@@ -323,6 +323,30 @@ type GitBlobstore struct {
 	// syncForRead will skip the fetch if the last sync completed within this duration.
 	// Defaults to defaultSyncForReadTTL. Set to 0 to disable dedup (useful in tests).
 	syncForReadTTL time.Duration
+
+	// materializeMu guards materializedBlobs and materializeDir.
+	materializeMu sync.Mutex
+	// materializeDir is a lazily-created temp directory holding the local copies
+	// of git blobs materialized for ranged reads. Removed wholesale on Close.
+	materializeDir string
+	// materializedBlobs maps an immutable blob OID to its local materialized copy.
+	// Git blobs are content-addressed, so the mapping never goes stale: a partial
+	// (ranged) read streams the whole blob to a seekable file exactly once, and
+	// every subsequent range is served from that file instead of re-streaming —
+	// and re-inflating — the entire blob from byte 0.
+	materializedBlobs map[git.OID]*materializedBlob
+}
+
+// materializedBlob is a git blob copied once to a local seekable file so that
+// repeated ranged reads (e.g. NBS table-file footer/index/chunk reads) serve
+// from the file rather than re-streaming the blob through `git cat-file`. ready
+// is closed once path/size/err are populated; concurrent readers of the same OID
+// block on it so the blob is streamed only once.
+type materializedBlob struct {
+	ready chan struct{}
+	path  string
+	size  int64
+	err   error
 }
 
 var _ Blobstore = (*GitBlobstore)(nil)
@@ -634,6 +658,8 @@ func (gbs *GitBlobstore) Close() error {
 	// has its own file-based lock for cross-process coordination.
 	gbs.maybeRunGC()
 
+	gbs.removeMaterializeDir()
+
 	gbs.writeMu.Lock()
 	defer gbs.writeMu.Unlock()
 
@@ -939,16 +965,25 @@ func (gbs *GitBlobstore) getFromCache(ctx context.Context, key string, br BlobRa
 
 	switch obj.typ {
 	case git.ObjectTypeBlob:
-		sz, err := gbs.api.BlobSize(ctx, obj.oid)
-		if err != nil {
-			return nil, 0, "", err
-		}
-		rc, err := gbs.api.BlobReader(ctx, obj.oid)
-		if err != nil {
-			return nil, 0, "", err
+		// A full read is a single sequential pass, so stream the blob directly.
+		// A partial (ranged) read is the NBS footer/index/chunk access pattern
+		// that hits the same blob many times; serving each range by streaming the
+		// whole blob and discarding the prefix is O(reads * blobsize). Materialize
+		// the blob to a seekable local file once and serve every range from it.
+		if br.isAllRange() {
+			sz, err := gbs.api.BlobSize(ctx, obj.oid)
+			if err != nil {
+				return nil, 0, "", err
+			}
+			rc, err := gbs.api.BlobReader(ctx, obj.oid)
+			if err != nil {
+				return nil, 0, "", err
+			}
+			// Per-key version: blob object id.
+			return sliceInlineBlob(rc, sz, br, obj.oid.String())
 		}
 		// Per-key version: blob object id.
-		return sliceInlineBlob(rc, sz, br, obj.oid.String())
+		return gbs.getMaterializedBlobRange(ctx, obj.oid, br)
 
 	case git.ObjectTypeTree:
 		// Per-key version: tree object id at this key.
@@ -1549,6 +1584,146 @@ func sliceInlineBlob(rc io.ReadCloser, sz int64, br BlobRange, ver string) (io.R
 	}
 
 	return &limitReadCloser{r: io.LimitReader(rc, pos.length), c: rc}, uint64(sz), ver, nil
+}
+
+// getMaterializedBlobRange serves a ranged read of |oid| from a local seekable
+// copy of the blob, materializing it once and reusing it for every later range.
+// Because the copy is a regular file, the requested range is reached with a
+// single seek rather than by inflating and discarding the blob prefix.
+func (gbs *GitBlobstore) getMaterializedBlobRange(ctx context.Context, oid git.OID, br BlobRange) (io.ReadCloser, uint64, string, error) {
+	mb, err := gbs.materializeBlob(ctx, oid)
+	if err != nil {
+		return nil, 0, "", err
+	}
+	f, err := os.Open(mb.path)
+	if err != nil {
+		return nil, 0, "", err
+	}
+	rc, sz, ver, err := sliceFileBlob(f, mb.size, br, oid.String())
+	if err != nil {
+		_ = f.Close()
+		return nil, sz, ver, err
+	}
+	return rc, sz, ver, nil
+}
+
+// materializeBlob returns the local materialized copy of |oid|, streaming the
+// blob to a temp file on first request and caching the result by OID. Blobs are
+// content-addressed, so a cached copy is always valid. The streaming I/O runs
+// outside materializeMu so reads of distinct blobs are not serialized; a single
+// in-flight entry per OID guarantees the blob is streamed only once.
+func (gbs *GitBlobstore) materializeBlob(ctx context.Context, oid git.OID) (*materializedBlob, error) {
+	gbs.materializeMu.Lock()
+	if gbs.materializedBlobs == nil {
+		gbs.materializedBlobs = make(map[git.OID]*materializedBlob)
+	}
+	if mb, ok := gbs.materializedBlobs[oid]; ok {
+		gbs.materializeMu.Unlock()
+		<-mb.ready
+		return mb, mb.err
+	}
+	mb := &materializedBlob{ready: make(chan struct{})}
+	gbs.materializedBlobs[oid] = mb
+	gbs.materializeMu.Unlock()
+
+	mb.path, mb.size, mb.err = gbs.writeBlobToTempFile(ctx, oid)
+	if mb.err != nil {
+		// Drop the failed entry so a later read can retry rather than caching the error.
+		gbs.materializeMu.Lock()
+		delete(gbs.materializedBlobs, oid)
+		gbs.materializeMu.Unlock()
+	}
+	close(mb.ready)
+	return mb, mb.err
+}
+
+// writeBlobToTempFile streams |oid| to a new file under the materialize dir and
+// returns its path and size.
+func (gbs *GitBlobstore) writeBlobToTempFile(ctx context.Context, oid git.OID) (string, int64, error) {
+	dir, err := gbs.ensureMaterializeDir()
+	if err != nil {
+		return "", 0, err
+	}
+	rc, err := gbs.api.BlobReader(ctx, oid)
+	if err != nil {
+		return "", 0, err
+	}
+	defer rc.Close()
+
+	f, err := os.CreateTemp(dir, oid.String()+"-")
+	if err != nil {
+		return "", 0, err
+	}
+	n, err := io.Copy(f, rc)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		_ = os.Remove(f.Name())
+		return "", 0, err
+	}
+	return f.Name(), n, nil
+}
+
+// ensureMaterializeDir lazily creates the per-blobstore temp directory that
+// holds materialized blob copies. It is removed wholesale by Close.
+func (gbs *GitBlobstore) ensureMaterializeDir() (string, error) {
+	gbs.materializeMu.Lock()
+	defer gbs.materializeMu.Unlock()
+	if gbs.materializeDir != "" {
+		return gbs.materializeDir, nil
+	}
+	dir, err := os.MkdirTemp("", "dolt-gitblobstore-materialized-")
+	if err != nil {
+		return "", err
+	}
+	gbs.materializeDir = dir
+	return dir, nil
+}
+
+// removeMaterializeDir deletes the materialized-blob temp directory and forgets
+// the cached copies. Best-effort: a removal error here would only mask Close's
+// ref cleanup, and the OS reclaims the temp dir regardless.
+func (gbs *GitBlobstore) removeMaterializeDir() {
+	gbs.materializeMu.Lock()
+	dir := gbs.materializeDir
+	gbs.materializeDir = ""
+	gbs.materializedBlobs = nil
+	gbs.materializeMu.Unlock()
+	if dir != "" {
+		_ = os.RemoveAll(dir)
+	}
+}
+
+// sliceFileBlob serves |br| over a materialized blob file. Unlike sliceInlineBlob,
+// it reaches the range offset with a single seek instead of discarding bytes, so
+// a ranged read costs O(range) rather than O(offset). The file is closed via the
+// returned ReadCloser.
+func sliceFileBlob(f *os.File, sz int64, br BlobRange, ver string) (io.ReadCloser, uint64, string, error) {
+	if br.isAllRange() {
+		return f, uint64(sz), ver, nil
+	}
+
+	pos := br.positiveRange(sz)
+	if pos.offset < 0 || pos.offset > sz {
+		return nil, uint64(sz), ver, fmt.Errorf("invalid BlobRange offset %d for blob of size %d", pos.offset, sz)
+	}
+	if pos.length < 0 {
+		return nil, uint64(sz), ver, fmt.Errorf("invalid BlobRange length %d", pos.length)
+	}
+	if pos.length == 0 {
+		pos.length = sz - pos.offset
+	}
+	if pos.offset+pos.length > sz {
+		pos.length = sz - pos.offset
+	}
+
+	if pos.offset > 0 {
+		if _, err := f.Seek(pos.offset, io.SeekStart); err != nil {
+			return nil, uint64(sz), ver, err
+		}
+	}
+	return &limitReadCloser{r: io.LimitReader(f, pos.length), c: f}, uint64(sz), ver, nil
 }
 
 func skipN(r io.Reader, n int64) error {
