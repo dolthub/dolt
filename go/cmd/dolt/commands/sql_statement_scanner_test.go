@@ -288,3 +288,96 @@ in quote'`,
 		})
 	}
 }
+
+// TestEndedAtEOFFlag covers the per-Scan termination distinction that
+// IsShellInputComplete relies on. A delimiter-terminated statement must
+// leave EndedAtEOF false; an unterminated trailing statement must leave it
+// true.
+func TestEndedAtEOFFlag(t *testing.T) {
+	t.Run("delimiter terminated", func(t *testing.T) {
+		scanner := NewStreamScanner(strings.NewReader("select 1;"))
+		require.True(t, scanner.Scan())
+		assert.False(t, scanner.EndedAtEOF())
+		assert.False(t, scanner.Scan())
+	})
+	t.Run("unterminated EOF", func(t *testing.T) {
+		scanner := NewStreamScanner(strings.NewReader("select 1"))
+		require.True(t, scanner.Scan())
+		assert.True(t, scanner.EndedAtEOF())
+		assert.False(t, scanner.Scan())
+	})
+	t.Run("flag resets across scans", func(t *testing.T) {
+		// First statement terminates; second hits EOF unterminated.
+		scanner := NewStreamScanner(strings.NewReader("select 1; select 2"))
+		require.True(t, scanner.Scan())
+		assert.False(t, scanner.EndedAtEOF())
+		require.True(t, scanner.Scan())
+		assert.True(t, scanner.EndedAtEOF())
+	})
+}
+
+// TestIsShellInputComplete covers the interactive-shell completion
+// predicate. Each case captures one branch of the four bug scenarios
+// referenced by dolthub/dolt#10866, plus the DELIMITER and pure-comment
+// edges that StreamScanner emits as empty tokens. The delimiter argument
+// mirrors the shell's active DELIMITER; most cases use the default ";".
+func TestIsShellInputComplete(t *testing.T) {
+	testcases := []struct {
+		name      string
+		input     string
+		delimiter string
+		want      bool
+	}{
+		{"empty", "", ";", true},
+		{"whitespace only", "   ", ";", true},
+		{"only newlines", "\n\n", ";", true},
+		{"unterminated single statement", "select 1", ";", false},
+		{"terminated single statement", "select 1;", ";", true},
+		{"terminated multi statement (#10860)", "select null; select null;", ";", true},
+		{"trailing unterminated multi", "select 1; select 2", ";", false},
+		{"open single quote (#10861)", "select '", ";", false},
+		{"open double quote (#10861)", "select \"", ";", false},
+		{"open backtick", "select `", ";", false},
+		{"semicolon inside open quote (#10861)", "select ';", ";", false},
+		{"closed quote then delimiter", "select 'foo';", ";", true},
+		{"backslash-escaped quote leaves string open", "select '\\';", ";", false},
+		{"doubled backslash closes string", "select '\\\\';", ";", true},
+		{"open block comment (#10862)", "select /* ;", ";", false},
+		{"closed block comment then delimiter", "select /* x */ null;", ";", true},
+		{"line comment with semicolon and no newline", "select -- ;", ";", false},
+		{"line comment with newline then terminator", "select -- ;\nnull;", ";", true},
+		{"DELIMITER alone", "DELIMITER //", ";", true},
+		{"DELIMITER then terminated", "DELIMITER //\nselect 1//", ";", true},
+		{"DELIMITER then unterminated", "DELIMITER //\nselect 1", ";", false},
+		{"pure line comment input", "-- hello\n", ";", true},
+		// A pure block comment with no trailing terminator produces a
+		// non-empty trailing token at EOF (StreamScanner emits empty tokens
+		// only for pure line comments). The shell waits for the user to
+		// type a delimiter, matching MySQL's behavior after a comment.
+		{"pure block comment input", "/* hello */\n", ";", false},
+
+		// Non-";" delimiter cases (DELIMITER active in the shell). The
+		// predicate sees the cumulative buffer with the delimiter still
+		// present (the callback strips the trailing delimiter only after
+		// ishell delivers the buffer). Under a custom delimiter, internal ";"
+		// must not be treated as terminators; only the custom delimiter
+		// completes a statement.
+		{"custom delim: trigger body still being typed is incomplete",
+			"CREATE TRIGGER t BEFORE INSERT ON x FOR EACH ROW\nBEGIN\nSET NEW.v = 1;\nSET NEW.v = 2;\nEND;", "#", false},
+		{"custom delim: trigger body completed by custom delimiter",
+			"CREATE TRIGGER t BEFORE INSERT ON x FOR EACH ROW\nBEGIN\nSET NEW.v = 1;\nSET NEW.v = 2;\nEND; #", "#", true},
+		{"custom delim: single statement terminated by custom delimiter",
+			"select 1 #", "#", true},
+		{"custom delim: unterminated single statement", "select 1", "#", false},
+		{"custom delim: multi-char // unterminated", "select 1", "//", false},
+		{"custom delim: multi-char // terminated", "select 1 //", "//", true},
+		{"custom delim: empty stays complete", "", "#", true},
+	}
+
+	for _, tt := range testcases {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsShellInputComplete(tt.input, tt.delimiter)
+			assert.Equal(t, tt.want, got, "input=%q delimiter=%q", tt.input, tt.delimiter)
+		})
+	}
+}

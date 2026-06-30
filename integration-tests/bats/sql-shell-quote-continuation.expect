@@ -1,0 +1,30 @@
+#!/usr/bin/expect -f
+# A ; inside an unclosed quote does not end the statement; input continues.
+
+set timeout 10
+spawn dolt sql
+
+expect {
+    "> " {}
+    timeout { send_user "\nFAIL: no initial prompt\n"; exit 1 }
+}
+
+send "select ';\r"
+expect {
+    -exact "-> " {}
+    -re "syntax error" { send_user "\nFAIL: treated as complete\n"; exit 1 }
+    timeout { send_user "\nFAIL: no continuation prompt\n"; exit 1 }
+}
+send "foo';\r"
+expect {
+    "foo" {}
+    -re "syntax error" { send_user "\nFAIL: parse failed\n"; exit 1 }
+    timeout { send_user "\nFAIL: no result\n"; exit 1 }
+}
+expect {
+    "> " {}
+    timeout { send_user "\nFAIL: no primary prompt\n"; exit 1 }
+}
+
+send "exit;\r"
+expect eof

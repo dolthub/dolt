@@ -1,0 +1,28 @@
+#!/usr/bin/expect -f
+# Multiple ;-separated statements on one line run as separate statements.
+
+set timeout 10
+spawn dolt sql
+
+expect {
+    "> " {}
+    timeout { send_user "\nFAIL: no initial prompt\n"; exit 1 }
+}
+
+send "select null; select null;\r"
+set null_seen 0
+expect {
+    -re "\\| NULL +\\|" {
+        incr null_seen
+        if {$null_seen < 2} { exp_continue }
+    }
+    -re "syntax error" { send_user "\nFAIL: syntax error on multi-statement line\n"; exit 1 }
+    timeout { send_user "\nFAIL: only saw $null_seen NULL row(s)\n"; exit 1 }
+}
+expect {
+    "> " {}
+    timeout { send_user "\nFAIL: no primary prompt\n"; exit 1 }
+}
+
+send "exit;\r"
+expect eof
