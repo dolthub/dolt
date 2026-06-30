@@ -80,10 +80,14 @@ func (c *ExtendedTupleComparator) Suffix(n int) TupleComparator {
 
 // Validated implements the TupleComparator interface.
 func (c *ExtendedTupleComparator) Validated(types []Type) TupleComparator {
-	// If our inner comparator is an ExtendedTupleComparator, then we should use its inner comparator to reduce redundancy.
+	// If our inner comparator is an ExtendedTupleComparator, then we should use its inner comparator to reduce redundancy, as well as its ValueStore if set.
 	var innerCmp TupleComparator
+	vs := c.vs
 	if extendedInner, ok := c.innerCmp.(*ExtendedTupleComparator); ok {
 		innerCmp = extendedInner.innerCmp.Validated(types)
+		if vs == nil {
+			vs = extendedInner.vs
+		}
 	} else {
 		innerCmp = c.innerCmp.Validated(types)
 	}
@@ -106,7 +110,7 @@ func (c *ExtendedTupleComparator) Validated(types []Type) TupleComparator {
 	if !hasHandler {
 		return innerCmp
 	}
-	return &ExtendedTupleComparator{innerCmp: innerCmp, handlers: c.handlers, vs: c.vs}
+	return &ExtendedTupleComparator{innerCmp: innerCmp, handlers: c.handlers, vs: vs}
 }
 
 // WithValueStore implements the TupleComparator interface.
