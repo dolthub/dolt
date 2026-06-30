@@ -169,7 +169,7 @@ func updateProfileWithCredentials(ctx context.Context, dEnv *env.DoltEnv, c cred
 	if err != nil {
 		return fmt.Errorf("error: unable to build dial options server with credentials: %w", err)
 	}
-	conn, err := grpc.Dial(cfg.Endpoint, cfg.DialOptions...)
+	conn, err := grpc.NewClient("dns:///"+cfg.Endpoint, cfg.DialOptions...)
 	if err != nil {
 		return fmt.Errorf("error: unable to connect to server with credentials: %w", err)
 	}
@@ -177,7 +177,7 @@ func updateProfileWithCredentials(ctx context.Context, dEnv *env.DoltEnv, c cred
 	grpcClient := remotesapi.NewCredentialsServiceClient(conn)
 	resp, err := grpcClient.WhoAmI(ctx, &remotesapi.WhoAmIRequest{})
 	if err != nil {
-		return fmt.Errorf("error: unable to call WhoAmI endpoint: %w", err)
+		return fmt.Errorf("error: unable to call WhoAmI endpoint at %s: %w", hostAndPort, err)
 	}
 	userUpdates := map[string]string{
 		config.UserNameKey:  resp.DisplayName,
