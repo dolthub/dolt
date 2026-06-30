@@ -697,37 +697,17 @@ func (dtf *DiffTableFunction) PartitionRows(ctx *sql.Context, part sql.Partition
 func (dtf *DiffTableFunction) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	indexID := lookup.Index.ID()
 
-	if indexID != "commits_to" && indexID != "commits_from" {
-		// This is an index based on a secondary index of the underlying table.
-		prefix, indexName, isSecondary := parseSecondaryIndexID(indexID)
-		if isSecondary {
-			prollyRanges, err := index.ProllyRangesFromIndexLookup(ctx, lookup)
-			if err != nil {
-				return nil, err
-			}
-
-			toSchema, fromSchema := dtf.getSchemas()
-			// We only select a secondary index if both tables have the same schema (or one of the schemas doesn't exist.)
-			sch := toSchema
-			if sch == nil {
-				sch = fromSchema
-			}
-			partition := dtables.NewSecondaryDiffPartition(
-				dtf.tableDelta.ToTable,
-				dtf.tableDelta.FromTable,
-				dtf.toRefDetails.refStr,
-				dtf.fromRefDetails.refStr,
-				dtf.toRefDetails.commitTime,
-				dtf.fromRefDetails.commitTime,
-				sch,
-				prefix,
-				indexName,
-				prollyRanges,
-			)
-			return dtables.NewSliceOfPartitionsItr([]sql.Partition{partition}), nil
-		}
+	// Check if this is an index based on a secondary index of the underlying table.
+	indexType, indexName, isSecondary := parseSecondaryIndexID(indexID)
+	if isSecondary {
+		return dtf.lookupSecondaryIndexPartition(ctx, lookup, indexType, indexName)
 	}
 
+	return dtf.lookupPrimaryIndexPartition(ctx, lookup)
+}
+
+// lookupPrimaryIndexPartition creates a partition iter based on a lookup into the primary index of the underlying table.
+func (dtf *DiffTableFunction) lookupPrimaryIndexPartition(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	prollyRanges, err := index.ProllyRangesFromIndexLookup(ctx, lookup)
 	if err != nil {
 		return nil, err
@@ -740,6 +720,34 @@ func (dtf *DiffTableFunction) LookupPartitions(ctx *sql.Context, lookup sql.Inde
 		dtf.toRefDetails.commitTime, dtf.fromRefDetails.commitTime,
 		toSchema, fromSchema,
 		prollyRanges)
+	return dtables.NewSliceOfPartitionsItr([]sql.Partition{partition}), nil
+}
+
+// lookupSecondaryIndexPartition creates a partition iter based on a lookup into the secondary index of the underlying table.
+func (dtf *DiffTableFunction) lookupSecondaryIndexPartition(ctx *sql.Context, lookup sql.IndexLookup, indexType index.SecondaryDiffIndexType, indexName string) (sql.PartitionIter, error) {
+	prollyRanges, err := index.ProllyRangesFromIndexLookup(ctx, lookup)
+	if err != nil {
+		return nil, err
+	}
+
+	toSchema, fromSchema := dtf.getSchemas()
+	// We only select a secondary index if both tables have the same schema (or one of the schemas doesn't exist.)
+	sch := toSchema
+	if sch == nil {
+		sch = fromSchema
+	}
+	partition := dtables.NewSecondaryDiffPartition(
+		dtf.tableDelta.ToTable,
+		dtf.tableDelta.FromTable,
+		dtf.toRefDetails.refStr,
+		dtf.fromRefDetails.refStr,
+		dtf.toRefDetails.commitTime,
+		dtf.fromRefDetails.commitTime,
+		sch,
+		indexType,
+		indexName,
+		prollyRanges,
+	)
 	return dtables.NewSliceOfPartitionsItr([]sql.Partition{partition}), nil
 }
 

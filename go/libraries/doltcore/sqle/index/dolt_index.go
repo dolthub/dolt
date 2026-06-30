@@ -252,6 +252,8 @@ func MakeDiffTableIndexes(tbl string, toSchema, fromSchema schema.Schema, vs val
 	return indexes
 }
 
+// SecondaryDiffIndexType indicates a type of index on DOLT_DIFF.
+// DOLT_DIFF tables can be indexed on columns from the "to_" side of the diff, or the "from_" side.
 type SecondaryDiffIndexType int
 
 const (
@@ -259,6 +261,8 @@ const (
 	SecondaryDiffIndexType_From
 )
 
+// Indexes on DOLT_DIFF are named after the index on the underlying table, prefixed by whether the "to" or "from" table
+// is having its columns selected on.
 func (t SecondaryDiffIndexType) Prefix() string {
 	switch t {
 	case SecondaryDiffIndexType_To:
