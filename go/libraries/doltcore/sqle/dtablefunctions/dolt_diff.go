@@ -82,7 +82,83 @@ func (dtf *DiffTableFunction) IndexedAccess(ctx *sql.Context, lookup sql.IndexLo
 
 // GetIndexes implements sql.IndexAddressable
 func (dtf *DiffTableFunction) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-	return index.MakeDiffTableIndexes(dtf.Name(), dtf.tableDelta.ToSch, dtf.tableDelta.FromSch, false), nil
+	indexes := index.MakeDiffTableIndexes(dtf.Name(), dtf.tableDelta.ToSch, dtf.tableDelta.FromSch, dtf.tableDelta.ToNodeStore, false)
+
+	if dtf.tableDelta.ToTable == nil {
+		// The entire table was removed.
+		for _, fromIdx := range dtf.tableDelta.FromSch.Indexes().AllIndexes() {
+			if !fromIdx.CoversAllNonVirtualColumns() {
+				// The index must be covering in order to detect all diffs.
+				continue
+			}
+			fromSecIdx, err := index.MakeDiffTableSecondaryIndex(ctx, dtf.Name(), index.SecondaryDiffIndexType_From, dtf.tableDelta.FromTable, dtf.tableDelta.FromSch, fromIdx)
+			if err != nil {
+				return nil, err
+			}
+			if fromSecIdx != nil {
+				indexes = append(indexes, fromSecIdx)
+			}
+		}
+		return indexes, nil
+	}
+
+	if dtf.tableDelta.FromTable == nil {
+		// The entire table was added.
+		for _, toIdx := range dtf.tableDelta.ToSch.Indexes().AllIndexes() {
+			if !toIdx.CoversAllNonVirtualColumns() {
+				// The index must be covering in order to detect all diffs.
+				continue
+			}
+			toSecIdx, err := index.MakeDiffTableSecondaryIndex(ctx, dtf.Name(), index.SecondaryDiffIndexType_To, dtf.tableDelta.ToTable, dtf.tableDelta.ToSch, toIdx)
+			if err != nil {
+				return nil, err
+			}
+			if toSecIdx != nil {
+				indexes = append(indexes, toSecIdx)
+			}
+		}
+		return indexes, nil
+	}
+
+	// We can use a secondary index on the underlying table iff:
+	// - It's a covering index (virtual columns exempted)
+	// - It exists on both commits and has the same schema
+	if dtf.tableDelta.ToTable != nil && dtf.tableDelta.FromTable != nil &&
+		dtf.tableDelta.ToSch != nil && dtf.tableDelta.FromSch != nil {
+		for _, toIdx := range dtf.tableDelta.ToSch.Indexes().AllIndexes() {
+			fromIdx := dtf.tableDelta.FromSch.Indexes().GetByName(toIdx.Name())
+			if fromIdx == nil {
+				continue
+			}
+			if !fromIdx.Equals(toIdx) {
+				continue
+			}
+			if !toIdx.CoversAllNonVirtualColumns() {
+				// The index must be covering in order to detect all diffs.
+				continue
+			}
+			if !fromIdx.CoversAllNonVirtualColumns() {
+				// The index must be covering in order to detect all diffs.
+				continue
+			}
+			toSecIdx, err := index.MakeDiffTableSecondaryIndex(ctx, dtf.Name(), index.SecondaryDiffIndexType_To, dtf.tableDelta.ToTable, dtf.tableDelta.ToSch, toIdx)
+			if err != nil {
+				return nil, err
+			}
+			if toSecIdx != nil {
+				indexes = append(indexes, toSecIdx)
+			}
+			fromSecIdx, err := index.MakeDiffTableSecondaryIndex(ctx, dtf.Name(), index.SecondaryDiffIndexType_From, dtf.tableDelta.FromTable, dtf.tableDelta.FromSch, fromIdx)
+			if err != nil {
+				return nil, err
+			}
+			if fromSecIdx != nil {
+				indexes = append(indexes, fromSecIdx)
+			}
+		}
+	}
+
+	return indexes, nil
 }
 
 func (dtf *DiffTableFunction) PreciseMatch() bool {
@@ -608,11 +684,30 @@ func (dtf *DiffTableFunction) PartitionRows(ctx *sql.Context, part sql.Partition
 	if part == nil {
 		return dtf.RowIter(ctx, nil)
 	}
-	dp := part.(*dtables.DiffPartition)
-	return dp.GetRowIter(ctx)
+	switch p := part.(type) {
+	case *dtables.DiffPartition:
+		return p.GetRowIter(ctx)
+	case *dtables.SecondaryDiffPartition:
+		return p.GetRowIter(ctx)
+	default:
+		return nil, fmt.Errorf("unexpected partition type: %T", part)
+	}
 }
 
 func (dtf *DiffTableFunction) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	indexID := lookup.Index.ID()
+
+	// Check if this is an index based on a secondary index of the underlying table.
+	indexType, indexName, isSecondary := parseSecondaryIndexID(indexID)
+	if isSecondary {
+		return dtf.lookupSecondaryIndexPartition(ctx, lookup, indexType, indexName)
+	}
+
+	return dtf.lookupPrimaryIndexPartition(ctx, lookup)
+}
+
+// lookupPrimaryIndexPartition creates a partition iter based on a lookup into the primary index of the underlying table.
+func (dtf *DiffTableFunction) lookupPrimaryIndexPartition(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	prollyRanges, err := index.ProllyRangesFromIndexLookup(ctx, lookup)
 	if err != nil {
 		return nil, err
@@ -626,6 +721,45 @@ func (dtf *DiffTableFunction) LookupPartitions(ctx *sql.Context, lookup sql.Inde
 		toSchema, fromSchema,
 		prollyRanges)
 	return dtables.NewSliceOfPartitionsItr([]sql.Partition{partition}), nil
+}
+
+// lookupSecondaryIndexPartition creates a partition iter based on a lookup into the secondary index of the underlying table.
+func (dtf *DiffTableFunction) lookupSecondaryIndexPartition(ctx *sql.Context, lookup sql.IndexLookup, indexType index.SecondaryDiffIndexType, indexName string) (sql.PartitionIter, error) {
+	prollyRanges, err := index.ProllyRangesFromIndexLookup(ctx, lookup)
+	if err != nil {
+		return nil, err
+	}
+
+	toSchema, fromSchema := dtf.getSchemas()
+	// We only select a secondary index if both tables have the same schema (or one of the schemas doesn't exist.)
+	sch := toSchema
+	if sch == nil {
+		sch = fromSchema
+	}
+	partition := dtables.NewSecondaryDiffPartition(
+		dtf.tableDelta.ToTable,
+		dtf.tableDelta.FromTable,
+		dtf.toRefDetails.refStr,
+		dtf.fromRefDetails.refStr,
+		dtf.toRefDetails.commitTime,
+		dtf.fromRefDetails.commitTime,
+		sch,
+		indexType,
+		indexName,
+		prollyRanges,
+	)
+	return dtables.NewSliceOfPartitionsItr([]sql.Partition{partition}), nil
+}
+
+// parseSecondaryIndexID parses a secondary index ID into the associated index on the underlying table.
+func parseSecondaryIndexID(id string) (indexType index.SecondaryDiffIndexType, indexName string, ok bool) {
+	if strings.HasPrefix(id, "to_") {
+		return index.SecondaryDiffIndexType_To, id[3:], true
+	}
+	if strings.HasPrefix(id, "from_") {
+		return index.SecondaryDiffIndexType_From, id[5:], true
+	}
+	return 0, "", false
 }
 
 func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, toCommitVal, dotCommitVal interface{}, tableName string) error {

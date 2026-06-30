@@ -26,16 +26,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
-	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
-
-type commitInfo struct {
-	date    *types.Timestamp
-	name    types.String
-	nameTag uint64
-	dateTag uint64
-}
 
 type commitInfo2 struct {
 	ts   *time.Time
