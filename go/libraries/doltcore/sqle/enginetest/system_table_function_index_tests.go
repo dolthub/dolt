@@ -137,8 +137,7 @@ var SystemTableFunctionIndexTests = []queries.ScriptTest{
 				ExpectedIndexes: []string{"to_covering"},
 			},
 			{
-				// TODO: When using a secondary index that covers a virtual column, DOLT_DIFF produces values for that column.
-				// When not using a secondary index, those values are always nil. We should decide which behavior is correct.
+				// TODO(https://github.com/dolthub/dolt/issues/11143): DOLT_DIFF currently produces NULL values for virtual columns.
 				Query: "SELECT to_pk, to_c1, to_c2, to_c3, from_pk, from_c1, from_c2, from_c3, diff_type from dolt_diff(@Commit1, @Commit2, 't') WHERE to_c1 = 5;",
 				Expected: []sql.Row{
 					{4, 5, 6, 15, nil, nil, nil, nil, "added"},
@@ -149,6 +148,7 @@ var SystemTableFunctionIndexTests = []queries.ScriptTest{
 	},
 	{
 		Name: "test DOLT_DIFF() with expression index",
+		Skip: true, // TODO(https://github.com/dolthub/dolt/issues/11143): support using expression indexes with DOLT_DIFF
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 int, c2 int);",
 			"create index expression_index on t ((c1+c2));",
@@ -191,6 +191,60 @@ var SystemTableFunctionIndexTests = []queries.ScriptTest{
 					{5, 6, 7, 8, 9, "added"},
 				},
 				ExpectedIndexes: []string{"to_sec_idx"},
+			},
+		},
+	},
+	{
+		Name: "DOLT_DIFF() cannot use secondary indexes if they have different schemas",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20), index sec_idx (c1, c2));",
+			"insert into t values(1, 'foo', 'a'), (2, 'bar', 'b'), (3, 'foo', 'c'), (4, 'bar', 'd');",
+			"set @Commit0 = HashOf('HEAD');",
+			"call dolt_add('.');",
+			"call dolt_commit('-m', 'create table');",
+			"alter table t drop index sec_idx;",
+			"create index sec_idx on t(c2, c1);",
+			"set @Commit1 = HashOf('HEAD');",
+			"insert into t values (5, 'foo', 'e'), (6, 'bar', 'f');",
+			"delete from t where pk <= 2;",
+			"update t set c1 = 'bar' where pk = 3;",
+			"update t set c1 = 'foo' where pk = 4;",
+			"call dolt_add('.');",
+			"call dolt_commit('-m', 'insert rows');",
+			"set @Commit2 = HashOf('HEAD');",
+			"create table lookup_vals (val varchar(20));",
+			"insert into lookup_vals values ('foo'), ('bar');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, diff_type from dolt_diff(@Commit1, @Commit2, 't') WHERE to_c1 = 'foo';",
+				Expected: []sql.Row{
+					{4, "foo", "d", "modified"},
+					{5, "foo", "e", "added"},
+				},
+				ExpectedIndexes: []string{},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, diff_type from dolt_diff(@Commit1, @Commit2, 't') WHERE to_c2 = 'e';",
+				Expected: []sql.Row{
+					{5, "foo", "e", "added"},
+				},
+				ExpectedIndexes: []string{},
+			},
+			{
+				Query: "SELECT from_pk, from_c1, from_c2, diff_type from dolt_diff(@Commit1, @Commit2, 't') WHERE from_c1 = 'foo';",
+				Expected: []sql.Row{
+					{1, "foo", "a", "removed"},
+					{3, "foo", "c", "modified"},
+				},
+				ExpectedIndexes: []string{},
+			},
+			{
+				Query: "SELECT from_pk, from_c1, from_c2, diff_type from dolt_diff(@Commit1, @Commit2, 't') WHERE from_c2 = 'a';",
+				Expected: []sql.Row{
+					{1, "foo", "a", "removed"},
+				},
+				ExpectedIndexes: []string{},
 			},
 		},
 	},

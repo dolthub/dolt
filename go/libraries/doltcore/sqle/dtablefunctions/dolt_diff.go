@@ -84,14 +84,53 @@ func (dtf *DiffTableFunction) IndexedAccess(ctx *sql.Context, lookup sql.IndexLo
 func (dtf *DiffTableFunction) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	indexes := index.MakeDiffTableIndexes(dtf.Name(), dtf.tableDelta.ToSch, dtf.tableDelta.FromSch, dtf.tableDelta.ToNodeStore, false)
 
+	if dtf.tableDelta.ToTable == nil {
+		// The entire table was removed.
+		for _, fromIdx := range dtf.tableDelta.FromSch.Indexes().AllIndexes() {
+			if !fromIdx.CoversAllNonVirtualColumns() {
+				// The index must be covering in order to detect all diffs.
+				continue
+			}
+			fromSecIdx, err := index.MakeDiffTableSecondaryIndex(ctx, dtf.Name(), index.SecondaryDiffIndexType_From, dtf.tableDelta.FromTable, dtf.tableDelta.FromSch, fromIdx)
+			if err != nil {
+				return nil, err
+			}
+			if fromSecIdx != nil {
+				indexes = append(indexes, fromSecIdx)
+			}
+		}
+		return indexes, nil
+	}
+
+	if dtf.tableDelta.FromTable == nil {
+		// The entire table was added.
+		for _, toIdx := range dtf.tableDelta.ToSch.Indexes().AllIndexes() {
+			if !toIdx.CoversAllNonVirtualColumns() {
+				// The index must be covering in order to detect all diffs.
+				continue
+			}
+			toSecIdx, err := index.MakeDiffTableSecondaryIndex(ctx, dtf.Name(), index.SecondaryDiffIndexType_To, dtf.tableDelta.ToTable, dtf.tableDelta.ToSch, toIdx)
+			if err != nil {
+				return nil, err
+			}
+			if toSecIdx != nil {
+				indexes = append(indexes, toSecIdx)
+			}
+		}
+		return indexes, nil
+	}
+
 	// We can use a secondary index on the underlying table iff:
-	// - It exists on both commits and has the same schema.
 	// - It's a covering index (virtual columns exempted)
+	// - It exists on both commits and has the same schema
 	if dtf.tableDelta.ToTable != nil && dtf.tableDelta.FromTable != nil &&
 		dtf.tableDelta.ToSch != nil && dtf.tableDelta.FromSch != nil {
 		for _, toIdx := range dtf.tableDelta.ToSch.Indexes().AllIndexes() {
 			fromIdx := dtf.tableDelta.FromSch.Indexes().GetByName(toIdx.Name())
 			if fromIdx == nil {
+				continue
+			}
+			if !fromIdx.Equals(toIdx) {
 				continue
 			}
 			if !toIdx.CoversAllNonVirtualColumns() {
@@ -668,6 +707,11 @@ func (dtf *DiffTableFunction) LookupPartitions(ctx *sql.Context, lookup sql.Inde
 			}
 
 			toSchema, fromSchema := dtf.getSchemas()
+			// We only select a secondary index if both tables have the same schema (or one of the schemas doesn't exist.)
+			sch := toSchema
+			if sch == nil {
+				sch = fromSchema
+			}
 			partition := dtables.NewSecondaryDiffPartition(
 				dtf.tableDelta.ToTable,
 				dtf.tableDelta.FromTable,
@@ -675,8 +719,7 @@ func (dtf *DiffTableFunction) LookupPartitions(ctx *sql.Context, lookup sql.Inde
 				dtf.fromRefDetails.refStr,
 				dtf.toRefDetails.commitTime,
 				dtf.fromRefDetails.commitTime,
-				toSchema,
-				fromSchema,
+				sch,
 				prefix,
 				indexName,
 				prollyRanges,

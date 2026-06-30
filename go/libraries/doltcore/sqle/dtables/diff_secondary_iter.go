@@ -40,8 +40,7 @@ type prollySecondaryDiffIter struct {
 	fromCm        commitInfo2
 	toCm          commitInfo2
 
-	targetFromSch schema.Schema
-	targetToSch   schema.Schema
+	targetSch schema.Schema
 
 	rows    chan sql.Row
 	errChan chan error
@@ -141,22 +140,21 @@ func (itr *prollySecondaryDiffIter) populateRows(ctx context.Context, pk val.Tup
 	// primaryMapForLookup is the primary index that requires a lookup.
 	var primaryMapForLookup prolly.Map
 	// indexedRow is the slice of the result row containing values read from the diff
+	var indexedRow sql.Row
 	// lookupRow is the slice of the result row containing values read from the lookup on the primary map
-	var indexedRow, lookupRow sql.Row
-	secondaryMapKey := val.Tuple(d.Key)
+	var lookupRow sql.Row
 
-	toSchemaLength := schemaSize(itr.targetToSch)
-	fromSchemaLength := schemaSize(itr.targetFromSch)
+	schemaLength := schemaSize(itr.targetSch)
 
-	// If the table did not exist at one the commits, then DOLT_DIFF uses the schema of the side where it did exist.
-	if fromSchemaLength == 0 && d.Type == tree.AddedDiff {
-		fromSchemaLength = toSchemaLength
-	} else if toSchemaLength == 0 && d.Type == tree.RemovedDiff {
-		toSchemaLength = fromSchemaLength
-	}
-
-	// 2 commit names, 2 commit dates, 1 diff_type
-	row = make(sql.Row, fromSchemaLength+toSchemaLength+5)
+	// The schema for DOLT_DIFF is (in order)
+	// - to_ rows
+	// - to_commit
+	// - to_commit_date
+	// - from_ rows
+	// - from_commit
+	// - from_commit_date
+	// - diff_type
+	row = make(sql.Row, schemaLength*2+5)
 
 	switch d.Type {
 	case tree.ModifiedDiff:
@@ -165,20 +163,20 @@ func (itr *prollySecondaryDiffIter) populateRows(ctx context.Context, pk val.Tup
 		return nil, fmt.Errorf("unexpected 'modified' diff when diffing secondary indexes")
 	case tree.AddedDiff:
 		primaryMapForLookup = itr.fromPrimary
-		indexedRow = row[0:toSchemaLength]
-		lookupRow = row[toSchemaLength+2 : toSchemaLength+2+fromSchemaLength]
+		indexedRow = row[0:schemaLength]
+		lookupRow = row[schemaLength+2 : schemaLength*2+2]
 
 	case tree.RemovedDiff:
 		primaryMapForLookup = itr.toPrimary
-		lookupRow = row[0:toSchemaLength]
-		indexedRow = row[toSchemaLength+2 : toSchemaLength+2+fromSchemaLength]
+		lookupRow = row[0:schemaLength]
+		indexedRow = row[schemaLength+2 : schemaLength*2+2]
 	}
 
-	row[toSchemaLength] = itr.toCm.name
-	row[toSchemaLength+1] = maybeTime(itr.toCm.ts)
+	row[schemaLength] = itr.toCm.name
+	row[schemaLength+1] = maybeTime(itr.toCm.ts)
 
-	row[toSchemaLength+2+fromSchemaLength] = itr.fromCm.name
-	row[toSchemaLength+2+fromSchemaLength+1] = maybeTime(itr.fromCm.ts)
+	row[schemaLength*2+2] = itr.fromCm.name
+	row[schemaLength*2+3] = maybeTime(itr.fromCm.ts)
 
 	var valueFromLookup val.Tuple
 	var valueExistsInLookup bool
@@ -194,22 +192,21 @@ func (itr *prollySecondaryDiffIter) populateRows(ctx context.Context, pk val.Tup
 	}
 	diffType := d.Type
 	if valueExistsInLookup {
+		// The primary key exists in both commits, so this is a modification.
 		diffType = tree.ModifiedDiff
 	}
 
+	secondaryMapKey := val.Tuple(d.Key)
 	for i, primaryPosition := range itr.secondaryToPrimaryMap {
 		// If the column isn't present in the secondary index, it must be a generated column.
 		// Currently, virtual generated columns are nil in the diff, so we can skip those.
-		// TODO: For generated columns (virtual + stored), we should desire consistent behavior between indexed and non-indexed cases.
-		// Currently, non-indexed / primary-indexed uses of DOLT_DIFF show values for stored generated columns and show NULL for virtual generated columns.
-		// Whereas secondary indexed uses show values for generated columns in the secondary index and NULL for others.
 		indexedRow[primaryPosition], err = tree.GetField(ctx, itr.toSecondary.KeyDesc(), i, secondaryMapKey, itr.toSecondary.NodeStore())
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	if diffType != tree.AddedDiff && valueExistsInLookup {
+	if valueExistsInLookup {
 		err := itr.fromConverter.PutConverted(ctx, pk, valueFromLookup, lookupRow)
 		if err != nil {
 			return nil, err
@@ -243,8 +240,7 @@ type SecondaryDiffPartition struct {
 	fromName  string
 	toDate    *types.Timestamp
 	fromDate  *types.Timestamp
-	toSch     schema.Schema
-	fromSch   schema.Schema
+	sch       schema.Schema
 	indexType index.SecondaryDiffIndexType
 	indexName string
 	ranges    []prolly.Range
@@ -256,8 +252,7 @@ func NewSecondaryDiffPartition(toTable *doltdb.Table,
 	fromName string,
 	toDate *types.Timestamp,
 	fromDate *types.Timestamp,
-	toSch schema.Schema,
-	fromSch schema.Schema,
+	sch schema.Schema,
 	indexType index.SecondaryDiffIndexType,
 	indexName string,
 	ranges []prolly.Range) *SecondaryDiffPartition {
@@ -268,8 +263,7 @@ func NewSecondaryDiffPartition(toTable *doltdb.Table,
 		fromName:  fromName,
 		toDate:    toDate,
 		fromDate:  fromDate,
-		toSch:     toSch,
-		fromSch:   fromSch,
+		sch:       sch,
 		indexType: indexType,
 		indexName: indexName,
 		ranges:    ranges,
@@ -283,66 +277,70 @@ func (p *SecondaryDiffPartition) Key() []byte {
 }
 
 func (p *SecondaryDiffPartition) GetRowIter(ctx *sql.Context) (sql.RowIter, error) {
-	// Get secondary index maps from both tables
-	toIdxData, err := p.toTable.GetIndexRowData(ctx, p.indexName)
-	if err != nil {
-		return nil, err
-	}
-	toSecondary, err := durable.ProllyMapFromIndex(toIdxData)
-	if err != nil {
-		return nil, err
+
+	var toSecondary, toPrimary prolly.Map
+	var toConverter ProllyRowConverter
+	if p.toTable != nil {
+		toIdxData, err := p.toTable.GetIndexRowData(ctx, p.indexName)
+		if err != nil {
+			return nil, err
+		}
+		toSecondary, err = durable.ProllyMapFromIndex(toIdxData)
+		if err != nil {
+			return nil, err
+		}
+
+		toRowData, err := p.toTable.GetRowData(ctx)
+		if err != nil {
+			return nil, err
+		}
+		toPrimary, err = durable.ProllyMapFromIndex(toRowData)
+		if err != nil {
+			return nil, err
+		}
+
+		toConverter, err = NewProllyRowConverter(ctx, p.sch, p.sch, ctx.Warn, p.toTable.NodeStore())
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	fromIdxData, err := p.fromTable.GetIndexRowData(ctx, p.indexName)
-	if err != nil {
-		return nil, err
-	}
-	fromSecondary, err := durable.ProllyMapFromIndex(fromIdxData)
-	if err != nil {
-		return nil, err
-	}
+	var fromSecondary, fromPrimary prolly.Map
+	var fromConverter ProllyRowConverter
+	if p.fromTable != nil {
+		fromIdxData, err := p.fromTable.GetIndexRowData(ctx, p.indexName)
+		if err != nil {
+			return nil, err
+		}
+		fromSecondary, err = durable.ProllyMapFromIndex(fromIdxData)
+		if err != nil {
+			return nil, err
+		}
 
-	// Get primary maps from both tables
-	toRowData, err := p.toTable.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-	toPrimary, err := durable.ProllyMapFromIndex(toRowData)
-	if err != nil {
-		return nil, err
-	}
+		fromRowData, err := p.fromTable.GetRowData(ctx)
+		if err != nil {
+			return nil, err
+		}
+		fromPrimary, err = durable.ProllyMapFromIndex(fromRowData)
+		if err != nil {
+			return nil, err
+		}
 
-	fromRowData, err := p.fromTable.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-	fromPrimary, err := durable.ProllyMapFromIndex(fromRowData)
-	if err != nil {
-		return nil, err
+		fromConverter, err = NewProllyRowConverter(ctx, p.sch, p.sch, ctx.Warn, p.fromTable.NodeStore())
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Build PK ordinal mapping: maps PK ordinal -> secondary key ordinal
-	idxDef := p.toSch.Indexes().GetByName(p.indexName)
+	idxDef := p.sch.Indexes().GetByName(p.indexName)
 	pkMap := schema.PrimaryIndexOrdinalToSecondaryIndexOrdinal(idxDef)
 
-	secondaryToPrimaryMap := schema.IndexOrdinalToTableOrdinal(p.toSch, idxDef)
+	secondaryToPrimaryMap := schema.IndexOrdinalToTableOrdinal(p.sch, idxDef)
 
 	// Build PK tuple builder from primary map's key descriptor
 	pkKd, _ := toPrimary.Descriptors()
 	pkBld := val.NewTupleBuilder(pkKd, toPrimary.NodeStore())
-
-	// Build converters
-	var nodeStore tree.NodeStore
-	nodeStore = p.toTable.NodeStore()
-
-	toConverter, err := NewProllyRowConverter(ctx, p.toSch, p.toSch, ctx.Warn, nodeStore)
-	if err != nil {
-		return nil, err
-	}
-	fromConverter, err := NewProllyRowConverter(ctx, p.fromSch, p.fromSch, ctx.Warn, nodeStore)
-	if err != nil {
-		return nil, err
-	}
 
 	child, cancel := context.WithCancel(ctx)
 	iter := &prollySecondaryDiffIter{
@@ -355,8 +353,7 @@ func (p *SecondaryDiffPartition) GetRowIter(ctx *sql.Context) (sql.RowIter, erro
 		secondaryToPrimaryMap: secondaryToPrimaryMap,
 		fromConverter:         fromConverter,
 		toConverter:           toConverter,
-		targetFromSch:         p.fromSch,
-		targetToSch:           p.toSch,
+		targetSch:             p.sch,
 		fromCm:                commitInfo2{name: p.fromName, ts: (*time.Time)(p.fromDate)},
 		toCm:                  commitInfo2{name: p.toName, ts: (*time.Time)(p.toDate)},
 		indexType:             p.indexType,

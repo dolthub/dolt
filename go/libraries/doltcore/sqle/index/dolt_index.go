@@ -241,13 +241,13 @@ func MakeDiffTableIndex(tableName string, prefix string, sch schema.Schema, incl
 	}
 }
 
-func MakeDiffTableIndexes(tbl string, toSchema, fromSchema schema.Schema, includeCommits bool) (indexes []sql.Index) {
+func MakeDiffTableIndexes(tbl string, toSchema, fromSchema schema.Schema, vs val.ValueStore, includeCommits bool) (indexes []sql.Index) {
 	indexes = make([]sql.Index, 0)
 	if toSchema != nil {
-		indexes = append(indexes, MakeDiffTableIndex(tbl, "to", toSchema, includeCommits))
+		indexes = append(indexes, MakeDiffTableIndex(tbl, "to", toSchema, includeCommits, vs))
 	}
 	if fromSchema != nil {
-		indexes = append(indexes, MakeDiffTableIndex(tbl, "from", fromSchema, includeCommits))
+		indexes = append(indexes, MakeDiffTableIndex(tbl, "from", fromSchema, includeCommits, vs))
 	}
 	return indexes
 }
