@@ -15,8 +15,9 @@
 package schema
 
 import (
-	"github.com/dolthub/dolt/go/store/val"
 	"slices"
+
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 type Index interface {
