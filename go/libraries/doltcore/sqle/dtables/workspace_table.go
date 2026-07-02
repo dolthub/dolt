@@ -15,6 +15,7 @@
 package dtables
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -85,6 +86,12 @@ type WorkspaceTableModifier struct {
 
 type WorkspaceTableUpdater struct {
 	WorkspaceTableModifier
+	// uniqueCols holds the ordinals of the columns covered by the table's unique indexes. A change touching none of
+	// them can neither free nor take a unique key, so it is applied directly.
+	uniqueCols []int
+	// deferredPuts holds the rows this statement will write, applied in [WorkspaceTableUpdater.StatementComplete]
+	// after every delete in the statement so that a unique key freed by one row can be taken by another.
+	deferredPuts []sql.Row
 }
 
 var _ sql.RowUpdater = (*WorkspaceTableUpdater)(nil)
@@ -198,9 +205,104 @@ func (wtu *WorkspaceTableUpdater) Update(ctx *sql.Context, old sql.Row, new sql.
 
 	if isDelete {
 		return tableWriter.Delete(ctx, fromRow)
-	} else {
+	}
+
+	if !wtu.changesUniqueKey(fromRow, toRow) {
 		return tableWriter.Update(ctx, fromRow, toRow)
 	}
+
+	// Applying the delete half now and deferring the put makes every delete in the statement land before any put.
+	isInsert := true
+	for _, val := range fromRow {
+		if val != nil {
+			isInsert = false
+			break
+		}
+	}
+	if !isInsert {
+		if err := tableWriter.Delete(ctx, fromRow); err != nil {
+			return err
+		}
+	}
+	wtu.deferredPuts = append(wtu.deferredPuts, append(sql.Row{}, toRow...))
+	return nil
+}
+
+// uniqueColumnOrdinals returns the ordinals of the columns covered by the unique indexes of |sch|.
+func uniqueColumnOrdinals(sch schema.Schema) []int {
+	tagToIdx := sch.GetAllCols().TagToIdx
+	var ords []int
+	seen := make(map[int]struct{})
+	for _, idx := range sch.Indexes().AllIndexes() {
+		if !idx.IsUnique() {
+			continue
+		}
+		for _, tag := range idx.IndexedColumnTags() {
+			ord := tagToIdx[tag]
+			if _, ok := seen[ord]; !ok {
+				seen[ord] = struct{}{}
+				ords = append(ords, ord)
+			}
+		}
+	}
+	return ords
+}
+
+// changesUniqueKey reports whether the change from |fromRow| to |toRow| frees or takes a unique key. Values whose
+// equality cannot be determined report a change, which safely defers the write.
+func (wtu *WorkspaceTableUpdater) changesUniqueKey(fromRow, toRow sql.Row) bool {
+	for _, ord := range wtu.uniqueCols {
+		from, to := fromRow[ord], toRow[ord]
+		if fromBytes, ok := from.([]byte); ok {
+			toBytes, ok := to.([]byte)
+			if !ok || !bytes.Equal(fromBytes, toBytes) {
+				return true
+			}
+		} else if from != to {
+			return true
+		}
+	}
+	return false
+}
+
+// StatementComplete applies the puts the statement deferred and then flushes as usual. A unique key violation among
+// the puts discards the partially applied statement, so a failed staging leaves the roots untouched.
+func (wtu *WorkspaceTableUpdater) StatementComplete(ctx *sql.Context) error {
+	if wtu.err != nil {
+		return *wtu.err
+	}
+	if err := wtu.applyDeferredPuts(ctx); err != nil {
+		if wtu.tableWriter != nil {
+			_ = (*wtu.tableWriter).DiscardChanges(ctx, err)
+		}
+		wtu.tableWriter = nil
+		wtu.sessionWriter = nil
+		return err
+	}
+	return wtu.statementComplete(ctx)
+}
+
+// applyDeferredPuts writes the rows this statement deferred and clears the queue.
+func (wtu *WorkspaceTableUpdater) applyDeferredPuts(ctx *sql.Context) error {
+	defer func() { wtu.deferredPuts = nil }()
+	if len(wtu.deferredPuts) == 0 {
+		return nil
+	}
+	if wtu.tableWriter == nil {
+		return fmt.Errorf("Runtime error: table writer is nil")
+	}
+	for _, row := range wtu.deferredPuts {
+		if err := (*wtu.tableWriter).Insert(ctx, row); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// DiscardChanges drops the deferred puts along with the writer's pending changes.
+func (wtu *WorkspaceTableUpdater) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
+	wtu.deferredPuts = nil
+	return wtu.WorkspaceTableModifier.DiscardChanges(ctx, errorEncountered)
 }
 
 func (wtu *WorkspaceTableUpdater) Close(c *sql.Context) error {
@@ -520,7 +622,8 @@ func (wt *WorkspaceTable) Updater(ctx *sql.Context) sql.RowUpdater {
 	}
 
 	return &WorkspaceTableUpdater{
-		modifier,
+		WorkspaceTableModifier: modifier,
+		uniqueCols:             uniqueColumnOrdinals(wt.headSchema),
 	}
 }
 
