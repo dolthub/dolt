@@ -22,9 +22,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
@@ -77,11 +75,11 @@ func (d MergeBase) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, errors.New("right value is not a string")
 	}
 
-	left, err := ResolveRefSpec(ctx, headRef, doltDB, leftStr)
+	left, err := doltDB.ResolveCommitSpecStrForMergeBase(ctx, leftStr, headRef)
 	if err != nil {
 		return nil, err
 	}
-	right, err := ResolveRefSpec(ctx, headRef, doltDB, rightStr)
+	right, err := doltDB.ResolveCommitSpecStrForMergeBase(ctx, rightStr, headRef)
 	if err != nil {
 		return nil, err
 	}
@@ -92,23 +90,6 @@ func (d MergeBase) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	}
 
 	return mergeBase.String(), nil
-}
-
-// ResolveRefSpec resolves a commit spec string to a Commit object using the provided headRef and doltDB.
-func ResolveRefSpec(ctx *sql.Context, headRef ref.DoltRef, doltDB *doltdb.DoltDB, spec string) (*doltdb.Commit, error) {
-	cs, err := doltdb.NewCommitSpec(spec)
-	if err != nil {
-		return nil, err
-	}
-	optCmt, err := doltDB.Resolve(ctx, cs, headRef)
-	if err != nil {
-		return nil, err
-	}
-	commit, ok := optCmt.ToCommit()
-	if !ok {
-		return nil, doltdb.ErrGhostCommitEncountered
-	}
-	return commit, err
 }
 
 // String implements the sql.Expression interface.
