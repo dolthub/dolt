@@ -1011,6 +1011,12 @@ func (gbs *GitBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 	return ok, nil
 }
 
+// RangeReadsStreamWholeBlob reports that a ranged Get streams the whole blob,
+// because git cat-file has no server-side range and must read from byte zero.
+func (gbs *GitBlobstore) RangeReadsStreamWholeBlob() bool {
+	return true
+}
+
 func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {
 	key, err := normalizeGitTreePath(key)
 	if err != nil {
