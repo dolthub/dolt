@@ -17,6 +17,8 @@ package enginetest
 import (
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
 var DoltWorkspaceScriptTests = []queries.ScriptTest{
@@ -1176,6 +1178,173 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			{
 				Query:    "select id from list_entries order by id",
 				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11195.
+		Name: "dolt_workspace_* stage a delete and insert that reuse a unique key",
+		SetUpScript: []string{
+			"create table t (id int primary key, u int, unique index ix (u));",
+			"call dolt_commit('-Am', 'creating table t');",
+			"insert into t values (5, 10);",
+			"call dolt_commit('-am', 'insert row with u=10');",
+			"delete from t where id = 5;",
+			"insert into t values (1, 10);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "update dolt_workspace_t set staged = 1 where diff_type = 'added'",
+				// Staging only the added row leaves both the old and the new u=10 row in staging.
+				ExpectedErrStr: "duplicate unique key given: [10]",
+			},
+			{
+				Query: "select diff_type, staged from dolt_workspace_t order by diff_type",
+				// The failed staging must not stage anything.
+				Expected: []sql.Row{{"added", false}, {"removed", false}},
+			},
+			{
+				Query:    "select id, u from t as of 'STAGED'",
+				Expected: []sql.Row{{5, 10}},
+			},
+			{
+				Query:    "update dolt_workspace_t set staged = 1",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
+			},
+			{
+				Query:    "select id, u from t as of 'STAGED'",
+				Expected: []sql.Row{{1, 10}},
+			},
+			{
+				Query: "select id from t as of 'STAGED' where u = 10",
+				// A lookup through the unique index must find the staged row, proving the index is consistent.
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11195.
+		Name: "dolt_workspace_* stage a delete and insert that reuse a composite unique key",
+		SetUpScript: []string{
+			"create table foo (id varchar(36) primary key);",
+			"create table bar (id varchar(36) primary key, foo_id varchar(36) not null, sequence int, " +
+				"foreign key (foo_id) references foo(id) on delete cascade on update cascade, " +
+				"unique index idx_foo_id_sequence (foo_id, sequence));",
+			"call dolt_commit('-Am', 'creating tables foo and bar');",
+			"insert into foo values ('f1');",
+			"insert into bar values ('b1', 'f1', 10);",
+			"call dolt_commit('-am', 'insert foo and bar with sequence 10');",
+			"delete from bar where id = 'b1';",
+			"insert into bar values ('b2', 'f1', 10);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "update dolt_workspace_bar set staged = 1",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
+			},
+			{
+				Query:    "select id, sequence from bar as of 'STAGED'",
+				Expected: []sql.Row{{"b2", 10}},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11195.
+		Name: "dolt_workspace_* stage two modifies that swap a unique key",
+		SetUpScript: []string{
+			"create table t (id int primary key, u int, unique index ix (u));",
+			"call dolt_commit('-Am', 'creating table t');",
+			"insert into t values (1, 10), (2, 20);",
+			"call dolt_commit('-am', 'insert two rows');",
+			"update t set u = 99 where id = 1;",
+			"update t set u = 10 where id = 2;",
+			"update t set u = 20 where id = 1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "update dolt_workspace_t set staged = 1",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
+			},
+			{
+				Query:    "select id, u from t as of 'STAGED' order by id",
+				Expected: []sql.Row{{1, 20}, {2, 10}},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11195.
+		Name: "dolt_workspace_* keyless table stage a delete and insert that reuse a unique key",
+		SetUpScript: []string{
+			"create table t (a int, u int, unique index ix (u));",
+			"call dolt_commit('-Am', 'creating keyless table t');",
+			"insert into t values (1, 10);",
+			"call dolt_commit('-am', 'insert row with u=10');",
+			"delete from t where a = 1;",
+			"insert into t values (2, 10);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "update dolt_workspace_t set staged = 1 where diff_type = 'added'",
+				// Staging only the added row leaves both the old and the new u=10 row in staging.
+				ExpectedErrStr: "duplicate unique key given: [10]",
+			},
+			{
+				Query:    "select a, u from t as of 'STAGED'",
+				Expected: []sql.Row{{1, 10}},
+			},
+			{
+				Query:    "update dolt_workspace_t set staged = 1",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
+			},
+			{
+				Query:    "select a, u from t as of 'STAGED'",
+				Expected: []sql.Row{{2, 10}},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11195.
+		Name: "dolt_workspace_* stage a modify that leaves the unique key untouched",
+		SetUpScript: []string{
+			"create table t (id int primary key, u int, v int, unique index ix (u));",
+			"call dolt_commit('-Am', 'creating table t');",
+			"insert into t values (1, 10, 100), (2, 20, 200);",
+			"call dolt_commit('-am', 'insert two rows');",
+			"update t set v = 101 where id = 1;",
+			"delete from t where id = 2;",
+			"insert into t values (3, 20, 300);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "update dolt_workspace_t set staged = 1",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 3, Info: plan.UpdateInfo{Matched: 3, Updated: 3}}}},
+			},
+			{
+				Query:    "select id, u, v from t as of 'STAGED' order by id",
+				Expected: []sql.Row{{1, 10, 101}, {3, 20, 300}},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11195.
+		Name: "dolt_workspace_* stage rows that share a null unique key",
+		SetUpScript: []string{
+			"create table t (id int primary key, u int, unique index ix (u));",
+			"call dolt_commit('-Am', 'creating table t');",
+			"insert into t values (1, 10);",
+			"call dolt_commit('-am', 'insert row with u=10');",
+			"update t set u = null where id = 1;",
+			"insert into t values (2, null);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "update dolt_workspace_t set staged = 1",
+				// NULLs do not collide under a unique index.
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
+			},
+			{
+				Query:    "select id, u from t as of 'STAGED' order by id",
+				Expected: []sql.Row{{1, nil}, {2, nil}},
 			},
 		},
 	},
