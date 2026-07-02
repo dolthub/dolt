@@ -36,7 +36,7 @@ type wholeBlobBlobstore struct {
 	spool bool
 }
 
-func (w wholeBlobBlobstore) RangeReadsStreamWholeBlob() bool { return w.spool }
+func (w wholeBlobBlobstore) RangeReadsWholeBlob() bool { return w.spool }
 
 // fakeGetBlobstore overrides Get to return a canned reader and error.
 type fakeGetBlobstore struct {
@@ -48,10 +48,6 @@ type fakeGetBlobstore struct {
 func (f fakeGetBlobstore) Get(context.Context, string, blobstore.BlobRange) (io.ReadCloser, uint64, string, error) {
 	return f.rc, 0, "", f.err
 }
-
-// GitBlobstore must keep satisfying the capability the spool seam asserts, so a signature
-// change to RangeReadsStreamWholeBlob can't silently drop git back to per-range streaming.
-var _ wholeBlobRangeBlobstore = (*blobstore.GitBlobstore)(nil)
 
 // countSpoolFiles counts leftover spool temp files in the provider's temp dir.
 func countSpoolFiles(t *testing.T) int {

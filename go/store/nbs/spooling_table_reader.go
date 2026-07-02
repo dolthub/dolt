@@ -29,16 +29,10 @@ import (
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
-// wholeBlobRangeBlobstore is implemented by a Blobstore whose ranged Get streams the
-// whole blob regardless of the requested range, making tables cheaper to spool once.
-type wholeBlobRangeBlobstore interface {
-	RangeReadsStreamWholeBlob() bool
-}
-
 // shouldSpool reports whether |bs| needs its table files spooled to a local temp file.
 func shouldSpool(bs blobstore.Blobstore) bool {
-	s, ok := bs.(wholeBlobRangeBlobstore)
-	return ok && s.RangeReadsStreamWholeBlob()
+	s, ok := bs.(interface{ RangeReadsWholeBlob() bool })
+	return ok && s.RangeReadsWholeBlob()
 }
 
 // spoolingTableReaderAt serves random ReadAt over a blob that cannot do cheap ranged
