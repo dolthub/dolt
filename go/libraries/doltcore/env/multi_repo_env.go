@@ -239,9 +239,14 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 			envSet[dbfactory.DirToDBName(dir)] = newEnv
 			openedEnvs = append(openedEnvs, newEnv)
 		} else {
-			cfgErr := newEnv.CfgLoadErr
-			if cfgErr != nil {
+			if cfgErr := newEnv.CfgLoadErr; cfgErr != nil {
 				logrus.Warnf("failed to load database configuration at %s with error: %s", path, cfgErr.Error())
+			}
+			// Warn only when the directory looks like a database that failed to
+			// finish initializing, not an unrelated directory that happens to sit
+			// in the data directory.
+			if rsErr := newEnv.RSLoadErr; rsErr != nil && newEnv.HasDoltDataDir() {
+				logrus.WithError(rsErr).WithField("path", path).Warn("skipping incomplete database directory")
 			}
 		}
 		return false
@@ -296,9 +301,11 @@ func (mrEnv *MultiRepoEnv) ReloadDBs(ctx context.Context) {
 					logrus.Warnf("failed to load database at %s with error: %s", dEnv.urlStr, dbErr.Error())
 				}
 			}
-			cfgErr := dEnv.CfgLoadErr
-			if cfgErr != nil {
+			if cfgErr := dEnv.CfgLoadErr; cfgErr != nil {
 				logrus.Warnf("failed to load database configuration at %s with error: %s", dEnv.urlStr, cfgErr.Error())
+			}
+			if rsErr := dEnv.RSLoadErr; rsErr != nil {
+				logrus.WithError(rsErr).WithField("database", dEnv.urlStr).Warn("failed to load repo state for database")
 			}
 		} else if !anyIsReadOnly {
 			if isReadOnly, err := dEnv.IsAccessModeReadOnly(ctx); err == nil && isReadOnly {

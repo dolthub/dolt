@@ -218,3 +218,34 @@ func initMultiEnv(t *testing.T, testName string, names []string) (string, HomeDi
 
 	return rootPath, hdp, envs
 }
+
+// TestMultiEnvForDirectorySkipsIncompleteDatabase verifies that a database
+// directory that never finished initializing, having storage files but no repo
+// state, is left out of the multi-repo environment instead of being loaded and
+// breaking queries against the healthy databases beside it.
+func TestMultiEnvForDirectorySkipsIncompleteDatabase(t *testing.T) {
+	// See https://github.com/dolthub/dolt/issues/11206
+	rootPath, err := test.ChangeToTestDir("TestMultiEnvForDirectorySkipsIncompleteDatabase")
+	require.NoError(t, err)
+
+	hdp := func() (string, error) { return rootPath, nil }
+	mainPath := filepath.Join(rootPath, "main_db")
+	dEnv := initRepoWithRelativePath(t, mainPath, hdp)
+	_ = initRepoWithRelativePath(t, filepath.Join(mainPath, "good"), hdp)
+
+	// A database whose creation was interrupted leaves behind storage files
+	// without the repo state that marks it ready.
+	incompleteDir := filepath.Join(mainPath, "incomplete")
+	require.NoError(t, os.MkdirAll(filepath.Join(incompleteDir, dbfactory.DoltDir, dbfactory.DataDir), os.ModePerm))
+	f, err := os.Create(filepath.Join(incompleteDir, dbfactory.DoltDir, dbfactory.DataDir, "LOCK"))
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+
+	mrEnv, err := MultiEnvForDirectory(context.Background(), dEnv.FS, dEnv)
+	require.NoError(t, err)
+
+	require.Len(t, mrEnv.envs, 2)
+	for _, namedEnv := range mrEnv.envs {
+		assert.NotEqual(t, "incomplete", namedEnv.name)
+	}
+}
