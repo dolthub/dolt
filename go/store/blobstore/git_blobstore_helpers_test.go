@@ -69,6 +69,20 @@ func (f fakeGitAPI) BlobSize(ctx context.Context, oid git.OID) (int64, error) {
 func (f fakeGitAPI) BlobReader(ctx context.Context, oid git.OID) (io.ReadCloser, error) {
 	return f.blobReader(ctx, oid)
 }
+func (f fakeGitAPI) BlobSizes(ctx context.Context, oids []git.OID) ([]int64, error) {
+	if len(oids) == 0 {
+		return nil, nil
+	}
+	sizes := make([]int64, len(oids))
+	for i, oid := range oids {
+		sz, err := f.blobSize(ctx, oid)
+		if err != nil {
+			return nil, err
+		}
+		sizes[i] = sz
+	}
+	return sizes, nil
+}
 func (f fakeGitAPI) HashObject(ctx context.Context, contents io.Reader) (git.OID, error) {
 	panic("unexpected call")
 }

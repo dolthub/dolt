@@ -19,11 +19,46 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/dolthub/dolt/go/store/testutils/gitrepo"
 )
+
+// TestMain allows the test binary to impersonate deterministic helper commands
+// in place of git for the cmdReadCloser tests.
+func TestMain(m *testing.M) {
+	// See https://abhinavg.net/2022/05/15/hijack-testmain/
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "stdoutfail":
+			_, _ = os.Stdout.WriteString("abc")
+			os.Exit(3)
+		case "yes":
+			// Dies of SIGPIPE on Unix once the pipe closes. Windows has no signals,
+			// so exit nonzero by hand when the write fails.
+			for {
+				if _, err := os.Stdout.WriteString("y\n"); err != nil {
+					os.Exit(3)
+				}
+			}
+		}
+	}
+	os.Exit(m.Run())
+}
+
+// helperCommandRunner returns a Runner that re-executes this test binary, so the
+// helper commands in TestMain can act as the child process.
+func helperCommandRunner(t *testing.T) *Runner {
+	t.Helper()
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return NewRunnerWithGitPath(t.TempDir(), exe)
+}
 
 func testAuthor() *Identity {
 	return &Identity{Name: "gitapi test", Email: "gitapi@test.invalid"}
@@ -989,5 +1024,161 @@ func TestGitAPIImpl_PushRefWithLease_CreatesWhenMissing(t *testing.T) {
 	}
 	if got != l1 {
 		t.Fatalf("remote ref mismatch after bootstrap push: got %q, want %q", got, l1)
+	}
+}
+
+func TestGitAPIImpl_BlobSizes(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	_, _, api := newTestRepo(t, ctx)
+
+	blobs := [][]byte{
+		[]byte("one"),
+		[]byte("two two"),
+		bytes.Repeat([]byte("x"), 1234),
+	}
+	oids := make([]OID, len(blobs))
+	for i, b := range blobs {
+		oid, err := api.HashObject(ctx, bytes.NewReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		oids[i] = oid
+	}
+
+	sizes, err := api.BlobSizes(ctx, oids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sizes) != len(blobs) {
+		t.Fatalf("expected %d sizes, got %d", len(blobs), len(sizes))
+	}
+	for i, b := range blobs {
+		if sizes[i] != int64(len(b)) {
+			t.Errorf("size[%d]: got %d, want %d", i, sizes[i], len(b))
+		}
+	}
+
+	got, err := api.BlobSizes(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != nil {
+		t.Fatalf("expected nil for empty input, got %v", got)
+	}
+}
+
+func TestGitAPIImpl_BlobSizes_MissingOID(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	_, _, api := newTestRepo(t, ctx)
+
+	present, err := api.HashObject(ctx, bytes.NewReader([]byte("present")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	missing := OID("2222222222222222222222222222222222222222")
+
+	_, err = api.BlobSizes(ctx, []OID{present, missing})
+	if err == nil {
+		t.Fatal("expected an error for a missing oid, got nil")
+	}
+	if !strings.Contains(err.Error(), "missing") {
+		t.Fatalf("error %q does not mention the missing object", err)
+	}
+}
+
+func TestParseBatchHeaderSize(t *testing.T) {
+	t.Parallel()
+
+	oid := OID("1111111111111111111111111111111111111111")
+	other := "2222222222222222222222222222222222222222"
+	cases := []struct {
+		name            string
+		header          string
+		want            int64
+		wantErrContains string // "" means expect success
+	}{
+		{"valid", oid.String() + " blob 5\n", 5, ""},
+		{"missing", oid.String() + " missing\n", 0, "missing"},
+		{"ambiguous", oid.String() + " ambiguous\n", 0, "ambiguous"},
+		{"desync", other + " blob 5\n", 0, "does not match"},
+		{"unparseable", oid.String() + " blob notanumber\n", 0, "parse size"},
+		{"empty", "\n", 0, "unexpected header"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := parseBatchHeaderSize(tc.header, oid)
+			if tc.wantErrContains == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got != tc.want {
+					t.Fatalf("size: got %d, want %d", got, tc.want)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("expected an error containing %q, got nil", tc.wantErrContains)
+			}
+			if !strings.Contains(err.Error(), tc.wantErrContains) {
+				t.Fatalf("error %q does not contain %q", err, tc.wantErrContains)
+			}
+		})
+	}
+}
+
+func TestCmdReadCloser_EarlyCloseSwallowsWaitError(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	r := helperCommandRunner(t)
+
+	// A writer that never exits is still writing whenever we close, regardless of pipe buffer sizes.
+	rc, cmd, err := r.Start(ctx, RunOptions{}, "yes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.ReadFull(rc, make([]byte, 16)); err != nil {
+		t.Fatal(err)
+	}
+	if err := rc.Close(); err != nil {
+		t.Fatalf("early Close must swallow the broken-pipe exit, got: %v", err)
+	}
+	if cmd.ProcessState == nil {
+		t.Fatal("Close must reap the child process (no zombie)")
+	}
+}
+
+func TestCmdReadCloser_DrainedNonZeroExitSurfaces(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	r := helperCommandRunner(t)
+
+	rc, _, err := r.Start(ctx, RunOptions{}, "stdoutfail")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := io.ReadAll(rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "abc" {
+		t.Fatalf("stdout: got %q, want %q", got, "abc")
+	}
+
+	err = rc.Close()
+	if err == nil {
+		t.Fatal("a non-zero exit after a full drain must surface, got nil")
+	}
+	var ce *CmdError
+	if !errors.As(err, &ce) {
+		t.Fatalf("expected a *CmdError in the chain, got %T: %v", err, err)
+	}
+	if ce.ExitCode != 3 {
+		t.Fatalf("exit code: got %d, want 3", ce.ExitCode)
 	}
 }

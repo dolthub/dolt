@@ -554,11 +554,8 @@ func (ar *archiveReader) count() uint32 {
 }
 
 func (ar *archiveReader) close() error {
-	err := ar.indexReader.Close()
-	if err != nil {
-		return err
-	}
-	return ar.reader.Close()
+	// Join the errors so the reader still closes and releases its file when the index close fails.
+	return errors.Join(ar.indexReader.Close(), ar.reader.Close())
 }
 
 // readByteSpan reads the byte span from the archive. This allocates a new byte slice and returns it to the caller.
