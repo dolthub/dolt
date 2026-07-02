@@ -61,6 +61,10 @@ type prollyTableWriter struct {
 }
 
 var _ dsess.TableWriter = &prollyTableWriter{}
+
+var _ interface {
+	UpdateChangesUniqueKey(oldRow, newRow sql.Row) bool
+} = &prollyTableWriter{}
 var _ AutoIncrementGetter = &prollyTableWriter{}
 
 func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, schState *dsess.WriterState) (map[string]indexWriter, error) {
@@ -197,6 +201,25 @@ func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.
 
 	w.aiSet = true
 	return nil
+}
+
+// uniqueKeyChangeReporter is an index writer that reports whether an update frees or takes a unique key.
+type uniqueKeyChangeReporter interface {
+	// updateChangesUniqueKey reports whether updating |oldRow| to |newRow| frees or takes a unique key of this
+	// index. Any change can move a row in or out of a partial index, so a unique partial index always reports one.
+	updateChangesUniqueKey(oldRow sql.Row, newRow sql.Row) bool
+}
+
+// UpdateChangesUniqueKey reports whether updating |oldRow| to |newRow| frees or takes a key in a unique index of
+// the table, erring toward reporting a change. The primary key is not considered.
+func (w *prollyTableWriter) UpdateChangesUniqueKey(oldRow sql.Row, newRow sql.Row) bool {
+	for _, wr := range w.secondary {
+		r, ok := wr.(uniqueKeyChangeReporter)
+		if !ok || r.updateChangesUniqueKey(oldRow, newRow) {
+			return true
+		}
+	}
+	return false
 }
 
 // Delete implements TableWriter.
