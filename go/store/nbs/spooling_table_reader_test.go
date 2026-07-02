@@ -188,6 +188,29 @@ func TestSpoolingTableReaderAt_ConcurrentClonesAndClose(t *testing.T) {
 	require.True(t, os.IsNotExist(err), "temp file must be removed once the last reference closes")
 }
 
+func TestSpoolingTableReaderAt_ReaderOutlivesSource(t *testing.T) {
+	ctx := context.Background()
+	data := []byte("a reader must own its lifetime")
+
+	ra, path := spoolBytes(t, ctx, data)
+
+	rdr, err := ra.Reader(ctx)
+	require.NoError(t, err)
+
+	// Closing the source while the reader is open must not remove the spooled file.
+	require.NoError(t, ra.Close())
+	_, err = os.Stat(path)
+	require.NoError(t, err, "the reader holds a reference, so the file survives the source close")
+
+	got, err := io.ReadAll(rdr)
+	require.NoError(t, err)
+	require.Equal(t, data, got)
+
+	require.NoError(t, rdr.Close())
+	_, err = os.Stat(path)
+	require.True(t, os.IsNotExist(err), "closing the last reader removes the temp file")
+}
+
 func TestSpoolingTableReaderAt(t *testing.T) {
 	ctx := context.Background()
 	data := []byte("the quick brown fox jumps over the lazy dog")

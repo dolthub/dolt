@@ -75,18 +75,35 @@ func (s *spoolingTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, o
 	return s.f.ReadAt(p, off)
 }
 
-// Reader returns a reader over the whole spooled file. [os.File.ReadAt] does not move
-// the file offset, so the returned [io.SectionReader] is safe alongside concurrent
-// ReadAt calls. Unlike fileReaderAt.Reader, it shares the open file and is only valid
-// until the owning chunk source is closed.
+// Reader returns an independent reader over the whole spooled file. It holds its own
+// reference, so the reader stays valid until the caller closes it, even after the owning
+// chunk source is closed. [os.File.ReadAt] does not move the file offset, so the reader
+// is safe alongside concurrent ReadAt calls.
 func (s *spoolingTableReaderAt) Reader(ctx context.Context) (io.ReadCloser, error) {
-	return io.NopCloser(io.NewSectionReader(s.f, 0, s.sz)), nil
+	src := s.ref()
+	return &spoolFileReader{Reader: io.NewSectionReader(src.f, 0, src.sz), src: src}, nil
+}
+
+// spoolFileReader streams a spooled file while holding a reference to it, so the temp
+// file is not removed until the reader is closed.
+type spoolFileReader struct {
+	io.Reader
+	src *spoolingTableReaderAt
+}
+
+func (r *spoolFileReader) Close() error {
+	return r.src.Close()
+}
+
+// ref increments the reference count and returns a handle that shares the spooled file.
+func (s *spoolingTableReaderAt) ref() *spoolingTableReaderAt {
+	dynassert.Assert(atomic.AddInt32(s.cnt, 1) > 1, "attempt to reference a closed spoolingTableReaderAt")
+	c := *s
+	return &c
 }
 
 func (s *spoolingTableReaderAt) clone() (tableReaderAt, error) {
-	dynassert.Assert(atomic.AddInt32(s.cnt, 1) > 1, "attempt to clone a closed spoolingTableReaderAt")
-	c := *s
-	return &c, nil
+	return s.ref(), nil
 }
 
 func (s *spoolingTableReaderAt) Close() error {
