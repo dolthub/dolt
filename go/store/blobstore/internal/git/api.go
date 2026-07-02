@@ -69,6 +69,9 @@ type GitAPI interface {
 	// BlobReader returns a reader for blob contents.
 	BlobReader(ctx context.Context, oid OID) (io.ReadCloser, error)
 
+	// BlobSizes returns the sizes of |oids| in the same order, and an error if any is missing.
+	BlobSizes(ctx context.Context, oids []OID) ([]int64, error)
+
 	// HashObject writes a new blob object for the provided contents and returns its OID.
 	// Equivalent plumbing:
 	//   GIT_DIR=... git hash-object -w --stdin
