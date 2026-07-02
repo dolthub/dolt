@@ -208,19 +208,32 @@ func (r *Runner) Start(ctx context.Context, opts RunOptions, args ...string) (io
 }
 
 type cmdReadCloser struct {
-	r      io.ReadCloser
-	cmd    *exec.Cmd
-	stderr *bytes.Buffer
-	args   []string
-	dir    string
+	r       io.ReadCloser
+	cmd     *exec.Cmd
+	stderr  *bytes.Buffer
+	args    []string
+	dir     string
+	drained bool // set once Read reaches io.EOF, so stdout was fully consumed
 }
 
-func (c *cmdReadCloser) Read(p []byte) (int, error) { return c.r.Read(p) }
+func (c *cmdReadCloser) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	if errors.Is(err, io.EOF) {
+		c.drained = true
+	}
+	return n, err
+}
 
 func (c *cmdReadCloser) Close() error {
 	_ = c.r.Close()
 	err := c.cmd.Wait()
 	if err == nil {
+		return nil
+	}
+	// A close before stdout was drained kills the still writing child with a closed
+	// pipe, which is expected. Checking our own drained flag is portable, while the
+	// child's exit text names the broken pipe signal only on Unix.
+	if !c.drained {
 		return nil
 	}
 	exitCode := 0

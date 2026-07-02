@@ -1011,6 +1011,14 @@ func (gbs *GitBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 	return ok, nil
 }
 
+// RangeReadsWholeBlob reports that a ranged Get streams the whole blob, because git
+// cat-file has no server-side range and must read from byte zero.
+func (gbs *GitBlobstore) RangeReadsWholeBlob() bool {
+	return true
+}
+
+var _ interface{ RangeReadsWholeBlob() bool } = (*GitBlobstore)(nil)
+
 func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {
 	key, err := normalizeGitTreePath(key)
 	if err != nil {
@@ -1101,6 +1109,7 @@ func (gbs *GitBlobstore) validateAndSizeChunkedParts(ctx context.Context, entrie
 	}
 
 	parts := make([]chunkPartRef, 0, len(entries))
+	oids := make([]git.OID, len(entries))
 	var total uint64
 	for i, e := range entries {
 		if e.Type != git.ObjectTypeBlob {
@@ -1120,11 +1129,20 @@ func (gbs *GitBlobstore) validateAndSizeChunkedParts(ctx context.Context, entrie
 		if want := fmt.Sprintf("%0*d", gitblobstorePartNameWidth, n); want != e.Name {
 			return nil, 0, fmt.Errorf("gitblobstore: invalid part name %q (expected %q)", e.Name, want)
 		}
+		oids[i] = e.OID
+	}
 
-		sz, err := gbs.api.BlobSize(ctx, e.OID)
-		if err != nil {
-			return nil, 0, err
-		}
+	// Size every part in one cat-file process rather than one per part.
+	sizes, err := gbs.api.BlobSizes(ctx, oids)
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(sizes) != len(oids) {
+		return nil, 0, fmt.Errorf("gitblobstore: expected %d part sizes, got %d", len(oids), len(sizes))
+	}
+
+	for i, e := range entries {
+		sz := sizes[i]
 		if sz < 0 {
 			return nil, 0, fmt.Errorf("gitblobstore: invalid part size %d for %q", sz, e.Name)
 		}
