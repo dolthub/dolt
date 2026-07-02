@@ -143,7 +143,11 @@ func TestSpoolingTableReaderAt_ConcurrentClonesAndClose(t *testing.T) {
 
 	ra, path := spoolBytes(t, ctx, data)
 
-	const goroutines = 16
+	const (
+		goroutines    = 16
+		readsPerClone = 64
+		offsetStride  = 37 // a prime, so a clone's own reads do not cluster at aligned offsets
+	)
 	var wg sync.WaitGroup
 	for i := 0; i < goroutines; i++ {
 		wg.Add(1)
@@ -156,8 +160,12 @@ func TestSpoolingTableReaderAt_ConcurrentClonesAndClose(t *testing.T) {
 			}
 			defer c.Close()
 			p := make([]byte, 8)
-			for j := 0; j < 64; j++ {
-				off := int64((j * 37) % (len(data) - len(p)))
+			span := int64(len(data) - len(p))
+			// Start each clone at a different base offset so the clones read different
+			// regions of the shared file at the same time.
+			base := int64(i) * span / goroutines
+			for j := 0; j < readsPerClone; j++ {
+				off := (base + int64(j)*offsetStride) % span
 				n, err := c.ReadAtWithStats(ctx, p, off, &Stats{})
 				if err != nil {
 					t.Errorf("read at %d: %v", off, err)
