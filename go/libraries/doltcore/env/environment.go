@@ -304,6 +304,20 @@ func (dEnv *DoltEnv) Valid() bool {
 	return dEnv != nil && dEnv.CfgLoadErr == nil && dEnv.RSLoadErr == nil && dEnv.DBLoadError == nil && dEnv.HasDoltDir() && dEnv.HasDoltDataDir()
 }
 
+// IsIncompleteDatabaseDir reports whether the database directory rooted at |fs| holds a database whose creation
+// never finished, either because it carries the in-progress marker or because it has Dolt storage without the
+// repo state file that every complete database has. Discovery ignores such a directory, so it cannot be served.
+func IsIncompleteDatabaseDir(fs filesys.Filesys) bool {
+	if dbfactory.IsDatabaseInProgress(fs) {
+		return true
+	}
+	if exists, isDir := fs.Exists(dbfactory.DoltDir); !exists || !isDir {
+		return false
+	}
+	exists, _ := fs.Exists(getRepoStateFile())
+	return !exists
+}
+
 // initWorkingSetFromRepoState sets the working set for the env's head to mirror the contents of the repo state file.
 // This is only necessary to migrate repos written before this method was introduced, and can be removed after 1.0
 func (dEnv *DoltEnv) initWorkingSetFromRepoState(ctx context.Context) error {

@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
@@ -164,6 +165,11 @@ func (cmd ReadTablesCmd) Exec(ctx context.Context, commandStr string, args []str
 
 	if err != nil {
 		return BuildVerrAndExit("Unable to update the working root for local database.", err)
+	}
+
+	err = dbfactory.ClearDatabaseInProgress(dEnv.FS)
+	if err != nil {
+		return BuildVerrAndExit("Unable to finish creating the local database.", err)
 	}
 
 	return 0

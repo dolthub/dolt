@@ -89,6 +89,11 @@ func GetMultiEnvStorageMetadata(ctx context.Context, dataDirFS filesys.Filesys) 
 		if err != nil {
 			return false
 		}
+
+		if dbfactory.IsDatabaseInProgress(newFs) {
+			return false
+		}
+
 		path, err = newFs.Abs("")
 		if err != nil {
 			return false
@@ -187,7 +192,10 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 	var openedEnvs []*DoltEnv
 
 	// Anything that looks like it has a dolt database belongs here.
-	if dEnv.HasDoltDataDir() {
+	if dEnv.HasDoltDataDir() && dbfactory.IsDatabaseInProgress(dEnv.FS) {
+		path, _ := dEnv.FS.Abs("")
+		logrus.WithField("path", path).Warn("skipping in-progress database directory")
+	} else if dEnv.HasDoltDataDir() {
 		LoadDoltDB(ctx, dEnv)
 		dbErr := dEnv.DBLoadError
 		if dbErr != nil {
@@ -222,6 +230,11 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 
 		newFs, err := dataDirFS.WithWorkingDir(dir)
 		if err != nil {
+			return false
+		}
+
+		if dbfactory.IsDatabaseInProgress(newFs) {
+			logrus.WithField("path", path).Warn("skipping in-progress database directory")
 			return false
 		}
 

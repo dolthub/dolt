@@ -173,6 +173,7 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 		// If we're cloning into a directory that already exists do not erase it. Otherwise
 		// make best effort to delete the directory we created.
 		if userDirExists {
+			_ = dbfactory.ClearDatabaseInProgress(clonedEnv.FS)
 			clonedEnv.FS.Delete(dbfactory.DoltDir, true)
 		} else {
 			clonedEnv.FS.Delete(".", true)
@@ -192,6 +193,11 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 		Merge:  clonedEnv.RepoState.Head,
 		Remote: remoteName,
 	})
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	err = dbfactory.ClearDatabaseInProgress(clonedEnv.FS)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}

@@ -219,33 +219,42 @@ func initMultiEnv(t *testing.T, testName string, names []string) (string, HomeDi
 	return rootPath, hdp, envs
 }
 
-// TestMultiEnvForDirectorySkipsIncompleteDatabase verifies that a database
-// directory that never finished initializing, having storage files but no repo
-// state, is left out of the multi-repo environment instead of being loaded and
-// breaking queries against the healthy databases beside it.
-func TestMultiEnvForDirectorySkipsIncompleteDatabase(t *testing.T) {
+func TestMultiEnvForDirectorySkipsOrphanedDatabase(t *testing.T) {
 	// See https://github.com/dolthub/dolt/issues/11206
-	rootPath, err := test.ChangeToTestDir("TestMultiEnvForDirectorySkipsIncompleteDatabase")
-	require.NoError(t, err)
+	cases := []struct {
+		name       string
+		makeOrphan func(t *testing.T, mainPath string, hdp HomeDirProvider)
+	}{
+		{"missing repo state", func(t *testing.T, mainPath string, hdp HomeDirProvider) {
+			nomsDir := filepath.Join(mainPath, "orphan", dbfactory.DoltDir, dbfactory.DataDir)
+			require.NoError(t, os.MkdirAll(nomsDir, os.ModePerm))
+			require.NoError(t, os.WriteFile(filepath.Join(nomsDir, "LOCK"), nil, 0o644))
+		}},
+		{"in-progress marker", func(t *testing.T, mainPath string, hdp HomeDirProvider) {
+			_ = initRepoWithRelativePath(t, filepath.Join(mainPath, "orphan"), hdp)
+			require.NoError(t, os.WriteFile(filepath.Join(mainPath, "orphan", ".dolt_safe_to_ignore"), nil, 0o644))
+		}},
+	}
 
-	hdp := func() (string, error) { return rootPath, nil }
-	mainPath := filepath.Join(rootPath, "main_db")
-	dEnv := initRepoWithRelativePath(t, mainPath, hdp)
-	_ = initRepoWithRelativePath(t, filepath.Join(mainPath, "good"), hdp)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rootPath, err := test.ChangeToTestDir("TestMultiEnvForDirectorySkipsOrphanedDatabase")
+			require.NoError(t, err)
 
-	// A database whose creation was interrupted leaves behind storage files
-	// without the repo state that marks it ready.
-	incompleteDir := filepath.Join(mainPath, "incomplete")
-	require.NoError(t, os.MkdirAll(filepath.Join(incompleteDir, dbfactory.DoltDir, dbfactory.DataDir), os.ModePerm))
-	f, err := os.Create(filepath.Join(incompleteDir, dbfactory.DoltDir, dbfactory.DataDir, "LOCK"))
-	require.NoError(t, err)
-	require.NoError(t, f.Close())
+			hdp := func() (string, error) { return rootPath, nil }
+			mainPath := filepath.Join(rootPath, "main_db")
+			dEnv := initRepoWithRelativePath(t, mainPath, hdp)
+			_ = initRepoWithRelativePath(t, filepath.Join(mainPath, "good"), hdp)
 
-	mrEnv, err := MultiEnvForDirectory(context.Background(), dEnv.FS, dEnv)
-	require.NoError(t, err)
+			tc.makeOrphan(t, mainPath, hdp)
 
-	require.Len(t, mrEnv.envs, 2)
-	for _, namedEnv := range mrEnv.envs {
-		assert.NotEqual(t, "incomplete", namedEnv.name)
+			mrEnv, err := MultiEnvForDirectory(context.Background(), dEnv.FS, dEnv)
+			require.NoError(t, err)
+
+			require.Len(t, mrEnv.envs, 2)
+			for _, namedEnv := range mrEnv.envs {
+				assert.NotEqual(t, "orphan", namedEnv.name)
+			}
+		})
 	}
 }

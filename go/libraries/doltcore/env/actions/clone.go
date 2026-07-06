@@ -25,6 +25,7 @@ import (
 	"github.com/dustin/go-humanize"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -39,6 +40,7 @@ import (
 )
 
 var ErrRepositoryExists = errors.New("data repository already exists")
+var ErrIncompleteRepository = errors.New("incomplete database directory from an interrupted create already exists")
 var ErrFailedToCreateDirectory = errors.New("unable to create directories")
 var ErrFailedToAccessDir = errors.New("unable to access directories")
 var ErrFailedToCreateRepoStateWithRemote = errors.New("unable to create repo state with remote")
@@ -55,10 +57,17 @@ var ErrEmailNotFound = errors.New("could not determine email. run dolt config --
 var ErrCloneFailed = errors.New("clone failed")
 
 // EnvForClone creates a new DoltEnv and configures it with repo state from the specified remote. The returned DoltEnv is ready for content to be cloned into it. The directory used for the new DoltEnv is determined by resolving the specified dir against the specified Filesys.
+// The directory at |dir| is marked in progress before any state is written, so callers must clear the marker
+// with [dbfactory.ClearDatabaseInProgress] once the clone content is complete.
 func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, dir string, fs filesys.Filesys, version string, homeProvider env.HomeDirProvider) (*env.DoltEnv, error) {
 	canCreate, err := env.CanCreateDatabaseAtPath(fs, dir)
 	if !canCreate {
 		if errors.Is(err, env.ErrCannotCreateDoltDirAlreadyExists) {
+			// A directory left behind by an interrupted clone is not a usable repository, so report it
+			// plainly instead of claiming a repository exists.
+			if subFs, ferr := fs.WithWorkingDir(dir); ferr == nil && env.IsIncompleteDatabaseDir(subFs) {
+				return nil, fmt.Errorf("%w: %s; remove the directory and try again", ErrIncompleteRepository, dir)
+			}
 			return nil, fmt.Errorf("%w: %s", ErrRepositoryExists, dir)
 		}
 	}
@@ -69,6 +78,11 @@ func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, di
 	}
 
 	newFs, err := fs.WithWorkingDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s; %s", ErrFailedToAccessDir, dir, err.Error())
+	}
+
+	err = dbfactory.MarkDatabaseInProgress(newFs)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s; %s", ErrFailedToAccessDir, dir, err.Error())
 	}

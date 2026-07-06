@@ -36,6 +36,23 @@ seed_repos_with_tables_with_use_statements() {
     [[ "$output" =~ "$EXPECTED" ]] || false
 }
 
+@test "sql-multi-db: dolt sql ignores an in-progress database directory" {
+    touch repo2/.dolt_safe_to_ignore
+
+    run dolt --data-dir ./ sql -r csv -q "SHOW DATABASES"
+    [ "$status" -eq 0 ]
+    # Match database rows exactly: the skip warning line also mentions repo2's path.
+    echo "$output" | grep -qx "repo1" || false
+    ! ( echo "$output" | grep -qx "repo2" ) || false
+
+    run dolt --data-dir ./ sql -r csv -q "SELECT COUNT(*) FROM information_schema.schemata"
+    [ "$status" -eq 0 ]
+    # information_schema and repo1: the ignored repo2 is not counted.
+    echo "$output" | grep -qx "2" || false
+
+    [ -d repo2 ]
+}
+
 @test "sql-multi-db: sql use statement and table accessibility" {
     seed_repos_with_tables_with_use_statements
 
