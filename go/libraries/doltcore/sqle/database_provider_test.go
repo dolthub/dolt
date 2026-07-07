@@ -15,11 +15,13 @@
 package sqle
 
 import (
+	"bytes"
 	"context"
 	"testing"
 
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -28,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
@@ -155,4 +158,35 @@ func (*snoopingCommitHook) ExecuteForReplicaWrite() bool {
 func InstallSnoopingCommitHook(ctx *sql.Context, pro *DoltDatabaseProvider, name string, dEnv *env.DoltEnv, db dsess.SqlDatabase) error {
 	dEnv.DoltDB(ctx).PrependCommitHooks(ctx, &snoopingCommitHook{})
 	return nil
+}
+
+func TestDuplicateDatabaseNameWarning(t *testing.T) {
+	ctx := context.Background()
+
+	dEnv1 := dtestutils.CreateTestEnvWithName("dupdb")
+	db1, err := NewDatabase(ctx, "dupdb", dEnv1.DbData(ctx), editor.Options{})
+	require.NoError(t, err)
+
+	dEnv2 := dtestutils.CreateTestEnvWithName("dupdb2")
+	db2, err := NewDatabase(ctx, "dupdb", dEnv2.DbData(ctx), editor.Options{})
+	require.NoError(t, err)
+
+	// Capture logrus output
+	var buf bytes.Buffer
+	logrus.SetOutput(&buf)
+	defer func() {
+		logrus.SetOutput(nil)
+	}()
+
+	_, err = NewDoltDatabaseProviderWithDatabases(
+		"main",
+		dEnv1.FS,
+		[]dsess.SqlDatabase{db1, db2},
+		[]filesys.Filesys{dEnv1.FS, dEnv2.FS},
+		sql.EngineOverrides{},
+	)
+	require.NoError(t, err)
+
+	assert.Contains(t, buf.String(), "duplicate database name")
+	assert.Contains(t, buf.String(), "dupdb")
 }
