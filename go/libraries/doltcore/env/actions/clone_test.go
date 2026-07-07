@@ -35,6 +35,7 @@ func TestEnvForCloneMarksDatabaseInProgress(t *testing.T) {
 
 	dEnv, err := EnvForClone(context.Background(), types.Format_DOLT, env.NoRemote, "cloned", fs, "test", hdp)
 	require.NoError(t, err)
+	defer dEnv.Close()
 
 	require.True(t, dbfactory.IsDatabaseInProgress(dEnv.FS), "EnvForClone must mark the directory before clone content arrives")
 
