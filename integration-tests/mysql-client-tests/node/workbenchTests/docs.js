@@ -11,7 +11,7 @@ export const docsTests = [
   {
     q: "INSERT INTO dolt_docs VALUES (:docName, :docText);",
     p: {
-      docName: "AGENT.md",
+      docName: "AGENTS.md",
       docText: agentText,
     },
     res: {
@@ -26,7 +26,7 @@ export const docsTests = [
   },
   {
     q: "select * from dolt_docs",
-    res: [{doc_name: "AGENT.md", doc_text: agentText}],
+    res: [{doc_name: "AGENTS.md", doc_text: agentText}],
   },
   {
     q: "REPLACE INTO dolt_docs VALUES (:docName, :docText);",
