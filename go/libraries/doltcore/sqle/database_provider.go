@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -664,7 +663,11 @@ func commitTransaction(ctx *sql.Context, dSess *dsess.DoltSession, rsc *doltdb.R
 	return nil
 }
 
-var ErrIncompleteDatabaseDir = goerrors.NewKind("cannot create database %s: incomplete database directory from an interrupted create already exists; remove the directory and try again")
+var ErrIncompleteDatabaseDir = errors.New("incomplete database directory from an interrupted create already exists; remove the directory and try again")
+
+func NewErrIncompleteDatabaseDir(db string) error {
+	return fmt.Errorf("cannot create database %s: %w", db, ErrIncompleteDatabaseDir)
+}
 
 func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name string, collation sql.CollationID) (err error) {
 	// We have to validate the name before attempting to create a directory. If a directory contains a delimiter, when
@@ -700,7 +703,7 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 	exists, isDir := p.fs.Exists(name)
 	if exists && isDir {
 		if subFs, ferr := p.fs.WithWorkingDir(name); ferr == nil && env.IsIncompleteDatabaseDir(subFs) {
-			return ErrIncompleteDatabaseDir.New(name)
+			return NewErrIncompleteDatabaseDir(name)
 		}
 		return sql.ErrDatabaseExists.New(name)
 	} else if exists {
@@ -952,7 +955,7 @@ func (p *DoltDatabaseProvider) CloneDatabaseFromRemote(
 	exists, isDir := p.fs.Exists(dbName)
 	if exists && isDir {
 		if subFs, ferr := p.fs.WithWorkingDir(dbName); ferr == nil && env.IsIncompleteDatabaseDir(subFs) {
-			return ErrIncompleteDatabaseDir.New(dbName)
+			return NewErrIncompleteDatabaseDir(dbName)
 		}
 		return sql.ErrDatabaseExists.New(dbName)
 	} else if exists {

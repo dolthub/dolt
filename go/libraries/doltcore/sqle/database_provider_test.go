@@ -207,7 +207,7 @@ func TestCreateDatabaseOverIncompleteDirectory(t *testing.T) {
 			for _, q := range []string{"CREATE DATABASE foo;", "CREATE DATABASE IF NOT EXISTS foo;"} {
 				err := ExecuteSqlOnEngine(sqlCtx, engine, q)
 				require.Error(t, err)
-				assert.True(t, ErrIncompleteDatabaseDir.Is(err), "expected an incomplete-directory error for %q, got %v", q, err)
+				assert.ErrorIs(t, err, ErrIncompleteDatabaseDir, "query %q", q)
 			}
 		})
 	}
@@ -222,7 +222,7 @@ func TestCloneDatabaseOverIncompleteDirectory(t *testing.T) {
 			// The orphaned directory is detected before any remote work, so the unreachable remote is never contacted.
 			err := pro.CloneDatabaseFromRemote(sqlCtx, "foo", "", "origin", "file://unreachable", -1, nil)
 			require.Error(t, err)
-			assert.True(t, ErrIncompleteDatabaseDir.Is(err), "expected an incomplete-directory error, got %v", err)
+			assert.ErrorIs(t, err, ErrIncompleteDatabaseDir)
 		})
 	}
 }
