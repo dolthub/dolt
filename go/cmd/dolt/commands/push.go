@@ -26,7 +26,6 @@ import (
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -197,23 +196,37 @@ func handlePushError(err error, usage cli.UsagePrinter) int {
 	}
 
 	var verr errhand.VerboseError
-	switch err {
-	case actions.ErrUnknownPushErr:
-		s, ok := status.FromError(err)
-		if ok && s.Code() == codes.PermissionDenied {
+	if errors.Is(err, actions.ErrUnknownPushErr) {
+		if isPermissionDeniedErr(err) {
 			cli.Println("hint: have you logged into DoltHub using 'dolt login'?")
 			cli.Println("hint: check that user.email in 'dolt config --list' has write perms to DoltHub repo")
 		}
-		if rpcErr, ok := err.(*remotestorage.RpcError); ok {
+		var rpcErr *remotestorage.RpcError
+		if errors.As(err, &rpcErr) {
 			verr = errhand.BuildDError("error: push failed").AddCause(err).AddDetails("%s", rpcErr.FullDetails()).Build()
 		} else {
 			verr = errhand.BuildDError("error: push failed").AddCause(err).Build()
 		}
-	default:
+	} else {
 		verr = errhand.VerboseErrorFromError(err)
 	}
 
 	return HandleVErrAndExitCode(verr, usage)
+}
+
+// isPermissionDeniedErr reports whether err indicates a gRPC PermissionDenied
+// failure. It first tries to extract an RpcError from the chain (which captures
+// the gRPC status at creation time), then falls back to checking the error text
+// for the status code name.
+func isPermissionDeniedErr(err error) bool {
+	var rpcErr *remotestorage.RpcError
+	if errors.As(err, &rpcErr) {
+		st := remotestorage.GetStatus(rpcErr)
+		if st != nil && st.Code() == codes.PermissionDenied {
+			return true
+		}
+	}
+	return strings.Contains(err.Error(), "PermissionDenied")
 }
 
 // progLanguage is the language to use when displaying progress for a pull from a src db to a sink db.
