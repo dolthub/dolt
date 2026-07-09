@@ -271,13 +271,13 @@ func TestCreatingDatabaseReservation(t *testing.T) {
 		return sqlCtx, sess.Provider().(*DoltDatabaseProvider)
 	}
 
-	// nameUnavailable runs databaseNameUnavailableLocked under the provider
+	// checkNameAvailable runs checkDatabaseNameAvailableLocked under the provider
 	// lock, mirroring how the create (checkDisk=true) and undrop
 	// (checkDisk=false) paths consult it.
-	nameUnavailable := func(pro *DoltDatabaseProvider, name string, checkDisk bool) error {
+	checkNameAvailable := func(pro *DoltDatabaseProvider, name string, checkDisk bool) error {
 		pro.mu.Lock()
 		defer pro.mu.Unlock()
-		return pro.databaseNameUnavailableLocked(name, checkDisk)
+		return pro.checkDatabaseNameAvailableLocked(name, checkDisk)
 	}
 
 	t.Run("second reservation of the same name conflicts", func(t *testing.T) {
@@ -297,9 +297,9 @@ func TestCreatingDatabaseReservation(t *testing.T) {
 		for _, variant := range []string{"clonedb", "CLONEDB", "CloneDB"} {
 			require.Truef(t, sql.ErrDatabaseExists.Is(pro.reserveCreatingDatabase(variant)),
 				"clone of case-variant %q should conflict", variant)
-			require.Truef(t, sql.ErrDatabaseExists.Is(nameUnavailable(pro, variant, true)),
+			require.Truef(t, sql.ErrDatabaseExists.Is(checkNameAvailable(pro, variant, true)),
 				"CREATE of case-variant %q should conflict", variant)
-			require.Truef(t, sql.ErrDatabaseExists.Is(nameUnavailable(pro, variant, false)),
+			require.Truef(t, sql.ErrDatabaseExists.Is(checkNameAvailable(pro, variant, false)),
 				"UNDROP of case-variant %q should conflict", variant)
 		}
 	})
@@ -309,7 +309,7 @@ func TestCreatingDatabaseReservation(t *testing.T) {
 		require.NoError(t, pro.reserveCreatingDatabase("clonedb"))
 		// Releasing via a different case must clear the same reservation.
 		pro.releaseCreatingDatabase("CLONEDB")
-		require.NoError(t, nameUnavailable(pro, "clonedb", true))
+		require.NoError(t, checkNameAvailable(pro, "clonedb", true))
 		require.NoError(t, pro.reserveCreatingDatabase("clonedb"))
 		pro.releaseCreatingDatabase("clonedb")
 	})
@@ -325,7 +325,7 @@ func TestCreatingDatabaseReservation(t *testing.T) {
 			pro.mu.Unlock()
 		})
 
-		require.Truef(t, sql.ErrDatabaseExists.Is(nameUnavailable(pro, "DELDB", true)),
+		require.Truef(t, sql.ErrDatabaseExists.Is(checkNameAvailable(pro, "DELDB", true)),
 			"CREATE of a case-variant of a deleting database should conflict")
 	})
 
