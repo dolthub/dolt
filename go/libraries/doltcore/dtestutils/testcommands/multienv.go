@@ -24,6 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	cmd "github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
@@ -203,6 +204,11 @@ func (mr *MultiRepoTestSetup) CloneDB(fromRemote, dbName string) {
 	pull.WithDiscardingStatsCh(func(statsCh chan pull.Stats) {
 		err = actions.CloneRemote(ctx, srcDB, r.Name, "", false, -1, dEnv, statsCh)
 	})
+	if err != nil {
+		mr.Errhand(err)
+	}
+
+	err = dbfactory.ClearDatabaseInProgress(dEnv.FS)
 	if err != nil {
 		mr.Errhand(err)
 	}

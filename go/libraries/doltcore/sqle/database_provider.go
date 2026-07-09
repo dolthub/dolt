@@ -663,6 +663,12 @@ func commitTransaction(ctx *sql.Context, dSess *dsess.DoltSession, rsc *doltdb.R
 	return nil
 }
 
+var ErrIncompleteDatabaseDir = errors.New("incomplete database directory from an interrupted create already exists; remove the directory and try again")
+
+func NewErrIncompleteDatabaseDir(db string) error {
+	return fmt.Errorf("cannot create database %s: %w", db, ErrIncompleteDatabaseDir)
+}
+
 func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name string, collation sql.CollationID) (err error) {
 	// We have to validate the name before attempting to create a directory. If a directory contains a delimiter, when
 	// registerNewDatabase errors out a directory with the exact name will be leftover due to a process lock. This then
@@ -696,6 +702,9 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 	}
 	exists, isDir := p.fs.Exists(name)
 	if exists && isDir {
+		if subFs, ferr := p.fs.WithWorkingDir(name); ferr == nil && env.IsIncompleteDatabaseDir(subFs) {
+			return NewErrIncompleteDatabaseDir(name)
+		}
 		return sql.ErrDatabaseExists.New(name)
 	} else if exists {
 		return fmt.Errorf("Cannot create DB, file exists at %s", name)
@@ -714,6 +723,11 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 	}()
 
 	newFs, err := p.fs.WithWorkingDir(name)
+	if err != nil {
+		return err
+	}
+
+	err = dbfactory.MarkDatabaseInProgress(newFs)
 	if err != nil {
 		return err
 	}
@@ -787,6 +801,11 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 		}
 
 		updatedSchemas = true
+	}
+
+	err = dbfactory.ClearDatabaseInProgress(newFs)
+	if err != nil {
+		return err
 	}
 
 	err = p.registerNewDatabase(ctx, name, newEnv)
@@ -935,6 +954,9 @@ func (p *DoltDatabaseProvider) CloneDatabaseFromRemote(
 
 	exists, isDir := p.fs.Exists(dbName)
 	if exists && isDir {
+		if subFs, ferr := p.fs.WithWorkingDir(dbName); ferr == nil && env.IsIncompleteDatabaseDir(subFs) {
+			return NewErrIncompleteDatabaseDir(dbName)
+		}
 		return sql.ErrDatabaseExists.New(dbName)
 	} else if exists {
 		return fmt.Errorf("cannot create DB, file exists at %s", dbName)
@@ -999,6 +1021,10 @@ func (p *DoltDatabaseProvider) cloneDatabaseFromRemote(
 		Merge:  dEnv.RepoState.Head,
 		Remote: remoteName,
 	})
+
+	if err := dbfactory.ClearDatabaseInProgress(dEnv.FS); err != nil {
+		return err
+	}
 
 	return p.registerNewDatabase(ctx, dbName, dEnv)
 }

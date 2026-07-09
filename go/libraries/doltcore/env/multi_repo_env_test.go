@@ -218,3 +218,43 @@ func initMultiEnv(t *testing.T, testName string, names []string) (string, HomeDi
 
 	return rootPath, hdp, envs
 }
+
+func TestMultiEnvForDirectorySkipsOrphanedDatabase(t *testing.T) {
+	// See https://github.com/dolthub/dolt/issues/11206
+	cases := []struct {
+		name       string
+		makeOrphan func(t *testing.T, mainPath string, hdp HomeDirProvider)
+	}{
+		{"missing repo state", func(t *testing.T, mainPath string, hdp HomeDirProvider) {
+			nomsDir := filepath.Join(mainPath, "orphan", dbfactory.DoltDir, dbfactory.DataDir)
+			require.NoError(t, os.MkdirAll(nomsDir, os.ModePerm))
+			require.NoError(t, os.WriteFile(filepath.Join(nomsDir, "LOCK"), nil, 0o644))
+		}},
+		{"in-progress marker", func(t *testing.T, mainPath string, hdp HomeDirProvider) {
+			_ = initRepoWithRelativePath(t, filepath.Join(mainPath, "orphan"), hdp)
+			require.NoError(t, os.WriteFile(filepath.Join(mainPath, "orphan", ".dolt_safe_to_ignore"), nil, 0o644))
+		}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rootPath, err := test.ChangeToTestDir("TestMultiEnvForDirectorySkipsOrphanedDatabase")
+			require.NoError(t, err)
+
+			hdp := func() (string, error) { return rootPath, nil }
+			mainPath := filepath.Join(rootPath, "main_db")
+			dEnv := initRepoWithRelativePath(t, mainPath, hdp)
+			_ = initRepoWithRelativePath(t, filepath.Join(mainPath, "good"), hdp)
+
+			tc.makeOrphan(t, mainPath, hdp)
+
+			mrEnv, err := MultiEnvForDirectory(context.Background(), dEnv.FS, dEnv)
+			require.NoError(t, err)
+
+			require.Len(t, mrEnv.envs, 2)
+			for _, namedEnv := range mrEnv.envs {
+				assert.NotEqual(t, "orphan", namedEnv.name)
+			}
+		})
+	}
+}
