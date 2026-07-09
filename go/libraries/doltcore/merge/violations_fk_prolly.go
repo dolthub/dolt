@@ -37,11 +37,11 @@ import (
 // removed or modified row, it checks whether an equivalent parent value still exists, then
 // scans the child's secondary index for child rows that reference the removed value.
 func prollyParentSecDiffFkConstraintViolations(
-	ctx context.Context,
-	foreignKey doltdb.ForeignKey,
-	postParent, postChild *constraintViolationsLoadedTable,
-	preParentSecIdx prolly.Map,
-	receiver FKViolationReceiver) error {
+		ctx context.Context,
+		foreignKey doltdb.ForeignKey,
+		postParent, postChild *constraintViolationsLoadedTable,
+		preParentSecIdx prolly.Map,
+		receiver FKViolationReceiver) error {
 	postParentRowData, err := durable.ProllyMapFromIndex(postParent.RowData)
 	if err != nil {
 		return err
@@ -132,11 +132,11 @@ func prollyParentSecDiffFkConstraintViolations(
 // diffs |preParentRowData| against |postParent|'s primary index and applies the same
 // checks as prollyParentSecDiffFkConstraintViolations.
 func prollyParentPriDiffFkConstraintViolations(
-	ctx context.Context,
-	foreignKey doltdb.ForeignKey,
-	postParent, postChild *constraintViolationsLoadedTable,
-	preParentRowData prolly.Map,
-	receiver FKViolationReceiver) error {
+		ctx context.Context,
+		foreignKey doltdb.ForeignKey,
+		postParent, postChild *constraintViolationsLoadedTable,
+		preParentRowData prolly.Map,
+		receiver FKViolationReceiver) error {
 	postParentRowData, err := durable.ProllyMapFromIndex(postParent.RowData)
 	if err != nil {
 		return err
@@ -240,11 +240,11 @@ func prollyParentPriDiffFkConstraintViolations(
 // row, it builds a parent lookup key from the FK columns and verifies that a matching parent
 // row exists.
 func prollyChildPriDiffFkConstraintViolations(
-	ctx context.Context,
-	foreignKey doltdb.ForeignKey,
-	postParent, postChild *constraintViolationsLoadedTable,
-	preChildRowData prolly.Map,
-	receiver FKViolationReceiver) error {
+		ctx context.Context,
+		foreignKey doltdb.ForeignKey,
+		postParent, postChild *constraintViolationsLoadedTable,
+		preChildRowData prolly.Map,
+		receiver FKViolationReceiver) error {
 	postChildRowData, err := durable.ProllyMapFromIndex(postChild.RowData)
 	if err != nil {
 		return err
@@ -314,11 +314,11 @@ func prollyChildPriDiffFkConstraintViolations(
 // in the child table. It diffs |preChildSecIdx| against |postChild|'s secondary index. For
 // each new or changed row, it verifies that a matching parent row exists.
 func prollyChildSecDiffFkConstraintViolations(
-	ctx context.Context,
-	foreignKey doltdb.ForeignKey,
-	postParent, postChild *constraintViolationsLoadedTable,
-	preChildSecIdx prolly.Map,
-	receiver FKViolationReceiver) error {
+		ctx context.Context,
+		foreignKey doltdb.ForeignKey,
+		postParent, postChild *constraintViolationsLoadedTable,
+		preChildSecIdx prolly.Map,
+		receiver FKViolationReceiver) error {
 
 	postChildRowData, err := durable.ProllyMapFromIndex(postChild.RowData)
 	if err != nil {
@@ -405,6 +405,11 @@ func fkIdxKeyDescs(idx durable.Index, n int) (prolly.Map, *val.TupleDesc, *val.T
 func fkHandlersAreSerializationCompatible(keyDescA, keyDescB *val.TupleDesc) bool {
 	for i, handlerA := range keyDescA.Handlers {
 		handlerB := keyDescB.Handlers[i]
+		// Mixing dolt-native encoding with an extended encoding is by definition incompatible.
+		if (handlerA == nil) != (handlerB == nil) {
+			return false
+		}
+
 		if handlerA != nil && handlerB != nil && !handlerA.SerializationCompatible(handlerB) {
 			return false
 		}
@@ -416,11 +421,6 @@ func fkHandlersAreSerializationCompatible(keyDescA, keyDescB *val.TupleDesc) boo
 			if !nativeEncodingsAreSerializationCompatible(keyDescA.Types[i].Enc, keyDescB.Types[i].Enc) {
 				return false
 			}
-		}
-		// If one handler is nil, then we're mixing native encoding with handlers
-		// TODO: fix this, this exists only to fix a customer issue
-		if handlerA == nil && handlerB != nil {
-			return false
 		}
 	}
 	return true
@@ -442,9 +442,9 @@ func nativeEncodingsAreSerializationCompatible(encA, encB val.Encoding) bool {
 
 // convertSerializedFkField converts a serialized foreign key value from one type handler to another.
 func convertSerializedFkField(
-	ctx context.Context,
-	toHandler, fromHandler val.TupleTypeHandler,
-	field []byte,
+		ctx context.Context,
+		toHandler, fromHandler val.TupleTypeHandler,
+		field []byte,
 ) ([]byte, error) {
 	convertingHandler := toHandler
 	convertedHandler := fromHandler
@@ -491,11 +491,11 @@ func convertSerializedFkField(
 }
 
 func createCVIfNoPartialKeyMatchesPri(
-	ctx context.Context,
-	k, v, partialKey val.Tuple,
-	partialKeyDesc *val.TupleDesc,
-	idx prolly.Map,
-	receiver FKViolationReceiver) error {
+		ctx context.Context,
+		k, v, partialKey val.Tuple,
+		partialKeyDesc *val.TupleDesc,
+		idx prolly.Map,
+		receiver FKViolationReceiver) error {
 	itr, err := creation.NewPrefixItr(ctx, partialKey, partialKeyDesc, idx)
 	if err != nil {
 		return err
@@ -512,12 +512,12 @@ func createCVIfNoPartialKeyMatchesPri(
 }
 
 func createCVForSecIdx(
-	ctx context.Context,
-	k val.Tuple,
-	primaryKD *val.TupleDesc,
-	pri prolly.Map,
-	tableSchema, indexSchema schema.Schema,
-	receiver FKViolationReceiver,
+		ctx context.Context,
+		k val.Tuple,
+		primaryKD *val.TupleDesc,
+		pri prolly.Map,
+		tableSchema, indexSchema schema.Schema,
+		receiver FKViolationReceiver,
 ) error {
 
 	// convert secondary idx entry to primary row key
@@ -587,13 +587,13 @@ type indexAndKeyDescriptor struct {
 // createCVsForDanglingChildRows finds all rows in the childIdx that match the given parent key and creates constraint
 // violations for each of them using the provided receiver.
 func createCVsForDanglingChildRows(
-	ctx context.Context,
-	partialKey val.Tuple,
-	partialKeyDesc *val.TupleDesc,
-	childPrimaryIdx *indexAndKeyDescriptor,
-	childSecIdx *indexAndKeyDescriptor,
-	receiver FKViolationReceiver,
-	compatibleTypes bool,
+		ctx context.Context,
+		partialKey val.Tuple,
+		partialKeyDesc *val.TupleDesc,
+		childPrimaryIdx *indexAndKeyDescriptor,
+		childSecIdx *indexAndKeyDescriptor,
+		receiver FKViolationReceiver,
+		compatibleTypes bool,
 ) error {
 
 	// We allow foreign keys between types that don't have the same serialization bytes for the same logical values
@@ -653,12 +653,12 @@ func createCVsForDanglingChildRows(
 // convertKeyBetweenTypes converts a partial key from one tuple descriptor's types to another. This is only necessary
 // when the keys are of different types that are not serialization identical.
 func convertKeyBetweenTypes(
-	ctx context.Context,
-	key val.Tuple,
-	fromKeyDesc *val.TupleDesc,
-	toKeyDesc *val.TupleDesc,
-	ns tree.NodeStore,
-	pool pool.BuffPool,
+		ctx context.Context,
+		key val.Tuple,
+		fromKeyDesc *val.TupleDesc,
+		toKeyDesc *val.TupleDesc,
+		ns tree.NodeStore,
+		pool pool.BuffPool,
 ) (val.Tuple, error) {
 	tb := val.NewTupleBuilder(toKeyDesc, ns)
 	for i := range toKeyDesc.Types {
@@ -671,9 +671,9 @@ func convertKeyBetweenTypes(
 		}
 		field := key.GetField(i)
 
-		// When both handlers are nil, use native encoding conversion logic.
-		if fromHandler == nil && toHandler == nil {
-			if err := convertNativeEncodedFkField(ctx, tb, ns, i, field, fromKeyDesc.Types[i].Enc, toKeyDesc.Types[i].Enc); err != nil {
+		// If one or both handlers are nil, at least one field has a native encoding and needs special handling
+		if fromHandler == nil || toHandler == nil {
+			if err := convertNativeEncodedFkField(ctx, tb, ns, i, field, fromKeyDesc.Types[i].Enc, toKeyDesc.Types[i].Enc, fromKeyDesc.Handlers[i], toKeyDesc.Handlers[i]); err != nil {
 				return nil, err
 			}
 			continue
@@ -726,18 +726,21 @@ func convertKeyBetweenTypes(
 //   - StringEnc  <-> StringAdaptiveEnc : VARCHAR <-> TEXT
 //   - StringAdaptiveEnc -> StringAdaptiveEnc : normalise out-of-band adaptive values to inline
 //   - BytesAdaptiveEnc  -> BytesAdaptiveEnc  : same normalisation for blob types
+//   - ExtendedEnc / ExtendedAdaptiveEnc <-> native types: convert via type handler serialization
 //
 // For any encoding pair not explicitly handled the raw bytes are copied unchanged.
 func convertNativeEncodedFkField(
-	ctx context.Context,
-	tb *val.TupleBuilder,
-	ns tree.NodeStore,
-	i int,
-	field []byte,
-	fromEnc, toEnc val.Encoding,
+		ctx context.Context,
+		tb *val.TupleBuilder,
+		ns tree.NodeStore,
+		i int,
+		field []byte,
+		fromEnc, toEnc val.Encoding,
+		fromHandler, toHandler val.TupleTypeHandler,
 ) error {
 	// Extract the raw string/byte content from the source encoding.
 	var content []byte
+	var fieldVal any
 	switch fromEnc {
 	case val.StringEnc:
 		// StringEnc layout: [string bytes][0x00 terminator]
@@ -746,7 +749,7 @@ func convertNativeEncodedFkField(
 			return nil
 		}
 		content = field[:len(field)-1] // strip null terminator
-	case val.StringAdaptiveEnc, val.BytesAdaptiveEnc, val.JsonAdaptiveEnc:
+	case val.StringAdaptiveEnc, val.BytesAdaptiveEnc, val.JsonAdaptiveEnc, val.ExtendedAdaptiveEnc:
 		adaptiveVal := val.AdaptiveValue(field)
 		if adaptiveVal.IsNull() {
 			tb.PutRaw(i, nil)
@@ -754,7 +757,7 @@ func convertNativeEncodedFkField(
 		}
 		if adaptiveVal.IsOutOfBand() {
 			// Resolve out-of-band reference to its inline bytes.
-			handler := val.NewAdaptiveTypeHandler(ns, nil)
+			handler := val.NewAdaptiveTypeHandler(ns, fromHandler)
 			inline, err := handler.ConvertToInline(ctx, adaptiveVal)
 			if err != nil {
 				return err
@@ -762,6 +765,21 @@ func convertNativeEncodedFkField(
 			content = inline[1:] // strip 0x00 inline header byte
 		} else {
 			content = field[1:] // strip 0x00 inline header byte
+		}
+	case val.ExtendedEnc:
+		// This is an edge case present only due to the evolving serialization decisions in Doltgres. Some customers
+		// ended up, after an upgrade, with fields in one table with an ExtendedEnc and fields in another table with
+		// StringEnc or similar. For this kind of mixed case, we need to deserialize the ExtendedEnc value and then
+		// re-serialize it into the target encoding.
+		// This cannot be removed after Doltgres 1.0 without breaking customers with tables from earlier releases.
+		var err error
+		fieldVal, err = fromHandler.DeserializeValue(ctx, content)
+		if err != nil {
+			return err
+		}
+		content, err = fromHandler.SerializeValue(ctx, fieldVal)
+		if err != nil {
+			return err
 		}
 	default:
 		// No known conversion; copy raw bytes as-is.
@@ -780,6 +798,15 @@ func convertNativeEncodedFkField(
 		return tb.PutAdaptiveBytesFromInline(ctx, i, content)
 	case val.JsonAdaptiveEnc:
 		return tb.PutAdaptiveJsonFromInline(ctx, i, content)
+	case val.ExtendedAdaptiveEnc:
+		return tb.PutAdaptiveExtendedFromInline(ctx, i, content)
+	case val.ExtendedEnc:
+		serialized, err := toHandler.SerializeValue(ctx, fieldVal)
+		if err != nil {
+			return err
+		}
+		tb.PutRaw(i, serialized)
+		return nil
 	default:
 		// Unsupported target encoding; copy raw bytes as-is.
 		tb.PutRaw(i, field)
@@ -856,15 +883,15 @@ func (m FkCVMeta) ToInterface(context.Context) (interface{}, error) {
 // output which includes additional whitespace between keys, values, and array elements.
 func (m FkCVMeta) PrettyPrint() string {
 	jsonStr := fmt.Sprintf(`{`+
-		`"Index": "%s", `+
-		`"Table": "%s", `+
-		`"Columns": ["%s"], `+
-		`"OnDelete": "%s", `+
-		`"OnUpdate": "%s", `+
-		`"ForeignKey": "%s", `+
-		`"ReferencedIndex": "%s", `+
-		`"ReferencedTable": "%s", `+
-		`"ReferencedColumns": ["%s"]}`,
+			`"Index": "%s", `+
+			`"Table": "%s", `+
+			`"Columns": ["%s"], `+
+			`"OnDelete": "%s", `+
+			`"OnUpdate": "%s", `+
+			`"ForeignKey": "%s", `+
+			`"ReferencedIndex": "%s", `+
+			`"ReferencedTable": "%s", `+
+			`"ReferencedColumns": ["%s"]}`,
 		m.Index,
 		m.Table,
 		strings.Join(m.Columns, `', '`),
