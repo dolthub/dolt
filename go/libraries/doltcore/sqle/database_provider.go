@@ -79,6 +79,29 @@ type DoltDatabaseProvider struct {
 	// when accessed.
 	deletingDatabases map[string]struct{}
 
+	// Databases named in creatingDatabases are currently being created by a
+	// clone that is fetching its data from a remote. The provider lock is
+	// deliberately NOT held for the duration of that network fetch (see
+	// CloneDatabaseFromRemote), so this set is used to reserve the name and
+	// prevent concurrent CREATE DATABASE / dolt_clone / undrop operations from
+	// racing on the same name while the clone is in progress.
+	//
+	// Names are stored normalized via formatDbMapKeyName, matching p.databases
+	// and deletingDatabases (Dolt database names are case-insensitive).
+	//
+	// Unlike deletingDatabases, this set deliberately does NOT gate database
+	// enumeration (see rlockAwaitingEmptyDeletingDatabases). A clone builds its
+	// database directory in place and non-atomically, so a partially-populated
+	// directory exists on disk for the duration of the fetch. That would be a
+	// hazard only if something enumerated databases by scanning the data
+	// directory at runtime, and nothing does: in a running server all
+	// enumeration goes through the in-memory p.databases map (AllDatabases /
+	// DoltDatabases), the remotesapi resolves databases by exact name, and the
+	// only data-directory scan (MultiEnvForDirectory) runs at startup, before
+	// any clone can be in flight. An in-progress clone is therefore simply
+	// invisible until it finishes and registers under the write lock.
+	creatingDatabases map[string]struct{}
+
 	txLocks keymutex.Keymutex
 
 	defaultBranch     string
@@ -208,6 +231,7 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 		dbLocations:            dbLocations,
 		databases:              dbs,
 		deletingDatabases:      make(map[string]struct{}),
+		creatingDatabases:      make(map[string]struct{}),
 		functions:              funcs,
 		tableFunctions:         tableFuncs,
 		externalProcedures:     externalProcedures,
@@ -697,17 +721,8 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 		}
 	}()
 
-	if _, ok := p.deletingDatabases[name]; ok {
-		return sql.ErrDatabaseExists.New(name)
-	}
-	exists, isDir := p.fs.Exists(name)
-	if exists && isDir {
-		if subFs, ferr := p.fs.WithWorkingDir(name); ferr == nil && env.IsIncompleteDatabaseDir(subFs) {
-			return NewErrIncompleteDatabaseDir(name)
-		}
-		return sql.ErrDatabaseExists.New(name)
-	} else if exists {
-		return fmt.Errorf("Cannot create DB, file exists at %s", name)
+	if err = p.databaseNameUnavailableLocked(name, true /* checkDisk */); err != nil {
+		return err
 	}
 
 	err = p.fs.MkDirs(name)
@@ -935,37 +950,36 @@ func NewConfigureReplicationDatabaseHook(bThreads *sql.BackgroundThreads, ctxF f
 	}
 }
 
-// CloneDatabaseFromRemote implements DoltDatabaseProvider interface
+// CloneDatabaseFromRemote implements DoltDatabaseProvider interface.
 //
-// TODO: This holds the database provider lock across the entire duration of
-// the clone, which is much too long to hold this lock.
+// The provider lock is intentionally NOT held for the duration of the clone.
+// The network fetch below (GetRemoteDB + CloneRemote) can be long-running and,
+// when this server is itself serving a remotesapi, that fetch may hit a peer's
+// remotesapi whose handler in turn needs a read lock on this same provider (via
+// SessionDatabase). Holding the provider write lock across the fetch therefore
+// starved this server's own remotesapi handler and deadlocked two sql-servers
+// that clone from each other's remotesapi at the same time. Instead we reserve
+// the database name under the lock (fast), release the lock for the fetch, and
+// re-acquire it only to register the finished database.
 func (p *DoltDatabaseProvider) CloneDatabaseFromRemote(
 	ctx *sql.Context,
 	dbName, branch, remoteName, remoteUrl string,
 	depth int,
 	remoteParams map[string]string,
 ) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	if _, ok := p.deletingDatabases[dbName]; ok {
-		return sql.ErrDatabaseExists.New(dbName)
+	// Reserve the database name so that concurrent create/clone/undrop of the
+	// same name are still serialized, even though we drop the lock for the fetch.
+	if err := p.reserveCreatingDatabase(dbName); err != nil {
+		return err
 	}
-
-	exists, isDir := p.fs.Exists(dbName)
-	if exists && isDir {
-		if subFs, ferr := p.fs.WithWorkingDir(dbName); ferr == nil && env.IsIncompleteDatabaseDir(subFs) {
-			return NewErrIncompleteDatabaseDir(dbName)
-		}
-		return sql.ErrDatabaseExists.New(dbName)
-	} else if exists {
-		return fmt.Errorf("cannot create DB, file exists at %s", dbName)
-	}
+	defer p.releaseCreatingDatabase(dbName)
 
 	err := p.cloneDatabaseFromRemote(ctx, dbName, remoteName, branch, remoteUrl, depth, remoteParams)
 	if err != nil {
 		// Make a best effort to clean up any artifacts on disk from a failed clone
-		// before we return the error
+		// before we return the error. We are still holding the name reservation
+		// here (released by the deferred call above), so nothing else can be
+		// using this directory.
 		exists, _ := p.fs.Exists(dbName)
 		if exists {
 			deleteErr := p.fs.Delete(dbName, true)
@@ -978,6 +992,70 @@ func (p *DoltDatabaseProvider) CloneDatabaseFromRemote(
 	}
 
 	return nil
+}
+
+// databaseNameUnavailableLocked returns an error if |name| cannot currently be
+// used to register a new database, and nil if the name is free. It must be
+// called with p.mu held.
+//
+// The name is normalized with formatDbMapKeyName so these checks are
+// case-insensitive and consistent with how databases are keyed in p.databases:
+// Dolt treats database names case-insensitively (e.g. "MyDB" and "mydb" are the
+// same database), so they must not race with one another. deletingDatabases and
+// creatingDatabases reserve names for in-flight drops and clones respectively.
+//
+// When |checkDisk| is true the on-disk data directory is also checked; creation
+// paths that materialize a directory pass true, while undrop (which restores
+// from the dropped-database stash rather than creating a directory) passes false.
+func (p *DoltDatabaseProvider) databaseNameUnavailableLocked(name string, checkDisk bool) error {
+	key := formatDbMapKeyName(name)
+	if _, ok := p.deletingDatabases[key]; ok {
+		return sql.ErrDatabaseExists.New(name)
+	}
+	if _, ok := p.creatingDatabases[key]; ok {
+		return sql.ErrDatabaseExists.New(name)
+	}
+	if checkDisk {
+		exists, isDir := p.fs.Exists(name)
+		if exists && isDir {
+			// A directory left behind by an interrupted create/clone carries an
+			// in-progress marker; surface a clearer error than "already exists".
+			if subFs, ferr := p.fs.WithWorkingDir(name); ferr == nil && env.IsIncompleteDatabaseDir(subFs) {
+				return NewErrIncompleteDatabaseDir(name)
+			}
+			return sql.ErrDatabaseExists.New(name)
+		} else if exists {
+			return fmt.Errorf("cannot create DB, file exists at %s", name)
+		}
+	}
+	return nil
+}
+
+// reserveCreatingDatabase briefly takes the provider write lock to verify that
+// |dbName| is available and then records it in p.creatingDatabases, reserving
+// the name for an in-progress clone. The caller MUST call
+// releaseCreatingDatabase once the clone has finished (success or failure).
+// This reserves a name with the same conflict semantics as creating one
+// outright, so that concurrent create/clone/undrop of the same name are still
+// serialized even though the clone drops the lock for its network fetch.
+func (p *DoltDatabaseProvider) reserveCreatingDatabase(dbName string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if err := p.databaseNameUnavailableLocked(dbName, true /* checkDisk */); err != nil {
+		return err
+	}
+
+	p.creatingDatabases[formatDbMapKeyName(dbName)] = struct{}{}
+	return nil
+}
+
+// releaseCreatingDatabase removes the reservation recorded by
+// reserveCreatingDatabase.
+func (p *DoltDatabaseProvider) releaseCreatingDatabase(dbName string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.creatingDatabases, formatDbMapKeyName(dbName))
 }
 
 // cloneDatabaseFromRemote encapsulates the inner logic for cloning a database so that if any error
@@ -1022,10 +1100,18 @@ func (p *DoltDatabaseProvider) cloneDatabaseFromRemote(
 		Remote: remoteName,
 	})
 
+	// The network fetch above ran without the provider lock held. Clear the
+	// in-progress marker (a filesystem operation, so no provider lock is needed)
+	// and then re-acquire the write lock only to register the finished database;
+	// registerNewDatabase requires the lock to be held. The name reservation
+	// taken in CloneDatabaseFromRemote is still in place, so no other creation
+	// path can have registered this name.
 	if err := dbfactory.ClearDatabaseInProgress(dEnv.FS); err != nil {
 		return err
 	}
 
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	return p.registerNewDatabase(ctx, dbName, dEnv)
 }
 
@@ -1157,8 +1243,8 @@ func (p *DoltDatabaseProvider) UndropDatabase(ctx *sql.Context, name string) (er
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if _, ok := p.deletingDatabases[name]; ok {
-		return sql.ErrDatabaseExists.New(name)
+	if err = p.databaseNameUnavailableLocked(name, false /* checkDisk */); err != nil {
+		return err
 	}
 
 	newFs, exactCaseName, err := p.droppedDatabaseManager.UndropDatabase(ctx, name)

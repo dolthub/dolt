@@ -17,7 +17,9 @@ package sqle
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -249,4 +251,103 @@ func TestCreateDatabaseClearsInProgressMarker(t *testing.T) {
 			assert.False(t, dbfactory.IsDatabaseInProgress(newFs), "a completed CREATE DATABASE must clear the marker")
 		})
 	}
+}
+
+// TestCreatingDatabaseReservation covers the name-reservation used by
+// CloneDatabaseFromRemote to hold a database name while it fetches from a remote
+// without the provider lock held. See the deadlock fix in database_provider.go.
+func TestCreatingDatabaseReservation(t *testing.T) {
+	setup := func(t *testing.T) (*sql.Context, *DoltDatabaseProvider) {
+		ctx := context.Background()
+		dEnv := dtestutils.CreateTestEnv()
+
+		db, err := NewDatabase(ctx, "dolt", dEnv.DbData(ctx), editor.Options{})
+		require.NoError(t, err)
+
+		_, sqlCtx, err := NewTestEngine(dEnv, ctx, db)
+		require.NoError(t, err)
+
+		sess := dsess.DSessFromSess(sqlCtx.Session)
+		return sqlCtx, sess.Provider().(*DoltDatabaseProvider)
+	}
+
+	// nameUnavailable runs databaseNameUnavailableLocked under the provider
+	// lock, mirroring how the create (checkDisk=true) and undrop
+	// (checkDisk=false) paths consult it.
+	nameUnavailable := func(pro *DoltDatabaseProvider, name string, checkDisk bool) error {
+		pro.mu.Lock()
+		defer pro.mu.Unlock()
+		return pro.databaseNameUnavailableLocked(name, checkDisk)
+	}
+
+	t.Run("second reservation of the same name conflicts", func(t *testing.T) {
+		_, pro := setup(t)
+		require.NoError(t, pro.reserveCreatingDatabase("clonedb"))
+		defer pro.releaseCreatingDatabase("clonedb")
+
+		err := pro.reserveCreatingDatabase("clonedb")
+		require.Truef(t, sql.ErrDatabaseExists.Is(err), "expected ErrDatabaseExists, got %v", err)
+	})
+
+	t.Run("reservation conflicts case-insensitively across create/clone/undrop", func(t *testing.T) {
+		_, pro := setup(t)
+		require.NoError(t, pro.reserveCreatingDatabase("CloneDB"))
+		defer pro.releaseCreatingDatabase("CloneDB")
+
+		for _, variant := range []string{"clonedb", "CLONEDB", "CloneDB"} {
+			require.Truef(t, sql.ErrDatabaseExists.Is(pro.reserveCreatingDatabase(variant)),
+				"clone of case-variant %q should conflict", variant)
+			require.Truef(t, sql.ErrDatabaseExists.Is(nameUnavailable(pro, variant, true)),
+				"CREATE of case-variant %q should conflict", variant)
+			require.Truef(t, sql.ErrDatabaseExists.Is(nameUnavailable(pro, variant, false)),
+				"UNDROP of case-variant %q should conflict", variant)
+		}
+	})
+
+	t.Run("release frees the name case-insensitively", func(t *testing.T) {
+		_, pro := setup(t)
+		require.NoError(t, pro.reserveCreatingDatabase("clonedb"))
+		// Releasing via a different case must clear the same reservation.
+		pro.releaseCreatingDatabase("CLONEDB")
+		require.NoError(t, nameUnavailable(pro, "clonedb", true))
+		require.NoError(t, pro.reserveCreatingDatabase("clonedb"))
+		pro.releaseCreatingDatabase("clonedb")
+	})
+
+	t.Run("a deleting database also conflicts case-insensitively", func(t *testing.T) {
+		_, pro := setup(t)
+		pro.mu.Lock()
+		pro.deletingDatabases[formatDbMapKeyName("delDB")] = struct{}{}
+		pro.mu.Unlock()
+		t.Cleanup(func() {
+			pro.mu.Lock()
+			delete(pro.deletingDatabases, formatDbMapKeyName("delDB"))
+			pro.mu.Unlock()
+		})
+
+		require.Truef(t, sql.ErrDatabaseExists.Is(nameUnavailable(pro, "DELDB", true)),
+			"CREATE of a case-variant of a deleting database should conflict")
+	})
+
+	t.Run("reservation does not gate database enumeration", func(t *testing.T) {
+		sqlCtx, pro := setup(t)
+		require.NoError(t, pro.reserveCreatingDatabase("clonedb"))
+		defer pro.releaseCreatingDatabase("clonedb")
+
+		// AllDatabases must return promptly (a reserved-but-unregistered clone
+		// must not block enumeration the way a deleting database does) and must
+		// not expose the in-progress clone. The bounded wait turns a regression
+		// (reservation gating enumeration) into a clean failure instead of a hang.
+		done := make(chan []sql.Database, 1)
+		go func() { done <- pro.AllDatabases(sqlCtx) }()
+		select {
+		case dbs := <-done:
+			for _, db := range dbs {
+				require.NotEqualf(t, "clonedb", strings.ToLower(db.Name()),
+					"in-progress clone must not be visible in AllDatabases")
+			}
+		case <-time.After(10 * time.Second):
+			t.Fatal("AllDatabases blocked while a name was reserved for cloning; reservation must not gate enumeration")
+		}
+	})
 }

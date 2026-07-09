@@ -915,3 +915,116 @@ GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'localhost';
     [[ "$status" -ne 0 ]] || false
     [[ "$output" =~ "target has uncommitted changes" ]] || false
 }
+
+# Regression test for a concurrent-clone deadlock: two sql-servers, each
+# running a --remotesapi-port, that CALL DOLT_CLONE from each other's
+# remotesapi at the same time must not deadlock.
+#
+# The bug: CloneDatabaseFromRemote held the database-provider write lock
+# across the entire network fetch. That fetch pulls chunks from the peer's
+# remotesapi, whose handler needs a *read* lock on the peer's provider. When
+# both servers clone from each other simultaneously, each holds its own write
+# lock while waiting on the peer's remotesapi, and the peer can't take the read
+# lock to answer -> mutual starvation that only a server restart recovers.
+@test "sql-server-remotesrv: concurrent DOLT_CLONE between two remotesapi servers does not deadlock" {
+    local aSqlPort aRemPort bSqlPort bRemPort
+    aSqlPort=$( definePORT )
+    aRemPort=$( definePORT )
+    bSqlPort=$( definePORT )
+    bRemPort=$( definePORT )
+
+    mkdir dirA dirB
+
+    # Start server A (serves database "da" over its remotesapi) and server B
+    # (serves database "db"). We start each with --data-dir so that $! is the
+    # dolt process itself (not a subshell), letting us force-kill it later even
+    # if it wedges. A deadlocked server does not shut down on SIGTERM, so we
+    # must SIGKILL it before the test finishes or teardown would hang.
+    dolt sql-server --data-dir dirA -H 127.0.0.1 -P $aSqlPort --remotesapi-port $aRemPort --loglevel=warning > serverA.log 2>&1 &
+    srv_pid=$!
+    dolt sql-server --data-dir dirB -H 127.0.0.1 -P $bSqlPort --remotesapi-port $bRemPort --loglevel=warning > serverB.log 2>&1 &
+    srv_two_pid=$!
+
+    query_port() {
+        dolt --host 127.0.0.1 --port "$1" --user root --password '' --no-tls sql -q "$2"
+    }
+
+    # Force-kill both servers and clear the pids so the shared teardown (which
+    # sends a graceful SIGTERM and waits) can't block on a wedged server.
+    kill_servers() {
+        [ -n "$srv_pid" ] && kill -9 "$srv_pid" 2>/dev/null
+        [ -n "$srv_two_pid" ] && kill -9 "$srv_two_pid" 2>/dev/null
+        wait "$srv_pid" 2>/dev/null || :
+        wait "$srv_two_pid" 2>/dev/null || :
+        srv_pid=
+        srv_two_pid=
+    }
+
+    # Wait for both servers to accept connections.
+    local ok=""
+    for i in $(seq 1 40); do
+        if query_port $aSqlPort "SELECT 1" >/dev/null 2>&1 && query_port $bSqlPort "SELECT 1" >/dev/null 2>&1; then
+            ok=1; break
+        fi
+        sleep 0.5
+    done
+    if [ -z "$ok" ]; then kill_servers; echo "servers did not come up"; false; fi
+
+    # Seed each server with a small committed database.
+    query_port $aSqlPort "CREATE DATABASE da; USE da; CREATE TABLE t(i int primary key); INSERT INTO t VALUES(1); CALL DOLT_COMMIT('-Am','seed');"
+    query_port $bSqlPort "CREATE DATABASE db; USE db; CREATE TABLE t(i int primary key); INSERT INTO t VALUES(2); CALL DOLT_COMMIT('-Am','seed');"
+
+    # Fire many simultaneous cross-clones at once. The deadlock only occurs
+    # when server A is fetching from B while B is fetching from A at the same
+    # instant. With the buggy code each server holds its provider write lock for
+    # the whole duration of a clone, so launching a batch of concurrent clones
+    # in both directions keeps both write locks held near-continuously and makes
+    # the overlap (and thus the deadlock) reliable rather than a rare race.
+    #
+    # Each clone is wrapped in `timeout`; a hung clone exits 124, which is the
+    # deadlock signature. On a fixed server every clone completes quickly. Each
+    # clone targets a unique database name, so on a correct server every clone
+    # is expected to succeed (exit 0); we assert that too, so the test cannot
+    # pass merely because the clones failed fast for some non-deadlock reason.
+    local n=12
+    local clone_timeout=25
+    local pids=() logs=() i
+    for i in $(seq 1 $n); do
+        timeout $clone_timeout dolt --host 127.0.0.1 --port $aSqlPort --user root --password '' --no-tls \
+            sql -q "CALL DOLT_CLONE('http://127.0.0.1:$bRemPort/db','cloneB_$i')" > "cloneB_$i.log" 2>&1 &
+        pids+=($!); logs+=("cloneB_$i.log")
+        timeout $clone_timeout dolt --host 127.0.0.1 --port $bSqlPort --user root --password '' --no-tls \
+            sql -q "CALL DOLT_CLONE('http://127.0.0.1:$aRemPort/da','cloneA_$i')" > "cloneA_$i.log" 2>&1 &
+        pids+=($!); logs+=("cloneA_$i.log")
+    done
+
+    local hung=0 failed=0 p st
+    for p in "${pids[@]}"; do
+        st=0; wait "$p" || st=$?
+        if [ $st -eq 124 ]; then
+            # 124 == `timeout` killed a clone that never returned (the deadlock).
+            hung=$((hung+1))
+        elif [ $st -ne 0 ]; then
+            # Any other non-zero exit means the clone itself errored.
+            failed=$((failed+1))
+        fi
+    done
+
+    # Stop the servers before asserting, so teardown never has to touch a
+    # possibly-wedged server.
+    kill_servers
+
+    if [ $hung -ne 0 ]; then
+        echo "DEADLOCK detected: $hung clone(s) timed out (never returned)"
+        cat "${logs[@]}" 2>/dev/null || :
+        false
+    fi
+
+    # Guard against the test silently passing if the clones were broken (rather
+    # than deadlocked): a non-deadlock clone failure should also fail the test.
+    if [ $failed -ne 0 ]; then
+        echo "clone failure: $failed clone(s) exited non-zero (not a timeout)"
+        cat "${logs[@]}" 2>/dev/null || :
+        false
+    fi
+}
