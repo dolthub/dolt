@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 	"github.com/dolthub/go-mysql-server/sql/fulltext"
+	"github.com/dolthub/go-mysql-server/sql/sets"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	vttypes "github.com/dolthub/vitess/go/sqltypes"
 
@@ -629,7 +630,7 @@ type doltIndex struct {
 type LookupMeta struct {
 	Idx      sql.Index
 	Fds      *sql.FuncDepSet
-	Cols     sql.FastIntSet
+	Cols     sets.FastIntSet
 	Ordinals []int
 }
 
@@ -657,7 +658,7 @@ func GetStrictLookups(ctx *sql.Context, schCols *schema.ColCollection, indexes [
 			continue
 		}
 		var ordinals []int
-		allCols := sql.NewFastIntSet()
+		allCols := sets.NewFastIntSet()
 		for _, c := range idx.columns {
 			idx := schCols.TagToIdx[c.Tag]
 			allCols.Add(idx + 1)
