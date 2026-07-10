@@ -89,12 +89,23 @@ type Config struct {
 
 	// ProviderFactory controls how the DatabaseProvider is instantiated
 	ProviderFactory sqle.ProviderFactory
+
+	// EngineInitializer, if non-nil, is invoked once the SqlEngine has been
+	// created, before the server begins accepting connections.
+	EngineInitializer EngineInitializer
+}
+
+// EngineInitializer performs one-time initialization of a SqlEngine during
+// server startup, after the engine is constructed but before the server
+// accepts any connections. Returning an error aborts server startup.
+type EngineInitializer interface {
+	InitializeEngine(ctx context.Context, engine *engine.SqlEngine) error
 }
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
 func Serve(
-	ctx context.Context,
-	cfg *Config,
+		ctx context.Context,
+		cfg *Config,
 ) (startError error, closeError error) {
 	// Code is easier to work through if we assume that serverController is never nil
 	if cfg.Controller == nil {
@@ -112,7 +123,7 @@ func Serve(
 }
 
 func ConfigureServices(
-	cfg *Config,
+		cfg *Config,
 ) {
 	controller := cfg.Controller
 	ValidateConfigStep := &svcs.AnonService{
@@ -378,6 +389,18 @@ func ConfigureServices(
 	}
 	controller.Register(InitSqlEngine)
 
+	// Run any application-provided engine initialization immediately after the
+	// engine itself is initialized. This runs during the controller's Init
+	// phase, so it completes before the server's accept loop starts running.
+	if cfg.EngineInitializer != nil {
+		RunEngineInitializer := &svcs.AnonService{
+			InitF: func(ctx context.Context) error {
+				return cfg.EngineInitializer.InitializeEngine(ctx, sqlEngine)
+			},
+		}
+		controller.Register(RunEngineInitializer)
+	}
+
 	// Closing the connections on shutdown attempts to prevent
 	// them from creating new work after we cancel their running
 	// queries up above. GMS should ideally avoid creating new
@@ -437,8 +460,8 @@ func ConfigureServices(
 				// binlog replication.
 				if strings.Contains(logBinBranch, "/") {
 					logrus.Warnf("branch names containing '/' are not supported "+
-						"for binlog replication. Not enabling binlog replication; fix "+
-						"@@log_bin_branch value and restart Dolt (current value: %s)", logBinBranch)
+							"for binlog replication. Not enabling binlog replication; fix "+
+							"@@log_bin_branch value and restart Dolt (current value: %s)", logBinBranch)
 					return nil
 				}
 
