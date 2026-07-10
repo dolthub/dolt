@@ -37,11 +37,11 @@ import (
 // removed or modified row, it checks whether an equivalent parent value still exists, then
 // scans the child's secondary index for child rows that reference the removed value.
 func prollyParentSecDiffFkConstraintViolations(
-		ctx context.Context,
-		foreignKey doltdb.ForeignKey,
-		postParent, postChild *constraintViolationsLoadedTable,
-		preParentSecIdx prolly.Map,
-		receiver FKViolationReceiver) error {
+	ctx context.Context,
+	foreignKey doltdb.ForeignKey,
+	postParent, postChild *constraintViolationsLoadedTable,
+	preParentSecIdx prolly.Map,
+	receiver FKViolationReceiver) error {
 	postParentRowData, err := durable.ProllyMapFromIndex(postParent.RowData)
 	if err != nil {
 		return err
@@ -132,11 +132,11 @@ func prollyParentSecDiffFkConstraintViolations(
 // diffs |preParentRowData| against |postParent|'s primary index and applies the same
 // checks as prollyParentSecDiffFkConstraintViolations.
 func prollyParentPriDiffFkConstraintViolations(
-		ctx context.Context,
-		foreignKey doltdb.ForeignKey,
-		postParent, postChild *constraintViolationsLoadedTable,
-		preParentRowData prolly.Map,
-		receiver FKViolationReceiver) error {
+	ctx context.Context,
+	foreignKey doltdb.ForeignKey,
+	postParent, postChild *constraintViolationsLoadedTable,
+	preParentRowData prolly.Map,
+	receiver FKViolationReceiver) error {
 	postParentRowData, err := durable.ProllyMapFromIndex(postParent.RowData)
 	if err != nil {
 		return err
@@ -240,11 +240,11 @@ func prollyParentPriDiffFkConstraintViolations(
 // row, it builds a parent lookup key from the FK columns and verifies that a matching parent
 // row exists.
 func prollyChildPriDiffFkConstraintViolations(
-		ctx context.Context,
-		foreignKey doltdb.ForeignKey,
-		postParent, postChild *constraintViolationsLoadedTable,
-		preChildRowData prolly.Map,
-		receiver FKViolationReceiver) error {
+	ctx context.Context,
+	foreignKey doltdb.ForeignKey,
+	postParent, postChild *constraintViolationsLoadedTable,
+	preChildRowData prolly.Map,
+	receiver FKViolationReceiver) error {
 	postChildRowData, err := durable.ProllyMapFromIndex(postChild.RowData)
 	if err != nil {
 		return err
@@ -314,11 +314,11 @@ func prollyChildPriDiffFkConstraintViolations(
 // in the child table. It diffs |preChildSecIdx| against |postChild|'s secondary index. For
 // each new or changed row, it verifies that a matching parent row exists.
 func prollyChildSecDiffFkConstraintViolations(
-		ctx context.Context,
-		foreignKey doltdb.ForeignKey,
-		postParent, postChild *constraintViolationsLoadedTable,
-		preChildSecIdx prolly.Map,
-		receiver FKViolationReceiver) error {
+	ctx context.Context,
+	foreignKey doltdb.ForeignKey,
+	postParent, postChild *constraintViolationsLoadedTable,
+	preChildSecIdx prolly.Map,
+	receiver FKViolationReceiver) error {
 	postChildRowData, err := durable.ProllyMapFromIndex(postChild.RowData)
 	if err != nil {
 		return err
@@ -441,9 +441,9 @@ func nativeEncodingsAreSerializationCompatible(encA, encB val.Encoding) bool {
 
 // convertSerializedFkField converts a serialized foreign key value from one type handler to another.
 func convertSerializedFkField(
-		ctx context.Context,
-		toHandler, fromHandler val.TupleTypeHandler,
-		field []byte,
+	ctx context.Context,
+	toHandler, fromHandler val.TupleTypeHandler,
+	field []byte,
 ) ([]byte, error) {
 	convertingHandler := toHandler
 	convertedHandler := fromHandler
@@ -490,11 +490,11 @@ func convertSerializedFkField(
 }
 
 func createCVIfNoPartialKeyMatchesPri(
-		ctx context.Context,
-		k, v, partialKey val.Tuple,
-		partialKeyDesc *val.TupleDesc,
-		idx prolly.Map,
-		receiver FKViolationReceiver) error {
+	ctx context.Context,
+	k, v, partialKey val.Tuple,
+	partialKeyDesc *val.TupleDesc,
+	idx prolly.Map,
+	receiver FKViolationReceiver) error {
 	itr, err := creation.NewPrefixItr(ctx, partialKey, partialKeyDesc, idx)
 	if err != nil {
 		return err
@@ -511,12 +511,12 @@ func createCVIfNoPartialKeyMatchesPri(
 }
 
 func createCVForSecIdx(
-		ctx context.Context,
-		k val.Tuple,
-		primaryKD *val.TupleDesc,
-		pri prolly.Map,
-		tableSchema, indexSchema schema.Schema,
-		receiver FKViolationReceiver,
+	ctx context.Context,
+	k val.Tuple,
+	primaryKD *val.TupleDesc,
+	pri prolly.Map,
+	tableSchema, indexSchema schema.Schema,
+	receiver FKViolationReceiver,
 ) error {
 
 	// convert secondary idx entry to primary row key
@@ -586,13 +586,13 @@ type indexAndKeyDescriptor struct {
 // createCVsForDanglingChildRows finds all rows in the childIdx that match the given parent key and creates constraint
 // violations for each of them using the provided receiver.
 func createCVsForDanglingChildRows(
-		ctx context.Context,
-		partialKey val.Tuple,
-		partialKeyDesc *val.TupleDesc,
-		childPrimaryIdx *indexAndKeyDescriptor,
-		childSecIdx *indexAndKeyDescriptor,
-		receiver FKViolationReceiver,
-		compatibleTypes bool,
+	ctx context.Context,
+	partialKey val.Tuple,
+	partialKeyDesc *val.TupleDesc,
+	childPrimaryIdx *indexAndKeyDescriptor,
+	childSecIdx *indexAndKeyDescriptor,
+	receiver FKViolationReceiver,
+	compatibleTypes bool,
 ) error {
 
 	// We allow foreign keys between types that don't have the same serialization bytes for the same logical values
@@ -652,12 +652,12 @@ func createCVsForDanglingChildRows(
 // convertKeyBetweenTypes converts a partial key from one tuple descriptor's types to another. This is only necessary
 // when the keys are of different types that are not serialization identical.
 func convertKeyBetweenTypes(
-		ctx context.Context,
-		key val.Tuple,
-		fromKeyDesc *val.TupleDesc,
-		toKeyDesc *val.TupleDesc,
-		ns tree.NodeStore,
-		pool pool.BuffPool,
+	ctx context.Context,
+	key val.Tuple,
+	fromKeyDesc *val.TupleDesc,
+	toKeyDesc *val.TupleDesc,
+	ns tree.NodeStore,
+	pool pool.BuffPool,
 ) (val.Tuple, error) {
 	tb := val.NewTupleBuilder(toKeyDesc, ns)
 	for i := range toKeyDesc.Types {
@@ -721,12 +721,12 @@ func convertKeyBetweenTypes(
 // convertNativeEncodedFkField converts a single FK field between encodings where at least one side uses a
 // Dolt-native encoding, writing the result directly into |tb| at position |i|.
 func convertNativeEncodedFkField(
-		ctx context.Context,
-		tb *val.TupleBuilder,
-		ns tree.NodeStore,
-		i int,
-		field []byte,
-		fromKeyDesc, toKeyDesc *val.TupleDesc,
+	ctx context.Context,
+	tb *val.TupleBuilder,
+	ns tree.NodeStore,
+	i int,
+	field []byte,
+	fromKeyDesc, toKeyDesc *val.TupleDesc,
 ) error {
 	fromEnc := fromKeyDesc.Types[i].Enc
 	toEnc := toKeyDesc.Types[i].Enc
@@ -900,15 +900,15 @@ func (m FkCVMeta) ToInterface(context.Context) (interface{}, error) {
 // output which includes additional whitespace between keys, values, and array elements.
 func (m FkCVMeta) PrettyPrint() string {
 	jsonStr := fmt.Sprintf(`{`+
-			`"Index": "%s", `+
-			`"Table": "%s", `+
-			`"Columns": ["%s"], `+
-			`"OnDelete": "%s", `+
-			`"OnUpdate": "%s", `+
-			`"ForeignKey": "%s", `+
-			`"ReferencedIndex": "%s", `+
-			`"ReferencedTable": "%s", `+
-			`"ReferencedColumns": ["%s"]}`,
+		`"Index": "%s", `+
+		`"Table": "%s", `+
+		`"Columns": ["%s"], `+
+		`"OnDelete": "%s", `+
+		`"OnUpdate": "%s", `+
+		`"ForeignKey": "%s", `+
+		`"ReferencedIndex": "%s", `+
+		`"ReferencedTable": "%s", `+
+		`"ReferencedColumns": ["%s"]}`,
 		m.Index,
 		m.Table,
 		strings.Join(m.Columns, `', '`),
