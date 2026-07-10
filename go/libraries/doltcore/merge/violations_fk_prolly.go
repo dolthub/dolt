@@ -672,7 +672,7 @@ func convertKeyBetweenTypes(
 
 		// If one or both handlers are nil, at least one field has a native encoding and needs special handling
 		if fromHandler == nil || toHandler == nil {
-			if err := convertNativeEncodedFkField(ctx, tb, ns, i, field, fromKeyDesc.Types[i].Enc, toKeyDesc.Types[i].Enc, fromKeyDesc.Handlers[i], toKeyDesc.Handlers[i]); err != nil {
+			if err := convertNativeEncodedFkField(ctx, tb, ns, i, field, fromKeyDesc, toKeyDesc); err != nil {
 				return nil, err
 			}
 			continue
@@ -718,48 +718,34 @@ func convertKeyBetweenTypes(
 	return key, nil
 }
 
-// convertNativeEncodedFkField converts a single FK field between encodings where at
-// least one side has no type handler (i.e. uses a Dolt-native encoding), writing the
-// result directly into |tb| at position |i|.
-//
-// The conversion happens in two steps:
-//  1. Reduce the source to a "raw content" byte slice — the underlying string or byte
-//     payload of the value with no encoding-specific framing.  Extended sources also
-//     produce a deserialised Go value (via |fromHandler|) that extended targets can
-//     re-serialise with |toHandler|.
-//  2. Write the raw content (native targets) or a re-serialised Go value (extended
-//     targets) into |tb| using the appropriate encoding-specific writer.
-//
-// Extended targets need a Go value, and when the source was native we lift the raw
-// content back to a value shape the target handler expects — string for text-shaped
-// handlers, []byte for byte-shaped ones — using the source encoding as the hint.
-//
-// This asymmetry (native side has no handler; extended side does) is what makes FK
-// validation across a doltgres version boundary work when one release stored a column
-// as ExtendedEnc + DoltgresType handler and a later release switched to a native
-// encoding for the same logical type.
+// convertNativeEncodedFkField converts a single FK field between encodings where at least one side uses a
+// Dolt-native encoding, writing the result directly into |tb| at position |i|.
 func convertNativeEncodedFkField(
 		ctx context.Context,
 		tb *val.TupleBuilder,
 		ns tree.NodeStore,
 		i int,
 		field []byte,
-		fromEnc, toEnc val.Encoding,
-		fromHandler, toHandler val.TupleTypeHandler,
+		fromKeyDesc, toKeyDesc *val.TupleDesc,
 ) error {
+	fromEnc := fromKeyDesc.Types[i].Enc
+	toEnc := toKeyDesc.Types[i].Enc
+	fromHandler := fromKeyDesc.Handlers[i]
+	toHandler := toKeyDesc.Handlers[i]
+
 	// Step 1: reduce the source to raw content bytes.  For extended sources we also
 	// hold on to the deserialised Go value so that an extended target can re-serialise
 	// it without a lossy round-trip through raw bytes.
-	var content []byte
+	var byteContent []byte
 	var fieldVal any
+
 	switch fromEnc {
 	case val.StringEnc:
-		// StringEnc layout: [string bytes][0x00 terminator]
 		if len(field) == 0 {
 			tb.PutRaw(i, nil)
 			return nil
 		}
-		content = field[:len(field)-1]
+		byteContent = field[:len(field)-1]
 	case val.StringAdaptiveEnc, val.BytesAdaptiveEnc, val.JsonAdaptiveEnc, val.ExtendedAdaptiveEnc:
 		adaptiveVal := val.AdaptiveValue(field)
 		if adaptiveVal.IsNull() {
@@ -772,18 +758,17 @@ func convertNativeEncodedFkField(
 			if err != nil {
 				return err
 			}
-			content = inline[1:] // strip 0x00 inline header byte
+			byteContent = inline[1:] // strip 0x00 inline header byte
 		} else {
-			content = field[1:] // strip 0x00 inline header byte
+			byteContent = field[1:] // strip 0x00 inline header byte
 		}
+
 		if fromEnc == val.ExtendedAdaptiveEnc {
-			// The inline bytes are handler-serialised; reduce to raw content.
-			v, err := fromHandler.DeserializeValue(ctx, content)
+			v, err := fromHandler.DeserializeValue(ctx, byteContent)
 			if err != nil {
 				return err
 			}
 			fieldVal = v
-			content = fkValueToRawContent(v)
 		}
 	case val.ExtendedEnc:
 		if len(field) == 0 {
@@ -795,7 +780,7 @@ func convertNativeEncodedFkField(
 			return err
 		}
 		fieldVal = v
-		content = fkValueToRawContent(v)
+		byteContent = field
 	default:
 		// No known conversion; copy raw bytes as-is.
 		tb.PutRaw(i, field)
@@ -806,18 +791,18 @@ func convertNativeEncodedFkField(
 	// extended targets need a Go value fed into |toHandler|.
 	switch toEnc {
 	case val.StringEnc:
-		return tb.PutString(i, string(content))
+		return tb.PutString(i, string(byteContent))
 	case val.StringAdaptiveEnc:
-		return tb.PutAdaptiveStringFromInline(ctx, i, string(content))
+		return tb.PutAdaptiveStringFromInline(ctx, i, string(byteContent))
 	case val.BytesAdaptiveEnc:
-		return tb.PutAdaptiveBytesFromInline(ctx, i, content)
+		return tb.PutAdaptiveBytesFromInline(ctx, i, byteContent)
 	case val.JsonAdaptiveEnc:
-		return tb.PutAdaptiveJsonFromInline(ctx, i, content)
+		return tb.PutAdaptiveJsonFromInline(ctx, i, byteContent)
 	case val.ExtendedAdaptiveEnc, val.ExtendedEnc:
 		v := fieldVal
 		if v == nil {
 			// Source was native; lift raw content to the Go shape |toHandler| expects.
-			v = fkRawContentToValue(fromEnc, content)
+			v = bytesToGoValue(fromEnc, byteContent)
 		}
 		serialized, err := toHandler.SerializeValue(ctx, v)
 		if err != nil {
@@ -835,30 +820,11 @@ func convertNativeEncodedFkField(
 	}
 }
 
-// fkValueToRawContent reduces a value returned by an extended type handler to the raw
-// content bytes that native encodings store — a string's UTF-8 bytes, or a byte slice
-// as-is.  Doltgres string types (bpchar / char / name / text / varchar / json / jsonb)
-// deserialise to a Go string; bytea deserialises to []byte.  fmt.Stringer is a
-// last-resort fallback for unknown extended types.
-func fkValueToRawContent(v any) []byte {
-	switch x := v.(type) {
-	case nil:
-		return nil
-	case string:
-		return []byte(x)
-	case []byte:
-		return x
-	case fmt.Stringer:
-		return []byte(x.String())
-	}
-	return nil
-}
-
-// fkRawContentToValue lifts raw content bytes to the Go value shape an extended type
+// bytesToGoValue lifts raw content bytes to the Go value shape an extended type
 // handler expects.  BytesAdaptiveEnc sources hold []byte payloads; every other native
 // encoding we handle here (StringEnc, StringAdaptiveEnc, JsonAdaptiveEnc) holds a UTF-8
 // string.
-func fkRawContentToValue(sourceEnc val.Encoding, content []byte) any {
+func bytesToGoValue(sourceEnc val.Encoding, content []byte) any {
 	if sourceEnc == val.BytesAdaptiveEnc {
 		return content
 	}
