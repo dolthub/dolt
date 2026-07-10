@@ -104,8 +104,8 @@ type EngineInitializer interface {
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
 func Serve(
-		ctx context.Context,
-		cfg *Config,
+	ctx context.Context,
+	cfg *Config,
 ) (startError error, closeError error) {
 	// Code is easier to work through if we assume that serverController is never nil
 	if cfg.Controller == nil {
@@ -123,7 +123,7 @@ func Serve(
 }
 
 func ConfigureServices(
-		cfg *Config,
+	cfg *Config,
 ) {
 	controller := cfg.Controller
 	ValidateConfigStep := &svcs.AnonService{
@@ -460,8 +460,8 @@ func ConfigureServices(
 				// binlog replication.
 				if strings.Contains(logBinBranch, "/") {
 					logrus.Warnf("branch names containing '/' are not supported "+
-							"for binlog replication. Not enabling binlog replication; fix "+
-							"@@log_bin_branch value and restart Dolt (current value: %s)", logBinBranch)
+						"for binlog replication. Not enabling binlog replication; fix "+
+						"@@log_bin_branch value and restart Dolt (current value: %s)", logBinBranch)
 					return nil
 				}
 
