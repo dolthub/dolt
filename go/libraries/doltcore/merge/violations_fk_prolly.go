@@ -764,7 +764,16 @@ func convertNativeEncodedFkField(
 		}
 
 		if fromEnc == val.ExtendedAdaptiveEnc {
-			v, err := fromHandler.DeserializeValue(ctx, byteContent)
+			// byteContent above has already been stripped of the 0x00 inline header, so
+			// use the child (non-adaptive) handler to deserialise those raw payload bytes.
+			// AdaptiveEncodingTypeHandler.DeserializeValue expects the full adaptive value
+			// (with header) and will panic trying to parse the payload as an out-of-band
+			// reference.
+			deserializingHandler := fromHandler
+			if h, ok := fromHandler.(val.AdaptiveEncodingTypeHandler); ok {
+				deserializingHandler = h.ChildHandler()
+			}
+			v, err := deserializingHandler.DeserializeValue(ctx, byteContent)
 			if err != nil {
 				return err
 			}
@@ -804,7 +813,15 @@ func convertNativeEncodedFkField(
 			// Source was native; lift raw content to the Go shape |toHandler| expects.
 			v = bytesToGoValue(fromEnc, byteContent)
 		}
-		serialized, err := toHandler.SerializeValue(ctx, v)
+		// For an adaptive target we need the child (non-adaptive) handler's serialisation
+		// bytes: PutAdaptiveExtendedFromInline prepends the 0x00 inline marker itself, and
+		// AdaptiveEncodingTypeHandler.SerializeValue would also prepend one, producing a
+		// double-header inline value that fails to compare against stored parent keys.
+		serializingHandler := toHandler
+		if h, ok := toHandler.(val.AdaptiveEncodingTypeHandler); ok {
+			serializingHandler = h.ChildHandler()
+		}
+		serialized, err := serializingHandler.SerializeValue(ctx, v)
 		if err != nil {
 			return err
 		}
