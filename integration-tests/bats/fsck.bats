@@ -78,6 +78,24 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
   dolt fsck
 }
 
+@test "fsck: repository with stash" {
+  dolt init
+  dolt sql -q "create table t (i int primary key, value int)"
+  dolt sql -q "insert into t values (1, 1)"
+  dolt commit -Am "Create table t"
+
+  dolt sql -q "update t set value = 2 where i = 1"
+  dolt stash
+
+  run dolt fsck
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "No problems found." ]] || false
+
+  run dolt stash list
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "stash@{0}" ]] || false
+}
+
 @test "fsck: bad journal crc" {
   mkdir .dolt
   cp -R $BATS_CWD/corrupt_dbs/bad_journal_crc/* .dolt/

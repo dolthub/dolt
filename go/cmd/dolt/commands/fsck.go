@@ -1011,9 +1011,12 @@ func getRawReferencesFromStoreRoot(ctx context.Context, cs chunks.ChunkStore, er
 
 			refType := doltRef.GetType()
 			switch refType {
-			case ref.BranchRefType, ref.RemoteRefType, ref.InternalRefType, ref.WorkspaceRefType, ref.StashRefType:
+			case ref.BranchRefType, ref.RemoteRefType, ref.InternalRefType, ref.WorkspaceRefType:
 				// Address is the commit id.
 				refs[addr] = append(refs[addr], name)
+			case ref.StashRefType:
+				// A stash ref points to a StashList, not a commit.
+				// Its chunks were already validated by the full chunk scan.
 			case ref.TagRefType:
 				if commitHash, ok := resolveTagToCommit(ctx, cs, name, addr, errs); ok {
 					refs[commitHash] = append(refs[commitHash], name)
