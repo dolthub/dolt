@@ -74,6 +74,28 @@ teardown() {
     [[ "$output" =~ "Division by 0" ]] || false
 }
 
+# Regression coverage for https://github.com/dolthub/dolt/issues/10864
+# bats test_tags=no_lambda
+@test "sql-shell: bare empty query gives MySQL-style error, not a warning" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    run $BATS_TEST_DIRNAME/sql-shell-empty-query.expect
+
+    [[ "$output" =~ "No query specified" ]] || false
+    ! [[ "$output" =~ "query was empty after trimming comments" ]] || false
+    ! [[ "$output" =~ "Empty set, 1 warning" ]] || false
+}
+
+# Regression coverage for https://github.com/dolthub/dolt/issues/10863
+# bats test_tags=no_lambda
+@test "sql-shell: comment-only query is skipped silently, no warning" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    run $BATS_TEST_DIRNAME/sql-shell-comment-only-query.expect
+
+    ! [[ "$output" =~ "query was empty after trimming comments" ]] || false
+    ! [[ "$output" =~ "Empty set, 1 warning" ]] || false
+    ! [[ "$output" =~ "No query specified" ]] || false
+}
+
 # bats test_tags=no_lambda
 @test "sql-shell: can toggle warning details" {
     skiponwindows "Need to install expect and make this script work on windows."
