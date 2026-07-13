@@ -1076,8 +1076,11 @@ func getRawReferencesFromStoreRoot(ctx context.Context, cs chunks.ChunkStore, er
 // resolveStashRefs reads the stash list (SLST) that a stash ref points to and resolves it into the objects fsck must
 // validate. A stash ref does not point to a commit: it points to a StashList whose entries are individual stashes.
 // Each stash records the commit it was created from (a commit, validated via the commit DAG walk) and the stashed
-// working root (a root value, validated as a tree root). Returns the head commit hashes and stash working root hashes;
-// problems reading the list or its entries are appended to errs rather than aborting the scan.
+// working root (a root value, validated as a tree root). Returns the head commit hashes and stash working root hashes.
+//
+// Because fsck must tolerate corrupt repositories, the stash list address map is walked directly rather than via the
+// datas stash helpers, which assume well-formed entries and can panic on damaged data. Any problem reading the list or
+// its entries is appended to errs and skipped rather than aborting the scan.
 func resolveStashRefs(ctx context.Context, cs chunks.ChunkStore, ns tree.NodeStore, stashListAddr hash.Hash, refName string, errs *Errs) (headCommits []hash.Hash, stashRoots []hash.Hash) {
 	listChunk, err := cs.Get(ctx, stashListAddr)
 	if err != nil {
@@ -1095,51 +1098,83 @@ func resolveStashRefs(ctx context.Context, cs chunks.ChunkStore, ns tree.NodeSto
 		return nil, nil
 	}
 
-	stashAddrs, err := datas.GetHashListFromStashList(ctx, ns, types.SerialMessage(listData))
+	sl, err := serial.TryGetRootAsStashList(listData, serial.MessagePrefixSz)
 	if err != nil {
-		errs.AppendF("failed to read stash list %s: %w", stashListAddr.String(), err)
+		errs.AppendF("failed to parse stash list %s: %w", stashListAddr.String(), err)
+		return nil, nil
+	}
+	node, fileID, err := tree.NodeFromBytes(sl.AddressMapBytes())
+	if err != nil {
+		errs.AppendF("failed to read stash list %s address map: %w", stashListAddr.String(), err)
+		return nil, nil
+	}
+	if fileID != serial.AddressMapFileID {
+		errs.AppendF("stash list %s address map has incorrect file ID: expected %s, got %s", stashListAddr.String(), serial.AddressMapFileID, fileID)
+		return nil, nil
+	}
+	addressMap, err := prolly.NewAddressMap(node, ns)
+	if err != nil {
+		errs.AppendF("failed to load stash list %s address map: %w", stashListAddr.String(), err)
 		return nil, nil
 	}
 
-	for _, stashAddr := range stashAddrs {
-		stashChunk, err := cs.Get(ctx, stashAddr)
-		if err != nil {
-			errs.AppendF("failed to read stash %s: %w", stashAddr.String(), err)
-			continue
+	err = addressMap.IterAll(ctx, func(name string, stashAddr hash.Hash) error {
+		headCommit, hasHead, stashRoot, hasRoot := resolveStash(ctx, cs, stashAddr, errs)
+		if hasHead {
+			headCommits = append(headCommits, headCommit)
 		}
-		if stashChunk.IsEmpty() {
-			errs.AppendF("stash %s is empty", stashAddr.String())
-			continue
+		if hasRoot {
+			stashRoots = append(stashRoots, stashRoot)
 		}
-
-		stashData := stashChunk.Data()
-		if serial.GetFileID(stashData) != serial.StashFileID {
-			errs.AppendF("stash %s has incorrect file ID: expected %s, got %s", stashAddr.String(), serial.StashFileID, serial.GetFileID(stashData))
-			continue
-		}
-
-		var stash serial.Stash
-		if err = serial.InitStashRoot(&stash, stashData, serial.MessagePrefixSz); err != nil {
-			errs.AppendF("failed to parse stash %s: %w", stashAddr.String(), err)
-			continue
-		}
-
-		headBytes := stash.HeadCommitAddrBytes()
-		if len(headBytes) == hash.ByteLen {
-			headCommits = append(headCommits, hash.New(headBytes))
-		} else {
-			errs.AppendF("stash %s has invalid head commit address length: %d", stashAddr.String(), len(headBytes))
-		}
-
-		rootBytes := stash.StashRootAddrBytes()
-		if len(rootBytes) == hash.ByteLen {
-			stashRoots = append(stashRoots, hash.New(rootBytes))
-		} else {
-			errs.AppendF("stash %s has invalid stash root address length: %d", stashAddr.String(), len(rootBytes))
-		}
+		return nil
+	})
+	if err != nil {
+		errs.AppendF("failed to iterate stash list %s: %w", stashListAddr.String(), err)
 	}
 
 	return headCommits, stashRoots
+}
+
+// resolveStash reads a single stash (STSH) object and extracts the commit it was based on and the stashed working root.
+// The booleans report whether each address was present and well-formed; problems are appended to errs.
+func resolveStash(ctx context.Context, cs chunks.ChunkStore, stashAddr hash.Hash, errs *Errs) (headCommit hash.Hash, hasHead bool, stashRoot hash.Hash, hasRoot bool) {
+	stashChunk, err := cs.Get(ctx, stashAddr)
+	if err != nil {
+		errs.AppendF("failed to read stash %s: %w", stashAddr.String(), err)
+		return
+	}
+	if stashChunk.IsEmpty() {
+		errs.AppendF("stash %s is empty", stashAddr.String())
+		return
+	}
+
+	stashData := stashChunk.Data()
+	if serial.GetFileID(stashData) != serial.StashFileID {
+		errs.AppendF("stash %s has incorrect file ID: expected %s, got %s", stashAddr.String(), serial.StashFileID, serial.GetFileID(stashData))
+		return
+	}
+
+	var stash serial.Stash
+	if err = serial.InitStashRoot(&stash, stashData, serial.MessagePrefixSz); err != nil {
+		errs.AppendF("failed to parse stash %s: %w", stashAddr.String(), err)
+		return
+	}
+
+	headBytes := stash.HeadCommitAddrBytes()
+	if len(headBytes) == hash.ByteLen {
+		headCommit, hasHead = hash.New(headBytes), true
+	} else {
+		errs.AppendF("stash %s has invalid head commit address length: %d", stashAddr.String(), len(headBytes))
+	}
+
+	rootBytes := stash.StashRootAddrBytes()
+	if len(rootBytes) == hash.ByteLen {
+		stashRoot, hasRoot = hash.New(rootBytes), true
+	} else {
+		errs.AppendF("stash %s has invalid stash root address length: %d", stashAddr.String(), len(rootBytes))
+	}
+
+	return
 }
 
 // resolveTagToCommit reads a tag object and extracts the commit hash it points to
