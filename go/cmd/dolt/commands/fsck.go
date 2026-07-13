@@ -216,13 +216,19 @@ func (e *Errs) AppendF(msg string, args ...any) {
 	*e = append(*e, fmt.Errorf(msg, args...))
 }
 
-// CmtAppendF appends an error message prefixed with a specific commit hash. The error returned is the error created
-// and appended. Not an indication of success or failure, so can be ignored.
-func (e *Errs) CmtAppendF(commitHash hash.Hash, msg string, args ...any) error {
-	msg = fmt.Sprintf("::commit:%s: %s", commitHash.String(), msg)
+// refAppendF appends an error message prefixed with an owner kind and hash (e.g. "::commit:<hash>: ...").
+// The error returned is the error created and appended. Not an indication of success or failure, so can be ignored.
+func (e *Errs) refAppendF(kind string, ownerHash hash.Hash, msg string, args ...any) error {
+	msg = fmt.Sprintf("::%s:%s: %s", kind, ownerHash.String(), msg)
 	newErr := fmt.Errorf(msg, args...)
 	*e = append(*e, newErr)
 	return newErr
+}
+
+// CmtAppendF appends an error message prefixed with a specific commit hash. The error returned is the error created
+// and appended. Not an indication of success or failure, so can be ignored.
+func (e *Errs) CmtAppendF(commitHash hash.Hash, msg string, args ...any) error {
+	return e.refAppendF("commit", commitHash, msg, args...)
 }
 func (e *Errs) AppendE(err error) {
 	*e = append(*e, err)
@@ -428,18 +434,18 @@ func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, report *Fsck
 		}
 	}
 
-	reachableCommits, err := walkCommitDAGFromRefs(ctx, gs, &allCommitsSet, progress, &report.CommitErrs, report)
+	reachableCommits, stashRoots, err := walkCommitDAGFromRefs(ctx, gs, &allCommitsSet, progress, &report.CommitErrs, report)
 	if err != nil {
 		return fmt.Errorf("commit DAG walking failed: %w", err)
 	}
 
-	// Phase 3: Tree validation for commits (performance heavy)
-	if len(reachableCommits) > 0 {
+	// Phase 3: Tree validation for commits and stash working roots (performance heavy)
+	if len(reachableCommits) > 0 || len(stashRoots) > 0 {
 		progress.Milestonef(ctx, "Starting tree validation for %d commit objects...", len(reachableCommits))
 
 		vs := types.NewValueStore(gs)
 
-		commitReachableChunks, err := validateCommitTrees(ctx, vs, gs, &reachableCommits, progress, &report.CommitErrs)
+		commitReachableChunks, err := validateCommitTrees(ctx, vs, gs, &reachableCommits, stashRoots, progress, &report.CommitErrs)
 		if err != nil {
 			return fmt.Errorf("commit tree validation failed: %w", err)
 		}
@@ -453,8 +459,8 @@ func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, report *Fsck
 		}
 		unreachableChunks := chunkCount - uint32(commitReachableChunks.Size())
 
-		report.AppendSummary("Commit objects found: %d (%d reachable from branches/tags, %d unreachable)", len(allCommitsSet), len(reachableCommits), unreachableCommits)
-		report.AppendSummary("Chunks reachable from branches/tags: %d (unreachable: %d)", commitReachableChunks.Size(), unreachableChunks)
+		report.AppendSummary("Commit objects found: %d (%d reachable from branches/tags/stashes, %d unreachable)", len(allCommitsSet), len(reachableCommits), unreachableCommits)
+		report.AppendSummary("Chunks reachable from branches/tags/stashes: %d (unreachable: %d)", commitReachableChunks.Size(), unreachableChunks)
 		if len(report.FileErrCounts) > 0 {
 			report.AppendSummary("Files with corruption:")
 			for fileName, count := range report.FileErrCounts {
@@ -616,11 +622,14 @@ func (rt *roundTripper) decodeMsg(chk chunks.Chunk) string {
 
 // validateCommitTrees validates each commit's content and structure (trees, referenced objects)
 // but does not follow parent hashes (no DAG traversal). Parent hashes are validated but not followed.
+// Stash working roots are validated as tree roots after the commits; they are not commits and are only reachable
+// through stash refs, so they would otherwise go unwalked.
 func validateCommitTrees(
 	ctx context.Context,
 	vs *types.ValueStore,
 	cs chunks.ChunkStore,
 	reachableCommits *hash.HashSet,
+	stashRoots hash.HashSet,
 	progress ProgressReporter,
 	errs *Errs,
 ) (*hash.HashSet, error) {
@@ -665,6 +674,14 @@ func validateCommitTrees(
 
 	for closureCommit := range treeScnr.unreachableClosureCommits {
 		errs.AppendF("commit %s: unreachable but referenced in parent closure of reachable commits", closureCommit.String())
+	}
+
+	for stashRoot := range stashRoots {
+		err := treeScnr.validateTreeRoot(ctx, "stash", stashRoot, stashRoot)
+		if err != nil {
+			// Any Errors here are unexpected. appendErr should be used for things we expect to possibly fail.
+			return nil, err
+		}
 	}
 
 	return reachableChunks, nil
@@ -725,7 +742,7 @@ func (ts *treeScanner) processCommitContent(
 	rootBytes := commit.RootBytes()
 	if len(rootBytes) == hash.ByteLen {
 		rootHash := hash.New(rootBytes)
-		err = ts.validateTreeRoot(ctx, commitHash, rootHash)
+		err = ts.validateTreeRoot(ctx, "commit", commitHash, rootHash)
 		if err != nil {
 			// Any Errors here are unexpected. appendErr should be used for things we expect to possibly fail.
 			return fmt.Errorf("error validating commit %s: root tree %s: %w", commitHash.String(), rootHash.String(), err)
@@ -805,10 +822,13 @@ func (ts *treeScanner) processCommitContent(
 	return nil
 }
 
-// validateTreeRoot performs breadth-first validation of a tree structure and tracks all reachable chunks in |ts.reachableChunks|
+// validateTreeRoot performs breadth-first validation of a tree structure and tracks all reachable chunks in |ts.reachableChunks|.
+// |ownerKind| and |ownerHash| identify the object (e.g. a commit or stash) that the tree hangs off of, and are used only
+// for error messages.
 func (ts *treeScanner) validateTreeRoot(
 	ctx context.Context,
-	commitHash, // Use just for error messages.
+	ownerKind string,
+	ownerHash hash.Hash,
 	treeHash hash.Hash,
 ) error {
 	// Skip if already processed. Root hashes rarely repeat, but possible if you revert to a previous state.
@@ -820,12 +840,12 @@ func (ts *treeScanner) validateTreeRoot(
 	if err != nil || treeValue == nil {
 		// Mark visited on error so a second commit sharing this root doesn't re-report the same error.
 		ts.visited.Insert(treeHash)
-		_ = ts.errs.CmtAppendF(commitHash, "failed to read tree %s: %w", treeHash.String(), err)
+		_ = ts.errs.refAppendF(ownerKind, ownerHash, "failed to read tree %s: %w", treeHash.String(), err)
 		return nil
 	}
 
 	if _, ok := treeValue.(types.SerialMessage); ok {
-		err = ts.validateTree(ctx, commitHash, treeHash)
+		err = ts.validateTree(ctx, ownerKind, ownerHash, treeHash)
 		if err != nil {
 			return fmt.Errorf("failed to validate tree object %s: %w", treeHash.String(), err)
 		}
@@ -839,10 +859,12 @@ func (ts *treeScanner) validateTreeRoot(
 
 // validateTree validates SerialMessages which are trees of objects. We track all reachable chunks, and any
 // errors encountered during traversal are appended via appendErr. If this function returns an error, it indicates
-// an unexpected failure, and further processing should halt.
+// an unexpected failure, and further processing should halt. |ownerKind| and |ownerHash| identify the owning object
+// (e.g. a commit or stash) for error messages only.
 func (ts *treeScanner) validateTree(
 	ctx context.Context,
-	commitHash hash.Hash, // Uses for error messages only.
+	ownerKind string,
+	ownerHash hash.Hash,
 	treeHash hash.Hash,
 ) error {
 	workQueue := list.New()
@@ -863,7 +885,7 @@ func (ts *treeScanner) validateTree(
 
 		value, err := ts.vs.MustReadValue(ctx, currentChunkHash)
 		if err != nil {
-			_ = ts.errs.CmtAppendF(commitHash, "read failure of %s: %w", currentChunkHash.String(), err)
+			_ = ts.errs.refAppendF(ownerKind, ownerHash, "read failure of %s: %w", currentChunkHash.String(), err)
 			continue
 		}
 
@@ -881,19 +903,21 @@ func (ts *treeScanner) validateTree(
 				return fmt.Errorf("failed to walk references in tree %s: %w", treeHash.String(), err)
 			}
 		} else {
-			panic(fmt.Sprintf("commit::%s: referenced chunk %s from tree %s is not a SerialMessage, got type %T", commitHash.String(), currentChunkHash.String(), treeHash.String(), value))
+			panic(fmt.Sprintf("::%s:%s: referenced chunk %s from tree %s is not a SerialMessage, got type %T", ownerKind, ownerHash.String(), currentChunkHash.String(), treeHash.String(), value))
 		}
 	}
 
 	return nil
 }
 
-// walkCommitDAGFromRefs loads all branches/tags and walks the commit DAG to find reachable commits
-// This is lightweight - only validates commit objects, parent closures, and parent hashes (no trees)
-func walkCommitDAGFromRefs(ctx context.Context, gs *nbs.GenerationalNBS, allCommits *hash.HashSet, progress ProgressReporter, errs *Errs, report *FsckReport) (hash.HashSet, error) {
-	startingCommits, err := getRawReferencesFromStoreRoot(ctx, gs, errs)
+// walkCommitDAGFromRefs loads all branches/tags/stashes and walks the commit DAG to find reachable commits.
+// This is lightweight - only validates commit objects, parent closures, and parent hashes (no trees).
+// It also returns the stash working roots referenced by stash refs, which are validated separately as tree roots.
+func walkCommitDAGFromRefs(ctx context.Context, gs *nbs.GenerationalNBS, allCommits *hash.HashSet, progress ProgressReporter, errs *Errs, report *FsckReport) (reachableCommits hash.HashSet, stashRoots hash.HashSet, err error) {
+	var startingCommits map[hash.Hash][]string
+	startingCommits, stashRoots, err = getRawReferencesFromStoreRoot(ctx, gs, errs)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get references from store root: %w", err)
+		return nil, nil, fmt.Errorf("failed to get references from store root: %w", err)
 	}
 
 	refCount := 0
@@ -903,12 +927,12 @@ func walkCommitDAGFromRefs(ctx context.Context, gs *nbs.GenerationalNBS, allComm
 	report.AppendSummary("Refs found: %d pointing to %d unique starting commits", refCount, len(startingCommits))
 
 	if len(startingCommits) == 0 {
-		return hash.HashSet{}, nil
+		return hash.HashSet{}, stashRoots, nil
 	}
 
 	// commitQueue is used as the work queue, and reachableCommits tracks all commits we've put in the queue (to avoid double enqueueing)
 	commitQueue := list.New()
-	reachableCommits := hash.HashSet{}
+	reachableCommits = hash.HashSet{}
 	for commitHash := range startingCommits {
 		commitQueue.PushBack(commitHash)
 		reachableCommits.Insert(commitHash)
@@ -950,57 +974,60 @@ func walkCommitDAGFromRefs(ctx context.Context, gs *nbs.GenerationalNBS, allComm
 			panic(fmt.Sprintf("::commit:%s: is not a SerialMessage, got type %T", commitHash.String(), commitValue))
 		}
 	}
-	return reachableCommits, nil
+	return reachableCommits, stashRoots, nil
 }
 
 // getRawReferencesFromStoreRoot accesses raw references from the chunk store root.
-// Returns a map from commit hash to list of reference names that point to it.
-func getRawReferencesFromStoreRoot(ctx context.Context, cs chunks.ChunkStore, errs *Errs) (map[hash.Hash][]string, error) {
+// Returns a map from commit hash to list of reference names that point to it, along with the stash working roots
+// referenced by any stash refs. Stash working roots are not commits, so they are validated as tree roots rather than
+// walked as part of the commit DAG.
+func getRawReferencesFromStoreRoot(ctx context.Context, cs chunks.ChunkStore, errs *Errs) (map[hash.Hash][]string, hash.HashSet, error) {
 	// Get the root hash from the chunk store
 	rootHash, err := cs.Root(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get store root hash: %w", err)
+		return nil, nil, fmt.Errorf("failed to get store root hash: %w", err)
 	}
 	if rootHash.IsEmpty() {
 		// Empty root? There should always be something.
-		return nil, fmt.Errorf("store root hash is empty")
+		return nil, nil, fmt.Errorf("store root hash is empty")
 	}
 
 	// Get the store root chunk
 	rootChunk, err := cs.Get(ctx, rootHash)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get store root chunk: %w", err)
+		return nil, nil, fmt.Errorf("failed to get store root chunk: %w", err)
 	}
 	if rootChunk.IsEmpty() {
-		return nil, fmt.Errorf("store root chunk is empty")
+		return nil, nil, fmt.Errorf("store root chunk is empty")
 	}
 
 	rootData := rootChunk.Data()
 	if serial.GetFileID(rootData) != serial.StoreRootFileID {
-		return nil, fmt.Errorf("invalid root chunk: %s. expected store root file id, got: %s", rootHash.String(), serial.GetFileID(rootData))
+		return nil, nil, fmt.Errorf("invalid root chunk: %s. expected store root file id, got: %s", rootHash.String(), serial.GetFileID(rootData))
 	}
 
 	sr, err := serial.TryGetRootAsStoreRoot(rootData, serial.MessagePrefixSz)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	mapBytes := sr.AddressMapBytes()
 	node, fileId, err := tree.NodeFromBytes(mapBytes)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if fileId != serial.AddressMapFileID {
-		return nil, fmt.Errorf("unexpected file ID for address map, expected %s, found %s", serial.AddressMapFileID, fileId)
+		return nil, nil, fmt.Errorf("unexpected file ID for address map, expected %s, found %s", serial.AddressMapFileID, fileId)
 	}
 
 	ns := tree.NewNodeStore(cs)
 	addressMap, err := prolly.NewAddressMap(node, ns)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Extract references into a map[hash.Hash][]string, filtering for commit-pointing refs only
 	refs := make(map[hash.Hash][]string)
+	stashRoots := make(hash.HashSet)
 	err = addressMap.IterAll(ctx, func(name string, addr hash.Hash) error {
 		// Parse the reference using the ref package to determine its type
 		if ref.IsRef(name) {
@@ -1011,9 +1038,17 @@ func getRawReferencesFromStoreRoot(ctx context.Context, cs chunks.ChunkStore, er
 
 			refType := doltRef.GetType()
 			switch refType {
-			case ref.BranchRefType, ref.RemoteRefType, ref.InternalRefType, ref.WorkspaceRefType, ref.StashRefType:
+			case ref.BranchRefType, ref.RemoteRefType, ref.InternalRefType, ref.WorkspaceRefType:
 				// Address is the commit id.
 				refs[addr] = append(refs[addr], name)
+			case ref.StashRefType:
+				headCommits, roots := resolveStashRefs(ctx, cs, ns, addr, name, errs)
+				for _, headCommit := range headCommits {
+					refs[headCommit] = append(refs[headCommit], name)
+				}
+				for _, root := range roots {
+					stashRoots.Insert(root)
+				}
 			case ref.TagRefType:
 				if commitHash, ok := resolveTagToCommit(ctx, cs, name, addr, errs); ok {
 					refs[commitHash] = append(refs[commitHash], name)
@@ -1032,10 +1067,79 @@ func getRawReferencesFromStoreRoot(ctx context.Context, cs chunks.ChunkStore, er
 	if err != nil {
 		// Failure to iterate address map is unexpected, but possibly recoverable. We'll return the error and give up now,
 		// but there may be a future need to continue processing other refs.
-		return nil, fmt.Errorf("failed to iterate root address map %s: %w", rootHash.String(), err)
+		return nil, nil, fmt.Errorf("failed to iterate root address map %s: %w", rootHash.String(), err)
 	}
 
-	return refs, nil
+	return refs, stashRoots, nil
+}
+
+// resolveStashRefs reads the stash list (SLST) that a stash ref points to and resolves it into the objects fsck must
+// validate. A stash ref does not point to a commit: it points to a StashList whose entries are individual stashes.
+// Each stash records the commit it was created from (a commit, validated via the commit DAG walk) and the stashed
+// working root (a root value, validated as a tree root). Returns the head commit hashes and stash working root hashes;
+// problems reading the list or its entries are appended to errs rather than aborting the scan.
+func resolveStashRefs(ctx context.Context, cs chunks.ChunkStore, ns tree.NodeStore, stashListAddr hash.Hash, refName string, errs *Errs) (headCommits []hash.Hash, stashRoots []hash.Hash) {
+	listChunk, err := cs.Get(ctx, stashListAddr)
+	if err != nil {
+		errs.AppendF("failed to read stash list %s for ref %s: %w", stashListAddr.String(), refName, err)
+		return nil, nil
+	}
+	if listChunk.IsEmpty() {
+		errs.AppendF("stash list %s for ref %s is empty", stashListAddr.String(), refName)
+		return nil, nil
+	}
+
+	listData := listChunk.Data()
+	if serial.GetFileID(listData) != serial.StashListFileID {
+		errs.AppendF("stash list %s has incorrect file ID: expected %s, got %s", stashListAddr.String(), serial.StashListFileID, serial.GetFileID(listData))
+		return nil, nil
+	}
+
+	stashAddrs, err := datas.GetHashListFromStashList(ctx, ns, types.SerialMessage(listData))
+	if err != nil {
+		errs.AppendF("failed to read stash list %s: %w", stashListAddr.String(), err)
+		return nil, nil
+	}
+
+	for _, stashAddr := range stashAddrs {
+		stashChunk, err := cs.Get(ctx, stashAddr)
+		if err != nil {
+			errs.AppendF("failed to read stash %s: %w", stashAddr.String(), err)
+			continue
+		}
+		if stashChunk.IsEmpty() {
+			errs.AppendF("stash %s is empty", stashAddr.String())
+			continue
+		}
+
+		stashData := stashChunk.Data()
+		if serial.GetFileID(stashData) != serial.StashFileID {
+			errs.AppendF("stash %s has incorrect file ID: expected %s, got %s", stashAddr.String(), serial.StashFileID, serial.GetFileID(stashData))
+			continue
+		}
+
+		var stash serial.Stash
+		if err = serial.InitStashRoot(&stash, stashData, serial.MessagePrefixSz); err != nil {
+			errs.AppendF("failed to parse stash %s: %w", stashAddr.String(), err)
+			continue
+		}
+
+		headBytes := stash.HeadCommitAddrBytes()
+		if len(headBytes) == hash.ByteLen {
+			headCommits = append(headCommits, hash.New(headBytes))
+		} else {
+			errs.AppendF("stash %s has invalid head commit address length: %d", stashAddr.String(), len(headBytes))
+		}
+
+		rootBytes := stash.StashRootAddrBytes()
+		if len(rootBytes) == hash.ByteLen {
+			stashRoots = append(stashRoots, hash.New(rootBytes))
+		} else {
+			errs.AppendF("stash %s has invalid stash root address length: %d", stashAddr.String(), len(rootBytes))
+		}
+	}
+
+	return headCommits, stashRoots
 }
 
 // resolveTagToCommit reads a tag object and extracts the commit hash it points to
