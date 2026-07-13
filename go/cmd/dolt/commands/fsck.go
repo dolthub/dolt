@@ -1010,17 +1010,8 @@ func getRawReferencesFromStoreRoot(ctx context.Context, cs chunks.ChunkStore, er
 	if err != nil {
 		return nil, nil, err
 	}
-	mapBytes := sr.AddressMapBytes()
-	node, fileId, err := tree.NodeFromBytes(mapBytes)
-	if err != nil {
-		return nil, nil, err
-	}
-	if fileId != serial.AddressMapFileID {
-		return nil, nil, fmt.Errorf("unexpected file ID for address map, expected %s, found %s", serial.AddressMapFileID, fileId)
-	}
-
 	ns := tree.NewNodeStore(cs)
-	addressMap, err := prolly.NewAddressMap(node, ns)
+	addressMap, err := addressMapFromBytes(sr.AddressMapBytes(), ns)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1073,6 +1064,19 @@ func getRawReferencesFromStoreRoot(ctx context.Context, cs chunks.ChunkStore, er
 	return refs, stashRoots, nil
 }
 
+// addressMapFromBytes parses an embedded serialized AddressMap (such as the one carried by a StoreRoot or a StashList)
+// and verifies that the node is actually an address map.
+func addressMapFromBytes(mapBytes []byte, ns tree.NodeStore) (prolly.AddressMap, error) {
+	node, fileID, err := tree.NodeFromBytes(mapBytes)
+	if err != nil {
+		return prolly.AddressMap{}, err
+	}
+	if fileID != serial.AddressMapFileID {
+		return prolly.AddressMap{}, fmt.Errorf("unexpected file ID for address map, expected %s, found %s", serial.AddressMapFileID, fileID)
+	}
+	return prolly.NewAddressMap(node, ns)
+}
+
 // resolveStashRefs reads the stash list (SLST) that a stash ref points to and resolves it into the objects fsck must
 // validate. A stash ref does not point to a commit: it points to a StashList whose entries are individual stashes.
 // Each stash records the commit it was created from (a commit, validated via the commit DAG walk) and the stashed
@@ -1103,18 +1107,9 @@ func resolveStashRefs(ctx context.Context, cs chunks.ChunkStore, ns tree.NodeSto
 		errs.AppendF("failed to parse stash list %s: %w", stashListAddr.String(), err)
 		return nil, nil
 	}
-	node, fileID, err := tree.NodeFromBytes(sl.AddressMapBytes())
+	addressMap, err := addressMapFromBytes(sl.AddressMapBytes(), ns)
 	if err != nil {
 		errs.AppendF("failed to read stash list %s address map: %w", stashListAddr.String(), err)
-		return nil, nil
-	}
-	if fileID != serial.AddressMapFileID {
-		errs.AppendF("stash list %s address map has incorrect file ID: expected %s, got %s", stashListAddr.String(), serial.AddressMapFileID, fileID)
-		return nil, nil
-	}
-	addressMap, err := prolly.NewAddressMap(node, ns)
-	if err != nil {
-		errs.AppendF("failed to load stash list %s address map: %w", stashListAddr.String(), err)
 		return nil, nil
 	}
 
