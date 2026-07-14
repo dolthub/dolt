@@ -1317,6 +1317,17 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 
 	tx, usingDoltTransaction := d.GetTransaction().(*DoltTransaction)
 
+	// If this database isn't part of the transaction's start-point snapshot, it became visible to this session after the
+	// transaction began (e.g. another session created it concurrently, or it was cloned on first reference). Register it
+	// now with its current root so that TransactionRoot and friends can resolve it, instead of erroring out. See AddDb.
+	if usingDoltTransaction {
+		if _, ok := tx.GetInitialRoot(baseName); !ok {
+			if err := tx.AddDb(ctx, db); err != nil {
+				return err
+			}
+		}
+	}
+
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	sessionState, sessionStateExists := d.dbStates[baseName]
