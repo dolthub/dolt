@@ -127,16 +127,20 @@ func NewDoltTransaction(
 	}, nil
 }
 
-// AddDb adds the database named to the transaction. Only necessary in the case when new databases are added to an
-// existing transaction (as when cloning a database on a read replica when it is first referenced).
+// AddDb adds the database named to the transaction, establishing a start-point root for it. Necessary when a database
+// becomes visible to a session after its transaction has already begun: when cloning a database on a read replica as it
+// is first referenced, or when another session created the database concurrently after this transaction's snapshot was
+// taken. The key is normalized to the base (non-revision-qualified, lowercased) name to match NewDoltTransaction and
+// GetInitialRoot, since db.Name() returns the user-requested name, which may be revision-qualified or differently cased.
 func (tx DoltTransaction) AddDb(ctx *sql.Context, db SqlDatabase) error {
 	nomsRoot, err := db.DbData().Ddb.NomsRoot(ctx)
 	if err != nil {
 		return err
 	}
 
-	tx.dbStartPoints[strings.ToLower(db.Name())] = dbRoot{
-		dbName:   db.Name(),
+	baseName, _ := doltdb.SplitRevisionDbName(db.Name())
+	tx.dbStartPoints[strings.ToLower(baseName)] = dbRoot{
+		dbName:   baseName,
 		rootHash: nomsRoot,
 		db:       db.DbData().Ddb,
 	}
