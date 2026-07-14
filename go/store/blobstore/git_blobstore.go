@@ -80,6 +80,11 @@ type multiPartReadCloser struct {
 	ctx context.Context
 	api git.GitAPI
 
+	// openSlice, when non-nil, overrides how part-blob slice readers are
+	// opened (e.g. from a local blob file cache that can seek to the offset
+	// instead of streaming and discarding the prefix).
+	openSlice func(s chunkPartSlice) (io.ReadCloser, error)
+
 	slices []chunkPartSlice
 	curIdx int
 
@@ -118,13 +123,33 @@ func (m *multiPartReadCloser) ensureCurrent() error {
 		return nil
 	}
 	s := m.slices[m.curIdx]
-	rc, err := m.openSliceReader(s)
+	open := m.openSliceReader
+	if m.openSlice != nil {
+		open = m.openSlice
+	}
+	rc, err := open(s)
 	if err != nil {
 		return err
 	}
 	m.curRC = rc
 	m.rem = s.length
 	return nil
+}
+
+// openCachedBlobSlice opens a part-blob slice from the blob file cache,
+// seeking directly to the slice offset.
+func (gbs *GitBlobstore) openCachedBlobSlice(ctx context.Context, s chunkPartSlice) (io.ReadCloser, error) {
+	f, _, err := gbs.blobFiles.open(ctx, gbs.api, git.OID(s.oidHex))
+	if err != nil {
+		return nil, err
+	}
+	if s.offset > 0 {
+		if _, err := f.Seek(s.offset, io.SeekStart); err != nil {
+			_ = f.Close()
+			return nil, err
+		}
+	}
+	return f, nil
 }
 
 func (m *multiPartReadCloser) openSliceReader(s chunkPartSlice) (io.ReadCloser, error) {
@@ -332,6 +357,11 @@ type GitBlobstore struct {
 	// for a visible info branch pushed after each successful data write. The branch
 	// contains a single DOLT_REMOTE.md file with remote metadata. Empty means disabled.
 	infoBranch string
+
+	// blobFiles, when non-nil, materializes blobs to local files so ranged and
+	// repeated reads avoid a `git cat-file` subprocess per read. Nil (via
+	// DOLT_GIT_BLOB_FILE_CACHE=0) falls back to streaming reads.
+	blobFiles *blobFileCache
 }
 
 var _ Blobstore = (*GitBlobstore)(nil)
@@ -434,6 +464,7 @@ func NewGitBlobstoreWithOptions(gitDir, ref string, opts GitBlobstoreOptions) (*
 		cacheChildren:     make(map[string][]git.TreeEntry),
 		syncForReadTTL:    syncForReadTTL,
 		infoBranch:        infoBranch,
+		blobFiles:         newBlobFileCache(gitDir),
 	}, nil
 }
 
@@ -1048,6 +1079,14 @@ func (gbs *GitBlobstore) getFromCache(ctx context.Context, key string, br BlobRa
 
 	switch obj.typ {
 	case git.ObjectTypeBlob:
+		if gbs.blobFiles != nil {
+			f, sz, err := gbs.blobFiles.open(ctx, gbs.api, obj.oid)
+			if err != nil {
+				return nil, 0, "", err
+			}
+			// Per-key version: blob object id.
+			return sliceFileBlob(f, sz, br, obj.oid.String())
+		}
 		sz, err := gbs.api.BlobSize(ctx, obj.oid)
 		if err != nil {
 			return nil, 0, "", err
@@ -1094,6 +1133,11 @@ func (gbs *GitBlobstore) openChunkedTreeRange(ctx context.Context, key string, b
 		ctx:    ctx,
 		api:    gbs.api,
 		slices: slices,
+	}
+	if gbs.blobFiles != nil {
+		streamRC.openSlice = func(s chunkPartSlice) (io.ReadCloser, error) {
+			return gbs.openCachedBlobSlice(ctx, s)
+		}
 	}
 	return streamRC, totalSize, nil
 }
@@ -1590,6 +1634,11 @@ func (gbs *GitBlobstore) sizeAtCommit(ctx context.Context, commit git.OID, key s
 
 	switch obj.typ {
 	case git.ObjectTypeBlob:
+		if gbs.blobFiles != nil {
+			if sz, ok := gbs.blobFiles.sizeOf(obj.oid); ok {
+				return uint64(sz), nil
+			}
+		}
 		sz, err := gbs.api.BlobSize(ctx, obj.oid)
 		if err != nil {
 			return 0, err
@@ -1668,6 +1717,40 @@ func sliceInlineBlob(rc io.ReadCloser, sz int64, br BlobRange, ver string) (io.R
 	}
 
 	return &limitReadCloser{r: io.LimitReader(rc, pos.length), c: rc}, uint64(sz), ver, nil
+}
+
+// sliceFileBlob implements BlobRange over a materialized blob file with the
+// same range semantics as sliceInlineBlob, but seeks instead of streaming and
+// discarding the prefix. Ownership of |f| passes to the returned ReadCloser
+// (or it is closed on error).
+func sliceFileBlob(f *os.File, sz int64, br BlobRange, ver string) (io.ReadCloser, uint64, string, error) {
+	if br.isAllRange() {
+		return f, uint64(sz), ver, nil
+	}
+
+	pos := br.positiveRange(sz)
+	if pos.offset < 0 || pos.offset > sz {
+		_ = f.Close()
+		return nil, uint64(sz), ver, fmt.Errorf("invalid BlobRange offset %d for blob of size %d", pos.offset, sz)
+	}
+	if pos.length < 0 {
+		_ = f.Close()
+		return nil, uint64(sz), ver, fmt.Errorf("invalid BlobRange length %d", pos.length)
+	}
+	if pos.length == 0 {
+		pos.length = sz - pos.offset
+	}
+	if pos.offset+pos.length > sz {
+		pos.length = sz - pos.offset
+	}
+
+	if pos.offset > 0 {
+		if _, err := f.Seek(pos.offset, io.SeekStart); err != nil {
+			_ = f.Close()
+			return nil, uint64(sz), ver, err
+		}
+	}
+	return &limitReadCloser{r: io.LimitReader(f, pos.length), c: f}, uint64(sz), ver, nil
 }
 
 func skipN(r io.Reader, n int64) error {
