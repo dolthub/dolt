@@ -203,7 +203,7 @@ type prollyKeylessSecondaryWriter struct {
 }
 
 var _ indexWriter = prollyKeylessSecondaryWriter{}
-var _ uniqueKeyChangeReporter = prollyKeylessSecondaryWriter{}
+var _ UniqueKeyChangeReporter = prollyKeylessSecondaryWriter{}
 
 // Name implements the interface indexWriter.
 func (writer prollyKeylessSecondaryWriter) Name() string {
@@ -384,7 +384,8 @@ func (writer prollyKeylessSecondaryWriter) Update(ctx context.Context, oldRow sq
 	return
 }
 
-func (writer prollyKeylessSecondaryWriter) updateChangesUniqueKey(oldRow sql.Row, newRow sql.Row) bool {
+// UpdateChangesUniqueKey implements UniqueKeyChangeReporter for this index.
+func (writer prollyKeylessSecondaryWriter) UpdateChangesUniqueKey(oldRow sql.Row, newRow sql.Row) bool {
 	return writer.unique && (writer.predicate != nil || !isNoopUpdate(oldRow, newRow, writer.keyMap))
 }
 

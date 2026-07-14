@@ -194,9 +194,7 @@ func (wtu *WorkspaceTableUpdater) Update(ctx *sql.Context, old sql.Row, new sql.
 		return tableWriter.Delete(ctx, fromRow)
 	}
 
-	if r, ok := tableWriter.(interface {
-		UpdateChangesUniqueKey(oldRow, newRow sql.Row) bool
-	}); ok && !r.UpdateChangesUniqueKey(fromRow, toRow) {
+	if r, ok := tableWriter.(writer.UniqueKeyChangeReporter); ok && !r.UpdateChangesUniqueKey(fromRow, toRow) {
 		return tableWriter.Update(ctx, fromRow, toRow)
 	}
 

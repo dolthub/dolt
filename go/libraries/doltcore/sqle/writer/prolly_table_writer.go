@@ -62,9 +62,7 @@ type prollyTableWriter struct {
 
 var _ dsess.TableWriter = &prollyTableWriter{}
 
-var _ interface {
-	UpdateChangesUniqueKey(oldRow, newRow sql.Row) bool
-} = &prollyTableWriter{}
+var _ UniqueKeyChangeReporter = &prollyTableWriter{}
 var _ AutoIncrementGetter = &prollyTableWriter{}
 
 func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, schState *dsess.WriterState) (map[string]indexWriter, error) {
@@ -203,19 +201,19 @@ func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.
 	return nil
 }
 
-// uniqueKeyChangeReporter is an index writer that reports whether an update frees or takes a unique key.
-type uniqueKeyChangeReporter interface {
-	// updateChangesUniqueKey reports whether updating |oldRow| to |newRow| frees or takes a unique key of this
-	// index. Any change can move a row in or out of a partial index, so a unique partial index always reports one.
-	updateChangesUniqueKey(oldRow sql.Row, newRow sql.Row) bool
+// UniqueKeyChangeReporter is a writer that reports whether an update frees or takes a unique key.
+type UniqueKeyChangeReporter interface {
+	// UpdateChangesUniqueKey reports whether updating |oldRow| to |newRow| frees or takes a key in a unique index,
+	// erring toward reporting a change. The primary key is not considered, and a unique partial index always
+	// reports a change since any change can move a row in or out of it.
+	UpdateChangesUniqueKey(oldRow sql.Row, newRow sql.Row) bool
 }
 
-// UpdateChangesUniqueKey reports whether updating |oldRow| to |newRow| frees or takes a key in a unique index of
-// the table, erring toward reporting a change. The primary key is not considered.
+// UpdateChangesUniqueKey implements UniqueKeyChangeReporter for the whole table by asking each secondary index.
 func (w *prollyTableWriter) UpdateChangesUniqueKey(oldRow sql.Row, newRow sql.Row) bool {
 	for _, wr := range w.secondary {
-		r, ok := wr.(uniqueKeyChangeReporter)
-		if !ok || r.updateChangesUniqueKey(oldRow, newRow) {
+		r, ok := wr.(UniqueKeyChangeReporter)
+		if !ok || r.UpdateChangesUniqueKey(oldRow, newRow) {
 			return true
 		}
 	}
