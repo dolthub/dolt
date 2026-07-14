@@ -1320,7 +1320,9 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	// If this database isn't part of the transaction's start-point snapshot, it became visible to this session after the
 	// transaction began (e.g. another session created it concurrently, or it was cloned on first reference). Register it
 	// now with its current root so that TransactionRoot and friends can resolve it, instead of erroring out. See AddDb.
-	if usingDoltTransaction {
+	// We only do this for databases backed by a DoltDB, matching StartTransaction, which skips databases with a nil Ddb
+	// (e.g. UserSpaceDatabase, clusterDatabase) when taking its snapshot.
+	if usingDoltTransaction && db.DbData().Ddb != nil {
 		if _, ok := tx.GetInitialRoot(baseName); !ok {
 			if err := tx.AddDb(ctx, db); err != nil {
 				return err
