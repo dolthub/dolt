@@ -241,13 +241,9 @@ func (iter *binaryHexIterator) Next(ctx *sql.Context) (sql.Row, error) {
 				}
 			case sqltypes.Bit:
 				switch v := val.(type) {
-				case string:
-					// A sql-server sends bit values as bytes already sized
-					// to the declared bit width.
+				case string: // sql-server sends bit values as bytes sized to the declared bit width
 					rowData[i] = sqlutil.BinaryAsHexDisplayValue(fmt.Sprintf("0x%X", []byte(v)))
-				default:
-					// Local engine values are integers, so Type.SQL is needed
-					// to produce bytes sized to the declared bit width.
+				default: // local engine values are integers, Type.SQL produces width-sized bytes
 					sqlVal, err := iter.schema[i].Type.SQL(ctx, nil, val)
 					if err != nil {
 						return nil, fmt.Errorf("unexpected value %v for bit column %s: %w", val, iter.schema[i].Name, err)
