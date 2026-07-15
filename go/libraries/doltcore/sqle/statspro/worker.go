@@ -469,10 +469,13 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 		return err
 	}
 
+	schemaName := sqlTable.DatabaseSchema().SchemaName()
+
 	tableKey := tableIndexesKey{
 		db:     strings.ToLower(sqlDb.AliasedName()),
 		branch: strings.ToLower(sqlDb.Revision()),
 		table:  strings.ToLower(tableName),
+		schema: strings.ToLower(schemaName),
 	}
 
 	tableHash, err := dTab.HashOf()
