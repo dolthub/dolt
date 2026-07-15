@@ -15,5 +15,5 @@
 package doltversion
 
 const (
-	Version = "2.1.11"
+	Version = "2.2.0"
 )
