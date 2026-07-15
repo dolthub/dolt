@@ -1,0 +1,26 @@
+#!/usr/bin/expect
+# See https://github.com/dolthub/dolt/issues/10132
+#
+# Usage:
+#   expect sql-server-mysql-bit.expect <port> <database>
+
+source "$env(BATS_CWD)/helper/common_expect_functions.tcl"
+
+set timeout 10
+
+set port [lindex $argv 0];
+set database [lindex $argv 1];
+
+spawn mysql --host 0.0.0.0 --port $port --user root $database
+
+expect_with_defaults {mysql> } { send "SELECT * FROM test_bit ORDER BY id;\r" }
+
+# The mysql client renders bit values as hex sized to the declared bit width
+expect_with_defaults_2 {0x00} {0x0000000000000000} {}
+expect_with_defaults_2 {0x02} {0xFFFFFFFFFFFFFFFF} {}
+expect_with_defaults_2 {0x07} {NULL}               {}
+
+expect_with_defaults {mysql> } { send "exit\r" }
+
+expect eof
+exit 0

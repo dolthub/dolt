@@ -1162,6 +1162,21 @@ expect eof
     [[ "$output" =~ "1,0x61626300000000000000" ]] || false
     [[ "$output" =~ "2,0x0A000000001000112233" ]] || false
     [[ "$output" =~ "3,0x00000000000000000000" ]] || false
+
+    # See https://github.com/dolthub/dolt/issues/10132
+    run dolt sql -q "SELECT * FROM test_bit" --binary-as-hex
+    [ "$status" -eq 0 ]
+    [[ $output =~ 1.*0x41.*0x0000000000000000 ]] || false
+    [[ $output =~ 2.*0xFF.*0xFFFFFFFFFFFFFFFF ]] || false
+    [[ $output =~ 3.*0x00.*NULL ]] || false
+
+    run dolt sql -q "SELECT * FROM test_bit" --skip-binary-as-hex
+    [ "$status" -eq 0 ]
+    [[ ! $output =~ 0x[0-9A-F]+ ]] || false
+
+    run dolt sql -r csv -q "SELECT * FROM test_bit WHERE id = 1;" --binary-as-hex
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,0x41,0x0000000000000000" ]] || false
 }
 
 # bats test_tags=no_lambda

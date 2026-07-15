@@ -226,7 +226,7 @@ func (iter *binaryHexIterator) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-	// TODO: Add support for BLOB types (TINYBLOB, BLOB, MEDIUMBLOB, LONGBLOB) and BIT type
+	// TODO: Add support for BLOB types (TINYBLOB, BLOB, MEDIUMBLOB, LONGBLOB)
 	for i, val := range rowData {
 		if val != nil && i < len(iter.schema) {
 			switch iter.schema[i].Type.Type() {
@@ -238,6 +238,21 @@ func (iter *binaryHexIterator) Next(ctx *sql.Context) (sql.Row, error) {
 					rowData[i] = sqlutil.BinaryAsHexDisplayValue(fmt.Sprintf("0x%X", []byte(v)))
 				default:
 					return nil, fmt.Errorf("unexpected type %T for binary column %s", val, iter.schema[i].Name)
+				}
+			case sqltypes.Bit:
+				switch v := val.(type) {
+				case string:
+					// A sql-server sends bit values as bytes already sized
+					// to the declared bit width.
+					rowData[i] = sqlutil.BinaryAsHexDisplayValue(fmt.Sprintf("0x%X", []byte(v)))
+				default:
+					// Local engine values are integers, so Type.SQL is needed
+					// to produce bytes sized to the declared bit width.
+					sqlVal, err := iter.schema[i].Type.SQL(ctx, nil, val)
+					if err != nil {
+						return nil, fmt.Errorf("unexpected value %v for bit column %s: %w", val, iter.schema[i].Name, err)
+					}
+					rowData[i] = sqlutil.BinaryAsHexDisplayValue(fmt.Sprintf("0x%X", sqlVal.Raw()))
 				}
 			}
 		}

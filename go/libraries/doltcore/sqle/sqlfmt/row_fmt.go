@@ -347,6 +347,9 @@ func interfaceValueAsSqlString(ctx *sql.Context, ti typeinfo.TypeInfo, value int
 		}
 	case querypb.Type_TIME, querypb.Type_YEAR, querypb.Type_DATETIME, querypb.Type_TIMESTAMP, querypb.Type_DATE:
 		return singleQuote + str + singleQuote, nil
+	case querypb.Type_BIT:
+		// str holds the value's raw bytes, written as hex so the statement parses back
+		return hexEncodeBytes([]byte(str)), nil
 	case querypb.Type_BINARY, querypb.Type_VARBINARY, querypb.Type_VECTOR:
 		value, err := sql.UnwrapAny(ctx, value)
 		if err != nil {
