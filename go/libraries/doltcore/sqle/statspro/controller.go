@@ -55,13 +55,9 @@ type tableIndexesKey struct {
 	db     string
 	branch string
 	table  string
-	schema string
 }
 
 func (k tableIndexesKey) String() string {
-	if k.table != "" {
-		return k.schema + "/" + k.db + "/" + k.branch + "/" + k.table
-	}
 	return k.db + "/" + k.branch + "/" + k.table
 }
 
@@ -405,7 +401,6 @@ func (sc *StatsController) GetTableDoltStats(ctx *sql.Context, branch, db, schem
 		db:     strings.ToLower(db),
 		branch: strings.ToLower(branch),
 		table:  strings.ToLower(table),
-		schema: strings.ToLower(schema),
 	}
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
