@@ -43,7 +43,7 @@ func (s StatsNoop) DropStats(ctx *sql.Context, qual sql.StatQualifier, cols []st
 	return nil
 }
 
-func (s StatsNoop) DropDbStats(ctx *sql.Context, sch, db string, flush bool) error {
+func (s StatsNoop) DropDbStats(ctx *sql.Context, db string, flush bool) error {
 	return nil
 }
 

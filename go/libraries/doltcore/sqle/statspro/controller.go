@@ -446,7 +446,7 @@ func (sc *StatsController) DropDbStats(ctx *sql.Context, dbName string, flush bo
 	}
 
 	var deleteKeys []tableIndexesKey
-	for k, _ := range sc.Stats.stats {
+	for k := range sc.Stats.stats {
 		if strings.EqualFold(dbName, k.db) {
 			deleteKeys = append(deleteKeys, k)
 		}
