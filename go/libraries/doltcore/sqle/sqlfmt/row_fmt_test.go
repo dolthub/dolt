@@ -18,8 +18,12 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 )
@@ -30,6 +34,31 @@ const expectedAddColSql = "ALTER TABLE `table_name` ADD `c0` BIGINT NOT NULL;"
 const expectedDropColSql = "ALTER TABLE `table_name` DROP `first_name`;"
 const expectedRenameColSql = "ALTER TABLE `table_name` RENAME COLUMN `id` TO `pk`;"
 const expectedRenameTableSql = "RENAME TABLE `table_name` TO `new_table_name`;"
+
+func TestSqlRowAsInsertStmtBit(t *testing.T) {
+	// See https://github.com/dolthub/dolt/issues/10132
+	bit3, err := typeinfo.FromSqlType(gmstypes.MustCreateBitType(3))
+	require.NoError(t, err)
+	bit64, err := typeinfo.FromSqlType(gmstypes.MustCreateBitType(64))
+	require.NoError(t, err)
+	idCol, err := schema.NewColumnWithTypeInfo("id", 0, typeinfo.Int32Type, true, "", false, "")
+	require.NoError(t, err)
+	b3Col, err := schema.NewColumnWithTypeInfo("b3", 1, bit3, false, "", false, "")
+	require.NoError(t, err)
+	b64Col, err := schema.NewColumnWithTypeInfo("b64", 2, bit64, false, "", false, "")
+	require.NoError(t, err)
+	sch, err := schema.SchemaFromCols(schema.NewColCollection(idCol, b3Col, b64Col))
+	require.NoError(t, err)
+
+	ctx := sql.NewEmptyContext()
+	stmt, err := sqlfmt.SqlRowAsInsertStmt(ctx, sql.Row{int32(0), uint64(0), nil}, "t", sch)
+	require.NoError(t, err)
+	assert.Equal(t, "INSERT INTO `t` (`id`,`b3`,`b64`) VALUES (0,0x00,NULL);", stmt)
+
+	stmt, err = sqlfmt.SqlRowAsInsertStmt(ctx, sql.Row{int32(1), uint64(2), uint64(18446744073709551615)}, "t", sch)
+	require.NoError(t, err)
+	assert.Equal(t, "INSERT INTO `t` (`id`,`b3`,`b64`) VALUES (1,0x02,0xffffffffffffffff);", stmt)
+}
 
 func TestTableDropStmt(t *testing.T) {
 	stmt := sqlfmt.DropTableStmt(sql.DefaultMySQLSchemaFormatter, "table_name")
