@@ -37,6 +37,12 @@ func SqlColToStr(ctx *sql.Context, sqlType sql.Type, col interface{}) (string, e
 			return string(hexVal), nil
 		}
 
+		// BIT values arrive from sql-server as bytes already sized to the
+		// declared bit width, so pass them through instead of re-encoding.
+		if s, ok := col.(string); ok && gmstypes.IsBit(sqlType) {
+			return s, nil
+		}
+
 		switch typedCol := col.(type) {
 		case bool:
 			if typedCol {

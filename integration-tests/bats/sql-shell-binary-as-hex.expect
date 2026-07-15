@@ -113,4 +113,17 @@ run_query "SELECT * FROM test_bit;" {
 }
 
 run_query "exit;" { expect eof }
+
+# -q from a terminal defaults to hex like mysql -e
+if {[llength $argv] == 0} {
+    spawn dolt sql -q "SELECT b FROM test_bit WHERE id = 1;"
+    expect_with_defaults {0x41} {}
+    expect eof
+}
+if {$has_skip_hex} {
+    spawn dolt sql --skip-binary-as-hex -q "SELECT b FROM test_bit WHERE id = 1;"
+    # expect_without_pattern consumes eof while scanning for the bad pattern
+    expect_without_pattern {0x[0-9A-F]+} {}
+}
+
 exit 0

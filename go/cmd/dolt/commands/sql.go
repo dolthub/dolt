@@ -229,6 +229,13 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	if binaryAsHex && apr.Contains(skipBinaryAsHexFlag) { // We stray from MYSQL here to make usage clear for users
 		return HandleVErrAndExitCode(errhand.BuildDError("cannot use both --%s and --%s", binaryAsHexFlag, skipBinaryAsHexFlag).Build(), usage)
 	}
+	// Like the mysql client, default to hex display when connected to a terminal.
+	// Only terminal display formats get the default, data export formats need the
+	// explicit flag.
+	if !binaryAsHex && !apr.Contains(skipBinaryAsHexFlag) &&
+		(format == engine.FormatTabular || format == engine.FormatVertical) {
+		binaryAsHex = checkIsTerminal()
+	}
 
 	enableAutoGC := true
 	if apr.Contains(disableAutoGCFlag) {
