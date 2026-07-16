@@ -382,7 +382,39 @@ func (c *Controller) DropDatabaseHook() func(*sql.Context, string) {
 	return c.dropDatabaseHook
 }
 
-func (c *Controller) dropDatabaseHook(_ *sql.Context, dbname string) {
+func (c *Controller) dropDatabaseHook(sqlCtx *sql.Context, dbname string) {
+	// Start the per-replica calls and snapshot the state under lock.
+	state := c.startDropDatabaseReplication(dbname)
+	if state == nil {
+		return
+	}
+
+	// Participate in ReplicationStatusController, if ack writes
+	// timeout is set.
+	var rsc doltdb.ReplicationStatusController
+	rsc.Wait = make([]func(context.Context) error, len(state.replicas))
+	rsc.NotifyWaitFailed = make([]func(), len(state.replicas))
+	for i, r := range state.replicas {
+		done := r.done
+		rsc.Wait[i] = func(ctx context.Context) error {
+			select {
+			case <-done:
+				return nil
+			case <-ctx.Done():
+				return context.Cause(ctx)
+			}
+		}
+		rsc.NotifyWaitFailed[i] = func() {}
+	}
+	dsess.WaitForReplicationController(sqlCtx, rsc)
+}
+
+// startDropDatabaseReplication kicks off background replication of
+// the drop to every standby if we are the primary. It returns the
+// tracking state (whose replicas' done channels are closed as each
+// standby acknowledges the drop), or nil if we are not the primary
+// and there is nothing to replicate.
+func (c *Controller) startDropDatabaseReplication(dbname string) *databaseDropReplication {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -402,7 +434,7 @@ func (c *Controller) dropDatabaseHook(_ *sql.Context, dbname string) {
 	c.commithooks = c.commithooks[:j]
 
 	if c.role != RolePrimary {
-		return
+		return nil
 	}
 
 	// If we are the primary, we will replicate the drop to our standby replicas.
@@ -442,6 +474,8 @@ func (c *Controller) dropDatabaseHook(_ *sql.Context, dbname string) {
 			delete(c.outstandingDropDatabases, dbname)
 		}
 	}()
+
+	return state
 }
 
 func (c *Controller) cancelDropDatabaseReplication(dbname string) {
