@@ -19,6 +19,8 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -217,6 +219,123 @@ func TestChunkJournalPersist(t *testing.T) {
 		assert.NotNil(t, cs)
 		assert.NoError(t, err)
 	}
+}
+
+// protectedRefCount returns the current prune-protection ref count for |h| in
+// the persister's protected set.
+func protectedRefCount(ftp *fsTablePersister, h hash.Hash) int32 {
+	ftp.mu.Lock()
+	defer ftp.mu.Unlock()
+	return ftp.protected[h]
+}
+
+// TestChunkJournalActiveFileProtectedFromPruning is a regression test for a bug
+// where PruneTableFiles could delete the journal file out from under an active
+// journal writer. The journal file lives in the table-file namespace (its name
+// is journalAddr), so the generic pruner would treat it as a prunable table
+// file. Protection used to be a racy, per-call `j.wr != nil` check inside
+// ChunkJournal.PruneTableFiles, decided under the persister's pruneMu while the
+// journal writer is created/dropped under the NomsBlockStore mutex — two
+// disjoint lock domains. The fix registers the journal file in the persister's
+// protected set for the entire lifetime of the writer, under pruneMu. This test
+// asserts that lifetime protection; it fails against the pre-fix code, whose
+// protection did not persist beyond a PruneTableFiles call.
+func TestChunkJournalActiveFileProtectedFromPruning(t *testing.T) {
+	ctx := context.Background()
+	j := makeTestChunkJournal(t)
+	journalPath := filepath.Join(j.persister.dir, chunkJournalName)
+
+	// Before any writes there is no journal writer, file, or protection.
+	require.Nil(t, j.wr)
+	require.Zero(t, protectedRefCount(j.persister, journalAddr))
+	ok, err := fileExists(journalPath)
+	require.NoError(t, err)
+	require.False(t, ok)
+
+	// Persisting a memtable activates the journal writer, which must create the
+	// journal file and register it as protected.
+	mt, _ := randomMemTable(8)
+	_, _, err = j.Persist(ctx, dherrors.FatalBehaviorError, mt, emptyChunkSource{}, nil, &Stats{})
+	require.NoError(t, err)
+	require.NotNil(t, j.wr)
+
+	ok, err = fileExists(journalPath)
+	require.NoError(t, err)
+	require.True(t, ok, "journal file should exist while the writer is active")
+
+	// The active journal file must be protected for the lifetime of the writer,
+	// not just transiently during a prune call.
+	require.Positive(t, protectedRefCount(j.persister, journalAddr),
+		"active journal file must be protected from pruning")
+
+	// A prune while the journal is active must not delete the journal file.
+	require.NoError(t, j.PruneTableFiles(ctx))
+	ok, err = fileExists(journalPath)
+	require.NoError(t, err)
+	require.True(t, ok, "PruneTableFiles must not delete the active journal file")
+
+	// Dropping the writer releases the protection and deletes the file, so it
+	// becomes prunable again.
+	require.NoError(t, j.dropJournalWriter(ctx))
+	require.Nil(t, j.wr)
+	require.Zero(t, protectedRefCount(j.persister, journalAddr),
+		"journal protection must be released when the writer is dropped")
+	ok, err = fileExists(journalPath)
+	require.NoError(t, err)
+	require.False(t, ok, "dropped journal file should be deleted")
+}
+
+// TestChunkJournalPruneConcurrentWithJournalRecreation is a regression test for
+// the race between PruneTableFiles and (re)creation of the journal file. A
+// commit that recreates the journal (after a prior GC dropped it) runs under
+// the NomsBlockStore mutex, while PruneTableFiles runs under the persister's
+// pruneMu; before the fix these disjoint lock domains let a prune delete a live
+// journal file, and left ChunkJournal.PruneTableFiles reading j.wr without
+// synchronization. Run under `-race` this reliably catches the unsynchronized
+// access; without it, it catches the erroneous deletion probabilistically.
+func TestChunkJournalPruneConcurrentWithJournalRecreation(t *testing.T) {
+	ctx := context.Background()
+	j := makeTestChunkJournal(t)
+	journalPath := filepath.Join(j.persister.dir, chunkJournalName)
+
+	stop := make(chan struct{})
+	var pruneErr atomic.Value
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			if err := j.PruneTableFiles(ctx); err != nil {
+				pruneErr.Store(err)
+				return
+			}
+		}
+	}()
+
+	const iters = 300
+	for i := 0; i < iters; i++ {
+		// Recreate the journal, as a commit persisting after a GC drop would.
+		mt, _ := randomMemTable(8)
+		_, _, err := j.Persist(ctx, dherrors.FatalBehaviorError, mt, emptyChunkSource{}, nil, &Stats{})
+		require.NoError(t, err)
+
+		// While the writer is active the file must not have been pruned.
+		ok, err := fileExists(journalPath)
+		require.NoError(t, err)
+		require.Truef(t, ok, "journal file was pruned while the writer was active (iter %d)", i)
+
+		// Drop the journal, as a GC finalize dropping it would.
+		require.NoError(t, j.dropJournalWriter(ctx))
+	}
+
+	close(stop)
+	wg.Wait()
+	require.Nil(t, pruneErr.Load(), "PruneTableFiles failed: %v", pruneErr.Load())
 }
 
 func TestReadRecordRanges(t *testing.T) {
