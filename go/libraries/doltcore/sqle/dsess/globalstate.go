@@ -16,8 +16,6 @@ package dsess
 
 import (
 	"context"
-	"sync"
-
 	"github.com/dolthub/go-mysql-server/sql"
 	"golang.org/x/sync/errgroup"
 
@@ -25,6 +23,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 )
+
+var AutoIncrementTrackerKey = struct{}{}
 
 func NewGlobalStateStoreForDb(ctx context.Context, dbName string, db *doltdb.DoltDB) (GlobalStateImpl, error) {
 	branches, err := db.GetBranches(ctx)
@@ -94,22 +94,37 @@ func NewGlobalStateStoreForDb(ctx context.Context, dbName string, db *doltdb.Dol
 	}
 
 	return GlobalStateImpl{
-		aiTracker: tracker,
-		mu:        &sync.Mutex{},
+		aiTrackers: map[interface{}]globalstate.AutoIncrementTracker{AutoIncrementTrackerKey: tracker},
 	}, nil
 }
 
 type GlobalStateImpl struct {
-	aiTracker *AutoIncrementTracker
-	mu        *sync.Mutex
+	aiTrackers map[interface{}]globalstate.AutoIncrementTracker
 }
 
 var _ globalstate.GlobalState = GlobalStateImpl{}
 
-func (g GlobalStateImpl) AutoIncrementTracker(ctx *sql.Context) (globalstate.AutoIncrementTracker, error) {
-	return g.aiTracker, nil
+func (g GlobalStateImpl) AutoIncrementTracker(ctx *sql.Context, key interface{}) (globalstate.AutoIncrementTracker, error) {
+	return g.aiTrackers[key], nil
+}
+
+func (g GlobalStateImpl) AddAutoIncrementTracker(ctx *sql.Context, key interface{}, tracker globalstate.AutoIncrementTracker) error {
+	g.aiTrackers[key] = tracker
+	return nil
 }
 
 func (g GlobalStateImpl) Close() {
-	g.aiTracker.Close()
+	for _, tracker := range g.aiTrackers {
+		tracker.Close()
+	}
+}
+
+func (g GlobalStateImpl) InitWithRoots(ctx *sql.Context, roots ...doltdb.Rootish) error {
+	for _, tracker := range g.aiTrackers {
+		err := tracker.InitWithRoots(ctx, roots...)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

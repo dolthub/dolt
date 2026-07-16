@@ -1924,7 +1924,7 @@ func (db Database) removeTableFromAutoIncrementTracker(
 		wses = append(wses, ws)
 	}
 
-	ait, err := db.gs.AutoIncrementTracker(ctx)
+	ait, err := db.gs.AutoIncrementTracker(ctx, dsess.AutoIncrementTrackerKey)
 	if err != nil {
 		return err
 	}
@@ -2084,7 +2084,7 @@ func (db Database) createSqlTable(ctx *sql.Context, table string, schemaName str
 	// Prevent any tables that use BINARY, CHAR, VARBINARY, VARCHAR prefixes
 
 	if schema.HasAutoIncrement(doltSch) {
-		ait, err := db.gs.AutoIncrementTracker(ctx)
+		ait, err := db.gs.AutoIncrementTracker(ctx, dsess.AutoIncrementTrackerKey)
 		if err != nil {
 			return err
 		}
@@ -2144,7 +2144,7 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, table string, schemaN
 	}
 
 	if schema.HasAutoIncrement(doltSch) {
-		ait, err := db.gs.AutoIncrementTracker(ctx)
+		ait, err := db.gs.AutoIncrementTracker(ctx, dsess.AutoIncrementTrackerKey)
 		if err != nil {
 			return err
 		}

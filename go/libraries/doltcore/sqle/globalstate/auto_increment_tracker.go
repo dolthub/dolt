@@ -46,4 +46,5 @@ type AutoIncrementTracker interface {
 	AcquireTableLock(ctx *sql.Context, tableName string) (func(), error)
 	// InitWithRoots fills the AutoIncrementTracker with values pulled from each root in order.
 	InitWithRoots(ctx context.Context, roots ...doltdb.Rootish) error
+	Close()
 }

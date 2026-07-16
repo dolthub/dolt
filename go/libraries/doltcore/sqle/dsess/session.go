@@ -1144,12 +1144,7 @@ func (d *DoltSession) ResetGlobals(ctx *sql.Context, dbName string, root doltdb.
 		return err
 	}
 
-	tracker, err := sessionState.dbState.globalState.AutoIncrementTracker(ctx)
-	if err != nil {
-		return err
-	}
-
-	err = tracker.InitWithRoots(ctx, root)
+	err = sessionState.dbState.globalState.InitWithRoots(ctx, root)
 	if err != nil {
 		return err
 	}
@@ -1412,7 +1407,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 			}
 			sessionState.globalState = stateProvider.GetGlobalState()
 
-			tracker, err := sessionState.globalState.AutoIncrementTracker(ctx)
+			tracker, err := sessionState.globalState.AutoIncrementTracker(ctx, AutoIncrementTrackerKey)
 			if err != nil {
 				return err
 			}
