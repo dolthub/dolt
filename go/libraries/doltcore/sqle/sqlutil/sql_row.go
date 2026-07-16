@@ -37,6 +37,12 @@ func SqlColToStr(ctx *sql.Context, sqlType sql.Type, col interface{}) (string, e
 			return string(hexVal), nil
 		}
 
+		// BIT values arrive from sql-server as bytes already sized to the
+		// declared bit width, so pass them through instead of re-encoding.
+		if s, ok := col.(string); ok && gmstypes.IsBit(sqlType) {
+			return s, nil
+		}
+
 		switch typedCol := col.(type) {
 		case bool:
 			if typedCol {
@@ -66,8 +72,7 @@ func SqlColToStr(ctx *sql.Context, sqlType sql.Type, col interface{}) (string, e
 // DatabaseTypeNameToSqlType converts a MySQL wire protocol database type name
 // to a go-mysql-server sql.Type. This uses the same type mapping logic as the existing
 // Dolt type system for consistency.
-// TODO: Add support for BLOB types (TINYBLOB, BLOB, MEDIUMBLOB, LONGBLOB) and BIT type
-// as confirmed by testing MySQL 8.4+ binary-as-hex behavior
+// TODO: Add support for BLOB types (TINYBLOB, BLOB, MEDIUMBLOB, LONGBLOB)
 func DatabaseTypeNameToSqlType(databaseTypeName string) sql.Type {
 	typeName := strings.ToLower(databaseTypeName)
 	switch typeName {
@@ -75,6 +80,12 @@ func DatabaseTypeNameToSqlType(databaseTypeName string) sql.Type {
 		return gmstypes.MustCreateBinary(sqltypes.Binary, 255)
 	case "varbinary":
 		return gmstypes.MustCreateBinary(sqltypes.VarBinary, 255)
+	case "bit":
+		// The driver does not report the declared bit width, so use the widest
+		// BIT type. Display paths size their output from the value bytes instead.
+		// TODO(elianddb): Use the declared width if the driver exposes column
+		// lengths. See https://pkg.go.dev/database/sql#ColumnType.Length.
+		return gmstypes.MustCreateBitType(gmstypes.BitTypeMaxBits)
 	default:
 		// Default to LongText for all other types (as was done before)
 		return gmstypes.LongText

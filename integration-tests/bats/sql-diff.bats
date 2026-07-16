@@ -971,3 +971,27 @@ SQL
   ! [[ "$output" =~ "ignore_table" ]] || false
 
 }
+@test "sql-diff: output reconciles BIT(n) columns" {
+    # See https://github.com/dolthub/dolt/issues/10132
+    dolt sql -q "CREATE TABLE t (id INT PRIMARY KEY, some_bitval BIT(3))"
+    dolt commit -Am "empty table with BIT column"
+
+    dolt checkout -b newbranch
+    dolt sql -q "INSERT INTO t VALUES (0, b'000'), (1, b'010')"
+    dolt commit -am "insert BIT rows"
+
+    # confirm a difference exists
+    run dolt diff -r sql main newbranch
+    [ "$status" -eq 0 ]
+    [ ! "$output" = "" ]
+
+    dolt diff -r sql main newbranch > query
+    dolt checkout main
+    dolt sql < query
+    dolt commit -am "reconciled with newbranch"
+
+    # confirm that both branches have the same content
+    run dolt diff -r sql main newbranch
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+}
