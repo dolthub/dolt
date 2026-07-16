@@ -321,6 +321,7 @@ func (m prollySecondaryIndexWriter) matchesPredicate(ctx context.Context, sqlRow
 }
 
 var _ indexWriter = prollySecondaryIndexWriter{}
+var _ UniqueKeyChangeReporter = prollySecondaryIndexWriter{}
 
 func (m prollySecondaryIndexWriter) Name() string {
 	return m.name
@@ -516,6 +517,11 @@ func (m prollySecondaryIndexWriter) Update(ctx context.Context, oldRow sql.Row, 
 	}
 
 	return nil
+}
+
+// UpdateChangesUniqueKey implements UniqueKeyChangeReporter for this index.
+func (m prollySecondaryIndexWriter) UpdateChangesUniqueKey(oldRow sql.Row, newRow sql.Row) bool {
+	return m.unique && (m.predicate != nil || !isNoopUpdate(oldRow, newRow, m.keyMap[:m.idxCols]))
 }
 
 func (m prollySecondaryIndexWriter) Commit(ctx context.Context) error {
