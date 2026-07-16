@@ -427,7 +427,7 @@ func (c *Controller) dropDatabaseHook(_ *sql.Context, dbname string) {
 	c.outstandingDropDatabases[dbname] = state
 
 	for i, client := range c.replicationClients {
-		go c.replicateDropDatabase(state, i, client, dbname)
+		go c.replicateDropDatabase(state, state.replicas[i].done, client, dbname)
 	}
 
 	// Once the drop has settled at every replica (successfully replicated,
@@ -454,7 +454,7 @@ func (c *Controller) cancelDropDatabaseReplication(dbname string) {
 	}
 }
 
-func (c *Controller) replicateDropDatabase(s *databaseDropReplication, i int, client *replicationServiceClient, dbname string) {
+func (c *Controller) replicateDropDatabase(s *databaseDropReplication, doneCh chan struct{}, client *replicationServiceClient, dbname string) {
 	defer s.wg.Done()
 	bo := backoff.NewExponentialBackOff()
 	bo.InitialInterval = time.Millisecond
@@ -471,7 +471,7 @@ func (c *Controller) replicateDropDatabase(s *databaseDropReplication, i int, cl
 		cancel()
 		if err == nil {
 			c.lgr.Tracef("successfully replicated drop of [%s] to %s", dbname, client.remote)
-			close(s.replicas[i].done)
+			close(doneCh)
 			return
 		}
 		if status.Code(err) == codes.FailedPrecondition {
