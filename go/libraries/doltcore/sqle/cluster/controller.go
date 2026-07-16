@@ -76,6 +76,24 @@ type databaseDropReplication struct {
 	ctx    context.Context
 	cancel func()
 	wg     *sync.WaitGroup
+
+	dbname string
+	// replicas has one entry per replication client that the drop is being
+	// replicated to, in the same order as |Controller.replicationClients| at
+	// the time the drop was initiated. Its contents are fixed at creation time
+	// and each entry's |done| channel is closed by exactly one
+	// replicateDropDatabase goroutine.
+	replicas []*dropDatabaseReplica
+}
+
+// dropDatabaseReplica tracks whether an outstanding DROP DATABASE has been
+// successfully replicated to a single standby.
+type dropDatabaseReplica struct {
+	remote    string
+	remoteUrl string
+	// done is closed once the drop has been successfully replicated to this
+	// standby.
+	done chan struct{}
 }
 
 type SqlContextFactory func(ctx context.Context) (*sql.Context, error)
@@ -393,15 +411,37 @@ func (c *Controller) dropDatabaseHook(_ *sql.Context, dbname string) {
 	wg := &sync.WaitGroup{}
 	wg.Add(len(c.replicationClients))
 	state := &databaseDropReplication{
-		ctx:    ctx,
-		cancel: cancel,
-		wg:     wg,
+		ctx:      ctx,
+		cancel:   cancel,
+		wg:       wg,
+		dbname:   dbname,
+		replicas: make([]*dropDatabaseReplica, len(c.replicationClients)),
+	}
+	for i, client := range c.replicationClients {
+		state.replicas[i] = &dropDatabaseReplica{
+			remote:    client.remote,
+			remoteUrl: client.httpUrl,
+			done:      make(chan struct{}),
+		}
 	}
 	c.outstandingDropDatabases[dbname] = state
 
-	for _, client := range c.replicationClients {
-		go c.replicateDropDatabase(state, client, dbname)
+	for i, client := range c.replicationClients {
+		go c.replicateDropDatabase(state, i, client, dbname)
 	}
+
+	// Once the drop has settled at every replica (successfully replicated,
+	// determined it will never replicate, or cancelled), stop tracking it so
+	// that outstandingDropDatabases does not grow without bound and completed
+	// or abandoned drops do not gate future graceful transitions.
+	go func() {
+		wg.Wait()
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		if c.outstandingDropDatabases[dbname] == state {
+			delete(c.outstandingDropDatabases, dbname)
+		}
+	}()
 }
 
 func (c *Controller) cancelDropDatabaseReplication(dbname string) {
@@ -410,10 +450,11 @@ func (c *Controller) cancelDropDatabaseReplication(dbname string) {
 	if s := c.outstandingDropDatabases[dbname]; s != nil {
 		s.cancel()
 		s.wg.Wait()
+		delete(c.outstandingDropDatabases, dbname)
 	}
 }
 
-func (c *Controller) replicateDropDatabase(s *databaseDropReplication, client *replicationServiceClient, dbname string) {
+func (c *Controller) replicateDropDatabase(s *databaseDropReplication, i int, client *replicationServiceClient, dbname string) {
 	defer s.wg.Done()
 	bo := backoff.NewExponentialBackOff()
 	bo.InitialInterval = time.Millisecond
@@ -430,6 +471,7 @@ func (c *Controller) replicateDropDatabase(s *databaseDropReplication, client *r
 		cancel()
 		if err == nil {
 			c.lgr.Tracef("successfully replicated drop of [%s] to %s", dbname, client.remote)
+			close(s.replicas[i].done)
 			return
 		}
 		if status.Code(err) == codes.FailedPrecondition {
@@ -804,11 +846,22 @@ func (c *Controller) gracefulTransitionToStandby(saveConnID, minCaughtUpStandbys
 	c.setProviderIsStandby(true)
 	c.killRunningQueries(saveConnID)
 
-	var hookStates, mysqlStates, bcStates []graceTransitionResult
+	// Snapshot the outstanding DROP DATABASE replications while we hold c.mu.
+	// A standby which has not yet acknowledged a pending drop is not fully
+	// caught up, so we must wait on these along with the other replication
+	// subsystems below. We snapshot here, rather than in the goroutine, so that
+	// only waitForHooksToReplicate touches c.mu concurrently.
+	dropStates := make([]*databaseDropReplication, 0, len(c.outstandingDropDatabases))
+	for _, s := range c.outstandingDropDatabases {
+		dropStates = append(dropStates, s)
+	}
+
+	var hookStates, mysqlStates, bcStates, dropStatesRes []graceTransitionResult
 	var hookErr, mysqlErr, bcErr error
 
-	// We concurrently wait for hooks, mysql and dolt_branch_control replication to true up.
-	// If we encounter any errors while doing this, we fail the graceful transition.
+	// We concurrently wait for hooks, mysql, dolt_branch_control and pending
+	// DROP DATABASE replication to true up. If we encounter any errors while
+	// doing this, we fail the graceful transition.
 
 	var wg sync.WaitGroup
 	wg.Go(func() {
@@ -822,6 +875,9 @@ func (c *Controller) gracefulTransitionToStandby(saveConnID, minCaughtUpStandbys
 	wg.Go(func() {
 		bcStates, bcErr = c.bcReplication.waitForReplication(waitForHooksToReplicateTimeout)
 	})
+	wg.Go(func() {
+		dropStatesRes = waitForDropDatabaseReplication(dropStates, waitForHooksToReplicateTimeout)
+	})
 	wg.Wait()
 
 	err := errors.Join(hookErr, mysqlErr, bcErr)
@@ -834,10 +890,11 @@ func (c *Controller) gracefulTransitionToStandby(saveConnID, minCaughtUpStandbys
 		return nil, errors.New("cluster/controller: failed to transition to standby; the set of replicated databases changed during the transition.")
 	}
 
-	res := make([]graceTransitionResult, 0, len(hookStates)+len(mysqlStates)+len(bcStates))
+	res := make([]graceTransitionResult, 0, len(hookStates)+len(mysqlStates)+len(bcStates)+len(dropStatesRes))
 	res = append(res, hookStates...)
 	res = append(res, mysqlStates...)
 	res = append(res, bcStates...)
+	res = append(res, dropStatesRes...)
 
 	if minCaughtUpStandbys == 0 {
 		for _, state := range res {
@@ -885,6 +942,51 @@ func allCaughtUp(res []graceTransitionResult) bool {
 		}
 	}
 	return true
+}
+
+// waitForDropDatabaseReplication waits, up to |timeout|, for the supplied
+// outstanding DROP DATABASE replications to be acknowledged by each of their
+// standby replicas. It returns one graceTransitionResult per (dropped database,
+// standby) pair, with caughtUp set only if that standby acknowledged the drop
+// before the timeout.
+//
+// Unlike the other waitForReplication routines, this does not touch c.mu: the
+// caller snapshots the outstanding drops while holding c.mu, and each replica's
+// done channel is closed independently by its replicateDropDatabase goroutine.
+func waitForDropDatabaseReplication(states []*databaseDropReplication, timeout time.Duration) []graceTransitionResult {
+	if len(states) == 0 {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	var res []graceTransitionResult
+	for _, s := range states {
+		for _, r := range s.replicas {
+			caughtUp := false
+			select {
+			case <-r.done:
+				caughtUp = true
+			case <-ctx.Done():
+				// The deadline elapsed. The drop may have completed right as we
+				// timed out, so check once more without blocking. ctx.Done()
+				// stays closed, so later iterations fall through immediately.
+				select {
+				case <-r.done:
+					caughtUp = true
+				default:
+				}
+			}
+			res = append(res, graceTransitionResult{
+				database:  s.dbname,
+				remote:    r.remote,
+				remoteUrl: r.remoteUrl,
+				caughtUp:  caughtUp,
+			})
+		}
+	}
+	return res
 }
 
 // The order of operations is:
