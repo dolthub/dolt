@@ -302,8 +302,19 @@ const unicodeEscapeLen = 6
 // Due to an oversight, the representation of JSON in storage escapes these characters, and we unescape them
 // before displaying them to the user.
 func unescapeHTMLCodepoints(path []byte) []byte {
-	nextToRead := path
-	nextToWrite := path
+	// |path| may be a view into shared, cached chunk storage that other
+	// goroutines can be reading concurrently, so we must not write to it. When
+	// there are no HTML codepoints to unescape (the common case), return it
+	// unmodified without any writes. Otherwise, compact into a copy and leave
+	// the caller's buffer intact.
+	if !containsEscapedHTMLCodepoint(path) {
+		return path
+	}
+	buf := make([]byte, len(path))
+	copy(buf, path)
+
+	nextToRead := buf
+	nextToWrite := buf
 
 	matches := 0
 	index := findNextEscapedUnicodeCodepoint(nextToRead)
@@ -332,7 +343,25 @@ func unescapeHTMLCodepoints(path []byte) []byte {
 		index = findNextEscapedUnicodeCodepoint(nextToRead)
 	}
 	copy(nextToWrite, nextToRead)
-	return path[:len(path)-(unicodeEscapeLen-1)*matches]
+	return buf[:len(buf)-(unicodeEscapeLen-1)*matches]
+}
+
+// containsEscapedHTMLCodepoint reports whether |path| contains any escaped HTML
+// codepoint (<, >, or &) that unescapeHTMLCodepoints would
+// rewrite. It performs no writes, so it is safe to call on a shared buffer.
+func containsEscapedHTMLCodepoint(path []byte) bool {
+	rest := path
+	for {
+		index := findNextEscapedUnicodeCodepoint(rest)
+		if index == -1 {
+			return false
+		}
+		switch string(rest[index+2 : index+unicodeEscapeLen]) {
+		case "003c", "003e", "0026":
+			return true
+		}
+		rest = rest[index+unicodeEscapeLen:]
+	}
 }
 
 func findNextEscapedUnicodeCodepoint(path []byte) int {
