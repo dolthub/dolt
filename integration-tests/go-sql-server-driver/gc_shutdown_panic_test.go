@@ -48,15 +48,16 @@ import (
 // possible symptom of the same race.)
 //
 // The test spins up a single sql-server hosting several databases, drives
-// continual writes (with commits, to produce garbage) against every database,
-// runs serial `call dolt_gc()` invocations against every database in a tight
-// loop, and periodically restarts the sql-server process. Each restart is a
-// SIGTERM-driven graceful shutdown; Restart()/GracefulStop() surfaces the error
-// from cmd.Wait() on the stopped process, so a non-zero exit (whether the
-// corrupt process failed on the way down or the freshly-started process failed
-// to load the corrupted store) fails the test. We additionally scan the merged
-// server output for the corruption message and for panic stack traces so that a
-// failure produces an actionable diagnostic.
+// continual writes (with commits, to produce garbage), runs serial
+// `call dolt_gc()` across every database in a tight loop, and periodically
+// restarts the process, choosing at random between a graceful SIGTERM shutdown
+// and an abrupt SIGKILL. Dolt must be robust across both. A graceful shutdown
+// must exit 0; a SIGKILL is expected to exit non-zero, so we do not assert on
+// it. Either way the freshly-started server must reload the store: if an
+// interrupted GC corrupted it, the next startup fails with "root hash doesn't
+// exist" and exits non-zero, which we catch via the following stop's exit
+// status, the server failing to become ready, and an output visitor scanning
+// the server log.
 //
 // This is a stress/race reproduction: a clean run does not prove the bug is
 // absent, but a failing run demonstrates it. Set
@@ -136,10 +137,10 @@ func (gct gcShutdownPanicTest) run(t *testing.T) {
 	// GC that fails while dropping the journal file. Either indicates the store
 	// was corrupted by an interrupted GC finalize, so we fail the test.
 	//
-	// A hard process crash (e.g. the FatalBehaviorCrash panic that used to fire
-	// from dropJournalWriter) makes the process exit non-zero, which is caught
-	// separately by asserting on the Restart/GracefulStop error, so we do not
-	// scan for it here.
+	// A hard crash of the process makes it exit non-zero. On a graceful restart
+	// that is caught by the Restart/GracefulStop error; on a SIGKILL restart the
+	// process is expected to exit non-zero, so there we rely on the next process
+	// failing to come up (and on this scan) instead.
 	var sawCorruption atomic.Bool
 	var corruptionLine atomic.Value
 	corruptionLine.Store("")
@@ -225,28 +226,49 @@ func (gct gcShutdownPanicTest) run(t *testing.T) {
 		return nil
 	})
 
-	// Main loop: periodically restart the server. Restart() gracefully stops
-	// the currently running process (SIGTERM + wait) and returns the error from
-	// cmd.Wait() on that process. A clean shutdown exits 0 (nil error); a panic
-	// on the way down exits non-zero and shows up here.
+	// Main loop: periodically restart the server. The first two restarts are
+	// forced abrupt then graceful so both are exercised even in a very short
+	// run; the rest are random, interleaving the two shutdown kinds.
 	restarts := 0
+	var gracefulRestarts, abruptRestarts int
 	start := time.Now()
 	for time.Since(start) < gct.duration {
 		gct.sleepJitter(egCtx)
 		if egCtx.Err() != nil {
 			break
 		}
-		err := server.Restart(nil, nil)
+		var abrupt bool
+		switch restarts {
+		case 0:
+			abrupt = true
+		case 1:
+			abrupt = false
+		default:
+			abrupt = rand.IntN(2) == 0
+		}
 		restarts++
-		require.NoErrorf(t, err, "server exited non-zero across restart #%d (corruption log line: %q)",
-			restarts, corruptionLine.Load())
+		if abrupt {
+			abruptRestarts++
+			err := server.KillRestart(nil, nil)
+			require.NoErrorf(t, err, "server crashed before SIGKILL or failed to restart after abrupt shutdown #%d (corruption log line: %q)",
+				restarts, corruptionLine.Load())
+		} else {
+			gracefulRestarts++
+			err := server.Restart(nil, nil)
+			require.NoErrorf(t, err, "server exited non-zero across graceful restart #%d (corruption log line: %q)",
+				restarts, corruptionLine.Load())
+		}
 		require.Falsef(t, sawCorruption.Load(), "server logged store corruption across restart #%d: %q",
 			restarts, corruptionLine.Load())
-		// Wait for the freshly-started process to come up before doing anything
-		// else, so that it has installed its signal handler and a subsequent
-		// SIGTERM exercises a graceful shutdown rather than hard-killing a
-		// still-booting process.
-		gct.waitReady(egCtx, dbs[gct.dbNames()[0]])
+		// The freshly-started process must load the store and come up; if it
+		// cannot, an interrupted GC left the store inconsistent. Waiting also
+		// ensures the new process has installed its signal handler before a
+		// subsequent SIGTERM.
+		ready := gct.waitReady(egCtx, dbs[gct.dbNames()[0]])
+		if egCtx.Err() == nil {
+			require.Truef(t, ready, "server did not become ready after restart #%d (%s shutdown); corruption log line: %q",
+				restarts, shutdownKind(abrupt), corruptionLine.Load())
+		}
 	}
 
 	// Stop the workload and drain the goroutines before the final shutdown so
@@ -267,7 +289,8 @@ func (gct gcShutdownPanicTest) run(t *testing.T) {
 		t.Logf("note: server logged %d recovered per-query panic(s) during the run (first: %q)",
 			n, firstRecoveredPanic.Load())
 	}
-	t.Logf("completed %d restarts over %v with no shutdown corruption", restarts, time.Since(start).Round(time.Millisecond))
+	t.Logf("completed %d restarts (%d graceful, %d abrupt/SIGKILL) over %v with no shutdown corruption",
+		restarts, gracefulRestarts, abruptRestarts, time.Since(start).Round(time.Millisecond))
 }
 
 func (gct gcShutdownPanicTest) createTable(t *testing.T, db *sql.DB) {
@@ -318,22 +341,34 @@ func (gct gcShutdownPanicTest) gcOnce(ctx context.Context, db *sql.DB) {
 	_, _ = conn.ExecContext(ctx, "call dolt_gc()")
 }
 
-// waitReady pings db until the server responds or ctx is cancelled, so callers
-// can be sure a just-(re)started server is fully up.
-func (gct gcShutdownPanicTest) waitReady(ctx context.Context, db *sql.DB) {
-	for i := 0; i < 200 && ctx.Err() == nil; i++ {
+// waitReady pings db until the server responds, ctx is cancelled, or the
+// deadline elapses, reporting whether the server became ready. A just-started
+// server that never loads its store gets flagged; the deadline is generous
+// because journal recovery after a SIGKILL (and a loaded CI host) take time.
+func (gct gcShutdownPanicTest) waitReady(ctx context.Context, db *sql.DB) bool {
+	deadline := time.Now().Add(30 * time.Second)
+	for ctx.Err() == nil && time.Now().Before(deadline) {
 		pingCtx, cancel := context.WithTimeout(ctx, time.Second)
 		err := db.PingContext(pingCtx)
 		cancel()
 		if err == nil {
-			return
+			return true
 		}
 		select {
 		case <-ctx.Done():
-			return
+			return false
 		case <-time.After(25 * time.Millisecond):
 		}
 	}
+	return false
+}
+
+// shutdownKind labels a restart's shutdown type for diagnostics.
+func shutdownKind(abrupt bool) string {
+	if abrupt {
+		return "abrupt/SIGKILL"
+	}
+	return "graceful/SIGTERM"
 }
 
 func (gct gcShutdownPanicTest) sleepJitter(ctx context.Context) {
