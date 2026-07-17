@@ -162,8 +162,7 @@ func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context, behavior dher
 	canCreate := !j.backing.readOnly()
 
 	if canCreate && !ok { // create new journal file
-		j.wr, err = createJournalWriter(ctx, j.path)
-		if err != nil {
+		if err = j.createProtectedJournalWriter(ctx); err != nil {
 			return err
 		}
 
@@ -187,7 +186,7 @@ func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context, behavior dher
 		return
 	}
 
-	j.wr, ok, err = openJournalWriter(ctx, j.path)
+	ok, err = j.openProtectedJournalWriter(ctx)
 	if err != nil {
 		return err
 	} else if !ok {
@@ -231,6 +230,44 @@ func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context, behavior dher
 	}
 	j.contents = mc
 	return
+}
+
+// createProtectedJournalWriter creates the journal file and registers it in the
+// persister's protected set. The journal file lives in the same directory and
+// naming namespace as regular table files (its address is |journalAddr|), so
+// without this registration PruneTableFiles would treat it as an orphaned table
+// file and delete it. Because journal creation happens under the NomsBlockStore
+// mutex while PruneTableFiles runs under the persister's pruneMu, the two are
+// otherwise unsynchronized; we hold pruneMu here so that a concurrent prune
+// cannot observe the newly created journal file before it has been protected.
+func (j *ChunkJournal) createProtectedJournalWriter(ctx context.Context) error {
+	j.persister.pruneMu.RLock()
+	defer j.persister.pruneMu.RUnlock()
+	wr, err := createJournalWriter(ctx, j.path)
+	if err != nil {
+		return err
+	}
+	j.wr = wr
+	j.persister.addProtected(journalAddr)
+	return nil
+}
+
+// openProtectedJournalWriter opens the existing journal file and registers it in
+// the persister's protected set under pruneMu, for the same reasons as
+// createProtectedJournalWriter. It returns false if the journal file does not
+// exist.
+func (j *ChunkJournal) openProtectedJournalWriter(ctx context.Context) (bool, error) {
+	j.persister.pruneMu.RLock()
+	defer j.persister.pruneMu.RUnlock()
+	wr, ok, err := openJournalWriter(ctx, j.path)
+	if err != nil {
+		return false, err
+	} else if !ok {
+		return false, nil
+	}
+	j.wr = wr
+	j.persister.addProtected(journalAddr)
+	return true, nil
 }
 
 // the journal file is the source of truth for the root hash, true-up persisted manifest
@@ -351,13 +388,13 @@ func (j *ChunkJournal) PruneTableFiles(ctx context.Context) error {
 	if j.backing.readOnly() {
 		return errReadOnlyManifest
 	}
-	// If the journal is active, protect its file from pruning by adding
-	// it to pending for the duration of the prune. When the journal is
-	// inactive (j.wr == nil), the file should be prunable.
-	if j.wr != nil {
-		ph := j.persister.addPending(journalAddr)
-		defer ph.Close()
-	}
+	// While the journal is active, its file is kept in the persister's
+	// protected set for the lifetime of the journal writer (see
+	// createProtectedJournalWriter / openProtectedJournalWriter and
+	// dropJournalWriter), so PruneTableFiles will not remove it. When the
+	// journal is inactive (j.wr == nil) it is not protected and the file, if
+	// any, is prunable. No per-call protection is needed or safe here: reading
+	// j.wr outside the NomsBlockStore mutex would race journal creation.
 	return j.persister.PruneTableFiles(ctx)
 }
 
@@ -484,10 +521,19 @@ func (j *ChunkJournal) flushToBackingManifest(ctx context.Context, behavior dher
 
 func (j *ChunkJournal) dropJournalWriter(ctx context.Context) error {
 	curr := j.wr
-	if j.wr == nil {
+	if curr == nil {
 		return nil
 	}
 	j.wr = nil
+	// Balance the protection registered when the writer was opened, and
+	// serialize with PruneTableFiles via pruneMu so that deregistering the
+	// journal file and deleting it happen atomically with respect to a
+	// concurrent prune. Deregister unconditionally: once the writer is dropped
+	// the journal file is no longer a dependency of the store, so even if the
+	// deletion below fails a leftover file should be prunable.
+	j.persister.pruneMu.RLock()
+	defer j.persister.pruneMu.RUnlock()
+	defer j.persister.removeProtected(journalAddr)
 	if err := curr.Close(); err != nil {
 		return err
 	}
