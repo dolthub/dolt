@@ -26,8 +26,40 @@ import (
 type hooksDatabase struct {
 	datas.Database
 	db    *DoltDB
-	hooks []CommitHook
+	hooks *commitHooks
 	rsc   *ReplicationStatusController
+}
+
+// commitHooks is a concurrency-safe container for the CommitHooks registered on
+// a DoltDB. A single *commitHooks is shared by pointer across every
+// hooksDatabase value derived from the same DoltDB (hooksDatabase values are
+// copied freely as writes flow through the database). Guarding the hook slice
+// with a mutex lets hooks be registered via (*DoltDB).PrependCommitHooks while
+// other goroutines - the commit path and the cluster replication threads - read
+// them, without racing on the DoltDB's db field.
+type commitHooks struct {
+	mu    sync.RWMutex
+	hooks []CommitHook
+}
+
+func newCommitHooks() *commitHooks {
+	return &commitHooks{}
+}
+
+// prepend registers |hooks| at the front of the existing hooks.
+func (ch *commitHooks) prepend(hooks ...CommitHook) {
+	ch.mu.Lock()
+	defer ch.mu.Unlock()
+	ch.hooks = append(append(make([]CommitHook, 0, len(hooks)+len(ch.hooks)), hooks...), ch.hooks...)
+}
+
+// get returns a copy of the currently registered hooks.
+func (ch *commitHooks) get() []CommitHook {
+	ch.mu.RLock()
+	defer ch.mu.RUnlock()
+	toret := make([]CommitHook, len(ch.hooks))
+	copy(toret, ch.hooks)
+	return toret
 }
 
 // CommitHook is an abstraction for executing arbitrary commands after atomic database commits
@@ -57,33 +89,26 @@ type NotifyWaitFailedCommitHook interface {
 	NotifyWaitFailed()
 }
 
-func (db hooksDatabase) SetCommitHooks(ctx context.Context, postHooks []CommitHook) hooksDatabase {
-	db.hooks = make([]CommitHook, len(postHooks))
-	copy(db.hooks, postHooks)
-	return db
-}
-
 func (db hooksDatabase) withReplicationStatusController(rsc *ReplicationStatusController) hooksDatabase {
 	db.rsc = rsc
 	return db
 }
 
 func (db hooksDatabase) PostCommitHooks() []CommitHook {
-	toret := make([]CommitHook, len(db.hooks))
-	copy(toret, db.hooks)
-	return toret
+	return db.hooks.get()
 }
 
 func (db hooksDatabase) ExecuteCommitHooks(ctx context.Context, ds datas.Dataset, onlyWS bool, replicaWrite bool) {
+	hooks := db.hooks.get()
 	var wg sync.WaitGroup
 	rsc := db.rsc
 	var ioff int
 	if rsc != nil {
 		ioff = len(rsc.Wait)
-		rsc.Wait = append(rsc.Wait, make([]func(context.Context) error, len(db.hooks))...)
-		rsc.NotifyWaitFailed = append(rsc.NotifyWaitFailed, make([]func(), len(db.hooks))...)
+		rsc.Wait = append(rsc.Wait, make([]func(context.Context) error, len(hooks))...)
+		rsc.NotifyWaitFailed = append(rsc.NotifyWaitFailed, make([]func(), len(hooks))...)
 	}
-	for il, hook := range db.hooks {
+	for il, hook := range hooks {
 		if (!onlyWS || hook.ExecuteForWorkingSets()) && (!replicaWrite || hook.ExecuteForReplicaWrite()) {
 			i := il
 			hook := hook
