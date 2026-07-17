@@ -233,13 +233,7 @@ func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context, behavior dher
 }
 
 // createProtectedJournalWriter creates the journal file and registers it in the
-// persister's protected set. The journal file lives in the same directory and
-// naming namespace as regular table files (its address is |journalAddr|), so
-// without this registration PruneTableFiles would treat it as an orphaned table
-// file and delete it. Because journal creation happens under the NomsBlockStore
-// mutex while PruneTableFiles runs under the persister's pruneMu, the two are
-// otherwise unsynchronized; we hold pruneMu here so that a concurrent prune
-// cannot observe the newly created journal file before it has been protected.
+// persister's protected set.
 func (j *ChunkJournal) createProtectedJournalWriter(ctx context.Context) error {
 	j.persister.pruneMu.RLock()
 	defer j.persister.pruneMu.RUnlock()
@@ -253,8 +247,7 @@ func (j *ChunkJournal) createProtectedJournalWriter(ctx context.Context) error {
 }
 
 // openProtectedJournalWriter opens the existing journal file and registers it in
-// the persister's protected set under pruneMu, for the same reasons as
-// createProtectedJournalWriter. It returns false if the journal file does not
+// the persister's protected set. It returns false if the journal file does not
 // exist.
 func (j *ChunkJournal) openProtectedJournalWriter(ctx context.Context) (bool, error) {
 	j.persister.pruneMu.RLock()
@@ -388,13 +381,6 @@ func (j *ChunkJournal) PruneTableFiles(ctx context.Context) error {
 	if j.backing.readOnly() {
 		return errReadOnlyManifest
 	}
-	// While the journal is active, its file is kept in the persister's
-	// protected set for the lifetime of the journal writer (see
-	// createProtectedJournalWriter / openProtectedJournalWriter and
-	// dropJournalWriter), so PruneTableFiles will not remove it. When the
-	// journal is inactive (j.wr == nil) it is not protected and the file, if
-	// any, is prunable. No per-call protection is needed or safe here: reading
-	// j.wr outside the NomsBlockStore mutex would race journal creation.
 	return j.persister.PruneTableFiles(ctx)
 }
 
@@ -525,12 +511,7 @@ func (j *ChunkJournal) dropJournalWriter(ctx context.Context) error {
 		return nil
 	}
 	j.wr = nil
-	// Balance the protection registered when the writer was opened, and
-	// serialize with PruneTableFiles via pruneMu so that deregistering the
-	// journal file and deleting it happen atomically with respect to a
-	// concurrent prune. Deregister unconditionally: once the writer is dropped
-	// the journal file is no longer a dependency of the store, so even if the
-	// deletion below fails a leftover file should be prunable.
+	// Dropping the journal also removes it from the persister's protected set.
 	j.persister.pruneMu.RLock()
 	defer j.persister.pruneMu.RUnlock()
 	defer j.persister.removeProtected(journalAddr)
