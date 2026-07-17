@@ -31,21 +31,13 @@ import (
 	driver "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/sql_server_driver"
 )
 
-// TestGCShutdownPanic reproduces a reported failure where a `dolt_gc()` that is
-// finalizing when the sql-server process is shut down (NomsBlockStore.Close())
-// leaves the on-disk store in an inconsistent state instead of shutting down
-// cleanly.
+// TestGCShutdownPanic repeatedly shutsdown and kills the sql-server process
+// while it is running GC. The sql-server process should never leave the
+// database in an inconsistent state.
 //
-// The observed failure mode is store corruption: GC updates the manifest to a
-// new root but the chunks backing that root are not durably persisted before
-// the process goes away (or the old table files are removed too early). The
-// next time the server starts and tries to load the database it fails with
-//
-//	root hash doesn't exist: <hash>
-//
-// and exits non-zero, because the manifest's root chunk cannot be found in the
-// table files. (A crash during Close() itself, i.e. a panic, is the other
-// possible symptom of the same race.)
+// This test has explicit checks for log lines to guard against regressions
+// which previous versions of Dolt could emit. These include panics and a
+// "root hash doesn't exist:" message.
 //
 // The test spins up a single sql-server hosting several databases, drives
 // continual writes (with commits, to produce garbage), runs serial
@@ -53,11 +45,7 @@ import (
 // restarts the process, choosing at random between a graceful SIGTERM shutdown
 // and an abrupt SIGKILL. Dolt must be robust across both. A graceful shutdown
 // must exit 0; a SIGKILL is expected to exit non-zero, so we do not assert on
-// it. Either way the freshly-started server must reload the store: if an
-// interrupted GC corrupted it, the next startup fails with "root hash doesn't
-// exist" and exits non-zero, which we catch via the following stop's exit
-// status, the server failing to become ready, and an output visitor scanning
-// the server log.
+// it. Either way the freshly-started server must reload the store.
 //
 // This is a stress/race reproduction: a clean run does not prove the bug is
 // absent, but a failing run demonstrates it. Set
@@ -73,10 +61,7 @@ func TestGCShutdownPanic(t *testing.T) {
 		duration = d
 	}
 
-	// The safepoint controller governs how in-flight sessions are handled
-	// while GC runs; the shutdown-vs-finalize race is independent of it, but
-	// the two implementations reach NomsBlockStore.Close() along different
-	// paths, so we exercise both.
+	// Both session_aware and kill_connections need to be safe.
 	for _, controller := range []string{"session_aware", "kill_connections"} {
 		t.Run(controller, func(t *testing.T) {
 			t.Parallel()
@@ -123,30 +108,21 @@ func (gct gcShutdownPanicTest) run(t *testing.T) {
 	rs, err := u.MakeRepoStore()
 	require.NoError(t, err)
 
-	// Create each database as its own dolt repo under a single repo store.
-	// The sql-server started on the repo store hosts them all as sibling
-	// databases.
+	// Create each database under a single repo store.
 	for _, name := range gct.dbNames() {
 		_, err := rs.MakeRepo(name)
 		require.NoError(t, err)
 	}
 
-	// Watch the server output for evidence that a GC left the store on-disk in
-	// a bad state. The signature is a (re)started server that cannot find the
-	// manifest's root chunk in the table files ("root hash doesn't exist"), or a
-	// GC that fails while dropping the journal file. Either indicates the store
-	// was corrupted by an interrupted GC finalize, so we fail the test.
-	//
-	// A hard crash of the process makes it exit non-zero. On a graceful restart
-	// that is caught by the Restart/GracefulStop error; on a SIGKILL restart the
-	// process is expected to exit non-zero, so there we rely on the next process
-	// failing to come up (and on this scan) instead.
+	// In addition the the exit code of the starting server, we watch the server
+	// output for evidence that a GC left the store on-disk in a bad state.
 	var sawCorruption atomic.Bool
 	var corruptionLine atomic.Value
 	corruptionLine.Store("")
+
 	// Recovered per-query panics (go-mysql-server catches these and logs
-	// "caught panic") do not crash the process or corrupt the store, so they are
-	// not what this test targets. We count them for diagnostics only.
+	// "caught panic") are caught only for diagnostics. They do not fail this
+	// test.
 	var recoveredPanics atomic.Int32
 	var firstRecoveredPanic atomic.Value
 	firstRecoveredPanic.Store("")
@@ -196,8 +172,7 @@ func (gct gcShutdownPanicTest) run(t *testing.T) {
 
 	// Workload goroutines run until their context is cancelled. They swallow
 	// all query errors: connections are expected to break on every restart,
-	// and only the process exit status is a signal of the bug. They must never
-	// fail the test off the main goroutine.
+	// and only the process exit status is a signal of the bug.
 	baseCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	eg, egCtx := errgroup.WithContext(baseCtx)
@@ -344,7 +319,7 @@ func (gct gcShutdownPanicTest) gcOnce(ctx context.Context, db *sql.DB) {
 // waitReady pings db until the server responds, ctx is cancelled, or the
 // deadline elapses, reporting whether the server became ready. A just-started
 // server that never loads its store gets flagged; the deadline is generous
-// because journal recovery after a SIGKILL (and a loaded CI host) take time.
+// because a loaded CI host can take time.
 func (gct gcShutdownPanicTest) waitReady(ctx context.Context, db *sql.DB) bool {
 	deadline := time.Now().Add(30 * time.Second)
 	for ctx.Err() == nil && time.Now().Before(deadline) {
