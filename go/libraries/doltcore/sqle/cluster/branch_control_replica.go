@@ -113,6 +113,8 @@ func (r *branchControlReplica) Run() {
 		client := r.client.client
 		version := r.version
 		attempt := r.progressNotifier.BeginAttempt()
+		r.lgr.Tracef("cluster/trace[branchControlReplica %s]: ts=%s attempting UpdateBranchControl; %s", r.client.remote, tsNow(), r.debugStateLocked())
+		attemptStart := time.Now()
 		r.mu.Unlock()
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		_, err := client.UpdateBranchControl(ctx, &replicationapi.UpdateBranchControlRequest{
@@ -122,7 +124,7 @@ func (r *branchControlReplica) Run() {
 		r.mu.Lock()
 		if err != nil {
 			r.progressNotifier.RecordFailure(attempt)
-			r.lgr.Warnf("branchControlReplica[%s]: error replicating branch control permissions. backing off. %v", r.client.remote, err)
+			r.lgr.Warnf("cluster/trace[branchControlReplica %s]: ts=%s error replicating branch control permissions (attempt took %v, connState now %s). backing off. %v", r.client.remote, tsNow(), time.Since(attemptStart), connStateStr(r.client.conn), err)
 			if r.waitNotify != nil {
 				// Someone (e.g. a graceful role transition) is blocked on this replica
 				// catching up, on a fixed budget. Retry on a short flat cadence with a
@@ -133,8 +135,10 @@ func (r *branchControlReplica) Run() {
 				if r.client.conn != nil {
 					r.client.conn.ResetConnectBackoff()
 				}
+				r.lgr.Tracef("cluster/trace[branchControlReplica %s]: ts=%s waiter present: flat 1s retry scheduled, connect backoff reset", r.client.remote, tsNow())
 			} else {
 				r.nextAttempt = time.Now().Add(r.backoff.NextBackOff())
+				r.lgr.Tracef("cluster/trace[branchControlReplica %s]: ts=%s no waiter: exponential backoff, next attempt at %s", r.client.remote, tsNow(), r.nextAttempt.Format("15:04:05.000000"))
 			}
 			next := r.nextAttempt
 			go func() {
@@ -169,6 +173,13 @@ func (r *branchControlReplica) wait() {
 
 func (r *branchControlReplica) isCaughtUp() bool {
 	return r.version == r.replicatedVersion || r.role != RolePrimary
+}
+
+// debugStateLocked renders the replica's replication-relevant state for the
+// cluster/trace diagnostics. called with r.mu locked.
+func (r *branchControlReplica) debugStateLocked() string {
+	return fmt.Sprintf("role=%s version=%d replicatedVersion=%d caughtUp=%v nextAttempt=%s waiterPresent=%v fastFail=%v connState=%s",
+		r.role, r.version, r.replicatedVersion, r.isCaughtUp(), r.nextAttempt.Format("15:04:05.000000"), r.waitNotify != nil, r.fastFailReplicationWait, connStateStr(r.client.conn))
 }
 
 func (r *branchControlReplica) setFastFailReplicationWait(v bool) {

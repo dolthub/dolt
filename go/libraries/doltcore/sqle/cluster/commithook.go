@@ -160,6 +160,8 @@ func (h *commithook) replicate(ctx context.Context) {
 					// TODO: if err != nil, something is really wrong; should shutdown or backoff.
 					lgr.Warningf("standby replication thread failed to load database root: %v", err)
 					h.nextHead = hash.Hash{}
+				} else {
+					lgr.Tracef("cluster/trace[commithook %s]: ts=%s primary init: loaded current head %s to replicate", h.dbname, tsNow(), h.nextHead.String())
 				}
 
 				// We do not know when this head was written, but we
@@ -170,7 +172,7 @@ func (h *commithook) replicate(ctx context.Context) {
 			h.attemptReplicate(ctx)
 			shouldHeartbeat = false
 		} else {
-			lgr.Tracef("cluster/commithook: background thread: waiting for signal.")
+			lgr.Tracef("cluster/trace[commithook %s]: ts=%s replicate thread waiting for signal; %s", h.dbname, tsNow(), h.debugStateLocked())
 			if h.waitNotify != nil {
 				h.waitNotify()
 			}
@@ -241,6 +243,13 @@ func (h *commithook) primaryNeedsInit() bool {
 	return h.role == RolePrimary && h.nextHead == (hash.Hash{})
 }
 
+// debugStateLocked renders the hook's replication-relevant state for the
+// cluster/trace diagnostics. called with h.mu locked.
+func (h *commithook) debugStateLocked() string {
+	return fmt.Sprintf("role=%s nextHead=%s lastPushedHead=%s caughtUp=%v destDBSet=%v nextPushAttempt=%s fastFail=%v",
+		h.role, h.nextHead.String(), h.lastPushedHead.String(), h.isCaughtUp(), h.destDB != nil, h.nextPushAttempt.Format("15:04:05.000000"), h.fastFailReplicationWait)
+}
+
 // Called by the replicate thread to periodically heartbeat liveness to a
 // standby if we are a primary. These heartbeats are best effort and currently
 // do not affect the data plane much.
@@ -285,6 +294,8 @@ func (h *commithook) attemptReplicate(ctx context.Context) {
 	toPush := h.nextHead
 	incomingTime := h.nextHeadIncomingTime
 	destDB := h.destDB
+	attemptStart := time.Now()
+	lgr.Tracef("cluster/trace[commithook %s]: ts=%s attemptReplicate: begin; toPush=%s destDBSet=%v", h.dbname, tsNow(), toPush.String(), destDB != nil)
 	ctx, h.cancelReplicate = context.WithCancel(ctx)
 	defer func() {
 		if h.cancelReplicate != nil {
@@ -312,21 +323,22 @@ func (h *commithook) attemptReplicate(ctx context.Context) {
 	defer sql.SessionCommandEnd(sqlCtx.Session)
 
 	if destDB == nil {
-		lgr.Tracef("cluster/commithook: attempting to fetch destDB.")
+		lgr.Tracef("cluster/trace[commithook %s]: ts=%s attemptReplicate: attempting to fetch destDB.", h.dbname, tsNow())
 		var err error
+		fetchStart := time.Now()
 		destDB, err = h.destDBF(sqlCtx)
 		if err != nil {
 			h.mu.Lock()
 			h.currentError = new(string)
 			*h.currentError = fmt.Sprintf("could not replicate to standby: error fetching destDB: %v", err)
-			lgr.Warnf("cluster/commithook: could not replicate to standby: error fetching destDB: %v.", err)
+			lgr.Warnf("cluster/trace[commithook %s]: ts=%s could not replicate to standby: error fetching destDB (took %v): %v.", h.dbname, tsNow(), time.Since(fetchStart), err)
 			// TODO: We could add some backoff here.
 			if toPush == h.nextHead {
 				h.nextPushAttempt = time.Now().Add(1 * time.Second)
 			}
 			return
 		}
-		lgr.Tracef("cluster/commithook: fetched destDB")
+		lgr.Tracef("cluster/trace[commithook %s]: ts=%s attemptReplicate: fetched destDB in %v", h.dbname, tsNow(), time.Since(fetchStart))
 		h.mu.Lock()
 		h.destDB = destDB
 		h.mu.Unlock()
@@ -354,7 +366,7 @@ func (h *commithook) attemptReplicate(ctx context.Context) {
 	if h.role == RolePrimary {
 		if err == nil {
 			h.currentError = nil
-			lgr.Tracef("cluster/commithook: successfully Committed chunks on destDB")
+			lgr.Tracef("cluster/trace[commithook %s]: ts=%s attemptReplicate: successfully Committed chunks on destDB; head=%s attempt took %v", h.dbname, tsNow(), toPush.String(), time.Since(attemptStart))
 			h.lastPushedHead = toPush
 			h.lastSuccess = incomingTime
 			h.nextPushAttempt = time.Time{}
@@ -362,13 +374,15 @@ func (h *commithook) attemptReplicate(ctx context.Context) {
 		} else {
 			h.currentError = new(string)
 			*h.currentError = fmt.Sprintf("failed to commit chunks on destDB: %v", err)
-			lgr.Warnf("cluster/commithook: failed to commit chunks on destDB: %v", err)
+			lgr.Warnf("cluster/trace[commithook %s]: ts=%s failed to commit chunks on destDB (attempt took %v): %v", h.dbname, tsNow(), time.Since(attemptStart), err)
 			// add some delay if a new head didn't come in while we were pushing.
 			if toPush == h.nextHead {
 				// TODO: We could add some backoff here.
 				h.nextPushAttempt = time.Now().Add(1 * time.Second)
 			}
 		}
+	} else {
+		lgr.Warnf("cluster/trace[commithook %s]: ts=%s attemptReplicate: discarding result (err=%v) because role changed to %s mid-attempt", h.dbname, tsNow(), err, h.role)
 	}
 }
 
@@ -446,6 +460,7 @@ func (h *commithook) recordSuccessfulRemoteSrvCommit() {
 func (h *commithook) setRole(role Role) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	h.logger().Tracef("cluster/trace[commithook %s]: ts=%s setRole %s -> %s; resetting heads; prior state: %s", h.dbname, tsNow(), h.role, role, h.debugStateLocked())
 	// Reset head-to-push and timers here. When we transition into Primary,
 	// the replicate() loop will take these from the current chunk store.
 	h.currentError = nil
@@ -470,9 +485,13 @@ func (h *commithook) setWaitNotify(f func()) bool {
 	defer h.mu.Unlock()
 	if f != nil {
 		if h.waitNotify != nil {
+			h.logger().Warnf("cluster/trace[commithook %s]: ts=%s setWaitNotify: rejected; a waiter is already registered", h.dbname, tsNow())
 			return false
 		}
+		h.logger().Tracef("cluster/trace[commithook %s]: ts=%s setWaitNotify: waiter registered; %s", h.dbname, tsNow(), h.debugStateLocked())
 		f()
+	} else {
+		h.logger().Tracef("cluster/trace[commithook %s]: ts=%s setWaitNotify: waiter unregistered; %s", h.dbname, tsNow(), h.debugStateLocked())
 	}
 	h.waitNotify = f
 	return true
@@ -498,7 +517,7 @@ func (h *commithook) Execute(ctx context.Context, ds datas.Dataset, db *doltdb.D
 		return nil, nil
 	}
 	if root != h.nextHead {
-		lgr.Tracef("signaling replication thread to push new head: %v", root.String())
+		lgr.Tracef("cluster/trace[commithook %s]: ts=%s Execute: signaling replication thread to push new head: %v", h.dbname, tsNow(), root.String())
 		h.nextHeadIncomingTime = time.Now()
 		h.nextHead = root
 		h.nextPushAttempt = time.Time{}

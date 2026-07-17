@@ -65,7 +65,7 @@ type mysqlDbReplica struct {
 func (r *mysqlDbReplica) UpdateMySQLDb(ctx context.Context, contents []byte, version uint32) func(context.Context) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.lgr.Infof("mysqlDbReplica got new contents at version %d", version)
+	r.lgr.Infof("cluster/trace[mysqlDbReplica %s]: ts=%s got new contents at version %d; %s", r.client.remote, tsNow(), version, r.debugStateLocked())
 	r.contents = contents
 	r.version = version
 	r.nextAttempt = time.Time{}
@@ -132,6 +132,8 @@ func (r *mysqlDbReplica) Run() {
 			client := r.client.client
 			version := r.version
 			attempt := r.progressNotifier.BeginAttempt()
+			r.lgr.Tracef("cluster/trace[mysqlDbReplica %s]: ts=%s attempting UpdateUsersAndGrants; %s", r.client.remote, tsNow(), r.debugStateLocked())
+			attemptStart := time.Now()
 			r.mu.Unlock()
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			_, err := client.UpdateUsersAndGrants(ctx, &replicationapi.UpdateUsersAndGrantsRequest{
@@ -141,7 +143,7 @@ func (r *mysqlDbReplica) Run() {
 			r.mu.Lock()
 			if err != nil {
 				r.progressNotifier.RecordFailure(attempt)
-				r.lgr.Warnf("mysqlDbReplica[%s]: error replicating users and grants. backing off. %v", r.client.remote, err)
+				r.lgr.Warnf("cluster/trace[mysqlDbReplica %s]: ts=%s error replicating users and grants (attempt took %v, connState now %s). backing off. %v", r.client.remote, tsNow(), time.Since(attemptStart), connStateStr(r.client.conn), err)
 				if r.waitNotify != nil {
 					// Someone (e.g. a graceful role transition) is blocked on this replica
 					// catching up, on a fixed budget. Retry on a short flat cadence with a
@@ -152,8 +154,10 @@ func (r *mysqlDbReplica) Run() {
 					if r.client.conn != nil {
 						r.client.conn.ResetConnectBackoff()
 					}
+					r.lgr.Tracef("cluster/trace[mysqlDbReplica %s]: ts=%s waiter present: flat 1s retry scheduled, connect backoff reset", r.client.remote, tsNow())
 				} else {
 					r.nextAttempt = time.Now().Add(r.backoff.NextBackOff())
+					r.lgr.Tracef("cluster/trace[mysqlDbReplica %s]: ts=%s no waiter: exponential backoff, next attempt at %s", r.client.remote, tsNow(), r.nextAttempt.Format("15:04:05.000000"))
 				}
 				next := r.nextAttempt
 				go func() {
@@ -170,7 +174,7 @@ func (r *mysqlDbReplica) Run() {
 			r.progressNotifier.RecordSuccess(attempt)
 			r.fastFailReplicationWait = false
 			r.backoff.Reset()
-			r.lgr.Debugf("mysqlDbReplica[%s]: successfully replicated users and grants at version %d.", r.client.remote, version)
+			r.lgr.Tracef("cluster/trace[mysqlDbReplica %s]: ts=%s successfully replicated users and grants at version %d (attempt took %v).", r.client.remote, tsNow(), version, time.Since(attemptStart))
 			r.replicatedVersion = version
 		} else {
 			r.lgr.Debugf("mysqlDbReplica[%s]: not replicating empty users and grants at version %d.", r.client.remote, r.version)
@@ -183,13 +187,22 @@ func (r *mysqlDbReplica) isCaughtUp() bool {
 	return r.version == r.replicatedVersion || r.role != RolePrimary
 }
 
+// debugStateLocked renders the replica's replication-relevant state for the
+// cluster/trace diagnostics. called with r.mu locked.
+func (r *mysqlDbReplica) debugStateLocked() string {
+	return fmt.Sprintf("role=%s version=%d replicatedVersion=%d caughtUp=%v nextAttempt=%s waiterPresent=%v fastFail=%v connState=%s",
+		r.role, r.version, r.replicatedVersion, r.isCaughtUp(), r.nextAttempt.Format("15:04:05.000000"), r.waitNotify != nil, r.fastFailReplicationWait, connStateStr(r.client.conn))
+}
+
 func (r *mysqlDbReplica) setWaitNotify(notify func()) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if notify != nil {
 		if r.waitNotify != nil {
+			r.lgr.Warnf("cluster/trace[mysqlDbReplica %s]: ts=%s setWaitNotify: rejected; a waiter is already registered", r.client.remote, tsNow())
 			return false
 		}
+		r.lgr.Tracef("cluster/trace[mysqlDbReplica %s]: ts=%s setWaitNotify: waiter registered; %s", r.client.remote, tsNow(), r.debugStateLocked())
 		notify()
 		// A waiter has just registered: someone (e.g. a graceful role transition) is now
 		// blocked on this replica catching up, on a fixed budget. If earlier attempts
@@ -205,8 +218,11 @@ func (r *mysqlDbReplica) setWaitNotify(notify func()) bool {
 			if r.client.conn != nil {
 				r.client.conn.ResetConnectBackoff()
 			}
+			r.lgr.Tracef("cluster/trace[mysqlDbReplica %s]: ts=%s setWaitNotify: not caught up; backoffs reset and run loop prodded", r.client.remote, tsNow())
 			r.cond.Broadcast()
 		}
+	} else if r.waitNotify != nil {
+		r.lgr.Tracef("cluster/trace[mysqlDbReplica %s]: ts=%s setWaitNotify: waiter unregistered; %s", r.client.remote, tsNow(), r.debugStateLocked())
 	}
 	r.waitNotify = notify
 	return true
@@ -216,7 +232,7 @@ func (r *mysqlDbReplica) wait() {
 	if r.waitNotify != nil {
 		r.waitNotify()
 	}
-	r.lgr.Infof("mysqlDbReplica waiting...")
+	r.lgr.Infof("cluster/trace[mysqlDbReplica %s]: ts=%s run loop waiting; %s", r.client.remote, tsNow(), r.debugStateLocked())
 	if r.isCaughtUp() {
 		attempt := r.progressNotifier.BeginAttempt()
 		r.progressNotifier.RecordSuccess(attempt)
@@ -234,6 +250,7 @@ func (r *mysqlDbReplica) GracefulStop() {
 func (r *mysqlDbReplica) setRole(role Role) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.lgr.Tracef("cluster/trace[mysqlDbReplica %s]: ts=%s setRole %s -> %s", r.client.remote, tsNow(), r.role, role)
 	r.role = role
 	r.nextAttempt = time.Time{}
 	r.backoff.Reset()
@@ -337,6 +354,7 @@ func (p *replicatingMySQLDbPersister) waitForReplication(timeout time.Duration) 
 	}
 	p.mu.Unlock()
 
+	start := time.Now()
 	done := make(chan struct{})
 	go func() {
 		wg.Wait()
@@ -344,12 +362,21 @@ func (p *replicatingMySQLDbPersister) waitForReplication(timeout time.Duration) 
 	}()
 	select {
 	case <-done:
+		if len(replicas) > 0 {
+			replicas[0].lgr.Tracef("cluster/trace[mysqlDbPersister]: ts=%s waitForReplication: all %d replicas caught up after %v", tsNow(), len(replicas), time.Since(start))
+		}
 	case <-time.After(timeout):
+		if len(replicas) > 0 {
+			replicas[0].lgr.Warnf("cluster/trace[mysqlDbPersister]: ts=%s waitForReplication: TIMED OUT after %v", tsNow(), time.Since(start))
+		}
 	}
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	for _, r := range replicas {
+	for i, r := range replicas {
+		if !res[i].caughtUp {
+			r.lgr.Warnf("cluster/trace[mysqlDbPersister]: ts=%s waitForReplication: replica %s not caught up at deadline", tsNow(), r.client.remote)
+		}
 		r.setWaitNotify(nil)
 	}
 
