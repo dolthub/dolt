@@ -31,28 +31,10 @@ import (
 // DATABASE replication participates in dolt_cluster_ack_writes_timeout_secs,
 // exactly like normal writes, users/grants, and branch control do.
 //
-// With ack writes enabled, a write on the primary blocks until it has been
-// acknowledged by the standby replicas, or until the ack-writes timeout
-// elapses (at which point it returns with a replication-timeout warning). This
-// is how a client learns whether its write actually made it to the standby.
-//
-// The scenario:
-//   - A primary (server1) and standby (server2) replicate two databases,
-//     repo_up and repo_down. dolt_cluster_ack_writes_timeout_secs is set.
-//   - While the standby is up and caught up, the primary drops repo_up. The
-//     drop replicates promptly, so the statement returns well before the
-//     timeout and emits no timeout warning. This proves the wait is driven by
-//     actual replication acknowledgement, not a blind sleep.
-//   - The standby is stopped. The primary drops repo_down. The drop cannot be
-//     acknowledged by the (stopped) standby, so a correct implementation blocks
-//     until the ack-writes timeout elapses and then returns with a
-//     replication-timeout warning.
-//
-// Before the fix, DROP DATABASE replication was entirely fire-and-forget: the
-// drop hook launched background goroutines and returned immediately, never
-// plumbing a ReplicationStatusController into WaitForReplicationController. As
-// a result the statement returned instantly regardless of whether the drop had
-// replicated, and dolt_cluster_ack_writes_timeout_secs had no effect on it.
+// The setup is: make a cluster and make a database, and make sure its data,
+// users+grants and branch control are all fully caught up on the standby.
+// Then shut down the standby and drop the database. That statement should
+// block on the replication until the timeout.
 func TestClusterDropDatabaseParticipatesInAckWritesTimeout(t *testing.T) {
 	t.Parallel()
 
@@ -133,10 +115,9 @@ cluster:
 	waitForDatabasesOnStandby(t, ctx, standbyDB, []string{"dolt_cluster", "information_schema", "mysql", "repo_down", "repo_up"})
 	standbyDB.Close()
 
-	// Control: with the standby up and caught up, dropping repo_up replicates
-	// promptly. The statement must return well before the ack-writes timeout
-	// and emit no replication-timeout warning. This proves the wait is
-	// satisfied by a real acknowledgement, not by always sleeping the timeout.
+	// With the standby up, dropping repo_up replicates promptly. The
+	// statement must return well before the ack-writes timeout and emit no
+	// replication-timeout warning.
 	start := time.Now()
 	_, err = primaryConn.ExecContext(ctx, "drop database repo_up")
 	require.NoError(t, err)
@@ -149,9 +130,9 @@ cluster:
 	// Stop the standby so that the DROP DATABASE below cannot be acknowledged.
 	require.NoError(t, standby.GracefulStop())
 
-	// Gap: dropping repo_down cannot be acknowledged by the stopped standby.
-	// With ack writes enabled, the statement must block until the ack-writes
-	// timeout elapses and then return with a replication-timeout warning.
+	// With the standby down, dropping repo_down should not be acknowleged
+	// quickly.  The statement must block until the ack-writes timeout
+	// elapses and then return with a replication-timeout warning.
 	start = time.Now()
 	_, err = primaryConn.ExecContext(ctx, "drop database repo_down")
 	require.NoError(t, err)
