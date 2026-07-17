@@ -308,7 +308,7 @@ func (e extendedType) Convert(ctx context.Context, i interface{}) (interface{}, 
 	panic("unimplemented")
 }
 
-func (e extendedType) ConvertToType(ctx *sql.Context, typ sql.ExtendedType, val any) (any, sql.ConvertInRange, error) {
+func (e extendedType) ConvertToType(ctx *sql.Context, typ sql.ExtendedType, val any, convTyp byte) (any, sql.ConvertInRange, error) {
 	panic("unimplemented")
 }
 
