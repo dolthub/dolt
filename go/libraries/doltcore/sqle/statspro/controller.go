@@ -427,7 +427,7 @@ func (sc *StatsController) DropStats(ctx *sql.Context, qual sql.StatQualifier, c
 	return nil
 }
 
-func (sc *StatsController) DropDbStats(ctx *sql.Context, dbName string, flush bool) error {
+func (sc *StatsController) DropDbStats(ctx *sql.Context, sch, dbName string, flush bool) error {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
