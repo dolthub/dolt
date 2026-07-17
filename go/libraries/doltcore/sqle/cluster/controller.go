@@ -1297,6 +1297,12 @@ func (c *Controller) standbyRemotesJWKS() *jwtauth.MultiJWKS {
 
 type replicationServiceClient struct {
 	client replicationapi.ReplicationServiceClient
+	// conn is the underlying grpc connection |client| operates on. It is retained so that
+	// replication waiters can call ResetConnectBackoff on it: after repeated connection
+	// failures (e.g. the standby was down or still coming up), the channel's internal
+	// reconnect backoff can otherwise delay the next actual dial attempt beyond a waiter's
+	// entire budget, with every intervening RPC failing fast on the cached connection error.
+	conn   *grpc.ClientConn
 	closer func() error
 	remote string
 	// httpUrl is the Dolt remote URL (e.g. http://53.78.2.1:3832) matching this
@@ -1347,6 +1353,7 @@ func (c *Controller) replicationServiceClients(ctx context.Context) ([]*replicat
 			remote:  r.Name(),
 			httpUrl: httpScheme + hostPort,
 			client:  client,
+			conn:    cc,
 			closer:  cc.Close,
 		})
 	}

@@ -61,6 +61,11 @@ func (r *branchControlReplica) UpdateContents(contents []byte, version uint32) f
 	r.version = version
 	r.nextAttempt = time.Time{}
 	r.backoff.Reset()
+	// See setWaitNotify: the caller may block on this update replicating, so also allow
+	// the grpc channel to attempt a fresh connection immediately.
+	if r.client.conn != nil {
+		r.client.conn.ResetConnectBackoff()
+	}
 	r.cond.Broadcast()
 	if r.fastFailReplicationWait {
 		remote := r.client.remote
@@ -168,6 +173,22 @@ func (r *branchControlReplica) setWaitNotify(notify func()) bool {
 			return false
 		}
 		notify()
+		// A waiter has just registered: someone (e.g. a graceful role transition) is now
+		// blocked on this replica catching up, on a fixed budget. If earlier attempts
+		// failed — common on first contact, while the peer is still coming up — the
+		// accumulated backoff can schedule the next attempt beyond that entire budget.
+		// Prod the run loop to retry immediately with a fresh backoff instead. The grpc
+		// channel maintains its own internal reconnect backoff, which would otherwise
+		// keep RPCs failing fast on the cached connection error without dialing, so
+		// reset it as well.
+		if !r.isCaughtUp() {
+			r.nextAttempt = time.Time{}
+			r.backoff.Reset()
+			if r.client.conn != nil {
+				r.client.conn.ResetConnectBackoff()
+			}
+			r.cond.Broadcast()
+		}
 	}
 	r.waitNotify = notify
 	return true
