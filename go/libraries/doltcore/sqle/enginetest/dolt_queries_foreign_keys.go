@@ -127,4 +127,173 @@ var DoltForeignKeyTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11317
+		Name: "ON DELETE CASCADE on a self-referential table with an indexed virtual generated column",
+		SetUpScript: []string{
+			"CREATE TABLE t2 (" +
+				"id int PRIMARY KEY, " +
+				"parentId int, " +
+				"parentKey int AS (parentId) VIRTUAL, " +
+				"UNIQUE KEY uk (parentKey), " +
+				"FOREIGN KEY (parentId) REFERENCES t2(id) ON DELETE CASCADE);",
+			"INSERT INTO t2 (id, parentId) VALUES (1, NULL), (2, 1);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "DELETE FROM t2 WHERE id = 1;",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query: "SELECT id, parentId, parentKey FROM t2 ORDER BY id;",
+				// id=2 references id=1, so the cascade also removes it.
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "SELECT parentKey FROM t2 WHERE parentKey = 1;",
+				// This lookup goes through the unique index, which must not keep a stale entry.
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "INSERT INTO t2 (id, parentId) VALUES (3, NULL), (4, 3);",
+				// Re-inserting a value freed by the cascade must succeed rather than hit a leftover index entry.
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "SELECT id, parentId, parentKey FROM t2 ORDER BY id;",
+				Expected: []sql.Row{{3, nil, nil}, {4, 3, 3}},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11317
+		Name: "ON DELETE CASCADE with an indexed virtual column between stored columns",
+		SetUpScript: []string{
+			"CREATE TABLE parent (id int PRIMARY KEY);",
+			"CREATE TABLE child (" +
+				"id int PRIMARY KEY, " +
+				"parentId int, " +
+				"doubled int AS (parentId * 2) VIRTUAL, " +
+				"note varchar(10), " +
+				"KEY idx_doubled (doubled), " +
+				"FOREIGN KEY (parentId) REFERENCES parent(id) ON DELETE CASCADE);",
+			"INSERT INTO parent VALUES (1), (2);",
+			"INSERT INTO child (id, parentId, note) VALUES (10, 1, 'a'), (20, 1, 'b'), (30, 2, 'c');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "DELETE FROM parent WHERE id = 1;",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query: "SELECT id, parentId, doubled, note FROM child ORDER BY id;",
+				// Only the child rows referencing parent 1 are removed.
+				Expected: []sql.Row{{30, 2, 4, "c"}},
+			},
+			{
+				Query:    "SELECT id FROM child WHERE doubled = 4;",
+				Expected: []sql.Row{{30}},
+			},
+			{
+				Query:    "SELECT id FROM child WHERE doubled = 2;",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11317
+		Name: "ON DELETE SET NULL maintains an index over a virtual generated column",
+		SetUpScript: []string{
+			"CREATE TABLE t (" +
+				"id int PRIMARY KEY, " +
+				"parentId int, " +
+				"parentKey int AS (parentId) VIRTUAL, " +
+				"UNIQUE KEY uk (parentKey), " +
+				"FOREIGN KEY (parentId) REFERENCES t(id) ON DELETE SET NULL);",
+			"INSERT INTO t (id, parentId) VALUES (1, NULL), (2, 1), (3, 2);",
+			"DELETE FROM t WHERE id = 2;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT id, parentId, parentKey FROM t ORDER BY id;",
+				Expected: []sql.Row{{1, nil, nil}, {3, nil, nil}},
+			},
+			{
+				Query: "SELECT id FROM t WHERE parentKey = 2;",
+				// The old value 2 must no longer be in the index.
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT count(*) FROM t WHERE parentKey IS NULL;",
+				Expected: []sql.Row{{2}},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11317
+		Name: "ON UPDATE CASCADE maintains a unique index over a virtual generated column",
+		SetUpScript: []string{
+			"CREATE TABLE parent (id int PRIMARY KEY);",
+			"CREATE TABLE child (" +
+				"id int PRIMARY KEY, " +
+				"parentId int, " +
+				"vcol int AS (parentId) VIRTUAL, " +
+				"UNIQUE KEY uk (vcol), " +
+				"FOREIGN KEY (parentId) REFERENCES parent(id) ON UPDATE CASCADE);",
+			"INSERT INTO parent VALUES (2);",
+			"INSERT INTO child (id, parentId) VALUES (20, 2);",
+			"UPDATE parent SET id = 99 WHERE id = 2;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT id, parentId, vcol FROM child ORDER BY id;",
+				Expected: []sql.Row{{20, 99, 99}},
+			},
+			{
+				Query:    "SELECT id FROM child WHERE vcol = 99;",
+				Expected: []sql.Row{{20}},
+			},
+			{
+				Query: "SELECT id FROM child WHERE vcol = 2;",
+				// The old value 2 must no longer be in the index.
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "INSERT INTO child (id, parentId) VALUES (40, 99);",
+				// vcol=99 is already taken, so this insert must be rejected as a duplicate.
+				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11317
+		Name: "ON UPDATE SET NULL maintains an index over a virtual generated column",
+		SetUpScript: []string{
+			"CREATE TABLE parent (id int PRIMARY KEY);",
+			"CREATE TABLE child (" +
+				"id int PRIMARY KEY, " +
+				"parentId int, " +
+				"vcol int AS (parentId) VIRTUAL, " +
+				"UNIQUE KEY uk (vcol), " +
+				"FOREIGN KEY (parentId) REFERENCES parent(id) ON UPDATE SET NULL);",
+			"INSERT INTO parent VALUES (2);",
+			"INSERT INTO child (id, parentId) VALUES (20, 2);",
+			"UPDATE parent SET id = 99 WHERE id = 2;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT id, parentId, vcol FROM child ORDER BY id;",
+				Expected: []sql.Row{{20, nil, nil}},
+			},
+			{
+				Query: "SELECT id FROM child WHERE vcol = 2;",
+				// The old value 2 must no longer be in the index.
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT count(*) FROM child WHERE vcol IS NULL;",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
 }
