@@ -387,6 +387,43 @@ func (s *SqlServer) Restart(newargs *[]string, newenvs *[]string) error {
 	if err != nil {
 		return err
 	}
+	return s.respawn(newargs, newenvs)
+}
+
+// KillStop hard-kills the running server process (SIGKILL on unix,
+// TerminateProcess on windows) and waits for it to exit. It reports whether the
+// process had already exited before we killed it: if exitedEarly is true,
+// waitErr is that exit's status (non-nil means the process crashed); otherwise
+// waitErr is the expected kill-induced status and should be ignored.
+func (s *SqlServer) KillStop() (exitedEarly bool, waitErr error) {
+	select {
+	case <-s.Done:
+		return true, s.CmdWaitErr
+	default:
+	}
+	if err := s.Cmd.Process.Kill(); err != nil {
+		// Kill errors only if the process has already finished.
+		<-s.Done
+		return true, s.CmdWaitErr
+	}
+	<-s.Done
+	return false, s.CmdWaitErr
+}
+
+// KillRestart is like Restart but hard-kills the current process (see KillStop)
+// instead of stopping it gracefully. It returns an error only if the killed
+// process had already crashed on its own, or the replacement failed to start.
+func (s *SqlServer) KillRestart(newargs *[]string, newenvs *[]string) error {
+	exitedEarly, waitErr := s.KillStop()
+	if exitedEarly && waitErr != nil {
+		return waitErr
+	}
+	return s.respawn(newargs, newenvs)
+}
+
+// respawn recreates and starts the server command, reusing the previous args
+// (or newargs/newenvs when provided).
+func (s *SqlServer) respawn(newargs *[]string, newenvs *[]string) error {
 	args := s.Cmd.Args[1:]
 	if newargs != nil {
 		args = append([]string{"sql-server"}, (*newargs)...)

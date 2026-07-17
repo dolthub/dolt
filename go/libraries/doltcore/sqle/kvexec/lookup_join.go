@@ -298,7 +298,7 @@ func convertLiteralKeyValue(ctx *sql.Context, colTyp sql.ColumnExpressionType, l
 	// For extended types, use the rich type conversion methods
 	if srcEt, ok := srcType.(sql.ExtendedType); ok {
 		if destEt, ok := destType.(sql.ExtendedType); ok {
-			return destEt.ConvertToType(ctx, srcEt, literal.Value())
+			return destEt.ConvertToType(ctx, srcEt, literal.Value(), 'a')
 		}
 	}
 	return destType.Convert(ctx, literal.Value())
