@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
@@ -85,6 +86,7 @@ type WorkspaceTableModifier struct {
 
 type WorkspaceTableUpdater struct {
 	WorkspaceTableModifier
+	deferredPuts []sql.Row
 }
 
 var _ sql.RowUpdater = (*WorkspaceTableUpdater)(nil)
@@ -182,25 +184,57 @@ func (wtu *WorkspaceTableUpdater) Update(ctx *sql.Context, old sql.Row, new sql.
 		toRow, fromRow = fromRow, toRow
 	}
 
-	// It's a delete if all the values in toRow are nil.
-	isDelete := true
-	for _, val := range toRow {
-		if val != nil {
-			isDelete = false
-			break
-		}
-	}
-
 	tableWriter := (*wtu.tableWriter)
 	if tableWriter == nil {
 		return fmt.Errorf("Runtime error: table writer is nil")
 	}
 
-	if isDelete {
+	// It's a delete if all the values in toRow are nil.
+	if rowIsAllNulls(toRow) {
 		return tableWriter.Delete(ctx, fromRow)
-	} else {
+	}
+
+	if r, ok := tableWriter.(writer.UniqueKeyChangeReporter); ok && !r.UpdateChangesUniqueKey(fromRow, toRow) {
 		return tableWriter.Update(ctx, fromRow, toRow)
 	}
+
+	// Applying deletes now and puts at statement end lets a unique key freed by one row be taken by another.
+	if !rowIsAllNulls(fromRow) {
+		if err := tableWriter.Delete(ctx, fromRow); err != nil {
+			return err
+		}
+	}
+	wtu.deferredPuts = append(wtu.deferredPuts, slices.Clone(toRow))
+	return nil
+}
+
+func rowIsAllNulls(row sql.Row) bool {
+	return !slices.ContainsFunc(row, func(val interface{}) bool { return val != nil })
+}
+
+// StatementComplete applies the deferred puts and then flushes as usual. A failed put discards the partially
+// applied statement so the roots stay untouched.
+func (wtu *WorkspaceTableUpdater) StatementComplete(ctx *sql.Context) error {
+	if wtu.err != nil {
+		return *wtu.err
+	}
+	puts := wtu.deferredPuts
+	wtu.deferredPuts = nil
+	for _, row := range puts {
+		if err := (*wtu.tableWriter).Insert(ctx, row); err != nil {
+			// The put error is the one to report, so the discard error is dropped.
+			_ = (*wtu.tableWriter).DiscardChanges(ctx, err)
+			wtu.tableWriter = nil
+			wtu.sessionWriter = nil
+			return err
+		}
+	}
+	return wtu.statementComplete(ctx)
+}
+
+func (wtu *WorkspaceTableUpdater) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
+	wtu.deferredPuts = nil
+	return wtu.WorkspaceTableModifier.DiscardChanges(ctx, errorEncountered)
 }
 
 func (wtu *WorkspaceTableUpdater) Close(c *sql.Context) error {
@@ -520,7 +554,7 @@ func (wt *WorkspaceTable) Updater(ctx *sql.Context) sql.RowUpdater {
 	}
 
 	return &WorkspaceTableUpdater{
-		modifier,
+		WorkspaceTableModifier: modifier,
 	}
 }
 

@@ -162,8 +162,7 @@ func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context, behavior dher
 	canCreate := !j.backing.readOnly()
 
 	if canCreate && !ok { // create new journal file
-		j.wr, err = createJournalWriter(ctx, j.path)
-		if err != nil {
+		if err = j.createProtectedJournalWriter(ctx); err != nil {
 			return err
 		}
 
@@ -187,7 +186,7 @@ func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context, behavior dher
 		return
 	}
 
-	j.wr, ok, err = openJournalWriter(ctx, j.path)
+	ok, err = j.openProtectedJournalWriter(ctx)
 	if err != nil {
 		return err
 	} else if !ok {
@@ -231,6 +230,37 @@ func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context, behavior dher
 	}
 	j.contents = mc
 	return
+}
+
+// createProtectedJournalWriter creates the journal file and registers it in the
+// persister's protected set.
+func (j *ChunkJournal) createProtectedJournalWriter(ctx context.Context) error {
+	j.persister.pruneMu.RLock()
+	defer j.persister.pruneMu.RUnlock()
+	wr, err := createJournalWriter(ctx, j.path)
+	if err != nil {
+		return err
+	}
+	j.wr = wr
+	j.persister.addProtected(journalAddr)
+	return nil
+}
+
+// openProtectedJournalWriter opens the existing journal file and registers it in
+// the persister's protected set. It returns false if the journal file does not
+// exist.
+func (j *ChunkJournal) openProtectedJournalWriter(ctx context.Context) (bool, error) {
+	j.persister.pruneMu.RLock()
+	defer j.persister.pruneMu.RUnlock()
+	wr, ok, err := openJournalWriter(ctx, j.path)
+	if err != nil {
+		return false, err
+	} else if !ok {
+		return false, nil
+	}
+	j.wr = wr
+	j.persister.addProtected(journalAddr)
+	return true, nil
 }
 
 // the journal file is the source of truth for the root hash, true-up persisted manifest
@@ -350,13 +380,6 @@ func (j *ChunkJournal) Exists(ctx context.Context, name string, chunkCount uint3
 func (j *ChunkJournal) PruneTableFiles(ctx context.Context) error {
 	if j.backing.readOnly() {
 		return errReadOnlyManifest
-	}
-	// If the journal is active, protect its file from pruning by adding
-	// it to pending for the duration of the prune. When the journal is
-	// inactive (j.wr == nil), the file should be prunable.
-	if j.wr != nil {
-		ph := j.persister.addPending(journalAddr)
-		defer ph.Close()
 	}
 	return j.persister.PruneTableFiles(ctx)
 }
@@ -484,10 +507,14 @@ func (j *ChunkJournal) flushToBackingManifest(ctx context.Context, behavior dher
 
 func (j *ChunkJournal) dropJournalWriter(ctx context.Context) error {
 	curr := j.wr
-	if j.wr == nil {
+	if curr == nil {
 		return nil
 	}
 	j.wr = nil
+	// Dropping the journal also removes it from the persister's protected set.
+	j.persister.pruneMu.RLock()
+	defer j.persister.pruneMu.RUnlock()
+	defer j.persister.removeProtected(journalAddr)
 	if err := curr.Close(); err != nil {
 		return err
 	}

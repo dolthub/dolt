@@ -845,6 +845,49 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 		},
 	},
+	{
+		// Regression test: a database created by one session after another session's transaction has already begun
+		// must still be usable in that already-open transaction. The transaction's start-point snapshot is taken when
+		// it begins and does not include the later-created database, so resolving it used to fail with
+		// "could not resolve initial root for database newdb". We now lazily register the database into the
+		// transaction on first reference (see DoltSession.addDB / DoltTransaction.AddDb). This reproduces the race hit
+		// when many databases are created concurrently and then queried concurrently across sessions.
+		Name:        "database created by another session is usable in an already-open transaction",
+		SetUpScript: []string{},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// client a opens a transaction; its snapshot predates newdb's existence
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				// client b creates and populates newdb, registering it in the shared provider
+				Query:            "/* client b */ create database newdb",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ use newdb",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ create table t (x int primary key)",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client b */ insert into t values (1)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				// client a references newdb inside its already-open transaction; previously errored on initial root
+				Query:            "/* client a */ use newdb",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ select * from t",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
 }
 
 var DoltConflictHandlingTests = []queries.TransactionTest{

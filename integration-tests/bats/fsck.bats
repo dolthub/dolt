@@ -202,3 +202,26 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
   [ "$status" -eq 0 ]
   ! [[ "$output" =~ "the filename, directory name, or volume label syntax is incorrect" ]] || false
 }
+
+@test "fsck: passes with a stash present" {
+  dolt init
+  dolt sql -q "create table t (id int primary key, value int); insert into t values (1, 1);"
+  dolt add t
+  dolt commit -m "initialize repro table"
+
+  dolt sql -q "update t set value=2 where id=1;"
+  dolt stash
+
+  run dolt stash list
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "stash@{0}" ]] || false
+
+  run dolt fsck
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "No problems found." ]] || false
+  ! [[ "$output" =~ "has incorrect file ID" ]] || false
+
+  run dolt stash list
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "stash@{0}" ]] || false
+}
