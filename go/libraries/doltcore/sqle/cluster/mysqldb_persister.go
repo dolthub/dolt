@@ -142,7 +142,19 @@ func (r *mysqlDbReplica) Run() {
 			if err != nil {
 				r.progressNotifier.RecordFailure(attempt)
 				r.lgr.Warnf("mysqlDbReplica[%s]: error replicating users and grants. backing off. %v", r.client.remote, err)
-				r.nextAttempt = time.Now().Add(r.backoff.NextBackOff())
+				if r.waitNotify != nil {
+					// Someone (e.g. a graceful role transition) is blocked on this replica
+					// catching up, on a fixed budget. Retry on a short flat cadence with a
+					// fresh connection attempt each time, rather than letting the growing
+					// backoff (both ours and the grpc channel's internal reconnect backoff)
+					// idle out their entire wait.
+					r.nextAttempt = time.Now().Add(time.Second)
+					if r.client.conn != nil {
+						r.client.conn.ResetConnectBackoff()
+					}
+				} else {
+					r.nextAttempt = time.Now().Add(r.backoff.NextBackOff())
+				}
 				next := r.nextAttempt
 				go func() {
 					<-time.After(time.Until(next))
