@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	errorKinds "gopkg.in/src-d/go-errors.v1"
 
@@ -299,7 +300,7 @@ func CreateBranchWithStartPt[C doltdb.Context](ctx C, dbData env.DbData[C], newB
 	err := createBranch(ctx, dbData, newBranch, startPt, force, rsc)
 
 	if err != nil {
-		if err == ErrAlreadyExists {
+		if errors.Is(err, ErrAlreadyExists) {
 			return fmt.Errorf("fatal: A branch named '%s' already exists.", newBranch)
 		} else if err == doltdb.ErrInvBranchName {
 			return fmt.Errorf("fatal: '%s' is an invalid branch name.", newBranch)
@@ -317,6 +318,20 @@ func CreateBranchWithStartPt[C doltdb.Context](ctx C, dbData env.DbData[C], newB
 	return nil
 }
 
+// HasCaseOnlyBranchConflict reports whether an existing branch differs from newName only by case.
+// Branch names resolve case-insensitively, so such a branch could not be told apart from newName.
+// Names in except are ignored, which lets a rename replace a case variant of the branch it renames.
+func HasCaseOnlyBranchConflict(ctx context.Context, ddb *doltdb.DoltDB, newName string, except ...string) (bool, error) {
+	existing, has, err := ddb.HasBranch(ctx, newName)
+	if err != nil {
+		return false, err
+	}
+	if !has || existing == newName || slices.Contains(except, existing) {
+		return false, nil
+	}
+	return true, nil
+}
+
 func CreateBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, newBranch, startingPoint string, force bool, headRef ref.DoltRef, rsc *doltdb.ReplicationStatusController) error {
 	branchRef := ref.NewBranchRef(newBranch)
 	hasRef, err := ddb.HasRef(ctx, branchRef)
@@ -325,6 +340,15 @@ func CreateBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, newBranch, starti
 	}
 
 	if !force && hasRef {
+		return ErrAlreadyExists
+	}
+
+	// TODO(elianddb): make this check atomic with the creation below so concurrent sessions cannot race past it.
+	conflict, err := HasCaseOnlyBranchConflict(ctx, ddb, newBranch)
+	if err != nil {
+		return err
+	}
+	if conflict {
 		return ErrAlreadyExists
 	}
 

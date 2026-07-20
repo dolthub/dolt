@@ -154,6 +154,14 @@ func renameBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argpar
 		return err
 	}
 
+	conflict, err := actions.HasCaseOnlyBranchConflict(ctx, dbData.Ddb, newBranchName, oldBranchName)
+	if err != nil {
+		return err
+	}
+	if conflict {
+		return fmt.Errorf("fatal: A branch named '%s' already exists.", newBranchName)
+	}
+
 	headRef, err := dbData.Rsr.CWBHeadRef(ctx)
 	if err != nil {
 		return err
@@ -514,11 +522,18 @@ func copyABranch(ctx *sql.Context, dbData env.DbData[*sql.Context], srcBr string
 			return err
 		}
 	}
-	err := actions.CopyBranchOnDB(ctx, dbData.Ddb, srcBr, destBr, force, rsc)
+	conflict, err := actions.HasCaseOnlyBranchConflict(ctx, dbData.Ddb, destBr)
+	if err != nil {
+		return err
+	}
+	if conflict {
+		return fmt.Errorf("fatal: A branch named '%s' already exists.", destBr)
+	}
+	err = actions.CopyBranchOnDB(ctx, dbData.Ddb, srcBr, destBr, force, rsc)
 	if err != nil {
 		if err == doltdb.ErrBranchNotFound {
 			return fmt.Errorf("fatal: A branch named '%s' not found", srcBr)
-		} else if err == actions.ErrAlreadyExists {
+		} else if errors.Is(err, actions.ErrAlreadyExists) {
 			return fmt.Errorf("fatal: A branch named '%s' already exists.", destBr)
 		} else if err == doltdb.ErrInvBranchName {
 			return fmt.Errorf("fatal: '%s' is not a valid branch name.", destBr)

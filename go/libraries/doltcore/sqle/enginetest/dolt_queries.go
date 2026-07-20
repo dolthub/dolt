@@ -4035,6 +4035,83 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11270
+		Name: "creating a branch that differs from an existing one only by case is rejected",
+		SetUpScript: []string{
+			"create table t (a int primary key);",
+			"insert into t values (1);",
+			"call dolt_commit('-Am', 'init');",
+			"call dolt_branch('br');",
+			"call dolt_branch('feature');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_branch('BR');",
+				ExpectedErrStr: "fatal: A branch named 'BR' already exists.",
+			},
+			{
+				Query:          "call dolt_branch('-f', 'BR');",
+				ExpectedErrStr: "fatal: A branch named 'BR' already exists.",
+			},
+			{
+				Query:          "call dolt_checkout('-b', 'BR');",
+				ExpectedErrStr: "fatal: A branch named 'BR' already exists.",
+			},
+			{
+				Query:          "call dolt_branch('-c', 'br', 'BR');",
+				ExpectedErrStr: "fatal: A branch named 'BR' already exists.",
+			},
+			{
+				Query:          "call dolt_branch('-m', 'feature', 'BR');",
+				ExpectedErrStr: "fatal: A branch named 'BR' already exists.",
+			},
+			{
+				Query:          "call dolt_branch('br');",
+				ExpectedErrStr: "fatal: A branch named 'br' already exists.",
+			},
+			{
+				Query:    "select count(*) from dolt_branches where name = 'br' or name = 'BR';",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11270
+		Name: "collision guard does not block distinct names, same-case reset, or case-only rename",
+		SetUpScript: []string{
+			"create table t (a int primary key);",
+			"insert into t values (1);",
+			"call dolt_commit('-Am', 'init');",
+			"call dolt_branch('br');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_branch('feature');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "call dolt_branch('-f', 'br');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "call dolt_branch('-c', 'br', 'brcopy');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "call dolt_branch('-m', 'br', 'BR');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select count(*) from dolt_branches where name = 'br';",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select count(*) from dolt_branches where name = 'BR';",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
 }
 
 var DoltCheckoutReadOnlyScripts = []queries.ScriptTest{

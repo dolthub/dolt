@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -350,4 +351,62 @@ func TestCreatingDatabaseReservation(t *testing.T) {
 			t.Fatal("AllDatabases blocked while a name was reserved for cloning; reservation must not gate enumeration")
 		}
 	})
+}
+
+func TestResolveCaseVariantBranch(t *testing.T) {
+	// See https://github.com/dolthub/dolt/issues/11270
+	engine, sqlCtx, _, dEnv := newProviderEngine(t)
+	ctx := context.Background()
+	ddb := dEnv.DoltDB(ctx)
+
+	query := func(q string) ([]sql.Row, error) {
+		_, iter, _, err := engine.Query(sqlCtx, q)
+		if err != nil {
+			return nil, err
+		}
+		return sql.RowIterToRows(sqlCtx, iter)
+	}
+	mustQuery := func(q string) {
+		_, err := query(q)
+		require.NoError(t, err)
+	}
+	headCommit := func(branch string) *doltdb.Commit {
+		cs, err := doltdb.NewCommitSpec(branch)
+		require.NoError(t, err)
+		optCmt, err := ddb.Resolve(ctx, cs, nil)
+		require.NoError(t, err)
+		commit, ok := optCmt.ToCommit()
+		require.True(t, ok)
+		return commit
+	}
+
+	mustQuery("create table t (a int primary key)")
+	mustQuery("call dolt_commit('-Am', 'init')")
+	mustQuery("call dolt_checkout('-b', 'lower')")
+	mustQuery("insert into t values (111)")
+	mustQuery("call dolt_commit('-am', 'lower')")
+	mustQuery("call dolt_checkout('main')")
+	mustQuery("call dolt_checkout('-b', 'upper')")
+	mustQuery("insert into t values (222)")
+	mustQuery("call dolt_commit('-am', 'upper')")
+	mustQuery("call dolt_checkout('main')")
+
+	require.NoError(t, ddb.NewBranchAtCommit(ctx, ref.NewBranchRef("br"), headCommit("lower"), nil))
+	require.NoError(t, ddb.NewBranchAtCommit(ctx, ref.NewBranchRef("BR"), headCommit("upper"), nil))
+
+	// While both exist every casing folds to the same pair, so neither branch's own data can be read.
+	for _, db := range []string{"dolt/br", "dolt/BR", "dolt/Br"} {
+		_, err := query("select a from `" + db + "`.t")
+		require.ErrorIs(t, err, ErrAmbiguousBranchName)
+	}
+
+	mustQuery("call dolt_branch('-m', 'BR', 'keepBR')")
+
+	rows, err := query("select a from `dolt/br`.t")
+	require.NoError(t, err)
+	require.Equal(t, []sql.Row{{int32(111)}}, rows)
+
+	rows, err = query("select a from `dolt/keepBR`.t")
+	require.NoError(t, err)
+	require.Equal(t, []sql.Row{{int32(222)}}, rows)
 }
