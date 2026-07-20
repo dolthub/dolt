@@ -1455,12 +1455,34 @@ func (gbs *GitBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key s
 		pending := gbs.pendingWrites
 		gbs.pendingWrites = nil
 		gbs.pendingMu.Unlock()
-		ver, err := gbs.checkAndPutWithRemoteSync(ctx, expectedVersion, key, int64(len(manifestData)), bufferedReader, msg, pending, allowedNames)
-		if err != nil && len(pending) > 0 {
-			gbs.pendingMu.Lock()
-			gbs.pendingWrites = append(pending, gbs.pendingWrites...)
-			gbs.pendingMu.Unlock()
+
+		// Only flush pending writes this manifest references; committing an
+		// unreferenced entry lets a later flush prune it while still live
+		// (dolthub/dolt#11323). Flush everything if names can't be parsed.
+		toFlush := pending
+		var deferred []pendingWrite
+		if allowedNames != nil {
+			toFlush = nil
+			for _, pw := range pending {
+				if isPathReferencedByManifest(pw.key, allowedNames) {
+					toFlush = append(toFlush, pw)
+				} else {
+					deferred = append(deferred, pw)
+				}
+			}
 		}
+
+		ver, err := gbs.checkAndPutWithRemoteSync(ctx, expectedVersion, key, int64(len(manifestData)), bufferedReader, msg, toFlush, allowedNames)
+
+		// On failure, re-queue everything we drained; on success, keep the
+		// deferred (unreferenced) writes pending.
+		gbs.pendingMu.Lock()
+		if err != nil {
+			gbs.pendingWrites = append(pending, gbs.pendingWrites...)
+		} else if len(deferred) > 0 {
+			gbs.pendingWrites = append(deferred, gbs.pendingWrites...)
+		}
+		gbs.pendingMu.Unlock()
 		return ver, err
 	}
 

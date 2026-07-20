@@ -78,10 +78,10 @@ func TestGitBlobstore_PostFlushEviction_RacesDeferredWrite(t *testing.T) {
 	_, err = bs.CheckAndPut(ctx, ver1, "manifest", int64(len(m2)), bytes.NewReader(m2))
 	require.NoError(t, err)
 
-	// The bug: B.darc is still tracked in cacheObjects as a tree, but its
-	// cacheChildren list was deleted by the eviction loop, so the read fails.
+	// B is unreferenced but never committed, so it stays pending and cached.
+	// Before the fix it was committed then pruned+evicted, failing with
+	// "Blob not found: B.darc".
 	got, _, err = GetBytes(ctx, bs, "B.darc", AllRange)
-	t.Logf("Get(B.darc) after second flush: err=%v", err)
 	require.NoError(t, err, "issue 11323: live table file evicted mid-flight -> Blob not found")
 	require.Equal(t, []byte("bbbbbbbbbb"), got)
 }
