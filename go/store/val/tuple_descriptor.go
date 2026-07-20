@@ -25,11 +25,10 @@ import (
 	"time"
 
 	"github.com/cockroachdb/apd/v3"
+	"github.com/dolthub/go-mysql-server/sql/encodings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/store/hash"
-
-	"github.com/dolthub/go-mysql-server/sql/encodings"
 )
 
 func init() {
