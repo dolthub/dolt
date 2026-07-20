@@ -17,6 +17,7 @@ package blobstore
 import (
 	"bytes"
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -24,6 +25,24 @@ import (
 	git "github.com/dolthub/dolt/go/store/blobstore/internal/git"
 	"github.com/dolthub/dolt/go/store/testutils/gitrepo"
 )
+
+// remoteTreePaths returns the full recursive list of blob/tree paths committed
+// at DoltDataRef in the bare repo at |gitDir|.
+func remoteTreePaths(ctx context.Context, t *testing.T, gitDir string) []string {
+	t.Helper()
+	runner, err := git.NewRunner(gitDir)
+	require.NoError(t, err)
+	api := git.NewGitAPIImpl(runner)
+	commit, err := api.ResolveRefCommit(ctx, DoltDataRef)
+	require.NoError(t, err)
+	entries, err := api.ListTreeRecursive(ctx, commit)
+	require.NoError(t, err)
+	paths := make([]string, len(entries))
+	for i, e := range entries {
+		paths[i] = e.Name
+	}
+	return paths
+}
 
 // A deferred (not-yet-manifested) table file must survive the post-flush cache
 // eviction in remoteManagedWrite.
@@ -79,6 +98,16 @@ func TestGitBlobstore_PostFlushEviction_RacesDeferredWrite(t *testing.T) {
 	m2 := []byte("5:__DOLT__:lock2:root2:gc2:A:10")
 	_, err = bs.CheckAndPut(ctx, ver1, "manifest", int64(len(m2)), bytes.NewReader(m2))
 	require.NoError(t, err)
+
+	// The manifests only ever referenced A, so only A (and the manifest) should
+	// have been committed to the remote. B must be absent from the remote tree:
+	// it stayed pending locally and was never pushed.
+	remoteEntries := remoteTreePaths(ctx, t, remoteRepo.GitDir)
+	require.Contains(t, remoteEntries, "A.darc/0001", "referenced write A should be committed to the remote")
+	for _, name := range remoteEntries {
+		require.NotEqual(t, "B.darc", name, "deferred write B must not be committed to the remote")
+		require.False(t, strings.HasPrefix(name, "B.darc/"), "deferred write B (%q) must not be committed to the remote", name)
+	}
 
 	// B was never committed, so it stays pending and cached and remains readable.
 	// Pre-fix it had been committed then pruned+evicted, failing with
