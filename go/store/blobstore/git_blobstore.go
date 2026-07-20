@@ -1457,8 +1457,8 @@ func (gbs *GitBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key s
 		gbs.pendingMu.Unlock()
 
 		// Only flush pending writes this manifest references; committing an
-		// unreferenced entry lets a later flush prune it while still live
-		// (dolthub/dolt#11323). Flush everything if names can't be parsed.
+		// unreferenced entry lets a later flush prune it while still live.
+		// Flush everything if names can't be parsed.
 		toFlush := pending
 		var deferred []pendingWrite
 		if allowedNames != nil {

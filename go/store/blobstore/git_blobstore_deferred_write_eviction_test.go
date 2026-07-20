@@ -26,7 +26,7 @@ import (
 )
 
 // A deferred (not-yet-manifested) table file must survive the post-flush cache
-// eviction in remoteManagedWrite. Regression test for dolthub/dolt#11323.
+// eviction in remoteManagedWrite.
 func TestGitBlobstore_PostFlushEviction_RacesDeferredWrite(t *testing.T) {
 	requireGitOnPath(t)
 	ctx := context.Background()
@@ -82,6 +82,6 @@ func TestGitBlobstore_PostFlushEviction_RacesDeferredWrite(t *testing.T) {
 	// Before the fix it was committed then pruned+evicted, failing with
 	// "Blob not found: B.darc".
 	got, _, err = GetBytes(ctx, bs, "B.darc", AllRange)
-	require.NoError(t, err, "issue 11323: live table file evicted mid-flight -> Blob not found")
+	require.NoError(t, err, "live table file evicted mid-flight -> Blob not found")
 	require.Equal(t, []byte("bbbbbbbbbb"), got)
 }
