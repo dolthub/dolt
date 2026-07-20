@@ -64,7 +64,8 @@ func TestGitBlobstore_PostFlushEviction_RacesDeferredWrite(t *testing.T) {
 	require.Equal(t, []byte("bbbbbbbbbb"), got)
 
 	// First manifest flush references only A (the "window": B uploaded, not yet
-	// manifested). Both deferred writes land in the tree, so B is now unreferenced.
+	// manifested). With the fix, B stays pending and is not committed to the tree.
+	// Pre-fix, B was flushed into the tree here as an unreferenced entry.
 	m1 := []byte("5:__DOLT__:lock1:root1:gc1:A:10")
 	_, err = bs.CheckAndPut(ctx, "", "manifest", int64(len(m1)), bytes.NewReader(m1))
 	require.NoError(t, err)
@@ -72,14 +73,15 @@ func TestGitBlobstore_PostFlushEviction_RacesDeferredWrite(t *testing.T) {
 	_, ver1, err := GetBytes(ctx, bs, "manifest", AllRange)
 	require.NoError(t, err)
 
-	// Second manifest flush still references only A. Now B exists in the parent
-	// tree and is unreferenced -> pruned -> orphan commit -> post-flush eviction.
+	// Second manifest flush still references only A. Pre-fix, B now existed in the
+	// parent tree unreferenced, so this flush pruned it -> orphan commit ->
+	// post-flush eviction of B from the cache. With the fix there is nothing to prune.
 	m2 := []byte("5:__DOLT__:lock2:root2:gc2:A:10")
 	_, err = bs.CheckAndPut(ctx, ver1, "manifest", int64(len(m2)), bytes.NewReader(m2))
 	require.NoError(t, err)
 
-	// B is unreferenced but never committed, so it stays pending and cached.
-	// Before the fix it was committed then pruned+evicted, failing with
+	// B was never committed, so it stays pending and cached and remains readable.
+	// Pre-fix it had been committed then pruned+evicted, failing with
 	// "Blob not found: B.darc".
 	got, _, err = GetBytes(ctx, bs, "B.darc", AllRange)
 	require.NoError(t, err, "live table file evicted mid-flight -> Blob not found")
