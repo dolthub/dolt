@@ -142,15 +142,6 @@ func PrintErrf(format string, a ...interface{}) {
 	fmt.Fprintf(CliErr, format, a...)
 }
 
-// DeleteAndPrint prints a new message and deletes the old one given the
-// previous messages length. It returns the length of the printed message that
-// should be passed as prevMsgLen on the next call of DeleteAndPrint.
-//
-// DeleteAndPrint does not work for multiline messages.
-// fdIsTerminal reports whether w is connected to an interactive terminal. It
-// checks w directly when it is an *os.File so that redirections which reassign
-// CliErr (e.g. --stderr <file>) are honored, and falls back to fallback (the
-// real stderr) when w is not a file, such as the colorable wrapper on Windows.
 func fdIsTerminal(w io.Writer, fallback *os.File) bool {
 	f, ok := w.(*os.File)
 	if !ok {
@@ -159,12 +150,18 @@ func fdIsTerminal(w io.Writer, fallback *os.File) bool {
 	return isatty.IsTerminal(f.Fd()) || isatty.IsCygwinTerminal(f.Fd())
 }
 
+// DeleteAndPrint prints a new message and deletes the old one given the
+// previous messages length. It returns the length of the printed message that
+// should be passed as prevMsgLen on the next call of DeleteAndPrint.
+//
+// DeleteAndPrint does not work for multiline messages.
 func DeleteAndPrint(prevMsgLen int, msg string) int {
 	if outputIsClosed() {
 		return 0
 	}
 
 	if !outputIsTerminal {
+		PrintErr(msg)
 		return len(msg)
 	}
 

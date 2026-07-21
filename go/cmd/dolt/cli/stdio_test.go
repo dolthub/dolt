@@ -31,13 +31,7 @@ func TestFdIsTerminalHonorsRedirectedCliErr(t *testing.T) {
 	}
 	defer f.Close()
 
-	// A redirected CliErr (e.g. --stderr <file>) is a plain *os.File and must be
-	// detected as non-terminal so no backspaces are written into the file, even
-	// if the real stderr fallback happens to be a terminal.
 	assert.False(t, fdIsTerminal(f, os.Stdout))
-
-	// A non-*os.File writer (e.g. the colorable wrapper on Windows) falls back
-	// to the provided stderr.
 	assert.False(t, fdIsTerminal(&bytes.Buffer{}, f))
 }
 
@@ -53,9 +47,15 @@ func TestDeleteAndPrintSkipsBackspacesWhenNotATTY(t *testing.T) {
 		CliErr = &captured
 		outputIsTerminal = false
 
-		DeleteAndPrint(n, "")
+		DeleteAndPrint(n, "- Uploading...")
 
-		assert.Empty(t, captured.String(), "no bytes should be written to a non-TTY")
+		out := captured.String()
+		assert.Equal(t, "- Uploading...", out)
+		assert.NotContains(t, out, "\b", "no backspaces should be written to a non-TTY")
+
+		captured.Reset()
+		DeleteAndPrint(n, "")
+		assert.Empty(t, captured.String())
 	})
 
 	t.Run("terminal", func(t *testing.T) {
