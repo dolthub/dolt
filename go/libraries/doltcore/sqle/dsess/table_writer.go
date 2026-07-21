@@ -95,4 +95,7 @@ type IndexState struct {
 	IsUnique      bool
 	IsSpatial     bool
 	Predicate     sql.Expression
+	// KeyVirtualExprs is parallel to KeyMapping. A non-nil entry at position i is the resolved
+	// generating expression for a virtual generated column that is key part i of this index.
+	KeyVirtualExprs []sql.Expression
 }

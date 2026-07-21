@@ -103,6 +103,7 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, schSta
 			pkBld:         val.NewTupleBuilder(schState.PkKeyDesc, idxMap.NodeStore()).WithMaxRowSize(targetRowSize),
 			key:           make(sql.Row, keyDesc.Count()),
 			predicate:     def.Predicate,
+			virtualExprs:  def.KeyVirtualExprs,
 		}
 	}
 
@@ -146,6 +147,7 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, schS
 			prefixBld:     val.NewTupleBuilder(keyDesc.PrefixDesc(def.Count), m.NodeStore()).WithMaxRowSize(targetRowSize),
 			hashBld:       val.NewTupleBuilder(val.NewTupleDescriptor(val.Type{Enc: val.Hash128Enc}), m.NodeStore()),
 			keyMap:        def.KeyMapping,
+			virtualExprs:  def.KeyVirtualExprs,
 		}
 	}
 

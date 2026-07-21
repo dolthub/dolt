@@ -85,17 +85,41 @@ func newWriterSchema(ctx *sql.Context, t *doltdb.Table, tableName string, dbName
 	for _, def := range definitions {
 		keyMap, valMap := ordinalMappingsFromSchema(schState.PkSchema.Schema, def.Schema())
 		pkMap := makeIndexToIndexMapping(def.Schema().GetPKCols(), schState.DoltSchema.GetPKCols())
+
+		// A virtual generated column that is a key part of this index is never physically
+		// persisted in the source table, so a writer must recompute its value from the row
+		// rather than trust a pre-populated slot.
+		var keyVirtualExprs []sql.Expression
+		for i, tag := range def.AllTags() {
+			// PK columns can never be virtual generated columns (MySQL requires STORED).
+			if _, isPk := schState.DoltSchema.GetPKCols().TagToIdx[tag]; isPk {
+				continue
+			}
+			col, ok := schState.DoltSchema.GetNonPKCols().TagToCol[tag]
+			if ok && col.Virtual {
+				if keyVirtualExprs == nil {
+					keyVirtualExprs = make([]sql.Expression, len(def.AllTags()))
+				}
+				expr, err := expranalysis.ResolveDefaultExpression(ctx, tableName, schState.DoltSchema, col)
+				if err != nil {
+					return nil, fmt.Errorf("failed to resolve virtual column expression for index %s: %w", def.Name(), err)
+				}
+				keyVirtualExprs[i] = expr
+			}
+		}
+
 		idxState := dsess.IndexState{
-			KeyMapping:    keyMap,
-			ValMapping:    valMap,
-			PkMapping:     pkMap,
-			Name:          def.Name(),
-			Schema:        def.Schema(),
-			Count:         def.Count(),
-			IsFullText:    def.IsFullText(),
-			IsUnique:      def.IsUnique(),
-			IsSpatial:     def.IsSpatial(),
-			PrefixLengths: def.PrefixLengths(),
+			KeyMapping:      keyMap,
+			ValMapping:      valMap,
+			PkMapping:       pkMap,
+			Name:            def.Name(),
+			Schema:          def.Schema(),
+			Count:           def.Count(),
+			IsFullText:      def.IsFullText(),
+			IsUnique:        def.IsUnique(),
+			IsSpatial:       def.IsSpatial(),
+			PrefixLengths:   def.PrefixLengths(),
+			KeyVirtualExprs: keyVirtualExprs,
 		}
 		if predStr := def.Predicate(); predStr != "" {
 			// TODO: need to set the schema in search_path? it cannot find tables and types.
