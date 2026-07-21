@@ -56,7 +56,7 @@ func SetIOStreams(inStream io.ReadCloser, outStream io.WriteCloser) {
 func InitIO() (restoreIO func()) {
 	stdOut, stdErr := os.Stdout, os.Stderr
 
-	outputIsTerminal = isatty.IsTerminal(stdErr.Fd()) || isatty.IsCygwinTerminal(stdErr.Fd())
+	outputIsTerminal = fdIsTerminal(CliErr, stdErr)
 
 	f, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
 
@@ -147,6 +147,18 @@ func PrintErrf(format string, a ...interface{}) {
 // should be passed as prevMsgLen on the next call of DeleteAndPrint.
 //
 // DeleteAndPrint does not work for multiline messages.
+// fdIsTerminal reports whether w is connected to an interactive terminal. It
+// checks w directly when it is an *os.File so that redirections which reassign
+// CliErr (e.g. --stderr <file>) are honored, and falls back to fallback (the
+// real stderr) when w is not a file, such as the colorable wrapper on Windows.
+func fdIsTerminal(w io.Writer, fallback *os.File) bool {
+	f, ok := w.(*os.File)
+	if !ok {
+		f = fallback
+	}
+	return isatty.IsTerminal(f.Fd()) || isatty.IsCygwinTerminal(f.Fd())
+}
+
 func DeleteAndPrint(prevMsgLen int, msg string) int {
 	if outputIsClosed() {
 		return 0

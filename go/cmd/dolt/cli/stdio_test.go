@@ -17,11 +17,29 @@ package cli
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestFdIsTerminalHonorsRedirectedCliErr(t *testing.T) {
+	f, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	// A redirected CliErr (e.g. --stderr <file>) is a plain *os.File and must be
+	// detected as non-terminal so no backspaces are written into the file, even
+	// if the real stderr fallback happens to be a terminal.
+	assert.False(t, fdIsTerminal(f, os.Stdout))
+
+	// A non-*os.File writer (e.g. the colorable wrapper on Windows) falls back
+	// to the provided stderr.
+	assert.False(t, fdIsTerminal(&bytes.Buffer{}, f))
+}
 
 func TestDeleteAndPrintSkipsBackspacesWhenNotATTY(t *testing.T) {
 	oldErr, oldTerm := CliErr, outputIsTerminal
