@@ -107,7 +107,41 @@ func newWriterSchema(ctx *sql.Context, t *doltdb.Table, tableName string, dbName
 		}
 		schState.SecIndexes = append(schState.SecIndexes, idxState)
 	}
+
+	schState.VirtualExpressions, err = resolveVirtualExpressions(ctx, tableName, schState.DoltSchema)
+	if err != nil {
+		return nil, err
+	}
+
 	return schState, nil
+}
+
+// resolveVirtualExpressions returns a table's resolved virtual column expressions indexed by column
+// position in the full schema, or nil when the table has no virtual columns. Rows read directly from
+// stored data omit virtual columns, so a write path evaluates these to fill them back in.
+func resolveVirtualExpressions(ctx *sql.Context, tableName string, sch schema.Schema) ([]sql.Expression, error) {
+	if !schema.IsVirtual(sch) {
+		return nil, nil
+	}
+	resolved, err := expranalysis.ResolveSchema(ctx, tableName, sch)
+	if err != nil {
+		return nil, err
+	}
+
+	cols := sch.GetAllCols().GetColumns()
+	virtualExpressions := make([]sql.Expression, len(cols))
+	for i, col := range cols {
+		if !col.Virtual {
+			continue
+		}
+		colIdx := resolved.IndexOfColName(col.Name)
+		if colIdx < 0 {
+			return nil, fmt.Errorf("unable to find virtual column %s in resolved schema", col.Name)
+		}
+		// The resolved expression itself lives in Generated (the virtual ones included).
+		virtualExpressions[i] = resolved[colIdx].Generated
+	}
+	return virtualExpressions, nil
 }
 
 func ordinalMappingsFromSchema(from sql.Schema, to schema.Schema) (km, vm val.OrdinalMapping) {

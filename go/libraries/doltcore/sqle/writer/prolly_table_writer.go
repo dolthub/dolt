@@ -23,7 +23,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expranalysis"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -60,8 +59,6 @@ type prollyTableWriter struct {
 
 	errEncountered error
 
-	// virtualExpressions holds the table's resolved virtual column expressions, indexed by full schema
-	// position, and is nil when the table has no virtual columns.
 	virtualExpressions []sql.Expression
 }
 
@@ -190,13 +187,6 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 
 // Update implements TableWriter.
 func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) (err error) {
-	// A foreign key action such as SET NULL or CASCADE leaves the new row's dependent virtual columns
-	// stale, so recompute them here before the index writers run.
-	if len(w.virtualExpressions) > 0 && len(newRow) == len(w.sqlSch) {
-		if err = populateVirtualColumns(ctx, newRow, w.virtualExpressions); err != nil {
-			return err
-		}
-	}
 	for _, wr := range w.secondary {
 		if err := wr.Update(ctx, oldRow, newRow); err != nil {
 			if uke, ok := err.(secondaryUniqueKeyError); ok {
@@ -210,46 +200,6 @@ func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.
 	}
 
 	w.aiSet = true
-	return nil
-}
-
-// resolveVirtualExpressions returns a table's resolved virtual column expressions, indexed by each
-// column's position in the full table schema. Positions that are not virtual columns are nil, and the
-// result is nil when the table has no virtual columns. A caller evaluates these expressions to fill in
-// virtual column values on write paths that read rows directly from stored data, which omits them.
-func resolveVirtualExpressions(ctx *sql.Context, tableName string, sch schema.Schema) ([]sql.Expression, error) {
-	if !schema.IsVirtual(sch) {
-		return nil, nil
-	}
-	cols := sch.GetAllCols().GetColumns()
-	virtualExpressions := make([]sql.Expression, len(cols))
-	for i, col := range cols {
-		if !col.Virtual {
-			continue
-		}
-		expr, err := expranalysis.ResolveDefaultExpression(ctx, tableName, sch, col)
-		if err != nil {
-			return nil, err
-		}
-		virtualExpressions[i] = expr
-	}
-	return virtualExpressions, nil
-}
-
-// populateVirtualColumns evaluates virtualExpressions against row and writes each result into its column
-// position. Columns are filled in order so that a virtual column can reference one that comes before it.
-// It does nothing when virtualExpressions is nil.
-func populateVirtualColumns(ctx *sql.Context, row sql.Row, virtualExpressions []sql.Expression) error {
-	for i, expr := range virtualExpressions {
-		if expr == nil {
-			continue
-		}
-		value, err := expr.Eval(ctx, row)
-		if err != nil {
-			return err
-		}
-		row[i] = value
-	}
 	return nil
 }
 
@@ -420,18 +370,13 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, tbl *doltdb.Table) error {
 		}
 	}
 
-	virtualExpressions, err := resolveVirtualExpressions(ctx, w.tblName.Name, schState.DoltSchema)
-	if err != nil {
-		return err
-	}
-
 	w.tbl = tbl
 	w.sch = schState.DoltSchema
 	w.sqlSch = schState.PkSchema.Schema
 	w.primary = newPrimary
 	w.secondary = newSecondaries
 	w.aiCol = schState.AutoIncCol
-	w.virtualExpressions = virtualExpressions
+	w.virtualExpressions = schState.VirtualExpressions
 
 	return nil
 }

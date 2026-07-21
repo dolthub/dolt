@@ -96,60 +96,33 @@ func (n *prollyFkIndexer) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.
 	if err != nil {
 		return nil, err
 	}
-	var iter sql.RowIter
 	if primary, ok := n.writer.primary.(prollyIndexWriter); ok {
-		iter = &prollyFkPkRowIter{
-			rangeIter:  rangeIter,
-			pkToIdxMap: pkToIdxMap,
-			primary:    primary,
-			sqlSch:     n.writer.sqlSch,
-			refCheck:   n.refCheck,
-		}
+		return &prollyFkPkRowIter{
+			rangeIter:          rangeIter,
+			pkToIdxMap:         pkToIdxMap,
+			primary:            primary,
+			sqlSch:             n.writer.sqlSch,
+			refCheck:           n.refCheck,
+			virtualExpressions: n.writer.virtualExpressions,
+		}, nil
 	} else {
-		iter = &prollyFkKeylessRowIter{
-			rangeIter: rangeIter,
-			primary:   n.writer.primary.(prollyKeylessWriter),
-			sqlSch:    n.writer.sqlSch,
-		}
+		return &prollyFkKeylessRowIter{
+			rangeIter:          rangeIter,
+			primary:            n.writer.primary.(prollyKeylessWriter),
+			sqlSch:             n.writer.sqlSch,
+			virtualExpressions: n.writer.virtualExpressions,
+		}, nil
 	}
-	// The rows built above come straight from stored data and have empty virtual column slots, so fill
-	// them in. Reference checks only test for existence and do not read the values, so they are skipped.
-	if len(n.writer.virtualExpressions) > 0 && !n.refCheck {
-		iter = virtualColumnRowIter{inner: iter, virtualExpressions: n.writer.virtualExpressions}
-	}
-	return iter, nil
-}
-
-// virtualColumnRowIter wraps a row iterator and populates virtual columns on each row it yields.
-type virtualColumnRowIter struct {
-	inner              sql.RowIter
-	virtualExpressions []sql.Expression
-}
-
-var _ sql.RowIter = virtualColumnRowIter{}
-
-func (it virtualColumnRowIter) Next(ctx *sql.Context) (sql.Row, error) {
-	row, err := it.inner.Next(ctx)
-	if err != nil || row == nil {
-		return row, err
-	}
-	if err = populateVirtualColumns(ctx, row, it.virtualExpressions); err != nil {
-		return nil, err
-	}
-	return row, nil
-}
-
-func (it virtualColumnRowIter) Close(ctx *sql.Context) error {
-	return it.inner.Close(ctx)
 }
 
 // prollyFkPkRowIter returns rows of the parent table requested by a foreign key reference. For use on tables with primary keys.
 type prollyFkPkRowIter struct {
-	rangeIter  prolly.MapIter
-	pkToIdxMap val.OrdinalMapping
-	primary    prollyIndexWriter
-	sqlSch     sql.Schema
-	refCheck   bool
+	rangeIter          prolly.MapIter
+	pkToIdxMap         val.OrdinalMapping
+	primary            prollyIndexWriter
+	sqlSch             sql.Schema
+	refCheck           bool
+	virtualExpressions []sql.Expression
 }
 
 var _ sql.RowIter = prollyFkPkRowIter{}
@@ -205,6 +178,9 @@ func (iter prollyFkPkRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 				return nil, err
 			}
 		}
+		if err = sql.EvalProjections(ctx, iter.virtualExpressions, nextRow); err != nil {
+			return nil, err
+		}
 		return nextRow, nil
 	}
 }
@@ -216,9 +192,10 @@ func (iter prollyFkPkRowIter) Close(ctx *sql.Context) error {
 
 // prollyFkKeylessRowIter returns rows requested by a foreign key reference. For use on keyless tables.
 type prollyFkKeylessRowIter struct {
-	rangeIter prolly.MapIter
-	primary   prollyKeylessWriter
-	sqlSch    sql.Schema
+	rangeIter          prolly.MapIter
+	primary            prollyKeylessWriter
+	sqlSch             sql.Schema
+	virtualExpressions []sql.Expression
 }
 
 var _ sql.RowIter = prollyFkKeylessRowIter{}
@@ -250,6 +227,9 @@ func (iter prollyFkKeylessRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil
 	})
 	if err != nil {
+		return nil, err
+	}
+	if err = sql.EvalProjections(ctx, iter.virtualExpressions, nextRow); err != nil {
 		return nil, err
 	}
 	return nextRow, nil
