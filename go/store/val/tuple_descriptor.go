@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/cockroachdb/apd/v3"
+	"github.com/dolthub/go-mysql-server/sql/encodings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -613,7 +614,7 @@ func (td *TupleDesc) GetStringAdaptiveValue(ctx context.Context, i int, vs Value
 	}
 	if adaptiveValue.isInlined() {
 		val, err := adaptiveValue.getUnderlyingBytes(ctx, vs)
-		return string(val), true, err
+		return encodings.BytesToString(val), true, err
 	} else {
 		val, err := adaptiveValue.convertToTextStorage(ctx, vs, nil)
 		return val, true, err
