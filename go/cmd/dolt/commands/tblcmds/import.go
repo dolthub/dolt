@@ -555,7 +555,8 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(bdr.Build(), usage)
 	}
 
-	cli.PrintErrln()
+	cli.DeleteAndPrint(displayStrLen, "")
+	cli.PrintErrln(importStatsDisplay)
 
 	if skipped > 0 {
 		cli.PrintErrln(color.YellowString("Lines skipped: %d", skipped))
@@ -566,12 +567,14 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 }
 
 var displayStrLen int
+var importStatsDisplay string
 
 func importStatsCB(stats mvdata.AppliedEditStats) {
 	noEffect := stats.NonExistentDeletes + stats.SameVal
 	total := noEffect + stats.Modifications + stats.Additions
 	p := message.NewPrinter(message.MatchLanguage("en")) // adds commas
 	displayStr := p.Sprintf("Rows Processed: %d, Additions: %d, Modifications: %d, Had No Effect: %d", total, stats.Additions, stats.Modifications, noEffect)
+	importStatsDisplay = displayStr
 	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
 }
 
