@@ -24,8 +24,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 )
 
-var AutoIncrementTrackerKey = struct{}{}
+// TrackerKey is a type used as a key into the GlobalStateImpl's map of SequenceTrackers
+type TrackerKey[TrackerType globalstate.SequenceTrackerBase] struct{}
 
+// NewGlobalStateStoreForDb creates a new GlobalState. It initially contains a single SequenceTracker: the AutoIncrementTracker
 func NewGlobalStateStoreForDb(ctx context.Context, dbName string, db *doltdb.DoltDB) (GlobalStateImpl, error) {
 	branches, err := db.GetBranches(ctx)
 	if err != nil {
@@ -94,37 +96,47 @@ func NewGlobalStateStoreForDb(ctx context.Context, dbName string, db *doltdb.Dol
 	}
 
 	return GlobalStateImpl{
-		aiTrackers: map[interface{}]globalstate.AutoIncrementTracker{AutoIncrementTrackerKey: tracker},
+		sequenceTrackers: map[interface{}]globalstate.SequenceTrackerBase{autoIncrementTrackerKey: tracker},
 	}, nil
 }
 
 type GlobalStateImpl struct {
-	aiTrackers map[interface{}]globalstate.AutoIncrementTracker
+	sequenceTrackers map[interface{}]globalstate.SequenceTrackerBase
 }
 
 var _ globalstate.GlobalState = GlobalStateImpl{}
 
-func (g GlobalStateImpl) AutoIncrementTracker(ctx *sql.Context, key interface{}) (globalstate.AutoIncrementTracker, error) {
-	return g.aiTrackers[key], nil
+func (g GlobalStateImpl) GetSequenceTracker(ctx *sql.Context, key interface{}) (globalstate.SequenceTrackerBase, error) {
+	return g.sequenceTrackers[key], nil
 }
 
-func (g GlobalStateImpl) AddAutoIncrementTracker(ctx *sql.Context, key interface{}, tracker globalstate.AutoIncrementTracker) error {
-	g.aiTrackers[key] = tracker
+func (g GlobalStateImpl) AddSequenceTracker(ctx *sql.Context, key interface{}, tracker globalstate.SequenceTrackerBase) error {
+	g.sequenceTrackers[key] = tracker
 	return nil
 }
 
 func (g GlobalStateImpl) Close() {
-	for _, tracker := range g.aiTrackers {
+	for _, tracker := range g.sequenceTrackers {
 		tracker.Close()
 	}
 }
 
 func (g GlobalStateImpl) InitWithRoots(ctx *sql.Context, roots ...doltdb.Rootish) error {
-	for _, tracker := range g.aiTrackers {
+	for _, tracker := range g.sequenceTrackers {
 		err := tracker.InitWithRoots(ctx, roots...)
 		if err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// GetSequenceTracker returns a SequenceTracker held by the globalstate.GlobalState, keyed by the provided key.
+// This function performs the necessary cast so that the caller doesn't have to cast the result.
+func GetSequenceTracker[T globalstate.SequenceTrackerBase](ctx *sql.Context, gs globalstate.GlobalState, key TrackerKey[T]) (result T, err error) {
+	aiti, err := gs.GetSequenceTracker(ctx, key)
+	if err != nil {
+		return result, err
+	}
+	return aiti.(T), nil
 }

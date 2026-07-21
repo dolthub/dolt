@@ -18,6 +18,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate/sequences"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+	"io"
+	"math"
 	"unicode"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -62,6 +68,8 @@ type Table struct {
 	table            durable.Table
 	overriddenSchema schema.Schema
 }
+
+var _ sequences.SequencedRelation[*Table, uint64, AutoIncrementState] = &Table{}
 
 // NewTable creates a durable object which stores row data, index data, and schema.
 func NewTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, rows durable.Index, indexes durable.IndexSet, autoIncVal types.Value) (*Table, error) {
@@ -406,20 +414,196 @@ func (t *Table) RenameIndexRowData(ctx context.Context, oldIndexName, newIndexNa
 	return t.SetIndexSet(ctx, indexes)
 }
 
+// HasSequenceState returns whether the table has an AUTO_INCREMENT value.
+func (t *Table) HasSequenceState(ctx context.Context) (bool, error) {
+	sch, err := t.GetSchema(ctx)
+	if err != nil {
+		return false, err
+	}
+	return schema.HasAutoIncrement(sch), nil
+}
+
+// GetSequenceState implements SequencedRelation
+func (t *Table) GetSequenceState(ctx context.Context) (AutoIncrementState, error) {
+	return t.GetAutoIncrementValue(ctx)
+}
+
 // GetAutoIncrementValue returns the current AUTO_INCREMENT value for this table.
-func (t *Table) GetAutoIncrementValue(ctx context.Context) (uint64, error) {
-	return t.table.GetAutoIncrement(ctx)
+func (t *Table) GetAutoIncrementValue(ctx context.Context) (AutoIncrementState, error) {
+	currentValue, err := t.table.GetAutoIncrement(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return AutoIncrementState(currentValue), nil
+}
+
+func (t *Table) GetSequenceSqlType(ctx context.Context) (sql.Type, bool, error) {
+	sch, err := t.table.GetSchema(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+
+	aiCol, ok := schema.GetAutoIncrementColumn(sch)
+	if !ok {
+		return nil, false, nil
+	}
+
+	return aiCol.TypeInfo.ToSqlType(), true, nil
 }
 
 // SetAutoIncrementValue sets the current AUTO_INCREMENT value for this table. This method does not verify that the
 // value given is greater than current table values. Setting it lower than current table values will result in
 // incorrect key generation on future inserts, causing duplicate key errors.
-func (t *Table) SetAutoIncrementValue(ctx context.Context, val uint64) (*Table, error) {
-	table, err := t.table.SetAutoIncrement(ctx, val)
+func (t *Table) SetAutoIncrementValue(ctx context.Context, val AutoIncrementState) (*Table, error) {
+	table, err := t.table.SetAutoIncrement(ctx, val.CurrentValue())
 	if err != nil {
 		return nil, err
 	}
 	return &Table{table: table}, nil
+}
+
+// SetSequenceState implements sequences.SequencedRelation
+func (t *Table) SetSequenceState(ctx context.Context, val AutoIncrementState) (*Table, error) {
+	return t.SetAutoIncrementValue(ctx, val)
+}
+
+// SetSequenceState implements sequences.SequencedRelation
+func (t *Table) TrySetSequenceState(ctx *sql.Context, newAutoIncVal AutoIncrementState) (*Table, bool, error) {
+	currentMax, err := getMaxAutoIncrementValue(ctx, t)
+	if err != nil {
+		return nil, false, err
+	}
+	currentMaxVal := AutoIncrementState(currentMax)
+
+	if !newAutoIncVal.GreaterThan(currentMaxVal) {
+		return t, false, nil
+	}
+
+	newTable, err := t.SetSequenceState(ctx, newAutoIncVal)
+	return newTable, true, err
+}
+
+// CoerceAutoIncrementValue converts |val| into an AUTO_INCREMENT sequence value
+func CoerceAutoIncrementValue(ctx *sql.Context, val interface{}) (uint64, error) {
+	switch typ := val.(type) {
+	case float32:
+		val = math.Round(float64(typ))
+	case float64:
+		val = math.Round(typ)
+	}
+
+	var err error
+	val, _, err = gmstypes.Uint64.Convert(ctx, val)
+	if err != nil {
+		return 0, err
+	}
+	if val == nil || val == uint64(0) {
+		return 0, nil
+	}
+	return val.(uint64), nil
+}
+
+type AutoIncrementState uint64
+
+func (s AutoIncrementState) Next() (aiVal uint64, ok bool, nextState AutoIncrementState, err error) {
+	if s == math.MaxUint64 {
+		return uint64(math.MaxUint64), false, s, nil
+	}
+	return uint64(s), true, s + 1, nil
+}
+
+func (s AutoIncrementState) CurrentValue() uint64 {
+	return uint64(s)
+}
+
+func (s AutoIncrementState) WithValue(v uint64) AutoIncrementState {
+	return AutoIncrementState(v)
+}
+
+func (s AutoIncrementState) WithSQLValue(ctx *sql.Context, v interface{}) (AutoIncrementState, error) {
+	given, err := CoerceAutoIncrementValue(ctx, v)
+	if err != nil {
+		return s, err
+	}
+	return AutoIncrementState(given), nil
+}
+
+func (s AutoIncrementState) GreaterThan(other AutoIncrementState) bool {
+	return s > other
+}
+
+func (s AutoIncrementState) Merge(other AutoIncrementState) (AutoIncrementState, bool) {
+	if s > other {
+		return s, true
+	}
+	return other, true
+}
+
+func (s AutoIncrementState) AtEnd() bool {
+	return s == math.MaxUint64
+}
+
+// getMaxAutoIncrementValue gets the highest value in a table's AUTO INCREMENT column
+func getMaxAutoIncrementValue(ctx *sql.Context, table *Table) (uint64, error) {
+	// First, establish whether to update this table based on the given value and its current max value.
+	sch, err := table.GetSchema(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	aiCol, ok := schema.GetAutoIncrementColumn(sch)
+	if !ok {
+		return 0, nil
+	}
+
+	var indexData durable.Index
+	aiIndex, ok := sch.Indexes().GetIndexByColumnNames(aiCol.Name)
+	if ok {
+		indexes, err := table.GetIndexSet(ctx)
+		if err != nil {
+			return 0, err
+		}
+
+		indexData, err = indexes.GetIndex(ctx, sch, nil, aiIndex.Name())
+		if err != nil {
+			return 0, err
+		}
+	} else {
+		indexData, err = table.GetRowData(ctx)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	maxValue, err := getMaxIndexValue(ctx, indexData)
+	if err != nil {
+		return 0, err
+	}
+	return CoerceAutoIncrementValue(ctx, maxValue)
+}
+
+// getMaxIndexValue reads the highest value for the first column in an index.
+func getMaxIndexValue(ctx *sql.Context, indexData durable.Index) (interface{}, error) {
+	idx, err := durable.ProllyMapFromIndex(indexData)
+	if err != nil {
+		return 0, err
+	}
+
+	iter, err := idx.IterAllReverse(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	kd, _ := idx.Descriptors()
+	k, _, err := iter.Next(ctx)
+	if err == io.EOF {
+		return 0, nil
+	} else if err != nil {
+		return 0, err
+	}
+
+	// TODO: is the auto-inc column always the first column in the index?
+	return tree.GetField(ctx, kd, 0, k, idx.NodeStore())
 }
 
 // AddColumnToRows adds the column named to row data as necessary and returns the resulting table.

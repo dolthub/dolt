@@ -22,9 +22,11 @@ import (
 // GlobalState is just a holding interface for pieces of global state, of which the auto increment tracking info is
 // the only example at the moment.
 type GlobalState interface {
-	// AutoIncrementTracker returns the auto increment tracker for this global state.
-	AutoIncrementTracker(ctx *sql.Context, key interface{}) (AutoIncrementTracker, error)
-	AddAutoIncrementTracker(ctx *sql.Context, key interface{}, value AutoIncrementTracker) error
+	// GetSequenceTracker returns the auto increment tracker for this global state.
+	GetSequenceTracker(ctx *sql.Context, key interface{}) (SequenceTrackerBase, error)
+	// AddSequenceTracker adds a new SequenceTracker to the GlobalState, accessible by the provided key.
+	AddSequenceTracker(ctx *sql.Context, key interface{}, value SequenceTrackerBase) error
+	// InitWithRoots initializes all of the state's SequenceTrackers
 	InitWithRoots(ctx *sql.Context, roots ...doltdb.Rootish) error
 }
 

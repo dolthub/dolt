@@ -1407,7 +1407,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 			}
 			sessionState.globalState = stateProvider.GetGlobalState()
 
-			tracker, err := sessionState.globalState.AutoIncrementTracker(ctx, AutoIncrementTrackerKey)
+			tracker, err := GetAutoIncrementTracker(ctx, sessionState.globalState)
 			if err != nil {
 				return err
 			}
@@ -2075,4 +2075,4 @@ func DefaultHead(ctx *sql.Context, baseName string, db SqlDatabase) (string, err
 // WriteSessFunc is a constructor that session builders use to
 // create fresh table editors.
 // The indirection avoids a writer/dsess package import cycle.
-type WriteSessFunc func(dbName string, ws *doltdb.WorkingSet, aiTracker globalstate.AutoIncrementTracker, setter SessionRootSetter, opts editor.Options) WriteSession
+type WriteSessFunc func(dbName string, ws *doltdb.WorkingSet, aiTracker *AutoIncrementTracker, setter SessionRootSetter, opts editor.Options) WriteSession

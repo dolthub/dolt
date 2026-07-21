@@ -455,7 +455,11 @@ func (t *DoltTable) PeekNextAutoIncrementValue(ctx *sql.Context) (uint64, error)
 	if err != nil {
 		return 0, err
 	}
-	return table.GetAutoIncrementValue(ctx)
+	seq, err := table.GetAutoIncrementValue(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return uint64(seq), err
 }
 
 // Name returns the name of the table.
@@ -1570,11 +1574,14 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 	}
 
 	if column.AutoIncrement {
-		ait, err := t.db.gs.AutoIncrementTracker(ctx, dsess.AutoIncrementTrackerKey)
+		ait, err := dsess.GetAutoIncrementTracker(ctx, t.db.gs)
 		if err != nil {
 			return err
 		}
-		ait.AddNewTable(t.tableName)
+		err = ait.AddNewTable(t.tableName, doltdb.AutoIncrementState(1))
+		if err != nil {
+			return err
+		}
 	}
 
 	newRoot, err := root.PutTable(ctx, t.TableName(), updatedTable)
@@ -1797,7 +1804,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 
 	// TODO: figure out locking. Other DBs automatically lock a table during this kind of operation, we should probably
 	//  do the same. We're messing with global auto-increment values here and it's not safe.
-	ait, err := t.db.gs.AutoIncrementTracker(ctx, dsess.AutoIncrementTrackerKey)
+	ait, err := dsess.GetAutoIncrementTracker(ctx, t.db.gs)
 	if err != nil {
 		return nil, err
 	}
@@ -1854,7 +1861,7 @@ func fullTextRewriteEditor(
 
 	// TODO: figure out locking. Other DBs automatically lock a table during this kind of operation, we should probably
 	//  do the same. We're messing with global auto-increment values here and it's not safe.
-	ait, err := t.db.gs.AutoIncrementTracker(ctx, dsess.AutoIncrementTrackerKey)
+	ait, err := dsess.GetAutoIncrementTracker(ctx, t.db.gs)
 	if err != nil {
 		return nil, err
 	}
@@ -2271,21 +2278,24 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 			return err
 		}
 
-		updatedTable, err = updatedTable.SetAutoIncrementValue(ctx, seq)
+		updatedTable, err = updatedTable.SetAutoIncrementValue(ctx, doltdb.AutoIncrementState(seq))
 		if err != nil {
 			return err
 		}
 
-		ait, err := t.db.gs.AutoIncrementTracker(ctx, dsess.AutoIncrementTrackerKey)
+		ait, err := dsess.GetAutoIncrementTracker(ctx, t.db.gs)
 		if err != nil {
 			return err
 		}
 
 		// TODO: this isn't transactional, and it should be (but none of the auto increment tracking is)
-		ait.AddNewTable(t.tableName)
+		err = ait.AddNewTable(t.tableName, doltdb.AutoIncrementState(1))
+		if err != nil {
+			return err
+		}
 		// Since this is a new auto increment table, we don't need to exclude the current working set from consideration
 		// when computing its new sequence value, hence the empty ref
-		_, err = ait.Set(ctx, t.tableName, updatedTable, ref.WorkingSetRef{}, seq)
+		_, err = ait.Set(ctx, t.tableName, updatedTable, ref.WorkingSetRef{}, doltdb.AutoIncrementState(seq))
 		if err != nil {
 			return err
 		}
@@ -2361,7 +2371,7 @@ func (t *AlterableDoltTable) getFirstAutoIncrementValue(
 		}
 	}
 
-	seq, err := dsess.CoerceAutoIncrementValue(ctx, initialValue)
+	seq, err := doltdb.CoerceAutoIncrementValue(ctx, initialValue)
 	if err != nil {
 		return 0, err
 	}

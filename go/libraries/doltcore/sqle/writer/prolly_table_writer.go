@@ -23,7 +23,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -52,7 +51,7 @@ type prollyTableWriter struct {
 	writeSess dsess.WriteSession
 
 	aiCol      schema.Column
-	aiTracker  globalstate.AutoIncrementTracker
+	aiTracker  *dsess.AutoIncrementTracker
 	aiAlterVal uint64
 	aiAltered  bool // True when an ALTER TABLE affects the auto increment value
 	aiSet      bool // True when an INSERT/UPDATE affects the auto increment value
@@ -176,7 +175,6 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 
 	// TODO: need schema name in ai tracker
 	w.aiSet = true
-	w.aiTracker.Next(ctx, w.tblName.Name, sqlRow)
 
 	return nil
 }
@@ -273,12 +271,16 @@ func (w *prollyTableWriter) PreciseMatch() bool {
 
 // GetNextAutoIncrementValue implements TableWriter.
 func (w *prollyTableWriter) GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error) {
-	return w.aiTracker.Next(ctx, w.tblName.Name, insertVal)
+	v, err := w.aiTracker.Next(ctx, w.tblName.Name, insertVal)
+	if err != nil {
+		return 0, err
+	}
+	return v, nil
 }
 
 // SetAutoIncrementValue implements AutoIncrementSetter.
 func (w *prollyTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) error {
-	seq, err := w.aiTracker.CoerceAutoIncrementValue(ctx, val)
+	seq, err := doltdb.CoerceAutoIncrementValue(ctx, val)
 	if err != nil {
 		return err
 	}
@@ -396,13 +398,12 @@ func (w *prollyTableWriter) table(ctx *sql.Context) (tbl *doltdb.Table, err erro
 
 	if w.aiCol.AutoIncrement {
 		if w.aiAltered {
-			tbl, err = w.aiTracker.Set(ctx, w.tblName.Name, tbl, w.writeSess.GetWorkingSet().Ref(), w.aiAlterVal)
+			tbl, err = w.aiTracker.Set(ctx, w.tblName.Name, tbl, w.writeSess.GetWorkingSet().Ref(), doltdb.AutoIncrementState(w.aiAlterVal))
 			if err != nil {
 				return nil, err
 			}
 		} else if w.aiSet {
-			var aiVal uint64
-			aiVal, err = w.aiTracker.Current(w.tblName.Name)
+			aiVal, err := w.aiTracker.Current(w.tblName.Name)
 			if err != nil {
 				return nil, err
 			}
