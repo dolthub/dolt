@@ -17,10 +17,58 @@ package cli
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestDeleteAndPrintSkipsBackspacesWhenNotATTY(t *testing.T) {
+	oldErr, oldTerm := CliErr, outputIsTerminal
+	defer func() { CliErr, outputIsTerminal = oldErr, oldTerm }()
+
+	const prevFrame = " Uploading..."
+	n := len(prevFrame) + 1
+
+	t.Run("not a terminal", func(t *testing.T) {
+		var captured bytes.Buffer
+		CliErr = &captured
+		outputIsTerminal = false
+
+		DeleteAndPrint(n, "")
+
+		assert.Empty(t, captured.String(), "no bytes should be written to a non-TTY")
+	})
+
+	t.Run("terminal", func(t *testing.T) {
+		var captured bytes.Buffer
+		CliErr = &captured
+		outputIsTerminal = true
+
+		DeleteAndPrint(n, "")
+
+		want := strings.Repeat("\b", n) + strings.Repeat(" ", n) + strings.Repeat("\b", n)
+		assert.Equal(t, want, captured.String())
+	})
+}
+
+func TestSpinnerDoesNotCorruptCapturedErrorLog(t *testing.T) {
+	oldErr, oldTerm := CliErr, outputIsTerminal
+	defer func() { CliErr, outputIsTerminal = oldErr, oldTerm }()
+
+	var captured bytes.Buffer
+	CliErr = &captured
+	outputIsTerminal = false
+
+	const frame = " Uploading..."
+	DeleteAndPrint(0, "/"+frame)
+	PrintErr("boom: connection reset")
+	DeleteAndPrint(len("boom: connection reset"), "")
+
+	out := captured.String()
+	assert.NotContains(t, out, "\b", "no backspaces should reach a captured log")
+	assert.Contains(t, out, "boom: connection reset", "the error text must survive in the log")
+}
 
 func TestEphemeralPrinter(t *testing.T) {
 	t.Run("DisplayPutsCursorAtLineStart", func(t *testing.T) {

@@ -23,6 +23,7 @@ import (
 	"sync/atomic"
 
 	"github.com/fatih/color"
+	"github.com/mattn/go-isatty"
 	"github.com/vbauerster/mpb/v8/cwriter"
 
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
@@ -33,6 +34,8 @@ var CliOut = colorOutput
 var CliErr = color.Error
 
 var outputClosed uint64
+
+var outputIsTerminal bool
 
 var InStream io.ReadCloser = os.Stdin
 var OutStream io.WriteCloser = os.Stdout
@@ -52,6 +55,8 @@ func SetIOStreams(inStream io.ReadCloser, outStream io.WriteCloser) {
 
 func InitIO() (restoreIO func()) {
 	stdOut, stdErr := os.Stdout, os.Stderr
+
+	outputIsTerminal = isatty.IsTerminal(stdErr.Fd()) || isatty.IsCygwinTerminal(stdErr.Fd())
 
 	f, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
 
@@ -145,6 +150,10 @@ func PrintErrf(format string, a ...interface{}) {
 func DeleteAndPrint(prevMsgLen int, msg string) int {
 	if outputIsClosed() {
 		return 0
+	}
+
+	if !outputIsTerminal {
+		return len(msg)
 	}
 
 	msgLen := len(msg)
