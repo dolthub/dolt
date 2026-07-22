@@ -58,6 +58,8 @@ type prollyTableWriter struct {
 	aiSet      bool // True when an INSERT/UPDATE affects the auto increment value
 
 	errEncountered error
+
+	virtualExpressions []sql.Expression
 }
 
 var _ dsess.TableWriter = &prollyTableWriter{}
@@ -376,6 +378,7 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, tbl *doltdb.Table) error {
 	w.primary = newPrimary
 	w.secondary = newSecondaries
 	w.aiCol = schState.AutoIncCol
+	w.virtualExpressions = schState.VirtualExpressions
 
 	return nil
 }

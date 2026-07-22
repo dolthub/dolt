@@ -78,6 +78,13 @@ func newWriterSchema(ctx *sql.Context, t *doltdb.Table, tableName string, dbName
 
 	schState.AutoIncCol = autoIncrementColFromSchema(schState.DoltSchema)
 
+	// Resolved once for the whole table: rows read directly from stored data omit virtual columns
+	// entirely, so any write path that needs a virtual column's value evaluates these to fill it in.
+	schState.VirtualExpressions, err = resolveVirtualExpressions(ctx, tableName, schState.DoltSchema)
+	if err != nil {
+		return nil, err
+	}
+
 	keyMap, valMap := ordinalMappingsFromSchema(schState.PkSchema.Schema, schState.DoltSchema)
 	schState.PriIndex = dsess.IndexState{KeyMapping: keyMap, ValMapping: valMap}
 
@@ -90,21 +97,20 @@ func newWriterSchema(ctx *sql.Context, t *doltdb.Table, tableName string, dbName
 		// persisted in the source table, so a writer must recompute its value from the row
 		// rather than trust a pre-populated slot.
 		var keyVirtualExprs []sql.Expression
-		for i, tag := range def.AllTags() {
-			// PK columns can never be virtual generated columns (MySQL requires STORED).
-			if _, isPk := schState.DoltSchema.GetPKCols().TagToIdx[tag]; isPk {
-				continue
-			}
-			col, ok := schState.DoltSchema.GetNonPKCols().TagToCol[tag]
-			if ok && col.Virtual {
+		if schState.VirtualExpressions != nil {
+			for i, tag := range def.AllTags() {
+				// PK columns can never be virtual generated columns (MySQL requires STORED).
+				if _, isPk := schState.DoltSchema.GetPKCols().TagToIdx[tag]; isPk {
+					continue
+				}
+				pos, ok := schState.DoltSchema.GetAllCols().TagToIdx[tag]
+				if !ok || schState.VirtualExpressions[pos] == nil {
+					continue
+				}
 				if keyVirtualExprs == nil {
 					keyVirtualExprs = make([]sql.Expression, len(def.AllTags()))
 				}
-				expr, err := expranalysis.ResolveDefaultExpression(ctx, tableName, schState.DoltSchema, col)
-				if err != nil {
-					return nil, fmt.Errorf("failed to resolve virtual column expression for index %s: %w", def.Name(), err)
-				}
-				keyVirtualExprs[i] = expr
+				keyVirtualExprs[i] = schState.VirtualExpressions[pos]
 			}
 		}
 
@@ -132,6 +138,32 @@ func newWriterSchema(ctx *sql.Context, t *doltdb.Table, tableName string, dbName
 		schState.SecIndexes = append(schState.SecIndexes, idxState)
 	}
 	return schState, nil
+}
+
+// resolveVirtualExpressions returns a table's resolved virtual column expressions indexed by column
+// position in the full schema, or nil when the table has no virtual columns.
+func resolveVirtualExpressions(ctx *sql.Context, tableName string, sch schema.Schema) ([]sql.Expression, error) {
+	if !schema.IsVirtual(sch) {
+		return nil, nil
+	}
+	resolved, err := expranalysis.ResolveSchema(ctx, tableName, sch)
+	if err != nil {
+		return nil, err
+	}
+
+	cols := sch.GetAllCols().GetColumns()
+	virtualExpressions := make([]sql.Expression, len(cols))
+	for i, col := range cols {
+		if !col.Virtual {
+			continue
+		}
+		colIdx := resolved.IndexOfColName(col.Name)
+		if colIdx < 0 {
+			return nil, fmt.Errorf("unable to find virtual column %s in resolved schema", col.Name)
+		}
+		virtualExpressions[i] = resolved[colIdx].Generated
+	}
+	return virtualExpressions, nil
 }
 
 func ordinalMappingsFromSchema(from sql.Schema, to schema.Schema) (km, vm val.OrdinalMapping) {

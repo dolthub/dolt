@@ -79,6 +79,9 @@ type WriterState struct {
 	PkValDesc  *val.TupleDesc
 	SecIndexes []IndexState
 	PriIndex   IndexState
+	// VirtualExpressions holds the table's resolved virtual column expressions, indexed by column
+	// position in the full schema.
+	VirtualExpressions []sql.Expression
 }
 
 // IndexState caches objects required for writing specific indexes.
