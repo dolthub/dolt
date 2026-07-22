@@ -178,7 +178,6 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 
 	// TODO: need schema name in ai tracker
 	w.aiSet = true
-	w.aiTracker.Next(ctx, w.tblName.Name, sqlRow)
 
 	return nil
 }
