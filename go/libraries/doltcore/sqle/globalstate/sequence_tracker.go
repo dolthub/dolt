@@ -16,12 +16,12 @@ package globalstate
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate/sequences"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate/sequences"
 )
 
 // SequenceTrackerBase is the non-generic base interface for SequenceTracker
