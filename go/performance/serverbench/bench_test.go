@@ -146,9 +146,7 @@ user:
  name: "root"
  password: ""
 
-databases:
- - name: "%s"
-   path: "%s"
+data_dir: "%s"
 
 listener:
  host: localhost
@@ -156,7 +154,7 @@ listener:
  max_connections: 128
  read_timeout_millis: 28800000
  write_timeout_millis: 28800000
-`, database, dbDir, port))
+`, tmp, port))
 
 	cfg, err = servercfg.NewYamlConfig(yaml)
 	if err != nil {
@@ -184,7 +182,7 @@ func executeServerQueries(ctx context.Context, b *testing.B, dEnv *env.DoltEnv, 
 	//b.Logf("Starting server with Config %v\n", srv.ConfigInfo(cfg))
 	eg.Go(func() (err error) {
 		startErr, closeErr := srv.Serve(ctx, &srv.Config{
-			Version:      "",
+			Version:      "0.0.0",
 			ServerConfig: cfg,
 			Controller:   sc,
 			DoltEnv:      dEnv,
@@ -222,6 +220,7 @@ func executeQuery(cfg servercfg.ServerConfig, q query) error {
 	if err != nil {
 		return err
 	}
+	defer conn.Close()
 
 	rows, err := conn.Query(string(q))
 	if err != nil {
