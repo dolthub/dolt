@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 const CommitVerificationFailedPrefix = "commit verification failed:"
@@ -73,13 +74,15 @@ func getCommitRunTestGroups() []string {
 	return nil
 }
 
-// GetCommitStaged returns a new pending commit with the roots and commit properties given.
+// GetCommitStaged returns a new pending commit with the roots and commit properties given. When props.Amend is
+// set, |amendedCommit| must be the address of the commit being amended.
 func GetCommitStaged(
 	ctx *sql.Context,
 	tableResolver doltdb.TableResolver,
 	roots doltdb.Roots,
 	ws *doltdb.WorkingSet,
 	mergeParents []*doltdb.Commit,
+	amendedCommit hash.Hash,
 	db *doltdb.DoltDB,
 	props CommitStagedProps,
 ) (*doltdb.PendingCommit, error) {
@@ -187,7 +190,7 @@ func GetCommitStaged(
 		return nil, err
 	}
 
-	return db.NewPendingCommit(ctx, roots, mergeParents, props.Amend, commitMeta)
+	return db.NewPendingCommit(ctx, roots, mergeParents, amendedCommit, commitMeta)
 }
 
 // runCommitVerification runs the commit verification tests for the given test groups.

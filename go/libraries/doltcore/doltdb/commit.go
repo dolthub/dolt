@@ -294,14 +294,14 @@ type PendingCommit struct {
 // commit, once written.
 // |headRef| is the ref of the HEAD the commit will update
 // |mergeParentCommits| are any merge parents for this commit
-// |amend| is a flag which indicates that additional parents should not be added to the provided |mergeParentCommits|.
+// |amendedCommit|, when not empty, is the address of an existing commit that this commit amends and replaces.
 // |cm| is the metadata for the commit
 // The current branch head will be automatically filled in as the first parent at commit time.
 func (ddb *DoltDB) NewPendingCommit(
 	ctx context.Context,
 	roots Roots,
 	mergeParentCommits []*Commit,
-	amend bool,
+	amendedCommit hash.Hash,
 	cm *datas.CommitMeta,
 ) (*PendingCommit, error) {
 	newstaged, val, err := ddb.writeRootValue(ctx, roots.Staged)
@@ -315,7 +315,7 @@ func (ddb *DoltDB) NewPendingCommit(
 		parents = append(parents, pc.dCommit.Addr())
 	}
 
-	commitOpts := datas.CommitOptions{Parents: parents, Meta: cm, Amend: amend}
+	commitOpts := datas.CommitOptions{Parents: parents, Meta: cm, AmendedCommit: amendedCommit}
 	return &PendingCommit{
 		Roots:         roots,
 		Val:           val,
