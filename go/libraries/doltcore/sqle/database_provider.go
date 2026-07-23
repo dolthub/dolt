@@ -1845,13 +1845,17 @@ func isBranch(ctx context.Context, db dsess.SqlDatabase, branchName string) (str
 
 func isLocalBranch(ctx context.Context, ddbs []*doltdb.DoltDB, branchName string) (string, bool, error) {
 	for _, ddb := range ddbs {
-		brName, branchExists, err := ddb.HasBranch(ctx, branchName)
+		branches, err := ddb.GetBranches(ctx)
 		if err != nil {
 			return "", false, err
 		}
 
-		if branchExists {
-			return brName, true, nil
+		match, found, err := doltdb.MatchRefInsensitive(branches, branchName)
+		if err != nil {
+			return "", false, err
+		}
+		if found {
+			return match.GetPath(), true, nil
 		}
 	}
 

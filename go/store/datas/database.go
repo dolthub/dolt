@@ -147,7 +147,7 @@ type Database interface {
 	// error will be non-nil.
 	// The workingSetPath is the path to the working set that should be used for updating the working set. If one
 	// is not provided, no working set update will be performed.
-	SetHead(ctx context.Context, ds Dataset, newHeadAddr hash.Hash, workingSetPath string) (Dataset, error)
+	SetHead(ctx context.Context, ds Dataset, newHeadAddr hash.Hash, workingSetPath string, opts ...SetHeadOption) (Dataset, error)
 
 	// FastForward sets the head of |ds| to the commit at |newHeadAddr| if it is a descendant of
 	// the current head. If the update cannot be performed, for example because another writer has

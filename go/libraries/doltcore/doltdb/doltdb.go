@@ -15,11 +15,13 @@
 package doltdb
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -1486,40 +1488,53 @@ func visitDatasets(ctx context.Context, refTypeFilter map[ref.RefType]struct{}, 
 	})
 }
 
+var ErrAmbiguousRefName = errors.New("ref name is ambiguous because refs differ only by case, rename or delete one to disambiguate")
+
 // GetRefByNameInsensitive searches this Dolt database's branch, tag, and head refs for a case-insensitive
-// match of the specified ref name. If a matching DoltRef is found, it is returned; otherwise an error is returned.
+// match of the specified ref name. If exactly one ref of a kind matches, it is returned. If more than one
+// ref differs only by case, ErrAmbiguousRefName is returned rather than an arbitrary match.
 func (ddb *DoltDB) GetRefByNameInsensitive(ctx context.Context, refName string) (ref.DoltRef, error) {
-	branchRefs, err := ddb.GetBranches(ctx)
-	if err != nil {
-		return nil, err
-	}
-	for _, branchRef := range branchRefs {
-		if strings.EqualFold(branchRef.GetPath(), refName) {
-			return branchRef, nil
+	for _, refs := range []func(context.Context) ([]ref.DoltRef, error){ddb.GetBranches, ddb.GetHeadRefs, ddb.GetTags} {
+		candidates, err := refs(ctx)
+		if err != nil {
+			return nil, err
 		}
-	}
-
-	headRefs, err := ddb.GetHeadRefs(ctx)
-	if err != nil {
-		return nil, err
-	}
-	for _, headRef := range headRefs {
-		if strings.EqualFold(headRef.GetPath(), refName) {
-			return headRef, nil
+		match, found, err := MatchRefInsensitive(candidates, refName)
+		if err != nil {
+			return nil, err
 		}
-	}
-
-	tagRefs, err := ddb.GetTags(ctx)
-	if err != nil {
-		return nil, err
-	}
-	for _, tagRef := range tagRefs {
-		if strings.EqualFold(tagRef.GetPath(), refName) {
-			return tagRef, nil
+		if found {
+			return match, nil
 		}
 	}
 
 	return nil, ref.ErrInvalidRefSpec
+}
+
+// MatchRefInsensitive returns the one ref whose path matches name ignoring case, reporting whether any
+// matched. Refs that differ only by case cannot be told apart, so matching more than one is an error
+// naming the candidates.
+func MatchRefInsensitive(refs []ref.DoltRef, name string) (ref.DoltRef, bool, error) {
+	var matches []ref.DoltRef
+	for _, r := range refs {
+		if strings.EqualFold(r.GetPath(), name) {
+			matches = append(matches, r)
+		}
+	}
+
+	switch len(matches) {
+	case 0:
+		return nil, false, nil
+	case 1:
+		return matches[0], true, nil
+	}
+
+	names := make([]string, len(matches))
+	for i, m := range matches {
+		names[i] = m.GetPath()
+	}
+	slices.Sort(names)
+	return nil, false, fmt.Errorf("%w: %q could be %s", ErrAmbiguousRefName, name, strings.Join(names, ", "))
 }
 
 func (ddb *DoltDB) GetRefsOfType(ctx context.Context, refTypeFilter map[ref.RefType]struct{}) ([]ref.DoltRef, error) {
@@ -1540,9 +1555,36 @@ func (ddb *DoltDB) GetRefsOfTypeByNomsRoot(ctx context.Context, refTypeFilter ma
 	return refs, err
 }
 
+var ErrCaseInsensitiveConflict = errors.New("branch name conflicts with an existing branch differing only in case")
+
+// FailOnCaseConflict returns a datas.SetHeadOption that rejects the head write with ErrCaseInsensitiveConflict
+// when the store already holds a dataset whose ID differs from the target only by case. IDs listed in
+// |except| are ignored so a rename can move a branch onto a case variant of its own name. The check runs
+// inside the atomic root update, so a case variant added by a concurrent writer is seen on retry.
+func FailOnCaseConflict(except ...string) datas.SetHeadOption {
+	skip := make([][]byte, len(except))
+	for i, e := range except {
+		skip[i] = []byte(e)
+	}
+	return datas.WithPreUpdateCheck(func(ctx context.Context, datasets prolly.AddressMap, targetID string) error {
+		target := []byte(targetID)
+		return datasets.IterAllBytes(ctx, func(name []byte, _ hash.Hash) error {
+			if bytes.Equal(name, target) || !bytes.EqualFold(name, target) {
+				return nil
+			}
+			for _, s := range skip {
+				if bytes.Equal(s, name) {
+					return nil
+				}
+			}
+			return ErrCaseInsensitiveConflict
+		})
+	})
+}
+
 // NewBranchAtCommit creates a new branch with HEAD at the commit given. Branch names must pass IsValidUserBranchName.
 // Silently overwrites any existing branch with the same name given, if one exists.
-func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef, commit *Commit, replicationStatus *ReplicationStatusController) error {
+func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef, commit *Commit, replicationStatus *ReplicationStatusController, opts ...datas.SetHeadOption) error {
 	if !IsValidBranchRef(branchRef) {
 		panic(fmt.Sprintf("invalid branch name %s, use IsValidUserBranchName check", branchRef.String()))
 	}
@@ -1557,7 +1599,7 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef,
 		return err
 	}
 
-	_, err = ddb.db.SetHead(ctx, ds, addr, "")
+	_, err = ddb.db.SetHead(ctx, ds, addr, "", opts...)
 	if err != nil {
 		return err
 	}

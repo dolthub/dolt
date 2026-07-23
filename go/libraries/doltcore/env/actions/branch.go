@@ -25,10 +25,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
 var ErrAlreadyExists = errors.New("already exists")
+var ErrBranchExists = errorKinds.NewKind("fatal: A branch named '%s' already exists.")
 var ErrCOBranchDelete = errorKinds.NewKind("Cannot delete checked out branch '%s'")
 var ErrUnmergedBranch = errorKinds.NewKind("branch '%s' is not fully merged")
 var ErrWorkingSetsOnBothBranches = errors.New("checkout would overwrite uncommitted changes on target branch")
@@ -37,9 +39,21 @@ func RenameBranch[C doltdb.Context](ctx C, dbData env.DbData[C], oldBranch, newB
 	oldRef := ref.NewBranchRef(oldBranch)
 	newRef := ref.NewBranchRef(newBranch)
 
-	// TODO: This function smears the branch updates across multiple commits of the datas.Database.
+	// Falling through would copy the branch onto itself and then delete the source.
+	if oldBranch == newBranch {
+		hasOld, err := dbData.Ddb.HasRef(ctx, oldRef)
+		if err != nil {
+			return err
+		}
+		if !hasOld {
+			return doltdb.ErrBranchNotFound
+		}
+		return nil
+	}
 
-	err := CopyBranchOnDB(ctx, dbData.Ddb, oldBranch, newBranch, force, rsc)
+	// TODO: This function smears the branch updates across multiple commits of the datas.Database.
+	// The source branch is excepted so a rename onto a case variant of its own name is allowed.
+	err := CopyBranchOnDB(ctx, dbData.Ddb, oldBranch, newBranch, force, rsc, doltdb.FailOnCaseConflict(oldRef.String()))
 	if err != nil {
 		return err
 	}
@@ -69,10 +83,10 @@ func RenameBranch[C doltdb.Context](ctx C, dbData env.DbData[C], oldBranch, newB
 }
 
 func CopyBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
-	return CopyBranchOnDB(ctx, dEnv.DoltDB(ctx), oldBranch, newBranch, force, nil)
+	return CopyBranchOnDB(ctx, dEnv.DoltDB(ctx), oldBranch, newBranch, force, nil, doltdb.FailOnCaseConflict())
 }
 
-func CopyBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, oldBranch, newBranch string, force bool, rsc *doltdb.ReplicationStatusController) error {
+func CopyBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, oldBranch, newBranch string, force bool, rsc *doltdb.ReplicationStatusController, opts ...datas.SetHeadOption) error {
 	oldRef := ref.NewBranchRef(oldBranch)
 	newRef := ref.NewBranchRef(newBranch)
 
@@ -106,7 +120,11 @@ func CopyBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, oldBranch, newBranc
 	if !ok {
 		return doltdb.ErrGhostCommitEncountered
 	}
-	return ddb.NewBranchAtCommit(ctx, newRef, commit, rsc)
+	err = ddb.NewBranchAtCommit(ctx, newRef, commit, rsc, opts...)
+	if errors.Is(err, doltdb.ErrCaseInsensitiveConflict) {
+		return ErrAlreadyExists
+	}
+	return err
 }
 
 type DeleteOptions struct {
@@ -299,8 +317,8 @@ func CreateBranchWithStartPt[C doltdb.Context](ctx C, dbData env.DbData[C], newB
 	err := createBranch(ctx, dbData, newBranch, startPt, force, rsc)
 
 	if err != nil {
-		if err == ErrAlreadyExists {
-			return fmt.Errorf("fatal: A branch named '%s' already exists.", newBranch)
+		if errors.Is(err, ErrAlreadyExists) {
+			return ErrBranchExists.New(newBranch)
 		} else if err == doltdb.ErrInvBranchName {
 			return fmt.Errorf("fatal: '%s' is an invalid branch name.", newBranch)
 		} else if err == doltdb.ErrInvHash || doltdb.IsNotACommit(err) {
@@ -347,8 +365,11 @@ func CreateBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, newBranch, starti
 		return doltdb.ErrGhostCommitEncountered
 	}
 
-	err = ddb.NewBranchAtCommit(ctx, branchRef, cm, rsc)
+	err = ddb.NewBranchAtCommit(ctx, branchRef, cm, rsc, doltdb.FailOnCaseConflict())
 	if err != nil {
+		if errors.Is(err, doltdb.ErrCaseInsensitiveConflict) {
+			return ErrAlreadyExists
+		}
 		return err
 	}
 

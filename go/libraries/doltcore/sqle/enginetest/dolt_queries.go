@@ -4309,7 +4309,7 @@ var DoltBranchScripts = []queries.ScriptTest{
 			{
 				// Renaming to an existing name fails without the force flag
 				Query:          "CALL DOLT_BRANCH('-m', 'myNewBranch1', 'myNewBranch2')",
-				ExpectedErrStr: "already exists",
+				ExpectedErrStr: "fatal: A branch named 'myNewBranch2' already exists.",
 			},
 			{
 				Query:    "CALL DOLT_BRANCH('-mf', 'myNewBranch1', 'myNewBranch2')",
@@ -4497,6 +4497,135 @@ var DoltBranchScripts = []queries.ScriptTest{
 			{
 				Query:    "select * from `mydb/b1`.t join `mydb/main`.t",
 				Expected: []sql.Row{{1, 1}, {1, 2}},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11270
+		Name: "creating a branch that differs from an existing one only by case is rejected",
+		SetUpScript: []string{
+			"create table t (a int primary key);",
+			"insert into t values (1);",
+			"call dolt_commit('-Am', 'init');",
+			"call dolt_branch('br');",
+			"call dolt_branch('feature');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_branch('BR');",
+				ExpectedErrStr: "fatal: A branch named 'BR' already exists.",
+			},
+			{
+				Query:          "call dolt_branch('-f', 'BR');",
+				ExpectedErrStr: "fatal: A branch named 'BR' already exists.",
+			},
+			{
+				Query:          "call dolt_checkout('-b', 'BR');",
+				ExpectedErrStr: "fatal: A branch named 'BR' already exists.",
+			},
+			{
+				Query:          "call dolt_branch('-c', 'br', 'BR');",
+				ExpectedErrStr: "fatal: A branch named 'BR' already exists.",
+			},
+			{
+				Query:          "call dolt_branch('-m', 'feature', 'BR');",
+				ExpectedErrStr: "fatal: A branch named 'BR' already exists.",
+			},
+			{
+				Query:          "call dolt_branch('-cf', 'feature', 'BR');",
+				ExpectedErrStr: "fatal: A branch named 'BR' already exists.",
+			},
+			{
+				Query:          "call dolt_branch('-mf', 'feature', 'BR');",
+				ExpectedErrStr: "fatal: A branch named 'BR' already exists.",
+			},
+			{
+				Query:          "call dolt_branch('br');",
+				ExpectedErrStr: "fatal: A branch named 'br' already exists.",
+			},
+			{
+				Query:    "select count(*) from dolt_branches where name = 'br' or name = 'BR';",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11270
+		Name: "collision guard does not block distinct names, same-case reset, or case-only rename",
+		SetUpScript: []string{
+			"create table t (a int primary key);",
+			"insert into t values (1);",
+			"call dolt_commit('-Am', 'init');",
+			"call dolt_branch('br');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_branch('feature');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "call dolt_branch('-f', 'br');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "call dolt_branch('-c', 'br', 'brcopy');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "call dolt_branch('-m', 'br', 'BR');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select count(*) from dolt_branches where name = 'br';",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select count(*) from dolt_branches where name = 'BR';",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11270
+		Name: "renaming a branch to its own name preserves the branch and its data",
+		SetUpScript: []string{
+			"create table t (a int primary key);",
+			"insert into t values (1);",
+			"call dolt_commit('-Am', 'init');",
+			"call dolt_branch('feature');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_branch('-m', 'feature', 'feature');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "call dolt_branch('-mf', 'feature', 'feature');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "call dolt_branch('-m', 'nosuch', 'nosuch');",
+				ExpectedErrStr: "branch not found",
+			},
+			{
+				Query:          "call dolt_branch('-mf', 'nosuch', 'nosuch');",
+				ExpectedErrStr: "branch not found",
+			},
+			{
+				Query:    "call dolt_checkout('feature');",
+				Expected: []sql.Row{{0, "Switched to branch 'feature'"}},
+			},
+			{
+				Query:    "call dolt_branch('-m', 'feature', 'feature');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select count(*) from dolt_branches where name = 'feature';",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "select a from t;",
+				Expected: []sql.Row{{1}},
 			},
 		},
 	},
@@ -6745,6 +6874,40 @@ var DoltTagTestScripts = []queries.ScriptTest{
 			{
 				Query:          "call dolt_checkout('v1');",
 				ExpectedErrStr: "dolt does not support a detached head state. To create a branch at this tag, run: \n\tCALL DOLT_CHECKOUT('v1', '-b', <new_branch_name>)",
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11270
+		Name: "dolt-tag: a branch and a tag may share a name",
+		SetUpScript: []string{
+			"CREATE TABLE test(pk int primary key);",
+			"CALL DOLT_COMMIT('-Am','created table test')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_BRANCH('shared')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "CALL DOLT_TAG('shared')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "CALL DOLT_TAG('fromtag')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "CALL DOLT_BRANCH('fromtag')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT count(*) FROM dolt_branches WHERE name IN ('shared', 'fromtag')",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "SELECT count(*) FROM dolt_tags WHERE tag_name IN ('shared', 'fromtag')",
+				Expected: []sql.Row{{2}},
 			},
 		},
 	},
