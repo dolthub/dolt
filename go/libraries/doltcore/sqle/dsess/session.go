@@ -773,11 +773,20 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, dbName string, branchSt
 		}
 	}
 
+	var amendedCommit hash.Hash
+	if props.Amend {
+		var err error
+		amendedCommit, err = headCommit.HashOf()
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	tableResolver, err := GetTableResolver(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}
-	pendingCommit, err := actions.GetCommitStaged(ctx, tableResolver, roots, branchState.WorkingSet(), mergeParentCommits, branchState.dbData.Ddb, props)
+	pendingCommit, err := actions.GetCommitStaged(ctx, tableResolver, roots, branchState.WorkingSet(), mergeParentCommits, amendedCommit, branchState.dbData.Ddb, props)
 	if err != nil {
 		// Special case for nothing staged, which is not an error
 		if _, ok := err.(actions.NothingStaged); !ok {

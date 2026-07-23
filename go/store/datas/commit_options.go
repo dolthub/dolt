@@ -41,10 +41,13 @@ type CommitOptions struct {
 	// creating. If it is empty, the existing dataset head will be the only
 	// parent.
 	Parents []hash.Hash
-	// Amend flag indicates that the commit being build it to amend an existing commit. Generally we add the branch HEAD
-	// as a parent, in addition to the parent set provided here. When we amend, we want to strictly use the commits
-	// provided in |Parents|, and no others.
-	Amend bool
+	// AmendedCommit, when not empty, is the address of an existing commit that the commit being built amends and
+	// replaces. The branch HEAD is then not added as a parent and only the commits provided in |Parents| are
+	// used. The commit is rejected with [ErrMergeNeeded] unless this address is still the dataset head.
+	AmendedCommit hash.Hash
+	// Force skips the check that the dataset head is among the new commit's parents. It is intended for
+	// administrative tooling and must not be combined with AmendedCommit.
+	Force bool
 	// Signer, when non-nil, is called to sign the commit payload. DBName, HeadHash, and StagedHash
 	// must also be set when Signer is provided.
 	Signer CommitSigner

@@ -200,6 +200,19 @@ func (m MergeState) IsRevert() bool {
 	return m.isRevert
 }
 
+// OperationName returns the user facing name of the operation this merge state belongs to, one of "merge",
+// "cherry-pick", or "revert".
+func (m MergeState) OperationName() string {
+	switch {
+	case m.isCherryPick:
+		return "cherry-pick"
+	case m.isRevert:
+		return "revert"
+	default:
+		return "merge"
+	}
+}
+
 func (m MergeState) PreMergeWorkingRoot() RootValue {
 	return m.preMergeWorking
 }

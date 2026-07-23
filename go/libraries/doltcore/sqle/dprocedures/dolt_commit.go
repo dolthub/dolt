@@ -111,6 +111,15 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 
 	msg, msgOk := apr.GetValue(cli.MessageArg)
 	amend := apr.Contains(cli.AmendFlag)
+	if amend {
+		ws, err := dSess.WorkingSet(ctx, dbName)
+		if err != nil {
+			return "", false, err
+		}
+		if ws.MergeActive() {
+			return "", false, fmt.Errorf("you are in the middle of a %s -- cannot amend", ws.MergeState().OperationName())
+		}
+	}
 	if !msgOk {
 		if amend {
 			commit, err := dSess.GetHeadCommit(ctx, dbName)

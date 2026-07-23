@@ -2108,6 +2108,170 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			},
 		},
 	},
+	// See https://github.com/dolthub/dolt/issues/9072
+	{
+		Name: "amend commit in transaction fails when another client merges into the branch",
+		SetUpScript: []string{
+			"create table test (pk int primary key, val varchar(30))",
+			"call dolt_add('.')",
+			"insert into test values (1, 'initial'), (2, 'second')",
+			"call dolt_commit('-a', '-m', 'initial commit')",
+			"call dolt_checkout('-b', 'side')",
+			"insert into test values (100, 'side work')",
+			"call dolt_commit('-a', '-m', 'side work')",
+			"call dolt_checkout('main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ update test set val = 'stale change' where pk = 1",
+				Expected: []sql.Row{{queries.NewUpdateResult(1, 1)}},
+			},
+			{
+				Query:    "/* client b */ call dolt_merge('--no-ff', 'side')",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query: "/* client a */ select hashof('HEAD') = hashof('main')",
+				// The transaction still sees its snapshot head even though the branch ref has moved
+				Expected: []sql.Row{{false}},
+			},
+			{
+				Query:       "/* client a */ call dolt_commit('-a', '--amend', '-m', 'stale amend')",
+				ExpectedErr: sql.ErrLockDeadlock,
+			},
+			{
+				Query:    "/* client a */ rollback",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "/* client a */ select message from dolt_log limit 1",
+				// The merge commit survives as the branch head
+				Expected: []sql.Row{{"Merge branch 'side' into main"}},
+			},
+			{
+				Query:    "/* client a */ select count(*) from dolt_log where message = 'stale amend'",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client a */ select val from test where pk = 1",
+				Expected: []sql.Row{{"initial"}},
+			},
+			{
+				Query:    "/* client a */ select val from test where pk = 100",
+				Expected: []sql.Row{{"side work"}},
+			},
+		},
+	},
+	{
+		Name: "amend commit in transaction fails when another client moves the branch head",
+		SetUpScript: []string{
+			"create table test (pk int primary key, val varchar(30))",
+			"call dolt_add('.')",
+			"insert into test values (1, 'initial'), (2, 'second')",
+			"call dolt_commit('-a', '-m', 'initial commit')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			// Another client moves the head with a plain commit
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ update test set val = 'stale change' where pk = 1",
+				Expected: []sql.Row{{queries.NewUpdateResult(1, 1)}},
+			},
+			{
+				Query:    "/* client b */ insert into test values (3, 'concurrent row')",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ call dolt_commit('-a', '-m', 'concurrent commit')",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				Query: "/* client a */ select hashof('HEAD') = hashof('main')",
+				// The transaction still sees its snapshot head even though the branch ref has moved
+				Expected: []sql.Row{{false}},
+			},
+			{
+				Query:       "/* client a */ call dolt_commit('-a', '--amend', '-m', 'stale amend')",
+				ExpectedErr: sql.ErrLockDeadlock,
+			},
+			// Another client moves the head with a commit that leaves the root data identical
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ update test set val = 'stale change' where pk = 1",
+				Expected: []sql.Row{{queries.NewUpdateResult(1, 1)}},
+			},
+			{
+				Query:    "/* client b */ call dolt_commit('--allow-empty', '-m', 'empty head move')",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				Query:       "/* client a */ call dolt_commit('-a', '--amend', '-m', 'stale amend')",
+				ExpectedErr: sql.ErrLockDeadlock,
+			},
+			// Another client amends the head first, touching only rows this transaction never changed
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ update test set val = 'stale change' where pk = 1",
+				Expected: []sql.Row{{queries.NewUpdateResult(1, 1)}},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ update test set val = 'concurrent amend' where pk = 2",
+				Expected: []sql.Row{{queries.NewUpdateResult(1, 1)}},
+			},
+			{
+				Query: "/* client b */ call dolt_commit('-a', '--amend', '-m', 'concurrent amend')",
+				// This amend is legal because the branch head has not moved since client b began
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				Query:       "/* client a */ call dolt_commit('-a', '--amend', '-m', 'stale amend')",
+				ExpectedErr: sql.ErrLockDeadlock,
+			},
+			{
+				Query:    "/* client a */ rollback",
+				Expected: []sql.Row{},
+			},
+			// Every rejected amend left the branch history untouched
+			{
+				Query:    "/* client a */ select message from dolt_log limit 1",
+				Expected: []sql.Row{{"concurrent amend"}},
+			},
+			{
+				Query:    "/* client a */ select count(*) from dolt_log where message = 'stale amend'",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query: "/* client a */ select count(*) from dolt_log where message = 'empty head move'",
+				// Client b's legal amend replaced the empty commit
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client a */ select val from test where pk = 1",
+				Expected: []sql.Row{{"initial"}},
+			},
+			{
+				Query:    "/* client a */ select val from test where pk = 2",
+				Expected: []sql.Row{{"concurrent amend"}},
+			},
+		},
+	},
 }
 
 var DoltConstraintViolationTransactionTests = []queries.TransactionTest{

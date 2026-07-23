@@ -499,17 +499,28 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 	return err
 }
 
+// BuildNewCommit creates a new commit for the dataset with the value and options given. An ordinary commit must
+// have the current dataset head among its parents. An amend commit must name the current dataset head in
+// [CommitOptions.AmendedCommit]. A force commit skips head validation.
 func (db *database) BuildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (*Commit, error) {
-	if !opts.Amend {
-		headAddr, ok := ds.MaybeHeadAddr()
-		if ok {
-			if len(opts.Parents) == 0 {
-				opts.Parents = []hash.Hash{headAddr}
-			} else {
-				if !hasParentHash(opts, headAddr) {
-					return nil, ErrMergeNeeded
-				}
-			}
+	if opts.Force && !opts.AmendedCommit.IsEmpty() {
+		return nil, errors.New("datas: the Force and AmendedCommit commit options are mutually exclusive")
+	}
+	headAddr, hasHead := ds.MaybeHeadAddr()
+	if !opts.AmendedCommit.IsEmpty() {
+		if !hasHead {
+			return nil, fmt.Errorf("cannot amend head of dataset '%s': dataset has no head: %w",
+				ds.ID(), ErrMergeNeeded)
+		}
+		if headAddr != opts.AmendedCommit {
+			return nil, fmt.Errorf("cannot amend head of dataset '%s': is at %s but expected %s: %w",
+				ds.ID(), headAddr, opts.AmendedCommit, ErrMergeNeeded)
+		}
+	} else if hasHead && !opts.Force {
+		if len(opts.Parents) == 0 {
+			opts.Parents = []hash.Hash{headAddr}
+		} else if !hasParentHash(opts, headAddr) {
+			return nil, ErrMergeNeeded
 		}
 	}
 
@@ -733,7 +744,7 @@ func (db *database) CommitWithWorkingSet(
 
 	// Prepend the current head hash to the list of parents if one was provided. This is only necessary if parents were
 	// provided because we fill it in automatically in buildNewCommit otherwise.
-	if len(opts.Parents) > 0 && !opts.Amend {
+	if len(opts.Parents) > 0 && opts.AmendedCommit.IsEmpty() && !opts.Force {
 		headHash, ok := commitDS.MaybeHeadAddr()
 		if ok {
 			if !hasParentHash(opts, headHash) {
