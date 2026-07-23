@@ -8262,6 +8262,54 @@ var DoltCommitTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// See https://git-scm.com/docs/git-commit#Documentation/git-commit.txt---amend
+		Name: "CALL DOLT_COMMIT with --amend fails while a merge or cherry-pick is in progress",
+		SetUpScript: []string{
+			"set @@foreign_key_checks = 0",
+			"set @@dolt_allow_commit_conflicts = 1",
+			"create table amend_merge_t (pk int primary key, c int)",
+			"insert into amend_merge_t values (1, 1)",
+			"call dolt_commit('-Am', 'base')",
+			"call dolt_checkout('-b', 'other')",
+			"update amend_merge_t set c = 2 where pk = 1",
+			"call dolt_commit('-am', 'other change')",
+			"call dolt_checkout('main')",
+			"update amend_merge_t set c = 3 where pk = 1",
+			"call dolt_commit('-am', 'main change')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('other')",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:          "call dolt_commit('-a', '--amend', '-m', 'amend during merge')",
+				ExpectedErrStr: "you are in the middle of a merge -- cannot amend",
+			},
+			{
+				Query: "select count(*) from dolt_conflicts_amend_merge_t",
+				// The merge state and its conflicts are untouched by the rejected amend
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "call dolt_merge('--abort')",
+				Expected: []sql.Row{{"", 0, 0, "merge aborted"}},
+			},
+			{
+				Query:    "call dolt_cherry_pick(dolt_hashof('other'))",
+				Expected: []sql.Row{{"", 1, 0, 0}},
+			},
+			{
+				Query:          "call dolt_commit('-a', '--amend', '-m', 'amend during cherry-pick')",
+				ExpectedErrStr: "you are in the middle of a cherry-pick -- cannot amend",
+			},
+			{
+				Query:    "call dolt_cherry_pick('--abort')",
+				Expected: []sql.Row{{"", 0, 0, 0}},
+			},
+		},
+	},
 }
 
 var DoltIndexPrefixScripts = []queries.ScriptTest{
