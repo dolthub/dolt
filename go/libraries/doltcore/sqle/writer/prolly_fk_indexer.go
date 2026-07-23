@@ -98,28 +98,31 @@ func (n *prollyFkIndexer) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.
 	}
 	if primary, ok := n.writer.primary.(prollyIndexWriter); ok {
 		return &prollyFkPkRowIter{
-			rangeIter:  rangeIter,
-			pkToIdxMap: pkToIdxMap,
-			primary:    primary,
-			sqlSch:     n.writer.sqlSch,
-			refCheck:   n.refCheck,
+			rangeIter:          rangeIter,
+			pkToIdxMap:         pkToIdxMap,
+			primary:            primary,
+			sqlSch:             n.writer.sqlSch,
+			refCheck:           n.refCheck,
+			virtualExpressions: n.writer.virtualExpressions,
 		}, nil
 	} else {
 		return &prollyFkKeylessRowIter{
-			rangeIter: rangeIter,
-			primary:   n.writer.primary.(prollyKeylessWriter),
-			sqlSch:    n.writer.sqlSch,
+			rangeIter:          rangeIter,
+			primary:            n.writer.primary.(prollyKeylessWriter),
+			sqlSch:             n.writer.sqlSch,
+			virtualExpressions: n.writer.virtualExpressions,
 		}, nil
 	}
 }
 
 // prollyFkPkRowIter returns rows of the parent table requested by a foreign key reference. For use on tables with primary keys.
 type prollyFkPkRowIter struct {
-	rangeIter  prolly.MapIter
-	pkToIdxMap val.OrdinalMapping
-	primary    prollyIndexWriter
-	sqlSch     sql.Schema
-	refCheck   bool
+	rangeIter          prolly.MapIter
+	pkToIdxMap         val.OrdinalMapping
+	primary            prollyIndexWriter
+	sqlSch             sql.Schema
+	refCheck           bool
+	virtualExpressions []sql.Expression
 }
 
 var _ sql.RowIter = prollyFkPkRowIter{}
@@ -162,7 +165,7 @@ func (iter prollyFkPkRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 			return nil, nil
 		}
 
-		nextRow := make(sql.Row, len(iter.primary.keyMap)+len(iter.primary.valMap))
+		nextRow := make(sql.Row, len(iter.sqlSch))
 		for from := range iter.primary.keyMap {
 			to := iter.primary.keyMap.MapOrdinal(from)
 			if nextRow[to], err = tree.GetField(ctx, iter.primary.keyBld.Desc, from, tblKey, iter.primary.mut.NodeStore()); err != nil {
@@ -175,6 +178,9 @@ func (iter prollyFkPkRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 				return nil, err
 			}
 		}
+		if err = sql.EvalProjections(ctx, iter.virtualExpressions, nextRow); err != nil {
+			return nil, err
+		}
 		return nextRow, nil
 	}
 }
@@ -186,9 +192,10 @@ func (iter prollyFkPkRowIter) Close(ctx *sql.Context) error {
 
 // prollyFkKeylessRowIter returns rows requested by a foreign key reference. For use on keyless tables.
 type prollyFkKeylessRowIter struct {
-	rangeIter prolly.MapIter
-	primary   prollyKeylessWriter
-	sqlSch    sql.Schema
+	rangeIter          prolly.MapIter
+	primary            prollyKeylessWriter
+	sqlSch             sql.Schema
+	virtualExpressions []sql.Expression
 }
 
 var _ sql.RowIter = prollyFkKeylessRowIter{}
@@ -209,7 +216,7 @@ func (iter prollyFkKeylessRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-	nextRow := make(sql.Row, len(iter.primary.valMap))
+	nextRow := make(sql.Row, len(iter.sqlSch))
 	err = iter.primary.mut.Get(ctx, primaryKey, func(tblKey, tblVal val.Tuple) error {
 		for from := range iter.primary.valMap {
 			to := iter.primary.valMap.MapOrdinal(from)
@@ -220,6 +227,9 @@ func (iter prollyFkKeylessRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil
 	})
 	if err != nil {
+		return nil, err
+	}
+	if err = sql.EvalProjections(ctx, iter.virtualExpressions, nextRow); err != nil {
 		return nil, err
 	}
 	return nextRow, nil

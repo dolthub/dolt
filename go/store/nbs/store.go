@@ -444,6 +444,9 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates map[hash.Hash]uint32, appendixOption *ManifestAppendixOption, gcGen *hash.Hash, sources chunkSourceSet) (mi ManifestInfo, gcGenDifferent bool, err error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
+	if nbs.closed {
+		return manifestContents{}, false, errors.New("*NomsBlockStore is closed")
+	}
 
 	err = nbs.startConjoinIfRequired(ctx)
 	if err != nil {
@@ -2156,6 +2159,9 @@ type openChunkSourcesResult struct {
 func (nbs *NomsBlockStore) openChunkSourcesForManifestUpdateAndRebase(ctx context.Context, files map[hash.Hash]uint32, existing chunkSourceSet) (openChunkSourcesResult, error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
+	if nbs.closed {
+		return openChunkSourcesResult{}, errors.New("*NomsBlockStore is closed")
+	}
 	sources, err := nbs.tables.openForAdd(ctx, files, existing, nbs.stats)
 	if err != nil {
 		return openChunkSourcesResult{}, err
@@ -2640,6 +2646,9 @@ func (nbs *NomsBlockStore) TolerantIterateAllChunks(ctx context.Context, cb func
 func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec, mode chunks.GCMode, srcs chunkSourceSet) (err error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
+	if nbs.closed {
+		return errors.New("*NomsBlockStore is closed")
+	}
 
 	// Pre-open chunk sources for the new specs before updating the
 	// manifest. This validates that the table files are on disk and
