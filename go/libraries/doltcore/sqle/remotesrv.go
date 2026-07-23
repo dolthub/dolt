@@ -30,6 +30,13 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
+// replicationDatabaseCreator is implemented by database providers that can create a database as a bare
+// target for inbound replication, skipping any content bootstrapping that a user-facing CREATE DATABASE
+// would perform. See DoltDatabaseProvider.CreateDatabaseForReplication.
+type replicationDatabaseCreator interface {
+	CreateDatabaseForReplication(ctx *sql.Context, name string) error
+}
+
 type remotesrvStore struct {
 	ctxFactory   func(context.Context) (*sql.Context, error)
 	createDBs    bool
@@ -47,7 +54,13 @@ func (s remotesrvStore) Get(ctx context.Context, path, _ string) (remotesrv.Remo
 	db, err := sess.Provider().Database(sqlCtx, path)
 	if err != nil {
 		if s.createDBs && sql.ErrDatabaseNotFound.Is(err) {
-			err = sess.Provider().CreateDatabase(sqlCtx, path)
+			// The database is being created to receive replicated content, so create it as a
+			// bare container: its contents will be replaced by the incoming replicated root.
+			if rdc, ok := sess.Provider().(replicationDatabaseCreator); ok {
+				err = rdc.CreateDatabaseForReplication(sqlCtx, path)
+			} else {
+				err = sess.Provider().CreateDatabase(sqlCtx, path)
+			}
 			if err != nil {
 				return nil, err
 			}

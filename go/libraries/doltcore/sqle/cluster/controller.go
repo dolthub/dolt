@@ -647,6 +647,7 @@ func (c *Controller) setRoleAndEpoch(role string, epoch int, opts roleTransition
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.lgr.Tracef("cluster/trace[controller]: ts=%s setRoleAndEpoch: requested role=%s epoch=%d graceful=%v minCaughtUpStandbys=%d saveConnID=%d; current role=%s epoch=%d", tsNow(), role, epoch, graceful, opts.minCaughtUpStandbys, saveConnID, c.role, c.epoch)
 	if epoch == c.epoch && role == string(c.role) {
 		return roleTransitionResult{changedRole: false, gracefulTransitionResults: nil}, nil
 	}
@@ -675,7 +676,9 @@ func (c *Controller) setRoleAndEpoch(role string, epoch int, opts roleTransition
 		if role == string(RoleStandby) {
 			if graceful {
 				beforeRole, beforeEpoch := c.role, c.epoch
+				gracefulStart := time.Now()
 				gracefulResults, err = c.gracefulTransitionToStandby(saveConnID, opts.minCaughtUpStandbys)
+				c.lgr.Tracef("cluster/trace[controller]: ts=%s setRoleAndEpoch: gracefulTransitionToStandby returned after %v, err=%v", tsNow(), time.Since(gracefulStart), err)
 				if err == nil && (beforeRole != c.role || beforeEpoch != c.epoch) {
 					// The role or epoch moved out from under us while we were unlocked and transitioning to standby.
 					err = fmt.Errorf("error assuming role '%s' at epoch %d: the role configuration changed while we were replicating to our standbys. Please try again", role, epoch)
@@ -724,6 +727,7 @@ func (c *Controller) roleAndEpoch() (Role, int) {
 func (c *Controller) registerCommitHook(hook *commithook) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.lgr.Tracef("cluster/trace[controller]: ts=%s registering commithook for database=%s remote=%s (now %d hooks)", tsNow(), hook.dbname, hook.remotename, len(c.commithooks)+1)
 	c.commithooks = append(c.commithooks, hook)
 }
 
@@ -753,7 +757,7 @@ func (c *Controller) GetClusterStatus() []clusterdb.ReplicaStatus {
 }
 
 func (c *Controller) recordSuccessfulRemoteSrvCommit(name string) {
-	c.lgr.Tracef("standby replica received push and updated database %s", name)
+	c.lgr.Tracef("cluster/trace[remotesrv]: ts=%s standby replica received push and updated database %s", tsNow(), name)
 	c.mu.Lock()
 	commithooks := make([]*commithook, len(c.commithooks))
 	copy(commithooks, c.commithooks)
@@ -877,6 +881,8 @@ type graceTransitionResult struct {
 //
 // called with c.mu held
 func (c *Controller) gracefulTransitionToStandby(saveConnID, minCaughtUpStandbys int) ([]graceTransitionResult, error) {
+	transitionStart := time.Now()
+	c.lgr.Tracef("cluster/trace[controller]: ts=%s gracefulTransitionToStandby: begin; commithooks=%d outstandingDrops=%d budget=%v", tsNow(), len(c.commithooks), len(c.outstandingDropDatabases), waitForHooksToReplicateTimeout)
 	c.setProviderIsStandby(true)
 	c.killRunningQueries(saveConnID)
 
@@ -901,16 +907,24 @@ func (c *Controller) gracefulTransitionToStandby(saveConnID, minCaughtUpStandbys
 	wg.Go(func() {
 		// waitForHooksToReplicate will release the lock while it
 		// blocks, but will return with the lock held.
+		start := time.Now()
 		hookStates, hookErr = c.waitForHooksToReplicate(waitForHooksToReplicateTimeout)
+		c.lgr.Tracef("cluster/trace[controller]: ts=%s gracefulTransitionToStandby: commithook wait finished after %v; allCaughtUp=%v err=%v", tsNow(), time.Since(start), allCaughtUp(hookStates), hookErr)
 	})
 	wg.Go(func() {
+		start := time.Now()
 		mysqlStates, mysqlErr = c.mysqlDbPersister.waitForReplication(waitForHooksToReplicateTimeout)
+		c.lgr.Tracef("cluster/trace[controller]: ts=%s gracefulTransitionToStandby: mysql users/grants wait finished after %v; allCaughtUp=%v err=%v", tsNow(), time.Since(start), allCaughtUp(mysqlStates), mysqlErr)
 	})
 	wg.Go(func() {
+		start := time.Now()
 		bcStates, bcErr = c.bcReplication.waitForReplication(waitForHooksToReplicateTimeout)
+		c.lgr.Tracef("cluster/trace[controller]: ts=%s gracefulTransitionToStandby: branch control wait finished after %v; allCaughtUp=%v err=%v", tsNow(), time.Since(start), allCaughtUp(bcStates), bcErr)
 	})
 	wg.Go(func() {
+		start := time.Now()
 		dropStatesRes = waitForDropDatabaseReplication(dropStates, waitForHooksToReplicateTimeout)
+		c.lgr.Tracef("cluster/trace[controller]: ts=%s gracefulTransitionToStandby: drop database wait finished after %v; allCaughtUp=%v", tsNow(), time.Since(start), allCaughtUp(dropStatesRes))
 	})
 	wg.Wait()
 
@@ -931,17 +945,25 @@ func (c *Controller) gracefulTransitionToStandby(saveConnID, minCaughtUpStandbys
 	res = append(res, dropStatesRes...)
 
 	if minCaughtUpStandbys == 0 {
+		anyNotCaughtUp := false
 		for _, state := range res {
 			if !state.caughtUp {
-				c.lgr.Warnf("cluster/controller: failed to replicate all databases to all standbys; not transitioning to standby.")
-				return nil, fmt.Errorf("cluster/controller: failed to transition from primary to standby gracefully; could not replicate databases to standby in a timely manner.")
+				anyNotCaughtUp = true
+				c.lgr.Warnf("cluster/trace[controller]: ts=%s gracefulTransitionToStandby: NOT caught up after %v: database=%s remote=%s url=%s", tsNow(), time.Since(transitionStart), state.database, state.remote, state.remoteUrl)
+			} else {
+				c.lgr.Tracef("cluster/trace[controller]: ts=%s gracefulTransitionToStandby: caught up: database=%s remote=%s", tsNow(), state.database, state.remote)
 			}
+		}
+		if anyNotCaughtUp {
+			c.lgr.Warnf("cluster/controller: failed to replicate all databases to all standbys; not transitioning to standby.")
+			return nil, fmt.Errorf("cluster/controller: failed to transition from primary to standby gracefully; could not replicate databases to standby in a timely manner.")
 		}
 		c.lgr.Tracef("cluster/controller: successfully replicated all databases to all standbys; transitioning to standby.")
 	} else {
 		databases := make(map[string]struct{})
 		replicas := make(map[string]int)
 		for _, r := range res {
+			c.lgr.Tracef("cluster/trace[controller]: ts=%s gracefulTransitionToStandby: result after %v: database=%s remote=%s caughtUp=%v", tsNow(), time.Since(transitionStart), r.database, r.remote, r.caughtUp)
 			databases[r.database] = struct{}{}
 			url, err := url.Parse(r.remoteUrl)
 			if err != nil {
@@ -1176,6 +1198,7 @@ func (c *Controller) waitForHooksToReplicate(timeout time.Duration) ([]graceTran
 		}
 	}
 	c.mu.Unlock()
+	start := time.Now()
 	done := make(chan struct{})
 	go func() {
 		wg.Wait()
@@ -1183,10 +1206,15 @@ func (c *Controller) waitForHooksToReplicate(timeout time.Duration) ([]graceTran
 	}()
 	select {
 	case <-done:
+		c.lgr.Tracef("cluster/trace[controller]: ts=%s waitForHooksToReplicate: all %d commithooks caught up after %v", tsNow(), len(commithooks), time.Since(start))
 	case <-time.After(timeout):
+		c.lgr.Warnf("cluster/trace[controller]: ts=%s waitForHooksToReplicate: TIMED OUT after %v waiting on %d commithooks", tsNow(), time.Since(start), len(commithooks))
 	}
 	c.mu.Lock()
-	for _, ch := range commithooks {
+	for i, ch := range commithooks {
+		if !res[i].caughtUp {
+			c.lgr.Warnf("cluster/trace[controller]: ts=%s waitForHooksToReplicate: commithook not caught up at deadline: database=%s remote=%s", tsNow(), ch.dbname, ch.remotename)
+		}
 		ch.setWaitNotify(nil)
 	}
 
@@ -1331,6 +1359,12 @@ func (c *Controller) standbyRemotesJWKS() *jwtauth.MultiJWKS {
 
 type replicationServiceClient struct {
 	client replicationapi.ReplicationServiceClient
+	// conn is the underlying grpc connection |client| operates on. It is retained so that
+	// replication waiters can call ResetConnectBackoff on it: after repeated connection
+	// failures (e.g. the standby was down or still coming up), the channel's internal
+	// reconnect backoff can otherwise delay the next actual dial attempt beyond a waiter's
+	// entire budget, with every intervening RPC failing fast on the cached connection error.
+	conn   *grpc.ClientConn
 	closer func() error
 	remote string
 	// httpUrl is the Dolt remote URL (e.g. http://53.78.2.1:3832) matching this
@@ -1377,10 +1411,12 @@ func (c *Controller) replicationServiceClients(ctx context.Context) ([]*replicat
 			httpScheme = "https://"
 		}
 		client := replicationapi.NewReplicationServiceClient(cc)
+		watchConnState(c.lgr.WithFields(logrus.Fields{}), r.Name(), cc)
 		ret = append(ret, &replicationServiceClient{
 			remote:  r.Name(),
 			httpUrl: httpScheme + hostPort,
 			client:  client,
+			conn:    cc,
 			closer:  cc.Close,
 		})
 	}

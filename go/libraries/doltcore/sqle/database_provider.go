@@ -652,6 +652,68 @@ func (p *DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) err
 	return p.CreateCollatedDatabase(ctx, name, sql.Collation_Default)
 }
 
+// CreateDatabaseForReplication creates a new, empty database whose sole purpose is to receive replicated
+// content, e.g. as the target of an inbound push on a cluster replication standby. Unlike CreateDatabase,
+// it skips the initial schema bootstrapping and the implicit Dolt commit that accompany a user-issued
+// CREATE DATABASE: the database's entire contents are about to be replaced by the incoming replicated
+// root, so that work is wasted, delays the caller (which sits in the critical path of the primary's
+// replication-ack waits), and creates local commits on a standby that fire replication commit hooks for
+// commits that will never (and should never) be replicated.
+func (p *DoltDatabaseProvider) CreateDatabaseForReplication(ctx *sql.Context, name string) (err error) {
+	err = validateDBName(name)
+	if err != nil {
+		return err
+	}
+
+	sess := dsess.DSessFromSess(ctx.Session)
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if err = p.checkDatabaseNameAvailableLocked(name, true /* checkDisk */); err != nil {
+		return err
+	}
+
+	err = p.fs.MkDirs(name)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		// We do not want to leave this directory behind if we do not
+		// successfully create the database.
+		if err != nil {
+			p.fs.Delete(name, true /* force / recursive */)
+		}
+	}()
+
+	newFs, err := p.fs.WithWorkingDir(name)
+	if err != nil {
+		return err
+	}
+
+	err = dbfactory.MarkDatabaseInProgress(newFs)
+	if err != nil {
+		return err
+	}
+
+	// TODO: fill in version appropriately
+	// Use LoadWithoutDB so we can apply db-load params before any DB is opened.
+	newEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, newFs, p.dbFactoryUrl, "TODO")
+	p.applyDBLoadParamsToEnv(newEnv)
+
+	err = newEnv.InitRepo(ctx, types.Format_DOLT, sess.Username(), sess.Email(), p.defaultBranch)
+	if err != nil {
+		return err
+	}
+
+	err = dbfactory.ClearDatabaseInProgress(newFs)
+	if err != nil {
+		return err
+	}
+
+	return p.registerNewDatabase(ctx, name, newEnv)
+}
+
 func commitTransaction(ctx *sql.Context, dSess *dsess.DoltSession, rsc *doltdb.ReplicationStatusController) error {
 	// there is no current transaction to commit; this happens in certain tests like
 	currentTx := ctx.GetTransaction()
