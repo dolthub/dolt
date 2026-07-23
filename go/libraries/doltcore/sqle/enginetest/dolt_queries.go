@@ -8266,7 +8266,7 @@ var DoltCommitTests = []queries.ScriptTest{
 		// See https://git-scm.com/docs/git-commit#Documentation/git-commit.txt---amend
 		Name: "CALL DOLT_COMMIT with --amend fails while a merge or cherry-pick is in progress",
 		SetUpScript: []string{
-			"set @@foreign_key_checks = 0",
+			"drop table if exists invalidFK",
 			"set @@dolt_allow_commit_conflicts = 1",
 			"create table amend_merge_t (pk int primary key, c int)",
 			"insert into amend_merge_t values (1, 1)",
