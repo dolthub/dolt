@@ -84,6 +84,23 @@ teardown() {
     [[ "$output" =~ "add table t1" ]] || false
 }
 
+@test "commit: trailing whitespace is stripped from the commit message" {
+    # See https://git-scm.com/docs/git-commit#Documentation/git-commit.txt---cleanupltmodegt
+    dolt sql -q "CREATE TABLE t1 (pk int primary key);"
+    dolt add t1
+    dolt commit -m "add table t1   "
+    stored=$(dolt sql -r csv -q "SELECT message FROM dolt_log LIMIT 1" | tail -n 1)
+    [ "$stored" = "add table t1" ]
+}
+
+@test "commit: whitespace-only message is rejected" {
+    dolt sql -q "CREATE TABLE t1 (pk int primary key);"
+    dolt add t1
+    run dolt commit -m "   "
+    [ $status -eq 1 ]
+    [[ "$output" =~ "empty commit message" ]] || false
+}
+
 @test "commit: all flag, message, author all work properly" {
     dolt sql -q "CREATE table t1 (pk int primary key);"
     dolt add t1

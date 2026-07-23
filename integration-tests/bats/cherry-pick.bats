@@ -658,6 +658,20 @@ teardown() {
     [[ "${lines[4]}" == "Integration Manager,integration@company.com,Integration Manager,integration@company.com,prepare for merge" ]] || false
     [[ "${lines[5]}" == "Bats Tests,bats@email.fake,Bats Tests,bats@email.fake,Merge integration_branch" ]] || false
 }
+
+@test "cherry-pick: commit message survives the cherry-pick" {
+    # See https://git-scm.com/docs/git-cherry-pick
+    dolt --branch branch1 sql -q "INSERT INTO test VALUES (99, 'z')"
+    dolt --branch branch1 add test
+    dolt --branch branch1 commit -m "cherry pick message"
+
+    run dolt cherry-pick branch1
+    [ $status -eq 0 ]
+
+    stored=$(dolt sql -r csv -q "SELECT message FROM dolt_log LIMIT 1" | tail -n 1)
+    [ "$stored" = "cherry pick message" ]
+}
+
 @test "cherry-pick: --continue after resolving conflicts" {
     dolt branch continue_test
     dolt --branch continue_test sql -q "INSERT INTO test VALUES (100, 'branch1')"
