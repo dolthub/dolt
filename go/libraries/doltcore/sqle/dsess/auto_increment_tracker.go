@@ -45,7 +45,7 @@ type AutoIncrementTracker = SequenceTracker[*doltdb.Table, doltdb.AutoIncrementS
 // Roots provided should be the working sets when available, or the branches when they are not (e.g. for remote
 // branches that don't have a local working set)
 func NewAutoIncrementTracker(ctx context.Context, dbName string, roots ...doltdb.Rootish) (*AutoIncrementTracker, error) {
-	return NewAutoIncrementTrackerI(ctx, dbName, DoltDBRelationSource{}, roots...)
+	return NewSequenceTracker(ctx, dbName, DoltDBRelationSource{}, roots...)
 }
 
 func GetAutoIncrementTracker(ctx *sql.Context, gs globalstate.GlobalState) (*AutoIncrementTracker, error) {

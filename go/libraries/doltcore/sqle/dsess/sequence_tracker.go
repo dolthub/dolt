@@ -89,7 +89,7 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) staticAssertTypes(
 	var _ globalstate.SequenceTracker[RelationType, StateType, ValueType] = a
 }
 
-func NewAutoIncrementTrackerI[
+func NewSequenceTracker[
 	RelationType sequences.SequencedRelation[RelationType, ValueType, StateType],
 	StateType sequences.SequenceState[StateType, ValueType],
 	ValueType comparable,
