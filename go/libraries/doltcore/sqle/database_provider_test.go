@@ -16,8 +16,11 @@ package sqle
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -35,6 +38,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/prolly"
 )
 
 func setGlobalSqlVariable(t *testing.T, name string, val interface{}) {
@@ -353,6 +357,40 @@ func TestCreatingDatabaseReservation(t *testing.T) {
 	})
 }
 
+// headCommit returns the commit at the head of the named branch.
+func headCommit(ctx context.Context, t *testing.T, ddb *doltdb.DoltDB, branch string) *doltdb.Commit {
+	t.Helper()
+	cs, err := doltdb.NewCommitSpec(branch)
+	require.NoError(t, err)
+	optCmt, err := ddb.Resolve(ctx, cs, nil)
+	require.NoError(t, err)
+	commit, ok := optCmt.ToCommit()
+	require.True(t, ok)
+	return commit
+}
+
+// newCaseVariantDB returns a database holding only main, and the commit new branches should start at.
+func newCaseVariantDB(t *testing.T) (*doltdb.DoltDB, context.Context, *doltdb.Commit) {
+	t.Helper()
+	_, _, _, dEnv := newProviderEngine(t)
+	ctx := context.Background()
+	ddb := dEnv.DoltDB(ctx)
+	return ddb, ctx, headCommit(ctx, t, ddb, "main")
+}
+
+// branchNames returns the sorted paths of every branch in ddb.
+func branchNames(ctx context.Context, t *testing.T, ddb *doltdb.DoltDB) []string {
+	t.Helper()
+	branches, err := ddb.GetBranches(ctx)
+	require.NoError(t, err)
+	names := make([]string, len(branches))
+	for i, b := range branches {
+		names[i] = b.GetPath()
+	}
+	sort.Strings(names)
+	return names
+}
+
 func TestResolveCaseVariantBranch(t *testing.T) {
 	// See https://github.com/dolthub/dolt/issues/11270
 	engine, sqlCtx, _, dEnv := newProviderEngine(t)
@@ -370,15 +408,6 @@ func TestResolveCaseVariantBranch(t *testing.T) {
 		_, err := query(q)
 		require.NoError(t, err)
 	}
-	headCommit := func(branch string) *doltdb.Commit {
-		cs, err := doltdb.NewCommitSpec(branch)
-		require.NoError(t, err)
-		optCmt, err := ddb.Resolve(ctx, cs, nil)
-		require.NoError(t, err)
-		commit, ok := optCmt.ToCommit()
-		require.True(t, ok)
-		return commit
-	}
 
 	mustQuery("create table t (a int primary key)")
 	mustQuery("call dolt_commit('-Am', 'init')")
@@ -391,13 +420,14 @@ func TestResolveCaseVariantBranch(t *testing.T) {
 	mustQuery("call dolt_commit('-am', 'upper')")
 	mustQuery("call dolt_checkout('main')")
 
-	require.NoError(t, ddb.NewBranchAtCommit(ctx, ref.NewBranchRef("br"), headCommit("lower"), nil))
-	require.NoError(t, ddb.NewBranchAtCommit(ctx, ref.NewBranchRef("BR"), headCommit("upper"), nil))
+	require.NoError(t, ddb.NewBranchAtCommit(ctx, ref.NewBranchRef("br"), headCommit(ctx, t, ddb, "lower"), nil))
+	require.NoError(t, ddb.NewBranchAtCommit(ctx, ref.NewBranchRef("BR"), headCommit(ctx, t, ddb, "upper"), nil))
 
 	// While both exist every casing folds to the same pair, so neither branch's own data can be read.
 	for _, db := range []string{"dolt/br", "dolt/BR", "dolt/Br"} {
 		_, err := query("select a from `" + db + "`.t")
-		require.ErrorIs(t, err, ErrAmbiguousBranchName)
+		require.ErrorIs(t, err, doltdb.ErrAmbiguousRefName)
+		require.ErrorContains(t, err, "could be BR, br")
 	}
 
 	mustQuery("call dolt_branch('-m', 'BR', 'keepBR')")
@@ -409,4 +439,68 @@ func TestResolveCaseVariantBranch(t *testing.T) {
 	rows, err = query("select a from `dolt/keepBR`.t")
 	require.NoError(t, err)
 	require.Equal(t, []sql.Row{{int32(222)}}, rows)
+}
+
+func TestCaseVariantBranchLosingAnUpdateRaceIsRejected(t *testing.T) {
+	// See https://github.com/dolthub/dolt/issues/11270
+	ddb, ctx, base := newCaseVariantDB(t)
+
+	// Stand in for a session that commits "br" after this update has already read the dataset map,
+	// but before it commits. The check reruns on every retry, so commit only on the first to leave
+	// the retry free to finish.
+	raced := false
+	raceIn := datas.WithPreUpdateCheck(func(ctx context.Context, _ prolly.AddressMap, _ string) error {
+		if !raced {
+			raced = true
+			require.NoError(t, ddb.NewBranchAtCommit(ctx, ref.NewBranchRef("br"), base, nil))
+		}
+		return nil
+	})
+
+	err := ddb.NewBranchAtCommit(ctx, ref.NewBranchRef("BR"), base, nil, raceIn, doltdb.FailOnCaseConflict())
+	require.ErrorIs(t, err, doltdb.ErrCaseInsensitiveConflict)
+	require.Equal(t, []string{"br", "main"}, branchNames(ctx, t, ddb))
+}
+
+func TestConcurrentCaseVariantBranchCreation(t *testing.T) {
+	// See https://github.com/dolthub/dolt/issues/11270
+	ddb, ctx, base := newCaseVariantDB(t)
+
+	errs := make([]error, 2)
+	var wg sync.WaitGroup
+	for i, name := range []string{"br", "BR"} {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs[i] = ddb.NewBranchAtCommit(ctx, ref.NewBranchRef(name), base, nil, doltdb.FailOnCaseConflict())
+		}()
+	}
+	wg.Wait()
+
+	require.Len(t, branchNames(ctx, t, ddb), 2)
+
+	rejected := 0
+	for _, e := range errs {
+		if e != nil {
+			require.ErrorIs(t, e, doltdb.ErrCaseInsensitiveConflict)
+			rejected++
+		}
+	}
+	require.Equal(t, 1, rejected)
+}
+
+func TestAmbiguousRefNameReadFailsLoud(t *testing.T) {
+	// See https://github.com/dolthub/dolt/issues/11270
+	ddb, ctx, base := newCaseVariantDB(t)
+
+	for _, name := range []string{"br", "BR", "Br"} {
+		require.NoError(t, ddb.NewBranchAtCommit(ctx, ref.NewBranchRef(name), base, nil))
+	}
+
+	for _, name := range []string{"br", "BR", "Br", "bR"} {
+		match, err := ddb.GetRefByNameInsensitive(ctx, name)
+		require.Nil(t, match)
+		require.ErrorIs(t, err, doltdb.ErrAmbiguousRefName)
+		require.ErrorContains(t, err, fmt.Sprintf("%q could be BR, Br, br", name))
+	}
 }

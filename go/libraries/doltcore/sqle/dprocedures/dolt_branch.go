@@ -154,14 +154,6 @@ func renameBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argpar
 		return err
 	}
 
-	conflict, err := actions.HasCaseOnlyBranchConflict(ctx, dbData.Ddb, newBranchName, oldBranchName)
-	if err != nil {
-		return err
-	}
-	if conflict {
-		return fmt.Errorf("fatal: A branch named '%s' already exists.", newBranchName)
-	}
-
 	headRef, err := dbData.Rsr.CWBHeadRef(ctx)
 	if err != nil {
 		return err
@@ -170,6 +162,9 @@ func renameBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argpar
 
 	err = actions.RenameBranch(ctx, dbData, oldBranchName, newBranchName, sess.Provider(), force, rsc)
 	if err != nil {
+		if errors.Is(err, actions.ErrAlreadyExists) {
+			return actions.ErrBranchExists.New(newBranchName)
+		}
 		return err
 	}
 	err = branch_control.AddAdminForContext(ctx, newBranchName)
@@ -522,19 +517,12 @@ func copyABranch(ctx *sql.Context, dbData env.DbData[*sql.Context], srcBr string
 			return err
 		}
 	}
-	conflict, err := actions.HasCaseOnlyBranchConflict(ctx, dbData.Ddb, destBr)
-	if err != nil {
-		return err
-	}
-	if conflict {
-		return fmt.Errorf("fatal: A branch named '%s' already exists.", destBr)
-	}
-	err = actions.CopyBranchOnDB(ctx, dbData.Ddb, srcBr, destBr, force, rsc)
+	err := actions.CopyBranchOnDB(ctx, dbData.Ddb, srcBr, destBr, force, rsc, doltdb.FailOnCaseConflict())
 	if err != nil {
 		if err == doltdb.ErrBranchNotFound {
 			return fmt.Errorf("fatal: A branch named '%s' not found", srcBr)
 		} else if errors.Is(err, actions.ErrAlreadyExists) {
-			return fmt.Errorf("fatal: A branch named '%s' already exists.", destBr)
+			return actions.ErrBranchExists.New(destBr)
 		} else if err == doltdb.ErrInvBranchName {
 			return fmt.Errorf("fatal: '%s' is not a valid branch name.", destBr)
 		} else {

@@ -1843,8 +1843,6 @@ func isBranch(ctx context.Context, db dsess.SqlDatabase, branchName string) (str
 	return "", false, nil
 }
 
-var ErrAmbiguousBranchName = errors.New("multiple branches differ only by case, rename or delete one to disambiguate")
-
 func isLocalBranch(ctx context.Context, ddbs []*doltdb.DoltDB, branchName string) (string, bool, error) {
 	for _, ddb := range ddbs {
 		branches, err := ddb.GetBranches(ctx)
@@ -1852,20 +1850,12 @@ func isLocalBranch(ctx context.Context, ddbs []*doltdb.DoltDB, branchName string
 			return "", false, err
 		}
 
-		match, count := "", 0
-		for _, b := range branches {
-			if strings.EqualFold(b.GetPath(), branchName) {
-				match, count = b.GetPath(), count+1
-			}
+		match, found, err := doltdb.MatchRefInsensitive(branches, branchName)
+		if err != nil {
+			return "", false, err
 		}
-
-		// Names resolve case-insensitively, so more than one match cannot be told apart. Fail instead
-		// of silently serving whichever one sorts first.
-		if count > 1 {
-			return "", false, fmt.Errorf("ambiguous branch name %q: %w", branchName, ErrAmbiguousBranchName)
-		}
-		if count == 1 {
-			return match, true, nil
+		if found {
+			return match.GetPath(), true, nil
 		}
 	}
 
