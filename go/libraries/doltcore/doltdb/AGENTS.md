@@ -1,4 +1,4 @@
-# AGENT.md - Dolt Database Operations Guide
+# AGENTS.md - Dolt Database Operations Guide
 
 This file provides guidance for AI agents working with Dolt databases to maximize productivity and follow best practices.
 

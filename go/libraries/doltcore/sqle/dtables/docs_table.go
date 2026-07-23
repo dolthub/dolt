@@ -116,7 +116,7 @@ func (dt *DocsTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (s
 			continue
 		}
 
-		if name == doltdb.AgentDoc {
+		if name == doltdb.AgentDoc || name == "AGENT.md" {
 			found = true
 			break
 		}
