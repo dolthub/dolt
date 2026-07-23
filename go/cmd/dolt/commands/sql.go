@@ -1138,10 +1138,67 @@ func processQuery(ctx *sql.Context, query string, qryist cli.Queryist) (sql.Sche
 	return processParsedQuery(ctx, query, qryist, sqlStatement)
 }
 
+func cleanCommentedSelectExpressionNames(sqlStatement sqlparser.Statement) {
+	if sqlStatement == nil {
+		return
+	}
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		aliasedExpr, ok := node.(*sqlparser.AliasedExpr)
+		if ok && aliasedExpr.As.IsEmpty() && containsSQLComment(aliasedExpr.InputExpression) {
+			aliasedExpr.InputExpression = ""
+		}
+		return true, nil
+	}, sqlStatement)
+}
+
+func containsSQLComment(s string) bool {
+	var quote byte
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if quote != 0 {
+			if c == '\\' && quote != '`' {
+				i++
+				continue
+			}
+			if c == quote {
+				quote = 0
+			}
+			continue
+		}
+
+		switch c {
+		case '\'', '"', '`':
+			quote = c
+		case '#':
+			return true
+		case '-':
+			if i+1 < len(s) && s[i+1] == '-' && (i+2 == len(s) || isSQLWhitespace(s[i+2])) {
+				return true
+			}
+		case '/':
+			if i+1 < len(s) && s[i+1] == '*' {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func isSQLWhitespace(c byte) bool {
+	switch c {
+	case ' ', '\t', '\n', '\r', '\f', '\v':
+		return true
+	default:
+		return false
+	}
+}
+
 // processParsedQuery processes a single query with the parsed statement provided. The Root of the sqlEngine
 // will be updated if necessary. Returns the schema and the row iterator for the results, which may be nil,
 // and an error if one occurs.
 func processParsedQuery(ctx *sql.Context, query string, qryist cli.Queryist, sqlStatement sqlparser.Statement) (sql.Schema, sql.RowIter, *sql.QueryFlags, error) {
+	cleanCommentedSelectExpressionNames(sqlStatement)
+
 	switch s := sqlStatement.(type) {
 	case *sqlparser.Use, *sqlparser.Commit:
 		_, ri, _, err := qryist.Query(ctx, query)
