@@ -155,6 +155,23 @@ teardown() {
     [ "$status" -eq 0 ]
 }
 
+# Regression coverage for https://github.com/dolthub/dolt/issues/10867
+# bats test_tags=no_lambda
+@test "sql-shell: \\c cancels the statement currently being entered" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Current test setup results in remote calls having a clean branch, where this expect script expects dirty."
+    fi
+    run $BATS_TEST_DIRNAME/sql-shell-clear-statement.expect
+    echo "$output"
+
+    [ "$status" -eq 0 ]
+    # \c must not have been folded into the next statement (a bug would surface as a syntax
+    # error near the stray backslash), and the next statement must have actually executed.
+    [[ ! "$output" =~ "syntax error" ]] || false
+    [[ "$output" =~ "1 row in set" ]] || false
+}
+
 # Regression coverage for https://github.com/dolthub/dolt/issues/11137
 # bats test_tags=no_lambda
 @test "sql-shell: status slash command works without --branch flag" {
