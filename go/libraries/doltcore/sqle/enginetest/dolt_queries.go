@@ -4741,19 +4741,19 @@ var DoltGC = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "CALL DOLT_GC(null);",
-				ExpectedErrStr: "error: invalid usage",
+				ExpectedErrStr: "error: gc does not take positional arguments, but found 1: ",
 			},
 			{
 				Query:          "CALL DOLT_GC('bad', '--shallow');",
-				ExpectedErrStr: "error: invalid usage",
+				ExpectedErrStr: "error: gc does not take positional arguments, but found 1: bad",
 			},
 			{
 				Query:    "CALL DOLT_GC('--shallow');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.Row{{0}},
 			},
 			{
 				Query:    "CALL DOLT_GC();",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.Row{{0}},
 			},
 			{
 				Query:          "CALL DOLT_GC();",

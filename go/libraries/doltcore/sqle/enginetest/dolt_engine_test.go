@@ -1354,7 +1354,6 @@ func TestDoltReset(t *testing.T) {
 }
 
 func TestDoltGC(t *testing.T) {
-	t.SkipNow()
 	for _, script := range DoltGC {
 		func() {
 			h := newDoltHarness(t)

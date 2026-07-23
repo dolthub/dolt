@@ -154,7 +154,7 @@ func DoltDBFromCS(cs chunks.ChunkStore, databaseName string) (*DoltDB, error) {
 		return nil, err
 	}
 	ret := &DoltDB{
-		db:           hooksDatabase{Database: db},
+		db:           hooksDatabase{Database: db, hooks: newCommitHooks()},
 		vrw:          vrw,
 		ns:           ns,
 		databaseName: databaseName,
@@ -225,7 +225,7 @@ func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr 
 	}
 
 	ret := &DoltDB{
-		db:           hooksDatabase{Database: db},
+		db:           hooksDatabase{Database: db, hooks: newCommitHooks()},
 		vrw:          vrw,
 		ns:           ns,
 		databaseName: name,
@@ -2257,7 +2257,7 @@ func (ddb *DoltDB) DatasetsByRootHash(ctx context.Context, hashof hash.Hash) (da
 }
 
 func (ddb *DoltDB) PrependCommitHooks(ctx context.Context, hooks ...CommitHook) *DoltDB {
-	ddb.db = ddb.db.SetCommitHooks(ctx, append(hooks, ddb.db.PostCommitHooks()...))
+	ddb.db.hooks.prepend(hooks...)
 	return ddb
 }
 

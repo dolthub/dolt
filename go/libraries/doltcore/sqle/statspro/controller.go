@@ -294,8 +294,8 @@ func (sc *StatsController) descError(d string, err error) {
 	sc.logger.Debug(b.String())
 }
 
-func (sc *StatsController) GetTableStats(ctx *sql.Context, db string, table sql.Table) ([]sql.Statistic, error) {
-	key, err := sc.statsKey(ctx, db, table.Name())
+func (sc *StatsController) GetTableStats(ctx *sql.Context, sch, db string, table sql.Table) ([]sql.Statistic, error) {
+	key, err := sc.statsKey(ctx, sch, db, table.Name())
 	if err != nil {
 		return nil, err
 	}
@@ -368,7 +368,8 @@ func (sc *StatsController) SetStats(ctx *sql.Context, s sql.Statistic) error {
 	if !ok {
 		return fmt.Errorf("expected *stats.Statistics, found %T", s)
 	}
-	key, err := sc.statsKey(ctx, ss.Qualifier().Db(), ss.Qualifier().Table())
+	qual := ss.Qualifier()
+	key, err := sc.statsKey(ctx, qual.Schema(), qual.Db(), qual.Table())
 	if err != nil {
 		return err
 	}
@@ -388,7 +389,7 @@ func (sc *StatsController) SetStats(ctx *sql.Context, s sql.Statistic) error {
 func (sc *StatsController) GetStats(ctx *sql.Context, qual sql.StatQualifier, cols []string) (sql.Statistic, bool) {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
-	key, err := sc.statsKey(ctx, qual.Database, qual.Table())
+	key, err := sc.statsKey(ctx, qual.Schema(), qual.Db(), qual.Table())
 	if err != nil {
 		return nil, false
 	}
@@ -416,7 +417,7 @@ func (sc *StatsController) GetTableDoltStats(ctx *sql.Context, branch, db, schem
 }
 
 func (sc *StatsController) DropStats(ctx *sql.Context, qual sql.StatQualifier, cols []string) error {
-	key, err := sc.statsKey(ctx, qual.Database, qual.Table())
+	key, err := sc.statsKey(ctx, qual.Schema(), qual.Db(), qual.Table())
 	if err != nil {
 		return err
 	}
@@ -426,7 +427,7 @@ func (sc *StatsController) DropStats(ctx *sql.Context, qual sql.StatQualifier, c
 	return nil
 }
 
-func (sc *StatsController) DropDbStats(ctx *sql.Context, dbName string, flush bool) error {
+func (sc *StatsController) DropDbStats(ctx *sql.Context, sch, dbName string, flush bool) error {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
@@ -445,7 +446,7 @@ func (sc *StatsController) DropDbStats(ctx *sql.Context, dbName string, flush bo
 	}
 
 	var deleteKeys []tableIndexesKey
-	for k, _ := range sc.Stats.stats {
+	for k := range sc.Stats.stats {
 		if strings.EqualFold(dbName, k.db) {
 			deleteKeys = append(deleteKeys, k)
 		}
@@ -456,7 +457,7 @@ func (sc *StatsController) DropDbStats(ctx *sql.Context, dbName string, flush bo
 	return nil
 }
 
-func (sc *StatsController) statsKey(ctx *sql.Context, dbName, table string) (tableIndexesKey, error) {
+func (sc *StatsController) statsKey(ctx *sql.Context, schema, dbName, table string) (tableIndexesKey, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	branch, err := dSess.GetBranch(ctx)
 	if err != nil {
@@ -466,12 +467,13 @@ func (sc *StatsController) statsKey(ctx *sql.Context, dbName, table string) (tab
 		db:     strings.ToLower(dbName),
 		branch: strings.ToLower(branch),
 		table:  strings.ToLower(table),
+		schema: strings.ToLower(schema),
 	}
 	return key, nil
 }
 
-func (sc *StatsController) RowCount(ctx *sql.Context, dbName string, table sql.Table) (uint64, error) {
-	key, err := sc.statsKey(ctx, dbName, table.Name())
+func (sc *StatsController) RowCount(ctx *sql.Context, schema, dbName string, table sql.Table) (uint64, error) {
+	key, err := sc.statsKey(ctx, schema, dbName, table.Name())
 	if err != nil {
 		return 0, err
 	}
@@ -485,8 +487,8 @@ func (sc *StatsController) RowCount(ctx *sql.Context, dbName string, table sql.T
 	return 0, nil
 }
 
-func (sc *StatsController) DataLength(ctx *sql.Context, dbName string, table sql.Table) (uint64, error) {
-	key, err := sc.statsKey(ctx, dbName, table.Name())
+func (sc *StatsController) DataLength(ctx *sql.Context, schema, dbName string, table sql.Table) (uint64, error) {
+	key, err := sc.statsKey(ctx, schema, dbName, table.Name())
 	if err != nil {
 		return 0, err
 	}

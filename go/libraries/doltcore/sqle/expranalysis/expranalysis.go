@@ -33,17 +33,17 @@ import (
 // ResolveDefaultExpression returns a sql.Expression for the column default or generated expression for the
 // column provided
 func ResolveDefaultExpression(ctx *sql.Context, tableName string, sch schema.Schema, col schema.Column) (sql.Expression, error) {
-	ct, err := parseCreateTable(ctx, tableName, sch)
+	resolved, err := ResolveSchema(ctx, tableName, sch)
 	if err != nil {
 		return nil, err
 	}
 
-	colIdx := ct.PkSchema().Schema.IndexOfColName(col.Name)
+	colIdx := resolved.IndexOfColName(col.Name)
 	if colIdx < 0 {
 		return nil, fmt.Errorf("unable to find column %s in analyzed query", col.Name)
 	}
 
-	sqlCol := ct.PkSchema().Schema[colIdx]
+	sqlCol := resolved[colIdx]
 	expr := sqlCol.Default
 	if expr == nil || expr.Expr == nil {
 		expr = sqlCol.Generated
@@ -54,6 +54,15 @@ func ResolveDefaultExpression(ctx *sql.Context, tableName string, sch schema.Sch
 	}
 
 	return expr, nil
+}
+
+// ResolveSchema returns the sql.Schema for |sch| with its column default and generated expressions resolved.
+func ResolveSchema(ctx *sql.Context, tableName string, sch schema.Schema) (sql.Schema, error) {
+	ct, err := parseCreateTable(ctx, tableName, sch)
+	if err != nil {
+		return nil, err
+	}
+	return ct.PkSchema().Schema, nil
 }
 
 // ResolveCheckExpression returns a sql.Expression for the check provided
