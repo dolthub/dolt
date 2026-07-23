@@ -17,7 +17,6 @@ package dsess
 import (
 	"context"
 	"fmt"
-	"sync"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -68,7 +67,7 @@ func TestCoerceAutoIncrementValue(t *testing.T) {
 	for _, test := range tests {
 		name := fmt.Sprintf("Coerce %v to %v", test.val, test.exp)
 		t.Run(name, func(t *testing.T) {
-			act, err := CoerceAutoIncrementValue(ctx, test.val)
+			act, err := doltdb.CoerceAutoIncrementValue(ctx, test.val)
 			if test.err {
 				assert.Error(t, err)
 			} else {
@@ -83,7 +82,7 @@ func TestInitWithRoots(t *testing.T) {
 	t.Run("EmptyRoots", func(t *testing.T) {
 		ait := AutoIncrementTracker{
 			dbName:     "test_database",
-			sequences:  &sync.Map{},
+			sequences:  &SyncMap[string, doltdb.AutoIncrementState]{},
 			mm:         mutexmap.NewMutexMap(),
 			init:       make(chan struct{}),
 			cancelInit: make(chan struct{}),
@@ -94,7 +93,7 @@ func TestInitWithRoots(t *testing.T) {
 	t.Run("CloseCancelsInit", func(t *testing.T) {
 		ait := AutoIncrementTracker{
 			dbName:     "test_database",
-			sequences:  &sync.Map{},
+			sequences:  &SyncMap[string, doltdb.AutoIncrementState]{},
 			mm:         mutexmap.NewMutexMap(),
 			init:       make(chan struct{}),
 			cancelInit: make(chan struct{}),
