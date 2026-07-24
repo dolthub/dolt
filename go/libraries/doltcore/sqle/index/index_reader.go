@@ -67,7 +67,7 @@ func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, r prolly.Range, pkSc
 		return newProllyKeylessIndexIter(ctx, idx, r, pkSch, projections, durableState.Primary, durableState.Secondary, reverse)
 	}
 
-	covers := idx.coversColumns(durableState, projections)
+	covers := idx.CoversColumns(durableState, projections)
 	if covers {
 		return newProllyCoveringIndexIter(ctx, idx, r, pkSch, projections, durableState.Secondary)
 	}
@@ -286,10 +286,10 @@ func NewIndexReaderBuilder(
 			baseIndexImplBuilder: base,
 			s:                    s,
 		}, nil
-	case idx.coversColumns(s, projections):
+	case idx.CoversColumns(s, projections):
 		return newCoveringLookupBuilder(base), nil
 	case idx.ID() == "PRIMARY":
-		// If we are using the primary index, always use a covering lookup builder. In some cases, coversColumns
+		// If we are using the primary index, always use a covering lookup builder. In some cases, CoversColumns
 		// can return false, for example if a column was modified in an older version and has a different tag than
 		// the current schema. In those cases, the primary index is still the best we have, so go ahead and use it.
 		return newCoveringLookupBuilder(base), nil

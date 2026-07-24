@@ -61,7 +61,7 @@ type DoltIndex interface {
 	Format() *types.NomsBinFormat
 	IsPrimaryKey() bool
 
-	coversColumns(s *durableIndexState, columns []uint64) bool
+	CoversColumns(s *durableIndexState, columns []uint64) bool
 }
 
 func NewBranchNameIndex(i *doltIndex) *BranchNameIndex {
@@ -789,7 +789,7 @@ func (di *doltIndex) prollyRanges(ctx *sql.Context, ns tree.NodeStore, ranges ..
 	return pranges, nil
 }
 
-func (di *doltIndex) coversColumns(s *durableIndexState, cols []uint64) bool {
+func (di *doltIndex) CoversColumns(s *durableIndexState, cols []uint64) bool {
 	if cols == nil {
 		return s.coversAllColumns(di)
 	}
