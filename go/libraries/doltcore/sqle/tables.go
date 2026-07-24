@@ -1347,6 +1347,14 @@ func (t *DoltTable) ProjectedTags() []uint64 {
 	return t.sch.GetAllCols().Tags
 }
 
+func (t *DoltTable) IsCovering(idx sql.Index) bool {
+	doltIdx, ok := idx.(index.DoltIndex) // TODO: i hope this works
+	if !ok || len(t.projectedCols) == 0 {
+		return false
+	}
+	return doltIdx.CoversColumns(nil, t.projectedCols) // TODO: might panic
+}
+
 // WithProjections implements sql.ProjectedTable
 func (t *DoltTable) WithProjections(ctx *sql.Context, colNames []string) (sql.Table, error) {
 	nt := *t
