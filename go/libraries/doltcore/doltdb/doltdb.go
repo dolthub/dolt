@@ -1540,6 +1540,12 @@ func (ddb *DoltDB) GetRefsOfTypeByNomsRoot(ctx context.Context, refTypeFilter ma
 	return refs, err
 }
 
+// maxNewBranchWorkingSetRetries bounds the number of times NewBranchAtCommit will
+// re-resolve and retry its working set update after losing a race with another
+// concurrent writer to the same working set ref (e.g. a background auto-GC cycle
+// finalizing at the same time), mirroring dsess's maxTxCommitRetries.
+const maxNewBranchWorkingSetRetries = 5
+
 // NewBranchAtCommit creates a new branch with HEAD at the commit given. Branch names must pass IsValidUserBranchName.
 // Silently overwrites any existing branch with the same name given, if one exists.
 func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef, commit *Commit, replicationStatus *ReplicationStatusController) error {
@@ -1572,22 +1578,30 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef,
 
 	wsRef, _ := ref.WorkingSetRefForHead(branchRef)
 
-	var ws *WorkingSet
-	var currWsHash hash.Hash
-	ws, err = ddb.ResolveWorkingSet(ctx, wsRef)
-	if errors.Is(err, ErrWorkingSetNotFound) {
-		ws = EmptyWorkingSet(wsRef)
-	} else if err != nil {
-		return err
-	} else {
-		currWsHash, err = ws.HashOf()
-		if err != nil {
+	// If another writer (e.g. a background auto-GC cycle) updates the same working set
+	// we can hit an ErrOptimisticLockFailedailure error here, so we retry here, similar
+	// to how the SQL transaction-commit path retries on this error.
+	for attempt := 0; ; attempt++ {
+		var ws *WorkingSet
+		var currWsHash hash.Hash
+		ws, err = ddb.ResolveWorkingSet(ctx, wsRef)
+		if errors.Is(err, ErrWorkingSetNotFound) {
+			ws = EmptyWorkingSet(wsRef)
+		} else if err != nil {
+			return err
+		} else {
+			currWsHash, err = ws.HashOf()
+			if err != nil {
+				return err
+			}
+		}
+
+		ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
+		err = ddb.UpdateWorkingSet(ctx, wsRef, ws, currWsHash, TodoWorkingSetMeta(), replicationStatus)
+		if err != datas.ErrOptimisticLockFailed || attempt >= maxNewBranchWorkingSetRetries-1 {
 			return err
 		}
 	}
-
-	ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
-	return ddb.UpdateWorkingSet(ctx, wsRef, ws, currWsHash, TodoWorkingSetMeta(), replicationStatus)
 }
 
 // CopyWorkingSet copies a WorkingSetRef from one ref to another. If `force` is
