@@ -827,7 +827,10 @@ func (di *doltIndex) coversColumnsByTag(s *durableIndexState, cols []uint64) boo
 
 // CoversColumns determines if this index covers the columns by name.
 func (di *doltIndex) CoversColumns(cols []string) bool {
-	idxCols := di.IndexSchema().GetAllCols()
+	if di.indexSch == nil {
+		return false
+	}
+	idxCols := di.indexSch.GetAllCols()
 	if len(cols) > len(idxCols.Tags) {
 		return false
 	}
