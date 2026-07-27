@@ -128,6 +128,9 @@ func (csvw *CSVWriter) WriteSqlRow(ctx *sql.Context, r sql.Row) error {
 func toCsvString(ctx *sql.Context, colType sql.Type, val interface{}) (string, error) {
 	// For BIT, emit base-10 int, instead of bytes
 	if _, ok := colType.(types.BitType); ok {
+		if hexVal, ok := val.(sqlutil.BinaryAsHexDisplayValue); ok {
+			return string(hexVal), nil
+		}
 		// Normalize to handle UNION type generalization (e.g., int64 -> uint64)
 		norm, _, err := colType.Convert(ctx, val)
 		if err != nil {

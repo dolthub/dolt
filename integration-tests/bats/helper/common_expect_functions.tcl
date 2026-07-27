@@ -102,3 +102,15 @@ proc expect_with_defaults_after {output_marker expected_prompt action} {
         eof     { _fail "<<EOF while expecting prompt>>" }
     }
 }
+
+# Waits for the spawned process to exit. A timeout means the process is still
+# running, which fails the test instead of passing silently.
+proc expect_eof_with_defaults {} {
+    expect {
+        eof {}
+        timeout {
+            puts "<<Timeout waiting for the spawned process to exit>>"
+            exit 1
+        }
+    }
+}

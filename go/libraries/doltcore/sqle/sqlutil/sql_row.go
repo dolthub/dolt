@@ -29,12 +29,40 @@ import (
 // BinaryAsHexDisplayValue is a wrapper for binary values that should be displayed as hex strings.
 type BinaryAsHexDisplayValue string
 
+// NewBinaryAsHexDisplayValue formats the given bytes as a hex literal such as
+// 0x1F. The mysql client prints the digits in upper case, so we match it.
+func NewBinaryAsHexDisplayValue(b []byte) BinaryAsHexDisplayValue {
+	return BinaryAsHexDisplayValue(fmt.Sprintf("0x%X", b))
+}
+
+// BitValueBytes returns a BIT value as the bytes that carry its declared width.
+// A sql-server connection sends those bytes as a string, while the local engine
+// sends a number that the column type encodes to the same width.
+func BitValueBytes(ctx *sql.Context, bitType sql.Type, val interface{}) ([]byte, error) {
+	if s, ok := val.(string); ok {
+		return []byte(s), nil
+	}
+	res, err := bitType.SQL(ctx, nil, val)
+	if err != nil {
+		return nil, err
+	}
+	return res.Raw(), nil
+}
+
 // SqlColToStr is a utility function for converting a sql column of type interface{} to a string.
 // NULL values are treated as empty strings. Handle nil separately if you require other behavior.
 func SqlColToStr(ctx *sql.Context, sqlType sql.Type, col interface{}) (string, error) {
 	if col != nil {
 		if hexVal, ok := col.(BinaryAsHexDisplayValue); ok {
 			return string(hexVal), nil
+		}
+
+		if gmstypes.IsBit(sqlType) {
+			b, err := BitValueBytes(ctx, sqlType, col)
+			if err != nil {
+				return "", err
+			}
+			return string(b), nil
 		}
 
 		switch typedCol := col.(type) {
@@ -46,11 +74,10 @@ func SqlColToStr(ctx *sql.Context, sqlType sql.Type, col interface{}) (string, e
 			}
 		case sql.SpatialColumnType:
 			res, err := sqlType.SQL(ctx, nil, col)
-			hexRes := fmt.Sprintf("0x%X", res.Raw())
 			if err != nil {
 				return "", err
 			}
-			return hexRes, nil
+			return string(NewBinaryAsHexDisplayValue(res.Raw())), nil
 		default:
 			res, err := sqlType.SQL(ctx, nil, col)
 			if err != nil {
@@ -66,8 +93,7 @@ func SqlColToStr(ctx *sql.Context, sqlType sql.Type, col interface{}) (string, e
 // DatabaseTypeNameToSqlType converts a MySQL wire protocol database type name
 // to a go-mysql-server sql.Type. This uses the same type mapping logic as the existing
 // Dolt type system for consistency.
-// TODO: Add support for BLOB types (TINYBLOB, BLOB, MEDIUMBLOB, LONGBLOB) and BIT type
-// as confirmed by testing MySQL 8.4+ binary-as-hex behavior
+// TODO: Add support for BLOB types (TINYBLOB, BLOB, MEDIUMBLOB, LONGBLOB)
 func DatabaseTypeNameToSqlType(databaseTypeName string) sql.Type {
 	typeName := strings.ToLower(databaseTypeName)
 	switch typeName {
@@ -75,6 +101,12 @@ func DatabaseTypeNameToSqlType(databaseTypeName string) sql.Type {
 		return gmstypes.MustCreateBinary(sqltypes.Binary, 255)
 	case "varbinary":
 		return gmstypes.MustCreateBinary(sqltypes.VarBinary, 255)
+	case "bit":
+		// The driver does not report the declared bit width, so use the widest
+		// BIT type. Display paths size their output from the value bytes instead.
+		// TODO(elianddb): Use the declared width if the driver exposes column
+		// lengths. See https://pkg.go.dev/database/sql#ColumnType.Length.
+		return gmstypes.MustCreateBitType(gmstypes.BitTypeMaxBits)
 	default:
 		// Default to LongText for all other types (as was done before)
 		return gmstypes.LongText

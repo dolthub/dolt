@@ -2350,3 +2350,20 @@ EOF
   start_sql_server > server_log.txt 2>&1 && sleep 0.5
   grep -F "permission denied" server_log.txt
 }
+
+# bats test_tags=no_lambda
+@test "sql-server: mysql client renders BIT columns as hex" {
+    skiponwindows "Missing dependencies"
+
+    # See https://github.com/dolthub/dolt/issues/10132
+    cd repo1
+    dolt sql -q "create table test_bit (id int primary key, b BIT(3), b64 BIT(64));"
+    dolt sql -q "insert into test_bit values (1, b'000', b'0'), (2, b'010', 18446744073709551615), (3, b'111', NULL);"
+    dolt commit -Am "create bit table"
+
+    cd ..
+    start_sql_server repo1
+
+    run expect $BATS_TEST_DIRNAME/sql-server-mysql-bit.expect $PORT repo1
+    [ "$status" -eq 0 ]
+}
