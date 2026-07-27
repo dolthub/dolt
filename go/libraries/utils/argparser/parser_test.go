@@ -171,6 +171,27 @@ func TestArgParser(t *testing.T) {
 	}
 }
 
+func TestArgParserListEmptyValue(t *testing.T) {
+	// An empty-string value for a list option must not panic: getListValues
+	// indexed arg[0] without a length check, so `--list ""` (or `-l ""`)
+	// panicked with an index-out-of-range.
+	ap := NewArgParserWithVariableArgs("test").SupportsStringList("list", "l", "vals", "")
+
+	apr, err := ap.Parse([]string{"--list", ""})
+	require.NoError(t, err)
+	v, ok := apr.GetValue("list")
+	assert.True(t, ok)
+	assert.Equal(t, "", v)
+
+	// A subsequent option after the empty value still terminates the list.
+	ap2 := NewArgParserWithVariableArgs("test").
+		SupportsStringList("list", "l", "vals", "").
+		SupportsFlag("flag", "f", "flag")
+	apr2, err := ap2.Parse([]string{"-l", "", "-f"})
+	require.NoError(t, err)
+	assert.True(t, apr2.Contains("flag"))
+}
+
 func TestArgParserSet(t *testing.T) {
 	ap := createParserWithOptionalArgs()
 	apr, err := ap.Parse([]string{"-o", "optional value", "-f", "foo", "bar"})
