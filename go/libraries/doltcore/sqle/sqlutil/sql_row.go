@@ -29,6 +29,26 @@ import (
 // BinaryAsHexDisplayValue is a wrapper for binary values that should be displayed as hex strings.
 type BinaryAsHexDisplayValue string
 
+// NewBinaryAsHexDisplayValue formats the given bytes as a hex literal such as
+// 0x1F. The mysql client prints the digits in upper case, so we match it.
+func NewBinaryAsHexDisplayValue(b []byte) BinaryAsHexDisplayValue {
+	return BinaryAsHexDisplayValue(fmt.Sprintf("0x%X", b))
+}
+
+// BitValueBytes returns a BIT value as the bytes that carry its declared width.
+// A sql-server connection sends those bytes as a string, while the local engine
+// sends a number that the column type encodes to the same width.
+func BitValueBytes(ctx *sql.Context, bitType sql.Type, val interface{}) ([]byte, error) {
+	if s, ok := val.(string); ok {
+		return []byte(s), nil
+	}
+	res, err := bitType.SQL(ctx, nil, val)
+	if err != nil {
+		return nil, err
+	}
+	return res.Raw(), nil
+}
+
 // SqlColToStr is a utility function for converting a sql column of type interface{} to a string.
 // NULL values are treated as empty strings. Handle nil separately if you require other behavior.
 func SqlColToStr(ctx *sql.Context, sqlType sql.Type, col interface{}) (string, error) {
@@ -37,10 +57,12 @@ func SqlColToStr(ctx *sql.Context, sqlType sql.Type, col interface{}) (string, e
 			return string(hexVal), nil
 		}
 
-		// BIT values arrive from sql-server as bytes already sized to the
-		// declared bit width, so pass them through instead of re-encoding.
-		if s, ok := col.(string); ok && gmstypes.IsBit(sqlType) {
-			return s, nil
+		if gmstypes.IsBit(sqlType) {
+			b, err := BitValueBytes(ctx, sqlType, col)
+			if err != nil {
+				return "", err
+			}
+			return string(b), nil
 		}
 
 		switch typedCol := col.(type) {
@@ -52,11 +74,10 @@ func SqlColToStr(ctx *sql.Context, sqlType sql.Type, col interface{}) (string, e
 			}
 		case sql.SpatialColumnType:
 			res, err := sqlType.SQL(ctx, nil, col)
-			hexRes := fmt.Sprintf("0x%X", res.Raw())
 			if err != nil {
 				return "", err
 			}
-			return hexRes, nil
+			return string(NewBinaryAsHexDisplayValue(res.Raw())), nil
 		default:
 			res, err := sqlType.SQL(ctx, nil, col)
 			if err != nil {

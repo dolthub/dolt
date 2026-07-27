@@ -232,24 +232,19 @@ func (iter *binaryHexIterator) Next(ctx *sql.Context) (sql.Row, error) {
 			switch iter.schema[i].Type.Type() {
 			case sqltypes.Binary, sqltypes.VarBinary:
 				switch v := val.(type) {
-				case []byte: // hex fmt is explicitly upper case
-					rowData[i] = sqlutil.BinaryAsHexDisplayValue(fmt.Sprintf("0x%X", v))
+				case []byte:
+					rowData[i] = sqlutil.NewBinaryAsHexDisplayValue(v)
 				case string: // handles results from sql-server; MySQL wire protocol returns strings
-					rowData[i] = sqlutil.BinaryAsHexDisplayValue(fmt.Sprintf("0x%X", []byte(v)))
+					rowData[i] = sqlutil.NewBinaryAsHexDisplayValue([]byte(v))
 				default:
 					return nil, fmt.Errorf("unexpected type %T for binary column %s", val, iter.schema[i].Name)
 				}
 			case sqltypes.Bit:
-				switch v := val.(type) {
-				case string: // sql-server sends bit values as bytes sized to the declared bit width
-					rowData[i] = sqlutil.BinaryAsHexDisplayValue(fmt.Sprintf("0x%X", []byte(v)))
-				default: // local engine values are integers, so Type.SQL encodes them to width-sized bytes
-					sqlVal, err := iter.schema[i].Type.SQL(ctx, nil, val)
-					if err != nil {
-						return nil, fmt.Errorf("unexpected value %v for bit column %s: %w", val, iter.schema[i].Name, err)
-					}
-					rowData[i] = sqlutil.BinaryAsHexDisplayValue(fmt.Sprintf("0x%X", sqlVal.Raw()))
+				bits, err := sqlutil.BitValueBytes(ctx, iter.schema[i].Type, val)
+				if err != nil {
+					return nil, fmt.Errorf("unexpected value %v for bit column %s: %w", val, iter.schema[i].Name, err)
 				}
+				rowData[i] = sqlutil.NewBinaryAsHexDisplayValue(bits)
 			}
 		}
 	}

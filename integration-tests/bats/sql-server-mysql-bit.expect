@@ -8,8 +8,8 @@ source "$env(BATS_CWD)/helper/common_expect_functions.tcl"
 
 set timeout 10
 
-set port [lindex $argv 0];
-set database [lindex $argv 1];
+set port [lindex $argv 0]
+set database [lindex $argv 1]
 
 spawn mysql --host 0.0.0.0 --port $port --user root $database
 
@@ -22,5 +22,5 @@ expect_with_defaults_2 {0x07} {NULL}               {}
 
 expect_with_defaults {mysql> } { send "exit\r" }
 
-expect eof
+expect_eof_with_defaults
 exit 0
