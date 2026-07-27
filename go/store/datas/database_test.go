@@ -254,6 +254,73 @@ func (suite *DatabaseSuite) TestDatabaseDuplicateCommit() {
 	suite.IsType(ErrMergeNeeded, err)
 }
 
+// TestBuildNewCommitHeadChecks verifies the head relationship that BuildNewCommit enforces for ordinary, amend,
+// and force commits.
+func (suite *DatabaseSuite) TestBuildNewCommitHeadChecks() {
+	// See https://github.com/dolthub/dolt/issues/9072
+	ctx := context.Background()
+	ds, err := suite.db.GetDataset(ctx, "testdataset")
+	suite.NoError(err)
+
+	// dataset: |a|
+	ds, err = CommitValue(ctx, suite.db, ds, types.String("a"))
+	suite.NoError(err)
+	commitA := mustHeadAddr(ds)
+	meta := newOpts(suite.db, commitA).Meta
+
+	suite.Run("amend with no head fails", func() {
+		empty, err := suite.db.GetDataset(ctx, "emptydataset")
+		suite.NoError(err)
+		_, err = suite.db.BuildNewCommit(ctx, empty, types.String("x"), CommitOptions{
+			Meta: meta, AmendedCommit: commitA,
+		})
+		suite.ErrorIs(err, ErrMergeNeeded)
+		suite.ErrorContains(err, "dataset has no head")
+	})
+
+	suite.Run("amend of the current head succeeds", func() {
+		commit, err := suite.db.BuildNewCommit(ctx, ds, types.String("a2"), CommitOptions{
+			Meta: meta, AmendedCommit: commitA,
+		})
+		suite.NoError(err)
+		suite.NotNil(commit)
+	})
+
+	// dataset: |a| <- |b|
+	ds, err = CommitValue(ctx, suite.db, ds, types.String("b"))
+	suite.NoError(err)
+	commitB := mustHeadAddr(ds)
+
+	suite.Run("amend of a stale head fails", func() {
+		// The amend was created against commit a but the head has since moved to commit b.
+		_, err := suite.db.BuildNewCommit(ctx, ds, types.String("x"), CommitOptions{
+			Meta: meta, AmendedCommit: commitA,
+		})
+		suite.ErrorIs(err, ErrMergeNeeded)
+		suite.ErrorContains(err, "is at "+commitB.String()+" but expected "+commitA.String())
+	})
+
+	suite.Run("ordinary commit without the head as a parent fails", func() {
+		_, err := suite.db.BuildNewCommit(ctx, ds, types.String("x"), newOpts(suite.db, commitA))
+		suite.ErrorIs(err, ErrMergeNeeded)
+	})
+
+	suite.Run("force skips head validation", func() {
+		opts := newOpts(suite.db, commitA)
+		opts.Force = true
+		commit, err := suite.db.BuildNewCommit(ctx, ds, types.String("x"), opts)
+		suite.NoError(err)
+		suite.NotNil(commit)
+	})
+
+	suite.Run("force and amend together fail", func() {
+		_, err := suite.db.BuildNewCommit(ctx, ds, types.String("x"), CommitOptions{
+			Meta: meta, Force: true, AmendedCommit: commitB,
+		})
+		suite.ErrorContains(err, "mutually exclusive")
+	})
+}
+
 func (suite *DatabaseSuite) TestDatabaseDelete() {
 	datasetID1, datasetID2 := "ds1", "ds2"
 	ds1, err := suite.db.GetDataset(context.Background(), datasetID1)
