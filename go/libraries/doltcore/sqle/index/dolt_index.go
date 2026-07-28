@@ -61,7 +61,7 @@ type DoltIndex interface {
 	Format() *types.NomsBinFormat
 	IsPrimaryKey() bool
 
-	coversColumns(s *durableIndexState, columns []uint64) bool
+	coversColumnsByTag(s *durableIndexState, columns []uint64) bool
 }
 
 func NewBranchNameIndex(i *doltIndex) *BranchNameIndex {
@@ -789,7 +789,8 @@ func (di *doltIndex) prollyRanges(ctx *sql.Context, ns tree.NodeStore, ranges ..
 	return pranges, nil
 }
 
-func (di *doltIndex) coversColumns(s *durableIndexState, cols []uint64) bool {
+// coversColumnsByTag determines if this index covers a list of columns
+func (di *doltIndex) coversColumnsByTag(s *durableIndexState, cols []uint64) bool {
 	if cols == nil {
 		return s.coversAllColumns(di)
 	}
@@ -821,6 +822,26 @@ func (di *doltIndex) coversColumns(s *durableIndexState, cols []uint64) bool {
 		}
 	}
 
+	return covers
+}
+
+// CoversColumns determines if this index covers the columns by name.
+func (di *doltIndex) CoversColumns(cols []string) bool {
+	if di.indexSch == nil {
+		return false
+	}
+	idxCols := di.indexSch.GetAllCols()
+	if len(cols) > len(idxCols.Tags) {
+		return false
+	}
+
+	covers := true
+	for _, colName := range cols {
+		if _, ok := idxCols.LowerNameToCol[strings.ToLower(colName)]; !ok {
+			covers = false
+			break
+		}
+	}
 	return covers
 }
 

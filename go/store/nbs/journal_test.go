@@ -231,15 +231,8 @@ func protectedRefCount(ftp *fsTablePersister, h hash.Hash) int32 {
 
 // TestChunkJournalActiveFileProtectedFromPruning is a regression test for a bug
 // where PruneTableFiles could delete the journal file out from under an active
-// journal writer. The journal file lives in the table-file namespace (its name
-// is journalAddr), so the generic pruner would treat it as a prunable table
-// file. Protection used to be a racy, per-call `j.wr != nil` check inside
-// ChunkJournal.PruneTableFiles, decided under the persister's pruneMu while the
-// journal writer is created/dropped under the NomsBlockStore mutex — two
-// disjoint lock domains. The fix registers the journal file in the persister's
-// protected set for the entire lifetime of the writer, under pruneMu. This test
-// asserts that lifetime protection; it fails against the pre-fix code, whose
-// protection did not persist beyond a PruneTableFiles call.
+// journal writer. Protection of the file used to be a racy and based on the
+// state of j.wr during a call to PruneTableFiles.
 func TestChunkJournalActiveFileProtectedFromPruning(t *testing.T) {
 	ctx := context.Background()
 	j := makeTestChunkJournal(t)
@@ -286,13 +279,7 @@ func TestChunkJournalActiveFileProtectedFromPruning(t *testing.T) {
 }
 
 // TestChunkJournalPruneConcurrentWithJournalRecreation is a regression test for
-// the race between PruneTableFiles and (re)creation of the journal file. A
-// commit that recreates the journal (after a prior GC dropped it) runs under
-// the NomsBlockStore mutex, while PruneTableFiles runs under the persister's
-// pruneMu; before the fix these disjoint lock domains let a prune delete a live
-// journal file, and left ChunkJournal.PruneTableFiles reading j.wr without
-// synchronization. Run under `-race` this reliably catches the unsynchronized
-// access; without it, it catches the erroneous deletion probabilistically.
+// a race between PruneTableFiles and (re)creation of the journal file.
 func TestChunkJournalPruneConcurrentWithJournalRecreation(t *testing.T) {
 	ctx := context.Background()
 	j := makeTestChunkJournal(t)

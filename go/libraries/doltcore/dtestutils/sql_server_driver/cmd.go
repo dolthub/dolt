@@ -309,18 +309,6 @@ func runSqlServerCommand(dc DoltCmdable, opts []SqlServerOpt, cmd *exec.Cmd) (*S
 		o(server)
 	}
 
-	go func() {
-		defer func() {
-			server.CmdWaitErr = server.Cmd.Wait()
-			close(done)
-		}()
-		logw := server.LogWriter
-		if logw == nil {
-			logw = os.Stdout
-		}
-		multiCopyWithNamePrefix(logw, output, stdout, server.Name, server.OutputVisitor)
-	}()
-
 	server.RecreateCmd = func(args ...string) *exec.Cmd {
 		if server.DebugPort > 0 {
 			ddb, ok := dc.(DoltDebuggable)
@@ -333,10 +321,24 @@ func runSqlServerCommand(dc DoltCmdable, opts []SqlServerOpt, cmd *exec.Cmd) (*S
 		}
 	}
 
-	err = server.Cmd.Start()
-	if err != nil {
+	// Start before launching the wait goroutine: Cmd.Wait must not run
+	// concurrently with Cmd.Start.
+	if err = cmd.Start(); err != nil {
 		return nil, err
 	}
+
+	go func() {
+		defer func() {
+			server.CmdWaitErr = cmd.Wait()
+			close(done)
+		}()
+		logw := server.LogWriter
+		if logw == nil {
+			logw = os.Stdout
+		}
+		multiCopyWithNamePrefix(logw, output, stdout, server.Name, server.OutputVisitor)
+	}()
+
 	return server, nil
 }
 
@@ -428,21 +430,29 @@ func (s *SqlServer) respawn(newargs *[]string, newenvs *[]string) error {
 	if newargs != nil {
 		args = append([]string{"sql-server"}, (*newargs)...)
 	}
-	s.Cmd = s.RecreateCmd(args...)
+	cmd := s.RecreateCmd(args...)
 	if newenvs != nil {
-		s.Cmd.Env = append(s.Cmd.Env, (*newenvs)...)
+		cmd.Env = append(cmd.Env, (*newenvs)...)
 	}
-	stdout, err := s.Cmd.StdoutPipe()
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
 	}
+	cmd.Stderr = cmd.Stdout
+	// Start before launching the wait goroutine: Cmd.Wait must not run
+	// concurrently with Cmd.Start. cmd/done are captured as locals so the
+	// goroutine never touches s.Cmd/s.Done, which a later respawn reassigns.
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	done := make(chan struct{})
+	s.Cmd = cmd
 	s.CmdWaitErr = nil
-	s.Cmd.Stderr = s.Cmd.Stdout
-	s.Done = make(chan struct{})
+	s.Done = done
 	go func() {
 		defer func() {
-			s.CmdWaitErr = s.Cmd.Wait()
-			close(s.Done)
+			s.CmdWaitErr = cmd.Wait()
+			close(done)
 		}()
 		logw := s.LogWriter
 		if logw == nil {
@@ -450,7 +460,7 @@ func (s *SqlServer) respawn(newargs *[]string, newenvs *[]string) error {
 		}
 		multiCopyWithNamePrefix(logw, s.Output, stdout, s.Name, s.OutputVisitor)
 	}()
-	return s.Cmd.Start()
+	return nil
 }
 
 func (s *SqlServer) DB(c Connection) (*sql.DB, error) {

@@ -283,6 +283,11 @@ func doltCommit(ctx *sql.Context,
 	var rsc doltdb.ReplicationStatusController
 	newCommit, err := doltDb.CommitWithWorkingSet(ctx, headRef, workingSet.Ref(), &pending, workingSet, currHash, tx.WorkingSetMeta(name, email), &rsc)
 	WaitForReplicationController(ctx, rsc)
+	// The check in doCommit can go stale before the ref update, so the storage layer compares the head against
+	// AmendedCommit once more, atomically with the update. A failure there surfaces the same way.
+	if err != nil && !pending.CommitOptions.AmendedCommit.IsEmpty() && errors.Is(err, datas.ErrMergeNeeded) {
+		return nil, nil, tx.rollbackAndErr(ctx, retryTransactionError(err.Error()))
+	}
 	return workingSet, newCommit, err
 }
 
@@ -451,6 +456,12 @@ func (tx *DoltTransaction) doCommit(
 				return nil, nil, err
 			}
 
+			// Checked before the working set merge so that a stale amend reports the moved head rather
+			// than a data conflict.
+			if err := tx.validateAmendedHead(ctx, startPoint.db, workingSet, commit); err != nil {
+				return nil, nil, err
+			}
+
 			if newWorkingSet || workingAndStagedEqual(existingWs, startState) {
 				// ff merge
 				err = tx.validateWorkingSetForCommit(ctx, workingSet, isFfMerge)
@@ -558,6 +569,51 @@ func (tx *DoltTransaction) rollback(ctx *sql.Context) error {
 	return nil
 }
 
+// rollbackAndErr rolls the transaction back and returns |err|, or the rollback error when rolling back fails.
+func (tx *DoltTransaction) rollbackAndErr(ctx *sql.Context, err error) error {
+	if rollbackErr := tx.rollback(ctx); rollbackErr != nil {
+		return rollbackErr
+	}
+	return err
+}
+
+// retryTransactionError returns the client facing serialization failure for a transaction that conflicts with a
+// committed transaction. A non empty |detail| is placed before the retry advice.
+func retryTransactionError(detail string) error {
+	if detail == "" {
+		return sql.ErrLockDeadlock.New(ErrRetryTransaction.Error())
+	}
+	return sql.ErrLockDeadlock.New(fmt.Sprintf("%s: %s", detail, ErrRetryTransaction.Error()))
+}
+
+// validateAmendedHead returns a retryable error when |pending| amends a commit that is no longer the head of the
+// branch that |workingSet| belongs to. The transaction is rolled back before the error is returned. A nil
+// |pending| or an ordinary commit passes without any check.
+func (tx *DoltTransaction) validateAmendedHead(ctx *sql.Context, doltDb *doltdb.DoltDB, workingSet *doltdb.WorkingSet, pending *doltdb.PendingCommit) error {
+	if pending == nil {
+		return nil
+	}
+	amended := pending.CommitOptions.AmendedCommit
+	if amended.IsEmpty() {
+		return nil
+	}
+
+	headRef, err := workingSet.Ref().ToHeadRef()
+	if err != nil {
+		return err
+	}
+	curHeadAddr, err := doltDb.GetHashForRefStr(ctx, headRef.String())
+	if err != nil {
+		return err
+	}
+	if *curHeadAddr != amended {
+		return tx.rollbackAndErr(ctx, retryTransactionError(fmt.Sprintf(
+			"cannot amend head of branch '%s': is at %s but expected %s",
+			headRef.GetPath(), *curHeadAddr, amended)))
+	}
+	return nil
+}
+
 type ffMerge bool
 
 const (
@@ -624,12 +680,7 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 		// Conflicts are never acceptable when they resulted from a merge with the existing working set -- it's equivalent
 		// to hitting a write lock (which we didn't take). Always roll back and return an error in this case.
 		if !isFf {
-			rollbackErr := tx.rollback(ctx)
-			if rollbackErr != nil {
-				return rollbackErr
-			}
-
-			return sql.ErrLockDeadlock.New(ErrRetryTransaction.Error())
+			return tx.rollbackAndErr(ctx, retryTransactionError(""))
 		}
 
 		// If there were conflicts before merge with the persisted working set, whether we allow it to be committed is a
@@ -769,12 +820,7 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 				}
 			}
 
-			rollbackErr := tx.rollback(ctx)
-			if rollbackErr != nil {
-				return rollbackErr
-			}
-
-			return fmt.Errorf("%s%s%s", ErrUnresolvedConstraintViolationsCommit, ConstraintViolationsListPrefix, messageBuilder.String())
+			return tx.rollbackAndErr(ctx, fmt.Errorf("%s%s%s", ErrUnresolvedConstraintViolationsCommit, ConstraintViolationsListPrefix, messageBuilder.String()))
 		}
 	}
 
