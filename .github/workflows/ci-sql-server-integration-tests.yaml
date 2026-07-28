@@ -19,9 +19,9 @@ jobs:
         shell: bash
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
-        os: [ubuntu-22.04]
+        os: [ubuntu-22.04, macos-latest]
     steps:
       - uses: actions/checkout@v6
       - name: Set up Go toolchain
@@ -29,5 +29,5 @@ jobs:
       - name: Build dolt
         uses: ./.github/actions/build-dolt
       - name: Test all
-        run: go test .
+        run: go test --timeout=30m .
         working-directory: ./integration-tests/go-sql-server-driver

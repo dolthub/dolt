@@ -40,6 +40,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	expcreds "google.golang.org/grpc/experimental/credentials"
+	dnsresolver "google.golang.org/grpc/resolver/dns"
 	"google.golang.org/grpc/status"
 
 	replicationapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/replicationapi/v1alpha1"
@@ -161,10 +162,28 @@ const (
 	DoltClusterRemoteApiAudience = "dolt-cluster-remote-api.dolthub.com"
 )
 
+// grpc's dns resolver blocks RPCs on a channel until its (host + TXT
+// service-config) lookups complete, with a default cap of 30s. A degraded
+// system resolver (observed with mDNSResponder on macOS, which can stall
+// lookups of even "localhost" for 10s+) can therefore starve replication
+// waiters whose budgets are shorter than a single resolution attempt, e.g.
+// the 10s graceful-transition wait. Cap resolution well below those budgets;
+// on timeout the resolver just retries with backoff, so slow-but-working DNS
+// still succeeds on a later attempt. The setting is process-global and must
+// be applied before any ClientConn is created.
+var capDNSResolvingTimeoutOnce sync.Once
+
+func capDNSResolvingTimeout() {
+	capDNSResolvingTimeoutOnce.Do(func() {
+		dnsresolver.SetResolvingTimeout(2 * time.Second)
+	})
+}
+
 func NewController(lgr *logrus.Logger, cfg servercfg.ClusterConfig, pCfg config.ReadWriteConfig) (*Controller, error) {
 	if cfg == nil {
 		return nil, nil
 	}
+	capDNSResolvingTimeout()
 	pCfg = config.NewPrefixConfig(pCfg, PersistentConfigPrefix)
 	role, epoch, err := applyBootstrapClusterConfig(lgr, cfg, pCfg)
 	if err != nil {
