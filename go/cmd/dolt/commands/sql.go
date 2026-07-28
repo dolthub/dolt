@@ -625,7 +625,7 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 
 // execBatchMode runs all the queries in the input reader
 func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, continueOnErr bool, format engine.PrintResultFormat, binaryAsHex bool) error {
-	scanner := NewStreamScanner(input)
+	scanner := ishell.NewStreamScanner(input)
 	var query string
 	for scanner.Scan() {
 		// The session we get is wrapped in a command begin/end block.
@@ -648,7 +648,7 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 		if err == sqlparser.ErrEmpty {
 			continue
 		} else if err != nil {
-			err = buildBatchSqlErr(scanner.state.statementStartLine, query, err)
+			err = buildBatchSqlErr(scanner.StatementStartLine(), query, err)
 			if !continueOnErr {
 				return err
 			} else {
@@ -660,7 +660,7 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 		ctx.SetQueryTime(time.Now())
 		sqlSch, rowIter, _, err := processParsedQuery(ctx, query, qryist, sqlStatement)
 		if err != nil {
-			err = buildBatchSqlErr(scanner.state.statementStartLine, query, err)
+			err = buildBatchSqlErr(scanner.StatementStartLine(), query, err)
 			if !continueOnErr {
 				return err
 			} else {
@@ -679,7 +679,7 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 			}
 			err = engine.PrettyPrintResults(ctx, format, sqlSch, rowIter, false, false, false, binaryAsHex)
 			if err != nil {
-				err = buildBatchSqlErr(scanner.state.statementStartLine, query, err)
+				err = buildBatchSqlErr(scanner.StatementStartLine(), query, err)
 				if !continueOnErr {
 					return err
 				} else {
@@ -691,7 +691,7 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 	}
 
 	if err := scanner.Err(); err != nil {
-		return buildBatchSqlErr(scanner.state.statementStartLine, query, err)
+		return buildBatchSqlErr(scanner.StatementStartLine(), query, err)
 	}
 
 	return nil
@@ -733,7 +733,6 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 		LineTerminator:     ";",
 		SpecialTerminators: verticalOutputLineTerminators,
 		BackSlashCmds:      backSlashCommands,
-		IsComplete:         IsShellInputComplete,
 	}
 
 	shell := ishell.NewUninterpreted(&shellConf)
@@ -846,16 +845,26 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 					}
 				}
 			} else {
+				// statements holds the individual SQL statements to run. For
+				// normal input, ishell already scanned the typed input into
+				// complete statements (single pass). The \edit transform produces
+				// new SQL that ishell never saw, so split it here.
+				statements := c.Statements
 				if cmdType == TransformCommand {
 					query = newQuery
 					trackHistory(shell, query+";")
+					statements = nil
+					scanner := ishell.NewStreamScannerWithDelimiter(strings.NewReader(query), shell.LineTerminator())
+					for scanner.Scan() {
+						statements = append(statements, scanner.Text())
+					}
+					if scanErr := scanner.Err(); scanErr != nil {
+						shell.Println(color.RedString(scanErr.Error()))
+					}
 				}
 				lastSqlCmd = query
 
-				// Split into individual statements so multiple on one line each run.
-				scanner := NewStreamScannerWithDelimiter(strings.NewReader(query), shell.LineTerminator())
-				for scanner.Scan() {
-					stmt := scanner.Text()
+				for _, stmt := range statements {
 					if strings.TrimSpace(stmt) == "" {
 						continue
 					}
@@ -889,9 +898,6 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 					} else if _, isUseStmt := sqlStmt.(*sqlparser.Use); isUseStmt {
 						cli.Println("Database Changed")
 					}
-				}
-				if scanErr := scanner.Err(); scanErr != nil {
-					shell.Println(color.RedString(scanErr.Error()))
 				}
 			}
 

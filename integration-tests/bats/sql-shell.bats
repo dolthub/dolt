@@ -249,6 +249,26 @@ teardown() {
     [ "$status" -eq 0 ]
 }
 
+# bats test_tags=no_lambda
+@test "sql-shell: large multi-line statement executes correctly" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Presently sql command will not connect to remote server due to lack of lock file where there are not DBs."
+    fi
+    run expect $BATS_TEST_DIRNAME/sql-shell-large-input.expect
+    [ "$status" -eq 0 ]
+}
+
+# bats test_tags=no_lambda
+@test "sql-shell: Ctrl-D at continuation prompt discards partial input" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Presently sql command will not connect to remote server due to lack of lock file where there are not DBs."
+    fi
+    run expect $BATS_TEST_DIRNAME/sql-shell-ctrld-continuation.expect
+    [ "$status" -eq 0 ]
+}
+
 @test "sql-shell: works with ANSI_QUOTES SQL mode" {
     if [ $SQL_ENGINE = "remote-engine" ]; then
       skip "Presently sql command will not connect to remote server due to lack of lock file where there are not DBs."
