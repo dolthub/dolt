@@ -1154,7 +1154,8 @@ func processParsedQuery(ctx *sql.Context, query string, qryist cli.Queryist, sql
 		}
 		return nil, nil, nil, nil
 	case *sqlparser.Insert, *sqlparser.Update, *sqlparser.Delete,
-		*sqlparser.AlterTable, *sqlparser.DDL, *sqlparser.Set:
+		*sqlparser.AlterTable, *sqlparser.DDL, *sqlparser.Set,
+		*sqlparser.Execute:
 		sch, ri, _, err := qryist.Query(ctx, query)
 		if err != nil {
 			return nil, nil, nil, err
