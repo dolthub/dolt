@@ -304,6 +304,27 @@ type prollySecondaryIndexWriter struct {
 	unique  bool
 	// predicate is set for partial indexes; rows not matching are excluded.
 	predicate sql.Expression
+	// virtualExprs is parallel to keyMap; non-nil entries are generating expressions for virtual
+	// (unstored) generated columns that appear in this index's key. Nil overall if the index has
+	// no virtual key parts (the common/fast-path case).
+	virtualExprs []sql.Expression
+}
+
+// keyPartFromRow returns the value for key part |to|, given |sqlRow|. For most columns this is
+// simply sqlRow[from]. For virtual generated columns, the value is computed by evaluating the
+// generating expression against |sqlRow|.
+func (m prollySecondaryIndexWriter) keyPartFromRow(ctx context.Context, to int, sqlRow sql.Row) (interface{}, error) {
+	if m.virtualExprs != nil {
+		if expr := m.virtualExprs[to]; expr != nil {
+			sqlCtx, ok := ctx.(*sql.Context)
+			if !ok {
+				return nil, fmt.Errorf("expected *sql.Context for virtual column expression evaluation")
+			}
+			return expr.Eval(sqlCtx, sqlRow)
+		}
+	}
+	from := m.keyMap.MapOrdinal(to)
+	return sqlRow[from], nil
 }
 
 // matchesPredicate returns true if the row satisfies this index's predicate (or if the index has no predicate).
@@ -358,8 +379,11 @@ func (m prollySecondaryIndexWriter) trimKeyPart(ctx context.Context, to int, key
 
 func (m prollySecondaryIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.Row) (val.Tuple, error) {
 	for to := range m.keyMap {
-		from := m.keyMap.MapOrdinal(to)
-		keyPart, _ := m.trimKeyPart(ctx, to, sqlRow[from])
+		v, err := m.keyPartFromRow(ctx, to, sqlRow)
+		if err != nil {
+			return nil, err
+		}
+		keyPart, _ := m.trimKeyPart(ctx, to, v)
 		if err := tree.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, keyPart); err != nil {
 			return nil, err
 		}
@@ -389,14 +413,17 @@ func (m prollySecondaryIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) 
 func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, sqlRow sql.Row) error {
 	ns := m.mut.NodeStore()
 	for to := range m.keyMap[:m.idxCols] {
-		from := m.keyMap.MapOrdinal(to)
-		if sqlRow[from] == nil {
+		v, err := m.keyPartFromRow(ctx, to, sqlRow)
+		if err != nil {
+			return err
+		}
+		if v == nil {
 			// NULL is incomparable and cannot
 			// trigger a UNIQUE KEY violation
 			m.keyBld.Recycle()
 			return nil
 		}
-		keyPart, _ := m.trimKeyPart(ctx, to, sqlRow[from])
+		keyPart, _ := m.trimKeyPart(ctx, to, v)
 		if err := tree.PutField(ctx, ns, m.keyBld, to, keyPart); err != nil {
 			return err
 		}
@@ -433,8 +460,11 @@ func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, sq
 	}
 
 	for to := range m.keyMap[:m.idxCols] {
-		from := m.keyMap.MapOrdinal(to)
-		m.key[to], _ = m.trimKeyPart(ctx, to, sqlRow[from])
+		v, err := m.keyPartFromRow(ctx, to, sqlRow)
+		if err != nil {
+			return err
+		}
+		m.key[to], _ = m.trimKeyPart(ctx, to, v)
 	}
 	return secondaryUniqueKeyError{
 		keyStr:      FormatKeyForUniqKeyErr(ctx, key, desc, m.key),
@@ -489,7 +519,10 @@ func (m prollySecondaryIndexWriter) Update(ctx context.Context, oldRow sql.Row, 
 	}
 
 	// If no indexed columns are modified and predicate status hasn't changed, no need to update.
-	if oldMatches && newMatches && isNoopUpdate(oldRow, newRow, m.keyMap) {
+	// isNoopUpdate compares the row's raw slots directly, which isn't safe for a virtual key part:
+	// a stale/unpopulated slot could look identical between oldRow and newRow even though the real
+	// underlying columns (and so the virtual column's computed value) changed.
+	if oldMatches && newMatches && m.virtualExprs == nil && isNoopUpdate(oldRow, newRow, m.keyMap) {
 		return nil
 	}
 
@@ -521,6 +554,9 @@ func (m prollySecondaryIndexWriter) Update(ctx context.Context, oldRow sql.Row, 
 
 // UpdateChangesUniqueKey implements UniqueKeyChangeReporter for this index.
 func (m prollySecondaryIndexWriter) UpdateChangesUniqueKey(oldRow sql.Row, newRow sql.Row) bool {
+	if m.virtualExprs != nil {
+		return m.unique
+	}
 	return m.unique && (m.predicate != nil || !isNoopUpdate(oldRow, newRow, m.keyMap[:m.idxCols]))
 }
 

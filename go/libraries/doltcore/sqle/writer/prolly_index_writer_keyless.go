@@ -16,6 +16,7 @@ package writer
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -200,6 +201,26 @@ type prollyKeylessSecondaryWriter struct {
 	unique        bool
 	spatial       bool
 	predicate     sql.Expression
+	// virtualExprs is parallel to keyMap; non-nil entries are generating expressions for virtual
+	// (unstored) generated columns that appear in this index's key.
+	virtualExprs []sql.Expression
+}
+
+// keyPartFromRow returns the value for key part |to|, given |sqlRow|. For most columns this is
+// simply sqlRow[from]. For virtual (unstored) generated columns, the value must instead be computed
+// by evaluating the column's generating expression against |sqlRow|.
+func (writer prollyKeylessSecondaryWriter) keyPartFromRow(ctx context.Context, to int, sqlRow sql.Row) (interface{}, error) {
+	if writer.virtualExprs != nil {
+		if expr := writer.virtualExprs[to]; expr != nil {
+			sqlCtx, ok := ctx.(*sql.Context)
+			if !ok {
+				return nil, fmt.Errorf("expected *sql.Context for virtual column expression evaluation")
+			}
+			return expr.Eval(sqlCtx, sqlRow)
+		}
+	}
+	from := writer.keyMap.MapOrdinal(to)
+	return sqlRow[from], nil
 }
 
 var _ indexWriter = prollyKeylessSecondaryWriter{}
@@ -250,8 +271,11 @@ func (writer prollyKeylessSecondaryWriter) trimKeyPart(to int, keyPart interface
 // Insert implements the interface indexWriter.
 func (writer prollyKeylessSecondaryWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
 	for to := range writer.keyMap {
-		from := writer.keyMap.MapOrdinal(to)
-		keyPart := writer.trimKeyPart(to, sqlRow[from])
+		v, err := writer.keyPartFromRow(ctx, to, sqlRow)
+		if err != nil {
+			return err
+		}
+		keyPart := writer.trimKeyPart(to, v)
 		if err := tree.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, keyPart); err != nil {
 			return err
 		}
@@ -321,8 +345,11 @@ func (writer prollyKeylessSecondaryWriter) checkForUniqueKeyError(ctx context.Co
 	if err == nil {
 		remappedSqlRow := make(sql.Row, len(sqlRow))
 		for to := range writer.keyMap {
-			from := writer.keyMap.MapOrdinal(to)
-			remappedSqlRow[to] = writer.trimKeyPart(to, sqlRow[from])
+			v, err := writer.keyPartFromRow(ctx, to, sqlRow)
+			if err != nil {
+				return err
+			}
+			remappedSqlRow[to] = writer.trimKeyPart(to, v)
 		}
 		keyStr := FormatKeyForUniqKeyErr(ctx, prefixKey, writer.prefixBld.Desc, remappedSqlRow)
 		writer.hashBld.PutRaw(0, k.GetField(k.Count()-1))
@@ -352,8 +379,11 @@ func (writer prollyKeylessSecondaryWriter) Delete(ctx context.Context, sqlRow sq
 	}
 
 	for to := range writer.keyMap {
-		from := writer.keyMap.MapOrdinal(to)
-		keyPart := writer.trimKeyPart(to, sqlRow[from])
+		v, err := writer.keyPartFromRow(ctx, to, sqlRow)
+		if err != nil {
+			return err
+		}
+		keyPart := writer.trimKeyPart(to, v)
 		if err := tree.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, keyPart); err != nil {
 			return err
 		}
@@ -386,6 +416,9 @@ func (writer prollyKeylessSecondaryWriter) Update(ctx context.Context, oldRow sq
 
 // UpdateChangesUniqueKey implements UniqueKeyChangeReporter for this index.
 func (writer prollyKeylessSecondaryWriter) UpdateChangesUniqueKey(oldRow sql.Row, newRow sql.Row) bool {
+	if writer.virtualExprs != nil {
+		return writer.unique
+	}
 	return writer.unique && (writer.predicate != nil || !isNoopUpdate(oldRow, newRow, writer.keyMap))
 }
 
