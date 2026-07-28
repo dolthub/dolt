@@ -58,9 +58,13 @@ type prollyTableWriter struct {
 	aiSet      bool // True when an INSERT/UPDATE affects the auto increment value
 
 	errEncountered error
+
+	virtualExpressions []sql.Expression
 }
 
 var _ dsess.TableWriter = &prollyTableWriter{}
+
+var _ UniqueKeyChangeReporter = &prollyTableWriter{}
 var _ AutoIncrementGetter = &prollyTableWriter{}
 
 func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, schState *dsess.WriterState) (map[string]indexWriter, error) {
@@ -101,6 +105,7 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, schSta
 			pkBld:         val.NewTupleBuilder(schState.PkKeyDesc, idxMap.NodeStore()).WithMaxRowSize(targetRowSize),
 			key:           make(sql.Row, keyDesc.Count()),
 			predicate:     def.Predicate,
+			virtualExprs:  def.KeyVirtualExprs,
 		}
 	}
 
@@ -144,6 +149,7 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, schS
 			prefixBld:     val.NewTupleBuilder(keyDesc.PrefixDesc(def.Count), m.NodeStore()).WithMaxRowSize(targetRowSize),
 			hashBld:       val.NewTupleBuilder(val.NewTupleDescriptor(val.Type{Enc: val.Hash128Enc}), m.NodeStore()),
 			keyMap:        def.KeyMapping,
+			virtualExprs:  def.KeyVirtualExprs,
 		}
 	}
 
@@ -197,6 +203,25 @@ func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.
 
 	w.aiSet = true
 	return nil
+}
+
+// UniqueKeyChangeReporter is a writer that reports whether an update frees or takes a unique key.
+type UniqueKeyChangeReporter interface {
+	// UpdateChangesUniqueKey reports whether updating |oldRow| to |newRow| frees or takes a key in a unique index,
+	// erring toward reporting a change. The primary key is not considered, and a unique partial index always
+	// reports a change since any change can move a row in or out of it.
+	UpdateChangesUniqueKey(oldRow sql.Row, newRow sql.Row) bool
+}
+
+// UpdateChangesUniqueKey implements UniqueKeyChangeReporter for the whole table by asking each secondary index.
+func (w *prollyTableWriter) UpdateChangesUniqueKey(oldRow sql.Row, newRow sql.Row) bool {
+	for _, wr := range w.secondary {
+		r, ok := wr.(UniqueKeyChangeReporter)
+		if !ok || r.UpdateChangesUniqueKey(oldRow, newRow) {
+			return true
+		}
+	}
+	return false
 }
 
 // Delete implements TableWriter.
@@ -353,6 +378,7 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, tbl *doltdb.Table) error {
 	w.primary = newPrimary
 	w.secondary = newSecondaries
 	w.aiCol = schState.AutoIncCol
+	w.virtualExpressions = schState.VirtualExpressions
 
 	return nil
 }

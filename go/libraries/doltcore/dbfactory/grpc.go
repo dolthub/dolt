@@ -118,7 +118,11 @@ func (fact DoltRemoteFactory) newChunkStore(ctx context.Context, nbf *types.Noms
 
 	opts := append(cfg.DialOptions, grpc.WithChainUnaryInterceptor(remotestorage.RetryingUnaryClientInterceptor))
 
-	conn, err := grpc.Dial(cfg.Endpoint, opts...)
+	// Dial through the dns resolver (the dns:/// prefix) rather than the default
+	// passthrough resolver so the re-resolving load-balancing policy can recover
+	// when the endpoint moves to a new IP. Passthrough never re-resolves. See
+	// grpcreresolve.
+	conn, err := grpc.NewClient("dns:///"+cfg.Endpoint, opts...)
 	if err != nil {
 		return nil, err
 	}

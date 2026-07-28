@@ -309,18 +309,6 @@ func runSqlServerCommand(dc DoltCmdable, opts []SqlServerOpt, cmd *exec.Cmd) (*S
 		o(server)
 	}
 
-	go func() {
-		defer func() {
-			server.CmdWaitErr = server.Cmd.Wait()
-			close(done)
-		}()
-		logw := server.LogWriter
-		if logw == nil {
-			logw = os.Stdout
-		}
-		multiCopyWithNamePrefix(logw, output, stdout, server.Name, server.OutputVisitor)
-	}()
-
 	server.RecreateCmd = func(args ...string) *exec.Cmd {
 		if server.DebugPort > 0 {
 			ddb, ok := dc.(DoltDebuggable)
@@ -333,10 +321,24 @@ func runSqlServerCommand(dc DoltCmdable, opts []SqlServerOpt, cmd *exec.Cmd) (*S
 		}
 	}
 
-	err = server.Cmd.Start()
-	if err != nil {
+	// Start before launching the wait goroutine: Cmd.Wait must not run
+	// concurrently with Cmd.Start.
+	if err = cmd.Start(); err != nil {
 		return nil, err
 	}
+
+	go func() {
+		defer func() {
+			server.CmdWaitErr = cmd.Wait()
+			close(done)
+		}()
+		logw := server.LogWriter
+		if logw == nil {
+			logw = os.Stdout
+		}
+		multiCopyWithNamePrefix(logw, output, stdout, server.Name, server.OutputVisitor)
+	}()
+
 	return server, nil
 }
 
@@ -387,25 +389,70 @@ func (s *SqlServer) Restart(newargs *[]string, newenvs *[]string) error {
 	if err != nil {
 		return err
 	}
+	return s.respawn(newargs, newenvs)
+}
+
+// KillStop hard-kills the running server process (SIGKILL on unix,
+// TerminateProcess on windows) and waits for it to exit. It reports whether the
+// process had already exited before we killed it: if exitedEarly is true,
+// waitErr is that exit's status (non-nil means the process crashed); otherwise
+// waitErr is the expected kill-induced status and should be ignored.
+func (s *SqlServer) KillStop() (exitedEarly bool, waitErr error) {
+	select {
+	case <-s.Done:
+		return true, s.CmdWaitErr
+	default:
+	}
+	if err := s.Cmd.Process.Kill(); err != nil {
+		// Kill errors only if the process has already finished.
+		<-s.Done
+		return true, s.CmdWaitErr
+	}
+	<-s.Done
+	return false, s.CmdWaitErr
+}
+
+// KillRestart is like Restart but hard-kills the current process (see KillStop)
+// instead of stopping it gracefully. It returns an error only if the killed
+// process had already crashed on its own, or the replacement failed to start.
+func (s *SqlServer) KillRestart(newargs *[]string, newenvs *[]string) error {
+	exitedEarly, waitErr := s.KillStop()
+	if exitedEarly && waitErr != nil {
+		return waitErr
+	}
+	return s.respawn(newargs, newenvs)
+}
+
+// respawn recreates and starts the server command, reusing the previous args
+// (or newargs/newenvs when provided).
+func (s *SqlServer) respawn(newargs *[]string, newenvs *[]string) error {
 	args := s.Cmd.Args[1:]
 	if newargs != nil {
 		args = append([]string{"sql-server"}, (*newargs)...)
 	}
-	s.Cmd = s.RecreateCmd(args...)
+	cmd := s.RecreateCmd(args...)
 	if newenvs != nil {
-		s.Cmd.Env = append(s.Cmd.Env, (*newenvs)...)
+		cmd.Env = append(cmd.Env, (*newenvs)...)
 	}
-	stdout, err := s.Cmd.StdoutPipe()
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
 	}
+	cmd.Stderr = cmd.Stdout
+	// Start before launching the wait goroutine: Cmd.Wait must not run
+	// concurrently with Cmd.Start. cmd/done are captured as locals so the
+	// goroutine never touches s.Cmd/s.Done, which a later respawn reassigns.
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	done := make(chan struct{})
+	s.Cmd = cmd
 	s.CmdWaitErr = nil
-	s.Cmd.Stderr = s.Cmd.Stdout
-	s.Done = make(chan struct{})
+	s.Done = done
 	go func() {
 		defer func() {
-			s.CmdWaitErr = s.Cmd.Wait()
-			close(s.Done)
+			s.CmdWaitErr = cmd.Wait()
+			close(done)
 		}()
 		logw := s.LogWriter
 		if logw == nil {
@@ -413,7 +460,7 @@ func (s *SqlServer) Restart(newargs *[]string, newenvs *[]string) error {
 		}
 		multiCopyWithNamePrefix(logw, s.Output, stdout, s.Name, s.OutputVisitor)
 	}()
-	return s.Cmd.Start()
+	return nil
 }
 
 func (s *SqlServer) DB(c Connection) (*sql.DB, error) {

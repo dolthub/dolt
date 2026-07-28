@@ -246,7 +246,7 @@ func (p *branchControlReplication) waitForReplication(timeout time.Duration) ([]
 	for i := range res {
 		res[i].database = "dolt_branch_control"
 		res[i].remote = replicas[i].client.remote
-		res[i].remoteUrl = replicas[i].client.httpUrl()
+		res[i].remoteUrl = replicas[i].client.httpUrl
 	}
 	var wg sync.WaitGroup
 	wg.Add(len(replicas))

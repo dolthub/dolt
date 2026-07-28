@@ -3096,9 +3096,9 @@ func (db Database) LoadRebasePlan(ctx *sql.Context) (*rebase.RebasePlan, error) 
 	}
 	resolvedTable := plan.NewResolvedTable(table, db, nil)
 	rebaseSchema := dprocedures.GetDoltRebaseSystemTableSchema()
-	sort := plan.NewSort([]sql.SortField{{
-		Column: expression.NewGetField(0, rebaseSchema[0].Type, "rebase_order", false),
-		Order:  sql.Ascending,
+	sort := plan.NewSort(sql.SortConditions{{
+		Expr:  expression.NewGetField(0, rebaseSchema[0].Type, "rebase_order", false),
+		Order: sql.Ascending,
 	}}, resolvedTable)
 	engOverrides := overrides.EngineOverridesFromContext(ctx)
 	iter, err := rowexec.NewBuilder(nil, engOverrides).Build(ctx, sort, nil)

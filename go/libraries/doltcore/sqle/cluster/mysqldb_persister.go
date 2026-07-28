@@ -279,7 +279,7 @@ func (p *replicatingMySQLDbPersister) waitForReplication(timeout time.Duration) 
 	for i := range replicas {
 		res[i].database = "mysql"
 		res[i].remote = replicas[i].client.remote
-		res[i].remoteUrl = replicas[i].client.httpUrl()
+		res[i].remoteUrl = replicas[i].client.httpUrl
 	}
 	var wg sync.WaitGroup
 	wg.Add(len(replicas))

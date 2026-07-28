@@ -319,8 +319,8 @@ func (sm SerialMessage) HumanReadableStringAtIndentationLevel(level int) string 
 		printWithIndendationLevel(level, ret, "Checks: [\n")
 		level += 1
 		for i := 0; i < msg.ChecksLength(); i++ {
-			var check *serial.CheckConstraint
-			_, _ = msg.TryChecks(check, i)
+			var check serial.CheckConstraint
+			_, _ = msg.TryChecks(&check, i)
 			printWithIndendationLevel(level, ret, "{\n")
 			level += 1
 			printWithIndendationLevel(level, ret, "Name: %s\n", string(check.Name()))

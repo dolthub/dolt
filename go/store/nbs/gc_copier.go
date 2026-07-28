@@ -250,7 +250,14 @@ func (gcc *rotatingGCCopier) finalizeChildWriter(ctx context.Context, copier gcC
 	defer pending.Close()
 
 	if gcc.incrementalUpdateManifest {
-		err = addTableFilesToManifest(ctx, gcc.dest, specs, gcc.specs.sourceSet)
+		// Pass a nil |existing| set here. Reading gcc.specs.sourceSet is
+		// unsynchronized and would race with the gcc.specs.append call below,
+		// which holds gcc.specs.mu and can be running concurrently in a
+		// sibling finalizeChildWriter goroutine. The set is only an
+		// optimization to clone already-open sources instead of reopening
+		// them, so nil is always correct: openForAdd just opens |specs| from
+		// disk instead.
+		err = addTableFilesToManifest(ctx, gcc.dest, specs, nil)
 		if err != nil {
 			return err
 		}

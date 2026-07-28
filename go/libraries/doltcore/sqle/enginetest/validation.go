@@ -173,7 +173,7 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 
 	idxDesc, _ := secondary.Descriptors()
 	builder := val.NewTupleBuilder(idxDesc, primary.NodeStore())
-	mapping := ordinalMappingsForSecondaryIndex(sch, def)
+	mapping := schema.IndexOrdinalToStorageOrdinal(sch, def)
 	_, vd := primary.Descriptors()
 
 	iter, err := primary.IterAll(ctx)
@@ -252,7 +252,7 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 	// secondary indexes have empty values
 	idxDesc, _ := secondary.Descriptors()
 	builder := val.NewTupleBuilder(idxDesc, primary.NodeStore())
-	mapping := ordinalMappingsForSecondaryIndex(sch, def)
+	mapping := schema.IndexOrdinalToStorageOrdinal(sch, def)
 	kd, vd := primary.Descriptors()
 
 	// Before we walk through the primary index data and validate that every row in the primary index exists in the

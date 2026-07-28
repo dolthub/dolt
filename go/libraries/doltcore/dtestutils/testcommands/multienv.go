@@ -24,6 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	cmd "github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
@@ -35,6 +36,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -207,6 +209,11 @@ func (mr *MultiRepoTestSetup) CloneDB(fromRemote, dbName string) {
 		mr.Errhand(err)
 	}
 
+	err = dbfactory.ClearDatabaseInProgress(dEnv.FS)
+	if err != nil {
+		mr.Errhand(err)
+	}
+
 	wd, err := os.Getwd()
 	if err != nil {
 		mr.Errhand(err)
@@ -270,7 +277,7 @@ func (mr *MultiRepoTestSetup) CommitWithWorkingSet(dbName string) *doltdb.Commit
 		Author:     ident,
 		Committer:  ident,
 	}
-	pendingCommit, err := actions.GetCommitStaged(ctx, doltdb.SimpleTableResolver{}, roots, ws, mergeParentCommits, dEnv.DbData(ctx).Ddb, commitStagedProps)
+	pendingCommit, err := actions.GetCommitStaged(ctx, doltdb.SimpleTableResolver{}, roots, ws, mergeParentCommits, hash.Hash{}, dEnv.DbData(ctx).Ddb, commitStagedProps)
 	if err != nil {
 		panic("pending commit error: " + err.Error())
 	}

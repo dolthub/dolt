@@ -535,6 +535,7 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 		}
 
 		template.Qual.Database = sqlDb.AliasedName()
+		template.Qual.Sch = sqlDb.SchemaName()
 
 		idxLen := len(sqlIdx.Expressions())
 

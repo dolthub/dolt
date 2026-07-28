@@ -17,6 +17,8 @@ package merge
 import (
 	"context"
 	"errors"
+	"fmt"
+	"runtime/debug"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -523,6 +525,11 @@ func calcTableMergeStats(ctx context.Context, tbl *doltdb.Table, mergeTbl *doltd
 	ch := make(chan diff.DiffStatProgress)
 	go func() {
 		defer close(ch)
+		defer func() {
+			if r := recover(); r != nil {
+				ae.SetIfError(fmt.Errorf("panic computing merge stats: %v\n%s", r, string(debug.Stack())))
+			}
+		}()
 		err := diff.Stat(ctx, ch, rows, mergeRows, sch, mergeSch)
 
 		ae.SetIfError(err)

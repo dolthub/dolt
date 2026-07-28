@@ -23,6 +23,8 @@ import (
 
 	"github.com/skratchdot/open-golang/open"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -206,6 +208,9 @@ func loginWithCreds(ctx context.Context, dEnv *env.DoltEnv, dc creds.DoltCreds, 
 	var err error
 	if behavior == checkCredentialsThenOpenBrowser {
 		whoAmI, err = grpcClient.WhoAmI(ctx, &remotesapi.WhoAmIRequest{})
+		if err != nil && status.Code(err) == codes.Unavailable {
+			return errhand.BuildDError("error: unable to reach doltremoteapi at %s.", authEndpoint).AddCause(err).Build()
+		}
 	}
 
 	if whoAmI == nil {
@@ -225,6 +230,13 @@ func loginWithCreds(ctx context.Context, dEnv *env.DoltEnv, dc creds.DoltCreds, 
 		linePrinter("requesting update")
 		whoAmI, err = grpcClient.WhoAmI(ctx, &remotesapi.WhoAmIRequest{})
 		if err != nil {
+			// Unavailable means the endpoint can't be reached (DNS failure,
+			// connection refused, 503); waiting for a key association won't fix
+			// that, so bail instead of looping forever. Other codes indicate the
+			// key isn't associated yet, which is what we're polling for.
+			if status.Code(err) == codes.Unavailable {
+				return errhand.BuildDError("error: unable to reach doltremoteapi at %s.", authEndpoint).AddCause(err).Build()
+			}
 			for i := 0; i < loginRetryInterval; i++ {
 				linePrinter(fmt.Sprintf("Retrying in %d", loginRetryInterval-i))
 				time.Sleep(time.Second)
@@ -259,7 +271,7 @@ func getCredentialsClient(dEnv *env.DoltEnv, dc creds.DoltCreds, authHost, authE
 	if err != nil {
 		return nil, errhand.BuildDError("error: unable to build dial options for connecting to server with credentials.").AddCause(err).Build()
 	}
-	conn, err := grpc.Dial(cfg.Endpoint, cfg.DialOptions...)
+	conn, err := grpc.NewClient("dns:///"+cfg.Endpoint, cfg.DialOptions...)
 	if err != nil {
 		return nil, errhand.BuildDError("error: unable to connect to server with credentials.").AddCause(err).Build()
 	}

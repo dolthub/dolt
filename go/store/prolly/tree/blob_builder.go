@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"slices"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -297,35 +296,72 @@ func (b *JSONDoc) ToString(ctx context.Context) (string, error) {
 	return string(buf[:toShow]), nil
 }
 
+const unicodeEscapeLen = 6
+
 // unescapeHTMLCodepoints replaces escaped HTML characters in serialized JSON with their unescaped equivalents.
 // Due to an oversight, the representation of JSON in storage escapes these characters, and we unescape them
 // before displaying them to the user.
 func unescapeHTMLCodepoints(path []byte) []byte {
-	nextToRead := path
-	nextToWrite := path
+	// |path| may be a view into shared, cached chunk storage that other
+	// goroutines can be reading concurrently, so we must not write to it. When
+	// there are no HTML codepoints to unescape (the common case), return it
+	// unmodified without any writes. Otherwise, compact into a copy and leave
+	// the caller's buffer intact.
+	if !containsEscapedHTMLCodepoint(path) {
+		return path
+	}
+	buf := make([]byte, len(path))
+	copy(buf, path)
+
+	nextToRead := buf
+	nextToWrite := buf
 
 	matches := 0
 	index := findNextEscapedUnicodeCodepoint(nextToRead)
 	for index != -1 {
-		newChar := byte(0)
-		if slices.Equal(nextToRead[index+2:index+6], []byte{'0', '0', '3', 'c'}) {
+		var newChar byte
+		switch string(nextToRead[index+2 : index+unicodeEscapeLen]) {
+		case "003c":
 			newChar = '<'
-		} else if slices.Equal(nextToRead[index+2:index+6], []byte{'0', '0', '3', 'e'}) {
+		case "003e":
 			newChar = '>'
-		} else if slices.Equal(nextToRead[index+2:index+6], []byte{'0', '0', '2', '6'}) {
+		case "0026":
 			newChar = '&'
 		}
 		if newChar != 0 {
-			matches += 1
+			matches++
 			copy(nextToWrite, nextToRead[:index])
 			nextToWrite[index] = newChar
 			nextToWrite = nextToWrite[index+1:]
+		} else {
+			// Copy a non HTML escape through unchanged. Without this the escape
+			// would be dropped and the rest of the buffer shifted over it.
+			copy(nextToWrite, nextToRead[:index+unicodeEscapeLen])
+			nextToWrite = nextToWrite[index+unicodeEscapeLen:]
 		}
-		nextToRead = nextToRead[index+6:]
+		nextToRead = nextToRead[index+unicodeEscapeLen:]
 		index = findNextEscapedUnicodeCodepoint(nextToRead)
 	}
 	copy(nextToWrite, nextToRead)
-	return path[:len(path)-5*matches]
+	return buf[:len(buf)-(unicodeEscapeLen-1)*matches]
+}
+
+// containsEscapedHTMLCodepoint reports whether |path| contains any escaped HTML
+// codepoint (<, >, or &) that unescapeHTMLCodepoints would
+// rewrite. It performs no writes, so it is safe to call on a shared buffer.
+func containsEscapedHTMLCodepoint(path []byte) bool {
+	rest := path
+	for {
+		index := findNextEscapedUnicodeCodepoint(rest)
+		if index == -1 {
+			return false
+		}
+		switch string(rest[index+2 : index+unicodeEscapeLen]) {
+		case "003c", "003e", "0026":
+			return true
+		}
+		rest = rest[index+unicodeEscapeLen:]
+	}
 }
 
 func findNextEscapedUnicodeCodepoint(path []byte) int {
@@ -335,7 +371,10 @@ func findNextEscapedUnicodeCodepoint(path []byte) int {
 			return -1
 		}
 		if path[index] == '\\' {
-			if path[index+1] == 'u' {
+			// Require a full escape so a truncated tail near the end of the
+			// buffer is left for the caller to copy through rather than read out
+			// of bounds.
+			if index+unicodeEscapeLen <= len(path) && path[index+1] == 'u' {
 				return index
 			}
 			index++

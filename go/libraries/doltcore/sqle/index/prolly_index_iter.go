@@ -22,6 +22,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
@@ -203,23 +204,7 @@ func (p prollyIndexIter) Close(*sql.Context) error {
 
 func OrdinalMappingFromIndex(idx DoltIndex) (m val.OrdinalMapping) {
 	def := idx.Schema().Indexes().GetByName(idx.ID())
-	pks := def.PrimaryKeyTags()
-	if len(pks) == 0 { // keyless index
-		m = make(val.OrdinalMapping, 1)
-		m[0] = len(def.AllTags())
-		return m
-	}
-
-	m = make(val.OrdinalMapping, len(pks))
-	for i, pk := range pks {
-		for j, tag := range def.AllTags() {
-			if tag == pk {
-				m[i] = j
-				break
-			}
-		}
-	}
-	return
+	return schema.PrimaryIndexOrdinalToSecondaryIndexOrdinal(def)
 }
 
 type prollyCoveringIndexIter struct {

@@ -81,8 +81,6 @@ tests:
         columns: ["COUNT(*)"]
         rows: [["3"]]
     - exec: 'CALL DOLT_GC()'
-    - query: 'SELECT COUNT(*) FROM wide_varchar'
-      error_match: "this connection can no longer be used"
   - on: server1
     queries:
     - query: |

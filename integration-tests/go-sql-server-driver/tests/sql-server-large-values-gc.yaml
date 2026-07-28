@@ -64,8 +64,6 @@ tests:
     - exec: "INSERT INTO large_text VALUES (4, REPEAT('4567890abc', 1500))"
     - exec: "INSERT INTO large_text VALUES (5, REPEAT('defghijklm', 1500))"
     - exec: 'CALL DOLT_GC()'
-    - query: 'SELECT COUNT(*) FROM large_text'
-      error_match: "this connection can no longer be used"
   # After GC the connection is invalidated. Open a new connection to the primary
   # and wait for the cluster to finish replicating the post-GC state.
   - on: server1

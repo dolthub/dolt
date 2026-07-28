@@ -1131,6 +1131,116 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
+		// See https://github.com/dolthub/dolt/issues/11187
+		Name: "dolt_diff: column reference commit arguments are rejected with a clear error",
+		SetUpScript: []string{
+			"CREATE TABLE airspaces (id INT PRIMARY KEY, name VARCHAR(20));",
+			"INSERT INTO airspaces VALUES (1, 'a');",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-m', 'init');",
+			"CALL DOLT_BRANCH('branch-x');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "SELECT branch.name, (SELECT COUNT(*) FROM DOLT_DIFF(branch.name, 'branch-x', 'airspaces')) FROM dolt_branches branch;",
+				ExpectedErr: dtablefunctions.ErrInvalidNonLiteralArgument,
+			},
+			{
+				Query:       "SELECT branch.name, (SELECT COUNT(*) FROM DOLT_DIFF(CONCAT(branch.name, '...branch-x'), 'airspaces')) FROM dolt_branches branch;",
+				ExpectedErr: dtablefunctions.ErrInvalidNonLiteralArgument,
+			},
+			{
+				Query:       "SELECT branch.name, (SELECT COUNT(*) FROM DOLT_DIFF('main', 'branch-x', branch.name)) FROM dolt_branches branch;",
+				ExpectedErr: dtablefunctions.ErrInvalidNonLiteralArgument,
+			},
+			{
+				Query: "SELECT COUNT(*) FROM DOLT_DIFF('main', 'branch-x', 'airspaces');",
+				Expected: []sql.Row{
+					{0},
+				},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11187
+		Name: "dolt_diff: per branch diffs run as one literal statement per branch",
+		SetUpScript: []string{
+			"CREATE TABLE airspaces (id INT PRIMARY KEY, name VARCHAR(20));",
+			"INSERT INTO airspaces VALUES (1, 'a'), (2, 'b'), (3, 'c'), (4, 'd');",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-m', 'init');",
+
+			"CALL DOLT_BRANCH('branch-x');",
+			"CALL DOLT_BRANCH('branch-y');",
+
+			"CALL DOLT_CHECKOUT('branch-x');",
+			"UPDATE airspaces SET name = 'x1' WHERE id = 1;",
+			"UPDATE airspaces SET name = 'x2' WHERE id = 2;",
+			"CALL DOLT_COMMIT('-am', 'x edits');",
+
+			"CALL DOLT_CHECKOUT('branch-y');",
+			"UPDATE airspaces SET name = 'y2' WHERE id = 2;",
+			"UPDATE airspaces SET name = 'y3' WHERE id = 3;",
+			"CALL DOLT_COMMIT('-am', 'y edits');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"CALL DOLT_CHECKOUT('-b', 'widened');",
+			"ALTER TABLE airspaces ADD COLUMN altitude INT;",
+			"UPDATE airspaces SET name = 'w2', altitude = 100 WHERE id = 2;",
+			"CALL DOLT_COMMIT('-am', 'widen and edit');",
+
+			"CALL DOLT_CHECKOUT('main');",
+
+			`CREATE PROCEDURE airspace_warnings(IN base VARCHAR(64))
+BEGIN
+  DECLARE done INT DEFAULT FALSE;
+  DECLARE b VARCHAR(64);
+  DECLARE cur CURSOR FOR SELECT name FROM dolt_branches WHERE name != base;
+  DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+  DROP TEMPORARY TABLE IF EXISTS warning_counts;
+  CREATE TEMPORARY TABLE warning_counts (branch VARCHAR(64), warning_count INT);
+  OPEN cur;
+  read_loop: LOOP
+    FETCH cur INTO b;
+    IF done THEN LEAVE read_loop; END IF;
+    SET @q = CONCAT(
+      'INSERT INTO warning_counts SELECT ?, COUNT(*) FROM (',
+      'SELECT COALESCE(to_id, from_id) AS id FROM DOLT_DIFF(', QUOTE(CONCAT(b, '...', base)), ', ''airspaces'') ',
+      'INTERSECT ',
+      'SELECT COALESCE(to_id, from_id) FROM DOLT_DIFF(', QUOTE(CONCAT(base, '...', b)), ', ''airspaces'')',
+      ') co');
+    SET @b = b;
+    PREPARE s FROM @q;
+    EXECUTE s USING @b;
+    DEALLOCATE PREPARE s;
+  END LOOP;
+  CLOSE cur;
+  SELECT * FROM warning_counts ORDER BY branch;
+END`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "CALL airspace_warnings('branch-x');",
+				// branch-y and widened each modified a row that branch-x also modified. The
+				// widened branch has a different column set, which each per branch statement
+				// handles because its literal arguments plan with that exact pair's schemas.
+				Expected: []sql.Row{
+					{"branch-y", 1},
+					{"main", 0},
+					{"widened", 1},
+				},
+			},
+			{
+				Query: "SELECT * FROM warning_counts ORDER BY branch;",
+				Expected: []sql.Row{
+					{"branch-y", 1},
+					{"main", 0},
+					{"widened", 1},
+				},
+			},
+		},
+	},
+	{
 		Name: "basic case",
 		SetUpScript: []string{
 			"set @Commit0 = HashOf('HEAD');",

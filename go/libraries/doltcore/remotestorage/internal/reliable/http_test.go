@@ -17,9 +17,11 @@ package reliable
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"runtime"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -270,5 +272,73 @@ func TestStreamingRangeDownload(t *testing.T) {
 
 		assert.Equal(t, int64(0), health.failures.Load(), "consumer-close cancel mid-range must not record a failure")
 		assert.Equal(t, int64(0), health.successes.Load(), "consumer-close cancel mid-range must not record a success")
+	})
+
+	t.Run("LogfReportsRetriedFailures", func(t *testing.T) {
+		// A transient failure that is retried and then succeeds should be
+		// reported via Logf, even though it never surfaces as a returned
+		// error.
+		const size = 1024
+		payload := make([]byte, size)
+		for i := range payload {
+			payload[i] = byte(i)
+		}
+
+		var calls atomic.Int64
+		fetcher := fetcherFunc(func(req *http.Request) (*http.Response, error) {
+			if calls.Add(1) == 1 {
+				// First attempt fails with a 503.
+				return &http.Response{
+					StatusCode: http.StatusServiceUnavailable,
+					Body:       io.NopCloser(bytes.NewReader(nil)),
+					Request:    req,
+				}, nil
+			}
+			return &http.Response{
+				StatusCode: http.StatusPartialContent,
+				Body:       io.NopCloser(bytes.NewReader(payload)),
+				Request:    req,
+			}, nil
+		})
+
+		var mu sync.Mutex
+		var logged []string
+		logf := func(format string, args ...interface{}) {
+			mu.Lock()
+			defer mu.Unlock()
+			logged = append(logged, fmt.Sprintf(format, args...))
+		}
+
+		health := &countingHealth{}
+		resp := StreamingRangeDownload(context.Background(), StreamingRangeRequest{
+			Fetcher: fetcher,
+			Offset:  0,
+			Length:  size,
+			UrlFact: func(error) (string, error) { return "http://example.test/file", nil },
+			Stats:   noopStats{},
+			Health:  health,
+			BackOffFact: func(ctx context.Context) backoff.BackOff {
+				return backoff.NewConstantBackOff(0)
+			},
+			Throughput: MinimumThroughputCheck{
+				CheckInterval: time.Hour,
+				BytesPerCheck: 1,
+				NumIntervals:  1,
+			},
+			RespHeadersTimeout: time.Hour,
+			Logf:               logf,
+		})
+
+		got := make([]byte, size)
+		_, err := io.ReadFull(resp.Body, got)
+		require.NoError(t, err)
+		require.Equal(t, payload, got)
+		require.NoError(t, resp.Close())
+
+		mu.Lock()
+		defer mu.Unlock()
+		require.Len(t, logged, 1, "expected exactly one retried-failure log line")
+		assert.Contains(t, logged[0], "retrying range download")
+		assert.Contains(t, logged[0], "503")
 	})
 }

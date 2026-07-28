@@ -282,8 +282,8 @@ type CacheStats interface {
 	CacheHits() uint32
 }
 
-func (dcs *DoltChunkStore) ChunkFetcher(ctx context.Context) nbs.ChunkFetcher {
-	return NewChunkFetcher(ctx, dcs)
+func (dcs *DoltChunkStore) ChunkFetcher(ctx context.Context, recorder nbs.StatsRecorder) nbs.ChunkFetcher {
+	return NewChunkFetcher(ctx, dcs, recorder)
 }
 
 // Get the Chunk for the value of the hash in the store. If the hash is absent from the store EmptyChunk is returned.
@@ -435,7 +435,7 @@ func sortRangesBySize(ranges []*GetRange) {
 
 type resourcePathToUrlFunc func(ctx context.Context, lastError error, resourcePath string) (url string, err error)
 
-func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, health reliable.HealthRecorder, fetcher HTTPFetcher, params NetworkRequestParams, resCb func(context.Context, []byte, *Range) error, pathToUrl resourcePathToUrlFunc) func() error {
+func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, health reliable.HealthRecorder, fetcher HTTPFetcher, params NetworkRequestParams, logf func(string, ...interface{}), resCb func(context.Context, []byte, *Range) error, pathToUrl resourcePathToUrlFunc) func() error {
 	if len(gr.Ranges) == 0 {
 		return func() error { return nil }
 	}
@@ -459,6 +459,7 @@ func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, he
 			UrlFact: urlF,
 			Stats:   stats,
 			Health:  health,
+			Logf:    logf,
 			BackOffFact: func(ctx context.Context) backoff.BackOff {
 				return downloadBackOff(ctx, params.DownloadRetryCount)
 			},
@@ -597,7 +598,7 @@ type RepoRequest interface {
 func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes []hash.Hash, found func(context.Context, nbs.ToChunker)) (err error) {
 	toSend := hash.NewHashSet(hashes...)
 
-	fetcher := dcs.ChunkFetcher(ctx)
+	fetcher := dcs.ChunkFetcher(ctx, nil)
 	defer func() {
 		cerr := fetcher.Close()
 		if err == nil {

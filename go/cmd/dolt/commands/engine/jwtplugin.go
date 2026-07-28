@@ -37,18 +37,24 @@ func NewAuthenticateDoltJWTPlugin(jwksConfig []servercfg.JwksConfig) mysql_db.Pl
 }
 
 func (p *authenticateDoltJWTPlugin) Authenticate(db *mysql_db.MySQLDb, user string, userEntry *mysql_db.User, pass string) (bool, error) {
-	return validateJWT(p.jwksConfig, user, userEntry.Identity, pass, time.Now())
+	return validateJWT(p.jwksConfig, userEntry.Identity, pass, time.Now())
 }
 
-func validateJWT(config []servercfg.JwksConfig, username, identity, token string, reqTime time.Time) (bool, error) {
+// validateJWT authenticates a token against the claims declared in the user's
+// identity string. The identity string is a comma-separated set of expected
+// claims (jwks, iss, aud, sub); the token authenticates iff it satisfies all
+// of them. The connecting username is deliberately not consulted here: if an
+// operator wants to bind the token subject to the account name, they set
+// sub=<username> in the identity, which is then enforced against the token's
+// sub claim like any other claim.
+func validateJWT(config []servercfg.JwksConfig, identity, token string, reqTime time.Time) (bool, error) {
 	if len(config) == 0 {
 		return false, errors.New("ValidateJWT: JWKS server config not found")
 	}
 
-	expectedClaimsMap := parseUserIdentity(identity)
-	sub, ok := expectedClaimsMap["sub"]
-	if ok && sub != username {
-		return false, errors.New("ValidateJWT: Subjects do not match")
+	expectedClaimsMap, err := parseUserIdentity(identity)
+	if err != nil {
+		return false, err
 	}
 
 	jwksConfig, err := getMatchingJwksConfig(config, expectedClaimsMap["jwks"])
@@ -119,12 +125,15 @@ func getMatchingJwksConfig(config []servercfg.JwksConfig, name string) (*serverc
 	return nil, errors.New("ValidateJWT: Matching JWKS config not found")
 }
 
-func parseUserIdentity(identity string) map[string]string {
+func parseUserIdentity(identity string) (map[string]string, error) {
 	idMap := make(map[string]string)
 	items := strings.Split(identity, ",")
 	for _, item := range items {
-		tup := strings.Split(item, "=")
-		idMap[tup[0]] = tup[1]
+		name, value, ok := strings.Cut(item, "=")
+		if !ok {
+			return nil, fmt.Errorf("ValidateJWT: malformed identity %q: expected comma-separated key=value pairs", identity)
+		}
+		idMap[name] = value
 	}
-	return idMap
+	return idMap, nil
 }

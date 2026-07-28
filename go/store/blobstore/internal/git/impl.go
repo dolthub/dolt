@@ -15,6 +15,7 @@
 package git
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -194,6 +195,57 @@ func (a *GitAPIImpl) BlobSize(ctx context.Context, oid OID) (int64, error) {
 func (a *GitAPIImpl) BlobReader(ctx context.Context, oid OID) (io.ReadCloser, error) {
 	rc, _, err := a.r.Start(ctx, RunOptions{}, "cat-file", "blob", oid.String())
 	return rc, err
+}
+
+func (a *GitAPIImpl) BlobSizes(ctx context.Context, oids []OID) ([]int64, error) {
+	if len(oids) == 0 {
+		return nil, nil
+	}
+	// git cat-file --batch-check emits one header line per input OID, in order.
+	var in bytes.Buffer
+	for _, oid := range oids {
+		fmt.Fprintln(&in, oid)
+	}
+	rc, _, err := a.r.Start(ctx, RunOptions{Stdin: &in}, "cat-file", "--batch-check=%(objectname) %(objecttype) %(objectsize)")
+	if err != nil {
+		return nil, err
+	}
+	br := bufio.NewReader(rc)
+	sizes := make([]int64, len(oids))
+	for i := range oids {
+		line, err := br.ReadString('\n')
+		if err != nil {
+			return nil, errors.Join(rc.Close(), fmt.Errorf("git cat-file --batch-check: reading size for %s: %w", oids[i], err))
+		}
+		sizes[i], err = parseBatchHeaderSize(line, oids[i])
+		if err != nil {
+			return nil, errors.Join(rc.Close(), err)
+		}
+	}
+	if err := rc.Close(); err != nil {
+		return nil, err
+	}
+	return sizes, nil
+}
+
+// parseBatchHeaderSize parses the size from |header|, a git cat-file --batch or --batch-check
+// line for |oid| of the form "<oid> <type> <size>". A missing or ambiguous object is an error.
+func parseBatchHeaderSize(header string, oid OID) (int64, error) {
+	fields := strings.Fields(header)
+	if len(fields) > 0 && fields[0] != oid.String() {
+		return 0, fmt.Errorf("git cat-file: response for %q does not match requested %s", fields[0], oid)
+	}
+	if len(fields) == 2 {
+		return 0, fmt.Errorf("git cat-file: object %s %s", oid, fields[1])
+	}
+	if len(fields) != 3 {
+		return 0, fmt.Errorf("git cat-file: unexpected header %q for %s", strings.TrimSpace(header), oid)
+	}
+	size, err := strconv.ParseInt(fields[2], 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("git cat-file: parse size %q for %s: %w", fields[2], oid, err)
+	}
+	return size, nil
 }
 
 func (a *GitAPIImpl) HashObject(ctx context.Context, contents io.Reader) (OID, error) {

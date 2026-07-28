@@ -35,7 +35,7 @@ setup() {
 
 teardown() {
     stop_sql_server
-    teardown_git
+    teardown_git_ssh
     unset DOLT_SSH_COMMAND DOLT_SSH_EXEC_PATH REMOTE_URL
 }
 

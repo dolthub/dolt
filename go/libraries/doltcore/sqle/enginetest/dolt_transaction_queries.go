@@ -845,6 +845,49 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 		},
 	},
+	{
+		// Regression test: a database created by one session after another session's transaction has already begun
+		// must still be usable in that already-open transaction. The transaction's start-point snapshot is taken when
+		// it begins and does not include the later-created database, so resolving it used to fail with
+		// "could not resolve initial root for database newdb". We now lazily register the database into the
+		// transaction on first reference (see DoltSession.addDB / DoltTransaction.AddDb). This reproduces the race hit
+		// when many databases are created concurrently and then queried concurrently across sessions.
+		Name:        "database created by another session is usable in an already-open transaction",
+		SetUpScript: []string{},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// client a opens a transaction; its snapshot predates newdb's existence
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				// client b creates and populates newdb, registering it in the shared provider
+				Query:            "/* client b */ create database newdb",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ use newdb",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ create table t (x int primary key)",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client b */ insert into t values (1)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				// client a references newdb inside its already-open transaction; previously errored on initial root
+				Query:            "/* client a */ use newdb",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ select * from t",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
 }
 
 var DoltConflictHandlingTests = []queries.TransactionTest{
@@ -2062,6 +2105,244 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 					{nil, 5, nil, 5},
 					{nil, 6, nil, 6},
 				},
+			},
+		},
+	},
+	// See https://github.com/dolthub/dolt/issues/9072
+	{
+		Name: "amend commit in transaction fails when another client merges into the branch",
+		SetUpScript: []string{
+			"create table test (pk int primary key, val varchar(30))",
+			"call dolt_add('.')",
+			"insert into test values (1, 'initial'), (2, 'second')",
+			"call dolt_commit('-a', '-m', 'initial commit')",
+			"call dolt_checkout('-b', 'side')",
+			"insert into test values (100, 'side work')",
+			"call dolt_commit('-a', '-m', 'side work')",
+			"call dolt_checkout('main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ update test set val = 'stale change' where pk = 1",
+				Expected: []sql.Row{{queries.NewUpdateResult(1, 1)}},
+			},
+			{
+				Query:    "/* client b */ call dolt_merge('--no-ff', 'side')",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query: "/* client a */ select hashof('HEAD') = hashof('main')",
+				// The transaction still sees its snapshot head even though the branch ref has moved
+				Expected: []sql.Row{{false}},
+			},
+			{
+				Query:       "/* client a */ call dolt_commit('-a', '--amend', '-m', 'stale amend')",
+				ExpectedErr: sql.ErrLockDeadlock,
+			},
+			{
+				Query:    "/* client a */ rollback",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "/* client a */ select message from dolt_log limit 1",
+				// The merge commit survives as the branch head
+				Expected: []sql.Row{{"Merge branch 'side' into main"}},
+			},
+			{
+				Query:    "/* client a */ select count(*) from dolt_log where message = 'stale amend'",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client a */ select val from test where pk = 1",
+				Expected: []sql.Row{{"initial"}},
+			},
+			{
+				Query:    "/* client a */ select val from test where pk = 100",
+				Expected: []sql.Row{{"side work"}},
+			},
+		},
+	},
+	{
+		Name: "amend commit in transaction fails when another client moves the branch head",
+		SetUpScript: []string{
+			"create table test (pk int primary key, val varchar(30))",
+			"call dolt_add('.')",
+			"insert into test values (1, 'initial'), (2, 'second')",
+			"call dolt_commit('-a', '-m', 'initial commit')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			// Another client moves the head with a plain commit
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ update test set val = 'stale change' where pk = 1",
+				Expected: []sql.Row{{queries.NewUpdateResult(1, 1)}},
+			},
+			{
+				Query:    "/* client b */ insert into test values (3, 'concurrent row')",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ call dolt_commit('-a', '-m', 'concurrent commit')",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				Query: "/* client a */ select hashof('HEAD') = hashof('main')",
+				// The transaction still sees its snapshot head even though the branch ref has moved
+				Expected: []sql.Row{{false}},
+			},
+			{
+				Query:       "/* client a */ call dolt_commit('-a', '--amend', '-m', 'stale amend')",
+				ExpectedErr: sql.ErrLockDeadlock,
+			},
+			// Another client moves the head with a commit that leaves the root data identical
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ update test set val = 'stale change' where pk = 1",
+				Expected: []sql.Row{{queries.NewUpdateResult(1, 1)}},
+			},
+			{
+				Query:    "/* client b */ call dolt_commit('--allow-empty', '-m', 'empty head move')",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				Query:       "/* client a */ call dolt_commit('-a', '--amend', '-m', 'stale amend')",
+				ExpectedErr: sql.ErrLockDeadlock,
+			},
+			// Another client amends the head first, touching only rows this transaction never changed
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ update test set val = 'stale change' where pk = 1",
+				Expected: []sql.Row{{queries.NewUpdateResult(1, 1)}},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ update test set val = 'concurrent amend' where pk = 2",
+				Expected: []sql.Row{{queries.NewUpdateResult(1, 1)}},
+			},
+			{
+				Query: "/* client b */ call dolt_commit('-a', '--amend', '-m', 'concurrent amend')",
+				// This amend is legal because the branch head has not moved since client b began
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				Query:       "/* client a */ call dolt_commit('-a', '--amend', '-m', 'stale amend')",
+				ExpectedErr: sql.ErrLockDeadlock,
+			},
+			{
+				Query:    "/* client a */ rollback",
+				Expected: []sql.Row{},
+			},
+			// Every rejected amend left the branch history untouched
+			{
+				Query:    "/* client a */ select message from dolt_log limit 1",
+				Expected: []sql.Row{{"concurrent amend"}},
+			},
+			{
+				Query:    "/* client a */ select count(*) from dolt_log where message = 'stale amend'",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query: "/* client a */ select count(*) from dolt_log where message = 'empty head move'",
+				// Client b's legal amend replaced the empty commit
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client a */ select val from test where pk = 1",
+				Expected: []sql.Row{{"initial"}},
+			},
+			{
+				Query:    "/* client a */ select val from test where pk = 2",
+				Expected: []sql.Row{{"concurrent amend"}},
+			},
+		},
+	},
+	{
+		Name: "amend commit tolerates ignored table changes from both clients",
+		SetUpScript: []string{
+			"create table test (pk int primary key, val varchar(30))",
+			"insert into dolt_ignore values ('ignored_*', 1)",
+			"create table ignored_t (pk int primary key)",
+			"insert into test values (1, 'initial')",
+			"call dolt_commit('-Am', 'initial commit')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ update test set val = 'amend me' where pk = 1",
+				Expected: []sql.Row{{queries.NewUpdateResult(1, 1)}},
+			},
+			{
+				Query:    "/* client a */ insert into ignored_t values (2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ create table ignored_a (pk int primary key)",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client b */ insert into ignored_t values (1)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ create table ignored_b (pk int primary key)",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query: "/* client a */ select hashof('HEAD') = hashof('main')",
+				// Client b's ignored table writes created no commit, so the branch head has not moved
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "/* client a */ call dolt_commit('-a', '--amend', '-m', 'amended')",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				Query:    "/* client a */ select message from dolt_log limit 1",
+				Expected: []sql.Row{{"amended"}},
+			},
+			{
+				Query: "/* client a */ select pk from ignored_t order by pk",
+				// Both clients' uncommitted ignored table rows survive the amend
+				Expected: []sql.Row{{1}, {2}},
+			},
+			{
+				Query: "/* client a */ select val from test as of hashof('HEAD')",
+				// The amended commit contains the staged data, not only the new message
+				Expected: []sql.Row{{"amend me"}},
+			},
+			{
+				Query: "/* client a */ select table_name from dolt_status_ignored where ignored = 1 order by table_name",
+				// Both clients' new ignored tables and the shared one remain classified as ignored
+				Expected: []sql.Row{{"ignored_a"}, {"ignored_b"}, {"ignored_t"}},
+			},
+			{
+				Query: "/* client a */ select count(*) from dolt_status",
+				// The ignored table leaves nothing to commit
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query: "/* client a */ show tables as of hashof('HEAD')",
+				// The ignored table is not part of the amended commit
+				Expected: []sql.Row{{"test"}},
 			},
 		},
 	},
