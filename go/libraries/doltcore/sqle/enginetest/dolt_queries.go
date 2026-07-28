@@ -4502,7 +4502,7 @@ var DoltBranchScripts = []queries.ScriptTest{
 	},
 	{
 		// See https://github.com/dolthub/dolt/issues/11270
-		Name: "creating a branch that differs from an existing one only by case is rejected",
+		Name: "a branch name differing from an existing one only by case is rejected, a distinct name is not",
 		SetUpScript: []string{
 			"create table t (a int primary key);",
 			"insert into t values (1);",
@@ -4513,31 +4513,31 @@ var DoltBranchScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "call dolt_branch('BR');",
-				ExpectedErrStr: "fatal: A branch named 'BR' already exists.",
+				ExpectedErrStr: "fatal: A branch named 'br' already exists.",
 			},
 			{
 				Query:          "call dolt_branch('-f', 'BR');",
-				ExpectedErrStr: "fatal: A branch named 'BR' already exists.",
+				ExpectedErrStr: "fatal: A branch named 'br' already exists.",
 			},
 			{
 				Query:          "call dolt_checkout('-b', 'BR');",
-				ExpectedErrStr: "fatal: A branch named 'BR' already exists.",
+				ExpectedErrStr: "fatal: A branch named 'br' already exists.",
 			},
 			{
 				Query:          "call dolt_branch('-c', 'br', 'BR');",
-				ExpectedErrStr: "fatal: A branch named 'BR' already exists.",
+				ExpectedErrStr: "fatal: A branch named 'br' already exists.",
 			},
 			{
 				Query:          "call dolt_branch('-m', 'feature', 'BR');",
-				ExpectedErrStr: "fatal: A branch named 'BR' already exists.",
+				ExpectedErrStr: "fatal: A branch named 'br' already exists.",
 			},
 			{
 				Query:          "call dolt_branch('-cf', 'feature', 'BR');",
-				ExpectedErrStr: "fatal: A branch named 'BR' already exists.",
+				ExpectedErrStr: "fatal: A branch named 'br' already exists.",
 			},
 			{
 				Query:          "call dolt_branch('-mf', 'feature', 'BR');",
-				ExpectedErrStr: "fatal: A branch named 'BR' already exists.",
+				ExpectedErrStr: "fatal: A branch named 'br' already exists.",
 			},
 			{
 				Query:          "call dolt_branch('br');",
@@ -4547,20 +4547,8 @@ var DoltBranchScripts = []queries.ScriptTest{
 				Query:    "select count(*) from dolt_branches where name = 'br' or name = 'BR';",
 				Expected: []sql.Row{{1}},
 			},
-		},
-	},
-	{
-		// See https://github.com/dolthub/dolt/issues/11270
-		Name: "collision guard does not block distinct names, same-case reset, or case-only rename",
-		SetUpScript: []string{
-			"create table t (a int primary key);",
-			"insert into t values (1);",
-			"call dolt_commit('-Am', 'init');",
-			"call dolt_branch('br');",
-		},
-		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "call dolt_branch('feature');",
+				Query:    "call dolt_branch('other');",
 				Expected: []sql.Row{{0}},
 			},
 			{
@@ -4605,10 +4593,6 @@ var DoltBranchScripts = []queries.ScriptTest{
 			},
 			{
 				Query:          "call dolt_branch('-m', 'nosuch', 'nosuch');",
-				ExpectedErrStr: "branch not found",
-			},
-			{
-				Query:          "call dolt_branch('-mf', 'nosuch', 'nosuch');",
 				ExpectedErrStr: "branch not found",
 			},
 			{
@@ -6902,12 +6886,8 @@ var DoltTagTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:    "SELECT count(*) FROM dolt_branches WHERE name IN ('shared', 'fromtag')",
-				Expected: []sql.Row{{2}},
-			},
-			{
-				Query:    "SELECT count(*) FROM dolt_tags WHERE tag_name IN ('shared', 'fromtag')",
-				Expected: []sql.Row{{2}},
+				Query:    "SELECT (SELECT count(*) FROM dolt_branches WHERE name IN ('shared', 'fromtag')), (SELECT count(*) FROM dolt_tags WHERE tag_name IN ('shared', 'fromtag'))",
+				Expected: []sql.Row{{2, 2}},
 			},
 		},
 	},

@@ -181,8 +181,8 @@ func (db hooksDatabase) WriteCommit(ctx context.Context, ds datas.Dataset, commi
 	return ds, err
 }
 
-func (db hooksDatabase) SetHead(ctx context.Context, ds datas.Dataset, newHeadAddr hash.Hash, ws string, opts ...datas.SetHeadOption) (datas.Dataset, error) {
-	ds, err := db.Database.SetHead(ctx, ds, newHeadAddr, ws, opts...)
+func (db hooksDatabase) SetHead(ctx context.Context, ds datas.Dataset, newHeadAddr hash.Hash, ws string, checks ...datas.PreUpdateCheck) (datas.Dataset, error) {
+	ds, err := db.Database.SetHead(ctx, ds, newHeadAddr, ws, checks...)
 	if err == nil {
 		db.ExecuteCommitHooks(ctx, ds, false, false)
 	}

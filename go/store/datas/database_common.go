@@ -199,32 +199,16 @@ func (db *database) Close() error {
 	return db.ValueStore.Close()
 }
 
-// SetHeadOption customizes a SetHead call.
-type SetHeadOption func(*setHeadOptions)
+// PreUpdateCheck runs inside the same atomic root update that performs a head write, receiving the
+// current dataset map and the ID being set. Returning an error aborts the update, letting a caller
+// enforce an invariant across all datasets without racing a concurrent writer.
+type PreUpdateCheck func(ctx context.Context, datasets prolly.AddressMap, targetID string) error
 
-type setHeadOptions struct {
-	preUpdateChecks []func(ctx context.Context, datasets prolly.AddressMap, targetID string) error
+func (db *database) SetHead(ctx context.Context, ds Dataset, newHeadAddr hash.Hash, workingSetPath string, checks ...PreUpdateCheck) (Dataset, error) {
+	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error { return db.doSetHead(ctx, ds, newHeadAddr, workingSetPath, checks) })
 }
 
-// WithPreUpdateCheck runs |fn| inside the same atomic root update that performs the head write, passing
-// the current dataset map and the ID being set. Returning an error aborts the update, letting a caller
-// enforce an invariant across all datasets without racing a concurrent writer. Checks accumulate and
-// run in the order given.
-func WithPreUpdateCheck(fn func(ctx context.Context, datasets prolly.AddressMap, targetID string) error) SetHeadOption {
-	return func(o *setHeadOptions) {
-		o.preUpdateChecks = append(o.preUpdateChecks, fn)
-	}
-}
-
-func (db *database) SetHead(ctx context.Context, ds Dataset, newHeadAddr hash.Hash, workingSetPath string, opts ...SetHeadOption) (Dataset, error) {
-	var o setHeadOptions
-	for _, opt := range opts {
-		opt(&o)
-	}
-	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error { return db.doSetHead(ctx, ds, newHeadAddr, workingSetPath, o) })
-}
-
-func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash, workingSetPath string, opts setHeadOptions) error {
+func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash, workingSetPath string, checks []PreUpdateCheck) error {
 	newHead, err := db.readHead(ctx, addr)
 	if err != nil {
 		return err
@@ -275,7 +259,7 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash, w
 	}
 
 	return db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
-		for _, check := range opts.preUpdateChecks {
+		for _, check := range checks {
 			if err := check(ctx, am, ds.ID()); err != nil {
 				return prolly.AddressMap{}, err
 			}

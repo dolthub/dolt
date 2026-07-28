@@ -18,6 +18,8 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 )
 
 var ErrInvBranchName = errors.New("not a valid user branch name")
@@ -38,6 +40,7 @@ var ErrWorkspaceNotFound = errors.New("workspace not found")
 var ErrTableNotFound = errors.New("table not found")
 var ErrTableExists = errors.New("table already exists")
 var ErrAlreadyOnBranch = errors.New("Already on branch")
+var ErrAmbiguousRefName = errors.New("ref name is ambiguous because refs differ only by case, rename or delete one to disambiguate")
 
 var ErrNomsIO = errors.New("error reading from or writing to noms")
 
@@ -140,6 +143,17 @@ func GetUnreachableRootCause(err error) error {
 	}
 
 	return rvu.Cause
+}
+
+// ExistingRefError reports the ref that already holds a name a caller tried to create. Ref is the stored
+// spelling, which differs from the requested one when only their cases differ. Callers name the ref they
+// were creating, so the message itself stays a bare suffix.
+type ExistingRefError struct {
+	Ref ref.DoltRef
+}
+
+func (e *ExistingRefError) Error() string {
+	return "already exists"
 }
 
 // DoltIgnoreConflictError is an error that is returned when the user attempts to stage a table that matches conflicting dolt_ignore patterns
