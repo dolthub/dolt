@@ -34,7 +34,7 @@ import (
 // doltSquashHistory is the stored procedure for CALL dolt_squash_history(...). It collapses a
 // suffix of the current branch's history into a single new commit that carries HEAD's tree,
 // reparented onto the parents of the --first commit. This is a pointer rewrite, not a replay:
-// the operation is constant time regardless of how many commits are collapsed.
+// it does not create new commits by replaying diffs, and is typically much faster than rebasing.
 func doltSquashHistory(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	commitHash, err := doDoltSquashHistory(ctx, args)
 	if err != nil {
