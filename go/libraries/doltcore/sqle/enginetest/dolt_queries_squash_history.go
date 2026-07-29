@@ -216,6 +216,111 @@ var DoltSquashHistoryScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "dolt_squash_history: aborts when a merge is in progress",
+		SetUpScript: []string{
+			"create table t (pk int primary key, v int);",
+			"insert into t values (1, 1);",
+			"call dolt_commit('-Am', 'c1');",
+			"call dolt_branch('other');",
+			"update t set v = 2 where pk = 1;",
+			"call dolt_commit('-am', 'main change');",
+			"call dolt_checkout('other');",
+			"update t set v = 3 where pk = 1;",
+			"call dolt_commit('-am', 'other change');",
+			"call dolt_checkout('main');",
+			"set @@autocommit = 0;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('other');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:          "call dolt_squash_history('--message', 'x');",
+				ExpectedErrStr: "cannot squash history while a merge is in progress; abort the merge first",
+			},
+		},
+	},
+	{
+		// Cherry-pick and revert use the merge state, so MergeActive covers them too.
+		Name: "dolt_squash_history: aborts when a cherry-pick is in progress",
+		SetUpScript: []string{
+			"set @@autocommit = 0;",
+			"create table t (pk int primary key, v int);",
+			"insert into t values (1, 1);",
+			"call dolt_commit('-Am', 'c1');",
+			"call dolt_checkout('-b', 'feature');",
+			"update t set v = 2 where pk = 1;",
+			"call dolt_commit('-am', 'feature change');",
+			"call dolt_checkout('main');",
+			"update t set v = 3 where pk = 1;",
+			"call dolt_commit('-am', 'main change');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "call dolt_cherry_pick(dolt_hashof('feature'));",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:          "call dolt_squash_history('--message', 'x');",
+				ExpectedErrStr: "cannot squash history while a merge is in progress; abort the merge first",
+			},
+		},
+	},
+	{
+		Name: "dolt_squash_history: aborts when a revert is in progress",
+		SetUpScript: []string{
+			"set @@autocommit = 0;",
+			"create table t (pk int primary key, v int);",
+			"insert into t values (1, 1);",
+			"call dolt_commit('-Am', 'c1');",
+			"update t set v = 2 where pk = 1;",
+			"call dolt_commit('-am', 'c2');",
+			"set @c2 = dolt_hashof('HEAD');",
+			"update t set v = 99 where pk = 1;",
+			"call dolt_commit('-am', 'c3');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "call dolt_revert(@c2);",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:          "call dolt_squash_history('--message', 'x');",
+				ExpectedErrStr: "cannot squash history while a merge is in progress; abort the merge first",
+			},
+		},
+	},
+	{
+		// A rebase that has started but not continued leaves a CLEAN working set, so the
+		// clean-working-set check cannot catch it -- RebaseActive is required here.
+		Name: "dolt_squash_history: aborts when a rebase is in progress",
+		SetUpScript: []string{
+			"create table t (pk int primary key, v int);",
+			"insert into t values (1, 1);",
+			"call dolt_commit('-Am', 'c1');",
+			"insert into t values (2, 2);",
+			"call dolt_commit('-am', 'c2');",
+			"insert into t values (3, 3);",
+			"call dolt_commit('-am', 'c3');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "call dolt_rebase('-i', 'HEAD~2');",
+				SkipResultsCheck: true,
+			},
+			{
+				// The working set is clean at this point, so this abort comes from RebaseActive.
+				Query:    "select count(*) from dolt_status;",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "call dolt_squash_history('--message', 'x');",
+				ExpectedErrStr: "cannot squash history while a rebase is in progress; abort the rebase first",
+			},
+		},
+	},
+	{
 		Name: "dolt_squash_history: error when --first is not an ancestor of HEAD",
 		SetUpScript: []string{
 			"create table t (pk int primary key);",

@@ -76,6 +76,17 @@ func doDoltSquashHistory(ctx *sql.Context, args []string) (string, error) {
 	}
 	ddb := dbData.Ddb
 
+	ws, err := dSess.WorkingSet(ctx, dbName)
+	if err != nil {
+		return "", err
+	}
+	if ws.MergeActive() {
+		return "", fmt.Errorf("cannot squash history while a merge is in progress; abort the merge first")
+	}
+	if ws.RebaseActive() {
+		return "", fmt.Errorf("cannot squash history while a rebase is in progress; abort the rebase first")
+	}
+
 	roots, ok := dSess.GetRoots(ctx, dbName)
 	if !ok {
 		return "", fmt.Errorf("Could not load database %s", dbName)
@@ -112,19 +123,9 @@ func doDoltSquashHistory(ctx *sql.Context, args []string) (string, error) {
 		return "", err
 	}
 
-	// HEAD's tree is unchanged, so the working set stays clean; point it at the new commit's root.
-	newRoot, err := newCommit.GetRootValue(ctx)
-	if err != nil {
-		return "", err
-	}
-	ws, err := dSess.WorkingSet(ctx, dbName)
-	if err != nil {
-		return "", err
-	}
-	if err = dSess.SetWorkingSet(ctx, dbName, ws.WithWorkingRoot(newRoot).WithStagedRoot(newRoot).ClearMerge().ClearRebase()); err != nil {
-		return "", err
-	}
-
+	// HEAD's tree is preserved, so the working and staged roots already match the new HEAD and need
+	// no modification. Committing the transaction starts a fresh one so the session observes the
+	// moved HEAD.
 	if err = commitTransaction(ctx, dSess, nil); err != nil {
 		return "", err
 	}
