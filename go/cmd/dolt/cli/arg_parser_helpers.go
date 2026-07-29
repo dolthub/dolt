@@ -168,6 +168,13 @@ func CreateResetArgParser() *argparser.ArgParser {
 	return ap
 }
 
+func CreateSquashHistoryArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParserWithMaxArgs("squash-history", 0)
+	ap.SupportsString(MessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message for the squashed commit.")
+	ap.SupportsString(FirstParam, "", "commit", "The oldest commit to include in the squash. Everything from {{.LessThan}}commit{{.GreaterThan}} through HEAD is collapsed into a single commit. Defaults to the initial commit's child.")
+	return ap
+}
+
 func CreateRemoteArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs("remote")
 	ap.SupportsString("ref", "", "ref", "Git ref to use as the Dolt data ref for git remotes (default: refs/dolt/data).")
