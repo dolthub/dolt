@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -91,8 +92,12 @@ func doDoltSquashHistory(ctx *sql.Context, args []string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("Could not load database %s", dbName)
 	}
-	if err = checkWorkingSetClean(ctx, roots); err != nil {
+	hasChanges, _, _, err := actions.RootHasUncommittedChanges(roots)
+	if err != nil {
 		return "", err
+	}
+	if hasChanges {
+		return "", fmt.Errorf("cannot squash history with uncommitted changes")
 	}
 
 	headRef, err := dbData.Rsr.CWBHeadRef(ctx)
@@ -135,27 +140,6 @@ func doDoltSquashHistory(ctx *sql.Context, args []string) (string, error) {
 		return "", err
 	}
 	return newHash.String(), nil
-}
-
-// checkWorkingSetClean returns an error if the working or staged root differs from HEAD. Squash
-// is a pure history rewrite and refuses to run against uncommitted changes.
-func checkWorkingSetClean(ctx *sql.Context, roots doltdb.Roots) error {
-	headHash, err := roots.Head.HashOf()
-	if err != nil {
-		return err
-	}
-	stagedHash, err := roots.Staged.HashOf()
-	if err != nil {
-		return err
-	}
-	workingHash, err := roots.Working.HashOf()
-	if err != nil {
-		return err
-	}
-	if headHash != stagedHash || headHash != workingHash {
-		return fmt.Errorf("cannot squash history with uncommitted changes")
-	}
-	return nil
 }
 
 // resolveFirstCommit returns the oldest commit to include in the squash. When --first is supplied
