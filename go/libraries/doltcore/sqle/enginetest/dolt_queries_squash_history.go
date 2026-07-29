@@ -116,6 +116,11 @@ var DoltSquashHistoryScriptTests = []queries.ScriptTest{
 			"call dolt_merge('b', '--no-commit');",
 			"call dolt_commit('-Am', 'M');",
 			"set @merge = dolt_hashof('HEAD');",
+			// Commits above the merge, so squashing from the merge actually collapses a range.
+			"insert into t values (3);",
+			"call dolt_commit('-am', 'N');",
+			"insert into t values (4);",
+			"call dolt_commit('-am', 'O');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -128,12 +133,26 @@ var DoltSquashHistoryScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{2}},
 			},
 			{
+				// The merge and everything above it (M, N, O) collapse into a single commit
+				// on top of A and C, leaving 4 reachable commits: collapsed, A, C, init.
+				Query:    "select count(*) from dolt_log;",
+				Expected: []sql.Row{{4}},
+			},
+			{
 				Query:    "select message from dolt_log limit 1;",
 				Expected: []sql.Row{{"collapsed"}},
 			},
 			{
+				Query:    "select count(*) from dolt_log where message in ('M', 'N', 'O');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select count(*) from dolt_log where message in ('A', 'C');",
+				Expected: []sql.Row{{2}},
+			},
+			{
 				Query:    "select * from t order by pk;",
-				Expected: []sql.Row{{1}, {2}},
+				Expected: []sql.Row{{1}, {2}, {3}, {4}},
 			},
 		},
 	},
