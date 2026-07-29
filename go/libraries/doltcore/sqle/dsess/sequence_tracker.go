@@ -168,7 +168,7 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) initializeTableAut
 		return state, false, err
 	}
 
-	seq, ok = loadSequenceState(a.sequences, tableName)
+	state, ok = loadSequenceState(a.sequences, tableName)
 	if ok {
 		return state, true, nil
 	}
