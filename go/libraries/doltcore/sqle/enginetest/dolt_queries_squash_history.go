@@ -101,6 +101,100 @@ var DoltSquashHistoryScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "dolt_squash_history: --first accepts a relative ref (HEAD~N)",
+		SetUpScript: []string{
+			"create table t (pk int primary key);",
+			"insert into t values (1);",
+			"call dolt_commit('-Am', 'c1');",
+			"insert into t values (2);",
+			"call dolt_commit('-am', 'c2');",
+			"insert into t values (3);",
+			"call dolt_commit('-am', 'c3');",
+			"insert into t values (4);",
+			"call dolt_commit('-am', 'c4');",
+			"insert into t values (5);",
+			"call dolt_commit('-am', 'c5');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// HEAD~4 resolves to c1, collapsing c1..c5 onto the initial commit.
+				Query:    "call dolt_squash_history('--message', 'sq', '--first', 'HEAD~4');",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				Query:    "select message from dolt_log;",
+				Expected: []sql.Row{{"sq"}, {"Initialize data repository"}},
+			},
+			{
+				Query:    "select * from t order by pk;",
+				Expected: []sql.Row{{1}, {2}, {3}, {4}, {5}},
+			},
+		},
+	},
+	{
+		Name: "dolt_squash_history: --first accepts a branch name",
+		SetUpScript: []string{
+			"create table t (pk int primary key);",
+			"insert into t values (1);",
+			"call dolt_commit('-Am', 'c1');",
+			"insert into t values (2);",
+			"call dolt_commit('-am', 'c2');",
+			"insert into t values (3);",
+			"call dolt_commit('-am', 'c3');",
+			"set @c1 = (select commit_hash from dolt_log where message = 'c1');",
+			"call dolt_branch('base', @c1);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// The 'base' branch points at c1, so it collapses c1..c3 onto the initial commit.
+				Query:    "call dolt_squash_history('--message', 'sq', '--first', 'base');",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				Query:    "select message from dolt_log;",
+				Expected: []sql.Row{{"sq"}, {"Initialize data repository"}},
+			},
+			{
+				// The other branch is untouched and still resolves to its commit.
+				Query:    "select count(*) from dolt_log as of 'base';",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "select * from t order by pk;",
+				Expected: []sql.Row{{1}, {2}, {3}},
+			},
+		},
+	},
+	{
+		Name: "dolt_squash_history: --first accepts a tag",
+		SetUpScript: []string{
+			"create table t (pk int primary key);",
+			"insert into t values (1);",
+			"call dolt_commit('-Am', 'c1');",
+			"insert into t values (2);",
+			"call dolt_commit('-am', 'c2');",
+			"insert into t values (3);",
+			"call dolt_commit('-am', 'c3');",
+			"set @c1 = (select commit_hash from dolt_log where message = 'c1');",
+			"call dolt_tag('v1', @c1);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// The 'v1' tag points at c1, so it collapses c1..c3 onto the initial commit.
+				Query:    "call dolt_squash_history('--message', 'sq', '--first', 'v1');",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				Query:    "select message from dolt_log;",
+				Expected: []sql.Row{{"sq"}, {"Initialize data repository"}},
+			},
+			{
+				Query:    "select * from t order by pk;",
+				Expected: []sql.Row{{1}, {2}, {3}},
+			},
+		},
+	},
+	{
 		Name: "dolt_squash_history: --first that is a merge commit keeps both parents",
 		SetUpScript: []string{
 			"create table t (pk int primary key);",
