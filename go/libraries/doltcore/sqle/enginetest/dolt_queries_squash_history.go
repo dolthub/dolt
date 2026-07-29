@@ -479,6 +479,47 @@ var DoltSquashHistoryScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
+		// The initial commit has two children (A on main, C on 'other'), but only A is
+		// reachable from HEAD, so the default first commit is unambiguous and squash succeeds.
+		Name: "dolt_squash_history: default resolves when only one child of the initial commit is reachable",
+		SetUpScript: []string{
+			"create table t (pk int primary key);",
+			"insert into t values (1);",
+			"call dolt_commit('-Am', 'A');",
+			"set @init = (select commit_hash from dolt_log where message = 'Initialize data repository');",
+			"call dolt_branch('other', @init);",
+			"call dolt_checkout('other');",
+			"create table t (pk int primary key);",
+			"insert into t values (99);",
+			"call dolt_commit('-Am', 'C');",
+			"call dolt_checkout('main');",
+			"insert into t values (2);",
+			"call dolt_commit('-am', 'B');",
+			"insert into t values (3);",
+			"call dolt_commit('-am', 'D');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_squash_history('--message', 'sq');",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				// A, B, D collapse onto the initial commit.
+				Query:    "select message from dolt_log;",
+				Expected: []sql.Row{{"sq"}, {"Initialize data repository"}},
+			},
+			{
+				// The unrelated 'other' branch (the second child of init) is untouched.
+				Query:    "select message from dolt_log as of 'other';",
+				Expected: []sql.Row{{"C"}, {"Initialize data repository"}},
+			},
+			{
+				Query:    "select * from t order by pk;",
+				Expected: []sql.Row{{1}, {2}, {3}},
+			},
+		},
+	},
+	{
 		Name:        "dolt_squash_history: error when the branch has only the initial commit",
 		SetUpScript: []string{},
 		Assertions: []queries.ScriptTestAssertion{
