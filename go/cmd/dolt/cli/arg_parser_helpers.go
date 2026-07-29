@@ -171,7 +171,7 @@ func CreateResetArgParser() *argparser.ArgParser {
 func CreateSquashHistoryArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs("squash-history", 0)
 	ap.SupportsString(MessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message for the squashed commit.")
-	ap.SupportsString(FirstParam, "", "commit", "The oldest commit to include in the squash. Everything from {{.LessThan}}commit{{.GreaterThan}} through HEAD is collapsed into a single commit. Defaults to the initial commit's child.")
+	ap.SupportsString(FirstParam, "f", "commit", "The oldest commit to include in the squash. Everything from {{.LessThan}}commit{{.GreaterThan}} through HEAD is collapsed into a single commit. Defaults to the initial commit's child.")
 	return ap
 }
 
