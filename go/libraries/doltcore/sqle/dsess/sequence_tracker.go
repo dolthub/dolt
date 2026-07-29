@@ -89,7 +89,7 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) staticAssertTypes(
 	var _ globalstate.SequenceTracker[RelationType, StateType, ValueType] = a
 }
 
-func NewSequenceTracker[
+func NewSequenceTrackerFromRoots[
 	RelationType sequences.SequencedRelation[RelationType, ValueType, StateType],
 	StateType sequences.SequenceState[StateType, ValueType],
 	ValueType comparable,
@@ -262,12 +262,12 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) Next(ctx *sql.Cont
 
 	if !currState.GreaterThan(givenState) {
 		// Check if the given value is valid for this column type
-		if !a.validateAutoIncrementBounds(ctx, tbl, givenState, false) {
+		if !a.validateBounds(ctx, tbl, givenState, false) {
 			return givenState.CurrentValue(), nil // Out of bounds, don't update sequence
 		}
 
 		// Value is valid, determine next sequence value
-		if a.validateAutoIncrementBounds(ctx, tbl, givenState, true) {
+		if a.validateBounds(ctx, tbl, givenState, true) {
 			_, _, givenState, err = givenState.Next()
 			if err != nil {
 				return nextValue, err
@@ -300,7 +300,7 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) Set(ctx *sql.Conte
 		return table.SetSequenceState(ctx, newSequenceState)
 	}
 	gt := newSequenceState.GreaterThan(existing)
-	if gt && a.validateAutoIncrementBounds(ctx, tableName, newSequenceState, true) {
+	if gt && a.validateBounds(ctx, tableName, newSequenceState, false) {
 		a.sequences.Store(tableName, newSequenceState)
 		return table.SetSequenceState(ctx, newSequenceState)
 	} else if gt {
@@ -420,7 +420,7 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) deepSet(ctx *sql.C
 		}
 	}
 
-	if a.validateAutoIncrementBounds(ctx, tableName, maxAutoInc, true) {
+	if a.validateBounds(ctx, tableName, maxAutoInc, false) {
 		a.sequences.Store(tableName, maxAutoInc)
 	}
 	return table, nil
@@ -592,7 +592,7 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) initWithRoots(ctx 
 }
 
 // validateAutoIncrementBounds checks if a value (or value+1 if checkIncrement) is valid for the auto-increment column type
-func (a *SequenceTracker[RelationType, StateType, ValueType]) validateAutoIncrementBounds(ctx *sql.Context, tbl string, val StateType, checkIncrement bool) bool {
+func (a *SequenceTracker[RelationType, StateType, ValueType]) validateBounds(ctx *sql.Context, tbl string, val StateType, checkIncrement bool) bool {
 	sess := DSessFromSess(ctx.Session)
 	db, ok := sess.Provider().BaseDatabase(ctx, a.dbName)
 	if !ok || !db.Versioned() {

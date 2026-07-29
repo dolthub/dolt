@@ -23,21 +23,25 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate/sequences"
 )
 
 // TrackerKey is a type used as a key into the GlobalStateImpl's map of SequenceTrackers
 type TrackerKey[TrackerType globalstate.SequenceTrackerBase] struct{}
 
-// NewGlobalStateStoreForDb creates a new GlobalState. It initially contains a single SequenceTracker: the AutoIncrementTracker
-func NewGlobalStateStoreForDb(ctx context.Context, dbName string, db *doltdb.DoltDB) (GlobalStateImpl, error) {
+func NewSequenceTracker[
+	RelationType sequences.SequencedRelation[RelationType, ValueType, StateType],
+	StateType sequences.SequenceState[StateType, ValueType],
+	ValueType comparable,
+](ctx context.Context, dbName string, db *doltdb.DoltDB, relationSource RelationSource[RelationType, StateType, ValueType]) (*SequenceTracker[RelationType, StateType, ValueType], error) {
 	branches, err := db.GetBranches(ctx)
 	if err != nil {
-		return GlobalStateImpl{}, err
+		return nil, err
 	}
 
 	remotes, err := db.GetRemoteRefs(ctx)
 	if err != nil {
-		return GlobalStateImpl{}, err
+		return nil, err
 	}
 
 	rootRefs := make([]ref.DoltRef, 0, len(branches)+len(remotes))
@@ -88,16 +92,19 @@ func NewGlobalStateStoreForDb(ctx context.Context, dbName string, db *doltdb.Dol
 
 	err = eg.Wait()
 	if err != nil {
-		return GlobalStateImpl{}, err
+		return nil, err
 	}
 
-	tracker, err := NewAutoIncrementTracker(ctx, dbName, roots...)
+	return NewSequenceTrackerFromRoots(ctx, dbName, relationSource, roots...)
+}
+
+func NewGlobalStateStoreForDb(ctx context.Context, dbName string, db *doltdb.DoltDB) (GlobalStateImpl, error) {
+	autoIncrementTracker, err := NewSequenceTracker(ctx, dbName, db, DoltDBRelationSource{})
 	if err != nil {
 		return GlobalStateImpl{}, err
 	}
-
 	return GlobalStateImpl{
-		sequenceTrackers: map[interface{}]globalstate.SequenceTrackerBase{autoIncrementTrackerKey: tracker},
+		sequenceTrackers: map[interface{}]globalstate.SequenceTrackerBase{autoIncrementTrackerKey: autoIncrementTracker},
 	}, nil
 }
 
