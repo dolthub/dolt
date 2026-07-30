@@ -30,9 +30,9 @@ type SequenceTrackerBase interface {
 	// AcquireLock acquires the lock on the global state for a specific relation, and returns a callback function to release the lock.
 	// Depending on the value of the `innodb_autoinc_lock_mode` system variable, the engine may need to acquire and hold
 	// the lock for the duration of an insert statement.
-	AcquireLock(ctx *sql.Context, tableName string) (func(), error)
+	AcquireLock(ctx *sql.Context, tableName doltdb.TableName) (func(), error)
 	// DropRelation removes a relation from the tracker.
-	DropRelation(ctx *sql.Context, relation string, wses ...*doltdb.WorkingSet) error
+	DropRelation(ctx *sql.Context, tableName doltdb.TableName, wses ...*doltdb.WorkingSet) error
 	// InitWithRoots fills the SequenceTracker with values pulled from each root in order.
 	InitWithRoots(ctx context.Context, roots ...doltdb.Rootish) error
 	Close()
@@ -47,13 +47,13 @@ type SequenceTracker[
 ] interface {
 	SequenceTrackerBase
 	// Current returns the current sequence state for the given relation.
-	Current(relation string) (StateType, error)
+	Current(tableName doltdb.TableName) (StateType, error)
 	// Next returns the next SQL value produced by the given relation, and advances that relation's state.
-	Next(ctx *sql.Context, relation string, insertVal interface{}) (ValueType, error)
+	Next(ctx *sql.Context, tableName doltdb.TableName, insertVal interface{}) (ValueType, error)
 	// AddNewRelation adds a new table to the tracker, initializing the sequence state to the provided |initialState|.
-	AddNewRelation(relation string, initialState StateType) error
+	AddNewRelation(tableName doltdb.TableName, initialState StateType) error
 	// Set sets the sequence state for the given relation. This operation may silently do nothing if this value is
 	// below the current value for this relation. The relation in the provided working set is assumed to already have the value
 	// given, so the new global maximum is computed without regard for its value in that working set.
-	Set(ctx *sql.Context, tableName string, table RelationType, ws ref.WorkingSetRef, newSequenceState StateType) (RelationType, error)
+	Set(ctx *sql.Context, tableName doltdb.TableName, table RelationType, ws ref.WorkingSetRef, newSequenceState StateType) (RelationType, error)
 }

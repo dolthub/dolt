@@ -1877,7 +1877,7 @@ func (db Database) dropTable(ctx *sql.Context, tableName string) error {
 
 	if schema.HasAutoIncrement(sch) {
 		ddb, _ := ds.GetDoltDB(ctx, db.RevisionQualifiedName())
-		err = db.removeTableFromAutoIncrementTracker(ctx, tableName, ddb, ws.Ref())
+		err = db.removeTableFromAutoIncrementTracker(ctx, tblName, ddb, ws.Ref())
 		if err != nil {
 			return err
 		}
@@ -1892,7 +1892,7 @@ func (db Database) dropTable(ctx *sql.Context, tableName string) error {
 // otherwise. This operation is expensive if the
 func (db Database) removeTableFromAutoIncrementTracker(
 	ctx *sql.Context,
-	tableName string,
+	tableName doltdb.TableName,
 	ddb *doltdb.DoltDB,
 	ws ref.WorkingSetRef,
 ) error {
@@ -2088,7 +2088,7 @@ func (db Database) createSqlTable(ctx *sql.Context, table string, schemaName str
 		if err != nil {
 			return err
 		}
-		err = ait.AddNewRelation(tableName.Name, doltdb.AutoIncrementState(1))
+		err = ait.AddNewRelation(tableName, doltdb.AutoIncrementState(1))
 		if err != nil {
 			return err
 		}
@@ -2151,7 +2151,10 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, table string, schemaN
 		if err != nil {
 			return err
 		}
-		ait.AddNewRelation(tableName.Name, doltdb.AutoIncrementState(1))
+		err = ait.AddNewRelation(tableName, doltdb.AutoIncrementState(1))
+		if err != nil {
+			return err
+		}
 	}
 
 	return db.createDoltTable(ctx, tableName.Name, tableName.Schema, root, doltSch)

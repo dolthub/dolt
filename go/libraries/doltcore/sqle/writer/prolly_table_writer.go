@@ -271,7 +271,7 @@ func (w *prollyTableWriter) PreciseMatch() bool {
 
 // GetNextAutoIncrementValue implements TableWriter.
 func (w *prollyTableWriter) GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error) {
-	v, err := w.aiTracker.Next(ctx, w.tblName.Name, insertVal)
+	v, err := w.aiTracker.Next(ctx, w.tblName, insertVal)
 	if err != nil {
 		return 0, err
 	}
@@ -294,7 +294,7 @@ func (w *prollyTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) 
 
 // AcquireAutoIncrementLock implements AutoIncrementSetter.
 func (w *prollyTableWriter) AcquireAutoIncrementLock(ctx *sql.Context) (func(), error) {
-	return w.aiTracker.AcquireLock(ctx, w.tblName.Name)
+	return w.aiTracker.AcquireLock(ctx, w.tblName)
 }
 
 // Close implements Closer
@@ -398,12 +398,12 @@ func (w *prollyTableWriter) table(ctx *sql.Context) (tbl *doltdb.Table, err erro
 
 	if w.aiCol.AutoIncrement {
 		if w.aiAltered {
-			tbl, err = w.aiTracker.Set(ctx, w.tblName.Name, tbl, w.writeSess.GetWorkingSet().Ref(), doltdb.AutoIncrementState(w.aiAlterVal))
+			tbl, err = w.aiTracker.Set(ctx, w.tblName, tbl, w.writeSess.GetWorkingSet().Ref(), doltdb.AutoIncrementState(w.aiAlterVal))
 			if err != nil {
 				return nil, err
 			}
 		} else if w.aiSet {
-			aiVal, err := w.aiTracker.Current(w.tblName.Name)
+			aiVal, err := w.aiTracker.Current(w.tblName)
 			if err != nil {
 				return nil, err
 			}

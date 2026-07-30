@@ -1073,7 +1073,7 @@ func (t *WritableDoltTable) truncate(
 
 	if schema.HasAutoIncrement(sch) {
 		ddb, _ := sess.GetDoltDB(ctx, t.db.RevisionQualifiedName())
-		err = t.db.removeTableFromAutoIncrementTracker(ctx, t.Name(), ddb, ws.Ref())
+		err = t.db.removeTableFromAutoIncrementTracker(ctx, t.TableName(), ddb, ws.Ref())
 		if err != nil {
 			return nil, err
 		}
@@ -1578,7 +1578,7 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		if err != nil {
 			return err
 		}
-		err = ait.AddNewRelation(t.tableName, doltdb.AutoIncrementState(1))
+		err = ait.AddNewRelation(t.TableName(), doltdb.AutoIncrementState(1))
 		if err != nil {
 			return err
 		}
@@ -2289,13 +2289,13 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		}
 
 		// TODO: this isn't transactional, and it should be (but none of the auto increment tracking is)
-		err = ait.AddNewRelation(t.tableName, doltdb.AutoIncrementState(1))
+		err = ait.AddNewRelation(t.TableName(), doltdb.AutoIncrementState(1))
 		if err != nil {
 			return err
 		}
 		// Since this is a new auto increment table, we don't need to exclude the current working set from consideration
 		// when computing its new sequence value, hence the empty ref
-		_, err = ait.Set(ctx, t.tableName, updatedTable, ref.WorkingSetRef{}, doltdb.AutoIncrementState(seq))
+		_, err = ait.Set(ctx, t.TableName(), updatedTable, ref.WorkingSetRef{}, doltdb.AutoIncrementState(seq))
 		if err != nil {
 			return err
 		}
@@ -2306,7 +2306,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		// TODO: this isn't transactional, and it should be
 		sess := dsess.DSessFromSess(ctx.Session)
 		ddb, _ := sess.GetDoltDB(ctx, t.db.RevisionQualifiedName())
-		err = t.db.removeTableFromAutoIncrementTracker(ctx, t.Name(), ddb, ws.Ref())
+		err = t.db.removeTableFromAutoIncrementTracker(ctx, t.TableName(), ddb, ws.Ref())
 		if err != nil {
 			return err
 		}
