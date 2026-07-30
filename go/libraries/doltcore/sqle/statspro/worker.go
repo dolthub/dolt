@@ -569,7 +569,7 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 
 		// TODO: these should all be the same within, so should be set outside of the loop
 		template.Qual.Database = strings.ToLower(sqlDb.AliasedName())
-		template.Qual.Sch = strings.ToLower(sqlDb.SchemaName())
+		template.Qual.Sch = strings.ToLower(schemaName)
 
 		idxLen := len(sqlIdx.Expressions())
 
