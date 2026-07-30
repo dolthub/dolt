@@ -1,4 +1,4 @@
-// Copyright 2023 Dolthub, Inc.
+// Copyright 2026 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,5 +52,5 @@ func GetAutoIncrementTracker(ctx *sql.Context, gs globalstate.GlobalState) (*Aut
 	return GetSequenceTracker(ctx, gs, autoIncrementTrackerKey)
 }
 
-// autoIncrementTrackerKey is the key used to store the AutoIncrmenetTracker in the GlobalState's map of SequenceTrackers
+// autoIncrementTrackerKey is the key used to store the AutoIncrementTracker in the GlobalState's map of SequenceTrackers
 var autoIncrementTrackerKey = TrackerKey[*AutoIncrementTracker]{}

@@ -1578,7 +1578,7 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		if err != nil {
 			return err
 		}
-		err = ait.AddNewTable(t.tableName, doltdb.AutoIncrementState(1))
+		err = ait.AddNewRelation(t.tableName, doltdb.AutoIncrementState(1))
 		if err != nil {
 			return err
 		}
@@ -2289,7 +2289,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		}
 
 		// TODO: this isn't transactional, and it should be (but none of the auto increment tracking is)
-		err = ait.AddNewTable(t.tableName, doltdb.AutoIncrementState(1))
+		err = ait.AddNewRelation(t.tableName, doltdb.AutoIncrementState(1))
 		if err != nil {
 			return err
 		}

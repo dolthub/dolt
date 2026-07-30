@@ -20,9 +20,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
-// This package is a collection of interfaces that describe state machines that are controlled by the global state.
-// It is a separate package from the parent package globalstate so that doltdb can depend on it.
-
 // A SequenceState is an incrementing state that must be shared across all branches and transactions.
 // It corresponds to a table or root object in the database.
 // |Self| should always be the same type as the implementation.

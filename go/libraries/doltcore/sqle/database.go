@@ -1929,7 +1929,7 @@ func (db Database) removeTableFromAutoIncrementTracker(
 		return err
 	}
 
-	err = ait.DropTable(ctx, tableName, wses...)
+	err = ait.DropRelation(ctx, tableName, wses...)
 	if err != nil {
 		return err
 	}
@@ -2088,7 +2088,7 @@ func (db Database) createSqlTable(ctx *sql.Context, table string, schemaName str
 		if err != nil {
 			return err
 		}
-		err = ait.AddNewTable(tableName.Name, doltdb.AutoIncrementState(1))
+		err = ait.AddNewRelation(tableName.Name, doltdb.AutoIncrementState(1))
 		if err != nil {
 			return err
 		}
@@ -2151,7 +2151,7 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, table string, schemaN
 		if err != nil {
 			return err
 		}
-		ait.AddNewTable(tableName.Name, doltdb.AutoIncrementState(1))
+		ait.AddNewRelation(tableName.Name, doltdb.AutoIncrementState(1))
 	}
 
 	return db.createDoltTable(ctx, tableName.Name, tableName.Schema, root, doltSch)
