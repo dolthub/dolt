@@ -500,6 +500,39 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 	}
 
 	var newTableStats []*stats.Statistic
+	newTableStats = make([]*stats.Statistic, 0, len(indexes)+1)
+
+	// Create statistic for plain TableScan (no index)
+	err = sc.execWithOptionalRateLimit(ctx, bypassRateLimit, openSessionCmds, func() (err error) {
+		rowCnt, _, err := sqlTable.RowCount(ctx)
+		if err != nil {
+			return err
+		}
+		var avgSize uint64
+		if rowCnt > 0 {
+			dataSize, err := sqlTable.DataLength(ctx)
+			if err != nil {
+				return err
+			}
+			avgSize = dataSize / rowCnt
+		}
+		noIdxStat := &stats.Statistic{
+			Qual: sql.StatQualifier{
+				Database: tableKey.db,
+				Sch:      tableKey.schema,
+				Tab:      tableKey.table,
+			},
+			RowCnt:      rowCnt,
+			DistinctCnt: rowCnt,
+			AvgRowSize:  avgSize,
+		}
+		newTableStats = append(newTableStats, noIdxStat)
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
 	for _, sqlIdx := range indexes {
 		if sqlIdx.IsSpatial() || sqlIdx.IsFullText() || sqlIdx.IsGenerated() || sqlIdx.IsVector() {
 			continue
@@ -534,13 +567,9 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 			return fmt.Errorf("failed to creat template for %s/%s/%s/%s", sqlDb.Revision(), sqlDb.AliasedName(), tableName, sqlIdx.ID())
 		}
 
-		template.Qual.Database = sqlDb.AliasedName()
-		// Use the schema name from the table, not the database: they are the same when this
-		// runs against a schema database from the background worker's iteration, but ANALYZE
-		// passes the unqualified database, whose schema name is empty. The tableIndexesKey
-		// above and statistics consumers (e.g. GMS's costed index scans, which match
-		// statistics to indexes by qualifier) both use the table's schema name.
-		template.Qual.Sch = schemaName
+		// TODO: these should all be the same within, so should be set outside of the loop
+		template.Qual.Database = strings.ToLower(sqlDb.AliasedName())
+		template.Qual.Sch = strings.ToLower(schemaName)
 
 		idxLen := len(sqlIdx.Expressions())
 

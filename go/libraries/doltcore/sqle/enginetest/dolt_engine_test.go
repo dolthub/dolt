@@ -1301,6 +1301,16 @@ func TestDoltRebasePrepared(t *testing.T) {
 	RunDoltRebasePreparedTests(t, h)
 }
 
+func TestDoltSquashHistory(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltSquashHistoryTests(t, h)
+}
+
+func TestDoltSquashHistoryPrepared(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltSquashHistoryPreparedTests(t, h)
+}
+
 func TestDoltRevert(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunDoltRevertTests(t, h)

@@ -38,6 +38,7 @@ const (
 	DryRunFlag             = "dry-run"
 	EmptyParam             = "empty"
 	ExcludeIgnoreRulesFlag = "x"
+	FirstParam             = "first"
 	ForceFlag              = "force"
 	FullFlag               = "full"
 	GraphFlag              = "graph"
