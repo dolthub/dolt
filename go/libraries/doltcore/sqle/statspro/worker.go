@@ -535,7 +535,12 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 		}
 
 		template.Qual.Database = sqlDb.AliasedName()
-		template.Qual.Sch = sqlDb.SchemaName()
+		// Use the schema name from the table, not the database: they are the same when this
+		// runs against a schema database from the background worker's iteration, but ANALYZE
+		// passes the unqualified database, whose schema name is empty. The tableIndexesKey
+		// above and statistics consumers (e.g. GMS's costed index scans, which match
+		// statistics to indexes by qualifier) both use the table's schema name.
+		template.Qual.Sch = schemaName
 
 		idxLen := len(sqlIdx.Expressions())
 
