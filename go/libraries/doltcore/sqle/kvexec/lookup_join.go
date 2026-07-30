@@ -334,10 +334,12 @@ func (m *lookupMapping) valid(ctx *sql.Context) bool {
 		// byte-compatible for these lookups, so we need to dig deeper.
 		switch desc.Types[from].Enc {
 		case val.ExtendedAddrEnc, val.ExtendedEnc, val.ExtendedAdaptiveEnc:
-			toTyp := m.idxColTyps[from].Type
-			fromTyp := m.keyExprs[from].Type(ctx)
+			toTyp := m.idxColTyps[to].Type
+			fromTyp := m.keyExprs[to].Type(ctx)
 			// this is more conservative than it needs to be, we want to assert these values are byte-compatible
-			return toTyp == fromTyp
+			if toTyp != fromTyp {
+				return false
+			}
 		}
 	}
 	return true
