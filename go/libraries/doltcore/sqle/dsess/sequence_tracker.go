@@ -109,7 +109,6 @@ func NewSequenceTrackerFromRoots[
 		relationSource: relationSource,
 	}
 	gcSafepointController := getGCSafepointController(ctx)
-	ctx = context.Background()
 	if gcSafepointController != nil {
 		ctx = gcctx.WithGCSafepointController(ctx, gcSafepointController)
 	}

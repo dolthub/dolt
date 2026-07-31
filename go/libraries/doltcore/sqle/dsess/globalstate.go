@@ -17,7 +17,6 @@ package dsess
 import (
 	"context"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -114,11 +113,11 @@ type GlobalStateImpl struct {
 
 var _ globalstate.GlobalState = GlobalStateImpl{}
 
-func (g GlobalStateImpl) GetSequenceTracker(ctx *sql.Context, key interface{}) (globalstate.SequenceTrackerBase, error) {
+func (g GlobalStateImpl) GetSequenceTracker(ctx context.Context, key interface{}) (globalstate.SequenceTrackerBase, error) {
 	return g.sequenceTrackers[key], nil
 }
 
-func (g GlobalStateImpl) AddSequenceTracker(ctx *sql.Context, key interface{}, tracker globalstate.SequenceTrackerBase) error {
+func (g GlobalStateImpl) AddSequenceTracker(ctx context.Context, key interface{}, tracker globalstate.SequenceTrackerBase) error {
 	g.sequenceTrackers[key] = tracker
 	return nil
 }
@@ -129,7 +128,7 @@ func (g GlobalStateImpl) Close() {
 	}
 }
 
-func (g GlobalStateImpl) InitWithRoots(ctx *sql.Context, roots ...doltdb.Rootish) error {
+func (g GlobalStateImpl) InitWithRoots(ctx context.Context, roots ...doltdb.Rootish) error {
 	for _, tracker := range g.sequenceTrackers {
 		err := tracker.InitWithRoots(ctx, roots...)
 		if err != nil {
@@ -141,7 +140,7 @@ func (g GlobalStateImpl) InitWithRoots(ctx *sql.Context, roots ...doltdb.Rootish
 
 // GetSequenceTracker returns a SequenceTracker held by the globalstate.GlobalState, keyed by the provided key.
 // This function performs the necessary cast so that the caller doesn't have to cast the result.
-func GetSequenceTracker[T globalstate.SequenceTrackerBase](ctx *sql.Context, gs globalstate.GlobalState, key TrackerKey[T]) (result T, err error) {
+func GetSequenceTracker[T globalstate.SequenceTrackerBase](ctx context.Context, gs globalstate.GlobalState, key TrackerKey[T]) (result T, err error) {
 	aiti, err := gs.GetSequenceTracker(ctx, key)
 	if err != nil {
 		return result, err
