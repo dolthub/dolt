@@ -64,6 +64,8 @@ teardown_signed_gpg() {
 
 # bats test_tags=no_lambda
 @test "signed: dolt commit with key specified in config" {
+    skip_if_remote
+
     run dolt config --global --add sqlserver.global.signingkey "573DA8C6366D04E35CDB1A44E09A0B208F666373"
     [ "$status" -eq 0 ]
 
@@ -92,6 +94,8 @@ teardown_signed_gpg() {
 
 # bats test_tags=no_lambda
 @test "signed: signing by default using the config" {
+    skip_if_remote
+
     run dolt config --global --add sqlserver.global.signingkey "573DA8C6366D04E35CDB1A44E09A0B208F666373"
     [ "$status" -eq 0 ]
 
@@ -124,6 +128,8 @@ teardown_signed_gpg() {
 
 # bats test_tags=no_lambda
 @test "signed: using stored procedure" {
+    skip_if_remote
+
     run dolt config --global --add sqlserver.global.signingkey "573DA8C6366D04E35CDB1A44E09A0B208F666373"
     [ "$status" -eq 0 ]
 
