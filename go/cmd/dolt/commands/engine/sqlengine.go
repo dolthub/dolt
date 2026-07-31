@@ -191,7 +191,7 @@ func NewSqlEngine(
 	}
 
 	b := env.GetDefaultInitBranch(mrEnv.Config())
-	engineProvider, err := factory.NewProvider(b, mrEnv.FileSystem(), all, locations, config.EngineOverrides)
+	engineProvider, err := factory.NewProvider(ctx, b, mrEnv.FileSystem(), all, locations, config.EngineOverrides)
 	if err != nil {
 		return nil, err
 	}
