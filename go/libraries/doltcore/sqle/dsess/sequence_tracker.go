@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"iter"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -47,7 +48,7 @@ type RelationSource[
 ] interface {
 	// GetRelation gets a relation at a specific doltdb.RootValue
 	GetRelation(ctx context.Context, root doltdb.RootValue, tName doltdb.TableName) (relation RelationType, resolvedName string, found bool, err error)
-	GetRelations(ctx context.Context, root doltdb.RootValue, cb func(doltdb.TableName, RelationType) (bool, error)) error
+	IterRelations(ctx context.Context, root doltdb.RootValue) iter.Seq2[doltdb.TableName, RelationType]
 }
 
 type SequenceTracker[
@@ -134,7 +135,7 @@ func loadSequenceState[StateType sequences.SequenceState[StateType, ValueType], 
 	return sequences.Load(relationName.ToLower())
 }
 
-func (a *SequenceTracker[RelationType, StateType, ValueType]) initializeTableAutoIncrement(ctx *sql.Context, relationName doltdb.TableName, initialValue interface{}) (state StateType, hasState bool, err error) {
+func (a *SequenceTracker[RelationType, StateType, ValueType]) initializeSequenceState(ctx *sql.Context, relationName doltdb.TableName, initialValue interface{}) (state StateType, hasState bool, err error) {
 	sess := DSessFromSess(ctx.Session)
 	ws, err := sess.WorkingSet(ctx, a.dbName)
 	if err != nil {
@@ -238,7 +239,7 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) Next(ctx *sql.Cont
 		}
 
 		if !ok {
-			currState, ok, err = a.initializeTableAutoIncrement(ctx, relationName, insertVal)
+			currState, ok, err = a.initializeSequenceState(ctx, relationName, insertVal)
 			if err != nil {
 				return nextValue, err
 			}
@@ -562,17 +563,17 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) initWithRoots(ctx 
 				return err
 			}
 
-			init := func(relationName doltdb.TableName, relation RelationType) (bool, error) {
+			for relationName, relation := range a.relationSource.IterRelations(ctx, r) {
 				hasSequenceState, err := relation.HasSequenceState(ctx)
 				if err != nil {
-					return true, err
+					return err
 				}
 				if !hasSequenceState {
-					return false, nil
+					continue
 				}
 				seq, err := relation.GetSequenceState(ctx)
 				if err != nil {
-					return true, err
+					return err
 				}
 
 				key := relationName.ToLower()
@@ -581,11 +582,8 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) initWithRoots(ctx 
 						oldValue, _ = a.sequences.Load(key)
 					}
 				}
-
-				return false, nil
 			}
-
-			return a.relationSource.GetRelations(ctx, r, init)
+			return nil
 		})
 	}
 

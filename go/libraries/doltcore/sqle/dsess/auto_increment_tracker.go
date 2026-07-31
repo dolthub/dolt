@@ -16,24 +16,35 @@ package dsess
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"iter"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 )
 
+// DoltDBRelationSource implements RelationSource
+// Specializations of SequenceTracker (such as AutoIncrementTracker) require an interface to read relations of a specified
+// type out of a doltdb.RootValue. DoltDBRelationSource provides the ability to read values of type doltdb.Table.
 type DoltDBRelationSource struct{}
 
+// GetRelation implements RelationSource
 func (s DoltDBRelationSource) GetRelation(ctx context.Context, root doltdb.RootValue, tName doltdb.TableName) (relation *doltdb.Table, resolvedName string, found bool, err error) {
 	return doltdb.GetTableInsensitive(ctx, root, tName)
 }
 
-func (s DoltDBRelationSource) GetRelations(ctx context.Context, root doltdb.RootValue, cb func(doltdb.TableName, *doltdb.Table) (bool, error)) error {
-	return root.IterTables(ctx, func(name doltdb.TableName, table *doltdb.Table, sch schema.Schema) (stop bool, err error) {
-		return cb(name, table)
-	})
+// IterRelations implements RelationSource
+func (s DoltDBRelationSource) IterRelations(ctx context.Context, root doltdb.RootValue) iter.Seq2[doltdb.TableName, *doltdb.Table] {
+	return func(yield func(doltdb.TableName, *doltdb.Table) bool) {
+		_ = root.IterTables(ctx, func(name doltdb.TableName, table *doltdb.Table, sch schema.Schema) (stop bool, err error) {
+			if !yield(name, table) {
+				return true, nil
+			}
+			return false, nil
+		})
+	}
 }
 
 var _ RelationSource[*doltdb.Table, doltdb.AutoIncrementState, uint64] = (*DoltDBRelationSource)(nil)
@@ -48,6 +59,7 @@ func NewAutoIncrementTracker(ctx context.Context, dbName string, roots ...doltdb
 	return NewSequenceTrackerFromRoots(ctx, dbName, DoltDBRelationSource{}, roots...)
 }
 
+// GetAutoIncrementTracker returns the AutoIncrementTracker stored within the global state.
 func GetAutoIncrementTracker(ctx *sql.Context, gs globalstate.GlobalState) (*AutoIncrementTracker, error) {
 	return GetSequenceTracker(ctx, gs, autoIncrementTrackerKey)
 }
