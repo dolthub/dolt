@@ -269,6 +269,17 @@ teardown() {
     [ "$status" -eq 0 ]
 }
 
+# bats test_tags=no_lambda
+@test "sql-shell: DELIMITER inside edited text is ordinary statement text" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Presently sql command will not connect to remote server due to lack of lock file where there are not DBs."
+    fi
+    run env EDITOR="sh $BATS_TEST_DIRNAME/sql-shell-fake-editor.sh" \
+        expect $BATS_TEST_DIRNAME/sql-shell-edit-delimiter.expect
+    [ "$status" -eq 0 ]
+}
+
 @test "sql-shell: works with ANSI_QUOTES SQL mode" {
     if [ $SQL_ENGINE = "remote-engine" ]; then
       skip "Presently sql command will not connect to remote server due to lack of lock file where there are not DBs."
