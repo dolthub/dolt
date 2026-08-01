@@ -1,7 +1,6 @@
 #!/usr/bin/expect -f
 # A large multi-line statement parses and executes correctly. This is a
-# correctness check; the O(n) single-pass property is guarded separately by a
-# Go scaling test on the scanner in the ishell library.
+# correctness check on the shell's single-pass statement scanning.
 
 set timeout 20
 spawn dolt sql

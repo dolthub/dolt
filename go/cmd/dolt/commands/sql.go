@@ -855,6 +855,10 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 					trackHistory(shell, query+";")
 					statements = nil
 					scanner := ishell.NewStreamScannerWithDelimiter(strings.NewReader(query), shell.LineTerminator())
+					// DELIMITER changes are handled at the line level by the shell;
+					// treat one inside edited text as ordinary statement text so the
+					// split stays consistent with the shell's terminator.
+					scanner.IgnoreDelimiterStatements()
 					for scanner.Scan() {
 						statements = append(statements, scanner.Text())
 					}
