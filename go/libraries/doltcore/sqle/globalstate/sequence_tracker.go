@@ -35,6 +35,7 @@ type SequenceTrackerBase interface {
 	DropRelation(ctx *sql.Context, tableName doltdb.TableName, wses ...*doltdb.WorkingSet) error
 	// InitWithRoots fills the SequenceTracker with values pulled from each root in order.
 	InitWithRoots(ctx context.Context, roots ...doltdb.Rootish) error
+	// Close releases any resources that might be held by the tracker.
 	Close()
 }
 
