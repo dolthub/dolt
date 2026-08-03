@@ -47,7 +47,7 @@ func (s DoltDBRelationSource) IterRelations(ctx context.Context, root doltdb.Roo
 	}
 }
 
-var _ RelationSource[*doltdb.Table, doltdb.AutoIncrementState, uint64] = (*DoltDBRelationSource)(nil)
+var _ RelationSource[*doltdb.Table] = (*DoltDBRelationSource)(nil)
 
 type AutoIncrementTracker = SequenceTracker[*doltdb.Table, doltdb.AutoIncrementState, uint64]
 

@@ -32,7 +32,7 @@ func NewSequenceTracker[
 	RelationType sequences.SequencedRelation[RelationType, ValueType, StateType],
 	StateType sequences.SequenceState[StateType, ValueType],
 	ValueType comparable,
-](ctx context.Context, dbName string, db *doltdb.DoltDB, relationSource RelationSource[RelationType, StateType, ValueType]) (*SequenceTracker[RelationType, StateType, ValueType], error) {
+](ctx context.Context, dbName string, db *doltdb.DoltDB, relationSource RelationSource[RelationType]) (*SequenceTracker[RelationType, StateType, ValueType], error) {
 	branches, err := db.GetBranches(ctx)
 	if err != nil {
 		return nil, err
