@@ -16,12 +16,12 @@ package dsess
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"iter"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 )
 

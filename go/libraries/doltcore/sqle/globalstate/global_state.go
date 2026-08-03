@@ -16,6 +16,7 @@ package globalstate
 
 import (
 	"context"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
 
