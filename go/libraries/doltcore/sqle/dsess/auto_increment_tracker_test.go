@@ -82,7 +82,7 @@ func TestInitWithRoots(t *testing.T) {
 	t.Run("EmptyRoots", func(t *testing.T) {
 		ait := AutoIncrementTracker{
 			dbName:     "test_database",
-			sequences:  &SyncMap[string, doltdb.AutoIncrementState]{},
+			sequences:  &SyncMap[doltdb.TableName, doltdb.AutoIncrementState]{},
 			mm:         mutexmap.NewMutexMap(),
 			init:       make(chan struct{}),
 			cancelInit: make(chan struct{}),
@@ -93,7 +93,7 @@ func TestInitWithRoots(t *testing.T) {
 	t.Run("CloseCancelsInit", func(t *testing.T) {
 		ait := AutoIncrementTracker{
 			dbName:     "test_database",
-			sequences:  &SyncMap[string, doltdb.AutoIncrementState]{},
+			sequences:  &SyncMap[doltdb.TableName, doltdb.AutoIncrementState]{},
 			mm:         mutexmap.NewMutexMap(),
 			init:       make(chan struct{}),
 			cancelInit: make(chan struct{}),
