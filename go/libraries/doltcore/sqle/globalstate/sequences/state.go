@@ -40,7 +40,7 @@ type SequenceState[Self any, ValueType comparable] interface {
 	AtEnd() bool
 	// Merge combines two states, usually returning the one that's further along. If the states can't be combined,
 	// |ok| is false.
-	Merge(other Self) (merged Self, ok bool)
+	Merge(other Self) Self
 }
 
 // A SequencedRelation is a table or root object with a state that must be shared across all branches

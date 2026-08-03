@@ -505,6 +505,8 @@ func CoerceAutoIncrementValue(ctx *sql.Context, val interface{}) (uint64, error)
 
 type AutoIncrementState uint64
 
+var _ sequences.SequenceState[AutoIncrementState, uint64] = AutoIncrementState(0)
+
 func (s AutoIncrementState) Next() (aiVal uint64, ok bool, nextState AutoIncrementState, err error) {
 	if s == math.MaxUint64 {
 		return uint64(math.MaxUint64), false, s, nil
@@ -532,11 +534,11 @@ func (s AutoIncrementState) GreaterThan(other AutoIncrementState) bool {
 	return s > other
 }
 
-func (s AutoIncrementState) Merge(other AutoIncrementState) (AutoIncrementState, bool) {
+func (s AutoIncrementState) Merge(other AutoIncrementState) AutoIncrementState {
 	if s > other {
-		return s, true
+		return s
 	}
-	return other, true
+	return other
 }
 
 func (s AutoIncrementState) AtEnd() bool {

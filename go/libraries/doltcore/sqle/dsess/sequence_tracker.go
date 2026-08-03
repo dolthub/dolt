@@ -40,7 +40,7 @@ var (
 	LockMode_Interleaved LockMode = 2
 )
 
-// A RelationSource maps table names to relations (which may be tables or root objects) at a supplied RootValue
+// A RelationSource maps table names to relations (which may be tables or root objects) at a supplied RootValue.
 type RelationSource[
 	RelationType sequences.SequencedRelation[RelationType, ValueType, StateType],
 	StateType sequences.SequenceState[StateType, ValueType],
@@ -51,6 +51,12 @@ type RelationSource[
 	IterRelations(ctx context.Context, root doltdb.RootValue) iter.Seq2[doltdb.TableName, RelationType]
 }
 
+// A SequenceTracker provides synchronized access to a shared global state across every branch and transaction.
+//
+// Usually, branches should be completely independent of each other, but in specific scenarios, we want to ensure
+// that operations like AUTO INCREMENT columns produce globally unique values. SequenceTracker accomplishes this
+// by combining the state of every branch on initialization, and then providing a synchronized function that
+// produces an incrementing sequence of values.
 type SequenceTracker[
 	RelationType sequences.SequencedRelation[RelationType, ValueType, StateType],
 	StateType sequences.SequenceState[StateType, ValueType],
@@ -130,10 +136,12 @@ func getGCSafepointController(ctx context.Context) *gcctx.GCSafepointController 
 	return gcctx.GetGCSafepointController(ctx)
 }
 
+// loadSequenceState normalizes relation names before looking them up in the global state.
 func loadSequenceState[StateType sequences.SequenceState[StateType, ValueType], ValueType comparable](sequences *SyncMap[doltdb.TableName, StateType], relationName doltdb.TableName) (current StateType, hasCurrent bool) {
 	return sequences.Load(relationName.ToLower())
 }
 
+// initializeSequenceState ini
 func (a *SequenceTracker[RelationType, StateType, ValueType]) initializeSequenceState(ctx *sql.Context, relationName doltdb.TableName, initialValue interface{}) (state StateType, hasState bool, err error) {
 	sess := DSessFromSess(ctx.Session)
 	ws, err := sess.WorkingSet(ctx, a.dbName)
@@ -153,9 +161,7 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) initializeSequence
 
 	var seq StateType
 	if !hasAutoIncrement {
-		// Create a new state based on the provided value
-		// TODO: This could cause problems when we need to create the more
-		// complicated sequence types for Doltgres
+		// Create a new state based on the provided value.
 		seq, err = state.WithSQLValue(ctx, initialValue)
 		if err != nil {
 			return state, false, err
@@ -317,21 +323,23 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) Set(ctx *sql.Conte
 
 // deepSet sets the sequence state for the table named, if it's greater than the one on any branch head for this
 // database, ignoring the current in-memory tracker value
-func (a *SequenceTracker[RelationType, StateType, ValueType]) deepSet(ctx *sql.Context, relationName doltdb.TableName, table RelationType, ws ref.WorkingSetRef, newAutoIncVal StateType) (newRelation RelationType, err error) {
+func (a *SequenceTracker[RelationType, StateType, ValueType]) deepSet(ctx *sql.Context, relationName doltdb.TableName, relation RelationType, ws ref.WorkingSetRef, newAutoIncVal StateType) (newRelation RelationType, err error) {
 	sess := DSessFromSess(ctx.Session)
 	db, ok := sess.Provider().BaseDatabase(ctx, a.dbName)
 
 	// just give up if we can't find this db for any reason, or it's a non-versioned DB
 	if !ok || !db.Versioned() {
-		return table, nil
+		return relation, nil
 	}
 
-	table, success, err := table.TrySetSequenceState(ctx, newAutoIncVal)
+	relation, success, err := relation.TrySetSequenceState(ctx, newAutoIncVal)
 	if err != nil {
 		return newRelation, err
 	}
 	if !success {
-		return table, nil
+		// If the relation wasn't actually updated (most likely because we just tried to set the AUTO_INCREMENT counter
+		// to something less than a value already in the table), then there's nothing more to do.
+		return relation, nil
 	}
 
 	// Now that we have established the current max for this table, reset the global max accordingly
@@ -414,19 +422,14 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) deepSet(ctx *sql.C
 				return newRelation, err
 			}
 
-			var mergeOk bool
-			maxAutoInc, mergeOk = maxAutoInc.Merge(seq)
-			if !mergeOk {
-				// TODO: This can't happen with AUTO INCREMENT but needs to be
-				// handled for sequences.
-			}
+			maxAutoInc = maxAutoInc.Merge(seq)
 		}
 	}
 
 	if a.validateBounds(ctx, relationName, maxAutoInc, false) {
 		a.sequences.Store(relationName, maxAutoInc)
 	}
-	return table, nil
+	return relation, nil
 }
 
 // AddNewRelation initializes a new table with an auto increment column to the tracker, as necessary
@@ -455,7 +458,8 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) DropRelation(ctx *
 	release := a.mm.Lock(relationName)
 	defer release()
 
-	var newHighestValue *StateType
+	// A State representing the "furthest along" state among all working sets.
+	var mergedState *StateType
 
 	// Get the new highest value from all tables in the working sets given
 	for _, ws := range wses {
@@ -477,22 +481,17 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) DropRelation(ctx *
 			if err != nil {
 				return err
 			}
-			if newHighestValue == nil {
-				newHighestValue = &seq
+			if mergedState == nil {
+				mergedState = &seq
 			} else {
-				var ok bool
-				*newHighestValue, ok = (*newHighestValue).Merge(seq)
-				if !ok {
-					// TODO: This can't happen with AUTO INCREMENT but needs to be
-					// handled for sequences.
-				}
+				*mergedState = (*mergedState).Merge(seq)
 			}
 
 		}
 	}
 
-	if newHighestValue != nil {
-		a.sequences.Store(relationName, *newHighestValue)
+	if mergedState != nil {
+		a.sequences.Store(relationName, *mergedState)
 	} else {
 		a.sequences.Delete(relationName)
 	}
