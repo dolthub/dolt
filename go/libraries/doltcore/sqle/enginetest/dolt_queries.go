@@ -4502,7 +4502,7 @@ var DoltBranchScripts = []queries.ScriptTest{
 	},
 	{
 		// See https://github.com/dolthub/dolt/issues/11270
-		Name: "a branch name differing from an existing one only by case is rejected, a distinct name is not",
+		Name: "a branch name differing from an existing one only by case is rejected",
 		SetUpScript: []string{
 			"create table t (a int primary key);",
 			"insert into t values (1);",
@@ -4547,13 +4547,33 @@ var DoltBranchScripts = []queries.ScriptTest{
 				Query:    "select count(*) from dolt_branches where name = 'br' or name = 'BR';",
 				Expected: []sql.Row{{1}},
 			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11270
+		Name: "the case collision guard allows same-case reset and case-only rename",
+		SetUpScript: []string{
+			"create table t (a int primary key);",
+			"insert into t values (1);",
+			"call dolt_commit('-Am', 'init');",
+			"call dolt_branch('br');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "call dolt_branch('other');",
-				Expected: []sql.Row{{0}},
+				Query:    "insert into t values (2);",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "call dolt_commit('-Am', 'second');",
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:    "call dolt_branch('-f', 'br');",
 				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select a from `mydb/br`.t order by a;",
+				Expected: []sql.Row{{1}, {2}},
 			},
 			{
 				Query:    "call dolt_branch('-c', 'br', 'brcopy');",
@@ -6865,20 +6885,12 @@ var DoltTagTestScripts = []queries.ScriptTest{
 		// See https://github.com/dolthub/dolt/issues/11270
 		Name: "dolt-tag: a branch and a tag may share a name",
 		SetUpScript: []string{
-			"CREATE TABLE test(pk int primary key);",
-			"CALL DOLT_COMMIT('-Am','created table test')",
+			"CALL DOLT_BRANCH('frombr')",
+			"CALL DOLT_TAG('fromtag')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "CALL DOLT_BRANCH('shared')",
-				Expected: []sql.Row{{0}},
-			},
-			{
-				Query:    "CALL DOLT_TAG('shared')",
-				Expected: []sql.Row{{0}},
-			},
-			{
-				Query:    "CALL DOLT_TAG('fromtag')",
+				Query:    "CALL DOLT_TAG('frombr')",
 				Expected: []sql.Row{{0}},
 			},
 			{
@@ -6886,7 +6898,7 @@ var DoltTagTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:    "SELECT (SELECT count(*) FROM dolt_branches WHERE name IN ('shared', 'fromtag')), (SELECT count(*) FROM dolt_tags WHERE tag_name IN ('shared', 'fromtag'))",
+				Query:    "SELECT (SELECT count(*) FROM dolt_branches WHERE name IN ('frombr', 'fromtag')), (SELECT count(*) FROM dolt_tags WHERE tag_name IN ('frombr', 'fromtag'))",
 				Expected: []sql.Row{{2, 2}},
 			},
 		},
