@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 	"github.com/dolthub/go-mysql-server/sql/fulltext"
+	"github.com/dolthub/go-mysql-server/sql/sets"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -150,7 +151,7 @@ func (t *DoltTable) LookupForExpressions(ctx *sql.Context, exprs ...sql.Expressi
 		}
 	}
 
-	colset := sql.NewFastIntSet()
+	colset := sets.NewFastIntSet()
 	schCols := t.sch.GetAllCols()
 	for _, c := range lookupCols {
 		col := schCols.LowerNameToCol[c.Col]

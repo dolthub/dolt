@@ -89,6 +89,17 @@ type Config struct {
 
 	// ProviderFactory controls how the DatabaseProvider is instantiated
 	ProviderFactory sqle.ProviderFactory
+
+	// EngineInitializer, if non-nil, is invoked once the SqlEngine has been
+	// created, before the server begins accepting connections.
+	EngineInitializer EngineInitializer
+}
+
+// EngineInitializer performs one-time initialization of a SqlEngine during
+// server startup, after the engine is constructed but before the server
+// accepts any connections. Returning an error aborts server startup.
+type EngineInitializer interface {
+	InitializeEngine(ctx context.Context, engine *engine.SqlEngine) error
 }
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
@@ -377,6 +388,18 @@ func ConfigureServices(
 		},
 	}
 	controller.Register(InitSqlEngine)
+
+	// Run any application-provided engine initialization immediately after the
+	// engine itself is initialized. This runs during the controller's Init
+	// phase, so it completes before the server's accept loop starts running.
+	if cfg.EngineInitializer != nil {
+		RunEngineInitializer := &svcs.AnonService{
+			InitF: func(ctx context.Context) error {
+				return cfg.EngineInitializer.InitializeEngine(ctx, sqlEngine)
+			},
+		}
+		controller.Register(RunEngineInitializer)
+	}
 
 	// Closing the connections on shutdown attempts to prevent
 	// them from creating new work after we cancel their running

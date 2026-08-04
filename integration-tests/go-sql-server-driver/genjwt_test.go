@@ -29,7 +29,7 @@ import (
 	"gopkg.in/go-jose/go-jose.v2/jwt"
 )
 
-var sub = "test_user"
+var sub = "test_jwt_user"
 var iss = "dolthub.com"
 var aud = "my_resource"
 var onBehalfOf = "my_user"

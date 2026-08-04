@@ -429,6 +429,12 @@ func (fs *InMemFS) DeleteFile(path string) error {
 	return fs.deleteFile(path)
 }
 
+// DeleteFileDurably deletes a file. An in-memory filesystem has no separate storage layer to sync, so there is
+// no extra work to do and this behaves the same as DeleteFile.
+func (fs *InMemFS) DeleteFileDurably(path string) error {
+	return fs.DeleteFile(path)
+}
+
 func (fs *InMemFS) deleteFile(path string) error {
 	path = fs.getAbsPath(path)
 

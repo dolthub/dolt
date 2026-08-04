@@ -48,33 +48,38 @@ func TestJWTAuth(t *testing.T) {
 
 	// Success
 	tokenCreated := time.Date(2022, 07, 20, 0, 12, 0, 0, time.UTC) // Update time if creating new token
-	authed, err := validateJWT(jwksConfig, sub, fmt.Sprintf("jwks=%s,sub=%s,iss=%s,aud=%s", jwksName, sub, iss, aud), jwt, tokenCreated)
+	authed, err := validateJWT(jwksConfig, fmt.Sprintf("jwks=%s,sub=%s,iss=%s,aud=%s", jwksName, sub, iss, aud), jwt, tokenCreated)
 	require.NoError(t, err)
 	require.True(t, authed)
 
 	// Token expired
 	now := time.Now()
-	authed, err = validateJWT(jwksConfig, sub, fmt.Sprintf("jwks=%s,sub=%s,iss=%s,aud=%s", jwksName, sub, iss, aud), jwt, now)
+	authed, err = validateJWT(jwksConfig, fmt.Sprintf("jwks=%s,sub=%s,iss=%s,aud=%s", jwksName, sub, iss, aud), jwt, now)
 	require.Error(t, err)
 	require.False(t, authed)
 
-	// Expected sub does not match
-	authed, err = validateJWT(jwksConfig, sub, fmt.Sprintf("jwks=%s,sub=%s,iss=%s,aud=%s", jwksName, "wrong-sub", iss, aud), jwt, tokenCreated)
+	// The token's sub claim does not match the sub claim declared in the identity.
+	authed, err = validateJWT(jwksConfig, fmt.Sprintf("jwks=%s,sub=%s,iss=%s,aud=%s", jwksName, "wrong-sub", iss, aud), jwt, tokenCreated)
 	require.Error(t, err)
 	require.False(t, authed)
 
 	// Jwks config doesn't exist
-	authed, err = validateJWT([]servercfg.JwksConfig{}, sub, fmt.Sprintf("jwks=%s,sub=%s,iss=%s,aud=%s", jwksName, sub, iss, aud), jwt, tokenCreated)
+	authed, err = validateJWT([]servercfg.JwksConfig{}, fmt.Sprintf("jwks=%s,sub=%s,iss=%s,aud=%s", jwksName, sub, iss, aud), jwt, tokenCreated)
 	require.Error(t, err)
 	require.False(t, authed)
 
 	// No token
-	authed, err = validateJWT(jwksConfig, sub, fmt.Sprintf("jwks=%s,sub=%s,iss=%s,aud=%s", jwksName, sub, iss, aud), "", tokenCreated)
+	authed, err = validateJWT(jwksConfig, fmt.Sprintf("jwks=%s,sub=%s,iss=%s,aud=%s", jwksName, sub, iss, aud), "", tokenCreated)
 	require.Error(t, err)
 	require.False(t, authed)
 
 	// Unknown claim in identity string
-	authed, err = validateJWT(jwksConfig, sub, fmt.Sprintf("jwks=%s,sub=%s,iss=%s,unknown=%s", jwksName, sub, iss, aud), "", tokenCreated)
+	authed, err = validateJWT(jwksConfig, fmt.Sprintf("jwks=%s,sub=%s,iss=%s,unknown=%s", jwksName, sub, iss, aud), "", tokenCreated)
+	require.Error(t, err)
+	require.False(t, authed)
+
+	// Malformed identity string (a field with no '=') returns an error rather than panicking.
+	authed, err = validateJWT(jwksConfig, fmt.Sprintf("jwks=%s,sub", jwksName), jwt, tokenCreated)
 	require.Error(t, err)
 	require.False(t, authed)
 }

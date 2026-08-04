@@ -44,8 +44,12 @@ func TestUnescapeHTMLCodepoints(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := unescapeHTMLCodepoints([]byte(tc.in))
+			in := []byte(tc.in)
+			got := unescapeHTMLCodepoints(in)
 			require.Equal(t, tc.expected, string(got))
+			// unescapeHTMLCodepoints must never mutate its input, which may be a
+			// shared view into cached chunk storage read by other goroutines.
+			require.Equal(t, tc.in, string(in), "input buffer was mutated")
 		})
 	}
 }

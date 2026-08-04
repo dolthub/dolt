@@ -773,11 +773,20 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, dbName string, branchSt
 		}
 	}
 
+	var amendedCommit hash.Hash
+	if props.Amend {
+		var err error
+		amendedCommit, err = headCommit.HashOf()
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	tableResolver, err := GetTableResolver(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}
-	pendingCommit, err := actions.GetCommitStaged(ctx, tableResolver, roots, branchState.WorkingSet(), mergeParentCommits, branchState.dbData.Ddb, props)
+	pendingCommit, err := actions.GetCommitStaged(ctx, tableResolver, roots, branchState.WorkingSet(), mergeParentCommits, amendedCommit, branchState.dbData.Ddb, props)
 	if err != nil {
 		// Special case for nothing staged, which is not an error
 		if _, ok := err.(actions.NothingStaged); !ok {
@@ -1311,6 +1320,19 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	DefineSystemVariablesForDB(baseName)
 
 	tx, usingDoltTransaction := d.GetTransaction().(*DoltTransaction)
+
+	// If this database isn't part of the transaction's start-point snapshot, it became visible to this session after the
+	// transaction began (e.g. another session created it concurrently, or it was cloned on first reference). Register it
+	// now with its current root so that TransactionRoot and friends can resolve it, instead of erroring out. See AddDb.
+	// We only do this for databases backed by a DoltDB, matching StartTransaction, which skips databases with a nil Ddb
+	// (e.g. UserSpaceDatabase, clusterDatabase) when taking its snapshot.
+	if usingDoltTransaction && db.DbData().Ddb != nil {
+		if _, ok := tx.GetInitialRoot(baseName); !ok {
+			if err := tx.AddDb(ctx, db); err != nil {
+				return err
+			}
+		}
+	}
 
 	d.mu.Lock()
 	defer d.mu.Unlock()

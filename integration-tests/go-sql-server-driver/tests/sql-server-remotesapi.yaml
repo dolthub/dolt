@@ -38,6 +38,34 @@ tests:
       result:
         columns: ["count(*)"]
         rows: [["5"]]
+- name: can clone from own remotesapi endpoint without deadlocking
+  # Regression test: CloneDatabaseFromRemote must not hold the provider lock
+  # across the network fetch. The fetch below reads from this same server's
+  # remotesapi, whose handler needs a read lock on the provider; holding the
+  # write lock across the fetch deadlocks the clone against itself.
+  multi_repos:
+  - name: server1
+    repos:
+    - name: repo1
+    - name: repo2
+    server:
+      args: ["--remotesapi-port", "{{get_port \"remotesapi_port\"}}", "--port", "{{get_port \"server_port\"}}"]
+      dynamic_port: server_port
+  connections:
+  - on: server1
+    queries:
+    - exec: "use repo2"
+    - exec: "create table vals (id int primary key)"
+    - exec: "insert into vals values (0),(1),(2),(3),(4)"
+    - exec: "call dolt_commit('-Am', 'insert some data')"
+  - on: server1
+    queries:
+    - exec: "call dolt_clone('http://localhost:{{get_port \"remotesapi_port\"}}/repo2', 'repo2_clone')"
+    - exec: "use repo2_clone"
+    - query: "select count(*) from vals"
+      result:
+        columns: ["count(*)"]
+        rows: [["5"]]
 - name: can clone from server1 remotesapi endpoint after a gc
   multi_repos:
   - name: server1

@@ -204,7 +204,7 @@ match:
 				return nil, err
 			}
 			l.matchPos += 2
-			l.matchedLeft = ok
+			l.matchedLeft = l.matchedLeft || ok
 			if ok {
 				return candidate, nil
 			}
@@ -213,7 +213,7 @@ match:
 			if err != nil {
 				return nil, err
 			}
-			l.matchedLeft = ok
+			l.matchedLeft = l.matchedLeft || ok
 			l.matchPos++
 			if ok {
 				return candidate, nil
@@ -228,6 +228,19 @@ match:
 			tmpKey, tmpVal := l.leftKey, l.leftVal
 			l.leftKey, l.leftVal, err = l.leftIter.Next(ctx)
 			if err != nil {
+				if errors.Is(err, io.EOF) && l.isLeftJoin && !l.matchedLeft {
+					// the just-completed left row never matched; emit its
+					// null-extended row before surfacing EOF
+					l.exhaustLeft = true
+					l.leftKey = nil
+					ret, ok, buildErr := l.buildResultRow(ctx, tmpKey, tmpVal, nil, nil)
+					if buildErr != nil {
+						return nil, buildErr
+					}
+					if ok {
+						return ret, nil
+					}
+				}
 				return nil, err
 			}
 			cmp, cmpErr := l.llCmp(tmpKey, tmpVal, l.leftKey, l.leftVal)

@@ -76,6 +76,20 @@ type commithook struct {
 	// actually indicated we are caught up. This is set to by a call to
 	// NotifyWaitFailed(), an optional interface on CommitHook.
 	fastFailReplicationWait bool
+
+	// Circuit breaker probe scheduling. While fastFailReplicationWait is
+	// true, most commits fast-fail their replication wait. Periodically we
+	// let one commit through as a real wait (a "probe"); if it replicates
+	// within the ack timeout, we close the breaker. nextProbeAt is the
+	// earliest time the next probe may be issued. probeBudget is the most
+	// recently observed replication-wait timeout. We learn it by observation
+	// so that we appropriately space probes without needing to plumb the
+	// dolt_cluster_ack_writes_timeout_secs sysvar into the hook.
+	nextProbeAt time.Time
+	probeBudget time.Duration
+	// nowFunc returns the current time. It is time.Now in production and is
+	// overridable in tests to make probe scheduling deterministic.
+	nowFunc func() time.Time
 }
 
 var errDestDBRootHashMoved error = errors.New("cluster/commithook: standby replication: destination database root hash moved during our write, while it is assumed we are the only writer.")
@@ -94,6 +108,7 @@ func newCommitHook(lgr *logrus.Logger, remotename, remoteurl, dbname string, rol
 	ret.destDBF = destDBF
 	ret.srcDB = srcDB
 	ret.tempDir = tempDir
+	ret.nowFunc = time.Now
 	ret.cond = sync.NewCond(&ret.mu)
 	return &ret
 }
@@ -453,6 +468,8 @@ func (h *commithook) setRole(role Role) {
 	h.lastPushedHead = hash.Hash{}
 	h.lastSuccess = time.Time{}
 	h.nextPushAttempt = time.Time{}
+	h.nextProbeAt = time.Time{}
+	h.probeBudget = 0
 	h.role = role
 	h.lgr.Store(h.rootLgr.WithField(logFieldRole, string(role)))
 	if h.cancelReplicate != nil {
@@ -506,12 +523,50 @@ func (h *commithook) Execute(ctx context.Context, ds datas.Dataset, db *doltdb.D
 	}
 	var waitF func(context.Context) error
 	if !h.isCaughtUp() {
-		if h.fastFailReplicationWait {
+		now := h.nowFunc()
+		if h.fastFailReplicationWait && now.Before(h.nextProbeAt) {
+			// The breaker is open and it is not yet time to probe;
+			// fast-fail this commit's replication wait.
 			waitF = func(ctx context.Context) error {
 				return fmt.Errorf("circuit breaker for replication to %s/%s is open. this commit did not necessarily replicate successfully.", h.remotename, h.dbname)
 			}
 		} else {
-			waitF = h.progressNotifier.Wait()
+			// Either the breaker is closed and this is a normal
+			// replication wait, or the breaker is open and this commit
+			// is our periodic probe. In both cases we block on real
+			// replication progress.
+			//
+			// If we are probing, push nextProbeAt out now, before we
+			// release h.mu, so that a burst of commits arriving at the
+			// probe boundary do not all become probes. The wait closure
+			// refines nextProbeAt when it completes.
+			probing := h.fastFailReplicationWait
+			if probing {
+				h.nextProbeAt = now.Add(h.probeBudget)
+			}
+			start := now
+			inner := h.progressNotifier.Wait()
+			waitF = func(ctx context.Context) error {
+				err := inner(ctx)
+				h.mu.Lock()
+				defer h.mu.Unlock()
+				if err == nil {
+					// Replication made progress within the ack
+					// timeout. If this was a probe, close the
+					// breaker.
+					if probing {
+						h.fastFailReplicationWait = false
+					}
+				} else if errors.Is(err, doltdb.ErrReplicationWaitFailed) {
+					// We waited the full ack timeout without seeing
+					// progress. Learn that budget by observation and
+					// use it to schedule the next probe.
+					end := h.nowFunc()
+					h.probeBudget = end.Sub(start)
+					h.nextProbeAt = end.Add(h.probeBudget)
+				}
+				return err
+			}
 		}
 	}
 	return waitF, nil

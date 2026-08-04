@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 var copyTagsDocs = cli.CommandDocumentationContent{
@@ -277,7 +278,7 @@ func doltCommitUpdatedTags(ctx *sql.Context, tableResolver doltdb.TableResolver,
 		return err
 	}
 
-	pendingCommit, err := actions.GetCommitStaged(ctx, tableResolver, roots, workingSet, nil, doltDB, commitStagedProps)
+	pendingCommit, err := actions.GetCommitStaged(ctx, tableResolver, roots, workingSet, nil, hash.Hash{}, doltDB, commitStagedProps)
 	if err != nil {
 		return err
 	}

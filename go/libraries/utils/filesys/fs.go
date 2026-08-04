@@ -67,6 +67,9 @@ type WritableFS interface {
 	// DeleteFile will delete a file at the given path
 	DeleteFile(path string) error
 
+	// DeleteFileDurably deletes a file and ensures the deletion survives a system crash or power loss.
+	DeleteFileDurably(path string) error
+
 	// Delete will delete an empty directory, or a file.  If trying delete a directory that is not empty you can set force to
 	// true in order to delete the dir and all of it's contents
 	Delete(path string, force bool) error

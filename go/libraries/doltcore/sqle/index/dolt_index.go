@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 	"github.com/dolthub/go-mysql-server/sql/fulltext"
+	"github.com/dolthub/go-mysql-server/sql/sets"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	vttypes "github.com/dolthub/vitess/go/sqltypes"
 
@@ -60,7 +61,7 @@ type DoltIndex interface {
 	Format() *types.NomsBinFormat
 	IsPrimaryKey() bool
 
-	coversColumns(s *durableIndexState, columns []uint64) bool
+	coversColumnsByTag(s *durableIndexState, columns []uint64) bool
 }
 
 func NewBranchNameIndex(i *doltIndex) *BranchNameIndex {
@@ -629,7 +630,7 @@ type doltIndex struct {
 type LookupMeta struct {
 	Idx      sql.Index
 	Fds      *sql.FuncDepSet
-	Cols     sql.FastIntSet
+	Cols     sets.FastIntSet
 	Ordinals []int
 }
 
@@ -657,7 +658,7 @@ func GetStrictLookups(ctx *sql.Context, schCols *schema.ColCollection, indexes [
 			continue
 		}
 		var ordinals []int
-		allCols := sql.NewFastIntSet()
+		allCols := sets.NewFastIntSet()
 		for _, c := range idx.columns {
 			idx := schCols.TagToIdx[c.Tag]
 			allCols.Add(idx + 1)
@@ -788,7 +789,8 @@ func (di *doltIndex) prollyRanges(ctx *sql.Context, ns tree.NodeStore, ranges ..
 	return pranges, nil
 }
 
-func (di *doltIndex) coversColumns(s *durableIndexState, cols []uint64) bool {
+// coversColumnsByTag determines if this index covers a list of columns
+func (di *doltIndex) coversColumnsByTag(s *durableIndexState, cols []uint64) bool {
 	if cols == nil {
 		return s.coversAllColumns(di)
 	}
@@ -820,6 +822,26 @@ func (di *doltIndex) coversColumns(s *durableIndexState, cols []uint64) bool {
 		}
 	}
 
+	return covers
+}
+
+// CoversColumns determines if this index covers the columns by name.
+func (di *doltIndex) CoversColumns(cols []string) bool {
+	if di.indexSch == nil {
+		return false
+	}
+	idxCols := di.indexSch.GetAllCols()
+	if len(cols) > len(idxCols.Tags) {
+		return false
+	}
+
+	covers := true
+	for _, colName := range cols {
+		if _, ok := idxCols.LowerNameToCol[strings.ToLower(colName)]; !ok {
+			covers = false
+			break
+		}
+	}
 	return covers
 }
 

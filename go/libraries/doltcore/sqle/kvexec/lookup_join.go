@@ -298,7 +298,7 @@ func convertLiteralKeyValue(ctx *sql.Context, colTyp sql.ColumnExpressionType, l
 	// For extended types, use the rich type conversion methods
 	if srcEt, ok := srcType.(sql.ExtendedType); ok {
 		if destEt, ok := destType.(sql.ExtendedType); ok {
-			return destEt.ConvertToType(ctx, srcEt, literal.Value())
+			return destEt.ConvertToType(ctx, srcEt, literal.Value(), 'a')
 		}
 	}
 	return destType.Convert(ctx, literal.Value())
@@ -334,10 +334,12 @@ func (m *lookupMapping) valid(ctx *sql.Context) bool {
 		// byte-compatible for these lookups, so we need to dig deeper.
 		switch desc.Types[from].Enc {
 		case val.ExtendedAddrEnc, val.ExtendedEnc, val.ExtendedAdaptiveEnc:
-			toTyp := m.idxColTyps[from].Type
-			fromTyp := m.keyExprs[from].Type(ctx)
+			toTyp := m.idxColTyps[to].Type
+			fromTyp := m.keyExprs[to].Type(ctx)
 			// this is more conservative than it needs to be, we want to assert these values are byte-compatible
-			return toTyp == fromTyp
+			if toTyp != fromTyp {
+				return false
+			}
 		}
 	}
 	return true

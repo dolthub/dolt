@@ -30,7 +30,7 @@ type fetchingJWTValidator struct {
 }
 
 func NewJWTValidator(provider JWTProvider) (JWTValidator, error) {
-	expected := jwt.Expected{Issuer: provider.Issuer, Audience: jwt.Audience{provider.Audience}}
+	expected := jwt.Expected{Issuer: provider.Issuer, Subject: provider.Subject, Audience: jwt.Audience{provider.Audience}}
 	jwks, err := newJWKS(provider)
 	if err != nil {
 		return nil, err
