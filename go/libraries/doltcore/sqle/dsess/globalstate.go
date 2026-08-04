@@ -32,7 +32,7 @@ func NewSequenceTracker[
 	RelationType sequences.SequencedRelation[RelationType, ValueType, StateType],
 	StateType sequences.SequenceState[StateType, ValueType],
 	ValueType comparable,
-](ctx context.Context, dbName string, db *doltdb.DoltDB, relationSource RelationSource[RelationType]) (*SequenceTracker[RelationType, StateType, ValueType], error) {
+](ctx context.Context, dbName string, db *doltdb.DoltDB, relationSource doltdb.RelationSource[RelationType]) (*SequenceTracker[RelationType, StateType, ValueType], error) {
 	branches, err := db.GetBranches(ctx)
 	if err != nil {
 		return nil, err
@@ -98,7 +98,7 @@ func NewSequenceTracker[
 }
 
 func NewGlobalStateStoreForDb(ctx context.Context, dbName string, db *doltdb.DoltDB) (GlobalStateImpl, error) {
-	autoIncrementTracker, err := NewSequenceTracker(ctx, dbName, db, DoltDBRelationSource{})
+	autoIncrementTracker, err := NewSequenceTracker(ctx, dbName, db, doltdb.TableSource{})
 	if err != nil {
 		return GlobalStateImpl{}, err
 	}

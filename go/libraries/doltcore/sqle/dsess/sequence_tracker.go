@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"iter"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -39,13 +38,6 @@ var (
 	LockMode_Concurrent  LockMode = 1
 	LockMode_Interleaved LockMode = 2
 )
-
-// A RelationSource maps table names to relations (which may be tables or root objects) at a supplied RootValue.
-type RelationSource[RelationType any] interface {
-	// GetRelation gets a relation at a specific doltdb.RootValue
-	GetRelation(ctx context.Context, root doltdb.RootValue, tName doltdb.TableName) (relation RelationType, resolvedName string, found bool, err error)
-	IterRelations(ctx context.Context, root doltdb.RootValue) iter.Seq2[doltdb.TableName, RelationType]
-}
 
 // A SequenceTracker provides synchronized access to a shared global state across every branch and transaction.
 //
@@ -76,7 +68,7 @@ type SequenceTracker[
 	lockMode LockMode
 	// relationSource is how the tracker reads objects from a RootValue.
 	// It may read tables or RootObjects.
-	relationSource RelationSource[RelationType]
+	relationSource doltdb.RelationSource[RelationType]
 }
 
 // currentLockMode returns the effective @@innodb_autoinc_lock_mode stored in global server vars
@@ -101,7 +93,7 @@ func NewSequenceTrackerFromRoots[
 	RelationType sequences.SequencedRelation[RelationType, ValueType, StateType],
 	StateType sequences.SequenceState[StateType, ValueType],
 	ValueType comparable,
-](ctx context.Context, dbName string, relationSource RelationSource[RelationType], roots ...doltdb.Rootish) (*SequenceTracker[RelationType, StateType, ValueType], error) {
+](ctx context.Context, dbName string, relationSource doltdb.RelationSource[RelationType], roots ...doltdb.Rootish) (*SequenceTracker[RelationType, StateType, ValueType], error) {
 	ait := SequenceTracker[RelationType, StateType, ValueType]{
 		dbName:         dbName,
 		sequences:      &SyncMap[doltdb.TableName, StateType]{},
