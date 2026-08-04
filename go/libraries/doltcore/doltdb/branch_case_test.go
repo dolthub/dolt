@@ -30,26 +30,36 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// newCaseVariantDB returns a database holding only main, and the commit new branches should start at.
-func newCaseVariantDB(t *testing.T) (*DoltDB, context.Context, *Commit) {
+// newMemDoltDBWithDefaultBranch returns an in-memory database holding only |defaultBranch|, and that branch's commit.
+func newMemDoltDBWithDefaultBranch(t *testing.T, defaultBranch string) (*DoltDB, context.Context, *Commit) {
 	t.Helper()
+
 	ctx := context.Background()
 	ddb, err := LoadDoltDB(ctx, types.Format_DOLT, InMemDoltDB, filesys.LocalFS)
 	require.NoError(t, err)
 	t.Cleanup(func() { ddb.Close() })
-	require.NoError(t, ddb.WriteEmptyRepo(ctx, "main", "Bill Billerson", "bigbillieb@fake.horse"))
 
-	cs, err := NewCommitSpec("main")
+	require.NoError(t, ddb.WriteEmptyRepo(ctx, defaultBranch, "Bill Billerson", "bigbillieb@fake.horse"))
+
+	return ddb, ctx, resolveCommitSpecStr(ctx, t, ddb, defaultBranch)
+}
+
+// resolveCommitSpecStr returns the commit that |spec| names in |ddb|.
+func resolveCommitSpecStr(ctx context.Context, t *testing.T, ddb *DoltDB, spec string) *Commit {
+	t.Helper()
+
+	cs, err := NewCommitSpec(spec)
 	require.NoError(t, err)
 	optCmt, err := ddb.Resolve(ctx, cs, nil)
 	require.NoError(t, err)
 	commit, ok := optCmt.ToCommit()
 	require.True(t, ok)
-	return ddb, ctx, commit
+
+	return commit
 }
 
-// branchNames returns the sorted paths of every branch in ddb.
-func branchNames(ctx context.Context, t *testing.T, ddb *DoltDB) []string {
+// sortedBranchNames returns the lexically sorted paths of every branch in |ddb|.
+func sortedBranchNames(ctx context.Context, t *testing.T, ddb *DoltDB) []string {
 	t.Helper()
 	branches, err := ddb.GetBranches(ctx)
 	require.NoError(t, err)
@@ -61,15 +71,14 @@ func branchNames(ctx context.Context, t *testing.T, ddb *DoltDB) []string {
 	return names
 }
 
-func TestCaseVariantBranchLosingAnUpdateRaceIsRejected(t *testing.T) {
+func TestCaseVariantBranchRejectedInDeterministicRace(t *testing.T) {
 	// See https://github.com/dolthub/dolt/issues/11270
-	ddb, ctx, base := newCaseVariantDB(t)
+	ddb, ctx, base := newMemDoltDBWithDefaultBranch(t, "main")
 
-	// Commit "br" between the update below reading the dataset map and committing it, the interleaving
-	// that costs the update its commit and makes it run again. Only the first run commits, so the rerun
-	// is left free to finish and has to reject "BR" against the reread map.
 	committedBr := false
-	commitBrMidUpdate := datas.PreUpdateCheck(func(ctx context.Context, _ prolly.AddressMap, _ string) error {
+	// SetHead runs this hook mid-creation of "BR". Committing "br" here moves the database root, so "BR"'s
+	// compare-and-swap fails and retries, reproducing the race deterministically.
+	commitBrMidUpdate := datas.Precondition(func(ctx context.Context, _ prolly.AddressMap, _ string) error {
 		if !committedBr {
 			committedBr = true
 			require.NoError(t, ddb.NewBranchAtCommit(ctx, ref.NewBranchRef("br"), base, nil))
@@ -83,19 +92,20 @@ func TestCaseVariantBranchLosingAnUpdateRaceIsRejected(t *testing.T) {
 	addr, err := base.HashOf()
 	require.NoError(t, err)
 
+	// On the retry, failOnCaseConflict scans the now-committed branches finding "br" folds onto "BR".
 	_, err = db.SetHead(ctx, ds, addr, "", commitBrMidUpdate, failOnCaseConflict())
 	var existing *ExistingRefError
 	require.ErrorAs(t, err, &existing)
 	require.Equal(t, "br", existing.Ref.GetPath())
-	require.Equal(t, []string{"br", "main"}, branchNames(ctx, t, ddb))
+	require.Equal(t, []string{"br", "main"}, sortedBranchNames(ctx, t, ddb))
 }
 
 func TestConcurrentCaseVariantBranchCreation(t *testing.T) {
 	// See https://github.com/dolthub/dolt/issues/11270
-	ddb, ctx, base := newCaseVariantDB(t)
+	ddb, ctx, base := newMemDoltDBWithDefaultBranch(t, "main")
 
-	// Run the creation path from two goroutines so the race detector has something to observe. Which
-	// one wins is left to the scheduler because the assertions below hold for either outcome.
+	// Drive creation path from goroutines, not a custom SetHead, so -race observes concurrency through
+	// public func. Scheduler handles execution of "br" and "BR" creation, so focus on invariants instead.
 	errs := make([]error, 2)
 	var wg sync.WaitGroup
 	for i, name := range []string{"br", "BR"} {
@@ -107,7 +117,7 @@ func TestConcurrentCaseVariantBranchCreation(t *testing.T) {
 	}
 	wg.Wait()
 
-	require.Len(t, branchNames(ctx, t, ddb), 2)
+	require.Len(t, sortedBranchNames(ctx, t, ddb), 2)
 
 	rejected := 0
 	for _, e := range errs {
@@ -122,13 +132,13 @@ func TestConcurrentCaseVariantBranchCreation(t *testing.T) {
 
 func TestAmbiguousRefNameReadFailsLoud(t *testing.T) {
 	// See https://github.com/dolthub/dolt/issues/11270
-	ddb, ctx, base := newCaseVariantDB(t)
+	ddb, ctx, base := newMemDoltDBWithDefaultBranch(t, "main")
 
 	for _, name := range []string{"br", "BR", "Br"} {
-		require.NoError(t, ddb.NewBranchAtCommitUnchecked(ctx, ref.NewBranchRef(name), base, nil))
+		require.NoError(t, ddb.NewBranchAtCommitAllowCaseConflict(ctx, ref.NewBranchRef(name), base, nil))
 	}
 
-	// The fourth casing matches no branch exactly and still folds onto all three.
+	// The fourth casing matches no branch but folds onto all three.
 	for _, name := range []string{"br", "BR", "Br", "bR"} {
 		match, err := ddb.GetRefByNameInsensitive(ctx, name)
 		require.Nil(t, match)

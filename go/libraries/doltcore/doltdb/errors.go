@@ -145,14 +145,19 @@ func GetUnreachableRootCause(err error) error {
 	return rvu.Cause
 }
 
-// ExistingRefError reports the ref that already holds a name a caller tried to create. Ref is the stored
-// spelling, which differs from the requested one when only their cases differ. Callers name the ref they
-// were creating, so the message itself stays a bare suffix.
+// ExistingRefError represents a caller-provided name for a categorized
+// [ref.DoltRef], such as a branch or tag, conflicts with one or more
+// existing names.
+//
+// Ref identifies one exsiting conflict so callers can produce
+// context-specific errors, such as actions.BranchExistsError.
 type ExistingRefError struct {
 	Ref ref.DoltRef
 }
 
 func (e *ExistingRefError) Error() string {
+	// TODO(elianddb): Include Ref in the error message once tags, workspaces,
+	//  and other reference types use their own errors, and update their tests.
 	return "already exists"
 }
 

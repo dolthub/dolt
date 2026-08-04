@@ -365,22 +365,18 @@ func headCommit(ctx context.Context, t *testing.T, ddb *doltdb.DoltDB, branch st
 	return commit
 }
 
-func TestResolveCaseVariantBranch(t *testing.T) {
+func TestResolveCaseVariantBranchConflict(t *testing.T) {
 	// See https://github.com/dolthub/dolt/issues/11270
 	engine, sqlCtx, _, dEnv := newProviderEngine(t)
 	ctx := context.Background()
 	ddb := dEnv.DoltDB(ctx)
 
-	query := func(q string) ([]sql.Row, error) {
-		_, iter, _, err := engine.Query(sqlCtx, q)
-		if err != nil {
-			return nil, err
-		}
-		return sql.RowIterToRows(sqlCtx, iter)
-	}
-	mustQuery := func(q string) {
-		_, err := query(q)
+	// mustQuery asserts no error occurs when running |q| and returns resulting rows.
+	mustQuery := func(q string) []sql.Row {
+		t.Helper()
+		rows, err := QueryRows(sqlCtx, engine, q)
 		require.NoError(t, err)
+		return rows
 	}
 
 	mustQuery("create table t (a int primary key)")
@@ -389,25 +385,18 @@ func TestResolveCaseVariantBranch(t *testing.T) {
 	mustQuery("update t set a = 222")
 	mustQuery("call dolt_commit('-am', 'upper')")
 
-	// Seed a collision the way clone or replication would, giving each casing its own commit.
-	require.NoError(t, ddb.NewBranchAtCommitUnchecked(ctx, ref.NewBranchRef("br"), headCommit(ctx, t, ddb, "main~1"), nil))
-	require.NoError(t, ddb.NewBranchAtCommitUnchecked(ctx, ref.NewBranchRef("BR"), headCommit(ctx, t, ddb, "main"), nil))
+	require.NoError(t, ddb.NewBranchAtCommitAllowCaseConflict(ctx, ref.NewBranchRef("br"), headCommit(ctx, t, ddb, "main~1"), nil))
+	require.NoError(t, ddb.NewBranchAtCommitAllowCaseConflict(ctx, ref.NewBranchRef("BR"), headCommit(ctx, t, ddb, "main"), nil))
 
-	// While both exist every casing folds to the same pair, so neither branch's own data can be read.
+	// Each casing folds onto the branches above, making it ambiguous which branch to read.
 	for _, db := range []string{"dolt/br", "dolt/BR", "dolt/Br"} {
-		_, err := query("select a from `" + db + "`.t")
+		_, err := QueryRows(sqlCtx, engine, "select a from `"+db+"`.t")
 		require.ErrorIs(t, err, doltdb.ErrAmbiguousRefName)
 		require.ErrorContains(t, err, "could be BR, br")
 	}
 
 	mustQuery("call dolt_branch('-m', 'BR', 'keepBR')")
 
-	// With only one casing of "br" left, each name resolves to its own branch and reads its own data.
-	rows, err := query("select a from `dolt/br`.t")
-	require.NoError(t, err)
-	require.Equal(t, []sql.Row{{int32(111)}}, rows)
-
-	rows, err = query("select a from `dolt/keepBR`.t")
-	require.NoError(t, err)
-	require.Equal(t, []sql.Row{{int32(222)}}, rows)
+	require.Equal(t, []sql.Row{{int32(111)}}, mustQuery("select a from `dolt/br`.t"))
+	require.Equal(t, []sql.Row{{int32(222)}}, mustQuery("select a from `dolt/keepBR`.t"))
 }

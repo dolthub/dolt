@@ -85,9 +85,7 @@ func CopyBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch str
 	return CopyBranchOnDB(ctx, dEnv.DoltDB(ctx), oldBranch, newBranch, force, nil)
 }
 
-// CopyBranchOnDB copies oldBranch to newBranch, rejecting a name that differs from an existing branch
-// only by case. Branches named in |exceptCaseConflict| are exempt.
-func CopyBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, oldBranch, newBranch string, force bool, rsc *doltdb.ReplicationStatusController, exceptCaseConflict ...ref.DoltRef) error {
+func CopyBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, oldBranch, newBranch string, force bool, rsc *doltdb.ReplicationStatusController, except ...ref.DoltRef) error {
 	oldRef := ref.NewBranchRef(oldBranch)
 	newRef := ref.NewBranchRef(newBranch)
 
@@ -121,14 +119,13 @@ func CopyBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, oldBranch, newBranc
 	if !ok {
 		return doltdb.ErrGhostCommitEncountered
 	}
-	return ddb.NewBranchAtCommit(ctx, newRef, commit, rsc, exceptCaseConflict...)
+	return ddb.NewBranchAtCommit(ctx, newRef, commit, rsc, except...)
 }
 
-// BranchExistsError reports that a branch already holds the name a caller tried to create, or nil when
-// |err| means something else. It names the branch that is taken, not the name that was requested.
+// BranchExistsError returns an ErrBranchExists naming the existing branch
+// when |err| wraps an ExistingRefError, or nil otherwise.
 func BranchExistsError(err error) error {
-	var existing *doltdb.ExistingRefError
-	if errors.As(err, &existing) {
+	if existing, ok := errors.AsType[*doltdb.ExistingRefError](err); ok {
 		name := existing.Ref.GetPath()
 		return ErrBranchExists.New(name)
 	}
@@ -325,8 +322,8 @@ func CreateBranchWithStartPt[C doltdb.Context](ctx C, dbData env.DbData[C], newB
 	err := createBranch(ctx, dbData, newBranch, startPt, force, rsc)
 
 	if err != nil {
-		if exists := BranchExistsError(err); exists != nil {
-			return exists
+		if existsErr := BranchExistsError(err); existsErr != nil {
+			return existsErr
 		} else if err == doltdb.ErrInvBranchName {
 			return fmt.Errorf("fatal: '%s' is an invalid branch name.", newBranch)
 		} else if err == doltdb.ErrInvHash || doltdb.IsNotACommit(err) {

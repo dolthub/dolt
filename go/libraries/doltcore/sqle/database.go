@@ -1314,8 +1314,6 @@ func getStatusTableRootsProvider(
 				"unable to get DoltDB for database %s", ctx.GetCurrentDatabase())
 		}
 
-		// Resolved here rather than with HasBranch so that branches differing only by case are reported
-		// as ambiguous instead of reading whichever one is found first.
 		branch, err := ddb.BranchByNameInsensitive(ctx, asOfStr)
 		if err != nil {
 			return nil, nil, err

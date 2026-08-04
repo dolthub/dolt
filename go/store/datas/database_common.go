@@ -199,16 +199,20 @@ func (db *database) Close() error {
 	return db.ValueStore.Close()
 }
 
-// PreUpdateCheck runs inside the same atomic root update that performs a head write, receiving the
-// current dataset map and the ID being set. Returning an error aborts the update, letting a caller
-// enforce an invariant across all datasets without racing a concurrent writer.
-type PreUpdateCheck func(ctx context.Context, datasets prolly.AddressMap, targetID string) error
+// Precondition validates a pending update to the dataset map before it's
+// finalized. It receives the current |datasets| and the |targetID| being
+// written, and returning an error aborts the update.
+//
+// It runs on each write attempt, before the database's compare-and-swap,
+// re-validating against the latest datasets when a concurrent
+// write forces a retry.
+type Precondition func(ctx context.Context, datasets prolly.AddressMap, targetID string) error
 
-func (db *database) SetHead(ctx context.Context, ds Dataset, newHeadAddr hash.Hash, workingSetPath string, checks ...PreUpdateCheck) (Dataset, error) {
-	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error { return db.doSetHead(ctx, ds, newHeadAddr, workingSetPath, checks) })
+func (db *database) SetHead(ctx context.Context, ds Dataset, newHeadAddr hash.Hash, workingSetPath string, preconditions ...Precondition) (Dataset, error) {
+	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error { return db.doSetHead(ctx, ds, newHeadAddr, workingSetPath, preconditions) })
 }
 
-func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash, workingSetPath string, checks []PreUpdateCheck) error {
+func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash, workingSetPath string, preconditions []Precondition) error {
 	newHead, err := db.readHead(ctx, addr)
 	if err != nil {
 		return err
@@ -259,7 +263,7 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash, w
 	}
 
 	return db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
-		for _, check := range checks {
+		for _, check := range preconditions {
 			if err := check(ctx, am, ds.ID()); err != nil {
 				return prolly.AddressMap{}, err
 			}

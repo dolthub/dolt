@@ -1498,9 +1498,9 @@ func visitDatasets(ctx context.Context, refTypeFilter map[ref.RefType]struct{}, 
 	})
 }
 
-// GetRefByNameInsensitive searches this Dolt database's branch, tag, and head refs for a case-insensitive
-// match of the specified ref name. If exactly one ref of a kind matches, it is returned. If more than one
-// ref differs only by case, ErrAmbiguousRefName is returned rather than an arbitrary match.
+// GetRefByNameInsensitive searches this Dolt database's branch, tag, and head refs
+// for a case-insensitive match of |refName|. If more than one ref differs by case,
+// ErrAmbiguousRefName is returned.
 func (ddb *DoltDB) GetRefByNameInsensitive(ctx context.Context, refName string) (ref.DoltRef, error) {
 	for _, refs := range []func(context.Context) ([]ref.DoltRef, error){ddb.GetBranches, ddb.GetHeadRefs, ddb.GetTags} {
 		candidates, err := refs(ctx)
@@ -1519,8 +1519,8 @@ func (ddb *DoltDB) GetRefByNameInsensitive(ctx context.Context, refName string) 
 	return nil, ref.ErrInvalidRefSpec
 }
 
-// matchRefInsensitive returns the one ref whose path matches name ignoring case, or nil if none does.
-// Matching more than one is an error naming the candidates.
+// matchRefInsensitive returns a ref.DoltRef with a path case-insensitively matches
+// |name|, or nil. If more than one ref differs by case, ErrAmbiguousRefName is returned.
 func matchRefInsensitive(refs []ref.DoltRef, name string) (ref.DoltRef, error) {
 	var matches []ref.DoltRef
 	for _, r := range refs {
@@ -1562,12 +1562,15 @@ func (ddb *DoltDB) GetRefsOfTypeByNomsRoot(ctx context.Context, refTypeFilter ma
 	return refs, err
 }
 
-// failOnCaseConflict rejects a head write with an ExistingRefError when a ref of the same type already
-// holds a name differing from the target only by case. Only refs of the target type are compared, so a
-// tag may share a name with a branch, and refs named in |except| are ignored.
-func failOnCaseConflict(except ...ref.DoltRef) datas.PreUpdateCheck {
+// failOnCaseConflict returns a datas.Precondition that rejects creating
+// a ref when an existing ref of the same type differs from it only by case,
+// with an ExistingRefError.
+//
+// Consequently, tags and branches can share names. Explictily |except| refs
+// from collisions when, for example, a branch is renamed to a different casing.
+func failOnCaseConflict(except ...ref.DoltRef) datas.Precondition {
 	return func(ctx context.Context, datasets prolly.AddressMap, targetID string) error {
-		targetRef, err := ref.Parse(targetID)
+		targetRef, err := ref.Parse(targetID) // defaults to ref.BranchRefType prefix
 		if err != nil {
 			return nil
 		}
@@ -1597,20 +1600,25 @@ func failOnCaseConflict(except ...ref.DoltRef) datas.PreUpdateCheck {
 // finalizing at the same time), mirroring dsess's maxTxCommitRetries.
 const maxNewBranchWorkingSetRetries = 5
 
-// NewBranchAtCommit creates a new branch with HEAD at the commit given, rejecting a name that differs from
-// an existing branch only by case. Branch names must pass IsValidUserBranchName, and branches named in
-// |exceptCaseConflict| are exempt from the case check. Silently overwrites a branch of the same name.
-func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef, commit *Commit, replicationStatus *ReplicationStatusController, exceptCaseConflict ...ref.DoltRef) error {
-	return ddb.newBranchAtCommit(ctx, branchRef, commit, replicationStatus, failOnCaseConflict(exceptCaseConflict...))
+// NewBranchAtCommit creates a new branch pointing at the given commit
+// and updates its working set. Branch names must pass IsValidUserBranchName
+// and avoid case-conflicting names.
+//
+// |except| an existing branch if the case conflict is intended. A name
+// that exactly matches an existing name overwrites its branch, repointing
+// it at the given commit.
+func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef, commit *Commit, replicationStatus *ReplicationStatusController, except ...ref.DoltRef) error {
+	return ddb.newBranchAtCommit(ctx, branchRef, commit, replicationStatus, failOnCaseConflict(except...))
 }
 
-// NewBranchAtCommitUnchecked is NewBranchAtCommit without the case conflict check, for branches mirrored
-// from another database, which may already hold branches whose names differ only by case.
-func (ddb *DoltDB) NewBranchAtCommitUnchecked(ctx context.Context, branchRef ref.DoltRef, commit *Commit, replicationStatus *ReplicationStatusController) error {
+// NewBranchAtCommitAllowCaseConflict is NewBranchAtCommit without the
+// case conflict check, for reproducing branches that already exist
+// elsewhere (e.g., replication, rewriting history).
+func (ddb *DoltDB) NewBranchAtCommitAllowCaseConflict(ctx context.Context, branchRef ref.DoltRef, commit *Commit, replicationStatus *ReplicationStatusController) error {
 	return ddb.newBranchAtCommit(ctx, branchRef, commit, replicationStatus)
 }
 
-func (ddb *DoltDB) newBranchAtCommit(ctx context.Context, branchRef ref.DoltRef, commit *Commit, replicationStatus *ReplicationStatusController, checks ...datas.PreUpdateCheck) error {
+func (ddb *DoltDB) newBranchAtCommit(ctx context.Context, branchRef ref.DoltRef, commit *Commit, replicationStatus *ReplicationStatusController, preconditions ...datas.Precondition) error {
 	if !IsValidBranchRef(branchRef) {
 		panic(fmt.Sprintf("invalid branch name %s, use IsValidUserBranchName check", branchRef.String()))
 	}
@@ -1625,7 +1633,7 @@ func (ddb *DoltDB) newBranchAtCommit(ctx context.Context, branchRef ref.DoltRef,
 		return err
 	}
 
-	_, err = ddb.db.SetHead(ctx, ds, addr, "", checks...)
+	_, err = ddb.db.SetHead(ctx, ds, addr, "", preconditions...)
 	if err != nil {
 		return err
 	}
