@@ -1424,6 +1424,7 @@ func ResolveDatabaseSchema(ctx *sql.Context, root RootValue, schemaName string) 
 type RelationSource[RelationType any] interface {
 	// GetRelation gets a relation at a specific RootValue
 	GetRelation(ctx context.Context, root RootValue, tName TableName) (relation RelationType, correctName string, found bool, err error)
+	// IterRelations returns an iterator over every relation in the specific RootValue
 	IterRelations(ctx context.Context, root RootValue) iter.Seq2[TableName, RelationType]
 }
 
