@@ -422,13 +422,22 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) deepSet(ctx *sql.C
 
 // AddNewRelation initializes a new table with an auto increment column to the tracker, as necessary
 func (a *SequenceTracker[RelationType, StateType, ValueType]) AddNewRelation(relationName doltdb.TableName, initialState StateType) error {
+	relationName = relationName.ToLower()
 	err := a.waitForInit()
 	if err != nil {
 		return err
 	}
 
 	// only initialize the sequence for this table if no other branch has such a table
-	a.sequences.LoadOrStore(relationName.ToLower(), initialState)
+	release := a.mm.Lock(relationName)
+	defer release()
+
+	existingState, hasExisting := a.sequences.Load(relationName)
+	if !hasExisting {
+		a.sequences.Store(relationName, initialState)
+	} else {
+		a.sequences.Store(relationName, existingState.Merge(initialState))
+	}
 	return nil
 }
 
