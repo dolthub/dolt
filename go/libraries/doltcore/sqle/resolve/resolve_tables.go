@@ -107,7 +107,27 @@ func TableNameWithSearchPath(
 		return candidate, true, nil
 	}
 
-	return doltdb.TableName{}, false, nil
+	// Reserved dolt_* system tables (e.g. dolt_nonlocal_tables) always live in the "dolt" namespace schema under
+	// search-path mode (see dtables.GetDoltNonlocalTablesName), never on a user's search_path. Users can't create
+	// tables in this reserved namespace (see doltdb.HasDoltPrefix), so this can't shadow a real user table; it's
+	// scoped to dolt_-prefixed names specifically so it doesn't change resolution of ordinary table names.
+	if !doltdb.HasDoltPrefix(tableName) {
+		return doltdb.TableName{}, false, nil
+	}
+	tablesInDoltSchema, err := root.GetTableNames(ctx, doltdb.DoltNamespace, true)
+	if err != nil {
+		return doltdb.TableName{}, false, err
+	}
+	correctedTableName, ok := sql.GetTableNameInsensitive(tableName, tablesInDoltSchema)
+	if !ok {
+		return doltdb.TableName{}, false, nil
+	}
+	candidate := doltdb.TableName{Name: correctedTableName, Schema: doltdb.DoltNamespace}
+	ok, err = root.HasTable(ctx, candidate)
+	if err != nil || !ok {
+		return doltdb.TableName{}, false, err
+	}
+	return candidate, true, nil
 }
 
 // TableWithSearchPath resolves a table name to a table in the root value, searching through the schemas in the search path.
