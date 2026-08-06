@@ -1112,10 +1112,6 @@ func (c *Controller) refreshAutoIncrementTrackersForSessionDatabases() error {
 			// Non-versioned DBs don't participate in AUTO_INCREMENT global state
 			continue
 		}
-		ai, err := gsp.GetGlobalState().AutoIncrementTracker(sqlCtx)
-		if err != nil {
-			return fmt.Errorf("cluster/controller: auto-inc refresh: %s: tracker: %w", name, err)
-		}
 
 		// Get working set roots only
 		state, ok, err := sess.LookupDbState(sqlCtx, name)
@@ -1126,7 +1122,7 @@ func (c *Controller) refreshAutoIncrementTrackersForSessionDatabases() error {
 			// Not loaded in session; defer to lazy initialization on first use
 			continue
 		}
-		if err := ai.InitWithRoots(sqlCtx, state.WorkingSet()); err != nil {
+		if err := gsp.GetGlobalState().InitWithRoots(sqlCtx, state.WorkingSet()); err != nil {
 			return fmt.Errorf("cluster/controller: auto-inc refresh: %s: init: %w", name, err)
 		}
 	}

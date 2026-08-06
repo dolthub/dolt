@@ -103,7 +103,7 @@ type DoltDatabaseProvider struct {
 // ProviderFactory creates a sql.DatabaseProvider for use as the engine's analyzer catalog
 // provider.
 type ProviderFactory interface {
-	NewProvider(defaultBranch string, fs filesys.Filesys, databases []dsess.SqlDatabase, locations []filesys.Filesys, overrides sql.EngineOverrides) (sql.DatabaseProvider, error)
+	NewProvider(ctx context.Context, defaultBranch string, fs filesys.Filesys, databases []dsess.SqlDatabase, locations []filesys.Filesys, overrides sql.EngineOverrides) (sql.DatabaseProvider, error)
 }
 
 // DoltProviderUnwrapper is an optional interface for sql.DatabaseProvider implementations
@@ -119,7 +119,7 @@ type DoltProviderFactory struct{}
 
 var _ ProviderFactory = DoltProviderFactory{}
 
-func (DoltProviderFactory) NewProvider(defaultBranch string, fs filesys.Filesys, databases []dsess.SqlDatabase, locations []filesys.Filesys, overrides sql.EngineOverrides) (sql.DatabaseProvider, error) {
+func (DoltProviderFactory) NewProvider(ctx context.Context, defaultBranch string, fs filesys.Filesys, databases []dsess.SqlDatabase, locations []filesys.Filesys, overrides sql.EngineOverrides) (sql.DatabaseProvider, error) {
 	return NewDoltDatabaseProviderWithDatabases(defaultBranch, fs, databases, locations, overrides)
 }
 

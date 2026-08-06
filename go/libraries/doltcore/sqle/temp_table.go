@@ -484,7 +484,11 @@ func temporaryDoltSchema(ctx context.Context, pkSch sql.PrimaryKeySchema, tags [
 }
 
 func (t *TempTable) PeekNextAutoIncrementValue(ctx *sql.Context) (uint64, error) {
-	return t.table.GetAutoIncrementValue(ctx)
+	autoIncState, err := t.table.GetAutoIncrementValue(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return autoIncState.CurrentValue(), nil
 }
 
 func (t *TempTable) GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error) {

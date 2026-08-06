@@ -1877,7 +1877,7 @@ func (db Database) dropTable(ctx *sql.Context, tableName string) error {
 
 	if schema.HasAutoIncrement(sch) {
 		ddb, _ := ds.GetDoltDB(ctx, db.RevisionQualifiedName())
-		err = db.removeTableFromAutoIncrementTracker(ctx, tableName, ddb, ws.Ref())
+		err = db.removeTableFromAutoIncrementTracker(ctx, tblName, ddb, ws.Ref())
 		if err != nil {
 			return err
 		}
@@ -1892,7 +1892,7 @@ func (db Database) dropTable(ctx *sql.Context, tableName string) error {
 // otherwise. This operation is expensive if the
 func (db Database) removeTableFromAutoIncrementTracker(
 	ctx *sql.Context,
-	tableName string,
+	tableName doltdb.TableName,
 	ddb *doltdb.DoltDB,
 	ws ref.WorkingSetRef,
 ) error {
@@ -1924,12 +1924,12 @@ func (db Database) removeTableFromAutoIncrementTracker(
 		wses = append(wses, ws)
 	}
 
-	ait, err := db.gs.AutoIncrementTracker(ctx)
+	ait, err := dsess.GetAutoIncrementTracker(ctx, db.gs)
 	if err != nil {
 		return err
 	}
 
-	err = ait.DropTable(ctx, tableName, wses...)
+	err = ait.DropRelation(ctx, tableName, wses...)
 	if err != nil {
 		return err
 	}
@@ -2084,11 +2084,14 @@ func (db Database) createSqlTable(ctx *sql.Context, table string, schemaName str
 	// Prevent any tables that use BINARY, CHAR, VARBINARY, VARCHAR prefixes
 
 	if schema.HasAutoIncrement(doltSch) {
-		ait, err := db.gs.AutoIncrementTracker(ctx)
+		ait, err := dsess.GetAutoIncrementTracker(ctx, db.gs)
 		if err != nil {
 			return err
 		}
-		ait.AddNewTable(tableName.Name)
+		err = ait.AddNewRelation(tableName, doltdb.AutoIncrementState(1))
+		if err != nil {
+			return err
+		}
 	}
 
 	return db.createDoltTable(ctx, tableName.Name, tableName.Schema, root, doltSch)
@@ -2144,11 +2147,14 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, table string, schemaN
 	}
 
 	if schema.HasAutoIncrement(doltSch) {
-		ait, err := db.gs.AutoIncrementTracker(ctx)
+		ait, err := dsess.GetAutoIncrementTracker(ctx, db.gs)
 		if err != nil {
 			return err
 		}
-		ait.AddNewTable(tableName.Name)
+		err = ait.AddNewRelation(tableName, doltdb.AutoIncrementState(1))
+		if err != nil {
+			return err
+		}
 	}
 
 	return db.createDoltTable(ctx, tableName.Name, tableName.Schema, root, doltSch)

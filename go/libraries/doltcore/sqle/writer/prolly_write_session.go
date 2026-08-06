@@ -23,7 +23,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -31,7 +30,7 @@ import (
 // NewWriteSession creates and returns a WriteSession. Inserting a nil root is not an error, as there are
 // locations that do not have a root at the time of this call. However, a root must be set through SetWorkingRoot before any
 // table editors are returned.
-func NewWriteSession(dbName string, ws *doltdb.WorkingSet, aiTracker globalstate.AutoIncrementTracker, setter dsess.SessionRootSetter, opts editor.Options) dsess.WriteSession {
+func NewWriteSession(dbName string, ws *doltdb.WorkingSet, aiTracker *dsess.AutoIncrementTracker, setter dsess.SessionRootSetter, opts editor.Options) dsess.WriteSession {
 	return &prollyWriteSession{
 		dbName:        dbName,
 		tables:        make(map[doltdb.TableName]*prollyTableWriter),
@@ -47,7 +46,7 @@ func NewWriteSession(dbName string, ws *doltdb.WorkingSet, aiTracker globalstate
 type prollyWriteSession struct {
 	dbName        string
 	tables        map[doltdb.TableName]*prollyTableWriter
-	aiTracker     globalstate.AutoIncrementTracker
+	aiTracker     *dsess.AutoIncrementTracker
 	workingSet    *doltdb.WorkingSet
 	setter        dsess.SessionRootSetter
 	targetStaging bool
