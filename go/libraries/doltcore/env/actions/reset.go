@@ -295,8 +295,14 @@ func CleanUntracked(ctx *sql.Context, roots doltdb.Roots, tables []string, dryru
 		} else {
 			candidates = allTableNames
 		}
+		// dolt_nonlocal_tables lives in the reserved "dolt" namespace schema under Doltgres's search-path model,
+		// rather than the default (unqualified) schema used by classic Dolt/MySQL.
+		nonlocalTableSchema := doltdb.DefaultSchemaName
+		if resolve.UseSearchPath {
+			nonlocalTableSchema = doltdb.DoltNamespace
+		}
 		var nonlocalPatterns []string
-		err = doltdb.GetNonlocalTablePatterns(ctx, roots.Working, doltdb.DefaultSchemaName, func(p string) {
+		err = doltdb.GetNonlocalTablePatterns(ctx, roots.Working, nonlocalTableSchema, func(p string) {
 			nonlocalPatterns = append(nonlocalPatterns, p)
 		})
 		if err != nil {
