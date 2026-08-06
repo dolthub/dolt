@@ -32,7 +32,7 @@ tests:
   - on: server2
     queries:
     - exec: "use repo1"
-    - exec: "call dolt_clone('http://localhost:{{get_port \"remotesapi_port\"}}/repo2')"
+    - exec: "call dolt_clone('http://127.0.0.1:{{get_port \"remotesapi_port\"}}/repo2')"
     - exec: "use repo2"
     - query: "select count(*) from vals"
       result:
@@ -60,7 +60,7 @@ tests:
     - exec: "call dolt_commit('-Am', 'insert some data')"
   - on: server1
     queries:
-    - exec: "call dolt_clone('http://localhost:{{get_port \"remotesapi_port\"}}/repo2', 'repo2_clone')"
+    - exec: "call dolt_clone('http://127.0.0.1:{{get_port \"remotesapi_port\"}}/repo2', 'repo2_clone')"
     - exec: "use repo2_clone"
     - query: "select count(*) from vals"
       result:
@@ -104,7 +104,7 @@ tests:
   - on: server2
     queries:
     - exec: "use repo1"
-    - exec: "call dolt_clone('http://localhost:{{get_port \"remotesapi_port\"}}/repo2')"
+    - exec: "call dolt_clone('http://127.0.0.1:{{get_port \"remotesapi_port\"}}/repo2')"
     - exec: "use repo2"
     - query: "select count(*) from vals"
       result:
