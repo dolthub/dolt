@@ -232,12 +232,9 @@ var ErrManifestSpecMissingTableFile = errors.New("refusing to write a manifest r
 // into place, so a file that passes here cannot be removed by a lock-respecting
 // process before the manifest naming it is committed.
 //
-// Nothing is expected to trip this: every path that adds a spec either renames
-// the file into place first or opens it first. It catches a file that went
-// missing in between, which our own open file descriptor would not notice.
-//
-// Only specs |upstream| does not already carry are checked; re-verifying the
-// whole set would make every manifest write a directory-sized stat storm.
+// Only specs |upstream| does not already carry are checked. If |upstream| is
+// stale, we need to rebase regardless, and this manifest update is doomed. When
+// it is not stale, only the new specs need to be asserted as still present.
 func checkNewSpecsPresent(dir string, upstream, contents manifestContents) error {
 	existing := upstream.getSpecSet()
 	for h := range upstream.getAppendixSet() {

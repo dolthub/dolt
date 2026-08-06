@@ -249,7 +249,8 @@ func TestFileManifestUpdateRejectsMissingTableFile(t *testing.T) {
 }
 
 // TestFileManifestUpdateAcceptsArchive asserts an archive satisfies a spec.
-// A tableSpec records only the address, so both spellings must be tried.
+// A tableSpec records only the address. This is just exercising the file
+// existence check on the archive file name.
 func TestFileManifestUpdateAcceptsArchive(t *testing.T) {
 	ctx := context.Background()
 	fm := makeFileManifestTempDir(t)
@@ -271,8 +272,8 @@ func TestFileManifestUpdateAcceptsArchive(t *testing.T) {
 	require.Equal(t, contents.lock, upstream.lock)
 }
 
-// TestFileManifestUpdateAcceptsAppendix asserts appendix specs are checked too;
-// they name table files the same way the main spec list does.
+// TestFileManifestUpdateAcceptsAppendix asserts appendix specs are checked
+// as part of the file existence check in a file manifest update.
 func TestFileManifestUpdateAcceptsAppendix(t *testing.T) {
 	ctx := context.Background()
 	fm := makeFileManifestTempDir(t)
@@ -298,8 +299,11 @@ func TestFileManifestUpdateAcceptsAppendix(t *testing.T) {
 }
 
 // TestFileManifestUpdateSkipsExistingSpecs asserts only newly added specs are
-// checked. Re-verifying the whole set on every write would cost a stat per
-// table file, and those files were vouched for when they were added.
+// checked. Existence checks are not required for table files which are already
+// open in the store. If the manifest is stale, it will need to be rebased
+// regardless before landing an update. If it is not stale, no correctly
+// behaving removal logic should be removing files which are referenced in the
+// manifest. Thus, it is not this logic's job to detect such a case.
 func TestFileManifestUpdateSkipsExistingSpecs(t *testing.T) {
 	ctx := context.Background()
 	fm := makeFileManifestTempDir(t)
@@ -336,7 +340,7 @@ func TestFileManifestUpdateSkipsExistingSpecs(t *testing.T) {
 }
 
 // TestFileManifestUpdateGCGenRejectsMissingTableFile asserts the GC generation
-// update path is checked as well; it publishes a wholly new spec list.
+// update path checks newly added files for existence.
 func TestFileManifestUpdateGCGenRejectsMissingTableFile(t *testing.T) {
 	ctx := context.Background()
 	fm := makeFileManifestTempDir(t)
