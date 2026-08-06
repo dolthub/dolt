@@ -2135,6 +2135,24 @@ func (ddb *DoltDB) Clone(ctx context.Context, tempTableDir string, destDB *DoltD
 		eventCh)
 }
 
+// PruneUnreferencedTableFilesWithGrace reclaims table files in this database's
+// storage directories that no manifest references, provided nothing in those
+// directories has been modified within |grace|.
+//
+// This exists for backup destinations, which are opened without a chunk
+// journal and so are written without a cross-process lock: an interrupted sync
+// strands a complete, unreferenced table file that nothing else reclaims.
+//
+// Returns [nbs.ErrGracePruneUnsupported] for stores this does not apply to.
+func (ddb *DoltDB) PruneUnreferencedTableFilesWithGrace(ctx context.Context, grace time.Duration) (nbs.PruneStats, error) {
+	cs := datas.ChunkStoreFromDatabase(ddb.db)
+	pruner, ok := cs.(nbs.GracePruner)
+	if !ok {
+		return nbs.PruneStats{}, nbs.ErrGracePruneUnsupported
+	}
+	return pruner.PruneUnreferencedWithGrace(ctx, grace)
+}
+
 // Returns |true| if the underlying ChunkStore for this DoltDB implements |chunks.TableFileStore|.
 func (ddb *DoltDB) IsTableFileStore() bool {
 	_, ok := datas.ChunkStoreFromDatabase(ddb.db).(chunks.TableFileStore)

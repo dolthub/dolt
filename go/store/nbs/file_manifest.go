@@ -45,6 +45,10 @@ const (
 	lockFileName     = "LOCK"
 	lockFileTimeout  = time.Millisecond * 100
 
+	// tempManifestPrefix names the temp file a manifest update is written to
+	// before being renamed over manifestFileName.
+	tempManifestPrefix = "nbs_manifest_"
+
 	storageVersion4 = "4"
 
 	prefixLen = 5
@@ -380,7 +384,7 @@ func updateWithChecker(_ context.Context, behavior dherrors.FatalBehavior, dir s
 	// The closure here ensures this file is closed before moving on.
 	tempManifestPath, err = func() (name string, ferr error) {
 		var temp *os.File
-		temp, ferr = tempfiles.MovableTempFileProvider.NewFile(dir, "nbs_manifest_")
+		temp, ferr = tempfiles.MovableTempFileProvider.NewFile(dir, tempManifestPrefix)
 		if ferr != nil {
 			return "", ferr
 		}

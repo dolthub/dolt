@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -31,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/datas/pull"
+	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -89,6 +91,12 @@ func doltBackup(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
+	// Pruning happens as part of a sync, against the destination the sync is
+	// about to write to. There is nothing to prune for the other operations.
+	if apr.Contains(cli.PruneWithGracePeriod) && funcParam != DoltBackupParamSync && funcParam != DoltBackupParamSyncUrl {
+		return nil, fmt.Errorf("--%s is only supported with '%s' and '%s'", cli.PruneWithGracePeriod, DoltBackupParamSync, DoltBackupParamSyncUrl)
+	}
+
 	switch funcParam {
 	case DoltBackupParamAdd:
 		if apr.NArg() != 3 {
@@ -105,8 +113,7 @@ func doltBackup(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 		if apr.NArg() != 2 {
 			return nil, errDoltBackupUsage(funcParam, []string{"name"}, nil)
 		}
-		name := apr.Arg(1)
-		err = doltBackupSync(ctx, dbData, doltSess, name)
+		err = doltBackupSync(ctx, dbData, doltSess, apr)
 	case DoltBackupParamSyncUrl:
 		if apr.NArg() != 2 {
 			return nil, errDoltBackupUsage(funcParam, []string{"remote_url"}, awsParamsUsage)
@@ -155,7 +162,14 @@ func doltBackupAdd(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dse
 // doltBackupSync syncs the current database to an existing backup identified by name in |apr|. The backup is looked up
 // from the repository state via |dbData.Rsr|. The sync operation copies all roots from the current database to the
 // backup location, overwriting any existing data.
-func doltBackupSync(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.DoltSession, backupName string) error {
+func doltBackupSync(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.DoltSession, apr *argparser.ArgParseResults) error {
+	backupName := apr.Arg(1)
+
+	pruneGrace, err := backupPruneGracePeriod(apr)
+	if err != nil {
+		return err
+	}
+
 	backups, err := dbData.Rsr.GetBackups()
 	if err != nil {
 		return err
@@ -166,7 +180,18 @@ func doltBackupSync(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *ds
 		return env.ErrBackupNotFound.New(backupName)
 	}
 
-	return syncRemote(ctx, dbData, dsess, backupRemote)
+	return syncRemote(ctx, dbData, dsess, backupRemote, pruneGrace)
+}
+
+// backupPruneGracePeriod returns the grace period requested by --prune-with-grace-period, or 0 if the option was not
+// supplied. An unparseable or too-short duration is a usage error and fails the command, unlike a prune that fails at
+// run time.
+func backupPruneGracePeriod(apr *argparser.ArgParseResults) (time.Duration, error) {
+	graceStr, ok := apr.GetValue(cli.PruneWithGracePeriod)
+	if !ok {
+		return 0, nil
+	}
+	return cli.ParseBackupPruneGracePeriod(graceStr)
 }
 
 // doltBackupSyncUrl syncs the current database to a remote URL specified in |apr| without requiring the remote to exist
@@ -174,6 +199,11 @@ func doltBackupSync(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *ds
 // in |apr| if present, otherwise they are loaded from session variables if the URL scheme matches. The sync operation
 // copies all roots from the current database to the remote location, overwriting any existing data.
 func doltBackupSyncUrl(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.DoltSession, apr *argparser.ArgParseResults) error {
+	pruneGrace, err := backupPruneGracePeriod(apr)
+	if err != nil {
+		return err
+	}
+
 	remoteUrlScheme, remoteUrl, err := newAbsRemoteUrl(dsess, apr.Arg(1))
 	if err != nil {
 		return err
@@ -192,7 +222,7 @@ func doltBackupSyncUrl(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 	}
 
 	remote := env.NewRemote(DoltBackupParamSyncUrl, remoteUrl, remoteParams)
-	return syncRemote(ctx, dbData, dsess, remote)
+	return syncRemote(ctx, dbData, dsess, remote, pruneGrace)
 }
 
 // doltBackupRestore clones a database from the remote URL specified in |apr| into a new database with the name
@@ -281,7 +311,10 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 // location using [dbfactory.PrepareDB], which creates directories for file:// URLs if they do not exist. The sync
 // operation copies all chunks from the source database to the destination, effectively overwriting the destination
 // to match the source.
-func syncRemote(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.DoltSession, remote env.Remote) error {
+//
+// If |pruneGrace| is non-zero, table files stranded in the destination by earlier interrupted syncs are reclaimed
+// before this sync writes anything of its own.
+func syncRemote(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.DoltSession, remote env.Remote, pruneGrace time.Duration) error {
 	// Commit the current session's working set to the persistent chunk store. This ensures that uncommitted transaction
 	// changes (e.g. INSERTs) are usually visible to the backup procedure, which reads directly from the roots.
 	err := dsess.CommitWorkingSet(ctx, ctx.GetCurrentDatabase(), ctx.GetTransaction())
@@ -308,6 +341,13 @@ func syncRemote(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.
 	// dolt_backup remove.
 	defer destDb.Close()
 
+	// Prune before SyncRoots, while the destination still holds only files
+	// this process did not write. A leak left by a killed sync heals on the
+	// next scheduled run with no operator action.
+	if pruneGrace > 0 {
+		pruneBackupDestination(ctx, destDb, remote, pruneGrace)
+	}
+
 	pull.WithDiscardingStatsCh(func(statsCh chan pull.Stats) {
 		err = actions.SyncRoots(ctx, dbData.Ddb, destDb, dsess.GetFileSystem().TempDir(), actions.SyncRootsDBRelationshipUnknown, statsCh)
 	})
@@ -320,6 +360,26 @@ func syncRemote(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.
 	}
 
 	return nil
+}
+
+// pruneBackupDestination reclaims table files that earlier interrupted syncs stranded in |destDb|, provided nothing in
+// the destination has been modified within |grace|.
+//
+// Failures are reported and swallowed. Taking the backup is the point of the command.
+func pruneBackupDestination(ctx *sql.Context, destDb *doltdb.DoltDB, remote env.Remote, grace time.Duration) {
+	stats, err := destDb.PruneUnreferencedTableFilesWithGrace(ctx, grace)
+	switch {
+	case errors.Is(err, nbs.ErrGracePruneUnsupported):
+		ctx.GetLogger().Warnf("dolt_backup: --%s is not supported for %s; only file:// backups can be pruned",
+			cli.PruneWithGracePeriod, remote.Url)
+	case err != nil:
+		ctx.GetLogger().Warnf("dolt_backup: pruning %s failed, continuing with sync: %v", remote.Url, err)
+	default:
+		ctx.GetLogger().Infof("dolt_backup: pruned %s: %s", remote.Url, stats)
+		if stats.FilesDeleted > 0 || len(stats.Skipped) > 0 {
+			cli.Printf("Pruning %s: %s\n", remote.Url, stats)
+		}
+	}
 }
 
 // newParams extracts AWS-specific parameters from command-line flags in |apr| if |urlScheme| is AWS. If the scheme is

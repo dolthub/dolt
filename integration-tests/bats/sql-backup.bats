@@ -328,3 +328,67 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "449,after_restore" ]] || false
 }
+
+@test "sql-backup: dolt_backup sync --prune-with-grace-period reclaims an orphaned table file" {
+    backupDir="$BATS_TEST_TMPDIR/the_backup"
+    orphan="00000000000000000000000000000001"
+
+    dolt backup add hostedapidb-0 "file://$backupDir"
+    dolt sql -q "call dolt_backup('sync', 'hostedapidb-0')"
+
+    # Stands in for a sync killed after landing a table file but before
+    # committing the manifest: a complete file that nothing references.
+    echo "orphaned table file" > "$backupDir/$orphan"
+    [ -f "$backupDir/$orphan" ] || false
+
+    # Wait for the destination to go quiescent. The grace period floor is
+    # lowered so the test does not have to wait out the production minimum.
+    sleep 2
+
+    dolt sql -q "create table t (a int primary key)"
+    dolt commit -Am "cm"
+    DOLT_BACKUP_PRUNE_MIN_GRACE=1s dolt sql -q "call dolt_backup('sync', 'hostedapidb-0', '--prune-with-grace-period', '1s')"
+
+    [ ! -f "$backupDir/$orphan" ] || false
+
+    dolt backup restore "file://$backupDir" the_restore
+    (cd the_restore && dolt sql -q "select * from t")
+}
+
+@test "sql-backup: dolt_backup sync --prune-with-grace-period leaves a recently written destination alone" {
+    backupDir="$BATS_TEST_TMPDIR/the_backup"
+    orphan="00000000000000000000000000000001"
+
+    dolt backup add hostedapidb-0 "file://$backupDir"
+    dolt sql -q "call dolt_backup('sync', 'hostedapidb-0')"
+
+    echo "orphaned table file" > "$backupDir/$orphan"
+
+    # The sync we just took is well inside the grace period, so nothing at all
+    # is deleted -- one recent touch vetoes the whole directory.
+    dolt sql -q "create table t (a int primary key)"
+    dolt commit -Am "cm"
+    DOLT_BACKUP_PRUNE_MIN_GRACE=1s dolt sql -q "call dolt_backup('sync', 'hostedapidb-0', '--prune-with-grace-period', '1m')"
+
+    [ -f "$backupDir/$orphan" ] || false
+}
+
+@test "sql-backup: dolt_backup --prune-with-grace-period rejects bad values and unrelated subcommands" {
+    backupFileUrl="file://$BATS_TEST_TMPDIR/the_backup"
+    dolt backup add hostedapidb-0 "$backupFileUrl"
+
+    run dolt sql -q "call dolt_backup('sync', 'hostedapidb-0', '--prune-with-grace-period', '5m')"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "at least 10m" ]] || false
+
+    run dolt sql -q "call dolt_backup('sync', 'hostedapidb-0', '--prune-with-grace-period', 'nonsense')"
+    [ "$status" -ne 0 ]
+
+    run dolt sql -q "call dolt_backup('add', 'bac2', '$backupFileUrl-2', '--prune-with-grace-period', '1h')"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "only supported with" ]] || false
+
+    run dolt sql -q "call dolt_backup('remove', 'hostedapidb-0', '--prune-with-grace-period', '1h')"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "only supported with" ]] || false
+}
