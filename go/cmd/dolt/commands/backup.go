@@ -64,14 +64,18 @@ Snapshot the database and upload to the backup {{.LessThan}}name{{.GreaterThan}}
 
 {{.EmphasisLeft}}sync-url{{.EmphasisRight}}
 Snapshot the database and upload the backup to {{.LessThan}}url{{.GreaterThan}}. Like sync, this includes branches, tags, working sets, and remote tracking refs, but it does not require you to create a named backup.
+
+A sync that is interrupted after uploading a storage file but before committing the backup's manifest leaves that file behind, unreferenced and never reused. For {{.EmphasisLeft}}file://{{.EmphasisRight}} backups, {{.EmphasisLeft}}sync{{.EmphasisRight}} and {{.EmphasisLeft}}sync-url{{.EmphasisRight}} accept {{.EmphasisLeft}}--prune-with-grace-period {{.LessThan}}duration{{.GreaterThan}}{{.EmphasisRight}} to reclaim them before uploading.
+
+Because a backup destination is written without a lock that other writers are required to take, the prune infers that no sync is in flight from the destination being idle: if any file there has been modified within {{.LessThan}}duration{{.GreaterThan}}, nothing at all is deleted. Two consequences follow. The duration must be shorter than the interval between your syncs, or the previous sync's own files will always veto the prune. And it must be long enough to cover the tail of a sync, during which a writer holds a reference to a file it is no longer touching; the minimum accepted is 10m, and 1h is a reasonable choice. Use a longer duration if more than one writer shares the destination.
 `,
 	Synopsis: []string{
 		"[-v | --verbose]",
 		"add [--aws-region {{.LessThan}}region{{.GreaterThan}}] [--aws-creds-type {{.LessThan}}creds-type{{.GreaterThan}}] [--aws-creds-file {{.LessThan}}file{{.GreaterThan}}] [--aws-creds-profile {{.LessThan}}profile{{.GreaterThan}}] {{.LessThan}}name{{.GreaterThan}} {{.LessThan}}url{{.GreaterThan}}",
 		"remove {{.LessThan}}name{{.GreaterThan}}",
 		"restore [--aws-region {{.LessThan}}region{{.GreaterThan}}] [--aws-creds-type {{.LessThan}}creds-type{{.GreaterThan}}] [--aws-creds-file {{.LessThan}}file{{.GreaterThan}}] [--aws-creds-profile {{.LessThan}}profile{{.GreaterThan}}] [--force] {{.LessThan}}url{{.GreaterThan}} {{.LessThan}}name{{.GreaterThan}}",
-		"sync {{.LessThan}}name{{.GreaterThan}}",
-		"sync-url [--aws-region {{.LessThan}}region{{.GreaterThan}}] [--aws-creds-type {{.LessThan}}creds-type{{.GreaterThan}}] [--aws-creds-file {{.LessThan}}file{{.GreaterThan}}] [--aws-creds-profile {{.LessThan}}profile{{.GreaterThan}}] {{.LessThan}}url{{.GreaterThan}}",
+		"sync [--prune-with-grace-period {{.LessThan}}duration{{.GreaterThan}}] {{.LessThan}}name{{.GreaterThan}}",
+		"sync-url [--aws-region {{.LessThan}}region{{.GreaterThan}}] [--aws-creds-type {{.LessThan}}creds-type{{.GreaterThan}}] [--aws-creds-file {{.LessThan}}file{{.GreaterThan}}] [--aws-creds-profile {{.LessThan}}profile{{.GreaterThan}}] [--prune-with-grace-period {{.LessThan}}duration{{.GreaterThan}}] {{.LessThan}}url{{.GreaterThan}}",
 	},
 }
 

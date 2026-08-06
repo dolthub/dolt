@@ -2186,6 +2186,58 @@ func (nbs *NomsBlockStore) pruneTableFiles(ctx context.Context) (err error) {
 	return nbs.persister.PruneTableFiles(ctx)
 }
 
+// PruneUnreferencedWithGrace implements [GracePruner]. Only local-file stores
+// support it; anything else returns ErrGracePruneUnsupported.
+func (nbs *NomsBlockStore) PruneUnreferencedWithGrace(ctx context.Context, grace time.Duration) (PruneStats, error) {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return PruneStats{}, err
+	}
+	valctx.ValidateContext(ctx)
+
+	ftp, ok := nbs.persister.(*fsTablePersister)
+	if !ok {
+		return PruneStats{}, ErrGracePruneUnsupported
+	}
+
+	referenced, err := nbs.referencedTableFiles(ctx)
+	if err != nil {
+		return PruneStats{}, err
+	}
+	return ftp.pruneUnreferencedWithGrace(ctx, referenced, grace)
+}
+
+// referencedTableFiles returns the names of every table file some manifest
+// this store knows about depends on: the specs and the appendix, both from
+// the manifest currently on disk and from the contents this store last
+// rebased to. Reading the manifest fresh matters because the store may have
+// been open for a while; unioning in |nbs.upstream| costs nothing and keeps a
+// concurrently truncated manifest from making live files look unreferenced.
+func (nbs *NomsBlockStore) referencedTableFiles(ctx context.Context) (map[hash.Hash]struct{}, error) {
+	referenced := make(map[hash.Hash]struct{})
+	addAll := func(contents manifestContents) {
+		for h := range contents.getSpecSet() {
+			referenced[h] = struct{}{}
+		}
+		for h := range contents.getAppendixSet() {
+			referenced[h] = struct{}{}
+		}
+	}
+
+	exists, contents, err := nbs.manifest.ParseIfExists(ctx, nbs.stats, nil)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		addAll(contents)
+	}
+
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
+	addAll(nbs.upstream)
+
+	return referenced, nil
+}
+
 func (nbs *NomsBlockStore) BeginGC(ctx context.Context, keeper func(hash.Hash) bool, _ chunks.GCMode) error {
 	if err := nbs.ensureLoad(ctx); err != nil {
 		return err

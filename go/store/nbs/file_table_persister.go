@@ -172,6 +172,12 @@ func (ftp *fsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCoun
 	return cs, nil
 }
 
+// Exists reports whether a table file named |name| is already present, and if
+// so returns a handle protecting it from pruning instead of writing it again.
+//
+// Currently, these handles are only effective for stores that do not
+// experience multi-process concurrency. So this method must not be used on
+// the backup or push path to a file:// store.
 func (ftp *fsTablePersister) Exists(ctx context.Context, name string, chunkCount uint32, stats *Stats) (bool, io.Closer, error) {
 	ftp.pruneMu.RLock()
 	defer ftp.pruneMu.RUnlock()
@@ -368,6 +374,26 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, behavior dherrors.F
 			file.Remove(filepath.Join(ftp.dir, h.String()+s.suffix()))
 		}
 	}, nil
+}
+
+// pruneUnreferencedWithGrace reclaims table files in ftp.dir that neither
+// |referenced| nor this process vouches for, subject to the directory-wide
+// quiescence check in pruneDirWithGrace.
+//
+// The write lock serves the same purpose it does in PruneTableFiles: it keeps
+// in-process writers from landing a file we are about to unlink. It says
+// nothing about other processes, which is what the quiescence check is for.
+func (ftp *fsTablePersister) pruneUnreferencedWithGrace(ctx context.Context, referenced map[hash.Hash]struct{}, grace time.Duration) (PruneStats, error) {
+	ftp.pruneMu.Lock()
+	defer ftp.pruneMu.Unlock()
+
+	keep := func(h hash.Hash) bool {
+		if _, ok := referenced[h]; ok {
+			return true
+		}
+		return ftp.protected[h] > 0
+	}
+	return pruneDirWithGrace(ctx, ftp.dir, keep, grace)
 }
 
 func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context) error {
