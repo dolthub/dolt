@@ -252,7 +252,7 @@ func (rrd ReadReplicaDatabase) CreateLocalBranchFromRemote(ctx *sql.Context, bra
 		}
 
 		// create refs/heads/branch dataset
-		err = rrd.ddb.NewBranchAtCommit(ctx, branchRef, cm, nil)
+		err = rrd.ddb.NewBranchAtCommitAllowCaseConflict(ctx, branchRef, cm, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -423,7 +423,7 @@ func (rrd ReadReplicaDatabase) createNewBranchFromRemote(ctx *sql.Context, remot
 		return doltdb.ErrGhostCommitEncountered // NM4 - TEST.
 	}
 
-	err = rrd.ddb.NewBranchAtCommit(ctx, remoteRef.Ref, cm, nil)
+	err = rrd.ddb.NewBranchAtCommitAllowCaseConflict(ctx, remoteRef.Ref, cm, nil)
 	return rrd.ddb.SetHead(ctx, trackingRef, remoteRef.Hash)
 }
 

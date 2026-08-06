@@ -28,7 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-var ErrAlreadyExists = errors.New("already exists")
+var ErrBranchExists = errorKinds.NewKind("fatal: A branch named '%s' already exists.")
 var ErrCOBranchDelete = errorKinds.NewKind("Cannot delete checked out branch '%s'")
 var ErrUnmergedBranch = errorKinds.NewKind("branch '%s' is not fully merged")
 var ErrWorkingSetsOnBothBranches = errors.New("checkout would overwrite uncommitted changes on target branch")
@@ -37,9 +37,22 @@ func RenameBranch[C doltdb.Context](ctx C, dbData env.DbData[C], oldBranch, newB
 	oldRef := ref.NewBranchRef(oldBranch)
 	newRef := ref.NewBranchRef(newBranch)
 
+	// Don't attempt to rename a branch to itself, otherwise removing oldBranch will remove the branch entirely.
+	if oldBranch == newBranch {
+		hasOld, err := dbData.Ddb.HasRef(ctx, oldRef)
+		if err != nil {
+			return err
+		}
+		if !hasOld {
+			return doltdb.ErrBranchNotFound
+		}
+		return nil
+	}
+
 	// TODO: This function smears the branch updates across multiple commits of the datas.Database.
 
-	err := CopyBranchOnDB(ctx, dbData.Ddb, oldBranch, newBranch, force, rsc)
+	// oldRef is exempt so a rename onto a case variant of its own name is allowed.
+	err := CopyBranchOnDB(ctx, dbData.Ddb, oldBranch, newBranch, force, rsc, oldRef)
 	if err != nil {
 		return err
 	}
@@ -72,7 +85,12 @@ func CopyBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch str
 	return CopyBranchOnDB(ctx, dEnv.DoltDB(ctx), oldBranch, newBranch, force, nil)
 }
 
-func CopyBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, oldBranch, newBranch string, force bool, rsc *doltdb.ReplicationStatusController) error {
+// CopyBranchOnDB creates |newBranch| at the commit |oldBranch| points to.
+//
+// Without |force|, an existing |newBranch| is a doltdb.ExistingRefError.
+// |except| an existing branch when a case conflict is intended, such as
+// copying onto a different casing of its name.
+func CopyBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, oldBranch, newBranch string, force bool, rsc *doltdb.ReplicationStatusController, except ...ref.DoltRef) error {
 	oldRef := ref.NewBranchRef(oldBranch)
 	newRef := ref.NewBranchRef(newBranch)
 
@@ -91,7 +109,7 @@ func CopyBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, oldBranch, newBranc
 	if !hasOld {
 		return doltdb.ErrBranchNotFound
 	} else if !force && hasNew {
-		return ErrAlreadyExists
+		return &doltdb.ExistingRefError{Ref: newRef}
 	} else if !doltdb.IsValidUserBranchName(newBranch) {
 		return doltdb.ErrInvBranchName
 	}
@@ -106,7 +124,17 @@ func CopyBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, oldBranch, newBranc
 	if !ok {
 		return doltdb.ErrGhostCommitEncountered
 	}
-	return ddb.NewBranchAtCommit(ctx, newRef, commit, rsc)
+	return ddb.NewBranchAtCommit(ctx, newRef, commit, rsc, except...)
+}
+
+// BranchExistsError returns an ErrBranchExists naming the existing branch
+// when |err| wraps an ExistingRefError, or nil otherwise.
+func BranchExistsError(err error) error {
+	if existing, ok := errors.AsType[*doltdb.ExistingRefError](err); ok {
+		name := existing.Ref.GetPath()
+		return ErrBranchExists.New(name)
+	}
+	return nil
 }
 
 type DeleteOptions struct {
@@ -299,8 +327,8 @@ func CreateBranchWithStartPt[C doltdb.Context](ctx C, dbData env.DbData[C], newB
 	err := createBranch(ctx, dbData, newBranch, startPt, force, rsc)
 
 	if err != nil {
-		if err == ErrAlreadyExists {
-			return fmt.Errorf("fatal: A branch named '%s' already exists.", newBranch)
+		if existsErr := BranchExistsError(err); existsErr != nil {
+			return existsErr
 		} else if err == doltdb.ErrInvBranchName {
 			return fmt.Errorf("fatal: '%s' is an invalid branch name.", newBranch)
 		} else if err == doltdb.ErrInvHash || doltdb.IsNotACommit(err) {
@@ -325,7 +353,7 @@ func CreateBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, newBranch, starti
 	}
 
 	if !force && hasRef {
-		return ErrAlreadyExists
+		return &doltdb.ExistingRefError{Ref: branchRef}
 	}
 
 	if !doltdb.IsValidUserBranchName(newBranch) {
@@ -347,12 +375,7 @@ func CreateBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, newBranch, starti
 		return doltdb.ErrGhostCommitEncountered
 	}
 
-	err = ddb.NewBranchAtCommit(ctx, branchRef, cm, rsc)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return ddb.NewBranchAtCommit(ctx, branchRef, cm, rsc)
 }
 
 func createBranch[C doltdb.Context](ctx C, dbData env.DbData[C], newBranch, startingPoint string, force bool, rsc *doltdb.ReplicationStatusController) error {
