@@ -496,9 +496,8 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 			return fmt.Errorf("Unexpected type for var %s: %T", DoltCommitOnTransactionCommitMessage, doltCommitMessageVar)
 		}
 
-		trimmedString := strings.TrimSpace(doltCommitMessageString)
-		if strings.TrimSpace(doltCommitMessageString) != "" {
-			message = trimmedString
+		if doltCommitMessageString != "" {
+			message = doltCommitMessageString
 		}
 
 		dbName := ctx.GetCurrentDatabase()
