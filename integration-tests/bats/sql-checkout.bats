@@ -41,6 +41,27 @@ teardown() {
     [[ "$output" =~ "main" ]] || false
 }
 
+@test "sql-checkout: DOLT_CHECKOUT warns when used as lone statement in dolt sql -q" {
+    dolt sql -q "call dolt_checkout('-b', 'feature-branch')"
+
+    run dolt sql -q "call dolt_checkout('feature-branch')"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Warning" ]] || false
+    [[ "$output" =~ "dolt_checkout()" ]] || false
+    [[ "$output" =~ "dolt checkout" ]] || false
+}
+
+@test "sql-checkout: DOLT_CHECKOUT does not warn when combined with other statements" {
+    dolt sql -q "call dolt_checkout('-b', 'feature-branch')"
+
+    run dolt sql <<SQL
+call dolt_checkout('feature-branch');
+select * from test;
+SQL
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "Warning" ]] || false
+}
+
 @test "sql-checkout: DOLT_CHECKOUT -b throws error on branches that already exist" {
     run dolt sql -q "call dolt_checkout('-b', 'main')"
     [ $status -eq 1 ]
