@@ -85,6 +85,11 @@ func CopyBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch str
 	return CopyBranchOnDB(ctx, dEnv.DoltDB(ctx), oldBranch, newBranch, force, nil)
 }
 
+// CopyBranchOnDB creates |newBranch| at the commit |oldBranch| points to.
+//
+// Without |force|, an existing |newBranch| is a doltdb.ExistingRefError.
+// |except| an existing branch when a case conflict is intended, such as
+// copying onto a different casing of its name.
 func CopyBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, oldBranch, newBranch string, force bool, rsc *doltdb.ReplicationStatusController, except ...ref.DoltRef) error {
 	oldRef := ref.NewBranchRef(oldBranch)
 	newRef := ref.NewBranchRef(newBranch)
