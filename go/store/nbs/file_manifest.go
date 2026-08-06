@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -191,7 +192,7 @@ func (fm fileManifest) Update(ctx context.Context, behavior dherrors.FatalBehavi
 		if contents.gcGen != upstream.gcGen {
 			return chunks.ErrGCGenerationExpired
 		}
-		return nil
+		return checkNewSpecsPresent(fm.dir, upstream, contents)
 	}
 
 	return updateWithChecker(ctx, behavior, fm.dir, checker, lastLock, newContents, writeHook)
@@ -211,7 +212,80 @@ func (fm fileManifest) UpdateGCGen(ctx context.Context, behavior dherrors.FatalB
 		}
 	}()
 
-	return updateWithChecker(ctx, behavior, fm.dir, updateGCGenManifestCheck, lastLock, newContents, writeHook)
+	checker := func(upstream, contents manifestContents) error {
+		if err := updateGCGenManifestCheck(upstream, contents); err != nil {
+			return err
+		}
+		return checkNewSpecsPresent(fm.dir, upstream, contents)
+	}
+
+	return updateWithChecker(ctx, behavior, fm.dir, checker, lastLock, newContents, writeHook)
+}
+
+// ErrManifestSpecMissingTableFile is returned by a manifest update that would
+// have published a dependency on a table file that is not in the directory.
+var ErrManifestSpecMissingTableFile = errors.New("refusing to write a manifest referencing a table file that is not present")
+
+// checkNewSpecsPresent verifies that every table file |contents| newly depends
+// on is present in |dir|. Callers hold the manifest file lock, and this runs
+// after the on-disk manifest has been read and before the new one is renamed
+// into place, so a file that passes here cannot be removed by a lock-respecting
+// process before the manifest naming it is committed.
+//
+// Nothing is expected to trip this: every path that adds a spec either renames
+// the file into place first or opens it first. It catches a file that went
+// missing in between, which our own open file descriptor would not notice.
+//
+// Only specs |upstream| does not already carry are checked; re-verifying the
+// whole set would make every manifest write a directory-sized stat storm.
+func checkNewSpecsPresent(dir string, upstream, contents manifestContents) error {
+	existing := upstream.getSpecSet()
+	for h := range upstream.getAppendixSet() {
+		existing[h] = struct{}{}
+	}
+
+	var missing []string
+	checked := make(map[hash.Hash]struct{})
+	for _, specs := range [][]tableSpec{contents.specs, contents.appendix} {
+		for _, s := range specs {
+			if _, ok := existing[s.name]; ok {
+				continue
+			}
+			if _, ok := checked[s.name]; ok {
+				continue
+			}
+			checked[s.name] = struct{}{}
+
+			ok, err := tableFileOrArchiveExists(dir, s.name)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				missing = append(missing, s.name.String())
+			}
+		}
+	}
+
+	if len(missing) > 0 {
+		return fmt.Errorf("%w: %s in %s", ErrManifestSpecMissingTableFile, strings.Join(missing, ", "), dir)
+	}
+	return nil
+}
+
+// tableFileOrArchiveExists reports whether |h| is present in |dir| as either a
+// table file or an archive. A tableSpec records only the address, so which of
+// the two it is has to be discovered by looking.
+func tableFileOrArchiveExists(dir string, h hash.Hash) (bool, error) {
+	for _, name := range []string{h.String(), h.String() + ArchiveFileSuffix} {
+		_, err := os.Stat(filepath.Join(dir, name))
+		if err == nil {
+			return true, nil
+		}
+		if !errors.Is(err, fs.ErrNotExist) {
+			return false, err
+		}
+	}
+	return false, nil
 }
 
 // parseV5Manifest parses the v5 manifest from the Reader given. Assumes the first field (the manifest version and
