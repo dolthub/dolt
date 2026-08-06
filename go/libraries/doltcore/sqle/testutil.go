@@ -81,7 +81,7 @@ func ExecuteSqlOnEngine(ctx *sql.Context, engine *sqle.Engine, statements string
 		switch sqlStatement.(type) {
 		case *sqlparser.Select, *sqlparser.OtherRead:
 			return errors.New("Select statements aren't handled")
-		case *sqlparser.Insert:
+		case *sqlparser.Insert, *sqlparser.Delete, *sqlparser.Update:
 			var rowIter sql.RowIter
 			_, rowIter, _, execErr = engine.Query(ctx, query)
 			if execErr == nil {
