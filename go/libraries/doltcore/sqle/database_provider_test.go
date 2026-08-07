@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -350,4 +351,52 @@ func TestCreatingDatabaseReservation(t *testing.T) {
 			t.Fatal("AllDatabases blocked while a name was reserved for cloning; reservation must not gate enumeration")
 		}
 	})
+}
+
+// headCommit returns the commit at the head of the named branch.
+func headCommit(ctx context.Context, t *testing.T, ddb *doltdb.DoltDB, branch string) *doltdb.Commit {
+	t.Helper()
+	cs, err := doltdb.NewCommitSpec(branch)
+	require.NoError(t, err)
+	optCmt, err := ddb.Resolve(ctx, cs, nil)
+	require.NoError(t, err)
+	commit, ok := optCmt.ToCommit()
+	require.True(t, ok)
+	return commit
+}
+
+func TestResolveCaseVariantBranchConflict(t *testing.T) {
+	// See https://github.com/dolthub/dolt/issues/11270
+	engine, sqlCtx, _, dEnv := newProviderEngine(t)
+	ctx := context.Background()
+	ddb := dEnv.DoltDB(ctx)
+
+	// mustQuery asserts no error occurs when running |q| and returns resulting rows.
+	mustQuery := func(q string) []sql.Row {
+		t.Helper()
+		rows, err := QueryRows(sqlCtx, engine, q)
+		require.NoError(t, err)
+		return rows
+	}
+
+	mustQuery("create table t (a int primary key)")
+	mustQuery("insert into t values (111)")
+	mustQuery("call dolt_commit('-Am', 'lower')")
+	mustQuery("update t set a = 222")
+	mustQuery("call dolt_commit('-am', 'upper')")
+
+	require.NoError(t, ddb.NewBranchAtCommitAllowCaseConflict(ctx, ref.NewBranchRef("br"), headCommit(ctx, t, ddb, "main~1"), nil))
+	require.NoError(t, ddb.NewBranchAtCommitAllowCaseConflict(ctx, ref.NewBranchRef("BR"), headCommit(ctx, t, ddb, "main"), nil))
+
+	// Each casing folds onto the branches above, making it ambiguous which branch to read.
+	for _, db := range []string{"dolt/br", "dolt/BR", "dolt/Br"} {
+		_, err := QueryRows(sqlCtx, engine, "select a from `"+db+"`.t")
+		require.ErrorIs(t, err, doltdb.ErrAmbiguousRefName)
+		require.ErrorContains(t, err, "could be BR, br")
+	}
+
+	mustQuery("call dolt_branch('-m', 'BR', 'keepBR')")
+
+	require.Equal(t, []sql.Row{{int32(111)}}, mustQuery("select a from `dolt/br`.t"))
+	require.Equal(t, []sql.Row{{int32(222)}}, mustQuery("select a from `dolt/keepBR`.t"))
 }

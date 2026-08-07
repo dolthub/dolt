@@ -16,6 +16,7 @@ package nbs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -74,16 +75,23 @@ func (gcc *gcCopier) cancel(_ context.Context) error {
 // It returns the table specs and a pending handle that must be kept open until
 // the files are Open'd (added to openFiles). The caller must close the handle.
 func (gcc *gcCopier) copyTablesToDir(ctx context.Context) (ts []tableSpec, pending io.Closer, err error) {
+	// Registered before Finish so that a Finish error still drops the writer's
+	// temp file. Nothing else holds a reference to |gcc.writer| once we return
+	// --- for a rotating copier's child, |gcc| itself is a throwaway copy ---
+	// so a missed Cancel here leaks the temp file for the life of the process.
+	// The error is deliberately dropped: on the success path |ts| and |pending|
+	// are valid and the caller owns the pending handle, so turning a failed
+	// temp-file cleanup into a returned error would strand that handle.
+	defer func() {
+		_ = gcc.writer.Cancel()
+		gcc.writer = nil
+	}()
+
 	var filename string
 	_, filename, err = gcc.writer.Finish()
 	if err != nil {
 		return nil, nil, err
 	}
-
-	defer func() {
-		gcc.writer.Cancel()
-		gcc.writer = nil
-	}()
 
 	if gcc.writer.ChunkCount() == 0 {
 		return []tableSpec{}, noopPendingHandle{}, nil
@@ -275,6 +283,12 @@ func (gcc *rotatingGCCopier) rotate(ctx context.Context) error {
 	// Copy the state of gcc.gcCopier so that the child goroutine will use the current writer,
 	// even after gcc.gcCopier.writer gets reassigned below.
 	previousCopier := gcc.gcCopier
+	// Hand ownership of the old writer to the child goroutine before spawning
+	// it. If the constructor below fails we return with a nil writer rather
+	// than one the child is concurrently finalizing, which a later cancel()
+	// would Cancel a second time --- BufferedFileByteSink.finish is not
+	// thread-safe.
+	gcc.gcCopier.writer = nil
 	gcc.eg.Go(func() error {
 		return gcc.finalizeChildWriter(ctx, previousCopier)
 	})
@@ -292,12 +306,15 @@ func (gcc *rotatingGCCopier) rotate(ctx context.Context) error {
 
 func (gcc *rotatingGCCopier) finalize(ctx context.Context) (*newlyWrittenSources, error) {
 	err := gcc.finalizeChildWriter(ctx, gcc.gcCopier)
-	if err != nil {
-		return nil, err
-	}
-	err = gcc.eg.Wait()
+	// finalizeChildWriter took ownership of the writer and cancelled it.
 	gcc.writer = nil
-	return &gcc.specs, err
+	// Wait even when the final writer failed, so that in-flight rotate
+	// goroutines finish cleaning up their own writers instead of outliving GC.
+	waitErr := gcc.eg.Wait()
+	if err != nil {
+		return nil, errors.Join(err, waitErr)
+	}
+	return &gcc.specs, waitErr
 }
 
 func (gcc *rotatingGCCopier) waitForPendingChunkFiles() error {
@@ -309,12 +326,15 @@ func (gcc *rotatingGCCopier) waitForPendingChunkFiles() error {
 
 func (gcc *rotatingGCCopier) cancel(ctx context.Context) error {
 	gcc.specs.sourceSet.close()
+	var err error
 	if gcc.writer != nil {
-		err := gcc.writer.Cancel()
-		if err != nil {
-			return err
-		}
+		err = gcc.writer.Cancel()
+		// Cleared unconditionally: Cancel always removes the temp file, and
+		// leaving a non-nil writer behind on error just invites a double
+		// Cancel from a later caller.
 		gcc.writer = nil
 	}
-	return nil
+	// Detached rotate goroutines own writers we cannot reach from here, so wait
+	// for them to finish cleaning up rather than letting them outlive the GC.
+	return errors.Join(err, gcc.eg.Wait())
 }

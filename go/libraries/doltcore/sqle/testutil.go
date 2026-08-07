@@ -330,3 +330,12 @@ func sqlRowFromTuples(sch schema.Schema, kd, vd *val.TupleDesc, k, v val.Tuple) 
 	}
 	return r, nil
 }
+
+// QueryRows runs |query| on |engine| and returns the resulting rows.
+func QueryRows(ctx *sql.Context, engine *sqle.Engine, query string) ([]sql.Row, error) {
+	_, iter, _, err := engine.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	return sql.RowIterToRows(ctx, iter)
+}

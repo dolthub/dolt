@@ -51,7 +51,7 @@ func CreateTagOnDB(ctx context.Context, ddb *doltdb.DoltDB, tagName, startPoint 
 	}
 
 	if hasRef {
-		return ErrAlreadyExists
+		return &doltdb.ExistingRefError{Ref: tagRef}
 	}
 
 	if !ref.IsValidTagName(tagName) {

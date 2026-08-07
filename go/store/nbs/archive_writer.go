@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -465,13 +466,8 @@ func (aw *archiveWriter) flushToFile(fullPath string) error {
 		return fmt.Errorf("Runtime error: flushToFile called out of order")
 	}
 
-	if bs, ok := aw.output.backingSink.(*BufferedFileByteSink); ok {
-		err := bs.finish()
-		if err != nil {
-			return err
-		}
-	}
-
+	// No need to shut the sink down here: FlushToFile below does that itself,
+	// forwarding through the hashing sinks to the backing sink.
 	aw.finalPath = fullPath
 	err := aw.output.FlushToFile(fullPath)
 	if err != nil {
@@ -614,23 +610,28 @@ func (asw *ArchiveStreamWriter) GetMD5() []byte {
 	return asw.writer.fullMD5[:]
 }
 
+// Cancel the inprogress write and remove the temp file backing it.
+//
+// The temp file is always removed, even if shutting down the sink fails. The
+// sink records the first error its background writer saw and returns it from
+// every subsequent call, so bailing out early here would leak the temp file
+// forever once any write had failed --- exactly when we can least afford it.
 func (asw *ArchiveStreamWriter) Cancel() error {
-	rdr, err := asw.writer.output.Reader()
-	if err != nil {
-		return err
-	}
-	err = rdr.Close()
-	if err != nil {
-		return err
-	}
-	return asw.Remove()
+	return errors.Join(asw.writer.output.finish(), asw.Remove())
 }
 
+// Remove deletes the temp file backing this writer. It is not an error to call
+// Remove after the temp file has already been renamed away by FlushToFile, or
+// to call it more than once.
 func (asw *ArchiveStreamWriter) Remove() error {
 	if asw.writer.path == "" {
 		return nil
 	}
-	return os.Remove(asw.writer.path)
+	err := os.Remove(asw.writer.path)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	return nil
 }
 
 // FlushToFile writes the archive to disk. The input is the directory where the file should be written, the file name
