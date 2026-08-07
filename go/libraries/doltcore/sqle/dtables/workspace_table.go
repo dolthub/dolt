@@ -915,7 +915,7 @@ func getWorkspaceTableRow(
 	return row, nil
 }
 
-// queueWorkspaceRows is similar to prollyDiffIter.queueRows, but for workspaces. It performs two seperate calls
+// queueWorkspaceRows is similar to prollyDiffIter.queueRows, but for workspaces. It performs two separate calls
 // to prolly.DiffMaps, one for staging and one for working. The end result is queueing the rows from both maps
 // into the "rows" channel of the workspaceDiffIter.
 func (itr *workspaceDiffIter) queueWorkspaceRows(ctx context.Context) {

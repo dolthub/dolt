@@ -544,7 +544,7 @@ func TestDoltTransactionCommitLateFkResolution(t *testing.T) {
 // TestDoltTransactionFulltextNullBodyNonFF is a regression test for a hang triggered by two concurrent
 // connections both inserting rows that leave the FULLTEXT-indexed column NULL. When the second
 // commit cannot fast-forward (because the first already advanced the working-set head), Dolt
-// calls rebuildFullTextIndexes, which was unneccessarily rebuilding the fulltext index. This test
+// calls rebuildFullTextIndexes, which was unnecessarily rebuilding the fulltext index. This test
 // asserts that fulltext index is not repeatedly rebuilt.
 func TestDoltTransactionFulltextNullBodyNonFF(t *testing.T) {
 	harness := newDoltHarness(t)
