@@ -70,7 +70,7 @@ func InsertStatementPrefix(ctx *sql.Context, tableName string, tableSch schema.S
 
 	seenOne := false
 	err := tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if isGeneratedColumn(col) {
+		if col.IsGenerated() {
 			return false, nil
 		}
 		if seenOne {
@@ -197,7 +197,7 @@ func SqlRowAsTupleString(ctx *sql.Context, r sql.Row, tableSch schema.Schema) (s
 	seenOne := false
 	for i, val := range r {
 		col := cols.GetByIndex(i)
-		if isGeneratedColumn(col) {
+		if col.IsGenerated() {
 			continue
 		}
 		if seenOne {
@@ -288,7 +288,7 @@ func SqlRowAsDeleteStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch 
 // |tableSch|, using their values from |r|.
 //
 // TODO(elianddb): Schema isn't recording column's Generated marker
-// correctly, so isGeneratedColumn doesn't filter
+// correctly, so Column.IsGenerated doesn't filter.
 func SqlRowAsUpdateStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch schema.Schema, colsToUpdate *set.StrSet) (string, error) {
 	var b strings.Builder
 	b.WriteString("UPDATE ")
@@ -351,13 +351,6 @@ func SqlRowAsUpdateStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch 
 
 	b.WriteString(";")
 	return b.String(), nil
-}
-
-// isGeneratedColumn reports whether |col| is computed by the engine.
-//
-// The db rejects statements that assign a value to these columns.
-func isGeneratedColumn(col schema.Column) bool {
-	return col.Generated != ""
 }
 
 func interfaceValueAsSqlString(ctx *sql.Context, ti typeinfo.TypeInfo, value interface{}) (string, error) {
