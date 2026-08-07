@@ -732,6 +732,31 @@ func TestStatScripts(t *testing.T) {
 	}
 }
 
+func TestStatisticCreatedAt(t *testing.T) {
+	origTimeSource := mockableTimeSource
+	t.Cleanup(func() {
+		mockableTimeSource = origTimeSource
+	})
+	mockableTimeSource = func() time.Time {
+		return time.Date(2026, time.August, 7, 1, 2, 3, 0, time.UTC)
+	}
+
+	bthreads := sql.NewBackgroundThreads()
+	defer bthreads.Shutdown()
+	ctx, sqlEng, sc := emptySetup(t, bthreads, false, false)
+	defer sqlEng.Close()
+
+	require.NoError(t, sc.Restart(ctx))
+	require.NoError(t, executeQuery(ctx, sqlEng, "create table xy (x int primary key)"))
+	require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (1)"))
+	require.NoError(t, executeQuery(ctx, sqlEng, "analyze table xy"))
+	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+
+	rows, err := executeQueryResults(ctx, sqlEng, "select count(*) from dolt_statistics where created_at = '2026-08-07 01:02:03'")
+	require.NoError(t, err)
+	require.Equal(t, []sql.Row{{int64(1)}}, rows)
+}
+
 func normalize(cmp, exp []sql.Row) ([]sql.Row, []sql.Row) {
 	for i, r := range exp {
 		for j, v := range r {

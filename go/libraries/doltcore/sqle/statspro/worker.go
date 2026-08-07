@@ -490,6 +490,7 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 			return nil
 		}
 	}
+	createdAt := mockableTimeSource()
 
 	var indexes []sql.Index
 	if err := sc.execWithOptionalRateLimit(ctx, bypassRateLimit, openSessionCmds, func() (err error) {
@@ -525,6 +526,7 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 			RowCnt:      rowCnt,
 			DistinctCnt: rowCnt,
 			AvgRowSize:  avgSize,
+			Created:     createdAt,
 		}
 		newTableStats = append(newTableStats, noIdxStat)
 		return nil
@@ -570,6 +572,7 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 		// TODO: these should all be the same within, so should be set outside of the loop
 		template.Qual.Database = strings.ToLower(sqlDb.AliasedName())
 		template.Qual.Sch = strings.ToLower(schemaName)
+		template.Created = createdAt
 
 		idxLen := len(sqlIdx.Expressions())
 
