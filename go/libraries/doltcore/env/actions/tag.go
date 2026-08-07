@@ -16,8 +16,11 @@ package actions
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
+
+	errorKinds "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -26,6 +29,8 @@ import (
 )
 
 const DefaultPageSize = 100
+
+var ErrTagExists = errorKinds.NewKind("fatal: A tag named '%s' already exists.")
 
 type TagProps struct {
 	TaggerName  string
@@ -75,6 +80,15 @@ func CreateTagOnDB(ctx context.Context, ddb *doltdb.DoltDB, tagName, startPoint 
 	meta := datas.NewTagMeta(props.TaggerName, props.TaggerEmail, props.Description)
 
 	return ddb.NewTagAtCommit(ctx, tagRef, cm, meta)
+}
+
+// TagExistsError returns an ErrTagExists naming the existing tag when |err|
+// wraps an doltdb.ExistingRefError, or nil otherwise.
+func TagExistsError(err error) error {
+	if existing, ok := errors.AsType[*doltdb.ExistingRefError](err); ok {
+		return ErrTagExists.New(existing.Ref.GetPath())
+	}
+	return nil
 }
 
 func DeleteTagsOnDB(ctx context.Context, ddb *doltdb.DoltDB, tagNames ...string) error {

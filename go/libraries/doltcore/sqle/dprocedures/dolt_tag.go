@@ -105,6 +105,9 @@ func doDoltTag(ctx *sql.Context, args []string) (int, error) {
 	}
 	err = actions.CreateTagOnDB(ctx, dbData.Ddb, tagName, startPoint, props, headRef)
 	if err != nil {
+		if existsErr := actions.TagExistsError(err); existsErr != nil {
+			return 1, existsErr
+		}
 		return 1, err
 	}
 

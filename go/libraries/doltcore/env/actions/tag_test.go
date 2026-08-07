@@ -148,3 +148,31 @@ func TestIterResolvedTagsPaginated(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(earlyTermTags))
 }
+
+func TestCreateTagOnExistingTag(t *testing.T) {
+	dEnv, _ := createTestEnv()
+	ctx := context.Background()
+
+	err := dEnv.InitRepo(ctx, types.Format_DOLT, "test user", "test@test.com", "main")
+	require.NoError(t, err)
+
+	props := TagProps{TaggerName: "test user", TaggerEmail: "test@test.com", Description: "test tag message"}
+	err = CreateTag(ctx, dEnv, "v1", "main", props)
+	require.NoError(t, err)
+
+	// Recreating the tag without deleting it first is an ExistingRefError
+	// naming the conflicting ref.
+	err = CreateTag(ctx, dEnv, "v1", "main", props)
+	var existing *doltdb.ExistingRefError
+	require.ErrorAs(t, err, &existing)
+	require.Equal(t, "v1", existing.Ref.GetPath())
+	require.EqualError(t, err, "ref 'refs/tags/v1' already exists")
+
+	// TagExistsError recovers a tag-specific message for callers.
+	existsErr := TagExistsError(err)
+	require.True(t, ErrTagExists.Is(existsErr))
+	require.EqualError(t, existsErr, "fatal: A tag named 'v1' already exists.")
+
+	// Unrelated errors are not converted.
+	require.Nil(t, TagExistsError(doltdb.ErrTagNotFound))
+}

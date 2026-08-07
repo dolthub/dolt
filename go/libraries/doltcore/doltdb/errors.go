@@ -156,9 +156,7 @@ type ExistingRefError struct {
 }
 
 func (e *ExistingRefError) Error() string {
-	// TODO(elianddb): Include Ref in the error message once tags, workspaces,
-	//  and other reference types use their own errors, and update their tests.
-	return "already exists"
+	return fmt.Sprintf("ref '%s' already exists", ref.String(e.Ref))
 }
 
 // DoltIgnoreConflictError is an error that is returned when the user attempts to stage a table that matches conflicting dolt_ignore patterns
