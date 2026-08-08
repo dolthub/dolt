@@ -250,7 +250,7 @@ func NewSqlEngine(
 	})
 
 	// Load in privileges from file, if it exists
-	var persister cluster.MySQLDbPersister
+	var persister cluster.AuthDbPersister
 	persister = mysql_file_handler.NewPersister(config.PrivFilePath, config.DoltCfgDirPath)
 
 	persister = config.ClusterController.HookMySQLDbPersister(persister, engine.Analyzer.Catalog.MySQLDb)

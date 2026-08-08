@@ -32,16 +32,25 @@ type BranchControlPersistence interface {
 	SaveData(context.Context, filesys.Filesys) error
 }
 
+type AuthPersistence interface {
+	SaveData(context.Context, filesys.Filesys) error
+}
+
 type replicationServiceServer struct {
 	replicationapi.UnimplementedReplicationServiceServer
 
+	// TODO: replace this field with an AuthPersistence member instead.
 	mysqlDb *mysql_db.MySQLDb
-	lgr     *logrus.Entry
+
+	lgr *logrus.Entry
 
 	ctxFactory func(context.Context) (*sql.Context, error)
 
 	branchControl        BranchControlPersistence
 	branchControlFilesys filesys.Filesys
+
+	authControl        AuthPersistence
+	authControlFilesys filesys.Filesys
 
 	dropDatabase func(*sql.Context, string) error
 }
@@ -56,6 +65,8 @@ func (s *replicationServiceServer) UpdateUsersAndGrants(ctx context.Context, req
 		return nil, err
 	}
 
+	// TODO: call AuthPersistence.SaveData() here instead. The existing implementation for MySQL below should be
+	//  implemented by a new type MysqlAuthPersistence, which is installed by default.
 	ed := s.mysqlDb.Editor()
 	defer ed.Close()
 	err = s.mysqlDb.OverwriteUsersAndGrantData(sqlCtx, ed, req.SerializedContents)
@@ -68,6 +79,8 @@ func (s *replicationServiceServer) UpdateUsersAndGrants(ctx context.Context, req
 		lgr.WithError(err).Warnf("error calling Persist")
 		return nil, err
 	}
+	// End implementation of AuthPersistence.SaveData()
+
 	return &replicationapi.UpdateUsersAndGrantsResponse{}, nil
 }
 
