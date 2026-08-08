@@ -120,7 +120,11 @@ type Controller struct {
 
 	role Role
 
-	mysqlDb         *mysql_db.MySQLDb
+	// TODO: this mysqlDb field should be replaced with an instance of AuthPersistence instead.
+	// Dolt server setup should instantiate a type that implements it and preserves the existing mysqldb
+	// overwriting behavior.
+	mysqlDb *mysql_db.MySQLDb
+
 	authDbPersister *replicatingAuthDbPersister
 
 	branchControlController *branch_control.Controller

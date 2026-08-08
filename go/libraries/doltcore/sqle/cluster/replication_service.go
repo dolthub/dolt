@@ -39,7 +39,7 @@ type AuthPersistence interface {
 type replicationServiceServer struct {
 	replicationapi.UnimplementedReplicationServiceServer
 
-	// TODO: replace this field with an AuthPersistence member instead.
+	// TODO: replace uses of this field with authPersistence field below
 	mysqlDb *mysql_db.MySQLDb
 
 	lgr *logrus.Entry
@@ -49,7 +49,7 @@ type replicationServiceServer struct {
 	branchControl        BranchControlPersistence
 	branchControlFilesys filesys.Filesys
 
-	authControl        AuthPersistence
+	authPersistence    AuthPersistence
 	authControlFilesys filesys.Filesys
 
 	dropDatabase func(*sql.Context, string) error
