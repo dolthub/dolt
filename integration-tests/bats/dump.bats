@@ -985,6 +985,98 @@ SQL
     # need to test binary, bit and blob types
 }
 
+@test "dump: SQL type - with a generated column" {
+    # See https://github.com/dolthub/dolt/issues/11439
+    create_generated_column_table
+
+    run dolt dump -r sql
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f doltdump.sql ]
+    grep -qF 'DROP TABLE IF EXISTS `repro`;' doltdump.sql
+
+    dolt sql < doltdump.sql
+
+    run dolt sql -r csv -q "SELECT id, a, b, c FROM repro ORDER BY id"
+    [[ "${lines[1]}" = "1,x,,x" ]] || false
+    [[ "${lines[2]}" = "2,,y,y" ]] || false
+}
+
+@test "dump: CSV type - with a generated column" {
+    # See https://github.com/dolthub/dolt/issues/11439
+    create_generated_column_table
+
+    run dolt dump -r csv
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f doltdump/repro.csv ]
+
+    run cat doltdump/repro.csv
+    [[ "${lines[0]}" = "id,a,b,c" ]] || false
+    [[ "${lines[1]}" = "1,x,,x" ]] || false
+    [[ "${lines[2]}" = "2,,y,y" ]] || false
+}
+
+@test "dump: parquet type - with a generated column" {
+    # See https://github.com/dolthub/dolt/issues/11439
+    create_generated_column_table
+
+    run dolt dump -r parquet
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f doltdump/repro.parquet ]
+
+    dolt sql -q "CREATE TABLE roundtrip (id INT PRIMARY KEY, a VARCHAR(50), b VARCHAR(50), c VARCHAR(50))"
+    dolt table import -r roundtrip doltdump/repro.parquet
+
+    run dolt sql -r csv -q "SELECT id, a, b, c FROM roundtrip ORDER BY id"
+    [[ "${lines[1]}" = "1,x,,x" ]] || false
+    [[ "${lines[2]}" = "2,,y,y" ]] || false
+}
+
+@test "dump: SQL type - with a stored generated column" {
+    # See https://github.com/dolthub/dolt/issues/11439
+    dolt sql <<'SQL'
+    CREATE TABLE repro (id INT PRIMARY KEY, a INT, b INT GENERATED ALWAYS AS (a + 1) STORED);
+    INSERT INTO repro (id, a) VALUES (1, 10), (2, 20);
+SQL
+
+    run dolt dump -r sql
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f doltdump.sql ]
+    grep -qF 'DROP TABLE IF EXISTS `repro`;' doltdump.sql
+
+    dolt sql < doltdump.sql
+
+    run dolt sql -r csv -q "SELECT id, a, b FROM repro ORDER BY id"
+    [[ "${lines[1]}" = "1,10,11" ]] || false
+    [[ "${lines[2]}" = "2,20,21" ]] || false
+}
+
+@test "dump: SQL type - with a generated column between two columns" {
+    # See https://github.com/dolthub/dolt/issues/11439
+    dolt sql <<'SQL'
+    CREATE TABLE repro (id INT PRIMARY KEY, a VARCHAR(20), g VARCHAR(20) GENERATED ALWAYS AS (concat(a, '!')), z VARCHAR(20));
+    INSERT INTO repro (id, a, z) VALUES (1, 'x', 'end'), (2, NULL, 'tail');
+SQL
+
+    run dolt dump -r sql
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f doltdump.sql ]
+    grep -qF 'DROP TABLE IF EXISTS `repro`;' doltdump.sql
+
+    dolt sql < doltdump.sql
+
+    # z holds its own value, so the column after the omitted one did not shift.
+    run dolt sql -r csv -q "SELECT id, a, g, z FROM repro ORDER BY id"
+    [[ "${lines[1]}" = "1,x,x!,end" ]] || false
+    [[ "${lines[2]}" = "2,,,tail" ]] || false
+}
+
+function create_generated_column_table() {
+  dolt sql <<'SQL'
+  CREATE TABLE repro (id INT PRIMARY KEY, a VARCHAR(50), b VARCHAR(50), c VARCHAR(50) GENERATED ALWAYS AS (coalesce(a, b)));
+  INSERT INTO repro (id, a, b) VALUES (1, 'x', NULL), (2, NULL, 'y');
+SQL
+}
+
 function create_tables() {
   dolt sql -q "CREATE TABLE new_table(pk int primary key);"
   dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name varchar(100));"
