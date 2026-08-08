@@ -18,7 +18,6 @@ import (
 	"context"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -32,16 +31,28 @@ type BranchControlPersistence interface {
 	SaveData(context.Context, filesys.Filesys) error
 }
 
+// AuthPersistence applies a replicated auth payload on a standby: it must
+// overwrite the running server's auth state with |contents| and persist the
+// new state locally. The payload bytes are opaque to the replication layer;
+// primaries and standbys must agree on their format. Dolt installs a
+// users-and-grants (mysql.db) implementation by default; applications with
+// their own auth store (e.g. Doltgres's auth.db) install a replacement with
+// Controller.HookAuthPersister.
+type AuthPersistence interface {
+	SaveData(ctx *sql.Context, contents []byte) error
+}
+
 type replicationServiceServer struct {
 	replicationapi.UnimplementedReplicationServiceServer
 
-	mysqlDb *mysql_db.MySQLDb
-	lgr     *logrus.Entry
+	lgr *logrus.Entry
 
 	ctxFactory func(context.Context) (*sql.Context, error)
 
 	branchControl        BranchControlPersistence
 	branchControlFilesys filesys.Filesys
+
+	authPersistence AuthPersistence
 
 	dropDatabase func(*sql.Context, string) error
 }
@@ -56,18 +67,15 @@ func (s *replicationServiceServer) UpdateUsersAndGrants(ctx context.Context, req
 		return nil, err
 	}
 
-	ed := s.mysqlDb.Editor()
-	defer ed.Close()
-	err = s.mysqlDb.OverwriteUsersAndGrantData(sqlCtx, ed, req.SerializedContents)
+	if s.authPersistence == nil {
+		return nil, status.Error(codes.Unimplemented, "unimplemented")
+	}
+	err = s.authPersistence.SaveData(sqlCtx, req.SerializedContents)
 	if err != nil {
-		lgr.WithError(err).Warnf("error calling OverwriteUsersAndGrantData")
+		lgr.WithError(err).Warnf("error calling SaveData")
 		return nil, err
 	}
-	err = s.mysqlDb.Persist(sqlCtx, ed)
-	if err != nil {
-		lgr.WithError(err).Warnf("error calling Persist")
-		return nil, err
-	}
+
 	return &replicationapi.UpdateUsersAndGrantsResponse{}, nil
 }
 

@@ -31,21 +31,22 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
-type MySQLDbPersister interface {
+// AuthDbPersister is an interface that hooks into auth change lifecycle events in order to replicate them
+type AuthDbPersister interface {
 	mysql_db.MySQLDbPersistence
 	LoadData(context.Context) ([]byte, error)
 }
 
-type replicatingMySQLDbPersister struct {
-	base     MySQLDbPersister
+type replicatingAuthDbPersister struct {
+	base     AuthDbPersister
 	current  []byte
-	replicas []*mysqlDbReplica
+	replicas []*authDbReplica
 
 	mu      sync.Mutex
 	version uint32
 }
 
-type mysqlDbReplica struct {
+type authDbReplica struct {
 	nextAttempt             time.Time
 	backoff                 backoff.BackOff
 	waitNotify              func()
@@ -62,10 +63,10 @@ type mysqlDbReplica struct {
 	fastFailReplicationWait bool
 }
 
-func (r *mysqlDbReplica) UpdateMySQLDb(ctx context.Context, contents []byte, version uint32) func(context.Context) error {
+func (r *authDbReplica) UpdateAuthDb(ctx context.Context, contents []byte, version uint32) func(context.Context) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.lgr.Infof("mysqlDbReplica got new contents at version %d", version)
+	r.lgr.Infof("authDbReplica got new contents at version %d", version)
 	r.contents = contents
 	r.version = version
 	r.nextAttempt = time.Time{}
@@ -89,16 +90,16 @@ func (r *mysqlDbReplica) UpdateMySQLDb(ctx context.Context, contents []byte, ver
 	}
 }
 
-func (r *mysqlDbReplica) setFastFailReplicationWait(v bool) {
+func (r *authDbReplica) setFastFailReplicationWait(v bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.fastFailReplicationWait = v
 }
 
-func (r *mysqlDbReplica) Run() {
+func (r *authDbReplica) Run() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.lgr.Tracef("mysqlDbReplica[%s]: running", r.client.remote)
+	r.lgr.Tracef("authDbReplica[%s]: running", r.client.remote)
 	defer r.client.closer()
 	for !r.shutdown {
 		if r.role != RolePrimary {
@@ -136,7 +137,7 @@ func (r *mysqlDbReplica) Run() {
 			r.mu.Lock()
 			if err != nil {
 				r.progressNotifier.RecordFailure(attempt)
-				r.lgr.Warnf("mysqlDbReplica[%s]: error replicating users and grants. backing off. %v", r.client.remote, err)
+				r.lgr.Warnf("authDbReplica[%s]: error replicating users and grants. backing off. %v", r.client.remote, err)
 				r.nextAttempt = time.Now().Add(r.backoff.NextBackOff())
 				next := r.nextAttempt
 				go func() {
@@ -153,20 +154,20 @@ func (r *mysqlDbReplica) Run() {
 			r.progressNotifier.RecordSuccess(attempt)
 			r.fastFailReplicationWait = false
 			r.backoff.Reset()
-			r.lgr.Debugf("mysqlDbReplica[%s]: successfully replicated users and grants at version %d.", r.client.remote, version)
+			r.lgr.Debugf("authDbReplica[%s]: successfully replicated users and grants at version %d.", r.client.remote, version)
 			r.replicatedVersion = version
 		} else {
-			r.lgr.Debugf("mysqlDbReplica[%s]: not replicating empty users and grants at version %d.", r.client.remote, r.version)
+			r.lgr.Debugf("authDbReplica[%s]: not replicating empty users and grants at version %d.", r.client.remote, r.version)
 			r.replicatedVersion = r.version
 		}
 	}
 }
 
-func (r *mysqlDbReplica) isCaughtUp() bool {
+func (r *authDbReplica) isCaughtUp() bool {
 	return r.version == r.replicatedVersion || r.role != RolePrimary
 }
 
-func (r *mysqlDbReplica) setWaitNotify(notify func()) bool {
+func (r *authDbReplica) setWaitNotify(notify func()) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if notify != nil {
@@ -179,11 +180,11 @@ func (r *mysqlDbReplica) setWaitNotify(notify func()) bool {
 	return true
 }
 
-func (r *mysqlDbReplica) wait() {
+func (r *authDbReplica) wait() {
 	if r.waitNotify != nil {
 		r.waitNotify()
 	}
-	r.lgr.Infof("mysqlDbReplica waiting...")
+	r.lgr.Infof("authDbReplica waiting...")
 	if r.isCaughtUp() {
 		attempt := r.progressNotifier.BeginAttempt()
 		r.progressNotifier.RecordSuccess(attempt)
@@ -191,14 +192,14 @@ func (r *mysqlDbReplica) wait() {
 	r.cond.Wait()
 }
 
-func (r *mysqlDbReplica) GracefulStop() {
+func (r *authDbReplica) GracefulStop() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.shutdown = true
 	r.cond.Broadcast()
 }
 
-func (r *mysqlDbReplica) setRole(role Role) {
+func (r *authDbReplica) setRole(role Role) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.role = role
@@ -207,7 +208,7 @@ func (r *mysqlDbReplica) setRole(role Role) {
 	r.cond.Broadcast()
 }
 
-func (p *replicatingMySQLDbPersister) setRole(role Role) {
+func (p *replicatingAuthDbPersister) setRole(role Role) {
 	for _, r := range p.replicas {
 		r.setRole(role)
 	}
@@ -222,7 +223,7 @@ func (p *replicatingMySQLDbPersister) setRole(role Role) {
 	}
 }
 
-func (p *replicatingMySQLDbPersister) Run() {
+func (p *replicatingAuthDbPersister) Run() {
 	var wg sync.WaitGroup
 	for _, r := range p.replicas {
 		wg.Go(r.Run)
@@ -230,34 +231,52 @@ func (p *replicatingMySQLDbPersister) Run() {
 	wg.Wait()
 }
 
-func (p *replicatingMySQLDbPersister) GracefulStop() {
+func (p *replicatingAuthDbPersister) GracefulStop() {
 	for _, r := range p.replicas {
 		r.GracefulStop()
 	}
 }
 
-func (p *replicatingMySQLDbPersister) Persist(ctx *sql.Context, data []byte) error {
-	p.mu.Lock()
-	err := p.base.Persist(ctx, data)
+func (p *replicatingAuthDbPersister) Persist(ctx *sql.Context, data []byte) error {
+	var rsc doltdb.ReplicationStatusController
+	err := p.PersistNoWait(ctx, data, &rsc)
 	if err == nil {
-		p.current = data
-		p.version += 1
-		var rsc doltdb.ReplicationStatusController
-		rsc.Wait = make([]func(context.Context) error, len(p.replicas))
-		rsc.NotifyWaitFailed = make([]func(), len(p.replicas))
-		for i, r := range p.replicas {
-			rsc.Wait[i] = r.UpdateMySQLDb(ctx, p.current, p.version)
-			rsc.NotifyWaitFailed[i] = func() {}
-		}
-		p.mu.Unlock()
 		dsess.WaitForReplicationController(ctx, rsc)
-	} else {
-		p.mu.Unlock()
 	}
 	return err
 }
 
-func (p *replicatingMySQLDbPersister) LoadData(ctx context.Context) ([]byte, error) {
+// PersistNoWait persists |data| locally and offers it to all standby
+// replicas, appending the replication-ack waiters to |rsc| instead of
+// blocking on them. Callers which hold locks that replication acks must not
+// block use this, and wait on |rsc| once their locks are released.
+func (p *replicatingAuthDbPersister) PersistNoWait(ctx *sql.Context, data []byte, rsc *doltdb.ReplicationStatusController) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	err := p.base.Persist(ctx, data)
+	if err != nil {
+		return err
+	}
+	p.current = data
+	p.version += 1
+	for _, r := range p.replicas {
+		rsc.Wait = append(rsc.Wait, r.UpdateAuthDb(ctx, p.current, p.version))
+		rsc.NotifyWaitFailed = append(rsc.NotifyWaitFailed, func() {})
+	}
+	return nil
+}
+
+// setBase replaces the persister used to load and store the local copy of the
+// replicated auth payload, keeping the replicas and the replication version
+// counter. Used when an embedding application takes over auth replication
+// after the default persister is installed.
+func (p *replicatingAuthDbPersister) setBase(base AuthDbPersister) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.base = base
+}
+
+func (p *replicatingAuthDbPersister) LoadData(ctx context.Context) ([]byte, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	ret, err := p.base.LoadData(ctx)
@@ -265,15 +284,15 @@ func (p *replicatingMySQLDbPersister) LoadData(ctx context.Context) ([]byte, err
 		p.current = ret
 		p.version += 1
 		for _, r := range p.replicas {
-			r.UpdateMySQLDb(ctx, p.current, p.version)
+			r.UpdateAuthDb(ctx, p.current, p.version)
 		}
 	}
 	return ret, err
 }
 
-func (p *replicatingMySQLDbPersister) waitForReplication(timeout time.Duration) ([]graceTransitionResult, error) {
+func (p *replicatingAuthDbPersister) waitForReplication(timeout time.Duration) ([]graceTransitionResult, error) {
 	p.mu.Lock()
-	replicas := make([]*mysqlDbReplica, len(p.replicas))
+	replicas := make([]*authDbReplica, len(p.replicas))
 	copy(replicas, p.replicas)
 	res := make([]graceTransitionResult, len(replicas))
 	for i := range replicas {
