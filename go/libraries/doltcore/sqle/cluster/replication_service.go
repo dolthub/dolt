@@ -52,10 +52,7 @@ type replicationServiceServer struct {
 	branchControl        BranchControlPersistence
 	branchControlFilesys filesys.Filesys
 
-	// Resolved at call time, so that an application which replaces the
-	// default auth persistence after the gRPC services are registered is
-	// still honored.
-	authPersistence func() AuthPersistence
+	authPersistence AuthPersistence
 
 	dropDatabase func(*sql.Context, string) error
 }
@@ -70,11 +67,10 @@ func (s *replicationServiceServer) UpdateUsersAndGrants(ctx context.Context, req
 		return nil, err
 	}
 
-	persistence := s.authPersistence()
-	if persistence == nil {
+	if s.authPersistence == nil {
 		return nil, status.Error(codes.Unimplemented, "unimplemented")
 	}
-	err = persistence.SaveData(sqlCtx, req.SerializedContents)
+	err = s.authPersistence.SaveData(sqlCtx, req.SerializedContents)
 	if err != nil {
 		lgr.WithError(err).Warnf("error calling SaveData")
 		return nil, err

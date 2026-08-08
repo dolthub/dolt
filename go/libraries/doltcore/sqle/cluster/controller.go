@@ -122,11 +122,9 @@ type Controller struct {
 
 	// authPersistence applies auth payloads replicated from a primary when
 	// this server is a standby. HookMySQLDbPersister installs the default
-	// users-and-grants implementation; HookAuthPersister replaces it.
-	// Guarded by authPersistenceMu, since an application may replace it
-	// while the controller is running.
-	authPersistence   AuthPersistence
-	authPersistenceMu sync.Mutex
+	// users-and-grants implementation; HookAuthPersister replaces it. Any
+	// replacement must happen before RegisterGrpcServices is called.
+	authPersistence AuthPersistence
 
 	authDbPersister *replicatingAuthDbPersister
 
@@ -801,7 +799,7 @@ func (c *Controller) RemoteSrvServerArgs(ctxFactory func(context.Context) (*sql.
 
 func (c *Controller) HookMySQLDbPersister(persister AuthDbPersister, mysqlDb *mysql_db.MySQLDb) AuthDbPersister {
 	if c != nil {
-		c.setAuthPersistence(mysqlDbAuthPersistence{mysqlDb})
+		c.authPersistence = mysqlDbAuthPersistence{mysqlDb}
 		c.authDbPersister = &replicatingAuthDbPersister{
 			base:     persister,
 			replicas: c.authDbReplicas,
@@ -835,15 +833,16 @@ type ReplicatingAuthPersister interface {
 //
 // Dolt installs a users-and-grants (mysql.db) implementation via
 // HookMySQLDbPersister during engine construction; applications with their
-// own auth store (e.g. Doltgres's auth.db) call this afterwards, before the
-// server accepts connections. The replication version counter and replica
-// state carry over, so contents already offered by the replaced persister are
-// superseded by the next write or LoadData through the returned one.
+// own auth store (e.g. Doltgres's auth.db) call this afterwards, before
+// RegisterGrpcServices runs and the server accepts connections. The
+// replication version counter and replica state carry over, so contents
+// already offered by the replaced persister are superseded by the next write
+// or LoadData through the returned one.
 func (c *Controller) HookAuthPersister(base AuthDbPersister, persistence AuthPersistence) ReplicatingAuthPersister {
 	if c == nil {
 		return nil
 	}
-	c.setAuthPersistence(persistence)
+	c.authPersistence = persistence
 	if c.authDbPersister == nil {
 		c.authDbPersister = &replicatingAuthDbPersister{
 			base:     base,
@@ -854,18 +853,6 @@ func (c *Controller) HookAuthPersister(base AuthDbPersister, persistence AuthPer
 		c.authDbPersister.setBase(base)
 	}
 	return c.authDbPersister
-}
-
-func (c *Controller) setAuthPersistence(p AuthPersistence) {
-	c.authPersistenceMu.Lock()
-	defer c.authPersistenceMu.Unlock()
-	c.authPersistence = p
-}
-
-func (c *Controller) getAuthPersistence() AuthPersistence {
-	c.authPersistenceMu.Lock()
-	defer c.authPersistenceMu.Unlock()
-	return c.authPersistence
 }
 
 func (c *Controller) HookBranchControlPersistence(controller *branch_control.Controller, fs filesys.Filesys) {
@@ -908,7 +895,7 @@ func (c *Controller) HookBranchControlPersistence(controller *branch_control.Con
 func (c *Controller) RegisterGrpcServices(ctxFactory func(context.Context) (*sql.Context, error), srv *grpc.Server) {
 	replicationapi.RegisterReplicationServiceServer(srv, &replicationServiceServer{
 		ctxFactory:           ctxFactory,
-		authPersistence:      c.getAuthPersistence,
+		authPersistence:      c.authPersistence,
 		branchControl:        c.branchControlController,
 		branchControlFilesys: c.branchControlFilesys,
 		dropDatabase:         c.dropDatabase,
