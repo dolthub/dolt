@@ -120,10 +120,13 @@ type Controller struct {
 
 	role Role
 
-	// TODO: this mysqlDb field should be replaced with an instance of AuthPersistence instead.
-	// Dolt server setup should instantiate a type that implements it and preserves the existing mysqldb
-	// overwriting behavior.
-	mysqlDb *mysql_db.MySQLDb
+	// authPersistence applies auth payloads replicated from a primary when
+	// this server is a standby. HookMySQLDbPersister installs the default
+	// users-and-grants implementation; HookAuthPersister replaces it.
+	// Guarded by authPersistenceMu, since an application may replace it
+	// while the controller is running.
+	authPersistence   AuthPersistence
+	authPersistenceMu sync.Mutex
 
 	authDbPersister *replicatingAuthDbPersister
 
@@ -798,7 +801,7 @@ func (c *Controller) RemoteSrvServerArgs(ctxFactory func(context.Context) (*sql.
 
 func (c *Controller) HookMySQLDbPersister(persister AuthDbPersister, mysqlDb *mysql_db.MySQLDb) AuthDbPersister {
 	if c != nil {
-		c.mysqlDb = mysqlDb
+		c.setAuthPersistence(mysqlDbAuthPersistence{mysqlDb})
 		c.authDbPersister = &replicatingAuthDbPersister{
 			base:     persister,
 			replicas: c.authDbReplicas,
@@ -807,6 +810,62 @@ func (c *Controller) HookMySQLDbPersister(persister AuthDbPersister, mysqlDb *my
 		persister = c.authDbPersister
 	}
 	return persister
+}
+
+// ReplicatingAuthPersister is an AuthDbPersister whose Persist replicates the
+// payload to cluster standbys and blocks until they ack, subject to
+// dolt_cluster_ack_writes_timeout_secs. PersistNoWait is for callers which
+// cannot afford to block while holding locks: it persists the payload locally
+// and begins replicating it, appending the ack waiters to |rsc|; the caller
+// should pass |rsc| to dsess.WaitForReplicationController once its locks are
+// released.
+type ReplicatingAuthPersister interface {
+	AuthDbPersister
+	PersistNoWait(ctx *sql.Context, data []byte, rsc *doltdb.ReplicationStatusController) error
+}
+
+// HookAuthPersister replaces the auth persistence used for cluster
+// replication with an application-supplied one. |base| is the source and sink
+// for the local serialized auth payload: it persists new contents written
+// through the returned persister and loads the current contents when this
+// server becomes a primary. |persistence| applies payloads replicated from a
+// primary while this server is a standby. The returned persister should be
+// used for all local auth writes; on a primary, writes through it replicate
+// to standbys.
+//
+// Dolt installs a users-and-grants (mysql.db) implementation via
+// HookMySQLDbPersister during engine construction; applications with their
+// own auth store (e.g. Doltgres's auth.db) call this afterwards, before the
+// server accepts connections. The replication version counter and replica
+// state carry over, so contents already offered by the replaced persister are
+// superseded by the next write or LoadData through the returned one.
+func (c *Controller) HookAuthPersister(base AuthDbPersister, persistence AuthPersistence) ReplicatingAuthPersister {
+	if c == nil {
+		return nil
+	}
+	c.setAuthPersistence(persistence)
+	if c.authDbPersister == nil {
+		c.authDbPersister = &replicatingAuthDbPersister{
+			base:     base,
+			replicas: c.authDbReplicas,
+		}
+		c.authDbPersister.setRole(c.role)
+	} else {
+		c.authDbPersister.setBase(base)
+	}
+	return c.authDbPersister
+}
+
+func (c *Controller) setAuthPersistence(p AuthPersistence) {
+	c.authPersistenceMu.Lock()
+	defer c.authPersistenceMu.Unlock()
+	c.authPersistence = p
+}
+
+func (c *Controller) getAuthPersistence() AuthPersistence {
+	c.authPersistenceMu.Lock()
+	defer c.authPersistenceMu.Unlock()
+	return c.authPersistence
 }
 
 func (c *Controller) HookBranchControlPersistence(controller *branch_control.Controller, fs filesys.Filesys) {
@@ -849,7 +908,7 @@ func (c *Controller) HookBranchControlPersistence(controller *branch_control.Con
 func (c *Controller) RegisterGrpcServices(ctxFactory func(context.Context) (*sql.Context, error), srv *grpc.Server) {
 	replicationapi.RegisterReplicationServiceServer(srv, &replicationServiceServer{
 		ctxFactory:           ctxFactory,
-		mysqlDb:              c.mysqlDb,
+		authPersistence:      c.getAuthPersistence,
 		branchControl:        c.branchControlController,
 		branchControlFilesys: c.branchControlFilesys,
 		dropDatabase:         c.dropDatabase,

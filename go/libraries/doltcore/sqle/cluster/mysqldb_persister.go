@@ -238,24 +238,42 @@ func (p *replicatingAuthDbPersister) GracefulStop() {
 }
 
 func (p *replicatingAuthDbPersister) Persist(ctx *sql.Context, data []byte) error {
-	p.mu.Lock()
-	err := p.base.Persist(ctx, data)
+	var rsc doltdb.ReplicationStatusController
+	err := p.PersistNoWait(ctx, data, &rsc)
 	if err == nil {
-		p.current = data
-		p.version += 1
-		var rsc doltdb.ReplicationStatusController
-		rsc.Wait = make([]func(context.Context) error, len(p.replicas))
-		rsc.NotifyWaitFailed = make([]func(), len(p.replicas))
-		for i, r := range p.replicas {
-			rsc.Wait[i] = r.UpdateAuthDb(ctx, p.current, p.version)
-			rsc.NotifyWaitFailed[i] = func() {}
-		}
-		p.mu.Unlock()
 		dsess.WaitForReplicationController(ctx, rsc)
-	} else {
-		p.mu.Unlock()
 	}
 	return err
+}
+
+// PersistNoWait persists |data| locally and offers it to all standby
+// replicas, appending the replication-ack waiters to |rsc| instead of
+// blocking on them. Callers which hold locks that replication acks must not
+// block use this, and wait on |rsc| once their locks are released.
+func (p *replicatingAuthDbPersister) PersistNoWait(ctx *sql.Context, data []byte, rsc *doltdb.ReplicationStatusController) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	err := p.base.Persist(ctx, data)
+	if err != nil {
+		return err
+	}
+	p.current = data
+	p.version += 1
+	for _, r := range p.replicas {
+		rsc.Wait = append(rsc.Wait, r.UpdateAuthDb(ctx, p.current, p.version))
+		rsc.NotifyWaitFailed = append(rsc.NotifyWaitFailed, func() {})
+	}
+	return nil
+}
+
+// setBase replaces the persister used to load and store the local copy of the
+// replicated auth payload, keeping the replicas and the replication version
+// counter. Used when an embedding application takes over auth replication
+// after the default persister is installed.
+func (p *replicatingAuthDbPersister) setBase(base AuthDbPersister) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.base = base
 }
 
 func (p *replicatingAuthDbPersister) LoadData(ctx context.Context) ([]byte, error) {
