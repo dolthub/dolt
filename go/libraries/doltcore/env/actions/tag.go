@@ -19,11 +19,15 @@ import (
 	"fmt"
 	"sort"
 
+	errorKinds "gopkg.in/src-d/go-errors.v1"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
 )
+
+var ErrTagExists = errorKinds.NewKind("fatal: A tag named '%s' already exists.")
 
 const DefaultPageSize = 100
 
@@ -51,7 +55,7 @@ func CreateTagOnDB(ctx context.Context, ddb *doltdb.DoltDB, tagName, startPoint 
 	}
 
 	if hasRef {
-		return &doltdb.ExistingRefError{Ref: tagRef}
+		return ErrTagExists.New(tagName)
 	}
 
 	if !ref.IsValidTagName(tagName) {
