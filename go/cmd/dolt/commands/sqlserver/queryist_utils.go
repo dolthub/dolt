@@ -104,6 +104,13 @@ func BuildConnectionStringQueryist(_ context.Context, cwdFS filesys.Filesys, cre
 	queryist := ConnectionQueryist{connection: conn, gatherWarnings: &gatherWarnings}
 
 	var lateBind cli.LateBindQueryist = func(ctx context.Context, opts ...cli.LateBindQueryistOption) (res cli.LateBindQueryistResult, err error) {
+		// Surface connection failures here, with the target named, instead of
+		// letting the first query return a bare dial error like
+		// "dial tcp [::1]:3306: connect: connection refused".
+		if err := conn.DB.PingContext(ctx); err != nil {
+			return res, fmt.Errorf("failed to connect to the dolt sql-server at %s:%d: %w", host, port, err)
+		}
+
 		sqlCtx := sql.NewContext(ctx)
 		sqlCtx.SetCurrentDatabase(dbRev)
 
