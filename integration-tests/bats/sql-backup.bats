@@ -11,6 +11,18 @@ teardown() {
     teardown_common
 }
 
+# The grace period floor is enforced by whichever process runs dolt_backup. Under
+# SQL_ENGINE=remote-engine that is the sql-server setup_common started, not the
+# `dolt sql` client, so the override has to be in the server's environment and the
+# server has to be restarted to pick it up.
+lower_prune_grace_floor() {
+    export DOLT_BACKUP_PRUNE_MIN_GRACE="$1"
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+        stop_sql_server 1
+        start_sql_server
+    fi
+}
+
 @test "sql-backup: dolt_backup no argument" {
     run dolt sql -q "call dolt_backup()"
     [ "$status" -ne 0 ]
@@ -333,6 +345,9 @@ SQL
     backupDir="$BATS_TEST_TMPDIR/the_backup"
     orphan="00000000000000000000000000000001"
 
+    # So the test does not have to wait out the production minimum.
+    lower_prune_grace_floor 1s
+
     dolt backup add hostedapidb-0 "file://$backupDir"
     dolt sql -q "call dolt_backup('sync', 'hostedapidb-0')"
 
@@ -341,13 +356,12 @@ SQL
     echo "orphaned table file" > "$backupDir/$orphan"
     [ -f "$backupDir/$orphan" ] || false
 
-    # Wait for the destination to go quiescent. The grace period floor is
-    # lowered so the test does not have to wait out the production minimum.
+    # Wait for the destination to go quiescent.
     sleep 2
 
     dolt sql -q "create table t (a int primary key)"
     dolt commit -Am "cm"
-    DOLT_BACKUP_PRUNE_MIN_GRACE=1s dolt sql -q "call dolt_backup('sync', 'hostedapidb-0', '--prune-with-grace-period', '1s')"
+    dolt sql -q "call dolt_backup('sync', 'hostedapidb-0', '--prune-with-grace-period', '1s')"
 
     [ ! -f "$backupDir/$orphan" ] || false
 
@@ -359,6 +373,8 @@ SQL
     backupDir="$BATS_TEST_TMPDIR/the_backup"
     orphan="00000000000000000000000000000001"
 
+    lower_prune_grace_floor 1s
+
     dolt backup add hostedapidb-0 "file://$backupDir"
     dolt sql -q "call dolt_backup('sync', 'hostedapidb-0')"
 
@@ -368,7 +384,7 @@ SQL
     # is deleted -- one recent touch vetoes the whole directory.
     dolt sql -q "create table t (a int primary key)"
     dolt commit -Am "cm"
-    DOLT_BACKUP_PRUNE_MIN_GRACE=1s dolt sql -q "call dolt_backup('sync', 'hostedapidb-0', '--prune-with-grace-period', '1m')"
+    dolt sql -q "call dolt_backup('sync', 'hostedapidb-0', '--prune-with-grace-period', '1m')"
 
     [ -f "$backupDir/$orphan" ] || false
 }
