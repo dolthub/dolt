@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -2198,44 +2199,52 @@ func (nbs *NomsBlockStore) PruneUnreferencedWithGrace(ctx context.Context, grace
 	if !ok {
 		return PruneStats{}, ErrGracePruneUnsupported
 	}
-
-	referenced, err := nbs.referencedTableFiles(ctx)
-	if err != nil {
-		return PruneStats{}, err
+	// A prune deletes files a manifest update is about to depend on unless the
+	// two are serialized, so a manifest that cannot be locked cannot be pruned.
+	locker, ok := nbs.manifest.(manifestLocker)
+	if !ok {
+		return PruneStats{}, ErrGracePruneUnsupported
 	}
-	return ftp.pruneUnreferencedWithGrace(ctx, referenced, grace)
+
+	// Snapshot what this store has rebased to before the persister's prune
+	// lock is taken, not under it: readers hold nbs.mu while taking that
+	// lock's read side, so acquiring nbs.mu underneath it would invert the
+	// order and deadlock.
+	upstream := nbs.upstreamReferences()
+
+	withRefs := func(ctx context.Context, del func(referenced map[hash.Hash]struct{}) error) error {
+		return locker.WithLockedManifest(ctx, func(exists bool, contents manifestContents) error {
+			referenced := make(map[hash.Hash]struct{}, len(upstream)+len(contents.specs))
+			maps.Copy(referenced, upstream)
+			if exists {
+				addSpecsAndAppendix(referenced, contents)
+			}
+			return del(referenced)
+		})
+	}
+	return ftp.pruneUnreferencedWithGrace(ctx, grace, withRefs)
 }
 
-// referencedTableFiles returns the names of every table file some manifest
-// this store knows about depends on: the specs and the appendix, both from
-// the manifest currently on disk and from the contents this store last
-// rebased to. Reading the manifest fresh matters because the store may have
-// been open for a while; unioning in |nbs.upstream| costs nothing and keeps a
-// concurrently truncated manifest from making live files look unreferenced.
-func (nbs *NomsBlockStore) referencedTableFiles(ctx context.Context) (map[hash.Hash]struct{}, error) {
-	referenced := make(map[hash.Hash]struct{})
-	addAll := func(contents manifestContents) {
-		for h := range contents.getSpecSet() {
-			referenced[h] = struct{}{}
-		}
-		for h := range contents.getAppendixSet() {
-			referenced[h] = struct{}{}
-		}
-	}
-
-	exists, contents, err := nbs.manifest.ParseIfExists(ctx, nbs.stats, nil)
-	if err != nil {
-		return nil, err
-	}
-	if exists {
-		addAll(contents)
-	}
-
+// upstreamReferences returns the table files the contents this store last
+// rebased to depend on. The manifest read under the lock during a prune is
+// authoritative for everything a concurrent writer has published; unioning
+// this in costs nothing and keeps a concurrently truncated manifest from
+// making files this store is still using look unreferenced.
+func (nbs *NomsBlockStore) upstreamReferences() map[hash.Hash]struct{} {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
-	addAll(nbs.upstream)
+	referenced := make(map[hash.Hash]struct{}, len(nbs.upstream.specs)+len(nbs.upstream.appendix))
+	addSpecsAndAppendix(referenced, nbs.upstream)
+	return referenced
+}
 
-	return referenced, nil
+func addSpecsAndAppendix(referenced map[hash.Hash]struct{}, contents manifestContents) {
+	for _, s := range contents.specs {
+		referenced[s.name] = struct{}{}
+	}
+	for _, s := range contents.appendix {
+		referenced[s.name] = struct{}{}
+	}
 }
 
 func (nbs *NomsBlockStore) BeginGC(ctx context.Context, keeper func(hash.Hash) bool, _ chunks.GCMode) error {

@@ -376,24 +376,33 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, behavior dherrors.F
 	}, nil
 }
 
-// pruneUnreferencedWithGrace reclaims table files in ftp.dir that neither
-// |referenced| nor this process vouches for, subject to the directory-wide
-// quiescence check in pruneDirWithGrace.
+// pruneUnreferencedWithGrace reclaims table files in ftp.dir that neither the
+// destination's manifest nor this process reference, subject to the
+// directory-wide quiescence check in pruneDirWithGrace. |withRefs| supplies
+// the referenced set under the manifest lock, which is where the deleting
+// happens.
 //
 // The write lock serves the same purpose it does in PruneTableFiles: it keeps
 // in-process writers from landing a file we are about to unlink. It says
-// nothing about other processes, which is what the quiescence check is for.
-func (ftp *fsTablePersister) pruneUnreferencedWithGrace(ctx context.Context, referenced map[hash.Hash]struct{}, grace time.Duration) (PruneStats, error) {
+// nothing about other processes, which is what quiescence and the manifest
+// lock are for.
+func (ftp *fsTablePersister) pruneUnreferencedWithGrace(ctx context.Context, grace time.Duration, withRefs withLockedReferences) (PruneStats, error) {
 	ftp.pruneMu.Lock()
 	defer ftp.pruneMu.Unlock()
 
-	keep := func(h hash.Hash) bool {
-		if _, ok := referenced[h]; ok {
-			return true
-		}
-		return ftp.protected[h] > 0
+	underLock := func(ctx context.Context, del func(keep func(hash.Hash) bool) error) error {
+		return withRefs(ctx, func(referenced map[hash.Hash]struct{}) error {
+			// ftp.protected can be read without ftp.mu since we hold
+			// ftp.pruneMu exclusively.
+			return del(func(h hash.Hash) bool {
+				if _, ok := referenced[h]; ok {
+					return true
+				}
+				return ftp.protected[h] > 0
+			})
+		})
 	}
-	return pruneDirWithGrace(ctx, ftp.dir, keep, grace)
+	return pruneDirWithGrace(ctx, ftp.dir, grace, underLock)
 }
 
 func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context) error {
@@ -426,7 +435,6 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context) error {
 		filePath := path.Join(ftp.dir, name)
 
 		if strings.HasPrefix(name, tempTablePrefix) {
-			// Write lock guarantees no temp files are in flight.
 			if err := file.Remove(filePath); err != nil && !errors.Is(err, fs.ErrNotExist) {
 				errs = append(errs, fmt.Errorf("error removing temp file %s: %w", filePath, err))
 			}

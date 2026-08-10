@@ -20,12 +20,15 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
+	"github.com/dolthub/fslock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -40,6 +43,18 @@ func writeAgedFile(t *testing.T, dir, name string, size int, age time.Duration) 
 	mt := time.Now().Add(-age)
 	require.NoError(t, os.Chtimes(p, mt, mt))
 	return p
+}
+
+// backdateDir makes |dir| read as quiescent by aging every entry in it well
+// past the grace period.
+func backdateDir(t *testing.T, dir string) {
+	t.Helper()
+	aged := time.Now().Add(-2 * testGrace)
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	for _, e := range entries {
+		require.NoError(t, os.Chtimes(filepath.Join(dir, e.Name()), aged, aged))
+	}
 }
 
 func exists(t *testing.T, path string) bool {
@@ -63,6 +78,15 @@ func keepSet(hashes ...hash.Hash) func(hash.Hash) bool {
 	}
 }
 
+// keepUnlocked runs the deletes immediately against a fixed keep set, for
+// tests that are not exercising the manifest lock.
+func keepUnlocked(hashes ...hash.Hash) withLockedKeep {
+	keep := keepSet(hashes...)
+	return func(_ context.Context, del func(func(hash.Hash) bool) error) error {
+		return del(keep)
+	}
+}
+
 // TestPruneDirClassification covers which names a quiescent directory gives up
 // and which it holds on to.
 func TestPruneDirClassification(t *testing.T) {
@@ -81,8 +105,6 @@ func TestPruneDirClassification(t *testing.T) {
 		writeAgedFile(t, dir, manifestFileName, 16, old),
 		writeAgedFile(t, dir, lockFileName, 0, old),
 		writeAgedFile(t, dir, chunkJournalName, 16, old),
-		// Unrecognized names are left alone whether or not they look
-		// vaguely like ours.
 		writeAgedFile(t, dir, "notes.txt", 16, old),
 		// 32 characters, but not a base32 address.
 		writeAgedFile(t, dir, "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz", 16, old),
@@ -95,13 +117,12 @@ func TestPruneDirClassification(t *testing.T) {
 		writeAgedFile(t, dir, tempManifestPrefix+"5678", 8, old),
 	}
 
-	// A subdirectory is another manifest's business, and its contents are
-	// invisible to this pass.
+	// Subdirectories belong to another manifest.
 	require.NoError(t, os.Mkdir(filepath.Join(dir, "oldgen"), os.ModePerm))
 	oldGenFile := writeAgedFile(t, filepath.Join(dir, "oldgen"), unreferenced.String(), 16, old)
 
 	now := time.Now()
-	stats, err := pruneDirAsOf(t.Context(), dir, keepSet(referenced, referencedArchive), testGrace, now, now)
+	stats, err := pruneDirAsOf(t.Context(), dir, testGrace, now, now, keepUnlocked(referenced, referencedArchive))
 	require.NoError(t, err)
 
 	assert.Empty(t, stats.Skipped)
@@ -117,10 +138,8 @@ func TestPruneDirClassification(t *testing.T) {
 	assert.True(t, exists(t, oldGenFile), "files in subdirectories should not be touched")
 }
 
-// TestPruneDirKeepsAppendixReferences asserts that a file reachable only
-// through the manifest appendix is not mistaken for garbage. The keep
-// predicate is what carries that, so this pins the contract the store side
-// relies on.
+// TestPruneDirKeepsAppendixReferences covers a file reachable only through the
+// manifest appendix, which getSpecSet alone does not report.
 func TestPruneDirKeepsAppendixReferences(t *testing.T) {
 	dir := makeTempDir(t)
 	defer file.RemoveAll(dir)
@@ -141,8 +160,10 @@ func TestPruneDirKeepsAppendixReferences(t *testing.T) {
 	appendixPath := writeAgedFile(t, dir, appendix.String(), 16, 2*testGrace)
 
 	now := time.Now()
-	keep := func(h hash.Hash) bool { _, ok := referenced[h]; return ok }
-	stats, err := pruneDirAsOf(t.Context(), dir, keep, testGrace, now, now)
+	underLock := func(_ context.Context, del func(func(hash.Hash) bool) error) error {
+		return del(func(h hash.Hash) bool { _, ok := referenced[h]; return ok })
+	}
+	stats, err := pruneDirAsOf(t.Context(), dir, testGrace, now, now, underLock)
 	require.NoError(t, err)
 
 	assert.Equal(t, 0, stats.FilesDeleted)
@@ -150,9 +171,8 @@ func TestPruneDirKeepsAppendixReferences(t *testing.T) {
 	assert.True(t, exists(t, appendixPath))
 }
 
-// TestPruneDirQuiescenceVeto asserts that one recently modified file stops the
-// entire pass, including deletion of unrelated debris. Partial pruning would
-// reintroduce the per-file age reasoning the design rejects.
+// TestPruneDirQuiescenceVeto covers a recent mtime protecting every candidate
+// in the directory, not just the file that carries it.
 func TestPruneDirQuiescenceVeto(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -175,7 +195,7 @@ func TestPruneDirQuiescenceVeto(t *testing.T) {
 			writeAgedFile(t, dir, tc.fresh, 16, testGrace-time.Minute)
 
 			now := time.Now()
-			stats, err := pruneDirAsOf(t.Context(), dir, keepSet(referenced), testGrace, now, now)
+			stats, err := pruneDirAsOf(t.Context(), dir, testGrace, now, now, keepUnlocked(referenced))
 			require.NoError(t, err)
 
 			assert.Equal(t, 0, stats.FilesDeleted)
@@ -186,10 +206,9 @@ func TestPruneDirQuiescenceVeto(t *testing.T) {
 	}
 }
 
-// TestPruneDirClockSkew asserts that a directory whose filesystem clock is far
-// from ours is refused rather than pruned on mtimes we cannot interpret. The
-// dangerous direction is a local clock ahead of the file server, which makes
-// every file look older than it is.
+// TestPruneDirClockSkew covers a directory whose reported mtimes are nothing
+// like the local clock. Its metadata is not something we understand well enough
+// to delete from, and pruning is optional housekeeping, so skip it.
 func TestPruneDirClockSkew(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -206,20 +225,51 @@ func TestPruneDirClockSkew(t *testing.T) {
 			debris := writeAgedFile(t, dir, unreferenced.String(), 16, 10*testGrace)
 
 			now := time.Now()
-			stats, err := pruneDirAsOf(t.Context(), dir, keepSet(), testGrace, now.Add(tc.skew), now)
+			stats, err := pruneDirAsOf(t.Context(), dir, testGrace, now.Add(tc.skew), now, keepUnlocked())
 			require.NoError(t, err)
 
 			assert.Equal(t, 0, stats.FilesDeleted)
 			require.Len(t, stats.Skipped, 1)
-			assert.Contains(t, stats.Skipped[0], "clock")
+			assert.Contains(t, stats.Skipped[0], "local clock")
 			assert.True(t, exists(t, debris))
 		})
 	}
 }
 
-// TestPruneDirIgnoresFilesCreatedAfterSnapshot asserts that the candidate
-// snapshot bounds what can be deleted: a writer that starts a sync after the
-// quiescence check passes lands files this pass never considered.
+// TestPruneDirDecidesInFilesystemTimeBase covers the cutoff being taken from the
+// probe's mtime rather than the local clock, so that a local clock offset cannot
+// change the outcome. The ages are chosen to discriminate: a cutoff taken from
+// the local clock would spare the debris in the "local clock behind" case.
+func TestPruneDirDecidesInFilesystemTimeBase(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		skew time.Duration
+	}{
+		{"local clock behind the filesystem", -3 * testGrace / 4},
+		{"local clock ahead of the filesystem", 3 * testGrace / 4},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := makeTempDir(t)
+			defer file.RemoveAll(dir)
+
+			unreferenced := computeAddr([]byte("unreferenced"))
+			debris := writeAgedFile(t, dir, unreferenced.String(), 16, 3*testGrace/2)
+
+			// The probe reads as the same moment the files were aged against;
+			// only the local clock moves.
+			probeMtime := time.Now()
+			stats, err := pruneDirAsOf(t.Context(), dir, testGrace, probeMtime, probeMtime.Add(tc.skew), keepUnlocked())
+			require.NoError(t, err)
+
+			assert.Empty(t, stats.Skipped)
+			assert.Equal(t, 1, stats.FilesDeleted)
+			assert.False(t, exists(t, debris))
+		})
+	}
+}
+
+// TestPruneDirIgnoresFilesCreatedAfterSnapshot covers the initial scan bounding
+// what can be deleted, whatever a writer lands afterward.
 func TestPruneDirIgnoresFilesCreatedAfterSnapshot(t *testing.T) {
 	dir := makeTempDir(t)
 	defer file.RemoveAll(dir)
@@ -236,7 +286,7 @@ func TestPruneDirIgnoresFilesCreatedAfterSnapshot(t *testing.T) {
 	defer func() { _testPruneAfterSnapshotHook = nil }()
 
 	now := time.Now()
-	stats, err := pruneDirAsOf(t.Context(), dir, keepSet(), testGrace, now, now)
+	stats, err := pruneDirAsOf(t.Context(), dir, testGrace, now, now, keepUnlocked())
 	require.NoError(t, err)
 
 	assert.Equal(t, 1, stats.FilesDeleted)
@@ -245,35 +295,42 @@ func TestPruneDirIgnoresFilesCreatedAfterSnapshot(t *testing.T) {
 	assert.True(t, exists(t, lateTemp), "a temp file created after the snapshot must survive")
 }
 
-// TestPruneDirRestatsBeforeUnlink asserts that a candidate replaced between the
-// snapshot and the unlink is left alone. Names are content-addressed, so a
-// writer can rename a live file over a name we had classified as garbage.
+// TestPruneDirRestatsBeforeUnlink covers a candidate replaced after the scan.
+// Table file names are content-addressed, so a writer can rename a live file
+// over one we classified as garbage — and a directory that was written to after
+// the scan is one whose other mtimes are stale too, so the pass stops.
 func TestPruneDirRestatsBeforeUnlink(t *testing.T) {
 	dir := makeTempDir(t)
 	defer file.RemoveAll(dir)
 
-	replaced := computeAddr([]byte("replaced"))
-	stale := computeAddr([]byte("stale"))
-	replacedPath := writeAgedFile(t, dir, replaced.String(), 16, 2*testGrace)
-	stalePath := writeAgedFile(t, dir, stale.String(), 16, 2*testGrace)
+	// Candidates are visited in directory order; the assertion is about the file
+	// visited after the one that stops the pass.
+	names := []string{computeAddr([]byte("one")).String(), computeAddr([]byte("two")).String()}
+	slices.Sort(names)
+	replaced, untouched := names[0], names[1]
+
+	replacedPath := writeAgedFile(t, dir, replaced, 16, 2*testGrace)
+	untouchedPath := writeAgedFile(t, dir, untouched, 16, 2*testGrace)
 
 	_testPruneAfterSnapshotHook = func() {
 		// Same name, different content: what a sync starting now would do.
-		writeAgedFile(t, dir, replaced.String(), 4096, 0)
+		writeAgedFile(t, dir, replaced, 4096, 0)
 	}
 	defer func() { _testPruneAfterSnapshotHook = nil }()
 
 	now := time.Now()
-	stats, err := pruneDirAsOf(t.Context(), dir, keepSet(), testGrace, now, now)
+	stats, err := pruneDirAsOf(t.Context(), dir, testGrace, now, now, keepUnlocked())
 	require.NoError(t, err)
 
-	assert.Equal(t, 1, stats.FilesDeleted)
+	assert.Equal(t, 0, stats.FilesDeleted)
+	require.Len(t, stats.Skipped, 1)
+	assert.Contains(t, stats.Skipped[0], replaced)
 	assert.True(t, exists(t, replacedPath), "a candidate replaced after the snapshot must survive")
-	assert.False(t, exists(t, stalePath))
+	assert.True(t, exists(t, untouchedPath), "one changed candidate must abandon the rest of the pass")
 }
 
-// TestPruneDirProbeHandling asserts that probe files neither veto a pass nor
-// accumulate: a fresh one belongs to a live pruner, an old one to a dead one.
+// TestPruneDirProbeHandling covers probe files neither vetoing a pass nor
+// accumulating: a fresh one belongs to a live pruner, an old one to a dead one.
 func TestPruneDirProbeHandling(t *testing.T) {
 	dir := makeTempDir(t)
 	defer file.RemoveAll(dir)
@@ -284,7 +341,7 @@ func TestPruneDirProbeHandling(t *testing.T) {
 	staleProbe := writeAgedFile(t, dir, pruneProbePrefix+"abandoned", 0, 2*testGrace)
 
 	now := time.Now()
-	stats, err := pruneDirAsOf(t.Context(), dir, keepSet(), testGrace, now, now)
+	stats, err := pruneDirAsOf(t.Context(), dir, testGrace, now, now, keepUnlocked())
 	require.NoError(t, err)
 
 	assert.Empty(t, stats.Skipped, "another pruner's probe is not evidence of a writer")
@@ -294,8 +351,8 @@ func TestPruneDirProbeHandling(t *testing.T) {
 	assert.False(t, exists(t, staleProbe))
 }
 
-// TestPruneDirWithGraceDropsProbe asserts the end-to-end entry point creates a
-// probe, uses it, and cleans it up.
+// TestPruneDirWithGraceDropsProbe covers the probe being cleaned up on the way
+// out.
 func TestPruneDirWithGraceDropsProbe(t *testing.T) {
 	dir := makeTempDir(t)
 	defer file.RemoveAll(dir)
@@ -303,7 +360,7 @@ func TestPruneDirWithGraceDropsProbe(t *testing.T) {
 	unreferenced := computeAddr([]byte("unreferenced"))
 	debris := writeAgedFile(t, dir, unreferenced.String(), 16, 2*testGrace)
 
-	stats, err := pruneDirWithGrace(t.Context(), dir, keepSet(), testGrace)
+	stats, err := pruneDirWithGrace(t.Context(), dir, testGrace, keepUnlocked())
 	require.NoError(t, err)
 	assert.Equal(t, 1, stats.FilesDeleted)
 	assert.False(t, exists(t, debris))
@@ -313,9 +370,65 @@ func TestPruneDirWithGraceDropsProbe(t *testing.T) {
 	assert.Empty(t, entries, "the probe should have been removed")
 }
 
-// TestNBSPruneUnreferencedWithGrace exercises the store-level entry point
-// against a real local store, which is how a file:// backup destination is
-// opened.
+// TestPruneDirSkipsIfManifestChangedSinceScan covers a manifest published
+// between the scan and the unlinks, which means a sync was in flight while the
+// pass was concluding that none was.
+func TestPruneDirSkipsIfManifestChangedSinceScan(t *testing.T) {
+	dir := makeTempDir(t)
+	defer file.RemoveAll(dir)
+
+	unreferenced := computeAddr([]byte("unreferenced"))
+	debris := writeAgedFile(t, dir, unreferenced.String(), 16, 2*testGrace)
+	writeAgedFile(t, dir, manifestFileName, 16, 2*testGrace)
+
+	// The scan has already recorded every mtime, so this reaches only the
+	// re-stat under the lock.
+	_testPruneAfterSnapshotHook = func() { writeAgedFile(t, dir, manifestFileName, 24, 0) }
+	defer func() { _testPruneAfterSnapshotHook = nil }()
+
+	now := time.Now()
+	stats, err := pruneDirAsOf(t.Context(), dir, testGrace, now, now, keepUnlocked())
+	require.NoError(t, err)
+
+	assert.Equal(t, 0, stats.FilesDeleted)
+	require.Len(t, stats.Skipped, 1)
+	assert.Contains(t, stats.Skipped[0], "manifest was updated")
+	assert.True(t, exists(t, debris))
+}
+
+// TestPruneDirBatchesUnlinks covers a large prune spreading its unlinks over
+// several acquisitions of the manifest lock. Concurrent writers give up on that
+// lock after lockFileTimeout, and would fail against one long critical section.
+func TestPruneDirBatchesUnlinks(t *testing.T) {
+	dir := makeTempDir(t)
+	defer file.RemoveAll(dir)
+
+	const count = 2*pruneUnlinkBatchSize + 1
+	var debris []string
+	for i := 0; i < count; i++ {
+		h := computeAddr([]byte{byte(i)})
+		debris = append(debris, writeAgedFile(t, dir, h.String(), 16, 2*testGrace))
+	}
+
+	var acquisitions int
+	underLock := func(_ context.Context, del func(func(hash.Hash) bool) error) error {
+		acquisitions++
+		return del(keepSet())
+	}
+
+	now := time.Now()
+	stats, err := pruneDirAsOf(t.Context(), dir, testGrace, now, now, underLock)
+	require.NoError(t, err)
+
+	assert.Equal(t, count, stats.FilesDeleted)
+	assert.Equal(t, 3, acquisitions, "unlinks should be spread over batches, releasing the lock between them")
+	for _, p := range debris {
+		assert.False(t, exists(t, p))
+	}
+}
+
+// TestNBSPruneUnreferencedWithGrace covers the store-level entry point against a
+// real local store, which is how a file:// backup destination is opened.
 func TestNBSPruneUnreferencedWithGrace(t *testing.T) {
 	ctx := context.Background()
 	st, nomsDir, _ := makeTestLocalStore(t, defaultMaxTables)
@@ -325,8 +438,8 @@ func TestNBSPruneUnreferencedWithGrace(t *testing.T) {
 	fileToData := populateLocalStore(t, st, 4)
 	require.NotEmpty(t, fileToData)
 
-	// A complete table file that no manifest references — what an
-	// interrupted sync leaves behind.
+	// What an interrupted sync leaves behind: a complete table file that no
+	// manifest references.
 	orphanData, orphanAddr, err := buildTable([][]byte{[]byte("orphaned chunk")})
 	require.NoError(t, err)
 	orphan := filepath.Join(nomsDir, orphanAddr.String())
@@ -335,13 +448,7 @@ func TestNBSPruneUnreferencedWithGrace(t *testing.T) {
 	tempFile := filepath.Join(nomsDir, tempTablePrefix+"abandoned")
 	require.NoError(t, os.WriteFile(tempFile, []byte("partial upload"), 0666))
 
-	// Backdate everything so the directory reads as quiescent.
-	aged := time.Now().Add(-2 * testGrace)
-	entries, err := os.ReadDir(nomsDir)
-	require.NoError(t, err)
-	for _, e := range entries {
-		require.NoError(t, os.Chtimes(filepath.Join(nomsDir, e.Name()), aged, aged))
-	}
+	backdateDir(t, nomsDir)
 
 	stats, err := st.PruneUnreferencedWithGrace(ctx, testGrace)
 	require.NoError(t, err)
@@ -362,8 +469,8 @@ func TestNBSPruneUnreferencedWithGrace(t *testing.T) {
 	assert.Len(t, sources.TableFiles, len(fileToData))
 }
 
-// TestNBSPruneUnreferencedWithGraceNotQuiescent asserts a store that was
-// written to recently gives up nothing.
+// TestNBSPruneUnreferencedWithGraceNotQuiescent covers a store written to
+// recently giving up nothing.
 func TestNBSPruneUnreferencedWithGraceNotQuiescent(t *testing.T) {
 	ctx := context.Background()
 	st, nomsDir, _ := makeTestLocalStore(t, defaultMaxTables)
@@ -383,15 +490,129 @@ func TestNBSPruneUnreferencedWithGraceNotQuiescent(t *testing.T) {
 	assert.True(t, exists(t, orphan))
 }
 
-// TestCopyTableFileReplacesExistingFile guards the invariant that grace
-// pruning depends on: a writer landing a table file in a destination always
-// writes it, even when a file of that name is already there, so the file
-// carries a fresh mtime.
-//
-// If "skip uploading a table file the destination already has" is ever added
-// to the pull or clone path, that optimization must refresh the adopted file's
-// mtime — otherwise a prune can delete a file at the moment it becomes live.
-// This test is the tripwire.
+// TestNBSPruneUnreferencedWithGraceHoldsManifestLock covers a writer racing a
+// prune. It must fail its update rather than publish a manifest naming a file
+// the prune deleted.
+func TestNBSPruneUnreferencedWithGraceHoldsManifestLock(t *testing.T) {
+	ctx := context.Background()
+	st, nomsDir, _ := makeTestLocalStore(t, defaultMaxTables)
+	defer st.Close()
+
+	populateLocalStore(t, st, 2)
+
+	// The state a writer is in between landing a table file and committing the
+	// manifest that names it.
+	orphanData, orphanAddr, err := buildTable([][]byte{[]byte("orphaned chunk")})
+	require.NoError(t, err)
+	orphan := filepath.Join(nomsDir, orphanAddr.String())
+	require.NoError(t, os.WriteFile(orphan, orphanData, 0666))
+	backdateDir(t, nomsDir)
+
+	// A second handle has its own file lock, standing in for another process.
+	other, err := getFileManifest(ctx, nomsDir)
+	require.NoError(t, err)
+	defer other.Close()
+
+	ok, upstream, err := other.ParseIfExists(ctx, &Stats{}, nil)
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	// The update that writer is about to attempt.
+	commit := manifestContents{
+		nbfVers: upstream.nbfVers,
+		lock:    computeAddr([]byte("next lock")),
+		root:    upstream.root,
+		gcGen:   upstream.gcGen,
+		specs:   append(slices.Clone(upstream.specs), tableSpec{name: orphanAddr, chunkCount: 1}),
+	}
+
+	var racedErr error
+	_testPruneUnderLockHook = func() {
+		_, racedErr = other.Update(ctx, dherrors.FatalBehaviorError, upstream.lock, commit, &Stats{}, nil)
+	}
+	defer func() { _testPruneUnderLockHook = nil }()
+
+	stats, err := st.PruneUnreferencedWithGrace(ctx, testGrace)
+	require.NoError(t, err)
+	require.Equal(t, 1, stats.FilesDeleted)
+
+	require.Error(t, racedErr)
+	assert.ErrorIs(t, racedErr, fslock.ErrTimeout,
+		"a manifest update must not be able to land while files are being deleted")
+
+	// Retried after the prune, the update is refused: the file it names is gone.
+	_, err = other.Update(ctx, dherrors.FatalBehaviorError, upstream.lock, commit, &Stats{}, nil)
+	assert.ErrorIs(t, err, ErrManifestSpecMissingTableFile)
+
+	_, after, err := other.ParseIfExists(ctx, &Stats{}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, upstream.lock, after.lock, "the manifest must be untouched")
+}
+
+// TestNBSPruneUnreferencedWithGraceSkipsWhenLockHeld covers a held manifest
+// lock, which means a sync is in flight.
+func TestNBSPruneUnreferencedWithGraceSkipsWhenLockHeld(t *testing.T) {
+	ctx := context.Background()
+	st, nomsDir, _ := makeTestLocalStore(t, defaultMaxTables)
+	defer st.Close()
+
+	populateLocalStore(t, st, 2)
+
+	orphanData, orphanAddr, err := buildTable([][]byte{[]byte("orphaned chunk")})
+	require.NoError(t, err)
+	orphan := filepath.Join(nomsDir, orphanAddr.String())
+	require.NoError(t, os.WriteFile(orphan, orphanData, 0666))
+	backdateDir(t, nomsDir)
+
+	held, err := fslock.New(filepath.Join(nomsDir, lockFileName))
+	require.NoError(t, err)
+	require.NoError(t, held.Lock())
+	defer func() {
+		require.NoError(t, held.Unlock())
+		require.NoError(t, held.Close())
+	}()
+
+	stats, err := st.PruneUnreferencedWithGrace(ctx, testGrace)
+	require.NoError(t, err, "a busy destination is a skip, not a failure")
+	assert.Equal(t, 0, stats.FilesDeleted)
+	require.Len(t, stats.Skipped, 1)
+	assert.Contains(t, stats.Skipped[0], "manifest lock")
+	assert.True(t, exists(t, orphan))
+}
+
+// TestNBSPruneUnreferencedWithGraceKeepsPending covers a file this process has
+// landed but not yet referenced. No manifest vouches for it, so the persister's
+// protected set must.
+func TestNBSPruneUnreferencedWithGraceKeepsPending(t *testing.T) {
+	ctx := context.Background()
+	st, nomsDir, _ := makeTestLocalStore(t, defaultMaxTables)
+	defer st.Close()
+
+	data, addr, err := buildTable([][]byte{[]byte("pending chunk")})
+	require.NoError(t, err)
+	fileID := addr.String()
+	pending, err := st.WriteTableFile(ctx, fileID, 0, 1, nil, func() (io.ReadCloser, uint64, error) {
+		return io.NopCloser(bytes.NewReader(data)), uint64(len(data)), nil
+	})
+	require.NoError(t, err)
+	defer pending.Close()
+
+	backdateDir(t, nomsDir)
+
+	stats, err := st.PruneUnreferencedWithGrace(ctx, testGrace)
+	require.NoError(t, err)
+	assert.Equal(t, 0, stats.FilesDeleted)
+	assert.True(t, exists(t, filepath.Join(nomsDir, fileID)))
+
+	// And it can still be published afterward.
+	require.NoError(t, st.AddTableFilesToManifest(ctx, map[string]int{fileID: 1}, noopGetAddrs))
+}
+
+// TestCopyTableFileReplacesExistingFile guards an invariant grace pruning
+// depends on: landing a table file always writes it, even over an existing file
+// of the same name, so it carries a fresh mtime. Adding a "skip uploading what
+// the destination already has" optimization to the pull or clone path would
+// break that, and a prune could then delete a file as it goes live.
 func TestCopyTableFileReplacesExistingFile(t *testing.T) {
 	ctx := context.Background()
 	dir := makeTempDir(t)
@@ -401,8 +622,7 @@ func TestCopyTableFileReplacesExistingFile(t *testing.T) {
 	data, addr, err := buildTable([][]byte{[]byte("a chunk")})
 	require.NoError(t, err)
 
-	// Stand in for an orphan left by an interrupted sync: right name, stale
-	// content, old mtime.
+	// An orphan left by an interrupted sync: right name, stale content.
 	p := writeAgedFile(t, dir, addr.String(), 7, 2*testGrace)
 	before, err := os.Stat(p)
 	require.NoError(t, err)

@@ -50,9 +50,11 @@ type manifest interface {
 	// the store, the root root hash.Hash of the store, and a tableSpec
 	// describing every table that comprises the store.
 	// If the manifest doesn't exist, |exists| is set to false and the other
-	// return values are undefined. The |readHook| parameter allows race
-	// condition testing. If it is non-nil, it will be invoked while the
-	// implementation is guaranteeing exclusive access to the manifest.
+	// return values are undefined.
+	//
+	// A read reflects a consistent manifest, but not necessarily the current
+	// one: implementations do not exclude writers for the read path. The
+	// returned contents may be stale by the time the caller acts on them.
 	ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (exists bool, contents manifestContents, err error)
 
 	// Close releases any resources held by the manifest, such as a file
@@ -62,6 +64,25 @@ type manifest interface {
 
 	manifestUpdater
 	manifestGCGenUpdater
+}
+
+// manifestLocker is an optional interface implemented by manifests whose
+// exclusive update region can be entered on its own, rather than only as part
+// of an update.
+//
+// It exists so that a grace prune can delete table files with no manifest
+// update in flight. See [GracePruner].
+type manifestLocker interface {
+	// WithLockedManifest calls |cb| while holding whatever exclusive access
+	// this manifest's Update takes, passing the manifest as it exists at the
+	// moment the lock is acquired. For the duration of |cb|, no other
+	// lock-respecting process can publish a manifest update, so |cb| may act
+	// on the contents it is handed.
+	//
+	// |cb| should be brief. Manifest updates elsewhere give up after
+	// lockFileTimeout and surface an error to their caller, so a slow |cb|
+	// breaks concurrent writers.
+	WithLockedManifest(ctx context.Context, cb func(exists bool, contents manifestContents) error) error
 }
 
 type manifestUpdater interface {
