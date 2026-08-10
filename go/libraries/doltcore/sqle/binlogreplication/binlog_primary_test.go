@@ -341,6 +341,66 @@ func TestBinlogPrimary_addingAndDroppingColumns(t *testing.T) {
 	})
 }
 
+// TestBinlogPrimary_FunctionalIndex tests that inserting a row into a keyless table with a functional/expression
+// index does not panic when binlog replication is active.
+// https://github.com/dolthub/dolt/issues/11475
+func TestBinlogPrimary_FunctionalIndex(t *testing.T) {
+	h := newHarness(t)
+	h.startSqlServersWithDoltSystemVars(doltReplicationPrimarySystemVars)
+	h.setupForDoltToMySqlReplication()
+	h.startReplicationAndCreateTestDb(h.doltPort)
+
+	h.primaryDatabase.MustExec("CREATE TABLE t (id INT);")
+	h.primaryDatabase.MustExec("CREATE INDEX idx_ifzero ON t ((IF(id = 0, 1, 0)));")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("show tables;", [][]any{{"t"}})
+
+	// The hidden column Dolt creates internally to back the functional index must NOT be replicated to the
+	// real MySQL replica as a normal, visible column; MySQL creates its own equivalent hidden column
+	// automatically as a side effect of the index DDL.
+	h.requireReplicaResults(
+		"select column_name from information_schema.columns where table_schema=database() and table_name='t';",
+		[][]any{{"id"}})
+
+	h.primaryDatabase.MustExec("INSERT INTO t VALUES (0);")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("select * from t;", [][]any{{"0"}})
+}
+
+// TestBinlogPrimary_FunctionalIndexWithPrimaryKey tests that inserting, updating, and deleting rows in a table
+// with a primary key and a functional/expression index correctly replicates.
+// https://github.com/dolthub/dolt/issues/11475
+func TestBinlogPrimary_FunctionalIndexWithPrimaryKey(t *testing.T) {
+	h := newHarness(t)
+	h.startSqlServersWithDoltSystemVars(doltReplicationPrimarySystemVars)
+	h.setupForDoltToMySqlReplication()
+	h.startReplicationAndCreateTestDb(h.doltPort)
+
+	h.primaryDatabase.MustExec("CREATE TABLE t (pk INT PRIMARY KEY, id INT);")
+	h.primaryDatabase.MustExec("CREATE INDEX idx_ifzero ON t ((IF(id = 0, 1, 0)));")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("show tables;", [][]any{{"t"}})
+
+	// The hidden column Dolt creates internally to back the functional index must NOT be replicated to the
+	// real MySQL replica as a normal, visible column; MySQL creates its own equivalent hidden column
+	// automatically as a side effect of the index DDL.
+	h.requireReplicaResults(
+		"select column_name from information_schema.columns where table_schema=database() and table_name='t' order by ordinal_position;",
+		[][]any{{"pk"}, {"id"}})
+
+	h.primaryDatabase.MustExec("INSERT INTO t VALUES (1, 0);")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("select * from t;", [][]any{{"1", "0"}})
+
+	h.primaryDatabase.MustExec("UPDATE t SET id = 1 WHERE pk = 1;")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("select * from t;", [][]any{{"1", "1"}})
+
+	h.primaryDatabase.MustExec("DELETE FROM t WHERE pk = 1;")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("select * from t;", [][]any{})
+}
+
 // TestBinlogPrimary_Rotation tests how a Dolt primary server handles rotating the binary log file when the
 // size threshold is reached.
 func TestBinlogPrimary_Rotation(t *testing.T) {

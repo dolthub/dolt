@@ -134,7 +134,9 @@ type SessionDbProvider interface {
 }
 
 func parseCreateTable(ctx *sql.Context, tableName string, sch schema.Schema) (*plan.CreateTable, error) {
-	createTable, err := sqlfmt.GenerateCreateTableStatement(ctx, tableName, sch, nil, nil)
+	// This is a pseudo CREATE TABLE, used only to resolve default/generated/check expressions via the
+	// engine's own SQL parser and analyzer, so SystemHidden columns are included here.
+	createTable, err := sqlfmt.GenerateCreateTableStatement(ctx, tableName, sch, nil, nil, true)
 	if err != nil {
 		return nil, err
 	}

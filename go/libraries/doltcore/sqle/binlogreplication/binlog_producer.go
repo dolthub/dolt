@@ -422,7 +422,7 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 			}
 		}
 
-		columns := sch.GetAllCols().GetColumns()
+		columns := nonVirtualColumns(sch.GetAllCols().GetColumns())
 		tableId := tablesToId[tableName.Name]
 
 		var tableRowsToWrite []mysql.Row
@@ -709,6 +709,19 @@ func extractRowCountAndDiffType(ctx *sql.Context, sch schema.Schema, diff tree.D
 	}
 }
 
+// nonVirtualColumns returns the subset of |columns| that are not virtual. Virtual columns (e.g. the
+// hidden columns Dolt creates to back a functional/expression index) are never stored in a row's value
+// tuple, so they must be excluded whenever binlog events are constructed from a table's full column set.
+func nonVirtualColumns(columns []schema.Column) []schema.Column {
+	nonVirtual := make([]schema.Column, 0, len(columns))
+	for _, col := range columns {
+		if !col.Virtual {
+			nonVirtual = append(nonVirtual, col)
+		}
+	}
+	return nonVirtual
+}
+
 // createTableMapFromDoltTable creates a binlog TableMap for the given Dolt table. If
 // |includeOptionalMetadata| is set to true, then additional, optional metadata such as
 // column names and column collations will also be included in the TableMap.
@@ -718,7 +731,7 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 		return nil, err
 	}
 
-	columns := sch.GetAllCols().GetColumns()
+	columns := nonVirtualColumns(sch.GetAllCols().GetColumns())
 	types := make([]byte, len(columns))
 	metadata := make([]uint16, len(columns))
 	canBeNullMap := mysql.NewServerBitmap(len(columns))
