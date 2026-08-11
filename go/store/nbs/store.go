@@ -2227,11 +2227,7 @@ func (nbs *NomsBlockStore) PruneUnreferencedWithGrace(ctx context.Context, grace
 	return ftp.pruneUnreferencedWithGrace(ctx, grace, lock)
 }
 
-// upstreamReferences returns the table files the contents this store last
-// rebased to depend on. The manifest read under the lock during a prune is
-// authoritative for everything a concurrent writer has published; unioning
-// this in costs nothing and keeps a concurrently truncated manifest from
-// making files this store is still using look unreferenced.
+// upstreamReferences returns the table files currently referenced by |nbs.upstream|.
 func (nbs *NomsBlockStore) upstreamReferences() hash.HashSet {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
