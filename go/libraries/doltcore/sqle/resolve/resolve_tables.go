@@ -97,25 +97,22 @@ func TableNameWithSearchPath(
 	}
 
 	for _, schemaName := range schemasToSearch {
-		tablesInSchema, err := root.GetTableNames(ctx, schemaName, true)
+		// Skip schemas that don't exist in this database
+		if _, exists, err := doltdb.ResolveDatabaseSchema(ctx, root, schemaName); err != nil {
+			return doltdb.TableName{}, false, err
+		} else if !exists {
+			continue
+		}
+
+		correctedTableName, ok, err := root.ResolveTableName(ctx, doltdb.TableName{Name: tableName, Schema: schemaName})
 		if err != nil {
 			return doltdb.TableName{}, false, err
 		}
-		correctedTableName, ok := sql.GetTableNameInsensitive(tableName, tablesInSchema)
 		if !ok {
 			continue
 		}
 
-		candidate := doltdb.TableName{Name: correctedTableName, Schema: schemaName}
-		ok, err = root.HasTable(ctx, candidate)
-		if err != nil {
-			return doltdb.TableName{}, false, err
-		} else if !ok {
-			// Should be impossible
-			return doltdb.TableName{}, false, nil
-		}
-
-		return candidate, true, nil
+		return doltdb.TableName{Name: correctedTableName, Schema: schemaName}, true, nil
 	}
 
 	// Reserved dolt_* system tables (e.g. dolt_nonlocal_tables) always live in the "dolt" namespace schema under
@@ -125,20 +122,11 @@ func TableNameWithSearchPath(
 	if !doltdb.HasDoltPrefix(tableName) {
 		return doltdb.TableName{}, false, nil
 	}
-	tablesInDoltSchema, err := root.GetTableNames(ctx, doltdb.DoltNamespace, true)
-	if err != nil {
-		return doltdb.TableName{}, false, err
-	}
-	correctedTableName, ok := sql.GetTableNameInsensitive(tableName, tablesInDoltSchema)
-	if !ok {
-		return doltdb.TableName{}, false, nil
-	}
-	candidate := doltdb.TableName{Name: correctedTableName, Schema: doltdb.DoltNamespace}
-	ok, err = root.HasTable(ctx, candidate)
+	correctedTableName, ok, err := root.ResolveTableName(ctx, doltdb.TableName{Name: tableName, Schema: doltdb.DoltNamespace})
 	if err != nil || !ok {
 		return doltdb.TableName{}, false, err
 	}
-	return candidate, true, nil
+	return doltdb.TableName{Name: correctedTableName, Schema: doltdb.DoltNamespace}, true, nil
 }
 
 // TableWithSearchPath resolves a table name to a table in the root value, searching through the schemas in the search path.
