@@ -62,16 +62,13 @@ type GracePruner interface {
 	PruneUnreferencedWithGrace(ctx context.Context, grace time.Duration) (PruneStats, error)
 }
 
-// withLockedReferences runs |del| while holding the destination's manifest
-// lock, passing the set of table files the manifest on disk references at that
-// moment. Implementations of this are what tie a prune to a particular store's
-// manifest; see NomsBlockStore.PruneUnreferencedWithGrace.
-type withLockedReferences func(ctx context.Context, del func(referenced map[hash.Hash]struct{}) error) error
-
-// withLockedKeep is withLockedReferences with the persister's own in-process
-// protections folded in, leaving a single predicate that answers "must this
-// table file survive?".
-type withLockedKeep func(ctx context.Context, del func(keep func(hash.Hash) bool) error) error
+// lockKeepers takes the destination's manifest lock and reports every table
+// file that must survive a prune: what the manifest on disk references at that
+// moment, plus whatever this process is relying on. Nobody can publish a
+// manifest update until |release| is called, so the answer holds until then.
+//
+// See NomsBlockStore.PruneUnreferencedWithGrace.
+type lockKeepers func(ctx context.Context) (keep hash.HashSet, release func() error, err error)
 
 // test hook: called after the candidate snapshot is taken and before the
 // manifest lock is acquired, so a test can simulate a writer that starts a
@@ -119,34 +116,28 @@ func (s PruneStats) String() string {
 // along with abandoned temp files, but only if nothing in |dir| has been
 // modified within |grace| of now.
 //
-// The quiescence test is the whole safety argument. |dir| may be written
-// concurrently by another process holding no lock we can see, so we cannot ask
-// "is this file unreferenced?" — a writer that has renamed a table file into
-// place but not yet committed its manifest would answer yes. We ask instead
-// "has anything in this directory been touched recently?" A writer mid-sync is
-// continuously touching something: a temp file whose mtime advances as bytes
-// land, or a fresh rename. Nothing recent means no sync is in flight, and
-// everything unreferenced is garbage. This needs no cooperation from the
-// writer, so it holds across dolt versions.
+// The quiescence test is an attempt to provide safety in a multi-process
+// context. |dir| can be written concurrently by another process holding no
+// lock. We cannot ask "is this file unreferenced?" — a writer which
+// renames a table file into place and has not yet committed its manifest
+// is still referencing the file, but we have no visibility into it. Instead
+// we ask "has anything in this directory been touched recently?" A writer
+// mid-sync is continuously touching something: a temp file whose mtime
+// advances as bytes land, or a fresh rename. Nothing recent means no sync
+// is in flight, and everything unreferenced is garbage.
 //
 // The residual hole is a writer that has landed its last table file and is
 // sitting in index load, ref checks and the manifest write with no directory
-// activity. In the usually case, that period of time is bounded, and that
+// activity. In the usual case, that period of time is bounded, and that
 // bound is what |grace| is sized against.
 //
-// One recent mtime vetoes the entire pass. Pruning the rest anyway would
-// reintroduce the per-file age reasoning this design exists to avoid: the
-// first file of a long sync is separated from that sync's manifest commit by
-// the whole remaining transfer, so no per-file age threshold is safe. The rule
-// is all-or-nothing after deleting starts too — a candidate found changed on
-// disk abandons the rest of the pass rather than skipping the one file.
+// One recent mtime vetoes the entire pass.
 //
 // Quiescence is a judgment about a writer we cannot see, so it can be wrong.
-// |underLock| bounds what that costs: the unlinks run inside the destination's
-// manifest lock, which no manifest update can be published outside of. See
-// unlinkCandidates. A concurrent update with a recent Dolt version will then
-// fail, since it will be attempting to add a reference to a file which no
-// longer exists. In the case of arbitrary chunk writes through
+// The files are pruned under |lock|, and recent versions of Dolt re-stat
+// new dependencies as they land in the manifest. This combination makes it
+// so that a concurrent update will not take a dependency on a newly deleted
+// table file. In the case of arbitrary chunk writes through
 // NomsBlockStore.memtable and accumulating dependencies through things that
 // prolly tree writers, dropped writes are problematic. In the current case
 // where we are pruning - push / backup sync - these are less problematic
@@ -159,7 +150,7 @@ func (s PruneStats) String() string {
 // comparison in the same time base: any constant offset between the two clocks
 // cancels, and the local clock does not enter the decision at all. It is read
 // once, only to sanity-check the probe — see pruneDirAsOf.
-func pruneDirWithGrace(ctx context.Context, dir string, grace time.Duration, underLock withLockedKeep) (stats PruneStats, err error) {
+func pruneDirWithGrace(ctx context.Context, dir string, grace time.Duration, lock lockKeepers) (stats PruneStats, err error) {
 	probePath, probeMtime, err := dropPruneProbe(dir)
 	if err != nil {
 		return PruneStats{}, err
@@ -171,13 +162,13 @@ func pruneDirWithGrace(ctx context.Context, dir string, grace time.Duration, und
 		}
 	}()
 
-	return pruneDirAsOf(ctx, dir, grace, probeMtime, time.Now(), underLock)
+	return pruneDirAsOf(ctx, dir, grace, probeMtime, time.Now(), lock)
 }
 
 // pruneDirAsOf is pruneDirWithGrace with the two clock readings supplied by the
 // caller: |probeMtime| as the directory filesystem reported it, and |now| as
 // the local clock reported it.
-func pruneDirAsOf(ctx context.Context, dir string, grace time.Duration, probeMtime, now time.Time, underLock withLockedKeep) (stats PruneStats, err error) {
+func pruneDirAsOf(ctx context.Context, dir string, grace time.Duration, probeMtime, now time.Time, lock lockKeepers) (stats PruneStats, err error) {
 	// Sanity check the filesystem's mtime reporting. A directory that stamps a
 	// file we created a moment ago with a time nothing like our own is a
 	// directory whose metadata we do not understand, or a host whose clock
@@ -272,37 +263,9 @@ func pruneDirAsOf(ctx context.Context, dir string, grace time.Duration, probeMti
 
 	var errs []error
 	if len(candidates) > 0 {
-		lockErr := underLock(ctx, func(keep func(hash.Hash) bool) error {
-			// The quiescence check ran outside the lock. Re-assert the
-			// manifest mtime with the lock held.
-			changed, err := manifestMtimeChanged(dir, manifestMtime)
-			if err != nil {
-				return err
-			}
-			if changed {
-				stats.Skipped = append(stats.Skipped, fmt.Sprintf(
-					"%s: the manifest was updated while pruning", dir))
-				return nil
-			}
-
-			if _testPruneUnderLockHook != nil {
-				_testPruneUnderLockHook()
-			}
-
-			unlinkStats, unlinkErrs := unlinkCandidates(ctx, dir, candidates, keep)
-			stats.add(unlinkStats)
-			errs = append(errs, unlinkErrs...)
-			return nil
-		})
-		if lockErr != nil {
-			if errors.Is(lockErr, fslock.ErrTimeout) {
-				// Someone else is updating the manifest. No need to prune.
-				stats.Skipped = append(stats.Skipped, fmt.Sprintf(
-					"%s: could not take the manifest lock", dir))
-			} else {
-				errs = append(errs, lockErr)
-			}
-		}
+		unlinkStats, unlinkErrs := unlinkUnderManifestLock(ctx, dir, candidates, manifestMtime, lock)
+		stats.add(unlinkStats)
+		errs = append(errs, unlinkErrs...)
 	}
 
 	for _, name := range staleProbes {
@@ -351,6 +314,46 @@ func classifyPruneCandidate(name string) (addr hash.Hash, isTemp, ok bool) {
 	return addr, false, ok
 }
 
+// unlinkUnderManifestLock takes the destination's manifest lock and deletes
+// the candidates nothing references, holding the lock for the whole pass.
+//
+// Failing to take the lock makes this a no-op: someone else is updating the
+// manifest, which means the destination is not quiesced.
+func unlinkUnderManifestLock(ctx context.Context, dir string, candidates []pruneCandidate, manifestMtime time.Time, lock lockKeepers) (stats PruneStats, errs []error) {
+	keep, release, err := lock(ctx)
+	if err != nil {
+		if errors.Is(err, fslock.ErrTimeout) {
+			stats.Skipped = append(stats.Skipped, fmt.Sprintf(
+				"%s: could not take the manifest lock", dir))
+			return stats, nil
+		}
+		return stats, []error{err}
+	}
+	defer func() {
+		if rerr := release(); rerr != nil {
+			errs = append(errs, rerr)
+		}
+	}()
+
+	// The quiescence check ran outside the lock. Re-assert the manifest mtime
+	// with the lock held.
+	changed, err := manifestMtimeChanged(dir, manifestMtime)
+	if err != nil {
+		return stats, []error{err}
+	}
+	if changed {
+		stats.Skipped = append(stats.Skipped, fmt.Sprintf(
+			"%s: the manifest was updated while pruning", dir))
+		return stats, nil
+	}
+
+	if _testPruneUnderLockHook != nil {
+		_testPruneUnderLockHook()
+	}
+
+	return unlinkCandidates(ctx, dir, candidates, keep)
+}
+
 // unlinkCandidates deletes the members of |candidates| that |keep| does not
 // vouch for. Callers hold the manifest lock.
 //
@@ -360,12 +363,12 @@ func classifyPruneCandidate(name string) (addr hash.Hash, isTemp, ok bool) {
 // whole directory, not for one file, and every remaining decision rests on the
 // same stale reading. This is the same all-or-nothing rule the quiescence check
 // applies up front, enforced again once deleting has started.
-func unlinkCandidates(ctx context.Context, dir string, candidates []pruneCandidate, keep func(hash.Hash) bool) (stats PruneStats, errs []error) {
+func unlinkCandidates(ctx context.Context, dir string, candidates []pruneCandidate, keep hash.HashSet) (stats PruneStats, errs []error) {
 	for _, c := range candidates {
 		if err := ctx.Err(); err != nil {
 			return stats, append(errs, err)
 		}
-		if !c.isTemp && keep(c.addr) {
+		if !c.isTemp && keep.Has(c.addr) {
 			continue
 		}
 

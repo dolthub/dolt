@@ -138,7 +138,7 @@ func getFileManifest(ctx context.Context, dir string) (m manifest, err error) {
 
 type fileManifest struct {
 	// lock is the dir/LOCK flock. It is a writer-exclusion lock.
-	// Update, UpdateGCGen and WithLockedManifest take it.
+	// Update, UpdateGCGen and LockManifest take it.
 	lock *fslock.Lock
 	dir  string
 }
@@ -234,24 +234,22 @@ func (fm fileManifest) UpdateGCGen(ctx context.Context, behavior dherrors.FatalB
 
 var _ manifestLocker = fileManifest{}
 
-// WithLockedManifest implements [manifestLocker]. It takes the same file lock
-// Update takes, so a manifest update by any process that respects the lock
-// cannot be published while |cb| runs.
-func (fm fileManifest) WithLockedManifest(ctx context.Context, cb func(exists bool, contents manifestContents) error) (err error) {
-	if err = tryFileLock(fm.lock); err != nil {
-		return err
+// LockManifest implements [manifestLocker]. It takes the same file lock Update
+// takes, so a manifest update by any process that respects the lock cannot be
+// published until the caller releases.
+func (fm fileManifest) LockManifest(ctx context.Context) (lockedManifest, error) {
+	if err := tryFileLock(fm.lock); err != nil {
+		return lockedManifest{}, err
 	}
-	defer func() {
-		if cerr := fm.lock.Unlock(); err == nil {
-			err = cerr // keep first error
-		}
-	}()
 
 	exists, contents, err := parseIfExists(ctx, fm.dir, nil)
 	if err != nil {
-		return err
+		if uerr := fm.lock.Unlock(); uerr != nil {
+			err = errors.Join(err, uerr)
+		}
+		return lockedManifest{}, err
 	}
-	return cb(exists, contents)
+	return lockedManifest{exists: exists, contents: contents, unlock: fm.lock.Unlock}, nil
 }
 
 // ErrManifestSpecMissingTableFile is returned by a manifest update that would

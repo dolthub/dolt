@@ -67,23 +67,20 @@ func exists(t *testing.T, path string) bool {
 	return false
 }
 
-func keepSet(hashes ...hash.Hash) func(hash.Hash) bool {
-	keep := make(map[hash.Hash]struct{}, len(hashes))
+func keepSet(hashes ...hash.Hash) hash.HashSet {
+	keep := make(hash.HashSet, len(hashes))
 	for _, h := range hashes {
-		keep[h] = struct{}{}
+		keep.Insert(h)
 	}
-	return func(h hash.Hash) bool {
-		_, ok := keep[h]
-		return ok
-	}
+	return keep
 }
 
-// keepUnlocked runs the deletes immediately against a fixed keep set, for
-// tests that are not exercising the manifest lock.
-func keepUnlocked(hashes ...hash.Hash) withLockedKeep {
+// keepUnlocked hands the prune a fixed keep set and a no-op release, for tests
+// that are not exercising the manifest lock.
+func keepUnlocked(hashes ...hash.Hash) lockKeepers {
 	keep := keepSet(hashes...)
-	return func(_ context.Context, del func(func(hash.Hash) bool) error) error {
-		return del(keep)
+	return func(context.Context) (hash.HashSet, func() error, error) {
+		return keep, func() error { return nil }, nil
 	}
 }
 
@@ -151,19 +148,19 @@ func TestPruneDirKeepsAppendixReferences(t *testing.T) {
 		specs:    []tableSpec{{name: spec, chunkCount: 1}},
 		appendix: []tableSpec{{name: appendix, chunkCount: 1}},
 	}
-	referenced := contents.getSpecSet()
+	referenced := hash.HashSet(contents.getSpecSet())
 	for h := range contents.getAppendixSet() {
-		referenced[h] = struct{}{}
+		referenced.Insert(h)
 	}
 
 	specPath := writeAgedFile(t, dir, spec.String(), 16, 2*testGrace)
 	appendixPath := writeAgedFile(t, dir, appendix.String(), 16, 2*testGrace)
 
 	now := time.Now()
-	underLock := func(_ context.Context, del func(func(hash.Hash) bool) error) error {
-		return del(func(h hash.Hash) bool { _, ok := referenced[h]; return ok })
+	lock := func(context.Context) (hash.HashSet, func() error, error) {
+		return referenced, func() error { return nil }, nil
 	}
-	stats, err := pruneDirAsOf(t.Context(), dir, testGrace, now, now, underLock)
+	stats, err := pruneDirAsOf(t.Context(), dir, testGrace, now, now, lock)
 	require.NoError(t, err)
 
 	assert.Equal(t, 0, stats.FilesDeleted)
@@ -410,13 +407,13 @@ func TestPruneDirUnlinksUnderOneLock(t *testing.T) {
 	}
 
 	var acquisitions int
-	underLock := func(_ context.Context, del func(func(hash.Hash) bool) error) error {
+	lock := func(context.Context) (hash.HashSet, func() error, error) {
 		acquisitions++
-		return del(keepSet())
+		return keepSet(), func() error { return nil }, nil
 	}
 
 	now := time.Now()
-	stats, err := pruneDirAsOf(t.Context(), dir, testGrace, now, now, underLock)
+	stats, err := pruneDirAsOf(t.Context(), dir, testGrace, now, now, lock)
 	require.NoError(t, err)
 
 	assert.Equal(t, count, stats.FilesDeleted)

@@ -378,31 +378,28 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, behavior dherrors.F
 
 // pruneUnreferencedWithGrace reclaims table files in ftp.dir that neither the
 // destination's manifest nor this process reference, subject to the
-// directory-wide quiescence check in pruneDirWithGrace. |withRefs| supplies
-// the referenced set under the manifest lock, which is where the deleting
-// happens.
-//
-// The write lock serves the same purpose it does in PruneTableFiles: it keeps
-// in-process writers from landing a file we are about to unlink. It says
-// nothing about other processes, which is what quiescence and the manifest
-// lock are for.
-func (ftp *fsTablePersister) pruneUnreferencedWithGrace(ctx context.Context, grace time.Duration, withRefs withLockedReferences) (PruneStats, error) {
+// directory-wide quiescence check in pruneDirWithGrace. |lock| supplies the
+// manifest's contribution to the keep set. ftp adds its own |protected| set to
+// the set of things to keep.
+func (ftp *fsTablePersister) pruneUnreferencedWithGrace(ctx context.Context, grace time.Duration, lock lockKeepers) (PruneStats, error) {
 	ftp.pruneMu.Lock()
 	defer ftp.pruneMu.Unlock()
 
-	underLock := func(ctx context.Context, del func(keep func(hash.Hash) bool) error) error {
-		return withRefs(ctx, func(referenced map[hash.Hash]struct{}) error {
-			// ftp.protected can be read without ftp.mu since we hold
-			// ftp.pruneMu exclusively.
-			return del(func(h hash.Hash) bool {
-				if _, ok := referenced[h]; ok {
-					return true
-				}
-				return ftp.protected[h] > 0
-			})
-		})
+	lockAndProtect := func(ctx context.Context) (hash.HashSet, func() error, error) {
+		keep, release, err := lock(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		// ftp.protected can be read without ftp.mu since we hold ftp.pruneMu
+		// exclusively.
+		for h, n := range ftp.protected {
+			if n > 0 {
+				keep.Insert(h)
+			}
+		}
+		return keep, release, nil
 	}
-	return pruneDirWithGrace(ctx, ftp.dir, grace, underLock)
+	return pruneDirWithGrace(ctx, ftp.dir, grace, lockAndProtect)
 }
 
 func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context) error {

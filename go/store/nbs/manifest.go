@@ -73,16 +73,24 @@ type manifest interface {
 // It exists so that a grace prune can delete table files with no manifest
 // update in flight. See [GracePruner].
 type manifestLocker interface {
-	// WithLockedManifest calls |cb| while holding whatever exclusive access
-	// this manifest's Update takes, passing the manifest as it exists at the
-	// moment the lock is acquired. For the duration of |cb|, no other
-	// lock-respecting process can publish a manifest update, so |cb| may act
-	// on the contents it is handed.
+	// LockManifest takes whatever exclusive access this manifest's Update
+	// takes and reads the manifest as it exists at that moment. Until the
+	// returned lock is released, no other lock-respecting process can publish
+	// a manifest update, so the caller may act on the contents it is handed.
 	//
-	// |cb| should be brief. Manifest updates elsewhere give up after
-	// lockFileTimeout and surface an error to their caller, so a slow |cb|
-	// breaks concurrent writers.
-	WithLockedManifest(ctx context.Context, cb func(exists bool, contents manifestContents) error) error
+	// Callers must release. Manifest updates elsewhere give up after
+	// lockFileTimeout and surface an error to their caller, so holding the
+	// lock for long breaks concurrent writers.
+	LockManifest(ctx context.Context) (lockedManifest, error)
+}
+
+// lockedManifest is a manifest's contents as of the moment its update lock was
+// taken, together with the means to release that lock.
+type lockedManifest struct {
+	exists   bool
+	contents manifestContents
+	// unlock releases the lock. It is never nil.
+	unlock func() error
 }
 
 type manifestUpdater interface {

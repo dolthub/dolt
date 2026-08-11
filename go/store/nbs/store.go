@@ -2212,17 +2212,19 @@ func (nbs *NomsBlockStore) PruneUnreferencedWithGrace(ctx context.Context, grace
 	// order and deadlock.
 	upstream := nbs.upstreamReferences()
 
-	withRefs := func(ctx context.Context, del func(referenced map[hash.Hash]struct{}) error) error {
-		return locker.WithLockedManifest(ctx, func(exists bool, contents manifestContents) error {
-			referenced := make(map[hash.Hash]struct{}, len(upstream)+len(contents.specs))
-			maps.Copy(referenced, upstream)
-			if exists {
-				addSpecsAndAppendix(referenced, contents)
-			}
-			return del(referenced)
-		})
+	lock := func(ctx context.Context) (hash.HashSet, func() error, error) {
+		lm, err := locker.LockManifest(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		referenced := make(hash.HashSet, len(upstream)+len(lm.contents.specs))
+		maps.Copy(referenced, upstream)
+		if lm.exists {
+			addSpecsAndAppendix(referenced, lm.contents)
+		}
+		return referenced, lm.unlock, nil
 	}
-	return ftp.pruneUnreferencedWithGrace(ctx, grace, withRefs)
+	return ftp.pruneUnreferencedWithGrace(ctx, grace, lock)
 }
 
 // upstreamReferences returns the table files the contents this store last
@@ -2230,10 +2232,10 @@ func (nbs *NomsBlockStore) PruneUnreferencedWithGrace(ctx context.Context, grace
 // authoritative for everything a concurrent writer has published; unioning
 // this in costs nothing and keeps a concurrently truncated manifest from
 // making files this store is still using look unreferenced.
-func (nbs *NomsBlockStore) upstreamReferences() map[hash.Hash]struct{} {
+func (nbs *NomsBlockStore) upstreamReferences() hash.HashSet {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
-	referenced := make(map[hash.Hash]struct{}, len(nbs.upstream.specs)+len(nbs.upstream.appendix))
+	referenced := make(hash.HashSet, len(nbs.upstream.specs)+len(nbs.upstream.appendix))
 	addSpecsAndAppendix(referenced, nbs.upstream)
 	return referenced
 }
