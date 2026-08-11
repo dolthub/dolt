@@ -396,14 +396,13 @@ func TestPruneDirSkipsIfManifestChangedSinceScan(t *testing.T) {
 	assert.True(t, exists(t, debris))
 }
 
-// TestPruneDirBatchesUnlinks covers a large prune spreading its unlinks over
-// several acquisitions of the manifest lock. Concurrent writers give up on that
-// lock after lockFileTimeout, and would fail against one long critical section.
-func TestPruneDirBatchesUnlinks(t *testing.T) {
+// TestPruneDirUnlinksUnderOneLock covers a large prune deleting everything in a
+// single acquisition of the manifest lock.
+func TestPruneDirUnlinksUnderOneLock(t *testing.T) {
 	dir := makeTempDir(t)
 	defer file.RemoveAll(dir)
 
-	const count = 2*pruneUnlinkBatchSize + 1
+	const count = 33
 	var debris []string
 	for i := 0; i < count; i++ {
 		h := computeAddr([]byte{byte(i)})
@@ -421,7 +420,7 @@ func TestPruneDirBatchesUnlinks(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, count, stats.FilesDeleted)
-	assert.Equal(t, 3, acquisitions, "unlinks should be spread over batches, releasing the lock between them")
+	assert.Equal(t, 1, acquisitions)
 	for _, p := range debris {
 		assert.False(t, exists(t, p))
 	}

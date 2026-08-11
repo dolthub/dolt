@@ -91,8 +91,7 @@ func doltBackup(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	// Pruning happens as part of a sync, against the destination the sync is
-	// about to write to. There is nothing to prune for the other operations.
+	// Pruning is only performed as part of a sync.
 	if apr.Contains(cli.PruneWithGracePeriod) && funcParam != DoltBackupParamSync && funcParam != DoltBackupParamSyncUrl {
 		return nil, fmt.Errorf("--%s is only supported with '%s' and '%s'", cli.PruneWithGracePeriod, DoltBackupParamSync, DoltBackupParamSyncUrl)
 	}
@@ -184,8 +183,7 @@ func doltBackupSync(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *ds
 }
 
 // backupPruneGracePeriod returns the grace period requested by --prune-with-grace-period, or 0 if the option was not
-// supplied. An unparseable or too-short duration is a usage error and fails the command, unlike a prune that fails at
-// run time.
+// supplied. An unparseable or too-short duration is an error.
 func backupPruneGracePeriod(apr *argparser.ArgParseResults) (time.Duration, error) {
 	graceStr, ok := apr.GetValue(cli.PruneWithGracePeriod)
 	if !ok {
@@ -312,8 +310,7 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 // operation copies all chunks from the source database to the destination, effectively overwriting the destination
 // to match the source.
 //
-// If |pruneGrace| is non-zero, table files stranded in the destination by earlier interrupted syncs are reclaimed
-// before this sync writes anything of its own.
+// If |pruneGrace| is non-zero, prune stale table files in the destination before running the sync.
 func syncRemote(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.DoltSession, remote env.Remote, pruneGrace time.Duration) error {
 	// Commit the current session's working set to the persistent chunk store. This ensures that uncommitted transaction
 	// changes (e.g. INSERTs) are usually visible to the backup procedure, which reads directly from the roots.
@@ -341,9 +338,6 @@ func syncRemote(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.
 	// dolt_backup remove.
 	defer destDb.Close()
 
-	// Prune before SyncRoots, while the destination still holds only files
-	// this process did not write. A leak left by a killed sync heals on the
-	// next scheduled run with no operator action.
 	if pruneGrace > 0 {
 		pruneBackupDestination(ctx, destDb, remote, pruneGrace)
 	}
@@ -362,10 +356,10 @@ func syncRemote(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.
 	return nil
 }
 
-// pruneBackupDestination reclaims table files that earlier interrupted syncs stranded in |destDb|, provided nothing in
-// the destination has been modified within |grace|.
+// pruneBackupDestination reclaims unreferenced table files in |destDb|. Nothing is removed if
+// anything in the destination has been modified within |grace|.
 //
-// Failures are reported and swallowed. Taking the backup is the point of the command.
+// Failures are reported and swallowed. Pruning is best effort.
 func pruneBackupDestination(ctx *sql.Context, destDb *doltdb.DoltDB, remote env.Remote, grace time.Duration) {
 	stats, err := destDb.PruneUnreferencedTableFilesWithGrace(ctx, grace)
 	switch {

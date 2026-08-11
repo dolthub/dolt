@@ -73,21 +73,13 @@ type withLockedReferences func(ctx context.Context, del func(referenced map[hash
 // table file survive?".
 type withLockedKeep func(ctx context.Context, del func(keep func(hash.Hash) bool) error) error
 
-// pruneUnlinkBatchSize bounds how many files are deleted per acquisition of
-// the manifest lock. A concurrent manifest update gives up after
-// lockFileTimeout — 100ms — and an unlink on a network filesystem is a
-// round trip, so a long run of them under one acquisition would fail writers
-// that have done nothing wrong. Between batches the lock is released and the
-// manifest re-read.
-const pruneUnlinkBatchSize = 16
-
 // test hook: called after the candidate snapshot is taken and before the
 // manifest lock is acquired, so a test can simulate a writer that starts a
 // sync in that window.
 var _testPruneAfterSnapshotHook func()
 
 // test hook: called while the manifest lock is held, immediately before the
-// first batch of unlinks.
+// unlinks.
 var _testPruneUnderLockHook func()
 
 var _ GracePruner = &NomsBlockStore{}
@@ -101,7 +93,7 @@ type PruneStats struct {
 	BytesReclaimed int64
 	// Skipped holds one message per directory that stopped short: it was not
 	// quiescent, its clock could not be trusted, or a writer took the manifest
-	// lock or updated the manifest partway through. A skip is a normal
+	// lock or updated the manifest since the scan. A skip is a normal
 	// outcome, not an error, and may accompany files already deleted.
 	Skipped []string
 }
@@ -147,8 +139,7 @@ func (s PruneStats) String() string {
 // first file of a long sync is separated from that sync's manifest commit by
 // the whole remaining transfer, so no per-file age threshold is safe. The rule
 // is all-or-nothing after deleting starts too — a candidate found changed on
-// disk, or a manifest update landing partway through, abandons the rest of the
-// pass rather than skipping the one file.
+// disk abandons the rest of the pass rather than skipping the one file.
 //
 // Quiescence is a judgment about a writer we cannot see, so it can be wrong.
 // |underLock| bounds what that costs: the unlinks run inside the destination's
@@ -280,15 +271,7 @@ func pruneDirAsOf(ctx context.Context, dir string, grace time.Duration, probeMti
 	}
 
 	var errs []error
-	for len(candidates) > 0 {
-		if err := ctx.Err(); err != nil {
-			return stats, errors.Join(append(errs, err)...)
-		}
-
-		batch := candidates[:min(len(candidates), pruneUnlinkBatchSize)]
-		candidates = candidates[len(batch):]
-
-		var stop bool
+	if len(candidates) > 0 {
 		lockErr := underLock(ctx, func(keep func(hash.Hash) bool) error {
 			// The quiescence check ran outside the lock. Re-assert the
 			// manifest mtime with the lock held.
@@ -299,7 +282,6 @@ func pruneDirAsOf(ctx context.Context, dir string, grace time.Duration, probeMti
 			if changed {
 				stats.Skipped = append(stats.Skipped, fmt.Sprintf(
 					"%s: the manifest was updated while pruning", dir))
-				stop = true
 				return nil
 			}
 
@@ -307,10 +289,9 @@ func pruneDirAsOf(ctx context.Context, dir string, grace time.Duration, probeMti
 				_testPruneUnderLockHook()
 			}
 
-			batchStats, batchStop, batchErrs := unlinkCandidates(ctx, dir, batch, keep)
-			stats.add(batchStats)
-			errs = append(errs, batchErrs...)
-			stop = batchStop
+			unlinkStats, unlinkErrs := unlinkCandidates(ctx, dir, candidates, keep)
+			stats.add(unlinkStats)
+			errs = append(errs, unlinkErrs...)
 			return nil
 		})
 		if lockErr != nil {
@@ -321,10 +302,6 @@ func pruneDirAsOf(ctx context.Context, dir string, grace time.Duration, probeMti
 			} else {
 				errs = append(errs, lockErr)
 			}
-			break
-		}
-		if stop {
-			break
 		}
 	}
 
@@ -377,17 +354,16 @@ func classifyPruneCandidate(name string) (addr hash.Hash, isTemp, ok bool) {
 // unlinkCandidates deletes the members of |candidates| that |keep| does not
 // vouch for. Callers hold the manifest lock.
 //
-// |stop| reports that a candidate changed on disk since the scan, which means
-// the directory stopped being quiescent while this pass was acting on the
-// conclusion that it was. The caller must abandon the rest of the pass: the
-// grace period was violated for the whole directory, not for one file, and
-// every remaining decision rests on the same stale reading. This is the same
-// all-or-nothing rule the quiescence check applies up front, enforced again
-// once deleting has started.
-func unlinkCandidates(ctx context.Context, dir string, candidates []pruneCandidate, keep func(hash.Hash) bool) (stats PruneStats, stop bool, errs []error) {
+// A candidate found changed on disk since the scan means the directory stopped
+// being quiescent while this pass was acting on the conclusion that it was, and
+// abandons the rest of the candidates: the grace period was violated for the
+// whole directory, not for one file, and every remaining decision rests on the
+// same stale reading. This is the same all-or-nothing rule the quiescence check
+// applies up front, enforced again once deleting has started.
+func unlinkCandidates(ctx context.Context, dir string, candidates []pruneCandidate, keep func(hash.Hash) bool) (stats PruneStats, errs []error) {
 	for _, c := range candidates {
 		if err := ctx.Err(); err != nil {
-			return stats, false, append(errs, err)
+			return stats, append(errs, err)
 		}
 		if !c.isTemp && keep(c.addr) {
 			continue
@@ -412,7 +388,7 @@ func unlinkCandidates(ctx context.Context, dir string, candidates []pruneCandida
 		if !info.ModTime().Equal(c.modTime) || info.Size() != c.size {
 			stats.Skipped = append(stats.Skipped, fmt.Sprintf(
 				"%s: %q changed after the scan; the directory is no longer quiescent", dir, c.name))
-			return stats, true, errs
+			return stats, errs
 		}
 
 		if err := file.Remove(p); err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -422,7 +398,7 @@ func unlinkCandidates(ctx context.Context, dir string, candidates []pruneCandida
 		stats.FilesDeleted++
 		stats.BytesReclaimed += c.size
 	}
-	return stats, false, errs
+	return stats, errs
 }
 
 // manifestMtimeChanged reports whether the manifest in |dir| still carries the

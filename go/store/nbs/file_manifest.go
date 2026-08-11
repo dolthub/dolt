@@ -247,7 +247,6 @@ func (fm fileManifest) WithLockedManifest(ctx context.Context, cb func(exists bo
 		}
 	}()
 
-	// The same internal helper ParseIfExists uses.
 	exists, contents, err := parseIfExists(ctx, fm.dir, nil)
 	if err != nil {
 		return err

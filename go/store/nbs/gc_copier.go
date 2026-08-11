@@ -102,10 +102,6 @@ func (gcc *gcCopier) copyTablesToDir(ctx context.Context) (ts []tableSpec, pendi
 		return nil, nil, fmt.Errorf("invalid filename: %s", filename)
 	}
 
-	// This is the tree's only adopt-without-write path: if the destination
-	// already has this file we reference it without rewriting it, which leaves
-	// its mtime untouched. That is safe here and only here, because GC runs
-	// against the local database, which holds an exclusive journal lock.
 	exists, closer, err := gcc.tfp.Exists(ctx, filename, uint32(gcc.writer.ChunkCount()), nil)
 	if err != nil {
 		return nil, nil, err
