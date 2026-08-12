@@ -646,12 +646,14 @@ setup_origin_remote() {
     dolt fetch -p
 
     run dolt branch -a
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "b1" ]] || false
     [[ ! "$output" =~ "remotes/origin/b1" ]] || false
 
     dolt branch -d b1
 
     run dolt branch
+    [ "$status" -eq 0 ]
     [[ ! "$output" =~ "b1" ]] || false
 }
 
@@ -676,6 +678,7 @@ setup_origin_remote() {
     dolt branch -D b1
 
     run dolt branch
+    [ "$status" -eq 0 ]
     [[ ! "$output" =~ "b1" ]] || false
 }
 
@@ -687,12 +690,14 @@ setup_origin_remote() {
     dolt push -u origin b1:other
 
     run dolt branch -a
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "remotes/origin/other" ]] || false
     [[ ! "$output" =~ "remotes/origin/b1" ]] || false
 
     dolt branch -d b1
 
     run dolt branch
+    [ "$status" -eq 0 ]
     [[ ! "$output" =~ "b1" ]] || false
 }
 
@@ -710,6 +715,7 @@ setup_origin_remote() {
     rm -rf "$BATS_TEST_TMPDIR/remote"
 
     run dolt branch -a
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "remotes/origin/b1" ]] || false
 
     dolt branch -d b1
@@ -721,6 +727,7 @@ setup_origin_remote() {
     dolt branch -D b2
 
     run dolt branch
+    [ "$status" -eq 0 ]
     [[ ! "$output" =~ "b1" ]] || false
     [[ ! "$output" =~ "b2" ]] || false
 }
@@ -744,5 +751,6 @@ setup_origin_remote() {
     dolt branch -D b1
 
     run dolt branch
+    [ "$status" -eq 0 ]
     [[ ! "$output" =~ "b1" ]] || false
 }
