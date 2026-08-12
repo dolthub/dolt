@@ -18,6 +18,7 @@ import (
 	"context"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -163,7 +164,9 @@ func InstallSnoopingCommitHook(ctx *sql.Context, pro *DoltDatabaseProvider, name
 	return nil
 }
 
-// orphanCases are the two on-disk remains an interrupted creation can leave behind.
+// orphanCases are the on-disk remains an interrupted creation can leave behind: an in-progress marker,
+// partial Dolt storage without a repo-state file, or a bare directory with no Dolt storage at all (an
+// early-cancelled clone interrupted before .dolt was written).
 var orphanCases = []struct {
 	name       string
 	makeOrphan func(t *testing.T, fs filesys.Filesys)
@@ -173,6 +176,10 @@ var orphanCases = []struct {
 	}},
 	{"missing repo state", func(t *testing.T, fs filesys.Filesys) {
 		require.NoError(t, fs.MkDirs(filepath.Join(dbfactory.DoltDir, dbfactory.DataDir)))
+	}},
+	{"no dolt storage", func(*testing.T, filesys.Filesys) {
+		// providerWithOrphanedDir already created an empty directory at the name; leave it bare (no
+		// .dolt), modelling a clone cancelled before any storage was written.
 	}},
 }
 
@@ -201,33 +208,108 @@ func providerWithOrphanedDir(t *testing.T, makeOrphan func(t *testing.T, fs file
 }
 
 func TestCreateDatabaseOverIncompleteDirectory(t *testing.T) {
+	// An interrupted create/clone leaves a directory that discovery ignores; a later CREATE must reclaim
+	// it (quarantine to the dropped-database holding area) and succeed, rather than wedging on "database
+	// exists" (murmur-zsyi [a]). IF NOT EXISTS behaves the same: the database genuinely does not exist yet.
 	for _, tc := range orphanCases {
-		t.Run(tc.name, func(t *testing.T) {
-			engine, sqlCtx, _ := providerWithOrphanedDir(t, tc.makeOrphan)
+		for _, q := range []string{"CREATE DATABASE foo;", "CREATE DATABASE IF NOT EXISTS foo;"} {
+			t.Run(tc.name+" / "+q, func(t *testing.T) {
+				engine, sqlCtx, pro := providerWithOrphanedDir(t, tc.makeOrphan)
 
-			// IF NOT EXISTS must not be silently suppressed, because the database does not exist and a
-			// client that believes it does cannot use it.
-			for _, q := range []string{"CREATE DATABASE foo;", "CREATE DATABASE IF NOT EXISTS foo;"} {
-				err := ExecuteSqlOnEngine(sqlCtx, engine, q)
-				require.Error(t, err)
-				assert.ErrorIs(t, err, ErrIncompleteDatabaseDir, "query %q", q)
-			}
-		})
+				require.NoError(t, ExecuteSqlOnEngine(sqlCtx, engine, q))
+
+				// foo is now a real, usable database...
+				_, err := pro.Database(sqlCtx, "foo")
+				require.NoError(t, err)
+
+				// ...and the incomplete leftover was quarantined (recoverable), not deleted or left in place.
+				dropped, err := pro.ListDroppedDatabases(sqlCtx)
+				require.NoError(t, err)
+				found, _ := hasCaseInsensitiveMatch(dropped, "foo")
+				require.Truef(t, found, "incomplete dir should have been quarantined; dropped=%v", dropped)
+			})
+		}
 	}
 }
 
 func TestCloneDatabaseOverIncompleteDirectory(t *testing.T) {
-	// A retried clone must not be stuck behind a directory it can neither use nor recreate.
+	// A retried clone must reclaim the incomplete leftover and get PAST the on-disk check to the remote,
+	// rather than being stuck behind a directory it can neither use nor recreate (murmur-zsyi [a]).
 	for _, tc := range orphanCases {
 		t.Run(tc.name, func(t *testing.T) {
 			_, sqlCtx, pro := providerWithOrphanedDir(t, tc.makeOrphan)
 
-			// The orphaned directory is detected before any remote work, so the unreachable remote is never contacted.
+			// The remote is unreachable, so the clone still fails — but only AFTER quarantining the orphan
+			// and getting past the directory check (it now reaches the remote instead of wedging on the dir).
 			err := pro.CloneDatabaseFromRemote(sqlCtx, "foo", "", "origin", "file://unreachable", -1, nil)
 			require.Error(t, err)
-			assert.ErrorIs(t, err, ErrIncompleteDatabaseDir)
+
+			dropped, derr := pro.ListDroppedDatabases(sqlCtx)
+			require.NoError(t, derr)
+			found, _ := hasCaseInsensitiveMatch(dropped, "foo")
+			require.Truef(t, found, "incomplete dir should have been quarantined; dropped=%v", dropped)
 		})
 	}
+}
+
+// TestReserveQuarantinesIncompleteDirectory exercises the shared reserve gate directly (murmur-zsyi [a]):
+// checkDatabaseNameAvailableLocked quarantines an incomplete on-disk leftover and reports the name
+// available, a complete database directory still conflicts, and concurrent reservations of the same name
+// over a leftover are serialized so exactly one wins.
+func TestReserveQuarantinesIncompleteDirectory(t *testing.T) {
+	for _, tc := range orphanCases {
+		t.Run("incomplete leftover is reclaimed: "+tc.name, func(t *testing.T) {
+			_, sqlCtx, pro := providerWithOrphanedDir(t, tc.makeOrphan)
+
+			require.NoError(t, pro.reserveCreatingDatabase("foo"))
+			pro.releaseCreatingDatabase("foo")
+
+			// the leftover no longer squats on the live name...
+			exists, _ := pro.fs.Exists("foo")
+			require.False(t, exists, "incomplete dir must be moved out of the live path")
+
+			// ...it was quarantined (recoverable), not deleted.
+			dropped, err := pro.ListDroppedDatabases(sqlCtx)
+			require.NoError(t, err)
+			found, _ := hasCaseInsensitiveMatch(dropped, "foo")
+			require.Truef(t, found, "incomplete dir should have been quarantined; dropped=%v", dropped)
+		})
+	}
+
+	t.Run("a complete database directory still conflicts", func(t *testing.T) {
+		engine, sqlCtx, pro, _ := newProviderEngine(t)
+		require.NoError(t, ExecuteSqlOnEngine(sqlCtx, engine, "CREATE DATABASE bar;"))
+
+		// bar is a real, complete database — a clone/create over it must still conflict, never quarantine.
+		require.Truef(t, sql.ErrDatabaseExists.Is(pro.reserveCreatingDatabase("bar")),
+			"a complete database must not be quarantined")
+	})
+
+	t.Run("concurrent reservations over a leftover: exactly one wins", func(t *testing.T) {
+		_, _, pro := providerWithOrphanedDir(t, orphanCases[0].makeOrphan)
+
+		const n = 8
+		var wg sync.WaitGroup
+		errs := make([]error, n)
+		wg.Add(n)
+		for i := range n {
+			go func(i int) {
+				defer wg.Done()
+				errs[i] = pro.reserveCreatingDatabase("foo")
+			}(i)
+		}
+		wg.Wait()
+
+		wins := 0
+		for _, err := range errs {
+			if err == nil {
+				wins++
+				continue
+			}
+			require.Truef(t, sql.ErrDatabaseExists.Is(err), "a losing reservation must get ErrDatabaseExists, got %v", err)
+		}
+		require.Equalf(t, 1, wins, "exactly one concurrent reservation may win; got %d", wins)
+	})
 }
 
 func TestCreateDatabaseClearsInProgressMarker(t *testing.T) {

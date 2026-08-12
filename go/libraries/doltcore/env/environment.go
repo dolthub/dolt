@@ -304,15 +304,20 @@ func (dEnv *DoltEnv) Valid() bool {
 	return dEnv != nil && dEnv.CfgLoadErr == nil && dEnv.RSLoadErr == nil && dEnv.DBLoadError == nil && dEnv.HasDoltDir() && dEnv.HasDoltDataDir()
 }
 
-// IsIncompleteDatabaseDir reports whether the database directory rooted at |fs| holds a database whose creation
-// never finished, either because it carries the in-progress marker or because it has Dolt storage without the
-// repo state file that every complete database has. Discovery ignores such a directory, so it cannot be served.
+// IsIncompleteDatabaseDir reports whether the directory rooted at |fs| is NOT a complete, servable Dolt
+// database, so discovery ignores it and a create/clone may reclaim its name instead of colliding with it.
+// This holds when the directory carries the in-progress marker, has Dolt storage without the repo state
+// file that every complete database has, or holds no Dolt storage at all — a bare or non-database leftover,
+// e.g. an early-cancelled clone interrupted before .dolt was written. A complete database (Dolt storage
+// plus its repo state file, marker cleared) returns false.
 func IsIncompleteDatabaseDir(fs filesys.Filesys) bool {
 	if dbfactory.IsDatabaseInProgress(fs) {
 		return true
 	}
 	if exists, isDir := fs.Exists(dbfactory.DoltDir); !exists || !isDir {
-		return false
+		// No Dolt storage at all: not a database, only a bare or non-database directory squatting on the
+		// name. Discovery would never serve it, so it is safe to reclaim.
+		return true
 	}
 	exists, _ := fs.Exists(getRepoStateFile())
 	return !exists

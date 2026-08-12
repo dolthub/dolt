@@ -675,12 +675,6 @@ func commitTransaction(ctx *sql.Context, dSess *dsess.DoltSession, rsc *doltdb.R
 	return nil
 }
 
-var ErrIncompleteDatabaseDir = errors.New("incomplete database directory from an interrupted create already exists; remove the directory and try again")
-
-func NewErrIncompleteDatabaseDir(db string) error {
-	return fmt.Errorf("cannot create database %s: %w", db, ErrIncompleteDatabaseDir)
-}
-
 func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name string, collation sql.CollationID) (err error) {
 	// We have to validate the name before attempting to create a directory. If a directory contains a delimiter, when
 	// registerNewDatabase errors out a directory with the exact name will be leftover due to a process lock. This then
@@ -980,8 +974,10 @@ func (p *DoltDatabaseProvider) CloneDatabaseFromRemote(
 // held. Names are normalized with formatDbMapKeyName because Dolt database names
 // are case-insensitive.
 //
-// When |checkDisk| is true the on-disk directory is also checked; creation paths
-// pass true, while undrop (which restores from the stash) passes false.
+// When |checkDisk| is true the on-disk directory is also checked; creation paths pass true, while undrop
+// (which restores from the stash) passes false. A complete database directory on disk conflicts, but an
+// INCOMPLETE leftover (an interrupted create/clone that discovery ignores) is quarantined into the
+// dropped-database holding area and the name reported available, so a retry is never wedged behind junk.
 func (p *DoltDatabaseProvider) checkDatabaseNameAvailableLocked(name string, checkDisk bool) error {
 	key := formatDbMapKeyName(name)
 	if _, ok := p.deletingDatabases[key]; ok {
@@ -993,10 +989,21 @@ func (p *DoltDatabaseProvider) checkDatabaseNameAvailableLocked(name string, che
 	if checkDisk {
 		exists, isDir := p.fs.Exists(name)
 		if exists && isDir {
-			// A directory left behind by an interrupted create/clone carries an
-			// in-progress marker; surface a clearer error than "already exists".
+			// A directory left behind by an interrupted create/clone — an in-progress marker, Dolt storage
+			// without the repo-state file every complete database has, or no Dolt storage at all (a bare
+			// early-cancel leftover) — is ignored by discovery, so it is not a live database: it only squats
+			// on the name and blocks a retry with "database exists". Quarantine it into the dropped-database
+			// holding area (recoverable via dolt_undrop, purged by DOLT_PURGE_DROPPED_DATABASES) so this
+			// create/clone can proceed. A COMPLETE database directory is a real database and still conflicts.
 			if subFs, ferr := p.fs.WithWorkingDir(name); ferr == nil && env.IsIncompleteDatabaseDir(subFs) {
-				return NewErrIncompleteDatabaseDir(name)
+				dropDbLoc, err := p.fs.Abs(name)
+				if err != nil {
+					return err
+				}
+				if err := p.droppedDatabaseManager.quarantineIncompleteDatabase(name, dropDbLoc); err != nil {
+					return fmt.Errorf("unable to reclaim incomplete database directory %q: %w", name, err)
+				}
+				return nil
 			}
 			return sql.ErrDatabaseExists.New(name)
 		} else if exists {

@@ -92,7 +92,31 @@ func (dd *droppedDatabaseManager) DropDatabase(ctx *sql.Context, name string, dr
 	base = dbfactory.DirToDBName(file)
 	destinationDirectory = filepath.Join(dir, base)
 
-	if err := dd.prepareToMoveDroppedDatabase(ctx, destinationDirectory); err != nil {
+	if err := dd.prepareToMoveDroppedDatabase(destinationDirectory); err != nil {
+		return err
+	}
+
+	return dd.fs.MoveDir(dropDbLoc, destinationDirectory)
+}
+
+// quarantineIncompleteDatabase moves an abandoned, never-completed database directory — an interrupted
+// create/clone leftover that discovery ignores (see env.IsIncompleteDatabaseDir): an in-progress marker,
+// Dolt storage without the repo-state file every complete database has, or no Dolt storage at all — from
+// |dropDbLoc| into the
+// dropped-database holding area, so a fresh create/clone of |name| can proceed instead of failing with
+// "database exists". Unlike DropDatabase it needs no *sql.Context because the directory was never a live
+// database; the move is otherwise identical, and the leftover stays recoverable via dolt_undrop (and is
+// purged by DOLT_PURGE_DROPPED_DATABASES). |dropDbLoc| MUST be the absolute path of the <name> directory.
+func (dd *droppedDatabaseManager) quarantineIncompleteDatabase(name string, dropDbLoc string) error {
+	if err := dd.initializeDeletedDatabaseDirectory(); err != nil {
+		return fmt.Errorf("unable to quarantine incomplete database %s: %w", name, err)
+	}
+
+	// Normalize the physical directory name to the logical/SQL database name, matching DropDatabase.
+	_, file := filepath.Split(dropDbLoc)
+	destinationDirectory := filepath.Join(droppedDatabaseDirectoryName, dbfactory.DirToDBName(file))
+
+	if err := dd.prepareToMoveDroppedDatabase(destinationDirectory); err != nil {
 		return err
 	}
 
@@ -257,7 +281,7 @@ func hasCaseInsensitiveMatch(candidates []string, target string) (bool, string) 
 // prepareToMoveDroppedDatabase checks the specified |targetPath| to make sure there is not already a dropped database
 // there, and if so, the existing dropped database will be renamed with a unique suffix. If any problems are encountered,
 // such as not being able to rename an existing dropped database, this function will return an error.
-func (dd *droppedDatabaseManager) prepareToMoveDroppedDatabase(_ *sql.Context, targetPath string) error {
+func (dd *droppedDatabaseManager) prepareToMoveDroppedDatabase(targetPath string) error {
 	if exists, _ := dd.fs.Exists(targetPath); !exists {
 		// If there's nothing at the desired targetPath, we're all set
 		return nil
