@@ -160,7 +160,7 @@ func renameBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argpar
 	}
 	activeSessionBranch := headRef.GetPath()
 
-	err = actions.RenameBranch(ctx, dbData, oldBranchName, newBranchName, sess.Provider(), force, rsc)
+	err = actions.RenameBranch(ctx, dbData, oldBranchName, newBranchName, force, rsc)
 	if err != nil {
 		if existsErr := actions.BranchExistsError(err); existsErr != nil {
 			return existsErr
@@ -275,7 +275,7 @@ func deleteBranches(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argp
 		err = actions.DeleteBranch(ctx, dbData, branchName, actions.DeleteOptions{
 			Force:  force,
 			Remote: remote,
-		}, dSess.Provider(), rsc)
+		}, rsc)
 		if err != nil {
 			return err
 		}

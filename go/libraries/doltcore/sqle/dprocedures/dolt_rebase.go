@@ -496,7 +496,7 @@ func abortRebase(ctx *sql.Context) error {
 	err = actions.DeleteBranch(ctx, dbData, headRef.GetPath(), actions.DeleteOptions{
 		Force:                      true,
 		AllowDeletingCurrentBranch: true,
-	}, doltSession.Provider(), &rsc)
+	}, &rsc)
 	if err != nil {
 		return err
 	}
@@ -839,7 +839,7 @@ func continueRebase(ctx *sql.Context) rebaseResult {
 
 	err = actions.DeleteBranch(ctx, dbData, rebaseWorkingBranch, actions.DeleteOptions{
 		Force: true,
-	}, doltSession.Provider(), nil)
+	}, nil)
 	if err != nil {
 		return newRebaseError(err)
 	}
