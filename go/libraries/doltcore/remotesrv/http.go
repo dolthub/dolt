@@ -441,6 +441,8 @@ func getFileReaderAt(path string, offset int64, length int64) (io.ReadCloser, in
 // ExtractBasicAuthCreds extracts the username and password from the incoming request. It returns RequestCredentials
 // populated with necessary information to authenticate the request. nil and an error will be returned if any error
 // occurs.
+//
+// A request without an authorization header is treated as credentialed as root with an empty password.
 func ExtractBasicAuthCreds(ctx context.Context) (*RequestCredentials, error) {
 	if md, ok := metadata.FromIncomingContext(ctx); !ok {
 		return nil, errors.New("no metadata in context")
@@ -458,13 +460,17 @@ func ExtractBasicAuthCreds(ctx context.Context) (*RequestCredentials, error) {
 				return nil, fmt.Errorf("bad request: authorization header did not start with 'Basic '")
 			}
 			authTrim := strings.TrimPrefix(auth, "Basic ")
-			uDec, err := base64.URLEncoding.DecodeString(authTrim)
+			uDec, err := base64.StdEncoding.DecodeString(authTrim)
 			if err != nil {
 				return nil, fmt.Errorf("incoming request authorization header failed to decode: %v", err)
 			}
-			userPass := strings.Split(string(uDec), ":")
-			username = userPass[0]
-			password = userPass[1]
+			// Cut, not Split: a password is allowed to contain ':', and a payload with no ':' at all
+			// is malformed rather than a username with an empty password.
+			var found bool
+			username, password, found = strings.Cut(string(uDec), ":")
+			if !found {
+				return nil, errors.New("bad request: authorization header was not of the form 'username:password'")
+			}
 		}
 		addr, ok := peer.FromContext(ctx)
 		if !ok {
