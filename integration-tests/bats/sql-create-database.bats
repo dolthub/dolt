@@ -196,6 +196,41 @@ SQL
     [[ "$output" =~ "database exists" ]] || false
 }
 
+# An interrupted CREATE/CLONE can leave a directory that discovery ignores but that still occupies the
+# name, in three shapes: an in-progress marker, partial .dolt storage without a repo-state file, or a
+# bare directory with no .dolt storage. A later CREATE must reclaim any of them -- quarantine the
+# leftover into the dropped-database holding area and create a fresh database -- instead of failing with
+# "database exists" / "incomplete database directory". A complete database still conflicts (test above).
+# See https://github.com/dolthub/dolt/issues/11533
+@test "sql-create-database: CREATE reclaims an incomplete leftover directory" {
+    make_incomplete_dir() {
+        case "$2" in
+            marker)  mkdir -p "$1" && touch "$1/.dolt_safe_to_ignore" ;;
+            partial) mkdir -p "$1/.dolt/noms" ;;
+            bare)    mkdir -p "$1" ;;
+        esac
+    }
+
+    for shape in marker partial bare; do
+        echo "create reclaim shape: $shape"
+        db="reclaimed_$shape"
+        make_incomplete_dir "$db" "$shape"
+
+        run dolt sql -q "CREATE DATABASE $db;"
+        [ "$status" -eq 0 ]
+
+        # the name is now a real, usable database...
+        run dolt sql -b -q "USE $db; CREATE TABLE t (pk int primary key); INSERT INTO t VALUES (1); SELECT count(*) FROM t;"
+        [ "$status" -eq 0 ]
+        [[ "$output" =~ "1" ]] || false
+
+        # ...and the incomplete leftover was quarantined (recoverable via dolt_undrop), not deleted.
+        [ -d ".dolt_dropped_databases/$db" ]
+        run dolt sql -q "CALL dolt_undrop();"
+        [[ "$output" =~ "$db" ]] || false
+    done
+}
+
 @test "sql-create-database: create database IF NOT EXISTS on database that already exists doesn't throw an error" {
     dolt sql -q "CREATE DATABASE mydb"
     run dolt sql -q "CREATE DATABASE IF NOT EXISTS mydb"
