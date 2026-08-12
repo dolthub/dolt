@@ -29,16 +29,15 @@ import (
 // the data for a row, so that callers can ask for the next column information and get the right descriptor, tuple,
 // and tuple index to use to load that column's data.
 type rowSerializationIter struct {
-	fromSch schema.Schema   // The schema representing the start of the diff being serialized
-	toSch   schema.Schema   // The schema representing the end of the diff row being serialized
-	toCols  []schema.Column // The non-virtual columns of toSch, in order; virtual columns are never stored in a row
+	fromSch schema.Schema // The schema representing the start of the diff being serialized
+	toSch   schema.Schema // The schema representing the end of the diff row being serialized
 
 	keyDesc   *val.TupleDesc // The descriptor for the key tuple (from fromSch)
 	valueDesc *val.TupleDesc // The descriptor for the value tuple (from fromSch)
 	key       val.Tuple      // The key tuple for the row being serialized
 	value     val.Tuple      // The value tuple for the row being serialized
 
-	colIdx int // The position in toCols for the current column
+	colIdx int // The stored (non-virtual) column index in toSch for the current column
 }
 
 // newRowSerializationIter creates a new rowSerializationIter using the |fromSch|, which describes the format of the
@@ -49,7 +48,6 @@ func newRowSerializationIter(ctx *sql.Context, fromSch, toSch schema.Schema, key
 	return &rowSerializationIter{
 		fromSch:   fromSch,
 		toSch:     toSch,
-		toCols:    nonVirtualColumns(toSch.GetAllCols().GetColumns()),
 		key:       val.Tuple(key),
 		keyDesc:   fromSch.GetKeyDescriptor(ns),
 		value:     val.Tuple(value),
@@ -60,7 +58,7 @@ func newRowSerializationIter(ctx *sql.Context, fromSch, toSch schema.Schema, key
 
 // hasNext returns true if this iterator has more columns to provide and the |nextColumn| method can be called.
 func (rsi *rowSerializationIter) hasNext() bool {
-	return rsi.colIdx < len(rsi.toCols)
+	return rsi.colIdx < rsi.toSch.GetAllCols().StoredSize()
 }
 
 // nextColumn provides the data needed to process the next column in a row, including the column from the "from" schema,
@@ -73,7 +71,7 @@ func (rsi *rowSerializationIter) nextColumn() (*schema.Column, *schema.Column, *
 	// Ultimately, we are serializing to the "to" schema so that we can send a binlog encoded row to a replica, so
 	// we iterate over the "to" schema's non-virtual columns to assemble the serialized row in the format the
 	// replica is expecting.
-	toCol := rsi.toCols[rsi.colIdx]
+	toCol := rsi.toSch.GetAllCols().GetByStoredIndex(rsi.colIdx)
 	rsi.colIdx++
 
 	// Look up the matching, non-virtual column in the "from" schema.
@@ -134,8 +132,7 @@ func (rsi *rowSerializationIter) findFromTupleIndex(pFromCol *schema.Column) int
 // out-of-band data. This function returns the binary representation of the row, as well as a bitmap that indicates
 // which fields of the row are null (and therefore don't contribute any bytes to the returned binary data).
 func serializeRowToBinlogBytes(ctx *sql.Context, fromSch, toSch schema.Schema, key, value tree.Item, ns tree.NodeStore) (data []byte, nullBitmap mysql.Bitmap, err error) {
-	columns := nonVirtualColumns(toSch.GetAllCols().GetColumns())
-	nullBitmap = mysql.NewServerBitmap(len(columns))
+	nullBitmap = mysql.NewServerBitmap(toSch.GetAllCols().StoredSize())
 
 	iter := newRowSerializationIter(ctx, fromSch, toSch, key, value, ns)
 	rowIdx := -1

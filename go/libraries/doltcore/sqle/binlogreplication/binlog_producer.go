@@ -422,7 +422,7 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 			}
 		}
 
-		columns := nonVirtualColumns(sch.GetAllCols().GetColumns())
+		nonSystemHiddenCols := sch.GetAllCols().GetNonSystemHiddenCols()
 		tableId := tablesToId[tableName.Name]
 
 		var tableRowsToWrite []mysql.Row
@@ -512,40 +512,41 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 
 		if tableRowsToWrite != nil {
 			rows := mysql.Rows{
-				DataColumns: mysql.NewServerBitmap(len(columns)),
+				DataColumns: mysql.NewServerBitmap(len(nonSystemHiddenCols)),
 				Rows:        tableRowsToWrite,
 			}
-			// All columns are included
-			for i := 0; i < len(columns); i++ {
-				rows.DataColumns.Set(i, true)
+			for i, col := range nonSystemHiddenCols {
+				if !col.Virtual {
+					rows.DataColumns.Set(i, true)
+				}
 			}
 			events = append(events, b.newWriteRowsEvent(tableId, rows))
 		}
 
 		if tableRowsToDelete != nil {
 			rows := mysql.Rows{
-				IdentifyColumns: mysql.NewServerBitmap(len(columns)),
+				IdentifyColumns: mysql.NewServerBitmap(len(nonSystemHiddenCols)),
 				Rows:            tableRowsToDelete,
 			}
-			// All identity columns are included
-			for i := 0; i < len(columns); i++ {
-				rows.IdentifyColumns.Set(i, true)
+			for i, col := range nonSystemHiddenCols {
+				if !col.Virtual {
+					rows.IdentifyColumns.Set(i, true)
+				}
 			}
 			events = append(events, b.newDeleteRowsEvent(tableId, rows))
 		}
 
 		if tableRowsToUpdate != nil {
 			rows := mysql.Rows{
-				DataColumns:     mysql.NewServerBitmap(len(columns)),
-				IdentifyColumns: mysql.NewServerBitmap(len(columns)),
+				DataColumns:     mysql.NewServerBitmap(len(nonSystemHiddenCols)),
+				IdentifyColumns: mysql.NewServerBitmap(len(nonSystemHiddenCols)),
 				Rows:            tableRowsToUpdate,
 			}
-			// All columns are included for data and identify fields
-			for i := 0; i < len(columns); i++ {
-				rows.DataColumns.Set(i, true)
-			}
-			for i := 0; i < len(columns); i++ {
-				rows.IdentifyColumns.Set(i, true)
+			for i, col := range nonSystemHiddenCols {
+				if !col.Virtual {
+					rows.DataColumns.Set(i, true)
+					rows.IdentifyColumns.Set(i, true)
+				}
 			}
 			events = append(events, b.newUpdateRowsEvent(tableId, rows))
 		}
@@ -709,19 +710,6 @@ func extractRowCountAndDiffType(ctx *sql.Context, sch schema.Schema, diff tree.D
 	}
 }
 
-// nonVirtualColumns returns the subset of |columns| that are not virtual. Virtual columns (e.g. the
-// hidden columns Dolt creates to back a functional/expression index) are never stored in a row's value
-// tuple, so they must be excluded whenever binlog events are constructed from a table's full column set.
-func nonVirtualColumns(columns []schema.Column) []schema.Column {
-	nonVirtual := make([]schema.Column, 0, len(columns))
-	for _, col := range columns {
-		if !col.Virtual {
-			nonVirtual = append(nonVirtual, col)
-		}
-	}
-	return nonVirtual
-}
-
 // createTableMapFromDoltTable creates a binlog TableMap for the given Dolt table. If
 // |includeOptionalMetadata| is set to true, then additional, optional metadata such as
 // column names and column collations will also be included in the TableMap.
@@ -731,10 +719,12 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 		return nil, err
 	}
 
-	columns := nonVirtualColumns(sch.GetAllCols().GetColumns())
-	types := make([]byte, len(columns))
-	metadata := make([]uint16, len(columns))
-	canBeNullMap := mysql.NewServerBitmap(len(columns))
+	// Include all non-system-hidden columns. Virtual generated columns still pass metadata, but
+	// don't ever pass a value, since the value isn't stored in a row tuple.
+	nonSystemHiddenCols := sch.GetAllCols().GetNonSystemHiddenCols()
+	types := make([]byte, len(nonSystemHiddenCols))
+	metadata := make([]uint16, len(nonSystemHiddenCols))
+	canBeNullMap := mysql.NewServerBitmap(len(nonSystemHiddenCols))
 
 	var columnNames []string
 	var columnCollationIds []uint64
@@ -742,11 +732,11 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 	var setValues [][]string
 	var enumAndSetCollationIds []uint64
 	if includeOptionalMetadata {
-		columnNames = make([]string, len(columns))
-		columnCollationIds = make([]uint64, len(columns))
+		columnNames = make([]string, len(nonSystemHiddenCols))
+		columnCollationIds = make([]uint64, len(nonSystemHiddenCols))
 	}
 
-	for i, col := range columns {
+	for i, col := range nonSystemHiddenCols {
 		if includeOptionalMetadata {
 			columnNames[i] = col.Name
 			columnCollationIds[i] = uint64(schema.Collation_Unspecified)

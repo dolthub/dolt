@@ -239,23 +239,23 @@ func TestBinlogReplicationVirtualColumn(t *testing.T) {
 	h.startReplicationAndCreateTestDb(h.mySqlPort)
 
 	h.primaryDatabase.MustExec(
-		"create table t (pk int primary key, a varchar(20), g varchar(20) generated always as (concat(a, '!')), z varchar(20))")
+		"create table t (pk int primary key, a varchar(20), g int generated always as (length(a)), z varchar(20))")
 	h.waitForReplicaToCatchUp()
 
-	h.primaryDatabase.MustExec("insert into t (pk, a, z) values (1, 'x', 'end'), (2, 'y', 'tail')")
+	h.primaryDatabase.MustExec("insert into t (pk, a, z) values (1, 'x', 'end'), (2, 'yy', 'tail')")
 	h.waitForReplicaToCatchUp()
 	// z holds its own value, so the stored column after the virtual one must not shift.
 	h.requireReplicaResults("select pk, a, g, z from db01.t order by pk",
-		[][]any{{"1", "x", "x!", "end"}, {"2", "y", "y!", "tail"}})
+		[][]any{{"1", "x", "1", "end"}, {"2", "yy", "2", "tail"}})
 
-	h.primaryDatabase.MustExec("update t set a = 'xx', z = 'end2' where pk = 1")
+	h.primaryDatabase.MustExec("update t set a = 'xxx', z = 'end2' where pk = 1")
 	h.waitForReplicaToCatchUp()
 	h.requireReplicaResults("select pk, a, g, z from db01.t order by pk",
-		[][]any{{"1", "xx", "xx!", "end2"}, {"2", "y", "y!", "tail"}})
+		[][]any{{"1", "xxx", "3", "end2"}, {"2", "yy", "2", "tail"}})
 
 	h.primaryDatabase.MustExec("delete from t where pk = 2")
 	h.waitForReplicaToCatchUp()
-	h.requireReplicaResults("select pk, a, g, z from db01.t order by pk", [][]any{{"1", "xx", "xx!", "end2"}})
+	h.requireReplicaResults("select pk, a, g, z from db01.t order by pk", [][]any{{"1", "xxx", "3", "end2"}})
 }
 
 // TestBinlogReplicationWithHundredsOfDatabases asserts that we can efficiently replicate the creation of hundreds of databases.

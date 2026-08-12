@@ -401,6 +401,32 @@ func TestBinlogPrimary_FunctionalIndexWithPrimaryKey(t *testing.T) {
 	h.requireReplicaResults("select * from t;", [][]any{})
 }
 
+// TestBinlogPrimary_VirtualColumn tests that inserting, updating, and deleting rows
+// in a table with a user-declared VIRTUAL generated column, interspersed between two stored
+// columns, correctly replicates from a Dolt primary to a real MySQL replica.
+func TestBinlogPrimary_VirtualColumn(t *testing.T) {
+	h := newHarness(t)
+	h.startSqlServersWithDoltSystemVars(doltReplicationPrimarySystemVars)
+	h.setupForDoltToMySqlReplication()
+	h.startReplicationAndCreateTestDb(h.doltPort)
+
+	h.primaryDatabase.MustExec("CREATE TABLE t (pk INT PRIMARY KEY, a VARCHAR(20), g INT GENERATED ALWAYS AS (LENGTH(a)) VIRTUAL, z VARCHAR(20));")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("show tables;", [][]any{{"t"}})
+
+	h.primaryDatabase.MustExec("INSERT INTO t (pk, a, z) VALUES (1, 'x', 'end');")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("select pk, a, g, z from t;", [][]any{{"1", "x", "1", "end"}})
+
+	h.primaryDatabase.MustExec("UPDATE t SET a = 'xxx', z = 'end2' WHERE pk = 1;")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("select pk, a, g, z from t;", [][]any{{"1", "xxx", "3", "end2"}})
+
+	h.primaryDatabase.MustExec("DELETE FROM t WHERE pk = 1;")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("select pk, a, g, z from t;", [][]any{})
+}
+
 // TestBinlogPrimary_Rotation tests how a Dolt primary server handles rotating the binary log file when the
 // size threshold is reached.
 func TestBinlogPrimary_Rotation(t *testing.T) {
