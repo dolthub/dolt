@@ -33,7 +33,7 @@ var ErrCOBranchDelete = errorKinds.NewKind("Cannot delete checked out branch '%s
 var ErrUnmergedBranch = errorKinds.NewKind("branch '%s' is not fully merged")
 var ErrWorkingSetsOnBothBranches = errors.New("checkout would overwrite uncommitted changes on target branch")
 
-func RenameBranch[C doltdb.Context](ctx C, dbData env.DbData[C], oldBranch, newBranch string, remoteDbPro env.RemoteDbProvider, force bool, rsc *doltdb.ReplicationStatusController) error {
+func RenameBranch[C doltdb.Context](ctx C, dbData env.DbData[C], oldBranch, newBranch string, force bool, rsc *doltdb.ReplicationStatusController) error {
 	oldRef := ref.NewBranchRef(oldBranch)
 	newRef := ref.NewBranchRef(newBranch)
 
@@ -78,7 +78,7 @@ func RenameBranch[C doltdb.Context](ctx C, dbData env.DbData[C], oldBranch, newB
 
 	// todo: update default branch variable
 
-	return DeleteBranch(ctx, dbData, oldBranch, DeleteOptions{Force: true, AllowDeletingCurrentBranch: true}, remoteDbPro, rsc)
+	return DeleteBranch(ctx, dbData, oldBranch, DeleteOptions{Force: true, AllowDeletingCurrentBranch: true}, rsc)
 }
 
 func CopyBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
@@ -143,7 +143,7 @@ type DeleteOptions struct {
 	AllowDeletingCurrentBranch bool
 }
 
-func DeleteBranch[C doltdb.Context](ctx C, dbData env.DbData[C], brName string, opts DeleteOptions, remoteDbPro env.RemoteDbProvider, rsc *doltdb.ReplicationStatusController) error {
+func DeleteBranch[C doltdb.Context](ctx C, dbData env.DbData[C], brName string, opts DeleteOptions, rsc *doltdb.ReplicationStatusController) error {
 	var branchRef ref.DoltRef
 	if opts.Remote {
 		var err error
@@ -162,10 +162,10 @@ func DeleteBranch[C doltdb.Context](ctx C, dbData env.DbData[C], brName string, 
 		}
 	}
 
-	return DeleteBranchOnDB(ctx, dbData, branchRef, opts, remoteDbPro, rsc)
+	return DeleteBranchOnDB(ctx, dbData, branchRef, opts, rsc)
 }
 
-func DeleteBranchOnDB[C doltdb.Context](ctx C, dbdata env.DbData[C], branchRef ref.DoltRef, opts DeleteOptions, pro env.RemoteDbProvider, rsc *doltdb.ReplicationStatusController) error {
+func DeleteBranchOnDB[C doltdb.Context](ctx C, dbdata env.DbData[C], branchRef ref.DoltRef, opts DeleteOptions, rsc *doltdb.ReplicationStatusController) error {
 	ddb := dbdata.Ddb
 	hasRef, err := ddb.HasRef(ctx, branchRef)
 
@@ -176,23 +176,8 @@ func DeleteBranchOnDB[C doltdb.Context](ctx C, dbdata env.DbData[C], branchRef r
 	}
 
 	if !opts.Force && !opts.Remote {
-		// check to see if the branch is fully merged into its parent
-		trackedBranches, err := dbdata.Rsr.GetBranches()
-		if err != nil {
+		if err := validateBranchMerged(ctx, dbdata, branchRef); err != nil {
 			return err
-		}
-
-		trackedBranch, hasUpstream := trackedBranches.Get(branchRef.GetPath())
-		if hasUpstream {
-			err = validateBranchMergedIntoUpstream(ctx, dbdata, branchRef, trackedBranch.Remote, pro)
-			if err != nil {
-				return err
-			}
-		} else {
-			err = validateBranchMergedIntoCurrentWorkingBranch(ctx, dbdata, branchRef)
-			if err != nil {
-				return err
-			}
 		}
 	}
 
@@ -211,116 +196,68 @@ func DeleteBranchOnDB[C doltdb.Context](ctx C, dbdata env.DbData[C], branchRef r
 	return ddb.DeleteBranch(ctx, branchRef, rsc)
 }
 
-// validateBranchMergedIntoCurrentWorkingBranch returns an error if the given branch is not fully merged into the HEAD of the current branch.
-func validateBranchMergedIntoCurrentWorkingBranch[C doltdb.Context](ctx C, dbdata env.DbData[C], branch ref.DoltRef) error {
-	branchSpec, err := doltdb.NewCommitSpec(branch.GetPath())
+// validateBranchMerged checks that |branch|'s commits are contained
+// by its upstream, or by the current working branch when |branch|
+// has no upstream.
+//
+// It returns ErrUnmergedBranch when they are not.
+func validateBranchMerged[C doltdb.Context](ctx C, dbdata env.DbData[C], branch ref.DoltRef) error {
+	mergedInto, err := upstreamOrHead(ctx, dbdata, branch)
 	if err != nil {
 		return err
 	}
 
-	optCmt, err := dbdata.Ddb.Resolve(ctx, branchSpec, nil)
+	branchHead, err := dbdata.Ddb.ResolveCommitRef(ctx, branch)
 	if err != nil {
 		return err
-	}
-	branchHead, ok := optCmt.ToCommit()
-	if !ok {
-		return doltdb.ErrGhostCommitEncountered
 	}
 
-	cwbCs, err := doltdb.NewCommitSpec("HEAD")
+	merged, err := branchHead.CanFastForwardTo(ctx, mergedInto)
 	if err != nil {
+		if errors.Is(err, doltdb.ErrUpToDate) {
+			return nil
+		}
+		if errors.Is(err, doltdb.ErrIsAhead) {
+			return ErrUnmergedBranch.New(branch.GetPath())
+		}
 		return err
+	}
+	if !merged {
+		return ErrUnmergedBranch.New(branch.GetPath())
+	}
+	return nil
+}
+
+// upstreamOrHead returns the commit at |branch|'s upstream, or the
+// commit at the current working branch when that upstream does
+// not resolve locally.
+//
+// A remote upstream is read from its local tracking ref, so the
+// returned commit is only as current as the last fetch. See
+// [git-branch] and [branch_merged].
+//
+// [git-branch]: https://git-scm.com/docs/git-branch#Documentation/git-branch.txt--d
+// [branch_merged]: https://git.kernel.org/pub/scm/git/git.git/tree/builtin/branch.c?id=010afd3166ddc64c9863b1506f12cbcdda0d4ea1#n146
+func upstreamOrHead[C doltdb.Context](ctx C, dbdata env.DbData[C], branch ref.DoltRef) (*doltdb.Commit, error) {
+	upstream, err := env.UpstreamRef(dbdata.Rsr, branch)
+	if err != nil {
+		return nil, err
+	}
+	if upstream != nil {
+		hasUpstream, err := dbdata.Ddb.HasRef(ctx, upstream)
+		if err != nil {
+			return nil, err
+		}
+		if hasUpstream {
+			return dbdata.Ddb.ResolveCommitRef(ctx, upstream)
+		}
 	}
 
 	headRef, err := dbdata.Rsr.CWBHeadRef(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	optCmt, err = dbdata.Ddb.Resolve(ctx, cwbCs, headRef)
-	if err != nil {
-		return err
-	}
-	cwbHead, ok := optCmt.ToCommit()
-	if !ok {
-		return doltdb.ErrGhostCommitEncountered
-	}
-
-	isMerged, err := branchHead.CanFastForwardTo(ctx, cwbHead)
-	if err != nil {
-		if errors.Is(err, doltdb.ErrUpToDate) {
-			return nil
-		}
-		if errors.Is(err, doltdb.ErrIsAhead) {
-			return ErrUnmergedBranch.New(branch.GetPath())
-		}
-
-		return err
-	}
-
-	if !isMerged {
-		return ErrUnmergedBranch.New(branch.GetPath())
-	}
-
-	return nil
-}
-
-// validateBranchMergedIntoUpstream returns an error if the branch provided is not fully merged into its upstream
-func validateBranchMergedIntoUpstream[C doltdb.Context](ctx context.Context, dbdata env.DbData[C], branch ref.DoltRef, remoteName string, pro env.RemoteDbProvider) error {
-	remotes, err := dbdata.Rsr.GetRemotes()
-	if err != nil {
-		return err
-	}
-	remote, ok := remotes.Get(remoteName)
-	if !ok {
-		// TODO: skip error?
-		return fmt.Errorf("remote %s not found", remoteName)
-	}
-
-	remoteDb, err := pro.GetRemoteDB(ctx, dbdata.Ddb.ValueReadWriter().Format(), remote)
-	if err != nil {
-		return err
-	}
-	defer remoteDb.Close()
-
-	cs, err := doltdb.NewCommitSpec(branch.GetPath())
-	if err != nil {
-		return err
-	}
-
-	optCmt, err := remoteDb.Resolve(ctx, cs, nil)
-	if err != nil {
-		return err
-	}
-	remoteBranchHead, ok := optCmt.ToCommit()
-	if !ok {
-		return doltdb.ErrGhostCommitEncountered
-	}
-
-	optCmt, err = dbdata.Ddb.Resolve(ctx, cs, nil)
-	if err != nil {
-		return err
-	}
-	localBranchHead, ok := optCmt.ToCommit()
-	if !ok {
-		return doltdb.ErrGhostCommitEncountered
-	}
-
-	canFF, err := localBranchHead.CanFastForwardTo(ctx, remoteBranchHead)
-	if err != nil {
-		if errors.Is(err, doltdb.ErrUpToDate) {
-			return nil
-		}
-		if errors.Is(err, doltdb.ErrIsAhead) {
-			return ErrUnmergedBranch.New(branch.GetPath())
-		}
-		return err
-	}
-
-	if !canFF {
-		return ErrUnmergedBranch.New(branch.GetPath())
-	}
-
-	return nil
+	return dbdata.Ddb.ResolveCommitRef(ctx, headRef)
 }
 
 func CreateBranchWithStartPt[C doltdb.Context](ctx C, dbData env.DbData[C], newBranch, startPt string, force bool, rsc *doltdb.ReplicationStatusController) error {
