@@ -238,7 +238,7 @@ func newSchemaConflict(ctx *sql.Context, table doltdb.TableName, baseRoot doltdb
 }
 
 func getCreateTableStatement(ctx *sql.Context, table string, sch schema.Schema, fks []doltdb.ForeignKey, parents map[doltdb.TableName]schema.Schema) (string, error) {
-	return sqlfmt.GenerateCreateTableStatement(ctx, table, sch, fks, parents)
+	return sqlfmt.GenerateCreateTableStatement(ctx, table, sch, fks, parents, false)
 }
 
 func getSchemaConflictDescription(ctx *sql.Context, table doltdb.TableName, base, ours, theirs schema.Schema) (string, error) {

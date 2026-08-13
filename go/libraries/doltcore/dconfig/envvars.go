@@ -54,6 +54,12 @@ const (
 	// Will go away after session_aware is made default-and-only.
 	EnvGCSafepointControllerChoice = "DOLT_GC_SAFEPOINT_CONTROLLER_CHOICE"
 
+	// Used for tests. Lowers the floor on `dolt backup sync
+	// --prune-with-grace-period` so a test does not have to wait out the
+	// production minimum. Not for production use: the floor exists to absorb
+	// NFS attribute caching and modest clock skew.
+	EnvBackupPruneMinGrace = "DOLT_BACKUP_PRUNE_MIN_GRACE"
+
 	// Used for tests. If set, Dolt will error if it would rebuild a table's row data.
 	EnvAssertNoTableRewrite         = "DOLT_TEST_ASSERT_NO_TABLE_REWRITE"
 	EnvAssertNoInMemoryArchiveIndex = "DOLT_TEST_ASSERT_NO_IN_MEMORY_ARCHIVE_INDEX"

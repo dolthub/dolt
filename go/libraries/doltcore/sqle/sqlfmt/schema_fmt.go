@@ -78,7 +78,7 @@ func GenerateSqlPatchSchemaStatements(ctx *sql.Context, toRoot doltdb.RootValue,
 	if td.IsDrop() {
 		ddlStatements = append(ddlStatements, DropTableStmt(formatter, td.FromName.Name))
 	} else if td.IsAdd() {
-		stmt, err := GenerateCreateTableStatement(ctx, td.ToName.Name, td.ToSch, td.ToFks, td.ToFksParentSch)
+		stmt, err := GenerateCreateTableStatement(ctx, td.ToName.Name, td.ToSch, td.ToFks, td.ToFksParentSch, false)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}
@@ -115,6 +115,11 @@ func generateNonCreateNonDropTableSqlSchemaDiff(ctx *sql.Context, formatter sql.
 	colDiffs, unionTags := diff.DiffSchColumns(fromSch, toSch)
 	for _, tag := range unionTags {
 		cd := colDiffs[tag]
+		// SystemHidden columns are the hidden columns Dolt creates internally to back a
+		// functional/expression index, so we don't include them here.
+		if (cd.Old != nil && cd.Old.SystemHidden) || (cd.New != nil && cd.New.SystemHidden) {
+			continue
+		}
 		switch cd.DiffType {
 		case diff.SchDiffNone:
 		case diff.SchDiffAdded:
@@ -224,19 +229,39 @@ func GenerateCreateTableIndentedColumnDefinition(ctx *sql.Context, formatter sql
 			Comment:       col.Comment,
 			Generated:     genVal,
 			Virtual:       col.Virtual,
+			Hidden:        col.Hidden,
+			HiddenSystem:  col.SystemHidden,
 			OnUpdate:      onUpdateVal,
 		}, col.Default, col.OnUpdate, tableCollation)
 }
 
-// GenerateCreateTableIndexDefinition returns index definition for CREATE TABLE statement with indentation of 2 spaces
-func GenerateCreateTableIndexDefinition(formatter sql.SchemaFormatter, index schema.Index) (string, bool) {
+// indexColumnDDLExpressions returns the SQL expression to use for each column in |index|'s column list when
+// generating CREATE TABLE / ALTER TABLE DDL. For a normal column, this is just the quoted column name. For the
+// hidden column backing a functional/expression index, the hidden column's name must never be referenced
+// directly in DDL sent to a real MySQL server.
+func indexColumnDDLExpressions(formatter sql.SchemaFormatter, index schema.Index) []string {
+	tags := index.IndexedColumnTags()
+	exprs := make([]string, len(tags))
+	for i, tag := range tags {
+		col, _ := index.GetColumn(tag)
+		if col.SystemHidden && col.Generated != "" {
+			exprs[i] = col.Generated
+		} else {
+			exprs[i] = formatter.QuoteIdentifier(col.Name)
+		}
+	}
+	return exprs
+}
+
+// indexColumnNames returns the quoted name of each column in |index|'s column list, unconditionally, including
+// columns backing a functional/expression index.
+func indexColumnNames(formatter sql.SchemaFormatter, index schema.Index) []string {
 	colNames := index.ColumnNames()
 	quotedColNames := make([]string, len(colNames))
-	for i, id := range colNames {
-		quotedColNames[i] = formatter.QuoteIdentifier(id)
+	for i, name := range colNames {
+		quotedColNames[i] = formatter.QuoteIdentifier(name)
 	}
-	return formatter.GenerateCreateTableIndexDefinition(index.IsUnique(), index.IsSpatial(), index.IsFullText(),
-		index.IsVector(), index.Name(), quotedColNames, index.Comment())
+	return quotedColNames
 }
 
 // GenerateCreateTableForeignKeyDefinition returns foreign key definition for CREATE TABLE statement with indentation of 2 spaces
@@ -383,11 +408,7 @@ func AlterTableAddIndexStmt(formatter sql.SchemaFormatter, tableName string, idx
 	b.WriteString(formatter.QuoteIdentifier(tableName))
 	b.WriteString(" ADD INDEX ")
 	b.WriteString(formatter.QuoteIdentifier(idx.Name()))
-	var cols []string
-	for _, cn := range idx.ColumnNames() {
-		cols = append(cols, formatter.QuoteIdentifier(cn))
-	}
-	b.WriteString("(" + strings.Join(cols, ",") + ");")
+	b.WriteString("(" + strings.Join(indexColumnDDLExpressions(formatter, idx), ",") + ");")
 	return b.String()
 }
 
@@ -456,15 +477,21 @@ func AlterTableDropForeignKeyStmt(formatter sql.SchemaFormatter, tableName doltd
 // GenerateCreateTableStatement returns a CREATE TABLE statement for given table. This is a reasonable approximation of
 // `SHOW CREATE TABLE` in the engine, but may have some differences. Callers are advised to use the engine when
 // possible.
-func GenerateCreateTableStatement(ctx *sql.Context, tblName string, sch schema.Schema, fks []doltdb.ForeignKey, fksParentSch map[doltdb.TableName]schema.Schema) (string, error) {
+//
+// |includeSystemHiddenColumns| controls how SystemHidden columns (the hidden columns Dolt creates internally to
+// back a functional/expression index) are rendered. Most callers want false: SystemHidden columns never appear
+// in real DDL output.
+func GenerateCreateTableStatement(ctx *sql.Context, tblName string, sch schema.Schema, fks []doltdb.ForeignKey, fksParentSch map[doltdb.TableName]schema.Schema, includeSystemHiddenColumns bool) (string, error) {
 	formatter := overrides.SchemaFormatterFromContext(ctx)
-	colStmts := make([]string, sch.GetAllCols().Size())
+	colStmts := make([]string, 0, sch.GetAllCols().Size())
 
 	schemaFormatter := overrides.SchemaFormatterFromContext(ctx)
 
-	// Statement creation parts for each column
-	for i, col := range sch.GetAllCols().GetColumns() {
-		colStmts[i] = GenerateCreateTableIndentedColumnDefinition(ctx, formatter, col, sql.CollationID(sch.GetCollation()))
+	for _, col := range sch.GetAllCols().GetColumns() {
+		if col.SystemHidden && !includeSystemHiddenColumns {
+			continue
+		}
+		colStmts = append(colStmts, GenerateCreateTableIndentedColumnDefinition(ctx, formatter, col, sql.CollationID(sch.GetCollation())))
 	}
 
 	primaryKeyCols := sch.GetPKCols().GetColumnNames()
@@ -480,7 +507,14 @@ func GenerateCreateTableStatement(ctx *sql.Context, tblName string, sch schema.S
 			continue
 		}
 
-		definition, shouldInclude := GenerateCreateTableIndexDefinition(formatter, index)
+		var indexCols []string
+		if includeSystemHiddenColumns {
+			indexCols = indexColumnNames(formatter, index)
+		} else {
+			indexCols = indexColumnDDLExpressions(formatter, index)
+		}
+		definition, shouldInclude := formatter.GenerateCreateTableIndexDefinition(index.IsUnique(), index.IsSpatial(),
+			index.IsFullText(), index.IsVector(), index.Name(), indexCols, index.Comment())
 		if shouldInclude {
 			colStmts = append(colStmts, definition)
 		}

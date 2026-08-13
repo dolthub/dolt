@@ -10,6 +10,14 @@ teardown() {
     teardown_common
 }
 
+setup_origin_remote() {
+    mkdir "$BATS_TEST_TMPDIR/remote"
+    dolt remote add origin "file://$BATS_TEST_TMPDIR/remote"
+    dolt sql -q "create table t1 (id int primary key);"
+    dolt commit -Am "initial commit"
+    dolt push origin main
+}
+
 @test "branch: branch --datasets lists all datasets" {
     dolt branch other
     dolt commit --allow-empty -m "empty"
@@ -625,4 +633,124 @@ teardown() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"[origin/main: ahead 1, behind 2]"* ]] || false
   [[ "$output" =~ "deviated commit" ]] || false
+}
+
+@test "branch: deleting a merged branch whose upstream was deleted on the remote" {
+    # See https://github.com/dolthub/dolt/issues/11450
+    setup_origin_remote
+
+    dolt branch b1
+    dolt push --set-upstream origin b1
+
+    dolt push origin :b1
+    dolt fetch -p
+
+    run dolt branch -a
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "b1" ]] || false
+    [[ ! "$output" =~ "remotes/origin/b1" ]] || false
+
+    dolt branch -d b1
+
+    run dolt branch
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "b1" ]] || false
+}
+
+@test "branch: deleting an unmerged branch whose upstream was deleted on the remote" {
+    # See https://github.com/dolthub/dolt/issues/11450
+    setup_origin_remote
+
+    dolt branch b1
+    dolt push --set-upstream origin b1
+    dolt --branch b1 sql -q "create table t2 (id int primary key);"
+    dolt --branch b1 commit -Am "new table"
+
+    dolt push origin :b1
+    dolt fetch -p
+
+    run dolt branch -d b1
+    [ "$status" -ne 0 ]
+    [[ ! "$output" =~ "branch not found" ]] || false
+    [[ "$output" =~ "branch 'b1' is not fully merged" ]] || false
+    [[ "$output" =~ "run 'dolt branch -D b1'" ]] || false
+
+    dolt branch -D b1
+
+    run dolt branch
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "b1" ]] || false
+}
+
+@test "branch: deleting a branch whose upstream has a different name than the branch" {
+    # See https://github.com/dolthub/dolt/issues/11450
+    setup_origin_remote
+
+    dolt branch b1
+    dolt push -u origin b1:other
+
+    run dolt branch -a
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "remotes/origin/other" ]] || false
+    [[ ! "$output" =~ "remotes/origin/b1" ]] || false
+
+    dolt branch -d b1
+
+    run dolt branch
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "b1" ]] || false
+}
+
+@test "branch: deleting a branch with an upstream works while the remote is unreachable" {
+    # See https://github.com/dolthub/dolt/issues/11450
+    setup_origin_remote
+
+    dolt branch b1
+    dolt push --set-upstream origin b1
+    dolt branch b2
+    dolt push --set-upstream origin b2
+    dolt --branch b2 sql -q "create table t2 (id int primary key);"
+    dolt --branch b2 commit -Am "new table"
+
+    rm -rf "$BATS_TEST_TMPDIR/remote"
+
+    run dolt branch -a
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "remotes/origin/b1" ]] || false
+
+    dolt branch -d b1
+
+    run dolt branch -d b2
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "branch 'b2' is not fully merged" ]] || false
+
+    dolt branch -D b2
+
+    run dolt branch
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "b1" ]] || false
+    [[ ! "$output" =~ "b2" ]] || false
+}
+
+
+@test "branch: deleting an unmerged branch after its remote was removed" {
+    # See https://github.com/dolthub/dolt/issues/11450
+    setup_origin_remote
+
+    dolt branch b1
+    dolt push --set-upstream origin b1
+    dolt --branch b1 sql -q "create table t2 (id int primary key);"
+    dolt --branch b1 commit -Am "new table"
+
+    dolt remote remove origin
+
+    run dolt branch -d b1
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "branch 'b1' is not fully merged" ]] || false
+
+    dolt branch -D b1
+
+    run dolt branch
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "b1" ]] || false
 }
