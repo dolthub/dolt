@@ -378,6 +378,9 @@ type prollyKeylessIndexIter struct {
 	eg      *errgroup.Group
 	rowChan chan sql.Row
 
+	// cancel stops the queueRows goroutine.
+	cancel context.CancelFunc
+
 	valueDesc *val.TupleDesc
 
 	// valueMap transforms tuples from the
@@ -417,7 +420,8 @@ func newProllyKeylessIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range
 	sch := idx.Schema()
 	_, vm, om := projectionMappings(sch, projections)
 
-	eg, c := errgroup.WithContext(ctx)
+	cancelCtx, cancel := context.WithCancel(ctx)
+	eg, c := errgroup.WithContext(cancelCtx)
 
 	iter := prollyKeylessIndexIter{
 		idx:          idx,
@@ -426,6 +430,7 @@ func newProllyKeylessIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range
 		clusteredMap: indexMap,
 		clusteredBld: keyBld,
 		eg:           eg,
+		cancel:       cancel,
 		rowChan:      make(chan sql.Row, indexLookupBufSize),
 		valueMap:     vm,
 		ordMap:       om,
@@ -517,5 +522,6 @@ func (p prollyKeylessIndexIter) keylessRowsFromValueTuple(ctx context.Context, n
 }
 
 func (p prollyKeylessIndexIter) Close(*sql.Context) error {
+	p.cancel()
 	return nil
 }
