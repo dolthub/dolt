@@ -72,6 +72,7 @@ const (
 	PasswordFlag           = "password"
 	PortFlag               = "port"
 	PruneFlag              = "prune"
+	PruneWithGracePeriod   = "prune-with-grace-period"
 	QuietFlag              = "quiet"
 	RebaseParam            = "rebase"
 	RemoteParam            = "remote"

@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -2184,6 +2185,64 @@ func (nbs *NomsBlockStore) PruneTableFiles(ctx context.Context) (err error) {
 
 func (nbs *NomsBlockStore) pruneTableFiles(ctx context.Context) (err error) {
 	return nbs.persister.PruneTableFiles(ctx)
+}
+
+// PruneUnreferencedWithGrace implements [GracePruner]. Only local-file stores
+// support it; anything else returns ErrGracePruneUnsupported.
+func (nbs *NomsBlockStore) PruneUnreferencedWithGrace(ctx context.Context, grace time.Duration) (PruneStats, error) {
+	if err := nbs.ensureLoad(ctx); err != nil {
+		return PruneStats{}, err
+	}
+	valctx.ValidateContext(ctx)
+
+	ftp, ok := nbs.persister.(*fsTablePersister)
+	if !ok {
+		return PruneStats{}, ErrGracePruneUnsupported
+	}
+	// A prune deletes files a manifest update is about to depend on unless the
+	// two are serialized, so a manifest that cannot be locked cannot be pruned.
+	locker, ok := nbs.manifest.(manifestLocker)
+	if !ok {
+		return PruneStats{}, ErrGracePruneUnsupported
+	}
+
+	// Snapshot what this store has rebased to before the persister's prune
+	// lock is taken, not under it: readers hold nbs.mu while taking that
+	// lock's read side, so acquiring nbs.mu underneath it would invert the
+	// order and deadlock.
+	upstream := nbs.upstreamReferences()
+
+	lock := func(ctx context.Context) (hash.HashSet, func() error, error) {
+		lm, err := locker.LockManifest(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		referenced := make(hash.HashSet, len(upstream)+len(lm.contents.specs))
+		maps.Copy(referenced, upstream)
+		if lm.exists {
+			addSpecsAndAppendix(referenced, lm.contents)
+		}
+		return referenced, lm.unlock, nil
+	}
+	return ftp.pruneUnreferencedWithGrace(ctx, grace, lock)
+}
+
+// upstreamReferences returns the table files currently referenced by |nbs.upstream|.
+func (nbs *NomsBlockStore) upstreamReferences() hash.HashSet {
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
+	referenced := make(hash.HashSet, len(nbs.upstream.specs)+len(nbs.upstream.appendix))
+	addSpecsAndAppendix(referenced, nbs.upstream)
+	return referenced
+}
+
+func addSpecsAndAppendix(referenced map[hash.Hash]struct{}, contents manifestContents) {
+	for _, s := range contents.specs {
+		referenced[s.name] = struct{}{}
+	}
+	for _, s := range contents.appendix {
+		referenced[s.name] = struct{}{}
+	}
 }
 
 func (nbs *NomsBlockStore) BeginGC(ctx context.Context, keeper func(hash.Hash) bool, _ chunks.GCMode) error {

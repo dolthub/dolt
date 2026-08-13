@@ -18,6 +18,7 @@ import (
 	"context"
 	"io"
 	"sync/atomic"
+	"time"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -89,6 +90,11 @@ func (nbsMW *NBSMetricWrapper) IterateAllChunks(ctx context.Context, cb func(chu
 // PruneTableFiles deletes old table files that are no longer referenced in the manifest.
 func (nbsMW *NBSMetricWrapper) PruneTableFiles(ctx context.Context) error {
 	return nbsMW.nbs.PruneTableFiles(ctx)
+}
+
+// PruneUnreferencedWithGrace implements [GracePruner].
+func (nbsMW *NBSMetricWrapper) PruneUnreferencedWithGrace(ctx context.Context, grace time.Duration) (PruneStats, error) {
+	return nbsMW.nbs.PruneUnreferencedWithGrace(ctx, grace)
 }
 
 // GetManyCompressed gets the compressed Chunks with |hashes| from the store. On return,

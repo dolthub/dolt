@@ -46,6 +46,10 @@ const (
 	lockFileName     = "LOCK"
 	lockFileTimeout  = time.Millisecond * 100
 
+	// tempManifestPrefix names the temp file a manifest update is written to
+	// before being renamed over manifestFileName.
+	tempManifestPrefix = "nbs_manifest_"
+
 	storageVersion4 = "4"
 
 	prefixLen = 5
@@ -133,6 +137,8 @@ func getFileManifest(ctx context.Context, dir string) (m manifest, err error) {
 }
 
 type fileManifest struct {
+	// lock is the dir/LOCK flock. It is a writer-exclusion lock.
+	// Update, UpdateGCGen and LockManifest take it.
 	lock *fslock.Lock
 	dir  string
 }
@@ -156,12 +162,17 @@ func (fm fileManifest) Name() string {
 	return fm.dir
 }
 
-// ParseIfExists looks for a LOCK and manifest file in fm.dir. If it finds
-// them, it takes the lock, parses the manifest and returns its contents,
-// setting |exists| to true. If not, it sets |exists| to false and returns. In
-// that case, the other return values are undefined. If |readHook| is non-nil,
-// it will be executed while ParseIfExists() holds the manifest file lock.
-// This is to allow for race condition testing.
+// ParseIfExists parses the manifest file in fm.dir and returns its contents,
+// setting |exists| to true. If there is no manifest file, it sets |exists| to
+// false and returns; the other return values are then undefined.
+//
+// Parsing the manifest does not interact with fm.lock. Returned manifest
+// contents are guaranteed to be a consistent view of something that was
+// written as a manifest, but they may no longer be current even as this
+// method returns.
+//
+// |readHook|, if non-nil, is executed before the manifest is opened, to allow
+// for race condition testing.
 func (fm fileManifest) ParseIfExists(
 	ctx context.Context,
 	stats *Stats,
@@ -170,7 +181,6 @@ func (fm fileManifest) ParseIfExists(
 	t1 := time.Now()
 	defer func() { stats.ReadManifestLatency.SampleTimeSince(t1) }()
 
-	// no file lock on the read path
 	return parseIfExists(ctx, fm.dir, readHook)
 }
 
@@ -220,6 +230,26 @@ func (fm fileManifest) UpdateGCGen(ctx context.Context, behavior dherrors.FatalB
 	}
 
 	return updateWithChecker(ctx, behavior, fm.dir, checker, lastLock, newContents, writeHook)
+}
+
+var _ manifestLocker = fileManifest{}
+
+// LockManifest implements [manifestLocker]. It takes the same file lock Update
+// takes, so a manifest update by any process that respects the lock cannot be
+// published until the caller releases.
+func (fm fileManifest) LockManifest(ctx context.Context) (lockedManifest, error) {
+	if err := tryFileLock(fm.lock); err != nil {
+		return lockedManifest{}, err
+	}
+
+	exists, contents, err := parseIfExists(ctx, fm.dir, nil)
+	if err != nil {
+		if uerr := fm.lock.Unlock(); uerr != nil {
+			err = errors.Join(err, uerr)
+		}
+		return lockedManifest{}, err
+	}
+	return lockedManifest{exists: exists, contents: contents, unlock: fm.lock.Unlock}, nil
 }
 
 // ErrManifestSpecMissingTableFile is returned by a manifest update that would
@@ -415,7 +445,7 @@ func parseV4Manifest(r io.Reader) (manifestContents, error) {
 	}, nil
 }
 
-// parseIfExists parses the manifest file if it exists, callers must hold the file lock.
+// parseIfExists parses the manifest file in |dir| if it exists.
 func parseIfExists(_ context.Context, dir string, readHook func() error) (exists bool, contents manifestContents, err error) {
 	if readHook != nil {
 		if err = readHook(); err != nil {
@@ -443,7 +473,12 @@ func parseIfExists(_ context.Context, dir string, readHook func() error) (exists
 	return
 }
 
-// updateWithChecker updates the manifest if |validate| is satisfied, callers must hold the file lock.
+// updateWithChecker updates the manifest if |validate| is satisfied. Callers
+// must have exclusive write access to |dir|'s manifest, by whichever means
+// they arrange it: fileManifest takes dir/LOCK for the call, journalManifest
+// holds the exclusive database lock for its whole lifetime, and
+// MaybeMigrateFileManifest takes nothing, relying on running before the store
+// is open.
 func updateWithChecker(_ context.Context, behavior dherrors.FatalBehavior, dir string, validate manifestChecker, lastLock hash.Hash, newContents manifestContents, writeHook func() error) (mc manifestContents, err error) {
 	var tempManifestPath string
 
@@ -451,7 +486,7 @@ func updateWithChecker(_ context.Context, behavior dherrors.FatalBehavior, dir s
 	// The closure here ensures this file is closed before moving on.
 	tempManifestPath, err = func() (name string, ferr error) {
 		var temp *os.File
-		temp, ferr = tempfiles.MovableTempFileProvider.NewFile(dir, "nbs_manifest_")
+		temp, ferr = tempfiles.MovableTempFileProvider.NewFile(dir, tempManifestPrefix)
 		if ferr != nil {
 			return "", ferr
 		}
@@ -558,7 +593,7 @@ func updateWithChecker(_ context.Context, behavior dherrors.FatalBehavior, dir s
 func tryFileLock(lock *fslock.Lock) (err error) {
 	err = lock.LockWithTimeout(lockFileTimeout)
 	if errors.Is(err, fslock.ErrTimeout) {
-		err = errors.New("timed out reading database manifest")
+		err = fmt.Errorf("timed out reading database manifest: %w", err)
 	}
 	return
 }
