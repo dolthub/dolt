@@ -312,13 +312,8 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 //
 // If |pruneGrace| is non-zero, prune stale table files in the destination before running the sync.
 func syncRemote(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.DoltSession, remote env.Remote, pruneGrace time.Duration) error {
-	// Commit the current session's working set to the persistent chunk store. This ensures that uncommitted transaction
-	// changes (e.g. INSERTs) are usually visible to the backup procedure, which reads directly from the roots.
-	err := dsess.CommitWorkingSet(ctx, ctx.GetCurrentDatabase(), ctx.GetTransaction())
-	if err != nil {
-		return err
-	}
-
+	// Writing the caller's open transaction here would publish work that a
+	// later rollback could not take back.
 	params := make(map[string]any, len(remote.Params))
 	for k, v := range remote.Params {
 		params[k] = v
