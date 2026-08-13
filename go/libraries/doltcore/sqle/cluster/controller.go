@@ -120,11 +120,8 @@ type Controller struct {
 
 	role Role
 
-	// authPersistence applies auth payloads replicated from a primary when
-	// this server is a standby. HookMySQLDbPersister installs the default
-	// users-and-grants implementation; HookAuthPersister replaces it. Any
-	// replacement must happen before RegisterGrpcServices is called.
-	authPersistence AuthPersistence
+	// replicaAuthPersister applies auth payloads replicated from a primary when this server is a standby.
+	replicaAuthPersister ReplicaAuthPersister
 
 	authDbPersister *replicatingAuthDbPersister
 
@@ -799,7 +796,7 @@ func (c *Controller) RemoteSrvServerArgs(ctxFactory func(context.Context) (*sql.
 
 func (c *Controller) HookMySQLDbPersister(persister AuthDbPersister, mysqlDb *mysql_db.MySQLDb) AuthDbPersister {
 	if c != nil {
-		c.authPersistence = mysqlDbAuthPersistence{mysqlDb}
+		c.replicaAuthPersister = mysqlDbReplicaPersister{mysqlDb}
 		c.authDbPersister = &replicatingAuthDbPersister{
 			base:     persister,
 			replicas: c.authDbReplicas,
@@ -812,46 +809,28 @@ func (c *Controller) HookMySQLDbPersister(persister AuthDbPersister, mysqlDb *my
 
 // ReplicatingAuthPersister is an AuthDbPersister whose Persist replicates the
 // payload to cluster standbys and blocks until they ack, subject to
-// dolt_cluster_ack_writes_timeout_secs. PersistNoWait is for callers which
-// cannot afford to block while holding locks: it persists the payload locally
-// and begins replicating it, appending the ack waiters to |rsc|; the caller
-// should pass |rsc| to dsess.WaitForReplicationController once its locks are
-// released.
+// dolt_cluster_ack_writes_timeout_secs.
 type ReplicatingAuthPersister interface {
 	AuthDbPersister
-	PersistNoWait(ctx *sql.Context, data []byte, rsc *doltdb.ReplicationStatusController) error
+	// SendToReplicas is the same as Persist, but does not block until standbys ack.
+	// Waiters installed on |rsc|, and can then be waited on by the caller with dsess.WaitForReplicationController.
+	SendToReplicas(ctx *sql.Context, data []byte, rsc *doltdb.ReplicationStatusController) error
 }
 
-// HookAuthPersister replaces the auth persistence used for cluster
-// replication with an application-supplied one. |base| is the source and sink
-// for the local serialized auth payload: it persists new contents written
-// through the returned persister and loads the current contents when this
-// server becomes a primary. |persistence| applies payloads replicated from a
-// primary while this server is a standby. The returned persister should be
-// used for all local auth writes; on a primary, writes through it replicate
-// to standbys.
+// SetAuthReplicator sets the auth replicator for this controller.
 //
-// Dolt installs a users-and-grants (mysql.db) implementation via
-// HookMySQLDbPersister during engine construction; applications with their
-// own auth store (e.g. Doltgres's auth.db) call this afterwards, before
-// RegisterGrpcServices runs and the server accepts connections. The
-// replication version counter and replica state carry over, so contents
-// already offered by the replaced persister are superseded by the next write
-// or LoadData through the returned one.
-func (c *Controller) HookAuthPersister(base AuthDbPersister, persistence AuthPersistence) ReplicatingAuthPersister {
+// Dolt installs a users-and-grants (mysql.db) implementation via HookMySQLDbPersister during engine construction;
+// applications with their own auth store (e.g. Doltgres's auth.db) override this default later, but before replication begins.
+func (c *Controller) SetAuthReplicator(base AuthDbPersister, replicaPersister ReplicaAuthPersister) ReplicatingAuthPersister {
 	if c == nil {
 		return nil
 	}
-	c.authPersistence = persistence
-	if c.authDbPersister == nil {
-		c.authDbPersister = &replicatingAuthDbPersister{
-			base:     base,
-			replicas: c.authDbReplicas,
-		}
-		c.authDbPersister.setRole(c.role)
-	} else {
-		c.authDbPersister.setBase(base)
+	c.replicaAuthPersister = replicaPersister
+	c.authDbPersister = &replicatingAuthDbPersister{
+		base:     base,
+		replicas: c.authDbReplicas,
 	}
+	c.authDbPersister.setRole(c.role)
 	return c.authDbPersister
 }
 
@@ -895,7 +874,7 @@ func (c *Controller) HookBranchControlPersistence(controller *branch_control.Con
 func (c *Controller) RegisterGrpcServices(ctxFactory func(context.Context) (*sql.Context, error), srv *grpc.Server) {
 	replicationapi.RegisterReplicationServiceServer(srv, &replicationServiceServer{
 		ctxFactory:           ctxFactory,
-		authPersistence:      c.authPersistence,
+		authPersistence:      c.replicaAuthPersister,
 		branchControl:        c.branchControlController,
 		branchControlFilesys: c.branchControlFilesys,
 		dropDatabase:         c.dropDatabase,

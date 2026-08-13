@@ -19,26 +19,22 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 )
 
-// mysqlDbAuthPersistence is the default AuthPersistence, which applies a
-// replicated payload of serialized users and grants to the engine's
-// mysql_db.MySQLDb instance and persists it locally. It is installed by
-// Controller.HookMySQLDbPersister during standard Dolt server startup.
-type mysqlDbAuthPersistence struct {
+// mysqlDbReplicaPersister applies a replicated payload of serialized users and grants to the engine's
+// mysql_db.MySQLDb instance and persists it locally.
+type mysqlDbReplicaPersister struct {
 	mysqlDb *mysql_db.MySQLDb
 }
 
-var _ AuthPersistence = mysqlDbAuthPersistence{}
+var _ ReplicaAuthPersister = mysqlDbReplicaPersister{}
 
-func (p mysqlDbAuthPersistence) SaveData(ctx *sql.Context, contents []byte) error {
+// SaveData implements ReplicaAuthPersister
+func (p mysqlDbReplicaPersister) SaveData(ctx *sql.Context, contents []byte) error {
 	ed := p.mysqlDb.Editor()
 	defer ed.Close()
 	err := p.mysqlDb.OverwriteUsersAndGrantData(ctx, ed, contents)
 	if err != nil {
 		return err
 	}
-	// Persist goes through the persister registered with the MySQLDb, which
-	// on a replication-enabled server is the controller's replicating
-	// persister; on a standby the replicas hold the data without pushing it,
-	// so this amounts to a local write.
+
 	return p.mysqlDb.Persist(ctx, ed)
 }

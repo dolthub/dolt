@@ -31,14 +31,12 @@ type BranchControlPersistence interface {
 	SaveData(context.Context, filesys.Filesys) error
 }
 
-// AuthPersistence applies a replicated auth payload on a standby: it must
+// ReplicaAuthPersister applies a replicated auth payload on a standby: it must
 // overwrite the running server's auth state with |contents| and persist the
 // new state locally. The payload bytes are opaque to the replication layer;
-// primaries and standbys must agree on their format. Dolt installs a
-// users-and-grants (mysql.db) implementation by default; applications with
-// their own auth store (e.g. Doltgres's auth.db) install a replacement with
-// Controller.HookAuthPersister.
-type AuthPersistence interface {
+// primaries and standbys must agree on their format.
+type ReplicaAuthPersister interface {
+	// SaveData applies the replicated auth payload to the running server and persists it locally
 	SaveData(ctx *sql.Context, contents []byte) error
 }
 
@@ -52,7 +50,7 @@ type replicationServiceServer struct {
 	branchControl        BranchControlPersistence
 	branchControlFilesys filesys.Filesys
 
-	authPersistence AuthPersistence
+	authPersistence ReplicaAuthPersister
 
 	dropDatabase func(*sql.Context, string) error
 }

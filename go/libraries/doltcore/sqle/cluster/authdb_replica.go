@@ -46,6 +46,8 @@ type replicatingAuthDbPersister struct {
 	version uint32
 }
 
+var _ AuthDbPersister = (*replicatingAuthDbPersister)(nil)
+
 type authDbReplica struct {
 	nextAttempt             time.Time
 	backoff                 backoff.BackOff
@@ -239,18 +241,16 @@ func (p *replicatingAuthDbPersister) GracefulStop() {
 
 func (p *replicatingAuthDbPersister) Persist(ctx *sql.Context, data []byte) error {
 	var rsc doltdb.ReplicationStatusController
-	err := p.PersistNoWait(ctx, data, &rsc)
+	err := p.SendToReplicas(ctx, data, &rsc)
 	if err == nil {
 		dsess.WaitForReplicationController(ctx, rsc)
 	}
 	return err
 }
 
-// PersistNoWait persists |data| locally and offers it to all standby
-// replicas, appending the replication-ack waiters to |rsc| instead of
-// blocking on them. Callers which hold locks that replication acks must not
-// block use this, and wait on |rsc| once their locks are released.
-func (p *replicatingAuthDbPersister) PersistNoWait(ctx *sql.Context, data []byte, rsc *doltdb.ReplicationStatusController) error {
+// SendToReplicas sends data to all replicas without waiting for a response.
+// Callers should wait on |rsc| via dsession.WaitForReplicationController.
+func (p *replicatingAuthDbPersister) SendToReplicas(ctx *sql.Context, data []byte, rsc *doltdb.ReplicationStatusController) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	err := p.base.Persist(ctx, data)
@@ -259,9 +259,12 @@ func (p *replicatingAuthDbPersister) PersistNoWait(ctx *sql.Context, data []byte
 	}
 	p.current = data
 	p.version += 1
-	for _, r := range p.replicas {
-		rsc.Wait = append(rsc.Wait, r.UpdateAuthDb(ctx, p.current, p.version))
-		rsc.NotifyWaitFailed = append(rsc.NotifyWaitFailed, func() {})
+
+	rsc.Wait = make([]func(context.Context) error, len(p.replicas))
+	rsc.NotifyWaitFailed = make([]func(), len(p.replicas))
+	for i, r := range p.replicas {
+		rsc.Wait[i] = r.UpdateAuthDb(ctx, p.current, p.version)
+		rsc.NotifyWaitFailed[i] = func() {}
 	}
 	return nil
 }
