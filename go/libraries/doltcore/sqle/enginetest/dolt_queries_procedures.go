@@ -409,8 +409,9 @@ END`,
 				Expected: []sql.Row{{gmstypes.OkResult{}}},
 			},
 			{
-				Query:    "select * from restored_txn_db.t;",
-				Expected: []sql.Row{{1}},
+				Query: "select * from restored_txn_db.t;",
+				// The insert was never committed, so the backup does not hold it.
+				Expected: []sql.Row{},
 			},
 			{
 				Query:    fmt.Sprintf("call dolt_backup('restore', '%s', 'restored_txn_url_db');", fileUrl("txn_backup_url")),
@@ -418,7 +419,7 @@ END`,
 			},
 			{
 				Query:    "select * from restored_txn_url_db.t;",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.Row{},
 			},
 			{
 				Query:    "select count(*) from dolt_backups where name='txn_bak';",
