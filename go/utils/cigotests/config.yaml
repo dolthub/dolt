@@ -1,0 +1,63 @@
+# Shard configuration for the unified Go test workflow. Each entry
+# describes a set of packages, the OSes it runs on, and when -race is
+# applied. The runner (./go/utils/cigotests) reads this file and emits
+# {os, shard} matrix combinations for the workflow.
+#
+# Editing rules:
+#   - Adding/removing a shard, packages, or env var: just edit this file;
+#     the workflow re-discovers shards on every run.
+#   - Adding a new heavy package: split it into its own shard so the
+#     other matrix cells aren't blocked by it.
+
+# OSes a shard runs on by default. A shard can override with `runs_on.os`.
+default_os:
+  - macos-latest
+  - ubuntu-22.04
+  - windows-latest
+
+shards:
+  # SQL engine tests are the slowest single package; they get their own shard.
+  # On a push to main we also exercise them with -race; the prepared variant
+  # is too slow under race so we skip it via DOLT_SKIP_PREPARED_ENGINETESTS.
+  - name: enginetest
+    packages: [./libraries/doltcore/sqle/enginetest]
+    timeout: 60m
+    env:
+      DOLT_DEFAULT_BIN_FORMAT: __DOLT__
+    env_with_race:
+      DOLT_SKIP_PREPARED_ENGINETESTS: "1"
+    race_on:
+      os: [ubuntu-22.04]
+      events: [push, workflow_dispatch]
+
+  # binlogreplication has been Linux-only historically. Preserve that until
+  # someone validates it on macOS/Windows. Race coverage on ubuntu.
+  - name: binlogreplication
+    packages: [./libraries/doltcore/sqle/binlogreplication/...]
+    timeout: 60m
+    runs_on:
+      os: [ubuntu-22.04]
+    race_on:
+      os: [ubuntu-22.04]
+
+  # integration_test contains tests gated by SkipByDefaultInCI() that need
+  # DOLT_TEST_RUN_NON_RACE_TESTS=true to run and that don't tolerate -race.
+  # The "rest" shard exercises this package's non-gated tests with -race;
+  # this shard exercises the gated ones on every OS without -race.
+  - name: integration_test_gated
+    packages: [./libraries/doltcore/sqle/integration_test]
+    timeout: 30m
+    env:
+      DOLT_TEST_RUN_NON_RACE_TESTS: "true"
+
+  # Everything else. enginetest and binlogreplication are excluded since
+  # they have their own shards. integration_test stays in here so its
+  # non-gated tests run with -race on ubuntu.
+  - name: rest
+    packages: [./...]
+    exclude:
+      - ./libraries/doltcore/sqle/enginetest
+      - ./libraries/doltcore/sqle/binlogreplication/...
+    timeout: 45m
+    race_on:
+      os: [ubuntu-22.04]
