@@ -125,29 +125,108 @@ func (acs *archiveChunkSource) get(ctx context.Context, h hash.Hash, keeper keep
 }
 
 func (acs *archiveChunkSource) getMany(ctx context.Context, eg *errgroup.Group, records []getRecord, found func(context.Context, *chunks.Chunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
-	// single threaded first pass.
+	return acs.getManyResolved(ctx, eg, records, keeper, stats, func(ctx context.Context, rc resolvedChunk) error {
+		data, err := acs.aRdr.getByRef(ctx, rc, stats)
+		if err != nil {
+			return err
+		}
+		chunk := chunks.NewChunk(data)
+		found(ctx, &chunk)
+		return nil
+	})
+}
+
+// getManyResolved locates every requested chunk in the index, then hands one read
+// per chunk to |eg| so the reads run concurrently within the caller's io budget.
+// Which chunks are present is settled before the first read is dispatched, so the
+// returned value is accurate while the reads are still in flight, as the caller
+// requires in order to decide whether to consult the next chunk source.
+func (acs *archiveChunkSource) getManyResolved(
+	ctx context.Context,
+	eg *errgroup.Group,
+	records []getRecord,
+	keeper keeperF,
+	stats *Stats,
+	read func(context.Context, resolvedChunk) error,
+) (bool, gcBehavior, error) {
+	resolved, remaining, gcb, err := acs.resolve(records, keeper)
+	if err != nil || gcb != gcBehavior_Continue {
+		return remaining, gcb, err
+	}
+
+	err = acs.loadDicts(ctx, resolved, stats)
+	if err != nil {
+		return remaining, gcBehavior_Continue, err
+	}
+
+	for _, rc := range resolved {
+		eg.Go(func() error {
+			return read(ctx, rc)
+		})
+	}
+	return remaining, gcBehavior_Continue, nil
+}
+
+// resolve looks up each not-yet-found record in the index, reading nothing. It
+// reports whether any record was absent.
+//
+// found flags are set only once the whole walk has succeeded. A keeper block part
+// way through otherwise leaves earlier records marked found but never delivered,
+// and the caller retries with the same slice.
+func (acs *archiveChunkSource) resolve(records []getRecord, keeper keeperF) ([]resolvedChunk, bool, gcBehavior, error) {
+	resolved := make([]resolvedChunk, 0, len(records))
+	hits := make([]int, 0, len(records))
+
 	foundAll := true
 	for i, req := range records {
 		if req.found {
 			continue
 		}
+
 		h := *req.a
-		data, err := acs.aRdr.get(ctx, h, stats)
-		if err != nil {
-			return true, gcBehavior_Continue, err
-		}
-		if data == nil {
+		idx := acs.aRdr.search(h)
+		if idx < 0 {
 			foundAll = false
-		} else {
-			if keeper != nil && keeper(h) {
-				return true, gcBehavior_Block, nil
-			}
-			chunk := chunks.NewChunk(data)
-			found(ctx, &chunk)
-			records[i].found = true
+			continue
+		}
+
+		if keeper != nil && keeper(h) {
+			return nil, true, gcBehavior_Block, nil
+		}
+
+		dictId, dataId := acs.aRdr.getChunkRef(idx)
+		resolved = append(resolved, resolvedChunk{h: h, dictId: dictId, dataId: dataId})
+		hits = append(hits, i)
+	}
+
+	for _, i := range hits {
+		records[i].found = true
+	}
+	return resolved, !foundAll, gcBehavior_Continue, nil
+}
+
+// loadDicts reads each distinct dictionary the resolved chunks need, before their
+// reads fan out. Otherwise every concurrent reader sharing an uncached dictionary
+// fetches its own copy. Archives written by the pull streamer hold a single
+// dictionary, so this is normally one read, and never more than the fanned out
+// reads would have done anyway.
+func (acs *archiveChunkSource) loadDicts(ctx context.Context, resolved []resolvedChunk, stats *Stats) error {
+	seen := make(map[uint32]struct{})
+	for _, rc := range resolved {
+		if rc.dictId == 0 {
+			continue
+		}
+		if _, ok := seen[rc.dictId]; ok {
+			continue
+		}
+		seen[rc.dictId] = struct{}{}
+
+		_, err := acs.aRdr.loadDict(ctx, rc.dictId, stats)
+		if err != nil {
+			return err
 		}
 	}
-	return !foundAll, gcBehavior_Continue, nil
+	return nil
 }
 
 // iterate iterates over the archive chunks. The callback is called for each chunk in the archive. This is not optimized
@@ -208,61 +287,35 @@ func (acs *archiveChunkSource) clone() (chunkSource, error) {
 }
 
 func (acs *archiveChunkSource) getRecordRanges(_ context.Context, _ dherrors.FatalBehavior, records []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error) {
-	result := make(map[hash.Hash]Range, len(records))
-	for i, req := range records {
-		if req.found {
-			continue
-		}
-		hAddr := *req.a
-		idx := acs.aRdr.search(hAddr)
-		if idx < 0 {
-			// Chunk not found.
-			continue
-		}
-		records[i].found = true
+	resolved, _, gcb, err := acs.resolve(records, keeper)
+	if err != nil || gcb != gcBehavior_Continue {
+		return nil, gcb, err
+	}
 
-		if keeper != nil && keeper(hAddr) {
-			return nil, gcBehavior_Block, nil
-		}
+	result := make(map[hash.Hash]Range, len(resolved))
+	for _, rc := range resolved {
+		dataSpan := acs.aRdr.getByteSpanByID(rc.dataId)
+		dictSpan := acs.aRdr.getByteSpanByID(rc.dictId)
 
-		dictId, dataId := acs.aRdr.getChunkRef(idx)
-		dataSpan := acs.aRdr.getByteSpanByID(dataId)
-		dictSpan := acs.aRdr.getByteSpanByID(dictId)
-
-		rng := Range{
+		result[rc.h] = Range{
 			Offset:     dataSpan.offset,
 			Length:     uint32(dataSpan.length),
 			DictOffset: dictSpan.offset,
 			DictLength: uint32(dictSpan.length),
 		}
-
-		result[hAddr] = rng
 	}
 	return result, gcBehavior_Continue, nil
 }
 
 func (acs *archiveChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
-	foundAll := true
-	for i, req := range reqs {
-		if req.found {
-			continue
-		}
-		h := *req.a
-		toChk, err := acs.aRdr.getAsToChunker(ctx, h, stats)
+	return acs.getManyResolved(ctx, eg, reqs, keeper, stats, func(ctx context.Context, rc resolvedChunk) error {
+		toChk, err := acs.aRdr.getAsToChunkerByRef(ctx, rc, stats)
 		if err != nil {
-			return true, gcBehavior_Continue, err
+			return err
 		}
-		if toChk == nil || toChk.IsEmpty() {
-			foundAll = false
-		} else {
-			if keeper != nil && keeper(h) {
-				return true, gcBehavior_Block, nil
-			}
-			found(ctx, toChk)
-			reqs[i].found = true
-		}
-	}
-	return !foundAll, gcBehavior_Continue, nil
+		found(ctx, toChk)
+		return nil
+	})
 }
 
 func (acs *archiveChunkSource) iterateAllChunks(ctx context.Context, cb func(chunks.Chunk), stats *Stats) error {

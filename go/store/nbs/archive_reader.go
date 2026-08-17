@@ -498,29 +498,35 @@ func (ar *archiveReader) get(ctx context.Context, hash hash.Hash, stats *Stats) 
 	if err != nil || data == nil {
 		return nil, err
 	}
+	return ar.decompress(hash, dict, data)
+}
 
-	if dict == nil {
-		if ar.footer.formatVersion >= archiveVersionSnappySupport {
-			// Snappy compression format. The data is compressed with a checksum at the end.
-			cc, err := NewCompressedChunk(hash, data)
-			if err != nil {
-				return nil, err
-			}
-			chk, err := cc.ToChunk()
-			if err != nil {
-				return nil, err
-			}
-			return chk.Data(), nil
-		}
-		return nil, errors.New("runtime error: unable to get archived chunk. dictionary is nil")
-	}
-
-	var result []byte
-	result, err = gozstd.DecompressDict(nil, data, dict.dDict)
+// getByRef is get for a chunk which has already been located in the index.
+func (ar *archiveReader) getByRef(ctx context.Context, rc resolvedChunk, stats *Stats) ([]byte, error) {
+	dict, data, err := ar.getRawByRef(ctx, rc.dictId, rc.dataId, stats)
 	if err != nil {
 		return nil, err
 	}
-	return result, nil
+	return ar.decompress(rc.h, dict, data)
+}
+
+func (ar *archiveReader) decompress(h hash.Hash, dict *DecompBundle, data []byte) ([]byte, error) {
+	if dict == nil {
+		if ar.footer.formatVersion < archiveVersionSnappySupport {
+			return nil, errors.New("runtime error: unable to get archived chunk. dictionary is nil")
+		}
+		// Snappy compression format. The data is compressed with a checksum at the end.
+		cc, err := NewCompressedChunk(h, data)
+		if err != nil {
+			return nil, err
+		}
+		chk, err := cc.ToChunk()
+		if err != nil {
+			return nil, err
+		}
+		return chk.Data(), nil
+	}
+	return gozstd.DecompressDict(nil, data, dict.dDict)
 }
 
 // getAsToChunker returns the chunk which is has not been decompressed. Similar to get, but with a different return type.
@@ -535,15 +541,31 @@ func (ar *archiveReader) getAsToChunker(ctx context.Context, h hash.Hash, stats 
 		return CompressedChunk{}, nil
 	}
 
+	return ar.toChunker(h, dict, data)
+}
+
+// getAsToChunkerByRef is getAsToChunker for a chunk which has already been located
+// in the index.
+func (ar *archiveReader) getAsToChunkerByRef(ctx context.Context, rc resolvedChunk, stats *Stats) (ToChunker, error) {
+	dict, data, err := ar.getRawByRef(ctx, rc.dictId, rc.dataId, stats)
+	if err != nil {
+		return nil, err
+	}
+	return ar.toChunker(rc.h, dict, data)
+}
+
+// toChunker wraps still-compressed chunk bytes in the ToChunker matching the
+// archive's compression format.
+func (ar *archiveReader) toChunker(h hash.Hash, dict *DecompBundle, data []byte) (ToChunker, error) {
 	if dict == nil {
-		if ar.footer.formatVersion >= archiveVersionSnappySupport {
-			cc, err := NewCompressedChunk(h, data)
-			if err != nil {
-				return nil, err
-			}
-			return cc, nil
+		if ar.footer.formatVersion < archiveVersionSnappySupport {
+			return nil, errors.New("runtime error: unable to get archived chunk. dictionary is nil")
 		}
-		return nil, errors.New("runtime error: unable to get archived chunk. dictionary is nil")
+		cc, err := NewCompressedChunk(h, data)
+		if err != nil {
+			return nil, err
+		}
+		return cc, nil
 	}
 
 	return &ArchiveToChunker{dict, data, h}, nil
@@ -583,30 +605,52 @@ func (ar *archiveReader) getRaw(ctx context.Context, hash hash.Hash, stats *Stat
 	}
 
 	dictId, dataId := ar.getChunkRef(idx)
-	if dictId != 0 {
-		if cached, cacheHit := ar.dictCache.Get(dictId); cacheHit {
-			dict = cached
-		} else {
-			byteSpan := ar.getByteSpanByID(dictId)
-			dictBytes, err := ar.readByteSpan(ctx, byteSpan, stats)
-			if err != nil {
-				return nil, nil, err
-			}
-			dict, err = NewDecompBundle(dictBytes)
-			if err != nil {
-				return nil, nil, err
-			}
+	return ar.getRawByRef(ctx, dictId, dataId, stats)
+}
 
-			ar.dictCache.Add(dictId, dict)
+// resolvedChunk is a chunk which has been located in the archive index but not yet
+// read. Separating the index lookup from the read lets many reads be issued
+// concurrently while the caller still learns synchronously which chunks are here.
+type resolvedChunk struct {
+	h      hash.Hash
+	dictId uint32
+	dataId uint32
+}
+
+// getRawByRef is getRaw for a chunk whose index entry has already been read.
+func (ar *archiveReader) getRawByRef(ctx context.Context, dictId, dataId uint32, stats *Stats) (dict *DecompBundle, data []byte, err error) {
+	if dictId != 0 {
+		dict, err = ar.loadDict(ctx, dictId, stats)
+		if err != nil {
+			return nil, nil, err
 		}
 	}
 
-	byteSpan := ar.getByteSpanByID(dataId)
-	data, err = ar.readByteSpan(ctx, byteSpan, stats)
+	data, err = ar.readByteSpan(ctx, ar.getByteSpanByID(dataId), stats)
 	if err != nil {
 		return nil, nil, err
 	}
-	return
+	return dict, data, nil
+}
+
+// loadDict returns the dictionary for |dictId|, reading and caching it on a miss.
+func (ar *archiveReader) loadDict(ctx context.Context, dictId uint32, stats *Stats) (*DecompBundle, error) {
+	if cached, cacheHit := ar.dictCache.Get(dictId); cacheHit {
+		return cached, nil
+	}
+
+	dictBytes, err := ar.readByteSpan(ctx, ar.getByteSpanByID(dictId), stats)
+	if err != nil {
+		return nil, err
+	}
+
+	dict, err := NewDecompBundle(dictBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	ar.dictCache.Add(dictId, dict)
+	return dict, nil
 }
 
 // getChunkRef returns the dictionary and data references for the chunk at the given index. Assumes good input!
