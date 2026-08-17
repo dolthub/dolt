@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -236,4 +237,118 @@ func (e *errorAfter) ReadAtWithStats(ctx context.Context, p []byte, off int64, s
 	n, err = e.tra.ReadAtWithStats(ctx, p, off, stats)
 	e.after -= n
 	return n, err
+}
+
+// resolveChunk locates |h| the way archiveChunkSource.resolve does, so the by-ref
+// read paths can be exercised directly.
+func resolveChunk(t *testing.T, ar archiveReader, h hash.Hash) resolvedChunk {
+	t.Helper()
+	idx := ar.search(h)
+	require.GreaterOrEqual(t, idx, 0)
+	dictId, dataId := ar.getChunkRef(idx)
+	return resolvedChunk{h: h, dictId: dictId, dataId: dataId}
+}
+
+func openMixedReader(t *testing.T, ctx context.Context, arc mixedArchive, rd tableReaderAt) archiveReader {
+	t.Helper()
+	ar, err := newArchiveReader(ctx, rd, arc.name, uint64(len(arc.data)), NewUnlimitedMemQuotaProvider(), &Stats{})
+	require.NoError(t, err)
+	t.Cleanup(func() { ar.close() })
+	return ar
+}
+
+// TestArchiveReaderByRefMatchesSearch checks the by-ref reads return exactly what
+// the searching reads return, for dictionary and snappy chunks alike.
+func TestArchiveReaderByRefMatchesSearch(t *testing.T) {
+	ctx := context.Background()
+	arc := buildMixedArchive(t)
+	ar := openMixedReader(t, ctx, arc, newCountingReaderAt(arc.data))
+
+	for _, chk := range arc.chunks {
+		ref := resolveChunk(t, ar, chk.Hash())
+
+		want, err := ar.get(ctx, chk.Hash(), &Stats{})
+		require.NoError(t, err)
+		got, err := ar.getByRef(ctx, ref, &Stats{})
+		require.NoError(t, err)
+		require.Equal(t, chk.Data(), want)
+		require.Equal(t, want, got)
+
+		wantTC, err := ar.getAsToChunker(ctx, chk.Hash(), &Stats{})
+		require.NoError(t, err)
+		gotTC, err := ar.getAsToChunkerByRef(ctx, ref, &Stats{})
+		require.NoError(t, err)
+
+		wantChk, err := wantTC.ToChunk()
+		require.NoError(t, err)
+		gotChk, err := gotTC.ToChunk()
+		require.NoError(t, err)
+		require.Equal(t, chk.Data(), gotChk.Data())
+		require.Equal(t, wantChk.Data(), gotChk.Data())
+	}
+}
+
+// TestArchiveReaderToChunkerFormat checks each compression format produces the
+// ToChunker the consumer expects.
+func TestArchiveReaderToChunkerFormat(t *testing.T) {
+	ctx := context.Background()
+	arc := buildMixedArchive(t)
+	ar := openMixedReader(t, ctx, arc, newCountingReaderAt(arc.data))
+
+	dicted := arc.dictChunks[0]
+	tc, err := ar.getAsToChunkerByRef(ctx, resolveChunk(t, ar, dicted.Hash()), &Stats{})
+	require.NoError(t, err)
+	require.IsType(t, &ArchiveToChunker{}, tc)
+
+	// The snappy chunks are the ones written without a dictionary.
+	var snappy *chunks.Chunk
+	for _, chk := range arc.chunks {
+		if resolveChunk(t, ar, chk.Hash()).dictId == 0 {
+			snappy = chk
+			break
+		}
+	}
+	require.NotNil(t, snappy, "fixture must contain a chunk with no dictionary")
+
+	tc, err = ar.getAsToChunkerByRef(ctx, resolveChunk(t, ar, snappy.Hash()), &Stats{})
+	require.NoError(t, err)
+	require.IsType(t, CompressedChunk{}, tc)
+}
+
+// TestArchiveReaderToChunkerRejectsMissingDict checks the pre-snappy format still
+// refuses a chunk with no dictionary rather than mis-reading it.
+func TestArchiveReaderToChunkerRejectsMissingDict(t *testing.T) {
+	ctx := context.Background()
+	arc := buildMixedArchive(t)
+	ar := openMixedReader(t, ctx, arc, newCountingReaderAt(arc.data))
+	ar.footer.formatVersion = archiveVersionSnappySupport - 1
+
+	_, err := ar.toChunker(hash.Hash{}, nil, []byte("data"))
+	require.Error(t, err)
+
+	_, err = ar.decompress(hash.Hash{}, nil, []byte("data"))
+	require.Error(t, err)
+}
+
+// TestArchiveReaderLoadDictCaches checks a dictionary is fetched once and served
+// from the cache thereafter.
+func TestArchiveReaderLoadDictCaches(t *testing.T) {
+	ctx := context.Background()
+	arc := buildMixedArchive(t)
+	rd := newCountingReaderAt(arc.data)
+	ar := openMixedReader(t, ctx, arc, rd)
+
+	ref := resolveChunk(t, ar, arc.dictChunks[0].Hash())
+	require.NotZero(t, ref.dictId)
+	dictOff := ar.getByteSpanByID(ref.dictId).offset
+
+	rd.reset()
+	first, err := ar.loadDict(ctx, ref.dictId, &Stats{})
+	require.NoError(t, err)
+	require.Equal(t, 1, rd.readsOf(dictOff))
+
+	second, err := ar.loadDict(ctx, ref.dictId, &Stats{})
+	require.NoError(t, err)
+	require.Same(t, first, second)
+	require.Equal(t, 1, rd.readsOf(dictOff), "a cached dictionary must not be re-read")
 }
