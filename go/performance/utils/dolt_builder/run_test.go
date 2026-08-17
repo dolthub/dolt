@@ -1,4 +1,4 @@
-// Copyright 2019-2022 Dolthub, Inc.
+// Copyright 2026 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,8 +14,19 @@
 
 package dolt_builder
 
-const (
-	GithubDolt               = "https://github.com/dolthub/dolt.git"
-	envDoltRepositoryURL     = "DOLT_REPOSITORY_URL"
-	envRepositoryAccessToken = "REPO_ACCESS_TOKEN"
-)
+import "testing"
+
+func TestRepositoryURLDefaultsToPublicDolt(t *testing.T) {
+	t.Setenv(envDoltRepositoryURL, "")
+	if got := repositoryURL(); got != GithubDolt {
+		t.Fatalf("expected %q, got %q", GithubDolt, got)
+	}
+}
+
+func TestRepositoryURLUsesEnvironmentOverride(t *testing.T) {
+	const customURL = "https://github.com/example/dolt-fork.git"
+	t.Setenv(envDoltRepositoryURL, customURL)
+	if got := repositoryURL(); got != customURL {
+		t.Fatalf("expected %q, got %q", customURL, got)
+	}
+}
