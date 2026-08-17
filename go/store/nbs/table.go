@@ -201,7 +201,7 @@ const (
 	// Operation was successful, go forward with the result.
 	gcBehavior_Continue gcBehavior = false
 	// Operation needs to block until the GC is over and then retry.
-	gcBehavior_Block = true
+	gcBehavior_Block gcBehavior = true
 )
 
 // keeperF is a function that takes a hash.Hash and returns true if the hash is used by the GC system to indicate

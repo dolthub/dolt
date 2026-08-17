@@ -424,8 +424,7 @@ func TestArchiveChunkSourceGetManyKeeperBlock(t *testing.T) {
 		return acs.getManyCompressed(ctx, eg, reqs, got.addToChunker, keeper, &Stats{})
 	})
 	require.NoError(t, err)
-	// gcBehavior_Block is declared untyped, so it needs converting to compare.
-	require.Equal(t, gcBehavior(gcBehavior_Block), gcb)
+	require.Equal(t, gcBehavior_Block, gcb)
 	require.True(t, remaining)
 
 	require.Zero(t, got.count(), "a blocked pass must not deliver chunks")
