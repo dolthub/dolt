@@ -387,6 +387,7 @@ var DoltBackupProcedureScripts = []queries.ScriptTest{
 		Name: "dolt_backup transactional operations",
 		SetUpScript: []string{
 			"create table t(a int primary key);",
+			"insert into t values (2);",
 			`CREATE PROCEDURE transaction_backup_ops()
 BEGIN
 	START TRANSACTION;
@@ -410,8 +411,9 @@ END`,
 			},
 			{
 				Query: "select * from restored_txn_db.t;",
-				// The insert was never committed, so the backup does not hold it.
-				Expected: []sql.Row{},
+				// [actions.SyncRoots] copies the roots the database holds. A row written
+				// by an open transaction is not yet part of those roots.
+				Expected: []sql.Row{{2}},
 			},
 			{
 				Query:    fmt.Sprintf("call dolt_backup('restore', '%s', 'restored_txn_url_db');", fileUrl("txn_backup_url")),
@@ -419,7 +421,13 @@ END`,
 			},
 			{
 				Query:    "select * from restored_txn_url_db.t;",
-				Expected: []sql.Row{},
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query: "select * from t;",
+				// The restore creates a database, which commits the caller's transaction.
+				// Its row is part of the roots from that point on.
+				Expected: []sql.Row{{1}, {2}},
 			},
 			{
 				Query:    "select count(*) from dolt_backups where name='txn_bak';",
