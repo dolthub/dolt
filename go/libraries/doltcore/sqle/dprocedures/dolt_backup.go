@@ -312,10 +312,6 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 //
 // If |pruneGrace| is non-zero, prune stale table files in the destination before running the sync.
 func syncRemote(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.DoltSession, remote env.Remote, pruneGrace time.Duration) error {
-	// Procedures such as merge and rebase move a branch head outside the caller's
-	// transaction, so they commit to get a new one that sees the move. A sync only
-	// reads and has no such need. Committing would make the caller's pending work
-	// durable, and a later rollback could not take it back.
 	params := make(map[string]any, len(remote.Params))
 	for k, v := range remote.Params {
 		params[k] = v
