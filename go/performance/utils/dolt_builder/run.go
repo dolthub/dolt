@@ -60,12 +60,12 @@ func Run(parentCtx context.Context, commitList []string, profilePath string) err
 
 	// Clone Dolt source. DOLT_REPOSITORY_URL allows callers to override the
 	// default source repository.
-	err = GitCloneBare(parentCtx, tempDir, repositoryURL())
+	const repoName = "dolt.git"
+	repoDir := filepath.Join(tempDir, repoName)
+	err = GitCloneBare(parentCtx, tempDir, repositoryURL(), repoName)
 	if err != nil {
 		return err
 	}
-
-	repoDir := filepath.Join(tempDir, "dolt.git")
 
 	withKeyCtx, cancel := context.WithCancel(parentCtx)
 	g, ctx := errgroup.WithContext(withKeyCtx)
