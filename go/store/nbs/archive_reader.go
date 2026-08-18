@@ -599,13 +599,12 @@ func (ar *archiveReader) readByteSpan(ctx context.Context, bs byteSpan, stats *S
 //   - Snappy compression when no dictionary is returned. The data has a checksum 32 bit checksum at the end. This
 //     format matches the noms format.
 func (ar *archiveReader) getRaw(ctx context.Context, hash hash.Hash, stats *Stats) (dict *DecompBundle, data []byte, err error) {
-	idx := ar.search(hash)
-	if idx < 0 {
+	rc, ok := ar.locate(hash)
+	if !ok {
 		return nil, nil, nil
 	}
 
-	dictId, dataId := ar.getChunkRef(idx)
-	return ar.getRawByRef(ctx, dictId, dataId, stats)
+	return ar.getRawByRef(ctx, rc.dictId, rc.dataId, stats)
 }
 
 // resolvedChunk is a chunk which has been located in the archive index but not yet
@@ -615,6 +614,18 @@ type resolvedChunk struct {
 	h      hash.Hash
 	dictId uint32
 	dataId uint32
+}
+
+// locate finds |h| in the index, reporting false when this archive does not hold
+// it. This is the only place a hash is turned into a chunk reference.
+func (ar *archiveReader) locate(h hash.Hash) (resolvedChunk, bool) {
+	idx := ar.search(h)
+	if idx < 0 {
+		return resolvedChunk{}, false
+	}
+
+	dictId, dataId := ar.getChunkRef(idx)
+	return resolvedChunk{h: h, dictId: dictId, dataId: dataId}, true
 }
 
 // getRawByRef is getRaw for a chunk whose index entry has already been read.

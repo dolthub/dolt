@@ -184,8 +184,8 @@ func (acs *archiveChunkSource) resolve(records []getRecord, keeper keeperF) ([]r
 		}
 
 		h := *req.a
-		idx := acs.aRdr.search(h)
-		if idx < 0 {
+		rc, ok := acs.aRdr.locate(h)
+		if !ok {
 			foundAll = false
 			continue
 		}
@@ -194,8 +194,7 @@ func (acs *archiveChunkSource) resolve(records []getRecord, keeper keeperF) ([]r
 			return nil, true, gcBehavior_Block, nil
 		}
 
-		dictId, dataId := acs.aRdr.getChunkRef(idx)
-		resolved = append(resolved, resolvedChunk{h: h, dictId: dictId, dataId: dataId})
+		resolved = append(resolved, rc)
 		hits = append(hits, i)
 	}
 
