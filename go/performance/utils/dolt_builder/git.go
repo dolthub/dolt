@@ -35,9 +35,9 @@ func GitVersion(ctx context.Context) error {
 	return nil
 }
 
-// GitCloneBare clones a repo
-func GitCloneBare(ctx context.Context, dir, url string) error {
-	clone := ExecCommand(ctx, "git", "clone", "--bare", url, "dolt.git")
+// GitCloneBare clones a repo to repoDir within dir.
+func GitCloneBare(ctx context.Context, dir, url, repoDir string) error {
+	clone := ExecCommand(ctx, "git", "clone", "--bare", url, repoDir)
 	clone.Dir = dir
 	if token := os.Getenv(envRepositoryAccessToken); token != "" {
 		credentials := base64.StdEncoding.EncodeToString([]byte("x-access-token:" + token))
