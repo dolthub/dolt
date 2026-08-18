@@ -385,7 +385,7 @@ func TestArchiveChunkSourceLoadsEachDictOnce(t *testing.T) {
 
 	dictSpans := map[uint64]struct{}{}
 	for _, chk := range arc.dictChunks {
-		idx := acs.aRdr.search(chk.Hash())
+		idx := acs.aRdr.findIndex(chk.Hash())
 		require.GreaterOrEqual(t, idx, 0)
 		dictId, _ := acs.aRdr.getChunkRef(idx)
 		require.NotZero(t, dictId)

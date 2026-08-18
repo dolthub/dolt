@@ -470,8 +470,8 @@ func buildArchiveFooter(name hash.Hash, fileSize uint64, buf []byte) (f archiveF
 	return
 }
 
-// search returns the index of the hash in the archive. If the hash is not found, -1 is returned.
-func (ar *archiveReader) search(hash hash.Hash) int {
+// findIndex returns the index of the hash in the archive. If the hash is not found, -1 is returned.
+func (ar *archiveReader) findIndex(hash hash.Hash) int {
 	prefix := hash.Prefix()
 	possibleMatch := ar.indexReader.searchPrefix(prefix)
 	targetSfx := hash.Suffix()
@@ -489,7 +489,7 @@ func (ar *archiveReader) search(hash hash.Hash) int {
 }
 
 func (ar *archiveReader) has(hash hash.Hash) bool {
-	return ar.search(hash) >= 0
+	return ar.findIndex(hash) >= 0
 }
 
 // get returns the decompressed data for the given hash. If the hash is not found, nil is returned (not an error)
@@ -599,7 +599,7 @@ func (ar *archiveReader) readByteSpan(ctx context.Context, bs byteSpan, stats *S
 //   - Snappy compression when no dictionary is returned. The data has a checksum 32 bit checksum at the end. This
 //     format matches the noms format.
 func (ar *archiveReader) getRaw(ctx context.Context, hash hash.Hash, stats *Stats) (dict *DecompBundle, data []byte, err error) {
-	rc, ok := ar.locate(hash)
+	rc, ok := ar.resolveChunk(hash)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -616,10 +616,10 @@ type resolvedChunk struct {
 	dataId uint32
 }
 
-// locate finds |h| in the index, reporting false when this archive does not hold
+// resolveChunk finds |h| in the index, reporting false when this archive does not hold
 // it. This is the only place a hash is turned into a chunk reference.
-func (ar *archiveReader) locate(h hash.Hash) (resolvedChunk, bool) {
-	idx := ar.search(h)
+func (ar *archiveReader) resolveChunk(h hash.Hash) (resolvedChunk, bool) {
+	idx := ar.findIndex(h)
 	if idx < 0 {
 		return resolvedChunk{}, false
 	}

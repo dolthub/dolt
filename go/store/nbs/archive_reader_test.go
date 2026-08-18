@@ -239,11 +239,11 @@ func (e *errorAfter) ReadAtWithStats(ctx context.Context, p []byte, off int64, s
 	return n, err
 }
 
-// resolveChunk locates |h| the way archiveChunkSource.resolve does, so the by-ref
+// chunkRefFor locates |h| independently of archiveReader.resolveChunk, so the by-ref
 // read paths can be exercised directly.
-func resolveChunk(t *testing.T, ar archiveReader, h hash.Hash) resolvedChunk {
+func chunkRefFor(t *testing.T, ar archiveReader, h hash.Hash) resolvedChunk {
 	t.Helper()
-	idx := ar.search(h)
+	idx := ar.findIndex(h)
 	require.GreaterOrEqual(t, idx, 0)
 	dictId, dataId := ar.getChunkRef(idx)
 	return resolvedChunk{h: h, dictId: dictId, dataId: dataId}
@@ -265,7 +265,7 @@ func TestArchiveReaderByRefMatchesSearch(t *testing.T) {
 	ar := openMixedReader(t, ctx, arc, newCountingReaderAt(arc.data))
 
 	for _, chk := range arc.chunks {
-		ref := resolveChunk(t, ar, chk.Hash())
+		ref := chunkRefFor(t, ar, chk.Hash())
 
 		want, err := ar.get(ctx, chk.Hash(), &Stats{})
 		require.NoError(t, err)
@@ -296,21 +296,21 @@ func TestArchiveReaderToChunkerFormat(t *testing.T) {
 	ar := openMixedReader(t, ctx, arc, newCountingReaderAt(arc.data))
 
 	dicted := arc.dictChunks[0]
-	tc, err := ar.getAsToChunkerByRef(ctx, resolveChunk(t, ar, dicted.Hash()), &Stats{})
+	tc, err := ar.getAsToChunkerByRef(ctx, chunkRefFor(t, ar, dicted.Hash()), &Stats{})
 	require.NoError(t, err)
 	require.IsType(t, &ArchiveToChunker{}, tc)
 
 	// The snappy chunks are the ones written without a dictionary.
 	var snappy *chunks.Chunk
 	for _, chk := range arc.chunks {
-		if resolveChunk(t, ar, chk.Hash()).dictId == 0 {
+		if chunkRefFor(t, ar, chk.Hash()).dictId == 0 {
 			snappy = chk
 			break
 		}
 	}
 	require.NotNil(t, snappy, "fixture must contain a chunk with no dictionary")
 
-	tc, err = ar.getAsToChunkerByRef(ctx, resolveChunk(t, ar, snappy.Hash()), &Stats{})
+	tc, err = ar.getAsToChunkerByRef(ctx, chunkRefFor(t, ar, snappy.Hash()), &Stats{})
 	require.NoError(t, err)
 	require.IsType(t, CompressedChunk{}, tc)
 }
@@ -338,7 +338,7 @@ func TestArchiveReaderLoadDictCaches(t *testing.T) {
 	rd := newCountingReaderAt(arc.data)
 	ar := openMixedReader(t, ctx, arc, rd)
 
-	ref := resolveChunk(t, ar, arc.dictChunks[0].Hash())
+	ref := chunkRefFor(t, ar, arc.dictChunks[0].Hash())
 	require.NotZero(t, ref.dictId)
 	dictOff := ar.getByteSpanByID(ref.dictId).offset
 

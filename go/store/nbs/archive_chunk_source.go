@@ -184,7 +184,7 @@ func (acs *archiveChunkSource) resolve(records []getRecord, keeper keeperF) ([]r
 		}
 
 		h := *req.a
-		rc, ok := acs.aRdr.locate(h)
+		rc, ok := acs.aRdr.resolveChunk(h)
 		if !ok {
 			foundAll = false
 			continue

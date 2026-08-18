@@ -170,7 +170,7 @@ func (ai *ArchiveInspector) GetMetadata(ctx context.Context) ([]byte, error) {
 
 // SearchChunk exposes the underlying search method for debugging
 func (ai *ArchiveInspector) SearchChunk(h hash.Hash) int {
-	return ai.reader.search(h)
+	return ai.reader.findIndex(h)
 }
 
 // SearchChunkDebug exposes detailed search information for debugging
@@ -310,7 +310,7 @@ func (ai *ArchiveInspector) GetIndexReaderDetails(idx uint32) *IndexReaderDetail
 
 // GetChunkInfo looks up information about a specific chunk in the archive
 func (ai *ArchiveInspector) GetChunkInfo(ctx context.Context, h hash.Hash) (*ChunkInfo, error) {
-	idx := ai.reader.search(h)
+	idx := ai.reader.findIndex(h)
 	if idx < 0 {
 		return nil, fmt.Errorf("chunk %s not found", h.String())
 	}
