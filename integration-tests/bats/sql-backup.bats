@@ -23,6 +23,16 @@ lower_prune_grace_floor() {
     fi
 }
 
+setup_backup() {
+    backup_dir="$BATS_TEST_TMPDIR/backup"
+    dolt backup add b1 "file://$backup_dir"
+    dolt sql <<SQL
+create table t (pk int primary key);
+insert into t values (1);
+call dolt_commit('-Am', 'init');
+SQL
+}
+
 @test "sql-backup: dolt_backup no argument" {
     run dolt sql -q "call dolt_backup()"
     [ "$status" -ne 0 ]
@@ -407,4 +417,49 @@ SQL
     run dolt sql -q "call dolt_backup('remove', 'hostedapidb-0', '--prune-with-grace-period', '1h')"
     [ "$status" -ne 0 ]
     [[ "$output" =~ "only supported with" ]] || false
+}
+
+@test "sql-backup: dolt_backup sync is a no-op when nothing has changed" {
+    # See https://github.com/dolthub/dolt/issues/11488
+    setup_backup
+    dolt sql -q "call dolt_backup('sync', 'b1');"
+
+    manifest_before=$(cat "$backup_dir/manifest")
+    files_before=$(ls "$backup_dir" | sort)
+
+    # WorkingSetMeta stamps writes with time.Now().Unix(), in seconds.
+    sleep 2
+
+    dolt sql -q "call dolt_backup('sync', 'b1');"
+
+    manifest_after=$(cat "$backup_dir/manifest")
+    files_after=$(ls "$backup_dir" | sort)
+
+    [ "$manifest_before" = "$manifest_after" ] || false
+    [ "$files_before" = "$files_after" ] || false
+}
+
+@test "sql-backup: dolt_backup sync does not commit the session's open transaction" {
+    # See https://github.com/dolthub/dolt/issues/11488
+    setup_backup
+    dolt sql -q "insert into t values (42);"
+
+    dolt sql <<SQL
+set autocommit = 0;
+start transaction;
+insert into t values (99);
+call dolt_backup('sync', 'b1');
+rollback;
+SQL
+
+    run dolt sql -r csv -q "select pk from t"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "42" ]] || false
+    [[ ! "$output" =~ "99" ]] || false
+
+    dolt backup restore "file://$backup_dir" the_restore
+    run dolt sql -r csv -q "use the_restore; select pk from t"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "42" ]] || false
+    [[ ! "$output" =~ "99" ]] || false
 }
