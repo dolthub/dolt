@@ -1389,34 +1389,9 @@ var DoltOnlyRevisionTableFunctionPrivilegeTests = []queries.UserPrivilegeTest{
 				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
-				User:  "tester",
-				Host:  "localhost",
-				Query: "SELECT * FROM dolt_query_diff('SELECT pk FROM test', 'SELECT pk FROM test');",
-				// TODO(elianddb): Add privilege checks scoped to tables touched in query args.
-				ExpectedErr: sql.ErrPrivilegeCheckFailed,
-			},
-			{
-				User:        "tester",
-				Host:        "localhost",
-				Query:       "SELECT * FROM dolt_query_diff('SELECT 1 AS pk', 'SELECT 2 AS pk');",
-				ExpectedErr: sql.ErrPrivilegeCheckFailed,
-			},
-			{
-				User:        "tester",
-				Host:        "localhost",
-				Query:       "SELECT * FROM dolt_query_diff('SELECT t.pk FROM test t JOIN test2 t2 ON t.pk = t2.pk', 'SELECT t.pk FROM test t JOIN test2 t2 ON t.pk = t2.pk');",
-				ExpectedErr: sql.ErrTableAccessDeniedForUser,
-			},
-			{
-				User:        "tester",
-				Host:        "localhost",
-				Query:       "SELECT * FROM dolt_query_diff('SELECT pk FROM (SELECT pk FROM test2) s', 'SELECT pk FROM (SELECT pk FROM test) s');",
-				ExpectedErr: sql.ErrTableAccessDeniedForUser,
-			},
-			{
 				User:     "root",
 				Host:     "localhost",
-				Query:    "GRANT SELECT ON mydb.* TO tester@localhost;",
+				Query:    "GRANT SELECT ON mydb.test2 TO tester@localhost;",
 				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
@@ -1435,13 +1410,191 @@ var DoltOnlyRevisionTableFunctionPrivilegeTests = []queries.UserPrivilegeTest{
 				User:  "tester",
 				Host:  "localhost",
 				Query: "SELECT * FROM dolt_query_diff('SELECT pk FROM test limit 1', 'SELECT pk FROM test2 limit 1');",
-				// TODO(elianddb): Add privilege checks scoped to tables touched in query args.
 				Expected: []sql.Row{{1, nil, "deleted"}, {nil, 1, "added"}},
 			},
 			{
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "SELECT * FROM dolt_query_diff('SELECT pk FROM (SELECT pk FROM test2) s', 'SELECT pk FROM (SELECT pk FROM test) s');",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "dolt_query_diff per-table privilege checking with revision database",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY, col1 varchar(20));",
+			"INSERT INTO test VALUES (1, 'first row'), (2, 'second row');",
+			"CREATE TABLE test2 (pk BIGINT PRIMARY KEY, col1 varchar(20));",
+			"INSERT INTO test2 VALUES (1, 'a'), (2, 'b');",
+			"call dolt_commit('-Am', 'first commit');",
+			"CREATE USER tester@localhost;",
+			"call dolt_branch('b1');",
+			"use mydb/b1;",
+		},
+		Assertions: []queries.UserPrivilegeTestAssertion{
+			// Grant SELECT only on test, not test2
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT SELECT ON mydb.test TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			// Query touching only test -> allowed
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT * FROM dolt_query_diff('SELECT pk FROM test', 'SELECT pk FROM test');",
+				Expected: []sql.Row{},
+			},
+			// Query touching test2 which tester has no access to -> denied
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_query_diff('SELECT pk FROM test2', 'SELECT pk FROM test2');",
+				ExpectedErr: sql.ErrTableAccessDeniedForUser,
+			},
+			// JOIN touching both tables, but only test is granted -> denied
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_query_diff('SELECT t.pk FROM test t JOIN test2 t2 ON t.pk = t2.pk', 'SELECT t.pk FROM test t JOIN test2 t2 ON t.pk = t2.pk');",
+				ExpectedErr: sql.ErrTableAccessDeniedForUser,
+			},
+			// query1 touches test (allowed), query2 touches test2 (denied) -> denied
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_query_diff('SELECT pk FROM test', 'SELECT pk FROM test2');",
+				ExpectedErr: sql.ErrTableAccessDeniedForUser,
+			},
+			// Subquery referencing test2 -> denied
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_query_diff('SELECT pk FROM (SELECT pk FROM test2) s', 'SELECT pk FROM test');",
+				ExpectedErr: sql.ErrTableAccessDeniedForUser,
+			},
+			// Query with no table references -> allowed
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT * FROM dolt_query_diff('SELECT 1 AS pk', 'SELECT 2 AS pk');",
+				Expected: []sql.Row{{1, 2, "modified"}},
+			},
+			// Now grant test2 as well
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT SELECT ON mydb.test2 TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			// JOIN touching both tables -> now allowed
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT * FROM dolt_query_diff('SELECT t.pk FROM test t JOIN test2 t2 ON t.pk = t2.pk', 'SELECT t.pk FROM test t JOIN test2 t2 ON t.pk = t2.pk');",
+				Expected: []sql.Row{},
+			},
+			// Cross-table query args -> now allowed
+			{
+				User:  "tester",
+				Host:  "localhost",
+				Query: "SELECT * FROM dolt_query_diff('SELECT pk FROM test limit 1', 'SELECT pk FROM test2 limit 1');",
+				Expected: []sql.Row{{1, nil, "deleted"}, {nil, 1, "added"}},
+			},
+			// Subquery referencing test2 -> now allowed
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT * FROM dolt_query_diff('SELECT pk FROM (SELECT pk FROM test2) s', 'SELECT pk FROM (SELECT pk FROM test) s');",
+				Expected: []sql.Row{},
+			},
+			// Revoke test2, verify denial again
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "REVOKE SELECT ON mydb.test2 FROM tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_query_diff('SELECT pk FROM test2', 'SELECT pk FROM test2');",
+				ExpectedErr: sql.ErrTableAccessDeniedForUser,
+			},
+		},
+	},
+	{
+		Name: "dolt_query_diff privilege checking with qualified table names",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY, col1 varchar(20));",
+			"INSERT INTO test VALUES (1, 'first row'), (2, 'second row');",
+			"CREATE TABLE test2 (pk BIGINT PRIMARY KEY, col1 varchar(20));",
+			"INSERT INTO test2 VALUES (1, 'a'), (2, 'b');",
+			"call dolt_commit('-Am', 'first commit');",
+			"CREATE USER tester@localhost;",
+			"call dolt_branch('b1');",
+			"use mydb/b1;",
+			"GRANT SELECT ON mydb.test TO tester@localhost;",
+		},
+		Assertions: []queries.UserPrivilegeTestAssertion{
+			// Database-qualified table name: mydb.test -> allowed
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT * FROM dolt_query_diff('SELECT pk FROM mydb.test', 'SELECT pk FROM mydb.test');",
+				Expected: []sql.Row{},
+			},
+			// Database-qualified table name: mydb.test2 -> denied
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_query_diff('SELECT pk FROM mydb.test2', 'SELECT pk FROM mydb.test2');",
+				ExpectedErr: sql.ErrTableAccessDeniedForUser,
+			},
+			// Branch-qualified table name using backticks: `mydb/b1`.test -> allowed
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT * FROM dolt_query_diff('SELECT pk FROM `mydb/b1`.test', 'SELECT pk FROM `mydb/b1`.test');",
+				Expected: []sql.Row{},
+			},
+			// Branch-qualified table name for denied table: `mydb/b1`.test2 -> denied
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_query_diff('SELECT pk FROM `mydb/b1`.test2', 'SELECT pk FROM `mydb/b1`.test2');",
+				ExpectedErr: sql.ErrTableAccessDeniedForUser,
+			},
+			// Mixed: one arg qualified, one unqualified
+			{
+				User:  "tester",
+				Host:  "localhost",
+				Query: "SELECT * FROM dolt_query_diff('SELECT pk FROM mydb.test', 'SELECT pk FROM test');",
+				Expected: []sql.Row{
+					{1, nil, "deleted"}, {2, nil, "deleted"},
+					{nil, 1, "added"}, {nil, 2, "added"},
+				},
+			},
+			// JOIN with database-qualified table names, missing test2 privilege
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_query_diff('SELECT t.pk FROM mydb.test t JOIN mydb.test2 t2 ON t.pk = t2.pk', 'SELECT t.pk FROM mydb.test t JOIN mydb.test2 t2 ON t.pk = t2.pk');",
+				ExpectedErr: sql.ErrTableAccessDeniedForUser,
+			},
+			// Grant test2 and verify qualified JOIN works
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT SELECT ON mydb.test2 TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT * FROM dolt_query_diff('SELECT t.pk FROM mydb.test t JOIN mydb.test2 t2 ON t.pk = t2.pk', 'SELECT t.pk FROM mydb.test t JOIN mydb.test2 t2 ON t.pk = t2.pk');",
 				Expected: []sql.Row{},
 			},
 		},
