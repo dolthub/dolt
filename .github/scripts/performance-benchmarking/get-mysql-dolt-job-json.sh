@@ -232,7 +232,7 @@ select
   to_server_name,
   to_server_version,
   to_tps,
-  round(to_tps / (from_tps + .000001) as percent_change
+  round(to_tps / (from_tps + .000001), $precision) as percent_change
 from
   result;"
 
