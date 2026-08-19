@@ -177,6 +177,18 @@ select
 from
   result;"
 
+# Replace new lines with spaces, so it is valid JSON later
+medianLatencyMultiplierReadsQuery=${medianLatencyMultiplierReadsQuery//$'\n'/ }
+meanMultiplierReadsQuery = ${meanMultiplierReadsQuery//$'\n'/ }
+medianLatencyMultiplierWritesQuery = ${medianLatencyMultiplierWritesQuery//$'\n'/ }
+meanMultiplierWritesQuery = ${meanMultiplierWritesQuery//$'\n'/ }
+meanMultiplierOverallQuery = ${meanMultiplierOverallQuery//$'\n'/ }
+tpccLatencyQuery = ${tpccLatencyQuery//$'\n'/ }
+tpccTpsQuery = ${tpccTpsQuery//$'\n'/ }
+tpccTpsMultiplierQuery = ${tpccTpsMultiplierQuery//$'\n'/ }
+perfRegressionQuery = ${perfRegressionQuery//$'\n'/ }
+
+
 echo '
 {
   "apiVersion": "batch/v1",
