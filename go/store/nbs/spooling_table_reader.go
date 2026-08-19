@@ -161,5 +161,5 @@ func newSpooledBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore,
 		_ = ra.Close()
 		return nil, err
 	}
-	return &archiveChunkSource{aRdr: aRdr, refs: noopRefCounter{}}, nil
+	return &archiveChunkSource{aRdr: aRdr, refs: noopRefCounter{}, blockSize: fileBlockSize}, nil
 }
