@@ -159,9 +159,6 @@ func CreateCloneArgParser() *argparser.ArgParser {
 	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use.")
 	ap.SupportsString(dbfactory.OSSCredsFileParam, "", "file", "OSS credentials file.")
 	ap.SupportsString(dbfactory.OSSCredsProfile, "", "profile", "OSS profile to use.")
-	ap.SupportsString(dbfactory.S3EndpointParam, "", "endpoint", "S3-compatible endpoint url (e.g. Cloudflare R2 or MinIO); only valid for s3 remotes.")
-	ap.SupportsString(dbfactory.S3RegionParam, "", "region", "Signing region for s3 remotes.")
-	ap.SupportsString(dbfactory.S3PathStyleParam, "", "true|false", "Use path-style addressing for s3 remotes.")
 	ap.SupportsString(UserFlag, "u", "user", "User name to use when authenticating with the remote. Gets password from the environment variable {{.EmphasisLeft}}DOLT_REMOTE_PASSWORD{{.EmphasisRight}}.")
 	ap.SupportsFlag(SingleBranchFlag, "", "Clone only the history leading to the tip of a single branch, either specified by --branch or the remote's HEAD (default).")
 	return ap
@@ -470,7 +467,6 @@ func CreateGlobalArgParser(name string) *argparser.ArgParser {
 
 var AwsParams = []string{dbfactory.AWSRegionParam, dbfactory.AWSCredsTypeParam, dbfactory.AWSCredsFileParam, dbfactory.AWSCredsProfile}
 var ossParams = []string{dbfactory.OSSCredsFileParam, dbfactory.OSSCredsProfile}
-var s3Params = []string{dbfactory.S3EndpointParam, dbfactory.S3RegionParam, dbfactory.S3PathStyleParam}
 
 func AddAWSParams(remoteUrl string, apr *argparser.ArgParseResults, params map[string]string) error {
 	isAWS := strings.HasPrefix(remoteUrl, "aws")
@@ -504,26 +500,6 @@ func AddOSSParams(remoteUrl string, apr *argparser.ArgParseResults, params map[s
 	}
 
 	for _, p := range ossParams {
-		if val, ok := apr.GetValue(p); ok {
-			params[p] = val
-		}
-	}
-
-	return nil
-}
-
-func AddS3Params(remoteUrl string, apr *argparser.ArgParseResults, params map[string]string) error {
-	isS3 := strings.HasPrefix(remoteUrl, "s3:")
-
-	if !isS3 {
-		for _, p := range s3Params {
-			if _, ok := apr.GetValue(p); ok {
-				return fmt.Errorf("%s param is only valid for s3 remotes in the format s3://bucket/database", p)
-			}
-		}
-	}
-
-	for _, p := range s3Params {
 		if val, ok := apr.GetValue(p); ok {
 			params[p] = val
 		}

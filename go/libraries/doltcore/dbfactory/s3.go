@@ -18,9 +18,7 @@ import (
 	"context"
 	"errors"
 	"net/url"
-	"strconv"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
@@ -30,24 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
-)
-
-const (
-	// S3EndpointParam is a creation parameter that overrides the S3 endpoint.
-	// Use it to target S3-compatible stores such as Cloudflare R2
-	// (https://<account>.r2.cloudflarestorage.com) or MinIO. When absent, the
-	// AWS SDK's standard resolution applies, including the AWS_ENDPOINT_URL_S3
-	// environment variable.
-	S3EndpointParam = "s3-endpoint"
-
-	// S3RegionParam is a creation parameter that overrides the signing region.
-	// Some S3-compatible providers accept any value here (R2 uses "auto").
-	S3RegionParam = "s3-region"
-
-	// S3PathStyleParam is a creation parameter ("true"/"false") that forces
-	// path-style addressing (https://endpoint/bucket/key) instead of
-	// virtual-hosted style. Most non-AWS providers require or prefer it.
-	S3PathStyleParam = "s3-path-style"
 )
 
 // S3Factory is a DBFactory implementation for databases backed by generic
@@ -78,7 +58,7 @@ func (fact S3Factory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, ur
 	}
 	prefix := urlObj.Path
 
-	client, err := newS3Client(ctx, params)
+	client, err := newS3Client(ctx)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -101,34 +81,11 @@ func (fact S3Factory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, ur
 	return db, vrw, ns, nil
 }
 
-func newS3Client(ctx context.Context, params map[string]interface{}) (*s3.Client, error) {
-	var loadOpts []func(*config.LoadOptions) error
-	if region, ok := paramString(params, S3RegionParam); ok {
-		loadOpts = append(loadOpts, config.WithRegion(region))
-	}
-
-	cfg, err := config.LoadDefaultConfig(ctx, loadOpts...)
+func newS3Client(ctx context.Context) (*s3.Client, error) {
+	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return s3.NewFromConfig(cfg, func(o *s3.Options) {
-		if endpoint, ok := paramString(params, S3EndpointParam); ok {
-			o.BaseEndpoint = aws.String(endpoint)
-		}
-		if ps, ok := paramString(params, S3PathStyleParam); ok {
-			if b, err := strconv.ParseBool(ps); err == nil {
-				o.UsePathStyle = b
-			}
-		}
-	}), nil
-}
-
-func paramString(params map[string]interface{}, key string) (string, bool) {
-	if v, ok := params[key]; ok {
-		if s, ok := v.(string); ok && s != "" {
-			return s, true
-		}
-	}
-	return "", false
+	return s3.NewFromConfig(cfg), nil
 }

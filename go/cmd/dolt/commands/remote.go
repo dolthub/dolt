@@ -53,7 +53,7 @@ aws-creds-type specifies the means by which credentials should be retrieved in o
 	env: Looks for environment variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
 	file: Uses the credentials file specified by the parameter aws-creds-file
 	
-S3-compatible remote urls should be of the form {{.EmphasisLeft}}s3://bucket/database{{.EmphasisRight}}. They work against any object store implementing the S3 API with conditional writes, including AWS S3, Cloudflare R2, and MinIO, and require no DynamoDB table. Credentials come from the standard AWS SDK chain (environment variables, shared config, SSO). Optional parameters: {{.EmphasisLeft}}s3-endpoint{{.EmphasisRight}} (e.g. an R2 or MinIO endpoint; the AWS_ENDPOINT_URL_S3 environment variable is also honored), {{.EmphasisLeft}}s3-region{{.EmphasisRight}}, and {{.EmphasisLeft}}s3-path-style{{.EmphasisRight}} (true/false, for providers requiring path-style addressing).
+S3-compatible remote urls should be of the form {{.EmphasisLeft}}s3://bucket/database{{.EmphasisRight}}. They work against any object store implementing the S3 API with conditional writes, including AWS S3, Cloudflare R2, and MinIO, and require no DynamoDB table. Credentials and endpoint resolution come from the standard AWS SDK chain, including the AWS_ENDPOINT_URL_S3 and AWS_REGION environment variables and the shared config file.
 
 GCP remote urls should be of the form gs://gcs-bucket/database and will use the credentials setup using the gcloud command line available from Google.
 
@@ -104,10 +104,6 @@ func (cmd RemoteCmd) ArgParser() *argparser.ArgParser {
 
 	ap.SupportsString(dbfactory.OSSCredsFileParam, "", "file", "OSS credentials file")
 	ap.SupportsString(dbfactory.OSSCredsProfile, "", "profile", "OSS profile to use")
-
-	ap.SupportsString(dbfactory.S3EndpointParam, "", "endpoint", "S3-compatible endpoint url (e.g. Cloudflare R2 or MinIO); only valid for s3 remotes")
-	ap.SupportsString(dbfactory.S3RegionParam, "", "region", "Signing region for s3 remotes")
-	ap.SupportsString(dbfactory.S3PathStyleParam, "", "true|false", "Use path-style addressing for s3 remotes")
 	return ap
 }
 
@@ -225,8 +221,6 @@ func parseRemoteArgs(apr *argparser.ArgParseResults, scheme, remoteUrl string) (
 		err = cli.AddAWSParams(remoteUrl, apr, params)
 	case dbfactory.OSSScheme:
 		err = cli.AddOSSParams(remoteUrl, apr, params)
-	case dbfactory.S3Scheme:
-		err = cli.AddS3Params(remoteUrl, apr, params)
 	case dbfactory.GitFileScheme, dbfactory.GitHTTPScheme, dbfactory.GitHTTPSScheme, dbfactory.GitSSHScheme:
 		verr := addGitRemoteParams(apr, params)
 		if verr != nil {
