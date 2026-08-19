@@ -198,7 +198,7 @@ with result(test_name, from_latency, to_latency) as (
     f.test_name
 )
 select
-  test_name,
+  test_name as tpcc_latency,
   from_latency as from_latency_p95,
   to_latency as to_latency_p95,
   round(to_latency / (from_latency + .000001), $precision) as multiplier
