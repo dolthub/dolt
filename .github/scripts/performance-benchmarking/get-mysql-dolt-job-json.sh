@@ -151,7 +151,7 @@ from
 meanMultiplierWritesQuery="
 with result(multiplier) as (
   select
-    round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001)), $precision)
+    round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)
   from
     from_results as f join to_results as t
     on
@@ -169,7 +169,7 @@ from
 meanMultiplierOverallQuery="
 with result(multiplier) as (
   select
-    round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001)), $precision)
+    round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)
   from
     from_results as f join to_results as t
     on
@@ -232,7 +232,7 @@ select
   to_server_name,
   to_server_version,
   to_tps,
-  round(to_tps / (from_tps + .000001), $precision) as percent_change
+  round(from_tps / (to_tps + .000001), $precision) as percent_change
 from
   result;"
 
