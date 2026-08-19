@@ -255,6 +255,16 @@ select
 from
   result;"
 
+# Replace new lines with spaces, so it is valid JSON later
+medianLatencyMultiplierReadsQuery=${medianLatencyMultiplierReadsQuery//$'\n'/ }
+meanMultiplierReadsQuery = ${meanMultiplierReadsQuery//$'\n'/ }
+medianLatencyMultiplierWritesQuery = ${medianLatencyMultiplierWritesQuery//$'\n'/ }
+meanMultiplierWritesQuery = ${meanMultiplierWritesQuery//$'\n'/ }
+meanMultiplierOverallQuery = ${meanMultiplierOverallQuery//$'\n'/ }
+tpccLatencyQuery = ${tpccLatencyQuery//$'\n'/ }
+tpccTpsQuery = ${tpccTpsQuery//$'\n'/ }
+tpccTpsMultiplierQuery = ${tpccTpsMultiplierQuery//$'\n'/ }
+
 echo '
 {
   "apiVersion": "batch/v1",
@@ -314,14 +324,14 @@ echo '
               '"$withTpcc"'
               '"$initBigRepo"'
               '"$nomsBinFormat"'
-              "--sysbenchQueries='"${medianLatencyMultiplierReadsQuery//$'\n'/ }"'",
-              "--sysbenchQueries='"${meanMultiplierReadsQuery//$'\n'/ }"'",
-              "--sysbenchQueries='"${medianLatencyMultiplierWritesQuery//$'\n'/ }"'",
-              "--sysbenchQueries='"${meanMultiplierWritesQuery//$'\n'/ }"'",
-              "--sysbenchQueries='"${meanMultiplierOverallQuery//$'\n'/ }"'",
-              "--tpccQueries='"${tpccLatencyQuery//$'\n'/ }"'",
-              "--tpccQueries='"${tpccTpsQuery//$'\n'/ }"'",
-              "--tpccQueries='"${tpccTpsMultiplierQuery//$'\n'/ }"'"
+              "--sysbenchQueries='"$medianLatencyMultiplierReadsQuery"'",
+              "--sysbenchQueries='"$meanMultiplierReadsQuery"'",
+              "--sysbenchQueries='"$medianLatencyMultiplierWritesQuery"'",
+              "--sysbenchQueries='"$meanMultiplierWritesQuery"'",
+              "--sysbenchQueries='"$meanMultiplierOverallQuery"'",
+              "--tpccQueries='"$tpccLatencyQuery"'",
+              "--tpccQueries='"$tpccTpsQuery"'",
+              "--tpccQueries='"$tpccTpsMultiplierQuery"'"
             ]
           }
         ],
