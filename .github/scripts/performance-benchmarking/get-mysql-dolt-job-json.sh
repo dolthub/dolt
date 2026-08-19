@@ -92,7 +92,7 @@ from
 meanMultiplierReadsQuery="
 with result(multiplier) as (
   select
-    round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001)), $precision)
+    round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)
   from
     from_results as f join to_results as t
     on
