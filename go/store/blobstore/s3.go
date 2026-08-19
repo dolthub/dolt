@@ -15,6 +15,7 @@
 package blobstore
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -151,12 +152,22 @@ func (bs *S3Blobstore) Put(ctx context.Context, key string, totalSize int64, rea
 // CheckAndPut updates the blob keyed by |key| using a conditional PutObject
 // on |expectedVersion| (an ETag). See the type comment for the protocol.
 func (bs *S3Blobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader) (string, error) {
+	// The body must be seekable. Callers pass a *bytes.Buffer, which is not:
+	// without a seekable body the SDK cannot compute the payload hash, so it
+	// refuses the request outright against a plain-http endpoint, and it
+	// cannot rewind to retry a transient 5xx against any endpoint. Manifests
+	// are small, so buffering costs little.
+	body, err := io.ReadAll(reader)
+	if err != nil {
+		return "", err
+	}
+
 	absKey := path.Join(bs.prefix, key)
 	req := &s3.PutObjectInput{
 		Bucket:        aws.String(bs.bucketName),
 		Key:           aws.String(absKey),
-		Body:          reader,
-		ContentLength: aws.Int64(totalSize),
+		Body:          bytes.NewReader(body),
+		ContentLength: aws.Int64(int64(len(body))),
 	}
 
 	if expectedVersion != "" {
