@@ -616,22 +616,39 @@ func (d *DoltSession) DirtyDatabases() []string {
 	return dbNames
 }
 
-// DirtyBranchRevisions returns the revision-qualified name of every (database, branch)
-// pair in this session whose branch state has uncommitted changes. Unlike DirtyDatabases
-// it distinguishes branches within the same database, so each returned name can be passed
-// to CommitWorkingSet, DoltCommit or Rollback to act on that one branch state.
-func (d *DoltSession) DirtyBranchRevisions() []string {
+// DirtyBranch identifies one branch of one database with uncommitted changes.
+type DirtyBranch struct {
+	DbName string // base name, never revision-qualified
+	Branch string
+}
+
+// DirtyBranches returns every (database, branch) pair with uncommitted changes.
+// Unlike DirtyDatabases it distinguishes branches within a database.
+func (d *DoltSession) DirtyBranches() []DirtyBranch {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	var revisions []string
+	var dirty []DirtyBranch
 	for _, dbState := range d.dbStates {
 		for _, branchState := range dbState.heads {
 			if branchState.dirty {
-				revisions = append(revisions, branchState.RevisionDbName())
+				dirty = append(dirty, DirtyBranch{DbName: dbState.dbName, Branch: branchState.head})
 			}
 		}
 	}
-	return revisions
+	return dirty
+}
+
+// IsBranchDirty reports whether |branch| of |dbName| has uncommitted changes.
+// |dbName| must be a base name, not revision-qualified.
+func (d *DoltSession) IsBranchDirty(dbName, branch string) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	dbState, ok := d.dbStates[strings.ToLower(dbName)]
+	if !ok {
+		return false
+	}
+	branchState, ok := dbState.heads[strings.ToLower(branch)]
+	return ok && branchState.dirty
 }
 
 // CommitWorkingSet commits the working set for the transaction given, without creating a new dolt commit.
