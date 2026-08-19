@@ -187,7 +187,7 @@ func openMixedChunkSource(t *testing.T, ctx context.Context, arc mixedArchive, r
 	t.Helper()
 	ar, err := newArchiveReader(ctx, rd, arc.name, uint64(len(arc.data)), NewUnlimitedMemQuotaProvider(), &Stats{})
 	require.NoError(t, err)
-	acs := &archiveChunkSource{aRdr: ar, refs: noopRefCounter{}}
+	acs := &archiveChunkSource{aRdr: ar, refs: noopRefCounter{}, blockSize: s3BlockSize}
 	t.Cleanup(func() { acs.close() })
 	return acs
 }
@@ -350,7 +350,7 @@ func TestArchiveChunkSourceGetManySkipsFoundRecords(t *testing.T) {
 }
 
 // TestArchiveChunkSourceGetManyFansOut is the regression guard for the errgroup:
-// the reads must run concurrently rather than one at a time.
+// the batched reads must run concurrently rather than one at a time.
 func TestArchiveChunkSourceGetManyFansOut(t *testing.T) {
 	ctx := context.Background()
 	arc := buildMixedArchive(t)
@@ -358,7 +358,16 @@ func TestArchiveChunkSourceGetManyFansOut(t *testing.T) {
 	acs := openMixedChunkSource(t, ctx, arc, rd)
 
 	const limit = 4
-	require.Greater(t, len(arc.chunks), limit, "need more chunks than slots to saturate")
+
+	// Batching would otherwise collapse this fixture into a single read, leaving
+	// nothing to fan out. Refusing to read across any gap, and asking for every
+	// other chunk so there is always a gap, gives one read per chunk.
+	acs.blockSize = 0
+	want := make([]*chunks.Chunk, 0, len(arc.chunks)/2)
+	for i := 0; i < len(arc.chunks); i += 2 {
+		want = append(want, arc.chunks[i])
+	}
+	require.Greater(t, len(want), limit, "need more reads than slots to saturate")
 
 	// The delay holds each read open long enough that concurrent reads overlap
 	// observably; without it they retire faster than the next one is dispatched.
@@ -368,11 +377,11 @@ func TestArchiveChunkSourceGetManyFansOut(t *testing.T) {
 
 	got := newCollector()
 	_, _, err := runGetMany(t, limit, func(ctx context.Context, eg *errgroup.Group) (bool, gcBehavior, error) {
-		return acs.getManyCompressed(ctx, eg, recordsFor(arc.chunks), got.addToChunker, nil, &Stats{})
+		return acs.getManyCompressed(ctx, eg, recordsFor(want), got.addToChunker, nil, &Stats{})
 	})
 	require.NoError(t, err)
-	require.Equal(t, len(arc.chunks), got.count())
-	require.Equal(t, limit, rd.peakInFlight(), "chunk reads must saturate the errgroup")
+	require.Equal(t, len(want), got.count())
+	require.Equal(t, limit, rd.peakInFlight(), "batched reads must saturate the errgroup")
 }
 
 // TestArchiveChunkSourceLoadsEachDictOnce checks that a dictionary shared by many
@@ -451,4 +460,59 @@ func TestArchiveChunkSourceGetManyReadError(t *testing.T) {
 		return acs.getManyCompressed(ctx, eg, recordsFor(arc.chunks), got.addToChunker, nil, &Stats{})
 	})
 	require.ErrorIs(t, err, boom)
+}
+
+// TestArchiveChunkSourceCoalescesReads is the regression guard for batching: one
+// request must cover many chunks, not one chunk each.
+func TestArchiveChunkSourceCoalescesReads(t *testing.T) {
+	ctx := context.Background()
+	arc := buildMixedArchive(t)
+	rd := newCountingReaderAt(arc.data)
+	acs := openMixedChunkSource(t, ctx, arc, rd)
+
+	rd.reset()
+	got := newCollector()
+	remaining, _, err := runGetMany(t, 4, func(ctx context.Context, eg *errgroup.Group) (bool, gcBehavior, error) {
+		return acs.getManyCompressed(ctx, eg, recordsFor(arc.chunks), got.addToChunker, nil, &Stats{})
+	})
+	require.NoError(t, err)
+	require.False(t, remaining)
+	require.Equal(t, len(arc.chunks), got.count())
+
+	for _, chk := range arc.chunks {
+		require.Equal(t, chk.Data(), got.seen[chk.Hash()])
+	}
+
+	// The fixture's spans are contiguous, so every chunk should arrive in one
+	// read, plus one read per dictionary.
+	require.Equal(t, 1+mixedArchiveDictGroups, rd.readCount(),
+		"expected one batched read plus one read per dictionary, got %d for %d chunks",
+		rd.readCount(), len(arc.chunks))
+}
+
+// TestArchiveChunkSourcePlanReadsSplitsOnGap checks the block size is honoured:
+// spans further apart than it allows must land in separate reads.
+func TestArchiveChunkSourcePlanReadsSplitsOnGap(t *testing.T) {
+	ctx := context.Background()
+	arc := buildMixedArchive(t)
+	acs := openMixedChunkSource(t, ctx, arc, newCountingReaderAt(arc.data))
+
+	resolved, _, _, err := acs.resolve(recordsFor(arc.chunks), nil)
+	require.NoError(t, err)
+	require.Equal(t, len(arc.chunks), len(resolved))
+
+	acs.blockSize = s3BlockSize
+	require.Len(t, acs.planReads(resolved), 1, "a whole contiguous archive is one read")
+
+	// With no tolerance for gaps, only spans which are exactly adjacent merge.
+	acs.blockSize = 0
+	batches := acs.planReads(resolved)
+	require.Greater(t, len(batches), 1, "a zero block size must not merge across gaps")
+
+	covered := 0
+	for _, b := range batches {
+		covered += len(b.chunks)
+		require.Less(t, b.start, b.end)
+	}
+	require.Equal(t, len(resolved), covered, "every resolved chunk belongs to exactly one batch")
 }

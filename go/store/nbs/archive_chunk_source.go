@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -33,6 +34,10 @@ type archiveChunkSource struct {
 	aRdr archiveReader
 	file string
 	refs refCounter
+
+	// blockSize is the backing store's read granularity, the gap this source is
+	// willing to read over to fetch two chunks in one request. See tableReader.
+	blockSize uint64
 }
 
 var _ chunkSource = &archiveChunkSource{}
@@ -49,7 +54,7 @@ func newArchiveChunkSource(ctx context.Context, dir string, h hash.Hash, chunkCo
 	if err != nil {
 		return nil, err
 	}
-	return &archiveChunkSource{aRdr: aRdr, file: archiveFile, refs: refs}, nil
+	return &archiveChunkSource{aRdr: aRdr, file: archiveFile, refs: refs, blockSize: fileBlockSize}, nil
 }
 
 func newAWSArchiveChunkSource(ctx context.Context,
@@ -81,7 +86,7 @@ func newAWSArchiveChunkSource(ctx context.Context,
 	if err != nil {
 		return emptyChunkSource{}, err
 	}
-	return &archiveChunkSource{aRdr: aRdr, refs: noopRefCounter{}}, nil
+	return &archiveChunkSource{aRdr: aRdr, refs: noopRefCounter{}, blockSize: s3BlockSize}, nil
 }
 
 func (acs *archiveChunkSource) has(h hash.Hash, keeper keeperF) (bool, gcBehavior, error) {
@@ -125,19 +130,25 @@ func (acs *archiveChunkSource) get(ctx context.Context, h hash.Hash, keeper keep
 }
 
 func (acs *archiveChunkSource) getMany(ctx context.Context, eg *errgroup.Group, records []getRecord, found func(context.Context, *chunks.Chunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
-	return acs.getManyResolved(ctx, eg, records, keeper, stats, func(ctx context.Context, rc resolvedChunk) error {
-		data, err := acs.aRdr.getByRef(ctx, rc, stats)
+	return acs.getManyResolved(ctx, eg, records, keeper, stats, func(ctx context.Context, rc resolvedChunk, data []byte) error {
+		dict, err := acs.aRdr.dictFor(ctx, rc, stats)
 		if err != nil {
 			return err
 		}
-		chunk := chunks.NewChunk(data)
+		raw, err := acs.aRdr.decompress(rc.h, dict, data)
+		if err != nil {
+			return err
+		}
+		chunk := chunks.NewChunk(raw)
 		found(ctx, &chunk)
 		return nil
 	})
 }
 
-// getManyResolved locates every requested chunk in the index, then hands one read
-// per chunk to |eg| so the reads run concurrently within the caller's io budget.
+// getManyResolved locates every requested chunk in the index, groups their data
+// spans into runs which are worth fetching in one request, and hands each run to
+// |eg| so the requests run concurrently within the caller's io budget.
+//
 // Which chunks are present is settled before the first read is dispatched, so the
 // returned value is accurate while the reads are still in flight, as the caller
 // requires in order to decide whether to consult the next chunk source.
@@ -147,7 +158,7 @@ func (acs *archiveChunkSource) getManyResolved(
 	records []getRecord,
 	keeper keeperF,
 	stats *Stats,
-	read func(context.Context, resolvedChunk) error,
+	deliver func(context.Context, resolvedChunk, []byte) error,
 ) (bool, gcBehavior, error) {
 	resolved, remaining, gcb, err := acs.resolve(records, keeper)
 	if err != nil || gcb != gcBehavior_Continue {
@@ -159,12 +170,86 @@ func (acs *archiveChunkSource) getManyResolved(
 		return remaining, gcBehavior_Continue, err
 	}
 
-	for _, rc := range resolved {
+	for _, batch := range acs.planReads(resolved) {
 		eg.Go(func() error {
-			return read(ctx, rc)
+			return acs.fetchBatch(ctx, batch, stats, deliver)
 		})
 	}
 	return remaining, gcBehavior_Continue, nil
+}
+
+// archiveReadBatch is a run of chunks whose data spans sit close enough together
+// to fetch in a single read.
+type archiveReadBatch struct {
+	chunks []resolvedChunk
+	start  uint64
+	end    uint64
+}
+
+// planReads groups |resolved| into the reads which will satisfy it. Spans are
+// sorted by offset and merged under canReadAhead, the same policy the table
+// reader applies, so both formats tolerate the same gap and cap a read at the
+// same size.
+//
+// Dictionaries are not part of a batch. loadDicts has already fetched them, and
+// there are far fewer of them than there are chunks.
+func (acs *archiveChunkSource) planReads(resolved []resolvedChunk) []archiveReadBatch {
+	type placed struct {
+		rc   resolvedChunk
+		span byteSpan
+	}
+
+	spans := make([]placed, len(resolved))
+	for i, rc := range resolved {
+		spans[i] = placed{rc: rc, span: acs.aRdr.getByteSpanByID(rc.dataId)}
+	}
+	sort.Slice(spans, func(i, j int) bool { return spans[i].span.offset < spans[j].span.offset })
+
+	batches := make([]archiveReadBatch, 0, len(spans))
+	for _, p := range spans {
+		rec := offsetRec{offset: p.span.offset, length: uint32(p.span.length)}
+
+		if n := len(batches); n > 0 {
+			cur := &batches[n-1]
+			if newEnd, ok := canReadAhead(rec, cur.start, cur.end, acs.blockSize); ok {
+				cur.chunks = append(cur.chunks, p.rc)
+				cur.end = newEnd
+				continue
+			}
+		}
+
+		batches = append(batches, archiveReadBatch{
+			chunks: []resolvedChunk{p.rc},
+			start:  p.span.offset,
+			end:    p.span.offset + p.span.length,
+		})
+	}
+	return batches
+}
+
+// fetchBatch reads a batch in one request and hands each chunk its own slice of
+// the result.
+func (acs *archiveChunkSource) fetchBatch(
+	ctx context.Context,
+	batch archiveReadBatch,
+	stats *Stats,
+	deliver func(context.Context, resolvedChunk, []byte) error,
+) error {
+	buf := make([]byte, batch.end-batch.start)
+	_, err := acs.aRdr.reader.ReadAtWithStats(ctx, buf, int64(batch.start), stats)
+	if err != nil {
+		return err
+	}
+
+	for _, rc := range batch.chunks {
+		span := acs.aRdr.getByteSpanByID(rc.dataId)
+		off := span.offset - batch.start
+		err = deliver(ctx, rc, buf[off:off+span.length])
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // resolve looks up each not-yet-found record in the index, reading nothing. It
@@ -279,9 +364,10 @@ func (acs *archiveChunkSource) clone() (chunkSource, error) {
 	}
 	acs.refs.addRef()
 	return &archiveChunkSource{
-		aRdr: reader,
-		file: acs.file,
-		refs: acs.refs,
+		aRdr:      reader,
+		file:      acs.file,
+		refs:      acs.refs,
+		blockSize: acs.blockSize,
 	}, nil
 }
 
@@ -307,8 +393,12 @@ func (acs *archiveChunkSource) getRecordRanges(_ context.Context, _ dherrors.Fat
 }
 
 func (acs *archiveChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
-	return acs.getManyResolved(ctx, eg, reqs, keeper, stats, func(ctx context.Context, rc resolvedChunk) error {
-		toChk, err := acs.aRdr.getAsToChunkerByRef(ctx, rc, stats)
+	return acs.getManyResolved(ctx, eg, reqs, keeper, stats, func(ctx context.Context, rc resolvedChunk, data []byte) error {
+		dict, err := acs.aRdr.dictFor(ctx, rc, stats)
+		if err != nil {
+			return err
+		}
+		toChk, err := acs.aRdr.toChunker(rc.h, dict, data)
 		if err != nil {
 			return err
 		}

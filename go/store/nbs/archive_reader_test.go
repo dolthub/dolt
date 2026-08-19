@@ -239,8 +239,8 @@ func (e *errorAfter) ReadAtWithStats(ctx context.Context, p []byte, off int64, s
 	return n, err
 }
 
-// chunkRefFor locates |h| independently of archiveReader.resolveChunk, so the by-ref
-// read paths can be exercised directly.
+// chunkRefFor locates |h| independently of archiveReader.resolveChunk, so the span
+// based read paths can be exercised directly.
 func chunkRefFor(t *testing.T, ar archiveReader, h hash.Hash) resolvedChunk {
 	t.Helper()
 	idx := ar.findIndex(h)
@@ -257,26 +257,39 @@ func openMixedReader(t *testing.T, ctx context.Context, arc mixedArchive, rd tab
 	return ar
 }
 
-// TestArchiveReaderByRefMatchesSearch checks the by-ref reads return exactly what
-// the searching reads return, for dictionary and snappy chunks alike.
-func TestArchiveReaderByRefMatchesSearch(t *testing.T) {
+// spanBytes reads a resolved chunk's data span the way fetchBatch slices it out
+// of a batch buffer.
+func spanBytes(t *testing.T, ctx context.Context, ar archiveReader, rc resolvedChunk) []byte {
+	t.Helper()
+	data, err := ar.readByteSpan(ctx, ar.getByteSpanByID(rc.dataId), &Stats{})
+	require.NoError(t, err)
+	return data
+}
+
+// TestArchiveReaderSpanReadMatchesSearch checks that rebuilding a chunk from its
+// data span and dictionary, which is what the batched read path does, returns
+// exactly what the single chunk searching reads return.
+func TestArchiveReaderSpanReadMatchesSearch(t *testing.T) {
 	ctx := context.Background()
 	arc := buildMixedArchive(t)
 	ar := openMixedReader(t, ctx, arc, newCountingReaderAt(arc.data))
 
 	for _, chk := range arc.chunks {
 		ref := chunkRefFor(t, ar, chk.Hash())
+		dict, err := ar.dictFor(ctx, ref, &Stats{})
+		require.NoError(t, err)
+		data := spanBytes(t, ctx, ar, ref)
 
 		want, err := ar.get(ctx, chk.Hash(), &Stats{})
 		require.NoError(t, err)
-		got, err := ar.getByRef(ctx, ref, &Stats{})
+		got, err := ar.decompress(ref.h, dict, data)
 		require.NoError(t, err)
 		require.Equal(t, chk.Data(), want)
 		require.Equal(t, want, got)
 
 		wantTC, err := ar.getAsToChunker(ctx, chk.Hash(), &Stats{})
 		require.NoError(t, err)
-		gotTC, err := ar.getAsToChunkerByRef(ctx, ref, &Stats{})
+		gotTC, err := ar.toChunker(ref.h, dict, data)
 		require.NoError(t, err)
 
 		wantChk, err := wantTC.ToChunk()
@@ -295,8 +308,10 @@ func TestArchiveReaderToChunkerFormat(t *testing.T) {
 	arc := buildMixedArchive(t)
 	ar := openMixedReader(t, ctx, arc, newCountingReaderAt(arc.data))
 
-	dicted := arc.dictChunks[0]
-	tc, err := ar.getAsToChunkerByRef(ctx, chunkRefFor(t, ar, dicted.Hash()), &Stats{})
+	dicted := chunkRefFor(t, ar, arc.dictChunks[0].Hash())
+	dict, err := ar.dictFor(ctx, dicted, &Stats{})
+	require.NoError(t, err)
+	tc, err := ar.toChunker(dicted.h, dict, spanBytes(t, ctx, ar, dicted))
 	require.NoError(t, err)
 	require.IsType(t, &ArchiveToChunker{}, tc)
 
@@ -310,7 +325,8 @@ func TestArchiveReaderToChunkerFormat(t *testing.T) {
 	}
 	require.NotNil(t, snappy, "fixture must contain a chunk with no dictionary")
 
-	tc, err = ar.getAsToChunkerByRef(ctx, chunkRefFor(t, ar, snappy.Hash()), &Stats{})
+	snappyRef := chunkRefFor(t, ar, snappy.Hash())
+	tc, err = ar.toChunker(snappyRef.h, nil, spanBytes(t, ctx, ar, snappyRef))
 	require.NoError(t, err)
 	require.IsType(t, CompressedChunk{}, tc)
 }

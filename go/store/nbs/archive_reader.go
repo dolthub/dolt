@@ -501,15 +501,6 @@ func (ar *archiveReader) get(ctx context.Context, hash hash.Hash, stats *Stats) 
 	return ar.decompress(hash, dict, data)
 }
 
-// getByRef is get for a chunk which has already been located in the index.
-func (ar *archiveReader) getByRef(ctx context.Context, rc resolvedChunk, stats *Stats) ([]byte, error) {
-	dict, data, err := ar.getRawByRef(ctx, rc.dictId, rc.dataId, stats)
-	if err != nil {
-		return nil, err
-	}
-	return ar.decompress(rc.h, dict, data)
-}
-
 func (ar *archiveReader) decompress(h hash.Hash, dict *DecompBundle, data []byte) ([]byte, error) {
 	if dict == nil {
 		if ar.footer.formatVersion < archiveVersionSnappySupport {
@@ -542,16 +533,6 @@ func (ar *archiveReader) getAsToChunker(ctx context.Context, h hash.Hash, stats 
 	}
 
 	return ar.toChunker(h, dict, data)
-}
-
-// getAsToChunkerByRef is getAsToChunker for a chunk which has already been located
-// in the index.
-func (ar *archiveReader) getAsToChunkerByRef(ctx context.Context, rc resolvedChunk, stats *Stats) (ToChunker, error) {
-	dict, data, err := ar.getRawByRef(ctx, rc.dictId, rc.dataId, stats)
-	if err != nil {
-		return nil, err
-	}
-	return ar.toChunker(rc.h, dict, data)
 }
 
 // toChunker wraps still-compressed chunk bytes in the ToChunker matching the
@@ -642,6 +623,16 @@ func (ar *archiveReader) getRawByRef(ctx context.Context, dictId, dataId uint32,
 		return nil, nil, err
 	}
 	return dict, data, nil
+}
+
+// dictFor returns the dictionary |rc| needs, or nil when the chunk carries no
+// dictionary. After loadDicts has run this is a cache hit; it falls back to a read
+// if the entry was evicted in between.
+func (ar *archiveReader) dictFor(ctx context.Context, rc resolvedChunk, stats *Stats) (*DecompBundle, error) {
+	if rc.dictId == 0 {
+		return nil, nil
+	}
+	return ar.loadDict(ctx, rc.dictId, stats)
 }
 
 // loadDict returns the dictionary for |dictId|, reading and caching it on a miss.
