@@ -314,14 +314,14 @@ echo '
               '"$withTpcc"'
               '"$initBigRepo"'
               '"$nomsBinFormat"'
-              "--sysbenchQueries='"$medianLatencyMultiplierReadsQuery"'",
-              "--sysbenchQueries='"$meanMultiplierReadsQuery"'",
-              "--sysbenchQueries='"$medianLatencyMultiplierWritesQuery"'",
-              "--sysbenchQueries='"$meanMultiplierWritesQuery"'",
-              "--sysbenchQueries='"$meanMultiplierOverallQuery"'",
-              "--tpccQueries='"$tpccLatencyQuery"'",
-              "--tpccQueries='"$tpccTpsQuery"'",
-              "--tpccQueries='"$tpccTpsMultiplierQuery"'"
+              "--sysbenchQueries='"${medianLatencyMultiplierReadsQuery//$'\n'/ }"'",
+              "--sysbenchQueries='"${meanMultiplierReadsQuery//$'\n'/ }"'",
+              "--sysbenchQueries='"${medianLatencyMultiplierWritesQuery//$'\n'/ }"'",
+              "--sysbenchQueries='"${meanMultiplierWritesQuery//$'\n'/ }"'",
+              "--sysbenchQueries='"${meanMultiplierOverallQuery//$'\n'/ }"'",
+              "--tpccQueries='"${tpccLatencyQuery//$'\n'/ }"'",
+              "--tpccQueries='"${tpccTpsQuery//$'\n'/ }"'",
+              "--tpccQueries='"${tpccTpsMultiplierQuery//$'\n'/ }"'"
             ]
           }
         ],
