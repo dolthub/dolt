@@ -31,12 +31,9 @@ import (
 )
 
 type archiveChunkSource struct {
-	aRdr archiveReader
-	file string
-	refs refCounter
-
-	// blockSize is the backing store's read granularity, the gap this source is
-	// willing to read over to fetch two chunks in one request. See tableReader.
+	aRdr      archiveReader
+	file      string
+	refs      refCounter
 	blockSize uint64
 }
 
@@ -149,9 +146,10 @@ func (acs *archiveChunkSource) getMany(ctx context.Context, eg *errgroup.Group, 
 // spans into runs which are worth fetching in one request, and hands each run to
 // |eg| so the requests run concurrently within the caller's io budget.
 //
-// Which chunks are present is settled before the first read is dispatched, so the
-// returned value is accurate while the reads are still in flight, as the caller
-// requires in order to decide whether to consult the next chunk source.
+// |deliver| is where a chunk is finished. It is handed the bytes of one chunk's
+// data span and turns them into what the caller asked for, running on the
+// errgroup goroutine which read that batch. So it runs after this call has
+// returned, and concurrently with the other batches.
 func (acs *archiveChunkSource) getManyResolved(
 	ctx context.Context,
 	eg *errgroup.Group,
@@ -254,8 +252,7 @@ func (acs *archiveChunkSource) fetchBatch(
 	return nil
 }
 
-// resolve looks up each not-yet-found record in the index, reading nothing. It
-// reports whether any record was absent.
+// resolve looks up each not-yet-found record in the index.
 //
 // found flags are set only once the whole walk has succeeded. A keeper block part
 // way through otherwise leaves earlier records marked found but never delivered,
@@ -293,9 +290,10 @@ func (acs *archiveChunkSource) resolve(records []getRecord, keeper keeperF) ([]r
 
 // loadDicts reads each distinct dictionary the resolved chunks need, before their
 // reads fan out. Otherwise every concurrent reader sharing an uncached dictionary
-// fetches its own copy. Archives written by the pull streamer hold a single
-// dictionary, so this is normally one read, and never more than the fanned out
-// reads would have done anyway.
+// fetches its own copy.
+//
+// Currently dicts are requested serially. Generally one dict per archive is the norm,
+// but that may not be true in the future. TODO: fan out.
 func (acs *archiveChunkSource) loadDicts(ctx context.Context, resolved []resolvedChunk, stats *Stats) error {
 	seen := make(map[uint32]struct{})
 	for _, rc := range resolved {
@@ -394,7 +392,14 @@ func (acs *archiveChunkSource) getRecordRanges(_ context.Context, _ dherrors.Fat
 	return result, gcBehavior_Continue, nil
 }
 
-func (acs *archiveChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
+func (acs *archiveChunkSource) getManyCompressed(
+	ctx context.Context,
+	eg *errgroup.Group,
+	reqs []getRecord,
+	found func(context.Context, ToChunker),
+	keeper keeperF,
+	stats *Stats,
+) (bool, gcBehavior, error) {
 	return acs.getManyResolved(ctx, eg, reqs, keeper, stats, func(ctx context.Context, rc resolvedChunk, data []byte) error {
 		dict, err := acs.aRdr.dictFor(ctx, rc, stats)
 		if err != nil {

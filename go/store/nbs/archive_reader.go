@@ -597,8 +597,7 @@ type resolvedChunk struct {
 	dataId uint32
 }
 
-// resolveChunk finds |h| in the index, reporting false when this archive does not hold
-// it. This is the only place a hash is turned into a chunk reference.
+// resolveChunk finds |h| in the index, reporting false when this archive does not hold it.
 func (ar *archiveReader) resolveChunk(h hash.Hash) (resolvedChunk, bool) {
 	idx := ar.findIndex(h)
 	if idx < 0 {
