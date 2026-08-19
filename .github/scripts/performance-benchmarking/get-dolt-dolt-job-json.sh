@@ -20,6 +20,7 @@ initBigRepo="${10}"
 nomsBinFormat="${11}"
 sysbenchTestTime="${12}"
 withTpcc="${13}"
+precision="2"
 tpccRegex="tpcc%"
 
 if [ -n "$initBigRepo" ]; then
@@ -71,7 +72,7 @@ select
   test_name as read_tests,
   from_latency,
   to_latency,
-  round(100 * ((to_latency - from_latency) / from_latency), 2) as percent_change
+  round(100 * ((to_latency - from_latency) / from_latency), $precision) as percent_change
 from result;"
 
 writeTests="(
@@ -103,7 +104,7 @@ select
   test_name as write_tests,
   from_latency,
   to_latency,
-  round(100 * ((to_latency - from_latency) / from_latency), 2) as percent_change
+  round(100 * ((to_latency - from_latency) / from_latency), $precision) as percent_change
 from
   result;"
 
@@ -124,7 +125,7 @@ select
   test_name,
   from_latency as from_latency_p95,
   to_latency as to_latency_p95,
-  round(100 * ((to_latency - from_latency) / from_latency), 2) as percent_change
+  round(100 * ((to_latency - from_latency) / from_latency), $precision) as percent_change
 from
   result;"
 
@@ -143,7 +144,7 @@ with result(test_name, from_server_name, from_server_version, from_tps, to_serve
     on
       f.test_name = t.test_name
     where
-      f.test_name LIKE 'tpcc%'
+      f.test_name LIKE '$tpccRegex'
   group by
     f.test_name
 )
@@ -155,7 +156,7 @@ select
   to_server_name,
   to_server_version,
   to_tps,
-  round(100 * ((to_tps - from_tps) / from_tps), 2) as percent_change
+  round(100 * ((to_tps - from_tps) / from_tps), $precision) as percent_change
 from
   result;"
 
