@@ -37,6 +37,50 @@ func TestDoltSessionInit(t *testing.T) {
 	assert.Equal(t, conf, dsess.globalsConf)
 }
 
+func TestDirtyBranchRevisions(t *testing.T) {
+	addBranchState := func(sess *DoltSession, dbName, head string, dirty bool) {
+		dbState, ok := sess.dbStates[dbName]
+		if !ok {
+			dbState = newEmptyDatabaseSessionState()
+			dbState.dbName = dbName
+			sess.dbStates[dbName] = dbState
+		}
+		dbState.NewEmptyBranchState(head, RevisionTypeBranch).dirty = dirty
+	}
+
+	t.Run("no branch states", func(t *testing.T) {
+		sess := DefaultSession(emptyDatabaseProvider(), nil)
+		assert.Empty(t, sess.DirtyBranchRevisions())
+	})
+
+	t.Run("no dirty branch states", func(t *testing.T) {
+		sess := DefaultSession(emptyDatabaseProvider(), nil)
+		addBranchState(sess, "db1", "main", false)
+		assert.Empty(t, sess.DirtyBranchRevisions())
+	})
+
+	// The distinction from DirtyDatabases: two dirty branches of one database
+	// yield two revision names but a single database name.
+	t.Run("multiple dirty branches in one database", func(t *testing.T) {
+		sess := DefaultSession(emptyDatabaseProvider(), nil)
+		addBranchState(sess, "db1", "main", true)
+		addBranchState(sess, "db1", "feature", true)
+		addBranchState(sess, "db1", "clean", false)
+
+		assert.ElementsMatch(t, []string{"db1/main", "db1/feature"}, sess.DirtyBranchRevisions())
+		assert.Equal(t, []string{"db1"}, sess.DirtyDatabases())
+	})
+
+	t.Run("dirty branches across databases", func(t *testing.T) {
+		sess := DefaultSession(emptyDatabaseProvider(), nil)
+		addBranchState(sess, "db1", "main", true)
+		addBranchState(sess, "db2", "main", false)
+		addBranchState(sess, "db3", "feature", true)
+
+		assert.ElementsMatch(t, []string{"db1/main", "db3/feature"}, sess.DirtyBranchRevisions())
+	})
+}
+
 func TestNewPersistedSystemVariables(t *testing.T) {
 	dsess := DefaultSession(emptyDatabaseProvider(), nil)
 	conf := config.NewMapConfig(map[string]string{"max_connections": "1000"})

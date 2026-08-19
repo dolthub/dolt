@@ -98,7 +98,33 @@ func DefaultSession(pro DoltDatabaseProvider, sessFunc WriteSessFunc) *DoltSessi
 	}
 }
 
+// NewDetachedSession returns a DoltSession backed by a fresh sql.BaseSession
+// rather than one supplied by a client connection. Use it when an external
+// session manager owns the DoltSession lifecycle and SQL requests run against
+// a *sql.Context pointing at this session instead of a per-connection one.
+func NewDetachedSession(
+	pro DoltDatabaseProvider,
+	conf config.ReadWriteConfig,
+	branchController *branch_control.Controller,
+	statsProvider sql.StatsProvider,
+	writeSessProv WriteSessFunc,
+	gcSafepointController *gcctx.GCSafepointController,
+	branchActivityTracker *doltdb.BranchActivityTracker,
+) (*DoltSession, error) {
+	return NewDoltSession(
+		sql.NewBaseSession(),
+		pro,
+		conf,
+		branchController,
+		statsProvider,
+		writeSessProv,
+		gcSafepointController,
+		branchActivityTracker,
+	)
+}
+
 // NewDoltSession creates a DoltSession object from a standard sql.Session and 0 or more Database objects.
+// sqlSess may be any *sql.BaseSession; callers with no per-connection session should use NewDetachedSession.
 func NewDoltSession(
 	sqlSess *sql.BaseSession,
 	pro DoltDatabaseProvider,
@@ -588,6 +614,24 @@ func (d *DoltSession) DirtyDatabases() []string {
 		}
 	}
 	return dbNames
+}
+
+// DirtyBranchRevisions returns the revision-qualified name of every (database, branch)
+// pair in this session whose branch state has uncommitted changes. Unlike DirtyDatabases
+// it distinguishes branches within the same database, so each returned name can be passed
+// to CommitWorkingSet, DoltCommit or Rollback to act on that one branch state.
+func (d *DoltSession) DirtyBranchRevisions() []string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	var revisions []string
+	for _, dbState := range d.dbStates {
+		for _, branchState := range dbState.heads {
+			if branchState.dirty {
+				revisions = append(revisions, branchState.RevisionDbName())
+			}
+		}
+	}
+	return revisions
 }
 
 // CommitWorkingSet commits the working set for the transaction given, without creating a new dolt commit.
