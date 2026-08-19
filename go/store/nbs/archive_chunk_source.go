@@ -186,42 +186,41 @@ type archiveReadBatch struct {
 	end    uint64
 }
 
-// planReads groups |resolved| into the reads which will satisfy it. Spans are
-// sorted by offset and merged under canReadAhead, the same policy the table
-// reader applies, so both formats tolerate the same gap and cap a read at the
-// same size.
+// resolvedByOffset orders resolved chunks by where their data sits in the file,
+// keeping the spans alongside so they are not looked up again per comparison.
+type resolvedByOffset struct {
+	resolved []resolvedChunk
+	spans    []byteSpan
+}
+
+func (s resolvedByOffset) Len() int           { return len(s.spans) }
+func (s resolvedByOffset) Less(i, j int) bool { return s.spans[i].offset < s.spans[j].offset }
+func (s resolvedByOffset) Swap(i, j int) {
+	s.resolved[i], s.resolved[j] = s.resolved[j], s.resolved[i]
+	s.spans[i], s.spans[j] = s.spans[j], s.spans[i]
+}
+
+// planReads groups |resolved| into the reads which will satisfy it, using the
+// same span grouping the table reader uses so both formats tolerate the same gap
+// and cap a read at the same size. |resolved| is reordered by offset.
 //
 // Dictionaries are not part of a batch. loadDicts has already fetched them, and
 // there are far fewer of them than there are chunks.
 func (acs *archiveChunkSource) planReads(resolved []resolvedChunk) []archiveReadBatch {
-	type placed struct {
-		rc   resolvedChunk
-		span byteSpan
-	}
-
-	spans := make([]placed, len(resolved))
+	spans := make([]byteSpan, len(resolved))
 	for i, rc := range resolved {
-		spans[i] = placed{rc: rc, span: acs.aRdr.getByteSpanByID(rc.dataId)}
+		spans[i] = acs.aRdr.getByteSpanByID(rc.dataId)
 	}
-	sort.Slice(spans, func(i, j int) bool { return spans[i].span.offset < spans[j].span.offset })
+	sort.Sort(resolvedByOffset{resolved: resolved, spans: spans})
 
-	batches := make([]archiveReadBatch, 0, len(spans))
-	for _, p := range spans {
-		rec := offsetRec{offset: p.span.offset, length: uint32(p.span.length)}
+	runs := groupSpans(len(spans), func(i int) byteSpan { return spans[i] }, acs.blockSize)
 
-		if n := len(batches); n > 0 {
-			cur := &batches[n-1]
-			if newEnd, ok := canReadAhead(rec, cur.start, cur.end, acs.blockSize); ok {
-				cur.chunks = append(cur.chunks, p.rc)
-				cur.end = newEnd
-				continue
-			}
-		}
-
+	batches := make([]archiveReadBatch, 0, len(runs))
+	for _, run := range runs {
 		batches = append(batches, archiveReadBatch{
-			chunks: []resolvedChunk{p.rc},
-			start:  p.span.offset,
-			end:    p.span.offset + p.span.length,
+			chunks: resolved[run.first : run.first+run.count],
+			start:  run.start,
+			end:    run.end,
 		})
 	}
 	return batches
@@ -236,9 +235,12 @@ func (acs *archiveChunkSource) fetchBatch(
 	deliver func(context.Context, resolvedChunk, []byte) error,
 ) error {
 	buf := make([]byte, batch.end-batch.start)
-	_, err := acs.aRdr.reader.ReadAtWithStats(ctx, buf, int64(batch.start), stats)
+	n, err := acs.aRdr.reader.ReadAtWithStats(ctx, buf, int64(batch.start), stats)
 	if err != nil {
 		return err
+	}
+	if uint64(n) != batch.end-batch.start {
+		return errors.New("failed to read all data")
 	}
 
 	for _, rc := range batch.chunks {
