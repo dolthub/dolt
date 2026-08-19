@@ -317,14 +317,14 @@ func (ds *SchemaDiffTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.R
 		var fromCreate, toCreate string
 
 		if delta.FromTable != nil {
-			fromCreate, err = sqlfmt.GenerateCreateTableStatement(ctx, delta.FromName.Name, delta.FromSch, delta.FromFks, delta.FromFksParentSch)
+			fromCreate, err = sqlfmt.GenerateCreateTableStatement(ctx, delta.FromName.Name, delta.FromSch, delta.FromFks, delta.FromFksParentSch, false)
 			if err != nil {
 				return nil, err
 			}
 		}
 
 		if delta.ToTable != nil {
-			toCreate, err = sqlfmt.GenerateCreateTableStatement(ctx, delta.ToName.Name, delta.ToSch, delta.ToFks, delta.ToFksParentSch)
+			toCreate, err = sqlfmt.GenerateCreateTableStatement(ctx, delta.ToName.Name, delta.ToSch, delta.ToFks, delta.ToFksParentSch, false)
 			if err != nil {
 				return nil, err
 			}

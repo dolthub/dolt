@@ -104,7 +104,22 @@ func (c AddressMap) Has(ctx context.Context, name string) (ok bool, err error) {
 	return c.addresses.Has(ctx, stringSlice(name))
 }
 
+// IterAll calls |cb| with the name and address of every entry
+// in the map, in key order. The name is a string copy that the
+// caller may retain.
 func (c AddressMap) IterAll(ctx context.Context, cb func(name string, address hash.Hash) error) error {
+	return c.IterAllBytes(ctx, func(name []byte, addr hash.Hash) error {
+		return cb(string(name), addr)
+	})
+}
+
+// IterAllBytes is like IterAll but passes each name as raw
+// bytes instead of a string, avoiding a copy per entry.
+//
+// The name passed to |cb| is only valid for the duration
+// of the call, so a caller that needs to retain it must
+// copy it first.
+func (c AddressMap) IterAllBytes(ctx context.Context, cb func(name []byte, address hash.Hash) error) error {
 	iter, err := c.addresses.IterAll(ctx)
 	if err != nil {
 		return err
@@ -121,7 +136,7 @@ func (c AddressMap) IterAll(ctx context.Context, cb func(name string, address ha
 			return err
 		}
 
-		if err = cb(string(n), hash.New(a)); err != nil {
+		if err = cb(n, hash.New(a)); err != nil {
 			return err
 		}
 	}

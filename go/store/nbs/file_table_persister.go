@@ -172,6 +172,12 @@ func (ftp *fsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCoun
 	return cs, nil
 }
 
+// Exists reports whether a table file named |name| is already present, and if
+// so returns a handle protecting it from pruning instead of writing it again.
+//
+// Currently, these handles are only effective for stores that do not
+// experience multi-process concurrency. So this method must not be used on
+// the backup or push path to a file:// store.
 func (ftp *fsTablePersister) Exists(ctx context.Context, name string, chunkCount uint32, stats *Stats) (bool, io.Closer, error) {
 	ftp.pruneMu.RLock()
 	defer ftp.pruneMu.RUnlock()
@@ -370,6 +376,32 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, behavior dherrors.F
 	}, nil
 }
 
+// pruneUnreferencedWithGrace reclaims table files in ftp.dir that neither the
+// destination's manifest nor this process reference, subject to the
+// directory-wide quiescence check in pruneDirWithGrace. |lock| supplies the
+// manifest's contribution to the keep set. ftp adds its own |protected| set to
+// the set of things to keep.
+func (ftp *fsTablePersister) pruneUnreferencedWithGrace(ctx context.Context, grace time.Duration, lock lockKeepers) (PruneStats, error) {
+	ftp.pruneMu.Lock()
+	defer ftp.pruneMu.Unlock()
+
+	lockAndProtect := func(ctx context.Context) (hash.HashSet, func() error, error) {
+		keep, release, err := lock(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		// ftp.protected can be read without ftp.mu since we hold ftp.pruneMu
+		// exclusively.
+		for h, n := range ftp.protected {
+			if n > 0 {
+				keep.Insert(h)
+			}
+		}
+		return keep, release, nil
+	}
+	return pruneDirWithGrace(ctx, ftp.dir, grace, lockAndProtect)
+}
+
 func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context) error {
 	ftp.pruneMu.Lock()
 	defer ftp.pruneMu.Unlock()
@@ -400,7 +432,6 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context) error {
 		filePath := path.Join(ftp.dir, name)
 
 		if strings.HasPrefix(name, tempTablePrefix) {
-			// Write lock guarantees no temp files are in flight.
 			if err := file.Remove(filePath); err != nil && !errors.Is(err, fs.ErrNotExist) {
 				errs = append(errs, fmt.Errorf("error removing temp file %s: %w", filePath, err))
 			}

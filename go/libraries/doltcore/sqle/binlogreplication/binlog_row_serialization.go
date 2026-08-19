@@ -37,7 +37,7 @@ type rowSerializationIter struct {
 	key       val.Tuple      // The key tuple for the row being serialized
 	value     val.Tuple      // The value tuple for the row being serialized
 
-	colIdx int // The position in the schema for the current column
+	colIdx int // The stored (non-virtual) column index in toSch for the current column
 }
 
 // newRowSerializationIter creates a new rowSerializationIter using the |fromSch|, which describes the format of the
@@ -58,7 +58,7 @@ func newRowSerializationIter(ctx *sql.Context, fromSch, toSch schema.Schema, key
 
 // hasNext returns true if this iterator has more columns to provide and the |nextColumn| method can be called.
 func (rsi *rowSerializationIter) hasNext() bool {
-	return rsi.colIdx < rsi.toSch.GetAllCols().Size()
+	return rsi.colIdx < rsi.toSch.GetAllCols().StoredSize()
 }
 
 // nextColumn provides the data needed to process the next column in a row, including the column from the "from" schema,
@@ -69,18 +69,19 @@ func (rsi *rowSerializationIter) hasNext() bool {
 // safe to call.
 func (rsi *rowSerializationIter) nextColumn() (*schema.Column, *schema.Column, *val.TupleDesc, val.Tuple, int) {
 	// Ultimately, we are serializing to the "to" schema so that we can send a binlog encoded row to a replica, so
-	// we iterate over the "to" schema to assemble the serialized row in the format the replica is expecting.
-	toCol := rsi.toSch.GetAllCols().GetColumns()[rsi.colIdx]
+	// we iterate over the "to" schema's non-virtual columns to assemble the serialized row in the format the
+	// replica is expecting.
+	toCol := rsi.toSch.GetAllCols().GetByStoredIndex(rsi.colIdx)
 	rsi.colIdx++
 
-	// Look up the matching column in the "from" schema
+	// Look up the matching, non-virtual column in the "from" schema.
 	var pFromCol *schema.Column
-	if fromCol, ok := rsi.fromSch.GetAllCols().GetByTag(toCol.Tag); ok {
+	if fromCol, ok := rsi.fromSch.GetAllCols().GetByTag(toCol.Tag); ok && !fromCol.Virtual {
 		pFromCol = &fromCol
 	} else {
 		// Try to look up by name in case we don't find by tag?
 		// The tag can change in some cases, such as type changes... need to test this
-		if fromCol, ok = rsi.fromSch.GetAllCols().GetByName(toCol.Name); ok {
+		if fromCol, ok = rsi.fromSch.GetAllCols().GetByName(toCol.Name); ok && !fromCol.Virtual {
 			pFromCol = &fromCol
 		}
 	}
@@ -101,27 +102,25 @@ func (rsi *rowSerializationIter) nextColumn() (*schema.Column, *schema.Column, *
 	}
 }
 
-// findFromTupleIndex searches the "from" schema in this iterator for the column |pFromCol| and returns the
-// index of that field into the tuple it is stored in (i.e. either the key tuple or the value tuple). If
-// |pFromCol| is nil, then -1 is returned. Callers must use this to find the correct index to load from the
-// tuple, because fields may be skipped over if a column was dropped or reordered as part of the transaction.
+// findFromTupleIndex returns the index of |pFromCol| into the tuple it is stored in (i.e. either the key tuple or
+// the value tuple). If |pFromCol| is nil, then -1 is returned. This uses the storage index (via StoredIndexByTag),
+// rather than the column's position.
 func (rsi *rowSerializationIter) findFromTupleIndex(pFromCol *schema.Column) int {
 	if pFromCol == nil {
 		return -1
 	}
 
-	fromTupleIdx := -1
-	for _, col := range rsi.fromSch.GetAllCols().GetColumns() {
-		// Make sure we're indexing into the correct tuple: either the key or the value tuple
-		if col.IsPartOfPK != pFromCol.IsPartOfPK {
-			continue
-		}
-		fromTupleIdx++
-		if col.Equals(*pFromCol) {
-			break
-		}
+	var idx int
+	var ok bool
+	if pFromCol.IsPartOfPK {
+		idx, ok = rsi.fromSch.GetPKCols().StoredIndexByTag(pFromCol.Tag)
+	} else {
+		idx, ok = rsi.fromSch.GetNonPKCols().StoredIndexByTag(pFromCol.Tag)
 	}
-	return fromTupleIdx
+	if !ok {
+		return -1
+	}
+	return idx
 }
 
 // serializeRowToBinlogBytes serializes the row formed by |key| and |value| into a binlog encoded row. The |fromSch| is
@@ -133,8 +132,7 @@ func (rsi *rowSerializationIter) findFromTupleIndex(pFromCol *schema.Column) int
 // out-of-band data. This function returns the binary representation of the row, as well as a bitmap that indicates
 // which fields of the row are null (and therefore don't contribute any bytes to the returned binary data).
 func serializeRowToBinlogBytes(ctx *sql.Context, fromSch, toSch schema.Schema, key, value tree.Item, ns tree.NodeStore) (data []byte, nullBitmap mysql.Bitmap, err error) {
-	columns := toSch.GetAllCols().GetColumns()
-	nullBitmap = mysql.NewServerBitmap(len(columns))
+	nullBitmap = mysql.NewServerBitmap(toSch.GetAllCols().StoredSize())
 
 	iter := newRowSerializationIter(ctx, fromSch, toSch, key, value, ns)
 	rowIdx := -1

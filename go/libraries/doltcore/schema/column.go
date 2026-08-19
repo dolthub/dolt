@@ -168,6 +168,14 @@ func (c Column) IsNullable() bool {
 	return true
 }
 
+// IsGenerated reports whether the column is computed by the engine.
+//
+// TODO(elianddb): Make Generated private so callers ask interface
+// instead of testing field.
+func (c Column) IsGenerated() bool {
+	return c.Generated != ""
+}
+
 // Equals tests equality between two columns.
 func (c Column) Equals(other Column) bool {
 	return c.Name == other.Name &&

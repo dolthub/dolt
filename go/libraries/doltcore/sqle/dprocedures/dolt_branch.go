@@ -160,8 +160,11 @@ func renameBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argpar
 	}
 	activeSessionBranch := headRef.GetPath()
 
-	err = actions.RenameBranch(ctx, dbData, oldBranchName, newBranchName, sess.Provider(), force, rsc)
+	err = actions.RenameBranch(ctx, dbData, oldBranchName, newBranchName, force, rsc)
 	if err != nil {
+		if existsErr := actions.BranchExistsError(err); existsErr != nil {
+			return existsErr
+		}
 		return err
 	}
 	err = branch_control.AddAdminForContext(ctx, newBranchName)
@@ -272,7 +275,7 @@ func deleteBranches(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argp
 		err = actions.DeleteBranch(ctx, dbData, branchName, actions.DeleteOptions{
 			Force:  force,
 			Remote: remote,
-		}, dSess.Provider(), rsc)
+		}, rsc)
 		if err != nil {
 			return err
 		}
@@ -518,8 +521,8 @@ func copyABranch(ctx *sql.Context, dbData env.DbData[*sql.Context], srcBr string
 	if err != nil {
 		if err == doltdb.ErrBranchNotFound {
 			return fmt.Errorf("fatal: A branch named '%s' not found", srcBr)
-		} else if err == actions.ErrAlreadyExists {
-			return fmt.Errorf("fatal: A branch named '%s' already exists.", destBr)
+		} else if existsErr := actions.BranchExistsError(err); existsErr != nil {
+			return existsErr
 		} else if err == doltdb.ErrInvBranchName {
 			return fmt.Errorf("fatal: '%s' is not a valid branch name.", destBr)
 		} else {

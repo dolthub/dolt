@@ -1107,17 +1107,19 @@ func (r *remotesapiAuth) ApiAuthenticate(ctx context.Context) (context.Context, 
 		return nil, err
 	}
 
-	err = commands.ValidatePasswordWithAuthResponse(r.rawDb, creds.Username, creds.Password)
-	if err != nil {
-		return nil, fmt.Errorf("API Authentication Failure: %v", err)
-	}
-
 	address := creds.Address
 	if strings.Index(address, ":") > 0 {
 		address, _, err = net.SplitHostPort(creds.Address)
 		if err != nil {
 			return nil, fmt.Errorf("Invalid Host string for authentication: %s", creds.Address)
 		}
+	}
+
+	// Validate against the account for the address the request came from, not a fixed one. The account this
+	// resolves to is the same one ApiAuthorize goes on to check privileges for.
+	err = commands.ValidatePasswordWithAuthResponse(r.rawDb, creds.Username, creds.Password, address)
+	if err != nil {
+		return nil, fmt.Errorf("API Authentication Failure: %v", err)
 	}
 
 	sqlCtx, err := r.ctxFactory(ctx)

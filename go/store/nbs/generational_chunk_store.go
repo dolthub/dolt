@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -455,6 +456,23 @@ func (gcs *GenerationalNBS) PruneTableFiles(ctx context.Context) error {
 	}
 
 	return gcs.newGen.pruneTableFiles(ctx)
+}
+
+// PruneUnreferencedWithGrace implements [GracePruner] over both generations.
+// Each directory is judged against its own manifest and its own quiescence,
+// so one busy generation does not veto the other.
+func (gcs *GenerationalNBS) PruneUnreferencedWithGrace(ctx context.Context, grace time.Duration) (PruneStats, error) {
+	var stats PruneStats
+
+	newGenStats, err := gcs.newGen.PruneUnreferencedWithGrace(ctx, grace)
+	stats.add(newGenStats)
+	if err != nil {
+		return stats, err
+	}
+
+	oldGenStats, err := gcs.oldGen.PruneUnreferencedWithGrace(ctx, grace)
+	stats.add(oldGenStats)
+	return stats, err
 }
 
 // SupportedOperations returns a description of the support TableFile operations. Some stores only support reading table files, not writing.

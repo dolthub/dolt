@@ -131,11 +131,13 @@ func TestFileManifestUpdate(t *testing.T) {
 	stats := &Stats{}
 
 	// First, test winning the race against another process.
+	specA := computeAddr([]byte("a"))
+	touchTableFile(t, fm.dir, specA)
 	contents := manifestContents{
 		nbfVers: constants.FormatDoltString,
 		lock:    computeAddr([]byte("locker")),
 		root:    hash.Of([]byte("new root")),
-		specs:   []tableSpec{{computeAddr([]byte("a")), 3}},
+		specs:   []tableSpec{{specA, 3}},
 	}
 	upstream, err := fm.Update(context.Background(), dherrors.FatalBehaviorError, hash.Hash{}, contents, stats, func() error {
 		// This should fail to get the lock, and therefore _not_ clobber the manifest. So the Update should succeed.
@@ -203,4 +205,173 @@ func runClobber(dir, contents string) ([]byte, error) {
 
 	c := exec.Command("go", "run", clobber, mkPath(lockFileName), mkPath(manifestFileName), contents)
 	return c.CombinedOutput()
+}
+
+// touchTableFile creates an empty stand-in for the table file named |h| in
+// |dir|, so that a manifest update may take a dependency on it.
+func touchTableFile(t *testing.T, dir string, h hash.Hash) string {
+	t.Helper()
+	p := filepath.Join(dir, h.String())
+	require.NoError(t, os.WriteFile(p, nil, 0666))
+	return p
+}
+
+// TestFileManifestUpdateRejectsMissingTableFile asserts that a manifest update
+// refuses to publish a dependency on a table file that is not in the
+// directory. A writer that committed such a manifest would leave the store
+// broken for every other process, while continuing to read the file through
+// its own already-open descriptor.
+func TestFileManifestUpdateRejectsMissingTableFile(t *testing.T) {
+	ctx := context.Background()
+	fm := makeFileManifestTempDir(t)
+	defer file.RemoveAll(fm.dir)
+	stats := &Stats{}
+
+	present := computeAddr([]byte("present"))
+	absent := computeAddr([]byte("absent"))
+	touchTableFile(t, fm.dir, present)
+
+	contents := manifestContents{
+		nbfVers: constants.FormatDoltString,
+		lock:    computeAddr([]byte("lock")),
+		root:    hash.Of([]byte("root")),
+		specs:   []tableSpec{{present, 1}, {absent, 1}},
+	}
+
+	_, err := fm.Update(ctx, dherrors.FatalBehaviorError, hash.Hash{}, contents, stats, nil)
+	require.ErrorIs(t, err, ErrManifestSpecMissingTableFile)
+	require.ErrorContains(t, err, absent.String())
+
+	// The manifest must not have been committed.
+	exists, _, err := fm.ParseIfExists(ctx, stats, nil)
+	require.NoError(t, err)
+	require.False(t, exists, "a rejected update must not publish a manifest")
+}
+
+// TestFileManifestUpdateAcceptsArchive asserts an archive satisfies a spec.
+// A tableSpec records only the address. This is just exercising the file
+// existence check on the archive file name.
+func TestFileManifestUpdateAcceptsArchive(t *testing.T) {
+	ctx := context.Background()
+	fm := makeFileManifestTempDir(t)
+	defer file.RemoveAll(fm.dir)
+	stats := &Stats{}
+
+	archive := computeAddr([]byte("archive"))
+	require.NoError(t, os.WriteFile(filepath.Join(fm.dir, archive.String()+ArchiveFileSuffix), nil, 0666))
+
+	contents := manifestContents{
+		nbfVers: constants.FormatDoltString,
+		lock:    computeAddr([]byte("lock")),
+		root:    hash.Of([]byte("root")),
+		specs:   []tableSpec{{archive, 1}},
+	}
+
+	upstream, err := fm.Update(ctx, dherrors.FatalBehaviorError, hash.Hash{}, contents, stats, nil)
+	require.NoError(t, err)
+	require.Equal(t, contents.lock, upstream.lock)
+}
+
+// TestFileManifestUpdateAcceptsAppendix asserts appendix specs are checked
+// as part of the file existence check in a file manifest update.
+func TestFileManifestUpdateAcceptsAppendix(t *testing.T) {
+	ctx := context.Background()
+	fm := makeFileManifestTempDir(t)
+	defer file.RemoveAll(fm.dir)
+	stats := &Stats{}
+
+	appendix := computeAddr([]byte("appendix"))
+	contents := manifestContents{
+		nbfVers:  constants.FormatDoltString,
+		lock:     computeAddr([]byte("lock")),
+		root:     hash.Of([]byte("root")),
+		specs:    []tableSpec{{appendix, 1}},
+		appendix: []tableSpec{{appendix, 1}},
+	}
+
+	_, err := fm.Update(ctx, dherrors.FatalBehaviorError, hash.Hash{}, contents, stats, nil)
+	require.ErrorIs(t, err, ErrManifestSpecMissingTableFile)
+
+	touchTableFile(t, fm.dir, appendix)
+	upstream, err := fm.Update(ctx, dherrors.FatalBehaviorError, hash.Hash{}, contents, stats, nil)
+	require.NoError(t, err)
+	require.Equal(t, contents.lock, upstream.lock)
+}
+
+// TestFileManifestUpdateSkipsExistingSpecs asserts only newly added specs are
+// checked. Existence checks are not required for table files which are already
+// open in the store. If the manifest is stale, it will need to be rebased
+// regardless before landing an update. If it is not stale, no correctly
+// behaving removal logic should be removing files which are referenced in the
+// manifest. Thus, it is not this logic's job to detect such a case.
+func TestFileManifestUpdateSkipsExistingSpecs(t *testing.T) {
+	ctx := context.Background()
+	fm := makeFileManifestTempDir(t)
+	defer file.RemoveAll(fm.dir)
+	stats := &Stats{}
+
+	first := computeAddr([]byte("first"))
+	firstPath := touchTableFile(t, fm.dir, first)
+	contents := manifestContents{
+		nbfVers: constants.FormatDoltString,
+		lock:    computeAddr([]byte("lock 1")),
+		root:    hash.Of([]byte("root")),
+		specs:   []tableSpec{{first, 1}},
+	}
+	upstream, err := fm.Update(ctx, dherrors.FatalBehaviorError, hash.Hash{}, contents, stats, nil)
+	require.NoError(t, err)
+
+	// Something removes the already-referenced file out from under us. The
+	// store is broken, but that is not this update's doing and not its job to
+	// notice.
+	require.NoError(t, os.Remove(firstPath))
+
+	second := computeAddr([]byte("second"))
+	touchTableFile(t, fm.dir, second)
+	contents2 := manifestContents{
+		nbfVers: constants.FormatDoltString,
+		lock:    computeAddr([]byte("lock 2")),
+		root:    hash.Of([]byte("root")),
+		specs:   []tableSpec{{first, 1}, {second, 1}},
+	}
+	upstream, err = fm.Update(ctx, dherrors.FatalBehaviorError, upstream.lock, contents2, stats, nil)
+	require.NoError(t, err)
+	require.Equal(t, contents2.lock, upstream.lock)
+}
+
+// TestFileManifestUpdateGCGenRejectsMissingTableFile asserts the GC generation
+// update path checks newly added files for existence.
+func TestFileManifestUpdateGCGenRejectsMissingTableFile(t *testing.T) {
+	ctx := context.Background()
+	fm := makeFileManifestTempDir(t)
+	defer file.RemoveAll(fm.dir)
+	stats := &Stats{}
+
+	root := hash.Of([]byte("root"))
+	present := computeAddr([]byte("present"))
+	touchTableFile(t, fm.dir, present)
+	contents := manifestContents{
+		nbfVers: constants.FormatDoltString,
+		lock:    computeAddr([]byte("lock 1")),
+		root:    root,
+		specs:   []tableSpec{{present, 1}},
+	}
+	upstream, err := fm.Update(ctx, dherrors.FatalBehaviorError, hash.Hash{}, contents, stats, nil)
+	require.NoError(t, err)
+
+	collected := computeAddr([]byte("collected"))
+	gcContents := manifestContents{
+		nbfVers: constants.FormatDoltString,
+		lock:    computeAddr([]byte("lock 2")),
+		root:    root,
+		gcGen:   computeAddr([]byte("gcgen")),
+		specs:   []tableSpec{{collected, 1}},
+	}
+	_, err = fm.UpdateGCGen(ctx, dherrors.FatalBehaviorError, upstream.lock, gcContents, stats, nil)
+	require.ErrorIs(t, err, ErrManifestSpecMissingTableFile)
+
+	touchTableFile(t, fm.dir, collected)
+	after, err := fm.UpdateGCGen(ctx, dherrors.FatalBehaviorError, upstream.lock, gcContents, stats, nil)
+	require.NoError(t, err)
+	require.Equal(t, gcContents.lock, after.lock)
 }
