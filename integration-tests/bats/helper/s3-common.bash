@@ -46,16 +46,30 @@ setup_minio() {
         </dev/null >>"$MINIO_DIR/minio.log" 2>&1 &
     MINIO_PID=$!
 
-    local i
+    local i ready=false
     for (( i = 0; i < 100; i++ )); do
         # /dev/tcp is a bash built-in that avoids a dependency on netcat.
-        (: >/dev/tcp/127.0.0.1/"$MINIO_PORT") 2>/dev/null && return 0
+        if (: >/dev/tcp/127.0.0.1/"$MINIO_PORT") 2>/dev/null; then
+            ready=true
+            break
+        fi
         sleep 0.1
     done
 
-    echo "minio failed to start on port $MINIO_PORT" >&2
-    cat "$MINIO_DIR/minio.log" >&2
-    return 1
+    if [ "$ready" != true ]; then
+        echo "minio failed to start on port $MINIO_PORT" >&2
+        cat "$MINIO_DIR/minio.log" >&2
+        return 1
+    fi
+
+    # Under SQL_ENGINE=remote-engine the push runs in the sql-server that
+    # setup_common started, not in the dolt client, and that server inherited
+    # the ambient AWS credentials rather than the ones set just above. Restart
+    # it so it picks them up, the same reason and remedy as sql-backup.bats.
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+        stop_sql_server 1
+        start_sql_server
+    fi
 }
 
 # teardown_minio stops the server from setup_minio and removes its data.
