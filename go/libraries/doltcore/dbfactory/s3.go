@@ -17,12 +17,16 @@ package dbfactory
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
+	"strconv"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
+	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
@@ -40,25 +44,102 @@ import (
 // come from the standard AWS SDK chain (environment variables, shared
 // config/credentials files, SSO, IMDS).
 //
-// URL format: s3://bucket/path/to/db
+// Provider routing travels in the url's query string rather than in creation
+// params, so a repository can address two providers at once and so the values
+// survive wherever the url does. Credentials are never accepted there.
+//
+// URL format: s3://bucket/path/to/db[?endpoint=...&region=...&path-style=true]
 type S3Factory struct {
 }
 
-// PrepareDB prepares an S3-compatible backed database
+const (
+	s3EndpointQuery  = "endpoint"
+	s3RegionQuery    = "region"
+	s3PathStyleQuery = "path-style"
+)
+
+// s3Routing is the provider addressing an s3:// url may carry. None of it is
+// authentication: credentials always come from the AWS SDK chain.
+type s3Routing struct {
+	// endpoint targets an S3-compatible provider, e.g. an R2 or MinIO host.
+	// When empty the SDK resolves it, honoring AWS_ENDPOINT_URL_S3 and the
+	// shared config file.
+	endpoint string
+
+	// region is the signing region. Some providers want a fixed value here;
+	// R2 uses "auto". When empty the SDK resolves it from AWS_REGION or the
+	// shared config file.
+	region string
+
+	// pathStyle selects https://endpoint/bucket/key addressing over
+	// virtual-hosted style. Providers without wildcard DNS need it, MinIO
+	// most commonly. There is no ambient equivalent: the SDK exposes this
+	// only as a client option, so the url is the only way to ask for it.
+	pathStyle bool
+}
+
+// PrepareDB validates the url so a malformed one is reported before any
+// request is attempted.
 func (fact S3Factory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) error {
-	// nothing to prepare
-	return nil
+	_, _, _, err := parseS3Url(urlObj)
+	return err
+}
+
+// ValidateS3Url reports whether |urlStr| is a usable s3:// url. Commands that
+// take a url from the user should call this so a mistake surfaces when the
+// remote is added rather than at first push.
+func ValidateS3Url(urlStr string) error {
+	urlObj, err := earl.Parse(urlStr)
+	if err != nil {
+		return err
+	}
+
+	_, _, _, err = parseS3Url(urlObj)
+	return err
+}
+
+func parseS3Url(urlObj *url.URL) (bucket, prefix string, routing s3Routing, err error) {
+	bucket = urlObj.Hostname()
+	if bucket == "" {
+		return "", "", routing, errors.New("s3 url must be of the form s3://bucket/path")
+	}
+
+	if urlObj.User != nil {
+		return "", "", routing, errors.New("s3 urls must not embed credentials: they would be stored in plaintext with the remote. Use the standard AWS credential chain instead")
+	}
+
+	for key, vals := range urlObj.Query() {
+		if len(vals) != 1 || vals[0] == "" {
+			return "", "", routing, fmt.Errorf("s3 url parameter %q needs exactly one non-empty value", key)
+		}
+
+		switch key {
+		case s3EndpointQuery:
+			routing.endpoint = vals[0]
+		case s3RegionQuery:
+			routing.region = vals[0]
+		case s3PathStyleQuery:
+			routing.pathStyle, err = strconv.ParseBool(vals[0])
+			if err != nil {
+				return "", "", routing, fmt.Errorf("s3 url parameter %q must be true or false, got %q", key, vals[0])
+			}
+		default:
+			return "", "", routing, fmt.Errorf("unknown s3 url parameter %q; supported parameters are %q, %q and %q",
+				key, s3EndpointQuery, s3RegionQuery, s3PathStyleQuery)
+		}
+	}
+
+	return bucket, urlObj.Path, routing, nil
 }
 
 // CreateDB creates a database backed by a generic S3-compatible object store
 func (fact S3Factory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
-	bucket := urlObj.Hostname()
-	if bucket == "" {
-		return nil, nil, nil, errors.New("s3 url must be of the form s3://bucket/path")
+	bucket, prefix, routing, err := parseS3Url(urlObj)
+	if err != nil {
+		return nil, nil, nil, err
 	}
-	prefix := urlObj.Path
 
-	client, err := newS3Client(ctx)
+	client, err := newS3Client(ctx, routing)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -81,11 +162,21 @@ func (fact S3Factory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, ur
 	return db, vrw, ns, nil
 }
 
-func newS3Client(ctx context.Context) (*s3.Client, error) {
-	cfg, err := config.LoadDefaultConfig(ctx)
+func newS3Client(ctx context.Context, routing s3Routing) (*s3.Client, error) {
+	var loadOpts []func(*config.LoadOptions) error
+	if routing.region != "" {
+		loadOpts = append(loadOpts, config.WithRegion(routing.region))
+	}
+
+	cfg, err := config.LoadDefaultConfig(ctx, loadOpts...)
 	if err != nil {
 		return nil, err
 	}
 
-	return s3.NewFromConfig(cfg), nil
+	return s3.NewFromConfig(cfg, func(o *s3.Options) {
+		if routing.endpoint != "" {
+			o.BaseEndpoint = aws.String(routing.endpoint)
+		}
+		o.UsePathStyle = routing.pathStyle
+	}), nil
 }
