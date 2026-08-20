@@ -274,17 +274,13 @@ func blobHasChanged(expectedVersion string, err error) bool {
 }
 
 // CheckAndPut updates the blob keyed by |key| using a check-and-set on |expectedVersion|
-func (bs *AzureBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader) (string, error) {
+func (bs *AzureBlobstore) CheckAndPutManifest(ctx context.Context, expectedVersion string, contents []byte) (string, error) {
+	key := ManifestKey
 	absKey := bs.absKey(key)
-
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		return "", err
-	}
 
 	uploadOptions := buildCheckAndPutOptions(expectedVersion)
 
-	resp, err := bs.azClient.UploadBuffer(ctx, bs.containerName, absKey, data, uploadOptions)
+	resp, err := bs.azClient.UploadBuffer(ctx, bs.containerName, absKey, contents, uploadOptions)
 	if err != nil {
 		if blobExistsWhenShouldnt(expectedVersion, err) || blobHasChanged(expectedVersion, err) {
 			// Get the current version to return in the error

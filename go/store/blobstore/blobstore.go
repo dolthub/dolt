@@ -22,6 +22,9 @@ import (
 	"strings"
 )
 
+// ManifestKey is the key of the one blob a Blobstore must support check-and-set on.
+const ManifestKey = "manifest"
+
 // Blobstore is an interface for storing and retrieving blobs of data by key
 type Blobstore interface {
 	// Path returns this blobstore's path.
@@ -41,8 +44,12 @@ type Blobstore interface {
 	// CheckAndPut.
 	Put(ctx context.Context, key string, totalSize int64, reader io.Reader) (version string, err error)
 
-	// CheckAndPut updates the blob keyed by |key| using a check-and-set on |expectedVersion|.
-	CheckAndPut(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader) (version string, err error)
+	// CheckAndPutManifest updates the manifest blob using a check-and-set on
+	// |expectedVersion|, which is empty when the manifest is not expected to
+	// exist yet. |contents| is taken whole rather than as a stream: the
+	// manifest is small, the caller has already materialized it, and several
+	// implementations need a rewindable view of it to sign, upload, or parse.
+	CheckAndPutManifest(ctx context.Context, expectedVersion string, contents []byte) (version string, err error)
 
 	// Concatenate creates a new blob named |key| by concatenating |sources|.
 	Concatenate(ctx context.Context, key string, sources []string) (version string, err error)

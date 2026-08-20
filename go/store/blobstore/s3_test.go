@@ -94,31 +94,31 @@ func TestS3PutGetExists(t *testing.T) {
 	assert.True(t, IsNotFoundError(err))
 }
 
-func TestS3CheckAndPut(t *testing.T) {
+func TestS3CheckAndPutManifest(t *testing.T) {
 	bs := newTestS3Blobstore(t)
 	ctx := context.Background()
 
 	// create with no expected version
-	v1, err := bs.CheckAndPut(ctx, "", "manifest", 4, bytes.NewReader([]byte("one1")))
+	v1, err := bs.CheckAndPutManifest(ctx, "", []byte("one1"))
 	require.NoError(t, err)
 	require.NotEmpty(t, v1)
 
 	// create again must fail: key exists
-	_, err = bs.CheckAndPut(ctx, "", "manifest", 4, bytes.NewReader([]byte("two2")))
+	_, err = bs.CheckAndPutManifest(ctx, "", []byte("two2"))
 	assert.True(t, IsCheckAndPutError(err), "expected CheckAndPutError, got %v", err)
 
 	// update with the correct version succeeds
-	v2, err := bs.CheckAndPut(ctx, v1, "manifest", 4, bytes.NewReader([]byte("two2")))
+	v2, err := bs.CheckAndPutManifest(ctx, v1, []byte("two2"))
 	require.NoError(t, err)
 	require.NotEmpty(t, v2)
 	require.NotEqual(t, v1, v2)
 
 	// update with a stale version fails
-	_, err = bs.CheckAndPut(ctx, v1, "manifest", 6, bytes.NewReader([]byte("three3")))
+	_, err = bs.CheckAndPutManifest(ctx, v1, []byte("three3"))
 	assert.True(t, IsCheckAndPutError(err), "expected CheckAndPutError, got %v", err)
 
 	// If-Match against a missing key fails and must not create it
-	_, err = bs.CheckAndPut(ctx, v1, "no-such-key", 4, bytes.NewReader([]byte("nope")))
+	_, err = bs.CheckAndPutManifest(ctx, v1, []byte("nope"))
 	assert.True(t, IsCheckAndPutError(err), "expected CheckAndPutError, got %v", err)
 	ok, err := bs.Exists(ctx, "no-such-key")
 	require.NoError(t, err)
@@ -130,11 +130,11 @@ func TestS3CheckAndPut(t *testing.T) {
 	assert.Equal(t, []byte("two2"), read)
 }
 
-func TestS3CheckAndPutConcurrent(t *testing.T) {
+func TestS3CheckAndPutManifestConcurrent(t *testing.T) {
 	bs := newTestS3Blobstore(t)
 	ctx := context.Background()
 
-	base, err := bs.CheckAndPut(ctx, "", "race", 4, bytes.NewReader([]byte("base")))
+	base, err := bs.CheckAndPutManifest(ctx, "", []byte("base"))
 	require.NoError(t, err)
 
 	const racers = 8
@@ -147,7 +147,7 @@ func TestS3CheckAndPutConcurrent(t *testing.T) {
 		go func(n int) {
 			defer wg.Done()
 			body := []byte(fmt.Sprintf("racer-%02d", n))
-			_, err := bs.CheckAndPut(ctx, base, "race", int64(len(body)), bytes.NewReader(body))
+			_, err := bs.CheckAndPutManifest(ctx, base, body)
 			mu.Lock()
 			defer mu.Unlock()
 			if err == nil {

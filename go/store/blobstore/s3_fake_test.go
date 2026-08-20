@@ -274,15 +274,15 @@ func newFakeS3Blobstore(t *testing.T, f *fakeS3, useTLS bool) *S3Blobstore {
 	return NewS3Blobstore(s3.New(opts), "bkt", "pfx")
 }
 
-// manifestBody mirrors what blobstoreManifest hands CheckAndPut: a
-// *bytes.Buffer, which is not an io.Seeker.
-func manifestBody(contents string) *bytes.Buffer {
+// manifestBody mirrors what blobstoreManifest hands CheckAndPutManifest: the
+// bytes of a buffer it has already filled.
+func manifestBody(contents string) []byte {
 	buf := bytes.NewBuffer(make([]byte, 64*1024)[:0])
 	buf.WriteString(contents)
-	return buf
+	return buf.Bytes()
 }
 
-func TestS3BlobstoreCheckAndPut(t *testing.T) {
+func TestS3BlobstoreCheckAndPutManifest(t *testing.T) {
 	for _, useTLS := range []bool{false, true} {
 		name := "http"
 		if useTLS {
@@ -294,24 +294,24 @@ func TestS3BlobstoreCheckAndPut(t *testing.T) {
 			f := newFakeS3()
 			bs := newFakeS3Blobstore(t, f, useTLS)
 
-			v1, err := bs.CheckAndPut(ctx, "", "manifest", 4, manifestBody("one1"))
+			v1, err := bs.CheckAndPutManifest(ctx, "", manifestBody("one1"))
 			require.NoError(t, err)
 			require.NotEmpty(t, v1)
 
 			// A second create must lose: the key already exists.
-			_, err = bs.CheckAndPut(ctx, "", "manifest", 4, manifestBody("two2"))
+			_, err = bs.CheckAndPutManifest(ctx, "", manifestBody("two2"))
 			assert.True(t, IsCheckAndPutError(err), "expected CheckAndPutError, got %v", err)
 
-			v2, err := bs.CheckAndPut(ctx, v1, "manifest", 4, manifestBody("two2"))
+			v2, err := bs.CheckAndPutManifest(ctx, v1, manifestBody("two2"))
 			require.NoError(t, err)
 			require.NotEqual(t, v1, v2)
 
 			// Stale version loses.
-			_, err = bs.CheckAndPut(ctx, v1, "manifest", 6, manifestBody("three3"))
+			_, err = bs.CheckAndPutManifest(ctx, v1, manifestBody("three3"))
 			assert.True(t, IsCheckAndPutError(err), "expected CheckAndPutError, got %v", err)
 
 			// If-Match against a missing key fails without creating it.
-			_, err = bs.CheckAndPut(ctx, v1, "absent", 4, manifestBody("nope"))
+			_, err = bs.CheckAndPutManifest(ctx, v1, manifestBody("nope"))
 			assert.True(t, IsCheckAndPutError(err), "expected CheckAndPutError, got %v", err)
 			exists, err := bs.Exists(ctx, "absent")
 			require.NoError(t, err)
@@ -334,11 +334,11 @@ func TestS3BlobstoreCheckAndPut(t *testing.T) {
 // enabled, seekable body or not, so there is no equivalent assertion to make
 // there. Whether every S3-compatible provider accepts those trailers is a
 // separate question from this one.
-func TestS3BlobstoreCheckAndPutSignsBodyOverPlainHTTP(t *testing.T) {
+func TestS3BlobstoreCheckAndPutManifestSignsBodyOverPlainHTTP(t *testing.T) {
 	f := newFakeS3()
 	bs := newFakeS3Blobstore(t, f, false)
 
-	_, err := bs.CheckAndPut(context.Background(), "", "manifest", 17, manifestBody("manifest-contents"))
+	_, err := bs.CheckAndPutManifest(context.Background(), "", manifestBody("manifest-contents"))
 	require.NoError(t, err)
 
 	assert.NotContains(t, f.lastPut.Get("Content-Encoding"), "aws-chunked")
@@ -350,7 +350,7 @@ func TestS3BlobstoreCheckAndPutSignsBodyOverPlainHTTP(t *testing.T) {
 // A transient 5xx must be retried by the SDK rather than surfacing as a hard
 // error: the manifest layer only retries CheckAndPutError, so anything else
 // fails the caller's push. Retrying requires rewinding the body.
-func TestS3BlobstoreCheckAndPutRetriesTransientFailure(t *testing.T) {
+func TestS3BlobstoreCheckAndPutManifestRetriesTransientFailure(t *testing.T) {
 	for _, useTLS := range []bool{false, true} {
 		name := "http"
 		if useTLS {
@@ -363,7 +363,7 @@ func TestS3BlobstoreCheckAndPutRetriesTransientFailure(t *testing.T) {
 			bs := newFakeS3Blobstore(t, f, useTLS)
 
 			f.failNext = 1
-			ver, err := bs.CheckAndPut(ctx, "", "manifest", 4, manifestBody("one1"))
+			ver, err := bs.CheckAndPutManifest(ctx, "", manifestBody("one1"))
 			require.NoError(t, err)
 			require.NotEmpty(t, ver)
 			assert.Equal(t, 2, f.requests, "expected the failed attempt to be retried")
@@ -409,7 +409,7 @@ func TestS3BlobstoreGetRanges(t *testing.T) {
 // CheckAndPut must translate exactly the responses that mean "your view is
 // stale" into CheckAndPutError, because that is the only error the manifest
 // layer retries. Anything else has to reach the caller unchanged.
-func TestS3BlobstoreCheckAndPutErrorMapping(t *testing.T) {
+func TestS3BlobstoreCheckAndPutManifestErrorMapping(t *testing.T) {
 	tests := []struct {
 		name            string
 		status          int
@@ -476,7 +476,7 @@ func TestS3BlobstoreCheckAndPutErrorMapping(t *testing.T) {
 			bs := newFakeS3Blobstore(t, f, false)
 
 			f.injectStatus, f.injectCode = test.status, test.code
-			_, err := bs.CheckAndPut(context.Background(), test.expectedVersion, "manifest", 4, manifestBody("one1"))
+			_, err := bs.CheckAndPutManifest(context.Background(), test.expectedVersion, manifestBody("one1"))
 
 			require.Error(t, err)
 			assert.Equal(t, test.checkAndPut, IsCheckAndPutError(err), "got %v", err)

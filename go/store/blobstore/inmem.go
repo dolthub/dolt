@@ -100,9 +100,10 @@ func (bs *InMemoryBlobstore) Put(ctx context.Context, key string, totalSize int6
 	return bs.put(ctx, key, reader)
 }
 
-// CheckAndPut will check the current version of a blob against an expectedVersion, and if the
-// versions match it will update the data and version associated with the key
-func (bs *InMemoryBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader) (string, error) {
+// CheckAndPutManifest will check the current version of the manifest against an
+// expectedVersion, and if the versions match it will update the data and version
+func (bs *InMemoryBlobstore) CheckAndPutManifest(ctx context.Context, expectedVersion string, contents []byte) (string, error) {
+	key := ManifestKey
 	bs.mutex.Lock()
 	defer bs.mutex.Unlock()
 
@@ -112,7 +113,7 @@ func (bs *InMemoryBlobstore) CheckAndPut(ctx context.Context, expectedVersion, k
 	if !check {
 		return "", CheckAndPutError{key, expectedVersion, ver}
 	}
-	return bs.put(ctx, key, reader)
+	return bs.put(ctx, key, bytes.NewReader(contents))
 }
 
 // Exists returns true if a blob exists for the given key, and false if it does not.

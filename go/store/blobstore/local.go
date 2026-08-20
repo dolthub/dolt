@@ -15,6 +15,7 @@
 package blobstore
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -184,7 +185,8 @@ func fLock(lockFilePath string) (*fslock.Lock, error) {
 
 // CheckAndPut will check the current version of a blob against an expectedVersion, and if the
 // versions match it will update the data and version associated with the key
-func (bs *LocalBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader) (string, error) {
+func (bs *LocalBlobstore) CheckAndPutManifest(ctx context.Context, expectedVersion string, contents []byte) (string, error) {
+	key := ManifestKey
 	path := filepath.Join(bs.RootDir, key) + bsExt
 	lockFilePath := path + lockExt
 	lck, err := fLock(lockFilePath)
@@ -213,7 +215,7 @@ func (bs *LocalBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key 
 		return "", CheckAndPutError{key, expectedVersion, ver}
 	}
 
-	return bs.Put(ctx, key, totalSize, reader)
+	return bs.Put(ctx, key, int64(len(contents)), bytes.NewReader(contents))
 }
 
 // Exists returns true if a blob exists for the given key, and false if it does not.

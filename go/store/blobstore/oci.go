@@ -157,8 +157,8 @@ func (bs *OCIBlobstore) Put(ctx context.Context, key string, totalSize int64, re
 
 // CheckAndPut will check the current version of a blob against an expectedVersion, and if the
 // versions match it will update the data and version associated with the key
-func (bs *OCIBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader) (string, error) {
-	return bs.upload(ctx, expectedVersion, key, totalSize, reader)
+func (bs *OCIBlobstore) CheckAndPutManifest(ctx context.Context, expectedVersion string, contents []byte) (string, error) {
+	return bs.upload(ctx, expectedVersion, ManifestKey, int64(len(contents)), bytes.NewReader(contents))
 }
 
 // At the time of this implementation, Oracle Cloud does not provide a way to create composite objects

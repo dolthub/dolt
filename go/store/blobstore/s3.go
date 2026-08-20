@@ -149,25 +149,20 @@ func (bs *S3Blobstore) Put(ctx context.Context, key string, totalSize int64, rea
 	return fmtstr(res.ETag), nil
 }
 
-// CheckAndPut updates the blob keyed by |key| using a conditional PutObject
-// on |expectedVersion| (an ETag). See the type comment for the protocol.
-func (bs *S3Blobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader) (string, error) {
-	// The body must be seekable. Callers pass a *bytes.Buffer, which is not:
-	// without a seekable body the SDK cannot compute the payload hash, so it
-	// refuses the request outright against a plain-http endpoint, and it
-	// cannot rewind to retry a transient 5xx against any endpoint. Manifests
-	// are small, so buffering costs little.
-	body, err := io.ReadAll(reader)
-	if err != nil {
-		return "", err
-	}
-
-	absKey := path.Join(bs.prefix, key)
+// CheckAndPutManifest updates the manifest using a conditional PutObject on
+// |expectedVersion| (an ETag). See the type comment for the protocol.
+//
+// |contents| arrives as bytes rather than a stream because the body must be
+// seekable: without that the SDK cannot compute the payload hash, so it
+// refuses the request outright against a plain-http endpoint, and it cannot
+// rewind to retry a transient 5xx against any endpoint.
+func (bs *S3Blobstore) CheckAndPutManifest(ctx context.Context, expectedVersion string, contents []byte) (string, error) {
+	absKey := path.Join(bs.prefix, ManifestKey)
 	req := &s3.PutObjectInput{
 		Bucket:        aws.String(bs.bucketName),
 		Key:           aws.String(absKey),
-		Body:          bytes.NewReader(body),
-		ContentLength: aws.Int64(int64(len(body))),
+		Body:          bytes.NewReader(contents),
+		ContentLength: aws.Int64(int64(len(contents))),
 	}
 
 	if expectedVersion != "" {
@@ -182,16 +177,16 @@ func (bs *S3Blobstore) CheckAndPut(ctx context.Context, expectedVersion, key str
 		switch {
 		case status == 412:
 			// Precondition failed: another writer won the race.
-			return "", CheckAndPutError{Key: key, ExpectedVersion: expectedVersion, ActualVersion: "unknown"}
+			return "", CheckAndPutError{Key: ManifestKey, ExpectedVersion: expectedVersion, ActualVersion: "unknown"}
 		case isS3ConditionalConflict(err):
 			// AWS returns 409 ConditionalRequestConflict when concurrent
 			// conditional writes collide; the caller must reread and retry,
 			// which is exactly the CheckAndPutError contract.
-			return "", CheckAndPutError{Key: key, ExpectedVersion: expectedVersion, ActualVersion: "unknown"}
+			return "", CheckAndPutError{Key: ManifestKey, ExpectedVersion: expectedVersion, ActualVersion: "unknown"}
 		case expectedVersion != "" && status == 404:
 			// If-Match against a missing key: the expected version cannot
 			// match a nonexistent object.
-			return "", CheckAndPutError{Key: key, ExpectedVersion: expectedVersion, ActualVersion: ""}
+			return "", CheckAndPutError{Key: ManifestKey, ExpectedVersion: expectedVersion, ActualVersion: ""}
 		}
 		return "", err
 	}
