@@ -72,7 +72,7 @@ select
   test_name as read_tests,
   from_latency,
   to_latency,
-  round(100 * ((to_latency - from_latency) / from_latency), $precision) as percent_change
+  round(100 * ((to_latency - from_latency) / (from_latency + .000001)), $precision) as percent_change
 from result;"
 
 writeTests="(
@@ -104,7 +104,7 @@ select
   test_name as write_tests,
   from_latency,
   to_latency,
-  round(100 * ((to_latency - from_latency) / from_latency), $precision) as percent_change
+  round(100 * ((to_latency - from_latency) / (from_latency + .000001)), $precision) as percent_change
 from
   result;"
 
@@ -125,7 +125,7 @@ select
   test_name,
   from_latency as from_latency_p95,
   to_latency as to_latency_p95,
-  round(100 * ((to_latency - from_latency) / from_latency), $precision) as percent_change
+  round(100 * ((to_latency - from_latency) / (from_latency + .000001)), $precision) as percent_change
 from
   result;"
 
@@ -156,7 +156,7 @@ select
   to_server_name,
   to_server_version,
   to_tps,
-  round(100 * ((to_tps - from_tps) / from_tps), $precision) as percent_change
+  round(100 * ((to_tps - from_tps) / (from_tps + .000001)), $precision) as percent_change
 from
   result;"
 
@@ -173,7 +173,7 @@ with result(from_lat, to_lat) as (
     t.test_name
 )
 select
-  sum((to_lat - from_lat) / from_lat  > 0.05)
+  sum((to_lat - from_lat) / (from_lat + .000001)  > 0.05)
 from
   result;"
 
