@@ -43,6 +43,13 @@ type fakeS3 struct {
 	failNext int
 	requests int
 	lastPut  http.Header
+
+	// injectStatus and injectCode replace every response with a specific S3
+	// error until cleared, covering failure modes a well-behaved fake never
+	// produces on its own. Sticky rather than one-shot, so an SDK retry
+	// cannot quietly turn an injected failure into a success.
+	injectStatus int
+	injectCode   string
 }
 
 func newFakeS3() *fakeS3 {
@@ -57,6 +64,10 @@ func (f *fakeS3) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if f.failNext > 0 {
 		f.failNext--
 		writeS3Error(w, http.StatusInternalServerError, "InternalError")
+		return
+	}
+	if f.injectStatus != 0 {
+		writeS3Error(w, f.injectStatus, f.injectCode)
 		return
 	}
 
@@ -393,4 +404,130 @@ func TestS3BlobstoreGetRanges(t *testing.T) {
 
 	_, _, err = GetBytes(ctx, bs, "absent", AllRange)
 	assert.True(t, IsNotFoundError(err), "expected NotFound, got %v", err)
+}
+
+// CheckAndPut must translate exactly the responses that mean "your view is
+// stale" into CheckAndPutError, because that is the only error the manifest
+// layer retries. Anything else has to reach the caller unchanged.
+func TestS3BlobstoreCheckAndPutErrorMapping(t *testing.T) {
+	tests := []struct {
+		name            string
+		status          int
+		code            string
+		expectedVersion string
+		checkAndPut     bool
+	}{
+		{
+			name:            "precondition failed",
+			status:          http.StatusPreconditionFailed,
+			code:            "PreconditionFailed",
+			expectedVersion: `"etag-1"`,
+			checkAndPut:     true,
+		},
+		{
+			name:        "conditional conflict on create",
+			status:      http.StatusConflict,
+			code:        "ConditionalRequestConflict",
+			checkAndPut: true,
+		},
+		{
+			name:            "conditional conflict on replace",
+			status:          http.StatusConflict,
+			code:            "ConditionalRequestConflict",
+			expectedVersion: `"etag-1"`,
+			checkAndPut:     true,
+		},
+		{
+			name:            "if-match against a missing key",
+			status:          http.StatusNotFound,
+			code:            "NoSuchKey",
+			expectedVersion: `"etag-1"`,
+			checkAndPut:     true,
+		},
+		{
+			// Only the conditional 409 means a lost race. A bucket-level
+			// conflict is a real failure and must not be retried as if the
+			// manifest had moved.
+			name:        "unrelated conflict",
+			status:      http.StatusConflict,
+			code:        "OperationAborted",
+			checkAndPut: false,
+		},
+		{
+			// Without an expected version there is no version to be stale,
+			// so a 404 is somebody else's problem: a missing bucket.
+			name:        "not found on create",
+			status:      http.StatusNotFound,
+			code:        "NoSuchBucket",
+			checkAndPut: false,
+		},
+		{
+			name:            "access denied",
+			status:          http.StatusForbidden,
+			code:            "AccessDenied",
+			expectedVersion: `"etag-1"`,
+			checkAndPut:     false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			f := newFakeS3()
+			bs := newFakeS3Blobstore(t, f, false)
+
+			f.injectStatus, f.injectCode = test.status, test.code
+			_, err := bs.CheckAndPut(context.Background(), test.expectedVersion, "manifest", 4, manifestBody("one1"))
+
+			require.Error(t, err)
+			assert.Equal(t, test.checkAndPut, IsCheckAndPutError(err), "got %v", err)
+		})
+	}
+}
+
+func TestS3BlobstoreExists(t *testing.T) {
+	ctx := context.Background()
+	f := newFakeS3()
+	bs := newFakeS3Blobstore(t, f, false)
+
+	_, err := PutBytes(ctx, bs, "obj", []byte("data"))
+	require.NoError(t, err)
+
+	exists, err := bs.Exists(ctx, "obj")
+	require.NoError(t, err)
+	assert.True(t, exists)
+
+	exists, err = bs.Exists(ctx, "absent")
+	require.NoError(t, err)
+	assert.False(t, exists)
+
+	// Only a missing key is a false; anything else has to surface, or a
+	// permissions problem reads as an empty store.
+	f.injectStatus, f.injectCode = http.StatusForbidden, "AccessDenied"
+	_, err = bs.Exists(ctx, "obj")
+	assert.Error(t, err)
+}
+
+func TestS3BlobstorePutOverwrites(t *testing.T) {
+	ctx := context.Background()
+	f := newFakeS3()
+	bs := newFakeS3Blobstore(t, f, false)
+
+	first, err := PutBytes(ctx, bs, "table", []byte("original"))
+	require.NoError(t, err)
+
+	second, err := PutBytes(ctx, bs, "table", []byte("replacement"))
+	require.NoError(t, err)
+	assert.NotEqual(t, first, second)
+
+	read, ver, err := GetBytes(ctx, bs, "table", AllRange)
+	require.NoError(t, err)
+	assert.Equal(t, []byte("replacement"), read)
+	assert.Equal(t, second, ver)
+}
+
+func TestS3BlobstoreConcatenateUnsupported(t *testing.T) {
+	bs := newFakeS3Blobstore(t, newFakeS3(), false)
+
+	_, err := bs.Concatenate(context.Background(), "joined", []string{"a", "b"})
+	assert.Error(t, err)
 }
