@@ -84,8 +84,6 @@ func (bs *LocalBlobstore) Teardown(ctx context.Context) error {
 	return nil
 }
 
-// Get retrieves an io.reader for the portion of a blob specified by br along with
-// its version
 func (bs *LocalBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {
 	path := filepath.Join(bs.RootDir, key) + bsExt
 	f, err := os.Open(path)
@@ -136,7 +134,6 @@ func readCloserForFileRange(f *os.File, br BlobRange) (io.ReadCloser, error) {
 	return f, nil
 }
 
-// Put sets the blob and the version for a key
 func (bs *LocalBlobstore) Put(ctx context.Context, key string, totalSize int64, reader io.Reader) (string, error) {
 	// written as temp file and renamed so the file corresponding to this key
 	// never exists in a partially written state
@@ -183,8 +180,6 @@ func fLock(lockFilePath string) (*fslock.Lock, error) {
 	return lck, nil
 }
 
-// CheckAndPut will check the current version of a blob against an expectedVersion, and if the
-// versions match it will update the data and version associated with the key
 func (bs *LocalBlobstore) CheckAndPutManifest(ctx context.Context, expectedVersion string, contents []byte) (string, error) {
 	key := ManifestKey
 	path := filepath.Join(bs.RootDir, key) + bsExt
@@ -218,8 +213,6 @@ func (bs *LocalBlobstore) CheckAndPutManifest(ctx context.Context, expectedVersi
 	return bs.Put(ctx, key, int64(len(contents)), bytes.NewReader(contents))
 }
 
-// Exists returns true if a blob exists for the given key, and false if it does not.
-// error may be returned if there are errors accessing the filesystem data.
 func (bs *LocalBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 	path := filepath.Join(bs.RootDir, key) + bsExt
 	_, err := os.Stat(path)

@@ -74,7 +74,6 @@ func (bs *S3Blobstore) Teardown(ctx context.Context) error {
 	return nil
 }
 
-// Exists returns true if a blob exists for the given key, and false if it does not.
 func (bs *S3Blobstore) Exists(ctx context.Context, key string) (bool, error) {
 	absKey := path.Join(bs.prefix, key)
 	_, err := bs.client.HeadObject(ctx, &s3.HeadObjectInput{
@@ -91,7 +90,6 @@ func (bs *S3Blobstore) Exists(ctx context.Context, key string) (bool, error) {
 	return false, err
 }
 
-// Get retrieves an io.ReadCloser for the portion of a blob specified by br along with its version.
 func (bs *S3Blobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {
 	absKey := path.Join(bs.prefix, key)
 	req := &s3.GetObjectInput{
@@ -134,7 +132,6 @@ func (bs *S3Blobstore) Get(ctx context.Context, key string, br BlobRange) (io.Re
 	return res.Body, size, fmtstr(res.ETag), nil
 }
 
-// Put stores a blob from |reader| keyed by |key|, returning the new version.
 // Large objects are uploaded via multipart automatically.
 func (bs *S3Blobstore) Put(ctx context.Context, key string, totalSize int64, reader io.Reader) (string, error) {
 	absKey := path.Join(bs.prefix, key)
@@ -149,13 +146,6 @@ func (bs *S3Blobstore) Put(ctx context.Context, key string, totalSize int64, rea
 	return fmtstr(res.ETag), nil
 }
 
-// CheckAndPutManifest updates the manifest using a conditional PutObject on
-// |expectedVersion| (an ETag). See the type comment for the protocol.
-//
-// |contents| arrives as bytes rather than a stream because the body must be
-// seekable: without that the SDK cannot compute the payload hash, so it
-// refuses the request outright against a plain-http endpoint, and it cannot
-// rewind to retry a transient 5xx against any endpoint.
 func (bs *S3Blobstore) CheckAndPutManifest(ctx context.Context, expectedVersion string, contents []byte) (string, error) {
 	absKey := path.Join(bs.prefix, ManifestKey)
 	req := &s3.PutObjectInput{

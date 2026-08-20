@@ -63,7 +63,6 @@ func normalizeAzPrefix(prefix string) string {
 	return prefix
 }
 
-// Path returns this blobstore's path (i.e. container name + prefix)
 func (bs *AzureBlobstore) Path() string {
 	return path.Join(bs.containerName, bs.prefix)
 }
@@ -77,7 +76,6 @@ func (bs *AzureBlobstore) absKey(key string) string {
 	return path.Join(bs.prefix, key)
 }
 
-// Exists returns true if a blob keyed by |key| exists
 func (bs *AzureBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 	absKey := bs.absKey(key)
 
@@ -111,7 +109,6 @@ func errOrNotFound(err error, containerName, absKey string) error {
 	return err
 }
 
-// Get retrieves an io.ReadCloser for the portion of a blob specified by br along with its version
 func (bs *AzureBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {
 	absKey := bs.absKey(key)
 
@@ -185,7 +182,6 @@ func (rsc *readSeekCloser) Close() error {
 	return nil
 }
 
-// Put creates a new blob from |reader| keyed by |key|
 // Uses streaming block upload to avoid loading entire file into memory
 func (bs *AzureBlobstore) Put(ctx context.Context, key string, totalSize int64, reader io.Reader) (string, error) {
 	absKey := bs.absKey(key)
@@ -273,7 +269,6 @@ func blobHasChanged(expectedVersion string, err error) bool {
 	return expectedVersion != "" && (strings.Contains(errMsg, "ConditionNotMet") || strings.Contains(errMsg, "412"))
 }
 
-// CheckAndPut updates the blob keyed by |key| using a check-and-set on |expectedVersion|
 func (bs *AzureBlobstore) CheckAndPutManifest(ctx context.Context, expectedVersion string, contents []byte) (string, error) {
 	key := ManifestKey
 	absKey := bs.absKey(key)
@@ -334,7 +329,6 @@ func etagToString(etag *azcore.ETag) string {
 	return string(*etag)
 }
 
-// Concatenate creates a new blob named |key| by concatenating |sources|
 // Uses Azure's server-side StageBlockFromURL for efficient copying without client egress
 func (bs *AzureBlobstore) Concatenate(ctx context.Context, key string, sources []string) (string, error) {
 	absKey := bs.absKey(key)

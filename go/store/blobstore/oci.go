@@ -81,9 +81,6 @@ func (bs *OCIBlobstore) Teardown(ctx context.Context) error {
 	return nil
 }
 
-// Exists returns true if a blob exists for the given key, and false if it does not.
-// For InMemoryBlobstore instances error should never be returned (though other
-// implementations of this interface can)
 func (bs *OCIBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 	absKey := path.Join(bs.prefix, key)
 	_, err := bs.client.HeadObject(ctx, objectstorage.HeadObjectRequest{
@@ -103,7 +100,6 @@ func (bs *OCIBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 	return false, err
 }
 
-// Get retrieves an io.reader for the portion of a blob specified by br along with its version
 func (bs *OCIBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {
 	absKey := path.Join(bs.prefix, key)
 	req := objectstorage.GetObjectRequest{
@@ -150,13 +146,10 @@ func (bs *OCIBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.R
 	return res.Content, size, fmtstr(res.ETag), nil
 }
 
-// Put sets the blob and the version for a key
 func (bs *OCIBlobstore) Put(ctx context.Context, key string, totalSize int64, reader io.Reader) (string, error) {
 	return bs.upload(ctx, "", key, totalSize, reader)
 }
 
-// CheckAndPut will check the current version of a blob against an expectedVersion, and if the
-// versions match it will update the data and version associated with the key
 func (bs *OCIBlobstore) CheckAndPutManifest(ctx context.Context, expectedVersion string, contents []byte) (string, error) {
 	return bs.upload(ctx, expectedVersion, ManifestKey, int64(len(contents)), bytes.NewReader(contents))
 }
