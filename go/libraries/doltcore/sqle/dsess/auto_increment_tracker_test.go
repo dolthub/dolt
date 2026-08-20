@@ -17,10 +17,12 @@ package dsess
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess/mutexmap"
@@ -87,7 +89,7 @@ func TestInitWithRoots(t *testing.T) {
 			init:       make(chan struct{}),
 			cancelInit: make(chan struct{}),
 		}
-		go ait.initWithRoots(context.Background())
+		go ait.initWithRoots(context.Background(), ait.init)
 		assert.NoError(t, ait.waitForInit())
 	})
 	t.Run("CloseCancelsInit", func(t *testing.T) {
@@ -98,10 +100,42 @@ func TestInitWithRoots(t *testing.T) {
 			init:       make(chan struct{}),
 			cancelInit: make(chan struct{}),
 		}
-		go ait.initWithRoots(context.Background(), blockingRoot{})
+		go ait.initWithRoots(context.Background(), ait.init, blockingRoot{})
 		ait.Close()
 		assert.Error(t, ait.waitForInit())
 	})
+}
+
+// TestConcurrentInitWithRoots reproduces a race where overlapping InitWithRoots
+// calls on the same tracker (e.g. from concurrent dolt_reset/dolt_checkout on
+// different sessions against the same database) could each observe the prior
+// |init| channel already closed and then race to install their own
+// replacement channel.
+func TestConcurrentInitWithRoots(t *testing.T) {
+	ait := AutoIncrementTracker{
+		dbName:     "test_database",
+		sequences:  &SyncMap[doltdb.TableName, doltdb.AutoIncrementState]{},
+		mm:         mutexmap.NewMutexMap(),
+		init:       make(chan struct{}),
+		cancelInit: make(chan struct{}),
+	}
+	close(ait.init) // starts "already initialized", like a live tracker between resets
+
+	const numConcurrentCallers = 50
+	errs := make([]error, numConcurrentCallers)
+	var wg sync.WaitGroup
+	for i := 0; i < numConcurrentCallers; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			errs[i] = ait.InitWithRoots(context.Background())
+		}(i)
+	}
+	wg.Wait()
+
+	for _, err := range errs {
+		require.NoError(t, err)
+	}
 }
 
 type blockingRoot struct {
