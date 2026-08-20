@@ -265,6 +265,16 @@ tpccLatencyQuery=${tpccLatencyQuery//$'\n'/ }
 tpccTpsQuery=${tpccTpsQuery//$'\n'/ }
 tpccTpsMultiplierQuery=${tpccTpsMultiplierQuery//$'\n'/ }
 
+# Replace tabs with spaces, so it is valid JSON later
+medianLatencyMultiplierReadsQuery=${medianLatencyMultiplierReadsQuery//$'\t'/ }
+meanMultiplierReadsQuery=${meanMultiplierReadsQuery//$'\t'/ }
+medianLatencyMultiplierWritesQuery=${medianLatencyMultiplierWritesQuery//$'\t'/ }
+meanMultiplierWritesQuery=${meanMultiplierWritesQuery//$'\t'/ }
+meanMultiplierOverallQuery=${meanMultiplierOverallQuery//$'\t'/ }
+tpccLatencyQuery=${tpccLatencyQuery//$'\t'/ }
+tpccTpsQuery=${tpccTpsQuery//$'\t'/ }
+tpccTpsMultiplierQuery=${tpccTpsMultiplierQuery//$'\t'/ }
+
 echo '
 {
   "apiVersion": "batch/v1",
