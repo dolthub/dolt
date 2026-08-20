@@ -28,7 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-//go:embed AGENT.md
+//go:embed AGENTS.md
 var DefaultAgentDocValue string
 
 type ctxKey int
@@ -183,7 +183,7 @@ const (
 	// ReadmeDoc is the key for accessing the readme within the docs table
 	ReadmeDoc = "README.md"
 	// AgentDoc is the key for accessing the agent documentation within the docs table
-	AgentDoc = "AGENT.md"
+	AgentDoc = "AGENTS.md"
 )
 
 // GetDocTableName returns the name of the dolt table containing documents such as the license and readme
