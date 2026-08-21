@@ -109,13 +109,17 @@ func NewSequenceTrackerFromRoots[
 	if gcSafepointController != nil {
 		ctx = gcctx.WithGCSafepointController(ctx, gcSafepointController)
 	}
+	// initWithRoots runs in a background goroutine that can outlive the request that
+	// triggered it (e.g. the CREATE DATABASE statement that creates this tracker). Detach
+	// it from the caller's cancellation so a query returning doesn't cancel initialization.
+	initCtx := context.WithoutCancel(ctx)
 	go func() {
 		if gcSafepointController != nil {
-			defer gcctx.SessionEnd(ctx)
-			gcctx.SessionCommandBegin(ctx)
-			defer gcctx.SessionCommandEnd(ctx)
+			defer gcctx.SessionEnd(initCtx)
+			gcctx.SessionCommandBegin(initCtx)
+			defer gcctx.SessionCommandEnd(initCtx)
 		}
-		ait.initWithRoots(ctx, ait.init, roots...)
+		ait.initWithRoots(initCtx, ait.init, roots...)
 	}()
 	return &ait, nil
 }

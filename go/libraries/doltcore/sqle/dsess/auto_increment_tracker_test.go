@@ -149,3 +149,51 @@ func (blockingRoot) ResolveRootValue(ctx context.Context) (doltdb.RootValue, err
 func (blockingRoot) HashOf() (hash.Hash, error) {
 	return hash.Hash{}, nil
 }
+
+// TestNewSequenceTrackerFromRootsSurvivesCallerContextCancellation reproduces a race condition
+// with initialization of sequence trackers.
+func TestNewSequenceTrackerFromRootsSurvivesCallerContextCancellation(t *testing.T) {
+	callerCtx, cancel := context.WithCancel(context.Background())
+	root := releasableRoot{release: make(chan struct{})}
+
+	ait, err := NewAutoIncrementTracker(callerCtx, "test_database", root)
+	require.NoError(t, err)
+
+	// Simulate the request returning and its context being canceled while our root is still
+	// resolving.
+	cancel()
+
+	// Now let resolution finish. If initWithRoots is (incorrectly) using the caller's context,
+	// this close is redundant: it would have already observed <-ctx.Done() above and bailed out
+	// with a canceled error.
+	close(root.release)
+
+	// releasableRoot returns a distinguishable sentinel (rather than a real RootValue) once
+	// released, so we can assert initialization ran to completion on an uncanceled context
+	// instead of short-circuiting on the caller's cancellation.
+	require.ErrorIs(t, ait.waitForInit(), errReleasableRootDone)
+}
+
+// releasableRoot blocks ResolveRootValue until |release| is closed, independent of the context
+// passed in. This lets tests control exactly when resolution completes relative to context
+// cancellation.
+type releasableRoot struct {
+	release chan struct{}
+}
+
+func (r releasableRoot) ResolveRootValue(ctx context.Context) (doltdb.RootValue, error) {
+	select {
+	case <-r.release:
+		return nil, errReleasableRootDone
+	case <-ctx.Done():
+		return nil, context.Cause(ctx)
+	}
+}
+
+func (releasableRoot) HashOf() (hash.Hash, error) {
+	return hash.Hash{}, nil
+}
+
+// errReleasableRootDone is returned by releasableRoot once released, so tests can distinguish
+// "resolution completed" from "resolution was canceled" without needing a real RootValue.
+var errReleasableRootDone = fmt.Errorf("releasableRoot: released")
