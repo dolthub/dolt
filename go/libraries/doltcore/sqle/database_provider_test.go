@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -399,4 +400,56 @@ func TestResolveCaseVariantBranchConflict(t *testing.T) {
 
 	require.Equal(t, []sql.Row{{int32(111)}}, mustQuery("select a from `dolt/br`.t"))
 	require.Equal(t, []sql.Row{{int32(222)}}, mustQuery("select a from `dolt/keepBR`.t"))
+}
+
+// TestCreateDatabaseFailureLeavesNothingBehind covers the whole of what a failed CREATE DATABASE must undo: the
+// directory it made, the in-progress marker inside it, and the DoltDB it opened. Only a process that dies
+// outright should leave any of that on disk.
+func TestCreateDatabaseFailureLeavesNothingBehind(t *testing.T) {
+	ctx := context.Background()
+	dEnv := dtestutils.CreateTestEnvForLocalFilesystem()
+	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(ctx), editor.Options{})
+	require.NoError(t, err)
+	engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db)
+	require.NoError(t, err)
+	pro := dsess.DSessFromSess(sqlCtx.Session).Provider().(*DoltDatabaseProvider)
+
+	failCreate := true
+	pro.AddInitDatabaseHook(func(_ *sql.Context, _ *DoltDatabaseProvider, _ string, _ *env.DoltEnv, _ dsess.SqlDatabase) error {
+		if failCreate {
+			return errors.New("there was an error initializing this database. abort!")
+		}
+		return nil
+	})
+
+	require.Error(t, ExecuteSqlOnEngine(sqlCtx, engine, "CREATE DATABASE mytest;"))
+
+	exists, _ := dEnv.FS.Exists("mytest")
+	require.False(t, exists, "a failed CREATE DATABASE must not leave its directory behind")
+
+	// The retry must get a database of its own. If the failed attempt left its DoltDB in the database cache,
+	// this one is handed a store whose files were deleted and writes never reach the new directory.
+	failCreate = false
+	require.NoError(t, ExecuteSqlOnEngine(sqlCtx, engine, "CREATE DATABASE mytest;"))
+	sqlCtx.SetCurrentDatabase("mytest")
+	require.NoError(t, ExecuteSqlOnEngine(sqlCtx, engine, "CREATE TABLE t (pk int primary key);\nINSERT INTO t VALUES (1);"))
+
+	newFs, err := dEnv.FS.WithWorkingDir("mytest")
+	require.NoError(t, err)
+	assert.False(t, dbfactory.IsDatabaseInProgress(newFs), "the retried CREATE DATABASE must clear the marker")
+
+	// Reopen the database from disk to prove its contents landed in its own directory.
+	absPath, err := newFs.Abs("")
+	require.NoError(t, err)
+	require.NoError(t, dbfactory.DeleteFromSingletonCache(dbfactory.SingletonCacheKeyForDatabaseDir(absPath), true))
+	reopened := env.Load(ctx, env.GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, "test")
+	require.NoError(t, reopened.DBLoadError)
+	require.NoError(t, reopened.RSLoadErr)
+	t.Cleanup(func() { reopened.Close() })
+
+	root, err := reopened.WorkingRoot(ctx)
+	require.NoError(t, err)
+	_, ok, err := root.GetTable(ctx, doltdb.TableName{Name: "t"})
+	require.NoError(t, err)
+	assert.True(t, ok, "the retried database's table must be on disk in its own directory")
 }

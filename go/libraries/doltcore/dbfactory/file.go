@@ -107,6 +107,12 @@ func CloseAllLocalDatabases() (err error) {
 	return
 }
 
+// SingletonCacheKeyForDatabaseDir returns the key the singleton cache uses for the local database rooted at
+// |dbDir|, which must be an absolute path to the database directory (the one holding .dolt).
+func SingletonCacheKeyForDatabaseDir(dbDir string) string {
+	return filepath.ToSlash(filepath.Join(dbDir, DoltDataDir))
+}
+
 func DeleteFromSingletonCache(path string, closeIt bool) error {
 	singletonLock.Lock()
 	defer singletonLock.Unlock()
