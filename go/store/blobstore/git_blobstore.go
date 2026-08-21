@@ -62,7 +62,7 @@ type putPlan struct {
 }
 
 // pendingWrite holds a deferred non-manifest write that will be flushed
-// in a single commit+push when CheckAndPut("manifest") is called.
+// in a single commit+push when CheckAndPutManifest is called.
 type pendingWrite struct {
 	key  string
 	plan putPlan
@@ -286,7 +286,7 @@ type GitBlobstore struct {
 	// checks this flag instead of competing with an in-progress push.
 	writeInProgress atomic.Bool
 	// pendingMu guards pendingWrites, which may be appended to by non-manifest Put/Concatenate
-	// while being flushed by CheckAndPut("manifest").
+	// while being flushed by CheckAndPutManifest.
 	pendingMu sync.Mutex
 	// identity, when non-nil, is used as the author/committer identity for new commits.
 	// When nil, we prefer whatever identity git derives from env/config, falling back
@@ -300,7 +300,7 @@ type GitBlobstore struct {
 	maxPartSize uint64
 
 	// pendingWrites accumulates non-manifest writes that will be flushed in a single
-	// commit+push when CheckAndPut("manifest") is called. This avoids per-key
+	// commit+push when CheckAndPutManifest is called. This avoids per-key
 	// fetch/commit/push cycles for content-addressed (immutable) table file blobs.
 	// Guarded by gbs.pendingMu.
 	pendingWrites []pendingWrite
@@ -1162,7 +1162,7 @@ func (gbs *GitBlobstore) Put(ctx context.Context, key string, totalSize int64, r
 	}
 
 	// For non-manifest keys, skip remote sync entirely: check cache, hash locally,
-	// and defer the write to be flushed in the next CheckAndPut("manifest").
+	// and defer the write to be flushed in the next CheckAndPutManifest.
 	if key != gitblobstoreManifestKey {
 		if obj, ok := gbs.cacheGetObject(key); ok {
 			return obj.oid.String(), nil
@@ -1425,68 +1425,57 @@ func (gbs *GitBlobstore) removeKeyConflictsFromIndex(ctx context.Context, parent
 	}
 }
 
-func (gbs *GitBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader) (string, error) {
-	key, err := normalizeGitTreePath(key)
+func (gbs *GitBlobstore) CheckAndPutManifest(ctx context.Context, expectedVersion string, contents []byte) (string, error) {
+	key, err := normalizeGitTreePath(gitblobstoreManifestKey)
 	if err != nil {
 		return "", err
 	}
 
 	msg := fmt.Sprintf("gitblobstore: checkandput %s", key)
 
-	// For the manifest key, flush all pending writes in a single commit+push.
-	if key == gitblobstoreManifestKey {
-		// Buffer manifest content so we can parse table names for pruning
-		// and still pass the data to HashObject via a bytes.Reader.
-		manifestData, err := io.ReadAll(reader)
-		if err != nil {
-			return "", fmt.Errorf("gitblobstore: reading manifest content: %w", err)
+	// Writing the manifest flushes all pending writes in a single commit+push.
+	names := parseManifestTableNames(contents)
+	var allowedNames map[string]bool
+	if names != nil {
+		allowedNames = make(map[string]bool, len(names))
+		for _, n := range names {
+			allowedNames[n] = true
 		}
-		names := parseManifestTableNames(manifestData)
-		var allowedNames map[string]bool
-		if names != nil {
-			allowedNames = make(map[string]bool, len(names))
-			for _, n := range names {
-				allowedNames[n] = true
-			}
-		}
-		bufferedReader := bytes.NewReader(manifestData)
-
-		gbs.pendingMu.Lock()
-		pending := gbs.pendingWrites
-		gbs.pendingWrites = nil
-		gbs.pendingMu.Unlock()
-
-		// Only flush pending writes this manifest references; committing an
-		// unreferenced entry lets a later flush prune it while still live.
-		// Flush everything if names can't be parsed.
-		toFlush := pending
-		var deferred []pendingWrite
-		if allowedNames != nil {
-			toFlush = nil
-			for _, pw := range pending {
-				if isPathReferencedByManifest(pw.key, allowedNames) {
-					toFlush = append(toFlush, pw)
-				} else {
-					deferred = append(deferred, pw)
-				}
-			}
-		}
-
-		ver, err := gbs.checkAndPutWithRemoteSync(ctx, expectedVersion, key, int64(len(manifestData)), bufferedReader, msg, toFlush, allowedNames)
-
-		// On failure, re-queue everything we drained; on success, keep the
-		// deferred (unreferenced) writes pending.
-		gbs.pendingMu.Lock()
-		if err != nil {
-			gbs.pendingWrites = append(pending, gbs.pendingWrites...)
-		} else if len(deferred) > 0 {
-			gbs.pendingWrites = append(deferred, gbs.pendingWrites...)
-		}
-		gbs.pendingMu.Unlock()
-		return ver, err
 	}
 
-	return gbs.checkAndPutWithRemoteSync(ctx, expectedVersion, key, totalSize, reader, msg, nil, nil)
+	gbs.pendingMu.Lock()
+	pending := gbs.pendingWrites
+	gbs.pendingWrites = nil
+	gbs.pendingMu.Unlock()
+
+	// Only flush pending writes this manifest references; committing an
+	// unreferenced entry lets a later flush prune it while still live.
+	// Flush everything if names can't be parsed.
+	toFlush := pending
+	var deferred []pendingWrite
+	if allowedNames != nil {
+		toFlush = nil
+		for _, pw := range pending {
+			if isPathReferencedByManifest(pw.key, allowedNames) {
+				toFlush = append(toFlush, pw)
+			} else {
+				deferred = append(deferred, pw)
+			}
+		}
+	}
+
+	ver, err := gbs.checkAndPutWithRemoteSync(ctx, expectedVersion, key, int64(len(contents)), bytes.NewReader(contents), msg, toFlush, allowedNames)
+
+	// On failure, re-queue everything we drained; on success, keep the
+	// deferred (unreferenced) writes pending.
+	gbs.pendingMu.Lock()
+	if err != nil {
+		gbs.pendingWrites = append(pending, gbs.pendingWrites...)
+	} else if len(deferred) > 0 {
+		gbs.pendingWrites = append(deferred, gbs.pendingWrites...)
+	}
+	gbs.pendingMu.Unlock()
+	return ver, err
 }
 
 func (gbs *GitBlobstore) currentKeyVersion(ctx context.Context, commit git.OID, haveCommit bool, key string) (string, error) {

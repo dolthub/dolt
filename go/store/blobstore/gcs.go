@@ -15,6 +15,7 @@
 package blobstore
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -135,10 +136,8 @@ func (bs *GCSBlobstore) Put(ctx context.Context, key string, totalSize int64, re
 	return writeObj(writer, reader)
 }
 
-// CheckAndPut will check the current version of a blob against an expectedVersion, and if the
-// versions match it will update the data and version associated with the key
-func (bs *GCSBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader) (string, error) {
-	absKey := path.Join(bs.prefix, key)
+func (bs *GCSBlobstore) CheckAndPutManifest(ctx context.Context, expectedVersion string, contents []byte) (string, error) {
+	absKey := path.Join(bs.prefix, ManifestKey)
 	oh := bs.bucket.Object(absKey)
 
 	var conditionalHandle *storage.ObjectHandle
@@ -156,14 +155,14 @@ func (bs *GCSBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key st
 
 	writer := conditionalHandle.NewWriter(ctx)
 
-	ver, err := writeObj(writer, reader)
+	ver, err := writeObj(writer, bytes.NewReader(contents))
 
 	if err != nil {
 		apiErr, ok := err.(*googleapi.Error)
 
 		if ok {
 			if apiErr.Code == precondFailCode {
-				return "", CheckAndPutError{key, expectedVersion, "unknown (Not supported in GCS implementation)"}
+				return "", CheckAndPutError{ManifestKey, expectedVersion, "unknown (Not supported in GCS implementation)"}
 			}
 		}
 	}

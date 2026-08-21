@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	manifestFile = "manifest"
+	manifestFile = blobstore.ManifestKey
 )
 
 type blobstoreManifest struct {
@@ -118,7 +118,7 @@ func updateBSWithChecker(ctx context.Context, behavior dherrors.FatalBehavior, b
 			return manifestContents{}, err
 		}
 
-		_, err = bs.CheckAndPut(ctx, ver, manifestFile, int64(buffer.Len()), buffer)
+		_, err = bs.CheckAndPutManifest(ctx, ver, buffer.Bytes())
 		if err != nil {
 			if !blobstore.IsCheckAndPutError(err) {
 				return manifestContents{}, err
