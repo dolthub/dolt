@@ -387,7 +387,7 @@ func applySystemVariables(vars sql.SystemVariableRegistry, cfg SystemVariables) 
 	return nil
 }
 
-// InitStats initalizes stats threads. We separate construction
+// InitStats initializes stats threads. We separate construction
 // from initialization because the session provider needs the
 // *StatsCoordinator handle (stats and provider are cyclically
 // dependent), but several other initialization steps race on

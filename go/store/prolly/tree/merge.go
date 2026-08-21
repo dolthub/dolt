@@ -217,7 +217,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 				// Since these are both at level > 0, this means that both patches contain an address pointing to
 				// the same content-addressed chunk.
 				// This necessarily means that their end keys are the same. But if one side has added or removed
-				// an entire chunk that immediately preceeds this chunk, then their start keys may differ.
+				// an entire chunk that immediately precedes this chunk, then their start keys may differ.
 				// If the left side added or removed a chunk, we can safely ignore it. If the right side added a chunk,
 				// then we already encountered it. But if the right side removed a chunk, we need to emit a patch here
 				// that reflects that.

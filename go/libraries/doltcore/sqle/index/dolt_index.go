@@ -1282,7 +1282,7 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 
 			nilBound := field.Lo.Value == nil && field.Hi.Value == nil
 			if foundDiscontinuity || nilBound {
-				// A discontinous variable followed by any restriction
+				// A discontinuous variable followed by any restriction
 				// can partition the key space.
 				isContiguous = false
 			}
