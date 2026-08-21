@@ -3,7 +3,7 @@
 set -e
 
 if [ "$#" -lt 10 ]; then
-    echo  "Usage: ./get-job-json.sh <jobname> <fromServer> <fromVersion> <toServer> <toVersion> <timePrefix> <actorPrefix> <format> <issueNumber> <initBigRepo> <nomsBinFormat> <sysbenchTestTime> <withTpcc>"
+    echo  "Usage: ./get-job-json.sh <jobName> <fromServer> <fromVersion> <toServer> <toVersion> <timePrefix> <actorPrefix> <format> <issueNumber> <initBigRepo> <nomsBinFormat> <sysbenchTestTime> <withTpcc>"
     exit 1
 fi
 
@@ -53,8 +53,8 @@ readTests="(
 'index_join'
 )"
 
-medianLatencyChangeReadsQuery="
-with result(test_name, from_latency, to_latency) as (
+medianLatencyChangeReadsQuery="with
+result(test_name, from_latency, to_latency) as (
   select
     f.test_name,
     avg(f.latency_percentile),
@@ -85,8 +85,8 @@ writeTests="(
 'types_delete_insert'
 )"
 
-medianLatencyChangeWritesQuery="
-with result(test_name, from_latency, to_latency) as (
+medianLatencyChangeWritesQuery="with
+result(test_name, from_latency, to_latency) as (
   select
     f.test_name,
     avg(f.latency_percentile),
@@ -108,8 +108,8 @@ select
 from
   result;"
 
-tpccLatencyQuery="
-with result(test_name, from_latency, to_latency) as (
+tpccLatencyQuery="with
+result(test_name, from_latency, to_latency) as (
   select
     f.test_name,
     avg(f.latency_percentile),
@@ -129,8 +129,8 @@ select
 from
   result;"
 
-tpccTpsQuery="
-with result(test_name, from_server_name, from_server_version, from_tps, to_server_name, to_server_version, to_tps) as (
+tpccTpsQuery="with
+result(test_name, from_server_name, from_server_version, from_tps, to_server_name, to_server_version, to_tps) as (
   select
     f.test_name,
     f.server_name,
@@ -160,8 +160,8 @@ select
 from
   result;"
 
-perfRegressionQuery="
-with result(from_lat, to_lat) as (
+perfRegressionQuery="with
+result(from_lat, to_lat) as (
   select
     avg(f.latency_percentile),
     avg(t.latency_percentile)

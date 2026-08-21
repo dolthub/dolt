@@ -3,17 +3,17 @@
 set -e
 
 if [ "$#" -lt 12 ]; then
-    echo  "Usage: ./get-job-json.sh <jobname> <fromServer> <fromVersion> <toServer> <toVersion> <timeprefix> <actorprefix> <format> <issueNumber> <initBigRepo> <nomsBinFormat> <sysbenchTestTime> <withTpcc>"
+    echo  "Usage: ./get-job-json.sh <jobName> <fromServer> <fromVersion> <toServer> <toVersion> <timePrefix> <actorPrefix> <format> <issueNumber> <initBigRepo> <nomsBinFormat> <sysbenchTestTime> <withTpcc>"
     exit 1
 fi
 
-jobname="$1"
+jobName="$1"
 fromServer="$2"
 fromVersion="$3"
 toServer="$4"
 toVersion="$5"
-timeprefix="$6"
-actorprefix="$7"
+timePrefix="$6"
+actorPrefix="$7"
 format="$8"
 issueNumber="$9"
 initBigRepo="${10}"
@@ -58,8 +58,8 @@ readTests="(
 'index_join'
 )"
 
-medianLatencyMultiplierReadsQuery="
-with result(test_name, from_server, from_version, from_latency, to_server, to_version, to_latency) as (
+medianLatencyMultiplierReadsQuery="with
+result(test_name, from_server, from_version, from_latency, to_server, to_version, to_latency) as (
   select
     f.test_name,
     f.server_name,
@@ -89,8 +89,8 @@ select
 from
   result;"
 
-meanMultiplierReadsQuery="
-with result(multiplier) as (
+meanMultiplierReadsQuery="with
+result(multiplier) as (
   select
     round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)
   from
@@ -117,8 +117,8 @@ writeTests="(
 'types_delete_insert'
 )"
 
-medianLatencyMultiplierWritesQuery="
-with result(test_name, from_server, from_version, from_latency, to_server, to_version, to_latency) as (
+medianLatencyMultiplierWritesQuery="with
+result(test_name, from_server, from_version, from_latency, to_server, to_version, to_latency) as (
   select
     f.test_name,
     f.server_name,
@@ -148,8 +148,8 @@ select
 from
   result;"
 
-meanMultiplierWritesQuery="
-with result(multiplier) as (
+meanMultiplierWritesQuery="with
+result(multiplier) as (
   select
     round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)
   from
@@ -166,8 +166,8 @@ select
 from
   result;"
 
-meanMultiplierOverallQuery="
-with result(multiplier) as (
+meanMultiplierOverallQuery="with
+result(multiplier) as (
   select
     round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)
   from
@@ -184,8 +184,8 @@ select
 from
   result;"
 
-tpccLatencyQuery="
-with result(test_name, from_latency, to_latency) as (
+tpccLatencyQuery="with
+result(test_name, from_latency, to_latency) as (
   select
     f.test_name,
     avg(f.latency_percentile),
@@ -205,8 +205,8 @@ select
 from
   result;"
 
-tpccTpsQuery="
-with result(test_name, from_server_name, from_server_version, from_tps, to_server_name, to_server_version, to_tps) as (
+tpccTpsQuery="with
+result(test_name, from_server_name, from_server_version, from_tps, to_server_name, to_server_version, to_tps) as (
   select
     f.test_name,
     f.server_name,
@@ -236,8 +236,8 @@ select
 from
   result;"
 
-tpccTpsMultiplierQuery="
-with result(from_tps, to_tps) as (
+tpccTpsMultiplierQuery="with
+result(from_tps, to_tps) as (
   select
     avg(f.sql_transactions_per_second),
     avg(t.sql_transactions_per_second)
@@ -270,7 +270,7 @@ echo '
   "apiVersion": "batch/v1",
   "kind": "Job",
   "metadata": {
-    "name": "'$jobname'",
+    "name": "'$jobName'",
     "namespace": "performance-benchmarking"
   },
   "spec": {
@@ -318,8 +318,8 @@ echo '
               '"$toProfileKey"'
               "--bucket=performance-benchmarking-github-actions-results",
               "--region=us-west-2",
-              "--results-dir='$timeprefix'",
-              "--results-prefix='$actorprefix'",
+              "--results-dir='$timePrefix'",
+              "--results-prefix='$actorPrefix'",
               '"$sysbenchTestTime"'
               '"$withTpcc"'
               '"$initBigRepo"'
