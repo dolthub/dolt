@@ -159,27 +159,21 @@ func TestNewSequenceTrackerFromRootsSurvivesCallerContextCancellation(t *testing
 	ait, err := NewAutoIncrementTracker(callerCtx, "test_database", root)
 	require.NoError(t, err)
 
-	// Simulate the request returning and its context being canceled while our root is still
-	// resolving.
+	// Cancel the caller's context while the root is still resolving.
 	cancel()
 
-	// Now let resolution finish. If initWithRoots is (incorrectly) using the caller's context,
-	// this close is redundant: it would have already observed <-ctx.Done() above and bailed out
-	// with a canceled error.
+	// Let resolution finish
 	close(root.release)
 
-	// releasableRoot returns a distinguishable sentinel (rather than a real RootValue) once
-	// released, so we can assert initialization ran to completion on an uncanceled context
-	// instead of short-circuiting on the caller's cancellation.
 	require.ErrorIs(t, ait.waitForInit(), errReleasableRootDone)
 }
 
-// releasableRoot blocks ResolveRootValue until |release| is closed, independent of the context
-// passed in. This lets tests control exactly when resolution completes relative to context
-// cancellation.
+// releasableRoot blocks ResolveRootValue until |release| is closed, regardless of ctx.
 type releasableRoot struct {
 	release chan struct{}
 }
+
+var _ doltdb.Rootish = releasableRoot{}
 
 func (r releasableRoot) ResolveRootValue(ctx context.Context) (doltdb.RootValue, error) {
 	select {
@@ -194,6 +188,5 @@ func (releasableRoot) HashOf() (hash.Hash, error) {
 	return hash.Hash{}, nil
 }
 
-// errReleasableRootDone is returned by releasableRoot once released, so tests can distinguish
-// "resolution completed" from "resolution was canceled" without needing a real RootValue.
+// errReleasableRootDone signals that releasableRoot resolved successfully rather than being canceled.
 var errReleasableRootDone = fmt.Errorf("releasableRoot: released")
