@@ -44,11 +44,10 @@ type Blobstore interface {
 	// CheckAndPut.
 	Put(ctx context.Context, key string, totalSize int64, reader io.Reader) (version string, err error)
 
-	// CheckAndPutManifest updates the manifest blob using a check-and-set on
-	// |expectedVersion|, which is empty when the manifest is not expected to
-	// exist yet. |contents| is taken whole rather than as a stream: the
-	// manifest is small, the caller has already materialized it, and several
-	// implementations need a rewindable view of it to sign, upload, or parse.
+	// CheckAndPutManifest updates the manifest using a check-and-set on
+	// |expectedVersion|, empty when the manifest is not expected to exist yet.
+	// |contents| is taken whole because several implementations need a
+	// rewindable view of it.
 	CheckAndPutManifest(ctx context.Context, expectedVersion string, contents []byte) (version string, err error)
 
 	// Concatenate creates a new blob named |key| by concatenating |sources|.

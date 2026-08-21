@@ -61,6 +61,9 @@ func (bs *GCSBlobstore) Teardown(ctx context.Context) error {
 	return nil
 }
 
+// Exists returns true if a blob exists for the given key, and false if it does not.
+// For InMemoryBlobstore instances error should never be returned (though other
+// implementations of this interface can)
 func (bs *GCSBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 	absKey := path.Join(bs.prefix, key)
 	oh := bs.bucket.Object(absKey)
@@ -73,6 +76,8 @@ func (bs *GCSBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 	return err == nil, err
 }
 
+// Get retrieves an io.reader for the portion of a blob specified by br along with
+// its version
 func (bs *GCSBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {
 	absKey := path.Join(bs.prefix, key)
 	oh := bs.bucket.Object(absKey)
@@ -122,6 +127,7 @@ func writeObj(writer *storage.Writer, reader io.Reader) (string, error) {
 	return fmtGeneration(generation), nil
 }
 
+// Put sets the blob and the version for a key
 func (bs *GCSBlobstore) Put(ctx context.Context, key string, totalSize int64, reader io.Reader) (string, error) {
 	absKey := path.Join(bs.prefix, key)
 	oh := bs.bucket.Object(absKey)

@@ -63,6 +63,8 @@ func (bs *InMemoryBlobstore) Path() string {
 	return bs.path
 }
 
+// Get retrieves an io.reader for the portion of a blob specified by br along with
+// its version
 func (bs *InMemoryBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {
 	bs.mutex.RLock()
 	defer bs.mutex.RUnlock()
@@ -91,6 +93,7 @@ func (bs *InMemoryBlobstore) Get(ctx context.Context, key string, br BlobRange) 
 	return nil, 0, "", NotFound{key}
 }
 
+// Put sets the blob and the version for a key
 func (bs *InMemoryBlobstore) Put(ctx context.Context, key string, totalSize int64, reader io.Reader) (string, error) {
 	bs.mutex.Lock()
 	defer bs.mutex.Unlock()
@@ -111,6 +114,9 @@ func (bs *InMemoryBlobstore) CheckAndPutManifest(ctx context.Context, expectedVe
 	return bs.put(ctx, key, bytes.NewReader(contents))
 }
 
+// Exists returns true if a blob exists for the given key, and false if it does not.
+// For InMemoryBlobstore instances error should never be returned (though other
+// implementations of this interface can)
 func (bs *InMemoryBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 	bs.mutex.RLock()
 	defer bs.mutex.RUnlock()

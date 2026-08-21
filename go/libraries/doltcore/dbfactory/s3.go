@@ -59,22 +59,12 @@ const (
 )
 
 // s3Routing is the provider addressing an s3:// url may carry. None of it is
-// authentication: credentials always come from the AWS SDK chain.
+// authentication: credentials always come from the AWS SDK chain. endpoint and
+// region fall back to the SDK's own resolution when empty; pathStyle has no
+// ambient equivalent, so the url is the only way to ask for it.
 type s3Routing struct {
-	// endpoint targets an S3-compatible provider, e.g. an R2 or MinIO host.
-	// When empty the SDK resolves it, honoring AWS_ENDPOINT_URL_S3 and the
-	// shared config file.
-	endpoint string
-
-	// region is the signing region. Some providers want a fixed value here;
-	// R2 uses "auto". When empty the SDK resolves it from AWS_REGION or the
-	// shared config file.
-	region string
-
-	// pathStyle selects https://endpoint/bucket/key addressing over
-	// virtual-hosted style. Providers without wildcard DNS need it, MinIO
-	// most commonly. There is no ambient equivalent: the SDK exposes this
-	// only as a client option, so the url is the only way to ask for it.
+	endpoint  string
+	region    string
 	pathStyle bool
 }
 
