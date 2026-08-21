@@ -138,6 +138,53 @@ func TestConcurrentInitWithRoots(t *testing.T) {
 	}
 }
 
+// TestInitWithRootsRetriesAfterFailedInit covers the case where the tracker's
+// first, lazy initialization failed -- for example because it inherited a
+// request-scoped context that was canceled when the session that created the
+// database finished. A later explicit InitWithRoots (dolt_reset --hard ->
+// ResetGlobals) must re-initialize from the roots it was handed rather than
+// replaying the earlier failure, which would otherwise persist for the life of
+// the server process.
+func TestInitWithRootsRetriesAfterFailedInit(t *testing.T) {
+	ait := AutoIncrementTracker{
+		dbName:     "test_database",
+		sequences:  &SyncMap[doltdb.TableName, doltdb.AutoIncrementState]{},
+		mm:         mutexmap.NewMutexMap(),
+		init:       make(chan struct{}),
+		cancelInit: make(chan struct{}),
+	}
+
+	// The initial async initialization is canceled, as it would be if the
+	// context it was started with belonged to a request that has since ended.
+	initCtx, cancelInitCtx := context.WithCancel(context.Background())
+	go ait.initWithRoots(initCtx, ait.init, blockingRoot{})
+	cancelInitCtx()
+	require.Error(t, ait.waitForInit(), "the canceled initialization should report its failure")
+
+	// Every subsequent explicit re-initialization must succeed on its own
+	// merits. Before this was fixed the cached error was returned here forever.
+	require.NoError(t, ait.InitWithRoots(context.Background()))
+	require.NoError(t, ait.InitWithRoots(context.Background()))
+	require.NoError(t, ait.waitForInit(), "a successful re-initialization must clear the cached error")
+}
+
+// TestInitWithRootsFailsAfterClose pins the other half of the behaviour above:
+// making a stale initialization error recoverable must not make a tracker that
+// has been closed initialize successfully again.
+func TestInitWithRootsFailsAfterClose(t *testing.T) {
+	ait := AutoIncrementTracker{
+		dbName:     "test_database",
+		sequences:  &SyncMap[doltdb.TableName, doltdb.AutoIncrementState]{},
+		mm:         mutexmap.NewMutexMap(),
+		init:       make(chan struct{}),
+		cancelInit: make(chan struct{}),
+	}
+	close(ait.init) // starts "already initialized", like a live tracker between resets
+	ait.Close()
+
+	assert.Error(t, ait.InitWithRoots(context.Background(), blockingRoot{}))
+}
+
 type blockingRoot struct {
 }
 
