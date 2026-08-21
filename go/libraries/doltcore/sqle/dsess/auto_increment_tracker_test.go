@@ -149,3 +149,44 @@ func (blockingRoot) ResolveRootValue(ctx context.Context) (doltdb.RootValue, err
 func (blockingRoot) HashOf() (hash.Hash, error) {
 	return hash.Hash{}, nil
 }
+
+// TestNewSequenceTrackerFromRootsSurvivesCallerContextCancellation reproduces a race condition
+// with initialization of sequence trackers.
+func TestNewSequenceTrackerFromRootsSurvivesCallerContextCancellation(t *testing.T) {
+	callerCtx, cancel := context.WithCancel(context.Background())
+	root := releasableRoot{release: make(chan struct{})}
+
+	ait, err := NewAutoIncrementTracker(callerCtx, "test_database", root)
+	require.NoError(t, err)
+
+	// Cancel the caller's context while the root is still resolving.
+	cancel()
+
+	// Let resolution finish
+	close(root.release)
+
+	require.ErrorIs(t, ait.waitForInit(), errReleasableRootDone)
+}
+
+// releasableRoot blocks ResolveRootValue until |release| is closed, regardless of ctx.
+type releasableRoot struct {
+	release chan struct{}
+}
+
+var _ doltdb.Rootish = releasableRoot{}
+
+func (r releasableRoot) ResolveRootValue(ctx context.Context) (doltdb.RootValue, error) {
+	select {
+	case <-r.release:
+		return nil, errReleasableRootDone
+	case <-ctx.Done():
+		return nil, context.Cause(ctx)
+	}
+}
+
+func (releasableRoot) HashOf() (hash.Hash, error) {
+	return hash.Hash{}, nil
+}
+
+// errReleasableRootDone signals that releasableRoot resolved successfully rather than being canceled.
+var errReleasableRootDone = fmt.Errorf("releasableRoot: released")
