@@ -719,6 +719,9 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 	}
 
 	verticalOutputLineTerminators := []string{"\\g", "\\G"}
+	// clearStatementTerminator mirrors the MySQL client's `\c` escape: it discards the statement
+	// currently being entered (however many lines it spans) without executing it.
+	clearStatementTerminator := "\\c"
 	backSlashCommands := make([]string, 0, len(slashCmds))
 	for _, cmd := range slashCmds {
 		backSlashCommands = append(backSlashCommands, "\\"+cmd.Name())
@@ -730,7 +733,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 			"quit", "exit", "quit()", "exit()",
 		},
 		LineTerminator:     ";",
-		SpecialTerminators: verticalOutputLineTerminators,
+		SpecialTerminators: append(append([]string{}, verticalOutputLineTerminators...), clearStatementTerminator),
 		BackSlashCmds:      backSlashCommands,
 	}
 
@@ -780,6 +783,16 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 		query := c.Args[0]
 		query = strings.TrimSpace(query)
 		if len(query) == 0 {
+			return
+		}
+
+		// \c cancels the statement currently being entered, matching the MySQL client. The buffered
+		// input is discarded without being executed or recorded in history, and the shell resets to
+		// a fresh prompt.
+		if strings.HasSuffix(query, clearStatementTerminator) {
+			nextPrompt, multiPrompt := postCommandUpdate(sqlCtx, qryist)
+			shell.SetPrompt(nextPrompt)
+			shell.SetMultiPrompt(multiPrompt)
 			return
 		}
 
