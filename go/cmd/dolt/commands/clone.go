@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path"
 	"strings"
@@ -170,15 +171,9 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 		err = actions.CloneRemote(ctx, srcDB, remoteName, branch, singleBranch, depth, clonedEnv, statsCh)
 	})
 	if err != nil {
-		// If we're cloning into a directory that already exists do not erase it. Otherwise
-		// make best effort to delete the directory we created.
-		if userDirExists {
-			clonedEnv.FS.Delete(dbfactory.DoltDir, true)
-			_ = dbfactory.ClearDatabaseInProgress(clonedEnv.FS)
-		} else {
-			clonedEnv.FS.Delete(".", true)
-		}
-		return errhand.VerboseErrorFromError(err)
+		// If we're cloning into a directory that already exists do not erase it, only the Dolt state we wrote
+		// into it. Otherwise make best effort to delete the directory we created.
+		return errhand.VerboseErrorFromError(errors.Join(err, actions.AbortIncompleteClone(clonedEnv, userDirExists)))
 	}
 
 	evt := events.GetEventFromContext(ctx)
@@ -194,12 +189,15 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 		Remote: remoteName,
 	})
 	if err != nil {
-		return errhand.VerboseErrorFromError(err)
+		// The clone is still marked in progress, so the directory it produced is unusable. Remove it rather
+		// than leaving a marked directory behind for the user to clean up by hand.
+		return errhand.VerboseErrorFromError(errors.Join(err, actions.AbortIncompleteClone(clonedEnv, userDirExists)))
 	}
 
 	err = dbfactory.ClearDatabaseInProgress(clonedEnv.FS)
 	if err != nil {
-		return errhand.VerboseErrorFromError(err)
+		// The marker is still on disk, so the clone is unusable however complete it is. Take it with us.
+		return errhand.VerboseErrorFromError(errors.Join(err, actions.AbortIncompleteClone(clonedEnv, userDirExists)))
 	}
 
 	return nil

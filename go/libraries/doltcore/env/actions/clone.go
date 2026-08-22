@@ -56,10 +56,39 @@ var ErrUserNotFound = errors.New("could not determine user name. run dolt config
 var ErrEmailNotFound = errors.New("could not determine email. run dolt config --global --add user.email")
 var ErrCloneFailed = errors.New("clone failed")
 
+// AbortIncompleteClone removes the on-disk state left behind by a clone that never finished: the DoltDB opened
+// for it, the Dolt data written so far, and the in-progress marker [EnvForClone] wrote. When |dirExisted| is
+// true the user's own pre-existing directory is kept and only the Dolt state written into it is removed;
+// otherwise the clone directory itself is removed. Every failure path after EnvForClone must call this, because
+// a marker left behind makes the directory unusable until someone deletes it by hand.
+func AbortIncompleteClone(dEnv *env.DoltEnv, dirExisted bool) error {
+	if dEnv == nil {
+		return nil
+	}
+
+	errs := []error{env.CloseIncompleteDatabase(dEnv)}
+	if dirExisted {
+		if err := dEnv.FS.Delete(dbfactory.DoltDir, true /* force / recursive */); err != nil {
+			errs = append(errs, fmt.Errorf("unable to clean up incomplete clone: %w", err))
+		}
+		if err := dbfactory.ClearDatabaseInProgress(dEnv.FS); err != nil {
+			errs = append(errs, fmt.Errorf("unable to clean up incomplete clone: %w", err))
+		}
+	} else {
+		if err := dEnv.FS.Delete(".", true /* force / recursive */); err != nil {
+			errs = append(errs, fmt.Errorf("unable to clean up incomplete clone directory: %w", err))
+		}
+	}
+
+	return errors.Join(errs...)
+}
+
 // EnvForClone creates a new DoltEnv and configures it with repo state from the specified remote. The returned DoltEnv is ready for content to be cloned into it. The directory used for the new DoltEnv is determined by resolving the specified dir against the specified Filesys.
 // The directory at |dir| is marked in progress before any state is written, so callers must clear the marker
-// with [dbfactory.ClearDatabaseInProgress] once the clone content is complete.
-func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, dir string, fs filesys.Filesys, version string, homeProvider env.HomeDirProvider) (*env.DoltEnv, error) {
+// with [dbfactory.ClearDatabaseInProgress] once the clone content is complete, or remove the state with
+// [AbortIncompleteClone] if the clone fails. A failure inside EnvForClone itself is cleaned up before it
+// returns.
+func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, dir string, fs filesys.Filesys, version string, homeProvider env.HomeDirProvider) (_ *env.DoltEnv, err error) {
 	canCreate, err := env.CanCreateDatabaseAtPath(fs, dir)
 	if !canCreate {
 		if errors.Is(err, env.ErrCannotCreateDoltDirAlreadyExists) {
@@ -72,10 +101,28 @@ func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, di
 		}
 	}
 
+	dirExisted, _ := fs.Exists(dir)
+
 	err = fs.MkDirs(dir)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s; %s", ErrFailedToCreateDirectory, dir, err.Error())
 	}
+
+	var dEnv *env.DoltEnv
+	defer func() {
+		// Nothing we started here may outlive this call: the marker written below turns an abandoned directory
+		// into one that no later create or clone can use.
+		if err == nil {
+			return
+		}
+		if dEnv != nil {
+			err = errors.Join(err, AbortIncompleteClone(dEnv, dirExisted))
+		} else if !dirExisted {
+			if derr := fs.Delete(dir, true /* force / recursive */); derr != nil {
+				err = errors.Join(err, fmt.Errorf("unable to clean up incomplete clone directory '%s': %w", dir, derr))
+			}
+		}
+	}()
 
 	newFs, err := fs.WithWorkingDir(dir)
 	if err != nil {
@@ -87,7 +134,7 @@ func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, di
 		return nil, fmt.Errorf("%w: %s; %s", ErrFailedToAccessDir, dir, err.Error())
 	}
 
-	dEnv := env.LoadWithoutDB(ctx, homeProvider, newFs, doltdb.LocalDirDoltDB, version)
+	dEnv = env.LoadWithoutDB(ctx, homeProvider, newFs, doltdb.LocalDirDoltDB, version)
 	err = dEnv.InitRepoWithNoData(ctx, nbf)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init repo: %w", err)

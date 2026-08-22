@@ -135,6 +135,27 @@ func (dEnv *DoltEnv) Close() error {
 	return nil
 }
 
+// CloseIncompleteDatabase closes the DoltDB opened for a database whose creation never finished and drops it
+// from the local database cache. Both are prerequisites for deleting that database's files: the open store holds
+// the storage lock and file handles, and a cache entry left behind would hand a later open of the same path a
+// store pointing at deleted files.
+func CloseIncompleteDatabase(dEnv *DoltEnv) error {
+	if dEnv == nil {
+		return nil
+	}
+
+	absPath, err := dEnv.FS.Abs("")
+	if err != nil {
+		return err
+	}
+
+	// Close before evicting, and evict without closing: the DoltDB and the cache entry share one
+	// datas.Database, so letting the cache close it as well would double-close the store.
+	closeErr := dEnv.Close()
+	cacheErr := dbfactory.DeleteFromSingletonCache(dbfactory.SingletonCacheKeyForDatabaseDir(absPath), false)
+	return errors.Join(closeErr, cacheErr)
+}
+
 // IncompleteEnv returns a DoltEnv that is incomplete. There are cases where we want to know that the structure
 // of and database is correct on disk, but don't want to actually load the database.
 //

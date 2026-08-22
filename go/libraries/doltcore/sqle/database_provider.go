@@ -681,6 +681,23 @@ func NewErrIncompleteDatabaseDir(db string) error {
 	return fmt.Errorf("cannot create database %s: %w", db, ErrIncompleteDatabaseDir)
 }
 
+// removeIncompleteDatabase deletes every trace of the database directory |name| whose creation or clone never
+// finished: the DoltDB opened underneath it, if any, and then the directory itself, including the in-progress
+// marker. Only a process that died outright should ever leave a marked directory behind, so a failure to clean
+// up is reported to the caller instead of being swallowed.
+func (p *DoltDatabaseProvider) removeIncompleteDatabase(name string, dbEnv *env.DoltEnv) error {
+	closeErr := env.CloseIncompleteDatabase(dbEnv)
+
+	var deleteErr error
+	if exists, _ := p.fs.Exists(name); exists {
+		if err := p.fs.Delete(name, true /* force / recursive */); err != nil {
+			deleteErr = fmt.Errorf("unable to clean up incomplete database in directory '%s': %w", name, err)
+		}
+	}
+
+	return errors.Join(closeErr, deleteErr)
+}
+
 func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name string, collation sql.CollationID) (err error) {
 	// We have to validate the name before attempting to create a directory. If a directory contains a delimiter, when
 	// registerNewDatabase errors out a directory with the exact name will be leftover due to a process lock. This then
@@ -717,11 +734,21 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 	if err != nil {
 		return err
 	}
+
+	var newEnv *env.DoltEnv
+	registered := false
 	defer func() {
-		// We do not want to leave this directory behind if we do not
-		// successfully create the database.
-		if err != nil {
-			p.fs.Delete(name, true /* force / recursive */)
+		// We do not want to leave this directory behind if we do not successfully create the database. Once the
+		// database is registered it is live and owned by the provider, so its files must stay put even if a later
+		// step fails. A panic is recovered higher up and the server carries on, so it has to clean up as well.
+		if r := recover(); r != nil {
+			if !registered {
+				_ = p.removeIncompleteDatabase(name, newEnv)
+			}
+			panic(r)
+		}
+		if err != nil && !registered {
+			err = errors.Join(err, p.removeIncompleteDatabase(name, newEnv))
 		}
 	}()
 
@@ -737,7 +764,7 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 
 	// TODO: fill in version appropriately
 	// Use LoadWithoutDB so we can apply db-load params before any DB is opened.
-	newEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, newFs, p.dbFactoryUrl, "TODO")
+	newEnv = env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, newFs, p.dbFactoryUrl, "TODO")
 	p.applyDBLoadParamsToEnv(newEnv)
 
 	newDbStorageFormat := types.Format_DOLT
@@ -815,6 +842,7 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 	if err != nil {
 		return err
 	}
+	registered = true
 
 	// Since we just created this database, we need to commit the current transaction so that the new database is
 	// usable in this session.
@@ -949,29 +977,36 @@ func (p *DoltDatabaseProvider) CloneDatabaseFromRemote(
 	dbName, branch, remoteName, remoteUrl string,
 	depth int,
 	remoteParams map[string]string,
-) error {
+) (err error) {
 	if err := p.reserveCreatingDatabase(dbName); err != nil {
 		return err
 	}
 	defer p.releaseCreatingDatabase(dbName)
 
-	err := p.cloneDatabaseFromRemote(ctx, dbName, remoteName, branch, remoteUrl, depth, remoteParams)
-	if err != nil {
-		// Make a best effort to clean up any artifacts on disk from a failed clone
-		// before we return the error. The name reservation is still held, so
-		// nothing else can be using this directory.
-		exists, _ := p.fs.Exists(dbName)
-		if exists {
-			deleteErr := p.fs.Delete(dbName, true)
-			if deleteErr != nil {
-				err = fmt.Errorf("%s: unable to clean up failed clone in directory '%s': %s",
-					err.Error(), dbName, deleteErr.Error())
-			}
+	// |dEnv| is the environment for the new database, once envForClone has created it. Cleanup has to see it
+	// so that a failure, or a panic recovered higher up, can close the database it opened before removing its
+	// files, so it is declared ahead of the deferred cleanup rather than returned into the tail call.
+	var srcDB *doltdb.DoltDB
+	var dEnv *env.DoltEnv
+	defer func() {
+		if r := recover(); r != nil {
+			_ = p.removeIncompleteDatabase(dbName, dEnv)
+			panic(r)
 		}
+		if err != nil {
+			// Clean up any artifacts on disk from a failed clone before we return the error, including the
+			// in-progress marker EnvForClone wrote. The name reservation is still held, so nothing else can
+			// be using this directory.
+			err = errors.Join(err, p.removeIncompleteDatabase(dbName, dEnv))
+		}
+	}()
+
+	srcDB, dEnv, err = p.envForClone(ctx, dbName, remoteName, remoteUrl, remoteParams)
+	if err != nil {
 		return err
 	}
 
-	return nil
+	return p.cloneDatabaseFromRemote(ctx, dbName, remoteName, branch, depth, srcDB, dEnv)
 }
 
 // checkDatabaseNameAvailableLocked verifies that |name| is free for a new
@@ -1030,36 +1065,52 @@ func (p *DoltDatabaseProvider) releaseCreatingDatabase(dbName string) {
 	delete(p.creatingDatabases, formatDbMapKeyName(dbName))
 }
 
-// cloneDatabaseFromRemote encapsulates the inner logic for cloning a database so that if any error
-// is returned by this function, the caller can capture the error and safely clean up the failed
-// clone directory before returning the error to the user. This function should not be used directly;
-// use CloneDatabaseFromRemote instead.
-func (p *DoltDatabaseProvider) cloneDatabaseFromRemote(
+// envForClone opens the remote database named by |remoteName| and |remoteUrl| and creates the DoltEnv the clone
+// will be written into. It is the part of a clone that produces the state CloneDatabaseFromRemote has to clean up
+// on failure, so it is separate from cloneDatabaseFromRemote: its caller has the new DoltEnv in hand before
+// anything that can fail with a database open runs. This function should not be used directly; use
+// CloneDatabaseFromRemote instead.
+func (p *DoltDatabaseProvider) envForClone(
 	ctx *sql.Context,
-	dbName, remoteName, branch, remoteUrl string,
-	depth int,
+	dbName, remoteName, remoteUrl string,
 	remoteParams map[string]string,
-) error {
+) (*doltdb.DoltDB, *env.DoltEnv, error) {
 	if p.remoteDialer == nil {
-		return fmt.Errorf("unable to clone remote database; no remote dialer configured")
+		return nil, nil, fmt.Errorf("unable to clone remote database; no remote dialer configured")
 	}
 
 	r := env.NewRemote(remoteName, remoteUrl, remoteParams)
 	destRoot, err := p.fs.Abs(dbName)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	srcDB, err := r.GetRemoteDB(ctx, types.Format_DOLT, remoteDialerWithGitCacheRoot{GRPCDialProvider: p.remoteDialer, root: destRoot})
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
 	dEnv, err := actions.EnvForClone(ctx, srcDB.ValueReadWriter().Format(), r, dbName, p.fs, "VERSION", env.GetCurrentUserHomeDir)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	p.applyDBLoadParamsToEnv(dEnv)
 
+	return srcDB, dEnv, nil
+}
+
+// cloneDatabaseFromRemote fetches the contents of |srcDB| into the database |dEnv| that [envForClone] created and
+// registers it with the provider. It encapsulates the inner logic for cloning a database so that if any error is
+// returned by this function, the caller can capture the error and safely clean up the failed clone directory
+// before returning the error to the user. This function should not be used directly; use CloneDatabaseFromRemote
+// instead.
+func (p *DoltDatabaseProvider) cloneDatabaseFromRemote(
+	ctx *sql.Context,
+	dbName, remoteName, branch string,
+	depth int,
+	srcDB *doltdb.DoltDB,
+	dEnv *env.DoltEnv,
+) error {
+	var err error
 	pull.WithDiscardingStatsCh(func(statsCh chan pull.Stats) {
 		err = actions.CloneRemote(ctx, srcDB, remoteName, branch, false, depth, dEnv, statsCh)
 	})
@@ -1071,6 +1122,9 @@ func (p *DoltDatabaseProvider) cloneDatabaseFromRemote(
 		Merge:  dEnv.RepoState.Head,
 		Remote: remoteName,
 	})
+	if err != nil {
+		return err
+	}
 
 	// Now that the fetch is complete, clear the in-progress marker and take the
 	// lock to register the database. registerNewDatabase requires the lock held.
