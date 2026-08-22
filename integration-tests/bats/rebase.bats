@@ -177,6 +177,34 @@ message"
     pcre2grep -nM "multi\s*\R+\s*line\s*\R+\s*commit\s*\R+\s*message" tmp.out
 }
 
+@test "rebase: trailing whitespace is stripped from a reworded commit message" {
+    # See https://git-scm.com/docs/git-commit#Documentation/git-commit.txt---cleanupltmodegt
+    dolt checkout b1
+    COMMIT=$(getHeadHash)
+
+    touch rewordPlan.txt
+    echo "reword $COMMIT reworded   " >> rewordPlan.txt
+    setupCustomEditorScript "rewordPlan.txt"
+
+    run dolt rebase -i main
+    [ $status -eq 0 ]
+    stored=$(dolt sql -r csv -q "SELECT message FROM dolt_log LIMIT 1" | tail -n 1)
+    [ "$stored" = "reworded" ]
+}
+
+@test "rebase: commit message survives the pick action" {
+    # See https://git-scm.com/docs/git-rebase#Documentation/git-rebase.txt-pick
+    dolt checkout b1
+    original=$(dolt sql -r csv -q "SELECT message FROM dolt_log LIMIT 1" | tail -n 1)
+
+    setupCustomEditorScript
+    run dolt rebase -i main
+    [ $status -eq 0 ]
+
+    rebased=$(dolt sql -r csv -q "SELECT message FROM dolt_log LIMIT 1" | tail -n 1)
+    [ "$rebased" = "$original" ]
+}
+
 @test "rebase: failed rebase will abort and clean up" {
     setupCustomEditorScript "invalidRebasePlan.txt"
     dolt checkout b1

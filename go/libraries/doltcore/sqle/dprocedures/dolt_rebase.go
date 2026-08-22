@@ -887,9 +887,11 @@ func commitManuallyStagedChangesForStep(ctx *sql.Context, step rebase.RebasePlan
 
 	// If the commit message wasn't set when we created the cherry-pick options, then set it to the step's commit
 	// message. For fixup commits, we don't use their commit message, so we keep it empty, and let the amend commit
-	// codepath use the previous commit's message.
+	// codepath use the previous commit's message. The step's message is the stored description of the commit
+	// being replayed, so preserve it verbatim.
 	if commitProps.Message == "" && step.Action != rebase.RebaseActionFixup {
 		commitProps.Message = step.CommitMsg
+		commitProps.CleanupMode = actions.CleanupVerbatim
 	}
 
 	roots, ok := doltSession.GetRoots(ctx, ctx.GetCurrentDatabase())
