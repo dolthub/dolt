@@ -850,8 +850,12 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 				}
 				lastSqlCmd = query
 				sqlStmt, err := sqlparser.Parse(query)
-				// silently skip empty statements
-				if err == nil || err == sqlparser.ErrEmpty {
+				if err == sqlparser.ErrEmpty {
+					// bare empty query (e.g. just ";") is a client error; comment-only is skipped silently
+					if strings.TrimSpace(query) == "" {
+						shell.Println(color.RedString("No query specified"))
+					}
+				} else if err == nil {
 					var sqlSch sql.Schema
 					var rowIter sql.RowIter
 					sqlSch, rowIter, _, err = processParsedQuery(sqlCtx, query, qryist, sqlStmt)
