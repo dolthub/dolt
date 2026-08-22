@@ -676,6 +676,10 @@ func (dArgs *diffArgs) applyDotRevisions(queryist cli.Queryist, sqlCtx *sql.Cont
 	if strings.Contains(args[0], "...") {
 		refs := strings.Split(args[0], "...")
 
+		if doltdb.IsWorkingSetRef(refs[0]) && doltdb.IsWorkingSetRef(refs[1]) {
+			return fmt.Errorf("ambiguous three dot range '%s': at least one side must be a commit", args[0])
+		}
+
 		if len(refs[0]) > 0 {
 			right := refs[1]
 			// Use current HEAD if right side of `...` does not exist
