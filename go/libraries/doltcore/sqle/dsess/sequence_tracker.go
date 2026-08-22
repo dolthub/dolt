@@ -58,8 +58,11 @@ type SequenceTracker[
 	initMu sync.Mutex
 	// SequenceTracker is lazily initialized by loading
 	// tracker state for every given |root|.  On first access, we
-	// block on initialization being completed and we terminally
-	// return |initErr| if there was any error initializing.
+	// block on initialization being completed and we return
+	// |initErr| if there was any error initializing. That error is
+	// terminal for readers, which have no roots to retry from, but
+	// not for InitWithRoots, which is handed a fresh set of roots
+	// and re-initializes from them.
 	init chan struct{}
 	// To clean up effectively we need to stop all access to
 	// storage. As part of that, we have the possibility to cancel
@@ -656,13 +659,21 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) InitWithRoots(ctx 
 	a.initMu.Lock()
 	defer a.initMu.Unlock()
 
+	// Wait for any in-flight initialization to finish before replacing |a.init|.
+	//
 	// Reading |a.init| directly (rather than via currentInit, which also takes |initMu|) is
 	// safe here because we're already holding the lock.
+	//
+	// A failure recorded by that earlier initialization is deliberately not returned here.
+	// This call is a request to re-initialize from |roots|, and |initErr| can hold a
+	// condition that belongs to whoever started the previous attempt rather than to this
+	// tracker -- most commonly a context cancellation inherited from the session that
+	// created the database. Replaying it would fail every later dolt_reset --hard against
+	// that database for the remaining life of the server process. Re-initialization below
+	// overwrites |initErr| with the outcome of this attempt, so a genuinely terminal
+	// condition (Close having been called, say) still surfaces as an error.
 	select {
 	case <-a.init:
-		if a.initErr != nil {
-			return a.initErr
-		}
 	case <-time.After(5 * time.Minute):
 		return errors.New("failed to initialize autoincrement tracker")
 	}
