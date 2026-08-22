@@ -983,8 +983,10 @@ func (p *DoltDatabaseProvider) CloneDatabaseFromRemote(
 	}
 	defer p.releaseCreatingDatabase(dbName)
 
-	// The clone's DoltEnv is handed back through |dEnv| as soon as it exists so that a failure, or a panic
-	// recovered higher up, can close the database it opened before removing its files.
+	// |dEnv| is the environment for the new database, once envForClone has created it. Cleanup has to see it
+	// so that a failure, or a panic recovered higher up, can close the database it opened before removing its
+	// files, so it is declared ahead of the deferred cleanup rather than returned into the tail call.
+	var srcDB *doltdb.DoltDB
 	var dEnv *env.DoltEnv
 	defer func() {
 		if r := recover(); r != nil {
@@ -999,7 +1001,12 @@ func (p *DoltDatabaseProvider) CloneDatabaseFromRemote(
 		}
 	}()
 
-	return p.cloneDatabaseFromRemote(ctx, dbName, remoteName, branch, remoteUrl, depth, remoteParams, &dEnv)
+	srcDB, dEnv, err = p.envForClone(ctx, dbName, remoteName, remoteUrl, remoteParams)
+	if err != nil {
+		return err
+	}
+
+	return p.cloneDatabaseFromRemote(ctx, dbName, remoteName, branch, depth, srcDB, dEnv)
 }
 
 // checkDatabaseNameAvailableLocked verifies that |name| is free for a new
@@ -1058,39 +1065,52 @@ func (p *DoltDatabaseProvider) releaseCreatingDatabase(dbName string) {
 	delete(p.creatingDatabases, formatDbMapKeyName(dbName))
 }
 
-// cloneDatabaseFromRemote encapsulates the inner logic for cloning a database so that if any error
-// is returned by this function, the caller can capture the error and safely clean up the failed
-// clone directory before returning the error to the user. The DoltEnv for the clone is stored in |dEnvOut| as
-// soon as it exists, so the caller can close it before removing its files. This function should not be used
-// directly; use CloneDatabaseFromRemote instead.
-func (p *DoltDatabaseProvider) cloneDatabaseFromRemote(
+// envForClone opens the remote database named by |remoteName| and |remoteUrl| and creates the DoltEnv the clone
+// will be written into. It is the part of a clone that produces the state CloneDatabaseFromRemote has to clean up
+// on failure, so it is separate from cloneDatabaseFromRemote: its caller has the new DoltEnv in hand before
+// anything that can fail with a database open runs. This function should not be used directly; use
+// CloneDatabaseFromRemote instead.
+func (p *DoltDatabaseProvider) envForClone(
 	ctx *sql.Context,
-	dbName, remoteName, branch, remoteUrl string,
-	depth int,
+	dbName, remoteName, remoteUrl string,
 	remoteParams map[string]string,
-	dEnvOut **env.DoltEnv,
-) error {
+) (*doltdb.DoltDB, *env.DoltEnv, error) {
 	if p.remoteDialer == nil {
-		return fmt.Errorf("unable to clone remote database; no remote dialer configured")
+		return nil, nil, fmt.Errorf("unable to clone remote database; no remote dialer configured")
 	}
 
 	r := env.NewRemote(remoteName, remoteUrl, remoteParams)
 	destRoot, err := p.fs.Abs(dbName)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	srcDB, err := r.GetRemoteDB(ctx, types.Format_DOLT, remoteDialerWithGitCacheRoot{GRPCDialProvider: p.remoteDialer, root: destRoot})
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
 	dEnv, err := actions.EnvForClone(ctx, srcDB.ValueReadWriter().Format(), r, dbName, p.fs, "VERSION", env.GetCurrentUserHomeDir)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
-	*dEnvOut = dEnv
 	p.applyDBLoadParamsToEnv(dEnv)
 
+	return srcDB, dEnv, nil
+}
+
+// cloneDatabaseFromRemote fetches the contents of |srcDB| into the database |dEnv| that [envForClone] created and
+// registers it with the provider. It encapsulates the inner logic for cloning a database so that if any error is
+// returned by this function, the caller can capture the error and safely clean up the failed clone directory
+// before returning the error to the user. This function should not be used directly; use CloneDatabaseFromRemote
+// instead.
+func (p *DoltDatabaseProvider) cloneDatabaseFromRemote(
+	ctx *sql.Context,
+	dbName, remoteName, branch string,
+	depth int,
+	srcDB *doltdb.DoltDB,
+	dEnv *env.DoltEnv,
+) error {
+	var err error
 	pull.WithDiscardingStatsCh(func(statsCh chan pull.Stats) {
 		err = actions.CloneRemote(ctx, srcDB, remoteName, branch, false, depth, dEnv, statsCh)
 	})

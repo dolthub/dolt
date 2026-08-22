@@ -145,7 +145,7 @@ func (cmd ReadTablesCmd) Exec(ctx context.Context, commandStr string, args []str
 	// before then leaves a database nothing can open, so remove it rather than leaving it on disk.
 	incompleteEnv := dEnv
 	defer func() {
-		if cerr := actions.AbortIncompleteClone(incompleteEnv, !dirExisted); cerr != nil {
+		if cerr := actions.AbortIncompleteClone(incompleteEnv, dirExisted); cerr != nil {
 			cli.PrintErrln(cerr.Error())
 		}
 	}()
@@ -270,7 +270,7 @@ func initializeShallowCloneRepo(ctx context.Context, dEnv *env.DoltEnv, nbf *typ
 	// EnvForClone marked the directory in progress, so a failure here must take the directory with it.
 	defer func() {
 		if verr != nil {
-			if cerr := actions.AbortIncompleteClone(newEnv, !dirExisted); cerr != nil {
+			if cerr := actions.AbortIncompleteClone(newEnv, dirExisted); cerr != nil {
 				cli.PrintErrln(cerr.Error())
 			}
 		}

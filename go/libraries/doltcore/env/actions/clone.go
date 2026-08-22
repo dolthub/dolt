@@ -57,26 +57,26 @@ var ErrEmailNotFound = errors.New("could not determine email. run dolt config --
 var ErrCloneFailed = errors.New("clone failed")
 
 // AbortIncompleteClone removes the on-disk state left behind by a clone that never finished: the DoltDB opened
-// for it, the Dolt data written so far, and the in-progress marker [EnvForClone] wrote. When |dirCreated| is
-// true the clone directory itself is removed; otherwise the user's own pre-existing directory is kept and only
-// the Dolt state written into it is removed. Every failure path after EnvForClone must call this, because a
-// marker left behind makes the directory unusable until someone deletes it by hand.
-func AbortIncompleteClone(dEnv *env.DoltEnv, dirCreated bool) error {
+// for it, the Dolt data written so far, and the in-progress marker [EnvForClone] wrote. When |dirExisted| is
+// true the user's own pre-existing directory is kept and only the Dolt state written into it is removed;
+// otherwise the clone directory itself is removed. Every failure path after EnvForClone must call this, because
+// a marker left behind makes the directory unusable until someone deletes it by hand.
+func AbortIncompleteClone(dEnv *env.DoltEnv, dirExisted bool) error {
 	if dEnv == nil {
 		return nil
 	}
 
 	errs := []error{env.CloseIncompleteDatabase(dEnv)}
-	if dirCreated {
-		if err := dEnv.FS.Delete(".", true /* force / recursive */); err != nil {
-			errs = append(errs, fmt.Errorf("unable to clean up incomplete clone directory: %w", err))
-		}
-	} else {
+	if dirExisted {
 		if err := dEnv.FS.Delete(dbfactory.DoltDir, true /* force / recursive */); err != nil {
 			errs = append(errs, fmt.Errorf("unable to clean up incomplete clone: %w", err))
 		}
 		if err := dbfactory.ClearDatabaseInProgress(dEnv.FS); err != nil {
 			errs = append(errs, fmt.Errorf("unable to clean up incomplete clone: %w", err))
+		}
+	} else {
+		if err := dEnv.FS.Delete(".", true /* force / recursive */); err != nil {
+			errs = append(errs, fmt.Errorf("unable to clean up incomplete clone directory: %w", err))
 		}
 	}
 
@@ -116,7 +116,7 @@ func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, di
 			return
 		}
 		if dEnv != nil {
-			err = errors.Join(err, AbortIncompleteClone(dEnv, !dirExisted))
+			err = errors.Join(err, AbortIncompleteClone(dEnv, dirExisted))
 		} else if !dirExisted {
 			if derr := fs.Delete(dir, true /* force / recursive */); derr != nil {
 				err = errors.Join(err, fmt.Errorf("unable to clean up incomplete clone directory '%s': %w", dir, derr))

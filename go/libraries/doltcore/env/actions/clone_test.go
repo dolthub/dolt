@@ -55,7 +55,7 @@ func TestAbortIncompleteCloneRemovesCreatedDir(t *testing.T) {
 	dEnv, err := EnvForClone(ctx, types.Format_DOLT, env.NoRemote, "cloned", fs, "test", hdp)
 	require.NoError(t, err)
 	require.NotNil(t, dEnv.DoltDB(ctx))
-	require.NoError(t, AbortIncompleteClone(dEnv, true /* dirCreated */))
+	require.NoError(t, AbortIncompleteClone(dEnv, false /* dirExisted */))
 
 	require.Nil(t, dEnv.DoltDB(ctx), "an aborted clone must close the database it opened before deleting its files")
 
@@ -98,7 +98,7 @@ func TestAbortIncompleteCloneKeepsUsersDir(t *testing.T) {
 
 	dEnv, err := EnvForClone(ctx, types.Format_DOLT, env.NoRemote, "cloned", fs, "test", hdp)
 	require.NoError(t, err)
-	require.NoError(t, AbortIncompleteClone(dEnv, false /* dirCreated */))
+	require.NoError(t, AbortIncompleteClone(dEnv, true /* dirExisted */))
 
 	exists, _ := fs.Exists(filepath.Join("cloned", "keepme"))
 	require.True(t, exists, "an aborted clone must not delete the user's own directory")
