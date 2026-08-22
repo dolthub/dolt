@@ -795,7 +795,22 @@ If you're interested in running this command against a remote host, hit us up on
 			}
 			doltConfigName := targetEnv.Config.GetStringOrDefault(config.UserNameKey, env.DefaultName)
 			doltConfigEmail := targetEnv.Config.GetStringOrDefault(config.UserEmailKey, env.DefaultEmail)
-			return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", localCreds.Port, sqlserver.QueryistTLSMode_NoVerify_FallbackToPlaintext, useDb, doltConfigName, doltConfigEmail)
+			qi, err := sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", localCreds.Port, sqlserver.QueryistTLSMode_NoVerify_FallbackToPlaintext, useDb, doltConfigName, doltConfigEmail)
+			if err != nil {
+				return nil, err
+			}
+			// The connection target came from the running-server info file,
+			// not from the user, so a failure to connect needs to explain
+			// what led here and how to recover (#10856).
+			credsFile := filepath.Join(dbfactory.DoltDir, sqlserver.ServerLocalCredsFile)
+			var withContext cli.LateBindQueryist = func(ctx context.Context, opts ...cli.LateBindQueryistOption) (cli.LateBindQueryistResult, error) {
+				res, err := qi(ctx, opts...)
+				if err != nil {
+					return res, fmt.Errorf("%w\n\nThis database is locked by another dolt process, and its %s file says a dolt sql-server is running on port %d, but connecting to that server failed. If the server is still starting, retry in a moment. If no server is running, the file is stale — delete %s and retry.", err, credsFile, localCreds.Port, credsFile)
+				}
+				return res, nil
+			}
+			return withContext, nil
 		}
 	}
 
