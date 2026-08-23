@@ -110,14 +110,31 @@ func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef
 func DoPush[C doltdb.Context](ctx C, pushMeta *env.PushOptions[C], statsCh chan pull.Stats) (returnMsg string, err error) {
 	var successPush, setUpstreamPush, failedPush []string
 	for _, targets := range pushMeta.Targets {
+		// Whether the destination branch already exists has to be sampled before the push, because the
+		// push itself creates the ref. It is used only to choose between the "[new branch]" and
+		// "[updated]" status lines below.
+		//
+		// A failure here is deliberately swallowed rather than returned: it affects the wording of a
+		// status message only, and a push that would otherwise succeed must not be failed because we
+		// could not describe it. On error we fall back to the previous behaviour.
+		destExisted := false
+		if targets.SrcRef != ref.EmptyBranchRef {
+			if exists, hasRefErr := pushMeta.DestDb.HasRef(ctx, targets.DestRef); hasRefErr == nil {
+				destExisted = exists
+			}
+		}
+
 		err = push(ctx, pushMeta.Rsr, pushMeta.TmpDir, pushMeta.SrcDb, pushMeta.DestDb, pushMeta.Remote, targets, statsCh)
 		if err == nil {
-			// TODO: we don't have sufficient information here to know what actually happened in the push. Supporting
-			// git behavior of printing the commit ids updated (e.g. 74476cf38..080b073e7  branch1 -> branch1) isn't
-			// currently possible. We need to plumb through results in the return from the Push(). Having just an error
-			// response is not sufficient, as there are many "success" cases that are not errors.
+			// TODO: we still don't have sufficient information here to print the commit ids updated the
+			// way git does (e.g. 74476cf38..080b073e7  branch1 -> branch1). That needs results plumbed
+			// through the return from Push(); an error response alone is not sufficient, as there are
+			// many "success" cases that are not errors. Branch creation vs update is distinguished above,
+			// so the status line is no longer actively misleading, but it remains coarser than git's.
 			if targets.SrcRef == ref.EmptyBranchRef {
 				successPush = append(successPush, fmt.Sprintf(" - [deleted]             %s", targets.DestRef.GetPath()))
+			} else if destExisted {
+				successPush = append(successPush, fmt.Sprintf(" * [updated]             %s -> %s", targets.SrcRef.GetPath(), targets.DestRef.GetPath()))
 			} else {
 				successPush = append(successPush, fmt.Sprintf(" * [new branch]          %s -> %s", targets.SrcRef.GetPath(), targets.DestRef.GetPath()))
 			}

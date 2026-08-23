@@ -637,7 +637,8 @@ SQL
     dolt commit -am "add 3s"
     run dolt push --all -u origin   # should set upstream for all branches
     [ "$status" -eq 0 ]
-    [[ "$output" =~ " * [new branch]          branch1 -> branch1" ]] || false
+    # branch1 was already pushed above, so this push updates it rather than creating it
+    [[ "$output" =~ " * [updated]             branch1 -> branch1" ]] || false
     [[ "$output" =~ "branch 'branch1' set up to track 'origin/branch1'." ]] || false
     [[ "$output" =~ "branch 'branch2' set up to track 'origin/branch2'." ]] || false
 }
@@ -737,6 +738,36 @@ SQL
     [[ "$output" =~ " ! [rejected]            branch1 -> branch1 (non-fast-forward)" ]] || false
     [[ "$output" =~ "branch 'branch2' set up to track 'origin/branch2'." ]] || false
     [[ "$output" =~ "Updates were rejected because the tip of your current branch is behind" ]] || false
+}
+
+@test "remotes-push-pull: push reports [new branch] on creation and [updated] on later pushes" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+
+    # first push of a branch the remote does not have yet
+    run dolt push origin main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " * [new branch]          main -> main" ]] || false
+
+    # the remote now has main, so a later push is an update, not a creation
+    dolt sql -q "CREATE TABLE test (pk INT PRIMARY KEY)"
+    dolt add .
+    dolt commit -am "create table"
+    run dolt push origin main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " * [updated]             main -> main" ]] || false
+    [[ ! "$output" =~ "[new branch]" ]] || false
+
+    # and stays an update on subsequent pushes
+    dolt sql -q "INSERT INTO test VALUES (1)"
+    dolt commit -am "add a row"
+    run dolt push origin main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " * [updated]             main -> main" ]] || false
 }
 
 @test "remotes-push-pull: pushing empty branch does not panic" {
