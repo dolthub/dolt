@@ -118,6 +118,11 @@ func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, di
 		if dEnv != nil {
 			err = errors.Join(err, AbortIncompleteClone(dEnv, dirExisted))
 		} else if !dirExisted {
+			// The remote was opened before this call and a git remote caches its repository under |dir|, so
+			// close what it left there before the directory goes away.
+			if abs, aerr := fs.Abs(dir); aerr == nil {
+				err = errors.Join(err, dbfactory.CloseGitRemotesUnderRoot(abs))
+			}
 			if derr := fs.Delete(dir, true /* force / recursive */); derr != nil {
 				err = errors.Join(err, fmt.Errorf("unable to clean up incomplete clone directory '%s': %w", dir, derr))
 			}

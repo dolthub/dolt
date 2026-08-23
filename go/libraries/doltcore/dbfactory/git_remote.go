@@ -122,6 +122,44 @@ func TeardownGitRemotes(ctx context.Context) {
 	}
 }
 
+// CloseGitRemotesUnderRoot closes and forgets every cached git remote store whose cache repository lives
+// under |root|, the directory that holds a database's `.dolt` directory. Callers use it before deleting
+// |root|: the cached store holds files inside the cache repository open, and an entry left behind would hand
+// the next open of that remote a store backed by files that are no longer on disk.
+//
+// Only a database that is being removed may be passed here: unlike a normal close, this really does close a
+// store that other holders of the same remote are still sharing.
+func CloseGitRemotesUnderRoot(root string) error {
+	if strings.TrimSpace(root) == "" {
+		return nil
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		return err
+	}
+	prefix := filepath.Join(abs, DoltDir, "git-remote-cache") + string(filepath.Separator)
+
+	var closing []gitRemoteCacheEntry
+	gitRemoteCacheMu.Lock()
+	for cacheRepo, entry := range gitRemoteCache {
+		if strings.HasPrefix(cacheRepo, prefix) {
+			closing = append(closing, entry)
+			delete(gitRemoteCache, cacheRepo)
+		}
+	}
+	gitRemoteCacheMu.Unlock()
+
+	// Unlike [TeardownGitRemotes] this does not tear the store down first: tearing down repacks and prunes
+	// refs in the cache repository, which is about to be deleted along with the rest of |root|.
+	var errs []error
+	for _, entry := range closing {
+		if g, ok := datas.ChunkStoreFromDatabase(entry.db).(gitSharedChunkStore); ok {
+			errs = append(errs, g.ForceClose())
+		}
+	}
+	return errors.Join(errs...)
+}
+
 type gitSharedChunkStore struct {
 	*nbs.NomsBlockStore
 }
@@ -133,6 +171,17 @@ func (cs gitSharedChunkStore) ForceClose() error {
 }
 
 var gitBlobstoreSyncForReadTTLOverride time.Duration
+
+// rebaseCachedEntry returns a cached store as if it had been newly opened. The store is shared
+// process-wide, so it can be holding a root read before another holder pushed to the remote; the
+// rebase reads the manifest again, which fetches from the git remote. Callers must not hold
+// [gitRemoteCacheMu] across this, since the fetch can be slow.
+func rebaseCachedEntry(ctx context.Context, entry gitRemoteCacheEntry) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
+	if err := datas.ChunkStoreFromDatabase(entry.db).Rebase(ctx); err != nil {
+		return nil, nil, nil, err
+	}
+	return entry.db, entry.vrw, entry.ns, nil
+}
 
 func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	remoteURL, ref, err := parseGitRemoteFactoryURL(urlObj, params)
@@ -157,7 +206,7 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	gitRemoteCacheMu.Lock()
 	if entry, ok := gitRemoteCache[cacheRepo]; ok {
 		gitRemoteCacheMu.Unlock()
-		return entry.db, entry.vrw, entry.ns, nil
+		return rebaseCachedEntry(ctx, entry)
 	}
 	gitRemoteCacheMu.Unlock()
 
@@ -214,7 +263,7 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	gitRemoteCacheMu.Lock()
 	if entry, ok := gitRemoteCache[cacheRepo]; ok {
 		gitRemoteCacheMu.Unlock()
-		return entry.db, entry.vrw, entry.ns, nil
+		return rebaseCachedEntry(ctx, entry)
 	}
 	gitRemoteCache[cacheRepo] = gitRemoteCacheEntry{db: db, vrw: vrw, ns: ns}
 	gitRemoteCacheMu.Unlock()

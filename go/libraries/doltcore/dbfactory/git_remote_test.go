@@ -287,3 +287,37 @@ func TestEnsureGitRemoteURL_IdempotentRemoteAlreadyExists(t *testing.T) {
 	require.NoError(t, err, "git remote get-url failed: %s", string(got))
 	require.Equal(t, remoteURL, strings.TrimSpace(string(got)))
 }
+
+func TestCloseGitRemotesUnderRoot(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found on PATH")
+	}
+
+	ctx := context.Background()
+	t.Cleanup(func() { TeardownGitRemotes(ctx) })
+
+	remoteRepo, err := gitrepo.InitBare(ctx, filepath.Join(shortTempDir(t), "remote.git"))
+	require.NoError(t, err)
+	_, err = remoteRepo.SetRefToTree(ctx, "refs/heads/main", map[string][]byte{"README": []byte("seed\n")}, "seed")
+	require.NoError(t, err)
+
+	urlStr := "git+file://" + filepath.ToSlash(remoteRepo.GitDir)
+	open := func(root string) datas.Database {
+		db, _, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, map[string]interface{}{GitCacheRootParam: root})
+		require.NoError(t, err)
+		return db
+	}
+
+	rootA, rootB := shortTempDir(t), shortTempDir(t)
+	dbA, dbB := open(rootA), open(rootB)
+	require.True(t, open(rootA) == dbA, "opens under the same root share one cached store")
+
+	require.NoError(t, CloseGitRemotesUnderRoot(rootA))
+
+	require.True(t, open(rootB) == dbB, "closing one root's remotes must leave the others cached")
+
+	// Deleting the cache repository is what eviction is for: an entry left behind would hand the next open
+	// of this remote a store backed by files that are no longer there.
+	require.NoError(t, os.RemoveAll(rootA))
+	require.True(t, open(rootA) != dbA, "the open after eviction must build a new store")
+}
