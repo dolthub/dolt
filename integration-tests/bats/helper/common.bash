@@ -21,13 +21,6 @@ export DOLT_ENABLE_DYNAMIC_ASSERTS=true
 # racing with a test's teardown removing that same directory. Disable it for bats runs.
 export DOLT_DISABLE_EVENT_FLUSH=true
 
-# The default pager (less) reads keypresses from /dev/tty directly, bypassing dolt's own
-# stdin handling, so it can race with and swallow characters an expect script already typed
-# ahead into the pty (see log.bats: "log: --decorate=auto shows decoration on a tty" for the
-# same workaround on a single test). Default to `cat` for all bats runs; tests that exercise
-# real pager behavior (pager.bats) already override this per-test.
-export DOLT_PAGER=cat
-
 nativebatsdir() { echo `nativepath $BATS_TEST_DIRNAME/$1`; }
 batshelper() { echo `nativebatsdir helper/$1`; }
 
