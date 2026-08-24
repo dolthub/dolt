@@ -1,6 +1,11 @@
 source "${BASH_SOURCE[0]%/*}/windows-compat.bash"
 source "${BASH_SOURCE[0]%/*}/local-remote.bash"
 
+if [ -z "${IS_MAC+x}" ]; then
+    IS_MAC=false
+    [ "$(uname)" = "Darwin" ] && IS_MAC=true
+fi
+
 if [ -z "$BATS_TMPDIR" ]; then
     export BATS_TMPDIR=$HOME/batstmp/
     mkdir $BATS_TMPDIR

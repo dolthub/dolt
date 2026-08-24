@@ -9,7 +9,10 @@ TEST_NAME="dolt-tzdata"
 TEST_IMAGE="$TEST_NAME:bookworm-slim"
 
 setup_file() {
-    command -v docker >/dev/null 2>&1 || skip "docker not found on PATH"
+    # Docker isn't available on GitHub's macOS runners
+    if [ "$IS_MAC" = true ]; then
+        command -v docker >/dev/null 2>&1 || skip "docker not found on PATH (expected on macOS runners)"
+    fi
 
     WORKSPACE_ROOT=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
     export WORKSPACE_ROOT

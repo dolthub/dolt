@@ -8,7 +8,10 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 setup() {
   setup_no_dolt_init
 
-  command -v docker >/dev/null 2>&1 || skip "docker not found on PATH"
+  # Docker isn't available on GitHub's macOS runners
+  if [ "$IS_MAC" = true ]; then
+    command -v docker >/dev/null 2>&1 || skip "docker not found on PATH (expected on macOS runners)"
+  fi
 
   # Compute workspace root from integration-tests/bats directory
   WORKSPACE_ROOT=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
