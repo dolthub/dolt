@@ -721,6 +721,65 @@ var BrokenDDLScripts = []queries.ScriptTest{
 
 var AddIndexScripts = []queries.ScriptTest{
 	{
+		Name: "duplicate key after adding a column to a table with an expression index",
+		SetUpScript: []string{
+			"CREATE TABLE test (id int PRIMARY KEY, name text UNIQUE);",
+			"CREATE INDEX lower_name ON test ((lower(name)));",
+			"CREATE INDEX upper_name ON test ((upper(name)));",
+			"ALTER TABLE test ADD COLUMN extra datetime;",
+			"INSERT INTO test (id, name) VALUES (1, 'v1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "INSERT INTO test (id, name) VALUES (1, 'duplicate');",
+				ExpectedErr: sql.ErrPrimaryKeyViolation,
+			},
+			{
+				Query:       "INSERT INTO test (id, name) VALUES (2, 'v1');",
+				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+			{
+				Query:    "INSERT IGNORE INTO test (id, name) VALUES (1, 'ignored');",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "INSERT INTO test (id, name) VALUES (1, 'updated') ON DUPLICATE KEY UPDATE name = VALUES(name);",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "SELECT id, name, extra FROM test;",
+				Expected: []sql.Row{{1, "updated", nil}},
+			},
+		},
+	},
+	{
+		Name: "duplicate unique key on keyless table after adding a column with an expression index",
+		SetUpScript: []string{
+			"CREATE TABLE keyless_test (id int, name text UNIQUE);",
+			"CREATE INDEX keyless_lower_name ON keyless_test ((lower(name)));",
+			"ALTER TABLE keyless_test ADD COLUMN extra datetime;",
+			"INSERT INTO keyless_test (id, name) VALUES (1, 'v1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "INSERT INTO keyless_test (id, name) VALUES (2, 'v1');",
+				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+			{
+				Query:    "INSERT IGNORE INTO keyless_test (id, name) VALUES (2, 'v1');",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "INSERT INTO keyless_test (id, name) VALUES (3, 'v1') ON DUPLICATE KEY UPDATE id = VALUES(id);",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "SELECT id, name, extra FROM keyless_test;",
+				Expected: []sql.Row{{3, "v1", nil}},
+			},
+		},
+	},
+	{
 		Name: "add unique constraint on keyless table",
 		SetUpScript: []string{
 			"CREATE TABLE test (uk int);",

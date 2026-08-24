@@ -163,14 +163,14 @@ func (k prollyKeylessWriter) errForSecondaryUniqueKeyError(ctx context.Context, 
 // UniqueKeyError builds a sql.UniqueKeyError. It fetches the existing row using
 // |key| and passes it as the |existing| row.
 func (k prollyKeylessWriter) uniqueKeyError(ctx context.Context, keyStr string, key val.Tuple, isPk bool) error {
-	existing := make(sql.Row, len(k.valMap))
+	existing := make(sql.Row, mappedRowSize(k.valMap))
 
 	_ = k.mut.Get(ctx, key, func(key, value val.Tuple) (err error) {
 		vd := k.valBld.Desc
-		for from := range k.valMap {
-			to := k.valMap.MapOrdinal(from)
+		for tupleOrdinal := range k.valMap {
+			rowOrdinal := k.valMap.MapOrdinal(tupleOrdinal)
 			// offset from index for keyless rows, as first field is the count
-			if existing[to], err = tree.GetField(ctx, vd, from+1, value, k.mut.NodeStore()); err != nil {
+			if existing[rowOrdinal], err = tree.GetField(ctx, vd, tupleOrdinal+1, value, k.mut.NodeStore()); err != nil {
 				return err
 			}
 		}
