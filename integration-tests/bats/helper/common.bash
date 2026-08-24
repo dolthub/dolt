@@ -1,6 +1,11 @@
 source "${BASH_SOURCE[0]%/*}/windows-compat.bash"
 source "${BASH_SOURCE[0]%/*}/local-remote.bash"
 
+if [ -z "${IS_MAC+x}" ]; then
+    IS_MAC=false
+    [ "$(uname)" = "Darwin" ] && IS_MAC=true
+fi
+
 if [ -z "$BATS_TMPDIR" ]; then
     export BATS_TMPDIR=$HOME/batstmp/
     mkdir $BATS_TMPDIR
@@ -8,6 +13,13 @@ fi
 
 export DOLT_CONTEXT_VALIDATION_ENABLED=true
 export DOLT_ENABLE_DYNAMIC_ASSERTS=true
+
+# Every dolt command that isn't init/config/send-metrics spawns a detached, untracked
+# `dolt send-metrics` child process on exit to flush usage events (see flushEventsDir in
+# cmd/dolt/dolt.go). That process can still be reading/writing/locking files under the
+# global config dir after the parent dolt command (or a killed sql-server) has exited,
+# racing with a test's teardown removing that same directory. Disable it for bats runs.
+export DOLT_DISABLE_EVENT_FLUSH=true
 
 nativebatsdir() { echo `nativepath $BATS_TEST_DIRNAME/$1`; }
 batshelper() { echo `nativebatsdir helper/$1`; }
