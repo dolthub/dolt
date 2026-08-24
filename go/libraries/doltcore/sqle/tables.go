@@ -2888,11 +2888,14 @@ func (t *WritableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, sq
 	}
 	tblName := doltdb.TableName{Name: sqlFk.Table, Schema: schemaName}
 
-	doltFk, ok := fkc.GetByNameCaseInsensitive(fkName, tblName)
+	// sqlFk.Table may already be the table's new name when this call is part of a rename (the rename itself is
+	// applied afterward), so look up the existing entry by the table's current name, not sqlFk.Table.
+	currentTblName := t.TableName()
+	doltFk, ok := fkc.GetByNameCaseInsensitive(fkName, currentTblName)
 	if !ok {
 		return sql.ErrForeignKeyNotFound.New(fkName, t.tableName)
 	}
-	fkc.RemoveKeyByName(doltFk.Name, tblName)
+	fkc.RemoveKeyByName(doltFk.Name, currentTblName)
 	doltFk.Name = sqlFk.Name
 	doltFk.TableName = tblName
 	doltFk.ReferencedTableName = doltdb.TableName{Name: sqlFk.ParentTable, Schema: schemaName}
