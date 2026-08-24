@@ -8,6 +8,8 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 setup() {
   setup_no_dolt_init
 
+  command -v docker >/dev/null 2>&1 || skip "docker not found on PATH"
+
   # Compute workspace root from integration-tests/bats directory
   WORKSPACE_ROOT=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
   export WORKSPACE_ROOT
