@@ -656,13 +656,20 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) InitWithRoots(ctx 
 	a.initMu.Lock()
 	defer a.initMu.Unlock()
 
+	// Wait for any in-flight initialization to finish before replacing |a.init|.
+	//
 	// Reading |a.init| directly (rather than via currentInit, which also takes |initMu|) is
 	// safe here because we're already holding the lock.
+	//
+	// A failure recorded by that earlier initialization is deliberately not returned here.
+	// This call is a request to re-initialize from |roots|, and |initErr| can hold a
+	// condition that belongs to whoever started the previous attempt rather than to this
+	// tracker. Replaying it would fail every later dolt_reset --hard against that database
+	// for the remaining life of the server process. Re-initialization below overwrites
+	// |initErr| with the outcome of this attempt, so a genuinely terminal condition (Close
+	// having been called, say) still surfaces as an error.
 	select {
 	case <-a.init:
-		if a.initErr != nil {
-			return a.initErr
-		}
 	case <-time.After(5 * time.Minute):
 		return errors.New("failed to initialize autoincrement tracker")
 	}
