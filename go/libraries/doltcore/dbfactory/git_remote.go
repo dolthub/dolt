@@ -43,11 +43,14 @@ const (
 	// GitCacheRootParam is the absolute path to the local Dolt repository root (the directory that contains `.dolt/`).
 	// Required for git remotes. GitRemoteFactory stores its local cache repo under:
 	// `<git_cache_root>/.dolt/git-remote-cache/<sha256(remoteURL|remoteRef)>/repo.git`.
-	GitCacheRootParam    = "git_cache_root"
-	GitRefParam          = "git_ref"
-	GitRemoteNameParam   = "git_remote_name"
-	defaultGitRef        = "refs/dolt/data"
-	defaultGitRemoteName = "origin"
+	GitCacheRootParam = "git_cache_root"
+	// GitRemoteCacheDirName is the directory under a Dolt repository's `.dolt/` which holds the local
+	// cache repositories for git remotes.
+	GitRemoteCacheDirName = "git-remote-cache"
+	GitRefParam           = "git_ref"
+	GitRemoteNameParam    = "git_remote_name"
+	defaultGitRef         = "refs/dolt/data"
+	defaultGitRemoteName  = "origin"
 )
 
 var ErrGitRemoteHasNoBranches = errors.New("git remote has no branches")
@@ -137,7 +140,7 @@ func CloseGitRemotesUnderRoot(root string) error {
 	if err != nil {
 		return err
 	}
-	prefix := filepath.Join(abs, DoltDir, "git-remote-cache") + string(filepath.Separator)
+	prefix := filepath.Join(abs, DoltDir, GitRemoteCacheDirName) + string(filepath.Separator)
 
 	var closing []gitRemoteCacheEntry
 	gitRemoteCacheMu.Lock()
@@ -196,7 +199,7 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	if !ok {
 		return nil, nil, nil, fmt.Errorf("%s is required for git remotes", GitCacheRootParam)
 	}
-	cacheBase := filepath.Join(cacheRoot, DoltDir, "git-remote-cache")
+	cacheBase := filepath.Join(cacheRoot, DoltDir, GitRemoteCacheDirName)
 
 	cacheRepo, err := cacheRepoPath(cacheBase, remoteURL.String(), ref)
 	if err != nil {

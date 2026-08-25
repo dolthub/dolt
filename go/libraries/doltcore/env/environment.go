@@ -583,7 +583,7 @@ func CanCreateDatabaseAtPath(fs filesys.Filesys, dir string) (bool, error) {
 		}
 		tmpPath := filepath.Join(doltDirPath, TmpDirName)
 		configPath := filepath.Join(doltDirPath, configFile)
-		gitRemoteCachePath := filepath.Join(doltDirPath, "git-remote-cache")
+		gitRemoteCachePath := filepath.Join(doltDirPath, dbfactory.GitRemoteCacheDirName)
 		isOK := true
 		err := fs.Iter(doltDirPath, true, func(path string, sz int64, isDir bool) (stop bool) {
 			if path == doltDirPath {
