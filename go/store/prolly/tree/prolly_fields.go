@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -91,7 +90,7 @@ func GetField(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple, ns N
 		buf, ok = td.GetJSON(i, tup)
 		if ok {
 			var doc types.JSONDocument
-			err = json.Unmarshal(buf, &doc.Val)
+			err = types.JsonUnmarshal(buf, &doc.Val)
 			v = doc
 		}
 	// GeometryEnc is no longer written by new columns, but could be used by older databases
