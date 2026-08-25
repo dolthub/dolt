@@ -128,6 +128,8 @@ func (cmd ReadTablesCmd) Exec(ctx context.Context, commandStr string, args []str
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
 	}
+	// The remote was opened for this command alone, so close it once we are done reading tables.
+	defer srcDB.Close()
 
 	branches, err := srcDB.GetBranches(ctx)
 	if verr != nil {
@@ -228,13 +230,23 @@ func pullTableValue(ctx context.Context, dEnv *env.DoltEnv, srcDB *doltdb.DoltDB
 	return destRoot, nil
 }
 
-func getRemoteDBAtCommit(ctx context.Context, remoteUrl string, remoteUrlParams map[string]string, commitStr string, dEnv *env.DoltEnv) (*doltdb.DoltDB, doltdb.RootValue, errhand.VerboseError) {
+// getRemoteDBAtCommit opens the remote at |remoteUrl| and resolves |commitStr| in it. The caller owns the
+// returned DoltDB and must close it.
+func getRemoteDBAtCommit(ctx context.Context, remoteUrl string, remoteUrlParams map[string]string, commitStr string, dEnv *env.DoltEnv) (_ *doltdb.DoltDB, _ doltdb.RootValue, verr errhand.VerboseError) {
 	cacheRoot, _ := dEnv.GitCacheRoot()
-	_, srcDB, verr := createRemote(ctx, "temp", remoteUrl, remoteUrlParams, dEnv, cacheRoot)
+	var srcDB *doltdb.DoltDB
+	_, srcDB, verr = createRemote(ctx, "temp", remoteUrl, remoteUrlParams, dEnv, cacheRoot)
 
 	if verr != nil {
 		return nil, nil, verr
 	}
+
+	// Only a successful return hands the database off to the caller; on failure it is ours to close.
+	defer func() {
+		if verr != nil {
+			srcDB.Close()
+		}
+	}()
 
 	cs, err := doltdb.NewCommitSpec(commitStr)
 

@@ -138,7 +138,8 @@ func (dEnv *DoltEnv) Close() error {
 // CloseIncompleteDatabase closes the DoltDB opened for a database whose creation never finished and drops it
 // from the local database cache. Both are prerequisites for deleting that database's files: the open store holds
 // the storage lock and file handles, and a cache entry left behind would hand a later open of the same path a
-// store pointing at deleted files.
+// store pointing at deleted files. Any git remote cached under the database's directory is closed and dropped
+// for the same reason, since that is where a clone puts a git remote's cache repository.
 func CloseIncompleteDatabase(dEnv *DoltEnv) error {
 	if dEnv == nil {
 		return nil
@@ -153,7 +154,8 @@ func CloseIncompleteDatabase(dEnv *DoltEnv) error {
 	// datas.Database, so letting the cache close it as well would double-close the store.
 	closeErr := dEnv.Close()
 	cacheErr := dbfactory.DeleteFromSingletonCache(dbfactory.SingletonCacheKeyForDatabaseDir(absPath), false)
-	return errors.Join(closeErr, cacheErr)
+	gitErr := dbfactory.CloseGitRemotesUnderRoot(absPath)
+	return errors.Join(closeErr, cacheErr, gitErr)
 }
 
 // IncompleteEnv returns a DoltEnv that is incomplete. There are cases where we want to know that the structure
@@ -581,7 +583,7 @@ func CanCreateDatabaseAtPath(fs filesys.Filesys, dir string) (bool, error) {
 		}
 		tmpPath := filepath.Join(doltDirPath, TmpDirName)
 		configPath := filepath.Join(doltDirPath, configFile)
-		gitRemoteCachePath := filepath.Join(doltDirPath, "git-remote-cache")
+		gitRemoteCachePath := filepath.Join(doltDirPath, dbfactory.GitRemoteCacheDirName)
 		isOK := true
 		err := fs.Iter(doltDirPath, true, func(path string, sz int64, isDir bool) (stop bool) {
 			if path == doltDirPath {

@@ -152,6 +152,7 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 	if verr != nil {
 		return verr
 	}
+	defer srcDB.Close()
 
 	// Create a new Dolt env for the clone
 	clonedEnv, err := actions.EnvForClone(ctx, srcDB.ValueReadWriter().Format(), r, dir, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
@@ -240,6 +241,11 @@ func parseArgs(apr *argparser.ArgParseResults) (string, string, errhand.VerboseE
 	return dir, urlStr, nil
 }
 
+// createRemote opens the remote at |remoteUrl| for reading. |cloneRoot| is the absolute path of the directory
+// the local database is being created in, which is where a git remote keeps its cache repository.
+//
+// The remote is opened without the singleton and chunk caches, the way fetch, push and pull open one, so the
+// caller gets a view of its own. The caller owns the returned DoltDB and must close it.
 func createRemote(ctx context.Context, remoteName, remoteUrl string, params map[string]string, dEnv *env.DoltEnv, cloneRoot string) (env.Remote, *doltdb.DoltDB, errhand.VerboseError) {
 	cli.Printf("cloning %s\n", remoteUrl)
 
@@ -248,7 +254,7 @@ func createRemote(ctx context.Context, remoteName, remoteUrl string, params map[
 	if strings.TrimSpace(cloneRoot) != "" {
 		dialer = remoteDialerWithGitCacheRoot{GRPCDialProvider: dEnv, root: cloneRoot}
 	}
-	ddb, err := r.GetRemoteDB(ctx, types.Format_DOLT, dialer)
+	ddb, err := r.GetRemoteDBWithoutCaching(ctx, types.Format_DOLT, dialer)
 	if err != nil {
 		bdr := errhand.BuildDError("error: failed to get remote db").AddCause(err)
 		return env.NoRemote, nil, bdr.Build()

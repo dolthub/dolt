@@ -1005,6 +1005,7 @@ func (p *DoltDatabaseProvider) CloneDatabaseFromRemote(
 	if err != nil {
 		return err
 	}
+	defer srcDB.Close()
 
 	return p.cloneDatabaseFromRemote(ctx, dbName, remoteName, branch, depth, srcDB, dEnv)
 }
@@ -1084,14 +1085,17 @@ func (p *DoltDatabaseProvider) envForClone(
 	if err != nil {
 		return nil, nil, err
 	}
-	srcDB, err := r.GetRemoteDB(ctx, types.Format_DOLT, remoteDialerWithGitCacheRoot{GRPCDialProvider: p.remoteDialer, root: destRoot})
+	// Open the remote without caching so the clone owns the store and should close it when it is done.
+	// |destRoot| is where a git remote keeps its cache repository, so it has to be the directory being
+	// cloned into, not the session's current database.
+	srcDB, err := r.GetRemoteDBWithoutCaching(ctx, types.Format_DOLT, remoteDialerWithGitCacheRoot{GRPCDialProvider: p.remoteDialer, root: destRoot})
 	if err != nil {
 		return nil, nil, err
 	}
 
 	dEnv, err := actions.EnvForClone(ctx, srcDB.ValueReadWriter().Format(), r, dbName, p.fs, "VERSION", env.GetCurrentUserHomeDir)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, errors.Join(err, srcDB.Close())
 	}
 	p.applyDBLoadParamsToEnv(dEnv)
 
