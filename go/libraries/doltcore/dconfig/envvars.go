@@ -19,6 +19,7 @@ const (
 	EnvUser                          = "DOLT_CLI_USER"
 	EnvSilenceUserReqForTesting      = "DOLT_SILENCE_USER_REQ_FOR_TESTING"
 	EnvOpenAiKey                     = "OPENAI_API_KEY"
+	EnvOrcaRouterKey                 = "ORCAROUTER_API_KEY"
 	EnvDoltRemotePassword            = "DOLT_REMOTE_PASSWORD"
 	EnvEditor                        = "EDITOR"
 	EnvSqlDebugLogVerbose            = "DOLT_SQL_DEBUG_LOG_VERBOSE"
