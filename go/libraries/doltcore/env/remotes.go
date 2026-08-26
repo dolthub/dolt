@@ -113,7 +113,7 @@ func (r *Remote) GetRemoteDB(ctx context.Context, nbf *types.NomsBinFormat, dial
 		params[dbfactory.GitRemoteNameParam] = r.Name
 		if p, ok := dialer.(dbfactory.GitCacheRootProvider); ok {
 			if root, ok := p.GitCacheRoot(); ok {
-				params[dbfactory.GitCacheRootParam] = root
+				params[dbfactory.GitCacheDirParam] = filepath.Join(root, dbfactory.DoltDir, dbfactory.GitRemoteCacheDirName)
 			}
 		}
 	}
@@ -134,7 +134,7 @@ func (r *Remote) Prepare(ctx context.Context, nbf *types.NomsBinFormat, dialer d
 		params[dbfactory.GitRemoteNameParam] = r.Name
 		if p, ok := dialer.(dbfactory.GitCacheRootProvider); ok {
 			if root, ok := p.GitCacheRoot(); ok {
-				params[dbfactory.GitCacheRootParam] = root
+				params[dbfactory.GitCacheDirParam] = filepath.Join(root, dbfactory.DoltDir, dbfactory.GitRemoteCacheDirName)
 			}
 		}
 	}
@@ -166,7 +166,7 @@ func (r *Remote) GetRemoteDBWithoutCaching(ctx context.Context, nbf *types.NomsB
 		params[dbfactory.GitRemoteNameParam] = r.Name
 		if p, ok := dialer.(dbfactory.GitCacheRootProvider); ok {
 			if root, ok := p.GitCacheRoot(); ok {
-				params[dbfactory.GitCacheRootParam] = root
+				params[dbfactory.GitCacheDirParam] = filepath.Join(root, dbfactory.DoltDir, dbfactory.GitRemoteCacheDirName)
 			}
 		}
 	}

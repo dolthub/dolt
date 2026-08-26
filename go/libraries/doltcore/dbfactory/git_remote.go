@@ -40,12 +40,13 @@ import (
 )
 
 const (
-	// GitCacheRootParam is the absolute path to the local Dolt repository root (the directory that contains `.dolt/`).
-	// Required for git remotes. GitRemoteFactory stores its local cache repo under:
-	// `<git_cache_root>/.dolt/git-remote-cache/<sha256(remoteURL|remoteRef)>/repo.git`.
-	GitCacheRootParam = "git_cache_root"
-	// GitRemoteCacheDirName is the directory under a Dolt repository's `.dolt/` which holds the local
-	// cache repositories for git remotes.
+	// GitCacheDirParam is the directory that holds the per-remote local cache
+	// repositories, used as given: <git_cache_dir>/<hash>/repo.git. Callers choose
+	// the layout: the Dolt CLI passes <repoRoot>/.dolt/git-remote-cache (see
+	// GitRemoteCacheDirName), while other embedders can pass any directory.
+	GitCacheDirParam = "git_cache_dir"
+	// GitRemoteCacheDirName is the conventional directory, under a Dolt repository's
+	// `.dolt/`, that the Dolt CLI uses for git remote caches.
 	GitRemoteCacheDirName = "git-remote-cache"
 	GitRefParam           = "git_ref"
 	GitRemoteNameParam    = "git_remote_name"
@@ -192,16 +193,15 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 		return nil, nil, nil, err
 	}
 
-	cacheRoot, ok, err := resolveGitCacheRoot(params)
+	cacheDir, ok, err := stringParam(params, GitCacheDirParam)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	if !ok {
-		return nil, nil, nil, fmt.Errorf("%s is required for git remotes", GitCacheRootParam)
+		return nil, nil, nil, fmt.Errorf("%s is required for git remotes", GitCacheDirParam)
 	}
-	cacheBase := filepath.Join(cacheRoot, DoltDir, GitRemoteCacheDirName)
 
-	cacheRepo, err := cacheRepoPath(cacheBase, remoteURL.String(), ref)
+	cacheRepo, err := cacheRepoPath(cacheDir, remoteURL.String(), ref)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -352,22 +352,21 @@ func resolveGitRemoteName(params map[string]interface{}) string {
 	return defaultGitRemoteName
 }
 
-// resolveGitCacheRoot parses and validates GitCacheRootParam.
-// It returns ok=false when the param is not present.
-func resolveGitCacheRoot(params map[string]interface{}) (root string, ok bool, err error) {
+// stringParam reads a required-non-empty string param, ok=false when absent.
+func stringParam(params map[string]interface{}, key string) (string, bool, error) {
 	if params == nil {
 		return "", false, nil
 	}
-	v, ok := params[GitCacheRootParam]
+	v, ok := params[key]
 	if !ok || v == nil {
 		return "", false, nil
 	}
 	s, ok := v.(string)
 	if !ok {
-		return "", false, fmt.Errorf("%s must be a string", GitCacheRootParam)
+		return "", false, fmt.Errorf("%s must be a string", key)
 	}
 	if strings.TrimSpace(s) == "" {
-		return "", false, fmt.Errorf("%s cannot be empty", GitCacheRootParam)
+		return "", false, fmt.Errorf("%s cannot be empty", key)
 	}
 	return s, true, nil
 }
