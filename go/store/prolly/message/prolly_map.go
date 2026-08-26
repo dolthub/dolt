@@ -74,6 +74,16 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 		valTups = writeItemBytes(b, values, valSz)
 		serial.ProllyTreeNodeStartValueOffsetsVector(b, len(values)+1)
 		valOffs = writeItemOffsets(b, values, valSz)
+
+		// serialize offStart of chunk addresses within |keyTups|
+		if s.keyDesc.AddressFieldCount() > 0 {
+			keyAddressFields := countAddresses(keys, s.keyDesc)
+			if keyAddressFields > 0 {
+				serial.ProllyTreeNodeStartKeyAddressOffsetsVector(b, keyAddressFields)
+				keyAddrOffs = writeAddressOffsets(b, keys, keySz, s.keyDesc)
+			}
+		}
+
 		// serialize offStart of chunk addresses within |valTups|
 		if s.valDesc.AddressFieldCount() > 0 {
 			addressFields := countAddresses(values, s.valDesc)
@@ -82,18 +92,7 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 				valAddrOffs = writeAddressOffsets(b, values, valSz, s.valDesc)
 			}
 		}
-		// serialize offStart of chunk addresses within |keyTups| (eg out-of-band adaptive values in
-		// key tuples). Only leaf nodes record these: every internal node key is a copy of a leaf key
-		// below it, so leaf references reach every key-referenced chunk. The field is only populated
-		// when such an address exists, keeping databases without them readable by older clients that
-		// predate the field.
-		if s.keyDesc.AddressFieldCount() > 0 {
-			keyAddressFields := countAddresses(keys, s.keyDesc)
-			if keyAddressFields > 0 {
-				serial.ProllyTreeNodeStartKeyAddressOffsetsVector(b, keyAddressFields)
-				keyAddrOffs = writeAddressOffsets(b, keys, keySz, s.keyDesc)
-			}
-		}
+
 	} else {
 		// serialize child refs and subtree counts for internal nodes
 		refArr = writeItemBytes(b, values, valSz)
