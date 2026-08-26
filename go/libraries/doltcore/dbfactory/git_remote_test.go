@@ -88,11 +88,11 @@ func TestGitRemoteURLString(t *testing.T) {
 	}
 }
 
-func TestGitRemoteFactory_GitFile_RequiresGitCacheDirParam(t *testing.T) {
+func TestGitRemoteFactory_GitFile_RequiresGitCacheRootParam(t *testing.T) {
 	ctx := context.Background()
 	_, _, _, err := CreateDB(ctx, types.Format_DOLT, "git+file:///tmp/remote.git", map[string]interface{}{})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), GitCacheDirParam)
+	require.Contains(t, err.Error(), GitCacheRootParam)
 }
 
 func TestGitRemoteFactory_GitFile_CachesUnderRepoDoltDirAndCanWrite(t *testing.T) {
@@ -112,10 +112,10 @@ func TestGitRemoteFactory_GitFile_CachesUnderRepoDoltDirAndCanWrite(t *testing.T
 	remoteURL := "file://" + remotePath
 	urlStr := "git+file://" + remotePath
 	// The Dolt CLI stores caches under <repoRoot>/.dolt/git-remote-cache; the
-	// factory uses git_cache_dir verbatim, so the caller composes that path.
+	// factory uses git_cache_root verbatim, so the caller composes that path.
 	cacheBase := filepath.Join(localRepoRoot, DoltDir, GitRemoteCacheDirName)
 	params := map[string]interface{}{
-		GitCacheDirParam: cacheBase,
+		GitCacheRootParam: cacheBase,
 	}
 
 	db, vrw, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, params)
@@ -179,7 +179,7 @@ func TestGitRemoteFactory_TwoClientsDistinctCacheDirsRoundtrip(t *testing.T) {
 
 	open := func(cacheRoot string) (db datas.Database, cs chunks.ChunkStore) {
 		params := map[string]interface{}{
-			GitCacheDirParam: cacheRoot,
+			GitCacheRootParam: cacheRoot,
 		}
 		d, vrw, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, params)
 		require.NoError(t, err)
@@ -253,7 +253,7 @@ func TestGitRemoteFactory_GitFile_RemoteWithNoBranchesFails(t *testing.T) {
 	remotePath := filepath.ToSlash(remoteRepo.GitDir)
 	urlStr := "git+file://" + remotePath
 	params := map[string]interface{}{
-		GitCacheDirParam: localRepoRoot,
+		GitCacheRootParam: localRepoRoot,
 	}
 
 	_, _, _, err = CreateDB(ctx, types.Format_DOLT, urlStr, params)
@@ -303,7 +303,7 @@ func TestCloseGitRemotesUnderRoot(t *testing.T) {
 
 	urlStr := "git+file://" + filepath.ToSlash(remoteRepo.GitDir)
 	open := func(root string) datas.Database {
-		db, _, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, map[string]interface{}{GitCacheDirParam: filepath.Join(root, DoltDir, GitRemoteCacheDirName)})
+		db, _, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, map[string]interface{}{GitCacheRootParam: filepath.Join(root, DoltDir, GitRemoteCacheDirName)})
 		require.NoError(t, err)
 		return db
 	}
@@ -343,7 +343,7 @@ func TestGitRemoteFactory_ReopenSeesOtherCacheRootsPush(t *testing.T) {
 
 	urlStr := "git+file://" + filepath.ToSlash(remoteRepo.GitDir)
 	open := func(root string) (datas.Database, chunks.ChunkStore) {
-		db, vrw, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, map[string]interface{}{GitCacheDirParam: filepath.Join(root, DoltDir, GitRemoteCacheDirName)})
+		db, vrw, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, map[string]interface{}{GitCacheRootParam: filepath.Join(root, DoltDir, GitRemoteCacheDirName)})
 		require.NoError(t, err)
 		vs, ok := vrw.(*types.ValueStore)
 		require.True(t, ok, "expected ValueReadWriter to be *types.ValueStore, got %T", vrw)
@@ -385,7 +385,7 @@ func TestGitRemoteFactory_ReopenSeesOtherCacheRootsPush(t *testing.T) {
 	require.Equal(t, "cacheRootB\n", string(got.Data()))
 }
 
-func TestGitRemoteFactory_GitCacheDirParamUsedVerbatim(t *testing.T) {
+func TestGitRemoteFactory_GitCacheRootParamUsedVerbatim(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found on PATH")
 	}
@@ -398,10 +398,10 @@ func TestGitRemoteFactory_GitCacheDirParamUsedVerbatim(t *testing.T) {
 	require.NoError(t, err)
 	urlStr := "git+file://" + filepath.ToSlash(remoteRepo.GitDir)
 
-	// GitCacheDirParam is used as the cache base verbatim: no .dolt/git-remote-cache
+	// GitCacheRootParam is used as the cache base verbatim: no .dolt/git-remote-cache
 	// is appended, so a non-Dolt embedder gets a clean cache location.
 	cacheDir := shortTempDir(t)
-	db, _, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, map[string]interface{}{GitCacheDirParam: cacheDir})
+	db, _, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, map[string]interface{}{GitCacheRootParam: cacheDir})
 	require.NoError(t, err)
 	require.NotNil(t, db)
 
@@ -418,5 +418,5 @@ func TestGitRemoteFactory_GitCacheDirParamUsedVerbatim(t *testing.T) {
 			}
 		}
 	}
-	require.True(t, found, "expected the cache repo directly under <git_cache_dir>/<hash>/repo.git")
+	require.True(t, found, "expected the cache repo directly under <git_cache_root>/<hash>/repo.git")
 }
