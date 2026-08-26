@@ -3905,7 +3905,16 @@ For t_cl_generator.cc
 
 ---------------------------------------------------
 
-= LICENSE 42c3d433e7147c55c3974e209eca70f89310d4fa5feb6a0f162df904 =
+---------------------------------------------------
+For compiler/cpp/src/thrift/generate/sha256.h
+
+SHA-256 implementation by Brad Conte (brad AT bradconte.com).
+Source: https://github.com/B-Con/crypto-algorithms
+The author has placed this code in the public domain (no copyright claimed).
+No algorithmic changes were made; the file was adapted to a C++ header-only
+form for inclusion in the Thrift compiler.
+
+= LICENSE 10de38f9ea3c22bea5fd9d5f862a2ac3721dd2b7c506ed4e9a8d9d9a =
 ================================================================================
 
 ================================================================================
