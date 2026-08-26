@@ -193,7 +193,7 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 		return nil, nil, nil, err
 	}
 
-	cacheDir, ok, err := stringParam(params, GitCacheDirParam)
+	cacheDir, ok, err := resolveGitCacheDir(params)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -352,21 +352,22 @@ func resolveGitRemoteName(params map[string]interface{}) string {
 	return defaultGitRemoteName
 }
 
-// stringParam reads a required-non-empty string param, ok=false when absent.
-func stringParam(params map[string]interface{}, key string) (string, bool, error) {
+// resolveGitCacheDir parses and validates GitCacheDirParam.
+// It returns ok=false when the param is not present.
+func resolveGitCacheDir(params map[string]interface{}) (dir string, ok bool, err error) {
 	if params == nil {
 		return "", false, nil
 	}
-	v, ok := params[key]
+	v, ok := params[GitCacheDirParam]
 	if !ok || v == nil {
 		return "", false, nil
 	}
 	s, ok := v.(string)
 	if !ok {
-		return "", false, fmt.Errorf("%s must be a string", key)
+		return "", false, fmt.Errorf("%s must be a string", GitCacheDirParam)
 	}
 	if strings.TrimSpace(s) == "" {
-		return "", false, fmt.Errorf("%s cannot be empty", key)
+		return "", false, fmt.Errorf("%s cannot be empty", GitCacheDirParam)
 	}
 	return s, true, nil
 }
