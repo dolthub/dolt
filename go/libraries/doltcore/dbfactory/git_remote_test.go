@@ -420,4 +420,3 @@ func TestGitRemoteFactory_GitCacheDirParamUsedVerbatim(t *testing.T) {
 	}
 	require.True(t, found, "expected the cache repo directly under <git_cache_dir>/<hash>/repo.git")
 }
-
