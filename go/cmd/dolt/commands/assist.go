@@ -40,14 +40,23 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
+const (
+	providerOpenAi     = "openai"
+	providerOrcaRouter = "orcarouter"
+	openAiApiBase      = "https://api.openai.com/v1"
+	orcaRouterApiBase  = "https://api.orcarouter.ai/v1"
+	openAiDefaultModel = "gpt-3.5-turbo"
+	orcaRouterModel    = "orcarouter/auto"
+)
+
 var assistDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Assists with dolt commands and queries.",
 	LongDesc: `Assists with dolt commands and queries. Can run dolt commands or SQL queries on your behalf based on your questions or instructions, as well as answer questions about your database.
 
-Powered by OpenAI's chat API. An API key is required. Please set the OPENAI_API_KEY environment variable. 
+Powered by a chat API. An API key is required. By default the assistant uses OpenAI's chat API, so set the OPENAI_API_KEY environment variable. To use OrcaRouter instead, pass --provider orcarouter and set the ORCAROUTER_API_KEY environment variable. OrcaRouter is an OpenAI-compatible AI gateway that routes to many models from a single endpoint (https://www.orcarouter.ai).
 `,
 	Synopsis: []string{
-		"[--debug] [--model {{.LessThan}}modelId{{.GreaterThan}}]",
+		"[--debug] [--model {{.LessThan}}modelId{{.GreaterThan}}] [--provider {{.LessThan}}provider{{.GreaterThan}}]",
 	},
 }
 
@@ -72,17 +81,30 @@ func (a Assist) Hidden() bool {
 func (a *Assist) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	a.messages = make([]string, 0)
 
-	apiKey, ok := os.LookupEnv(dconfig.EnvOpenAiKey)
-	if !ok {
-		cli.PrintErrln("Could not find OpenAI API key. Please set the OPENAI_API_KEY environment variable.")
-		return 1
-	}
-
 	ap := a.ArgParser()
 	helpPr, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, addDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, helpPr)
 
-	model := apr.GetValueOrDefault("model", "gpt-3.5-turbo")
+	provider := apr.GetValueOrDefault("provider", providerOpenAi)
+
+	var apiKeyEnv, apiBaseUrl, defaultModel, providerName string
+	switch provider {
+	case providerOpenAi:
+		apiKeyEnv, apiBaseUrl, defaultModel, providerName = dconfig.EnvOpenAiKey, openAiApiBase, openAiDefaultModel, "OpenAI"
+	case providerOrcaRouter:
+		apiKeyEnv, apiBaseUrl, defaultModel, providerName = dconfig.EnvOrcaRouterKey, orcaRouterApiBase, orcaRouterModel, "OrcaRouter"
+	default:
+		cli.PrintErrf("Unknown provider %q. Supported providers are %q and %q.\n", provider, providerOpenAi, providerOrcaRouter)
+		return 1
+	}
+
+	apiKey, ok := os.LookupEnv(apiKeyEnv)
+	if !ok {
+		cli.PrintErrf("Could not find %s API key. Please set the %s environment variable.\n", providerName, apiKeyEnv)
+		return 1
+	}
+
+	model := apr.GetValueOrDefault("model", defaultModel)
 	debug := apr.Contains("debug")
 
 	sqlEng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
@@ -108,7 +130,7 @@ func (a *Assist) Exec(ctx context.Context, commandStr string, args []string, dEn
 	cli.Println("# Welcome to the Dolt Assistant, powered by ChatGPT.\n# Type your question or command, or exit to quit.")
 	cli.Println("")
 
-	if !agreeToTerms(scanner) {
+	if !agreeToTerms(scanner, providerName) {
 		return 0
 	}
 
@@ -135,7 +157,7 @@ func (a *Assist) Exec(ctx context.Context, commandStr string, args []string, dEn
 			query = input
 		}
 
-		response, err := a.queryGpt(ctx, apiKey, model, query, debug)
+		response, err := a.queryGpt(ctx, apiKey, apiBaseUrl, model, query, debug)
 		if err != nil {
 			return 1
 		}
@@ -150,14 +172,14 @@ func (a *Assist) Exec(ctx context.Context, commandStr string, args []string, dEn
 	}
 }
 
-func agreeToTerms(scanner *bufio.Scanner) bool {
+func agreeToTerms(scanner *bufio.Scanner, providerName string) bool {
 	_, ok := os.LookupEnv(dconfig.EnvDoltAssistAgree)
 	if ok {
 		return true
 	}
 
 	cli.Println(wordWrap("# ", "DISCLAIMER: Use of this tool may send information in your database, including schema, "+
-		"commit history, and rows to OpenAI. If this use of your database information is unacceptable to you, please do "+
+		"commit history, and rows to "+providerName+". If this use of your database information is unacceptable to you, please do "+
 		"not use the tool."))
 	cli.Print("\nContinue? (y/n) > ")
 
@@ -365,7 +387,7 @@ func wordWrap(linePrefix string, content string) string {
 	return sb.String()
 }
 
-func (a *Assist) queryGpt(ctx context.Context, apiKey, modelId, query string, debug bool) (string, error) {
+func (a *Assist) queryGpt(ctx context.Context, apiKey, apiBaseUrl, modelId, query string, debug bool) (string, error) {
 	prompt, err := a.getJsonPrompt(ctx, modelId, query)
 	if err != nil {
 		return "", err
@@ -375,7 +397,7 @@ func (a *Assist) queryGpt(ctx context.Context, apiKey, modelId, query string, de
 		cli.Println(prompt)
 	}
 
-	url := "https://api.openai.com/v1/chat/completions"
+	url := apiBaseUrl + "/chat/completions"
 	client := &http.Client{}
 
 	req, err := http.NewRequest("POST", url, prompt)
@@ -445,7 +467,9 @@ func (a *Assist) getJsonPrompt(ctx context.Context, modelId string, query string
 
 	a.messages = append(a.messages, string(msg))
 
-	sb.WriteString(",")
+	if len(a.messages) > 1 {
+		sb.WriteString(",")
+	}
 	sb.WriteString(string(msg))
 	sb.WriteString(chatGptJsonFooter)
 
@@ -616,9 +640,12 @@ func (a Assist) Docs() *cli.CommandDocumentation {
 
 func (a Assist) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(a.Name(), 0)
-	ap.SupportsString("model", "m", "open AI model id",
-		"The ID of the Open AI model to use for the assistant. Defaults to gpt-3.5-turbo. "+
-			"See https://platform.openai.com/docs/models/overview for a full list of models.")
+	ap.SupportsString("model", "m", "model id",
+		"The ID of the chat model to use for the assistant. Defaults to gpt-3.5-turbo for OpenAI. "+
+			"See https://platform.openai.com/docs/models/overview for a full list of OpenAI models.")
+	ap.SupportsString("provider", "p", "provider",
+		"The chat API provider to use. One of \"openai\" (default) or \"orcarouter\". When set to \"orcarouter\", "+
+			"the ORCAROUTER_API_KEY environment variable must be set and the default model is orcarouter/auto.")
 	ap.SupportsFlag("debug", "d", "log API requests to and from the assistant")
 	return ap
 }
