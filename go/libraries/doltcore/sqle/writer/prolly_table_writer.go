@@ -347,7 +347,7 @@ func (w *prollyTableWriter) VisitGCRoots(ctx context.Context, roots func(hash.Ha
 
 // Reset puts the writer into a fresh state, updating the schema and index writers according to the newly given table.
 func (w *prollyTableWriter) Reset(ctx *sql.Context, tbl *doltdb.Table) error {
-	schState, err := writerSchema(ctx, tbl, w.tblName.Name, w.dbName)
+	schState, err := writerSchema(ctx, tbl, w.tblName, w.dbName)
 	if err != nil {
 		return err
 	}

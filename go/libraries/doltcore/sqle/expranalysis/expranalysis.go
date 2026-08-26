@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/transform"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
@@ -88,9 +89,9 @@ func ResolveCheckExpression(ctx *sql.Context, tableName string, sch schema.Schem
 // ResolveExpression compiles a predicate or check constraint string into a sql.Expression resolved.
 // Used to re-hydrate partial index predicates and check expressions from their string representation.
 // It uses SELECT statement on the expression FROM given table.
-func ResolveExpression(ctx *sql.Context, tableName string, predicateStr string) (sql.Expression, error) {
+func ResolveExpression(ctx *sql.Context, tableName doltdb.TableName, predicateStr string) (sql.Expression, error) {
 	// TODO: added * in SELECT stmt to avoid pruning columns during analyzer.
-	parsed, err := parseQuery(ctx, fmt.Sprintf("SELECT *, %s FROM %s", predicateStr, tableName))
+	parsed, err := parseQuery(ctx, fmt.Sprintf("SELECT *, %s FROM %s", predicateStr, queryTableName(ctx, tableName)))
 	if err != nil {
 		return nil, err
 	}
@@ -116,6 +117,17 @@ func ResolveExpression(ctx *sql.Context, tableName string, predicateStr string) 
 		expr = alias.Child
 	}
 	return expr, nil
+}
+
+// queryTableName renders |tableName| for use in the FROM clause of a query built for the analyzer. The schema, where
+// there is one, must survive into the parsed statement: an unqualified name is resolved against the session's
+// search_path, which need not reach the table's own schema, and may name a different table of the same name first.
+func queryTableName(ctx *sql.Context, tableName doltdb.TableName) string {
+	if tableName.Schema == "" {
+		return tableName.Name
+	}
+	formatter := overrides.SchemaFormatterFromContext(ctx)
+	return fmt.Sprintf("%s.%s", formatter.QuoteIdentifier(tableName.Schema), formatter.QuoteIdentifier(tableName.Name))
 }
 
 func stripTableNamesFromExpression(ctx *sql.Context, formatter sql.SchemaFormatter, expr sql.Expression, quoted bool) sql.Expression {

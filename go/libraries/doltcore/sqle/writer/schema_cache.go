@@ -29,7 +29,7 @@ import (
 
 // writerSchema returns the state required to map logical sql.Row values to
 // primary and secondary val.Tuple that will be written to disk.
-func writerSchema(ctx *sql.Context, t *doltdb.Table, tableName string, dbName string) (*dsess.WriterState, error) {
+func writerSchema(ctx *sql.Context, t *doltdb.Table, tableName doltdb.TableName, dbName string) (*dsess.WriterState, error) {
 	sess, ok := ctx.Session.(*dsess.DoltSession)
 	if !ok {
 		return newWriterSchema(ctx, t, tableName, dbName)
@@ -63,7 +63,7 @@ func writerSchema(ctx *sql.Context, t *doltdb.Table, tableName string, dbName st
 	return schState, nil
 }
 
-func newWriterSchema(ctx *sql.Context, t *doltdb.Table, tableName string, dbName string) (*dsess.WriterState, error) {
+func newWriterSchema(ctx *sql.Context, t *doltdb.Table, tableName doltdb.TableName, dbName string) (*dsess.WriterState, error) {
 	var err error
 	schState := new(dsess.WriterState)
 	schState.DoltSchema, err = t.GetSchema(ctx)
@@ -71,7 +71,7 @@ func newWriterSchema(ctx *sql.Context, t *doltdb.Table, tableName string, dbName
 		return nil, err
 	}
 	schState.PkKeyDesc, schState.PkValDesc = schState.DoltSchema.GetMapDescriptors(t.NodeStore())
-	schState.PkSchema, err = sqlutil.FromDoltSchema(ctx, dbName, tableName, schState.DoltSchema)
+	schState.PkSchema, err = sqlutil.FromDoltSchema(ctx, dbName, tableName.Name, schState.DoltSchema)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +80,7 @@ func newWriterSchema(ctx *sql.Context, t *doltdb.Table, tableName string, dbName
 
 	// Resolved once for the whole table: rows read directly from stored data omit virtual columns
 	// entirely, so any write path that needs a virtual column's value evaluates these to fill it in.
-	schState.VirtualExpressions, err = resolveVirtualExpressions(ctx, tableName, schState.DoltSchema)
+	schState.VirtualExpressions, err = resolveVirtualExpressions(ctx, tableName.Name, schState.DoltSchema)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +128,6 @@ func newWriterSchema(ctx *sql.Context, t *doltdb.Table, tableName string, dbName
 			KeyVirtualExprs: keyVirtualExprs,
 		}
 		if predStr := def.Predicate(); predStr != "" {
-			// TODO: need to set the schema in search_path? it cannot find tables and types.
 			predExpr, err := expranalysis.ResolveExpression(ctx, tableName, predStr)
 			if err != nil {
 				return nil, fmt.Errorf("failed to compile partial index predicate for %s: %w", def.Name(), err)
