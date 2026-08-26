@@ -491,7 +491,7 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 			return err
 		}
 
-		serializer := message.NewProllyMapSerializer(mergedValDesc, ns.Pool())
+		serializer := message.NewProllyMapSerializer(mergedKeyDesc, mergedValDesc, ns.Pool())
 		mergedRoot, err = tree.ApplyPatches(errCtx, ns, lIdx.Node(), mergedKeyDesc, serializer, patchBuffer)
 		return err
 	})

@@ -40,12 +40,13 @@ const (
 
 var prollyMapFileID = []byte(serial.ProllyTreeNodeFileID)
 
-func NewProllyMapSerializer(valueDesc *val.TupleDesc, pool pool.BuffPool) ProllyMapSerializer {
-	return ProllyMapSerializer{valDesc: valueDesc, pool: pool}
+func NewProllyMapSerializer(keyDesc, valueDesc *val.TupleDesc, pool pool.BuffPool) ProllyMapSerializer {
+	return ProllyMapSerializer{keyDesc: keyDesc, valDesc: valueDesc, pool: pool}
 }
 
 type ProllyMapSerializer struct {
 	pool    pool.BuffPool
+	keyDesc *val.TupleDesc
 	valDesc *val.TupleDesc
 }
 
@@ -56,10 +57,11 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 		keyTups, keyOffs fb.UOffsetT
 		valTups, valOffs fb.UOffsetT
 		valAddrOffs      fb.UOffsetT
+		keyAddrOffs      fb.UOffsetT
 		refArr, cardArr  fb.UOffsetT
 	)
 
-	keySz, valSz, bufSz := estimateProllyMapSize(keys, values, subtrees, s.valDesc.AddressFieldCount())
+	keySz, valSz, bufSz := estimateProllyMapSize(keys, values, subtrees, s.keyDesc.AddressFieldCount()+s.valDesc.AddressFieldCount())
 	b := getFlatbufferBuilder(s.pool, bufSz)
 
 	// serialize keys and offStart
@@ -80,6 +82,18 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 				valAddrOffs = writeAddressOffsets(b, values, valSz, s.valDesc)
 			}
 		}
+		// serialize offStart of chunk addresses within |keyTups| (eg out-of-band adaptive values in
+		// key tuples). Only leaf nodes record these: every internal node key is a copy of a leaf key
+		// below it, so leaf references reach every key-referenced chunk. The field is only populated
+		// when such an address exists, keeping databases without them readable by older clients that
+		// predate the field.
+		if s.keyDesc.AddressFieldCount() > 0 {
+			keyAddressFields := countAddresses(keys, s.keyDesc)
+			if keyAddressFields > 0 {
+				serial.ProllyTreeNodeStartKeyAddressOffsetsVector(b, keyAddressFields)
+				keyAddrOffs = writeAddressOffsets(b, keys, keySz, s.keyDesc)
+			}
+		}
 	} else {
 		// serialize child refs and subtree counts for internal nodes
 		refArr = writeItemBytes(b, values, valSz)
@@ -95,6 +109,7 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 		serial.ProllyTreeNodeAddValueOffsets(b, valOffs)
 		serial.ProllyTreeNodeAddTreeCount(b, uint64(len(keys)))
 		serial.ProllyTreeNodeAddValueAddressOffsets(b, valAddrOffs)
+		serial.ProllyTreeNodeAddKeyAddressOffsets(b, keyAddrOffs)
 	} else {
 		serial.ProllyTreeNodeAddAddressArray(b, refArr)
 		serial.ProllyTreeNodeAddSubtreeCounts(b, cardArr)
@@ -161,6 +176,16 @@ func walkProllyMapAddresses(ctx context.Context, msg serial.Message, cb func(ctx
 		}
 	}
 	assertFalse((arr != nil) && (arr2 != nil), "cannot WalkAddresses for ProllyTreeNode with both AddressArray and ValueAddressOffsets")
+
+	cnt = pm.KeyAddressOffsetsLength()
+	arr3 := pm.KeyItemsBytes()
+	for i := 0; i < cnt; i++ {
+		o := pm.KeyAddressOffsets(i)
+		addr := hash.New(arr3[o : o+addrSize])
+		if err := cb(ctx, addr); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -210,8 +235,9 @@ func getProllyMapSubtrees(msg serial.Message) ([]uint64, error) {
 }
 
 // estimateProllyMapSize returns the exact Size of the tuple vectors for keys and values,
-// and an estimate of the overall Size of the final flatbuffer.
-func estimateProllyMapSize(keys, values [][]byte, subtrees []uint64, valAddrsCnt int) (int, int, int) {
+// and an estimate of the overall Size of the final flatbuffer. |addrsCnt| is the combined
+// address field count of the key and value descriptors.
+func estimateProllyMapSize(keys, values [][]byte, subtrees []uint64, addrsCnt int) (int, int, int) {
 	var keySz, valSz, bufSz int
 	for i := range keys {
 		keySz += len(keys[i])
@@ -233,7 +259,7 @@ func estimateProllyMapSize(keys, values [][]byte, subtrees []uint64, valAddrsCnt
 	bufSz += 8 + 1 + 1 + 1               // metadata
 	bufSz += 72                          // vtable (approx)
 	bufSz += 100                         // padding?
-	bufSz += valAddrsCnt * len(values) * 2
+	bufSz += addrsCnt * len(values) * 2
 	bufSz += serial.MessagePrefixSz
 
 	return keySz, valSz, bufSz
