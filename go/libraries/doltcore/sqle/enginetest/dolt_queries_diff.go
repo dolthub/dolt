@@ -7224,4 +7224,32 @@ var QueryDiffTableScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt_query_diff in read-only transaction",
+		SetUpScript: []string{
+			"create table t (i int primary key, j int);",
+			"insert into t values (1, 1), (2, 2);",
+			"create table tt (i int primary key, j int);",
+			"insert into tt values (1, 1), (2, 3);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "START TRANSACTION READ ONLY;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "SELECT * FROM dolt_query_diff('SELECT * FROM t', 'SELECT * FROM tt');",
+				Expected: []sql.Row{
+					{1, 1, nil, nil, "deleted"},
+					{2, 2, nil, nil, "deleted"},
+					{nil, nil, 1, 1, "added"},
+					{nil, nil, 2, 3, "added"},
+				},
+			},
+			{
+				Query:    "COMMIT;",
+				Expected: []sql.Row{},
+			},
+		},
+	},
 }
