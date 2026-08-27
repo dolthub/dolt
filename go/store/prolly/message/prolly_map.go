@@ -76,13 +76,7 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 		valOffs = writeItemOffsets(b, values, valSz)
 
 		// serialize offStart of chunk addresses within |keyTups|
-		if s.keyDesc.AddressFieldCount() > 0 {
-			keyAddressFields := countAddresses(keys, s.keyDesc)
-			if keyAddressFields > 0 {
-				serial.ProllyTreeNodeStartKeyAddressOffsetsVector(b, keyAddressFields)
-				keyAddrOffs = writeAddressOffsets(b, keys, keySz, s.keyDesc)
-			}
-		}
+		keyAddrOffs = s.writeKeyAddressOffsets(b, keys, keySz)
 
 		// serialize offStart of chunk addresses within |valTups|
 		if s.valDesc.AddressFieldCount() > 0 {
@@ -97,6 +91,12 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 		// serialize child refs and subtree counts for internal nodes
 		refArr = writeItemBytes(b, values, valSz)
 		cardArr = writeCountArray(b, subtrees)
+
+		// serialize offStart of chunk addresses within |keyTups| (boundary keys copied from the
+		// leaves below). These are recorded as bookkeeping, so that every node is self-contained in
+		// its description of which of its keys reference out-of-band values, but tree walks don't
+		// visit them: every chunk they reference is also referenced from a leaf key below.
+		keyAddrOffs = s.writeKeyAddressOffsets(b, keys, keySz)
 	}
 
 	// populate the node's vtable
@@ -108,17 +108,34 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 		serial.ProllyTreeNodeAddValueOffsets(b, valOffs)
 		serial.ProllyTreeNodeAddTreeCount(b, uint64(len(keys)))
 		serial.ProllyTreeNodeAddValueAddressOffsets(b, valAddrOffs)
-		serial.ProllyTreeNodeAddKeyAddressOffsets(b, keyAddrOffs)
 	} else {
 		serial.ProllyTreeNodeAddAddressArray(b, refArr)
 		serial.ProllyTreeNodeAddSubtreeCounts(b, cardArr)
 		serial.ProllyTreeNodeAddTreeCount(b, sumSubtrees(subtrees))
 	}
+	serial.ProllyTreeNodeAddKeyAddressOffsets(b, keyAddrOffs)
 	serial.ProllyTreeNodeAddKeyType(b, serial.ItemTypeTupleFormatAlpha)
 	serial.ProllyTreeNodeAddValueType(b, serial.ItemTypeTupleFormatAlpha)
 	serial.ProllyTreeNodeAddTreeLevel(b, uint8(level))
 
 	return serial.FinishMessage(b, serial.ProllyTreeNodeEnd(b), prollyMapFileID)
+}
+
+// writeKeyAddressOffsets serializes the offsets of the chunk addresses embedded in |keys| (eg key
+// tuples containing out-of-band adaptive values), returning 0 if there are none. The field it
+// populates was added after the ProllyTreeNode format was already in wide use, so it is only written
+// when at least one such address exists: clients predating it can read any database that doesn't use
+// it, and fail loudly (rather than silently leaking chunk references) on any that does.
+func (s ProllyMapSerializer) writeKeyAddressOffsets(b *fb.Builder, keys [][]byte, keySz int) fb.UOffsetT {
+	if s.keyDesc.AddressFieldCount() == 0 {
+		return 0
+	}
+	keyAddressFields := countAddresses(keys, s.keyDesc)
+	if keyAddressFields == 0 {
+		return 0
+	}
+	serial.ProllyTreeNodeStartKeyAddressOffsetsVector(b, keyAddressFields)
+	return writeAddressOffsets(b, keys, keySz, s.keyDesc)
 }
 
 func getProllyMapKeysAndValues(msg serial.Message) (keys, values *ItemAccess, level, count uint16, err error) {
@@ -176,13 +193,18 @@ func walkProllyMapAddresses(ctx context.Context, msg serial.Message, cb func(ctx
 	}
 	assertFalse((arr != nil) && (arr2 != nil), "cannot WalkAddresses for ProllyTreeNode with both AddressArray and ValueAddressOffsets")
 
-	cnt = pm.KeyAddressOffsetsLength()
-	arr3 := pm.KeyItemsBytes()
-	for i := 0; i < cnt; i++ {
-		o := pm.KeyAddressOffsets(i)
-		addr := hash.New(arr3[o : o+addrSize])
-		if err := cb(ctx, addr); err != nil {
-			return err
+	// Key address offsets are only walked on leaf nodes. Internal nodes may record them as well,
+	// but purely as bookkeeping: their boundary keys are copies of leaf keys, so every chunk they
+	// reference is reached through a leaf below.
+	if pm.TreeLevel() == 0 {
+		cnt = pm.KeyAddressOffsetsLength()
+		arr3 := pm.KeyItemsBytes()
+		for i := 0; i < cnt; i++ {
+			o := pm.KeyAddressOffsets(i)
+			addr := hash.New(arr3[o : o+addrSize])
+			if err := cb(ctx, addr); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

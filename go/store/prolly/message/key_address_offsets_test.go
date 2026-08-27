@@ -133,13 +133,47 @@ func TestKeyAddressOffsets(t *testing.T) {
 		}
 	})
 
-	t.Run("internal nodes never record key addresses", func(t *testing.T) {
-		// internal node keys may embed out-of-band addresses, but each one is a copy of a leaf
-		// key below it, so only leaves record them; internal nodes remain readable by older
-		// clients even in trees that use key_address_offsets.
+	t.Run("internal nodes record key addresses as bookkeeping, but they are not walked", func(t *testing.T) {
+		// internal node boundary keys may embed out-of-band addresses. They are recorded so that
+		// every node is self-contained in its description of which of its keys reference
+		// out-of-band values, but tree walks don't visit them: each boundary key is a copy of a
+		// leaf key below it, so the referenced chunks are reached through the leaves.
+		keyAddrs := []hash.Hash{testAddr(1), testAddr(2)}
 		keys := [][]byte{
-			newTuple(outOfBandAdaptiveValue(3000, testAddr(1))),
-			newTuple(outOfBandAdaptiveValue(4000, testAddr(2))),
+			newTuple(outOfBandAdaptiveValue(3000, keyAddrs[0])),
+			newTuple(outOfBandAdaptiveValue(4000, keyAddrs[1])),
+		}
+		child1, child2 := testAddr(21), testAddr(22)
+		children := [][]byte{child1[:], child2[:]}
+		msg := s.Serialize(keys, children, []uint64{10, 20}, 1)
+
+		var pm serial.ProllyTreeNode
+		require.NoError(t, serial.InitProllyTreeNodeRoot(&pm, msg, serial.MessagePrefixSz))
+		require.Equal(t, len(keyAddrs), pm.KeyAddressOffsetsLength())
+		assert.Equal(t, serial.ProllyTreeNodeNumFields, int(pm.Table().NumFields()))
+
+		// each recorded offset points at the address bytes within the key items buffer
+		keyItems := pm.KeyItemsBytes()
+		recorded := hash.NewHashSet()
+		for i := 0; i < pm.KeyAddressOffsetsLength(); i++ {
+			o := pm.KeyAddressOffsets(i)
+			recorded.Insert(hash.New(keyItems[o : o+hash.ByteLen]))
+		}
+		for _, addr := range keyAddrs {
+			assert.True(t, recorded.Has(addr), "missing key address %s", addr)
+		}
+
+		// the walk visits only the child addresses
+		walked := collectAddresses(t, msg)
+		require.Equal(t, 2, walked.Size())
+		assert.True(t, walked.Has(testAddr(21)))
+		assert.True(t, walked.Has(testAddr(22)))
+	})
+
+	t.Run("internal nodes with inline boundary keys omit the field and stay readable by older clients", func(t *testing.T) {
+		keys := [][]byte{
+			newTuple(inlineAdaptiveValue("small-1")),
+			newTuple(inlineAdaptiveValue("small-2")),
 		}
 		child1, child2 := testAddr(21), testAddr(22)
 		children := [][]byte{child1[:], child2[:]}
@@ -149,11 +183,5 @@ func TestKeyAddressOffsets(t *testing.T) {
 		require.NoError(t, serial.InitProllyTreeNodeRoot(&pm, msg, serial.MessagePrefixSz))
 		assert.Zero(t, pm.KeyAddressOffsetsLength())
 		assert.Less(t, int(pm.Table().NumFields()), serial.ProllyTreeNodeNumFields)
-
-		// the walk visits only the child addresses
-		walked := collectAddresses(t, msg)
-		require.Equal(t, 2, walked.Size())
-		assert.True(t, walked.Has(testAddr(21)))
-		assert.True(t, walked.Has(testAddr(22)))
 	})
 }

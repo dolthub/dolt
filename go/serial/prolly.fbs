@@ -52,7 +52,7 @@ table ProllyTreeNode {
   // prolly tree level, 0 for leaf nodes
   tree_level:uint8;
 
-  // offsets for each address (if any) in |key_items| of leaf nodes
+  // offsets for each address (if any) in |key_items|
   // (eg key tuples containing out-of-band adaptive values)
   key_address_offsets:[uint16];
 }
