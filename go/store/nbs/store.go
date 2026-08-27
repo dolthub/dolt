@@ -392,15 +392,6 @@ func (nbs *NomsBlockStore) finalizeConjoin(ctx context.Context, err error) {
 	}()
 
 	if err != nil {
-		// Conjoin is best-effort compaction running on a goroutine that outlives the caller, and at
-		// this point nothing has been changed — the store is untouched and conjoin is retried on a
-		// later write. The attached error is the raw underlying one, though, and for a git+ssh remote
-		// that is git's own text: "fatal: Could not read from remote repository", an access-rights
-		// sentence and an `ssh-add` hint. Emitted next to the push it coincided with, that reads as an
-		// authentication failure on an operation which in fact succeeded.
-		//
-		// So say what happened rather than only that something failed. The severity was already right;
-		// the wording was borrowed from a tool whose failure means something else entirely.
 		nbs.logger.WithError(err).WithField("deferred", true).
 			Warn("background compaction (conjoin) failed and was deferred; it will be retried on a later write, and the operation that triggered it was unaffected")
 		return
