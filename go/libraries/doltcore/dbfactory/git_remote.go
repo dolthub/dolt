@@ -40,12 +40,13 @@ import (
 )
 
 const (
-	// GitCacheRootParam is the absolute path to the local Dolt repository root (the directory that contains `.dolt/`).
-	// Required for git remotes. GitRemoteFactory stores its local cache repo under:
-	// `<git_cache_root>/.dolt/git-remote-cache/<sha256(remoteURL|remoteRef)>/repo.git`.
+	// GitCacheRootParam is the directory that holds the per-remote local cache
+	// repositories, used as given: <git_cache_root>/<hash>/repo.git. Callers choose
+	// the layout: the Dolt CLI passes <repoRoot>/.dolt/git-remote-cache (see
+	// GitRemoteCacheDirName), while other embedders can pass any directory.
 	GitCacheRootParam = "git_cache_root"
-	// GitRemoteCacheDirName is the directory under a Dolt repository's `.dolt/` which holds the local
-	// cache repositories for git remotes.
+	// GitRemoteCacheDirName is the conventional directory, under a Dolt repository's
+	// `.dolt/`, that the Dolt CLI uses for git remote caches.
 	GitRemoteCacheDirName = "git-remote-cache"
 	GitRefParam           = "git_ref"
 	GitRemoteNameParam    = "git_remote_name"
@@ -199,9 +200,8 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	if !ok {
 		return nil, nil, nil, fmt.Errorf("%s is required for git remotes", GitCacheRootParam)
 	}
-	cacheBase := filepath.Join(cacheRoot, DoltDir, GitRemoteCacheDirName)
 
-	cacheRepo, err := cacheRepoPath(cacheBase, remoteURL.String(), ref)
+	cacheRepo, err := cacheRepoPath(cacheRoot, remoteURL.String(), ref)
 	if err != nil {
 		return nil, nil, nil, err
 	}
