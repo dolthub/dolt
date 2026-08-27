@@ -191,6 +191,8 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 	envSet := map[string]*DoltEnv{}
 	var openedEnvs []*DoltEnv
 
+	seenDbNames := make(map[string]string)
+
 	// Anything that looks like it has a dolt database belongs here.
 	if dEnv.HasDoltDataDir() && dbfactory.IsDatabaseInProgress(dEnv.FS) {
 		path, _ := dEnv.FS.Abs("")
@@ -213,6 +215,7 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 			}
 		}
 		envSet[dbName] = dEnv
+		seenDbNames[strings.ToLower(dbName)] = dbName
 		openedEnvs = append(openedEnvs, dEnv)
 	}
 
@@ -249,7 +252,14 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 			newEnv.DBLoadParams = maps.Clone(dbLoadParams)
 		}
 		if newEnv.Valid() {
-			envSet[dbfactory.DirToDBName(dir)] = newEnv
+			subDbName := dbfactory.DirToDBName(dir)
+			subDbNameLower := strings.ToLower(subDbName)
+			if existing, exists := seenDbNames[subDbNameLower]; exists {
+				WarnDuplicateDatabase(subDbName, existing, path)
+				return false
+			}
+			seenDbNames[subDbNameLower] = subDbName
+			envSet[subDbName] = newEnv
 			openedEnvs = append(openedEnvs, newEnv)
 		} else {
 			if cfgErr := newEnv.CfgLoadErr; cfgErr != nil {
@@ -403,6 +413,20 @@ func (mrEnv *MultiRepoEnv) GetFirstDatabase() string {
 	return currentDb
 }
 
+// WarnDuplicateDatabase emits a structured warning when a duplicate
+// database is detected and skipped.
+func WarnDuplicateDatabase(name, existing, path string) {
+	entry := logrus.WithFields(logrus.Fields{
+		"database":          name,
+		"existing_database": existing,
+	})
+	if path != "" {
+		entry.WithField("path", path).Warn("skipping duplicate database directory")
+		return
+	}
+	entry.Warn("skipping duplicate database")
+}
+
 func getRepoRootDir(path, pathSeparator string) string {
 	if pathSeparator != "/" {
 		path = strings.ReplaceAll(path, pathSeparator, "/")
@@ -421,7 +445,9 @@ func getRepoRootDir(path, pathSeparator string) string {
 		return ""
 	}
 
-	if tokens[len(tokens)-1] == dbfactory.DataDir && tokens[len(tokens)-2] == dbfactory.DoltDir {
+	// Strip trailing .dolt/noms directory tokens to locate the repository
+	// root folder name.
+	if len(tokens) >= 2 && tokens[len(tokens)-1] == dbfactory.DataDir && tokens[len(tokens)-2] == dbfactory.DoltDir {
 		tokens = tokens[:len(tokens)-2]
 	}
 

@@ -258,3 +258,16 @@ func TestMultiEnvForDirectorySkipsOrphanedDatabase(t *testing.T) {
 		})
 	}
 }
+
+func TestMultiEnvDuplicateDatabaseName(t *testing.T) {
+	rootPath, hdp, envs := initMultiEnv(t, "TestMultiEnvDuplicateDatabaseName", []string{"main_db"})
+	dEnv := envs["main_db"]
+
+	_ = initRepoWithRelativePath(t, filepath.Join(rootPath, "main_db", "main_db"), hdp)
+
+	mrEnv, err := MultiEnvForDirectory(context.Background(), dEnv.FS, dEnv)
+	require.NoError(t, err)
+
+	assert.Len(t, mrEnv.envs, 1)
+	assert.Equal(t, dEnv, mrEnv.GetEnv("main_db"))
+}

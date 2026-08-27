@@ -181,13 +181,15 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 	}
 
 	dbs := make(map[string]dsess.SqlDatabase, len(databases))
-	for _, db := range databases {
-		dbs[strings.ToLower(db.Name())] = db
-	}
-
 	dbLocations := make(map[string]filesys.Filesys, len(locations))
-	for i, dbLocation := range locations {
-		dbLocations[strings.ToLower(databases[i].Name())] = dbLocation
+	for i, db := range databases {
+		key := formatDbMapKeyName(db.Name())
+		if existing, exists := dbs[key]; exists {
+			env.WarnDuplicateDatabase(db.Name(), existing.Name(), "")
+			continue
+		}
+		dbs[key] = db
+		dbLocations[key] = locations[i]
 	}
 
 	funcs := make(map[string]sql.Function, len(dfunctions.DoltFunctions))
@@ -1020,6 +1022,9 @@ func (p *DoltDatabaseProvider) CloneDatabaseFromRemote(
 // pass true, while undrop (which restores from the stash) passes false.
 func (p *DoltDatabaseProvider) checkDatabaseNameAvailableLocked(name string, checkDisk bool) error {
 	key := formatDbMapKeyName(name)
+	if _, ok := p.databases[key]; ok {
+		return sql.ErrDatabaseExists.New(name)
+	}
 	if _, ok := p.deletingDatabases[key]; ok {
 		return sql.ErrDatabaseExists.New(name)
 	}
@@ -1269,10 +1274,6 @@ func (p *DoltDatabaseProvider) UndropDatabase(ctx *sql.Context, name string) (er
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if err = p.checkDatabaseNameAvailableLocked(name, false /* checkDisk */); err != nil {
-		return err
-	}
-
 	newFs, exactCaseName, err := p.droppedDatabaseManager.UndropDatabase(ctx, name)
 	if err != nil {
 		return err
@@ -1345,9 +1346,12 @@ func (p *DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string
 		return err
 	}
 
-	formattedName := formatDbMapKeyName(db.Name())
-	p.databases[formattedName] = sdb
-	p.dbLocations[formattedName] = newEnv.FS
+	key := formatDbMapKeyName(db.Name())
+	if _, exists := p.databases[key]; exists {
+		return sql.ErrDatabaseExists.New(name)
+	}
+	p.databases[key] = sdb
+	p.dbLocations[key] = newEnv.FS
 	return nil
 }
 

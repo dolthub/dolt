@@ -453,3 +453,40 @@ func TestCreateDatabaseFailureLeavesNothingBehind(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, ok, "the retried database's table must be on disk in its own directory")
 }
+
+func TestDuplicateDatabaseNameSkipped(t *testing.T) {
+	ctx := context.Background()
+
+	dEnv1 := dtestutils.CreateTestEnvWithName("dupdb")
+	db1, err := NewDatabase(ctx, "dupdb", dEnv1.DbData(ctx), editor.Options{})
+	require.NoError(t, err)
+
+	dEnv2 := dtestutils.CreateTestEnvWithName("dupdb2")
+	db2, err := NewDatabase(ctx, "dupdb", dEnv2.DbData(ctx), editor.Options{})
+	require.NoError(t, err)
+
+	pro, err := NewDoltDatabaseProviderWithDatabases(
+		"main",
+		dEnv1.FS,
+		[]dsess.SqlDatabase{db1, db2},
+		[]filesys.Filesys{dEnv1.FS, dEnv2.FS},
+		sql.EngineOverrides{},
+	)
+	require.NoError(t, err)
+
+	config, _ := dEnv1.Config.GetConfig(env.GlobalConfig)
+	sqlCtx := NewTestSQLCtxWithProvider(ctx, pro, config, nil, nil)
+	dbs := pro.AllDatabases(sqlCtx)
+	assert.Len(t, dbs, 1)
+
+	db, err := pro.Database(sqlCtx, "dupdb")
+	require.NoError(t, err)
+	assert.Same(t, db1.GetDoltDB(), db.(Database).GetDoltDB())
+}
+
+func TestCloneDatabaseDuplicateNameRejected(t *testing.T) {
+	_, sqlCtx, pro, _ := newProviderEngine(t)
+	err := pro.CloneDatabaseFromRemote(sqlCtx, "DOLT", "main", "origin", "file:///nonexistent", -1, nil)
+	require.Error(t, err)
+	assert.True(t, sql.ErrDatabaseExists.Is(err))
+}
