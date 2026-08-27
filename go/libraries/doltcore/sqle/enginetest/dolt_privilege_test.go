@@ -1528,9 +1528,9 @@ var DoltOnlyRevisionTableFunctionPrivilegeTests = []queries.UserPrivilegeTest{
 				},
 			},
 			{
-				User:        "tester",
-				Host:        "localhost",
-				Query:       "EXPLAIN SELECT * FROM dolt_query_diff('SELECT pk FROM otherdb.other_table2', 'SELECT pk FROM otherdb.other_table2');",
+				User:  "tester",
+				Host:  "localhost",
+				Query: "EXPLAIN SELECT * FROM dolt_query_diff('SELECT pk FROM otherdb.other_table2', 'SELECT pk FROM otherdb.other_table2');",
 				// Does not exist, but auth doesn't reveal such info.
 				ExpectedErr: sql.ErrTableAccessDeniedForUser,
 			},
