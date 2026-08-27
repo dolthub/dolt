@@ -45,6 +45,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expranalysis"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/fk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
@@ -2526,6 +2527,10 @@ func (t *AlterableDoltTable) createIndex(ctx *sql.Context, idx sql.IndexDef, key
 	var predicateStr string
 	if idx.Predicate != nil {
 		predicateStr = idx.Predicate.String()
+		idx.Predicate, err = expranalysis.ResolveExpression(ctx, t.TableName(), predicateStr)
+		if err != nil {
+			return fmt.Errorf("failed to resolve partial index predicate: %w", err)
+		}
 	}
 
 	idxProperties := schema.IndexProperties{
