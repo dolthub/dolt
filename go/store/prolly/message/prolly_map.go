@@ -69,7 +69,8 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 	serial.ProllyTreeNodeStartKeyOffsetsVector(b, len(keys)+1)
 	keyOffs = writeItemOffsets(b, keys, keySz)
 
-	if level == 0 {
+	isLeafNode := level == 0
+	if isLeafNode {
 		// serialize value tuples for leaf nodes
 		valTups = writeItemBytes(b, values, valSz)
 		serial.ProllyTreeNodeStartValueOffsetsVector(b, len(values)+1)
@@ -92,9 +93,8 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 		refArr = writeItemBytes(b, values, valSz)
 		cardArr = writeCountArray(b, subtrees)
 
-		// serialize offStart of chunk addresses within |keyTups| (boundary keys copied from the
-		// leaves below). These are recorded as bookkeeping, so that every node is self-contained in
-		// its description of which of its keys reference out-of-band values
+		// we still record the key address offsets for internal nodes for consistency, although they aren't
+		// used for anything at the moment
 		keyAddrOffs = s.writeKeyAddressOffsets(b, keys, keySz)
 	}
 
@@ -102,7 +102,7 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 	serial.ProllyTreeNodeStart(b)
 	serial.ProllyTreeNodeAddKeyItems(b, keyTups)
 	serial.ProllyTreeNodeAddKeyOffsets(b, keyOffs)
-	if level == 0 {
+	if isLeafNode {
 		serial.ProllyTreeNodeAddValueItems(b, valTups)
 		serial.ProllyTreeNodeAddValueOffsets(b, valOffs)
 		serial.ProllyTreeNodeAddTreeCount(b, uint64(len(keys)))

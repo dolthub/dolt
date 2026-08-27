@@ -36,7 +36,7 @@ func inlineAdaptiveValue(content string) []byte {
 // outOfBandAdaptiveValue returns the out-of-band encoding of an adaptive value:
 // varint(length) followed by the content address.
 func outOfBandAdaptiveValue(length uint64, addr hash.Hash) []byte {
-	buf := make([]byte, 10)
+	buf := make([]byte, 0, 24)
 	n := uvarint.Encode(buf, length)
 	return append(buf[:n], addr[:]...)
 }
@@ -90,7 +90,7 @@ func TestKeyAddressOffsets(t *testing.T) {
 		assert.Empty(t, collectAddresses(t, msg))
 	})
 
-	t.Run("out-of-band key and value addresses are recorded and walked", func(t *testing.T) {
+	t.Run("out-of-band key and value addresses are recorded and walked in leaf nodes", func(t *testing.T) {
 		keyAddrs := []hash.Hash{testAddr(1), testAddr(2), testAddr(3)}
 		valueAddrs := []hash.Hash{testAddr(11), testAddr(12)}
 		keys := [][]byte{
@@ -111,7 +111,6 @@ func TestKeyAddressOffsets(t *testing.T) {
 		require.NoError(t, serial.InitProllyTreeNodeRoot(&pm, msg, serial.MessagePrefixSz))
 		require.Equal(t, len(keyAddrs), pm.KeyAddressOffsetsLength())
 		require.Equal(t, len(valueAddrs), pm.ValueAddressOffsetsLength())
-		// This node requires clients that understand key_address_offsets.
 		assert.Equal(t, serial.ProllyTreeNodeNumFields, int(pm.Table().NumFields()))
 
 		// each recorded offset points at the address bytes within the key items buffer
@@ -134,10 +133,6 @@ func TestKeyAddressOffsets(t *testing.T) {
 	})
 
 	t.Run("internal nodes record key addresses as bookkeeping, but they are not walked", func(t *testing.T) {
-		// internal node boundary keys may embed out-of-band addresses. They are recorded so that
-		// every node is self-contained in its description of which of its keys reference
-		// out-of-band values, but tree walks don't visit them: each boundary key is a copy of a
-		// leaf key below it, so the referenced chunks are reached through the leaves.
 		keyAddrs := []hash.Hash{testAddr(1), testAddr(2)}
 		keys := [][]byte{
 			newTuple(outOfBandAdaptiveValue(3000, keyAddrs[0])),
