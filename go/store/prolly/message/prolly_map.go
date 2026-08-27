@@ -94,8 +94,7 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 
 		// serialize offStart of chunk addresses within |keyTups| (boundary keys copied from the
 		// leaves below). These are recorded as bookkeeping, so that every node is self-contained in
-		// its description of which of its keys reference out-of-band values, but tree walks don't
-		// visit them: every chunk they reference is also referenced from a leaf key below.
+		// its description of which of its keys reference out-of-band values
 		keyAddrOffs = s.writeKeyAddressOffsets(b, keys, keySz)
 	}
 
@@ -122,10 +121,8 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 }
 
 // writeKeyAddressOffsets serializes the offsets of the chunk addresses embedded in |keys| (eg key
-// tuples containing out-of-band adaptive values), returning 0 if there are none. The field it
-// populates was added after the ProllyTreeNode format was already in wide use, so it is only written
-// when at least one such address exists: clients predating it can read any database that doesn't use
-// it, and fail loudly (rather than silently leaking chunk references) on any that does.
+// tuples containing out-of-band adaptive values), returning 0 if there are none.
+// Note that 0 values for an offset are automatically ignored by the flatbuffer builder.
 func (s ProllyMapSerializer) writeKeyAddressOffsets(b *fb.Builder, keys [][]byte, keySz int) fb.UOffsetT {
 	if s.keyDesc.AddressFieldCount() == 0 {
 		return 0
