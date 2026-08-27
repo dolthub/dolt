@@ -36,7 +36,9 @@ func inlineAdaptiveValue(content string) []byte {
 // outOfBandAdaptiveValue returns the out-of-band encoding of an adaptive value:
 // varint(length) followed by the content address.
 func outOfBandAdaptiveValue(length uint64, addr hash.Hash) []byte {
-	buf := make([]byte, 0, 24)
+	// uvarint.Encode writes by index, so the buffer needs length (not just capacity) for the
+	// largest possible varint
+	buf := make([]byte, 9)
 	n := uvarint.Encode(buf, length)
 	return append(buf[:n], addr[:]...)
 }
