@@ -40,7 +40,7 @@ require (
 	golang.org/x/sys v0.45.0
 	google.golang.org/api v0.241.0
 	google.golang.org/grpc v1.82.1
-	google.golang.org/protobuf v1.36.11
+	google.golang.org/protobuf v1.36.12
 	gopkg.in/src-d/go-errors.v1 v1.0.0
 	gopkg.in/yaml.v2 v2.4.0
 )
