@@ -296,6 +296,14 @@ func computeProllyTreePatches(
 					return tree.Diff{}, false
 				}
 			}
+			if !decided && left.To == nil && right.To == nil {
+				// Convergent delete. Both sides removed the row and the left
+				// map already reflects that, so there is no patch to send and
+				// no conflict to record. This case only reaches the callback
+				// now that convergent edits are visited, and TryMerge has no
+				// answer for a row neither side kept.
+				return tree.Diff{}, false
+			}
 			if !decided {
 				// On conflict, attempt to merge rows
 				var err error
