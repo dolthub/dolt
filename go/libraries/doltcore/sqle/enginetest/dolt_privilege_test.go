@@ -1474,7 +1474,7 @@ var DoltOnlyRevisionTableFunctionPrivilegeTests = []queries.UserPrivilegeTest{
 			{
 				User:        "tester",
 				Host:        "localhost",
-				Query:       "SELECT * FROM dolt_query_diff('SELECT pk FROM mydb.test2', 'SELECT pk FROM mydb.test2');",
+				Query:       "SELECT * FROM dolt_query_diff('SELECT pk FROM mydb.test UNION ALL SELECT pk FROM mydb.test2', 'SELECT pk FROM mydb.test');",
 				ExpectedErr: sql.ErrTableAccessDeniedForUser,
 			},
 			{
@@ -1511,6 +1511,12 @@ var DoltOnlyRevisionTableFunctionPrivilegeTests = []queries.UserPrivilegeTest{
 				Expected: []sql.Row{{1, 2, "modified"}},
 			},
 			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT * FROM dolt_query_diff('SELECT * FROM dolt_query_diff(''SELECT pk FROM mydb.test'', ''SELECT pk FROM mydb.test'')', 'SELECT * FROM dolt_query_diff(''SELECT pk FROM mydb.test2'', ''SELECT pk FROM mydb.test2'')');",
+				Expected: []sql.Row{},
+			},
+			{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "GRANT SELECT ON otherdb.other_table TO tester@localhost;",
@@ -1533,6 +1539,24 @@ var DoltOnlyRevisionTableFunctionPrivilegeTests = []queries.UserPrivilegeTest{
 				Query: "EXPLAIN SELECT * FROM dolt_query_diff('SELECT pk FROM otherdb.other_table2', 'SELECT pk FROM otherdb.other_table2');",
 				// Does not exist, but auth doesn't reveal such info.
 				ExpectedErr: sql.ErrTableAccessDeniedForUser,
+			},
+			{
+				User:  "tester",
+				Host:  "localhost",
+				Query: "EXPLAIN FORMAT=TREE SELECT pk FROM mydb.test UNION ALL SELECT pk FROM mydb.test;",
+				// Confirms the subquery compiles to [plan.SetOp],
+				// an [sql.OpaqueNode] containing union branches.
+				Expected: []sql.Row{
+					{"Union all"},
+					{" ├─ Project"},
+					{" │   ├─ columns: [test.pk]"},
+					{" │   └─ Table"},
+					{" │       └─ name: test"},
+					{" └─ Project"},
+					{"     ├─ columns: [test.pk]"},
+					{"     └─ Table"},
+					{"         └─ name: test"},
+				},
 			},
 			{
 				User:  "tester",

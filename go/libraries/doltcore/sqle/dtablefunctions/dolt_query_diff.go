@@ -212,7 +212,9 @@ func (tf *QueryDiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowI
 		return nil, err
 	}
 	if !tf.schema1.Equals(tf.schema2) {
-		// todo: schema is currently an unreliable source of primary key columns
+		// TODO(elianddb): Queries across different tables or
+		// databases fall back to a keyless diff even when their
+		// projected schemas match.
 		return tf.keylessRowIter(ctx, iter1, iter2)
 	}
 	return tf.pkRowIter(ctx, iter1, iter2)
