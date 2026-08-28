@@ -93,8 +93,7 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 		refArr = writeItemBytes(b, values, valSz)
 		cardArr = writeCountArray(b, subtrees)
 
-		// we still record the key address offsets for internal nodes for consistency, although they aren't
-		// used for anything at the moment
+		// internal nodes can also have address references in their keys
 		keyAddrOffs = s.writeKeyAddressOffsets(b, keys, keySz)
 	}
 
@@ -190,20 +189,16 @@ func walkProllyMapAddresses(ctx context.Context, msg serial.Message, cb func(ctx
 	}
 	assertFalse((arr != nil) && (arr2 != nil), "cannot WalkAddresses for ProllyTreeNode with both AddressArray and ValueAddressOffsets")
 
-	// Key address offsets are only walked on leaf nodes. Internal nodes may record them as well,
-	// but purely as bookkeeping: their boundary keys are copies of leaf keys, so every chunk they
-	// reference is reached through a leaf below.
-	if pm.TreeLevel() == 0 {
-		cnt = pm.KeyAddressOffsetsLength()
-		arr3 := pm.KeyItemsBytes()
-		for i := 0; i < cnt; i++ {
-			o := pm.KeyAddressOffsets(i)
-			addr := hash.New(arr3[o : o+addrSize])
-			if err := cb(ctx, addr); err != nil {
-				return err
-			}
+	cnt = pm.KeyAddressOffsetsLength()
+	arr3 := pm.KeyItemsBytes()
+	for i := 0; i < cnt; i++ {
+		o := pm.KeyAddressOffsets(i)
+		addr := hash.New(arr3[o : o+addrSize])
+		if err := cb(ctx, addr); err != nil {
+			return err
 		}
 	}
+
 	return nil
 }
 
