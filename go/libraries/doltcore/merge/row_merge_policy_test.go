@@ -15,6 +15,7 @@
 package merge_test
 
 import (
+	"bytes"
 	"context"
 	"strings"
 	"testing"
@@ -267,4 +268,293 @@ func TestRowMergePolicy_DefersWhenSchemasDiffer(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, p.calls, "a schema-changing merge must not consult the policy")
 	require.Zero(t, dataConflictCount(result), "the merge must use Dolt's own semantics")
+}
+
+// ---------------------------------------------------------------------------
+// The four merge strictness levels, as policies over SQL rows.
+//
+// A row is the document and a column is the field, so the levels can be
+// written against val.Tuple without any document format. Each is a pure
+// predicate: it answers RowMergeConflict or defers, because deciding whether
+// two edits collide is the level's job and composing a clean merge is Dolt's.
+// ---------------------------------------------------------------------------
+
+// changedFields reports the column indexes where |row| differs from |base|.
+// A nil base is an insert, so every column of |row| is new; a nil row is a
+// delete, so every column that existed changed.
+func changedFields(base, row val.Tuple) map[int]struct{} {
+	changed := map[int]struct{}{}
+	switch {
+	case base == nil:
+		if row != nil {
+			for i := 0; i < row.Count(); i++ {
+				changed[i] = struct{}{}
+			}
+		}
+	case row == nil:
+		for i := 0; i < base.Count(); i++ {
+			changed[i] = struct{}{}
+		}
+	default:
+		for i := 0; i < base.Count(); i++ {
+			if !bytes.Equal(base.GetField(i), row.GetField(i)) {
+				changed[i] = struct{}{}
+			}
+		}
+	}
+	return changed
+}
+
+func intersects(a, b map[int]struct{}) bool {
+	for i := range a {
+		if _, ok := b[i]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func rowsEqual(left, right val.Tuple) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return bytes.Equal(left, right)
+}
+
+type strictnessLevel struct {
+	name     string
+	conflict func(left, right, base val.Tuple) bool
+}
+
+var strictnessLevels = []strictnessLevel{
+	{
+		// Both sides wrote this document at all.
+		name: "documentTouched",
+		conflict: func(left, right, base val.Tuple) bool {
+			return len(changedFields(base, left)) > 0 && len(changedFields(base, right)) > 0
+		},
+	},
+	{
+		// Both sides wrote the same field, even to the same value.
+		name: "fieldTouched",
+		conflict: func(left, right, base val.Tuple) bool {
+			return intersects(changedFields(base, left), changedFields(base, right))
+		},
+	},
+	{
+		// Both sides wrote the same field, to different values. Dolt's own rule.
+		name: "fieldDivergent",
+		conflict: func(left, right, base val.Tuple) bool {
+			fo, ft := changedFields(base, left), changedFields(base, right)
+			for i := range fo {
+				if _, ok := ft[i]; !ok {
+					continue
+				}
+				var l, r []byte
+				if left != nil {
+					l = left.GetField(i)
+				}
+				if right != nil {
+					r = right.GetField(i)
+				}
+				if !bytes.Equal(l, r) {
+					return true
+				}
+			}
+			return false
+		},
+	},
+	{
+		// Both sides wrote this document, to different results.
+		name: "documentDivergent",
+		conflict: func(left, right, base val.Tuple) bool {
+			return len(changedFields(base, left)) > 0 &&
+				len(changedFields(base, right)) > 0 &&
+				!rowsEqual(left, right)
+		},
+	},
+}
+
+func (l strictnessLevel) policy(calls *int) merge.RowMergePolicy {
+	return func(_ *sql.Context, _ doltdb.TableName, left, right, base val.Tuple) (val.Tuple, tree.RowMergeStatus, error) {
+		*calls++
+		if l.conflict(left, right, base) {
+			return nil, tree.RowMergeConflict, nil
+		}
+		return nil, tree.RowMergeDefer, nil
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The case matrix. pk 1 or 2 carries the case; pk 99 is ballast that only the
+// left side edits, so the two roots always differ (an identical pair short
+// circuits before any row is compared) and so every run also asserts that a
+// one-sided edit is not offered to the policy.
+// ---------------------------------------------------------------------------
+
+type levelCase struct {
+	name                  string
+	ancestor, left, right []sql.Row
+	// expected verdict per level, indexed as strictnessLevels
+	conflicts [4]bool
+	// calls is the number of three-way decisions in the case
+	calls int
+}
+
+func ballast(rows ...sql.Row) []sql.Row { return rows }
+
+var levelCases = []levelCase{
+	{
+		name:      "1 identical edit, same column",
+		ancestor:  ballast(sql.NewRow(1, 0, 0), sql.NewRow(99, 0, 0)),
+		left:      ballast(sql.NewRow(1, 1, 0), sql.NewRow(99, 7, 0)),
+		right:     ballast(sql.NewRow(1, 1, 0), sql.NewRow(99, 0, 0)),
+		conflicts: [4]bool{true, true, false, false},
+		calls:     1,
+	},
+	{
+		name:      "2 disjoint columns",
+		ancestor:  ballast(sql.NewRow(1, 0, 0), sql.NewRow(99, 0, 0)),
+		left:      ballast(sql.NewRow(1, 1, 0), sql.NewRow(99, 7, 0)),
+		right:     ballast(sql.NewRow(1, 0, 2), sql.NewRow(99, 0, 0)),
+		conflicts: [4]bool{true, false, false, true},
+		calls:     1,
+	},
+	{
+		name:      "3 same column, different values",
+		ancestor:  ballast(sql.NewRow(1, 0, 0), sql.NewRow(99, 0, 0)),
+		left:      ballast(sql.NewRow(1, 1, 0), sql.NewRow(99, 7, 0)),
+		right:     ballast(sql.NewRow(1, 2, 0), sql.NewRow(99, 0, 0)),
+		conflicts: [4]bool{true, true, true, true},
+		calls:     1,
+	},
+	{
+		name:      "4 identical edit plus a disjoint one",
+		ancestor:  ballast(sql.NewRow(1, 0, 0), sql.NewRow(99, 0, 0)),
+		left:      ballast(sql.NewRow(1, 1, 5), sql.NewRow(99, 7, 0)),
+		right:     ballast(sql.NewRow(1, 1, 0), sql.NewRow(99, 0, 0)),
+		conflicts: [4]bool{true, true, false, true},
+		calls:     1,
+	},
+	{
+		name:      "5 one side only",
+		ancestor:  ballast(sql.NewRow(1, 0, 0), sql.NewRow(99, 0, 0)),
+		left:      ballast(sql.NewRow(1, 1, 0), sql.NewRow(99, 7, 0)),
+		right:     ballast(sql.NewRow(1, 0, 0), sql.NewRow(99, 0, 0)),
+		conflicts: [4]bool{false, false, false, false},
+		calls:     0,
+	},
+	{
+		name:      "6 add/add identical",
+		ancestor:  ballast(sql.NewRow(1, 0, 0), sql.NewRow(99, 0, 0)),
+		left:      ballast(sql.NewRow(1, 0, 0), sql.NewRow(2, 1, 1), sql.NewRow(99, 7, 0)),
+		right:     ballast(sql.NewRow(1, 0, 0), sql.NewRow(2, 1, 1), sql.NewRow(99, 0, 0)),
+		conflicts: [4]bool{true, true, false, false},
+		calls:     1,
+	},
+	{
+		name:      "7 add/add different",
+		ancestor:  ballast(sql.NewRow(1, 0, 0), sql.NewRow(99, 0, 0)),
+		left:      ballast(sql.NewRow(1, 0, 0), sql.NewRow(2, 1, 1), sql.NewRow(99, 7, 0)),
+		right:     ballast(sql.NewRow(1, 0, 0), sql.NewRow(2, 9, 9), sql.NewRow(99, 0, 0)),
+		conflicts: [4]bool{true, true, true, true},
+		calls:     1,
+	},
+	{
+		name:      "8 modify vs delete",
+		ancestor:  ballast(sql.NewRow(1, 0, 0), sql.NewRow(99, 0, 0)),
+		left:      ballast(sql.NewRow(1, 1, 0), sql.NewRow(99, 7, 0)),
+		right:     ballast(sql.NewRow(99, 0, 0)),
+		conflicts: [4]bool{true, true, true, true},
+		calls:     1,
+	},
+	{
+		name:      "9 delete vs delete",
+		ancestor:  ballast(sql.NewRow(1, 0, 0), sql.NewRow(99, 0, 0)),
+		left:      ballast(sql.NewRow(99, 7, 0)),
+		right:     ballast(sql.NewRow(99, 0, 0)),
+		conflicts: [4]bool{true, true, false, false},
+		calls:     1,
+	},
+}
+
+// Each level must produce its whole column of the matrix, on both merge paths.
+// Four different answer sets from one interface is the expressiveness proof:
+// any single level could be satisfied by a hook with less information.
+func TestRowMergePolicy_FourStrictnessLevels(t *testing.T) {
+	for _, shape := range []struct {
+		name   string
+		schema namedSchema
+	}{
+		{"fast path", fastPathSchema},
+		{"differ path", differPathSchema},
+	} {
+		t.Run(shape.name, func(t *testing.T) {
+			for li, level := range strictnessLevels {
+				t.Run(level.name, func(t *testing.T) {
+					for _, tc := range levelCases {
+						t.Run(tc.name, func(t *testing.T) {
+							calls := 0
+							data := dataTest{
+								name:     tc.name,
+								ancestor: tc.ancestor,
+								left:     tc.left,
+								right:    tc.right,
+								merged:   tc.left,
+							}
+							result, err := runPolicyMergeWithSchema(t, shape.schema, data, level.policy(&calls))
+							require.NoError(t, err)
+
+							require.Equal(t, tc.calls, calls,
+								"three-way decisions offered to the policy; a one-sided edit is not one")
+
+							if tc.conflicts[li] {
+								require.Equal(t, 1, dataConflictCount(result),
+									"%s must conflict on %q", level.name, tc.name)
+							} else {
+								require.Zero(t, dataConflictCount(result),
+									"%s must merge %q", level.name, tc.name)
+							}
+						})
+					}
+				})
+			}
+		})
+	}
+}
+
+// Inertness, by hash: for every case, a nil policy and an always-defer policy
+// must produce identical merged roots. Stronger than comparing outcomes case
+// by case, because it cannot be fooled by a case nobody thought to check.
+func TestRowMergePolicy_AlwaysDeferIsInertByHash(t *testing.T) {
+	for _, shape := range []struct {
+		name   string
+		schema namedSchema
+	}{
+		{"fast path", fastPathSchema},
+		{"differ path", differPathSchema},
+	} {
+		t.Run(shape.name, func(t *testing.T) {
+			for _, tc := range levelCases {
+				t.Run(tc.name, func(t *testing.T) {
+					data := dataTest{
+						name:     tc.name,
+						ancestor: tc.ancestor,
+						left:     tc.left,
+						right:    tc.right,
+						merged:   tc.left,
+					}
+					withoutPolicy, err := runPolicyMergeWithSchema(t, shape.schema, data, nil)
+					require.NoError(t, err)
+
+					p := &recordingRowMergePolicy{}
+					withDefer, err := runPolicyMergeWithSchema(t, shape.schema, data, p.opt())
+					require.NoError(t, err)
+
+					require.Len(t, p.calls, tc.calls)
+					requireSameMergedTable(t, withoutPolicy, withDefer)
+				})
+			}
+		})
+	}
 }
