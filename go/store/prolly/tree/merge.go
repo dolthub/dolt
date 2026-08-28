@@ -93,7 +93,7 @@ func ThreeWayMerge[K ~[]byte, O Ordering[K], S message.Serializer](
 				err = cerr
 			}
 		}()
-		err = SendPatches(ctx, ld, rd, patches, collide)
+		err = SendPatches(ctx, ld, rd, patches, collide, false)
 		return
 	})
 
@@ -163,11 +163,17 @@ func resolveCollision(left Patch, lDiffType DiffType, right Patch, rDiffType Dif
 }
 
 // SendPatches iterates over |l| and |r| in parallel, sending an ordered non-overlapping series of patches into |buf|.
+// visitConvergent, when set, makes SendPatches offer convergent edits to |cb|
+// as well as divergent ones. Both sides writing the same value is normally
+// merged without consulting anything; a caller whose merge rule can conflict on
+// agreeing edits needs to see them. Setting it also forces descent into
+// subtrees both sides rewrote identically, which are convergent edits in bulk.
 func SendPatches[K ~[]byte, O Ordering[K]](
 	ctx context.Context,
 	l, r PatchGenerator[K, O],
 	buf PatchBuffer,
 	cb CollisionFn,
+	visitConvergent bool,
 ) (err error) {
 	var (
 		left, right          Patch
@@ -210,6 +216,18 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 				}
 
 				right, rDiffType, rok, err = getNextAndSplitIfAtEnd(ctx, &r)
+				if err != nil {
+					return err
+				}
+			} else if bytes.Equal(left.To, right.To) && visitConvergent {
+				// Both sides rewrote this subtree to identical content, so every
+				// row in it is a convergent edit. The caller needs to see each
+				// one, so descend a level on both sides and reconsider.
+				left, lDiffType, lok, err = l.split(ctx)
+				if err != nil {
+					return err
+				}
+				right, rDiffType, rok, err = r.split(ctx)
 				if err != nil {
 					return err
 				}
@@ -354,8 +372,9 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 			}
 
 		case cmp == 0:
-			// Convergent edit:
-			if !bytes.Equal(left.To, right.To) {
+			// Convergent edit: normally left already holds the value and there
+			// is nothing to do, but a caller may need to decide it anyway.
+			if visitConvergent || !bytes.Equal(left.To, right.To) {
 				resolvedPatch, ok := resolveCollision(left, lDiffType, right, rDiffType, cb)
 				// If the collision can be resolved, we record it as a patch.
 				// Otherwise, the callback function records the conflict and we don't have to do anything here.
