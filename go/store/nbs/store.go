@@ -392,8 +392,7 @@ func (nbs *NomsBlockStore) finalizeConjoin(ctx context.Context, err error) {
 	}()
 
 	if err != nil {
-		nbs.logger.WithError(err).WithField("deferred", true).
-			Warn("background compaction (conjoin) failed and was deferred; it will be retried on a later write, and the operation that triggered it was unaffected")
+		nbs.logger.WithError(err).WithField("deferred", true).Warn("background conjoin (compaction) deferred")
 		return
 	}
 
