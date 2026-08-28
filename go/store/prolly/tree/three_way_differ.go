@@ -38,6 +38,10 @@ type ThreeWayDiffer[K ~[]byte, O Ordering[K]] struct {
 	rDone                     bool
 	keyless                   bool
 	leftAndRightSchemasDiffer bool
+	// schemaChangeInMerge suppresses the row merge policy. A policy returns a
+	// raw tuple, and only a merge where every side shares one schema gives
+	// that tuple an unambiguous shape.
+	schemaChangeInMerge bool
 }
 
 //var _ DiffIter = (*threeWayDiffer[Item, val.TupleDesc])(nil)
@@ -111,6 +115,9 @@ func NewThreeWayDiffer[K, V ~[]byte, O Ordering[K]](
 		rowMergePolicy:            rowMergePolicy,
 		keyless:                   keyless,
 		leftAndRightSchemasDiffer: diffInfo.LeftAndRightSchemasDiffer,
+		schemaChangeInMerge: diffInfo.LeftSchemaChange ||
+			diffInfo.RightSchemaChange ||
+			diffInfo.LeftAndRightSchemasDiffer,
 	}, nil
 }
 
@@ -350,7 +357,13 @@ func (d *ThreeWayDiffer[K, O]) applyRowMergePolicy(ctx *sql.Context) (bool, Thre
 	// Keyless tables always use the default reconciler: their rows carry a
 	// cardinality rather than an identity, so a per-row policy has nothing
 	// stable to decide about.
-	if d.rowMergePolicy == nil || d.keyless {
+	//
+	// A merge that also changes schema defers as well. Dolt builds its merged
+	// row through the value merger's result descriptor, so the row is in the
+	// merged schema by construction; a policy returns a bare tuple and has no
+	// such builder. While every side shares one schema that distinction does
+	// not matter, because the three inputs and the result have the same shape.
+	if d.rowMergePolicy == nil || d.keyless || d.schemaChangeInMerge {
 		return false, ThreeWayDiff{}, nil
 	}
 	merged, status, err := d.rowMergePolicy(ctx,
