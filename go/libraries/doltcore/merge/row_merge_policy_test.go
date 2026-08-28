@@ -16,6 +16,7 @@ package merge_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -28,7 +29,13 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-var policyTestSchema = sch("CREATE TABLE t (pk int PRIMARY KEY, a int, b int)")
+// fastPathSchema has no secondary index and no non-null column, so it
+// satisfies canFastMergeProllyTrees. differPathSchema adds an index, which
+// forces needsSecondaryIndexMerge and routes the merge through ThreeWayDiffer.
+var fastPathSchema = sch("CREATE TABLE t (pk int PRIMARY KEY, a int, b int)")
+var differPathSchema = sch("CREATE TABLE t (pk int PRIMARY KEY, a int, b int, INDEX idx_a (a))")
+
+var policyTestSchema = fastPathSchema
 
 type policyInvocation struct {
 	table             string
@@ -58,9 +65,13 @@ func (p *recordingRowMergePolicy) opt() merge.RowMergePolicy {
 }
 
 func runPolicyMerge(t *testing.T, data dataTest, policy merge.RowMergePolicy) (*merge.Result, error) {
+	return runPolicyMergeWithSchema(t, policyTestSchema, data, policy)
+}
+
+func runPolicyMergeWithSchema(t *testing.T, schema namedSchema, data dataTest, policy merge.RowMergePolicy) (*merge.Result, error) {
 	t.Helper()
 	ctx := context.Background()
-	a, l, r, _ := setupDataMergeTest(ctx, t, policyTestSchema, data)
+	a, l, r, _ := setupDataMergeTest(ctx, t, schema, data)
 
 	var eo editor.Options
 	mo := merge.MergeOpts{RowMergePolicy: policy}
@@ -155,4 +166,77 @@ func requireSameMergedTable(t *testing.T, a, b *merge.Result) {
 	bh, err := doltdb.MapTableHashes(ctx, b.Root)
 	require.NoError(t, err)
 	require.Equal(t, ah, bh, "an always-defer policy must produce the same merged tables")
+}
+
+// Both merge paths must offer the policy the same decisions. If the fast path
+// stops consulting it, the convergent edit disappears from its invocation list
+// while the differ path still reports it.
+func TestRowMergePolicy_BothPathsSeeTheSameDecisions(t *testing.T) {
+	data := dataTest{
+		name:     "convergent edit on row 1, left-only edit on row 2",
+		ancestor: []sql.Row{sql.NewRow(1, 0, 0), sql.NewRow(2, 0, 0)},
+		left:     []sql.Row{sql.NewRow(1, 1, 0), sql.NewRow(2, 7, 0)},
+		right:    []sql.Row{sql.NewRow(1, 1, 0), sql.NewRow(2, 0, 0)},
+		merged:   []sql.Row{sql.NewRow(1, 1, 0), sql.NewRow(2, 7, 0)},
+	}
+
+	for _, tc := range []struct {
+		name   string
+		schema namedSchema
+	}{
+		{"fast path", fastPathSchema},
+		{"differ path", differPathSchema},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := &recordingRowMergePolicy{answer: func() (val.Tuple, tree.RowMergeStatus) {
+				return nil, tree.RowMergeConflict
+			}}
+			result, err := runPolicyMergeWithSchema(t, tc.schema, data, p.opt())
+			require.NoError(t, err)
+			require.Len(t, p.calls, 1, "the convergent edit is the only three-way decision")
+			require.True(t, p.calls[0].left && p.calls[0].right && p.calls[0].base)
+			require.Equal(t, 1, dataConflictCount(result))
+		})
+	}
+}
+
+// Both sides rewriting a large region identically produces equal chunk
+// addresses above the leaf level. The fast path skips those subtrees without
+// visiting rows, so a policy only sees them if the merge descends.
+func TestRowMergePolicy_SeesConvergentEditsInsideIdenticalSubtrees(t *testing.T) {
+	const rowCount = 64
+	const converged = 40
+
+	wide := strings.Repeat("1", 255)
+	schema := sch("CREATE TABLE t (pk int PRIMARY KEY, t char(255), a int)")
+
+	rows := func(mutateUpTo int, extra bool) []sql.Row {
+		var out []sql.Row
+		for i := 0; i < rowCount; i++ {
+			a := 0
+			if i < mutateUpTo {
+				a = 1
+			}
+			if extra && i == rowCount-1 {
+				a = 9
+			}
+			out = append(out, sql.NewRow(i, wide, a))
+		}
+		return out
+	}
+
+	data := dataTest{
+		name:     "both sides make the same bulk edit",
+		ancestor: rows(0, false),
+		left:     rows(converged, true),
+		right:    rows(converged, false),
+		merged:   rows(converged, true),
+	}
+
+	p := &recordingRowMergePolicy{}
+	_, err := runPolicyMergeWithSchema(t, schema, data, p.opt())
+	require.NoError(t, err)
+
+	require.Len(t, p.calls, converged,
+		"every row both sides changed identically must reach the policy, including those inside subtrees the two sides rewrote to the same chunk")
 }
