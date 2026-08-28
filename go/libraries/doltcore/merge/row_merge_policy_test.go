@@ -240,3 +240,31 @@ func TestRowMergePolicy_SeesConvergentEditsInsideIdenticalSubtrees(t *testing.T)
 	require.Len(t, p.calls, converged,
 		"every row both sides changed identically must reach the policy, including those inside subtrees the two sides rewrote to the same chunk")
 }
+
+// A policy returns a bare tuple and has no builder for the merged schema, so a
+// merge that also changes schema must not consult it. The merge still succeeds
+// with Dolt's own semantics even though the policy would have conflicted every
+// row it was offered.
+func TestRowMergePolicy_DefersWhenSchemasDiffer(t *testing.T) {
+	test := schemaMergeTest{
+		name:     "right side adds a nullable column",
+		ancestor: *tbl(sch("CREATE TABLE t (pk int PRIMARY KEY, a int)"), sql.NewRow(1, 0), sql.NewRow(2, 0)),
+		left:     tbl(sch("CREATE TABLE t (pk int PRIMARY KEY, a int)"), sql.NewRow(1, 1), sql.NewRow(2, 0)),
+		right:    tbl(sch("CREATE TABLE t (pk int PRIMARY KEY, a int, c int)"), sql.NewRow(1, 1, nil), sql.NewRow(2, 0, nil)),
+		merged:   *tbl(sch("CREATE TABLE t (pk int PRIMARY KEY, a int, c int)"), sql.NewRow(1, 1, nil), sql.NewRow(2, 0, nil)),
+	}
+
+	ctx := context.Background()
+	a, l, r, _ := setupSchemaMergeTest(ctx, t, test)
+
+	p := &recordingRowMergePolicy{answer: func() (val.Tuple, tree.RowMergeStatus) {
+		return nil, tree.RowMergeConflict
+	}}
+
+	var eo editor.Options
+	mo := merge.MergeOpts{RowMergePolicy: p.opt()}
+	result, err := merge.MergeRoots(sql.NewContext(ctx), doltdb.SimpleTableResolver{}, l, r, a, rootish{r}, rootish{a}, eo, mo)
+	require.NoError(t, err)
+	require.Empty(t, p.calls, "a schema-changing merge must not consult the policy")
+	require.Zero(t, dataConflictCount(result), "the merge must use Dolt's own semantics")
+}
