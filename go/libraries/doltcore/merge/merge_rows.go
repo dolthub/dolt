@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
+	"github.com/dolthub/dolt/go/store/val"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -55,10 +56,25 @@ type MergeOpts struct {
 	// dolt_verify_constraints() stored procedure to allow callers to verify constraints for a
 	// subset of tables.
 	RecordViolationsForTables map[doltdb.TableName]struct{}
+	// RowMergePolicy, when non-nil, is consulted for every three-way row
+	// decision before Dolt classifies it, including convergent edits that
+	// would otherwise merge without inspection. Returning tree.RowMergeDefer
+	// yields Dolt's standard behaviour for that row.
+	//
+	// Installing a policy disables the fast prolly-tree merge, which elides
+	// convergent edits and whole identical subtrees without visiting rows.
+	RowMergePolicy RowMergePolicy
 }
+
+// RowMergePolicy decides one three-way row merge. It receives the table the
+// row belongs to; the tuple arguments and return follow tree.RowMergePolicy.
+type RowMergePolicy func(ctx *sql.Context, table doltdb.TableName, left, right, base val.Tuple) (val.Tuple, tree.RowMergeStatus, error)
 
 type TableMerger struct {
 	name doltdb.TableName
+
+	// rowMergePolicy is MergeOpts.RowMergePolicy with this table bound, or nil.
+	rowMergePolicy tree.RowMergePolicy
 
 	leftTbl  *doltdb.Table
 	rightTbl *doltdb.Table
@@ -281,6 +297,12 @@ func (rm *RootMerger) MakeTableMerger(ctx context.Context, tblName doltdb.TableN
 		vrw:              rm.vrw,
 		ns:               rm.ns,
 		recordViolations: recordViolations,
+	}
+	if mergeOpts.RowMergePolicy != nil {
+		policy := mergeOpts.RowMergePolicy
+		tm.rowMergePolicy = func(ctx *sql.Context, left, right, base val.Tuple) (val.Tuple, tree.RowMergeStatus, error) {
+			return policy(ctx, tblName, left, right, base)
+		}
 	}
 
 	var err error

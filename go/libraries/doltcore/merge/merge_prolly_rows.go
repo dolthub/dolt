@@ -257,7 +257,14 @@ func computeProllyTreePatches(
 	needsSecondaryIndexMerge := len(sec.leftIdxes) > 0 && !mergeInfo.InvalidateSecondaryIndexes
 	// either skip if there's secondary indexes, or merge secondary indexes.
 	needsSchemaMigration := mergeInfo.RightNeedsRewrite || mergeInfo.LeftNeedsRewrite
+	// A RowMergePolicy must see every three-way row decision. The fast path
+	// cannot offer that: tree.SendPatches elides convergent edits without
+	// calling its collision callback, and at level > 0 it skips whole
+	// identical subtrees without ever descending to rows. Route policy merges
+	// through the three-way differ, which reaches every matched key because it
+	// diffs each side against the base independently.
 	canFastMergeProllyTrees := !keyless &&
+		tm.rowMergePolicy == nil &&
 		!needsUniquenessValidation &&
 		!needsCheckValidation &&
 		!needsNullValidation &&
@@ -575,7 +582,7 @@ func threeWayDiffer(ctx context.Context, tm *TableMerger, valueMerger *valueMerg
 		rightRows.Tuples(),
 		ancRows.Tuples(),
 		valueMerger.TryMerge,
-		nil,
+		tm.rowMergePolicy,
 		valueMerger.keyless,
 		diffInfo,
 		leftRows.Tuples().Order,
