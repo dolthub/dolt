@@ -158,7 +158,12 @@ func computeProllyTreePatches(
 	s *MergeStats) (*secondaryMerger, *conflictMerger, error) {
 	ns := tm.ns
 
-	iter, err := threeWayDiffer(ctx, tm, valueMerger, diffInfo)
+	// The value descriptor a policy needs comes from the merged schema, which
+	// is only known here, so the adaptation happens here rather than where the
+	// TableMerger is built.
+	rowPolicy := tm.treeRowMergePolicy(finalSch)
+
+	iter, err := threeWayDiffer(ctx, tm, valueMerger, diffInfo, rowPolicy)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -278,8 +283,8 @@ func computeProllyTreePatches(
 			var m val.Tuple
 			var b bool
 			decided := false
-			if tm.rowMergePolicy != nil {
-				merged, status, pErr := tm.rowMergePolicy(ctx,
+			if rowPolicy != nil {
+				merged, status, pErr := rowPolicy(ctx,
 					val.Tuple(left.To), val.Tuple(right.To), val.Tuple(left.From))
 				if pErr != nil {
 					mergeErr = pErr
@@ -353,7 +358,7 @@ func computeProllyTreePatches(
 			mergeDiff := left
 			mergeDiff.To = tree.Item(m)
 			return mergeDiff, b
-		}, tm.rowMergePolicy != nil)
+		}, rowPolicy != nil)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -573,7 +578,34 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 	return finalTbl, s, nil
 }
 
-func threeWayDiffer(ctx context.Context, tm *TableMerger, valueMerger *valueMerger, diffInfo tree.ThreeWayDiffInfo) (*tree.ThreeWayDiffer[val.Tuple, *val.TupleDesc], error) {
+// treeRowMergePolicy adapts the caller's policy to the storage layer's
+// callback, supplying the table, the merged value descriptor and the node
+// store. Returns nil when no policy is installed.
+func (tm *TableMerger) treeRowMergePolicy(mergedSch schema.Schema) tree.RowMergePolicy {
+	if tm.rowMergePolicy == nil {
+		return nil
+	}
+	policy, tblName, ns := tm.rowMergePolicy, tm.name, tm.ns
+	valDesc := mergedSch.GetValueDescriptor(ns)
+	return func(ctx *sql.Context, left, right, base val.Tuple) (val.Tuple, tree.RowMergeStatus, error) {
+		return policy(ctx, RowMergeInput{
+			Table:     tblName,
+			Base:      base,
+			Left:      left,
+			Right:     right,
+			ValueDesc: valDesc,
+			NodeStore: ns,
+		})
+	}
+}
+
+func threeWayDiffer(
+	ctx context.Context,
+	tm *TableMerger,
+	valueMerger *valueMerger,
+	diffInfo tree.ThreeWayDiffInfo,
+	rowPolicy tree.RowMergePolicy,
+) (*tree.ThreeWayDiffer[val.Tuple, *val.TupleDesc], error) {
 	lr, err := tm.leftTbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err
@@ -607,7 +639,7 @@ func threeWayDiffer(ctx context.Context, tm *TableMerger, valueMerger *valueMerg
 		rightRows.Tuples(),
 		ancRows.Tuples(),
 		valueMerger.TryMerge,
-		tm.rowMergePolicy,
+		rowPolicy,
 		valueMerger.keyless,
 		diffInfo,
 		leftRows.Tuples().Order,

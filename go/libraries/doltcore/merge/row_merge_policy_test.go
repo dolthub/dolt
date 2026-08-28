@@ -17,6 +17,8 @@ package merge_test
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"sort"
 	"strings"
 	"testing"
 
@@ -41,6 +43,7 @@ var policyTestSchema = fastPathSchema
 type policyInvocation struct {
 	table             string
 	left, right, base bool // whether each tuple was present
+	hasDesc, hasStore bool // whether the input carried what a policy needs to compose
 }
 
 // recordingRowMergePolicy captures every invocation and returns a scripted answer.
@@ -50,12 +53,14 @@ type recordingRowMergePolicy struct {
 }
 
 func (p *recordingRowMergePolicy) opt() merge.RowMergePolicy {
-	return func(_ *sql.Context, table doltdb.TableName, left, right, base val.Tuple) (val.Tuple, tree.RowMergeStatus, error) {
+	return func(_ *sql.Context, in merge.RowMergeInput) (val.Tuple, tree.RowMergeStatus, error) {
 		p.calls = append(p.calls, policyInvocation{
-			table: table.Name,
-			left:  left != nil,
-			right: right != nil,
-			base:  base != nil,
+			table:    in.Table.Name,
+			left:     in.Left != nil,
+			right:    in.Right != nil,
+			base:     in.Base != nil,
+			hasDesc:  in.ValueDesc != nil,
+			hasStore: in.NodeStore != nil,
 		})
 		if p.answer == nil {
 			return nil, tree.RowMergeDefer, nil
@@ -97,6 +102,8 @@ func TestRowMergePolicy_ReachesMergeAndSeesConvergentEdit(t *testing.T) {
 
 	require.Len(t, p.calls, 1, "policy must be consulted for the convergent edit: %#v", p.calls)
 	require.Equal(t, "t", p.calls[0].table, "policy must be told which table it is deciding")
+	require.True(t, p.calls[0].hasDesc, "policy must receive the merged value descriptor")
+	require.True(t, p.calls[0].hasStore, "policy must receive the node store")
 	require.True(t, p.calls[0].left)
 	require.True(t, p.calls[0].right)
 	require.True(t, p.calls[0].base)
@@ -376,8 +383,9 @@ var strictnessLevels = []strictnessLevel{
 }
 
 func (l strictnessLevel) policy(calls *int) merge.RowMergePolicy {
-	return func(_ *sql.Context, _ doltdb.TableName, left, right, base val.Tuple) (val.Tuple, tree.RowMergeStatus, error) {
+	return func(_ *sql.Context, in merge.RowMergeInput) (val.Tuple, tree.RowMergeStatus, error) {
 		*calls++
+		left, right, base := in.Left, in.Right, in.Base
 		if l.conflict(left, right, base) {
 			return nil, tree.RowMergeConflict, nil
 		}
@@ -557,4 +565,202 @@ func TestRowMergePolicy_AlwaysDeferIsInertByHash(t *testing.T) {
 			}
 		})
 	}
+}
+
+// ---------------------------------------------------------------------------
+// dumbodb's shape: one key column and one adaptive value column holding a
+// whole document. The four levels then have to look inside that single cell,
+// and -- the part the SQL-table matrix does not exercise -- have to COMPOSE the
+// merged document, because Dolt's cell rule sees one column changed
+// differently on both sides and conflicts.
+//
+// The encoding here is a toy "k=v;k=v" text format, not BSON. Any
+// self-describing encoding demonstrates the same thing without importing
+// dumbodb.
+// ---------------------------------------------------------------------------
+
+var docTableSchema = sch("CREATE TABLE t (pk int PRIMARY KEY, doc longblob NOT NULL)")
+
+func encodeDoc(fields map[string]string) []byte {
+	keys := make([]string, 0, len(fields))
+	for k := range fields {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	for i, k := range keys {
+		if i > 0 {
+			b.WriteString(";")
+		}
+		b.WriteString(k)
+		b.WriteString("=")
+		b.WriteString(fields[k])
+	}
+	return []byte(b.String())
+}
+
+func decodeDoc(raw []byte) map[string]string {
+	out := map[string]string{}
+	if len(raw) == 0 {
+		return out
+	}
+	for _, pair := range strings.Split(string(raw), ";") {
+		if k, v, ok := strings.Cut(pair, "="); ok {
+			out[k] = v
+		}
+	}
+	return out
+}
+
+// readDoc resolves the value column, which for an adaptive encoding is either
+// inline bytes or an out-of-band pointer.
+func readDoc(ctx context.Context, in merge.RowMergeInput, tup val.Tuple, oob *int) (map[string]string, error) {
+	if tup == nil {
+		return nil, nil
+	}
+	res, ok, err := in.ValueDesc.GetBytesAdaptiveValue(ctx, 0, in.NodeStore, tup)
+	if err != nil || !ok {
+		return nil, err
+	}
+	switch v := res.(type) {
+	case []byte:
+		return decodeDoc(v), nil
+	case *val.ByteArray:
+		if oob != nil {
+			*oob++
+		}
+		raw, err := v.GetBytes(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return decodeDoc(raw), nil
+	default:
+		return nil, fmt.Errorf("unexpected adaptive value type %T", res)
+	}
+}
+
+// docFieldTouchedPolicy applies fieldTouched over the fields inside the single
+// value column, composing the merged document when the level permits a merge.
+func docFieldTouchedPolicy(t *testing.T, calls *int, oob *int) merge.RowMergePolicy {
+	return func(ctx *sql.Context, in merge.RowMergeInput) (val.Tuple, tree.RowMergeStatus, error) {
+		*calls++
+		base, err := readDoc(ctx, in, in.Base, oob)
+		require.NoError(t, err)
+		left, err := readDoc(ctx, in, in.Left, oob)
+		require.NoError(t, err)
+		right, err := readDoc(ctx, in, in.Right, oob)
+		require.NoError(t, err)
+
+		changed := func(from, to map[string]string) map[string]struct{} {
+			out := map[string]struct{}{}
+			for k, v := range to {
+				if from[k] != v {
+					out[k] = struct{}{}
+				}
+			}
+			for k := range from {
+				if _, ok := to[k]; !ok {
+					out[k] = struct{}{}
+				}
+			}
+			return out
+		}
+		fo, ft := changed(base, left), changed(base, right)
+		for k := range fo {
+			if _, ok := ft[k]; ok {
+				return nil, tree.RowMergeConflict, nil
+			}
+		}
+
+		// Disjoint fields: compose. Neither side holds this document, so the
+		// policy has to build it.
+		merged := map[string]string{}
+		for k, v := range base {
+			merged[k] = v
+		}
+		for k := range fo {
+			merged[k] = left[k]
+		}
+		for k := range ft {
+			merged[k] = right[k]
+		}
+
+		tb := val.NewTupleBuilder(in.ValueDesc, in.NodeStore)
+		if err := tb.PutAdaptiveBytesFromInline(ctx, 0, encodeDoc(merged)); err != nil {
+			return nil, tree.RowMergeDefer, err
+		}
+		tup, err := tb.Build(ctx, in.NodeStore.Pool())
+		if err != nil {
+			return nil, tree.RowMergeDefer, err
+		}
+		return tup, tree.RowMergeResolved, nil
+	}
+}
+
+func TestRowMergePolicy_ComposesInsideASingleValueColumn(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		pad       int
+		expectOOB bool
+	}{
+		{"inline value", 0, false},
+		{"value large enough to spill out of band", 16 * 1024, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pad := strings.Repeat("x", tc.pad)
+			doc := func(a, b string) []byte {
+				return encodeDoc(map[string]string{"a": a, "b": b, "pad": pad})
+			}
+
+			data := dataTest{
+				name:     "disjoint fields inside one document",
+				ancestor: []sql.Row{sql.NewRow(1, doc("s", "s")), sql.NewRow(99, doc("s", "s"))},
+				left:     []sql.Row{sql.NewRow(1, doc("A", "s")), sql.NewRow(99, doc("L", "s"))},
+				right:    []sql.Row{sql.NewRow(1, doc("s", "B")), sql.NewRow(99, doc("s", "s"))},
+				merged:   []sql.Row{sql.NewRow(1, doc("A", "B")), sql.NewRow(99, doc("L", "s"))},
+			}
+
+			// Baseline: a deferring policy gets Dolt's cell rule, which sees one
+			// column changed differently on both sides and conflicts. This is why
+			// the level cannot be expressed by classification alone.
+			deferring := &recordingRowMergePolicy{}
+			baseline, err := runPolicyMergeWithSchema(t, docTableSchema, data, deferring.opt())
+			require.NoError(t, err)
+			require.Equal(t, 1, dataConflictCount(baseline),
+				"precondition: deferring conflicts, because the whole document is one column")
+
+			calls, oob := 0, 0
+			result, err := runPolicyMergeWithSchema(t, docTableSchema, data, docFieldTouchedPolicy(t, &calls, &oob))
+			require.NoError(t, err)
+			require.Equal(t, 1, calls, "one three-way decision")
+			if tc.expectOOB {
+				require.NotZero(t, oob,
+					"this case exists to exercise the out-of-band read path; if the value stayed inline the case proves nothing")
+			} else {
+				require.Zero(t, oob, "a small value must stay inline")
+			}
+			require.Zero(t, dataConflictCount(result),
+				"fieldTouched merges disjoint fields inside the document")
+
+			expected := expectedMergedRoot(t, docTableSchema, data)
+			requireSameTables(t, expected, result.Root)
+		})
+	}
+}
+
+func expectedMergedRoot(t *testing.T, schema namedSchema, data dataTest) doltdb.RootValue {
+	t.Helper()
+	ctx := context.Background()
+	_, _, _, merged := setupDataMergeTest(ctx, t, schema, data)
+	return merged
+}
+
+func requireSameTables(t *testing.T, expected doltdb.RootValue, actual doltdb.RootValue) {
+	t.Helper()
+	ctx := context.Background()
+	exp, err := doltdb.MapTableHashes(ctx, expected)
+	require.NoError(t, err)
+	act, err := doltdb.MapTableHashes(ctx, actual)
+	require.NoError(t, err)
+	require.Equal(t, exp, act, "merged tables must match the expected composition")
 }
