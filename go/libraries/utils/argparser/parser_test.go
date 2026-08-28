@@ -172,9 +172,6 @@ func TestArgParser(t *testing.T) {
 }
 
 func TestArgParserListEmptyValue(t *testing.T) {
-	// An empty-string value for a list option must not panic: getListValues
-	// indexed arg[0] without a length check, so `--list ""` (or `-l ""`)
-	// panicked with an index-out-of-range.
 	ap := NewArgParserWithVariableArgs("test").SupportsStringList("list", "l", "vals", "")
 
 	apr, err := ap.Parse([]string{"--list", ""})
@@ -183,7 +180,6 @@ func TestArgParserListEmptyValue(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, "", v)
 
-	// A subsequent option after the empty value still terminates the list.
 	ap2 := NewArgParserWithVariableArgs("test").
 		SupportsStringList("list", "l", "vals", "").
 		SupportsFlag("flag", "f", "flag")

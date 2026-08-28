@@ -495,7 +495,6 @@ func getListValues(args []string) []string {
 	var values []string
 
 	for _, arg := range args {
-		// Stop if another option found
 		if arg == "--" || (arg != "" && arg[0] == '-') {
 			return values
 		}
