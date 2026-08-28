@@ -15,8 +15,9 @@
 package schema
 
 import (
-	"fmt"
 	"strings"
+
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type Check interface {
@@ -73,7 +74,7 @@ func (c *checkCollection) AddCheck(name, expression string, enforce, isNotValid 
 	for _, chk := range c.checks {
 		if strings.EqualFold(name, chk.name) {
 			// Engine is supposed to enforce this for us, but just in case
-			return nil, fmt.Errorf("name %s in use", name)
+			return nil, sql.ErrDuplicateCheckName.New(name)
 		}
 	}
 

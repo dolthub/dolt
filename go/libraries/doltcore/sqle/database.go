@@ -1204,11 +1204,21 @@ func (db Database) getNonlocalTableNames(ctx *sql.Context, root doltdb.RootValue
 			return nil, err
 		}
 
+		// db.schemaName is only meaningful when this Database is scoped to a particular schema. For a top-level,
+		// unqualified Database in search-path mode, fall back to the first schema on the search path that actually
+		// exists on the referenced root, since that's where the aliased table will actually live.
+		schemaName := db.schemaName
+		if resolve.UseSearchPath && schemaName == "" {
+			if resolvedSchema, serr := resolve.FirstExistingSchemaOnSearchPath(ctx, referencedRoot); serr == nil {
+				schemaName = resolvedSchema
+			}
+		}
+
 		if nonlocalTableEntry.NewTableName == "" {
 			// The rule doesn't specify a name on the nonlocal ref.
 			// Thus, the name of the local table will be the same as the nonlocal table.
 			// If the name on the rule is a pattern, we must find all tables on the nonlocal ref that match that pattern.
-			matchedTables, err := doltdb.GetMatchingTables(ctx, referencedRoot, db.schemaName, nonlocalsEntryTableName)
+			matchedTables, err := doltdb.GetMatchingTables(ctx, referencedRoot, schemaName, nonlocalsEntryTableName)
 			if err != nil {
 				return nil, err
 			}
@@ -1216,7 +1226,7 @@ func (db Database) getNonlocalTableNames(ctx *sql.Context, root doltdb.RootValue
 		} else {
 			// The rule does specify a name on the nonlocal ref.
 			// If a table with that name exists on that ref, then the local name is considered to exist
-			hasTable, err := referencedRoot.HasTable(ctx, doltdb.TableName{Name: nonlocalTableEntry.NewTableName, Schema: db.SchemaName()})
+			hasTable, err := referencedRoot.HasTable(ctx, doltdb.TableName{Name: nonlocalTableEntry.NewTableName, Schema: schemaName})
 			if err != nil {
 				return nil, err
 			}
@@ -1314,11 +1324,11 @@ func getStatusTableRootsProvider(
 				"unable to get DoltDB for database %s", ctx.GetCurrentDatabase())
 		}
 
-		_, hasBranch, err := ddb.HasBranch(ctx, asOfStr)
+		branch, err := ddb.BranchByNameInsensitive(ctx, asOfStr)
 		if err != nil {
 			return nil, nil, err
 		}
-		if hasBranch {
+		if branch != nil {
 			branchRoots, err := getRootsForBranch(ctx, ddb, asOfStr)
 			if err != nil {
 				return nil, nil, err
@@ -1570,11 +1580,19 @@ func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName s
 // case-insensitive manner. The table is returned along with its case-sensitive matched name. An error is returned if
 // no such table exists.
 func (db Database) resolveUserTable(ctx *sql.Context, root doltdb.RootValue, tableName doltdb.TableName) (doltdb.TableName, *doltdb.Table, bool, error) {
+	if resolve.UseSearchPath && tableName.Schema != "" && tableName.Schema != db.schemaName {
+		// An explicit schema that differs from this database's own schema (e.g. the "dolt"
+		// namespace schema used by dolt_nonlocal_tables) must be honored
+		tbl, resolvedName, ok, err := doltdb.GetTableInsensitive(ctx, root, tableName)
+		if err != nil || !ok {
+			return doltdb.TableName{}, nil, false, err
+		}
+		return doltdb.TableName{Schema: tableName.Schema, Name: resolvedName}, tbl, true, nil
+	}
 	if resolve.UseSearchPath && db.schemaName == "" {
 		return resolve.TableWithSearchPath(ctx, root, tableName.Name)
-	} else {
-		return db.tableInsensitive(ctx, root, tableName)
 	}
+	return db.tableInsensitive(ctx, root, tableName)
 }
 
 // tableInsensitive returns the name of this table in the root given with the db's schema name, if it exists.
@@ -1724,6 +1742,9 @@ func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue, inc
 		// TODO: this method should probably return TableNames, but need to iron out the effective schema for system
 		//  tables first
 		result = doltdb.FlattenTableNames(names)
+		for _, nameStr := range result {
+			localNameSet[nameStr] = struct{}{}
+		}
 	} else {
 		result, err = root.GetTableNames(ctx, db.schemaName, includeRootObjects)
 		if err != nil {
@@ -1877,7 +1898,7 @@ func (db Database) dropTable(ctx *sql.Context, tableName string) error {
 
 	if schema.HasAutoIncrement(sch) {
 		ddb, _ := ds.GetDoltDB(ctx, db.RevisionQualifiedName())
-		err = db.removeTableFromAutoIncrementTracker(ctx, tableName, ddb, ws.Ref())
+		err = db.removeTableFromAutoIncrementTracker(ctx, tblName, ddb, ws.Ref())
 		if err != nil {
 			return err
 		}
@@ -1892,7 +1913,7 @@ func (db Database) dropTable(ctx *sql.Context, tableName string) error {
 // otherwise. This operation is expensive if the
 func (db Database) removeTableFromAutoIncrementTracker(
 	ctx *sql.Context,
-	tableName string,
+	tableName doltdb.TableName,
 	ddb *doltdb.DoltDB,
 	ws ref.WorkingSetRef,
 ) error {
@@ -1924,12 +1945,12 @@ func (db Database) removeTableFromAutoIncrementTracker(
 		wses = append(wses, ws)
 	}
 
-	ait, err := db.gs.AutoIncrementTracker(ctx)
+	ait, err := dsess.GetAutoIncrementTracker(ctx, db.gs)
 	if err != nil {
 		return err
 	}
 
-	err = ait.DropTable(ctx, tableName, wses...)
+	err = ait.DropRelation(ctx, tableName, wses...)
 	if err != nil {
 		return err
 	}
@@ -2084,11 +2105,14 @@ func (db Database) createSqlTable(ctx *sql.Context, table string, schemaName str
 	// Prevent any tables that use BINARY, CHAR, VARBINARY, VARCHAR prefixes
 
 	if schema.HasAutoIncrement(doltSch) {
-		ait, err := db.gs.AutoIncrementTracker(ctx)
+		ait, err := dsess.GetAutoIncrementTracker(ctx, db.gs)
 		if err != nil {
 			return err
 		}
-		ait.AddNewTable(tableName.Name)
+		err = ait.AddNewRelation(tableName, doltdb.AutoIncrementState(1))
+		if err != nil {
+			return err
+		}
 	}
 
 	return db.createDoltTable(ctx, tableName.Name, tableName.Schema, root, doltSch)
@@ -2144,11 +2168,14 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, table string, schemaN
 	}
 
 	if schema.HasAutoIncrement(doltSch) {
-		ait, err := db.gs.AutoIncrementTracker(ctx)
+		ait, err := dsess.GetAutoIncrementTracker(ctx, db.gs)
 		if err != nil {
 			return err
 		}
-		ait.AddNewTable(tableName.Name)
+		err = ait.AddNewRelation(tableName, doltdb.AutoIncrementState(1))
+		if err != nil {
+			return err
+		}
 	}
 
 	return db.createDoltTable(ctx, tableName.Name, tableName.Schema, root, doltSch)

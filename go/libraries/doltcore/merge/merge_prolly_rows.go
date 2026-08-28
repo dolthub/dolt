@@ -140,8 +140,8 @@ func mergeAutoIncrementValues(ctx context.Context, tbl, otherTbl, resultTbl *dol
 	if err != nil {
 		return nil, err
 	}
-	if autoVal < mergeAutoVal {
-		autoVal = mergeAutoVal
+	if mergeAutoVal.GreaterThan(autoVal) {
+		return resultTbl.SetAutoIncrementValue(ctx, mergeAutoVal)
 	}
 	return resultTbl.SetAutoIncrementValue(ctx, autoVal)
 }
@@ -491,7 +491,7 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 			return err
 		}
 
-		serializer := message.NewProllyMapSerializer(mergedValDesc, ns.Pool())
+		serializer := message.NewProllyMapSerializer(mergedKeyDesc, mergedValDesc, ns.Pool())
 		mergedRoot, err = tree.ApplyPatches(errCtx, ns, lIdx.Node(), mergedKeyDesc, serializer, patchBuffer)
 		return err
 	})

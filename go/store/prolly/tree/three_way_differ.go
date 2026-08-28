@@ -237,7 +237,7 @@ func (d *ThreeWayDiffer[K, O]) Close() error {
 	return nil
 }
 
-//go:generate stringer -type=diffOp -linecomment
+//go:generate stringer -type=DiffOp -linecomment
 
 type DiffOp uint16
 
@@ -254,7 +254,7 @@ const (
 	DiffOpDivergentModifyResolved               //divergentModifyResolved
 	DiffOpDivergentDeleteConflict               //divergentDeleteConflict
 	DiffOpDivergentModifyConflict               //divergentModifyConflict
-	DiffOpDivergentDeleteResolved               //divergentDeleteConflict
+	DiffOpDivergentDeleteResolved               //divergentDeleteResolved
 )
 
 // ThreeWayDiff is a generic object for encoding a three way diff.

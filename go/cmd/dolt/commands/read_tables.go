@@ -128,16 +128,29 @@ func (cmd ReadTablesCmd) Exec(ctx context.Context, commandStr string, args []str
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
 	}
+	// The remote was opened for this command alone, so close it once we are done reading tables.
+	defer srcDB.Close()
 
 	branches, err := srcDB.GetBranches(ctx)
 	if verr != nil {
 		BuildVerrAndExit("Failed to get remote branches", err)
 	}
 
-	dEnv, verr = initializeShallowCloneRepo(ctx, dEnv, srcDB.Format(), dir, env.GetDefaultBranch(dEnv, branches))
+	dirExisted, _ := dEnv.FS.Exists(dir)
+
+	dEnv, verr = initializeShallowCloneRepo(ctx, dEnv, srcDB.Format(), dir, env.GetDefaultBranch(dEnv, branches), dirExisted)
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
 	}
+
+	// The new database is marked in progress until the very end of this function. Anything that goes wrong
+	// before then leaves a database nothing can open, so remove it rather than leaving it on disk.
+	incompleteEnv := dEnv
+	defer func() {
+		if cerr := actions.AbortIncompleteClone(incompleteEnv, dirExisted); cerr != nil {
+			cli.PrintErrln(cerr.Error())
+		}
+	}()
 
 	destRoot, err := dEnv.WorkingRoot(ctx)
 
@@ -171,6 +184,7 @@ func (cmd ReadTablesCmd) Exec(ctx context.Context, commandStr string, args []str
 	if err != nil {
 		return BuildVerrAndExit("Unable to finish creating the local database.", err)
 	}
+	incompleteEnv = nil
 
 	return 0
 }
@@ -216,13 +230,23 @@ func pullTableValue(ctx context.Context, dEnv *env.DoltEnv, srcDB *doltdb.DoltDB
 	return destRoot, nil
 }
 
-func getRemoteDBAtCommit(ctx context.Context, remoteUrl string, remoteUrlParams map[string]string, commitStr string, dEnv *env.DoltEnv) (*doltdb.DoltDB, doltdb.RootValue, errhand.VerboseError) {
+// getRemoteDBAtCommit opens the remote at |remoteUrl| and resolves |commitStr| in it. The caller owns the
+// returned DoltDB and must close it.
+func getRemoteDBAtCommit(ctx context.Context, remoteUrl string, remoteUrlParams map[string]string, commitStr string, dEnv *env.DoltEnv) (_ *doltdb.DoltDB, _ doltdb.RootValue, verr errhand.VerboseError) {
 	cacheRoot, _ := dEnv.GitCacheRoot()
-	_, srcDB, verr := createRemote(ctx, "temp", remoteUrl, remoteUrlParams, dEnv, cacheRoot)
+	var srcDB *doltdb.DoltDB
+	_, srcDB, verr = createRemote(ctx, "temp", remoteUrl, remoteUrlParams, dEnv, cacheRoot)
 
 	if verr != nil {
 		return nil, nil, verr
 	}
+
+	// Only a successful return hands the database off to the caller; on failure it is ours to close.
+	defer func() {
+		if verr != nil {
+			srcDB.Close()
+		}
+	}()
 
 	cs, err := doltdb.NewCommitSpec(commitStr)
 
@@ -247,23 +271,32 @@ func getRemoteDBAtCommit(ctx context.Context, remoteUrl string, remoteUrlParams 
 	return srcDB, srcRoot, nil
 }
 
-func initializeShallowCloneRepo(ctx context.Context, dEnv *env.DoltEnv, nbf *types.NomsBinFormat, dir, branchName string) (*env.DoltEnv, errhand.VerboseError) {
+func initializeShallowCloneRepo(ctx context.Context, dEnv *env.DoltEnv, nbf *types.NomsBinFormat, dir, branchName string, dirExisted bool) (_ *env.DoltEnv, verr errhand.VerboseError) {
 	var err error
-	dEnv, err = actions.EnvForClone(ctx, nbf, env.NoRemote, dir, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
+	newEnv, err := actions.EnvForClone(ctx, nbf, env.NoRemote, dir, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
 
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
 	}
 
-	err = actions.InitEmptyClonedRepo(ctx, dEnv)
+	// EnvForClone marked the directory in progress, so a failure here must take the directory with it.
+	defer func() {
+		if verr != nil {
+			if cerr := actions.AbortIncompleteClone(newEnv, dirExisted); cerr != nil {
+				cli.PrintErrln(cerr.Error())
+			}
+		}
+	}()
+
+	err = actions.InitEmptyClonedRepo(ctx, newEnv)
 	if err != nil {
 		return nil, errhand.BuildDError("Unable to initialize repo.").AddCause(err).Build()
 	}
 
-	err = dEnv.InitializeRepoState(ctx, branchName)
+	err = newEnv.InitializeRepoState(ctx, branchName)
 	if err != nil {
 		return nil, errhand.BuildDError("Unable to initialize repo.").AddCause(err).Build()
 	}
 
-	return dEnv, nil
+	return newEnv, nil
 }

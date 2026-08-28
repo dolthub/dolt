@@ -74,7 +74,23 @@ func (bsp *noConjoinBlobstorePersister) ConjoinAll(ctx context.Context, behavior
 
 // Open a table named |name|, containing |chunkCount| chunks.
 func (bsp *noConjoinBlobstorePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
-	return newBSTableChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, stats)
+	cs, err := newBSTableChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, stats)
+	if err == nil {
+		return cs, nil
+	}
+
+	// The table may exist in archive format (<name>.darc), e.g. when table
+	// files written by a local archive-enabled store are copied to this
+	// blobstore during a push. Mirror blobstorePersister.Open's fallback.
+	if blobstore.IsNotFoundError(err) {
+		source, err := newBSArchiveChunkSource(ctx, bsp.bs, name, bsp.q, stats)
+		if err != nil {
+			return nil, err
+		}
+		return source, nil
+	}
+
+	return nil, err
 }
 
 func (bsp *noConjoinBlobstorePersister) Exists(ctx context.Context, name string, chunkCount uint32, stats *Stats) (bool, io.Closer, error) {

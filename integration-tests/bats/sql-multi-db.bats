@@ -129,3 +129,28 @@ seed_repos_with_tables_with_use_statements() {
         USE repo2;
         call dolt_fetch();" -r csv
 }
+
+@test "sql-multi-db: duplicate database directories are skipped with a warning and outer database is preserved" {
+    mkdir dupdb
+    (
+        cd dupdb
+        dolt init
+        dolt sql -q "CREATE TABLE outer_tbl (pk int primary key);"
+
+        mkdir dupdb
+        (
+            cd dupdb
+            dolt init
+            dolt sql -q "CREATE TABLE inner_tbl (pk int primary key);"
+        )
+
+        run dolt sql -r csv -q "SHOW DATABASES; SHOW TABLES;"
+        [ "$status" -eq 0 ]
+        [[ "$output" =~ "skipping duplicate database directory" ]] || false
+        [[ "$output" =~ "database=dupdb" ]] || false
+        [[ "$output" =~ "existing_database=dupdb" ]] || false
+
+        [[ "$output" =~ "outer_tbl" ]] || false
+        [[ ! "$output" =~ "inner_tbl" ]] || false
+    )
+}

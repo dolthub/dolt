@@ -21,12 +21,11 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 
 	"github.com/sirupsen/logrus"
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
 	"google.golang.org/grpc"
 
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
@@ -145,11 +144,6 @@ func NewServer(args ServerArgs) (*Server, error) {
 	if args.HttpInterceptor != nil {
 		handler = args.HttpInterceptor(handler)
 	}
-	if args.HttpListenAddr == args.GrpcListenAddr {
-		handler = s.grpcMultiplexHandler(s.grpcSrv, handler)
-	} else {
-		s.wg.Add(2)
-	}
 
 	s.httpListenAddr = args.HttpListenAddr
 	s.httpSrv = http.Server{
@@ -157,12 +151,46 @@ func NewServer(args ServerArgs) (*Server, error) {
 		Handler: handler,
 	}
 
+	if args.HttpListenAddr == args.GrpcListenAddr {
+		s.httpSrv.Handler = s.grpcMultiplexHandler(s.grpcSrv, handler)
+		// gRPC clients speak HTTP/2 with prior knowledge on a cleartext
+		// listener, so we have to accept h2c in addition to HTTP/1 and
+		// h2-over-TLS on this listener.
+		protocols := new(http.Protocols)
+		protocols.SetHTTP1(true)
+		protocols.SetHTTP2(true)
+		protocols.SetUnencryptedHTTP2(true)
+		s.httpSrv.Protocols = protocols
+		if s.tlsConfig != nil {
+			s.tlsConfig = withH2ALPN(s.tlsConfig)
+		}
+	} else {
+		s.wg.Add(2)
+	}
+
 	return s, nil
 }
 
+// withH2ALPN returns cfg with "h2" advertised for ALPN, preferred
+// over HTTP/1.1. This is necessary because net/http only serves
+// HTTP/2 over TLS connections which negotiated it.
+func withH2ALPN(cfg *tls.Config) *tls.Config {
+	if slices.Contains(cfg.NextProtos, "h2") {
+		return cfg
+	}
+	protos := make([]string, 0, len(cfg.NextProtos)+2)
+	protos = append(protos, "h2")
+	protos = append(protos, cfg.NextProtos...)
+	if !slices.Contains(protos, "http/1.1") {
+		protos = append(protos, "http/1.1")
+	}
+	cfg = cfg.Clone()
+	cfg.NextProtos = protos
+	return cfg
+}
+
 func (s *Server) grpcMultiplexHandler(grpcSrv *grpc.Server, handler http.Handler) http.Handler {
-	h2s := &http2.Server{}
-	newHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.ProtoMajor == 2 && strings.HasPrefix(r.Header.Get("Content-Type"), "application/grpc") {
 			s.grpcHttpReqsWG.Add(1)
 			defer s.grpcHttpReqsWG.Done()
@@ -171,7 +199,6 @@ func (s *Server) grpcMultiplexHandler(grpcSrv *grpc.Server, handler http.Handler
 			handler.ServeHTTP(w, r)
 		}
 	})
-	return h2c.NewHandler(newHandler, h2s)
 }
 
 type Listeners struct {
@@ -254,21 +281,25 @@ func (s *Server) Serve(listeners Listeners) {
 	go func() {
 		defer s.wg.Done()
 		<-s.stopChan
-		logrus.Traceln("Calling httpSrv.Shutdown")
-		s.httpSrv.Shutdown(context.Background())
-		logrus.Traceln("Finished calling httpSrv.Shutdown")
 
 		// If we are multiplexing HTTP and gRPC requests on the same
 		// listener, we need to stop the gRPC server here as well. We
 		// cannot stop it gracefully, but if we stop it forcefully
 		// here, we guarantee all the handler threads are cleaned up
-		// before we return.
+		// before we return. This has to happen before the Shutdown
+		// below, since the gRPC handlers run on connections owned by
+		// httpSrv and Shutdown will not return while they are still
+		// in flight.
 		if listeners.grpc == nil {
 			logrus.Traceln("Calling grpcSrv.Stop")
 			s.grpcSrv.Stop()
 			s.grpcHttpReqsWG.Wait()
 			logrus.Traceln("Finished calling grpcSrv.Stop")
 		}
+
+		logrus.Traceln("Calling httpSrv.Shutdown")
+		s.httpSrv.Shutdown(context.Background())
+		logrus.Traceln("Finished calling httpSrv.Shutdown")
 	}()
 
 	s.wg.Wait()

@@ -618,7 +618,7 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 		// For now, create a Dolt commit from every data update. Eventually, we'll want to make this configurable.
 		// We commit to every database that we saw had a dirty session – these identify the databases where we have
 		// run DML commands through the engine. We also commit to every database that was modified through a RowEvent,
-		// which is all tracked through the applier's databasesWithUncommitedChanges property – these don't show up
+		// which is all tracked through the applier's databasesWithUncommittedChanges property – these don't show up
 		// as dirty in our session, since we used TableWriter to update them.
 		a.addDatabasesWithUncommittedChanges(databasesToCommit...)
 		for _, database := range a.databasesWithUncommittedChanges() {

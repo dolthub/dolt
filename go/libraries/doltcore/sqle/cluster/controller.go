@@ -120,8 +120,10 @@ type Controller struct {
 
 	role Role
 
-	mysqlDb          *mysql_db.MySQLDb
-	mysqlDbPersister *replicatingMySQLDbPersister
+	// replicaAuthPersister applies auth payloads replicated from a primary when this server is a standby.
+	replicaAuthPersister ReplicaAuthPersister
+
+	authDbPersister *replicatingAuthDbPersister
 
 	branchControlController *branch_control.Controller
 	bcReplication           *branchControlReplication
@@ -129,7 +131,7 @@ type Controller struct {
 	lgr *logrus.Logger
 
 	replicationClients []*replicationServiceClient
-	mysqlDbReplicas    []*mysqlDbReplica
+	authDbReplicas     []*authDbReplica
 	commithooks        []*commithook
 
 	priv ed25519.PrivateKey
@@ -218,18 +220,18 @@ func NewController(lgr *logrus.Logger, cfg servercfg.ClusterConfig, pCfg config.
 	if err != nil {
 		return nil, err
 	}
-	ret.mysqlDbReplicas = make([]*mysqlDbReplica, len(ret.replicationClients))
-	for i := range ret.mysqlDbReplicas {
+	ret.authDbReplicas = make([]*authDbReplica, len(ret.replicationClients))
+	for i := range ret.authDbReplicas {
 		bo := backoff.NewExponentialBackOff()
 		bo.InitialInterval = time.Second
 		bo.MaxInterval = time.Minute
 		bo.MaxElapsedTime = 0
-		ret.mysqlDbReplicas[i] = &mysqlDbReplica{
+		ret.authDbReplicas[i] = &authDbReplica{
 			lgr:     lgr.WithFields(logrus.Fields{}),
 			client:  ret.replicationClients[i],
 			backoff: bo,
 		}
-		ret.mysqlDbReplicas[i].cond = sync.NewCond(&ret.mysqlDbReplicas[i].mu)
+		ret.authDbReplicas[i].cond = sync.NewCond(&ret.authDbReplicas[i].mu)
 	}
 
 	ret.outstandingDropDatabases = make(map[string]*databaseDropReplication)
@@ -240,7 +242,7 @@ func NewController(lgr *logrus.Logger, cfg servercfg.ClusterConfig, pCfg config.
 func (c *Controller) Run() {
 	var wg sync.WaitGroup
 	wg.Go(c.jwks.Run)
-	wg.Go(c.mysqlDbPersister.Run)
+	wg.Go(c.authDbPersister.Run)
 	wg.Go(c.bcReplication.Run)
 	wg.Wait()
 	for _, client := range c.replicationClients {
@@ -250,7 +252,7 @@ func (c *Controller) Run() {
 
 func (c *Controller) GracefulStop() error {
 	c.jwks.GracefulStop()
-	c.mysqlDbPersister.GracefulStop()
+	c.authDbPersister.GracefulStop()
 	c.bcReplication.GracefulStop()
 	return nil
 }
@@ -705,7 +707,7 @@ func (c *Controller) setRoleAndEpoch(role string, epoch int, opts roleTransition
 		for _, h := range c.commithooks {
 			h.setRole(c.role)
 		}
-		c.mysqlDbPersister.setRole(c.role)
+		c.authDbPersister.setRole(c.role)
 		c.bcReplication.setRole(c.role)
 	}
 	_ = c.persistVariables()
@@ -792,17 +794,44 @@ func (c *Controller) RemoteSrvServerArgs(ctxFactory func(context.Context) (*sql.
 	return args, nil
 }
 
-func (c *Controller) HookMySQLDbPersister(persister MySQLDbPersister, mysqlDb *mysql_db.MySQLDb) MySQLDbPersister {
+func (c *Controller) HookMySQLDbPersister(persister AuthDbPersister, mysqlDb *mysql_db.MySQLDb) AuthDbPersister {
 	if c != nil {
-		c.mysqlDb = mysqlDb
-		c.mysqlDbPersister = &replicatingMySQLDbPersister{
+		c.replicaAuthPersister = mysqlDbReplicaPersister{mysqlDb}
+		c.authDbPersister = &replicatingAuthDbPersister{
 			base:     persister,
-			replicas: c.mysqlDbReplicas,
+			replicas: c.authDbReplicas,
 		}
-		c.mysqlDbPersister.setRole(c.role)
-		persister = c.mysqlDbPersister
+		c.authDbPersister.setRole(c.role)
+		persister = c.authDbPersister
 	}
 	return persister
+}
+
+// ReplicatingAuthPersister is an AuthDbPersister whose Persist replicates the
+// payload to cluster standbys and blocks until they ack, subject to
+// dolt_cluster_ack_writes_timeout_secs.
+type ReplicatingAuthPersister interface {
+	AuthDbPersister
+	// SendToReplicas is the same as Persist, but does not block until standbys ack.
+	// Waiters installed on |rsc|, and can then be waited on by the caller with dsess.WaitForReplicationController.
+	SendToReplicas(ctx *sql.Context, data []byte, rsc *doltdb.ReplicationStatusController) error
+}
+
+// SetAuthReplicator sets the auth replicator for this controller.
+//
+// Dolt installs a users-and-grants (mysql.db) implementation via HookMySQLDbPersister during engine construction;
+// applications with their own auth store (e.g. Doltgres's auth.db) override this default later, but before replication begins.
+func (c *Controller) SetAuthReplicator(base AuthDbPersister, replicaPersister ReplicaAuthPersister) ReplicatingAuthPersister {
+	if c == nil {
+		return nil
+	}
+	c.replicaAuthPersister = replicaPersister
+	c.authDbPersister = &replicatingAuthDbPersister{
+		base:     base,
+		replicas: c.authDbReplicas,
+	}
+	c.authDbPersister.setRole(c.role)
+	return c.authDbPersister
 }
 
 func (c *Controller) HookBranchControlPersistence(controller *branch_control.Controller, fs filesys.Filesys) {
@@ -845,7 +874,7 @@ func (c *Controller) HookBranchControlPersistence(controller *branch_control.Con
 func (c *Controller) RegisterGrpcServices(ctxFactory func(context.Context) (*sql.Context, error), srv *grpc.Server) {
 	replicationapi.RegisterReplicationServiceServer(srv, &replicationServiceServer{
 		ctxFactory:           ctxFactory,
-		mysqlDb:              c.mysqlDb,
+		authPersistence:      c.replicaAuthPersister,
 		branchControl:        c.branchControlController,
 		branchControlFilesys: c.branchControlFilesys,
 		dropDatabase:         c.dropDatabase,
@@ -904,7 +933,7 @@ func (c *Controller) gracefulTransitionToStandby(saveConnID, minCaughtUpStandbys
 		hookStates, hookErr = c.waitForHooksToReplicate(waitForHooksToReplicateTimeout)
 	})
 	wg.Go(func() {
-		mysqlStates, mysqlErr = c.mysqlDbPersister.waitForReplication(waitForHooksToReplicateTimeout)
+		mysqlStates, mysqlErr = c.authDbPersister.waitForReplication(waitForHooksToReplicateTimeout)
 	})
 	wg.Go(func() {
 		bcStates, bcErr = c.bcReplication.waitForReplication(waitForHooksToReplicateTimeout)
@@ -1112,10 +1141,6 @@ func (c *Controller) refreshAutoIncrementTrackersForSessionDatabases() error {
 			// Non-versioned DBs don't participate in AUTO_INCREMENT global state
 			continue
 		}
-		ai, err := gsp.GetGlobalState().AutoIncrementTracker(sqlCtx)
-		if err != nil {
-			return fmt.Errorf("cluster/controller: auto-inc refresh: %s: tracker: %w", name, err)
-		}
 
 		// Get working set roots only
 		state, ok, err := sess.LookupDbState(sqlCtx, name)
@@ -1126,7 +1151,7 @@ func (c *Controller) refreshAutoIncrementTrackersForSessionDatabases() error {
 			// Not loaded in session; defer to lazy initialization on first use
 			continue
 		}
-		if err := ai.InitWithRoots(sqlCtx, state.WorkingSet()); err != nil {
+		if err := gsp.GetGlobalState().InitWithRoots(sqlCtx, state.WorkingSet()); err != nil {
 			return fmt.Errorf("cluster/controller: auto-inc refresh: %s: init: %w", name, err)
 		}
 	}

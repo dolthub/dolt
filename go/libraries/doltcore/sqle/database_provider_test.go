@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -30,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -350,4 +352,141 @@ func TestCreatingDatabaseReservation(t *testing.T) {
 			t.Fatal("AllDatabases blocked while a name was reserved for cloning; reservation must not gate enumeration")
 		}
 	})
+}
+
+// headCommit returns the commit at the head of the named branch.
+func headCommit(ctx context.Context, t *testing.T, ddb *doltdb.DoltDB, branch string) *doltdb.Commit {
+	t.Helper()
+	cs, err := doltdb.NewCommitSpec(branch)
+	require.NoError(t, err)
+	optCmt, err := ddb.Resolve(ctx, cs, nil)
+	require.NoError(t, err)
+	commit, ok := optCmt.ToCommit()
+	require.True(t, ok)
+	return commit
+}
+
+func TestResolveCaseVariantBranchConflict(t *testing.T) {
+	// See https://github.com/dolthub/dolt/issues/11270
+	engine, sqlCtx, _, dEnv := newProviderEngine(t)
+	ctx := context.Background()
+	ddb := dEnv.DoltDB(ctx)
+
+	// mustQuery asserts no error occurs when running |q| and returns resulting rows.
+	mustQuery := func(q string) []sql.Row {
+		t.Helper()
+		rows, err := QueryRows(sqlCtx, engine, q)
+		require.NoError(t, err)
+		return rows
+	}
+
+	mustQuery("create table t (a int primary key)")
+	mustQuery("insert into t values (111)")
+	mustQuery("call dolt_commit('-Am', 'lower')")
+	mustQuery("update t set a = 222")
+	mustQuery("call dolt_commit('-am', 'upper')")
+
+	require.NoError(t, ddb.NewBranchAtCommitAllowCaseConflict(ctx, ref.NewBranchRef("br"), headCommit(ctx, t, ddb, "main~1"), nil))
+	require.NoError(t, ddb.NewBranchAtCommitAllowCaseConflict(ctx, ref.NewBranchRef("BR"), headCommit(ctx, t, ddb, "main"), nil))
+
+	// Each casing folds onto the branches above, making it ambiguous which branch to read.
+	for _, db := range []string{"dolt/br", "dolt/BR", "dolt/Br"} {
+		_, err := QueryRows(sqlCtx, engine, "select a from `"+db+"`.t")
+		require.ErrorIs(t, err, doltdb.ErrAmbiguousRefName)
+		require.ErrorContains(t, err, "could be BR, br")
+	}
+
+	mustQuery("call dolt_branch('-m', 'BR', 'keepBR')")
+
+	require.Equal(t, []sql.Row{{int32(111)}}, mustQuery("select a from `dolt/br`.t"))
+	require.Equal(t, []sql.Row{{int32(222)}}, mustQuery("select a from `dolt/keepBR`.t"))
+}
+
+// TestCreateDatabaseFailureLeavesNothingBehind covers the whole of what a failed CREATE DATABASE must undo: the
+// directory it made, the in-progress marker inside it, and the DoltDB it opened. Only a process that dies
+// outright should leave any of that on disk.
+func TestCreateDatabaseFailureLeavesNothingBehind(t *testing.T) {
+	ctx := context.Background()
+	dEnv := dtestutils.CreateTestEnvForLocalFilesystem()
+	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(ctx), editor.Options{})
+	require.NoError(t, err)
+	engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db)
+	require.NoError(t, err)
+	pro := dsess.DSessFromSess(sqlCtx.Session).Provider().(*DoltDatabaseProvider)
+
+	failCreate := true
+	pro.AddInitDatabaseHook(func(_ *sql.Context, _ *DoltDatabaseProvider, _ string, _ *env.DoltEnv, _ dsess.SqlDatabase) error {
+		if failCreate {
+			return errors.New("there was an error initializing this database. abort!")
+		}
+		return nil
+	})
+
+	require.Error(t, ExecuteSqlOnEngine(sqlCtx, engine, "CREATE DATABASE mytest;"))
+
+	exists, _ := dEnv.FS.Exists("mytest")
+	require.False(t, exists, "a failed CREATE DATABASE must not leave its directory behind")
+
+	// The retry must get a database of its own. If the failed attempt left its DoltDB in the database cache,
+	// this one is handed a store whose files were deleted and writes never reach the new directory.
+	failCreate = false
+	require.NoError(t, ExecuteSqlOnEngine(sqlCtx, engine, "CREATE DATABASE mytest;"))
+	sqlCtx.SetCurrentDatabase("mytest")
+	require.NoError(t, ExecuteSqlOnEngine(sqlCtx, engine, "CREATE TABLE t (pk int primary key);\nINSERT INTO t VALUES (1);"))
+
+	newFs, err := dEnv.FS.WithWorkingDir("mytest")
+	require.NoError(t, err)
+	assert.False(t, dbfactory.IsDatabaseInProgress(newFs), "the retried CREATE DATABASE must clear the marker")
+
+	// Reopen the database from disk to prove its contents landed in its own directory.
+	absPath, err := newFs.Abs("")
+	require.NoError(t, err)
+	require.NoError(t, dbfactory.DeleteFromSingletonCache(dbfactory.SingletonCacheKeyForDatabaseDir(absPath), true))
+	reopened := env.Load(ctx, env.GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, "test")
+	require.NoError(t, reopened.DBLoadError)
+	require.NoError(t, reopened.RSLoadErr)
+	t.Cleanup(func() { reopened.Close() })
+
+	root, err := reopened.WorkingRoot(ctx)
+	require.NoError(t, err)
+	_, ok, err := root.GetTable(ctx, doltdb.TableName{Name: "t"})
+	require.NoError(t, err)
+	assert.True(t, ok, "the retried database's table must be on disk in its own directory")
+}
+
+func TestDuplicateDatabaseNameSkipped(t *testing.T) {
+	ctx := context.Background()
+
+	dEnv1 := dtestutils.CreateTestEnvWithName("dupdb")
+	db1, err := NewDatabase(ctx, "dupdb", dEnv1.DbData(ctx), editor.Options{})
+	require.NoError(t, err)
+
+	dEnv2 := dtestutils.CreateTestEnvWithName("dupdb2")
+	db2, err := NewDatabase(ctx, "dupdb", dEnv2.DbData(ctx), editor.Options{})
+	require.NoError(t, err)
+
+	pro, err := NewDoltDatabaseProviderWithDatabases(
+		"main",
+		dEnv1.FS,
+		[]dsess.SqlDatabase{db1, db2},
+		[]filesys.Filesys{dEnv1.FS, dEnv2.FS},
+		sql.EngineOverrides{},
+	)
+	require.NoError(t, err)
+
+	config, _ := dEnv1.Config.GetConfig(env.GlobalConfig)
+	sqlCtx := NewTestSQLCtxWithProvider(ctx, pro, config, nil, nil)
+	dbs := pro.AllDatabases(sqlCtx)
+	assert.Len(t, dbs, 1)
+
+	db, err := pro.Database(sqlCtx, "dupdb")
+	require.NoError(t, err)
+	assert.Same(t, db1.GetDoltDB(), db.(Database).GetDoltDB())
+}
+
+func TestCloneDatabaseDuplicateNameRejected(t *testing.T) {
+	_, sqlCtx, pro, _ := newProviderEngine(t)
+	err := pro.CloneDatabaseFromRemote(sqlCtx, "DOLT", "main", "origin", "file:///nonexistent", -1, nil)
+	require.Error(t, err)
+	assert.True(t, sql.ErrDatabaseExists.Is(err))
 }

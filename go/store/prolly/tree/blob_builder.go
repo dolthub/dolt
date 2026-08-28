@@ -21,7 +21,6 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/goccy/go-json"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
@@ -256,7 +255,7 @@ func (b *JSONDoc) ToJSONDocument(ctx context.Context) (sqltypes.JSONDocument, er
 		return sqltypes.JSONDocument{}, err
 	}
 	var doc sqltypes.JSONDocument
-	err = json.Unmarshal(buf, &doc.Val)
+	err = sqltypes.JsonUnmarshal(buf, &doc.Val)
 	if err != nil {
 		return sqltypes.JSONDocument{}, err
 	}

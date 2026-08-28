@@ -51,6 +51,10 @@ table ProllyTreeNode {
   tree_count:uint64;
   // prolly tree level, 0 for leaf nodes
   tree_level:uint8;
+
+  // offsets for each address (if any) in |key_items|
+  // (eg key tuples containing out-of-band adaptive values)
+  key_address_offsets:[uint16];
 }
 
 // KEEP THIS IN SYNC WITH fileidentifiers.go

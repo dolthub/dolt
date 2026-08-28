@@ -15,11 +15,13 @@
 package doltdb
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -1242,6 +1244,16 @@ func (ddb *DoltDB) HasBranch(ctx context.Context, branchName string) (string, bo
 	return "", false, nil
 }
 
+// BranchByNameInsensitive returns the branch whose name matches ignoring case, or nil if none does.
+// Matching more than one is ErrAmbiguousRefName.
+func (ddb *DoltDB) BranchByNameInsensitive(ctx context.Context, name string) (ref.DoltRef, error) {
+	branches, err := ddb.GetBranches(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return matchRefInsensitive(branches, name)
+}
+
 // HasRemoteTrackingBranch returns whether the DB has a remote tracking branch with the name given, case-insensitive.
 // Returns the case-sensitive matching branch if found, as well as a bool indicating if there was a case-insensitive match,
 // remote tracking branchRef that is the only match for the branchName and any error.
@@ -1486,40 +1498,50 @@ func visitDatasets(ctx context.Context, refTypeFilter map[ref.RefType]struct{}, 
 	})
 }
 
-// GetRefByNameInsensitive searches this Dolt database's branch, tag, and head refs for a case-insensitive
-// match of the specified ref name. If a matching DoltRef is found, it is returned; otherwise an error is returned.
+// GetRefByNameInsensitive searches this Dolt database's branch, tag, and head refs
+// for a case-insensitive match of |refName|. If more than one ref differs by case,
+// ErrAmbiguousRefName is returned.
 func (ddb *DoltDB) GetRefByNameInsensitive(ctx context.Context, refName string) (ref.DoltRef, error) {
-	branchRefs, err := ddb.GetBranches(ctx)
-	if err != nil {
-		return nil, err
-	}
-	for _, branchRef := range branchRefs {
-		if strings.EqualFold(branchRef.GetPath(), refName) {
-			return branchRef, nil
+	for _, refs := range []func(context.Context) ([]ref.DoltRef, error){ddb.GetBranches, ddb.GetHeadRefs, ddb.GetTags} {
+		candidates, err := refs(ctx)
+		if err != nil {
+			return nil, err
 		}
-	}
-
-	headRefs, err := ddb.GetHeadRefs(ctx)
-	if err != nil {
-		return nil, err
-	}
-	for _, headRef := range headRefs {
-		if strings.EqualFold(headRef.GetPath(), refName) {
-			return headRef, nil
+		match, err := matchRefInsensitive(candidates, refName)
+		if err != nil {
+			return nil, err
 		}
-	}
-
-	tagRefs, err := ddb.GetTags(ctx)
-	if err != nil {
-		return nil, err
-	}
-	for _, tagRef := range tagRefs {
-		if strings.EqualFold(tagRef.GetPath(), refName) {
-			return tagRef, nil
+		if match != nil {
+			return match, nil
 		}
 	}
 
 	return nil, ref.ErrInvalidRefSpec
+}
+
+// matchRefInsensitive returns a ref.DoltRef with a path case-insensitively matches
+// |name|, or nil. If more than one ref differs by case, ErrAmbiguousRefName is returned.
+func matchRefInsensitive(refs []ref.DoltRef, name string) (ref.DoltRef, error) {
+	var matches []ref.DoltRef
+	for _, r := range refs {
+		if strings.EqualFold(r.GetPath(), name) {
+			matches = append(matches, r)
+		}
+	}
+
+	switch len(matches) {
+	case 0:
+		return nil, nil
+	case 1:
+		return matches[0], nil
+	}
+
+	names := make([]string, len(matches))
+	for i, m := range matches {
+		names[i] = m.GetPath()
+	}
+	slices.Sort(names)
+	return nil, fmt.Errorf("%w: %q could be %s", ErrAmbiguousRefName, name, strings.Join(names, ", "))
 }
 
 func (ddb *DoltDB) GetRefsOfType(ctx context.Context, refTypeFilter map[ref.RefType]struct{}) ([]ref.DoltRef, error) {
@@ -1540,15 +1562,63 @@ func (ddb *DoltDB) GetRefsOfTypeByNomsRoot(ctx context.Context, refTypeFilter ma
 	return refs, err
 }
 
+// failOnCaseConflict returns a datas.Precondition that rejects creating
+// a ref when an existing ref of the same type differs from it only by case,
+// with an ExistingRefError.
+//
+// Consequently, tags and branches can share names. Explictily |except| refs
+// from collisions when, for example, a branch is renamed to a different casing.
+func failOnCaseConflict(except ...ref.DoltRef) datas.Precondition {
+	return func(ctx context.Context, datasets prolly.AddressMap, targetID string) error {
+		targetRef, err := ref.Parse(targetID) // defaults to ref.BranchRefType prefix
+		if err != nil {
+			return nil
+		}
+		sameType := []byte(ref.PrefixForType(targetRef.GetType()))
+		target := []byte(targetID)
+		return datasets.IterAllBytes(ctx, func(name []byte, _ hash.Hash) error {
+			if !bytes.HasPrefix(name, sameType) || bytes.Equal(name, target) || !bytes.EqualFold(name, target) {
+				return nil
+			}
+			existing, err := ref.Parse(string(name))
+			if err != nil {
+				return err
+			}
+			for _, e := range except {
+				if ref.Equals(e, existing) {
+					return nil
+				}
+			}
+			return &ExistingRefError{Ref: existing}
+		})
+	}
+}
+
 // maxNewBranchWorkingSetRetries bounds the number of times NewBranchAtCommit will
 // re-resolve and retry its working set update after losing a race with another
 // concurrent writer to the same working set ref (e.g. a background auto-GC cycle
 // finalizing at the same time), mirroring dsess's maxTxCommitRetries.
 const maxNewBranchWorkingSetRetries = 5
 
-// NewBranchAtCommit creates a new branch with HEAD at the commit given. Branch names must pass IsValidUserBranchName.
-// Silently overwrites any existing branch with the same name given, if one exists.
-func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef, commit *Commit, replicationStatus *ReplicationStatusController) error {
+// NewBranchAtCommit creates a new branch pointing at the given commit
+// and updates its working set. Branch names must pass IsValidUserBranchName
+// and avoid case-conflicting names.
+//
+// |except| an existing branch if the case conflict is intended. A name
+// that exactly matches an existing name overwrites its branch, repointing
+// it at the given commit.
+func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef, commit *Commit, replicationStatus *ReplicationStatusController, except ...ref.DoltRef) error {
+	return ddb.newBranchAtCommit(ctx, branchRef, commit, replicationStatus, failOnCaseConflict(except...))
+}
+
+// NewBranchAtCommitAllowCaseConflict is NewBranchAtCommit without the
+// case conflict check, for reproducing branches that already exist
+// elsewhere (e.g., replication, rewriting history).
+func (ddb *DoltDB) NewBranchAtCommitAllowCaseConflict(ctx context.Context, branchRef ref.DoltRef, commit *Commit, replicationStatus *ReplicationStatusController) error {
+	return ddb.newBranchAtCommit(ctx, branchRef, commit, replicationStatus)
+}
+
+func (ddb *DoltDB) newBranchAtCommit(ctx context.Context, branchRef ref.DoltRef, commit *Commit, replicationStatus *ReplicationStatusController, preconditions ...datas.Precondition) error {
 	if !IsValidBranchRef(branchRef) {
 		panic(fmt.Sprintf("invalid branch name %s, use IsValidUserBranchName check", branchRef.String()))
 	}
@@ -1563,7 +1633,7 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef,
 		return err
 	}
 
-	_, err = ddb.db.SetHead(ctx, ds, addr, "")
+	_, err = ddb.db.SetHead(ctx, ds, addr, "", preconditions...)
 	if err != nil {
 		return err
 	}
@@ -2133,6 +2203,24 @@ func (ddb *DoltDB) Clone(ctx context.Context, tempTableDir string, destDB *DoltD
 		ddb.getAddrs,
 		tempTableDir,
 		eventCh)
+}
+
+// PruneUnreferencedTableFilesWithGrace reclaims table files in this database's
+// storage directories that no manifest references, provided nothing in those
+// directories has been modified within |grace|.
+//
+// This exists for backup destinations, which are opened without a chunk
+// journal and so are written without a cross-process lock: an interrupted sync
+// strands a complete, unreferenced table file that nothing else reclaims.
+//
+// Returns [nbs.ErrGracePruneUnsupported] for stores this does not apply to.
+func (ddb *DoltDB) PruneUnreferencedTableFilesWithGrace(ctx context.Context, grace time.Duration) (nbs.PruneStats, error) {
+	cs := datas.ChunkStoreFromDatabase(ddb.db)
+	pruner, ok := cs.(nbs.GracePruner)
+	if !ok {
+		return nbs.PruneStats{}, nbs.ErrGracePruneUnsupported
+	}
+	return pruner.PruneUnreferencedWithGrace(ctx, grace)
 }
 
 // Returns |true| if the underlying ChunkStore for this DoltDB implements |chunks.TableFileStore|.

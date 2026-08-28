@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess/mutexmap"
@@ -68,7 +69,7 @@ func TestCoerceAutoIncrementValue(t *testing.T) {
 	for _, test := range tests {
 		name := fmt.Sprintf("Coerce %v to %v", test.val, test.exp)
 		t.Run(name, func(t *testing.T) {
-			act, err := CoerceAutoIncrementValue(ctx, test.val)
+			act, err := doltdb.CoerceAutoIncrementValue(ctx, test.val)
 			if test.err {
 				assert.Error(t, err)
 			} else {
@@ -83,26 +84,58 @@ func TestInitWithRoots(t *testing.T) {
 	t.Run("EmptyRoots", func(t *testing.T) {
 		ait := AutoIncrementTracker{
 			dbName:     "test_database",
-			sequences:  &sync.Map{},
+			sequences:  &SyncMap[doltdb.TableName, doltdb.AutoIncrementState]{},
 			mm:         mutexmap.NewMutexMap(),
 			init:       make(chan struct{}),
 			cancelInit: make(chan struct{}),
 		}
-		go ait.initWithRoots(context.Background())
+		go ait.initWithRoots(context.Background(), ait.init)
 		assert.NoError(t, ait.waitForInit())
 	})
 	t.Run("CloseCancelsInit", func(t *testing.T) {
 		ait := AutoIncrementTracker{
 			dbName:     "test_database",
-			sequences:  &sync.Map{},
+			sequences:  &SyncMap[doltdb.TableName, doltdb.AutoIncrementState]{},
 			mm:         mutexmap.NewMutexMap(),
 			init:       make(chan struct{}),
 			cancelInit: make(chan struct{}),
 		}
-		go ait.initWithRoots(context.Background(), blockingRoot{})
+		go ait.initWithRoots(context.Background(), ait.init, blockingRoot{})
 		ait.Close()
 		assert.Error(t, ait.waitForInit())
 	})
+}
+
+// TestConcurrentInitWithRoots reproduces a race where overlapping InitWithRoots
+// calls on the same tracker (e.g. from concurrent dolt_reset/dolt_checkout on
+// different sessions against the same database) could each observe the prior
+// |init| channel already closed and then race to install their own
+// replacement channel.
+func TestConcurrentInitWithRoots(t *testing.T) {
+	ait := AutoIncrementTracker{
+		dbName:     "test_database",
+		sequences:  &SyncMap[doltdb.TableName, doltdb.AutoIncrementState]{},
+		mm:         mutexmap.NewMutexMap(),
+		init:       make(chan struct{}),
+		cancelInit: make(chan struct{}),
+	}
+	close(ait.init) // starts "already initialized", like a live tracker between resets
+
+	const numConcurrentCallers = 50
+	errs := make([]error, numConcurrentCallers)
+	var wg sync.WaitGroup
+	for i := 0; i < numConcurrentCallers; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			errs[i] = ait.InitWithRoots(context.Background())
+		}(i)
+	}
+	wg.Wait()
+
+	for _, err := range errs {
+		require.NoError(t, err)
+	}
 }
 
 type blockingRoot struct {
@@ -116,3 +149,44 @@ func (blockingRoot) ResolveRootValue(ctx context.Context) (doltdb.RootValue, err
 func (blockingRoot) HashOf() (hash.Hash, error) {
 	return hash.Hash{}, nil
 }
+
+// TestNewSequenceTrackerFromRootsSurvivesCallerContextCancellation reproduces a race condition
+// with initialization of sequence trackers.
+func TestNewSequenceTrackerFromRootsSurvivesCallerContextCancellation(t *testing.T) {
+	callerCtx, cancel := context.WithCancel(context.Background())
+	root := releasableRoot{release: make(chan struct{})}
+
+	ait, err := NewAutoIncrementTracker(callerCtx, "test_database", root)
+	require.NoError(t, err)
+
+	// Cancel the caller's context while the root is still resolving.
+	cancel()
+
+	// Let resolution finish
+	close(root.release)
+
+	require.ErrorIs(t, ait.waitForInit(), errReleasableRootDone)
+}
+
+// releasableRoot blocks ResolveRootValue until |release| is closed, regardless of ctx.
+type releasableRoot struct {
+	release chan struct{}
+}
+
+var _ doltdb.Rootish = releasableRoot{}
+
+func (r releasableRoot) ResolveRootValue(ctx context.Context) (doltdb.RootValue, error) {
+	select {
+	case <-r.release:
+		return nil, errReleasableRootDone
+	case <-ctx.Done():
+		return nil, context.Cause(ctx)
+	}
+}
+
+func (releasableRoot) HashOf() (hash.Hash, error) {
+	return hash.Hash{}, nil
+}
+
+// errReleasableRootDone signals that releasableRoot resolved successfully rather than being canceled.
+var errReleasableRootDone = fmt.Errorf("releasableRoot: released")

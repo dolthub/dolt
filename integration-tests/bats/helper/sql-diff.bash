@@ -7,13 +7,12 @@ _dbg_block() { [ -n "$SQL_DIFF_DEBUG" ] && { printf '%s\n' "$1" >&2; printf '%s\
 # first table header row from CLI diff (data section), as newline list
 _cli_header_cols() {
     awk '
-        /^\s*\|\s*[-+<>]\s*\|/ && last_header != "" { print last_header; exit }
-        /^\s*\|/ { last_header = $0 }
+        /^[[:space:]]*\|[[:space:]]*[-+<>][[:space:]]*\|/ && last_header != "" { print last_header; exit }
+        /^[[:space:]]*\|/ { last_header = $0 }
     ' <<<"$1" \
       | tr '|' '\n' \
       | sed -e 's/^[[:space:]]*//;s/[[:space:]]*$//' \
-      | grep -v -E '^(<|>|)$' \
-      | grep -v '^$'
+      | grep -v -E '^[<>]?$'
 }
 
 # first table header row from SQL diff, strip to_/from_, drop metadata, as newline list
@@ -32,7 +31,7 @@ _sql_data_header_cols() {
 _cli_change_count() {
     awk -F'|' '
         # start counting once we see a data row marker
-        /^\s*\|\s*[-+<>]\s*\|/ { in_table=1 }
+        /^[[:space:]]*\|[[:space:]]*[-+<>][[:space:]]*\|/ { in_table=1 }
         in_table && $2 ~ /^[[:space:]]*[-+<>][[:space:]]*$/ {
             pk=$3
             gsub(/^[[:space:]]+|[[:space:]]+$/, "", pk)

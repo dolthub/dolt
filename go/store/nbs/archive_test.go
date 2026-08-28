@@ -1475,7 +1475,7 @@ func createMixedCompressionArchive(t *testing.T, chunkData [][]byte, useSnappy m
 func readersToSource(readers []archiveReader) []chunkSource {
 	sources := make([]chunkSource, 0, len(readers))
 	for _, r := range readers {
-		ar := &archiveChunkSource{file: "", aRdr: r}
+		ar := &archiveChunkSource{file: "", aRdr: r, blockSize: fileBlockSize}
 		sources = append(sources, ar)
 	}
 	return sources

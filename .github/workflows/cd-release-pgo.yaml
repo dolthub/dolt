@@ -91,7 +91,7 @@ jobs:
         run: go run -mod=readonly ./utils/genminver_validation/ $FILE
         env:
           FILE: ${{ format('{0}/go/libraries/doltcore/servercfg/testdata/minver_validation.txt', github.workspace) }}
-      - uses: EndBug/add-and-commit@v9.1.4
+      - uses: EndBug/add-and-commit@645ecc0dd0a57f4d86d26c0aa5fc42c0a856fbca # v11.0.0
         with:
           message: ${{ format('[ga-bump-release] Update Dolt version to {0} and release v{0}', needs.format-version.outputs.version) }}
           add: ${{ format('["{0}/go/cmd/dolt/doltversion/version.go", "{0}/go/libraries/doltcore/servercfg/yaml_config.go", "{0}/go/libraries/doltcore/servercfg/testdata/minver_validation.txt"]', github.workspace) }}

@@ -9,6 +9,11 @@ TEST_NAME="dolt-tzdata"
 TEST_IMAGE="$TEST_NAME:bookworm-slim"
 
 setup_file() {
+    # Docker isn't available on GitHub's macOS runners
+    if [ "$IS_MAC" = true ]; then
+        command -v docker >/dev/null 2>&1 || skip "docker not found on PATH (expected on macOS runners)"
+    fi
+
     WORKSPACE_ROOT=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
     export WORKSPACE_ROOT
 
@@ -45,6 +50,7 @@ dolt init"
 }
 
 teardown() {
+    command -v docker >/dev/null 2>&1 || return 0
     docker rm -f "$TEST_CONTAINER" >/dev/null 2>&1
 }
 

@@ -227,7 +227,7 @@ func newLeafNode(keys, values []Item) *Node {
 		vv[i] = values[i]
 	}
 
-	s := message.NewProllyMapSerializer(&val.TupleDesc{}, sharedPool)
+	s := message.NewProllyMapSerializer(&val.TupleDesc{}, &val.TupleDesc{}, sharedPool)
 	msg := s.Serialize(kk, vv, nil, 0)
 	n, _, err := NodeFromBytes(msg)
 	if err != nil {
@@ -452,7 +452,7 @@ func MakeTreeForTest(tuples [][2]val.Tuple) (*Node, error) {
 	ns := NewTestNodeStore()
 
 	// todo(andy): move this test
-	s := message.NewProllyMapSerializer(&val.TupleDesc{}, ns.Pool())
+	s := message.NewProllyMapSerializer(&val.TupleDesc{}, &val.TupleDesc{}, ns.Pool())
 	chunker, err := newEmptyChunker(ctx, ns, s)
 	if err != nil {
 		return nil, err

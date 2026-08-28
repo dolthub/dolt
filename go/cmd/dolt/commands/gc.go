@@ -37,7 +37,7 @@ var gcDocs = cli.CommandDocumentationContent{
 	LongDesc: `Searches the repository for data that is no longer referenced and no longer needed.
 
 Dolt GC is generational. When a GC is run, everything reachable from any commit on any branch
-is put into the old generation. Data which is only reachable from uncommited branch HEADs is kept in
+is put into the old generation. Data which is only reachable from uncommitted branch HEADs is kept in
 the new generation. By default, Dolt GC will only visit data in the new generation, and so will never
 collect data from deleted branches which has previously made its way to the old generation from being
 copied during a prior garbage collection.

@@ -374,7 +374,7 @@ func newTree(t *testing.T, ns NodeStore, keyCnt, blobLen, chunkSize int) *Node {
 		}
 	}
 
-	s := message.NewProllyMapSerializer(valDesc, ns.Pool())
+	s := message.NewProllyMapSerializer(keyDesc, valDesc, ns.Pool())
 	chunker, err := newEmptyChunker(ctx, ns, s)
 	require.NoError(t, err)
 	for _, pair := range tuples {

@@ -43,7 +43,7 @@ var remoteDocs = cli.CommandDocumentationContent{
 {{.EmphasisLeft}}add{{.EmphasisRight}}
 Adds a remote named {{.LessThan}}name{{.GreaterThan}} for the repository at {{.LessThan}}url{{.GreaterThan}}. The command dolt fetch {{.LessThan}}name{{.GreaterThan}} can then be used to create and update remote-tracking branches {{.EmphasisLeft}}<name>/<branch>{{.EmphasisRight}}.
 
-The {{.LessThan}}url{{.GreaterThan}} parameter supports url schemes of http, https, aws, gs, and file. The url prefix defaults to https. If the {{.LessThan}}url{{.GreaterThan}} parameter is in the format {{.EmphasisLeft}}<organization>/<repository>{{.EmphasisRight}} then dolt will use the {{.EmphasisLeft}}remotes.default_host{{.EmphasisRight}} from your configuration file (Which will be dolthub.com unless changed).
+The {{.LessThan}}url{{.GreaterThan}} parameter supports url schemes of http, https, aws, s3, gs, and file. The url prefix defaults to https. If the {{.LessThan}}url{{.GreaterThan}} parameter is in the format {{.EmphasisLeft}}<organization>/<repository>{{.EmphasisRight}} then dolt will use the {{.EmphasisLeft}}remotes.default_host{{.EmphasisRight}} from your configuration file (Which will be dolthub.com unless changed).
 
 AWS cloud remote urls should be of the form {{.EmphasisLeft}}aws://[dynamo-table:s3-bucket]/database{{.EmphasisRight}}.  You may configure your aws cloud remote using the optional parameters {{.EmphasisLeft}}aws-region{{.EmphasisRight}}, {{.EmphasisLeft}}aws-creds-type{{.EmphasisRight}}, {{.EmphasisLeft}}aws-creds-file{{.EmphasisRight}}.
 
@@ -53,6 +53,12 @@ aws-creds-type specifies the means by which credentials should be retrieved in o
 	env: Looks for environment variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
 	file: Uses the credentials file specified by the parameter aws-creds-file
 	
+S3-compatible remote urls should be of the form {{.EmphasisLeft}}s3://bucket/database{{.EmphasisRight}}. They work against any object store implementing the S3 API with conditional writes, including AWS S3, Cloudflare R2, and MinIO, and require no DynamoDB table. Credentials always come from the standard AWS SDK chain and are never accepted in the url.
+
+A non-AWS provider is addressed with query parameters: {{.EmphasisLeft}}endpoint{{.EmphasisRight}} (the provider host), {{.EmphasisLeft}}region{{.EmphasisRight}} (the signing region, {{.EmphasisLeft}}auto{{.EmphasisRight}} for R2), and {{.EmphasisLeft}}path-style{{.EmphasisRight}} (true/false, needed by providers without wildcard DNS such as MinIO). Endpoint and region otherwise resolve from AWS_ENDPOINT_URL_S3, AWS_REGION and the shared config file. Because the url carries them, one repository can address several providers, for example:
+
+	dolt remote add r2 's3://bucket/db?endpoint=https://<account>.r2.cloudflarestorage.com&region=auto'
+
 GCP remote urls should be of the form gs://gcs-bucket/database and will use the credentials setup using the gcloud command line available from Google.
 
 The local filesystem can be used as a remote by providing a repository url in the format file://absolute path. See https://en.wikipedia.org/wiki/File_URI_scheme
@@ -219,6 +225,8 @@ func parseRemoteArgs(apr *argparser.ArgParseResults, scheme, remoteUrl string) (
 		err = cli.AddAWSParams(remoteUrl, apr, params)
 	case dbfactory.OSSScheme:
 		err = cli.AddOSSParams(remoteUrl, apr, params)
+	case dbfactory.S3Scheme:
+		err = dbfactory.ValidateS3Url(remoteUrl)
 	case dbfactory.GitFileScheme, dbfactory.GitHTTPScheme, dbfactory.GitHTTPSScheme, dbfactory.GitSSHScheme:
 		verr := addGitRemoteParams(apr, params)
 		if verr != nil {
