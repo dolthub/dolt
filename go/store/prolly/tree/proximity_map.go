@@ -15,6 +15,7 @@
 package tree
 
 import (
+	"bytes"
 	"container/heap"
 	"context"
 	"math"
@@ -93,6 +94,7 @@ func (t ProximityMap[K, V, O]) WalkNodes(ctx context.Context, cb NodeCb) error {
 }
 
 // Get searches for an exact vector in the index, calling |cb| with the matching key-value pairs.
+// If |query| is not present in the map, |cb| is called with nil key-value pairs.
 func (t ProximityMap[K, V, O]) Get(ctx context.Context, query K, cb KeyValueFn[K, V]) (err error) {
 	nd := t.Root
 
@@ -101,32 +103,46 @@ func (t ProximityMap[K, V, O]) Get(ctx context.Context, query K, cb KeyValueFn[K
 		return err
 	}
 
-	// Find the child with the minimum distance.
-
 	for {
-		var closestKey K
-		var closestIdx int
-		distance := math.Inf(1)
+		if nd.IsLeaf() {
+			for i := 0; i < nd.Count(); i++ {
+				k := K(nd.GetKey(i))
+				if bytes.Equal(query, k) {
+					return cb(k, []byte(nd.GetValue(i)))
+				}
+			}
+			var noKey K
+			var noValue V
+			return cb(noKey, noValue)
+		}
 
+		// A key that appears in an internal node is stored under its own subtree, which may not be the
+		// closest subtree under a non-metric distance function like inner product.
+		closestIdx := -1
 		for i := 0; i < nd.Count(); i++ {
-			k := nd.GetKey(i)
-			vec, err := t.Convert(ctx, k)
-			if err != nil {
-				return err
-			}
-			newDistance, err := t.DistanceType.Eval(vec, queryVector)
-			if err != nil {
-				return err
-			}
-			if newDistance < distance {
+			if bytes.Equal(query, nd.GetKey(i)) {
 				closestIdx = i
-				distance = newDistance
-				closestKey = []byte(k)
+				break
 			}
 		}
 
-		if nd.IsLeaf() {
-			return cb(closestKey, []byte(nd.GetValue(closestIdx)))
+		if closestIdx == -1 {
+			// Descend to the child with the minimum distance, which is where the query key was placed during insertion.
+			distance := math.Inf(1)
+			for i := 0; i < nd.Count(); i++ {
+				vec, err := t.Convert(ctx, nd.GetKey(i))
+				if err != nil {
+					return err
+				}
+				newDistance, err := t.DistanceType.Eval(vec, queryVector)
+				if err != nil {
+					return err
+				}
+				if newDistance < distance {
+					closestIdx = i
+					distance = newDistance
+				}
+			}
 		}
 
 		nd, err = fetchChild(ctx, t.NodeStore, nd.getAddress(closestIdx))
@@ -137,8 +153,8 @@ func (t ProximityMap[K, V, O]) Get(ctx context.Context, query K, cb KeyValueFn[K
 }
 
 func (t ProximityMap[K, V, O]) Has(ctx context.Context, query K) (ok bool, err error) {
-	err = t.Get(ctx, query, func(_ K, _ V) error {
-		ok = true
+	err = t.Get(ctx, query, func(key K, _ V) error {
+		ok = key != nil
 		return nil
 	})
 	return ok, err

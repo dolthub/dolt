@@ -1019,6 +1019,29 @@ var DoltScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "test AS OF vector indexed queries",
+		SetUpScript: []string{
+			"create table vectors (id int primary key, v vector(2) not null, vector index v_idx(v));",
+			"insert into vectors values (1, string_to_vector('[3.0,4.0]')), (2, string_to_vector('[1.0,1.0]')), (3, string_to_vector('[5.0,5.0]'));",
+			"call dolt_commit('-Am', 'adding table vectors with vector index');",
+			"SET @commit1 = hashof('HEAD');",
+			"insert into vectors values (4, string_to_vector('[0.0,0.0]'));",
+			"call dolt_commit('-am', 'adding closest vector');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:           "select id from vectors order by vec_distance('[0.0,0.0]', v) limit 2;",
+				Expected:        []sql.Row{{4}, {2}},
+				ExpectedIndexes: []string{"v_idx"},
+			},
+			{
+				Query:           "select id from vectors as of @commit1 order by vec_distance('[0.0,0.0]', v) limit 2;",
+				Expected:        []sql.Row{{2}, {1}},
+				ExpectedIndexes: []string{"v_idx"},
+			},
+		},
+	},
+	{
 		Name: "test as of indexed join (https://github.com/dolthub/dolt/issues/2189)",
 		SetUpScript: []string{
 			"create table a (pk int primary key, c1 int)",

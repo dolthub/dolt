@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/stretchr/testify/assert"
@@ -167,4 +168,53 @@ func getTestVRW(nbf *types.NomsBinFormat) types.ValueReadWriter {
 	ts := &chunks.TestStorage{}
 	cs := ts.NewViewWithFormat(nbf.VersionString())
 	return types.NewValueStore(cs)
+}
+
+func TestVectorIndexMarshalling(t *testing.T) {
+	tests := []struct {
+		distanceType vector.DistanceType
+		expected     vector.DistanceType
+	}{
+		{vector.DistanceL2Squared{}, vector.DistanceL2Squared{}},
+		// DistanceEuclidean produces the same ordering as DistanceL2Squared, so it is stored as L2_Squared.
+		{vector.DistanceEuclidean{}, vector.DistanceL2Squared{}},
+		{vector.DistanceCosine{}, vector.DistanceCosine{}},
+		{vector.DistanceInnerProduct{}, vector.DistanceInnerProduct{}},
+		{vector.DistanceL1{}, vector.DistanceL1{}},
+	}
+	ctx := context.Background()
+	nbf := types.Format_DOLT
+	vrw := getTestVRW(nbf)
+	for _, test := range tests {
+		t.Run(test.distanceType.String(), func(t *testing.T) {
+			pkTi, err := typeinfo.FromSqlType(gmstypes.Int64)
+			require.NoError(t, err)
+			pkCol, err := schema.NewColumnWithTypeInfo("pk", 1, pkTi, true, "", false, "", schema.NotNullConstraint{})
+			require.NoError(t, err)
+			vecTi, err := typeinfo.FromSqlType(gmstypes.JSON)
+			require.NoError(t, err)
+			vecCol, err := schema.NewColumnWithTypeInfo("vec", 2, vecTi, false, "", false, "")
+			require.NoError(t, err)
+			sch, err := schema.SchemaFromCols(schema.NewColCollection(pkCol, vecCol))
+			require.NoError(t, err)
+			_, err = sch.Indexes().AddIndexByColTags("vec_idx", []uint64{2}, nil, schema.IndexProperties{
+				IsVector:         true,
+				VectorProperties: schema.VectorProperties{DistanceType: test.distanceType},
+			})
+			require.NoError(t, err)
+
+			v, err := MarshalSchema(ctx, vrw, sch)
+			require.NoError(t, err)
+			unmarshalled, err := UnmarshalSchema(ctx, nbf, v)
+			require.NoError(t, err)
+
+			idx := unmarshalled.Indexes().GetByName("vec_idx")
+			require.NotNil(t, idx)
+			require.True(t, idx.IsVector())
+			require.Equal(t, schema.VectorProperties{DistanceType: test.expected}, idx.VectorProperties())
+			if test.distanceType == test.expected {
+				assert.True(t, schema.SchemasAreEqual(sch, unmarshalled))
+			}
+		})
+	}
 }

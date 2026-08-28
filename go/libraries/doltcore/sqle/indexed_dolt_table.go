@@ -61,6 +61,9 @@ func (t *IndexedDoltTable) LookupBuilder(ctx *sql.Context) (index.IndexScanBuild
 }
 
 func (idt *IndexedDoltTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	if lookup.VectorOrderAndLimit.OrderBy != nil {
+		return index.NewVectorPartitionIter(lookup)
+	}
 	return index.NewRangePartitionIter(ctx, idt.DoltTable, lookup)
 }
 

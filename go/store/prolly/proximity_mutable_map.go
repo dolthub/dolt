@@ -64,6 +64,12 @@ func (f ProximityFlusher) ApplyMutationsWithSerializer(
 	mutation := editIter.NextMutation(ctx)
 	maxEditLevel := uint8(0)
 	for mutation.Key != nil {
+		// A row whose indexed vector is NULL has no entry in the index.
+		// Inserts of NULL keys are skipped, and deletes of them are no-ops.
+		if keyDesc.HasNulls(val.Tuple(mutation.Key)) {
+			mutation = editIter.NextMutation(ctx)
+			continue
+		}
 		keyLevel := tree.DeterministicHashLevel(f.logChunkSize, mutation.Key)
 		if keyLevel > maxEditLevel {
 			maxEditLevel = keyLevel

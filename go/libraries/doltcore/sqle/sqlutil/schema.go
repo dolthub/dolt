@@ -20,6 +20,7 @@ import (
 
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 
@@ -63,6 +64,13 @@ func ParseCreateTableStatement(ctx *sql.Context, root doltdb.RootValue, engine *
 			IsVector:   idx.IsVector(),
 			Comment:    idx.Comment,
 			Predicate:  predicateStr,
+		}
+		if idx.IsVector() {
+			distanceType := idx.VectorProperties.DistanceType
+			if distanceType == nil {
+				distanceType = vector.DistanceL2Squared{}
+			}
+			props.VectorProperties = schema.VectorProperties{DistanceType: distanceType}
 		}
 		name := getIndexName(idx)
 		_, err = sch.Indexes().AddIndexByColNames(name, idx.ColumnNames(), prefixes, props)

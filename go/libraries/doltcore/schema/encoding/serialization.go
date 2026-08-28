@@ -623,6 +623,17 @@ func serializeVectorInfo(b *fb.Builder, idx schema.Index) fb.UOffsetT {
 	switch props.DistanceType {
 	case vector.DistanceL2Squared{}:
 		serial.VectorInfoAddDistanceType(b, serial.DistanceTypeL2_Squared)
+	case vector.DistanceEuclidean{}:
+		// DistanceEuclidean produces the same ordering as DistanceL2Squared, so they build identical indexes.
+		serial.VectorInfoAddDistanceType(b, serial.DistanceTypeL2_Squared)
+	case vector.DistanceCosine{}:
+		serial.VectorInfoAddDistanceType(b, serial.DistanceTypeCosine)
+	case vector.DistanceInnerProduct{}:
+		serial.VectorInfoAddDistanceType(b, serial.DistanceTypeInnerProduct)
+	case vector.DistanceL1{}:
+		serial.VectorInfoAddDistanceType(b, serial.DistanceTypeL1)
+	default:
+		panic(fmt.Sprintf("unsupported distance type for vector index: %v", props.DistanceType))
 	}
 
 	return serial.VectorInfoEnd(b)
@@ -673,6 +684,18 @@ func deserializeVectorInfo(idx *serial.Index) (schema.VectorProperties, error) {
 	case serial.DistanceTypeL2_Squared:
 		return schema.VectorProperties{
 			DistanceType: vector.DistanceL2Squared{},
+		}, nil
+	case serial.DistanceTypeCosine:
+		return schema.VectorProperties{
+			DistanceType: vector.DistanceCosine{},
+		}, nil
+	case serial.DistanceTypeInnerProduct:
+		return schema.VectorProperties{
+			DistanceType: vector.DistanceInnerProduct{},
+		}, nil
+	case serial.DistanceTypeL1:
+		return schema.VectorProperties{
+			DistanceType: vector.DistanceL1{},
 		}, nil
 	}
 	return schema.VectorProperties{}, fmt.Errorf("unknown distance type in vector index info: %s", vectorInfo.DistanceType())
