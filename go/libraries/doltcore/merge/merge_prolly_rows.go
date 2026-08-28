@@ -257,14 +257,7 @@ func computeProllyTreePatches(
 	needsSecondaryIndexMerge := len(sec.leftIdxes) > 0 && !mergeInfo.InvalidateSecondaryIndexes
 	// either skip if there's secondary indexes, or merge secondary indexes.
 	needsSchemaMigration := mergeInfo.RightNeedsRewrite || mergeInfo.LeftNeedsRewrite
-	// A RowMergePolicy must see every three-way row decision. The fast path
-	// cannot offer that: tree.SendPatches elides convergent edits without
-	// calling its collision callback, and at level > 0 it skips whole
-	// identical subtrees without ever descending to rows. Route policy merges
-	// through the three-way differ, which reaches every matched key because it
-	// diffs each side against the base independently.
 	canFastMergeProllyTrees := !keyless &&
-		tm.rowMergePolicy == nil &&
 		!needsUniquenessValidation &&
 		!needsCheckValidation &&
 		!needsNullValidation &&
@@ -282,11 +275,35 @@ func computeProllyTreePatches(
 			return nil, nil, err
 		}
 		err = tree.SendPatches(ctx, lDiff, rDiff, patchBuffer, func(left, right tree.Diff) (tree.Diff, bool) {
-			// On conflict, attempt to merge rows
-			m, b, err := valueMerger.TryMerge(ctx, val.Tuple(left.To), val.Tuple(right.To), val.Tuple(left.From))
-			if err != nil {
-				mergeErr = err
-				return tree.Diff{}, false
+			var m val.Tuple
+			var b bool
+			decided := false
+			if tm.rowMergePolicy != nil {
+				merged, status, pErr := tm.rowMergePolicy(ctx,
+					val.Tuple(left.To), val.Tuple(right.To), val.Tuple(left.From))
+				if pErr != nil {
+					mergeErr = pErr
+					return tree.Diff{}, false
+				}
+				switch status {
+				case tree.RowMergeResolved:
+					m, b, decided = merged, true, true
+				case tree.RowMergeConflict:
+					m, b, decided = nil, false, true
+				case tree.RowMergeDefer:
+				default:
+					mergeErr = fmt.Errorf("unknown RowMergeStatus %d", status)
+					return tree.Diff{}, false
+				}
+			}
+			if !decided {
+				// On conflict, attempt to merge rows
+				var err error
+				m, b, err = valueMerger.TryMerge(ctx, val.Tuple(left.To), val.Tuple(right.To), val.Tuple(left.From))
+				if err != nil {
+					mergeErr = err
+					return tree.Diff{}, false
+				}
 			}
 			if !b {
 				s.DataConflicts++
@@ -328,7 +345,7 @@ func computeProllyTreePatches(
 			mergeDiff := left
 			mergeDiff.To = tree.Item(m)
 			return mergeDiff, b
-		})
+		}, tm.rowMergePolicy != nil)
 		if err != nil {
 			return nil, nil, err
 		}
