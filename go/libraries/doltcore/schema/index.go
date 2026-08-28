@@ -212,6 +212,8 @@ func (ix *indexImpl) Equals(other Index) bool {
 
 	return ix.IsUnique() == other.IsUnique() &&
 		ix.IsSpatial() == other.IsSpatial() &&
+		ix.IsVector() == other.IsVector() &&
+		ix.VectorProperties() == other.VectorProperties() &&
 		compareUint16Slices(ix.PrefixLengths(), other.PrefixLengths()) &&
 		ix.Comment() == other.Comment() &&
 		ix.Predicate() == other.Predicate() &&
@@ -235,6 +237,8 @@ func (ix *indexImpl) DeepEquals(other Index) bool {
 
 	return ix.IsUnique() == other.IsUnique() &&
 		ix.IsSpatial() == other.IsSpatial() &&
+		ix.IsVector() == other.IsVector() &&
+		ix.VectorProperties() == other.VectorProperties() &&
 		compareUint16Slices(ix.PrefixLengths(), other.PrefixLengths()) &&
 		ix.Comment() == other.Comment() &&
 		ix.Predicate() == other.Predicate() &&

@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
@@ -64,10 +65,11 @@ func MapInterfaceFromValue(ctx context.Context, v types.Value, sch schema.Schema
 	vd := sch.GetValueDescriptor(ns)
 	switch fileId {
 	case serial.VectorIndexNodeFileID:
-		// TODO: We should read the distance function and chunk size from the message.
-		// Currently, vector.DistanceL2Squared{} and prolly.DefaultLogChunkSize are the only values that can be written,
-		// but this may not be true in the future.
-		return prolly.NewProximityMap(ns, root, kd, vd, vector.DistanceL2Squared{}, prolly.DefaultLogChunkSize)
+		distanceType, logChunkSize, err := vectorIndexMetadata(v)
+		if err != nil {
+			return nil, err
+		}
+		return prolly.NewProximityMap(ns, root, kd, vd, distanceType, logChunkSize)
 	default:
 		return prolly.NewMap(root, ns, kd, vd), nil
 	}
@@ -80,11 +82,25 @@ func MapFromValueWithDescriptors(v types.Value, kd, vd *val.TupleDesc, ns tree.N
 	}
 	switch fileId {
 	case serial.VectorIndexNodeFileID:
-		// TODO: We should read the distance function and chunk size from the message.
-		// Currently, vector.DistanceL2Squared{} and prolly.DefaultLogChunkSize are the only values that can be written,
-		// but this may not be true in the future.
-		return prolly.NewProximityMap(ns, root, kd, vd, vector.DistanceL2Squared{}, prolly.DefaultLogChunkSize)
+		distanceType, logChunkSize, err := vectorIndexMetadata(v)
+		if err != nil {
+			return nil, err
+		}
+		return prolly.NewProximityMap(ns, root, kd, vd, distanceType, logChunkSize)
 	default:
 		return prolly.NewMap(root, ns, kd, vd), nil
 	}
+}
+
+// vectorIndexMetadata reads the distance function and log chunk size from a vector index root node,
+// applying the defaults for nodes written before those fields existed.
+func vectorIndexMetadata(v types.Value) (vector.DistanceType, uint8, error) {
+	distanceType, logChunkSize, err := message.GetVectorIndexMetadata(serial.Message(v.(types.SerialMessage)))
+	if err != nil {
+		return nil, 0, err
+	}
+	if logChunkSize == 0 {
+		logChunkSize = prolly.DefaultLogChunkSize
+	}
+	return distanceType, logChunkSize, nil
 }

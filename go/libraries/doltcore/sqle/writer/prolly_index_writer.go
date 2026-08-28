@@ -19,6 +19,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"reflect"
+	"slices"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -516,6 +518,18 @@ func isNoopUpdate(oldRow, newRow sql.Row, keyMap val.OrdinalMapping) bool {
 			if !ok || !bytes.Equal(oldBytes, newBytes) {
 				return false
 			}
+		} else if oldFloats, ok := oldVal.([]float32); ok {
+			newFloats, ok := newVal.([]float32)
+			if !ok || !slices.Equal(oldFloats, newFloats) {
+				return false
+			}
+		} else if oldVal == nil || newVal == nil {
+			if oldVal != newVal {
+				return false
+			}
+		} else if !reflect.ValueOf(oldVal).Comparable() || !reflect.ValueOf(newVal).Comparable() {
+			// Other uncomparable values are treated as changed.
+			return false
 		} else if oldVal != newVal {
 			return false
 		}

@@ -2411,13 +2411,20 @@ func (t *AlterableDoltTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) err
 		return err
 	}
 	if idx.Constraint != sql.IndexConstraint_None && idx.Constraint != sql.IndexConstraint_Unique && idx.Constraint != sql.IndexConstraint_Spatial && idx.Constraint != sql.IndexConstraint_Vector {
-		return fmt.Errorf("only the following types of index constraints are supported: none, unique, spatial")
+		return fmt.Errorf("only the following types of index constraints are supported: none, unique, spatial, vector")
 	}
 
 	var vectorProperties schema.VectorProperties
 	if idx.Constraint == sql.IndexConstraint_Vector {
+		if schema.IsKeyless(t.sch) {
+			return fmt.Errorf("vector indexes on keyless tables are not supported")
+		}
+		distanceType := idx.VectorProperties.DistanceType
+		if distanceType == nil {
+			distanceType = vector.DistanceL2Squared{}
+		}
 		vectorProperties = schema.VectorProperties{
-			DistanceType: vector.DistanceL2Squared{},
+			DistanceType: distanceType,
 		}
 	}
 	return t.createIndex(ctx, idx, fulltext.KeyColumns{}, fulltext.IndexTableNames{}, vectorProperties)

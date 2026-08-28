@@ -21,6 +21,7 @@ import (
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -276,6 +277,7 @@ func NewIndexReaderBuilder(
 		base.sec = si
 	case prolly.ProximityMap:
 		base.proximitySecondary = si
+		base.isProximity = true
 	default:
 		return nil, fmt.Errorf("unknown index type %v", secondaryIndex)
 	}
@@ -440,7 +442,14 @@ func (ib *baseIndexImplBuilder) proximityIter(ctx *sql.Context, part vectorParti
 	if err != nil {
 		return nil, err
 	}
-	return ib.proximitySecondary.GetClosest(ctx, candidateVector, int(limit.(int64)))
+	limitVal, _, err := gmstypes.Int64.Convert(ctx, limit)
+	if err != nil {
+		return nil, err
+	}
+	if limitVal == nil {
+		return nil, fmt.Errorf("vector index lookups must have a non-null limit")
+	}
+	return ib.proximitySecondary.GetClosest(ctx, candidateVector, int(limitVal.(int64)))
 }
 
 // coveringIndexImplBuilder constructs row iters for covering lookups,

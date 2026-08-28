@@ -441,3 +441,24 @@ SQL
 INSERT INTO onepk VALUES (6, '[99, 51]'), (7, '[11, 55]'), (8, '[88, 52]'), (9, '[22, 54]'), (10, '[77, 53]');
 SQL
 }
+
+@test "vector-index: can GC with out-of-line vectors" {
+    # 600-dimension vectors exceed the inline tuple size limit and are stored out-of-line.
+    v1="[$(seq -s, 1 600)]"
+    v2="[$(seq -s, 101 700)]"
+    v3="[$(seq -s, 201 800)]"
+    dolt sql <<SQL
+CREATE TABLE big (pk BIGINT PRIMARY KEY, v VECTOR(600) NOT NULL);
+INSERT INTO big VALUES (1, STRING_TO_VECTOR('$v1')), (2, STRING_TO_VECTOR('$v2')), (3, STRING_TO_VECTOR('$v3'));
+CREATE VECTOR INDEX idx_v ON big(v);
+SQL
+    dolt gc
+
+    run dolt sql -q "EXPLAIN PLAN SELECT pk FROM big ORDER BY VEC_DISTANCE('$v1', v) LIMIT 1"
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "IndexedTableAccess(big)" ]] || false
+
+    run dolt sql -q "SELECT pk FROM big ORDER BY VEC_DISTANCE('$v1', v) LIMIT 1" -r csv
+    [ "$status" -eq "0" ]
+    [[ "${lines[1]}" =~ "1" ]] || false
+}

@@ -18,8 +18,11 @@ include "collation.fbs";
 namespace serial;
 
 enum DistanceType : uint8 {
-  Null       = 0,
-  L2_Squared = 1,
+  Null          = 0,
+  L2_Squared    = 1,
+  Cosine        = 2,
+  InnerProduct  = 3,
+  L1            = 4,
 }
 
 table TableSchema {

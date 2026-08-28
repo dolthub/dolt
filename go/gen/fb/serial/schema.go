@@ -25,18 +25,27 @@ import (
 type DistanceType byte
 
 const (
-	DistanceTypeNull       DistanceType = 0
-	DistanceTypeL2_Squared DistanceType = 1
+	DistanceTypeNull         DistanceType = 0
+	DistanceTypeL2_Squared   DistanceType = 1
+	DistanceTypeCosine       DistanceType = 2
+	DistanceTypeInnerProduct DistanceType = 3
+	DistanceTypeL1           DistanceType = 4
 )
 
 var EnumNamesDistanceType = map[DistanceType]string{
-	DistanceTypeNull:       "Null",
-	DistanceTypeL2_Squared: "L2_Squared",
+	DistanceTypeNull:         "Null",
+	DistanceTypeL2_Squared:   "L2_Squared",
+	DistanceTypeCosine:       "Cosine",
+	DistanceTypeInnerProduct: "InnerProduct",
+	DistanceTypeL1:           "L1",
 }
 
 var EnumValuesDistanceType = map[string]DistanceType{
-	"Null":       DistanceTypeNull,
-	"L2_Squared": DistanceTypeL2_Squared,
+	"Null":         DistanceTypeNull,
+	"L2_Squared":   DistanceTypeL2_Squared,
+	"Cosine":       DistanceTypeCosine,
+	"InnerProduct": DistanceTypeInnerProduct,
+	"L1":           DistanceTypeL1,
 }
 
 func (v DistanceType) String() string {

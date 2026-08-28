@@ -17,6 +17,7 @@ package writer
 import (
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/val"
@@ -43,4 +44,19 @@ func TestMappedRowSize(t *testing.T) {
 			require.Equal(t, test.expected, mappedRowSize(test.mappings...))
 		})
 	}
+}
+
+func TestIsNoopUpdate(t *testing.T) {
+	keyMap := val.OrdinalMapping{0}
+	require.True(t, isNoopUpdate(sql.Row{int64(1)}, sql.Row{int64(1)}, keyMap))
+	require.False(t, isNoopUpdate(sql.Row{int64(1)}, sql.Row{int64(2)}, keyMap))
+	require.True(t, isNoopUpdate(sql.Row{[]byte{1}}, sql.Row{[]byte{1}}, keyMap))
+	require.False(t, isNoopUpdate(sql.Row{[]byte{1}}, sql.Row{[]byte{2}}, keyMap))
+	require.True(t, isNoopUpdate(sql.Row{nil}, sql.Row{nil}, keyMap))
+	require.False(t, isNoopUpdate(sql.Row{nil}, sql.Row{int64(1)}, keyMap))
+	require.False(t, isNoopUpdate(sql.Row{int64(1)}, sql.Row{nil}, keyMap))
+	require.True(t, isNoopUpdate(sql.Row{[]float32{1}}, sql.Row{[]float32{1}}, keyMap))
+	require.False(t, isNoopUpdate(sql.Row{[]float32{1}}, sql.Row{[]float32{2}}, keyMap))
+	// Uncomparable values must not panic, and are treated as changed.
+	require.False(t, isNoopUpdate(sql.Row{map[string]int{}}, sql.Row{map[string]int{}}, keyMap))
 }
