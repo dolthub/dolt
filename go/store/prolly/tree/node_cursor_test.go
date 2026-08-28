@@ -93,7 +93,7 @@ func testGetOrdinalOfCursor(t *testing.T, count int) {
 
 	ctx := sql.NewEmptyContext()
 	ns := NewTestNodeStore()
-	serializer := message.NewProllyMapSerializer(desc, ns.Pool())
+	serializer := message.NewProllyMapSerializer(desc, desc, ns.Pool())
 	chkr, err := newEmptyChunker(ctx, ns, serializer)
 	require.NoError(t, err)
 
@@ -141,7 +141,7 @@ func testGetOrdinalOfCursor(t *testing.T, count int) {
 func randomTree(t *testing.T, count int) (*Node, [][2]Item, NodeStore) {
 	ctx := sql.NewEmptyContext()
 	ns := NewTestNodeStore()
-	serializer := message.NewProllyMapSerializer(valDesc, ns.Pool())
+	serializer := message.NewProllyMapSerializer(keyDesc, valDesc, ns.Pool())
 	chkr, err := newEmptyChunker(ctx, ns, serializer)
 	require.NoError(t, err)
 

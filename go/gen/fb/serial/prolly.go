@@ -340,7 +340,33 @@ func (rcv *ProllyTreeNode) MutateTreeLevel(n byte) bool {
 	return rcv._tab.MutateByteSlot(24, n)
 }
 
-const ProllyTreeNodeNumFields = 11
+func (rcv *ProllyTreeNode) KeyAddressOffsets(j int) uint16 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(26))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.GetUint16(a + flatbuffers.UOffsetT(j*2))
+	}
+	return 0
+}
+
+func (rcv *ProllyTreeNode) KeyAddressOffsetsLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(26))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func (rcv *ProllyTreeNode) MutateKeyAddressOffsets(j int, n uint16) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(26))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.MutateUint16(a+flatbuffers.UOffsetT(j*2), n)
+	}
+	return false
+}
+
+const ProllyTreeNodeNumFields = 12
 
 func ProllyTreeNodeStart(builder *flatbuffers.Builder) {
 	builder.StartObject(ProllyTreeNodeNumFields)
@@ -398,6 +424,12 @@ func ProllyTreeNodeAddTreeCount(builder *flatbuffers.Builder, treeCount uint64) 
 }
 func ProllyTreeNodeAddTreeLevel(builder *flatbuffers.Builder, treeLevel byte) {
 	builder.PrependByteSlot(10, treeLevel, 0)
+}
+func ProllyTreeNodeAddKeyAddressOffsets(builder *flatbuffers.Builder, keyAddressOffsets flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(11, flatbuffers.UOffsetT(keyAddressOffsets), 0)
+}
+func ProllyTreeNodeStartKeyAddressOffsetsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(2, numElems, 2)
 }
 func ProllyTreeNodeEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
