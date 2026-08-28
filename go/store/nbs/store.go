@@ -392,7 +392,7 @@ func (nbs *NomsBlockStore) finalizeConjoin(ctx context.Context, err error) {
 	}()
 
 	if err != nil {
-		nbs.logger.WithError(err).Warn("conjoin of database failed with error")
+		nbs.logger.WithError(err).WithField("deferred", true).Warn("background conjoin (compaction) deferred")
 		return
 	}
 
