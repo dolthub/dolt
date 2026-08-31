@@ -27,7 +27,9 @@ type mysqlDbReplicaPersister struct {
 
 var _ ReplicaAuthPersister = mysqlDbReplicaPersister{}
 
-// SaveData implements ReplicaAuthPersister
+// SaveData implements ReplicaAuthPersister. The overwrite replaces this server's
+// users and grants with the primary's. This server's ephemeral users, such as the
+// account the CLI connects with, are never part of a payload and are left in place.
 func (p mysqlDbReplicaPersister) SaveData(ctx *sql.Context, contents []byte) error {
 	ed := p.mysqlDb.Editor()
 	defer ed.Close()

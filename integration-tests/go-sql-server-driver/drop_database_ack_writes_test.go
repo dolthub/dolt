@@ -79,8 +79,8 @@ cluster:
     port: %d
 `, server2Port, server1Cluster, server2Cluster)
 
-	primary := makeClusterServer(t, &ports, "server1", "server1", primaryConfig)
-	standby := makeClusterServer(t, &ports, "server2", "server2", standbyConfig)
+	primary, _ := makeClusterServer(t, &ports, "server1", "server1", primaryConfig)
+	standby, _ := makeClusterServer(t, &ports, "server2", "server2", standbyConfig)
 
 	ctx := t.Context()
 
