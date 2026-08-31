@@ -799,15 +799,13 @@ If you're interested in running this command against a remote host, hit us up on
 			if err != nil {
 				return nil, err
 			}
-			// Connection target came from server info file, so connection
-			// failure explains lock contention and recovery steps.
-			credsFile := sqlserver.LocalCredsFilePath()
 			var withContext cli.LateBindQueryist = func(ctx context.Context, opts ...cli.LateBindQueryistOption) (cli.LateBindQueryistResult, error) {
 				res, err := lateBind(ctx, opts...)
-				if err != nil {
+				if errors.Is(err, sqlserver.ErrServerConnectionFailed) {
+					credsFile := sqlserver.LocalCredsFilePath()
 					return res, fmt.Errorf("database locked; connecting to sql-server on port %d (%s) failed (retry if starting, or delete %s if stale): %w", localCreds.Port, credsFile, credsFile, err)
 				}
-				return res, nil
+				return res, err
 			}
 			return withContext, nil
 		}

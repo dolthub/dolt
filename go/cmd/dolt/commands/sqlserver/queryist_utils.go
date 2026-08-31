@@ -18,6 +18,7 @@ import (
 	"context"
 	"crypto/tls"
 	sql2 "database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -63,11 +64,19 @@ const (
 	QueryistTLSMode_NoVerify_FallbackToPlaintext
 )
 
-// BuildConnectionStringQueryist returns a [cli.LateBindQueryist] that opens a connection to the
-// server at |host|:|port| using |creds| and |tlsMode|, and selects |dbRev| as the default
-// database. |configName| and |configEmail| are used as the commit identity when the client
-// connects over a loopback address; non-loopback connections read the identity from
-// CURRENT_USER() so the grant host matches whatever the server assigned.
+// ErrServerConnectionFailed is returned when the late-binding
+// queryist fails to connect to the sql-server.
+var ErrServerConnectionFailed = errors.New("failed to connect to the dolt sql-server")
+
+// BuildConnectionStringQueryist returns a [cli.LateBindQueryist]
+// that opens a connection to the server at |host|:|port| using
+// |creds| and |tlsMode|, and selects |dbRev| as the default
+// database.
+//
+// |configName| and |configEmail| are used as the commit identity
+// when the client connects over a loopback address. Non-loopback
+// connections read the identity from CURRENT_USER() so the grant
+// host matches whatever the server assigned.
 func BuildConnectionStringQueryist(_ context.Context, cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argparser.ArgParseResults, host string, port int, tlsMode QueryistTLSMode, dbRev string, configName, configEmail string) (cli.LateBindQueryist, error) {
 	clientConfig, err := GetClientConfig(cwdFS, creds, apr)
 	if err != nil {
@@ -106,7 +115,7 @@ func BuildConnectionStringQueryist(_ context.Context, cwdFS filesys.Filesys, cre
 	var lateBind cli.LateBindQueryist = func(ctx context.Context, opts ...cli.LateBindQueryistOption) (res cli.LateBindQueryistResult, err error) {
 		if err := conn.DB.PingContext(ctx); err != nil {
 			_ = conn.Close()
-			return res, fmt.Errorf("failed to connect to the dolt sql-server at %s:%d: %w", host, port, err)
+			return res, fmt.Errorf("%w at %s:%d: %w", ErrServerConnectionFailed, host, port, err)
 		}
 
 		sqlCtx := sql.NewContext(ctx)

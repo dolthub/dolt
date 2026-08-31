@@ -65,6 +65,7 @@ func TestBuildConnectionStringQueryistNamesTargetOnConnectFailure(t *testing.T) 
 
 			_, err = lateBind(context.Background())
 			require.Error(t, err)
+			require.ErrorIs(t, err, ErrServerConnectionFailed)
 			require.Contains(t, err.Error(), "failed to connect to the dolt sql-server at "+tc.host+":"+strconv.Itoa(port))
 		})
 	}

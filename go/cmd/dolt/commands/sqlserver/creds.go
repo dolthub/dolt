@@ -20,10 +20,8 @@ import (
 	iofs "io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/google/uuid"
 
@@ -49,17 +47,21 @@ type LocalCreds struct {
 	Secret string
 }
 
+// NewLocalCreds initializes a new LocalCreds struct for a sql-server
+// listening on the given port, populated with the current process ID
+// and a newly generated authentication secret.
 func NewLocalCreds(port int) *LocalCreds {
 	return &LocalCreds{os.Getpid(), port, uuid.New().String()}
 }
 
-// LocalCredsFilePath returns the server info file path.
+// LocalCredsFilePath returns the relative path to the server info file
+// within the dbfactory.DoltDir.
 func LocalCredsFilePath() string {
 	return filepath.Join(dbfactory.DoltDir, ServerLocalCredsFile)
 }
 
-// Best effort attempt to remove local creds file persisted as the Filesys
-// rooted there.
+// RemoveLocalCreds makes a best-effort attempt to remove the server
+// info file from the provided |fs|.
 func RemoveLocalCreds(fs filesys.Filesys) {
 	credsFilePath, err := fs.Abs(LocalCredsFilePath())
 	if err != nil {
@@ -68,8 +70,8 @@ func RemoveLocalCreds(fs filesys.Filesys) {
 	_ = fs.Delete(credsFilePath, false)
 }
 
-// WriteLocalCreds writes a file containing the contents of LocalCreds to the
-// DoltDir rooted at the provided Filesys.
+// WriteLocalCreds writes a server info file containing the serialized
+// |creds| to the dbfactory.DoltDir of the provided |fs|.
 func WriteLocalCreds(fs filesys.Filesys, creds *LocalCreds) error {
 	// if the DoltDir doesn't exist, create it.
 	doltDir, err := fs.Abs(dbfactory.DoltDir)
@@ -94,43 +96,12 @@ func WriteLocalCreds(fs filesys.Filesys, creds *LocalCreds) error {
 	return fs.WriteFile(credsFile, []byte(fmt.Sprintf("%d:%s:%s", creds.Pid, portStr, creds.Secret)), 0600)
 }
 
-// ProcessExists reports whether a process with pid is running.
+// FindAndLoadLocalCreds traverses upward from |fs| to locate, parse, and
+// validate a server info file.
 //
-// On Unix systems, [os.FindProcess] always succeeds without verifying
-// whether the process exists, so liveness is tested by sending
-// signal 0 via [os.Process.Signal].
-//
-// On Windows, [os.FindProcess] opens an OS handle that fails if the
-// process is dead; the handle is released immediately using
-// [os.Process.Release] to prevent handle leaks.
-func ProcessExists(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-	p, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-	if runtime.GOOS == "windows" {
-		_ = p.Release()
-		return true
-	}
-	err = p.Signal(syscall.Signal(0))
-	if err == nil {
-		return true
-	}
-	if errors.Is(err, syscall.EPERM) {
-		return true
-	}
-	return false
-}
-
-// Starting at `fs`, look for the a ServerLocalCredsFile in the .dolt directory
-// of this directory and every parent directory, until we find one. When we
-// find one, we return its contents if we can open and parse it successfully.
-// Otherwise, we return an error associated with attempting to read it. If we
-// do not find anything all the way up to the root of the filesystem, returns
-// `nil` *LocalCreds and a `nil` error.
+// If a credentials file is found but its recorded process is dead, the
+// stale file is removed automatically. If no valid credentials file is
+// found, nil is returned.
 func FindAndLoadLocalCreds(fs filesys.Filesys) (creds *LocalCreds, err error) {
 	root, err := fs.Abs(".")
 	if err != nil {
@@ -164,6 +135,8 @@ func FindAndLoadLocalCreds(fs filesys.Filesys) (creds *LocalCreds, err error) {
 	return nil, nil
 }
 
+// LoadLocalCreds reads and parses the server info file from the
+// dbfactory.DoltDir directory of the given |fs|.
 func LoadLocalCreds(fs filesys.Filesys) (creds *LocalCreds, err error) {
 	rd, err := fs.OpenForRead(LocalCredsFilePath())
 	if err != nil {
