@@ -1077,7 +1077,6 @@ func (h *heartbeatService) Run(ctx context.Context) {
 
 var _ svcs.Service = &heartbeatService{}
 
-
 // remotesapiAuth facilitates the implementation remotesrv.AccessControl for the remotesapi server.
 type remotesapiAuth struct {
 	// ctxFactory is a function that returns a new sql.Context. This will create a new context every time it is called,
