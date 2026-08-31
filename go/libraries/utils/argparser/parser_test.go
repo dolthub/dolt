@@ -171,6 +171,23 @@ func TestArgParser(t *testing.T) {
 	}
 }
 
+func TestArgParserListEmptyValue(t *testing.T) {
+	ap := NewArgParserWithVariableArgs("test").SupportsStringList("list", "l", "vals", "")
+
+	apr, err := ap.Parse([]string{"--list", ""})
+	require.NoError(t, err)
+	v, ok := apr.GetValue("list")
+	assert.True(t, ok)
+	assert.Equal(t, "", v)
+
+	ap2 := NewArgParserWithVariableArgs("test").
+		SupportsStringList("list", "l", "vals", "").
+		SupportsFlag("flag", "f", "flag")
+	apr2, err := ap2.Parse([]string{"-l", "", "-f"})
+	require.NoError(t, err)
+	assert.True(t, apr2.Contains("flag"))
+}
+
 func TestArgParserSet(t *testing.T) {
 	ap := createParserWithOptionalArgs()
 	apr, err := ap.Parse([]string{"-o", "optional value", "-f", "foo", "bar"})
