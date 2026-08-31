@@ -20,8 +20,10 @@ import (
 	iofs "io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/google/uuid"
 
@@ -31,14 +33,16 @@ import (
 
 const ServerLocalCredsFile = "sql-server.info"
 
-// LocalCreds is a struct that contains information about how to access the
-// locally running server for a CLI process which wants to operate against a
-// database while a sql-server process is running. It contains the pid of the
-// process that created the lockfile, the port that the server is running on
-// and the password to be used connecting to the server.
+// ErrInvalidLockFileFormat indicates a malformed server info file.
+var ErrInvalidLockFileFormat = errors.New("invalid lock file format")
+
+// LocalCreds contains connection information for accessing a locally
+// running sql-server from a CLI process. It contains the pid of the
+// process that created the lockfile, the port the server listens on,
+// and the shared secret for local authentication.
 //
-// Pid is a legacy field which is retained for compatibility but no longer
-// influences the behavior of the running program(s).
+// Pid is used to detect server liveness and automatically clean up
+// stale credentials files when the server process has terminated.
 type LocalCreds struct {
 	Pid    int
 	Port   int
@@ -49,10 +53,15 @@ func NewLocalCreds(port int) *LocalCreds {
 	return &LocalCreds{os.Getpid(), port, uuid.New().String()}
 }
 
+// LocalCredsFilePath returns the server info file path.
+func LocalCredsFilePath() string {
+	return filepath.Join(dbfactory.DoltDir, ServerLocalCredsFile)
+}
+
 // Best effort attempt to remove local creds file persisted as the Filesys
 // rooted there.
 func RemoveLocalCreds(fs filesys.Filesys) {
-	credsFilePath, err := fs.Abs(filepath.Join(dbfactory.DoltDir, ServerLocalCredsFile))
+	credsFilePath, err := fs.Abs(LocalCredsFilePath())
 	if err != nil {
 		return
 	}
@@ -72,7 +81,7 @@ func WriteLocalCreds(fs filesys.Filesys, creds *LocalCreds) error {
 		return err
 	}
 
-	credsFile, err := fs.Abs(filepath.Join(dbfactory.DoltDir, ServerLocalCredsFile))
+	credsFile, err := fs.Abs(LocalCredsFilePath())
 	if err != nil {
 		return err
 	}
@@ -83,6 +92,37 @@ func WriteLocalCreds(fs filesys.Filesys, creds *LocalCreds) error {
 	}
 
 	return fs.WriteFile(credsFile, []byte(fmt.Sprintf("%d:%s:%s", creds.Pid, portStr, creds.Secret)), 0600)
+}
+
+// ProcessExists reports whether a process with pid is running.
+//
+// On Unix systems, [os.FindProcess] always succeeds without verifying
+// whether the process exists, so liveness is tested by sending
+// signal 0 via [os.Process.Signal].
+//
+// On Windows, [os.FindProcess] opens an OS handle that fails if the
+// process is dead; the handle is released immediately using
+// [os.Process.Release] to prevent handle leaks.
+func ProcessExists(pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	p, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	if runtime.GOOS == "windows" {
+		_ = p.Release()
+		return true
+	}
+	err = p.Signal(syscall.Signal(0))
+	if err == nil {
+		return true
+	}
+	if errors.Is(err, syscall.EPERM) {
+		return true
+	}
+	return false
 }
 
 // Starting at `fs`, look for the a ServerLocalCredsFile in the .dolt directory
@@ -99,7 +139,11 @@ func FindAndLoadLocalCreds(fs filesys.Filesys) (creds *LocalCreds, err error) {
 	for root != "" && root[len(root)-1] != filepath.Separator {
 		creds, err := LoadLocalCreds(fs)
 		if err == nil {
-			return creds, err
+			if !ProcessExists(creds.Pid) {
+				RemoveLocalCreds(fs)
+				return nil, nil
+			}
+			return creds, nil
 		}
 		// If we have an error that is not ErrNotExist, for example, a
 		// permission error opening the credentials file, or an error
@@ -121,7 +165,7 @@ func FindAndLoadLocalCreds(fs filesys.Filesys) (creds *LocalCreds, err error) {
 }
 
 func LoadLocalCreds(fs filesys.Filesys) (creds *LocalCreds, err error) {
-	rd, err := fs.OpenForRead(filepath.Join(dbfactory.DoltDir, ServerLocalCredsFile))
+	rd, err := fs.OpenForRead(LocalCredsFilePath())
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +181,7 @@ func LoadLocalCreds(fs filesys.Filesys) (creds *LocalCreds, err error) {
 
 	parts := strings.Split(data, ":")
 	if len(parts) != 3 {
-		return nil, errors.New("invalid lock file format")
+		return nil, ErrInvalidLockFileFormat
 	}
 
 	pid, err := strconv.Atoi(parts[0])

@@ -104,6 +104,11 @@ func BuildConnectionStringQueryist(_ context.Context, cwdFS filesys.Filesys, cre
 	queryist := ConnectionQueryist{connection: conn, gatherWarnings: &gatherWarnings}
 
 	var lateBind cli.LateBindQueryist = func(ctx context.Context, opts ...cli.LateBindQueryistOption) (res cli.LateBindQueryistResult, err error) {
+		if err := conn.DB.PingContext(ctx); err != nil {
+			_ = conn.Close()
+			return res, fmt.Errorf("failed to connect to the dolt sql-server at %s:%d: %w", host, port, err)
+		}
+
 		sqlCtx := sql.NewContext(ctx)
 		sqlCtx.SetCurrentDatabase(dbRev)
 

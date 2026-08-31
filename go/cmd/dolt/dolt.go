@@ -795,7 +795,21 @@ If you're interested in running this command against a remote host, hit us up on
 			}
 			doltConfigName := targetEnv.Config.GetStringOrDefault(config.UserNameKey, env.DefaultName)
 			doltConfigEmail := targetEnv.Config.GetStringOrDefault(config.UserEmailKey, env.DefaultEmail)
-			return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", localCreds.Port, sqlserver.QueryistTLSMode_NoVerify_FallbackToPlaintext, useDb, doltConfigName, doltConfigEmail)
+			lateBind, err := sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", localCreds.Port, sqlserver.QueryistTLSMode_NoVerify_FallbackToPlaintext, useDb, doltConfigName, doltConfigEmail)
+			if err != nil {
+				return nil, err
+			}
+			// Connection target came from server info file, so connection
+			// failure explains lock contention and recovery steps.
+			credsFile := sqlserver.LocalCredsFilePath()
+			var withContext cli.LateBindQueryist = func(ctx context.Context, opts ...cli.LateBindQueryistOption) (cli.LateBindQueryistResult, error) {
+				res, err := lateBind(ctx, opts...)
+				if err != nil {
+					return res, fmt.Errorf("database locked; connecting to sql-server on port %d (%s) failed (retry if starting, or delete %s if stale): %w", localCreds.Port, credsFile, credsFile, err)
+				}
+				return res, nil
+			}
+			return withContext, nil
 		}
 	}
 

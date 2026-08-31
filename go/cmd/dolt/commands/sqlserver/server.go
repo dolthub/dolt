@@ -219,18 +219,7 @@ func ConfigureServices(
 	}
 	controller.Register(AssertNoDatabasesInAccessModeReadOnly)
 
-	var localCreds *LocalCreds
-	InitServerLocalCreds := &svcs.AnonService{
-		InitF: func(context.Context) (err error) {
-			localCreds, err = persistServerLocalCreds(cfg.ServerConfig.Port(), cfg.DoltEnv)
-			return err
-		},
-		StopF: func(_ svcs.RunState) error {
-			RemoveLocalCreds(cfg.DoltEnv.FS)
-			return nil
-		},
-	}
-	controller.Register(InitServerLocalCreds)
+	localCreds := NewLocalCreds(cfg.ServerConfig.Port())
 
 	// Persist any system variables that have a non-deterministic default value (i.e. @@server_uuid)
 	// We only do this on sql-server startup initially since we want to keep the persisted server_uuid
@@ -920,6 +909,16 @@ func ConfigureServices(
 		},
 	}
 	controller.Register(InitSQLServer)
+	InitServerLocalCreds := &svcs.AnonService{
+		InitF: func(context.Context) (err error) {
+			return WriteLocalCreds(cfg.DoltEnv.FS, localCreds)
+		},
+		StopF: func(_ svcs.RunState) error {
+			RemoveLocalCreds(cfg.DoltEnv.FS)
+			return nil
+		},
+	}
+	controller.Register(InitServerLocalCreds)
 
 	// Automatically restart binlog replication if replication was enabled when the server was last shut down
 	AutoStartBinlogReplica := &svcs.AnonService{
@@ -1078,14 +1077,6 @@ func (h *heartbeatService) Run(ctx context.Context) {
 
 var _ svcs.Service = &heartbeatService{}
 
-func persistServerLocalCreds(port int, dEnv *env.DoltEnv) (*LocalCreds, error) {
-	creds := NewLocalCreds(port)
-	err := WriteLocalCreds(dEnv.FS, creds)
-	if err != nil {
-		return nil, err
-	}
-	return creds, err
-}
 
 // remotesapiAuth facilitates the implementation remotesrv.AccessControl for the remotesapi server.
 type remotesapiAuth struct {
