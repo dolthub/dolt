@@ -92,8 +92,8 @@ cluster:
     port: %d
 `, server2Port, server1Cluster, server2Cluster)
 
-	primary := makeClusterServer(t, &ports, "server1", "server1", primaryConfig)
-	standby := makeClusterServer(t, &ports, "server2", "server2", standbyConfig)
+	primary, _ := makeClusterServer(t, &ports, "server1", "server1", primaryConfig)
+	standby, _ := makeClusterServer(t, &ports, "server2", "server2", standbyConfig)
 
 	ctx := t.Context()
 
@@ -156,7 +156,9 @@ cluster:
 // makeClusterServer starts a single sql-server in its own repo store, using the
 // provided cluster config written to server.yaml. portName must already be
 // allocated in ports and must match the listener port embedded in config.
-func makeClusterServer(t *testing.T, ports *DynamicResources, name, portName, config string) *driver.SqlServer {
+// makeClusterServer starts a sql-server with |config| in a repo store of its
+// own, returning the server and the repo store it runs in.
+func makeClusterServer(t *testing.T, ports *DynamicResources, name, portName, config string) (*driver.SqlServer, driver.RepoStore) {
 	u, err := driver.NewDoltUser()
 	require.NoError(t, err)
 	t.Cleanup(func() { u.Cleanup() })
@@ -173,7 +175,7 @@ func makeClusterServer(t *testing.T, ports *DynamicResources, name, portName, co
 		DynamicPort: portName,
 	}, ports)
 	require.NotNil(t, server)
-	return server
+	return server, rs
 }
 
 func waitForDatabasesOnStandby(t *testing.T, ctx context.Context, db *sql.DB, want []string) {
