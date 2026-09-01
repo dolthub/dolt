@@ -33,8 +33,10 @@ type SequenceTrackerBase interface {
 	AcquireLock(ctx *sql.Context, tableName doltdb.TableName) (func(), error)
 	// DropRelation removes a relation from the tracker.
 	DropRelation(ctx *sql.Context, tableName doltdb.TableName, wses ...*doltdb.WorkingSet) error
-	// InitWithRoots fills the SequenceTracker with values pulled from each root in order.
-	InitWithRoots(ctx context.Context, roots ...doltdb.Rootish) error
+	// MergeRoots raises the tracked state of every relation in |roots| to the value that
+	// root records. It is not initialization: it runs synchronously and reports failure
+	// only to its caller.
+	MergeRoots(ctx context.Context, roots ...doltdb.Rootish) error
 	// Close releases any resources that might be held by the tracker.
 	Close()
 }

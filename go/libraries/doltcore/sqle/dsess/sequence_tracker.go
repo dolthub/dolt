@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -51,15 +50,16 @@ type SequenceTracker[
 	StateType sequences.SequenceState[StateType, ValueType],
 	ValueType comparable,
 ] struct {
+	// initErr is written by the lazy initialization started in the constructor, before
+	// it closes |init|, and read only after |init| is closed.
 	initErr   error
 	sequences *SyncMap[doltdb.TableName, StateType]
 	mm        *mutexmap.MutexMap
-	// initMu guards |init| against concurrent callers of InitWithRoots.
-	initMu sync.Mutex
-	// SequenceTracker is lazily initialized by loading
-	// tracker state for every given |root|.  On first access, we
-	// block on initialization being completed and we terminally
-	// return |initErr| if there was any error initializing.
+	// SequenceTracker is lazily initialized by loading tracker state for every given
+	// |root|. On first access, we block on initialization being completed and we
+	// terminally return |initErr| if there was any error initializing. |init| is
+	// created by the constructor and never replaced: re-reading roots into an already
+	// initialized tracker is MergeRoots, which does not disturb initialization state.
 	init chan struct{}
 	// To clean up effectively we need to stop all access to
 	// storage. As part of that, we have the possibility to cancel
@@ -188,7 +188,7 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) initializeSequence
 
 func (a *SequenceTracker[RelationType, StateType, ValueType]) Close() {
 	close(a.cancelInit)
-	<-a.currentInit()
+	<-a.init
 }
 
 // Current returns the next value to be generated in the auto increment sequence for |relationName|.
@@ -513,21 +513,35 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) AcquireLock(ctx *s
 		// This shouldn't be possible, it's a serious programming error if it happens
 		panic("Attempted to acquire AutoInc lock for entire insert operation, but lock mode was set to Interleaved")
 	}
-	return a.mm.Lock(relationName), nil
-}
-
-// currentInit returns the current |init| channel under |initMu|, so that it never races
-// with a concurrent InitWithRoots call installing a replacement channel.
-func (a *SequenceTracker[RelationType, StateType, ValueType]) currentInit() chan struct{} {
-	a.initMu.Lock()
-	defer a.initMu.Unlock()
-	return a.init
+	// Normalized like every other use of |mm|, so that the statement-level lock excludes
+	// the same allocations and merges a per-row lock would, whatever case the statement
+	// referred to the relation by.
+	return a.mm.Lock(relationName.ToLower()), nil
 }
 
 func (a *SequenceTracker[RelationType, StateType, ValueType]) waitForInit() error {
+	return a.awaitInit(context.Background())
+}
+
+// awaitInit blocks until the tracker's initialization finishes and returns its result,
+// giving up early if |ctx| is canceled. Initialization is deliberately detached from any
+// one caller's context, so a caller whose query has ended stops waiting rather than
+// recording its own cancellation as the tracker's outcome.
+func (a *SequenceTracker[RelationType, StateType, ValueType]) awaitInit(ctx context.Context) error {
+	// Fast path for the overwhelmingly common case of an already-initialized tracker.
+	// This is on the per-row path of every auto-increment insert, and the timeout below
+	// would otherwise allocate a timer on each one.
 	select {
-	case <-a.currentInit():
+	case <-a.init:
 		return a.initErr
+	default:
+	}
+
+	select {
+	case <-a.init:
+		return a.initErr
+	case <-ctx.Done():
+		return context.Cause(ctx)
 	case <-time.After(5 * time.Minute):
 		return errors.New("failed to initialize autoincrement tracker")
 	}
@@ -536,11 +550,7 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) waitForInit() erro
 // This method will initialize the SequenceTracker state with all
 // data from the tables found in |roots|.  This method closes the
 // |init| channel when it completes. It is meant to be run in a
-// goroutine, as in `go a.initWithRoots(...)`. |init| must be the
-// channel that the caller just installed as |a.init|: closing that
-// specific channel value (rather than re-reading |a.init|, which a
-// racing InitWithRoots caller may have already replaced) is what
-// makes concurrent InitWithRoots calls safe.
+// goroutine, as in `go a.initWithRoots(...)`.
 //
 // It is the caller's responsibility to ensure that whatever |ctx|
 // |initWithRoots| is called with appropriately outlives the end of
@@ -562,6 +572,29 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) initWithRoots(ctx 
 		}
 	}()
 
+	a.lockMode = currentLockMode()
+	a.initErr = a.mergeRoots(ctx, roots)
+}
+
+// MergeRoots raises the tracked sequence state for every relation found in |roots| to the
+// value that root records, leaving relations that are already further along alone.
+//
+// This is how a caller that has changed a working set (dolt_reset --hard, a cluster
+// standby taking over) tells the tracker about state it may not have seen. It is
+// deliberately not initialization: it runs synchronously and reports its failure only to
+// the caller, so a merge that fails cannot take the tracker away from other sessions the
+// way a failed initialization does.
+func (a *SequenceTracker[RelationType, StateType, ValueType]) MergeRoots(ctx context.Context, roots ...doltdb.Rootish) error {
+	if err := a.awaitInit(ctx); err != nil {
+		return err
+	}
+	return a.mergeRoots(ctx, roots)
+}
+
+// mergeRoots reads every relation in every root and merges its sequence state into the
+// tracker. Roots are read concurrently; the per-relation merge itself is serialized by
+// the same lock the mutators take.
+func (a *SequenceTracker[RelationType, StateType, ValueType]) mergeRoots(ctx context.Context, roots []doltdb.Rootish) error {
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(128)
 
@@ -588,20 +621,31 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) initWithRoots(ctx 
 				if err != nil {
 					return err
 				}
-
-				key := relationName.ToLower()
-				if oldValue, loaded := a.sequences.LoadOrStore(key, seq); loaded {
-					for seq.GreaterThan(oldValue) && !a.sequences.CompareAndSwap(key, oldValue, seq) {
-						oldValue, _ = a.sequences.Load(key)
-					}
-				}
+				a.mergeSequenceState(relationName, seq)
 			}
 			return nil
 		})
 	}
 
-	a.lockMode = currentLockMode()
-	a.initErr = eg.Wait()
+	return eg.Wait()
+}
+
+// mergeSequenceState raises the tracked state for |relationName| to |seq| if |seq| is
+// further along, and leaves it alone otherwise.
+//
+// The read-modify-write is done under the per-relation lock that Next, Set, AddNewRelation
+// and DropRelation also take. Without it, an allocation sitting between its own read and
+// write-back overwrites whatever was merged in here, sending the tracker backwards and
+// handing out values another branch has already used.
+func (a *SequenceTracker[RelationType, StateType, ValueType]) mergeSequenceState(relationName doltdb.TableName, seq StateType) {
+	key := relationName.ToLower()
+	release := a.mm.Lock(key)
+	defer release()
+
+	if current, ok := a.sequences.Load(key); ok && !seq.GreaterThan(current) {
+		return
+	}
+	a.sequences.Store(key, seq)
 }
 
 // validateAutoIncrementBounds checks if a value (or value+1 if checkIncrement) is valid for the auto-increment column type
@@ -647,34 +691,4 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) validateBounds(ctx
 
 	_, inRange, err := sqlType.Convert(ctx, testVal.CurrentValue())
 	return err == nil && inRange == sql.InRange
-}
-
-// InitWithRoots (re)initializes the tracker's state from |roots|. Concurrent calls (e.g. from
-// dolt_reset/dolt_checkout racing on separate sessions against the same database) are serialized
-// by |initMu|.
-func (a *SequenceTracker[RelationType, StateType, ValueType]) InitWithRoots(ctx context.Context, roots ...doltdb.Rootish) error {
-	a.initMu.Lock()
-	defer a.initMu.Unlock()
-
-	// Reading |a.init| directly (rather than via currentInit, which also takes |initMu|) is
-	// safe here because we're already holding the lock.
-	select {
-	case <-a.init:
-		if a.initErr != nil {
-			return a.initErr
-		}
-	case <-time.After(5 * time.Minute):
-		return errors.New("failed to initialize autoincrement tracker")
-	}
-
-	init := make(chan struct{})
-	a.init = init
-	go a.initWithRoots(ctx, init, roots...)
-
-	select {
-	case <-init:
-		return a.initErr
-	case <-time.After(5 * time.Minute):
-		return errors.New("failed to initialize autoincrement tracker")
-	}
 }
