@@ -74,6 +74,36 @@ type DoltSession struct {
 	branchActivityTracker *doltdb.BranchActivityTracker
 }
 
+// doltgresTransactionLifecycle is implemented by Doltgres session state that
+// needs notification when a transaction ends. Keeping this interface here
+// avoids coupling Dolt to Doltgres packages.
+type doltgresTransactionLifecycle interface {
+	DoltgresTransactionEnd()
+}
+
+type doltgresSessionCacheLifecycle interface {
+	DoltgresSessionCacheClear()
+}
+
+// NotifyTransactionEnd notifies Doltgres-owned session state that the active
+// transaction has ended. It is safe to call more than once for the same
+// transaction.
+func (d *DoltSession) NotifyTransactionEnd() {
+	if lifecycle, ok := d.DoltgresSessObj.(doltgresTransactionLifecycle); ok {
+		lifecycle.DoltgresTransactionEnd()
+	}
+}
+
+// ClearDoltgresSessionCache clears Doltgres's transaction-independent session
+// caches without discarding transaction lifecycle state.
+func (d *DoltSession) ClearDoltgresSessionCache() {
+	if lifecycle, ok := d.DoltgresSessObj.(doltgresSessionCacheLifecycle); ok {
+		lifecycle.DoltgresSessionCacheClear()
+	} else {
+		d.DoltgresSessObj = nil
+	}
+}
+
 var _ sql.Session = (*DoltSession)(nil)
 var _ sql.PersistableSession = (*DoltSession)(nil)
 var _ sql.TransactionSession = (*DoltSession)(nil)
@@ -476,6 +506,7 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 	// See comment in |commitBranchState|
 	defer func() {
 		if err == nil {
+			d.NotifyTransactionEnd()
 			ctx.SetTransaction(nil)
 		}
 	}()
@@ -746,6 +777,7 @@ func (d *DoltSession) commitBranchState(
 	// a new transaction. This should in principle be done by the engine, but it currently only understands explicit
 	// COMMIT statements. Any other statements that commit a transaction, including stored procedures, needs to do this
 	// themselves.
+	d.NotifyTransactionEnd()
 	ctx.SetTransaction(nil)
 	return newCommit, nil
 }
@@ -860,6 +892,7 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, dbName string, branchSt
 
 // Rollback rolls the given transaction back
 func (d *DoltSession) Rollback(ctx *sql.Context, tx sql.Transaction) error {
+	d.NotifyTransactionEnd()
 	// Nothing to do here, we just throw away all our work and let a new transaction begin next statement
 	d.clear()
 	return nil
