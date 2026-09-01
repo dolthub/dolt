@@ -296,7 +296,7 @@ var ModifyAndChangeColumnScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "alter table people modify rating double default 'not a number'",
-				ExpectedErrStr: "incompatible type for default value: Truncated incorrect double value: not a number",
+				ExpectedErrStr: "incompatible type for default value: Truncated incorrect double value: 'not a number'",
 			},
 		},
 	},
@@ -480,7 +480,7 @@ var ModifyColumnTypeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:       "alter table test modify column pk datetime",
-				ExpectedErr: types.ErrConvertingToTime,
+				ExpectedErr: sql.ErrIncorrectDateTimeValue,
 			},
 		},
 	},

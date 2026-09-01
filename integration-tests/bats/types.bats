@@ -322,7 +322,7 @@ SQL
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 9999-01-01 " ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (2, '999-01-01 00:00:00');"
+    run dolt sql -q "INSERT INTO test VALUES (2, '99999-01-01 00:00:00');"
     [ "$status" -eq "1" ]
     run dolt sql -q "INSERT INTO test VALUES (2, '10000-01-01 00:00:00');"
     [ "$status" -eq "1" ]
@@ -371,7 +371,7 @@ SQL
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 9999-01-01 23:59:59.999999 " ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (2, '999-01-01 00:00:00');"
+    run dolt sql -q "INSERT INTO test VALUES (2, '99999-01-01 00:00:00');"
     [ "$status" -eq "1" ]
     run dolt sql -q "INSERT INTO test VALUES (2, '10000-01-01 00:00:00');"
     [ "$status" -eq "1" ]
