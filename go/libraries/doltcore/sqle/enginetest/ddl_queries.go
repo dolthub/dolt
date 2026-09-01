@@ -480,7 +480,7 @@ var ModifyColumnTypeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:       "alter table test modify column pk datetime",
-				ExpectedErr: types.ErrConvertingToTime,
+				ExpectedErr: sql.ErrIncorrectDateTimeValue,
 			},
 		},
 	},
