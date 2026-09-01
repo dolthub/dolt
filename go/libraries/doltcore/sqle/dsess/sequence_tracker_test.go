@@ -205,7 +205,7 @@ func TestConcurrentMergeRootsWithReaders(t *testing.T) {
 					return
 				default:
 				}
-				cur, err := trk.Current(stubTable)
+				cur, err := trk.Current(context.Background(), stubTable)
 				require.NoError(t, err)
 				require.GreaterOrEqual(t, cur.v, last, "tracked value went backwards")
 				last = cur.v
@@ -221,4 +221,78 @@ func TestConcurrentMergeRootsWithReaders(t *testing.T) {
 	}
 	close(stop)
 	workers.Wait()
+}
+
+// TestMergeRootsIsCancellableWhileWaitingForARelationLock pins that a merge blocked behind
+// a long holder of the per-relation lock gives up when its own query is killed. Outside
+// interleaved lock mode that holder is an entire insert statement, so a dolt_reset --hard
+// arriving mid-insert would otherwise park somewhere KILL QUERY cannot reach it.
+func TestMergeRootsIsCancellableWhileWaitingForARelationLock(t *testing.T) {
+	const highWater = uint64(1 << 40)
+	trk := newStubTracker(&stubSource{value: highWater})
+	trk.sequences.Store(stubTable, gatedState{v: 1})
+
+	// The statement-level lock AcquireLock hands to the engine for the duration of an insert.
+	release, err := trk.mm.Lock(context.Background(), stubTable.ToLower())
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	mergeErr := make(chan error, 1)
+	go func() { mergeErr <- trk.MergeRoots(ctx, nilRoot{}) }()
+
+	select {
+	case err := <-mergeErr:
+		t.Fatalf("merge returned %v without waiting for the relation lock", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	cancel()
+	select {
+	case err := <-mergeErr:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(30 * time.Second):
+		t.Fatal("merge did not return after its context was canceled")
+	}
+
+	got, _ := trk.sequences.Load(stubTable)
+	require.Equal(t, uint64(1), got.v, "an abandoned merge must not have applied")
+
+	release()
+}
+
+// TestAcquireLockIsCancellable pins the same for the statement-level lock itself: an insert
+// waiting on another statement's auto-increment lock answers KILL QUERY.
+func TestAcquireLockIsCancellable(t *testing.T) {
+	trk := newStubTracker(&stubSource{value: 1})
+	trk.lockMode = LockMode_Traditional
+
+	release, err := trk.mm.Lock(context.Background(), stubTable.ToLower())
+	require.NoError(t, err)
+	defer release()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	type result struct {
+		release func()
+		err     error
+	}
+	acquired := make(chan result, 1)
+	go func() {
+		r, err := trk.AcquireLock(sql.NewContext(ctx), stubTable)
+		acquired <- result{release: r, err: err}
+	}()
+
+	select {
+	case r := <-acquired:
+		t.Fatalf("AcquireLock returned (%v) while the lock was held", r.err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	cancel()
+	select {
+	case r := <-acquired:
+		require.ErrorIs(t, r.err, context.Canceled)
+		require.Nil(t, r.release)
+	case <-time.After(30 * time.Second):
+		t.Fatal("AcquireLock did not return after its context was canceled")
+	}
 }

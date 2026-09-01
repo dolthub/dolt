@@ -91,7 +91,7 @@ func TestInitWithRoots(t *testing.T) {
 			cancelInit: make(chan struct{}),
 		}
 		go ait.initWithRoots(context.Background(), ait.init)
-		assert.NoError(t, ait.waitForInit())
+		assert.NoError(t, ait.awaitInit(context.Background()))
 	})
 	t.Run("CloseCancelsInit", func(t *testing.T) {
 		ait := AutoIncrementTracker{
@@ -103,7 +103,7 @@ func TestInitWithRoots(t *testing.T) {
 		}
 		go ait.initWithRoots(context.Background(), ait.init, blockingRoot{})
 		ait.Close()
-		assert.Error(t, ait.waitForInit())
+		assert.Error(t, ait.awaitInit(context.Background()))
 	})
 }
 
@@ -134,7 +134,7 @@ func TestNewSequenceTrackerFromRootsSurvivesCallerContextCancellation(t *testing
 	// Let resolution finish
 	close(root.release)
 
-	require.ErrorIs(t, ait.waitForInit(), errReleasableRootDone)
+	require.ErrorIs(t, ait.awaitInit(context.Background()), errReleasableRootDone)
 }
 
 // releasableRoot blocks ResolveRootValue until |release| is closed, regardless of ctx.
@@ -245,7 +245,7 @@ func TestMergeRootsCallerCancellationIsNotTerminal(t *testing.T) {
 	}
 
 	// Other sessions are unaffected, and a later merge still works.
-	require.NoError(t, ait.waitForInit(), "a canceled dolt_reset --hard poisoned the tracker")
+	require.NoError(t, ait.awaitInit(context.Background()), "a canceled dolt_reset --hard poisoned the tracker")
 	require.NoError(t, ait.MergeRoots(context.Background(), newReleasedGateRoot()))
 }
 
@@ -271,4 +271,50 @@ func TestMergeRootsWaitsForInitialization(t *testing.T) {
 	ait.Close()
 
 	require.Error(t, ait.MergeRoots(context.Background(), newReleasedGateRoot()))
+}
+
+// TestQueryCancellationDuringInitialization pins that a query arriving while the tracker
+// is still reading roots answers KILL QUERY. Initialization is deliberately detached from
+// any one caller's context, which is why the wait for it needs the waiting caller's own
+// context: otherwise a killed session sits in it for up to five minutes.
+func TestQueryCancellationDuringInitialization(t *testing.T) {
+	ait := &AutoIncrementTracker{
+		dbName:         "test_database",
+		sequences:      &SyncMap[doltdb.TableName, doltdb.AutoIncrementState]{},
+		mm:             mutexmap.NewMutexMap(),
+		init:           make(chan struct{}),
+		cancelInit:     make(chan struct{}),
+		relationSource: noRelations{},
+	}
+	go ait.initWithRoots(context.Background(), ait.init, blockingRoot{})
+	defer ait.Close()
+
+	queryCtx, cancelQuery := context.WithCancel(context.Background())
+	queryDone := make(chan error, 1)
+	go func() {
+		_, err := ait.Current(queryCtx, doltdb.TableName{Name: "t"})
+		queryDone <- err
+	}()
+
+	select {
+	case err := <-queryDone:
+		t.Fatalf("Current returned %v while initialization was still in progress", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	cancelQuery()
+	select {
+	case err := <-queryDone:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(30 * time.Second):
+		t.Fatal("Current did not return after its query context was canceled")
+	}
+
+	// Giving up is the caller's business only: initialization is still running, and its
+	// outcome is still its own.
+	select {
+	case <-ait.init:
+		t.Fatal("a canceled query ended the tracker's initialization")
+	default:
+	}
 }

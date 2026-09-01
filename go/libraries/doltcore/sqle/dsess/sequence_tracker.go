@@ -192,8 +192,8 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) Close() {
 }
 
 // Current returns the next value to be generated in the auto increment sequence for |relationName|.
-func (a *SequenceTracker[RelationType, StateType, ValueType]) Current(relationName doltdb.TableName) (current StateType, err error) {
-	err = a.waitForInit()
+func (a *SequenceTracker[RelationType, StateType, ValueType]) Current(ctx context.Context, relationName doltdb.TableName) (current StateType, err error) {
+	err = a.awaitInit(ctx)
 	if err != nil {
 		return current, err
 	}
@@ -207,7 +207,7 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) Current(relationNa
 // Next returns the next auto increment value for |relationName| using |insertVal| from an insert. If |insertVal| is
 // null or 0, it is generated from the sequence.
 func (a *SequenceTracker[RelationType, StateType, ValueType]) Next(ctx *sql.Context, relationName doltdb.TableName, insertVal interface{}) (nextValue ValueType, err error) {
-	err = a.waitForInit()
+	err = a.awaitInit(ctx)
 	if err != nil {
 		return nextValue, err
 	}
@@ -219,7 +219,10 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) Next(ctx *sql.Cont
 	// short per-table lock here.
 	locked := false
 	if a.lockMode == LockMode_Interleaved {
-		release := a.mm.Lock(relationName)
+		release, err := a.mm.Lock(ctx, relationName)
+		if err != nil {
+			return nextValue, err
+		}
 		defer release()
 		locked = true
 	}
@@ -230,7 +233,10 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) Next(ctx *sql.Cont
 		// restored after startup, so initialize it here.
 		if !locked {
 			if a.lockMode == LockMode_Interleaved {
-				release := a.mm.Lock(relationName)
+				release, err := a.mm.Lock(ctx, relationName)
+				if err != nil {
+					return nextValue, err
+				}
 				defer release()
 				locked = true
 			}
@@ -289,14 +295,17 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) Next(ctx *sql.Cont
 // table. Otherwise, the update is silently disregarded. So far this matches the MySQL behavior, but Dolt uses the
 // maximum value for this table across all branches.
 func (a *SequenceTracker[RelationType, StateType, ValueType]) Set(ctx *sql.Context, relationName doltdb.TableName, table RelationType, ws ref.WorkingSetRef, newSequenceState StateType) (newRelation RelationType, err error) {
-	err = a.waitForInit()
+	err = a.awaitInit(ctx)
 	if err != nil {
 		return newRelation, err
 	}
 
 	relationName = relationName.ToLower()
 
-	release := a.mm.Lock(relationName)
+	release, err := a.mm.Lock(ctx, relationName)
+	if err != nil {
+		return newRelation, err
+	}
 	defer release()
 
 	existing, ok := loadSequenceState(a.sequences, relationName)
@@ -428,15 +437,18 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) deepSet(ctx *sql.C
 }
 
 // AddNewRelation initializes a new table with an auto increment column to the tracker, as necessary
-func (a *SequenceTracker[RelationType, StateType, ValueType]) AddNewRelation(relationName doltdb.TableName, initialState StateType) error {
+func (a *SequenceTracker[RelationType, StateType, ValueType]) AddNewRelation(ctx context.Context, relationName doltdb.TableName, initialState StateType) error {
 	relationName = relationName.ToLower()
-	err := a.waitForInit()
+	err := a.awaitInit(ctx)
 	if err != nil {
 		return err
 	}
 
 	// only initialize the sequence for this table if no other branch has such a table
-	release := a.mm.Lock(relationName)
+	release, err := a.mm.Lock(ctx, relationName)
+	if err != nil {
+		return err
+	}
 	defer release()
 
 	existingState, hasExisting := a.sequences.Load(relationName)
@@ -452,14 +464,17 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) AddNewRelation(rel
 // To establish the new auto increment value, callers must also pass all other working sets in scope that may include
 // a table with the same name, omitting the working set that just deleted the table named.
 func (a *SequenceTracker[RelationType, StateType, ValueType]) DropRelation(ctx *sql.Context, relationName doltdb.TableName, wses ...*doltdb.WorkingSet) error {
-	err := a.waitForInit()
+	err := a.awaitInit(ctx)
 	if err != nil {
 		return err
 	}
 
 	relationName = relationName.ToLower()
 
-	release := a.mm.Lock(relationName)
+	release, err := a.mm.Lock(ctx, relationName)
+	if err != nil {
+		return err
+	}
 	defer release()
 
 	// A State representing the "furthest along" state among all working sets.
@@ -504,7 +519,7 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) DropRelation(ctx *
 }
 
 func (a *SequenceTracker[RelationType, StateType, ValueType]) AcquireLock(ctx *sql.Context, relationName doltdb.TableName) (func(), error) {
-	err := a.waitForInit()
+	err := a.awaitInit(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -516,11 +531,7 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) AcquireLock(ctx *s
 	// Normalized like every other use of |mm|, so that the statement-level lock excludes
 	// the same allocations and merges a per-row lock would, whatever case the statement
 	// referred to the relation by.
-	return a.mm.Lock(relationName.ToLower()), nil
-}
-
-func (a *SequenceTracker[RelationType, StateType, ValueType]) waitForInit() error {
-	return a.awaitInit(context.Background())
+	return a.mm.Lock(ctx, relationName.ToLower())
 }
 
 // awaitInit blocks until the tracker's initialization finishes and returns its result,
@@ -621,7 +632,9 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) mergeRoots(ctx con
 				if err != nil {
 					return err
 				}
-				a.mergeSequenceState(relationName, seq)
+				if err := a.mergeSequenceState(ctx, relationName, seq); err != nil {
+					return err
+				}
 			}
 			return nil
 		})
@@ -634,18 +647,20 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) mergeRoots(ctx con
 // further along, and leaves it alone otherwise.
 //
 // The read-modify-write is done under the per-relation lock that Next, Set, AddNewRelation
-// and DropRelation also take. Without it, an allocation sitting between its own read and
-// write-back overwrites whatever was merged in here, sending the tracker backwards and
-// handing out values another branch has already used.
-func (a *SequenceTracker[RelationType, StateType, ValueType]) mergeSequenceState(relationName doltdb.TableName, seq StateType) {
+// and DropRelation also take.
+func (a *SequenceTracker[RelationType, StateType, ValueType]) mergeSequenceState(ctx context.Context, relationName doltdb.TableName, seq StateType) error {
 	key := relationName.ToLower()
-	release := a.mm.Lock(key)
+	release, err := a.mm.Lock(ctx, key)
+	if err != nil {
+		return err
+	}
 	defer release()
 
 	if current, ok := a.sequences.Load(key); ok && !seq.GreaterThan(current) {
-		return
+		return nil
 	}
 	a.sequences.Store(key, seq)
+	return nil
 }
 
 // validateAutoIncrementBounds checks if a value (or value+1 if checkIncrement) is valid for the auto-increment column type
