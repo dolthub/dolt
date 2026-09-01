@@ -444,9 +444,9 @@ SQL
 
 @test "vector-index: can GC with out-of-line vectors" {
     # 600-dimension vectors exceed the inline tuple size limit and are stored out-of-line.
-    v1="[$(seq -s, 1 600)]"
-    v2="[$(seq -s, 101 700)]"
-    v3="[$(seq -s, 201 800)]"
+    v1="[$(seq 1 600 | paste -sd, -)]"
+    v2="[$(seq 101 700 | paste -sd, -)]"
+    v3="[$(seq 201 800 | paste -sd, -)]"
     dolt sql <<SQL
 CREATE TABLE big (pk BIGINT PRIMARY KEY, v VECTOR(600) NOT NULL);
 INSERT INTO big VALUES (1, STRING_TO_VECTOR('$v1')), (2, STRING_TO_VECTOR('$v2')), (3, STRING_TO_VECTOR('$v3'));
