@@ -829,8 +829,16 @@ func (gbs *GitBlobstore) pushInfoBranch(ctx context.Context, headOID git.OID) {
 		return
 	}
 
-	infoRef := "refs/heads/" + gbs.infoBranch
-	localInfoRef := "refs/dolt/info/" + gbs.infoBranch
+	// Push the info branch outside refs/heads/ so it is not swept into every
+	// consumer's default `git fetch` (+refs/heads/*:refs/remotes/origin/*).
+	// Keeping it under refs/dolt/info/ mirrors the local ref name and the
+	// refs/dolt/data layout: it stays visible in `git ls-remote` and forge ref
+	// browsers, but no longer collides with concurrent fetches. Landing this
+	// high-churn, force-pushed ref under refs/heads/ made overlapping fetches in
+	// the same clone race git's compare-and-swap and fail with
+	// "incorrect old value provided", aborting `git fetch` with a non-zero exit.
+	infoRef := "refs/dolt/info/" + gbs.infoBranch
+	localInfoRef := infoRef
 
 	content := formatDoltRemoteInfo(gbs.remoteRef, headOID, time.Now())
 
