@@ -743,6 +743,27 @@ func (db *database) PersistGhostCommitIDs(ctx context.Context, ghosts hash.HashS
 	return err
 }
 
+// CommitBundleItem contains all the information necessary to update one working set and its corresponding HEAD in
+// a single atomic operation.
+type CommitBundleItem struct {
+	// CommitDS is the HEAD Dataset to update with a new commit, or nil if no HEAD is to be updated.
+	CommitDS Dataset
+	// CommitOpts are the options to use when creating the new commit, or nil if no commit is to be created.
+	CommitOpts CommitOptions
+	// WorkingSetDS is the working set Dataset to update with a new working set.
+	WorkingSetDS Dataset
+	// WorkingSet is the new working set to write to the WorkingSetDS.
+	WorkingSet WorkingSetSpec
+	// PrevWsHash is the expected hash of the current working set for the WorkingSetDS.
+	// If the current working set does not match this hash, the update will fail with ErrOptimisticLockFailed.
+	PrevWsHash hash.Hash
+	// RootVal is the root value object to write to the WorkingSetDS
+	// TODO: why not use the one in WorkingSetSpec?
+	RootVal types.Value
+}
+
+type CommitBundle []CommitBundleItem
+
 // CommitWithWorkingSet updates two Datasets atomically: the working set, and its corresponding HEAD. Uses the same
 // global locking mechanism as UpdateWorkingSet.
 // The current dataset head will be filled in as the first parent of the new commit if not already present.
