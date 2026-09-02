@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	_ "github.com/dolthub/go-mysql-server/sql/variables"
+	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -506,6 +507,53 @@ func TestUpdate(t *testing.T) {
 					assert.Equal(t, uint32(test.expectedAges[i]), rows[0][2])
 				}
 			}
+		})
+	}
+}
+
+func TestIsDoltCheckoutCall(t *testing.T) {
+	tests := []struct {
+		name     string
+		query    string
+		expected bool
+	}{
+		{
+			name:     "single dolt_checkout call",
+			query:    "call dolt_checkout('main')",
+			expected: true,
+		},
+		{
+			name:     "dolt_checkout uppercase",
+			query:    "CALL DOLT_CHECKOUT('feature-branch')",
+			expected: true,
+		},
+		{
+			name:     "dolt_checkout mixed case",
+			query:    "Call Dolt_Checkout('dev')",
+			expected: true,
+		},
+		{
+			name:     "dolt_checkout with -b flag",
+			query:    "call dolt_checkout('-b', 'new-branch')",
+			expected: true,
+		},
+		{
+			name:     "not a call statement",
+			query:    "select * from people",
+			expected: false,
+		},
+		{
+			name:     "different procedure",
+			query:    "call dolt_commit('-m', 'test')",
+			expected: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			stmt, err := sqlparser.Parse(test.query)
+			require.NoError(t, err)
+			assert.Equal(t, test.expected, isDoltCheckoutCall(stmt))
 		})
 	}
 }
