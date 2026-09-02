@@ -74,14 +74,11 @@ type DoltSession struct {
 	branchActivityTracker *doltdb.BranchActivityTracker
 }
 
-// doltgresTransactionLifecycle is implemented by Doltgres session state that
-// needs notification when a transaction ends. Keeping this interface here
-// avoids coupling Dolt to Doltgres packages.
-type doltgresTransactionLifecycle interface {
+// DoltgresSessionLifecycle is implemented by Doltgres session state that needs
+// notification when a transaction ends or its session caches must be cleared.
+// Keeping this interface here avoids coupling Dolt to Doltgres packages.
+type DoltgresSessionLifecycle interface {
 	DoltgresTransactionEnd()
-}
-
-type doltgresSessionCacheLifecycle interface {
 	DoltgresSessionCacheClear()
 }
 
@@ -89,7 +86,7 @@ type doltgresSessionCacheLifecycle interface {
 // transaction has ended. It is safe to call more than once for the same
 // transaction.
 func (d *DoltSession) NotifyTransactionEnd() {
-	if lifecycle, ok := d.DoltgresSessObj.(doltgresTransactionLifecycle); ok {
+	if lifecycle, ok := d.DoltgresSessObj.(DoltgresSessionLifecycle); ok {
 		lifecycle.DoltgresTransactionEnd()
 	}
 }
@@ -97,7 +94,7 @@ func (d *DoltSession) NotifyTransactionEnd() {
 // ClearDoltgresSessionCache clears Doltgres's transaction-independent session
 // caches without discarding transaction lifecycle state.
 func (d *DoltSession) ClearDoltgresSessionCache() {
-	if lifecycle, ok := d.DoltgresSessObj.(doltgresSessionCacheLifecycle); ok {
+	if lifecycle, ok := d.DoltgresSessObj.(DoltgresSessionLifecycle); ok {
 		lifecycle.DoltgresSessionCacheClear()
 	} else {
 		d.DoltgresSessObj = nil
