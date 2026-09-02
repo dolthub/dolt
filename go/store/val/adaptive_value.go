@@ -244,8 +244,8 @@ func (v AdaptiveValue) convertToJsonStorage(ctx context.Context, vs ValueStore) 
 	return NewJsonStorageOutOfBand(addr, vs, length), nil
 }
 
-// OutOfBandAddr returns the content address embedded in an out-of-band
-// AdaptiveValue.
+// OutOfBandAddr returns the content address embedded in an
+// out-of-band AdaptiveValue.
 //
 // If |v| is NULL, inlined, or contains a malformed address whose
 // length is not exactly 20 bytes, OutOfBandAddr returns an error.
@@ -329,6 +329,14 @@ func InlineValueBytes(val []byte) ([]byte, bool) {
 // outside the TupleBuilder (e.g. in the merge path).
 func NewOutOfBandAdaptiveValue(ctx context.Context, vs ValueStore, data []byte) (AdaptiveValue, error) {
 	return convertBytesToOutOfBand(ctx, data, vs, nil)
+}
+
+// NewOutOfBandAdaptiveValueWithAddr returns an out-of-band AdaptiveValue
+// encoding [varint(|length|) | |addr|].
+func NewOutOfBandAdaptiveValueWithAddr(length uint64, addr hash.Hash) AdaptiveValue {
+	var buf [29]byte
+	n := uvarint.Encode(buf[:], length)
+	return AdaptiveValue(append(buf[:n], addr[:]...))
 }
 
 // AdaptiveEncodingTypeHandler is an implementation of TypeHandler for adaptive encoding types,

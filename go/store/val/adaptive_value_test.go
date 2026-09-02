@@ -56,7 +56,7 @@ func (m *mockValueStore) CompareAdaptiveCollatedStrings(ctx context.Context, l, 
 	return 0, nil
 }
 
-func TestAdaptiveValueMalformedAddress(t *testing.T) {
+func TestAdaptiveValue_OutOfBandDecode(t *testing.T) {
 	ctx := context.Background()
 	vs := &mockValueStore{}
 	buffPool := pool.NewBuffPool()
@@ -87,6 +87,11 @@ func TestAdaptiveValueMalformedAddress(t *testing.T) {
 			name:        "truncated varint header",
 			data:        []byte{241},
 			expectedErr: ErrTruncatedVarint,
+		},
+		{
+			name:        "mismatched varint length",
+			data:        NewOutOfBandAdaptiveValueWithAddr(1000, hash.Hash{1}),
+			expectedErr: nil,
 		},
 	}
 
@@ -153,31 +158,39 @@ func TestAdaptiveValueMalformedAddress(t *testing.T) {
 			for _, op := range decodeOps {
 				t.Run(op.name, func(t *testing.T) {
 					err := op.call(v)
-					assert.ErrorIs(t, err, tc.expectedErr)
+					if tc.expectedErr != nil {
+						assert.ErrorIs(t, err, tc.expectedErr)
+					} else {
+						assert.NoError(t, err)
+					}
 				})
 			}
 		})
 	}
 }
 
-func TestAdaptiveValueOutOfBandAddrInvalidCases(t *testing.T) {
-	var nullVal AdaptiveValue
-	addr, err := nullVal.OutOfBandAddr()
-	assert.ErrorIs(t, err, ErrNullAdaptiveValue)
-	assert.True(t, addr.IsEmpty())
+func TestAdaptiveValue_OutOfBandAddr(t *testing.T) {
+	t.Run("null", func(t *testing.T) {
+		var nullVal AdaptiveValue
+		addr, err := nullVal.OutOfBandAddr()
+		assert.ErrorIs(t, err, ErrNullAdaptiveValue)
+		assert.True(t, addr.IsEmpty())
+	})
 
-	inlineVal := AdaptiveValue([]byte{0x00, 0x01, 0x02})
-	addr, err = inlineVal.OutOfBandAddr()
-	assert.ErrorIs(t, err, ErrInlineAdaptiveValue)
-	assert.True(t, addr.IsEmpty())
-}
+	t.Run("inline", func(t *testing.T) {
+		inlineVal := AdaptiveValue([]byte{0x00, 0x01, 0x02})
+		addr, err := inlineVal.OutOfBandAddr()
+		assert.ErrorIs(t, err, ErrInlineAdaptiveValue)
+		assert.True(t, addr.IsEmpty())
+	})
 
-func TestAdaptiveValueOutOfBandAddrValid(t *testing.T) {
-	ctx := context.Background()
-	vs := &mockValueStore{}
-	v, err := NewOutOfBandAdaptiveValue(ctx, vs, []byte("valid content"))
-	require.NoError(t, err)
-	addr, err := v.OutOfBandAddr()
-	require.NoError(t, err)
-	assert.False(t, addr.IsEmpty())
+	t.Run("valid out-of-band", func(t *testing.T) {
+		ctx := context.Background()
+		vs := &mockValueStore{}
+		v, err := NewOutOfBandAdaptiveValue(ctx, vs, []byte("valid content"))
+		require.NoError(t, err)
+		addr, err := v.OutOfBandAddr()
+		require.NoError(t, err)
+		assert.False(t, addr.IsEmpty())
+	})
 }

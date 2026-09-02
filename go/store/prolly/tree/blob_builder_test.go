@@ -632,11 +632,14 @@ func getBlobValues(msg serial.Message) []byte {
 	return b.PayloadBytes()
 }
 
-func TestCompareAdaptiveValueMalformedAddress(t *testing.T) {
+func TestCompareAdaptiveValue_MalformedAndMismatchedAddress(t *testing.T) {
 	ctx := context.Background()
 	ns := NewTestNodeStore()
 
 	validVal := mustNewOutOfBandValue(t, ctx, ns, []byte("valid out-of-band content"))
+	validAddr, err := validVal.OutOfBandAddr()
+	require.NoError(t, err)
+
 	td := val.NewTupleDescriptorWithArgs(
 		val.TupleDescriptorArgs{ValueStore: ns},
 		val.Type{Enc: val.BytesAdaptiveEnc},
@@ -653,6 +656,8 @@ func TestCompareAdaptiveValueMalformedAddress(t *testing.T) {
 		{"3-byte tail", []byte{0x15, 0x01, 0x02, 0x03}, val.ErrInvalidAddressLen},
 		{"19-byte tail", append([]byte{0x15}, make([]byte, 19)...), val.ErrInvalidAddressLen},
 		{"21-byte tail", append([]byte{0x15}, make([]byte, 21)...), val.ErrInvalidAddressLen},
+		{"truncated varint", []byte{241}, val.ErrTruncatedVarint},
+		{"mismatched varint length", val.NewOutOfBandAdaptiveValueWithAddr(9999, validAddr), nil},
 	}
 
 	comparators := []struct {
@@ -679,7 +684,11 @@ func TestCompareAdaptiveValueMalformedAddress(t *testing.T) {
 			for _, c := range comparators {
 				t.Run(c.name, func(t *testing.T) {
 					err := c.cmp(validVal, mVal)
-					assert.ErrorIs(t, err, tc.expectedErr)
+					if tc.expectedErr != nil {
+						assert.ErrorIs(t, err, tc.expectedErr)
+					} else {
+						assert.NoError(t, err)
+					}
 				})
 			}
 		})
