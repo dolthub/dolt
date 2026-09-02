@@ -1208,13 +1208,19 @@ func (d *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roo
 	return d.SetWorkingSet(ctx, dbName, workingSet)
 }
 
-func (d *DoltSession) ResetGlobals(ctx *sql.Context, dbName string, root doltdb.RootValue) error {
+// MergeGlobals merges the sequence state recorded in |root| into the database's global
+// state, raising any tracked sequence that |root| is further along on.
+//
+// It cannot lower a sequence. Global sequence state is a high-water mark across every
+// branch, so a caller that has moved a working set backwards (dolt_reset --hard) is only
+// telling the tracker about relations it may not have seen, not undoing allocations.
+func (d *DoltSession) MergeGlobals(ctx *sql.Context, dbName string, root doltdb.RootValue) error {
 	sessionState, _, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
 		return err
 	}
 
-	err = sessionState.dbState.globalState.InitWithRoots(ctx, root)
+	err = sessionState.dbState.globalState.MergeRoots(ctx, root)
 	if err != nil {
 		return err
 	}

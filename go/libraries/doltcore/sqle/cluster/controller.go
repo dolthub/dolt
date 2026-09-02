@@ -1151,8 +1151,8 @@ func (c *Controller) refreshAutoIncrementTrackersForSessionDatabases() error {
 			// Not loaded in session; defer to lazy initialization on first use
 			continue
 		}
-		if err := gsp.GetGlobalState().InitWithRoots(sqlCtx, state.WorkingSet()); err != nil {
-			return fmt.Errorf("cluster/controller: auto-inc refresh: %s: init: %w", name, err)
+		if err := gsp.GetGlobalState().MergeRoots(sqlCtx, state.WorkingSet()); err != nil {
+			return fmt.Errorf("cluster/controller: auto-inc refresh: %s: merge: %w", name, err)
 		}
 	}
 	return nil
