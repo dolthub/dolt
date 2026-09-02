@@ -38,6 +38,43 @@ func TestDoltSessionInit(t *testing.T) {
 	assert.Equal(t, conf, dsess.globalsConf)
 }
 
+type countingDoltgresTransactionLifecycle struct {
+	transactionEnds int
+	pending         bool
+	cacheClears     int
+}
+
+func (l *countingDoltgresTransactionLifecycle) DoltgresTransactionEnd() {
+	if l.pending {
+		l.transactionEnds++
+		l.pending = false
+	}
+}
+
+func (l *countingDoltgresTransactionLifecycle) DoltgresSessionCacheClear() {
+	l.cacheClears++
+}
+
+func TestDoltgresTransactionLifecycle(t *testing.T) {
+	sess := DefaultSession(emptyDatabaseProvider(), nil)
+	lifecycle := &countingDoltgresTransactionLifecycle{pending: true}
+	sess.DoltgresSessObj = lifecycle
+	tx := DisabledTransaction{}
+	ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
+
+	assert.NoError(t, sess.Rollback(ctx, tx))
+	assert.Equal(t, 1, lifecycle.transactionEnds)
+	sess.NotifyTransactionEnd()
+	assert.Equal(t, 1, lifecycle.transactionEnds)
+
+	lifecycle.pending = true
+	sess.ClearDoltgresSessionCache()
+	assert.Equal(t, 1, lifecycle.cacheClears)
+	assert.Same(t, lifecycle, sess.DoltgresSessObj)
+	sess.NotifyTransactionEnd()
+	assert.Equal(t, 2, lifecycle.transactionEnds)
+}
+
 func TestDirtyBranches(t *testing.T) {
 	addBranchState := func(sess *DoltSession, dbName, head string, dirty bool) {
 		dbState, ok := sess.dbStates[strings.ToLower(dbName)]
