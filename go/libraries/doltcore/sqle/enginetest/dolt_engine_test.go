@@ -46,7 +46,7 @@ import (
 const SkipPreparedsCount = 83
 
 func TestQueries(t *testing.T) {
-	h := newDoltHarness(t)
+	h := newDoltServerTestHarness(t)
 	defer h.Close()
 	enginetest.TestQueries(t, h)
 }
@@ -1747,7 +1747,7 @@ func TestDoltCommitPrepared(t *testing.T) {
 }
 
 func TestQueriesPrepared(t *testing.T) {
-	h := newDoltHarness(t)
+	h := newDoltEnginetestHarness(t)
 	defer h.Close()
 	enginetest.TestQueriesPrepared(t, h)
 }
