@@ -217,41 +217,24 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) Next(ctx *sql.Cont
 	// The read-modify-write of the sequence below must be atomic across concurrent inserters. In
 	// interleaved lock mode (the default) the engine holds no statement-level lock, so we take a
 	// short per-table lock here.
-	locked := false
 	if a.lockMode == LockMode_Interleaved {
 		release, err := a.mm.Lock(ctx, relationName)
 		if err != nil {
 			return nextValue, err
 		}
 		defer release()
-		locked = true
 	}
 
 	currState, ok := loadSequenceState(a.sequences, relationName)
 	if !ok {
 		// Missing tracker state after initialization can happen when a running sql-server discovers a database
 		// restored after startup, so initialize it here.
-		if !locked {
-			if a.lockMode == LockMode_Interleaved {
-				release, err := a.mm.Lock(ctx, relationName)
-				if err != nil {
-					return nextValue, err
-				}
-				defer release()
-				locked = true
-			}
-
-			currState, ok = loadSequenceState(a.sequences, relationName)
+		currState, ok, err = a.initializeSequenceState(ctx, relationName, insertVal)
+		if err != nil {
+			return nextValue, err
 		}
-
 		if !ok {
-			currState, ok, err = a.initializeSequenceState(ctx, relationName, insertVal)
-			if err != nil {
-				return nextValue, err
-			}
-			if !ok {
-				return nextValue, fmt.Errorf("autoIncrementTracker: unable to find sequence for table %s", relationName.Name)
-			}
+			return nextValue, fmt.Errorf("autoIncrementTracker: unable to find sequence for table %s", relationName.Name)
 		}
 	}
 

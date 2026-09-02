@@ -78,8 +78,8 @@ func (mm *MutexMap) ref(key interface{}) *mapMutex {
 	return keyedMutex
 }
 
-// unref drops one reference to |mm|, deleting it from |keyedMutex| once nobody holds or
-// awaits it.
+// unref drops one reference to |mm|, deleting it from |keyedMutexes| once nobody holds
+// or awaits it.
 func (mm *mapMutex) unref() {
 	mutexMap := mm.parent
 	mutexMap.mu.Lock()
