@@ -27,8 +27,8 @@ type GlobalState interface {
 	GetSequenceTracker(ctx context.Context, key interface{}) (SequenceTrackerBase, error)
 	// AddSequenceTracker adds a new SequenceTracker to the GlobalState, accessible by the provided key.
 	AddSequenceTracker(ctx context.Context, key interface{}, value SequenceTrackerBase) error
-	// InitWithRoots initializes all of the state's SequenceTrackers
-	InitWithRoots(ctx context.Context, roots ...doltdb.Rootish) error
+	// MergeRoots merges |roots| into all of the state's SequenceTrackers.
+	MergeRoots(ctx context.Context, roots ...doltdb.Rootish) error
 }
 
 // GlobalStateProvider is an optional interface for databases that provide global state tracking

@@ -33,8 +33,10 @@ type SequenceTrackerBase interface {
 	AcquireLock(ctx *sql.Context, tableName doltdb.TableName) (func(), error)
 	// DropRelation removes a relation from the tracker.
 	DropRelation(ctx *sql.Context, tableName doltdb.TableName, wses ...*doltdb.WorkingSet) error
-	// InitWithRoots fills the SequenceTracker with values pulled from each root in order.
-	InitWithRoots(ctx context.Context, roots ...doltdb.Rootish) error
+	// MergeRoots raises the tracked state of every relation in |roots| to the value that
+	// root records. It is not initialization: it runs synchronously and reports failure
+	// only to its caller.
+	MergeRoots(ctx context.Context, roots ...doltdb.Rootish) error
 	// Close releases any resources that might be held by the tracker.
 	Close()
 }
@@ -48,11 +50,11 @@ type SequenceTracker[
 ] interface {
 	SequenceTrackerBase
 	// Current returns the current sequence state for the given relation.
-	Current(tableName doltdb.TableName) (StateType, error)
+	Current(ctx context.Context, tableName doltdb.TableName) (StateType, error)
 	// Next returns the next SQL value produced by the given relation, and advances that relation's state.
 	Next(ctx *sql.Context, tableName doltdb.TableName, insertVal interface{}) (ValueType, error)
 	// AddNewRelation adds a new table to the tracker, initializing the sequence state to the provided |initialState|.
-	AddNewRelation(tableName doltdb.TableName, initialState StateType) error
+	AddNewRelation(ctx context.Context, tableName doltdb.TableName, initialState StateType) error
 	// Set sets the sequence state for the given relation. This operation may silently do nothing if this value is
 	// below the current value for this relation. The relation in the provided working set is assumed to already have the value
 	// given, so the new global maximum is computed without regard for its value in that working set.

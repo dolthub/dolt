@@ -429,7 +429,7 @@ func (w *prollyTableWriter) table(ctx *sql.Context) (tbl *doltdb.Table, err erro
 				return nil, err
 			}
 		} else if w.aiSet {
-			aiVal, err := w.aiTracker.Current(w.tblName)
+			aiVal, err := w.aiTracker.Current(ctx, w.tblName)
 			if err != nil {
 				return nil, err
 			}

@@ -128,9 +128,9 @@ func (g GlobalStateImpl) Close() {
 	}
 }
 
-func (g GlobalStateImpl) InitWithRoots(ctx context.Context, roots ...doltdb.Rootish) error {
+func (g GlobalStateImpl) MergeRoots(ctx context.Context, roots ...doltdb.Rootish) error {
 	for _, tracker := range g.sequenceTrackers {
-		err := tracker.InitWithRoots(ctx, roots...)
+		err := tracker.MergeRoots(ctx, roots...)
 		if err != nil {
 			return err
 		}
