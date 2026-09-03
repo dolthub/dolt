@@ -149,16 +149,14 @@ func GetUnreachableRootCause(err error) error {
 // [ref.DoltRef], such as a branch or tag, conflicts with one or more
 // existing names.
 //
-// Ref identifies one exsiting conflict so callers can produce
+// Ref identifies one existing conflict so callers can produce
 // context-specific errors, such as actions.BranchExistsError.
 type ExistingRefError struct {
 	Ref ref.DoltRef
 }
 
 func (e *ExistingRefError) Error() string {
-	// TODO(elianddb): Include Ref in the error message once tags, workspaces,
-	//  and other reference types use their own errors, and update their tests.
-	return "already exists"
+	return fmt.Sprintf("ref '%s' already exists", e.Ref.String())
 }
 
 // DoltIgnoreConflictError is an error that is returned when the user attempts to stage a table that matches conflicting dolt_ignore patterns

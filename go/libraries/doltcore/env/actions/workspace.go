@@ -18,6 +18,8 @@ import (
 	"context"
 	"errors"
 
+	errorKinds "gopkg.in/src-d/go-errors.v1"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -26,6 +28,7 @@ import (
 var ErrUnmergedWorkspaceDelete = errors.New("attempted to delete a workspace that is not fully merged into its parent; use `-f` to force")
 var ErrCOWorkspaceDelete = errors.New("attempted to delete checked out workspace")
 var ErrBranchNameExists = errors.New("workspace name must not be existing branch name")
+var ErrWorkspaceExists = errorKinds.NewKind("fatal: A workspace named '%s' already exists.")
 
 func CreateWorkspace(ctx context.Context, dEnv *env.DoltEnv, name, startPoint string) error {
 	headRef, err := dEnv.RepoStateReader().CWBHeadRef(ctx)
@@ -55,7 +58,7 @@ func CreateWorkspaceOnDB(ctx context.Context, ddb *doltdb.DoltDB, name, startPoi
 		return err
 	}
 	if hasRef {
-		return &doltdb.ExistingRefError{Ref: workRef}
+		return ErrWorkspaceExists.New(name)
 	}
 
 	cs, err := doltdb.NewCommitSpec(startPoint)
