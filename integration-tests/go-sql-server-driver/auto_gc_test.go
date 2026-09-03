@@ -170,7 +170,7 @@ listener:
 cluster:
   standby_remotes:
   - name: standby
-    remote_url_template: http://localhost:{{get_port "standby_server_cluster_port"}}/{database}
+    remote_url_template: http://127.0.0.1:{{get_port "standby_server_cluster_port"}}/{database}
   bootstrap_role: primary
   bootstrap_epoch: 1
   remotesapi:
@@ -241,7 +241,7 @@ remotesapi:
 cluster:
   standby_remotes:
   - name: primary
-    remote_url_template: http://localhost:{{get_port "primary_server_cluster_port"}}/{database}
+    remote_url_template: http://127.0.0.1:{{get_port "primary_server_cluster_port"}}/{database}
   bootstrap_role: standby
   bootstrap_epoch: 1
   remotesapi:
@@ -324,7 +324,7 @@ func (s *AutoGCTest) CreateUsersAndRemotes(ctx context.Context, t *testing.T, u 
 	require.NoError(t, err)
 	port, ok := s.Ports.GetPort("standby_remotesapi_port")
 	require.True(t, ok)
-	_, err = conn.ExecContext(ctx, fmt.Sprintf("call dolt_remote('add', 'origin', 'http://localhost:%d/auto_gc_test')", port))
+	_, err = conn.ExecContext(ctx, fmt.Sprintf("call dolt_remote('add', 'origin', 'http://127.0.0.1:%d/auto_gc_test')", port))
 	require.NoError(t, err)
 	require.NoError(t, conn.Close())
 }
