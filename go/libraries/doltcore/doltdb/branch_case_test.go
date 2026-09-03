@@ -97,6 +97,7 @@ func TestCaseVariantBranchRejectedInDeterministicRace(t *testing.T) {
 	var existing *ExistingRefError
 	require.ErrorAs(t, err, &existing)
 	require.Equal(t, "br", existing.Ref.GetPath())
+	require.EqualError(t, existing, "ref 'refs/heads/br' already exists")
 	require.Equal(t, []string{"br", "main"}, sortedBranchNames(ctx, t, ddb))
 }
 
