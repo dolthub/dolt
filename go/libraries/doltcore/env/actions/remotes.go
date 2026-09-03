@@ -46,47 +46,86 @@ var ErrFailedToGetRemoteDb = errors.New("failed to get remote db")
 var ErrUnknownPushErr = errors.New("unknown push error")
 var ErrShallowPushImpossible = errors.New("shallow repository missing chunks to complete push")
 
-// Push will update a destination branch, in a given destination database if it can be done as a fast forward merge.
-// This is accomplished first by verifying that the remote tracking reference for the source database can be updated to
-// the given commit via a fast forward merge.  If this is the case, an attempt will be made to update the branch in the
-// destination db to the given commit via fast forward move.  If that succeeds the tracking branch is updated in the
-// source db.
-func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef ref.BranchRef, remoteRef ref.RemoteRef, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, statsCh chan pull.Stats) error {
-	var err error
-	if mode == ref.FastForwardOnly {
-		canFF, err := destDB.CanFastForward(ctx, destRef, commit)
+// PushRefResultType identifies how a pushed reference was modified on
+// the remote database.
+type PushRefResultType int
 
-		if err != nil {
-			return err
-		} else if !canFF {
-			return ErrCantFF
+const (
+	// PushResultTypeNewBranch indicates a new remote branch was created.
+	PushResultTypeNewBranch PushRefResultType = iota
+	// PushResultTypeUpdated indicates an existing remote branch was
+	// fast-forwarded.
+	PushResultTypeUpdated
+	// PushResultTypeForced indicates an existing remote branch was
+	// force-updated.
+	PushResultTypeForced
+	// PushResultTypeDeleted indicates a remote branch was deleted.
+	PushResultTypeDeleted
+	// PushResultTypeNewTag indicates a new remote tag was created.
+	PushResultTypeNewTag
+)
+
+// PushRefResult records the outcome and commit hash transition of
+// pushing a single reference to a remote database.
+type PushRefResult struct {
+	Type    PushRefResultType
+	OldHash hash.Hash
+	NewHash hash.Hash
+}
+
+// Push updates |destRef| on |destDB| with commits from |srcDB| and
+// updates |remoteRef| in |srcDB| to track the newly pushed commit.
+//
+// |destRef| specifies the destination branch on |destDB|. Push
+// inspects |destDB| before transferring chunks to distinguish branch
+// creation from updates and returns a *PushRefResult recording the
+// commit hashes. Returns ErrCantFF if a fast-forward update cannot be
+// performed, [doltdb.ErrUpToDate] if the remote branch already points
+// to the given commit, or an error if chunks cannot be transferred.
+func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef ref.BranchRef, remoteRef ref.RemoteRef, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, statsCh chan pull.Stats) (*PushRefResult, error) {
+	var oldHash hash.Hash
+	isNewBranch := false
+	canFF := true
+	prevCommit, err := destDB.ResolveCommitRef(ctx, destRef)
+	if errors.Is(err, doltdb.ErrBranchNotFound) {
+		isNewBranch = true
+	} else if err != nil {
+		return nil, err
+	} else {
+		if oldHash, err = prevCommit.HashOf(); err != nil {
+			return nil, err
+		}
+		if canFF, err = prevCommit.CanFastForwardTo(ctx, commit); err != nil {
+			return nil, err
+		}
+		if mode == ref.FastForwardOnly && !canFF {
+			return nil, ErrCantFF
 		}
 	}
 
 	h, err := commit.HashOf()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	err = destDB.PullChunks(ctx, tempTableDir, srcDB, []hash.Hash{h}, statsCh, nil)
-
 	if errors.Is(err, nbs.ErrGhostChunkRequested) {
 		err = ErrShallowPushImpossible
 	}
-
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	switch mode {
 	case ref.ForceUpdate:
 		err = destDB.SetHeadAndWorkingSetToCommit(ctx, destRef, commit)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		err = srcDB.SetHeadToCommit(ctx, remoteRef, commit)
 	case ref.FastForwardOnly:
-		// Ignored tables create a staged/working mismatch that blocks fast-forward pushes, so we detect and permit that case.
+		// Working sets with only ignored tables are allowed through
+		// fast-forward updates without failing the workspace check.
 		onlyIgnored := false
 		roots, err := destDB.ResolveBranchRoots(ctx, destRef)
 		if err == nil {
@@ -94,43 +133,58 @@ func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef
 		}
 		err = destDB.FastForwardWithWorkspaceCheck(ctx, destRef, commit, onlyIgnored)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		// We set the remote ref to the commit here, regardless of its
 		// previous value. It does not need to be a FastForward update
 		// of the local ref for this operation to succeed.
 		err = srcDB.SetHeadToCommit(ctx, remoteRef, commit)
 	}
+	if err != nil {
+		return nil, err
+	}
 
-	return err
+	resultType := PushResultTypeUpdated
+	if isNewBranch {
+		resultType = PushResultTypeNewBranch
+	} else if !canFF {
+		resultType = PushResultTypeForced
+	}
+
+	return &PushRefResult{
+		Type:    resultType,
+		OldHash: oldHash,
+		NewHash: h,
+	}, nil
 }
 
-// DoPush returns a message about whether the push was successful for each branch or a tag.
-// This includes if there is a new remote branch created, upstream is set or push was rejected for a branch.
+// DoPush executes a push for each target in |pushMeta| and returns a
+// summary string describing created, updated, or rejected references.
+//
+// Targets are evaluated sequentially. If any target fails with an
+// unrecoverable error, DoPush returns the accumulated output string
+// along with the error.
 func DoPush[C doltdb.Context](ctx C, pushMeta *env.PushOptions[C], statsCh chan pull.Stats) (returnMsg string, err error) {
 	var successPush, setUpstreamPush, failedPush []string
 	for _, targets := range pushMeta.Targets {
-		err = push(ctx, pushMeta.Rsr, pushMeta.TmpDir, pushMeta.SrcDb, pushMeta.DestDb, pushMeta.Remote, targets, statsCh)
-		if err == nil {
-			// TODO: we don't have sufficient information here to know what actually happened in the push. Supporting
-			// git behavior of printing the commit ids updated (e.g. 74476cf38..080b073e7  branch1 -> branch1) isn't
-			// currently possible. We need to plumb through results in the return from the Push(). Having just an error
-			// response is not sufficient, as there are many "success" cases that are not errors.
-			if targets.SrcRef == ref.EmptyBranchRef {
-				successPush = append(successPush, fmt.Sprintf(" - [deleted]             %s", targets.DestRef.GetPath()))
-			} else {
-				successPush = append(successPush, fmt.Sprintf(" * [new branch]          %s -> %s", targets.SrcRef.GetPath(), targets.DestRef.GetPath()))
-			}
-
-		} else if errors.Is(err, doltdb.ErrIsAhead) || errors.Is(err, ErrCantFF) || errors.Is(err, datas.ErrMergeNeeded) {
-			failedPush = append(failedPush, fmt.Sprintf(" ! [rejected]            %s -> %s (non-fast-forward)", targets.SrcRef.GetPath(), targets.DestRef.GetPath()))
+		src := targets.SrcRef.GetPath()
+		dest := targets.DestRef.GetPath()
+		res, pushErr := push(ctx, pushMeta.Rsr, pushMeta.TmpDir, pushMeta.SrcDb, pushMeta.DestDb, pushMeta.Remote, targets, statsCh)
+		if pushErr == nil {
+			successPush = append(successPush, formatPushSuccess(res, src, dest))
+		} else if errors.Is(pushErr, doltdb.ErrIsAhead) || errors.Is(pushErr, ErrCantFF) || errors.Is(pushErr, datas.ErrMergeNeeded) {
+			failedPush = append(failedPush, fmt.Sprintf(" ! [rejected]            %s -> %s (non-fast-forward)", src, dest))
 			continue
-		} else if !errors.Is(err, doltdb.ErrUpToDate) {
-			// this will allow getting successful push messages along with the error of current push
+		} else if errors.Is(pushErr, doltdb.ErrUpToDate) {
+			if err == nil {
+				err = pushErr
+			}
+		} else {
+			err = pushErr
 			break
 		}
 		if targets.SetUpstream {
-			err = pushMeta.Rsw.UpdateBranch(targets.SrcRef.GetPath(), env.BranchConfig{
+			err = pushMeta.Rsw.UpdateBranch(src, env.BranchConfig{
 				Merge: ref.MarshalableRef{
 					Ref: targets.DestRef,
 				},
@@ -139,7 +193,7 @@ func DoPush[C doltdb.Context](ctx C, pushMeta *env.PushOptions[C], statsCh chan 
 			if err != nil {
 				return "", err
 			}
-			setUpstreamPush = append(setUpstreamPush, fmt.Sprintf("branch '%s' set up to track '%s'.", targets.SrcRef.GetPath(), targets.RemoteRef.GetPath()))
+			setUpstreamPush = append(setUpstreamPush, fmt.Sprintf("branch '%s' set up to track '%s'.", src, targets.RemoteRef.GetPath()))
 		}
 	}
 
@@ -147,24 +201,54 @@ func DoPush[C doltdb.Context](ctx C, pushMeta *env.PushOptions[C], statsCh chan 
 	return
 }
 
-// push performs push on a branch or a tag.
-func push[C doltdb.Context](ctx C, rsr env.RepoStateReader[C], tmpDir string, src, dest *doltdb.DoltDB, remote *env.Remote, opts *env.PushTarget, statsCh chan pull.Stats) error {
-	switch opts.SrcRef.GetType() {
-	case ref.BranchRefType:
-		if opts.SrcRef == ref.EmptyBranchRef {
-			return deleteRemoteBranch(ctx, opts.DestRef, opts.RemoteRef, src, dest, *remote, opts.Mode.Force)
-		} else {
-			return PushToRemoteBranch(ctx, rsr, tmpDir, opts.Mode, opts.SrcRef, opts.DestRef, opts.RemoteRef, src, dest, *remote, statsCh)
-		}
-	case ref.TagRefType:
-		return pushTagToRemote(ctx, tmpDir, opts.SrcRef, opts.DestRef, src, dest, statsCh)
+func formatPushSuccess(res *PushRefResult, src, dest string) string {
+	switch res.Type {
+	case PushResultTypeDeleted:
+		return fmt.Sprintf(" - [deleted]             %s", dest)
+	case PushResultTypeNewBranch:
+		return fmt.Sprintf(" * [new branch]          %s -> %s", src, dest)
+	case PushResultTypeNewTag:
+		return fmt.Sprintf(" * [new tag]             %s -> %s", src, dest)
+	case PushResultTypeForced:
+		return fmt.Sprintf(" + %s...%s %s -> %s (forced update)", shortHash(res.OldHash), shortHash(res.NewHash), src, dest)
 	default:
-		return fmt.Errorf("%w: %s of type %s", ErrCannotPushRef, opts.SrcRef.String(), opts.SrcRef.GetType())
+		return fmt.Sprintf("   %s..%s  %s -> %s", shortHash(res.OldHash), shortHash(res.NewHash), src, dest)
 	}
 }
 
-// buildReturnMsg combines the push progress information of created branches, remote tracking branches
-// and rejected branches, in order. // TODO: updated branches info is missing
+// shortHash returns the 7-character abbreviated prefix of a commit
+// hash.
+func shortHash(h hash.Hash) string {
+	s := h.String()
+	if len(s) > 7 {
+		return s[:7]
+	}
+	return s
+}
+
+// push performs push on a branch or a tag.
+func push[C doltdb.Context](ctx C, rsr env.RepoStateReader[C], tmpDir string, src, dest *doltdb.DoltDB, remote *env.Remote, opts *env.PushTarget, statsCh chan pull.Stats) (*PushRefResult, error) {
+	switch opts.SrcRef.GetType() {
+	case ref.BranchRefType:
+		if opts.SrcRef == ref.EmptyBranchRef {
+			if err := deleteRemoteBranch(ctx, opts.DestRef, opts.RemoteRef, src, dest, *remote, opts.Mode.Force); err != nil {
+				return nil, err
+			}
+			return &PushRefResult{Type: PushResultTypeDeleted}, nil
+		}
+		return PushToRemoteBranch(ctx, rsr, tmpDir, opts.Mode, opts.SrcRef, opts.DestRef, opts.RemoteRef, src, dest, *remote, statsCh)
+	case ref.TagRefType:
+		if err := pushTagToRemote(ctx, tmpDir, opts.SrcRef, opts.DestRef, src, dest, statsCh); err != nil {
+			return nil, err
+		}
+		return &PushRefResult{Type: PushResultTypeNewTag}, nil
+	default:
+		return nil, fmt.Errorf("%w: %s of type %s", ErrCannotPushRef, opts.SrcRef.String(), opts.SrcRef.GetType())
+	}
+}
+
+// buildReturnMsg combines the push progress messages for updated,
+// created, and rejected branches in order.
 func buildReturnMsg(success, setUpstream, failed []string, remoteUrl string, err error) (string, error) {
 	var retMsg string
 	if len(success) == 0 && len(failed) == 0 {
@@ -217,7 +301,14 @@ func deleteRemoteBranch(ctx context.Context, toDelete, remoteRef ref.DoltRef, lo
 	return nil
 }
 
-func PushToRemoteBranch[C doltdb.Context](ctx C, rsr env.RepoStateReader[C], tempTableDir string, mode ref.UpdateMode, srcRef, destRef, remoteRef ref.DoltRef, localDB, remoteDB *doltdb.DoltDB, remote env.Remote, statsCh chan pull.Stats) error {
+// PushToRemoteBranch resolves |srcRef| to a commit and pushes it to
+// |destRef| on |remoteDB|, updating the local remote tracking
+// reference |remoteRef|.
+//
+// Returns a *PushRefResult on success recording whether the remote
+// branch was created or updated, or an error if the ref cannot be
+// resolved or the push is rejected.
+func PushToRemoteBranch[C doltdb.Context](ctx C, rsr env.RepoStateReader[C], tempTableDir string, mode ref.UpdateMode, srcRef, destRef, remoteRef ref.DoltRef, localDB, remoteDB *doltdb.DoltDB, remote env.Remote, statsCh chan pull.Stats) (*PushRefResult, error) {
 	evt := events.GetEventFromContext(ctx)
 
 	u, err := earl.Parse(remote.Url)
@@ -232,25 +323,25 @@ func PushToRemoteBranch[C doltdb.Context](ctx C, rsr env.RepoStateReader[C], tem
 	cs, _ := doltdb.NewCommitSpec(srcRef.GetPath())
 	headRef, err := rsr.CWBHeadRef(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	optCmt, err := localDB.Resolve(ctx, cs, headRef)
 	if err != nil {
-		return fmt.Errorf("%w; refspec not found: '%s'; %s", ref.ErrInvalidRefSpec, srcRef.GetPath(), err.Error())
+		return nil, fmt.Errorf("%w; refspec not found: '%s'; %s", ref.ErrInvalidRefSpec, srcRef.GetPath(), err.Error())
 	}
 	cm, ok := optCmt.ToCommit()
 	if !ok {
-		return doltdb.ErrGhostCommitEncountered
+		return nil, doltdb.ErrGhostCommitEncountered
 	}
 
-	err = Push(ctx, tempTableDir, mode, destRef.(ref.BranchRef), remoteRef.(ref.RemoteRef), localDB, remoteDB, cm, statsCh)
+	res, err := Push(ctx, tempTableDir, mode, destRef.(ref.BranchRef), remoteRef.(ref.RemoteRef), localDB, remoteDB, cm, statsCh)
 	switch err {
 	case nil:
-		return nil
+		return res, nil
 	case doltdb.ErrUpToDate, doltdb.ErrIsAhead, ErrCantFF, datas.ErrMergeNeeded, datas.ErrDirtyWorkspace, ErrShallowPushImpossible:
-		return err
+		return nil, err
 	default:
-		return fmt.Errorf("%w; %s", ErrUnknownPushErr, err.Error())
+		return nil, fmt.Errorf("%w; %s", ErrUnknownPushErr, err.Error())
 	}
 }
 

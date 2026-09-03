@@ -291,3 +291,59 @@ teardown() {
     [ "$status" -eq 0 ]
 }
 
+@test "push: push existing branch does not report new branch" {
+    cd repo1
+    setup_remote_server
+
+    run dolt push origin main
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "[new branch]" ]] || false
+    [[ "$output" =~ "main -> main" ]] || false
+}
+
+@test "push: force push to existing diverged branch does not report new branch" {
+    (
+        cd repo1
+        dolt push origin main
+    )
+
+    cd repo2
+    dolt sql -q "create table diverged (pk int primary key)"
+    dolt add .
+    dolt commit -m "diverged commit"
+
+    setup_remote_server
+    run dolt push --force origin main
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "[new branch]" ]] || false
+    [[ "$output" =~ "(forced update)" ]] || false
+}
+
+@test "push: multi-branch push reports new branch only for new branches" {
+    cd repo1
+    setup_remote_server
+    dolt branch branch_new
+    run dolt push origin branch_new:branch_new main:main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "* [new branch]          branch_new -> branch_new" ]] || false
+    [[ ! "$output" =~ "* [new branch]          main -> main" ]] || false
+}
+
+@test "push: push tag reports new tag" {
+    cd repo1
+    setup_remote_server
+    dolt tag v1
+    run dolt push origin v1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "* [new tag]             v1 -> v1" ]] || false
+}
+
+@test "push: delete remote branch reports deleted" {
+    cd repo1
+    setup_remote_server
+    dolt branch to_delete
+    dolt push origin to_delete
+    run dolt push origin :to_delete
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "- [deleted]             to_delete" ]] || false
+}
