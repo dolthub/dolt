@@ -291,6 +291,14 @@ teardown() {
     [ "$status" -eq 0 ]
 }
 
+assert_push_updated() {
+    [[ "$output" =~ [0-9a-v]{32}\.\.[0-9a-v]{32}[[:space:]]+$1\ -\>[[:space:]]$2 ]] || false
+}
+
+assert_push_forced() {
+    [[ "$output" =~ \+[[:space:]][0-9a-v]{32}\.\.\.[0-9a-v]{32}[[:space:]]+$1\ -\>[[:space:]]$2[[:space:]]+\(forced\ update\) ]] || false
+}
+
 @test "push: push existing branch does not report new branch" {
     cd repo1
     setup_remote_server
@@ -298,7 +306,7 @@ teardown() {
     run dolt push origin main
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "[new branch]" ]] || false
-    [[ "$output" =~ "main -> main" ]] || false
+    assert_push_updated main main
 }
 
 @test "push: force push to existing diverged branch does not report new branch" {
@@ -316,7 +324,7 @@ teardown() {
     run dolt push --force origin main
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "[new branch]" ]] || false
-    [[ "$output" =~ "(forced update)" ]] || false
+    assert_push_forced main main
 }
 
 @test "push: multi-branch push reports new branch only for new branches" {
@@ -346,4 +354,19 @@ teardown() {
     run dolt push origin :to_delete
     [ "$status" -eq 0 ]
     [[ "$output" =~ "- [deleted]             to_delete" ]] || false
+}
+
+@test "push: push refspec with different destination name reports src to dest" {
+    cd repo1
+    setup_remote_server
+
+    run dolt push origin main:foobar
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "* [new branch]          main -> foobar" ]] || false
+
+    dolt sql -q "insert into t1 values (10, 10)"
+    dolt commit -am "Commit for foobar"
+    run dolt push origin main:foobar
+    [ "$status" -eq 0 ]
+    assert_push_updated main foobar
 }

@@ -210,20 +210,10 @@ func formatPushSuccess(res *PushRefResult, src, dest string) string {
 	case PushResultTypeNewTag:
 		return fmt.Sprintf(" * [new tag]             %s -> %s", src, dest)
 	case PushResultTypeForced:
-		return fmt.Sprintf(" + %s...%s %s -> %s (forced update)", shortHash(res.OldHash), shortHash(res.NewHash), src, dest)
+		return fmt.Sprintf(" + %s...%s %s -> %s (forced update)", res.OldHash.String(), res.NewHash.String(), src, dest)
 	default:
-		return fmt.Sprintf("   %s..%s  %s -> %s", shortHash(res.OldHash), shortHash(res.NewHash), src, dest)
+		return fmt.Sprintf("   %s..%s  %s -> %s", res.OldHash.String(), res.NewHash.String(), src, dest)
 	}
-}
-
-// shortHash returns the 7-character abbreviated prefix of a commit
-// hash.
-func shortHash(h hash.Hash) string {
-	s := h.String()
-	if len(s) > 7 {
-		return s[:7]
-	}
-	return s
 }
 
 // push performs push on a branch or a tag.
