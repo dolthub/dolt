@@ -83,6 +83,11 @@ type PushRefResult struct {
 // performed, [doltdb.ErrUpToDate] if the remote branch already points
 // to the given commit, or an error if chunks cannot be transferred.
 func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef ref.BranchRef, remoteRef ref.RemoteRef, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, statsCh chan pull.Stats) (*PushRefResult, error) {
+	h, err := commit.HashOf()
+	if err != nil {
+		return nil, err
+	}
+
 	var oldHash hash.Hash
 	isNewBranch := false
 	canFF := true
@@ -95,17 +100,22 @@ func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef
 		if oldHash, err = prevCommit.HashOf(); err != nil {
 			return nil, err
 		}
-		if canFF, err = prevCommit.CanFastForwardTo(ctx, commit); err != nil {
-			return nil, err
+		if oldHash == h {
+			return nil, doltdb.ErrUpToDate
 		}
-		if mode == ref.FastForwardOnly && !canFF {
-			return nil, ErrCantFF
+		// A forced push does not need an ancestry check. Besides being
+		// unnecessary for the update itself, checking ancestry here can be
+		// very expensive for remotes backed by the remotes API because every
+		// parent lookup may be a network request. Keep the check for normal
+		// pushes, where it is required to reject non-fast-forward updates.
+		if mode == ref.FastForwardOnly {
+			if canFF, err = prevCommit.CanFastForwardTo(ctx, commit); err != nil {
+				return nil, err
+			}
+			if !canFF {
+				return nil, ErrCantFF
+			}
 		}
-	}
-
-	h, err := commit.HashOf()
-	if err != nil {
-		return nil, err
 	}
 
 	err = destDB.PullChunks(ctx, tempTableDir, srcDB, []hash.Hash{h}, statsCh, nil)
@@ -147,7 +157,7 @@ func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef
 	resultType := PushResultTypeUpdated
 	if isNewBranch {
 		resultType = PushResultTypeNewBranch
-	} else if !canFF {
+	} else if mode == ref.ForceUpdate || !canFF {
 		resultType = PushResultTypeForced
 	}
 
