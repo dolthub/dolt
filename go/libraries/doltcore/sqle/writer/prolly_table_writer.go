@@ -16,6 +16,8 @@ package writer
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -62,6 +64,7 @@ type prollyTableWriter struct {
 }
 
 var _ dsess.TableWriter = &prollyTableWriter{}
+var _ sql.UniqueKeyConflictCheckingRowInserter = &prollyTableWriter{}
 
 var _ UniqueKeyChangeReporter = &prollyTableWriter{}
 var _ AutoIncrementGetter = &prollyTableWriter{}
@@ -183,6 +186,82 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 	w.aiSet = true
 
 	return nil
+}
+
+// HasUniqueKeyConflict implements sql.UniqueKeyConflictCheckingRowInserter.
+func (w *prollyTableWriter) HasUniqueKeyConflict(ctx *sql.Context, sqlRow sql.Row, columns []string) (bool, error) {
+	pkColumns := w.sch.GetPKCols().GetColumns()
+	pkNames := make([]string, len(pkColumns))
+	for idx, column := range pkColumns {
+		pkNames[idx] = column.Name
+	}
+	if len(columns) == 0 || sameColumnNames(columns, pkNames) {
+		conflict, err := isUniqueKeyConflict(w.primary.ValidateKeyViolations(ctx, sqlRow))
+		if err != nil || conflict || len(columns) > 0 {
+			return conflict, err
+		}
+	}
+
+	for _, index := range w.sch.Indexes().AllIndexes() {
+		if !index.IsUnique() || (len(columns) > 0 && (index.Predicate() != "" || !sameColumnNames(columns, index.ColumnNames()))) {
+			continue
+		}
+		indexWriter, ok := w.secondary[index.Name()]
+		if !ok {
+			return false, fmt.Errorf("unique index writer %q not found", index.Name())
+		}
+		if keylessWriter, ok := indexWriter.(prollyKeylessSecondaryWriter); ok {
+			conflict, err := isUniqueKeyConflict(keylessWriter.validateUniqueKeyViolation(ctx, sqlRow))
+			if err != nil || conflict || len(columns) > 0 {
+				return conflict, err
+			}
+			continue
+		}
+		conflict, err := isUniqueKeyConflict(indexWriter.ValidateKeyViolations(ctx, sqlRow))
+		if err != nil || conflict || len(columns) > 0 {
+			return conflict, err
+		}
+	}
+	if len(columns) == 0 {
+		return false, nil
+	}
+	return false, fmt.Errorf("unique key conflict target does not match a unique key")
+}
+
+// isUniqueKeyConflict converts supported duplicate-key errors into a conflict result.
+func isUniqueKeyConflict(err error) (bool, error) {
+	if err == nil {
+		return false, nil
+	}
+	if sql.ErrPrimaryKeyViolation.Is(err) || sql.ErrUniqueKeyViolation.Is(err) {
+		return true, nil
+	}
+	if _, ok := err.(secondaryUniqueKeyError); ok {
+		return true, nil
+	}
+	return false, err
+}
+
+// sameColumnNames reports whether two column-name slices contain the same names regardless of order or case.
+func sameColumnNames(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	matched := make([]bool, len(right))
+	for _, leftName := range left {
+		found := false
+		for idx, rightName := range right {
+			if !matched[idx] && strings.EqualFold(leftName, rightName) {
+				matched[idx] = true
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
 }
 
 // Update implements TableWriter.
