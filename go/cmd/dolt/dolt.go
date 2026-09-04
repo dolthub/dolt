@@ -939,25 +939,30 @@ func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapCo
 		return nil, true, 1
 	}
 
-	var cwdFs filesys.Filesys
-	if targetDir, ok := apr.GetValue("directory"); ok {
-		var err error
-		cwdFs, err = filesys.LocalFilesysWithWorkingDir(targetDir)
-		if err != nil {
-			cli.PrintErrln(color.RedString("cannot change to directory %q: %v", targetDir, err))
-			return nil, true, 1
-		}
-	} else {
-		lfs := filesys.LocalFS
-		cwd, err := lfs.Abs("")
-		if err != nil {
-			cli.PrintErrln(color.RedString("Failed to load the current working directory: %v", err))
-			return nil, true, 1
-		}
-		cwdFs, err = lfs.WithWorkingDir(cwd)
-		if err != nil {
-			cli.PrintErrln(color.RedString("Failed to load the current working directory: %v", err))
-			return nil, true, 1
+	lfs := filesys.LocalFS
+	cwd, err := lfs.Abs("")
+	if err != nil {
+		cli.PrintErrln(color.RedString("Failed to load the current working directory: %v", err))
+		return nil, true, 1
+	}
+	cwdFs, err := lfs.WithWorkingDir(cwd)
+	if err != nil {
+		cli.PrintErrln(color.RedString("Failed to load the current working directory: %v", err))
+		return nil, true, 1
+	}
+
+	if targetDirs, ok := apr.GetValueList("directory"); ok {
+		for _, targetDir := range targetDirs {
+			absoluteTargetDir, err := cwdFs.Abs(targetDir)
+			if err != nil {
+				cli.PrintErrln(color.RedString("cannot change to directory %q: %v", targetDir, err))
+				return nil, true, 1
+			}
+			cwdFs, err = filesys.LocalFilesysWithWorkingDir(absoluteTargetDir)
+			if err != nil {
+				cli.PrintErrln(color.RedString("cannot change to directory %q: %v", targetDir, err))
+				return nil, true, 1
+			}
 		}
 	}
 

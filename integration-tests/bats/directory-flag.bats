@@ -110,6 +110,23 @@ teardown() {
     [[ "$output" =~ "rel" ]] || false
 }
 
+@test "directory-flag: repeated flags chain relative directories" {
+    repo_parent=$(dirname "$REPO")
+    repo_base=$(basename "$REPO")
+
+    cd "$NONREPO"
+    run dolt -C "$repo_parent" -C . --directory="$repo_base" status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch" ]] || false
+}
+
+@test "directory-flag: an absolute repeated path resets the directory" {
+    cd "$NONREPO"
+    run dolt --directory . -C="$REPO" status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch" ]] || false
+}
+
 @test "directory-flag: -C works alongside other global flags" {
     dolt sql -q "create table withflags (pk int primary key)"
 
