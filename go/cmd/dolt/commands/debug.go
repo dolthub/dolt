@@ -31,6 +31,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/ishell"
 	"github.com/pkg/profile"
 	"github.com/sirupsen/logrus"
 	textunicode "golang.org/x/text/encoding/unicode"
@@ -391,7 +392,7 @@ func debugAnalyze(ctx *sql.Context, tempDir string, sqlEng *engine.SqlEngine, sq
 		cli.CliErr = origCliErr
 	}()
 
-	scanner := NewStreamScanner(sqlFile)
+	scanner := ishell.NewStreamScanner(sqlFile)
 	var query string
 	for scanner.Scan() {
 		if fileReadProg != nil {

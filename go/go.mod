@@ -207,4 +207,6 @@ require (
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 )
 
+replace github.com/dolthub/ishell => github.com/codeaucafe/ishell v0.0.0-20260828034509-a91cae3dc6ac
+
 go 1.26.2

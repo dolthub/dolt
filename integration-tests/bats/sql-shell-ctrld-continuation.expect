@@ -1,0 +1,34 @@
+#!/usr/bin/expect -f
+# Ctrl-D at the continuation prompt discards the partial statement instead of
+# executing it, then exits (matching the mysql client). Proven by side effect:
+# an unterminated INSERT is aborted, so a fresh session sees an empty table.
+
+set timeout 20
+spawn dolt sql
+
+expect { "> " {} timeout { send_user "\nFAIL: no initial prompt\n"; exit 1 } }
+
+send "create table ctrld (i int);\r"
+expect { "> " {} timeout { send_user "\nFAIL: create table\n"; exit 1 } }
+
+# Type an unterminated INSERT to drop into the continuation prompt, then send
+# Ctrl-D (0x04). The partial INSERT must be discarded, not run.
+send "insert into ctrld values (1)\r"
+expect { -exact "-> " {} timeout { send_user "\nFAIL: no continuation prompt\n"; exit 1 } }
+send "\x04"
+expect { eof {} timeout { send_user "\nFAIL: Ctrl-D did not exit\n"; exit 1 } }
+
+# Fresh session: the table must be empty because the aborted INSERT never ran.
+spawn dolt sql
+expect { "> " {} timeout { send_user "\nFAIL: no prompt (2nd session)\n"; exit 1 } }
+
+send "select count(*) as c from ctrld;\r"
+expect {
+    -re "\\| +0 +\\|" {}
+    -re "\\| +1 +\\|" { send_user "\nFAIL: partial INSERT was executed\n"; exit 1 }
+    timeout { send_user "\nFAIL: no count result\n"; exit 1 }
+}
+expect { "> " {} timeout { send_user "\nFAIL: no prompt after count\n"; exit 1 } }
+
+send "exit;\r"
+expect eof
