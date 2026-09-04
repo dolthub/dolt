@@ -2016,6 +2016,93 @@ on a.to_pk = b.to_pk;`,
 			},
 		},
 	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11204
+		Name: "dolt_diff: three dot diff supports WORKING and STAGED",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int primary key, c1 varchar(20));",
+			"INSERT INTO t VALUES (1, 'one');",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-m', 'init');",
+
+			"CALL DOLT_BRANCH('bar');",
+			"CALL DOLT_CHECKOUT('bar');",
+			"INSERT INTO t VALUES (2, 'two');",
+			"CALL DOLT_COMMIT('-am', 'bar change');",
+
+			// Row 3 is staged and row 4 is left in the working tree so that the staged
+			// root and the working root differ from each other and from HEAD.
+			"CALL DOLT_CHECKOUT('main');",
+			"INSERT INTO t VALUES (3, 'three');",
+			"CALL DOLT_ADD('.');",
+			"INSERT INTO t VALUES (4, 'four');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT from_pk, to_pk, diff_type FROM DOLT_DIFF('HEAD...bar', 't') ORDER BY COALESCE(from_pk, to_pk);",
+				Expected: []sql.Row{
+					{nil, 2, "added"},
+				},
+			},
+			{
+				Query: "SELECT from_pk, to_pk, diff_type FROM DOLT_DIFF('WORKING...bar', 't') ORDER BY COALESCE(from_pk, to_pk);",
+				// A revision to the left of the three dots only chooses the merge base, so
+				// the uncommitted change on the current branch is not part of the diff and
+				// the result is the same as for HEAD.
+				Expected: []sql.Row{
+					{nil, 2, "added"},
+				},
+			},
+			{
+				Query: "SELECT from_pk, to_pk, diff_type FROM DOLT_DIFF('STAGED...bar', 't') ORDER BY COALESCE(from_pk, to_pk);",
+				Expected: []sql.Row{
+					{nil, 2, "added"},
+				},
+			},
+			{
+				Query: "SELECT from_pk, to_pk, diff_type FROM DOLT_DIFF('bar...WORKING', 't') ORDER BY COALESCE(from_pk, to_pk);",
+				// A revision to the right of the three dots is the diff target, so the
+				// working root contributes both of its uncommitted rows.
+				Expected: []sql.Row{
+					{nil, 3, "added"},
+					{nil, 4, "added"},
+				},
+			},
+			{
+				Query: "SELECT from_pk, to_pk, diff_type FROM DOLT_DIFF('bar...STAGED', 't') ORDER BY COALESCE(from_pk, to_pk);",
+				// The staged root contains row 3 but not row 4, which was never added.
+				Expected: []sql.Row{
+					{nil, 3, "added"},
+				},
+			},
+			{
+				Query:       "SELECT from_pk, to_pk, diff_type FROM DOLT_DIFF('WORKING...STAGED', 't') ORDER BY COALESCE(from_pk, to_pk);",
+				ExpectedErr: dtablefunctions.ErrAmbiguousThreeDotRange,
+			},
+			{
+				Query:       "SELECT from_pk, to_pk, diff_type FROM DOLT_DIFF('STAGED...WORKING', 't') ORDER BY COALESCE(from_pk, to_pk);",
+				ExpectedErr: dtablefunctions.ErrAmbiguousThreeDotRange,
+			},
+			{
+				Query: "SELECT from_pk, to_pk, diff_type FROM DOLT_DIFF('HEAD...WORKING', 't') ORDER BY COALESCE(from_pk, to_pk);",
+				// A real commit on the left keeps the working set as the diff target, so this
+				// surfaces both uncommitted rows.
+				Expected: []sql.Row{
+					{nil, 3, "added"},
+					{nil, 4, "added"},
+				},
+			},
+			{
+				Query: "SELECT from_pk, to_pk, diff_type FROM DOLT_DIFF('WORKING...HEAD', 't') ORDER BY COALESCE(from_pk, to_pk);",
+				// The merge base and the target are both HEAD, so there is no diff.
+				Expected: []sql.Row{},
+			},
+			{
+				Query:          "SELECT from_pk, to_pk, diff_type FROM DOLT_DIFF('bar...nope', 't');",
+				ExpectedErrStr: "branch not found: nope",
+			},
+		},
+	},
 }
 
 var DiffStatTableFunctionScriptTests = []queries.ScriptTest{
@@ -2715,6 +2802,38 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 				},
 				ExpectedWarning:       dtables.PrimaryKeyChangeWarningCode,
 				ExpectedWarningsCount: 1,
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11204
+		Name: "dolt_diff_stat: three dot diff supports WORKING and STAGED",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int primary key, c1 varchar(20));",
+			"INSERT INTO t VALUES (1, 'one');",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-m', 'init');",
+			"CALL DOLT_BRANCH('bar');",
+			"CALL DOLT_CHECKOUT('bar');",
+			"INSERT INTO t VALUES (2, 'two');",
+			"CALL DOLT_COMMIT('-am', 'bar change');",
+			"CALL DOLT_CHECKOUT('main');",
+			"INSERT INTO t VALUES (3, 'three');",
+			"CALL DOLT_ADD('.');",
+			"INSERT INTO t VALUES (4, 'four');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT table_name, rows_added FROM dolt_diff_stat('WORKING...bar', 't');",
+				Expected: []sql.Row{{"t", 1}},
+			},
+			{
+				Query:    "SELECT table_name, rows_added FROM dolt_diff_stat('bar...WORKING', 't');",
+				Expected: []sql.Row{{"t", 2}},
+			},
+			{
+				Query:    "SELECT table_name, rows_added FROM dolt_diff_stat('bar...STAGED', 't');",
+				Expected: []sql.Row{{"t", 1}},
 			},
 		},
 	},
@@ -3490,6 +3609,38 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{"t", "t", "modified", false, true},
 				},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11204
+		Name: "dolt_diff_summary: three dot diff supports WORKING and STAGED",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int primary key, c1 varchar(20));",
+			"INSERT INTO t VALUES (1, 'one');",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-m', 'init');",
+			"CALL DOLT_BRANCH('bar');",
+			"CALL DOLT_CHECKOUT('bar');",
+			"INSERT INTO t VALUES (2, 'two');",
+			"CALL DOLT_COMMIT('-am', 'bar change');",
+			"CALL DOLT_CHECKOUT('main');",
+			"INSERT INTO t VALUES (3, 'three');",
+			"CALL DOLT_ADD('.');",
+			"INSERT INTO t VALUES (4, 'four');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT from_table_name, to_table_name, diff_type, data_change, schema_change from dolt_diff_summary('WORKING...bar', 't');",
+				Expected: []sql.Row{{"t", "t", "modified", true, false}},
+			},
+			{
+				Query:    "SELECT from_table_name, to_table_name, diff_type, data_change, schema_change from dolt_diff_summary('bar...WORKING', 't');",
+				Expected: []sql.Row{{"t", "t", "modified", true, false}},
+			},
+			{
+				Query:    "SELECT from_table_name, to_table_name, diff_type, data_change, schema_change from dolt_diff_summary('bar...STAGED', 't');",
+				Expected: []sql.Row{{"t", "t", "modified", true, false}},
 			},
 		},
 	},

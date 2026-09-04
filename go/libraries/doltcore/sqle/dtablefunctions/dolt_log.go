@@ -495,19 +495,19 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		return nil, err
 	}
 
-	for _, revisionStr := range revisionValStrs {
-		cs, err := doltdb.NewCommitSpec(revisionStr)
-		if err != nil {
-			return nil, err
-		}
+	if threeDot && doltdb.IsWorkingSetRef(revisionValStrs[0]) && doltdb.IsWorkingSetRef(revisionValStrs[1]) {
+		return nil, ErrAmbiguousThreeDotRange.New(revisionValStrs[0] + "..." + revisionValStrs[1])
+	}
 
-		optCmt, err := sqledb.DbData().Ddb.Resolve(ctx, cs, headRef)
+	// Only a three dot range accepts WORKING and STAGED, where they anchor the merge base.
+	resolve := sqledb.DbData().Ddb.ResolveCommitSpecStr
+	if threeDot {
+		resolve = sqledb.DbData().Ddb.ResolveCommitSpecStrForMergeBase
+	}
+	for _, revisionStr := range revisionValStrs {
+		commit, err := resolve(ctx, revisionStr, headRef)
 		if err != nil {
 			return nil, err
-		}
-		commit, ok = optCmt.ToCommit()
-		if err != nil {
-			return nil, doltdb.ErrGhostCommitEncountered
 		}
 
 		commits = append(commits, commit)
@@ -515,18 +515,9 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 
 	var notCommits []*doltdb.Commit
 	for _, notRevisionStr := range notRevisionValStrs {
-		cs, err := doltdb.NewCommitSpec(notRevisionStr)
+		notCommit, err := sqledb.DbData().Ddb.ResolveCommitSpecStr(ctx, notRevisionStr, headRef)
 		if err != nil {
 			return nil, err
-		}
-
-		optCmt, err := sqledb.DbData().Ddb.Resolve(ctx, cs, headRef)
-		if err != nil {
-			return nil, err
-		}
-		notCommit, ok := optCmt.ToCommit()
-		if !ok {
-			return nil, doltdb.ErrGhostCommitEncountered
 		}
 
 		notCommits = append(notCommits, notCommit)
@@ -538,19 +529,10 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 			return nil, err
 		}
 
-		mergeCs, err := doltdb.NewCommitSpec(mergeBase.String())
-		if err != nil {
-			return nil, err
-		}
-
 		// Use merge base as excluding commit
-		optCmt, err := sqledb.DbData().Ddb.Resolve(ctx, mergeCs, nil)
+		mergeCommit, err := sqledb.DbData().Ddb.ResolveCommitSpecStr(ctx, mergeBase.String(), nil)
 		if err != nil {
 			return nil, err
-		}
-		mergeCommit, ok := optCmt.ToCommit()
-		if !ok {
-			return nil, doltdb.ErrGhostCommitEncountered
 		}
 
 		notCommits = append(notCommits, mergeCommit)
