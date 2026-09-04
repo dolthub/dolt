@@ -214,6 +214,13 @@ func TestArgParserRepeatableString(t *testing.T) {
 	assert.Equal(t, []string{"replacement"}, values)
 }
 
+func TestArgParserNonRepeatableStringRejectsMultipleValues(t *testing.T) {
+	ap := NewArgParserWithVariableArgs("test").SupportsString("param", "p", "value", "")
+
+	_, err := ap.Parse([]string{"--param", "first", "-p", "second"})
+	require.EqualError(t, err, "error: multiple values provided for `param'")
+}
+
 func TestArgParserSet(t *testing.T) {
 	ap := createParserWithOptionalArgs()
 	apr, err := ap.Parse([]string{"-o", "optional value", "-f", "foo", "bar"})
