@@ -951,19 +951,10 @@ func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapCo
 		return nil, true, 1
 	}
 
-	if targetDirs, ok := apr.GetValueList("directory"); ok {
-		for _, targetDir := range targetDirs {
-			absoluteTargetDir, err := cwdFs.Abs(targetDir)
-			if err != nil {
-				cli.PrintErrln(color.RedString("cannot change to directory %q: %v", targetDir, err))
-				return nil, true, 1
-			}
-			cwdFs, err = filesys.LocalFilesysWithWorkingDir(absoluteTargetDir)
-			if err != nil {
-				cli.PrintErrln(color.RedString("cannot change to directory %q: %v", targetDir, err))
-				return nil, true, 1
-			}
-		}
+	cwdFs, err = applyDirectoryArgs(cwdFs, apr)
+	if err != nil {
+		cli.PrintErrln(color.RedString("%v", err))
+		return nil, true, 1
 	}
 
 	tmpEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, cwdFs, "", doltversion.Version)
@@ -1074,6 +1065,26 @@ func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapCo
 	}
 
 	return cfg, false, 0
+}
+
+func applyDirectoryArgs(cwdFs filesys.Filesys, apr *argparser.ArgParseResults) (filesys.Filesys, error) {
+	targetDirs, ok := apr.GetValueList("directory")
+	if !ok {
+		return cwdFs, nil
+	}
+
+	for _, targetDir := range targetDirs {
+		absoluteTargetDir, err := cwdFs.Abs(targetDir)
+		if err != nil {
+			return nil, fmt.Errorf("cannot change to directory %q: %v", targetDir, err)
+		}
+		cwdFs, err = filesys.LocalFilesysWithWorkingDir(absoluteTargetDir)
+		if err != nil {
+			return nil, fmt.Errorf("cannot change to directory %q: %v", targetDir, err)
+		}
+	}
+
+	return cwdFs, nil
 }
 
 // injectProfileArgs retrieves the given |profileName| from the provided |profilesJson| and inject the profile details
