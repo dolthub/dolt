@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -81,6 +82,17 @@ func TestInsertStatementPrefixSkipsGeneratedCols(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "INSERT INTO `table_name` (`id`,`a`) VALUES ", prefix)
+}
+
+func TestSqlRowAsUpdateStmtSkipsGeneratedCols(t *testing.T) {
+	// See https://github.com/dolthub/dolt/issues/11445
+	sch := newGeneratedColSchema()
+	colsToUpdate := set.NewStrSet([]string{"a", "c"})
+
+	stmt, err := sqlfmt.SqlRowAsUpdateStmt(sql.NewEmptyContext(), sql.Row{int64(1), "x", "x!"}, "table_name", sch, colsToUpdate)
+
+	require.NoError(t, err)
+	assert.Equal(t, "UPDATE `table_name` SET `a`='x' WHERE `id`=1;", stmt)
 }
 
 func TestSqlRowAsTupleString(t *testing.T) {

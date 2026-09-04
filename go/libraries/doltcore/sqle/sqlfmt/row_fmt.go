@@ -287,8 +287,8 @@ func SqlRowAsDeleteStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch 
 // The row to change is keyed by the primary key columns of
 // |tableSch|, using their values from |r|.
 //
-// TODO(elianddb): Schema isn't recording column's Generated marker
-// correctly, so Column.IsGenerated doesn't filter.
+// Generated columns are skipped, matching InsertStatementPrefix and
+// SqlRowAsTupleString.
 func SqlRowAsUpdateStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch schema.Schema, colsToUpdate *set.StrSet) (string, error) {
 	var b strings.Builder
 	b.WriteString("UPDATE ")
@@ -300,7 +300,7 @@ func SqlRowAsUpdateStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch 
 	i := 0
 	seenOne := false
 	err := tableSch.GetAllCols().Iter(func(_ uint64, col schema.Column) (stop bool, err error) {
-		if colsToUpdate.Contains(col.Name) {
+		if colsToUpdate.Contains(col.Name) && !col.IsGenerated() {
 			if seenOne {
 				b.WriteRune(',')
 			}
