@@ -995,8 +995,13 @@ func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapCo
 	})
 
 	hasGlobalArgs := false
-	if len(remainingArgs) != len(args) {
-		hasGlobalArgs = true
+	for _, option := range globalArgParser.Supported {
+		// --directory only changes the filesystem used as the local working
+		// directory. It does not require command support for remote contexts.
+		if option.Name != "directory" && apr.Contains(option.Name) {
+			hasGlobalArgs = true
+			break
+		}
 	}
 
 	subCommand := remainingArgs[0]

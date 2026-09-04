@@ -119,6 +119,38 @@ teardown() {
     [[ "$output" =~ "withflags" ]] || false
 }
 
+@test "directory-flag: works with commands that do not support remote global arguments" {
+    dolt sql -q "create table legacy_test (pk int primary key, value int); insert into legacy_test values (1, 1)"
+    dolt add .
+    dolt commit -m "add legacy test table"
+
+    cd "$NONREPO"
+
+    run dolt -C "$REPO" filter-branch -q "update legacy_test set value = 2" --all
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "Global arguments are not supported" ]] || false
+
+    run dolt -C "$REPO" sql -r csv -q "select value from legacy_test"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2" ]] || false
+
+    run dolt --directory="$REPO" roots
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "Global arguments are not supported" ]] || false
+}
+
+@test "directory-flag: does not hide unsupported remote global arguments" {
+    cd "$NONREPO"
+
+    run dolt -C="$REPO" --data-dir="$REPO" roots
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "Global arguments are not supported" ]] || false
+
+    run dolt --directory "$REPO" --data-dir "$REPO" roots
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "Global arguments are not supported" ]] || false
+}
+
 @test "directory-flag: -C with a nonexistent directory errors cleanly" {
     cd "$NONREPO"
     run dolt -C "/nonexistent/dolt-C-test-path" status
