@@ -15,6 +15,7 @@
 package blobstore
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -111,18 +112,18 @@ func (ob *OSSBlobstore) Put(ctx context.Context, key string, totalSize int64, re
 	return ob.getVersion(meta), nil
 }
 
-func (ob *OSSBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader) (string, error) {
+func (ob *OSSBlobstore) CheckAndPutManifest(ctx context.Context, expectedVersion string, contents []byte) (string, error) {
 	var options []oss.Option
 	if expectedVersion != "" {
 		options = append(options, oss.VersionId(expectedVersion))
 	}
 	var meta http.Header
 	options = append(options, oss.GetResponseHeader(&meta))
-	if err := ob.bucket.PutObject(ob.absKey(key), reader, options...); err != nil {
+	if err := ob.bucket.PutObject(ob.absKey(ManifestKey), bytes.NewReader(contents), options...); err != nil {
 		ossErr, ok := err.(oss.ServiceError)
 		if ok {
 			return "", CheckAndPutError{
-				Key:             key,
+				Key:             ManifestKey,
 				ExpectedVersion: expectedVersion,
 				ActualVersion:   fmt.Sprintf("unknown (OSS error code %d)", ossErr.StatusCode)}
 		}

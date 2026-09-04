@@ -87,7 +87,6 @@ var commandsWithoutCliCtx = []cli.Command{
 	docscmds.Commands,
 	&commands.Assist{},
 	commands.ProfileCmd{},
-	commands.ArchiveCmd{},
 	commands.FsckCmd{},
 	commands.ConfigCmd{},
 	commands.InitCmd{},
@@ -796,7 +795,19 @@ If you're interested in running this command against a remote host, hit us up on
 			}
 			doltConfigName := targetEnv.Config.GetStringOrDefault(config.UserNameKey, env.DefaultName)
 			doltConfigEmail := targetEnv.Config.GetStringOrDefault(config.UserEmailKey, env.DefaultEmail)
-			return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", localCreds.Port, sqlserver.QueryistTLSMode_NoVerify_FallbackToPlaintext, useDb, doltConfigName, doltConfigEmail)
+			lateBind, err := sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", localCreds.Port, sqlserver.QueryistTLSMode_NoVerify_FallbackToPlaintext, useDb, doltConfigName, doltConfigEmail)
+			if err != nil {
+				return nil, err
+			}
+			var withContext cli.LateBindQueryist = func(ctx context.Context, opts ...cli.LateBindQueryistOption) (cli.LateBindQueryistResult, error) {
+				res, err := lateBind(ctx, opts...)
+				if errors.Is(err, sqlserver.ErrServerConnectionFailed) {
+					credsFile := sqlserver.LocalCredsFilePath()
+					return res, fmt.Errorf("database locked; connecting to sql-server on port %d (%s) failed (retry if starting, or delete %s if stale): %w", localCreds.Port, credsFile, credsFile, err)
+				}
+				return res, err
+			}
+			return withContext, nil
 		}
 	}
 

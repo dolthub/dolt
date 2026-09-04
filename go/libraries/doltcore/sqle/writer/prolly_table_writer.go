@@ -16,6 +16,8 @@ package writer
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -23,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -52,15 +53,20 @@ type prollyTableWriter struct {
 	writeSess dsess.WriteSession
 
 	aiCol      schema.Column
-	aiTracker  globalstate.AutoIncrementTracker
+	aiTracker  *dsess.AutoIncrementTracker
 	aiAlterVal uint64
 	aiAltered  bool // True when an ALTER TABLE affects the auto increment value
 	aiSet      bool // True when an INSERT/UPDATE affects the auto increment value
 
 	errEncountered error
+
+	virtualExpressions []sql.Expression
 }
 
 var _ dsess.TableWriter = &prollyTableWriter{}
+var _ sql.UniqueKeyConflictCheckingRowInserter = &prollyTableWriter{}
+
+var _ UniqueKeyChangeReporter = &prollyTableWriter{}
 var _ AutoIncrementGetter = &prollyTableWriter{}
 
 func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, schState *dsess.WriterState) (map[string]indexWriter, error) {
@@ -101,6 +107,7 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, schSta
 			pkBld:         val.NewTupleBuilder(schState.PkKeyDesc, idxMap.NodeStore()).WithMaxRowSize(targetRowSize),
 			key:           make(sql.Row, keyDesc.Count()),
 			predicate:     def.Predicate,
+			virtualExprs:  def.KeyVirtualExprs,
 		}
 	}
 
@@ -144,6 +151,7 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, schS
 			prefixBld:     val.NewTupleBuilder(keyDesc.PrefixDesc(def.Count), m.NodeStore()).WithMaxRowSize(targetRowSize),
 			hashBld:       val.NewTupleBuilder(val.NewTupleDescriptor(val.Type{Enc: val.Hash128Enc}), m.NodeStore()),
 			keyMap:        def.KeyMapping,
+			virtualExprs:  def.KeyVirtualExprs,
 		}
 	}
 
@@ -176,9 +184,84 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 
 	// TODO: need schema name in ai tracker
 	w.aiSet = true
-	w.aiTracker.Next(ctx, w.tblName.Name, sqlRow)
 
 	return nil
+}
+
+// HasUniqueKeyConflict implements sql.UniqueKeyConflictCheckingRowInserter.
+func (w *prollyTableWriter) HasUniqueKeyConflict(ctx *sql.Context, sqlRow sql.Row, columns []string) (bool, error) {
+	pkColumns := w.sch.GetPKCols().GetColumns()
+	pkNames := make([]string, len(pkColumns))
+	for idx, column := range pkColumns {
+		pkNames[idx] = column.Name
+	}
+	if len(columns) == 0 || sameColumnNames(columns, pkNames) {
+		conflict, err := isUniqueKeyConflict(w.primary.ValidateKeyViolations(ctx, sqlRow))
+		if err != nil || conflict || len(columns) > 0 {
+			return conflict, err
+		}
+	}
+
+	for _, index := range w.sch.Indexes().AllIndexes() {
+		if !index.IsUnique() || (len(columns) > 0 && (index.Predicate() != "" || !sameColumnNames(columns, index.ColumnNames()))) {
+			continue
+		}
+		indexWriter, ok := w.secondary[index.Name()]
+		if !ok {
+			return false, fmt.Errorf("unique index writer %q not found", index.Name())
+		}
+		if keylessWriter, ok := indexWriter.(prollyKeylessSecondaryWriter); ok {
+			conflict, err := isUniqueKeyConflict(keylessWriter.validateUniqueKeyViolation(ctx, sqlRow))
+			if err != nil || conflict || len(columns) > 0 {
+				return conflict, err
+			}
+			continue
+		}
+		conflict, err := isUniqueKeyConflict(indexWriter.ValidateKeyViolations(ctx, sqlRow))
+		if err != nil || conflict || len(columns) > 0 {
+			return conflict, err
+		}
+	}
+	if len(columns) == 0 {
+		return false, nil
+	}
+	return false, fmt.Errorf("unique key conflict target does not match a unique key")
+}
+
+// isUniqueKeyConflict converts supported duplicate-key errors into a conflict result.
+func isUniqueKeyConflict(err error) (bool, error) {
+	if err == nil {
+		return false, nil
+	}
+	if sql.ErrPrimaryKeyViolation.Is(err) || sql.ErrUniqueKeyViolation.Is(err) {
+		return true, nil
+	}
+	if _, ok := err.(secondaryUniqueKeyError); ok {
+		return true, nil
+	}
+	return false, err
+}
+
+// sameColumnNames reports whether two column-name slices contain the same names regardless of order or case.
+func sameColumnNames(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	matched := make([]bool, len(right))
+	for _, leftName := range left {
+		found := false
+		for idx, rightName := range right {
+			if !matched[idx] && strings.EqualFold(leftName, rightName) {
+				matched[idx] = true
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
 }
 
 // Update implements TableWriter.
@@ -197,6 +280,25 @@ func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.
 
 	w.aiSet = true
 	return nil
+}
+
+// UniqueKeyChangeReporter is a writer that reports whether an update frees or takes a unique key.
+type UniqueKeyChangeReporter interface {
+	// UpdateChangesUniqueKey reports whether updating |oldRow| to |newRow| frees or takes a key in a unique index,
+	// erring toward reporting a change. The primary key is not considered, and a unique partial index always
+	// reports a change since any change can move a row in or out of it.
+	UpdateChangesUniqueKey(oldRow sql.Row, newRow sql.Row) bool
+}
+
+// UpdateChangesUniqueKey implements UniqueKeyChangeReporter for the whole table by asking each secondary index.
+func (w *prollyTableWriter) UpdateChangesUniqueKey(oldRow sql.Row, newRow sql.Row) bool {
+	for _, wr := range w.secondary {
+		r, ok := wr.(UniqueKeyChangeReporter)
+		if !ok || r.UpdateChangesUniqueKey(oldRow, newRow) {
+			return true
+		}
+	}
+	return false
 }
 
 // Delete implements TableWriter.
@@ -273,12 +375,16 @@ func (w *prollyTableWriter) PreciseMatch() bool {
 
 // GetNextAutoIncrementValue implements TableWriter.
 func (w *prollyTableWriter) GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error) {
-	return w.aiTracker.Next(ctx, w.tblName.Name, insertVal)
+	v, err := w.aiTracker.Next(ctx, w.tblName, insertVal)
+	if err != nil {
+		return 0, err
+	}
+	return v, nil
 }
 
 // SetAutoIncrementValue implements AutoIncrementSetter.
 func (w *prollyTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) error {
-	seq, err := w.aiTracker.CoerceAutoIncrementValue(ctx, val)
+	seq, err := doltdb.CoerceAutoIncrementValue(ctx, val)
 	if err != nil {
 		return err
 	}
@@ -292,7 +398,7 @@ func (w *prollyTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) 
 
 // AcquireAutoIncrementLock implements AutoIncrementSetter.
 func (w *prollyTableWriter) AcquireAutoIncrementLock(ctx *sql.Context) (func(), error) {
-	return w.aiTracker.AcquireTableLock(ctx, w.tblName.Name)
+	return w.aiTracker.AcquireLock(ctx, w.tblName)
 }
 
 // Close implements Closer
@@ -320,7 +426,7 @@ func (w *prollyTableWriter) VisitGCRoots(ctx context.Context, roots func(hash.Ha
 
 // Reset puts the writer into a fresh state, updating the schema and index writers according to the newly given table.
 func (w *prollyTableWriter) Reset(ctx *sql.Context, tbl *doltdb.Table) error {
-	schState, err := writerSchema(ctx, tbl, w.tblName.Name, w.dbName)
+	schState, err := writerSchema(ctx, tbl, w.tblName, w.dbName)
 	if err != nil {
 		return err
 	}
@@ -353,6 +459,7 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, tbl *doltdb.Table) error {
 	w.primary = newPrimary
 	w.secondary = newSecondaries
 	w.aiCol = schState.AutoIncCol
+	w.virtualExpressions = schState.VirtualExpressions
 
 	return nil
 }
@@ -396,13 +503,12 @@ func (w *prollyTableWriter) table(ctx *sql.Context) (tbl *doltdb.Table, err erro
 
 	if w.aiCol.AutoIncrement {
 		if w.aiAltered {
-			tbl, err = w.aiTracker.Set(ctx, w.tblName.Name, tbl, w.writeSess.GetWorkingSet().Ref(), w.aiAlterVal)
+			tbl, err = w.aiTracker.Set(ctx, w.tblName, tbl, w.writeSess.GetWorkingSet().Ref(), doltdb.AutoIncrementState(w.aiAlterVal))
 			if err != nil {
 				return nil, err
 			}
 		} else if w.aiSet {
-			var aiVal uint64
-			aiVal, err = w.aiTracker.Current(w.tblName.Name)
+			aiVal, err := w.aiTracker.Current(ctx, w.tblName)
 			if err != nil {
 				return nil, err
 			}

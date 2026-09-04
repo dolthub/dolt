@@ -535,3 +535,106 @@ EOF
 	fi
     done
 }
+@test "backup: sync --prune-with-grace-period reclaims an orphaned table file" {
+    orphan="00000000000000000000000000000001"
+
+    cd repo1
+    dolt backup add bac1 file://../bac1
+    dolt backup sync bac1
+    cd ..
+
+    # Stands in for a sync killed after landing a table file but before
+    # committing the manifest: a complete file that nothing references.
+    echo "orphaned table file" > bac1/$orphan
+    [ -f bac1/$orphan ] || false
+
+    # Wait for the destination to go quiescent. The grace period floor is
+    # lowered so the test does not have to wait out the production minimum.
+    sleep 2
+
+    cd repo1
+    dolt sql -q "insert into t1 values (1)"
+    dolt commit -am "cm2"
+    run env DOLT_BACKUP_PRUNE_MIN_GRACE=1s dolt backup sync bac1 --prune-with-grace-period=1s
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "deleted 1 file" ]] || false
+    cd ..
+
+    [ ! -f bac1/$orphan ] || false
+
+    # The pruned backup still restores.
+    dolt backup restore file://./bac1 repo2
+    cd repo2
+    run dolt sql -q "select * from t1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+}
+
+@test "backup: sync-url --prune-with-grace-period reclaims an orphaned table file" {
+    orphan="00000000000000000000000000000001"
+
+    cd repo1
+    dolt backup sync-url file://../bac1
+    cd ..
+
+    echo "orphaned table file" > bac1/$orphan
+    sleep 2
+
+    cd repo1
+    dolt sql -q "insert into t1 values (1)"
+    dolt commit -am "cm2"
+    run env DOLT_BACKUP_PRUNE_MIN_GRACE=1s dolt backup sync-url file://../bac1 --prune-with-grace-period=1s
+    [ "$status" -eq 0 ]
+    cd ..
+
+    [ ! -f bac1/$orphan ] || false
+}
+
+@test "backup: sync --prune-with-grace-period leaves a recently written destination alone" {
+    orphan="00000000000000000000000000000001"
+
+    cd repo1
+    dolt backup add bac1 file://../bac1
+    dolt backup sync bac1
+    cd ..
+
+    echo "orphaned table file" > bac1/$orphan
+
+    # The sync we just took is well inside the grace period, so nothing at all
+    # is deleted -- one recent touch vetoes the whole directory.
+    cd repo1
+    dolt sql -q "insert into t1 values (1)"
+    dolt commit -am "cm2"
+    run env DOLT_BACKUP_PRUNE_MIN_GRACE=1s dolt backup sync bac1 --prune-with-grace-period=1m
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "not quiescent" ]] || false
+    cd ..
+
+    [ -f bac1/$orphan ] || false
+}
+
+@test "backup: --prune-with-grace-period rejects bad values and unrelated subcommands" {
+    cd repo1
+    dolt backup add bac1 file://../bac1
+
+    # Below the production floor.
+    run dolt backup sync bac1 --prune-with-grace-period=5m
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "at least 10m" ]] || false
+
+    run dolt backup sync bac1 --prune-with-grace-period=nonsense
+    [ "$status" -ne 0 ]
+
+    # Only sync and sync-url prune.
+    run dolt backup add bac2 file://../bac2 --prune-with-grace-period=1h
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "only supported with" ]] || false
+
+    run dolt backup remove bac1 --prune-with-grace-period=1h
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "only supported with" ]] || false
+
+    run dolt backup restore file://./bac1 repo2 --prune-with-grace-period=1h
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "only supported with" ]] || false
+}

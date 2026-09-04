@@ -74,6 +74,33 @@ type DoltSession struct {
 	branchActivityTracker *doltdb.BranchActivityTracker
 }
 
+// DoltgresSessionLifecycle is implemented by Doltgres session state that needs
+// notification when a transaction ends or its session caches must be cleared.
+// Keeping this interface here avoids coupling Dolt to Doltgres packages.
+type DoltgresSessionLifecycle interface {
+	DoltgresTransactionEnd()
+	DoltgresSessionCacheClear()
+}
+
+// NotifyTransactionEnd notifies Doltgres-owned session state that the active
+// transaction has ended. It is safe to call more than once for the same
+// transaction.
+func (d *DoltSession) NotifyTransactionEnd() {
+	if lifecycle, ok := d.DoltgresSessObj.(DoltgresSessionLifecycle); ok {
+		lifecycle.DoltgresTransactionEnd()
+	}
+}
+
+// ClearDoltgresSessionCache clears Doltgres's transaction-independent session
+// caches without discarding transaction lifecycle state.
+func (d *DoltSession) ClearDoltgresSessionCache() {
+	if lifecycle, ok := d.DoltgresSessObj.(DoltgresSessionLifecycle); ok {
+		lifecycle.DoltgresSessionCacheClear()
+	} else {
+		d.DoltgresSessObj = nil
+	}
+}
+
 var _ sql.Session = (*DoltSession)(nil)
 var _ sql.PersistableSession = (*DoltSession)(nil)
 var _ sql.TransactionSession = (*DoltSession)(nil)
@@ -98,7 +125,33 @@ func DefaultSession(pro DoltDatabaseProvider, sessFunc WriteSessFunc) *DoltSessi
 	}
 }
 
+// NewDetachedSession returns a DoltSession backed by a fresh sql.BaseSession
+// rather than one supplied by a client connection. Use it when an external
+// session manager owns the DoltSession lifecycle and SQL requests run against
+// a *sql.Context pointing at this session instead of a per-connection one.
+func NewDetachedSession(
+	pro DoltDatabaseProvider,
+	conf config.ReadWriteConfig,
+	branchController *branch_control.Controller,
+	statsProvider sql.StatsProvider,
+	writeSessProv WriteSessFunc,
+	gcSafepointController *gcctx.GCSafepointController,
+	branchActivityTracker *doltdb.BranchActivityTracker,
+) (*DoltSession, error) {
+	return NewDoltSession(
+		sql.NewBaseSession(),
+		pro,
+		conf,
+		branchController,
+		statsProvider,
+		writeSessProv,
+		gcSafepointController,
+		branchActivityTracker,
+	)
+}
+
 // NewDoltSession creates a DoltSession object from a standard sql.Session and 0 or more Database objects.
+// sqlSess may be any *sql.BaseSession; callers with no per-connection session should use NewDetachedSession.
 func NewDoltSession(
 	sqlSess *sql.BaseSession,
 	pro DoltDatabaseProvider,
@@ -450,6 +503,7 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 	// See comment in |commitBranchState|
 	defer func() {
 		if err == nil {
+			d.NotifyTransactionEnd()
 			ctx.SetTransaction(nil)
 		}
 	}()
@@ -590,6 +644,41 @@ func (d *DoltSession) DirtyDatabases() []string {
 	return dbNames
 }
 
+// DirtyBranch identifies one branch of one database with uncommitted changes.
+type DirtyBranch struct {
+	DbName string // base name, never revision-qualified
+	Branch string
+}
+
+// DirtyBranches returns every (database, branch) pair with uncommitted changes.
+// Unlike DirtyDatabases it distinguishes branches within a database.
+func (d *DoltSession) DirtyBranches() []DirtyBranch {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	var dirty []DirtyBranch
+	for _, dbState := range d.dbStates {
+		for _, branchState := range dbState.heads {
+			if branchState.dirty {
+				dirty = append(dirty, DirtyBranch{DbName: dbState.dbName, Branch: branchState.head})
+			}
+		}
+	}
+	return dirty
+}
+
+// IsBranchDirty reports whether |branch| of |dbName| has uncommitted changes.
+// |dbName| must be a base name, not revision-qualified.
+func (d *DoltSession) IsBranchDirty(dbName, branch string) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	dbState, ok := d.dbStates[strings.ToLower(dbName)]
+	if !ok {
+		return false
+	}
+	branchState, ok := dbState.heads[strings.ToLower(branch)]
+	return ok && branchState.dirty
+}
+
 // CommitWorkingSet commits the working set for the transaction given, without creating a new dolt commit.
 // Clients should typically use CommitTransaction, which performs additional checks, instead of this method.
 func (d *DoltSession) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.Transaction) error {
@@ -685,6 +774,7 @@ func (d *DoltSession) commitBranchState(
 	// a new transaction. This should in principle be done by the engine, but it currently only understands explicit
 	// COMMIT statements. Any other statements that commit a transaction, including stored procedures, needs to do this
 	// themselves.
+	d.NotifyTransactionEnd()
 	ctx.SetTransaction(nil)
 	return newCommit, nil
 }
@@ -773,11 +863,20 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, dbName string, branchSt
 		}
 	}
 
+	var amendedCommit hash.Hash
+	if props.Amend {
+		var err error
+		amendedCommit, err = headCommit.HashOf()
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	tableResolver, err := GetTableResolver(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}
-	pendingCommit, err := actions.GetCommitStaged(ctx, tableResolver, roots, branchState.WorkingSet(), mergeParentCommits, branchState.dbData.Ddb, props)
+	pendingCommit, err := actions.GetCommitStaged(ctx, tableResolver, roots, branchState.WorkingSet(), mergeParentCommits, amendedCommit, branchState.dbData.Ddb, props)
 	if err != nil {
 		// Special case for nothing staged, which is not an error
 		if _, ok := err.(actions.NothingStaged); !ok {
@@ -790,6 +889,7 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, dbName string, branchSt
 
 // Rollback rolls the given transaction back
 func (d *DoltSession) Rollback(ctx *sql.Context, tx sql.Transaction) error {
+	d.NotifyTransactionEnd()
 	// Nothing to do here, we just throw away all our work and let a new transaction begin next statement
 	d.clear()
 	return nil
@@ -1138,18 +1238,19 @@ func (d *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roo
 	return d.SetWorkingSet(ctx, dbName, workingSet)
 }
 
-func (d *DoltSession) ResetGlobals(ctx *sql.Context, dbName string, root doltdb.RootValue) error {
+// MergeGlobals merges the sequence state recorded in |root| into the database's global
+// state, raising any tracked sequence that |root| is further along on.
+//
+// It cannot lower a sequence. Global sequence state is a high-water mark across every
+// branch, so a caller that has moved a working set backwards (dolt_reset --hard) is only
+// telling the tracker about relations it may not have seen, not undoing allocations.
+func (d *DoltSession) MergeGlobals(ctx *sql.Context, dbName string, root doltdb.RootValue) error {
 	sessionState, _, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
 		return err
 	}
 
-	tracker, err := sessionState.dbState.globalState.AutoIncrementTracker(ctx)
-	if err != nil {
-		return err
-	}
-
-	err = tracker.InitWithRoots(ctx, root)
+	err = sessionState.dbState.globalState.MergeRoots(ctx, root)
 	if err != nil {
 		return err
 	}
@@ -1317,6 +1418,19 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 
 	tx, usingDoltTransaction := d.GetTransaction().(*DoltTransaction)
 
+	// If this database isn't part of the transaction's start-point snapshot, it became visible to this session after the
+	// transaction began (e.g. another session created it concurrently, or it was cloned on first reference). Register it
+	// now with its current root so that TransactionRoot and friends can resolve it, instead of erroring out. See AddDb.
+	// We only do this for databases backed by a DoltDB, matching StartTransaction, which skips databases with a nil Ddb
+	// (e.g. UserSpaceDatabase, clusterDatabase) when taking its snapshot.
+	if usingDoltTransaction && db.DbData().Ddb != nil {
+		if _, ok := tx.GetInitialRoot(baseName); !ok {
+			if err := tx.AddDb(ctx, db); err != nil {
+				return err
+			}
+		}
+	}
+
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	sessionState, sessionStateExists := d.dbStates[baseName]
@@ -1412,7 +1526,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 			}
 			sessionState.globalState = stateProvider.GetGlobalState()
 
-			tracker, err := sessionState.globalState.AutoIncrementTracker(ctx)
+			tracker, err := GetAutoIncrementTracker(ctx, sessionState.globalState)
 			if err != nil {
 				return err
 			}
@@ -2080,4 +2194,4 @@ func DefaultHead(ctx *sql.Context, baseName string, db SqlDatabase) (string, err
 // WriteSessFunc is a constructor that session builders use to
 // create fresh table editors.
 // The indirection avoids a writer/dsess package import cycle.
-type WriteSessFunc func(dbName string, ws *doltdb.WorkingSet, aiTracker globalstate.AutoIncrementTracker, setter SessionRootSetter, opts editor.Options) WriteSession
+type WriteSessFunc func(dbName string, ws *doltdb.WorkingSet, aiTracker *AutoIncrementTracker, setter SessionRootSetter, opts editor.Options) WriteSession

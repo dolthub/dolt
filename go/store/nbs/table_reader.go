@@ -486,28 +486,55 @@ func (s readBatch) ExtractChunkFromRead(buff []byte, idx int) (CompressedChunk, 
 	return NewCompressedChunk(hash.Hash(*rec.a), buff[chunkStart:chunkStart+uint64(rec.length)])
 }
 
-func toReadBatches(offsets offsetRecSlice, blockSize uint64) []readBatch {
-	res := make([]readBatch, 0)
-	var batch readBatch
-	for i := 0; i < len(offsets); {
-		rec := offsets[i]
-		if batch == nil {
-			batch = readBatch{rec}
-			i++
-			continue
+// spanRun is a run of byte spans which one read can cover. |first| and |count|
+// index the sorted span list the run was built from.
+type spanRun struct {
+	start uint64
+	end   uint64
+	first int
+	count int
+}
+
+// groupSpans partitions |count| byte spans, read through |spanAt| and sorted by
+// offset, into the runs a reader should fetch. Spans join a run while
+// canReadAhead judges the gap between them worth reading over.
+//
+// Both table files and archives group their reads with this. They differ in what
+// a span belongs to, not in when two of them are worth fetching together.
+func groupSpans(count int, spanAt func(int) byteSpan, blockSize uint64) []spanRun {
+	runs := make([]spanRun, 0, count)
+	for i := 0; i < count; i++ {
+		span := spanAt(i)
+		rec := offsetRec{offset: span.offset, length: uint32(span.length)}
+
+		if n := len(runs); n > 0 {
+			cur := &runs[n-1]
+			if newEnd, canRead := canReadAhead(rec, cur.start, cur.end, blockSize); canRead {
+				// canReadAhead leaves the end alone for a span which starts inside
+				// the run. Take the furthest end so a span contained in an earlier
+				// one cannot shorten the read below what a member needs.
+				if end := span.offset + span.length; end > newEnd {
+					newEnd = end
+				}
+				cur.end = newEnd
+				cur.count++
+				continue
+			}
 		}
 
-		if _, canRead := canReadAhead(rec, batch.Start(), batch.End(), blockSize); canRead {
-			batch = append(batch, rec)
-			i++
-			continue
-		}
-
-		res = append(res, batch)
-		batch = nil
+		runs = append(runs, spanRun{start: span.offset, end: span.offset + span.length, first: i, count: 1})
 	}
-	if batch != nil {
-		res = append(res, batch)
+	return runs
+}
+
+func toReadBatches(offsets offsetRecSlice, blockSize uint64) []readBatch {
+	runs := groupSpans(len(offsets), func(i int) byteSpan {
+		return byteSpan{offset: offsets[i].offset, length: uint64(offsets[i].length)}
+	}, blockSize)
+
+	res := make([]readBatch, 0, len(runs))
+	for _, run := range runs {
+		res = append(res, readBatch(offsets[run.first:run.first+run.count]))
 	}
 	return res
 }

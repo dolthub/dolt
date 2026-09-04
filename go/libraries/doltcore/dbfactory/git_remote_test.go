@@ -111,17 +111,17 @@ func TestGitRemoteFactory_GitFile_CachesUnderRepoDoltDirAndCanWrite(t *testing.T
 	remotePath := filepath.ToSlash(remoteRepo.GitDir)
 	remoteURL := "file://" + remotePath
 	urlStr := "git+file://" + remotePath
+	// The Dolt CLI stores caches under <repoRoot>/.dolt/git-remote-cache; the
+	// factory uses git_cache_root verbatim, so the caller composes that path.
+	cacheBase := filepath.Join(localRepoRoot, DoltDir, GitRemoteCacheDirName)
 	params := map[string]interface{}{
-		GitCacheRootParam: localRepoRoot,
+		GitCacheRootParam: cacheBase,
 	}
 
 	db, vrw, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, params)
 	require.NoError(t, err)
 	require.NotNil(t, db)
 	require.NotNil(t, vrw)
-
-	// Ensure cache repo created under <repoRoot>/.dolt/git-remote-cache.
-	cacheBase := filepath.Join(localRepoRoot, DoltDir, "git-remote-cache")
 
 	sum := sha256.Sum256([]byte(remoteURL + "|" + "refs/dolt/data"))
 	h := hex.EncodeToString(sum[:])
@@ -286,4 +286,137 @@ func TestEnsureGitRemoteURL_IdempotentRemoteAlreadyExists(t *testing.T) {
 	got, err := exec.CommandContext(ctx, "git", "--git-dir", gitDir, "remote", "get-url", remoteName).CombinedOutput()
 	require.NoError(t, err, "git remote get-url failed: %s", string(got))
 	require.Equal(t, remoteURL, strings.TrimSpace(string(got)))
+}
+
+func TestCloseGitRemotesUnderRoot(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found on PATH")
+	}
+
+	ctx := context.Background()
+	t.Cleanup(func() { TeardownGitRemotes(ctx) })
+
+	remoteRepo, err := gitrepo.InitBare(ctx, filepath.Join(shortTempDir(t), "remote.git"))
+	require.NoError(t, err)
+	_, err = remoteRepo.SetRefToTree(ctx, "refs/heads/main", map[string][]byte{"README": []byte("seed\n")}, "seed")
+	require.NoError(t, err)
+
+	urlStr := "git+file://" + filepath.ToSlash(remoteRepo.GitDir)
+	open := func(root string) datas.Database {
+		db, _, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, map[string]interface{}{GitCacheRootParam: filepath.Join(root, DoltDir, GitRemoteCacheDirName)})
+		require.NoError(t, err)
+		return db
+	}
+
+	rootA, rootB := shortTempDir(t), shortTempDir(t)
+	dbA, dbB := open(rootA), open(rootB)
+	require.True(t, open(rootA) == dbA, "opens under the same root share one cached store")
+
+	require.NoError(t, CloseGitRemotesUnderRoot(rootA))
+
+	require.True(t, open(rootB) == dbB, "closing one root's remotes must leave the others cached")
+
+	// Deleting the cache repository is what eviction is for: an entry left behind would hand the next open
+	// of this remote a store backed by files that are no longer there.
+	require.NoError(t, os.RemoveAll(rootA))
+	require.True(t, open(rootA) != dbA, "the open after eviction must build a new store")
+}
+
+func TestGitRemoteFactory_ReopenSeesOtherCacheRootsPush(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found on PATH")
+	}
+
+	// Reopening returns the process-wide cached store, so it must fetch from the remote to see a push
+	// made through a different cache root. A tiny TTL keeps the read-side fetch dedup from hiding that.
+	prevTTL := gitBlobstoreSyncForReadTTLOverride
+	gitBlobstoreSyncForReadTTLOverride = time.Nanosecond
+	t.Cleanup(func() { gitBlobstoreSyncForReadTTLOverride = prevTTL })
+
+	ctx := context.Background()
+	t.Cleanup(func() { TeardownGitRemotes(ctx) })
+
+	remoteRepo, err := gitrepo.InitBare(ctx, filepath.Join(shortTempDir(t), "remote.git"))
+	require.NoError(t, err)
+	_, err = remoteRepo.SetRefToTree(ctx, "refs/heads/main", map[string][]byte{"README": []byte("seed\n")}, "seed")
+	require.NoError(t, err)
+
+	urlStr := "git+file://" + filepath.ToSlash(remoteRepo.GitDir)
+	open := func(root string) (datas.Database, chunks.ChunkStore) {
+		db, vrw, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, map[string]interface{}{GitCacheRootParam: filepath.Join(root, DoltDir, GitRemoteCacheDirName)})
+		require.NoError(t, err)
+		vs, ok := vrw.(*types.ValueStore)
+		require.True(t, ok, "expected ValueReadWriter to be *types.ValueStore, got %T", vrw)
+		return db, vs.ChunkStore()
+	}
+	noopGetAddrs := func(chunks.Chunk) chunks.InsertAddrsCb {
+		return func(context.Context, hash.HashSet, chunks.PendingRefExists) error { return nil }
+	}
+
+	rootA, rootB := shortTempDir(t), shortTempDir(t)
+
+	dbA, csA := open(rootA)
+	cA := chunks.NewChunk([]byte("cacheRootA\n"))
+	require.NoError(t, csA.Put(ctx, cA, noopGetAddrs))
+	lastA, err := csA.Root(ctx)
+	require.NoError(t, err)
+	okCommit, err := csA.Commit(ctx, cA.Hash(), lastA)
+	require.NoError(t, err)
+	require.True(t, okCommit)
+
+	// Cache root B pushes a new root on top of A's.
+	_, csB := open(rootB)
+	rootHash, err := csB.Root(ctx)
+	require.NoError(t, err)
+	require.Equal(t, cA.Hash(), rootHash)
+	cB := chunks.NewChunk([]byte("cacheRootB\n"))
+	require.NoError(t, csB.Put(ctx, cB, noopGetAddrs))
+	okCommit, err = csB.Commit(ctx, cB.Hash(), rootHash)
+	require.NoError(t, err)
+	require.True(t, okCommit)
+
+	dbA2, csA2 := open(rootA)
+	require.True(t, dbA2 == dbA, "reopen under the same root returns the cached store")
+	rootA2, err := csA2.Root(ctx)
+	require.NoError(t, err)
+	require.Equal(t, cB.Hash(), rootA2, "reopen must see the root pushed through cache root B")
+	got, err := csA2.Get(ctx, cB.Hash())
+	require.NoError(t, err)
+	require.Equal(t, "cacheRootB\n", string(got.Data()))
+}
+
+func TestGitRemoteFactory_GitCacheRootParamUsedVerbatim(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found on PATH")
+	}
+	ctx := context.Background()
+	t.Cleanup(func() { TeardownGitRemotes(ctx) })
+
+	remoteRepo, err := gitrepo.InitBare(ctx, filepath.Join(shortTempDir(t), "remote.git"))
+	require.NoError(t, err)
+	_, err = remoteRepo.SetRefToTree(ctx, "refs/heads/main", map[string][]byte{"README": []byte("seed\n")}, "seed")
+	require.NoError(t, err)
+	urlStr := "git+file://" + filepath.ToSlash(remoteRepo.GitDir)
+
+	// GitCacheRootParam is used as the cache base verbatim: no .dolt/git-remote-cache
+	// is appended, so a non-Dolt embedder gets a clean cache location.
+	cacheDir := shortTempDir(t)
+	db, _, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, map[string]interface{}{GitCacheRootParam: cacheDir})
+	require.NoError(t, err)
+	require.NotNil(t, db)
+
+	_, statErr := os.Stat(filepath.Join(cacheDir, DoltDir))
+	require.True(t, os.IsNotExist(statErr), "cache dir must not contain a .dolt directory")
+
+	entries, err := os.ReadDir(cacheDir)
+	require.NoError(t, err)
+	found := false
+	for _, e := range entries {
+		if e.IsDir() {
+			if _, err := os.Stat(filepath.Join(cacheDir, e.Name(), "repo.git")); err == nil {
+				found = true
+			}
+		}
+	}
+	require.True(t, found, "expected the cache repo directly under <git_cache_root>/<hash>/repo.git")
 }

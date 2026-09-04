@@ -20,8 +20,17 @@ wait_for_connection() {
   user=${SQL_USER:-root}
   end_time=$((SECONDS+($timeout/1000)))
 
+  # Probe from an empty data dir. Even with --host, which makes this a pure client,
+  # a dolt command takes the exclusive write lock on every database in its data dir
+  # for the life of the process. Tests that start the server from inside a database
+  # directory would otherwise have this probe fight the server we are waiting on for
+  # that database's lock; the server only waits 100ms for it before exiting with
+  # "database is locked by another dolt process".
+  probe_data_dir="$BATS_TMPDIR/dolt-sql-client-probe"
+  mkdir -p "$probe_data_dir"
+
   while [ $SECONDS -lt $end_time ]; do
-    run dolt -u $user -p "$DOLT_REMOTE_PASSWORD" --host localhost --no-tls --port $port --use-db "$DEFAULT_DB" sql -q "SELECT 1;"
+    run dolt --data-dir "$(nativepath "$probe_data_dir")" -u $user -p "$DOLT_REMOTE_PASSWORD" --host localhost --no-tls --port $port --use-db "$DEFAULT_DB" sql -q "SELECT 1;"
     if [ $status -eq 0 ]; then
       echo "Connected successfully!"
       return 0

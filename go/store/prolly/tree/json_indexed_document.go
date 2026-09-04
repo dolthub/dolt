@@ -17,7 +17,6 @@ package tree
 import (
 	"context"
 	"database/sql/driver"
-	"encoding/json"
 	"fmt"
 	"io"
 	"sync"
@@ -117,7 +116,7 @@ func getInterfaceFromIndexedJsonMap(ctx context.Context, m StaticJsonMap) (val i
 	if err != nil {
 		return nil, err
 	}
-	err = json.Unmarshal(jsonBytes, &val)
+	err = types.JsonUnmarshal(jsonBytes, &val)
 	if err != nil {
 		return nil, err
 	}

@@ -11,6 +11,28 @@ teardown() {
     teardown_common
 }
 
+# The grace period floor is enforced by whichever process runs dolt_backup. Under
+# SQL_ENGINE=remote-engine that is the sql-server setup_common started, not the
+# `dolt sql` client, so the override has to be in the server's environment and the
+# server has to be restarted to pick it up.
+lower_prune_grace_floor() {
+    export DOLT_BACKUP_PRUNE_MIN_GRACE="$1"
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+        stop_sql_server 1
+        start_sql_server
+    fi
+}
+
+setup_backup() {
+    backup_dir="$BATS_TEST_TMPDIR/backup"
+    dolt backup add b1 "file://$backup_dir"
+    dolt sql <<SQL
+create table t (pk int primary key);
+insert into t values (1);
+call dolt_commit('-Am', 'init');
+SQL
+}
+
 @test "sql-backup: dolt_backup no argument" {
     run dolt sql -q "call dolt_backup()"
     [ "$status" -ne 0 ]
@@ -327,4 +349,117 @@ SQL
     run dolt --port $PORT --host 0.0.0.0 --no-tls --use-db ai_restored sql -r csv -q "insert into t (name) values ('after_restore'); select * from t order by id"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "449,after_restore" ]] || false
+}
+
+@test "sql-backup: dolt_backup sync --prune-with-grace-period reclaims an orphaned table file" {
+    backupDir="$BATS_TEST_TMPDIR/the_backup"
+    orphan="00000000000000000000000000000001"
+
+    # So the test does not have to wait out the production minimum.
+    lower_prune_grace_floor 1s
+
+    dolt backup add hostedapidb-0 "file://$backupDir"
+    dolt sql -q "call dolt_backup('sync', 'hostedapidb-0')"
+
+    # Stands in for a sync killed after landing a table file but before
+    # committing the manifest: a complete file that nothing references.
+    echo "orphaned table file" > "$backupDir/$orphan"
+    [ -f "$backupDir/$orphan" ] || false
+
+    # Wait for the destination to go quiescent.
+    sleep 2
+
+    dolt sql -q "create table t (a int primary key)"
+    dolt commit -Am "cm"
+    dolt sql -q "call dolt_backup('sync', 'hostedapidb-0', '--prune-with-grace-period', '1s')"
+
+    [ ! -f "$backupDir/$orphan" ] || false
+
+    dolt backup restore "file://$backupDir" the_restore
+    (cd the_restore && dolt sql -q "select * from t")
+}
+
+@test "sql-backup: dolt_backup sync --prune-with-grace-period leaves a recently written destination alone" {
+    backupDir="$BATS_TEST_TMPDIR/the_backup"
+    orphan="00000000000000000000000000000001"
+
+    lower_prune_grace_floor 1s
+
+    dolt backup add hostedapidb-0 "file://$backupDir"
+    dolt sql -q "call dolt_backup('sync', 'hostedapidb-0')"
+
+    echo "orphaned table file" > "$backupDir/$orphan"
+
+    # The sync we just took is well inside the grace period, so nothing at all
+    # is deleted -- one recent touch vetoes the whole directory.
+    dolt sql -q "create table t (a int primary key)"
+    dolt commit -Am "cm"
+    dolt sql -q "call dolt_backup('sync', 'hostedapidb-0', '--prune-with-grace-period', '1m')"
+
+    [ -f "$backupDir/$orphan" ] || false
+}
+
+@test "sql-backup: dolt_backup --prune-with-grace-period rejects bad values and unrelated subcommands" {
+    backupFileUrl="file://$BATS_TEST_TMPDIR/the_backup"
+    dolt backup add hostedapidb-0 "$backupFileUrl"
+
+    run dolt sql -q "call dolt_backup('sync', 'hostedapidb-0', '--prune-with-grace-period', '5m')"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "at least 10m" ]] || false
+
+    run dolt sql -q "call dolt_backup('sync', 'hostedapidb-0', '--prune-with-grace-period', 'nonsense')"
+    [ "$status" -ne 0 ]
+
+    run dolt sql -q "call dolt_backup('add', 'bac2', '$backupFileUrl-2', '--prune-with-grace-period', '1h')"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "only supported with" ]] || false
+
+    run dolt sql -q "call dolt_backup('remove', 'hostedapidb-0', '--prune-with-grace-period', '1h')"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "only supported with" ]] || false
+}
+
+@test "sql-backup: dolt_backup sync is a no-op when nothing has changed" {
+    # See https://github.com/dolthub/dolt/issues/11488
+    setup_backup
+    dolt sql -q "call dolt_backup('sync', 'b1');"
+
+    manifest_before=$(cat "$backup_dir/manifest")
+    files_before=$(ls "$backup_dir" | sort)
+
+    # WorkingSetMeta stamps writes with time.Now().Unix(), in seconds.
+    sleep 2
+
+    dolt sql -q "call dolt_backup('sync', 'b1');"
+
+    manifest_after=$(cat "$backup_dir/manifest")
+    files_after=$(ls "$backup_dir" | sort)
+
+    [ "$manifest_before" = "$manifest_after" ] || false
+    [ "$files_before" = "$files_after" ] || false
+}
+
+@test "sql-backup: dolt_backup sync does not commit the session's open transaction" {
+    # See https://github.com/dolthub/dolt/issues/11488
+    setup_backup
+    dolt sql -q "insert into t values (42);"
+
+    dolt sql <<SQL
+set autocommit = 0;
+start transaction;
+insert into t values (99);
+call dolt_backup('sync', 'b1');
+rollback;
+SQL
+
+    run dolt sql -r csv -q "select pk from t"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "42" ]] || false
+    [[ ! "$output" =~ "99" ]] || false
+
+    dolt backup restore "file://$backup_dir" the_restore
+    run dolt sql -r csv -q "use the_restore; select pk from t"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "42" ]] || false
+    [[ ! "$output" =~ "99" ]] || false
 }

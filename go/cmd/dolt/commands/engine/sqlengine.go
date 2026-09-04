@@ -57,11 +57,12 @@ import (
 
 // SqlEngine packages up the context necessary to run sql queries against dsqle.
 type SqlEngine struct {
-	provider       *sqle.DoltDatabaseProvider
-	ContextFactory sql.ContextFactory
-	dsessFactory   sessionFactory
-	engine         *gms.Engine
-	fs             filesys.Filesys
+	provider          *sqle.DoltDatabaseProvider
+	ContextFactory    sql.ContextFactory
+	dsessFactory      sessionFactory
+	engine            *gms.Engine
+	fs                filesys.Filesys
+	clusterController *cluster.Controller
 }
 
 type sessionFactory func(mysqlSess *sql.BaseSession, pro sql.DatabaseProvider) (*dsess.DoltSession, error)
@@ -191,7 +192,7 @@ func NewSqlEngine(
 	}
 
 	b := env.GetDefaultInitBranch(mrEnv.Config())
-	engineProvider, err := factory.NewProvider(b, mrEnv.FileSystem(), all, locations, config.EngineOverrides)
+	engineProvider, err := factory.NewProvider(ctx, b, mrEnv.FileSystem(), all, locations, config.EngineOverrides)
 	if err != nil {
 		return nil, err
 	}
@@ -250,7 +251,7 @@ func NewSqlEngine(
 	})
 
 	// Load in privileges from file, if it exists
-	var persister cluster.MySQLDbPersister
+	var persister cluster.AuthDbPersister
 	persister = mysql_file_handler.NewPersister(config.PrivFilePath, config.DoltCfgDirPath)
 
 	persister = config.ClusterController.HookMySQLDbPersister(persister, engine.Analyzer.Catalog.MySQLDb)
@@ -312,6 +313,7 @@ func NewSqlEngine(
 	sqlEngine.ContextFactory = sqlContextFactory
 	sqlEngine.engine = engine
 	sqlEngine.fs = pro.FileSystem()
+	sqlEngine.clusterController = config.ClusterController
 
 	pro.InstallReplicationInitDatabaseHook(bThreads, sqlEngine.NewDefaultContext)
 	if err = config.ClusterController.RunCommitHooks(bThreads, sqlEngine.NewDefaultContext); err != nil {
@@ -385,7 +387,7 @@ func applySystemVariables(vars sql.SystemVariableRegistry, cfg SystemVariables) 
 	return nil
 }
 
-// InitStats initalizes stats threads. We separate construction
+// InitStats initializes stats threads. We separate construction
 // from initialization because the session provider needs the
 // *StatsCoordinator handle (stats and provider are cyclically
 // dependent), but several other initialization steps race on
@@ -494,6 +496,12 @@ func (se *SqlEngine) GetUnderlyingEngine() *gms.Engine {
 
 func (se *SqlEngine) FileSystem() filesys.Filesys {
 	return se.fs
+}
+
+// ClusterController returns the cluster replication controller for this
+// engine, or nil when cluster replication is not configured.
+func (se *SqlEngine) ClusterController() *cluster.Controller {
+	return se.clusterController
 }
 
 func (se *SqlEngine) Close() error {

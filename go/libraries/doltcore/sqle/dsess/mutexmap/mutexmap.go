@@ -15,6 +15,7 @@
 package mutexmap
 
 import (
+	"context"
 	"sync"
 )
 
@@ -29,38 +30,57 @@ type mapMutex struct {
 	key      interface{}
 	parent   *MutexMap
 	refcount int
-	mu       sync.Mutex
+	// held is a capacity-one channel used as the mutex itself, rather than a sync.Mutex, so
+	// that a waiter can give up on a canceled context. Holds a value when locked.
+	held chan struct{}
 }
 
 func NewMutexMap() *MutexMap {
 	return &MutexMap{keyedMutexes: make(map[interface{}]*mapMutex)}
 }
 
-func (mm *MutexMap) Lock(key interface{}) func() {
-	mm.mu.Lock()
+// Lock acquires the mutex for |key| and returns a callback that releases it, giving up and
+// returning |ctx|'s cause if |ctx| is canceled before the lock can be acquired. It returns
+// a nil callback with a non-nil error in that case.
+//
+// |ctx| governs the wait only: an uncontended lock is granted even to a canceled caller.
+func (mm *MutexMap) Lock(ctx context.Context, key interface{}) (func(), error) {
+	keyedMutex := mm.ref(key)
 
-	var keyedMutex *mapMutex
-	func() {
-		// We must release the parent lock before attempting to acquire the child lock, otherwise if the child lock
-		// is currently held it will never be released.
-		defer mm.mu.Unlock()
-		var hasKey bool
-		keyedMutex, hasKey = mm.keyedMutexes[key]
-		if !hasKey {
-			keyedMutex = &mapMutex{parent: mm, key: key}
-			mm.keyedMutexes[key] = keyedMutex
-		}
-		keyedMutex.refcount++
-	}()
+	select {
+	case keyedMutex.held <- struct{}{}:
+		return keyedMutex.Unlock, nil
+	default:
+	}
 
-	keyedMutex.mu.Lock()
-
-	return func() {
-		keyedMutex.Unlock()
+	select {
+	case keyedMutex.held <- struct{}{}:
+		return keyedMutex.Unlock, nil
+	case <-ctx.Done():
+		keyedMutex.unref()
+		return nil, context.Cause(ctx)
 	}
 }
 
-func (mm *mapMutex) Unlock() {
+// ref returns the mutex for |key|, creating it if necessary, with this caller's reference
+// counted. The mapMutex refcount is what keeps the mutex in the map, and it is guarded by
+// |mm.mu|, just like keyedMutexes itself.
+func (mm *MutexMap) ref(key interface{}) *mapMutex {
+	mm.mu.Lock()
+	defer mm.mu.Unlock()
+
+	keyedMutex, hasKey := mm.keyedMutexes[key]
+	if !hasKey {
+		keyedMutex = &mapMutex{parent: mm, key: key, held: make(chan struct{}, 1)}
+		mm.keyedMutexes[key] = keyedMutex
+	}
+	keyedMutex.refcount++
+	return keyedMutex
+}
+
+// unref drops one reference to |mm|, deleting it from |keyedMutexes| once nobody holds
+// or awaits it.
+func (mm *mapMutex) unref() {
 	mutexMap := mm.parent
 	mutexMap.mu.Lock()
 	defer mutexMap.mu.Unlock()
@@ -69,5 +89,14 @@ func (mm *mapMutex) Unlock() {
 	if mm.refcount < 1 {
 		delete(mutexMap.keyedMutexes, mm.key)
 	}
-	mm.mu.Unlock()
+}
+
+func (mm *mapMutex) Unlock() {
+	select {
+	case <-mm.held:
+	default:
+		// Matches sync.Mutex, which throws on unlock of an unlocked mutex.
+		panic("mutexmap: release called for a mutex that is not held")
+	}
+	mm.unref()
 }

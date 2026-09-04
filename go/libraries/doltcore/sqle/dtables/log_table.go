@@ -34,8 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly"
 )
 
-const logsDefaultRowCount = 100
-
 // LogTable is a sql.Table implementation that implements a system table which shows the dolt commit log
 type LogTable struct {
 	ddb               *doltdb.DoltDB
@@ -171,17 +169,19 @@ func (dt *LogTable) DataLength(ctx *sql.Context) (uint64, error) {
 }
 
 // RowCount implements sql.StatisticsTable
-func (dt *LogTable) RowCount(ctx *sql.Context) (uint64, bool, error) {
+func (dt *LogTable) RowCount(ctx *sql.Context) (rowCount uint64, exact bool, err error) {
 	cc, err := dt.head.GetCommitClosure(ctx)
 	if err != nil {
-		// TODO: remove this when we deprecate LD
-		return logsDefaultRowCount, false, nil
+		return 0, false, err
 	}
 	if cc.IsEmpty() {
 		return 1, true, nil
 	}
 	cnt, err := cc.Count()
-	return uint64(cnt + 1), true, err
+	// A shallow clone's closure counts ancestors it never fetched, so its total
+	// is too high. Report it as inexact only in that case, which makes count(*)
+	// recount the rows actually present while full clones keep the exact fast path.
+	return uint64(cnt + 1), !dt.ddb.IsShallow(), err
 }
 
 // Name is a sql.Table interface function which returns the name of the table
@@ -420,7 +420,14 @@ func (dt *LogTable) NewLogItr(ctx *sql.Context, ddb *doltdb.DoltDB, head *doltdb
 		return nil, err
 	}
 
-	child, err := commitwalk.GetTopologicalOrderIterator[*sql.Context](ctx, ddb, []hash.Hash{h}, nil)
+	// Returning false for ghost commits, which stand in for ancestors a shallow
+	// clone never fetched, stops the walk at the boundary of the available history.
+	matchFn := func(optCmt *doltdb.OptionalCommit) (bool, error) {
+		_, ok := optCmt.ToCommit()
+		return ok, nil
+	}
+
+	child, err := commitwalk.GetTopologicalOrderIterator[*sql.Context](ctx, ddb, []hash.Hash{h}, matchFn)
 	if err != nil {
 		return nil, err
 	}

@@ -22,7 +22,6 @@ import (
 	"log"
 	"math"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -55,6 +54,7 @@ type Puller struct {
 
 	wr *PullTableFileWriter
 
+	tempDir string
 	pushLog *log.Logger
 
 	statsCh chan Stats
@@ -121,30 +121,27 @@ func NewPuller(
 		GetAddrs:             getAddrs,
 	})
 
-	var pushLogger *log.Logger
-	if dbg, ok := os.LookupEnv(dconfig.EnvPushLog); ok && strings.EqualFold(dbg, "true") {
-		logFilePath := filepath.Join(tempDir, "push.log")
-		f, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
-
-		if err == nil {
-			pushLogger = log.New(f, "", log.Lmicroseconds)
-		}
-	}
-
 	p := &Puller{
 		waf:           walkAddrs,
 		srcChunkStore: srcChunkStore,
 		sinkDBCS:      sinkCS,
 		hashes:        hash.NewHashSet(hashes...),
 		wr:            wr,
-		pushLog:       pushLogger,
+		tempDir:       tempDir,
 		statsCh:       statsCh,
 		stats: &stats{
 			wrStatsGetter: wr.GetStats,
+			fetcher:       &fetchStatsRecorder{},
 		},
 	}
 
+	// Route chunk store debug logging into the push log. For a push, the sink
+	// is the remote store; for a fetch, the source is. Wire both so either
+	// operation's remote-side messages are captured.
 	if lcs, ok := sinkCS.(chunks.LoggingChunkStore); ok {
+		lcs.SetLogger(p)
+	}
+	if lcs, ok := srcCS.(chunks.LoggingChunkStore); ok {
 		lcs.SetLogger(p)
 	}
 
@@ -183,7 +180,7 @@ func (c countingReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func emitStats(s *stats, ch chan Stats) (cancel func()) {
+func emitStats(s *stats, ch chan Stats, logf func(string, ...interface{})) (cancel func()) {
 	done := make(chan struct{})
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -248,12 +245,37 @@ func emitStats(s *stats, ch chan Stats) (cancel func()) {
 		updateduration := 1 * time.Second
 		ticker := time.NewTicker(updateduration)
 		defer ticker.Stop()
+		emit := func(st Stats) {
+			if ch != nil {
+				ch <- st
+			}
+			fs := s.fetcher.read()
+			compBytes := atomic.LoadUint64(&s.fetchedSourceCompBytes)
+			// Source side counters:
+			//   chunks            - wanted chunks received / total requested
+			//   uncompressed      - decompressed size of the wanted chunks
+			//   compressed        - on-wire (snappy) size of just the wanted chunks
+			//   wire              - bytes actually downloaded, including dark bytes
+			//                       pulled in by range coalescing (wire - compressed
+			//                       ~= coalescing overhead)
+			//   fetch_rate        - uncompressed bytes/sec
+			//   range_downloads   - completed coalesced range downloads (and retries)
+			//   inflight/peak     - concurrent range downloads in flight
+			// Sink side counters:
+			//   sent/buffered     - table file bytes written to / queued for the dest
+			//   send_rate         - sent bytes/sec
+			logf("stats: source[chunks=%d/%d uncompressed=%dB compressed=%dB wire=%dB fetch_rate=%.0fB/s range_downloads=%d retries=%d inflight=%d peak=%d] sink[sent=%dB buffered=%dB send_rate=%.0fB/s]",
+				st.FetchedSourceChunks, st.TotalSourceChunks,
+				st.FetchedSourceBytes, compBytes, fs.DownloadedBytes, st.FetchedSourceBytesPerSec,
+				fs.CompletedDownloads, fs.Retries, fs.InFlight, fs.PeakInFlight,
+				st.FinishedSendBytes, st.BufferedSendBytes, st.SendBytesPerSec)
+		}
 		for {
 			select {
 			case <-ticker.C:
-				ch <- s.read()
+				emit(s.read())
 			case <-done:
-				ch <- s.read()
+				emit(s.read())
 				return
 			}
 		}
@@ -268,9 +290,14 @@ type stats struct {
 	totalSourceChunks         uint64
 	fetchedSourceChunks       uint64
 	fetchedSourceBytes        uint64
+	fetchedSourceCompBytes    uint64
 	fetchedSourceBytesPerSec  uint64
 	sendBytesPerSecF          float64
 	fetchedSourceBytesPerSecF float64
+
+	// fetcher accumulates download stats reported by the source ChunkFetcher
+	// (bytes fetched over the wire including dark bytes, download concurrency).
+	fetcher *fetchStatsRecorder
 }
 
 type Stats struct {
@@ -314,14 +341,30 @@ func WithDiscardingStatsCh(cb func(statsCh chan Stats)) {
 
 // Pull executes the sync operation
 func (p *Puller) Pull(ctx context.Context) error {
-	if p.statsCh != nil {
-		c := emitStats(p.stats, p.statsCh)
+	// If push logging is enabled, create a unique log file for this pull
+	// operation and close it when the pull completes.
+	if dbg, ok := os.LookupEnv(dconfig.EnvPushLog); ok && strings.EqualFold(dbg, "true") {
+		f, err := os.CreateTemp(p.tempDir, "push-*.log")
+		if err == nil {
+			p.pushLog = log.New(f, "", log.LstdFlags|log.Lmicroseconds)
+			p.Logf("starting pull of %d hashes", p.hashes.Size())
+			defer func() {
+				p.Logf("pull complete")
+				f.Close()
+			}()
+		}
+	}
+
+	// Run stats emission if anyone is consuming the stats channel or if we are
+	// logging stats to the push log.
+	if p.statsCh != nil || p.pushLog != nil {
+		c := emitStats(p.stats, p.statsCh, p.Logf)
 		defer c()
 	}
 
 	eg, ctx := errgroup.WithContext(ctx)
 
-	rd := GetChunkFetcher(ctx, p.srcChunkStore)
+	rd := GetChunkFetcher(ctx, p.srcChunkStore, p.stats.fetcher)
 
 	const batchSize = 64 * 1024
 	tracker := NewPullChunkTracker(TrackerConfig{
@@ -393,6 +436,10 @@ func (p *Puller) Pull(ctx context.Context) error {
 			}
 
 			atomic.AddUint64(&p.stats.fetchedSourceChunks, uint64(1))
+			// CompressedSize is the on-the-wire (snappy-compressed) size of
+			// just this wanted chunk, excluding any dark bytes pulled in by
+			// range coalescing (those are tracked by the fetcher recorder).
+			atomic.AddUint64(&p.stats.fetchedSourceCompBytes, uint64(cChk.CompressedSize()))
 
 			chnk, err := cChk.ToChunk()
 			if err != nil {

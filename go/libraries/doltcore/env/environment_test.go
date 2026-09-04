@@ -41,7 +41,7 @@ const (
 func TestCanCreateDatabaseAtPathAllowsGitRemoteCache(t *testing.T) {
 	dir := "/user/bheni/datasets/allow_git_remote_cache"
 	doltDir := filepath.Join(dir, dbfactory.DoltDir)
-	cacheDir := filepath.Join(doltDir, "git-remote-cache")
+	cacheDir := filepath.Join(doltDir, dbfactory.GitRemoteCacheDirName)
 
 	// Any contents under .dolt/git-remote-cache should be ignored by CanCreateDatabaseAtPath.
 	fs := filesys.NewInMemFS(

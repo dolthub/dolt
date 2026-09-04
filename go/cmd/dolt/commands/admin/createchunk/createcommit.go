@@ -125,11 +125,11 @@ func (cmd CreateCommitCmd) Exec(ctx context.Context, commandStr string, args []s
 		return 1
 	}
 
-	// This isn't technically an amend, but the Amend field controls whether the commit must be a child of the ref's current commit (if any)
+	// The Force field controls whether the commit must be a child of the ref's current commit (if any).
 	commitOpts := datas.CommitOptions{
 		Parents: parentCommits,
 		Meta:    commitMeta,
-		Amend:   force,
+		Force:   force,
 	}
 
 	rootVal, err := db.ValueReadWriter().ReadValue(ctx, commitRootHash)

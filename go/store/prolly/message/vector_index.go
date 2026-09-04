@@ -44,8 +44,50 @@ func distanceTypeToEnum(distanceType vector.DistanceType) serial.DistanceType {
 	switch distanceType.(type) {
 	case vector.DistanceL2Squared:
 		return serial.DistanceTypeL2_Squared
+	case vector.DistanceEuclidean:
+		// DistanceEuclidean produces the same ordering as DistanceL2Squared, so they build identical trees.
+		return serial.DistanceTypeL2_Squared
+	case vector.DistanceCosine:
+		return serial.DistanceTypeCosine
+	case vector.DistanceInnerProduct:
+		return serial.DistanceTypeInnerProduct
+	case vector.DistanceL1:
+		return serial.DistanceTypeL1
 	}
-	return serial.DistanceTypeNull
+	// constraints enforced upstream
+	panic(fmt.Sprintf("unsupported distance type for vector index: %v", distanceType))
+}
+
+func enumToDistanceType(distanceType serial.DistanceType) (vector.DistanceType, error) {
+	switch distanceType {
+	case serial.DistanceTypeNull:
+		// Vector index nodes written before the distance_type field existed are always L2_Squared.
+		return vector.DistanceL2Squared{}, nil
+	case serial.DistanceTypeL2_Squared:
+		return vector.DistanceL2Squared{}, nil
+	case serial.DistanceTypeCosine:
+		return vector.DistanceCosine{}, nil
+	case serial.DistanceTypeInnerProduct:
+		return vector.DistanceInnerProduct{}, nil
+	case serial.DistanceTypeL1:
+		return vector.DistanceL1{}, nil
+	}
+	return nil, fmt.Errorf("unknown distance type in vector index node: %s", distanceType)
+}
+
+// GetVectorIndexMetadata returns the distance function and log chunk size recorded in a vector index node. A zero log
+// chunk size means the node predates the field and the caller should use its default.
+func GetVectorIndexMetadata(msg serial.Message) (vector.DistanceType, uint8, error) {
+	var pm serial.VectorIndexNode
+	err := serial.InitVectorIndexNodeRoot(&pm, msg, serial.MessagePrefixSz)
+	if err != nil {
+		return nil, 0, err
+	}
+	distanceType, err := enumToDistanceType(pm.DistanceType())
+	if err != nil {
+		return nil, 0, err
+	}
+	return distanceType, pm.LogChunkSize(), nil
 }
 
 func NewVectorIndexSerializer(pool pool.BuffPool, logChunkSize uint8, distanceType vector.DistanceType) VectorIndexSerializer {

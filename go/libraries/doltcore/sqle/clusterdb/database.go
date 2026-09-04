@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -85,6 +86,48 @@ func (database) SaveStoredProcedure(ctx *sql.Context, spd sql.StoredProcedureDet
 
 func (database) DropStoredProcedure(ctx *sql.Context, name string) error {
 	return errors.New("unimplemented")
+}
+
+// Implement EventDatabase (and QuiescableEventDatabase) as no-ops. The cluster database never has
+// events, but the event scheduler wraps every catalog database in a mysql_db.PrivilegedDatabase,
+// which exposes the sql.EventDatabase interface unconditionally and returns
+// sql.ErrEventsNotSupported when the underlying database doesn't implement events. Without these
+// no-op implementations the event executor logs "unable to determine if events need to be
+// reloaded: database 'dolt_cluster' doesn't support events", short-circuits its reload check for
+// every database iterated after dolt_cluster, and is prevented from ever quiescing.
+var _ sql.EventDatabase = database{}
+var _ sql.QuiescableEventDatabase = database{}
+
+func (database) GetEvent(ctx *sql.Context, name string) (sql.EventDefinition, bool, error) {
+	return sql.EventDefinition{}, false, nil
+}
+
+func (database) GetEvents(ctx *sql.Context) ([]sql.EventDefinition, interface{}, error) {
+	return nil, nil, nil
+}
+
+func (database) SaveEvent(ctx *sql.Context, ed sql.EventDefinition) (bool, error) {
+	return false, errors.New("unimplemented")
+}
+
+func (database) DropEvent(ctx *sql.Context, name string) error {
+	return errors.New("unimplemented")
+}
+
+func (database) UpdateEvent(ctx *sql.Context, originalName string, ed sql.EventDefinition) (bool, error) {
+	return false, errors.New("unimplemented")
+}
+
+func (database) UpdateLastExecuted(ctx *sql.Context, eventName string, lastExecuted time.Time) error {
+	return errors.New("unimplemented")
+}
+
+func (database) NeedsToReloadEvents(ctx *sql.Context, token interface{}) (bool, error) {
+	return false, nil
+}
+
+func (database) QuiescableEvents() bool {
+	return true
 }
 
 var _ sql.ViewDatabase = database{}

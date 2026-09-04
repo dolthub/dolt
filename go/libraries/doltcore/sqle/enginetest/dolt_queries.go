@@ -1019,6 +1019,29 @@ var DoltScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "test AS OF vector indexed queries",
+		SetUpScript: []string{
+			"create table vectors (id int primary key, v vector(2) not null, vector index v_idx(v));",
+			"insert into vectors values (1, string_to_vector('[3.0,4.0]')), (2, string_to_vector('[1.0,1.0]')), (3, string_to_vector('[5.0,5.0]'));",
+			"call dolt_commit('-Am', 'adding table vectors with vector index');",
+			"SET @commit1 = hashof('HEAD');",
+			"insert into vectors values (4, string_to_vector('[0.0,0.0]'));",
+			"call dolt_commit('-am', 'adding closest vector');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:           "select id from vectors order by vec_distance('[0.0,0.0]', v) limit 2;",
+				Expected:        []sql.Row{{4}, {2}},
+				ExpectedIndexes: []string{"v_idx"},
+			},
+			{
+				Query:           "select id from vectors as of @commit1 order by vec_distance('[0.0,0.0]', v) limit 2;",
+				Expected:        []sql.Row{{2}, {1}},
+				ExpectedIndexes: []string{"v_idx"},
+			},
+		},
+	},
+	{
 		Name: "test as of indexed join (https://github.com/dolthub/dolt/issues/2189)",
 		SetUpScript: []string{
 			"create table a (pk int primary key, c1 int)",
@@ -4309,7 +4332,7 @@ var DoltBranchScripts = []queries.ScriptTest{
 			{
 				// Renaming to an existing name fails without the force flag
 				Query:          "CALL DOLT_BRANCH('-m', 'myNewBranch1', 'myNewBranch2')",
-				ExpectedErrStr: "already exists",
+				ExpectedErrStr: "fatal: A branch named 'myNewBranch2' already exists.",
 			},
 			{
 				Query:    "CALL DOLT_BRANCH('-mf', 'myNewBranch1', 'myNewBranch2')",
@@ -4497,6 +4520,139 @@ var DoltBranchScripts = []queries.ScriptTest{
 			{
 				Query:    "select * from `mydb/b1`.t join `mydb/main`.t",
 				Expected: []sql.Row{{1, 1}, {1, 2}},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11270
+		Name: "a branch name differing from an existing one only by case is rejected",
+		SetUpScript: []string{
+			"create table t (a int primary key);",
+			"insert into t values (1);",
+			"call dolt_commit('-Am', 'init');",
+			"call dolt_branch('br');",
+			"call dolt_branch('feature');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_branch('BR');",
+				ExpectedErrStr: "fatal: A branch named 'br' already exists.",
+			},
+			{
+				Query:          "call dolt_branch('-f', 'BR');",
+				ExpectedErrStr: "fatal: A branch named 'br' already exists.",
+			},
+			{
+				Query:          "call dolt_checkout('-b', 'BR');",
+				ExpectedErrStr: "fatal: A branch named 'br' already exists.",
+			},
+			{
+				Query:          "call dolt_branch('-c', 'br', 'BR');",
+				ExpectedErrStr: "fatal: A branch named 'br' already exists.",
+			},
+			{
+				Query:          "call dolt_branch('-m', 'feature', 'BR');",
+				ExpectedErrStr: "fatal: A branch named 'br' already exists.",
+			},
+			{
+				Query:          "call dolt_branch('-cf', 'feature', 'BR');",
+				ExpectedErrStr: "fatal: A branch named 'br' already exists.",
+			},
+			{
+				Query:          "call dolt_branch('-mf', 'feature', 'BR');",
+				ExpectedErrStr: "fatal: A branch named 'br' already exists.",
+			},
+			{
+				Query:          "call dolt_branch('br');",
+				ExpectedErrStr: "fatal: A branch named 'br' already exists.",
+			},
+			{
+				Query:    "select count(*) from dolt_branches where name = 'br' or name = 'BR';",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11270
+		Name: "the case collision guard allows same-case reset and case-only rename",
+		SetUpScript: []string{
+			"create table t (a int primary key);",
+			"insert into t values (1);",
+			"call dolt_commit('-Am', 'init');",
+			"call dolt_branch('br');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "insert into t values (2);",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "call dolt_commit('-Am', 'second');",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				Query:    "call dolt_branch('-f', 'br');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select a from `mydb/br`.t order by a;",
+				Expected: []sql.Row{{1}, {2}},
+			},
+			{
+				Query:    "call dolt_branch('-c', 'br', 'brcopy');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "call dolt_branch('-m', 'br', 'BR');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select count(*) from dolt_branches where name = 'br';",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select count(*) from dolt_branches where name = 'BR';",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11270
+		Name: "renaming a branch to its own name preserves the branch and its data",
+		SetUpScript: []string{
+			"create table t (a int primary key);",
+			"insert into t values (1);",
+			"call dolt_commit('-Am', 'init');",
+			"call dolt_branch('feature');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_branch('-m', 'feature', 'feature');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "call dolt_branch('-mf', 'feature', 'feature');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "call dolt_branch('-m', 'nosuch', 'nosuch');",
+				ExpectedErrStr: "branch not found",
+			},
+			{
+				Query:    "call dolt_checkout('feature');",
+				Expected: []sql.Row{{0, "Switched to branch 'feature'"}},
+			},
+			{
+				Query:    "call dolt_branch('-m', 'feature', 'feature');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select count(*) from dolt_branches where name = 'feature';",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "select a from t;",
+				Expected: []sql.Row{{1}},
 			},
 		},
 	},
@@ -4741,19 +4897,19 @@ var DoltGC = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "CALL DOLT_GC(null);",
-				ExpectedErrStr: "error: invalid usage",
+				ExpectedErrStr: "error: gc does not take positional arguments, but found 1: ",
 			},
 			{
 				Query:          "CALL DOLT_GC('bad', '--shallow');",
-				ExpectedErrStr: "error: invalid usage",
+				ExpectedErrStr: "error: gc does not take positional arguments, but found 1: bad",
 			},
 			{
 				Query:    "CALL DOLT_GC('--shallow');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.Row{{0}},
 			},
 			{
 				Query:    "CALL DOLT_GC();",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.Row{{0}},
 			},
 			{
 				Query:          "CALL DOLT_GC();",
@@ -6446,6 +6602,142 @@ var JsonAdaptiveEncodingScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// See https://github.com/tianhuil/dolt-json-bug
+		Name:    "json adaptive: large value with control characters round-trips",
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"create table t (id int primary key, j json, txt longtext)",
+			"insert into t values (665, json_object('d', repeat(char(11), 665)), repeat(char(11), 665))",
+			"insert into t values (666, json_object('d', repeat(char(11), 666)), repeat(char(11), 666))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select count(*) from t where txt is null",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select char_length(txt) from t where id = 666",
+				Expected: []sql.Row{{666}},
+			},
+			{
+				Query:    "select char_length(json_unquote(json_extract(j, '$.d'))) from t where id = 665",
+				Expected: []sql.Row{{665}},
+			},
+			{
+				Query:    "select char_length(json_unquote(json_extract(j, '$.d'))) from t where id = 666",
+				Expected: []sql.Row{{666}},
+			},
+		},
+	},
+	{
+		// See https://github.com/tianhuil/dolt-json-bug
+		Name:    "json adaptive: json_valid on large longtext without a primary key",
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"create table nopk (txt longtext)",
+			"create table withpk (id int auto_increment primary key, txt longtext)",
+			"insert into nopk values (json_object('d', repeat('x', 2032)))",
+			"insert into nopk values (json_object('d', repeat('x', 2030)))",
+			"insert into withpk (txt) values (json_object('d', repeat('x', 2032)))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select json_valid(json_object('d', repeat('x', 2032)))",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "select json_valid(txt) from withpk",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "select json_valid(txt) from nopk where length(txt) < 2040",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "select json_valid(txt) from nopk where length(txt) >= 2040",
+				Expected: []sql.Row{{true}},
+			},
+		},
+	},
+	{
+		// See https://github.com/tianhuil/dolt-json-bug
+		Name:    "json adaptive: html and multibyte characters round-trip out-of-band",
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"create table h (id int primary key, j json)",
+			"insert into h values (1, json_object('d', repeat('<>&', 2000)))",
+			"insert into h values (2, json_object('d', repeat(convert('😀' using utf8mb4), 2000)))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select char_length(cast(j as char)) from h where id = 1",
+				Expected: []sql.Row{{6009}},
+			},
+			{
+				Query:    "select char_length(json_unquote(json_extract(j, '$.d'))) from h where id = 1",
+				Expected: []sql.Row{{6000}},
+			},
+			{
+				Query:    "select char_length(cast(j as char)) from h where id = 2",
+				Expected: []sql.Row{{2009}},
+			},
+			{
+				Query:    "select char_length(json_unquote(json_extract(j, '$.d'))) from h where id = 2",
+				Expected: []sql.Row{{2000}},
+			},
+		},
+	},
+	{
+		// See https://github.com/tianhuil/dolt-json-bug
+		Name:    "json adaptive: json functions read large keyless longtext",
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"create table kt (txt longtext)",
+			"insert into kt values (json_object('a', repeat('x', 3000), 'b', 2))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select json_length(txt) from kt",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "select json_type(txt) from kt",
+				Expected: []sql.Row{{"OBJECT"}},
+			},
+			{
+				Query:    "select json_length(json_keys(txt)) from kt",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "select char_length(json_unquote(json_extract(txt, '$.a'))) from kt",
+				Expected: []sql.Row{{3000}},
+			},
+		},
+	},
+	{
+		// See https://github.com/tianhuil/dolt-json-bug
+		Name:    "json adaptive: large value with ansi escape sequences round-trips",
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"create table p (id varchar(64) primary key, data json)",
+			`insert into p (id, data) select 'big', convert(concat('{"d":"', repeat(concat('Line ', char(92), 'u001b[36;1mcolored', char(92), 'u000b', char(92), 'n'), 200), '"}') using utf8mb4)`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select json_type(data) from p",
+				Expected: []sql.Row{{"OBJECT"}},
+			},
+			{
+				Query:    "select length(cast(data as char)) from p",
+				Expected: []sql.Row{{6409}},
+			},
+			{
+				Query:    "select char_length(json_unquote(json_extract(data, '$.d'))) from p",
+				Expected: []sql.Row{{4200}},
+			},
+		},
+	},
 }
 
 var DoltTagTestScripts = []queries.ScriptTest{
@@ -6609,6 +6901,28 @@ var DoltTagTestScripts = []queries.ScriptTest{
 			{
 				Query:          "call dolt_checkout('v1');",
 				ExpectedErrStr: "dolt does not support a detached head state. To create a branch at this tag, run: \n\tCALL DOLT_CHECKOUT('v1', '-b', <new_branch_name>)",
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11270
+		Name: "dolt-tag: a branch and a tag may share a name",
+		SetUpScript: []string{
+			"CALL DOLT_BRANCH('frombr')",
+			"CALL DOLT_TAG('fromtag')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_TAG('frombr')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "CALL DOLT_BRANCH('fromtag')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT (SELECT count(*) FROM dolt_branches WHERE name IN ('frombr', 'fromtag')), (SELECT count(*) FROM dolt_tags WHERE tag_name IN ('frombr', 'fromtag'))",
+				Expected: []sql.Row{{2, 2}},
 			},
 		},
 	},
@@ -8123,6 +8437,54 @@ var DoltCommitTests = []queries.ScriptTest{
 			{
 				Query:    "CALL DOLT_COMMIT('-A', '-m', 'Table with foreign key violation');",
 				Expected: []sql.Row{{doltCommit}},
+			},
+		},
+	},
+	{
+		// See https://git-scm.com/docs/git-commit#Documentation/git-commit.txt---amend
+		Name: "CALL DOLT_COMMIT with --amend fails while a merge or cherry-pick is in progress",
+		SetUpScript: []string{
+			"drop table if exists invalidFK",
+			"set @@dolt_allow_commit_conflicts = 1",
+			"create table amend_merge_t (pk int primary key, c int)",
+			"insert into amend_merge_t values (1, 1)",
+			"call dolt_commit('-Am', 'base')",
+			"call dolt_checkout('-b', 'other')",
+			"update amend_merge_t set c = 2 where pk = 1",
+			"call dolt_commit('-am', 'other change')",
+			"call dolt_checkout('main')",
+			"update amend_merge_t set c = 3 where pk = 1",
+			"call dolt_commit('-am', 'main change')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('other')",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:          "call dolt_commit('-a', '--amend', '-m', 'amend during merge')",
+				ExpectedErrStr: "you are in the middle of a merge -- cannot amend",
+			},
+			{
+				Query: "select count(*) from dolt_conflicts_amend_merge_t",
+				// The merge state and its conflicts are untouched by the rejected amend
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "call dolt_merge('--abort')",
+				Expected: []sql.Row{{"", 0, 0, "merge aborted"}},
+			},
+			{
+				Query:    "call dolt_cherry_pick(dolt_hashof('other'))",
+				Expected: []sql.Row{{"", 1, 0, 0}},
+			},
+			{
+				Query:          "call dolt_commit('-a', '--amend', '-m', 'amend during cherry-pick')",
+				ExpectedErrStr: "you are in the middle of a cherry-pick -- cannot amend",
+			},
+			{
+				Query:    "call dolt_cherry_pick('--abort')",
+				Expected: []sql.Row{{"", 0, 0, 0}},
 			},
 		},
 	},

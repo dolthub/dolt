@@ -17,7 +17,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
@@ -39,7 +39,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
@@ -81,8 +81,6 @@ tests:
         columns: ["COUNT(*)"]
         rows: [["3"]]
     - exec: 'CALL DOLT_GC()'
-    - query: 'SELECT COUNT(*) FROM wide_varchar'
-      error_match: "this connection can no longer be used"
   - on: server1
     queries:
     - query: |

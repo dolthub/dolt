@@ -67,6 +67,8 @@ type DoltHarness struct {
 	configureStats        bool
 	useLocalFilesystem    bool
 	setupTestProcedures   bool
+	// server indicates whether the harness will create a running MySQL server.
+	server bool
 }
 
 func (d *DoltHarness) UseLocalFileSystem() {
@@ -141,6 +143,15 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 
 func newDoltEnginetestHarness(t *testing.T) DoltEnginetestHarness {
 	return newDoltHarness(t)
+}
+
+// newDoltServerTestHarness creates a harness that starts a MySQL server
+// and runs tests by connecting to the server with a driver. This is useful
+// for testing the server's handler.
+func newDoltServerTestHarness(t *testing.T) DoltEnginetestHarness {
+	dh := newDoltHarness(t)
+	dh.server = true
+	return dh
 }
 
 // newDoltHarnessForLocalFilesystem creates a new harness for testing Dolt, using
@@ -239,6 +250,8 @@ func commitScripts(dbs []string) []setup.SetupScript {
 // engine for reuse.
 func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 	initializeEngine := d.engine == nil
+	var e *gms.Engine
+	var err error
 	if initializeEngine {
 		ctx := sql.NewEmptyContext()
 		d.branchControl = branch_control.CreateDefaultController(ctx)
@@ -271,7 +284,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, d.gcSafepointController, d.branchActivityTracker)
 		require.NoError(t, err)
 
-		e, err := enginetest.NewEngine(t, d, d.provider, d.setupData, d.statsPro)
+		e, err = enginetest.NewEngine(t, d, d.provider, d.setupData, d.statsPro)
 		if err != nil {
 			return nil, err
 		}
@@ -297,7 +310,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 			}
 
 			// Get a fresh session after running setup scripts, since some setup scripts can change the session state
-			d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, nil, d.branchActivityTracker)
+			d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, d.gcSafepointController, d.branchActivityTracker)
 			require.NoError(t, err)
 		}
 
@@ -325,32 +338,35 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 			e, err = enginetest.RunSetupScripts(sqlCtx, d.engine, finalizeStatsAfterSetup, d.SupportsNativeIndexCreation())
 			require.NoError(t, err)
 		}
+	} else {
 
-		return e, nil
-	}
+		// Reset the mysql DB table to a clean state for this new engine
+		ctx := enginetest.NewContext(d)
 
-	// Reset the mysql DB table to a clean state for this new engine
-	ctx := enginetest.NewContext(d)
+		if d.configureStats {
+			err := d.statsPro.Purge(ctx)
+			require.NoError(t, err)
 
-	if d.configureStats {
-		err := d.statsPro.Purge(ctx)
+			err = d.statsPro.Restart(ctx)
+			require.NoError(t, err)
+		}
+
+		d.engine.Analyzer.Catalog.MySQLDb = mysql_db.CreateEmptyMySQLDb()
+		d.engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
+
+		e, err = enginetest.RunSetupScripts(ctx, d.engine, d.resetScripts(), d.SupportsNativeIndexCreation())
 		require.NoError(t, err)
 
-		err = d.statsPro.Restart(ctx)
+		// Get a fresh session after running setup scripts, since some setup scripts can change the session state
+		d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, nil, d.branchActivityTracker)
 		require.NoError(t, err)
 	}
 
-	d.engine.Analyzer.Catalog.MySQLDb = mysql_db.CreateEmptyMySQLDb()
-	d.engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
+	if d.server {
+		return enginetest.NewServerQueryEngine(t, e, newSessionBuilder(d))
+	}
 
-	e, err := enginetest.RunSetupScripts(ctx, d.engine, d.resetScripts(), d.SupportsNativeIndexCreation())
-	require.NoError(t, err)
-
-	// Get a fresh session after running setup scripts, since some setup scripts can change the session state
-	d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, nil, d.branchActivityTracker)
-	require.NoError(t, err)
-
-	return e, err
+	return e, nil
 }
 
 func filterStatsOnlyQueries(scripts []setup.SetupScript) []setup.SetupScript {
@@ -429,7 +445,7 @@ func (d *DoltHarness) newSessionWithClient(client sql.Client) *dsess.DoltSession
 	localConfig := d.multiRepoEnv.Config()
 	pro := d.session.Provider()
 
-	dSession, err := dsess.NewDoltSession(sql.NewBaseSessionWithClientServer("address", client, 1), pro.(dsess.DoltDatabaseProvider), localConfig, d.branchControl, d.statsPro, writer.NewWriteSession, nil, d.branchActivityTracker)
+	dSession, err := dsess.NewDoltSession(sql.NewBaseSessionWithClientServer("address", client, 1), pro.(dsess.DoltDatabaseProvider), localConfig, d.branchControl, d.statsPro, writer.NewWriteSession, d.gcSafepointController, d.branchActivityTracker)
 	dSession.SetCurrentDatabase("mydb")
 	require.NoError(d.t, err)
 	return dSession

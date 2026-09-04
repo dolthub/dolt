@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/transform"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
@@ -33,17 +34,17 @@ import (
 // ResolveDefaultExpression returns a sql.Expression for the column default or generated expression for the
 // column provided
 func ResolveDefaultExpression(ctx *sql.Context, tableName string, sch schema.Schema, col schema.Column) (sql.Expression, error) {
-	ct, err := parseCreateTable(ctx, tableName, sch)
+	resolved, err := ResolveSchema(ctx, tableName, sch)
 	if err != nil {
 		return nil, err
 	}
 
-	colIdx := ct.PkSchema().Schema.IndexOfColName(col.Name)
+	colIdx := resolved.IndexOfColName(col.Name)
 	if colIdx < 0 {
 		return nil, fmt.Errorf("unable to find column %s in analyzed query", col.Name)
 	}
 
-	sqlCol := ct.PkSchema().Schema[colIdx]
+	sqlCol := resolved[colIdx]
 	expr := sqlCol.Default
 	if expr == nil || expr.Expr == nil {
 		expr = sqlCol.Generated
@@ -54,6 +55,15 @@ func ResolveDefaultExpression(ctx *sql.Context, tableName string, sch schema.Sch
 	}
 
 	return expr, nil
+}
+
+// ResolveSchema returns the sql.Schema for |sch| with its column default and generated expressions resolved.
+func ResolveSchema(ctx *sql.Context, tableName string, sch schema.Schema) (sql.Schema, error) {
+	ct, err := parseCreateTable(ctx, tableName, sch)
+	if err != nil {
+		return nil, err
+	}
+	return ct.PkSchema().Schema, nil
 }
 
 // ResolveCheckExpression returns a sql.Expression for the check provided
@@ -79,9 +89,9 @@ func ResolveCheckExpression(ctx *sql.Context, tableName string, sch schema.Schem
 // ResolveExpression compiles a predicate or check constraint string into a sql.Expression resolved.
 // Used to re-hydrate partial index predicates and check expressions from their string representation.
 // It uses SELECT statement on the expression FROM given table.
-func ResolveExpression(ctx *sql.Context, tableName string, predicateStr string) (sql.Expression, error) {
+func ResolveExpression(ctx *sql.Context, tableName doltdb.TableName, predicateStr string) (sql.Expression, error) {
 	// TODO: added * in SELECT stmt to avoid pruning columns during analyzer.
-	parsed, err := parseQuery(ctx, fmt.Sprintf("SELECT *, %s FROM %s", predicateStr, tableName))
+	parsed, err := parseQuery(ctx, fmt.Sprintf("SELECT *, %s FROM %s", predicateStr, queryTableName(ctx, tableName)))
 	if err != nil {
 		return nil, err
 	}
@@ -109,6 +119,17 @@ func ResolveExpression(ctx *sql.Context, tableName string, predicateStr string) 
 	return expr, nil
 }
 
+// queryTableName renders |tableName| for use in the FROM clause of a query built for the analyzer. The schema, where
+// there is one, must survive into the parsed statement: an unqualified name is resolved against the session's
+// search_path, which need not reach the table's own schema, and may name a different table of the same name first.
+func queryTableName(ctx *sql.Context, tableName doltdb.TableName) string {
+	if tableName.Schema == "" {
+		return tableName.Name
+	}
+	formatter := overrides.SchemaFormatterFromContext(ctx)
+	return fmt.Sprintf("%s.%s", formatter.QuoteIdentifier(tableName.Schema), formatter.QuoteIdentifier(tableName.Name))
+}
+
 func stripTableNamesFromExpression(ctx *sql.Context, formatter sql.SchemaFormatter, expr sql.Expression, quoted bool) sql.Expression {
 	e, _, _ := transform.Expr(ctx, expr, func(ctx *sql.Context, e sql.Expression) (sql.Expression, transform.TreeIdentity, error) {
 		if col, ok := e.(*expression.GetField); ok {
@@ -125,7 +146,9 @@ type SessionDbProvider interface {
 }
 
 func parseCreateTable(ctx *sql.Context, tableName string, sch schema.Schema) (*plan.CreateTable, error) {
-	createTable, err := sqlfmt.GenerateCreateTableStatement(ctx, tableName, sch, nil, nil)
+	// This is a pseudo CREATE TABLE, used only to resolve default/generated/check expressions via the
+	// engine's own SQL parser and analyzer, so SystemHidden columns are included here.
+	createTable, err := sqlfmt.GenerateCreateTableStatement(ctx, tableName, sch, nil, nil, true)
 	if err != nil {
 		return nil, err
 	}

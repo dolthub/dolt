@@ -63,6 +63,7 @@ const (
 				WHERE
 				    sd.row_num = 1
 				    and sd.diff_type <> 'removed'
+						and sd.to_commit <> 'WORKING'
 				ORDER BY 
 					%s  -- pksOrderByExpression;
 `

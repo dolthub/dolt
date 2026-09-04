@@ -16,6 +16,7 @@ package dsess
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -35,6 +36,121 @@ func TestDoltSessionInit(t *testing.T) {
 	dsess := DefaultSession(emptyDatabaseProvider(), nil)
 	conf := config.NewMapConfig(make(map[string]string))
 	assert.Equal(t, conf, dsess.globalsConf)
+}
+
+type countingDoltgresTransactionLifecycle struct {
+	transactionEnds int
+	pending         bool
+	cacheClears     int
+}
+
+func (l *countingDoltgresTransactionLifecycle) DoltgresTransactionEnd() {
+	if l.pending {
+		l.transactionEnds++
+		l.pending = false
+	}
+}
+
+func (l *countingDoltgresTransactionLifecycle) DoltgresSessionCacheClear() {
+	l.cacheClears++
+}
+
+func TestDoltgresTransactionLifecycle(t *testing.T) {
+	sess := DefaultSession(emptyDatabaseProvider(), nil)
+	lifecycle := &countingDoltgresTransactionLifecycle{pending: true}
+	sess.DoltgresSessObj = lifecycle
+	tx := DisabledTransaction{}
+	ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
+
+	assert.NoError(t, sess.Rollback(ctx, tx))
+	assert.Equal(t, 1, lifecycle.transactionEnds)
+	sess.NotifyTransactionEnd()
+	assert.Equal(t, 1, lifecycle.transactionEnds)
+
+	lifecycle.pending = true
+	sess.ClearDoltgresSessionCache()
+	assert.Equal(t, 1, lifecycle.cacheClears)
+	assert.Same(t, lifecycle, sess.DoltgresSessObj)
+	sess.NotifyTransactionEnd()
+	assert.Equal(t, 2, lifecycle.transactionEnds)
+}
+
+func TestDirtyBranches(t *testing.T) {
+	addBranchState := func(sess *DoltSession, dbName, head string, dirty bool) {
+		dbState, ok := sess.dbStates[strings.ToLower(dbName)]
+		if !ok {
+			dbState = newEmptyDatabaseSessionState()
+			dbState.dbName = dbName
+			sess.dbStates[strings.ToLower(dbName)] = dbState
+		}
+		dbState.NewEmptyBranchState(head, RevisionTypeBranch).dirty = dirty
+	}
+
+	t.Run("no branch states", func(t *testing.T) {
+		sess := DefaultSession(emptyDatabaseProvider(), nil)
+		assert.Empty(t, sess.DirtyBranches())
+		assert.False(t, sess.IsBranchDirty("db1", "main"))
+	})
+
+	t.Run("no dirty branch states", func(t *testing.T) {
+		sess := DefaultSession(emptyDatabaseProvider(), nil)
+		addBranchState(sess, "db1", "main", false)
+		assert.Empty(t, sess.DirtyBranches())
+		assert.False(t, sess.IsBranchDirty("db1", "main"))
+	})
+
+	// Two dirty branches of one database: two pairs, one database name.
+	t.Run("multiple dirty branches in one database", func(t *testing.T) {
+		sess := DefaultSession(emptyDatabaseProvider(), nil)
+		addBranchState(sess, "db1", "main", true)
+		addBranchState(sess, "db1", "feature", true)
+		addBranchState(sess, "db1", "clean", false)
+
+		assert.ElementsMatch(t, []DirtyBranch{
+			{DbName: "db1", Branch: "main"},
+			{DbName: "db1", Branch: "feature"},
+		}, sess.DirtyBranches())
+		assert.Equal(t, []string{"db1"}, sess.DirtyDatabases())
+
+		assert.True(t, sess.IsBranchDirty("db1", "main"))
+		assert.True(t, sess.IsBranchDirty("db1", "feature"))
+		assert.False(t, sess.IsBranchDirty("db1", "clean"))
+	})
+
+	t.Run("dirty branches across databases", func(t *testing.T) {
+		sess := DefaultSession(emptyDatabaseProvider(), nil)
+		addBranchState(sess, "db1", "main", true)
+		addBranchState(sess, "db2", "main", false)
+		addBranchState(sess, "db3", "feature", true)
+
+		assert.ElementsMatch(t, []DirtyBranch{
+			{DbName: "db1", Branch: "main"},
+			{DbName: "db3", Branch: "feature"},
+		}, sess.DirtyBranches())
+
+		assert.True(t, sess.IsBranchDirty("db1", "main"))
+		assert.False(t, sess.IsBranchDirty("db2", "main"))
+		assert.False(t, sess.IsBranchDirty("db3", "main"), "wrong branch of a dirty database")
+		assert.False(t, sess.IsBranchDirty("nosuchdb", "main"))
+	})
+
+	// Both maps are keyed lowercased, as lookupDbState assumes.
+	t.Run("lookup folds case", func(t *testing.T) {
+		sess := DefaultSession(emptyDatabaseProvider(), nil)
+		addBranchState(sess, "db1", "Feature", true)
+
+		assert.True(t, sess.IsBranchDirty("DB1", "feature"))
+		assert.True(t, sess.IsBranchDirty("db1", "FEATURE"))
+	})
+
+	// The joined form could not express this.
+	t.Run("database name containing a revision delimiter", func(t *testing.T) {
+		sess := DefaultSession(emptyDatabaseProvider(), nil)
+		addBranchState(sess, "db/one", "main", true)
+
+		assert.Equal(t, []DirtyBranch{{DbName: "db/one", Branch: "main"}}, sess.DirtyBranches())
+		assert.True(t, sess.IsBranchDirty("db/one", "main"))
+	})
 }
 
 func TestNewPersistedSystemVariables(t *testing.T) {

@@ -227,7 +227,7 @@ func NewBufferedFileByteSink(tempDir string, blockSize, chBufferSize int) (*Buff
 
 	sink := &BufferedFileByteSink{
 		blockSize:    blockSize,
-		currentBlock: make([]byte, blockSize),
+		currentBlock: make([]byte, 0, blockSize),
 		writeCh:      make(chan []byte, chBufferSize),
 		ae:           atomicerr.New(),
 		wg:           &sync.WaitGroup{},
@@ -285,6 +285,15 @@ func (sink *BufferedFileByteSink) backgroundWrite() {
 	err = sink.wr.Close()
 	sink.ae.SetIfError(err)
 }
+
+// finisher is implemented by ByteSinks which own a background writer that must
+// be shut down before their output can be used or discarded.
+type finisher interface {
+	finish() error
+}
+
+var _ finisher = (*BufferedFileByteSink)(nil)
+var _ finisher = (*HashingByteSink)(nil)
 
 func (sink *BufferedFileByteSink) finish() error {
 	// |finish()| is not thread-safe. We just use writeCh == nil as a
@@ -397,6 +406,15 @@ func (sink *HashingByteSink) FlushToFile(path string) error {
 
 func (sink *HashingByteSink) Reader() (io.ReadCloser, error) {
 	return sink.backingSink.Reader()
+}
+
+// finish shuts down the backing sink if it has anything to shut down. It is a
+// no-op for the purely in-memory sinks.
+func (sink *HashingByteSink) finish() error {
+	if f, ok := sink.backingSink.(finisher); ok {
+		return f.finish()
+	}
+	return nil
 }
 
 // Execute the hasher.Sum() function and return the result

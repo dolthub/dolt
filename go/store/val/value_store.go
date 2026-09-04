@@ -17,7 +17,6 @@ package val
 import (
 	"context"
 	"database/sql/driver"
-	"encoding/json"
 	"fmt"
 	"unsafe"
 
@@ -336,7 +335,7 @@ func (j *JsonAdaptiveStorage) ToInterface(ctx context.Context) (interface{}, err
 		return nil, err
 	}
 	var val interface{}
-	if err = json.Unmarshal(buf, &val); err != nil {
+	if err = types.JsonUnmarshal(buf, &val); err != nil {
 		return nil, err
 	}
 	return val, nil

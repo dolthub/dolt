@@ -17,6 +17,8 @@ package tree
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"runtime/debug"
 
 	"golang.org/x/sync/errgroup"
 
@@ -82,6 +84,11 @@ func ThreeWayMerge[K ~[]byte, O Ordering[K], S message.Serializer](
 	// iterate |ld| and |rd| in parallel, populating |patches|
 	eg.Go(func() (err error) {
 		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("panic generating patches during three-way merge: %v\n%s", r, string(debug.Stack()))
+			}
+		}()
+		defer func() {
 			if cerr := patches.Close(); err == nil {
 				err = cerr
 			}
@@ -91,7 +98,12 @@ func ThreeWayMerge[K ~[]byte, O Ordering[K], S message.Serializer](
 	})
 
 	// consume |patches| and apply them to |left|
-	eg.Go(func() error {
+	eg.Go(func() (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("panic applying patches during three-way merge: %v\n%s", r, string(debug.Stack()))
+			}
+		}()
 		final, err = ApplyPatches[K](ctx, ns, left, order, serializer, patches)
 		return err
 	})
@@ -205,7 +217,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 				// Since these are both at level > 0, this means that both patches contain an address pointing to
 				// the same content-addressed chunk.
 				// This necessarily means that their end keys are the same. But if one side has added or removed
-				// an entire chunk that immediately preceeds this chunk, then their start keys may differ.
+				// an entire chunk that immediately precedes this chunk, then their start keys may differ.
 				// If the left side added or removed a chunk, we can safely ignore it. If the right side added a chunk,
 				// then we already encountered it. But if the right side removed a chunk, we need to emit a patch here
 				// that reflects that.

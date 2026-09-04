@@ -16,6 +16,7 @@ package writer
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -162,14 +163,14 @@ func (k prollyKeylessWriter) errForSecondaryUniqueKeyError(ctx context.Context, 
 // UniqueKeyError builds a sql.UniqueKeyError. It fetches the existing row using
 // |key| and passes it as the |existing| row.
 func (k prollyKeylessWriter) uniqueKeyError(ctx context.Context, keyStr string, key val.Tuple, isPk bool) error {
-	existing := make(sql.Row, len(k.valMap))
+	existing := make(sql.Row, mappedRowSize(k.valMap))
 
 	_ = k.mut.Get(ctx, key, func(key, value val.Tuple) (err error) {
 		vd := k.valBld.Desc
-		for from := range k.valMap {
-			to := k.valMap.MapOrdinal(from)
+		for tupleOrdinal := range k.valMap {
+			rowOrdinal := k.valMap.MapOrdinal(tupleOrdinal)
 			// offset from index for keyless rows, as first field is the count
-			if existing[to], err = tree.GetField(ctx, vd, from+1, value, k.mut.NodeStore()); err != nil {
+			if existing[rowOrdinal], err = tree.GetField(ctx, vd, tupleOrdinal+1, value, k.mut.NodeStore()); err != nil {
 				return err
 			}
 		}
@@ -200,9 +201,30 @@ type prollyKeylessSecondaryWriter struct {
 	unique        bool
 	spatial       bool
 	predicate     sql.Expression
+	// virtualExprs is parallel to keyMap; non-nil entries are generating expressions for virtual
+	// (unstored) generated columns that appear in this index's key.
+	virtualExprs []sql.Expression
+}
+
+// keyPartFromRow returns the value for key part |to|, given |sqlRow|. For most columns this is
+// simply sqlRow[from]. For virtual (unstored) generated columns, the value must instead be computed
+// by evaluating the column's generating expression against |sqlRow|.
+func (writer prollyKeylessSecondaryWriter) keyPartFromRow(ctx context.Context, to int, sqlRow sql.Row) (interface{}, error) {
+	if writer.virtualExprs != nil {
+		if expr := writer.virtualExprs[to]; expr != nil {
+			sqlCtx, ok := ctx.(*sql.Context)
+			if !ok {
+				return nil, fmt.Errorf("expected *sql.Context for virtual column expression evaluation")
+			}
+			return expr.Eval(sqlCtx, sqlRow)
+		}
+	}
+	from := writer.keyMap.MapOrdinal(to)
+	return sqlRow[from], nil
 }
 
 var _ indexWriter = prollyKeylessSecondaryWriter{}
+var _ UniqueKeyChangeReporter = prollyKeylessSecondaryWriter{}
 
 // Name implements the interface indexWriter.
 func (writer prollyKeylessSecondaryWriter) Name() string {
@@ -221,6 +243,33 @@ func (writer prollyKeylessSecondaryWriter) VisitGCRoots(ctx context.Context, roo
 // ValidateKeyViolations implements the interface indexWriter.
 func (writer prollyKeylessSecondaryWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error {
 	return nil
+}
+
+// validateUniqueKeyViolation checks the mutable unique-index prefix for a conflicting keyless row.
+func (writer prollyKeylessSecondaryWriter) validateUniqueKeyViolation(ctx context.Context, sqlRow sql.Row) error {
+	if writer.predicate != nil {
+		matches, err := writer.predicate.Eval(ctx.(*sql.Context), sqlRow)
+		if err != nil {
+			return err
+		}
+		if !matches.(bool) {
+			return nil
+		}
+	}
+	for to := range writer.prefixBld.Desc.Count() {
+		value, err := writer.keyPartFromRow(ctx, to, sqlRow)
+		if err != nil {
+			return err
+		}
+		if err := tree.PutField(ctx, writer.mut.NodeStore(), writer.prefixBld, to, writer.trimKeyPart(to, value)); err != nil {
+			return err
+		}
+	}
+	prefixKey, err := writer.prefixBld.Build(ctx, sharePool)
+	if err != nil {
+		return err
+	}
+	return writer.checkForUniqueKeyError(ctx, prefixKey, sqlRow)
 }
 
 // trimKeyPart will trim entry into the sql.Row depending on the prefixLengths
@@ -249,8 +298,11 @@ func (writer prollyKeylessSecondaryWriter) trimKeyPart(to int, keyPart interface
 // Insert implements the interface indexWriter.
 func (writer prollyKeylessSecondaryWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
 	for to := range writer.keyMap {
-		from := writer.keyMap.MapOrdinal(to)
-		keyPart := writer.trimKeyPart(to, sqlRow[from])
+		v, err := writer.keyPartFromRow(ctx, to, sqlRow)
+		if err != nil {
+			return err
+		}
+		keyPart := writer.trimKeyPart(to, v)
 		if err := tree.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, keyPart); err != nil {
 			return err
 		}
@@ -320,8 +372,11 @@ func (writer prollyKeylessSecondaryWriter) checkForUniqueKeyError(ctx context.Co
 	if err == nil {
 		remappedSqlRow := make(sql.Row, len(sqlRow))
 		for to := range writer.keyMap {
-			from := writer.keyMap.MapOrdinal(to)
-			remappedSqlRow[to] = writer.trimKeyPart(to, sqlRow[from])
+			v, err := writer.keyPartFromRow(ctx, to, sqlRow)
+			if err != nil {
+				return err
+			}
+			remappedSqlRow[to] = writer.trimKeyPart(to, v)
 		}
 		keyStr := FormatKeyForUniqKeyErr(ctx, prefixKey, writer.prefixBld.Desc, remappedSqlRow)
 		writer.hashBld.PutRaw(0, k.GetField(k.Count()-1))
@@ -351,8 +406,11 @@ func (writer prollyKeylessSecondaryWriter) Delete(ctx context.Context, sqlRow sq
 	}
 
 	for to := range writer.keyMap {
-		from := writer.keyMap.MapOrdinal(to)
-		keyPart := writer.trimKeyPart(to, sqlRow[from])
+		v, err := writer.keyPartFromRow(ctx, to, sqlRow)
+		if err != nil {
+			return err
+		}
+		keyPart := writer.trimKeyPart(to, v)
 		if err := tree.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, keyPart); err != nil {
 			return err
 		}
@@ -381,6 +439,14 @@ func (writer prollyKeylessSecondaryWriter) Update(ctx context.Context, oldRow sq
 		return err
 	}
 	return
+}
+
+// UpdateChangesUniqueKey implements UniqueKeyChangeReporter for this index.
+func (writer prollyKeylessSecondaryWriter) UpdateChangesUniqueKey(oldRow sql.Row, newRow sql.Row) bool {
+	if writer.virtualExprs != nil {
+		return writer.unique
+	}
+	return writer.unique && (writer.predicate != nil || !isNoopUpdate(oldRow, newRow, writer.keyMap))
 }
 
 // Commit implements the interface indexWriter.

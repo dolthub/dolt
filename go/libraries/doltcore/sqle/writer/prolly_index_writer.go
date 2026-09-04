@@ -19,6 +19,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"reflect"
+	"slices"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -257,21 +259,21 @@ func (m prollyIndexWriter) errForSecondaryUniqueKeyError(ctx context.Context, er
 // uniqueKeyError builds a sql.UniqueKeyError. It fetches the existing row using
 // |key| and passes it as the |existing| row.
 func (m prollyIndexWriter) uniqueKeyError(ctx context.Context, keyStr string, key val.Tuple, isPk bool) error {
-	existing := make(sql.Row, len(m.keyMap)+len(m.valMap))
+	existing := make(sql.Row, mappedRowSize(m.keyMap, m.valMap))
 
 	_ = m.mut.Get(ctx, key, func(key, value val.Tuple) (err error) {
 		kd := m.keyBld.Desc
-		for from := range m.keyMap {
-			to := m.keyMap.MapOrdinal(from)
-			if existing[to], err = tree.GetField(ctx, kd, from, key, m.mut.NodeStore()); err != nil {
+		for tupleOrdinal := range m.keyMap {
+			rowOrdinal := m.keyMap.MapOrdinal(tupleOrdinal)
+			if existing[rowOrdinal], err = tree.GetField(ctx, kd, tupleOrdinal, key, m.mut.NodeStore()); err != nil {
 				return err
 			}
 		}
 
 		vd := m.valBld.Desc
-		for from := range m.valMap {
-			to := m.valMap.MapOrdinal(from)
-			if existing[to], err = tree.GetField(ctx, vd, from, value, m.mut.NodeStore()); err != nil {
+		for tupleOrdinal := range m.valMap {
+			rowOrdinal := m.valMap.MapOrdinal(tupleOrdinal)
+			if existing[rowOrdinal], err = tree.GetField(ctx, vd, tupleOrdinal, value, m.mut.NodeStore()); err != nil {
 				return err
 			}
 		}
@@ -279,6 +281,25 @@ func (m prollyIndexWriter) uniqueKeyError(ctx context.Context, keyStr string, ke
 	})
 
 	return sql.NewUniqueKeyErr(keyStr, isPk, existing)
+}
+
+// mappedRowSize returns the minimum SQL row length required to address every mapped SQL row
+// ordinal across the supplied tuple-to-row mappings. Mapping values may be sparse when the SQL
+// row contains system-hidden virtual columns, so len(mapping) only counts tuple fields and is not
+// sufficient to size the destination row.
+func mappedRowSize(mappings ...val.OrdinalMapping) int {
+	var maxRowOrdinal int
+	var found bool
+	for _, mapping := range mappings {
+		for tupleOrdinal := range mapping {
+			maxRowOrdinal = max(maxRowOrdinal, mapping.MapOrdinal(tupleOrdinal))
+			found = true
+		}
+	}
+	if !found {
+		return 0
+	}
+	return maxRowOrdinal + 1
 }
 
 type prollySecondaryIndexWriter struct {
@@ -304,6 +325,27 @@ type prollySecondaryIndexWriter struct {
 	unique  bool
 	// predicate is set for partial indexes; rows not matching are excluded.
 	predicate sql.Expression
+	// virtualExprs is parallel to keyMap; non-nil entries are generating expressions for virtual
+	// (unstored) generated columns that appear in this index's key. Nil overall if the index has
+	// no virtual key parts (the common/fast-path case).
+	virtualExprs []sql.Expression
+}
+
+// keyPartFromRow returns the value for key part |to|, given |sqlRow|. For most columns this is
+// simply sqlRow[from]. For virtual generated columns, the value is computed by evaluating the
+// generating expression against |sqlRow|.
+func (m prollySecondaryIndexWriter) keyPartFromRow(ctx context.Context, to int, sqlRow sql.Row) (interface{}, error) {
+	if m.virtualExprs != nil {
+		if expr := m.virtualExprs[to]; expr != nil {
+			sqlCtx, ok := ctx.(*sql.Context)
+			if !ok {
+				return nil, fmt.Errorf("expected *sql.Context for virtual column expression evaluation")
+			}
+			return expr.Eval(sqlCtx, sqlRow)
+		}
+	}
+	from := m.keyMap.MapOrdinal(to)
+	return sqlRow[from], nil
 }
 
 // matchesPredicate returns true if the row satisfies this index's predicate (or if the index has no predicate).
@@ -321,6 +363,7 @@ func (m prollySecondaryIndexWriter) matchesPredicate(ctx context.Context, sqlRow
 }
 
 var _ indexWriter = prollySecondaryIndexWriter{}
+var _ UniqueKeyChangeReporter = prollySecondaryIndexWriter{}
 
 func (m prollySecondaryIndexWriter) Name() string {
 	return m.name
@@ -357,8 +400,11 @@ func (m prollySecondaryIndexWriter) trimKeyPart(ctx context.Context, to int, key
 
 func (m prollySecondaryIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.Row) (val.Tuple, error) {
 	for to := range m.keyMap {
-		from := m.keyMap.MapOrdinal(to)
-		keyPart, _ := m.trimKeyPart(ctx, to, sqlRow[from])
+		v, err := m.keyPartFromRow(ctx, to, sqlRow)
+		if err != nil {
+			return nil, err
+		}
+		keyPart, _ := m.trimKeyPart(ctx, to, v)
 		if err := tree.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, keyPart); err != nil {
 			return nil, err
 		}
@@ -388,14 +434,17 @@ func (m prollySecondaryIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) 
 func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, sqlRow sql.Row) error {
 	ns := m.mut.NodeStore()
 	for to := range m.keyMap[:m.idxCols] {
-		from := m.keyMap.MapOrdinal(to)
-		if sqlRow[from] == nil {
+		v, err := m.keyPartFromRow(ctx, to, sqlRow)
+		if err != nil {
+			return err
+		}
+		if v == nil {
 			// NULL is incomparable and cannot
 			// trigger a UNIQUE KEY violation
 			m.keyBld.Recycle()
 			return nil
 		}
-		keyPart, _ := m.trimKeyPart(ctx, to, sqlRow[from])
+		keyPart, _ := m.trimKeyPart(ctx, to, v)
 		if err := tree.PutField(ctx, ns, m.keyBld, to, keyPart); err != nil {
 			return err
 		}
@@ -432,8 +481,11 @@ func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, sq
 	}
 
 	for to := range m.keyMap[:m.idxCols] {
-		from := m.keyMap.MapOrdinal(to)
-		m.key[to], _ = m.trimKeyPart(ctx, to, sqlRow[from])
+		v, err := m.keyPartFromRow(ctx, to, sqlRow)
+		if err != nil {
+			return err
+		}
+		m.key[to], _ = m.trimKeyPart(ctx, to, v)
 	}
 	return secondaryUniqueKeyError{
 		keyStr:      FormatKeyForUniqKeyErr(ctx, key, desc, m.key),
@@ -466,6 +518,18 @@ func isNoopUpdate(oldRow, newRow sql.Row, keyMap val.OrdinalMapping) bool {
 			if !ok || !bytes.Equal(oldBytes, newBytes) {
 				return false
 			}
+		} else if oldFloats, ok := oldVal.([]float32); ok {
+			newFloats, ok := newVal.([]float32)
+			if !ok || !slices.Equal(oldFloats, newFloats) {
+				return false
+			}
+		} else if oldVal == nil || newVal == nil {
+			if oldVal != newVal {
+				return false
+			}
+		} else if !reflect.ValueOf(oldVal).Comparable() || !reflect.ValueOf(newVal).Comparable() {
+			// Other uncomparable values are treated as changed.
+			return false
 		} else if oldVal != newVal {
 			return false
 		}
@@ -488,7 +552,10 @@ func (m prollySecondaryIndexWriter) Update(ctx context.Context, oldRow sql.Row, 
 	}
 
 	// If no indexed columns are modified and predicate status hasn't changed, no need to update.
-	if oldMatches && newMatches && isNoopUpdate(oldRow, newRow, m.keyMap) {
+	// isNoopUpdate compares the row's raw slots directly, which isn't safe for a virtual key part:
+	// a stale/unpopulated slot could look identical between oldRow and newRow even though the real
+	// underlying columns (and so the virtual column's computed value) changed.
+	if oldMatches && newMatches && m.virtualExprs == nil && isNoopUpdate(oldRow, newRow, m.keyMap) {
 		return nil
 	}
 
@@ -516,6 +583,14 @@ func (m prollySecondaryIndexWriter) Update(ctx context.Context, oldRow sql.Row, 
 	}
 
 	return nil
+}
+
+// UpdateChangesUniqueKey implements UniqueKeyChangeReporter for this index.
+func (m prollySecondaryIndexWriter) UpdateChangesUniqueKey(oldRow sql.Row, newRow sql.Row) bool {
+	if m.virtualExprs != nil {
+		return m.unique
+	}
+	return m.unique && (m.predicate != nil || !isNoopUpdate(oldRow, newRow, m.keyMap[:m.idxCols]))
 }
 
 func (m prollySecondaryIndexWriter) Commit(ctx context.Context) error {

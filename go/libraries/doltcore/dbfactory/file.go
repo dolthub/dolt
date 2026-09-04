@@ -107,6 +107,12 @@ func CloseAllLocalDatabases() (err error) {
 	return
 }
 
+// SingletonCacheKeyForDatabaseDir returns the key the singleton cache uses for the local database rooted at
+// |dbDir|, which must be an absolute path to the database directory (the one holding .dolt).
+func SingletonCacheKeyForDatabaseDir(dbDir string) string {
+	return filepath.ToSlash(filepath.Join(dbDir, DoltDataDir))
+}
+
 func DeleteFromSingletonCache(path string, closeIt bool) error {
 	singletonLock.Lock()
 	defer singletonLock.Unlock()
@@ -160,6 +166,14 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	defer singletonLock.Unlock()
 
 	if s, ok := singletons[urlObj.Path]; ok {
+		// Callers to CreateDB are expecting to see the database as newly
+		// opened with any novelty present. This is potentially a little
+		// sketchy for any concurrent accessors, but this whole mechanism
+		// has already made callers reliquinish any notion that they are
+		// the sole owners of the Database they opened.
+		if err := datas.ChunkStoreFromDatabase(s.ddb).Rebase(ctx); err != nil {
+			return nil, nil, nil, err
+		}
 		return s.ddb, s.vrw, s.ns, nil
 	}
 

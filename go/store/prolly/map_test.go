@@ -268,7 +268,7 @@ func TestVisitMapLevelOrder(t *testing.T) {
 }
 
 func TestNewEmptyNode(t *testing.T) {
-	s := message.NewProllyMapSerializer(&val.TupleDesc{}, sharedPool)
+	s := message.NewProllyMapSerializer(&val.TupleDesc{}, &val.TupleDesc{}, sharedPool)
 	msg := s.Serialize(nil, nil, nil, 0)
 	empty, fileId, err := tree.NodeFromBytes(msg)
 	require.NoError(t, err)

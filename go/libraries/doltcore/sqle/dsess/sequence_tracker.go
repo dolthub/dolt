@@ -1,0 +1,692 @@
+// Copyright 2026 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package dsess
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"golang.org/x/sync/errgroup"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/gcctx"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess/mutexmap"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate/sequences"
+)
+
+type LockMode int64
+
+var (
+	LockMode_Traditional LockMode = 0
+	LockMode_Concurrent  LockMode = 1
+	LockMode_Interleaved LockMode = 2
+)
+
+// A SequenceTracker provides synchronized access to a shared global state across every branch and transaction.
+//
+// Usually, branches should be completely independent of each other, but in specific scenarios, we want to ensure
+// that operations like AUTO INCREMENT columns produce globally unique values. SequenceTracker accomplishes this
+// by combining the state of every branch on initialization, and then providing a synchronized function that
+// produces an incrementing sequence of values.
+type SequenceTracker[
+	RelationType sequences.SequencedRelation[RelationType, ValueType, StateType],
+	StateType sequences.SequenceState[StateType, ValueType],
+	ValueType comparable,
+] struct {
+	// initErr is written by the lazy initialization started in the constructor, before
+	// it closes |init|, and read only after |init| is closed.
+	initErr   error
+	sequences *SyncMap[doltdb.TableName, StateType]
+	mm        *mutexmap.MutexMap
+	// SequenceTracker is lazily initialized by loading tracker state for every given
+	// |root|. On first access, we block on initialization being completed and we
+	// terminally return |initErr| if there was any error initializing. |init| is
+	// created by the constructor and never replaced: re-reading roots into an already
+	// initialized tracker is MergeRoots, which does not disturb initialization state.
+	init chan struct{}
+	// To clean up effectively we need to stop all access to
+	// storage. As part of that, we have the possibility to cancel
+	// async initialization and block on the process completing.
+	cancelInit chan struct{}
+	dbName     string
+	// lockMode is the effective @@innodb_autoinc_lock_mode at the time of SequenceTracker initialization.
+	// This value can only be set by config and cannot be changed in a running server.
+	lockMode LockMode
+	// relationSource is how the tracker reads objects from a RootValue.
+	// It may read tables or RootObjects.
+	relationSource doltdb.RelationSource[RelationType]
+}
+
+// currentLockMode returns the effective @@innodb_autoinc_lock_mode stored in global server vars
+func currentLockMode() LockMode {
+	_, i, _ := sql.SystemVariables.GetGlobal("innodb_autoinc_lock_mode")
+	if mode, ok := i.(int64); ok {
+		return LockMode(mode)
+	}
+	return LockMode_Interleaved
+}
+
+// staticAssertTypes contains compile-time assertions that SequenceTracker implements interfaces.
+// It does not need to be called.
+func (a *SequenceTracker[RelationType, StateType, ValueType]) staticAssertTypes() {
+	var _ globalstate.SequenceTracker[RelationType, StateType, ValueType] = a
+}
+
+// NewSequenceTrackerFromRoots creates and initializes a new SequenceTracker by querying |relationSource| for
+// objects that need to be globally tracked, and computing a single tracked global state for each object by merging
+// the state at every root in |roots|
+func NewSequenceTrackerFromRoots[
+	RelationType sequences.SequencedRelation[RelationType, ValueType, StateType],
+	StateType sequences.SequenceState[StateType, ValueType],
+	ValueType comparable,
+](ctx context.Context, dbName string, relationSource doltdb.RelationSource[RelationType], roots ...doltdb.Rootish) (*SequenceTracker[RelationType, StateType, ValueType], error) {
+	ait := SequenceTracker[RelationType, StateType, ValueType]{
+		dbName:         dbName,
+		sequences:      &SyncMap[doltdb.TableName, StateType]{},
+		mm:             mutexmap.NewMutexMap(),
+		init:           make(chan struct{}),
+		cancelInit:     make(chan struct{}),
+		relationSource: relationSource,
+	}
+	gcSafepointController := getGCSafepointController(ctx)
+	if gcSafepointController != nil {
+		ctx = gcctx.WithGCSafepointController(ctx, gcSafepointController)
+	}
+	// initWithRoots runs in a background goroutine that can outlive the request that
+	// triggered it (e.g. the CREATE DATABASE statement that creates this tracker). Detach
+	// it from the caller's cancellation so a query returning doesn't cancel initialization.
+	initCtx := context.WithoutCancel(ctx)
+	go func() {
+		if gcSafepointController != nil {
+			defer gcctx.SessionEnd(initCtx)
+			gcctx.SessionCommandBegin(initCtx)
+			defer gcctx.SessionCommandEnd(initCtx)
+		}
+		ait.initWithRoots(initCtx, ait.init, roots...)
+	}()
+	return &ait, nil
+}
+
+func getGCSafepointController(ctx context.Context) *gcctx.GCSafepointController {
+	if sqlCtx, ok := ctx.(*sql.Context); ok {
+		return DSessFromSess(sqlCtx.Session).GCSafepointController()
+	}
+	return gcctx.GetGCSafepointController(ctx)
+}
+
+// loadSequenceState normalizes relation names before looking them up in the global state.
+func loadSequenceState[StateType sequences.SequenceState[StateType, ValueType], ValueType comparable](sequences *SyncMap[doltdb.TableName, StateType], relationName doltdb.TableName) (current StateType, hasCurrent bool) {
+	return sequences.Load(relationName.ToLower())
+}
+
+// initializeSequenceState ini
+func (a *SequenceTracker[RelationType, StateType, ValueType]) initializeSequenceState(ctx *sql.Context, relationName doltdb.TableName, initialValue interface{}) (state StateType, hasState bool, err error) {
+	sess := DSessFromSess(ctx.Session)
+	ws, err := sess.WorkingSet(ctx, a.dbName)
+	if err != nil {
+		return state, false, err
+	}
+
+	table, _, ok, err := a.relationSource.GetRelation(ctx, ws.WorkingRoot(), relationName)
+	if err != nil || !ok {
+		return state, false, err
+	}
+
+	hasAutoIncrement, err := table.HasSequenceState(ctx)
+	if err != nil {
+		return state, false, err
+	}
+
+	var seq StateType
+	if !hasAutoIncrement {
+		// Create a new state based on the provided value.
+		seq, err = state.WithSQLValue(ctx, initialValue)
+		if err != nil {
+			return state, false, err
+		}
+	} else {
+		seq, err = table.GetSequenceState(ctx)
+		if err != nil {
+			return state, false, err
+		}
+	}
+
+	relation, err := a.deepSet(ctx, relationName, table, ws.Ref(), seq)
+	if err != nil {
+		return state, false, err
+	}
+
+	state, ok = loadSequenceState(a.sequences, relationName)
+	if ok {
+		return state, true, nil
+	}
+
+	seq, err = relation.GetSequenceState(ctx)
+	if err != nil {
+		return state, false, err
+	}
+	a.sequences.Store(relationName.ToLower(), seq)
+	return state, true, nil
+}
+
+func (a *SequenceTracker[RelationType, StateType, ValueType]) Close() {
+	close(a.cancelInit)
+	<-a.init
+}
+
+// Current returns the next value to be generated in the auto increment sequence for |relationName|.
+func (a *SequenceTracker[RelationType, StateType, ValueType]) Current(ctx context.Context, relationName doltdb.TableName) (current StateType, err error) {
+	err = a.awaitInit(ctx)
+	if err != nil {
+		return current, err
+	}
+	seq, ok := loadSequenceState(a.sequences, relationName)
+	if !ok {
+		return current, nil
+	}
+	return seq, nil
+}
+
+// Next returns the next auto increment value for |relationName| using |insertVal| from an insert. If |insertVal| is
+// null or 0, it is generated from the sequence.
+func (a *SequenceTracker[RelationType, StateType, ValueType]) Next(ctx *sql.Context, relationName doltdb.TableName, insertVal interface{}) (nextValue ValueType, err error) {
+	err = a.awaitInit(ctx)
+	if err != nil {
+		return nextValue, err
+	}
+
+	relationName = relationName.ToLower()
+
+	// The read-modify-write of the sequence below must be atomic across concurrent inserters. In
+	// interleaved lock mode (the default) the engine holds no statement-level lock, so we take a
+	// short per-table lock here.
+	if a.lockMode == LockMode_Interleaved {
+		release, err := a.mm.Lock(ctx, relationName)
+		if err != nil {
+			return nextValue, err
+		}
+		defer release()
+	}
+
+	currState, ok := loadSequenceState(a.sequences, relationName)
+	if !ok {
+		// Missing tracker state after initialization can happen when a running sql-server discovers a database
+		// restored after startup, so initialize it here.
+		currState, ok, err = a.initializeSequenceState(ctx, relationName, insertVal)
+		if err != nil {
+			return nextValue, err
+		}
+		if !ok {
+			return nextValue, fmt.Errorf("autoIncrementTracker: unable to find sequence for table %s", relationName.Name)
+		}
+	}
+
+	if insertVal == nil {
+		// |given| is 0 or NULL
+		currentVal, _, nextState, err := currState.Next()
+		if err != nil {
+			return nextValue, err
+		}
+		a.sequences.Store(relationName, nextState)
+		return currentVal, nil
+	}
+
+	givenState, err := currState.WithSQLValue(ctx, insertVal)
+	if err != nil {
+		return nextValue, err
+	}
+	given := givenState.CurrentValue()
+
+	if !currState.GreaterThan(givenState) {
+		// Check if the given value is valid for this column type
+		if !a.validateBounds(ctx, relationName, givenState, false) {
+			return givenState.CurrentValue(), nil // Out of bounds, don't update sequence
+		}
+
+		// Value is valid, determine next sequence value
+		if a.validateBounds(ctx, relationName, givenState, true) {
+			_, _, givenState, err = givenState.Next()
+			if err != nil {
+				return nextValue, err
+			}
+		}
+		a.sequences.Store(relationName, givenState)
+		return given, nil
+	}
+
+	return given, nil
+}
+
+// Set sets the auto increment value for the table named, if it's greater than the one already registered for this
+// table. Otherwise, the update is silently disregarded. So far this matches the MySQL behavior, but Dolt uses the
+// maximum value for this table across all branches.
+func (a *SequenceTracker[RelationType, StateType, ValueType]) Set(ctx *sql.Context, relationName doltdb.TableName, table RelationType, ws ref.WorkingSetRef, newSequenceState StateType) (newRelation RelationType, err error) {
+	err = a.awaitInit(ctx)
+	if err != nil {
+		return newRelation, err
+	}
+
+	relationName = relationName.ToLower()
+
+	release, err := a.mm.Lock(ctx, relationName)
+	if err != nil {
+		return newRelation, err
+	}
+	defer release()
+
+	existing, ok := loadSequenceState(a.sequences, relationName)
+	if !ok {
+		a.sequences.Store(relationName, newSequenceState)
+		return table.SetSequenceState(ctx, newSequenceState)
+	}
+	gt := newSequenceState.GreaterThan(existing)
+	if gt && a.validateBounds(ctx, relationName, newSequenceState, false) {
+		a.sequences.Store(relationName, newSequenceState)
+		return table.SetSequenceState(ctx, newSequenceState)
+	} else if gt {
+		// Value is greater but out of bounds, don't update
+		return table, nil
+	}
+	// Value is not greater than current, do deep check across branches
+	return a.deepSet(ctx, relationName, table, ws, newSequenceState)
+}
+
+// deepSet sets the sequence state for the table named, if it's greater than the one on any branch head for this
+// database, ignoring the current in-memory tracker value
+func (a *SequenceTracker[RelationType, StateType, ValueType]) deepSet(ctx *sql.Context, relationName doltdb.TableName, relation RelationType, ws ref.WorkingSetRef, newAutoIncVal StateType) (newRelation RelationType, err error) {
+	sess := DSessFromSess(ctx.Session)
+	db, ok := sess.Provider().BaseDatabase(ctx, a.dbName)
+
+	// just give up if we can't find this db for any reason, or it's a non-versioned DB
+	if !ok || !db.Versioned() {
+		return relation, nil
+	}
+
+	relation, success, err := relation.TrySetSequenceState(ctx, newAutoIncVal)
+	if err != nil {
+		return newRelation, err
+	}
+	if !success {
+		// If the relation wasn't actually updated (most likely because we just tried to set the AUTO_INCREMENT counter
+		// to something less than a value already in the table), then there's nothing more to do.
+		return relation, nil
+	}
+
+	// Now that we have established the current max for this table, reset the global max accordingly
+	maxAutoInc := newAutoIncVal
+	doltdbs := db.DoltDatabases()
+	for _, db := range doltdbs {
+		branches, err := db.GetBranches(ctx)
+		if err != nil {
+			return newRelation, err
+		}
+
+		remotes, err := db.GetRemoteRefs(ctx)
+		if err != nil {
+			return newRelation, err
+		}
+
+		rootRefs := make([]ref.DoltRef, 0, len(branches)+len(remotes))
+		rootRefs = append(rootRefs, branches...)
+		rootRefs = append(rootRefs, remotes...)
+
+		for _, b := range rootRefs {
+			var rootish doltdb.Rootish
+			switch b.GetType() {
+			case ref.BranchRefType:
+				wsRef, err := ref.WorkingSetRefForHead(b)
+				if err != nil {
+					return newRelation, err
+				}
+
+				if wsRef == ws {
+					// we don't need to check the working set we're updating
+					continue
+				}
+
+				ws, err := db.ResolveWorkingSet(ctx, wsRef)
+				if err == doltdb.ErrWorkingSetNotFound {
+					// use the branch head if there isn't a working set for it
+					cm, err := db.ResolveCommitRef(ctx, b)
+					if err != nil {
+						return newRelation, err
+					}
+					rootish = cm
+				} else if err != nil {
+					return newRelation, err
+				} else {
+					rootish = ws
+				}
+			case ref.RemoteRefType:
+				cm, err := db.ResolveCommitRef(ctx, b)
+				if err != nil {
+					return newRelation, err
+				}
+				rootish = cm
+			}
+
+			root, err := rootish.ResolveRootValue(ctx)
+			if err != nil {
+				return newRelation, err
+			}
+
+			table, _, ok, err := a.relationSource.GetRelation(ctx, root, relationName)
+			if err != nil {
+				return newRelation, err
+			}
+			if !ok {
+				continue
+			}
+
+			hasAutoIncrement, err := table.HasSequenceState(ctx)
+			if err != nil {
+				return newRelation, err
+			}
+
+			if !hasAutoIncrement {
+				continue
+			}
+
+			seq, err := table.GetSequenceState(ctx)
+			if err != nil {
+				return newRelation, err
+			}
+
+			maxAutoInc = maxAutoInc.Merge(seq)
+		}
+	}
+
+	if a.validateBounds(ctx, relationName, maxAutoInc, false) {
+		a.sequences.Store(relationName, maxAutoInc)
+	}
+	return relation, nil
+}
+
+// AddNewRelation initializes a new table with an auto increment column to the tracker, as necessary
+func (a *SequenceTracker[RelationType, StateType, ValueType]) AddNewRelation(ctx context.Context, relationName doltdb.TableName, initialState StateType) error {
+	relationName = relationName.ToLower()
+	err := a.awaitInit(ctx)
+	if err != nil {
+		return err
+	}
+
+	// only initialize the sequence for this table if no other branch has such a table
+	release, err := a.mm.Lock(ctx, relationName)
+	if err != nil {
+		return err
+	}
+	defer release()
+
+	existingState, hasExisting := a.sequences.Load(relationName)
+	if !hasExisting {
+		a.sequences.Store(relationName, initialState)
+	} else {
+		a.sequences.Store(relationName, existingState.Merge(initialState))
+	}
+	return nil
+}
+
+// DropRelation drops the table with the name given.
+// To establish the new auto increment value, callers must also pass all other working sets in scope that may include
+// a table with the same name, omitting the working set that just deleted the table named.
+func (a *SequenceTracker[RelationType, StateType, ValueType]) DropRelation(ctx *sql.Context, relationName doltdb.TableName, wses ...*doltdb.WorkingSet) error {
+	err := a.awaitInit(ctx)
+	if err != nil {
+		return err
+	}
+
+	relationName = relationName.ToLower()
+
+	release, err := a.mm.Lock(ctx, relationName)
+	if err != nil {
+		return err
+	}
+	defer release()
+
+	// A State representing the "furthest along" state among all working sets.
+	var mergedState *StateType
+
+	// Get the new highest value from all tables in the working sets given
+	for _, ws := range wses {
+		table, _, exists, err := a.relationSource.GetRelation(ctx, ws.WorkingRoot(), relationName)
+		if err != nil {
+			return err
+		}
+
+		if !exists {
+			continue
+		}
+
+		hasAutoIncrement, err := table.HasSequenceState(ctx)
+		if err != nil {
+			return err
+		}
+		if hasAutoIncrement {
+			seq, err := table.GetSequenceState(ctx)
+			if err != nil {
+				return err
+			}
+			if mergedState == nil {
+				mergedState = &seq
+			} else {
+				*mergedState = (*mergedState).Merge(seq)
+			}
+
+		}
+	}
+
+	if mergedState != nil {
+		a.sequences.Store(relationName, *mergedState)
+	} else {
+		a.sequences.Delete(relationName)
+	}
+
+	return nil
+}
+
+func (a *SequenceTracker[RelationType, StateType, ValueType]) AcquireLock(ctx *sql.Context, relationName doltdb.TableName) (func(), error) {
+	err := a.awaitInit(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if a.lockMode == LockMode_Interleaved {
+		// This shouldn't be possible, it's a serious programming error if it happens
+		panic("Attempted to acquire AutoInc lock for entire insert operation, but lock mode was set to Interleaved")
+	}
+	// Normalized like every other use of |mm|, so that the statement-level lock excludes
+	// the same allocations and merges a per-row lock would, whatever case the statement
+	// referred to the relation by.
+	return a.mm.Lock(ctx, relationName.ToLower())
+}
+
+// awaitInit blocks until the tracker's initialization finishes and returns its result,
+// giving up early if |ctx| is canceled. Initialization is deliberately detached from any
+// one caller's context, so a caller whose query has ended stops waiting rather than
+// recording its own cancellation as the tracker's outcome.
+func (a *SequenceTracker[RelationType, StateType, ValueType]) awaitInit(ctx context.Context) error {
+	// Fast path for the overwhelmingly common case of an already-initialized tracker.
+	// This is on the per-row path of every auto-increment insert, and the timeout below
+	// would otherwise allocate a timer on each one.
+	select {
+	case <-a.init:
+		return a.initErr
+	default:
+	}
+
+	select {
+	case <-a.init:
+		return a.initErr
+	case <-ctx.Done():
+		return context.Cause(ctx)
+	case <-time.After(5 * time.Minute):
+		return errors.New("failed to initialize autoincrement tracker")
+	}
+}
+
+// This method will initialize the SequenceTracker state with all
+// data from the tables found in |roots|.  This method closes the
+// |init| channel when it completes. It is meant to be run in a
+// goroutine, as in `go a.initWithRoots(...)`.
+//
+// It is the caller's responsibility to ensure that whatever |ctx|
+// |initWithRoots| is called with appropriately outlives the end of
+// the method and that it participates in GC lifecycle callbacks
+// appropriately, if that is necessary.
+func (a *SequenceTracker[RelationType, StateType, ValueType]) initWithRoots(ctx context.Context, init chan struct{}, roots ...doltdb.Rootish) {
+	defer close(init)
+
+	// Cancel the parent context so that the errgroup work will
+	// complete with an error if we see cancelInit closed.
+	finishedCh := make(chan struct{})
+	defer close(finishedCh)
+	ctx, cancel := context.WithCancelCause(ctx)
+	go func() {
+		select {
+		case <-a.cancelInit:
+			cancel(errors.New("initialization canceled. did not complete successfully."))
+		case <-finishedCh:
+		}
+	}()
+
+	a.lockMode = currentLockMode()
+	a.initErr = a.mergeRoots(ctx, roots)
+}
+
+// MergeRoots raises the tracked sequence state for every relation found in |roots| to the
+// value that root records, leaving relations that are already further along alone.
+//
+// This is how a caller that has changed a working set (dolt_reset --hard, a cluster
+// standby taking over) tells the tracker about state it may not have seen. It is
+// deliberately not initialization: it runs synchronously and reports its failure only to
+// the caller, so a merge that fails cannot take the tracker away from other sessions the
+// way a failed initialization does.
+func (a *SequenceTracker[RelationType, StateType, ValueType]) MergeRoots(ctx context.Context, roots ...doltdb.Rootish) error {
+	if err := a.awaitInit(ctx); err != nil {
+		return err
+	}
+	return a.mergeRoots(ctx, roots)
+}
+
+// mergeRoots reads every relation in every root and merges its sequence state into the
+// tracker. Roots are read concurrently; the per-relation merge itself is serialized by
+// the same lock the mutators take.
+func (a *SequenceTracker[RelationType, StateType, ValueType]) mergeRoots(ctx context.Context, roots []doltdb.Rootish) error {
+	eg, ctx := errgroup.WithContext(ctx)
+	eg.SetLimit(128)
+
+	for _, root := range roots {
+		eg.Go(func() error {
+			if ctx.Err() != nil {
+				return context.Cause(ctx)
+			}
+
+			r, err := root.ResolveRootValue(ctx)
+			if err != nil {
+				return err
+			}
+
+			for relationName, relation := range a.relationSource.IterRelations(ctx, r) {
+				hasSequenceState, err := relation.HasSequenceState(ctx)
+				if err != nil {
+					return err
+				}
+				if !hasSequenceState {
+					continue
+				}
+				seq, err := relation.GetSequenceState(ctx)
+				if err != nil {
+					return err
+				}
+				if err := a.mergeSequenceState(ctx, relationName, seq); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+	}
+
+	return eg.Wait()
+}
+
+// mergeSequenceState raises the tracked state for |relationName| to |seq| if |seq| is
+// further along, and leaves it alone otherwise.
+//
+// The read-modify-write is done under the per-relation lock that Next, Set, AddNewRelation
+// and DropRelation also take.
+func (a *SequenceTracker[RelationType, StateType, ValueType]) mergeSequenceState(ctx context.Context, relationName doltdb.TableName, seq StateType) error {
+	key := relationName.ToLower()
+	release, err := a.mm.Lock(ctx, key)
+	if err != nil {
+		return err
+	}
+	defer release()
+
+	if current, ok := a.sequences.Load(key); ok && !seq.GreaterThan(current) {
+		return nil
+	}
+	a.sequences.Store(key, seq)
+	return nil
+}
+
+// validateAutoIncrementBounds checks if a value (or value+1 if checkIncrement) is valid for the auto-increment column type
+func (a *SequenceTracker[RelationType, StateType, ValueType]) validateBounds(ctx *sql.Context, relationName doltdb.TableName, val StateType, checkIncrement bool) bool {
+	sess := DSessFromSess(ctx.Session)
+	db, ok := sess.Provider().BaseDatabase(ctx, a.dbName)
+	if !ok || !db.Versioned() {
+		return true // fail-open for infrastructure errors
+	}
+
+	ws, err := sess.WorkingSet(ctx, a.dbName)
+	if err != nil {
+		return true
+	}
+
+	table, _, ok, err := a.relationSource.GetRelation(ctx, ws.WorkingRoot(), relationName)
+	if err != nil || !ok {
+		return true
+	}
+
+	hasSequenceState, err := table.HasSequenceState(ctx)
+	if !hasSequenceState {
+		// fail-open because the table writer could be in the process of adding auto-increment to a column
+		return true
+	}
+
+	sqlType, ok, err := table.GetSequenceSqlType(ctx)
+	if err != nil || !ok {
+		return true
+	}
+
+	testVal := val
+	if checkIncrement {
+		// TODO: Remove error parameter?
+		_, hasNext, nextVal, _ := val.Next()
+		// SequenceState can only error if there is no next value.
+		// Consider changing this to a separate |ok| return value.
+		if !hasNext {
+			return false
+		}
+		testVal = nextVal
+	}
+
+	_, inRange, err := sqlType.Convert(ctx, testVal.CurrentValue())
+	return err == nil && inRange == sql.InRange
+}

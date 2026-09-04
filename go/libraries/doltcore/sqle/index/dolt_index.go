@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 	"github.com/dolthub/go-mysql-server/sql/fulltext"
+	"github.com/dolthub/go-mysql-server/sql/sets"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	vttypes "github.com/dolthub/vitess/go/sqltypes"
 
@@ -60,7 +61,7 @@ type DoltIndex interface {
 	Format() *types.NomsBinFormat
 	IsPrimaryKey() bool
 
-	coversColumns(s *durableIndexState, columns []uint64) bool
+	coversColumnsByTag(s *durableIndexState, columns []uint64) bool
 }
 
 func NewBranchNameIndex(i *doltIndex) *BranchNameIndex {
@@ -214,7 +215,7 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 	return indexes, nil
 }
 
-func MakeDiffTableIndex(tableName string, prefix string, sch schema.Schema, includeCommitColumns bool) *doltIndex {
+func MakeDiffTableIndex(tableName string, prefix string, sch schema.Schema, includeCommitColumns bool, vs val.ValueStore) *doltIndex {
 	cols := make([]schema.Column, 0, len(sch.GetAllCols().GetColumns())+2)
 	if includeCommitColumns {
 		cols = append(cols,
@@ -237,19 +238,80 @@ func MakeDiffTableIndex(tableName string, prefix string, sch schema.Schema, incl
 		constrainedToLookupExpression: false,
 		// We pass a nil ValueStore into the key builder, because we don't have one. This would cause an issue
 		// if any of the columns use Adaptive encoding, but that shouldn't be possible in the primary key.
-		keyBld: val.NewTupleBuilder(sch.GetKeyDescriptor(nil), nil),
+		keyBld: val.NewTupleBuilder(sch.GetKeyDescriptor(nil), vs),
 	}
 }
 
-func MakeDiffTableIndexes(tbl string, toSchema, fromSchema schema.Schema, includeCommits bool) (indexes []sql.Index) {
+func MakeDiffTableIndexes(tbl string, toSchema, fromSchema schema.Schema, vs val.ValueStore, includeCommits bool) (indexes []sql.Index) {
 	indexes = make([]sql.Index, 0)
 	if toSchema != nil {
-		indexes = append(indexes, MakeDiffTableIndex(tbl, "to", toSchema, includeCommits))
+		indexes = append(indexes, MakeDiffTableIndex(tbl, "to", toSchema, includeCommits, vs))
 	}
 	if fromSchema != nil {
-		indexes = append(indexes, MakeDiffTableIndex(tbl, "from", fromSchema, includeCommits))
+		indexes = append(indexes, MakeDiffTableIndex(tbl, "from", fromSchema, includeCommits, vs))
 	}
 	return indexes
+}
+
+// SecondaryDiffIndexType indicates a type of index on DOLT_DIFF.
+// DOLT_DIFF tables can be indexed on columns from the "to_" side of the diff, or the "from_" side.
+type SecondaryDiffIndexType int
+
+const (
+	SecondaryDiffIndexType_To SecondaryDiffIndexType = iota
+	SecondaryDiffIndexType_From
+)
+
+// Indexes on DOLT_DIFF are named after the index on the underlying table, prefixed by whether the "to" or "from" table
+// is having its columns selected on.
+func (t SecondaryDiffIndexType) Prefix() string {
+	switch t {
+	case SecondaryDiffIndexType_To:
+		return "to"
+	case SecondaryDiffIndexType_From:
+		return "from"
+	default:
+		panic("unknown secondary diff index type")
+	}
+}
+
+// MakeDiffTableSecondaryIndex creates a *doltIndex for a secondary index on the diff table function.
+// The prefix should be "to" or "from" and determines the column name prefix (e.g., "to_c1").
+// Returns nil, nil for fulltext, spatial, or vector indexes which are not supported.
+func MakeDiffTableSecondaryIndex(ctx context.Context, tableName string, indexType SecondaryDiffIndexType, t *doltdb.Table, sch schema.Schema, idx schema.Index) (*doltIndex, error) {
+	if idx.IsFullText() || idx.IsSpatial() || idx.IsVector() {
+		return nil, nil
+	}
+
+	indexRows, err := t.GetIndexRowData(ctx, idx.Name())
+	if err != nil {
+		return nil, err
+	}
+	keyBld := keyBuilderForIndex(indexRows)
+
+	cols := make([]schema.Column, idx.Count())
+	for i, tag := range idx.IndexedColumnTags() {
+		col, _ := idx.GetColumn(tag)
+		col.Name = indexType.Prefix() + "_" + col.Name
+		cols[i] = col
+	}
+
+	return &doltIndex{
+		id:                            indexType.Prefix() + "_" + idx.Name(),
+		tblName:                       tableName,
+		columns:                       cols,
+		indexSch:                      idx.Schema(),
+		tableSch:                      sch,
+		unique:                        idx.IsUnique(),
+		isPk:                          false,
+		comment:                       idx.Comment(),
+		vrw:                           t.ValueReadWriter(),
+		ns:                            t.NodeStore(),
+		keyBld:                        keyBld,
+		order:                         sql.IndexOrderNone,
+		constrainedToLookupExpression: false,
+		prefixLengths:                 idx.PrefixLengths(),
+	}, nil
 }
 
 // MockIndex returns a sql.Index that is not backed by an actual datastore. It's useful for system tables and
@@ -568,7 +630,7 @@ type doltIndex struct {
 type LookupMeta struct {
 	Idx      sql.Index
 	Fds      *sql.FuncDepSet
-	Cols     sql.FastIntSet
+	Cols     sets.FastIntSet
 	Ordinals []int
 }
 
@@ -596,7 +658,7 @@ func GetStrictLookups(ctx *sql.Context, schCols *schema.ColCollection, indexes [
 			continue
 		}
 		var ordinals []int
-		allCols := sql.NewFastIntSet()
+		allCols := sets.NewFastIntSet()
 		for _, c := range idx.columns {
 			idx := schCols.TagToIdx[c.Tag]
 			allCols.Add(idx + 1)
@@ -622,11 +684,11 @@ func (di *doltIndex) CanSupport(*sql.Context, ...sql.Range) bool {
 
 // CanSupportOrderBy implements the interface sql.Index.
 func (di *doltIndex) CanSupportOrderBy(expr sql.Expression) bool {
-	distance, ok := expr.(*vector.Distance)
+	distance, ok := expr.(vector.OrderableDistance)
 	if !ok {
 		return false
 	}
-	return di.vector && di.vectorProps.DistanceType.CanEval(distance.DistanceType)
+	return di.vector && di.vectorProps.DistanceType != nil && di.vectorProps.DistanceType.CanEval(distance.DistanceMetric())
 }
 
 // ColumnExpressionTypes implements the interface sql.Index.
@@ -727,7 +789,8 @@ func (di *doltIndex) prollyRanges(ctx *sql.Context, ns tree.NodeStore, ranges ..
 	return pranges, nil
 }
 
-func (di *doltIndex) coversColumns(s *durableIndexState, cols []uint64) bool {
+// coversColumnsByTag determines if this index covers a list of columns
+func (di *doltIndex) coversColumnsByTag(s *durableIndexState, cols []uint64) bool {
 	if cols == nil {
 		return s.coversAllColumns(di)
 	}
@@ -759,6 +822,26 @@ func (di *doltIndex) coversColumns(s *durableIndexState, cols []uint64) bool {
 		}
 	}
 
+	return covers
+}
+
+// CoversColumns determines if this index covers the columns by name.
+func (di *doltIndex) CoversColumns(cols []string) bool {
+	if di.indexSch == nil {
+		return false
+	}
+	idxCols := di.indexSch.GetAllCols()
+	if len(cols) > len(idxCols.Tags) {
+		return false
+	}
+
+	covers := true
+	for _, colName := range cols {
+		if _, ok := idxCols.LowerNameToCol[strings.ToLower(colName)]; !ok {
+			covers = false
+			break
+		}
+	}
 	return covers
 }
 
@@ -888,6 +971,11 @@ func (di *doltIndex) IsFullText() bool {
 // IsVector implements sql.Index
 func (di *doltIndex) IsVector() bool {
 	return di.vector
+}
+
+// VectorProperties returns the vector index properties of this index. Only set when IsVector is true.
+func (di *doltIndex) VectorProperties() schema.VectorProperties {
+	return di.vectorProps
 }
 
 // IsPrimaryKey implements DoltIndex.
@@ -1199,7 +1287,7 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 
 			nilBound := field.Lo.Value == nil && field.Hi.Value == nil
 			if foundDiscontinuity || nilBound {
-				// A discontinous variable followed by any restriction
+				// A discontinuous variable followed by any restriction
 				// can partition the key space.
 				isContiguous = false
 			}

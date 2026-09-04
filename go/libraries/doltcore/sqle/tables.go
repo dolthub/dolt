@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 	"github.com/dolthub/go-mysql-server/sql/fulltext"
+	"github.com/dolthub/go-mysql-server/sql/sets"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -44,6 +45,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expranalysis"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/fk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
@@ -150,7 +152,7 @@ func (t *DoltTable) LookupForExpressions(ctx *sql.Context, exprs ...sql.Expressi
 		}
 	}
 
-	colset := sql.NewFastIntSet()
+	colset := sets.NewFastIntSet()
 	schCols := t.sch.GetAllCols()
 	for _, c := range lookupCols {
 		col := schCols.LowerNameToCol[c.Col]
@@ -455,7 +457,11 @@ func (t *DoltTable) PeekNextAutoIncrementValue(ctx *sql.Context) (uint64, error)
 	if err != nil {
 		return 0, err
 	}
-	return table.GetAutoIncrementValue(ctx)
+	seq, err := table.GetAutoIncrementValue(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return uint64(seq), err
 }
 
 // Name returns the name of the table.
@@ -1069,7 +1075,7 @@ func (t *WritableDoltTable) truncate(
 
 	if schema.HasAutoIncrement(sch) {
 		ddb, _ := sess.GetDoltDB(ctx, t.db.RevisionQualifiedName())
-		err = t.db.removeTableFromAutoIncrementTracker(ctx, t.Name(), ddb, ws.Ref())
+		err = t.db.removeTableFromAutoIncrementTracker(ctx, t.TableName(), ddb, ws.Ref())
 		if err != nil {
 			return nil, err
 		}
@@ -1570,11 +1576,14 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 	}
 
 	if column.AutoIncrement {
-		ait, err := t.db.gs.AutoIncrementTracker(ctx)
+		ait, err := dsess.GetAutoIncrementTracker(ctx, t.db.gs)
 		if err != nil {
 			return err
 		}
-		ait.AddNewTable(t.tableName)
+		err = ait.AddNewRelation(ctx, t.TableName(), doltdb.AutoIncrementState(1))
+		if err != nil {
+			return err
+		}
 	}
 
 	newRoot, err := root.PutTable(ctx, t.TableName(), updatedTable)
@@ -1797,7 +1806,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 
 	// TODO: figure out locking. Other DBs automatically lock a table during this kind of operation, we should probably
 	//  do the same. We're messing with global auto-increment values here and it's not safe.
-	ait, err := t.db.gs.AutoIncrementTracker(ctx)
+	ait, err := dsess.GetAutoIncrementTracker(ctx, t.db.gs)
 	if err != nil {
 		return nil, err
 	}
@@ -1854,7 +1863,7 @@ func fullTextRewriteEditor(
 
 	// TODO: figure out locking. Other DBs automatically lock a table during this kind of operation, we should probably
 	//  do the same. We're messing with global auto-increment values here and it's not safe.
-	ait, err := t.db.gs.AutoIncrementTracker(ctx)
+	ait, err := dsess.GetAutoIncrementTracker(ctx, t.db.gs)
 	if err != nil {
 		return nil, err
 	}
@@ -2271,21 +2280,24 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 			return err
 		}
 
-		updatedTable, err = updatedTable.SetAutoIncrementValue(ctx, seq)
+		updatedTable, err = updatedTable.SetAutoIncrementValue(ctx, doltdb.AutoIncrementState(seq))
 		if err != nil {
 			return err
 		}
 
-		ait, err := t.db.gs.AutoIncrementTracker(ctx)
+		ait, err := dsess.GetAutoIncrementTracker(ctx, t.db.gs)
 		if err != nil {
 			return err
 		}
 
 		// TODO: this isn't transactional, and it should be (but none of the auto increment tracking is)
-		ait.AddNewTable(t.tableName)
+		err = ait.AddNewRelation(ctx, t.TableName(), doltdb.AutoIncrementState(1))
+		if err != nil {
+			return err
+		}
 		// Since this is a new auto increment table, we don't need to exclude the current working set from consideration
 		// when computing its new sequence value, hence the empty ref
-		_, err = ait.Set(ctx, t.tableName, updatedTable, ref.WorkingSetRef{}, seq)
+		_, err = ait.Set(ctx, t.TableName(), updatedTable, ref.WorkingSetRef{}, doltdb.AutoIncrementState(seq))
 		if err != nil {
 			return err
 		}
@@ -2296,7 +2308,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		// TODO: this isn't transactional, and it should be
 		sess := dsess.DSessFromSess(ctx.Session)
 		ddb, _ := sess.GetDoltDB(ctx, t.db.RevisionQualifiedName())
-		err = t.db.removeTableFromAutoIncrementTracker(ctx, t.Name(), ddb, ws.Ref())
+		err = t.db.removeTableFromAutoIncrementTracker(ctx, t.TableName(), ddb, ws.Ref())
 		if err != nil {
 			return err
 		}
@@ -2361,7 +2373,7 @@ func (t *AlterableDoltTable) getFirstAutoIncrementValue(
 		}
 	}
 
-	seq, err := dsess.CoerceAutoIncrementValue(ctx, initialValue)
+	seq, err := doltdb.CoerceAutoIncrementValue(ctx, initialValue)
 	if err != nil {
 		return 0, err
 	}
@@ -2399,13 +2411,20 @@ func (t *AlterableDoltTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) err
 		return err
 	}
 	if idx.Constraint != sql.IndexConstraint_None && idx.Constraint != sql.IndexConstraint_Unique && idx.Constraint != sql.IndexConstraint_Spatial && idx.Constraint != sql.IndexConstraint_Vector {
-		return fmt.Errorf("only the following types of index constraints are supported: none, unique, spatial")
+		return fmt.Errorf("only the following types of index constraints are supported: none, unique, spatial, vector")
 	}
 
 	var vectorProperties schema.VectorProperties
 	if idx.Constraint == sql.IndexConstraint_Vector {
+		if schema.IsKeyless(t.sch) {
+			return fmt.Errorf("vector indexes on keyless tables are not supported")
+		}
+		distanceType := idx.VectorProperties.DistanceType
+		if distanceType == nil {
+			distanceType = vector.DistanceL2Squared{}
+		}
 		vectorProperties = schema.VectorProperties{
-			DistanceType: vector.DistanceL2Squared{},
+			DistanceType: distanceType,
 		}
 	}
 	return t.createIndex(ctx, idx, fulltext.KeyColumns{}, fulltext.IndexTableNames{}, vectorProperties)
@@ -2515,6 +2534,10 @@ func (t *AlterableDoltTable) createIndex(ctx *sql.Context, idx sql.IndexDef, key
 	var predicateStr string
 	if idx.Predicate != nil {
 		predicateStr = idx.Predicate.String()
+		idx.Predicate, err = expranalysis.ResolveExpression(ctx, t.TableName(), predicateStr)
+		if err != nil {
+			return fmt.Errorf("failed to resolve partial index predicate: %w", err)
+		}
 	}
 
 	idxProperties := schema.IndexProperties{
@@ -2877,11 +2900,14 @@ func (t *WritableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, sq
 	}
 	tblName := doltdb.TableName{Name: sqlFk.Table, Schema: schemaName}
 
-	doltFk, ok := fkc.GetByNameCaseInsensitive(fkName, tblName)
+	// sqlFk.Table may already be the table's new name when this call is part of a rename (the rename itself is
+	// applied afterward), so look up the existing entry by the table's current name, not sqlFk.Table.
+	currentTblName := t.TableName()
+	doltFk, ok := fkc.GetByNameCaseInsensitive(fkName, currentTblName)
 	if !ok {
 		return sql.ErrForeignKeyNotFound.New(fkName, t.tableName)
 	}
-	fkc.RemoveKeyByName(doltFk.Name, tblName)
+	fkc.RemoveKeyByName(doltFk.Name, currentTblName)
 	doltFk.Name = sqlFk.Name
 	doltFk.TableName = tblName
 	doltFk.ReferencedTableName = doltdb.TableName{Name: sqlFk.ParentTable, Schema: schemaName}

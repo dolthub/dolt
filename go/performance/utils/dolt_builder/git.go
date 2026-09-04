@@ -16,6 +16,7 @@ package dolt_builder
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"strings"
@@ -34,10 +35,18 @@ func GitVersion(ctx context.Context) error {
 	return nil
 }
 
-// GitCloneBare clones a repo
-func GitCloneBare(ctx context.Context, dir, url string) error {
-	clone := ExecCommand(ctx, "git", "clone", "--bare", url)
+// GitCloneBare clones a repo to repoDir within dir.
+func GitCloneBare(ctx context.Context, dir, url, repoDir string) error {
+	clone := ExecCommand(ctx, "git", "clone", "--bare", url, repoDir)
 	clone.Dir = dir
+	if token := os.Getenv(envRepositoryAccessToken); token != "" {
+		credentials := base64.StdEncoding.EncodeToString([]byte("x-access-token:" + token))
+		clone.Env = append(os.Environ(),
+			"GIT_CONFIG_COUNT=1",
+			"GIT_CONFIG_KEY_0=http.extraHeader",
+			"GIT_CONFIG_VALUE_0=Authorization: Basic "+credentials,
+		)
+	}
 	return RunCommand(clone)
 }
 

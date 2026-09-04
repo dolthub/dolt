@@ -293,7 +293,7 @@ func extractTestVal(t *testing.T, valDesc *val.TupleDesc, tuple val.Tuple) []int
 // to a row in the prolly map. The first value in a row will be the primary key.
 // The rest of the values will be the value fields.
 func newTestMap(t *testing.T, ctx context.Context, rows [][]int, ns NodeStore, valDesc *val.TupleDesc) StaticMap[val.Tuple, val.Tuple, *val.TupleDesc] {
-	serializer := message.NewProllyMapSerializer(valDesc, ns.Pool())
+	serializer := message.NewProllyMapSerializer(keyDesc, valDesc, ns.Pool())
 	chkr, err := newEmptyChunker(ctx, ns, serializer)
 	require.NoError(t, err)
 

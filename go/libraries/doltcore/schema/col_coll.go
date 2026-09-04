@@ -146,6 +146,20 @@ func (cc *ColCollection) GetColumnNames() []string {
 	return names
 }
 
+// GetNonSystemHiddenCols returns the subset of columns in this collection that are not SystemHidden, in
+// declared order. SystemHidden columns (e.g. the hidden columns Dolt creates internally to back a
+// functional/expression index) are never visible in DDL, information_schema, or a MySQL server's
+// binlog TableMap/Rows events.
+func (cc *ColCollection) GetNonSystemHiddenCols() []Column {
+	nonSystemHidden := make([]Column, 0, len(cc.cols))
+	for _, col := range cc.cols {
+		if !col.SystemHidden {
+			nonSystemHidden = append(nonSystemHidden, col)
+		}
+	}
+	return nonSystemHidden
+}
+
 // AppendColl returns a new collection with the additional ColCollection's columns appended
 func (cc *ColCollection) AppendColl(colColl *ColCollection) *ColCollection {
 	return cc.Append(colColl.cols...)

@@ -113,7 +113,7 @@ func (r *Remote) GetRemoteDB(ctx context.Context, nbf *types.NomsBinFormat, dial
 		params[dbfactory.GitRemoteNameParam] = r.Name
 		if p, ok := dialer.(dbfactory.GitCacheRootProvider); ok {
 			if root, ok := p.GitCacheRoot(); ok {
-				params[dbfactory.GitCacheRootParam] = root
+				params[dbfactory.GitCacheRootParam] = filepath.Join(root, dbfactory.DoltDir, dbfactory.GitRemoteCacheDirName)
 			}
 		}
 	}
@@ -134,7 +134,7 @@ func (r *Remote) Prepare(ctx context.Context, nbf *types.NomsBinFormat, dialer d
 		params[dbfactory.GitRemoteNameParam] = r.Name
 		if p, ok := dialer.(dbfactory.GitCacheRootProvider); ok {
 			if root, ok := p.GitCacheRoot(); ok {
-				params[dbfactory.GitCacheRootParam] = root
+				params[dbfactory.GitCacheRootParam] = filepath.Join(root, dbfactory.DoltDir, dbfactory.GitRemoteCacheDirName)
 			}
 		}
 	}
@@ -166,7 +166,7 @@ func (r *Remote) GetRemoteDBWithoutCaching(ctx context.Context, nbf *types.NomsB
 		params[dbfactory.GitRemoteNameParam] = r.Name
 		if p, ok := dialer.(dbfactory.GitCacheRootProvider); ok {
 			if root, ok := p.GitCacheRoot(); ok {
-				params[dbfactory.GitCacheRootParam] = root
+				params[dbfactory.GitCacheRootParam] = filepath.Join(root, dbfactory.DoltDir, dbfactory.GitRemoteCacheDirName)
 			}
 		}
 	}
@@ -793,6 +793,39 @@ func GetDefaultBranch(dEnv *DoltEnv, branches []ref.DoltRef) string {
 	}
 
 	return branches[0].GetPath()
+}
+
+// UpstreamRef returns the local ref that is |branchRef|'s upstream.
+//
+// It returns nil when |branchRef| has no BranchConfig (upstream)
+// recorded, when the remote field is empty or unknown, or when that
+// remote's fetch specs do not map the merge ref.
+//
+// The returned ref is not checked for existence.
+func UpstreamRef[C doltdb.Context](rsr RepoStateReader[C], branchRef ref.DoltRef) (ref.DoltRef, error) {
+	branchConfigs, err := rsr.GetBranches()
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO(elianddb): delete a branch's config entry on remote removal,
+	// so there's no ambiguity with an explicit non-remote merge ref.
+	upstream, hasUpstream := branchConfigs.Get(branchRef.GetPath())
+	if !hasUpstream || upstream.Merge.Ref == nil || upstream.Remote == "" {
+		return nil, nil
+	}
+
+	remotes, err := rsr.GetRemotes()
+	if err != nil {
+		return nil, err
+	}
+
+	remote, ok := remotes.Get(upstream.Remote)
+	if !ok {
+		return nil, nil
+	}
+
+	return GetTrackingRef(upstream.Merge.Ref, remote)
 }
 
 // SetRemoteUpstreamForRefSpec set upstream for given RefSpec, remote name and branch ref. It uses given RepoStateWriter

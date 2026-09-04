@@ -177,7 +177,7 @@ func testPatchBasedMergingResultsOnly[T interface{}](
 	baseRoot, leftRoot, rightRoot *tree.Node,
 	expectedPatches []expectedPatch[T],
 ) {
-	serializer := message.NewProllyMapSerializer(keyDesc, ns.Pool())
+	serializer := message.NewProllyMapSerializer(keyDesc, keyDesc, ns.Pool())
 	traditionalMergeRoot, err := traditionalThreeWayMerge(ctx, ns, leftRoot, rightRoot, baseRoot, collide, false, false, keyDesc, serializer)
 	patchBasedMergeRoot, _, err := tree.ThreeWayMerge(ctx, ns, leftRoot, rightRoot, baseRoot, collide, keyDesc, serializer)
 	require.NoError(t, err)
@@ -244,7 +244,7 @@ func testPatchBasedMerging[T interface{}](t *testing.T, ctx context.Context, ns 
 		// In order to apply the patches, we need to wrap them in a new tree.PatchIter
 		patchIter := slicePatchIter{slice: actualPatches}
 
-		serializer := message.NewProllyMapSerializer(keyDesc, ns.Pool())
+		serializer := message.NewProllyMapSerializer(keyDesc, keyDesc, ns.Pool())
 		// verify that this is equivalent to a traditional merge.
 		traditionalMergeRoot, err := traditionalThreeWayMerge(ctx, ns, leftRoot, rightRoot, baseRoot, collide, false, false, keyDesc, serializer)
 		mergedRoot, err := tree.ApplyPatches(ctx, ns, leftRoot, keyDesc, serializer, &patchIter)

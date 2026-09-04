@@ -72,9 +72,10 @@ func TestScheduleLoop(t *testing.T) {
 		require.Equal(t, 4, len(kv.templates))
 		require.Equal(t, 2, len(sc.Stats.stats))
 		stat := sc.Stats.stats[tableIndexesKey{"mydb", "main", "ab", ""}]
-		require.Equal(t, 2, len(stat))
-		require.Equal(t, 7, len(stat[0].Hist))
+		require.Equal(t, 3, len(stat))
+		require.Equal(t, 0, len(stat[0].Hist))
 		require.Equal(t, 7, len(stat[1].Hist))
+		require.Equal(t, 7, len(stat[2].Hist))
 	}
 
 	require.NoError(t, executeQuery(ctx, sqlEng, "drop table xy"))
@@ -91,8 +92,9 @@ func TestScheduleLoop(t *testing.T) {
 	require.Equal(t, 2, len(kv.templates))
 	require.Equal(t, 1, len(sc.Stats.stats))
 	stat := sc.Stats.stats[tableIndexesKey{"mydb", "main", "ab", ""}]
-	require.Equal(t, 2, len(stat))
-	require.Equal(t, 7, len(stat[0].Hist))
+	require.Equal(t, 3, len(stat))
+	require.Equal(t, 0, len(stat[0].Hist))
+	require.Equal(t, 7, len(stat[1].Hist))
 	require.Equal(t, 7, len(stat[1].Hist))
 }
 
@@ -119,7 +121,7 @@ func TestAnalyze(t *testing.T) {
 	require.Equal(t, 2, len(kv.templates))
 	require.Equal(t, 1, len(sc.Stats.stats))
 	for _, tableStats := range sc.Stats.stats {
-		require.Equal(t, 2, len(tableStats))
+		require.Equal(t, 3, len(tableStats))
 	}
 }
 
@@ -169,8 +171,9 @@ func TestModifyColumn(t *testing.T) {
 		require.Equal(t, 4, len(kv.templates))
 		require.Equal(t, 1, len(sc.Stats.stats))
 		stat := sc.Stats.stats[tableIndexesKey{"mydb", "main", "xy", ""}]
-		require.Equal(t, 4, len(stat[0].Hist))
-		require.Equal(t, 2, len(stat[1].Hist))
+		require.Equal(t, 0, len(stat[0].Hist))
+		require.Equal(t, 4, len(stat[1].Hist))
+		require.Equal(t, 2, len(stat[2].Hist))
 
 		runBlock(t, ctx, sqlEng, "call dolt_stats_gc()")
 		require.Equal(t, 6, sc.Len())
@@ -193,8 +196,9 @@ func TestAddColumn(t *testing.T) {
 	require.Equal(t, 4, len(kv.templates)) // +2 for new schema
 	require.Equal(t, 1, len(sc.Stats.stats))
 	stat := sc.Stats.stats[tableIndexesKey{"mydb", "main", "xy", ""}]
-	require.Equal(t, 2, len(stat[0].Hist))
+	require.Equal(t, 0, len(stat[0].Hist))
 	require.Equal(t, 2, len(stat[1].Hist))
+	require.Equal(t, 2, len(stat[2].Hist))
 }
 
 func TestDropIndex(t *testing.T) {
@@ -213,8 +217,9 @@ func TestDropIndex(t *testing.T) {
 	require.Equal(t, 3, len(kv.templates))
 	require.Equal(t, 1, len(sc.Stats.stats))
 	stat := sc.Stats.stats[tableIndexesKey{"mydb", "main", "xy", ""}]
-	require.Equal(t, 1, len(stat))
-	require.Equal(t, 2, len(stat[0].Hist))
+	require.Equal(t, 2, len(stat))
+	require.Equal(t, 0, len(stat[0].Hist))
+	require.Equal(t, 2, len(stat[1].Hist))
 
 	runBlock(t, ctx, sqlEng, "call dolt_stats_gc()")
 
@@ -224,8 +229,9 @@ func TestDropIndex(t *testing.T) {
 	require.Equal(t, 1, len(kv.templates))
 	require.Equal(t, 1, len(sc.Stats.stats))
 	stat = sc.Stats.stats[tableIndexesKey{"mydb", "main", "xy", ""}]
-	require.Equal(t, 1, len(stat))
-	require.Equal(t, 2, len(stat[0].Hist))
+	require.Equal(t, 2, len(stat))
+	require.Equal(t, 0, len(stat[0].Hist))
+	require.Equal(t, 2, len(stat[1].Hist))
 }
 
 func TestDropTable(t *testing.T) {
@@ -246,8 +252,9 @@ func TestDropTable(t *testing.T) {
 	require.Equal(t, 3, len(kv.templates))
 	require.Equal(t, 1, len(sc.Stats.stats))
 	stat := sc.Stats.stats[tableIndexesKey{"mydb", "main", "ab", ""}]
-	require.Equal(t, 1, len(stat))
-	require.Equal(t, 1, len(stat[0].Hist))
+	require.Equal(t, 2, len(stat))
+	require.Equal(t, 0, len(stat[0].Hist))
+	require.Equal(t, 1, len(stat[1].Hist))
 
 	runBlock(t, ctx, sqlEng, "call dolt_stats_gc()")
 
@@ -257,8 +264,9 @@ func TestDropTable(t *testing.T) {
 	require.Equal(t, 1, len(kv.templates))
 	require.Equal(t, 1, len(sc.Stats.stats))
 	stat = sc.Stats.stats[tableIndexesKey{"mydb", "main", "ab", ""}]
-	require.Equal(t, 1, len(stat))
-	require.Equal(t, 1, len(stat[0].Hist))
+	require.Equal(t, 2, len(stat))
+	require.Equal(t, 0, len(stat[0].Hist))
+	require.Equal(t, 1, len(stat[1].Hist))
 }
 
 func TestDeleteAboveBoundary(t *testing.T) {
@@ -279,7 +287,8 @@ func TestDeleteAboveBoundary(t *testing.T) {
 	require.Equal(t, 3, len(kv.templates)) // +1 for schema change
 	require.Equal(t, 1, len(sc.Stats.stats))
 	stat := sc.Stats.stats[tableIndexesKey{db: "mydb", branch: "main", table: "xy"}]
-	require.Equal(t, 2, len(stat[0].Hist))
+	require.Equal(t, 0, len(stat[0].Hist))
+	require.Equal(t, 2, len(stat[1].Hist))
 
 	runBlock(t, ctx, sqlEng, "call dolt_stats_gc()")
 
@@ -305,7 +314,8 @@ func TestDeleteBelowBoundary(t *testing.T) {
 	require.Equal(t, 3, len(kv.templates))
 	require.Equal(t, 1, len(sc.Stats.stats))
 	stat := sc.Stats.stats[tableIndexesKey{db: "mydb", branch: "main", table: "xy"}]
-	require.Equal(t, 1, len(stat[0].Hist))
+	require.Equal(t, 0, len(stat[0].Hist))
+	require.Equal(t, 1, len(stat[1].Hist))
 
 	runBlock(t, ctx, sqlEng, "call dolt_stats_gc()")
 
@@ -331,7 +341,8 @@ func TestDeleteOnBoundary(t *testing.T) {
 	require.Equal(t, 3, len(kv.templates)) // +1 schema change
 	require.Equal(t, 1, len(sc.Stats.stats))
 	stat := sc.Stats.stats[tableIndexesKey{db: "mydb", branch: "main", table: "xy"}]
-	require.Equal(t, 1, len(stat[0].Hist))
+	require.Equal(t, 0, len(stat[0].Hist))
+	require.Equal(t, 1, len(stat[1].Hist))
 
 	runBlock(t, ctx, sqlEng, "call dolt_stats_gc()")
 
@@ -360,7 +371,7 @@ func TestAddDropDatabases(t *testing.T) {
 		require.Equal(t, 3, len(kv.templates))
 		require.Equal(t, 2, len(sc.Stats.stats))
 		stat := sc.Stats.stats[tableIndexesKey{db: "otherdb", branch: "main", table: "t"}]
-		require.Equal(t, 1, len(stat))
+		require.Equal(t, 2, len(stat))
 	}
 
 	{
@@ -436,9 +447,9 @@ func TestBranches(t *testing.T) {
 		stat, ok = sc.Stats.stats[tableIndexesKey{"otherdb", "feat3", "t", ""}]
 		require.False(t, ok)
 		stat, ok = sc.Stats.stats[tableIndexesKey{"otherdb", "main", "t", ""}]
-		require.Equal(t, 1, len(stat))
-		stat = sc.Stats.stats[tableIndexesKey{"thirddb", "main", "s", ""}]
 		require.Equal(t, 2, len(stat))
+		stat = sc.Stats.stats[tableIndexesKey{"thirddb", "main", "s", ""}]
+		require.Equal(t, 3, len(stat))
 
 		runBlock(t, ctx, sqlEng,
 			"use mydb",
@@ -464,15 +475,15 @@ func TestBranches(t *testing.T) {
 
 		stat, ok = sc.Stats.stats[tableIndexesKey{"mydb", "feat1", "xy", ""}]
 		require.True(t, ok)
-		require.Equal(t, 2, len(stat))
+		require.Equal(t, 3, len(stat))
 		stat, ok = sc.Stats.stats[tableIndexesKey{"otherdb", "feat2", "t", ""}]
 		require.True(t, ok)
-		require.Equal(t, 1, len(stat))
+		require.Equal(t, 2, len(stat))
 		stat, ok = sc.Stats.stats[tableIndexesKey{"otherdb", "feat3", "t", ""}]
 		require.False(t, ok)
 		stat, ok = sc.Stats.stats[tableIndexesKey{"thirddb", "feat1", "s", ""}]
 		require.True(t, ok)
-		require.Equal(t, 1, len(stat))
+		require.Equal(t, 2, len(stat))
 
 		// mydb: 4 shared
 		// otherdb: 1 + 1
@@ -778,7 +789,7 @@ func defaultSetupDetail(t *testing.T, threads *sql.BackgroundThreads, memOnly bo
 	require.Equal(t, 2, len(kv.templates))
 	require.Equal(t, 1, len(sc.Stats.stats))
 	for _, tableStats := range sc.Stats.stats {
-		require.Equal(t, 2, len(tableStats))
+		require.Equal(t, 3, len(tableStats))
 	}
 
 	switch s := sc.kv.(type) {
@@ -792,7 +803,7 @@ func defaultSetupDetail(t *testing.T, threads *sql.BackgroundThreads, memOnly bo
 	require.Equal(t, 2, len(kv.templates))
 	require.Equal(t, 1, len(sc.Stats.stats))
 	for _, tableStats := range sc.Stats.stats {
-		require.Equal(t, 2, len(tableStats))
+		require.Equal(t, 3, len(tableStats))
 	}
 
 	return ctx, sqlEng, sc

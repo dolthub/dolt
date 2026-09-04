@@ -199,11 +199,20 @@ func (db *database) Close() error {
 	return db.ValueStore.Close()
 }
 
-func (db *database) SetHead(ctx context.Context, ds Dataset, newHeadAddr hash.Hash, workingSetPath string) (Dataset, error) {
-	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error { return db.doSetHead(ctx, ds, newHeadAddr, workingSetPath) })
+// Precondition validates a pending update to the dataset map before it's
+// finalized. It receives the current |datasets| and the |targetID| being
+// written, and returning an error aborts the update.
+//
+// It runs on each write attempt, before the database's compare-and-swap,
+// re-validating against the latest datasets when a concurrent
+// write forces a retry.
+type Precondition func(ctx context.Context, datasets prolly.AddressMap, targetID string) error
+
+func (db *database) SetHead(ctx context.Context, ds Dataset, newHeadAddr hash.Hash, workingSetPath string, preconditions ...Precondition) (Dataset, error) {
+	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error { return db.doSetHead(ctx, ds, newHeadAddr, workingSetPath, preconditions) })
 }
 
-func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash, workingSetPath string) error {
+func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash, workingSetPath string, preconditions []Precondition) error {
 	newHead, err := db.readHead(ctx, addr)
 	if err != nil {
 		return err
@@ -254,6 +263,12 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash, w
 	}
 
 	return db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
+		for _, check := range preconditions {
+			if err := check(ctx, am, ds.ID()); err != nil {
+				return prolly.AddressMap{}, err
+			}
+		}
+
 		curr, err := am.Get(ctx, ds.ID())
 		if err != nil {
 			return prolly.AddressMap{}, err
@@ -499,17 +514,28 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 	return err
 }
 
+// BuildNewCommit creates a new commit for the dataset with the value and options given. An ordinary commit must
+// have the current dataset head among its parents. An amend commit must name the current dataset head in
+// [CommitOptions.AmendedCommit]. A force commit skips head validation.
 func (db *database) BuildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (*Commit, error) {
-	if !opts.Amend {
-		headAddr, ok := ds.MaybeHeadAddr()
-		if ok {
-			if len(opts.Parents) == 0 {
-				opts.Parents = []hash.Hash{headAddr}
-			} else {
-				if !hasParentHash(opts, headAddr) {
-					return nil, ErrMergeNeeded
-				}
-			}
+	if opts.Force && !opts.AmendedCommit.IsEmpty() {
+		return nil, errors.New("datas: the Force and AmendedCommit commit options are mutually exclusive")
+	}
+	headAddr, hasHead := ds.MaybeHeadAddr()
+	if !opts.AmendedCommit.IsEmpty() {
+		if !hasHead {
+			return nil, fmt.Errorf("cannot amend head of dataset '%s': dataset has no head: %w",
+				ds.ID(), ErrMergeNeeded)
+		}
+		if headAddr != opts.AmendedCommit {
+			return nil, fmt.Errorf("cannot amend head of dataset '%s': is at %s but expected %s: %w",
+				ds.ID(), headAddr, opts.AmendedCommit, ErrMergeNeeded)
+		}
+	} else if hasHead && !opts.Force {
+		if len(opts.Parents) == 0 {
+			opts.Parents = []hash.Hash{headAddr}
+		} else if !hasParentHash(opts, headAddr) {
+			return nil, ErrMergeNeeded
 		}
 	}
 
@@ -733,7 +759,7 @@ func (db *database) CommitWithWorkingSet(
 
 	// Prepend the current head hash to the list of parents if one was provided. This is only necessary if parents were
 	// provided because we fill it in automatically in buildNewCommit otherwise.
-	if len(opts.Parents) > 0 && !opts.Amend {
+	if len(opts.Parents) > 0 && opts.AmendedCommit.IsEmpty() && !opts.Force {
 		headHash, ok := commitDS.MaybeHeadAddr()
 		if ok {
 			if !hasParentHash(opts, headHash) {

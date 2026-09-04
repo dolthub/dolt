@@ -45,16 +45,16 @@ func init() {
 		DoltGCFeatureFlag = false
 	}
 	if choice := os.Getenv(dconfig.EnvGCSafepointControllerChoice); choice != "" {
-		if choice == "session_aware" {
-			UseSessionAwareSafepointController = true
-		} else if choice != "kill_connections" {
-			panic("Invalid value for " + dconfig.EnvGCSafepointControllerChoice + ". must be session_aware or kill_connections")
+		if choice == "kill_connections" {
+			UseSessionAwareSafepointController = false
+		} else if choice != "session_aware" {
+			panic("Invalid value for " + dconfig.EnvGCSafepointControllerChoice + ": " + choice + ". Must be session_aware or kill_connections")
 		}
 	}
 }
 
 var DoltGCFeatureFlag = true
-var UseSessionAwareSafepointController = false
+var UseSessionAwareSafepointController = true
 
 // doltGC is the stored procedure to run online garbage collection on a database.
 func doltGC(ctx *sql.Context, args ...string) (sql.RowIter, error) {
@@ -158,8 +158,10 @@ func (sc killConnectionsSafepointController) EstablishPostFinalizeSafepoint(ctx 
 	if err != nil {
 		return fmt.Errorf("%w: still saw these connections in the process list: %v", err, unkilled)
 	}
+	doltSession := dsess.DSessFromSess(sc.callCtx.Session)
+	doltSession.NotifyTransactionEnd()
 	sc.callCtx.Session.SetTransaction(nil)
-	dsess.DSessFromSess(sc.callCtx.Session).SetValidateErr(ErrServerPerformedGC)
+	doltSession.SetValidateErr(ErrServerPerformedGC)
 	return nil
 }
 

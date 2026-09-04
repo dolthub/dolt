@@ -357,7 +357,7 @@ func debugFormat(ctx context.Context, m *MutableMap) (string, error) {
 type ProllyFlusher struct{}
 
 func (f ProllyFlusher) GetDefaultSerializer(ctx context.Context, mut *GenericMutableMap[Map, tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc]]) message.Serializer {
-	return message.NewProllyMapSerializer(mut.valDesc, mut.NodeStore().Pool())
+	return message.NewProllyMapSerializer(mut.keyDesc, mut.valDesc, mut.NodeStore().Pool())
 }
 
 func (f ProllyFlusher) Map(ctx context.Context, mut *GenericMutableMap[Map, tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc]]) (Map, error) {
@@ -376,7 +376,7 @@ func (f ProllyFlusher) Map(ctx context.Context, mut *GenericMutableMap[Map, tree
 var _ MutableMapFlusher[Map, tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc]] = ProllyFlusher{}
 
 func (f ProllyFlusher) ApplyMutations(ctx context.Context, m *GenericMutableMap[Map, tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc]]) (tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc], error) {
-	serializer := message.NewProllyMapSerializer(m.valDesc, m.NodeStore().Pool())
+	serializer := message.NewProllyMapSerializer(m.keyDesc, m.valDesc, m.NodeStore().Pool())
 	return f.ApplyMutationsWithSerializer(ctx, serializer, m)
 }
 

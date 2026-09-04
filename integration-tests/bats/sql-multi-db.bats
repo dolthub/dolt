@@ -36,6 +36,23 @@ seed_repos_with_tables_with_use_statements() {
     [[ "$output" =~ "$EXPECTED" ]] || false
 }
 
+@test "sql-multi-db: dolt sql ignores an in-progress database directory" {
+    touch repo2/.dolt_safe_to_ignore
+
+    run dolt --data-dir ./ sql -r csv -q "SHOW DATABASES"
+    [ "$status" -eq 0 ]
+    # Match database rows exactly: the skip warning line also mentions repo2's path.
+    echo "$output" | grep -qx "repo1" || false
+    ! ( echo "$output" | grep -qx "repo2" ) || false
+
+    run dolt --data-dir ./ sql -r csv -q "SELECT COUNT(*) FROM information_schema.schemata"
+    [ "$status" -eq 0 ]
+    # information_schema and repo1: the ignored repo2 is not counted.
+    echo "$output" | grep -qx "2" || false
+
+    [ -d repo2 ]
+}
+
 @test "sql-multi-db: sql use statement and table accessibility" {
     seed_repos_with_tables_with_use_statements
 
@@ -111,4 +128,29 @@ seed_repos_with_tables_with_use_statements() {
     dolt --data-dir ./subremotes sql -b -q "
         USE repo2;
         call dolt_fetch();" -r csv
+}
+
+@test "sql-multi-db: duplicate database directories are skipped with a warning and outer database is preserved" {
+    mkdir dupdb
+    (
+        cd dupdb
+        dolt init
+        dolt sql -q "CREATE TABLE outer_tbl (pk int primary key);"
+
+        mkdir dupdb
+        (
+            cd dupdb
+            dolt init
+            dolt sql -q "CREATE TABLE inner_tbl (pk int primary key);"
+        )
+
+        run dolt sql -r csv -q "SHOW DATABASES; SHOW TABLES;"
+        [ "$status" -eq 0 ]
+        [[ "$output" =~ "skipping duplicate database directory" ]] || false
+        [[ "$output" =~ "database=dupdb" ]] || false
+        [[ "$output" =~ "existing_database=dupdb" ]] || false
+
+        [[ "$output" =~ "outer_tbl" ]] || false
+        [[ ! "$output" =~ "inner_tbl" ]] || false
+    )
 }

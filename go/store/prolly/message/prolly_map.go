@@ -40,12 +40,13 @@ const (
 
 var prollyMapFileID = []byte(serial.ProllyTreeNodeFileID)
 
-func NewProllyMapSerializer(valueDesc *val.TupleDesc, pool pool.BuffPool) ProllyMapSerializer {
-	return ProllyMapSerializer{valDesc: valueDesc, pool: pool}
+func NewProllyMapSerializer(keyDesc, valueDesc *val.TupleDesc, pool pool.BuffPool) ProllyMapSerializer {
+	return ProllyMapSerializer{keyDesc: keyDesc, valDesc: valueDesc, pool: pool}
 }
 
 type ProllyMapSerializer struct {
 	pool    pool.BuffPool
+	keyDesc *val.TupleDesc
 	valDesc *val.TupleDesc
 }
 
@@ -56,10 +57,11 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 		keyTups, keyOffs fb.UOffsetT
 		valTups, valOffs fb.UOffsetT
 		valAddrOffs      fb.UOffsetT
+		keyAddrOffs      fb.UOffsetT
 		refArr, cardArr  fb.UOffsetT
 	)
 
-	keySz, valSz, bufSz := estimateProllyMapSize(keys, values, subtrees, s.valDesc.AddressFieldCount())
+	keySz, valSz, bufSz := estimateProllyMapSize(keys, values, subtrees, s.keyDesc.AddressFieldCount()+s.valDesc.AddressFieldCount())
 	b := getFlatbufferBuilder(s.pool, bufSz)
 
 	// serialize keys and offStart
@@ -67,11 +69,16 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 	serial.ProllyTreeNodeStartKeyOffsetsVector(b, len(keys)+1)
 	keyOffs = writeItemOffsets(b, keys, keySz)
 
-	if level == 0 {
+	isLeafNode := level == 0
+	if isLeafNode {
 		// serialize value tuples for leaf nodes
 		valTups = writeItemBytes(b, values, valSz)
 		serial.ProllyTreeNodeStartValueOffsetsVector(b, len(values)+1)
 		valOffs = writeItemOffsets(b, values, valSz)
+
+		// serialize offStart of chunk addresses within |keyTups|
+		keyAddrOffs = s.writeKeyAddressOffsets(b, keys, keySz)
+
 		// serialize offStart of chunk addresses within |valTups|
 		if s.valDesc.AddressFieldCount() > 0 {
 			addressFields := countAddresses(values, s.valDesc)
@@ -80,17 +87,21 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 				valAddrOffs = writeAddressOffsets(b, values, valSz, s.valDesc)
 			}
 		}
+
 	} else {
 		// serialize child refs and subtree counts for internal nodes
 		refArr = writeItemBytes(b, values, valSz)
 		cardArr = writeCountArray(b, subtrees)
+
+		// internal nodes can also have address references in their keys
+		keyAddrOffs = s.writeKeyAddressOffsets(b, keys, keySz)
 	}
 
 	// populate the node's vtable
 	serial.ProllyTreeNodeStart(b)
 	serial.ProllyTreeNodeAddKeyItems(b, keyTups)
 	serial.ProllyTreeNodeAddKeyOffsets(b, keyOffs)
-	if level == 0 {
+	if isLeafNode {
 		serial.ProllyTreeNodeAddValueItems(b, valTups)
 		serial.ProllyTreeNodeAddValueOffsets(b, valOffs)
 		serial.ProllyTreeNodeAddTreeCount(b, uint64(len(keys)))
@@ -100,11 +111,27 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 		serial.ProllyTreeNodeAddSubtreeCounts(b, cardArr)
 		serial.ProllyTreeNodeAddTreeCount(b, sumSubtrees(subtrees))
 	}
+	serial.ProllyTreeNodeAddKeyAddressOffsets(b, keyAddrOffs)
 	serial.ProllyTreeNodeAddKeyType(b, serial.ItemTypeTupleFormatAlpha)
 	serial.ProllyTreeNodeAddValueType(b, serial.ItemTypeTupleFormatAlpha)
 	serial.ProllyTreeNodeAddTreeLevel(b, uint8(level))
 
 	return serial.FinishMessage(b, serial.ProllyTreeNodeEnd(b), prollyMapFileID)
+}
+
+// writeKeyAddressOffsets serializes the offsets of the chunk addresses embedded in |keys| (eg key
+// tuples containing out-of-band adaptive values), returning 0 if there are none.
+// Note that 0 values for an offset are automatically ignored by the flatbuffer builder.
+func (s ProllyMapSerializer) writeKeyAddressOffsets(b *fb.Builder, keys [][]byte, keySz int) fb.UOffsetT {
+	if s.keyDesc.AddressFieldCount() == 0 {
+		return 0
+	}
+	keyAddressFields := countAddresses(keys, s.keyDesc)
+	if keyAddressFields == 0 {
+		return 0
+	}
+	serial.ProllyTreeNodeStartKeyAddressOffsetsVector(b, keyAddressFields)
+	return writeAddressOffsets(b, keys, keySz, s.keyDesc)
 }
 
 func getProllyMapKeysAndValues(msg serial.Message) (keys, values *ItemAccess, level, count uint16, err error) {
@@ -161,6 +188,17 @@ func walkProllyMapAddresses(ctx context.Context, msg serial.Message, cb func(ctx
 		}
 	}
 	assertFalse((arr != nil) && (arr2 != nil), "cannot WalkAddresses for ProllyTreeNode with both AddressArray and ValueAddressOffsets")
+
+	cnt = pm.KeyAddressOffsetsLength()
+	arr3 := pm.KeyItemsBytes()
+	for i := 0; i < cnt; i++ {
+		o := pm.KeyAddressOffsets(i)
+		addr := hash.New(arr3[o : o+addrSize])
+		if err := cb(ctx, addr); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -210,8 +248,9 @@ func getProllyMapSubtrees(msg serial.Message) ([]uint64, error) {
 }
 
 // estimateProllyMapSize returns the exact Size of the tuple vectors for keys and values,
-// and an estimate of the overall Size of the final flatbuffer.
-func estimateProllyMapSize(keys, values [][]byte, subtrees []uint64, valAddrsCnt int) (int, int, int) {
+// and an estimate of the overall Size of the final flatbuffer. |addrsCnt| is the combined
+// address field count of the key and value descriptors.
+func estimateProllyMapSize(keys, values [][]byte, subtrees []uint64, addrsCnt int) (int, int, int) {
 	var keySz, valSz, bufSz int
 	for i := range keys {
 		keySz += len(keys[i])
@@ -233,7 +272,7 @@ func estimateProllyMapSize(keys, values [][]byte, subtrees []uint64, valAddrsCnt
 	bufSz += 8 + 1 + 1 + 1               // metadata
 	bufSz += 72                          // vtable (approx)
 	bufSz += 100                         // padding?
-	bufSz += valAddrsCnt * len(values) * 2
+	bufSz += addrsCnt * len(values) * 2
 	bufSz += serial.MessagePrefixSz
 
 	return keySz, valSz, bufSz

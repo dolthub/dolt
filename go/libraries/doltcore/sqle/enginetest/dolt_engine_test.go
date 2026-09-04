@@ -46,7 +46,7 @@ import (
 const SkipPreparedsCount = 83
 
 func TestQueries(t *testing.T) {
-	h := newDoltHarness(t)
+	h := newDoltServerTestHarness(t)
 	defer h.Close()
 	enginetest.TestQueries(t, h)
 }
@@ -1301,6 +1301,16 @@ func TestDoltRebasePrepared(t *testing.T) {
 	RunDoltRebasePreparedTests(t, h)
 }
 
+func TestDoltSquashHistory(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltSquashHistoryTests(t, h)
+}
+
+func TestDoltSquashHistoryPrepared(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltSquashHistoryPreparedTests(t, h)
+}
+
 func TestDoltRevert(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunDoltRevertTests(t, h)
@@ -1354,7 +1364,6 @@ func TestDoltReset(t *testing.T) {
 }
 
 func TestDoltGC(t *testing.T) {
-	t.SkipNow()
 	for _, script := range DoltGC {
 		func() {
 			h := newDoltHarness(t)
@@ -1738,7 +1747,7 @@ func TestDoltCommitPrepared(t *testing.T) {
 }
 
 func TestQueriesPrepared(t *testing.T) {
-	h := newDoltHarness(t)
+	h := newDoltEnginetestHarness(t)
 	defer h.Close()
 	enginetest.TestQueriesPrepared(t, h)
 }

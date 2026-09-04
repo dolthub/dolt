@@ -1170,6 +1170,28 @@ func RunDoltResetTest(t *testing.T, h DoltEnginetestHarness) {
 	}
 }
 
+func RunDoltSquashHistoryTests(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range DoltSquashHistoryScriptTests {
+		func() {
+			h := h.NewHarness(t)
+			defer h.Close()
+			h.SkipSetupCommit()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func RunDoltSquashHistoryPreparedTests(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range DoltSquashHistoryScriptTests {
+		func() {
+			h := h.NewHarness(t)
+			defer h.Close()
+			h.SkipSetupCommit()
+			enginetest.TestScriptPrepared(t, h, script)
+		}()
+	}
+}
+
 func RunDoltCheckoutTests(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range DoltCheckoutScripts {
 		func() {

@@ -162,9 +162,9 @@ func BuildSqlEngineQueryist(ctx context.Context, cwdFS filesys.Filesys, mrEnv *e
 		dataDirCfgExists, isDir := cwdFS.Exists(dataDirCfg)
 		currDirExists := dataDirCfgExists && isDir
 
-		// Error if both CWD/../.doltfcfg and dataDir/.doltcfg exist because it's unclear which to use.
+		// Error if both CWD/../.doltcfg and dataDir/.doltcfg exist because it's unclear which to use.
 		if currDirExists && parentDirExists {
-			p1, err := cwdFS.Abs(cfgDirPath)
+			p1, err := cwdFS.Abs(dataDirCfg)
 			if err != nil {
 				return nil, errhand.VerboseErrorFromError(err)
 			}
@@ -301,7 +301,8 @@ func newLateBindingEngine(
 
 			authResponse := buildAuthResponse(salt, config.ServerPass)
 
-			err := passwordValidate(rawDb, salt, dbUser, authResponse)
+			// This engine runs in-process for the CLI, so the client really is local.
+			err := passwordValidate(rawDb, salt, dbUser, authResponse, config.ServerHost)
 			if err != nil {
 				se.Close()
 				return res, err
@@ -470,11 +471,17 @@ func getTimestampColAsUint64(col interface{}) (uint64, error) {
 	}
 }
 
-// passwordValidate validates the password for the given user. This is a helper function around ValidateHash. Returns
-// nil if the user is authenticated, an error otherwise.
-func passwordValidate(rawDb *mysql_db.MySQLDb, salt []byte, user string, authResponse []byte) error {
-	// The port is meaningless here. It's going to be stripped in the ValidateHash function
-	addr, _ := net.ResolveTCPAddr("tcp", "localhost:3306")
+// passwordValidate validates the password for the given user, connecting from |host|. This is a helper function
+// around ValidateHash. Returns nil if the user is authenticated, an error otherwise.
+//
+// Accounts are scoped to the host pattern they are created for, so |host| must be the host of the client these
+// credentials came from.
+func passwordValidate(rawDb *mysql_db.MySQLDb, salt []byte, user string, authResponse []byte, host string) error {
+	// The port is meaningless here. It's going to be stripped in the ValidateHash function.
+	addr, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(host, "0"))
+	if err != nil {
+		return fmt.Errorf("unable to resolve host %s for user %s: %w", host, user, err)
+	}
 
 	authenticated, err := rawDb.ValidateHash(salt, user, authResponse, addr)
 	if err != nil {
@@ -521,14 +528,15 @@ func buildAuthResponse(salt []byte, password string) []byte {
 	return shaPwd
 }
 
-func ValidatePasswordWithAuthResponse(rawDb *mysql_db.MySQLDb, user, password string) error {
+// ValidatePasswordWithAuthResponse validates |password| for |user| as a client connecting from |host|.
+func ValidatePasswordWithAuthResponse(rawDb *mysql_db.MySQLDb, user, password, host string) error {
 	salt, err := mysql.NewSalt()
 	if err != nil {
 		return err
 	}
 
 	authResponse := buildAuthResponse(salt, password)
-	return passwordValidate(rawDb, salt, user, authResponse)
+	return passwordValidate(rawDb, salt, user, authResponse, host)
 }
 
 // GetDoltStatus retrieves the status of the current working set of changes in the working set, and returns two

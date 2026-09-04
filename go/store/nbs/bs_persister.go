@@ -355,6 +355,10 @@ func (bsTRA *bsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off
 }
 
 func newBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
+	if shouldSpool(bs) {
+		return newSpooledBSArchiveChunkSource(ctx, bs, name, q, stats)
+	}
+
 	rc, sz, _, err := bs.Get(ctx, name.String()+ArchiveFileSuffix, blobstore.NewBlobRange(-int64(archiveFooterSize), 0))
 	if err != nil {
 		return nil, err
@@ -371,10 +375,14 @@ func newBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore, name h
 	if err != nil {
 		return emptyChunkSource{}, err
 	}
-	return &archiveChunkSource{aRdr: aRdr, refs: noopRefCounter{}}, nil
+	return &archiveChunkSource{aRdr: aRdr, refs: noopRefCounter{}, blockSize: s3BlockSize}, nil
 }
 
 func newBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
+	if shouldSpool(bs) {
+		return newSpooledBSTableChunkSource(ctx, bs, name, chunkCount, q, stats)
+	}
+
 	index, err := loadTableIndex(ctx, stats, chunkCount, q, func(p []byte) error {
 		rc, _, _, err := bs.Get(ctx, name.String(), blobstore.NewBlobRange(-int64(len(p)), 0))
 		if err != nil {

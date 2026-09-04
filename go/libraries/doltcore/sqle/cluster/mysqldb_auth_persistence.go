@@ -1,0 +1,42 @@
+// Copyright 2026 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package cluster
+
+import (
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/mysql_db"
+)
+
+// mysqlDbReplicaPersister applies a replicated payload of serialized users and grants to the engine's
+// mysql_db.MySQLDb instance and persists it locally.
+type mysqlDbReplicaPersister struct {
+	mysqlDb *mysql_db.MySQLDb
+}
+
+var _ ReplicaAuthPersister = mysqlDbReplicaPersister{}
+
+// SaveData implements ReplicaAuthPersister. The overwrite replaces this server's
+// users and grants with the primary's. This server's ephemeral users, such as the
+// account the CLI connects with, are never part of a payload and are left in place.
+func (p mysqlDbReplicaPersister) SaveData(ctx *sql.Context, contents []byte) error {
+	ed := p.mysqlDb.Editor()
+	defer ed.Close()
+	err := p.mysqlDb.OverwriteUsersAndGrantData(ctx, ed, contents)
+	if err != nil {
+		return err
+	}
+
+	return p.mysqlDb.Persist(ctx, ed)
+}

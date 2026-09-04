@@ -55,7 +55,7 @@ func CreateWorkspaceOnDB(ctx context.Context, ddb *doltdb.DoltDB, name, startPoi
 		return err
 	}
 	if hasRef {
-		return ErrAlreadyExists
+		return &doltdb.ExistingRefError{Ref: workRef}
 	}
 
 	cs, err := doltdb.NewCommitSpec(startPoint)

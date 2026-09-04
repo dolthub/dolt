@@ -46,6 +46,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/creds"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory/grpcreresolve"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
@@ -75,6 +76,24 @@ type databaseDropReplication struct {
 	ctx    context.Context
 	cancel func()
 	wg     *sync.WaitGroup
+
+	dbname string
+	// replicas has one entry per replication client that the drop is being
+	// replicated to, in the same order as |Controller.replicationClients| at
+	// the time the drop was initiated. Its contents are fixed at creation time
+	// and each entry's |done| channel is closed by exactly one
+	// replicateDropDatabase goroutine.
+	replicas []*dropDatabaseReplica
+}
+
+// dropDatabaseReplica tracks whether an outstanding DROP DATABASE has been
+// successfully replicated to a single standby.
+type dropDatabaseReplica struct {
+	remote    string
+	remoteUrl string
+	// done is closed once the drop has been successfully replicated to this
+	// standby.
+	done chan struct{}
 }
 
 type SqlContextFactory func(ctx context.Context) (*sql.Context, error)
@@ -101,8 +120,10 @@ type Controller struct {
 
 	role Role
 
-	mysqlDb          *mysql_db.MySQLDb
-	mysqlDbPersister *replicatingMySQLDbPersister
+	// replicaAuthPersister applies auth payloads replicated from a primary when this server is a standby.
+	replicaAuthPersister ReplicaAuthPersister
+
+	authDbPersister *replicatingAuthDbPersister
 
 	branchControlController *branch_control.Controller
 	bcReplication           *branchControlReplication
@@ -110,7 +131,7 @@ type Controller struct {
 	lgr *logrus.Logger
 
 	replicationClients []*replicationServiceClient
-	mysqlDbReplicas    []*mysqlDbReplica
+	authDbReplicas     []*authDbReplica
 	commithooks        []*commithook
 
 	priv ed25519.PrivateKey
@@ -199,18 +220,18 @@ func NewController(lgr *logrus.Logger, cfg servercfg.ClusterConfig, pCfg config.
 	if err != nil {
 		return nil, err
 	}
-	ret.mysqlDbReplicas = make([]*mysqlDbReplica, len(ret.replicationClients))
-	for i := range ret.mysqlDbReplicas {
+	ret.authDbReplicas = make([]*authDbReplica, len(ret.replicationClients))
+	for i := range ret.authDbReplicas {
 		bo := backoff.NewExponentialBackOff()
 		bo.InitialInterval = time.Second
 		bo.MaxInterval = time.Minute
 		bo.MaxElapsedTime = 0
-		ret.mysqlDbReplicas[i] = &mysqlDbReplica{
+		ret.authDbReplicas[i] = &authDbReplica{
 			lgr:     lgr.WithFields(logrus.Fields{}),
 			client:  ret.replicationClients[i],
 			backoff: bo,
 		}
-		ret.mysqlDbReplicas[i].cond = sync.NewCond(&ret.mysqlDbReplicas[i].mu)
+		ret.authDbReplicas[i].cond = sync.NewCond(&ret.authDbReplicas[i].mu)
 	}
 
 	ret.outstandingDropDatabases = make(map[string]*databaseDropReplication)
@@ -221,7 +242,7 @@ func NewController(lgr *logrus.Logger, cfg servercfg.ClusterConfig, pCfg config.
 func (c *Controller) Run() {
 	var wg sync.WaitGroup
 	wg.Go(c.jwks.Run)
-	wg.Go(c.mysqlDbPersister.Run)
+	wg.Go(c.authDbPersister.Run)
 	wg.Go(c.bcReplication.Run)
 	wg.Wait()
 	for _, client := range c.replicationClients {
@@ -231,7 +252,7 @@ func (c *Controller) Run() {
 
 func (c *Controller) GracefulStop() error {
 	c.jwks.GracefulStop()
-	c.mysqlDbPersister.GracefulStop()
+	c.authDbPersister.GracefulStop()
 	c.bcReplication.GracefulStop()
 	return nil
 }
@@ -363,7 +384,39 @@ func (c *Controller) DropDatabaseHook() func(*sql.Context, string) {
 	return c.dropDatabaseHook
 }
 
-func (c *Controller) dropDatabaseHook(_ *sql.Context, dbname string) {
+func (c *Controller) dropDatabaseHook(sqlCtx *sql.Context, dbname string) {
+	// Start the per-replica calls and snapshot the state under lock.
+	state := c.startDropDatabaseReplication(dbname)
+	if state == nil {
+		return
+	}
+
+	// Participate in ReplicationStatusController, if ack writes
+	// timeout is set.
+	var rsc doltdb.ReplicationStatusController
+	rsc.Wait = make([]func(context.Context) error, len(state.replicas))
+	rsc.NotifyWaitFailed = make([]func(), len(state.replicas))
+	for i, r := range state.replicas {
+		done := r.done
+		rsc.Wait[i] = func(ctx context.Context) error {
+			select {
+			case <-done:
+				return nil
+			case <-ctx.Done():
+				return context.Cause(ctx)
+			}
+		}
+		rsc.NotifyWaitFailed[i] = func() {}
+	}
+	dsess.WaitForReplicationController(sqlCtx, rsc)
+}
+
+// startDropDatabaseReplication kicks off background replication of
+// the drop to every standby if we are the primary. It returns the
+// tracking state (whose replicas' done channels are closed as each
+// standby acknowledges the drop), or nil if we are not the primary
+// and there is nothing to replicate.
+func (c *Controller) startDropDatabaseReplication(dbname string) *databaseDropReplication {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -383,7 +436,7 @@ func (c *Controller) dropDatabaseHook(_ *sql.Context, dbname string) {
 	c.commithooks = c.commithooks[:j]
 
 	if c.role != RolePrimary {
-		return
+		return nil
 	}
 
 	// If we are the primary, we will replicate the drop to our standby replicas.
@@ -392,15 +445,39 @@ func (c *Controller) dropDatabaseHook(_ *sql.Context, dbname string) {
 	wg := &sync.WaitGroup{}
 	wg.Add(len(c.replicationClients))
 	state := &databaseDropReplication{
-		ctx:    ctx,
-		cancel: cancel,
-		wg:     wg,
+		ctx:      ctx,
+		cancel:   cancel,
+		wg:       wg,
+		dbname:   dbname,
+		replicas: make([]*dropDatabaseReplica, len(c.replicationClients)),
+	}
+	for i, client := range c.replicationClients {
+		state.replicas[i] = &dropDatabaseReplica{
+			remote:    client.remote,
+			remoteUrl: client.httpUrl,
+			done:      make(chan struct{}),
+		}
 	}
 	c.outstandingDropDatabases[dbname] = state
 
-	for _, client := range c.replicationClients {
-		go c.replicateDropDatabase(state, client, dbname)
+	for i, client := range c.replicationClients {
+		go c.replicateDropDatabase(state, state.replicas[i].done, client, dbname)
 	}
+
+	// Once the drop has settled at every replica (successfully replicated,
+	// determined it will never replicate, or cancelled), stop tracking it so
+	// that outstandingDropDatabases does not grow without bound and completed
+	// or abandoned drops do not gate future graceful transitions.
+	go func() {
+		wg.Wait()
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		if c.outstandingDropDatabases[dbname] == state {
+			delete(c.outstandingDropDatabases, dbname)
+		}
+	}()
+
+	return state
 }
 
 func (c *Controller) cancelDropDatabaseReplication(dbname string) {
@@ -409,10 +486,11 @@ func (c *Controller) cancelDropDatabaseReplication(dbname string) {
 	if s := c.outstandingDropDatabases[dbname]; s != nil {
 		s.cancel()
 		s.wg.Wait()
+		delete(c.outstandingDropDatabases, dbname)
 	}
 }
 
-func (c *Controller) replicateDropDatabase(s *databaseDropReplication, client *replicationServiceClient, dbname string) {
+func (c *Controller) replicateDropDatabase(s *databaseDropReplication, doneCh chan struct{}, client *replicationServiceClient, dbname string) {
 	defer s.wg.Done()
 	bo := backoff.NewExponentialBackOff()
 	bo.InitialInterval = time.Millisecond
@@ -429,6 +507,7 @@ func (c *Controller) replicateDropDatabase(s *databaseDropReplication, client *r
 		cancel()
 		if err == nil {
 			c.lgr.Tracef("successfully replicated drop of [%s] to %s", dbname, client.remote)
+			close(doneCh)
 			return
 		}
 		if status.Code(err) == codes.FailedPrecondition {
@@ -628,7 +707,7 @@ func (c *Controller) setRoleAndEpoch(role string, epoch int, opts roleTransition
 		for _, h := range c.commithooks {
 			h.setRole(c.role)
 		}
-		c.mysqlDbPersister.setRole(c.role)
+		c.authDbPersister.setRole(c.role)
 		c.bcReplication.setRole(c.role)
 	}
 	_ = c.persistVariables()
@@ -715,17 +794,44 @@ func (c *Controller) RemoteSrvServerArgs(ctxFactory func(context.Context) (*sql.
 	return args, nil
 }
 
-func (c *Controller) HookMySQLDbPersister(persister MySQLDbPersister, mysqlDb *mysql_db.MySQLDb) MySQLDbPersister {
+func (c *Controller) HookMySQLDbPersister(persister AuthDbPersister, mysqlDb *mysql_db.MySQLDb) AuthDbPersister {
 	if c != nil {
-		c.mysqlDb = mysqlDb
-		c.mysqlDbPersister = &replicatingMySQLDbPersister{
+		c.replicaAuthPersister = mysqlDbReplicaPersister{mysqlDb}
+		c.authDbPersister = &replicatingAuthDbPersister{
 			base:     persister,
-			replicas: c.mysqlDbReplicas,
+			replicas: c.authDbReplicas,
 		}
-		c.mysqlDbPersister.setRole(c.role)
-		persister = c.mysqlDbPersister
+		c.authDbPersister.setRole(c.role)
+		persister = c.authDbPersister
 	}
 	return persister
+}
+
+// ReplicatingAuthPersister is an AuthDbPersister whose Persist replicates the
+// payload to cluster standbys and blocks until they ack, subject to
+// dolt_cluster_ack_writes_timeout_secs.
+type ReplicatingAuthPersister interface {
+	AuthDbPersister
+	// SendToReplicas is the same as Persist, but does not block until standbys ack.
+	// Waiters installed on |rsc|, and can then be waited on by the caller with dsess.WaitForReplicationController.
+	SendToReplicas(ctx *sql.Context, data []byte, rsc *doltdb.ReplicationStatusController) error
+}
+
+// SetAuthReplicator sets the auth replicator for this controller.
+//
+// Dolt installs a users-and-grants (mysql.db) implementation via HookMySQLDbPersister during engine construction;
+// applications with their own auth store (e.g. Doltgres's auth.db) override this default later, but before replication begins.
+func (c *Controller) SetAuthReplicator(base AuthDbPersister, replicaPersister ReplicaAuthPersister) ReplicatingAuthPersister {
+	if c == nil {
+		return nil
+	}
+	c.replicaAuthPersister = replicaPersister
+	c.authDbPersister = &replicatingAuthDbPersister{
+		base:     base,
+		replicas: c.authDbReplicas,
+	}
+	c.authDbPersister.setRole(c.role)
+	return c.authDbPersister
 }
 
 func (c *Controller) HookBranchControlPersistence(controller *branch_control.Controller, fs filesys.Filesys) {
@@ -768,7 +874,7 @@ func (c *Controller) HookBranchControlPersistence(controller *branch_control.Con
 func (c *Controller) RegisterGrpcServices(ctxFactory func(context.Context) (*sql.Context, error), srv *grpc.Server) {
 	replicationapi.RegisterReplicationServiceServer(srv, &replicationServiceServer{
 		ctxFactory:           ctxFactory,
-		mysqlDb:              c.mysqlDb,
+		authPersistence:      c.replicaAuthPersister,
 		branchControl:        c.branchControlController,
 		branchControlFilesys: c.branchControlFilesys,
 		dropDatabase:         c.dropDatabase,
@@ -803,11 +909,22 @@ func (c *Controller) gracefulTransitionToStandby(saveConnID, minCaughtUpStandbys
 	c.setProviderIsStandby(true)
 	c.killRunningQueries(saveConnID)
 
-	var hookStates, mysqlStates, bcStates []graceTransitionResult
+	// Snapshot the outstanding DROP DATABASE replications while we hold c.mu.
+	// A standby which has not yet acknowledged a pending drop is not fully
+	// caught up, so we must wait on these along with the other replication
+	// subsystems below. We snapshot here, rather than in the goroutine, so that
+	// only waitForHooksToReplicate touches c.mu concurrently.
+	dropStates := make([]*databaseDropReplication, 0, len(c.outstandingDropDatabases))
+	for _, s := range c.outstandingDropDatabases {
+		dropStates = append(dropStates, s)
+	}
+
+	var hookStates, mysqlStates, bcStates, dropStatesRes []graceTransitionResult
 	var hookErr, mysqlErr, bcErr error
 
-	// We concurrently wait for hooks, mysql and dolt_branch_control replication to true up.
-	// If we encounter any errors while doing this, we fail the graceful transition.
+	// We concurrently wait for hooks, mysql, dolt_branch_control and pending
+	// DROP DATABASE replication to true up. If we encounter any errors while
+	// doing this, we fail the graceful transition.
 
 	var wg sync.WaitGroup
 	wg.Go(func() {
@@ -816,10 +933,13 @@ func (c *Controller) gracefulTransitionToStandby(saveConnID, minCaughtUpStandbys
 		hookStates, hookErr = c.waitForHooksToReplicate(waitForHooksToReplicateTimeout)
 	})
 	wg.Go(func() {
-		mysqlStates, mysqlErr = c.mysqlDbPersister.waitForReplication(waitForHooksToReplicateTimeout)
+		mysqlStates, mysqlErr = c.authDbPersister.waitForReplication(waitForHooksToReplicateTimeout)
 	})
 	wg.Go(func() {
 		bcStates, bcErr = c.bcReplication.waitForReplication(waitForHooksToReplicateTimeout)
+	})
+	wg.Go(func() {
+		dropStatesRes = waitForDropDatabaseReplication(dropStates, waitForHooksToReplicateTimeout)
 	})
 	wg.Wait()
 
@@ -833,10 +953,11 @@ func (c *Controller) gracefulTransitionToStandby(saveConnID, minCaughtUpStandbys
 		return nil, errors.New("cluster/controller: failed to transition to standby; the set of replicated databases changed during the transition.")
 	}
 
-	res := make([]graceTransitionResult, 0, len(hookStates)+len(mysqlStates)+len(bcStates))
+	res := make([]graceTransitionResult, 0, len(hookStates)+len(mysqlStates)+len(bcStates)+len(dropStatesRes))
 	res = append(res, hookStates...)
 	res = append(res, mysqlStates...)
 	res = append(res, bcStates...)
+	res = append(res, dropStatesRes...)
 
 	if minCaughtUpStandbys == 0 {
 		for _, state := range res {
@@ -884,6 +1005,51 @@ func allCaughtUp(res []graceTransitionResult) bool {
 		}
 	}
 	return true
+}
+
+// waitForDropDatabaseReplication waits, up to |timeout|, for the supplied
+// outstanding DROP DATABASE replications to be acknowledged by each of their
+// standby replicas. It returns one graceTransitionResult per (dropped database,
+// standby) pair, with caughtUp set only if that standby acknowledged the drop
+// before the timeout.
+//
+// Unlike the other waitForReplication routines, this does not touch c.mu: the
+// caller snapshots the outstanding drops while holding c.mu, and each replica's
+// done channel is closed independently by its replicateDropDatabase goroutine.
+func waitForDropDatabaseReplication(states []*databaseDropReplication, timeout time.Duration) []graceTransitionResult {
+	if len(states) == 0 {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	var res []graceTransitionResult
+	for _, s := range states {
+		for _, r := range s.replicas {
+			caughtUp := false
+			select {
+			case <-r.done:
+				caughtUp = true
+			case <-ctx.Done():
+				// The deadline elapsed. The drop may have completed right as we
+				// timed out, so check once more without blocking. ctx.Done()
+				// stays closed, so later iterations fall through immediately.
+				select {
+				case <-r.done:
+					caughtUp = true
+				default:
+				}
+			}
+			res = append(res, graceTransitionResult{
+				database:  s.dbname,
+				remote:    r.remote,
+				remoteUrl: r.remoteUrl,
+				caughtUp:  caughtUp,
+			})
+		}
+	}
+	return res
 }
 
 // The order of operations is:
@@ -975,10 +1141,6 @@ func (c *Controller) refreshAutoIncrementTrackersForSessionDatabases() error {
 			// Non-versioned DBs don't participate in AUTO_INCREMENT global state
 			continue
 		}
-		ai, err := gsp.GetGlobalState().AutoIncrementTracker(sqlCtx)
-		if err != nil {
-			return fmt.Errorf("cluster/controller: auto-inc refresh: %s: tracker: %w", name, err)
-		}
 
 		// Get working set roots only
 		state, ok, err := sess.LookupDbState(sqlCtx, name)
@@ -989,8 +1151,8 @@ func (c *Controller) refreshAutoIncrementTrackersForSessionDatabases() error {
 			// Not loaded in session; defer to lazy initialization on first use
 			continue
 		}
-		if err := ai.InitWithRoots(sqlCtx, state.WorkingSet()); err != nil {
-			return fmt.Errorf("cluster/controller: auto-inc refresh: %s: init: %w", name, err)
+		if err := gsp.GetGlobalState().MergeRoots(sqlCtx, state.WorkingSet()); err != nil {
+			return fmt.Errorf("cluster/controller: auto-inc refresh: %s: merge: %w", name, err)
 		}
 	}
 	return nil
@@ -1196,8 +1358,10 @@ type replicationServiceClient struct {
 	client replicationapi.ReplicationServiceClient
 	closer func() error
 	remote string
-	url    string
-	tls    bool
+	// httpUrl is the Dolt remote URL (e.g. http://53.78.2.1:3832) matching this
+	// client's endpoint. It is derived from the same remote URL as the gRPC dial
+	// target, so it stays correct regardless of the grpc target's scheme/format.
+	httpUrl string
 }
 
 func (c *Controller) replicationServiceDialOptions() []grpc.DialOption {
@@ -1213,6 +1377,9 @@ func (c *Controller) replicationServiceDialOptions() []grpc.DialOption {
 
 	ret = append(ret, grpc.WithPerRPCCredentials(c.grpcCreds))
 
+	// Use the failure-driven re-resolving load-balancing policy.
+	ret = append(ret, grpc.WithDefaultServiceConfig(grpcreresolve.ServiceConfigJSON))
+
 	return ret
 }
 
@@ -1224,30 +1391,23 @@ func (c *Controller) replicationServiceClients(ctx context.Context) ([]*replicat
 		if err != nil {
 			return nil, fmt.Errorf("could not parse remote url template [%s] for remote %s: %w", r.RemoteURLTemplate(), r.Name(), err)
 		}
-		grpcTarget := "dns:" + url.Hostname() + ":" + url.Port()
-		cc, err := grpc.DialContext(ctx, grpcTarget, c.replicationServiceDialOptions()...)
+		hostPort := url.Hostname() + ":" + url.Port()
+		grpcTarget := "dns:///" + hostPort
+		cc, err := grpc.NewClient(grpcTarget, c.replicationServiceDialOptions()...)
 		if err != nil {
 			return nil, fmt.Errorf("could not dial grpc endpoint [%s] for remote %s: %w", grpcTarget, r.Name(), err)
 		}
+		httpScheme := "http://"
+		if c.tlsCfg != nil {
+			httpScheme = "https://"
+		}
 		client := replicationapi.NewReplicationServiceClient(cc)
 		ret = append(ret, &replicationServiceClient{
-			remote: r.Name(),
-			url:    grpcTarget,
-			tls:    c.tlsCfg != nil,
-			client: client,
-			closer: cc.Close,
+			remote:  r.Name(),
+			httpUrl: httpScheme + hostPort,
+			client:  client,
+			closer:  cc.Close,
 		})
 	}
 	return ret, nil
-}
-
-// Generally r.url is a gRPC dial endpoint and will be something like "dns:53.78.2.1:3832", or something like that.
-//
-// We want to match these endpoints up with Dolt remotes URLs, which will typically be something like http://53.78.2.1:3832.
-func (r *replicationServiceClient) httpUrl() string {
-	prefix := "https://"
-	if !r.tls {
-		prefix = "http://"
-	}
-	return prefix + strings.TrimPrefix(r.url, "dns:")
 }

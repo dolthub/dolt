@@ -72,7 +72,7 @@ If a server is running for the database in question, then the query will go thro
 	},
 }
 
-var ErrMultipleDoltCfgDirs = errors.NewKind("multiple .doltcfg directories detected: '%s' and '%s'; pass one of the directories using option --doltcfg-dir")
+var ErrMultipleDoltCfgDirs = errors.NewKind("multiple .doltcfg directories detected: '%s' and '%s'; specify which directory to use with --doltcfg-dir or remove the redundant directory")
 
 const (
 	QueryFlag             = "query"
@@ -1154,7 +1154,8 @@ func processParsedQuery(ctx *sql.Context, query string, qryist cli.Queryist, sql
 		}
 		return nil, nil, nil, nil
 	case *sqlparser.Insert, *sqlparser.Update, *sqlparser.Delete,
-		*sqlparser.AlterTable, *sqlparser.DDL, *sqlparser.Set:
+		*sqlparser.AlterTable, *sqlparser.DDL, *sqlparser.Set,
+		*sqlparser.Execute:
 		sch, ri, _, err := qryist.Query(ctx, query)
 		if err != nil {
 			return nil, nil, nil, err

@@ -15,5 +15,7 @@
 package dolt_builder
 
 const (
-	GithubDolt = "https://github.com/dolthub/dolt.git"
+	GithubDolt               = "https://github.com/dolthub/dolt.git"
+	envDoltRepositoryURL     = "DOLT_REPOSITORY_URL"
+	envRepositoryAccessToken = "REPO_ACCESS_TOKEN"
 )

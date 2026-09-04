@@ -15,6 +15,7 @@
 package prolly
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -22,6 +23,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -60,6 +62,61 @@ var vectorTestKeyDesc = val.NewTupleDescriptor(
 	val.Type{Enc: val.BytesAdaptiveEnc, Nullable: true},
 )
 
+var extendedTestKeyDesc = val.NewTupleDescriptorWithArgs(
+	val.TupleDescriptorArgs{Handlers: []val.TupleTypeHandler{binaryVectorTypeHandler{}}},
+	val.Type{Enc: val.ExtendedEnc, Nullable: true},
+)
+
+var extendedAdaptiveTestKeyDesc = val.NewTupleDescriptorWithArgs(
+	val.TupleDescriptorArgs{Handlers: []val.TupleTypeHandler{val.NewAdaptiveTypeHandler(ns, binaryVectorTypeHandler{})}, ValueStore: ns},
+	val.Type{Enc: val.ExtendedAdaptiveEnc, Nullable: true},
+)
+
+// binaryVectorTypeHandler is a minimal val.TupleTypeHandler that stores vectors in the binary vector encoding, standing
+// in for a Doltgres vector.
+type binaryVectorTypeHandler struct{}
+
+var _ val.TupleTypeHandler = binaryVectorTypeHandler{}
+
+// SerializedCompare implements the interface val.TupleTypeHandler.
+func (binaryVectorTypeHandler) SerializedCompare(ctx context.Context, v1 []byte, v2 []byte) (int, error) {
+	return bytes.Compare(v1, v2), nil
+}
+
+// SerializeValue implements the interface val.TupleTypeHandler.
+func (binaryVectorTypeHandler) SerializeValue(ctx context.Context, v any) ([]byte, error) {
+	floats, err := sql.ConvertToVector(ctx, v)
+	if err != nil {
+		return nil, err
+	}
+	return sql.EncodeVector(floats), nil
+}
+
+// DeserializeValue implements the interface val.TupleTypeHandler.
+func (binaryVectorTypeHandler) DeserializeValue(ctx context.Context, v []byte) (any, error) {
+	return sql.DecodeVector(v)
+}
+
+// FormatValue implements the interface val.TupleTypeHandler.
+func (handler binaryVectorTypeHandler) FormatValue(v any) (string, error) {
+	floats, err := handler.DeserializeValue(context.Background(), v.([]byte))
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%v", floats), nil
+}
+
+// SerializationCompatible implements the interface val.TupleTypeHandler.
+func (binaryVectorTypeHandler) SerializationCompatible(other val.TupleTypeHandler) bool {
+	_, ok := other.(binaryVectorTypeHandler)
+	return ok
+}
+
+// ConvertSerialized implements the interface val.TupleTypeHandler.
+func (binaryVectorTypeHandler) ConvertSerialized(ctx context.Context, other val.TupleTypeHandler, v []byte) ([]byte, error) {
+	return v, nil
+}
+
 var testValDesc = val.NewTupleDescriptor(
 	val.Type{Enc: val.Int64Enc, Nullable: true},
 )
@@ -90,10 +147,12 @@ func createAndValidateProximityMap(t *testing.T, ctx context.Context, ns tree.No
 }
 
 func createProximityMap(t *testing.T, ctx context.Context, ns tree.NodeStore, keyDesc *val.TupleDesc, keyBytes [][]byte, valueDesc *val.TupleDesc, valueBytes [][]byte, logChunkSize uint8) ProximityMap {
+	return createProximityMapWithDistanceType(t, ctx, ns, vector.DistanceL2Squared{}, keyDesc, keyBytes, valueDesc, valueBytes, logChunkSize)
+}
+
+func createProximityMapWithDistanceType(t *testing.T, ctx context.Context, ns tree.NodeStore, distanceType vector.DistanceType, keyDesc *val.TupleDesc, keyBytes [][]byte, valueDesc *val.TupleDesc, valueBytes [][]byte, logChunkSize uint8) ProximityMap {
 	count := len(keyBytes)
 	require.Equal(t, count, len(valueBytes))
-
-	distanceType := vector.DistanceL2Squared{}
 
 	builder, err := NewProximityMapBuilder(ctx, ns, distanceType, keyDesc, valueDesc, logChunkSize)
 	require.NoError(t, err)
@@ -120,6 +179,10 @@ func validateProximityMap(t *testing.T, ctx context.Context, ns tree.NodeStore, 
 }
 
 func validateProximityMapSkipHistoryIndependenceCheck(t *testing.T, ctx context.Context, ns tree.NodeStore, m *ProximityMap, keyDesc, valDesc *val.TupleDesc, keys, values [][]byte) {
+	validateProximityMapWithDistanceType(t, ctx, ns, vector.DistanceL2Squared{}, m, keyDesc, valDesc, keys, values)
+}
+
+func validateProximityMapWithDistanceType(t *testing.T, ctx context.Context, ns tree.NodeStore, distanceType vector.DistanceType, m *ProximityMap, keyDesc, valDesc *val.TupleDesc, keys, values [][]byte) {
 	expectedSize := len(keys)
 	actualSize, err := m.Count()
 	require.NoError(t, err)
@@ -139,7 +202,7 @@ func validateProximityMapSkipHistoryIndependenceCheck(t *testing.T, ctx context.
 
 	// Check that the invariant holds: each vector is closer to its parent than any of its uncles.
 	err = tree.WalkNodes(ctx, m.tuples.Root, ns, func(ctx context.Context, nd *tree.Node) error {
-		validateProximityMapNode(t, ctx, ns, nd, vector.DistanceL2Squared{}, keyDesc, valDesc)
+		validateProximityMapNode(t, ctx, ns, nd, distanceType, keyDesc, valDesc)
 		return nil
 	})
 	require.NoError(t, err)
@@ -181,6 +244,11 @@ func validateProximityMapNode(t *testing.T, ctx context.Context, ns tree.NodeSto
 		require.NoError(t, err)
 		for childKeyIdx := 0; childKeyIdx < childNode.Count(); childKeyIdx++ {
 			childVectorKey := childNode.GetKey(childKeyIdx)
+			if bytes.Equal(childVectorKey, nd.GetKey(childIdx)) {
+				// A key that appears in an internal node is always placed under its own subtree, even if
+				// a non-metric distance function like inner product considers another key closer.
+				continue
+			}
 			childVector := vectorFromKey(t, keyDesc, childVectorKey)
 			minDistance := math.MaxFloat64
 			closestKeyIdx := -1
@@ -204,7 +272,7 @@ func encodeVector(t *testing.T, keyDesc *val.TupleDesc, vec ...float32) []byte {
 		res, err := json.Marshal(vec)
 		require.NoError(t, err)
 		return res
-	case val.BytesAdaptiveEnc:
+	case val.BytesAdaptiveEnc, val.ExtendedEnc, val.ExtendedAdaptiveEnc:
 		return sql.EncodeVector(vec)
 	default:
 		panic("unexpected encoding")
@@ -225,6 +293,13 @@ func decodeVector(t *testing.T, keyDesc *val.TupleDesc, valBytes []byte) []float
 		vectorValue, ok, err = val.GetBytesAdaptiveValue(ctx, ns, valBytes)
 		require.NoError(t, err)
 		require.True(t, ok)
+	case val.ExtendedEnc, val.ExtendedAdaptiveEnc:
+		vectorValue, err = keyDesc.Handlers[0].DeserializeValue(ctx, valBytes)
+		require.NoError(t, err)
+		if wrapper, ok := vectorValue.(*val.ExtendedValueWrapper); ok {
+			vectorValue, err = wrapper.UnwrapAny(ctx)
+			require.NoError(t, err)
+		}
 	default:
 		panic("unexpected encoding")
 	}
@@ -242,6 +317,11 @@ func putVector(t *testing.T, keyBuilder *val.TupleBuilder, v []byte) {
 	case val.BytesAdaptiveEnc:
 		err := keyBuilder.PutAdaptiveBytesFromInline(ctx, 0, v)
 		require.NoError(t, err)
+	case val.ExtendedEnc:
+		keyBuilder.PutExtended(0, v)
+	case val.ExtendedAdaptiveEnc:
+		err := keyBuilder.PutAdaptiveExtendedFromInline(ctx, 0, v)
+		require.NoError(t, err)
 	default:
 		panic("unexpected encoding")
 	}
@@ -253,6 +333,12 @@ func TestProximityMap(t *testing.T) {
 	})
 	t.Run("VECTOR vector encoding", func(t *testing.T) {
 		testProximityMapWithEncoding(t, vectorTestKeyDesc)
+	})
+	t.Run("extended vector encoding", func(t *testing.T) {
+		testProximityMapWithEncoding(t, extendedTestKeyDesc)
+	})
+	t.Run("extended adaptive vector encoding", func(t *testing.T) {
+		testProximityMapWithEncoding(t, extendedAdaptiveTestKeyDesc)
 	})
 }
 
@@ -269,6 +355,7 @@ func testProximityMapWithEncoding(t *testing.T, keyDesc *val.TupleDesc) {
 	testIncrementalInserts(t, keyDesc)
 	testIncrementalUpdates(t, keyDesc)
 	testIncrementalDeletes(t, keyDesc)
+	testNullKeys(t, keyDesc)
 	testNonlexographicKey(t, keyDesc)
 	testManyDimensions(t, keyDesc)
 }
@@ -316,6 +403,21 @@ func testDoubleEntryProximityMapGetExact(t *testing.T, keyDesc *val.TupleDesc) {
 			require.NoError(t, err)
 		}
 		require.Equal(t, matches, len(keys))
+
+		// An absent key produces a nil-pair callback from Get and false from Has, not the closest match
+		absentKeys := buildTuples(t, ctx, ns, pb, keyDesc, [][]interface{}{{encodeVector(t, keyDesc, 1.0, 1.0)}})
+		err := m.Get(ctx, absentKeys[0], func(foundKey val.Tuple, foundValue val.Tuple) error {
+			require.Nil(t, foundKey)
+			require.Nil(t, foundValue)
+			return nil
+		})
+		require.NoError(t, err)
+		ok, err := m.Has(ctx, absentKeys[0])
+		require.NoError(t, err)
+		require.False(t, ok)
+		ok, err = m.Has(ctx, keys[0])
+		require.NoError(t, err)
+		require.True(t, ok)
 	})
 }
 
@@ -601,6 +703,54 @@ func testIncrementalInserts(t *testing.T, keyDesc *val.TupleDesc) {
 	})
 }
 
+func testNullKeys(t *testing.T, keyDesc *val.TupleDesc) {
+	t.Run("null keys are not indexed", func(t *testing.T) {
+		ctx := context.Background()
+		ns, keyDesc := keyDescWithNodeStore(keyDesc)
+		pb := pool.NewBuffPool()
+		logChunkSize := uint8(1)
+		distanceType := vector.DistanceL2Squared{}
+		flusher := ProximityFlusher{logChunkSize: logChunkSize, distanceType: distanceType}
+
+		keyRows := [][]interface{}{
+			{encodeVector(t, keyDesc, 0.0, 1.0)},
+			{encodeVector(t, keyDesc, 3.0, 4.0)},
+		}
+		keys := buildTuples(t, ctx, ns, pb, keyDesc, keyRows)
+		valueRows := [][]interface{}{{int64(1)}, {int64(2)}}
+		values := buildTuples(t, ctx, ns, pb, testValDesc, valueRows)
+
+		m := createAndValidateProximityMap(t, ctx, ns, keyDesc, keys, testValDesc, values, logChunkSize)
+
+		nullKey := buildTuples(t, ctx, ns, pb, keyDesc, [][]interface{}{{nil}})[0]
+		nullValue := buildTuples(t, ctx, ns, pb, testValDesc, [][]interface{}{{int64(3)}})[0]
+
+		// Inserting a NULL key must be skipped, leaving the map unchanged
+		mutableMap := newProximityMutableMap(m)
+		require.NoError(t, mutableMap.Put(ctx, nullKey, nullValue))
+		newMap, err := flusher.Map(ctx, mutableMap)
+		require.NoError(t, err)
+		validateProximityMap(t, ctx, ns, &newMap, keyDesc, testValDesc, keys, values, logChunkSize)
+
+		// Deleting a NULL key that was never stored must be a no-op
+		mutableMap = newProximityMutableMap(newMap)
+		require.NoError(t, mutableMap.Delete(ctx, nullKey))
+		newMap, err = flusher.Map(ctx, mutableMap)
+		require.NoError(t, err)
+		validateProximityMap(t, ctx, ns, &newMap, keyDesc, testValDesc, keys, values, logChunkSize)
+
+		// A NULL key insert into an empty map must produce an empty map
+		empty := createProximityMap(t, ctx, ns, keyDesc, nil, testValDesc, nil, logChunkSize)
+		mutableMap = newProximityMutableMap(empty)
+		require.NoError(t, mutableMap.Put(ctx, nullKey, nullValue))
+		newMap, err = flusher.Map(ctx, mutableMap)
+		require.NoError(t, err)
+		count, err := newMap.Count()
+		require.NoError(t, err)
+		require.Equal(t, 0, count)
+	})
+}
+
 // keyDescWithNodeStore returns a new NodeStore and a TupleDesc based on the input that uses it.
 //
 // TODO: this is necessary for VECTOR encoding because the map mutator needs to be able to call Compare() on the
@@ -610,6 +760,7 @@ func keyDescWithNodeStore(keyDesc *val.TupleDesc) (tree.NodeStore, *val.TupleDes
 	ns := tree.NewTestNodeStore()
 	keyDesc = val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{
 		ValueStore: ns,
+		Handlers:   keyDesc.Handlers,
 	}, keyDesc.Types...)
 	return ns, keyDesc
 }
@@ -788,6 +939,19 @@ func testIncrementalDeletes(t *testing.T, keyDesc *val.TupleDesc) {
 	})
 }
 
+// vectorAndInt64KeyDesc returns a TupleDesc with `keyDesc`'s vector field (and its handler, if any) followed by an int64 field.
+func vectorAndInt64KeyDesc(keyDesc *val.TupleDesc) *val.TupleDesc {
+	var handlers []val.TupleTypeHandler
+	if keyDesc.Handlers != nil {
+		handlers = []val.TupleTypeHandler{keyDesc.Handlers[0], nil}
+	}
+	return val.NewTupleDescriptorWithArgs(
+		val.TupleDescriptorArgs{Handlers: handlers},
+		keyDesc.Types[0],
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+	)
+}
+
 // As part of the algorithm for building proximity maps, we store the map keys as bytestrings in a temporary table.
 // The sorting order of a key is not always the same as the lexographic ordering of these bytestrings.
 // This test makes sure that even when this is not the case we still generate correct output.
@@ -797,10 +961,7 @@ func testNonlexographicKey(t *testing.T, keyDesc *val.TupleDesc) {
 		ns := tree.NewTestNodeStore()
 		pb := pool.NewBuffPool()
 
-		testKeyDesc := val.NewTupleDescriptor(
-			keyDesc.Types[0],
-			val.Type{Enc: val.Int64Enc, Nullable: true},
-		)
+		testKeyDesc := vectorAndInt64KeyDesc(keyDesc)
 
 		valDesc := val.NewTupleDescriptor()
 
@@ -832,10 +993,7 @@ func testManyDimensions(t *testing.T, keyDesc *val.TupleDesc) {
 
 func testManyDimensionsHelper(ctx context.Context, t *testing.T, keyDesc *val.TupleDesc, ns tree.NodeStore, numRows int, dimensions int) {
 	pb := pool.NewBuffPool()
-	testKeyDesc := val.NewTupleDescriptor(
-		keyDesc.Types[0],
-		val.Type{Enc: val.Int64Enc, Nullable: true},
-	)
+	testKeyDesc := vectorAndInt64KeyDesc(keyDesc)
 
 	valDesc := val.NewTupleDescriptor()
 
@@ -870,7 +1028,7 @@ func makeManyDimensionalVector(encoding val.Encoding, dimensions int, seed int64
 		}
 		builder.WriteRune(']')
 		return builder.String()
-	case val.BytesAdaptiveEnc:
+	case val.BytesAdaptiveEnc, val.ExtendedEnc, val.ExtendedAdaptiveEnc:
 		result := make([]float32, dimensions)
 		for i := 0; i < dimensions; i++ {
 			result[i] = rng.Float32()
@@ -879,4 +1037,169 @@ func makeManyDimensionalVector(encoding val.Encoding, dimensions int, seed int64
 	default:
 		panic("unexpected encoding")
 	}
+}
+
+// requireGetClosest asserts that GetClosest returns the `limit` closest keys to `queryVector` in the same order as a
+// brute-force scan using `distanceType`. GetClosest is an approximate search, so on a multi-level map this is only
+// guaranteed when `limit` is at least the number of keys in the map.
+func requireGetClosest(t *testing.T, ctx context.Context, distanceType vector.DistanceType, m *ProximityMap, keyDesc *val.TupleDesc, keys, values [][]byte, queryVector []float32, limit int) {
+	type keyDistance struct {
+		index    int
+		distance float64
+	}
+	distances := make([]keyDistance, len(keys))
+	for i, key := range keys {
+		distance, err := distanceType.Eval(vectorFromKey(t, keyDesc, key), queryVector)
+		require.NoError(t, err)
+		distances[i] = keyDistance{i, distance}
+	}
+	sort.SliceStable(distances, func(a, b int) bool {
+		return distances[a].distance < distances[b].distance
+	})
+
+	mapIter, err := m.GetClosest(ctx, sql.EncodeVector(queryVector), limit)
+	require.NoError(t, err)
+	matches := 0
+	for {
+		k, v, err := mapIter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+		expected := distances[matches].index
+		require.Equal(t, val.Tuple(keys[expected]), k)
+		require.Equal(t, val.Tuple(values[expected]), v)
+		matches++
+	}
+	require.Equal(t, limit, matches)
+}
+
+func TestProximityMapDistanceTypes(t *testing.T) {
+	distanceTypes := []vector.DistanceType{
+		vector.DistanceL2Squared{},
+		vector.DistanceCosine{},
+		vector.DistanceInnerProduct{},
+		vector.DistanceL1{},
+	}
+	ctx := context.Background()
+	numRows := 40
+	dimensions := 8
+	logChunkSize := uint8(2)
+	queryVector := make([]float32, dimensions)
+	for i := range queryVector {
+		queryVector[i] = 0.5
+	}
+	rootHashes := make(map[hash.Hash]string)
+	for _, distanceType := range distanceTypes {
+		t.Run(distanceType.String(), func(t *testing.T) {
+			ns, keyDesc := keyDescWithNodeStore(vectorTestKeyDesc)
+			pb := pool.NewBuffPool()
+
+			keyRows := make([][]interface{}, numRows)
+			valueRows := make([][]interface{}, numRows)
+			for i := 0; i < numRows; i++ {
+				keyRows[i] = []interface{}{makeManyDimensionalVector(keyDesc.Types[0].Enc, dimensions, int64(i))}
+				valueRows[i] = []interface{}{int64(i)}
+			}
+			keys := buildTuples(t, ctx, ns, pb, keyDesc, keyRows)
+			values := buildTuples(t, ctx, ns, pb, testValDesc, valueRows)
+
+			m := createProximityMapWithDistanceType(t, ctx, ns, distanceType, keyDesc, keys, testValDesc, values, logChunkSize)
+			validateProximityMapWithDistanceType(t, ctx, ns, distanceType, &m, keyDesc, testValDesc, keys, values)
+			requireGetClosest(t, ctx, distanceType, &m, keyDesc, keys, values, queryVector, numRows)
+
+			// Maps built with different distance functions must arrange the same data differently
+			otherMetric, collision := rootHashes[m.HashOf()]
+			require.False(t, collision, "map built with %s has the same root hash as the map built with %s", distanceType.String(), otherMetric)
+			rootHashes[m.HashOf()] = distanceType.String()
+
+			// Insertion order must not affect the resulting map
+			reversedKeys := make([][]byte, numRows)
+			reversedValues := make([][]byte, numRows)
+			for i := 0; i < numRows; i++ {
+				reversedKeys[i] = keys[numRows-1-i]
+				reversedValues[i] = values[numRows-1-i]
+			}
+			m2 := createProximityMapWithDistanceType(t, ctx, ns, distanceType, keyDesc, reversedKeys, testValDesc, reversedValues, logChunkSize)
+			require.Equal(t, m.HashOf(), m2.HashOf())
+
+			// Mutating the map must preserve the distance function recorded in storage
+			extraRows := 8
+			extraKeyRows := make([][]interface{}, extraRows)
+			extraValueRows := make([][]interface{}, extraRows)
+			for i := 0; i < extraRows; i++ {
+				extraKeyRows[i] = []interface{}{makeManyDimensionalVector(keyDesc.Types[0].Enc, dimensions, int64(numRows+i))}
+				extraValueRows[i] = []interface{}{int64(numRows + i)}
+			}
+			extraKeys := buildTuples(t, ctx, ns, pb, keyDesc, extraKeyRows)
+			extraValues := buildTuples(t, ctx, ns, pb, testValDesc, extraValueRows)
+
+			mutableMap := newProximityMutableMap(m)
+			for i, key := range extraKeys {
+				err := mutableMap.Put(ctx, key, extraValues[i])
+				require.NoError(t, err)
+			}
+			newMap, err := mutableMap.Map(ctx)
+			require.NoError(t, err)
+			require.Equal(t, distanceType, newMap.tuples.DistanceType)
+
+			combinedKeys := append(append([][]byte{}, keys...), extraKeys...)
+			combinedValues := append(append([][]byte{}, values...), extraValues...)
+			validateProximityMapWithDistanceType(t, ctx, ns, distanceType, &newMap, keyDesc, testValDesc, combinedKeys, combinedValues)
+			requireGetClosest(t, ctx, distanceType, &newMap, keyDesc, combinedKeys, combinedValues, queryVector, numRows+extraRows)
+		})
+	}
+
+	t.Run("euclidean builds the same map as l2-squared", func(t *testing.T) {
+		ns, keyDesc := keyDescWithNodeStore(vectorTestKeyDesc)
+		pb := pool.NewBuffPool()
+
+		keyRows := make([][]interface{}, numRows)
+		valueRows := make([][]interface{}, numRows)
+		for i := 0; i < numRows; i++ {
+			keyRows[i] = []interface{}{makeManyDimensionalVector(keyDesc.Types[0].Enc, dimensions, int64(i))}
+			valueRows[i] = []interface{}{int64(i)}
+		}
+		keys := buildTuples(t, ctx, ns, pb, keyDesc, keyRows)
+		values := buildTuples(t, ctx, ns, pb, testValDesc, valueRows)
+
+		l2Map := createProximityMapWithDistanceType(t, ctx, ns, vector.DistanceL2Squared{}, keyDesc, keys, testValDesc, values, logChunkSize)
+		euclideanMap := createProximityMapWithDistanceType(t, ctx, ns, vector.DistanceEuclidean{}, keyDesc, keys, testValDesc, values, logChunkSize)
+		require.Equal(t, l2Map.HashOf(), euclideanMap.HashOf())
+	})
+}
+
+func TestProximityMapOutOfLineExtendedKeys(t *testing.T) {
+	ctx := context.Background()
+	ns := tree.NewTestNodeStore()
+	pb := pool.NewBuffPool()
+	keyDesc := val.NewTupleDescriptorWithArgs(
+		val.TupleDescriptorArgs{Handlers: []val.TupleTypeHandler{val.NewAdaptiveTypeHandler(ns, binaryVectorTypeHandler{})}, ValueStore: ns},
+		val.Type{Enc: val.ExtendedAdaptiveEnc, Nullable: true},
+	)
+
+	// 1024-dimension vectors exceed the tuple length target, forcing every key to be stored out-of-line
+	dimensions := 1024
+	numRows := 8
+	keyRows := make([][]interface{}, numRows)
+	valueRows := make([][]interface{}, numRows)
+	for i := 0; i < numRows; i++ {
+		keyRows[i] = []interface{}{makeManyDimensionalVector(val.ExtendedAdaptiveEnc, dimensions, int64(i))}
+		valueRows[i] = []interface{}{int64(i)}
+	}
+	keys := buildTuples(t, ctx, ns, pb, keyDesc, keyRows)
+	values := buildTuples(t, ctx, ns, pb, testValDesc, valueRows)
+	for _, key := range keys {
+		require.True(t, val.AdaptiveValue(keyDesc.GetField(0, key)).IsOutOfBand())
+	}
+
+	distanceType := vector.DistanceCosine{}
+	m := createProximityMapWithDistanceType(t, ctx, ns, distanceType, keyDesc, keys, testValDesc, values, 1)
+	validateProximityMapWithDistanceType(t, ctx, ns, distanceType, &m, keyDesc, testValDesc, keys, values)
+
+	queryVector := make([]float32, dimensions)
+	for i := range queryVector {
+		queryVector[i] = 0.5
+	}
+	requireGetClosest(t, ctx, distanceType, &m, keyDesc, keys, values, queryVector, numRows)
 }

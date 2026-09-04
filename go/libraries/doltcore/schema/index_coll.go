@@ -252,18 +252,19 @@ func validateColumnIndexable(c Column) error {
 
 func (ixc *indexCollectionImpl) UnsafeAddIndexByColTags(indexName string, tags []uint64, prefixLengths []uint16, props IndexProperties) (Index, error) {
 	index := &indexImpl{
-		indexColl:     ixc,
-		name:          indexName,
-		tags:          tags,
-		allTags:       combineAllTags(tags, ixc.pks),
-		isUnique:      props.IsUnique,
-		isSpatial:     props.IsSpatial,
-		isFullText:    props.IsFullText,
-		isVector:      props.IsVector,
-		isUserDefined: props.IsUserDefined,
-		comment:       props.Comment,
-		prefixLengths: prefixLengths,
-		fullTextProps: props.FullTextProperties,
+		indexColl:        ixc,
+		name:             indexName,
+		tags:             tags,
+		allTags:          combineAllTags(tags, ixc.pks),
+		isUnique:         props.IsUnique,
+		isSpatial:        props.IsSpatial,
+		isFullText:       props.IsFullText,
+		isVector:         props.IsVector,
+		isUserDefined:    props.IsUserDefined,
+		comment:          props.Comment,
+		prefixLengths:    prefixLengths,
+		fullTextProps:    props.FullTextProperties,
+		vectorProperties: props.VectorProperties,
 	}
 	ixc.indexes[strings.ToLower(indexName)] = index
 	for _, tag := range tags {
@@ -440,17 +441,18 @@ func (ixc *indexCollectionImpl) Merge(indexes ...Index) {
 	for _, index := range indexes {
 		if tags, ok := ixc.columnNamesToTags(index.ColumnNames()); ok && !ixc.Contains(index.Name()) {
 			newIndex := &indexImpl{
-				name:          index.Name(),
-				tags:          tags,
-				indexColl:     ixc,
-				isUnique:      index.IsUnique(),
-				isSpatial:     index.IsSpatial(),
-				isFullText:    index.IsFullText(),
-				isVector:      index.IsVector(),
-				isUserDefined: index.IsUserDefined(),
-				comment:       index.Comment(),
-				prefixLengths: index.PrefixLengths(),
-				fullTextProps: index.FullTextProperties(),
+				name:             index.Name(),
+				tags:             tags,
+				indexColl:        ixc,
+				isUnique:         index.IsUnique(),
+				isSpatial:        index.IsSpatial(),
+				isFullText:       index.IsFullText(),
+				isVector:         index.IsVector(),
+				isUserDefined:    index.IsUserDefined(),
+				comment:          index.Comment(),
+				prefixLengths:    index.PrefixLengths(),
+				fullTextProps:    index.FullTextProperties(),
+				vectorProperties: index.VectorProperties(),
 			}
 			ixc.AddIndex(newIndex)
 		}

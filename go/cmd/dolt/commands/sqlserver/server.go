@@ -89,6 +89,17 @@ type Config struct {
 
 	// ProviderFactory controls how the DatabaseProvider is instantiated
 	ProviderFactory sqle.ProviderFactory
+
+	// EngineInitializer, if non-nil, is invoked once the SqlEngine has been
+	// created, before the server begins accepting connections.
+	EngineInitializer EngineInitializer
+}
+
+// EngineInitializer performs one-time initialization of a SqlEngine during
+// server startup, after the engine is constructed but before the server
+// accepts any connections. Returning an error aborts server startup.
+type EngineInitializer interface {
+	InitializeEngine(ctx context.Context, engine *engine.SqlEngine) error
 }
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
@@ -208,18 +219,7 @@ func ConfigureServices(
 	}
 	controller.Register(AssertNoDatabasesInAccessModeReadOnly)
 
-	var localCreds *LocalCreds
-	InitServerLocalCreds := &svcs.AnonService{
-		InitF: func(context.Context) (err error) {
-			localCreds, err = persistServerLocalCreds(cfg.ServerConfig.Port(), cfg.DoltEnv)
-			return err
-		},
-		StopF: func(_ svcs.RunState) error {
-			RemoveLocalCreds(cfg.DoltEnv.FS)
-			return nil
-		},
-	}
-	controller.Register(InitServerLocalCreds)
+	localCreds := NewLocalCreds(cfg.ServerConfig.Port())
 
 	// Persist any system variables that have a non-deterministic default value (i.e. @@server_uuid)
 	// We only do this on sql-server startup initially since we want to keep the persisted server_uuid
@@ -377,6 +377,18 @@ func ConfigureServices(
 		},
 	}
 	controller.Register(InitSqlEngine)
+
+	// Run any application-provided engine initialization immediately after the
+	// engine itself is initialized. This runs during the controller's Init
+	// phase, so it completes before the server's accept loop starts running.
+	if cfg.EngineInitializer != nil {
+		RunEngineInitializer := &svcs.AnonService{
+			InitF: func(ctx context.Context) error {
+				return cfg.EngineInitializer.InitializeEngine(ctx, sqlEngine)
+			},
+		}
+		controller.Register(RunEngineInitializer)
+	}
 
 	// Closing the connections on shutdown attempts to prevent
 	// them from creating new work after we cancel their running
@@ -897,6 +909,16 @@ func ConfigureServices(
 		},
 	}
 	controller.Register(InitSQLServer)
+	InitServerLocalCreds := &svcs.AnonService{
+		InitF: func(context.Context) (err error) {
+			return WriteLocalCreds(cfg.DoltEnv.FS, localCreds)
+		},
+		StopF: func(_ svcs.RunState) error {
+			RemoveLocalCreds(cfg.DoltEnv.FS)
+			return nil
+		},
+	}
+	controller.Register(InitServerLocalCreds)
 
 	// Automatically restart binlog replication if replication was enabled when the server was last shut down
 	AutoStartBinlogReplica := &svcs.AnonService{
@@ -1055,15 +1077,6 @@ func (h *heartbeatService) Run(ctx context.Context) {
 
 var _ svcs.Service = &heartbeatService{}
 
-func persistServerLocalCreds(port int, dEnv *env.DoltEnv) (*LocalCreds, error) {
-	creds := NewLocalCreds(port)
-	err := WriteLocalCreds(dEnv.FS, creds)
-	if err != nil {
-		return nil, err
-	}
-	return creds, err
-}
-
 // remotesapiAuth facilitates the implementation remotesrv.AccessControl for the remotesapi server.
 type remotesapiAuth struct {
 	// ctxFactory is a function that returns a new sql.Context. This will create a new context every time it is called,
@@ -1084,17 +1097,19 @@ func (r *remotesapiAuth) ApiAuthenticate(ctx context.Context) (context.Context, 
 		return nil, err
 	}
 
-	err = commands.ValidatePasswordWithAuthResponse(r.rawDb, creds.Username, creds.Password)
-	if err != nil {
-		return nil, fmt.Errorf("API Authentication Failure: %v", err)
-	}
-
 	address := creds.Address
 	if strings.Index(address, ":") > 0 {
 		address, _, err = net.SplitHostPort(creds.Address)
 		if err != nil {
 			return nil, fmt.Errorf("Invalid Host string for authentication: %s", creds.Address)
 		}
+	}
+
+	// Validate against the account for the address the request came from, not a fixed one. The account this
+	// resolves to is the same one ApiAuthorize goes on to check privileges for.
+	err = commands.ValidatePasswordWithAuthResponse(r.rawDb, creds.Username, creds.Password, address)
+	if err != nil {
+		return nil, fmt.Errorf("API Authentication Failure: %v", err)
 	}
 
 	sqlCtx, err := r.ctxFactory(ctx)

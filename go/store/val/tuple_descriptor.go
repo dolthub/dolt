@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/cockroachdb/apd/v3"
+	"github.com/dolthub/go-mysql-server/sql/encodings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -529,14 +530,10 @@ func getGeomAdaptiveValue(ctx context.Context, vs ValueStore, val []byte) (any, 
 	}
 	if adaptiveValue.isInlined() {
 		bytes, err := adaptiveValue.getUnderlyingBytes(ctx, vs)
-		if err != nil {
-			return nil, false, err
-		}
-		return bytes, true, nil
-	} else {
-		gs, err := adaptiveValue.convertToGeometryStorage(ctx, vs)
-		return gs, true, err
+		return bytes, err == nil, err
 	}
+	gs, err := adaptiveValue.convertToGeometryStorage(ctx, vs)
+	return gs, err == nil, err
 }
 
 func (td *TupleDesc) GetHash128(i int, tup Tuple) (v []byte, ok bool) {
@@ -597,11 +594,10 @@ func GetBytesAdaptiveValue(ctx context.Context, vs ValueStore, val []byte) (inte
 	}
 	if adaptiveValue.isInlined() {
 		val, err := adaptiveValue.getUnderlyingBytes(ctx, vs)
-		return val, true, err
-	} else {
-		val, err := adaptiveValue.convertToByteArray(ctx, vs, nil)
-		return val, true, err
+		return val, err == nil, err
 	}
+	valBytes, err := adaptiveValue.convertToByteArray(ctx, vs, nil)
+	return valBytes, err == nil, err
 }
 
 // GetStringAdaptiveValue returns either a string or a StringWrapper, but Go doesn't allow us to use a single type for that.
@@ -613,11 +609,10 @@ func (td *TupleDesc) GetStringAdaptiveValue(ctx context.Context, i int, vs Value
 	}
 	if adaptiveValue.isInlined() {
 		val, err := adaptiveValue.getUnderlyingBytes(ctx, vs)
-		return string(val), true, err
-	} else {
-		val, err := adaptiveValue.convertToTextStorage(ctx, vs, nil)
-		return val, true, err
+		return encodings.BytesToString(val), err == nil, err
 	}
+	valText, err := adaptiveValue.convertToTextStorage(ctx, vs, nil)
+	return valText, err == nil, err
 }
 
 // GetJsonAdaptiveValue reads a JSON value from an adaptive-encoded field, returning a *JsonAdaptiveStorage
@@ -635,13 +630,10 @@ func GetJsonAdaptiveValue(ctx context.Context, vs ValueStore, field []byte) (any
 	}
 	if adaptiveValue.isInlined() {
 		bytes, err := adaptiveValue.getUnderlyingBytes(ctx, vs)
-		if err != nil {
-			return nil, false, err
-		}
-		return bytes, true, nil
+		return bytes, err == nil, err
 	}
 	gs, err := adaptiveValue.convertToJsonStorage(ctx, vs)
-	return gs, true, err
+	return gs, err == nil, err
 }
 
 func (td *TupleDesc) GetCommitAddr(i int, tup Tuple) (v hash.Hash, ok bool) {

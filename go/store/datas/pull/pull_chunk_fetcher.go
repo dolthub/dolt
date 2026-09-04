@@ -29,12 +29,17 @@ type GetManyer interface {
 }
 
 type ChunkFetcherable interface {
-	ChunkFetcher(ctx context.Context) nbs.ChunkFetcher
+	ChunkFetcher(ctx context.Context, recorder nbs.StatsRecorder) nbs.ChunkFetcher
 }
 
-func GetChunkFetcher(ctx context.Context, cs GetManyer) nbs.ChunkFetcher {
+// GetChunkFetcher returns a ChunkFetcher for |cs|. If |cs| is capable of
+// producing its own fetcher (e.g. a remote chunk store with range coalescing
+// and concurrent downloads), |recorder|, if non-nil, is threaded into it to
+// receive per-download statistics. The fallback PullChunkFetcher does no
+// ranged downloads, so |recorder| is unused in that case.
+func GetChunkFetcher(ctx context.Context, cs GetManyer, recorder nbs.StatsRecorder) nbs.ChunkFetcher {
 	if fable, ok := cs.(ChunkFetcherable); ok {
-		return fable.ChunkFetcher(ctx)
+		return fable.ChunkFetcher(ctx, recorder)
 	}
 	return NewPullChunkFetcher(cs)
 }

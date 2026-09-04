@@ -16,6 +16,7 @@ package nbs
 
 import (
 	"context"
+	"time"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -49,4 +50,32 @@ type ChunkFetcher interface {
 	Recv(context.Context) (ToChunker, error)
 
 	Close() error
+}
+
+// StatsRecorder is an optional sink, supplied by the caller that creates a
+// ChunkFetcher, which receives callbacks as the fetcher downloads byte ranges
+// from the underlying ChunkStore. It is defined here, in a package both the
+// puller (store/datas/pull) and the remote chunk store
+// (libraries/doltcore/remotestorage) depend on, so that a per-operation
+// recorder can be threaded into the fetcher without an import cycle.
+//
+// The |size| reported to these callbacks is the length of the (possibly
+// coalesced) byte range being downloaded, which includes any "dark" bytes
+// fetched between requested chunks as a result of range coalescing. This is
+// distinct from the number of decompressed chunk bytes ultimately delivered to
+// the caller.
+//
+// Implementations must be safe for concurrent use; callbacks fire from multiple
+// download goroutines.
+type StatsRecorder interface {
+	// RecordTimeToFirstByte is called once per download attempt, after the
+	// response headers for the range request have been received.
+	RecordTimeToFirstByte(retry int, size uint64, d time.Duration)
+	// RecordDownloadAttemptStart is called at the start of every download
+	// attempt for a range. |retry| is 0 for the first attempt and increments
+	// for each subsequent retry of the same range.
+	RecordDownloadAttemptStart(retry int, offset, size uint64)
+	// RecordDownloadComplete is called once per range, after the entire range
+	// has been successfully downloaded (across any retries).
+	RecordDownloadComplete(retry int, size uint64, d time.Duration)
 }

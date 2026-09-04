@@ -67,7 +67,19 @@ Valid configuration variables:
 
 	- remotes.default_port - sets default port for authenticating with doltremoteapi.
 
+	- remotesapi.credential_helper - sets a global credential helper for remotesapi requests. This option is ignored in repository local config.
+
 	- push.autoSetupRemote - if set to "true" assume --set-upstream on default push when no upstream tracking exists for the current branch.
+
+Credential helpers use the Bazel credential helper protocol. Dolt invokes the configured executable with the {{.EmphasisLeft}}get{{.EmphasisRight}} argument and sends the canonical remotesapi origin on stdin:
+
+	{"uri":"https://example.com:443"}
+
+The helper returns additive HTTP headers and, optionally, an RFC 3339 expiration time:
+
+	{"headers":{"Proxy-Authorization":["Bearer TOKEN"]},"expires":"2026-06-24T20:00:00Z"}
+
+Dolt caches headers until shortly before their expiration. Responses without an expiration are used once. The helper is responsible for returning credentials only for origins it trusts. It cannot replace Dolt's own Authorization header or transport-controlled headers.
 `,
 
 	Synopsis: []string{

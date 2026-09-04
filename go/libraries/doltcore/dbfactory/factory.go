@@ -30,6 +30,11 @@ const (
 	// AWSScheme
 	AWSScheme = "aws"
 
+	// S3Scheme is for generic S3-compatible stores (AWS S3, Cloudflare R2,
+	// MinIO, ...) using conditional PutObject for the manifest, with no
+	// DynamoDB dependency. See S3Factory.
+	S3Scheme = "s3"
+
 	// GSScheme
 	GSScheme = "gs"
 
@@ -81,6 +86,7 @@ type DBFactory interface {
 // from external packages.
 var DBFactories = map[string]DBFactory{
 	AWSScheme:      AWSFactory{},
+	S3Scheme:       S3Factory{},
 	OSSScheme:      OSSFactory{},
 	GSScheme:       GSFactory{},
 	AzScheme:       AzureDBFactory{},

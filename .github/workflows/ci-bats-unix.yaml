@@ -112,6 +112,12 @@ jobs:
           mvn clean install -DskipTests
           runtime_jar="$(pwd)"/target/parquet-cli-1.12.3-runtime.jar
           echo "runtime_jar=$runtime_jar" >> $GITHUB_OUTPUT
+      - name: Install MinIO
+        if: matrix.os == 'ubuntu-22.04'
+        working-directory: ./.ci_bin
+        run: |
+          curl -sSL -o minio https://dl.min.io/server/minio/release/linux-amd64/minio
+          chmod +x minio
       - name: Check expect
         run: expect -v
       - name: Test all Unix

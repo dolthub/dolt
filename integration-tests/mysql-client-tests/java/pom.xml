@@ -24,12 +24,12 @@
         <dependency>
             <groupId>org.mariadb.jdbc</groupId>
             <artifactId>mariadb-java-client</artifactId>
-            <version>3.5.3</version>
+            <version>3.5.9</version>
         </dependency>
         <dependency>
             <groupId>org.mariadb</groupId>
             <artifactId>r2dbc-mariadb</artifactId>
-            <version>1.2.2</version>
+            <version>1.4.1</version>
         </dependency>
     </dependencies>
 

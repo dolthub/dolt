@@ -51,6 +51,7 @@ func newAssumeRoleProcedure(controller *Controller) sql.ExternalStoredProcedureD
 			}
 			if res.changedRole {
 				// We transitioned, make sure we do not run anymore queries on this session.
+				dsess.DSessFromSess(ctx.Session).NotifyTransactionEnd()
 				ctx.Session.SetTransaction(nil)
 				dsess.DSessFromSess(ctx.Session).SetValidateErr(ErrServerTransitionedRolesErr)
 			}
@@ -98,6 +99,7 @@ func newTransitionToStandbyProcedure(controller *Controller) sql.ExternalStoredP
 			}
 			if res.changedRole {
 				// We transitioned, make sure we do not run anymore queries on this session.
+				dsess.DSessFromSess(ctx.Session).NotifyTransactionEnd()
 				ctx.Session.SetTransaction(nil)
 				dsess.DSessFromSess(ctx.Session).SetValidateErr(ErrServerTransitionedRolesErr)
 				rows := make([]sql.Row, len(res.gracefulTransitionResults))

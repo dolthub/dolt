@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"iter"
 	"sort"
 	"strings"
 
@@ -1418,3 +1419,33 @@ func ResolveDatabaseSchema(ctx *sql.Context, root RootValue, schemaName string) 
 
 	return "", false, nil
 }
+
+// A RelationSource maps table names to relations (which may be tables or root objects) at a supplied RootValue.
+type RelationSource[RelationType any] interface {
+	// GetRelation gets a relation at a specific RootValue
+	GetRelation(ctx context.Context, root RootValue, tName TableName) (relation RelationType, correctName string, found bool, err error)
+	// IterRelations returns an iterator over every relation in the specific RootValue
+	IterRelations(ctx context.Context, root RootValue) iter.Seq2[TableName, RelationType]
+}
+
+// TableSource maps names to tables at a supplied RootValue
+type TableSource struct{}
+
+// GetRelation implements RelationSource
+func (s TableSource) GetRelation(ctx context.Context, root RootValue, tName TableName) (relation *Table, foundName string, found bool, err error) {
+	return GetTableInsensitive(ctx, root, tName)
+}
+
+// IterRelations implements RelationSource
+func (s TableSource) IterRelations(ctx context.Context, root RootValue) iter.Seq2[TableName, *Table] {
+	return func(yield func(TableName, *Table) bool) {
+		_ = root.IterTables(ctx, func(name TableName, table *Table, sch schema.Schema) (stop bool, err error) {
+			if !yield(name, table) {
+				return true, nil
+			}
+			return false, nil
+		})
+	}
+}
+
+var _ RelationSource[*Table] = (*TableSource)(nil)

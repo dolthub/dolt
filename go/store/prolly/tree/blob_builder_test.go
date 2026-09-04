@@ -374,7 +374,7 @@ func newTree(t *testing.T, ns NodeStore, keyCnt, blobLen, chunkSize int) *Node {
 		}
 	}
 
-	s := message.NewProllyMapSerializer(valDesc, ns.Pool())
+	s := message.NewProllyMapSerializer(keyDesc, valDesc, ns.Pool())
 	chunker, err := newEmptyChunker(ctx, ns, s)
 	require.NoError(t, err)
 	for _, pair := range tuples {
@@ -499,6 +499,13 @@ func mustOOBAddr(t *testing.T, v val.AdaptiveValue) hash.Hash {
 	return addr
 }
 
+func mustNewOutOfBandValue(t *testing.T, ctx context.Context, vs val.ValueStore, data []byte) val.AdaptiveValue {
+	t.Helper()
+	v, err := val.NewOutOfBandAdaptiveValue(ctx, vs, data)
+	require.NoError(t, err)
+	return v
+}
+
 // TestCompareAdaptiveValueStreamsChunks verifies that comparing two out-of-band AdaptiveValues
 // through TupleDesc.Comparator returns the correct ordering and stops loading nodes once the
 // ordering is decided. The streaming path is the entire reason this test exists; if it were
@@ -531,10 +538,8 @@ func TestCompareAdaptiveValueStreamsChunks(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			cns := &countingNodeStore{NodeStore: NewTestNodeStore()}
-			lVal, err := val.NewOutOfBandAdaptiveValue(ctx, cns, c.l)
-			require.NoError(t, err)
-			rVal, err := val.NewOutOfBandAdaptiveValue(ctx, cns, c.r)
-			require.NoError(t, err)
+			lVal := mustNewOutOfBandValue(t, ctx, cns, c.l)
+			rVal := mustNewOutOfBandValue(t, ctx, cns, c.r)
 
 			td := val.NewTupleDescriptorWithArgs(
 				val.TupleDescriptorArgs{ValueStore: cns},
@@ -604,10 +609,8 @@ func TestCompareAdaptiveTextWithCollation(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			ns := NewTestNodeStore()
-			lVal, err := val.NewOutOfBandAdaptiveValue(ctx, ns, []byte(c.l))
-			require.NoError(t, err)
-			rVal, err := val.NewOutOfBandAdaptiveValue(ctx, ns, []byte(c.r))
-			require.NoError(t, err)
+			lVal := mustNewOutOfBandValue(t, ctx, ns, []byte(c.l))
+			rVal := mustNewOutOfBandValue(t, ctx, ns, []byte(c.r))
 
 			cmp := schema.CollationTupleComparator{
 				Collations: []sql.CollationID{c.collation},
@@ -627,4 +630,67 @@ func getBlobValues(msg serial.Message) []byte {
 		panic(err)
 	}
 	return b.PayloadBytes()
+}
+
+func TestCompareAdaptiveValue_MalformedAndMismatchedAddress(t *testing.T) {
+	ctx := context.Background()
+	ns := NewTestNodeStore()
+
+	validVal := mustNewOutOfBandValue(t, ctx, ns, []byte("valid out-of-band content"))
+	validAddr, err := validVal.OutOfBandAddr()
+	require.NoError(t, err)
+
+	td := val.NewTupleDescriptorWithArgs(
+		val.TupleDescriptorArgs{ValueStore: ns},
+		val.Type{Enc: val.BytesAdaptiveEnc},
+	)
+	collCmp := schema.CollationTupleComparator{
+		Collations: []sql.CollationID{sql.Collation_utf8mb4_0900_ai_ci},
+	}.WithValueStore(ns).Validated([]val.Type{{Enc: val.StringAdaptiveEnc}})
+
+	testCases := []struct {
+		name        string
+		data        []byte
+		expectedErr error
+	}{
+		{"3-byte tail", []byte{0x15, 0x01, 0x02, 0x03}, val.ErrInvalidAddressLen},
+		{"19-byte tail", append([]byte{0x15}, make([]byte, 19)...), val.ErrInvalidAddressLen},
+		{"21-byte tail", append([]byte{0x15}, make([]byte, 21)...), val.ErrInvalidAddressLen},
+		{"truncated varint", []byte{241}, val.ErrTruncatedVarint},
+		{"mismatched varint length", val.NewOutOfBandAdaptiveValueWithAddr(9999, validAddr), nil},
+	}
+
+	comparators := []struct {
+		name string
+		cmp  func(l, r val.AdaptiveValue) error
+	}{
+		{"bytes cmp left-valid", func(l, r val.AdaptiveValue) error {
+			_, err := td.Comparator().CompareValues(ctx, 0, l, r, val.Type{Enc: val.BytesAdaptiveEnc})
+			return err
+		}},
+		{"bytes cmp left-corrupt", func(l, r val.AdaptiveValue) error {
+			_, err := td.Comparator().CompareValues(ctx, 0, r, l, val.Type{Enc: val.BytesAdaptiveEnc})
+			return err
+		}},
+		{"collated cmp", func(l, r val.AdaptiveValue) error {
+			_, err := collCmp.CompareValues(ctx, 0, l, r, val.Type{Enc: val.StringAdaptiveEnc})
+			return err
+		}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mVal := val.AdaptiveValue(tc.data)
+			for _, c := range comparators {
+				t.Run(c.name, func(t *testing.T) {
+					err := c.cmp(validVal, mVal)
+					if tc.expectedErr != nil {
+						assert.ErrorIs(t, err, tc.expectedErr)
+					} else {
+						assert.NoError(t, err)
+					}
+				})
+			}
+		})
+	}
 }

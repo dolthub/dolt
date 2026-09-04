@@ -89,6 +89,11 @@ func GetMultiEnvStorageMetadata(ctx context.Context, dataDirFS filesys.Filesys) 
 		if err != nil {
 			return false
 		}
+
+		if dbfactory.IsDatabaseInProgress(newFs) {
+			return false
+		}
+
 		path, err = newFs.Abs("")
 		if err != nil {
 			return false
@@ -186,8 +191,13 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 	envSet := map[string]*DoltEnv{}
 	var openedEnvs []*DoltEnv
 
+	seenDbNames := make(map[string]string)
+
 	// Anything that looks like it has a dolt database belongs here.
-	if dEnv.HasDoltDataDir() {
+	if dEnv.HasDoltDataDir() && dbfactory.IsDatabaseInProgress(dEnv.FS) {
+		path, _ := dEnv.FS.Abs("")
+		logrus.WithField("path", path).Warn("skipping in-progress database directory")
+	} else if dEnv.HasDoltDataDir() {
 		LoadDoltDB(ctx, dEnv)
 		dbErr := dEnv.DBLoadError
 		if dbErr != nil {
@@ -205,6 +215,7 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 			}
 		}
 		envSet[dbName] = dEnv
+		seenDbNames[strings.ToLower(dbName)] = dbName
 		openedEnvs = append(openedEnvs, dEnv)
 	}
 
@@ -225,6 +236,11 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 			return false
 		}
 
+		if dbfactory.IsDatabaseInProgress(newFs) {
+			logrus.WithField("path", path).Warn("skipping in-progress database directory")
+			return false
+		}
+
 		// TODO: get rid of version altogether
 		subVersion := ""
 		if dEnv != nil {
@@ -236,12 +252,24 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 			newEnv.DBLoadParams = maps.Clone(dbLoadParams)
 		}
 		if newEnv.Valid() {
-			envSet[dbfactory.DirToDBName(dir)] = newEnv
+			subDbName := dbfactory.DirToDBName(dir)
+			subDbNameLower := strings.ToLower(subDbName)
+			if existing, exists := seenDbNames[subDbNameLower]; exists {
+				WarnDuplicateDatabase(subDbName, existing, path)
+				return false
+			}
+			seenDbNames[subDbNameLower] = subDbName
+			envSet[subDbName] = newEnv
 			openedEnvs = append(openedEnvs, newEnv)
 		} else {
-			cfgErr := newEnv.CfgLoadErr
-			if cfgErr != nil {
+			if cfgErr := newEnv.CfgLoadErr; cfgErr != nil {
 				logrus.Warnf("failed to load database configuration at %s with error: %s", path, cfgErr.Error())
+			}
+			// Warn only when the directory looks like a database that failed to
+			// finish initializing, not an unrelated directory that happens to sit
+			// in the data directory.
+			if rsErr := newEnv.RSLoadErr; rsErr != nil && newEnv.HasDoltDataDir() {
+				logrus.WithError(rsErr).WithField("path", path).Warn("skipping incomplete database directory")
 			}
 		}
 		return false
@@ -296,9 +324,11 @@ func (mrEnv *MultiRepoEnv) ReloadDBs(ctx context.Context) {
 					logrus.Warnf("failed to load database at %s with error: %s", dEnv.urlStr, dbErr.Error())
 				}
 			}
-			cfgErr := dEnv.CfgLoadErr
-			if cfgErr != nil {
+			if cfgErr := dEnv.CfgLoadErr; cfgErr != nil {
 				logrus.Warnf("failed to load database configuration at %s with error: %s", dEnv.urlStr, cfgErr.Error())
+			}
+			if rsErr := dEnv.RSLoadErr; rsErr != nil {
+				logrus.WithError(rsErr).WithField("database", dEnv.urlStr).Warn("failed to load repo state for database")
 			}
 		} else if !anyIsReadOnly {
 			if isReadOnly, err := dEnv.IsAccessModeReadOnly(ctx); err == nil && isReadOnly {
@@ -383,6 +413,20 @@ func (mrEnv *MultiRepoEnv) GetFirstDatabase() string {
 	return currentDb
 }
 
+// WarnDuplicateDatabase emits a structured warning when a duplicate
+// database is detected and skipped.
+func WarnDuplicateDatabase(name, existing, path string) {
+	entry := logrus.WithFields(logrus.Fields{
+		"database":          name,
+		"existing_database": existing,
+	})
+	if path != "" {
+		entry.WithField("path", path).Warn("skipping duplicate database directory")
+		return
+	}
+	entry.Warn("skipping duplicate database")
+}
+
 func getRepoRootDir(path, pathSeparator string) string {
 	if pathSeparator != "/" {
 		path = strings.ReplaceAll(path, pathSeparator, "/")
@@ -401,7 +445,9 @@ func getRepoRootDir(path, pathSeparator string) string {
 		return ""
 	}
 
-	if tokens[len(tokens)-1] == dbfactory.DataDir && tokens[len(tokens)-2] == dbfactory.DoltDir {
+	// Strip trailing .dolt/noms directory tokens to locate the repository
+	// root folder name.
+	if len(tokens) >= 2 && tokens[len(tokens)-1] == dbfactory.DataDir && tokens[len(tokens)-2] == dbfactory.DoltDir {
 		tokens = tokens[:len(tokens)-2]
 	}
 
