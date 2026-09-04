@@ -374,6 +374,46 @@ func TestColumnAliases(t *testing.T) {
 	enginetest.TestColumnAliases(t, h)
 }
 
+// https://github.com/dolthub/dolt/issues/11502
+func TestWindowDefinitionColumnAliases(t *testing.T) {
+	h := newDoltHarness(t)
+	defer h.Close()
+	h.Setup(setup.MydbData)
+
+	enginetest.TestScript(t, h, queries.ScriptTest{
+		Name: "column aliases in window definitions",
+		SetUpScript: []string{
+			"create table t (id int primary key, g int, k int, v int);",
+			"insert into t values (1,1,1,25),(2,0,0,-37),(3,1,-2,85);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: `select id, g, k as order_alias,
+					lag(v) over (partition by g order by order_alias, id) as prev_v,
+					lead(v) over (partition by g order by order_alias, id) as next_v
+					from t order by id;`,
+				ExpectedErrStr: "Unknown column 'order_alias' in 'window order by'",
+			},
+			{
+				Query:          "select k as order_alias, lag(v) over (order by order_alias) as p from t;",
+				ExpectedErrStr: "Unknown column 'order_alias' in 'window order by'",
+			},
+			{
+				Query:          "select g as part_alias, lag(v) over (partition by part_alias order by id) as p from t;",
+				ExpectedErrStr: "Unknown column 'part_alias' in 'window partition by'",
+			},
+			{
+				Query:    "select id, k as order_alias, lag(v) over (order by k, id) as p from t order by id;",
+				Expected: []sql.Row{{1, 1, -37}, {2, 0, 85}, {3, -2, nil}},
+			},
+			{
+				Query:    "select id, g, k as order_alias, lag(v) over (partition by g order by k, id) as prev_v from t order by order_alias;",
+				Expected: []sql.Row{{3, 1, -2, nil}, {2, 0, 0, nil}, {1, 1, 1, 85}},
+			},
+		},
+	})
+}
+
 func TestOrderByGroupBy(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
