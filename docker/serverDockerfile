@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.3-labs
+# syntax=docker/dockerfile:1
 
 FROM debian:bookworm-slim AS base
 ENV DEBIAN_FRONTEND=noninteractive
@@ -13,28 +13,31 @@ FROM golang:1.26.2-bookworm AS build-from-source
 ENV DEBIAN_FRONTEND=noninteractive
 ARG DOLT_VERSION
 
-# COPY doesn't support conditionals, so we rely on the path context to maybe have a dolt/ directory
-# to distinguish between source and binary builds using DOLT_VERSION=source too.
-COPY dolt*/go*/go.mod* /tmp/dolt/go/
+# Support building from either repo root (go/) or workspace root (dolt/go/)
+COPY dolt*/go*/go.mod* go*/go.mod* /tmp/dolt/go/
+COPY dolt*/go*/go.sum* go*/go.sum* /tmp/dolt/go/
 WORKDIR /tmp/dolt/go/
 
 # Check for source to avoid unnecessary installation of build dependencies
 RUN if [ "$DOLT_VERSION" = "source" ]; then \
-        cd /tmp/dolt/go || { echo "Make sure the `dolt/` directory exists in your workspace to build from source."; exit 1; }; \
+        cd /tmp/dolt/go || { echo "Make sure the dolt source exists in your workspace to build from source."; exit 1; }; \
         apt-get update -y && \
-        apt-get install -y libicu-dev && \
+        apt-get install -y --no-install-recommends libicu-dev && \
         rm -rf /var/lib/apt/lists/*; \
     fi
 
-# Separate layers to avoid redundant downloads
-RUN if [ "$DOLT_VERSION" = "source" ]; then \
+# Use BuildKit cache mount to avoid redundant downloads across builds
+RUN --mount=type=cache,target=/go/pkg/mod \
+    if [ "$DOLT_VERSION" = "source" ]; then \
         go mod download; \
     fi
 
-COPY dolt*/go/ /tmp/dolt/go/
+COPY dolt*/go/ go/ /tmp/dolt/go/
 
-RUN if [ "$DOLT_VERSION" = "source" ]; then \
-        go build -o /usr/local/bin/dolt ./cmd/dolt && \
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    if [ "$DOLT_VERSION" = "source" ]; then \
+        go build -ldflags="-w" -o /usr/local/bin/dolt ./cmd/dolt && \
         chmod +x /usr/local/bin/dolt; \
     fi
 
@@ -48,8 +51,22 @@ RUN if [ "$DOLT_VERSION" = "latest" ]; then \
             | cut -d'"' -f4 \
             | sed 's/^v//'); \
     fi && \
-    if [ "$DOLT_VERSION" != "source" ]; then \
+    if [ "$DOLT_VERSION" != "source" ] && [ "$DOLT_VERSION" != "local" ]; then \
         curl -L "https://github.com/dolthub/dolt/releases/download/v${DOLT_VERSION}/install.sh" | bash; \
+    fi
+
+
+FROM base AS local-binary
+ARG DOLT_VERSION
+RUN mkdir -p /tmp/dolt-bin
+COPY *ci_bin/dolt* dolt*/*ci_bin/dolt* *bin/dolt* dolt*/*bin/dolt* /tmp/dolt-bin/
+RUN if [ "$DOLT_VERSION" = "local" ]; then \
+        if [ -f /tmp/dolt-bin/dolt ]; then \
+            cp /tmp/dolt-bin/dolt /usr/local/bin/dolt && \
+            chmod +x /usr/local/bin/dolt; \
+        else \
+            echo "Error: DOLT_VERSION=local specified but no pre-built dolt binary found in .ci_bin/ or bin/" && exit 1; \
+        fi \
     fi
 
 
@@ -58,16 +75,17 @@ ARG DOLT_VERSION
 
 RUN apt-get update -y && apt-get install -y --no-install-recommends bzip2 gzip xz-utils zstd \
   && rm -rf /var/lib/apt/lists/*
-# icu dependency for source builds
-RUN if [ "$DOLT_VERSION" = "source" ]; then \
+# icu dependency for source and local builds
+RUN if [ "$DOLT_VERSION" = "source" ] || [ "$DOLT_VERSION" = "local" ]; then \
         apt-get update -y && \
         apt-get install -y --no-install-recommends libicu-dev && \
         rm -rf /var/lib/apt/lists/*; \
     fi
 
-# Only one binary is possible due to DOLT_VERSION, so we optionally copy from either stage
+# Copy binary from whichever stage built or copied it
 COPY --from=download-binary /usr/local/bin/dolt* /usr/local/bin/
 COPY --from=build-from-source /usr/local/bin/dolt* /usr/local/bin/
+COPY --from=local-binary /usr/local/bin/dolt* /usr/local/bin/
 
 RUN /usr/local/bin/dolt version
 

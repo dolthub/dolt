@@ -7,6 +7,42 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup_file() {
   skip_if_remote
+
+  # Docker isn't available on GitHub's macOS runners
+  if [ "$IS_MAC" = true ]; then
+    command -v docker >/dev/null 2>&1 || skip "docker not found on PATH (expected on macOS runners)"
+  fi
+
+  WORKSPACE_ROOT=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
+  DOLT_ROOT=$(cd "$BATS_TEST_DIRNAME/../.." && pwd)
+  export WORKSPACE_ROOT DOLT_ROOT
+
+  # Default to 'local' if pre-built dolt binary exists (e.g. CI runner has .ci_bin/dolt), otherwise 'source'
+  if [ -z "$DOLT_DOCKER_TEST_VERSION" ]; then
+    if [ -f "$DOLT_ROOT/.ci_bin/dolt" ] || [ -f "$WORKSPACE_ROOT/dolt/.ci_bin/dolt" ] || [ -f "$DOLT_ROOT/bin/dolt" ]; then
+      DOLT_DOCKER_TEST_VERSION="local"
+    else
+      DOLT_DOCKER_TEST_VERSION="source"
+    fi
+  fi
+  export DOLT_DOCKER_TEST_VERSION
+
+  TEST_IMAGE="dolt-entrypoint-it:${DOLT_DOCKER_TEST_VERSION}"
+  export TEST_IMAGE
+
+  # Build image once per file per Bats official documentation
+  if ! docker image inspect "$TEST_IMAGE" >/dev/null 2>&1; then
+    echo "Building Dolt image (${DOLT_DOCKER_TEST_VERSION}) for docker-entrypoint tests..." >&2
+    docker build -f "$DOLT_ROOT/docker/serverDockerfile" --build-arg DOLT_VERSION="$DOLT_DOCKER_TEST_VERSION" -t "$TEST_IMAGE" "$DOLT_ROOT" >&2
+  else
+    echo "Using existing source-built image: $TEST_IMAGE" >&2
+  fi
+}
+
+teardown_file() {
+  if [ -n "$TEST_IMAGE" ]; then
+    docker rmi "$TEST_IMAGE" >/dev/null 2>&1 || true
+  fi
 }
 
 setup() {
@@ -17,21 +53,7 @@ setup() {
     command -v docker >/dev/null 2>&1 || skip "docker not found on PATH (expected on macOS runners)"
   fi
 
-  # Compute workspace root from integration-tests/bats directory
-  WORKSPACE_ROOT=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
-  export WORKSPACE_ROOT
-
-  DOLT_DOCKER_TEST_VERSION=${DOLT_DOCKER_TEST_VERSION:-source}
-  TEST_IMAGE="dolt-entrypoint-it:${DOLT_DOCKER_TEST_VERSION}"
   TEST_PREFIX="dolt-entrypoint-it-$$-"
-
-  # Build from source only once per test run, check img already exists
-  if ! docker image inspect "$TEST_IMAGE" >/dev/null 2>&1; then
-    echo "Building Dolt from source for `docker-entrypoint.sh` integrations container..."
-    docker build -f "$WORKSPACE_ROOT/dolt/docker/serverDockerfile" --build-arg DOLT_VERSION=$DOLT_DOCKER_TEST_VERSION -t "$TEST_IMAGE" "$WORKSPACE_ROOT"
-  else
-    echo "Using existing source-built image: $TEST_IMAGE"
-  fi
 }
 
 teardown() {
