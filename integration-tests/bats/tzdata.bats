@@ -48,9 +48,7 @@ setup() {
 rm -rf $DOLT_REPOSITORY
 mkdir -p $DOLT_REPOSITORY
 cd $DOLT_REPOSITORY
-dolt config --global --add user.email 'bats@email.fake'
-dolt config --global --add user.name 'Bats Tests'
-dolt init"
+dolt init --name 'Bats Tests' --email 'bats@email.fake'"
 }
 
 teardown() {
