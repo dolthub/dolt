@@ -31,12 +31,6 @@ setup_file() {
   fi
 }
 
-teardown_file() {
-  if [ -n "$TEST_IMAGE" ]; then
-    docker rmi "$TEST_IMAGE" >/dev/null 2>&1 || true
-  fi
-}
-
 setup() {
   setup_no_dolt_init
 
