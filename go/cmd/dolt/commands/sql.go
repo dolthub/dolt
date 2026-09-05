@@ -72,7 +72,7 @@ If a server is running for the database in question, then the query will go thro
 	},
 }
 
-var ErrMultipleDoltCfgDirs = errors.NewKind("multiple .doltcfg directories detected: '%s' and '%s'; pass one of the directories using option --doltcfg-dir")
+var ErrMultipleDoltCfgDirs = errors.NewKind("multiple .doltcfg directories detected: '%s' and '%s'; specify which directory to use with --doltcfg-dir or remove the redundant directory")
 
 const (
 	QueryFlag             = "query"

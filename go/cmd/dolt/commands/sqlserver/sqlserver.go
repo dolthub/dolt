@@ -568,7 +568,7 @@ func setupDoltConfig(dEnv *env.DoltEnv, cwd filesys.Filesys, apr *argparser.ArgP
 
 		// Error if both current and parent exist
 		if currDirExists && parentDirExists {
-			p1, err := dEnv.FS.Abs(cfgDirPath)
+			p1, err := dEnv.FS.Abs(currDirCfg)
 			if err != nil {
 				return err
 			}

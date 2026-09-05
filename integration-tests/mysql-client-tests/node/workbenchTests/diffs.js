@@ -199,7 +199,7 @@ export const diffTests = [
         to_fragment: "CREATE VIEW `myview` AS SELECT * FROM test",
         to_extra: { CreatedAt: 0 },
         to_sql_mode:
-          "NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES",
+          "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION",
         to_commit: "WORKING",
         to_commit_date: "2023-03-09T07:56:29.035Z",
         from_type: null,
