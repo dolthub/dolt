@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.3-labs
+# syntax=docker/dockerfile:1
 
 FROM debian:bookworm-slim AS base
 ENV DEBIAN_FRONTEND=noninteractive
@@ -13,28 +13,28 @@ FROM golang:1.26.2-bookworm AS build-from-source
 ENV DEBIAN_FRONTEND=noninteractive
 ARG DOLT_VERSION
 
-# COPY doesn't support conditionals, so we rely on the path context to maybe have a dolt/ directory
-# to distinguish between source and binary builds using DOLT_VERSION=source too.
-COPY dolt*/go*/go.mod* /tmp/dolt/go/
+COPY dolt*/go*/go.mod* dolt*/go*/go.sum* /tmp/dolt/go/
 WORKDIR /tmp/dolt/go/
 
 # Check for source to avoid unnecessary installation of build dependencies
 RUN if [ "$DOLT_VERSION" = "source" ]; then \
         cd /tmp/dolt/go || { echo "Make sure the `dolt/` directory exists in your workspace to build from source."; exit 1; }; \
         apt-get update -y && \
-        apt-get install -y libicu-dev && \
+        apt-get install -y --no-install-recommends libicu-dev && \
         rm -rf /var/lib/apt/lists/*; \
     fi
 
-# Separate layers to avoid redundant downloads
-RUN if [ "$DOLT_VERSION" = "source" ]; then \
+RUN --mount=type=cache,target=/go/pkg/mod \
+    if [ "$DOLT_VERSION" = "source" ]; then \
         go mod download; \
     fi
 
 COPY dolt*/go/ /tmp/dolt/go/
 
-RUN if [ "$DOLT_VERSION" = "source" ]; then \
-        go build -o /usr/local/bin/dolt ./cmd/dolt && \
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    if [ "$DOLT_VERSION" = "source" ]; then \
+        go build -ldflags="-w" -o /usr/local/bin/dolt ./cmd/dolt && \
         chmod +x /usr/local/bin/dolt; \
     fi
 

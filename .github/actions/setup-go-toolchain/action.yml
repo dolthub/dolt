@@ -10,9 +10,10 @@ runs:
   using: 'composite'
   steps:
     - name: Set up Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
       with:
         go-version-file: go/go.mod
+        cache-dependency-path: go/go.sum
     - name: Install ICU4C (MacOS)
       if: runner.os == 'macOS'
       shell: bash

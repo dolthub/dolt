@@ -143,6 +143,8 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~mutual-tls-auth.bats~
 ~requires-repo.bats~
 ~commit_verification.bats~
+~docker-entrypoint.bats~
+~tzdata.bats~
 EOM
 )
 

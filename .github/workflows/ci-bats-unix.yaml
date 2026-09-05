@@ -6,6 +6,11 @@ on:
     paths:
       - 'go/**'
       - 'integration-tests/**'
+      - '.github/workflows/ci-bats-unix.yaml'
+      - '.github/actions/setup-go-toolchain/**'
+      - '.github/actions/build-dolt/**'
+      - '.github/actions/setup-dolt-config/**'
+  workflow_dispatch:
 
 concurrency:
   group: ci-bats-unix-${{ github.event.pull_request.number || github.ref }}
@@ -19,11 +24,15 @@ jobs:
         shell: bash
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         os: [ ubuntu-22.04 ]
+        sql_engine: [ local-engine, remote-engine ]
     env:
       use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
+      BATS_TMPDIR: /dev/shm/batstmp/
+      DOCKER_BUILDKIT: "1"
+      TERM: xterm
     steps:
       # Docker entrypoint and docker tests in general may use more space than is available in the GitHub default runner,
       # so we remove unused pre-installed programs.
@@ -31,6 +40,7 @@ jobs:
         run: |
           NAME="DISK-CLEANUP"
           echo "[${NAME}] Starting background cleanup..."
+          mkdir -p /dev/shm/batstmp
           [ -d /usr/share/dotnet ] && sudo rm -rf /usr/share/dotnet &
           [ -d /usr/local/lib/android ] && sudo rm -rf /usr/local/lib/android &
           [ -d /opt/ghc ] && sudo rm -rf /opt/ghc &
@@ -62,12 +72,9 @@ jobs:
       - name: Set up Go toolchain
         uses: ./.github/actions/setup-go-toolchain
       - name: Setup Python 3.x
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.10"
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ^16
       - name: Build dolt
         uses: ./.github/actions/build-dolt
         with:
@@ -75,45 +82,54 @@ jobs:
           noms: 'true'
       - name: Install Bats
         run: |
-          npm i bats
-          echo "$(pwd)/node_modules/.bin" >> $GITHUB_PATH
-        working-directory: ./.ci_bin
+          git clone --depth 1 -b v1.11.1 https://github.com/bats-core/bats-core.git /tmp/bats-core
+          sudo /tmp/bats-core/install.sh /usr/local
+          rm -rf /tmp/bats-core
       - name: Install Python Deps
-        run: |
-          pip install mysql-connector-python
-          pip install pandas
-          pip install pyarrow
+        run: pip install mysql-connector-python pandas pyarrow
       - name: Setup Dolt Config
         uses: ./.github/actions/setup-dolt-config
-      - name: Install expect
+      - name: Install system dependencies
         if: matrix.os == 'ubuntu-22.04'
-        run: sudo apt-get install -y expect
-      - name: Install pcre2grep
-        if: matrix.os == 'ubuntu-22.04'
-        run: sudo apt-get install -y pcre2-utils
-      - name: Install openssh-server
-        if: matrix.os == 'ubuntu-22.04'
-        run: sudo apt-get install -y openssh-server
-      - name: Install Maven
-        run: sudo apt-get install -y maven
+        run: sudo apt-get install --no-install-recommends -y expect pcre2-utils openssh-server parallel
+      - name: Cache Hadoop
+        id: cache_hadoop
+        uses: actions/cache@v5
+        with:
+          path: ./.ci_bin/hadoop-3.3.6
+          key: hadoop-3.3.6
       - name: Install Hadoop
+        if: steps.cache_hadoop.outputs.cache-hit != 'true'
         working-directory: ./.ci_bin
         run: |
-          curl -LO https://downloads.apache.org/hadoop/common/hadoop-3.3.6/hadoop-3.3.6.tar.gz
-          tar xvf hadoop-3.3.6.tar.gz
-          echo "$(pwd)/hadoop-3.3.6/bin" >> $GITHUB_PATH
+          curl -sSL -o hadoop-3.3.6.tar.gz https://dlcdn.apache.org/hadoop/common/hadoop-3.3.6/hadoop-3.3.6.tar.gz || curl -sSL -o hadoop-3.3.6.tar.gz https://archive.apache.org/dist/hadoop/common/hadoop-3.3.6/hadoop-3.3.6.tar.gz
+          tar -xzf hadoop-3.3.6.tar.gz
+          rm -f hadoop-3.3.6.tar.gz
+      - name: Add Hadoop to PATH
+        run: echo "$(pwd)/.ci_bin/hadoop-3.3.6/bin" >> $GITHUB_PATH
+      - name: Cache parquet-cli
+        id: cache_parquet_cli
+        uses: actions/cache@v5
+        with:
+          path: ./.ci_bin/parquet-cli-1.12.3-runtime.jar
+          key: parquet-cli-1.12.3-runtime-jar
       - name: Install parquet-cli
-        id: parquet_cli
+        if: steps.cache_parquet_cli.outputs.cache-hit != 'true'
         working-directory: ./.ci_bin
         run: |
-          curl -OL https://github.com/apache/parquet-mr/archive/refs/tags/apache-parquet-1.12.3.tar.gz
-          tar zxvf apache-parquet-1.12.3.tar.gz
-          cd parquet-java-apache-parquet-1.12.3/parquet-cli
-          mvn clean install -DskipTests
-          runtime_jar="$(pwd)"/target/parquet-cli-1.12.3-runtime.jar
-          echo "runtime_jar=$runtime_jar" >> $GITHUB_OUTPUT
-      - name: Install MinIO
+          curl -sSL -o parquet-cli-1.12.3-runtime.jar https://repo1.maven.org/maven2/org/apache/parquet/parquet-cli/1.12.3/parquet-cli-1.12.3-runtime.jar
+      - name: Set parquet-cli runtime jar path
+        id: parquet_cli
+        run: echo "runtime_jar=$(pwd)/.ci_bin/parquet-cli-1.12.3-runtime.jar" >> $GITHUB_OUTPUT
+      - name: Cache MinIO
+        id: cache_minio
         if: matrix.os == 'ubuntu-22.04'
+        uses: actions/cache@v5
+        with:
+          path: ./.ci_bin/minio
+          key: minio-bin
+      - name: Install MinIO
+        if: matrix.os == 'ubuntu-22.04' && steps.cache_minio.outputs.cache-hit != 'true'
         working-directory: ./.ci_bin
         run: |
           curl -sSL -o minio https://dl.min.io/server/minio/release/linux-amd64/minio
@@ -121,20 +137,19 @@ jobs:
       - name: Check expect
         run: expect -v
       - name: Test all Unix
+        if: matrix.sql_engine == 'local-engine' || env.use_credentials == 'true'
         env:
-          SQL_ENGINE: "local-engine"
+          SQL_ENGINE: ${{ matrix.sql_engine }}
           PARQUET_RUNTIME_JAR: ${{ steps.parquet_cli.outputs.runtime_jar }}
           BATS_TEST_RETRIES: "3"
         run: |
-          bats --print-output-on-failure --tap $BATS_FILTER .
-        working-directory: ./integration-tests/bats
-      - name: Test all Unix, SQL_ENGINE=remote-engine
-        # If we have AWS credentials, we run these remote-engine tests here instead of in the separate job.
-        if: ${{ env.use_credentials == 'true' && matrix.os == 'ubuntu-22.04' }}
-        env:
-          SQL_ENGINE: "remote-engine"
-          PARQUET_RUNTIME_JAR: ${{ steps.parquet_cli.outputs.runtime_jar }}
-          BATS_TEST_RETRIES: "3"
-        run: |
-          bats --print-output-on-failure --tap $BATS_FILTER .
+          for f in *.bats; do
+            if grep -q -E 'config[[:space:]]+--global' "$f"; then
+              seq+=("$f")
+            else
+              par+=("$f")
+            fi
+          done
+          bats -j 2 --no-parallelize-within-files --print-output-on-failure --tap $BATS_FILTER "${par[@]}"
+          [ ${#seq[@]} -gt 0 ] && bats --print-output-on-failure --tap $BATS_FILTER "${seq[@]}"
         working-directory: ./integration-tests/bats
