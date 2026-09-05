@@ -16,10 +16,16 @@ setup_file() {
         command -v docker >/dev/null 2>&1 || skip "docker not found on PATH (expected on macOS runners)"
     fi
 
+    TEST_NAME="dolt-tzdata"
+    TEST_IMAGE="$TEST_NAME:bookworm-slim"
+    export TEST_NAME TEST_IMAGE
+
     WORKSPACE_ROOT=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
     export WORKSPACE_ROOT
 
-    docker build -f "$BATS_TEST_DIRNAME/tzdataDockerfile" -t "$TEST_IMAGE" "$WORKSPACE_ROOT"
+    if ! docker image inspect "$TEST_IMAGE" >/dev/null 2>&1; then
+        docker build -f "$BATS_TEST_DIRNAME/tzdataDockerfile" -t "$TEST_IMAGE" "$WORKSPACE_ROOT"
+    fi
 }
 
 # The 'c' prefixes avoid conflicts with binaries on the local bats runner machine. The normal binaries are still
