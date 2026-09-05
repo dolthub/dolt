@@ -51,22 +51,8 @@ RUN if [ "$DOLT_VERSION" = "latest" ]; then \
             | cut -d'"' -f4 \
             | sed 's/^v//'); \
     fi && \
-    if [ "$DOLT_VERSION" != "source" ] && [ "$DOLT_VERSION" != "local" ]; then \
+    if [ "$DOLT_VERSION" != "source" ]; then \
         curl -L "https://github.com/dolthub/dolt/releases/download/v${DOLT_VERSION}/install.sh" | bash; \
-    fi
-
-
-FROM base AS local-binary
-ARG DOLT_VERSION
-RUN mkdir -p /tmp/dolt-bin
-COPY *ci_bin/dolt* dolt*/*ci_bin/dolt* *bin/dolt* dolt*/*bin/dolt* /tmp/dolt-bin/
-RUN if [ "$DOLT_VERSION" = "local" ]; then \
-        if [ -f /tmp/dolt-bin/dolt ]; then \
-            cp /tmp/dolt-bin/dolt /usr/local/bin/dolt && \
-            chmod +x /usr/local/bin/dolt; \
-        else \
-            echo "Error: DOLT_VERSION=local specified but no pre-built dolt binary found in .ci_bin/ or bin/" && exit 1; \
-        fi \
     fi
 
 
@@ -75,17 +61,16 @@ ARG DOLT_VERSION
 
 RUN apt-get update -y && apt-get install -y --no-install-recommends bzip2 gzip xz-utils zstd \
   && rm -rf /var/lib/apt/lists/*
-# icu dependency for source and local builds
-RUN if [ "$DOLT_VERSION" = "source" ] || [ "$DOLT_VERSION" = "local" ]; then \
+# icu dependency for source builds
+RUN if [ "$DOLT_VERSION" = "source" ]; then \
         apt-get update -y && \
         apt-get install -y --no-install-recommends libicu-dev && \
         rm -rf /var/lib/apt/lists/*; \
     fi
 
-# Copy binary from whichever stage built or copied it
+# Only one binary is possible due to DOLT_VERSION, so we optionally copy from either stage
 COPY --from=download-binary /usr/local/bin/dolt* /usr/local/bin/
 COPY --from=build-from-source /usr/local/bin/dolt* /usr/local/bin/
-COPY --from=local-binary /usr/local/bin/dolt* /usr/local/bin/
 
 RUN /usr/local/bin/dolt version
 

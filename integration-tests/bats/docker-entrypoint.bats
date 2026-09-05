@@ -17,14 +17,7 @@ setup_file() {
   DOLT_ROOT=$(cd "$BATS_TEST_DIRNAME/../.." && pwd)
   export WORKSPACE_ROOT DOLT_ROOT
 
-  # Default to 'local' if pre-built dolt binary exists (e.g. CI runner has .ci_bin/dolt), otherwise 'source'
-  if [ -z "$DOLT_DOCKER_TEST_VERSION" ]; then
-    if [ -f "$DOLT_ROOT/.ci_bin/dolt" ] || [ -f "$WORKSPACE_ROOT/dolt/.ci_bin/dolt" ] || [ -f "$DOLT_ROOT/bin/dolt" ]; then
-      DOLT_DOCKER_TEST_VERSION="local"
-    else
-      DOLT_DOCKER_TEST_VERSION="source"
-    fi
-  fi
+  DOLT_DOCKER_TEST_VERSION=${DOLT_DOCKER_TEST_VERSION:-source}
   export DOLT_DOCKER_TEST_VERSION
 
   TEST_IMAGE="dolt-entrypoint-it:${DOLT_DOCKER_TEST_VERSION}"
