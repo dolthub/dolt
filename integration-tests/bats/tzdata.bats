@@ -55,7 +55,9 @@ dolt init"
 
 teardown() {
     command -v docker >/dev/null 2>&1 || return 0
-    docker rm -f "$TEST_CONTAINER" >/dev/null 2>&1
+    if [ -n "$TEST_CONTAINER" ]; then
+        docker rm -f "$TEST_CONTAINER" >/dev/null 2>&1
+    fi
 }
 
 # bats test_tags=no_lambda
