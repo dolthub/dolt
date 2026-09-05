@@ -1,8 +1,0 @@
-.git
-.github
-.idea
-.vscode
-integration-tests/
-.ci_bin/hadoop*
-.ci_bin/parquet*
-.ci_bin/minio*
