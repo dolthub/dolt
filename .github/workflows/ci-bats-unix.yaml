@@ -144,7 +144,7 @@ jobs:
           BATS_TEST_RETRIES: "3"
         run: |
           for f in *.bats; do
-            if grep -q -E 'config[[:space:]]+--global' "$f" && ! grep -q -E 'docker[[:space:]]+(run|build)' "$f"; then
+            if grep -q -E 'config[[:space:]]+--global' "$f"; then
               seq+=("$f")
             else
               par+=("$f")
