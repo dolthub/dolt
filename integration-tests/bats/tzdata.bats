@@ -16,10 +16,6 @@ setup_file() {
         command -v docker >/dev/null 2>&1 || skip "docker not found on PATH (expected on macOS runners)"
     fi
 
-    TEST_NAME="dolt-tzdata"
-    TEST_IMAGE="$TEST_NAME:bookworm-slim"
-    export TEST_NAME TEST_IMAGE
-
     WORKSPACE_ROOT=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
     export WORKSPACE_ROOT
 

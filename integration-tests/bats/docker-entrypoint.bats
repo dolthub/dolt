@@ -24,7 +24,6 @@ setup_file() {
   TEST_IMAGE="dolt-entrypoint-it:${DOLT_DOCKER_TEST_VERSION}"
   export TEST_IMAGE
 
-  # Build image once per file per Bats official documentation
   if ! docker image inspect "$TEST_IMAGE" >/dev/null 2>&1; then
     echo "Building Dolt image (${DOLT_DOCKER_TEST_VERSION}) for docker-entrypoint tests..." >&2
     docker build -f "$DOLT_ROOT/docker/serverDockerfile" --build-arg DOLT_VERSION="$DOLT_DOCKER_TEST_VERSION" -t "$TEST_IMAGE" "$DOLT_ROOT" >&2
@@ -41,11 +40,6 @@ teardown_file() {
 
 setup() {
   setup_no_dolt_init
-
-  # Docker isn't available on GitHub's macOS runners
-  if [ "$IS_MAC" = true ]; then
-    command -v docker >/dev/null 2>&1 || skip "docker not found on PATH (expected on macOS runners)"
-  fi
 
   PORT=$(definePORT)
   TEST_PREFIX="dolt-entrypoint-it-$$-"

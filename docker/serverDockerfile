@@ -13,7 +13,6 @@ FROM golang:1.26.2-bookworm AS build-from-source
 ENV DEBIAN_FRONTEND=noninteractive
 ARG DOLT_VERSION
 
-# Support building from either repo root (go/) or workspace root (dolt/go/)
 COPY dolt*/go*/go.mod* go*/go.mod* /tmp/dolt/go/
 COPY dolt*/go*/go.sum* go*/go.sum* /tmp/dolt/go/
 WORKDIR /tmp/dolt/go/
@@ -26,7 +25,6 @@ RUN if [ "$DOLT_VERSION" = "source" ]; then \
         rm -rf /var/lib/apt/lists/*; \
     fi
 
-# Use BuildKit cache mount to avoid redundant downloads across builds
 RUN --mount=type=cache,target=/go/pkg/mod \
     if [ "$DOLT_VERSION" = "source" ]; then \
         go mod download; \

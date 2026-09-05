@@ -142,30 +142,14 @@ jobs:
           SQL_ENGINE: ${{ matrix.sql_engine }}
           PARQUET_RUNTIME_JAR: ${{ steps.parquet_cli.outputs.runtime_jar }}
           BATS_TEST_RETRIES: "3"
-          BATS_JOBS: "2"
         run: |
-          # Partition tests: host global config tests run sequentially; docker and other tests run in parallel
-          PARALLEL_FILES=()
-          SEQUENTIAL_FILES=()
           for f in *.bats; do
             if grep -q -E 'config[[:space:]]+--global' "$f" && ! grep -q -E 'docker[[:space:]]+(run|build)' "$f"; then
-              SEQUENTIAL_FILES+=("$f")
+              seq+=("$f")
             else
-              PARALLEL_FILES+=("$f")
+              par+=("$f")
             fi
           done
-
-          # 1. Run all independent tests (including Docker tests) in parallel
-          JOBS_FLAG=()
-          if [ "${BATS_JOBS:-1}" -gt 1 ]; then
-            JOBS_FLAG=( "-j" "${BATS_JOBS}" "--no-parallelize-within-files" )
-          fi
-          if [ ${#PARALLEL_FILES[@]} -gt 0 ]; then
-            bats "${JOBS_FLAG[@]}" --print-output-on-failure --tap $BATS_FILTER "${PARALLEL_FILES[@]}"
-          fi
-
-          # 2. Run host global config tests sequentially
-          if [ ${#SEQUENTIAL_FILES[@]} -gt 0 ]; then
-            bats --print-output-on-failure --tap $BATS_FILTER "${SEQUENTIAL_FILES[@]}"
-          fi
+          bats -j 2 --no-parallelize-within-files --print-output-on-failure --tap $BATS_FILTER "${par[@]}"
+          [ ${#seq[@]} -gt 0 ] && bats --print-output-on-failure --tap $BATS_FILTER "${seq[@]}"
         working-directory: ./integration-tests/bats
