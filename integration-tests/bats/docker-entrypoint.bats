@@ -15,8 +15,7 @@ setup_file() {
   fi
 
   WORKSPACE_ROOT=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
-  DOLT_ROOT=$(cd "$BATS_TEST_DIRNAME/../.." && pwd)
-  export WORKSPACE_ROOT DOLT_ROOT
+  export WORKSPACE_ROOT
 
   DOLT_DOCKER_TEST_VERSION=${DOLT_DOCKER_TEST_VERSION:-source}
   export DOLT_DOCKER_TEST_VERSION
@@ -26,7 +25,7 @@ setup_file() {
 
   if ! docker image inspect "$TEST_IMAGE" >/dev/null 2>&1; then
     echo "Building Dolt image (${DOLT_DOCKER_TEST_VERSION}) for docker-entrypoint tests..." >&2
-    docker build -f "$DOLT_ROOT/docker/serverDockerfile" --build-arg DOLT_VERSION="$DOLT_DOCKER_TEST_VERSION" -t "$TEST_IMAGE" "$DOLT_ROOT" >&2
+    docker build -f "$WORKSPACE_ROOT/dolt/docker/serverDockerfile" --build-arg DOLT_VERSION="$DOLT_DOCKER_TEST_VERSION" -t "$TEST_IMAGE" "$WORKSPACE_ROOT" >&2
   else
     echo "Using existing source-built image: $TEST_IMAGE" >&2
   fi

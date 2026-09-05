@@ -13,13 +13,12 @@ FROM golang:1.26.2-bookworm AS build-from-source
 ENV DEBIAN_FRONTEND=noninteractive
 ARG DOLT_VERSION
 
-COPY dolt*/go*/go.mod* go*/go.mod* /tmp/dolt/go/
-COPY dolt*/go*/go.sum* go*/go.sum* /tmp/dolt/go/
+COPY dolt*/go*/go.mod* dolt*/go*/go.sum* /tmp/dolt/go/
 WORKDIR /tmp/dolt/go/
 
 # Check for source to avoid unnecessary installation of build dependencies
 RUN if [ "$DOLT_VERSION" = "source" ]; then \
-        cd /tmp/dolt/go || { echo "Make sure the dolt source exists in your workspace to build from source."; exit 1; }; \
+        cd /tmp/dolt/go || { echo "Make sure the `dolt/` directory exists in your workspace to build from source."; exit 1; }; \
         apt-get update -y && \
         apt-get install -y --no-install-recommends libicu-dev && \
         rm -rf /var/lib/apt/lists/*; \
@@ -30,7 +29,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
         go mod download; \
     fi
 
-COPY dolt*/go/ go/ /tmp/dolt/go/
+COPY dolt*/go/ /tmp/dolt/go/
 
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
