@@ -5,6 +5,10 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 # These tests validate docker/docker-entrypoint.sh using a Docker image built from
 # docker/serverDockerfile in the repo root. They follow existing integration test conventions.
 
+setup_file() {
+  skip_if_remote
+}
+
 setup() {
   setup_no_dolt_init
 
@@ -76,7 +80,7 @@ wait_for_server_ready() {
     if docker exec "$name" dolt sql -q "SELECT 1;" >/dev/null 2>&1; then
       return 0
     fi
-    sleep 1
+    sleep 0.2
   done
   return 1
 }
@@ -86,14 +90,12 @@ wait_for_log() {
   name="$1"; shift
   pattern="$1"; shift
   timeout="${1:-15}"
-  i=0
-  while [ $i -lt $timeout ]; do
+  local end_time=$((SECONDS + timeout))
+  while [ $SECONDS -lt $end_time ]; do
     if docker logs "$name" 2>&1 | grep -q "$pattern"; then
-      sleep 1
       return 0
     fi
-    sleep 1
-    i=$((i+1))
+    sleep 0.1
   done
   return 1
 }

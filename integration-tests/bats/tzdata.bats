@@ -9,6 +9,8 @@ TEST_NAME="dolt-tzdata"
 TEST_IMAGE="$TEST_NAME:bookworm-slim"
 
 setup_file() {
+    skip_if_remote
+
     # Docker isn't available on GitHub's macOS runners
     if [ "$IS_MAC" = true ]; then
         command -v docker >/dev/null 2>&1 || skip "docker not found on PATH (expected on macOS runners)"
