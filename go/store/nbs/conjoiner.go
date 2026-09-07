@@ -284,8 +284,22 @@ func conjoin(ctx context.Context, behavior dherrors.FatalBehavior, s conjoinStra
 	return mc, op.conjoinedSrc, cf, nil
 }
 
+// conjoinOpenConcurrency bounds how many table files conjoinTables opens at
+// once. Opening a table file is a network round trip for a remote persister,
+// and for a Git remote reached over SSH it costs a separate SSH connection.
+// An unbounded fan-out here therefore scales with the number of conjoinees and
+// can exceed the server's limit on concurrent unauthenticated connections
+// (sshd's MaxStartups defaults to 10), which drops the excess before
+// authentication and fails the conjoin.
+//
+// Local persisters are not meaningfully constrained by this: opening table
+// files is dominated by the index read, and eight in flight already saturates
+// a local disk.
+const conjoinOpenConcurrency = 8
+
 func conjoinTables(ctx context.Context, behavior dherrors.FatalBehavior, conjoinees []tableSpec, p tablePersister, stats *Stats) (conjoined tableSpec, src chunkSource, cleanup cleanupFunc, err error) {
 	eg, ectx := errgroup.WithContext(ctx)
+	eg.SetLimit(conjoinOpenConcurrency)
 	toConjoin := make(chunkSources, len(conjoinees))
 
 	for idx := range conjoinees {
