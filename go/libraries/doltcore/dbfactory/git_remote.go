@@ -439,6 +439,8 @@ func gitCmd(ctx context.Context, args ...string) (*exec.Cmd, error) {
 	cmd := exec.CommandContext(ctx, p, args...) //nolint:gosec // controlled args
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	gitauth.CmdSetsid(cmd)
+	gitauth.CmdKillGroupOnCancel(cmd)
+	cmd.WaitDelay = gitauth.CmdWaitDelay
 	return cmd, nil
 }
 

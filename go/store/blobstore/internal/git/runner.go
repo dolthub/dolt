@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/dolthub/dolt/go/libraries/utils/gitauth"
 )
@@ -38,6 +39,8 @@ type Runner struct {
 	gitDir  string
 	// extraEnv is appended to os.Environ() for every command.
 	extraEnv []string
+	// waitDelay is gitauth.CmdWaitDelay in production; tests shorten it.
+	waitDelay time.Duration
 }
 
 // NewRunner creates a Runner using the git binary on PATH.
@@ -52,8 +55,9 @@ func NewRunner(gitDir string) (*Runner, error) {
 // NewRunnerWithGitPath creates a Runner using an explicit git binary path.
 func NewRunnerWithGitPath(gitDir, gitPath string) *Runner {
 	return &Runner{
-		gitPath: gitPath,
-		gitDir:  gitDir,
+		gitPath:   gitPath,
+		gitDir:    gitDir,
+		waitDelay: gitauth.CmdWaitDelay,
 	}
 }
 
@@ -120,6 +124,8 @@ func (r *Runner) buildCmd(ctx context.Context, opts RunOptions, args []string) *
 	}
 	cmd.Env = r.env(opts)
 	gitauth.CmdSetsid(cmd)
+	gitauth.CmdKillGroupOnCancel(cmd)
+	cmd.WaitDelay = r.waitDelay
 	return cmd
 }
 
@@ -166,6 +172,15 @@ func (r *Runner) Run(ctx context.Context, opts RunOptions, args ...string) ([]by
 		ExitCode: exitCode,
 		Output:   out,
 		Cause:    err,
+	}
+	// Neither a cancelled command nor an abandoned pipe is an auth failure, so skip
+	// the credential hints NormalizeError appends. Cancellation surfaces as the
+	// child's kill signal, so name ctx.Err() for callers that test for it.
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return out, errors.Join(ctxErr, cerr)
+	}
+	if errors.Is(err, exec.ErrWaitDelay) {
+		return out, cerr
 	}
 	return out, gitauth.NormalizeError(cerr, out)
 }
