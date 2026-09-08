@@ -1,0 +1,26 @@
+#!/usr/bin/expect -f
+# An empty Enter stays at the primary prompt instead of entering continuation.
+
+set timeout 10
+spawn dolt sql
+
+expect {
+    "> " {}
+    timeout { send_user "\nFAIL: no initial prompt\n"; exit 1 }
+}
+
+send "\r"
+after 200
+send "select 10865 as ok;\r"
+expect {
+    -re "10865" {}
+    -re "syntax" { send_user "\nFAIL: syntax error after empty Enter\n"; exit 1 }
+    timeout { send_user "\nFAIL: no response\n"; exit 1 }
+}
+expect {
+    "> " {}
+    timeout { send_user "\nFAIL: no primary prompt\n"; exit 1 }
+}
+
+send "exit;\r"
+expect eof

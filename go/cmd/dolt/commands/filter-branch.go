@@ -23,6 +23,7 @@ import (
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/ishell"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
@@ -281,7 +282,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root doltdb.Root
 		return nil, err
 	}
 
-	scanner := NewStreamScanner(strings.NewReader(query))
+	scanner := ishell.NewStreamScanner(strings.NewReader(query))
 	if err != nil {
 		return nil, err
 	}

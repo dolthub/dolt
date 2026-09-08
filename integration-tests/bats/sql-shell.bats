@@ -209,6 +209,77 @@ teardown() {
     $BATS_TEST_DIRNAME/sql-shell-empty-prompt.expect
 }
 
+# bats test_tags=no_lambda
+@test "sql-shell: multiple statements on one line (#10860)" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Presently sql command will not connect to remote server due to lack of lock file where there are not DBs."
+    fi
+    run expect $BATS_TEST_DIRNAME/sql-shell-multi-statement-line.expect
+    [ "$status" -eq 0 ]
+}
+
+# bats test_tags=no_lambda
+@test "sql-shell: unclosed quote continues input (#10861)" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Presently sql command will not connect to remote server due to lack of lock file where there are not DBs."
+    fi
+    run expect $BATS_TEST_DIRNAME/sql-shell-quote-continuation.expect
+    [ "$status" -eq 0 ]
+}
+
+# bats test_tags=no_lambda
+@test "sql-shell: unclosed comment continues input (#10862)" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Presently sql command will not connect to remote server due to lack of lock file where there are not DBs."
+    fi
+    run expect $BATS_TEST_DIRNAME/sql-shell-comment-continuation.expect
+    [ "$status" -eq 0 ]
+}
+
+# bats test_tags=no_lambda
+@test "sql-shell: empty line stays at primary prompt (#10865)" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Presently sql command will not connect to remote server due to lack of lock file where there are not DBs."
+    fi
+    run expect $BATS_TEST_DIRNAME/sql-shell-empty-enter.expect
+    [ "$status" -eq 0 ]
+}
+
+# bats test_tags=no_lambda
+@test "sql-shell: large multi-line statement executes correctly" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Presently sql command will not connect to remote server due to lack of lock file where there are not DBs."
+    fi
+    run expect $BATS_TEST_DIRNAME/sql-shell-large-input.expect
+    [ "$status" -eq 0 ]
+}
+
+# bats test_tags=no_lambda
+@test "sql-shell: Ctrl-D at continuation prompt discards partial input" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Presently sql command will not connect to remote server due to lack of lock file where there are not DBs."
+    fi
+    run expect $BATS_TEST_DIRNAME/sql-shell-ctrld-continuation.expect
+    [ "$status" -eq 0 ]
+}
+
+# bats test_tags=no_lambda
+@test "sql-shell: DELIMITER inside edited text is ordinary statement text" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Presently sql command will not connect to remote server due to lack of lock file where there are not DBs."
+    fi
+    run env EDITOR="sh $BATS_TEST_DIRNAME/sql-shell-fake-editor.sh" \
+        expect $BATS_TEST_DIRNAME/sql-shell-edit-delimiter.expect
+    [ "$status" -eq 0 ]
+}
+
 @test "sql-shell: works with ANSI_QUOTES SQL mode" {
     if [ $SQL_ENGINE = "remote-engine" ]; then
       skip "Presently sql command will not connect to remote server due to lack of lock file where there are not DBs."

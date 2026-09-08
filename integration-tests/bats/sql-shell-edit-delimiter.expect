@@ -1,0 +1,36 @@
+#!/usr/bin/expect -f
+# A DELIMITER line inside \edit-produced text is treated as ordinary statement
+# text (a syntax error), consistent with typing the same text at the prompt.
+# EDITOR must point at sql-shell-fake-editor.sh, which replaces the buffer
+# with "DELIMITER |\nselect 42|". Without IgnoreDelimiterStatements on the
+# \edit split scanner, the embedded DELIMITER would be honored and select 42
+# would execute.
+
+set timeout 10
+spawn dolt sql
+
+expect {
+    "> " {}
+    timeout { send_user "\nFAIL: no initial prompt\n"; exit 1 }
+}
+
+# Seed lastSqlCmd so \edit has a query to transform.
+send "select 1;\r"
+expect {
+    "> " {}
+    timeout { send_user "\nFAIL: no prompt after seed query\n"; exit 1 }
+}
+
+send "\\edit\r"
+expect {
+    -re "syntax error" {}
+    -re {\| +42 +\|} { send_user "\nFAIL: embedded DELIMITER was honored\n"; exit 1 }
+    timeout { send_user "\nFAIL: no response to edited query\n"; exit 1 }
+}
+expect {
+    "> " {}
+    timeout { send_user "\nFAIL: no prompt after edited query\n"; exit 1 }
+}
+
+send "exit;\r"
+expect eof

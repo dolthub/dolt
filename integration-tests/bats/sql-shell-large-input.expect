@@ -1,0 +1,36 @@
+#!/usr/bin/expect -f
+# A large multi-line statement parses and executes correctly. This is a
+# correctness check on the shell's single-pass statement scanning.
+
+set timeout 20
+spawn dolt sql
+
+expect { "> " {} timeout { send_user "\nFAIL: no initial prompt\n"; exit 1 } }
+
+send "create table big (i int);\r"
+expect { "> " {} timeout { send_user "\nFAIL: create table\n"; exit 1 } }
+
+# Build one INSERT statement whose value rows span 50 physical lines, then send
+# it all at once. The continuation prompts are buffered by expect.
+set stmt "insert into big values\r"
+for {set k 1} {$k < 50} {incr k} {
+    append stmt "($k),\r"
+}
+append stmt "(50);\r"
+send $stmt
+expect {
+    -re "Query OK" {}
+    -re "syntax error" { send_user "\nFAIL: syntax error on large insert\n"; exit 1 }
+    timeout { send_user "\nFAIL: large insert did not complete\n"; exit 1 }
+}
+expect { "> " {} timeout { send_user "\nFAIL: no prompt after insert\n"; exit 1 } }
+
+send "select count(*) as c from big;\r"
+expect {
+    -re "\\| +50 +\\|" {}
+    timeout { send_user "\nFAIL: wrong row count\n"; exit 1 }
+}
+expect { "> " {} timeout { send_user "\nFAIL: no prompt after count\n"; exit 1 } }
+
+send "exit;\r"
+expect { eof {} timeout { send_user "\nFAIL: did not exit\n"; exit 1 } }

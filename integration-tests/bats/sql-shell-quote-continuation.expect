@@ -1,0 +1,35 @@
+#!/usr/bin/expect -f
+# A ; inside an unclosed quote does not end the statement; input continues.
+
+set timeout 10
+spawn dolt sql
+
+expect {
+    "> " {}
+    timeout { send_user "\nFAIL: no initial prompt\n"; exit 1 }
+}
+
+# The ; is inside an unclosed quote, so the statement must not end here.
+send "select length(';\r"
+expect {
+    -exact "-> " {}
+    -re "syntax error" { send_user "\nFAIL: treated as complete\n"; exit 1 }
+    timeout { send_user "\nFAIL: no continuation prompt\n"; exit 1 }
+}
+
+# Close the quote and complete the statement. Assert on the aliased result cell
+# (10861) anchored between table pipes, so the terminal echo of the typed input
+# (which has no surrounding "| |" delimiters) cannot satisfy the match.
+send "x') as n, 10861 as tag;\r"
+expect {
+    -re {\| +10861 +\|} {}
+    -re "syntax error" { send_user "\nFAIL: parse failed\n"; exit 1 }
+    timeout { send_user "\nFAIL: no result row\n"; exit 1 }
+}
+expect {
+    "> " {}
+    timeout { send_user "\nFAIL: no primary prompt\n"; exit 1 }
+}
+
+send "exit;\r"
+expect eof

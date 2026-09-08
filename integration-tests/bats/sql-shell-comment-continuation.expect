@@ -1,0 +1,49 @@
+#!/usr/bin/expect -f
+# A ; inside an unclosed block or line comment does not end the statement.
+
+set timeout 10
+spawn dolt sql
+
+expect {
+    "> " {}
+    timeout { send_user "\nFAIL: no initial prompt\n"; exit 1 }
+}
+
+# block comment
+send "select /* ;\r"
+expect {
+    -exact "-> " {}
+    -re "syntax error" { send_user "\nFAIL block: treated as complete\n"; exit 1 }
+    timeout { send_user "\nFAIL block: no continuation\n"; exit 1 }
+}
+send "*/ null;\r"
+expect {
+    "NULL" {}
+    -re "syntax error" { send_user "\nFAIL block: parse failed\n"; exit 1 }
+    timeout { send_user "\nFAIL block: no NULL row\n"; exit 1 }
+}
+expect {
+    "> " {}
+    timeout { send_user "\nFAIL block: no primary prompt\n"; exit 1 }
+}
+
+# line comment
+send "select -- ;\r"
+expect {
+    -exact "-> " {}
+    -re "syntax error" { send_user "\nFAIL line: treated as complete\n"; exit 1 }
+    timeout { send_user "\nFAIL line: no continuation\n"; exit 1 }
+}
+send "null;\r"
+expect {
+    "NULL" {}
+    -re "syntax error" { send_user "\nFAIL line: parse failed\n"; exit 1 }
+    timeout { send_user "\nFAIL line: no NULL row\n"; exit 1 }
+}
+expect {
+    "> " {}
+    timeout { send_user "\nFAIL line: no primary prompt\n"; exit 1 }
+}
+
+send "exit;\r"
+expect eof
