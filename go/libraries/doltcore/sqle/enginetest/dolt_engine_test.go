@@ -113,18 +113,36 @@ func TestSchemaOverridesWithAdaptiveEncoding(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	//t.Skip()
+	t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "alter modify column type incompatible types with non-empty table",
+			Name: "foreign key violation, parent row deleted, child keyless",
 			SetUpScript: []string{
-				"create table test(pk bigint primary key, v1 bit(20), index (v1));",
-				"insert into test values (1, 1);",
+				"create table parent (pk int primary key, a int);",
+				"create index idx_a on parent(pk, a);",
+				"create table child (fk1 int, fk2 int, foreign key (fk1, fk2) references parent(pk, a));",
+				"insert into parent values (10, 1), (20, 2);",
+				"insert into child values (10, 1), (20, 2);",
+				"call dolt_commit('-Am', 'setup');",
+				"call dolt_branch('other');",
+				"delete from child where fk2 = 1;",
+				"delete from parent where pk = 10;",
+				"call dolt_commit('-am', 'delete parent and child rows');",
+				"call dolt_checkout('other');",
+				"insert into child values (10, 1);",
+				"call dolt_commit('-am', 'insert child row');",
+				"set dolt_force_transaction_commit = on;",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:       "alter table test modify column pk datetime;",
-					ExpectedErr: sql.ErrIncorrectValue,
+					Query:            "call dolt_merge('main')",
+					SkipResultsCheck: true,
+				},
+				{
+					Query: "select violation_type, fk2 from dolt_constraint_violations_child",
+					Expected: []sql.Row{
+						{"foreign key", 1},
+					},
 				},
 			},
 		},
