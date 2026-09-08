@@ -474,13 +474,13 @@ var ModifyColumnTypeScripts = []queries.ScriptTest{
 	{
 		Name: "alter modify column type incompatible types with non-empty table",
 		SetUpScript: []string{
-			"create table test(pk bigint primary key, v1 bit(20), index (v1))",
-			"insert into test values (1, 1)",
+			"create table test(pk bigint primary key, v1 bit(20), index (v1));",
+			"insert into test values (1, 1);",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:       "alter table test modify column pk datetime",
-				ExpectedErr: sql.ErrIncorrectDateTimeValue,
+				Query:       "alter table test modify column pk datetime;",
+				ExpectedErr: sql.ErrInvalidValue,
 			},
 		},
 	},
