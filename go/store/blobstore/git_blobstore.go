@@ -310,6 +310,13 @@ type GitBlobstore struct {
 	// from the in-memory cache. Protected by writeMu.
 	pendingCacheEvictions []string
 
+	// syncMu guards inFlightSync.
+	syncMu sync.Mutex
+	// inFlightSync is the read-path fetch currently running, which readers
+	// arriving during it wait on instead of starting their own. Nil when none
+	// is running, so the zero value of GitBlobstore needs no initialization.
+	inFlightSync *inFlightSync
+
 	// cacheMu guards all cache fields below.
 	cacheMu sync.RWMutex
 	// cacheHead is the last commit OID whose tree we merged into the cache.
@@ -558,12 +565,12 @@ func (gbs *GitBlobstore) mergeCacheFromHead(ctx context.Context, head git.OID) e
 		return fmt.Errorf("gitblobstore: cannot merge cache for empty head")
 	}
 
-	gbs.cacheMu.RLock()
-	if gbs.cacheHead == head {
-		gbs.cacheMu.RUnlock()
+	// An unchanged head still means the cache is up to date as of now. Say so,
+	// or the dedup window never renews against a quiet remote and every
+	// cache-missing read fetches again.
+	if gbs.markSyncedIfHeadUnchanged(head) {
 		return nil
 	}
-	gbs.cacheMu.RUnlock()
 
 	entries, err := gbs.api.ListTreeRecursive(ctx, head)
 	if err != nil {
@@ -574,6 +581,7 @@ func (gbs *GitBlobstore) mergeCacheFromHead(ctx context.Context, head git.OID) e
 
 	// Double-check under write lock for concurrent callers.
 	if gbs.cacheHead == head {
+		gbs.lastSyncedAt = time.Now()
 		gbs.cacheMu.Unlock()
 		return nil
 	}
@@ -616,6 +624,37 @@ func (gbs *GitBlobstore) mergeCacheFromHead(ctx context.Context, head git.OID) e
 	gbs.lastSyncedAt = time.Now()
 	gbs.cacheMu.Unlock()
 	return nil
+}
+
+// markSyncedIfHeadUnchanged refreshes the sync timestamp if the cache was
+// already merged from |head|, and reports whether it was.
+func (gbs *GitBlobstore) markSyncedIfHeadUnchanged(head git.OID) bool {
+	gbs.cacheMu.Lock()
+	defer gbs.cacheMu.Unlock()
+	if gbs.cacheHead != head {
+		return false
+	}
+	gbs.lastSyncedAt = time.Now()
+	return true
+}
+
+// syncedWithinTTL reports whether a sync completed recently enough that another
+// one would not tell us anything new.
+func (gbs *GitBlobstore) syncedWithinTTL() bool {
+	ttl := gbs.syncForReadTTL
+	if ttl <= 0 {
+		return false
+	}
+	gbs.cacheMu.RLock()
+	defer gbs.cacheMu.RUnlock()
+	return !gbs.lastSyncedAt.IsZero() && time.Since(gbs.lastSyncedAt) < ttl
+}
+
+// hasSyncedHead reports whether the cache has ever been merged from a commit.
+func (gbs *GitBlobstore) hasSyncedHead() bool {
+	gbs.cacheMu.RLock()
+	defer gbs.cacheMu.RUnlock()
+	return gbs.cacheHead != ""
 }
 
 func (gbs *GitBlobstore) Path() string {
@@ -736,13 +775,8 @@ func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
 	// Dedup guard: skip the fetch if we synced recently. The write path
 	// (fetchAlignAndMergeForWrite) always does its own unconditional fetch,
 	// so this only affects read-path callers (Get/Exists).
-	if ttl := gbs.syncForReadTTL; ttl > 0 {
-		gbs.cacheMu.RLock()
-		sinceLast := time.Since(gbs.lastSyncedAt)
-		gbs.cacheMu.RUnlock()
-		if sinceLast < ttl {
-			return nil
-		}
+	if gbs.syncedWithinTTL() {
+		return nil
 	}
 
 	// Concurrent fetches contend with an in-progress push on slow remotes.
@@ -750,6 +784,66 @@ func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
 		return nil
 	}
 
+	// One fetch brings the whole ref, so concurrent readers all want the same
+	// thing, and for an ssh remote every extra fetch is another connection and
+	// another key exchange.
+	sync, owned := gbs.beginSync()
+	if !owned {
+		return sync.wait(ctx)
+	}
+	// Deferred: a panic in the fetch must still release the waiters, or every
+	// later reader blocks on a fetch that will never finish.
+	var err error
+	defer func() { gbs.endSync(sync, err) }()
+	err = gbs.fetchAndMergeForRead(ctx)
+	return err
+}
+
+// inFlightSync is a read-path fetch that other readers can wait on.
+type inFlightSync struct {
+	done chan struct{}
+	// err is the result of the fetch, written before |done| is closed.
+	err error
+}
+
+// wait returns the result of the in-flight fetch, which is as fresh as one the
+// caller would have started itself.
+//
+// It honors |ctx| because the fetch belongs to another caller, which may have no
+// deadline of its own and may be stuck on a hung connection.
+func (s *inFlightSync) wait(ctx context.Context) error {
+	select {
+	case <-s.done:
+		return s.err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// beginSync returns the in-flight fetch to wait on, or, when there is none, a
+// new one that the caller owns and must complete with endSync.
+func (gbs *GitBlobstore) beginSync() (sync *inFlightSync, owned bool) {
+	gbs.syncMu.Lock()
+	defer gbs.syncMu.Unlock()
+	if gbs.inFlightSync != nil {
+		return gbs.inFlightSync, false
+	}
+	gbs.inFlightSync = &inFlightSync{done: make(chan struct{})}
+	return gbs.inFlightSync, true
+}
+
+// endSync publishes |err| to the waiters and lets the next fetch start.
+func (gbs *GitBlobstore) endSync(sync *inFlightSync, err error) {
+	gbs.syncMu.Lock()
+	gbs.inFlightSync = nil
+	gbs.syncMu.Unlock()
+	sync.err = err
+	close(sync.done)
+}
+
+// fetchAndMergeForRead fetches the remote ref and brings the cache up to date
+// with it. Only syncForRead may call it: it is what keeps one running at a time.
+func (gbs *GitBlobstore) fetchAndMergeForRead(ctx context.Context) error {
 	// Fetch remote ref into our remote-tracking ref.
 	err := gbs.api.FetchRef(ctx, gbs.remoteName, gbs.remoteRef, gbs.remoteTrackingRef)
 	if err != nil {
@@ -1002,6 +1096,9 @@ func (gbs *GitBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 		if _, ok := gbs.cacheGetObject(key); ok {
 			return true, nil
 		}
+		if gbs.syncedAbsent(key) {
+			return false, nil
+		}
 	}
 
 	if err := gbs.syncForRead(ctx); err != nil {
@@ -1032,12 +1129,40 @@ func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.
 		if _, ok := gbs.cacheGetObject(key); ok {
 			return gbs.getFromCache(ctx, key, br)
 		}
+		if gbs.syncedAbsent(key) {
+			return nil, 0, "", NotFound{Key: key}
+		}
 	}
 
 	if err := gbs.syncForRead(ctx); err != nil {
 		return nil, 0, "", err
 	}
 	return gbs.getFromCache(ctx, key, br)
+}
+
+// syncedAbsent reports that |key| does not exist, on the authority of the cache
+// alone, so the caller can skip fetching to find that out.
+//
+// The cache holds the complete recursive listing of the commit it was merged
+// from, plus this blobstore's own pending writes, so a key missing from it does
+// not exist as of that commit. Answering from the cache puts an absent key on
+// the same footing as a present one, which is already served as of that commit
+// rather than re-checked against the remote.
+//
+// A non-manifest key is content-addressed, so the only thing a fetch could add
+// is a key another writer has since pushed. Callers reach such a key by way of
+// the manifest naming it, and the manifest always fetches because it is never
+// served from the cache, so the sync that delivers a new manifest also delivers
+// the keys it names.
+func (gbs *GitBlobstore) syncedAbsent(key string) bool {
+	if key == gitblobstoreManifestKey {
+		return false
+	}
+	if !gbs.hasSyncedHead() {
+		return false
+	}
+	_, ok := gbs.cacheGetObject(key)
+	return !ok
 }
 
 func (gbs *GitBlobstore) getFromCache(ctx context.Context, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {
