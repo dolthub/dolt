@@ -66,6 +66,7 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~export-tables.bats~
 ~filter-branch.bats~
 ~arg-parsing.bats~
+~directory-flag.bats~
 ~dump.bats~
 ~rename-tables.bats~
 ~drop-create.bats~

@@ -267,11 +267,15 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		var input io.Reader = os.Stdin
 		if fileInput, ok := apr.GetValue(fileInputFlag); ok {
 			isTty = false
-			input, err = os.OpenFile(fileInput, os.O_RDONLY, os.ModePerm)
+			filePath, err := cliCtx.WorkingDir().Abs(fileInput)
 			if err != nil {
 				return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.BuildDError("couldn't open file %s", fileInput).Build(), usage)
 			}
-			info, err := os.Stat(fileInput)
+			input, err = os.OpenFile(filePath, os.O_RDONLY, os.ModePerm)
+			if err != nil {
+				return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.BuildDError("couldn't open file %s", fileInput).Build(), usage)
+			}
+			info, err := os.Stat(filePath)
 			if err != nil {
 				return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.BuildDError("couldn't get file size %s", fileInput).Build(), usage)
 			}
