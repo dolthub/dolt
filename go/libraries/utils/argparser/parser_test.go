@@ -188,6 +188,39 @@ func TestArgParserListEmptyValue(t *testing.T) {
 	assert.True(t, apr2.Contains("flag"))
 }
 
+func TestArgParserRepeatableString(t *testing.T) {
+	ap := NewArgParserWithVariableArgs("test").SupportsRepeatableString("directory", "C", "dir", "")
+
+	apr, err := ap.Parse([]string{"-C", "parent,with,commas", "--directory=child", "-Cgrandchild"})
+	require.NoError(t, err)
+	values, ok := apr.GetValueList("directory")
+	require.True(t, ok)
+	assert.Equal(t, []string{"parent,with,commas", "child", "grandchild"}, values)
+	value, ok := apr.GetValue("directory")
+	require.True(t, ok)
+	assert.Equal(t, "grandchild", value)
+
+	apr, remaining, err := ap.ParseGlobalArgs([]string{"-C=parent", "--directory", "child", "status"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"status"}, remaining)
+	values, ok = apr.GetValueList("directory")
+	require.True(t, ok)
+	assert.Equal(t, []string{"parent", "child"}, values)
+
+	apr, err = apr.SetArgument("directory", "replacement")
+	require.NoError(t, err)
+	values, ok = apr.GetValueList("directory")
+	require.True(t, ok)
+	assert.Equal(t, []string{"replacement"}, values)
+}
+
+func TestArgParserNonRepeatableStringRejectsMultipleValues(t *testing.T) {
+	ap := NewArgParserWithVariableArgs("test").SupportsString("param", "p", "value", "")
+
+	_, err := ap.Parse([]string{"--param", "first", "-p", "second"})
+	require.EqualError(t, err, "error: multiple values provided for `param'")
+}
+
 func TestArgParserSet(t *testing.T) {
 	ap := createParserWithOptionalArgs()
 	apr, err := ap.Parse([]string{"-o", "optional value", "-f", "foo", "bar"})

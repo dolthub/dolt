@@ -150,6 +150,14 @@ func (ap *ArgParser) SupportsString(name, abbrev, valDesc, desc string) *ArgPars
 	return ap
 }
 
+// SupportsRepeatableString adds support for a string argument that may be specified more than once.
+func (ap *ArgParser) SupportsRepeatableString(name, abbrev, valDesc, desc string) *ArgParser {
+	opt := &Option{name, abbrev, valDesc, OptionalRepeatableValue, desc, nil, false}
+	ap.SupportOption(opt)
+
+	return ap
+}
+
 // SupportsRequiredString adds support for a new required string argument with the description given. See SupportOpt for details on params.
 func (ap *ArgParser) SupportsRequiredString(name, abbrev, valDesc, desc string) *ArgParser {
 	opt := &Option{name, abbrev, valDesc, RequiredValue, desc, nil, false}
@@ -260,7 +268,7 @@ func (ap *ArgParser) matchModalOptions(arg string) (matches []*Option, rest stri
 func (ap *ArgParser) sortedValueOptions() []string {
 	vos := make([]string, 0, len(ap.Supported))
 	for s, opt := range ap.nameOrAbbrevToOpt {
-		if (opt.OptType == OptionalValue || opt.OptType == OptionalEmptyValue || opt.OptType == RequiredValue) && s != "" {
+		if (opt.OptType == OptionalValue || opt.OptType == OptionalEmptyValue || opt.OptType == RequiredValue || opt.OptType == OptionalRepeatableValue) && s != "" {
 			vos = append(vos, s)
 		}
 	}
@@ -295,6 +303,7 @@ func (ap *ArgParser) matchValueOption(arg string, isLongFormFlag bool) (match *O
 func (ap *ArgParser) ParseGlobalArgs(args []string) (apr *ArgParseResults, remaining []string, err error) {
 	list := make([]string, 0, 16)
 	results := make(map[string]string)
+	repeatedResults := make(map[string][]string)
 
 	i := 0
 	for ; i < len(args); i++ {
@@ -306,11 +315,11 @@ func (ap *ArgParser) ParseGlobalArgs(args []string) (apr *ArgParseResults, remai
 
 		if arg[0] != '-' {
 			// This isn't a flag; assume it's the subcommand. Don't parse the remaining args.
-			return &ArgParseResults{results, nil, ap, NO_POSITIONAL_ARGS}, args[i:], nil
+			return &ArgParseResults{results, repeatedResults, nil, ap, NO_POSITIONAL_ARGS}, args[i:], nil
 		}
 
 		var err error
-		i, list, results, err = ap.parseToken(args, i, list, results)
+		i, list, results, repeatedResults, err = ap.parseToken(args, i, list, results, repeatedResults)
 
 		if err != nil {
 			return nil, nil, err
@@ -327,6 +336,7 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 	positionalArgs := make([]string, 0, 16)
 	positionalArgsSeparatorIndex := NO_POSITIONAL_ARGS
 	namedArgs := make(map[string]string)
+	repeatedArgs := make(map[string][]string)
 	onlyPositionalArgsLeft := false
 
 	index := 0
@@ -346,7 +356,7 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 		}
 
 		var err error
-		index, positionalArgs, namedArgs, err = ap.parseToken(args, index, positionalArgs, namedArgs)
+		index, positionalArgs, namedArgs, repeatedArgs, err = ap.parseToken(args, index, positionalArgs, namedArgs, repeatedArgs)
 
 		if err != nil {
 			return nil, err
@@ -369,7 +379,7 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 		}
 	}
 
-	return &ArgParseResults{namedArgs, positionalArgs, ap, positionalArgsSeparatorIndex}, nil
+	return &ArgParseResults{namedArgs, repeatedArgs, positionalArgs, ap, positionalArgsSeparatorIndex}, nil
 }
 
 func (ap *ArgParser) isOptionOrFlag(s string) bool {
@@ -388,7 +398,7 @@ func (ap *ArgParser) isOptionOrFlag(s string) bool {
 	return ok
 }
 
-func (ap *ArgParser) parseToken(args []string, index int, positionalArgs []string, namedArgs map[string]string) (newIndex int, newPositionalArgs []string, newNamedArgs map[string]string, err error) {
+func (ap *ArgParser) parseToken(args []string, index int, positionalArgs []string, namedArgs map[string]string, repeatedArgs map[string][]string) (newIndex int, newPositionalArgs []string, newNamedArgs map[string]string, newRepeatedArgs map[string][]string, err error) {
 	arg := args[index]
 
 	isLongFormFlag := len(arg) >= 2 && arg[:2] == "--"
@@ -396,7 +406,7 @@ func (ap *ArgParser) parseToken(args []string, index int, positionalArgs []strin
 	arg = strings.TrimLeft(arg, "-")
 
 	if arg == helpFlag || arg == helpFlagAbbrev {
-		return 0, nil, nil, ErrHelp
+		return 0, nil, nil, nil, ErrHelp
 	}
 
 	modalOpts, rest := ap.matchModalOptions(arg)
@@ -410,7 +420,7 @@ func (ap *ArgParser) parseToken(args []string, index int, positionalArgs []strin
 	for optName, count := range optCounts {
 		opt := ap.nameOrAbbrevToOpt[optName]
 		if _, exists := namedArgs[opt.Name]; exists && opt.OptType != OptionalRepeatableFlag {
-			return 0, nil, nil, errors.New("error: multiple values provided for `" + opt.Name + "'")
+			return 0, nil, nil, nil, errors.New("error: multiple values provided for `" + opt.Name + "'")
 		}
 
 		if opt.OptType == OptionalRepeatableFlag {
@@ -429,22 +439,22 @@ func (ap *ArgParser) parseToken(args []string, index int, positionalArgs []strin
 
 	if opt == nil {
 		if rest == "" {
-			return index, positionalArgs, namedArgs, nil
+			return index, positionalArgs, namedArgs, repeatedArgs, nil
 		}
 
 		if len(modalOpts) > 0 {
 			// value was attached to modal flag
 			// eg: dolt branch -fdmy_branch
 			positionalArgs = append(positionalArgs, rest)
-			return index, positionalArgs, namedArgs, nil
+			return index, positionalArgs, namedArgs, repeatedArgs, nil
 		}
 
-		return 0, nil, nil, UnknownArgumentParam{name: arg}
+		return 0, nil, nil, nil, UnknownArgumentParam{name: arg}
 	}
 
-	if _, exists := namedArgs[opt.Name]; exists {
+	if _, exists := namedArgs[opt.Name]; exists && opt.OptType != OptionalRepeatableValue {
 		//already provided
-		return 0, nil, nil, errors.New("error: multiple values provided for `" + opt.Name + "'")
+		return 0, nil, nil, nil, errors.New("error: multiple values provided for `" + opt.Name + "'")
 	}
 
 	if value == nil {
@@ -452,7 +462,7 @@ func (ap *ArgParser) parseToken(args []string, index int, positionalArgs []strin
 		valueStr := ""
 		if next >= len(args) {
 			if opt.OptType != OptionalEmptyValue {
-				return 0, nil, nil, errors.New("error: no value for option `" + opt.Name + "'")
+				return 0, nil, nil, nil, errors.New("error: no value for option `" + opt.Name + "'")
 			}
 		} else {
 			if opt.AllowMultipleOptions {
@@ -479,7 +489,7 @@ func (ap *ArgParser) parseToken(args []string, index int, positionalArgs []strin
 		err := opt.Validator(*value)
 
 		if err != nil {
-			return 0, nil, nil, err
+			return 0, nil, nil, nil, err
 		}
 	}
 
@@ -488,7 +498,10 @@ func (ap *ArgParser) parseToken(args []string, index int, positionalArgs []strin
 	}
 
 	namedArgs[opt.Name] = *value
-	return index, positionalArgs, namedArgs, nil
+	if opt.OptType == OptionalRepeatableValue {
+		repeatedArgs[opt.Name] = append(repeatedArgs[opt.Name], *value)
+	}
+	return index, positionalArgs, namedArgs, repeatedArgs, nil
 }
 
 func getListValues(args []string) []string {
