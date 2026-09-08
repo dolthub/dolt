@@ -127,6 +127,45 @@ teardown() {
     [[ "$output" =~ "On branch" ]] || false
 }
 
+@test "directory-flag: input file paths resolve from the target directory" {
+    echo "create table sql_file_input (pk int primary key);" > "$REPO/input.sql"
+    echo "pk,value" > "$REPO/input.csv"
+    echo "1,imported" >> "$REPO/input.csv"
+    repo_parent=$(dirname "$REPO")
+    repo_base=$(basename "$REPO")
+
+    cd "$NONREPO"
+    run dolt -C "$repo_parent" -C "$repo_base" sql --file input.sql
+    [ "$status" -eq 0 ]
+
+    run dolt -C "$repo_parent" --directory "$repo_base" table import -c -pk pk csv_file_input input.csv
+    [ "$status" -eq 0 ]
+
+    run dolt -C "$REPO" sql -r csv -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "sql_file_input" ]] || false
+    [[ "$output" =~ "csv_file_input" ]] || false
+}
+
+@test "directory-flag: output file paths resolve from the target directory" {
+    dolt sql -q "create table file_output (pk int primary key, value varchar(20)); insert into file_output values (1, 'exported')"
+    repo_parent=$(dirname "$REPO")
+    repo_base=$(basename "$REPO")
+
+    cd "$NONREPO"
+    run dolt -C "$repo_parent" -C "$repo_base" table export file_output output.csv
+    [ "$status" -eq 0 ]
+    [ -f "$REPO/output.csv" ]
+    [ ! -e "$NONREPO/output.csv" ]
+    grep -q "exported" "$REPO/output.csv"
+
+    run dolt -C "$repo_parent" --directory "$repo_base" dump --file-name output.sql
+    [ "$status" -eq 0 ]
+    [ -f "$REPO/output.sql" ]
+    [ ! -e "$NONREPO/output.sql" ]
+    grep -q "CREATE TABLE.*file_output" "$REPO/output.sql"
+}
+
 @test "directory-flag: -C works alongside other global flags" {
     dolt sql -q "create table withflags (pk int primary key)"
 
