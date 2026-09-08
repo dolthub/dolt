@@ -46,7 +46,7 @@ teardown() {
     [[ "$output" =~ "t2" ]] || false
 }
 
-@test "directory-flag: --chdir is a synonym for -C" {
+@test "directory-flag: --chdir is still supported" {
     dolt sql -q "create table t3 (pk int primary key)"
 
     cd "$NONREPO"
