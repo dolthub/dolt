@@ -101,7 +101,7 @@ RUN mkdir -p /build/bin && \
     cp /build/elixir/myxql/burrito_out/simple_linux /build/bin/myxql-driver-test && \
     cp /build/elixir/mysql/burrito_out/mysql_otp_linux /build/bin/mysql-otp-test
 
-FROM maven:3.8-openjdk-17-slim AS java_clients_build
+FROM maven:3.9-eclipse-temurin-17-noble AS java_clients_build
 RUN apt-get update && apt-get install -y binutils && rm -rf /var/lib/apt/lists/*
 COPY dolt/integration-tests/mysql-client-tests/java/ /build/java/
 WORKDIR /build/java/
