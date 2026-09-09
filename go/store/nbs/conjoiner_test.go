@@ -190,6 +190,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 	// openTableSet returns a tableSet with every spec in |upstream| open,
 	// which is the state a NomsBlockStore is in when it starts a conjoin.
 	openTableSet := func(t *testing.T, p tableFilePersister, upstream manifestContents) *tableSet {
+		t.Helper()
 		ts := newTableSet(p, &UnlimitedQuotaProvider{})
 		ts.upstream = make(chunkSourceSet)
 		for _, spec := range upstream.specs {
