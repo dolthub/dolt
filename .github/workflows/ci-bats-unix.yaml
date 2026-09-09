@@ -22,11 +22,10 @@ jobs:
     defaults:
       run:
         shell: bash
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-22.04 ]
         sql_engine: [ local-engine, remote-engine ]
     env:
       use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
@@ -56,7 +55,7 @@ jobs:
             echo "DOLT_BATS_AWS_EXISTING_REPO=aws_remote_bats_tests__dolt__" >> $GITHUB_ENV
           fi
       - name: Configure filter tags for lambda bats
-        if: ${{ matrix.os == 'ubuntu-22.04' && env.use_credentials == 'true' }}
+        if: ${{ env.use_credentials == 'true' }}
         run: |
           echo "BATS_FILTER=--filter-tags no_lambda" >> $GITHUB_ENV
       - name: Configure AWS Credentials
@@ -90,7 +89,6 @@ jobs:
       - name: Setup Dolt Config
         uses: ./.github/actions/setup-dolt-config
       - name: Install system dependencies
-        if: matrix.os == 'ubuntu-22.04'
         run: sudo apt-get install --no-install-recommends -y expect pcre2-utils openssh-server parallel
       - name: Cache Hadoop
         id: cache_hadoop
@@ -114,28 +112,25 @@ jobs:
           path: ./.ci_bin/parquet-cli-1.12.3-runtime.jar
           key: parquet-cli-1.12.3-runtime-jar
       - name: Install parquet-cli
-        if: steps.cache_parquet_cli.outputs.cache-hit != 'true'
+        id: parquet_cli
         working-directory: ./.ci_bin
         run: |
-          curl -sSL -o parquet-cli-1.12.3-runtime.jar https://repo1.maven.org/maven2/org/apache/parquet/parquet-cli/1.12.3/parquet-cli-1.12.3-runtime.jar
-      - name: Set parquet-cli runtime jar path
-        id: parquet_cli
-        run: echo "runtime_jar=$(pwd)/.ci_bin/parquet-cli-1.12.3-runtime.jar" >> $GITHUB_OUTPUT
+          if [ "${{ steps.cache_parquet_cli.outputs.cache-hit }}" != "true" ]; then
+            curl -sSL -o parquet-cli-1.12.3-runtime.jar https://repo1.maven.org/maven2/org/apache/parquet/parquet-cli/1.12.3/parquet-cli-1.12.3-runtime.jar
+          fi
+          echo "runtime_jar=$(pwd)/parquet-cli-1.12.3-runtime.jar" >> $GITHUB_OUTPUT
       - name: Cache MinIO
         id: cache_minio
-        if: matrix.os == 'ubuntu-22.04'
         uses: actions/cache@v5
         with:
           path: ./.ci_bin/minio
           key: minio-bin
       - name: Install MinIO
-        if: matrix.os == 'ubuntu-22.04' && steps.cache_minio.outputs.cache-hit != 'true'
+        if: steps.cache_minio.outputs.cache-hit != 'true'
         working-directory: ./.ci_bin
         run: |
           curl -sSL -o minio https://dl.min.io/server/minio/release/linux-amd64/minio
           chmod +x minio
-      - name: Check expect
-        run: expect -v
       - name: Test all Unix
         if: matrix.sql_engine == 'local-engine' || env.use_credentials == 'true'
         env:
