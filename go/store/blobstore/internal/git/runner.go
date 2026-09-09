@@ -173,16 +173,7 @@ func (r *Runner) Run(ctx context.Context, opts RunOptions, args ...string) ([]by
 		Output:   out,
 		Cause:    err,
 	}
-	// Neither a cancelled command nor an abandoned pipe is an auth failure, so skip
-	// the credential hints NormalizeError appends. Cancellation surfaces as the
-	// child's kill signal, so name ctx.Err() for callers that test for it.
-	if ctxErr := ctx.Err(); ctxErr != nil {
-		return out, errors.Join(ctxErr, cerr)
-	}
-	if errors.Is(err, exec.ErrWaitDelay) {
-		return out, cerr
-	}
-	return out, gitauth.NormalizeError(cerr, out)
+	return out, gitauth.NormalizeError(ctx, cerr, out)
 }
 
 // Start starts "git <args...>" and returns a ReadCloser for stdout.
@@ -213,6 +204,7 @@ func (r *Runner) Start(ctx context.Context, opts RunOptions, args ...string) (io
 
 	// Wrap stdout so that Close also waits to avoid zombies if callers bail early.
 	rc := &cmdReadCloser{
+		ctx:    ctx,
 		r:      stdout,
 		cmd:    cmd,
 		stderr: &stderr,
@@ -223,6 +215,9 @@ func (r *Runner) Start(ctx context.Context, opts RunOptions, args ...string) (io
 }
 
 type cmdReadCloser struct {
+	// ctx is the context the command was started with, so Close can tell a
+	// cancellation from a git failure.
+	ctx     context.Context
 	r       io.ReadCloser
 	cmd     *exec.Cmd
 	stderr  *bytes.Buffer
@@ -263,7 +258,7 @@ func (c *cmdReadCloser) Close() error {
 		Output:   c.stderr.Bytes(),
 		Cause:    err,
 	}
-	return gitauth.NormalizeError(cerr, cerr.Output)
+	return gitauth.NormalizeError(c.ctx, cerr, cerr.Output)
 }
 
 func (r *Runner) env(opts RunOptions) []string {
