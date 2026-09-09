@@ -40,12 +40,17 @@ type countingFetchGitAPI struct {
 	// started is closed when the first fetch begins.
 	started     chan struct{}
 	startedOnce sync.Once
+	// canceled receives the cause of every fetch that ended because its own
+	// context was canceled. Buffered, so a test that ignores it never blocks a
+	// fetch. Its length is also the count of such fetches.
+	canceled chan error
 }
 
 func (c *countingFetchGitAPI) FetchRef(ctx context.Context, remote, srcRef, dstRef string) error {
 	c.total.Add(1)
 	c.startedOnce.Do(func() { close(c.started) })
 	n := c.inFlight.Add(1)
+	defer c.inFlight.Add(-1)
 	for {
 		max := c.maxSeen.Load()
 		if n <= max || c.maxSeen.CompareAndSwap(max, n) {
@@ -53,10 +58,41 @@ func (c *countingFetchGitAPI) FetchRef(ctx context.Context, remote, srcRef, dstR
 		}
 	}
 	if c.delay > 0 {
-		time.Sleep(c.delay)
+		// A real fetch dies when its context is canceled, and the point of a
+		// fetch owning its context is who gets to do that, so stand in for one
+		// faithfully rather than sleeping through cancellation.
+		select {
+		case <-time.After(c.delay):
+		case <-ctx.Done():
+			select {
+			case c.canceled <- context.Cause(ctx):
+			default:
+			}
+			return context.Cause(ctx)
+		}
 	}
-	c.inFlight.Add(-1)
 	return c.GitAPI.FetchRef(ctx, remote, srcRef, dstRef)
+}
+
+// awaitFetchStarted waits until |n| fetches have begun. The count rises before a
+// fetch does anything, so this is the signal that the nth one is in flight.
+func (c *countingFetchGitAPI) awaitFetchStarted(t *testing.T, n int64) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		return c.total.Load() >= n
+	}, 5*time.Second, time.Millisecond, "fetch %d never started", n)
+}
+
+// awaitCanceledFetch returns the cause of the next fetch to end in cancellation.
+func (c *countingFetchGitAPI) awaitCanceledFetch(t *testing.T) error {
+	t.Helper()
+	select {
+	case cause := <-c.canceled:
+		return cause
+	case <-time.After(5 * time.Second):
+		t.Fatal("no fetch was canceled")
+		return nil
+	}
 }
 
 // newCountingBlobstore returns a blobstore whose fetches are counted, along with
@@ -75,8 +111,15 @@ func newCountingBlobstore(t *testing.T, ctx context.Context, tree map[string][]b
 	})
 	require.NoError(t, err)
 
-	counting := &countingFetchGitAPI{GitAPI: bs.api, started: make(chan struct{})}
+	counting := &countingFetchGitAPI{
+		GitAPI:   bs.api,
+		started:  make(chan struct{}),
+		canceled: make(chan error, 16),
+	}
 	bs.api = counting
+	// Close cancels and drains any fetch still running, which keeps a fetch
+	// goroutine from reading the repos t.TempDir is about to remove.
+	t.Cleanup(func() { require.NoError(t, bs.Close()) })
 	return bs, remoteRepo, counting
 }
 
@@ -264,4 +307,158 @@ func TestGitBlobstore_WaitingOnAnotherFetchHonorsContext(t *testing.T) {
 	require.ErrorIs(t, err, context.DeadlineExceeded)
 	require.Less(t, elapsed, stuckFor/2, "waiter blocked on the stuck fetch")
 	require.Equal(t, int64(1), counting.total.Load(), "the waiter must not start its own fetch")
+	require.Empty(t, counting.canceled, "a waiter leaving must not end a fetch another reader needs")
+}
+
+// A fetch is shared, so it must not answer to any one reader's deadline. The
+// reader that happened to start it giving up cannot be allowed to fail the
+// readers waiting behind it, which still have time of their own.
+func TestGitBlobstore_FetchOutlivesTheReaderThatStartedIt(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	bs, _, counting := newCountingBlobstore(t, ctx, map[string][]byte{
+		"manifest": []byte("hello\n"),
+	}, time.Nanosecond)
+	// Longer than the first reader's deadline, shorter than the second's.
+	counting.delay = 300 * time.Millisecond
+
+	firstCtx, cancelFirst := context.WithTimeout(ctx, 50*time.Millisecond)
+	defer cancelFirst()
+	firstDone := make(chan error, 1)
+	go func() {
+		_, _, err := GetBytes(firstCtx, bs, "manifest", AllRange)
+		firstDone <- err
+	}()
+	<-counting.started
+
+	// A second reader joins the fetch the first one started, then outlives it.
+	secondCtx, cancelSecond := context.WithTimeout(ctx, 30*time.Second)
+	defer cancelSecond()
+	secondDone := make(chan error, 1)
+	go func() {
+		got, _, err := GetBytes(secondCtx, bs, "manifest", AllRange)
+		if err == nil {
+			require.Equal(t, []byte("hello\n"), got)
+		}
+		secondDone <- err
+	}()
+
+	require.ErrorIs(t, <-firstDone, context.DeadlineExceeded)
+	require.NoError(t, <-secondDone, "the first reader's deadline must not fail a reader that still had time")
+	require.Equal(t, int64(1), counting.total.Load(), "the second reader must not start its own fetch")
+	require.Empty(t, counting.canceled, "the fetch had a waiter throughout and must not have been canceled")
+}
+
+// A fetch nobody is waiting for is work nobody asked for, so the last reader to
+// leave ends it.
+func TestGitBlobstore_LastReaderLeavingEndsTheFetch(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	bs, _, counting := newCountingBlobstore(t, ctx, map[string][]byte{
+		"manifest": []byte("hello\n"),
+	}, time.Nanosecond)
+	// Stand in for a hung connection: far longer than the only reader will wait.
+	counting.delay = 30 * time.Second
+
+	readCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
+	_, err := bs.Exists(readCtx, "manifest")
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+
+	require.ErrorIs(t, counting.awaitCanceledFetch(t), errGitSyncAbandoned)
+	require.Equal(t, int64(1), counting.total.Load())
+}
+
+// The abandoned fetch's git process is still exiting when the next reader
+// arrives. Only one fetch may run against the remote-tracking ref at a time, so
+// that reader waits it out rather than starting a second one alongside it.
+func TestGitBlobstore_NextFetchWaitsForTheAbandonedOne(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	bs, _, counting := newCountingBlobstore(t, ctx, map[string][]byte{
+		"manifest": []byte("hello\n"),
+	}, time.Nanosecond)
+	counting.delay = 30 * time.Second
+
+	readCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
+	_, err := bs.Exists(readCtx, "manifest")
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+
+	// Arrive while the abandoned fetch is winding down. This read must still be
+	// served, by a fetch of its own.
+	counting.delay = 0
+	got, _, err := GetBytes(ctx, bs, "manifest", AllRange)
+	require.NoError(t, err)
+	require.Equal(t, []byte("hello\n"), got)
+
+	require.Equal(t, int64(2), counting.total.Load(), "the second reader needed a fetch of its own")
+	require.Equal(t, int64(1), counting.maxSeen.Load(), "fetches must not overlap")
+	require.ErrorIs(t, counting.awaitCanceledFetch(t), errGitSyncAbandoned)
+}
+
+// Closing the store ends a fetch running under it, and says so. Afterwards the
+// store answers from the cache it already has and never fetches again.
+func TestGitBlobstore_CloseEndsAndDrainsTheFetch(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	bs, _, counting := newCountingBlobstore(t, ctx, map[string][]byte{
+		"manifest": []byte("hello\n"),
+		"present":  []byte("abc"),
+	}, time.Nanosecond)
+
+	// Warm the cache, so there is something to answer from after the close.
+	_, _, err := GetBytes(ctx, bs, "manifest", AllRange)
+	require.NoError(t, err)
+
+	// A reader with no deadline of its own, the shape conjoin has.
+	counting.delay = 30 * time.Second
+	readDone := make(chan error, 1)
+	go func() {
+		_, _, err := GetBytes(context.Background(), bs, "manifest", AllRange)
+		readDone <- err
+	}()
+	counting.awaitFetchStarted(t, 2)
+
+	require.NoError(t, bs.Close())
+	require.Zero(t, counting.inFlight.Load(), "Close returned with a fetch still running")
+	require.ErrorIs(t, <-readDone, errGitStoreClosed, "a read caught by Close must say what happened")
+	require.ErrorIs(t, counting.awaitCanceledFetch(t), errGitStoreClosed)
+
+	// The cache outlives the close, and nothing goes to the remote for it.
+	got, _, err := GetBytes(ctx, bs, "present", AllRange)
+	require.NoError(t, err)
+	require.Equal(t, []byte("abc"), got)
+	ok, err := bs.Exists(ctx, "manifest")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, int64(2), counting.total.Load(), "a closed store must not fetch")
+}
+
+// Teardown deletes the remote-tracking ref a fetch writes and repacks the
+// objects it reads, so it must not run alongside one.
+func TestGitBlobstore_TeardownEndsAndDrainsTheFetch(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	bs, _, counting := newCountingBlobstore(t, ctx, map[string][]byte{
+		"manifest": []byte("hello\n"),
+	}, time.Nanosecond)
+	counting.delay = 30 * time.Second
+
+	readDone := make(chan error, 1)
+	go func() {
+		_, _, err := GetBytes(context.Background(), bs, "manifest", AllRange)
+		readDone <- err
+	}()
+	<-counting.started
+
+	require.NoError(t, bs.Teardown(ctx))
+	require.Zero(t, counting.inFlight.Load(), "Teardown returned with a fetch still running")
+	require.ErrorIs(t, <-readDone, errGitStoreTornDown, "a read caught by Teardown must say what happened")
+	require.ErrorIs(t, counting.awaitCanceledFetch(t), errGitStoreTornDown)
 }
