@@ -1341,6 +1341,10 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 			IsContiguous:           isContiguous,
 		}
 	}
+	// GMS orders ranges by value, which is not the physical order of an index with descending or NULLS LAST columns
+	if err = prolly.SortRangesByStart(ctx, pranges); err != nil {
+		return nil, err
+	}
 	return pranges, nil
 }
 
