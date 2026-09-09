@@ -19,6 +19,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"slices"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -152,7 +153,11 @@ func (itr *rangePartitionIter) nextProllyPartition() (sql.Partition, error) {
 
 	var bytes [4]byte
 	binary.BigEndian.PutUint32(bytes[:], uint32(itr.curr))
-	pr := itr.prollyRanges[itr.curr]
+	i := itr.curr
+	if itr.isReverse {
+		i = len(itr.prollyRanges) - 1 - i
+	}
+	pr := itr.prollyRanges[i]
 	itr.curr += 1
 
 	return rangePartition{
@@ -466,6 +471,9 @@ type coveringIndexImplBuilder struct {
 func NewSequenceRangeIter(ctx context.Context, irIter IndexRangeIterable, ranges []prolly.Range, reverse bool) (prolly.MapIter, error) {
 	if len(ranges) == 0 {
 		return &strictLookupIter{}, nil
+	}
+	if reverse {
+		slices.Reverse(ranges)
 	}
 	// TODO: probably need to do something with Doltgres ranges here?
 	cur, err := irIter.NewRangeMapIter(ctx, ranges[0], reverse)

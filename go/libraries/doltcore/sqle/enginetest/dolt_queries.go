@@ -1834,6 +1834,56 @@ var DoltScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "descending index scans over several ranges",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk INT PRIMARY KEY, a INT, b INT, INDEX a_desc (a DESC), INDEX ab (a, b DESC));",
+			"INSERT INTO t VALUES (1, 10, 1), (2, 20, 2), (3, 30, 3), (4, 40, 4), (5, NULL, 5), (6, 20, 6), (7, 30, NULL);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "EXPLAIN PLAN SELECT a FROM t WHERE a IN (10, 30, 40) ORDER BY a DESC",
+				Expected: []sql.Row{
+					{"IndexedTableAccess(t)"},
+					{" ├─ index: [t.a DESC]"},
+					{" ├─ filters: [{[10, 10]}, {[30, 30]}, {[40, 40]}]"},
+					{" └─ columns: [a]"},
+				},
+			},
+			{
+				Query:    "SELECT a FROM t WHERE a IN (10, 30, 40) ORDER BY a DESC",
+				Expected: []sql.Row{{40}, {30}, {30}, {10}},
+			},
+			{
+				Query:    "SELECT a FROM t WHERE a IN (10, 30, 40) ORDER BY a",
+				Expected: []sql.Row{{10}, {30}, {30}, {40}},
+			},
+			{
+				Query:    "SELECT a FROM t WHERE a < 20 OR a > 30 ORDER BY a DESC",
+				Expected: []sql.Row{{40}, {10}},
+			},
+			{
+				Query:    "SELECT a FROM t WHERE a < 20 OR a > 30 ORDER BY a",
+				Expected: []sql.Row{{10}, {40}},
+			},
+			{
+				Query:    "SELECT a FROM t WHERE a > 30 OR b = 2 ORDER BY a DESC",
+				Expected: []sql.Row{{40}, {20}},
+			},
+			{
+				Query:    "SELECT a FROM t WHERE a > 30 OR b = 2 ORDER BY a",
+				Expected: []sql.Row{{20}, {40}},
+			},
+			{
+				Query:    "SELECT a, b FROM t WHERE a IN (20, 30) ORDER BY a DESC, b",
+				Expected: []sql.Row{{30, nil}, {30, 3}, {20, 2}, {20, 6}},
+			},
+			{
+				Query:    "SELECT a, b FROM t WHERE a IN (20, 30) ORDER BY a, b DESC",
+				Expected: []sql.Row{{20, 6}, {20, 2}, {30, 3}, {30, nil}},
+			},
+		},
+	},
 }
 
 func makeLargeInsert(sz int) string {
