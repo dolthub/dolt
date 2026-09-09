@@ -223,6 +223,8 @@ github.com/dolthub/go-mysql-server v0.20.1-0.20260909201528-afc37bfd7790 h1:wcUb
 github.com/dolthub/go-mysql-server v0.20.1-0.20260909201528-afc37bfd7790/go.mod h1:KbxLOK14KE6dXRFdw2tRJv72WN0VOujQATgr3afyU1E=
 github.com/dolthub/go-mysql-server v0.20.1-0.20260909220441-8fdda179fbf2 h1:544tkEVLimbpTNM5pFIo+WcVQsRe3CmnWn/D8QawwbE=
 github.com/dolthub/go-mysql-server v0.20.1-0.20260909220441-8fdda179fbf2/go.mod h1:KbxLOK14KE6dXRFdw2tRJv72WN0VOujQATgr3afyU1E=
+github.com/dolthub/go-mysql-server v0.20.1-0.20260909225640-18a7cc32c269 h1:GmDJn2pYcBCC3bh52JSDKdVbsp3q0iBb8U1YNXb49Pw=
+github.com/dolthub/go-mysql-server v0.20.1-0.20260909225640-18a7cc32c269/go.mod h1:dhOSHdtMpz0sxA087pU4jspKUlEVQ/A+QH/7jtp78J4=
 github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63 h1:OAsXLAPL4du6tfbBgK0xXHZkOlos63RdKYS3Sgw/dfI=
 github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63/go.mod h1:lV7lUeuDhH5thVGDCKXbatwKy2KW80L4rMT46n+Y2/Q=
 github.com/dolthub/ishell v0.0.0-20260414231531-5f031e3e9037 h1:oIW9HwuWrhxv+4HZxA+QQSKHLqWFyXZ2FmNjUYwkdiM=
@@ -233,6 +235,8 @@ github.com/dolthub/sqllogictest/go v0.0.0-20240618184124-ca47f9354216 h1:JWkKRE4
 github.com/dolthub/sqllogictest/go v0.0.0-20240618184124-ca47f9354216/go.mod h1:e/FIZVvT2IR53HBCAo41NjqgtEnjMJGKca3Y/dAmZaA=
 github.com/dolthub/vitess v0.0.0-20260904221543-1d51d1321878 h1:8kWfU5sCkeAcDH4z4TG1qwmwj/kaWyT1x45/PM+S9bs=
 github.com/dolthub/vitess v0.0.0-20260904221543-1d51d1321878/go.mod h1:5SVEJgAhw5nnQUFnGgKI1Svqes1Mw+zKUsalyxmOuG0=
+github.com/dolthub/vitess v0.0.0-20260909054055-e9f1b2468025 h1:FxPRRQ6uuQMi7vUgkJvMVBMRIYSeFvE/mQhLLusfg/A=
+github.com/dolthub/vitess v0.0.0-20260909054055-e9f1b2468025/go.mod h1:5SVEJgAhw5nnQUFnGgKI1Svqes1Mw+zKUsalyxmOuG0=
 github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=
 github.com/dustin/go-humanize v1.0.1/go.mod h1:Mu1zIs6XwVuF/gI1OepvI0qD18qycQx+mFykh5fBlto=
 github.com/ebitengine/purego v0.9.1 h1:a/k2f2HQU3Pi399RPW1MOaZyhKJL9w/xFpKAg4q1s0A=
