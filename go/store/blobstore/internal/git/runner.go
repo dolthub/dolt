@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/dolthub/dolt/go/libraries/utils/gitauth"
 )
@@ -38,6 +39,8 @@ type Runner struct {
 	gitDir  string
 	// extraEnv is appended to os.Environ() for every command.
 	extraEnv []string
+	// waitDelay is gitauth.CmdWaitDelay in production; tests shorten it.
+	waitDelay time.Duration
 }
 
 // NewRunner creates a Runner using the git binary on PATH.
@@ -52,8 +55,9 @@ func NewRunner(gitDir string) (*Runner, error) {
 // NewRunnerWithGitPath creates a Runner using an explicit git binary path.
 func NewRunnerWithGitPath(gitDir, gitPath string) *Runner {
 	return &Runner{
-		gitPath: gitPath,
-		gitDir:  gitDir,
+		gitPath:   gitPath,
+		gitDir:    gitDir,
+		waitDelay: gitauth.CmdWaitDelay,
 	}
 }
 
@@ -120,6 +124,8 @@ func (r *Runner) buildCmd(ctx context.Context, opts RunOptions, args []string) *
 	}
 	cmd.Env = r.env(opts)
 	gitauth.CmdSetsid(cmd)
+	gitauth.CmdKillGroupOnCancel(cmd)
+	cmd.WaitDelay = r.waitDelay
 	return cmd
 }
 
@@ -167,7 +173,7 @@ func (r *Runner) Run(ctx context.Context, opts RunOptions, args ...string) ([]by
 		Output:   out,
 		Cause:    err,
 	}
-	return out, gitauth.NormalizeError(cerr, out)
+	return out, gitauth.NormalizeError(ctx, cerr, out)
 }
 
 // Start starts "git <args...>" and returns a ReadCloser for stdout.
@@ -198,6 +204,7 @@ func (r *Runner) Start(ctx context.Context, opts RunOptions, args ...string) (io
 
 	// Wrap stdout so that Close also waits to avoid zombies if callers bail early.
 	rc := &cmdReadCloser{
+		ctx:    ctx,
 		r:      stdout,
 		cmd:    cmd,
 		stderr: &stderr,
@@ -208,6 +215,9 @@ func (r *Runner) Start(ctx context.Context, opts RunOptions, args ...string) (io
 }
 
 type cmdReadCloser struct {
+	// ctx is the context the command was started with, so Close can tell a
+	// cancellation from a git failure.
+	ctx     context.Context
 	r       io.ReadCloser
 	cmd     *exec.Cmd
 	stderr  *bytes.Buffer
@@ -248,7 +258,7 @@ func (c *cmdReadCloser) Close() error {
 		Output:   c.stderr.Bytes(),
 		Cause:    err,
 	}
-	return gitauth.NormalizeError(cerr, cerr.Output)
+	return gitauth.NormalizeError(c.ctx, cerr, cerr.Output)
 }
 
 func (r *Runner) env(opts RunOptions) []string {

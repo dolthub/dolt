@@ -16,7 +16,9 @@ package gitauth
 
 import (
 	"bytes"
+	"context"
 	"errors"
+	"os/exec"
 	"strings"
 )
 
@@ -47,12 +49,23 @@ func (e *NonInteractiveAuthError) Unwrap() error { return e.Cause }
 
 // NormalizeError wraps |err| in a [NonInteractiveAuthError] so that
 // credential hints are always appended to git remote failures.
-func NormalizeError(err error, output []byte) error {
+//
+// Neither a command |ctx| cancelled nor one whose Wait gave up on pipes an
+// outliving process still holds is an auth failure, so those keep their own error
+// and get no hints. A cancelled command surfaces as the child's kill signal, so
+// |ctx|'s error is joined in for callers that test for it.
+func NormalizeError(ctx context.Context, err error, output []byte) error {
 	if err == nil {
 		return nil
 	}
 	var already *NonInteractiveAuthError
 	if errors.As(err, &already) {
+		return err
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return errors.Join(ctxErr, err)
+	}
+	if errors.Is(err, exec.ErrWaitDelay) {
 		return err
 	}
 	return &NonInteractiveAuthError{

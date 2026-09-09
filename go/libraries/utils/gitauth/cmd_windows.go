@@ -17,7 +17,9 @@
 package gitauth
 
 import (
+	"os"
 	"os/exec"
+	"strconv"
 	"syscall"
 
 	"golang.org/x/sys/windows"
@@ -29,4 +31,22 @@ func CmdSetsid(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		CreationFlags: windows.DETACHED_PROCESS,
 	}
+}
+
+// killProcessGroup kills |cmd| and its descendants. Windows has no group to
+// signal -- TerminateProcess takes one process, and DETACHED_PROCESS leaves no
+// console for GenerateConsoleCtrlEvent -- so use `taskkill /T`, which walks the
+// tree down from git while git is still alive.
+func killProcessGroup(cmd *exec.Cmd) error {
+	if cmd.Process == nil {
+		return os.ErrProcessDone
+	}
+	kill := exec.Command("taskkill", "/T", "/F", "/PID", strconv.Itoa(cmd.Process.Pid))
+	kill.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_NO_WINDOW}
+	if err := kill.Run(); err != nil {
+		// taskkill is unavailable or the pid is already gone: stop git itself so
+		// cancellation still takes effect, and let WaitDelay cover its descendants.
+		return cmd.Process.Kill()
+	}
+	return nil
 }
