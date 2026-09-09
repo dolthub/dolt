@@ -484,6 +484,38 @@ func (ts *tableSet) openForAdd(ctx context.Context, files map[hash.Hash]uint32, 
 	return ret, nil
 }
 
+// cloneOpenSources returns clones of the chunkSources which |ts| already has
+// open for |specs|. Specs which |ts| does not have open are absent from the
+// result, leaving the caller to open them itself. The caller owns closing
+// every source in the returned set.
+//
+// A clone shares the open file handle and the parsed index with |ts| instead
+// of reading and parsing the index again. For a persister backed by a
+// blobstore that cannot serve cheap ranged reads, opening a table file
+// downloads the whole file to a local spool, so cloning avoids the transfer
+// entirely.
+func (ts *tableSet) cloneOpenSources(specs []tableSpec) (chunkSourceSet, error) {
+	ret := make(chunkSourceSet, len(specs))
+	for _, spec := range specs {
+		if _, ok := ret[spec.name]; ok {
+			continue
+		}
+		src, ok := ts.upstream[spec.name]
+		if !ok {
+			if src, ok = ts.novel[spec.name]; !ok {
+				continue
+			}
+		}
+		cloned, err := src.clone()
+		if err != nil {
+			ret.close()
+			return nil, err
+		}
+		ret[spec.name] = cloned
+	}
+	return ret, nil
+}
+
 // rebase returns a new tableSet holding the novel tables managed by |ts| and
 // those specified by |specs|.
 func (ts *tableSet) rebase(ctx context.Context, specs []tableSpec, srcs chunkSourceSet, stats *Stats) (*tableSet, error) {
