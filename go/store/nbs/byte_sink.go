@@ -251,20 +251,20 @@ func (sink *BufferedFileByteSink) Write(src []byte) (int, error) {
 
 	if remaining >= srcLen {
 		sink.currentBlock = append(sink.currentBlock, src...)
-
 		if remaining == srcLen {
 			sink.writeCh <- sink.currentBlock
 			sink.currentBlock = nil
 		}
 	} else {
-		if remaining > 0 {
-			sink.currentBlock = append(sink.currentBlock, src[:remaining]...)
+		// Fill and hand off the current block.
+		sink.currentBlock = append(sink.currentBlock, src[:remaining]...)
+		if len(sink.currentBlock) > 0 {
 			sink.writeCh <- sink.currentBlock
 		}
-
-		newBlock := make([]byte, 0, sink.blockSize)
-		newBlock = append(newBlock, src[remaining:]...)
-		sink.currentBlock = newBlock
+		// Size the next block to hold all of |rest|, even if that needs more
+		// than |blockSize|.
+		rest := src[remaining:]
+		sink.currentBlock = append(make([]byte, 0, max(sink.blockSize, len(rest))), rest...)
 	}
 
 	sink.pos += uint64(srcLen)
