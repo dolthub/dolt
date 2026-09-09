@@ -2040,6 +2040,8 @@ func modifyIndexesForTableRewrite(ctx *sql.Context, oldSch schema.Schema, oldCol
 				IsVector:           index.IsVector(),
 				IsUserDefined:      index.IsUserDefined(),
 				Comment:            index.Comment(),
+				ColumnOrders:       index.ColumnOrders(),
+				OpClasses:          index.OpClasses(),
 				FullTextProperties: index.FullTextProperties(),
 				VectorProperties:   index.VectorProperties(),
 			})
@@ -2548,6 +2550,8 @@ func (t *AlterableDoltTable) createIndex(ctx *sql.Context, idx sql.IndexDef, key
 		IsUserDefined: true,
 		Comment:       idx.Comment,
 		Predicate:     predicateStr,
+		ColumnOrders:  idx.ColumnOrders(),
+		OpClasses:     idx.OpClasses(),
 		FullTextProperties: schema.FullTextProperties{
 			ConfigTable:      tableNames.Config,
 			PositionTable:    tableNames.Position,

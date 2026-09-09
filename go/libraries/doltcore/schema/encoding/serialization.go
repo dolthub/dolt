@@ -449,6 +449,37 @@ func serializeSecondaryIndexes(b *fb.Builder, sch schema.Schema, indexes []schem
 		}
 		po := b.EndVector(len(prefixLengths))
 
+		// serialize column orders
+		var descendingOff, nullsLastOff fb.UOffsetT
+		columnOrders := idx.ColumnOrders()
+		if len(columnOrders) > 0 {
+			serial.IndexStartDescendingVector(b, len(columnOrders))
+			for j := len(columnOrders) - 1; j >= 0; j-- {
+				b.PrependBool(columnOrders[j].Descending)
+			}
+			descendingOff = b.EndVector(len(columnOrders))
+			serial.IndexStartNullsLastVector(b, len(columnOrders))
+			for j := len(columnOrders) - 1; j >= 0; j-- {
+				b.PrependBool(columnOrders[j].NullsLast)
+			}
+			nullsLastOff = b.EndVector(len(columnOrders))
+		}
+
+		// serialize operator classes
+		var opClassesOff fb.UOffsetT
+		opClasses := idx.OpClasses()
+		if len(opClasses) > 0 {
+			opClassOffs := make([]fb.UOffsetT, len(opClasses))
+			for j := range opClasses {
+				opClassOffs[j] = b.CreateString(opClasses[j])
+			}
+			serial.IndexStartOpClassesVector(b, len(opClasses))
+			for j := len(opClasses) - 1; j >= 0; j-- {
+				b.PrependUOffsetT(opClassOffs[j])
+			}
+			opClassesOff = b.EndVector(len(opClasses))
+		}
+
 		var ftInfo fb.UOffsetT
 		if idx.IsFullText() {
 			ftInfo = serializeFullTextInfo(b, idx)
@@ -480,6 +511,13 @@ func serializeSecondaryIndexes(b *fb.Builder, sch schema.Schema, indexes []schem
 		if idx.Predicate() != "" {
 			serial.IndexAddPredicate(b, predOffset)
 		}
+		if len(columnOrders) > 0 {
+			serial.IndexAddDescending(b, descendingOff)
+			serial.IndexAddNullsLast(b, nullsLastOff)
+		}
+		if len(opClasses) > 0 {
+			serial.IndexAddOpClasses(b, opClassesOff)
+		}
 		offs[i] = serial.IndexEnd(b)
 	}
 
@@ -510,6 +548,22 @@ func deserializeSecondaryIndexes(sch schema.Schema, s *serial.TableSchema) error
 			return err
 		}
 
+		var columnOrders []sql.IndexColumnOrder
+		if idx.DescendingLength() > 0 {
+			columnOrders = make([]sql.IndexColumnOrder, idx.DescendingLength())
+			for j := range columnOrders {
+				columnOrders[j] = sql.IndexColumnOrder{Descending: idx.Descending(j), NullsLast: idx.NullsLast(j)}
+			}
+		}
+
+		var opClasses []string
+		if idx.OpClassesLength() > 0 {
+			opClasses = make([]string, idx.OpClassesLength())
+			for j := range opClasses {
+				opClasses[j] = string(idx.OpClasses(j))
+			}
+		}
+
 		name := string(idx.Name())
 		props := schema.IndexProperties{
 			IsUnique:           idx.UniqueKey(),
@@ -519,6 +573,8 @@ func deserializeSecondaryIndexes(sch schema.Schema, s *serial.TableSchema) error
 			IsUserDefined:      !idx.SystemDefined(),
 			Comment:            string(idx.Comment()),
 			Predicate:          string(idx.Predicate()),
+			ColumnOrders:       columnOrders,
+			OpClasses:          opClasses,
 			FullTextProperties: fti,
 			VectorProperties:   vi,
 		}

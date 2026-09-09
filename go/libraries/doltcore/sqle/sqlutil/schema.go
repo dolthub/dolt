@@ -58,12 +58,14 @@ func ParseCreateTableStatement(ctx *sql.Context, root doltdb.RootValue, engine *
 			predicateStr = idx.Predicate.String()
 		}
 		props := schema.IndexProperties{
-			IsUnique:   idx.IsUnique(),
-			IsSpatial:  idx.IsSpatial(),
-			IsFullText: idx.IsFullText(),
-			IsVector:   idx.IsVector(),
-			Comment:    idx.Comment,
-			Predicate:  predicateStr,
+			IsUnique:     idx.IsUnique(),
+			IsSpatial:    idx.IsSpatial(),
+			IsFullText:   idx.IsFullText(),
+			IsVector:     idx.IsVector(),
+			Comment:      idx.Comment,
+			Predicate:    predicateStr,
+			ColumnOrders: idx.ColumnOrders(),
+			OpClasses:    idx.OpClasses(),
 		}
 		if idx.IsVector() {
 			distanceType := idx.VectorProperties.DistanceType
