@@ -6755,12 +6755,24 @@ var DoltTagTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
+				Query:       "CALL DOLT_TAG('v1', 'HEAD')",
+				ExpectedErr: actions.ErrTagExists,
+			},
+			{
+				Query:          "CALL DOLT_TAG('v1')",
+				ExpectedErrStr: "fatal: A tag named 'v1' already exists.",
+			},
+			{
 				Query:    "SELECT tag_name, IF(CHAR_LENGTH(tag_hash) < 0, NULL, 'not null'), tagger, email, IF(date IS NULL, NULL, 'not null'), message from dolt_tags",
 				Expected: []sql.Row{{"v1", "not null", "root", "root@localhost", "not null", ""}},
 			},
 			{
 				Query:    "CALL DOLT_TAG('v2', '-m', 'create tag v2')",
 				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "CALL DOLT_TAG('v2', '-m', 'replace tag v2')",
+				ExpectedErrStr: "fatal: A tag named 'v2' already exists.",
 			},
 			{
 				Query:    "SELECT tag_name, message from dolt_tags",
