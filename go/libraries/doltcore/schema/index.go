@@ -17,6 +17,8 @@ package schema
 import (
 	"slices"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -60,6 +62,10 @@ type Index interface {
 	Predicate() string
 	// PrefixLengths returns the prefix lengths for the index
 	PrefixLengths() []uint16
+	// ColumnOrders returns the sort order of each indexed column, or nil when every column is ascending with NULLs first.
+	ColumnOrders() []sql.IndexColumnOrder
+	// OpClasses returns the operator class of each indexed column, or nil when no column has one.
+	OpClasses() []string
 	// FullTextProperties returns all properties belonging to a Full-Text index.
 	FullTextProperties() FullTextProperties
 	// VectorProperties returns all properties belonging to a vector index.
@@ -139,6 +145,8 @@ type indexImpl struct {
 	comment          string
 	predicate        string
 	prefixLengths    []uint16
+	columnOrders     []sql.IndexColumnOrder
+	opClasses        []string
 	fullTextProps    FullTextProperties
 	vectorProperties VectorProperties
 }
@@ -161,6 +169,8 @@ func NewIndex(name string, tags, allTags []uint64, indexColl IndexCollection, pr
 		isUserDefined:    props.IsUserDefined,
 		comment:          props.Comment,
 		predicate:        props.Predicate,
+		columnOrders:     props.ColumnOrders,
+		opClasses:        props.OpClasses,
 		fullTextProps:    props.FullTextProperties,
 		vectorProperties: props.VectorProperties,
 	}
@@ -215,6 +225,8 @@ func (ix *indexImpl) Equals(other Index) bool {
 		ix.IsVector() == other.IsVector() &&
 		ix.VectorProperties() == other.VectorProperties() &&
 		compareUint16Slices(ix.PrefixLengths(), other.PrefixLengths()) &&
+		slices.Equal(ix.ColumnOrders(), other.ColumnOrders()) &&
+		slices.Equal(ix.OpClasses(), other.OpClasses()) &&
 		ix.Comment() == other.Comment() &&
 		ix.Predicate() == other.Predicate() &&
 		ix.Name() == other.Name()
@@ -240,6 +252,8 @@ func (ix *indexImpl) DeepEquals(other Index) bool {
 		ix.IsVector() == other.IsVector() &&
 		ix.VectorProperties() == other.VectorProperties() &&
 		compareUint16Slices(ix.PrefixLengths(), other.PrefixLengths()) &&
+		slices.Equal(ix.ColumnOrders(), other.ColumnOrders()) &&
+		slices.Equal(ix.OpClasses(), other.OpClasses()) &&
 		ix.Comment() == other.Comment() &&
 		ix.Predicate() == other.Predicate() &&
 		ix.Name() == other.Name()
@@ -342,12 +356,23 @@ func (ix *indexImpl) Schema() Schema {
 		indexCollection:     NewIndexCollection(nil, nil),
 		checkCollection:     NewCheckCollection(),
 		contentHashedFields: contentHashedFields,
+		keyColumnOrders:     ix.columnOrders,
 	}
 }
 
 // PrefixLengths implements Index.
 func (ix *indexImpl) PrefixLengths() []uint16 {
 	return ix.prefixLengths
+}
+
+// ColumnOrders implements Index.
+func (ix *indexImpl) ColumnOrders() []sql.IndexColumnOrder {
+	return ix.columnOrders
+}
+
+// OpClasses implements Index.
+func (ix *indexImpl) OpClasses() []string {
+	return ix.opClasses
 }
 
 // FullTextProperties implements Index.
@@ -371,6 +396,8 @@ func (ix *indexImpl) copy() *indexImpl {
 		newIx.prefixLengths = make([]uint16, len(ix.prefixLengths))
 		_ = copy(newIx.prefixLengths, ix.prefixLengths)
 	}
+	newIx.columnOrders = slices.Clone(ix.columnOrders)
+	newIx.opClasses = slices.Clone(ix.opClasses)
 	if len(newIx.fullTextProps.KeyPositions) > 0 {
 		newIx.fullTextProps.KeyPositions = make([]uint16, len(ix.fullTextProps.KeyPositions))
 		_ = copy(newIx.fullTextProps.KeyPositions, ix.fullTextProps.KeyPositions)

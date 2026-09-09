@@ -135,6 +135,22 @@ function test_2_0_breaking_compatibility() {
   DOLT_OLD_BIN="$(pwd)/$bin/dolt" REPO_DIR="$(pwd)/repos/2_0_breaking-$ver" bats --print-output-on-failure ./test_files/bats/2_0_breaking
 }
 
+function setup_repo_desc_index() {
+  dir=repos/"$1"
+  ./test_files/setup_repo_desc_index.sh "$dir"
+}
+
+function test_desc_index_compatibility() {
+  ver=$1
+  bin=`download_release "$ver"`
+
+  # create a repo with a descending index using the current dolt
+  setup_repo_desc_index "desc_index-$ver"
+
+  echo "Run descending index tests: verify old Dolt version $ver fails only on tables with descending indexes"
+  DOLT_OLD_BIN="$(pwd)/$bin/dolt" REPO_DIR="$(pwd)/repos/desc_index-$ver" bats --print-output-on-failure ./test_files/bats/desc_index_breaking
+}
+
 function list_forward_compatible_versions() {
   grep -v '^ *#' < test_files/forward_compatible_versions.txt
 }
@@ -235,6 +251,14 @@ _main() {
     done
   fi
 
+
+  # descending index columns are new schema fields that only clients reading them must understand,
+  # so otherwise forward compatible versions must fail on them and nothing else
+  if [ -s "test_files/2_0_forward_compatible_versions.txt" ]; then
+    list_2_0_forward_compatible_versions | while IFS= read -r ver; do
+      test_desc_index_compatibility "$ver"
+    done
+  fi
 
   # test bidirectional compatibility
   echo "Testing post-2.0 bi-directional compatible versions"

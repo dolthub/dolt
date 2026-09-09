@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/cockroachdb/apd/v3"
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/encodings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
@@ -76,6 +77,9 @@ type TupleDescriptorArgs struct {
 	// ValueStore, if non-nil, is attached to the TupleDesc's Comparator via |WithValueStore|.
 	// It is required when comparing tuples with adaptive-encoded fields.
 	ValueStore ValueStore
+	// ColumnOrders, if non-nil, is the sort order of the leading fields. Fields past its end and every field of a nil
+	// slice are ascending with NULLs first.
+	ColumnOrders []sql.IndexColumnOrder
 }
 
 // NewTupleDescriptor makes a TupleDescriptor from |types|.
@@ -95,6 +99,9 @@ func NewTupleDescriptorWithArgs(args TupleDescriptorArgs, types ...Type) (td *Tu
 	}
 	if args.Comparator == nil {
 		args.Comparator = &DefaultTupleComparator{}
+	}
+	if len(args.ColumnOrders) > 0 {
+		args.Comparator = &OrderedTupleComparator{innerCmp: args.Comparator, orders: args.ColumnOrders}
 	}
 	args.Comparator = (&ExtendedTupleComparator{
 		innerCmp: args.Comparator,

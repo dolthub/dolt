@@ -47,6 +47,8 @@ type schemaImpl struct {
 	contentHashedFields        []uint64
 	comment                    string
 	targetRowSize              uint16
+	// keyColumnOrders is the sort order of the leading key columns of an index schema, nil for the default order.
+	keyColumnOrders []sql.IndexColumnOrder
 }
 
 var _ Schema = (*schemaImpl)(nil)
@@ -551,9 +553,9 @@ func (si *schemaImpl) getKeyColumnsDescriptor(vs val.ValueStore) *val.TupleDesc 
 			panic(fmt.Errorf("cannot create tuple descriptor from %d collations and %d types", len(collations), len(tt)))
 		}
 		cmp := CollationTupleComparator{Collations: collations}
-		return val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Comparator: cmp, Handlers: handlers, ValueStore: vs}, tt...)
+		return val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Comparator: cmp, Handlers: handlers, ValueStore: vs, ColumnOrders: si.keyColumnOrders}, tt...)
 	} else {
-		return val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Handlers: handlers, ValueStore: vs}, tt...)
+		return val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Handlers: handlers, ValueStore: vs, ColumnOrders: si.keyColumnOrders}, tt...)
 	}
 }
 
