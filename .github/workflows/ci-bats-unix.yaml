@@ -137,6 +137,7 @@ jobs:
           SQL_ENGINE: ${{ matrix.sql_engine }}
           PARQUET_RUNTIME_JAR: ${{ steps.parquet_cli.outputs.runtime_jar }}
           BATS_TEST_RETRIES: "3"
+          EXPECT_TIMEOUT: "30"
         run: |
           seq=( $(grep -l -E 'config[[:space:]]+--global' *.bats || true) )
           par=( $(grep -L -E 'config[[:space:]]+--global' *.bats || true) )
