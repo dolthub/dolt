@@ -175,7 +175,9 @@ func (sl *newlyWrittenSources) append(ctx context.Context, specs []tableSpec, nb
 	defer sl.mu.Unlock()
 	sl.specs = append(sl.specs, specs...)
 	for _, spec := range specs {
-		err := nbs.tables.insertIntoChunkSourceSet(ctx, sl.sourceSet, spec, nil, nbs.stats)
+		// |specs| names table files GC has just written, so deep-validate
+		// them as they are opened for the first time.
+		err := nbs.tables.insertIntoChunkSourceSet(ctx, sl.sourceSet, spec, nil, openOpts{deepValidate: true}, nbs.stats)
 		if err != nil {
 			return err
 		}

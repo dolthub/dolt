@@ -359,7 +359,7 @@ func (j *ChunkJournal) ConjoinAll(ctx context.Context, behavior dherrors.FatalBe
 }
 
 // Open implements tablePersister.
-func (j *ChunkJournal) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
+func (j *ChunkJournal) Open(ctx context.Context, name hash.Hash, chunkCount uint32, opts openOpts, stats *Stats) (chunkSource, error) {
 	if name == journalAddr {
 		// Open is a tablePersister method with no FatalBehavior parameter; if it has to
 		// bootstrap the journal, fail with an error rather than crashing the process.
@@ -368,7 +368,7 @@ func (j *ChunkJournal) Open(ctx context.Context, name hash.Hash, chunkCount uint
 		}
 		return journalChunkSource{journal: j.wr}, nil
 	}
-	return j.persister.Open(ctx, name, chunkCount, stats)
+	return j.persister.Open(ctx, name, chunkCount, opts, stats)
 }
 
 // Exists implements tablePersister.

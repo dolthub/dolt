@@ -602,7 +602,7 @@ func compactSourcesToBuffer(sources chunkSources) (name hash.Hash, data []byte, 
 	return name, buff[:tableSize], chunkCount, nil
 }
 
-func (ftp fakeTablePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
+func (ftp fakeTablePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, opts openOpts, stats *Stats) (chunkSource, error) {
 	ftp.mu.Lock()
 	defer ftp.mu.Unlock()
 

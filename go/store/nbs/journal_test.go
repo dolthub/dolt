@@ -94,15 +94,15 @@ func TestChunkJournalReadOnly(t *testing.T) {
 		// We start without a journal.
 		assert.False(t, containsJournalSpec(rw.contents.specs))
 
-		rosource, err := ro.Open(t.Context(), journalAddr, 0, &Stats{})
+		rosource, err := ro.Open(t.Context(), journalAddr, 0, openOpts{}, &Stats{})
 		require.Error(t, err)
 		require.Nil(t, rosource)
 
-		rwsource, err := rw.Open(t.Context(), journalAddr, 0, &Stats{})
+		rwsource, err := rw.Open(t.Context(), journalAddr, 0, openOpts{}, &Stats{})
 		require.NoError(t, err)
 		require.NotNil(t, rwsource)
 
-		rosource, err = ro.Open(t.Context(), journalAddr, 0, &Stats{})
+		rosource, err = ro.Open(t.Context(), journalAddr, 0, openOpts{}, &Stats{})
 		require.NoError(t, err)
 		require.NotNil(t, rosource)
 	})
@@ -215,7 +215,7 @@ func TestChunkJournalPersist(t *testing.T) {
 			assert.Equal(t, ch.Data(), data)
 		}
 
-		cs, err := j.Open(ctx, source.hash(), 16, stats)
+		cs, err := j.Open(ctx, source.hash(), 16, openOpts{}, stats)
 		assert.NotNil(t, cs)
 		assert.NoError(t, err)
 	}

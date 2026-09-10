@@ -106,7 +106,7 @@ func TestNewSpooledBSTableChunkSource_RoundTrip(t *testing.T) {
 	bs := wholeBlobBlobstore{inmem, true}
 
 	before := countSpoolFiles(t)
-	cs, err := newSpooledBSTableChunkSource(ctx, bs, tableHash, uint32(len(data)), NewUnlimitedMemQuotaProvider(), &Stats{})
+	cs, err := newSpooledBSTableChunkSource(ctx, bs, tableHash, uint32(len(data)), NewUnlimitedMemQuotaProvider(), openOpts{}, &Stats{})
 	require.NoError(t, err)
 	require.Equal(t, before+1, countSpoolFiles(t), "opening the source spools exactly one temp file")
 
@@ -132,7 +132,7 @@ func TestNewSpooledBSTableChunkSource_ChunkCountMismatch(t *testing.T) {
 	bs := wholeBlobBlobstore{inmem, true}
 
 	before := countSpoolFiles(t)
-	_, err = newSpooledBSTableChunkSource(ctx, bs, tableHash, uint32(len(data))+1, NewUnlimitedMemQuotaProvider(), &Stats{})
+	_, err = newSpooledBSTableChunkSource(ctx, bs, tableHash, uint32(len(data))+1, NewUnlimitedMemQuotaProvider(), openOpts{}, &Stats{})
 	require.Error(t, err)
 	require.Equal(t, before, countSpoolFiles(t), "the temp file is removed when open fails")
 }
