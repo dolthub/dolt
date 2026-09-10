@@ -150,7 +150,7 @@ func nomsFileTableReader(ctx context.Context, path string, h hash.Hash, chunkCou
 	if err != nil {
 		q.ReleaseQuotaBytes(len(b))
 		fra.Close()
-		return
+		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 
 	if chunkCount != index.chunkCount() {
