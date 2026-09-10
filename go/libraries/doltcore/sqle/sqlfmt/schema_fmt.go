@@ -43,7 +43,11 @@ func GenerateDataDiffStatement(ctx *sql.Context, tableName string, sch schema.Sc
 		updatedCols := set.NewEmptyStrSet()
 		for i, diffType := range colDiffTypes {
 			if diffType != diff.None {
-				updatedCols.Add(sch.GetAllCols().GetByIndex(i).Name)
+				col := sch.GetAllCols().GetByIndex(i)
+				if col.IsGenerated() {
+					continue
+				}
+				updatedCols.Add(col.Name)
 			}
 		}
 		if updatedCols.Size() == 0 {
