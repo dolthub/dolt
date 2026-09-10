@@ -1,0 +1,26 @@
+#!/usr/bin/expect
+
+set timeout 5
+set env(NO_COLOR) 1
+
+source  "$env(BATS_CWD)/helper/common_expect_functions.tcl"
+
+spawn dolt sql
+
+# \c cancels the statement currently being entered, mirroring the MySQL client's \c escape.
+# The buffered statement should be discarded without being executed. If \c were left
+# unhandled, the shell would fold it into the next line typed, producing a syntax error near
+# the stray backslash instead of running "select 1;" on its own -- see the bats assertions in
+# sql-shell.bats for how this is verified against the full transcript.
+expect_with_defaults {dolt-repo-[0-9]+/main\*?> } { send "select * from nonexistent_table \\c\r" }
+
+# Give the shell a moment to process (or mis-process) the \c before sending the next
+# statement, rather than racing to match a pattern that could also appear in echoed input.
+sleep 1
+
+send "select 1;\r"
+sleep 1
+
+send "quit\r"
+
+expect eof
