@@ -1556,6 +1556,334 @@ var DoltScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "descending index columns",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk INT PRIMARY KEY, a INT, b INT NOT NULL, INDEX ab (a DESC, b));",
+			"INSERT INTO t VALUES (1, 1, 1), (2, 1, 2), (3, 2, 1), (4, NULL, 3), (5, 3, 4);",
+			"CALL dolt_commit('-Am', 'table with a descending index');",
+			"ALTER TABLE t ADD INDEX b_desc (b DESC);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT statement FROM dolt_patch('HEAD~', 'HEAD', 't') WHERE diff_type = 'schema'",
+				Expected: []sql.Row{{"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `a` int,\n  `b` int NOT NULL,\n  PRIMARY KEY (`pk`),\n  KEY `ab` (`a` DESC,`b`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"}},
+			},
+			{
+				Query:    "SELECT statement FROM dolt_patch('HEAD', 'WORKING', 't')",
+				Expected: []sql.Row{{"ALTER TABLE `t` ADD INDEX `b_desc`(`b` DESC);"}},
+			},
+			{
+				Query: "SHOW CREATE TABLE t",
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n" +
+					"  `pk` int NOT NULL,\n" +
+					"  `a` int,\n" +
+					"  `b` int NOT NULL,\n" +
+					"  PRIMARY KEY (`pk`),\n" +
+					"  KEY `ab` (`a` DESC,`b`),\n" +
+					"  KEY `b_desc` (`b` DESC)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query: "SELECT index_name, column_name, collation FROM information_schema.statistics WHERE table_name = 't' ORDER BY index_name, seq_in_index",
+				Expected: []sql.Row{
+					{"ab", "a", "D"},
+					{"ab", "b", "A"},
+					{"b_desc", "b", "D"},
+					{"PRIMARY", "pk", "A"},
+				},
+			},
+			{
+				Query: "EXPLAIN PLAN SELECT pk FROM t WHERE a > 0 ORDER BY a DESC, b",
+				Expected: []sql.Row{
+					{"Project"},
+					{" ├─ columns: [t.pk]"},
+					{" └─ IndexedTableAccess(t)"},
+					{"     ├─ index: [t.a DESC,t.b]"},
+					{"     ├─ filters: [{(0, ∞), [NULL, ∞)}]"},
+					{"     └─ columns: [pk a b]"},
+				},
+			},
+			{
+				Query: "EXPLAIN PLAN SELECT pk FROM t WHERE a > 0 ORDER BY a, b DESC",
+				Expected: []sql.Row{
+					{"Project"},
+					{" ├─ columns: [t.pk]"},
+					{" └─ IndexedTableAccess(t)"},
+					{"     ├─ index: [t.a DESC,t.b]"},
+					{"     ├─ filters: [{(0, ∞), [NULL, ∞)}]"},
+					{"     ├─ columns: [pk a b]"},
+					{"     └─ reverse: true"},
+				},
+			},
+			{
+				Query: "EXPLAIN PLAN SELECT pk FROM t WHERE a > 0 ORDER BY a, b",
+				Expected: []sql.Row{
+					{"Project"},
+					{" ├─ columns: [t.pk]"},
+					{" └─ Sort(t.a ASC, t.b ASC)"},
+					{"     └─ IndexedTableAccess(t)"},
+					{"         ├─ index: [t.a DESC,t.b]"},
+					{"         ├─ filters: [{(0, ∞), [NULL, ∞)}]"},
+					{"         └─ columns: [pk a b]"},
+				},
+			},
+			{
+				Query: "EXPLAIN PLAN SELECT pk FROM t ORDER BY b DESC",
+				Expected: []sql.Row{
+					{"Project"},
+					{" ├─ columns: [t.pk]"},
+					{" └─ IndexedTableAccess(t)"},
+					{"     ├─ index: [t.b DESC]"},
+					{"     ├─ filters: [{[NULL, ∞)}]"},
+					{"     └─ columns: [pk b]"},
+				},
+			},
+			{
+				Query:    "SELECT pk FROM t WHERE a > 0 ORDER BY a DESC, b",
+				Expected: []sql.Row{{5}, {3}, {1}, {2}},
+			},
+			{
+				Query:    "SELECT pk FROM t WHERE a > 0 ORDER BY a, b DESC",
+				Expected: []sql.Row{{2}, {1}, {3}, {5}},
+			},
+			{
+				Query:    "SELECT pk FROM t ORDER BY b DESC, pk",
+				Expected: []sql.Row{{5}, {4}, {2}, {1}, {3}},
+			},
+			{
+				Query:    "SELECT pk FROM t WHERE a IS NULL",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:    "SELECT pk FROM t WHERE a = 1 AND b > 1",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query: "ALTER TABLE t MODIFY COLUMN a BIGINT",
+			},
+			{
+				Query:    "SELECT pk FROM t WHERE a > 1 ORDER BY a DESC",
+				Expected: []sql.Row{{5}, {3}},
+			},
+			{
+				Query:    "SELECT statement FROM dolt_patch('HEAD', 'WORKING', 't') ORDER BY statement_order",
+				Expected: []sql.Row{{"ALTER TABLE `t` MODIFY COLUMN `a` bigint;"}, {"ALTER TABLE `t` ADD INDEX `b_desc`(`b` DESC);"}},
+			},
+		},
+	},
+	{
+		Name: "descending index chosen among candidates",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk INT PRIMARY KEY, a INT, b INT, INDEX ab (a DESC, b), INDEX ab_desc (a DESC, b DESC));",
+			"INSERT INTO t VALUES (1, 1, 1), (2, 1, 2), (3, 2, 1), (4, NULL, 3), (5, 2, NULL);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "EXPLAIN PLAN SELECT pk FROM t ORDER BY a DESC, b DESC",
+				Expected: []sql.Row{
+					{"Project"},
+					{" ├─ columns: [t.pk]"},
+					{" └─ IndexedTableAccess(t)"},
+					{"     ├─ index: [t.a DESC,t.b DESC]"},
+					{"     ├─ filters: [{[NULL, ∞), [NULL, ∞)}]"},
+					{"     └─ columns: [pk a b]"},
+				},
+			},
+			{
+				Query: "EXPLAIN PLAN SELECT pk FROM t ORDER BY a, b",
+				Expected: []sql.Row{
+					{"Project"},
+					{" ├─ columns: [t.pk]"},
+					{" └─ IndexedTableAccess(t)"},
+					{"     ├─ index: [t.a DESC,t.b DESC]"},
+					{"     ├─ filters: [{[NULL, ∞), [NULL, ∞)}]"},
+					{"     ├─ columns: [pk a b]"},
+					{"     └─ reverse: true"},
+				},
+			},
+			{
+				Query: "EXPLAIN PLAN SELECT pk FROM t ORDER BY a DESC, b",
+				Expected: []sql.Row{
+					{"Project"},
+					{" ├─ columns: [t.pk]"},
+					{" └─ IndexedTableAccess(t)"},
+					{"     ├─ index: [t.a DESC,t.b]"},
+					{"     ├─ filters: [{[NULL, ∞), [NULL, ∞)}]"},
+					{"     └─ columns: [pk a b]"},
+				},
+			},
+			{
+				Query:    "SELECT pk FROM t ORDER BY a DESC, b DESC",
+				Expected: []sql.Row{{3}, {5}, {2}, {1}, {4}},
+			},
+			{
+				Query:    "SELECT pk FROM t ORDER BY a, b",
+				Expected: []sql.Row{{4}, {1}, {2}, {5}, {3}},
+			},
+			{
+				Query:    "SELECT pk FROM t ORDER BY a DESC, b",
+				Expected: []sql.Row{{5}, {3}, {1}, {2}, {4}},
+			},
+		},
+	},
+	{
+		Name: "descending indexes across branches and merges",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk INT PRIMARY KEY, a INT, b VARCHAR(10), INDEX idx_a (a DESC));",
+			"INSERT INTO t VALUES (1, 3, 'c'), (2, 1, 'a'), (3, NULL, 'b');",
+			"CALL dolt_commit('-Am', 'create table');",
+			"CALL dolt_checkout('-b', 'branch1');",
+			"ALTER TABLE t ADD INDEX idx_ab (a, b DESC);",
+			"INSERT INTO t VALUES (4, 2, 'd');",
+			"CALL dolt_commit('-Am', 'add index on branch1');",
+			"CALL dolt_checkout('main');",
+			"INSERT INTO t VALUES (5, 4, 'e');",
+			"CALL dolt_commit('-Am', 'insert on main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT from_create_statement, to_create_statement FROM dolt_schema_diff('main', 'branch1', 't')",
+				Expected: []sql.Row{{
+					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `a` int,\n  `b` varchar(10),\n  PRIMARY KEY (`pk`),\n  KEY `idx_a` (`a` DESC)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `a` int,\n  `b` varchar(10),\n  PRIMARY KEY (`pk`),\n  KEY `idx_a` (`a` DESC),\n  KEY `idx_ab` (`a`,`b` DESC)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+				}},
+			},
+			{
+				Query:    "SELECT statement FROM dolt_patch('main', 'branch1', 't') WHERE diff_type = 'schema'",
+				Expected: []sql.Row{{"ALTER TABLE `t` ADD INDEX `idx_ab`(`a`,`b` DESC);"}},
+			},
+			{
+				Query:    "SELECT pk FROM t AS OF 'branch1' ORDER BY a DESC",
+				Expected: []sql.Row{{1}, {4}, {2}, {3}},
+			},
+			{
+				Query:    "CALL dolt_merge('branch1')",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query: "SHOW CREATE TABLE t",
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n" +
+					"  `pk` int NOT NULL,\n" +
+					"  `a` int,\n" +
+					"  `b` varchar(10),\n" +
+					"  PRIMARY KEY (`pk`),\n" +
+					"  KEY `idx_a` (`a` DESC),\n" +
+					"  KEY `idx_ab` (`a`,`b` DESC)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:    "SELECT to_pk, diff_type FROM dolt_diff('HEAD~', 'HEAD', 't')",
+				Expected: []sql.Row{{4, "added"}},
+			},
+			{
+				Query:    "SELECT pk FROM t ORDER BY a DESC",
+				Expected: []sql.Row{{5}, {1}, {4}, {2}, {3}},
+			},
+			{
+				Query:    "SELECT pk, a, b FROM t ORDER BY a, b DESC",
+				Expected: []sql.Row{{3, nil, "b"}, {2, 1, "a"}, {4, 2, "d"}, {1, 3, "c"}, {5, 4, "e"}},
+			},
+			{
+				Query: "EXPLAIN PLAN SELECT pk, a, b FROM t ORDER BY a, b DESC",
+				Expected: []sql.Row{
+					{"IndexedTableAccess(t)"},
+					{" ├─ index: [t.a,t.b DESC]"},
+					{" ├─ filters: [{[NULL, ∞), [NULL, ∞)}]"},
+					{" └─ columns: [pk a b]"},
+				},
+			},
+			{
+				Query: "EXPLAIN PLAN SELECT pk FROM t ORDER BY a DESC LIMIT 2",
+				Expected: []sql.Row{
+					{"Limit(2)"},
+					{" └─ Project"},
+					{"     ├─ columns: [t.pk]"},
+					{"     └─ IndexedTableAccess(t)"},
+					{"         ├─ index: [t.a DESC]"},
+					{"         ├─ filters: [{[NULL, ∞)}]"},
+					{"         └─ columns: [pk a]"},
+				},
+			},
+			{
+				Query:    "SELECT pk FROM t ORDER BY a DESC LIMIT 2",
+				Expected: []sql.Row{{5}, {1}},
+			},
+			{
+				Query: "ALTER TABLE t DROP INDEX idx_ab",
+			},
+			{
+				Query:    "SELECT statement FROM dolt_patch('HEAD', 'WORKING', 't')",
+				Expected: []sql.Row{{"ALTER TABLE `t` DROP INDEX `idx_ab`;"}},
+			},
+			{
+				Query: "CALL dolt_reset('--hard')",
+			},
+			{
+				Query: "SELECT index_name, column_name, collation FROM information_schema.statistics WHERE table_name = 't' ORDER BY index_name, seq_in_index",
+				Expected: []sql.Row{
+					{"idx_a", "a", "D"},
+					{"idx_ab", "a", "A"},
+					{"idx_ab", "b", "D"},
+					{"PRIMARY", "pk", "A"},
+				},
+			},
+			{
+				Query:    "SELECT pk FROM t WHERE a = 2 AND b < 'z'",
+				Expected: []sql.Row{{4}},
+			},
+		},
+	},
+	{
+		Name: "descending index scans over several ranges",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk INT PRIMARY KEY, a INT, b INT, INDEX a_desc (a DESC), INDEX ab (a, b DESC));",
+			"INSERT INTO t VALUES (1, 10, 1), (2, 20, 2), (3, 30, 3), (4, 40, 4), (5, NULL, 5), (6, 20, 6), (7, 30, NULL);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "EXPLAIN PLAN SELECT a FROM t WHERE a IN (10, 30, 40) ORDER BY a DESC",
+				Expected: []sql.Row{
+					{"IndexedTableAccess(t)"},
+					{" ├─ index: [t.a DESC]"},
+					{" ├─ filters: [{[10, 10]}, {[30, 30]}, {[40, 40]}]"},
+					{" └─ columns: [a]"},
+				},
+			},
+			{
+				Query:    "SELECT a FROM t WHERE a IN (10, 30, 40) ORDER BY a DESC",
+				Expected: []sql.Row{{40}, {30}, {30}, {10}},
+			},
+			{
+				Query:    "SELECT a FROM t WHERE a IN (10, 30, 40) ORDER BY a",
+				Expected: []sql.Row{{10}, {30}, {30}, {40}},
+			},
+			{
+				Query:    "SELECT a FROM t WHERE a < 20 OR a > 30 ORDER BY a DESC",
+				Expected: []sql.Row{{40}, {10}},
+			},
+			{
+				Query:    "SELECT a FROM t WHERE a < 20 OR a > 30 ORDER BY a",
+				Expected: []sql.Row{{10}, {40}},
+			},
+			{
+				Query:    "SELECT a FROM t WHERE a > 30 OR b = 2 ORDER BY a DESC",
+				Expected: []sql.Row{{40}, {20}},
+			},
+			{
+				Query:    "SELECT a FROM t WHERE a > 30 OR b = 2 ORDER BY a",
+				Expected: []sql.Row{{20}, {40}},
+			},
+			{
+				Query:    "SELECT a, b FROM t WHERE a IN (20, 30) ORDER BY a DESC, b",
+				Expected: []sql.Row{{30, nil}, {30, 3}, {20, 2}, {20, 6}},
+			},
+			{
+				Query:    "SELECT a, b FROM t WHERE a IN (20, 30) ORDER BY a, b DESC",
+				Expected: []sql.Row{{20, 6}, {20, 2}, {30, 3}, {30, nil}},
+			},
+		},
+	},
 }
 
 func makeLargeInsert(sz int) string {
@@ -6755,12 +7083,24 @@ var DoltTagTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
+				Query:       "CALL DOLT_TAG('v1', 'HEAD')",
+				ExpectedErr: actions.ErrTagExists,
+			},
+			{
+				Query:          "CALL DOLT_TAG('v1')",
+				ExpectedErrStr: "fatal: A tag named 'v1' already exists.",
+			},
+			{
 				Query:    "SELECT tag_name, IF(CHAR_LENGTH(tag_hash) < 0, NULL, 'not null'), tagger, email, IF(date IS NULL, NULL, 'not null'), message from dolt_tags",
 				Expected: []sql.Row{{"v1", "not null", "root", "root@localhost", "not null", ""}},
 			},
 			{
 				Query:    "CALL DOLT_TAG('v2', '-m', 'create tag v2')",
 				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "CALL DOLT_TAG('v2', '-m', 'replace tag v2')",
+				ExpectedErrStr: "fatal: A tag named 'v2' already exists.",
 			},
 			{
 				Query:    "SELECT tag_name, message from dolt_tags",

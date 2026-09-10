@@ -296,7 +296,7 @@ var ModifyAndChangeColumnScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "alter table people modify rating double default 'not a number'",
-				ExpectedErrStr: "incompatible type for default value: Truncated incorrect double value: not a number",
+				ExpectedErrStr: "incompatible type for default value: Truncated incorrect double value: 'not a number'",
 			},
 		},
 	},
@@ -474,13 +474,13 @@ var ModifyColumnTypeScripts = []queries.ScriptTest{
 	{
 		Name: "alter modify column type incompatible types with non-empty table",
 		SetUpScript: []string{
-			"create table test(pk bigint primary key, v1 bit(20), index (v1))",
-			"insert into test values (1, 1)",
+			"create table test(pk bigint primary key, v1 bit(20), index (v1));",
+			"insert into test values (1, 1);",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:       "alter table test modify column pk datetime",
-				ExpectedErr: sql.ErrTruncatedIncorrect,
+				Query:       "alter table test modify column pk datetime;",
+				ExpectedErr: sql.ErrInvalidValue,
 			},
 		},
 	},

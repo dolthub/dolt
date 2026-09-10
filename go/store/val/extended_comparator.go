@@ -80,6 +80,13 @@ func (c *ExtendedTupleComparator) Suffix(n int) TupleComparator {
 
 // Validated implements the TupleComparator interface.
 func (c *ExtendedTupleComparator) Validated(types []Type) TupleComparator {
+	// An ordered inner comparator stays outermost so that it also orders the fields compared through handlers.
+	if ordered, ok := c.innerCmp.(*OrderedTupleComparator); ok {
+		return (&OrderedTupleComparator{
+			innerCmp: &ExtendedTupleComparator{innerCmp: ordered.innerCmp, handlers: c.handlers, vs: c.vs},
+			orders:   ordered.orders,
+		}).Validated(types)
+	}
 	// If our inner comparator is an ExtendedTupleComparator, then we should use its inner comparator to reduce redundancy, as well as its ValueStore if set.
 	var innerCmp TupleComparator
 	vs := c.vs

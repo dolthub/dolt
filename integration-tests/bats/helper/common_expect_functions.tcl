@@ -1,3 +1,6 @@
+if {[info exists env(EXPECT_TIMEOUT)]} {
+    set timeout $env(EXPECT_TIMEOUT)
+}
 
 proc expect_with_defaults {pattern action} {
     expect {

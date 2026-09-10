@@ -87,6 +87,10 @@ type IndexProperties struct {
 	Comment       string
 	// Predicate is the WHERE clause expression string for partial indexes.
 	Predicate string
+	// ColumnOrders is the sort order of each indexed column, nil when every column is ascending with NULLs first.
+	ColumnOrders []sql.IndexColumnOrder
+	// OpClasses is the operator class of each indexed column, nil when no column has one.
+	OpClasses []string
 	FullTextProperties
 	IsVector bool
 	VectorProperties
@@ -235,6 +239,8 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 		comment:          props.Comment,
 		predicate:        props.Predicate,
 		prefixLengths:    prefixLengths,
+		columnOrders:     props.ColumnOrders,
+		opClasses:        props.OpClasses,
 		fullTextProps:    props.FullTextProperties,
 		vectorProperties: props.VectorProperties,
 	}
@@ -263,6 +269,8 @@ func (ixc *indexCollectionImpl) UnsafeAddIndexByColTags(indexName string, tags [
 		isUserDefined:    props.IsUserDefined,
 		comment:          props.Comment,
 		prefixLengths:    prefixLengths,
+		columnOrders:     props.ColumnOrders,
+		opClasses:        props.OpClasses,
 		fullTextProps:    props.FullTextProperties,
 		vectorProperties: props.VectorProperties,
 	}
@@ -451,6 +459,8 @@ func (ixc *indexCollectionImpl) Merge(indexes ...Index) {
 				isUserDefined:    index.IsUserDefined(),
 				comment:          index.Comment(),
 				prefixLengths:    index.PrefixLengths(),
+				columnOrders:     index.ColumnOrders(),
+				opClasses:        index.OpClasses(),
 				fullTextProps:    index.FullTextProperties(),
 				vectorProperties: index.VectorProperties(),
 			}

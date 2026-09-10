@@ -311,6 +311,8 @@ func MakeDiffTableSecondaryIndex(ctx context.Context, tableName string, indexTyp
 		order:                         sql.IndexOrderNone,
 		constrainedToLookupExpression: false,
 		prefixLengths:                 idx.PrefixLengths(),
+		columnOrders:                  idx.ColumnOrders(),
+		opClasses:                     idx.OpClasses(),
 	}, nil
 }
 
@@ -503,6 +505,8 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		order:                         sql.IndexOrderAsc,
 		constrainedToLookupExpression: true,
 		prefixLengths:                 idx.PrefixLengths(),
+		columnOrders:                  idx.ColumnOrders(),
+		opClasses:                     idx.OpClasses(),
 		fullTextProps:                 idx.FullTextProperties(),
 		vectorProps:                   idx.VectorProperties(),
 	}, nil
@@ -536,6 +540,8 @@ func ConvertFullTextToSql(ctx context.Context, db, tbl string, sch schema.Schema
 		order:                         sql.IndexOrderAsc,
 		constrainedToLookupExpression: true,
 		prefixLengths:                 idx.PrefixLengths(),
+		columnOrders:                  idx.ColumnOrders(),
+		opClasses:                     idx.OpClasses(),
 		fullTextProps:                 idx.FullTextProperties(),
 		vectorProps:                   idx.VectorProperties(),
 	}, nil
@@ -612,6 +618,8 @@ type doltIndex struct {
 
 	fullTextProps schema.FullTextProperties
 	prefixLengths []uint16
+	columnOrders  []sql.IndexColumnOrder
+	opClasses     []string
 
 	columns      []schema.Column
 	colExprTypes []sql.ColumnExpressionType
@@ -909,8 +917,23 @@ func (di *doltIndex) Order(ctx *sql.Context) sql.IndexOrder {
 	if di.HasContentHashedField() || di.IsSpatial() {
 		return sql.IndexOrderNone
 	}
+	// A descending column leaves the index without a single order, while placing NULLs last keeps the values
+	// ascending, which is all that consumers of the order rely on
+	for _, order := range di.columnOrders {
+		if order.Descending {
+			return sql.IndexOrderNone
+		}
+	}
 
 	return di.order
+}
+
+// ColumnOrders implements sql.ColumnOrderedIndex.
+func (di *doltIndex) ColumnOrders(ctx *sql.Context) []sql.IndexColumnOrder {
+	if di.HasContentHashedField() || di.IsSpatial() {
+		return nil
+	}
+	return di.columnOrders
 }
 
 func (di *doltIndex) Reversible(ctx *sql.Context) bool {
@@ -996,6 +1019,11 @@ func (di *doltIndex) Predicate() string {
 // PrefixLengths implements sql.Index
 func (di *doltIndex) PrefixLengths() []uint16 {
 	return di.prefixLengths
+}
+
+// OpClasses implements sql.OpClassIndex.
+func (di *doltIndex) OpClasses() []string {
+	return di.opClasses
 }
 
 // IndexType implements sql.Index
@@ -1183,6 +1211,12 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 	if di.spatial {
 		return di.prollySpatialRanges(ranges)
 	}
+	if len(di.columnOrders) > 0 {
+		ranges, err = splitNullsFromRanges(ctx, ranges, di.columnOrders)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	pranges := make([]prolly.Range, len(ranges))
 	for k, rng := range ranges {
@@ -1264,6 +1298,11 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 		for i := range fields {
 			fields[i].Hi.Value = tup.GetField(i)
 		}
+		for j, colOrder := range di.columnOrders {
+			if j < len(fields) && (colOrder.Descending || colOrder.NullsLast) {
+				fields[j] = physicalRangeField(colOrder, rng[j], fields[j])
+			}
+		}
 
 		order := di.keyBld.Desc.Comparator()
 		var foundDiscontinuity bool
@@ -1302,6 +1341,10 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 			IsContiguous:           isContiguous,
 		}
 	}
+	// GMS orders ranges by value, which is not the physical order of an index with descending or NULLS LAST columns
+	if err = prolly.SortRangesByStart(ctx, pranges); err != nil {
+		return nil, err
+	}
 	return pranges, nil
 }
 
@@ -1328,17 +1371,65 @@ func getRangeCutValue(ctx context.Context, cut sql.MySQLRangeCut, typ sql.Type) 
 	return ret, err
 }
 
+// physicalRangeField converts the bounds of `field`, which GMS expresses for a column stored ascending with NULLs
+// first, into the bounds of the same values in a column stored with `order`. Ranges over such a column pass through
+// splitNullsFromRanges first, so `expr` either matches only NULL, matches every value, or excludes NULL.
+func physicalRangeField(order sql.IndexColumnOrder, expr sql.MySQLRangeColumnExpr, field prolly.RangeField) prolly.RangeField {
+	if _, ok := expr.LowerBound.(sql.BelowNull); ok {
+		if _, ok = expr.UpperBound.(sql.AboveNull); ok {
+			nullBound := prolly.Bound{Binding: true, Inclusive: true}
+			field.Lo, field.Hi = nullBound, nullBound
+		} else {
+			field.Lo, field.Hi = prolly.Bound{}, prolly.Bound{}
+		}
+		return field
+	}
+	// the non-NULL values begin just after NULL when NULLs are first, and end just before NULL when they are last
+	nonNullStart, nonNullEnd := prolly.Bound{Binding: true}, prolly.Bound{}
+	if order.NullsLast {
+		nonNullStart, nonNullEnd = nonNullEnd, nonNullStart
+	}
+	lo, hi := field.Lo, field.Hi
+	if order.Descending {
+		lo, hi = hi, lo
+	}
+	if lo.Value == nil {
+		lo = nonNullStart
+	}
+	if hi.Value == nil {
+		hi = nonNullEnd
+	}
+	field.Lo, field.Hi = lo, hi
+	return field
+}
+
+// splitNullsFromRanges applies SplitNullsFromRange to every range in `ranges`.
+func splitNullsFromRanges(ctx context.Context, ranges []sql.MySQLRange, orders []sql.IndexColumnOrder) ([]sql.MySQLRange, error) {
+	res := make([]sql.MySQLRange, 0, len(ranges))
+	for _, r := range ranges {
+		split, err := SplitNullsFromRange(ctx, r, orders)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, split...)
+	}
+	return res, nil
+}
+
 // SplitNullsFromRange given a sql.Range, splits it up into multiple ranges, where each column expr
 // that could be NULL and non-NULL is replaced with two column expressions, one
 // matching only NULL, and one matching the non-NULL component.
 //
-// This is for building physical scans against storage which does not store
-// NULL contiguous and ordered < non-NULL values.
-func SplitNullsFromRange(ctx context.Context, r sql.MySQLRange) ([]sql.MySQLRange, error) {
+// This is for building physical scans against storage which does not store NULL contiguous and
+// ordered < non-NULL values, which is the case for the columns of `orders` stored descending or
+// with NULLs last. Unrestricted column exprs are left whole.
+func SplitNullsFromRange(ctx context.Context, r sql.MySQLRange, orders []sql.IndexColumnOrder) ([]sql.MySQLRange, error) {
 	res := []sql.MySQLRange{{}}
 
-	for _, rce := range r {
-		if _, ok := rce.LowerBound.(sql.BelowNull); ok {
+	for i, rce := range r {
+		_, lowerIsNull := rce.LowerBound.(sql.BelowNull)
+		_, unrestricted := rce.UpperBound.(sql.AboveAll)
+		if lowerIsNull && !unrestricted && i < len(orders) && (orders[i].Descending || orders[i].NullsLast) {
 			// May include NULL. Split it and add each non-empty range.
 			withnull, nullok, err := rce.TryIntersect(ctx, sql.NullRangeColumnExpr(rce.Typ))
 			if err != nil {
