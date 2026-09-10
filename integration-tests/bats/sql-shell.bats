@@ -170,6 +170,11 @@ teardown() {
     # error near the stray backslash), and the next statement must have actually executed.
     [[ ! "$output" =~ "syntax error" ]] || false
     [[ "$output" =~ "1 row in set" ]] || false
+
+    # Neither canceled INSERT should have changed the table on disk.
+    run dolt sql -r csv -q "select count(*) from test"
+    [ "$status" -eq 0 ]
+    [ "$output" = $'count(*)\n0' ]
 }
 
 # Regression coverage for https://github.com/dolthub/dolt/issues/11137

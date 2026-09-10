@@ -7,20 +7,23 @@ source  "$env(BATS_CWD)/helper/common_expect_functions.tcl"
 
 spawn dolt sql
 
-# \c cancels the statement currently being entered, mirroring the MySQL client's \c escape.
-# The buffered statement should be discarded without being executed. If \c were left
-# unhandled, the shell would fold it into the next line typed, producing a syntax error near
-# the stray backslash instead of running "select 1;" on its own -- see the bats assertions in
-# sql-shell.bats for how this is verified against the full transcript.
-expect_with_defaults {dolt-repo-[0-9]+/main\*?> } { send "select * from nonexistent_table \\c\r" }
+set prompt {dolt-repo-[0-9]+/main\*?> }
 
-# Give the shell a moment to process (or mis-process) the \c before sending the next
-# statement, rather than racing to match a pattern that could also appear in echoed input.
-sleep 1
+# Cancel a valid INSERT so executing the canceled statement is observable.
+expect_with_defaults $prompt { send "insert into test (pk) values (1) \\c\r" }
+expect_with_defaults $prompt { send "select count(*) as remaining_rows from test;\r" }
+expect_with_defaults_after {\| 0 +\|\r?\n} $prompt {
+    send "insert into test (pk)\r"
+}
 
-send "select 1;\r"
-sleep 1
+# Also cancel a statement accumulated across multiple input lines.
+expect_with_defaults {-> } { send "values (2) \\c\r" }
+expect_with_defaults $prompt { send "select count(*) as remaining_rows from test;\r" }
+expect_with_defaults_after {\| 0 +\|\r?\n} $prompt { send "quit\r" }
 
-send "quit\r"
-
-expect eof
+expect {
+    eof {}
+    timeout { exit 1 }
+}
+set waitval [wait -i $spawn_id]
+exit [lindex $waitval 3]
