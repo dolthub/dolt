@@ -16,6 +16,7 @@ package dsess
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -345,6 +346,17 @@ func TestGetPersistedValue(t *testing.T) {
 			Name:        "activate_all_roles_on_login",
 			Value:       "0",
 			ExpectedRes: int8(0),
+		},
+		{
+			Name:        sql.SqlModeSessionVar,
+			Value:       "NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY",
+			ExpectedRes: "NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY",
+		},
+		{
+			// Test backwards compatibility with legacy decimal bitmask config.
+			Name:        sql.SqlModeSessionVar,
+			Value:       strconv.FormatUint(sql.MODE_ANSI, 10),
+			ExpectedRes: sql.ANSI,
 		},
 	}
 

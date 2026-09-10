@@ -275,6 +275,17 @@ EOF
     [[ $output =~ "dev" ]] || false
 }
 
+@test "sql-server: persist sql_mode across server restart" {
+    cd repo1
+    start_sql_server
+    dolt sql -q "SET PERSIST sql_mode = 'NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES';"
+    stop_sql_server
+    start_sql_server
+    run dolt --use-db repo1 sql -q "SELECT @@GLOBAL.sql_mode;" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" =~ "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION" ]] || false
+}
+
 @test "sql-server: user session variables from config" {
   cd repo1
   echo "

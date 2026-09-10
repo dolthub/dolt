@@ -234,6 +234,10 @@ func ConfigureServices(
 			if err != nil {
 				logrus.Errorf("unable to persist system variable defaults: %v", err)
 			}
+			err = dsess.InitPersistedSystemVars(cfg.DoltEnv)
+			if err != nil {
+				logrus.Errorf("unable to init persisted system variables: %v", err)
+			}
 			// Always return nil, because we don't want an invalid config value to prevent
 			// the server from starting up.
 			return nil

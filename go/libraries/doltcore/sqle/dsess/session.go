@@ -1710,6 +1710,17 @@ func (d *DoltSession) PersistGlobal(ctx *sql.Context, sysVarName string, value i
 		return err
 	}
 
+	if sysVarType, ok := sysVar.GetType().(sql.SystemVariableType); ok {
+		if encoded, err := sysVarType.EncodeValue(value); err == nil {
+			value = encoded
+		}
+	} else if strings.EqualFold(sysVar.GetName(), sql.SqlModeSessionVar) {
+		// Store sql_mode as comma-delimited string instead of bitmask int.
+		if s, err := sql.ConvertSqlModeBitmask(value); err == nil {
+			value = s
+		}
+	}
+
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return setPersistedValue(d.globalsConf, sysVar.GetName(), value)
@@ -1926,6 +1937,14 @@ func getPersistedValue(conf config.ReadableConfig, k string) (interface{}, error
 	case bool:
 		return nil, sql.ErrInvalidType.New(value)
 	case string:
+		if strings.EqualFold(k, sql.SqlModeSessionVar) {
+			// Convert legacy decimal bitmask string to comma-delimited modes.
+			if bitmask, err := strconv.ParseUint(v, 10, 64); err == nil {
+				if s, err := sql.ConvertSqlModeBitmask(bitmask); err == nil {
+					return s, nil
+				}
+			}
+		}
 		return v, nil
 	default:
 		return nil, sql.ErrInvalidType.New(value)
@@ -2027,8 +2046,12 @@ func SystemVariablesInConfig(conf config.ReadableConfig) ([]sql.SystemVariable, 
 
 var initMu = sync.Mutex{}
 
-// InitPersistedSystemVars loads all persisted global variables from disk and initializes the corresponding
-// SQL system variables with their values.
+// InitPersistedSystemVars loads persisted global system variables from
+// configuration into [sql.SystemVariables].
+//
+// The environment's local and global configuration stores are searched
+// for persisted variables, and each definition is initialized with its
+// persisted value. Returns an error if reading configuration fails.
 func InitPersistedSystemVars(dEnv *env.DoltEnv) error {
 	initMu.Lock()
 	defer initMu.Unlock()
@@ -2073,31 +2096,19 @@ func PersistSystemVarDefaults(dEnv *env.DoltEnv) error {
 // global configuration stores, this function searches both.
 func findPersistedGlobalVars(dEnv *env.DoltEnv) (persistedGlobalVars []sql.SystemVariable, err error) {
 	foundConfig := false
-	if localConf, ok := dEnv.Config.GetConfig(env.LocalConfig); ok {
-		foundConfig = true
-		localConfig := config.NewPrefixConfig(localConf, env.SqlServerGlobalsPrefix)
-		globalVars, missingKeys, err := SystemVariablesInConfig(localConfig)
-		if err != nil {
-			return nil, err
-		}
+	for _, confScope := range []env.ConfigScope{env.LocalConfig, env.GlobalConfig} {
+		if conf, ok := dEnv.Config.GetConfig(confScope); ok {
+			foundConfig = true
+			pfxConfig := config.NewPrefixConfig(conf, env.SqlServerGlobalsPrefix)
+			globalVars, missingKeys, err := SystemVariablesInConfig(pfxConfig)
+			if err != nil {
+				return nil, err
+			}
 
-		persistedGlobalVars = append(persistedGlobalVars, globalVars...)
-		for _, k := range missingKeys {
-			logrus.Warnf("persisted system variable %s was not loaded since its definition does not exist.", k)
-		}
-	}
-
-	if globalConf, ok := dEnv.Config.GetConfig(env.GlobalConfig); ok {
-		foundConfig = true
-		globalConfig := config.NewPrefixConfig(globalConf, env.SqlServerGlobalsPrefix)
-		globalVars, missingKeys, err := SystemVariablesInConfig(globalConfig)
-		if err != nil {
-			return nil, err
-		}
-
-		persistedGlobalVars = append(persistedGlobalVars, globalVars...)
-		for _, k := range missingKeys {
-			logrus.Warnf("persisted system variable %s was not loaded since its definition does not exist.", k)
+			persistedGlobalVars = append(persistedGlobalVars, globalVars...)
+			for _, k := range missingKeys {
+				logrus.Warnf("persisted system variable %s was not loaded since its definition does not exist.", k)
+			}
 		}
 	}
 
