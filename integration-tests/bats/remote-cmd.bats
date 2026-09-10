@@ -122,6 +122,36 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "origin" ]] || false
     [[ ! "$output" =~ "Your branch is up to date with 'origin/main'" ]] || false
+    [[ ! "$output" =~ "Your branch is up to date with 'main'" ]] || false
+
+    run grep -q 'origin' .dolt/repo_state.json
+    [ "$status" -eq 1 ]
+}
+
+@test "remote-cmd: SQL remove origin and verify tracking is gone" {
+    mkdir remote_repo
+    mkdir initter
+    cd initter
+    dolt init
+    dolt remote add origin file://../remote_repo
+    dolt push origin main
+    cd ../
+    rm -rf initter
+
+    dolt clone file://remote_repo cloned_repo
+    cd cloned_repo
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Your branch is up to date with 'origin/main'" ]] || false
+
+    dolt sql -q "CALL DOLT_REMOTE('remove','origin')"
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "origin" ]] || false
+    [[ ! "$output" =~ "Your branch is up to date with 'origin/main'" ]] || false
+    [[ ! "$output" =~ "Your branch is up to date with 'main'" ]] || false
 
     run grep -q 'origin' .dolt/repo_state.json
     [ "$status" -eq 1 ]

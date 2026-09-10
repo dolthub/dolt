@@ -44,3 +44,15 @@ func TestRemoveRemoteClearsTrackingBranches(t *testing.T) {
 	_, found = repoState.Branches.Get("other")
 	require.True(t, found)
 }
+
+func TestRemoveRemoteWithUninitializedBranches(t *testing.T) {
+	remotes := concurrentmap.New[string, Remote]()
+	remotes.Set("origin", Remote{Name: "origin"})
+	repoState := RepoState{Remotes: remotes}
+
+	require.NotPanics(t, func() {
+		repoState.RemoveRemote(Remote{Name: "origin"})
+	})
+	_, found := repoState.Remotes.Get("origin")
+	require.False(t, found)
+}
