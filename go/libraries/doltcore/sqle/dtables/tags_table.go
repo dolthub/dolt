@@ -21,13 +21,16 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 const tagsDefaultRowCount = 10
 
 var _ sql.Table = (*TagsTable)(nil)
+var _ sql.IndexAddressableTable = (*TagsTable)(nil)
 var _ sql.StatisticsTable = (*TagsTable)(nil)
 
 // TagsTable is a sql.Table implementation that implements a system table which shows the dolt tags
@@ -126,3 +129,49 @@ func (itr *TagsItr) Next(ctx *sql.Context) (sql.Row, error) {
 func (itr *TagsItr) Close(*sql.Context) error {
 	return nil
 }
+
+func (tt *TagsTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	return []sql.Index{refNameIndex{ctx.GetCurrentDatabase(), tt.Name(), "tag_name", "dolt_tags_name_idx"}}, nil
+}
+
+func (tt *TagsTable) PreciseMatch() bool { return true }
+
+func (tt *TagsTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
+	return &refIndexedTable{Table: tt,
+		load: func(ctx *sql.Context) ([]ref.DoltRef, hash.Hash, error) {
+			root, err := tt.ddb.NomsRoot(ctx)
+			if err != nil {
+				return nil, root, err
+			}
+			refs, err := tt.ddb.GetRefsOfTypeByNomsRoot(ctx, map[ref.RefType]struct{}{ref.TagRefType: {}}, root)
+			return refs, root, err
+		},
+		rows: func(ctx *sql.Context, p *refPartition) (sql.RowIter, error) {
+			return &indexedTagsIter{ddb: tt.ddb, partition: p}, nil
+		},
+	}
+}
+
+type indexedTagsIter struct {
+	ddb       *doltdb.DoltDB
+	partition *refPartition
+	pos       int
+}
+
+func (i *indexedTagsIter) Next(ctx *sql.Context) (sql.Row, error) {
+	if i.pos >= len(i.partition.refs) {
+		return nil, io.EOF
+	}
+	r := i.partition.refs[i.pos].(ref.TagRef)
+	i.pos++
+	tag, err := i.ddb.ResolveTagAtRoot(ctx, r, i.partition.root)
+	if err != nil {
+		return nil, err
+	}
+	h, err := tag.Commit.HashOf()
+	if err != nil {
+		return nil, err
+	}
+	return sql.NewRow(tag.Name, h.String(), tag.Meta.Name, tag.Meta.Email, tag.Meta.Time(), tag.Meta.Description), nil
+}
+func (i *indexedTagsIter) Close(*sql.Context) error { return nil }
