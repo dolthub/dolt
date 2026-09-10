@@ -15,6 +15,7 @@
 package dtables
 
 import (
+	"fmt"
 	"io"
 	"testing"
 
@@ -64,4 +65,59 @@ func TestRefNameLookup(t *testing.T) {
 		require.Equal(t, test.names, names)
 	}
 	require.Equal(t, 1, loads, "repeated join lookups must reuse the ref snapshot")
+}
+
+func TestRemoteRefNameLookup(t *testing.T) {
+	ctx := sql.NewEmptyContext()
+	table := &refIndexedTable{load: func(*sql.Context) ([]ref.DoltRef, hash.Hash, error) {
+		return []ref.DoltRef{ref.NewRemoteRef("origin", "alpha"), ref.NewRemoteRef("origin", "beta")}, hash.Hash{}, nil
+	}}
+	for _, name := range []string{"remotes/origin/alpha", "origin/alpha", "alpha"} {
+		parts, err := table.LookupPartitions(ctx, sql.IndexLookup{Ranges: sql.MySQLRangeCollection{{sql.ClosedRangeColumnExpr(name, name, types.Text)}}})
+		require.NoError(t, err)
+		p, err := parts.Next(ctx)
+		if name == "remotes/origin/alpha" {
+			require.NoError(t, err)
+			require.Equal(t, []ref.DoltRef{ref.NewRemoteRef("origin", "alpha")}, p.(*refPartition).refs)
+		} else {
+			require.Equal(t, io.EOF, err)
+		}
+		require.NoError(t, parts.Close(ctx))
+	}
+}
+
+func BenchmarkRefNameLookup(b *testing.B) {
+	for _, size := range []int{100, 14000} {
+		for _, point := range []bool{true, false} {
+			b.Run(fmt.Sprintf("refs=%d/point=%t", size, point), func(b *testing.B) {
+				ctx := sql.NewEmptyContext()
+				table := &refIndexedTable{load: func(*sql.Context) ([]ref.DoltRef, hash.Hash, error) {
+					refs := make([]ref.DoltRef, size)
+					for i := range refs {
+						refs[i] = ref.NewTagRef(fmt.Sprintf("tag%06d", i))
+					}
+					return refs, hash.Hash{}, nil
+				}}
+				upper := "tag000050"
+				if !point {
+					upper = "tag000060"
+				}
+				lookup := sql.IndexLookup{Ranges: sql.MySQLRangeCollection{{sql.ClosedRangeColumnExpr("tag000050", upper, types.Text)}}}
+				// Exclude building the shared snapshot: measure repeated join probes.
+				parts, err := table.LookupPartitions(ctx, lookup)
+				require.NoError(b, err)
+				require.NoError(b, parts.Close(ctx))
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					parts, err := table.LookupPartitions(ctx, lookup)
+					if err != nil {
+						b.Fatal(err)
+					}
+					if err = parts.Close(ctx); err != nil {
+						b.Fatal(err)
+					}
+				}
+			})
+		}
+	}
 }
