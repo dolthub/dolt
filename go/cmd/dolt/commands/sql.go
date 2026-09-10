@@ -296,10 +296,11 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			}
 		} else {
 			input = transform.NewReader(input, textunicode.BOMOverride(transform.Nop))
-			_, err := execBatchMode(queryist.Context, queryist.Queryist, input, continueOnError, format, binaryAsHex)
+			info, err := execBatchMode(queryist.Context, queryist.Queryist, input, continueOnError, format, binaryAsHex)
 			if err != nil {
 				return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.VerboseErrorFromError(err), usage)
 			}
+			warnIfLoneDoltCheckout(info)
 		}
 	}
 
@@ -415,9 +416,7 @@ func queryMode(
 		return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
 	}
 
-	if info.isLoneDoltCheckout {
-		cli.PrintErrln(color.YellowString("Warning: dolt_checkout() in a SQL session only changes the active branch for that SQL session. Your branch in the CLI is unchanged. To change the checked out branch for dolt CLI commands, run `dolt checkout <branch>`."))
-	}
+	warnIfLoneDoltCheckout(info)
 
 	return 0
 }
@@ -426,6 +425,12 @@ func queryMode(
 // inspect what was executed without re-parsing the query string.
 type batchExecInfo struct {
 	isLoneDoltCheckout bool
+}
+
+func warnIfLoneDoltCheckout(info batchExecInfo) {
+	if info.isLoneDoltCheckout {
+		cli.PrintErrln(color.YellowString("Warning: dolt_checkout() in a SQL session only changes the active branch for that SQL session. Your branch in the CLI is unchanged. To change the checked out branch for dolt CLI commands, run `dolt checkout <branch>`."))
+	}
 }
 
 // isDoltCheckoutCall returns true when the already-parsed statement

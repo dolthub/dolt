@@ -121,11 +121,35 @@ teardown() {
     [[ ! "$stderr" =~ "Warning:" ]] || false
 }
 
-@test "sql-checkout: stdin batch checkouts do not warn" {
+@test "sql-checkout: redirected lone checkout warns without changing the CLI branch" {
+    export NO_COLOR=1
     dolt branch feature-branch
-    run --separate-stderr dolt sql <<< "call dolt_checkout('feature-branch');"
+    echo "call dolt_checkout('feature-branch');" > queries.sql
+
+    run --separate-stderr dolt sql < queries.sql
+    [ "$status" -eq 0 ]
+    [ "$stderr" = 'Warning: dolt_checkout() in a SQL session only changes the active branch for that SQL session. Your branch in the CLI is unchanged. To change the checked out branch for dolt CLI commands, run `dolt checkout <branch>`.' ]
+    [[ ! "$output" =~ "Warning:" ]] || false
+
+    run dolt branch --show-current
+    [ "$status" -eq 0 ]
+    [ "$output" = "main" ]
+}
+
+@test "sql-checkout: redirected multiple statements and failed checkouts do not warn" {
+    dolt branch feature-branch
+    echo "call dolt_checkout('feature-branch'); select active_branch();" > queries.sql
+
+    run --separate-stderr dolt sql -r csv < queries.sql
     [ "$status" -eq 0 ]
     [ -z "$stderr" ]
+    [[ "$output" = *$'active_branch()\nfeature-branch' ]] || false
+
+    echo "call dolt_checkout('missing-branch');" > queries.sql
+    run --separate-stderr dolt sql < queries.sql
+    [ "$status" -ne 0 ]
+    [[ "$stderr" =~ "missing-branch" ]] || false
+    [[ ! "$stderr" =~ "Warning:" ]] || false
 }
 
 @test "sql-checkout: DOLT_CHECKOUT -b throws error on branches that already exist" {
