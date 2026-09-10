@@ -784,6 +784,114 @@ func TestVectorIndexes(t *testing.T) {
 	enginetest.TestVectorIndexes(t, harness)
 }
 
+func TestVectorIndexNullability(t *testing.T) {
+	for _, colType := range []string{"JSON", "VECTOR(2)"} {
+		t.Run(colType, func(t *testing.T) {
+			harness := newDoltHarness(t)
+			defer harness.Close()
+			value := "'[1,2]'"
+			if colType == "VECTOR(2)" {
+				value = "STRING_TO_VECTOR('[1,2]')"
+			}
+			enginetest.TestScript(t, harness, queries.ScriptTest{
+				Name: "vector index validation across working set and committed schemas",
+				SetUpScript: []string{
+					fmt.Sprintf("CREATE TABLE vectors (id INT PRIMARY KEY, v %s)", colType),
+					"INSERT INTO vectors VALUES (1, NULL)",
+					"CALL DOLT_COMMIT('-Am', 'nullable vector column')",
+					"CALL DOLT_BRANCH('nullable')",
+				},
+				Assertions: []queries.ScriptTestAssertion{
+					{
+						Query:       "CREATE VECTOR INDEX v_idx ON vectors(v)",
+						ExpectedErr: sql.ErrNullableVectorIdx,
+					},
+					{
+						Query:       "ALTER TABLE vectors ADD VECTOR INDEX v_idx(v)",
+						ExpectedErr: sql.ErrNullableVectorIdx,
+					},
+					{
+						Query:    "SELECT * FROM vectors",
+						Expected: []sql.Row{{1, nil}},
+					},
+					{
+						// Failed DDL must not leave a partial index or dirty the working set.
+						Query:    "SELECT count(*) FROM information_schema.statistics WHERE table_name = 'vectors' AND index_name = 'v_idx'",
+						Expected: []sql.Row{{0}},
+					},
+					{
+						Query:    "SELECT count(*) FROM dolt_status",
+						Expected: []sql.Row{{0}},
+					},
+					{
+						Query:    "DELETE FROM vectors WHERE id = 1",
+						Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: 1}}},
+					},
+					{
+						// Removing NULL rows does not make a nullable column indexable.
+						Query:       "CREATE VECTOR INDEX v_idx ON vectors(v)",
+						ExpectedErr: sql.ErrNullableVectorIdx,
+					},
+					{
+						Query:    fmt.Sprintf("ALTER TABLE vectors MODIFY COLUMN v %s NOT NULL", colType),
+						Expected: []sql.Row{{gmstypes.OkResult{}}},
+					},
+					{
+						Query:    fmt.Sprintf("INSERT INTO vectors VALUES (2, %s)", value),
+						Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: 1}}},
+					},
+					{
+						Query:    "ALTER TABLE vectors ADD VECTOR INDEX v_idx(v)",
+						Expected: []sql.Row{{gmstypes.OkResult{}}},
+					},
+					{
+						Query:       "INSERT INTO vectors VALUES (2, NULL)",
+						ExpectedErr: sql.ErrInsertIntoNonNullableProvidedNull,
+					},
+					{
+						Query:            "CALL DOLT_COMMIT('-Am', 'not null vector index')",
+						SkipResultsCheck: true,
+					},
+					{
+						Query:    "CALL DOLT_BRANCH('indexed')",
+						Expected: []sql.Row{{0}},
+					},
+					{
+						Query:    "CALL DOLT_RESET('--hard', 'nullable')",
+						Expected: []sql.Row{{0}},
+					},
+					{
+						// Re-loading the old schema must preserve its nullability.
+						Query:       "CREATE VECTOR INDEX v_idx ON vectors(v)",
+						ExpectedErr: sql.ErrNullableVectorIdx,
+					},
+					{
+						Query:    "SELECT * FROM vectors",
+						Expected: []sql.Row{{1, nil}},
+					},
+					{
+						Query:    "CALL DOLT_RESET('--hard', 'indexed')",
+						Expected: []sql.Row{{0}},
+					},
+					{
+						Query:    "SELECT count(*) FROM information_schema.statistics WHERE table_name = 'vectors' AND index_name = 'v_idx'",
+						Expected: []sql.Row{{1}},
+					},
+					{
+						Query:           "SELECT id FROM vectors ORDER BY VEC_DISTANCE('[1,2]', v) LIMIT 1",
+						Expected:        []sql.Row{{2}},
+						ExpectedIndexes: []string{"v_idx"},
+					},
+					{
+						Query:       "INSERT INTO vectors VALUES (3, NULL)",
+						ExpectedErr: sql.ErrInsertIntoNonNullableProvidedNull,
+					},
+				},
+			})
+		})
+	}
+}
+
 func TestVectorFunctions(t *testing.T) {
 	harness := newDoltHarness(t)
 	defer harness.Close()
