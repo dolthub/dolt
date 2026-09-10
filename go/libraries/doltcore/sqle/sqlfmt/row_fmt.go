@@ -284,11 +284,11 @@ func SqlRowAsDeleteStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch 
 // SqlRowAsUpdateStmt generates an UPDATE statement setting the
 // columns of |r| named by |colsToUpdate|.
 //
+// Generated columns are skipped. If no columns remain to update,
+// an empty string is returned.
+//
 // The row to change is keyed by the primary key columns of
 // |tableSch|, using their values from |r|.
-//
-// Generated columns are skipped, matching InsertStatementPrefix and
-// SqlRowAsTupleString.
 func SqlRowAsUpdateStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch schema.Schema, colsToUpdate *set.StrSet) (string, error) {
 	var b strings.Builder
 	b.WriteString("UPDATE ")
@@ -320,6 +320,10 @@ func SqlRowAsUpdateStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch 
 
 	if err != nil {
 		return "", err
+	}
+
+	if !seenOne {
+		return "", nil
 	}
 
 	b.WriteString(" WHERE ")

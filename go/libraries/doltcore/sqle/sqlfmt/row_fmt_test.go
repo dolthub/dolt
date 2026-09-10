@@ -93,6 +93,12 @@ func TestSqlRowAsUpdateStmtSkipsGeneratedCols(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "UPDATE `table_name` SET `a`='x' WHERE `id`=1;", stmt)
+
+	colsToUpdate = set.NewStrSet([]string{"c"})
+	stmt, err = sqlfmt.SqlRowAsUpdateStmt(sql.NewEmptyContext(), sql.Row{int64(1), "x", "x!"}, "table_name", sch, colsToUpdate)
+
+	require.NoError(t, err)
+	assert.Empty(t, stmt)
 }
 
 func TestSqlRowAsTupleString(t *testing.T) {
