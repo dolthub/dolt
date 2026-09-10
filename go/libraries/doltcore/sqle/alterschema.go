@@ -326,6 +326,56 @@ func modifyPkOrdinals(oldSch, newSch schema.Schema) ([]int, error) {
 	return newPkOrdinals, nil
 }
 
+// rebindForeignKeyIndexes updates the foreign keys involving `tableName` whose backing index is no longer in `newSch`
+// (due to a dropped column) to use another index over the columns, creating one on the declaring side when a suitable
+// one does not exist. Returns `true` when any foreign key was changed.
+func rebindForeignKeyIndexes(tableName doltdb.TableName, newSch schema.Schema, fkc *doltdb.ForeignKeyCollection) (bool, error) {
+	changed := false
+	for _, fk := range fkc.AllKeys() {
+		rebound := fk
+		if fk.TableName.EqualFold(tableName) && fk.TableIndex != "" && !newSch.Indexes().Contains(fk.TableIndex) {
+			idx, ok, err := indexForForeignKeyColumns(newSch, fk.TableColumns)
+			if err != nil {
+				return false, err
+			}
+			if !ok {
+				if idx, err = newSch.Indexes().AddIndexByColTags(fk.Name, fk.TableColumns, nil, schema.IndexProperties{}); err != nil {
+					return false, err
+				}
+			}
+			rebound.TableIndex = idx.Name()
+		}
+		if fk.ReferencedTableName.EqualFold(tableName) && fk.ReferencedTableIndex != "" && !newSch.Indexes().Contains(fk.ReferencedTableIndex) {
+			idx, ok, err := indexForForeignKeyColumns(newSch, fk.ReferencedTableColumns)
+			if err != nil {
+				return false, err
+			}
+			if !ok {
+				return false, sql.ErrCantDropIndex.New(fk.ReferencedTableIndex, fk.Name)
+			}
+			rebound.ReferencedTableIndex = idx.Name()
+		}
+		if rebound.TableIndex != fk.TableIndex || rebound.ReferencedTableIndex != fk.ReferencedTableIndex {
+			fkc.RemoveKeys(fk)
+			if err := fkc.AddKeys(rebound); err != nil {
+				return false, err
+			}
+			changed = true
+		}
+	}
+	return changed, nil
+}
+
+// indexForForeignKeyColumns returns an index of `sch` whose leading columns are the columns with the given tags.
+func indexForForeignKeyColumns(sch schema.Schema, tags []uint64) (schema.Index, bool, error) {
+	colNames := make([]string, len(tags))
+	for i, tag := range tags {
+		col, _ := sch.GetAllCols().GetByTag(tag)
+		colNames[i] = col.Name
+	}
+	return FindIndexWithPrefix(sch, colNames)
+}
+
 // backupFkcIndexesForKeyDrop finds backup indexes to cover foreign key references during a primary
 // key drop. If multiple indexes are valid, we sort by unique and select the first.
 // This will not work with a non-pk index drop without an additional index filter argument.
