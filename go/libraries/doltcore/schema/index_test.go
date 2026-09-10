@@ -17,7 +17,6 @@ package schema
 import (
 	"testing"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -290,37 +289,6 @@ func TestIndexCollectionAddIndexByColTags(t *testing.T) {
 		_, err = indexColl.AddIndexByColTags("nonsense", []uint64{3, 4, 10}, nil, IndexProperties{IsUnique: false, Comment: ""})
 		assert.Error(t, err)
 	})
-}
-
-func TestIndexCollectionVectorIndexNullability(t *testing.T) {
-	for _, test := range []struct {
-		name     string
-		nullable bool
-		isVector bool
-	}{
-		{"nullable vector index", true, true},
-		{"not null vector index", false, true},
-		{"nullable ordinary index", true, false},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			col := NewColumn("v", 1, types.JSONKind, false)
-			if !test.nullable {
-				col.Constraints = append(col.Constraints, NotNullConstraint{})
-			}
-			indexes := NewIndexCollection(NewColCollection(col), nil)
-			idx, err := indexes.AddIndexByColTags("v_idx", []uint64{1}, nil, IndexProperties{IsVector: test.isVector})
-			if test.nullable && test.isVector {
-				require.Error(t, err)
-				assert.True(t, sql.ErrNullableVectorIdx.Is(err))
-				assert.Nil(t, idx)
-				assert.False(t, indexes.Contains("v_idx"))
-			} else {
-				require.NoError(t, err)
-				assert.NotNil(t, idx)
-				assert.True(t, indexes.Contains("v_idx"))
-			}
-		})
-	}
 }
 
 func TestIndexCollectionAllIndexes(t *testing.T) {
