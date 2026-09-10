@@ -808,8 +808,6 @@ func UpstreamRef[C doltdb.Context](rsr RepoStateReader[C], branchRef ref.DoltRef
 		return nil, err
 	}
 
-	// TODO(elianddb): delete a branch's config entry on remote removal,
-	// so there's no ambiguity with an explicit non-remote merge ref.
 	upstream, hasUpstream := branchConfigs.Get(branchRef.GetPath())
 	if !hasUpstream || upstream.Merge.Ref == nil || upstream.Remote == "" {
 		return nil, nil

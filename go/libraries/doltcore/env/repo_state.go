@@ -232,6 +232,14 @@ func (rs *RepoState) AddRemote(r Remote) {
 
 func (rs *RepoState) RemoveRemote(r Remote) {
 	rs.Remotes.Delete(r.Name)
+	if rs.Branches == nil {
+		return
+	}
+	for branchName, branch := range rs.Branches.Snapshot() {
+		if branch.Remote == r.Name {
+			rs.Branches.Delete(branchName)
+		}
+	}
 }
 
 func (rs *RepoState) AddBackup(r Remote) {
