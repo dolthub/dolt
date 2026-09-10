@@ -254,7 +254,7 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 // validateColumnIndexable returns an error if the column given cannot be used in an index
 func validateColumnIndexable(c Column, isVector bool) error {
 	if isVector && c.IsNullable() {
-		return fmt.Errorf("all parts of a VECTOR index must be NOT NULL")
+		return sql.ErrNullableVectorIdx.New()
 	}
 	return nil
 }
