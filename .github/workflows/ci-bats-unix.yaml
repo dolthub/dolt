@@ -124,12 +124,12 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ./.ci_bin/minio
-          key: minio-bin
+          key: minio-community-RELEASE.2025-09-07T16-13-09Z
       - name: Install MinIO
         if: steps.cache_minio.outputs.cache-hit != 'true'
         working-directory: ./.ci_bin
         run: |
-          curl -sSL -o minio https://dl.min.io/server/minio/release/linux-amd64/minio
+          curl -sSLf -o minio https://github.com/minio/minio/releases/download/RELEASE.2025-09-07T16-13-09Z/minio.linux-amd64.RELEASE.2025-09-07T16-13-09Z
           chmod +x minio
       - name: Test all Unix
         if: matrix.sql_engine == 'local-engine' || env.use_credentials == 'true'
