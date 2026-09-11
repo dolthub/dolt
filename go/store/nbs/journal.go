@@ -161,10 +161,26 @@ func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context, behavior dher
 
 	canCreate := !j.backing.readOnly()
 
+	// If we fail the bootstrap, rollback to an uninitialized state
+	// so that future accesses can try again.
+	var created bool
+	defer func() {
+		if err == nil || j.wr == nil {
+			return
+		}
+		err = errors.Join(err, j.abortBootstrap(ctx, created))
+	}()
+
 	if canCreate && !ok { // create new journal file
+		// Creating a journal is bounded work and its best to succeed if
+		// we can once we start. Detach from the caller's context so its
+		// cancelation doesn't cause us to fail half way through.
+		ctx := context.WithoutCancel(ctx)
+
 		if err = j.createProtectedJournalWriter(ctx); err != nil {
 			return err
 		}
+		created = true
 
 		_, err = j.wr.bootstrapJournal(ctx, canCreate, j.reflogRingBuffer, warningsCb)
 		if err != nil {
@@ -505,6 +521,32 @@ func (j *ChunkJournal) flushToBackingManifest(ctx context.Context, behavior dher
 	return nil
 }
 
+// abortBootstrap returns the ChunkJournal to its uninitialized state
+// after a failed bootstrapJournalWriter. A later call will be
+// responsible for boostraping. |created| says whether the failed call
+// made the journal file, in which case we should delete it as part of
+// cleanup.
+func (j *ChunkJournal) abortBootstrap(ctx context.Context, created bool) error {
+	if j.wr == nil {
+		return nil
+	}
+	if created {
+		return j.dropJournalWriter(ctx)
+	}
+
+	curr := j.wr
+	j.wr = nil
+	// A retry replays the journal from the beginning, so drop the roots this
+	// attempt collected rather than recording them twice.
+	if !reflogDisabled {
+		j.reflogRingBuffer.Truncate()
+	}
+	j.persister.pruneMu.RLock()
+	defer j.persister.pruneMu.RUnlock()
+	defer j.persister.removeProtected(journalAddr)
+	return curr.Close()
+}
+
 func (j *ChunkJournal) dropJournalWriter(ctx context.Context) error {
 	curr := j.wr
 	if curr == nil {
@@ -553,7 +595,7 @@ func (j *ChunkJournal) Close() (err error) {
 	if j.wr != nil {
 		err = j.wr.Close()
 		// flush the latest root to the backing manifest
-		if !j.backing.readOnly() {
+		if !j.backing.readOnly() && !j.contents.lock.IsEmpty() {
 			// Let caller implement FatalBehavior.
 			cerr := j.flushToBackingManifest(context.Background(), dherrors.FatalBehaviorError, j.contents, &Stats{})
 			if err == nil {
