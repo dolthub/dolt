@@ -743,12 +743,12 @@ func (db *database) PersistGhostCommitIDs(ctx context.Context, ghosts hash.HashS
 	return err
 }
 
-// CommitBundleItem contains all the information necessary to update one working set and its corresponding HEAD in
+// AtomicCommitElement contains all the information necessary to update one working set and its corresponding HEAD in
 // a single atomic operation.
-type CommitBundleItem struct {
-	// CommitDS is the HEAD Dataset to update with a new commit, or nil if no HEAD is to be updated.
+type AtomicCommitElement struct {
+	// CommitDS is the HEAD Dataset to update with a new commit, empty if no HEAD is to be updated.
 	CommitDS Dataset
-	// CommitOpts are the options to use when creating the new commit, or nil if no commit is to be created.
+	// CommitOpts are the options to use when creating the new commit, empty if no commit is to be created.
 	CommitOpts CommitOptions
 	// WorkingSetDS is the working set Dataset to update with a new working set.
 	WorkingSetDS Dataset
@@ -762,7 +762,123 @@ type CommitBundleItem struct {
 	RootVal types.Value
 }
 
-type CommitBundle []CommitBundleItem
+// AtomicCommit is a slice of AtomicCommitElements to apply in a single atomic operation
+type AtomicCommit []AtomicCommitElement
+
+type pendingAtomicCommit struct {
+	commitRef        types.Ref
+	currCommitDSHash hash.Hash
+	wsAddr           hash.Hash
+}
+
+// CommitAtomic updates N Datasets atomically.
+func (db *database) CommitAtomic(
+	ctx context.Context,
+	atomicCommit AtomicCommit,
+	opts CommitOptions,
+) (Dataset, Dataset, error) {
+	pending := make([]pendingAtomicCommit, len(atomicCommit))
+
+	for i, cmt := range atomicCommit {
+		wsAddr, err := newWorkingSet(ctx, db, atomicCommit[i].WorkingSet)
+		if err != nil {
+			return Dataset{}, Dataset{}, err
+		}
+
+		var commitValRef types.Ref
+		var currCommitDSHash hash.Hash
+
+		if !cmt.CommitDS.IsEmpty() {
+			// Prepend the current head hash to the list of parents if one was provided. This is only necessary if parents were
+			// provided because we fill it in automatically in buildNewCommit otherwise.
+			if len(opts.Parents) > 0 && opts.AmendedCommit.IsEmpty() && !opts.Force {
+				headHash, ok := cmt.CommitDS.MaybeHeadAddr()
+				if ok {
+					if !hasParentHash(opts, headHash) {
+						opts.Parents = append([]hash.Hash{headHash}, opts.Parents...)
+					}
+				}
+			}
+
+			commit, err := db.BuildNewCommit(ctx, cmt.CommitDS, cmt.RootVal, opts)
+			if err != nil {
+				return Dataset{}, Dataset{}, err
+			}
+
+			commitRef, err := db.WriteValue(ctx, commit.NomsValue())
+			if err != nil {
+				return Dataset{}, Dataset{}, err
+			}
+
+			commitValRef, err = types.ToRefOfValue(commitRef, db.Format())
+			if err != nil {
+				return Dataset{}, Dataset{}, err
+			}
+
+			currCommitDSHash, _ = cmt.CommitDS.MaybeHeadAddr()
+		}
+
+		pending[i] = pendingAtomicCommit{
+			commitRef:        commitValRef,
+			currCommitDSHash: currCommitDSHash,
+			wsAddr:           wsAddr,
+		}
+	}
+
+	err := db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
+		for i := range atomicCommit {
+
+			currWS, err := am.Get(ctx, workingSetDS.ID())
+			if err != nil {
+				return prolly.AddressMap{}, err
+			}
+			if currWS != prevWsHash {
+				return prolly.AddressMap{}, ErrOptimisticLockFailed
+			}
+			currDS, err := am.Get(ctx, commitDS.ID())
+			if err != nil {
+				return prolly.AddressMap{}, err
+			}
+			if currDS != currCommitDSHash {
+				return prolly.AddressMap{}, ErrMergeNeeded
+			}
+			ae := am.Editor()
+			err = ae.Update(ctx, commitDS.ID(), commitValRef.TargetHash())
+			if err != nil {
+				return prolly.AddressMap{}, err
+			}
+			err = ae.Update(ctx, workingSetDS.ID(), wsAddr)
+			if err != nil {
+				return prolly.AddressMap{}, err
+			}
+			_, err = ae.Flush(ctx)
+			return _, err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return Dataset{}, Dataset{}, err
+	}
+
+	currentDatasets, err := db.Datasets(ctx)
+	if err != nil {
+		return Dataset{}, Dataset{}, err
+	}
+
+	commitDS, err = db.datasetFromMap(ctx, commitDS.ID(), currentDatasets)
+	if err != nil {
+		return Dataset{}, Dataset{}, err
+	}
+
+	workingSetDS, err = db.datasetFromMap(ctx, workingSetDS.ID(), currentDatasets)
+	if err != nil {
+		return Dataset{}, Dataset{}, err
+	}
+
+	return commitDS, workingSetDS, nil
+}
 
 // CommitWithWorkingSet updates two Datasets atomically: the working set, and its corresponding HEAD. Uses the same
 // global locking mechanism as UpdateWorkingSet.
