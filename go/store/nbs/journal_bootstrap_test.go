@@ -34,9 +34,13 @@ func newTestJournalingStore(t *testing.T, dir string) *NomsBlockStore {
 	return st
 }
 
-// Creating the journal is store-wide work that happens to be triggered by
-// whichever commit runs first. A client disconnecting mid-commit must not
-// abandon it: the bootstrap is detached from the caller's cancellation.
+// Landing new chunks or a new root value against a journaled store
+// that doesn't already have a journal will bootstrap its
+// journal. That create shouldn't succeed or fail based on the
+// lifecycle of the calling context.Context --- the bootstrap itself
+// needs to work even if the caller Context is canceled. This test
+// asserts that the bootstrap is detached from the caller's Context
+// cancellation.
 func TestJournalBootstrapIgnoresCallerCancellation(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
@@ -58,10 +62,9 @@ func TestJournalBootstrapIgnoresCallerCancellation(t *testing.T) {
 	require.NoError(t, st.Close())
 }
 
-// A bootstrap that fails after installing the journal writer must roll back,
-// not leave the journal permanently half-initialized. |journal.idx| as a
-// directory makes loadJournalIndex fail to obtain a writable index handle,
-// which is the one fatal case in that path.
+// A failed journal bootstrap shouldn't leave the journal or its journal
+// writer in a failed state. If bootstrap fails, we should roll back
+// the journal writer state so it can potentially be tried again.
 func TestJournalBootstrapRollsBackOnError(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
@@ -88,9 +91,12 @@ func TestJournalBootstrapRollsBackOnError(t *testing.T) {
 	require.NoError(t, st.Close())
 }
 
-// A brand new database bootstraps its journal before any manifest exists, so
-// j.contents is legitimately empty --- no error, nothing to roll back. Closing
-// after a failed first commit must not flush those empty contents.
+// A brand new database bootstraps its journal when no manifest
+// exists. |j.contents| starts out empty --- no table files and no
+// root hash. Closing the store after a failed first commit should not
+// try to write out an empty manifest (doing so would panic ---
+// manifest writes currently assert that they have non-empty
+// contents).
 func TestNewDatabaseFailedFirstCommitThenClose(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()

@@ -165,7 +165,7 @@ func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context, behavior dher
 	// so that future accesses can try again.
 	var created bool
 	defer func() {
-		if err == nil || j.wr == nil {
+		if err == nil {
 			return
 		}
 		err = errors.Join(err, j.abortBootstrap(ctx, created))
@@ -594,7 +594,18 @@ func (j *ChunkJournal) maybeInit(ctx context.Context, behavior dherrors.FatalBeh
 func (j *ChunkJournal) Close() (err error) {
 	if j.wr != nil {
 		err = j.wr.Close()
-		// flush the latest root to the backing manifest
+		// Flush the latest root to the backing manifest.
+		//
+		// If j.contents is empty --- its lock is the zero
+		// value --- then there is nothing to flush; there is
+		// no root and there are no other table files. This
+		// happens if we bootstrapped the journal in a store
+		// with no manifest but then never successfully landed
+		// a root update before we got to this Close call. In
+		// that case, it's fine to write no manifest at
+		// all. Attempting to write a manifest with no root
+		// value and no referenced table files (or a 0 chunk
+		// vvvv file) is not clearly better behavior.
 		if !j.backing.readOnly() && !j.contents.lock.IsEmpty() {
 			// Let caller implement FatalBehavior.
 			cerr := j.flushToBackingManifest(context.Background(), dherrors.FatalBehaviorError, j.contents, &Stats{})
