@@ -94,9 +94,14 @@ func (t *indexedBranchesTable) PartitionRows(ctx *sql.Context, part sql.Partitio
 	return newBranchItrForRefs(ctx, t.BranchesTable, refs, t.root)
 }
 
+// BranchNameIndex is the virtual name index for branches and remote branches.
+type BranchNameIndex struct {
+	refNameIndex
+}
+
 // GetIndexes implements sql.IndexAddressable.
 func (bt *BranchesTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-	return []sql.Index{refNameIndex{bt.db.Name(), bt.Name(), "name", doltBranchesIndexName}}, nil
+	return []sql.Index{&BranchNameIndex{refNameIndex{bt.db.Name(), bt.Name(), "name", doltBranchesIndexName}}}, nil
 }
 
 // PreciseMatch implements sql.IndexAddressable.

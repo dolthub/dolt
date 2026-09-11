@@ -109,8 +109,13 @@ func (tt *TagsTable) tagRefs(ctx *sql.Context) ([]ref.DoltRef, hash.Hash, error)
 	return refs, root, err
 }
 
+// TagNameIndex is the virtual name index for tags.
+type TagNameIndex struct {
+	refNameIndex
+}
+
 func (tt *TagsTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-	return []sql.Index{refNameIndex{tt.db.Name(), tt.Name(), "tag_name", "dolt_tags_name_idx"}}, nil
+	return []sql.Index{&TagNameIndex{refNameIndex{tt.db.Name(), tt.Name(), "tag_name", "dolt_tags_name_idx"}}}, nil
 }
 
 func (tt *TagsTable) PreciseMatch() bool { return true }
