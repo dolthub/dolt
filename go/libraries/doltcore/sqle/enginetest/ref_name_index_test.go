@@ -158,12 +158,25 @@ func TestTagNameIndex(t *testing.T) {
 				ExpectedIndexes: []string{"dolt_tags_name_idx"},
 			},
 			{
-				Query:    "explain format=tree select tag_name from dolt_tags where tag_name='alpha'",
-				Expected: []sql.Row{{"Project"}, {" ├─ columns: [dolt_tags.tag_name]"}, {" └─ IndexedTableAccess(dolt_tags)"}, {"     ├─ index: [dolt_tags.tag_name]"}, {"     └─ filters: [{[alpha, alpha]}]"}},
+				Query: "explain format=tree select tag_name from dolt_tags where tag_name='alpha'",
+				Expected: []sql.Row{
+					{"Project"},
+					{" ├─ columns: [dolt_tags.tag_name]"},
+					{" └─ IndexedTableAccess(dolt_tags)"},
+					{"     ├─ index: [dolt_tags.tag_name]"},
+					{"     └─ filters: [{[alpha, alpha]}]"},
+				},
 			},
 			{
-				Query:    "explain format=tree select tag_name from dolt_tags where tag_name between 'alpha' and 'gamma' order by tag_name desc",
-				Expected: []sql.Row{{"Project"}, {" ├─ columns: [dolt_tags.tag_name]"}, {" └─ IndexedTableAccess(dolt_tags)"}, {"     ├─ index: [dolt_tags.tag_name]"}, {"     ├─ filters: [{[alpha, gamma]}]"}, {"     └─ reverse: true"}},
+				Query: "explain format=tree select tag_name from dolt_tags where tag_name between 'alpha' and 'gamma' order by tag_name desc",
+				Expected: []sql.Row{
+					{"Project"},
+					{" ├─ columns: [dolt_tags.tag_name]"},
+					{" └─ IndexedTableAccess(dolt_tags)"},
+					{"     ├─ index: [dolt_tags.tag_name]"},
+					{"     ├─ filters: [{[alpha, gamma]}]"},
+					{"     └─ reverse: true"},
+				},
 			},
 			{
 				Query:    "execute ref_lookup",
@@ -336,12 +349,25 @@ func TestBranchNameIndex(t *testing.T) {
 				ExpectedIndexes: []string{"dolt_branches_name_idx"},
 			},
 			{
-				Query:    "explain format=tree select name from dolt_branches where name='alpha'",
-				Expected: []sql.Row{{"Project"}, {" ├─ columns: [dolt_branches.name]"}, {" └─ IndexedTableAccess(dolt_branches)"}, {"     ├─ index: [dolt_branches.name]"}, {"     └─ filters: [{[alpha, alpha]}]"}},
+				Query: "explain format=tree select name from dolt_branches where name='alpha'",
+				Expected: []sql.Row{
+					{"Project"},
+					{" ├─ columns: [dolt_branches.name]"},
+					{" └─ IndexedTableAccess(dolt_branches)"},
+					{"     ├─ index: [dolt_branches.name]"},
+					{"     └─ filters: [{[alpha, alpha]}]"},
+				},
 			},
 			{
-				Query:    "explain format=tree select name from dolt_branches where name between 'alpha' and 'gamma' order by name desc",
-				Expected: []sql.Row{{"Project"}, {" ├─ columns: [dolt_branches.name]"}, {" └─ IndexedTableAccess(dolt_branches)"}, {"     ├─ index: [dolt_branches.name]"}, {"     ├─ filters: [{[alpha, gamma]}]"}, {"     └─ reverse: true"}},
+				Query: "explain format=tree select name from dolt_branches where name between 'alpha' and 'gamma' order by name desc",
+				Expected: []sql.Row{
+					{"Project"},
+					{" ├─ columns: [dolt_branches.name]"},
+					{" └─ IndexedTableAccess(dolt_branches)"},
+					{"     ├─ index: [dolt_branches.name]"},
+					{"     ├─ filters: [{[alpha, gamma]}]"},
+					{"     └─ reverse: true"},
+				},
 			},
 			{
 				Query:    "execute ref_lookup",
