@@ -202,11 +202,7 @@ func (s SessionStateAdapter) RemoveRemote(_ context.Context, name string) error 
 	}
 
 	s.remotes.Delete(remote.Name)
-	for branchName, branch := range s.branches.Snapshot() {
-		if branch.Remote == remote.Name {
-			s.branches.Delete(branchName)
-		}
-	}
+	env.ClearTrackingBranches(s.branches, remote.Name)
 	return nil
 }
 

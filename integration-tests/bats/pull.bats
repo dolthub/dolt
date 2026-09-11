@@ -95,6 +95,8 @@ teardown() {
 @test "pull: pull default custom remote" {
     cd repo2
     dolt remote remove origin
+    dolt fetch test-remote
+    dolt branch --set-upstream-to test-remote/main
 
     setup_remote_server
 

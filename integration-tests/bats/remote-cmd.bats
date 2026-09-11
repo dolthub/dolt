@@ -121,7 +121,6 @@ teardown() {
     run dolt status
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "origin" ]] || false
-    [[ ! "$output" =~ "Your branch is up to date with 'origin/main'" ]] || false
     [[ ! "$output" =~ "Your branch is up to date with 'main'" ]] || false
 
     run grep -q 'origin' .dolt/repo_state.json
@@ -150,7 +149,6 @@ teardown() {
     run dolt status
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "origin" ]] || false
-    [[ ! "$output" =~ "Your branch is up to date with 'origin/main'" ]] || false
     [[ ! "$output" =~ "Your branch is up to date with 'main'" ]] || false
 
     run grep -q 'origin' .dolt/repo_state.json

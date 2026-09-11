@@ -56,3 +56,9 @@ func TestRemoveRemoteWithUninitializedBranches(t *testing.T) {
 	_, found := repoState.Remotes.Get("origin")
 	require.False(t, found)
 }
+
+func TestClearTrackingBranchesWithUninitializedBranches(t *testing.T) {
+	require.NotPanics(t, func() {
+		ClearTrackingBranches(nil, "origin")
+	})
+}
