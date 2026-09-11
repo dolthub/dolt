@@ -1710,13 +1710,13 @@ func (d *DoltSession) PersistGlobal(ctx *sql.Context, sysVarName string, value i
 		return err
 	}
 
-	// Fall back to setPersistedValue on error; EncodeValue rejects un-widened AST types (e.g. int8).
+	// Fall back to setPersistedValue because EncodeValue rejects un-widened AST types (e.g. int8).
 	if sysVarType, ok := sysVar.GetType().(sql.SystemVariableType); ok {
 		if encoded, err := sysVarType.EncodeValue(value); err == nil {
 			value = encoded
 		}
 	} else if strings.EqualFold(sysVar.GetName(), sql.SqlModeSessionVar) {
-		// Convert bitmask int to string; string modes or invalid values fall through.
+		// Fall back to setPersistedValue because already-valid string modes error in ConvertSqlModeBitmask.
 		if s, err := sql.ConvertSqlModeBitmask(value); err == nil {
 			value = s
 		}
@@ -1939,7 +1939,7 @@ func getPersistedValue(conf config.ReadableConfig, k string) (interface{}, error
 		return nil, sql.ErrInvalidType.New(value)
 	case string:
 		if strings.EqualFold(k, sql.SqlModeSessionVar) {
-			// Convert legacy bitmask int; non-numeric mode strings fail ParseUint and fall through.
+			// Fall through to return v because modern comma-delimited mode strings error in ParseUint.
 			if bitmask, err := strconv.ParseUint(v, 10, 64); err == nil {
 				if s, err := sql.ConvertSqlModeBitmask(bitmask); err == nil {
 					return s, nil
