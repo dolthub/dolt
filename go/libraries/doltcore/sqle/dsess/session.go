@@ -1710,19 +1710,13 @@ func (d *DoltSession) PersistGlobal(ctx *sql.Context, sysVarName string, value i
 		return err
 	}
 
-	// Try custom encoding if the variable type supports it. Errors are
-	// intentionally not returned because EncodeValue requires strict types
-	// (e.g. int64) whereas queries pass un-widened AST types (e.g. int8(1));
-	// on error we fall through to setPersistedValue below which handles all
-	// primitive Go types.
+	// Fall back to setPersistedValue on error; EncodeValue rejects un-widened AST types (e.g. int8).
 	if sysVarType, ok := sysVar.GetType().(sql.SystemVariableType); ok {
 		if encoded, err := sysVarType.EncodeValue(value); err == nil {
 			value = encoded
 		}
 	} else if strings.EqualFold(sysVar.GetName(), sql.SqlModeSessionVar) {
-		// When setting sql_mode via integer bitmask, convert it to a
-		// comma-delimited string. If value is already a string or invalid,
-		// the error is ignored so setPersistedValue can process it directly.
+		// Convert bitmask int to string; string modes or invalid values fall through.
 		if s, err := sql.ConvertSqlModeBitmask(value); err == nil {
 			value = s
 		}
@@ -1945,9 +1939,7 @@ func getPersistedValue(conf config.ReadableConfig, k string) (interface{}, error
 		return nil, sql.ErrInvalidType.New(value)
 	case string:
 		if strings.EqualFold(k, sql.SqlModeSessionVar) {
-			// Legacy Dolt stored sql_mode as a decimal bitmask string (e.g. "270848").
-			// Non-numeric strings (modern comma-delimited modes) intentionally error
-			// in ParseUint and fall through to return v as-is.
+			// Convert legacy bitmask int; non-numeric mode strings fail ParseUint and fall through.
 			if bitmask, err := strconv.ParseUint(v, 10, 64); err == nil {
 				if s, err := sql.ConvertSqlModeBitmask(bitmask); err == nil {
 					return s, nil
