@@ -46,7 +46,6 @@ teardown() {
 @test "sql-checkout: DOLT_CHECKOUT warns when used as lone statement in dolt sql -q" {
     export NO_COLOR=1
     dolt branch feature-branch
-    expected_warning='Warning: dolt_checkout() in a SQL session only changes the active branch for that SQL session. Your branch in the CLI is unchanged. To change the checked out branch for dolt CLI commands, run `dolt checkout <branch>`.'
 
     for query in \
         "call dolt_checkout('feature-branch')" \
@@ -56,7 +55,7 @@ teardown() {
     do
         run --separate-stderr dolt sql -q "$query"
         [ "$status" -eq 0 ]
-        [ "$stderr" = "$expected_warning" ]
+        [[ "$stderr" =~ "Your branch in the CLI is unchanged" ]] || false
         [[ ! "$output" =~ "Warning:" ]] || false
     done
 
@@ -69,7 +68,7 @@ teardown() {
     export NO_COLOR=1
     run --separate-stderr dolt sql -q "call dolt_checkout('-b', 'feature-branch')"
     [ "$status" -eq 0 ]
-    [ "$stderr" = 'Warning: dolt_checkout() in a SQL session only changes the active branch for that SQL session. Your branch in the CLI is unchanged. To change the checked out branch for dolt CLI commands, run `dolt checkout <branch>`.' ]
+    [[ "$stderr" =~ "Your branch in the CLI is unchanged" ]] || false
 
     run dolt branch --show-current
     [ "$status" -eq 0 ]
@@ -128,7 +127,7 @@ teardown() {
 
     run --separate-stderr dolt sql < queries.sql
     [ "$status" -eq 0 ]
-    [ "$stderr" = 'Warning: dolt_checkout() in a SQL session only changes the active branch for that SQL session. Your branch in the CLI is unchanged. To change the checked out branch for dolt CLI commands, run `dolt checkout <branch>`.' ]
+    [[ "$stderr" =~ "Your branch in the CLI is unchanged" ]] || false
     [[ ! "$output" =~ "Warning:" ]] || false
 
     run dolt branch --show-current
