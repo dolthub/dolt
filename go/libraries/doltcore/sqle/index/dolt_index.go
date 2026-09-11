@@ -64,26 +64,6 @@ type DoltIndex interface {
 	coversColumnsByTag(s *durableIndexState, columns []uint64) bool
 }
 
-func NewBranchNameIndex(i *doltIndex) *BranchNameIndex {
-	return &BranchNameIndex{doltIndex: i}
-}
-
-type BranchNameIndex struct {
-	*doltIndex
-}
-
-func (bni *BranchNameIndex) ExtendedExpressions(ctx *sql.Context) []string {
-	// The MockIndex used by the branch name virtual index doesn't set an index schema, so
-	// we can't use the implementation of ExtendedExpressions from doltIndex.
-	return bni.Expressions()
-}
-
-func (bni *BranchNameIndex) ExtendedColumnExpressionTypes(ctx *sql.Context) []sql.ColumnExpressionType {
-	// The MockIndex used by the branch name virtual index doesn't set an index schema, so
-	// we can't use the implementation of ExtendedColumnExpressionTypes from doltIndex.
-	return bni.ColumnExpressionTypes(ctx)
-}
-
 func NewCommitIndex(i *doltIndex) *CommitIndex {
 	return &CommitIndex{doltIndex: i}
 }

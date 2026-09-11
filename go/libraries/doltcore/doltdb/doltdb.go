@@ -700,9 +700,24 @@ func (ddb *DoltDB) ResolveTag(ctx context.Context, tagRef ref.TagRef) (*Tag, err
 	}
 
 	if !ds.IsTag() {
-		return nil, fmt.Errorf("tagRef head is not a tag")
+		return nil, fmt.Errorf("tagRef %s head is not a tag", tagRef)
 	}
 
+	return NewTag(ctx, tagRef.GetPath(), ds, ddb.vrw, ddb.ns)
+}
+
+// ResolveTagAtRoot resolves a tag from the given ref-map snapshot.
+func (ddb *DoltDB) ResolveTagAtRoot(ctx context.Context, tagRef ref.TagRef, root hash.Hash) (*Tag, error) {
+	ds, err := ddb.db.GetDatasetByRootHash(ctx, tagRef.String(), root)
+	if err != nil {
+		return nil, err
+	}
+	if !ds.HasHead() {
+		return nil, ErrTagNotFound
+	}
+	if !ds.IsTag() {
+		return nil, fmt.Errorf("tagRef %s head is not a tag", tagRef)
+	}
 	return NewTag(ctx, tagRef.GetPath(), ds, ddb.vrw, ddb.ns)
 }
 
