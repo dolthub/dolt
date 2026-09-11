@@ -27,21 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// OpenStopRange defines a half-open Range of Tuples [start, stop).
-func OpenStopRange(ctx context.Context, start, stop val.Tuple, desc *val.TupleDesc) (Range, error) {
-	return openStopRange(ctx, start, stop, desc)
-}
-
-// GreaterOrEqualRange defines a Range of Tuples greater than or equal to |start|.
-func GreaterOrEqualRange(start val.Tuple, desc *val.TupleDesc) Range {
-	return greaterOrEqualRange(start, desc)
-}
-
-// LesserRange defines a Range of Tuples less than |stop|.
-func LesserRange(stop val.Tuple, desc *val.TupleDesc) Range {
-	return lesserRange(stop, desc)
-}
-
 // PrefixRange constructs a Range for Tuples with a prefix of |prefix|.
 func PrefixRange(ctx context.Context, prefix val.Tuple, desc *val.TupleDesc) (Range, error) {
 	return closedRange(ctx, prefix, prefix, desc)
@@ -76,8 +61,6 @@ type RangeField struct {
 	Lo, Hi Bound
 	// BoundsAreEqual is |true| when |Lo.Value| == |Hi.Value|
 	BoundsAreEqual bool
-	// TargetIsUnique is |true| when the associated index is unique
-	TargetIsUnique bool
 }
 
 type Bound struct {
@@ -284,8 +267,8 @@ func (r Range) KeyRangeLookup(ctx context.Context, pool pool.BuffPool, ns tree.N
 		// ex: range scan
 		return nil, false, nil
 	}
-	ordered, _ := r.Desc.Comparator().(*val.OrderedTupleComparator)
-	if ordered != nil && ordered.Order(n).Descending {
+	order := r.Desc.Comparator()
+	if order.Order(n).Descending {
 		// the incremented key precedes the start key
 		return nil, false, nil
 	}
@@ -297,7 +280,7 @@ func (r Range) KeyRangeLookup(ctx context.Context, pool pool.BuffPool, ns tree.N
 			// todo: why?
 			return nil, false, nil
 		}
-		if ordered != nil && ordered.Order(n+1+i).NullsLast {
+		if order.Order(n + 1 + i).NullsLast {
 			// the start key's NULL fields follow every matching key
 			return nil, false, nil
 		}
