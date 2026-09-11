@@ -162,9 +162,9 @@ func BuildSqlEngineQueryist(ctx context.Context, cwdFS filesys.Filesys, mrEnv *e
 		dataDirCfgExists, isDir := cwdFS.Exists(dataDirCfg)
 		currDirExists := dataDirCfgExists && isDir
 
-		// Error if both CWD/../.doltfcfg and dataDir/.doltcfg exist because it's unclear which to use.
+		// Error if both CWD/../.doltcfg and dataDir/.doltcfg exist because it's unclear which to use.
 		if currDirExists && parentDirExists {
-			p1, err := cwdFS.Abs(cfgDirPath)
+			p1, err := cwdFS.Abs(dataDirCfg)
 			if err != nil {
 				return nil, errhand.VerboseErrorFromError(err)
 			}

@@ -184,6 +184,20 @@ func TestEmptyInMemoryRepoCreation(t *testing.T) {
 	}
 }
 
+func TestResolveTagWithNonTagHead(t *testing.T) {
+	ddb, ctx, commit := newMemDoltDBWithDefaultBranch(t, "main")
+	tagRef := ref.NewTagRef("invalid-tag")
+	// A ref in the tag namespace must point to a tag, not directly to a commit.
+	require.NoError(t, ddb.SetHeadToCommit(ctx, tagRef, commit))
+	root, err := ddb.NomsRoot(ctx)
+	require.NoError(t, err)
+
+	_, err = ddb.ResolveTag(ctx, tagRef)
+	require.EqualError(t, err, "tagRef refs/tags/invalid-tag head is not a tag")
+	_, err = ddb.ResolveTagAtRoot(ctx, tagRef, root)
+	require.EqualError(t, err, "tagRef refs/tags/invalid-tag head is not a tag")
+}
+
 func TestLoadNonExistentLocalFSRepo(t *testing.T) {
 	_, err := test.ChangeToTestDir("TestLoadRepo")
 

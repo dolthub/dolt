@@ -17,6 +17,9 @@ package nbs
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
+	"os"
+	"path/filepath"
 	"sort"
 	"testing"
 
@@ -162,4 +165,105 @@ func readAllChunks(ctx context.Context, hashes hash.HashSet, reader tableReader)
 	}
 
 	return hashToData, nil
+}
+
+// TestCmpChunkTableWriterLargeIndex is a regression test for dolt#11747, where
+// a GC output file was written missing the tail of its index. Finish writes the
+// whole index in one Write, and the sink dropped the block that write left
+// behind whenever it had no spare capacity.
+func TestCmpChunkTableWriterLargeIndex(t *testing.T) {
+	ctx := context.Background()
+
+	// The runtime's allocation granularity for large objects. Only used to
+	// search for a triggering chunk count; the probe below is what actually
+	// ties this test to the bug.
+	const goPageSize = 8192
+	const contentLen = 16
+	const indexEntrySize = prefixTupleSize + lengthSize + hash.SuffixLen
+
+	// Content this short always encodes as a single snappy literal, so every
+	// chunk contributes the same number of bytes.
+	perChunkData := len(ChunkToCompressedChunk(chunks.NewChunk(make([]byte, contentLen))).FullCompressedChunk)
+
+	// Above 2*blockSize, append() asks for a capacity equal to the leftover's
+	// own length, which the runtime rounds up to a page and no further --- so
+	// a page-aligned leftover gets a block that is full on arrival. blockSize
+	// is itself page aligned, so that happens exactly when the file bar its
+	// footer is. Walk up to a qualifying count; a multiple of goPageSize
+	// always works, so this terminates.
+	minLeftover := 2*defaultTableSinkBlockSize + goPageSize
+	chunkCount := (minLeftover + defaultTableSinkBlockSize + indexEntrySize - 1) / indexEntrySize
+	for (chunkCount*(perChunkData+indexEntrySize))%goPageSize != 0 {
+		chunkCount++
+	}
+
+	dataLen := chunkCount * perChunkData
+	indexLen := chunkCount * indexEntrySize
+	// Room left in the block the sink holds when the index write arrives, or
+	// zero if the chunk data ended flush and the sink holds no block.
+	remaining := (defaultTableSinkBlockSize - dataLen%defaultTableSinkBlockSize) % defaultTableSinkBlockSize
+	leftover := indexLen - remaining
+	require.Greater(t, leftover, 2*defaultTableSinkBlockSize)
+
+	// Ask the runtime rather than assume: the leftover has to land on a block
+	// that comes back exactly full.
+	probe := append(make([]byte, 0, defaultTableSinkBlockSize), make([]byte, leftover)...)
+	require.Equal(t, leftover, cap(probe),
+		"a %d byte leftover does not fill its block exactly on this runtime, so this test cannot reproduce dolt#11747", leftover)
+
+	tw, err := NewCmpChunkTableWriter("")
+	require.NoError(t, err)
+
+	content := make([]byte, contentLen)
+	hashes := make([]hash.Hash, 0, chunkCount)
+	var wroteData int
+	for i := 0; i < chunkCount; i++ {
+		binary.BigEndian.PutUint64(content, uint64(i))
+		c := chunks.NewChunk(content)
+		hashes = append(hashes, c.Hash())
+		n, err := tw.AddChunk(ChunkToCompressedChunk(c))
+		require.NoError(t, err)
+		wroteData += int(n)
+	}
+	require.Equal(t, chunkCount, tw.ChunkCount())
+	// The sizing above assumes every chunk compressed to the same length.
+	require.Equal(t, dataLen, wroteData, "chunks did not all compress to %d bytes", perChunkData)
+
+	_, name, err := tw.Finish()
+	require.NoError(t, err)
+	require.EqualValues(t, dataLen+indexLen+footerSize, tw.FullLength())
+
+	path := filepath.Join(t.TempDir(), name)
+	require.NoError(t, tw.FlushToFile(path))
+
+	// Every byte the writer accounted for has to be on disk. FullLength is
+	// what the persisters report and what push sends, so a short file here is
+	// corruption nothing downstream would notice.
+	stat, err := os.Stat(path)
+	require.NoError(t, err)
+	require.Equal(t, int64(tw.FullLength()), stat.Size(),
+		"table file is %d bytes short of the %d bytes written",
+		int64(tw.FullLength())-stat.Size(), tw.FullLength())
+
+	// And the file has to actually parse and serve every chunk back.
+	buff, err := os.ReadFile(path)
+	require.NoError(t, err)
+
+	ti, err := parseTableIndexByCopy(ctx, buff, &UnlimitedQuotaProvider{})
+	require.NoError(t, err)
+	tr, err := newTableReader(ctx, ti, tableReaderAtFromBytes(buff), fileBlockSize)
+	require.NoError(t, err)
+	defer tr.close()
+	require.EqualValues(t, chunkCount, tr.count())
+
+	// get() reads the prefix map, the suffixes and the lengths, so reading
+	// every chunk back covers all three index regions.
+	for i, h := range hashes {
+		binary.BigEndian.PutUint64(content, uint64(i))
+		data, _, err := tr.get(ctx, h, nil, &Stats{})
+		require.NoError(t, err)
+		if !bytes.Equal(content, data) {
+			t.Fatalf("chunk %d (%s) did not read back: got %x, want %x", i, h.String(), data, content)
+		}
+	}
 }

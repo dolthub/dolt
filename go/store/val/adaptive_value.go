@@ -17,12 +17,20 @@ package val
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/mohae/uvarint"
 
 	"github.com/dolthub/dolt/go/store/hash"
+)
+
+var (
+	ErrNullAdaptiveValue   = errors.New("cannot get address from null adaptive value")
+	ErrInlineAdaptiveValue = errors.New("cannot get address from inline adaptive value")
+	ErrTruncatedVarint     = errors.New("malformed out-of-band adaptive value: truncated length varint")
+	ErrInvalidAddressLen   = errors.New("malformed out-of-band adaptive value: invalid address length")
 )
 
 // A AdaptiveValue is a byte sequence that can represent:
@@ -151,9 +159,11 @@ func (v AdaptiveValue) convertToInline(ctx context.Context, vs ValueStore, dest 
 	if v.isInlined() {
 		return v, nil
 	}
-	_, lengthBytes := uvarint.Uvarint(v)
-	addr := v[lengthBytes:]
-	blob, err := vs.ReadBytes(ctx, hash.New(addr))
+	addr, err := v.OutOfBandAddr()
+	if err != nil {
+		return nil, err
+	}
+	blob, err := vs.ReadBytes(ctx, addr)
 	if err != nil {
 		return nil, err
 	}
@@ -175,32 +185,37 @@ func (v AdaptiveValue) getUnderlyingBytes(ctx context.Context, vs ValueStore) ([
 	if v.isInlined() {
 		return v[1:], nil
 	}
-	// else value is stored out-of-band
-	_, lengthBytes := uvarint.Uvarint(v)
-	addr := v[lengthBytes:]
-	return vs.ReadBytes(ctx, hash.New(addr))
+	addr, err := v.OutOfBandAddr()
+	if err != nil {
+		return nil, err
+	}
+	return vs.ReadBytes(ctx, addr)
 }
 
 func (v AdaptiveValue) convertToByteArray(ctx context.Context, vs ValueStore, buf []byte) (*ByteArray, error) {
 	// Only out-of-band values can be converted to a ByteArray
 	outOfBandValue, err := v.convertToOutOfBand(ctx, vs, buf)
 	if err != nil {
-		return &ByteArray{}, err
+		return nil, err
 	}
-	length, lengthBytes := uvarint.Uvarint(outOfBandValue)
-	address := hash.New(outOfBandValue[lengthBytes:])
-	return NewByteArray(address, vs).WithMaxByteLength(int64(length)), nil
+	addr, length, err := outOfBandValue.outOfBandAddressAndLength()
+	if err != nil {
+		return nil, err
+	}
+	return NewByteArray(addr, vs).WithMaxByteLength(length), nil
 }
 
 func (v AdaptiveValue) convertToTextStorage(ctx context.Context, vs ValueStore, buf []byte) (*TextStorage, error) {
 	// Only out-of-band values can be converted to a TextStorage
 	outOfBandValue, err := v.convertToOutOfBand(ctx, vs, buf)
 	if err != nil {
-		return &TextStorage{}, err
+		return nil, err
 	}
-	length, lengthBytes := uvarint.Uvarint(outOfBandValue)
-	address := hash.New(outOfBandValue[lengthBytes:])
-	return NewTextStorage(address, vs).WithMaxByteLength(int64(length)), nil
+	addr, length, err := outOfBandValue.outOfBandAddressAndLength()
+	if err != nil {
+		return nil, err
+	}
+	return NewTextStorage(addr, vs).WithMaxByteLength(length), nil
 }
 
 func (v AdaptiveValue) convertToGeometryStorage(ctx context.Context, vs ValueStore) (*GeometryStorage, error) {
@@ -209,9 +224,11 @@ func (v AdaptiveValue) convertToGeometryStorage(ctx context.Context, vs ValueSto
 	if err != nil {
 		return nil, err
 	}
-	length, lengthBytes := uvarint.Uvarint(outOfBandValue)
-	addr := hash.New(outOfBandValue[lengthBytes:])
-	return NewGeometryStorageOutOfBand(addr, vs, int64(length)), nil
+	addr, length, err := outOfBandValue.outOfBandAddressAndLength()
+	if err != nil {
+		return nil, err
+	}
+	return NewGeometryStorageOutOfBand(addr, vs, length), nil
 }
 
 func (v AdaptiveValue) convertToJsonStorage(ctx context.Context, vs ValueStore) (*JsonAdaptiveStorage, error) {
@@ -220,22 +237,59 @@ func (v AdaptiveValue) convertToJsonStorage(ctx context.Context, vs ValueStore) 
 	if err != nil {
 		return nil, err
 	}
-	length, lengthBytes := uvarint.Uvarint(outOfBandValue)
-	addr := hash.New(outOfBandValue[lengthBytes:])
-	return NewJsonStorageOutOfBand(addr, vs, int64(length)), nil
+	addr, length, err := outOfBandValue.outOfBandAddressAndLength()
+	if err != nil {
+		return nil, err
+	}
+	return NewJsonStorageOutOfBand(addr, vs, length), nil
 }
 
-// OutOfBandAddr returns the content address embedded in an out-of-band AdaptiveValue. It
-// returns an error if v is NULL or inline.
+// OutOfBandAddr returns the content address embedded in an
+// out-of-band AdaptiveValue.
+//
+// If |v| is NULL, inlined, or contains a malformed address whose
+// length is not exactly 20 bytes, OutOfBandAddr returns an error.
+//
+// Out-of-band values encode the payload length as a [SQLite4 Varint]
+// followed by a 20-byte content address.
+//
+// [SQLite4 Varint]: https://sqlite.org/src4/doc/trunk/www/varint.wiki
 func (v AdaptiveValue) OutOfBandAddr() (hash.Hash, error) {
+	addr, _, err := v.outOfBandAddressAndLength()
+	return addr, err
+}
+
+func (v AdaptiveValue) outOfBandAddressAndLength() (hash.Hash, int64, error) {
 	if v.IsNull() {
-		return hash.Hash{}, fmt.Errorf("cannot get address from NULL adaptive value")
+		return hash.Hash{}, 0, ErrNullAdaptiveValue
 	}
 	if v.isInlined() {
-		return hash.Hash{}, fmt.Errorf("cannot get address from inline adaptive value")
+		return hash.Hash{}, 0, ErrInlineAdaptiveValue
 	}
-	_, lengthBytes := uvarint.Uvarint(v)
-	return hash.New(v[lengthBytes:]), nil
+	if len(v) < varintPrefixLen(v[0]) {
+		return hash.Hash{}, 0, ErrTruncatedVarint
+	}
+	length, lengthBytes := uvarint.Uvarint(v)
+	addr := v[lengthBytes:]
+	if len(addr) != hash.ByteLen {
+		return hash.Hash{}, 0, fmt.Errorf("%w: expected %d-byte address, got %d", ErrInvalidAddressLen, hash.ByteLen, len(addr))
+	}
+	return hash.New(addr), int64(length), nil
+}
+
+// varintPrefixLen returns the number of prefix bytes required by a
+// [SQLite4 Varint] based on its leading byte |b|.
+//
+// [SQLite4 Varint]: https://sqlite.org/src4/doc/trunk/www/varint.wiki
+func varintPrefixLen(b byte) int {
+	switch {
+	case b <= 240:
+		return 1
+	case b <= 248:
+		return 2
+	default:
+		return int(b - 246)
+	}
 }
 
 // AdaptiveValueInlineBytes returns the inline encoding of the adaptive value given as a byte slice.
@@ -275,6 +329,14 @@ func InlineValueBytes(val []byte) ([]byte, bool) {
 // outside the TupleBuilder (e.g. in the merge path).
 func NewOutOfBandAdaptiveValue(ctx context.Context, vs ValueStore, data []byte) (AdaptiveValue, error) {
 	return convertBytesToOutOfBand(ctx, data, vs, nil)
+}
+
+// NewOutOfBandAdaptiveValueWithAddr returns an out-of-band AdaptiveValue
+// encoding [varint(|length|) | |addr|].
+func NewOutOfBandAdaptiveValueWithAddr(length uint64, addr hash.Hash) AdaptiveValue {
+	var buf [29]byte
+	n := uvarint.Encode(buf[:], length)
+	return AdaptiveValue(append(buf[:n], addr[:]...))
 }
 
 // AdaptiveEncodingTypeHandler is an implementation of TypeHandler for adaptive encoding types,
@@ -376,12 +438,13 @@ func (handler AdaptiveEncodingTypeHandler) DeserializeValue(ctx context.Context,
 	if adaptiveValue.isInlined() {
 		return handler.childHandler.DeserializeValue(ctx, adaptiveValue[1:])
 	}
-	// else adaptiveValue is stored out-of-band
-	length, lengthBytes := uvarint.Uvarint(adaptiveValue)
-	addr := hash.New(adaptiveValue[lengthBytes:])
+	addr, length, err := adaptiveValue.outOfBandAddressAndLength()
+	if err != nil {
+		return nil, err
+	}
 	return &ExtendedValueWrapper{
 		ImmutableValue:  NewImmutableValue(addr, handler.vs),
-		outOfBandLength: int64(length),
+		outOfBandLength: length,
 		typeHandler:     handler.childHandler,
 	}, nil
 }

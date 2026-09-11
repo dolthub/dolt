@@ -27,6 +27,7 @@ import (
 	"encoding/binary"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -186,6 +187,23 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 		return
 	}
 
+	// openTableSet returns a tableSet with every spec in |upstream| open,
+	// which is the state a NomsBlockStore is in when it starts a conjoin.
+	openTableSet := func(t *testing.T, p tableFilePersister, upstream manifestContents) *tableSet {
+		t.Helper()
+		ts := newTableSet(p, &UnlimitedQuotaProvider{})
+		ts.upstream = make(chunkSourceSet)
+		for _, spec := range upstream.specs {
+			cs, err := p.Open(context.Background(), spec.name, spec.chunkCount, &Stats{})
+			require.NoError(t, err)
+			ts.upstream[spec.name] = cs
+		}
+		t.Cleanup(func() {
+			require.NoError(t, ts.close())
+		})
+		return ts
+	}
+
 	// Returns the chunk counts of the tables in ts.compacted & ts.upstream in ascending order
 	getSortedSizes := func(specs []tableSpec) (sorted []uint32) {
 		all := append([]tableSpec{}, specs...)
@@ -274,7 +292,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 			t.Run(c.name, func(t *testing.T) {
 				fm, p, upstream := setup(t, startLock, startRoot, c.precompact)
 
-				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, fm, p, &Stats{})
+				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, fm, p, openTableSet(t, p, upstream), &Stats{})
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), &Stats{}, nil)
 				require.NoError(t, err)
@@ -296,7 +314,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 					specs := append([]tableSpec{}, upstream.specs...)
 					fm.set(constants.FormatDoltString, computeAddr([]byte("lock2")), startRoot, append(specs, newTable), nil)
 				}}
-				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, &Stats{})
+				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, openTableSet(t, p, upstream), &Stats{})
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), &Stats{}, nil)
 				require.NoError(t, err)
@@ -317,7 +335,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 				u := updatePreemptManifest{fm, func() {
 					fm.set(constants.FormatDoltString, computeAddr([]byte("lock2")), startRoot, upstream.specs[1:], nil)
 				}}
-				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, &Stats{})
+				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, openTableSet(t, p, upstream), &Stats{})
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), &Stats{}, nil)
 				require.NoError(t, err)
@@ -361,7 +379,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 			t.Run(c.name, func(t *testing.T) {
 				fm, p, upstream := setupAppendix(t, startLock, startRoot, c.precompact, c.appendix)
 
-				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, fm, p, &Stats{})
+				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, fm, p, openTableSet(t, p, upstream), &Stats{})
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), &Stats{}, nil)
 				require.NoError(t, err)
@@ -386,7 +404,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 					fm.set(constants.FormatDoltString, computeAddr([]byte("lock2")), startRoot, append(specs, newTable), upstream.appendix)
 				}}
 
-				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, &Stats{})
+				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, openTableSet(t, p, upstream), &Stats{})
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), &Stats{}, nil)
 				require.NoError(t, err)
@@ -412,7 +430,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 					fm.set(constants.FormatDoltString, computeAddr([]byte("lock2")), startRoot, append(specs, upstream.specs...), append(app, newTable))
 				}}
 
-				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, &Stats{})
+				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, openTableSet(t, p, upstream), &Stats{})
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), &Stats{}, nil)
 				require.NoError(t, err)
@@ -437,7 +455,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 				u := updatePreemptManifest{fm, func() {
 					fm.set(constants.FormatDoltString, computeAddr([]byte("lock2")), startRoot, upstream.specs[len(c.appendix)+1:], upstream.appendix[:])
 				}}
-				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, &Stats{})
+				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, openTableSet(t, p, upstream), &Stats{})
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), &Stats{}, nil)
 				require.NoError(t, err)
@@ -462,7 +480,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 					fm.set(constants.FormatDoltString, computeAddr([]byte("lock2")), startRoot, specs, append([]tableSpec{}, newTable))
 				}}
 
-				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, &Stats{})
+				_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{c.maxTables}, upstream, u, p, openTableSet(t, p, upstream), &Stats{})
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), &Stats{}, nil)
 				require.NoError(t, err)
@@ -472,6 +490,70 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 			})
 		}
 	})
+
+	t.Run("ReusesOpenSources", func(t *testing.T) {
+		t.Parallel()
+		fm, p, upstream := setup(t, startLock, startRoot, []uint32{1, 1, 1, 1, 1})
+		tables := openTableSet(t, p, upstream)
+		counting := &openCountingPersister{tableFilePersister: p}
+
+		_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{3}, upstream, fm, counting, tables, &Stats{})
+		require.NoError(t, err)
+		// Every conjoinee is cloned out of |tables|, so none of them is opened.
+		for _, spec := range upstream.specs {
+			assert.NotContains(t, counting.opened(), spec.name)
+		}
+
+		exists, newUpstream, err := fm.ParseIfExists(context.Background(), &Stats{}, nil)
+		require.NoError(t, err)
+		assert.True(t, exists)
+		assert.Equal(t, []uint32{5}, getSortedSizes(newUpstream.specs))
+		assertContainAll(t, p, upstream.specs, newUpstream.specs)
+	})
+
+	t.Run("OpensUnopenedSources", func(t *testing.T) {
+		t.Parallel()
+		fm, p, upstream := setup(t, startLock, startRoot, []uint32{1, 1, 1, 1, 1})
+		counting := &openCountingPersister{tableFilePersister: p}
+
+		// An empty tableSet leaves every conjoinee to be opened.
+		empty := newTableSet(p, &UnlimitedQuotaProvider{})
+		_, _, _, err := conjoin(context.Background(), dherrors.FatalBehaviorError, inlineConjoiner{3}, upstream, fm, counting, empty, &Stats{})
+		require.NoError(t, err)
+		for _, spec := range upstream.specs {
+			assert.Contains(t, counting.opened(), spec.name)
+		}
+
+		exists, newUpstream, err := fm.ParseIfExists(context.Background(), &Stats{}, nil)
+		require.NoError(t, err)
+		assert.True(t, exists)
+		assert.Equal(t, []uint32{5}, getSortedSizes(newUpstream.specs))
+		assertContainAll(t, p, upstream.specs, newUpstream.specs)
+	})
+}
+
+// openCountingPersister records which table files were Open'd, so tests can
+// assert that conjoin reuses the chunkSources a store already has open.
+type openCountingPersister struct {
+	tableFilePersister
+	mu    sync.Mutex
+	names hash.HashSet
+}
+
+func (p *openCountingPersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
+	p.mu.Lock()
+	if p.names == nil {
+		p.names = hash.NewHashSet()
+	}
+	p.names.Insert(name)
+	p.mu.Unlock()
+	return p.tableFilePersister.Open(ctx, name, chunkCount, stats)
+}
+
+func (p *openCountingPersister) opened() hash.HashSet {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.names.Copy()
 }
 
 type updatePreemptManifest struct {

@@ -2726,6 +2726,223 @@ var BranchIsolationTests = []queries.TransactionTest{
 			},
 		},
 	},
+	{
+		Name: "dolt_tags name index uses transaction snapshot",
+		SetUpScript: []string{"call dolt_commit('--allow-empty','-m','original')",
+			"call dolt_tag('alpha')",
+			"call dolt_tag('beta')",
+			"create table wanted (name varchar(100))",
+			"insert into wanted values ('alpha'),('beta'),('gamma'),('delta')",
+			"set autocommit = 0",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ call dolt_tag('-d','beta')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client b */ call dolt_tag('gamma')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:           "/* client a */ select tag_name from dolt_tags where tag_name = 'beta'",
+				Expected:        []sql.Row{{"beta"}},
+				ExpectedIndexes: []string{"dolt_tags_name_idx"},
+			},
+			{
+				Query:           "/* client a */ select tag_name from dolt_tags where tag_name = 'gamma'",
+				Expected:        []sql.Row{},
+				ExpectedIndexes: []string{"dolt_tags_name_idx"},
+			},
+			{
+				Query:           "/* client a */ select tag_name from dolt_tags where tag_name between 'alpha' and 'gamma' order by tag_name",
+				Expected:        []sql.Row{{"alpha"}, {"beta"}},
+				ExpectedIndexes: []string{"dolt_tags_name_idx"},
+			},
+			{
+				Query:           "/* client b */ select tag_name from dolt_tags where tag_name between 'alpha' and 'gamma' order by tag_name",
+				Expected:        []sql.Row{{"alpha"}, {"gamma"}},
+				ExpectedIndexes: []string{"dolt_tags_name_idx"},
+			},
+			{
+				Query:           "/* client a */ select /*+ LOOKUP_JOIN(w, r) */ r.tag_name from wanted w join dolt_tags r on w.name=r.tag_name order by r.tag_name",
+				Expected:        []sql.Row{{"alpha"}, {"beta"}},
+				ExpectedIndexes: []string{"dolt_tags_name_idx"},
+			},
+			{
+				Query:    "/* client a */ select tag_name from dolt_tags ignore index (dolt_tags_name_idx) order by tag_name",
+				Expected: []sql.Row{{"alpha"}, {"beta"}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:           "/* client a */ select tag_name from dolt_tags where tag_name in ('alpha','beta','gamma') order by tag_name",
+				Expected:        []sql.Row{{"alpha"}, {"gamma"}},
+				ExpectedIndexes: []string{"dolt_tags_name_idx"},
+			},
+			{
+				Query:    "/* client a */ call dolt_tag('-d','gamma')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client a */ call dolt_tag('delta')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:           "/* client b */ select tag_name from dolt_tags where tag_name between 'alpha' and 'gamma' order by tag_name desc",
+				Expected:        []sql.Row{{"gamma"}, {"alpha"}},
+				ExpectedIndexes: []string{"dolt_tags_name_idx"},
+			},
+			{
+				Query:    "/* client b */ select tag_name from dolt_tags ignore index (dolt_tags_name_idx) order by tag_name",
+				Expected: []sql.Row{{"alpha"}, {"gamma"}},
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:           "/* client b */ select tag_name from dolt_tags where tag_name in ('alpha','beta','gamma','delta') order by tag_name",
+				Expected:        []sql.Row{{"alpha"}, {"delta"}},
+				ExpectedIndexes: []string{"dolt_tags_name_idx"},
+			},
+		},
+	},
+
+	{
+		Name: "dolt_branches name index uses transaction snapshot",
+		SetUpScript: []string{"call dolt_commit('--allow-empty','-m','original')",
+			"call dolt_branch('alpha')",
+			"call dolt_branch('beta')",
+			"create table wanted (name varchar(100))",
+			"insert into wanted values ('alpha'),('beta'),('gamma'),('delta')",
+			"set autocommit = 0",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ call dolt_branch('-d','beta')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client b */ call dolt_branch('gamma')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:           "/* client a */ select name from dolt_branches where name = 'beta'",
+				Expected:        []sql.Row{{"beta"}},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+			{
+				Query:           "/* client a */ select name from dolt_branches where name = 'gamma'",
+				Expected:        []sql.Row{},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+			{
+				Query:           "/* client a */ select name from dolt_branches where name between 'alpha' and 'gamma' order by name",
+				Expected:        []sql.Row{{"alpha"}, {"beta"}},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+			{
+				Query:           "/* client b */ select name from dolt_branches where name between 'alpha' and 'gamma' order by name",
+				Expected:        []sql.Row{{"alpha"}, {"gamma"}},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+			{
+				Query:           "/* client a */ select /*+ LOOKUP_JOIN(w, r) */ r.name from wanted w join dolt_branches r on w.name=r.name order by r.name",
+				Expected:        []sql.Row{{"alpha"}, {"beta"}},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+			{
+				Query:    "/* client a */ select name from dolt_branches ignore index (dolt_branches_name_idx) order by name",
+				Expected: []sql.Row{{"alpha"}, {"beta"}, {"main"}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:           "/* client a */ select name from dolt_branches where name in ('alpha','beta','gamma') order by name",
+				Expected:        []sql.Row{{"alpha"}, {"gamma"}},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+			{
+				Query:    "/* client a */ call dolt_branch('-d','gamma')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client a */ call dolt_branch('delta')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:           "/* client b */ select name from dolt_branches where name between 'alpha' and 'gamma' order by name desc",
+				Expected:        []sql.Row{{"gamma"}, {"alpha"}},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+			{
+				Query:    "/* client b */ select name from dolt_branches ignore index (dolt_branches_name_idx) order by name",
+				Expected: []sql.Row{{"alpha"}, {"gamma"}, {"main"}},
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:           "/* client b */ select name from dolt_branches where name in ('alpha','beta','gamma','delta') order by name",
+				Expected:        []sql.Row{{"alpha"}, {"delta"}},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+		},
+	},
 }
 
 var MultiDbTransactionTests = []queries.ScriptTest{

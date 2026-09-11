@@ -1,33 +1,41 @@
 #!/usr/bin/env bats
 
 load $BATS_TEST_DIRNAME/helper/common.bash
+load $BATS_TEST_DIRNAME/helper/query-server-common.bash
 
 # These tests validate docker/docker-entrypoint.sh using a Docker image built from
 # docker/serverDockerfile in the repo root. They follow existing integration test conventions.
 
-setup() {
-  setup_no_dolt_init
+setup_file() {
+  skip_if_remote
 
   # Docker isn't available on GitHub's macOS runners
   if [ "$IS_MAC" = true ]; then
     command -v docker >/dev/null 2>&1 || skip "docker not found on PATH (expected on macOS runners)"
   fi
 
-  # Compute workspace root from integration-tests/bats directory
   WORKSPACE_ROOT=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
   export WORKSPACE_ROOT
 
   DOLT_DOCKER_TEST_VERSION=${DOLT_DOCKER_TEST_VERSION:-source}
-  TEST_IMAGE="dolt-entrypoint-it:${DOLT_DOCKER_TEST_VERSION}"
-  TEST_PREFIX="dolt-entrypoint-it-$$-"
+  export DOLT_DOCKER_TEST_VERSION
 
-  # Build from source only once per test run, check img already exists
+  TEST_IMAGE="dolt-entrypoint-it:${DOLT_DOCKER_TEST_VERSION}"
+  export TEST_IMAGE
+
   if ! docker image inspect "$TEST_IMAGE" >/dev/null 2>&1; then
-    echo "Building Dolt from source for `docker-entrypoint.sh` integrations container..."
-    docker build -f "$WORKSPACE_ROOT/dolt/docker/serverDockerfile" --build-arg DOLT_VERSION=$DOLT_DOCKER_TEST_VERSION -t "$TEST_IMAGE" "$WORKSPACE_ROOT"
+    echo "Building Dolt image (${DOLT_DOCKER_TEST_VERSION}) for docker-entrypoint tests..." >&2
+    docker build -f "$WORKSPACE_ROOT/dolt/docker/serverDockerfile" --build-arg DOLT_VERSION="$DOLT_DOCKER_TEST_VERSION" -t "$TEST_IMAGE" "$WORKSPACE_ROOT" >&2
   else
-    echo "Using existing source-built image: $TEST_IMAGE"
+    echo "Using existing source-built image: $TEST_IMAGE" >&2
   fi
+}
+
+setup() {
+  setup_no_dolt_init
+
+  PORT=$(definePORT)
+  TEST_PREFIX="dolt-entrypoint-it-$$-"
 }
 
 teardown() {
@@ -76,7 +84,7 @@ wait_for_server_ready() {
     if docker exec "$name" dolt sql -q "SELECT 1;" >/dev/null 2>&1; then
       return 0
     fi
-    sleep 1
+    sleep 0.2
   done
   return 1
 }
@@ -86,14 +94,12 @@ wait_for_log() {
   name="$1"; shift
   pattern="$1"; shift
   timeout="${1:-15}"
-  i=0
-  while [ $i -lt $timeout ]; do
+  local end_time=$((SECONDS + timeout))
+  while [ $SECONDS -lt $end_time ]; do
     if docker logs "$name" 2>&1 | grep -q "$pattern"; then
-      sleep 1
       return 0
     fi
-    sleep 1
-    i=$((i+1))
+    sleep 0.1
   done
   return 1
 }
@@ -309,7 +315,7 @@ EOF
   pwd="testpass"
 
   # Run container with custom user
-  run_container_with_port "$cname" 3306 \
+  run_container_with_port "$cname" "$PORT" \
     -e DOLT_ROOT_PASSWORD=rootpass \
     -e DOLT_ROOT_HOST=% \
     -e DOLT_USER="$usr" \
@@ -319,7 +325,7 @@ EOF
   [ $status -ne 0 ]
   [[ "$output" =~ "Error 1045 (28000): Access denied for user 'testuser'" ]] || false
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$usr" --password="wrongpass" -e "SHOW DATABASES;"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u "$usr" --password="wrongpass" -e "SHOW DATABASES;"
   [ $status -ne 0 ]
   [[ "$output" =~ "ERROR 1045 (28000): Access denied for user 'testuser'" ]] || false
 
@@ -327,7 +333,7 @@ EOF
   [ $status -ne 0 ]
   [[ "$output" =~ "Error 1045 (28000): Access denied for user 'root'" ]] || false
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=wrongpass -e "SHOW DATABASES;"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u root --password=wrongpass -e "SHOW DATABASES;"
   [ $status -ne 0 ]
   [[ "$output" =~ "ERROR 1045 (28000): Access denied for user 'root'" ]] || false
 }
@@ -335,7 +341,7 @@ EOF
 # bats test_tags=no_lambda
 @test "docker-entrypoint: DOLT_USER_HOST and MYSQL_USER_HOST creates user with specific host" {
   cname="${TEST_PREFIX}user-host"
-  run_container_with_port "$cname" 3306 -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=localhost -e DOLT_USER=testuser -e DOLT_PASSWORD=testpass -e DOLT_USER_HOST=%
+  run_container_with_port "$cname" "$PORT" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=localhost -e DOLT_USER=testuser -e DOLT_PASSWORD=testpass -e DOLT_USER_HOST=%
 
   run docker exec "$cname" dolt sql -q "GRANT ALL PRIVILEGES ON mysql.* TO 'testuser'@'%';"
   [ $status -eq 0 ]
@@ -358,7 +364,7 @@ EOF
 
   # Test MYSQL_USER_HOST variant
   cname2="${TEST_PREFIX}user-host-2"
-  run_container_with_port "$cname2" 3306 -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% -e DOLT_USER=testuser2 -e DOLT_PASSWORD=testpass2 -e MYSQL_USER_HOST=%
+  run_container_with_port "$cname2" "$PORT" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% -e DOLT_USER=testuser2 -e DOLT_PASSWORD=testpass2 -e MYSQL_USER_HOST=%
 
   run docker exec "$cname2" dolt -u root -p rootpass sql --result-format csv -q "SELECT User, Host FROM mysql.user WHERE User='testuser2';"
   [ $status -eq 0 ]
@@ -380,7 +386,7 @@ EOF
   usr="testuser"
   pwd="testpass"
 
-  run_container_with_port "$cname" 3306 \
+  run_container_with_port "$cname" "$PORT" \
     -e DOLT_ROOT_PASSWORD=rootpass \
     -e DOLT_ROOT_HOST=% \
     -e DOLT_DATABASE="$db" \
@@ -436,23 +442,23 @@ EOF
   usr="testuser"
   pwd="testpass"
 
-  run_container_with_port "$cname" 3306 -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% -e DOLT_DATABASE="$db" -e DOLT_USER="$usr" -e DOLT_PASSWORD="$pwd"
+  run_container_with_port "$cname" "$PORT" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% -e DOLT_DATABASE="$db" -e DOLT_USER="$usr" -e DOLT_PASSWORD="$pwd"
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "SHOW DATABASES;"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u root --password=rootpass -e "SHOW DATABASES;"
   [ $status -eq 0 ]
   echo "$output" | grep -Fx "$db" >/dev/null
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$usr" --password="$pwd" -e "SHOW DATABASES;"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u "$usr" --password="$pwd" -e "SHOW DATABASES;"
   [ $status -eq 0 ]
   echo "$output" | grep -Fx "$db" >/dev/null
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$usr" --password="$pwd" -e "USE \`$db\`; CREATE TABLE mysql_test (id INT PRIMARY KEY, name VARCHAR(50));"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u "$usr" --password="$pwd" -e "USE \`$db\`; CREATE TABLE mysql_test (id INT PRIMARY KEY, name VARCHAR(50));"
   [ $status -eq 0 ]
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$usr" --password="$pwd" -e "USE \`$db\`; INSERT INTO mysql_test VALUES (1, 'mysql_test_data');"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u "$usr" --password="$pwd" -e "USE \`$db\`; INSERT INTO mysql_test VALUES (1, 'mysql_test_data');"
   [ $status -eq 0 ]
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$usr" --password="$pwd" -e "USE \`$db\`; SELECT * FROM mysql_test;"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u "$usr" --password="$pwd" -e "USE \`$db\`; SELECT * FROM mysql_test;"
   [ $status -eq 0 ]
   [[ "$output" =~ "mysql_test_data" ]] || false
 }
@@ -464,23 +470,23 @@ EOF
   kw_user="from"
   pwd="testpass"
 
-  run_container_with_port "$cname" 3306 -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% -e DOLT_DATABASE="$kw_db" -e DOLT_USER="$kw_user" -e DOLT_PASSWORD="$pwd"
+  run_container_with_port "$cname" "$PORT" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% -e DOLT_DATABASE="$kw_db" -e DOLT_USER="$kw_user" -e DOLT_PASSWORD="$pwd"
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "SHOW DATABASES;"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u root --password=rootpass -e "SHOW DATABASES;"
   [ $status -eq 0 ]
   echo "$output" | grep -Fx "$kw_db" >/dev/null
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$kw_user" --password="$pwd" -e "SHOW DATABASES;"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u "$kw_user" --password="$pwd" -e "SHOW DATABASES;"
   [ $status -eq 0 ]
   echo "$output" | grep -Fx "$kw_db" >/dev/null
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$kw_user" --password="$pwd" -e "USE \`$kw_db\`; CREATE TABLE test_table (id INT);"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u "$kw_user" --password="$pwd" -e "USE \`$kw_db\`; CREATE TABLE test_table (id INT);"
   [ $status -eq 0 ]
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$kw_user" --password="$pwd" -e "USE \`$kw_db\`; INSERT INTO test_table VALUES (1);"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u "$kw_user" --password="$pwd" -e "USE \`$kw_db\`; INSERT INTO test_table VALUES (1);"
   [ $status -eq 0 ]
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$kw_user" --password="$pwd" -e "USE \`$kw_db\`; SELECT * FROM test_table;"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u "$kw_user" --password="$pwd" -e "USE \`$kw_db\`; SELECT * FROM test_table;"
   [ $status -eq 0 ]
   [[ "$output" =~ "1" ]] || false
 }
@@ -492,49 +498,49 @@ EOF
   usr="testuser"
   pwd="testpass"
 
-  run_container_with_port "$cname" 3306 \
+  run_container_with_port "$cname" "$PORT" \
     -e DOLT_ROOT_PASSWORD=rootpass \
     -e DOLT_ROOT_HOST=% \
     -e DOLT_DATABASE="$db" \
     -e DOLT_USER="$usr" \
     -e DOLT_PASSWORD="$pwd"
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "SHOW DATABASES;"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u root --password=rootpass -e "SHOW DATABASES;"
   [ $status -eq 0 ]
   [[ "$output" =~ "$db" ]] || false
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "USE \`$db\`; CREATE TABLE root_table (id INT PRIMARY KEY, data VARCHAR(100));"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u root --password=rootpass -e "USE \`$db\`; CREATE TABLE root_table (id INT PRIMARY KEY, data VARCHAR(100));"
   [ $status -eq 0 ]
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "USE \`$db\`; INSERT INTO root_table VALUES (1, 'root data');"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u root --password=rootpass -e "USE \`$db\`; INSERT INTO root_table VALUES (1, 'root data');"
   [ $status -eq 0 ]
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$usr" --password="$pwd" -e "SHOW DATABASES;"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u "$usr" --password="$pwd" -e "SHOW DATABASES;"
   [ $status -eq 0 ]
   [[ "$output" =~ "$db" ]] || false
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$usr" --password="$pwd" -e "USE \`$db\`; CREATE TABLE user_table (id INT PRIMARY KEY, data VARCHAR(100));"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u "$usr" --password="$pwd" -e "USE \`$db\`; CREATE TABLE user_table (id INT PRIMARY KEY, data VARCHAR(100));"
   [ $status -eq 0 ]
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$usr" --password="$pwd" -e "USE \`$db\`; INSERT INTO user_table VALUES (1, 'user data');"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u "$usr" --password="$pwd" -e "USE \`$db\`; INSERT INTO user_table VALUES (1, 'user data');"
   [ $status -eq 0 ]
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$usr" --password="$pwd" -e "USE \`$db\`; SELECT * FROM user_table;"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u "$usr" --password="$pwd" -e "USE \`$db\`; SELECT * FROM user_table;"
   [ $status -eq 0 ]
   [[ "$output" =~ "user data" ]] || false
 
   # Test that custom user can see root's table (both have access to the same database)
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$usr" --password="$pwd" -e "USE \`$db\`; SELECT * FROM root_table;"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u "$usr" --password="$pwd" -e "USE \`$db\`; SELECT * FROM root_table;"
   [ $status -eq 0 ]
   [[ "$output" =~ "root data" ]] || false
 
   # Test that root can see user's table
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "USE \`$db\`; SELECT * FROM user_table;"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u root --password=rootpass -e "USE \`$db\`; SELECT * FROM user_table;"
   [ $status -eq 0 ]
   [[ "$output" =~ "user data" ]] || false
 
   # Test that custom user cannot access other databases (if any exist)
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$usr" --password="$pwd" -e "SHOW DATABASES;"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u "$usr" --password="$pwd" -e "SHOW DATABASES;"
   [ $status -eq 0 ]
   # Should only see the custom database and information_schema
   db_count=$(echo "$output" | grep -c "testdb\|information_schema" || true)
@@ -567,13 +573,13 @@ INSERT INTO init_test VALUES (3, 'Compressed SQL executed');
 EOF
   gzip "$temp_dir/03-data.sql"
 
-  run_container_with_port "$cname" 3306 -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% -v "$temp_dir:/docker-entrypoint-initdb.d"
+  run_container_with_port "$cname" "$PORT" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% -v "$temp_dir:/docker-entrypoint-initdb.d"
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "SHOW DATABASES;"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u root --password=rootpass -e "SHOW DATABASES;"
   [ $status -eq 0 ]
   [[ "$output" =~ "testinit" ]] || false
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "USE testinit; SELECT * FROM init_test ORDER BY id;"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u root --password=rootpass -e "USE testinit; SELECT * FROM init_test ORDER BY id;"
   [ $status -eq 0 ]
   [[ "$output" =~ "SQL script executed" ]] || false
   [[ "$output" =~ "Bash script executed" ]] || false
@@ -606,7 +612,7 @@ dolt sql -q "USE shell_test_db; INSERT INTO script_test VALUES (2, 'Sourced scri
 EOF
   chmod +x "$temp_dir/01-executable.sh"
 
-  run_container_with_port "$cname" 3306 -e DOLT_ROOT_HOST=% -v "$temp_dir:/docker-entrypoint-initdb.d"
+  run_container_with_port "$cname" "$PORT" -e DOLT_ROOT_HOST=% -v "$temp_dir:/docker-entrypoint-initdb.d"
 
   run docker exec "$cname" dolt sql -q "SHOW DATABASES;"
   [ $status -eq 0 ]
@@ -620,7 +626,7 @@ EOF
   [ $status -eq 0 ]
   [[ "$output" =~ "Sourced script ran" ]] || false
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root -e "USE shell_test_db; SELECT COUNT(*) as count FROM script_test;"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u root -e "USE shell_test_db; SELECT COUNT(*) as count FROM script_test;"
   [ $status -eq 0 ]
   [[ "$output" =~ "2" ]] || false
 
@@ -651,7 +657,7 @@ GRANT USAGE ON *.* TO 'gzipuser'@'%';
 EOF
   gzip "$temp_dir/01-init.sql"
 
-  run_container_with_port "$cname" 3306 -e DOLT_ROOT_HOST=% -v "$temp_dir:/docker-entrypoint-initdb.d"
+  run_container_with_port "$cname" "$PORT" -e DOLT_ROOT_HOST=% -v "$temp_dir:/docker-entrypoint-initdb.d"
 
   run docker exec "$cname" dolt sql -q "SHOW DATABASES;"
   [ $status -eq 0 ]
@@ -661,7 +667,7 @@ EOF
   [ $status -eq 0 ]
   [[ "$output" =~ "3" ]] || false
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u gzipuser --password=gzippass -e "USE gzip_sql_db; SELECT name FROM products WHERE price > 25.00;"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u gzipuser --password=gzippass -e "USE gzip_sql_db; SELECT name FROM products WHERE price > 25.00;"
   [ $status -eq 0 ]
   [[ "$output" =~ "Gadget" ]] || false
   [[ "$output" =~ "Doohickey" ]] || false
@@ -689,7 +695,7 @@ GRANT USAGE ON *.* TO 'bzip2user'@'%';
 EOF
   bzip2 "$temp_dir/01-init.sql"
 
-  run_container_with_port "$cname" 3306 -e DOLT_ROOT_HOST=% -v "$temp_dir:/docker-entrypoint-initdb.d"
+  run_container_with_port "$cname" "$PORT" -e DOLT_ROOT_HOST=% -v "$temp_dir:/docker-entrypoint-initdb.d"
 
   run docker exec "$cname" dolt sql -q "SHOW DATABASES;"
   [ $status -eq 0 ]
@@ -699,10 +705,10 @@ EOF
   [ $status -eq 0 ]
   [[ "$output" =~ "475.75" ]] || false
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u bzip2user --password=bzip2pass -e "USE bzip2_sql_db; INSERT INTO orders VALUES (4, 'Alice Brown', 99.99, 'shipped');"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u bzip2user --password=bzip2pass -e "USE bzip2_sql_db; INSERT INTO orders VALUES (4, 'Alice Brown', 99.99, 'shipped');"
   [ $status -eq 0 ]
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u bzip2user --password=bzip2pass -e "USE bzip2_sql_db; SELECT customer FROM orders WHERE status='completed';"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u bzip2user --password=bzip2pass -e "USE bzip2_sql_db; SELECT customer FROM orders WHERE status='completed';"
   [ $status -eq 0 ]
   [[ "$output" =~ "John Doe" ]] || false
   [[ "$output" =~ "Bob Johnson" ]] || false
@@ -731,7 +737,7 @@ GRANT USAGE ON *.* TO 'xzuser'@'%';
 EOF
   xz "$temp_dir/01-init.sql"
 
-  run_container_with_port "$cname" 3306 -e DOLT_ROOT_HOST=% -v "$temp_dir:/docker-entrypoint-initdb.d"
+  run_container_with_port "$cname" "$PORT" -e DOLT_ROOT_HOST=% -v "$temp_dir:/docker-entrypoint-initdb.d"
 
   run docker exec "$cname" dolt sql -q "SHOW DATABASES;"
   [ $status -eq 0 ]
@@ -741,10 +747,10 @@ EOF
   [ $status -eq 0 ]
   [[ "$output" =~ "4" ]] || false
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u xzuser --password=xzpass -e "USE xz_sql_db; UPDATE inventory SET quantity = 60 WHERE item_name='Laptop';"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u xzuser --password=xzpass -e "USE xz_sql_db; UPDATE inventory SET quantity = 60 WHERE item_name='Laptop';"
   [ $status -eq 0 ]
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u xzuser --password=xzpass -e "USE xz_sql_db; SELECT item_name, location FROM inventory WHERE location='Warehouse A';"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u xzuser --password=xzpass -e "USE xz_sql_db; SELECT item_name, location FROM inventory WHERE location='Warehouse A';"
   [ $status -eq 0 ]
   [[ "$output" =~ "Laptop" ]] || false
   [[ "$output" =~ "Keyboard" ]] || false
@@ -775,7 +781,7 @@ EOF
   zstd -q "$temp_dir/01-init.sql"
   rm -f "$temp_dir/01-init.sql"  # zstd keeps original by default
 
-  run_container_with_port "$cname" 3306 -e DOLT_ROOT_HOST=% -v "$temp_dir:/docker-entrypoint-initdb.d"
+  run_container_with_port "$cname" "$PORT" -e DOLT_ROOT_HOST=% -v "$temp_dir:/docker-entrypoint-initdb.d"
 
   run docker exec "$cname" dolt sql -q "SHOW DATABASES;"
   [ $status -eq 0 ]
@@ -785,11 +791,11 @@ EOF
   [ $status -eq 0 ]
   [[ "$output" =~ "5" ]] || false
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u zstduser --password=zstdpass -e "USE zstd_sql_db; SELECT name FROM employees WHERE department='Engineering' AND salary > 90000;"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u zstduser --password=zstdpass -e "USE zstd_sql_db; SELECT name FROM employees WHERE department='Engineering' AND salary > 90000;"
   [ $status -eq 0 ]
   [[ "$output" =~ "Alice Johnson" ]] || false
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u zstduser --password=zstdpass -e "USE zstd_sql_db; SELECT department, COUNT(*) as count FROM employees GROUP BY department ORDER BY count DESC;"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u zstduser --password=zstdpass -e "USE zstd_sql_db; SELECT department, COUNT(*) as count FROM employees GROUP BY department ORDER BY count DESC;"
   [ $status -eq 0 ]
   [[ "$output" =~ "Engineering" ]] || false
 
@@ -805,7 +811,7 @@ EOF
   curl -sL "https://raw.githubusercontent.com/datacharmer/test_db/master/load_employees.dump" -o "$temp_dir/load_employees.sql"
   sed -i '1iCREATE TABLE employees (id int, dob text, fn text, ln text, g text, dod text);' "$temp_dir/load_employees.sql"
 
-  run_container_with_port "$cname" 3306 \
+  run_container_with_port "$cname" "$PORT" \
     -e DOLT_DATABASE=test \
     -v "$temp_dir:/docker-entrypoint-initdb.d"
 
@@ -855,13 +861,13 @@ GRANT ALL PRIVILEGES ON *.* TO 'nautobot'@'%';
 FLUSH PRIVILEGES;
 EOF
 
-  run_container_with_port "$cname" 3306 -e DOLT_USER_HOST=% -e DOLT_USER=nautobot -e DOLT_PASSWORD=nautobotpass -v "$temp_dir:/docker-entrypoint-initdb.d"
+  run_container_with_port "$cname" "$PORT" -e DOLT_USER_HOST=% -e DOLT_USER=nautobot -e DOLT_PASSWORD=nautobotpass -v "$temp_dir:/docker-entrypoint-initdb.d"
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u nautobot --password=nautobotpass -e "SHOW DATABASES;"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u nautobot --password=nautobotpass -e "SHOW DATABASES;"
   [ $status -eq 0 ]
   [[ "$output" =~ "nautobot_db" ]] || false
 
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u nautobot --password=nautobotpass -e "CREATE DATABASE nautobot_test; USE nautobot_test; CREATE TABLE test (id INT);"
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P "$PORT" -u nautobot --password=nautobotpass -e "CREATE DATABASE nautobot_test; USE nautobot_test; CREATE TABLE test (id INT);"
   [ $status -eq 0 ]
 
   rm -rf "$temp_dir"
@@ -882,7 +888,7 @@ INSERT INTO users_table VALUES (2, 'bob', 'bob@example.com');
 SELECT * FROM users_table;
 EOF
 
-  run_container_with_port "$cname" 3306 -e DOLT_ROOT_HOST=% -v "$temp_dir:/docker-entrypoint-initdb.d"
+  run_container_with_port "$cname" "$PORT" -e DOLT_ROOT_HOST=% -v "$temp_dir:/docker-entrypoint-initdb.d"
   docker logs "$cname" >$BATS_TMPDIR/${cname}.log 2>&1
 
   run grep -F "| id | username | email             |" $BATS_TMPDIR/"${cname}".log
@@ -904,7 +910,7 @@ EOF
   usr="testuser"
   pwd="testpass"
 
-  run_container_with_port "$cname" 3306 \
+  run_container_with_port "$cname" "$PORT" \
     -e DOLT_ROOT_PASSWORD=rootpass \
     -e DOLT_ROOT_HOST=% \
     -e DOLT_USER="$usr" \

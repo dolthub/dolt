@@ -35,7 +35,7 @@ wait_for_connection() {
       echo "Connected successfully!"
       return 0
     fi
-    sleep 1
+    sleep 0.1
   done
 
   echo "Failed to connect to database $DEFAULT_DB on port $port within $timeout ms."

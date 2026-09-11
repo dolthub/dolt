@@ -74,6 +74,28 @@ teardown() {
     [[ "$output" =~ "Division by 0" ]] || false
 }
 
+# Regression coverage for https://github.com/dolthub/dolt/issues/10864
+# bats test_tags=no_lambda
+@test "sql-shell: bare empty query gives MySQL-style error, not a warning" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    run $BATS_TEST_DIRNAME/sql-shell-empty-query.expect
+
+    [[ "$output" =~ "No query specified" ]] || false
+    ! [[ "$output" =~ "query was empty after trimming comments" ]] || false
+    ! [[ "$output" =~ "Empty set, 1 warning" ]] || false
+}
+
+# Regression coverage for https://github.com/dolthub/dolt/issues/10863
+# bats test_tags=no_lambda
+@test "sql-shell: comment-only query is skipped silently, no warning" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    run $BATS_TEST_DIRNAME/sql-shell-comment-only-query.expect
+
+    ! [[ "$output" =~ "query was empty after trimming comments" ]] || false
+    ! [[ "$output" =~ "Empty set, 1 warning" ]] || false
+    ! [[ "$output" =~ "No query specified" ]] || false
+}
+
 # bats test_tags=no_lambda
 @test "sql-shell: can toggle warning details" {
     skiponwindows "Need to install expect and make this script work on windows."
@@ -153,6 +175,28 @@ teardown() {
     echo "$output"
 
     [ "$status" -eq 0 ]
+}
+
+# Regression coverage for https://github.com/dolthub/dolt/issues/10867
+# bats test_tags=no_lambda
+@test "sql-shell: \\c cancels the statement currently being entered" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Current test setup results in remote calls having a clean branch, where this expect script expects dirty."
+    fi
+    run $BATS_TEST_DIRNAME/sql-shell-clear-statement.expect
+    echo "$output"
+
+    [ "$status" -eq 0 ]
+    # \c must not have been folded into the next statement (a bug would surface as a syntax
+    # error near the stray backslash), and the next statement must have actually executed.
+    [[ ! "$output" =~ "syntax error" ]] || false
+    [[ "$output" =~ "1 row in set" ]] || false
+
+    # Neither canceled INSERT should have changed the table on disk.
+    run dolt sql -r csv -q "select count(*) from test"
+    [ "$status" -eq 0 ]
+    [ "$output" = $'count(*)\n0' ]
 }
 
 # Regression coverage for https://github.com/dolthub/dolt/issues/11137

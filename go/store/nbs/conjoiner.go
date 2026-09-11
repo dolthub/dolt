@@ -156,16 +156,28 @@ type conjoinOperation struct {
 	// can be passed to tables.rebase as an available source, avoiding
 	// a redundant Open call.
 	conjoinedSrc chunkSource
+	// Clones of the chunkSources which the store already had open for
+	// |conjoinees| when this operation was prepared. Taken under the
+	// store's Mutex by |prepareConjoin| and handed to |conjoin|, which
+	// closes them.
+	sources chunkSourceSet
 }
 
 // Compute what we will conjoin and prepare to do it. This should be
 // done synchronously and with the Mutex held by NomsBlockStore.
-func (op *conjoinOperation) prepareConjoin(ctx context.Context, strat conjoinStrategy, upstream manifestContents) error {
+func (op *conjoinOperation) prepareConjoin(ctx context.Context, strat conjoinStrategy, upstream manifestContents, tables *tableSet) error {
 	if upstream.NumAppendixSpecs() != 0 {
 		upstream, _ = upstream.removeAppendixSpecs()
 	}
 	var err error
 	op.conjoinees, err = strat.chooseConjoinees(upstream.specs)
+	if err != nil {
+		return err
+	}
+	// Clone the sources the store already has open, rather than making
+	// |conjoin| open every conjoinee again. Cloning is in-memory, so it is
+	// cheap to do here under the store's Mutex.
+	op.sources, err = tables.cloneOpenSources(op.conjoinees)
 	if err != nil {
 		return err
 	}
@@ -176,8 +188,12 @@ func (op *conjoinOperation) prepareConjoin(ctx context.Context, strat conjoinStr
 // |prepareConjoin|.  This should be done asynchronously by
 // NomsBlockStore.
 func (op *conjoinOperation) conjoin(ctx context.Context, behavior dherrors.FatalBehavior, persister tablePersister, stats *Stats) error {
+	// Hand off ownership of the cloned sources; conjoinTables closes them.
+	sources := op.sources
+	op.sources = nil
+
 	var err error
-	op.conjoined, op.conjoinedSrc, op.cleanup, err = conjoinTables(ctx, behavior, op.conjoinees, persister, stats)
+	op.conjoined, op.conjoinedSrc, op.cleanup, err = conjoinTables(ctx, behavior, op.conjoinees, sources, persister, stats)
 	if err != nil {
 		return err
 	}
@@ -266,9 +282,9 @@ func (op *conjoinOperation) updateManifest(ctx context.Context, behavior dherror
 // process actor has already landed a conjoin of its own. Callers must
 // handle this, likely by rebasing against upstream and re-evaluating the
 // situation.
-func conjoin(ctx context.Context, behavior dherrors.FatalBehavior, s conjoinStrategy, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) (manifestContents, chunkSource, cleanupFunc, error) {
+func conjoin(ctx context.Context, behavior dherrors.FatalBehavior, s conjoinStrategy, upstream manifestContents, mm manifestUpdater, p tablePersister, tables *tableSet, stats *Stats) (manifestContents, chunkSource, cleanupFunc, error) {
 	var op conjoinOperation
-	err := op.prepareConjoin(ctx, s, upstream)
+	err := op.prepareConjoin(ctx, s, upstream, tables)
 	if err != nil {
 		return manifestContents{}, nil, nil, err
 	}
@@ -284,18 +300,33 @@ func conjoin(ctx context.Context, behavior dherrors.FatalBehavior, s conjoinStra
 	return mc, op.conjoinedSrc, cf, nil
 }
 
-func conjoinTables(ctx context.Context, behavior dherrors.FatalBehavior, conjoinees []tableSpec, p tablePersister, stats *Stats) (conjoined tableSpec, src chunkSource, cleanup cleanupFunc, err error) {
+// conjoinTables conjoins the table files named by |conjoinees| into a single
+// new table file.
+//
+// |open| holds chunkSources which are already open for some of |conjoinees|,
+// keyed by table file name. Those are conjoined as they are, rather than
+// opened a second time. conjoinTables takes ownership of |open| and closes
+// every source in it before returning.
+func conjoinTables(ctx context.Context, behavior dherrors.FatalBehavior, conjoinees []tableSpec, open chunkSourceSet, p tablePersister, stats *Stats) (conjoined tableSpec, src chunkSource, cleanup cleanupFunc, err error) {
 	eg, ectx := errgroup.WithContext(ctx)
 	toConjoin := make(chunkSources, len(conjoinees))
 
 	for idx := range conjoinees {
 		i, spec := idx, conjoinees[idx]
+		if cs, ok := open[spec.name]; ok {
+			// Ownership moves to |toConjoin|, which is closed below.
+			delete(open, spec.name)
+			toConjoin[i] = cs
+			continue
+		}
 		eg.Go(func() (err error) {
 			toConjoin[i], err = p.Open(ectx, spec.name, spec.chunkCount, stats)
 			return
 		})
 	}
 	defer func() {
+		// Anything left in |open| was not claimed by |toConjoin|.
+		open.close()
 		for _, cs := range toConjoin {
 			if cs != nil {
 				cs.close()

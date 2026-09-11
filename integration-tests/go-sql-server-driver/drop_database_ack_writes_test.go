@@ -57,7 +57,7 @@ listener:
 cluster:
   standby_remotes:
   - name: standby
-    remote_url_template: http://localhost:%d/{database}
+    remote_url_template: http://127.0.0.1:%d/{database}
   bootstrap_role: primary
   bootstrap_epoch: 1
   remotesapi:
@@ -72,7 +72,7 @@ listener:
 cluster:
   standby_remotes:
   - name: standby
-    remote_url_template: http://localhost:%d/{database}
+    remote_url_template: http://127.0.0.1:%d/{database}
   bootstrap_role: standby
   bootstrap_epoch: 1
   remotesapi:

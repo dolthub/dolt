@@ -258,6 +258,15 @@ func resetHard(
 		return err
 	}
 
+	// Raise global sequence state before the new roots become reachable.
+	// Doing this before landing the update ensures the tracker is not
+	// behind immediately after the update lands and it prevents us from
+	// landing the update at all if the tracker update fails.
+	err = dSess.MergeGlobals(ctx, dbName, roots.Working)
+	if err != nil {
+		return err
+	}
+
 	// TODO: this overrides the transaction setting, needs to happen at commit, not here
 	if newHead != nil {
 		headRef, err := dbData.Rsr.CWBHeadRef(ctx)
@@ -275,10 +284,6 @@ func resetHard(
 		return err
 	}
 	err = dSess.SetWorkingSet(ctx, dbName, ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged).ClearMerge().ClearRebase())
-	if err != nil {
-		return err
-	}
-	err = dSess.ResetGlobals(ctx, dbName, roots.Working)
 	if err != nil {
 		return err
 	}

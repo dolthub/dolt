@@ -156,6 +156,48 @@ func (r Range) belowStop(ctx context.Context, t val.Tuple) (bool, error) {
 	return true, nil
 }
 
+// SortRangesByStart orders `ranges` by the physical position of their lower bounds, so that scanning them in
+// sequence returns tuples in map order. An unbound field starts before every bound one, and an inclusive bound
+// before an exclusive bound on the same value.
+func SortRangesByStart(ctx context.Context, ranges []Range) error {
+	var err error
+	sort.SliceStable(ranges, func(i, j int) bool {
+		cmp, cmpErr := compareRangeStarts(ctx, ranges[i], ranges[j])
+		if cmpErr != nil {
+			err = cmpErr
+		}
+		return cmp < 0
+	})
+	return err
+}
+
+// compareRangeStarts compares the lower bounds of `a` and `b` field by field.
+func compareRangeStarts(ctx context.Context, a, b Range) (int, error) {
+	order := a.Desc.Comparator()
+	for i := range a.Fields {
+		lo, other := a.Fields[i].Lo, b.Fields[i].Lo
+		if !lo.Binding || !other.Binding {
+			if lo.Binding == other.Binding {
+				return 0, nil
+			} else if !lo.Binding {
+				return -1, nil
+			}
+			return 1, nil
+		}
+		cmp, err := order.CompareValues(ctx, i, lo.Value, other.Value, a.Desc.Types[i])
+		if err != nil || cmp != 0 {
+			return cmp, err
+		}
+		if lo.Inclusive != other.Inclusive {
+			if lo.Inclusive {
+				return -1, nil
+			}
+			return 1, nil
+		}
+	}
+	return 0, nil
+}
+
 // Matches returns true if all the filter predicates
 // for Range |r| are true for Tuple |t|.
 func (r Range) Matches(ctx context.Context, t val.Tuple) (bool, error) {
@@ -242,12 +284,21 @@ func (r Range) KeyRangeLookup(ctx context.Context, pool pool.BuffPool, ns tree.N
 		// ex: range scan
 		return nil, false, nil
 	}
+	ordered, _ := r.Desc.Comparator().(*val.OrderedTupleComparator)
+	if ordered != nil && ordered.Order(n).Descending {
+		// the incremented key precedes the start key
+		return nil, false, nil
+	}
 
-	for _, typ := range r.Desc.Types[n+1:] {
+	for i, typ := range r.Desc.Types[n+1:] {
 		if !typ.Nullable {
 			// this is checked separately because fulltext descriptors
 			// do not match field lengths sometimes
 			// todo: why?
+			return nil, false, nil
+		}
+		if ordered != nil && ordered.Order(n+1+i).NullsLast {
+			// the start key's NULL fields follow every matching key
 			return nil, false, nil
 		}
 	}

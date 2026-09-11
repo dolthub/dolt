@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/cockroachdb/apd/v3"
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/encodings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
@@ -76,6 +77,9 @@ type TupleDescriptorArgs struct {
 	// ValueStore, if non-nil, is attached to the TupleDesc's Comparator via |WithValueStore|.
 	// It is required when comparing tuples with adaptive-encoded fields.
 	ValueStore ValueStore
+	// ColumnOrders, if non-nil, is the sort order of the leading fields. Fields past its end and every field of a nil
+	// slice are ascending with NULLs first.
+	ColumnOrders []sql.IndexColumnOrder
 }
 
 // NewTupleDescriptor makes a TupleDescriptor from |types|.
@@ -95,6 +99,9 @@ func NewTupleDescriptorWithArgs(args TupleDescriptorArgs, types ...Type) (td *Tu
 	}
 	if args.Comparator == nil {
 		args.Comparator = &DefaultTupleComparator{}
+	}
+	if len(args.ColumnOrders) > 0 {
+		args.Comparator = &OrderedTupleComparator{innerCmp: args.Comparator, orders: args.ColumnOrders}
 	}
 	args.Comparator = (&ExtendedTupleComparator{
 		innerCmp: args.Comparator,
@@ -530,14 +537,10 @@ func getGeomAdaptiveValue(ctx context.Context, vs ValueStore, val []byte) (any, 
 	}
 	if adaptiveValue.isInlined() {
 		bytes, err := adaptiveValue.getUnderlyingBytes(ctx, vs)
-		if err != nil {
-			return nil, false, err
-		}
-		return bytes, true, nil
-	} else {
-		gs, err := adaptiveValue.convertToGeometryStorage(ctx, vs)
-		return gs, true, err
+		return bytes, err == nil, err
 	}
+	gs, err := adaptiveValue.convertToGeometryStorage(ctx, vs)
+	return gs, err == nil, err
 }
 
 func (td *TupleDesc) GetHash128(i int, tup Tuple) (v []byte, ok bool) {
@@ -598,11 +601,10 @@ func GetBytesAdaptiveValue(ctx context.Context, vs ValueStore, val []byte) (inte
 	}
 	if adaptiveValue.isInlined() {
 		val, err := adaptiveValue.getUnderlyingBytes(ctx, vs)
-		return val, true, err
-	} else {
-		val, err := adaptiveValue.convertToByteArray(ctx, vs, nil)
-		return val, true, err
+		return val, err == nil, err
 	}
+	valBytes, err := adaptiveValue.convertToByteArray(ctx, vs, nil)
+	return valBytes, err == nil, err
 }
 
 // GetStringAdaptiveValue returns either a string or a StringWrapper, but Go doesn't allow us to use a single type for that.
@@ -614,11 +616,10 @@ func (td *TupleDesc) GetStringAdaptiveValue(ctx context.Context, i int, vs Value
 	}
 	if adaptiveValue.isInlined() {
 		val, err := adaptiveValue.getUnderlyingBytes(ctx, vs)
-		return encodings.BytesToString(val), true, err
-	} else {
-		val, err := adaptiveValue.convertToTextStorage(ctx, vs, nil)
-		return val, true, err
+		return encodings.BytesToString(val), err == nil, err
 	}
+	valText, err := adaptiveValue.convertToTextStorage(ctx, vs, nil)
+	return valText, err == nil, err
 }
 
 // GetJsonAdaptiveValue reads a JSON value from an adaptive-encoded field, returning a *JsonAdaptiveStorage
@@ -636,13 +637,10 @@ func GetJsonAdaptiveValue(ctx context.Context, vs ValueStore, field []byte) (any
 	}
 	if adaptiveValue.isInlined() {
 		bytes, err := adaptiveValue.getUnderlyingBytes(ctx, vs)
-		if err != nil {
-			return nil, false, err
-		}
-		return bytes, true, nil
+		return bytes, err == nil, err
 	}
 	gs, err := adaptiveValue.convertToJsonStorage(ctx, vs)
-	return gs, true, err
+	return gs, err == nil, err
 }
 
 func (td *TupleDesc) GetCommitAddr(i int, tup Tuple) (v hash.Hash, ok bool) {

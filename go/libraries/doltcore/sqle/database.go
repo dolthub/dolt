@@ -800,7 +800,7 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 			return nil, false, err
 		}
 		if !resolve.UseSearchPath || isDoltgresSystemTable {
-			dt, found = dtables.NewTagsTable(ctx, lwrName, db.ddb), true
+			dt, found = dtables.NewTagsTable(ctx, lwrName, db), true
 		}
 	case dtables.AccessTableName:
 		basCtx := branch_control.GetBranchAwareSession(ctx)
@@ -2109,7 +2109,7 @@ func (db Database) createSqlTable(ctx *sql.Context, table string, schemaName str
 		if err != nil {
 			return err
 		}
-		err = ait.AddNewRelation(tableName, doltdb.AutoIncrementState(1))
+		err = ait.AddNewRelation(ctx, tableName, doltdb.AutoIncrementState(1))
 		if err != nil {
 			return err
 		}
@@ -2172,7 +2172,7 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, table string, schemaN
 		if err != nil {
 			return err
 		}
-		err = ait.AddNewRelation(tableName, doltdb.AutoIncrementState(1))
+		err = ait.AddNewRelation(ctx, tableName, doltdb.AutoIncrementState(1))
 		if err != nil {
 			return err
 		}

@@ -44,10 +44,10 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 				// The harness skips assertions containing "show indexes from", so this uses the singular synonym.
 				Query: "SHOW INDEX FROM dolt_diff_foo;",
 				Expected: []sql.Row{
-					{"dolt_diff_foo", 0, "to_pks", 1, "to_id", nil, int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
-					{"dolt_diff_foo", 0, "from_pks", 1, "from_id", nil, int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
-					{"dolt_diff_foo", 1, "to_commit", 1, "to_commit", nil, int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
-					{"dolt_diff_foo", 1, "from_commit", 1, "from_commit", nil, int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
+					{"dolt_diff_foo", 0, "to_pks", 1, "to_id", "A", int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
+					{"dolt_diff_foo", 0, "from_pks", 1, "from_id", "A", int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
+					{"dolt_diff_foo", 1, "to_commit", 1, "to_commit", "A", int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
+					{"dolt_diff_foo", 1, "from_commit", 1, "from_commit", "A", int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
 				},
 			},
 		},

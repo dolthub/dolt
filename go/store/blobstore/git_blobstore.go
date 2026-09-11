@@ -310,6 +310,21 @@ type GitBlobstore struct {
 	// from the in-memory cache. Protected by writeMu.
 	pendingCacheEvictions []string
 
+	// syncMu guards the read-path fetch fields below.
+	syncMu sync.Mutex
+	// inFlightSync is the read-path fetch currently running, which readers
+	// arriving during it wait on instead of starting their own. Nil when none
+	// is running, so the zero value of GitBlobstore needs no initialization.
+	inFlightSync *inFlightSync
+	// drainingSync is a fetch that every waiter gave up on, now canceled. Its
+	// git process may still be exiting, so the next fetch waits for it rather
+	// than run a second one against the same remote-tracking ref.
+	drainingSync *inFlightSync
+	// syncsDisabled is non-zero while no read-path fetch may start: the store is
+	// closed, or a Teardown holds the repository. Reads are answered from
+	// whatever the cache already holds.
+	syncsDisabled int
+
 	// cacheMu guards all cache fields below.
 	cacheMu sync.RWMutex
 	// cacheHead is the last commit OID whose tree we merged into the cache.
@@ -558,12 +573,12 @@ func (gbs *GitBlobstore) mergeCacheFromHead(ctx context.Context, head git.OID) e
 		return fmt.Errorf("gitblobstore: cannot merge cache for empty head")
 	}
 
-	gbs.cacheMu.RLock()
-	if gbs.cacheHead == head {
-		gbs.cacheMu.RUnlock()
+	// An unchanged head still means the cache is up to date as of now. Say so,
+	// or the dedup window never renews against a quiet remote and every
+	// cache-missing read fetches again.
+	if gbs.markSyncedIfHeadUnchanged(head) {
 		return nil
 	}
-	gbs.cacheMu.RUnlock()
 
 	entries, err := gbs.api.ListTreeRecursive(ctx, head)
 	if err != nil {
@@ -574,6 +589,7 @@ func (gbs *GitBlobstore) mergeCacheFromHead(ctx context.Context, head git.OID) e
 
 	// Double-check under write lock for concurrent callers.
 	if gbs.cacheHead == head {
+		gbs.lastSyncedAt = time.Now()
 		gbs.cacheMu.Unlock()
 		return nil
 	}
@@ -618,6 +634,37 @@ func (gbs *GitBlobstore) mergeCacheFromHead(ctx context.Context, head git.OID) e
 	return nil
 }
 
+// markSyncedIfHeadUnchanged refreshes the sync timestamp if the cache was
+// already merged from |head|, and reports whether it was.
+func (gbs *GitBlobstore) markSyncedIfHeadUnchanged(head git.OID) bool {
+	gbs.cacheMu.Lock()
+	defer gbs.cacheMu.Unlock()
+	if gbs.cacheHead != head {
+		return false
+	}
+	gbs.lastSyncedAt = time.Now()
+	return true
+}
+
+// syncedWithinTTL reports whether a sync completed recently enough that another
+// one would not tell us anything new.
+func (gbs *GitBlobstore) syncedWithinTTL() bool {
+	ttl := gbs.syncForReadTTL
+	if ttl <= 0 {
+		return false
+	}
+	gbs.cacheMu.RLock()
+	defer gbs.cacheMu.RUnlock()
+	return !gbs.lastSyncedAt.IsZero() && time.Since(gbs.lastSyncedAt) < ttl
+}
+
+// hasSyncedHead reports whether the cache has ever been merged from a commit.
+func (gbs *GitBlobstore) hasSyncedHead() bool {
+	gbs.cacheMu.RLock()
+	defer gbs.cacheMu.RUnlock()
+	return gbs.cacheHead != ""
+}
+
 func (gbs *GitBlobstore) Path() string {
 	return fmt.Sprintf("%s@%s", gbs.gitDir, gbs.remoteRef)
 }
@@ -651,6 +698,12 @@ func (gbs *GitBlobstore) CleanupOwnedLocalRef(ctx context.Context) error {
 // Teardown best-effort deletes this instance's UUID-owned refs and
 // periodically runs git gc to repack the cache repository.
 func (gbs *GitBlobstore) Teardown(ctx context.Context) error {
+	// The gc below repacks the object store a fetch writes into, and the ref
+	// deletions remove the remote-tracking ref it writes, so no read-path fetch
+	// may be in flight for the rest of this call.
+	gbs.quiesceSyncs(errGitStoreTornDown)
+	defer gbs.resumeSyncs()
+
 	// Best-effort periodic GC to repack the cache repo. Runs outside the
 	// write lock so a slow gc cannot serialize other writers. maybeRunGC
 	// has its own file-based lock for cross-process coordination.
@@ -681,6 +734,10 @@ func (gbs *GitBlobstore) Teardown(ctx context.Context) error {
 }
 
 func (gbs *GitBlobstore) Close() error {
+	// Deliberately not paired with a resumeSyncs: a closed store never fetches
+	// again, and answers reads from what it has already cached. Nothing errors
+	// out on a read after Close today, and this keeps it that way.
+	gbs.quiesceSyncs(errGitStoreClosed)
 	return nil
 }
 
@@ -728,6 +785,17 @@ func (gbs *GitBlobstore) maybeRunGC() {
 	_ = os.WriteFile(markerPath, nil, 0644)
 }
 
+// errGitSyncAbandoned cancels a read-path fetch that every waiting reader has
+// given up on.
+var errGitSyncAbandoned = errors.New("gitblobstore: read fetch abandoned, no readers waiting")
+
+// errGitStoreClosed cancels a read-path fetch when the store is closed under it.
+var errGitStoreClosed = errors.New("gitblobstore: store closed")
+
+// errGitStoreTornDown cancels a read-path fetch when the store is torn down
+// under it.
+var errGitStoreTornDown = errors.New("gitblobstore: store torn down")
+
 func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
 	if err := gbs.validateRemoteManaged(); err != nil {
 		return err
@@ -736,13 +804,8 @@ func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
 	// Dedup guard: skip the fetch if we synced recently. The write path
 	// (fetchAlignAndMergeForWrite) always does its own unconditional fetch,
 	// so this only affects read-path callers (Get/Exists).
-	if ttl := gbs.syncForReadTTL; ttl > 0 {
-		gbs.cacheMu.RLock()
-		sinceLast := time.Since(gbs.lastSyncedAt)
-		gbs.cacheMu.RUnlock()
-		if sinceLast < ttl {
-			return nil
-		}
+	if gbs.syncedWithinTTL() {
+		return nil
 	}
 
 	// Concurrent fetches contend with an in-progress push on slow remotes.
@@ -750,6 +813,167 @@ func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
 		return nil
 	}
 
+	// Dedup concurrent readers.
+	sync, ok, err := gbs.beginSync(ctx)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		// Fetching is off for now: the store is closed or being torn down.
+		// Reads can still be sserved from the cache.
+		return nil
+	}
+	defer gbs.doneWaiting(sync)
+
+	select {
+	case <-sync.done:
+		return sync.err
+	case <-ctx.Done():
+		return context.Cause(ctx)
+	}
+}
+
+// inFlightSync is a read-path fetch that readers wait on together.
+//
+// It runs on a context of its own rather than on the context of the waiter which
+// spawned it. No single reader's deadline decides the fate of the fetch for the
+// rest. It is canceled once no reader is waiting for it any more.
+type inFlightSync struct {
+	done chan struct{}
+	// err is the result of the fetch, written before |done| is closed.
+	err error
+	// cancel cancels the fetch's own context.
+	cancel context.CancelCauseFunc
+	// waiters is the count of waiting readers readers on this result.
+	// Guarded by GitBlobstore.syncMu.
+	waiters int
+}
+
+// beginSync registers the caller as a waiter on a read-path fetch, starting one
+// if none is running. It returns the fetch to wait on. It reports ok=false when
+// no fetch may run at all, which leaves the caller to answer from the cache.
+func (gbs *GitBlobstore) beginSync(ctx context.Context) (sync *inFlightSync, ok bool, err error) {
+	for {
+		gbs.syncMu.Lock()
+		if gbs.syncsDisabled > 0 {
+			gbs.syncMu.Unlock()
+			return nil, false, nil
+		}
+		if gbs.inFlightSync != nil {
+			// A fetch is already running. We add ourself as a waiter.
+			sync = gbs.inFlightSync
+			sync.waiters++
+			gbs.syncMu.Unlock()
+			return sync, true, nil
+		}
+		draining := gbs.drainingSync
+		if draining == nil {
+			// No fetch currently running and nothing to drain.
+			// Start a new sync and return that as what we block on.
+			sync = gbs.startSyncLocked()
+			gbs.syncMu.Unlock()
+			return sync, true, nil
+		}
+		gbs.syncMu.Unlock()
+
+		// An abandoned fetch is still winding down.
+		// Block on that canceled sync finishing before we start a new sync.
+		select {
+		case <-draining.done:
+		case <-ctx.Done():
+			return nil, false, context.Cause(ctx)
+		}
+	}
+}
+
+// startSyncLocked starts a fetch whose sole waiter is the caller. Called with
+// syncMu held.
+func (gbs *GitBlobstore) startSyncLocked() *inFlightSync {
+	ctx, cancel := context.WithCancelCause(context.Background())
+	sync := &inFlightSync{
+		done:    make(chan struct{}),
+		cancel:  cancel,
+		waiters: 1,
+	}
+	gbs.inFlightSync = sync
+	// The fetch gets a goroutine of its own because it outlives the reader that
+	// started it whenever another reader is still waiting on it.
+	go func() {
+		defer cancel(nil)
+		defer gbs.finishSync(sync)
+		sync.err = gbs.fetchAndMergeForRead(ctx)
+	}()
+	return sync
+}
+
+// finishSync publishes the result of a finished fetch to its waiters and retires
+// it, which lets the next fetch start.
+func (gbs *GitBlobstore) finishSync(sync *inFlightSync) {
+	gbs.syncMu.Lock()
+	if gbs.inFlightSync == sync {
+		gbs.inFlightSync = nil
+	}
+	if gbs.drainingSync == sync {
+		gbs.drainingSync = nil
+	}
+	gbs.syncMu.Unlock()
+	close(sync.done)
+}
+
+// doneWaiting takes the caller out of |sync|'s waiters and cancels the fetch if
+// it was still inflight when the last waiter was removed.
+//
+// Cancellation is asynchronous: waiting for the git process to die is not
+// work a canceled waiter needs to do. GitBlobstore tracks the draining fetch
+// in |drainingSync| and whoever wants the next fetch has to wait for it before
+// starting their own.
+func (gbs *GitBlobstore) doneWaiting(sync *inFlightSync) {
+	gbs.syncMu.Lock()
+	sync.waiters--
+	abandoned := sync.waiters == 0 && gbs.inFlightSync == sync
+	if abandoned {
+		gbs.inFlightSync = nil
+		gbs.drainingSync = sync
+	}
+	gbs.syncMu.Unlock()
+
+	if abandoned {
+		sync.cancel(errGitSyncAbandoned)
+	}
+}
+
+// quiesceSyncs keeps new read-path fetches from starting and waits out any fetch
+// already running. Readers still waiting on a canceled fetch will get |cause|.
+// Pair every call with resumeSyncs, except from Close.
+func (gbs *GitBlobstore) quiesceSyncs(cause error) {
+	gbs.syncMu.Lock()
+	gbs.syncsDisabled++
+	sync, draining := gbs.inFlightSync, gbs.drainingSync
+	if sync != nil {
+		gbs.inFlightSync = nil
+		gbs.drainingSync = sync
+	}
+	gbs.syncMu.Unlock()
+
+	if sync != nil {
+		sync.cancel(cause)
+		<-sync.done
+	}
+	if draining != nil {
+		<-draining.done
+	}
+}
+
+// resumeSyncs undoes one quiesceSyncs, letting read-path fetches start again.
+func (gbs *GitBlobstore) resumeSyncs() {
+	gbs.syncMu.Lock()
+	gbs.syncsDisabled--
+	gbs.syncMu.Unlock()
+}
+
+// fetchAndMergeForRead fetches the remote ref and brings the cache up to date
+// with it. Only syncForRead may call it: it is what keeps one running at a time.
+func (gbs *GitBlobstore) fetchAndMergeForRead(ctx context.Context) error {
 	// Fetch remote ref into our remote-tracking ref.
 	err := gbs.api.FetchRef(ctx, gbs.remoteName, gbs.remoteRef, gbs.remoteTrackingRef)
 	if err != nil {
@@ -1002,6 +1226,9 @@ func (gbs *GitBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 		if _, ok := gbs.cacheGetObject(key); ok {
 			return true, nil
 		}
+		if gbs.syncedAbsent(key) {
+			return false, nil
+		}
 	}
 
 	if err := gbs.syncForRead(ctx); err != nil {
@@ -1032,12 +1259,40 @@ func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.
 		if _, ok := gbs.cacheGetObject(key); ok {
 			return gbs.getFromCache(ctx, key, br)
 		}
+		if gbs.syncedAbsent(key) {
+			return nil, 0, "", NotFound{Key: key}
+		}
 	}
 
 	if err := gbs.syncForRead(ctx); err != nil {
 		return nil, 0, "", err
 	}
 	return gbs.getFromCache(ctx, key, br)
+}
+
+// syncedAbsent reports that |key| does not exist, on the authority of the cache
+// alone, so the caller can skip fetching to find that out.
+//
+// The cache holds the complete recursive listing of the commit it was merged
+// from, plus this blobstore's own pending writes, so a key missing from it does
+// not exist as of that commit. Answering from the cache puts an absent key on
+// the same footing as a present one, which is already served as of that commit
+// rather than re-checked against the remote.
+//
+// A non-manifest key is content-addressed, so the only thing a fetch could add
+// is a key another writer has since pushed. Callers reach such a key by way of
+// the manifest naming it, and the manifest always fetches because it is never
+// served from the cache, so the sync that delivers a new manifest also delivers
+// the keys it names.
+func (gbs *GitBlobstore) syncedAbsent(key string) bool {
+	if key == gitblobstoreManifestKey {
+		return false
+	}
+	if !gbs.hasSyncedHead() {
+		return false
+	}
+	_, ok := gbs.cacheGetObject(key)
+	return !ok
 }
 
 func (gbs *GitBlobstore) getFromCache(ctx context.Context, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {

@@ -245,6 +245,33 @@ func (writer prollyKeylessSecondaryWriter) ValidateKeyViolations(ctx context.Con
 	return nil
 }
 
+// validateUniqueKeyViolation checks the mutable unique-index prefix for a conflicting keyless row.
+func (writer prollyKeylessSecondaryWriter) validateUniqueKeyViolation(ctx context.Context, sqlRow sql.Row) error {
+	if writer.predicate != nil {
+		matches, err := writer.predicate.Eval(ctx.(*sql.Context), sqlRow)
+		if err != nil {
+			return err
+		}
+		if !matches.(bool) {
+			return nil
+		}
+	}
+	for to := range writer.prefixBld.Desc.Count() {
+		value, err := writer.keyPartFromRow(ctx, to, sqlRow)
+		if err != nil {
+			return err
+		}
+		if err := tree.PutField(ctx, writer.mut.NodeStore(), writer.prefixBld, to, writer.trimKeyPart(to, value)); err != nil {
+			return err
+		}
+	}
+	prefixKey, err := writer.prefixBld.Build(ctx, sharePool)
+	if err != nil {
+		return err
+	}
+	return writer.checkForUniqueKeyError(ctx, prefixKey, sqlRow)
+}
+
 // trimKeyPart will trim entry into the sql.Row depending on the prefixLengths
 func (writer prollyKeylessSecondaryWriter) trimKeyPart(to int, keyPart interface{}) interface{} {
 	var prefixLength uint16

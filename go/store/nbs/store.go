@@ -362,7 +362,7 @@ func (nbs *NomsBlockStore) startConjoinIfRequired(ctx context.Context) error {
 		}
 		nbs.logger.WithField("upstream_len", len(nbs.tables.upstream)).Info("beginning conjoin of database")
 		var op = &conjoinOperation{}
-		err := op.prepareConjoin(ctx, nbs.conjoiner, nbs.upstream)
+		err := op.prepareConjoin(ctx, nbs.conjoiner, nbs.upstream, nbs.tables)
 		if err != nil {
 			return err
 		}
@@ -2835,7 +2835,7 @@ func (nbs *NomsBlockStore) ConjoinTableFiles(ctx context.Context, storageIds []h
 
 	nbs.logger.Info("ConjoinTableFiles was called")
 	strategy := &specificFilesConjoiner{targetStorageIds: storageIds}
-	newUpstream, conjoinedSrc, finalCleanup, err := conjoin(ctx, nbs.fatalBehavior, strategy, nbs.upstream, nbs.manifest, nbs.persister, nbs.stats)
+	newUpstream, conjoinedSrc, finalCleanup, err := conjoin(ctx, nbs.fatalBehavior, strategy, nbs.upstream, nbs.manifest, nbs.persister, nbs.tables, nbs.stats)
 	if err != nil {
 		return hash.Hash{}, err
 	}

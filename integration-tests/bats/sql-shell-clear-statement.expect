@@ -1,0 +1,29 @@
+#!/usr/bin/expect
+
+set timeout 5
+set env(NO_COLOR) 1
+
+source  "$env(BATS_CWD)/helper/common_expect_functions.tcl"
+
+spawn dolt sql
+
+set prompt {dolt-repo-[0-9]+/main\*?> }
+
+# Cancel a valid INSERT so executing the canceled statement is observable.
+expect_with_defaults $prompt { send "insert into test (pk) values (1) \\c\r" }
+expect_with_defaults $prompt { send "select count(*) as remaining_rows from test;\r" }
+expect_with_defaults_after {\| 0 +\|\r?\n} $prompt {
+    send "insert into test (pk)\r"
+}
+
+# Also cancel a statement accumulated across multiple input lines.
+expect_with_defaults {-> } { send "values (2) \\c\r" }
+expect_with_defaults $prompt { send "select count(*) as remaining_rows from test;\r" }
+expect_with_defaults_after {\| 0 +\|\r?\n} $prompt { send "quit\r" }
+
+expect {
+    eof {}
+    timeout { exit 1 }
+}
+set waitval [wait -i $spawn_id]
+exit [lindex $waitval 3]

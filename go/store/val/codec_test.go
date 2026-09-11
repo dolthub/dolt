@@ -79,6 +79,31 @@ func TestCompare(t *testing.T) {
 			l:   encFloat(1), r: encFloat(0),
 			cmp: 1,
 		},
+		{
+			typ: Type{Enc: Float64Enc},
+			l:   encFloat(math.NaN()), r: encFloat(math.NaN()),
+			cmp: 0,
+		},
+		{
+			typ: Type{Enc: Float64Enc},
+			l:   encFloat(math.NaN()), r: encFloat(math.Inf(1)),
+			cmp: 1,
+		},
+		{
+			typ: Type{Enc: Float64Enc},
+			l:   encFloat(math.Inf(-1)), r: encFloat(math.NaN()),
+			cmp: -1,
+		},
+		{
+			typ: Type{Enc: Float32Enc},
+			l:   encFloat32(float32(math.NaN())), r: encFloat32(float32(math.NaN())),
+			cmp: 0,
+		},
+		{
+			typ: Type{Enc: Float32Enc},
+			l:   encFloat32(1), r: encFloat32(float32(math.NaN())),
+			cmp: -1,
+		},
 		// bit
 		{
 			typ: Type{Enc: Bit64Enc},
@@ -280,6 +305,12 @@ func encInt(i int64) []byte {
 func encUint(u uint64) []byte {
 	buf := make([]byte, int64Size)
 	writeUint64(buf, u)
+	return buf
+}
+
+func encFloat32(f float32) []byte {
+	buf := make([]byte, float32Size)
+	writeFloat32(buf, f)
 	return buf
 }
 

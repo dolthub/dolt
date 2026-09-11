@@ -193,7 +193,7 @@ func TestVectorIndexMarshalling(t *testing.T) {
 			require.NoError(t, err)
 			vecTi, err := typeinfo.FromSqlType(gmstypes.JSON)
 			require.NoError(t, err)
-			vecCol, err := schema.NewColumnWithTypeInfo("vec", 2, vecTi, false, "", false, "")
+			vecCol, err := schema.NewColumnWithTypeInfo("vec", 2, vecTi, false, "", false, "", schema.NotNullConstraint{})
 			require.NoError(t, err)
 			sch, err := schema.SchemaFromCols(schema.NewColCollection(pkCol, vecCol))
 			require.NoError(t, err)

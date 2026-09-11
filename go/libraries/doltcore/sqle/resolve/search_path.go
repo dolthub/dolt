@@ -33,7 +33,7 @@ func SearchPath(ctx *sql.Context) ([]string, error) {
 		return nil, err
 	}
 
-	pathElems := strings.Split(searchPathVar.(string), ",")
+	pathElems := SplitSearchPath(searchPathVar.(string))
 	path := make([]string, len(pathElems))
 	for i, pathElem := range pathElems {
 		path[i] = normalizeSearchPathSchema(ctx, pathElem)
@@ -42,9 +42,83 @@ func SearchPath(ctx *sql.Context) ([]string, error) {
 	return path, nil
 }
 
+// SplitSearchPath splits a search_path setting into its schema names. It follows the same rules Postgres
+// applies---elements are separated by commas, whitespace around an element is insignificant, an element
+// may be double quoted, which preserves its case and lets it hold characters that are not valid in a
+// bare identifier (including a comma), a doubled double quote within a quoted element stands for one
+// literal quote. A bare element is lower cased, the same as an unquoted identifier elsewhere in SQL.
+// An empty setting names no schemas at all, which is distinct from the single empty element that `""`
+// names.
+func SplitSearchPath(searchPath string) []string {
+	if len(strings.Trim(searchPath, searchPathSpace)) == 0 {
+		return nil
+	}
+
+	var elems []string
+	for pos := 0; pos >= 0; {
+		var elem string
+		elem, pos = readSearchPathElem(searchPath, pos)
+		elems = append(elems, elem)
+	}
+	return elems
+}
+
+// searchPathSpace holds the characters Postgres's scanner treats as whitespace.
+const searchPathSpace = " \t\n\r\f"
+
+// readSearchPathElem reads the search_path element beginning at pos, returning the read schema name
+// along with the position the following element begins at, or -1 once the element read was the last
+// one.
+//
+// There is no error reporting on this path. A malformed element is read as far as it makes sense: an
+// unterminated quote runs to the end of the value, and anything between a closing quote and the
+// following comma is discarded.
+func readSearchPathElem(searchPath string, pos int) (string, int) {
+	// Skip starting whitespace.
+	for pos < len(searchPath) && isSearchPathSpace(searchPath[pos]) {
+		pos++
+	}
+
+	// A bare element ends at the next comma, and the whitespace around it is not part of the name
+	if pos == len(searchPath) || searchPath[pos] != '"' {
+		if comma := strings.IndexByte(searchPath[pos:], ','); comma >= 0 {
+			return strings.ToLower(strings.Trim(searchPath[pos:pos+comma], searchPathSpace)), pos + comma + 1
+		}
+		return strings.ToLower(strings.Trim(searchPath[pos:], searchPathSpace)), -1
+	}
+
+	// Starting one past the " literal we just saw.
+	var elem strings.Builder
+	for pos++; pos < len(searchPath); pos++ {
+		if searchPath[pos] != '"' {
+			elem.WriteByte(searchPath[pos])
+			continue
+		}
+		// Is it a double quote?
+		if pos+1 < len(searchPath) && searchPath[pos+1] == '"' {
+			elem.WriteByte('"')
+			pos++
+			continue
+		}
+		// Found an end quote.
+		pos++
+		break
+	}
+	if comma := strings.IndexByte(searchPath[pos:], ','); comma >= 0 {
+		return elem.String(), pos + comma + 1
+	}
+	return elem.String(), -1
+}
+
+// isSearchPathSpace returns whether the byte is whitespace as far as splitting a search_path setting is concerned.
+func isSearchPathSpace(c byte) bool {
+	return strings.IndexByte(searchPathSpace, c) >= 0
+}
+
+// normalizeSearchPathSchema resolves the "$user" element, which stands for a schema named after the session's user,
+// to that user's name.
 func normalizeSearchPathSchema(ctx *sql.Context, schemaName string) string {
-	schemaName = strings.Trim(schemaName, " ")
-	if schemaName == "\"$user\"" {
+	if schemaName == "$user" {
 		client := ctx.Session.Client()
 		return client.User
 	}
