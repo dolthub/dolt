@@ -616,13 +616,15 @@ func checkSchemaConflicts(columnMappings columnMappings) ([]ColConflict, error) 
 					})
 				}
 			case theirs != nil && anc == nil:
-				// Column exists on both sides, but not in ancestor
-				// col added on our branch and their branch with different def
-				conflicts = append(conflicts, ColConflict{
-					Kind:   NameCollision,
-					Ours:   *ours,
-					Theirs: *theirs,
-				})
+				// Column exists on both sides, but not in ancestor.
+				// Only flag a conflict if the definitions differ; identical additions converge cleanly.
+				if !ours.Equals(*theirs) {
+					conflicts = append(conflicts, ColConflict{
+						Kind:   NameCollision,
+						Ours:   *ours,
+						Theirs: *theirs,
+					})
+				}
 			case theirs == nil && anc == nil:
 				// column doesn't exist on theirs or in anc – no conflict
 			}

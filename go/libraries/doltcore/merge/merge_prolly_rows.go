@@ -1909,9 +1909,12 @@ type valueMerger struct {
 	keyless                                bool
 	ns                                     tree.NodeStore
 	valueBuilder                           *val.TupleBuilder
+	// tableName is stored so that processColumn can resolve column default expressions
+	// for convergently-added columns (same definition on both sides, absent from base).
+	tableName string
 }
 
-func NewValueMerger(ctx context.Context, merged, leftSch, rightSch, baseSch schema.Schema, syncPool pool.BuffPool, ns tree.NodeStore) *valueMerger {
+func NewValueMerger(ctx context.Context, merged, leftSch, rightSch, baseSch schema.Schema, syncPool pool.BuffPool, ns tree.NodeStore, tableName string) *valueMerger {
 	leftMapping, rightMapping, baseMapping := generateSchemaMappings(merged, leftSch, rightSch, baseSch)
 
 	baseToLeftMapping, baseToRightMapping, baseToResultMapping := generateSchemaMappings(baseSch, leftSch, rightSch, merged)
@@ -1936,7 +1939,50 @@ func NewValueMerger(ctx context.Context, merged, leftSch, rightSch, baseSch sche
 		keyless:             schema.IsKeyless(merged),
 		ns:                  ns,
 		valueBuilder:        val.NewTupleBuilder(resultVD, ns),
+		tableName:           tableName,
 	}
+}
+
+// getConvergentDefault evaluates the default expression for result-schema stored column i when
+// that column was convergently added (same definition on both sides, absent from base). It is
+// called only when left and right have differing values with no base, so the default serves as
+// a synthetic base: a side whose value matches the default made no intentional write. Returns
+// nil if no default applies, the column was not a convergent add, or evaluation fails — in all
+// such cases the caller falls back to reporting a conflict.
+func (m *valueMerger) getConvergentDefault(ctx *sql.Context, i int) interface{} {
+	if m.tableName == "" {
+		return nil
+	}
+
+	// detect if columns are absent on either side
+	if m.leftMapping[i] == -1 || m.rightMapping[i] == -1 {
+		return nil
+	}
+
+	// checks if the columns have the same definition and metadata on both sides
+	leftCol := m.leftSchema.GetNonPKCols().GetByStoredIndex(m.leftMapping[i])
+	rightCol := m.rightSchema.GetNonPKCols().GetByStoredIndex(m.rightMapping[i])
+	if !leftCol.Equals(rightCol) {
+		return nil
+	}
+
+	col := m.resultSchema.GetNonPKCols().GetByStoredIndex(i)
+	if col.Default == "" {
+		return nil
+	}
+	expr, err := expranalysis.ResolveDefaultExpression(ctx, m.tableName, m.resultSchema, col)
+	if err != nil || !expr.Resolved() {
+		return nil
+	}
+	v, err := expr.Eval(ctx, sql.Row{})
+	if err != nil {
+		return nil
+	}
+	v, _, err = col.TypeInfo.ToSqlType().Convert(ctx, v)
+	if err != nil {
+		return nil
+	}
+	return v
 }
 
 // generateSchemaMappings returns three schema mappings: 1) mapping the |leftSch| to |mergedSch|,
@@ -2204,6 +2250,25 @@ func (m *valueMerger) processColumn(ctx *sql.Context, i int, left, right, base v
 		// generated columns will be updated as part of the merge later on, so choose either value for now
 		if generatedColumn {
 			return leftVal, false, err
+		}
+
+		// If the column was convergently added (same definition on both sides, not in base)
+		// and we know its default value, use that default as a synthetic base for three-way merge.
+		// This lets us distinguish a schema-backfill value (== default) from an intentional write.
+		if defaultVal := m.getConvergentDefault(ctx, i); defaultVal != nil {
+			leftEqDefault, err1 := sqlType.Compare(ctx, leftVal, defaultVal)
+			rightEqDefault, err2 := sqlType.Compare(ctx, rightVal, defaultVal)
+			if err1 == nil && err2 == nil {
+				if leftEqDefault == 0 && rightEqDefault != 0 {
+					// Left has the backfill default; right made an explicit change.
+					return rightVal, false, nil
+				}
+				if rightEqDefault == 0 && leftEqDefault != 0 {
+					// Right has the backfill default; left made an explicit change.
+					return leftVal, false, nil
+				}
+				// Both differ from the default with different values — genuine conflict; fall through.
+			}
 		}
 
 		// conflicting inserts
