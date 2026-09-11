@@ -17,7 +17,7 @@ package dtables
 import (
 	"fmt"
 	"sort"
-	"sync"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -34,7 +34,7 @@ type refNameIndex struct {
 	database, table, column, id string
 }
 
-var _ sql.Index = refNameIndex{}
+var _ sql.OrderedIndex = refNameIndex{}
 
 // Describe the full string key as VARCHAR. The engine treats unique TEXT
 // indexes without prefix lengths as content hashes, which only support equality.
@@ -79,26 +79,26 @@ func (i refNameIndex) CanSupport(_ *sql.Context, ranges ...sql.Range) bool {
 	}
 	return true
 }
-func (i refNameIndex) CanSupportOrderBy(sql.Expression) bool { return false }
-func (i refNameIndex) CoversColumns([]string) bool           { return false }
-func (i refNameIndex) PrefixLengths() []uint16               { return nil }
+func (i refNameIndex) CanSupportOrderBy(sql.Expression) bool { return true }
+func (i refNameIndex) CoversColumns(cols []string) bool {
+	for _, col := range cols {
+		if !strings.EqualFold(col, i.column) {
+			return false
+		}
+	}
+	return true
+}
+func (i refNameIndex) PrefixLengths() []uint16           { return nil }
+func (i refNameIndex) Order(*sql.Context) sql.IndexOrder { return sql.IndexOrderAsc }
+func (i refNameIndex) Reversible(*sql.Context) bool      { return true }
 
-// refIndexedTable owns one execution's snapshot. In a lookup join the engine
-// calls LookupPartitions repeatedly with new ranges; only the first call reads
-// refs from storage. No tag metadata or branch commits are loaded here.
+// refIndexedTable holds the ordered ref snapshot shared by lookups in one
+// execution. Each system table loads its own snapshot and resolves its rows.
 type refIndexedTable struct {
-	sql.Table
-	once   sync.Once
-	load   func(*sql.Context) ([]ref.DoltRef, hash.Hash, error)
-	rows   func(*sql.Context, *refPartition) (sql.RowIter, error)
 	refs   []ref.DoltRef
-	names  []string
 	byName map[string]int
 	root   hash.Hash
-	err    error
 }
-
-var _ sql.IndexedTable = (*refIndexedTable)(nil)
 
 func refSQLName(r ref.DoltRef) string {
 	if r.GetType() == ref.RemoteRefType {
@@ -107,23 +107,17 @@ func refSQLName(r ref.DoltRef) string {
 	return r.GetPath()
 }
 
-func (t *refIndexedTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
-	t.once.Do(func() {
-		t.refs, t.root, t.err = t.load(ctx)
-		if t.err != nil {
-			return
-		}
-		sort.Slice(t.refs, func(i, j int) bool { return refSQLName(t.refs[i]) < refSQLName(t.refs[j]) })
-		t.names = make([]string, len(t.refs))
-		t.byName = make(map[string]int, len(t.refs))
-		for i, r := range t.refs {
-			t.names[i] = refSQLName(r)
-			t.byName[t.names[i]] = i
-		}
-	})
-	if t.err != nil {
-		return nil, t.err
+func (t *refIndexedTable) setRefs(refs []ref.DoltRef) {
+	t.refs = refs
+	sort.Slice(t.refs, func(i, j int) bool { return refSQLName(t.refs[i]) < refSQLName(t.refs[j]) })
+	t.byName = make(map[string]int, len(refs))
+	for i, r := range refs {
+		t.byName[refSQLName(r)] = i
 	}
+}
+
+// LookupPartitions returns one scan for each already-disjoint engine range.
+func (t *refIndexedTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	if lookup.IsEmptyRange {
 		return NewSliceOfPartitionsItr(nil), nil
 	}
@@ -131,104 +125,52 @@ func (t *refIndexedTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLoo
 	if !ok {
 		return nil, fmt.Errorf("unsupported ref index ranges: %T", lookup.Ranges)
 	}
-	// Merge intervals so overlapping ranges cannot emit the same ref twice.
-	type interval struct{ start, end int }
-	var intervals []interval
+	var parts []sql.Partition
 	for _, r := range ranges {
-		if len(r) != 1 {
-			return nil, fmt.Errorf("ref name index requires one range column")
+		switch r[0].Type() {
+		case sql.RangeType_Empty, sql.RangeType_EqualNull:
+			continue
 		}
-		start, end, err := t.bounds(r[0])
-		if err != nil {
-			return nil, err
+		var lower, upper string
+		lowerInclusive := r[0].LowerBound.TypeAsLowerBound().Inclusive()
+		upperInclusive := r[0].UpperBound.TypeAsUpperBound().Inclusive()
+		if r[0].HasLowerBound() {
+			lower = sql.GetMySQLRangeCutKey(r[0].LowerBound).(string)
+		}
+		if r[0].HasUpperBound() {
+			upper = sql.GetMySQLRangeCutKey(r[0].UpperBound).(string)
+		}
+		start, end := 0, len(t.refs)
+		if r[0].HasLowerBound() && r[0].HasUpperBound() && lower == upper {
+			pos, ok := t.byName[lower]
+			if !ok || !lowerInclusive || !upperInclusive {
+				continue
+			}
+			start, end = pos, pos+1
+		} else {
+			if r[0].HasLowerBound() {
+				start = sort.Search(len(t.refs), func(i int) bool {
+					name := refSQLName(t.refs[i])
+					return name > lower || lowerInclusive && name == lower
+				})
+			}
+			if r[0].HasUpperBound() {
+				end = sort.Search(len(t.refs), func(i int) bool {
+					name := refSQLName(t.refs[i])
+					return name > upper || !upperInclusive && name == upper
+				})
+			}
 		}
 		if start < end {
-			intervals = append(intervals, interval{start, end})
+			parts = append(parts, &refPartition{refs: t.refs[start:end], reverse: lookup.IsReverse})
 		}
-	}
-	sort.Slice(intervals, func(i, j int) bool { return intervals[i].start < intervals[j].start })
-	var merged []interval
-	for _, r := range intervals {
-		if len(merged) > 0 && r.start <= merged[len(merged)-1].end {
-			if r.end > merged[len(merged)-1].end {
-				merged[len(merged)-1].end = r.end
-			}
-		} else {
-			merged = append(merged, r)
-		}
-	}
-	parts := make([]sql.Partition, len(merged))
-	for i, r := range merged {
-		parts[i] = &refPartition{refs: t.refs[r.start:r.end], root: t.root}
 	}
 	return NewSliceOfPartitionsItr(parts), nil
 }
 
-func (t *refIndexedTable) bounds(r sql.MySQLRangeColumnExpr) (int, int, error) {
-	if lower, ok := r.LowerBound.(sql.Below); ok {
-		if upper, ok := r.UpperBound.(sql.Above); ok {
-			key, ok := lower.Key.(string)
-			if !ok {
-				return 0, 0, fmt.Errorf("unsupported ref name: %T", lower.Key)
-			}
-			if upperKey, ok := upper.Key.(string); ok && key == upperKey {
-				if pos, ok := t.byName[key]; ok {
-					return pos, pos + 1, nil
-				}
-				return 0, 0, nil
-			}
-		}
-	}
-	start, err := t.cutPosition(r.LowerBound)
-	if err != nil {
-		return 0, 0, err
-	}
-	end, err := t.cutPosition(r.UpperBound)
-	return start, end, err
-}
-
-// A Below cut precedes equal keys; an Above cut follows them. Since names
-// cannot be NULL, both NULL cuts precede every name, including the empty string.
-func (t *refIndexedTable) cutPosition(c sql.MySQLRangeCut) (int, error) {
-	var key any
-	inclusive := false
-	switch c := c.(type) {
-	case sql.Below:
-		key = c.Key
-	case sql.Above:
-		key = c.Key
-		inclusive = true
-	case sql.BelowNull, sql.AboveNull:
-		return 0, nil
-	case sql.AboveAll:
-		return len(t.names), nil
-	default:
-		return 0, fmt.Errorf("unsupported ref range cut: %T", c)
-	}
-	s, ok := key.(string)
-	if !ok {
-		return 0, fmt.Errorf("unsupported ref name: %T", key)
-	}
-	return sort.Search(len(t.names), func(i int) bool {
-		if inclusive {
-			return t.names[i] > s
-		}
-		return t.names[i] >= s
-	}), nil
-}
-
-func (t *refIndexedTable) PartitionRows(ctx *sql.Context, p sql.Partition) (sql.RowIter, error) {
-	return t.rows(ctx, p.(*refPartition))
-}
-
 type refPartition struct {
-	refs []ref.DoltRef
-	root hash.Hash
+	refs    []ref.DoltRef
+	reverse bool
 }
 
-func (p *refPartition) Key() []byte {
-	if len(p.refs) == 0 {
-		return nil
-	}
-	return []byte(p.refs[0].String())
-}
+func (p *refPartition) Key() []byte { return []byte(refSQLName(p.refs[0])) }

@@ -16,6 +16,7 @@ package dtables
 
 import (
 	"io"
+	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -23,6 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -35,13 +37,13 @@ var _ sql.StatisticsTable = (*TagsTable)(nil)
 
 // TagsTable is a sql.Table implementation that implements a system table which shows the dolt tags
 type TagsTable struct {
-	ddb       *doltdb.DoltDB
+	db        dsess.SqlDatabase
 	tableName string
 }
 
 // NewTagsTable creates a TagsTable
-func NewTagsTable(_ *sql.Context, tableName string, ddb *doltdb.DoltDB) sql.Table {
-	return &TagsTable{tableName: tableName, ddb: ddb}
+func NewTagsTable(_ *sql.Context, tableName string, db dsess.SqlDatabase) sql.Table {
+	return &TagsTable{tableName: tableName, db: db}
 }
 
 func (tt *TagsTable) DataLength(ctx *sql.Context) (uint64, error) {
@@ -91,80 +93,79 @@ func (tt *TagsTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition
 func (tt *TagsTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
-	return NewTagsItr(ctx, tt.ddb)
-}
-
-// TagsItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
-type TagsItr struct {
-	tagsWithHash []doltdb.TagWithHash
-	idx          int
-}
-
-// NewTagsItr creates a TagsItr from the current environment.
-func NewTagsItr(ctx *sql.Context, ddb *doltdb.DoltDB) (*TagsItr, error) {
-	tagsWithHash, err := ddb.GetTagsWithHashes(ctx)
+	refs, root, err := tt.tagRefs(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	return &TagsItr{tagsWithHash, 0}, nil
+	return &indexedTagsIter{ddb: tt.db.DbData().Ddb, refs: refs, root: root}, nil
 }
 
-// Next retrieves the next row. It will return io.EOF if it's the last row.
-// After retrieving the last row, Close will be automatically closed.
-func (itr *TagsItr) Next(ctx *sql.Context) (sql.Row, error) {
-	if itr.idx >= len(itr.tagsWithHash) {
-		return nil, io.EOF
+func (tt *TagsTable) tagRefs(ctx *sql.Context) ([]ref.DoltRef, hash.Hash, error) {
+	root, err := dsess.TransactionRoot(ctx, tt.db)
+	if err != nil {
+		return nil, root, err
 	}
-
-	defer func() {
-		itr.idx++
-	}()
-
-	twh := itr.tagsWithHash[itr.idx]
-	return sql.NewRow(twh.Tag.Name, twh.Hash.String(), twh.Tag.Meta.Name, twh.Tag.Meta.Email, twh.Tag.Meta.Time(), twh.Tag.Meta.Description), nil
-}
-
-// Close closes the iterator.
-func (itr *TagsItr) Close(*sql.Context) error {
-	return nil
+	refs, err := tt.db.DbData().Ddb.GetRefsOfTypeByNomsRoot(ctx, map[ref.RefType]struct{}{ref.TagRefType: {}}, root)
+	return refs, root, err
 }
 
 func (tt *TagsTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-	return []sql.Index{refNameIndex{ctx.GetCurrentDatabase(), tt.Name(), "tag_name", "dolt_tags_name_idx"}}, nil
+	return []sql.Index{refNameIndex{tt.db.Name(), tt.Name(), "tag_name", "dolt_tags_name_idx"}}, nil
 }
 
 func (tt *TagsTable) PreciseMatch() bool { return true }
 
 func (tt *TagsTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
-	return &refIndexedTable{Table: tt,
-		load: func(ctx *sql.Context) ([]ref.DoltRef, hash.Hash, error) {
-			root, err := tt.ddb.NomsRoot(ctx)
-			if err != nil {
-				return nil, root, err
-			}
-			refs, err := tt.ddb.GetRefsOfTypeByNomsRoot(ctx, map[ref.RefType]struct{}{ref.TagRefType: {}}, root)
-			return refs, root, err
-		},
-		rows: func(ctx *sql.Context, p *refPartition) (sql.RowIter, error) {
-			return &indexedTagsIter{ddb: tt.ddb, partition: p}, nil
-		},
+	return &indexedTagsTable{TagsTable: tt}
+}
+
+type indexedTagsTable struct {
+	*TagsTable
+	refIndexedTable
+	once sync.Once
+	err  error
+}
+
+var _ sql.IndexedTable = (*indexedTagsTable)(nil)
+
+func (t *indexedTagsTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	t.once.Do(func() {
+		var refs []ref.DoltRef
+		refs, t.root, t.err = t.tagRefs(ctx)
+		if t.err == nil {
+			t.setRefs(refs)
+		}
+	})
+	if t.err != nil {
+		return nil, t.err
 	}
+	return t.refIndexedTable.LookupPartitions(ctx, lookup)
+}
+
+func (t *indexedTagsTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	p := part.(*refPartition)
+	return &indexedTagsIter{ddb: t.db.DbData().Ddb, refs: p.refs, root: t.root, reverse: p.reverse}, nil
 }
 
 type indexedTagsIter struct {
-	ddb       *doltdb.DoltDB
-	partition *refPartition
-	pos       int
+	ddb     *doltdb.DoltDB
+	refs    []ref.DoltRef
+	root    hash.Hash
+	pos     int
+	reverse bool
 }
 
 func (i *indexedTagsIter) Next(ctx *sql.Context) (sql.Row, error) {
-	if i.pos >= len(i.partition.refs) {
+	if i.pos >= len(i.refs) {
 		return nil, io.EOF
 	}
-	r := i.partition.refs[i.pos].(ref.TagRef)
+	pos := i.pos
+	if i.reverse {
+		pos = len(i.refs) - 1 - pos
+	}
+	r := i.refs[pos].(ref.TagRef)
 	i.pos++
-	tag, err := i.ddb.ResolveTagAtRoot(ctx, r, i.partition.root)
+	tag, err := i.ddb.ResolveTagAtRoot(ctx, r, i.root)
 	if err != nil {
 		return nil, err
 	}

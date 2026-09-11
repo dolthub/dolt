@@ -18,6 +18,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
+	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -56,12 +58,40 @@ type BranchesTable struct {
 
 // IndexedAccess creates a snapshot shared by every lookup in this execution.
 func (bt *BranchesTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
-	return &refIndexedTable{Table: bt,
-		load: bt.branchRefs,
-		rows: func(ctx *sql.Context, p *refPartition) (sql.RowIter, error) {
-			return newBranchItrForRefs(ctx, bt, p.refs, p.root)
-		},
+	return &indexedBranchesTable{BranchesTable: bt}
+}
+
+type indexedBranchesTable struct {
+	*BranchesTable
+	refIndexedTable
+	once sync.Once
+	err  error
+}
+
+var _ sql.IndexedTable = (*indexedBranchesTable)(nil)
+
+func (t *indexedBranchesTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	t.once.Do(func() {
+		var refs []ref.DoltRef
+		refs, t.root, t.err = t.branchRefs(ctx)
+		if t.err == nil {
+			t.setRefs(refs)
+		}
+	})
+	if t.err != nil {
+		return nil, t.err
 	}
+	return t.refIndexedTable.LookupPartitions(ctx, lookup)
+}
+
+func (t *indexedBranchesTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	p := part.(*refPartition)
+	refs := p.refs
+	if p.reverse {
+		refs = slices.Clone(refs)
+		slices.Reverse(refs)
+	}
+	return newBranchItrForRefs(ctx, t.BranchesTable, refs, t.root)
 }
 
 // GetIndexes implements sql.IndexAddressable.
