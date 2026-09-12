@@ -1,6 +1,8 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
 
+bats_require_minimum_version 1.5.0
+
 setup() {
     setup_common
 
@@ -39,6 +41,114 @@ teardown() {
     run dolt status
     [ $status -eq 0 ]
     [[ "$output" =~ "main" ]] || false
+}
+
+@test "sql-checkout: DOLT_CHECKOUT warns when used as lone statement in dolt sql -q" {
+    export NO_COLOR=1
+    dolt branch feature-branch
+
+    for query in \
+        "call dolt_checkout('feature-branch')" \
+        "CALL DOLT_CHECKOUT('feature-branch');" \
+        "/* leading comment */ Call Dolt_Checkout('feature-branch'); /* trailing comment */" \
+        " ; call dolt_checkout('feature-branch'); ; "
+    do
+        run --separate-stderr dolt sql -q "$query"
+        [ "$status" -eq 0 ]
+        [[ "$stderr" =~ "Your branch in the CLI is unchanged" ]] || false
+        [[ ! "$output" =~ "Warning:" ]] || false
+    done
+
+    run dolt branch --show-current
+    [ "$status" -eq 0 ]
+    [ "$output" = "main" ]
+}
+
+@test "sql-checkout: DOLT_CHECKOUT branch creation warns without changing the CLI branch" {
+    export NO_COLOR=1
+    run --separate-stderr dolt sql -q "call dolt_checkout('-b', 'feature-branch')"
+    [ "$status" -eq 0 ]
+    [[ "$stderr" =~ "Your branch in the CLI is unchanged" ]] || false
+
+    run dolt branch --show-current
+    [ "$status" -eq 0 ]
+    [ "$output" = "main" ]
+    run dolt sql -r csv -q "select name from dolt_branches where name = 'feature-branch'"
+    [ "$status" -eq 0 ]
+    [ "$output" = $'name\nfeature-branch' ]
+}
+
+@test "sql-checkout: DOLT_CHECKOUT does not warn when combined with other statements in dolt sql -q" {
+    dolt branch feature-branch
+
+    for query in \
+        "call dolt_checkout('feature-branch'); select active_branch();" \
+        "select 1; call dolt_checkout('feature-branch'); select active_branch();" \
+        "select 1; call dolt_checkout('feature-branch');" \
+        "call dolt_checkout('feature-branch'); call dolt_checkout('main');"
+    do
+        run --separate-stderr dolt sql -r csv -q "$query"
+        [ "$status" -eq 0 ]
+        [ -z "$stderr" ]
+        [[ ! "$output" =~ "Warning:" ]] || false
+        if [[ "$query" =~ "active_branch" ]]; then
+            [[ "$output" = *$'active_branch()\nfeature-branch' ]] || false
+        fi
+    done
+
+    run dolt branch --show-current
+    [ "$status" -eq 0 ]
+    [ "$output" = "main" ]
+}
+
+@test "sql-checkout: unrelated queries and failed checkouts do not warn" {
+    for query in "select 'dolt_checkout'" "call dolt_branch('feature-branch')" "/* only a comment */"
+    do
+        run --separate-stderr dolt sql -q "$query"
+        [ "$status" -eq 0 ]
+        [ -z "$stderr" ]
+    done
+
+    run --separate-stderr dolt sql -q "call dolt_checkout('missing-branch')"
+    [ "$status" -ne 0 ]
+    [[ "$stderr" =~ "missing-branch" ]] || false
+    [[ ! "$stderr" =~ "Warning:" ]] || false
+
+    run --separate-stderr dolt sql --continue -q "call dolt_checkout('missing-branch')"
+    [ "$status" -eq 0 ]
+    [[ "$stderr" =~ "missing-branch" ]] || false
+    [[ ! "$stderr" =~ "Warning:" ]] || false
+}
+
+@test "sql-checkout: redirected lone checkout warns without changing the CLI branch" {
+    export NO_COLOR=1
+    dolt branch feature-branch
+    echo "call dolt_checkout('feature-branch');" > queries.sql
+
+    run --separate-stderr dolt sql < queries.sql
+    [ "$status" -eq 0 ]
+    [[ "$stderr" =~ "Your branch in the CLI is unchanged" ]] || false
+    [[ ! "$output" =~ "Warning:" ]] || false
+
+    run dolt branch --show-current
+    [ "$status" -eq 0 ]
+    [ "$output" = "main" ]
+}
+
+@test "sql-checkout: redirected multiple statements and failed checkouts do not warn" {
+    dolt branch feature-branch
+    echo "call dolt_checkout('feature-branch'); select active_branch();" > queries.sql
+
+    run --separate-stderr dolt sql -r csv < queries.sql
+    [ "$status" -eq 0 ]
+    [ -z "$stderr" ]
+    [[ "$output" = *$'active_branch()\nfeature-branch' ]] || false
+
+    echo "call dolt_checkout('missing-branch');" > queries.sql
+    run --separate-stderr dolt sql < queries.sql
+    [ "$status" -ne 0 ]
+    [[ "$stderr" =~ "missing-branch" ]] || false
+    [[ ! "$stderr" =~ "Warning:" ]] || false
 }
 
 @test "sql-checkout: DOLT_CHECKOUT -b throws error on branches that already exist" {

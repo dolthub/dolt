@@ -44,6 +44,25 @@ teardown() {
     [[ "$output" =~ "sqlserver.global.max_connections = 1000" ]] || false
 }
 
+@test "sql-config: persist sql_mode and query persisted value with cli engine" {
+    dolt sql -q "SET PERSIST sql_mode = 'NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES'"
+    run dolt config --local --list
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "sqlserver.global.sql_mode" ]] || false
+    run dolt sql -q "SELECT @@GLOBAL.sql_mode" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION" ]] || false
+}
+
+@test "sql-config: backwards-compatible with legacy bitmask integer in config for sql_mode" {
+    # 270848 is 0x422a0, the bitmask value for MODE_ANSI (0x1 << 18 | ...)
+    # that legacy Dolt stored when persisting sql_mode.
+    dolt config --local --add "sqlserver.global.sql_mode" "270848"
+    run dolt sql -q "SELECT @@GLOBAL.sql_mode" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "ANSI" ]] || false
+}
+
 @test "sql-config: remove persisted variable with cli engine" {
     skip "TODO parser support for RESET PERSIST"
 
