@@ -136,7 +136,11 @@ func deleteJournalAndIndexFiles(ctx context.Context, path string) (err error) {
 		return err
 	}
 	idxPath := filepath.Join(filepath.Dir(path), journalIndexFileName)
-	return os.Remove(idxPath)
+	// The index doesn't necessarily exist, even if the journal did.
+	if err = os.Remove(idxPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
 }
 
 type journalWriter struct {
