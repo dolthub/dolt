@@ -232,6 +232,19 @@ func (rs *RepoState) AddRemote(r Remote) {
 
 func (rs *RepoState) RemoveRemote(r Remote) {
 	rs.Remotes.Delete(r.Name)
+	ClearTrackingBranches(rs.Branches, r.Name)
+}
+
+// ClearTrackingBranches removes tracking configurations for the named remote.
+func ClearTrackingBranches(branches *concurrentmap.Map[string, BranchConfig], remoteName string) {
+	if branches == nil {
+		return
+	}
+	for branchName, branch := range branches.Snapshot() {
+		if branch.Remote == remoteName {
+			branches.Delete(branchName)
+		}
+	}
 }
 
 func (rs *RepoState) AddBackup(r Remote) {

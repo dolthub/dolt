@@ -72,6 +72,8 @@ teardown() {
 @test "sql-pull: dolt_pull default custom remote" {
     cd repo2
     dolt remote remove origin
+    dolt fetch test-remote
+    dolt branch --set-upstream-to test-remote/main
     dolt sql -q "call dolt_pull()"
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]

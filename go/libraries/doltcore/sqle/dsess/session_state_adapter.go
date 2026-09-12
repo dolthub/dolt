@@ -180,7 +180,6 @@ func (s SessionStateAdapter) RemoveRemote(_ context.Context, name string) error 
 	if !ok {
 		return env.ErrRemoteNotFound
 	}
-	s.remotes.Delete(remote.Name)
 
 	fs, err := s.session.Provider().FileSystemForDatabase(s.dbName)
 	if err != nil {
@@ -197,8 +196,14 @@ func (s SessionStateAdapter) RemoveRemote(_ context.Context, name string) error 
 		// sanity check
 		return env.ErrRemoteNotFound
 	}
-	repoState.Remotes.Delete(name)
-	return repoState.Save(fs)
+	repoState.RemoveRemote(remote)
+	if err := repoState.Save(fs); err != nil {
+		return err
+	}
+
+	s.remotes.Delete(remote.Name)
+	env.ClearTrackingBranches(s.branches, remote.Name)
+	return nil
 }
 
 func (s SessionStateAdapter) RemoveBackup(_ context.Context, name string) error {
