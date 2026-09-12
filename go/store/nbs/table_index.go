@@ -31,6 +31,10 @@ import (
 var (
 	ErrWrongBufferSize = errors.New("buffer length and/or capacity incorrect for chunkCount specified in footer")
 	ErrWrongCopySize   = errors.New("could not copy enough bytes")
+
+	// ErrCorruptTableIndex is returned when a table file index looks wrong.
+	// Prefixes aren't sorted, offsets pointing past the end of the file, etc.
+	ErrCorruptTableIndex = errors.New("corrupt table file index")
 )
 
 // By setting this to false, you can make tablefile index creation cheaper. In
@@ -254,6 +258,20 @@ func newOnHeapTableIndex(indexBuff []byte, offsetsBuff1 []byte, count uint32, to
 		}
 	}
 
+	ti := onHeapTableIndex{
+		q:              q,
+		prefixTuples:   tuples,
+		offsets1:       offsetsBuff1,
+		offsets2:       offsetsBuff2,
+		suffixes:       suffixes,
+		footer:         footer,
+		count:          count,
+		uncompressedSz: totalUncompressedData,
+	}
+	if err = ti.validate(); err != nil {
+		return onHeapTableIndex{}, err
+	}
+
 	refCnt := new(int32)
 	*refCnt = 1
 
@@ -268,17 +286,129 @@ func newOnHeapTableIndex(indexBuff []byte, offsetsBuff1 []byte, count uint32, to
 		})
 	}
 
-	return onHeapTableIndex{
-		refCnt:         refCnt,
-		q:              q,
-		prefixTuples:   tuples,
-		offsets1:       offsetsBuff1,
-		offsets2:       offsetsBuff2,
-		suffixes:       suffixes,
-		footer:         footer,
-		count:          count,
-		uncompressedSz: totalUncompressedData,
-	}, nil
+	ti.refCnt = refCnt
+	return ti, nil
+}
+
+// validate checks the structural invariants that the read path for the table
+// file relies on. The index in the table file format has no checksums built
+// in, so this is also how we sanity check that what we're dealing with
+// actually makes sense as an index.
+//
+// This runs on every index parse. Each check here asserts a precondition
+// that the future read path will rely on:
+//
+//   - Prefixes are sorted, which is what makes the binary search in
+//     [onHeapTableIndex.findPrefix] correct.
+//   - Ordinals are in [0, chunkCount), which keeps
+//     [onHeapTableIndex.offsetAt] and the suffixes slicing in bounds.
+//   - Offsets increase by more than |checksumSize|, which keeps the
+//     length [onHeapTableIndex.getIndexEntry] computes from underflowing.
+//
+// These are simple preconditions which make the read path well behaved going
+// forward. Deeper checks which attempt to more thoroughly verify the index
+// contents live in [onHeapTableIndex.deepValidate] instead.
+//
+// These checks make one full pass over the prefix tuples and one over the
+// offsets. They do not allocate.
+func (ti onHeapTableIndex) validate() error {
+	var prevPrefix uint64
+	for i, off := uint32(0), int64(0); i < ti.count; i, off = i+1, off+prefixTupleSize {
+		tuple := ti.prefixTuples[off : off+prefixTupleSize]
+
+		prefix := binary.BigEndian.Uint64(tuple)
+		if prefix < prevPrefix {
+			return fmt.Errorf("%w: prefix tuple %d of %d is out of order: %016x follows %016x",
+				ErrCorruptTableIndex, i, ti.count, prefix, prevPrefix)
+		}
+		prevPrefix = prefix
+
+		ord := binary.BigEndian.Uint32(tuple[hash.PrefixLen:])
+		if ord >= ti.count {
+			return fmt.Errorf("%w: prefix tuple %d of %d has out of range ordinal %d",
+				ErrCorruptTableIndex, i, ti.count, ord)
+		}
+	}
+
+	// A chunk record is a non-empty snappy frame followed by a crc32, so the
+	// offsets must strictly increase from one to the next by more than |checksumSize|.
+	chunks1 := ti.count - ti.count/2
+	prevOff, err := ti.checkOffsets(ti.offsets1, 0, 0)
+	if err != nil {
+		return err
+	}
+	if _, err = ti.checkOffsets(ti.offsets2[:uint64(ti.count/2)*offsetSize], chunks1, prevOff); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// checkOffsets walks the packed uint64 offsets in |b|, which start at ordinal
+// |ordBase| and follow the offset |prev|, and returns the last one.
+func (ti onHeapTableIndex) checkOffsets(b []byte, ordBase uint32, prev uint64) (uint64, error) {
+	for off := int64(0); off < int64(len(b)); off += offsetSize {
+		cur := binary.BigEndian.Uint64(b[off:])
+		if cur <= prev+checksumSize {
+			return 0, fmt.Errorf("%w: chunk record %d of %d spans offsets [%d, %d), too small to hold a chunk and a crc32",
+				ErrCorruptTableIndex, ordBase+uint32(off/offsetSize), ti.count, prev, cur)
+		}
+		prev = cur
+	}
+	return prev, nil
+}
+
+// checkTableFileSize cross-checks the byte ranges the index entries point to
+// against the actual size of the file the index came out of. Callers which do
+// not know the true size of the file in storage can pass 0.
+func (ti onHeapTableIndex) checkTableFileSize(actual uint64) error {
+	if actual == 0 {
+		return nil
+	}
+	if sz := ti.tableFileSize(); sz != actual {
+		return fmt.Errorf("%w: index describes a %d byte table file, but the file is %d bytes",
+			ErrCorruptTableIndex, sz, actual)
+	}
+	return nil
+}
+
+// deepValidate runs sanity checks on the index data. These are more expensive
+// than what we do in |validate| and are less related to read-path
+// preconditions. They have more to do with catching possible corruption and
+// with defense in depth. We only run them when an Open asks for them with
+// [openOpts.deepValidate].
+//
+// |name| is the name the table file is being opened under.
+func (ti onHeapTableIndex) deepValidate(name hash.Hash) error {
+	if err := ti.checkOrdinalsDistinct(); err != nil {
+		return err
+	}
+	return ti.verifyName(name)
+}
+
+// checkOrdinalsDistinct checks that the ordinals in the prefix tuples are a
+// permutation of [0, chunkCount) rather than merely in range.
+func (ti onHeapTableIndex) checkOrdinalsDistinct() error {
+	seen := make([]uint64, (uint64(ti.count)+63)/64)
+	for i, off := uint32(0), int64(0); i < ti.count; i, off = i+1, off+prefixTupleSize {
+		ord := binary.BigEndian.Uint32(ti.prefixTuples[off+hash.PrefixLen:])
+		if seen[ord/64]&(1<<(ord%64)) != 0 {
+			return fmt.Errorf("%w: prefix tuple %d of %d repeats ordinal %d",
+				ErrCorruptTableIndex, i, ti.count, ord)
+		}
+		seen[ord/64] |= 1 << (ord % 64)
+	}
+	return nil
+}
+
+// verifyName checks |name| against the name the index's suffixes block hashes
+// to. A table file is named for the sha512 of its suffixes, so this is a strong
+// checksum on the suffixes block in the index.
+func (ti onHeapTableIndex) verifyName(name hash.Hash) error {
+	if actual := nameFromSuffixes(ti.suffixes); actual != name {
+		return fmt.Errorf("%w: suffixes of %s hash to %s", ErrCorruptTableIndex, name.String(), actual.String())
+	}
+	return nil
 }
 
 func (ti onHeapTableIndex) entrySuffixMatches(idx uint32, h *hash.Hash) (bool, error) {

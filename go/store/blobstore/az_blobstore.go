@@ -115,6 +115,10 @@ func errOrNotFound(err error, containerName, absKey string) error {
 func (bs *AzureBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {
 	absKey := bs.absKey(key)
 
+	// blobSize is set when we have already had to ask for the blob's size,
+	// which is a better answer than anything on the download response.
+	var blobSize uint64
+
 	var downloadOptions *blob.DownloadStreamOptions
 	if !br.isAllRange() {
 		if br.offset >= 0 {
@@ -136,6 +140,8 @@ func (bs *AzureBlobstore) Get(ctx context.Context, key string, br BlobRange) (io
 				return nil, 0, "", fmt.Errorf("blob properties missing ContentLength for blob %s", absKey)
 			}
 
+			blobSize = uint64(*contentLength)
+
 			// Convert negative range to a positive offset/length based on the blob size.
 			pr := br.positiveRange(*contentLength)
 			downloadOptions = &blob.DownloadStreamOptions{
@@ -155,18 +161,15 @@ func (bs *AzureBlobstore) Get(ctx context.Context, key string, br BlobRange) (io
 	// Get the ETag as the version
 	version := etagToString(resp.GetETag())
 
-	// Get the total size of the blob
-	var size uint64
-	if resp.GetContentLength() != nil {
-		size = uint64(*resp.GetContentLength())
+	// The whole blob's size. For a ranged request only the Content-Range
+	// carries it; ContentLength is the length of the range, so it is only a
+	// usable fallback when the whole blob was requested.
+	size := blobSize
+	if size == 0 && resp.GetContentRange() != nil {
+		size = parseContentRangeSize(*resp.GetContentRange())
 	}
-
-	// If this is a range request, try to get the full size from Content-Range header
-	if !br.isAllRange() && resp.GetContentRange() != nil {
-		fullSize := parseContentRangeSize(*resp.GetContentRange())
-		if fullSize > 0 {
-			size = fullSize
-		}
+	if size == 0 && br.isAllRange() && resp.GetContentLength() != nil {
+		size = uint64(*resp.GetContentLength())
 	}
 
 	return resp.GetBody(), size, version, nil

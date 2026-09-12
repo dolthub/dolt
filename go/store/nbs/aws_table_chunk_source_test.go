@@ -50,6 +50,7 @@ func TestAWSChunkSource(t *testing.T) {
 			h,
 			uint32(len(chunks)),
 			NewUnlimitedMemQuotaProvider(),
+			openOpts{},
 			&Stats{},
 		)
 

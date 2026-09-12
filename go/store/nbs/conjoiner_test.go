@@ -84,7 +84,7 @@ func makeTestSrcs(t *testing.T, tableSizes []uint32, p tableFilePersister, mode 
 			require.NoError(t, err)
 			defer ph.Close()
 			h := hash.Parse(strings.TrimSuffix(name, ArchiveFileSuffix))
-			cs, err := p.Open(t.Context(), h, s, &Stats{})
+			cs, err := p.Open(t.Context(), h, s, openOpts{}, &Stats{})
 			require.NoError(t, err)
 			srcs = append(srcs, cs)
 		} else {
@@ -194,7 +194,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 		ts := newTableSet(p, &UnlimitedQuotaProvider{})
 		ts.upstream = make(chunkSourceSet)
 		for _, spec := range upstream.specs {
-			cs, err := p.Open(context.Background(), spec.name, spec.chunkCount, &Stats{})
+			cs, err := p.Open(context.Background(), spec.name, spec.chunkCount, openOpts{}, &Stats{})
 			require.NoError(t, err)
 			ts.upstream[spec.name] = cs
 		}
@@ -218,7 +218,7 @@ func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) 
 		stats := &Stats{}
 		open := func(specs []tableSpec) (sources chunkSources) {
 			for _, sp := range specs {
-				cs, err := p.Open(context.Background(), sp.name, sp.chunkCount, stats)
+				cs, err := p.Open(context.Background(), sp.name, sp.chunkCount, openOpts{}, stats)
 				if err != nil {
 					require.NoError(t, err)
 				}
@@ -540,14 +540,14 @@ type openCountingPersister struct {
 	names hash.HashSet
 }
 
-func (p *openCountingPersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
+func (p *openCountingPersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, opts openOpts, stats *Stats) (chunkSource, error) {
 	p.mu.Lock()
 	if p.names == nil {
 		p.names = hash.NewHashSet()
 	}
 	p.names.Insert(name)
 	p.mu.Unlock()
-	return p.tableFilePersister.Open(ctx, name, chunkCount, stats)
+	return p.tableFilePersister.Open(ctx, name, chunkCount, opts, stats)
 }
 
 func (p *openCountingPersister) opened() hash.HashSet {
