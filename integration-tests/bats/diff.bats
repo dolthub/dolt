@@ -491,6 +491,50 @@ SQL
     [[ ! "$output" =~ "- | 2" ]] || false
 }
 
+@test "diff: three dot diff supports WORKING and STAGED" {
+    # See https://github.com/dolthub/dolt/issues/11204
+    dolt sql -q 'insert into test values (0,0,0,0,0,0)'
+    dolt add .
+    dolt commit -m table
+    dolt sql -q "call dolt_branch('branch1')"
+    dolt --branch branch1 sql -q "insert into test values (1,1,1,1,1,1); call dolt_add('.'); call dolt_commit('-m', 'row');"
+    # Stage row 2 and leave row 3 in the working set so STAGED and WORKING differ.
+    dolt sql -q 'insert into test values (2,2,2,2,2,2)'
+    dolt add .
+    dolt sql -q 'insert into test values (3,3,3,3,3,3)'
+
+    run dolt diff WORKING...branch1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+ | 1" ]] || false
+    [[ ! "$output" =~ "+ | 2" ]] || false
+    [[ ! "$output" =~ "+ | 3" ]] || false
+
+    run dolt diff STAGED...branch1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+ | 1" ]] || false
+    [[ ! "$output" =~ "+ | 3" ]] || false
+
+    run dolt diff branch1...WORKING
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+ | 2" ]] || false
+    [[ "$output" =~ "+ | 3" ]] || false
+    [[ ! "$output" =~ "+ | 1" ]] || false
+
+    run dolt diff branch1...STAGED
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+ | 2" ]] || false
+    [[ ! "$output" =~ "+ | 3" ]] || false
+
+    run dolt diff STAGED...WORKING
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "at least one side must be a commit" ]] || false
+
+    working_base=$(dolt sql -r csv -q "SELECT dolt_merge_base('branch1', 'WORKING')" | tail -n 1)
+    head_base=$(dolt sql -r csv -q "SELECT dolt_merge_base('branch1', 'HEAD')" | tail -n 1)
+    [ -n "$working_base" ]
+    [ "$working_base" = "$head_base" ]
+}
+
 @test "diff: data and schema changes" {
     dolt sql <<SQL
 drop table test;
