@@ -2944,3 +2944,21 @@ SQL
     dolt sql < $BATS_TEST_DIRNAME/helper/with_utf16be_bom.sql
     dolt table rm t1
 }
+
+@test "sql: oversized primary key lookup returns no rows" {
+    # https://github.com/dolthub/dolt/issues/5942
+    run dolt sql -r csv <<'SQL'
+CREATE TABLE django_session(session_key VARCHAR(5) PRIMARY KEY); INSERT INTO django_session VALUES('01234');
+SQL
+    [ "$status" -eq 0 ]
+    run dolt sql -r csv <<'SQL'
+SELECT * FROM django_session WHERE session_key='0123456789';
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'session_key' ]
+    run dolt sql -r csv <<'SQL'
+SELECT * FROM django_session WHERE session_key='01234';
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'session_key\n01234' ]
+}
