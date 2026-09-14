@@ -1142,6 +1142,32 @@ func TestJsonScripts(t *testing.T) {
 	enginetest.TestJsonScripts(t, h, skippedTests)
 }
 
+// https://github.com/dolthub/dolt/issues/7196
+func TestJsonObjectComparisonAcyclic(t *testing.T) {
+	script := queries.ScriptTest{
+		Name: "Test consistent JSON object comparisons",
+		SetUpScript: []string{
+			"SET @r=JSON_OBJECT('a',2e0,'b',1e0)",
+			"SET @p=JSON_OBJECT('b',2e0,'c',1e0)",
+			"SET @s=JSON_OBJECT('c',2e0,'a',1e0)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "SELECT ((CAST(@r AS JSON)<CAST(@p AS JSON))+(CAST(@p AS JSON)<CAST(@s AS JSON))+(CAST(@s AS JSON)<CAST(@r AS JSON))) IN (1,2)", Expected: []sql.Row{{true}}},
+		},
+	}
+	for _, prepared := range []bool{false, true} {
+		t.Run(fmt.Sprintf("prepared=%t", prepared), func(t *testing.T) {
+			h := newDoltHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestScript(t, h, script)
+			}
+		})
+	}
+}
+
 func TestTriggers(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
