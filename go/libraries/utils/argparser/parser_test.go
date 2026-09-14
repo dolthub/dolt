@@ -158,6 +158,15 @@ func TestArgParser(t *testing.T) {
 			map[string]string{"param": "value"},
 			[]string{"arg1", "table1", "table2"},
 		},
+		// https://github.com/dolthub/dolt/issues/5414
+		{
+			NewArgParserWithVariableArgs("diff").SupportsString("diff-mode", "m", "mode", "").SupportsFlag("merge-base", "", ""),
+			[]string{"--merge-base"}, nil, map[string]string{"merge-base": ""}, []string{},
+		},
+		{
+			NewArgParserWithVariableArgs("diff").SupportsString("diff-mode", "m", "mode", "").SupportsFlag("merge-base", "", ""),
+			[]string{"-m", "row", "--merge-base"}, nil, map[string]string{"diff-mode": "row", "merge-base": ""}, []string{},
+		},
 	}
 
 	for _, test := range tests {
@@ -168,25 +177,6 @@ func TestArgParser(t *testing.T) {
 			assert.Equal(t, test.expectedOptions, apr.options)
 			assert.Equal(t, test.expectedArgs, apr.Args)
 		}
-	}
-}
-
-// https://github.com/dolthub/dolt/issues/5414
-func TestLongFlagSharingShortOptionPrefix(t *testing.T) {
-	ap := NewArgParserWithVariableArgs("diff")
-	ap.SupportsString("diff-mode", "m", "mode", "")
-	ap.SupportsFlag("merge-base", "", "")
-	for _, args := range [][]string{{"--merge-base"}, {"-m", "row", "--merge-base"}} {
-		t.Run(fmt.Sprint(args), func(t *testing.T) {
-			apr, err := ap.Parse(args)
-			require.NoError(t, err)
-			assert.True(t, apr.Contains("merge-base"))
-			if len(args) > 1 {
-				assert.Equal(t, "row", apr.MustGetValue("diff-mode"))
-			} else {
-				assert.False(t, apr.Contains("diff-mode"))
-			}
-		})
 	}
 }
 
