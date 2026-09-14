@@ -800,7 +800,7 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 			return nil, false, err
 		}
 		if !resolve.UseSearchPath || isDoltgresSystemTable {
-			dt, found = dtables.NewTagsTable(ctx, lwrName, db.ddb), true
+			dt, found = dtables.NewTagsTable(ctx, lwrName, db), true
 		}
 	case dtables.AccessTableName:
 		basCtx := branch_control.GetBranchAwareSession(ctx)
