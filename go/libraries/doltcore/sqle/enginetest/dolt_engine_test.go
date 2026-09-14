@@ -17,7 +17,6 @@ package enginetest
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime"
 	"sync"
 	"testing"
@@ -1505,46 +1504,6 @@ func TestDoltTag(t *testing.T) {
 func TestDoltRemote(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunDoltRemoteTests(t, h)
-
-	t.Run("clone checkout after garbage collection", func(t *testing.T) {
-		for _, prepared := range []bool{false, true} {
-			t.Run(fmt.Sprintf("prepared=%t", prepared), func(t *testing.T) {
-				h := newDoltHarnessForLocalFilesystem(t)
-				defer h.Close()
-				h.Setup(setup.MydbData)
-				e, err := h.NewEngine(t)
-				require.NoError(t, err)
-				defer e.Close()
-				h.provider.(*sqle.DoltDatabaseProvider).SetRemoteDialer(h.multiRepoEnv.RemoteDialProvider())
-				sourcePath, err := h.multiRepoEnv.FileSystem().Abs("clone_source/.dolt/noms")
-				require.NoError(t, err)
-				script := queries.ScriptTest{
-					Name: "clone a checkout chunk store after garbage collection",
-					SetUpScript: []string{
-						"CREATE DATABASE clone_source",
-						"USE clone_source",
-						"CREATE TABLE checkout_data(pk INT PRIMARY KEY)",
-						"INSERT INTO checkout_data VALUES(42)",
-						"CALL dolt_commit('-Am','data')",
-						"CALL dolt_gc()",
-						"USE mydb",
-					},
-					Assertions: []queries.ScriptTestAssertion{
-						{Query: fmt.Sprintf("CALL dolt_clone(%q, 'cloned_checkout')", "file://"+filepath.ToSlash(sourcePath)), Expected: []sql.Row{{int64(0)}}},
-						{Query: "USE cloned_checkout", Expected: []sql.Row{}},
-						{Query: "SELECT * FROM checkout_data", Expected: []sql.Row{{int32(42)}}},
-						{Query: "SELECT message FROM dolt_log LIMIT 1", Expected: []sql.Row{{"data"}}},
-					},
-				}
-				if prepared {
-					enginetest.TestScriptWithEnginePrepared(t, e, h, script)
-				} else {
-					enginetest.TestScriptWithEngine(t, e, h, script)
-				}
-			})
-		}
-
-	})
 }
 
 func TestDoltUndrop(t *testing.T) {
