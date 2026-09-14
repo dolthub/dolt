@@ -2944,3 +2944,24 @@ SQL
     dolt sql < $BATS_TEST_DIRNAME/helper/with_utf16be_bom.sql
     dolt table rm t1
 }
+
+@test "sql: show create preserves unique indexes on virtual columns" {
+    # https://github.com/dolthub/dolt/issues/8275
+    run dolt sql -r csv <<'SQL'
+CREATE TABLE virtual_unique(a INT PRIMARY KEY,b INT GENERATED ALWAYS AS(a*a),UNIQUE KEY(b));
+SQL
+    [ "$status" -eq 0 ]
+    run dolt sql -q "SHOW CREATE TABLE virtual_unique"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'UNIQUE KEY `b` (`b`)' ]] || false
+    run dolt sql -r csv <<'SQL'
+INSERT INTO virtual_unique(a) VALUES(2),(-2);
+SQL
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "duplicate unique key" ]] || false
+    run dolt sql -r csv <<'SQL'
+SELECT COUNT(*) AS n FROM virtual_unique;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'n\n0' ]
+}
