@@ -2944,3 +2944,35 @@ SQL
     dolt sql < $BATS_TEST_DIRNAME/helper/with_utf16be_bom.sql
     dolt table rm t1
 }
+
+@test "sql: cursor continue handler terminates checksum loop" {
+    # https://github.com/dolthub/dolt/issues/6742
+    dolt sql <<'SQL'
+CREATE TABLE checksums(id INT AUTO_INCREMENT PRIMARY KEY, checksum VARCHAR(40));
+INSERT INTO checksums VALUES (1, SHA('macneale'));
+DELIMITER //
+CREATE PROCEDURE calculate_checksum()
+BEGIN
+    DECLARE done INT DEFAULT 0;
+    DECLARE current_checksum VARCHAR(40);
+    DECLARE concat_string VARCHAR(10000) DEFAULT '';
+    DECLARE cur CURSOR FOR SELECT checksum FROM checksums ORDER BY id;
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+    OPEN cur;
+    read_loop: LOOP
+        FETCH cur INTO current_checksum;
+        IF done THEN LEAVE read_loop; END IF;
+        SET concat_string = CONCAT(concat_string, current_checksum);
+    END LOOP;
+    CLOSE cur;
+    INSERT INTO checksums(checksum) VALUES (SHA1(concat_string));
+END//
+DELIMITER ;
+CALL calculate_checksum();
+SQL
+    run dolt sql -r csv <<'SQL'
+SELECT * FROM checksums ORDER BY id;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'id,checksum\n1,ca530ba53d2e3b54206e62c7ab257657b7367cc7\n2,89fa71febbc9effd2fa58c7441ad2ed899fcdcf1' ]
+}
