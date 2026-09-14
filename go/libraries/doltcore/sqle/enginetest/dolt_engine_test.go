@@ -1154,6 +1154,35 @@ func TestRollbackTriggers(t *testing.T) {
 	enginetest.TestRollbackTriggers(t, h)
 }
 
+// https://github.com/dolthub/dolt/issues/1894
+func TestTriggerRollbackAcrossTables(t *testing.T) {
+	script := queries.ScriptTest{
+		Name: "Test trigger rollback after failed multi-row inserts",
+		SetUpScript: []string{
+			"CREATE TABLE test1(pk BIGINT PRIMARY KEY,v1 BIGINT)",
+			"CREATE TABLE test2(pk BIGINT PRIMARY KEY,v1 BIGINT)",
+			"CREATE TRIGGER test1_trig AFTER INSERT ON test1 FOR EACH ROW INSERT INTO test2 VALUES(new.pk+100,new.v1+100)",
+			"INSERT INTO test1 VALUES(1,1),(2,2)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "INSERT INTO test1 VALUES(3,3),(1,4),(5,5)", ExpectedErr: sql.ErrPrimaryKeyViolation},
+			{Query: "SELECT * FROM test1 ORDER BY pk", Expected: []sql.Row{{int64(1), int64(1)}, {int64(2), int64(2)}}},
+			{Query: "SELECT * FROM test2 ORDER BY pk", Expected: []sql.Row{{int64(101), int64(101)}, {int64(102), int64(102)}}},
+		},
+	}
+	for _, prepared := range []bool{false, true} {
+		t.Run(fmt.Sprintf("prepared=%t", prepared), func(t *testing.T) {
+			h := newDoltHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestScript(t, h, script)
+			}
+		})
+	}
+}
+
 func TestStoredProcedures(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunStoredProceduresTest(t, h)
