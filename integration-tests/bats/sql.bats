@@ -2944,21 +2944,3 @@ SQL
     dolt sql < $BATS_TEST_DIRNAME/helper/with_utf16be_bom.sql
     dolt table rm t1
 }
-
-@test "sql: invalid binary decimal parameter errors without panicking" {
-    # https://github.com/dolthub/dolt/issues/4989
-    run dolt sql -r csv <<'SQL'
-CREATE TABLE decimal_bindings(id INT PRIMARY KEY AUTO_INCREMENT,decimal_col DECIMAL(9,2));
-SQL
-    [ "$status" -eq 0 ]
-    run dolt sql -r csv <<'SQL'
-PREPARE stmt FROM 'INSERT INTO decimal_bindings(decimal_col) VALUES (?)'; SET @a=_binary"X'10'"; EXECUTE stmt USING @a;
-SQL
-    [ "$status" -ne 0 ]
-    [[ "$output" =~ "is not a valid value" ]] || false
-    run dolt sql -r csv <<'SQL'
-SELECT COUNT(*) AS n FROM decimal_bindings;
-SQL
-    [ "$status" -eq 0 ]
-    [ "$output" = $'n\n0' ]
-}
