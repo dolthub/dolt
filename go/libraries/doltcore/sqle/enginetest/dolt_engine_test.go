@@ -1185,6 +1185,28 @@ func TestJsonValueScripts(t *testing.T) {
 	RunJsonValueScriptsTest(t, harness)
 }
 
+// https://github.com/dolthub/dolt/issues/7905
+func TestJsonObjectPathsOnArrays(t *testing.T) {
+	script := queries.ScriptTest{
+		Name:        "Test JSON object paths on arrays",
+		SetUpScript: []string{},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "SELECT JSON_EXTRACT('[{\"a\":1},{\"a\":2}]','$.a'),JSON_VALUE('[{\"a\":1},{\"a\":2}]','$.a'),JSON_EXTRACT('[{\"a\":[{\"b\":1},{\"b\":2}]},{\"a\":[{\"b\":3},{\"b\":4}]}]','$.a.b')", Expected: []sql.Row{{nil, nil, nil}}},
+		},
+	}
+	for _, prepared := range []bool{false, true} {
+		t.Run(fmt.Sprintf("prepared=%t", prepared), func(t *testing.T) {
+			h := newDoltHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestScript(t, h, script)
+			}
+		})
+	}
+}
+
 func TestLargeJsonObjects(t *testing.T) {
 	harness := newDoltEnginetestHarness(t)
 	RunLargeJsonObjectsTest(t, harness)
