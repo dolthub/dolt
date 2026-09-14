@@ -4584,6 +4584,28 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	// https://github.com/dolthub/dolt/issues/7034
+	{
+		Name: "Test multiple unique violations on a merged row",
+		SetUpScript: []string{
+			"CREATE TABLE t(a INT PRIMARY KEY,b INT,c INT)",
+			"INSERT INTO t VALUES(1,2,3),(2,4,5)",
+			"CALL dolt_commit('-Am','base')",
+			"CALL dolt_checkout('-b','other')",
+			"ALTER TABLE t ADD UNIQUE KEY(b)",
+			"UPDATE t SET c=5 WHERE a=1",
+			"CALL dolt_commit('-am','other')",
+			"CALL dolt_checkout('main')",
+			"ALTER TABLE t ADD UNIQUE KEY(c)",
+			"UPDATE t SET b=4 WHERE a=1",
+			"CALL dolt_commit('-am','main')",
+			"SET dolt_force_transaction_commit=1",
+			"CALL dolt_merge('other')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "SELECT a,b,c,violation_info->>'$.Name' AS index_name FROM dolt_constraint_violations_t ORDER BY a,index_name", Expected: []sql.Row{{int32(1), int32(4), int32(5), "b"}, {int32(1), int32(4), int32(5), "c"}, {int32(2), int32(4), int32(5), "b"}, {int32(2), int32(4), int32(5), "c"}}},
+		},
+	},
 	{
 		Name: "Multiple unique key violations part 1 (repro issue #5719)",
 		SetUpScript: []string{
