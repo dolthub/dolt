@@ -1159,6 +1159,33 @@ func TestStoredProcedures(t *testing.T) {
 	RunStoredProceduresTest(t, h)
 }
 
+// https://github.com/dolthub/dolt/issues/6742
+func TestCursorContinueHandlerChecksum(t *testing.T) {
+	script := queries.ScriptTest{
+		Name: "Test cursor continue-handler checksum loops",
+		SetUpScript: []string{
+			"CREATE TABLE checksums(id INT AUTO_INCREMENT PRIMARY KEY,checksum VARCHAR(40))",
+			"INSERT INTO checksums VALUES(1,SHA('macneale'))",
+			"CREATE PROCEDURE calculate_checksum()\nBEGIN\n DECLARE done INT DEFAULT 0;\n DECLARE current_checksum VARCHAR(40);\n DECLARE concat_string VARCHAR(10000) DEFAULT '';\n DECLARE cur CURSOR FOR SELECT checksum FROM checksums ORDER BY id;\n DECLARE CONTINUE HANDLER FOR NOT FOUND SET done=1;\n OPEN cur;\n read_loop: LOOP\n  FETCH cur INTO current_checksum;\n  IF done THEN LEAVE read_loop; END IF;\n  SET concat_string=CONCAT(concat_string,current_checksum);\n END LOOP;\n CLOSE cur;\n INSERT INTO checksums(checksum) VALUES(SHA1(concat_string));\nEND",
+			"CALL calculate_checksum()",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "SELECT * FROM checksums ORDER BY id", Expected: []sql.Row{{int32(1), "ca530ba53d2e3b54206e62c7ab257657b7367cc7"}, {int32(2), "89fa71febbc9effd2fa58c7441ad2ed899fcdcf1"}}},
+		},
+	}
+	for _, prepared := range []bool{false, true} {
+		t.Run(fmt.Sprintf("prepared=%t", prepared), func(t *testing.T) {
+			h := newDoltHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestScript(t, h, script)
+			}
+		})
+	}
+}
+
 func TestDoltStoredProcedures(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunDoltStoredProceduresTest(t, h)
