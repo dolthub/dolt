@@ -898,6 +898,28 @@ func TestVectorFunctions(t *testing.T) {
 	enginetest.TestVectorFunctions(t, harness)
 }
 
+// https://github.com/dolthub/dolt/issues/8855
+func TestCosineVectorDistance(t *testing.T) {
+	script := queries.ScriptTest{
+		Name:        "Test cosine vector distance",
+		SetUpScript: []string{},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "SELECT VEC_DISTANCE_COSINE('[1,0]','[0,1]'),VEC_DISTANCE_COSINE('[1,0]','[1,0]')", Expected: []sql.Row{{float64(1), float64(0)}}},
+		},
+	}
+	for _, prepared := range []bool{false, true} {
+		t.Run(fmt.Sprintf("prepared=%t", prepared), func(t *testing.T) {
+			h := newDoltHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestScript(t, h, script)
+			}
+		})
+	}
+}
+
 func TestVectorType(t *testing.T) {
 	harness := newDoltHarness(t)
 	defer harness.Close()
