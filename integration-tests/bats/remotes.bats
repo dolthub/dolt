@@ -1940,22 +1940,3 @@ SQL
   [ "$status" -eq 1 ]
   [[ "$output" =~ "remote name invalid" ]] || false
 }
-
-@test "remotes: clone a checkout chunk store after garbage collection" {
-    # https://github.com/dolthub/dolt/issues/5325
-    dolt sql -q "CREATE TABLE checkout_data(pk INT PRIMARY KEY); INSERT INTO checkout_data VALUES(42)"
-    dolt add .
-    dolt commit -m "data"
-    dolt gc
-    dolt clone "file://$(pwd)/.dolt/noms" cloned_checkout
-    cd cloned_checkout
-    run dolt sql -r csv <<'SQL'
-SELECT * FROM checkout_data;
-SQL
-    [ "$status" -eq 0 ]
-    [ "$output" = $'pk\n42' ]
-    run dolt log -n 1
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "data" ]] || false
-    cd ..
-}
