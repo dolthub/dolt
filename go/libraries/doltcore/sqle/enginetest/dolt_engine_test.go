@@ -778,6 +778,32 @@ func TestIndexedExpressions(t *testing.T) {
 	enginetest.TestIndexedExpressions(t, harness)
 }
 
+// https://github.com/dolthub/dolt/issues/5942
+func TestOversizedPrimaryKeyLookup(t *testing.T) {
+	script := queries.ScriptTest{
+		Name: "Test oversized primary-key lookups",
+		SetUpScript: []string{
+			"CREATE TABLE django_session(session_key VARCHAR(5) PRIMARY KEY)",
+			"INSERT INTO django_session VALUES('01234')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "SELECT * FROM django_session WHERE session_key='0123456789'", Expected: []sql.Row{}},
+			{Query: "SELECT * FROM django_session WHERE session_key='01234'", Expected: []sql.Row{{"01234"}}},
+		},
+	}
+	for _, prepared := range []bool{false, true} {
+		t.Run(fmt.Sprintf("prepared=%t", prepared), func(t *testing.T) {
+			h := newDoltHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestScript(t, h, script)
+			}
+		})
+	}
+}
+
 func TestVectorIndexes(t *testing.T) {
 	harness := newDoltHarness(t)
 	defer harness.Close()
