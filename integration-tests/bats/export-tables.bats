@@ -338,10 +338,10 @@ SQL
     dolt table export newline_export newline_export.csv
     dolt table import -c newline_copy newline_export.csv
     run dolt sql -r csv <<'SQL'
-SELECT a,HEX(b) AS bytes FROM newline_copy ORDER BY a;
+SELECT a, LENGTH(b) AS byte_length, LOCATE(CHAR(10), b) AS newline_position FROM newline_copy ORDER BY a;
 SQL
     [ "$status" -eq 0 ]
-    [ "$output" = $'a,bytes\n1,6C696E650A627265616B\n2,736F7272790A637376' ]
+    [ "$output" = $'a,byte_length,newline_position\n1,10,5\n2,9,6' ]
 }
 
 @test "export-tables: table with column with not null constraint can be exported and reimported" {
