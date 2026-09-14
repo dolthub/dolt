@@ -2944,3 +2944,12 @@ SQL
     dolt sql < $BATS_TEST_DIRNAME/helper/with_utf16be_bom.sql
     dolt table rm t1
 }
+
+@test "sql: arithmetic preserves large doubles" {
+    # https://github.com/dolthub/dolt/issues/7130
+    run dolt sql -r csv <<'SQL'
+SELECT CASE WHEN 1.7e308+0=1.7e308 AND 1.7e308+0.0=1.7e308 AND 1.7e308+1e10=1.7e308 AND 1.7e64+123=1.7e64 AND 1.7e65+123=1.7e65 THEN 'preserved' ELSE 'lost' END AS result;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'result\npreserved' ]
+}
