@@ -2944,16 +2944,3 @@ SQL
     dolt sql < $BATS_TEST_DIRNAME/helper/with_utf16be_bom.sql
     dolt table rm t1
 }
-
-@test "sql: prepared AS OF lookup resolves the primary key" {
-    # https://github.com/dolthub/dolt/issues/6300
-    run dolt sql -r csv <<'SQL'
-CREATE TABLE prepared_history(pk INT PRIMARY KEY,v INT); INSERT INTO prepared_history VALUES(1,10),(2,20); CALL dolt_commit('-Am','data');
-SQL
-    [ "$status" -eq 0 ]
-    run dolt sql -r csv <<'SQL'
-PREPARE stmt FROM "SELECT * FROM prepared_history AS OF 'HEAD' WHERE pk=?"; SET @p=2; EXECUTE stmt USING @p;
-SQL
-    [ "$status" -eq 0 ]
-    [ "$output" = $'pk,v\n2,20' ]
-}

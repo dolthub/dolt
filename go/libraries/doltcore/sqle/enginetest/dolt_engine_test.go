@@ -1382,6 +1382,25 @@ func TestViewsWithAsOf(t *testing.T) {
 	enginetest.TestScript(t, h, ViewsWithAsOfScriptTest)
 }
 
+// https://github.com/dolthub/dolt/issues/6300
+func TestPreparedAsOfPrimaryKeyLookup(t *testing.T) {
+	h := newDoltHarness(t)
+	defer h.Close()
+	enginetest.TestScript(t, h, queries.ScriptTest{
+		Name: "Test prepared AS OF primary-key lookups",
+		SetUpScript: []string{
+			"CREATE TABLE prepared_history(pk INT PRIMARY KEY,v INT)",
+			"INSERT INTO prepared_history VALUES(1,10),(2,20)",
+			"CALL dolt_commit('-Am','data')",
+			"PREPARE stmt FROM \"SELECT * FROM prepared_history AS OF 'HEAD' WHERE pk=?\"",
+			"SET @p=2",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "EXECUTE stmt USING @p", Expected: []sql.Row{{int32(2), int32(20)}}},
+		},
+	})
+}
+
 func TestViewsWithAsOfPrepared(t *testing.T) {
 	skipPreparedTests(t)
 	h := newDoltHarness(t)
