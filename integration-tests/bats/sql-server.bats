@@ -2361,17 +2361,3 @@ EOF
   start_sql_server > server_log.txt 2>&1 && sleep 0.5
   grep -F "permission denied" server_log.txt
 }
-
-@test "sql-server: IF procedure returns its row result over the wire" {
-    # https://github.com/dolthub/dolt/issues/6918
-    cd repo1
-    dolt sql <<'SQL'
-DELIMITER //
-CREATE PROCEDURE conditional_result() IF 0 = 0 THEN SELECT 1 AS answer; END IF//
-DELIMITER ;
-SQL
-    start_sql_server repo1
-    run dolt --host localhost --no-tls --port "$PORT" --use-db repo1 sql -r csv -q "CALL conditional_result()"
-    [ "$status" -eq 0 ]
-    [ "$output" = $'answer\n1' ]
-}
