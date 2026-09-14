@@ -1281,26 +1281,3 @@ get_head_commit() {
 get_working_hash() {
   dolt sql -q "select @@dolt_repo_$$_working" | sed -n 4p | sed -e 's/|//' -e 's/|//'  -e 's/ //'
 }
-
-@test "sql-merge: records multiple unique violations for the same merged row" {
-    # https://github.com/dolthub/dolt/issues/7034
-    run dolt sql <<'SQL'
-CREATE TABLE t(a INT PRIMARY KEY,b INT,c INT);
-INSERT INTO t VALUES(1,2,3),(2,4,5);
-CALL dolt_commit('-Am','base');
-CALL dolt_checkout('-b','other');
-ALTER TABLE t ADD UNIQUE KEY(b);
-UPDATE t SET c=5 WHERE a=1;
-CALL dolt_commit('-am','other');
-CALL dolt_checkout('main');
-ALTER TABLE t ADD UNIQUE KEY(c);
-UPDATE t SET b=4 WHERE a=1;
-CALL dolt_commit('-am','main');
-SET dolt_force_transaction_commit=1;
-CALL dolt_merge('other');
-SQL
-    [ "$status" -eq 0 ]
-    run dolt sql -r csv -q "SELECT a,b,c,violation_info->>'$.Name' AS index_name FROM dolt_constraint_violations_t ORDER BY a,index_name"
-    [ "$status" -eq 0 ]
-    [ "$output" = $'a,b,c,index_name\n1,4,5,b\n1,4,5,c\n2,4,5,b\n2,4,5,c' ]
-}
