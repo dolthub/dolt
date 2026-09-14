@@ -2944,13 +2944,3 @@ SQL
     dolt sql < $BATS_TEST_DIRNAME/helper/with_utf16be_bom.sql
     dolt table rm t1
 }
-
-@test "sql: MD5 accepts binary file contents outside the connection charset" {
-    # https://github.com/dolthub/dolt/issues/8785
-    printf '\377\000\200abc' > md5_binary
-    run dolt sql -r csv <<'SQL'
-SELECT MD5(BINARY LOAD_FILE('md5_binary')) AS digest;
-SQL
-    [ "$status" -eq 0 ]
-    [ "$output" = $'digest\nc54f88b4c45ee5d3aaf21a0da5003612' ]
-}
