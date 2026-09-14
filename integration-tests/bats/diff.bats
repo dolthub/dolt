@@ -2529,3 +2529,22 @@ EOF
     [[ "$output" =~ "Incompatible schema change, skipping data diff for table 't'" ]] || false
 
 }
+
+@test "diff: collation merge preserves earlier feature branch inserts" {
+    # https://github.com/dolthub/dolt/issues/6612
+    dolt sql -q "CREATE TABLE t(pk VARCHAR(255) PRIMARY KEY,v VARCHAR(255)) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    dolt commit -Am "base"
+    dolt checkout -b feature
+    dolt sql -q "INSERT INTO t VALUES('1','first')"
+    dolt commit -am "first row"
+    dolt checkout main
+    dolt sql -q "ALTER TABLE t COLLATE utf8mb4_0900_bin; ALTER TABLE t MODIFY v VARCHAR(255) NOT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin"
+    dolt commit -am "collation"
+    dolt checkout feature
+    dolt merge main -m "merge"
+    dolt sql -q "INSERT INTO t VALUES('2','second')"
+    dolt commit -am "second row"
+    run dolt sql -r csv -q "SELECT to_pk,to_v,diff_type FROM dolt_commit_diff_t WHERE to_commit=HASHOF('feature') AND from_commit=DOLT_MERGE_BASE('main','feature') ORDER BY to_pk"
+    [ "$status" -eq 0 ]
+    [ "$output" = $'to_pk,to_v,diff_type\n1,first,added\n2,second,added' ]
+}
