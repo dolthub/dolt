@@ -2955,3 +2955,250 @@ SQL
     [ "$status" -eq 0 ]
     [ "$output" = $'n\n1' ]
 }
+
+@test "sql: reject ungrouped columns without a functional dependency" {
+    # https://github.com/dolthub/dolt/issues/5821
+    run dolt sql -r csv <<'SQL'
+CREATE TABLE grouped(col1 INT,col2 INT); INSERT INTO grouped VALUES(1,1),(1,2),(1,3),(1,4),(1,5); SELECT COUNT(*),col1,col2 FROM grouped GROUP BY col1;
+SQL
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "only_full_group_by" ]] || false
+}
+
+@test "sql: oversized primary key lookup returns no rows" {
+    # https://github.com/dolthub/dolt/issues/5942
+    run dolt sql -r csv <<'SQL'
+CREATE TABLE django_session(session_key VARCHAR(5) PRIMARY KEY); INSERT INTO django_session VALUES('01234');
+SQL
+    [ "$status" -eq 0 ]
+    run dolt sql -r csv <<'SQL'
+SELECT * FROM django_session WHERE session_key='0123456789';
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'session_key' ]
+    run dolt sql -r csv <<'SQL'
+SELECT * FROM django_session WHERE session_key='01234';
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'session_key\n01234' ]
+}
+
+@test "sql: insert source aliases resolve on duplicate key update" {
+    # https://github.com/dolthub/dolt/issues/6500
+    run dolt sql -r csv <<'SQL'
+CREATE TABLE alias_insert(a INT PRIMARY KEY,b INT,c INT); INSERT INTO alias_insert VALUES(1,0,0); INSERT INTO alias_insert(a,b,c) VALUES(1,2,3),(4,5,6) AS new(m,n,p) ON DUPLICATE KEY UPDATE c=m+n;
+SQL
+    [ "$status" -eq 0 ]
+    run dolt sql -r csv <<'SQL'
+SELECT * FROM alias_insert ORDER BY a;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'a,b,c\n1,0,3\n4,5,6' ]
+}
+
+@test "sql: arithmetic preserves large doubles" {
+    # https://github.com/dolthub/dolt/issues/7130
+    run dolt sql -r csv <<'SQL'
+SELECT CASE WHEN 1.7e308+0=1.7e308 AND 1.7e308+0.0=1.7e308 AND 1.7e308+1e10=1.7e308 AND 1.7e64+123=1.7e64 AND 1.7e65+123=1.7e65 THEN 'preserved' ELSE 'lost' END AS result;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'result\npreserved' ]
+}
+
+@test "sql: prepared decimal parameter retains fractional digits" {
+    # https://github.com/dolthub/dolt/issues/7668
+    run dolt sql -r csv <<'SQL'
+PREPARE stmt FROM 'SELECT ?'; SET @a=CAST(123.45 AS DECIMAL(5,2)); EXECUTE stmt USING @a;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'?\n123.45' ]
+}
+
+@test "sql: explicit insert columns reject empty value lists" {
+    # https://github.com/dolthub/dolt/issues/8193
+    run dolt sql -r csv <<'SQL'
+CREATE TABLE empty_values(i INT,j INT);
+SQL
+    [ "$status" -eq 0 ]
+    run dolt sql -r csv <<'SQL'
+INSERT INTO empty_values(i,j) VALUES();
+SQL
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "number of values does not match" ]] || false
+    run dolt sql -r csv <<'SQL'
+INSERT INTO empty_values(i) VALUES();
+SQL
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "number of values does not match" ]] || false
+    run dolt sql -r csv <<'SQL'
+INSERT INTO empty_values(j) VALUES();
+SQL
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "number of values does not match" ]] || false
+    run dolt sql -r csv <<'SQL'
+SELECT * FROM empty_values;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'i,j' ]
+    run dolt sql -r csv <<'SQL'
+INSERT INTO empty_values VALUES();
+SQL
+    [ "$status" -eq 0 ]
+    run dolt sql -r csv <<'SQL'
+SELECT COUNT(*) AS n FROM empty_values;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'n\n1' ]
+}
+
+@test "sql: virtual columns project filter and sort with unused columns" {
+    # https://github.com/dolthub/dolt/issues/8323
+    run dolt sql -r csv <<'SQL'
+CREATE TABLE virtual_one(pk INT PRIMARY KEY,j INT,value INT AS(pk*pk)); INSERT INTO virtual_one(pk,j) VALUES(-1,1),(2,1),(-3,1); CREATE TABLE virtual_two(pk INT PRIMARY KEY,j INT,k INT,value INT AS(pk*pk)); INSERT INTO virtual_two(pk,j,k) VALUES(-1,1,2),(2,1,2),(-3,1,2);
+SQL
+    [ "$status" -eq 0 ]
+    run dolt sql -r csv <<'SQL'
+SELECT value FROM virtual_one ORDER BY value;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'value\n1\n4\n9' ]
+    run dolt sql -r csv <<'SQL'
+SELECT pk FROM virtual_one WHERE value>1 ORDER BY pk;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'pk\n-3\n2' ]
+    run dolt sql -r csv <<'SQL'
+SELECT value FROM virtual_two ORDER BY value;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'value\n1\n4\n9' ]
+    run dolt sql -r csv <<'SQL'
+SELECT pk FROM virtual_two WHERE value>1 ORDER BY pk;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'pk\n-3\n2' ]
+}
+
+@test "sql: show create preserves unique indexes on virtual columns" {
+    # https://github.com/dolthub/dolt/issues/8275
+    run dolt sql -r csv <<'SQL'
+CREATE TABLE virtual_unique(a INT PRIMARY KEY,b INT GENERATED ALWAYS AS(a*a),UNIQUE KEY(b));
+SQL
+    [ "$status" -eq 0 ]
+    run dolt sql -q "SHOW CREATE TABLE virtual_unique"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'UNIQUE KEY `b` (`b`)' ]] || false
+    run dolt sql -r csv <<'SQL'
+INSERT INTO virtual_unique(a) VALUES(2),(-2);
+SQL
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "duplicate unique key" ]] || false
+    run dolt sql -r csv <<'SQL'
+SELECT COUNT(*) AS n FROM virtual_unique;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'n\n0' ]
+}
+
+@test "sql: prepared AS OF lookup resolves the primary key" {
+    # https://github.com/dolthub/dolt/issues/6300
+    run dolt sql -r csv <<'SQL'
+CREATE TABLE prepared_history(pk INT PRIMARY KEY,v INT); INSERT INTO prepared_history VALUES(1,10),(2,20); CALL dolt_commit('-Am','data');
+SQL
+    [ "$status" -eq 0 ]
+    run dolt sql -r csv <<'SQL'
+PREPARE stmt FROM "SELECT * FROM prepared_history AS OF 'HEAD' WHERE pk=?"; SET @p=2; EXECUTE stmt USING @p;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'pk,v\n2,20' ]
+}
+
+@test "sql: stored procedure writes follow branch checkout" {
+    # https://github.com/dolthub/dolt/issues/6236
+    run dolt sql -r csv <<'SQL'
+CREATE TABLE branch_writes(b INT); CALL dolt_commit('-Am','table');
+SQL
+    [ "$status" -eq 0 ]
+    dolt sql <<'SQL'
+DELIMITER //
+CREATE PROCEDURE edit_on_branch()
+BEGIN
+    CALL dolt_checkout('-b', 'branch1');
+    INSERT INTO branch_writes VALUES (100);
+    CALL dolt_commit('-am', 'new row');
+    CALL dolt_checkout('main');
+END//
+DELIMITER ;
+CALL edit_on_branch();
+SQL
+    run dolt sql -r csv <<'SQL'
+SELECT * FROM branch_writes;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'b' ]
+    run dolt sql -r csv <<'SQL'
+SELECT * FROM branch_writes AS OF 'branch1';
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'b\n100' ]
+}
+
+@test "sql: cursor continue handler terminates checksum loop" {
+    # https://github.com/dolthub/dolt/issues/6742
+    dolt sql <<'SQL'
+CREATE TABLE checksums(id INT AUTO_INCREMENT PRIMARY KEY, checksum VARCHAR(40));
+INSERT INTO checksums VALUES (1, SHA('macneale'));
+DELIMITER //
+CREATE PROCEDURE calculate_checksum()
+BEGIN
+    DECLARE done INT DEFAULT 0;
+    DECLARE current_checksum VARCHAR(40);
+    DECLARE concat_string VARCHAR(10000) DEFAULT '';
+    DECLARE cur CURSOR FOR SELECT checksum FROM checksums ORDER BY id;
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+    OPEN cur;
+    read_loop: LOOP
+        FETCH cur INTO current_checksum;
+        IF done THEN LEAVE read_loop; END IF;
+        SET concat_string = CONCAT(concat_string, current_checksum);
+    END LOOP;
+    CLOSE cur;
+    INSERT INTO checksums(checksum) VALUES (SHA1(concat_string));
+END//
+DELIMITER ;
+CALL calculate_checksum();
+SQL
+    run dolt sql -r csv <<'SQL'
+SELECT * FROM checksums ORDER BY id;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'id,checksum\n1,ca530ba53d2e3b54206e62c7ab257657b7367cc7\n2,89fa71febbc9effd2fa58c7441ad2ed899fcdcf1' ]
+}
+
+@test "sql: invalid binary decimal parameter errors without panicking" {
+    # https://github.com/dolthub/dolt/issues/4989
+    run dolt sql -r csv <<'SQL'
+CREATE TABLE decimal_bindings(id INT PRIMARY KEY AUTO_INCREMENT,decimal_col DECIMAL(9,2));
+SQL
+    [ "$status" -eq 0 ]
+    run dolt sql -r csv <<'SQL'
+PREPARE stmt FROM 'INSERT INTO decimal_bindings(decimal_col) VALUES (?)'; SET @a=_binary"X'10'"; EXECUTE stmt USING @a;
+SQL
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "is not a valid value" ]] || false
+    run dolt sql -r csv <<'SQL'
+SELECT COUNT(*) AS n FROM decimal_bindings;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'n\n0' ]
+}
+
+@test "sql: MD5 accepts binary file contents outside the connection charset" {
+    # https://github.com/dolthub/dolt/issues/8785
+    printf '\377\000\200abc' > md5_binary
+    run dolt sql -r csv <<'SQL'
+SELECT MD5(BINARY LOAD_FILE('md5_binary')) AS digest;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'digest\nc54f88b4c45ee5d3aaf21a0da5003612' ]
+}

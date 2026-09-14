@@ -2361,3 +2361,30 @@ EOF
   start_sql_server > server_log.txt 2>&1 && sleep 0.5
   grep -F "permission denied" server_log.txt
 }
+
+@test "sql-server: IF procedure returns its row result over the wire" {
+    # https://github.com/dolthub/dolt/issues/6918
+    cd repo1
+    dolt sql <<'SQL'
+DELIMITER //
+CREATE PROCEDURE conditional_result() IF 0 = 0 THEN SELECT 1 AS answer; END IF//
+DELIMITER ;
+SQL
+    start_sql_server repo1
+    run dolt --host localhost --no-tls --port "$PORT" --use-db repo1 sql -r csv -q "CALL conditional_result()"
+    [ "$status" -eq 0 ]
+    [ "$output" = $'answer\n1' ]
+}
+
+@test "sql-server: grants match a wildcard within an IP address" {
+    # https://github.com/dolthub/dolt/issues/4501
+    cd repo1
+    dolt sql -q "CREATE TABLE wildcard_data(pk INT PRIMARY KEY); INSERT INTO wildcard_data VALUES(42);
+        CREATE USER IF NOT EXISTS root@'%' IDENTIFIED BY ''; GRANT ALL ON *.* TO root@'%';
+        CREATE USER wildcard_user@'127.0.0.%' IDENTIFIED BY '';
+        GRANT SELECT ON repo1.* TO wildcard_user@'127.0.0.%';"
+    start_sql_server repo1
+    run dolt --host 127.0.0.1 --no-tls --port "$PORT" --user wildcard_user --use-db repo1 sql -r csv -q "SELECT * FROM wildcard_data"
+    [ "$status" -eq 0 ]
+    [ "$output" = $'pk\n42' ]
+}

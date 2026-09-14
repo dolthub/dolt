@@ -171,6 +171,25 @@ func TestArgParser(t *testing.T) {
 	}
 }
 
+// https://github.com/dolthub/dolt/issues/5414
+func TestLongFlagSharingShortOptionPrefix(t *testing.T) {
+	ap := NewArgParserWithVariableArgs("diff")
+	ap.SupportsString("diff-mode", "m", "mode", "")
+	ap.SupportsFlag("merge-base", "", "")
+	for _, args := range [][]string{{"--merge-base"}, {"-m", "row", "--merge-base"}} {
+		t.Run(fmt.Sprint(args), func(t *testing.T) {
+			apr, err := ap.Parse(args)
+			require.NoError(t, err)
+			assert.True(t, apr.Contains("merge-base"))
+			if len(args) > 1 {
+				assert.Equal(t, "row", apr.MustGetValue("diff-mode"))
+			} else {
+				assert.False(t, apr.Contains("diff-mode"))
+			}
+		})
+	}
+}
+
 func TestArgParserListEmptyValue(t *testing.T) {
 	ap := NewArgParserWithVariableArgs("test").SupportsStringList("list", "l", "vals", "")
 

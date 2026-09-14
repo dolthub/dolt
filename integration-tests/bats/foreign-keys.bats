@@ -2271,3 +2271,24 @@ SQL
     [[ "$output" =~ "CREATE TABLE \`child1\`" ]] || false
     [[ "$output" =~ "FOREIGN KEY (\`c\`) REFERENCES \`parent1\` (\`a\`)" ]] || false
 }
+
+@test "foreign-keys: add a constraint while using a revision database" {
+    # https://github.com/dolthub/dolt/issues/6318
+    dolt sql -q "CREATE TABLE ref_parent(pk INT PRIMARY KEY); CREATE TABLE ref_child(pk INT PRIMARY KEY)"
+    db_name=$(dolt sql -r csv -q "SELECT database()" | tail -n 1)
+    dolt sql -q "USE \`$db_name/main\`; ALTER TABLE ref_child ADD CONSTRAINT revision_fk FOREIGN KEY(pk) REFERENCES ref_parent(pk)"
+    run dolt sql -r csv <<'SQL'
+INSERT INTO ref_child VALUES(1);
+SQL
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "Foreign key violation" ]] || false
+    run dolt sql -r csv <<'SQL'
+INSERT INTO ref_parent VALUES(1); INSERT INTO ref_child VALUES(1);
+SQL
+    [ "$status" -eq 0 ]
+    run dolt sql -r csv <<'SQL'
+SELECT * FROM ref_child;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'pk\n1' ]
+}

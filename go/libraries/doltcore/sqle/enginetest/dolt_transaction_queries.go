@@ -840,8 +840,11 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:            "/* client b */ commit",
-				Skip:             true, // multiple indexes covering the same column set cannot be merged: 'i1' and 'u1'
 				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ select * from t1 order by pk",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
 			},
 		},
 	},

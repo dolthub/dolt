@@ -462,3 +462,67 @@ SQL
     [ "$status" -eq "0" ]
     [[ "${lines[1]}" =~ "1" ]] || false
 }
+
+@test "vector-index: non-covering nearest neighbor returns non-index columns" {
+    # https://github.com/dolthub/dolt/issues/8657
+    run dolt sql -r csv <<'SQL'
+CREATE TABLE noncovering(pk INT PRIMARY KEY,c0 INT,embedding JSON NOT NULL); CREATE VECTOR INDEX vidx ON noncovering(embedding);
+SQL
+    [ "$status" -eq 0 ]
+    run dolt sql -r csv <<'SQL'
+SELECT c0 FROM noncovering ORDER BY VEC_DISTANCE('[0.0]',embedding);
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'c0' ]
+    run dolt sql -r csv <<'SQL'
+INSERT INTO noncovering VALUES(1,10,'[1.0]'),(2,20,'[2.0]');
+SQL
+    [ "$status" -eq 0 ]
+    run dolt sql -r csv <<'SQL'
+SELECT c0 FROM noncovering ORDER BY VEC_DISTANCE('[0.0]',embedding) LIMIT 1;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'c0\n10' ]
+}
+
+@test "vector-index: adding generated columns preserves existing indexes" {
+    # https://github.com/dolthub/dolt/issues/8961
+    run dolt sql -r csv <<'SQL'
+CREATE TABLE generated_vector(pk INT PRIMARY KEY,embedding JSON NOT NULL,metadata JSON,category INT,INDEX category_idx(category)); CREATE VECTOR INDEX vidx ON generated_vector(embedding); INSERT INTO generated_vector VALUES(1,'[1.0]','{"name":"first"}',7); ALTER TABLE generated_vector ADD COLUMN name VARCHAR(255) AS(metadata->>'$.name'); CALL dolt_commit('-Am','generated column');
+SQL
+    [ "$status" -eq 0 ]
+    run dolt sql -q "SHOW CREATE TABLE generated_vector"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'VECTOR KEY `vidx` (`embedding`)' ]] || false
+    [[ "$output" =~ 'KEY `category_idx` (`category`)' ]] || false
+    run dolt sql -r csv <<'SQL'
+SELECT name FROM generated_vector ORDER BY VEC_DISTANCE('[0.0]',embedding) LIMIT 1;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'name\nfirst' ]
+}
+
+@test "vector-index: cosine distance distinguishes orthogonal and parallel vectors" {
+    # https://github.com/dolthub/dolt/issues/8855
+    run dolt sql -r csv <<'SQL'
+SELECT VEC_DISTANCE_COSINE('[1,0]','[0,1]') AS orthogonal,VEC_DISTANCE_COSINE('[1,0]','[1,0]') AS parallel;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'orthogonal,parallel\n1,0' ]
+}
+
+@test "vector-index: VECTOR column stores a fixed dimensional vector" {
+    # https://github.com/dolthub/dolt/issues/8658
+    run dolt sql -r csv <<'SQL'
+CREATE TABLE typed_vector(pk INT PRIMARY KEY,v VECTOR(3) NOT NULL); INSERT INTO typed_vector VALUES(1,STRING_TO_VECTOR('[1,2,3]'));
+SQL
+    [ "$status" -eq 0 ]
+    run dolt sql -r csv <<'SQL'
+SELECT VEC_DISTANCE_COSINE(v,STRING_TO_VECTOR('[1,2,3]')) AS distance FROM typed_vector;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'distance\n0' ]
+    run dolt sql -q "INSERT INTO typed_vector VALUES(2,STRING_TO_VECTOR('[1,2]'))"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "VECTOR dimension mismatch" ]] || false
+}

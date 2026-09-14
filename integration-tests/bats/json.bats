@@ -338,3 +338,22 @@ SQL
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = '"{""a"":""b"",""a key"":""b"",""c"":""test"",""d"":{""e"":""nested""}}"' ]
 }
+
+@test "json: object paths do not traverse array elements implicitly" {
+    # https://github.com/dolthub/dolt/issues/7905
+    run dolt sql -r csv <<'SQL'
+SELECT IF(JSON_EXTRACT('[{"a":1},{"a":2}]','$.a') IS NULL,1,0) AS a, IF(JSON_VALUE('[{"a":1},{"a":2}]','$.a') IS NULL,1,0) AS b, IF(JSON_EXTRACT('[{"a":[{"b":1},{"b":2}]},{"a":[{"b":3},{"b":4}]}]','$.a.b') IS NULL,1,0) AS c;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'a,b,c\n1,1,1' ]
+}
+
+@test "json: object comparisons do not form a three-object cycle" {
+    # https://github.com/dolthub/dolt/issues/7196
+    run dolt sql -r csv <<'SQL'
+SET @r=JSON_OBJECT('a',2e0,'b',1e0); SET @p=JSON_OBJECT('b',2e0,'c',1e0); SET @s=JSON_OBJECT('c',2e0,'a',1e0); SELECT (CAST(@r AS JSON)<CAST(@p AS JSON))+(CAST(@p AS JSON)<CAST(@s AS JSON))+(CAST(@s AS JSON)<CAST(@r AS JSON)) AS edges;
+SQL
+    [ "$status" -eq 0 ]
+    # The ordering of JSON objects is implementation-defined, but must be acyclic.
+    [[ "$output" = $'edges\n1' || "$output" = $'edges\n2' ]] || false
+}
