@@ -548,6 +548,28 @@ func TestNumericErrorScripts(t *testing.T) {
 	enginetest.TestNumericErrorScripts(t, h)
 }
 
+// https://github.com/dolthub/dolt/issues/7130
+func TestLargeDoubleArithmetic(t *testing.T) {
+	script := queries.ScriptTest{
+		Name:        "Test large DOUBLE arithmetic",
+		SetUpScript: []string{},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "SELECT 1.7e308+0,1.7e308+0.0,1.7e308+1e10,1.7e64+123,1.7e65+123", Expected: []sql.Row{{float64(1.7e308), float64(1.7e308), float64(1.7e308), float64(1.7e64), float64(1.7e65)}}},
+		},
+	}
+	for _, prepared := range []bool{false, true} {
+		t.Run(fmt.Sprintf("prepared=%t", prepared), func(t *testing.T) {
+			h := newDoltHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestScript(t, h, script)
+			}
+		})
+	}
+}
+
 // TestDoltUserPrivileges tests Dolt-specific code that needs to handle user privilege checking
 func TestDoltUserPrivileges(t *testing.T) {
 	harness := newDoltHarness(t)
