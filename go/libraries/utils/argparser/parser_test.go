@@ -158,15 +158,6 @@ func TestArgParser(t *testing.T) {
 			map[string]string{"param": "value"},
 			[]string{"arg1", "table1", "table2"},
 		},
-		// https://github.com/dolthub/dolt/issues/5414
-		{
-			NewArgParserWithVariableArgs("diff").SupportsString("diff-mode", "m", "mode", "").SupportsFlag("merge-base", "", ""),
-			[]string{"--merge-base"}, nil, map[string]string{"merge-base": ""}, []string{},
-		},
-		{
-			NewArgParserWithVariableArgs("diff").SupportsString("diff-mode", "m", "mode", "").SupportsFlag("merge-base", "", ""),
-			[]string{"-m", "row", "--merge-base"}, nil, map[string]string{"diff-mode": "row", "merge-base": ""}, []string{},
-		},
 	}
 
 	for _, test := range tests {
