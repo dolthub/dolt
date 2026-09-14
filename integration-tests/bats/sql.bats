@@ -2944,3 +2944,14 @@ SQL
     dolt sql < $BATS_TEST_DIRNAME/helper/with_utf16be_bom.sql
     dolt table rm t1
 }
+
+@test "sql: CTE definitions can only reference preceding CTEs" {
+    # https://github.com/dolthub/dolt/issues/4233
+    run dolt sql -r csv -q "WITH c AS (SELECT * FROM b), b AS (SELECT * FROM a), a AS (SELECT 1 AS n) SELECT * FROM c"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "table not found: b" ]] || false
+
+    run dolt sql -r csv -q "WITH a AS (SELECT 1 AS n), b AS (SELECT * FROM a), c AS (SELECT * FROM b) SELECT * FROM c"
+    [ "$status" -eq 0 ]
+    [ "$output" = $'n\n1' ]
+}
