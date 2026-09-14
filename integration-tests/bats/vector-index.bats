@@ -462,3 +462,12 @@ SQL
     [ "$status" -eq "0" ]
     [[ "${lines[1]}" =~ "1" ]] || false
 }
+
+@test "vector-index: cosine distance distinguishes orthogonal and parallel vectors" {
+    # https://github.com/dolthub/dolt/issues/8855
+    run dolt sql -r csv <<'SQL'
+SELECT VEC_DISTANCE_COSINE('[1,0]','[0,1]') AS orthogonal,VEC_DISTANCE_COSINE('[1,0]','[1,0]') AS parallel;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'orthogonal,parallel\n1,0' ]
+}
