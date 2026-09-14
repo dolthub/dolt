@@ -1839,6 +1839,45 @@ func TestDoltCherryPick(t *testing.T) {
 	RunDoltCherryPickTests(t, harness)
 }
 
+// https://github.com/dolthub/dolt/issues/7402
+func TestCherryPickAbortPreservesIgnoredTables(t *testing.T) {
+	script := queries.ScriptTest{
+		Name: "Test ignored table preservation on cherry-pick abort",
+		SetUpScript: []string{
+			"SET dolt_allow_commit_conflicts=1",
+			"INSERT INTO dolt_ignore VALUES('generated_*',1)",
+			"CREATE TABLE generated_preserved(pk INT PRIMARY KEY)",
+			"INSERT INTO generated_preserved VALUES(42)",
+			"CREATE TABLE cp_rows(pk INT PRIMARY KEY,col INT)",
+			"INSERT INTO cp_rows VALUES(1,1)",
+			"CALL dolt_commit('-Am','base')",
+			"CALL dolt_checkout('-b','cp_other')",
+			"UPDATE cp_rows SET col=2",
+			"CALL dolt_commit('-am','update')",
+			"CALL dolt_checkout('main')",
+			"DELETE FROM cp_rows",
+			"CALL dolt_commit('-am','delete')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "CALL dolt_cherry_pick('cp_other')", Expected: []sql.Row{{"", int64(1), int64(0), int64(0)}}},
+			{Query: "CALL dolt_cherry_pick('--abort')", Expected: []sql.Row{{"", int64(0), int64(0), int64(0)}}},
+			{Query: "SELECT * FROM generated_preserved", Expected: []sql.Row{{int32(42)}}},
+			{Query: "SELECT * FROM cp_rows", Expected: []sql.Row{}},
+		},
+	}
+	for _, prepared := range []bool{false, true} {
+		t.Run(fmt.Sprintf("prepared=%t", prepared), func(t *testing.T) {
+			h := newDoltHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestScript(t, h, script)
+			}
+		})
+	}
+}
+
 func TestDoltCherryPickPrepared(t *testing.T) {
 	harness := newDoltEnginetestHarness(t)
 	RunDoltCherryPickTestsPrepared(t, harness)

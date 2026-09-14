@@ -763,33 +763,3 @@ teardown() {
   [[ "$output" =~ author,author_date,committer,date ]] || false
   [[ "$output" =~ "Date Test Author,2023-09-26 01:23:45.000,Bats Tests,2023-09-26 12:34:56.000" ]] || false
 }
-
-@test "cherry-pick: abort preserves ignored tables and their contents" {
-    # https://github.com/dolthub/dolt/issues/7402
-    run dolt sql -r csv <<'SQL'
-CREATE TABLE generated_preserved(pk INT PRIMARY KEY); INSERT INTO generated_preserved VALUES(42); CREATE TABLE cp_rows(pk INT PRIMARY KEY,col INT); INSERT INTO cp_rows VALUES(1,1);
-SQL
-    [ "$status" -eq 0 ]
-    dolt add .
-    dolt commit -m "base"
-    dolt checkout -b cp_other
-    dolt sql -q "UPDATE cp_rows SET col=2"
-    dolt commit -am "update"
-    dolt checkout main
-    dolt sql -q "DELETE FROM cp_rows"
-    dolt commit -am "delete"
-    run dolt cherry-pick cp_other
-    [ "$status" -ne 0 ]
-    [[ "$output" =~ "conflicts" ]] || false
-    dolt cherry-pick --abort
-    run dolt sql -r csv <<'SQL'
-SELECT * FROM generated_preserved;
-SQL
-    [ "$status" -eq 0 ]
-    [ "$output" = $'pk\n42' ]
-    run dolt sql -r csv <<'SQL'
-SELECT * FROM cp_rows;
-SQL
-    [ "$status" -eq 0 ]
-    [ "$output" = $'pk,col' ]
-}
