@@ -109,3 +109,19 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "archived" ]] || false
 }
+
+@test "sql-export: dump and reload a populated virtual column table" {
+    # https://github.com/dolthub/dolt/issues/8325
+    run dolt sql -r csv <<'SQL'
+CREATE TABLE virtual_dump(pk INT PRIMARY KEY,g INT AS(pk*pk)); INSERT INTO virtual_dump(pk) VALUES(1),(3);
+SQL
+    [ "$status" -eq 0 ]
+    dolt dump --no-create-db -f -fn virtual_dump.sql
+    dolt sql -q "DROP TABLE virtual_dump"
+    dolt sql < virtual_dump.sql
+    run dolt sql -r csv <<'SQL'
+SELECT * FROM virtual_dump ORDER BY pk;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'pk,g\n1,1\n3,9' ]
+}
