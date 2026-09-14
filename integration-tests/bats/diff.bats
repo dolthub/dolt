@@ -2529,3 +2529,16 @@ EOF
     [[ "$output" =~ "Incompatible schema change, skipping data diff for table 't'" ]] || false
 
 }
+
+@test "diff: primary key type change followed by an added column" {
+    # https://github.com/dolthub/dolt/issues/6124
+    run dolt sql -r csv <<'SQL'
+CREATE TABLE changed_pk(pk INT PRIMARY KEY); CALL dolt_commit('-Am','create'); ALTER TABLE changed_pk MODIFY COLUMN pk VARCHAR(10); CALL dolt_commit('-am','alter'); ALTER TABLE changed_pk ADD COLUMN col1 VARCHAR(20); CALL dolt_commit('-am','column');
+SQL
+    [ "$status" -eq 0 ]
+    run dolt diff HEAD HEAD~2
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'Primary key sets differ' ]] || false
+    [[ "$output" =~ '-  `col1` varchar(20)' ]] || false
+    [[ "$output" =~ '+  `pk` int NOT NULL' ]] || false
+}
