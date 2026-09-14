@@ -1394,6 +1394,44 @@ func TestDoltMerge(t *testing.T) {
 	RunDoltMergeTests(t, h)
 }
 
+// https://github.com/dolthub/dolt/issues/7031
+func TestDeleteConflictsAfterColumnDrop(t *testing.T) {
+	script := queries.ScriptTest{
+		Name: "Test conflict deletion after column drops",
+		SetUpScript: []string{
+			"SET dolt_allow_commit_conflicts=1",
+			"CALL dolt_checkout('-b','old')",
+			"CREATE TABLE conflict_drop(a INT PRIMARY KEY,b INT,c INT)",
+			"CALL dolt_commit('-Am','table')",
+			"CALL dolt_checkout('-b','new')",
+			"ALTER TABLE conflict_drop DROP COLUMN c",
+			"INSERT INTO conflict_drop VALUES(1,5)",
+			"CALL dolt_commit('-am','new')",
+			"CALL dolt_checkout('old')",
+			"INSERT INTO conflict_drop VALUES(1,2,3)",
+			"CALL dolt_commit('-am','old')",
+			"CALL dolt_merge('new')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "SELECT COUNT(*) FROM dolt_conflicts_conflict_drop", Expected: []sql.Row{{int64(1)}}},
+			{Query: "DELETE FROM dolt_conflicts_conflict_drop", Expected: []sql.Row{{gmstypes.NewOkResult(1)}}},
+			{Query: "SELECT * FROM conflict_drop", Expected: []sql.Row{{int32(1), int32(2)}}},
+			{Query: "SELECT COUNT(*) FROM dolt_conflicts_conflict_drop", Expected: []sql.Row{{int64(0)}}},
+		},
+	}
+	for _, prepared := range []bool{false, true} {
+		t.Run(fmt.Sprintf("prepared=%t", prepared), func(t *testing.T) {
+			h := newDoltHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestScript(t, h, script)
+			}
+		})
+	}
+}
+
 func TestDoltMergePrepared(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunDoltMergePreparedTests(t, h)

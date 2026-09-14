@@ -244,30 +244,3 @@ SQL
   [ "$status" -eq 0 ]
   [[ "$output" =~ "$EXPECTED" ]] || false
 }
-
-@test "sql-conflicts: deleting conflicts after a column drop keeps local data" {
-    # https://github.com/dolthub/dolt/issues/7031
-    run dolt sql -r csv <<'SQL'
-SET dolt_allow_commit_conflicts=1; CALL dolt_checkout('-b','old'); CREATE TABLE conflict_drop(a INT PRIMARY KEY,b INT,c INT); CALL dolt_commit('-Am','table'); CALL dolt_checkout('-b','new'); ALTER TABLE conflict_drop DROP COLUMN c; INSERT INTO conflict_drop VALUES(1,5); CALL dolt_commit('-am','new'); CALL dolt_checkout('old'); INSERT INTO conflict_drop VALUES(1,2,3); CALL dolt_commit('-am','old'); CALL dolt_merge('new');
-SQL
-    [ "$status" -eq 0 ]
-    run dolt --branch old sql -r csv <<'SQL'
-SELECT COUNT(*) AS n FROM dolt_conflicts_conflict_drop;
-SQL
-    [ "$status" -eq 0 ]
-    [ "$output" = $'n\n1' ]
-    run dolt --branch old sql -r csv <<'SQL'
-DELETE FROM dolt_conflicts_conflict_drop;
-SQL
-    [ "$status" -eq 0 ]
-    run dolt --branch old sql -r csv <<'SQL'
-SELECT * FROM conflict_drop;
-SQL
-    [ "$status" -eq 0 ]
-    [ "$output" = $'a,b\n1,2' ]
-    run dolt --branch old sql -r csv <<'SQL'
-SELECT COUNT(*) AS n FROM dolt_conflicts_conflict_drop;
-SQL
-    [ "$status" -eq 0 ]
-    [ "$output" = $'n\n0' ]
-}
