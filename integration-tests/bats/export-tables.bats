@@ -329,6 +329,19 @@ SQL
     # output will be slit over two lines
     grep 'this,is,,,,"a new ' export.csv
     grep ' line"' export.csv
+
+    # https://github.com/dolthub/dolt/issues/8389
+    run dolt sql -r csv <<'SQL'
+CREATE TABLE newline_export(a INT PRIMARY KEY,b VARBINARY(255)); INSERT INTO newline_export VALUES(1,'line\nbreak'),(2,'sorry\ncsv');
+SQL
+    [ "$status" -eq 0 ]
+    dolt table export newline_export newline_export.csv
+    dolt table import -c newline_copy newline_export.csv
+    run dolt sql -r csv <<'SQL'
+SELECT a,HEX(b) AS bytes FROM newline_copy ORDER BY a;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'a,bytes\n1,6C696E650A627265616B\n2,736F7272790A637376' ]
 }
 
 @test "export-tables: table with column with not null constraint can be exported and reimported" {
