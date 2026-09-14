@@ -784,6 +784,35 @@ func TestVectorIndexes(t *testing.T) {
 	enginetest.TestVectorIndexes(t, harness)
 }
 
+// https://github.com/dolthub/dolt/issues/8961
+func TestGeneratedColumnPreservesVectorIndex(t *testing.T) {
+	script := queries.ScriptTest{
+		Name: "Test index preservation when adding generated columns",
+		SetUpScript: []string{
+			"CREATE TABLE generated_vector(pk INT PRIMARY KEY,embedding JSON NOT NULL,metadata JSON,category INT,INDEX category_idx(category))",
+			"CREATE VECTOR INDEX vidx ON generated_vector(embedding)",
+			"INSERT INTO generated_vector VALUES(1,'[1.0]','{\"name\":\"first\"}',7)",
+			"ALTER TABLE generated_vector ADD COLUMN name VARCHAR(255) AS(metadata->>'$.name')",
+			"CALL dolt_commit('-Am','generated column')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "SHOW CREATE TABLE generated_vector", Expected: []sql.Row{{"generated_vector", "CREATE TABLE `generated_vector` (\n  `pk` int NOT NULL,\n  `embedding` json NOT NULL,\n  `metadata` json,\n  `category` int,\n  `name` varchar(255) GENERATED ALWAYS AS (json_unquote(json_extract(`metadata`, '$.name'))),\n  PRIMARY KEY (`pk`),\n  KEY `category_idx` (`category`),\n  VECTOR KEY `vidx` (`embedding`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}}},
+			{Query: "SELECT name FROM generated_vector ORDER BY VEC_DISTANCE('[0.0]',embedding) LIMIT 1", Expected: []sql.Row{{"first"}}},
+		},
+	}
+	for _, prepared := range []bool{false, true} {
+		t.Run(fmt.Sprintf("prepared=%t", prepared), func(t *testing.T) {
+			h := newDoltHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestScript(t, h, script)
+			}
+		})
+	}
+}
+
 func TestVectorIndexNullability(t *testing.T) {
 	for _, colType := range []string{"JSON", "VECTOR(2)"} {
 		t.Run(colType, func(t *testing.T) {
