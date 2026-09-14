@@ -955,6 +955,36 @@ func TestForeignKeyBranches(t *testing.T) {
 	RunForeignKeyBranchesTest(t, h)
 }
 
+// https://github.com/dolthub/dolt/issues/6318
+func TestForeignKeyInRevisionDatabase(t *testing.T) {
+	script := queries.ScriptTest{
+		Name: "Test foreign-key creation in revision databases",
+		SetUpScript: []string{
+			"CREATE TABLE ref_parent(pk INT PRIMARY KEY)",
+			"CREATE TABLE ref_child(pk INT PRIMARY KEY)",
+			"USE `mydb/main`",
+			"ALTER TABLE ref_child ADD CONSTRAINT revision_fk FOREIGN KEY(pk) REFERENCES ref_parent(pk)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "INSERT INTO ref_child VALUES(1)", ExpectedErr: sql.ErrForeignKeyChildViolation},
+			{Query: "INSERT INTO ref_parent VALUES(1)", Expected: []sql.Row{{gmstypes.NewOkResult(1)}}},
+			{Query: "INSERT INTO ref_child VALUES(1)", Expected: []sql.Row{{gmstypes.NewOkResult(1)}}},
+			{Query: "SELECT * FROM ref_child", Expected: []sql.Row{{int32(1)}}},
+		},
+	}
+	for _, prepared := range []bool{false, true} {
+		t.Run(fmt.Sprintf("prepared=%t", prepared), func(t *testing.T) {
+			h := newDoltHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestScript(t, h, script)
+			}
+		})
+	}
+}
+
 func TestForeignKeyBranchesPrepared(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunForeignKeyBranchesPreparedTest(t, h)
