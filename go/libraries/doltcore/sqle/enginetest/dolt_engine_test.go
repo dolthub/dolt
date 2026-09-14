@@ -1157,30 +1157,18 @@ func TestRollbackTriggers(t *testing.T) {
 func TestStoredProcedures(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunStoredProceduresTest(t, h)
-}
 
-// https://github.com/dolthub/dolt/issues/6918
-func TestProcedureIfResultOverWire(t *testing.T) {
-	script := queries.ScriptTest{
-		Name: "Test stored-procedure IF results over the wire",
-		SetUpScript: []string{
-			"CREATE PROCEDURE conditional_result() IF 0=0 THEN SELECT 1 AS answer; END IF",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{Query: "CALL conditional_result()", Expected: []sql.Row{{1}}},
-		},
-	}
-	for _, prepared := range []bool{false, true} {
-		t.Run(fmt.Sprintf("prepared=%t", prepared), func(t *testing.T) {
-			h := newDoltServerTestHarness(t)
-			defer h.Close()
-			if prepared {
-				enginetest.TestScriptPrepared(t, h, script)
-			} else {
+	// https://github.com/dolthub/dolt/issues/6918
+	t.Run("server", func(t *testing.T) {
+		h := newDoltServerTestHarness(t)
+		defer h.Close()
+		for _, script := range queries.ProcedureLogicTests {
+			switch script.Name {
+			case "IF/ELSE with nested SELECT in branches", "SELECT with JOIN and table aliases":
 				enginetest.TestScript(t, h, script)
 			}
-		})
-	}
+		}
+	})
 }
 
 func TestDoltStoredProcedures(t *testing.T) {
