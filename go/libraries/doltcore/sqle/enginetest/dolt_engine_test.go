@@ -938,6 +938,36 @@ func TestCreateForeignKeys(t *testing.T) {
 	enginetest.TestCreateForeignKeys(t, h)
 }
 
+// https://github.com/dolthub/dolt/issues/3024
+func TestForeignKeyWithSpatialParentColumn(t *testing.T) {
+	script := queries.ScriptTest{
+		Name: "Test foreign keys with spatial parent columns",
+		SetUpScript: []string{
+			"CREATE TABLE restaurants(id INT PRIMARY KEY,coordinate POINT)",
+			"CREATE TABLE hours(restaurant_id INT PRIMARY KEY AUTO_INCREMENT,FOREIGN KEY(restaurant_id) REFERENCES restaurants(id))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "SELECT column_name,referenced_table_name,referenced_column_name FROM information_schema.key_column_usage WHERE table_name='hours' AND referenced_table_name IS NOT NULL", Expected: []sql.Row{{"restaurant_id", "restaurants", "id"}}},
+			{Query: "INSERT INTO hours VALUES(123)", ExpectedErr: sql.ErrForeignKeyChildViolation},
+			{Query: "SELECT * FROM hours", Expected: []sql.Row{}},
+			{Query: "INSERT INTO restaurants VALUES(123,POINT(1,2))", Expected: []sql.Row{{gmstypes.NewOkResult(1)}}},
+			{Query: "INSERT INTO hours VALUES(123)", Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: 1, InsertID: 123}}}},
+			{Query: "SELECT * FROM hours", Expected: []sql.Row{{int32(123)}}},
+		},
+	}
+	for _, prepared := range []bool{false, true} {
+		t.Run(fmt.Sprintf("prepared=%t", prepared), func(t *testing.T) {
+			h := newDoltHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestScript(t, h, script)
+			}
+		})
+	}
+}
+
 func TestDropForeignKeys(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
