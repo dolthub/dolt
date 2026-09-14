@@ -462,25 +462,3 @@ SQL
     [ "$status" -eq "0" ]
     [[ "${lines[1]}" =~ "1" ]] || false
 }
-
-@test "vector-index: non-covering nearest neighbor returns non-index columns" {
-    # https://github.com/dolthub/dolt/issues/8657
-    run dolt sql -r csv <<'SQL'
-CREATE TABLE noncovering(pk INT PRIMARY KEY,c0 INT,embedding JSON NOT NULL); CREATE VECTOR INDEX vidx ON noncovering(embedding);
-SQL
-    [ "$status" -eq 0 ]
-    run dolt sql -r csv <<'SQL'
-SELECT c0 FROM noncovering ORDER BY VEC_DISTANCE('[0.0]',embedding);
-SQL
-    [ "$status" -eq 0 ]
-    [ "$output" = $'c0' ]
-    run dolt sql -r csv <<'SQL'
-INSERT INTO noncovering VALUES(1,10,'[1.0]'),(2,20,'[2.0]');
-SQL
-    [ "$status" -eq 0 ]
-    run dolt sql -r csv <<'SQL'
-SELECT c0 FROM noncovering ORDER BY VEC_DISTANCE('[0.0]',embedding) LIMIT 1;
-SQL
-    [ "$status" -eq 0 ]
-    [ "$output" = $'c0\n10' ]
-}

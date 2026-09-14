@@ -784,6 +784,33 @@ func TestVectorIndexes(t *testing.T) {
 	enginetest.TestVectorIndexes(t, harness)
 }
 
+// https://github.com/dolthub/dolt/issues/8657
+func TestNonCoveringVectorLookup(t *testing.T) {
+	script := queries.ScriptTest{
+		Name: "Test non-covering vector lookups",
+		SetUpScript: []string{
+			"CREATE TABLE noncovering(pk INT PRIMARY KEY,c0 INT,embedding JSON NOT NULL)",
+			"CREATE VECTOR INDEX vidx ON noncovering(embedding)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "SELECT c0 FROM noncovering ORDER BY VEC_DISTANCE('[0.0]',embedding)", Expected: []sql.Row{}},
+			{Query: "INSERT INTO noncovering VALUES(1,10,'[1.0]'),(2,20,'[2.0]')", Expected: []sql.Row{{gmstypes.NewOkResult(2)}}},
+			{Query: "SELECT c0 FROM noncovering ORDER BY VEC_DISTANCE('[0.0]',embedding) LIMIT 1", Expected: []sql.Row{{int32(10)}}},
+		},
+	}
+	for _, prepared := range []bool{false, true} {
+		t.Run(fmt.Sprintf("prepared=%t", prepared), func(t *testing.T) {
+			h := newDoltHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestScript(t, h, script)
+			}
+		})
+	}
+}
+
 func TestVectorIndexNullability(t *testing.T) {
 	for _, colType := range []string{"JSON", "VECTOR(2)"} {
 		t.Run(colType, func(t *testing.T) {
