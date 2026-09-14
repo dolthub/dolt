@@ -2944,3 +2944,12 @@ SQL
     dolt sql < $BATS_TEST_DIRNAME/helper/with_utf16be_bom.sql
     dolt table rm t1
 }
+
+@test "sql: reject ungrouped columns without a functional dependency" {
+    # https://github.com/dolthub/dolt/issues/5821
+    run dolt sql -r csv <<'SQL'
+CREATE TABLE grouped(col1 INT,col2 INT); INSERT INTO grouped VALUES(1,1),(1,2),(1,3),(1,4),(1,5); SELECT COUNT(*),col1,col2 FROM grouped GROUP BY col1;
+SQL
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "only_full_group_by" ]] || false
+}
