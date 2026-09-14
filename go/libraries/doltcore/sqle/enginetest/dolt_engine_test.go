@@ -904,6 +904,32 @@ func TestVectorType(t *testing.T) {
 	enginetest.TestVectorType(t, harness)
 }
 
+// https://github.com/dolthub/dolt/issues/8658
+func TestFixedDimensionalVectorColumn(t *testing.T) {
+	script := queries.ScriptTest{
+		Name: "Test fixed-dimensional VECTOR columns",
+		SetUpScript: []string{
+			"CREATE TABLE typed_vector(pk INT PRIMARY KEY,v VECTOR(3) NOT NULL)",
+			"INSERT INTO typed_vector VALUES(1,STRING_TO_VECTOR('[1,2,3]'))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "SELECT VEC_DISTANCE_COSINE(v,STRING_TO_VECTOR('[1,2,3]')) FROM typed_vector", Expected: []sql.Row{{float64(0)}}},
+			{Query: "INSERT INTO typed_vector VALUES(2,STRING_TO_VECTOR('[1,2]'))", ExpectedErr: gmstypes.ErrVectorWrongDimensions},
+		},
+	}
+	for _, prepared := range []bool{false, true} {
+		t.Run(fmt.Sprintf("prepared=%t", prepared), func(t *testing.T) {
+			h := newDoltHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestScript(t, h, script)
+			}
+		})
+	}
+}
+
 func TestIndexPrefix(t *testing.T) {
 	harness := newDoltHarness(t)
 	RunIndexPrefixTest(t, harness)

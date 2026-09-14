@@ -462,19 +462,3 @@ SQL
     [ "$status" -eq "0" ]
     [[ "${lines[1]}" =~ "1" ]] || false
 }
-
-@test "vector-index: VECTOR column stores a fixed dimensional vector" {
-    # https://github.com/dolthub/dolt/issues/8658
-    run dolt sql -r csv <<'SQL'
-CREATE TABLE typed_vector(pk INT PRIMARY KEY,v VECTOR(3) NOT NULL); INSERT INTO typed_vector VALUES(1,STRING_TO_VECTOR('[1,2,3]'));
-SQL
-    [ "$status" -eq 0 ]
-    run dolt sql -r csv <<'SQL'
-SELECT VEC_DISTANCE_COSINE(v,STRING_TO_VECTOR('[1,2,3]')) AS distance FROM typed_vector;
-SQL
-    [ "$status" -eq 0 ]
-    [ "$output" = $'distance\n0' ]
-    run dolt sql -q "INSERT INTO typed_vector VALUES(2,STRING_TO_VECTOR('[1,2]'))"
-    [ "$status" -ne 0 ]
-    [[ "$output" =~ "VECTOR dimension mismatch" ]] || false
-}
