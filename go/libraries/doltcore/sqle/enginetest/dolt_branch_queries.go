@@ -81,11 +81,13 @@ var ForeignKeyBranchTests = []queries.ScriptTest{
 	},
 	// https://github.com/dolthub/dolt/issues/6318
 	{
-		Name: "Test foreign-key creation in revision databases",
+		Name: "Test foreign-key creation in non-default revision databases",
 		SetUpScript: []string{
 			"CREATE TABLE ref_parent(pk INT PRIMARY KEY)",
 			"CREATE TABLE ref_child(pk INT PRIMARY KEY)",
-			"USE `mydb/main`",
+			"CALL DOLT_COMMIT('-Am', 'create tables')",
+			"CALL DOLT_BRANCH('revision_branch')",
+			"USE `mydb/revision_branch`",
 			"ALTER TABLE ref_child ADD CONSTRAINT revision_fk FOREIGN KEY(pk) REFERENCES ref_parent(pk)",
 		},
 		Assertions: []queries.ScriptTestAssertion{
