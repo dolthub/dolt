@@ -175,6 +175,28 @@ SQL
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_named` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)' ]] || false
 }
 
+@test "foreign-keys: reference a parent with a spatial non-key column" {
+    # https://github.com/dolthub/dolt/issues/3024
+    dolt sql -q "CREATE TABLE restaurants (id INT PRIMARY KEY, coordinate POINT);
+        CREATE TABLE hours (restaurant_id INT PRIMARY KEY AUTO_INCREMENT,
+            FOREIGN KEY (restaurant_id) REFERENCES restaurants(id));"
+
+    run dolt sql -q "SHOW CREATE TABLE hours"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'FOREIGN KEY (`restaurant_id`) REFERENCES `restaurants` (`id`)' ]] || false
+    run dolt sql -q "INSERT INTO hours VALUES (123)"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "Foreign key violation" ]] || false
+    run dolt sql -r csv -q "SELECT * FROM hours"
+    [ "$status" -eq 0 ]
+    [ "$output" = "restaurant_id" ]
+
+    dolt sql -q "INSERT INTO restaurants VALUES (123, POINT(1, 2)); INSERT INTO hours VALUES (123)"
+    run dolt sql -r csv -q "SELECT * FROM hours"
+    [ "$status" -eq 0 ]
+    [ "$output" = $'restaurant_id\n123' ]
+}
+
 @test "foreign-keys: parent table index required" {
     # parent doesn't have an index over (v1,v2) to reference
     run dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1,v2) REFERENCES parent(v1,v2);"
