@@ -542,6 +542,29 @@ func TestScripts(t *testing.T) {
 	enginetest.TestScripts(t, h)
 }
 
+// https://github.com/dolthub/dolt/issues/4233
+func TestCTEDefinitionOrder(t *testing.T) {
+	script := queries.ScriptTest{
+		Name:        "Test CTE definition ordering",
+		SetUpScript: []string{},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "WITH c AS (SELECT * FROM b), b AS (SELECT * FROM a), a AS (SELECT 1 AS n) SELECT * FROM c", ExpectedErr: sql.ErrTableNotFound},
+			{Query: "WITH a AS (SELECT 1 AS n), b AS (SELECT * FROM a), c AS (SELECT * FROM b) SELECT * FROM c", Expected: []sql.Row{{1}}},
+		},
+	}
+	for _, prepared := range []bool{false, true} {
+		t.Run(fmt.Sprintf("prepared=%t", prepared), func(t *testing.T) {
+			h := newDoltHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestScript(t, h, script)
+			}
+		})
+	}
+}
+
 func TestNumericErrorScripts(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
