@@ -1164,6 +1164,34 @@ func TestDoltStoredProcedures(t *testing.T) {
 	RunDoltStoredProceduresTest(t, h)
 }
 
+// https://github.com/dolthub/dolt/issues/6236
+func TestProcedureBranchWrites(t *testing.T) {
+	script := queries.ScriptTest{
+		Name: "Test branch changes inside stored procedures",
+		SetUpScript: []string{
+			"CREATE TABLE branch_writes(b INT)",
+			"CALL dolt_commit('-Am','table')",
+			"CREATE PROCEDURE edit_on_branch()\nBEGIN\n CALL dolt_checkout('-b','branch1');\n INSERT INTO branch_writes VALUES(100);\n CALL dolt_commit('-am','new row');\n CALL dolt_checkout('main');\nEND",
+			"CALL edit_on_branch()",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "SELECT * FROM branch_writes", Expected: []sql.Row{}},
+			{Query: "SELECT * FROM branch_writes AS OF 'branch1'", Expected: []sql.Row{{int32(100)}}},
+		},
+	}
+	for _, prepared := range []bool{false, true} {
+		t.Run(fmt.Sprintf("prepared=%t", prepared), func(t *testing.T) {
+			h := newDoltHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestScript(t, h, script)
+			}
+		})
+	}
+}
+
 func TestDoltStoredProceduresPrepared(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunDoltStoredProceduresPreparedTest(t, h)
