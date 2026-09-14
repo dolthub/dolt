@@ -1371,6 +1371,32 @@ func TestShowCreateTable(t *testing.T) {
 	RunShowCreateTableTests(t, h)
 }
 
+// https://github.com/dolthub/dolt/issues/8275
+func TestVirtualColumnUniqueIndexShowCreate(t *testing.T) {
+	script := queries.ScriptTest{
+		Name: "Test unique indexes on virtual columns",
+		SetUpScript: []string{
+			"CREATE TABLE virtual_unique(a INT PRIMARY KEY,b INT GENERATED ALWAYS AS(a*a),UNIQUE KEY(b))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "SHOW CREATE TABLE virtual_unique", Expected: []sql.Row{{"virtual_unique", "CREATE TABLE `virtual_unique` (\n  `a` int NOT NULL,\n  `b` int GENERATED ALWAYS AS ((`a` * `a`)),\n  PRIMARY KEY (`a`),\n  UNIQUE KEY `b` (`b`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}}},
+			{Query: "INSERT INTO virtual_unique(a) VALUES(2),(-2)", ExpectedErr: sql.ErrUniqueKeyViolation},
+			{Query: "SELECT COUNT(*) FROM virtual_unique", Expected: []sql.Row{{int64(0)}}},
+		},
+	}
+	for _, prepared := range []bool{false, true} {
+		t.Run(fmt.Sprintf("prepared=%t", prepared), func(t *testing.T) {
+			h := newDoltHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestScript(t, h, script)
+			}
+		})
+	}
+}
+
 func TestShowCreateTablePrepared(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunShowCreateTablePreparedTests(t, h)
