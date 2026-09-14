@@ -1286,3 +1286,11 @@ SQL
     [[ "$output" =~ "dolt_status_ignored" ]] || false
 }
 
+@test "system-tables: dolt_procedures exists before the first procedure" {
+    # https://github.com/dolthub/dolt/issues/6152
+    run dolt sql -r csv <<'SQL'
+SELECT COUNT(*) AS n FROM dolt_procedures;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'n\n0' ]
+}
