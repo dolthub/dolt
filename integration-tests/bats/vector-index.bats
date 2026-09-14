@@ -462,3 +462,20 @@ SQL
     [ "$status" -eq "0" ]
     [[ "${lines[1]}" =~ "1" ]] || false
 }
+
+@test "vector-index: adding generated columns preserves existing indexes" {
+    # https://github.com/dolthub/dolt/issues/8961
+    run dolt sql -r csv <<'SQL'
+CREATE TABLE generated_vector(pk INT PRIMARY KEY,embedding JSON NOT NULL,metadata JSON,category INT,INDEX category_idx(category)); CREATE VECTOR INDEX vidx ON generated_vector(embedding); INSERT INTO generated_vector VALUES(1,'[1.0]','{"name":"first"}',7); ALTER TABLE generated_vector ADD COLUMN name VARCHAR(255) AS(metadata->>'$.name'); CALL dolt_commit('-Am','generated column');
+SQL
+    [ "$status" -eq 0 ]
+    run dolt sql -q "SHOW CREATE TABLE generated_vector"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'VECTOR KEY `vidx` (`embedding`)' ]] || false
+    [[ "$output" =~ 'KEY `category_idx` (`category`)' ]] || false
+    run dolt sql -r csv <<'SQL'
+SELECT name FROM generated_vector ORDER BY VEC_DISTANCE('[0.0]',embedding) LIMIT 1;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'name\nfirst' ]
+}
