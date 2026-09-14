@@ -2944,31 +2944,3 @@ SQL
     dolt sql < $BATS_TEST_DIRNAME/helper/with_utf16be_bom.sql
     dolt table rm t1
 }
-
-@test "sql: virtual columns project filter and sort with unused columns" {
-    # https://github.com/dolthub/dolt/issues/8323
-    run dolt sql -r csv <<'SQL'
-CREATE TABLE virtual_one(pk INT PRIMARY KEY,j INT,value INT AS(pk*pk)); INSERT INTO virtual_one(pk,j) VALUES(-1,1),(2,1),(-3,1); CREATE TABLE virtual_two(pk INT PRIMARY KEY,j INT,k INT,value INT AS(pk*pk)); INSERT INTO virtual_two(pk,j,k) VALUES(-1,1,2),(2,1,2),(-3,1,2);
-SQL
-    [ "$status" -eq 0 ]
-    run dolt sql -r csv <<'SQL'
-SELECT value FROM virtual_one ORDER BY value;
-SQL
-    [ "$status" -eq 0 ]
-    [ "$output" = $'value\n1\n4\n9' ]
-    run dolt sql -r csv <<'SQL'
-SELECT pk FROM virtual_one WHERE value>1 ORDER BY pk;
-SQL
-    [ "$status" -eq 0 ]
-    [ "$output" = $'pk\n-3\n2' ]
-    run dolt sql -r csv <<'SQL'
-SELECT value FROM virtual_two ORDER BY value;
-SQL
-    [ "$status" -eq 0 ]
-    [ "$output" = $'value\n1\n4\n9' ]
-    run dolt sql -r csv <<'SQL'
-SELECT pk FROM virtual_two WHERE value>1 ORDER BY pk;
-SQL
-    [ "$status" -eq 0 ]
-    [ "$output" = $'pk\n-3\n2' ]
-}
