@@ -1394,6 +1394,42 @@ func TestDoltMerge(t *testing.T) {
 	RunDoltMergeTests(t, h)
 }
 
+// https://github.com/dolthub/dolt/issues/6612
+func TestCollationMergePreservesFeatureDiff(t *testing.T) {
+	script := queries.ScriptTest{
+		Name: "Test feature data preservation across collation merges",
+		SetUpScript: []string{
+			"CREATE TABLE t(pk VARCHAR(255) PRIMARY KEY,v VARCHAR(255)) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+			"CALL dolt_commit('-Am','base')",
+			"CALL dolt_checkout('-b','feature')",
+			"INSERT INTO t VALUES('1','first')",
+			"CALL dolt_commit('-am','first row')",
+			"CALL dolt_checkout('main')",
+			"ALTER TABLE t COLLATE utf8mb4_0900_bin",
+			"ALTER TABLE t MODIFY v VARCHAR(255) NOT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin",
+			"CALL dolt_commit('-am','collation')",
+			"CALL dolt_checkout('feature')",
+			"CALL dolt_merge('main','-m','merge')",
+			"INSERT INTO t VALUES('2','second')",
+			"CALL dolt_commit('-am','second row')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "SELECT to_pk,to_v,diff_type FROM dolt_commit_diff_t WHERE to_commit=HASHOF('feature') AND from_commit=DOLT_MERGE_BASE('main','feature') ORDER BY to_pk", Expected: []sql.Row{{"1", "first", "added"}, {"2", "second", "added"}}},
+		},
+	}
+	for _, prepared := range []bool{false, true} {
+		t.Run(fmt.Sprintf("prepared=%t", prepared), func(t *testing.T) {
+			h := newDoltHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestScript(t, h, script)
+			}
+		})
+	}
+}
+
 func TestDoltMergePrepared(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunDoltMergePreparedTests(t, h)
