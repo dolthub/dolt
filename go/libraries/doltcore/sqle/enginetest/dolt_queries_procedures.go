@@ -739,6 +739,14 @@ end
 			},
 		},
 	},
+	// https://github.com/dolthub/dolt/issues/6152
+	{
+		Name:        "Test the empty dolt_procedures table",
+		SetUpScript: []string{},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "SELECT COUNT(*) FROM dolt_procedures", Expected: []sql.Row{{int64(0)}}},
+		},
+	},
 	{
 		Name: "checkout existing branch and commit in procedure",
 		SetUpScript: []string{
