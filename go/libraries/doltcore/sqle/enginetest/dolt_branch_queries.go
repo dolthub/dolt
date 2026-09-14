@@ -79,6 +79,22 @@ var ForeignKeyBranchTests = []queries.ScriptTest{
 			},
 		},
 	},
+	// https://github.com/dolthub/dolt/issues/6318
+	{
+		Name: "Test foreign-key creation in revision databases",
+		SetUpScript: []string{
+			"CREATE TABLE ref_parent(pk INT PRIMARY KEY)",
+			"CREATE TABLE ref_child(pk INT PRIMARY KEY)",
+			"USE `mydb/main`",
+			"ALTER TABLE ref_child ADD CONSTRAINT revision_fk FOREIGN KEY(pk) REFERENCES ref_parent(pk)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "INSERT INTO ref_child VALUES(1)", ExpectedErr: sql.ErrForeignKeyChildViolation},
+			{Query: "INSERT INTO ref_parent VALUES(1)", Expected: []sql.Row{{types.NewOkResult(1)}}},
+			{Query: "INSERT INTO ref_child VALUES(1)", Expected: []sql.Row{{types.NewOkResult(1)}}},
+			{Query: "SELECT * FROM ref_child", Expected: []sql.Row{{int32(1)}}},
+		},
+	},
 	{
 		Name: "create fk with branch checkout",
 		SetUpScript: []string{
