@@ -392,6 +392,32 @@ func TestInsertInto(t *testing.T) {
 	enginetest.TestInsertInto(t, h)
 }
 
+// https://github.com/dolthub/dolt/issues/6500
+func TestInsertSourceAliasesOnDuplicateKeyUpdate(t *testing.T) {
+	script := queries.ScriptTest{
+		Name: "Test INSERT aliases in duplicate-key updates",
+		SetUpScript: []string{
+			"CREATE TABLE alias_insert(a INT PRIMARY KEY,b INT,c INT)",
+			"INSERT INTO alias_insert VALUES(1,0,0)",
+			"INSERT INTO alias_insert(a,b,c) VALUES(1,2,3),(4,5,6) AS new(m,n,p) ON DUPLICATE KEY UPDATE c=m+n",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "SELECT * FROM alias_insert ORDER BY a", Expected: []sql.Row{{int32(1), int32(0), int32(3)}, {int32(4), int32(5), int32(6)}}},
+		},
+	}
+	for _, prepared := range []bool{false, true} {
+		t.Run(fmt.Sprintf("prepared=%t", prepared), func(t *testing.T) {
+			h := newDoltHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestScript(t, h, script)
+			}
+		})
+	}
+}
+
 func TestInsertIgnoreInto(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()

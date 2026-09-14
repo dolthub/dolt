@@ -2944,16 +2944,3 @@ SQL
     dolt sql < $BATS_TEST_DIRNAME/helper/with_utf16be_bom.sql
     dolt table rm t1
 }
-
-@test "sql: insert source aliases resolve on duplicate key update" {
-    # https://github.com/dolthub/dolt/issues/6500
-    run dolt sql -r csv <<'SQL'
-CREATE TABLE alias_insert(a INT PRIMARY KEY,b INT,c INT); INSERT INTO alias_insert VALUES(1,0,0); INSERT INTO alias_insert(a,b,c) VALUES(1,2,3),(4,5,6) AS new(m,n,p) ON DUPLICATE KEY UPDATE c=m+n;
-SQL
-    [ "$status" -eq 0 ]
-    run dolt sql -r csv <<'SQL'
-SELECT * FROM alias_insert ORDER BY a;
-SQL
-    [ "$status" -eq 0 ]
-    [ "$output" = $'a,b,c\n1,0,3\n4,5,6' ]
-}
