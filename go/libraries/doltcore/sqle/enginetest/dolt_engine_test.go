@@ -536,6 +536,22 @@ func TestConvertPrepared(t *testing.T) {
 	enginetest.TestConvertPrepared(t, h)
 }
 
+// https://github.com/dolthub/dolt/issues/7668
+func TestPreparedDecimalFractionalDigits(t *testing.T) {
+	h := newDoltHarness(t)
+	defer h.Close()
+	enginetest.TestScript(t, h, queries.ScriptTest{
+		Name: "Test prepared decimal fractional digits",
+		SetUpScript: []string{
+			"PREPARE stmt FROM 'SELECT ?'",
+			"SET @a=CAST(123.45 AS DECIMAL(5,2))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "EXECUTE stmt USING @a", Expected: []sql.Row{{"123.45"}}},
+		},
+	})
+}
+
 func TestScripts(t *testing.T) {
 	h := newDoltServerTestHarness(t).WithConfigureStats(true)
 	defer h.Close()
