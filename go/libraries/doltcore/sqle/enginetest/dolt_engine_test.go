@@ -1164,6 +1164,28 @@ func TestDoltStoredProcedures(t *testing.T) {
 	RunDoltStoredProceduresTest(t, h)
 }
 
+// https://github.com/dolthub/dolt/issues/6152
+func TestEmptyProceduresTable(t *testing.T) {
+	script := queries.ScriptTest{
+		Name:        "Test the empty dolt_procedures table",
+		SetUpScript: []string{},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "SELECT COUNT(*) FROM dolt_procedures", Expected: []sql.Row{{int64(0)}}},
+		},
+	}
+	for _, prepared := range []bool{false, true} {
+		t.Run(fmt.Sprintf("prepared=%t", prepared), func(t *testing.T) {
+			h := newDoltHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestScript(t, h, script)
+			}
+		})
+	}
+}
+
 func TestDoltStoredProceduresPrepared(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunDoltStoredProceduresPreparedTest(t, h)
