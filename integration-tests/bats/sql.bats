@@ -2944,3 +2944,33 @@ SQL
     dolt sql < $BATS_TEST_DIRNAME/helper/with_utf16be_bom.sql
     dolt table rm t1
 }
+
+@test "sql: stored procedure writes follow branch checkout" {
+    # https://github.com/dolthub/dolt/issues/6236
+    run dolt sql -r csv <<'SQL'
+CREATE TABLE branch_writes(b INT); CALL dolt_commit('-Am','table');
+SQL
+    [ "$status" -eq 0 ]
+    dolt sql <<'SQL'
+DELIMITER //
+CREATE PROCEDURE edit_on_branch()
+BEGIN
+    CALL dolt_checkout('-b', 'branch1');
+    INSERT INTO branch_writes VALUES (100);
+    CALL dolt_commit('-am', 'new row');
+    CALL dolt_checkout('main');
+END//
+DELIMITER ;
+CALL edit_on_branch();
+SQL
+    run dolt sql -r csv <<'SQL'
+SELECT * FROM branch_writes;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'b' ]
+    run dolt sql -r csv <<'SQL'
+SELECT * FROM branch_writes AS OF 'branch1';
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'b\n100' ]
+}
