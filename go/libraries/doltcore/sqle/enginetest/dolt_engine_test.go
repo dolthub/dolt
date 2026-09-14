@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer/analyzererrors"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -378,6 +379,32 @@ func TestOrderByGroupBy(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestOrderByGroupBy(t, h)
+}
+
+// https://github.com/dolthub/dolt/issues/5821
+func TestOnlyFullGroupByUngroupedColumn(t *testing.T) {
+	script := queries.ScriptTest{
+		Name: "Test ONLY_FULL_GROUP_BY enforcement",
+		SetUpScript: []string{
+			"SET sql_mode='ONLY_FULL_GROUP_BY'",
+			"CREATE TABLE grouped(col1 INT,col2 INT)",
+			"INSERT INTO grouped VALUES(1,1),(1,2),(1,3),(1,4),(1,5)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "SELECT COUNT(*),col1,col2 FROM grouped GROUP BY col1", ExpectedErr: analyzererrors.ErrValidationGroupBy},
+		},
+	}
+	for _, prepared := range []bool{false, true} {
+		t.Run(fmt.Sprintf("prepared=%t", prepared), func(t *testing.T) {
+			h := newDoltHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestScript(t, h, script)
+			}
+		})
+	}
 }
 
 func TestAmbiguousColumnResolution(t *testing.T) {
