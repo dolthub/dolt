@@ -2944,3 +2944,12 @@ SQL
     dolt sql < $BATS_TEST_DIRNAME/helper/with_utf16be_bom.sql
     dolt table rm t1
 }
+
+@test "sql: prepared decimal parameter retains fractional digits" {
+    # https://github.com/dolthub/dolt/issues/7668
+    run dolt sql -r csv <<'SQL'
+PREPARE stmt FROM 'SELECT ?'; SET @a=CAST(123.45 AS DECIMAL(5,2)); EXECUTE stmt USING @a;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'?\n123.45' ]
+}
