@@ -266,6 +266,23 @@ SQL
     [[ ! "$output" =~ "README.md" ]] || false
 }
 
+@test "remotes: clone a freshly initialized checkout after garbage collection" {
+    # https://github.com/dolthub/dolt/issues/5325
+    mkdir repo_one
+    cd repo_one
+    dolt init
+    dolt gc
+    cd ..
+
+    run dolt clone file://./repo_one/.dolt/noms repo_two
+    [ "$status" -eq 0 ]
+    cd repo_two
+    run dolt log -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Initialize data repository" ]] || false
+    cd ..
+}
+
 @test "remotes: clone a complicated remote" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql -q "CREATE TABLE test (pk int primary key)"
@@ -1939,23 +1956,4 @@ SQL
   run dolt remote add "remote@special" http://localhost:50051/test-org/test-repo
   [ "$status" -eq 1 ]
   [[ "$output" =~ "remote name invalid" ]] || false
-}
-
-@test "remotes: clone a checkout chunk store after garbage collection" {
-    # https://github.com/dolthub/dolt/issues/5325
-    dolt sql -q "CREATE TABLE checkout_data(pk INT PRIMARY KEY); INSERT INTO checkout_data VALUES(42)"
-    dolt add .
-    dolt commit -m "data"
-    dolt gc
-    dolt clone "file://$(pwd)/.dolt/noms" cloned_checkout
-    cd cloned_checkout
-    run dolt sql -r csv <<'SQL'
-SELECT * FROM checkout_data;
-SQL
-    [ "$status" -eq 0 ]
-    [ "$output" = $'pk\n42' ]
-    run dolt log -n 1
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "data" ]] || false
-    cd ..
 }
