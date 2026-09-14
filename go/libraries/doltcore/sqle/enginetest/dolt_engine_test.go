@@ -425,6 +425,35 @@ func TestInsertIntoErrors(t *testing.T) {
 	RunInsertIntoErrorsTest(t, h)
 }
 
+// https://github.com/dolthub/dolt/issues/8193
+func TestEmptyValuesWithExplicitColumns(t *testing.T) {
+	script := queries.ScriptTest{
+		Name: "Test empty VALUES with explicit insert columns",
+		SetUpScript: []string{
+			"CREATE TABLE empty_values(i INT,j INT)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "INSERT INTO empty_values(i,j) VALUES()", ExpectedErr: sql.ErrInsertIntoMismatchValueCount},
+			{Query: "INSERT INTO empty_values(i) VALUES()", ExpectedErr: sql.ErrInsertIntoMismatchValueCount},
+			{Query: "INSERT INTO empty_values(j) VALUES()", ExpectedErr: sql.ErrInsertIntoMismatchValueCount},
+			{Query: "SELECT * FROM empty_values", Expected: []sql.Row{}},
+			{Query: "INSERT INTO empty_values VALUES()", Expected: []sql.Row{{gmstypes.NewOkResult(1)}}},
+			{Query: "SELECT * FROM empty_values", Expected: []sql.Row{{nil, nil}}},
+		},
+	}
+	for _, prepared := range []bool{false, true} {
+		t.Run(fmt.Sprintf("prepared=%t", prepared), func(t *testing.T) {
+			h := newDoltHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestScript(t, h, script)
+			}
+		})
+	}
+}
+
 func TestGeneratedColumns(t *testing.T) {
 	harness := newDoltEnginetestHarness(t)
 	RunGeneratedColumnTests(t, harness)
