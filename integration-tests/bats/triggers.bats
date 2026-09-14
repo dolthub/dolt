@@ -93,6 +93,26 @@ SQL
     [[ "${#lines[@]}" = "2" ]] || false
 }
 
+@test "triggers: failed multi-row insert rolls back writes to other tables" {
+    # https://github.com/dolthub/dolt/issues/1894
+    dolt sql -q "CREATE TABLE test1 (pk BIGINT PRIMARY KEY, v1 BIGINT);
+        CREATE TABLE test2 (pk BIGINT PRIMARY KEY, v1 BIGINT);
+        CREATE TRIGGER test1_trig AFTER INSERT ON test1 FOR EACH ROW
+            INSERT INTO test2 VALUES (new.pk + 100, new.v1 + 100);
+        INSERT INTO test1 VALUES (1, 1), (2, 2);"
+
+    run dolt sql -q "INSERT INTO test1 VALUES (3, 3), (1, 4), (5, 5)"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "duplicate primary key" ]] || false
+
+    run dolt sql -r csv -q "SELECT * FROM test1 ORDER BY pk"
+    [ "$status" -eq 0 ]
+    [ "$output" = $'pk,v1\n1,1\n2,2' ]
+    run dolt sql -r csv -q "SELECT * FROM test2 ORDER BY pk"
+    [ "$status" -eq 0 ]
+    [ "$output" = $'pk,v1\n101,101\n102,102' ]
+}
+
 @test "triggers: import with triggers" {
        dolt sql <<SQL
 CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT);
