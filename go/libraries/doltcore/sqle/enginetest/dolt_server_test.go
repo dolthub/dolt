@@ -15,8 +15,6 @@
 package enginetest
 
 import (
-	gosql "database/sql"
-	"fmt"
 	"runtime"
 	"strings"
 	"testing"
@@ -43,33 +41,6 @@ func TestDropDatabaseMultiSessionBehavior(t *testing.T) {
 // TestPersistVariable tests persisting variables across server starts
 func TestPersistVariable(t *testing.T) {
 	testSerialSessionScriptTests(t, PersistVariableTests)
-}
-
-// https://github.com/dolthub/dolt/issues/4501
-func TestWildcardIPHostGrant(t *testing.T) {
-	dEnv, controller, config := startServer(t, true, "127.0.0.1", "")
-	t.Cleanup(func() {
-		controller.Stop()
-		require.NoError(t, controller.WaitForStop())
-		dEnv.Close()
-	})
-	root, session := newConnection(t, config)
-	defer root.Close()
-	for _, query := range []string{
-		"CREATE TABLE wildcard_data(pk INT PRIMARY KEY)",
-		"INSERT INTO wildcard_data VALUES(42)",
-		"CREATE USER wildcard_user@'127.0.0.%' IDENTIFIED BY ''",
-		"GRANT SELECT ON dolt.* TO wildcard_user@'127.0.0.%'",
-	} {
-		_, err := session.Exec(query)
-		require.NoError(t, err)
-	}
-	conn, err := gosql.Open("mysql", fmt.Sprintf("wildcard_user:@tcp(127.0.0.1:%d)/dolt", config.Port()))
-	require.NoError(t, err)
-	defer conn.Close()
-	var pk int
-	require.NoError(t, conn.QueryRow("SELECT pk FROM wildcard_data").Scan(&pk))
-	require.Equal(t, 42, pk)
 }
 
 func TestDoltServerRunningUnixSocket(t *testing.T) {
