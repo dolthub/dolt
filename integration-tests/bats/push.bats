@@ -51,6 +51,32 @@ teardown() {
     [[ "$output" =~ "t1" ]] || false
 }
 
+@test "push: HEAD resolves to the current branch" {
+    cd repo1
+    dolt checkout -b feature/current
+    dolt push -u origin HEAD
+    run dolt branch -r
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "origin/feature/current" ]] || false
+    [[ ! "$output" =~ "origin/HEAD" ]] || false
+
+    cd ../repo2
+    dolt fetch origin
+    dolt checkout feature/current
+    run dolt sql -r csv -q "select * from t1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "0,0" ]] || false
+
+    cd ../repo1
+    dolt push origin HEAD:renamed
+    cd ../repo2
+    dolt fetch origin
+    dolt checkout renamed
+    run dolt sql -r csv -q "select * from t1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "0,0" ]] || false
+}
+
 @test "push: push custom remote" {
     cd repo1
     setup_remote_server
