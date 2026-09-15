@@ -9,7 +9,7 @@ const FORCE_DRAFT_LABEL = 'force-draft-ci';
 const LABEL = 'ci-deferred';
 const STATUS = 'CI scheduling';
 const COMMENT = '<!-- dolt-ci-scheduling -->';
-const { ADMISSION_STEP, DEFERRED_STEP, jobDecision, cancelFromJob, cancelDeferredRun } = require('./cancellation');
+const { ADMISSION_STEP, readDecision, cancelFromJob, cancelDeferredRun } = require('./cancellation');
 const DEFAULT_TIMEZONE = 'America/Los_Angeles';
 
 function afterHours(now = new Date(), timezone = DEFAULT_TIMEZONE) {
@@ -242,7 +242,7 @@ async function reconcile({ github, context, pullNumber, now = new Date(), timezo
       if (!['deferred', 'admitted', 'failed'].includes(decision)) {
         const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt,
           { ...repo, run_id: run.id, attempt_number: run.run_attempt, per_page: 100 });
-        decision = jobDecision(jobs);
+        decision = await readDecision({ github, repo, run, jobs });
         cacheChanged = true;
       }
       currentCache[key] = decision;
@@ -311,4 +311,4 @@ async function reconcile({ github, context, pullNumber, now = new Date(), timezo
 }
 
 module.exports = { cancelFromJob, cancelDeferredRun, ADMISSION_STEP, afterHours, admission, candidates, reconcile, latestRuns,
-  hasApproval, deferralReasons, DEFAULT_TIMEZONE, AFTER_HOURS_LABEL, REVIEW_LABEL, FORCE_DRAFT_LABEL, LABEL, STATUS, DEFERRED_STEP };
+  hasApproval, deferralReasons, DEFAULT_TIMEZONE, AFTER_HOURS_LABEL, REVIEW_LABEL, FORCE_DRAFT_LABEL, LABEL, STATUS };

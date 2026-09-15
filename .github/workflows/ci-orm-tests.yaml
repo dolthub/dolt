@@ -19,46 +19,15 @@ jobs:
     timeout-minutes: 30
     name: ORM tests
     steps:
-      - name: Checkout CI admission
-        if: github.event_name == 'pull_request'
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-          path: .ci-admission
-          sparse-checkout: .github/scripts/ci-scheduling
-      - name: Check CI admission
+      - name: Check deferred CI
         id: ci-admission
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        env:
-          CI_TIMEZONE: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
-        with:
-          script: |
-            const { admission } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
-            const decision = await admission({ github, context, timezone: process.env.CI_TIMEZONE });
-            core.setOutput('run', String(decision.run));
-            core.setOutput('reason', decision.reason);
-      - name: CI postponed
-        if: steps.ci-admission.outputs.reason == 'deferred'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await core.summary.addRaw('CI postponed. See the PR comment for conditions and overrides.').write();
-      - name: Cancel deferred CI
-        if: github.event_name == 'pull_request' && steps.ci-admission.outputs.run == 'false'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { cancelFromJob } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
-            await cancelFromJob({ github, context, core });
+        uses: $/.github/actions/check-deferred-ci
       - name: Checkout
         uses: actions/checkout@v6
         with:
           path: dolt
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Build ORM test image
         uses: docker/build-push-action@v6
         with:
@@ -68,19 +37,17 @@ jobs:
           load: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Test ORM integrations
         run: docker run --rm orm-tests:latest
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Configure AWS Credentials
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') && (failure() && !env.ACT) }}
+        if: steps.ci-admission.outputs.run == 'true' && (failure() && !env.ACT)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-2
       - name: Send Email
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') && (failure() && !env.ACT) }}
+        if: steps.ci-admission.outputs.run == 'true' && (failure() && !env.ACT)
         uses: ./.github/actions/ses-email-action
         with:
           template: 'OrmIntegrationFailureTemplate'

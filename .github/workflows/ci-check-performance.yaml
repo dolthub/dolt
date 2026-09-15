@@ -15,38 +15,8 @@ jobs:
       pull-requests: write
       contents: read
     steps:
-      - name: Checkout CI admission
-        if: github.event_name == 'pull_request'
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-          path: .ci-admission
-          sparse-checkout: .github/scripts/ci-scheduling
-      - name: Check CI admission
-        id: ci-admission
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        env:
-          CI_TIMEZONE: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
-        with:
-          script: |
-            const { admission } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
-            const decision = await admission({ github, context, timezone: process.env.CI_TIMEZONE });
-            core.setOutput('run', String(decision.run));
-            core.setOutput('reason', decision.reason);
-      - name: CI postponed
-        if: steps.ci-admission.outputs.reason == 'deferred'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await core.summary.addRaw('CI postponed. See the PR comment for conditions and overrides.').write();
-      - name: Cancel deferred CI
-        if: github.event_name == 'pull_request' && steps.ci-admission.outputs.run == 'false'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { cancelFromJob } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
-            await cancelFromJob({ github, context, core });
+      - name: Check deferred CI
+        uses: $/.github/actions/check-deferred-ci
       - uses: mheap/github-action-required-labels@v5
         with:
           mode: exactly
@@ -56,4 +26,3 @@ jobs:
           message: "<!-- go-run-output -->
 
             This PR is being tested for performance. Please allow ~25 mins for this to complete. If this PR does not result in a performance regression, the `performance_approved` label will be automatically added to this PR."
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}

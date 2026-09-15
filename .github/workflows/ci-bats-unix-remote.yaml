@@ -24,92 +24,62 @@ jobs:
       use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
     # We only run these as seaparte workflow if we do not have AWS credentials.
     steps:
-      - name: Checkout CI admission
-        if: github.event_name == 'pull_request'
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-          path: .ci-admission
-          sparse-checkout: .github/scripts/ci-scheduling
-      - name: Check CI admission
-        id: ci-admission
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        env:
-          CI_TIMEZONE: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
-        with:
-          script: |
-            const { admission } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
-            const decision = await admission({ github, context, timezone: process.env.CI_TIMEZONE });
-            core.setOutput('run', String(decision.run));
-            core.setOutput('reason', decision.reason);
-      - name: CI postponed
-        if: steps.ci-admission.outputs.reason == 'deferred'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await core.summary.addRaw('CI postponed. See the PR comment for conditions and overrides.').write();
-      - name: Cancel deferred CI
-        if: github.event_name == 'pull_request' && steps.ci-admission.outputs.run == 'false'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { cancelFromJob } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
-            await cancelFromJob({ github, context, core });
+      - name: Check deferred CI
+        uses: $/.github/actions/check-deferred-ci
       - uses: actions/checkout@v6
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') && (env.use_credentials != 'true') }}
+        if: env.use_credentials != 'true'
       - name: Set up Go toolchain
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') && (env.use_credentials != 'true') }}
+        if: env.use_credentials != 'true'
         uses: ./.github/actions/setup-go-toolchain
       - name: Setup Python 3.x
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') && (env.use_credentials != 'true') }}
+        if: env.use_credentials != 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
       - uses: actions/setup-node@v4
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') && (env.use_credentials != 'true') }}
+        if: env.use_credentials != 'true'
         with:
           node-version: ^16
       - name: Build dolt
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') && (env.use_credentials != 'true') }}
+        if: env.use_credentials != 'true'
         uses: ./.github/actions/build-dolt
         with:
           remotesrv: 'true'
           noms: 'true'
       - name: Install Bats
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') && (env.use_credentials != 'true') }}
+        if: env.use_credentials != 'true'
         run: |
           npm i bats
           echo "$(pwd)/node_modules/.bin" >> $GITHUB_PATH
         working-directory: ./.ci_bin
       - name: Install Python Deps
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') && (env.use_credentials != 'true') }}
+        if: env.use_credentials != 'true'
         run: |
           pip install mysql-connector-python
           pip install pandas
           pip install pyarrow
       - name: Setup Dolt Config
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') && (env.use_credentials != 'true') }}
+        if: env.use_credentials != 'true'
         uses: ./.github/actions/setup-dolt-config
       - name: Install expect
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') && (env.use_credentials != 'true') }}
+        if: env.use_credentials != 'true'
         run: sudo apt-get install -y expect
       - name: Install Maven
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') && (env.use_credentials != 'true') }}
+        if: env.use_credentials != 'true'
         working-directory: ./.ci_bin
         run: |
           curl -LO https://dlcdn.apache.org/maven/maven-3/3.9.16/binaries/apache-maven-3.9.16-bin.tar.gz
           tar -xf apache-maven-3.9.16-bin.tar.gz
           echo "$(pwd)/apache-maven-3.9.16/bin" >> $GITHUB_PATH
       - name: Install Hadoop
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') && (env.use_credentials != 'true') }}
+        if: env.use_credentials != 'true'
         working-directory: ./.ci_bin
         run: |
           curl -LO https://downloads.apache.org/hadoop/common/hadoop-3.3.6/hadoop-3.3.6.tar.gz
           tar xvf hadoop-3.3.6.tar.gz
           echo "$(pwd)/hadoop-3.3.6/bin" >> $GITHUB_PATH
       - name: Install parquet-cli
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') && (env.use_credentials != 'true') }}
+        if: env.use_credentials != 'true'
         id: parquet_cli
         working-directory: ./.ci_bin
         run: |
@@ -120,10 +90,10 @@ jobs:
           runtime_jar="$(pwd)"/target/parquet-cli-1.12.3-runtime.jar
           echo "runtime_jar=$runtime_jar" >> $GITHUB_OUTPUT
       - name: Check expect
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') && (env.use_credentials != 'true') }}
+        if: env.use_credentials != 'true'
         run: expect -v
       - name: Test all Unix
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') && (env.use_credentials != 'true') }}
+        if: env.use_credentials != 'true'
         env:
           SQL_ENGINE: "remote-engine"
           PARQUET_RUNTIME_JAR: ${{ steps.parquet_cli.outputs.runtime_jar }}

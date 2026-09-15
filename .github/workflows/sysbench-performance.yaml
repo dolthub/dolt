@@ -12,38 +12,8 @@ jobs:
     if: ${{ github.actor != 'dependabot[bot]' }}
     runs-on: ubuntu-22.04
     steps:
-      - name: Checkout CI admission
-        if: github.event_name == 'pull_request'
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-          path: .ci-admission
-          sparse-checkout: .github/scripts/ci-scheduling
-      - name: Check CI admission
-        id: ci-admission
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        env:
-          CI_TIMEZONE: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
-        with:
-          script: |
-            const { admission } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
-            const decision = await admission({ github, context, timezone: process.env.CI_TIMEZONE });
-            core.setOutput('run', String(decision.run));
-            core.setOutput('reason', decision.reason);
-      - name: CI postponed
-        if: steps.ci-admission.outputs.reason == 'deferred'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await core.summary.addRaw('CI postponed. See the PR comment for conditions and overrides.').write();
-      - name: Cancel deferred CI
-        if: github.event_name == 'pull_request' && steps.ci-admission.outputs.run == 'false'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { cancelFromJob } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
-            await cancelFromJob({ github, context, core });
+      - name: Check deferred CI
+        uses: $/.github/actions/check-deferred-ci
       - name: Build benchmark payload (main HEAD + PR HEAD)
         uses: actions/github-script@v7
         id: build_payload
@@ -73,16 +43,13 @@ jobs:
             core.setOutput("from_sha", fromSha);
             core.setOutput("to_sha", toSha);
             core.setOutput("payload", JSON.stringify(payload));
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Log benchmark versions
         shell: bash
         run: |
           echo "from_version_sha=${{ steps.build_payload.outputs.from_sha }}"
           echo "to_version_sha=${{ steps.build_payload.outputs.to_sha }}"
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: benchmark-latency
           client-payload: ${{ steps.build_payload.outputs.payload }}
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}

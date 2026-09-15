@@ -24,44 +24,12 @@ jobs:
       matrix:
         os: [ macos-latest, ubuntu-22.04, windows-latest ]
     steps:
-      - name: Checkout CI admission
-        if: github.event_name == 'pull_request'
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-          path: .ci-admission
-          sparse-checkout: .github/scripts/ci-scheduling
-      - name: Check CI admission
-        id: ci-admission
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        env:
-          CI_TIMEZONE: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
-        with:
-          script: |
-            const { admission } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
-            const decision = await admission({ github, context, timezone: process.env.CI_TIMEZONE });
-            core.setOutput('run', String(decision.run));
-            core.setOutput('reason', decision.reason);
-      - name: CI postponed
-        if: steps.ci-admission.outputs.reason == 'deferred'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await core.summary.addRaw('CI postponed. See the PR comment for conditions and overrides.').write();
-      - name: Cancel deferred CI
-        if: github.event_name == 'pull_request' && steps.ci-admission.outputs.run == 'false'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { cancelFromJob } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
-            await cancelFromJob({ github, context, core });
+      - name: Check deferred CI
+        uses: $/.github/actions/check-deferred-ci
       - uses: actions/checkout@v6
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Set up Go toolchain
         id: toolchain
         uses: ./.github/actions/setup-go-toolchain
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Test All
         working-directory: ./go
         run: |
@@ -102,7 +70,6 @@ jobs:
         env:
           MATRIX_OS: ${{ matrix.os }}
           MSYS2_LOCATION: ${{ steps.toolchain.outputs.msys2-location }}
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
   noracetest:
     name: Go tests - no race
     defaults:
@@ -114,44 +81,12 @@ jobs:
       matrix:
         os: [ macos-latest, ubuntu-22.04, windows-latest ]
     steps:
-      - name: Checkout CI admission
-        if: github.event_name == 'pull_request'
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-          path: .ci-admission
-          sparse-checkout: .github/scripts/ci-scheduling
-      - name: Check CI admission
-        id: ci-admission
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        env:
-          CI_TIMEZONE: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
-        with:
-          script: |
-            const { admission } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
-            const decision = await admission({ github, context, timezone: process.env.CI_TIMEZONE });
-            core.setOutput('run', String(decision.run));
-            core.setOutput('reason', decision.reason);
-      - name: CI postponed
-        if: steps.ci-admission.outputs.reason == 'deferred'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await core.summary.addRaw('CI postponed. See the PR comment for conditions and overrides.').write();
-      - name: Cancel deferred CI
-        if: github.event_name == 'pull_request' && steps.ci-admission.outputs.run == 'false'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { cancelFromJob } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
-            await cancelFromJob({ github, context, core });
+      - name: Check deferred CI
+        uses: $/.github/actions/check-deferred-ci
       - uses: actions/checkout@v6
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Set up Go toolchain
         id: toolchain
         uses: ./.github/actions/setup-go-toolchain
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Test All
         working-directory: ./go
         run: |
@@ -163,4 +98,3 @@ jobs:
           MATRIX_OS: ${{ matrix.os }}
           DOLT_TEST_RUN_NON_RACE_TESTS: "true"
           MSYS2_LOCATION: ${{ steps.toolchain.outputs.msys2-location }}
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}

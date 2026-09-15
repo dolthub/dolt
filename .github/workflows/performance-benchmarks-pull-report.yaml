@@ -12,46 +12,14 @@ jobs:
     outputs:
       valid: ${{ steps.set_valid.outputs.valid }}
     steps:
-      - name: Checkout CI admission
-        if: github.event_name == 'pull_request'
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-          path: .ci-admission
-          sparse-checkout: .github/scripts/ci-scheduling
-      - name: Check CI admission
-        id: ci-admission
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        env:
-          CI_TIMEZONE: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
-        with:
-          script: |
-            const { admission } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
-            const decision = await admission({ github, context, timezone: process.env.CI_TIMEZONE });
-            core.setOutput('run', String(decision.run));
-            core.setOutput('reason', decision.reason);
-      - name: CI postponed
-        if: steps.ci-admission.outputs.reason == 'deferred'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await core.summary.addRaw('CI postponed. See the PR comment for conditions and overrides.').write();
-      - name: Cancel deferred CI
-        if: github.event_name == 'pull_request' && steps.ci-admission.outputs.run == 'false'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { cancelFromJob } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
-            await cancelFromJob({ github, context, core });
+      - name: Check deferred CI
+        uses: $/.github/actions/check-deferred-ci
       - uses: actions/checkout@v6
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Validate Commentor
         id: set_valid
         run: ./.github/scripts/performance-benchmarking/validate-commentor.sh "$ACTOR"
         env:
           ACTOR: ${{ github.actor }}
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
 
   check-comments:
     runs-on: ubuntu-22.04
@@ -62,38 +30,8 @@ jobs:
       sysbench-test-time: ${{ steps.set_benchmark_mini.outputs.sysbench-test-time }}
       comment-body: ${{ steps.set_body.outputs.body }}
     steps:
-      - name: Checkout CI admission
-        if: github.event_name == 'pull_request'
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-          path: .ci-admission
-          sparse-checkout: .github/scripts/ci-scheduling
-      - name: Check CI admission
-        id: ci-admission
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        env:
-          CI_TIMEZONE: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
-        with:
-          script: |
-            const { admission } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
-            const decision = await admission({ github, context, timezone: process.env.CI_TIMEZONE });
-            core.setOutput('run', String(decision.run));
-            core.setOutput('reason', decision.reason);
-      - name: CI postponed
-        if: steps.ci-admission.outputs.reason == 'deferred'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await core.summary.addRaw('CI postponed. See the PR comment for conditions and overrides.').write();
-      - name: Cancel deferred CI
-        if: github.event_name == 'pull_request' && steps.ci-admission.outputs.run == 'false'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { cancelFromJob } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
-            await cancelFromJob({ github, context, core });
+      - name: Check deferred CI
+        uses: $/.github/actions/check-deferred-ci
       - name: Check for Deploy Trigger
         uses: dolthub/pull-request-comment-trigger@v2
         id: check
@@ -102,9 +40,8 @@ jobs:
           reaction: rocket
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Set Benchmark
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') && (steps.check.outputs.triggered == 'true') }}
+        if: steps.check.outputs.triggered == 'true'
         id: set_benchmark
         run: |
           echo "benchmark=true" >> $GITHUB_OUTPUT
@@ -116,9 +53,8 @@ jobs:
           reaction: rocket
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Set Benchmark Mini
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') && (steps.check_mini.outputs.triggered == 'true') }}
+        if: steps.check_mini.outputs.triggered == 'true'
         id: set_benchmark_mini
         run: |
           echo "benchmark=true" >> $GITHUB_OUTPUT
@@ -130,53 +66,20 @@ jobs:
     if: ${{ needs.check-comments.outputs.benchmark == 'true' }}
     name: Trigger Benchmark Latency K8s Workflow
     steps:
-      - name: Checkout CI admission
-        if: github.event_name == 'pull_request'
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-          path: .ci-admission
-          sparse-checkout: .github/scripts/ci-scheduling
-      - name: Check CI admission
-        id: ci-admission
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        env:
-          CI_TIMEZONE: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
-        with:
-          script: |
-            const { admission } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
-            const decision = await admission({ github, context, timezone: process.env.CI_TIMEZONE });
-            core.setOutput('run', String(decision.run));
-            core.setOutput('reason', decision.reason);
-      - name: CI postponed
-        if: steps.ci-admission.outputs.reason == 'deferred'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await core.summary.addRaw('CI postponed. See the PR comment for conditions and overrides.').write();
-      - name: Cancel deferred CI
-        if: github.event_name == 'pull_request' && steps.ci-admission.outputs.run == 'false'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { cancelFromJob } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
-            await cancelFromJob({ github, context, core });
+      - name: Check deferred CI
+        uses: $/.github/actions/check-deferred-ci
       - uses: dolthub/pull-request-comment-branch@v3
         id: comment-branch
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Get pull number
         uses: actions/github-script@v7
         id: get_pull_number
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: core.setOutput("pull_number", JSON.stringify(context.issue.number));
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: benchmark-latency
           client-payload: '{"from_server": "dolt", "from_version": "${{ github.sha }}", "to_server": "dolt", "to_version": "${{ steps.comment-branch.outputs.head_sha }}", "mode": "pullRequest", "issue_number": "${{ steps.get_pull_number.outputs.pull_number }}", "init_big_repo": "true", "actor": "${{ github.actor }}", "sysbench_test_time": "${{ needs.check-comments.outputs.sysbench-test-time }}", "template_script": "./.github/scripts/performance-benchmarking/get-dolt-dolt-job-json.sh"}'
-        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}

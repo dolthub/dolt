@@ -6,8 +6,9 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { readFileSync, readdirSync } = require('node:fs');
 const { join } = require('node:path');
-const { ADMISSION_STEP, afterHours, admission, candidates, reconcile, latestRuns, hasApproval, AFTER_HOURS_LABEL, REVIEW_LABEL, FORCE_DRAFT_LABEL, LABEL, STATUS, DEFERRED_STEP } = require('./');
+const { ADMISSION_STEP, afterHours, admission, candidates, reconcile, latestRuns, hasApproval, AFTER_HOURS_LABEL, REVIEW_LABEL, FORCE_DRAFT_LABEL, LABEL, STATUS } = require('./');
 const workflows = require('./workflows.json');
+const { DEFERRED_NOTICE, marker } = require('./cancellation');
 const day = new Date('2026-09-15T19:00:00Z'); // noon Pacific
 const night = new Date('2026-09-16T04:00:00Z'); // 9pm Pacific
 const pr = { number: 12, state: 'open', draft: false, user: { login: 'author' }, body: '', labels: [{ name: AFTER_HOURS_LABEL }],
@@ -18,9 +19,10 @@ const run = { id: 100, path: workflows[0], event: 'pull_request', head_sha: 'hea
   head_branch: 'feature', head_repository: { full_name: 'contributor/dolt' }, pull_requests: [],
   status: 'completed', conclusion: 'success', run_attempt: 1, html_url: 'https://github.com/run/100' };
 const postponed = [{ name: 'Go tests (ubuntu-22.04)', conclusion: 'cancelled',
-  steps: [{ name: ADMISSION_STEP, conclusion: 'success' }, { name: DEFERRED_STEP, conclusion: 'success' }] }];
+  check_run_url: 'https://api.github.com/repos/dolthub/dolt/check-runs/1',
+  steps: [{ name: ADMISSION_STEP, conclusion: 'cancelled' }] }];
 const admitted = [{ name: 'Go tests (ubuntu-22.04)', conclusion: 'success',
-  steps: [{ name: ADMISSION_STEP, conclusion: 'success' }, { name: DEFERRED_STEP, conclusion: 'skipped' }] }];
+  steps: [{ name: ADMISSION_STEP, conclusion: 'success' }] }];
 
 function fixture(options = {}) {
   const state = { pr: structuredClone(pr), runs: [structuredClone(run)], jobs: postponed,
@@ -48,9 +50,13 @@ function fixture(options = {}) {
       addLabels: method('labels.add', args => state.pr.labels.push(...args.labels.map(name => ({ name })))),
       removeLabel: method('labels.remove', args => state.pr.labels = state.pr.labels.filter(l => l.name !== args.name)),
     },
+    checks: { listAnnotations: method('annotations.list', args => [{ title: DEFERRED_NOTICE,
+      message: marker(args.check_run_id, state.runs.find(run => run.id === args.check_run_id).run_attempt) }]) },
     actions: {
       listWorkflowRunsForRepo: method('runs.list', () => state.runs),
-      listJobsForWorkflowRunAttempt: method('jobs.list', args => typeof state.jobs === 'function' ? state.jobs(args) : state.jobs),
+      listJobsForWorkflowRunAttempt: method('jobs.list', args =>
+        (typeof state.jobs === 'function' ? state.jobs(args) : state.jobs).map(job => ({ ...job,
+          check_run_url: `https://api.github.com/repos/dolthub/dolt/check-runs/${args.run_id}` }))),
       listJobsForWorkflowRun: method('jobs.all', () => state.allJobs || state.jobs),
       getWorkflowRun: method('runs.get', args => state.fresh || state.runs.find(r => r.id === args.run_id)),
       reRunWorkflow: method('runs.rerun', args => {
