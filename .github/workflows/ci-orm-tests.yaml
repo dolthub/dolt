@@ -22,6 +22,8 @@ jobs:
       - name: Check deferred CI
         id: ci-admission
         uses: $/.github/actions/check-deferred-ci
+        with:
+          timezone: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
       - name: Checkout
         uses: actions/checkout@v6
         with:

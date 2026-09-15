@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Check deferred CI
         uses: $/.github/actions/check-deferred-ci
+        with:
+          timezone: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
       - name: Checkout BASE REF
         uses: actions/checkout@v6
         with:
@@ -48,6 +50,8 @@ jobs:
     steps:
       - name: Check deferred CI
         uses: $/.github/actions/check-deferred-ci
+        with:
+          timezone: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
       - name: Get pull number
         uses: actions/github-script@v7
         id: get_pull_number

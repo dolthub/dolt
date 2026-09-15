@@ -26,6 +26,8 @@ jobs:
     steps:
       - name: Check deferred CI
         uses: $/.github/actions/check-deferred-ci
+        with:
+          timezone: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
       - uses: actions/checkout@v6
       - name: Set up Go toolchain
         id: toolchain
@@ -83,6 +85,8 @@ jobs:
     steps:
       - name: Check deferred CI
         uses: $/.github/actions/check-deferred-ci
+        with:
+          timezone: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
       - uses: actions/checkout@v6
       - name: Set up Go toolchain
         id: toolchain

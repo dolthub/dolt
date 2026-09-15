@@ -14,6 +14,8 @@ jobs:
     steps:
       - name: Check deferred CI
         uses: $/.github/actions/check-deferred-ci
+        with:
+          timezone: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
       - name: Build benchmark payload (main HEAD + PR HEAD)
         uses: actions/github-script@v7
         id: build_payload

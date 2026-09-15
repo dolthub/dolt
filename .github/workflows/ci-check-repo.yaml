@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Check deferred CI
         uses: $/.github/actions/check-deferred-ci
+        with:
+          timezone: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
       - uses: actions/checkout@v6
         with:
           submodules: true
@@ -69,6 +71,8 @@ jobs:
     steps:
       - name: Check deferred CI
         uses: $/.github/actions/check-deferred-ci
+        with:
+          timezone: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
       - uses: actions/checkout@v6
         with:
           ref: "main"
@@ -100,6 +104,8 @@ jobs:
     steps:
       - name: Check deferred CI
         uses: $/.github/actions/check-deferred-ci
+        with:
+          timezone: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
       - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.ref || github.ref }}

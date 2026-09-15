@@ -88,7 +88,7 @@ test('each independent job uses one action and only failure handlers need guards
       const action = job.steps[0];
       assert.equal(action.name, ADMISSION_STEP, message);
       assert.equal(action.uses, '$/.github/actions/check-deferred-ci', message);
-      assert.ok(Object.keys(action).length <= 3, message);
+      assert.ok(Object.keys(action).length <= 4, message);
       for (const step of job.steps.slice(1)) {
         assert.notEqual(step.name, 'Checkout CI admission', message);
         if (/\b(always|failure|cancelled)\(/.test(step.if || '')) {

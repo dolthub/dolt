@@ -26,6 +26,8 @@ jobs:
     steps:
       - name: Check deferred CI
         uses: $/.github/actions/check-deferred-ci
+        with:
+          timezone: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
       - uses: actions/checkout@v6
         if: env.use_credentials != 'true'
       - name: Set up Go toolchain

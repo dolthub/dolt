@@ -37,6 +37,8 @@ jobs:
       # so we remove unused pre-installed programs.
       - name: Check deferred CI
         uses: $/.github/actions/check-deferred-ci
+        with:
+          timezone: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
       - name: Free disk space
         run: |
           NAME="DISK-CLEANUP"
