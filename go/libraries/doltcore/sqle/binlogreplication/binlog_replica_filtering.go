@@ -188,7 +188,7 @@ func normalizeFilterName(value string, caseInsensitive bool) string {
 	return value
 }
 
-// compileWildcardPattern converts MySQL replication wildcards into byte-oriented matcher tokens.
+// compileWildcardPattern converts replication wildcards into byte-oriented matcher tokens.
 func compileWildcardPattern(pattern string) []tablePatternToken {
 	tokens := make([]tablePatternToken, 0, len(pattern))
 	for i := 0; i < len(pattern); i++ {

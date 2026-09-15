@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
-	"github.com/dolthub/vitess/go/mysql"
 )
 
 var DoltBinlogReplicaController = newDoltBinlogReplicaController()
@@ -284,7 +283,7 @@ func (d *doltBinlogReplicaController) SetReplicationFilterOptions(ctx *sql.Conte
 	defer d.operationMutex.Unlock()
 
 	if d.applier.IsRunning() {
-		return mysql.NewSQLError(3085, "HY000", "This operation cannot be performed with a running replica sql thread; run STOP REPLICA SQL_THREAD FOR CHANNEL '' first.")
+		return sql.ErrReplicaRunning.New()
 	}
 
 	lowerCaseTableNames, err := ctx.GetSessionVariable(ctx, "lower_case_table_names")
