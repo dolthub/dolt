@@ -314,7 +314,7 @@ func (s *SqlEngineTableWriter) createTable() error {
 	formatter := overrides.SchemaFormatterFromContext(s.sqlCtx)
 	sqlCols := make([]string, len(s.tableSchema.Schema))
 	for i, c := range s.tableSchema.Schema {
-		sqlCols[i] = formatter.GenerateCreateTableColumnDefinition(c, c.Default.String(), c.OnUpdate.String(), sql.Collation_Default)
+		sqlCols[i] = formatter.GenerateCreateTableColumnDefinition(c, c.Default.String(), sql.Collation_Default)
 	}
 	var pks string
 	var sep string

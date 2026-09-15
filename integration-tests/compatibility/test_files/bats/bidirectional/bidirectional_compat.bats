@@ -11,6 +11,9 @@
 # are in a subdirectory. So the key pieces of functionality are duplicated in this file.
 
 setup() {
+    [ -n "$DOLT_OLD_BIN" ] || skip "requires DOLT_OLD_BIN"
+    [ -n "$DOLT_NEW_BIN" ] || skip "requires DOLT_NEW_BIN"
+
     bats_load_library common.bash
     bats_load_library compat-common.bash
     cp -Rpf $REPO_DIR bats_repo
@@ -35,9 +38,6 @@ clear_branch_control() {
 # ---------------------------------------------------------------------------
 
 @test "bidirectional_compat: scalar types round-trip across versions" {
-    [ -n "$DOLT_OLD_BIN" ] || skip "requires DOLT_OLD_BIN"
-    [ -n "$DOLT_NEW_BIN" ] || skip "requires DOLT_NEW_BIN"
-    
     # Setup: old dolt creates schema and seeds two rows
     old_dolt init
     old_dolt sql <<SQL
@@ -126,9 +126,6 @@ SQL
 # ---------------------------------------------------------------------------
 
 @test "bidirectional_compat: large text and blob values round-trip" {
-    [ -n "$DOLT_OLD_BIN" ] || skip "requires DOLT_OLD_BIN"
-    [ -n "$DOLT_NEW_BIN" ] || skip "requires DOLT_NEW_BIN"
-
     # Setup: old dolt creates table with text/blob columns and small initial values
     old_dolt init
     old_dolt sql <<SQL
@@ -212,9 +209,6 @@ SQL
 # ---------------------------------------------------------------------------
 
 @test "bidirectional_compat: geometry types round-trip across versions" {
-    [ -n "$DOLT_OLD_BIN" ] || skip "requires DOLT_OLD_BIN"
-    [ -n "$DOLT_NEW_BIN" ] || skip "requires DOLT_NEW_BIN"
-
     # Setup: old dolt creates geometry table
     old_dolt init
     old_dolt sql <<SQL
@@ -303,9 +297,6 @@ SQL
 # ---------------------------------------------------------------------------
 
 @test "bidirectional_compat: add columns from both versions" {
-    [ -n "$DOLT_OLD_BIN" ] || skip "requires DOLT_OLD_BIN"
-    [ -n "$DOLT_NEW_BIN" ] || skip "requires DOLT_NEW_BIN"
-
     # Setup: old dolt creates a minimal base table
     old_dolt init
     old_dolt sql <<SQL
@@ -399,9 +390,6 @@ SQL
 # ---------------------------------------------------------------------------
 
 @test "bidirectional_compat: branch and merge across versions" {
-    [ -n "$DOLT_OLD_BIN" ] || skip "requires DOLT_OLD_BIN"
-    [ -n "$DOLT_NEW_BIN" ] || skip "requires DOLT_NEW_BIN"
-
     # Setup: old dolt creates repo with base table and data
     old_dolt init
     MAIN=$(old_dolt branch | sed 's/^\* //' | sed 's/[[:space:]]*$//')
@@ -513,9 +501,6 @@ SQL
 # ---------------------------------------------------------------------------
 
 @test "bidirectional_compat: comprehensive type coverage across versions" {
-    [ -n "$DOLT_OLD_BIN" ] || skip "requires DOLT_OLD_BIN"
-    [ -n "$DOLT_NEW_BIN" ] || skip "requires DOLT_NEW_BIN"
-
     # Setup: old dolt creates a minimal table
     old_dolt init
     old_dolt sql <<SQL
@@ -633,9 +618,6 @@ SQL
 # ---------------------------------------------------------------------------
 
 @test "bidirectional_compat: text types round-trip across versions" {
-    [ -n "$DOLT_OLD_BIN" ] || skip "requires DOLT_OLD_BIN"
-    [ -n "$DOLT_NEW_BIN" ] || skip "requires DOLT_NEW_BIN"
-
     if [ -n "$DOLT_USE_ADAPTIVE_ENCODING" ]; then
         skip "bug in adaptive encoding between 1.85.0 and 1.86.4"
     fi
@@ -748,9 +730,6 @@ SQL
 # ---------------------------------------------------------------------------
 
 @test "bidirectional_compat: blob types round-trip across versions" {
-    [ -n "$DOLT_OLD_BIN" ] || skip "requires DOLT_OLD_BIN"
-    [ -n "$DOLT_NEW_BIN" ] || skip "requires DOLT_NEW_BIN"
-
     if [ -n "$DOLT_USE_ADAPTIVE_ENCODING" ]; then
         skip "bug in adaptive encoding between 1.85.0 and 1.86.4"
     fi
@@ -861,9 +840,6 @@ SQL
 # ---------------------------------------------------------------------------
 
 @test "bidirectional_compat: json round-trip across versions" {
-    [ -n "$DOLT_OLD_BIN" ] || skip "requires DOLT_OLD_BIN"
-    [ -n "$DOLT_NEW_BIN" ] || skip "requires DOLT_NEW_BIN"
-
     skip "new json encoding not compatible with older versions (can't decipher new encoding)"
     
     # Setup: old dolt creates table with two JSON columns.
@@ -985,4 +961,113 @@ SQL
     run old_dolt sql -q "SELECT count(*) FROM jsondocs;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "7" ]] || false
+}
+
+assert_show_create_table() {
+    local dolt_cmd="${1:-dolt}"
+    run "$dolt_cmd" sql -q "SHOW CREATE TABLE ts_compat;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "ON UPDATE CURRENT_TIMESTAMP" ]] || false
+    [[ "$output" =~ "ON UPDATE CURRENT_TIMESTAMP(3)" ]] || false
+    [[ "$output" =~ "ON UPDATE CURRENT_TIMESTAMP(6)" ]] || false
+    [[ "$output" =~ "ON UPDATE CURRENT_TIMESTAMP(2)" ]] || false
+}
+
+assert_ts_rows() {
+    local dolt_cmd="$1"
+    shift
+    run "$dolt_cmd" sql -q "SET @@session.time_zone = '+00:00'; SELECT id, v, ts1, ts2, ts3, ts4 FROM ts_compat ORDER BY id;" -r csv
+    [ "$status" -eq 0 ]
+    local i=1
+    for expected in "$@"; do
+        [[ "${lines[$i]}" =~ $expected ]] || false
+        i=$((i+1))
+    done
+    [ "${#lines[@]}" -eq "$i" ]
+}
+
+# CURRENT_TIMESTAMP evaluates against system clock time because
+# GMS/Dolt lacks @@timestamp support:
+# https://dev.mysql.com/doc/refman/8.4/en/server-system-variables.html#sysvar_timestamp
+@test "bidirectional_compat: on update current_timestamp round-trip across versions" {
+    local ts0='[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}'
+    local ts3='[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}'
+    local ts6='[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6}'
+    local ts2='[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{2}'
+
+    old_dolt init
+    old_dolt sql <<SQL
+CREATE TABLE ts_compat (
+  id INT NOT NULL PRIMARY KEY,
+  v INT,
+  ts1 TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  ts2 TIMESTAMP(3) DEFAULT NULL ON UPDATE now(3),
+  ts3 DATETIME(6) DEFAULT NULL ON UPDATE localtimestamp(6),
+  ts4 TIMESTAMP(2) DEFAULT NULL ON UPDATE localtime(2)
+);
+INSERT INTO ts_compat (id, v) VALUES (1, 10);
+SQL
+    old_dolt add .
+    old_dolt commit -m "old: initial table and data"
+    assert_ts_rows old_dolt \
+        "^1,10,$ts0,,,$"
+    local r1_ins="${lines[1]}"
+
+    clear_branch_control
+
+    assert_show_create_table new_dolt
+    assert_ts_rows new_dolt \
+        "$r1_ins"
+
+    new_dolt sql -q "UPDATE ts_compat SET v = 20 WHERE id = 1; INSERT INTO ts_compat (id, v) VALUES (2, 30);"
+    new_dolt add .
+    new_dolt commit -m "new: update row 1, insert row 2"
+
+    assert_ts_rows new_dolt \
+        "^1,20,$ts0,$ts3,$ts6,$ts2$" \
+        "^2,30,$ts0,,,$"
+    local r1_upd="${lines[1]}"
+    local r2_ins="${lines[2]}"
+
+    clear_branch_control
+
+    assert_show_create_table old_dolt
+    assert_ts_rows old_dolt \
+        "$r1_upd" \
+        "$r2_ins"
+
+    old_dolt sql -q "UPDATE ts_compat SET v = 40 WHERE id = 2; INSERT INTO ts_compat (id, v) VALUES (3, 50);"
+    old_dolt add .
+    old_dolt commit -m "old: update row 2, insert row 3"
+
+    assert_ts_rows old_dolt \
+        "$r1_upd" \
+        "^2,40,$ts0,$ts3,$ts6,$ts2$" \
+        "^3,50,$ts0,,,$"
+    local r2_upd="${lines[2]}"
+    local r3_ins="${lines[3]}"
+
+    clear_branch_control
+
+    assert_ts_rows new_dolt \
+        "$r1_upd" \
+        "$r2_upd" \
+        "$r3_ins"
+
+    new_dolt sql -q "UPDATE ts_compat SET v = 60 WHERE id = 3;"
+    new_dolt add .
+    new_dolt commit -m "new: update row 3"
+
+    assert_ts_rows new_dolt \
+        "$r1_upd" \
+        "$r2_upd" \
+        "^3,60,$ts0,$ts3,$ts6,$ts2$"
+    local r3_upd="${lines[3]}"
+
+    clear_branch_control
+
+    assert_ts_rows old_dolt \
+        "$r1_upd" \
+        "$r2_upd" \
+        "$r3_upd"
 }
