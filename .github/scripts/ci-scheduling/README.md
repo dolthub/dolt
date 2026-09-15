@@ -1,35 +1,48 @@
 # Non-urgent PR CI
 
 Put the literal, case-sensitive marker `[non-urgent]` anywhere in a PR description
-to postpone its automatic PR CI outside **9pm–5am America/Los_Angeles**. Configure
-the repository Actions variable `CI_TIMEZONE` with an IANA timezone name to change
-that timezone. Daylight-saving transitions are handled automatically. The window
-applies every day, including weekends.
+to postpone its automatic PR CI during the day and release it overnight:
+
+- **Deferral period: 5am–9pm.** New CI work waits until that evening's release window.
+- **Release window: 9pm–5am.** Postponed CI is released automatically, and new CI
+  work can start normally. The window includes 9pm and ends at 5am.
+
+For example, CI for a marked PR opened at 2pm waits until the release window opens
+at 9pm. CI for a marked PR opened at 11pm can start immediately.
+
+All times use **America/Los_Angeles** by default. Configure the repository Actions
+variable `CI_TIMEZONE` with an IANA timezone name to change the timezone.
+Daylight-saving transitions are handled automatically. This schedule applies
+every day, including weekends.
 
 ## Release and override
 
 - New marked PRs and new commits run only the small admission and scheduling jobs
-  during the day. The test jobs and their OS matrices do not acquire runners.
+  during the 5am–9pm deferral period. The test jobs and their OS matrices do not
+  acquire runners.
 - A single bot comment explains the delay and is updated as work is released.
   The `ci-deferred` label tracks deferred work until its current CI finishes.
-- `Schedule PR CI` checks every 15 minutes, at :07, :22, :37, and :52. Overnight it
-  scans open marked PRs as well as labeled PRs, recovering missed initial events.
+- `Schedule PR CI` checks every 15 minutes, at :07, :22, :37, and :52. During the
+  9pm–5am release window, it scans open marked PRs as well as labeled PRs and
+  releases postponed workflows, recovering missed initial events.
   GitHub schedules can be delayed or dropped; the next invocation retries.
 - Remove the marker to release deferred workflows immediately through the PR
   description `edited` event. No new commit is necessary. A polling fallback also
-  recovers missed removal events for tracked PRs during the day.
+  recovers missed removal events for tracked PRs during the deferral period.
 - For an explicit manual retry, remove the marker and use Actions → **Schedule PR
   CI** → **Run workflow**, choosing the default branch and entering the PR number.
   Alternatively, use **Re-run all jobs** on an original deferred CI run. The gate
   fetches the live description on every attempt; the old event body is not used.
-- A PR that keeps the marker gets the same nighttime policy on subsequent commits.
+- A PR that keeps the marker also defers CI for subsequent commits made during
+  5am–9pm until the next release window.
   Removing it restores ordinary CI for subsequent commits.
 
-This is an admission window. Work already admitted continues after 5am, and adding
-the marker does not cancel running tests. GitHub may delay assigning a runner
-after admission. Existing non-PR triggers (manual branch runs, comment commands,
-pushes, repository dispatches, releases, and nightly workflows) retain their
-previous behavior.
+The 9pm–5am release window controls when CI is allowed to start. Work already
+admitted can continue after 5am; it is not stopped when the deferral period begins.
+Adding the marker does not cancel running tests. GitHub may delay assigning a
+runner after admission. Existing non-PR triggers (manual branch runs, comment
+commands, pushes, repository dispatches, releases, and nightly workflows) retain
+their previous behavior.
 
 ## Repository setup
 
@@ -48,9 +61,9 @@ previous behavior.
 4. The workflows use `GITHUB_TOKEN`, with `actions: write`, `statuses: write`, and
    `issues: write` only on the trusted controller. No new PAT or secret is needed.
    The controller creates `ci-deferred` automatically if it does not exist.
-5. Verify using a small marked PR during daytime: test jobs should be skipped, the
-   comment and pending status should appear, and removing the marker should
-   restart the original runs. Also verify overnight release and fork PRs in the
+5. Verify using a small marked PR during the 5am–9pm deferral period: test jobs
+   should be skipped, the comment and pending status should appear, and removing
+   the marker should restart the original runs. Also verify overnight release and fork PRs in the
    live repository. Fork approval requirements remain in force.
 
 The scheduling status stays pending while deferred runs are being released or
