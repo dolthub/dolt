@@ -36,4 +36,4 @@ jobs:
       # The controller reads this step from the original run's latest attempt.
       - name: CI postponed
         if: steps.admission.outputs.reason == 'deferred'
-        run: echo 'CI postponed until 9pm–5am. Remove [non-urgent] from the PR description to release it.' >> "$GITHUB_STEP_SUMMARY"
+        run: echo 'CI postponed by draft status or a deferral label. See the PR scheduling comment for outstanding conditions and overrides.' >> "$GITHUB_STEP_SUMMARY"

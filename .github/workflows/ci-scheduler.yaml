@@ -2,7 +2,7 @@ name: Schedule PR CI
 
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened, edited]
+    types: [opened, synchronize, reopened, labeled, unlabeled, ready_for_review, converted_to_draft]
   workflow_run:
     workflows:
       - "Test Bats Unix Remote"
@@ -26,6 +26,7 @@ on:
       - "Run Systab Benchmark on Pull Requests"
       - "Benchmark Mini Sysbench Performance on PR"
       - "Test CI scheduling"
+      - "Notify CI review"
     types: [completed]
   schedule:
     # Off the hour; repeated reconciliation recovers missed events and delayed runs.
@@ -33,7 +34,7 @@ on:
   workflow_dispatch:
     inputs:
       pull_number:
-        description: PR number to release after removing [non-urgent]
+        description: PR number to recheck against its deferral labels and reviews
         required: true
         type: string
 
