@@ -17,11 +17,12 @@ package commands
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/creds"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
-	"github.com/stretchr/testify/require"
 )
 
 func TestLoginUpdateConfig(t *testing.T) {
