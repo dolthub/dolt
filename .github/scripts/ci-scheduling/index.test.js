@@ -189,9 +189,7 @@ test('deferral comments document every applicable override, alone and combined',
         assert.equal(body.includes('**Draft hold:** add `force-draft-ci` or mark the PR ready for review.'), draft);
         assert.equal(body.includes('**After-hours hold:** remove `defer-ci-after-hours`'), hours);
         assert.equal(body.includes('**Review hold:** remove `defer-ci-review`'), needsReview);
-        assert.match(body, /Each override clears only its own condition/);
-        assert.match(body, /PR number \*\*12\*\*/);
-        assert.match(body, /Manual retries.*do not bypass outstanding conditions/);
+        assert.doesNotMatch(body, /Each override clears|For a manual retry|Manual retries/);
       }
     }
   }

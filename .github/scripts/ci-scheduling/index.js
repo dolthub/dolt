@@ -86,11 +86,7 @@ function overrideInstructions(pr) {
     overrides.push(`- **Review hold:** remove \`${REVIEW_LABEL}\` to allow CI without an approving review.`);
   }
   if (overrides.length === 0) return '';
-  return `\n\n**How to override deferral**\n\n${overrides.join('\n')}\n\n` +
-    'Each override clears only its own condition; satisfy or override every remaining condition to start CI. ' +
-    'These changes trigger an automatic recheck. For a manual retry, run **Schedule PR CI** ' +
-    `with PR number **${pr.number}**, or use **Re-run all jobs** on a postponed workflow. ` +
-    'Manual retries recheck the draft state, labels, and reviews; they do not bypass outstanding conditions.';
+  return `\n\n**How to override deferral**\n\n${overrides.join('\n')}`;
 }
 
 // Re-runs retain the old event payload. Always fetch the live labels, reviews, and head.
