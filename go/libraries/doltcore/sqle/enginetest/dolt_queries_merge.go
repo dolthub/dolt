@@ -1692,8 +1692,8 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{Query: "SELECT * FROM overlap_indexes ORDER BY pk", Expected: []sql.Row{{int32(1), int32(1)}, {int32(2), int32(2)}, {int32(3), int32(3)}}},
-			{Query: "SELECT * FROM overlap_indexes FORCE INDEX(idx) WHERE v=2", Expected: []sql.Row{{int32(2), int32(2)}}},
-			{Query: "SELECT * FROM overlap_indexes FORCE INDEX(uniq) WHERE v=3", Expected: []sql.Row{{int32(3), int32(3)}}},
+			{Query: "SELECT /*+ LOOKUP_JOIN(w, o) JOIN_ORDER(w, o) */ o.* FROM (SELECT 2 AS v) w JOIN overlap_indexes o ON w.v = o.v", Expected: []sql.Row{{int32(2), int32(2)}}},
+			{Query: "SELECT /*+ LOOKUP_JOIN(w, o) JOIN_ORDER(w, o) */ o.* FROM (SELECT 3 AS v) w JOIN overlap_indexes o ON w.v = o.v", Expected: []sql.Row{{int32(3), int32(3)}}},
 		},
 	},
 	{
