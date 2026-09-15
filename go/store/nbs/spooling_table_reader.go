@@ -118,15 +118,16 @@ func (s *spoolingTableReaderAt) Close() error {
 
 // newSpooledBSTableChunkSource opens a table file by spooling it whole to a local temp
 // file once, then reading its index and serving chunk reads from that file.
-func newSpooledBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (chunkSource, error) {
+func newSpooledBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, opts openOpts, stats *Stats) (chunkSource, error) {
 	ra, err := newSpoolingTableReaderAt(ctx, bs, name.String())
 	if err != nil {
 		return nil, err
 	}
 
-	index, err := loadTableIndex(ctx, stats, chunkCount, q, func(p []byte) error {
+	// The whole blob is local now, so |ra.sz| is the true size of the file.
+	index, err := loadTableIndex(ctx, stats, name, chunkCount, q, opts, func(p []byte) (uint64, error) {
 		_, err := ra.f.ReadAt(p, ra.sz-int64(len(p)))
-		return err
+		return uint64(ra.sz), err
 	})
 	if err != nil {
 		_ = ra.Close()

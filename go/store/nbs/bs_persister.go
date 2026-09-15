@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 
 	"golang.org/x/sync/errgroup"
@@ -137,7 +138,7 @@ func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, behavior dherrors
 	if plan.suffix == ArchiveFileSuffix {
 		cs, err = newBSArchiveChunkSource(ctx, bsp.bs, plan.name, bsp.q, stats)
 	} else {
-		cs, err = newBSTableChunkSource(ctx, bsp.bs, plan.name, plan.chunkCount, bsp.q, stats)
+		cs, err = newBSTableChunkSource(ctx, bsp.bs, plan.name, plan.chunkCount, bsp.q, openOpts{deepValidate: true}, stats)
 	}
 
 	return cs, func() {}, err
@@ -205,8 +206,8 @@ func (bsp *blobstorePersister) hotCreateArchiveRecords(ctx context.Context, cs c
 }
 
 // Open a table named |name|, containing |chunkCount| chunks.
-func (bsp *blobstorePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
-	cs, err := newBSTableChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, stats)
+func (bsp *blobstorePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, opts openOpts, stats *Stats) (chunkSource, error) {
+	cs, err := newBSTableChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, opts, stats)
 	if err == nil {
 		return cs, nil
 	}
@@ -365,6 +366,12 @@ func newBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore, name h
 	}
 	defer rc.Close()
 
+	// Spans in the archive are addressed relative to the end of the file.
+	// If we don't have a real size, we can't compute the right range reads.
+	if sz == 0 {
+		return nil, fmt.Errorf("%s%s: blobstore did not report the size of the archive", name.String(), ArchiveFileSuffix)
+	}
+
 	footer := make([]byte, archiveFooterSize)
 	_, err = io.ReadFull(rc, footer)
 	if err != nil {
@@ -378,24 +385,24 @@ func newBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore, name h
 	return &archiveChunkSource{aRdr: aRdr, refs: noopRefCounter{}, blockSize: s3BlockSize}, nil
 }
 
-func newBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
+func newBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, opts openOpts, stats *Stats) (cs chunkSource, err error) {
 	if shouldSpool(bs) {
-		return newSpooledBSTableChunkSource(ctx, bs, name, chunkCount, q, stats)
+		return newSpooledBSTableChunkSource(ctx, bs, name, chunkCount, q, opts, stats)
 	}
 
-	index, err := loadTableIndex(ctx, stats, chunkCount, q, func(p []byte) error {
-		rc, _, _, err := bs.Get(ctx, name.String(), blobstore.NewBlobRange(-int64(len(p)), 0))
+	index, err := loadTableIndex(ctx, stats, name, chunkCount, q, opts, func(p []byte) (uint64, error) {
+		rc, sz, _, err := bs.Get(ctx, name.String(), blobstore.NewBlobRange(-int64(len(p)), 0))
 		if err != nil {
-			return err
+			return 0, err
 		}
 		defer rc.Close()
 
 		_, err = io.ReadFull(rc, p)
 		if err != nil {
-			return err
+			return 0, err
 		}
 
-		return nil
+		return sz, nil
 	})
 	if err != nil {
 		return nil, err

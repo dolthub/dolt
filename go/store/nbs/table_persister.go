@@ -39,6 +39,27 @@ var errCacheMiss = errors.New("index cache miss")
 
 type cleanupFunc func()
 
+// openOpts are the per-open choices a caller can make about how thoroughly a
+// table file is checked on the way in. The zero value is what every read path
+// wants; the extra checks belong to the paths which admit a file into the
+// store, where paying for them once buys a file that is then read many times.
+type openOpts struct {
+	// deepValidate asks for the index checks that the read path does not
+	// itself depend on, on top of the structural ones every parse runs. See
+	// [onHeapTableIndex.deepValidate]: today that is re-deriving the file's
+	// name from the suffixes in its index, and confirming the ordinals are a
+	// permutation rather than merely in range.
+	//
+	// These checks catch some forms of corruption which a reader will
+	// silently tolerate, so they are worth their cost when a file is
+	// entering the store. The cost is currently dominated by the sha512
+	// over the suffixes.
+	//
+	// Archive files carry their own sha512 checksums over their index and
+	// data, so they ignore this option.
+	deepValidate bool
+}
+
 // tablePersister allows interaction with persistent storage. It provides
 // primitives for pushing the contents of a memTable to persistent storage,
 // opening persistent tables for reading, and conjoining a number of existing
@@ -55,8 +76,9 @@ type tablePersister interface {
 	// they are no longer needed.
 	ConjoinAll(ctx context.Context, behavior dherrors.FatalBehavior, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error)
 
-	// Open a table named |name|, containing |chunkCount| chunks.
-	Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error)
+	// Open a table named |name|, containing |chunkCount| chunks, checking it
+	// on the way in as |opts| asks.
+	Open(ctx context.Context, name hash.Hash, chunkCount uint32, opts openOpts, stats *Stats) (chunkSource, error)
 
 	// Exists checks if a table named |name| exists. If the file exists, the
 	// returned handle keeps it protected from pruning until closed.

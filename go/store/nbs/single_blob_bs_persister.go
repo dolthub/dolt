@@ -110,14 +110,14 @@ func (bsp *singleBlobBSPersister) ConjoinAll(ctx context.Context, behavior dherr
 	if plan.suffix == ArchiveFileSuffix {
 		cs, err = newBSArchiveChunkSource(ctx, bsp.bs, plan.name, bsp.q, stats)
 	} else {
-		cs, err = newBSTableChunkSource(ctx, bsp.bs, plan.name, plan.chunkCount, bsp.q, stats)
+		cs, err = newBSTableChunkSource(ctx, bsp.bs, plan.name, plan.chunkCount, bsp.q, openOpts{deepValidate: true}, stats)
 	}
 
 	return cs, func() {}, err
 }
 
-func (bsp *singleBlobBSPersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
-	cs, err := newBSTableChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, stats)
+func (bsp *singleBlobBSPersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, opts openOpts, stats *Stats) (chunkSource, error) {
+	cs, err := newBSTableChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, opts, stats)
 	if err == nil {
 		return cs, nil
 	}

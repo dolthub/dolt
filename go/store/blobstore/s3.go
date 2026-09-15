@@ -111,12 +111,13 @@ func (bs *S3Blobstore) Get(ctx context.Context, key string, br BlobRange) (io.Re
 		return nil, 0, "", err
 	}
 
+	// The whole blob's size. For a ranged request only the Content-Range
+	// carries it; ContentLength is the length of the range, so falling back to
+	// it there would report a size the blob does not have.
 	var size uint64
-	// For range requests the total size comes from the Content-Range header.
 	if res.ContentRange != nil {
 		size = parseContentRangeSize(*res.ContentRange)
-	}
-	if size == 0 && res.ContentLength != nil {
+	} else if br.isAllRange() && res.ContentLength != nil {
 		size = uint64(*res.ContentLength)
 	}
 
