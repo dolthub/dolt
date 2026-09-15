@@ -21,3 +21,18 @@ runs:
           const { checkDeferredCI } = require(process.env.CI_ACTION_PATH + '/../../scripts/ci-scheduling/cancellation');
           await checkDeferredCI({ github, context, core, timezone: process.env.CI_TIMEZONE,
             attempt: Number(process.env.GITHUB_RUN_ATTEMPT) });
+    - if: steps.admission.outputs.marker-name != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ steps.admission.outputs.marker-name }}
+        path: ${{ steps.admission.outputs.marker-path }}
+        retention-days: 30
+        if-no-files-found: error
+    - if: steps.admission.outputs.run == 'false'
+      uses: actions/github-script@v7
+      env:
+        CI_ACTION_PATH: ${{ github.action_path }}
+      with:
+        script: |
+          const { cancelFromJob } = require(process.env.CI_ACTION_PATH + '/../../scripts/ci-scheduling/cancellation');
+          await cancelFromJob({ github, context, core });

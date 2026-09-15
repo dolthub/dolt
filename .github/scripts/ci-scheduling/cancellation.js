@@ -4,22 +4,31 @@
 
 const workflows = require('./workflows.json');
 const ADMISSION_STEP = 'Check deferred CI';
-const DEFERRED_NOTICE = 'Dolt CI deferred';
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-const marker = (run, attempt) => `Deferred workflow ${run}, attempt ${attempt}.`;
+const marker = (run, attempt) => `dolt-ci-deferred-${run}-${attempt}-`;
 
-async function checkDeferredCI({ github, context, core, timezone, attempt, wait = sleep }) {
+async function recordDeferral(run, attempt) {
+  const { mkdtemp, writeFile } = require('node:fs/promises');
+  const { join } = require('node:path');
+  const { tmpdir } = require('node:os');
+  const { randomUUID } = require('node:crypto');
+  const path = join(await mkdtemp(join(tmpdir(), 'dolt-ci-')), 'deferred.json');
+  await writeFile(path, JSON.stringify({ run, attempt }));
+  return { path, name: marker(run, attempt) + randomUUID() };
+}
+
+async function checkDeferredCI({ github, context, core, timezone, attempt, record = recordDeferral }) {
   const { admission } = require('./index');
   const decision = await admission({ github, context, timezone });
   core.setOutput('run', String(decision.run));
-  if (decision.run) return;
   if (decision.reason === 'deferred') {
-    // Composite internals are not separate steps in the Jobs API. A notice on
-    // the existing job check records postponement without creating a new check.
-    core.notice(marker(context.runId, attempt), { title: DEFERRED_NOTICE });
+    // The action uploads this tiny marker before waiting for cancellation.
+    // Unlike check annotations it is visible while the action is still running.
+    const artifact = await record(context.runId, attempt);
+    core.setOutput('marker-path', artifact.path);
+    core.setOutput('marker-name', artifact.name);
     await core.summary.addRaw('CI postponed. See the PR comment for conditions and overrides.').write();
   }
-  await cancelFromJob({ github, context, core, wait });
 }
 
 function jobDecision(jobs) {
@@ -30,17 +39,15 @@ function jobDecision(jobs) {
 }
 
 async function readDecision({ github, repo, run, jobs }) {
-  for (const job of jobs) {
-    const step = job.steps?.find(step => step.name === ADMISSION_STEP);
-    if (!step || step.conclusion === 'success' || step.conclusion === 'skipped') continue;
-    const id = Number(job.check_run_url?.split('/').pop());
-    if (!Number.isSafeInteger(id) || id <= 0) throw new Error('Missing job check ID for CI admission');
-    const annotations = await github.paginate(github.rest.checks.listAnnotations,
-      { ...repo, check_run_id: id, per_page: 100 });
-    if (annotations.some(item => item.title === DEFERRED_NOTICE &&
-        item.message === marker(run.id, run.run_attempt))) return 'deferred';
+  const decision = jobDecision(jobs);
+  if (decision === 'admitted' || !jobs.some(job => job.steps?.some(step =>
+    step.name === ADMISSION_STEP && step.conclusion !== 'skipped'))) return decision;
+  const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts,
+    { ...repo, run_id: run.id, per_page: 100 });
+  if (artifacts.some(artifact => !artifact.expired && artifact.name.startsWith(marker(run.id, run.run_attempt)))) {
+    return 'deferred';
   }
-  return jobDecision(jobs);
+  return decision;
 }
 
 async function cancelFromJob({ github, context, core, wait = sleep }) {
@@ -89,4 +96,4 @@ async function cancelDeferredRun({ github, context, wait = sleep, attempts = 20 
   }
 }
 
-module.exports = { ADMISSION_STEP, DEFERRED_NOTICE, marker, checkDeferredCI, jobDecision, readDecision, cancelFromJob, cancelDeferredRun };
+module.exports = { ADMISSION_STEP, marker, checkDeferredCI, jobDecision, readDecision, cancelFromJob, cancelDeferredRun };

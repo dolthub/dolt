@@ -8,7 +8,7 @@ const { readFileSync } = require('node:fs');
 const { join } = require('node:path');
 const YAML = require('yaml');
 const workflows = require('./workflows.json');
-const { ADMISSION_STEP, DEFERRED_NOTICE, marker, readDecision, checkDeferredCI, jobDecision, cancelFromJob, cancelDeferredRun } = require('./cancellation');
+const { ADMISSION_STEP, marker, readDecision, checkDeferredCI, jobDecision, cancelFromJob, cancelDeferredRun } = require('./cancellation');
 const deferred = { conclusion: 'cancelled', check_run_url: 'https://api.github.com/repos/base/repo/check-runs/42',
   steps: [{ name: ADMISSION_STEP, conclusion: 'cancelled' }] };
 const admitted = { conclusion: 'success', steps: [{ name: ADMISSION_STEP, conclusion: 'success' }] };
@@ -46,11 +46,12 @@ function fixture() {
     actions: {
       getWorkflowRun: async () => ({ data: state.run }),
       listJobsForWorkflowRunAttempt: 'jobs',
+      listWorkflowRunArtifacts: 'artifacts',
       cancelWorkflowRun: async args => state.canceled.push(args.run_id),
-    }, pulls: { list: 'prs' }, checks: { listAnnotations: 'annotations' },
+    }, pulls: { list: 'prs' },
   }, paginate: async (method, args) => {
     if (method === 'jobs') { assert.equal(args.attempt_number, 1); return state.jobs; }
-    if (method === 'annotations') return state.annotations || [{ title: DEFERRED_NOTICE, message: marker(7, 1) }];
+    if (method === 'artifacts') return state.artifacts || [{ name: marker(7, 1) + 'test' }];
     return [state.pr];
   } };
   const context = { repo: { owner: 'base', repo: 'repo' }, payload: { workflow_run: { id: 7, run_attempt: 1 } } };
@@ -110,34 +111,32 @@ test('restricted jobs request cancellation permission instead of waiting for a q
   }
 });
 
-test('only a deferral notice for the current attempt permits automatic release', async () => {
+test('only a non-expired marker for the current attempt permits automatic release', async () => {
   const f = fixture();
   const args = { github: f.github, repo: f.context.repo, run: f.state.run, jobs: f.state.jobs };
   assert.equal(await readDecision(args), 'deferred');
-  for (const notice of [{ title: DEFERRED_NOTICE, message: marker(7, 2) },
-    { title: DEFERRED_NOTICE, message: marker(8, 1) }, { title: 'Other notice', message: marker(7, 1) }]) {
-    f.state.annotations = [notice]; assert.equal(await readDecision(args), 'failed');
+  for (const artifact of [{ name: marker(7, 2) + 'test' },
+    { name: marker(8, 1) + 'test' }, { name: 'other' }, { name: marker(7, 1) + 'test', expired: true }]) {
+    f.state.artifacts = [artifact]; assert.equal(await readDecision(args), 'failed');
   }
   f.github.paginate = async () => { throw new Error('API failure'); };
   await assert.rejects(readDecision(args), /API failure/);
 });
 
-test('the shared action returns only for admitted work and records deferral before cancellation', async () => {
+test('the shared action records a marker only for deliberate deferral', async () => {
   for (const eventName of ['push', 'pull_request']) {
     const calls = [];
     const pr = { state: 'open', draft: true, head: { sha: 'head' }, labels: [] };
     const context = { eventName, repo: {}, runId: 7, payload: { pull_request: pr } };
-    const github = { rest: { pulls: { get: async () => ({ data: pr }) }, actions: {
-      cancelWorkflowRun: async () => { calls.push('cancel'); },
-    } } };
+    const github = { rest: { pulls: { get: async () => ({ data: pr }) } } };
     const core = { setOutput: (key, value) => calls.push([key, value]),
-      notice: (message, opts) => calls.push([opts.title, message]),
       summary: { addRaw: () => ({ write: async () => {} }) },
-      setFailed: () => calls.push('failed'),
     };
-    await checkDeferredCI({ github, context, core, attempt: 1, wait: async () => {} });
+    await checkDeferredCI({ github, context, core, attempt: 1,
+      record: async (run, attempt) => { assert.equal(run, 7); assert.equal(attempt, 1); return { path: '/marker', name: 'marker' }; },
+    });
     if (eventName === 'push') assert.deepEqual(calls, [['run', 'true']]);
-    else assert.deepEqual(calls, [['run', 'false'], [DEFERRED_NOTICE, marker(7, 1)], 'cancel', 'failed']);
+    else assert.deepEqual(calls, [['run', 'false'], ['marker-path', '/marker'], ['marker-name', 'marker']]);
   }
 });
 
@@ -149,6 +148,11 @@ test('the composite passes its action directory, timezone input and admission ou
   assert.equal(action.runs.steps[0].env.CI_ACTION_PATH, '${{ github.action_path }}');
   assert.equal(action.runs.steps[0].env.CI_TIMEZONE, '${{ inputs.timezone }}');
   assert.doesNotMatch(JSON.stringify(action), /vars\./);
+  assert.equal(action.runs.steps[1].uses, 'actions/upload-artifact@v4');
+  assert.equal(action.runs.steps[1].with['retention-days'], 30);
+  assert.equal(action.runs.steps[1].with['if-no-files-found'], 'error');
+  assert.equal(action.runs.steps[2].if, "steps.admission.outputs.run == 'false'");
+  assert.equal(action.runs.steps[2]['continue-on-error'], undefined);
 });
 
 test('admission API errors fail before cancellation or a deferral notice', async () => {

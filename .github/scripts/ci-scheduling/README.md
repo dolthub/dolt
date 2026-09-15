@@ -126,8 +126,7 @@ dispatches, releases, and nightly workflows) retain their previous behavior.
    trusted controller has `statuses: write`; it also requests
    `issues: write` and `pull-requests: write` to manage PR labels and comments.
    Existing label-validation suites retain their original metadata write permissions.
-   The shared action needs contents and pull-request read access. The scheduler
-   also requests `checks: read` to recognize its deferral notices. Restricted label and
+   The shared action needs contents and pull-request read access. Restricted label and
    scheduling-test jobs also request `actions: write` to cancel themselves; other
    jobs retain the repository default. GitHub downgrades fork PR tokens to read-only.
    Review notifications have no repository permissions and do not check out code,
@@ -164,24 +163,26 @@ retried; use their original workflow controls.
   Normal subsequent steps therefore need no extra condition. Failure/always
   handlers must additionally check its `run` output; the ORM workflow demonstrates
   this with an `id: ci-admission` and two guarded failure handlers.
-- A `Dolt CI deferred` notice on the existing job check records the workflow run
-  and attempt before cancellation. This replaces reliance on internal composite
-  step names, which are not exposed separately by the Jobs API. The scheduler
-  reads annotations through the Checks API; no extra check or artifact is created.
+- When deferred, the action uploads a tiny artifact named with the run, attempt,
+  and a unique suffix before waiting for cancellation. Composite internals are
+  not separate Jobs API steps, and annotations are not published until the step
+  finishes; artifact metadata is available while cancellation is pending. The
+  scheduler reads only artifact names and expiry flags, never artifact contents.
+  Markers last 30 days, matching GitHub's rerun window. No extra check is created.
 - A deferred job requests cancellation of its own workflow using its existing
   token. GitHub's API cancels a whole workflow, including matrix siblings; it does
   not provide an individual-job cancellation endpoint.
 - Fork PR tokens and explicitly restricted jobs cannot cancel runs themselves.
   A trusted `workflow_run: in_progress` handler checks GitHub job metadata for the
-  postponement notice and cancels the run without executing PR code. It stops
+  postponement artifact metadata and cancels the run without executing PR code. It stops
   monitoring once all jobs have passed admission or after 60 seconds.
 - The job waits at most 90 seconds for cancellation. If GitHub delays cancellation
   beyond that limit, the step fails without running tests; its postponement marker
   still lets the scheduler release it later. Restricted jobs explicitly request
   `actions: write`; read-only fork PR tokens still use the trusted controller.
-- The controller recognizes postponed runs from a matching notice in any
-  matrix job, even when its siblings were canceled before starting. Notices from
-  another run or attempt do not qualify. Admission API
+- The controller recognizes postponed runs from a matching artifact for the
+  current run and attempt, even when matrix siblings were canceled before starting.
+  Expired artifacts and markers from other attempts do not qualify. Admission API
   errors and unrelated cancellations fail closed; ordinary test failures are not
   automatically retried.
 - The scheduler reruns the original independent workflows. Each job rechecks

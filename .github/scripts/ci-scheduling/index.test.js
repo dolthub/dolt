@@ -8,7 +8,7 @@ const { readFileSync, readdirSync } = require('node:fs');
 const { join } = require('node:path');
 const { ADMISSION_STEP, afterHours, admission, candidates, reconcile, latestRuns, hasApproval, AFTER_HOURS_LABEL, REVIEW_LABEL, FORCE_DRAFT_LABEL, LABEL, STATUS } = require('./');
 const workflows = require('./workflows.json');
-const { DEFERRED_NOTICE, marker } = require('./cancellation');
+const { marker } = require('./cancellation');
 const day = new Date('2026-09-15T19:00:00Z'); // noon Pacific
 const night = new Date('2026-09-16T04:00:00Z'); // 9pm Pacific
 const pr = { number: 12, state: 'open', draft: false, user: { login: 'author' }, body: '', labels: [{ name: AFTER_HOURS_LABEL }],
@@ -50,9 +50,9 @@ function fixture(options = {}) {
       addLabels: method('labels.add', args => state.pr.labels.push(...args.labels.map(name => ({ name })))),
       removeLabel: method('labels.remove', args => state.pr.labels = state.pr.labels.filter(l => l.name !== args.name)),
     },
-    checks: { listAnnotations: method('annotations.list', args => [{ title: DEFERRED_NOTICE,
-      message: marker(args.check_run_id, state.runs.find(run => run.id === args.check_run_id).run_attempt) }]) },
     actions: {
+      listWorkflowRunArtifacts: method('artifacts.list', args => [{
+        name: marker(args.run_id, state.runs.find(run => run.id === args.run_id).run_attempt) + 'test' }]),
       listWorkflowRunsForRepo: method('runs.list', () => state.runs),
       listJobsForWorkflowRunAttempt: method('jobs.list', args =>
         (typeof state.jobs === 'function' ? state.jobs(args) : state.jobs).map(job => ({ ...job,
