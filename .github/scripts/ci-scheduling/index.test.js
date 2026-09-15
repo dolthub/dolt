@@ -470,6 +470,16 @@ test('every PR workflow is registered and every test job depends on admission', 
   }
 });
 
+test('the scheduler can manage PR labels and comments even when repository issues are disabled', () => {
+  const scheduler = readFileSync(join(__dirname, '../../workflows/ci-scheduler.yaml'), 'utf8');
+  const reconcile = scheduler.split(/^  reconcile:\s*$/m)[1];
+  const permissions = reconcile.match(/^    permissions:\n((?:^      .*\n)+)/m)[1];
+  // PR metadata writes require PR permission; issue permission alone failed in the fork.
+  assert.match(permissions, /^      pull-requests: write$/m);
+  // Repository label creation still needs issue permission.
+  assert.match(permissions, /^      issues: write$/m);
+});
+
 test('all deferred suites must finish before the scheduling barrier clears', async () => {
   const f = fixture({ runs: [{ ...run }, { ...run, id: 101, path: workflows[1] }] });
   await f.reconcile(night);

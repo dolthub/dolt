@@ -83,7 +83,8 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
-      pull-requests: read
+      # PR labels and comments require write access, including in forks with issues disabled.
+      pull-requests: write
       issues: write
       statuses: write
       actions: write
