@@ -16,13 +16,14 @@ package engine
 
 import (
 	"bytes"
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/types"
 	"testing"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 )
 
 func TestSecondsSince(t *testing.T) {
