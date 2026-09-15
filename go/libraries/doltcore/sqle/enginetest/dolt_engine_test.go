@@ -17,6 +17,7 @@ package enginetest
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sync"
 	"testing"
@@ -764,6 +765,37 @@ func TestBlobs(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestBlobs(t, h)
+
+	t.Run("MD5 of binary LOAD_FILE", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "md5_binary")
+		require.NoError(t, os.WriteFile(path, []byte{0xff, 0x00, 0x80, 'a', 'b', 'c'}, 0600))
+		_, oldSecureFilePriv, ok := sql.SystemVariables.GetGlobal("secure_file_priv")
+		require.True(t, ok)
+		require.NoError(t, sql.SystemVariables.AssignValues(map[string]interface{}{"secure_file_priv": dir}))
+		t.Cleanup(func() {
+			require.NoError(t, sql.SystemVariables.AssignValues(map[string]interface{}{"secure_file_priv": oldSecureFilePriv}))
+		})
+		script := queries.ScriptTest{
+			Name: "MD5 of binary file contents",
+			Assertions: []queries.ScriptTestAssertion{{
+				Query:    fmt.Sprintf("SELECT MD5(BINARY LOAD_FILE(%q))", filepath.ToSlash(path)),
+				Expected: []sql.Row{{"c54f88b4c45ee5d3aaf21a0da5003612"}},
+			}},
+		}
+		for _, prepared := range []bool{false, true} {
+			t.Run(fmt.Sprintf("prepared=%t", prepared), func(t *testing.T) {
+				h := newDoltHarness(t)
+				defer h.Close()
+				if prepared {
+					enginetest.TestScriptPrepared(t, h, script)
+				} else {
+					enginetest.TestScript(t, h, script)
+				}
+			})
+		}
+
+	})
 }
 
 func TestIndexes(t *testing.T) {
