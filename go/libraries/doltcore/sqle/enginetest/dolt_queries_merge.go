@@ -1675,6 +1675,27 @@ var MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	// https://github.com/dolthub/dolt/issues/8822
+	{
+		Name: "Test concurrent merges with overlapping indexes",
+		SetUpScript: []string{
+			"CREATE TABLE overlap_indexes(pk INT PRIMARY KEY,v INT,UNIQUE KEY uniq(v),KEY idx(v))",
+			"INSERT INTO overlap_indexes VALUES(1,1)",
+			"CALL dolt_commit('-Am','base')",
+			"CALL dolt_checkout('-b','other')",
+			"INSERT INTO overlap_indexes VALUES(2,2)",
+			"CALL dolt_commit('-am','other')",
+			"CALL dolt_checkout('main')",
+			"INSERT INTO overlap_indexes VALUES(3,3)",
+			"CALL dolt_commit('-am','main')",
+			"CALL dolt_merge('other')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "SELECT * FROM overlap_indexes ORDER BY pk", Expected: []sql.Row{{int32(1), int32(1)}, {int32(2), int32(2)}, {int32(3), int32(3)}}},
+			{Query: "SELECT /*+ LOOKUP_JOIN(w, o) JOIN_ORDER(w, o) */ o.* FROM (SELECT 2 AS v) w JOIN overlap_indexes o ON w.v = o.v", Expected: []sql.Row{{int32(2), int32(2)}}},
+			{Query: "SELECT /*+ LOOKUP_JOIN(w, o) JOIN_ORDER(w, o) */ o.* FROM (SELECT 3 AS v) w JOIN overlap_indexes o ON w.v = o.v", Expected: []sql.Row{{int32(3), int32(3)}}},
+		},
+	},
 	{
 		Name: "unique keys, update violation from left",
 		SetUpScript: []string{
