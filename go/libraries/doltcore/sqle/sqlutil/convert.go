@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/vt/sqlparser"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -36,21 +37,15 @@ func FromDoltSchema(ctx context.Context, dbName, tableName string, sch schema.Sc
 	var i int
 	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		sqlType := col.TypeInfo.ToSqlType()
-		var extra string
-		if col.AutoIncrement {
-			extra = "auto_increment"
-		}
 
-		var deflt, generated, onUpdate *sql.ColumnDefaultValue
+		var deflt, generated *sql.ColumnDefaultValue
 		if col.Default != "" {
 			deflt = sql.NewUnresolvedColumnDefaultValue(col.Default)
 		}
 		if col.Generated != "" {
 			generated = sql.NewUnresolvedColumnDefaultValue(col.Generated)
 		}
-		if col.OnUpdate != "" {
-			onUpdate = sql.NewUnresolvedColumnDefaultValue(col.OnUpdate)
-		}
+		onUpdate := OnUpdateExprFromType(col.OnUpdate, sqlType)
 
 		cols[i] = &sql.Column{
 			Name:           col.Name,
@@ -65,7 +60,6 @@ func FromDoltSchema(ctx context.Context, dbName, tableName string, sch schema.Sc
 			AutoIncrement:  col.AutoIncrement,
 			Comment:        col.Comment,
 			Virtual:        col.Virtual,
-			Extra:          extra,
 			Hidden:         col.Hidden,
 			HiddenSystem:   col.SystemHidden,
 		}
@@ -156,7 +150,7 @@ func ToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 	}
 
 	if col.OnUpdate != nil {
-		onUpdateVal = col.OnUpdate.String()
+		onUpdateVal = sqlparser.String(col.OnUpdate)
 	}
 
 	c := schema.Column{
@@ -182,6 +176,18 @@ func ToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 	}
 
 	return c, nil
+}
+
+// OnUpdateExprFromType creates an [sqlparser.OnUpdateExpr] for the column's onUpdate string and [sql.Type].
+func OnUpdateExprFromType(onUpdateStr string, sqlType sql.Type) *sqlparser.OnUpdateExpr {
+	if onUpdateStr == "" {
+		return nil
+	}
+	var prec int
+	if dt, ok := sqlType.(sql.DatetimeType); ok {
+		prec = dt.Precision()
+	}
+	return &sqlparser.OnUpdateExpr{Precision: prec}
 }
 
 // ToForeignKeyConstraint converts |fk| to a sql.ForeignKeyConstraint, using the name of the database

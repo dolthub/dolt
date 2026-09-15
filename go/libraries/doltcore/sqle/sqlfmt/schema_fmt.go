@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
@@ -204,7 +205,7 @@ func GenerateCreateTableColumnDefinition(ctx *sql.Context, formatter sql.SchemaF
 
 // GenerateCreateTableIndentedColumnDefinition returns column definition for CREATE TABLE statement with no indentation
 func GenerateCreateTableIndentedColumnDefinition(ctx *sql.Context, formatter sql.SchemaFormatter, col schema.Column, tableCollation sql.CollationID) string {
-	var defaultVal, genVal, onUpdateVal *sql.ColumnDefaultValue
+	var defaultVal, genVal *sql.ColumnDefaultValue
 	if col.Default != "" {
 		// hacky way to determine if column default is an expression
 		if col.Default[0] != '(' && col.Default[len(col.Default)-1] != ')' && col.Default[0] != '\'' && col.Default[len(col.Default)-1] != '\'' && col.Default != "NULL" {
@@ -215,9 +216,7 @@ func GenerateCreateTableIndentedColumnDefinition(ctx *sql.Context, formatter sql
 	if col.Generated != "" {
 		genVal = sql.NewUnresolvedColumnDefaultValue(col.Generated)
 	}
-	if col.OnUpdate != "" {
-		onUpdateVal = sql.NewUnresolvedColumnDefaultValue(col.OnUpdate)
-	}
+	onUpdateVal := sqlutil.OnUpdateExprFromType(col.OnUpdate, col.TypeInfo.ToSqlType())
 
 	return formatter.GenerateCreateTableColumnDefinition(
 		&sql.Column{
@@ -232,7 +231,7 @@ func GenerateCreateTableIndentedColumnDefinition(ctx *sql.Context, formatter sql
 			Hidden:        col.Hidden,
 			HiddenSystem:  col.SystemHidden,
 			OnUpdate:      onUpdateVal,
-		}, col.Default, col.OnUpdate, tableCollation)
+		}, col.Default, tableCollation)
 }
 
 // indexColumnDDLExpressions returns the SQL expression to use for each column in |index|'s column list when
