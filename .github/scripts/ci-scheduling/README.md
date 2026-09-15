@@ -123,10 +123,12 @@ dispatches, releases, and nightly workflows) retain their previous behavior.
    The controller creates the internal `ci-deferred` queue label automatically.
 4. Optionally set `CI_TIMEZONE`. An invalid timezone fails after-hours admission.
 5. The workflows use `GITHUB_TOKEN`; no new PAT or secret is needed. Only the
-   trusted controller has `actions: write` and `statuses: write`; it also requests
+   trusted controller has `statuses: write`; it also requests
    `issues: write` and `pull-requests: write` to manage PR labels and comments.
    Existing label-validation suites retain their original metadata write permissions.
-   Their inline admission steps also need contents and pull-request read access.
+   Inline steps need contents and pull-request read access. Restricted label and
+   scheduling-test jobs also request `actions: write` to cancel themselves; other
+   jobs retain the repository default. GitHub downgrades fork PR tokens to read-only.
    Review notifications have no repository permissions and do not check out code,
    so fork review events never execute PR code with the controller's write token.
 6. Validate a draft-to-ready submission with each label and both labels. Verify
@@ -157,8 +159,8 @@ retried; use their original workflow controls.
   monitoring once all jobs have passed admission or after 60 seconds.
 - The job waits at most 90 seconds for cancellation. If GitHub delays cancellation
   beyond that limit, the step fails without running tests; its postponement marker
-  still lets the scheduler release it later. No additional write permission is
-  granted to PR jobs for cancellation.
+  still lets the scheduler release it later. Restricted jobs explicitly request
+  `actions: write`; read-only fork PR tokens still use the trusted controller.
 - The controller recognizes postponed runs from the successful marker in any
   matrix job, even when its siblings were canceled before starting. Admission API
   errors and unrelated cancellations fail closed; ordinary test failures are not

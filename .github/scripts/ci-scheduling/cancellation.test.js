@@ -98,3 +98,12 @@ test('each independent job checks admission before setup and guards every origin
     }
   }
 });
+
+test('restricted jobs request cancellation permission instead of waiting for a queued controller', () => {
+  for (const name of ['ci-check-correctness.yaml', 'ci-check-performance.yaml', 'ci-scheduling-tests.yaml']) {
+    const workflow = YAML.parse(readFileSync(join(__dirname, '../../workflows', name), 'utf8'));
+    for (const job of Object.values(workflow.jobs)) {
+      assert.equal((job.permissions || workflow.permissions).actions, 'write', name);
+    }
+  }
+});
