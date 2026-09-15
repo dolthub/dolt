@@ -178,10 +178,9 @@ retried; use their original workflow controls.
 - The trusted controller never executes PR code or downloads PR artifacts.
 - Add new suites to `suites.json` and the appropriate parent's calls. The structural
   tests require every suite to belong to exactly one parent and depend on its gate.
-  The scheduler registry (`workflows.json`) and subscriptions also retain legacy
-  workflow paths/names so already-postponed runs can finish during rollout.
-  New PR runs use only the two parents. Fresh test PRs should start from the merged
-  default branch. The review notifier remains a separate metadata workflow.
+  The scheduler registry (`workflows.json`) and subscriptions track only the two
+  parents. Fresh test PRs should start from the merged default branch. The review
+  notifier remains a separate metadata workflow.
 
 GitHub permits reruns for **30 days after the original run**, up to **50 attempts**.
 This also limits how long draft/review deferrals can be automatically released

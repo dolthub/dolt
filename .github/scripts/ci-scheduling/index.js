@@ -252,9 +252,8 @@ async function reconcile({ github, context, pullNumber, now = new Date(), timezo
           gate = allJobs.filter(job => job.name === GATE_JOB).sort((a, b) => b.id - a.id)[0];
         }
         if (!gate) {
-          // Existing runs from before rollout have no gate. A missing gate must
-          // not clear the barrier on a canceled or otherwise unsuccessful run.
-          decision = run.conclusion === 'success' ? 'admitted' : 'failed';
+          // Both parent workflows require admission; a missing gate is an error.
+          decision = 'failed';
         } else if (gate.conclusion !== 'success') {
           decision = 'failed';
         } else if (gate.steps?.some(step => step.name === DEFERRED_STEP && step.conclusion === 'success')) {
