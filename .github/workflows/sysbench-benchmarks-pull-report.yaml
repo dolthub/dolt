@@ -7,7 +7,15 @@ on:
     types: [ created ]
 
 jobs:
+  ci-admission:
+    uses: ./.github/workflows/ci-admission.yaml
+    permissions:
+      contents: read
+      pull-requests: read
+
   validate-commentor:
+    if: ${{ needs.ci-admission.outputs.run == 'true' }}
+    needs: ci-admission
     runs-on: ubuntu-22.04
     outputs:
       valid: ${{ steps.set_valid.outputs.valid }}
@@ -21,8 +29,8 @@ jobs:
 
   check-comments:
     runs-on: ubuntu-22.04
-    needs: validate-commentor
-    if: ${{ needs.validate-commentor.outputs.valid == 'true' }}
+    needs: [ci-admission, validate-commentor]
+    if: ${{ needs.ci-admission.outputs.run == 'true' && (needs.validate-commentor.outputs.valid == 'true') }}
     outputs:
       benchmark: ${{ steps.set_benchmark.outputs.benchmark }}
       comment-body: ${{ steps.set_body.outputs.body }}
@@ -43,8 +51,8 @@ jobs:
 
   performance:
     runs-on: ubuntu-22.04
-    needs: [validate-commentor, check-comments]
-    if: ${{ needs.check-comments.outputs.benchmark == 'true' }}
+    needs: [ci-admission, validate-commentor, check-comments]
+    if: ${{ needs.ci-admission.outputs.run == 'true' && (needs.check-comments.outputs.benchmark == 'true') }}
     name: Trigger Benchmark Systab Workflow
     steps:
       - uses: dolthub/pull-request-comment-branch@v3

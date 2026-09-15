@@ -12,7 +12,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  ci-admission:
+    uses: ./.github/workflows/ci-admission.yaml
+    permissions:
+      contents: read
+      pull-requests: read
+
   binlog-test:
+    if: ${{ needs.ci-admission.outputs.run == 'true' }}
+    needs: ci-admission
     name: Binlog tests
     defaults:
       run:
@@ -34,6 +42,8 @@ jobs:
       env:
         MATRIX_OS: ${{ matrix.os }}
   binlog-race-test:
+    if: ${{ needs.ci-admission.outputs.run == 'true' }}
+    needs: ci-admission
     name: Binlog tests - race
     defaults:
       run:

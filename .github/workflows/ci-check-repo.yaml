@@ -9,7 +9,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  ci-admission:
+    uses: ./.github/workflows/ci-admission.yaml
+    permissions:
+      contents: read
+      pull-requests: read
+
   verify:
+    if: ${{ needs.ci-admission.outputs.run == 'true' }}
+    needs: ci-admission
     name: Verify format and committers
     runs-on: ubuntu-22.04
     outputs:
@@ -60,8 +68,8 @@ jobs:
              exit 1
           fi
   get-artifacts:
-    needs: verify
-    if: ${{ needs.verify.outputs.format == 'true' }}
+    needs: [ci-admission, verify]
+    if: ${{ needs.ci-admission.outputs.run == 'true' && (needs.verify.outputs.format == 'true') }}
     name: Get artifacts
     runs-on: ubuntu-22.04
     steps:
@@ -89,8 +97,8 @@ jobs:
           name: format-code-script
           path: go/utils/repofmt/_format_repo.sh
   format:
-    needs: [verify, get-artifacts]
-    if: ${{ needs.verify.outputs.format == 'true' }}
+    needs: [ci-admission, verify, get-artifacts]
+    if: ${{ needs.ci-admission.outputs.run == 'true' && (needs.verify.outputs.format == 'true') }}
     name: Format PR
     runs-on: ubuntu-22.04
     steps:

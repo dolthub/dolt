@@ -1,0 +1,25 @@
+name: Test CI scheduling
+
+on:
+  pull_request:
+    paths:
+      - '.github/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  ci-admission:
+    uses: ./.github/workflows/ci-admission.yaml
+  test:
+    needs: ci-admission
+    if: needs.ci-admission.outputs.run == 'true'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node --test .github/scripts/ci-scheduling/*.test.js

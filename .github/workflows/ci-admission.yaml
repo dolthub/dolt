@@ -1,0 +1,39 @@
+name: PR CI admission
+
+on:
+  workflow_call:
+    outputs:
+      run:
+        description: Whether the CI jobs can start
+        value: ${{ jobs.admission.outputs.run }}
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  admission:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.admission.outputs.run }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts/ci-scheduling
+      - name: Check admission
+        id: admission
+        uses: actions/github-script@v7
+        env:
+          CI_TIMEZONE: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
+        with:
+          script: |
+            const { admission } = require('./.github/scripts/ci-scheduling');
+            const decision = await admission({ github, context, timezone: process.env.CI_TIMEZONE });
+            core.setOutput('run', String(decision.run));
+            core.setOutput('reason', decision.reason);
+      # The controller reads this step from the original run's latest attempt.
+      - name: CI postponed
+        if: steps.admission.outputs.reason == 'deferred'
+        run: echo 'CI postponed until 9pm–5am. Remove [non-urgent] from the PR description to release it.' >> "$GITHUB_STEP_SUMMARY"

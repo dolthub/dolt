@@ -11,7 +11,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  ci-admission:
+    uses: ./.github/workflows/ci-admission.yaml
+    permissions:
+      contents: read
+      pull-requests: read
+
   data_dump_laoding_integrations_job:
+    if: ${{ needs.ci-admission.outputs.run == 'true' }}
+    needs: ci-admission
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     name: Run tests

@@ -11,7 +11,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  ci-admission:
+    uses: ./.github/workflows/ci-admission.yaml
+    permissions:
+      contents: read
+      pull-requests: read
+
   mysql_client_integrations:
+    if: ${{ needs.ci-admission.outputs.run == 'true' }}
+    needs: ci-admission
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     steps:

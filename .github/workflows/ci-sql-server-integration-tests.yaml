@@ -12,7 +12,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  ci-admission:
+    uses: ./.github/workflows/ci-admission.yaml
+    permissions:
+      contents: read
+      pull-requests: read
+
   test:
+    if: ${{ needs.ci-admission.outputs.run == 'true' }}
+    needs: ci-admission
     name: sql-server Integration Tests
     defaults:
       run:

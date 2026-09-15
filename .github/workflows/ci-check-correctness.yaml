@@ -6,7 +6,15 @@ on:
     branches: [main]
     types: [opened, labeled, unlabeled, synchronize]
 jobs:
+  ci-admission:
+    uses: ./.github/workflows/ci-admission.yaml
+    permissions:
+      contents: read
+      pull-requests: read
+
   label:
+    if: ${{ needs.ci-admission.outputs.run == 'true' }}
+    needs: ci-admission
     runs-on: ubuntu-latest
     permissions:
       issues: write

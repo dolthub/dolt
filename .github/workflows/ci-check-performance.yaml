@@ -6,8 +6,15 @@ on:
     branches: [main]
     types: [opened, labeled, unlabeled, synchronize]
 jobs:
+  ci-admission:
+    uses: ./.github/workflows/ci-admission.yaml
+    permissions:
+      contents: read
+      pull-requests: read
+
   label:
-    if: github.actor != 'dependabot[bot]'
+    needs: ci-admission
+    if: ${{ needs.ci-admission.outputs.run == 'true' && (github.actor != 'dependabot[bot]') }}
     runs-on: ubuntu-latest
     permissions:
       issues: write
