@@ -140,3 +140,24 @@ test('the shared action returns only for admitted work and records deferral befo
     else assert.deepEqual(calls, [['run', 'false'], [DEFERRED_NOTICE, marker(7, 1)], 'cancel', 'failed']);
   }
 });
+
+test('the composite passes its action directory, timezone input and admission output explicitly', () => {
+  const action = YAML.parse(readFileSync(join(__dirname, '../../actions/check-deferred-ci/action.yml'), 'utf8'));
+  assert.equal(action.runs.using, 'composite');
+  assert.equal(action.inputs.timezone.default, 'America/Los_Angeles');
+  assert.equal(action.outputs.run.value, '${{ steps.admission.outputs.run }}');
+  assert.equal(action.runs.steps[0].env.CI_ACTION_PATH, '${{ github.action_path }}');
+  assert.equal(action.runs.steps[0].env.CI_TIMEZONE, '${{ inputs.timezone }}');
+  assert.doesNotMatch(JSON.stringify(action), /vars\./);
+});
+
+test('admission API errors fail before cancellation or a deferral notice', async () => {
+  const calls = [];
+  await assert.rejects(checkDeferredCI({
+    github: { rest: { pulls: { get: async () => { throw new Error('API unavailable'); } } } },
+    context: { eventName: 'pull_request', repo: {}, payload: { pull_request: { number: 1 } } },
+    core: { notice: () => calls.push('notice'), setOutput: () => calls.push('output') },
+    attempt: 1,
+  }), /API unavailable/);
+  assert.deepEqual(calls, []);
+});

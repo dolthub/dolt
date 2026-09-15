@@ -53,7 +53,8 @@ async function cancelFromJob({ github, context, core, wait = sleep }) {
     core.info('Waiting for the trusted CI scheduler to cancel this deferred run.');
   }
   // Never return successfully while cancellation is asynchronous. Ordinary
-  // steps require success; failure/always handlers retain an admission guard. Bound runner time
+  // steps require success; failure/always handlers retain an admission guard.
+  // Bound runner time
   // if GitHub delays the cancellation controller; its completion event can still
   // record this marked run for later release.
   await wait(90000);

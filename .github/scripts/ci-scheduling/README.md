@@ -126,7 +126,8 @@ dispatches, releases, and nightly workflows) retain their previous behavior.
    trusted controller has `statuses: write`; it also requests
    `issues: write` and `pull-requests: write` to manage PR labels and comments.
    Existing label-validation suites retain their original metadata write permissions.
-   Inline steps need contents and pull-request read access. Restricted label and
+   The shared action needs contents and pull-request read access. The scheduler
+   also requests `checks: read` to recognize its deferral notices. Restricted label and
    scheduling-test jobs also request `actions: write` to cancel themselves; other
    jobs retain the repository default. GitHub downgrades fork PR tokens to read-only.
    Review notifications have no repository permissions and do not check out code,
@@ -146,23 +147,41 @@ retried; use their original workflow controls.
 
 - Each existing PR workflow keeps its triggers, branch/path filters, job names,
   dependencies, runner matrices, concurrency groups, and non-PR entry points.
-- Each job first checks out only the scheduling scripts into `.ci-admission`,
-  checks the live PR policy, and records a `CI postponed` step when deferred.
-  Every original setup/test step also requires admission, including steps with
-  their own `always()` or failure conditions.
+- Each job adds one shared composite action before setup or tests:
+
+  ```yaml
+  - name: Check deferred CI
+    uses: $/.github/actions/check-deferred-ci
+    with:
+      timezone: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
+  ```
+
+  The `$/` self reference loads the action from the workflow's own repository and
+  commit without a workspace checkout, including in forks. This syntax requires
+  GitHub.com; older local workflow linters may not recognize it.
+- The action returns successfully only when work is admitted (including non-PR
+  triggers). Otherwise it waits for cancellation, failing after a bounded timeout.
+  Normal subsequent steps therefore need no extra condition. Failure/always
+  handlers must additionally check its `run` output; the ORM workflow demonstrates
+  this with an `id: ci-admission` and two guarded failure handlers.
+- A `Dolt CI deferred` notice on the existing job check records the workflow run
+  and attempt before cancellation. This replaces reliance on internal composite
+  step names, which are not exposed separately by the Jobs API. The scheduler
+  reads annotations through the Checks API; no extra check or artifact is created.
 - A deferred job requests cancellation of its own workflow using its existing
   token. GitHub's API cancels a whole workflow, including matrix siblings; it does
   not provide an individual-job cancellation endpoint.
 - Fork PR tokens and explicitly restricted jobs cannot cancel runs themselves.
   A trusted `workflow_run: in_progress` handler checks GitHub job metadata for the
-  postponement marker and cancels the run without executing PR code. It stops
+  postponement notice and cancels the run without executing PR code. It stops
   monitoring once all jobs have passed admission or after 60 seconds.
 - The job waits at most 90 seconds for cancellation. If GitHub delays cancellation
   beyond that limit, the step fails without running tests; its postponement marker
   still lets the scheduler release it later. Restricted jobs explicitly request
   `actions: write`; read-only fork PR tokens still use the trusted controller.
-- The controller recognizes postponed runs from the successful marker in any
-  matrix job, even when its siblings were canceled before starting. Admission API
+- The controller recognizes postponed runs from a matching notice in any
+  matrix job, even when its siblings were canceled before starting. Notices from
+  another run or attempt do not qualify. Admission API
   errors and unrelated cancellations fail closed; ordinary test failures are not
   automatically retried.
 - The scheduler reruns the original independent workflows. Each job rechecks
@@ -177,8 +196,8 @@ retried; use their original workflow controls.
   Only the bot's own comment is read; a missing or damaged cache is rebuilt.
 - The trusted controller never executes PR code or downloads PR artifacts.
 - Register each independent PR workflow in `workflows.json` and the scheduler's
-  subscriptions. Every job must have the inline admission steps and guard every
-  original step; structural tests verify this. The review notifier remains a
+  subscriptions. Every job must start with the shared action; only failure/always
+  handlers need an extra admission guard. Structural tests verify this. The review notifier remains a
   separate metadata workflow. No legacy workflow format is supported.
 
 GitHub permits reruns for **30 days after the original run**, up to **50 attempts**.
