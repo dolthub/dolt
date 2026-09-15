@@ -1511,9 +1511,11 @@ func TestDoltUndrop(t *testing.T) {
 	RunDoltUndropTests(t, h)
 }
 
-// TestCommitMergeWithOverlappingIndexes covers the original reproduction from
-// https://github.com/dolthub/dolt/issues/8822.
-func TestCommitMergeWithOverlappingIndexes(t *testing.T) {
+// TestSingleTransactionScript is a convenience method for debugging a single transaction test. Unskip and set to the
+// desired test.
+func TestSingleTransactionScript(t *testing.T) {
+	t.Skip()
+
 	tcc := &testCommitClock{}
 	cleanup := installTestCommitClock(tcc)
 	defer cleanup()
