@@ -25,7 +25,7 @@ const updateFrequency = 500 * time.Millisecond
 type ReadStats struct {
 	Read    uint64
 	Elapsed time.Duration
-	Percent float64
+	Percent float64 // -1 when the total size is unknown.
 }
 
 type ReaderWithStats struct {
@@ -62,8 +62,8 @@ func (rws *ReaderWithStats) Start(updateFunc func(ReadStats)) {
 			case <-timer.C:
 				read := atomic.LoadUint64(&rws.read)
 				elapsed := time.Since(rws.start)
-				var percent float64
-				if rws.size != 0 {
+				percent := float64(-1)
+				if rws.size > 0 {
 					percent = float64(read) / float64(rws.size)
 				}
 				updateFunc(ReadStats{Read: read, Elapsed: elapsed, Percent: percent})
