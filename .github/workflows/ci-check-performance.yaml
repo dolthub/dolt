@@ -1,20 +1,9 @@
 name: Check for performance_approved label
 on:
-  pull_request:
-    paths:
-      - 'go/**'
-    branches: [main]
-    types: [opened, labeled, unlabeled, synchronize]
+  workflow_call:
 jobs:
-  ci-admission:
-    uses: ./.github/workflows/ci-admission.yaml
-    permissions:
-      contents: read
-      pull-requests: read
-
   label:
-    needs: ci-admission
-    if: ${{ needs.ci-admission.outputs.run == 'true' && (github.actor != 'dependabot[bot]') }}
+    if: ${{ github.actor != 'dependabot[bot]' }}
     runs-on: ubuntu-latest
     permissions:
       issues: write

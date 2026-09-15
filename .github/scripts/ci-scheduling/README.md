@@ -69,7 +69,7 @@ Sources: [GitHub CLI creation and metadata calls](https://github.com/cli/cli/blo
   deferred. Test jobs and their OS matrices do not acquire runners while waiting.
 - One bot comment explains the outstanding conditions and the exact label changes
   that override each applicable hold. Release and error updates retain these
-  instructions, including that each override clears only its own condition.
+  instructions.
   The separate `ci-deferred` label tracks postponed work until its CI finishes.
   The scheduler manages this queue label; users choose the two `defer-ci-*` labels.
 - Label additions/removals and draft-ready transitions trigger reconciliation.
@@ -100,13 +100,16 @@ dispatches, releases, and nightly workflows) retain their previous behavior.
 1. Merge the workflows and scripts into the default branch. Scheduled and
    `workflow_run` triggers require that. The privileged controller explicitly
    checks out that branch, so full end-to-end validation requires deployment there.
-   PR branches must contain the admission workflow and scripts, directly or
-   through their PR merge commit.
+   PR branches must contain the parent workflows, callable suites, admission
+   workflow, and scripts, directly or through their PR merge commit.
 2. **Require the `CI scheduling` status check** in branch protection or the ruleset
    for PR target branches, while keeping existing required test checks. Skipped
    Actions jobs count as successful; this pending status prevents merging deferred
    CI. Arrange this protection before using deferral. Source changes do not
-   modify repository rules.
+   modify repository rules. After consolidation, test check names acquire the
+   parent job prefix (for example, `ci-go-tests / Go tests (ubuntu-22.04)`).
+   Update any required-check names to the checks emitted by the new workflows
+   before merging PRs that use them; keep `CI scheduling` required.
 3. Create the three user-facing labels if they do not already exist:
 
    ```sh
@@ -121,7 +124,9 @@ dispatches, releases, and nightly workflows) retain their previous behavior.
    The controller creates the internal `ci-deferred` queue label automatically.
 4. Optionally set `CI_TIMEZONE`. An invalid timezone fails after-hours admission.
 5. The workflows use `GITHUB_TOKEN`; no new PAT or secret is needed. Only the
-   trusted controller has `actions: write`, `statuses: write`, and `issues: write`.
+   trusted controller has `actions: write` and `statuses: write`; it also requests
+   `issues: write` and `pull-requests: write` to manage PR labels and comments.
+   Existing label-validation suites retain their original metadata write permissions.
    Review notifications have no repository permissions and do not check out code,
    so fork review events never execute PR code with the controller's write token.
 6. Validate a draft-to-ready submission with each label and both labels. Verify
@@ -137,12 +142,31 @@ retried; use their original workflow controls.
 
 ## Implementation and limits
 
-- Every job in a PR workflow depends on the reusable `ci-admission.yaml`. Existing
-  job conditions, dependencies, PR event types, and path filters are preserved.
+- `PR CI` (`ci-pr.yaml`) runs one shared admission job, then calls the selected
+  test suites as reusable workflows. Each suite keeps its runner matrices, steps,
+  internal dependencies, permissions, and existing concurrency groups. There is
+  no parent-level cancellation that could cancel unrelated suite work.
+- `PR CI label checks` (`ci-pr-labels.yaml`) has one separate admission job for the
+  correctness and performance label validators. It retains their opened, push,
+  and label-change events and Go/main filters. Label updates do not create a new
+  test run or replace real test results with skipped checks. The main test
+  workflow uses opened, synchronize, and reopened events.
+- The shared gate reads `suites.json` to preserve each suite's original branch,
+  path, and activity filters. It lists changed PR files (including both sides of
+  renames) through the API. At the API's 3,000-file cap, path selection is
+  conservative: all suites allowed by the branch and activity are selected.
+  Unsupported filter syntax fails admission rather than silently omitting tests.
+- Each callable suite retains its existing manual, comment-command, or repository
+  dispatch triggers. Those non-PR invocations do not run the shared admission job.
+- The checks list contains one admission check for tests and, when applicable,
+  one for label validators. Individual test results remain visible under their
+  caller job names. GitHub controls their presentation and collapse state.
 - A deferred gate records a successful step named `CI postponed`; test jobs are
   skipped. The controller reads that step through the Actions API.
-- The scheduler reruns the original workflows, preserving PR checks, checkout and
-  merge refs, event payloads, concurrency groups, and original actor permissions.
+- The scheduler reruns the original parent workflows, preserving PR checks,
+  checkout and merge refs, event payloads, and original actor permissions. The
+  gate recomputes suite selection and live deferral conditions on each full rerun.
+  Failed tests remain available for individual-job or failed-job reruns.
 - Only the latest run per workflow for the current open PR head is eligible.
   Before each rerun the controller rechecks the head, draft state, labels, review
   decisions, time, run state, and attempt. It does not release obsolete commits.
@@ -152,9 +176,12 @@ retried; use their original workflow controls.
   to avoid repeatedly fetching jobs. Live labels and reviews are never cached.
   Only the bot's own comment is read; a missing or damaged cache is rebuilt.
 - The trusted controller never executes PR code or downloads PR artifacts.
-- Register new PR workflows in `workflows.json` and the scheduler's subscriptions,
-  and gate every job. A structural test checks that coverage. The review notifier
-  is a metadata workflow and is not itself part of deferred CI.
+- Add new suites to `suites.json` and the appropriate parent's calls. The structural
+  tests require every suite to belong to exactly one parent and depend on its gate.
+  The scheduler registry (`workflows.json`) and subscriptions also retain legacy
+  workflow paths/names so already-postponed runs can finish during rollout.
+  New PR runs use only the two parents. Fresh test PRs should start from the merged
+  default branch. The review notifier remains a separate metadata workflow.
 
 GitHub permits reruns for **30 days after the original run**, up to **50 attempts**.
 This also limits how long draft/review deferrals can be automatically released
@@ -168,13 +195,15 @@ per scheduler invocation; this does not reserve organization-wide runner capacit
 From the repository root:
 
 ```sh
-node --test .github/scripts/ci-scheduling/*.test.js
+npm ci --prefix .github/scripts/ci-scheduling
+npm test --prefix .github/scripts/ci-scheduling
 actionlint -shellcheck='' .github/workflows/ci-admission.yaml \
   .github/workflows/ci-scheduler.yaml .github/workflows/ci-review-notification.yaml \
-  .github/workflows/ci-scheduling-tests.yaml
+  .github/workflows/ci-scheduling-tests.yaml .github/workflows/ci-pr.yaml \
+  .github/workflows/ci-pr-labels.yaml
 ```
 
 The mocked API tests cover label combinations, active approvals and dismissal,
 draft submission and its override, time boundaries and DST, comments, queue
-recovery, stale/fork heads, retries, errors, and workflow wiring. They do not launch
+recovery, stale/fork heads, retries, errors, suite selection, and workflow wiring. They do not launch
 actual CI or change repository settings.

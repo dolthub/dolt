@@ -1,10 +1,7 @@
 name: Test ORM integrations
 
 on:
-  pull_request:
-    paths:
-      - 'go/**'
-      - 'integration-tests/**'
+  workflow_call:
   workflow_dispatch:
   repository_dispatch:
     types: [ test-orm-integrations ]
@@ -14,15 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  ci-admission:
-    uses: ./.github/workflows/ci-admission.yaml
-    permissions:
-      contents: read
-      pull-requests: read
-
   orm_integrations_job:
-    if: ${{ needs.ci-admission.outputs.run == 'true' }}
-    needs: ci-admission
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     name: ORM tests

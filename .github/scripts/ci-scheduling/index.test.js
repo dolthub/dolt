@@ -451,7 +451,8 @@ test('every PR workflow is registered and every test job depends on admission', 
       assert.match(job, /^    if:.*needs.ci-admission.outputs.run == 'true'/m, file);
     }
   }
-  assert.deepEqual(actual.sort(), [...workflows].sort());
+  assert.deepEqual(actual.sort(), ['.github/workflows/ci-pr-labels.yaml', '.github/workflows/ci-pr.yaml']);
+  assert.ok(actual.every(file => workflows.includes(file)));
   const scheduler = readFileSync(join(dir, 'ci-scheduler.yaml'), 'utf8');
   for (const action of ['labeled', 'unlabeled', 'ready_for_review', 'converted_to_draft']) {
     assert.ok(scheduler.includes(action), `Missing PR activity: ${action}`);

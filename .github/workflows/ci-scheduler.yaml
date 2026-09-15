@@ -5,6 +5,9 @@ on:
     types: [opened, synchronize, reopened, labeled, unlabeled, ready_for_review, converted_to_draft]
   workflow_run:
     workflows:
+      - "PR CI"
+      - "PR CI label checks"
+      # Legacy subscriptions let already-postponed PRs finish during rollout.
       - "Test Bats Unix Remote"
       - "Test Bats Unix"
       - "Test Benchmark Runner Utility Works"

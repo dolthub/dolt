@@ -1,21 +1,10 @@
 name: Benchmark SQL Correctness on PR
 
 on:
-  pull_request:
-    paths:
-      - 'go/**'
-    branches: [ main ]
-
+  workflow_call:
 jobs:
-  ci-admission:
-    uses: ./.github/workflows/ci-admission.yaml
-    permissions:
-      contents: read
-      pull-requests: read
-
   set-version-actor:
-    needs: ci-admission
-    if: ${{ needs.ci-admission.outputs.run == 'true' && (github.actor != 'dependabot[bot]') }}
+    if: ${{ github.actor != 'dependabot[bot]' }}
     name: Set Version and Actor
     runs-on: ubuntu-22.04
     outputs:
@@ -47,9 +36,8 @@ jobs:
           ACTOR: ${{ github.event.client_payload.actor || github.actor }}
 
   correctness:
-    if: ${{ needs.ci-admission.outputs.run == 'true' }}
     runs-on: ubuntu-22.04
-    needs: [ci-admission, set-version-actor]
+    needs: [set-version-actor]
     name: Trigger SQL Correctness K8s Workflow
     steps:
       - name: Get pull number

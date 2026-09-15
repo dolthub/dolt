@@ -1,15 +1,7 @@
 name: Test Bats Unix
 
 on:
-  pull_request:
-    branches: [ main ]
-    paths:
-      - 'go/**'
-      - 'integration-tests/**'
-      - '.github/workflows/ci-bats-unix.yaml'
-      - '.github/actions/setup-go-toolchain/**'
-      - '.github/actions/build-dolt/**'
-      - '.github/actions/setup-dolt-config/**'
+  workflow_call:
   workflow_dispatch:
 
 concurrency:
@@ -17,15 +9,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  ci-admission:
-    uses: ./.github/workflows/ci-admission.yaml
-    permissions:
-      contents: read
-      pull-requests: read
-
   test:
-    if: ${{ needs.ci-admission.outputs.run == 'true' }}
-    needs: ci-admission
     name: Bats tests
     defaults:
       run:

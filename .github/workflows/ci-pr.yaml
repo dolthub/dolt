@@ -1,0 +1,137 @@
+name: PR CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+# No parent cancellation: label updates must not cancel unrelated tests.
+# Suite workflows retain their existing per-PR concurrency groups.
+jobs:
+  ci-admission:
+    uses: ./.github/workflows/ci-admission.yaml
+    permissions:
+      contents: read
+      pull-requests: read
+
+  ci-bats-unix-remote:
+    needs: ci-admission
+    if: needs.ci-admission.outputs.run == 'true' && fromJSON(needs.ci-admission.outputs.suites)['ci-bats-unix-remote']
+    uses: ./.github/workflows/ci-bats-unix-remote.yaml
+    secrets: inherit
+
+  ci-bats-unix:
+    needs: ci-admission
+    if: needs.ci-admission.outputs.run == 'true' && fromJSON(needs.ci-admission.outputs.suites)['ci-bats-unix']
+    uses: ./.github/workflows/ci-bats-unix.yaml
+    secrets: inherit
+
+  ci-benchmark-runner-tests:
+    needs: ci-admission
+    if: needs.ci-admission.outputs.run == 'true' && fromJSON(needs.ci-admission.outputs.suites)['ci-benchmark-runner-tests']
+    uses: ./.github/workflows/ci-benchmark-runner-tests.yaml
+    secrets: inherit
+
+  ci-binlog-tests:
+    needs: ci-admission
+    if: needs.ci-admission.outputs.run == 'true' && fromJSON(needs.ci-admission.outputs.suites)['ci-binlog-tests']
+    uses: ./.github/workflows/ci-binlog-tests.yaml
+    secrets: inherit
+
+  ci-check-repo:
+    needs: ci-admission
+    if: needs.ci-admission.outputs.run == 'true' && fromJSON(needs.ci-admission.outputs.suites)['ci-check-repo']
+    uses: ./.github/workflows/ci-check-repo.yaml
+    secrets: inherit
+
+  ci-compatibility-tests:
+    needs: ci-admission
+    if: needs.ci-admission.outputs.run == 'true' && fromJSON(needs.ci-admission.outputs.suites)['ci-compatibility-tests']
+    uses: ./.github/workflows/ci-compatibility-tests.yaml
+    secrets: inherit
+
+  ci-data-dump-loading-tests:
+    needs: ci-admission
+    if: needs.ci-admission.outputs.run == 'true' && fromJSON(needs.ci-admission.outputs.suites)['ci-data-dump-loading-tests']
+    uses: ./.github/workflows/ci-data-dump-loading-tests.yaml
+    secrets: inherit
+
+  ci-go-tests:
+    needs: ci-admission
+    if: needs.ci-admission.outputs.run == 'true' && fromJSON(needs.ci-admission.outputs.suites)['ci-go-tests']
+    uses: ./.github/workflows/ci-go-tests.yaml
+    secrets: inherit
+
+  ci-lambdabats-unix:
+    needs: ci-admission
+    if: needs.ci-admission.outputs.run == 'true' && fromJSON(needs.ci-admission.outputs.suites)['ci-lambdabats-unix']
+    uses: ./.github/workflows/ci-lambdabats-unix.yaml
+    secrets: inherit
+
+  ci-mysql-client-tests:
+    needs: ci-admission
+    if: needs.ci-admission.outputs.run == 'true' && fromJSON(needs.ci-admission.outputs.suites)['ci-mysql-client-tests']
+    uses: ./.github/workflows/ci-mysql-client-tests.yaml
+    secrets: inherit
+
+  ci-orm-tests:
+    needs: ci-admission
+    if: needs.ci-admission.outputs.run == 'true' && fromJSON(needs.ci-admission.outputs.suites)['ci-orm-tests']
+    uses: ./.github/workflows/ci-orm-tests.yaml
+    secrets: inherit
+
+  ci-sql-server-integration-tests:
+    needs: ci-admission
+    if: needs.ci-admission.outputs.run == 'true' && fromJSON(needs.ci-admission.outputs.suites)['ci-sql-server-integration-tests']
+    uses: ./.github/workflows/ci-sql-server-integration-tests.yaml
+    secrets: inherit
+
+  doltgres-dependency:
+    needs: ci-admission
+    if: needs.ci-admission.outputs.run == 'true' && fromJSON(needs.ci-admission.outputs.suites)['doltgres-dependency']
+    uses: ./.github/workflows/doltgres-dependency.yml
+    secrets: inherit
+
+  import-benchmarks-pull-report:
+    needs: ci-admission
+    if: needs.ci-admission.outputs.run == 'true' && fromJSON(needs.ci-admission.outputs.suites)['import-benchmarks-pull-report']
+    uses: ./.github/workflows/import-benchmarks-pull-report.yaml
+    secrets: inherit
+
+  merge-perf-pr:
+    needs: ci-admission
+    if: needs.ci-admission.outputs.run == 'true' && fromJSON(needs.ci-admission.outputs.suites)['merge-perf-pr']
+    uses: ./.github/workflows/merge-perf-pr.yaml
+    secrets: inherit
+
+  performance-benchmarks-pull-report:
+    needs: ci-admission
+    if: needs.ci-admission.outputs.run == 'true' && fromJSON(needs.ci-admission.outputs.suites)['performance-benchmarks-pull-report']
+    uses: ./.github/workflows/performance-benchmarks-pull-report.yaml
+    secrets: inherit
+
+  sql-regressions:
+    needs: ci-admission
+    if: needs.ci-admission.outputs.run == 'true' && fromJSON(needs.ci-admission.outputs.suites)['sql-regressions']
+    uses: ./.github/workflows/sql-regressions.yaml
+    secrets: inherit
+
+  sysbench-benchmarks-pull-report:
+    needs: ci-admission
+    if: needs.ci-admission.outputs.run == 'true' && fromJSON(needs.ci-admission.outputs.suites)['sysbench-benchmarks-pull-report']
+    uses: ./.github/workflows/sysbench-benchmarks-pull-report.yaml
+    secrets: inherit
+
+  sysbench-performance:
+    needs: ci-admission
+    if: needs.ci-admission.outputs.run == 'true' && fromJSON(needs.ci-admission.outputs.suites)['sysbench-performance']
+    uses: ./.github/workflows/sysbench-performance.yaml
+    secrets: inherit
+
+  ci-scheduling-tests:
+    needs: ci-admission
+    if: needs.ci-admission.outputs.run == 'true' && fromJSON(needs.ci-admission.outputs.suites)['ci-scheduling-tests']
+    uses: ./.github/workflows/ci-scheduling-tests.yaml
+    secrets: inherit
+    permissions:
+      contents: read
+      pull-requests: read

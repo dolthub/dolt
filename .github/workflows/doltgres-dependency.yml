@@ -1,21 +1,13 @@
 name: Test Integration with DoltgreSQL
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
+  workflow_call:
   issue_comment:
     types: [created, edited, deleted]
 
 jobs:
-  ci-admission:
-    uses: ./.github/workflows/ci-admission.yaml
-    permissions:
-      contents: read
-      pull-requests: read
-
   test-integration:
-    needs: ci-admission
-    if: ${{ needs.ci-admission.outputs.run == 'true' && (github.event_name == 'issue_comment' && github.event.issue.pull_request != '' || github.event_name == 'pull_request') }}
+    if: ${{ github.event_name == 'issue_comment' && github.event.issue.pull_request != '' || github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
 
     steps:

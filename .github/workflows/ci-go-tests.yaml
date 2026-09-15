@@ -1,11 +1,7 @@
 name: Test Go
 
 on:
-  pull_request:
-    branches: [ main ]
-    paths:
-      - 'go/**'
-      - '.github/workflows/ci-go-tests.yaml'
+  workflow_call:
   workflow_dispatch:
 
 concurrency:
@@ -13,15 +9,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  ci-admission:
-    uses: ./.github/workflows/ci-admission.yaml
-    permissions:
-      contents: read
-      pull-requests: read
-
   test:
-    if: ${{ needs.ci-admission.outputs.run == 'true' }}
-    needs: ci-admission
     name: Go tests
     defaults:
       run:
@@ -77,8 +65,6 @@ jobs:
         MATRIX_OS: ${{ matrix.os }}
         MSYS2_LOCATION: ${{ steps.toolchain.outputs.msys2-location }}
   noracetest:
-    if: ${{ needs.ci-admission.outputs.run == 'true' }}
-    needs: ci-admission
     name: Go tests - no race
     defaults:
       run:

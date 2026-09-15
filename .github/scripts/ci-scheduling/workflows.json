@@ -1,4 +1,6 @@
 [
+  ".github/workflows/ci-pr.yaml",
+  ".github/workflows/ci-pr-labels.yaml",
   ".github/workflows/ci-bats-unix-remote.yaml",
   ".github/workflows/ci-bats-unix.yaml",
   ".github/workflows/ci-benchmark-runner-tests.yaml",

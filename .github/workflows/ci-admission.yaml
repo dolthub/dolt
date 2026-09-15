@@ -6,6 +6,9 @@ on:
       run:
         description: Whether the CI jobs can start
         value: ${{ jobs.admission.outputs.run }}
+      suites:
+        description: Suites selected by the original PR event and changed files
+        value: ${{ jobs.admission.outputs.suites }}
 
 permissions:
   contents: read
@@ -17,6 +20,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       run: ${{ steps.admission.outputs.run }}
+      suites: ${{ steps.admission.outputs.suites }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -33,6 +37,9 @@ jobs:
             const decision = await admission({ github, context, timezone: process.env.CI_TIMEZONE });
             core.setOutput('run', String(decision.run));
             core.setOutput('reason', decision.reason);
+            const { selection } = require('./.github/scripts/ci-scheduling/selection');
+            core.setOutput('suites', JSON.stringify(decision.run && context.eventName === 'pull_request'
+              ? await selection({ github, context }) : {}));
       # The controller reads this step from the original run's latest attempt.
       - name: CI postponed
         if: steps.admission.outputs.reason == 'deferred'

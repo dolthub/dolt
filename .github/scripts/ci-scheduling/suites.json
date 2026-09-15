@@ -1,0 +1,198 @@
+{
+  "ci-bats-unix-remote": {
+    "workflow": ".github/workflows/ci-bats-unix-remote.yaml",
+    "branches": [
+      "main"
+    ],
+    "paths": [
+      "go/**",
+      "integration-tests/**"
+    ]
+  },
+  "ci-bats-unix": {
+    "workflow": ".github/workflows/ci-bats-unix.yaml",
+    "branches": [
+      "main"
+    ],
+    "paths": [
+      "go/**",
+      "integration-tests/**",
+      ".github/workflows/ci-bats-unix.yaml",
+      ".github/actions/setup-go-toolchain/**",
+      ".github/actions/build-dolt/**",
+      ".github/actions/setup-dolt-config/**"
+    ]
+  },
+  "ci-benchmark-runner-tests": {
+    "workflow": ".github/workflows/ci-benchmark-runner-tests.yaml",
+    "branches": [
+      "main"
+    ],
+    "paths": [
+      "go/**",
+      "integration-tests/**"
+    ]
+  },
+  "ci-binlog-tests": {
+    "workflow": ".github/workflows/ci-binlog-tests.yaml",
+    "branches": [
+      "main"
+    ],
+    "paths": [
+      "go/**"
+    ]
+  },
+  "ci-check-correctness": {
+    "workflow": ".github/workflows/ci-check-correctness.yaml",
+    "paths": [
+      "go/**"
+    ],
+    "branches": [
+      "main"
+    ],
+    "types": [
+      "opened",
+      "labeled",
+      "unlabeled",
+      "synchronize"
+    ]
+  },
+  "ci-check-performance": {
+    "workflow": ".github/workflows/ci-check-performance.yaml",
+    "paths": [
+      "go/**"
+    ],
+    "branches": [
+      "main"
+    ],
+    "types": [
+      "opened",
+      "labeled",
+      "unlabeled",
+      "synchronize"
+    ]
+  },
+  "ci-check-repo": {
+    "workflow": ".github/workflows/ci-check-repo.yaml",
+    "branches": [
+      "main"
+    ]
+  },
+  "ci-compatibility-tests": {
+    "workflow": ".github/workflows/ci-compatibility-tests.yaml",
+    "branches": [
+      "main"
+    ],
+    "paths": [
+      "go/**",
+      "integration-tests/**"
+    ]
+  },
+  "ci-data-dump-loading-tests": {
+    "workflow": ".github/workflows/ci-data-dump-loading-tests.yaml",
+    "paths": [
+      "go/**",
+      "integration-tests/**"
+    ]
+  },
+  "ci-go-tests": {
+    "workflow": ".github/workflows/ci-go-tests.yaml",
+    "branches": [
+      "main"
+    ],
+    "paths": [
+      "go/**",
+      ".github/workflows/ci-go-tests.yaml"
+    ]
+  },
+  "ci-lambdabats-unix": {
+    "workflow": ".github/workflows/ci-lambdabats-unix.yaml",
+    "branches": [
+      "main"
+    ],
+    "paths": [
+      "go/**",
+      "integration-tests/**"
+    ]
+  },
+  "ci-mysql-client-tests": {
+    "workflow": ".github/workflows/ci-mysql-client-tests.yaml",
+    "paths": [
+      "go/**",
+      "integration-tests/**"
+    ]
+  },
+  "ci-orm-tests": {
+    "workflow": ".github/workflows/ci-orm-tests.yaml",
+    "paths": [
+      "go/**",
+      "integration-tests/**"
+    ]
+  },
+  "ci-sql-server-integration-tests": {
+    "workflow": ".github/workflows/ci-sql-server-integration-tests.yaml",
+    "branches": [
+      "main"
+    ],
+    "paths": [
+      "go/**",
+      "integration-tests/go-sql-server-driver/**"
+    ]
+  },
+  "doltgres-dependency": {
+    "workflow": ".github/workflows/doltgres-dependency.yml",
+    "types": [
+      "opened",
+      "synchronize",
+      "reopened"
+    ]
+  },
+  "import-benchmarks-pull-report": {
+    "workflow": ".github/workflows/import-benchmarks-pull-report.yaml",
+    "types": [
+      "opened"
+    ]
+  },
+  "merge-perf-pr": {
+    "workflow": ".github/workflows/merge-perf-pr.yaml",
+    "types": [
+      "opened"
+    ]
+  },
+  "performance-benchmarks-pull-report": {
+    "workflow": ".github/workflows/performance-benchmarks-pull-report.yaml",
+    "types": [
+      "opened"
+    ]
+  },
+  "sql-regressions": {
+    "workflow": ".github/workflows/sql-regressions.yaml",
+    "paths": [
+      "go/**"
+    ],
+    "branches": [
+      "main"
+    ]
+  },
+  "sysbench-benchmarks-pull-report": {
+    "workflow": ".github/workflows/sysbench-benchmarks-pull-report.yaml",
+    "types": [
+      "opened"
+    ]
+  },
+  "sysbench-performance": {
+    "workflow": ".github/workflows/sysbench-performance.yaml",
+    "paths": [
+      "go/**"
+    ],
+    "branches": [
+      "main"
+    ]
+  },
+  "ci-scheduling-tests": {
+    "workflow": ".github/workflows/ci-scheduling-tests.yaml",
+    "paths": [
+      ".github/**"
+    ]
+  }
+}

@@ -1,20 +1,8 @@
 name: Check for correctness_approved label
 on:
-  pull_request:
-    paths:
-      - 'go/**'
-    branches: [main]
-    types: [opened, labeled, unlabeled, synchronize]
+  workflow_call:
 jobs:
-  ci-admission:
-    uses: ./.github/workflows/ci-admission.yaml
-    permissions:
-      contents: read
-      pull-requests: read
-
   label:
-    if: ${{ needs.ci-admission.outputs.run == 'true' }}
-    needs: ci-admission
     runs-on: ubuntu-latest
     permissions:
       issues: write

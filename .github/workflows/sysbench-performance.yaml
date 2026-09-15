@@ -1,22 +1,11 @@
 name: Benchmark Mini Sysbench Performance on PR
 
 on:
-  pull_request:
-    paths:
-      - 'go/**'
-    branches: [ main ]
-
+  workflow_call:
 jobs:
-  ci-admission:
-    uses: ./.github/workflows/ci-admission.yaml
-    permissions:
-      contents: read
-      pull-requests: read
-
   performance:
-    needs: ci-admission
     name: Trigger Mini Benchmark Latency K8s Workflow
-    if: ${{ needs.ci-admission.outputs.run == 'true' && (github.actor != 'dependabot[bot]') }}
+    if: ${{ github.actor != 'dependabot[bot]' }}
     runs-on: ubuntu-22.04
     steps:
       - name: Build benchmark payload (main HEAD + PR HEAD)

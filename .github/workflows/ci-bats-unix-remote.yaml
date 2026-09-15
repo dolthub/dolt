@@ -1,26 +1,13 @@
 name: Test Bats Unix Remote
 
 on:
-  pull_request:
-    branches: [ main ]
-    paths:
-      - 'go/**'
-      - 'integration-tests/**'
-
+  workflow_call:
 concurrency:
   group: ci-bats-unix-remote${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  ci-admission:
-    uses: ./.github/workflows/ci-admission.yaml
-    permissions:
-      contents: read
-      pull-requests: read
-
   test:
-    if: ${{ needs.ci-admission.outputs.run == 'true' }}
-    needs: ci-admission
     name: Bats tests
     defaults:
       run:

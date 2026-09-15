@@ -1,21 +1,12 @@
 name: Benchmark Pull Requests
 
 on:
-  pull_request:
-    types: [ opened ]
+  workflow_call:
   issue_comment:
     types: [ created ]
 
 jobs:
-  ci-admission:
-    uses: ./.github/workflows/ci-admission.yaml
-    permissions:
-      contents: read
-      pull-requests: read
-
   validate-commentor:
-    if: ${{ needs.ci-admission.outputs.run == 'true' }}
-    needs: ci-admission
     runs-on: ubuntu-22.04
     outputs:
       valid: ${{ steps.set_valid.outputs.valid }}
@@ -29,8 +20,8 @@ jobs:
 
   check-comments:
     runs-on: ubuntu-22.04
-    needs: [ci-admission, validate-commentor]
-    if: ${{ needs.ci-admission.outputs.run == 'true' && (needs.validate-commentor.outputs.valid == 'true') }}
+    needs: [validate-commentor]
+    if: ${{ needs.validate-commentor.outputs.valid == 'true' }}
     outputs:
       benchmark: ${{ steps.set_benchmark.outputs.benchmark }}
       sysbench-test-time: ${{ steps.set_benchmark_mini.outputs.sysbench-test-time }}
@@ -66,8 +57,8 @@ jobs:
 
   performance:
     runs-on: ubuntu-22.04
-    needs: [ci-admission, validate-commentor, check-comments]
-    if: ${{ needs.ci-admission.outputs.run == 'true' && (needs.check-comments.outputs.benchmark == 'true') }}
+    needs: [validate-commentor, check-comments]
+    if: ${{ needs.check-comments.outputs.benchmark == 'true' }}
     name: Trigger Benchmark Latency K8s Workflow
     steps:
       - uses: dolthub/pull-request-comment-branch@v3
