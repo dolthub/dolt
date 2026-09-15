@@ -15,6 +15,10 @@
 package engine
 
 import (
+	"bytes"
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"testing"
 	"time"
 
@@ -37,4 +41,27 @@ func TestSecondsSince(t *testing.T) {
 		stop := time.Date(2022, 1, 1, 0, 0, 1, int(1*time.Millisecond/2), time.UTC)
 		require.Equal(t, 1.000, secondsSince(start, stop))
 	})
+}
+
+func TestJSONLResults(t *testing.T) {
+	sch := sql.Schema{&sql.Column{Name: "id", Type: types.Int64}, &sql.Column{Name: "value", Type: types.LongText}}
+	for _, tt := range []struct {
+		name string
+		rows []sql.Row
+		want string
+	}{
+		{"empty", nil, ""},
+		{"one row", []sql.Row{{int64(1), "text"}}, "{\"id\":1,\"value\":\"text\"}\n"},
+		{"multiple rows and escaped newline", []sql.Row{{int64(1), "a\nb"}, {int64(2), nil}}, "{\"id\":1,\"value\":\"a\\nb\"}\n{\"id\":2}\n"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			old := cli.CliOut
+			cli.CliOut = &buf
+			defer func() { cli.CliOut = old }()
+			err := PrettyPrintResults(sql.NewEmptyContext(), FormatJsonl, sch, sql.RowsToRowIter(tt.rows...), false, false, false, false)
+			require.NoError(t, err)
+			require.Equal(t, tt.want, buf.String())
+		})
+	}
 }
