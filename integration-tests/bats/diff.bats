@@ -489,6 +489,21 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "+ | 1" ]] || false
     [[ ! "$output" =~ "- | 2" ]] || false
+
+    # https://github.com/dolthub/dolt/issues/5414
+    # --reverse must not be parsed as a value attached to the -r option.
+    # This exercises the reported short-option / long-flag collision using
+    # existing diff options; --diff-mode does not currently have a -m alias.
+    run dolt diff --reverse --merge-base main branch1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "- | 1" ]] || false
+    [[ ! "$output" =~ "+ | 2" ]] || false
+    reverse_merge_base="$output"
+
+    run dolt diff -r tabular --reverse --merge-base main branch1
+    [ "$status" -eq 0 ]
+    [ "$output" = "$reverse_merge_base" ]
+
 }
 
 @test "diff: data and schema changes" {
