@@ -13,7 +13,7 @@ require (
 	github.com/dolthub/fslock v0.0.5
 	github.com/dolthub/ishell v0.0.0-20260414231531-5f031e3e9037
 	github.com/dolthub/sqllogictest/go v0.0.0-20240618184124-ca47f9354216
-	github.com/dolthub/vitess v0.0.0-20260909054055-e9f1b2468025
+	github.com/dolthub/vitess v0.0.0-20260915003731-4ab56bf07719
 	github.com/dustin/go-humanize v1.0.1
 	github.com/fatih/color v1.13.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568

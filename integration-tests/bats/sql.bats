@@ -59,6 +59,20 @@ teardown() {
     rm -rf .doltcfg
 }
 
+@test "sql: Dolt executable comments" {
+    run dolt sql -r csv -q "SELECT /*DOLT! 1 + */ 2 AS n"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "3" ]
+
+    run dolt sql -r csv -q "/*dolt! SET @dolt_marker = 7 */; SELECT @dolt_marker AS n;"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "7" ]
+
+    run dolt sql -r csv -q "SELECT 2 AS n /*DOLT ordinary comment */"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "2" ]
+}
+
 @test "sql: check configurations with all default options" {
     # remove any previous config directories
     rm -rf .doltcfg
