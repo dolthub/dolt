@@ -1,7 +1,10 @@
 name: Test Binlog
 
 on:
-  workflow_call:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'go/**'
   workflow_dispatch:
 
 concurrency:
@@ -18,18 +21,53 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04]
+        os: [ ubuntu-22.04 ]
     steps:
-    - uses: actions/checkout@v6
-    - name: Set up Go toolchain
-      uses: ./.github/actions/setup-go-toolchain
-    - name: Test Binlog
-      working-directory: ./go
-      run: |
-        # Test binlog packages
-        go test -vet=off -timeout 60m ./libraries/doltcore/sqle/binlogreplication/...
-      env:
-        MATRIX_OS: ${{ matrix.os }}
+      - name: Checkout CI admission
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          path: .ci-admission
+          sparse-checkout: .github/scripts/ci-scheduling
+      - name: Check CI admission
+        id: ci-admission
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          CI_TIMEZONE: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
+        with:
+          script: |
+            const { admission } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
+            const decision = await admission({ github, context, timezone: process.env.CI_TIMEZONE });
+            core.setOutput('run', String(decision.run));
+            core.setOutput('reason', decision.reason);
+      - name: CI postponed
+        if: steps.ci-admission.outputs.reason == 'deferred'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await core.summary.addRaw('CI postponed. See the PR comment for conditions and overrides.').write();
+      - name: Cancel deferred CI
+        if: github.event_name == 'pull_request' && steps.ci-admission.outputs.run == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { cancelFromJob } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
+            await cancelFromJob({ github, context, core });
+      - uses: actions/checkout@v6
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
+      - name: Set up Go toolchain
+        uses: ./.github/actions/setup-go-toolchain
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
+      - name: Test Binlog
+        working-directory: ./go
+        run: |
+          # Test binlog packages
+          go test -vet=off -timeout 60m ./libraries/doltcore/sqle/binlogreplication/...
+        env:
+          MATRIX_OS: ${{ matrix.os }}
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
   binlog-race-test:
     name: Binlog tests - race
     defaults:
@@ -39,15 +77,50 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04]
+        os: [ ubuntu-22.04 ]
     steps:
-    - uses: actions/checkout@v6
-    - name: Set up Go toolchain
-      uses: ./.github/actions/setup-go-toolchain
-    - name: Test Binlog with Race
-      working-directory: ./go
-      run: |
-        # Test binlog packages with race detector
-        go test -vet=off -timeout 60m -race ./libraries/doltcore/sqle/binlogreplication/...
-      env:
-        MATRIX_OS: ${{ matrix.os }}
+      - name: Checkout CI admission
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          path: .ci-admission
+          sparse-checkout: .github/scripts/ci-scheduling
+      - name: Check CI admission
+        id: ci-admission
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          CI_TIMEZONE: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
+        with:
+          script: |
+            const { admission } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
+            const decision = await admission({ github, context, timezone: process.env.CI_TIMEZONE });
+            core.setOutput('run', String(decision.run));
+            core.setOutput('reason', decision.reason);
+      - name: CI postponed
+        if: steps.ci-admission.outputs.reason == 'deferred'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await core.summary.addRaw('CI postponed. See the PR comment for conditions and overrides.').write();
+      - name: Cancel deferred CI
+        if: github.event_name == 'pull_request' && steps.ci-admission.outputs.run == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { cancelFromJob } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
+            await cancelFromJob({ github, context, core });
+      - uses: actions/checkout@v6
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
+      - name: Set up Go toolchain
+        uses: ./.github/actions/setup-go-toolchain
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
+      - name: Test Binlog with Race
+        working-directory: ./go
+        run: |
+          # Test binlog packages with race detector
+          go test -vet=off -timeout 60m -race ./libraries/doltcore/sqle/binlogreplication/...
+        env:
+          MATRIX_OS: ${{ matrix.os }}
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}

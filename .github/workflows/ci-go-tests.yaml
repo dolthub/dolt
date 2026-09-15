@@ -1,7 +1,11 @@
 name: Test Go
 
 on:
-  workflow_call:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'go/**'
+      - '.github/workflows/ci-go-tests.yaml'
   workflow_dispatch:
 
 concurrency:
@@ -18,52 +22,87 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-22.04, windows-latest]
+        os: [ macos-latest, ubuntu-22.04, windows-latest ]
     steps:
-    - uses: actions/checkout@v6
-    - name: Set up Go toolchain
-      id: toolchain
-      uses: ./.github/actions/setup-go-toolchain
-    - name: Test All
-      working-directory: ./go
-      run: |
-        files=$(go list ./...)
-        SAVEIFS=$IFS
-        IFS=$'\n'
-        file_arr=($files)
-        IFS=$SAVEIFS
-        if [ "$MATRIX_OS" == 'windows-latest' ]; then
-          export PATH=$(cygpath -u "$MSYS2_LOCATION"/ucrt64/bin):"$PATH"
-        fi
-        
-        for (( i=0; i<${#file_arr[@]}; i++ ))
-        do
-          # Skip binlog tests as they run in a separate CI job
-          if [[ "${file_arr[$i]}" == *binlogreplication* ]]; then
-            echo "Skipping binlog package: ${file_arr[$i]} (runs in separate CI)"
-            continue
+      - name: Checkout CI admission
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          path: .ci-admission
+          sparse-checkout: .github/scripts/ci-scheduling
+      - name: Check CI admission
+        id: ci-admission
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          CI_TIMEZONE: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
+        with:
+          script: |
+            const { admission } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
+            const decision = await admission({ github, context, timezone: process.env.CI_TIMEZONE });
+            core.setOutput('run', String(decision.run));
+            core.setOutput('reason', decision.reason);
+      - name: CI postponed
+        if: steps.ci-admission.outputs.reason == 'deferred'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await core.summary.addRaw('CI postponed. See the PR comment for conditions and overrides.').write();
+      - name: Cancel deferred CI
+        if: github.event_name == 'pull_request' && steps.ci-admission.outputs.run == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { cancelFromJob } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
+            await cancelFromJob({ github, context, core });
+      - uses: actions/checkout@v6
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
+      - name: Set up Go toolchain
+        id: toolchain
+        uses: ./.github/actions/setup-go-toolchain
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
+      - name: Test All
+        working-directory: ./go
+        run: |
+          files=$(go list ./...)
+          SAVEIFS=$IFS
+          IFS=$'\n'
+          file_arr=($files)
+          IFS=$SAVEIFS
+          if [ "$MATRIX_OS" == 'windows-latest' ]; then
+            export PATH=$(cygpath -u "$MSYS2_LOCATION"/ucrt64/bin):"$PATH"
           fi
-          
-          echo "Testing Package: ${file_arr[$i]}"
-          if [ "$MATRIX_OS" == 'ubuntu-22.04' ]
-          then
-            if [[ "${file_arr[$i]}" != *enginetest* ]]; then
-              go test -vet=off -timeout 45m -race "${file_arr[$i]}"
-            else
-              echo "skipping enginetests for -race"
+
+          for (( i=0; i<${#file_arr[@]}; i++ ))
+          do
+            # Skip binlog tests as they run in a separate CI job
+            if [[ "${file_arr[$i]}" == *binlogreplication* ]]; then
+              echo "Skipping binlog package: ${file_arr[$i]} (runs in separate CI)"
+              continue
             fi
-          else
-            go test -vet=off -timeout 45m "${file_arr[$i]}"
-          fi
-          succeeded=$(echo "$?")
-          if [ "$succeeded" -ne 0 ]; then
-            echo "Testing failed in package ${file_arr[$i]}"
-            exit 1;
-          fi
-        done
-      env:
-        MATRIX_OS: ${{ matrix.os }}
-        MSYS2_LOCATION: ${{ steps.toolchain.outputs.msys2-location }}
+
+            echo "Testing Package: ${file_arr[$i]}"
+            if [ "$MATRIX_OS" == 'ubuntu-22.04' ]
+            then
+              if [[ "${file_arr[$i]}" != *enginetest* ]]; then
+                go test -vet=off -timeout 45m -race "${file_arr[$i]}"
+              else
+                echo "skipping enginetests for -race"
+              fi
+            else
+              go test -vet=off -timeout 45m "${file_arr[$i]}"
+            fi
+            succeeded=$(echo "$?")
+            if [ "$succeeded" -ne 0 ]; then
+              echo "Testing failed in package ${file_arr[$i]}"
+              exit 1;
+            fi
+          done
+        env:
+          MATRIX_OS: ${{ matrix.os }}
+          MSYS2_LOCATION: ${{ steps.toolchain.outputs.msys2-location }}
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
   noracetest:
     name: Go tests - no race
     defaults:
@@ -73,20 +112,55 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-22.04, windows-latest]
+        os: [ macos-latest, ubuntu-22.04, windows-latest ]
     steps:
-    - uses: actions/checkout@v6
-    - name: Set up Go toolchain
-      id: toolchain
-      uses: ./.github/actions/setup-go-toolchain
-    - name: Test All
-      working-directory: ./go
-      run: |
-        if [ "$MATRIX_OS" == 'windows-latest' ]; then
-          export PATH=$(cygpath -u "$MSYS2_LOCATION"/ucrt64/bin):"$PATH"
-        fi
-        go test -vet=off -timeout 30m ./libraries/doltcore/sqle/integration_test
-      env:
-        MATRIX_OS: ${{ matrix.os }}
-        DOLT_TEST_RUN_NON_RACE_TESTS: "true"
-        MSYS2_LOCATION: ${{ steps.toolchain.outputs.msys2-location }}
+      - name: Checkout CI admission
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          path: .ci-admission
+          sparse-checkout: .github/scripts/ci-scheduling
+      - name: Check CI admission
+        id: ci-admission
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          CI_TIMEZONE: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
+        with:
+          script: |
+            const { admission } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
+            const decision = await admission({ github, context, timezone: process.env.CI_TIMEZONE });
+            core.setOutput('run', String(decision.run));
+            core.setOutput('reason', decision.reason);
+      - name: CI postponed
+        if: steps.ci-admission.outputs.reason == 'deferred'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await core.summary.addRaw('CI postponed. See the PR comment for conditions and overrides.').write();
+      - name: Cancel deferred CI
+        if: github.event_name == 'pull_request' && steps.ci-admission.outputs.run == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { cancelFromJob } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
+            await cancelFromJob({ github, context, core });
+      - uses: actions/checkout@v6
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
+      - name: Set up Go toolchain
+        id: toolchain
+        uses: ./.github/actions/setup-go-toolchain
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
+      - name: Test All
+        working-directory: ./go
+        run: |
+          if [ "$MATRIX_OS" == 'windows-latest' ]; then
+            export PATH=$(cygpath -u "$MSYS2_LOCATION"/ucrt64/bin):"$PATH"
+          fi
+          go test -vet=off -timeout 30m ./libraries/doltcore/sqle/integration_test
+        env:
+          MATRIX_OS: ${{ matrix.os }}
+          DOLT_TEST_RUN_NON_RACE_TESTS: "true"
+          MSYS2_LOCATION: ${{ steps.toolchain.outputs.msys2-location }}
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}

@@ -1,15 +1,52 @@
 name: Check for correctness_approved label
 on:
-  workflow_call:
+  pull_request:
+    paths:
+      - 'go/**'
+    branches: [ main ]
+    types: [ opened, labeled, unlabeled, synchronize ]
 jobs:
   label:
     runs-on: ubuntu-latest
     permissions:
       issues: write
       pull-requests: write
+      contents: read
     steps:
+      - name: Checkout CI admission
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          path: .ci-admission
+          sparse-checkout: .github/scripts/ci-scheduling
+      - name: Check CI admission
+        id: ci-admission
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          CI_TIMEZONE: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
+        with:
+          script: |
+            const { admission } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
+            const decision = await admission({ github, context, timezone: process.env.CI_TIMEZONE });
+            core.setOutput('run', String(decision.run));
+            core.setOutput('reason', decision.reason);
+      - name: CI postponed
+        if: steps.ci-admission.outputs.reason == 'deferred'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await core.summary.addRaw('CI postponed. See the PR comment for conditions and overrides.').write();
+      - name: Cancel deferred CI
+        if: github.event_name == 'pull_request' && steps.ci-admission.outputs.run == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { cancelFromJob } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
+            await cancelFromJob({ github, context, core });
       - uses: mheap/github-action-required-labels@v5
-        if: github.actor != 'dependabot[bot]'
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') && (github.actor != 'dependabot[bot]') }}
         with:
           mode: exactly
           count: 1

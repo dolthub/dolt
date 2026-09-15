@@ -5,10 +5,30 @@ on:
     types: [opened, synchronize, reopened, labeled, unlabeled, ready_for_review, converted_to_draft]
   workflow_run:
     workflows:
-      - "PR CI"
-      - "PR CI label checks"
+      - "Test Bats Unix Remote"
+      - "Test Bats Unix"
+      - "Test Benchmark Runner Utility Works"
+      - "Test Binlog"
+      - "Check for correctness_approved label"
+      - "Check for performance_approved label"
+      - "Check Formatting, Committers and Generated Code"
+      - "Check Compatibility"
+      - "Test Data Dump Loading integrations"
+      - "Test Go"
+      - "Test Bats Unix"
+      - "Test MySQL Client integrations"
+      - "Test ORM integrations"
+      - "sql-server Integration Tests"
+      - "Test Integration with DoltgreSQL"
+      - "Run Import Benchmark on Pull Requests"
+      - "Run Merge Benchmark on Pull Requests"
+      - "Benchmark Pull Requests"
+      - "Benchmark SQL Correctness on PR"
+      - "Run Systab Benchmark on Pull Requests"
+      - "Benchmark Mini Sysbench Performance on PR"
+      - "Test CI scheduling"
       - "Notify CI review"
-    types: [completed]
+    types: [in_progress, completed]
   schedule:
     # Off the hour; repeated reconciliation recovers missed events and delayed runs.
     - cron: '7,22,37,52 * * * *'
@@ -22,7 +42,27 @@ on:
 permissions: {}
 
 jobs:
+  cancel-deferred:
+    if: github.event_name == 'workflow_run' && github.event.action == 'in_progress'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          sparse-checkout: .github/scripts/ci-scheduling
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { cancelDeferredRun } = require('./.github/scripts/ci-scheduling');
+            await cancelDeferredRun({ github, context });
   candidates:
+    if: github.event_name != 'workflow_run' || github.event.action != 'in_progress'
     runs-on: ubuntu-22.04
     timeout-minutes: 5
     permissions:

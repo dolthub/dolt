@@ -9,8 +9,7 @@ const FORCE_DRAFT_LABEL = 'force-draft-ci';
 const LABEL = 'ci-deferred';
 const STATUS = 'CI scheduling';
 const COMMENT = '<!-- dolt-ci-scheduling -->';
-const DEFERRED_STEP = 'CI postponed';
-const GATE_JOB = 'ci-admission / admission';
+const { ADMISSION_STEP, DEFERRED_STEP, jobDecision, cancelFromJob, cancelDeferredRun } = require('./cancellation');
 const DEFAULT_TIMEZONE = 'America/Los_Angeles';
 
 function afterHours(now = new Date(), timezone = DEFAULT_TIMEZONE) {
@@ -71,7 +70,7 @@ function waitingMessage(reasons, timezone) {
   }
   const waiting = conditions.length ? `CI is postponed, waiting for ${conditions.join(' and ')}.`
     : 'Postponed CI is eligible to be released.';
-  return `${waiting} No test runner is held while waiting.`;
+  return waiting;
 }
 
 function overrideInstructions(pr) {
@@ -243,24 +242,7 @@ async function reconcile({ github, context, pullNumber, now = new Date(), timezo
       if (!['deferred', 'admitted', 'failed'].includes(decision)) {
         const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt,
           { ...repo, run_id: run.id, attempt_number: run.run_attempt, per_page: 100 });
-        let gate = jobs.find(job => job.name === GATE_JOB);
-        if (!gate && run.run_attempt > 1) {
-          // Re-running only failed tests may omit the already-successful gate from
-          // the new attempt. Its most recent execution still controls admission.
-          const allJobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun,
-            { ...repo, run_id: run.id, filter: 'all', per_page: 100 });
-          gate = allJobs.filter(job => job.name === GATE_JOB).sort((a, b) => b.id - a.id)[0];
-        }
-        if (!gate) {
-          // Both parent workflows require admission; a missing gate is an error.
-          decision = 'failed';
-        } else if (gate.conclusion !== 'success') {
-          decision = 'failed';
-        } else if (gate.steps?.some(step => step.name === DEFERRED_STEP && step.conclusion === 'success')) {
-          decision = 'deferred';
-        } else {
-          decision = 'admitted';
-        }
+        decision = jobDecision(jobs);
         cacheChanged = true;
       }
       currentCache[key] = decision;
@@ -328,5 +310,5 @@ async function reconcile({ github, context, pullNumber, now = new Date(), timezo
   }
 }
 
-module.exports = { afterHours, admission, candidates, reconcile, latestRuns,
+module.exports = { cancelFromJob, cancelDeferredRun, ADMISSION_STEP, afterHours, admission, candidates, reconcile, latestRuns,
   hasApproval, deferralReasons, DEFAULT_TIMEZONE, AFTER_HOURS_LABEL, REVIEW_LABEL, FORCE_DRAFT_LABEL, LABEL, STATUS, DEFERRED_STEP };

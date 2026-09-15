@@ -1,9 +1,10 @@
 name: Test Integration with DoltgreSQL
 
 on:
-  workflow_call:
+  pull_request:
+    types: [ opened, synchronize, reopened ]
   issue_comment:
-    types: [created, edited, deleted]
+    types: [ created, edited, deleted ]
 
 jobs:
   test-integration:
@@ -11,17 +12,52 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout CI admission
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          path: .ci-admission
+          sparse-checkout: .github/scripts/ci-scheduling
+      - name: Check CI admission
+        id: ci-admission
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          CI_TIMEZONE: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
+        with:
+          script: |
+            const { admission } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
+            const decision = await admission({ github, context, timezone: process.env.CI_TIMEZONE });
+            core.setOutput('run', String(decision.run));
+            core.setOutput('reason', decision.reason);
+      - name: CI postponed
+        if: steps.ci-admission.outputs.reason == 'deferred'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await core.summary.addRaw('CI postponed. See the PR comment for conditions and overrides.').write();
+      - name: Cancel deferred CI
+        if: github.event_name == 'pull_request' && steps.ci-admission.outputs.run == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { cancelFromJob } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
+            await cancelFromJob({ github, context, core });
       - name: Set timezone for Unix
         uses: szenius/set-timezone@v2.0
         with:
           timezoneLinux: "America/Los_Angeles"
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Checkout Dolt
         uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
 
       - name: Setup Git User
         uses: fregante/setup-git-user@v2
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
 
       - name: Merge main into PR
         id: merge_main
@@ -35,10 +71,11 @@ jobs:
             echo "Merge performed successfully, continuing workflow."
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
 
       - name: Check for a DoltgreSQL PR link
         id: check_doltgresql_pr
-        if: steps.merge_main.outputs.skip == 'false'
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') && (steps.merge_main.outputs.skip == 'false') }}
         run: |
           PR_DESCRIPTION=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number != '' && github.event.pull_request.number || github.event.issue.number }})
@@ -55,23 +92,23 @@ jobs:
 
       - name: Install Go
         uses: actions/setup-go@v5
-        if: steps.merge_main.outputs.skip == 'false'
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') && (steps.merge_main.outputs.skip == 'false') }}
         with:
           go-version-file: go/go.mod
 
       - name: Clone DoltgreSQL repository
-        if: steps.merge_main.outputs.skip == 'false' && steps.check_doltgresql_pr.outputs.comment_exists == 'false'
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') && (steps.merge_main.outputs.skip == 'false' && steps.check_doltgresql_pr.outputs.comment_exists == 'false') }}
         run: git clone https://github.com/dolthub/doltgresql.git
 
       - name: Build DoltgreSQL's parser
-        if: steps.merge_main.outputs.skip == 'false' && steps.check_doltgresql_pr.outputs.comment_exists == 'false'
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') && (steps.merge_main.outputs.skip == 'false' && steps.check_doltgresql_pr.outputs.comment_exists == 'false') }}
         run: |
           cd doltgresql
           ./postgres/parser/build.sh
 
       - name: Test DoltgreSQL against main
         id: test_doltgresql_main
-        if: steps.merge_main.outputs.skip == 'false' && steps.check_doltgresql_pr.outputs.comment_exists == 'false'
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') && (steps.merge_main.outputs.skip == 'false' && steps.check_doltgresql_pr.outputs.comment_exists == 'false') }}
         continue-on-error: true
         run: |
           cd doltgresql
@@ -81,7 +118,7 @@ jobs:
           go test ./... --count=1 -skip Replication
 
       - name: Test DoltgreSQL against PR
-        if: steps.merge_main.outputs.skip == 'false' && steps.check_doltgresql_pr.outputs.comment_exists == 'false' && steps.test_doltgresql_main.outcome == 'success'
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') && (steps.merge_main.outputs.skip == 'false' && steps.check_doltgresql_pr.outputs.comment_exists == 'false' && steps.test_doltgresql_main.outcome == 'success') }}
         run: |
           cd doltgresql
           git reset --hard

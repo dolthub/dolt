@@ -1,7 +1,15 @@
 name: Test Bats Unix
 
 on:
-  workflow_call:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'go/**'
+      - 'integration-tests/**'
+      - '.github/workflows/ci-bats-unix.yaml'
+      - '.github/actions/setup-go-toolchain/**'
+      - '.github/actions/build-dolt/**'
+      - '.github/actions/setup-dolt-config/**'
   workflow_dispatch:
 
 concurrency:
@@ -27,6 +35,38 @@ jobs:
     steps:
       # Docker entrypoint and docker tests in general may use more space than is available in the GitHub default runner,
       # so we remove unused pre-installed programs.
+      - name: Checkout CI admission
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          path: .ci-admission
+          sparse-checkout: .github/scripts/ci-scheduling
+      - name: Check CI admission
+        id: ci-admission
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          CI_TIMEZONE: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
+        with:
+          script: |
+            const { admission } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
+            const decision = await admission({ github, context, timezone: process.env.CI_TIMEZONE });
+            core.setOutput('run', String(decision.run));
+            core.setOutput('reason', decision.reason);
+      - name: CI postponed
+        if: steps.ci-admission.outputs.reason == 'deferred'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await core.summary.addRaw('CI postponed. See the PR comment for conditions and overrides.').write();
+      - name: Cancel deferred CI
+        if: github.event_name == 'pull_request' && steps.ci-admission.outputs.run == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { cancelFromJob } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
+            await cancelFromJob({ github, context, core });
       - name: Free disk space
         run: |
           NAME="DISK-CLEANUP"
@@ -36,6 +76,7 @@ jobs:
           [ -d /usr/local/lib/android ] && sudo rm -rf /usr/local/lib/android &
           [ -d /opt/ghc ] && sudo rm -rf /opt/ghc &
           [ -d /usr/local/share/boost ] && sudo rm -rf /usr/local/share/boost &
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
 
       - name: Conditionally Set ENV VARS for AWS tests
         run: |
@@ -46,12 +87,13 @@ jobs:
             echo "DOLT_BATS_AWS_BUCKET=dolt-ci-bats-chunks-us-west-2" >> $GITHUB_ENV
             echo "DOLT_BATS_AWS_EXISTING_REPO=aws_remote_bats_tests__dolt__" >> $GITHUB_ENV
           fi
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Configure filter tags for lambda bats
-        if: ${{ env.use_credentials == 'true' }}
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') && (env.use_credentials == 'true') }}
         run: |
           echo "BATS_FILTER=--filter-tags no_lambda" >> $GITHUB_ENV
       - name: Configure AWS Credentials
-        if: ${{ env.use_credentials == 'true' }}
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') && (env.use_credentials == 'true') }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -60,36 +102,45 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           role-duration-seconds: 10800 # 3 hours D:
       - uses: actions/checkout@v6
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Set up Go toolchain
         uses: ./.github/actions/setup-go-toolchain
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Setup Python 3.x
         uses: actions/setup-python@v6
         with:
           python-version: "3.10"
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Build dolt
         uses: ./.github/actions/build-dolt
         with:
           remotesrv: 'true'
           noms: 'true'
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Install Bats
         run: |
           git clone --depth 1 -b v1.11.1 https://github.com/bats-core/bats-core.git /tmp/bats-core
           sudo /tmp/bats-core/install.sh /usr/local
           rm -rf /tmp/bats-core
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Install Python Deps
         run: pip install mysql-connector-python pandas pyarrow
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Setup Dolt Config
         uses: ./.github/actions/setup-dolt-config
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Install system dependencies
         run: sudo apt-get install --no-install-recommends -y expect pcre2-utils openssh-server parallel
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Cache Hadoop
         id: cache_hadoop
         uses: actions/cache@v5
         with:
           path: ./.ci_bin/hadoop-3.3.6
           key: hadoop-3.3.6
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Install Hadoop
-        if: steps.cache_hadoop.outputs.cache-hit != 'true'
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') && (steps.cache_hadoop.outputs.cache-hit != 'true') }}
         working-directory: ./.ci_bin
         run: |
           curl -sSL -o hadoop-3.3.6.tar.gz https://dlcdn.apache.org/hadoop/common/hadoop-3.3.6/hadoop-3.3.6.tar.gz || curl -sSL -o hadoop-3.3.6.tar.gz https://archive.apache.org/dist/hadoop/common/hadoop-3.3.6/hadoop-3.3.6.tar.gz
@@ -97,12 +148,14 @@ jobs:
           rm -f hadoop-3.3.6.tar.gz
       - name: Add Hadoop to PATH
         run: echo "$(pwd)/.ci_bin/hadoop-3.3.6/bin" >> $GITHUB_PATH
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Cache parquet-cli
         id: cache_parquet_cli
         uses: actions/cache@v5
         with:
           path: ./.ci_bin/parquet-cli-1.12.3-runtime.jar
           key: parquet-cli-1.12.3-runtime-jar
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Install parquet-cli
         id: parquet_cli
         working-directory: ./.ci_bin
@@ -111,20 +164,22 @@ jobs:
             curl -sSL -o parquet-cli-1.12.3-runtime.jar https://repo1.maven.org/maven2/org/apache/parquet/parquet-cli/1.12.3/parquet-cli-1.12.3-runtime.jar
           fi
           echo "runtime_jar=$(pwd)/parquet-cli-1.12.3-runtime.jar" >> $GITHUB_OUTPUT
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Cache MinIO
         id: cache_minio
         uses: actions/cache@v5
         with:
           path: ./.ci_bin/minio
           key: minio-community-RELEASE.2025-09-07T16-13-09Z
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Install MinIO
-        if: steps.cache_minio.outputs.cache-hit != 'true'
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') && (steps.cache_minio.outputs.cache-hit != 'true') }}
         working-directory: ./.ci_bin
         run: |
           curl -sSLf -o minio https://github.com/minio/minio/releases/download/RELEASE.2025-09-07T16-13-09Z/minio.linux-amd64.RELEASE.2025-09-07T16-13-09Z
           chmod +x minio
       - name: Test all Unix
-        if: matrix.sql_engine == 'local-engine' || env.use_credentials == 'true'
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') && (matrix.sql_engine == 'local-engine' || env.use_credentials == 'true') }}
         env:
           SQL_ENGINE: ${{ matrix.sql_engine }}
           PARQUET_RUNTIME_JAR: ${{ steps.parquet_cli.outputs.runtime_jar }}

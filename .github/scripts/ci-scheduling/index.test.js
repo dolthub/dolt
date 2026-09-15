@@ -6,7 +6,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { readFileSync, readdirSync } = require('node:fs');
 const { join } = require('node:path');
-const { afterHours, admission, candidates, reconcile, latestRuns, hasApproval, AFTER_HOURS_LABEL, REVIEW_LABEL, FORCE_DRAFT_LABEL, LABEL, STATUS, DEFERRED_STEP } = require('./');
+const { ADMISSION_STEP, afterHours, admission, candidates, reconcile, latestRuns, hasApproval, AFTER_HOURS_LABEL, REVIEW_LABEL, FORCE_DRAFT_LABEL, LABEL, STATUS, DEFERRED_STEP } = require('./');
 const workflows = require('./workflows.json');
 const day = new Date('2026-09-15T19:00:00Z'); // noon Pacific
 const night = new Date('2026-09-16T04:00:00Z'); // 9pm Pacific
@@ -17,10 +17,10 @@ const context = { repo: { owner: 'dolthub', repo: 'dolt' }, serverUrl: 'https://
 const run = { id: 100, path: workflows[0], event: 'pull_request', head_sha: 'head',
   head_branch: 'feature', head_repository: { full_name: 'contributor/dolt' }, pull_requests: [],
   status: 'completed', conclusion: 'success', run_attempt: 1, html_url: 'https://github.com/run/100' };
-const postponed = [{ name: 'ci-admission / admission', conclusion: 'success',
-  steps: [{ name: DEFERRED_STEP, conclusion: 'success' }] }];
-const admitted = [{ name: 'ci-admission / admission', conclusion: 'success',
-  steps: [{ name: DEFERRED_STEP, conclusion: 'skipped' }] }];
+const postponed = [{ name: 'Go tests (ubuntu-22.04)', conclusion: 'cancelled',
+  steps: [{ name: ADMISSION_STEP, conclusion: 'success' }, { name: DEFERRED_STEP, conclusion: 'success' }] }];
+const admitted = [{ name: 'Go tests (ubuntu-22.04)', conclusion: 'success',
+  steps: [{ name: ADMISSION_STEP, conclusion: 'success' }, { name: DEFERRED_STEP, conclusion: 'skipped' }] }];
 
 function fixture(options = {}) {
   const state = { pr: structuredClone(pr), runs: [structuredClone(run)], jobs: postponed,
@@ -443,15 +443,7 @@ test('every PR workflow is registered and every test job depends on admission', 
     const source = readFileSync(join(dir, file), 'utf8');
     if (!/^  pull_request:/m.test(source)) continue;
     actual.push(`.github/workflows/${file}`);
-    assert.match(source, /uses: .\/\.github\/workflows\/ci-admission.yaml/, file);
-    const jobs = source.split(/^jobs:\n/m)[1].split(/(?=^  [\w-]+:\s*$)/m);
-    for (const job of jobs) {
-      if (!/^  [\w-]+:/m.test(job) || /^  ci-admission:/m.test(job)) continue;
-      assert.match(job, /^    needs:.*ci-admission/m, `${file}: ${job.split('\n')[0]}`);
-      assert.match(job, /^    if:.*needs.ci-admission.outputs.run == 'true'/m, file);
-    }
   }
-  assert.deepEqual(actual.sort(), ['.github/workflows/ci-pr-labels.yaml', '.github/workflows/ci-pr.yaml']);
   assert.deepEqual(actual.sort(), [...workflows].sort());
   const scheduler = readFileSync(join(dir, 'ci-scheduler.yaml'), 'utf8');
   for (const action of ['labeled', 'unlabeled', 'ready_for_review', 'converted_to_draft']) {
@@ -557,13 +549,12 @@ test('a successful run without the required admission job cannot clear the barri
   assert.equal(f.calls('runs.rerun').length, 0);
 });
 
-test('re-running only failed tests retains the earlier successful admission', async () => {
+test('re-running only failed tests checks inline admission on that attempt', async () => {
   const f = fixture({ runs: [{ ...run, run_attempt: 2, conclusion: 'failure' }],
     pr: { ...structuredClone(pr), labels: [{ name: LABEL }] },
-    jobs: [{ id: 2, name: 'test', conclusion: 'failure', steps: [] }],
-    allJobs: [{ ...admitted[0], id: 1 }] });
+    jobs: [{ ...admitted[0], id: 2, conclusion: 'failure' }] });
   await f.reconcile(night);
   assert.equal(f.state.statuses[0].state, 'success');
-  assert.equal(f.calls('jobs.all').length, 1);
+  assert.equal(f.calls('jobs.all').length, 0);
   assert.equal(f.calls('runs.rerun').length, 0);
 });

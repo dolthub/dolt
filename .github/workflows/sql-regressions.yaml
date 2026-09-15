@@ -1,7 +1,11 @@
 name: Benchmark SQL Correctness on PR
 
 on:
-  workflow_call:
+  pull_request:
+    paths:
+      - 'go/**'
+    branches: [ main ]
+
 jobs:
   set-version-actor:
     if: ${{ github.actor != 'dependabot[bot]' }}
@@ -12,20 +16,55 @@ jobs:
       version: ${{ steps.set-vars.outputs.version }}
       actor: ${{ steps.set-vars.outputs.actor }}
     steps:
+      - name: Checkout CI admission
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          path: .ci-admission
+          sparse-checkout: .github/scripts/ci-scheduling
+      - name: Check CI admission
+        id: ci-admission
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          CI_TIMEZONE: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
+        with:
+          script: |
+            const { admission } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
+            const decision = await admission({ github, context, timezone: process.env.CI_TIMEZONE });
+            core.setOutput('run', String(decision.run));
+            core.setOutput('reason', decision.reason);
+      - name: CI postponed
+        if: steps.ci-admission.outputs.reason == 'deferred'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await core.summary.addRaw('CI postponed. See the PR comment for conditions and overrides.').write();
+      - name: Cancel deferred CI
+        if: github.event_name == 'pull_request' && steps.ci-admission.outputs.run == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { cancelFromJob } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
+            await cancelFromJob({ github, context, core });
       - name: Checkout BASE REF
         uses: actions/checkout@v6
         with:
           ref: ${{ github.base_ref }}
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Get Current Correctness
         id: regress-comp
         working-directory: ./.github/scripts/sql-correctness
         run: |
           out=$(cat current_correctness.txt)
           echo "regress_comp=$out" >> $GITHUB_OUTPUT
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Checkout PR HEAD REF
         uses: actions/checkout@v6
         with:
           ref: ${{ github.head_ref }}
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - name: Set variables
         id: set-vars
         run: |
@@ -34,20 +73,55 @@ jobs:
           echo "version=$sha" >> $GITHUB_OUTPUT
         env:
           ACTOR: ${{ github.event.client_payload.actor || github.actor }}
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
 
   correctness:
     runs-on: ubuntu-22.04
-    needs: [set-version-actor]
+    needs: [ set-version-actor ]
     name: Trigger SQL Correctness K8s Workflow
     steps:
+      - name: Checkout CI admission
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          path: .ci-admission
+          sparse-checkout: .github/scripts/ci-scheduling
+      - name: Check CI admission
+        id: ci-admission
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          CI_TIMEZONE: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
+        with:
+          script: |
+            const { admission } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
+            const decision = await admission({ github, context, timezone: process.env.CI_TIMEZONE });
+            core.setOutput('run', String(decision.run));
+            core.setOutput('reason', decision.reason);
+      - name: CI postponed
+        if: steps.ci-admission.outputs.reason == 'deferred'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await core.summary.addRaw('CI postponed. See the PR comment for conditions and overrides.').write();
+      - name: Cancel deferred CI
+        if: github.event_name == 'pull_request' && steps.ci-admission.outputs.run == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { cancelFromJob } = require(process.env.GITHUB_WORKSPACE + '/.ci-admission/.github/scripts/ci-scheduling');
+            await cancelFromJob({ github, context, core });
       - name: Get pull number
         uses: actions/github-script@v7
         id: get_pull_number
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: core.setOutput("pull_number", JSON.stringify(context.issue.number));
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
       - uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: sql-correctness
           client-payload: '{"issue_number": "${{ steps.get_pull_number.outputs.pull_number }}", "branch_ref": "${{ github.head_ref }}", "regress_comp": "${{ needs.set-version-actor.outputs.regress_comp }}", "version": "${{ needs.set-version-actor.outputs.version }}", "mode": "release", "actor": "${{ needs.set-version-actor.outputs.actor }}", "actor_email": "${{ needs.set-version-actor.outputs.actor_email }}", "template_script": "./.github/scripts/sql-correctness/get-dolt-correctness-job-json.sh"}'
+        if: ${{ (github.event_name != 'pull_request' || steps.ci-admission.outputs.run == 'true') }}
