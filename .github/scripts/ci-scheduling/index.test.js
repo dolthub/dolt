@@ -80,7 +80,7 @@ test('gate reads live labels on initial runs and manual re-runs', async () => {
   assert.deepEqual(await admission({ github: f.github, context, now: day }), { run: false, reason: 'deferred' });
   assert.equal((await admission({ github: f.github, context, now: night })).run, true);
   f.state.pr.labels = [];
-  for (const body of [null, '', '[non-urgent]', '[NON-URGENT]']) {
+  for (const body of [null, '', 'Ready for testing']) {
     f.state.pr.body = body;
     assert.equal((await admission({ github: f.github, context, now: day })).run, true);
   }
@@ -174,6 +174,47 @@ test('daytime deferral sets a pending check, tracks the queue, and comments once
   assert.equal(f.calls('labels.add').length, 1);
   assert.equal(f.calls('jobs.list').length, 1, 'completed attempts are cached');
   assert.match(f.state.comments[0].body, /9pm–5am \(America\/Los_Angeles\)/);
+});
+
+test('deferral comments document every applicable override, alone and combined', async () => {
+  for (const draft of [false, true]) {
+    for (const hours of [false, true]) {
+      for (const needsReview of [false, true]) {
+        if (!draft && !hours && !needsReview) continue;
+        const labels = [hours && AFTER_HOURS_LABEL, needsReview && REVIEW_LABEL].filter(Boolean).map(name => ({ name }));
+        const f = fixture({ pr: { ...structuredClone(pr), draft, labels } });
+        await f.reconcile();
+        const body = f.state.comments[0].body;
+        assert.match(body, /How to override deferral/);
+        assert.equal(body.includes('**Draft hold:** add `force-draft-ci` or mark the PR ready for review.'), draft);
+        assert.equal(body.includes('**After-hours hold:** remove `defer-ci-after-hours`'), hours);
+        assert.equal(body.includes('**Review hold:** remove `defer-ci-review`'), needsReview);
+        assert.match(body, /Each override clears only its own condition/);
+        assert.match(body, /PR number \*\*12\*\*/);
+        assert.match(body, /Manual retries.*do not bypass outstanding conditions/);
+      }
+    }
+  }
+});
+
+test('a bypassed draft hold is not listed among the required overrides', async () => {
+  const f = fixture({ pr: { ...structuredClone(pr), draft: true,
+    labels: [{ name: FORCE_DRAFT_LABEL }, { name: REVIEW_LABEL }] } });
+  await f.reconcile();
+  assert.match(f.state.comments[0].body, /\*\*Review hold:\*\* remove `defer-ci-review`/);
+  assert.doesNotMatch(f.state.comments[0].body, /\*\*Draft hold:\*\*/);
+});
+
+test('release progress and errors retain override instructions in the bot comment', async () => {
+  const released = fixture();
+  await released.reconcile(night);
+  assert.match(released.state.comments[0].body, /Released 1 postponed CI workflow/);
+  assert.match(released.state.comments[0].body, /\*\*After-hours hold:\*\* remove `defer-ci-after-hours`/);
+  const failed = fixture();
+  failed.github.rest.actions.reRunWorkflow = async () => { throw new Error('API unavailable'); };
+  await assert.rejects(failed.reconcile(night), /API unavailable/);
+  assert.match(failed.state.comments[0].body, /CI could not be released/);
+  assert.match(failed.state.comments[0].body, /\*\*After-hours hold:\*\* remove `defer-ci-after-hours`/);
 });
 
 test('nighttime release re-runs the original workflow and waits for real results', async () => {

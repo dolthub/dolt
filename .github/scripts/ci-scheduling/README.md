@@ -16,7 +16,6 @@ time handled automatically.
 For example, a PR with both labels that receives approval at 2pm waits until the
 9pm release window. If it is still unapproved at 9pm, it continues waiting for an
 approval. A PR with only `defer-ci-review` can start CI on approval at any time.
-The old `[non-urgent]` phrase in a PR description no longer affects CI.
 
 An active approval means a reviewer's latest submitted decision is `APPROVED`.
 A later comment-only review does not revoke it; a dismissal or later request for
@@ -68,7 +67,9 @@ Sources: [GitHub CLI creation and metadata calls](https://github.com/cli/cli/blo
 
 - Only small admission, scheduling, and review-notification jobs run while CI is
   deferred. Test jobs and their OS matrices do not acquire runners while waiting.
-- One bot comment explains the outstanding conditions and is updated on release.
+- One bot comment explains the outstanding conditions and the exact label changes
+  that override each applicable hold. Release and error updates retain these
+  instructions, including that each override clears only its own condition.
   The separate `ci-deferred` label tracks postponed work until its CI finishes.
   The scheduler manages this queue label; users choose the two `defer-ci-*` labels.
 - Label additions/removals and draft-ready transitions trigger reconciliation.

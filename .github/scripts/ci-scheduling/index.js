@@ -71,11 +71,26 @@ function waitingMessage(reasons, timezone) {
   }
   const waiting = conditions.length ? `CI is postponed, waiting for ${conditions.join(' and ')}.`
     : 'Postponed CI is eligible to be released.';
-  return `${waiting} If both \`${AFTER_HOURS_LABEL}\` and \`${REVIEW_LABEL}\` are present, ` +
-    'both conditions must be satisfied. ' +
-    'Removing a deferral label removes only that condition. ' +
-    'You can also run **Schedule PR CI** with this PR number or use **Re-run all jobs**; ' +
-    'both recheck the draft state, labels, and reviews. No test runner is held while waiting.';
+  return `${waiting} No test runner is held while waiting.`;
+}
+
+function overrideInstructions(pr) {
+  const overrides = [];
+  if (draftHeld(pr)) {
+    overrides.push(`- **Draft hold:** add \`${FORCE_DRAFT_LABEL}\` or mark the PR ready for review.`);
+  }
+  if (hasLabel(pr, AFTER_HOURS_LABEL)) {
+    overrides.push(`- **After-hours hold:** remove \`${AFTER_HOURS_LABEL}\` to allow CI during the day.`);
+  }
+  if (hasLabel(pr, REVIEW_LABEL)) {
+    overrides.push(`- **Review hold:** remove \`${REVIEW_LABEL}\` to allow CI without an approving review.`);
+  }
+  if (overrides.length === 0) return '';
+  return `\n\n**How to override deferral**\n\n${overrides.join('\n')}\n\n` +
+    'Each override clears only its own condition; satisfy or override every remaining condition to start CI. ' +
+    'These changes trigger an automatic recheck. For a manual retry, run **Schedule PR CI** ' +
+    `with PR number **${pr.number}**, or use **Re-run all jobs** on a postponed workflow. ` +
+    'Manual retries recheck the draft state, labels, and reviews; they do not bypass outstanding conditions.';
 }
 
 // Re-runs retain the old event payload. Always fetch the live labels, reviews, and head.
@@ -178,7 +193,12 @@ async function reconcile({ github, context, pullNumber, now = new Date(), timezo
       } catch { /* A missing or damaged cache is rebuilt from the Actions API. */ }
     }
   };
-  const comment = async text => { await loadComment(); message = text; };
+  const comment = async text => {
+    await loadComment();
+    // Preserve actionable overrides when release progress or errors replace the
+    // waiting message in the same bot comment.
+    message = text + overrideInstructions(pr);
+  };
   const saveComment = async () => {
     if (!message && !(existingComment && cacheChanged)) return;
     // The cache avoids re-fetching every completed job for every workflow_run event.
