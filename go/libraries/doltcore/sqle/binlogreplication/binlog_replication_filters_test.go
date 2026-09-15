@@ -393,6 +393,32 @@ func TestBinlogReplicationFilters_wildTables(t *testing.T) {
 	require.Equal(t, "", status["Replicate_Wild_Do_Table"])
 }
 
+// TestBinlogReplicationFilters_resetReplica verifies that RESET REPLICA ALL clears filters used by the running applier.
+func TestBinlogReplicationFilters_resetReplica(t *testing.T) {
+	h := newHarness(t)
+	h.startSqlServersWithDoltSystemVars(doltReplicaSystemVars)
+	h.startReplicationAndCreateTestDb(h.mySqlPort)
+
+	h.replicaDatabase.MustExec("STOP REPLICA;")
+	h.replicaDatabase.MustExec("CHANGE REPLICATION FILTER REPLICATE_WILD_IGNORE_TABLE=('db01.filtered');")
+	h.replicaDatabase.MustExec("START REPLICA;")
+
+	h.primaryDatabase.MustExec("CREATE TABLE db01.filtered (pk INT PRIMARY KEY);")
+	h.primaryDatabase.MustExec("INSERT INTO db01.filtered VALUES (1);")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("SELECT * FROM db01.filtered;", nil)
+
+	h.replicaDatabase.MustExec("STOP REPLICA;")
+	h.replicaDatabase.MustExec("RESET REPLICA ALL;")
+	status := h.showReplicaStatus()
+	require.Equal(t, "", status["Replicate_Wild_Ignore_Table"])
+
+	h.startReplicationAndCreateTestDb(h.mySqlPort)
+	h.primaryDatabase.MustExec("INSERT INTO db01.filtered VALUES (2);")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("SELECT * FROM db01.filtered;", [][]any{{"2"}})
+}
+
 // TestBinlogReplicationFilters_errorCases test returned errors for various error cases.
 func TestBinlogReplicationFilters_errorCases(t *testing.T) {
 	h := newHarness(t)

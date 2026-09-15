@@ -70,6 +70,18 @@ func newFilterConfiguration() *filterConfiguration {
 	}
 }
 
+// clear removes every configured replication filter while preserving references held by the applier.
+func (fc *filterConfiguration) clear() {
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
+
+	fc.doTables = make(map[string]map[string]struct{})
+	fc.ignoreTables = make(map[string]map[string]struct{})
+	fc.wildDoTables = nil
+	fc.wildIgnoreTables = nil
+	fc.caseInsensitive = false
+}
+
 // setOptions validates a complete command before atomically replacing the filter types it specifies.
 func (fc *filterConfiguration) setOptions(options []gmsbinlogreplication.ReplicationOption, caseInsensitive bool) error {
 	var updates struct {

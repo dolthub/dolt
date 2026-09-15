@@ -366,7 +366,7 @@ func (d *doltBinlogReplicaController) ResetReplica(ctx *sql.Context, resetAll bo
 			return err
 		}
 
-		d.filters = newFilterConfiguration()
+		d.filters.clear()
 	}
 
 	return nil
