@@ -89,9 +89,7 @@ func GetField(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple, ns N
 		var buf []byte
 		buf, ok = td.GetJSON(i, tup)
 		if ok {
-			var doc types.JSONDocument
-			err = types.JsonUnmarshal(buf, &doc.Val)
-			v = doc
+			v = types.NewLazyJSONDocument(buf)
 		}
 	// GeometryEnc is no longer written by new columns, but could be used by older databases
 	case val.GeometryEnc:

@@ -239,6 +239,51 @@ func testRoundTripProllyFields(t *testing.T, test prollyFieldTest) {
 
 }
 
+var benchmarkJSONFieldValue interface{}
+
+// BenchmarkJSONFieldReadPolicies measures normalized and exact decoding after tuple retrieval.
+func BenchmarkJSONFieldReadPolicies(b *testing.B) {
+	ctx := context.Background()
+	desc := val.NewTupleDescriptor(val.Type{Enc: val.JSONAddrEnc})
+	ns := NewTestNodeStore()
+	builder := val.NewTupleBuilder(desc, ns)
+	document := types.NewLazyJSONDocument([]byte(`{"id":42,"ratio":12345678901234567890.123456789,"items":[1.1,2.2,3.3,4.4]}`))
+	require.NoError(b, PutField(ctx, ns, builder, 0, document))
+	tuple, err := builder.Build(ctx, testPool)
+	require.NoError(b, err)
+
+	b.Run("mysql_normalized", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			field, err := GetField(ctx, desc, 0, tuple, ns)
+			if err != nil {
+				b.Fatal(err)
+			}
+			benchmarkJSONFieldValue, err = field.(sql.JSONWrapper).ToInterface(ctx)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+
+	b.Run("exact_decode_from_storage_bytes", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			field, err := GetField(ctx, desc, 0, tuple, ns)
+			if err != nil {
+				b.Fatal(err)
+			}
+			bytes, err := field.(types.JSONBytes).GetBytes(ctx)
+			if err != nil {
+				b.Fatal(err)
+			}
+			if err = types.JsonUnmarshalPreserveNumberPrecision(bytes, &benchmarkJSONFieldValue); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+}
+
 func mustParseGeometryType(t *testing.T, s string) (v interface{}) {
 	// Determine type, and get data
 	geomType, data, _, err := spatial.ParseWKTHeader(s)
