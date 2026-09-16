@@ -262,7 +262,7 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash, w
 		return fmt.Errorf("Unrecognized dataset value: %s", headType)
 	}
 
-	return db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
+	_, err = db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
 		for _, check := range preconditions {
 			if err := check(ctx, am, ds.ID()); err != nil {
 				return prolly.AddressMap{}, err
@@ -350,6 +350,8 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash, w
 
 		return ae.Flush(ctx)
 	})
+
+	return err
 }
 
 func (db *database) FastForward(ctx context.Context, ds Dataset, newHeadAddr hash.Hash, wsPath string, allowDirtyWorking bool) (Dataset, error) {
@@ -574,7 +576,7 @@ func CommitValue(ctx context.Context, db Database, ds Dataset, v types.Value) (D
 	return db.Commit(ctx, ds, v, CommitOptions{Meta: &CommitMeta{}})
 }
 func (db *database) doCommit(ctx context.Context, datasetID string, datasetCurrentAddr hash.Hash, newCommitValue types.Value) error {
-	return db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
+	_, err := db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
 		curr, err := am.Get(ctx, datasetID)
 		if err != nil {
 			return prolly.AddressMap{}, err
@@ -600,6 +602,8 @@ func (db *database) doCommit(ctx context.Context, datasetID string, datasetCurre
 
 		return ae.Flush(ctx)
 	})
+
+	return err
 }
 
 func mergeNeeded(currentAddr hash.Hash, ancestorAddr hash.Hash) bool {
@@ -623,7 +627,7 @@ func (db *database) Tag(ctx context.Context, ds Dataset, commitAddr hash.Hash, o
 // doTag manages concurrent access the single logical piece of mutable state: the current Root. It uses
 // the same optimistic writing algorithm as doCommit (see above).
 func (db *database) doTag(ctx context.Context, datasetID string, tagAddr hash.Hash) error {
-	return db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
+	_, err := db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
 		curr, err := am.Get(ctx, datasetID)
 		if err != nil {
 			return prolly.AddressMap{}, err
@@ -638,6 +642,8 @@ func (db *database) doTag(ctx context.Context, datasetID string, tagAddr hash.Ha
 		}
 		return ae.Flush(ctx)
 	})
+
+	return err
 }
 
 func (db *database) SetTuple(ctx context.Context, ds Dataset, val []byte) (Dataset, error) {
@@ -646,7 +652,7 @@ func (db *database) SetTuple(ctx context.Context, ds Dataset, val []byte) (Datas
 		return Dataset{}, err
 	}
 	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error {
-		return db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
+		_, err = db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
 			ae := am.Editor()
 			err := ae.Update(ctx, ds.ID(), tupleAddr)
 			if err != nil {
@@ -654,6 +660,7 @@ func (db *database) SetTuple(ctx context.Context, ds Dataset, val []byte) (Datas
 			}
 			return ae.Flush(ctx)
 		})
+		return err
 	})
 }
 
@@ -663,7 +670,7 @@ func (db *database) SetStatsRef(ctx context.Context, ds Dataset, mapAddr hash.Ha
 		return Dataset{}, err
 	}
 	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error {
-		return db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
+		_, err = db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
 			ae := am.Editor()
 			err := ae.Update(ctx, ds.ID(), statAddr)
 			if err != nil {
@@ -671,6 +678,7 @@ func (db *database) SetStatsRef(ctx context.Context, ds Dataset, mapAddr hash.Ha
 			}
 			return ae.Flush(ctx)
 		})
+		return err
 	})
 }
 
@@ -682,7 +690,7 @@ func (db *database) UpdateStashList(ctx context.Context, ds Dataset, stashListAd
 	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error {
 		// TODO: this function needs concurrency control for using stash in SQL context
 		// this will update the dataset for stashes address map
-		return db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
+		_, err := db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
 			ae := am.Editor()
 			err := ae.Update(ctx, ds.ID(), stashListAddr)
 			if err != nil {
@@ -690,6 +698,7 @@ func (db *database) UpdateStashList(ctx context.Context, ds Dataset, stashListAd
 			}
 			return ae.Flush(ctx)
 		})
+		return err
 	})
 }
 
@@ -713,7 +722,7 @@ func (db *database) UpdateWorkingSet(ctx context.Context, ds Dataset, workingSet
 // return an error if the application is working with a stale value for the
 // workingset.
 func (db *database) doUpdateWorkingSet(ctx context.Context, datasetID string, addr hash.Hash, currHash hash.Hash) error {
-	return db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
+	_, err := db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
 		curr, err := am.Get(ctx, datasetID)
 		if err != nil {
 			return prolly.AddressMap{}, err
@@ -728,6 +737,8 @@ func (db *database) doUpdateWorkingSet(ctx context.Context, datasetID string, ad
 		}
 		return ae.Flush(ctx)
 	})
+
+	return err
 }
 
 func (db *database) PersistGhostCommitIDs(ctx context.Context, ghosts hash.HashSet) error {
@@ -825,7 +836,7 @@ func (db *database) CommitAtomic(
 		}
 	}
 
-	_, err := db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
+	currentDatasets, err := db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
 		ae := am.Editor()
 
 		for i := range atomicCommit {
@@ -869,11 +880,6 @@ func (db *database) CommitAtomic(
 		return nil, err
 	}
 
-	currentDatasets, err := db.Datasets(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	// TODO: come back to this
 	// commitDS, err = db.datasetFromMap(ctx, commitDS.ID(), currentDatasets)
 	// if err != nil {
@@ -884,6 +890,8 @@ func (db *database) CommitAtomic(
 	// if err != nil {
 	// 	return Dataset{}, Dataset{}, err
 	// }
+
+	updatedDatasets := make([]Dataset, len(atomicCommit))
 
 	// TODO(next): return a slice of dataset pairs
 	// TODO(next): investigate workspace-only version of this method for same reason
@@ -1032,7 +1040,7 @@ func (db *database) update(
 func (db *database) doDelete(ctx context.Context, datasetIDstr string, workingsetIDstr string) error {
 	var firstHash hash.Hash
 
-	return db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
+	_, err := db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
 		curr, err := am.Get(ctx, datasetIDstr)
 		if err != nil {
 			return prolly.AddressMap{}, err
@@ -1111,6 +1119,8 @@ func (db *database) doDelete(ctx context.Context, datasetIDstr string, workingse
 
 		return ae.Flush(ctx)
 	})
+
+	return err
 }
 
 // GC traverses the database starting at the Root and removes all unreferenced data from persistent storage.
