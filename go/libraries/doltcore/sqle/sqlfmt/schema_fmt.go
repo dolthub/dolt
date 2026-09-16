@@ -216,7 +216,10 @@ func GenerateCreateTableIndentedColumnDefinition(ctx *sql.Context, formatter sql
 		genVal = sql.NewUnresolvedColumnDefaultValue(col.Generated)
 	}
 	if col.OnUpdate != "" {
-		onUpdateVal = sql.NewUnresolvedColumnDefaultValue(col.OnUpdate)
+		onUpdateVal = &sql.ColumnDefaultValue{
+			Expr:    &sql.UnresolvedColumnDefault{ExprString: col.OnUpdate},
+			Literal: true,
+		}
 	}
 
 	return formatter.GenerateCreateTableColumnDefinition(
