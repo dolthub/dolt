@@ -1023,6 +1023,20 @@ SQL
     [[ "$output" =~ "not found" ]] || false
 }
 
+@test "sql: boolean query results use numeric output" {
+    run dolt sql -r csv -q "select count(*) > 0 as positive, count(*) < 0 as negative from (select 1) t"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "1,0" ]
+
+    run dolt sql -q "select count(*) > 0 as positive, count(*) < 0 as negative from (select 1) t"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| 1        | 0        |" ]] || false
+
+    run dolt sql -r csv -q "select 'true' as text_value, true as boolean_value, null as null_value"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "true,1," ]
+}
+
 @test "sql: output formats" {
     dolt sql <<SQL
     CREATE TABLE test (
