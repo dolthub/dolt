@@ -1791,7 +1791,9 @@ var MergeScripts = []queries.ScriptTest{
 	},
 	// https://github.com/dolthub/dolt/issues/6612
 	{
-		Name: "Test feature data preservation across collation merges",
+		// charset and collation ALTER TABLE syntax is MySQL-specific
+		Dialect: "mysql",
+		Name:    "Test feature data preservation across collation merges",
 		SetUpScript: []string{
 			"CREATE TABLE t(pk VARCHAR(255) PRIMARY KEY,v VARCHAR(255)) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
 			"CALL dolt_commit('-Am','base')",
