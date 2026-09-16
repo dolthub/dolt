@@ -21,6 +21,7 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -253,9 +254,16 @@ func NewPushOpts[C doltdb.Context](ctx C, apr *argparser.ArgParseResults, rsr Re
 			return nil, nil, ErrAllFlagCannotBeUsedWithRefSpec.New()
 		}
 
-		refSpecNames := apr.Args[1:]
+		refSpecNames := slices.Clone(apr.Args[1:])
 		// validate given refSpec names
-		for _, refSpecName := range refSpecNames {
+		for i, refSpecName := range refSpecNames {
+			if src, dest, hasDest := strings.Cut(refSpecName, ":"); src == "HEAD" {
+				refSpecName = currentBranch.GetPath()
+				if hasDest {
+					refSpecName += ":" + dest
+				}
+				refSpecNames[i] = refSpecName
+			}
 			if len(refSpecName) == 0 {
 				return nil, nil, fmt.Errorf("%w: '%s'", ref.ErrInvalidRefSpec, refSpecName)
 			}
