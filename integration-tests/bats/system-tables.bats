@@ -102,7 +102,7 @@ teardown() {
     # Test that the function and system table return the same commit_order for the same commit
     run dolt sql -q "select (select commit_order from dolt_log where message = 'Added test2 table') = (select commit_order from dolt_log() where message = 'Added test2 table') as orders_match"
     [ $status -eq 0 ]
-    [[ "$output" =~ \|[[:space:]]+(true|1)[[:space:]]+\| ]] || false
+    [[ "$output" =~ \|[[:space:]]+1[[:space:]]+\| ]] || false
 }
 
 @test "system-tables: commit_order reflects topological order for branches" {
@@ -136,7 +136,7 @@ teardown() {
     
     run dolt sql -q "select (select commit_order from dolt_log('$feature_hash') limit 1) = (select commit_order from dolt_log('$main_hash') limit 1) as same_height"
     [ $status -eq 0 ]
-    [[ "$output" =~ \|[[:space:]]+(true|1)[[:space:]]+\| ]] || false
+    [[ "$output" =~ \|[[:space:]]+1[[:space:]]+\| ]] || false
     
     # Merge feature into main
     dolt merge feature -m "merge feature"
@@ -144,7 +144,7 @@ teardown() {
     # The merge commit should have a higher commit_order than both branch commits
     run dolt sql -q "select (select commit_order from dolt_log where message = 'merge feature') > (select commit_order from dolt_log where message = 'main commit') as merge_higher"
     [ $status -eq 0 ]
-    [[ "$output" =~ \|[[:space:]]+(true|1)[[:space:]]+\| ]] || false
+    [[ "$output" =~ \|[[:space:]]+1[[:space:]]+\| ]] || false
 }
 
 @test "system-tables: query dolt_branches system table" {
@@ -346,8 +346,8 @@ SQL
 
     run dolt sql -r csv -q 'select * from dolt_diff'
     [ "$status" -eq 0 ]
-    [[ "$output" =~ STAGED,testStaged,,,,,(false|0),(true|1)(,|[[:space:]]|$) ]] || false
-    [[ "$output" =~ WORKING,testWorking,,,,,(false|0),(true|1)(,|[[:space:]]|$) ]] || false
+    [[ "$output" =~ STAGED,testStaged,,,,,0,1(,|[[:space:]]|$) ]] || false
+    [[ "$output" =~ WORKING,testWorking,,,,,0,1(,|[[:space:]]|$) ]] || false
 
     dolt add testWorking
     DOLT_COMMITTER_NAME="Bats Committer" DOLT_COMMITTER_EMAIL="committer@email.fake" \
@@ -1257,12 +1257,12 @@ SQL
     # Verify ignored column correctly identifies ignored tables
     run dolt sql -r csv -q "SELECT table_name, ignored FROM dolt_status_ignored WHERE table_name = 'ignored_table'"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ ignored_table,(true|1)(,|[[:space:]]|$) ]] || false
+    [[ "$output" =~ ignored_table,1(,|[[:space:]]|$) ]] || false
 
     # Verify non-ignored table has ignored = false
     run dolt sql -r csv -q "SELECT table_name, ignored FROM dolt_status_ignored WHERE table_name = 'test'"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ test,(false|0)(,|[[:space:]]|$) ]] || false
+    [[ "$output" =~ test,0(,|[[:space:]]|$) ]] || false
 }
 
 @test "system-tables: dolt_status_ignored shows staged tables without ignored flag" {
@@ -1277,7 +1277,7 @@ SQL
     # Staged tables should never be marked as ignored
     run dolt sql -r csv -q "SELECT ignored FROM dolt_status_ignored WHERE staged = true AND table_name = 'staged_test'"
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ ^(false|0)$ ]] || false
+    [[ "${lines[1]}" =~ ^0$ ]] || false
 }
 
 @test "system-tables: dolt_status_ignored shows in dolt ls --system" {

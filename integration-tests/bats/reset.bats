@@ -61,7 +61,7 @@ merge_with_conflicts() {
     merge_without_conflicts
 
     run dolt sql -q "SELECT * from dolt_merge_status;"
-    [[ "$output" =~ \|[[:space:]]+(false|0)[[:space:]]+\| ]] || false
+    [[ "$output" =~ \|[[:space:]]+0[[:space:]]+\| ]] || false
 
     run dolt reset --hard
     [ $status -eq 0 ]
@@ -73,14 +73,14 @@ merge_with_conflicts() {
     [[ "$output" =~ "fatal: There is no merge to abort" ]] || false
 
     run dolt sql -q "SELECT * from dolt_merge_status;"
-    [[ "$output" =~ \|[[:space:]]+(false|0)[[:space:]]+\| ]] || false
+    [[ "$output" =~ \|[[:space:]]+0[[:space:]]+\| ]] || false
 }
 
 @test "reset: dolt reset --hard should clear a conflicted merge state" {
     merge_with_conflicts
 
     run dolt sql -q "SELECT * from dolt_merge_status;"
-    [[ "$output" =~ \|[[:space:]]+(true|1)[[:space:]]+\| ]] || false
+    [[ "$output" =~ \|[[:space:]]+1[[:space:]]+\| ]] || false
     [[ "$output" =~ "merge_branch" ]] || false
     [[ "$output" =~ "refs/heads/main" ]] || false
     [[ "$output" =~ "test1" ]] || false
@@ -95,7 +95,7 @@ merge_with_conflicts() {
     [[ "$output" =~ "fatal: There is no merge to abort" ]] || false
 
     run dolt sql -q "SELECT * from dolt_merge_status;"
-    [[ "$output" =~ \|[[:space:]]+(false|0)[[:space:]]+\| ]] || false
+    [[ "$output" =~ \|[[:space:]]+0[[:space:]]+\| ]] || false
 }
 
 @test "reset: dolt reset head works" {
