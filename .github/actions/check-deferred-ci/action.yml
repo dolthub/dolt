@@ -8,6 +8,8 @@ outputs:
   run:
     description: Whether subsequent work is admitted (also true for non-PR events).
     value: ${{ steps.admission.outputs.run }}
+# The action runs before checkout. Load its bundled code from github.action_path,
+# the absolute action directory, rather than depending on the caller’s workspace.
 runs:
   using: composite
   steps:
@@ -18,7 +20,7 @@ runs:
         CI_TIMEZONE: ${{ inputs.timezone }}
       with:
         script: |
-          const { checkDeferredCI } = require(process.env.CI_ACTION_PATH + '/../../scripts/ci-scheduling/cancellation');
+          const { checkDeferredCI } = require(process.env.CI_ACTION_PATH + '/cancellation');
           await checkDeferredCI({ github, context, core, timezone: process.env.CI_TIMEZONE,
             attempt: Number(process.env.GITHUB_RUN_ATTEMPT) });
     - if: steps.admission.outputs.marker-name != ''
@@ -34,5 +36,5 @@ runs:
         CI_ACTION_PATH: ${{ github.action_path }}
       with:
         script: |
-          const { cancelFromJob } = require(process.env.CI_ACTION_PATH + '/../../scripts/ci-scheduling/cancellation');
+          const { cancelFromJob } = require(process.env.CI_ACTION_PATH + '/cancellation');
           await cancelFromJob({ github, context, core });

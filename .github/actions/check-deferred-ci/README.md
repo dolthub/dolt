@@ -160,7 +160,9 @@ are not automatically retried; use their original workflow controls.
 
   The `$/` self reference loads the action from the workflow's own repository and
   commit without a workspace checkout, including in forks. This syntax requires
-  GitHub.com; older local workflow linters may not recognize it.
+  GitHub.com; older local workflow linters may not recognize it. The shared code
+  lives beside `action.yml` and is loaded from the absolute `github.action_path`;
+  it does not depend on a checkout or the caller’s working directory.
 - The action returns successfully only when work is admitted (including non-PR
   triggers). Otherwise it waits for cancellation, failing after a bounded timeout.
   Normal subsequent steps therefore need no extra condition. Failure/always
@@ -226,8 +228,8 @@ per scheduler invocation; this does not reserve organization-wide runner capacit
 From the repository root:
 
 ```sh
-npm ci --prefix .github/scripts/ci-scheduling
-npm test --prefix .github/scripts/ci-scheduling
+npm ci --prefix .github/actions/check-deferred-ci
+npm test --prefix .github/actions/check-deferred-ci
 actionlint -shellcheck='' .github/workflows/ci-scheduler.yaml \
   .github/workflows/ci-review-notification.yaml .github/workflows/ci-scheduling-tests.yaml
 ```

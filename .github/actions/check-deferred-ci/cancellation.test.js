@@ -68,3 +68,25 @@ test('discovery requires a current deferral marker and matching PR head, reposit
   assert.deepEqual(f.state.canceled, []);
   assert.equal(f.state.waits, 0);
 });
+
+test('both action imports work from an isolated action directory without a checkout', async () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const root = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'ci-action-'));
+  try {
+    const action = path.join(root, 'action');
+    fs.cpSync(__dirname, action, { recursive: true });
+    const source = fs.readFileSync(path.join(action, 'action.yml'), 'utf8');
+    const imports = [...source.matchAll(/require\(([^\n]+)\)/g)];
+    assert.equal(imports.length, 2);
+    for (const [, expression] of imports) {
+      const load = new Function('require', 'process', `return require(${expression});`);
+      const module = load(require, { env: { CI_ACTION_PATH: action, GITHUB_WORKSPACE: root } });
+      const outputs = [];
+      await module.checkDeferredCI({ context: { eventName: 'push' },
+        core: { setOutput: (...args) => outputs.push(args) } });
+      assert.deepEqual(outputs, [['run', 'true']]);
+      assert.equal(typeof module.cancelFromJob, 'function');
+    }
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});

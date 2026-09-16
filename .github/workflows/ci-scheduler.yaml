@@ -58,11 +58,11 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
-          sparse-checkout: .github/scripts/ci-scheduling
+          sparse-checkout: .github/actions/check-deferred-ci
       - uses: actions/github-script@v7
         with:
           script: |
-            const { cancelDeferredRun } = require('./.github/scripts/ci-scheduling');
+            const { cancelDeferredRun } = require('./.github/actions/check-deferred-ci');
             await cancelDeferredRun({ github, context });
   candidates:
     if: >-
@@ -83,7 +83,7 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
-          sparse-checkout: .github/scripts/ci-scheduling
+          sparse-checkout: .github/actions/check-deferred-ci
       - id: candidates
         uses: actions/github-script@v7
         env:
@@ -91,7 +91,7 @@ jobs:
           CI_TIMEZONE: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
         with:
           script: |
-            const { candidates } = require('./.github/scripts/ci-scheduling');
+            const { candidates } = require('./.github/actions/check-deferred-ci');
             return await candidates({ github, context, pullNumber: process.env.PULL_NUMBER,
               timezone: process.env.CI_TIMEZONE });
   reconcile:
@@ -121,13 +121,13 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
-          sparse-checkout: .github/scripts/ci-scheduling
+          sparse-checkout: .github/actions/check-deferred-ci
       - uses: actions/github-script@v7
         env:
           PULL_NUMBER: ${{ matrix.pr }}
           CI_TIMEZONE: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
         with:
           script: |
-            const { reconcile } = require('./.github/scripts/ci-scheduling');
+            const { reconcile } = require('./.github/actions/check-deferred-ci');
             await reconcile({ github, context, pullNumber: Number(process.env.PULL_NUMBER),
               timezone: process.env.CI_TIMEZONE });
