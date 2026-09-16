@@ -17,7 +17,7 @@ const context = { repo: { owner: 'dolthub', repo: 'dolt' }, serverUrl: 'https://
   eventName: 'pull_request', payload: { pull_request: pr } };
 const run = { id: 100, path: workflows[0], event: 'pull_request', head_sha: 'head',
   head_branch: 'feature', head_repository: { full_name: 'contributor/dolt' }, pull_requests: [],
-  status: 'completed', conclusion: 'success', run_attempt: 1, html_url: 'https://github.com/run/100' };
+  status: 'completed', conclusion: 'cancelled', run_attempt: 1, html_url: 'https://github.com/run/100' };
 const postponed = [{ name: 'Go tests (ubuntu-22.04)', conclusion: 'cancelled',
   check_run_url: 'https://api.github.com/repos/dolthub/dolt/check-runs/1',
   steps: [{ name: ADMISSION_STEP, conclusion: 'cancelled' }] }];
@@ -44,7 +44,7 @@ function fixture(options = {}) {
     issues: {
       listComments: method('comments.list', () => state.comments),
       createComment: method('comments.create', args => state.comments.push({ ...args, id: 1, user: { login: 'github-actions[bot]' } })),
-      updateComment: method('comments.update', args => Object.assign(state.comments.find(c => c.id === args.comment_id), args)),
+      updateComment: method('comments.update', () => { throw new Error('Existing comments must never be edited'); }),
       getLabel: method('labels.get', () => ({ name: LABEL })),
       createLabel: method('labels.create', () => ({})),
       addLabels: method('labels.add', args => state.pr.labels.push(...args.labels.map(name => ({ name })))),
@@ -178,7 +178,7 @@ test('daytime deferral sets a pending check, tracks the queue, and comments once
   assert.equal(f.calls('comments.create').length, 1);
   assert.equal(f.calls('comments.update').length, 0);
   assert.equal(f.calls('labels.add').length, 1);
-  assert.equal(f.calls('jobs.list').length, 1, 'completed attempts are cached');
+  assert.equal(f.calls('jobs.list').length, 2, 'deferrals are read from live attempts');
   assert.match(f.state.comments[0].body, /9pm–5am \(America\/Los_Angeles\)/);
 });
 
@@ -209,31 +209,55 @@ test('a bypassed draft hold is not listed among the required overrides', async (
   assert.doesNotMatch(f.state.comments[0].body, /\*\*Draft hold:\*\*/);
 });
 
-test('release progress and errors retain override instructions in the bot comment', async () => {
-  const released = fixture();
-  await released.reconcile(night);
-  assert.match(released.state.comments[0].body, /Released 1 postponed CI workflow/);
-  assert.match(released.state.comments[0].body, /\*\*After-hours hold:\*\* remove `defer-ci-after-hours`/);
-  const failed = fixture();
-  failed.github.rest.actions.reRunWorkflow = async () => { throw new Error('API unavailable'); };
-  await assert.rejects(failed.reconcile(night), /API unavailable/);
-  assert.match(failed.state.comments[0].body, /CI could not be released/);
-  assert.match(failed.state.comments[0].body, /\*\*After-hours hold:\*\* remove `defer-ci-after-hours`/);
-});
-
-test('nighttime release re-runs the original workflow and waits for real results', async () => {
+test('deferral and release append events once without modifying earlier comments', async () => {
   const f = fixture();
-  await f.reconcile(night);
-  assert.equal(f.calls('runs.rerun')[0][1].run_id, 100);
-  assert.equal(f.state.statuses[0].state, 'pending');
+  await f.reconcile();
+  const deferred = f.state.comments[0].body;
+  await f.reconcile();
   await f.reconcile(night);
   assert.equal(f.calls('runs.rerun').length, 1);
-  f.state.runs[0].status = 'completed';
-  f.state.jobs = admitted;
-  await f.reconcile(night);
   assert.equal(f.state.statuses[0].state, 'success');
   assert.equal(f.calls('labels.remove').length, 1);
-  assert.match(f.state.comments[0].body, /has finished/);
+  assert.equal(f.state.runs[0].status, 'queued', 'release does not wait for tests');
+  await f.reconcile(night);
+  f.state.runs[0].status = 'completed';
+  f.state.runs[0].conclusion = 'success';
+  f.state.jobs = admitted;
+  const inspections = f.calls('jobs.list').length;
+  await f.reconcile(night);
+  assert.equal(f.calls('jobs.list').length, inspections, 'successful tests are not inspected');
+  assert.equal(f.state.comments.length, 2);
+  assert.equal(f.state.comments[0].body, deferred);
+  assert.match(f.state.comments[1].body, /Released postponed CI/);
+  assert.doesNotMatch(f.state.comments[1].body, /override|finished|results|pending/);
+  assert.equal(f.calls('comments.update').length, 0);
+});
+
+test('release API errors do not create comments or clear the hold', async () => {
+  const f = fixture();
+  await f.reconcile();
+  const before = structuredClone(f.state.comments);
+  f.github.rest.actions.reRunWorkflow = async () => { throw new Error('API unavailable'); };
+  await assert.rejects(f.reconcile(night), /API unavailable/);
+  assert.deepEqual(f.state.comments, before);
+  assert.equal(f.state.statuses[0].state, 'pending');
+});
+
+test('a partial release logs the action and keeps unreleased work pending', async () => {
+  const f = fixture({ runs: [{ ...run }, { ...run, id: 101, path: workflows[1] }] });
+  const rerun = f.github.rest.actions.reRunWorkflow;
+  f.github.rest.actions.reRunWorkflow = async args => {
+    if (args.run_id === 101) throw new Error('API unavailable');
+    return rerun(args);
+  };
+  await assert.rejects(f.reconcile(night), /API unavailable/);
+  assert.equal(f.state.statuses[0].state, 'pending');
+  assert.equal(f.state.comments.length, 1);
+  assert.match(f.state.comments[0].body, /Released postponed CI/);
+  f.github.rest.actions.reRunWorkflow = rerun;
+  await f.reconcile(night);
+  assert.equal(f.state.statuses[0].state, 'success');
+  assert.equal(f.state.comments.length, 1, 'late releases in the same episode do not spam');
 });
 
 test('removing the after-hours label releases daytime CI without a new commit', async () => {
@@ -242,7 +266,7 @@ test('removing the after-hours label releases daytime CI without a new commit', 
   f.state.pr.labels = [{ name: LABEL }];
   await f.reconcile();
   assert.equal(f.calls('runs.rerun').length, 1);
-  assert.equal(f.state.statuses[0].state, 'pending');
+  assert.equal(f.state.statuses[0].state, 'success');
 });
 
 test('an approving review automatically releases review-only deferrals during the day', async () => {
@@ -254,7 +278,7 @@ test('an approving review automatically releases review-only deferrals during th
   f.state.reviews = [review(1, 'APPROVED')];
   await f.reconcile();
   assert.equal(f.calls('runs.rerun').length, 1);
-  // Decisions about admission are cached; live approval state is not.
+  // Approval is read again on release.
   assert.ok(f.calls('reviews.list').length >= 2);
 });
 
@@ -330,7 +354,7 @@ test('does not retry failed tests or change which individual checks are required
   await f.reconcile(night);
   assert.equal(f.state.statuses[0].state, 'success');
   assert.equal(f.state.runs[0].conclusion, 'failure');
-  assert.match(f.state.statuses[0].description, /individual checks/);
+  assert.equal(f.state.comments.length, 0);
   assert.equal(f.calls('runs.rerun').length, 0);
 });
 
@@ -341,6 +365,7 @@ test('gate errors fail closed even on ordinary urgent PRs', async () => {
   await f.reconcile();
   assert.equal(f.state.statuses[0].state, 'failure');
   assert.equal(f.calls('runs.rerun').length, 0);
+  assert.equal(f.state.comments.length, 0);
 });
 
 test('closed PRs and old revisions are never released', async () => {
@@ -350,7 +375,7 @@ test('closed PRs and old revisions are never released', async () => {
   const old = fixture({ runs: [{ ...run, head_sha: 'old' }] });
   await old.reconcile(night);
   assert.equal(old.calls('runs.rerun').length, 0);
-  assert.equal(old.state.statuses[0].state, 'pending');
+  assert.equal(old.state.statuses[0].state, 'success');
 });
 
 test('only the newest run per workflow and the matching PR repository is eligible', () => {
@@ -385,7 +410,7 @@ test('a partial release failure remains pending and can recover on the next time
   f.github.rest.actions.reRunWorkflow = async () => { throw new Error('API unavailable'); };
   await assert.rejects(f.reconcile(night), /API unavailable/);
   assert.equal(f.state.statuses[0].state, 'pending');
-  assert.match(f.state.comments[0].body, /could not be released/);
+  assert.equal(f.state.comments.length, 0);
   f.github.rest.actions.reRunWorkflow = rerun;
   await f.reconcile(night);
   assert.equal(f.calls('runs.rerun').length, 1);
@@ -456,6 +481,8 @@ test('every PR workflow is registered and every test job depends on admission', 
     assert.ok(scheduler.includes(action), `Missing PR activity: ${action}`);
   }
   assert.ok(scheduler.includes('"Notify CI review"'));
+  assert.match(scheduler, /github.event.workflow_run.conclusion != 'success'/);
+  assert.match(scheduler, /github.event.workflow_run.event == 'pull_request_review'/);
   const notification = readFileSync(join(dir, 'ci-review-notification.yaml'), 'utf8');
   assert.match(notification, /pull_request_review:/);
   assert.match(notification, /types: \[submitted, edited, dismissed\]/);
@@ -477,17 +504,12 @@ test('the scheduler can manage PR labels and comments even when repository issue
   assert.match(permissions, /^      issues: write$/m);
 });
 
-test('all deferred suites must finish before the scheduling barrier clears', async () => {
+test('releasing all deferred suites clears the barrier before tests start', async () => {
   const f = fixture({ runs: [{ ...run }, { ...run, id: 101, path: workflows[1] }] });
   await f.reconcile(night);
   assert.equal(f.calls('runs.rerun').length, 2);
-  f.state.runs[0].status = 'completed';
-  f.state.jobs = admitted;
-  await f.reconcile(night);
-  assert.equal(f.state.statuses[0].state, 'pending');
-  f.state.runs[1].status = 'completed';
-  await f.reconcile(night);
   assert.equal(f.state.statuses[0].state, 'success');
+  assert.ok(f.state.runs.every(run => run.status === 'queued'));
 });
 
 test('labeled PRs stay pending while admission jobs are queued', async () => {
@@ -497,7 +519,7 @@ test('labeled PRs stay pending while admission jobs are queued', async () => {
   assert.equal(f.calls('runs.rerun').length, 0);
 });
 
-test('a manually repeated deferral invalidates only that attempt in the cache', async () => {
+test('a manually repeated deferral does not duplicate its event comment', async () => {
   const f = fixture();
   await f.reconcile();
   f.state.runs[0].run_attempt++;
@@ -506,23 +528,27 @@ test('a manually repeated deferral invalidates only that attempt in the cache', 
   assert.equal(f.calls('comments.create').length, 1);
 });
 
-test('does not read another user’s lookalike scheduling comment as a cache', async () => {
+test("another user's lookalike event cannot suppress a deferral comment", async () => {
   const f = fixture({ comments: [{ id: 7, user: { login: 'contributor' },
-    body: '<!-- dolt-ci-scheduling -->\nForged\n<!-- dolt-ci-state {"sha":"head","runs":{"100:1":"admitted"}} -->' }] });
+    body: '<!-- dolt-ci-scheduling -->\nForged\n<!-- dolt-ci-event {"sha":"head","event":"deferred"} -->' }] });
   await f.reconcile();
   assert.equal(f.state.statuses[0].state, 'pending');
   assert.equal(f.calls('comments.create').length, 1);
   assert.equal(f.calls('comments.update').length, 0);
 });
 
-test('an invalid comment cache is rebuilt from live workflow attempts', async () => {
-  const f = fixture({ comments: [{ id: 7, user: { login: 'github-actions[bot]' },
-    body: '<!-- dolt-ci-scheduling -->\nWaiting\n<!-- dolt-ci-state invalid -->' }] });
+test('later deferrals and new revisions append events while preserving history', async () => {
+  const f = fixture();
   await f.reconcile();
-  assert.equal(f.state.statuses[0].state, 'pending');
-  assert.equal(f.calls('jobs.list').length, 1);
-  assert.equal(f.calls('comments.create').length, 0);
-  assert.equal(f.calls('comments.update').length, 1);
+  await f.reconcile(night);
+  f.state.runs[0].status = 'completed';
+  await f.reconcile();
+  assert.equal(f.state.comments.length, 3);
+  f.state.pr.head.sha = 'new-head';
+  f.state.runs[0].head_sha = 'new-head';
+  await f.reconcile();
+  assert.equal(f.state.comments.length, 4);
+  assert.equal(f.calls('comments.update').length, 0);
 });
 
 test('creates the queue label and tolerates another PR creating it concurrently', async () => {
@@ -546,13 +572,14 @@ test('a canceled run that never started admission cannot clear the barrier', asy
   await f.reconcile(night);
   assert.equal(f.state.statuses[0].state, 'failure');
   assert.equal(f.calls('runs.rerun').length, 0);
+  assert.equal(f.state.comments.length, 0);
 });
 
-test('a successful run without the required admission job cannot clear the barrier', async () => {
-  const f = fixture({ jobs: [] });
-  await f.reconcile(night);
-  assert.equal(f.state.statuses[0].state, 'failure');
-  assert.equal(f.calls('runs.rerun').length, 0);
+test('successful workflow completions do not trigger reconciliation', async () => {
+  const f = fixture();
+  assert.deepEqual(await candidates({ github: f.github, context: { ...context,
+    eventName: 'workflow_run', payload: { workflow_run: { ...run, conclusion: 'success' } } } }), []);
+  assert.equal(f.calls('pulls.list').length, 0);
 });
 
 test('re-running only failed tests checks inline admission on that attempt', async () => {
@@ -563,4 +590,13 @@ test('re-running only failed tests checks inline admission on that attempt', asy
   assert.equal(f.state.statuses[0].state, 'success');
   assert.equal(f.calls('jobs.all').length, 0);
   assert.equal(f.calls('runs.rerun').length, 0);
+});
+
+test('released work is not held again just because the time window closes', async () => {
+  const f = fixture();
+  await f.reconcile(night);
+  await f.reconcile(day);
+  assert.equal(f.state.statuses[0].state, 'success');
+  assert.equal(f.state.comments.length, 1);
+  assert.match(f.state.comments[0].body, /Released/);
 });

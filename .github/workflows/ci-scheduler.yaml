@@ -62,7 +62,11 @@ jobs:
             const { cancelDeferredRun } = require('./.github/scripts/ci-scheduling');
             await cancelDeferredRun({ github, context });
   candidates:
-    if: github.event_name != 'workflow_run' || github.event.action != 'in_progress'
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.action != 'in_progress' &&
+       (github.event.workflow_run.event == 'pull_request_review' ||
+        github.event.workflow_run.conclusion != 'success'))
     runs-on: ubuntu-22.04
     timeout-minutes: 5
     permissions:

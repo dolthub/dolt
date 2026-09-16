@@ -69,10 +69,10 @@ Sources: [GitHub CLI creation and metadata calls](https://github.com/cli/cli/blo
   or tests. Deferred workflows are canceled, freeing those runners until release.
   Matrix members can each briefly allocate a runner; there is no separate
   admission job or admission check.
-- One bot comment explains the outstanding conditions and the exact label changes
-  that override each applicable hold. Release and error updates retain these
-  instructions.
-  The separate `ci-deferred` label tracks postponed work until its CI finishes.
+- A new bot comment records each deferral, including its conditions and overrides,
+  and another records release. Existing comments are never edited. Repeated
+  notifications for the same event and revision do not add duplicate comments.
+  The separate `ci-deferred` label tracks postponed work until release.
   The scheduler manages this queue label; users choose the two `defer-ci-*` labels.
 - Label additions/removals and draft-ready transitions trigger reconciliation.
   An approval triggers a small read-only review-notification workflow; its
@@ -136,11 +136,11 @@ dispatches, releases, and nightly workflows) retain their previous behavior.
    the draft override, and fork PRs. GitHub's normal fork approval requirements
    remain in force; polling is a fallback if a review notification awaits approval.
 
-The scheduling status remains pending until all participating workflows finish
-without deferred or failed admission. Individual CI checks still determine test
-results and mergeability, preserving which test suites are required or optional.
-Admission errors fail the scheduling status. Failed tests are not automatically
-retried; use their original workflow controls.
+The scheduling status remains pending while work is postponed and clears when
+the scheduler releases it, without waiting for tests to finish. Individual CI
+checks determine test results and mergeability. Admission errors fail the
+scheduling status; errors appear in scheduler logs, not PR comments. Failed tests
+are not automatically retried; use their original workflow controls.
 
 ## Implementation and limits
 
@@ -192,9 +192,11 @@ retried; use their original workflow controls.
   decisions, time, run state, and attempt. It does not release obsolete commits.
 - A per-PR concurrency group serializes event and timer reconciliation. Polling
   recovers invocations replaced in GitHub's single pending concurrency slot.
-- The bot comment caches completed admission decisions by commit, run, and attempt
-  to avoid repeatedly fetching jobs. Live labels and reviews are never cached.
-  Only the bot's own comment is read; a missing or damaged cache is rebuilt.
+- Event comments contain only a hidden revision and event identifier for
+  deduplication. No workflow results are cached in comments. Successful test
+  completions do not trigger reconciliation; unsuccessful attempts are inspected
+  only to identify deferrals or admission errors. The scheduler never reports
+  test completion.
 - The trusted controller never executes PR code or downloads PR artifacts.
 - Register each independent PR workflow in `workflows.json` and the scheduler's
   subscriptions. Every job must start with the shared action; only failure/always
@@ -204,8 +206,8 @@ retried; use their original workflow controls.
 GitHub permits reruns for **30 days after the original run**, up to **50 attempts**.
 This also limits how long draft/review deferrals can be automatically released
 using the original runs. If a review takes longer, or the rerun limit is exhausted,
-the controller leaves CI pending and comments with recovery instructions: push a
-new commit to create fresh PR runs. Two PR reconciliations may run concurrently
+the controller leaves CI pending and records the API error in its workflow log.
+Push a new commit to create fresh PR runs. Two PR reconciliations may run concurrently
 per scheduler invocation; this does not reserve organization-wide runner capacity.
 
 ## Tests

@@ -131,6 +131,7 @@ async function candidates({ github, context, pullNumber, now, timezone = DEFAULT
   if (context.eventName === 'workflow_run') {
     const run = context.payload.workflow_run;
     if (!['pull_request', 'pull_request_review'].includes(run.event)) return [];
+    if (run.event === 'pull_request' && run.conclusion === 'success') return [];
     // GitHub can omit pull_requests for fork runs. Match the repository and head too.
     const prs = await github.paginate(github.rest.pulls.list, { ...context.repo,
       state: 'open', per_page: 100 });
@@ -157,7 +158,7 @@ async function reconcile({ github, context, pullNumber, now = new Date(), timezo
   const { data: pr } = await github.rest.pulls.get({ ...repo, pull_number: pullNumber });
   if (pr.state !== 'open') return;
   const sha = pr.head.sha;
-  const tracked = hasLabel(pr, LABEL);
+  let tracked = hasLabel(pr, LABEL);
   const statuses = await github.paginate(github.rest.repos.listCommitStatusesForRef,
     { ...repo, ref: sha, per_page: 100 });
   const previous = statuses.find(status => status.context === STATUS);
@@ -169,42 +170,19 @@ async function reconcile({ github, context, pullNumber, now = new Date(), timezo
     await github.rest.repos.createCommitStatus({ ...repo, sha, context: STATUS, state, description,
       target_url: `${context.serverUrl}/${repo.owner}/${repo.repo}/actions/workflows/ci-scheduler.yaml` });
   };
-  let existingComment;
-  let commentsLoaded = false;
-  let message;
-  let cache = { sha, runs: {} };
-  let cacheChanged = false;
-  const loadComment = async () => {
-    if (commentsLoaded) return;
-    commentsLoaded = true;
+  const comment = async (event, text) => {
     const comments = await github.paginate(github.rest.issues.listComments,
       { ...repo, issue_number: pullNumber, per_page: 100 });
-    existingComment = comments.find(c => c.user?.login === 'github-actions[bot]' && c.body?.startsWith(COMMENT));
-    const saved = existingComment?.body.match(/<!-- dolt-ci-state (.+) -->/);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved[1]);
-        if (parsed.sha === sha && parsed.runs && typeof parsed.runs === 'object') cache = parsed;
-      } catch { /* A missing or damaged cache is rebuilt from the Actions API. */ }
-    }
-  };
-  const comment = async text => {
-    await loadComment();
-    // Preserve actionable overrides when release progress or errors replace the
-    // waiting message in the same bot comment.
-    message = text + overrideInstructions(pr);
-  };
-  const saveComment = async () => {
-    if (!message && !(existingComment && cacheChanged)) return;
-    // The cache avoids re-fetching every completed job for every workflow_run event.
-    // Only our own bot's comment is read, and IDs/attempts still come from the live API.
-    const text = message || existingComment.body.split('\n<!-- dolt-ci-state ')[0].slice(COMMENT.length + 1);
-    const body = `${COMMENT}\n${text}\n<!-- dolt-ci-state ${JSON.stringify(cache)} -->`;
-    if (existingComment && existingComment.body !== body) {
-      await github.rest.issues.updateComment({ ...repo, comment_id: existingComment.id, body });
-    } else if (!existingComment) {
-      await github.rest.issues.createComment({ ...repo, issue_number: pullNumber, body });
-    }
+    // Deduplicate repeated events for this revision without editing the event log.
+    // This marker stores only the event identity, never workflow results.
+    const events = comments.filter(c => c.user?.login === 'github-actions[bot]' &&
+      c.body?.startsWith(COMMENT)).flatMap(c => {
+      const saved = c.body.match(/<!-- dolt-ci-event (.+) -->/);
+      try { return saved ? [JSON.parse(saved[1])] : []; } catch { return []; }
+    }).filter(entry => entry.sha === sha);
+    if (events.at(-1)?.event === event) return;
+    await github.rest.issues.createComment({ ...repo, issue_number: pullNumber,
+      body: `${COMMENT}\n${text}\n<!-- dolt-ci-event ${JSON.stringify({ sha, event })} -->` });
   };
   const track = async () => {
     if (tracked) return;
@@ -214,60 +192,47 @@ async function reconcile({ github, context, pullNumber, now = new Date(), timezo
       if (error.status !== 404) throw error;
       try {
         await github.rest.issues.createLabel({ ...repo, name: LABEL, color: 'd4c5f9',
-          description: 'CI postponed or running after postponement' });
+          description: 'CI postponed pending release' });
       } catch (error) {
         // Another PR may have created the repository label concurrently.
         if (error.status !== 422) throw error;
       }
     }
     await github.rest.issues.addLabels({ ...repo, issue_number: pullNumber, labels: [LABEL] });
+    tracked = true;
   };
 
-  try {
-    if (tracked || hasDeferral(pr) || previous?.state === 'pending') await loadComment();
-    const runs = latestRuns(await github.paginate(github.rest.actions.listWorkflowRunsForRepo,
-      { ...repo, event: 'pull_request', head_sha: sha, per_page: 100 }), pr);
-    const deferred = [];
-    let admissionFailed = false;
-    const currentCache = {};
-    for (const run of runs) {
-      if (run.status !== 'completed') continue;
-      // Ordinary PRs have no comment cache. On completion, inspect the triggering
-      // run (and any failures) instead of repeatedly inspecting all successful runs.
-      if (context.eventName === 'workflow_run' && !tracked && !hasDeferral(pr) &&
-          previous?.state !== 'pending' && run.conclusion === 'success' &&
-          run.id !== context.payload.workflow_run.id) continue;
-      const key = `${run.id}:${run.run_attempt}`;
-      let decision = cache.runs[key];
-      if (!['deferred', 'admitted', 'failed'].includes(decision)) {
-        const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt,
-          { ...repo, run_id: run.id, attempt_number: run.run_attempt, per_page: 100 });
-        decision = await readDecision({ github, repo, run, jobs });
-        cacheChanged = true;
-      }
-      currentCache[key] = decision;
-      if (decision === 'failed') admissionFailed = true;
-      if (decision === 'deferred') deferred.push(run);
-    }
-    cache.runs = currentCache;
-
-    if (admissionFailed) {
+  const runs = latestRuns(await github.paginate(github.rest.actions.listWorkflowRunsForRepo,
+    { ...repo, event: 'pull_request', head_sha: sha, per_page: 100 }), pr);
+  const deferred = [];
+  for (const run of runs) {
+    // Inspect unsuccessful attempts only to distinguish canceled deferrals from
+    // admission errors and ordinary test failures. Never monitor test completion.
+    if (run.status !== 'completed' || run.conclusion === 'success') continue;
+    const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt,
+      { ...repo, run_id: run.id, attempt_number: run.run_attempt, per_page: 100 });
+    const decision = await readDecision({ github, repo, run, jobs });
+    if (decision === 'failed') {
       await status('failure', 'CI admission failed; inspect and re-run the original workflows');
-      await track();
-      await comment('CI admission failed. Inspect and re-run the original CI workflows.');
       return;
     }
+    if (decision === 'deferred') deferred.push(run);
+  }
 
-    // Initialize the pending status before path-filtered CI workflows have appeared.
-    const reasons = await deferralReasons({ github, repo, pr, now, timezone });
-    const waiting = deferred.length > 0 || (runs.length === 0 && reasons.length > 0);
-    if (waiting) {
-      await status('pending', 'CI postponed; waiting for admission and test results');
-      await track();
-      await comment(waitingMessage(reasons, timezone));
-      let released = 0;
+  const reasons = await deferralReasons({ github, repo, pr, now, timezone });
+  if (deferred.length > 0 || (reasons.length > 0 &&
+      (runs.length === 0 || (previous?.state !== 'success' &&
+        runs.some(run => run.status !== 'completed'))))) {
+    await status('pending', 'CI postponed; waiting for release');
+    await track();
+    if (reasons.length > 0) {
+      await comment('deferred', waitingMessage(reasons, timezone) + overrideInstructions(pr));
+      return;
+    }
+    let released = 0;
+    try {
       for (const run of deferred) {
-        // Recheck at each admission: edits, pushes, and the 5am boundary can race this loop.
+        // Recheck at each release: edits, pushes, and the 5am boundary can race this loop.
         const { data: current } = await github.rest.pulls.get({ ...repo, pull_number: pullNumber });
         if (current.state !== 'open' || current.head.sha !== sha) break;
         const blockers = await deferralReasons({ github, repo, pr: current,
@@ -275,38 +240,20 @@ async function reconcile({ github, context, pullNumber, now = new Date(), timezo
         if (blockers.length > 0) break;
         const { data: fresh } = await github.rest.actions.getWorkflowRun({ ...repo, run_id: run.id });
         if (fresh.status !== 'completed' || fresh.run_attempt !== run.run_attempt) continue;
-        // Re-runs preserve the original PR checks, merge ref, and fork permission restrictions.
-        try {
-          await github.rest.actions.reRunWorkflow({ ...repo, run_id: run.id });
-          released++;
-        } catch (error) {
-          await comment(`CI could not be released for [workflow run ${run.id}](${run.html_url}). ` +
-            `Inspect **Schedule PR CI** for the API error. GitHub limits re-runs to 30 days and 50 attempts; ` +
-            `if that limit was reached, push a new commit to create fresh PR workflows.`);
-          throw error;
-        }
+        // Re-runs preserve the original PR checks, merge ref, and fork permissions.
+        // API errors remain in the scheduler logs, not the PR's event log.
+        await github.rest.actions.reRunWorkflow({ ...repo, run_id: run.id });
+        released++;
       }
-      if (released > 0) await comment(`Released ${released} postponed CI workflow(s) for the current PR revision. ` +
-        `The original workflow runs show progress; **CI scheduling** stays pending until CI completes.`);
-      return;
+    } finally {
+      if (released > 0) await comment('released', 'Released postponed CI for this PR revision.');
     }
-    if (tracked || previous?.state === 'pending' || hasDeferral(pr)) {
-      if (runs.length === 0 || runs.some(run => run.status !== 'completed')) {
-        await status('pending', 'Waiting for CI admission and test results');
-        await track();
-        return;
-      }
-      // CI scheduling is an admission barrier, not a replacement for the existing
-      // required test checks. Optional test failures must not become mandatory.
-      await status('success', 'Postponed CI finished; see individual checks for results');
-      await comment('Postponed CI has finished for the current PR revision. ' +
-        'See the individual workflow checks for test results; failed tests are not automatically retried.');
-      if (tracked) await github.rest.issues.removeLabel({ ...repo, issue_number: pullNumber, name: LABEL });
-    } else {
-      await status('success', 'CI is not postponed');
-    }
-  } finally {
-    await saveComment();
+    if (released !== deferred.length) return;
+  }
+  // Admission ends at release. Existing required checks own all test results.
+  await status('success', 'CI is not postponed');
+  if (tracked) {
+    await github.rest.issues.removeLabel({ ...repo, issue_number: pullNumber, name: LABEL });
   }
 }
 
