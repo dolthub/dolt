@@ -320,7 +320,7 @@ func conjoinTables(ctx context.Context, behavior dherrors.FatalBehavior, conjoin
 			continue
 		}
 		eg.Go(func() (err error) {
-			toConjoin[i], err = p.Open(ectx, spec.name, spec.chunkCount, stats)
+			toConjoin[i], err = p.Open(ectx, spec.name, spec.chunkCount, openOpts{}, stats)
 			return
 		})
 	}
