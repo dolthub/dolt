@@ -123,12 +123,22 @@ type NomsBlockStore struct {
 	putCount   uint64
 	memtableSz uint64
 
-	// When unlocked read operations are occurring against the
-	// block store, and they started when |gcInProgress == true|,
-	// this variable is incremented. EndGC will not return until
-	// no outstanding reads are in progress.
-	gcOutstandingReads int
-	mu                 sync.RWMutex // protects the current nbs state
+	// Incremented for the duration of every unlocked read operation
+	// against the block store, that is, every read which samples
+	// |keeperFunc| and then runs against a table set with |mu|
+	// released. BeginGC will not install its keeper, and EndGC will not
+	// return, while any of these are in progress.
+	outstandingReads int
+
+	// Set while BeginGC is waiting for |outstandingReads| to drain so
+	// that it can install its keeper. New reads block rather than start
+	// while this is set, which is what stops the drain from being
+	// starved under a steady read load, and what makes the install a
+	// barrier: once BeginGC returns, every read which can still observe
+	// the store has sampled the new keeper.
+	gcInstallPending bool
+
+	mu sync.RWMutex // protects the current nbs state
 
 	// |true| after BeginGC is called, and false once the corresponding EndGC call returns.
 	gcInProgress bool
@@ -273,9 +283,14 @@ func (nbs *NomsBlockStore) getChunkLocations(ctx context.Context, hashes hash.Ha
 			nbs.mu.Unlock()
 			return nil, errors.New("*NomsBlockStore is closed")
 		}
+		keeper, endRead, cycle, err := nbs.beginRead(ctx)
+		if err != nil {
+			nbs.mu.Unlock()
+			return nil, err
+		}
+		behavior := nbs.fatalBehavior
 		tables = nbs.tables
 		tables.acquire()
-		keeper, endRead, behavior, cycle := nbs.keeperFunc, nbs.beginRead(), nbs.fatalBehavior, nbs.gcCycleCounter
 		nbs.mu.Unlock()
 
 		gr := toGetRecords(hashes)
@@ -323,24 +338,20 @@ func (nbs *NomsBlockStore) GetChunkLocations(ctx context.Context, hashes hash.Ha
 func (nbs *NomsBlockStore) handleUnlockedRead(ctx context.Context, gcb gcBehavior, endReadOnSuccess bool, endRead func(), tables *tableSet, cycle uint64, err error) (bool, *tableSet, error) {
 	if err != nil {
 		tables.release()
-		if endRead != nil {
-			nbs.mu.Lock()
-			endRead()
-			nbs.mu.Unlock()
-		}
+		nbs.mu.Lock()
+		endRead()
+		nbs.mu.Unlock()
 		return false, nil, err
 	}
 	if gcb == gcBehavior_Block {
 		tables.release()
 		nbs.mu.Lock()
-		if endRead != nil {
-			endRead()
-		}
+		endRead()
 		err := nbs.waitForGC(ctx, cycle)
 		nbs.mu.Unlock()
 		return true, nil, err
 	} else {
-		if endRead != nil && endReadOnSuccess {
+		if endReadOnSuccess {
 			tables.release()
 			nbs.mu.Lock()
 			endRead()
@@ -1149,7 +1160,11 @@ func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 				return chunks.NewChunkWithHash(h, data), nil
 			}
 		}
-		keeper, endRead, cycle := nbs.keeperFunc, nbs.beginRead(), nbs.gcCycleCounter
+		keeper, endRead, cycle, err := nbs.beginRead(ctx)
+		if err != nil {
+			nbs.mu.Unlock()
+			return chunks.EmptyChunk, err
+		}
 		tables = nbs.tables
 		tables.acquire()
 		nbs.mu.Unlock()
@@ -1234,12 +1249,14 @@ func (nbs *NomsBlockStore) getManyWithFunc(
 			nbs.mu.Unlock()
 			return errors.New("*NomsBlockStore is closed")
 		}
-		keeper := nbs.keeperFunc
-		cycle := nbs.gcCycleCounter
-		if gcDepMode == gcDependencyMode_NoDependency {
-			keeper = nil
-		}
 		if nbs.memtable != nil {
+			// The memtable is read with |nbs.mu| held, so it samples
+			// the keeper itself rather than taking one from beginRead.
+			keeper := nbs.keeperFunc
+			cycle := nbs.gcCycleCounter
+			if gcDepMode == gcDependencyMode_NoDependency {
+				keeper = nil
+			}
 			// nbs.mt does not use the errgroup parameter, which we pass at |nil| here.
 			remaining, gcb, err := getManyFunc(ctx, nbs.memtable, nil, reqs, keeper, nbs.stats)
 			if err != nil {
@@ -1259,9 +1276,16 @@ func (nbs *NomsBlockStore) getManyWithFunc(
 				return nil
 			}
 		}
+		keeper, endRead, cycle, err := nbs.beginRead(ctx)
+		if err != nil {
+			nbs.mu.Unlock()
+			return err
+		}
+		if gcDepMode == gcDependencyMode_NoDependency {
+			keeper = nil
+		}
 		tables = nbs.tables
 		tables.acquire()
-		endRead := nbs.beginRead()
 		nbs.mu.Unlock()
 
 		gcb, err := func() (gcBehavior, error) {
@@ -1357,7 +1381,11 @@ func (nbs *NomsBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 				return true, nil
 			}
 		}
-		keeper, endRead, cycle := nbs.keeperFunc, nbs.beginRead(), nbs.gcCycleCounter
+		keeper, endRead, cycle, err := nbs.beginRead(ctx)
+		if err != nil {
+			nbs.mu.Unlock()
+			return false, err
+		}
 		tables = nbs.tables
 		tables.acquire()
 		nbs.mu.Unlock()
@@ -1409,9 +1437,11 @@ func (nbs *NomsBlockStore) hasManyDep(ctx context.Context, hashes hash.HashSet, 
 			nbs.mu.Unlock()
 			return nil, errors.New("*NomsBlockStore is closed")
 		}
-		cycle := nbs.gcCycleCounter
 		if nbs.memtable != nil {
+			// The memtable is read with |nbs.mu| held, so it samples
+			// the keeper itself rather than taking one from beginRead.
 			keeper := nbs.keeperFunc
+			cycle := nbs.gcCycleCounter
 			if gcDepMode == gcDependencyMode_NoDependency {
 				keeper = nil
 			}
@@ -1433,7 +1463,11 @@ func (nbs *NomsBlockStore) hasManyDep(ctx context.Context, hashes hash.HashSet, 
 				return hash.HashSet{}, nil
 			}
 		}
-		keeper, endRead := nbs.keeperFunc, nbs.beginRead()
+		keeper, endRead, cycle, err := nbs.beginRead(ctx)
+		if err != nil {
+			nbs.mu.Unlock()
+			return nil, err
+		}
 		if gcDepMode == gcDependencyMode_NoDependency {
 			keeper = nil
 		}
@@ -2251,11 +2285,11 @@ func (nbs *NomsBlockStore) BeginGC(ctx context.Context, keeper func(hash.Hash) b
 	}
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
-	return nbs.lockedBeginGC(keeper)
+	return nbs.lockedBeginGC(ctx, keeper)
 }
 
 // lockedBeginGC performs the work of BeginGC with nbs.mu already held.
-func (nbs *NomsBlockStore) lockedBeginGC(keeper func(hash.Hash) bool) error {
+func (nbs *NomsBlockStore) lockedBeginGC(ctx context.Context, keeper func(hash.Hash) bool) error {
 	// Block until there is no ongoing conjoin...
 	for nbs.conjoinOp != nil {
 		nbs.conjoinOpCond.Wait()
@@ -2285,11 +2319,31 @@ func (nbs *NomsBlockStore) lockedBeginGC(keeper func(hash.Hash) bool) error {
 	// table file and swap to it. In such a case, conjoin is
 	// likely to be wasted work anyway. Most table files are about
 	// to be deleted.
+	//
+	// This must happen before we drop |nbs.mu| to drain readers below,
+	// or a new conjoin could start while we are waiting.
 	nbs.DisableConjoin()
+
+	// Installing the keeper has to be a barrier. A read samples the
+	// keeper under |nbs.mu| and then runs against a table set with the
+	// lock released, so a read which started before this point would
+	// otherwise finish after it having taken no read dependency on the
+	// chunks it handed to the application, leaving the GC free to
+	// collect them. Take priority over new reads and wait for the ones
+	// already running, so that afterwards every read which can still
+	// observe the store observes |keeper|.
+	nbs.gcInstallPending = true
+	if err := nbs.drainOutstandingReads(ctx); err != nil {
+		nbs.gcInstallPending = false
+		nbs.RestoreDefaultConjoinBehavior()
+		nbs.gcCond.Broadcast()
+		return err
+	}
 
 	nbs.gcInProgress = true
 	nbs.gcCycleCounter++
 	nbs.keeperFunc = keeper
+	nbs.gcInstallPending = false
 	nbs.gcCond.Broadcast()
 	return nil
 }
@@ -2305,7 +2359,7 @@ func (nbs *NomsBlockStore) lockedEndGC() {
 	if !nbs.gcInProgress {
 		panic("EndGC called when gc was not in progress")
 	}
-	for nbs.gcOutstandingReads > 0 {
+	for nbs.outstandingReads > 0 {
 		nbs.gcCond.Wait()
 	}
 	nbs.RestoreDefaultConjoinBehavior()
@@ -2314,26 +2368,78 @@ func (nbs *NomsBlockStore) lockedEndGC() {
 	nbs.gcCond.Broadcast()
 }
 
-// beginRead() is called with |nbs.mu| held. It signals an ongoing
-// read operation which will be operating against the existing table
-// files without |nbs.mu| held. The read should be bracket with a call
-// to the returned |endRead|, which must be called with |nbs.mu| held
-// if it is non-|nil|, and should not be called otherwise.
+// beginRead is called with |nbs.mu| held, immediately before the caller
+// releases the lock and reads against a table set it took from the
+// store.
 //
-// If there is an ongoing GC operation which this call is made, it is
-// guaranteed not to complete until the corresponding |endRead| call.
-func (nbs *NomsBlockStore) beginRead() (endRead func()) {
-	if nbs.gcInProgress {
-		nbs.gcOutstandingReads += 1
-		return func() {
-			nbs.gcOutstandingReads -= 1
-			if nbs.gcOutstandingReads < 0 {
-				panic("impossible")
-			}
-			nbs.gcCond.Broadcast()
-		}
+// It first blocks for any GC which is waiting to install its keeper,
+// releasing |nbs.mu| while it blocks. It then registers the read and
+// returns the |keeper| and GC |cycle| the read must use. Sampling those
+// here, rather than at the call site, is what guarantees they cannot be
+// replaced between being read and the read being registered: the caller
+// must not release |nbs.mu| in between.
+//
+// The read must be bracketed by a call to the returned |endRead|, which
+// must be called with |nbs.mu| held. A GC which is in progress when
+// this returns is guaranteed not to finish, and a GC which has not
+// started is guaranteed not to install its keeper, until then.
+func (nbs *NomsBlockStore) beginRead(ctx context.Context) (keeper keeperF, endRead func(), cycle uint64, err error) {
+	if err := nbs.waitForGCInstall(ctx); err != nil {
+		return nil, nil, 0, err
 	}
-	return nil
+	nbs.outstandingReads += 1
+	return nbs.keeperFunc, func() {
+		nbs.outstandingReads -= 1
+		if nbs.outstandingReads < 0 {
+			panic("impossible")
+		}
+		nbs.gcCond.Broadcast()
+	}, nbs.gcCycleCounter, nil
+}
+
+// waitForGCInstall blocks while a GC is waiting to install its keeper.
+// Called with |nbs.mu| held, which it releases while it blocks.
+func (nbs *NomsBlockStore) waitForGCInstall(ctx context.Context) error {
+	if !nbs.gcInstallPending {
+		return nil
+	}
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() {
+		select {
+		case <-ctx.Done():
+			nbs.gcCond.Broadcast()
+		case <-stop:
+		}
+	}()
+	for nbs.gcInstallPending && ctx.Err() == nil {
+		nbs.gcCond.Wait()
+	}
+	return ctx.Err()
+}
+
+// drainOutstandingReads blocks until no unlocked reads are running
+// against a table set they took from this store. Called with |nbs.mu|
+// held, which it releases while it blocks. |nbs.gcInstallPending| must
+// already be set, or a steady read load can keep the count from ever
+// reaching zero.
+func (nbs *NomsBlockStore) drainOutstandingReads(ctx context.Context) error {
+	if nbs.outstandingReads == 0 {
+		return nil
+	}
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() {
+		select {
+		case <-ctx.Done():
+			nbs.gcCond.Broadcast()
+		case <-stop:
+		}
+	}()
+	for nbs.outstandingReads > 0 && ctx.Err() == nil {
+		nbs.gcCond.Wait()
+	}
+	return ctx.Err()
 }
 
 func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, getAddrs chunks.GetAddrs, filter chunks.HasManyFunc, dest chunks.ChunkStore, gcConfig chunks.GCConfig, incrementalUpdateManifest bool) (chunks.MarkAndSweeper, error) {
