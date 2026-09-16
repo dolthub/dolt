@@ -754,24 +754,6 @@ func (db *database) PersistGhostCommitIDs(ctx context.Context, ghosts hash.HashS
 	return err
 }
 
-// AtomicCommitElement contains all the information necessary to update one dataset head as part of an atomic transaction.
-type AtomicCommitElement struct {
-	// CommitDS is the HEAD Dataset to update with a new commit, empty if no HEAD is to be updated.
-	CommitDS Dataset
-	// CommitOpts are the options to use when creating the new commit, empty if no commit is to be created.
-	CommitOpts CommitOptions
-	// WorkingSetDS is the working set Dataset to update with a new working set.
-	WorkingSetDS Dataset
-	// WorkingSet is the new working set to write to the WorkingSetDS.
-	WorkingSet WorkingSetSpec
-	// PrevWsHash is the expected hash of the current working set for the WorkingSetDS.
-	// If the current working set does not match this hash, the update will fail with ErrOptimisticLockFailed.
-	PrevWsHash hash.Hash
-	// RootVal is the root value object to write to the WorkingSetDS
-	// TODO: why not use the one in WorkingSetSpec?
-	RootVal types.Value
-}
-
 type DatasetUpdate interface {
 	// DatasetID returns the ID of the dataset to update
 	DatasetID() string
@@ -860,100 +842,44 @@ func (c CommitUpdate) LockPrevHash() hash.Hash {
 
 var _ DatasetUpdate = &CommitUpdate{}
 
-// AtomicCommit is a slice of AtomicCommitElements to apply in a single atomic operation
-type AtomicCommit []AtomicCommitElement
-
-type pendingAtomicCommit struct {
-	commitRef        types.Ref
-	currCommitDSHash hash.Hash
-	wsAddr           hash.Hash
-}
-
-// CommitAtomic updates N Datasets atomically.
-func (db *database) CommitAtomic(
+// CommitDatasets updates the given Datasets atomically.
+func (db *database) CommitDatasets(
 	ctx context.Context,
-	atomicCommit AtomicCommit,
+	atomicCommit []DatasetUpdate,
 ) ([]Dataset, error) {
-	pending := make([]pendingAtomicCommit, len(atomicCommit))
+	pending := make([]hash.Hash, len(atomicCommit))
 
 	for i, cmt := range atomicCommit {
-		wsAddr, err := newWorkingSet(ctx, db, atomicCommit[i].WorkingSet)
+		newRefHash, err := cmt.BuildCommitValue(ctx, db)
 		if err != nil {
 			return nil, err
 		}
-
-		var commitValRef types.Ref
-		var currCommitDSHash hash.Hash
-
-		if !cmt.CommitDS.IsEmpty() {
-			// Prepend the current head hash to the list of parents if one was provided. This is only necessary if parents were
-			// provided because we fill it in automatically in buildNewCommit otherwise.
-			if len(cmt.CommitOpts.Parents) > 0 && cmt.CommitOpts.AmendedCommit.IsEmpty() && !cmt.CommitOpts.Force {
-				headHash, ok := cmt.CommitDS.MaybeHeadAddr()
-				if ok {
-					if !hasParentHash(cmt.CommitOpts, headHash) {
-						cmt.CommitOpts.Parents = append([]hash.Hash{headHash}, cmt.CommitOpts.Parents...)
-					}
-				}
-			}
-
-			commit, err := db.BuildNewCommit(ctx, cmt.CommitDS, cmt.RootVal, cmt.CommitOpts)
-			if err != nil {
-				return nil, err
-			}
-
-			commitRef, err := db.WriteValue(ctx, commit.NomsValue())
-			if err != nil {
-				return nil, err
-			}
-
-			commitValRef, err = types.ToRefOfValue(commitRef, db.Format())
-			if err != nil {
-				return nil, err
-			}
-
-			currCommitDSHash, _ = cmt.CommitDS.MaybeHeadAddr()
-		}
-
-		pending[i] = pendingAtomicCommit{
-			commitRef:        commitValRef,
-			currCommitDSHash: currCommitDSHash,
-			wsAddr:           wsAddr,
-		}
+		pending[i] = newRefHash
 	}
 
 	currentDatasets, err := db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
 		ae := am.Editor()
 
 		for i := range atomicCommit {
-			workingSetDS := atomicCommit[i].WorkingSetDS
-			prevWsHash := atomicCommit[i].PrevWsHash
-			commitDS := atomicCommit[i].CommitDS
-			currCommitDSHash := pending[i].currCommitDSHash
-			commitValRef := pending[i].commitRef
-			wsAddr := pending[i].wsAddr
-
-			currWS, err := am.Get(ctx, workingSetDS.ID())
+			currHash, err := am.Get(ctx, atomicCommit[i].LockDatasetID())
 			if err != nil {
 				return prolly.AddressMap{}, err
 			}
 
-			if currWS != prevWsHash {
+			if currHash != atomicCommit[i].LockPrevHash() {
 				return prolly.AddressMap{}, ErrOptimisticLockFailed
 			}
-			currDS, err := am.Get(ctx, commitDS.ID())
+
+			currDS, err := am.Get(ctx, atomicCommit[i].DatasetID())
 			if err != nil {
 				return prolly.AddressMap{}, err
 			}
-			if currDS != currCommitDSHash {
+
+			if currDS != pending[i] {
 				return prolly.AddressMap{}, ErrMergeNeeded
 			}
 
-			err = ae.Update(ctx, commitDS.ID(), commitValRef.TargetHash())
-			if err != nil {
-				return prolly.AddressMap{}, err
-			}
-			err = ae.Update(ctx, workingSetDS.ID(), wsAddr)
+			err = ae.Update(ctx, atomicCommit[i].DatasetID(), pending[i])
 			if err != nil {
 				return prolly.AddressMap{}, err
 			}
@@ -966,22 +892,17 @@ func (db *database) CommitAtomic(
 		return nil, err
 	}
 
-	// TODO: come back to this
-	// commitDS, err = db.datasetFromMap(ctx, commitDS.ID(), currentDatasets)
-	// if err != nil {
-	// 	return Dataset{}, Dataset{}, err
-	// }
-	//
-	// workingSetDS, err = db.datasetFromMap(ctx, workingSetDS.ID(), currentDatasets)
-	// if err != nil {
-	// 	return Dataset{}, Dataset{}, err
-	// }
-
 	updatedDatasets := make([]Dataset, len(atomicCommit))
+	dsMap := DatasetsMap(refmapDatasetsMap{currentDatasets})
+	for i := range atomicCommit {
+		updatedDS, err := db.datasetFromMap(ctx, atomicCommit[i].DatasetID(), dsMap)
+		if err != nil {
+			return nil, err
+		}
+		updatedDatasets[i] = updatedDS
+	}
 
-	// TODO(next): return a slice of dataset pairs
-	// TODO(next): investigate workspace-only version of this method for same reason
-	return nil, nil
+	return updatedDatasets, nil
 }
 
 // CommitWithWorkingSet updates two Datasets atomically: the working set, and its corresponding HEAD. Uses the same
