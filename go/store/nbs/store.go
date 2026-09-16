@@ -124,18 +124,16 @@ type NomsBlockStore struct {
 	memtableSz uint64
 
 	// Incremented for the duration of every unlocked read operation
-	// against the block store, that is, every read which samples
-	// |keeperFunc| and then runs against a table set with |mu|
-	// released. BeginGC will not install its keeper, and EndGC will not
-	// return, while any of these are in progress.
+	// against the block store. These reads sample |keeperFunc| and
+	// then run against a table set with |mu| released. BeginGC will
+	// not install a keeper, and EndGC will not return, while any
+	// unlocked read is in progress.
 	outstandingReads int
 
 	// Set while BeginGC is waiting for |outstandingReads| to drain so
 	// that it can install its keeper. New reads block rather than start
-	// while this is set, which is what stops the drain from being
-	// starved under a steady read load, and what makes the install a
-	// barrier: once BeginGC returns, every read which can still observe
-	// the store has sampled the new keeper.
+	// while this is set. This prevents starvation on installing a new
+	// keeper when reads are constantly arriving.
 	gcInstallPending bool
 
 	mu sync.RWMutex // protects the current nbs state
@@ -964,6 +962,20 @@ func (nbs *NomsBlockStore) SetFatalBehavior(behavior dherrors.FatalBehavior) {
 	nbs.fatalBehavior = behavior
 }
 
+// broadcastOnCancel arranges for |nbs.gcCond| to be broadcast if |ctx|
+// is cancelled, so that a waiter parked on the cond wakes up and
+// notices. The broadcast takes |nbs.mu| so that there is no race
+// between a waiter checking its predicate and the eventual call to
+// Wait. The returned func ends the watch and must be called before the
+// waiter returns.
+func (nbs *NomsBlockStore) broadcastOnCancel(ctx context.Context) func() bool {
+	return context.AfterFunc(ctx, func() {
+		nbs.mu.Lock()
+		defer nbs.mu.Unlock()
+		nbs.gcCond.Broadcast()
+	})
+}
+
 // waitForGC blocks until the GC cycle identified by |cycle| completes or
 // a new cycle begins. Called with nbs.mu held. The caller must pass the
 // value of nbs.gcCycleCounter that was current when the keeper rejected
@@ -973,15 +985,7 @@ func (nbs *NomsBlockStore) SetFatalBehavior(behavior dherrors.FatalBehavior) {
 // immediately, allowing the caller to re-evaluate the new cycle's
 // keeper.
 func (nbs *NomsBlockStore) waitForGC(ctx context.Context, cycle uint64) error {
-	stop := make(chan struct{})
-	defer close(stop)
-	go func() {
-		select {
-		case <-ctx.Done():
-			nbs.gcCond.Broadcast()
-		case <-stop:
-		}
-	}()
+	defer nbs.broadcastOnCancel(ctx)()
 	for nbs.gcInProgress && nbs.gcCycleCounter == cycle && ctx.Err() == nil {
 		nbs.gcCond.Wait()
 	}
@@ -1251,7 +1255,7 @@ func (nbs *NomsBlockStore) getManyWithFunc(
 		}
 		if nbs.memtable != nil {
 			// The memtable is read with |nbs.mu| held, so it samples
-			// the keeper itself rather than taking one from beginRead.
+			// the keeper directly and registers no unlocked read.
 			keeper := nbs.keeperFunc
 			cycle := nbs.gcCycleCounter
 			if gcDepMode == gcDependencyMode_NoDependency {
@@ -1439,7 +1443,7 @@ func (nbs *NomsBlockStore) hasManyDep(ctx context.Context, hashes hash.HashSet, 
 		}
 		if nbs.memtable != nil {
 			// The memtable is read with |nbs.mu| held, so it samples
-			// the keeper itself rather than taking one from beginRead.
+			// the keeper directly and registers no unlocked read.
 			keeper := nbs.keeperFunc
 			cycle := nbs.gcCycleCounter
 			if gcDepMode == gcDependencyMode_NoDependency {
@@ -2324,14 +2328,12 @@ func (nbs *NomsBlockStore) lockedBeginGC(ctx context.Context, keeper func(hash.H
 	// or a new conjoin could start while we are waiting.
 	nbs.DisableConjoin()
 
-	// Installing the keeper has to be a barrier. A read samples the
-	// keeper under |nbs.mu| and then runs against a table set with the
-	// lock released, so a read which started before this point would
-	// otherwise finish after it having taken no read dependency on the
-	// chunks it handed to the application, leaving the GC free to
-	// collect them. Take priority over new reads and wait for the ones
-	// already running, so that afterwards every read which can still
-	// observe the store observes |keeper|.
+	// Installing the keeper has to be a barrier. Reads sample the
+	// keeper under |nbs.mu| and then run against a table set with the
+	// lock released. A read which started before BeginGC is called
+	// could otherwise finish after it, and it would have taken no
+	// read dependencies on the chunks it handed to the application,
+	// leaving the GC free to collect them.
 	nbs.gcInstallPending = true
 	if err := nbs.drainOutstandingReads(ctx); err != nil {
 		nbs.gcInstallPending = false
@@ -2370,14 +2372,8 @@ func (nbs *NomsBlockStore) lockedEndGC() {
 
 // beginRead is called with |nbs.mu| held, immediately before the caller
 // releases the lock and reads against a table set it took from the
-// store.
-//
-// It first blocks for any GC which is waiting to install its keeper,
-// releasing |nbs.mu| while it blocks. It then registers the read and
-// returns the |keeper| and GC |cycle| the read must use. Sampling those
-// here, rather than at the call site, is what guarantees they cannot be
-// replaced between being read and the read being registered: the caller
-// must not release |nbs.mu| in between.
+// store. It blocks, releasing |nbs.mu|, for any GC which is waiting to
+// install its keeper.
 //
 // The read must be bracketed by a call to the returned |endRead|, which
 // must be called with |nbs.mu| held. A GC which is in progress when
@@ -2403,15 +2399,7 @@ func (nbs *NomsBlockStore) waitForGCInstall(ctx context.Context) error {
 	if !nbs.gcInstallPending {
 		return nil
 	}
-	stop := make(chan struct{})
-	defer close(stop)
-	go func() {
-		select {
-		case <-ctx.Done():
-			nbs.gcCond.Broadcast()
-		case <-stop:
-		}
-	}()
+	defer nbs.broadcastOnCancel(ctx)()
 	for nbs.gcInstallPending && ctx.Err() == nil {
 		nbs.gcCond.Wait()
 	}
@@ -2427,15 +2415,7 @@ func (nbs *NomsBlockStore) drainOutstandingReads(ctx context.Context) error {
 	if nbs.outstandingReads == 0 {
 		return nil
 	}
-	stop := make(chan struct{})
-	defer close(stop)
-	go func() {
-		select {
-		case <-ctx.Done():
-			nbs.gcCond.Broadcast()
-		case <-stop:
-		}
-	}()
+	defer nbs.broadcastOnCancel(ctx)()
 	for nbs.outstandingReads > 0 && ctx.Err() == nil {
 		nbs.gcCond.Wait()
 	}

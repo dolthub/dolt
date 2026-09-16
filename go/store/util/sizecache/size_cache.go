@@ -50,12 +50,8 @@ type SizeCache struct {
 	// both under mu, so that a value which was fetched from the backing
 	// store before a Purge cannot be cached after it.
 	//
-	// A ValueStore is purged as part of establishing a GC safepoint,
-	// precisely so that everything the application can still reach has
-	// to be read back through the ChunkStore, where a read dependency is
-	// taken on it. A read which was already in flight took no such
-	// dependency, so putting its result back into the cache would hand
-	// out a value the GC is free to collect.
+	// The read which fetched it took no GC read dependency on it, so
+	// caching it would hand out a value the GC is free to collect.
 	gen uint64
 }
 

@@ -49,10 +49,7 @@ func TestNodeCache(t *testing.T) {
 
 	t.Run("InsertAfterPurgeIsDropped", func(t *testing.T) {
 		// A node read from the ChunkStore before a purge must not be
-		// cached after it. This is what keeps a read which was already
-		// in flight when a GC began, and which therefore took no read
-		// dependency on the chunk, from repopulating the cache the GC
-		// just emptied.
+		// cached after it.
 		var addr hash.Hash
 		n := &Node{
 			msg: make([]byte, 1024),

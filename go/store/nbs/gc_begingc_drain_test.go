@@ -26,15 +26,10 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-// A read samples the keeper under nbs.mu and then runs against a table
-// set with the lock released. If BeginGC could install its keeper while
-// such a read was in flight, the read would finish having taken no read
-// dependency on the chunks it returned, and the GC would be free to
+// BeginGC must not install its keeper while a read which sampled the
+// previous one is still running. Such a read would finish having taken
+// no read dependency on the chunks it returned, leaving the GC free to
 // collect chunks the application is still holding.
-//
-// BeginGC therefore drains the reads which are already running before it
-// installs, so that afterwards every read which can still observe the
-// store observes the keeper.
 func TestBeginGCDrainsOutstandingReads(t *testing.T) {
 	ctx := context.Background()
 
@@ -46,8 +41,8 @@ func TestBeginGCDrainsOutstandingReads(t *testing.T) {
 	_, err := st.Commit(ctx, hash.Hash{}, hash.Hash{})
 	require.NoError(t, err)
 
-	// Start a read, as an unlocked read path does. No GC is running, so
-	// it samples a nil keeper and takes no dependency on what it reads.
+	// Start a read, as an unlocked read path does. With no GC running,
+	// it samples a nil keeper.
 	st.mu.Lock()
 	keeper, endRead, _, err := st.beginRead(ctx)
 	require.NoError(t, err)
@@ -67,8 +62,7 @@ func TestBeginGCDrainsOutstandingReads(t *testing.T) {
 	}
 
 	// While BeginGC is waiting, a new read has to queue behind it rather
-	// than start with the old keeper. Without that, a steady read load
-	// could also starve the drain.
+	// than start with the old keeper.
 	newRead := make(chan keeperF, 1)
 	go func() {
 		st.mu.Lock()
@@ -101,8 +95,7 @@ func TestBeginGCDrainsOutstandingReads(t *testing.T) {
 	}
 	defer st.EndGC(chunks.GCMode_Full)
 
-	// The read which queued behind the install sees the new keeper, not
-	// the nil one it would have sampled had it not waited.
+	// The read which queued behind the install sees the new keeper.
 	select {
 	case keeper := <-newRead:
 		assert.NotNil(t, keeper, "queued read did not pick up the GC's keeper")
@@ -153,9 +146,8 @@ func TestBeginGCDrainRespectsContext(t *testing.T) {
 	endRead()
 	st.mu.Unlock()
 
-	// The abandoned install must not have left new reads queued behind a
-	// barrier that is never coming down, and must not have left conjoin
-	// disabled.
+	// A failed install must leave no reads queued behind a barrier which
+	// is never coming down, and must not leave conjoin disabled.
 	st.mu.Lock()
 	_, endRead2, _, err := st.beginRead(ctx)
 	st.mu.Unlock()

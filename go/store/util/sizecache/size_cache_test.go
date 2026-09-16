@@ -189,9 +189,7 @@ func TestAddAfterPurgeIsDropped(t *testing.T) {
 	assert := assert.New(t)
 
 	// A value fetched from the backing store before a Purge must not be
-	// cached after it. This is what keeps a read which was already in
-	// flight when a GC began, and which therefore took no read dependency
-	// on the chunk, from repopulating the cache the GC just emptied.
+	// cached after it.
 	c := New(1024)
 
 	// Read the generation, as a caller does on a miss, then purge before

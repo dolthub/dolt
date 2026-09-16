@@ -82,12 +82,8 @@ type stripe struct {
 	// insert, both under mu, so that a node which was fetched from the
 	// ChunkStore before a purge cannot be cached after it.
 	//
-	// A GC purges the cache precisely so that everything the
-	// application can still reach has to be read back through the
-	// ChunkStore, where a read dependency is taken on it. A read which
-	// was already in flight took no such dependency, so putting its
-	// result back into the cache would hand out a chunk the GC is free
-	// to collect.
+	// The read which fetched it took no GC read dependency on it, so
+	// caching it would hand out a node the GC is free to collect.
 	gen uint64
 }
 
