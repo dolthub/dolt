@@ -108,7 +108,7 @@ func (bsp *singleBlobBSPersister) ConjoinAll(ctx context.Context, behavior dherr
 
 	var cs chunkSource
 	if plan.suffix == ArchiveFileSuffix {
-		cs, err = newBSArchiveChunkSource(ctx, bsp.bs, plan.name, bsp.q, stats)
+		cs, err = newBSArchiveChunkSource(ctx, bsp.bs, plan.name, bsp.q, openOpts{deepValidate: true}, stats)
 	} else {
 		cs, err = newBSTableChunkSource(ctx, bsp.bs, plan.name, plan.chunkCount, bsp.q, openOpts{deepValidate: true}, stats)
 	}
@@ -123,7 +123,7 @@ func (bsp *singleBlobBSPersister) Open(ctx context.Context, name hash.Hash, chun
 	}
 
 	if blobstore.IsNotFoundError(err) {
-		return newBSArchiveChunkSource(ctx, bsp.bs, name, bsp.q, stats)
+		return newBSArchiveChunkSource(ctx, bsp.bs, name, bsp.q, opts, stats)
 	}
 
 	return nil, err

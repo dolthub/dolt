@@ -136,7 +136,7 @@ func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, behavior dherrors
 
 	var cs chunkSource
 	if plan.suffix == ArchiveFileSuffix {
-		cs, err = newBSArchiveChunkSource(ctx, bsp.bs, plan.name, bsp.q, stats)
+		cs, err = newBSArchiveChunkSource(ctx, bsp.bs, plan.name, bsp.q, openOpts{deepValidate: true}, stats)
 	} else {
 		cs, err = newBSTableChunkSource(ctx, bsp.bs, plan.name, plan.chunkCount, bsp.q, openOpts{deepValidate: true}, stats)
 	}
@@ -213,7 +213,7 @@ func (bsp *blobstorePersister) Open(ctx context.Context, name hash.Hash, chunkCo
 	}
 
 	if blobstore.IsNotFoundError(err) {
-		source, err := newBSArchiveChunkSource(ctx, bsp.bs, name, bsp.q, stats)
+		source, err := newBSArchiveChunkSource(ctx, bsp.bs, name, bsp.q, opts, stats)
 		if err != nil {
 			return nil, err
 		}
@@ -355,9 +355,9 @@ func (bsTRA *bsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off
 	return totalRead, nil
 }
 
-func newBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
+func newBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, q MemoryQuotaProvider, opts openOpts, stats *Stats) (cs chunkSource, err error) {
 	if shouldSpool(bs) {
-		return newSpooledBSArchiveChunkSource(ctx, bs, name, q, stats)
+		return newSpooledBSArchiveChunkSource(ctx, bs, name, q, opts, stats)
 	}
 
 	rc, sz, _, err := bs.Get(ctx, name.String()+ArchiveFileSuffix, blobstore.NewBlobRange(-int64(archiveFooterSize), 0))
@@ -378,7 +378,7 @@ func newBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore, name h
 		return nil, err
 	}
 
-	aRdr, err := newArchiveReaderFromFooter(ctx, &bsTableReaderAt{key: name.String() + ArchiveFileSuffix, bs: bs}, name, sz, footer, q, stats)
+	aRdr, err := newArchiveReaderFromFooter(ctx, &bsTableReaderAt{key: name.String() + ArchiveFileSuffix, bs: bs}, name, sz, footer, q, opts, stats)
 	if err != nil {
 		return emptyChunkSource{}, err
 	}

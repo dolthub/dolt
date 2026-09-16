@@ -94,7 +94,7 @@ func newFileTableReader(ctx context.Context, dir string, h hash.Hash, chunkCount
 	if err != nil {
 		return nil, err
 	} else if afExists {
-		return newArchiveChunkSource(ctx, dir, h, chunkCount, q, mmapArchiveIndexes, refs, stats)
+		return newArchiveChunkSource(ctx, dir, h, chunkCount, q, mmapArchiveIndexes, refs, opts, stats)
 	}
 	return nil, fmt.Errorf("error opening table file: %w: %s/%s", ErrTableFileNotFound, dir, h.String())
 }

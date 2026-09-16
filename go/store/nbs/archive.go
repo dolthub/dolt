@@ -247,6 +247,10 @@ type archiveOrigin struct {
 	ConversionTime time.Time
 }
 
+// ErrCorruptArchiveIndex is returned when an archive's footer or index does not
+// describe a well formed archive.
+var ErrCorruptArchiveIndex = errors.New("corrupt archive index")
+
 var ErrInvalidChunkRange = errors.New("invalid chunk range")
 var ErrInvalidDictionaryRange = errors.New("invalid dictionary range")
 var ErrInvalidFileSignature = errors.New("invalid file signature")

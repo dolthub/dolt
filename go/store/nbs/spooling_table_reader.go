@@ -151,13 +151,13 @@ func newSpooledBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore, n
 
 // newSpooledBSArchiveChunkSource is the archive counterpart of newSpooledBSTableChunkSource.
 // It spools the file whole, reads the footer, and serves chunk reads from the spooled file.
-func newSpooledBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, q MemoryQuotaProvider, stats *Stats) (chunkSource, error) {
+func newSpooledBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, q MemoryQuotaProvider, opts openOpts, stats *Stats) (chunkSource, error) {
 	ra, err := newSpoolingTableReaderAt(ctx, bs, name.String()+ArchiveFileSuffix)
 	if err != nil {
 		return nil, err
 	}
 
-	aRdr, err := newArchiveReader(ctx, ra, name, uint64(ra.sz), q, stats)
+	aRdr, err := newArchiveReader(ctx, ra, name, uint64(ra.sz), q, opts, stats)
 	if err != nil {
 		_ = ra.Close()
 		return nil, err
