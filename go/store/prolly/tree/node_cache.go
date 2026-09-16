@@ -36,12 +36,24 @@ func newChunkCache(maxSize int) nodeCache {
 	return cache
 }
 
-func (c nodeCache) get(addr hash.Hash) (*Node, bool) {
+// get returns the cached node for |addr|, if there is one, along with
+// the generation of the stripe |addr| belongs to. A caller which misses
+// here and goes to the ChunkStore must pass that generation back to
+// |insert|.
+func (c nodeCache) get(addr hash.Hash) (*Node, uint64, bool) {
 	return c[addr[0]].get(addr)
 }
 
-func (c nodeCache) insert(addr hash.Hash, node *Node) {
-	c[addr[0]].insert(addr, node)
+// generation returns the current generation of the stripe |addr|
+// belongs to, for callers which have not just missed in |get|.
+func (c nodeCache) generation(addr hash.Hash) uint64 {
+	return c[addr[0]].generation()
+}
+
+// insert caches |node| under |addr|, unless the cache has been purged
+// since |gen| was read.
+func (c nodeCache) insert(addr hash.Hash, node *Node, gen uint64) {
+	c[addr[0]].insert(addr, node, gen)
 }
 
 func (c nodeCache) purge() {
@@ -65,6 +77,18 @@ type stripe struct {
 	sz     int
 	maxSz  int
 	rev    int
+
+	// Incremented by every purge. Read out of get and rechecked by
+	// insert, both under mu, so that a node which was fetched from the
+	// ChunkStore before a purge cannot be cached after it.
+	//
+	// A GC purges the cache precisely so that everything the
+	// application can still reach has to be read back through the
+	// ChunkStore, where a read dependency is taken on it. A read which
+	// was already in flight took no such dependency, so putting its
+	// result back into the cache would hand out a chunk the GC is free
+	// to collect.
+	gen uint64
 }
 
 func newStripe(maxSize int) *stripe {
@@ -89,6 +113,13 @@ func (s *stripe) purge() {
 	s.head = nil
 	s.sz = 0
 	s.rev = 0
+	s.gen += 1
+}
+
+func (s *stripe) generation() uint64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.gen
 }
 
 func (s *stripe) moveToFront(e *centry) {
@@ -107,20 +138,24 @@ func (s *stripe) moveToFront(e *centry) {
 	s.head = e
 }
 
-func (s *stripe) get(h hash.Hash) (*Node, bool) {
+func (s *stripe) get(h hash.Hash) (*Node, uint64, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if e, ok := s.chunks[h]; ok {
 		s.moveToFront(e)
-		return e.n, true
+		return e.n, s.gen, true
 	} else {
-		return nil, false
+		return nil, s.gen, false
 	}
 }
 
-func (s *stripe) insert(addr hash.Hash, node *Node) {
+func (s *stripe) insert(addr hash.Hash, node *Node, gen uint64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if s.gen != gen {
+		return
+	}
 
 	if e, ok := s.chunks[addr]; !ok {
 		e = &centry{nil, nil, node, 0, addr}

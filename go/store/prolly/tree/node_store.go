@@ -103,7 +103,7 @@ func NewNodeStore(cs chunks.ChunkStore) NodeStore {
 
 // Read implements NodeStore.
 func (ns *nodeStore) Read(ctx context.Context, ref hash.Hash) (*Node, error) {
-	n, ok := ns.cache.get(ref)
+	n, gen, ok := ns.cache.get(ref)
 	if ok {
 		return n, nil
 	}
@@ -118,7 +118,7 @@ func (ns *nodeStore) Read(ctx context.Context, ref hash.Hash) (*Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	ns.cache.insert(ref, n)
+	ns.cache.insert(ref, n, gen)
 
 	return n, nil
 }
@@ -127,13 +127,16 @@ func (ns *nodeStore) Read(ctx context.Context, ref hash.Hash) (*Node, error) {
 func (ns *nodeStore) ReadMany(ctx context.Context, addrs hash.HashSlice) ([]*Node, error) {
 	found := make(map[hash.Hash]*Node)
 	gets := hash.HashSet{}
+	// The cache generation each miss saw before we went to the store.
+	gens := make(map[hash.Hash]uint64)
 
 	for _, r := range addrs {
-		n, ok := ns.cache.get(r)
+		n, gen, ok := ns.cache.get(r)
 		if ok {
 			found[r] = n
 		} else {
 			gets.Insert(r)
+			gens[r] = gen
 		}
 	}
 
@@ -159,9 +162,15 @@ func (ns *nodeStore) ReadMany(ctx context.Context, addrs hash.HashSlice) ([]*Nod
 	nodes := make([]*Node, len(addrs))
 	for i, addr := range addrs {
 		nodes[i], ok = found[addr]
-		if ok {
-			ns.cache.insert(addr, nodes[i])
+		if !ok {
+			continue
 		}
+		gen, fetched := gens[addr]
+		if !fetched {
+			// Already cached; nothing to put back.
+			continue
+		}
+		ns.cache.insert(addr, nodes[i], gen)
 	}
 	return nodes, nil
 }
@@ -183,10 +192,11 @@ func (ns *nodeStore) Write(ctx context.Context, nd *Node) (hash.Hash, error) {
 		}
 	}
 
+	gen := ns.cache.generation(c.Hash())
 	if err := ns.store.Put(ctx, c, getAddrs); err != nil {
 		return hash.Hash{}, err
 	}
-	ns.cache.insert(c.Hash(), nd)
+	ns.cache.insert(c.Hash(), nd, gen)
 	return c.Hash(), nil
 }
 
