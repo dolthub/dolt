@@ -82,7 +82,7 @@ type awsLimits struct {
 
 // Open takes the named object, and returns a chunkSource for it. This function works for both table files and archive
 // files. If the table file doesn't exist, but |name| + ".darc" does, then an archive chunk source is returned instead.
-func (s3p awsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
+func (s3p awsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, opts openOpts, stats *Stats) (chunkSource, error) {
 	cs, err := newAWSTableFileChunkSource(
 		ctx,
 		&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns},
@@ -90,6 +90,7 @@ func (s3p awsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCoun
 		name,
 		chunkCount,
 		s3p.q,
+		opts,
 		stats,
 	)
 	if err == nil {
@@ -103,6 +104,7 @@ func (s3p awsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCoun
 		name.String()+ArchiveFileSuffix,
 		chunkCount,
 		s3p.q,
+		opts,
 		stats)
 }
 
@@ -259,7 +261,7 @@ func (s3p awsTablePersister) ConjoinAll(ctx context.Context, behavior dherrors.F
 
 	rdr := &s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns}
 	if plan.suffix == ArchiveFileSuffix {
-		cs, err := newAWSArchiveChunkSource(ctx, rdr, s3p.limits, plan.name.String()+plan.suffix, plan.chunkCount, s3p.q, stats)
+		cs, err := newAWSArchiveChunkSource(ctx, rdr, s3p.limits, plan.name.String()+plan.suffix, plan.chunkCount, s3p.q, openOpts{deepValidate: true}, stats)
 		return cs, func() {}, err
 	} else {
 		tra := &s3TableReaderAt{rdr, plan.name.String()}
