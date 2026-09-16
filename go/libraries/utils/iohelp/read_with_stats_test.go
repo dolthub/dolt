@@ -65,13 +65,14 @@ func TestReadWithStatsUnknownSize(t *testing.T) {
 		size int64
 		want float64
 	}{
-		{"known size", 8, 0.5},
-		{"unknown HTTP content length", -1, -1},
-		{"zero size", 0, -1},
+		{"known size", 8, 0.5},                  // Four bytes read out of an advertised eight is 50%.
+		{"unknown HTTP content length", -1, -1}, // HTTP uses -1 when the response length is unknown.
+		{"zero size", 0, -1},                    // A zero total cannot be used to calculate a percentage.
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			rdr := NewReaderWithStats(bytes.NewBufferString("data"), tt.size)
 			defer rdr.Close()
+			// Consume all four bytes of "data" before starting updates so every sample sees the same count.
 			_, err := io.ReadAll(rdr)
 			require.NoError(t, err)
 			updates := make(chan ReadStats, 1)
