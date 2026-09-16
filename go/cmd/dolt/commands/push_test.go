@@ -31,18 +31,21 @@ import (
 
 func TestPushPermissionHint(t *testing.T) {
 	denied := status.Error(codes.PermissionDenied, "write denied")
-	rpc := remotestorage.NewRpcError(denied, "Commit", "test-host", nil)
+	permissionDeniedRPC := remotestorage.NewRpcError(denied, "Commit", "test-host", nil)
+	unavailableRPC := remotestorage.NewRpcError(status.Error(codes.Unavailable, "offline"), "Commit", "test-host", nil)
 	for _, tt := range []struct {
-		name          string
-		err           error
-		hint, details bool
+		name             string
+		err              error
+		expectLoginHint  bool
+		expectRPCDetails bool
 	}{
 		{"success", nil, false, false},
 		{"unrelated error", errors.New("other failure"), false, false},
 		{"unknown push", actions.ErrUnknownPushErr, false, false},
 		{"wrapped permission denied", fmt.Errorf("%w; %w", actions.ErrUnknownPushErr, denied), true, false},
-		{"wrapped RPC permission denied", fmt.Errorf("%w; %w", actions.ErrUnknownPushErr, rpc), true, true},
+		{"wrapped RPC permission denied", fmt.Errorf("%w; %w", actions.ErrUnknownPushErr, permissionDeniedRPC), true, true},
 		{"unavailable", fmt.Errorf("%w; %w", actions.ErrUnknownPushErr, status.Error(codes.Unavailable, "offline")), false, false},
+		{"wrapped RPC unavailable", fmt.Errorf("%w; %w", actions.ErrUnknownPushErr, unavailableRPC), false, true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var out, errOut bytes.Buffer
@@ -55,13 +58,16 @@ func TestPushPermissionHint(t *testing.T) {
 			} else {
 				require.Equal(t, 1, code)
 			}
-			if tt.hint {
+			if tt.expectLoginHint {
 				require.Contains(t, out.String(), "dolt login")
+				require.Contains(t, out.String(), "has write perms to DoltHub repo")
 			} else {
 				require.NotContains(t, out.String(), "dolt login")
+				require.NotContains(t, out.String(), "has write perms to DoltHub repo")
 			}
-			if tt.details {
-				require.Contains(t, errOut.String(), "test-host")
+			if tt.expectRPCDetails {
+				require.Contains(t, errOut.String(), "host:test-host")
+				require.Contains(t, errOut.String(), "rpc: Commit")
 			}
 		})
 	}
