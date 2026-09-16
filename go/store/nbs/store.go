@@ -2163,7 +2163,11 @@ func (nbs *NomsBlockStore) openChunkSourcesForManifestUpdateAndRebase(ctx contex
 	if nbs.closed {
 		return openChunkSourcesResult{}, errors.New("*NomsBlockStore is closed")
 	}
-	sources, err := nbs.tables.openForAdd(ctx, files, existing, nbs.stats)
+	// These files are being admitted into the store from outside it --- a
+	// push, a pull, a manual AddTableFiles. We run the more expensive deep
+	// validation here, before we add them to the store and take a dependency
+	// on them.
+	sources, err := nbs.tables.openForAdd(ctx, files, existing, openOpts{deepValidate: true}, nbs.stats)
 	if err != nil {
 		return openChunkSourcesResult{}, err
 	}
@@ -2716,7 +2720,10 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec, mo
 	for _, s := range specs {
 		files[s.name] = s.chunkCount
 	}
-	opened, err := nbs.tables.openForAdd(ctx, files, srcs, nbs.stats)
+	// These are the table files GC just wrote, and they are about to become
+	// the whole store, so deep-validate them before the manifest points at
+	// them and the files they were copied from become collectable.
+	opened, err := nbs.tables.openForAdd(ctx, files, srcs, openOpts{deepValidate: true}, nbs.stats)
 	if err != nil {
 		return fmt.Errorf("swapTables, openForAdd: %w", err)
 	}

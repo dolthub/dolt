@@ -1077,6 +1077,22 @@ SQL
     [[ "$output" =~ "utf8mb4" ]] || false
 }
 
+@test "sql: jsonl result format" {
+    run dolt sql -r jsonl -q "select 1 as id union all select 2 as id"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [ "${lines[0]}" = '{"id":1}' ]
+    [ "${lines[1]}" = '{"id":2}' ]
+
+    run dolt sql -r JSONL -q "select 1 as id where false"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+
+    run dolt sql -r json -q "select 1 as id"
+    [ "$status" -eq 0 ]
+    [ "$output" = '{"rows": [{"id":1}]}' ]
+}
+
 @test "sql: empty output exports properly" {
     dolt sql <<SQL
     CREATE TABLE test (

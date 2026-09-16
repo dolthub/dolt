@@ -15,6 +15,10 @@ jobs:
     outputs:
       format: ${{ steps.should_format.outputs.format }}
     steps:
+      - name: Check deferred CI
+        uses: $/.github/actions/check-deferred-ci
+        with:
+          timezone: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
       - uses: actions/checkout@v6
         with:
           submodules: true
@@ -60,11 +64,15 @@ jobs:
              exit 1
           fi
   get-artifacts:
-    needs: verify
+    needs: [ verify ]
     if: ${{ needs.verify.outputs.format == 'true' }}
     name: Get artifacts
     runs-on: ubuntu-22.04
     steps:
+      - name: Check deferred CI
+        uses: $/.github/actions/check-deferred-ci
+        with:
+          timezone: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
       - uses: actions/checkout@v6
         with:
           ref: "main"
@@ -89,11 +97,15 @@ jobs:
           name: format-code-script
           path: go/utils/repofmt/_format_repo.sh
   format:
-    needs: [verify, get-artifacts]
+    needs: [ verify, get-artifacts ]
     if: ${{ needs.verify.outputs.format == 'true' }}
     name: Format PR
     runs-on: ubuntu-22.04
     steps:
+      - name: Check deferred CI
+        uses: $/.github/actions/check-deferred-ci
+        with:
+          timezone: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
       - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.ref || github.ref }}
@@ -149,7 +161,7 @@ jobs:
              echo "has-changes=true" >> $GITHUB_OUTPUT
           fi
       - uses: EndBug/add-and-commit@645ecc0dd0a57f4d86d26c0aa5fc42c0a856fbca # v11.0.0
-        if: ${{ steps.detect-changes.outputs.has-changes == 'true' }}
+        if: steps.detect-changes.outputs.has-changes == 'true'
         with:
           message: "[ga-format-pr] Run go/utils/repofmt/format_repo.sh and go/Godeps/update.sh"
           add: "."
