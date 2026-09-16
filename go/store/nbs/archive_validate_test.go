@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/dolthub/gozstd"
@@ -290,4 +291,44 @@ func TestArchiveChunkSourceRejectsCorruptIndex(t *testing.T) {
 			require.ErrorIs(t, err, ErrCorruptArchiveIndex)
 		})
 	}
+}
+
+// archiveFixtureDir holds the bats fixtures' archives, which are the only real
+// archives in the tree written by an older Dolt.
+const archiveFixtureDir = "../../../integration-tests/bats/archive-test-repos"
+
+// TestValidateArchiveFixtures runs both tiers of validation over the version 1
+// and version 2 archives in the bats fixtures. Nothing in the format requires
+// the invariants they check, so this is what says older archives satisfy them.
+func TestValidateArchiveFixtures(t *testing.T) {
+	ctx := context.Background()
+
+	var files []string
+	for _, pat := range []string{"*/noms/*.darc", "*/noms/oldgen/*.darc"} {
+		found, err := filepath.Glob(filepath.Join(archiveFixtureDir, pat))
+		require.NoError(t, err)
+		files = append(files, found...)
+	}
+	if len(files) == 0 {
+		t.Skipf("no archive fixtures under %s", archiveFixtureDir)
+	}
+
+	seen := map[byte]bool{}
+	for _, f := range files {
+		t.Run(filepath.Base(f), func(t *testing.T) {
+			name, ok := hash.MaybeParse(strings.TrimSuffix(filepath.Base(f), ArchiveFileSuffix))
+			require.True(t, ok)
+
+			fra, err := newFileReaderAt(f, false)
+			require.NoError(t, err)
+
+			ar, err := newArchiveReader(ctx, fra, name, uint64(fra.sz), NewUnlimitedMemQuotaProvider(), openOpts{deepValidate: true}, &Stats{})
+			require.NoError(t, err)
+			seen[ar.footer.formatVersion] = true
+			require.NoError(t, ar.close())
+		})
+	}
+
+	require.True(t, seen[archiveVersionInitial], "expected a version 1 archive among the fixtures")
+	require.True(t, seen[archiveVersionSnappySupport], "expected a version 2 archive among the fixtures")
 }
