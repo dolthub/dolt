@@ -71,6 +71,35 @@ teardown() {
     run dolt sql -r csv -q "SELECT 2 AS n /*DOLT ordinary comment */"
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = "2" ]
+
+    # A Dolt-only function can add a column while leaving valid SQL for MySQL.
+    run dolt sql -r csv -q "SELECT commit_hash FROM dolt_log LIMIT 1"
+    [ "$status" -eq 0 ]
+    head_hash="${lines[1]}"
+    run dolt sql -r csv -q "SELECT /*DOLT! DOLT_HASHOF('HEAD') AS commit_hash, */ 1 AS portable"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "$head_hash,1" ]
+
+    # MySQL ignores the version-control calls; Dolt commits the first row and resets the second.
+    run dolt sql <<'SQL'
+CREATE TABLE comment_portability (pk INT PRIMARY KEY);
+INSERT INTO comment_portability VALUES (1);
+/*DOLT! CALL DOLT_ADD('comment_portability') */;
+/*dolt! CALL DOLT_COMMIT('-m', 'commit from executable comment') */;
+INSERT INTO comment_portability VALUES (2);
+/*DOLT! CALL DOLT_RESET('--hard') */;
+SQL
+    [ "$status" -eq 0 ]
+
+    # The commit call must execute, and the hard reset must discard only the uncommitted row.
+    run dolt sql -r csv -q "SELECT message FROM dolt_log LIMIT 1"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "commit from executable comment" ]
+    run dolt sql -r csv -q "SELECT pk FROM comment_portability ORDER BY pk"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [ "${lines[1]}" = "1" ]
+
 }
 
 @test "sql: check configurations with all default options" {
