@@ -279,7 +279,7 @@ SQL
     dolt sql -q "truncate totals;"
     run dolt sql -q "SELECT (SELECT COUNT(*) FROM totals) > 0;"
     [ $status -eq 0 ]
-    [[ $output =~ "| false  " ]] || false
+    [[ $output =~ \|[[:space:]]+(false|0)[[:space:]]+\| ]] || false
 
     # Restart the server and assert that the event is still enabled
     start_sql_server

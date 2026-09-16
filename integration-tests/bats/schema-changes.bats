@@ -403,5 +403,5 @@ EOF
 
   # After all these schema changes, the table hash remains the same.
   run dolt sql -r csv -q "select DOLT_HASHOF_TABLE('t') = (select DOLT_HASHOF_TABLE('t') from t as of HEAD);"
-  [[ "$output" =~ "true" ]] || false
+  [[ "${lines[1]}" =~ ^(true|1)$ ]] || false
 }

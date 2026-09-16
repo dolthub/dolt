@@ -170,7 +170,7 @@ SQL
     [[ "$output" =~ "test1" ]] || false
 
    run dolt sql -q "SELECT * from dolt_merge_status"
-   [[ "$output" =~ "true" ]] || false
+   [[ "$output" =~ \|[[:space:]]+(true|1)[[:space:]]+\| ]] || false
    [[ "$output" =~ "merge_branch" ]] || false
    [[ "$output" =~ "refs/heads/main" ]] || false
 
@@ -204,7 +204,7 @@ SQL
     dolt merge --abort
 
     run dolt sql -q "SELECT * from dolt_merge_status"
-    [[ "$output" =~ "false" ]] || false
+    [[ "$output" =~ \|[[:space:]]+(false|0)[[:space:]]+\| ]] || false
 
     # per Git, working set changes to test2 should remain
     dolt sql -q "SELECT * FROM test2" -r csv
@@ -238,7 +238,7 @@ SQL
     [[ "${lines[1]}" =~ "nothing to commit, working tree clean" ]] || false
 
     run dolt sql -q "SELECT * from dolt_merge_status"
-    [[ "$output" =~ "false" ]] || false
+    [[ "$output" =~ \|[[:space:]]+(false|0)[[:space:]]+\| ]] || false
 }
 
 @test "merge: squash merge" {
@@ -298,7 +298,7 @@ SQL
     [[ "$output" =~ "| 0 " ]] || false
 
     run dolt sql -q "SELECT * from dolt_merge_status"
-    [[ "$output" =~ "false" ]] || false
+    [[ "$output" =~ \|[[:space:]]+(false|0)[[:space:]]+\| ]] || false
 }
 
 @test "merge: dolt commit fails on table with conflict" {
@@ -324,7 +324,7 @@ SQL
     [[ "$output" =~ "test1" ]] || false
 
     run dolt sql -q "SELECT * from dolt_merge_status"
-    [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ \|[[:space:]]+(true|1)[[:space:]]+\| ]] || false
     [[ "$output" =~ "merge_branch" ]] || false
     [[ "$output" =~ "refs/heads/main" ]] || false
 

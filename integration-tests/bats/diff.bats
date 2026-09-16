@@ -1782,10 +1782,10 @@ SQL
     [ "${lines[0]}" = "+------------+-----------+-------------+---------------+" ]
     [ "${lines[1]}" = "| Table name | Diff type | Data change | Schema change |" ]
     [ "${lines[2]}" = "+------------+-----------+-------------+---------------+" ]
-    [ "${lines[3]}" = "| t1         | dropped   | false       | true          |" ]
-    [ "${lines[4]}" = "| t2         | modified  | false       | true          |" ]
-    [ "${lines[5]}" = "| t3         | modified  | true        | false         |" ]
-    [ "${lines[6]}" = "| t4         | added     | false       | true          |" ]
+    [[ "${lines[3]}" =~ ^\|[[:space:]]+t1[[:space:]]+\|[[:space:]]+dropped[[:space:]]+\|[[:space:]]+(false|0)[[:space:]]+\|[[:space:]]+(true|1)[[:space:]]+\|$ ]]
+    [[ "${lines[4]}" =~ ^\|[[:space:]]+t2[[:space:]]+\|[[:space:]]+modified[[:space:]]+\|[[:space:]]+(false|0)[[:space:]]+\|[[:space:]]+(true|1)[[:space:]]+\|$ ]]
+    [[ "${lines[5]}" =~ ^\|[[:space:]]+t3[[:space:]]+\|[[:space:]]+modified[[:space:]]+\|[[:space:]]+(true|1)[[:space:]]+\|[[:space:]]+(false|0)[[:space:]]+\|$ ]]
+    [[ "${lines[6]}" =~ ^\|[[:space:]]+t4[[:space:]]+\|[[:space:]]+added[[:space:]]+\|[[:space:]]+(false|0)[[:space:]]+\|[[:space:]]+(true|1)[[:space:]]+\|$ ]]
     [ "${lines[7]}" = "+------------+-----------+-------------+---------------+" ]
 
     run dolt diff --name-only

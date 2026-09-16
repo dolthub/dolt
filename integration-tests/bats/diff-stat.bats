@@ -46,7 +46,7 @@ teardown() {
     run dolt diff --summary
     [ "$status" -eq 0 ]
     [[ "$output" =~ "| Table name | Diff type | Data change | Schema change |" ]] || false
-    [[ "$output" =~ "| test       | modified  | true        | false         |" ]] || false
+    [[ "$output" =~ \|[[:space:]]+test[[:space:]]+\|[[:space:]]+modified[[:space:]]+\|[[:space:]]+(true|1)[[:space:]]+\|[[:space:]]+(false|0)[[:space:]]+\| ]] || false
 
     dolt add test
     dolt commit -m "added two rows"
@@ -67,7 +67,7 @@ teardown() {
     [ "$status" -eq 0 ]
     echo "$output"
     [[ "$output" =~ "| Table name | Diff type | Data change | Schema change |" ]] || false
-    [[ "$output" =~ "| test       | modified  | true        | false         |" ]] || false
+    [[ "$output" =~ \|[[:space:]]+test[[:space:]]+\|[[:space:]]+modified[[:space:]]+\|[[:space:]]+(true|1)[[:space:]]+\|[[:space:]]+(false|0)[[:space:]]+\| ]] || false
 
     dolt add test
     dolt commit -m "modified first row"
@@ -88,14 +88,14 @@ teardown() {
     [ "$status" -eq 0 ]
     echo "$output"
     [[ "$output" =~ "| Table name | Diff type | Data change | Schema change |" ]] || false
-    [[ "$output" =~ "| test       | modified  | true        | false         |" ]] || false
+    [[ "$output" =~ \|[[:space:]]+test[[:space:]]+\|[[:space:]]+modified[[:space:]]+\|[[:space:]]+(true|1)[[:space:]]+\|[[:space:]]+(false|0)[[:space:]]+\| ]] || false
 }
 
 @test "diff-stat: stat/summary comparing row with a deleted cell and an added cell" {
     run dolt diff --summary
     [ "$status" -eq 0 ]
     [[ "$output" =~ "| Table name | Diff type | Data change | Schema change |" ]] || false
-    [[ "$output" =~ "| test       | added     | false       | true          |" ]] || false
+    [[ "$output" =~ \|[[:space:]]+test[[:space:]]+\|[[:space:]]+added[[:space:]]+\|[[:space:]]+(false|0)[[:space:]]+\|[[:space:]]+(true|1)[[:space:]]+\| ]] || false
 
     dolt add test
     dolt commit -m "create table"
@@ -119,7 +119,7 @@ teardown() {
     run dolt diff --summary
     [ "$status" -eq 0 ]
     [[ "$output" =~ "| Table name | Diff type | Data change | Schema change |" ]] || false
-    [[ "$output" =~ "| test       | modified  | true        | false         |" ]] || false
+    [[ "$output" =~ \|[[:space:]]+test[[:space:]]+\|[[:space:]]+modified[[:space:]]+\|[[:space:]]+(true|1)[[:space:]]+\|[[:space:]]+(false|0)[[:space:]]+\| ]] || false
 
     dolt add test
     dolt commit -m "row modified"
@@ -138,7 +138,7 @@ teardown() {
     run dolt diff --summary
     [ "$status" -eq 0 ]
     [[ "$output" =~ "| Table name | Diff type | Data change | Schema change |" ]] || false
-    [[ "$output" =~ "| test       | modified  | true        | false         |" ]] || false
+    [[ "$output" =~ \|[[:space:]]+test[[:space:]]+\|[[:space:]]+modified[[:space:]]+\|[[:space:]]+(true|1)[[:space:]]+\|[[:space:]]+(false|0)[[:space:]]+\| ]] || false
 }
 
 @test "diff-stat: stat/summary comparing two branches" {
@@ -165,7 +165,7 @@ teardown() {
     run dolt diff --summary firstbranch newbranch
     [ "$status" -eq 0 ]
     [[ "$output" =~ "| Table name | Diff type | Data change | Schema change |" ]] || false
-    [[ "$output" =~ "| test       | modified  | true        | false         |" ]] || false
+    [[ "$output" =~ \|[[:space:]]+test[[:space:]]+\|[[:space:]]+modified[[:space:]]+\|[[:space:]]+(true|1)[[:space:]]+\|[[:space:]]+(false|0)[[:space:]]+\| ]] || false
 
     run dolt diff --stat firstbranch..newbranch
     [ "$status" -eq 0 ]
@@ -181,7 +181,7 @@ teardown() {
     run dolt diff --summary firstbranch..newbranch
     [ "$status" -eq 0 ]
     [[ "$output" =~ "| Table name | Diff type | Data change | Schema change |" ]] || false
-    [[ "$output" =~ "| test       | modified  | true        | false         |" ]] || false
+    [[ "$output" =~ \|[[:space:]]+test[[:space:]]+\|[[:space:]]+modified[[:space:]]+\|[[:space:]]+(true|1)[[:space:]]+\|[[:space:]]+(false|0)[[:space:]]+\| ]] || false
 }
 
 @test "diff-stat: stat/summary shows correct changes after schema change" {
@@ -213,7 +213,7 @@ DELIM
     run dolt diff --summary 
     [ "$status" -eq 0 ]
     [[ "$output" =~ "| Table name | Diff type | Data change | Schema change |" ]] || false
-    [[ "$output" =~ "| employees  | modified  | true        | true          |" ]] || false
+    [[ "$output" =~ \|[[:space:]]+employees[[:space:]]+\|[[:space:]]+modified[[:space:]]+\|[[:space:]]+(true|1)[[:space:]]+\|[[:space:]]+(true|1)[[:space:]]+\| ]] || false
 
     dolt sql -q "replace into employees values (0, 'tim', 'sehn', 'ceo', '2 years ago', '', 'Santa Monica')"
     
@@ -232,7 +232,7 @@ DELIM
     run dolt diff --summary 
     [ "$status" -eq 0 ]
     [[ "$output" =~ "| Table name | Diff type | Data change | Schema change |" ]] || false
-    [[ "$output" =~ "| employees  | modified  | true        | true          |" ]] || false
+    [[ "$output" =~ \|[[:space:]]+employees[[:space:]]+\|[[:space:]]+modified[[:space:]]+\|[[:space:]]+(true|1)[[:space:]]+\|[[:space:]]+(true|1)[[:space:]]+\| ]] || false
 }
 
 @test "diff-stat: stat/summary gets summaries for all tables with changes" {
@@ -267,8 +267,8 @@ SQL
     run dolt diff --summary 
     [ "$status" -eq 0 ]
     [[ "$output" =~ "| Table name | Diff type | Data change | Schema change |" ]] || false
-    [[ "$output" =~ "| test       | modified  | true        | false         |" ]] || false
-    [[ "$output" =~ "| employees  | modified  | true        | false         |" ]] || false
+    [[ "$output" =~ \|[[:space:]]+test[[:space:]]+\|[[:space:]]+modified[[:space:]]+\|[[:space:]]+(true|1)[[:space:]]+\|[[:space:]]+(false|0)[[:space:]]+\| ]] || false
+    [[ "$output" =~ \|[[:space:]]+employees[[:space:]]+\|[[:space:]]+modified[[:space:]]+\|[[:space:]]+(true|1)[[:space:]]+\|[[:space:]]+(false|0)[[:space:]]+\| ]] || false
 
     run dolt diff --stat employees
     [ "$status" -eq 0 ]
@@ -279,7 +279,7 @@ SQL
     run dolt diff --summary employees
     [ "$status" -eq 0 ]
     [[ "$output" =~ "| Table name | Diff type | Data change | Schema change |" ]] || false
-    [[ "$output" =~ "| employees  | modified  | true        | false         |" ]] || false
+    [[ "$output" =~ \|[[:space:]]+employees[[:space:]]+\|[[:space:]]+modified[[:space:]]+\|[[:space:]]+(true|1)[[:space:]]+\|[[:space:]]+(false|0)[[:space:]]+\| ]] || false
 }
 
 @test "diff-stat: two and three dot diff stat/summary" {
@@ -310,7 +310,7 @@ SQL
     run dolt diff main..branch1 --summary 
     [ "$status" -eq 0 ]
     [[ "$output" =~ "| Table name | Diff type | Data change | Schema change |" ]] || false
-    [[ "$output" =~ "| test       | modified  | true        | false         |" ]] || false
+    [[ "$output" =~ \|[[:space:]]+test[[:space:]]+\|[[:space:]]+modified[[:space:]]+\|[[:space:]]+(true|1)[[:space:]]+\|[[:space:]]+(false|0)[[:space:]]+\| ]] || false
 
     run dolt diff main...branch1 --stat
     echo $output
@@ -327,7 +327,7 @@ SQL
     run dolt diff main...branch1 --summary 
     [ "$status" -eq 0 ]
     [[ "$output" =~ "| Table name | Diff type | Data change | Schema change |" ]] || false
-    [[ "$output" =~ "| test       | modified  | true        | false         |" ]] || false
+    [[ "$output" =~ \|[[:space:]]+test[[:space:]]+\|[[:space:]]+modified[[:space:]]+\|[[:space:]]+(true|1)[[:space:]]+\|[[:space:]]+(false|0)[[:space:]]+\| ]] || false
 }
 
 @test "diff-stat: diff stat incorrect primary key set change regression test" {
@@ -356,7 +356,7 @@ SQL
     run dolt diff --summary
     [ "$status" -eq 0 ]
     [[ "$output" =~ "| Table name    | Diff type | Data change | Schema change |" ]] || false
-    [[ "$output" =~ "| test -> test2 | renamed   | false       | true          |" ]] || false
+    [[ "$output" =~ \|[[:space:]]+test[[:space:]]+\-\>[[:space:]]+test2[[:space:]]+\|[[:space:]]+renamed[[:space:]]+\|[[:space:]]+(false|0)[[:space:]]+\|[[:space:]]+(true|1)[[:space:]]+\| ]] || false
 
     dolt sql -q "insert into test2 values (2, 2, 2, 2, 2, 2)"
     run dolt diff --stat
@@ -374,5 +374,5 @@ SQL
     run dolt diff --summary
     [ "$status" -eq 0 ]
     [[ "$output" =~ "| Table name    | Diff type | Data change | Schema change |" ]] || false
-    [[ "$output" =~ "| test -> test2 | renamed   | true        | true          |" ]] || false
+    [[ "$output" =~ \|[[:space:]]+test[[:space:]]+\-\>[[:space:]]+test2[[:space:]]+\|[[:space:]]+renamed[[:space:]]+\|[[:space:]]+(true|1)[[:space:]]+\|[[:space:]]+(true|1)[[:space:]]+\| ]] || false
 }

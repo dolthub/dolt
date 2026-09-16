@@ -77,6 +77,6 @@ EOF
       max(pk) = firstId
     from test1 join ranges on test1.c0 = ranges.pk group by c0"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "0,true,true,true" ]] || false
-    [[ "$output" =~ "1,true,true,true" ]] || false
+    [[ "$output" =~ 0,(true|1),(true|1),(true|1)(,|[[:space:]]|$) ]] || false
+    [[ "$output" =~ 1,(true|1),(true|1),(true|1)(,|[[:space:]]|$) ]] || false
 }

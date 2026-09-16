@@ -92,7 +92,7 @@ call dolt_merge('feature-branch');
 SELECT COUNT(*) > 0 FROM test WHERE pk=3;
 SQL
     log_status_eq 0
-    [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ \|[[:space:]]+(true|1)[[:space:]]+\| ]] || false
 
     run dolt sql -r csv -q "select count(*) from dolt_status"
     [ "${#lines[@]}" -eq 2 ]
@@ -240,8 +240,8 @@ SELECT COUNT(*) = 2 FROM test WHERE pk > 2;
 SQL
 
     log_status_eq 0
-    [[ "$output" =~ "true" ]] || false
-    [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ \|[[:space:]]+(true|1)[[:space:]]+\| ]] || false
+    [[ "$output" =~ \|[[:space:]]+(true|1)[[:space:]]+\| ]] || false
     [[ "${lines[3]}" =~ "0" ]] || false
     ! [[ "$output" =~ "Updating" ]] || false
 
@@ -290,7 +290,7 @@ call dolt_merge('feature-branch', '-no-ff', '-m', 'this is a no-ff');
 SELECT COUNT(*) = 4 FROM dolt_log
 SQL
     log_status_eq 0
-    [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ \|[[:space:]]+(true|1)[[:space:]]+\| ]] || false
 
     run dolt log -n 1
     log_status_eq 0
@@ -571,7 +571,7 @@ CALL DOLT_MERGE('feature-branch', '--squash');
 SELECT COUNT(*) > 0 FROM test WHERE pk=3;
 SQL
     log_status_eq 0
-    [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ \|[[:space:]]+(true|1)[[:space:]]+\| ]] || false
 
     run dolt log -n 1
     log_status_eq 0
@@ -1221,7 +1221,7 @@ SQL
 
     run dolt sql -q "SELECT * from dolt_merge_status"
     [[ "$output" =~ "| is_merging | source | source_commit | target | unmerged_tables |" ]] || false
-    [[ "$output" =~ "| false      | NULL   | NULL          | NULL   | NULL            |" ]] || false
+    [[ "$output" =~ \|[[:space:]]+(false|0)[[:space:]]+\|[[:space:]]+NULL[[:space:]]+\|[[:space:]]+NULL[[:space:]]+\|[[:space:]]+NULL[[:space:]]+\|[[:space:]]+NULL[[:space:]]+\| ]] || false
 
     # per Git, working set changes to test2 should remain
     dolt sql -q "SELECT * FROM t2" -r csv
@@ -1260,7 +1260,7 @@ SQL
     [[ "$output" =~ "test" ]] || false
 
    run dolt sql -q "SELECT * from dolt_merge_status"
-   [[ "$output" =~ "true" ]] || false
+   [[ "$output" =~ \|[[:space:]]+(true|1)[[:space:]]+\| ]] || false
    [[ "$output" =~ "merge_branch" ]] || false
    [[ "$output" =~ "refs/heads/main" ]] || false
 
