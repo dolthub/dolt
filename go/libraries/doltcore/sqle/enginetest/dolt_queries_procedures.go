@@ -714,29 +714,32 @@ end
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call edit_on_branch();",
-				Skip:             true,
 				SkipResultsCheck: true, // return value is a bit odd, needs investigation
 			},
 			{
 				Query:    "select active_branch()",
-				Skip:     true,
 				Expected: []sql.Row{{"main"}},
 			},
 			{
 				Query:    "select * from t order by 1",
-				Skip:     true,
 				Expected: []sql.Row{},
 			},
 			{
 				Query:    "select name from dolt_branches order by 1",
-				Skip:     true,
 				Expected: []sql.Row{{"branch1"}, {"main"}},
 			},
 			{
 				Query:    "select * from `mydb/branch1`.t order by 1",
-				Skip:     true,
 				Expected: []sql.Row{{1, 100}},
 			},
+		},
+	},
+	// https://github.com/dolthub/dolt/issues/6152
+	{
+		Name:        "Test the empty dolt_procedures table",
+		SetUpScript: []string{},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "SELECT COUNT(*) FROM dolt_procedures", Expected: []sql.Row{{int64(0)}}},
 		},
 	},
 	{
@@ -757,27 +760,22 @@ end
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call edit_on_branch();",
-				Skip:             true,
 				SkipResultsCheck: true, // return value is a bit odd, needs investigation
 			},
 			{
 				Query:    "select active_branch()",
-				Skip:     true,
 				Expected: []sql.Row{{"main"}},
 			},
 			{
 				Query:    "select * from t order by 1",
-				Skip:     true,
 				Expected: []sql.Row{},
 			},
 			{
 				Query:    "select name from dolt_branches order by 1",
-				Skip:     true,
 				Expected: []sql.Row{{"branch1"}, {"main"}},
 			},
 			{
 				Query:    "select * from `mydb/branch1`.t order by 1",
-				Skip:     true,
 				Expected: []sql.Row{{1, 100}},
 			},
 		},

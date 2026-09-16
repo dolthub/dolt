@@ -15,6 +15,7 @@
 package enginetest
 
 import (
+	gosql "database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -674,10 +675,39 @@ func TestUserPrivileges(t *testing.T) {
 }
 
 func TestUserAuthentication(t *testing.T) {
-	t.Skip("Unexpected panic, need to fix")
-	h := newDoltHarness(t)
-	defer h.Close()
-	enginetest.TestUserAuthentication(t, h)
+	t.Run("legacy authentication suite", func(t *testing.T) {
+		t.Skip("Unexpected panic, need to fix")
+		h := newDoltHarness(t)
+		defer h.Close()
+		enginetest.TestUserAuthentication(t, h)
+
+	})
+	t.Run("wildcard IP host grants", func(t *testing.T) {
+		dEnv, controller, config := startServer(t, true, "127.0.0.1", "")
+		t.Cleanup(func() {
+			controller.Stop()
+			require.NoError(t, controller.WaitForStop())
+			dEnv.Close()
+		})
+		root, session := newConnection(t, config)
+		defer root.Close()
+		for _, query := range []string{
+			"CREATE TABLE wildcard_data(pk INT PRIMARY KEY)",
+			"INSERT INTO wildcard_data VALUES(42)",
+			"CREATE USER wildcard_user@'127.0.0.%' IDENTIFIED BY ''",
+			"GRANT SELECT ON dolt.* TO wildcard_user@'127.0.0.%'",
+		} {
+			_, err := session.Exec(query)
+			require.NoError(t, err)
+		}
+		conn, err := gosql.Open("mysql", fmt.Sprintf("wildcard_user:@tcp(127.0.0.1:%d)/dolt", config.Port()))
+		require.NoError(t, err)
+		defer conn.Close()
+		var pk int
+		require.NoError(t, conn.QueryRow("SELECT pk FROM wildcard_data").Scan(&pk))
+		require.Equal(t, 42, pk)
+
+	})
 }
 
 func TestComplexIndexQueries(t *testing.T) {
