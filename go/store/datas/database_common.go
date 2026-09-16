@@ -754,8 +754,7 @@ func (db *database) PersistGhostCommitIDs(ctx context.Context, ghosts hash.HashS
 	return err
 }
 
-// AtomicCommitElement contains all the information necessary to update one working set and its corresponding HEAD in
-// a single atomic operation.
+// AtomicCommitElement contains all the information necessary to update one dataset head as part of an atomic transaction.
 type AtomicCommitElement struct {
 	// CommitDS is the HEAD Dataset to update with a new commit, empty if no HEAD is to be updated.
 	CommitDS Dataset
@@ -773,6 +772,94 @@ type AtomicCommitElement struct {
 	RootVal types.Value
 }
 
+type DatasetUpdate interface {
+	// DatasetID returns the ID of the dataset to update
+	DatasetID() string
+	// BuildCommitValue writes the value to write as a commit to the dataset and returns a ref to it
+	BuildCommitValue(ctx context.Context, db *database) (hash.Hash, error)
+	// LockDatasetID returns the ID of the dataset to check for optimistic locking. See |LockPrevHash|.
+	LockDatasetID() string
+	// LockPrevHash returns the expected hash of the current head of |LockDatasetId()|.
+	// This value must be current for the update to succeed.
+	LockPrevHash() hash.Hash
+}
+
+// WorkingSetUpdate is a DatasetUpdate that updates a working set.
+type WorkingSetUpdate struct {
+	// WorkingSetDS is the working set Dataset to update with a new working set.
+	WorkingSetDS string
+	// WorkingSet is the new working set to write to the WorkingSetDS.
+	WorkingSet WorkingSetSpec
+	// PrevWsHash is the expected hash of the current working set for the WorkingSetDS.
+	// If the current working set does not match this hash, the update will fail with ErrOptimisticLockFailed.
+	PrevWsHash hash.Hash
+}
+
+var _ DatasetUpdate = &WorkingSetUpdate{}
+
+func (w WorkingSetUpdate) DatasetID() string {
+	return w.WorkingSetDS
+}
+
+func (w WorkingSetUpdate) BuildCommitValue(ctx context.Context, db *database) (hash.Hash, error) {
+	return newWorkingSet(ctx, db, w.WorkingSet)
+}
+
+func (w WorkingSetUpdate) LockDatasetID() string {
+	return w.WorkingSetDS
+}
+
+func (w WorkingSetUpdate) LockPrevHash() hash.Hash {
+	return w.PrevWsHash
+}
+
+type CommitUpdate struct {
+	CommitDS     Dataset
+	CommitOpts   CommitOptions
+	WorkingSetDS string
+	PrevWsHash   hash.Hash
+	RootVal      types.Value
+}
+
+func (c CommitUpdate) DatasetID() string {
+	return c.CommitDS.ID()
+}
+
+func (c CommitUpdate) BuildCommitValue(ctx context.Context, db *database) (hash.Hash, error) {
+	// Prepend the current head hash to the list of parents if one was provided. This is only necessary if parents were
+	// provided because we fill it in automatically in buildNewCommit otherwise.
+	if len(c.CommitOpts.Parents) > 0 && c.CommitOpts.AmendedCommit.IsEmpty() && !c.CommitOpts.Force {
+		headHash, ok := c.CommitDS.MaybeHeadAddr()
+		if ok {
+			if !hasParentHash(c.CommitOpts, headHash) {
+				c.CommitOpts.Parents = append([]hash.Hash{headHash}, c.CommitOpts.Parents...)
+			}
+		}
+	}
+
+	commit, err := db.BuildNewCommit(ctx, c.CommitDS, c.RootVal, c.CommitOpts)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+
+	commitRef, err := db.WriteValue(ctx, commit.NomsValue())
+	if err != nil {
+		return hash.Hash{}, err
+	}
+
+	return commitRef.TargetHash(), nil
+}
+
+func (c CommitUpdate) LockDatasetID() string {
+	return c.WorkingSetDS
+}
+
+func (c CommitUpdate) LockPrevHash() hash.Hash {
+	return c.PrevWsHash
+}
+
+var _ DatasetUpdate = &CommitUpdate{}
+
 // AtomicCommit is a slice of AtomicCommitElements to apply in a single atomic operation
 type AtomicCommit []AtomicCommitElement
 
@@ -786,7 +873,6 @@ type pendingAtomicCommit struct {
 func (db *database) CommitAtomic(
 	ctx context.Context,
 	atomicCommit AtomicCommit,
-	opts CommitOptions,
 ) ([]Dataset, error) {
 	pending := make([]pendingAtomicCommit, len(atomicCommit))
 
@@ -802,16 +888,16 @@ func (db *database) CommitAtomic(
 		if !cmt.CommitDS.IsEmpty() {
 			// Prepend the current head hash to the list of parents if one was provided. This is only necessary if parents were
 			// provided because we fill it in automatically in buildNewCommit otherwise.
-			if len(opts.Parents) > 0 && opts.AmendedCommit.IsEmpty() && !opts.Force {
+			if len(cmt.CommitOpts.Parents) > 0 && cmt.CommitOpts.AmendedCommit.IsEmpty() && !cmt.CommitOpts.Force {
 				headHash, ok := cmt.CommitDS.MaybeHeadAddr()
 				if ok {
-					if !hasParentHash(opts, headHash) {
-						opts.Parents = append([]hash.Hash{headHash}, opts.Parents...)
+					if !hasParentHash(cmt.CommitOpts, headHash) {
+						cmt.CommitOpts.Parents = append([]hash.Hash{headHash}, cmt.CommitOpts.Parents...)
 					}
 				}
 			}
 
-			commit, err := db.BuildNewCommit(ctx, cmt.CommitDS, cmt.RootVal, opts)
+			commit, err := db.BuildNewCommit(ctx, cmt.CommitDS, cmt.RootVal, cmt.CommitOpts)
 			if err != nil {
 				return nil, err
 			}
