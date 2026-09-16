@@ -1810,6 +1810,30 @@ var MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	// https://github.com/dolthub/dolt/issues/6612
+	{
+		// charset and collation ALTER TABLE syntax is MySQL-specific
+		Dialect: "mysql",
+		Name:    "Test feature data preservation across collation merges",
+		SetUpScript: []string{
+			"CREATE TABLE t(pk VARCHAR(255) PRIMARY KEY,v VARCHAR(255)) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+			"CALL dolt_commit('-Am','base')",
+			"CALL dolt_checkout('-b','feature')",
+			"INSERT INTO t VALUES('1','first')",
+			"CALL dolt_commit('-am','first row')",
+			"CALL dolt_checkout('main')",
+			"ALTER TABLE t COLLATE utf8mb4_0900_bin",
+			"ALTER TABLE t MODIFY v VARCHAR(255) NOT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin",
+			"CALL dolt_commit('-am','collation')",
+			"CALL dolt_checkout('feature')",
+			"CALL dolt_merge('main','-m','merge')",
+			"INSERT INTO t VALUES('2','second')",
+			"CALL dolt_commit('-am','second row')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "SELECT to_pk,to_v,diff_type FROM dolt_commit_diff_t WHERE to_commit=HASHOF('feature') AND from_commit=DOLT_MERGE_BASE('main','feature') ORDER BY to_pk", Expected: []sql.Row{{"1", "first", "added"}, {"2", "second", "added"}}},
+		},
+	},
 	// Behavior between new and old format diverges in the case where right adds
 	// a unique key constraint and resolves existing violations.
 	// In the old format, because the violations exist on the left the merge is aborted.
