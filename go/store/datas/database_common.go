@@ -400,7 +400,7 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 		}
 	}
 
-	err = db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
+	_, err = db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
 		curr, err := am.Get(ctx, ds.ID())
 		if err != nil {
 			return prolly.AddressMap{}, err
@@ -776,13 +776,13 @@ func (db *database) CommitAtomic(
 	ctx context.Context,
 	atomicCommit AtomicCommit,
 	opts CommitOptions,
-) (Dataset, Dataset, error) {
+) ([]Dataset, error) {
 	pending := make([]pendingAtomicCommit, len(atomicCommit))
 
 	for i, cmt := range atomicCommit {
 		wsAddr, err := newWorkingSet(ctx, db, atomicCommit[i].WorkingSet)
 		if err != nil {
-			return Dataset{}, Dataset{}, err
+			return nil, err
 		}
 
 		var commitValRef types.Ref
@@ -802,17 +802,17 @@ func (db *database) CommitAtomic(
 
 			commit, err := db.BuildNewCommit(ctx, cmt.CommitDS, cmt.RootVal, opts)
 			if err != nil {
-				return Dataset{}, Dataset{}, err
+				return nil, err
 			}
 
 			commitRef, err := db.WriteValue(ctx, commit.NomsValue())
 			if err != nil {
-				return Dataset{}, Dataset{}, err
+				return nil, err
 			}
 
 			commitValRef, err = types.ToRefOfValue(commitRef, db.Format())
 			if err != nil {
-				return Dataset{}, Dataset{}, err
+				return nil, err
 			}
 
 			currCommitDSHash, _ = cmt.CommitDS.MaybeHeadAddr()
@@ -825,13 +825,22 @@ func (db *database) CommitAtomic(
 		}
 	}
 
-	err := db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
+	_, err := db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
+		ae := am.Editor()
+
 		for i := range atomicCommit {
+			workingSetDS := atomicCommit[i].WorkingSetDS
+			prevWsHash := atomicCommit[i].PrevWsHash
+			commitDS := atomicCommit[i].CommitDS
+			currCommitDSHash := pending[i].currCommitDSHash
+			commitValRef := pending[i].commitRef
+			wsAddr := pending[i].wsAddr
 
 			currWS, err := am.Get(ctx, workingSetDS.ID())
 			if err != nil {
 				return prolly.AddressMap{}, err
 			}
+
 			if currWS != prevWsHash {
 				return prolly.AddressMap{}, ErrOptimisticLockFailed
 			}
@@ -842,7 +851,7 @@ func (db *database) CommitAtomic(
 			if currDS != currCommitDSHash {
 				return prolly.AddressMap{}, ErrMergeNeeded
 			}
-			ae := am.Editor()
+
 			err = ae.Update(ctx, commitDS.ID(), commitValRef.TargetHash())
 			if err != nil {
 				return prolly.AddressMap{}, err
@@ -851,33 +860,34 @@ func (db *database) CommitAtomic(
 			if err != nil {
 				return prolly.AddressMap{}, err
 			}
-			_, err = ae.Flush(ctx)
-			return _, err
 		}
 
-		return nil
+		return ae.Flush(ctx)
 	})
 
 	if err != nil {
-		return Dataset{}, Dataset{}, err
+		return nil, err
 	}
 
 	currentDatasets, err := db.Datasets(ctx)
 	if err != nil {
-		return Dataset{}, Dataset{}, err
+		return nil, err
 	}
 
-	commitDS, err = db.datasetFromMap(ctx, commitDS.ID(), currentDatasets)
-	if err != nil {
-		return Dataset{}, Dataset{}, err
-	}
+	// TODO: come back to this
+	// commitDS, err = db.datasetFromMap(ctx, commitDS.ID(), currentDatasets)
+	// if err != nil {
+	// 	return Dataset{}, Dataset{}, err
+	// }
+	//
+	// workingSetDS, err = db.datasetFromMap(ctx, workingSetDS.ID(), currentDatasets)
+	// if err != nil {
+	// 	return Dataset{}, Dataset{}, err
+	// }
 
-	workingSetDS, err = db.datasetFromMap(ctx, workingSetDS.ID(), currentDatasets)
-	if err != nil {
-		return Dataset{}, Dataset{}, err
-	}
-
-	return commitDS, workingSetDS, nil
+	// TODO(next): return a slice of dataset pairs
+	// TODO(next): investigate workspace-only version of this method for same reason
+	return nil, nil
 }
 
 // CommitWithWorkingSet updates two Datasets atomically: the working set, and its corresponding HEAD. Uses the same
@@ -922,7 +932,7 @@ func (db *database) CommitWithWorkingSet(
 
 	currDSHash, _ := commitDS.MaybeHeadAddr()
 
-	err = db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
+	_, err = db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
 		currWS, err := am.Get(ctx, workingSetDS.ID())
 		if err != nil {
 			return prolly.AddressMap{}, err
@@ -978,7 +988,7 @@ func (db *database) Delete(ctx context.Context, ds Dataset, wsIDStr string) (Dat
 func (db *database) update(
 	ctx context.Context,
 	editFB func(context.Context, prolly.AddressMap) (prolly.AddressMap, error),
-) error {
+) (prolly.AddressMap, error) {
 	var (
 		err  error
 		root hash.Hash
@@ -987,33 +997,35 @@ func (db *database) update(
 	for {
 		root, err = db.rt.Root(ctx)
 		if err != nil {
-			return err
+			return prolly.AddressMap{}, err
 		}
 
 		var newRootHash hash.Hash
 
 		datasets, err := db.loadDatasetsRefmap(ctx, root)
 		if err != nil {
-			return err
+			return prolly.AddressMap{}, err
 		}
 
 		datasets, err = editFB(ctx, datasets)
 		if err != nil {
-			return err
+			return prolly.AddressMap{}, err
 		}
 
 		data := storeroot_flatbuffer(datasets)
 		r, err := db.WriteValue(ctx, types.SerialMessage(data))
 		if err != nil {
-			return err
+			return prolly.AddressMap{}, err
 		}
 
 		newRootHash = r.TargetHash()
 
 		err = db.tryCommitChunks(ctx, newRootHash, root)
-		if err != ErrOptimisticLockFailed {
-			return err
+		if err == ErrOptimisticLockFailed {
+			continue
 		}
+
+		return datasets, err
 	}
 }
 
