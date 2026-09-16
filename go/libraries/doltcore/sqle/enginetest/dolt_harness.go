@@ -28,7 +28,6 @@ import (
 	"github.com/dolthub/go-mysql-server/memory"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
-	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
@@ -288,7 +287,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		if err != nil {
 			return nil, err
 		}
-		e.Analyzer.ExecBuilder = rowexec.NewBuilder(kvexec.Builder{}, e.Analyzer.Overrides)
+		e.Analyzer.ExecBuilder = kvexec.NewExecBuilder(e.Analyzer.Overrides)
 		e.Analyzer.ExecBuilder.Runner = e.Analyzer.Runner
 		d.engine = e
 
