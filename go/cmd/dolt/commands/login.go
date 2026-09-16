@@ -287,7 +287,13 @@ func updateConfig(dEnv *env.DoltEnv, whoAmI *remotesapi.WhoAmIResponse, dCreds c
 
 	gcfg.SetStrings(map[string]string{config.UserCreds: dCreds.KeyIDBase32Str()})
 
-	userUpdates := map[string]string{config.UserNameKey: whoAmI.DisplayName, config.UserEmailKey: whoAmI.EmailAddress}
+	userUpdates := make(map[string]string)
+	if whoAmI.DisplayName != "" {
+		userUpdates[config.UserNameKey] = whoAmI.DisplayName
+	}
+	if whoAmI.EmailAddress != "" {
+		userUpdates[config.UserEmailKey] = whoAmI.EmailAddress
+	}
 	lcfg, hasLCfg := dEnv.Config.GetConfig(env.LocalConfig)
 
 	if hasLCfg {
