@@ -42,7 +42,7 @@ func TestSizeCache(t *testing.T) {
 
 	c := New(1024)
 	for i, v := range []string{"data-1", "data-2", "data-3", "data-4", "data-5", "data-6", "data-7", "data-8", "data-9"} {
-		c.Add(hashFromString(v), defSize, v)
+		c.Add(hashFromString(v), defSize, v, c.Generation())
 		maxElements := uint64(i + 1)
 		if maxElements >= uint64(5) {
 			maxElements = uint64(5)
@@ -50,22 +50,22 @@ func TestSizeCache(t *testing.T) {
 		assert.Equal(maxElements*defSize, c.totalSize)
 	}
 
-	_, ok := c.Get(hashFromString("data-1"))
+	_, _, ok := c.Get(hashFromString("data-1"))
 	assert.False(ok)
 	assert.Equal(hashFromString("data-5"), c.lru.Front().Value)
 
-	v, ok := c.Get(hashFromString("data-5"))
+	v, _, ok := c.Get(hashFromString("data-5"))
 	assert.True(ok)
 	assert.Equal("data-5", v.(string))
 	assert.Equal(hashFromString("data-5"), c.lru.Back().Value)
 	assert.Equal(hashFromString("data-6"), c.lru.Front().Value)
 
-	c.Add(hashFromString("data-7"), defSize, "data-7")
+	c.Add(hashFromString("data-7"), defSize, "data-7", c.Generation())
 	assert.Equal(hashFromString("data-7"), c.lru.Back().Value)
 	assert.Equal(uint64(1000), c.totalSize)
 
-	c.Add(hashFromString("no-data"), 0, nil)
-	v, ok = c.Get(hashFromString("no-data"))
+	c.Add(hashFromString("no-data"), 0, nil, c.Generation())
+	v, _, ok = c.Get(hashFromString("no-data"))
 	assert.True(ok)
 	assert.Nil(v)
 	assert.Equal(hashFromString("no-data"), c.lru.Back().Value)
@@ -79,14 +79,14 @@ func TestSizeCache(t *testing.T) {
 	}
 	assert.Equal(hashFromString("no-data"), c.lru.Front().Value)
 
-	c.Add(hashFromString("data-10"), 200, "data-10")
+	c.Add(hashFromString("data-10"), 200, "data-10", c.Generation())
 	assert.Equal(uint64(1000), c.totalSize)
 	assert.Equal(5, c.lru.Len())
 	assert.Equal(5, len(c.cache))
 
-	_, ok = c.Get(hashFromString("no-data"))
+	_, _, ok = c.Get(hashFromString("no-data"))
 	assert.False(ok)
-	_, ok = c.Get(hashFromString("data-5"))
+	_, _, ok = c.Get(hashFromString("data-5"))
 	assert.False(ok)
 
 	c.Drop(hashFromString("data-10"))
@@ -97,7 +97,7 @@ func TestSizeCache(t *testing.T) {
 	c.Purge()
 	assert.Equal(uint64(0), c.totalSize)
 	for i, v := range []string{"data-1", "data-2", "data-3", "data-4", "data-5", "data-6", "data-7", "data-8", "data-9"} {
-		c.Add(hashFromString(v), defSize, v)
+		c.Add(hashFromString(v), defSize, v, c.Generation())
 		maxElements := uint64(i + 1)
 		if maxElements >= uint64(5) {
 			maxElements = uint64(5)
@@ -115,10 +115,10 @@ func TestSizeCacheWithExpiry(t *testing.T) {
 	c := NewWithExpireCallback(5, expire)
 	data := []string{"a", "b", "c", "d", "e"}
 	for i, k := range data {
-		c.Add(k, 1, i)
+		c.Add(k, 1, i, c.Generation())
 	}
 
-	c.Add("big", 5, "thing")
+	c.Add("big", 5, "thing", c.Generation())
 	sort.Strings(expired)
 	assert.Equal(t, data, expired)
 }
@@ -139,7 +139,7 @@ func concurrencySizeCacheTest(data []string) {
 		wg.Add(1)
 		go func() {
 			for d := range dchan {
-				cache.Add(d, uint64(len(d)), d)
+				cache.Add(d, uint64(len(d)), d, cache.Generation())
 			}
 			wg.Done()
 		}()
@@ -171,8 +171,8 @@ func TestTooLargeValue(t *testing.T) {
 	assert := assert.New(t)
 
 	c := New(1024)
-	c.Add(hashFromString("big-data"), 2048, "big-data")
-	_, ok := c.Get(hashFromString("big-data"))
+	c.Add(hashFromString("big-data"), 2048, "big-data", c.Generation())
+	_, _, ok := c.Get(hashFromString("big-data"))
 	assert.False(ok)
 }
 
@@ -180,7 +180,34 @@ func TestZeroSizeCache(t *testing.T) {
 	assert := assert.New(t)
 
 	c := New(0)
-	c.Add(hashFromString("data1"), 200, "data1")
-	_, ok := c.Get(hashFromString("data1"))
+	c.Add(hashFromString("data1"), 200, "data1", c.Generation())
+	_, _, ok := c.Get(hashFromString("data1"))
 	assert.False(ok)
+}
+
+func TestAddAfterPurgeIsDropped(t *testing.T) {
+	assert := assert.New(t)
+
+	// A value fetched from the backing store before a Purge must not be
+	// cached after it. This is what keeps a read which was already in
+	// flight when a GC began, and which therefore took no read dependency
+	// on the chunk, from repopulating the cache the GC just emptied.
+	c := New(1024)
+
+	// Read the generation, as a caller does on a miss, then purge before
+	// getting around to the Add.
+	_, gen, ok := c.Get(hashFromString("data-1"))
+	assert.False(ok)
+	c.Purge()
+	c.Add(hashFromString("data-1"), 200, "data-1", gen)
+
+	_, _, ok = c.Get(hashFromString("data-1"))
+	assert.False(ok)
+	assert.Equal(uint64(0), c.totalSize)
+
+	// An Add which reads the generation after the purge still lands.
+	c.Add(hashFromString("data-1"), 200, "data-1", c.Generation())
+	v, _, ok := c.Get(hashFromString("data-1"))
+	assert.True(ok)
+	assert.Equal("data-1", v.(string))
 }

@@ -199,9 +199,10 @@ func (lvs *ValueStore) Format() *NomsBinFormat {
 // returns nil.
 func (lvs *ValueStore) ReadValue(ctx context.Context, h hash.Hash) (Value, error) {
 	lvs.versOnce.Do(lvs.expectVersion)
-	if v, ok := lvs.decodedChunks.Get(h); ok {
-		d.PanicIfTrue(v == nil)
-		nv := v.(Value)
+	cached, gen, ok := lvs.decodedChunks.Get(h)
+	if ok {
+		d.PanicIfTrue(cached == nil)
+		nv := cached.(Value)
 		return nv, nil
 	}
 
@@ -232,7 +233,7 @@ func (lvs *ValueStore) ReadValue(ctx context.Context, h hash.Hash) (Value, error
 		}
 	}
 
-	lvs.decodedChunks.Add(h, uint64(len(chunk.Data())), v)
+	lvs.decodedChunks.Add(h, uint64(len(chunk.Data())), v, gen)
 	return v, nil
 }
 
@@ -252,6 +253,9 @@ func (lvs *ValueStore) MustReadValue(ctx context.Context, h hash.Hash) (Value, e
 // represented by nil.
 func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice) (ValueSlice, error) {
 	lvs.versOnce.Do(lvs.expectVersion)
+	// The cache generation each miss saw before we went to the store,
+	// written before GetMany and read from its callback.
+	gens := make(map[hash.Hash]uint64)
 	decode := func(h hash.Hash, chunk *chunks.Chunk) (Value, error) {
 		if chunk.IsGhost() {
 			return GhostValue{hash: chunk.Hash()}, nil
@@ -272,7 +276,7 @@ func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice
 			}
 		}
 
-		lvs.decodedChunks.Add(h, uint64(len(chunk.Data())), v)
+		lvs.decodedChunks.Add(h, uint64(len(chunk.Data())), v, gens[h])
 		return v, nil
 	}
 
@@ -282,12 +286,13 @@ func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice
 	// Put the rest into a new HashSet to be requested en masse from the ChunkStore.
 	remaining := hash.HashSet{}
 	for _, h := range hashes {
-		if v, ok := lvs.decodedChunks.Get(h); ok {
+		if v, gen, ok := lvs.decodedChunks.Get(h); ok {
 			d.PanicIfTrue(v == nil)
 			nv := v.(Value)
 			foundValues[h] = nv
 		} else {
 			remaining.Insert(h)
+			gens[h] = gen
 		}
 	}
 
@@ -360,13 +365,14 @@ func (lvs *ValueStore) WriteValue(ctx context.Context, v Value) (Ref, error) {
 	}
 	defer finalize()
 
+	gen := lvs.decodedChunks.Generation()
 	err = lvs.cs.Put(ctx, c, lvs.getAddrs)
 	if err != nil {
 		return Ref{}, err
 	}
 
 	if !lvs.skipWriteCaching {
-		lvs.decodedChunks.Add(c.Hash(), uint64(c.Size()), v)
+		lvs.decodedChunks.Add(c.Hash(), uint64(c.Size()), v, gen)
 	}
 
 	return r, nil

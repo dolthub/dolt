@@ -45,6 +45,18 @@ type SizeCache struct {
 	totalSize uint64
 	maxSize   uint64
 	mu        sync.Mutex
+
+	// Incremented by every Purge. Read out of Get and rechecked by Add,
+	// both under mu, so that a value which was fetched from the backing
+	// store before a Purge cannot be cached after it.
+	//
+	// A ValueStore is purged as part of establishing a GC safepoint,
+	// precisely so that everything the application can still reach has
+	// to be read back through the ChunkStore, where a read dependency is
+	// taken on it. A read which was already in flight took no such
+	// dependency, so putting its result back into the cache would hand
+	// out a value the GC is free to collect.
+	gen uint64
 }
 
 type ExpireCallback func(key interface{})
@@ -79,27 +91,42 @@ func (c *SizeCache) entry(key interface{}) (sizeCacheEntry, bool) {
 	return entry, true
 }
 
-// Get checks the searches the cache for an entry. If it exists, it moves it's
-// lru entry to the back of the queue and returns (value, true). Otherwise, it
-// returns (nil, false).
-func (c *SizeCache) Get(key interface{}) (interface{}, bool) {
+// Get searches the cache for an entry. If it exists, it moves its lru
+// entry to the back of the queue and returns (value, gen, true).
+// Otherwise, it returns (nil, gen, false). |gen| is the cache's
+// generation; a caller which misses here and goes to the backing store
+// must pass it back to Add.
+func (c *SizeCache) Get(key interface{}) (interface{}, uint64, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if entry, ok := c.entry(key); ok {
-		return entry.value, true
+		return entry.value, c.gen, true
 	}
-	return nil, false
+	return nil, c.gen, false
+}
+
+// Generation returns the cache's current generation, for callers which
+// have not just missed in Get.
+func (c *SizeCache) Generation() uint64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.gen
 }
 
 // Add will add this element to the cache at the back of the queue as long it's
 // size does not exceed maxSize. If the addition of this entry causes the size of
 // the cache to exceed maxSize, the necessary entries at the front of the queue
 // will be deleted in order to keep the total cache size below maxSize.
-func (c *SizeCache) Add(key interface{}, size uint64, value interface{}) {
+// It is a no-op if the cache has been purged since |gen| was read.
+func (c *SizeCache) Add(key interface{}, size uint64, value interface{}, gen uint64) {
 	if size <= c.maxSize {
 		c.mu.Lock()
 		defer c.mu.Unlock()
+
+		if c.gen != gen {
+			return
+		}
 
 		if _, ok := c.entry(key); ok {
 			// this value is already in the cache; just return
@@ -147,6 +174,7 @@ func (c *SizeCache) Purge() {
 	clear(c.cache)
 	c.totalSize = 0
 	c.lru = list.List{}
+	c.gen += 1
 }
 
 func (c *SizeCache) Size() uint64 {
