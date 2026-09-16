@@ -55,8 +55,9 @@ type openOpts struct {
 	// entering the store. The cost is currently dominated by the sha512
 	// over the suffixes.
 	//
-	// Archive files carry their own sha512 checksums over their index and
-	// data, so they ignore this option.
+	// Archive files honor this option too. They have no checksum over
+	// their index, so they scan it instead. See
+	// [archiveReader.deepValidate].
 	deepValidate bool
 }
 
