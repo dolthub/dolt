@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0.
 'use strict';
 
-const workflows = require('./workflows.json');
 const ADMISSION_STEP = 'Check deferred CI';
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const marker = (run, attempt) => `dolt-ci-deferred-${run}-${attempt}-`;
@@ -39,6 +38,8 @@ function jobDecision(jobs) {
 }
 
 async function readDecision({ github, repo, run, jobs }) {
+  // Discover participation from GitHub's job metadata, not a workflow registry.
+  if (!jobs.some(job => job.steps?.some(step => step.name === ADMISSION_STEP))) return 'unmanaged';
   const decision = jobDecision(jobs);
   if (decision === 'admitted' || !jobs.some(job => job.steps?.some(step =>
     step.name === ADMISSION_STEP && step.conclusion !== 'skipped'))) return decision;
@@ -73,7 +74,7 @@ async function cancelDeferredRun({ github, context, wait = sleep, attempts = 20 
   const repo = context.repo;
   for (let attempt = 0; attempt < attempts; attempt++) {
     const { data: run } = await github.rest.actions.getWorkflowRun({ ...repo, run_id: runId });
-    if (run.event !== 'pull_request' || !workflows.includes(run.path) || run.status === 'completed') return;
+    if (run.event !== 'pull_request' || run.status === 'completed') return;
     if (run.run_attempt !== context.payload.workflow_run.run_attempt) return;
     // Only trust GitHub's metadata, never PR artifacts or code. Recheck the live
     // head so an old event cannot cancel the new revision's run.
@@ -90,6 +91,10 @@ async function cancelDeferredRun({ github, context, wait = sleep, attempts = 20 
       }
       return;
     }
+    // Unrelated PR workflows need no admission monitoring. Empty step metadata
+    // can mean a runner has not started yet, so allow the bounded retry below.
+    if (jobs.some(job => job.steps?.length) &&
+        !jobs.some(job => job.steps?.some(step => step.name === ADMISSION_STEP))) return;
     if (jobs.length && jobs.every(job => job.conclusion === 'skipped' || job.steps?.some(step =>
       step.name === ADMISSION_STEP && step.conclusion === 'success'))) return;
     await wait(3000);

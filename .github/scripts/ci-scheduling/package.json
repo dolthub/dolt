@@ -3,8 +3,5 @@
   "private": true,
   "scripts": {
     "test": "node --test *.test.js"
-  },
-  "devDependencies": {
-    "yaml": "^2.8.3"
   }
 }

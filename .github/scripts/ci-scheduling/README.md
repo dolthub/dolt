@@ -77,7 +77,10 @@ Sources: [GitHub CLI creation and metadata calls](https://github.com/cli/cli/blo
 - Label additions/removals and draft-ready transitions trigger reconciliation.
   An approval triggers a small read-only review-notification workflow; its
   completion wakes the trusted controller, which fetches the current reviews.
-  Review edits and dismissals also trigger that recheck.
+  This is a permissions bridge: review events on fork PRs have read-only tokens
+  and cannot rerun CI directly, while `workflow_run` can use a write token.
+  Without this bridge, approvals would wait for the scheduled poll. Review edits
+  and dismissals also trigger that recheck. See [GitHub’s event permissions](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_run).
 - `Schedule PR CI` polls every 15 minutes, at :07, :22, :37, and :52. Review-only
   PRs, drafts, and tracked PRs whose deferral labels were removed are checked
   during daytime too. After-hours PRs are polled during the release window.
@@ -198,10 +201,18 @@ are not automatically retried; use their original workflow controls.
   only to identify deferrals or admission errors. The scheduler never reports
   test completion.
 - The trusted controller never executes PR code or downloads PR artifacts.
-- Register each independent PR workflow in `workflows.json` and the scheduler's
-  subscriptions. Every job must start with the shared action; only failure/always
-  handlers need an extra admission guard. Structural tests verify this. The review notifier remains a
-  separate metadata workflow. No legacy workflow format is supported.
+- The scheduler queries Actions runs for the current PR head and groups them by
+  workflow ID. It recognizes participating workflows by the shared admission
+  step in their job metadata and confirms deferrals using attempt-specific
+  artifact markers. No file registry is needed; unrelated workflows are ignored.
+- The `workflow_run.workflows` subscription still lists display names: GitHub
+  requires literal names to deliver these events and does not support a catch-all
+  subscription. Update that one list when adding or renaming a PR workflow.
+  Runtime discovery still finds unlisted workflows during polling, but prompt
+  cancellation of read-only jobs requires the event subscription. Removing the
+  list entirely would require polling or an external webhook service.
+- Each participating job starts with the shared action; failure/always handlers
+  additionally check its admission output.
 
 GitHub permits reruns for **30 days after the original run**, up to **50 attempts**.
 This also limits how long draft/review deferrals can be automatically released
@@ -221,7 +232,6 @@ actionlint -shellcheck='' .github/workflows/ci-scheduler.yaml \
   .github/workflows/ci-review-notification.yaml .github/workflows/ci-scheduling-tests.yaml
 ```
 
-The mocked API tests cover label combinations, active approvals and dismissal,
-draft submission and its override, time boundaries and DST, comments, queue
-recovery, stale/fork heads, retries, errors, inline cancellation, matrix jobs, restricted tokens, and workflow wiring. They do not launch
-actual CI or change repository settings.
+The minimal API tests cover admission conditions, runtime workflow discovery,
+append-only event comments, safe release and cancellation, and review wake-ups.
+They do not launch actual CI or change repository settings.

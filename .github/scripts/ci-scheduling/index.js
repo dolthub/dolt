@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0.
 'use strict';
 
-const workflows = require('./workflows.json');
 const AFTER_HOURS_LABEL = 'defer-ci-after-hours';
 const REVIEW_LABEL = 'defer-ci-review';
 const FORCE_DRAFT_LABEL = 'force-draft-ci';
@@ -111,8 +110,11 @@ function belongsToPR(run, pr) {
 function latestRuns(runs, pr) {
   const latest = new Map();
   for (const run of runs) {
-    if (!workflows.includes(run.path) || !belongsToPR(run, pr)) continue;
-    if (!latest.has(run.path) || latest.get(run.path).id < run.id) latest.set(run.path, run);
+    if (!belongsToPR(run, pr)) continue;
+    // Group by GitHub's workflow ID, without a registry of names or file paths.
+    if (!latest.has(run.workflow_id) || latest.get(run.workflow_id).id < run.id) {
+      latest.set(run.workflow_id, run);
+    }
   }
   return [...latest.values()];
 }

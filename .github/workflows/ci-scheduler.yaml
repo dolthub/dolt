@@ -4,6 +4,9 @@ on:
   pull_request_target:
     types: [opened, synchronize, reopened, labeled, unlabeled, ready_for_review, converted_to_draft]
   workflow_run:
+    # GitHub requires literal workflow names here (no catch-all subscription).
+    # This list only wakes the controller; it discovers PR runs and admission
+    # steps at runtime. Keep it in sync when adding or renaming a PR workflow.
     workflows:
       - "Test Bats Unix Remote"
       - "Test Bats Unix"
