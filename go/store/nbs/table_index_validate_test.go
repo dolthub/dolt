@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -183,6 +184,147 @@ func TestDeepValidateTableIndex(t *testing.T) {
 			require.NoError(t, idx.checkTableFileSize(uint64(len(bad))))
 
 			require.ErrorIs(t, idx.deepValidate(name), ErrCorruptTableIndex)
+		})
+	}
+}
+
+// packOffsets lays out |offs| the way the index stores them.
+func packOffsets(offs ...uint64) []byte {
+	b := make([]byte, len(offs)*offsetSize)
+	for i, o := range offs {
+		binary.BigEndian.PutUint64(b[i*offsetSize:], o)
+	}
+	return b
+}
+
+// TestCheckOffsets drives checkOffsets at the boundary of the smallest record
+// it accepts. A record is a non-empty snappy frame plus a crc32, so the gap from
+// one offset to the next is greater than checksumSize.
+func TestCheckOffsets(t *testing.T) {
+	// The count only shows up in the error message.
+	ti := onHeapTableIndex{count: 8}
+
+	tests := []struct {
+		name string
+		offs []uint64
+		prev uint64
+		ok   bool
+	}{
+		{name: "no offsets", offs: nil, ok: true},
+		{name: "smallest accepted first record", offs: []uint64{checksumSize + 1}, ok: true},
+		{name: "first record is exactly a crc32", offs: []uint64{checksumSize}},
+		{name: "first record is one byte short of a crc32", offs: []uint64{checksumSize - 1}},
+		{name: "empty first record", offs: []uint64{0}},
+		{name: "smallest accepted later record", offs: []uint64{100, 100 + checksumSize + 1}, prev: 0, ok: true},
+		{name: "later record is exactly a crc32", offs: []uint64{100, 100 + checksumSize}},
+		{name: "later record is empty", offs: []uint64{100, 100}},
+		{name: "offsets go backwards", offs: []uint64{100, 99}},
+		{name: "offset returns to zero", offs: []uint64{100, 0}},
+		{name: "prev is respected", offs: []uint64{100}, prev: 100 - checksumSize},
+		{name: "prev is respected and satisfied", offs: []uint64{100}, prev: 100 - checksumSize - 1, ok: true},
+		// prev + checksumSize wraps here.
+		{name: "offset wraps past the top of the range", offs: []uint64{checksumSize - 1}, prev: math.MaxUint64 - 1},
+		{name: "max offset after a max prev", offs: []uint64{math.MaxUint64}, prev: math.MaxUint64},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			last, err := ti.checkOffsets(packOffsets(test.offs...), 0, test.prev)
+			if !test.ok {
+				require.ErrorIs(t, err, ErrCorruptTableIndex)
+				return
+			}
+			require.NoError(t, err)
+			if len(test.offs) == 0 {
+				require.Equal(t, test.prev, last)
+			} else {
+				require.Equal(t, test.offs[len(test.offs)-1], last)
+			}
+		})
+	}
+}
+
+// TestCheckOffsetsReportsOrdinal covers |ordBase|, which puts the offsets2
+// half's ordinals in the file's numbering.
+func TestCheckOffsetsReportsOrdinal(t *testing.T) {
+	ti := onHeapTableIndex{count: 8}
+	_, err := ti.checkOffsets(packOffsets(100, 200, 200), 5, 0)
+	require.ErrorIs(t, err, ErrCorruptTableIndex)
+	require.Contains(t, err.Error(), "chunk record 7 of 8")
+}
+
+// TestValidateChecksOffsetsSeam covers the handoff between the two halves of
+// the offsets: the last offset of offsets1 is the |prev| for the first record
+// of offsets2.
+func TestValidateChecksOffsetsSeam(t *testing.T) {
+	ctx := context.Background()
+	const count = 9 // chunks1 == 5, so the seam is at ordinal 5.
+	tf, _, err := buildTable(validateTestChunks(t, count))
+	require.NoError(t, err)
+
+	idx, err := parseTableIndexByCopy(ctx, tf, &UnlimitedQuotaProvider{})
+	require.NoError(t, err)
+	require.Equal(t, uint64(count-count/2)*offsetSize, uint64(len(idx.offsets1)))
+	require.NoError(t, idx.Close())
+
+	// Record 5 is the first one in offsets2. Shrink it to exactly a crc32.
+	bad := mutateIndex(t, tf, count, func(_, lengths, _ []byte) {
+		binary.BigEndian.PutUint32(lengths[5*lengthSize:], checksumSize)
+	})
+	_, err = parseTableIndexByCopy(ctx, bad, &UnlimitedQuotaProvider{})
+	require.ErrorIs(t, err, ErrCorruptTableIndex)
+	require.Contains(t, err.Error(), "chunk record 5 of 9")
+}
+
+// TestCheckOrdinalsDistinct drives the distinctness check at the ends of the
+// ordinal range and across the word boundary of its bitmap.
+func TestCheckOrdinalsDistinct(t *testing.T) {
+	// tuples builds a prefix tuple block whose ordinals are |ords|.
+	tuples := func(ords ...uint32) []byte {
+		b := make([]byte, len(ords)*prefixTupleSize)
+		for i, o := range ords {
+			binary.BigEndian.PutUint32(b[i*prefixTupleSize+hash.PrefixLen:], o)
+		}
+		return b
+	}
+	// identity returns [0, n) with |swap| applied.
+	identity := func(n uint32, swap func(ords []uint32)) []uint32 {
+		ords := make([]uint32, n)
+		for i := range ords {
+			ords[i] = uint32(i)
+		}
+		swap(ords)
+		return ords
+	}
+	noop := func([]uint32) {}
+
+	tests := []struct {
+		name string
+		ords []uint32
+		ok   bool
+	}{
+		{name: "empty", ords: nil, ok: true},
+		{name: "single", ords: []uint32{0}, ok: true},
+		{name: "single repeated", ords: []uint32{0, 0}},
+		{name: "a permutation is fine", ords: []uint32{3, 1, 0, 2}, ok: true},
+		{name: "first and last are the same", ords: []uint32{0, 1, 2, 0}},
+		{name: "exactly one bitmap word", ords: identity(64, noop), ok: true},
+		{name: "one more than a bitmap word", ords: identity(65, noop), ok: true},
+		// Ordinals 63 and 64 land in different words of the bitmap.
+		{name: "repeat across the bitmap word boundary", ords: identity(65, func(ords []uint32) { ords[64] = 63 })},
+		{name: "repeat of the last ordinal in a word", ords: identity(128, func(ords []uint32) { ords[0] = 63 })},
+		{name: "repeat of the first ordinal in a word", ords: identity(128, func(ords []uint32) { ords[0] = 64 })},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ti := onHeapTableIndex{count: uint32(len(test.ords)), prefixTuples: tuples(test.ords...)}
+			err := ti.checkOrdinalsDistinct()
+			if !test.ok {
+				require.ErrorIs(t, err, ErrCorruptTableIndex)
+				return
+			}
+			require.NoError(t, err)
 		})
 	}
 }

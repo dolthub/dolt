@@ -349,7 +349,9 @@ func (ti onHeapTableIndex) validate() error {
 func (ti onHeapTableIndex) checkOffsets(b []byte, ordBase uint32, prev uint64) (uint64, error) {
 	for off := int64(0); off < int64(len(b)); off += offsetSize {
 		cur := binary.BigEndian.Uint64(b[off:])
-		if cur <= prev+checksumSize {
+		// Subtraction rather than |cur <= prev+checksumSize|, which wraps
+		// for a |prev| near the top of the range.
+		if cur <= prev || cur-prev <= checksumSize {
 			return 0, fmt.Errorf("%w: chunk record %d of %d spans offsets [%d, %d), too small to hold a chunk and a crc32",
 				ErrCorruptTableIndex, ordBase+uint32(off/offsetSize), ti.count, prev, cur)
 		}
