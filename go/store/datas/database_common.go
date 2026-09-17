@@ -553,57 +553,15 @@ func (db *database) Commit(ctx context.Context, ds Dataset, v types.Value, opts 
 }
 
 func (db *database) WriteCommit(ctx context.Context, ds Dataset, commit *Commit) (Dataset, error) {
-	currentAddr, _ := ds.MaybeHeadAddr()
-
-	val := commit.NomsValue()
-
-	_, err := db.WriteValue(ctx, val)
-	if err != nil {
-		return Dataset{}, err
-	}
-
-	return db.doHeadUpdate(
-		ctx,
-		ds,
-		func(ds Dataset) error {
-			return db.doCommit(ctx, ds.ID(), currentAddr, val)
-		},
-	)
+	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error {
+		_, err := db.CommitDatasets(ctx, []DatasetUpdate{CommitUpdate{CommitDS: ds, Commit: commit}})
+		return err
+	})
 }
 
 // Calls db.Commit with empty CommitOptions{}.
 func CommitValue(ctx context.Context, db Database, ds Dataset, v types.Value) (Dataset, error) {
 	return db.Commit(ctx, ds, v, CommitOptions{Meta: &CommitMeta{}})
-}
-func (db *database) doCommit(ctx context.Context, datasetID string, datasetCurrentAddr hash.Hash, newCommitValue types.Value) error {
-	_, err := db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
-		curr, err := am.Get(ctx, datasetID)
-		if err != nil {
-			return prolly.AddressMap{}, err
-		}
-		if curr != datasetCurrentAddr {
-			return prolly.AddressMap{}, ErrMergeNeeded
-		}
-		h, err := newCommitValue.Hash(db.Format())
-		if err != nil {
-			return prolly.AddressMap{}, err
-		}
-		if curr != (hash.Hash{}) {
-			if curr == h {
-				return prolly.AddressMap{}, ErrAlreadyCommitted
-			}
-		}
-
-		ae := am.Editor()
-		err = ae.Update(ctx, datasetID, h)
-		if err != nil {
-			return prolly.AddressMap{}, err
-		}
-
-		return ae.Flush(ctx)
-	})
-
-	return err
 }
 
 func mergeNeeded(currentAddr hash.Hash, ancestorAddr hash.Hash) bool {
@@ -775,6 +733,8 @@ type CommitUpdate struct {
 	WorkingSetDS string
 	PrevWsHash   hash.Hash
 	RootVal      types.Value
+	// Commit optionally supplies a prebuilt commit instead of RootVal and CommitOpts.
+	Commit *Commit
 }
 
 func (c CommitUpdate) DatasetID() string {
@@ -782,9 +742,16 @@ func (c CommitUpdate) DatasetID() string {
 }
 
 func (c CommitUpdate) BuildCommitValue(ctx context.Context, db *database) (hash.Hash, error) {
+	if c.Commit != nil {
+		r, err := db.WriteValue(ctx, c.Commit.NomsValue())
+		if err != nil {
+			return hash.Hash{}, err
+		}
+		return r.TargetHash(), nil
+	}
 	// Prepend the current head hash to the list of parents if one was provided. This is only necessary if parents were
 	// provided because we fill it in automatically in buildNewCommit otherwise.
-	if len(c.CommitOpts.Parents) > 0 && c.CommitOpts.AmendedCommit.IsEmpty() && !c.CommitOpts.Force {
+	if c.WorkingSetDS != "" && len(c.CommitOpts.Parents) > 0 && c.CommitOpts.AmendedCommit.IsEmpty() && !c.CommitOpts.Force {
 		headHash, ok := c.CommitDS.MaybeHeadAddr()
 		if ok {
 			if !hasParentHash(c.CommitOpts, headHash) {
@@ -823,6 +790,9 @@ func (c CommitUpdate) validateHead(ctx context.Context, datasets prolly.AddressM
 	if current != expected {
 		return ErrMergeNeeded
 	}
+	if c.WorkingSetDS == "" && !current.IsEmpty() && current == newHead {
+		return ErrAlreadyCommitted
+	}
 	return nil
 }
 
@@ -855,20 +825,21 @@ func (db *database) CommitDatasets(
 		ae := am.Editor()
 
 		for i := range atomicCommit {
-			currHash, err := am.Get(ctx, atomicCommit[i].LockDatasetID())
-			if err != nil {
-				return prolly.AddressMap{}, err
-			}
-
-			if currHash != atomicCommit[i].LockPrevHash() {
-				return prolly.AddressMap{}, ErrOptimisticLockFailed
+			if lockID := atomicCommit[i].LockDatasetID(); lockID != "" {
+				currHash, err := am.Get(ctx, lockID)
+				if err != nil {
+					return prolly.AddressMap{}, err
+				}
+				if currHash != atomicCommit[i].LockPrevHash() {
+					return prolly.AddressMap{}, ErrOptimisticLockFailed
+				}
 			}
 
 			if err := atomicCommit[i].validateHead(ctx, am, pending[i]); err != nil {
 				return prolly.AddressMap{}, err
 			}
 
-			err = ae.Update(ctx, atomicCommit[i].DatasetID(), pending[i])
+			err := ae.Update(ctx, atomicCommit[i].DatasetID(), pending[i])
 			if err != nil {
 				return prolly.AddressMap{}, err
 			}
