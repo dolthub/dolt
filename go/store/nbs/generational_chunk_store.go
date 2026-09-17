@@ -48,9 +48,9 @@ var ErrGhostChunkRequested = errors.New("requested chunk which is expected to be
 
 func (gcs *GenerationalNBS) PersistGhostHashes(ctx context.Context, refs hash.HashSet) error {
 	if gcs.ghostGen == nil {
-		return gcs.ghostGen.PersistGhostHashes(ctx, refs)
+		return fmt.Errorf("runtime error. ghostGen is nil but an attempt to persist ghost hashes was made")
 	}
-	return fmt.Errorf("runtime error. ghostGen is nil but an attempt to persist ghost hashes was made")
+	return gcs.ghostGen.PersistGhostHashes(ctx, refs)
 }
 
 func (gcs *GenerationalNBS) GhostGen() chunks.GhostChunkStore {
@@ -234,8 +234,11 @@ func (gcs *GenerationalNBS) HasMany(ctx context.Context, hashes hash.HashSet) (h
 	if err != nil {
 		return nil, err
 	}
-	if len(absent) == 0 || gcs.ghostGen == nil {
-		return nil, err
+	if len(absent) == 0 {
+		return nil, nil
+	}
+	if gcs.ghostGen == nil {
+		return absent, nil
 	}
 
 	return gcs.ghostGen.HasMany(ctx, absent)
