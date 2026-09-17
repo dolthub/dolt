@@ -69,9 +69,12 @@ Sources: [GitHub CLI creation and metadata calls](https://github.com/cli/cli/blo
   or tests. Deferred workflows are canceled, freeing those runners until release.
   Matrix members can each briefly allocate a runner; there is no separate
   admission job or admission check.
-- A new bot comment records each deferral, including its conditions and overrides,
-  and another records release. Existing comments are never edited. Repeated
-  notifications for the same event and revision do not add duplicate comments.
+- Bot comments record deferral or release only when `defer-ci-after-hours`,
+  `defer-ci-review`, or `force-draft-ci` is added or removed, or the PR
+  transitions between draft and ready. Deferral comments include conditions and
+  overrides. Pushes, polling, and reviews reconcile CI silently. Existing comments are never edited, and
+  repeated notifications for the same event, label state, and draft state are deduplicated
+  across commits.
   The separate `ci-deferred` label tracks postponed work until release.
   The scheduler manages this queue label; users choose the two `defer-ci-*` labels.
 - Label additions/removals and draft-ready transitions trigger reconciliation.
@@ -197,7 +200,7 @@ are not automatically retried; use their original workflow controls.
   decisions, time, run state, and attempt. It does not release obsolete commits.
 - A per-PR concurrency group serializes event and timer reconciliation. Polling
   recovers invocations replaced in GitHub's single pending concurrency slot.
-- Event comments contain only a hidden revision and event identifier for
+- Event comments contain only hidden label/draft state and an event identifier for
   deduplication. No workflow results are cached in comments. Successful test
   completions do not trigger reconciliation; unsuccessful attempts are inspected
   only to identify deferrals or admission errors. The scheduler never reports
