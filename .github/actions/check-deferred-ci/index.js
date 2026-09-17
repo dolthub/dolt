@@ -173,18 +173,23 @@ async function reconcile({ github, context, pullNumber, now = new Date(), timezo
       target_url: `${context.serverUrl}/${repo.owner}/${repo.repo}/actions/workflows/ci-scheduler.yaml` });
   };
   const comment = async (event, text) => {
+    const labels = [AFTER_HOURS_LABEL, REVIEW_LABEL, FORCE_DRAFT_LABEL];
+    const labelChanged = ['labeled', 'unlabeled'].includes(context.payload.action) &&
+      labels.includes(context.payload.label?.name);
+    const draftChanged = ['ready_for_review', 'converted_to_draft'].includes(context.payload.action);
+    if (context.eventName !== 'pull_request_target' || !(labelChanged || draftChanged)) return;
+    const notification = { event, labels: labels.filter(label => hasLabel(pr, label)), draft: pr.draft };
     const comments = await github.paginate(github.rest.issues.listComments,
       { ...repo, issue_number: pullNumber, per_page: 100 });
-    // Deduplicate repeated events for this revision without editing the event log.
-    // This marker stores only the event identity, never workflow results.
+    // Deduplicate state notifications across commits without editing existing comments.
     const events = comments.filter(c => c.user?.login === 'github-actions[bot]' &&
       c.body?.startsWith(COMMENT)).flatMap(c => {
       const saved = c.body.match(/<!-- dolt-ci-event (.+) -->/);
       try { return saved ? [JSON.parse(saved[1])] : []; } catch { return []; }
-    }).filter(entry => entry.sha === sha);
-    if (events.at(-1)?.event === event) return;
+    });
+    if (JSON.stringify(events.at(-1)) === JSON.stringify(notification)) return;
     await github.rest.issues.createComment({ ...repo, issue_number: pullNumber,
-      body: `${COMMENT}\n${text}\n<!-- dolt-ci-event ${JSON.stringify({ sha, event })} -->` });
+      body: `${COMMENT}\n${text}\n<!-- dolt-ci-event ${JSON.stringify(notification)} -->` });
   };
   const track = async () => {
     if (tracked) return;

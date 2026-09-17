@@ -62,7 +62,7 @@ function fixture(options = {}) {
     },
   }, paginate: async (endpoint, args) => (await endpoint(args)).data };
   return { state, github, calls: name => state.calls.filter(c => c[0] === name),
-    reconcile: now => reconcile({ github, context, pullNumber: 12, now: now || day }) };
+    reconcile: (now, eventContext = context) => reconcile({ github, context: eventContext, pullNumber: 12, now: now || day }) };
 }
 
 test('admission composes draft, after-hours and review conditions using live PR state', async () => {
@@ -102,12 +102,16 @@ test('new and renamed workflows are discovered from the PR; unrelated runs are i
 
 test('deferral and release append brief events once, without completion monitoring', async () => {
   const f = fixture();
-  await f.reconcile(); await f.reconcile();
+  const labeled = { ...context, eventName: 'pull_request_target',
+    payload: { action: 'labeled', label: { name: AFTER_HOURS_LABEL } } };
+  await f.reconcile(day, labeled); await f.reconcile(day, labeled);
   const original = f.state.comments[0].body;
   assert.match(original, /9pm–5am/);
   assert.match(original, /remove `defer-ci-after-hours`/);
   assert.equal(f.state.statuses[0].state, 'pending');
-  await f.reconcile(night); await f.reconcile(night);
+  f.state.pr.labels = [{ name: LABEL }];
+  const unlabeled = { ...labeled, payload: { ...labeled.payload, action: 'unlabeled' } };
+  await f.reconcile(day, unlabeled); await f.reconcile(day, unlabeled);
   assert.equal(f.calls('runs.rerun').length, 1);
   assert.equal(f.state.statuses[0].state, 'success');
   assert.equal(f.state.runs[0].status, 'queued');
