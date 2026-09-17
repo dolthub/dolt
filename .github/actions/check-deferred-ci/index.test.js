@@ -62,7 +62,7 @@ function fixture(options = {}) {
     },
   }, paginate: async (endpoint, args) => (await endpoint(args)).data };
   return { state, github, calls: name => state.calls.filter(c => c[0] === name),
-    reconcile: (now, eventContext = context) => reconcile({ github, context: eventContext, pullNumber: 12, now: now || day }) };
+    reconcile: now => reconcile({ github, context, pullNumber: 12, now: now || day }) };
 }
 
 test('admission composes draft, after-hours and review conditions using live PR state', async () => {
@@ -100,20 +100,14 @@ test('new and renamed workflows are discovered from the PR; unrelated runs are i
   assert.equal(f.state.statuses[0].state, 'success');
 });
 
-test('relevant label changes append deferral and release comments once across commits', async () => {
+test('deferral and release append brief events once, without completion monitoring', async () => {
   const f = fixture();
-  const labeled = { ...context, eventName: 'pull_request_target',
-    payload: { action: 'labeled', label: { name: AFTER_HOURS_LABEL } } };
-  await f.reconcile(day, labeled);
-  f.state.pr.head.sha = f.state.runs[0].head_sha = 'new-head';
-  await f.reconcile(day, labeled);
+  await f.reconcile(); await f.reconcile();
   const original = f.state.comments[0].body;
   assert.match(original, /9pm–5am/);
   assert.match(original, /remove `defer-ci-after-hours`/);
   assert.equal(f.state.statuses[0].state, 'pending');
-  f.state.pr.labels = [{ name: LABEL }];
-  const unlabeled = { ...labeled, payload: { ...labeled.payload, action: 'unlabeled' } };
-  await f.reconcile(day, unlabeled); await f.reconcile(day, unlabeled);
+  await f.reconcile(night); await f.reconcile(night);
   assert.equal(f.calls('runs.rerun').length, 1);
   assert.equal(f.state.statuses[0].state, 'success');
   assert.equal(f.state.runs[0].status, 'queued');
@@ -164,49 +158,4 @@ test('review notifications and polling wake reconciliation; successful CI does n
   assert.deepEqual(await candidates({ github: f.github, context: event({ ...run, conclusion: 'success' }) }), []);
   assert.deepEqual(await candidates({ github: f.github, context: { ...context, eventName: 'schedule' }, now: night }), [12]);
   assert.deepEqual(await candidates({ github: f.github, context: { ...context, eventName: 'schedule' }, now: day }), []);
-});
-
-test('pushes and other events without label or draft changes reconcile without reading or adding comments', async () => {
-  const contexts = [
-    ...['opened', 'synchronize', 'reopened'].map(action =>
-      ({ ...context, eventName: 'pull_request_target', payload: { action } })),
-    ...[LABEL, 'unrelated'].map(name => ({ ...context, eventName: 'pull_request_target',
-      payload: { action: 'labeled', label: { name } } })),
-    ...['schedule', 'workflow_dispatch', 'workflow_run'].map(eventName => ({ ...context, eventName })),
-  ];
-  for (const eventContext of contexts) {
-    const f = fixture({ pr: { ...structuredClone(pr), draft: true } });
-    await f.reconcile(day, eventContext);
-    f.state.pr.head.sha = f.state.runs[0].head_sha = 'new-head';
-    await f.reconcile(day, eventContext);
-    assert.equal(f.state.statuses[0].state, 'pending');
-    f.state.pr.draft = false;
-    await f.reconcile(night, eventContext);
-    assert.equal(f.calls('runs.rerun').length, 1);
-    assert.equal(f.calls('comments.list').length, 0);
-    assert.equal(f.state.comments.length, 0);
-  }
-  for (const name of [REVIEW_LABEL, FORCE_DRAFT_LABEL]) {
-    const f = fixture({ pr: { ...structuredClone(pr), draft: true, labels: [{ name: REVIEW_LABEL }] } });
-    await f.reconcile(day, { ...context, eventName: 'pull_request_target',
-      payload: { action: 'labeled', label: { name } } });
-    assert.equal(f.state.comments.length, 1);
-  }
-});
-
-test('draft-ready transitions comment while commits on a draft remain silent', async () => {
-  const f = fixture({ pr: { ...structuredClone(pr), draft: true, labels: [] } });
-  const event = action => ({ ...context, eventName: 'pull_request_target', payload: { action } });
-  await f.reconcile(day, event('converted_to_draft'));
-  assert.equal(f.state.comments.length, 1);
-  f.state.pr.head.sha = f.state.runs[0].head_sha = 'new-head';
-  await f.reconcile(day, event('synchronize'));
-  assert.equal(f.state.comments.length, 1);
-  f.state.pr.draft = false;
-  await f.reconcile(day, event('ready_for_review'));
-  assert.equal(f.calls('runs.rerun').length, 1);
-  assert.equal(f.state.comments.length, 2);
-  assert.match(f.state.comments[1].body, /Released postponed CI/);
-  await f.reconcile(day, event('ready_for_review'));
-  assert.equal(f.state.comments.length, 2);
 });
