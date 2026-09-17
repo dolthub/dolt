@@ -83,6 +83,71 @@ func (suite *RemoteDatabaseSuite) TestWriteRefToNonexistentValue() {
 	suite.Error(err)
 }
 
+func (suite *DatabaseSuite) TestCommitDatasetsAtomic() {
+	ctx := context.Background()
+	root, err := suite.db.WriteValue(ctx, types.String("working root"))
+	suite.Require().NoError(err)
+	var updates []DatasetUpdate
+	for _, name := range []string{"a", "b", "c"} {
+		head, err := suite.db.GetDataset(ctx, "refs/heads/"+name)
+		suite.Require().NoError(err)
+		head, err = CommitValue(ctx, suite.db, head, types.String("initial"))
+		suite.Require().NoError(err)
+		wsID := "workingSets/heads/" + name
+		updates = append(updates,
+			WorkingSetUpdate{WorkingSetDS: wsID, WorkingSet: WorkingSetSpec{Meta: &WorkingSetMeta{}, WorkingRoot: root, StagedRoot: root}},
+			&CommitUpdate{CommitDS: head, WorkingSetDS: wsID, RootVal: types.String("next"), CommitOpts: CommitOptions{Meta: &CommitMeta{}}},
+		)
+	}
+	before, err := suite.db.rt.Root(ctx)
+	suite.Require().NoError(err)
+
+	// A stale lock on the last working set must not publish any earlier updates.
+	stale := append([]DatasetUpdate(nil), updates...)
+	last := stale[4].(WorkingSetUpdate)
+	last.PrevWsHash = root.TargetHash()
+	stale[4] = last
+	_, err = suite.db.CommitDatasets(ctx, stale)
+	suite.ErrorIs(err, ErrOptimisticLockFailed)
+	after, err := suite.db.rt.Root(ctx)
+	suite.Require().NoError(err)
+	suite.Equal(before, after)
+
+	// Pointer and value updates obey the same branch-head checks.
+	stale = append([]DatasetUpdate(nil), updates...)
+	lastCommit := *stale[5].(*CommitUpdate)
+	lastCommit.CommitDS, err = suite.db.GetDatasetByRootHash(ctx, lastCommit.DatasetID(), hash.Hash{})
+	suite.Require().NoError(err)
+	stale[5] = &lastCommit
+	_, err = suite.db.CommitDatasets(ctx, stale)
+	suite.ErrorIs(err, ErrMergeNeeded)
+	after, err = suite.db.rt.Root(ctx)
+	suite.Require().NoError(err)
+	suite.Equal(before, after)
+
+	_, err = suite.db.CommitDatasets(ctx, append(updates, updates[0]))
+	suite.ErrorContains(err, "duplicate dataset update")
+
+	datasets, err := suite.db.CommitDatasets(ctx, updates)
+	suite.Require().NoError(err)
+	suite.Require().Len(datasets, 6)
+	for i, ds := range datasets {
+		suite.Equal(updates[i].DatasetID(), ds.ID())
+		suite.True(ds.HasHead())
+		if i%2 == 1 {
+			suite.True(mustHeadValue(ds).Equals(types.String("next")))
+		}
+	}
+	// Reusing the original optimistic locks cannot change any part of the batch.
+	before, err = suite.db.rt.Root(ctx)
+	suite.Require().NoError(err)
+	_, err = suite.db.CommitDatasets(ctx, updates)
+	suite.ErrorIs(err, ErrOptimisticLockFailed)
+	after, err = suite.db.rt.Root(ctx)
+	suite.Require().NoError(err)
+	suite.Equal(before, after)
+}
+
 func (suite *DatabaseSuite) TestTolerateUngettableRefs() {
 	suite.Nil(suite.db.ReadValue(context.Background(), hash.Hash{}))
 }

@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -494,8 +495,7 @@ func (d *DoltSession) clear() {
 }
 
 // CommitTransaction commits the in-progress transaction. Depending on session settings, this may write only a new
-// working set, or may additionally create a new dolt commit for the current HEAD. If more than one branch head has
-// changes, the transaction is rejected.
+// working sets, or may additionally create a new dolt commit for the current HEAD.
 func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (err error) {
 	// Any non-error path must set the ctx's transaction to nil even if no work was done, because the engine only clears
 	// out transaction state in some cases. Changes to only branch heads (creating a new branch, reset, etc.) have no
@@ -517,10 +517,6 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 		return nil
 	}
 
-	if len(dirties) > 1 {
-		return ErrDirtyWorkingSets
-	}
-
 	performDoltCommitVar, err := d.Session.GetSessionVariable(ctx, DoltCommitOnTransactionCommit)
 	if err != nil {
 		return err
@@ -533,6 +529,9 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 
 	dirtyBranchState := dirties[0]
 	if peformDoltCommitInt == 1 {
+		if len(dirties) > 1 {
+			return ErrDirtyWorkingSets
+		}
 		// if the dirty working set doesn't belong to the currently checked out branch, that's an error
 		err = d.validateDoltCommit(ctx, dirtyBranchState)
 		if err != nil {
@@ -575,7 +574,48 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 		return err
 	}
 
-	return d.commitWorkingSet(ctx, dirtyBranchState, tx)
+	_, err = d.commitBranchStates(ctx, dirties, tx, nil)
+	return err
+}
+
+// commitBranchStates publishes all branch changes before updating any session state.
+// A nil pending slice requests working-set-only updates.
+func (d *DoltSession) commitBranchStates(ctx *sql.Context, states []*branchState, tx sql.Transaction, pending []*doltdb.PendingCommit) ([]*doltdb.Commit, error) {
+	dtx, ok := tx.(*DoltTransaction)
+	if !ok {
+		return nil, fmt.Errorf("expected a DoltTransaction")
+	}
+	changes := make([]transactionCommit, len(states))
+	for i, state := range states {
+		ws := state.WorkingSet()
+		var commit *doltdb.PendingCommit
+		if pending != nil {
+			commit = pending[i]
+		}
+		if commit != nil {
+			ws = ws.WithWorkingRoot(commit.Roots.Working).WithStagedRoot(commit.Roots.Staged)
+		}
+		changes[i] = transactionCommit{state.RevisionDbName(), ws, commit}
+	}
+	workingSets, commits, err := dtx.commitDatasets(ctx, changes)
+	if err != nil {
+		return nil, err
+	}
+	for i, state := range states {
+		state.workingSet = workingSets[i]
+		if commits[i] != nil {
+			root, err := commits[i].GetRootValue(ctx)
+			if err != nil {
+				return nil, err
+			}
+			state.headCommit = commits[i]
+			state.headRoot = root
+		}
+		state.dirty = false
+	}
+	d.NotifyTransactionEnd()
+	ctx.SetTransaction(nil)
+	return commits, nil
 }
 
 func (d *DoltSession) validateDoltCommit(ctx *sql.Context, dirtyBranchState *branchState) error {
@@ -624,6 +664,9 @@ func (d *DoltSession) dirtyWorkingSets() []*branchState {
 		}
 	}
 
+	sort.Slice(dirtyStates, func(i, j int) bool {
+		return dirtyStates[i].RevisionDbName() < dirtyStates[j].RevisionDbName()
+	})
 	return dirtyStates
 }
 
@@ -710,6 +753,9 @@ func (d *DoltSession) DoltCommit(
 	tx sql.Transaction,
 	commit *doltdb.PendingCommit,
 ) (*doltdb.Commit, error) {
+	if len(d.dirtyWorkingSets()) > 1 {
+		return nil, ErrDirtyWorkingSets
+	}
 	commitFunc := func(ctx *sql.Context, dtx *DoltTransaction, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 		ws, commit, err := dtx.DoltCommit(
 			ctx,
