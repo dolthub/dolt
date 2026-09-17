@@ -234,8 +234,11 @@ func (gcs *GenerationalNBS) HasMany(ctx context.Context, hashes hash.HashSet) (h
 	if err != nil {
 		return nil, err
 	}
-	if len(absent) == 0 || gcs.ghostGen == nil {
-		return nil, err
+	if len(absent) == 0 {
+		return nil, nil
+	}
+	if gcs.ghostGen == nil {
+		return absent, nil
 	}
 
 	return gcs.ghostGen.HasMany(ctx, absent)
