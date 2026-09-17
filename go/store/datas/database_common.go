@@ -764,6 +764,8 @@ type DatasetUpdate interface {
 	// LockPrevHash returns the expected hash of the current head of |LockDatasetId()|.
 	// This value must be current for the update to succeed.
 	LockPrevHash() hash.Hash
+	// validateHead checks any additional constraints on the dataset being updated.
+	validateHead(ctx context.Context, datasets prolly.AddressMap, newHead hash.Hash) error
 }
 
 // WorkingSetUpdate is a DatasetUpdate that updates a working set.
@@ -793,6 +795,10 @@ func (w WorkingSetUpdate) LockDatasetID() string {
 
 func (w WorkingSetUpdate) LockPrevHash() hash.Hash {
 	return w.PrevWsHash
+}
+
+func (w WorkingSetUpdate) validateHead(context.Context, prolly.AddressMap, hash.Hash) error {
+	return nil
 }
 
 type CommitUpdate struct {
@@ -840,6 +846,18 @@ func (c CommitUpdate) LockPrevHash() hash.Hash {
 	return c.PrevWsHash
 }
 
+func (c CommitUpdate) validateHead(ctx context.Context, datasets prolly.AddressMap, newHead hash.Hash) error {
+	current, err := datasets.Get(ctx, c.DatasetID())
+	if err != nil {
+		return err
+	}
+	expected, _ := c.CommitDS.MaybeHeadAddr()
+	if current != expected {
+		return ErrMergeNeeded
+	}
+	return nil
+}
+
 var _ DatasetUpdate = &CommitUpdate{}
 
 // CommitDatasets updates the given Datasets atomically.
@@ -848,8 +866,16 @@ func (db *database) CommitDatasets(
 	atomicCommit []DatasetUpdate,
 ) ([]Dataset, error) {
 	pending := make([]hash.Hash, len(atomicCommit))
+	seen := make(map[string]struct{}, len(atomicCommit))
 
 	for i, cmt := range atomicCommit {
+		if err := ValidateDatasetId(cmt.DatasetID()); err != nil {
+			return nil, err
+		}
+		if _, ok := seen[cmt.DatasetID()]; ok {
+			return nil, fmt.Errorf("duplicate dataset update: %s", cmt.DatasetID())
+		}
+		seen[cmt.DatasetID()] = struct{}{}
 		newRefHash, err := cmt.BuildCommitValue(ctx, db)
 		if err != nil {
 			return nil, err
@@ -870,13 +896,8 @@ func (db *database) CommitDatasets(
 				return prolly.AddressMap{}, ErrOptimisticLockFailed
 			}
 
-			currDS, err := am.Get(ctx, atomicCommit[i].DatasetID())
-			if err != nil {
+			if err := atomicCommit[i].validateHead(ctx, am, pending[i]); err != nil {
 				return prolly.AddressMap{}, err
-			}
-
-			if currDS != pending[i] {
-				return prolly.AddressMap{}, ErrMergeNeeded
 			}
 
 			err = ae.Update(ctx, atomicCommit[i].DatasetID(), pending[i])
@@ -903,97 +924,6 @@ func (db *database) CommitDatasets(
 	}
 
 	return updatedDatasets, nil
-}
-
-// CommitWithWorkingSet updates two Datasets atomically: the working set, and its corresponding HEAD. Uses the same
-// global locking mechanism as UpdateWorkingSet.
-// The current dataset head will be filled in as the first parent of the new commit if not already present.
-func (db *database) CommitWithWorkingSet(
-	ctx context.Context,
-	commitDS, workingSetDS Dataset,
-	val types.Value, workingSetSpec WorkingSetSpec,
-	prevWsHash hash.Hash, opts CommitOptions,
-) (Dataset, Dataset, error) {
-	wsAddr, err := newWorkingSet(ctx, db, workingSetSpec)
-	if err != nil {
-		return Dataset{}, Dataset{}, err
-	}
-
-	// Prepend the current head hash to the list of parents if one was provided. This is only necessary if parents were
-	// provided because we fill it in automatically in buildNewCommit otherwise.
-	if len(opts.Parents) > 0 && opts.AmendedCommit.IsEmpty() && !opts.Force {
-		headHash, ok := commitDS.MaybeHeadAddr()
-		if ok {
-			if !hasParentHash(opts, headHash) {
-				opts.Parents = append([]hash.Hash{headHash}, opts.Parents...)
-			}
-		}
-	}
-
-	commit, err := db.BuildNewCommit(ctx, commitDS, val, opts)
-	if err != nil {
-		return Dataset{}, Dataset{}, err
-	}
-
-	commitRef, err := db.WriteValue(ctx, commit.NomsValue())
-	if err != nil {
-		return Dataset{}, Dataset{}, err
-	}
-
-	commitValRef, err := types.ToRefOfValue(commitRef, db.Format())
-	if err != nil {
-		return Dataset{}, Dataset{}, err
-	}
-
-	currDSHash, _ := commitDS.MaybeHeadAddr()
-
-	_, err = db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
-		currWS, err := am.Get(ctx, workingSetDS.ID())
-		if err != nil {
-			return prolly.AddressMap{}, err
-		}
-		if currWS != prevWsHash {
-			return prolly.AddressMap{}, ErrOptimisticLockFailed
-		}
-		currDS, err := am.Get(ctx, commitDS.ID())
-		if err != nil {
-			return prolly.AddressMap{}, err
-		}
-		if currDS != currDSHash {
-			return prolly.AddressMap{}, ErrMergeNeeded
-		}
-		ae := am.Editor()
-		err = ae.Update(ctx, commitDS.ID(), commitValRef.TargetHash())
-		if err != nil {
-			return prolly.AddressMap{}, err
-		}
-		err = ae.Update(ctx, workingSetDS.ID(), wsAddr)
-		if err != nil {
-			return prolly.AddressMap{}, err
-		}
-		return ae.Flush(ctx)
-	})
-
-	if err != nil {
-		return Dataset{}, Dataset{}, err
-	}
-
-	currentDatasets, err := db.Datasets(ctx)
-	if err != nil {
-		return Dataset{}, Dataset{}, err
-	}
-
-	commitDS, err = db.datasetFromMap(ctx, commitDS.ID(), currentDatasets)
-	if err != nil {
-		return Dataset{}, Dataset{}, err
-	}
-
-	workingSetDS, err = db.datasetFromMap(ctx, workingSetDS.ID(), currentDatasets)
-	if err != nil {
-		return Dataset{}, Dataset{}, err
-	}
-
-	return commitDS, workingSetDS, nil
 }
 
 func (db *database) Delete(ctx context.Context, ds Dataset, wsIDStr string) (Dataset, error) {

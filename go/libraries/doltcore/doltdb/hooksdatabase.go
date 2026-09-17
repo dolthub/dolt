@@ -145,24 +145,15 @@ func (db hooksDatabase) ExecuteCommitHooks(ctx context.Context, ds datas.Dataset
 	}
 }
 
-func (db hooksDatabase) CommitWithWorkingSet(
-	ctx context.Context,
-	commitDS, workingSetDS datas.Dataset,
-	val types.Value, workingSetSpec datas.WorkingSetSpec,
-	prevWsHash hash.Hash, opts datas.CommitOptions,
-) (datas.Dataset, datas.Dataset, error) {
-	commitDS, workingSetDS, err := db.Database.CommitWithWorkingSet(
-		ctx,
-		commitDS,
-		workingSetDS,
-		val,
-		workingSetSpec,
-		prevWsHash,
-		opts)
-	if err == nil {
-		db.ExecuteCommitHooks(ctx, commitDS, false, false)
+func (db hooksDatabase) CommitDatasets(ctx context.Context, updates []datas.DatasetUpdate) ([]datas.Dataset, error) {
+	datasets, err := db.Database.CommitDatasets(ctx, updates)
+	if err != nil {
+		return nil, err
 	}
-	return commitDS, workingSetDS, err
+	for _, ds := range datasets {
+		db.ExecuteCommitHooks(ctx, ds, ds.IsWorkingSet(), false)
+	}
+	return datasets, nil
 }
 
 func (db hooksDatabase) Commit(ctx context.Context, ds datas.Dataset, v types.Value, opts datas.CommitOptions) (datas.Dataset, error) {

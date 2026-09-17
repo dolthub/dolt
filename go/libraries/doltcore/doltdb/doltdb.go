@@ -1887,57 +1887,69 @@ func (ddb *DoltDB) UpdateWorkingSet(
 	return err
 }
 
-// CommitWithWorkingSet combines the functionality of CommitWithParents with UpdateWorking set, and takes a combination
-// of their parameters. It's a way to update the working set and current HEAD in the same atomic transaction. It commits
-// to disk a pending commit value previously created with NewPendingCommit, asserting that the working set hash given
-// is still current for that HEAD.
-func (ddb *DoltDB) CommitWithWorkingSet(
-	ctx context.Context,
-	headRef ref.DoltRef, workingSetRef ref.WorkingSetRef,
-	commit *PendingCommit, workingSet *WorkingSet,
-	prevHash hash.Hash,
-	meta *datas.WorkingSetMeta,
-	replicationStatus *ReplicationStatusController,
-) (*Commit, error) {
-	wsDs, err := ddb.db.GetDataset(ctx, workingSetRef.String())
+// DatasetUpdate describes a working set and an optional branch commit to publish atomically.
+type DatasetUpdate struct {
+	WorkingSet *WorkingSet
+	PrevHash   hash.Hash
+	Meta       *datas.WorkingSetMeta
+	Commit     *PendingCommit
+}
+
+// CommitDatasets publishes all updates in a single storage transaction. Returned commits
+// correspond to updates, with nil entries for updates that only change a working set.
+func (ddb *DoltDB) CommitDatasets(ctx context.Context, updates []DatasetUpdate, replicationStatus *ReplicationStatusController) ([]*Commit, error) {
+	var pending []datas.DatasetUpdate
+	commitIndexes := make(map[int]int)
+	for i, update := range updates {
+		wsRef := update.WorkingSet.Ref()
+		wsDS, err := ddb.db.GetDataset(ctx, wsRef.String())
+		if err != nil {
+			return nil, err
+		}
+		spec, err := ddb.writeWorkingSet(ctx, wsRef, update.WorkingSet, update.Meta, wsDS)
+		if err != nil {
+			return nil, err
+		}
+		pending = append(pending, datas.WorkingSetUpdate{WorkingSetDS: wsDS.ID(), WorkingSet: *spec, PrevWsHash: update.PrevHash})
+		if update.Commit != nil {
+			headRef, err := wsRef.ToHeadRef()
+			if err != nil {
+				return nil, err
+			}
+			headDS, err := ddb.db.GetDataset(ctx, headRef.String())
+			if err != nil {
+				return nil, err
+			}
+			commitIndexes[i] = len(pending)
+			pending = append(pending, datas.CommitUpdate{CommitDS: headDS, CommitOpts: update.Commit.CommitOptions, WorkingSetDS: wsDS.ID(), PrevWsHash: update.PrevHash, RootVal: update.Commit.Roots.Staged.NomsValue()})
+		}
+	}
+	datasets, err := ddb.db.withReplicationStatusController(replicationStatus).CommitDatasets(ctx, pending)
 	if err != nil {
 		return nil, err
 	}
-
-	headDs, err := ddb.db.GetDataset(ctx, headRef.String())
-	if err != nil {
-		return nil, err
+	commits := make([]*Commit, len(updates))
+	for i, index := range commitIndexes {
+		commitRef, ok, err := datasets[index].MaybeHeadRef()
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, errors.New("commit has no head after successful update")
+		}
+		dc, err := datas.LoadCommitRef(ctx, ddb.vrw, commitRef)
+		if err != nil {
+			return nil, err
+		}
+		if dc.IsGhost() {
+			return nil, ErrGhostCommitEncountered
+		}
+		commits[i], err = NewCommit(ctx, ddb.vrw, ddb.ns, dc)
+		if err != nil {
+			return nil, err
+		}
 	}
-
-	wsSpec, err := ddb.writeWorkingSet(ctx, workingSetRef, workingSet, meta, wsDs)
-	if err != nil {
-		return nil, err
-	}
-
-	commitDataset, _, err := ddb.db.withReplicationStatusController(replicationStatus).
-		CommitWithWorkingSet(ctx, headDs, wsDs, commit.Roots.Staged.NomsValue(), *wsSpec, prevHash, commit.CommitOptions)
-	if err != nil {
-		return nil, err
-	}
-
-	commitRef, ok, err := commitDataset.MaybeHeadRef()
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, errors.New("Commit has no head but commit succeeded. This is a bug.")
-	}
-
-	dc, err := datas.LoadCommitRef(ctx, ddb.vrw, commitRef)
-	if err != nil {
-		return nil, err
-	}
-
-	if dc.IsGhost() {
-		return nil, ErrGhostCommitEncountered
-	}
-
-	return NewCommit(ctx, ddb.vrw, ddb.ns, dc)
+	return commits, nil
 }
 
 // writeWorkingSet writes the specified |workingSet| at the specified |workingSetRef| with the

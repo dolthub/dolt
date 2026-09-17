@@ -281,14 +281,17 @@ func doltCommit(ctx *sql.Context,
 	}
 
 	var rsc doltdb.ReplicationStatusController
-	newCommit, err := doltDb.CommitWithWorkingSet(ctx, headRef, workingSet.Ref(), &pending, workingSet, currHash, tx.WorkingSetMeta(name, email), &rsc)
+	commits, err := doltDb.CommitDatasets(ctx, []doltdb.DatasetUpdate{{WorkingSet: workingSet, Commit: &pending, PrevHash: currHash, Meta: tx.WorkingSetMeta(name, email)}}, &rsc)
 	WaitForReplicationController(ctx, rsc)
 	// The check in doCommit can go stale before the ref update, so the storage layer compares the head against
 	// AmendedCommit once more, atomically with the update. A failure there surfaces the same way.
 	if err != nil && !pending.CommitOptions.AmendedCommit.IsEmpty() && errors.Is(err, datas.ErrMergeNeeded) {
 		return nil, nil, tx.rollbackAndErr(ctx, retryTransactionError(err.Error()))
 	}
-	return workingSet, newCommit, err
+	if err != nil {
+		return nil, nil, err
+	}
+	return workingSet, commits[0], nil
 }
 
 // txCommit is a transactionWrite function that updates the working set
