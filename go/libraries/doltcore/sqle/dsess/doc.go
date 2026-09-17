@@ -63,9 +63,11 @@ name (myDb/myBranch). The details of this are a little bit subtle:
 	including rows and all other table data. It's only appropriate to use an unqualified database name when you want
   the current checked out HEAD.
 
-It's possible to alter the data on multiple HEADS in a single session, but we currently restrict the users to
-committing a single one. It doesn't need to be the checked out head -- we simply look for a single dirty branch head
-state and commit that one. If there is more than one, it's an error. We may allow multiple branch heads to be updated
-in a single transaction in the future.
+SQL transactions can atomically update working sets on multiple branches of one database.
+Each working set is merged against its transaction snapshot and validated before any changes are published.
+Transactions spanning separate physical databases remain unsupported. dolt_commit and
+dolt_transaction_commit continue to require at most one dirty branch.
+dolt_commit_all creates commits for every dirty branch in the selected database and
+publishes those commits together with their working sets in the same atomic update.
 
 */

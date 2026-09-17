@@ -18,6 +18,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -145,24 +146,28 @@ func (db hooksDatabase) ExecuteCommitHooks(ctx context.Context, ds datas.Dataset
 	}
 }
 
-func (db hooksDatabase) CommitWithWorkingSet(
-	ctx context.Context,
-	commitDS, workingSetDS datas.Dataset,
-	val types.Value, workingSetSpec datas.WorkingSetSpec,
-	prevWsHash hash.Hash, opts datas.CommitOptions,
-) (datas.Dataset, datas.Dataset, error) {
-	commitDS, workingSetDS, err := db.Database.CommitWithWorkingSet(
-		ctx,
-		commitDS,
-		workingSetDS,
-		val,
-		workingSetSpec,
-		prevWsHash,
-		opts)
-	if err == nil {
-		db.ExecuteCommitHooks(ctx, commitDS, false, false)
+func (db hooksDatabase) CommitDatasets(ctx context.Context, updates []datas.DatasetUpdate) ([]datas.Dataset, error) {
+	datasets, err := db.Database.CommitDatasets(ctx, updates)
+	if err != nil {
+		return nil, err
 	}
-	return commitDS, workingSetDS, err
+	// A branch commit already notifies hooks about its accompanying working set,
+	// matching the single-branch commit path.
+	pairedWorkingSets := make(map[string]bool)
+	for _, ds := range datasets {
+		if head, err := ref.Parse(ds.ID()); err == nil {
+			if ws, err := ref.WorkingSetRefForHead(head); err == nil {
+				pairedWorkingSets[ws.String()] = true
+			}
+		}
+	}
+	for _, ds := range datasets {
+		if ds.IsWorkingSet() && pairedWorkingSets[ds.ID()] {
+			continue
+		}
+		db.ExecuteCommitHooks(ctx, ds, ds.IsWorkingSet(), false)
+	}
+	return datasets, nil
 }
 
 func (db hooksDatabase) Commit(ctx context.Context, ds datas.Dataset, v types.Value, opts datas.CommitOptions) (datas.Dataset, error) {

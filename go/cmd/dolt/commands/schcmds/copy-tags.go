@@ -283,19 +283,15 @@ func doltCommitUpdatedTags(ctx *sql.Context, tableResolver doltdb.TableResolver,
 		return err
 	}
 
-	headRef, err := dEnv.RepoStateReader().CWBHeadRef(ctx)
-	if err != nil {
-		return err
-	}
 	prevHash, err := workingSet.HashOf()
 	if err != nil {
 		return err
 	}
 
-	_, err = doltDB.CommitWithWorkingSet(ctx, headRef, workingSet.Ref(), pendingCommit, workingSet, prevHash, &datas.WorkingSetMeta{
+	_, err = doltDB.CommitDatasets(ctx, []doltdb.DatasetUpdate{{WorkingSet: workingSet, Commit: pendingCommit, PrevHash: prevHash, Meta: &datas.WorkingSetMeta{
 		Name:  commitStagedProps.Committer.Name,
 		Email: commitStagedProps.Committer.Email,
-	}, nil)
+	}}}, nil)
 	return err
 }
 

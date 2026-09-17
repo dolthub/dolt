@@ -282,25 +282,16 @@ func (mr *MultiRepoTestSetup) CommitWithWorkingSet(dbName string) *doltdb.Commit
 		panic("pending commit error: " + err.Error())
 	}
 
-	headRef, err := dEnv.RepoStateReader().CWBHeadRef(ctx)
-	if err != nil {
-		panic("couldn't get working set: " + err.Error())
-	}
-
-	commit, err := dEnv.DoltDB(ctx).CommitWithWorkingSet(
-		ctx,
-		headRef,
-		ws.Ref(),
-		pendingCommit,
-		ws.WithStagedRoot(pendingCommit.Roots.Staged).WithWorkingRoot(pendingCommit.Roots.Working).ClearMerge(),
-		prevHash,
-		doltdb.TodoWorkingSetMeta(),
-		nil,
-	)
+	commits, err := dEnv.DoltDB(ctx).CommitDatasets(ctx, []doltdb.DatasetUpdate{{
+		WorkingSet: ws.WithStagedRoot(pendingCommit.Roots.Staged).WithWorkingRoot(pendingCommit.Roots.Working).ClearMerge(),
+		Commit:     pendingCommit,
+		PrevHash:   prevHash,
+		Meta:       doltdb.TodoWorkingSetMeta(),
+	}}, nil)
 	if err != nil {
 		panic("couldn't commit: " + err.Error())
 	}
-	return commit
+	return commits[0]
 }
 
 func (mr *MultiRepoTestSetup) CreateTable(ctx context.Context, dbName, tblName string) {
