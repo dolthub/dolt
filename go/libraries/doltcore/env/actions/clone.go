@@ -57,39 +57,6 @@ var ErrUserNotFound = errors.New("could not determine user name. run dolt config
 var ErrEmailNotFound = errors.New("could not determine email. run dolt config --global --add user.email")
 var ErrCloneFailed = errors.New("clone failed")
 
-// InitEnvForClone initializes a new [env.DoltEnv] prepared to receive
-// cloned content from |r| inside |dir|.
-func InitEnvForClone(
-	ctx context.Context,
-	nbf *types.NomsBinFormat,
-	r env.Remote,
-	dir string,
-	fs filesys.Filesys,
-	version string,
-	homeProvider env.HomeDirProvider,
-) (*env.DoltEnv, error) {
-	newFs, err := fs.WithWorkingDir(dir)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %s; %s", ErrFailedToAccessDir, dir, err.Error())
-	}
-
-	dEnv := env.LoadWithoutDB(ctx, homeProvider, newFs, doltdb.LocalDirDoltDB, version)
-	err = dEnv.InitRepoWithNoData(ctx, nbf)
-	if err != nil {
-		return nil, fmt.Errorf("failed to init repo: %w", err)
-	}
-
-	dEnv.RSLoadErr = nil
-	if !env.IsEmptyRemote(r) {
-		dEnv.RepoState, err = env.CloneRepoState(dEnv.FS, r)
-		if err != nil {
-			return nil, fmt.Errorf("%w: %s; %s", ErrFailedToCreateRepoStateWithRemote, r.Name, err.Error())
-		}
-	}
-
-	return dEnv, nil
-}
-
 // EnvForClone creates a new [env.DoltEnv] and [dbfactory.FsCreateTx]
 // prepared to receive cloned content from |r|.
 //
@@ -123,9 +90,23 @@ func EnvForClone(
 		}
 	}()
 
-	dEnv, err = InitEnvForClone(ctx, nbf, r, dir, fs, version, homeProvider)
+	newFs, err := fs.WithWorkingDir(dir)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("%w: %s; %s", ErrFailedToAccessDir, dir, err.Error())
+	}
+
+	dEnv = env.LoadWithoutDB(ctx, homeProvider, newFs, doltdb.LocalDirDoltDB, version)
+	err = dEnv.InitRepoWithNoData(ctx, nbf)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to init repo: %w", err)
+	}
+
+	dEnv.RSLoadErr = nil
+	if !env.IsEmptyRemote(r) {
+		dEnv.RepoState, err = env.CloneRepoState(dEnv.FS, r)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%w: %s; %s", ErrFailedToCreateRepoStateWithRemote, r.Name, err.Error())
+		}
 	}
 
 	return dEnv, fsTx, nil

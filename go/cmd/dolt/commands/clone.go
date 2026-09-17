@@ -109,7 +109,7 @@ func (cmd CloneCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	return 0
 }
 
-func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.VerboseError {
+func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv) (verr errhand.VerboseError) {
 	remoteName := apr.GetValueOrDefault(cli.RemoteParam, "origin")
 	branch := apr.GetValueOrDefault(cli.BranchParam, "")
 	singleBranch := apr.Contains(cli.SingleBranchFlag)
@@ -122,8 +122,6 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 	if verr != nil {
 		return verr
 	}
-
-	userDirExists, _ := dEnv.FS.Exists(dir)
 
 	// Check for a valid dolthub url and replace the urlStr with the parsed repoName.
 	repoName, ok := validateAndParseDolthubUrl(urlStr)
@@ -142,23 +140,29 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 		return verr
 	}
 
-	var r env.Remote
+	r := env.NewRemote(remoteName, remoteUrl, params)
+	var clonedEnv *env.DoltEnv
+	var fsTx *dbfactory.FsCreateTx
+	clonedEnv, fsTx, err = actions.EnvForClone(ctx, types.Format_DOLT, r, dir, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+	defer func() {
+		if verr != nil {
+			_ = errors.Join(clonedEnv.Close(), fsTx.Rollback())
+		}
+	}()
+
 	var srcDB *doltdb.DoltDB
 	cloneRoot, err := dEnv.FS.Abs(dir)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
-	r, srcDB, verr = createRemote(ctx, remoteName, remoteUrl, params, dEnv, cloneRoot)
+	srcDB, verr = createRemote(ctx, r, dEnv, cloneRoot)
 	if verr != nil {
 		return verr
 	}
 	defer srcDB.Close()
-
-	// Create a new Dolt env for the clone
-	clonedEnv, err := actions.EnvForClone(ctx, srcDB.ValueReadWriter().Format(), r, dir, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
 
 	depth, ok := apr.GetInt(cli.DepthFlag)
 	if !ok {
@@ -172,9 +176,7 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 		err = actions.CloneRemote(ctx, srcDB, remoteName, branch, singleBranch, depth, clonedEnv, statsCh)
 	})
 	if err != nil {
-		// If we're cloning into a directory that already exists do not erase it, only the Dolt state we wrote
-		// into it. Otherwise make best effort to delete the directory we created.
-		return errhand.VerboseErrorFromError(errors.Join(err, actions.AbortIncompleteClone(clonedEnv, userDirExists)))
+		return errhand.VerboseErrorFromError(err)
 	}
 
 	evt := events.GetEventFromContext(ctx)
@@ -190,15 +192,12 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 		Remote: remoteName,
 	})
 	if err != nil {
-		// The clone is still marked in progress, so the directory it produced is unusable. Remove it rather
-		// than leaving a marked directory behind for the user to clean up by hand.
-		return errhand.VerboseErrorFromError(errors.Join(err, actions.AbortIncompleteClone(clonedEnv, userDirExists)))
+		return errhand.VerboseErrorFromError(err)
 	}
 
-	err = dbfactory.ClearDatabaseInProgress(clonedEnv.FS)
+	err = fsTx.Commit()
 	if err != nil {
-		// The marker is still on disk, so the clone is unusable however complete it is. Take it with us.
-		return errhand.VerboseErrorFromError(errors.Join(err, actions.AbortIncompleteClone(clonedEnv, userDirExists)))
+		return errhand.VerboseErrorFromError(err)
 	}
 
 	return nil
@@ -241,15 +240,14 @@ func parseArgs(apr *argparser.ArgParseResults) (string, string, errhand.VerboseE
 	return dir, urlStr, nil
 }
 
-// createRemote opens the remote at |remoteUrl| for reading. |cloneRoot| is the absolute path of the directory
+// createRemote opens the remote |r| for reading. |cloneRoot| is the absolute path of the directory
 // the local database is being created in, which is where a git remote keeps its cache repository.
 //
 // The remote is opened without the singleton and chunk caches, the way fetch, push and pull open one, so the
 // caller gets a view of its own. The caller owns the returned DoltDB and must close it.
-func createRemote(ctx context.Context, remoteName, remoteUrl string, params map[string]string, dEnv *env.DoltEnv, cloneRoot string) (env.Remote, *doltdb.DoltDB, errhand.VerboseError) {
-	cli.Printf("cloning %s\n", remoteUrl)
+func createRemote(ctx context.Context, r env.Remote, dEnv *env.DoltEnv, cloneRoot string) (*doltdb.DoltDB, errhand.VerboseError) {
+	cli.Printf("cloning %s\n", r.Url)
 
-	r := env.NewRemote(remoteName, remoteUrl, params)
 	dialer := dbfactory.GRPCDialProvider(dEnv)
 	if strings.TrimSpace(cloneRoot) != "" {
 		dialer = remoteDialerWithGitCacheRoot{GRPCDialProvider: dEnv, root: cloneRoot}
@@ -257,10 +255,10 @@ func createRemote(ctx context.Context, remoteName, remoteUrl string, params map[
 	ddb, err := r.GetRemoteDBWithoutCaching(ctx, types.Format_DOLT, dialer)
 	if err != nil {
 		bdr := errhand.BuildDError("error: failed to get remote db").AddCause(err)
-		return env.NoRemote, nil, bdr.Build()
+		return nil, bdr.Build()
 	}
 
-	return r, ddb, nil
+	return ddb, nil
 }
 
 // validateAndParseDolthubUrl validates and returns a Dolthub repo link's repository name. For example, given this url: https://www.dolthub.com/repositories/user/test
