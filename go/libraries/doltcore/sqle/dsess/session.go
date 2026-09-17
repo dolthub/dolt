@@ -780,6 +780,33 @@ func (d *DoltSession) DoltCommit(
 	return c, nil
 }
 
+// DoltCommitAll publishes prepared commits and working sets for every named branch.
+// Nil pending commits update only the working set (for --skip-empty).
+func (d *DoltSession) DoltCommitAll(ctx *sql.Context, tx sql.Transaction, dbNames []string, pending []*doltdb.PendingCommit) ([]*doltdb.Commit, error) {
+	if len(dbNames) != len(pending) {
+		return nil, fmt.Errorf("expected one pending commit per branch")
+	}
+	states := make([]*branchState, len(dbNames))
+	included := make(map[*branchState]bool, len(dbNames))
+	for i, dbName := range dbNames {
+		state, ok, err := d.lookupDbState(ctx, dbName)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, sql.ErrDatabaseNotFound.New(dbName)
+		}
+		states[i] = state
+		included[state] = true
+	}
+	for _, dirty := range d.dirtyWorkingSets() {
+		if !included[dirty] {
+			return nil, ErrDirtyWorkingSets
+		}
+	}
+	return d.commitBranchStates(ctx, states, tx, pending)
+}
+
 // doCommitFunc is a function to write to the database, which involves updating the working set and potentially
 // updating HEAD with a new commit
 type doCommitFunc func(ctx *sql.Context, dtx *DoltTransaction, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, *doltdb.Commit, error)

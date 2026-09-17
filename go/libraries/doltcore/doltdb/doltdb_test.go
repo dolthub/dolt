@@ -184,6 +184,23 @@ func TestEmptyInMemoryRepoCreation(t *testing.T) {
 	}
 }
 
+func TestCopyWorkingSetPreservesDestination(t *testing.T) {
+	ddb, ctx, commit := newMemDoltDBWithDefaultBranch(t, "main")
+	root, err := commit.GetRootValue(ctx)
+	require.NoError(t, err)
+	source := ref.NewWorkingSetRef("heads/main")
+	target := ref.NewWorkingSetRef("heads/copy")
+	ws := EmptyWorkingSet(source).WithWorkingRoot(root).WithStagedRoot(root)
+	require.NoError(t, ddb.UpdateWorkingSet(ctx, source, ws, hash.Hash{}, TodoWorkingSetMeta(), nil))
+	require.NoError(t, ddb.CopyWorkingSet(ctx, source, target, false))
+	copied, err := ddb.ResolveWorkingSet(ctx, target)
+	require.NoError(t, err)
+	require.Equal(t, target, copied.Ref())
+	require.Equal(t, source, ws.Ref())
+	require.Error(t, ddb.CopyWorkingSet(ctx, source, target, false))
+	require.NoError(t, ddb.CopyWorkingSet(ctx, source, target, true))
+}
+
 func TestResolveTagWithNonTagHead(t *testing.T) {
 	ddb, ctx, commit := newMemDoltDBWithDefaultBranch(t, "main")
 	tagRef := ref.NewTagRef("invalid-tag")

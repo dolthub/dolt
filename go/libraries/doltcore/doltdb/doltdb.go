@@ -1857,7 +1857,10 @@ func (ddb *DoltDB) UpdateWorkingSet(
 	meta *datas.WorkingSetMeta,
 	replicationStatus *ReplicationStatusController,
 ) error {
-	_, err := ddb.CommitDatasets(ctx, []DatasetUpdate{{WorkingSet: workingSet, PrevHash: prevHash, Meta: meta}}, replicationStatus)
+	// CopyWorkingSet can supply a value belonging to a different ref.
+	updated := *workingSet
+	updated.Name = workingSetRef.GetPath()
+	_, err := ddb.CommitDatasets(ctx, []DatasetUpdate{{WorkingSet: &updated, PrevHash: prevHash, Meta: meta}}, replicationStatus)
 
 	if err == nil {
 		if headRef, e2 := workingSetRef.ToHeadRef(); e2 == nil && headRef.GetType() == ref.BranchRefType {

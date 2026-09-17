@@ -655,7 +655,7 @@ func RunTransactionTests(t *testing.T, h DoltEnginetestHarness, prepared bool) {
 }
 
 func RunBranchTransactionTest(t *testing.T, h DoltEnginetestHarness) {
-	for _, script := range BranchIsolationTests {
+	for _, script := range append(BranchIsolationTests, DoltCommitAllTransactionTests...) {
 		func() {
 			h := h.NewHarness(t)
 			defer h.Close()
@@ -1785,12 +1785,22 @@ func RunDoltCommitTests(t *testing.T, harness DoltEnginetestHarness) {
 	for _, script := range DoltCommitTests {
 		enginetest.TestScript(t, harness, script)
 	}
+	for _, script := range DoltCommitAllTests {
+		h := harness.NewHarness(t)
+		enginetest.TestScript(t, h, script)
+		h.Close()
+	}
 }
 
 func RunDoltCommitTestsPrepared(t *testing.T, harness DoltEnginetestHarness) {
 	defer harness.Close()
 	for _, script := range DoltCommitTests {
 		enginetest.TestScriptPrepared(t, harness, script)
+	}
+	for _, script := range DoltCommitAllTests {
+		h := harness.NewHarness(t)
+		enginetest.TestScriptPrepared(t, h, script)
+		h.Close()
 	}
 }
 
