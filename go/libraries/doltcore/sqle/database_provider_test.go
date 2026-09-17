@@ -31,11 +31,13 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 func setGlobalSqlVariable(t *testing.T, name string, val interface{}) {
@@ -164,69 +166,170 @@ func InstallSnoopingCommitHook(ctx *sql.Context, pro *DoltDatabaseProvider, name
 	return nil
 }
 
-// orphanCases are the two on-disk remains an interrupted creation can leave behind.
-var orphanCases = []struct {
-	name       string
-	makeOrphan func(t *testing.T, fs filesys.Filesys)
-}{
-	{"in-progress marker", func(t *testing.T, fs filesys.Filesys) {
-		require.NoError(t, dbfactory.MarkDatabaseInProgress(fs))
-	}},
-	{"missing repo state", func(t *testing.T, fs filesys.Filesys) {
-		require.NoError(t, fs.MkDirs(filepath.Join(dbfactory.DoltDir, dbfactory.DataDir)))
-	}},
+func newProviderEngine(t *testing.T) (*sqle.Engine, *sql.Context, *DoltDatabaseProvider, *env.DoltEnv) {
+	return newProviderEngineWithEnv(t, dtestutils.CreateTestEnv())
 }
 
-func newProviderEngine(t *testing.T) (*sqle.Engine, *sql.Context, *DoltDatabaseProvider, *env.DoltEnv) {
+func newLocalProviderEngine(t *testing.T) (*sqle.Engine, *sql.Context, *DoltDatabaseProvider, *env.DoltEnv) {
+	return newProviderEngineWithEnv(t, dtestutils.CreateTestEnvForLocalFilesystem())
+}
+
+func newProviderEngineWithEnv(t *testing.T, dEnv *env.DoltEnv) (*sqle.Engine, *sql.Context, *DoltDatabaseProvider, *env.DoltEnv) {
 	ctx := context.Background()
-	dEnv := dtestutils.CreateTestEnv()
 	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(ctx), editor.Options{})
 	require.NoError(t, err)
 	engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db)
 	require.NoError(t, err)
 	sess := dsess.DSessFromSess(sqlCtx.Session)
-	return engine, sqlCtx, sess.Provider().(*DoltDatabaseProvider), dEnv
+	pro := sess.Provider().(*DoltDatabaseProvider)
+	pro.remoteDialer = env.NewGRPCDialProviderFromDoltEnv(dEnv)
+	return engine, sqlCtx, pro, dEnv
 }
 
-// providerWithOrphanedDir returns an engine whose filesystem holds a directory named foo that |makeOrphan|
-// has turned into the remains of an interrupted creation.
-func providerWithOrphanedDir(t *testing.T, makeOrphan func(t *testing.T, fs filesys.Filesys)) (*sqle.Engine, *sql.Context, *DoltDatabaseProvider) {
-	engine, sqlCtx, pro, dEnv := newProviderEngine(t)
+// providerWithIncompleteDir returns an engine whose filesystem holds a directory named foo that |setupDir|
+// has initialized.
+func providerWithIncompleteDir(t *testing.T, setupDir func(t *testing.T, fs filesys.Filesys)) (*sqle.Engine, *sql.Context, *DoltDatabaseProvider, string) {
+	engine, sqlCtx, pro, dEnv := newLocalProviderEngine(t)
+
+	ctx := sqlCtx
+	remoteDir := t.TempDir()
+	remoteUrl := "file://" + filepath.ToSlash(remoteDir)
+	rem := env.NewRemote("origin", remoteUrl, nil)
+	require.NoError(t, rem.Prepare(ctx, types.Format_DOLT, pro.remoteDialer))
+	require.NoError(t, dEnv.AddRemote(rem))
+
+	remoteDB, err := rem.GetRemoteDBWithoutCaching(ctx, types.Format_DOLT, pro.remoteDialer)
+	require.NoError(t, err)
+	defer remoteDB.Close()
+
+	headCommit, err := dEnv.DoltDB(ctx).ResolveCommitRef(ctx, dEnv.RepoState.CWBHeadRef())
+	require.NoError(t, err)
+
+	tmpDir, err := dEnv.TempTableFilesDir()
+	require.NoError(t, err)
+
+	branchRef := ref.NewBranchRef("main")
+	remoteRef := ref.NewRemoteRef("origin", "main")
+	_, err = actions.Push(ctx, tmpDir, ref.ForceUpdate, branchRef, remoteRef, dEnv.DoltDB(ctx), remoteDB, headCommit, nil)
+	require.NoError(t, err)
 
 	require.NoError(t, dEnv.FS.MkDirs("foo"))
 	fooFS, err := dEnv.FS.WithWorkingDir("foo")
 	require.NoError(t, err)
-	makeOrphan(t, fooFS)
+	setupDir(t, fooFS)
 
-	return engine, sqlCtx, pro
+	return engine, sqlCtx, pro, remoteUrl
 }
 
-func TestCreateDatabaseOverIncompleteDirectory(t *testing.T) {
-	for _, tc := range orphanCases {
-		t.Run(tc.name, func(t *testing.T) {
-			engine, sqlCtx, _ := providerWithOrphanedDir(t, tc.makeOrphan)
+func testWithIncompleteDir(
+	t *testing.T,
+	testFn func(t *testing.T, engine *sqle.Engine, sqlCtx *sql.Context, pro *DoltDatabaseProvider, remoteUrl string, reclaimable bool),
+) {
+	t.Helper()
+	tests := []struct {
+		name        string
+		setupDir    func(t *testing.T, fs filesys.Filesys)
+		reclaimable bool
+	}{
+		{
+			name: "in-progress marker",
+			setupDir: func(t *testing.T, fs filesys.Filesys) {
+				require.NoError(t, fs.WriteFile(dbfactory.SafeToIgnoreMarkerFile, nil, 0o644))
+			},
+			reclaimable: true,
+		},
+		{
+			name: "missing repo state",
+			setupDir: func(t *testing.T, fs filesys.Filesys) {
+				require.NoError(t, fs.MkDirs(filepath.Join(dbfactory.DoltDir, dbfactory.DataDir)))
+			},
+			reclaimable: false,
+		},
+	}
 
-			// IF NOT EXISTS must not be silently suppressed, because the database does not exist and a
-			// client that believes it does cannot use it.
-			for _, q := range []string{"CREATE DATABASE foo;", "CREATE DATABASE IF NOT EXISTS foo;"} {
-				err := ExecuteSqlOnEngine(sqlCtx, engine, q)
-				require.Error(t, err)
-				assert.ErrorIs(t, err, ErrIncompleteDatabaseDir, "query %q", q)
-			}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			engine, sqlCtx, pro, remoteUrl := providerWithIncompleteDir(t, tc.setupDir)
+			testFn(t, engine, sqlCtx, pro, remoteUrl, tc.reclaimable)
 		})
 	}
 }
 
-func TestCloneDatabaseOverIncompleteDirectory(t *testing.T) {
-	// A retried clone must not be stuck behind a directory it can neither use nor recreate.
-	for _, tc := range orphanCases {
-		t.Run(tc.name, func(t *testing.T) {
-			_, sqlCtx, pro := providerWithOrphanedDir(t, tc.makeOrphan)
-
-			// The orphaned directory is detected before any remote work, so the unreachable remote is never contacted.
-			err := pro.CloneDatabaseFromRemote(sqlCtx, "foo", "", "origin", "file://unreachable", -1, nil)
+func TestCreateDatabaseWithIncompleteDir(t *testing.T) {
+	testWithIncompleteDir(t, func(t *testing.T, engine *sqle.Engine, sqlCtx *sql.Context, pro *DoltDatabaseProvider, _ string, reclaimable bool) {
+		if reclaimable {
+			for _, q := range []string{"CREATE DATABASE foo;", "CREATE DATABASE IF NOT EXISTS foo;"} {
+				require.NoError(t, ExecuteSqlOnEngine(sqlCtx, engine, q), "query %q", q)
+				_, err := pro.Database(sqlCtx, "foo")
+				require.NoError(t, err)
+			}
+		} else {
+			err := ExecuteSqlOnEngine(sqlCtx, engine, "CREATE DATABASE foo;")
 			require.Error(t, err)
-			assert.ErrorIs(t, err, ErrIncompleteDatabaseDir)
+			assert.True(t, sql.ErrDatabaseExists.Is(err))
+		}
+	})
+}
+
+func TestCloneDatabaseWithIncompleteDir(t *testing.T) {
+	testWithIncompleteDir(t, func(t *testing.T, _ *sqle.Engine, sqlCtx *sql.Context, pro *DoltDatabaseProvider, remoteUrl string, reclaimable bool) {
+		err := pro.CloneDatabaseFromRemote(sqlCtx, "foo", "main", "origin", remoteUrl, -1, nil)
+		if reclaimable {
+			require.NoError(t, err)
+			db, err := pro.Database(sqlCtx, "foo")
+			require.NoError(t, err)
+			sqldb, ok := db.(dsess.SqlDatabase)
+			require.True(t, ok)
+			branches, err := sqldb.DbData().Ddb.GetBranches(sqlCtx)
+			require.NoError(t, err)
+			assert.Len(t, branches, 1)
+			assert.Equal(t, "main", branches[0].GetPath())
+		} else {
+			require.Error(t, err)
+			assert.True(t, sql.ErrDatabaseExists.Is(err))
+		}
+	})
+}
+
+func TestInProgressBlocksConcurrentCreation(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		startCreate func(t *testing.T, ctx context.Context, dEnv *env.DoltEnv) func() error
+	}{
+		{
+			name: "create in progress",
+			startCreate: func(t *testing.T, _ context.Context, dEnv *env.DoltEnv) func() error {
+				fsTx, err := dbfactory.BeginCreate(dEnv.FS, "foo")
+				require.NoError(t, err)
+				return fsTx.Rollback
+			},
+		},
+		{
+			name: "clone in progress",
+			startCreate: func(t *testing.T, ctx context.Context, dEnv *env.DoltEnv) func() error {
+				hdp := func() (string, error) { return dEnv.FS.TempDir(), nil }
+				clonedEnv, fsTx, err := actions.EnvForClone(ctx, types.Format_DOLT, env.NoRemote, "foo", dEnv.FS, "test", hdp)
+				require.NoError(t, err)
+				return func() error {
+					return errors.Join(clonedEnv.Close(), fsTx.Rollback())
+				}
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			engine, sqlCtx, pro, dEnv := newLocalProviderEngine(t)
+			rollback := tc.startCreate(t, sqlCtx, dEnv)
+
+			err := ExecuteSqlOnEngine(sqlCtx, engine, "CREATE DATABASE foo;")
+			require.Error(t, err)
+			assert.ErrorIs(t, err, ErrIncompleteDir)
+
+			require.NoError(t, rollback())
+
+			err = ExecuteSqlOnEngine(sqlCtx, engine, "CREATE DATABASE foo;")
+			require.NoError(t, err)
+			_, err = pro.Database(sqlCtx, "foo")
+			require.NoError(t, err)
 		})
 	}
 }
@@ -250,7 +353,8 @@ func TestCreateDatabaseClearsInProgressMarker(t *testing.T) {
 
 			newFs, err := dEnv.FS.WithWorkingDir("mytest")
 			require.NoError(t, err)
-			assert.False(t, dbfactory.IsDatabaseInProgress(newFs), "a completed CREATE DATABASE must clear the marker")
+			exists, _ := newFs.Exists(dbfactory.SafeToIgnoreMarkerFile)
+			assert.False(t, exists, "a completed CREATE DATABASE must clear the marker")
 		})
 	}
 }
@@ -274,12 +378,11 @@ func TestCreatingDatabaseReservation(t *testing.T) {
 	}
 
 	// checkNameAvailable runs checkDatabaseNameAvailableLocked under the provider
-	// lock, mirroring how the create (checkDisk=true) and undrop
-	// (checkDisk=false) paths consult it.
-	checkNameAvailable := func(pro *DoltDatabaseProvider, name string, checkDisk bool) error {
+	// lock, mirroring how the create and undrop paths consult it in memory.
+	checkNameAvailable := func(pro *DoltDatabaseProvider, name string) error {
 		pro.mu.Lock()
 		defer pro.mu.Unlock()
-		return pro.checkDatabaseNameAvailableLocked(name, checkDisk)
+		return pro.checkDatabaseNameAvailableLocked(name, false)
 	}
 
 	t.Run("second reservation of the same name conflicts", func(t *testing.T) {
@@ -299,10 +402,8 @@ func TestCreatingDatabaseReservation(t *testing.T) {
 		for _, variant := range []string{"clonedb", "CLONEDB", "CloneDB"} {
 			require.Truef(t, sql.ErrDatabaseExists.Is(pro.reserveCreatingDatabase(variant)),
 				"clone of case-variant %q should conflict", variant)
-			require.Truef(t, sql.ErrDatabaseExists.Is(checkNameAvailable(pro, variant, true)),
+			require.Truef(t, sql.ErrDatabaseExists.Is(checkNameAvailable(pro, variant)),
 				"CREATE of case-variant %q should conflict", variant)
-			require.Truef(t, sql.ErrDatabaseExists.Is(checkNameAvailable(pro, variant, false)),
-				"UNDROP of case-variant %q should conflict", variant)
 		}
 	})
 
@@ -311,7 +412,7 @@ func TestCreatingDatabaseReservation(t *testing.T) {
 		require.NoError(t, pro.reserveCreatingDatabase("clonedb"))
 		// Releasing via a different case must clear the same reservation.
 		pro.releaseCreatingDatabase("CLONEDB")
-		require.NoError(t, checkNameAvailable(pro, "clonedb", true))
+		require.NoError(t, checkNameAvailable(pro, "clonedb"))
 		require.NoError(t, pro.reserveCreatingDatabase("clonedb"))
 		pro.releaseCreatingDatabase("clonedb")
 	})
@@ -327,7 +428,7 @@ func TestCreatingDatabaseReservation(t *testing.T) {
 			pro.mu.Unlock()
 		})
 
-		require.Truef(t, sql.ErrDatabaseExists.Is(checkNameAvailable(pro, "DELDB", true)),
+		require.Truef(t, sql.ErrDatabaseExists.Is(checkNameAvailable(pro, "DELDB")),
 			"CREATE of a case-variant of a deleting database should conflict")
 	})
 
@@ -406,13 +507,8 @@ func TestResolveCaseVariantBranchConflict(t *testing.T) {
 // directory it made, the in-progress marker inside it, and the DoltDB it opened. Only a process that dies
 // outright should leave any of that on disk.
 func TestCreateDatabaseFailureLeavesNothingBehind(t *testing.T) {
-	ctx := context.Background()
-	dEnv := dtestutils.CreateTestEnvForLocalFilesystem()
-	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(ctx), editor.Options{})
-	require.NoError(t, err)
-	engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db)
-	require.NoError(t, err)
-	pro := dsess.DSessFromSess(sqlCtx.Session).Provider().(*DoltDatabaseProvider)
+	engine, sqlCtx, pro, dEnv := newLocalProviderEngine(t)
+	ctx := sqlCtx
 
 	failCreate := true
 	pro.AddInitDatabaseHook(func(_ *sql.Context, _ *DoltDatabaseProvider, _ string, _ *env.DoltEnv, _ dsess.SqlDatabase) error {
@@ -436,7 +532,8 @@ func TestCreateDatabaseFailureLeavesNothingBehind(t *testing.T) {
 
 	newFs, err := dEnv.FS.WithWorkingDir("mytest")
 	require.NoError(t, err)
-	assert.False(t, dbfactory.IsDatabaseInProgress(newFs), "the retried CREATE DATABASE must clear the marker")
+	exists, _ = newFs.Exists(dbfactory.SafeToIgnoreMarkerFile)
+	assert.False(t, exists, "the retried CREATE DATABASE must clear the marker")
 
 	// Reopen the database from disk to prove its contents landed in its own directory.
 	absPath, err := newFs.Abs("")
