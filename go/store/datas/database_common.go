@@ -703,42 +703,10 @@ func (db *database) UpdateStashList(ctx context.Context, ds Dataset, stashListAd
 }
 
 func (db *database) UpdateWorkingSet(ctx context.Context, ds Dataset, workingSetSpec WorkingSetSpec, prevHash hash.Hash) (Dataset, error) {
-	return db.doHeadUpdate(
-		ctx,
-		ds,
-		func(ds Dataset) error {
-			addr, err := newWorkingSet(ctx, db, workingSetSpec)
-			if err != nil {
-				return err
-			}
-			return db.doUpdateWorkingSet(ctx, ds.ID(), addr, prevHash)
-		},
-	)
-}
-
-// Update the entry in the datasets map for |datasetID| to point to the address of a new
-// |workingSet|. Unlike |doCommit|, |doTag|, etc., this method requires a
-// compare-and-set for the current target hash of the datasets entry, and will
-// return an error if the application is working with a stale value for the
-// workingset.
-func (db *database) doUpdateWorkingSet(ctx context.Context, datasetID string, addr hash.Hash, currHash hash.Hash) error {
-	_, err := db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
-		curr, err := am.Get(ctx, datasetID)
-		if err != nil {
-			return prolly.AddressMap{}, err
-		}
-		if curr != currHash {
-			return prolly.AddressMap{}, ErrOptimisticLockFailed
-		}
-		ae := am.Editor()
-		err = ae.Update(ctx, datasetID, addr)
-		if err != nil {
-			return prolly.AddressMap{}, err
-		}
-		return ae.Flush(ctx)
+	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error {
+		_, err := db.CommitDatasets(ctx, []DatasetUpdate{WorkingSetUpdate{WorkingSetDS: ds.ID(), WorkingSet: workingSetSpec, PrevWsHash: prevHash}})
+		return err
 	})
-
-	return err
 }
 
 func (db *database) PersistGhostCommitIDs(ctx context.Context, ghosts hash.HashSet) error {

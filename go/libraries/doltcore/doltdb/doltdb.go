@@ -1857,17 +1857,7 @@ func (ddb *DoltDB) UpdateWorkingSet(
 	meta *datas.WorkingSetMeta,
 	replicationStatus *ReplicationStatusController,
 ) error {
-	ds, err := ddb.db.GetDataset(ctx, workingSetRef.String())
-	if err != nil {
-		return err
-	}
-
-	wsSpec, err := ddb.writeWorkingSet(ctx, workingSetRef, workingSet, meta, ds)
-	if err != nil {
-		return err
-	}
-
-	_, err = ddb.db.withReplicationStatusController(replicationStatus).UpdateWorkingSet(ctx, ds, *wsSpec, prevHash)
+	_, err := ddb.CommitDatasets(ctx, []DatasetUpdate{{WorkingSet: workingSet, PrevHash: prevHash, Meta: meta}}, replicationStatus)
 
 	if err == nil {
 		if headRef, e2 := workingSetRef.ToHeadRef(); e2 == nil && headRef.GetType() == ref.BranchRefType {
