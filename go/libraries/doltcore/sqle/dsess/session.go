@@ -722,15 +722,22 @@ func (d *DoltSession) IsBranchDirty(dbName, branch string) bool {
 	return ok && branchState.dirty
 }
 
-// CommitWorkingSet commits the working set for the transaction given, without creating a new dolt commit.
+// CommitWorkingSet commits the named working set and any other dirty working sets
+// in the transaction, without creating a new dolt commit.
 // Clients should typically use CommitTransaction, which performs additional checks, instead of this method.
 func (d *DoltSession) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.Transaction) error {
-	commitFunc := func(ctx *sql.Context, dtx *DoltTransaction, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, *doltdb.Commit, error) {
-		ws, err := dtx.Commit(ctx, workingSet, dbName)
-		return ws, nil, err
+	state, ok, err := d.lookupDbState(ctx, dbName)
+	if err != nil {
+		return err
 	}
-
-	_, err := d.commitCurrentHead(ctx, dbName, tx, commitFunc)
+	if !ok {
+		return sql.ErrDatabaseNotFound.New(dbName)
+	}
+	states := d.dirtyWorkingSets()
+	if !state.dirty {
+		states = append(states, state)
+	}
+	_, err = d.commitBranchStates(ctx, states, tx, nil)
 	return err
 }
 

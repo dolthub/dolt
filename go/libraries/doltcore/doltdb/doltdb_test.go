@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -199,6 +200,73 @@ func TestCopyWorkingSetPreservesDestination(t *testing.T) {
 	require.Equal(t, source, ws.Ref())
 	require.Error(t, ddb.CopyWorkingSet(ctx, source, target, false))
 	require.NoError(t, ddb.CopyWorkingSet(ctx, source, target, true))
+}
+
+type workingRootListener struct {
+	updated func()
+}
+
+type batchCommitHook struct {
+	datasets []string
+}
+
+func (h *batchCommitHook) Execute(_ context.Context, ds datas.Dataset, _ *DoltDB) (func(context.Context) error, error) {
+	h.datasets = append(h.datasets, ds.ID())
+	return func(context.Context) error { return nil }, nil
+}
+func (*batchCommitHook) ExecuteForWorkingSets() bool  { return true }
+func (*batchCommitHook) ExecuteForReplicaWrite() bool { return false }
+
+func (l workingRootListener) WorkingRootUpdated(*sql.Context, string, string, RootValue, RootValue) error {
+	l.updated()
+	return nil
+}
+func (workingRootListener) DatabaseCreated(*sql.Context, string) error { return nil }
+func (workingRootListener) DatabaseDropped(*sql.Context, string) error { return nil }
+
+func TestCommitDatasetsChecksPreparedHeadBeforePublishing(t *testing.T) {
+	ddb, baseCtx, commit := newMemDoltDBWithDefaultBranch(t, "main")
+	ctx := sql.NewContext(baseCtx)
+	root, err := commit.GetRootValue(ctx)
+	require.NoError(t, err)
+	ws := EmptyWorkingSet(ref.NewWorkingSetRef("heads/main")).WithWorkingRoot(root).WithStagedRoot(root)
+	other := EmptyWorkingSet(ref.NewWorkingSetRef("heads/other")).WithWorkingRoot(root).WithStagedRoot(root)
+	before, err := ddb.NomsRoot(ctx)
+	require.NoError(t, err)
+	called := 0
+	hook := &batchCommitHook{}
+	ddb.PrependCommitHooks(ctx, hook)
+	listeners := DatabaseUpdateListeners
+	DatabaseUpdateListeners = []DatabaseUpdateListener{workingRootListener{func() {
+		published, err := ddb.NomsRoot(ctx)
+		require.NoError(t, err)
+		require.NotEqual(t, before, published)
+		called++
+	}}}
+	t.Cleanup(func() { DatabaseUpdateListeners = listeners })
+	expected := hash.Hash{}
+	updates := []DatasetUpdate{
+		{WorkingSet: other, Meta: TodoWorkingSetMeta()},
+		{WorkingSet: ws, Meta: TodoWorkingSetMeta(), ExpectedHead: &expected, Commit: &PendingCommit{
+			Roots:         Roots{Head: root, Staged: root, Working: root},
+			CommitOptions: datas.CommitOptions{Meta: &datas.CommitMeta{}},
+		}},
+	}
+	_, err = ddb.CommitDatasets(ctx, updates, nil)
+	require.ErrorIs(t, err, datas.ErrMergeNeeded)
+	require.Zero(t, called)
+	require.Empty(t, hook.datasets)
+	after, err := ddb.NomsRoot(ctx)
+	require.NoError(t, err)
+	require.Equal(t, before, after)
+	expected, err = commit.HashOf()
+	require.NoError(t, err)
+	var rsc ReplicationStatusController
+	_, err = ddb.CommitDatasets(ctx, updates, &rsc)
+	require.NoError(t, err)
+	require.Equal(t, 2, called)
+	require.Equal(t, []string{"workingSets/heads/other", "refs/heads/main"}, hook.datasets)
+	require.Len(t, rsc.Wait, 2)
 }
 
 func TestResolveTagWithNonTagHead(t *testing.T) {

@@ -1886,6 +1886,8 @@ type DatasetUpdate struct {
 	PrevHash   hash.Hash
 	Meta       *datas.WorkingSetMeta
 	Commit     *PendingCommit
+	// ExpectedHead, when supplied, is the head used to merge Commit before publication.
+	ExpectedHead *hash.Hash
 }
 
 // CommitDatasets publishes all updates in a single storage transaction. Returned commits
@@ -1893,16 +1895,18 @@ type DatasetUpdate struct {
 func (ddb *DoltDB) CommitDatasets(ctx context.Context, updates []DatasetUpdate, replicationStatus *ReplicationStatusController) ([]*Commit, error) {
 	var pending []datas.DatasetUpdate
 	commitIndexes := make(map[int]int)
+	notifications := make([]func(), 0, len(updates))
 	for i, update := range updates {
 		wsRef := update.WorkingSet.Ref()
 		wsDS, err := ddb.db.GetDataset(ctx, wsRef.String())
 		if err != nil {
 			return nil, err
 		}
-		spec, err := ddb.writeWorkingSet(ctx, wsRef, update.WorkingSet, update.Meta, wsDS)
+		spec, notify, err := ddb.writeWorkingSet(ctx, wsRef, update.WorkingSet, update.Meta, wsDS)
 		if err != nil {
 			return nil, err
 		}
+		notifications = append(notifications, notify)
 		pending = append(pending, datas.WorkingSetUpdate{WorkingSetDS: wsDS.ID(), WorkingSet: *spec, PrevWsHash: update.PrevHash})
 		if update.Commit != nil {
 			headRef, err := wsRef.ToHeadRef()
@@ -1913,6 +1917,12 @@ func (ddb *DoltDB) CommitDatasets(ctx context.Context, updates []DatasetUpdate, 
 			if err != nil {
 				return nil, err
 			}
+			if update.ExpectedHead != nil {
+				head, _ := headDS.MaybeHeadAddr()
+				if head != *update.ExpectedHead {
+					return nil, datas.ErrMergeNeeded
+				}
+			}
 			commitIndexes[i] = len(pending)
 			pending = append(pending, datas.CommitUpdate{CommitDS: headDS, CommitOpts: update.Commit.CommitOptions, WorkingSetDS: wsDS.ID(), PrevWsHash: update.PrevHash, RootVal: update.Commit.Roots.Staged.NomsValue()})
 		}
@@ -1920,6 +1930,9 @@ func (ddb *DoltDB) CommitDatasets(ctx context.Context, updates []DatasetUpdate, 
 	datasets, err := ddb.db.withReplicationStatusController(replicationStatus).CommitDatasets(ctx, pending)
 	if err != nil {
 		return nil, err
+	}
+	for _, notify := range notifications {
+		notify()
 	}
 	commits := make([]*Commit, len(updates))
 	for i, index := range commitIndexes {
@@ -1947,13 +1960,13 @@ func (ddb *DoltDB) CommitDatasets(ctx context.Context, updates []DatasetUpdate, 
 
 // writeWorkingSet writes the specified |workingSet| at the specified |workingSetRef| with the
 // specified ws metadata, |meta|, in the dataset |wsDs| and returns the created WorkingSetSpec along with any error
-// encountered. If any listeners are registered for working root updates, then they will be notified as well.
-func (ddb *DoltDB) writeWorkingSet(ctx context.Context, workingSetRef ref.WorkingSetRef, workingSet *WorkingSet, meta *datas.WorkingSetMeta, wsDs datas.Dataset) (wsSpec *datas.WorkingSetSpec, err error) {
+// encountered. The returned callback notifies listeners after the batch is published.
+func (ddb *DoltDB) writeWorkingSet(ctx context.Context, workingSetRef ref.WorkingSetRef, workingSet *WorkingSet, meta *datas.WorkingSetMeta, wsDs datas.Dataset) (wsSpec *datas.WorkingSetSpec, notify func(), err error) {
 	var prevRoot RootValue
 	if wsDs.HasHead() {
 		prevWorkingSet, err := newWorkingSet(ctx, workingSetRef.String(), ddb.vrw, ddb.ns, wsDs)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		prevRoot = prevWorkingSet.workingRoot
 	} else {
@@ -1963,7 +1976,7 @@ func (ddb *DoltDB) writeWorkingSet(ctx context.Context, workingSetRef ref.Workin
 		// or when a new branch is created.
 		prevRoot, err = EmptyRootValue(ctx, ddb.vrw, ddb.ns)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
@@ -1974,26 +1987,28 @@ func (ddb *DoltDB) writeWorkingSet(ctx context.Context, workingSetRef ref.Workin
 
 	wsSpec, err = workingSet.writeValues(ctx, ddb, meta, false)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	if branchName != "" {
-		for _, listener := range DatabaseUpdateListeners {
-			sqlCtx, ok := ctx.(*sql.Context)
-			if ok {
-				err := listener.WorkingRootUpdated(sqlCtx,
-					ddb.databaseName,
-					branchName,
-					prevRoot,
-					workingSet.WorkingRoot())
-				if err != nil {
-					logrus.Errorf("error notifying working root listener of update: %s", err.Error())
+	notify = func() {
+		if branchName != "" {
+			for _, listener := range DatabaseUpdateListeners {
+				sqlCtx, ok := ctx.(*sql.Context)
+				if ok {
+					err := listener.WorkingRootUpdated(sqlCtx,
+						ddb.databaseName,
+						branchName,
+						prevRoot,
+						workingSet.WorkingRoot())
+					if err != nil {
+						logrus.Errorf("error notifying working root listener of update: %s", err.Error())
+					}
 				}
 			}
 		}
-	}
 
-	return wsSpec, nil
+	}
+	return wsSpec, notify, nil
 }
 
 // DeleteWorkingSet deletes the working set given

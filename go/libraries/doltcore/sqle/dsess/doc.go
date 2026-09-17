@@ -67,5 +67,7 @@ SQL transactions can atomically update working sets on multiple branches of one 
 Each working set is merged against its transaction snapshot and validated before any changes are published.
 Transactions spanning separate physical databases remain unsupported. dolt_commit and
 dolt_transaction_commit continue to require at most one dirty branch.
+dolt_commit_all creates commits for every dirty branch in the selected database and
+publishes those commits together with their working sets in the same atomic update.
 
 */

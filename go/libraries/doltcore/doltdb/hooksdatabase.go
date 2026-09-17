@@ -18,6 +18,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -150,7 +151,20 @@ func (db hooksDatabase) CommitDatasets(ctx context.Context, updates []datas.Data
 	if err != nil {
 		return nil, err
 	}
+	// A branch commit already notifies hooks about its accompanying working set,
+	// matching the single-branch commit path.
+	pairedWorkingSets := make(map[string]bool)
 	for _, ds := range datasets {
+		if head, err := ref.Parse(ds.ID()); err == nil {
+			if ws, err := ref.WorkingSetRefForHead(head); err == nil {
+				pairedWorkingSets[ws.String()] = true
+			}
+		}
+	}
+	for _, ds := range datasets {
+		if ds.IsWorkingSet() && pairedWorkingSets[ds.ID()] {
+			continue
+		}
 		db.ExecuteCommitHooks(ctx, ds, ds.IsWorkingSet(), false)
 	}
 	return datasets, nil

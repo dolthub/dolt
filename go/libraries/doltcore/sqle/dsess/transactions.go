@@ -438,7 +438,16 @@ func (tx *DoltTransaction) commitDatasets(ctx *sql.Context, changes []transactio
 				return nil, nil, err
 			}
 			pending := change.commit
+			var expectedHead *hash.Hash
 			if pending != nil {
+				headRef, err := ws.Ref().ToHeadRef()
+				if err != nil {
+					return nil, nil, err
+				}
+				expectedHead, err = startPoint.db.GetHashForRefStr(ctx, headRef.String())
+				if err != nil {
+					return nil, nil, err
+				}
 				ws, pending, err = prepareDoltCommit(ctx, change.dbName, startPoint.db, starts[i], pending, ws, states[i].EditOpts())
 				if err != nil {
 					return nil, nil, err
@@ -448,7 +457,7 @@ func (tx *DoltTransaction) commitDatasets(ctx *sql.Context, changes []transactio
 				}
 			}
 			workingSets[i] = ws
-			updates[i] = doltdb.DatasetUpdate{WorkingSet: ws, PrevHash: existingHash, Meta: tx.WorkingSetMeta(name, email), Commit: pending}
+			updates[i] = doltdb.DatasetUpdate{WorkingSet: ws, PrevHash: existingHash, Meta: tx.WorkingSetMeta(name, email), Commit: pending, ExpectedHead: expectedHead}
 		}
 		var rsc doltdb.ReplicationStatusController
 		commits, err := startPoint.db.CommitDatasets(ctx, updates, &rsc)

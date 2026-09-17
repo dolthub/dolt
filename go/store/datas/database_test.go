@@ -101,6 +101,12 @@ func (suite *DatabaseSuite) TestCommitDatasetsAtomic() {
 	}
 	before, err := suite.db.rt.Root(ctx)
 	suite.Require().NoError(err)
+	empty, err := suite.db.CommitDatasets(ctx, nil)
+	suite.Require().NoError(err)
+	suite.Empty(empty)
+	unchanged, err := suite.db.rt.Root(ctx)
+	suite.Require().NoError(err)
+	suite.Equal(before, unchanged)
 
 	// A stale lock on the last working set must not publish any earlier updates.
 	stale := append([]DatasetUpdate(nil), updates...)

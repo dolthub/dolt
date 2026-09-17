@@ -803,6 +803,9 @@ func (db *database) CommitDatasets(
 	ctx context.Context,
 	atomicCommit []DatasetUpdate,
 ) ([]Dataset, error) {
+	if len(atomicCommit) == 0 {
+		return []Dataset{}, nil
+	}
 	pending := make([]hash.Hash, len(atomicCommit))
 	seen := make(map[string]struct{}, len(atomicCommit))
 
