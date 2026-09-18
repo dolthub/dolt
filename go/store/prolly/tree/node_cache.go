@@ -36,12 +36,21 @@ func newChunkCache(maxSize int) nodeCache {
 	return cache
 }
 
-func (c nodeCache) get(addr hash.Hash) (*Node, bool) {
+// A cacheKey ties an |insert| to the |get| which looked the address up,
+// including a |get| which missed. |insert| drops the node if the stripe
+// was purged in between, so a reader which went to the ChunkStore before
+// a purge cannot reinstate a node that purge was meant to remove.
+type cacheKey struct {
+	addr   hash.Hash
+	purges uint64
+}
+
+func (c nodeCache) get(addr hash.Hash) (*Node, cacheKey, bool) {
 	return c[addr[0]].get(addr)
 }
 
-func (c nodeCache) insert(addr hash.Hash, node *Node) {
-	c[addr[0]].insert(addr, node)
+func (c nodeCache) insert(k cacheKey, node *Node) {
+	c[k.addr[0]].insert(k, node)
 }
 
 func (c nodeCache) purge() {
@@ -65,6 +74,9 @@ type stripe struct {
 	sz     int
 	maxSz  int
 	rev    int
+
+	// Incremented by every purge; see cacheKey.
+	purges uint64
 }
 
 func newStripe(maxSize int) *stripe {
@@ -89,6 +101,7 @@ func (s *stripe) purge() {
 	s.head = nil
 	s.sz = 0
 	s.rev = 0
+	s.purges += 1
 }
 
 func (s *stripe) moveToFront(e *centry) {
@@ -107,20 +120,26 @@ func (s *stripe) moveToFront(e *centry) {
 	s.head = e
 }
 
-func (s *stripe) get(h hash.Hash) (*Node, bool) {
+func (s *stripe) get(h hash.Hash) (*Node, cacheKey, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	k := cacheKey{addr: h, purges: s.purges}
 	if e, ok := s.chunks[h]; ok {
 		s.moveToFront(e)
-		return e.n, true
+		return e.n, k, true
 	} else {
-		return nil, false
+		return nil, k, false
 	}
 }
 
-func (s *stripe) insert(addr hash.Hash, node *Node) {
+func (s *stripe) insert(k cacheKey, node *Node) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if s.purges != k.purges {
+		return
+	}
+	addr := k.addr
 
 	if e, ok := s.chunks[addr]; !ok {
 		e = &centry{nil, nil, node, 0, addr}
