@@ -74,6 +74,33 @@ type DoltSession struct {
 	branchActivityTracker *doltdb.BranchActivityTracker
 }
 
+// DoltgresSessionLifecycle is implemented by Doltgres session state that needs
+// notification when a transaction ends or its session caches must be cleared.
+// Keeping this interface here avoids coupling Dolt to Doltgres packages.
+type DoltgresSessionLifecycle interface {
+	DoltgresTransactionEnd()
+	DoltgresSessionCacheClear()
+}
+
+// NotifyTransactionEnd notifies Doltgres-owned session state that the active
+// transaction has ended. It is safe to call more than once for the same
+// transaction.
+func (d *DoltSession) NotifyTransactionEnd() {
+	if lifecycle, ok := d.DoltgresSessObj.(DoltgresSessionLifecycle); ok {
+		lifecycle.DoltgresTransactionEnd()
+	}
+}
+
+// ClearDoltgresSessionCache clears Doltgres's transaction-independent session
+// caches without discarding transaction lifecycle state.
+func (d *DoltSession) ClearDoltgresSessionCache() {
+	if lifecycle, ok := d.DoltgresSessObj.(DoltgresSessionLifecycle); ok {
+		lifecycle.DoltgresSessionCacheClear()
+	} else {
+		d.DoltgresSessObj = nil
+	}
+}
+
 var _ sql.Session = (*DoltSession)(nil)
 var _ sql.PersistableSession = (*DoltSession)(nil)
 var _ sql.TransactionSession = (*DoltSession)(nil)
@@ -476,6 +503,7 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 	// See comment in |commitBranchState|
 	defer func() {
 		if err == nil {
+			d.NotifyTransactionEnd()
 			ctx.SetTransaction(nil)
 		}
 	}()
@@ -746,6 +774,7 @@ func (d *DoltSession) commitBranchState(
 	// a new transaction. This should in principle be done by the engine, but it currently only understands explicit
 	// COMMIT statements. Any other statements that commit a transaction, including stored procedures, needs to do this
 	// themselves.
+	d.NotifyTransactionEnd()
 	ctx.SetTransaction(nil)
 	return newCommit, nil
 }
@@ -860,6 +889,7 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, dbName string, branchSt
 
 // Rollback rolls the given transaction back
 func (d *DoltSession) Rollback(ctx *sql.Context, tx sql.Transaction) error {
+	d.NotifyTransactionEnd()
 	// Nothing to do here, we just throw away all our work and let a new transaction begin next statement
 	d.clear()
 	return nil
@@ -1208,13 +1238,19 @@ func (d *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roo
 	return d.SetWorkingSet(ctx, dbName, workingSet)
 }
 
-func (d *DoltSession) ResetGlobals(ctx *sql.Context, dbName string, root doltdb.RootValue) error {
+// MergeGlobals merges the sequence state recorded in |root| into the database's global
+// state, raising any tracked sequence that |root| is further along on.
+//
+// It cannot lower a sequence. Global sequence state is a high-water mark across every
+// branch, so a caller that has moved a working set backwards (dolt_reset --hard) is only
+// telling the tracker about relations it may not have seen, not undoing allocations.
+func (d *DoltSession) MergeGlobals(ctx *sql.Context, dbName string, root doltdb.RootValue) error {
 	sessionState, _, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
 		return err
 	}
 
-	err = sessionState.dbState.globalState.InitWithRoots(ctx, root)
+	err = sessionState.dbState.globalState.MergeRoots(ctx, root)
 	if err != nil {
 		return err
 	}
@@ -1674,6 +1710,18 @@ func (d *DoltSession) PersistGlobal(ctx *sql.Context, sysVarName string, value i
 		return err
 	}
 
+	// Fall back to setPersistedValue because EncodeValue rejects un-widened AST types (e.g. int8).
+	if sysVarType, ok := sysVar.GetType().(sql.SystemVariableType); ok {
+		if encoded, err := sysVarType.EncodeValue(value); err == nil {
+			value = encoded
+		}
+	} else if strings.EqualFold(sysVar.GetName(), sql.SqlModeSessionVar) {
+		// Fall back to setPersistedValue because already-valid string modes error in ConvertSqlModeBitmask.
+		if s, err := sql.ConvertSqlModeBitmask(value); err == nil {
+			value = s
+		}
+	}
+
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return setPersistedValue(d.globalsConf, sysVar.GetName(), value)
@@ -1890,6 +1938,14 @@ func getPersistedValue(conf config.ReadableConfig, k string) (interface{}, error
 	case bool:
 		return nil, sql.ErrInvalidType.New(value)
 	case string:
+		if strings.EqualFold(k, sql.SqlModeSessionVar) {
+			// Fall through to return v because modern comma-delimited mode strings error in ParseUint.
+			if bitmask, err := strconv.ParseUint(v, 10, 64); err == nil {
+				if s, err := sql.ConvertSqlModeBitmask(bitmask); err == nil {
+					return s, nil
+				}
+			}
+		}
 		return v, nil
 	default:
 		return nil, sql.ErrInvalidType.New(value)
@@ -1991,8 +2047,12 @@ func SystemVariablesInConfig(conf config.ReadableConfig) ([]sql.SystemVariable, 
 
 var initMu = sync.Mutex{}
 
-// InitPersistedSystemVars loads all persisted global variables from disk and initializes the corresponding
-// SQL system variables with their values.
+// InitPersistedSystemVars loads persisted global system variables from
+// configuration into [sql.SystemVariables].
+//
+// The environment's local and global configuration stores are searched
+// for persisted variables, and each definition is initialized with its
+// persisted value. Returns an error if reading configuration fails.
 func InitPersistedSystemVars(dEnv *env.DoltEnv) error {
 	initMu.Lock()
 	defer initMu.Unlock()
@@ -2037,31 +2097,19 @@ func PersistSystemVarDefaults(dEnv *env.DoltEnv) error {
 // global configuration stores, this function searches both.
 func findPersistedGlobalVars(dEnv *env.DoltEnv) (persistedGlobalVars []sql.SystemVariable, err error) {
 	foundConfig := false
-	if localConf, ok := dEnv.Config.GetConfig(env.LocalConfig); ok {
-		foundConfig = true
-		localConfig := config.NewPrefixConfig(localConf, env.SqlServerGlobalsPrefix)
-		globalVars, missingKeys, err := SystemVariablesInConfig(localConfig)
-		if err != nil {
-			return nil, err
-		}
+	for _, confScope := range []env.ConfigScope{env.LocalConfig, env.GlobalConfig} {
+		if conf, ok := dEnv.Config.GetConfig(confScope); ok {
+			foundConfig = true
+			pfxConfig := config.NewPrefixConfig(conf, env.SqlServerGlobalsPrefix)
+			globalVars, missingKeys, err := SystemVariablesInConfig(pfxConfig)
+			if err != nil {
+				return nil, err
+			}
 
-		persistedGlobalVars = append(persistedGlobalVars, globalVars...)
-		for _, k := range missingKeys {
-			logrus.Warnf("persisted system variable %s was not loaded since its definition does not exist.", k)
-		}
-	}
-
-	if globalConf, ok := dEnv.Config.GetConfig(env.GlobalConfig); ok {
-		foundConfig = true
-		globalConfig := config.NewPrefixConfig(globalConf, env.SqlServerGlobalsPrefix)
-		globalVars, missingKeys, err := SystemVariablesInConfig(globalConfig)
-		if err != nil {
-			return nil, err
-		}
-
-		persistedGlobalVars = append(persistedGlobalVars, globalVars...)
-		for _, k := range missingKeys {
-			logrus.Warnf("persisted system variable %s was not loaded since its definition does not exist.", k)
+			persistedGlobalVars = append(persistedGlobalVars, globalVars...)
+			for _, k := range missingKeys {
+				logrus.Warnf("persisted system variable %s was not loaded since its definition does not exist.", k)
+			}
 		}
 	}
 

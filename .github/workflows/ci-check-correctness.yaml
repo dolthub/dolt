@@ -3,15 +3,21 @@ on:
   pull_request:
     paths:
       - 'go/**'
-    branches: [main]
-    types: [opened, labeled, unlabeled, synchronize]
+    branches: [ main ]
+    types: [ opened, labeled, unlabeled, synchronize ]
 jobs:
   label:
     runs-on: ubuntu-latest
     permissions:
+      actions: write
       issues: write
       pull-requests: write
+      contents: read
     steps:
+      - name: Check deferred CI
+        uses: $/.github/actions/check-deferred-ci
+        with:
+          timezone: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
       - uses: mheap/github-action-required-labels@v5
         if: github.actor != 'dependabot[bot]'
         with:

@@ -19,8 +19,10 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"slices"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -88,10 +90,22 @@ func NewRangePartitionIter(ctx *sql.Context, t DoltTableable, lookup sql.IndexLo
 		return nil, err
 	}
 	return &rangePartitionIter{
-		prollyRanges: prollyRanges,
+		prollyRanges: rangesInScanOrder(prollyRanges, lookup.IsReverse),
 		curr:         0,
 		isReverse:    lookup.IsReverse,
 	}, nil
+}
+
+// rangesInScanOrder returns |ranges| in the order a scan visits them. |ranges| arrives sorted by
+// the physical position of its lower bounds (see prolly.SortRangesByStart), so a reverse scan
+// visits them back to front. The input is left untouched.
+func rangesInScanOrder(ranges []prolly.Range, reverse bool) []prolly.Range {
+	if !reverse {
+		return ranges
+	}
+	ordered := slices.Clone(ranges)
+	slices.Reverse(ordered)
+	return ordered
 }
 
 func newPointPartitionIter(ctx *sql.Context, lookup sql.IndexLookup, idx *doltIndex) (sql.PartitionIter, error) {
@@ -128,10 +142,13 @@ func (p *pointPartition) Next(c *sql.Context) (sql.Partition, error) {
 	return *p, nil
 }
 
+// rangePartitionIter hands out one partition per range, in scan order.
 type rangePartitionIter struct {
+	// prollyRanges is in scan order, so it is walked front to back regardless of isReverse.
 	prollyRanges []prolly.Range
 	curr         int
-	isReverse    bool
+	// isReverse is the direction each partition is scanned in.
+	isReverse bool
 }
 
 // Close is required by the sql.PartitionIter interface. Does nothing.
@@ -276,6 +293,7 @@ func NewIndexReaderBuilder(
 		base.sec = si
 	case prolly.ProximityMap:
 		base.proximitySecondary = si
+		base.isProximity = true
 	default:
 		return nil, fmt.Errorf("unknown index type %v", secondaryIndex)
 	}
@@ -440,7 +458,14 @@ func (ib *baseIndexImplBuilder) proximityIter(ctx *sql.Context, part vectorParti
 	if err != nil {
 		return nil, err
 	}
-	return ib.proximitySecondary.GetClosest(ctx, candidateVector, int(limit.(int64)))
+	limitVal, _, err := gmstypes.Int64.Convert(ctx, limit)
+	if err != nil {
+		return nil, err
+	}
+	if limitVal == nil {
+		return nil, fmt.Errorf("vector index lookups must have a non-null limit")
+	}
+	return ib.proximitySecondary.GetClosest(ctx, candidateVector, int(limitVal.(int64)))
 }
 
 // coveringIndexImplBuilder constructs row iters for covering lookups,
@@ -458,6 +483,7 @@ func NewSequenceRangeIter(ctx context.Context, irIter IndexRangeIterable, ranges
 	if len(ranges) == 0 {
 		return &strictLookupIter{}, nil
 	}
+	ranges = rangesInScanOrder(ranges, reverse)
 	// TODO: probably need to do something with Doltgres ranges here?
 	cur, err := irIter.NewRangeMapIter(ctx, ranges[0], reverse)
 	if err != nil || len(ranges) < 2 {
@@ -475,10 +501,12 @@ func NewSequenceRangeIter(ctx context.Context, irIter IndexRangeIterable, ranges
 // sequenceRangeIter iterates a list of ranges into
 // an underlying map.
 type sequenceRangeIter struct {
-	cur             prolly.MapIter
-	irIter          IndexRangeIterable
+	cur    prolly.MapIter
+	irIter IndexRangeIterable
+	// remainingRanges is in scan order, so it is consumed front to back regardless of reverse.
 	remainingRanges []prolly.Range
-	reverse         bool
+	// reverse is the direction each range is scanned in.
+	reverse bool
 }
 
 var _ prolly.MapIter = (*sequenceRangeIter)(nil)

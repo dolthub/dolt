@@ -61,10 +61,10 @@ func collectAddresses(t *testing.T, msg serial.Message) hash.HashSet {
 	return addrs
 }
 
-// TestKeyAddressOffsets exercises the key_address_offsets field of ProllyTreeNode: leaf nodes with
-// out-of-band adaptive values in key tuples record their addresses, WalkAddresses visits them, and
-// nodes without any such address omit the field entirely, remaining readable by older clients that
-// predate it.
+// TestKeyAddressOffsets exercises the key_address_offsets field of ProllyTreeNode: nodes with
+// out-of-band adaptive values in key tuples record their addresses, WalkAddresses visits them at
+// every tree level, and nodes without any such address omit the field entirely, remaining readable
+// by older clients that predate it.
 func TestKeyAddressOffsets(t *testing.T) {
 	kd := val.NewTupleDescriptor(val.Type{Enc: val.StringAdaptiveEnc, Nullable: true})
 	vd := val.NewTupleDescriptor(val.Type{Enc: val.StringAdaptiveEnc, Nullable: true})
@@ -134,7 +134,7 @@ func TestKeyAddressOffsets(t *testing.T) {
 		}
 	})
 
-	t.Run("internal nodes record key addresses as bookkeeping, but they are not walked", func(t *testing.T) {
+	t.Run("out-of-band key addresses are recorded and walked in internal nodes", func(t *testing.T) {
 		keyAddrs := []hash.Hash{testAddr(1), testAddr(2)}
 		keys := [][]byte{
 			newTuple(outOfBandAdaptiveValue(3000, keyAddrs[0])),
@@ -160,11 +160,12 @@ func TestKeyAddressOffsets(t *testing.T) {
 			assert.True(t, recorded.Has(addr), "missing key address %s", addr)
 		}
 
-		// the walk visits only the child addresses
+		// the address walk visits every key address as well as the child addresses
 		walked := collectAddresses(t, msg)
-		require.Equal(t, 2, walked.Size())
-		assert.True(t, walked.Has(testAddr(21)))
-		assert.True(t, walked.Has(testAddr(22)))
+		require.Equal(t, len(keyAddrs)+2, walked.Size())
+		for _, addr := range append(keyAddrs, child1, child2) {
+			assert.True(t, walked.Has(addr), "missing address %s", addr)
+		}
 	})
 
 	t.Run("internal nodes with inline boundary keys omit the field and stay readable by older clients", func(t *testing.T) {

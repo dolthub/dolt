@@ -127,4 +127,58 @@ var DoltForeignKeyTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// See https://github.com/dolthub/doltgresql/issues/3267
+		Name: "dropping a column keeps foreign keys backed by a dropped composite index valid",
+		SetUpScript: []string{
+			"CREATE TABLE parent (id INT NOT NULL PRIMARY KEY, a INT NOT NULL, b INT NOT NULL, UNIQUE KEY a_b (a, b));",
+			"CREATE TABLE child (id INT NOT NULL PRIMARY KEY, a_id INT NOT NULL, b_id INT NOT NULL, UNIQUE KEY a_id_b_id (a_id, b_id), CONSTRAINT a_id_fk FOREIGN KEY (a_id) REFERENCES parent (a));",
+			"INSERT INTO parent VALUES (1, 1, 1);",
+			"INSERT INTO child VALUES (1, 1, 1);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "ALTER TABLE child DROP COLUMN b_id;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query: "SHOW CREATE TABLE child;",
+				Expected: []sql.Row{{"child", "CREATE TABLE `child` (\n" +
+					"  `id` int NOT NULL,\n" +
+					"  `a_id` int NOT NULL,\n" +
+					"  PRIMARY KEY (`id`),\n" +
+					"  KEY `a_id_fk` (`a_id`),\n" +
+					"  CONSTRAINT `a_id_fk` FOREIGN KEY (`a_id`) REFERENCES `parent` (`a`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:       "INSERT INTO child VALUES (2, 2);",
+				ExpectedErr: sql.ErrForeignKeyChildViolation,
+			},
+			{
+				Query:    "INSERT INTO child VALUES (2, 1);",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:       "ALTER TABLE parent DROP COLUMN b;",
+				ExpectedErr: sql.ErrCantDropIndex,
+			},
+			{
+				Query:    "ALTER TABLE parent ADD KEY a_only (a);",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "ALTER TABLE parent DROP COLUMN b;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:       "INSERT INTO child VALUES (3, 3);",
+				ExpectedErr: sql.ErrForeignKeyChildViolation,
+			},
+			{
+				Query:            "CALL DOLT_COMMIT('-Am', 'dropped columns');",
+				SkipResultsCheck: true,
+			},
+		},
+	},
 }

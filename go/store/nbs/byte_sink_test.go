@@ -34,6 +34,7 @@ func TestBlockBufferTableSink(t *testing.T) {
 	}
 
 	suite.Run(t, &TableSinkSuite{createSink, t})
+	suite.Run(t, &TableSinkBlockSizeSuite{createSink, 128, t})
 }
 
 func TestFixedBufferTableSink(t *testing.T) {
@@ -53,6 +54,46 @@ func TestBufferedFileByteSink(t *testing.T) {
 	}
 
 	suite.Run(t, &TableSinkSuite{createSink, t})
+	suite.Run(t, &TableSinkBlockSizeSuite{createSink, 4 * 1024, t})
+
+	// Regression test for dolt#11747, where Write dropped a block it was
+	// replacing if that block had no spare capacity left.
+	t.Run("ExactlyFullBlockIsNotDropped", func(t *testing.T) {
+		const blockSize = 4 * 1024
+
+		// A write of exactly |blockSize| fills its block on allocation,
+		// independent of how the runtime rounds capacities.
+		t.Run("WritesOfExactlyBlockSize", func(t *testing.T) {
+			sink, err := NewBufferedFileByteSink(t.TempDir(), blockSize, 16)
+			require.NoError(t, err)
+			for i := 0; i < 3; i++ {
+				_, err = sink.Write(make([]byte, blockSize))
+				require.NoError(t, err)
+			}
+			assertSinkFileHoldsEverything(t, sink, 3*blockSize)
+		})
+
+		// The shape seen in the wild: a partial block, a write several
+		// blocks long, then the footer's small writes.
+		t.Run("OversizedWriteThenSmallWrite", func(t *testing.T) {
+			for _, tail := range []int{0, 1, 1000, blockSize - 1} {
+				for _, big := range []int{blockSize + 1, 2 * blockSize, 4*blockSize + tail, 16384 + tail} {
+					sink, err := NewBufferedFileByteSink(t.TempDir(), blockSize, 16)
+					require.NoError(t, err)
+					_, err = sink.Write(make([]byte, tail))
+					require.NoError(t, err)
+					_, err = sink.Write(make([]byte, big))
+					require.NoError(t, err)
+					// The footer: chunk count, uncompressed size, magic.
+					for _, n := range []int{4, 8, 8} {
+						_, err = sink.Write(make([]byte, n))
+						require.NoError(t, err)
+					}
+					assertSinkFileHoldsEverything(t, sink, tail+big+20)
+				}
+			}
+		})
+	})
 
 	t.Run("ReaderTwice", func(t *testing.T) {
 		sink, err := NewBufferedFileByteSink("", 4*1024, 16)
@@ -209,4 +250,68 @@ func (suite *TableSinkSuite) TestWriteAndFlushToFile() {
 	require.NoError(suite.t, err)
 
 	verifyContents(suite.t, data)
+}
+
+// assertSinkFileHoldsEverything checks that every byte |sink| accepted reached
+// its backing file. |sink.pos| counts what Write claimed, so comparing it
+// against the file catches bytes Write never passed to the background writer.
+func assertSinkFileHoldsEverything(t *testing.T, sink *BufferedFileByteSink, expected int) {
+	t.Helper()
+	require.NoError(t, sink.finish())
+	require.Equal(t, uint64(expected), sink.pos, "sink did not accept every byte")
+	stat, err := os.Stat(sink.path)
+	require.NoError(t, err)
+	require.Equal(t, int64(expected), stat.Size(), "sink lost %d bytes", expected-int(stat.Size()))
+}
+
+// TableSinkBlockSizeSuite exercises writes sized around a sink's block
+// boundary, including ones larger than a whole block. TableSinkSuite writes 64
+// bytes at a time, so it never splits a write across blocks.
+type TableSinkBlockSizeSuite struct {
+	sinkFactory func() ByteSink
+	blockSize   int
+	t           *testing.T
+}
+
+var _ suite.TestingSuite = (*TableSinkBlockSizeSuite)(nil)
+
+func (suite *TableSinkBlockSizeSuite) SetS(s suite.TestingSuite) {}
+
+func (suite *TableSinkBlockSizeSuite) SetT(t *testing.T) {
+	suite.t = t
+}
+
+func (suite *TableSinkBlockSizeSuite) T() *testing.T {
+	return suite.t
+}
+
+func (suite *TableSinkBlockSizeSuite) TestWritesSpanningBlocks() {
+	bs := suite.blockSize
+	sizes := []int{
+		1, bs - 1, bs, bs + 1, 2 * bs, 2*bs + 1, 3 * bs, 7, 4*bs + 13, 8, 4, 8,
+	}
+
+	// A counter, so dropped or reordered bytes cannot go unnoticed.
+	var expected []byte
+	for _, sz := range sizes {
+		block := make([]byte, sz)
+		for i := range block {
+			block[i] = byte(len(expected) + i)
+		}
+		expected = append(expected, block...)
+	}
+
+	sink := suite.sinkFactory()
+	var written int
+	for _, sz := range sizes {
+		n, err := sink.Write(expected[written : written+sz])
+		require.NoError(suite.t, err)
+		require.Equal(suite.t, sz, n)
+		written += sz
+	}
+
+	bb := bytes.NewBuffer(nil)
+	require.NoError(suite.t, sink.Flush(bb))
+	require.Equal(suite.t, len(expected), bb.Len(), "sink lost bytes")
+	require.True(suite.t, bytes.Equal(expected, bb.Bytes()), "sink corrupted bytes")
 }

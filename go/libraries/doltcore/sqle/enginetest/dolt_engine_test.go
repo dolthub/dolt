@@ -15,8 +15,10 @@
 package enginetest
 
 import (
+	gosql "database/sql"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sync"
 	"testing"
@@ -46,7 +48,7 @@ import (
 const SkipPreparedsCount = 83
 
 func TestQueries(t *testing.T) {
-	h := newDoltHarness(t)
+	h := newDoltServerTestHarness(t)
 	defer h.Close()
 	enginetest.TestQueries(t, h)
 }
@@ -537,7 +539,7 @@ func TestConvertPrepared(t *testing.T) {
 }
 
 func TestScripts(t *testing.T) {
-	h := newDoltHarness(t).WithConfigureStats(true)
+	h := newDoltServerTestHarness(t).WithConfigureStats(true)
 	defer h.Close()
 	enginetest.TestScripts(t, h)
 }
@@ -673,10 +675,39 @@ func TestUserPrivileges(t *testing.T) {
 }
 
 func TestUserAuthentication(t *testing.T) {
-	t.Skip("Unexpected panic, need to fix")
-	h := newDoltHarness(t)
-	defer h.Close()
-	enginetest.TestUserAuthentication(t, h)
+	t.Run("legacy authentication suite", func(t *testing.T) {
+		t.Skip("Unexpected panic, need to fix")
+		h := newDoltHarness(t)
+		defer h.Close()
+		enginetest.TestUserAuthentication(t, h)
+
+	})
+	t.Run("wildcard IP host grants", func(t *testing.T) {
+		dEnv, controller, config := startServer(t, true, "127.0.0.1", "")
+		t.Cleanup(func() {
+			controller.Stop()
+			require.NoError(t, controller.WaitForStop())
+			dEnv.Close()
+		})
+		root, session := newConnection(t, config)
+		defer root.Close()
+		for _, query := range []string{
+			"CREATE TABLE wildcard_data(pk INT PRIMARY KEY)",
+			"INSERT INTO wildcard_data VALUES(42)",
+			"CREATE USER wildcard_user@'127.0.0.%' IDENTIFIED BY ''",
+			"GRANT SELECT ON dolt.* TO wildcard_user@'127.0.0.%'",
+		} {
+			_, err := session.Exec(query)
+			require.NoError(t, err)
+		}
+		conn, err := gosql.Open("mysql", fmt.Sprintf("wildcard_user:@tcp(127.0.0.1:%d)/dolt", config.Port()))
+		require.NoError(t, err)
+		defer conn.Close()
+		var pk int
+		require.NoError(t, conn.QueryRow("SELECT pk FROM wildcard_data").Scan(&pk))
+		require.Equal(t, 42, pk)
+
+	})
 }
 
 func TestComplexIndexQueries(t *testing.T) {
@@ -764,6 +795,37 @@ func TestBlobs(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestBlobs(t, h)
+
+	t.Run("MD5 of binary LOAD_FILE", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "md5_binary")
+		require.NoError(t, os.WriteFile(path, []byte{0xff, 0x00, 0x80, 'a', 'b', 'c'}, 0600))
+		_, oldSecureFilePriv, ok := sql.SystemVariables.GetGlobal("secure_file_priv")
+		require.True(t, ok)
+		require.NoError(t, sql.SystemVariables.AssignValues(map[string]interface{}{"secure_file_priv": dir}))
+		t.Cleanup(func() {
+			require.NoError(t, sql.SystemVariables.AssignValues(map[string]interface{}{"secure_file_priv": oldSecureFilePriv}))
+		})
+		script := queries.ScriptTest{
+			Name: "MD5 of binary file contents",
+			Assertions: []queries.ScriptTestAssertion{{
+				Query:    fmt.Sprintf("SELECT MD5(BINARY LOAD_FILE(%q))", filepath.ToSlash(path)),
+				Expected: []sql.Row{{"c54f88b4c45ee5d3aaf21a0da5003612"}},
+			}},
+		}
+		for _, prepared := range []bool{false, true} {
+			t.Run(fmt.Sprintf("prepared=%t", prepared), func(t *testing.T) {
+				h := newDoltHarness(t)
+				defer h.Close()
+				if prepared {
+					enginetest.TestScriptPrepared(t, h, script)
+				} else {
+					enginetest.TestScript(t, h, script)
+				}
+			})
+		}
+
+	})
 }
 
 func TestIndexes(t *testing.T) {
@@ -782,6 +844,114 @@ func TestVectorIndexes(t *testing.T) {
 	harness := newDoltHarness(t)
 	defer harness.Close()
 	enginetest.TestVectorIndexes(t, harness)
+}
+
+func TestVectorIndexNullability(t *testing.T) {
+	for _, colType := range []string{"JSON", "VECTOR(2)"} {
+		t.Run(colType, func(t *testing.T) {
+			harness := newDoltHarness(t)
+			defer harness.Close()
+			value := "'[1,2]'"
+			if colType == "VECTOR(2)" {
+				value = "STRING_TO_VECTOR('[1,2]')"
+			}
+			enginetest.TestScript(t, harness, queries.ScriptTest{
+				Name: "vector index validation across working set and committed schemas",
+				SetUpScript: []string{
+					fmt.Sprintf("CREATE TABLE vectors (id INT PRIMARY KEY, v %s)", colType),
+					"INSERT INTO vectors VALUES (1, NULL)",
+					"CALL DOLT_COMMIT('-Am', 'nullable vector column')",
+					"CALL DOLT_BRANCH('nullable')",
+				},
+				Assertions: []queries.ScriptTestAssertion{
+					{
+						Query:       "CREATE VECTOR INDEX v_idx ON vectors(v)",
+						ExpectedErr: sql.ErrNullableVectorIdx,
+					},
+					{
+						Query:       "ALTER TABLE vectors ADD VECTOR INDEX v_idx(v)",
+						ExpectedErr: sql.ErrNullableVectorIdx,
+					},
+					{
+						Query:    "SELECT * FROM vectors",
+						Expected: []sql.Row{{1, nil}},
+					},
+					{
+						// Failed DDL must not leave a partial index or dirty the working set.
+						Query:    "SELECT count(*) FROM information_schema.statistics WHERE table_name = 'vectors' AND index_name = 'v_idx'",
+						Expected: []sql.Row{{0}},
+					},
+					{
+						Query:    "SELECT count(*) FROM dolt_status",
+						Expected: []sql.Row{{0}},
+					},
+					{
+						Query:    "DELETE FROM vectors WHERE id = 1",
+						Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: 1}}},
+					},
+					{
+						// Removing NULL rows does not make a nullable column indexable.
+						Query:       "CREATE VECTOR INDEX v_idx ON vectors(v)",
+						ExpectedErr: sql.ErrNullableVectorIdx,
+					},
+					{
+						Query:    fmt.Sprintf("ALTER TABLE vectors MODIFY COLUMN v %s NOT NULL", colType),
+						Expected: []sql.Row{{gmstypes.OkResult{}}},
+					},
+					{
+						Query:    fmt.Sprintf("INSERT INTO vectors VALUES (2, %s)", value),
+						Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: 1}}},
+					},
+					{
+						Query:    "ALTER TABLE vectors ADD VECTOR INDEX v_idx(v)",
+						Expected: []sql.Row{{gmstypes.OkResult{}}},
+					},
+					{
+						Query:       "INSERT INTO vectors VALUES (2, NULL)",
+						ExpectedErr: sql.ErrInsertIntoNonNullableProvidedNull,
+					},
+					{
+						Query:            "CALL DOLT_COMMIT('-Am', 'not null vector index')",
+						SkipResultsCheck: true,
+					},
+					{
+						Query:    "CALL DOLT_BRANCH('indexed')",
+						Expected: []sql.Row{{0}},
+					},
+					{
+						Query:    "CALL DOLT_RESET('--hard', 'nullable')",
+						Expected: []sql.Row{{0}},
+					},
+					{
+						// Re-loading the old schema must preserve its nullability.
+						Query:       "CREATE VECTOR INDEX v_idx ON vectors(v)",
+						ExpectedErr: sql.ErrNullableVectorIdx,
+					},
+					{
+						Query:    "SELECT * FROM vectors",
+						Expected: []sql.Row{{1, nil}},
+					},
+					{
+						Query:    "CALL DOLT_RESET('--hard', 'indexed')",
+						Expected: []sql.Row{{0}},
+					},
+					{
+						Query:    "SELECT count(*) FROM information_schema.statistics WHERE table_name = 'vectors' AND index_name = 'v_idx'",
+						Expected: []sql.Row{{1}},
+					},
+					{
+						Query:           "SELECT id FROM vectors ORDER BY VEC_DISTANCE('[1,2]', v) LIMIT 1",
+						Expected:        []sql.Row{{2}},
+						ExpectedIndexes: []string{"v_idx"},
+					},
+					{
+						Query:       "INSERT INTO vectors VALUES (3, NULL)",
+						ExpectedErr: sql.ErrInsertIntoNonNullableProvidedNull,
+					},
+				},
+			})
+		})
+	}
 }
 
 func TestVectorFunctions(t *testing.T) {
@@ -1747,7 +1917,7 @@ func TestDoltCommitPrepared(t *testing.T) {
 }
 
 func TestQueriesPrepared(t *testing.T) {
-	h := newDoltHarness(t)
+	h := newDoltEnginetestHarness(t)
 	defer h.Close()
 	enginetest.TestQueriesPrepared(t, h)
 }

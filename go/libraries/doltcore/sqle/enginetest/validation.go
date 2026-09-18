@@ -266,7 +266,9 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 	if err != nil {
 		return err
 	}
-	if totalSecondaryCount != totalPrimaryCount {
+	// A vector index has no entries for rows whose indexed value is NULL, so its count is compared against the number
+	// of non-NULL keys built during the walk below instead.
+	if !def.IsVector() && totalSecondaryCount != totalPrimaryCount {
 		return fmt.Errorf("primary index row count (%d) does not match secondary index row count (%d)",
 			totalPrimaryCount, totalSecondaryCount)
 	}
@@ -277,9 +279,14 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 		return err
 	}
 
+	nonNullKeyCount := 0
 	for {
 		key, value, err := iter.Next(ctx)
 		if err == io.EOF {
+			if def.IsVector() && totalSecondaryCount != nonNullKeyCount {
+				return fmt.Errorf("non-NULL primary index row count (%d) does not match secondary index row count (%d)",
+					nonNullKeyCount, totalSecondaryCount)
+			}
 			return nil
 		}
 		if err != nil {
@@ -324,6 +331,11 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 		if err != nil {
 			return err
 		}
+
+		if def.IsVector() && idxDesc.HasNulls(k) {
+			continue
+		}
+		nonNullKeyCount++
 
 		ok, err := secondary.Has(ctx, k)
 		if err != nil {

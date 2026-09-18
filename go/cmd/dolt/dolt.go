@@ -795,7 +795,19 @@ If you're interested in running this command against a remote host, hit us up on
 			}
 			doltConfigName := targetEnv.Config.GetStringOrDefault(config.UserNameKey, env.DefaultName)
 			doltConfigEmail := targetEnv.Config.GetStringOrDefault(config.UserEmailKey, env.DefaultEmail)
-			return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", localCreds.Port, sqlserver.QueryistTLSMode_NoVerify_FallbackToPlaintext, useDb, doltConfigName, doltConfigEmail)
+			lateBind, err := sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", localCreds.Port, sqlserver.QueryistTLSMode_NoVerify_FallbackToPlaintext, useDb, doltConfigName, doltConfigEmail)
+			if err != nil {
+				return nil, err
+			}
+			var withContext cli.LateBindQueryist = func(ctx context.Context, opts ...cli.LateBindQueryistOption) (cli.LateBindQueryistResult, error) {
+				res, err := lateBind(ctx, opts...)
+				if errors.Is(err, sqlserver.ErrServerConnectionFailed) {
+					credsFile := sqlserver.LocalCredsFilePath()
+					return res, fmt.Errorf("database locked; connecting to sql-server on port %d (%s) failed (retry if starting, or delete %s if stale): %w", localCreds.Port, credsFile, credsFile, err)
+				}
+				return res, err
+			}
+			return withContext, nil
 		}
 	}
 
@@ -915,11 +927,33 @@ type bootstrapConfig struct {
 // |terminate| is set to true if the process should end for any reason. Errors or messages to the user will be printed already.
 // |status| is the exit code to terminate with, and can be ignored if |terminate| is false.
 func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapConfig, terminate bool, status int) {
+	_, usage := cli.HelpAndUsagePrinters(globalDocs)
+	apr, remainingArgs, err := globalArgParser.ParseGlobalArgs(args)
+	if errors.Is(err, argparser.ErrHelp) {
+		doltCommand.PrintUsage("dolt")
+		cli.Println(globalSpecialMsg)
+		usage()
+		return nil, true, 0
+	} else if err != nil {
+		cli.PrintErrln(color.RedString("Failed to parse global arguments: %v", err))
+		return nil, true, 1
+	}
+
 	lfs := filesys.LocalFS
 	cwd, err := lfs.Abs("")
+	if err != nil {
+		cli.PrintErrln(color.RedString("Failed to load the current working directory: %v", err))
+		return nil, true, 1
+	}
 	cwdFs, err := lfs.WithWorkingDir(cwd)
 	if err != nil {
 		cli.PrintErrln(color.RedString("Failed to load the current working directory: %v", err))
+		return nil, true, 1
+	}
+
+	cwdFs, err = applyDirectoryArgs(cwdFs, apr)
+	if err != nil {
+		cli.PrintErrln(color.RedString("%v", err))
 		return nil, true, 1
 	}
 
@@ -956,21 +990,14 @@ func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapCo
 		return false
 	})
 
-	_, usage := cli.HelpAndUsagePrinters(globalDocs)
-	apr, remainingArgs, err := globalArgParser.ParseGlobalArgs(args)
-	if errors.Is(err, argparser.ErrHelp) {
-		doltCommand.PrintUsage("dolt")
-		cli.Println(globalSpecialMsg)
-		usage()
-		return nil, true, 0
-	} else if err != nil {
-		cli.PrintErrln(color.RedString("Failed to parse global arguments: %v", err))
-		return nil, true, 1
-	}
-
 	hasGlobalArgs := false
-	if len(remainingArgs) != len(args) {
-		hasGlobalArgs = true
+	for _, option := range globalArgParser.Supported {
+		// --directory only changes the filesystem used as the local working
+		// directory. It does not require command support for remote contexts.
+		if option.Name != "directory" && apr.Contains(option.Name) {
+			hasGlobalArgs = true
+			break
+		}
 	}
 
 	subCommand := remainingArgs[0]
@@ -1038,6 +1065,26 @@ func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapCo
 	}
 
 	return cfg, false, 0
+}
+
+func applyDirectoryArgs(cwdFs filesys.Filesys, apr *argparser.ArgParseResults) (filesys.Filesys, error) {
+	targetDirs, ok := apr.GetValueList("directory")
+	if !ok {
+		return cwdFs, nil
+	}
+
+	for _, targetDir := range targetDirs {
+		absoluteTargetDir, err := cwdFs.Abs(targetDir)
+		if err != nil {
+			return nil, fmt.Errorf("cannot change to directory %q: %v", targetDir, err)
+		}
+		cwdFs, err = filesys.LocalFilesysWithWorkingDir(absoluteTargetDir)
+		if err != nil {
+			return nil, fmt.Errorf("cannot change to directory %q: %v", targetDir, err)
+		}
+	}
+
+	return cwdFs, nil
 }
 
 // injectProfileArgs retrieves the given |profileName| from the provided |profilesJson| and inject the profile details

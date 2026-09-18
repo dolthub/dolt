@@ -59,7 +59,7 @@ func BuildProllyIndexExternal(ctx *sql.Context, vrw types.ValueReadWriter, ns tr
 	}
 
 	if idx.IsVector() {
-		return BuildProximityIndex(ctx, ns, idx, keyDesc, prefixDesc, iter, secondaryBld, uniqCb)
+		return BuildProximityIndex(ctx, ns, idx, keyDesc, prefixDesc, iter, secondaryBld)
 	}
 
 	var sortErr error
@@ -156,7 +156,6 @@ func BuildProximityIndex(
 	prefixDesc *val.TupleDesc,
 	iter prolly.MapIter,
 	secondaryBld index.SecondaryKeyBuilder,
-	uniqCb DupEntryCb,
 ) (durable.Index, error) {
 	// Secondary indexes have no non-key columns
 	valDesc := val.NewTupleDescriptor()
@@ -177,7 +176,8 @@ func BuildProximityIndex(
 			return nil, err
 		}
 
-		if uniqCb != nil && prefixDesc.HasNulls(idxKey) {
+		// A vector index has no entry for a row whose indexed value is NULL.
+		if prefixDesc.HasNulls(idxKey) {
 			continue
 		}
 
@@ -186,6 +186,9 @@ func BuildProximityIndex(
 		}
 	}
 	proximityMap, err := proximityMapBuilder.Flush(ctx)
+	if err != nil {
+		return nil, err
+	}
 	return durable.IndexFromProximityMap(proximityMap), nil
 }
 

@@ -16,6 +16,7 @@ package dsess
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -36,6 +37,43 @@ func TestDoltSessionInit(t *testing.T) {
 	dsess := DefaultSession(emptyDatabaseProvider(), nil)
 	conf := config.NewMapConfig(make(map[string]string))
 	assert.Equal(t, conf, dsess.globalsConf)
+}
+
+type countingDoltgresTransactionLifecycle struct {
+	transactionEnds int
+	pending         bool
+	cacheClears     int
+}
+
+func (l *countingDoltgresTransactionLifecycle) DoltgresTransactionEnd() {
+	if l.pending {
+		l.transactionEnds++
+		l.pending = false
+	}
+}
+
+func (l *countingDoltgresTransactionLifecycle) DoltgresSessionCacheClear() {
+	l.cacheClears++
+}
+
+func TestDoltgresTransactionLifecycle(t *testing.T) {
+	sess := DefaultSession(emptyDatabaseProvider(), nil)
+	lifecycle := &countingDoltgresTransactionLifecycle{pending: true}
+	sess.DoltgresSessObj = lifecycle
+	tx := DisabledTransaction{}
+	ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
+
+	assert.NoError(t, sess.Rollback(ctx, tx))
+	assert.Equal(t, 1, lifecycle.transactionEnds)
+	sess.NotifyTransactionEnd()
+	assert.Equal(t, 1, lifecycle.transactionEnds)
+
+	lifecycle.pending = true
+	sess.ClearDoltgresSessionCache()
+	assert.Equal(t, 1, lifecycle.cacheClears)
+	assert.Same(t, lifecycle, sess.DoltgresSessObj)
+	sess.NotifyTransactionEnd()
+	assert.Equal(t, 2, lifecycle.transactionEnds)
 }
 
 func TestDirtyBranches(t *testing.T) {
@@ -308,6 +346,17 @@ func TestGetPersistedValue(t *testing.T) {
 			Name:        "activate_all_roles_on_login",
 			Value:       "0",
 			ExpectedRes: int8(0),
+		},
+		{
+			Name:        sql.SqlModeSessionVar,
+			Value:       "NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY",
+			ExpectedRes: "NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY",
+		},
+		{
+			// Test backwards compatibility with legacy decimal bitmask config.
+			Name:        sql.SqlModeSessionVar,
+			Value:       strconv.FormatUint(sql.MODE_ANSI, 10),
+			ExpectedRes: sql.ANSI,
 		},
 	}
 

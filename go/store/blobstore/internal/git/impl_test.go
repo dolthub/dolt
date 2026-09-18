@@ -20,9 +20,12 @@ import (
 	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dolthub/dolt/go/store/testutils/gitrepo"
 )
@@ -44,6 +47,32 @@ func TestMain(m *testing.M) {
 					os.Exit(3)
 				}
 			}
+		case "holdpipe":
+			// Stands in for git's transport: records its pid, then holds the pipes it
+			// inherited for a minute. It never writes to them, so nothing about the
+			// read end being closed can end it early.
+			if err := os.WriteFile(os.Args[2], []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
+				os.Exit(1)
+			}
+			time.Sleep(time.Minute)
+			os.Exit(0)
+		case "orphanexit", "orphanwait":
+			// Stands in for git: spawns a "transport" holding our pipes, then either
+			// exits and orphans it, or stays alive to be cancelled.
+			exe, err := os.Executable()
+			if err != nil {
+				os.Exit(1)
+			}
+			child := exec.Command(exe, "holdpipe", os.Args[2])
+			child.Stdout = os.Stdout
+			child.Stderr = os.Stderr
+			if err := child.Start(); err != nil {
+				os.Exit(1)
+			}
+			if os.Args[1] == "orphanwait" {
+				time.Sleep(time.Minute)
+			}
+			os.Exit(0)
 		}
 	}
 	os.Exit(m.Run())

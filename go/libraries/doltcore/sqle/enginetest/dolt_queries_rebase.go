@@ -578,6 +578,23 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				Query:       "call dolt_rebase('--continue');",
 				ExpectedErr: dprocedures.ErrRebaseDataConflictsCantBeResolved,
 			},
+			{
+				// See https://github.com/dolthub/dolt/issues/10951
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"branch1"}},
+			},
+			{
+				Query:    "select name from dolt_branches;",
+				Expected: []sql.Row{{"branch1"}, {"main"}},
+			},
+			{
+				Query:          "select * from dolt_rebase;",
+				ExpectedErrStr: "table not found: dolt_rebase",
+			},
+			{
+				Query:    "select count(*) from dolt_conflicts;",
+				Expected: []sql.Row{{0}},
+			},
 		},
 	},
 	{

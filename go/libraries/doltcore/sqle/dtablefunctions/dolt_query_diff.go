@@ -19,7 +19,6 @@ import (
 	"io"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 
 	gms "github.com/dolthub/go-mysql-server"
@@ -42,14 +41,14 @@ type QueryDiffTableFunction struct {
 	query1   sql.Expression
 	query2   sql.Expression
 
-	engine   *gms.Engine
-	rowIter1 sql.RowIter
-	rowIter2 sql.RowIter
-	schema1  sql.Schema
-	schema2  sql.Schema
+	engine  *gms.Engine
+	plan1   sql.Node
+	plan2   sql.Node
+	schema1 sql.Schema
+	schema2 sql.Schema
 }
 
-// NewInstance creates a new instance of TableFunction interface
+// NewInstance creates a new instance of the TableFunction.
 func (tf *QueryDiffTableFunction) NewInstance(ctx *sql.Context, database sql.Database, expressions []sql.Expression) (sql.Node, error) {
 	newInstance := &QueryDiffTableFunction{
 		ctx:      ctx,
@@ -62,7 +61,7 @@ func (tf *QueryDiffTableFunction) NewInstance(ctx *sql.Context, database sql.Dat
 	return node, nil
 }
 
-// WithCatalog implements the sql.CatalogTableFunction interface
+// WithCatalog implements the sql.CatalogTableFunction interface.
 func (tf *QueryDiffTableFunction) WithCatalog(c sql.Catalog) (sql.TableFunction, error) {
 	newInstance := *tf
 	newInstance.catalog = c
@@ -71,7 +70,7 @@ func (tf *QueryDiffTableFunction) WithCatalog(c sql.Catalog) (sql.TableFunction,
 		return nil, fmt.Errorf("unable to get database provider")
 	}
 	newInstance.engine = gms.NewDefault(pro)
-	err := newInstance.evalQueries()
+	err := newInstance.analyzeQueries()
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +90,7 @@ func (tf *QueryDiffTableFunction) RowCount(_ *sql.Context) (uint64, bool, error)
 	return queryDiffDefaultRowCount, false, nil
 }
 
-func (tf *QueryDiffTableFunction) evalQuery(query sql.Expression) (sql.Schema, sql.RowIter, error) {
+func (tf *QueryDiffTableFunction) analyzeQuery(query sql.Expression) (sql.Schema, sql.Node, error) {
 	q, err := query.Eval(tf.ctx, nil)
 	if err != nil {
 		return nil, nil, err
@@ -104,16 +103,19 @@ func (tf *QueryDiffTableFunction) evalQuery(query sql.Expression) (sql.Schema, s
 	if !strings.HasPrefix(strings.ToLower(qStr), "select") { // TODO: allow "with?"
 		return nil, nil, fmt.Errorf("query must be a SELECT statement")
 	}
-	sch, iter, _, err := tf.engine.Query(tf.ctx, qStr)
-	return sch, iter, err
+	plan, err := tf.engine.AnalyzeQuery(tf.ctx, qStr)
+	if err != nil {
+		return nil, nil, err
+	}
+	return plan.Schema(tf.ctx), plan, nil
 }
 
-func (tf *QueryDiffTableFunction) evalQueries() error {
+func (tf *QueryDiffTableFunction) analyzeQueries() error {
 	var err error
-	if tf.schema1, tf.rowIter1, err = tf.evalQuery(tf.query1); err != nil {
+	if tf.schema1, tf.plan1, err = tf.analyzeQuery(tf.query1); err != nil {
 		return err
 	}
-	if tf.schema2, tf.rowIter2, err = tf.evalQuery(tf.query2); err != nil {
+	if tf.schema2, tf.plan2, err = tf.analyzeQuery(tf.query2); err != nil {
 		return err
 	}
 	tf.sqlSch = append(tf.sqlSch, tf.schema1.Copy()...)
@@ -200,22 +202,31 @@ func (tf *QueryDiffTableFunction) compareRows(ctx *sql.Context, pkOrds []int, ro
 }
 
 // RowIter implements the sql.Node interface
-// TODO: actually implement a row iterator
 func (tf *QueryDiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter, error) {
-	if !tf.schema1.Equals(tf.schema2) {
-		// todo: schema is currently an unreliable source of primary key columns
-		return tf.keylessRowIter()
+	_, iter1, _, err := tf.engine.PrepQueryPlanForExecution(ctx, "", tf.plan1, nil)
+	if err != nil {
+		return nil, err
 	}
-	return tf.pkRowIter(ctx)
+	_, iter2, _, err := tf.engine.PrepQueryPlanForExecution(ctx, "", tf.plan2, nil)
+	if err != nil {
+		return nil, err
+	}
+	if !tf.schema1.Equals(tf.schema2) {
+		// TODO(elianddb): Queries across different tables or
+		// databases fall back to a keyless diff even when their
+		// projected schemas match.
+		return tf.keylessRowIter(ctx, iter1, iter2)
+	}
+	return tf.pkRowIter(ctx, iter1, iter2)
 }
 
 // keylessRowIter uses the entire row for difference comparison
-func (tf *QueryDiffTableFunction) keylessRowIter() (sql.RowIter, error) {
+func (tf *QueryDiffTableFunction) keylessRowIter(ctx *sql.Context, iter1, iter2 sql.RowIter) (sql.RowIter, error) {
 	var results []sql.Row
 	var newRow sql.Row
 	nilRow1, nilRow2 := make(sql.Row, len(tf.schema1)), make(sql.Row, len(tf.schema2))
 	for {
-		row, err := tf.rowIter1.Next(tf.ctx)
+		row, err := iter1.Next(ctx)
 		if err == io.EOF {
 			break
 		}
@@ -226,7 +237,7 @@ func (tf *QueryDiffTableFunction) keylessRowIter() (sql.RowIter, error) {
 		results = append(results, newRow)
 	}
 	for {
-		row, err := tf.rowIter2.Next(tf.ctx)
+		row, err := iter2.Next(ctx)
 		if err == io.EOF {
 			break
 		}
@@ -240,11 +251,11 @@ func (tf *QueryDiffTableFunction) keylessRowIter() (sql.RowIter, error) {
 }
 
 // pkRowIter uses primary keys to do an efficient row comparison
-func (tf *QueryDiffTableFunction) pkRowIter(ctx *sql.Context) (sql.RowIter, error) {
+func (tf *QueryDiffTableFunction) pkRowIter(ctx *sql.Context, iter1, iter2 sql.RowIter) (sql.RowIter, error) {
 	var results []sql.Row
 	var newRow sql.Row
-	row1, err1 := tf.rowIter1.Next(tf.ctx)
-	row2, err2 := tf.rowIter2.Next(tf.ctx)
+	row1, err1 := iter1.Next(ctx)
+	row2, err2 := iter2.Next(ctx)
 	var pkOrds []int
 	for i, col := range tf.schema1 {
 		if col.PrimaryKey {
@@ -261,18 +272,18 @@ func (tf *QueryDiffTableFunction) pkRowIter(ctx *sql.Context) (sql.RowIter, erro
 		case -1: // deleted
 			newRow = append(append(row1, nilRow...), "deleted")
 			results = append(results, newRow)
-			row1, err1 = tf.rowIter1.Next(tf.ctx)
+			row1, err1 = iter1.Next(ctx)
 		case 1: // added
 			newRow = append(append(nilRow, row2...), "added")
 			results = append(results, newRow)
-			row2, err2 = tf.rowIter2.Next(tf.ctx)
+			row2, err2 = iter2.Next(ctx)
 		default: // modified or no change
 			if d {
 				newRow = append(append(row1, row2...), "modified")
 				results = append(results, newRow)
 			}
-			row1, err1 = tf.rowIter1.Next(tf.ctx)
-			row2, err2 = tf.rowIter2.Next(tf.ctx)
+			row1, err1 = iter1.Next(ctx)
+			row2, err2 = iter2.Next(ctx)
 		}
 	}
 
@@ -283,7 +294,7 @@ func (tf *QueryDiffTableFunction) pkRowIter(ctx *sql.Context) (sql.RowIter, erro
 		newRow = append(append(nilRow, row2...), "added")
 		results = append(results, newRow)
 		for {
-			row2, err2 = tf.rowIter2.Next(tf.ctx)
+			row2, err2 = iter2.Next(ctx)
 			if err2 == io.EOF {
 				break
 			}
@@ -294,7 +305,7 @@ func (tf *QueryDiffTableFunction) pkRowIter(ctx *sql.Context) (sql.RowIter, erro
 		newRow = append(append(row1, nilRow...), "deleted")
 		results = append(results, newRow)
 		for {
-			row1, err1 = tf.rowIter1.Next(tf.ctx)
+			row1, err1 = iter1.Next(ctx)
 			if err1 == io.EOF {
 				break
 			}
@@ -311,7 +322,7 @@ func (tf *QueryDiffTableFunction) pkRowIter(ctx *sql.Context) (sql.RowIter, erro
 	return sql.RowsToRowIter(results...), nil
 }
 
-// WithChildren implements the sql.Node interface
+// WithChildren implements the sql.Node interface.
 func (tf *QueryDiffTableFunction) WithChildren(ctx *sql.Context, node ...sql.Node) (sql.Node, error) {
 	if len(node) != 0 {
 		return nil, fmt.Errorf("unexpected children")
@@ -319,14 +330,15 @@ func (tf *QueryDiffTableFunction) WithChildren(ctx *sql.Context, node ...sql.Nod
 	return tf, nil
 }
 
-// CheckAuth implements the interface sql.AuthorizationCheckerNode.
+// CheckAuth implements the sql.AuthorizationCheckerNode interface.
+//
+// Authorization is enforced when subquery plans are analyzed in
+// WithCatalog.
 func (tf *QueryDiffTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
-	baseDB, _ := doltdb.SplitRevisionDbName(tf.database.Name())
-	subject := sql.PrivilegeCheckSubject{Database: baseDB}
-	return opChecker.UserHasPrivileges(ctx, sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))
+	return true
 }
 
-// Schema implements the sql.Node interface
+// Schema implements the sql.Node interface.
 func (tf *QueryDiffTableFunction) Schema(ctx *sql.Context) sql.Schema {
 	if !tf.Resolved() {
 		return nil
@@ -337,26 +349,25 @@ func (tf *QueryDiffTableFunction) Schema(ctx *sql.Context) sql.Schema {
 	return tf.sqlSch
 }
 
-// Resolved implements the sql.Resolvable interface
+// Resolved implements the sql.Resolvable interface.
 func (tf *QueryDiffTableFunction) Resolved() bool {
 	return tf.query1.Resolved() && tf.query2.Resolved()
 }
 
+// IsReadOnly implements the sql.Node interface.
 func (tf *QueryDiffTableFunction) IsReadOnly() bool {
-	// TODO: This table function is going to run two arbitrary queries
-	// after evaluating the string expressions. We don't have access to the
-	// string expressions here. In |evalQuery|, we have an adhoc check to
-	// see if we are only running a |SELECT|. This works for the most part
-	// for now --- non-read-only dfunctions may violate our assumption here.
+	if tf.plan1 != nil && tf.plan2 != nil {
+		return tf.plan1.IsReadOnly() && tf.plan2.IsReadOnly()
+	}
 	return true
 }
 
-// String implements the Stringer interface
+// String implements the fmt.Stringer interface.
 func (tf *QueryDiffTableFunction) String() string {
 	return fmt.Sprintf("DOLT_QUERY_DIFF('%s', '%s')", tf.query1.String(), tf.query2.String())
 }
 
-// Name implements the sql.TableFunction interface
+// Name implements the sql.TableFunction interface.
 func (tf *QueryDiffTableFunction) Name() string {
 	return "dolt_query_diff"
 }

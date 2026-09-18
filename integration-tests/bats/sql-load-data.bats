@@ -416,7 +416,7 @@ SQL
     [[ $output =~ "0,2022-10-10 00:00:00,2022-10-10,00:00:00" ]] || false
 
     cat <<CSV > in.csv
-1,2022-10-10 00:00:00:00,2022-10-10,00:00:00
+1,thisisnotavaliddate,2022-10-10,00:00:00
 CSV
 
     run dolt sql <<SQL
@@ -425,7 +425,7 @@ fields terminated by ','
 lines terminated by '\n'
 SQL
     [ $status -ne 0 ]
-    [[ $output =~ "is not a valid value" ]] || false
+    [[ $output =~ "Incorrect datetime value" ]] || false
 }
 
 @test "sql-load-data: schema with not null constraints" {

@@ -56,12 +56,7 @@ func addColumnToTable(
 	root doltdb.RootValue,
 	tbl *doltdb.Table,
 	tblName string,
-	tag uint64,
-	newColName string,
-	typeInfo typeinfo.TypeInfo,
-	nullable Nullable,
-	defaultVal *sql.ColumnDefaultValue,
-	comment string,
+	newCol schema.Column,
 	order *sql.ColumnOrder,
 ) (*doltdb.Table, error) {
 	oldSchema, err := tbl.GetSchema(ctx)
@@ -69,12 +64,7 @@ func addColumnToTable(
 		return nil, err
 	}
 
-	if err := validateNewColumn(ctx, root, tbl, tblName, tag, newColName, typeInfo); err != nil {
-		return nil, err
-	}
-
-	newCol, err := createColumn(nullable, newColName, tag, typeInfo, defaultVal.String(), comment)
-	if err != nil {
+	if err := validateNewColumn(ctx, root, tbl, tblName, newCol.Tag, newCol.Name, newCol.TypeInfo); err != nil {
 		return nil, err
 	}
 
@@ -88,8 +78,12 @@ func addColumnToTable(
 		return nil, err
 	}
 
+	if newCol.Virtual {
+		return newTable, nil
+	}
+
 	// TODO: we do a second pass in the engine to set a default if there is one. We should only do a single table scan.
-	return newTable.AddColumnToRows(ctx, newColName, newSchema)
+	return newTable.AddColumnToRows(ctx, newCol.Name, newSchema)
 }
 
 func orderToOrder(order *sql.ColumnOrder) *schema.ColumnOrder {
@@ -260,6 +254,8 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 				IsUserDefined:      index.IsUserDefined(),
 				Comment:            index.Comment(),
 				Predicate:          index.Predicate(),
+				ColumnOrders:       index.ColumnOrders(),
+				OpClasses:          index.OpClasses(),
 				FullTextProperties: index.FullTextProperties(),
 				VectorProperties:   index.VectorProperties(),
 			})
@@ -322,6 +318,56 @@ func modifyPkOrdinals(oldSch, newSch schema.Schema) ([]int, error) {
 	}
 
 	return newPkOrdinals, nil
+}
+
+// rebindForeignKeyIndexes updates the foreign keys involving `tableName` whose backing index is no longer in `newSch`
+// (due to a dropped column) to use another index over the columns, creating one on the declaring side when a suitable
+// one does not exist. Returns `true` when any foreign key was changed.
+func rebindForeignKeyIndexes(tableName doltdb.TableName, newSch schema.Schema, fkc *doltdb.ForeignKeyCollection) (bool, error) {
+	changed := false
+	for _, fk := range fkc.AllKeys() {
+		rebound := fk
+		if fk.TableName.EqualFold(tableName) && fk.TableIndex != "" && !newSch.Indexes().Contains(fk.TableIndex) {
+			idx, ok, err := indexForForeignKeyColumns(newSch, fk.TableColumns)
+			if err != nil {
+				return false, err
+			}
+			if !ok {
+				if idx, err = newSch.Indexes().AddIndexByColTags(fk.Name, fk.TableColumns, nil, schema.IndexProperties{}); err != nil {
+					return false, err
+				}
+			}
+			rebound.TableIndex = idx.Name()
+		}
+		if fk.ReferencedTableName.EqualFold(tableName) && fk.ReferencedTableIndex != "" && !newSch.Indexes().Contains(fk.ReferencedTableIndex) {
+			idx, ok, err := indexForForeignKeyColumns(newSch, fk.ReferencedTableColumns)
+			if err != nil {
+				return false, err
+			}
+			if !ok {
+				return false, sql.ErrCantDropIndex.New(fk.ReferencedTableIndex, fk.Name)
+			}
+			rebound.ReferencedTableIndex = idx.Name()
+		}
+		if rebound.TableIndex != fk.TableIndex || rebound.ReferencedTableIndex != fk.ReferencedTableIndex {
+			fkc.RemoveKeys(fk)
+			if err := fkc.AddKeys(rebound); err != nil {
+				return false, err
+			}
+			changed = true
+		}
+	}
+	return changed, nil
+}
+
+// indexForForeignKeyColumns returns an index of `sch` whose leading columns are the columns with the given tags.
+func indexForForeignKeyColumns(sch schema.Schema, tags []uint64) (schema.Index, bool, error) {
+	colNames := make([]string, len(tags))
+	for i, tag := range tags {
+		col, _ := sch.GetAllCols().GetByTag(tag)
+		colNames[i] = col.Name
+	}
+	return FindIndexWithPrefix(sch, colNames)
 }
 
 // backupFkcIndexesForKeyDrop finds backup indexes to cover foreign key references during a primary

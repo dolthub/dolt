@@ -123,12 +123,12 @@ type NomsBlockStore struct {
 	putCount   uint64
 	memtableSz uint64
 
-	// When unlocked read operations are occurring against the
-	// block store, and they started when |gcInProgress == true|,
-	// this variable is incremented. EndGC will not return until
-	// no outstanding reads are in progress.
-	gcOutstandingReads int
-	mu                 sync.RWMutex // protects the current nbs state
+	// Incremented for the duration of every unlocked read: a read
+	// which runs against a table set with |mu| released. EndGC does
+	// not return while any is in progress.
+	outstandingReads int
+
+	mu sync.RWMutex // protects the current nbs state
 
 	// |true| after BeginGC is called, and false once the corresponding EndGC call returns.
 	gcInProgress bool
@@ -273,9 +273,10 @@ func (nbs *NomsBlockStore) getChunkLocations(ctx context.Context, hashes hash.Ha
 			nbs.mu.Unlock()
 			return nil, errors.New("*NomsBlockStore is closed")
 		}
+		keeper, endRead, cycle := nbs.beginRead()
+		behavior := nbs.fatalBehavior
 		tables = nbs.tables
 		tables.acquire()
-		keeper, endRead, behavior, cycle := nbs.keeperFunc, nbs.beginRead(), nbs.fatalBehavior, nbs.gcCycleCounter
 		nbs.mu.Unlock()
 
 		gr := toGetRecords(hashes)
@@ -323,24 +324,20 @@ func (nbs *NomsBlockStore) GetChunkLocations(ctx context.Context, hashes hash.Ha
 func (nbs *NomsBlockStore) handleUnlockedRead(ctx context.Context, gcb gcBehavior, endReadOnSuccess bool, endRead func(), tables *tableSet, cycle uint64, err error) (bool, *tableSet, error) {
 	if err != nil {
 		tables.release()
-		if endRead != nil {
-			nbs.mu.Lock()
-			endRead()
-			nbs.mu.Unlock()
-		}
+		nbs.mu.Lock()
+		endRead()
+		nbs.mu.Unlock()
 		return false, nil, err
 	}
 	if gcb == gcBehavior_Block {
 		tables.release()
 		nbs.mu.Lock()
-		if endRead != nil {
-			endRead()
-		}
+		endRead()
 		err := nbs.waitForGC(ctx, cycle)
 		nbs.mu.Unlock()
 		return true, nil, err
 	} else {
-		if endRead != nil && endReadOnSuccess {
+		if endReadOnSuccess {
 			tables.release()
 			nbs.mu.Lock()
 			endRead()
@@ -362,7 +359,7 @@ func (nbs *NomsBlockStore) startConjoinIfRequired(ctx context.Context) error {
 		}
 		nbs.logger.WithField("upstream_len", len(nbs.tables.upstream)).Info("beginning conjoin of database")
 		var op = &conjoinOperation{}
-		err := op.prepareConjoin(ctx, nbs.conjoiner, nbs.upstream)
+		err := op.prepareConjoin(ctx, nbs.conjoiner, nbs.upstream, nbs.tables)
 		if err != nil {
 			return err
 		}
@@ -392,7 +389,7 @@ func (nbs *NomsBlockStore) finalizeConjoin(ctx context.Context, err error) {
 	}()
 
 	if err != nil {
-		nbs.logger.WithError(err).Warn("conjoin of database failed with error")
+		nbs.logger.WithError(err).WithField("deferred", true).Warn("background conjoin (compaction) deferred")
 		return
 	}
 
@@ -962,19 +959,30 @@ func (nbs *NomsBlockStore) SetFatalBehavior(behavior dherrors.FatalBehavior) {
 // immediately, allowing the caller to re-evaluate the new cycle's
 // keeper.
 func (nbs *NomsBlockStore) waitForGC(ctx context.Context, cycle uint64) error {
-	stop := make(chan struct{})
-	defer close(stop)
-	go func() {
-		select {
-		case <-ctx.Done():
-			nbs.gcCond.Broadcast()
-		case <-stop:
-		}
-	}()
+	defer nbs.broadcastOnCancel(ctx)()
 	for nbs.gcInProgress && nbs.gcCycleCounter == cycle && ctx.Err() == nil {
 		nbs.gcCond.Wait()
 	}
 	return ctx.Err()
+}
+
+// broadcastOnCancel broadcasts |nbs.gcCond| when |ctx| is cancelled. A
+// sync.Cond wait cannot select on a context, so without this a wait
+// whose predicate includes |ctx.Err()| sleeps until something else
+// broadcasts.
+//
+// The broadcast takes |nbs.mu| so that it cannot land between a waiter
+// checking its predicate and its call to Wait, where it would find
+// nobody parked and be lost.
+//
+// The returned func ends the watch. It does not wait for a broadcast
+// already in progress, so it is safe to call with |nbs.mu| held.
+func (nbs *NomsBlockStore) broadcastOnCancel(ctx context.Context) func() bool {
+	return context.AfterFunc(ctx, func() {
+		nbs.mu.Lock()
+		defer nbs.mu.Unlock()
+		nbs.gcCond.Broadcast()
+	})
 }
 
 func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.InsertAddrsCurry) error {
@@ -1149,7 +1157,7 @@ func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 				return chunks.NewChunkWithHash(h, data), nil
 			}
 		}
-		keeper, endRead, cycle := nbs.keeperFunc, nbs.beginRead(), nbs.gcCycleCounter
+		keeper, endRead, cycle := nbs.beginRead()
 		tables = nbs.tables
 		tables.acquire()
 		nbs.mu.Unlock()
@@ -1234,12 +1242,14 @@ func (nbs *NomsBlockStore) getManyWithFunc(
 			nbs.mu.Unlock()
 			return errors.New("*NomsBlockStore is closed")
 		}
-		keeper := nbs.keeperFunc
-		cycle := nbs.gcCycleCounter
-		if gcDepMode == gcDependencyMode_NoDependency {
-			keeper = nil
-		}
 		if nbs.memtable != nil {
+			// Read with |nbs.mu| held, so there is no unlocked read
+			// to register.
+			keeper := nbs.keeperFunc
+			cycle := nbs.gcCycleCounter
+			if gcDepMode == gcDependencyMode_NoDependency {
+				keeper = nil
+			}
 			// nbs.mt does not use the errgroup parameter, which we pass at |nil| here.
 			remaining, gcb, err := getManyFunc(ctx, nbs.memtable, nil, reqs, keeper, nbs.stats)
 			if err != nil {
@@ -1259,9 +1269,12 @@ func (nbs *NomsBlockStore) getManyWithFunc(
 				return nil
 			}
 		}
+		keeper, endRead, cycle := nbs.beginRead()
+		if gcDepMode == gcDependencyMode_NoDependency {
+			keeper = nil
+		}
 		tables = nbs.tables
 		tables.acquire()
-		endRead := nbs.beginRead()
 		nbs.mu.Unlock()
 
 		gcb, err := func() (gcBehavior, error) {
@@ -1357,7 +1370,7 @@ func (nbs *NomsBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 				return true, nil
 			}
 		}
-		keeper, endRead, cycle := nbs.keeperFunc, nbs.beginRead(), nbs.gcCycleCounter
+		keeper, endRead, cycle := nbs.beginRead()
 		tables = nbs.tables
 		tables.acquire()
 		nbs.mu.Unlock()
@@ -1409,9 +1422,11 @@ func (nbs *NomsBlockStore) hasManyDep(ctx context.Context, hashes hash.HashSet, 
 			nbs.mu.Unlock()
 			return nil, errors.New("*NomsBlockStore is closed")
 		}
-		cycle := nbs.gcCycleCounter
 		if nbs.memtable != nil {
+			// Read with |nbs.mu| held, so there is no unlocked read
+			// to register.
 			keeper := nbs.keeperFunc
+			cycle := nbs.gcCycleCounter
 			if gcDepMode == gcDependencyMode_NoDependency {
 				keeper = nil
 			}
@@ -1433,7 +1448,7 @@ func (nbs *NomsBlockStore) hasManyDep(ctx context.Context, hashes hash.HashSet, 
 				return hash.HashSet{}, nil
 			}
 		}
-		keeper, endRead := nbs.keeperFunc, nbs.beginRead()
+		keeper, endRead, cycle := nbs.beginRead()
 		if gcDepMode == gcDependencyMode_NoDependency {
 			keeper = nil
 		}
@@ -2163,7 +2178,11 @@ func (nbs *NomsBlockStore) openChunkSourcesForManifestUpdateAndRebase(ctx contex
 	if nbs.closed {
 		return openChunkSourcesResult{}, errors.New("*NomsBlockStore is closed")
 	}
-	sources, err := nbs.tables.openForAdd(ctx, files, existing, nbs.stats)
+	// These files are being admitted into the store from outside it --- a
+	// push, a pull, a manual AddTableFiles. We run the more expensive deep
+	// validation here, before we add them to the store and take a dependency
+	// on them.
+	sources, err := nbs.tables.openForAdd(ctx, files, existing, openOpts{deepValidate: true}, nbs.stats)
 	if err != nil {
 		return openChunkSourcesResult{}, err
 	}
@@ -2305,7 +2324,7 @@ func (nbs *NomsBlockStore) lockedEndGC() {
 	if !nbs.gcInProgress {
 		panic("EndGC called when gc was not in progress")
 	}
-	for nbs.gcOutstandingReads > 0 {
+	for nbs.outstandingReads > 0 {
 		nbs.gcCond.Wait()
 	}
 	nbs.RestoreDefaultConjoinBehavior()
@@ -2314,26 +2333,24 @@ func (nbs *NomsBlockStore) lockedEndGC() {
 	nbs.gcCond.Broadcast()
 }
 
-// beginRead() is called with |nbs.mu| held. It signals an ongoing
-// read operation which will be operating against the existing table
-// files without |nbs.mu| held. The read should be bracket with a call
-// to the returned |endRead|, which must be called with |nbs.mu| held
-// if it is non-|nil|, and should not be called otherwise.
+// beginRead is called with |nbs.mu| held, immediately before the caller
+// releases the lock and reads against a table set it took from the
+// store. It registers the read and returns the |keeper| and GC |cycle|
+// the read must use; the caller must not release |nbs.mu| in between,
+// or they can be replaced before the read is registered.
 //
-// If there is an ongoing GC operation which this call is made, it is
-// guaranteed not to complete until the corresponding |endRead| call.
-func (nbs *NomsBlockStore) beginRead() (endRead func()) {
-	if nbs.gcInProgress {
-		nbs.gcOutstandingReads += 1
-		return func() {
-			nbs.gcOutstandingReads -= 1
-			if nbs.gcOutstandingReads < 0 {
-				panic("impossible")
-			}
-			nbs.gcCond.Broadcast()
+// The read must be bracketed by a call to the returned |endRead|, with
+// |nbs.mu| held. A GC in progress when this returns cannot finish until
+// then.
+func (nbs *NomsBlockStore) beginRead() (keeper keeperF, endRead func(), cycle uint64) {
+	nbs.outstandingReads += 1
+	return nbs.keeperFunc, func() {
+		nbs.outstandingReads -= 1
+		if nbs.outstandingReads < 0 {
+			panic("impossible")
 		}
-	}
-	return nil
+		nbs.gcCond.Broadcast()
+	}, nbs.gcCycleCounter
 }
 
 func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, getAddrs chunks.GetAddrs, filter chunks.HasManyFunc, dest chunks.ChunkStore, gcConfig chunks.GCConfig, incrementalUpdateManifest bool) (chunks.MarkAndSweeper, error) {
@@ -2716,7 +2733,10 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec, mo
 	for _, s := range specs {
 		files[s.name] = s.chunkCount
 	}
-	opened, err := nbs.tables.openForAdd(ctx, files, srcs, nbs.stats)
+	// These are the table files GC just wrote, and they are about to become
+	// the whole store, so deep-validate them before the manifest points at
+	// them and the files they were copied from become collectable.
+	opened, err := nbs.tables.openForAdd(ctx, files, srcs, openOpts{deepValidate: true}, nbs.stats)
 	if err != nil {
 		return fmt.Errorf("swapTables, openForAdd: %w", err)
 	}
@@ -2835,7 +2855,7 @@ func (nbs *NomsBlockStore) ConjoinTableFiles(ctx context.Context, storageIds []h
 
 	nbs.logger.Info("ConjoinTableFiles was called")
 	strategy := &specificFilesConjoiner{targetStorageIds: storageIds}
-	newUpstream, conjoinedSrc, finalCleanup, err := conjoin(ctx, nbs.fatalBehavior, strategy, nbs.upstream, nbs.manifest, nbs.persister, nbs.stats)
+	newUpstream, conjoinedSrc, finalCleanup, err := conjoin(ctx, nbs.fatalBehavior, strategy, nbs.upstream, nbs.manifest, nbs.persister, nbs.tables, nbs.stats)
 	if err != nil {
 		return hash.Hash{}, err
 	}

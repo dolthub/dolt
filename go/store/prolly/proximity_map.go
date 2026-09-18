@@ -173,6 +173,21 @@ func getConvertToVectorFunction(keyDesc *val.TupleDesc, ns tree.NodeStore) (tree
 			}
 			return sql.ConvertToVector(ctx, vec)
 		}, nil
+	case val.ExtendedEnc, val.ExtendedAdaptiveEnc:
+		handler := keyDesc.Handlers[0]
+		return func(ctx context.Context, bytes []byte) ([]float32, error) {
+			v, err := handler.DeserializeValue(ctx, keyDesc.GetField(0, bytes))
+			if err != nil {
+				return nil, err
+			}
+			if wrapper, ok := v.(*val.ExtendedValueWrapper); ok {
+				v, err = wrapper.UnwrapAny(ctx)
+				if err != nil {
+					return nil, err
+				}
+			}
+			return sql.ConvertToVector(ctx, v)
+		}, nil
 	default:
 		return nil, fmt.Errorf("unexpected encoding for vector index: %v", keyDesc.Types[0].Enc)
 	}

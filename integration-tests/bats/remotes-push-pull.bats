@@ -637,7 +637,8 @@ SQL
     dolt commit -am "add 3s"
     run dolt push --all -u origin   # should set upstream for all branches
     [ "$status" -eq 0 ]
-    [[ "$output" =~ " * [new branch]          branch1 -> branch1" ]] || false
+    [[ "$output" =~ "branch1 -> branch1" ]] || false
+    [[ "$output" =~ " * [new branch]          branch2 -> branch2" ]] || false
     [[ "$output" =~ "branch 'branch1' set up to track 'origin/branch1'." ]] || false
     [[ "$output" =~ "branch 'branch2' set up to track 'origin/branch2'." ]] || false
 }

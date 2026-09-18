@@ -2,7 +2,7 @@ name: sql-server Integration Tests
 
 on:
   pull_request:
-    branches: [main]
+    branches: [ main ]
     paths:
       - "go/**"
       - "integration-tests/go-sql-server-driver/**"
@@ -19,15 +19,19 @@ jobs:
         shell: bash
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
-        os: [ubuntu-22.04]
+        os: [ ubuntu-22.04, macos-latest ]
     steps:
+      - name: Check deferred CI
+        uses: $/.github/actions/check-deferred-ci
+        with:
+          timezone: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
       - uses: actions/checkout@v6
       - name: Set up Go toolchain
         uses: ./.github/actions/setup-go-toolchain
       - name: Build dolt
         uses: ./.github/actions/build-dolt
       - name: Test all
-        run: go test .
+        run: go test --timeout=30m .
         working-directory: ./integration-tests/go-sql-server-driver

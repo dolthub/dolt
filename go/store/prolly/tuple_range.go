@@ -27,21 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// OpenStopRange defines a half-open Range of Tuples [start, stop).
-func OpenStopRange(ctx context.Context, start, stop val.Tuple, desc *val.TupleDesc) (Range, error) {
-	return openStopRange(ctx, start, stop, desc)
-}
-
-// GreaterOrEqualRange defines a Range of Tuples greater than or equal to |start|.
-func GreaterOrEqualRange(start val.Tuple, desc *val.TupleDesc) Range {
-	return greaterOrEqualRange(start, desc)
-}
-
-// LesserRange defines a Range of Tuples less than |stop|.
-func LesserRange(stop val.Tuple, desc *val.TupleDesc) Range {
-	return lesserRange(stop, desc)
-}
-
 // PrefixRange constructs a Range for Tuples with a prefix of |prefix|.
 func PrefixRange(ctx context.Context, prefix val.Tuple, desc *val.TupleDesc) (Range, error) {
 	return closedRange(ctx, prefix, prefix, desc)
@@ -76,8 +61,6 @@ type RangeField struct {
 	Lo, Hi Bound
 	// BoundsAreEqual is |true| when |Lo.Value| == |Hi.Value|
 	BoundsAreEqual bool
-	// TargetIsUnique is |true| when the associated index is unique
-	TargetIsUnique bool
 }
 
 type Bound struct {
@@ -154,6 +137,48 @@ func (r Range) belowStop(ctx context.Context, t val.Tuple) (bool, error) {
 		return cmp < 0 || bound.Inclusive, nil
 	}
 	return true, nil
+}
+
+// SortRangesByStart orders `ranges` by the physical position of their lower bounds, so that scanning them in
+// sequence returns tuples in map order. An unbound field starts before every bound one, and an inclusive bound
+// before an exclusive bound on the same value.
+func SortRangesByStart(ctx context.Context, ranges []Range) error {
+	var err error
+	sort.SliceStable(ranges, func(i, j int) bool {
+		cmp, cmpErr := compareRangeStarts(ctx, ranges[i], ranges[j])
+		if cmpErr != nil {
+			err = cmpErr
+		}
+		return cmp < 0
+	})
+	return err
+}
+
+// compareRangeStarts compares the lower bounds of `a` and `b` field by field.
+func compareRangeStarts(ctx context.Context, a, b Range) (int, error) {
+	order := a.Desc.Comparator()
+	for i := range a.Fields {
+		lo, other := a.Fields[i].Lo, b.Fields[i].Lo
+		if !lo.Binding || !other.Binding {
+			if lo.Binding == other.Binding {
+				return 0, nil
+			} else if !lo.Binding {
+				return -1, nil
+			}
+			return 1, nil
+		}
+		cmp, err := order.CompareValues(ctx, i, lo.Value, other.Value, a.Desc.Types[i])
+		if err != nil || cmp != 0 {
+			return cmp, err
+		}
+		if lo.Inclusive != other.Inclusive {
+			if lo.Inclusive {
+				return -1, nil
+			}
+			return 1, nil
+		}
+	}
+	return 0, nil
 }
 
 // Matches returns true if all the filter predicates
@@ -242,12 +267,21 @@ func (r Range) KeyRangeLookup(ctx context.Context, pool pool.BuffPool, ns tree.N
 		// ex: range scan
 		return nil, false, nil
 	}
+	order := r.Desc.Comparator()
+	if order.Order(n).Descending {
+		// the incremented key precedes the start key
+		return nil, false, nil
+	}
 
-	for _, typ := range r.Desc.Types[n+1:] {
+	for i, typ := range r.Desc.Types[n+1:] {
 		if !typ.Nullable {
 			// this is checked separately because fulltext descriptors
 			// do not match field lengths sometimes
 			// todo: why?
+			return nil, false, nil
+		}
+		if order.Order(n + 1 + i).NullsLast {
+			// the start key's NULL fields follow every matching key
 			return nil, false, nil
 		}
 	}

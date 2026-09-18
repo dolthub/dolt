@@ -90,7 +90,7 @@ func TestArchiveSingleZStdChunk(t *testing.T) {
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
 
-	aIdx, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, NewUnlimitedMemQuotaProvider(), &Stats{})
+	aIdx, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, NewUnlimitedMemQuotaProvider(), openOpts{deepValidate: true}, &Stats{})
 	assert.NoError(t, err)
 
 	assert.Equal(t, uint64(23), aIdx.indexReader.getPrefix(0))
@@ -142,7 +142,7 @@ func TestArchiveSingleSnappyChunk(t *testing.T) {
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
 
-	aIdx, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, NewUnlimitedMemQuotaProvider(), &Stats{})
+	aIdx, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, NewUnlimitedMemQuotaProvider(), openOpts{deepValidate: true}, &Stats{})
 	assert.NoError(t, err)
 
 	assert.Equal(t, uint64(23), aIdx.indexReader.getPrefix(0))
@@ -210,7 +210,7 @@ func TestArchiverMultipleChunksMultipleDictionaries(t *testing.T) {
 	fileSize := uint64(len(theBytes))
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
-	aIdx, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, NewUnlimitedMemQuotaProvider(), &Stats{})
+	aIdx, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, NewUnlimitedMemQuotaProvider(), openOpts{deepValidate: true}, &Stats{})
 	assert.NoError(t, err)
 	expectedPrefixes := []uint64{21, 42, 42, 42, 42, 81, 88}
 	for i, expected := range expectedPrefixes {
@@ -301,7 +301,7 @@ func TestArchiveDictDecompression(t *testing.T) {
 	fileSize := uint64(len(theBytes))
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
-	aIdx, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, NewUnlimitedMemQuotaProvider(), &Stats{})
+	aIdx, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, NewUnlimitedMemQuotaProvider(), openOpts{deepValidate: true}, &Stats{})
 	assert.NoError(t, err)
 
 	c := context.Background()
@@ -344,7 +344,7 @@ func TestArchiveSnappyDecompression(t *testing.T) {
 	fileSize := uint64(len(theBytes))
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
-	aIdx, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, NewUnlimitedMemQuotaProvider(), &Stats{})
+	aIdx, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, NewUnlimitedMemQuotaProvider(), openOpts{deepValidate: true}, &Stats{})
 	assert.NoError(t, err)
 
 	c := context.Background()
@@ -419,7 +419,7 @@ func TestArchiveMixedTypesToChunkers(t *testing.T) {
 	fileSize := uint64(len(theBytes))
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
-	aIdx, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, NewUnlimitedMemQuotaProvider(), &Stats{})
+	aIdx, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, NewUnlimitedMemQuotaProvider(), openOpts{deepValidate: true}, &Stats{})
 	assert.NoError(t, err)
 
 	c := context.Background()
@@ -453,7 +453,7 @@ func TestMetadata(t *testing.T) {
 	fileSize := uint64(len(theBytes))
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
-	rdr, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, NewUnlimitedMemQuotaProvider(), &Stats{})
+	rdr, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, NewUnlimitedMemQuotaProvider(), openOpts{deepValidate: true}, &Stats{})
 	assert.NoError(t, err)
 
 	md, err := rdr.getMetadata(context.Background(), &Stats{})
@@ -483,7 +483,7 @@ func TestArchiveChunkCorruption(t *testing.T) {
 	fileSize := uint64(len(theBytes))
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
-	idx, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, NewUnlimitedMemQuotaProvider(), &Stats{})
+	idx, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, NewUnlimitedMemQuotaProvider(), openOpts{deepValidate: true}, &Stats{})
 	assert.NoError(t, err)
 
 	// Corrupt the data
@@ -615,7 +615,7 @@ func TestFooterVersionAndSignature(t *testing.T) {
 	fileSize := uint64(len(theBytes))
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
-	rdr, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, NewUnlimitedMemQuotaProvider(), &Stats{})
+	rdr, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, NewUnlimitedMemQuotaProvider(), openOpts{deepValidate: true}, &Stats{})
 	assert.NoError(t, err)
 
 	assert.Equal(t, archiveFormatVersionMax, rdr.footer.formatVersion)
@@ -625,7 +625,7 @@ func TestFooterVersionAndSignature(t *testing.T) {
 	theBytes[fileSize-archiveFooterSize+afrVersionOffset] = 23
 	readerAt = bytes.NewReader(theBytes)
 	tra = tableReaderAtAdapter{readerAt}
-	_, err = newArchiveReader(context.Background(), tra, defaultId, fileSize, NewUnlimitedMemQuotaProvider(), &Stats{})
+	_, err = newArchiveReader(context.Background(), tra, defaultId, fileSize, NewUnlimitedMemQuotaProvider(), openOpts{deepValidate: true}, &Stats{})
 	assert.ErrorContains(t, err, "invalid format version")
 
 	// Corrupt the signature, but first restore the version.
@@ -633,7 +633,7 @@ func TestFooterVersionAndSignature(t *testing.T) {
 	theBytes[fileSize-archiveFooterSize+afrSigOffset+2] = 'X'
 	readerAt = bytes.NewReader(theBytes)
 	tra = tableReaderAtAdapter{readerAt}
-	_, err = newArchiveReader(context.Background(), tra, defaultId, fileSize, NewUnlimitedMemQuotaProvider(), &Stats{})
+	_, err = newArchiveReader(context.Background(), tra, defaultId, fileSize, NewUnlimitedMemQuotaProvider(), openOpts{deepValidate: true}, &Stats{})
 	assert.ErrorContains(t, err, "invalid file signature")
 }
 
@@ -760,7 +760,7 @@ func TestArchiveConjoinAll(t *testing.T) {
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
 
-	combinedReader, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, NewUnlimitedMemQuotaProvider(), &Stats{})
+	combinedReader, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, NewUnlimitedMemQuotaProvider(), openOpts{deepValidate: true}, &Stats{})
 	assert.NoError(t, err)
 
 	// Verify combined reader contains all chunks
@@ -815,7 +815,7 @@ func TestArchiveConjoinAllDuplicateChunk(t *testing.T) {
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
 
-	combinedReader, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, NewUnlimitedMemQuotaProvider(), &Stats{})
+	combinedReader, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, NewUnlimitedMemQuotaProvider(), openOpts{deepValidate: true}, &Stats{})
 	assert.NoError(t, err)
 
 	// Check chunk counts - should have 8 chunks total (4 from archive1 + 4 from archive2)
@@ -893,7 +893,7 @@ func TestArchiveConjoinAllMixedCompression(t *testing.T) {
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
 
-	combinedReader, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, NewUnlimitedMemQuotaProvider(), &Stats{})
+	combinedReader, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, NewUnlimitedMemQuotaProvider(), openOpts{deepValidate: true}, &Stats{})
 	assert.NoError(t, err)
 
 	// Verify all chunks can be read from the combined archive
@@ -1052,7 +1052,7 @@ func TestArchiveConjoinAllComprehensive(t *testing.T) {
 	readerAt1 := bytes.NewReader(bytes1)
 	tra1 := tableReaderAtAdapter{readerAt1}
 
-	combinedReader1, err := newArchiveReader(context.Background(), tra1, defaultId, fileSize1, NewUnlimitedMemQuotaProvider(), &Stats{})
+	combinedReader1, err := newArchiveReader(context.Background(), tra1, defaultId, fileSize1, NewUnlimitedMemQuotaProvider(), openOpts{deepValidate: true}, &Stats{})
 	assert.NoError(t, err)
 
 	// Create additional readers for second conjoin
@@ -1114,7 +1114,7 @@ func TestArchiveConjoinAllComprehensive(t *testing.T) {
 	readerAt2 := bytes.NewReader(bytes2)
 	tra2 := tableReaderAtAdapter{readerAt2}
 
-	finalCombinedReader, err := newArchiveReader(context.Background(), tra2, defaultId, fileSize2, NewUnlimitedMemQuotaProvider(), &Stats{})
+	finalCombinedReader, err := newArchiveReader(context.Background(), tra2, defaultId, fileSize2, NewUnlimitedMemQuotaProvider(), openOpts{deepValidate: true}, &Stats{})
 	assert.NoError(t, err)
 
 	// Verify all expected chunks can be read from the final combined archive
@@ -1442,7 +1442,7 @@ func createTestArchiveWithHashes(t *testing.T, chunkData [][]byte, hashes []hash
 	fileSize := uint64(len(theBytes))
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
-	archiveReader, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, NewUnlimitedMemQuotaProvider(), &Stats{})
+	archiveReader, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, NewUnlimitedMemQuotaProvider(), openOpts{deepValidate: true}, &Stats{})
 	assert.NoError(t, err)
 	return archiveReader, hashes
 }

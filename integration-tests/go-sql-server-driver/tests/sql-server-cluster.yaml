@@ -7,11 +7,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server2_cluster"}}/repo1
+        url: http://127.0.0.1:{{get_port "server2_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server2_cluster"}}/repo2
+        url: http://127.0.0.1:{{get_port "server2_cluster"}}/repo2
     with_files:
     - name: standby_server.yaml
       contents: |
@@ -22,7 +22,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 10
           remotesapi:
@@ -36,7 +36,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 15
           remotesapi:
@@ -75,11 +75,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server2_cluster"}}/repo1
+        url: http://127.0.0.1:{{get_port "server2_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server2_cluster"}}/repo2
+        url: http://127.0.0.1:{{get_port "server2_cluster"}}/repo2
     with_files:
     - name: server.yaml
       contents: |
@@ -90,7 +90,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 10
           remotesapi:
@@ -152,11 +152,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server2_cluster"}}/repo1
+        url: http://127.0.0.1:{{get_port "server2_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server2_cluster"}}/repo2
+        url: http://127.0.0.1:{{get_port "server2_cluster"}}/repo2
     with_files:
     - name: server.yaml
       contents: |
@@ -167,7 +167,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 10
           remotesapi:
@@ -183,7 +183,7 @@ tests:
     - query: "select name, url from dolt_remotes"
       result:
         columns: ["name","url"]
-        rows: [["standby","http://localhost:{{get_port \"server2_cluster\"}}/a_new_database"]]
+        rows: [["standby","http://127.0.0.1:{{get_port \"server2_cluster\"}}/a_new_database"]]
 - name: primary comes up and replicates to standby
   multi_repos:
   - name: server1
@@ -191,11 +191,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server2_cluster"}}/repo1
+        url: http://127.0.0.1:{{get_port "server2_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server2_cluster"}}/repo2
+        url: http://127.0.0.1:{{get_port "server2_cluster"}}/repo2
     with_files:
     - name: server.yaml
       contents: |
@@ -206,7 +206,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 10
           remotesapi:
@@ -219,11 +219,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server1_cluster"}}/repo1
+        url: http://127.0.0.1:{{get_port "server1_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server1_cluster"}}/repo2
+        url: http://127.0.0.1:{{get_port "server1_cluster"}}/repo2
     with_files:
     - name: server.yaml
       contents: |
@@ -234,7 +234,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 10
           remotesapi:
@@ -276,11 +276,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server2_cluster"}}/repo1
+        url: http://127.0.0.1:{{get_port "server2_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server2_cluster"}}/repo2
+        url: http://127.0.0.1:{{get_port "server2_cluster"}}/repo2
     with_files:
     - name: standby_server.yaml
       contents: |
@@ -291,7 +291,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 10
           remotesapi:
@@ -312,11 +312,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server2_cluster"}}/repo1
+        url: http://127.0.0.1:{{get_port "server2_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server2_cluster"}}/repo2
+        url: http://127.0.0.1:{{get_port "server2_cluster"}}/repo2
     with_files:
     - name: server.yaml
       contents: |
@@ -327,7 +327,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 10
           remotesapi:
@@ -347,11 +347,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server2_cluster"}}/repo1
+        url: http://127.0.0.1:{{get_port "server2_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server2_cluster"}}/repo2
+        url: http://127.0.0.1:{{get_port "server2_cluster"}}/repo2
     with_files:
     - name: server.yaml
       contents: |
@@ -362,7 +362,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 10
           remotesapi:
@@ -375,11 +375,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server1_cluster"}}/repo1
+        url: http://127.0.0.1:{{get_port "server1_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server1_cluster"}}/repo2
+        url: http://127.0.0.1:{{get_port "server1_cluster"}}/repo2
     with_files:
     - name: server.yaml
       contents: |
@@ -390,7 +390,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
@@ -458,11 +458,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server2_cluster"}}/repo1
+        url: http://127.0.0.1:{{get_port "server2_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server2_cluster"}}/repo2
+        url: http://127.0.0.1:{{get_port "server2_cluster"}}/repo2
     with_files:
     - name: standby_server.yaml
       contents: |
@@ -473,7 +473,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 10
           remotesapi:
@@ -506,11 +506,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server2_cluster"}}/repo1
+        url: http://127.0.0.1:{{get_port "server2_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server2_cluster"}}/repo2
+        url: http://127.0.0.1:{{get_port "server2_cluster"}}/repo2
     with_files:
     - name: server.yaml
       contents: |
@@ -521,7 +521,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 10
           remotesapi:
@@ -534,11 +534,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server1_cluster"}}/repo1
+        url: http://127.0.0.1:{{get_port "server1_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server1_cluster"}}/repo2
+        url: http://127.0.0.1:{{get_port "server1_cluster"}}/repo2
     with_files:
     - name: server.yaml
       contents: |
@@ -549,7 +549,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 10
           remotesapi:
@@ -583,11 +583,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server2_cluster"}}/repo1
+        url: http://127.0.0.1:{{get_port "server2_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server2_cluster"}}/repo2
+        url: http://127.0.0.1:{{get_port "server2_cluster"}}/repo2
     with_files:
     - name: server.yaml
       contents: |
@@ -598,7 +598,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 10
           remotesapi:
@@ -611,11 +611,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server1_cluster"}}/repo1
+        url: http://127.0.0.1:{{get_port "server1_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server1_cluster"}}/repo2
+        url: http://127.0.0.1:{{get_port "server1_cluster"}}/repo2
     with_files:
     - name: server.yaml
       contents: |
@@ -626,7 +626,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 10
           remotesapi:
@@ -662,11 +662,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server2_cluster"}}/repo1
+        url: http://127.0.0.1:{{get_port "server2_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server2_cluster"}}/repo2
+        url: http://127.0.0.1:{{get_port "server2_cluster"}}/repo2
     with_files:
     - name: preserver.yaml
       contents: |
@@ -683,7 +683,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 15
           remotesapi:
@@ -696,11 +696,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server1_cluster"}}/repo1
+        url: http://127.0.0.1:{{get_port "server1_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server1_cluster"}}/repo2
+        url: http://127.0.0.1:{{get_port "server1_cluster"}}/repo2
     with_files:
     - name: preserver.yaml
       contents: |
@@ -717,7 +717,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 10
           remotesapi:
@@ -773,11 +773,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server2_cluster"}}/repo1
+        url: http://127.0.0.1:{{get_port "server2_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server2_cluster"}}/repo2
+        url: http://127.0.0.1:{{get_port "server2_cluster"}}/repo2
     with_files:
     - name: preserver.yaml
       contents: |
@@ -794,7 +794,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 10
           remotesapi:
@@ -807,11 +807,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server1_cluster"}}/repo1
+        url: http://127.0.0.1:{{get_port "server1_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server1_cluster"}}/repo2
+        url: http://127.0.0.1:{{get_port "server1_cluster"}}/repo2
     with_files:
     - name: preserver.yaml
       contents: |
@@ -828,7 +828,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 15
           remotesapi:
@@ -889,11 +889,11 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server2_cluster"}}/repo1
+        url: http://127.0.0.1:{{get_port "server2_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:{{get_port "server2_cluster"}}/repo2
+        url: http://127.0.0.1:{{get_port "server2_cluster"}}/repo2
     with_files:
     - name: server.yaml
       contents: |
@@ -904,7 +904,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 10
           remotesapi:
@@ -933,7 +933,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
@@ -952,7 +952,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
@@ -971,9 +971,9 @@ tests:
       result:
         columns: ["caught_up", "database", "remote", "remote_url"]
         rows:
-        - ["1", "repo1", "standby", "http://localhost:{{get_port \"server2_cluster\"}}/repo1"]
-        - ["1", "mysql", "standby", "http://localhost:{{get_port \"server2_cluster\"}}"]
-        - ["1", "dolt_branch_control", "standby", "http://localhost:{{get_port \"server2_cluster\"}}"]
+        - ["1", "repo1", "standby", "http://127.0.0.1:{{get_port \"server2_cluster\"}}/repo1"]
+        - ["1", "mysql", "standby", "http://127.0.0.1:{{get_port \"server2_cluster\"}}"]
+        - ["1", "dolt_branch_control", "standby", "http://127.0.0.1:{{get_port \"server2_cluster\"}}"]
 - name: dolt_cluster_transition_to_standby too many standbys provided
   multi_repos:
   - name: server1
@@ -987,7 +987,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
@@ -1006,7 +1006,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
@@ -1036,7 +1036,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
@@ -1055,7 +1055,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
@@ -1125,7 +1125,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
@@ -1144,7 +1144,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
@@ -1193,7 +1193,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
@@ -1212,7 +1212,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
@@ -1260,7 +1260,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
@@ -1279,7 +1279,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
@@ -1411,7 +1411,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
@@ -1443,7 +1443,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
@@ -1462,7 +1462,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
@@ -1515,7 +1515,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
@@ -1537,7 +1537,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
@@ -1590,7 +1590,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
@@ -1609,7 +1609,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
@@ -1678,7 +1678,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
@@ -1697,7 +1697,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
@@ -1747,7 +1747,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
@@ -1766,7 +1766,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
@@ -1846,7 +1846,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
@@ -1865,7 +1865,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
@@ -1907,7 +1907,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby_one
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
@@ -1921,9 +1921,9 @@ tests:
         cluster:
           standby_remotes:
           - name: standby_one
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           - name: standby_two
-            remote_url_template: http://localhost:{{get_port "server3_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server3_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
@@ -1942,7 +1942,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
@@ -1961,7 +1961,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
@@ -2007,11 +2007,11 @@ tests:
         - name: repo1
           with_remotes:
             - name: standby
-              url: http://localhost:{{get_port "server2_cluster"}}/repo1
+              url: http://127.0.0.1:{{get_port "server2_cluster"}}/repo1
         - name: repo2
           with_remotes:
             - name: standby
-              url: http://localhost:{{get_port "server2_cluster"}}/repo2
+              url: http://127.0.0.1:{{get_port "server2_cluster"}}/repo2
       with_files:
         - name: server.yaml
           contents: |
@@ -2022,7 +2022,7 @@ tests:
             cluster:
               standby_remotes:
               - name: standby
-                remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+                remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
               bootstrap_role: primary
               remotesapi:
                 port: {{get_port "server1_cluster"}}
@@ -2047,7 +2047,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
@@ -2066,7 +2066,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
@@ -2118,7 +2118,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
@@ -2137,7 +2137,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
@@ -2232,7 +2232,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
@@ -2253,7 +2253,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+            remote_url_template: http://127.0.0.1:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:

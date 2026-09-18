@@ -18,8 +18,11 @@ include "collation.fbs";
 namespace serial;
 
 enum DistanceType : uint8 {
-  Null       = 0,
-  L2_Squared = 1,
+  Null          = 0,
+  L2_Squared    = 1,
+  Cosine        = 2,
+  InnerProduct  = 3,
+  L1            = 4,
 }
 
 table TableSchema {
@@ -132,6 +135,15 @@ table Index {
 
   // WHERE clause expression string for partial indexes (empty for full indexes)
   predicate:string;
+
+  // per-column sort order, parallel to index_columns.
+  // omitted when every column is ascending with NULLs first.
+  descending:[bool];
+  nulls_last:[bool];
+
+  // per-column operator class, parallel to index_columns.
+  // omitted when no column has one.
+  op_classes:[string];
 }
 
 table FulltextInfo {

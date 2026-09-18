@@ -105,29 +105,36 @@ func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 
 // NewEmptyPrimaryIndex creates a new empty Index for use as the primary index in a table.
 func NewEmptyPrimaryIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, indexSchema schema.Schema) (Index, error) {
-	return newEmptyIndex(ctx, vrw, ns, indexSchema, false, false)
+	return newEmptyIndex(ctx, vrw, ns, indexSchema, nil, false)
 }
 
 // NewEmptyForeignKeyIndex creates a new empty Index for use as a foreign key index.
 // Foreign keys cannot appear on keyless tables.
 func NewEmptyForeignKeyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, indexSchema schema.Schema) (Index, error) {
-	return newEmptyIndex(ctx, vrw, ns, indexSchema, false, false)
+	return newEmptyIndex(ctx, vrw, ns, indexSchema, nil, false)
 }
 
 // NewEmptyIndexFromTableSchema creates a new empty Index described by a schema.Index.
 func NewEmptyIndexFromTableSchema(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, idx schema.Index, tableSchema schema.Schema) (Index, error) {
 	indexSchema := idx.Schema()
-	return newEmptyIndex(ctx, vrw, ns, indexSchema, idx.IsVector(), schema.IsKeyless(tableSchema))
+	var distanceType vector.DistanceType
+	if idx.IsVector() {
+		distanceType = idx.VectorProperties().DistanceType
+		if distanceType == nil {
+			distanceType = vector.DistanceL2Squared{}
+		}
+	}
+	return newEmptyIndex(ctx, vrw, ns, indexSchema, distanceType, schema.IsKeyless(tableSchema))
 }
 
-// newEmptyIndex returns an index with no rows.
-func newEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, isVector bool, isKeylessSecondary bool) (Index, error) {
+// newEmptyIndex returns an index with no rows. A non-nil `distanceType` creates a proximity index ordered by that metric.
+func newEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, distanceType vector.DistanceType, isKeylessSecondary bool) (Index, error) {
 	kd, vd := sch.GetMapDescriptors(ns)
 	if isKeylessSecondary {
 		kd = prolly.AddHashToSchema(kd)
 	}
-	if isVector {
-		return NewEmptyProximityIndex(ctx, ns, kd, vd)
+	if distanceType != nil {
+		return NewEmptyProximityIndex(ctx, ns, kd, vd, distanceType)
 	} else {
 		return NewEmptyProllyIndex(ctx, ns, kd, vd)
 	}
@@ -141,8 +148,8 @@ func NewEmptyProllyIndex(ctx context.Context, ns tree.NodeStore, kd, vd *val.Tup
 	return IndexFromProllyMap(m), nil
 }
 
-func NewEmptyProximityIndex(ctx context.Context, ns tree.NodeStore, kd, vd *val.TupleDesc) (Index, error) {
-	proximityMapBuilder, err := prolly.NewProximityMapBuilder(ctx, ns, vector.DistanceL2Squared{}, kd, vd, prolly.DefaultLogChunkSize)
+func NewEmptyProximityIndex(ctx context.Context, ns tree.NodeStore, kd, vd *val.TupleDesc, distanceType vector.DistanceType) (Index, error) {
+	proximityMapBuilder, err := prolly.NewProximityMapBuilder(ctx, ns, distanceType, kd, vd, prolly.DefaultLogChunkSize)
 	if err != nil {
 		return nil, err
 	}

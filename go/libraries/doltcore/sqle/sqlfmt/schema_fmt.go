@@ -216,7 +216,10 @@ func GenerateCreateTableIndentedColumnDefinition(ctx *sql.Context, formatter sql
 		genVal = sql.NewUnresolvedColumnDefaultValue(col.Generated)
 	}
 	if col.OnUpdate != "" {
-		onUpdateVal = sql.NewUnresolvedColumnDefaultValue(col.OnUpdate)
+		onUpdateVal = &sql.ColumnDefaultValue{
+			Expr:    &sql.UnresolvedColumnDefault{ExprString: col.OnUpdate},
+			Literal: true,
+		}
 	}
 
 	return formatter.GenerateCreateTableColumnDefinition(
@@ -249,8 +252,17 @@ func indexColumnDDLExpressions(formatter sql.SchemaFormatter, index schema.Index
 		} else {
 			exprs[i] = formatter.QuoteIdentifier(col.Name)
 		}
+		exprs[i] += indexColumnOrderSuffix(index, i)
 	}
 	return exprs
+}
+
+// indexColumnOrderSuffix returns " DESC" when column `i` of `index` is stored in descending order, and "" otherwise.
+func indexColumnOrderSuffix(index schema.Index, i int) string {
+	if orders := index.ColumnOrders(); i < len(orders) && orders[i].Descending {
+		return " DESC"
+	}
+	return ""
 }
 
 // indexColumnNames returns the quoted name of each column in |index|'s column list, unconditionally, including
@@ -259,7 +271,7 @@ func indexColumnNames(formatter sql.SchemaFormatter, index schema.Index) []strin
 	colNames := index.ColumnNames()
 	quotedColNames := make([]string, len(colNames))
 	for i, name := range colNames {
-		quotedColNames[i] = formatter.QuoteIdentifier(name)
+		quotedColNames[i] = formatter.QuoteIdentifier(name) + indexColumnOrderSuffix(index, i)
 	}
 	return quotedColNames
 }

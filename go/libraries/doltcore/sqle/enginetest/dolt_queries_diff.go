@@ -44,10 +44,10 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 				// The harness skips assertions containing "show indexes from", so this uses the singular synonym.
 				Query: "SHOW INDEX FROM dolt_diff_foo;",
 				Expected: []sql.Row{
-					{"dolt_diff_foo", 0, "to_pks", 1, "to_id", nil, int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
-					{"dolt_diff_foo", 0, "from_pks", 1, "from_id", nil, int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
-					{"dolt_diff_foo", 1, "to_commit", 1, "to_commit", nil, int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
-					{"dolt_diff_foo", 1, "from_commit", 1, "from_commit", nil, int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
+					{"dolt_diff_foo", 0, "to_pks", 1, "to_id", "A", int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
+					{"dolt_diff_foo", 0, "from_pks", 1, "from_id", "A", int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
+					{"dolt_diff_foo", 1, "to_commit", 1, "to_commit", "A", int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
+					{"dolt_diff_foo", 1, "from_commit", 1, "from_commit", "A", int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
 				},
 			},
 		},
@@ -7221,6 +7221,34 @@ var QueryDiffTableScriptTests = []queries.ScriptTest{
 				Query: "SELECT to_table_name, diff_type FROM dolt_diff_summary('HEAD~2', 'HEAD~1');",
 				// the_table was committed before the ignore pattern existed, so it must appear.
 				Expected: []sql.Row{{"the_table", "added"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_query_diff in read-only transaction",
+		SetUpScript: []string{
+			"create table t (i int primary key, j int);",
+			"insert into t values (1, 1), (2, 2);",
+			"create table tt (i int primary key, j int);",
+			"insert into tt values (1, 1), (2, 3);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "START TRANSACTION READ ONLY;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "SELECT * FROM dolt_query_diff('SELECT * FROM t', 'SELECT * FROM tt');",
+				Expected: []sql.Row{
+					{1, 1, nil, nil, "deleted"},
+					{2, 2, nil, nil, "deleted"},
+					{nil, nil, 1, 1, "added"},
+					{nil, nil, 2, 3, "added"},
+				},
+			},
+			{
+				Query:    "COMMIT;",
+				Expected: []sql.Row{},
 			},
 		},
 	},

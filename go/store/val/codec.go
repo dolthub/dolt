@@ -413,14 +413,16 @@ func writeFloat32(buf []byte, val float32) {
 	binary.LittleEndian.PutUint32(buf, math.Float32bits(val))
 }
 
+// compareFloat32 orders NaN after every other value and equal to itself, so that a NaN can be found by a lookup.
 func compareFloat32(l, r float32) int {
 	if l == r {
 		return 0
 	} else if l < r {
 		return -1
-	} else {
+	} else if l > r {
 		return 1
 	}
+	return compareNaN(l != l, r != r)
 }
 
 func readFloat64(val []byte) float64 {
@@ -433,14 +435,26 @@ func writeFloat64(buf []byte, val float64) {
 	binary.LittleEndian.PutUint64(buf, math.Float64bits(val))
 }
 
+// compareFloat64 orders NaN after every other value and equal to itself, so that a NaN can be found by a lookup.
 func compareFloat64(l, r float64) int {
 	if l == r {
 		return 0
 	} else if l < r {
 		return -1
-	} else {
+	} else if l > r {
 		return 1
 	}
+	return compareNaN(math.IsNaN(l), math.IsNaN(r))
+}
+
+// compareNaN compares two floats of which at least one is NaN.
+func compareNaN(lNaN, rNaN bool) int {
+	if lNaN && rNaN {
+		return 0
+	} else if lNaN {
+		return 1
+	}
+	return -1
 }
 
 func readBit64(val []byte) uint64 {

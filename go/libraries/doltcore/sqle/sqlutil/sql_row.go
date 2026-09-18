@@ -40,9 +40,9 @@ func SqlColToStr(ctx *sql.Context, sqlType sql.Type, col interface{}) (string, e
 		switch typedCol := col.(type) {
 		case bool:
 			if typedCol {
-				return "true", nil
+				return "1", nil
 			} else {
-				return "false", nil
+				return "0", nil
 			}
 		case sql.SpatialColumnType:
 			res, err := sqlType.SQL(ctx, nil, col)

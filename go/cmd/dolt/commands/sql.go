@@ -72,7 +72,7 @@ If a server is running for the database in question, then the query will go thro
 	},
 }
 
-var ErrMultipleDoltCfgDirs = errors.NewKind("multiple .doltcfg directories detected: '%s' and '%s'; pass one of the directories using option --doltcfg-dir")
+var ErrMultipleDoltCfgDirs = errors.NewKind("multiple .doltcfg directories detected: '%s' and '%s'; specify which directory to use with --doltcfg-dir or remove the redundant directory")
 
 const (
 	QueryFlag             = "query"
@@ -146,7 +146,7 @@ func (cmd SqlCmd) Docs() *cli.CommandDocumentation {
 func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 	ap.SupportsString(QueryFlag, "q", "SQL query to run", "Runs a single query and exits.")
-	ap.SupportsString(FormatFlag, "r", "result output format", "How to format result output. Valid values are tabular, csv, json, vertical, and parquet. Defaults to tabular.")
+	ap.SupportsString(FormatFlag, "r", "result output format", "How to format result output. Valid values are tabular, csv, json, jsonl, vertical, and parquet. Defaults to tabular.")
 	ap.SupportsString(saveFlag, "s", "saved query name", "Used with --query, save the query to the query catalog with the name provided. Saved queries can be examined in the dolt_query_catalog system table.")
 	ap.SupportsString(executeFlag, "x", "saved query name", "Executes a saved query with the given name.")
 	ap.SupportsFlag(listSavedFlag, "l", "List all saved queries.")
@@ -267,11 +267,15 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		var input io.Reader = os.Stdin
 		if fileInput, ok := apr.GetValue(fileInputFlag); ok {
 			isTty = false
-			input, err = os.OpenFile(fileInput, os.O_RDONLY, os.ModePerm)
+			filePath, err := cliCtx.WorkingDir().Abs(fileInput)
 			if err != nil {
 				return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.BuildDError("couldn't open file %s", fileInput).Build(), usage)
 			}
-			info, err := os.Stat(fileInput)
+			input, err = os.OpenFile(filePath, os.O_RDONLY, os.ModePerm)
+			if err != nil {
+				return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.BuildDError("couldn't open file %s", fileInput).Build(), usage)
+			}
+			info, err := os.Stat(filePath)
 			if err != nil {
 				return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.BuildDError("couldn't get file size %s", fileInput).Build(), usage)
 			}
@@ -292,10 +296,11 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			}
 		} else {
 			input = transform.NewReader(input, textunicode.BOMOverride(transform.Nop))
-			err := execBatchMode(queryist.Context, queryist.Queryist, input, continueOnError, format, binaryAsHex)
+			info, err := execBatchMode(queryist.Context, queryist.Queryist, input, continueOnError, format, binaryAsHex)
 			if err != nil {
 				return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.VerboseErrorFromError(err), usage)
 			}
+			warnIfLoneDoltCheckout(info)
 		}
 	}
 
@@ -329,7 +334,7 @@ func (cmd SqlCmd) handleLegacyArguments(ap *argparser.ArgParser, commandStr stri
 	if err != nil {
 		legacyParser := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 		legacyParser.SupportsString(QueryFlag, "q", "SQL query to run", "Runs a single query and exits.")
-		legacyParser.SupportsString(FormatFlag, "r", "result output format", "How to format result output. Valid values are tabular, csv, json, vertical, and parquet. Defaults to tabular.")
+		legacyParser.SupportsString(FormatFlag, "r", "result output format", "How to format result output. Valid values are tabular, csv, json, jsonl, vertical, and parquet. Defaults to tabular.")
 		legacyParser.SupportsString(saveFlag, "s", "saved query name", "Used with --query, save the query to the query catalog with the name provided. Saved queries can be examined in the dolt_query_catalog system table.")
 		legacyParser.SupportsString(executeFlag, "x", "saved query name", "Executes a saved query with the given name.")
 		legacyParser.SupportsFlag(listSavedFlag, "l", "List all saved queries.")
@@ -406,12 +411,36 @@ func queryMode(
 	_, continueOnError := apr.GetValue(continueFlag)
 
 	input := strings.NewReader(query)
-	err := execBatchMode(ctx, qryist, input, continueOnError, format, binaryAsHex)
+	info, err := execBatchMode(ctx, qryist, input, continueOnError, format, binaryAsHex)
 	if err != nil {
 		return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
 	}
 
+	warnIfLoneDoltCheckout(info)
+
 	return 0
+}
+
+// batchExecInfo collects metadata from execBatchMode so callers can
+// inspect what was executed without re-parsing the query string.
+type batchExecInfo struct {
+	isLoneDoltCheckout bool
+}
+
+func warnIfLoneDoltCheckout(info batchExecInfo) {
+	if info.isLoneDoltCheckout {
+		cli.PrintErrln(color.YellowString("Warning: dolt_checkout() in a SQL session only changes the active branch for that SQL session. Your branch in the CLI is unchanged. To change the checked out branch for dolt CLI commands, run `dolt checkout <branch>`."))
+	}
+}
+
+// isDoltCheckoutCall returns true when the already-parsed statement
+// is a CALL dolt_checkout(...).
+func isDoltCheckoutCall(stmt sqlparser.Statement) bool {
+	call, ok := stmt.(*sqlparser.Call)
+	if !ok {
+		return false
+	}
+	return strings.EqualFold(call.ProcName.Name.String(), "dolt_checkout")
 }
 
 func SaveQuery(ctx *sql.Context, qryist cli.Queryist, apr *argparser.ArgParseResults, query string, format engine.PrintResultFormat, usage cli.UsagePrinter, binaryAsHex bool) int {
@@ -542,6 +571,8 @@ func GetResultFormat(format string) (engine.PrintResultFormat, errhand.VerboseEr
 		return engine.FormatCsv, nil
 	case "json":
 		return engine.FormatJson, nil
+	case "jsonl":
+		return engine.FormatJsonl, nil
 	case "null":
 		return engine.FormatNull, nil
 	case "vertical":
@@ -549,7 +580,7 @@ func GetResultFormat(format string) (engine.PrintResultFormat, errhand.VerboseEr
 	case "parquet":
 		return engine.FormatParquet, nil
 	default:
-		return engine.FormatTabular, errhand.BuildDError("Invalid argument for --result-format. Valid values are tabular, csv, json").Build()
+		return engine.FormatTabular, errhand.BuildDError("Invalid argument for --result-format. Valid values are tabular, csv, json, jsonl, vertical, and parquet").Build()
 	}
 }
 
@@ -622,8 +653,11 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 	return nil
 }
 
-// execBatchMode runs all the queries in the input reader
-func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, continueOnErr bool, format engine.PrintResultFormat, binaryAsHex bool) error {
+// execBatchMode runs all the queries in the input reader.
+// It returns metadata about the executed statements.
+func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, continueOnErr bool, format engine.PrintResultFormat, binaryAsHex bool) (batchExecInfo, error) {
+	var info batchExecInfo
+	var stmtCount int
 	scanner := NewStreamScanner(input)
 	var query string
 	for scanner.Scan() {
@@ -647,21 +681,26 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 		if err == sqlparser.ErrEmpty {
 			continue
 		} else if err != nil {
+			info.isLoneDoltCheckout = false
 			err = buildBatchSqlErr(scanner.state.statementStartLine, query, err)
 			if !continueOnErr {
-				return err
+				return batchExecInfo{}, err
 			} else {
 				cli.PrintErrln(err.Error())
 			}
 		}
 
+		stmtCount++
+		info.isLoneDoltCheckout = stmtCount == 1 && isDoltCheckoutCall(sqlStatement)
+
 		// store start time for query
 		ctx.SetQueryTime(time.Now())
 		sqlSch, rowIter, _, err := processParsedQuery(ctx, query, qryist, sqlStatement)
 		if err != nil {
+			info.isLoneDoltCheckout = false
 			err = buildBatchSqlErr(scanner.state.statementStartLine, query, err)
 			if !continueOnErr {
-				return err
+				return batchExecInfo{}, err
 			} else {
 				cli.PrintErrln(err.Error())
 			}
@@ -678,9 +717,10 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 			}
 			err = engine.PrettyPrintResults(ctx, format, sqlSch, rowIter, false, false, false, binaryAsHex)
 			if err != nil {
+				info.isLoneDoltCheckout = false
 				err = buildBatchSqlErr(scanner.state.statementStartLine, query, err)
 				if !continueOnErr {
-					return err
+					return batchExecInfo{}, err
 				} else {
 					cli.PrintErrln(err.Error())
 				}
@@ -690,10 +730,10 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 	}
 
 	if err := scanner.Err(); err != nil {
-		return buildBatchSqlErr(scanner.state.statementStartLine, query, err)
+		return batchExecInfo{}, buildBatchSqlErr(scanner.state.statementStartLine, query, err)
 	}
 
-	return nil
+	return info, nil
 }
 
 func buildBatchSqlErr(stmtStartLine int, query string, err error) error {
@@ -719,6 +759,9 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 	}
 
 	verticalOutputLineTerminators := []string{"\\g", "\\G"}
+	// clearStatementTerminator mirrors the MySQL client's `\c` escape: it discards the statement
+	// currently being entered (however many lines it spans) without executing it.
+	clearStatementTerminator := "\\c"
 	backSlashCommands := make([]string, 0, len(slashCmds))
 	for _, cmd := range slashCmds {
 		backSlashCommands = append(backSlashCommands, "\\"+cmd.Name())
@@ -730,7 +773,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 			"quit", "exit", "quit()", "exit()",
 		},
 		LineTerminator:     ";",
-		SpecialTerminators: verticalOutputLineTerminators,
+		SpecialTerminators: append(append([]string{}, verticalOutputLineTerminators...), clearStatementTerminator),
 		BackSlashCmds:      backSlashCommands,
 	}
 
@@ -780,6 +823,16 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 		query := c.Args[0]
 		query = strings.TrimSpace(query)
 		if len(query) == 0 {
+			return
+		}
+
+		// \c cancels the statement currently being entered, matching the MySQL client. The buffered
+		// input is discarded without being executed or recorded in history, and the shell resets to
+		// a fresh prompt.
+		if strings.HasSuffix(query, clearStatementTerminator) {
+			nextPrompt, multiPrompt := postCommandUpdate(sqlCtx, qryist)
+			shell.SetPrompt(nextPrompt)
+			shell.SetMultiPrompt(multiPrompt)
 			return
 		}
 
@@ -850,8 +903,12 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 				}
 				lastSqlCmd = query
 				sqlStmt, err := sqlparser.Parse(query)
-				// silently skip empty statements
-				if err == nil || err == sqlparser.ErrEmpty {
+				if err == sqlparser.ErrEmpty {
+					// bare empty query (e.g. just ";") is a client error; comment-only is skipped silently
+					if strings.TrimSpace(query) == "" {
+						shell.Println(color.RedString("No query specified"))
+					}
+				} else if err == nil {
 					var sqlSch sql.Schema
 					var rowIter sql.RowIter
 					sqlSch, rowIter, _, err = processParsedQuery(sqlCtx, query, qryist, sqlStmt)

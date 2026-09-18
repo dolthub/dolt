@@ -15,7 +15,9 @@
 package gitauth
 
 import (
+	"context"
 	"errors"
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -35,7 +37,7 @@ func TestNormalizeError_AlwaysWrapsAndAppendsHints(t *testing.T) {
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			got := NormalizeError(errors.New("git failed"), []byte(tt.output))
+			got := NormalizeError(context.Background(), errors.New("git failed"), []byte(tt.output))
 
 			var niae *NonInteractiveAuthError
 			if !errors.As(got, &niae) {
@@ -55,9 +57,44 @@ func TestNormalizeError_AlwaysWrapsAndAppendsHints(t *testing.T) {
 func TestNormalizeError_Idempotent(t *testing.T) {
 	base := errors.New("git failed")
 	authOutput := []byte("Permission denied (publickey).")
-	got1 := NormalizeError(base, authOutput)
-	got2 := NormalizeError(got1, authOutput)
+	got1 := NormalizeError(context.Background(), base, authOutput)
+	got2 := NormalizeError(context.Background(), got1, authOutput)
 	if got1 != got2 {
 		t.Fatalf("expected NormalizeError to be idempotent when already normalized")
+	}
+}
+
+// A cancelled command is not an auth failure: the caller's ctx error has to be
+// visible, and the credential hints have to stay off.
+func TestNormalizeError_CancelledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	base := errors.New("signal: killed")
+	got := NormalizeError(ctx, base, []byte("Permission denied (publickey)."))
+
+	if !errors.Is(got, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", got)
+	}
+	if !errors.Is(got, base) {
+		t.Fatalf("expected the command error preserved, got %v", got)
+	}
+	var niae *NonInteractiveAuthError
+	if errors.As(got, &niae) {
+		t.Fatalf("expected no credential hints for a cancelled command, got: %v", got)
+	}
+}
+
+// Nor is a Wait that gave up on pipes a process outliving git still holds.
+func TestNormalizeError_WaitDelayExpired(t *testing.T) {
+	base := errors.New("git failed: " + exec.ErrWaitDelay.Error())
+	got := NormalizeError(context.Background(), errors.Join(base, exec.ErrWaitDelay), nil)
+
+	if !errors.Is(got, exec.ErrWaitDelay) {
+		t.Fatalf("expected ErrWaitDelay preserved, got %v", got)
+	}
+	var niae *NonInteractiveAuthError
+	if errors.As(got, &niae) {
+		t.Fatalf("expected no credential hints for an expired wait, got: %v", got)
 	}
 }
