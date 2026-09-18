@@ -83,10 +83,8 @@ func TestNodeCache(t *testing.T) {
 	})
 
 	t.Run("PurgeOnlyDropsInsertsForItsOwnStripe", func(t *testing.T) {
-		// A key is only checked against its own stripe, which is what
-		// keeps nodeStore.ReadMany, holding a key per miss across one
-		// GetMany, from losing every node when an unrelated stripe is
-		// purged.
+		// A key is only checked against its own stripe. Purging
+		// one stripe doesn't purge the others.
 		n := &Node{
 			msg: make([]byte, 1024),
 		}
