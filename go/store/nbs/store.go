@@ -962,19 +962,30 @@ func (nbs *NomsBlockStore) SetFatalBehavior(behavior dherrors.FatalBehavior) {
 // immediately, allowing the caller to re-evaluate the new cycle's
 // keeper.
 func (nbs *NomsBlockStore) waitForGC(ctx context.Context, cycle uint64) error {
-	stop := make(chan struct{})
-	defer close(stop)
-	go func() {
-		select {
-		case <-ctx.Done():
-			nbs.gcCond.Broadcast()
-		case <-stop:
-		}
-	}()
+	defer nbs.broadcastOnCancel(ctx)()
 	for nbs.gcInProgress && nbs.gcCycleCounter == cycle && ctx.Err() == nil {
 		nbs.gcCond.Wait()
 	}
 	return ctx.Err()
+}
+
+// broadcastOnCancel broadcasts |nbs.gcCond| when |ctx| is cancelled. A
+// sync.Cond wait cannot select on a context, so without this a wait
+// whose predicate includes |ctx.Err()| sleeps until something else
+// broadcasts.
+//
+// The broadcast takes |nbs.mu| so that it cannot land between a waiter
+// checking its predicate and its call to Wait, where it would find
+// nobody parked and be lost.
+//
+// The returned func ends the watch. It does not wait for a broadcast
+// already in progress, so it is safe to call with |nbs.mu| held.
+func (nbs *NomsBlockStore) broadcastOnCancel(ctx context.Context) func() bool {
+	return context.AfterFunc(ctx, func() {
+		nbs.mu.Lock()
+		defer nbs.mu.Unlock()
+		nbs.gcCond.Broadcast()
+	})
 }
 
 func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.InsertAddrsCurry) error {
