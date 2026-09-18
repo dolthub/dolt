@@ -196,7 +196,7 @@ func TestThreeWayDiffer(t *testing.T) {
 			right := newTestMap(t, ctx, tt.right, ns, valDesc)
 
 			var diffInfo ThreeWayDiffInfo
-			iter, err := NewThreeWayDiffer(ctx, ns, left, right, base, testResolver(t, ns, valDesc, val.NewTupleBuilder(valDesc, ns)), false, diffInfo, keyDesc)
+			iter, err := NewThreeWayDiffer(ctx, ns, left, right, base, testResolver(t, ns, valDesc, val.NewTupleBuilder(valDesc, ns)), nil, false, diffInfo, keyDesc)
 			require.NoError(t, err)
 
 			var cmp []testDiff
@@ -217,6 +217,219 @@ func TestThreeWayDiffer(t *testing.T) {
 			}
 		})
 	}
+}
+
+// policyCall records one invocation of a RowMergePolicy under test.
+type policyCall struct {
+	key               int
+	left, right, base []int
+}
+
+// rowMergePolicyFixture records every invocation and returns a scripted answer.
+type rowMergePolicyFixture struct {
+	calls  []policyCall
+	answer func(left, right, base []int) (val.Tuple, RowMergeStatus)
+}
+
+func (f *rowMergePolicyFixture) policy(t *testing.T, valDesc *val.TupleDesc) RowMergePolicy {
+	return func(_ *sql.Context, left, right, base val.Tuple) (val.Tuple, RowMergeStatus, error) {
+		l, r, b := extractTestVal(t, valDesc, left), extractTestVal(t, valDesc, right), extractTestVal(t, valDesc, base)
+		f.calls = append(f.calls, policyCall{left: l, right: r, base: b})
+		if f.answer == nil {
+			return nil, RowMergeDefer, nil
+		}
+		merged, status := f.answer(l, r, b)
+		return merged, status, nil
+	}
+}
+
+func runThreeWayDifferWithPolicy(
+	t *testing.T,
+	base, left, right [][]int,
+	policy func(valDesc *val.TupleDesc) RowMergePolicy,
+) []testDiff {
+	return runThreeWayDifferWithPolicyKeyless(t, base, left, right, policy, false)
+}
+
+func runThreeWayDifferWithPolicyKeyless(
+	t *testing.T,
+	base, left, right [][]int,
+	policy func(valDesc *val.TupleDesc) RowMergePolicy,
+	keyless bool,
+) []testDiff {
+	t.Helper()
+	ctx := sql.NewEmptyContext()
+	ns := NewTestNodeStore()
+
+	var valTypes []val.Type
+	for i := 0; i < len(base[0])-1; i++ {
+		valTypes = append(valTypes, val.Type{Enc: val.Int64Enc, Nullable: true})
+	}
+	valDesc := &val.TupleDesc{Types: valTypes}
+
+	baseMap := newTestMap(t, ctx, base, ns, valDesc)
+	leftMap := newTestMap(t, ctx, left, ns, valDesc)
+	rightMap := newTestMap(t, ctx, right, ns, valDesc)
+
+	var p RowMergePolicy
+	if policy != nil {
+		p = policy(valDesc)
+	}
+
+	var diffInfo ThreeWayDiffInfo
+	iter, err := NewThreeWayDiffer(ctx, ns, leftMap, rightMap, baseMap,
+		testResolver(t, ns, valDesc, val.NewTupleBuilder(valDesc, ns)), p, keyless, diffInfo, keyDesc)
+	require.NoError(t, err)
+
+	var out []testDiff
+	for {
+		diff, err := iter.Next(ctx)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		require.NoError(t, err)
+		out = append(out, formatTestDiff(t, diff, keyDesc, valDesc))
+	}
+	return out
+}
+
+// A nil policy must leave the differ's classification untouched.
+func TestRowMergePolicy_NilIsInert(t *testing.T) {
+	base := [][]int{{1, 0, 0}, {2, 0, 0}, {3, 0, 0}}
+	left := [][]int{{1, 1, 0}, {2, 1, 0}, {3, 1, 0}}
+	right := [][]int{{1, 1, 0}, {2, 2, 0}, {3, 0, 2}}
+
+	withoutPolicy := runThreeWayDifferWithPolicy(t, base, left, right, nil)
+	deferring := runThreeWayDifferWithPolicy(t, base, left, right, func(vd *val.TupleDesc) RowMergePolicy {
+		f := &rowMergePolicyFixture{}
+		return f.policy(t, vd)
+	})
+	require.Equal(t, withoutPolicy, deferring, "an always-defer policy must not change classification")
+}
+
+// The policy must be consulted for every three-way decision, including the
+// convergent branches that short-circuit today, and for nothing else.
+func TestRowMergePolicy_SeesEveryThreeWayDecision(t *testing.T) {
+	// key 1 convergent modify (identical bytes), key 2 divergent modify,
+	// key 3 convergent delete, key 4 divergent delete, key 5 convergent add,
+	// key 6 left-only edit (not a three-way decision), key 7 right-only edit.
+	base := [][]int{{1, 0, 0}, {2, 0, 0}, {3, 0, 0}, {4, 0, 0}, {6, 0, 0}, {7, 0, 0}}
+	left := [][]int{{1, 1, 0}, {2, 1, 0}, {4, 1, 0}, {5, 9, 9}, {6, 5, 0}, {7, 0, 0}}
+	right := [][]int{{1, 1, 0}, {2, 2, 0}, {5, 9, 9}, {6, 0, 0}, {7, 5, 0}}
+
+	f := &rowMergePolicyFixture{}
+	runThreeWayDifferWithPolicy(t, base, left, right, func(vd *val.TupleDesc) RowMergePolicy {
+		return f.policy(t, vd)
+	})
+
+	require.Len(t, f.calls, 5, "policy must see exactly the five three-way decisions: %#v", f.calls)
+
+	// convergent modify: both sides moved the row to the same value
+	require.Equal(t, []int{1, 0}, f.calls[0].left)
+	require.Equal(t, []int{1, 0}, f.calls[0].right)
+	require.Equal(t, []int{0, 0}, f.calls[0].base)
+	// divergent modify
+	require.Equal(t, []int{1, 0}, f.calls[1].left)
+	require.Equal(t, []int{2, 0}, f.calls[1].right)
+	// convergent delete: both sides removed the row
+	require.Nil(t, f.calls[2].left)
+	require.Nil(t, f.calls[2].right)
+	require.Equal(t, []int{0, 0}, f.calls[2].base)
+	// divergent delete: right removed, left modified
+	require.Equal(t, []int{1, 0}, f.calls[3].left)
+	require.Nil(t, f.calls[3].right)
+	// convergent add: no base
+	require.Nil(t, f.calls[4].base)
+	require.Equal(t, []int{9, 9}, f.calls[4].left)
+}
+
+// Keyless tables always use the default reconciler; the policy is not consulted.
+func TestRowMergePolicy_NotConsultedForKeylessTables(t *testing.T) {
+	base := [][]int{{1, 0, 0}, {2, 0, 0}}
+	left := [][]int{{1, 1, 0}, {2, 1, 0}}
+	right := [][]int{{1, 1, 0}, {2, 2, 0}}
+
+	f := &rowMergePolicyFixture{answer: func(_, _, _ []int) (val.Tuple, RowMergeStatus) {
+		return nil, RowMergeConflict
+	}}
+	diffs := runThreeWayDifferWithPolicyKeyless(t, base, left, right, func(vd *val.TupleDesc) RowMergePolicy {
+		return f.policy(t, vd)
+	}, true)
+
+	require.Empty(t, f.calls, "a keyless table must not consult the policy")
+	require.Equal(t, DiffOpConvergentModify, diffs[0].op)
+}
+
+// Each status must map to the diff op the merge layer acts on.
+func TestRowMergePolicy_StatusMapping(t *testing.T) {
+	base := [][]int{{1, 0, 0}, {2, 0, 0}}
+	left := [][]int{{1, 1, 0}, {2, 1, 0}}
+	right := [][]int{{1, 1, 0}, {2, 2, 0}}
+
+	t.Run("conflict on a convergent edit", func(t *testing.T) {
+		// Baseline: without a policy, key 1 is byte-identical on both sides and
+		// the differ merges it silently. That short-circuit is what a policy has
+		// to be able to override.
+		baseline := runThreeWayDifferWithPolicy(t, base, left, right, nil)
+		require.Equal(t, DiffOpConvergentModify, baseline[0].op,
+			"precondition: key 1 must be a convergent edit without a policy")
+
+		diffs := runThreeWayDifferWithPolicy(t, base, left, right, func(vd *val.TupleDesc) RowMergePolicy {
+			f := &rowMergePolicyFixture{answer: func(_, _, _ []int) (val.Tuple, RowMergeStatus) {
+				return nil, RowMergeConflict
+			}}
+			return f.policy(t, vd)
+		})
+		require.Len(t, diffs, 2)
+		// Key 1 is byte-identical on both sides; without a policy it merges silently.
+		require.Equal(t, DiffOpDivergentModifyConflict, diffs[0].op)
+		require.Equal(t, DiffOpDivergentModifyConflict, diffs[1].op)
+	})
+
+	t.Run("resolved supplies the row", func(t *testing.T) {
+		diffs := runThreeWayDifferWithPolicy(t, base, left, right, func(vd *val.TupleDesc) RowMergePolicy {
+			b := val.NewTupleBuilder(vd, NewTestNodeStore())
+			f := &rowMergePolicyFixture{answer: func(_, _, _ []int) (val.Tuple, RowMergeStatus) {
+				b.PutInt64(0, 42)
+				b.PutInt64(1, 43)
+				tup, err := b.Build(context.Background(), NewTestNodeStore().Pool())
+				require.NoError(t, err)
+				return tup, RowMergeResolved
+			}}
+			return f.policy(t, vd)
+		})
+		require.Len(t, diffs, 2)
+		require.Equal(t, DiffOpDivergentModifyResolved, diffs[0].op)
+		require.Equal(t, []int{42, 43}, diffs[0].m)
+	})
+
+	t.Run("resolved with a nil row deletes", func(t *testing.T) {
+		diffs := runThreeWayDifferWithPolicy(t, base, left, right, func(vd *val.TupleDesc) RowMergePolicy {
+			f := &rowMergePolicyFixture{answer: func(_, _, _ []int) (val.Tuple, RowMergeStatus) {
+				return nil, RowMergeResolved
+			}}
+			return f.policy(t, vd)
+		})
+		require.Len(t, diffs, 2)
+		require.Equal(t, DiffOpDivergentDeleteResolved, diffs[0].op)
+	})
+}
+
+// A conflict where both sides deleted the row must be representable: this is
+// the delete/delete case at the documentTouched level.
+func TestRowMergePolicy_ConflictOnConvergentDelete(t *testing.T) {
+	base := [][]int{{1, 0, 0}}
+	left := [][]int{}
+	right := [][]int{}
+
+	diffs := runThreeWayDifferWithPolicy(t, base, left, right, func(vd *val.TupleDesc) RowMergePolicy {
+		f := &rowMergePolicyFixture{answer: func(_, _, _ []int) (val.Tuple, RowMergeStatus) {
+			return nil, RowMergeConflict
+		}}
+		return f.policy(t, vd)
+	})
+	require.Len(t, diffs, 1)
+	require.Equal(t, DiffOpDivergentDeleteConflict, diffs[0].op)
 }
 
 func testResolver(t *testing.T, ns NodeStore, valDesc *val.TupleDesc, valBuilder *val.TupleBuilder) func(*sql.Context, val.Tuple, val.Tuple, val.Tuple) (val.Tuple, bool, error) {
