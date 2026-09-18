@@ -4,6 +4,10 @@ on:
   repository_dispatch:
     types: [ bump-dependency ]
 
+concurrency:
+  group: bump-dependency-${{ github.event.client_payload.dependency }}
+  cancel-in-progress: false
+
 jobs:
   sanitize-payload:
     name: Sanitize Payload
@@ -92,6 +96,9 @@ jobs:
     needs: [sanitize-payload, stale-bump-prs]
     name: Open Bump PR
     runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      pull-requests: write
     outputs:
       latest-pr: ${{ steps.latest-pr.outputs.pr_url }}
     steps:
@@ -110,18 +117,8 @@ jobs:
         run: |
           GOOS=linux go get "${SAFE_MODULE}@${SAFE_HEAD}"
           go mod tidy
-      - name: Get Assignee and Reviewer (safe)
-        id: get_reviewer
-        env:
-          ASSIGNEE: ${{ needs.sanitize-payload.outputs.safe_assignee }}
-        run: |
-          if [ "${ASSIGNEE}" == "zachmu" ]
-          then
-            echo "reviewer=Hydrocharged" >> $GITHUB_OUTPUT
-          else
-            echo "reviewer=zachmu" >> $GITHUB_OUTPUT
-          fi
       - name: Create and Push new branch (safe)
+        id: bump-commit
         env:
           GIT_USER:  ${{ needs.sanitize-payload.outputs.safe_assignee }}
           GIT_MAIL:  ${{ needs.sanitize-payload.outputs.safe_email }}
@@ -134,6 +131,7 @@ jobs:
           git checkout -b "${BRANCH}"
           git add .
           git commit -m "[ga-bump-dep] Bump dependency in Dolt by ${COMMIT_BY}"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           git push origin "${BRANCH}"
       - name: pull-request
         uses: repo-sync/pull-request@v2
@@ -144,9 +142,92 @@ jobs:
           github_token: ${{ secrets.REPO_ACCESS_TOKEN }}
           pr_title: "[auto-bump] [no-release-notes] dependency by ${{ needs.sanitize-payload.outputs.safe_assignee }}"
           pr_template: ".github/markdown-templates/dep-bump.md"
-          pr_reviewer: ${{ steps.get_reviewer.outputs.reviewer }}
           pr_assignee: ${{ needs.sanitize-payload.outputs.safe_assignee }}
           pr_label: ${{ needs.sanitize-payload.outputs.label }}
+      - name: Validate and approve pull request
+        uses: actions/github-script@v7
+        env:
+          EXPECTED_BRANCH: ${{ needs.sanitize-payload.outputs.safe_branch }}
+          EXPECTED_LABEL: ${{ needs.sanitize-payload.outputs.label }}
+          EXPECTED_SHA: ${{ steps.bump-commit.outputs.sha }}
+          PR_URL: ${{ steps.latest-pr.outputs.pr_url }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { EXPECTED_BRANCH, EXPECTED_LABEL, EXPECTED_SHA, PR_URL } = process.env;
+            const match = PR_URL.match(/\/pull\/(\d+)$/);
+            if (!match) throw new Error(`Unable to determine pull request number from ${PR_URL}`);
+
+            const pull_number = Number(match[1]);
+            const { owner, repo } = context.repo;
+            const { data: pull } = await github.rest.pulls.get({ owner, repo, pull_number });
+
+            if (pull.state !== "open") throw new Error("Pull request is not open");
+            if (pull.base.ref !== "main") throw new Error(`Unexpected base branch: ${pull.base.ref}`);
+            if (pull.head.repo?.full_name !== `${owner}/${repo}`) throw new Error("Pull request head is from a fork");
+            if (pull.head.ref !== EXPECTED_BRANCH) throw new Error(`Unexpected head branch: ${pull.head.ref}`);
+            if (pull.head.sha !== EXPECTED_SHA) throw new Error(`Unexpected head SHA: ${pull.head.sha}`);
+            if (!pull.labels.some(({ name }) => name === EXPECTED_LABEL)) {
+              throw new Error(`Pull request is missing expected label: ${EXPECTED_LABEL}`);
+            }
+
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner,
+              repo,
+              pull_number,
+              per_page: 100,
+            });
+            const allowed = new Set(["go/go.mod", "go/go.sum"]);
+            const unexpected = files.filter(({ filename }) => !allowed.has(filename));
+            if (!files.some(({ filename }) => filename === "go/go.mod")) {
+              throw new Error("Dependency bump did not change go/go.mod");
+            }
+            if (unexpected.length > 0) {
+              throw new Error(`Unexpected changed files: ${unexpected.map(({ filename }) => filename).join(", ")}`);
+            }
+
+            await github.rest.pulls.createReview({
+              owner,
+              repo,
+              pull_number,
+              commit_id: EXPECTED_SHA,
+              event: "APPROVE",
+              body: "Automated approval: validated dependency-only update.",
+            });
+      - name: Disable auto-merge on superseded pull requests
+        if: ${{ needs.stale-bump-prs.outputs.stale-pulls != '' }}
+        uses: actions/github-script@v7
+        env:
+          STALE_PULLS: ${{ needs.stale-bump-prs.outputs.stale-pulls }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const pulls = JSON.parse(process.env.STALE_PULLS);
+
+            for (const { number, keepAlive } of pulls) {
+              if (keepAlive) continue;
+              const { data: pull } = await github.rest.pulls.get({
+                owner,
+                repo,
+                pull_number: number,
+              });
+              if (!pull.auto_merge) continue;
+
+              await github.graphql(`
+                mutation($pullRequestId: ID!) {
+                  disablePullRequestAutoMerge(input: {pullRequestId: $pullRequestId}) {
+                    pullRequest { number }
+                  }
+                }
+              `, { pullRequestId: pull.node_id });
+            }
+      - name: Enable auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ steps.bump-commit.outputs.sha }}
+          PR_URL: ${{ steps.latest-pr.outputs.pr_url }}
+        run: gh pr merge "$PR_URL" --auto --squash --match-head-commit "$HEAD_SHA"
 
   comment-on-stale-prs:
     needs: [open-bump-pr, stale-bump-prs]
