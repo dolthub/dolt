@@ -32,7 +32,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dolthub/fslock"
+	filelock "github.com/dolthub/file-lock"
 
 	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/libraries/utils/file"
@@ -102,7 +102,7 @@ func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
 
 // getFileManifest makes a new file manifest.
 func getFileManifest(ctx context.Context, dir string) (m manifest, err error) {
-	lock, err := fslock.New(filepath.Join(dir, lockFileName))
+	lock, err := filelock.New(filepath.Join(dir, lockFileName))
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +139,7 @@ func getFileManifest(ctx context.Context, dir string) (m manifest, err error) {
 type fileManifest struct {
 	// lock is the dir/LOCK flock. It is a writer-exclusion lock.
 	// Update, UpdateGCGen and LockManifest take it.
-	lock *fslock.Lock
+	lock *filelock.Lock
 	dir  string
 }
 
@@ -590,10 +590,19 @@ func updateWithChecker(_ context.Context, behavior dherrors.FatalBehavior, dir s
 	return newContents, nil
 }
 
-func tryFileLock(lock *fslock.Lock) (err error) {
-	err = lock.LockWithTimeout(lockFileTimeout)
-	if errors.Is(err, fslock.ErrTimeout) {
-		err = fmt.Errorf("timed out reading database manifest: %w", err)
+// ErrManifestLockTimeout is returned when the manifest lock is held elsewhere
+// for longer than lockFileTimeout. It is a normal outcome, not a failure: a
+// caller that cannot take the lock falls back to read-only mode or skips the
+// work it wanted the lock for.
+var ErrManifestLockTimeout = errors.New("timed out reading database manifest")
+
+func tryFileLock(lock *filelock.Lock) error {
+	ok, err := lock.LockWithTimeout(lockFileTimeout)
+	if err != nil {
+		return err
 	}
-	return
+	if !ok {
+		return ErrManifestLockTimeout
+	}
+	return nil
 }

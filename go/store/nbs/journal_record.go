@@ -27,7 +27,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/dolthub/fslock"
+	filelock "github.com/dolthub/file-lock"
 
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -257,14 +257,17 @@ func validateJournalRecord(buf []byte) error {
 // corrupted journal file is created with a timestamped suffix before truncating. If no data loss is detected, no action
 // is taken and an empty string and error is returned.
 func ReviveJournalWithDataLoss(nomsDir string) (preservePath string, err error) {
-	lock, err := fslock.New(filepath.Join(nomsDir, lockFileName))
+	lock, err := filelock.New(filepath.Join(nomsDir, lockFileName))
 	if err != nil {
 		return "", fmt.Errorf("could not create lock on NBS store: %w", err)
 	}
 	defer lock.Close()
-	err = lock.TryLock()
+	ok, err := lock.TryLock()
 	if err != nil {
 		return "", fmt.Errorf("could not acquire lock on NBS store: %w", err)
+	}
+	if !ok {
+		return "", errors.New("could not acquire lock on NBS store: it is in use by another process")
 	}
 	defer lock.Unlock()
 

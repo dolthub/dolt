@@ -19,7 +19,6 @@ import (
 	"errors"
 	"io/fs"
 
-	"github.com/dolthub/fslock"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -123,14 +122,14 @@ func (f FileFlusher) lockAndFlush(ctx context.Context, fsys filesys.Filesys, dir
 	}()
 
 	if err != nil {
-		if errors.Is(err, fslock.ErrLocked) {
-			return ErrFileLocked
-		}
 		return err
 	}
 
 	if !isUnlocked {
-		return nil
+		// Another process is flushing this directory. dolt send-metrics
+		// reports this as its own exit code, so it is not the same as
+		// "nothing to do".
+		return ErrFileLocked
 	}
 
 	var returnErr error

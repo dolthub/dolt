@@ -28,7 +28,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dolthub/fslock"
+	filelock "github.com/dolthub/file-lock"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
 	"github.com/dolthub/dolt/go/libraries/utils/gitauth"
@@ -220,7 +220,7 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	if err := os.MkdirAll(hashDir, 0o755); err != nil {
 		return nil, nil, nil, err
 	}
-	initLock, err := fslock.New(filepath.Join(hashDir, "init.lock"))
+	initLock, err := filelock.New(filepath.Join(hashDir, "init.lock"))
 	if err != nil {
 		return nil, nil, nil, err
 	}
