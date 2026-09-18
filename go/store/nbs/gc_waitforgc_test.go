@@ -105,7 +105,7 @@ func TestWaitForGCNotTrappedAcrossCycles(t *testing.T) {
 	// With the gcCycleCounter fix, it detects the cycle change and breaks
 	// out.
 	st.lockedEndGC()
-	require.NoError(t, st.lockedBeginGC(func(hash.Hash) bool { return false }))
+	require.NoError(t, st.lockedBeginGC(ctx, func(hash.Hash) bool { return false }))
 	st.mu.Unlock()
 
 	// --- Assert: the goroutine is NOT trapped (regression check) ----------
