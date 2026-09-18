@@ -29,33 +29,35 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func TestEnvForCloneMarksDatabaseInProgress(t *testing.T) {
+func TestEnvForCloneMarksIncomplete(t *testing.T) {
 	// A process killed after EnvForClone must leave the directory marked, so callers that die before the
 	// clone content is complete leave a directory that is ignored rather than served.
 	fs, err := filesys.LocalFilesysWithWorkingDir(t.TempDir())
 	require.NoError(t, err)
 	hdp := func() (string, error) { return fs.TempDir(), nil }
 
-	dEnv, err := EnvForClone(context.Background(), types.Format_DOLT, env.NoRemote, "cloned", fs, "test", hdp)
+	dEnv, tx, err := EnvForClone(context.Background(), types.Format_DOLT, env.NoRemote, "cloned", fs, "test", hdp)
 	require.NoError(t, err)
 	defer dEnv.Close()
 
-	require.True(t, dbfactory.IsDatabaseInProgress(dEnv.FS), "EnvForClone must mark the directory before clone content arrives")
+	exists, isDir := dEnv.FS.Exists(dbfactory.SafeToIgnoreMarkerFile)
+	require.True(t, exists && !isDir, "EnvForClone must mark the directory before clone content arrives")
 
-	require.NoError(t, dbfactory.ClearDatabaseInProgress(dEnv.FS))
-	require.False(t, dbfactory.IsDatabaseInProgress(dEnv.FS))
+	require.NoError(t, tx.Commit())
+	exists, _ = dEnv.FS.Exists(dbfactory.SafeToIgnoreMarkerFile)
+	require.False(t, exists)
 }
 
-func TestAbortIncompleteCloneRemovesCreatedDir(t *testing.T) {
+func TestRollbackRemovesCreatedDir(t *testing.T) {
 	ctx := context.Background()
 	fs, err := filesys.LocalFilesysWithWorkingDir(t.TempDir())
 	require.NoError(t, err)
 	hdp := func() (string, error) { return fs.TempDir(), nil }
 
-	dEnv, err := EnvForClone(ctx, types.Format_DOLT, env.NoRemote, "cloned", fs, "test", hdp)
+	dEnv, tx, err := EnvForClone(ctx, types.Format_DOLT, env.NoRemote, "cloned", fs, "test", hdp)
 	require.NoError(t, err)
-	require.NotNil(t, dEnv.DoltDB(ctx))
-	require.NoError(t, AbortIncompleteClone(dEnv, false /* dirExisted */))
+	require.NoError(t, dEnv.Close())
+	require.NoError(t, tx.Rollback())
 
 	require.Nil(t, dEnv.DoltDB(ctx), "an aborted clone must close the database it opened before deleting its files")
 
@@ -64,14 +66,14 @@ func TestAbortIncompleteCloneRemovesCreatedDir(t *testing.T) {
 
 	// The retry must get a database of its own, not the store the aborted clone opened and left in the
 	// database cache pointing at deleted files.
-	retry, err := EnvForClone(ctx, types.Format_DOLT, env.NoRemote, "cloned", fs, "test", hdp)
+	retry, retryTx, err := EnvForClone(ctx, types.Format_DOLT, env.NoRemote, "cloned", fs, "test", hdp)
 	require.NoError(t, err)
 	cfg, ok := retry.Config.GetConfig(env.GlobalConfig)
 	require.True(t, ok)
 	require.NoError(t, cfg.SetStrings(map[string]string{config.UserNameKey: "test", config.UserEmailKey: "test@test.com"}))
 	require.NoError(t, InitEmptyClonedRepo(ctx, retry))
 	require.NoError(t, retry.InitializeRepoState(ctx, env.DefaultInitBranch))
-	require.NoError(t, dbfactory.ClearDatabaseInProgress(retry.FS))
+	require.NoError(t, retryTx.Commit())
 
 	// Reopen from disk to prove the retry's content landed in the new directory.
 	absPath, err := retry.FS.Abs("")
@@ -85,7 +87,7 @@ func TestAbortIncompleteCloneRemovesCreatedDir(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestAbortIncompleteCloneKeepsUsersDir(t *testing.T) {
+func TestRollbackKeepsUsersDir(t *testing.T) {
 	// Cloning into a directory the user already had must not delete that directory, only the Dolt state the
 	// clone wrote into it, marker included.
 	ctx := context.Background()
@@ -96,9 +98,9 @@ func TestAbortIncompleteCloneKeepsUsersDir(t *testing.T) {
 	require.NoError(t, fs.MkDirs("cloned"))
 	require.NoError(t, fs.WriteFile(filepath.Join("cloned", "keepme"), []byte("mine"), 0o644))
 
-	dEnv, err := EnvForClone(ctx, types.Format_DOLT, env.NoRemote, "cloned", fs, "test", hdp)
-	require.NoError(t, err)
-	require.NoError(t, AbortIncompleteClone(dEnv, true /* dirExisted */))
+	dEnv, tx, err := EnvForClone(ctx, types.Format_DOLT, env.NoRemote, "cloned", fs, "test", hdp)
+	require.NoError(t, dEnv.Close())
+	require.NoError(t, tx.Rollback())
 
 	exists, _ := fs.Exists(filepath.Join("cloned", "keepme"))
 	require.True(t, exists, "an aborted clone must not delete the user's own directory")
@@ -107,7 +109,8 @@ func TestAbortIncompleteCloneKeepsUsersDir(t *testing.T) {
 
 	clonedFs, err := fs.WithWorkingDir("cloned")
 	require.NoError(t, err)
-	require.False(t, env.IsIncompleteDatabaseDir(clonedFs), "an aborted clone must not leave a directory nothing can use")
+	exists, _ = clonedFs.Exists(dbfactory.SafeToIgnoreMarkerFile)
+	require.False(t, exists, "an aborted clone must not leave a directory nothing can use")
 }
 
 func TestEnvForCloneCleansUpAfterFailure(t *testing.T) {
@@ -121,10 +124,11 @@ func TestEnvForCloneCleansUpAfterFailure(t *testing.T) {
 	require.NoError(t, fs.MkDirs("cloned"))
 	require.NoError(t, fs.WriteFile(filepath.Join("cloned", dbfactory.DoltDir), []byte("not a directory"), 0o644))
 
-	_, err = EnvForClone(ctx, types.Format_DOLT, env.NoRemote, "cloned", fs, "test", hdp)
+	_, _, err = EnvForClone(ctx, types.Format_DOLT, env.NoRemote, "cloned", fs, "test", hdp)
 	require.Error(t, err)
 
 	clonedFs, err := fs.WithWorkingDir("cloned")
 	require.NoError(t, err)
-	require.False(t, dbfactory.IsDatabaseInProgress(clonedFs), "a failed EnvForClone must not leave its marker behind")
+	exists, _ := clonedFs.Exists(dbfactory.SafeToIgnoreMarkerFile)
+	require.False(t, exists, "a failed EnvForClone must not leave its marker behind")
 }

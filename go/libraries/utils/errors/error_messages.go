@@ -15,6 +15,7 @@
 package errors
 
 import (
+	stderrors "errors"
 	"fmt"
 	"strings"
 )
@@ -28,4 +29,21 @@ func CreateUndropErrorMessage(availableDatabases []string) string {
 	} else {
 		return fmt.Sprintf("available databases that can be undropped: %s", strings.Join(availableDatabases, ", "))
 	}
+}
+
+// JoinCompat joins errs onto primary without wrapping primary with
+// [stderrors.Join] when all additional errs are nil.
+//
+// Callers relying on Go 1.13 single-error unwrapping ([stderrors.Unwrap])
+// cannot inspect the multi-error slice returned by [stderrors.Join].
+//
+// TODO: Replace with [errors.Join] when GMS supports multi-error
+// unwrapping.
+func JoinCompat(primary error, errs ...error) error {
+	for _, err := range errs {
+		if err != nil {
+			primary = stderrors.Join(primary, err)
+		}
+	}
+	return primary
 }
