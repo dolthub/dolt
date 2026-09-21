@@ -135,6 +135,10 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 				}
 			}
 		}
+	case *plan.TopN:
+		if s, ok := canRandomSampleOrderByRand(ctx, n, r); ok {
+			return newRandomSampleIter(ctx, s)
+		}
 	default:
 		return nil, nil
 	}
