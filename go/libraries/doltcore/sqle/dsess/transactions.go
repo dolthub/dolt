@@ -132,7 +132,7 @@ func NewDoltTransaction(
 // is first referenced, or when another session created the database concurrently after this transaction's snapshot was
 // taken. The key is normalized to the base (non-revision-qualified, lowercased) name to match NewDoltTransaction and
 // GetInitialRoot, since db.Name() returns the user-requested name, which may be revision-qualified or differently cased.
-func (tx DoltTransaction) AddDb(ctx *sql.Context, db SqlDatabase) error {
+func (tx *DoltTransaction) AddDb(ctx *sql.Context, db SqlDatabase) error {
 	nomsRoot, err := db.DbData().Ddb.NomsRoot(ctx)
 	if err != nil {
 		return err
@@ -148,18 +148,18 @@ func (tx DoltTransaction) AddDb(ctx *sql.Context, db SqlDatabase) error {
 	return nil
 }
 
-func (tx DoltTransaction) String() string {
+func (tx *DoltTransaction) String() string {
 	// TODO: return more info (hashes need caching)
 	return "DoltTransaction"
 }
 
-func (tx DoltTransaction) IsReadOnly() bool {
+func (tx *DoltTransaction) IsReadOnly() bool {
 	return tx.tCharacteristic == sql.ReadOnly
 }
 
 // GetInitialRoot returns the noms root hash for the db named, established when the transaction began. The dbName here
 // is always the base name of the database, not the revision qualified one.
-func (tx DoltTransaction) GetInitialRoot(dbName string) (hash.Hash, bool) {
+func (tx *DoltTransaction) GetInitialRoot(dbName string) (hash.Hash, bool) {
 	dbName, _ = doltdb.SplitRevisionDbName(dbName)
 	startPoint, ok := tx.dbStartPoints[strings.ToLower(dbName)]
 	return startPoint.rootHash, ok
@@ -348,7 +348,12 @@ type transactionCommit struct {
 	commit     *doltdb.PendingCommit
 }
 
-func (tx *DoltTransaction) doCommit(ctx *sql.Context, workingSet *doltdb.WorkingSet, commit *doltdb.PendingCommit, dbName string) (*doltdb.WorkingSet, *doltdb.Commit, error) {
+func (tx *DoltTransaction) doCommit(
+	ctx *sql.Context,
+	workingSet *doltdb.WorkingSet,
+	commit *doltdb.PendingCommit,
+	dbName string,
+) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 	workingSets, commits, err := tx.commitDatasets(ctx, []transactionCommit{{dbName, workingSet, commit}})
 	if err != nil {
 		return nil, nil, err
@@ -356,12 +361,15 @@ func (tx *DoltTransaction) doCommit(ctx *sql.Context, workingSet *doltdb.Working
 	return workingSets[0], commits[0], nil
 }
 
-// commitDatasets merges and validates every branch before publishing any of them.
-// A failed compare-and-swap retries the entire batch from the original session values.
-func (tx *DoltTransaction) commitDatasets(ctx *sql.Context, changes []transactionCommit) ([]*doltdb.WorkingSet, []*doltdb.Commit, error) {
+// commitDatasets atomically commits the dataset changes given
+func (tx *DoltTransaction) commitDatasets(
+	ctx *sql.Context,
+	changes []transactionCommit,
+) ([]*doltdb.WorkingSet, []*doltdb.Commit, error) {
 	if len(changes) == 0 {
 		return nil, nil, nil
 	}
+
 	sess := DSessFromSess(ctx.Session)
 	states := make([]*branchState, len(changes))
 	starts := make([]*doltdb.WorkingSet, len(changes))
@@ -377,9 +385,12 @@ func (tx *DoltTransaction) commitDatasets(ctx *sql.Context, changes []transactio
 			return nil, nil, sql.ErrDatabaseNotFound.New(change.dbName)
 		}
 		normalizedName := strings.ToLower(state.dbState.dbName)
+
 		if i > 0 && normalizedName != databaseName {
+			// TODO: this should be a different error message, the problem is committing to more than DB, not more than one branch
 			return nil, nil, ErrDirtyWorkingSets
 		}
+
 		databaseName = normalizedName
 		startPoint, ok = tx.dbStartPoints[databaseName]
 		if !ok {
@@ -392,7 +403,9 @@ func (tx *DoltTransaction) commitDatasets(ctx *sql.Context, changes []transactio
 		}
 		lockIDs[i] = databaseName + "\u0000" + change.workingSet.Ref().String()
 	}
-	// All callers acquire branch locks in the same order, including overlapping batches.
+
+	// All callers acquire branch locks in the same order.
+	// This makes deadlock between two transactions impossible, but starvation is still possible because there's no queue.
 	sort.Strings(lockIDs)
 	for i, id := range lockIDs {
 		if i > 0 && id == lockIDs[i-1] {
@@ -403,10 +416,12 @@ func (tx *DoltTransaction) commitDatasets(ctx *sql.Context, changes []transactio
 		}
 		defer sess.Provider().TxLocks().Unlock(id)
 	}
+
 	name, email, _, _, err := ResolveNameEmail(ctx, DoltCommitterName, DoltCommitterEmail)
 	if err != nil {
 		return nil, nil, err
 	}
+
 	for attempt := 0; attempt < maxTxCommitRetries; attempt++ {
 		updates := make([]doltdb.DatasetUpdate, len(changes))
 		workingSets := make([]*doltdb.WorkingSet, len(changes))
@@ -457,8 +472,15 @@ func (tx *DoltTransaction) commitDatasets(ctx *sql.Context, changes []transactio
 				}
 			}
 			workingSets[i] = ws
-			updates[i] = doltdb.DatasetUpdate{WorkingSet: ws, PrevHash: existingHash, Meta: tx.WorkingSetMeta(name, email), Commit: pending, ExpectedHead: expectedHead}
+			updates[i] = doltdb.DatasetUpdate{
+				WorkingSet:   ws,
+				PrevHash:     existingHash,
+				Meta:         tx.WorkingSetMeta(name, email),
+				Commit:       pending,
+				ExpectedHead: expectedHead,
+			}
 		}
+
 		var rsc doltdb.ReplicationStatusController
 		commits, err := startPoint.db.CommitDatasets(ctx, updates, &rsc)
 		WaitForReplicationController(ctx, rsc)
@@ -472,6 +494,7 @@ func (tx *DoltTransaction) commitDatasets(ctx *sql.Context, changes []transactio
 		if errors.Is(err, datas.ErrOptimisticLockFailed) || errors.Is(err, datas.ErrMergeNeeded) {
 			continue
 		}
+
 		if err != nil {
 			return nil, nil, err
 		}
@@ -480,6 +503,7 @@ func (tx *DoltTransaction) commitDatasets(ctx *sql.Context, changes []transactio
 		}
 		return workingSets, commits, nil
 	}
+
 	return nil, nil, datas.ErrOptimisticLockFailed
 }
 
@@ -836,7 +860,7 @@ func (tx *DoltTransaction) ClearSavepoint(name string) bool {
 }
 
 // WorkingSetMeta returns the metadata to use for a commit of this transaction.
-func (tx DoltTransaction) WorkingSetMeta(name, email string) *datas.WorkingSetMeta {
+func (tx *DoltTransaction) WorkingSetMeta(name, email string) *datas.WorkingSetMeta {
 	return &datas.WorkingSetMeta{
 		Name:        name,
 		Email:       email,

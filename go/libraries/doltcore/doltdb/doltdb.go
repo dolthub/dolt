@@ -1961,7 +1961,14 @@ func (ddb *DoltDB) CommitDatasets(ctx context.Context, updates []DatasetUpdate, 
 // writeWorkingSet writes the specified |workingSet| at the specified |workingSetRef| with the
 // specified ws metadata, |meta|, in the dataset |wsDs| and returns the created WorkingSetSpec along with any error
 // encountered. The returned callback notifies listeners after the batch is published.
-func (ddb *DoltDB) writeWorkingSet(ctx context.Context, workingSetRef ref.WorkingSetRef, workingSet *WorkingSet, meta *datas.WorkingSetMeta, wsDs datas.Dataset) (wsSpec *datas.WorkingSetSpec, notify func(), err error) {
+// TODO: what is notify used for
+func (ddb *DoltDB) writeWorkingSet(
+	ctx context.Context,
+	workingSetRef ref.WorkingSetRef,
+	workingSet *WorkingSet,
+	meta *datas.WorkingSetMeta,
+	wsDs datas.Dataset,
+) (wsSpec *datas.WorkingSetSpec, notify func(), err error) {
 	var prevRoot RootValue
 	if wsDs.HasHead() {
 		prevWorkingSet, err := newWorkingSet(ctx, workingSetRef.String(), ddb.vrw, ddb.ns, wsDs)
@@ -2006,8 +2013,8 @@ func (ddb *DoltDB) writeWorkingSet(ctx context.Context, workingSetRef ref.Workin
 				}
 			}
 		}
-
 	}
+
 	return wsSpec, notify, nil
 }
 

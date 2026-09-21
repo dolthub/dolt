@@ -527,60 +527,70 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 		return fmt.Errorf("Unexpected type for var %s: %T", DoltCommitOnTransactionCommit, performDoltCommitVar)
 	}
 
-	dirtyBranchState := dirties[0]
 	if peformDoltCommitInt == 1 {
-		if len(dirties) > 1 {
-			return ErrDirtyWorkingSets
-		}
-		// if the dirty working set doesn't belong to the currently checked out branch, that's an error
-		err = d.validateDoltCommit(ctx, dirtyBranchState)
-		if err != nil {
-			return err
-		}
-
-		message := "Transaction commit"
-		doltCommitMessageVar, err := d.Session.GetSessionVariable(ctx, DoltCommitOnTransactionCommitMessage)
-		if err != nil {
-			return err
-		}
-
-		doltCommitMessageString, ok := doltCommitMessageVar.(string)
-		if !ok && doltCommitMessageVar != nil {
-			return fmt.Errorf("Unexpected type for var %s: %T", DoltCommitOnTransactionCommitMessage, doltCommitMessageVar)
-		}
-
-		trimmedString := strings.TrimSpace(doltCommitMessageString)
-		if strings.TrimSpace(doltCommitMessageString) != "" {
-			message = trimmedString
-		}
-
-		dbName := ctx.GetCurrentDatabase()
-		var pendingCommit *doltdb.PendingCommit
-		commitStagedProps, _, err := NewCommitStagedProps(ctx, message)
-		if err != nil {
-			return err
-		}
-		pendingCommit, err = d.PendingCommitAllStaged(ctx, dbName, dirtyBranchState, commitStagedProps)
-		if err != nil {
-			return err
-		}
-
-		// Nothing to stage, so fall back to CommitWorkingSet logic instead
-		if pendingCommit == nil {
-			return d.commitWorkingSet(ctx, dirtyBranchState, tx)
-		}
-
-		_, err = d.DoltCommit(ctx, dbName, tx, pendingCommit)
-		return err
+		return d.doltCommit(ctx, tx, dirties, err)
 	}
 
 	_, err = d.commitBranchStates(ctx, dirties, tx, nil)
 	return err
 }
 
+// doltCommit commits a new dolt commit for the current HEAD
+func (d *DoltSession) doltCommit(ctx *sql.Context, tx sql.Transaction, dirties []*branchState, err error) error {
+	dirtyBranchState := dirties[0]
+	if len(dirties) > 1 {
+		return ErrDirtyWorkingSets
+	}
+	// if the dirty working set doesn't belong to the currently checked out branch, that's an error
+	err = d.validateDoltCommit(ctx, dirtyBranchState)
+	if err != nil {
+		return err
+	}
+
+	message := "Transaction commit"
+	doltCommitMessageVar, err := d.Session.GetSessionVariable(ctx, DoltCommitOnTransactionCommitMessage)
+	if err != nil {
+		return err
+	}
+
+	doltCommitMessageString, ok := doltCommitMessageVar.(string)
+	if !ok && doltCommitMessageVar != nil {
+		return fmt.Errorf("Unexpected type for var %s: %T", DoltCommitOnTransactionCommitMessage, doltCommitMessageVar)
+	}
+
+	trimmedString := strings.TrimSpace(doltCommitMessageString)
+	if strings.TrimSpace(doltCommitMessageString) != "" {
+		message = trimmedString
+	}
+
+	dbName := ctx.GetCurrentDatabase()
+	var pendingCommit *doltdb.PendingCommit
+	commitStagedProps, _, err := NewCommitStagedProps(ctx, message)
+	if err != nil {
+		return err
+	}
+	pendingCommit, err = d.PendingCommitAllStaged(ctx, dbName, dirtyBranchState, commitStagedProps)
+	if err != nil {
+		return err
+	}
+
+	// Nothing to stage, so fall back to CommitWorkingSet logic instead
+	if pendingCommit == nil {
+		return d.commitWorkingSet(ctx, dirtyBranchState, tx)
+	}
+
+	_, err = d.DoltCommit(ctx, dbName, tx, pendingCommit)
+	return err
+}
+
 // commitBranchStates publishes all branch changes before updating any session state.
 // A nil pending slice requests working-set-only updates.
-func (d *DoltSession) commitBranchStates(ctx *sql.Context, states []*branchState, tx sql.Transaction, pending []*doltdb.PendingCommit) ([]*doltdb.Commit, error) {
+func (d *DoltSession) commitBranchStates(
+	ctx *sql.Context,
+	states []*branchState,
+	tx sql.Transaction,
+	pending []*doltdb.PendingCommit,
+) ([]*doltdb.Commit, error) {
 	dtx, ok := tx.(*DoltTransaction)
 	if !ok {
 		return nil, fmt.Errorf("expected a DoltTransaction")
@@ -595,7 +605,11 @@ func (d *DoltSession) commitBranchStates(ctx *sql.Context, states []*branchState
 		if commit != nil {
 			ws = ws.WithWorkingRoot(commit.Roots.Working).WithStagedRoot(commit.Roots.Staged)
 		}
-		changes[i] = transactionCommit{state.RevisionDbName(), ws, commit}
+		changes[i] = transactionCommit{
+			dbName:     state.RevisionDbName(),
+			workingSet: ws,
+			commit:     commit,
+		}
 	}
 	workingSets, commits, err := dtx.commitDatasets(ctx, changes)
 	if err != nil {
