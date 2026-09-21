@@ -583,8 +583,10 @@ func (d *DoltSession) doltCommit(ctx *sql.Context, tx sql.Transaction, dirties [
 	return err
 }
 
-// commitBranchStates publishes all branch changes before updating any session state.
-// A nil pending slice requests working-set-only updates.
+// commitBranchStates atomically updates working sets and HEADs for the branch states provided.
+// A nil pending slice requests working-set-only updates. Otherwise, the |pending| slice must be the same length as
+// |states|. Each index in |pending| contains a pending commit corresponding to the branch state at the same index in
+// |states|, or nil if that branch state is a working-set only update.
 func (d *DoltSession) commitBranchStates(
 	ctx *sql.Context,
 	states []*branchState,
@@ -595,7 +597,12 @@ func (d *DoltSession) commitBranchStates(
 	if !ok {
 		return nil, fmt.Errorf("expected a DoltTransaction")
 	}
-	changes := make([]transactionCommit, len(states))
+
+	if len(states) != len(pending) && pending != nil {
+		return nil, fmt.Errorf("pending commits must be the same length as states")
+	}
+
+	changes := make([]workingSetAndHead, len(states))
 	for i, state := range states {
 		ws := state.WorkingSet()
 		var commit *doltdb.PendingCommit
@@ -605,7 +612,7 @@ func (d *DoltSession) commitBranchStates(
 		if commit != nil {
 			ws = ws.WithWorkingRoot(commit.Roots.Working).WithStagedRoot(commit.Roots.Staged)
 		}
-		changes[i] = transactionCommit{
+		changes[i] = workingSetAndHead{
 			dbName:     state.RevisionDbName(),
 			workingSet: ws,
 			commit:     commit,
@@ -736,8 +743,7 @@ func (d *DoltSession) IsBranchDirty(dbName, branch string) bool {
 	return ok && branchState.dirty
 }
 
-// CommitWorkingSet commits the named working set and any other dirty working sets
-// in the transaction, without creating a new dolt commit.
+// CommitWorkingSet commits the named working set named without creating a new dolt commit.
 // Clients should typically use CommitTransaction, which performs additional checks, instead of this method.
 func (d *DoltSession) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.Transaction) error {
 	state, ok, err := d.lookupDbState(ctx, dbName)
@@ -747,11 +753,8 @@ func (d *DoltSession) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.T
 	if !ok {
 		return sql.ErrDatabaseNotFound.New(dbName)
 	}
-	states := d.dirtyWorkingSets()
-	if !state.dirty {
-		states = append(states, state)
-	}
-	_, err = d.commitBranchStates(ctx, states, tx, nil)
+
+	_, err = d.commitBranchStates(ctx, []*branchState{state}, tx, nil)
 	return err
 }
 
@@ -807,6 +810,7 @@ func (d *DoltSession) DoltCommitAll(ctx *sql.Context, tx sql.Transaction, dbName
 	if len(dbNames) != len(pending) {
 		return nil, fmt.Errorf("expected one pending commit per branch")
 	}
+
 	states := make([]*branchState, len(dbNames))
 	included := make(map[*branchState]bool, len(dbNames))
 	for i, dbName := range dbNames {
@@ -820,11 +824,14 @@ func (d *DoltSession) DoltCommitAll(ctx *sql.Context, tx sql.Transaction, dbName
 		states[i] = state
 		included[state] = true
 	}
+
 	for _, dirty := range d.dirtyWorkingSets() {
 		if !included[dirty] {
+			// TODO: this is the wrong error to use in this case, it indicates a programming error in dolt_commit_all, rather than the stated error that a user could correct.
 			return nil, ErrDirtyWorkingSets
 		}
 	}
+
 	return d.commitBranchStates(ctx, states, tx, pending)
 }
 

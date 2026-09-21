@@ -341,20 +341,25 @@ func WaitForReplicationController(ctx *sql.Context, rsc doltdb.ReplicationStatus
 	}
 }
 
-// transactionCommit is one branch's contribution to an atomic transaction.
-type transactionCommit struct {
+// workingSetAndHead is one branch's contribution to an atomic transaction.
+type workingSetAndHead struct {
 	dbName     string
 	workingSet *doltdb.WorkingSet
 	commit     *doltdb.PendingCommit
 }
 
+// doCommit commits the working set and creates a new DoltCommit as specified, in one atomic write
 func (tx *DoltTransaction) doCommit(
 	ctx *sql.Context,
 	workingSet *doltdb.WorkingSet,
 	commit *doltdb.PendingCommit,
 	dbName string,
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
-	workingSets, commits, err := tx.commitDatasets(ctx, []transactionCommit{{dbName, workingSet, commit}})
+	workingSets, commits, err := tx.commitDatasets(ctx, []workingSetAndHead{{
+		dbName:     dbName,
+		workingSet: workingSet,
+		commit:     commit,
+	}})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -364,7 +369,7 @@ func (tx *DoltTransaction) doCommit(
 // commitDatasets atomically commits the dataset changes given
 func (tx *DoltTransaction) commitDatasets(
 	ctx *sql.Context,
-	changes []transactionCommit,
+	changes []workingSetAndHead,
 ) ([]*doltdb.WorkingSet, []*doltdb.Commit, error) {
 	if len(changes) == 0 {
 		return nil, nil, nil
