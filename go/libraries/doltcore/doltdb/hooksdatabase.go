@@ -98,6 +98,8 @@ func (db hooksDatabase) PostCommitHooks() []CommitHook {
 	return db.hooks.get()
 }
 
+// TODO: get rid of the onlyWS bool param. The hook should execute conditionally based on the type of the dataset given
+// and its configuration. The type of the dataset can be determined by parsing it as a ref and checking the type.
 func (db hooksDatabase) ExecuteCommitHooks(ctx context.Context, ds datas.Dataset, onlyWS bool, replicaWrite bool) {
 	hooks := db.hooks.get()
 	var wg sync.WaitGroup
@@ -151,11 +153,7 @@ func (db hooksDatabase) CommitDatasets(ctx context.Context, updates []datas.Data
 		return nil, err
 	}
 
-	// Execute commit hooks for all new commits (everything except working set updates)
 	for _, ds := range datasets {
-		if ds.IsWorkingSet() {
-			continue
-		}
 		db.ExecuteCommitHooks(ctx, ds, ds.IsWorkingSet(), false)
 	}
 	return datasets, nil

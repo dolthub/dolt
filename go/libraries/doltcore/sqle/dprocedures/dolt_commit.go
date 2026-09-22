@@ -99,7 +99,7 @@ func doltCommitAll(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 		}
 	}
 	ctx.SetCurrentDatabase(currentDB)
-	commits, err := dSess.DoltCommitAll(ctx, dSess.GetTransaction(), dbNames, pending)
+	commits, err := dSess.DoltCommitMulti(ctx, dSess.GetTransaction(), dbNames, pending)
 	if err != nil {
 		return nil, err
 	}

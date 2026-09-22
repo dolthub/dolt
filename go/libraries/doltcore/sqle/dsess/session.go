@@ -618,22 +618,12 @@ func (d *DoltSession) commitBranchStates(
 			commit:     commit,
 		}
 	}
-	workingSets, commits, err := dtx.commitDatasets(ctx, changes)
+
+	_, commits, err := dtx.commitDatasets(ctx, changes)
 	if err != nil {
 		return nil, err
 	}
-	for i, state := range states {
-		state.workingSet = workingSets[i]
-		if commits[i] != nil {
-			root, err := commits[i].GetRootValue(ctx)
-			if err != nil {
-				return nil, err
-			}
-			state.headCommit = commits[i]
-			state.headRoot = root
-		}
-		state.dirty = false
-	}
+
 	d.NotifyTransactionEnd()
 	ctx.SetTransaction(nil)
 	return commits, nil
@@ -804,9 +794,11 @@ func (d *DoltSession) DoltCommit(
 	return c, nil
 }
 
-// DoltCommitAll publishes prepared commits and working sets for every named branch.
-// Nil pending commits update only the working set (for --skip-empty).
-func (d *DoltSession) DoltCommitAll(ctx *sql.Context, tx sql.Transaction, dbNames []string, pending []*doltdb.PendingCommit) ([]*doltdb.Commit, error) {
+// DoltCommitMulti commits a new commit for the databases named, using the pending commits provided.
+// |dbNames| name the revision database names to commit (e.g. `mydb@branch1`)
+// |pending| contains the pending commit for each branch named, in the same order
+// A pending commit must be provided for every dirty working set in the transaction.
+func (d *DoltSession) DoltCommitMulti(ctx *sql.Context, tx sql.Transaction, dbNames []string, pending []*doltdb.PendingCommit) ([]*doltdb.Commit, error) {
 	if len(dbNames) != len(pending) {
 		return nil, fmt.Errorf("expected one pending commit per branch")
 	}
