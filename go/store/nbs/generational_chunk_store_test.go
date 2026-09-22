@@ -222,3 +222,27 @@ func TestGenerationalCSGetChunkLocationsDuplicates(t *testing.T) {
 	}
 	assert.Equal(t, 16, cnt)
 }
+
+func TestGenerationalCSHasManyNilGhostGen(t *testing.T) {
+	// With no ghost gen, HasMany used to return a nil absent set,
+	// regardless of which requested hashes were actually missing.
+	ctx := context.Background()
+	oldGen, _, _ := makeTestLocalStore(t, 64)
+	newGen, _, _ := makeTestLocalStore(t, 64)
+	inOld := make(map[int]bool)
+	inNew := make(map[int]bool)
+	chnks := genChunks(t, 4, 1024)
+
+	putChunks(t, ctx, chnks, oldGen, inOld, 0)
+	putChunks(t, ctx, chnks, newGen, inNew, 1)
+
+	cs := NewGenerationalCS(oldGen, newGen, nil)
+
+	absent, err := cs.HasMany(ctx, hashesForChunks(chnks, map[int]bool{0: true, 1: true, 2: true, 3: true}))
+	require.NoError(t, err)
+	assert.Equal(t, hashesForChunks(chnks, map[int]bool{2: true, 3: true}), absent)
+
+	absent, err = cs.HasMany(ctx, hashesForChunks(chnks, map[int]bool{0: true, 1: true}))
+	require.NoError(t, err)
+	assert.Len(t, absent, 0)
+}

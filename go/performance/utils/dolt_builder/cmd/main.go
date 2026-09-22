@@ -20,18 +20,17 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	builder "github.com/dolthub/dolt/go/performance/utils/dolt_builder"
 )
 
 var profile = flag.String("profile", "", "path to profile used during build")
+var tags = flag.String("tags", "", "comma-separated Go build tags")
 
 func main() {
 	flag.Parse()
-	commitList := os.Args[1:]
-	if *profile != "" {
-		commitList = commitList[2:]
-	}
+	commitList := flag.Args()
 	if len(commitList) < 1 {
 		helpStr := "dolt-builder takes Dolt commit shas or tags as arguments\n" +
 			"and builds corresponding binaries to a path specified\n" +
@@ -43,12 +42,18 @@ func main() {
 			"use the -profile flag to supply a pprof profile\n" +
 			"which will be used to create a PGO build\n" +
 			"usage: dolt-builder -profile /path/to/profile v1.33.0\n" +
-			"only one version may be specified when supplying a profile\n"
+			"only one version may be specified when supplying a profile\n" +
+			"use -tags to supply additional Go build tags\n" +
+			"usage: dolt-builder -tags tag_one,tag_two v1.33.0\n"
 		fmt.Print(helpStr)
 		os.Exit(2)
 	}
 
-	err := builder.Run(context.Background(), commitList, *profile)
+	var buildTags []string
+	if *tags != "" {
+		buildTags = strings.Split(*tags, ",")
+	}
+	err := builder.RunWithBuildTags(context.Background(), commitList, *profile, buildTags)
 	if err != nil {
 		log.Fatal(err)
 	}

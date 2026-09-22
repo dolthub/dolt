@@ -73,8 +73,8 @@ func (bsp *noConjoinBlobstorePersister) ConjoinAll(ctx context.Context, behavior
 }
 
 // Open a table named |name|, containing |chunkCount| chunks.
-func (bsp *noConjoinBlobstorePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
-	cs, err := newBSTableChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, stats)
+func (bsp *noConjoinBlobstorePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, opts openOpts, stats *Stats) (chunkSource, error) {
+	cs, err := newBSTableChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, opts, stats)
 	if err == nil {
 		return cs, nil
 	}
@@ -83,7 +83,7 @@ func (bsp *noConjoinBlobstorePersister) Open(ctx context.Context, name hash.Hash
 	// files written by a local archive-enabled store are copied to this
 	// blobstore during a push. Mirror blobstorePersister.Open's fallback.
 	if blobstore.IsNotFoundError(err) {
-		source, err := newBSArchiveChunkSource(ctx, bsp.bs, name, bsp.q, stats)
+		source, err := newBSArchiveChunkSource(ctx, bsp.bs, name, bsp.q, opts, stats)
 		if err != nil {
 			return nil, err
 		}

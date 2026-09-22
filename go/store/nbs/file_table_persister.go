@@ -159,12 +159,12 @@ func (ftplc *fsTablePersisterRefCounter) addRef() {
 	ftplc.ftp.addProtected(ftplc.name)
 }
 
-func (ftp *fsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
+func (ftp *fsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, opts openOpts, stats *Stats) (chunkSource, error) {
 	PanicIfLoadingTableFilesDisabled()
 	ftp.pruneMu.RLock()
 	defer ftp.pruneMu.RUnlock()
 	rc := fsTablePersisterRefCounter{ftp, name}
-	cs, err := newFileTableReader(ctx, ftp.dir, name, chunkCount, ftp.q, ftp.mmapArchiveIndexes, &rc, stats)
+	cs, err := newFileTableReader(ctx, ftp.dir, name, chunkCount, ftp.q, ftp.mmapArchiveIndexes, &rc, opts, stats)
 	if err != nil {
 		return nil, err
 	}
@@ -309,7 +309,9 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, behavior dherrors
 	}
 	defer ph.Close()
 
-	return ftp.Open(ctx, name, chunkCount, stats)
+	// Run the more expensive deepValidate validation on the newly
+	// written table file. We're about to take a dependency on it.
+	return ftp.Open(ctx, name, chunkCount, openOpts{deepValidate: true}, stats)
 }
 
 func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, behavior dherrors.FatalBehavior, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
@@ -359,7 +361,7 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, behavior dherrors.F
 	}
 	defer ph.Close()
 
-	cs, err := ftp.Open(ctx, plan.name, plan.chunkCount, stats)
+	cs, err := ftp.Open(ctx, plan.name, plan.chunkCount, openOpts{deepValidate: true}, stats)
 	if err != nil {
 		return nil, nil, err
 	}

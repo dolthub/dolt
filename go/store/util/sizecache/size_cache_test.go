@@ -36,13 +36,20 @@ func hashFromString(s string) hash.Hash {
 	return hash.Of([]byte(s))
 }
 
+// put does the Get/Put round trip a caller does, for tests which only
+// care that the value ends up in the cache.
+func put(c *SizeCache, key interface{}, size uint64, value interface{}) {
+	_, k, _ := c.Get(key)
+	c.Put(k, size, value)
+}
+
 func TestSizeCache(t *testing.T) {
 	assert := assert.New(t)
 	defSize := uint64(200)
 
 	c := New(1024)
 	for i, v := range []string{"data-1", "data-2", "data-3", "data-4", "data-5", "data-6", "data-7", "data-8", "data-9"} {
-		c.Add(hashFromString(v), defSize, v)
+		put(c, hashFromString(v), defSize, v)
 		maxElements := uint64(i + 1)
 		if maxElements >= uint64(5) {
 			maxElements = uint64(5)
@@ -50,22 +57,22 @@ func TestSizeCache(t *testing.T) {
 		assert.Equal(maxElements*defSize, c.totalSize)
 	}
 
-	_, ok := c.Get(hashFromString("data-1"))
+	_, _, ok := c.Get(hashFromString("data-1"))
 	assert.False(ok)
 	assert.Equal(hashFromString("data-5"), c.lru.Front().Value)
 
-	v, ok := c.Get(hashFromString("data-5"))
+	v, _, ok := c.Get(hashFromString("data-5"))
 	assert.True(ok)
 	assert.Equal("data-5", v.(string))
 	assert.Equal(hashFromString("data-5"), c.lru.Back().Value)
 	assert.Equal(hashFromString("data-6"), c.lru.Front().Value)
 
-	c.Add(hashFromString("data-7"), defSize, "data-7")
+	put(c, hashFromString("data-7"), defSize, "data-7")
 	assert.Equal(hashFromString("data-7"), c.lru.Back().Value)
 	assert.Equal(uint64(1000), c.totalSize)
 
-	c.Add(hashFromString("no-data"), 0, nil)
-	v, ok = c.Get(hashFromString("no-data"))
+	put(c, hashFromString("no-data"), 0, nil)
+	v, _, ok = c.Get(hashFromString("no-data"))
 	assert.True(ok)
 	assert.Nil(v)
 	assert.Equal(hashFromString("no-data"), c.lru.Back().Value)
@@ -79,14 +86,14 @@ func TestSizeCache(t *testing.T) {
 	}
 	assert.Equal(hashFromString("no-data"), c.lru.Front().Value)
 
-	c.Add(hashFromString("data-10"), 200, "data-10")
+	put(c, hashFromString("data-10"), 200, "data-10")
 	assert.Equal(uint64(1000), c.totalSize)
 	assert.Equal(5, c.lru.Len())
 	assert.Equal(5, len(c.cache))
 
-	_, ok = c.Get(hashFromString("no-data"))
+	_, _, ok = c.Get(hashFromString("no-data"))
 	assert.False(ok)
-	_, ok = c.Get(hashFromString("data-5"))
+	_, _, ok = c.Get(hashFromString("data-5"))
 	assert.False(ok)
 
 	c.Drop(hashFromString("data-10"))
@@ -97,7 +104,7 @@ func TestSizeCache(t *testing.T) {
 	c.Purge()
 	assert.Equal(uint64(0), c.totalSize)
 	for i, v := range []string{"data-1", "data-2", "data-3", "data-4", "data-5", "data-6", "data-7", "data-8", "data-9"} {
-		c.Add(hashFromString(v), defSize, v)
+		put(c, hashFromString(v), defSize, v)
 		maxElements := uint64(i + 1)
 		if maxElements >= uint64(5) {
 			maxElements = uint64(5)
@@ -115,10 +122,10 @@ func TestSizeCacheWithExpiry(t *testing.T) {
 	c := NewWithExpireCallback(5, expire)
 	data := []string{"a", "b", "c", "d", "e"}
 	for i, k := range data {
-		c.Add(k, 1, i)
+		put(c, k, 1, i)
 	}
 
-	c.Add("big", 5, "thing")
+	put(c, "big", 5, "thing")
 	sort.Strings(expired)
 	assert.Equal(t, data, expired)
 }
@@ -139,7 +146,7 @@ func concurrencySizeCacheTest(data []string) {
 		wg.Add(1)
 		go func() {
 			for d := range dchan {
-				cache.Add(d, uint64(len(d)), d)
+				put(cache, d, uint64(len(d)), d)
 			}
 			wg.Done()
 		}()
@@ -171,8 +178,8 @@ func TestTooLargeValue(t *testing.T) {
 	assert := assert.New(t)
 
 	c := New(1024)
-	c.Add(hashFromString("big-data"), 2048, "big-data")
-	_, ok := c.Get(hashFromString("big-data"))
+	put(c, hashFromString("big-data"), 2048, "big-data")
+	_, _, ok := c.Get(hashFromString("big-data"))
 	assert.False(ok)
 }
 
@@ -180,7 +187,34 @@ func TestZeroSizeCache(t *testing.T) {
 	assert := assert.New(t)
 
 	c := New(0)
-	c.Add(hashFromString("data1"), 200, "data1")
-	_, ok := c.Get(hashFromString("data1"))
+	put(c, hashFromString("data1"), 200, "data1")
+	_, _, ok := c.Get(hashFromString("data1"))
 	assert.False(ok)
+}
+
+func TestPutAfterPurgeIsDropped(t *testing.T) {
+	assert := assert.New(t)
+
+	c := New(1024)
+
+	// Miss, Purge, then Put what the caller fetched.
+	_, key, ok := c.Get(hashFromString("data-1"))
+	assert.False(ok)
+	c.Purge()
+	c.Put(key, 200, "data-1")
+
+	_, _, ok = c.Get(hashFromString("data-1"))
+	assert.False(ok)
+	assert.Equal(uint64(0), c.totalSize)
+
+	// A Key obtained after the purge still lands.
+	put(c, hashFromString("data-1"), 200, "data-1")
+	v, _, ok := c.Get(hashFromString("data-1"))
+	assert.True(ok)
+	assert.Equal("data-1", v.(string))
+
+	// The zero Key is inert; in particular it does not cache under a nil
+	// key.
+	c.Put(Key{}, 200, "no-key")
+	assert.Equal(uint64(200), c.totalSize)
 }

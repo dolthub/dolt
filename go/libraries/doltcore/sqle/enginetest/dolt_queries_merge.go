@@ -1675,6 +1675,27 @@ var MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	// https://github.com/dolthub/dolt/issues/8822
+	{
+		Name: "Test concurrent merges with overlapping indexes",
+		SetUpScript: []string{
+			"CREATE TABLE overlap_indexes(pk INT PRIMARY KEY,v INT,UNIQUE KEY uniq(v),KEY idx(v))",
+			"INSERT INTO overlap_indexes VALUES(1,1)",
+			"CALL dolt_commit('-Am','base')",
+			"CALL dolt_checkout('-b','other')",
+			"INSERT INTO overlap_indexes VALUES(2,2)",
+			"CALL dolt_commit('-am','other')",
+			"CALL dolt_checkout('main')",
+			"INSERT INTO overlap_indexes VALUES(3,3)",
+			"CALL dolt_commit('-am','main')",
+			"CALL dolt_merge('other')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "SELECT * FROM overlap_indexes ORDER BY pk", Expected: []sql.Row{{int32(1), int32(1)}, {int32(2), int32(2)}, {int32(3), int32(3)}}},
+			{Query: "SELECT /*+ LOOKUP_JOIN(w, o) JOIN_ORDER(w, o) */ o.* FROM (SELECT 2 AS v) w JOIN overlap_indexes o ON w.v = o.v", Expected: []sql.Row{{int32(2), int32(2)}}},
+			{Query: "SELECT /*+ LOOKUP_JOIN(w, o) JOIN_ORDER(w, o) */ o.* FROM (SELECT 3 AS v) w JOIN overlap_indexes o ON w.v = o.v", Expected: []sql.Row{{int32(3), int32(3)}}},
+		},
+	},
 	{
 		Name: "unique keys, update violation from left",
 		SetUpScript: []string{
@@ -1787,6 +1808,30 @@ var MergeScripts = []queries.ScriptTest{
 					{"t", byte(0), "constraint violation"},
 				},
 			},
+		},
+	},
+	// https://github.com/dolthub/dolt/issues/6612
+	{
+		// charset and collation ALTER TABLE syntax is MySQL-specific
+		Dialect: "mysql",
+		Name:    "Test feature data preservation across collation merges",
+		SetUpScript: []string{
+			"CREATE TABLE t(pk VARCHAR(255) PRIMARY KEY,v VARCHAR(255)) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+			"CALL dolt_commit('-Am','base')",
+			"CALL dolt_checkout('-b','feature')",
+			"INSERT INTO t VALUES('1','first')",
+			"CALL dolt_commit('-am','first row')",
+			"CALL dolt_checkout('main')",
+			"ALTER TABLE t COLLATE utf8mb4_0900_bin",
+			"ALTER TABLE t MODIFY v VARCHAR(255) NOT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin",
+			"CALL dolt_commit('-am','collation')",
+			"CALL dolt_checkout('feature')",
+			"CALL dolt_merge('main','-m','merge')",
+			"INSERT INTO t VALUES('2','second')",
+			"CALL dolt_commit('-am','second row')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "SELECT to_pk,to_v,diff_type FROM dolt_commit_diff_t WHERE to_commit=HASHOF('feature') AND from_commit=DOLT_MERGE_BASE('main','feature') ORDER BY to_pk", Expected: []sql.Row{{"1", "first", "added"}, {"2", "second", "added"}}},
 		},
 	},
 	// Behavior between new and old format diverges in the case where right adds
