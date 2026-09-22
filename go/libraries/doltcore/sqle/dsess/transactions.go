@@ -410,7 +410,7 @@ func (tx *DoltTransaction) commitDatasets(
 	}
 
 	// All callers acquire branch locks in the same order.
-	// This makes deadlock between two transactions impossible, but starvation is still possible because there's no queue.
+	// This makes deadlock between two transactions impossible
 	sort.Strings(lockIDs)
 	for i, id := range lockIDs {
 		if i > 0 && id == lockIDs[i-1] {
