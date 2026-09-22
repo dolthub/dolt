@@ -251,7 +251,6 @@ func (o ordinalPartition) Key() []byte {
 	return nil
 }
 
-
 // IndexScanBuilder generates secondary lookups for partitions and
 // encapsulates fast path optimizations for certain point lookups.
 type IndexScanBuilder interface {
