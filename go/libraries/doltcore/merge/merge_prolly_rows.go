@@ -284,21 +284,17 @@ func computeProllyTreePatches(
 			var b bool
 			decided := false
 			if rowPolicy != nil {
-				merged, status, pErr := rowPolicy(ctx,
+				handled, merged, conflict, pErr := tree.RunRowMergePolicy(ctx, rowPolicy,
 					val.Tuple(left.To), val.Tuple(right.To), val.Tuple(left.From))
 				if pErr != nil {
 					mergeErr = pErr
 					return tree.Diff{}, false
 				}
-				switch status {
-				case tree.RowMergeResolved:
-					m, b, decided = merged, true, true
-				case tree.RowMergeConflict:
-					m, b, decided = nil, false, true
-				case tree.RowMergeDefer:
-				default:
-					mergeErr = fmt.Errorf("unknown RowMergeStatus %d", status)
-					return tree.Diff{}, false
+				if handled {
+					// A conflict yields (nil, false); a resolution yields the
+					// merged row and keeps it. Either way, Dolt's own merge for
+					// this row is skipped.
+					m, b, decided = merged, !conflict, true
 				}
 			}
 			if !decided && left.To == nil && right.To == nil {

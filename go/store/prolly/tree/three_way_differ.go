@@ -70,6 +70,30 @@ const (
 // the row, which is not a three-way decision.
 type RowMergePolicy func(ctx *sql.Context, left, right, base val.Tuple) (val.Tuple, RowMergeStatus, error)
 
+// RunRowMergePolicy consults policy for one three-way row decision and decodes
+// its RowMergeStatus into the answer both merge paths share, so the fast path
+// and the differ path never interpret a status differently. handled is false
+// for RowMergeDefer, meaning the caller applies Dolt's own classification.
+// When handled, exactly one of the remaining results is meaningful:
+// RowMergeResolved yields merged (a nil tuple deletes the row), and
+// RowMergeConflict yields conflict. An unknown status is an error.
+func RunRowMergePolicy(ctx *sql.Context, policy RowMergePolicy, left, right, base val.Tuple) (handled bool, merged val.Tuple, conflict bool, err error) {
+	merged, status, err := policy(ctx, left, right, base)
+	if err != nil {
+		return false, nil, false, err
+	}
+	switch status {
+	case RowMergeDefer:
+		return false, nil, false, nil
+	case RowMergeResolved:
+		return true, merged, false, nil
+	case RowMergeConflict:
+		return true, nil, true, nil
+	default:
+		return false, nil, false, fmt.Errorf("unknown RowMergeStatus %d", status)
+	}
+}
+
 // ThreeWayDiffInfo stores contextual data that can influence the diff.
 // If |LeftSchemaChange| is true, then the left side's bytes have a different interpretation from the base,
 // so every row in both Left and Base should be considered a modification, even if they have the same bytes.
@@ -366,27 +390,21 @@ func (d *ThreeWayDiffer[K, O]) applyRowMergePolicy(ctx *sql.Context) (bool, Thre
 	if d.rowMergePolicy == nil || d.keyless || d.schemaChangeInMerge {
 		return false, ThreeWayDiff{}, nil
 	}
-	merged, status, err := d.rowMergePolicy(ctx,
+	handled, merged, conflict, err := RunRowMergePolicy(ctx, d.rowMergePolicy,
 		val.Tuple(d.lDiff.To), val.Tuple(d.rDiff.To), val.Tuple(d.lDiff.From))
-	if err != nil {
+	if err != nil || !handled {
 		return false, ThreeWayDiff{}, err
 	}
-	switch status {
-	case RowMergeDefer:
-		return false, ThreeWayDiff{}, nil
-	case RowMergeConflict:
+	if conflict {
 		if d.lDiff.To == nil || d.rDiff.To == nil {
 			return true, d.newDivergentDeleteConflict(d.lDiff.Key, d.lDiff.From, d.lDiff.To, d.rDiff.To), nil
 		}
 		return true, d.newDivergentClashConflict(d.lDiff.Key, d.lDiff.From, d.lDiff.To, d.rDiff.To), nil
-	case RowMergeResolved:
-		if merged == nil {
-			return true, d.newDivergentDeleteResolved(d.lDiff.Key, d.lDiff.From, d.lDiff.To, d.rDiff.To), nil
-		}
-		return true, d.newDivergentResolved(d.lDiff.Key, d.lDiff.To, d.rDiff.To, Item(merged)), nil
-	default:
-		return false, ThreeWayDiff{}, fmt.Errorf("unknown RowMergeStatus %d", status)
 	}
+	if merged == nil {
+		return true, d.newDivergentDeleteResolved(d.lDiff.Key, d.lDiff.From, d.lDiff.To, d.rDiff.To), nil
+	}
+	return true, d.newDivergentResolved(d.lDiff.Key, d.lDiff.To, d.rDiff.To, Item(merged)), nil
 }
 
 func (d *ThreeWayDiffer[K, O]) newConvergentEdit(key, left Item, typ DiffType) ThreeWayDiff {
