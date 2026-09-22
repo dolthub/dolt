@@ -18,11 +18,11 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/go-mysql-server/testutils"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
@@ -53,7 +53,7 @@ type MergeScriptTest struct {
 
 type doltCommitValidator struct{}
 
-var _ enginetest.CustomValueValidator = &doltCommitValidator{}
+var _ testutils.CustomValueValidator = &doltCommitValidator{}
 var hashRegex = regexp.MustCompile(`^[0-9a-v]{32}$`)
 
 func (dcv *doltCommitValidator) Validate(val interface{}) (bool, error) {
