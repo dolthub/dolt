@@ -16,12 +16,12 @@ package enginetest
 
 import (
 	"regexp"
-
-	"github.com/dolthub/go-mysql-server/enginetest"
+	
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/go-mysql-server/testutils"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
@@ -30,7 +30,7 @@ import (
 // editPauseMessageValidator validates edit pause message format
 type editPauseMessageValidator struct{}
 
-var _ enginetest.CustomValueValidator = &editPauseMessageValidator{}
+var _ testutils.CustomValueValidator = &editPauseMessageValidator{}
 var editPauseRegex = regexp.MustCompile(`^edit action paused at commit [0-9a-v]{32} \(.+\)\.\s+You can now modify the working directory and stage changes\. When ready, continue the rebase by calling dolt_rebase\('--continue'\)$`)
 
 func (epmv *editPauseMessageValidator) Validate(val interface{}) (bool, error) {
