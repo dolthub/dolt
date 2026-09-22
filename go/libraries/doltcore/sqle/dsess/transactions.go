@@ -165,7 +165,7 @@ func (tx *DoltTransaction) GetInitialRoot(dbName string) (hash.Hash, bool) {
 	return startPoint.rootHash, ok
 }
 
-// Commit attempts to merge the working set given into the current working set.
+// CommitWorkingSet attempts to merge the working set given into the current working set.
 // Uses the same algorithm as merge.RootMerger:
 // |current working set working root| is the root
 // |workingSet.workingRoot| is the mergeRoot
@@ -173,7 +173,7 @@ func (tx *DoltTransaction) GetInitialRoot(dbName string) (hash.Hash, bool) {
 // if workingSet.workingRoot == ancRoot, attempt a fast-forward merge
 // TODO: Non-working roots aren't merged into the working set and just stomp any changes made there. We need merge
 // strategies for staged as well as merge state.
-func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSet, dbName string) (*doltdb.WorkingSet, error) {
+func (tx *DoltTransaction) CommitWorkingSet(ctx *sql.Context, workingSet *doltdb.WorkingSet, dbName string) (*doltdb.WorkingSet, error) {
 	ws, _, err := tx.doCommit(ctx, workingSet, nil, dbName)
 	return ws, err
 }
@@ -363,6 +363,8 @@ func (tx *DoltTransaction) doCommit(
 	if err != nil {
 		return nil, nil, err
 	}
+
+	// limited to a single element, as above
 	return workingSets[0], commits[0], nil
 }
 
@@ -377,10 +379,11 @@ func (tx *DoltTransaction) commitDatasets(
 
 	sess := DSessFromSess(ctx.Session)
 	states := make([]*branchState, len(changes))
-	starts := make([]*doltdb.WorkingSet, len(changes))
+	workingSetsAtTxStart := make([]*doltdb.WorkingSet, len(changes))
 	lockIDs := make([]string, len(changes))
+
 	var startPoint dbRoot
-	var databaseName string
+	var baseDbName string
 	for i, change := range changes {
 		state, ok, err := sess.lookupDbState(ctx, change.dbName)
 		if err != nil {
@@ -391,26 +394,27 @@ func (tx *DoltTransaction) commitDatasets(
 		}
 		normalizedName := strings.ToLower(state.dbState.dbName)
 
-		if i > 0 && normalizedName != databaseName {
-			// TODO: this should be a different error message, the problem is committing to more than DB, not more than one branch
+		if i > 0 && normalizedName != baseDbName {
+			// TODO: this should be a different error type, the problem is committing to more than one DB, not more than one branch
 			return nil, nil, ErrDirtyWorkingSets
 		}
 
-		databaseName = normalizedName
-		startPoint, ok = tx.dbStartPoints[databaseName]
+		baseDbName = normalizedName
+		startPoint, ok = tx.dbStartPoints[baseDbName]
 		if !ok {
 			return nil, nil, fmt.Errorf("database %s unknown to transaction", change.dbName)
 		}
 		states[i] = state
-		starts[i], err = startPoint.db.ResolveWorkingSetAtRoot(ctx, change.workingSet.Ref(), startPoint.rootHash)
+		workingSetsAtTxStart[i], err = startPoint.db.ResolveWorkingSetAtRoot(ctx, change.workingSet.Ref(), startPoint.rootHash)
 		if err != nil {
 			return nil, nil, err
 		}
-		lockIDs[i] = databaseName + "\u0000" + change.workingSet.Ref().String()
+
+		lockIDs[i] = baseDbName + "\u0000" + change.workingSet.Ref().String()
 	}
 
 	// All callers acquire branch locks in the same order.
-	// This makes deadlock between two transactions impossible
+	// This makes deadlock between two transactions impossible.
 	sort.Strings(lockIDs)
 	for i, id := range lockIDs {
 		if i > 0 && id == lockIDs[i-1] {
@@ -439,24 +443,29 @@ func (tx *DoltTransaction) commitDatasets(
 			} else if err != nil {
 				return nil, nil, err
 			}
+
 			existingHash, err := existing.HashOf()
 			if err != nil {
 				return nil, nil, err
 			}
+
 			if err := tx.validateAmendedHead(ctx, startPoint.db, ws, change.commit); err != nil {
 				return nil, nil, err
 			}
+
 			ff := isFfMerge
-			if !newWorkingSet && !workingAndStagedEqual(existing, starts[i]) {
+			if !newWorkingSet && !workingAndStagedEqual(existing, workingSetsAtTxStart[i]) {
 				ff = notFfMerge
-				ws, err = tx.mergeRoots(ctx, change.dbName, starts[i], existing, ws, states[i].EditOpts())
+				ws, err = tx.mergeRoots(ctx, change.dbName, workingSetsAtTxStart[i], existing, ws, states[i].EditOpts())
 				if err != nil {
 					return nil, nil, err
 				}
 			}
+
 			if err := tx.validateWorkingSetForCommit(ctx, ws, ff); err != nil {
 				return nil, nil, err
 			}
+
 			pending := change.commit
 			var expectedHead *hash.Hash
 			if pending != nil {
@@ -468,7 +477,7 @@ func (tx *DoltTransaction) commitDatasets(
 				if err != nil {
 					return nil, nil, err
 				}
-				ws, pending, err = prepareDoltCommit(ctx, change.dbName, startPoint.db, starts[i], pending, ws, states[i].EditOpts())
+				ws, pending, err = prepareDoltCommit(ctx, change.dbName, startPoint.db, workingSetsAtTxStart[i], pending, ws, states[i].EditOpts())
 				if err != nil {
 					return nil, nil, err
 				}
@@ -489,6 +498,9 @@ func (tx *DoltTransaction) commitDatasets(
 		var rsc doltdb.ReplicationStatusController
 		commits, err := startPoint.db.CommitDatasets(ctx, updates, &rsc)
 		WaitForReplicationController(ctx, rsc)
+
+		// The check in doCommit can go stale before the ref update, so the storage layer compares the head against
+		// AmendedCommit once more, atomically with the update. A failure there surfaces the same way.
 		if errors.Is(err, datas.ErrMergeNeeded) {
 			for _, change := range changes {
 				if change.commit != nil && !change.commit.CommitOptions.AmendedCommit.IsEmpty() {
@@ -496,6 +508,8 @@ func (tx *DoltTransaction) commitDatasets(
 				}
 			}
 		}
+
+		// An optimistic lock failure will be retried with the new current value of the working set.
 		if errors.Is(err, datas.ErrOptimisticLockFailed) || errors.Is(err, datas.ErrMergeNeeded) {
 			continue
 		}

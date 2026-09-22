@@ -751,7 +751,7 @@ func (d *DoltSession) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.T
 // commitWorkingSet commits the working set for the branch state given, without creating a new dolt commit.
 func (d *DoltSession) commitWorkingSet(ctx *sql.Context, branchState *branchState, tx sql.Transaction) error {
 	commitFunc := func(ctx *sql.Context, dtx *DoltTransaction, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, *doltdb.Commit, error) {
-		ws, err := dtx.Commit(ctx, workingSet, branchState.RevisionDbName())
+		ws, err := dtx.CommitWorkingSet(ctx, workingSet, branchState.RevisionDbName())
 		return ws, nil, err
 	}
 
@@ -796,15 +796,22 @@ func (d *DoltSession) DoltCommit(
 
 // DoltCommitMulti commits a new commit for the databases named, using the pending commits provided.
 // |dbNames| name the revision database names to commit (e.g. `mydb@branch1`)
-// |pending| contains the pending commit for each branch named, in the same order
-// A pending commit must be provided for every dirty working set in the transaction.
-func (d *DoltSession) DoltCommitMulti(ctx *sql.Context, tx sql.Transaction, dbNames []string, pending []*doltdb.PendingCommit) ([]*doltdb.Commit, error) {
+// |pending| contains the pending commit for each branch named, in the same order. A nil entry commits no dolt commit
+// for that branch, only a working set update.
+// This method does not enforce that all the branches named are dirty, or that no other dirty working sets exist.
+// Callers must choose the semantics of which branches they wish to commit, which of them will have corresponding
+// HEAD updates, and enforce their own business logic checks.
+func (d *DoltSession) DoltCommitMulti(
+	ctx *sql.Context,
+	tx sql.Transaction,
+	dbNames []string,
+	pending []*doltdb.PendingCommit,
+) ([]*doltdb.Commit, error) {
 	if len(dbNames) != len(pending) {
 		return nil, fmt.Errorf("expected one pending commit per branch")
 	}
 
 	states := make([]*branchState, len(dbNames))
-	included := make(map[*branchState]bool, len(dbNames))
 	for i, dbName := range dbNames {
 		state, ok, err := d.lookupDbState(ctx, dbName)
 		if err != nil {
@@ -814,14 +821,6 @@ func (d *DoltSession) DoltCommitMulti(ctx *sql.Context, tx sql.Transaction, dbNa
 			return nil, sql.ErrDatabaseNotFound.New(dbName)
 		}
 		states[i] = state
-		included[state] = true
-	}
-
-	for _, dirty := range d.dirtyWorkingSets() {
-		if !included[dirty] {
-			// TODO: this is the wrong error to use in this case, it indicates a programming error in dolt_commit_all, rather than the stated error that a user could correct.
-			return nil, ErrDirtyWorkingSets
-		}
 	}
 
 	return d.commitBranchStates(ctx, states, tx, pending)

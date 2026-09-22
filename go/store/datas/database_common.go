@@ -734,6 +734,7 @@ type CommitUpdate struct {
 	PrevWsHash   hash.Hash
 	RootVal      types.Value
 	// Commit optionally supplies a prebuilt commit instead of RootVal and CommitOpts.
+	// TODO: remove this field, and create a new DatasetUpdate type for prebuilt commits, using where appropriate.
 	Commit *Commit
 }
 
@@ -751,6 +752,7 @@ func (c CommitUpdate) BuildCommitValue(ctx context.Context, db *database) (hash.
 	}
 	// Prepend the current head hash to the list of parents if one was provided. This is only necessary if parents were
 	// provided because we fill it in automatically in buildNewCommit otherwise.
+	// TODO: remove this working set empty check once the WriteCommit use case is replaced with another type.
 	if c.WorkingSetDS != "" && len(c.CommitOpts.Parents) > 0 && c.CommitOpts.AmendedCommit.IsEmpty() && !c.CommitOpts.Force {
 		headHash, ok := c.CommitDS.MaybeHeadAddr()
 		if ok {
@@ -790,6 +792,8 @@ func (c CommitUpdate) validateHead(ctx context.Context, datasets prolly.AddressM
 	if current != expected {
 		return ErrMergeNeeded
 	}
+
+	// TODO: remove this working set empty check once the WriteCommit use case is replaced with another implementation of DatasetUpdate.
 	if c.WorkingSetDS == "" && !current.IsEmpty() && current == newHead {
 		return ErrAlreadyCommitted
 	}
