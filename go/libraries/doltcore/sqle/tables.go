@@ -405,7 +405,8 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 		if err != nil {
 			return nil, err
 		}
-		return index.DoltIndexesFromTable(ctx, t.db.Name(), t.tableName, tbl)
+		indexes, err := index.DoltIndexesFromTable(ctx, t.db.Name(), t.tableName, tbl)
+		return index.BindTableToIndexes(indexes, t), err
 	}
 
 	sess := dsess.DSessFromSess(ctx.Session)
@@ -420,7 +421,7 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 
 	indexes, ok := dbState.SessionCache().GetTableIndexesCache(key, t.Name())
 	if ok {
-		return indexes, nil
+		return index.BindTableToIndexes(indexes, t), nil
 	}
 
 	tbl, err := t.DoltTable(ctx)
@@ -434,7 +435,7 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	}
 
 	dbState.SessionCache().CacheTableIndexes(key, t.Name(), indexes)
-	return indexes, nil
+	return index.BindTableToIndexes(indexes, t), nil
 }
 
 func (t *DoltTable) PreciseMatch() bool {

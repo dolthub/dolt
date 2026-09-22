@@ -61,6 +61,9 @@ func (t *IndexedDoltTable) LookupBuilder(ctx *sql.Context) (index.IndexScanBuild
 }
 
 func (idt *IndexedDoltTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	if len(lookup.Ordinals) > 0 {
+		return index.NewOrdinalPartitionIter(lookup)
+	}
 	if lookup.VectorOrderAndLimit.OrderBy != nil {
 		return index.NewVectorPartitionIter(lookup)
 	}
@@ -146,6 +149,9 @@ func (t *WritableIndexedDoltTable) LookupBuilder(ctx *sql.Context) (index.IndexS
 }
 
 func (t *WritableIndexedDoltTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	if len(lookup.Ordinals) > 0 {
+		return index.NewOrdinalPartitionIter(lookup)
+	}
 	if lookup.VectorOrderAndLimit.OrderBy != nil {
 		return index.NewVectorPartitionIter(lookup)
 	}

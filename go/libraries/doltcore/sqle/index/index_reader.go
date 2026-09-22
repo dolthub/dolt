@@ -235,6 +235,23 @@ func NewVectorPartitionIter(lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	}, nil
 }
 
+// NewOrdinalPartitionIter returns a [sql.PartitionIter] yielding a
+// single partition containing the discrete ordinals in |lookup|.
+func NewOrdinalPartitionIter(lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	return sql.PartitionsToPartitionIter(ordinalPartition{ordinals: lookup.Ordinals}), nil
+}
+
+type ordinalPartition struct {
+	ordinals []uint64
+}
+
+var _ sql.Partition = ordinalPartition{}
+
+func (o ordinalPartition) Key() []byte {
+	return nil
+}
+
+
 // IndexScanBuilder generates secondary lookups for partitions and
 // encapsulates fast path optimizations for certain point lookups.
 type IndexScanBuilder interface {
@@ -431,6 +448,8 @@ func (ib *baseIndexImplBuilder) newPointLookup(ctx *sql.Context, rang prolly.Ran
 
 func (ib *baseIndexImplBuilder) rangeIter(ctx *sql.Context, part sql.Partition) (prolly.MapIter, error) {
 	switch p := part.(type) {
+	case ordinalPartition:
+		return &ordinalProbesIter{ordinals: p.ordinals, m: ib.sec}, nil
 	case pointPartition:
 		return ib.newPointLookup(ctx, p.r)
 	case rangePartition:
@@ -466,6 +485,34 @@ func (ib *baseIndexImplBuilder) proximityIter(ctx *sql.Context, part vectorParti
 		return nil, fmt.Errorf("vector index lookups must have a non-null limit")
 	}
 	return ib.proximitySecondary.GetClosest(ctx, candidateVector, int(limitVal.(int64)))
+}
+
+// ordinalProbesIter iterates discrete ordinal positions in |m|
+// using [prolly.Map.IterOrdinalRange].
+type ordinalProbesIter struct {
+	ordinals []uint64
+	idx      int
+	m        prolly.Map
+}
+
+var _ prolly.MapIter = (*ordinalProbesIter)(nil)
+
+// Next implements [prolly.MapIter].
+func (it *ordinalProbesIter) Next(ctx context.Context) (val.Tuple, val.Tuple, error) {
+	for it.idx < len(it.ordinals) {
+		ord := it.ordinals[it.idx]
+		it.idx++
+		subIter, err := it.m.IterOrdinalRange(ctx, ord, ord+1)
+		if err != nil {
+			return nil, nil, err
+		}
+		k, v, err := subIter.Next(ctx)
+		if err == io.EOF {
+			continue
+		}
+		return k, v, err
+	}
+	return nil, nil, io.EOF
 }
 
 // coveringIndexImplBuilder constructs row iters for covering lookups,

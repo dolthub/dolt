@@ -1555,3 +1555,37 @@ func TestSplitNullsFromRange(t *testing.T) {
 		assert.Equal(t, sql.Below{Key: 10}, rs[1][1].UpperBound)
 	})
 }
+
+func TestDoltIndexOrdinalAddressable(t *testing.T) {
+	_, indexMap := doltIndexSetup(t)
+	ctx := sql.NewEmptyContext()
+
+	pkIdx := indexMap["onepk:primaryKey"]
+	count, err := pkIdx.Count(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, uint64(4), count)
+
+	secIdx := indexMap["onepk:idx_v1"]
+	count, err = secIdx.Count(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, uint64(4), count)
+
+	typesPk := indexMap["types:primaryKey"]
+	count, err = typesPk.Count(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, uint64(5), count)
+
+	assert.Equal(t, int64(1), pkIdx.MaxOrdinalSampleLimit(ctx, 4))
+	assert.Equal(t, int64(1), pkIdx.MaxOrdinalSampleLimit(ctx, 19))
+	assert.Equal(t, int64(1), pkIdx.MaxOrdinalSampleLimit(ctx, 20))
+	assert.Equal(t, int64(2), pkIdx.MaxOrdinalSampleLimit(ctx, 40))
+	assert.Equal(t, int64(50), pkIdx.MaxOrdinalSampleLimit(ctx, 1000))
+
+	partIter, err := index.NewOrdinalPartitionIter(sql.IndexLookup{Ordinals: []uint64{0, 2}})
+	require.NoError(t, err)
+	part, err := partIter.Next(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, part)
+	_, err = partIter.Next(ctx)
+	assert.Equal(t, io.EOF, err)
+}

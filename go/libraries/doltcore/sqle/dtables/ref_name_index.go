@@ -49,6 +49,7 @@ func (i refNameIndex) IsUnique() bool        { return true }
 func (i refNameIndex) IsSpatial() bool       { return false }
 func (i refNameIndex) IsFullText() bool      { return false }
 func (i refNameIndex) IsVector() bool        { return false }
+func (i refNameIndex) IsPrimary() bool       { return false }
 func (i refNameIndex) Comment() string       { return "" }
 func (i refNameIndex) IndexType() string     { return "BTREE" }
 func (i refNameIndex) IsGenerated() bool     { return false }
