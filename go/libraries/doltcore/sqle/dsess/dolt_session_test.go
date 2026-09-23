@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	_ "github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/src-d/go-errors.v1"
@@ -43,6 +44,26 @@ type countingDoltgresTransactionLifecycle struct {
 	transactionEnds int
 	pending         bool
 	cacheClears     int
+	events          []string
+}
+
+func (l *countingDoltgresTransactionLifecycle) DoltgresTransactionStarted() {
+	l.events = append(l.events, "start")
+}
+func (l *countingDoltgresTransactionLifecycle) DoltgresTransactionCommitted() {
+	l.events = append(l.events, "commit")
+}
+func (l *countingDoltgresTransactionLifecycle) DoltgresTransactionRolledBack() {
+	l.events = append(l.events, "rollback")
+}
+func (l *countingDoltgresTransactionLifecycle) DoltgresSavepointCreated(name string) {
+	l.events = append(l.events, "save "+name)
+}
+func (l *countingDoltgresTransactionLifecycle) DoltgresSavepointRolledBack(name string) {
+	l.events = append(l.events, "rollback to "+name)
+}
+func (l *countingDoltgresTransactionLifecycle) DoltgresSavepointReleased(name string) {
+	l.events = append(l.events, "release "+name)
 }
 
 func (l *countingDoltgresTransactionLifecycle) DoltgresTransactionEnd() {
@@ -74,6 +95,74 @@ func TestDoltgresTransactionLifecycle(t *testing.T) {
 	assert.Same(t, lifecycle, sess.DoltgresSessObj)
 	sess.NotifyTransactionEnd()
 	assert.Equal(t, 2, lifecycle.transactionEnds)
+}
+
+func TestDoltgresSemanticTransactionLifecycle(t *testing.T) {
+	if _, _, ok := sql.SystemVariables.GetGlobal(DoltCommitOnTransactionCommit); !ok {
+		sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{&sql.MysqlSystemVariable{
+			Name: DoltCommitOnTransactionCommit, Scope: sql.GetMysqlScope(sql.SystemVariableScope_Session),
+			Dynamic: true, Type: sqltypes.NewSystemBoolType(DoltCommitOnTransactionCommit), Default: int8(0),
+		}})
+	}
+	sess := DefaultSession(emptyDatabaseProvider(), nil)
+	lifecycle := &countingDoltgresTransactionLifecycle{pending: true}
+	sess.DoltgresSessObj = lifecycle
+	ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
+	tx, err := sess.StartTransaction(ctx, sql.ReadWrite)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.NoError(t, sess.CreateSavepoint(ctx, tx, "same"))
+	assert.NoError(t, sess.CreateSavepoint(ctx, tx, "same"))
+	assert.NoError(t, sess.RollbackToSavepoint(ctx, tx, "same"))
+	assert.NoError(t, sess.ReleaseSavepoint(ctx, tx, "same"))
+	assert.NoError(t, sess.CommitTransaction(ctx, tx))
+	assert.Equal(t, []string{"start", "save same", "save same", "rollback to same", "release same", "commit"}, lifecycle.events)
+	assert.Equal(t, 1, lifecycle.transactionEnds)
+
+	lifecycle.pending = true
+	tx, err = sess.StartTransaction(ctx, sql.ReadWrite)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"one", "two"} {
+		state := newEmptyDatabaseSessionState()
+		state.NewEmptyBranchState("main", RevisionTypeBranch).dirty = true
+		sess.dbStates[name] = state
+	}
+	// An invalid transaction must not emit a successful commit notification.
+	assert.EqualError(t, sess.CommitTransaction(ctx, nil), "expected a DoltTransaction")
+	assert.Equal(t, "start", lifecycle.events[len(lifecycle.events)-1], "failed commit ended transaction")
+	assert.NoError(t, sess.Rollback(ctx, tx))
+	assert.Equal(t, 2, lifecycle.transactionEnds)
+	assert.Equal(t, "rollback", lifecycle.events[len(lifecycle.events)-1])
+}
+
+func TestDoltTransactionRepeatedSavepointNames(t *testing.T) {
+	tx := &DoltTransaction{postgresSavepoints: true}
+	first := map[string]doltdb.RootValue{"first": nil}
+	second := map[string]doltdb.RootValue{"second": nil}
+	firstDirty := map[string]bool{"mydb/main": true}
+	secondDirty := map[string]bool{"mydb/other": true}
+	tx.CreateSavepoint("same", first, firstDirty)
+	tx.CreateSavepoint("child", map[string]doltdb.RootValue{}, nil)
+	tx.CreateSavepoint("same", second, secondDirty)
+	assert.Equal(t, second, tx.RollbackToSavepoint("same").roots)
+	assert.Equal(t, secondDirty, tx.RollbackToSavepoint("same").dirtyBranches)
+	assert.True(t, tx.ClearSavepoint("same"))
+	assert.Equal(t, first, tx.RollbackToSavepoint("same").roots)
+	assert.Equal(t, firstDirty, tx.RollbackToSavepoint("same").dirtyBranches)
+	assert.False(t, tx.ClearSavepoint("child"))
+}
+
+func TestDoltTransactionDefaultSavepointSemantics(t *testing.T) {
+	tx := &DoltTransaction{}
+	tx.CreateSavepoint("Same", map[string]doltdb.RootValue{"first": nil}, map[string]bool{"mydb/main": true})
+	tx.CreateSavepoint("same", map[string]doltdb.RootValue{"second": nil}, map[string]bool{"mydb/other": true})
+	assert.Equal(t, map[string]doltdb.RootValue{"second": nil}, tx.RollbackToSavepoint("SAME").roots)
+	assert.Equal(t, map[string]bool{"mydb/other": true}, tx.RollbackToSavepoint("SAME").dirtyBranches)
+	assert.True(t, tx.ClearSavepoint("Same"))
+	assert.Nil(t, tx.RollbackToSavepoint("same"))
 }
 
 func TestDirtyBranches(t *testing.T) {

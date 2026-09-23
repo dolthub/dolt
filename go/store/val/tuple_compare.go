@@ -17,6 +17,8 @@ package val
 import (
 	"bytes"
 	"context"
+
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // TupleComparator compares Tuples.
@@ -40,6 +42,9 @@ type TupleComparator interface {
 	// WithValueStore returns a copy of this TupleComparator that uses |vs| when comparing values that require
 	// loading content from a content-addressed store (e.g. adaptive-encoded TEXT/BLOB values).
 	WithValueStore(vs ValueStore) TupleComparator
+
+	// Order returns the physical sort order this comparator gives field |i|.
+	Order(i int) sql.IndexColumnOrder
 }
 
 type DefaultTupleComparator struct {
@@ -100,6 +105,11 @@ func (d *DefaultTupleComparator) Validated(types []Type) TupleComparator {
 // WithValueStore implements TupleComparator
 func (d *DefaultTupleComparator) WithValueStore(vs ValueStore) TupleComparator {
 	return &DefaultTupleComparator{vs: vs}
+}
+
+// Order implements TupleComparator
+func (d *DefaultTupleComparator) Order(i int) sql.IndexColumnOrder {
+	return sql.IndexColumnOrder{}
 }
 
 func compare(ctx context.Context, typ Type, left, right []byte, vs ValueStore) (int, error) {

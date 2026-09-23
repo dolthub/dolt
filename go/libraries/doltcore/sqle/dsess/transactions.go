@@ -56,9 +56,10 @@ var ErrUnresolvedConstraintViolationsCommit = errors.New("Committing this transa
 const ConstraintViolationsListPrefix = "\nConstraint violations: "
 
 type DoltTransaction struct {
-	dbStartPoints   map[string]dbRoot
-	savepoints      []savepoint
-	tCharacteristic sql.TransactionCharacteristic
+	dbStartPoints      map[string]dbRoot
+	savepoints         []savepoint
+	postgresSavepoints bool
+	tCharacteristic    sql.TransactionCharacteristic
 }
 
 type dbRoot struct {
@@ -838,20 +839,22 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 	return nil
 }
 
-// CreateSavepoint creates a new savepoint with the name and roots given. If a savepoint with the name given
-// already exists, it's overwritten.
+// CreateSavepoint creates a new savepoint with the name and roots given. In
+// PostgreSQL mode a repeated name shadows the older savepoint until release;
+// the default MySQL mode replaces it.
 func (tx *DoltTransaction) CreateSavepoint(name string, roots map[string]doltdb.RootValue, dirtyBranches map[string]bool) {
-	existing := tx.findSavepoint(name)
-	if existing >= 0 {
-		tx.savepoints = append(tx.savepoints[:existing], tx.savepoints[existing+1:]...)
+	if !tx.postgresSavepoints {
+		if existing := tx.findSavepoint(name); existing >= 0 {
+			tx.savepoints = append(tx.savepoints[:existing], tx.savepoints[existing+1:]...)
+		}
 	}
 	tx.savepoints = append(tx.savepoints, savepoint{name: name, roots: roots, dirtyBranches: dirtyBranches})
 }
 
 // findSavepoint returns the index of the savepoint with the name given, or -1 if it doesn't exist
 func (tx *DoltTransaction) findSavepoint(name string) int {
-	for i, s := range tx.savepoints {
-		if strings.EqualFold(s.name, name) {
+	for i := len(tx.savepoints) - 1; i >= 0; i-- {
+		if (tx.postgresSavepoints && tx.savepoints[i].name == name) || (!tx.postgresSavepoints && strings.EqualFold(tx.savepoints[i].name, name)) {
 			return i
 		}
 	}
@@ -870,11 +873,16 @@ func (tx *DoltTransaction) RollbackToSavepoint(name string) *savepoint {
 	return nil
 }
 
-// ClearSavepoint removes the savepoint with the name given and returns whether a savepoint had that name
+// ClearSavepoint releases the named savepoint. In PostgreSQL mode it also
+// releases all savepoints created after it.
 func (tx *DoltTransaction) ClearSavepoint(name string) bool {
 	existing := tx.findSavepoint(name)
 	if existing >= 0 {
-		tx.savepoints = append(tx.savepoints[:existing], tx.savepoints[existing+1:]...)
+		if tx.postgresSavepoints {
+			tx.savepoints = tx.savepoints[:existing]
+		} else {
+			tx.savepoints = append(tx.savepoints[:existing], tx.savepoints[existing+1:]...)
+		}
 		return true
 	}
 	return false

@@ -2296,7 +2296,7 @@ func (m *valueMerger) processColumn(ctx *sql.Context, i int, left, right, base v
 		if err != nil {
 			return nil, true, err
 		}
-		if _, ok := sqlType.(types.JsonType); ok && !disallowJsonMerge {
+		if !disallowJsonMerge {
 			// if any of the values are NULL, this is an unresolvable conflict
 			if baseCol == nil || leftCol == nil || rightCol == nil {
 				return nil, true, nil
@@ -2304,7 +2304,9 @@ func (m *valueMerger) processColumn(ctx *sql.Context, i int, left, right, base v
 			if resultType.Enc == val.JsonAdaptiveEnc {
 				return m.mergeJSONAdaptive(ctx, baseCol, leftCol, rightCol)
 			}
-			return m.mergeJSONAddr(ctx, baseCol, leftCol, rightCol)
+			if resultType.Enc == val.JSONAddrEnc {
+				return m.mergeJSONAddr(ctx, baseCol, leftCol, rightCol)
+			}
 		}
 		// otherwise, this is a conflict.
 		return nil, true, nil

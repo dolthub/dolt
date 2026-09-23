@@ -395,6 +395,45 @@ func TestGetRange(t *testing.T) {
 	}
 }
 
+// TestGetReportsWholeBlobSize pins the size return of Get: it is the size of
+// the whole blob, never the length of the range that was read. An
+// implementation which only learns the size from a Content-Range it may not
+// get is allowed to report 0 for a ranged read, but never a wrong number.
+func TestGetReportsWholeBlobSize(t *testing.T) {
+	const size = 4096
+	testData := randBytes(size)
+
+	for _, bsTest := range newBlobStoreTests() {
+		t.Run(bsTest.bsType, func(t *testing.T) {
+			ctx := context.Background()
+			_, err := PutBytes(ctx, bsTest.bs, key, testData)
+			require.NoError(t, err)
+
+			rc, sz, _, err := bsTest.bs.Get(ctx, key, AllRange)
+			require.NoError(t, err)
+			require.NoError(t, rc.Close())
+			require.Equal(t, uint64(size), sz, "a whole-blob read always knows the size")
+
+			ranges := []BlobRange{
+				NewBlobRange(0, 128),
+				NewBlobRange(1024, 128),
+				NewBlobRange(-128, 0),
+				NewBlobRange(-256, 128),
+			}
+			for _, br := range ranges {
+				t.Run(br.asHttpRangeHeader(), func(t *testing.T) {
+					rc, sz, _, err := bsTest.bs.Get(ctx, key, br)
+					require.NoError(t, err)
+					require.NoError(t, rc.Close())
+					if sz != 0 {
+						assert.Equal(t, uint64(size), sz)
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestPanicOnNegativeRangeLength(t *testing.T) {
 	defer func() {
 		if r := recover(); r == nil {
