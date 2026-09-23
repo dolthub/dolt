@@ -537,7 +537,7 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 
 // doltCommit performs a dolt commit for the current transaction.
 // If @@dolt_multi_branch_commit is enabled, all dirty working sets are committed with corresponding dolt commits on
-// their respective branch HEADS. Otherwise, the only the current checked out branch is committed, and an error is
+// their respective branch HEADS. Otherwise, only the current checked out branch is committed, and an error is
 // returned if there are any other dirty working sets.
 func (d *DoltSession) doltCommit(ctx *sql.Context, tx sql.Transaction, dirties []*branchState) error {
 	multiBranchCommit, err := GetBooleanSystemVar(ctx, DoltMultiBranchCommit)
@@ -545,10 +545,8 @@ func (d *DoltSession) doltCommit(ctx *sql.Context, tx sql.Transaction, dirties [
 		return err
 	}
 
-	if len(dirties) > 1 {
-		if !multiBranchCommit {
-			return ErrDirtyWorkingSets
-		}
+	if len(dirties) > 1 && !multiBranchCommit {
+		return ErrDirtyWorkingSets
 	}
 
 	message := "Transaction commit"
@@ -568,21 +566,24 @@ func (d *DoltSession) doltCommit(ctx *sql.Context, tx sql.Transaction, dirties [
 	}
 
 	dbName := ctx.GetCurrentDatabase()
-	var pendingCommit *doltdb.PendingCommit
+	if dbName == "" {
+		return fmt.Errorf("cannot dolt_commit with no database selected")
+	}
+
 	commitStagedProps, _, err := NewCommitStagedProps(ctx, message)
 	if err != nil {
 		return err
 	}
 
 	if len(dirties) > 1 {
-		return d.doltCommitAllDirtyBranches(ctx, tx, dirties, dbName, commitStagedProps)
+		return d.doltCommitAllDirtyBranches(ctx, dbName, tx, dirties, commitStagedProps)
 	}
 
 	if err := d.validateDoltCommit(ctx, dirties[0]); err != nil {
 		return err
 	}
 
-	pendingCommit, err = d.PendingCommitAllStaged(ctx, dbName, dirties[0], commitStagedProps)
+	pendingCommit, err := d.PendingCommitAllStaged(ctx, dbName, dirties[0], commitStagedProps)
 	if err != nil {
 		return err
 	}
@@ -598,14 +599,11 @@ func (d *DoltSession) doltCommit(ctx *sql.Context, tx sql.Transaction, dirties [
 
 func (d *DoltSession) doltCommitAllDirtyBranches(
 	ctx *sql.Context,
+	dbName string,
 	tx sql.Transaction,
 	dirties []*branchState,
-	dbName string,
 	commitStagedProps actions.CommitStagedProps,
 ) error {
-	if dbName == "" {
-		return fmt.Errorf("cannot dolt_commit with no database selected")
-	}
 	baseName, _ := doltdb.SplitRevisionDbName(dbName)
 	pending := make([]*doltdb.PendingCommit, len(dirties))
 
@@ -819,8 +817,10 @@ func (d *DoltSession) commitWorkingSet(ctx *sql.Context, branchState *branchStat
 	return err
 }
 
-// DoltCommit commits the working set and a new dolt commit with the properties given.
+// DoltCommit commits the currently checked out working set, creating a new dolt commit with the properties given.
 // Clients should typically use CommitTransaction, which performs additional checks, instead of this method.
+// If there are multiple dirty working sets, this method returns ErrDirtyWorkingSets.
+// Use DoltCommitMulti to commit multiple across multiple branches in one transaction.
 func (d *DoltSession) DoltCommit(
 	ctx *sql.Context,
 	dbName string,
