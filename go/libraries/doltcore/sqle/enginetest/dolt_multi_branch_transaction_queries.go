@@ -16,9 +16,10 @@ package enginetest
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
-	"strings"
 )
 
 // multiBranchTransactionTests exercises the same interleavings with working-set
