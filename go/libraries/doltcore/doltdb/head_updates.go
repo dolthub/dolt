@@ -17,16 +17,16 @@ package doltdb
 import (
 	"context"
 
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/sirupsen/logrus"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/sirupsen/logrus"
 )
 
-// HeadUpdate builds one dataset update to publish in an atomic batch.
+// HeadUpdate is an update to a single head to commit as part of an atomic batch.
 type HeadUpdate interface {
+	// BuildDatasetUpdate returns the datas.DatasetUpdate update corresponding to this head update
 	BuildDatasetUpdate(ctx context.Context, ddb *DoltDB) (datas.DatasetUpdate, error)
 }
 
@@ -58,6 +58,7 @@ type BranchHeadUpdate struct {
 	CommitOptions datas.CommitOptions
 	// ExpectedHead is the head used to prepare the commit. When supplied, both
 	// this hash and the dataset snapshot taken by BuildDatasetUpdate are checked.
+	// TODO: change this to use a zero value hash, rather than a pointer. See corresponding comment in datas package.
 	ExpectedHead *hash.Hash
 	// WorkingSetRef optionally locks an associated working set at PrevWsHash.
 	// A zero reference omits this additional lock; the branch head is always checked.
@@ -86,6 +87,8 @@ func (u BranchHeadUpdate) BuildDatasetUpdate(ctx context.Context, ddb *DoltDB) (
 	}, nil
 }
 
+// TODO: move the methods below into doltdb.go with other methods on the DoltDB type.
+
 // CommitHeadUpdates publishes all updates in one storage transaction. Each returned
 // hash is the new dataset head for the input at the same index.
 func (ddb *DoltDB) CommitHeadUpdates(
@@ -112,6 +115,9 @@ func (ddb *DoltDB) CommitHeadUpdates(
 		if ds.IsWorkingSet() {
 			// The lock hash identifies the exact previous value, even if another writer
 			// changes this working set again before listeners run.
+			// TODO: this is not the right way to get previous root values for working set updates. It inappropriately
+			// ties the optimistic lock mechanism to the business logic for getting previous root values. Instead, we should
+			// preserve the current root value to examine while assembling pending updates, then apply them here.
 			if err := ddb.notifyWorkingRootUpdated(ctx, ds, pending[i].LockPrevHash()); err != nil {
 				logrus.Errorf("error notifying working root listeners of update: %s", err)
 			}
@@ -121,7 +127,8 @@ func (ddb *DoltDB) CommitHeadUpdates(
 }
 
 // notifyWorkingRootUpdated infers notifications from a published working-set dataset.
-// Listener failures are non-fatal: the batch has already been committed.
+// Listener failures are non-fatal.
+// TODO: this method should take before and after working set objects, rather than dataset and hash objects. See TODO in above method.
 func (ddb *DoltDB) notifyWorkingRootUpdated(ctx context.Context, ds datas.Dataset, previous hash.Hash) error {
 	sqlCtx, ok := ctx.(*sql.Context)
 	if !ok || len(DatabaseUpdateListeners) == 0 {

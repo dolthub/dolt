@@ -680,6 +680,8 @@ func (db *database) PersistGhostCommitIDs(ctx context.Context, ghosts hash.HashS
 	return err
 }
 
+// DatasetUpdate knows how to update a single dataset as part of an atomic batch. Updates can provide optimistic lock
+// values to check, and these values may be on a dataset other than one being updated.
 type DatasetUpdate interface {
 	// DatasetID returns the ID of the dataset to update
 	DatasetID() string
@@ -731,6 +733,7 @@ type CommitUpdate struct {
 	CommitDS Dataset
 	// ExpectedHead additionally requires the head used to prepare the update.
 	// It is checked inside the atomic root update, alongside the working-set lock.
+	// TODO: change this to use a zero hash for the empty value, rather than a pointer. This matches use elsewhere in dolt.
 	ExpectedHead *hash.Hash
 	CommitOpts   CommitOptions
 	WorkingSetDS string
