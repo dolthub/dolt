@@ -436,7 +436,7 @@ func (tx *DoltTransaction) commitHeads(
 	}
 
 	for attempt := 0; attempt < maxTxCommitRetries; attempt++ {
-		updates := make([]doltdb.DatasetUpdate, len(changes))
+		updates := make([]doltdb.HeadUpdate, 0, 2*len(changes))
 		workingSets := make([]*doltdb.WorkingSet, len(changes))
 		for i, change := range changes {
 			ws := change.workingSet
@@ -490,17 +490,29 @@ func (tx *DoltTransaction) commitHeads(
 				}
 			}
 			workingSets[i] = ws
-			updates[i] = doltdb.DatasetUpdate{
-				WorkingSet:   ws,
-				PrevHash:     existingHash,
-				Meta:         tx.WorkingSetMeta(name, email),
-				Commit:       pending,
-				ExpectedHead: expectedHead,
+			updates = append(updates, doltdb.WorkingSetUpdate{
+				WorkingSet: ws,
+				PrevHash:   existingHash,
+				Meta:       tx.WorkingSetMeta(name, email),
+			})
+			if pending != nil {
+				headRef, err := ws.Ref().ToHeadRef()
+				if err != nil {
+					return nil, nil, err
+				}
+				updates = append(updates, doltdb.BranchHeadUpdate{
+					HeadRef:       headRef,
+					Root:          pending.Roots.Staged,
+					CommitOptions: pending.CommitOptions,
+					ExpectedHead:  expectedHead,
+					WorkingSetRef: ws.Ref(),
+					PrevWsHash:    existingHash,
+				})
 			}
 		}
 
 		var rsc doltdb.ReplicationStatusController
-		commits, err := startPoint.db.CommitDatasets(ctx, updates, &rsc)
+		heads, err := startPoint.db.CommitHeadUpdates(ctx, updates, &rsc)
 		WaitForReplicationController(ctx, rsc)
 
 		// The check in doCommit can go stale before the ref update, so the storage layer compares the head against
@@ -520,6 +532,18 @@ func (tx *DoltTransaction) commitHeads(
 
 		if err != nil {
 			return nil, nil, err
+		}
+		commits := make([]*doltdb.Commit, len(changes))
+		index := 0
+		for i, change := range changes {
+			index++ // Each working set is followed by its optional branch head.
+			if change.commit != nil {
+				commits[i], err = doltdb.HashToCommit(ctx, startPoint.db.ValueReadWriter(), startPoint.db.NodeStore(), heads[index])
+				if err != nil {
+					return nil, nil, err
+				}
+				index++
+			}
 		}
 		for _, state := range states {
 			doltdb.BranchActivityWriteEvent(ctx, state.dbState.dbName, state.head)

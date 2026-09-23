@@ -282,14 +282,14 @@ func (c *Commit) ResolveRootValue(ctx context.Context) (RootValue, error) {
 
 // PendingCommit represents a commit that hasn't yet been written to storage. It contains a root value and options to
 // use when committing it. Use a PendingCommit when it's important to update the working set and HEAD together
-// atomically, via doltdb.CommitDatasets
+// atomically, via doltdb.CommitHeadUpdates.
 type PendingCommit struct {
 	Roots         Roots
 	Val           types.Value
 	CommitOptions datas.CommitOptions
 }
 
-// NewPendingCommit returns a new PendingCommit object to be written with doltdb.CommitDatasets.
+// NewPendingCommit returns a new PendingCommit object to be written with doltdb.CommitHeadUpdates.
 // |roots| are the current roots to include in the PendingCommit. roots.Staged is used as the new root to package in the
 // commit, once written.
 // |headRef| is the ref of the HEAD the commit will update

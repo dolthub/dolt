@@ -28,7 +28,6 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	lru "github.com/hashicorp/golang-lru/v2"
-	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -1860,7 +1859,7 @@ func (ddb *DoltDB) UpdateWorkingSet(
 	if workingSet.Ref() != workingSetRef {
 		return fmt.Errorf("working set ref %s does not match target %s", workingSet.Ref(), workingSetRef)
 	}
-	_, err := ddb.CommitDatasets(ctx, []DatasetUpdate{{
+	_, err := ddb.CommitHeadUpdates(ctx, []HeadUpdate{WorkingSetUpdate{
 		WorkingSet: workingSet,
 		PrevHash:   prevHash,
 		Meta:       meta,
@@ -1882,180 +1881,6 @@ func (ddb *DoltDB) UpdateWorkingSet(
 	}
 
 	return err
-}
-
-// DatasetUpdate describes a working set and an optional branch commit to publish atomically.
-// TODO: we want this to be an interface called HeadUpdate that mirrors the underlying datas.CommitDatasets call so that it
-// generalizes to any kind of dataset update. We support exactly two kinds right now, BranchHeadUpdate and
-// WorkingSetUpdate. Extract an interface similar to the one in the datas package (but as stripped down as possible,
-// probably only a BuildDatasetUpdate that returns the corresponding datas.DatasetUpdate is necessary).
-type DatasetUpdate struct {
-	WorkingSet *WorkingSet
-	PrevHash   hash.Hash
-	Meta       *datas.WorkingSetMeta
-	Commit     *PendingCommit
-	// ExpectedHead, when supplied, is the head used to merge Commit before publication.
-	ExpectedHead *hash.Hash
-}
-
-// CommitDatasets publishes all updates in a single storage transaction. Returned commits
-// correspond to updates, with nil entries for updates that only change a working set.
-// TODO: after the HeadUpdate refactoring above, this method should return a slice of hash.Hash that the caller is
-// responsible for interpreting appropriately (they know what kinds of refs they passed this method, and the
-// return slice will have the same order). Then this method should be renamed to CommitHeadUpdates.
-func (ddb *DoltDB) CommitDatasets(
-	ctx context.Context,
-	updates []DatasetUpdate,
-	replicationStatus *ReplicationStatusController,
-) ([]*Commit, error) {
-	var pending []datas.DatasetUpdate
-
-	// TODO: no sense keeping track of which indexes in the return value correspond to commits.
-	//  Just treat the dataset ID as a ref and see if it's a commit. This lets us make this code more general, to handle
-	//  more kinds of HEAD updates
-	commitIndexes := make(map[int]int)
-
-	// TODO: similarly, we don't need an explicit notifications list here, we can infer which notifications to send
-	//  based on the kinds of datasets that we updated.
-	notifications := make([]func(), 0, len(updates))
-
-	for i, update := range updates {
-		wsRef := update.WorkingSet.Ref()
-		wsDS, err := ddb.db.GetDataset(ctx, wsRef.String())
-		if err != nil {
-			return nil, err
-		}
-		spec, notify, err := ddb.writeWorkingSet(ctx, wsRef, update.WorkingSet, update.Meta, wsDS)
-		if err != nil {
-			return nil, err
-		}
-		notifications = append(notifications, notify)
-		pending = append(pending, datas.WorkingSetUpdate{
-			WorkingSetDS: wsDS.ID(),
-			WorkingSet:   *spec,
-			PrevWsHash:   update.PrevHash,
-		})
-
-		if update.Commit != nil {
-			headRef, err := wsRef.ToHeadRef()
-			if err != nil {
-				return nil, err
-			}
-			headDS, err := ddb.db.GetDataset(ctx, headRef.String())
-			if err != nil {
-				return nil, err
-			}
-
-			// TODO: this check isn't appropriate here. It can only be performed in the doUpdate function in the datas
-			//  package, which is where we hold the optimistic lock for the root. Only during that window can a test and
-			//  set operation be performed atomically, which is the point of this check.
-			if update.ExpectedHead != nil {
-				head, _ := headDS.MaybeHeadAddr()
-				if head != *update.ExpectedHead {
-					return nil, datas.ErrMergeNeeded
-				}
-			}
-			commitIndexes[i] = len(pending)
-			pending = append(pending, datas.CommitUpdate{
-				CommitDS:     headDS,
-				CommitOpts:   update.Commit.CommitOptions,
-				WorkingSetDS: wsDS.ID(),
-				PrevWsHash:   update.PrevHash,
-				RootVal:      update.Commit.Roots.Staged.NomsValue(),
-			})
-		}
-	}
-
-	datasets, err := ddb.db.withReplicationStatusController(replicationStatus).CommitDatasets(ctx, pending)
-	if err != nil {
-		return nil, err
-	}
-	for _, notify := range notifications {
-		notify()
-	}
-
-	commits := make([]*Commit, len(updates))
-	for i, index := range commitIndexes {
-		commitRef, ok, err := datasets[index].MaybeHeadRef()
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			return nil, errors.New("commit has no head after successful update")
-		}
-		dc, err := datas.LoadCommitRef(ctx, ddb.vrw, commitRef)
-		if err != nil {
-			return nil, err
-		}
-		if dc.IsGhost() {
-			return nil, ErrGhostCommitEncountered
-		}
-		commits[i], err = NewCommit(ctx, ddb.vrw, ddb.ns, dc)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return commits, nil
-}
-
-// writeWorkingSet writes the specified |workingSet| at the specified |workingSetRef| with the
-// specified ws metadata, |meta|, in the dataset |wsDs| and returns the created WorkingSetSpec along with any error
-// encountered. The returned callback notifies listeners after the batch is published.
-// TODO: rather than returning a notification func here, the one call site should notify working set listeners on its own
-func (ddb *DoltDB) writeWorkingSet(
-	ctx context.Context,
-	workingSetRef ref.WorkingSetRef,
-	workingSet *WorkingSet,
-	meta *datas.WorkingSetMeta,
-	wsDs datas.Dataset,
-) (wsSpec *datas.WorkingSetSpec, notify func(), err error) {
-	var prevRoot RootValue
-	if wsDs.HasHead() {
-		prevWorkingSet, err := newWorkingSet(ctx, workingSetRef.String(), ddb.vrw, ddb.ns, wsDs)
-		if err != nil {
-			return nil, nil, err
-		}
-		prevRoot = prevWorkingSet.workingRoot
-	} else {
-		// If the working set dataset doesn't have a head, then there isn't a previous root value for us to use
-		// for the database update, so instead we pass in an EmptyRootValue so that implementations of
-		// DatabaseUpdateListener don't have to do nil checking. This can happen when a new database is created
-		// or when a new branch is created.
-		prevRoot, err = EmptyRootValue(ctx, ddb.vrw, ddb.ns)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	var branchName string
-	if strings.HasPrefix(workingSet.Name, "heads/") {
-		branchName = workingSet.Name[len("heads/"):]
-	}
-
-	wsSpec, err = workingSet.writeValues(ctx, ddb, meta, false)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	notify = func() {
-		if branchName != "" {
-			for _, listener := range DatabaseUpdateListeners {
-				sqlCtx, ok := ctx.(*sql.Context)
-				if ok {
-					err := listener.WorkingRootUpdated(sqlCtx,
-						ddb.databaseName,
-						branchName,
-						prevRoot,
-						workingSet.WorkingRoot())
-					if err != nil {
-						logrus.Errorf("error notifying working root listener of update: %s", err.Error())
-					}
-				}
-			}
-		}
-	}
-
-	return wsSpec, notify, nil
 }
 
 // DeleteWorkingSet deletes the working set given

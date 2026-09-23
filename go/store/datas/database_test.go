@@ -131,6 +131,19 @@ func (suite *DatabaseSuite) TestCommitDatasetsAtomic() {
 	suite.Require().NoError(err)
 	suite.Equal(before, after)
 
+	// An up-to-date dataset is not sufficient if the commit was prepared against
+	// a different head. Validate the caller's expected head in the atomic update.
+	stale = append([]DatasetUpdate(nil), updates...)
+	lastCommit = *stale[5].(*CommitUpdate)
+	expected := hash.Hash{}
+	lastCommit.ExpectedHead = &expected
+	stale[5] = lastCommit
+	_, err = suite.db.CommitDatasets(ctx, stale)
+	suite.ErrorIs(err, ErrMergeNeeded)
+	after, err = suite.db.rt.Root(ctx)
+	suite.Require().NoError(err)
+	suite.Equal(before, after)
+
 	_, err = suite.db.CommitDatasets(ctx, append(updates, updates[0]))
 	suite.ErrorContains(err, "duplicate dataset update")
 
@@ -152,6 +165,55 @@ func (suite *DatabaseSuite) TestCommitDatasetsAtomic() {
 	after, err = suite.db.rt.Root(ctx)
 	suite.Require().NoError(err)
 	suite.Equal(before, after)
+}
+
+// interleavedDatasetUpdate changes the database after building an update, but
+// before CommitDatasets attempts to publish its batch.
+type interleavedDatasetUpdate struct {
+	DatasetUpdate
+	afterBuild func()
+}
+
+func (u interleavedDatasetUpdate) BuildCommitValue(ctx context.Context, db *database) (hash.Hash, error) {
+	h, err := u.DatasetUpdate.BuildCommitValue(ctx, db)
+	if err == nil {
+		u.afterBuild()
+	}
+	return h, err
+}
+
+func (suite *DatabaseSuite) TestCommitDatasetsHeadChangesDuringBuild() {
+	ctx := context.Background()
+	ds, err := suite.db.GetDataset(ctx, "refs/heads/main")
+	suite.Require().NoError(err)
+	ds, err = CommitValue(ctx, suite.db, ds, types.String("initial"))
+	suite.Require().NoError(err)
+	expected, _ := ds.MaybeHeadAddr()
+	root, err := suite.db.WriteValue(ctx, types.String("working root"))
+	suite.Require().NoError(err)
+	var concurrentRoot hash.Hash
+	updates := []DatasetUpdate{
+		WorkingSetUpdate{WorkingSetDS: "workingSets/heads/other", WorkingSet: WorkingSetSpec{
+			Meta: &WorkingSetMeta{}, WorkingRoot: root, StagedRoot: root,
+		}},
+		interleavedDatasetUpdate{
+			DatasetUpdate: CommitUpdate{CommitDS: ds, ExpectedHead: &expected, RootVal: types.String("batch"), CommitOpts: CommitOptions{Meta: &CommitMeta{}}},
+			afterBuild: func() {
+				_, err := CommitValue(ctx, suite.db, ds, types.String("concurrent"))
+				suite.Require().NoError(err)
+				concurrentRoot, err = suite.db.rt.Root(ctx)
+				suite.Require().NoError(err)
+			},
+		},
+	}
+	_, err = suite.db.CommitDatasets(ctx, updates)
+	suite.ErrorIs(err, ErrMergeNeeded)
+	actual, err := suite.db.rt.Root(ctx)
+	suite.Require().NoError(err)
+	suite.Equal(concurrentRoot, actual)
+	ws, err := suite.db.GetDataset(ctx, "workingSets/heads/other")
+	suite.Require().NoError(err)
+	suite.False(ws.HasHead())
 }
 
 func (suite *DatabaseSuite) TestTolerateUngettableRefs() {

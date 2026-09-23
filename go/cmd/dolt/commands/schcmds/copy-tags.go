@@ -288,14 +288,23 @@ func doltCommitUpdatedTags(ctx *sql.Context, tableResolver doltdb.TableResolver,
 		return err
 	}
 
-	_, err = doltDB.CommitDatasets(ctx, []doltdb.DatasetUpdate{{
+	headRef, err := workingSet.Ref().ToHeadRef()
+	if err != nil {
+		return err
+	}
+	_, err = doltDB.CommitHeadUpdates(ctx, []doltdb.HeadUpdate{doltdb.WorkingSetUpdate{
 		WorkingSet: workingSet,
-		Commit:     pendingCommit,
 		PrevHash:   prevHash,
 		Meta: &datas.WorkingSetMeta{
 			Name:  commitStagedProps.Committer.Name,
 			Email: commitStagedProps.Committer.Email,
 		},
+	}, doltdb.BranchHeadUpdate{
+		HeadRef:       headRef,
+		Root:          pendingCommit.Roots.Staged,
+		CommitOptions: pendingCommit.CommitOptions,
+		WorkingSetRef: workingSet.Ref(),
+		PrevWsHash:    prevHash,
 	}}, nil)
 	return err
 }
