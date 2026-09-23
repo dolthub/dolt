@@ -228,6 +228,7 @@ func NewSqlEngine(
 		IsReadOnly:     config.IsReadOnly,
 		IsServerLocked: config.IsServerLocked,
 	}).WithBackgroundThreads(bThreads)
+	sqle.ConfigureDoltAnalyzer(engine.Analyzer)
 
 	if err := configureBinlogPrimaryController(engine); err != nil {
 		return nil, err

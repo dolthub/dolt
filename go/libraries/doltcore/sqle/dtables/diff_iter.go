@@ -419,8 +419,9 @@ func (itr *diffPartitionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 
 		row, err := (*itr.currentRowIter).Next(ctx)
 		if err == io.EOF {
-			itr.currentPartition = nil
-			itr.currentRowIter = nil
+			if closeErr := itr.Close(ctx); closeErr != nil {
+				return nil, closeErr
+			}
 			return nil, err
 		} else if err != nil {
 			return nil, err
@@ -430,6 +431,12 @@ func (itr *diffPartitionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 }
 
-func (itr *diffPartitionRowIter) Close(_ *sql.Context) error {
-	return nil
+func (itr *diffPartitionRowIter) Close(ctx *sql.Context) error {
+	itr.currentPartition = nil
+	if itr.currentRowIter == nil {
+		return nil
+	}
+	child := *itr.currentRowIter
+	itr.currentRowIter = nil
+	return child.Close(ctx)
 }
