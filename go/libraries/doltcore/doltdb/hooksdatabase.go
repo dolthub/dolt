@@ -101,7 +101,7 @@ func (db hooksDatabase) PostCommitHooks() []CommitHook {
 
 func (db hooksDatabase) ExecuteCommitHooks(ctx context.Context, ds datas.Dataset, replicaWrite bool) {
 	hooks := db.hooks.get()
-	onlyWS := ref.IsWorkingSet(ds.ID())
+	isWorkingSet := ref.IsWorkingSet(ds.ID())
 	var wg sync.WaitGroup
 	rsc := db.rsc
 	var ioff int
@@ -111,7 +111,7 @@ func (db hooksDatabase) ExecuteCommitHooks(ctx context.Context, ds datas.Dataset
 		rsc.NotifyWaitFailed = append(rsc.NotifyWaitFailed, make([]func(), len(hooks))...)
 	}
 	for il, hook := range hooks {
-		if (!onlyWS || hook.ExecuteForWorkingSets()) && (!replicaWrite || hook.ExecuteForReplicaWrite()) {
+		if (!isWorkingSet || hook.ExecuteForWorkingSets()) && (!replicaWrite || hook.ExecuteForReplicaWrite()) {
 			i := il
 			hook := hook
 			wg.Add(1)

@@ -56,6 +56,7 @@ var ErrUnresolvedConstraintViolationsCommit = errors.New("Committing this transa
 const ConstraintViolationsListPrefix = "\nConstraint violations: "
 
 // TODO: remove this
+// TODO: let's actually get rid of it now, it's unused and untested
 func TransactionsDisabled(ctx *sql.Context) bool {
 	enabled, err := ctx.GetSessionVariable(ctx, TransactionsDisabledSysVar)
 	if err != nil {

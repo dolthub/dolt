@@ -535,21 +535,19 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 	return err
 }
 
-// doltCommit creates commits for a SQL transaction, respecting the multi-branch setting.
+// doltCommit performs a dolt commit for the current transaction.
+// If @@dolt_multi_branch_commit is enabled, all dirty working sets are committed with corresponding dolt commits on
+// their respective branch HEADS. Otherwise, the only the current checked out branch is committed, and an error is
+// returned if there are any other dirty working sets.
 func (d *DoltSession) doltCommit(ctx *sql.Context, tx sql.Transaction, dirties []*branchState) error {
-	dirtyBranchState := dirties[0]
-	multi, err := GetBooleanSystemVar(ctx, DoltMultiBranchCommit)
+	multiBranchCommit, err := GetBooleanSystemVar(ctx, DoltMultiBranchCommit)
 	if err != nil {
 		return err
 	}
+
 	if len(dirties) > 1 {
-		if !multi {
+		if !multiBranchCommit {
 			return ErrDirtyWorkingSets
-		}
-	} else {
-		// A single-branch automatic commit still targets the selected branch.
-		if err := d.validateDoltCommit(ctx, dirtyBranchState); err != nil {
-			return err
 		}
 	}
 
@@ -575,42 +573,71 @@ func (d *DoltSession) doltCommit(ctx *sql.Context, tx sql.Transaction, dirties [
 	if err != nil {
 		return err
 	}
+
 	if len(dirties) > 1 {
-		if dbName == "" {
-			return fmt.Errorf("cannot dolt_commit with no database selected")
-		}
-		baseName, _ := doltdb.SplitRevisionDbName(dbName)
-		pending := make([]*doltdb.PendingCommit, len(dirties))
-		defer ctx.SetCurrentDatabase(dbName)
-		for i, branch := range dirties {
-			if !strings.EqualFold(baseName, branch.dbState.dbName) {
-				return ErrMultipleDatabases
-			}
-			name := branch.RevisionDbName()
-			ctx.SetCurrentDatabase(name)
-			if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Merge); err != nil {
-				return err
-			}
-			pending[i], err = d.PendingCommitAllStaged(ctx, name, branch, commitStagedProps)
-			if err != nil {
-				return err
-			}
-		}
-		ctx.SetCurrentDatabase(dbName)
-		_, err := d.commitBranchStates(ctx, dirties, tx, pending)
+		return d.doltCommitAllDirtyBranches(ctx, tx, dirties, dbName, commitStagedProps)
+	}
+
+	if err := d.validateDoltCommit(ctx, dirties[0]); err != nil {
 		return err
 	}
-	pendingCommit, err = d.PendingCommitAllStaged(ctx, dbName, dirtyBranchState, commitStagedProps)
+
+	pendingCommit, err = d.PendingCommitAllStaged(ctx, dbName, dirties[0], commitStagedProps)
 	if err != nil {
 		return err
 	}
 
 	// Nothing to stage, so fall back to CommitWorkingSet logic instead
 	if pendingCommit == nil {
-		return d.commitWorkingSet(ctx, dirtyBranchState, tx)
+		return d.commitWorkingSet(ctx, dirties[0], tx)
 	}
 
 	_, err = d.DoltCommit(ctx, dbName, tx, pendingCommit)
+	return err
+}
+
+func (d *DoltSession) doltCommitAllDirtyBranches(
+	ctx *sql.Context,
+	tx sql.Transaction,
+	dirties []*branchState,
+	dbName string,
+	commitStagedProps actions.CommitStagedProps,
+) error {
+	if dbName == "" {
+		return fmt.Errorf("cannot dolt_commit with no database selected")
+	}
+	baseName, _ := doltdb.SplitRevisionDbName(dbName)
+	pending := make([]*doltdb.PendingCommit, len(dirties))
+
+	// TODO: this is wrong. Under no circumstances should we modify the current database for these operations. Rather than doing this,
+	// operations that inspect the current database in their logic should be refactored to take a database name as an argument.
+	// Existing call sites that expect the current database can either pass ctx.CurrentDatabase(), or else we can introduce new methods
+	// with the suffix `ForCurrentDatabase` that existing call sites use instead.
+	defer ctx.SetCurrentDatabase(dbName)
+
+	for i, branch := range dirties {
+		if !strings.EqualFold(baseName, branch.dbState.dbName) {
+			return ErrMultipleDatabases
+		}
+
+		if err := d.validateDoltCommit(ctx, branch); err != nil {
+			return err
+		}
+
+		name := branch.RevisionDbName()
+		ctx.SetCurrentDatabase(name)
+		if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Merge); err != nil {
+			return err
+		}
+		var err error
+		pending[i], err = d.PendingCommitAllStaged(ctx, name, branch, commitStagedProps)
+		if err != nil {
+			return err
+		}
+	}
+
+	ctx.SetCurrentDatabase(dbName)
+	_, err := d.commitBranchStates(ctx, dirties, tx, pending)
 	return err
 }
 
@@ -1020,6 +1047,7 @@ func (d *DoltSession) Rollback(ctx *sql.Context, tx sql.Transaction) error {
 	return nil
 }
 
+// VisitGCRoots invokes the provided keep function for every root in this session for the database named.
 // As part of GC, ongoing *DoltSessions are asked to make their roots available to the GC process.
 // A *DoltSession has the following roots:
 // 1) All of the branchStates for the database.
