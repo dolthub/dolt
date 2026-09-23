@@ -462,6 +462,7 @@ func (tx *DoltTransaction) commitHeads(
 					return nil, nil, err
 				}
 			}
+
 			workingSets[i] = ws
 			updates = append(updates, doltdb.WorkingSetUpdate{
 				WorkingSet: ws,
