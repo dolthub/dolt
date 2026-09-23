@@ -1842,6 +1842,40 @@ func RunMultiBranchTransactionTests(t *testing.T, harness DoltEnginetestHarness,
 	}
 }
 
+func RunMultiBranchCommitTests(t *testing.T, harness DoltEnginetestHarness, prepared bool) {
+	defer harness.Close()
+	for _, script := range DoltMultiBranchCommitTests {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestScript(t, h, script)
+			}
+		}()
+	}
+	for _, automatic := range []bool{false, true} {
+		name := "dolt_commit"
+		if automatic {
+			name = "transaction_commit"
+		}
+		t.Run(name, func(t *testing.T) {
+			for _, script := range multiBranchCommitVariableTransactions(automatic) {
+				func() {
+					h := harness.NewHarness(t)
+					defer h.Close()
+					if prepared {
+						enginetest.TestTransactionScriptPrepared(t, h, script)
+					} else {
+						enginetest.TestTransactionScript(t, h, script)
+					}
+				}()
+			}
+		})
+	}
+}
+
 func RunStatsHistogramTests(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range DoltHistogramTests {
 		func() {

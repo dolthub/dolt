@@ -36,6 +36,23 @@ import (
 
 // doltCommit is the stored procedure version for the CLI command `dolt commit`.
 func doltCommit(ctx *sql.Context, args ...string) (sql.RowIter, error) {
+	if len(dsess.DSessFromSess(ctx.Session).DirtyBranches()) > 1 {
+		multi, err := dsess.GetBooleanSystemVar(ctx, dsess.DoltMultiBranchCommit)
+		if err != nil {
+			return nil, err
+		}
+		if multi {
+			rows, err := doDoltCommitAll(ctx, args...)
+			if err != nil {
+				return nil, err
+			}
+			// Keep dolt_commit's hash-only result schema, with one row per branch.
+			for i, row := range rows {
+				rows[i] = sql.Row{row[1]}
+			}
+			return sql.RowsToRowIter(rows...), nil
+		}
+	}
 	commitHash, skipped, err := doDoltCommit(ctx, args)
 	if err != nil {
 		return nil, err
@@ -49,6 +66,14 @@ func doltCommit(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 // doltCommitAll commits each dirty branch in the selected database and returns
 // (branch, hash) rows in branch-name order. All heads and working sets are published together.
 func doltCommitAll(ctx *sql.Context, args ...string) (sql.RowIter, error) {
+	rows, err := doDoltCommitAll(ctx, args...)
+	if err != nil {
+		return nil, err
+	}
+	return sql.RowsToRowIter(rows...), nil
+}
+
+func doDoltCommitAll(ctx *sql.Context, args ...string) ([]sql.Row, error) {
 	apr, err := cli.CreateCommitArgParser(true).Parse(args)
 	if err != nil {
 		return nil, err
@@ -115,7 +140,7 @@ func doltCommitAll(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 		_, branch := doltdb.SplitRevisionDbName(dbNames[i])
 		rows = append(rows, sql.Row{branch, h.String()})
 	}
-	return sql.RowsToRowIter(rows...), nil
+	return rows, nil
 }
 
 // doltCommitHashOut is the stored procedure version for the CLI function `commit`. The first parameter is the variable

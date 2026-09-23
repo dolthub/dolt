@@ -2448,28 +2448,34 @@ var BranchControlTests = []BranchControlTest{
 }
 
 func TestDoltCommitAllChecksEveryBranch(t *testing.T) {
-	harness := newDoltHarness(t)
-	defer harness.Close()
-	engine, err := harness.NewEngine(t)
-	require.NoError(t, err)
-	defer engine.Close()
-	ctx := enginetest.NewContext(harness)
-	ctx.WithClient(sql.Client{User: "root", Address: "localhost"})
-	engine.EngineAnalyzer().Catalog.MySQLDb.AddRootAccount()
-	engine.EngineAnalyzer().Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
-	for _, query := range append(append([]string{}, TestUserSetUpScripts...),
-		"INSERT INTO dolt_branch_control VALUES ('%', 'main', 'testuser', 'localhost', 'merge')",
-		"SET autocommit = 0",
-		"INSERT INTO test VALUES (2, 2)",
-		"INSERT INTO `mydb/other`.test VALUES (3, 3)") {
-		enginetest.RunQueryWithContext(t, engine, harness, ctx, query)
-	}
-	ctx = ctx.WithClient(sql.Client{User: "testuser", Address: "localhost"})
-	enginetest.AssertErrWithCtx(t, engine, harness, ctx, "CALL dolt_commit_all('-am', 'denied')", nil, branch_control.ErrIncorrectPermissions)
-	enginetest.TestQueryWithContext(t, ctx, engine, harness, "SELECT database()", []sql.Row{{"mydb"}}, nil, nil, nil)
-	ctx = ctx.WithClient(sql.Client{User: "root", Address: "localhost"})
-	for _, dbName := range []string{"mydb", "mydb/other"} {
-		enginetest.TestQueryWithContext(t, ctx, engine, harness, "SELECT * FROM `"+dbName+"`.test AS OF 'HEAD'", []sql.Row{{1, 1}}, nil, nil, nil)
+	for _, query := range []string{"CALL dolt_commit_all('-am', 'denied')", "CALL dolt_commit('-am', 'denied')", "COMMIT"} {
+		t.Run(query, func(t *testing.T) {
+			harness := newDoltHarness(t)
+			defer harness.Close()
+			engine, err := harness.NewEngine(t)
+			require.NoError(t, err)
+			defer engine.Close()
+			ctx := enginetest.NewContext(harness)
+			ctx.WithClient(sql.Client{User: "root", Address: "localhost"})
+			engine.EngineAnalyzer().Catalog.MySQLDb.AddRootAccount()
+			engine.EngineAnalyzer().Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
+			for _, query := range append(append([]string{}, TestUserSetUpScripts...),
+				"INSERT INTO dolt_branch_control VALUES ('%', 'main', 'testuser', 'localhost', 'merge')",
+				"SET autocommit = 0",
+				"INSERT INTO test VALUES (2, 2)",
+				"INSERT INTO `mydb/other`.test VALUES (3, 3)") {
+				enginetest.RunQueryWithContext(t, engine, harness, ctx, query)
+			}
+			ctx = ctx.WithClient(sql.Client{User: "testuser", Address: "localhost"})
+			enginetest.RunQueryWithContext(t, engine, harness, ctx, "SET @@dolt_multi_branch_commit=1")
+			enginetest.RunQueryWithContext(t, engine, harness, ctx, "SET @@dolt_transaction_commit=1")
+			enginetest.AssertErrWithCtx(t, engine, harness, ctx, query, nil, branch_control.ErrIncorrectPermissions)
+			enginetest.TestQueryWithContext(t, ctx, engine, harness, "SELECT database()", []sql.Row{{"mydb"}}, nil, nil, nil)
+			ctx = ctx.WithClient(sql.Client{User: "root", Address: "localhost"})
+			for _, dbName := range []string{"mydb", "mydb/other"} {
+				enginetest.TestQueryWithContext(t, ctx, engine, harness, "SELECT * FROM `"+dbName+"`.test AS OF 'HEAD'", []sql.Row{{1, 1}}, nil, nil, nil)
+			}
+		})
 	}
 }
 

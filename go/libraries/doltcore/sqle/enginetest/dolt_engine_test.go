@@ -1878,6 +1878,14 @@ func TestDoltCommitAllTransactionsPrepared(t *testing.T) {
 	RunDoltCommitAllTransactionTests(t, newDoltEnginetestHarness(t), true)
 }
 
+func TestMultiBranchCommit(t *testing.T) {
+	RunMultiBranchCommitTests(t, newDoltEnginetestHarness(t), false)
+}
+
+func TestMultiBranchCommitPrepared(t *testing.T) {
+	RunMultiBranchCommitTests(t, newDoltEnginetestHarness(t), true)
+}
+
 func TestQueriesPrepared(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	defer h.Close()

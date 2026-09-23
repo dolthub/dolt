@@ -528,23 +528,29 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 	}
 
 	if peformDoltCommitInt == 1 {
-		return d.doltCommit(ctx, tx, dirties, err)
+		return d.doltCommit(ctx, tx, dirties)
 	}
 
 	_, err = d.commitBranchStates(ctx, dirties, tx, nil)
 	return err
 }
 
-// doltCommit commits a new dolt commit for the current HEAD
-func (d *DoltSession) doltCommit(ctx *sql.Context, tx sql.Transaction, dirties []*branchState, err error) error {
+// doltCommit creates commits for a SQL transaction, respecting the multi-branch setting.
+func (d *DoltSession) doltCommit(ctx *sql.Context, tx sql.Transaction, dirties []*branchState) error {
 	dirtyBranchState := dirties[0]
-	if len(dirties) > 1 {
-		return ErrDirtyWorkingSets
-	}
-	// if the dirty working set doesn't belong to the currently checked out branch, that's an error
-	err = d.validateDoltCommit(ctx, dirtyBranchState)
+	multi, err := GetBooleanSystemVar(ctx, DoltMultiBranchCommit)
 	if err != nil {
 		return err
+	}
+	if len(dirties) > 1 {
+		if !multi {
+			return ErrDirtyWorkingSets
+		}
+	} else {
+		// A single-branch automatic commit still targets the selected branch.
+		if err := d.validateDoltCommit(ctx, dirtyBranchState); err != nil {
+			return err
+		}
 	}
 
 	message := "Transaction commit"
@@ -567,6 +573,31 @@ func (d *DoltSession) doltCommit(ctx *sql.Context, tx sql.Transaction, dirties [
 	var pendingCommit *doltdb.PendingCommit
 	commitStagedProps, _, err := NewCommitStagedProps(ctx, message)
 	if err != nil {
+		return err
+	}
+	if len(dirties) > 1 {
+		if dbName == "" {
+			return fmt.Errorf("cannot dolt_commit with no database selected")
+		}
+		baseName, _ := doltdb.SplitRevisionDbName(dbName)
+		pending := make([]*doltdb.PendingCommit, len(dirties))
+		defer ctx.SetCurrentDatabase(dbName)
+		for i, branch := range dirties {
+			if !strings.EqualFold(baseName, branch.dbState.dbName) {
+				return ErrMultipleDatabases
+			}
+			name := branch.RevisionDbName()
+			ctx.SetCurrentDatabase(name)
+			if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Merge); err != nil {
+				return err
+			}
+			pending[i], err = d.PendingCommitAllStaged(ctx, name, branch, commitStagedProps)
+			if err != nil {
+				return err
+			}
+		}
+		ctx.SetCurrentDatabase(dbName)
+		_, err := d.commitBranchStates(ctx, dirties, tx, pending)
 		return err
 	}
 	pendingCommit, err = d.PendingCommitAllStaged(ctx, dbName, dirtyBranchState, commitStagedProps)

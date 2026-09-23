@@ -65,8 +65,10 @@ name (myDb/myBranch). The details of this are a little bit subtle:
 
 SQL transactions can atomically update working sets on multiple branches of one database.
 Each working set is merged against its transaction snapshot and validated before any changes are published.
-Transactions spanning separate physical databases remain unsupported. dolt_commit and
-dolt_transaction_commit continue to require at most one dirty branch.
+Transactions spanning separate physical databases remain unsupported. By default, dolt_commit and
+dolt_transaction_commit require at most one dirty branch. Setting dolt_multi_branch_commit to true
+allows both to create commits across all dirty branches in the selected database. In this mode,
+dolt_commit returns one commit-hash row per branch, preserving its single-column result schema.
 dolt_commit_all creates commits for every dirty branch in the selected database and
 publishes those commits together with their working sets in the same atomic update.
 
