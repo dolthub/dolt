@@ -1891,23 +1891,28 @@ func (ddb *DoltDB) CommitHeadUpdates(
 	updates []HeadUpdate,
 	replicationStatus *ReplicationStatusController,
 ) ([]hash.Hash, error) {
-	// TODO: only get a previous root snapshot and keep track of working sets if there are listeners (there usually aren't), and it's expensive.
-
-	// We need a previous root snapshot to determine before and after for any working set change listeners
-	previousRoot, err := ddb.NomsRoot(ctx)
-	if err != nil {
-		return nil, err
+	_, sqlContext := ctx.(*sql.Context)
+	notifyListeners := sqlContext && len(DatabaseUpdateListeners) > 0
+	var previousRoot hash.Hash
+	var workingSetsBefore []*WorkingSet
+	var err error
+	if notifyListeners {
+		// Only listeners need a snapshot and before / after working set values.
+		previousRoot, err = ddb.NomsRoot(ctx)
+		if err != nil {
+			return nil, err
+		}
+		workingSetsBefore = make([]*WorkingSet, len(updates))
 	}
 
 	dsUpdates := make([]datas.DatasetUpdate, len(updates))
-	workingSetsBefore := make([]*WorkingSet, len(updates))
 	for i, update := range updates {
 		dsUpdates[i], err = update.BuildDatasetUpdate(ctx, ddb)
 		if err != nil {
 			return nil, err
 		}
 
-		if ref.IsWorkingSet(dsUpdates[i].DatasetID()) {
+		if notifyListeners && ref.IsWorkingSet(dsUpdates[i].DatasetID()) {
 			wsRef := ref.NewWorkingSetRef(dsUpdates[i].DatasetID())
 			workingSetsBefore[i], err = ddb.ResolveWorkingSetAtRoot(ctx, wsRef, previousRoot)
 			if errors.Is(err, ErrWorkingSetNotFound) {
@@ -1930,7 +1935,7 @@ func (ddb *DoltDB) CommitHeadUpdates(
 	heads := make([]hash.Hash, len(datasets))
 	for i, ds := range datasets {
 		heads[i], _ = ds.MaybeHeadAddr()
-		if ds.IsWorkingSet() {
+		if notifyListeners && ds.IsWorkingSet() {
 			after, err := newWorkingSet(ctx, ds.ID(), ddb.vrw, ddb.ns, ds)
 			if err != nil {
 				logrus.Errorf("error reading published working set for listeners: %s", err)

@@ -294,6 +294,79 @@ func TestCommitHeadUpdatesChecksPreparedHeadBeforePublishing(t *testing.T) {
 	require.Equal(t, []string{"refs/heads/main"}, branchHook.datasets)
 }
 
+type notificationSnapshotCountingDatabase struct {
+	datas.Database
+	snapshots int
+}
+
+func (db *notificationSnapshotCountingDatabase) GetDatasetByRootHash(ctx context.Context, id string, root hash.Hash) (datas.Dataset, error) {
+	db.snapshots++
+	return db.Database.GetDatasetByRootHash(ctx, id, root)
+}
+
+type notificationValueCountingStore struct {
+	types.ValueReadWriter
+	reads int
+}
+
+func (s *notificationValueCountingStore) MustReadValue(ctx context.Context, h hash.Hash) (types.Value, error) {
+	s.reads++
+	return s.ValueReadWriter.MustReadValue(ctx, h)
+}
+
+func TestCommitHeadUpdatesOnlyLoadsWorkingSetsForListeners(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		listener   bool
+		sqlContext bool
+	}{
+		{"no listeners", false, true},
+		{"listener", true, true},
+		{"non-SQL context", true, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ddb, ctx, commit := newMemDoltDBWithDefaultBranch(t, "main")
+			root, err := commit.GetRootValue(ctx)
+			require.NoError(t, err)
+			ws := EmptyWorkingSet(ref.NewWorkingSetRef("heads/main")).WithWorkingRoot(root).WithStagedRoot(root)
+			require.NoError(t, ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, hash.Hash{}, TodoWorkingSetMeta(), nil))
+			ws, err = ddb.ResolveWorkingSet(ctx, ws.Ref())
+			require.NoError(t, err)
+			previous, err := ws.HashOf()
+			require.NoError(t, err)
+
+			listeners := DatabaseUpdateListeners
+			t.Cleanup(func() { DatabaseUpdateListeners = listeners })
+			DatabaseUpdateListeners = nil
+			called := 0
+			if test.listener {
+				DatabaseUpdateListeners = []DatabaseUpdateListener{workingRootListener{func(_ string, _, _ RootValue) { called++ }}}
+			}
+			if test.sqlContext {
+				ctx = sql.NewContext(ctx)
+			}
+			db := &notificationSnapshotCountingDatabase{Database: ddb.db.Database}
+			ddb.db.Database = db
+			store := &notificationValueCountingStore{ValueReadWriter: ddb.vrw}
+			ddb.vrw = store
+			heads, err := ddb.CommitHeadUpdates(ctx, []HeadUpdate{WorkingSetUpdate{
+				WorkingSet: ws, PrevHash: previous, Meta: TodoWorkingSetMeta(),
+			}}, nil)
+			require.NoError(t, err)
+			require.Len(t, heads, 1)
+			if test.listener && test.sqlContext {
+				require.Equal(t, 1, called)
+				require.Equal(t, 1, db.snapshots)
+				require.Positive(t, store.reads)
+			} else {
+				require.Zero(t, called)
+				require.Zero(t, db.snapshots)
+				require.Zero(t, store.reads, "neither before nor after working sets should be loaded")
+			}
+		})
+	}
+}
+
 func TestCommitHeadUpdatesIndependentKinds(t *testing.T) {
 	ddb, ctx, commit := newMemDoltDBWithDefaultBranch(t, "main")
 	root, err := commit.GetRootValue(ctx)
