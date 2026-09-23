@@ -3,20 +3,28 @@ on:
   pull_request:
     paths:
       - 'go/**'
-    branches: [main]
-    types: [opened, labeled, unlabeled, synchronize]
+    branches: [ main ]
+    types: [ opened, labeled, unlabeled, synchronize ]
 jobs:
   label:
-    if: github.actor != 'dependabot[bot]'
+    if: ${{ github.actor != 'dependabot[bot]' }}
     runs-on: ubuntu-latest
     permissions:
+      actions: write
       issues: write
       pull-requests: write
+      contents: read
     steps:
+      - name: Check deferred CI
+        uses: $/.github/actions/check-deferred-ci
+        with:
+          timezone: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
       - uses: mheap/github-action-required-labels@v5
         with:
           mode: exactly
           count: 1
           labels: "performance_approved"
           add_comment: true
-          message: "<!-- go-run-output -->\nThis PR is being tested for performance. Please allow ~25 mins for this to complete. If this PR does not result in a performance regression, the `performance_approved` label will be automatically added to this PR."
+          message: "<!-- go-run-output -->
+
+            This PR is being tested for performance. Please allow ~25 mins for this to complete. If this PR does not result in a performance regression, the `performance_approved` label will be automatically added to this PR."

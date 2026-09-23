@@ -71,6 +71,16 @@ func NewJSONSqlWriter(wr io.WriteCloser, sch sql.Schema) (*RowWriter, error) {
 	return w, nil
 }
 
+// NewJSONLSqlWriter returns a writer that encodes each row as one JSON line.
+func NewJSONLSqlWriter(wr io.WriteCloser, sch sql.Schema) (*RowWriter, error) {
+	w, err := NewJSONWriterWithHeader(wr, nil, "", "\n", "\n")
+	if err != nil {
+		return nil, err
+	}
+	w.sqlSch = sch
+	return w, nil
+}
+
 func NewJSONWriterWithHeader(wr io.WriteCloser, outSch schema.Schema, header, footer, separator string) (*RowWriter, error) {
 	bwr := bufio.NewWriterSize(wr, WriteBufSize)
 	return &RowWriter{

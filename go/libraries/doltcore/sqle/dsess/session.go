@@ -82,6 +82,37 @@ type DoltgresSessionLifecycle interface {
 	DoltgresSessionCacheClear()
 }
 
+// DoltgresTransactionLifecycle is an optional semantic transaction hook. The
+// legacy end hook above still handles resource cleanup after either outcome.
+type DoltgresTransactionLifecycle interface {
+	DoltgresTransactionStarted()
+	DoltgresTransactionCommitted()
+	DoltgresTransactionRolledBack()
+	DoltgresSavepointCreated(name string)
+	DoltgresSavepointRolledBack(name string)
+	DoltgresSavepointReleased(name string)
+}
+
+func (d *DoltSession) notifyDoltgresTransactionStarted() {
+	if lifecycle, ok := d.DoltgresSessObj.(DoltgresTransactionLifecycle); ok {
+		lifecycle.DoltgresTransactionStarted()
+	}
+}
+
+func (d *DoltSession) notifyDoltgresTransactionCommitted() {
+	if lifecycle, ok := d.DoltgresSessObj.(DoltgresTransactionLifecycle); ok {
+		lifecycle.DoltgresTransactionCommitted()
+	}
+	d.NotifyTransactionEnd()
+}
+
+func (d *DoltSession) notifyDoltgresTransactionRolledBack() {
+	if lifecycle, ok := d.DoltgresSessObj.(DoltgresTransactionLifecycle); ok {
+		lifecycle.DoltgresTransactionRolledBack()
+	}
+	d.NotifyTransactionEnd()
+}
+
 // NotifyTransactionEnd notifies Doltgres-owned session state that the active
 // transaction has ended. It is safe to call more than once for the same
 // transaction.
@@ -445,12 +476,14 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	if err != nil {
 		return nil, err
 	}
+	_, tx.postgresSavepoints = d.DoltgresSessObj.(DoltgresTransactionLifecycle)
 
 	// The engine sets the transaction after this call as well, but since we begin accessing data below, we need to set
 	// this now to avoid seeding the session state with stale data in some cases. The duplication is harmless since the
 	// code below cannot error. Additionally we clear any state that was cached by replication updates in the block above.
 	d.clear()
 	ctx.SetTransaction(tx)
+	d.notifyDoltgresTransactionStarted()
 
 	// Set session vars for every DB in this session using their current branch head
 	for _, db := range doltDatabases {
@@ -503,7 +536,7 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 	// See comment in |commitBranchState|
 	defer func() {
 		if err == nil {
-			d.NotifyTransactionEnd()
+			d.notifyDoltgresTransactionCommitted()
 			ctx.SetTransaction(nil)
 		}
 	}()
@@ -774,7 +807,7 @@ func (d *DoltSession) commitBranchState(
 	// a new transaction. This should in principle be done by the engine, but it currently only understands explicit
 	// COMMIT statements. Any other statements that commit a transaction, including stored procedures, needs to do this
 	// themselves.
-	d.NotifyTransactionEnd()
+	d.notifyDoltgresTransactionCommitted()
 	ctx.SetTransaction(nil)
 	return newCommit, nil
 }
@@ -889,7 +922,7 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, dbName string, branchSt
 
 // Rollback rolls the given transaction back
 func (d *DoltSession) Rollback(ctx *sql.Context, tx sql.Transaction) error {
-	d.NotifyTransactionEnd()
+	d.notifyDoltgresTransactionRolledBack()
 	// Nothing to do here, we just throw away all our work and let a new transaction begin next statement
 	d.clear()
 	return nil
@@ -1013,6 +1046,9 @@ func (d *DoltSession) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, save
 	}
 
 	dtx.CreateSavepoint(savepointName, roots)
+	if lifecycle, ok := d.DoltgresSessObj.(DoltgresTransactionLifecycle); ok {
+		lifecycle.DoltgresSavepointCreated(savepointName)
+	}
 	return nil
 }
 
@@ -1039,6 +1075,9 @@ func (d *DoltSession) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, 
 			return err
 		}
 	}
+	if lifecycle, ok := d.DoltgresSessObj.(DoltgresTransactionLifecycle); ok {
+		lifecycle.DoltgresSavepointRolledBack(savepointName)
+	}
 
 	return nil
 }
@@ -1058,6 +1097,9 @@ func (d *DoltSession) ReleaseSavepoint(ctx *sql.Context, tx sql.Transaction, sav
 	existed := dtx.ClearSavepoint(savepointName)
 	if !existed {
 		return sql.ErrSavepointDoesNotExist.New(savepointName)
+	}
+	if lifecycle, ok := d.DoltgresSessObj.(DoltgresTransactionLifecycle); ok {
+		lifecycle.DoltgresSavepointReleased(savepointName)
 	}
 
 	return nil
