@@ -60,7 +60,7 @@ func TestDoltgresTransactionLifecycle(t *testing.T) {
 	sess := DefaultSession(emptyDatabaseProvider(), nil)
 	lifecycle := &countingDoltgresTransactionLifecycle{pending: true}
 	sess.DoltgresSessObj = lifecycle
-	tx := DisabledTransaction{}
+	tx := &DoltTransaction{}
 	ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
 
 	assert.NoError(t, sess.Rollback(ctx, tx))

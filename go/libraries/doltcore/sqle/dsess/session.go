@@ -400,12 +400,6 @@ func (d *DoltSession) ClearNotices() {
 
 // StartTransaction refreshes the state of this session and starts a new transaction.
 func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
-	// TODO: this is only necessary to support filter-branch, which needs to set a root directly and not have the
-	//  session state altered when a transaction begins
-	if TransactionsDisabled(ctx) {
-		return DisabledTransaction{}, nil
-	}
-
 	// New transaction, clear all session state
 	d.clear()
 
@@ -507,10 +501,6 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 			ctx.SetTransaction(nil)
 		}
 	}()
-
-	if TransactionsDisabled(ctx) {
-		return nil
-	}
 
 	dirties := d.dirtyWorkingSets()
 	if len(dirties) == 0 {
@@ -1133,10 +1123,6 @@ func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func
 // CreateSavepoint creates a new savepoint for this transaction with the name given. A previously created savepoint
 // with the same name will be overwritten.
 func (d *DoltSession) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, savepointName string) error {
-	if TransactionsDisabled(ctx) {
-		return nil
-	}
-
 	dtx, ok := tx.(*DoltTransaction)
 	if !ok {
 		return fmt.Errorf("expected a DoltTransaction")
@@ -1180,10 +1166,6 @@ func (d *DoltSession) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, save
 // RollbackToSavepoint sets this session's root to the one saved in the savepoint name. It's an error if no savepoint
 // with that name exists.
 func (d *DoltSession) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, savepointName string) error {
-	if TransactionsDisabled(ctx) {
-		return nil
-	}
-
 	dtx, ok := tx.(*DoltTransaction)
 	if !ok {
 		return fmt.Errorf("expected a DoltTransaction")
@@ -1234,10 +1216,6 @@ func (d *DoltSession) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, 
 // ReleaseSavepoint removes the savepoint name from the transaction. It's an error if no savepoint with that name
 // exists.
 func (d *DoltSession) ReleaseSavepoint(ctx *sql.Context, tx sql.Transaction, savepointName string) error {
-	if TransactionsDisabled(ctx) {
-		return nil
-	}
-
 	dtx, ok := tx.(*DoltTransaction)
 	if !ok {
 		return fmt.Errorf("expected a DoltTransaction")
