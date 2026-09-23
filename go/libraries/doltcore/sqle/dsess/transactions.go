@@ -342,10 +342,14 @@ func WaitForReplicationController(ctx *sql.Context, rsc doltdb.ReplicationStatus
 }
 
 // workingSetAndHead is one branch's contribution to an atomic transaction.
+// The working set is always committed, but the commit is optionally nil
 type workingSetAndHead struct {
-	dbName     string
+	// dbName is the revision-qualified name of the database that the working set and commit belong to
+	dbName string
+	// workingSet is the working set to commit, typically from the session
 	workingSet *doltdb.WorkingSet
-	commit     *doltdb.PendingCommit
+	// commit is the dolt commit to create, or nil if only the working set is being committed
+	commit *doltdb.PendingCommit
 }
 
 // doCommit commits the working set and creates a new DoltCommit as specified, in one atomic write
@@ -355,7 +359,7 @@ func (tx *DoltTransaction) doCommit(
 	commit *doltdb.PendingCommit,
 	dbName string,
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
-	workingSets, commits, err := tx.commitDatasets(ctx, []workingSetAndHead{{
+	workingSets, commits, err := tx.commitHeads(ctx, []workingSetAndHead{{
 		dbName:     dbName,
 		workingSet: workingSet,
 		commit:     commit,
@@ -368,8 +372,8 @@ func (tx *DoltTransaction) doCommit(
 	return workingSets[0], commits[0], nil
 }
 
-// commitDatasets atomically commits the dataset changes given
-func (tx *DoltTransaction) commitDatasets(
+// commitHeads atomically commits the head updates given
+func (tx *DoltTransaction) commitHeads(
 	ctx *sql.Context,
 	changes []workingSetAndHead,
 ) ([]*doltdb.WorkingSet, []*doltdb.Commit, error) {

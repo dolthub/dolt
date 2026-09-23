@@ -619,7 +619,7 @@ func (d *DoltSession) commitBranchStates(
 		}
 	}
 
-	_, commits, err := dtx.commitDatasets(ctx, changes)
+	_, commits, err := dtx.commitHeads(ctx, changes)
 	if err != nil {
 		return nil, err
 	}

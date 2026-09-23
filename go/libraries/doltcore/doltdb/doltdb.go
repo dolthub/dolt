@@ -1887,7 +1887,10 @@ func (ddb *DoltDB) UpdateWorkingSet(
 }
 
 // DatasetUpdate describes a working set and an optional branch commit to publish atomically.
-// TODO: return to this, it might be desirable to separate this out into one update object per dataset as in the datas package.
+// TODO: we want this to be an interface called HeadUpdate that mirrors the underlying datas.CommitDatasets call so that it
+// generalizes to any kind of dataset update. We support exactly two kinds right now, BranchHeadUpdate and
+// WorkingSetUpdate. Extract an interface similar to the one in the datas package (but as stripped down as possible,
+// probably only a BuildDatasetUpdate that returns the corresponding datas.DatasetUpdate is necessary).
 type DatasetUpdate struct {
 	WorkingSet *WorkingSet
 	PrevHash   hash.Hash
@@ -1899,6 +1902,9 @@ type DatasetUpdate struct {
 
 // CommitDatasets publishes all updates in a single storage transaction. Returned commits
 // correspond to updates, with nil entries for updates that only change a working set.
+// TODO: after the HeadUpdate refactoring above, this method should return a slice of hash.Hash that the caller is
+// responsible for interpreting appropriately (they know what kinds of refs they passed this method, and the
+// return slice will have the same order). Then this method should be renamed to CommitHeadUpdates.
 func (ddb *DoltDB) CommitDatasets(
 	ctx context.Context,
 	updates []DatasetUpdate,
