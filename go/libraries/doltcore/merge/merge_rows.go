@@ -57,12 +57,9 @@ type MergeOpts struct {
 	// subset of tables.
 	RecordViolationsForTables map[doltdb.TableName]struct{}
 	// RowMergePolicy, when non-nil, is consulted for every three-way row
-	// decision before Dolt classifies it, including convergent edits that
-	// would otherwise merge without inspection. Returning tree.RowMergeDefer
-	// yields Dolt's standard behaviour for that row.
-	//
-	// Installing a policy disables the fast prolly-tree merge, which elides
-	// convergent edits and whole identical subtrees without visiting rows.
+	// decision, including convergent edits that would otherwise merge without
+	// inspection. Returning tree.RowMergeDefer keeps the standard behaviour for
+	// that row.
 	RowMergePolicy RowMergePolicy
 }
 
@@ -71,14 +68,10 @@ type MergeOpts struct {
 // Any of Base, Left and Right may be nil: a nil Base is an insert on both
 // sides, a nil Left or Right is a delete on that side.
 //
-// ValueDesc describes the merged value tuple. A policy needs it twice: to read
-// fields whose encoding is not self-contained -- an adaptive field holds either
-// inline bytes or an out-of-band pointer -- and to build a tuple when it
-// returns tree.RowMergeResolved. NodeStore resolves those out-of-band values
-// and stores any the policy writes.
-//
-// This is a struct rather than a parameter list so that what a policy is handed
-// can grow without breaking callers.
+// ValueDesc describes the merged value tuple. A policy needs it to read fields
+// whose encoding is not self-contained -- an adaptive field holds either inline
+// bytes or an out-of-band pointer -- and to build a tuple for tree.RowMergeResolved.
+// NodeStore resolves those out-of-band values and stores any the policy writes.
 type RowMergeInput struct {
 	Table             doltdb.TableName
 	Base, Left, Right val.Tuple
@@ -92,9 +85,8 @@ type RowMergePolicy func(ctx *sql.Context, in RowMergeInput) (val.Tuple, tree.Ro
 type TableMerger struct {
 	name doltdb.TableName
 
-	// rowMergePolicy is MergeOpts.RowMergePolicy, or nil. It is adapted to a
-	// tree.RowMergePolicy where the merged schema is known, since the value
-	// descriptor a policy needs comes from that schema.
+	// rowMergePolicy is adapted to a tree.RowMergePolicy later, where the
+	// merged schema that supplies its value descriptor is known.
 	rowMergePolicy RowMergePolicy
 
 	leftTbl  *doltdb.Table
@@ -318,8 +310,8 @@ func (rm *RootMerger) MakeTableMerger(ctx context.Context, tblName doltdb.TableN
 		vrw:              rm.vrw,
 		ns:               rm.ns,
 		recordViolations: recordViolations,
+		rowMergePolicy:   mergeOpts.RowMergePolicy,
 	}
-	tm.rowMergePolicy = mergeOpts.RowMergePolicy
 
 	var err error
 	var leftSideTableExists, rightSideTableExists, ancTableExists bool

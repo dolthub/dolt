@@ -38,10 +38,7 @@ type ThreeWayDiffer[K ~[]byte, O Ordering[K]] struct {
 	rDone                     bool
 	keyless                   bool
 	leftAndRightSchemasDiffer bool
-	// schemaChangeInMerge suppresses the row merge policy. A policy returns a
-	// raw tuple, and only a merge where every side shares one schema gives
-	// that tuple an unambiguous shape.
-	schemaChangeInMerge bool
+	schemaChangeInMerge       bool
 }
 
 //var _ DiffIter = (*threeWayDiffer[Item, val.TupleDesc])(nil)
@@ -52,31 +49,22 @@ type resolveCb func(*sql.Context, val.Tuple, val.Tuple, val.Tuple) (val.Tuple, b
 type RowMergeStatus int
 
 const (
-	// RowMergeDefer is the zero value: the differ classifies the row exactly
-	// as it does without a policy, convergent short-circuits included.
+	// RowMergeDefer, the zero value, leaves the row to the default merge.
 	RowMergeDefer RowMergeStatus = iota
-	// RowMergeResolved supplies the merged row. A nil tuple deletes it.
+	// RowMergeResolved supplies the merged row; a nil tuple deletes it.
 	RowMergeResolved
 	// RowMergeConflict records the row as a data conflict.
 	RowMergeConflict
 )
 
-// RowMergePolicy is consulted for every three-way row decision, before the
-// differ classifies it, so that a policy can reach convergent edits as well as
-// divergent ones. Argument order matches resolveCb: left, right, base.
-//
-// Any argument may be nil: a nil base is an add on both sides, a nil left or
-// right is a delete on that side. It is not called when only one side changed
-// the row, which is not a three-way decision.
+// RowMergePolicy decides one three-way row, convergent edits included. Any of
+// left, right, base may be nil: a nil base is an insert on both sides, a nil
+// left or right a delete on that side.
 type RowMergePolicy func(ctx *sql.Context, left, right, base val.Tuple) (val.Tuple, RowMergeStatus, error)
 
-// RunRowMergePolicy consults policy for one three-way row decision and decodes
-// its RowMergeStatus into the answer both merge paths share, so the fast path
-// and the differ path never interpret a status differently. handled is false
-// for RowMergeDefer, meaning the caller applies Dolt's own classification.
-// When handled, exactly one of the remaining results is meaningful:
-// RowMergeResolved yields merged (a nil tuple deletes the row), and
-// RowMergeConflict yields conflict. An unknown status is an error.
+// RunRowMergePolicy runs policy and decodes its status so both merge paths
+// interpret it identically. handled is false for RowMergeDefer. When handled,
+// merged carries the resolved row (nil deletes) and conflict marks a conflict.
 func RunRowMergePolicy(ctx *sql.Context, policy RowMergePolicy, left, right, base val.Tuple) (handled bool, merged val.Tuple, conflict bool, err error) {
 	merged, status, err := policy(ctx, left, right, base)
 	if err != nil {
@@ -132,6 +120,10 @@ func NewThreeWayDiffer[K, V ~[]byte, O Ordering[K]](
 		return nil, err
 	}
 
+	schemaChangeInMerge := diffInfo.LeftSchemaChange ||
+		diffInfo.RightSchemaChange ||
+		diffInfo.LeftAndRightSchemasDiffer
+
 	return &ThreeWayDiffer[K, O]{
 		lIter:                     ld,
 		rIter:                     rd,
@@ -139,9 +131,7 @@ func NewThreeWayDiffer[K, V ~[]byte, O Ordering[K]](
 		rowMergePolicy:            rowMergePolicy,
 		keyless:                   keyless,
 		leftAndRightSchemasDiffer: diffInfo.LeftAndRightSchemasDiffer,
-		schemaChangeInMerge: diffInfo.LeftSchemaChange ||
-			diffInfo.RightSchemaChange ||
-			diffInfo.LeftAndRightSchemasDiffer,
+		schemaChangeInMerge:       schemaChangeInMerge,
 	}, nil
 }
 
@@ -374,19 +364,12 @@ func (d *ThreeWayDiffer[K, O]) newRightEdit(key, base, right Item, typ DiffType)
 	}
 }
 
-// applyRowMergePolicy consults the installed policy for the current matched
-// key. It reports whether the policy decided the row; on RowMergeDefer, or
-// when no policy is installed, the differ's own classification runs.
-func (d *ThreeWayDiffer[K, O]) applyRowMergePolicy(ctx *sql.Context) (bool, ThreeWayDiff, error) {
-	// Keyless tables always use the default reconciler: their rows carry a
-	// cardinality rather than an identity, so a per-row policy has nothing
-	// stable to decide about.
-	//
-	// A merge that also changes schema defers as well. Dolt builds its merged
-	// row through the value merger's result descriptor, so the row is in the
-	// merged schema by construction; a policy returns a bare tuple and has no
-	// such builder. While every side shares one schema that distinction does
-	// not matter, because the three inputs and the result have the same shape.
+// applyRowMergePolicy consults the policy for the current matched key and
+// reports whether it decided the row.
+func (d *ThreeWayDiffer[K, O]) applyRowMergePolicy(ctx *sql.Context) (handled bool, res ThreeWayDiff, err error) {
+	// Keyless rows carry a cardinality rather than an identity, and a
+	// schema-changing merge needs a builder the policy does not have; both
+	// defer to the default merge.
 	if d.rowMergePolicy == nil || d.keyless || d.schemaChangeInMerge {
 		return false, ThreeWayDiff{}, nil
 	}

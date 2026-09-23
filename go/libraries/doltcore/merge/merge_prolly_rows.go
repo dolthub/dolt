@@ -158,9 +158,6 @@ func computeProllyTreePatches(
 	s *MergeStats) (*secondaryMerger, *conflictMerger, error) {
 	ns := tm.ns
 
-	// The value descriptor a policy needs comes from the merged schema, which
-	// is only known here, so the adaptation happens here rather than where the
-	// TableMerger is built.
 	rowPolicy := tm.treeRowMergePolicy(finalSch)
 
 	iter, err := threeWayDiffer(ctx, tm, valueMerger, diffInfo, rowPolicy)
@@ -280,9 +277,9 @@ func computeProllyTreePatches(
 			return nil, nil, err
 		}
 		err = tree.SendPatches(ctx, lDiff, rDiff, patchBuffer, func(left, right tree.Diff) (tree.Diff, bool) {
-			var m val.Tuple
-			var b bool
-			decided := false
+			var mergedRow val.Tuple
+			var resolved bool
+			policyDecided := false
 			if rowPolicy != nil {
 				handled, merged, conflict, pErr := tree.RunRowMergePolicy(ctx, rowPolicy,
 					val.Tuple(left.To), val.Tuple(right.To), val.Tuple(left.From))
@@ -291,30 +288,28 @@ func computeProllyTreePatches(
 					return tree.Diff{}, false
 				}
 				if handled {
-					// A conflict yields (nil, false); a resolution yields the
-					// merged row and keeps it. Either way, Dolt's own merge for
-					// this row is skipped.
-					m, b, decided = merged, !conflict, true
+					// The policy settled the row: take its merged value, or
+					// record a conflict (an unresolved row) when it declined.
+					mergedRow = merged
+					resolved = !conflict
+					policyDecided = true
 				}
 			}
-			if !decided && left.To == nil && right.To == nil {
-				// Convergent delete. Both sides removed the row and the left
-				// map already reflects that, so there is no patch to send and
-				// no conflict to record. This case only reaches the callback
-				// now that convergent edits are visited, and TryMerge has no
-				// answer for a row neither side kept.
+			if !policyDecided && left.To == nil && right.To == nil {
+				// Convergent delete: nothing to merge, and TryMerge panics on
+				// two nil sides.
 				return tree.Diff{}, false
 			}
-			if !decided {
+			if !policyDecided {
 				// On conflict, attempt to merge rows
 				var err error
-				m, b, err = valueMerger.TryMerge(ctx, val.Tuple(left.To), val.Tuple(right.To), val.Tuple(left.From))
+				mergedRow, resolved, err = valueMerger.TryMerge(ctx, val.Tuple(left.To), val.Tuple(right.To), val.Tuple(left.From))
 				if err != nil {
 					mergeErr = err
 					return tree.Diff{}, false
 				}
 			}
-			if !b {
+			if !resolved {
 				s.DataConflicts++
 				conflictDiff := tree.ThreeWayDiff{
 					Op:    tree.DiffOpDivergentModifyConflict,
@@ -335,7 +330,7 @@ func computeProllyTreePatches(
 				tempTupleValue, err := remapTupleWithColumnDefaults(
 					ctx,
 					val.Tuple(left.Key),
-					m,
+					mergedRow,
 					finalSch.GetValueDescriptor(valueMerger.ns),
 					valueMerger.rightMapping,
 					tm,
@@ -348,12 +343,12 @@ func computeProllyTreePatches(
 					mergeErr = err
 					return tree.Diff{}, false
 				}
-				m = tempTupleValue
+				mergedRow = tempTupleValue
 			}
 
 			mergeDiff := left
-			mergeDiff.To = tree.Item(m)
-			return mergeDiff, b
+			mergeDiff.To = tree.Item(mergedRow)
+			return mergeDiff, resolved
 		}, rowPolicy != nil)
 		if err != nil {
 			return nil, nil, err

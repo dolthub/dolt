@@ -372,8 +372,6 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 			}
 
 		case cmp == 0:
-			// Convergent edit: normally left already holds the value and there
-			// is nothing to do, but a caller may need to decide it anyway.
 			if visitConvergent || !bytes.Equal(left.To, right.To) {
 				resolvedPatch, ok := resolveCollision(left, lDiffType, right, rDiffType, cb)
 				// If the collision can be resolved, we record it as a patch.

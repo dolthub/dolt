@@ -372,7 +372,6 @@ var strictnessLevels = []strictnessLevel{
 		},
 	},
 	{
-		// Both sides wrote this document, to different results.
 		name: "documentDivergent",
 		conflict: func(left, right, base val.Tuple) bool {
 			return len(changedFields(base, left)) > 0 &&
@@ -532,8 +531,7 @@ func TestRowMergePolicy_FourStrictnessLevels(t *testing.T) {
 }
 
 // Inertness, by hash: for every case, a nil policy and an always-defer policy
-// must produce identical merged roots. Stronger than comparing outcomes case
-// by case, because it cannot be fooled by a case nobody thought to check.
+// must produce identical merged roots.
 func TestRowMergePolicy_AlwaysDeferIsInertByHash(t *testing.T) {
 	for _, shape := range []struct {
 		name   string
@@ -567,18 +565,10 @@ func TestRowMergePolicy_AlwaysDeferIsInertByHash(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// dumbodb's shape: one key column and one adaptive value column holding a
-// whole document. The four levels then have to look inside that single cell,
-// and -- the part the SQL-table matrix does not exercise -- have to COMPOSE the
-// merged document, because Dolt's cell rule sees one column changed
-// differently on both sides and conflicts.
-//
-// The encoding here is a toy "k=v;k=v" text format, not BSON. Any
-// self-describing encoding demonstrates the same thing without importing
-// dumbodb.
-// ---------------------------------------------------------------------------
-
+// A single adaptive value column holding a whole document. A field-level rule
+// then has to look inside that one cell and compose the merged document,
+// because the cell rule sees one column changed differently on both sides and
+// conflicts.
 var docTableSchema = sch("CREATE TABLE t (pk int PRIMARY KEY, doc longblob NOT NULL)")
 
 func encodeDoc(fields map[string]string) []byte {
