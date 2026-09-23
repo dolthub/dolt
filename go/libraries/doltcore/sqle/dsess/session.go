@@ -579,7 +579,7 @@ func (d *DoltSession) doltCommit(ctx *sql.Context, tx sql.Transaction, dirties [
 		return d.doltCommitAllDirtyBranches(ctx, dbName, tx, dirties, commitStagedProps)
 	}
 
-	if err := d.validateDoltCommit(ctx, dirties[0]); err != nil {
+	if err := d.validateDoltCommit(dbName, dirties[0]); err != nil {
 		return err
 	}
 
@@ -607,24 +607,17 @@ func (d *DoltSession) doltCommitAllDirtyBranches(
 	baseName, _ := doltdb.SplitRevisionDbName(dbName)
 	pending := make([]*doltdb.PendingCommit, len(dirties))
 
-	// TODO: this is wrong. Under no circumstances should we modify the current database for these operations. Rather than doing this,
-	// operations that inspect the current database in their logic should be refactored to take a database name as an argument.
-	// Existing call sites that expect the current database can either pass ctx.CurrentDatabase(), or else we can introduce new methods
-	// with the suffix `ForCurrentDatabase` that existing call sites use instead.
-	defer ctx.SetCurrentDatabase(dbName)
-
 	for i, branch := range dirties {
 		if !strings.EqualFold(baseName, branch.dbState.dbName) {
 			return ErrMultipleDatabases
 		}
 
-		if err := d.validateDoltCommit(ctx, branch); err != nil {
+		name := branch.RevisionDbName()
+		if err := d.validateDoltCommit(name, branch); err != nil {
 			return err
 		}
 
-		name := branch.RevisionDbName()
-		ctx.SetCurrentDatabase(name)
-		if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Merge); err != nil {
+		if err := branch_control.CheckAccessForBranch(ctx, branch.dbState.dbName, branch.head, branch_control.Permissions_Merge); err != nil {
 			return err
 		}
 		var err error
@@ -634,7 +627,6 @@ func (d *DoltSession) doltCommitAllDirtyBranches(
 		}
 	}
 
-	ctx.SetCurrentDatabase(dbName)
 	_, err := d.commitBranchStates(ctx, dirties, tx, pending)
 	return err
 }
@@ -685,8 +677,7 @@ func (d *DoltSession) commitBranchStates(
 	return commits, nil
 }
 
-func (d *DoltSession) validateDoltCommit(ctx *sql.Context, dirtyBranchState *branchState) error {
-	currDb := ctx.GetCurrentDatabase()
+func (d *DoltSession) validateDoltCommit(currDb string, dirtyBranchState *branchState) error {
 	if currDb == "" {
 		return fmt.Errorf("cannot dolt_commit with no database selected")
 	}

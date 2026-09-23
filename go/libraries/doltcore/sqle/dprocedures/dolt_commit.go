@@ -109,10 +109,9 @@ func doDoltCommitAll(ctx *sql.Context, args ...string) ([]sql.Row, error) {
 	}
 	sort.Strings(dbNames)
 	pending := make([]*doltdb.PendingCommit, len(dbNames))
-	defer ctx.SetCurrentDatabase(currentDB)
 	for i, dbName := range dbNames {
-		ctx.SetCurrentDatabase(dbName)
-		if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Merge); err != nil {
+		baseName, branch := doltdb.SplitRevisionDbName(dbName)
+		if err := branch_control.CheckAccessForBranch(ctx, baseName, branch, branch_control.Permissions_Merge); err != nil {
 			return nil, err
 		}
 		pending[i], err = prepareCommit(ctx, dbName, apr)
@@ -123,7 +122,6 @@ func doDoltCommitAll(ctx *sql.Context, args ...string) ([]sql.Row, error) {
 			return nil, fmt.Errorf("nothing to commit on %s", dbName)
 		}
 	}
-	ctx.SetCurrentDatabase(currentDB)
 	commits, err := dSess.DoltCommitMulti(ctx, dSess.GetTransaction(), dbNames, pending)
 	if err != nil {
 		return nil, err
