@@ -1216,6 +1216,14 @@ func TestBranchTransactions(t *testing.T) {
 	RunBranchTransactionTest(t, h)
 }
 
+func TestMultiBranchTransactions(t *testing.T) {
+	RunMultiBranchTransactionTests(t, newDoltEnginetestHarness(t), false)
+}
+
+func TestMultiBranchTransactionsPrepared(t *testing.T) {
+	RunMultiBranchTransactionTests(t, newDoltEnginetestHarness(t), true)
+}
+
 func TestMultiDbTransactions(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunMultiDbTransactionsTest(t, h)

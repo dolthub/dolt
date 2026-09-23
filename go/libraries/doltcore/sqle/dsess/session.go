@@ -1062,8 +1062,11 @@ func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func
 		panic("gc safepoint establishment found inconsistent state; process could not guarantee it could would be able to keep a chunk if we continue")
 	}
 	for _, savepoint := range dtx.savepoints {
-		rv, ok := savepoint.roots[dbName]
-		if ok {
+		for name, rv := range savepoint.roots {
+			baseName, _ := doltdb.SplitRevisionDbName(name)
+			if !strings.EqualFold(baseName, dbName) {
+				continue
+			}
 			h, err := rv.HashOf()
 			if err != nil {
 				return err
@@ -1101,12 +1104,26 @@ func (d *DoltSession) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, save
 			if !ok {
 				return fmt.Errorf("session state for database %s not found", db.Name())
 			}
-			baseName, _ := doltdb.SplitRevisionDbName(db.Name())
-			roots[strings.ToLower(baseName)] = branchState.WorkingSet().WorkingRoot()
+			if branchState.WorkingSet() != nil {
+				roots[strings.ToLower(branchState.RevisionDbName())] = branchState.WorkingSet().WorkingRoot()
+			}
 		}
 	}
 
-	dtx.CreateSavepoint(savepointName, roots)
+	// A physical database can have several branch states in this session.
+	dirtyBranches := make(map[string]bool)
+	d.mu.Lock()
+	for _, dbState := range d.dbStates {
+		for _, branch := range dbState.heads {
+			if ws := branch.WorkingSet(); ws != nil {
+				roots[strings.ToLower(branch.RevisionDbName())] = ws.WorkingRoot()
+				dirtyBranches[strings.ToLower(branch.RevisionDbName())] = branch.dirty
+			}
+		}
+	}
+	d.mu.Unlock()
+
+	dtx.CreateSavepoint(savepointName, roots, dirtyBranches)
 	return nil
 }
 
@@ -1122,16 +1139,43 @@ func (d *DoltSession) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, 
 		return fmt.Errorf("expected a DoltTransaction")
 	}
 
-	roots := dtx.RollbackToSavepoint(savepointName)
-	if roots == nil {
+	point := dtx.RollbackToSavepoint(savepointName)
+	if point == nil {
 		return sql.ErrSavepointDoesNotExist.New(savepointName)
 	}
 
-	for dbName, root := range roots {
+	// Branches first edited after the savepoint weren't in its map. Their
+	// saved value is the value at transaction start, not the latest persisted value.
+	restore := make(map[string]doltdb.RootValue, len(point.roots))
+	for name, root := range point.roots {
+		restore[name] = root
+	}
+	for _, branch := range d.dirtyWorkingSets() {
+		name := strings.ToLower(branch.RevisionDbName())
+		if _, ok := restore[name]; ok {
+			continue
+		}
+		baseName := strings.ToLower(branch.dbState.dbName)
+		start, ok := dtx.dbStartPoints[baseName]
+		if !ok {
+			return fmt.Errorf("database %s unknown to transaction", baseName)
+		}
+		ws, err := start.db.ResolveWorkingSetAtRoot(ctx, branch.WorkingSet().Ref(), start.rootHash)
+		if err != nil {
+			return err
+		}
+		restore[name] = ws.WorkingRoot()
+	}
+	for dbName, root := range restore {
 		err := d.SetWorkingRoot(ctx, dbName, root)
 		if err != nil {
 			return err
 		}
+		branch, _, err := d.lookupDbState(ctx, dbName)
+		if err != nil {
+			return err
+		}
+		branch.dirty = point.dirtyBranches[dbName]
 	}
 
 	return nil

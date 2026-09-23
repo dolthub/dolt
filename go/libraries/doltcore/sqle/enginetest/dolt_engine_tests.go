@@ -1814,7 +1814,22 @@ func RunDoltCommitAllTestsPrepared(t *testing.T, harness DoltEnginetestHarness) 
 
 func RunDoltCommitAllTransactionTests(t *testing.T, harness DoltEnginetestHarness, prepared bool) {
 	defer harness.Close()
-	for _, script := range DoltCommitAllTransactionTests {
+	for _, script := range append(DoltCommitAllTransactionTests, multiBranchTransactionTests(true)...) {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestTransactionScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestTransactionScript(t, h, script)
+			}
+		}()
+	}
+}
+
+func RunMultiBranchTransactionTests(t *testing.T, harness DoltEnginetestHarness, prepared bool) {
+	defer harness.Close()
+	for _, script := range multiBranchTransactionTests(false) {
 		func() {
 			h := harness.NewHarness(t)
 			defer h.Close()

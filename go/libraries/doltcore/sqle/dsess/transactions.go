@@ -96,8 +96,9 @@ type dbRoot struct {
 }
 
 type savepoint struct {
-	roots map[string]doltdb.RootValue
-	name  string
+	roots         map[string]doltdb.RootValue
+	name          string
+	dirtyBranches map[string]bool
 }
 
 func NewDoltTransaction(
@@ -841,12 +842,12 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 
 // CreateSavepoint creates a new savepoint with the name and roots given. If a savepoint with the name given
 // already exists, it's overwritten.
-func (tx *DoltTransaction) CreateSavepoint(name string, roots map[string]doltdb.RootValue) {
+func (tx *DoltTransaction) CreateSavepoint(name string, roots map[string]doltdb.RootValue, dirtyBranches map[string]bool) {
 	existing := tx.findSavepoint(name)
 	if existing >= 0 {
 		tx.savepoints = append(tx.savepoints[:existing], tx.savepoints[existing+1:]...)
 	}
-	tx.savepoints = append(tx.savepoints, savepoint{name: name, roots: roots})
+	tx.savepoints = append(tx.savepoints, savepoint{name: name, roots: roots, dirtyBranches: dirtyBranches})
 }
 
 // findSavepoint returns the index of the savepoint with the name given, or -1 if it doesn't exist
@@ -859,14 +860,14 @@ func (tx *DoltTransaction) findSavepoint(name string) int {
 	return -1
 }
 
-// RollbackToSavepoint returns the root values for all applicable databases associated with the savepoint name given, or nil if no such savepoint can
+// RollbackToSavepoint returns the saved branch roots and dirty flags, or nil if no such savepoint can
 // be found. All savepoints created after the one being rolled back to are no longer accessible.
-func (tx *DoltTransaction) RollbackToSavepoint(name string) map[string]doltdb.RootValue {
+func (tx *DoltTransaction) RollbackToSavepoint(name string) *savepoint {
 	existing := tx.findSavepoint(name)
 	if existing >= 0 {
 		// Clear out any savepoints past this one
 		tx.savepoints = tx.savepoints[:existing+1]
-		return tx.savepoints[existing].roots
+		return &tx.savepoints[existing]
 	}
 	return nil
 }
