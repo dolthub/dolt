@@ -28,6 +28,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	lru "github.com/hashicorp/golang-lru/v2"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -1881,6 +1882,82 @@ func (ddb *DoltDB) UpdateWorkingSet(
 	}
 
 	return err
+}
+
+// CommitHeadUpdates publishes all updates in one storage transaction. Each returned
+// hash is the new dataset head for the input at the same index.
+func (ddb *DoltDB) CommitHeadUpdates(
+	ctx context.Context,
+	updates []HeadUpdate,
+	replicationStatus *ReplicationStatusController,
+) ([]hash.Hash, error) {
+	// Preserve the database snapshot independently of the optimistic locks used by
+	// individual updates. Listeners compare working sets from before and after the batch.
+	previousRoot, err := ddb.NomsRoot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	pending := make([]datas.DatasetUpdate, len(updates))
+	before := make([]*WorkingSet, len(updates))
+	for i, update := range updates {
+		pending[i], err = update.BuildDatasetUpdate(ctx, ddb)
+		if err != nil {
+			return nil, err
+		}
+		if ref.IsWorkingSet(pending[i].DatasetID()) {
+			wsRef := ref.NewWorkingSetRef(pending[i].DatasetID())
+			before[i], err = ddb.ResolveWorkingSetAtRoot(ctx, wsRef, previousRoot)
+			if errors.Is(err, ErrWorkingSetNotFound) {
+				// Listeners receive an empty root for newly created working sets.
+				root, emptyErr := EmptyRootValue(ctx, ddb.vrw, ddb.ns)
+				if emptyErr != nil {
+					return nil, emptyErr
+				}
+				before[i] = EmptyWorkingSet(wsRef).WithWorkingRoot(root)
+			} else if err != nil {
+				return nil, err
+			}
+		}
+	}
+	datasets, err := ddb.db.withReplicationStatusController(replicationStatus).CommitDatasets(ctx, pending)
+	if err != nil {
+		return nil, err
+	}
+	heads := make([]hash.Hash, len(datasets))
+	for i, ds := range datasets {
+		heads[i], _ = ds.MaybeHeadAddr()
+		if ds.IsWorkingSet() {
+			after, err := newWorkingSet(ctx, ds.ID(), ddb.vrw, ddb.ns, ds)
+			if err != nil {
+				logrus.Errorf("error reading published working set for listeners: %s", err)
+				continue
+			}
+			ddb.notifyWorkingRootUpdated(ctx, before[i], after)
+		}
+	}
+	return heads, nil
+}
+
+// notifyWorkingRootUpdated notifies listeners using the working sets from before
+// and after a published batch. Listener failures are non-fatal.
+func (ddb *DoltDB) notifyWorkingRootUpdated(ctx context.Context, before, after *WorkingSet) {
+	sqlCtx, ok := ctx.(*sql.Context)
+	if !ok || len(DatabaseUpdateListeners) == 0 {
+		return
+	}
+	headRef, err := after.Ref().ToHeadRef()
+	if err != nil {
+		logrus.Errorf("error resolving working set head for listeners: %s", err)
+		return
+	}
+	if headRef.GetType() != ref.BranchRefType {
+		return
+	}
+	for _, listener := range DatabaseUpdateListeners {
+		if err := listener.WorkingRootUpdated(sqlCtx, ddb.databaseName, headRef.GetPath(), before.WorkingRoot(), after.WorkingRoot()); err != nil {
+			logrus.Errorf("error notifying working root listener of update: %s", err)
+		}
+	}
 }
 
 // DeleteWorkingSet deletes the working set given

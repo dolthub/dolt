@@ -731,10 +731,9 @@ func (w WorkingSetUpdate) validateHead(context.Context, prolly.AddressMap, hash.
 
 type CommitUpdate struct {
 	CommitDS Dataset
-	// ExpectedHead additionally requires the head used to prepare the update.
+	// ExpectedHead, when nonzero, additionally requires the head used to prepare the update.
 	// It is checked inside the atomic root update, alongside the working-set lock.
-	// TODO: change this to use a zero hash for the empty value, rather than a pointer. This matches use elsewhere in dolt.
-	ExpectedHead *hash.Hash
+	ExpectedHead hash.Hash
 	CommitOpts   CommitOptions
 	WorkingSetDS string
 	PrevWsHash   hash.Hash
@@ -784,7 +783,7 @@ func (c CommitUpdate) validateHead(ctx context.Context, datasets prolly.AddressM
 		return err
 	}
 	expected, _ := c.CommitDS.MaybeHeadAddr()
-	if current != expected || (c.ExpectedHead != nil && current != *c.ExpectedHead) {
+	if current != expected || (!c.ExpectedHead.IsEmpty() && current != c.ExpectedHead) {
 		return ErrMergeNeeded
 	}
 

@@ -135,8 +135,7 @@ func (suite *DatabaseSuite) TestCommitDatasetsAtomic() {
 	// a different head. Validate the caller's expected head in the atomic update.
 	stale = append([]DatasetUpdate(nil), updates...)
 	lastCommit = *stale[5].(*CommitUpdate)
-	expected := hash.Hash{}
-	lastCommit.ExpectedHead = &expected
+	lastCommit.ExpectedHead = root.TargetHash()
 	stale[5] = lastCommit
 	_, err = suite.db.CommitDatasets(ctx, stale)
 	suite.ErrorIs(err, ErrMergeNeeded)
@@ -197,7 +196,7 @@ func (suite *DatabaseSuite) TestCommitDatasetsHeadChangesDuringBuild() {
 			Meta: &WorkingSetMeta{}, WorkingRoot: root, StagedRoot: root,
 		}},
 		interleavedDatasetUpdate{
-			DatasetUpdate: CommitUpdate{CommitDS: ds, ExpectedHead: &expected, RootVal: types.String("batch"), CommitOpts: CommitOptions{Meta: &CommitMeta{}}},
+			DatasetUpdate: CommitUpdate{CommitDS: ds, ExpectedHead: expected, RootVal: types.String("batch"), CommitOpts: CommitOptions{Meta: &CommitMeta{}}},
 			afterBuild: func() {
 				_, err := CommitValue(ctx, suite.db, ds, types.String("concurrent"))
 				suite.Require().NoError(err)

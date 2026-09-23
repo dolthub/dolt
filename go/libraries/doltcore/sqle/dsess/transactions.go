@@ -472,16 +472,17 @@ func (tx *DoltTransaction) commitHeads(
 			}
 
 			pending := change.commit
-			var expectedHead *hash.Hash
+			var expectedHead hash.Hash
 			if pending != nil {
 				headRef, err := ws.Ref().ToHeadRef()
 				if err != nil {
 					return nil, nil, err
 				}
-				expectedHead, err = startPoint.db.GetHashForRefStr(ctx, headRef.String())
+				head, err := startPoint.db.GetHashForRefStr(ctx, headRef.String())
 				if err != nil {
 					return nil, nil, err
 				}
+				expectedHead = *head
 				ws, pending, err = prepareDoltCommit(ctx, change.dbName, startPoint.db, workingSetsAtTxStart[i], pending, ws, states[i].EditOpts())
 				if err != nil {
 					return nil, nil, err
