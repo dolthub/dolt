@@ -134,8 +134,8 @@ func (a *HasAncestor) String() string {
 	return fmt.Sprintf("HAS_ANCESTOR(%s, %s)", a.reference, a.ancestor)
 }
 
-// FunctionName implements the FunctionExpression interface
-func (a *HasAncestor) FunctionName() string {
+// Name implements the FunctionExpression interface
+func (a *HasAncestor) Name() string {
 	return HasAncestorFuncName
 }
 

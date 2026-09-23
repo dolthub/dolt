@@ -85,8 +85,8 @@ func (t *HashOfTable) String() string {
 	return fmt.Sprintf("%s(%s)", HashOfTableFuncName, t.Child.String())
 }
 
-// FunctionName implements the FunctionExpression interface
-func (t *HashOfTable) FunctionName() string {
+// Name implements the FunctionExpression interface
+func (t *HashOfTable) Name() string {
 	return HashOfTableFuncName
 }
 

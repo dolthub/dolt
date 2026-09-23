@@ -194,7 +194,7 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 
 	funcs := make(map[string]sql.Function, len(dfunctions.DoltFunctions))
 	for _, fn := range dfunctions.DoltFunctions {
-		funcs[strings.ToLower(fn.FunctionName())] = fn
+		funcs[strings.ToLower(fn.Name())] = fn
 	}
 
 	tableFuncs := make(map[string]sql.TableFunction, len(dtablefunctions.DoltTableFunctions))
@@ -242,7 +242,7 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 func (p *DoltDatabaseProvider) WithFunctions(fns []sql.Function) *DoltDatabaseProvider {
 	funcs := make(map[string]sql.Function, len(dfunctions.DoltFunctions))
 	for _, fn := range fns {
-		funcs[strings.ToLower(fn.FunctionName())] = fn
+		funcs[strings.ToLower(fn.Name())] = fn
 	}
 	cp := *p
 	cp.functions = funcs

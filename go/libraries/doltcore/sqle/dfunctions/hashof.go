@@ -135,8 +135,8 @@ func (t *HashOf) String() string {
 	return fmt.Sprintf("%s(%s)", t.name, t.Child.String())
 }
 
-// FunctionName implements the FunctionExpression interface
-func (t *HashOf) FunctionName() string {
+// Name implements the FunctionExpression interface
+func (t *HashOf) Name() string {
 	return t.name
 }
 

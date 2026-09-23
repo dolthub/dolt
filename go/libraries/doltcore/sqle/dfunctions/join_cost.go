@@ -41,8 +41,8 @@ func NewJoinCost(ctx *sql.Context, e sql.Expression) sql.Expression {
 	return &JoinCost{q: e}
 }
 
-// FunctionName implements sql.FunctionExpression
-func (c *JoinCost) FunctionName() string {
+// Name implements sql.FunctionExpression
+func (c *JoinCost) Name() string {
 	return "JoinCost"
 }
 
@@ -65,7 +65,7 @@ func (c *JoinCost) IsNullable(ctx *sql.Context) bool {
 }
 
 func (c *JoinCost) String() string {
-	return fmt.Sprintf("%s(%s)", c.FunctionName(), c.q)
+	return fmt.Sprintf("%s(%s)", c.Name(), c.q)
 }
 
 // Eval implements the Expression interface.
