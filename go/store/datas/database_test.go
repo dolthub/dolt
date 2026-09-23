@@ -325,6 +325,25 @@ func (suite *DatabaseSuite) TestDatabaseDuplicateCommit() {
 	suite.IsType(ErrMergeNeeded, err)
 }
 
+func (suite *DatabaseSuite) TestPrebuiltCommitUpdate() {
+	ctx := context.Background()
+	ds, err := suite.db.GetDataset(ctx, "prebuilt")
+	suite.Require().NoError(err)
+	commit, err := suite.db.BuildNewCommit(ctx, ds, types.String("root"), CommitOptions{Meta: &CommitMeta{}})
+	suite.Require().NoError(err)
+	updated, err := suite.db.CommitDatasets(ctx, []DatasetUpdate{PrebuiltCommitUpdate{CommitDS: ds, Commit: commit}})
+	suite.Require().NoError(err)
+	_, err = suite.db.CommitDatasets(ctx, []DatasetUpdate{PrebuiltCommitUpdate{CommitDS: ds, Commit: commit}})
+	suite.ErrorIs(err, ErrMergeNeeded)
+	_, err = suite.db.CommitDatasets(ctx, []DatasetUpdate{&PrebuiltCommitUpdate{CommitDS: updated[0], Commit: commit}})
+	suite.ErrorIs(err, ErrAlreadyCommitted)
+	actual, err := suite.db.GetDataset(ctx, ds.ID())
+	suite.Require().NoError(err)
+	before, _ := updated[0].MaybeHeadAddr()
+	after, _ := actual.MaybeHeadAddr()
+	suite.Equal(before, after)
+}
+
 // TestBuildNewCommitHeadChecks verifies the head relationship that BuildNewCommit enforces for ordinary, amend,
 // and force commits.
 func (suite *DatabaseSuite) TestBuildNewCommitHeadChecks() {

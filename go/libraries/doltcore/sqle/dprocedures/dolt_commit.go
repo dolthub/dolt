@@ -68,7 +68,7 @@ func doltCommitAll(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	var dbNames []string
 	for _, dirty := range dSess.DirtyBranches() {
 		if !strings.EqualFold(dirty.DbName, baseDB) {
-			return nil, dsess.ErrDirtyWorkingSets
+			return nil, dsess.ErrMultipleDatabases
 		}
 		dbNames = append(dbNames, dirty.DbName+"/"+dirty.Branch)
 	}

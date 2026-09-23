@@ -655,8 +655,7 @@ func RunTransactionTests(t *testing.T, h DoltEnginetestHarness, prepared bool) {
 }
 
 func RunBranchTransactionTest(t *testing.T, h DoltEnginetestHarness) {
-	// TODO: The new group of tests should be in their own isolated test method, not in this one.
-	for _, script := range append(BranchIsolationTests, DoltCommitAllTransactionTests...) {
+	for _, script := range BranchIsolationTests {
 		func() {
 			h := h.NewHarness(t)
 			defer h.Close()
@@ -1786,7 +1785,10 @@ func RunDoltCommitTests(t *testing.T, harness DoltEnginetestHarness) {
 	for _, script := range DoltCommitTests {
 		enginetest.TestScript(t, harness, script)
 	}
-	// TODO: here and below, the new test scripts should be in their own test method, not this one.
+}
+
+func RunDoltCommitAllTests(t *testing.T, harness DoltEnginetestHarness) {
+	defer harness.Close()
 	for _, script := range DoltCommitAllTests {
 		h := harness.NewHarness(t)
 		enginetest.TestScript(t, h, script)
@@ -1799,10 +1801,29 @@ func RunDoltCommitTestsPrepared(t *testing.T, harness DoltEnginetestHarness) {
 	for _, script := range DoltCommitTests {
 		enginetest.TestScriptPrepared(t, harness, script)
 	}
+}
+
+func RunDoltCommitAllTestsPrepared(t *testing.T, harness DoltEnginetestHarness) {
+	defer harness.Close()
 	for _, script := range DoltCommitAllTests {
 		h := harness.NewHarness(t)
 		enginetest.TestScriptPrepared(t, h, script)
 		h.Close()
+	}
+}
+
+func RunDoltCommitAllTransactionTests(t *testing.T, harness DoltEnginetestHarness, prepared bool) {
+	defer harness.Close()
+	for _, script := range DoltCommitAllTransactionTests {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestTransactionScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestTransactionScript(t, h, script)
+			}
+		}()
 	}
 }
 

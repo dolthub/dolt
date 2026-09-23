@@ -662,6 +662,8 @@ func (d *DoltSession) validateDoltCommit(ctx *sql.Context, dirtyBranchState *bra
 
 var ErrDirtyWorkingSets = errors.New("Cannot commit changes on more than one branch / database")
 
+var ErrMultipleDatabases = errors.New("Cannot atomically commit changes to more than one database")
+
 // dirtyWorkingSets returns all dirty working sets for this session
 func (d *DoltSession) dirtyWorkingSets() []*branchState {
 	d.mu.Lock()

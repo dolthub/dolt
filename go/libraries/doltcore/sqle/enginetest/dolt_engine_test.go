@@ -1854,6 +1854,22 @@ func TestDoltCommitPrepared(t *testing.T) {
 	RunDoltCommitTestsPrepared(t, harness)
 }
 
+func TestDoltCommitAll(t *testing.T) {
+	RunDoltCommitAllTests(t, newDoltEnginetestHarness(t))
+}
+
+func TestDoltCommitAllPrepared(t *testing.T) {
+	RunDoltCommitAllTestsPrepared(t, newDoltEnginetestHarness(t))
+}
+
+func TestDoltCommitAllTransactions(t *testing.T) {
+	RunDoltCommitAllTransactionTests(t, newDoltEnginetestHarness(t), false)
+}
+
+func TestDoltCommitAllTransactionsPrepared(t *testing.T) {
+	RunDoltCommitAllTransactionTests(t, newDoltEnginetestHarness(t), true)
+}
+
 func TestQueriesPrepared(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	defer h.Close()

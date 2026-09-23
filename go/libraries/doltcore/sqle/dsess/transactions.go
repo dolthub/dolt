@@ -399,8 +399,7 @@ func (tx *DoltTransaction) commitHeads(
 		normalizedName := strings.ToLower(state.dbState.dbName)
 
 		if i > 0 && normalizedName != baseDbName {
-			// TODO: this should be a different error type, the problem is committing to more than one DB, not more than one branch
-			return nil, nil, ErrDirtyWorkingSets
+			return nil, nil, ErrMultipleDatabases
 		}
 
 		baseDbName = normalizedName

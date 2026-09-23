@@ -192,6 +192,9 @@ func TestCopyWorkingSetPreservesDestination(t *testing.T) {
 	source := ref.NewWorkingSetRef("heads/main")
 	target := ref.NewWorkingSetRef("heads/copy")
 	ws := EmptyWorkingSet(source).WithWorkingRoot(root).WithStagedRoot(root)
+	require.ErrorContains(t, ddb.UpdateWorkingSet(ctx, target, ws, hash.Hash{}, TodoWorkingSetMeta(), nil), "does not match target")
+	_, err = ddb.ResolveWorkingSet(ctx, target)
+	require.ErrorIs(t, err, ErrWorkingSetNotFound)
 	require.NoError(t, ddb.UpdateWorkingSet(ctx, source, ws, hash.Hash{}, TodoWorkingSetMeta(), nil))
 	require.NoError(t, ddb.CopyWorkingSet(ctx, source, target, false))
 	copied, err := ddb.ResolveWorkingSet(ctx, target)
@@ -207,15 +210,16 @@ type workingRootListener struct {
 }
 
 type batchCommitHook struct {
-	datasets []string
+	datasets        []string
+	skipWorkingSets bool
 }
 
 func (h *batchCommitHook) Execute(_ context.Context, ds datas.Dataset, _ *DoltDB) (func(context.Context) error, error) {
 	h.datasets = append(h.datasets, ds.ID())
 	return func(context.Context) error { return nil }, nil
 }
-func (*batchCommitHook) ExecuteForWorkingSets() bool  { return true }
-func (*batchCommitHook) ExecuteForReplicaWrite() bool { return false }
+func (h *batchCommitHook) ExecuteForWorkingSets() bool { return !h.skipWorkingSets }
+func (*batchCommitHook) ExecuteForReplicaWrite() bool  { return false }
 
 func (l workingRootListener) WorkingRootUpdated(*sql.Context, string, string, RootValue, RootValue) error {
 	l.updated()
@@ -235,7 +239,8 @@ func TestCommitDatasetsChecksPreparedHeadBeforePublishing(t *testing.T) {
 	require.NoError(t, err)
 	called := 0
 	hook := &batchCommitHook{}
-	ddb.PrependCommitHooks(ctx, hook)
+	branchHook := &batchCommitHook{skipWorkingSets: true}
+	ddb.PrependCommitHooks(ctx, hook, branchHook)
 	listeners := DatabaseUpdateListeners
 	DatabaseUpdateListeners = []DatabaseUpdateListener{workingRootListener{func() {
 		published, err := ddb.NomsRoot(ctx)
@@ -265,8 +270,12 @@ func TestCommitDatasetsChecksPreparedHeadBeforePublishing(t *testing.T) {
 	_, err = ddb.CommitDatasets(ctx, updates, &rsc)
 	require.NoError(t, err)
 	require.Equal(t, 2, called)
-	require.Equal(t, []string{"workingSets/heads/other", "refs/heads/main"}, hook.datasets)
-	require.Len(t, rsc.Wait, 2)
+	require.Equal(t, []string{"workingSets/heads/other", "workingSets/heads/main", "refs/heads/main"}, hook.datasets)
+	require.Equal(t, []string{"refs/heads/main"}, branchHook.datasets)
+	require.Len(t, rsc.Wait, 4)
+	// Headless working sets (deletions) still use working-set hook policy.
+	require.NoError(t, ddb.ExecuteCommitHooks(ctx, "workingSets/heads/deleted"))
+	require.Equal(t, []string{"refs/heads/main"}, branchHook.datasets)
 }
 
 func TestResolveTagWithNonTagHead(t *testing.T) {

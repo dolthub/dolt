@@ -3609,7 +3609,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "commit",
-				ExpectedErrStr: "Cannot commit changes on more than one branch / database",
+				ExpectedErrStr: "Cannot atomically commit changes to more than one database",
 			},
 		},
 	},

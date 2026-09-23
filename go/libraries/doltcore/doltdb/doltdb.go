@@ -1717,7 +1717,7 @@ func (ddb *DoltDB) CopyWorkingSet(ctx context.Context, fromWSRef ref.WorkingSetR
 		}
 	}
 
-	return ddb.UpdateWorkingSet(ctx, toWSRef, ws, currWsHash, TodoWorkingSetMeta(), nil)
+	return ddb.UpdateWorkingSet(ctx, toWSRef, ws.WithRef(toWSRef), currWsHash, TodoWorkingSetMeta(), nil)
 }
 
 func (ddb *DoltDB) DeleteBranchWithWorkspaceCheck(ctx context.Context, branch ref.DoltRef, replicationStatus *ReplicationStatusController, wsPath string) error {
@@ -1857,13 +1857,11 @@ func (ddb *DoltDB) UpdateWorkingSet(
 	meta *datas.WorkingSetMeta,
 	replicationStatus *ReplicationStatusController,
 ) error {
-	// CopyWorkingSet can supply a value belonging to a different ref.
-	// TODO: rather than this update, we should enforce the invariant that a working set's name matches the ref provided,
-	//  and update call sites where this might not be true to make it true.
-	updated := *workingSet
-	updated.Name = workingSetRef.GetPath()
+	if workingSet.Ref() != workingSetRef {
+		return fmt.Errorf("working set ref %s does not match target %s", workingSet.Ref(), workingSetRef)
+	}
 	_, err := ddb.CommitDatasets(ctx, []DatasetUpdate{{
-		WorkingSet: &updated,
+		WorkingSet: workingSet,
 		PrevHash:   prevHash,
 		Meta:       meta,
 	}}, replicationStatus)
@@ -2452,7 +2450,7 @@ func (ddb *DoltDB) ExecuteCommitHooks(ctx context.Context, datasetId string) err
 	if err != nil {
 		return err
 	}
-	ddb.db.ExecuteCommitHooks(ctx, ds, false, false)
+	ddb.db.ExecuteCommitHooks(ctx, ds, false)
 	return nil
 }
 
@@ -2466,7 +2464,7 @@ func (ddb *DoltDB) ExecuteReplicaCommitHooks(ctx context.Context, datasetId stri
 	if err != nil {
 		return err
 	}
-	ddb.db.ExecuteCommitHooks(ctx, ds, false, true)
+	ddb.db.ExecuteCommitHooks(ctx, ds, true)
 	return nil
 }
 

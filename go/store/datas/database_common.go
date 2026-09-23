@@ -554,7 +554,7 @@ func (db *database) Commit(ctx context.Context, ds Dataset, v types.Value, opts 
 
 func (db *database) WriteCommit(ctx context.Context, ds Dataset, commit *Commit) (Dataset, error) {
 	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error {
-		_, err := db.CommitDatasets(ctx, []DatasetUpdate{CommitUpdate{CommitDS: ds, Commit: commit}})
+		_, err := db.CommitDatasets(ctx, []DatasetUpdate{PrebuiltCommitUpdate{CommitDS: ds, Commit: commit}})
 		return err
 	})
 }
@@ -733,9 +733,6 @@ type CommitUpdate struct {
 	WorkingSetDS string
 	PrevWsHash   hash.Hash
 	RootVal      types.Value
-	// Commit optionally supplies a prebuilt commit instead of RootVal and CommitOpts.
-	// TODO: remove this field, and create a new DatasetUpdate type for prebuilt commits, using where appropriate.
-	Commit *Commit
 }
 
 func (c CommitUpdate) DatasetID() string {
@@ -743,17 +740,9 @@ func (c CommitUpdate) DatasetID() string {
 }
 
 func (c CommitUpdate) BuildCommitValue(ctx context.Context, db *database) (hash.Hash, error) {
-	if c.Commit != nil {
-		r, err := db.WriteValue(ctx, c.Commit.NomsValue())
-		if err != nil {
-			return hash.Hash{}, err
-		}
-		return r.TargetHash(), nil
-	}
 	// Prepend the current head hash to the list of parents if one was provided. This is only necessary if parents were
 	// provided because we fill it in automatically in buildNewCommit otherwise.
-	// TODO: remove this working set empty check once the WriteCommit use case is replaced with another type.
-	if c.WorkingSetDS != "" && len(c.CommitOpts.Parents) > 0 && c.CommitOpts.AmendedCommit.IsEmpty() && !c.CommitOpts.Force {
+	if len(c.CommitOpts.Parents) > 0 && c.CommitOpts.AmendedCommit.IsEmpty() && !c.CommitOpts.Force {
 		headHash, ok := c.CommitDS.MaybeHeadAddr()
 		if ok {
 			if !hasParentHash(c.CommitOpts, headHash) {
@@ -793,14 +782,45 @@ func (c CommitUpdate) validateHead(ctx context.Context, datasets prolly.AddressM
 		return ErrMergeNeeded
 	}
 
-	// TODO: remove this working set empty check once the WriteCommit use case is replaced with another implementation of DatasetUpdate.
-	if c.WorkingSetDS == "" && !current.IsEmpty() && current == newHead {
-		return ErrAlreadyCommitted
-	}
 	return nil
 }
 
 var _ DatasetUpdate = &CommitUpdate{}
+
+// PrebuiltCommitUpdate publishes an already constructed commit without changing its parents.
+type PrebuiltCommitUpdate struct {
+	CommitDS Dataset
+	Commit   *Commit
+}
+
+var _ DatasetUpdate = PrebuiltCommitUpdate{}
+
+func (c PrebuiltCommitUpdate) DatasetID() string       { return c.CommitDS.ID() }
+func (c PrebuiltCommitUpdate) LockDatasetID() string   { return "" }
+func (c PrebuiltCommitUpdate) LockPrevHash() hash.Hash { return hash.Hash{} }
+
+func (c PrebuiltCommitUpdate) BuildCommitValue(ctx context.Context, db *database) (hash.Hash, error) {
+	r, err := db.WriteValue(ctx, c.Commit.NomsValue())
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	return r.TargetHash(), nil
+}
+
+func (c PrebuiltCommitUpdate) validateHead(ctx context.Context, datasets prolly.AddressMap, newHead hash.Hash) error {
+	current, err := datasets.Get(ctx, c.DatasetID())
+	if err != nil {
+		return err
+	}
+	expected, _ := c.CommitDS.MaybeHeadAddr()
+	if current != expected {
+		return ErrMergeNeeded
+	}
+	if !current.IsEmpty() && current == newHead {
+		return ErrAlreadyCommitted
+	}
+	return nil
+}
 
 // CommitDatasets updates the given Datasets atomically.
 func (db *database) CommitDatasets(
