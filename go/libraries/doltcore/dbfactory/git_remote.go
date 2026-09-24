@@ -28,7 +28,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dolthub/fslock"
+	fslock "github.com/dolthub/file-locks"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
 	"github.com/dolthub/dolt/go/libraries/utils/gitauth"

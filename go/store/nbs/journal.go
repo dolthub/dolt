@@ -24,7 +24,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dolthub/fslock"
+	fslock "github.com/dolthub/file-locks"
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"

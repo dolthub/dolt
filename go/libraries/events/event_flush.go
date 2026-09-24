@@ -19,7 +19,7 @@ import (
 	"errors"
 	"io/fs"
 
-	"github.com/dolthub/fslock"
+	fslock "github.com/dolthub/file-locks"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"

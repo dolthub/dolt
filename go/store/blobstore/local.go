@@ -23,7 +23,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/dolthub/fslock"
+	fslock "github.com/dolthub/file-locks"
 	"github.com/google/uuid"
 
 	"github.com/dolthub/dolt/go/libraries/utils/file"

@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dolthub/fslock"
+	fslock "github.com/dolthub/file-locks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 

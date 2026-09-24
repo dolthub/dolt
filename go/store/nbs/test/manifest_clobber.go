@@ -26,7 +26,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/dolthub/fslock"
+	fslock "github.com/dolthub/file-locks"
 )
 
 func main() {
