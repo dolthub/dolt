@@ -367,6 +367,9 @@ func getPushTargetFromRefSpec(refSpec ref.RefSpec, currentBranch ref.DoltRef, re
 	var err error
 	switch src.GetType() {
 	case ref.BranchRefType:
+		if !ref.IsValidBranchName(dest.GetPath()) {
+			return nil, fmt.Errorf("%w: '%s'", doltdb.ErrInvBranchName, dest.GetPath())
+		}
 		remoteRef, err = GetTrackingRef(dest, *remote)
 	case ref.TagRefType:
 		if setUpstream {

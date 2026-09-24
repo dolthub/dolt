@@ -185,7 +185,7 @@ func (c *countingReaderAt) readCount() int {
 
 func openMixedChunkSource(t *testing.T, ctx context.Context, arc mixedArchive, rd tableReaderAt) *archiveChunkSource {
 	t.Helper()
-	ar, err := newArchiveReader(ctx, rd, arc.name, uint64(len(arc.data)), NewUnlimitedMemQuotaProvider(), &Stats{})
+	ar, err := newArchiveReader(ctx, rd, arc.name, uint64(len(arc.data)), NewUnlimitedMemQuotaProvider(), openOpts{deepValidate: true}, &Stats{})
 	require.NoError(t, err)
 	acs := &archiveChunkSource{aRdr: ar, refs: noopRefCounter{}, blockSize: s3BlockSize}
 	t.Cleanup(func() { acs.close() })

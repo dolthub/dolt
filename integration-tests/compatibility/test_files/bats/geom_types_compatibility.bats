@@ -95,7 +95,8 @@ teardown() {
 @test "geom_types_compatibility: null geometry columns readable from old dolt" {
     run dolt sql -q "SELECT pk, c_linestring IS NULL, c_polygon IS NULL FROM geom_types WHERE pk=2;" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "2,true,true" ]] || false
+    # Older clients print boolean literals; newer clients print numeric SQL booleans.
+    [[ "${lines[1]}" =~ ^2,(true|1),(true|1)$ ]] || false
 }
 
 # ---------------------------------------------------------------------------

@@ -15,8 +15,10 @@
 package enginetest
 
 import (
+	gosql "database/sql"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sync"
 	"testing"
@@ -537,7 +539,7 @@ func TestConvertPrepared(t *testing.T) {
 }
 
 func TestScripts(t *testing.T) {
-	h := newDoltHarness(t).WithConfigureStats(true)
+	h := newDoltServerTestHarness(t).WithConfigureStats(true)
 	defer h.Close()
 	enginetest.TestScripts(t, h)
 }
@@ -673,10 +675,39 @@ func TestUserPrivileges(t *testing.T) {
 }
 
 func TestUserAuthentication(t *testing.T) {
-	t.Skip("Unexpected panic, need to fix")
-	h := newDoltHarness(t)
-	defer h.Close()
-	enginetest.TestUserAuthentication(t, h)
+	t.Run("legacy authentication suite", func(t *testing.T) {
+		t.Skip("Unexpected panic, need to fix")
+		h := newDoltHarness(t)
+		defer h.Close()
+		enginetest.TestUserAuthentication(t, h)
+
+	})
+	t.Run("wildcard IP host grants", func(t *testing.T) {
+		dEnv, controller, config := startServer(t, true, "127.0.0.1", "")
+		t.Cleanup(func() {
+			controller.Stop()
+			require.NoError(t, controller.WaitForStop())
+			dEnv.Close()
+		})
+		root, session := newConnection(t, config)
+		defer root.Close()
+		for _, query := range []string{
+			"CREATE TABLE wildcard_data(pk INT PRIMARY KEY)",
+			"INSERT INTO wildcard_data VALUES(42)",
+			"CREATE USER wildcard_user@'127.0.0.%' IDENTIFIED BY ''",
+			"GRANT SELECT ON dolt.* TO wildcard_user@'127.0.0.%'",
+		} {
+			_, err := session.Exec(query)
+			require.NoError(t, err)
+		}
+		conn, err := gosql.Open("mysql", fmt.Sprintf("wildcard_user:@tcp(127.0.0.1:%d)/dolt", config.Port()))
+		require.NoError(t, err)
+		defer conn.Close()
+		var pk int
+		require.NoError(t, conn.QueryRow("SELECT pk FROM wildcard_data").Scan(&pk))
+		require.Equal(t, 42, pk)
+
+	})
 }
 
 func TestComplexIndexQueries(t *testing.T) {
@@ -764,6 +795,37 @@ func TestBlobs(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestBlobs(t, h)
+
+	t.Run("MD5 of binary LOAD_FILE", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "md5_binary")
+		require.NoError(t, os.WriteFile(path, []byte{0xff, 0x00, 0x80, 'a', 'b', 'c'}, 0600))
+		_, oldSecureFilePriv, ok := sql.SystemVariables.GetGlobal("secure_file_priv")
+		require.True(t, ok)
+		require.NoError(t, sql.SystemVariables.AssignValues(map[string]interface{}{"secure_file_priv": dir}))
+		t.Cleanup(func() {
+			require.NoError(t, sql.SystemVariables.AssignValues(map[string]interface{}{"secure_file_priv": oldSecureFilePriv}))
+		})
+		script := queries.ScriptTest{
+			Name: "MD5 of binary file contents",
+			Assertions: []queries.ScriptTestAssertion{{
+				Query:    fmt.Sprintf("SELECT MD5(BINARY LOAD_FILE(%q))", filepath.ToSlash(path)),
+				Expected: []sql.Row{{"c54f88b4c45ee5d3aaf21a0da5003612"}},
+			}},
+		}
+		for _, prepared := range []bool{false, true} {
+			t.Run(fmt.Sprintf("prepared=%t", prepared), func(t *testing.T) {
+				h := newDoltHarness(t)
+				defer h.Close()
+				if prepared {
+					enginetest.TestScriptPrepared(t, h, script)
+				} else {
+					enginetest.TestScript(t, h, script)
+				}
+			})
+		}
+
+	})
 }
 
 func TestIndexes(t *testing.T) {
@@ -1214,6 +1276,14 @@ func TestTransactionsPrepared(t *testing.T) {
 func TestBranchTransactions(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunBranchTransactionTest(t, h)
+}
+
+func TestMultiBranchTransactions(t *testing.T) {
+	RunMultiBranchTransactionTests(t, newDoltEnginetestHarness(t), false)
+}
+
+func TestMultiBranchTransactionsPrepared(t *testing.T) {
+	RunMultiBranchTransactionTests(t, newDoltEnginetestHarness(t), true)
 }
 
 func TestMultiDbTransactions(t *testing.T) {
@@ -1852,6 +1922,30 @@ func TestDoltCommit(t *testing.T) {
 func TestDoltCommitPrepared(t *testing.T) {
 	harness := newDoltEnginetestHarness(t)
 	RunDoltCommitTestsPrepared(t, harness)
+}
+
+func TestDoltCommitAll(t *testing.T) {
+	RunDoltCommitAllTests(t, newDoltEnginetestHarness(t))
+}
+
+func TestDoltCommitAllPrepared(t *testing.T) {
+	RunDoltCommitAllTestsPrepared(t, newDoltEnginetestHarness(t))
+}
+
+func TestDoltCommitAllTransactions(t *testing.T) {
+	RunDoltCommitAllTransactionTests(t, newDoltEnginetestHarness(t), false)
+}
+
+func TestDoltCommitAllTransactionsPrepared(t *testing.T) {
+	RunDoltCommitAllTransactionTests(t, newDoltEnginetestHarness(t), true)
+}
+
+func TestMultiBranchCommit(t *testing.T) {
+	RunMultiBranchCommitTests(t, newDoltEnginetestHarness(t), false)
+}
+
+func TestMultiBranchCommitPrepared(t *testing.T) {
+	RunMultiBranchCommitTests(t, newDoltEnginetestHarness(t), true)
 }
 
 func TestQueriesPrepared(t *testing.T) {

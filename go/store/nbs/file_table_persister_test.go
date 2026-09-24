@@ -146,7 +146,7 @@ func TestFSTablePersisterPruneTableFilesKeepsOpenFiles(t *testing.T) {
 	require.NoError(t, src2.close())
 
 	// Re-open only src1 through the persister so it's tracked.
-	opened, err := ftp.Open(ctx, src1Hash, src1Count, &Stats{})
+	opened, err := ftp.Open(ctx, src1Hash, src1Count, openOpts{}, &Stats{})
 	require.NoError(t, err)
 	defer opened.close()
 
@@ -185,7 +185,7 @@ func TestFSTablePersisterConjoinAllPruneRace(t *testing.T) {
 		require.NoError(t, err)
 		name, err := writeTableData(dir, testChunks[i], randChunk)
 		require.NoError(t, err)
-		sources[i], err = ftp.Open(ctx, name, 2, nil)
+		sources[i], err = ftp.Open(ctx, name, 2, openOpts{}, nil)
 		require.NoError(t, err)
 	}
 	defer func() {
@@ -226,7 +226,7 @@ func TestFSTablePersisterConjoinAll(t *testing.T) {
 		require.NoError(t, err)
 		name, err := writeTableData(dir, c, randChunk)
 		require.NoError(t, err)
-		sources[i], err = fts.Open(ctx, name, 2, nil)
+		sources[i], err = fts.Open(ctx, name, 2, openOpts{}, nil)
 		require.NoError(t, err)
 	}
 	defer func() {

@@ -123,8 +123,38 @@ func (f *archiveFooter) metadataSpan() byteSpan {
 	return byteSpan{offset: f.fileSize - f.actualFooterSize() - uint64(f.metadataSize), length: uint64(f.metadataSize)}
 }
 
+// archiveIndexSize returns the size in bytes of the index of an archive holding
+// |chunkCount| chunks across |byteSpanCount| byte spans. Every entry in the four
+// sections of the index is fixed width.
+func archiveIndexSize(byteSpanCount, chunkCount uint32) uint64 {
+	return uint64(byteSpanCount)*uint64Size + // SpanIndex
+		uint64(chunkCount)*uint64Size + // Prefix Map
+		uint64(chunkCount)*2*uint32Size + // ChunkReferences
+		uint64(chunkCount)*hash.SuffixLen // Suffixes
+}
+
+// validate checks the footer's arithmetic against the size of the file it came
+// out of. The spans above are computed by subtracting these numbers from the
+// file size, so numbers which do not add up underflow into offsets near the top
+// of the uint64 range.
+//
+// O(1), and runs on every archive open.
+func (f *archiveFooter) validate() error {
+	if want := archiveIndexSize(f.byteSpanCount, f.chunkCount); want != f.indexSize {
+		return fmt.Errorf("%w: %d chunks in %d byte spans need a %d byte index, but the footer says the index is %d bytes",
+			ErrCorruptArchiveIndex, f.chunkCount, f.byteSpanCount, want, f.indexSize)
+	}
+	// The data section is what is left over, so this is what keeps dataSpan
+	// from underflowing.
+	if tail := f.actualFooterSize() + uint64(f.metadataSize) + f.indexSize; tail > f.fileSize {
+		return fmt.Errorf("%w: index, metadata and footer come to %d bytes, which does not fit in a %d byte file",
+			ErrCorruptArchiveIndex, tail, f.fileSize)
+	}
+	return nil
+}
+
 func newArchiveMetadata(ctx context.Context, reader tableReaderAt, name hash.Hash, fileSize uint64, q MemoryQuotaProvider, stats *Stats) (*ArchiveMetadata, error) {
-	aRdr, err := newArchiveReader(ctx, reader, name, fileSize, q, stats)
+	aRdr, err := newArchiveReader(ctx, reader, name, fileSize, q, openOpts{}, stats)
 	if err != nil {
 		return nil, err
 	}
@@ -190,7 +220,7 @@ func newArchiveMetadata(ctx context.Context, reader tableReaderAt, name hash.Has
 	}, nil
 }
 
-func newArchiveReaderFromFooter(ctx context.Context, reader tableReaderAt, name hash.Hash, fileSz uint64, footer []byte, q MemoryQuotaProvider, stats *Stats) (archiveReader, error) {
+func newArchiveReaderFromFooter(ctx context.Context, reader tableReaderAt, name hash.Hash, fileSz uint64, footer []byte, q MemoryQuotaProvider, opts openOpts, stats *Stats) (archiveReader, error) {
 	if uint64(len(footer)) != archiveFooterSize {
 		return archiveReader{}, errors.New("runtime error: invalid footer.")
 	}
@@ -200,19 +230,19 @@ func newArchiveReaderFromFooter(ctx context.Context, reader tableReaderAt, name 
 		return archiveReader{}, err
 	}
 
-	return buildArchiveReader(ctx, reader, ftr, q, stats)
+	return buildArchiveReader(ctx, reader, ftr, q, opts, stats)
 }
 
-func newArchiveReader(ctx context.Context, reader tableReaderAt, name hash.Hash, fileSize uint64, q MemoryQuotaProvider, stats *Stats) (archiveReader, error) {
+func newArchiveReader(ctx context.Context, reader tableReaderAt, name hash.Hash, fileSize uint64, q MemoryQuotaProvider, opts openOpts, stats *Stats) (archiveReader, error) {
 	footer, err := loadFooter(ctx, reader, name, fileSize, stats)
 	if err != nil {
 		return archiveReader{}, fmt.Errorf("Failed to loadFooter: %w", err)
 	}
 
-	return buildArchiveReader(ctx, reader, footer, q, stats)
+	return buildArchiveReader(ctx, reader, footer, q, opts, stats)
 }
 
-func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiveFooter, q MemoryQuotaProvider, stats *Stats) (archiveReader, error) {
+func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiveFooter, q MemoryQuotaProvider, opts openOpts, stats *Stats) (archiveReader, error) {
 	dictCache, err := lru.New2Q[uint32, *DecompBundle](256)
 	if err != nil {
 		return archiveReader{}, err
@@ -236,12 +266,96 @@ func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiv
 		}
 	}
 
-	return archiveReader{
+	ar := archiveReader{
 		reader:      reader,
 		indexReader: indexRdr,
 		footer:      footer,
 		dictCache:   dictCache,
-	}, nil
+	}
+
+	if opts.deepValidate {
+		if err = ar.deepValidate(); err != nil {
+			_ = indexRdr.Close()
+			return archiveReader{}, err
+		}
+	}
+
+	return ar, nil
+}
+
+// deepValidate makes a full pass over the archive's index, checking what the
+// read path assumes of it but does not verify. An archive has no checksum over
+// its index, so this is as far as we can go short of decompressing every chunk.
+//
+// O(chunkCount + byteSpanCount), and reads the whole index, which for a memory
+// mapped index faults all of it in. Only runs when an Open asks for it with
+// [openOpts.deepValidate].
+func (ar archiveReader) deepValidate() error {
+	if err := ar.checkByteSpans(); err != nil {
+		return err
+	}
+	if err := ar.checkPrefixes(); err != nil {
+		return err
+	}
+	return ar.checkChunkRefs()
+}
+
+// checkByteSpans walks the SpanIndex, whose entries are the end offset of each
+// byte span. Byte spans are never empty and tile the data section, so the end
+// offsets strictly increase and the last one is the length of the data section.
+// The read path subtracts one entry from the next for a span's length, which an
+// entry that does not advance underflows.
+func (ar archiveReader) checkByteSpans() error {
+	var prev uint64
+	for i := uint32(1); i <= ar.footer.byteSpanCount; i++ {
+		end := ar.indexReader.getSpanIndex(i)
+		if end <= prev {
+			return fmt.Errorf("%w: byte span %d of %d ends at %d, which does not follow %d",
+				ErrCorruptArchiveIndex, i, ar.footer.byteSpanCount, end, prev)
+		}
+		prev = end
+	}
+	if data := ar.footer.dataSpan(); prev != data.length {
+		return fmt.Errorf("%w: %d byte spans cover %d bytes, but the data section is %d bytes",
+			ErrCorruptArchiveIndex, ar.footer.byteSpanCount, prev, data.length)
+	}
+	return nil
+}
+
+// checkPrefixes checks that the Prefix Map is sorted, which is what makes the
+// search in [archiveReader.findIndex] correct. Distinct chunks can share a
+// prefix, which findIndex scans forward over.
+func (ar archiveReader) checkPrefixes() error {
+	var prev uint64
+	for i := uint32(0); i < ar.footer.chunkCount; i++ {
+		prefix := ar.indexReader.getPrefix(i)
+		if prefix < prev {
+			return fmt.Errorf("%w: prefix %d of %d is out of order: %016x follows %016x",
+				ErrCorruptArchiveIndex, i, ar.footer.chunkCount, prefix, prev)
+		}
+		prev = prefix
+	}
+	return nil
+}
+
+// checkChunkRefs checks that every chunk names byte spans which exist. An id
+// past the end of the SpanIndex reads as 0 in getByteSpanByID, which underflows
+// into an enormous length.
+func (ar archiveReader) checkChunkRefs() error {
+	for i := uint32(0); i < ar.footer.chunkCount; i++ {
+		dict, data := ar.indexReader.getChunkRef(i)
+		// A chunk's data is never the null byte span, but its dictionary
+		// is whenever the chunk does not have one.
+		if data == 0 || data > ar.footer.byteSpanCount {
+			return fmt.Errorf("%w: chunk %d of %d names data byte span %d, of %d",
+				ErrCorruptArchiveIndex, i, ar.footer.chunkCount, data, ar.footer.byteSpanCount)
+		}
+		if dict > ar.footer.byteSpanCount {
+			return fmt.Errorf("%w: chunk %d of %d names dictionary byte span %d, of %d",
+				ErrCorruptArchiveIndex, i, ar.footer.chunkCount, dict, ar.footer.byteSpanCount)
+		}
+	}
+	return nil
 }
 
 // newInMemoryArchiveIndexReader implements the original index loading logic for non-file readers
@@ -467,6 +581,7 @@ func buildArchiveFooter(name hash.Hash, fileSize uint64, buf []byte) (f archiveF
 
 	f.hash = name
 
+	err = f.validate()
 	return
 }
 

@@ -131,10 +131,12 @@ func TestAddColumnToTable(t *testing.T) {
 		order          *sql.ColumnOrder
 		name           string
 		newColName     string
+		onUpdate       string
 		expectedErr    string
 		tag            uint64
 		colKind        types.NomsKind
 		nullable       Nullable
+		virtual        bool
 	}{
 		{
 			name:       "bool column no default",
@@ -144,6 +146,40 @@ func TestAddColumnToTable(t *testing.T) {
 			nullable:   Null,
 			expectedSchema: dtestutils.AddColumnToSchema(sch,
 				schema.NewColumn("newCol", dtestutils.NextTag, types.IntKind, false)),
+		},
+		{
+			name:       "column with on update",
+			tag:        dtestutils.NextTag,
+			newColName: "updated_at",
+			colKind:    types.TimestampKind,
+			nullable:   Null,
+			onUpdate:   "CURRENT_TIMESTAMP",
+			expectedSchema: dtestutils.AddColumnToSchema(sch,
+				schema.Column{
+					Name:        "updated_at",
+					Tag:         dtestutils.NextTag,
+					Kind:        types.TimestampKind,
+					TypeInfo:    typeinfo.FromKind(types.TimestampKind),
+					OnUpdate:    "CURRENT_TIMESTAMP",
+					Constraints: []schema.ColConstraint{},
+				}),
+		},
+		{
+			name:       "virtual column",
+			tag:        dtestutils.NextTag,
+			newColName: "v_col",
+			colKind:    types.IntKind,
+			nullable:   Null,
+			virtual:    true,
+			expectedSchema: dtestutils.AddColumnToSchema(sch,
+				schema.Column{
+					Name:        "v_col",
+					Tag:         dtestutils.NextTag,
+					Kind:        types.IntKind,
+					TypeInfo:    typeinfo.FromKind(types.IntKind),
+					Virtual:     true,
+					Constraints: []schema.ColConstraint{},
+				}),
 		},
 		{
 			name:       "nullable with nil default",
@@ -230,7 +266,11 @@ func TestAddColumnToTable(t *testing.T) {
 			assert.True(t, ok)
 			assert.NoError(t, err)
 
-			updatedTable, err := addColumnToTable(ctx, root, tbl, tableName, tt.tag, tt.newColName, typeinfo.FromKind(tt.colKind), tt.nullable, tt.defaultVal, "", tt.order)
+			newCol, err := createColumn(tt.nullable, tt.newColName, tt.tag, typeinfo.FromKind(tt.colKind), tt.defaultVal.String(), "")
+			require.NoError(t, err)
+			newCol.OnUpdate = tt.onUpdate
+			newCol.Virtual = tt.virtual
+			updatedTable, err := addColumnToTable(ctx, root, tbl, tableName, newCol, tt.order)
 			if len(tt.expectedErr) > 0 {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expectedErr)

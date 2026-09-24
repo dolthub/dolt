@@ -1565,12 +1565,7 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		return errors.New("adding primary keys is not supported")
 	}
 
-	nullable := NotNull
-	if col.IsNullable() {
-		nullable = Null
-	}
-
-	updatedTable, err := addColumnToTable(ctx, root, table, t.tableName, col.Tag, col.Name, col.TypeInfo, nullable, column.Default, col.Comment, order)
+	updatedTable, err := addColumnToTable(ctx, root, table, t.tableName, col, order)
 	if err != nil {
 		return err
 	}

@@ -840,8 +840,11 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:            "/* client b */ commit",
-				Skip:             true, // multiple indexes covering the same column set cannot be merged: 'i1' and 'u1'
 				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ select * from t1 order by pk",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
 			},
 		},
 	},
@@ -2621,6 +2624,59 @@ var BranchIsolationTests = []queries.TransactionTest{
 		},
 	},
 	{
+		Name:        "atomic writes to three branches merge concurrent working sets",
+		SetUpScript: []string{"create table t (pk int primary key, v int)", "insert into t values (1, 0)", "call dolt_commit('-Am', 'setup')", "call dolt_branch('b1')", "call dolt_branch('b2')", "set autocommit = 0"},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "/* client a */ start transaction", SkipResultsCheck: true},
+			{Query: "/* client b */ start transaction", SkipResultsCheck: true},
+			{Query: "/* client a */ insert into `mydb/main`.t values (2, 20)", SkipResultsCheck: true},
+			{Query: "/* client a */ insert into `mydb/b1`.t values (2, 20)", SkipResultsCheck: true},
+			{Query: "/* client a */ insert into `mydb/b2`.t values (2, 20)", SkipResultsCheck: true},
+			{Query: "/* client b */ insert into `mydb/main`.t values (3, 30)", SkipResultsCheck: true},
+			{Query: "/* client b */ insert into `mydb/b1`.t values (3, 30)", SkipResultsCheck: true},
+			{Query: "/* client b */ insert into `mydb/b2`.t values (3, 30)", SkipResultsCheck: true},
+			{Query: "/* client b */ commit", SkipResultsCheck: true},
+			{Query: "/* client a */ select * from `mydb/b1`.t order by pk", Expected: []sql.Row{{1, 0}, {2, 20}}},
+			{Query: "/* client a */ commit", SkipResultsCheck: true},
+			{Query: "/* client a */ select * from `mydb/main`.t order by pk", Expected: []sql.Row{{1, 0}, {2, 20}, {3, 30}}},
+			{Query: "/* client a */ select * from `mydb/b1`.t order by pk", Expected: []sql.Row{{1, 0}, {2, 20}, {3, 30}}},
+			{Query: "/* client a */ select * from `mydb/b2`.t order by pk", Expected: []sql.Row{{1, 0}, {2, 20}, {3, 30}}},
+			{Query: "/* client a */ select * from t as of 'HEAD'", Expected: []sql.Row{{1, 0}}},
+		},
+	},
+	{
+		Name:        "conflict on one branch rolls back every branch",
+		SetUpScript: []string{"create table t (pk int primary key, v int)", "insert into t values (1, 0)", "call dolt_commit('-Am', 'setup')", "call dolt_branch('b1')", "call dolt_branch('b2')", "set autocommit = 0"},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "/* client a */ start transaction", SkipResultsCheck: true},
+			{Query: "/* client b */ start transaction", SkipResultsCheck: true},
+			{Query: "/* client a */ insert into `mydb/b1`.t values (2, 20)", SkipResultsCheck: true},
+			{Query: "/* client a */ insert into `mydb/b2`.t values (2, 20)", SkipResultsCheck: true},
+			{Query: "/* client a */ update t set v = 10 where pk = 1", SkipResultsCheck: true},
+			{Query: "/* client b */ update t set v = 20 where pk = 1", SkipResultsCheck: true},
+			{Query: "/* client b */ commit", SkipResultsCheck: true},
+			{Query: "/* client a */ commit", ExpectedErr: sql.ErrLockDeadlock},
+			{Query: "/* client b */ start transaction", SkipResultsCheck: true},
+			{Query: "/* client b */ select * from `mydb/b1`.t", Expected: []sql.Row{{1, 0}}},
+			{Query: "/* client b */ select * from `mydb/b2`.t", Expected: []sql.Row{{1, 0}}},
+			{Query: "/* client a */ select * from t", Expected: []sql.Row{{1, 20}}},
+		},
+	},
+	{
+		Name:        "rollback discards all dirty branch working sets",
+		SetUpScript: []string{"create table t (pk int primary key, v int)", "insert into t values (1, 0)", "call dolt_commit('-Am', 'setup')", "call dolt_branch('b1')", "call dolt_branch('b2')", "set autocommit = 0"},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "/* client a */ start transaction", SkipResultsCheck: true},
+			{Query: "/* client a */ insert into `mydb/main`.t values (2, 20)", SkipResultsCheck: true},
+			{Query: "/* client a */ insert into `mydb/b1`.t values (2, 20)", SkipResultsCheck: true},
+			{Query: "/* client a */ insert into `mydb/b2`.t values (2, 20)", SkipResultsCheck: true},
+			{Query: "/* client a */ rollback", SkipResultsCheck: true},
+			{Query: "/* client b */ select * from `mydb/main`.t", Expected: []sql.Row{{1, 0}}},
+			{Query: "/* client b */ select * from `mydb/b1`.t", Expected: []sql.Row{{1, 0}}},
+			{Query: "/* client b */ select * from `mydb/b2`.t", Expected: []sql.Row{{1, 0}}},
+		},
+	},
+	{
 		Name: "clients can't see changes on other branch heads made since transaction start",
 		SetUpScript: []string{
 			"create table t1 (a int)",
@@ -3492,9 +3548,10 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query:          "commit",
-				ExpectedErrStr: "Cannot commit changes on more than one branch / database",
+				Query: "commit", Expected: []sql.Row{},
 			},
+			{Query: "select * from `mydb/main`.t1", Expected: []sql.Row{{1}}},
+			{Query: "select * from `mydb/b1`.t1", Expected: []sql.Row{{2}}},
 		},
 	},
 	{
@@ -3524,9 +3581,10 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query:          "commit",
-				ExpectedErrStr: "Cannot commit changes on more than one branch / database",
+				Query: "commit", Expected: []sql.Row{},
 			},
+			{Query: "select * from `mydb/main`.t1", Expected: []sql.Row{{1}}},
+			{Query: "select * from `mydb/b1`.t1", Expected: []sql.Row{{2}}},
 		},
 	},
 	{
@@ -3554,7 +3612,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "commit",
-				ExpectedErrStr: "Cannot commit changes on more than one branch / database",
+				ExpectedErrStr: "Cannot atomically commit changes to more than one database",
 			},
 		},
 	},

@@ -329,6 +329,19 @@ SQL
     # output will be slit over two lines
     grep 'this,is,,,,"a new ' export.csv
     grep ' line"' export.csv
+
+    # https://github.com/dolthub/dolt/issues/8389
+    run dolt sql -r csv <<'SQL'
+CREATE TABLE newline_export(a INT PRIMARY KEY,b VARBINARY(255)); INSERT INTO newline_export VALUES(1,'line\nbreak'),(2,'sorry\ncsv');
+SQL
+    [ "$status" -eq 0 ]
+    dolt table export newline_export newline_export.csv
+    dolt table import -c newline_copy newline_export.csv
+    run dolt sql -r csv <<'SQL'
+SELECT a, LENGTH(b) AS byte_length, LOCATE(CHAR(10), b) AS newline_position FROM newline_copy ORDER BY a;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'a,byte_length,newline_position\n1,10,5\n2,9,6' ]
 }
 
 @test "export-tables: table with column with not null constraint can be exported and reimported" {
@@ -352,6 +365,19 @@ SQL
     [ "$status" -eq 0 ]
     run dolt table import -u person_info export-csv.csv
     [ "$status" -eq 0 ]
+
+    # https://github.com/dolthub/dolt/issues/8388
+    run dolt sql -r csv <<'SQL'
+CREATE TABLE empty_string_export(pk INT PRIMARY KEY,v VARBINARY(255)); INSERT INTO empty_string_export VALUES(1,''),(2,NULL);
+SQL
+    [ "$status" -eq 0 ]
+    dolt table export empty_string_export empty_string_export.csv
+    dolt table import -c empty_string_copy empty_string_export.csv
+    run dolt sql -r csv <<'SQL'
+SELECT pk,IF(v IS NULL,1,0) AS is_null FROM empty_string_copy ORDER BY pk;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = $'pk,is_null\n1,0\n2,1' ]
 }
 
 @test "export-tables: export a table with a json string to csv" {

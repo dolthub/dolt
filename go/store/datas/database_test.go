@@ -83,6 +83,138 @@ func (suite *RemoteDatabaseSuite) TestWriteRefToNonexistentValue() {
 	suite.Error(err)
 }
 
+func (suite *DatabaseSuite) TestCommitDatasetsAtomic() {
+	ctx := context.Background()
+	root, err := suite.db.WriteValue(ctx, types.String("working root"))
+	suite.Require().NoError(err)
+	var updates []DatasetUpdate
+	for _, name := range []string{"a", "b", "c"} {
+		head, err := suite.db.GetDataset(ctx, "refs/heads/"+name)
+		suite.Require().NoError(err)
+		head, err = CommitValue(ctx, suite.db, head, types.String("initial"))
+		suite.Require().NoError(err)
+		wsID := "workingSets/heads/" + name
+		updates = append(updates,
+			WorkingSetUpdate{WorkingSetDS: wsID, WorkingSet: WorkingSetSpec{Meta: &WorkingSetMeta{}, WorkingRoot: root, StagedRoot: root}},
+			&CommitUpdate{CommitDS: head, WorkingSetDS: wsID, RootVal: types.String("next"), CommitOpts: CommitOptions{Meta: &CommitMeta{}}},
+		)
+	}
+	before, err := suite.db.rt.Root(ctx)
+	suite.Require().NoError(err)
+	empty, err := suite.db.CommitDatasets(ctx, nil)
+	suite.Require().NoError(err)
+	suite.Empty(empty)
+	unchanged, err := suite.db.rt.Root(ctx)
+	suite.Require().NoError(err)
+	suite.Equal(before, unchanged)
+
+	// A stale lock on the last working set must not publish any earlier updates.
+	stale := append([]DatasetUpdate(nil), updates...)
+	last := stale[4].(WorkingSetUpdate)
+	last.PrevWsHash = root.TargetHash()
+	stale[4] = last
+	_, err = suite.db.CommitDatasets(ctx, stale)
+	suite.ErrorIs(err, ErrOptimisticLockFailed)
+	after, err := suite.db.rt.Root(ctx)
+	suite.Require().NoError(err)
+	suite.Equal(before, after)
+
+	// Pointer and value updates obey the same branch-head checks.
+	stale = append([]DatasetUpdate(nil), updates...)
+	lastCommit := *stale[5].(*CommitUpdate)
+	lastCommit.CommitDS, err = suite.db.GetDatasetByRootHash(ctx, lastCommit.DatasetID(), hash.Hash{})
+	suite.Require().NoError(err)
+	stale[5] = &lastCommit
+	_, err = suite.db.CommitDatasets(ctx, stale)
+	suite.ErrorIs(err, ErrMergeNeeded)
+	after, err = suite.db.rt.Root(ctx)
+	suite.Require().NoError(err)
+	suite.Equal(before, after)
+
+	// An up-to-date dataset is not sufficient if the commit was prepared against
+	// a different head. Validate the caller's expected head in the atomic update.
+	stale = append([]DatasetUpdate(nil), updates...)
+	lastCommit = *stale[5].(*CommitUpdate)
+	lastCommit.ExpectedHead = root.TargetHash()
+	stale[5] = lastCommit
+	_, err = suite.db.CommitDatasets(ctx, stale)
+	suite.ErrorIs(err, ErrMergeNeeded)
+	after, err = suite.db.rt.Root(ctx)
+	suite.Require().NoError(err)
+	suite.Equal(before, after)
+
+	_, err = suite.db.CommitDatasets(ctx, append(updates, updates[0]))
+	suite.ErrorContains(err, "duplicate dataset update")
+
+	datasets, err := suite.db.CommitDatasets(ctx, updates)
+	suite.Require().NoError(err)
+	suite.Require().Len(datasets, 6)
+	for i, ds := range datasets {
+		suite.Equal(updates[i].DatasetID(), ds.ID())
+		suite.True(ds.HasHead())
+		if i%2 == 1 {
+			suite.True(mustHeadValue(ds).Equals(types.String("next")))
+		}
+	}
+	// Reusing the original optimistic locks cannot change any part of the batch.
+	before, err = suite.db.rt.Root(ctx)
+	suite.Require().NoError(err)
+	_, err = suite.db.CommitDatasets(ctx, updates)
+	suite.ErrorIs(err, ErrOptimisticLockFailed)
+	after, err = suite.db.rt.Root(ctx)
+	suite.Require().NoError(err)
+	suite.Equal(before, after)
+}
+
+// interleavedDatasetUpdate changes the database after building an update, but
+// before CommitDatasets attempts to publish its batch.
+type interleavedDatasetUpdate struct {
+	DatasetUpdate
+	afterBuild func()
+}
+
+func (u interleavedDatasetUpdate) BuildCommitValue(ctx context.Context, db *database) (hash.Hash, error) {
+	h, err := u.DatasetUpdate.BuildCommitValue(ctx, db)
+	if err == nil {
+		u.afterBuild()
+	}
+	return h, err
+}
+
+func (suite *DatabaseSuite) TestCommitDatasetsHeadChangesDuringBuild() {
+	ctx := context.Background()
+	ds, err := suite.db.GetDataset(ctx, "refs/heads/main")
+	suite.Require().NoError(err)
+	ds, err = CommitValue(ctx, suite.db, ds, types.String("initial"))
+	suite.Require().NoError(err)
+	expected, _ := ds.MaybeHeadAddr()
+	root, err := suite.db.WriteValue(ctx, types.String("working root"))
+	suite.Require().NoError(err)
+	var concurrentRoot hash.Hash
+	updates := []DatasetUpdate{
+		WorkingSetUpdate{WorkingSetDS: "workingSets/heads/other", WorkingSet: WorkingSetSpec{
+			Meta: &WorkingSetMeta{}, WorkingRoot: root, StagedRoot: root,
+		}},
+		interleavedDatasetUpdate{
+			DatasetUpdate: CommitUpdate{CommitDS: ds, ExpectedHead: expected, RootVal: types.String("batch"), CommitOpts: CommitOptions{Meta: &CommitMeta{}}},
+			afterBuild: func() {
+				_, err := CommitValue(ctx, suite.db, ds, types.String("concurrent"))
+				suite.Require().NoError(err)
+				concurrentRoot, err = suite.db.rt.Root(ctx)
+				suite.Require().NoError(err)
+			},
+		},
+	}
+	_, err = suite.db.CommitDatasets(ctx, updates)
+	suite.ErrorIs(err, ErrMergeNeeded)
+	actual, err := suite.db.rt.Root(ctx)
+	suite.Require().NoError(err)
+	suite.Equal(concurrentRoot, actual)
+	ws, err := suite.db.GetDataset(ctx, "workingSets/heads/other")
+	suite.Require().NoError(err)
+	suite.False(ws.HasHead())
+}
+
 func (suite *DatabaseSuite) TestTolerateUngettableRefs() {
 	suite.Nil(suite.db.ReadValue(context.Background(), hash.Hash{}))
 }
@@ -252,6 +384,25 @@ func (suite *DatabaseSuite) TestDatabaseDuplicateCommit() {
 
 	_, err = CommitValue(context.Background(), suite.db, ds, v)
 	suite.IsType(ErrMergeNeeded, err)
+}
+
+func (suite *DatabaseSuite) TestPrebuiltCommitUpdate() {
+	ctx := context.Background()
+	ds, err := suite.db.GetDataset(ctx, "prebuilt")
+	suite.Require().NoError(err)
+	commit, err := suite.db.BuildNewCommit(ctx, ds, types.String("root"), CommitOptions{Meta: &CommitMeta{}})
+	suite.Require().NoError(err)
+	updated, err := suite.db.CommitDatasets(ctx, []DatasetUpdate{PrebuiltCommitUpdate{CommitDS: ds, Commit: commit}})
+	suite.Require().NoError(err)
+	_, err = suite.db.CommitDatasets(ctx, []DatasetUpdate{PrebuiltCommitUpdate{CommitDS: ds, Commit: commit}})
+	suite.ErrorIs(err, ErrMergeNeeded)
+	_, err = suite.db.CommitDatasets(ctx, []DatasetUpdate{&PrebuiltCommitUpdate{CommitDS: updated[0], Commit: commit}})
+	suite.ErrorIs(err, ErrAlreadyCommitted)
+	actual, err := suite.db.GetDataset(ctx, ds.ID())
+	suite.Require().NoError(err)
+	before, _ := updated[0].MaybeHeadAddr()
+	after, _ := actual.MaybeHeadAddr()
+	suite.Equal(before, after)
 }
 
 // TestBuildNewCommitHeadChecks verifies the head relationship that BuildNewCommit enforces for ordinary, amend,
