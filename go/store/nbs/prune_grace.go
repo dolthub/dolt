@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	fslock "github.com/dolthub/file-locks"
+	filelocks "github.com/dolthub/file-locks"
 
 	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -322,7 +322,7 @@ func classifyPruneCandidate(name string) (addr hash.Hash, isTemp, ok bool) {
 func unlinkUnderManifestLock(ctx context.Context, dir string, candidates []pruneCandidate, manifestMtime time.Time, lock lockKeepers) (stats PruneStats, errs []error) {
 	keep, release, err := lock(ctx)
 	if err != nil {
-		if errors.Is(err, fslock.ErrTimeout) {
+		if errors.Is(err, filelocks.ErrTimeout) {
 			stats.Skipped = append(stats.Skipped, fmt.Sprintf(
 				"%s: could not take the manifest lock", dir))
 			return stats, nil

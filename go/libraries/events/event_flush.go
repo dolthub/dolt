@@ -19,7 +19,7 @@ import (
 	"errors"
 	"io/fs"
 
-	fslock "github.com/dolthub/file-locks"
+	filelocks "github.com/dolthub/file-locks"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -123,7 +123,7 @@ func (f FileFlusher) lockAndFlush(ctx context.Context, fsys filesys.Filesys, dir
 	}()
 
 	if err != nil {
-		if errors.Is(err, fslock.ErrLocked) {
+		if errors.Is(err, filelocks.ErrLocked) {
 			return ErrFileLocked
 		}
 		return err

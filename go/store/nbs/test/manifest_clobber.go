@@ -26,7 +26,7 @@ import (
 	"log"
 	"os"
 
-	fslock "github.com/dolthub/file-locks"
+	filelocks "github.com/dolthub/file-locks"
 )
 
 func main() {
@@ -41,14 +41,14 @@ func main() {
 	manifestFile := flag.Arg(1)
 	manifestContents := flag.Arg(2)
 
-	lck, err := fslock.New(lockFile)
+	lck, err := filelocks.New(lockFile)
 	if err != nil {
 		log.Fatalln(err)
 	}
 	defer lck.Close()
 
 	err = lck.TryLock()
-	if err == fslock.ErrLocked {
+	if err == filelocks.ErrLocked {
 		return
 	}
 	if err != nil {

@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	fslock "github.com/dolthub/file-locks"
+	filelocks "github.com/dolthub/file-locks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -533,7 +533,7 @@ func TestNBSPruneUnreferencedWithGraceHoldsManifestLock(t *testing.T) {
 	require.Equal(t, 1, stats.FilesDeleted)
 
 	require.Error(t, racedErr)
-	assert.ErrorIs(t, racedErr, fslock.ErrTimeout,
+	assert.ErrorIs(t, racedErr, filelocks.ErrTimeout,
 		"a manifest update must not be able to land while files are being deleted")
 
 	// Retried after the prune, the update is refused: the file it names is gone.
@@ -560,7 +560,7 @@ func TestNBSPruneUnreferencedWithGraceSkipsWhenLockHeld(t *testing.T) {
 	require.NoError(t, os.WriteFile(orphan, orphanData, 0666))
 	backdateDir(t, nomsDir)
 
-	held, err := fslock.New(filepath.Join(nomsDir, lockFileName))
+	held, err := filelocks.New(filepath.Join(nomsDir, lockFileName))
 	require.NoError(t, err)
 	require.NoError(t, held.Lock())
 	defer func() {
