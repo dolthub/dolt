@@ -81,7 +81,7 @@ func TestDoltgresTransactionLifecycle(t *testing.T) {
 	sess := DefaultSession(emptyDatabaseProvider(), nil)
 	lifecycle := &countingDoltgresTransactionLifecycle{pending: true}
 	sess.DoltgresSessObj = lifecycle
-	tx := &DoltTransaction{}
+	tx := DisabledTransaction{}
 	ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
 
 	assert.NoError(t, sess.Rollback(ctx, tx))
@@ -98,6 +98,16 @@ func TestDoltgresTransactionLifecycle(t *testing.T) {
 }
 
 func TestDoltgresSemanticTransactionLifecycle(t *testing.T) {
+	if _, _, ok := sql.SystemVariables.GetGlobal(TransactionsDisabledSysVar); !ok {
+		sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{&sql.MysqlSystemVariable{
+			Name:    TransactionsDisabledSysVar,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
+			Dynamic: true,
+			Type:    sqltypes.NewSystemBoolType(TransactionsDisabledSysVar),
+			Default: int8(0),
+		}})
+	}
+
 	if _, _, ok := sql.SystemVariables.GetGlobal(DoltCommitOnTransactionCommit); !ok {
 		sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{&sql.MysqlSystemVariable{
 			Name: DoltCommitOnTransactionCommit, Scope: sql.GetMysqlScope(sql.SystemVariableScope_Session),

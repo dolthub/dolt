@@ -372,6 +372,14 @@ func NewSqlEngine(
 	return sqlEngine, nil
 }
 
+// NewRebasedSqlEngine returns a smalled rebased engine primarily used in filterbranch.
+// TODO: migrate to provider
+func NewRebasedSqlEngine(engine *gms.Engine, dbs map[string]dsess.SqlDatabase) *SqlEngine {
+	return &SqlEngine{
+		engine: engine,
+	}
+}
+
 func applySystemVariables(vars sql.SystemVariableRegistry, cfg SystemVariables) error {
 	if cfg != nil {
 		return vars.AssignValues(cfg)

@@ -31,7 +31,6 @@ var DoltMultiBranchCommitTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{Query: "select @@session.dolt_multi_branch_commit, @@global.dolt_multi_branch_commit", Expected: []sql.Row{{0, 0}}},
-			{Query: "set @@dolt_transactions_disabled=1", ExpectedErr: sql.ErrUnknownSystemVariable},
 			{Query: "call dolt_commit('-am', 'rejected')", ExpectedErrStr: "Cannot commit changes on more than one branch / database"},
 			{Query: "commit", Expected: []sql.Row{}},
 			{Query: "select * from t", Expected: []sql.Row{{1}}},
