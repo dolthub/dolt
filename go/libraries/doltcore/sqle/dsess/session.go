@@ -49,6 +49,9 @@ type DoltSession struct {
 	provider DoltDatabaseProvider
 
 	DoltgresSessObj any // This is used by Doltgres to persist objects in the session. This is not used by Dolt.
+	// DoltgresPrincipalProvider supplies the SQL actor for branch control without
+	// changing the authenticated connection user used by MySQL and transport code.
+	DoltgresPrincipalProvider func() string
 
 	// If non-nil, this will be returned from ValidateSession.
 	// Used by sqle/cluster to put a session into a terminal err state.
@@ -1852,6 +1855,9 @@ func (d *DoltSession) GetBranch(ctx *sql.Context) (string, error) {
 
 // GetUser implements the interface branch_control.Context.
 func (d *DoltSession) GetUser() string {
+	if d.DoltgresPrincipalProvider != nil {
+		return d.DoltgresPrincipalProvider()
+	}
 	return d.Session.Client().User
 }
 
