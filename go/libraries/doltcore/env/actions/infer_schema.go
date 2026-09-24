@@ -259,6 +259,11 @@ func leastPermissiveChronoType(strVal string) typeinfo.TypeInfo {
 		return typeinfo.UnknownType
 	}
 
+	_, inRange, err := typeinfo.TimeType.ToSqlType().Convert(nil, strVal)
+	if err == nil && inRange == sql.InRange {
+		return typeinfo.TimeType
+	}
+
 	dt, inRange, err := typeinfo.DatetimeType.ToSqlType().Convert(nil, strVal)
 	if err == nil && inRange == sql.InRange {
 		t := dt.(time.Time)
@@ -267,11 +272,6 @@ func leastPermissiveChronoType(strVal string) typeinfo.TypeInfo {
 		}
 
 		return typeinfo.DatetimeType
-	}
-
-	_, inRange, err = typeinfo.TimeType.ToSqlType().Convert(nil, strVal)
-	if err == nil && inRange == sql.InRange {
-		return typeinfo.TimeType
 	}
 
 	return typeinfo.UnknownType
