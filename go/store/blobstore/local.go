@@ -23,7 +23,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/dolthub/fslock"
+	filelocks "github.com/dolthub/file-locks"
 	"github.com/google/uuid"
 
 	"github.com/dolthub/dolt/go/libraries/utils/file"
@@ -170,8 +170,8 @@ func (bs *LocalBlobstore) Put(ctx context.Context, key string, totalSize int64, 
 	return info.ModTime().String(), nil
 }
 
-func fLock(lockFilePath string) (*fslock.Lock, error) {
-	lck, err := fslock.New(lockFilePath)
+func fLock(lockFilePath string) (*filelocks.Lock, error) {
+	lck, err := filelocks.New(lockFilePath)
 	if err != nil {
 		return nil, err
 	}

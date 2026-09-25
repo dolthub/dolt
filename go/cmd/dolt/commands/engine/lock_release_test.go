@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dolthub/fslock"
+	filelocks "github.com/dolthub/file-locks"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -90,7 +90,7 @@ func TestCreateDatabase_ReleasesLockOnEngineClose(t *testing.T) {
 	_, err = os.Stat(lockPath)
 	require.NoError(t, err, "expected lock file to exist at %s", lockPath)
 
-	lck, err := fslock.New(lockPath)
+	lck, err := filelocks.New(lockPath)
 	require.NoError(t, err)
 	err = lck.LockWithTimeout(25 * time.Millisecond)
 	require.NoError(t, err, "expected lock to be free after engine close (path=%s)", lockPath)

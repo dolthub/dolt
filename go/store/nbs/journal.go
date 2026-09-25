@@ -24,7 +24,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dolthub/fslock"
+	filelocks "github.com/dolthub/file-locks"
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
@@ -692,8 +692,8 @@ func (c journalConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees []t
 	return c.child.chooseConjoinees(pruned)
 }
 
-func newJournalLock(dir string, timeout time.Duration, failOnTimeout bool) (*fslock.Lock, chunks.ExclusiveAccessMode, error) {
-	lock, err := fslock.New(filepath.Join(dir, lockFileName))
+func newJournalLock(dir string, timeout time.Duration, failOnTimeout bool) (*filelocks.Lock, chunks.ExclusiveAccessMode, error) {
+	lock, err := filelocks.New(filepath.Join(dir, lockFileName))
 	if err != nil {
 		return nil, chunks.ExclusiveAccessMode_ReadOnly, err
 	}
@@ -701,13 +701,13 @@ func newJournalLock(dir string, timeout time.Duration, failOnTimeout bool) (*fsl
 	// if we succeed, hold the file lock until we close the journalManifest
 	if timeout == 0 {
 		err = lock.TryLock()
-		if errors.Is(err, fslock.ErrLocked) {
-			err = fslock.ErrTimeout
+		if errors.Is(err, filelocks.ErrLocked) {
+			err = filelocks.ErrTimeout
 		}
 	} else {
 		err = lock.LockWithTimeout(timeout)
 	}
-	if errors.Is(err, fslock.ErrTimeout) {
+	if errors.Is(err, filelocks.ErrTimeout) {
 		// We didn't acquire the lock; close the *Lock instance and
 		// either fail or fall back to read-only mode.
 		_ = lock.Close()
@@ -726,7 +726,7 @@ func newJournalLock(dir string, timeout time.Duration, failOnTimeout bool) (*fsl
 // newJournalManifest makes a new file manifest.
 // When failOnTimeout is true, callers want a hard error instead of falling back to read-only mode.
 // (The behavior change is implemented separately; this is the plumbing flag.)
-func newJournalManifest(ctx context.Context, dir string, lock *fslock.Lock) (m *journalManifest, err error) {
+func newJournalManifest(ctx context.Context, dir string, lock *filelocks.Lock) (m *journalManifest, err error) {
 	m = &journalManifest{dir: dir, lock: lock}
 
 	var f *os.File
@@ -754,7 +754,7 @@ func newJournalManifest(ctx context.Context, dir string, lock *fslock.Lock) (m *
 }
 
 type journalManifest struct {
-	lock *fslock.Lock
+	lock *filelocks.Lock
 	dir  string
 }
 
