@@ -56,10 +56,12 @@ type DoltIndex interface {
 	sql.FilteredIndex
 	sql.OrderedIndex
 	fulltext.Index
+	sql.OrdinalAddressableIndex
 	Schema() schema.Schema
 	IndexSchema() schema.Schema
 	Format() *types.NomsBinFormat
 	IsPrimaryKey() bool
+	IsPrimary() bool
 
 	coversColumnsByTag(s *durableIndexState, columns []uint64) bool
 }
@@ -345,7 +347,26 @@ func DoltIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) 
 		indexes = append(indexes, idx)
 	}
 
-	return indexes, nil
+	return BindTableToIndexes(indexes, tableAdapter{t: t}), nil
+}
+
+type tableAdapter struct{ t *doltdb.Table }
+
+func (a tableAdapter) DoltTable(*sql.Context) (*doltdb.Table, error) { return a.t, nil }
+func (a tableAdapter) DataCacheKey(*sql.Context) (doltdb.DataCacheKey, bool, error) {
+	h, err := a.t.HashOf()
+	return doltdb.DataCacheKey{Hash: h}, err == nil, err
+}
+
+// BindTableToIndexes sets the [DoltTableable] on each index in
+// |indexes| and returns them.
+func BindTableToIndexes(indexes []sql.Index, t DoltTableable) []sql.Index {
+	for _, idx := range indexes {
+		if di, ok := idx.(*doltIndex); ok {
+			di.table = t
+		}
+	}
+	return indexes
 }
 
 func TableHasIndex(ctx context.Context, db, tbl string, t *doltdb.Table, i sql.Index) (bool, error) {
@@ -582,6 +603,7 @@ func (i *cachedDurableIndexes) store(v *durableIndexState) {
 }
 
 type doltIndex struct {
+	table       DoltTableable
 	ns          tree.NodeStore
 	vrw         types.ValueReadWriter
 	keyBld      *val.TupleBuilder
@@ -660,6 +682,34 @@ func GetStrictLookups(ctx *sql.Context, schCols *schema.ColCollection, indexes [
 
 var _ DoltIndex = (*doltIndex)(nil)
 var _ sql.ExtendedIndex = (*doltIndex)(nil)
+var _ sql.OrdinalAddressableIndex = (*doltIndex)(nil)
+
+// Count returns the total number of entries in the index.
+func (di *doltIndex) Count(ctx *sql.Context) (uint64, error) {
+	if di.table == nil {
+		return 0, nil
+	}
+	s, err := di.getDurableState(ctx, di.table)
+	if err != nil || s == nil || s.Secondary == nil {
+		return 0, err
+	}
+	return s.Secondary.Count()
+}
+
+// MaxOrdinalSampleLimit returns the maximum sample limit where
+// random ordinal seeks on [prolly.Map] outperform a sequential
+// table scan of |totalRows|.
+//
+// Leaf chunks in a Prolly Tree average 20-80 rows based on chunk
+// boundaries (see [prolly.Map.IterOrdinalRange]). A sequential scan
+// reads ceil(N / 20) chunks once. If k >= N / 20, random seeks visit
+// more chunks than exist in the table.
+func (di *doltIndex) MaxOrdinalSampleLimit(ctx *sql.Context, totalRows uint64) int64 {
+	if di.tableSch != nil && schema.IsKeyless(di.tableSch) {
+		return 0
+	}
+	return max(1, int64(totalRows/20))
+}
 
 func (di *doltIndex) String() string {
 	return di.dbName + "." + di.tblName + "." + di.id
@@ -983,6 +1033,11 @@ func (di *doltIndex) VectorProperties() schema.VectorProperties {
 
 // IsPrimaryKey implements DoltIndex.
 func (di *doltIndex) IsPrimaryKey() bool {
+	return di.isPk
+}
+
+// IsPrimary implements sql.Index.
+func (di *doltIndex) IsPrimary() bool {
 	return di.isPk
 }
 
