@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
@@ -44,6 +43,10 @@ const diffTableDefaultRowCount = 1000
 
 var ErrInvalidNonLiteralArgument = errors.NewKind("Invalid argument to %s: %s – only literal values supported")
 var ErrInvalidTableName = errors.NewKind("Invalid table name %s.")
+
+// ErrAmbiguousThreeDotRange is returned for a three dot range whose sides are both working set
+// refs, which has no commit fork point to anchor a merge base.
+var ErrAmbiguousThreeDotRange = errors.NewKind("ambiguous three dot range '%s': at least one side must be a commit")
 
 var _ sql.TableFunction = (*DiffTableFunction)(nil)
 var _ sql.IndexedTable = (*DiffTableFunction)(nil)
@@ -416,22 +419,26 @@ func resolveCommitStrings(ctx *sql.Context, fromRef, toRef, dotRef interface{}, 
 		if strings.Contains(dotStr, "...") {
 			refs := strings.Split(dotStr, "...")
 
+			if doltdb.IsWorkingSetRef(refs[0]) && doltdb.IsWorkingSetRef(refs[1]) {
+				return "", "", ErrAmbiguousThreeDotRange.New(dotStr)
+			}
+
 			headRef, err := sess.CWBHeadRef(ctx, db.Name())
 			if err != nil {
 				return "", "", err
 			}
 
-			rightCm, err := resolveCommit(ctx, db.DbData().Ddb, headRef, refs[0])
+			leftCm, err := db.DbData().Ddb.ResolveCommitSpecStrForMergeBase(ctx, refs[0], headRef)
 			if err != nil {
 				return "", "", err
 			}
 
-			leftCm, err := resolveCommit(ctx, db.DbData().Ddb, headRef, refs[1])
+			rightCm, err := db.DbData().Ddb.ResolveCommitSpecStrForMergeBase(ctx, refs[1], headRef)
 			if err != nil {
 				return "", "", err
 			}
 
-			mergeBase, err := merge.MergeBase(ctx, rightCm, leftCm)
+			mergeBase, err := merge.MergeBase(ctx, leftCm, rightCm)
 			if err != nil {
 				return "", "", err
 			}
@@ -478,24 +485,6 @@ func interfaceToString(r interface{}) (string, error) {
 		return "", fmt.Errorf("received '%v' when expecting commit hash string", r)
 	}
 	return str, nil
-}
-
-func resolveCommit(ctx *sql.Context, ddb *doltdb.DoltDB, headRef ref.DoltRef, cSpecStr string) (*doltdb.Commit, error) {
-	cs, err := doltdb.NewCommitSpec(cSpecStr)
-	if err != nil {
-		return nil, err
-	}
-
-	optCmt, err := ddb.Resolve(ctx, cs, headRef)
-	if err != nil {
-		return nil, err
-	}
-	cm, ok := optCmt.ToCommit()
-	if !ok {
-		return nil, doltdb.ErrGhostCommitEncountered
-	}
-
-	return cm, nil
 }
 
 // WithChildren implements the sql.Node interface
