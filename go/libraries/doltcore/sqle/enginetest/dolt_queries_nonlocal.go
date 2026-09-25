@@ -15,12 +15,12 @@
 package enginetest
 
 import (
-	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/testutils"
 )
 
-var _ enginetest.CustomValueValidator = &doltCommitValidator{}
+var _ testutils.CustomValueValidator = &doltCommitValidator{}
 
 var NonlocalScripts = []queries.ScriptTest{
 	{
