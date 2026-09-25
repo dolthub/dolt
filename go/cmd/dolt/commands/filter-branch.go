@@ -23,9 +23,13 @@ import (
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
+	"github.com/dolthub/go-mysql-server/sql/rowexec"
+	"github.com/dolthub/go-mysql-server/sql/transform"
+	"github.com/dolthub/vitess/go/vt/sqlparser"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -280,6 +284,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root doltdb.Root
 	if err != nil {
 		return nil, err
 	}
+	defer eng.Close()
 
 	scanner := NewStreamScanner(strings.NewReader(query))
 	if err != nil {
@@ -294,7 +299,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root doltdb.Root
 		}
 
 		err = func() error {
-			_, itr, _, err := eng.Query(sqlCtx, q)
+			_, itr, _, err := eng.QueryWithBindings(sqlCtx, q, nil, nil, nil)
 			if err != nil {
 				return err
 			}
@@ -331,10 +336,9 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root doltdb.Root
 }
 
 // rebaseSqlEngine packages up the context necessary to run sql queries against single root
-// The SQL engine returned has transactions disabled. This is to prevent transactions starts from overwriting the root
-// we set manually with the one at the working set of the HEAD being rebased.
+// The caller executes analyzed plans directly, without starting or committing SQL transactions.
 // Some functionality will not work on this kind of engine, e.g. many DOLT_ functions.
-func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue) (*sql.Context, *engine.SqlEngine, error) {
+func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue) (*sql.Context, *filterQueryRunner, error) {
 	db, err := dsqle.NewDatabase(ctx, filterDbName, dEnv.DbData(ctx), editor.Options{})
 	if err != nil {
 		return nil, nil, err
@@ -359,11 +363,6 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootVal
 		return nil, nil, err
 	}
 
-	err = sqlCtx.SetSessionVariable(sqlCtx, dsess.TransactionsDisabledSysVar, true)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	azr := analyzer.NewDefault(pro)
 
 	err = db.SetRoot(sqlCtx, root)
@@ -373,7 +372,59 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootVal
 
 	sqlCtx.SetCurrentDatabase(filterDbName)
 
-	se := engine.NewRebasedSqlEngine(sqle.New(azr, &sqle.Config{IsReadOnly: false}), map[string]dsess.SqlDatabase{filterDbName: db})
+	runner := &filterQueryRunner{Engine: sqle.New(azr, &sqle.Config{IsReadOnly: false})}
+	// Stored procedures and triggers must use the same root-only execution path.
+	azr.Runner = runner
+	azr.ExecBuilder.Runner = runner
+	return sqlCtx, runner, nil
+}
 
-	return sqlCtx, se, nil
+// filterQueryRunner transforms a historical root, without the transaction-start
+// and commit wrappers that would replace that root or publish a live working set.
+type filterQueryRunner struct {
+	*sqle.Engine
+}
+
+var _ sql.StatementRunner = (*filterQueryRunner)(nil)
+
+func (r *filterQueryRunner) QueryWithBindings(ctx *sql.Context, query string, parsed sqlparser.Statement, bindings map[string]sqlparser.Expr, qFlags *sql.QueryFlags) (sql.Schema, sql.RowIter, *sql.QueryFlags, error) {
+	binder := planbuilder.New(ctx, r.Analyzer.Catalog, r.EventScheduler)
+	binder.SetBindings(bindings)
+	var node sql.Node
+	var err error
+	if parsed == nil {
+		node, _, _, qFlags, err = binder.Parse(query, qFlags, false)
+	} else {
+		node, qFlags, err = binder.BindOnly(parsed, query, qFlags)
+	}
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	node, err = r.Analyzer.Analyze(ctx, node, nil, qFlags)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	transform.Inspect(node, func(n sql.Node) bool {
+		switch n.(type) {
+		case *plan.StartTransaction, *plan.Commit, *plan.Rollback, *plan.CreateSavepoint, *plan.RollbackSavepoint, *plan.ReleaseSavepoint:
+			err = fmt.Errorf("transaction control statements are not supported by filter-branch")
+			return false
+		}
+		return true
+	})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	iter, err := r.Analyzer.ExecBuilder.Build(ctx, node, nil)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	// Finalize results and resource cleanup, but do not add a transaction-committing iterator.
+	iter, sch := rowexec.AddAccumulatorIter(ctx, iter)
+	iter = plan.AddTrackedRowIter(ctx, node, iter)
+	iter = rowexec.AddExpressionCloser(ctx, node, iter)
+	if sch == nil {
+		sch = node.Schema(ctx)
+	}
+	return sch, iter, qFlags, nil
 }
