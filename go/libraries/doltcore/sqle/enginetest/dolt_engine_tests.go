@@ -1787,10 +1787,92 @@ func RunDoltCommitTests(t *testing.T, harness DoltEnginetestHarness) {
 	}
 }
 
+func RunDoltCommitAllTests(t *testing.T, harness DoltEnginetestHarness) {
+	defer harness.Close()
+	for _, script := range DoltCommitAllTests {
+		h := harness.NewHarness(t)
+		enginetest.TestScript(t, h, script)
+		h.Close()
+	}
+}
+
 func RunDoltCommitTestsPrepared(t *testing.T, harness DoltEnginetestHarness) {
 	defer harness.Close()
 	for _, script := range DoltCommitTests {
 		enginetest.TestScriptPrepared(t, harness, script)
+	}
+}
+
+func RunDoltCommitAllTestsPrepared(t *testing.T, harness DoltEnginetestHarness) {
+	defer harness.Close()
+	for _, script := range DoltCommitAllTests {
+		h := harness.NewHarness(t)
+		enginetest.TestScriptPrepared(t, h, script)
+		h.Close()
+	}
+}
+
+func RunDoltCommitAllTransactionTests(t *testing.T, harness DoltEnginetestHarness, prepared bool) {
+	defer harness.Close()
+	for _, script := range append(DoltCommitAllTransactionTests, multiBranchTransactionTests(true)...) {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestTransactionScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestTransactionScript(t, h, script)
+			}
+		}()
+	}
+}
+
+func RunMultiBranchTransactionTests(t *testing.T, harness DoltEnginetestHarness, prepared bool) {
+	defer harness.Close()
+	for _, script := range multiBranchTransactionTests(false) {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestTransactionScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestTransactionScript(t, h, script)
+			}
+		}()
+	}
+}
+
+func RunMultiBranchCommitTests(t *testing.T, harness DoltEnginetestHarness, prepared bool) {
+	defer harness.Close()
+	for _, script := range DoltMultiBranchCommitTests {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestScript(t, h, script)
+			}
+		}()
+	}
+	for _, automatic := range []bool{false, true} {
+		name := "dolt_commit"
+		if automatic {
+			name = "transaction_commit"
+		}
+		t.Run(name, func(t *testing.T) {
+			for _, script := range multiBranchCommitVariableTransactions(automatic) {
+				func() {
+					h := harness.NewHarness(t)
+					defer h.Close()
+					if prepared {
+						enginetest.TestTransactionScriptPrepared(t, h, script)
+					} else {
+						enginetest.TestTransactionScript(t, h, script)
+					}
+				}()
+			}
+		})
 	}
 }
 

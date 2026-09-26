@@ -17,6 +17,8 @@ package dprocedures
 import (
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -24,14 +26,33 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/gpg"
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
 // doltCommit is the stored procedure version for the CLI command `dolt commit`.
 func doltCommit(ctx *sql.Context, args ...string) (sql.RowIter, error) {
+	if len(dsess.DSessFromSess(ctx.Session).DirtyBranches()) > 1 {
+		multi, err := dsess.GetBooleanSystemVar(ctx, dsess.DoltMultiBranchCommit)
+		if err != nil {
+			return nil, err
+		}
+		if multi {
+			rows, err := doDoltCommitAll(ctx, args...)
+			if err != nil {
+				return nil, err
+			}
+			// Keep dolt_commit's hash-only result schema, with one row per branch.
+			for i, row := range rows {
+				rows[i] = sql.Row{row[1]}
+			}
+			return sql.RowsToRowIter(rows...), nil
+		}
+	}
 	commitHash, skipped, err := doDoltCommit(ctx, args)
 	if err != nil {
 		return nil, err
@@ -40,6 +61,84 @@ func doltCommit(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 		return nil, nil
 	}
 	return rowToIter(commitHash), nil
+}
+
+// doltCommitAll commits each dirty branch in the selected database and returns
+// (branch, hash) rows in branch-name order. All heads and working sets are published together.
+func doltCommitAll(ctx *sql.Context, args ...string) (sql.RowIter, error) {
+	rows, err := doDoltCommitAll(ctx, args...)
+	if err != nil {
+		return nil, err
+	}
+	return sql.RowsToRowIter(rows...), nil
+}
+
+func doDoltCommitAll(ctx *sql.Context, args ...string) ([]sql.Row, error) {
+	apr, err := cli.CreateCommitArgParser(true).Parse(args)
+	if err != nil {
+		return nil, err
+	}
+	if err := cli.VerifyCommitArgs(apr); err != nil {
+		return nil, err
+	}
+	if apr.Contains(cli.BranchParam) {
+		return nil, fmt.Errorf("--branch is not supported by dolt_commit_all")
+	}
+	dSess := dsess.DSessFromSess(ctx.Session)
+	currentDB := ctx.GetCurrentDatabase()
+	if currentDB == "" {
+		return nil, fmt.Errorf("cannot dolt_commit_all with no database selected")
+	}
+	baseDB, _ := doltdb.SplitRevisionDbName(currentDB)
+	var dbNames []string
+	for _, dirty := range dSess.DirtyBranches() {
+		if !strings.EqualFold(dirty.DbName, baseDB) {
+			return nil, dsess.ErrMultipleDatabases
+		}
+		dbNames = append(dbNames, dirty.DbName+"/"+dirty.Branch)
+	}
+	if len(dbNames) == 0 {
+		branch, ok, err := dSess.CurrentHead(ctx, currentDB)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, doltdb.ErrOperationNotSupportedInDetachedHead
+		}
+		dbNames = append(dbNames, baseDB+"/"+branch)
+	}
+	sort.Strings(dbNames)
+	pending := make([]*doltdb.PendingCommit, len(dbNames))
+	for i, dbName := range dbNames {
+		baseName, branch := doltdb.SplitRevisionDbName(dbName)
+		if err := branch_control.CheckAccessForBranch(ctx, baseName, branch, branch_control.Permissions_Merge); err != nil {
+			return nil, err
+		}
+		pending[i], err = prepareCommit(ctx, dbName, apr)
+		if err != nil {
+			return nil, err
+		}
+		if pending[i] == nil && !apr.Contains(cli.SkipEmptyFlag) {
+			return nil, fmt.Errorf("nothing to commit on %s", dbName)
+		}
+	}
+	commits, err := dSess.DoltCommitMulti(ctx, dSess.GetTransaction(), dbNames, pending)
+	if err != nil {
+		return nil, err
+	}
+	var rows []sql.Row
+	for i, commit := range commits {
+		if commit == nil {
+			continue
+		}
+		h, err := commit.HashOf()
+		if err != nil {
+			return nil, err
+		}
+		_, branch := doltdb.SplitRevisionDbName(dbNames[i])
+		rows = append(rows, sql.Row{branch, h.String()})
+	}
+	return rows, nil
 }
 
 // doltCommitHashOut is the stored procedure version for the CLI function `commit`. The first parameter is the variable
@@ -84,107 +183,13 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 	}
 
 	dSess := dsess.DSessFromSess(ctx.Session)
-	roots, ok := dSess.GetRoots(ctx, dbName)
-	if !ok {
-		return "", false, fmt.Errorf("Could not load database %s", dbName)
+	if len(dSess.DirtyBranches()) > 1 {
+		return "", false, dsess.ErrDirtyWorkingSets
 	}
-
-	if apr.Contains(cli.UpperCaseAllFlag) {
-		roots, err = actions.StageAllTables(ctx, roots, true)
-		if err != nil {
-			return "", false, err
-		}
-		roots, err = actions.StageDatabase(ctx, roots)
-		if err != nil {
-			return "", false, err
-		}
-	} else if apr.Contains(cli.AllFlag) {
-		roots, err = actions.StageModifiedAndDeletedTables(ctx, roots)
-		if err != nil {
-			return "", false, err
-		}
-		roots, err = actions.StageDatabase(ctx, roots)
-		if err != nil {
-			return "", false, err
-		}
-	}
-
-	msg, msgOk := apr.GetValue(cli.MessageArg)
-	amend := apr.Contains(cli.AmendFlag)
-	if amend {
-		ws, err := dSess.WorkingSet(ctx, dbName)
-		if err != nil {
-			return "", false, err
-		}
-		if ws.MergeActive() {
-			return "", false, fmt.Errorf("you are in the middle of a %s -- cannot amend", ws.MergeState().OperationName())
-		}
-	}
-	if !msgOk {
-		if amend {
-			commit, err := dSess.GetHeadCommit(ctx, dbName)
-			if err != nil {
-				return "", false, err
-			}
-			commitMeta, err := commit.GetCommitMeta(ctx)
-			if err != nil {
-				return "", false, err
-			}
-			msg = commitMeta.Description
-		} else {
-			return "", false, fmt.Errorf("Must provide commit message.")
-		}
-	}
-
-	commitStagedProps, committerSet, err := dsess.NewCommitStagedProps(ctx, msg)
+	pendingCommit, err := prepareCommit(ctx, dbName, apr)
 	if err != nil {
 		return "", false, err
 	}
-	commitStagedProps.Amend = amend
-
-	commitStagedProps.AllowEmpty = apr.Contains(cli.AllowEmptyFlag)
-	commitStagedProps.SkipEmpty = apr.Contains(cli.SkipEmptyFlag)
-	commitStagedProps.SkipVerification = apr.Contains(cli.SkipVerificationFlag)
-
-	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-		commitStagedProps.Author.Name, commitStagedProps.Author.Email, err = cli.ParseAuthor(authorStr)
-		if err != nil {
-			return "", false, err
-		}
-		// Older ver. of Dolt treated author as a synonym for committer. Unless specified, do the same.
-		if !committerSet {
-			commitStagedProps.Committer.Name = commitStagedProps.Author.Name
-			commitStagedProps.Committer.Email = commitStagedProps.Author.Email
-		}
-	}
-
-	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
-		t, err := dconfig.ParseDate(commitTimeStr)
-		if err != nil {
-			return "", false, err
-		}
-		commitStagedProps.Author.Date = datas.CommitDateAt(t)
-		commitStagedProps.Committer.Date = commitStagedProps.Committer.Date.Or(t)
-	}
-
-	if apr.Contains(cli.ForceFlag) {
-		commitStagedProps.Force = true
-		err = ctx.SetSessionVariable(ctx, "dolt_force_transaction_commit", 1)
-		if err != nil {
-			return "", false, err
-		}
-	}
-
-	shouldSign, err := dsess.GetBooleanSystemVar(ctx, "gpgsign")
-	if err != nil {
-		return "", false, fmt.Errorf("failed to get gpgsign: %w", err)
-	}
-
-	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, commitStagedProps)
-	if err != nil {
-		return "", false, err
-	}
-
 	// we've checked for the presence of --allow-empty and --skip-empty previously, and verified they don't coexist.
 	if pendingCommit == nil && !apr.Contains(cli.AllowEmptyFlag) {
 		// Nothing to commit. Finalize the transaction if there is one. There could be ignored tables, and we want
@@ -200,33 +205,6 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		return "", false, errors.New("nothing to commit")
 	}
 
-	if apr.Contains(cli.SignFlag) || shouldSign {
-		keyId := apr.GetValueOrDefault(cli.SignFlag, "")
-
-		if keyId == "" {
-			v, err := ctx.GetSessionVariable(ctx, "signingkey")
-			if err != nil && !sql.ErrUnknownSystemVariable.Is(err) {
-				return "", false, fmt.Errorf("failed to get signingkey: %w", err)
-			} else if err == nil {
-				keyId = v.(string)
-			}
-		}
-
-		headHash, err := roots.Head.HashOf()
-		if err != nil {
-			return "", false, err
-		}
-		stagedHash, err := roots.Staged.HashOf()
-		if err != nil {
-			return "", false, err
-		}
-
-		pendingCommit.CommitOptions.Signer = &gpg.Signer{KeyId: keyId}
-		pendingCommit.CommitOptions.DBName = dbName
-		pendingCommit.CommitOptions.HeadHash = headHash
-		pendingCommit.CommitOptions.StagedHash = stagedHash
-	}
-
 	newCommit, err := dSess.DoltCommit(ctx, dbName, dSess.GetTransaction(), pendingCommit)
 	if err != nil {
 		return "", false, err
@@ -238,6 +216,144 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 	}
 
 	return h.String(), false, nil
+}
+
+// prepareCommit constructs and validates a commit without publishing any branch updates.
+func prepareCommit(ctx *sql.Context, dbName string, apr *argparser.ArgParseResults) (*doltdb.PendingCommit, error) {
+	var err error
+	dSess := dsess.DSessFromSess(ctx.Session)
+	roots, ok := dSess.GetRoots(ctx, dbName)
+	if !ok {
+		return nil, fmt.Errorf("Could not load database %s", dbName)
+	}
+
+	if apr.Contains(cli.UpperCaseAllFlag) {
+		roots, err = actions.StageAllTables(ctx, roots, true)
+		if err != nil {
+			return nil, err
+		}
+		roots, err = actions.StageDatabase(ctx, roots)
+		if err != nil {
+			return nil, err
+		}
+	} else if apr.Contains(cli.AllFlag) {
+		roots, err = actions.StageModifiedAndDeletedTables(ctx, roots)
+		if err != nil {
+			return nil, err
+		}
+		roots, err = actions.StageDatabase(ctx, roots)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	msg, msgOk := apr.GetValue(cli.MessageArg)
+	amend := apr.Contains(cli.AmendFlag)
+	if amend {
+		ws, err := dSess.WorkingSet(ctx, dbName)
+		if err != nil {
+			return nil, err
+		}
+		if ws.MergeActive() {
+			return nil, fmt.Errorf("you are in the middle of a %s -- cannot amend", ws.MergeState().OperationName())
+		}
+	}
+	if !msgOk {
+		if amend {
+			commit, err := dSess.GetHeadCommit(ctx, dbName)
+			if err != nil {
+				return nil, err
+			}
+			commitMeta, err := commit.GetCommitMeta(ctx)
+			if err != nil {
+				return nil, err
+			}
+			msg = commitMeta.Description
+		} else {
+			return nil, fmt.Errorf("Must provide commit message.")
+		}
+	}
+
+	commitStagedProps, committerSet, err := dsess.NewCommitStagedProps(ctx, msg)
+	if err != nil {
+		return nil, err
+	}
+	commitStagedProps.Amend = amend
+
+	commitStagedProps.AllowEmpty = apr.Contains(cli.AllowEmptyFlag)
+	commitStagedProps.SkipEmpty = apr.Contains(cli.SkipEmptyFlag)
+	commitStagedProps.SkipVerification = apr.Contains(cli.SkipVerificationFlag)
+
+	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
+		commitStagedProps.Author.Name, commitStagedProps.Author.Email, err = cli.ParseAuthor(authorStr)
+		if err != nil {
+			return nil, err
+		}
+		// Older ver. of Dolt treated author as a synonym for committer. Unless specified, do the same.
+		if !committerSet {
+			commitStagedProps.Committer.Name = commitStagedProps.Author.Name
+			commitStagedProps.Committer.Email = commitStagedProps.Author.Email
+		}
+	}
+
+	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
+		t, err := dconfig.ParseDate(commitTimeStr)
+		if err != nil {
+			return nil, err
+		}
+		commitStagedProps.Author.Date = datas.CommitDateAt(t)
+		commitStagedProps.Committer.Date = commitStagedProps.Committer.Date.Or(t)
+	}
+
+	if apr.Contains(cli.ForceFlag) {
+		commitStagedProps.Force = true
+		err = ctx.SetSessionVariable(ctx, "dolt_force_transaction_commit", 1)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	shouldSign, err := dsess.GetBooleanSystemVar(ctx, "gpgsign")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get gpgsign: %w", err)
+	}
+
+	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, commitStagedProps)
+	if err != nil {
+		return nil, err
+	}
+
+	if pendingCommit == nil {
+		return nil, nil
+	}
+
+	if apr.Contains(cli.SignFlag) || shouldSign {
+		keyId := apr.GetValueOrDefault(cli.SignFlag, "")
+
+		if keyId == "" {
+			v, err := ctx.GetSessionVariable(ctx, "signingkey")
+			if err != nil && !sql.ErrUnknownSystemVariable.Is(err) {
+				return nil, fmt.Errorf("failed to get signingkey: %w", err)
+			} else if err == nil {
+				keyId = v.(string)
+			}
+		}
+
+		headHash, err := roots.Head.HashOf()
+		if err != nil {
+			return nil, err
+		}
+		stagedHash, err := roots.Staged.HashOf()
+		if err != nil {
+			return nil, err
+		}
+
+		pendingCommit.CommitOptions.Signer = &gpg.Signer{KeyId: keyId}
+		pendingCommit.CommitOptions.DBName = dbName
+		pendingCommit.CommitOptions.HeadHash = headHash
+		pendingCommit.CommitOptions.StagedHash = stagedHash
+	}
+	return pendingCommit, nil
 }
 
 func getDoltArgs(ctx *sql.Context, row sql.Row, children []sql.Expression) ([]string, error) {

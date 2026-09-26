@@ -1717,7 +1717,7 @@ func (ddb *DoltDB) CopyWorkingSet(ctx context.Context, fromWSRef ref.WorkingSetR
 		}
 	}
 
-	return ddb.UpdateWorkingSet(ctx, toWSRef, ws, currWsHash, TodoWorkingSetMeta(), nil)
+	return ddb.UpdateWorkingSet(ctx, toWSRef, ws.WithRef(toWSRef), currWsHash, TodoWorkingSetMeta(), nil)
 }
 
 func (ddb *DoltDB) DeleteBranchWithWorkspaceCheck(ctx context.Context, branch ref.DoltRef, replicationStatus *ReplicationStatusController, wsPath string) error {
@@ -1857,17 +1857,14 @@ func (ddb *DoltDB) UpdateWorkingSet(
 	meta *datas.WorkingSetMeta,
 	replicationStatus *ReplicationStatusController,
 ) error {
-	ds, err := ddb.db.GetDataset(ctx, workingSetRef.String())
-	if err != nil {
-		return err
+	if workingSet.Ref() != workingSetRef {
+		return fmt.Errorf("working set ref %s does not match target %s", workingSet.Ref(), workingSetRef)
 	}
-
-	wsSpec, err := ddb.writeWorkingSet(ctx, workingSetRef, workingSet, meta, ds)
-	if err != nil {
-		return err
-	}
-
-	_, err = ddb.db.withReplicationStatusController(replicationStatus).UpdateWorkingSet(ctx, ds, *wsSpec, prevHash)
+	_, err := ddb.CommitHeadUpdates(ctx, []HeadUpdate{WorkingSetUpdate{
+		WorkingSet: workingSet,
+		PrevHash:   prevHash,
+		Meta:       meta,
+	}}, replicationStatus)
 
 	if err == nil {
 		if headRef, e2 := workingSetRef.ToHeadRef(); e2 == nil && headRef.GetType() == ref.BranchRefType {
@@ -1887,108 +1884,92 @@ func (ddb *DoltDB) UpdateWorkingSet(
 	return err
 }
 
-// CommitWithWorkingSet combines the functionality of CommitWithParents with UpdateWorking set, and takes a combination
-// of their parameters. It's a way to update the working set and current HEAD in the same atomic transaction. It commits
-// to disk a pending commit value previously created with NewPendingCommit, asserting that the working set hash given
-// is still current for that HEAD.
-func (ddb *DoltDB) CommitWithWorkingSet(
+// CommitHeadUpdates publishes all updates in one storage transaction. Each returned
+// hash is the new dataset head for the input at the same index.
+func (ddb *DoltDB) CommitHeadUpdates(
 	ctx context.Context,
-	headRef ref.DoltRef, workingSetRef ref.WorkingSetRef,
-	commit *PendingCommit, workingSet *WorkingSet,
-	prevHash hash.Hash,
-	meta *datas.WorkingSetMeta,
+	updates []HeadUpdate,
 	replicationStatus *ReplicationStatusController,
-) (*Commit, error) {
-	wsDs, err := ddb.db.GetDataset(ctx, workingSetRef.String())
-	if err != nil {
-		return nil, err
-	}
-
-	headDs, err := ddb.db.GetDataset(ctx, headRef.String())
-	if err != nil {
-		return nil, err
-	}
-
-	wsSpec, err := ddb.writeWorkingSet(ctx, workingSetRef, workingSet, meta, wsDs)
-	if err != nil {
-		return nil, err
-	}
-
-	commitDataset, _, err := ddb.db.withReplicationStatusController(replicationStatus).
-		CommitWithWorkingSet(ctx, headDs, wsDs, commit.Roots.Staged.NomsValue(), *wsSpec, prevHash, commit.CommitOptions)
-	if err != nil {
-		return nil, err
-	}
-
-	commitRef, ok, err := commitDataset.MaybeHeadRef()
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, errors.New("Commit has no head but commit succeeded. This is a bug.")
-	}
-
-	dc, err := datas.LoadCommitRef(ctx, ddb.vrw, commitRef)
-	if err != nil {
-		return nil, err
-	}
-
-	if dc.IsGhost() {
-		return nil, ErrGhostCommitEncountered
-	}
-
-	return NewCommit(ctx, ddb.vrw, ddb.ns, dc)
-}
-
-// writeWorkingSet writes the specified |workingSet| at the specified |workingSetRef| with the
-// specified ws metadata, |meta|, in the dataset |wsDs| and returns the created WorkingSetSpec along with any error
-// encountered. If any listeners are registered for working root updates, then they will be notified as well.
-func (ddb *DoltDB) writeWorkingSet(ctx context.Context, workingSetRef ref.WorkingSetRef, workingSet *WorkingSet, meta *datas.WorkingSetMeta, wsDs datas.Dataset) (wsSpec *datas.WorkingSetSpec, err error) {
-	var prevRoot RootValue
-	if wsDs.HasHead() {
-		prevWorkingSet, err := newWorkingSet(ctx, workingSetRef.String(), ddb.vrw, ddb.ns, wsDs)
+) ([]hash.Hash, error) {
+	_, sqlContext := ctx.(*sql.Context)
+	notifyListeners := sqlContext && len(DatabaseUpdateListeners) > 0
+	var previousRoot hash.Hash
+	var workingSetsBefore []*WorkingSet
+	var err error
+	if notifyListeners {
+		// Only listeners need a snapshot and before / after working set values.
+		previousRoot, err = ddb.NomsRoot(ctx)
 		if err != nil {
 			return nil, err
 		}
-		prevRoot = prevWorkingSet.workingRoot
-	} else {
-		// If the working set dataset doesn't have a head, then there isn't a previous root value for us to use
-		// for the database update, so instead we pass in an EmptyRootValue so that implementations of
-		// DatabaseUpdateListener don't have to do nil checking. This can happen when a new database is created
-		// or when a new branch is created.
-		prevRoot, err = EmptyRootValue(ctx, ddb.vrw, ddb.ns)
+		workingSetsBefore = make([]*WorkingSet, len(updates))
+	}
+
+	dsUpdates := make([]datas.DatasetUpdate, len(updates))
+	for i, update := range updates {
+		dsUpdates[i], err = update.BuildDatasetUpdate(ctx, ddb)
 		if err != nil {
 			return nil, err
 		}
-	}
 
-	var branchName string
-	if strings.HasPrefix(workingSet.Name, "heads/") {
-		branchName = workingSet.Name[len("heads/"):]
-	}
-
-	wsSpec, err = workingSet.writeValues(ctx, ddb, meta, false)
-	if err != nil {
-		return nil, err
-	}
-
-	if branchName != "" {
-		for _, listener := range DatabaseUpdateListeners {
-			sqlCtx, ok := ctx.(*sql.Context)
-			if ok {
-				err := listener.WorkingRootUpdated(sqlCtx,
-					ddb.databaseName,
-					branchName,
-					prevRoot,
-					workingSet.WorkingRoot())
-				if err != nil {
-					logrus.Errorf("error notifying working root listener of update: %s", err.Error())
+		if notifyListeners && ref.IsWorkingSet(dsUpdates[i].DatasetID()) {
+			wsRef := ref.NewWorkingSetRef(dsUpdates[i].DatasetID())
+			workingSetsBefore[i], err = ddb.ResolveWorkingSetAtRoot(ctx, wsRef, previousRoot)
+			if errors.Is(err, ErrWorkingSetNotFound) {
+				root, emptyErr := EmptyRootValue(ctx, ddb.vrw, ddb.ns)
+				if emptyErr != nil {
+					return nil, emptyErr
 				}
+				workingSetsBefore[i] = EmptyWorkingSet(wsRef).WithWorkingRoot(root)
+			} else if err != nil {
+				return nil, err
 			}
 		}
 	}
 
-	return wsSpec, nil
+	datasets, err := ddb.db.withReplicationStatusController(replicationStatus).CommitDatasets(ctx, dsUpdates)
+	if err != nil {
+		return nil, err
+	}
+
+	heads := make([]hash.Hash, len(datasets))
+	for i, ds := range datasets {
+		heads[i], _ = ds.MaybeHeadAddr()
+		if notifyListeners && ds.IsWorkingSet() {
+			after, err := newWorkingSet(ctx, ds.ID(), ddb.vrw, ddb.ns, ds)
+			if err != nil {
+				logrus.Errorf("error reading published working set for listeners: %s", err)
+				continue
+			}
+			ddb.notifyWorkingRootUpdated(ctx, workingSetsBefore[i], after)
+		}
+	}
+
+	return heads, nil
+}
+
+// notifyWorkingRootUpdated notifies listeners using the working sets from before
+// and after a published batch. Listener failures are non-fatal.
+func (ddb *DoltDB) notifyWorkingRootUpdated(ctx context.Context, before, after *WorkingSet) {
+	sqlCtx, ok := ctx.(*sql.Context)
+	if !ok || len(DatabaseUpdateListeners) == 0 {
+		return
+	}
+
+	headRef, err := after.Ref().ToHeadRef()
+	if err != nil {
+		logrus.Errorf("error resolving working set head for listeners: %s", err)
+		return
+	}
+	if headRef.GetType() != ref.BranchRefType {
+		return
+	}
+
+	for _, listener := range DatabaseUpdateListeners {
+		if err := listener.WorkingRootUpdated(sqlCtx, ddb.databaseName, headRef.GetPath(), before.WorkingRoot(), after.WorkingRoot()); err != nil {
+			logrus.Errorf("error notifying working root listener of update: %s", err)
+		}
+	}
 }
 
 // DeleteWorkingSet deletes the working set given
@@ -2383,7 +2364,7 @@ func (ddb *DoltDB) ExecuteCommitHooks(ctx context.Context, datasetId string) err
 	if err != nil {
 		return err
 	}
-	ddb.db.ExecuteCommitHooks(ctx, ds, false, false)
+	ddb.db.ExecuteCommitHooks(ctx, ds, false)
 	return nil
 }
 
@@ -2397,7 +2378,7 @@ func (ddb *DoltDB) ExecuteReplicaCommitHooks(ctx context.Context, datasetId stri
 	if err != nil {
 		return err
 	}
-	ddb.db.ExecuteCommitHooks(ctx, ds, false, true)
+	ddb.db.ExecuteCommitHooks(ctx, ds, true)
 	return nil
 }
 
