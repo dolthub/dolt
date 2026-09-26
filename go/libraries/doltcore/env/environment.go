@@ -135,29 +135,6 @@ func (dEnv *DoltEnv) Close() error {
 	return nil
 }
 
-// CloseIncompleteDatabase closes the DoltDB opened for a database whose creation never finished and drops it
-// from the local database cache. Both are prerequisites for deleting that database's files: the open store holds
-// the storage lock and file handles, and a cache entry left behind would hand a later open of the same path a
-// store pointing at deleted files. Any git remote cached under the database's directory is closed and dropped
-// for the same reason, since that is where a clone puts a git remote's cache repository.
-func CloseIncompleteDatabase(dEnv *DoltEnv) error {
-	if dEnv == nil {
-		return nil
-	}
-
-	absPath, err := dEnv.FS.Abs("")
-	if err != nil {
-		return err
-	}
-
-	// Close before evicting, and evict without closing: the DoltDB and the cache entry share one
-	// datas.Database, so letting the cache close it as well would double-close the store.
-	closeErr := dEnv.Close()
-	cacheErr := dbfactory.DeleteFromSingletonCache(dbfactory.SingletonCacheKeyForDatabaseDir(absPath), false)
-	gitErr := dbfactory.CloseGitRemotesUnderRoot(absPath)
-	return errors.Join(closeErr, cacheErr, gitErr)
-}
-
 // IncompleteEnv returns a DoltEnv that is incomplete. There are cases where we want to know that the structure
 // of and database is correct on disk, but don't want to actually load the database.
 //
@@ -327,20 +304,6 @@ func (dEnv *DoltEnv) Valid() bool {
 	return dEnv != nil && dEnv.CfgLoadErr == nil && dEnv.RSLoadErr == nil && dEnv.DBLoadError == nil && dEnv.HasDoltDir() && dEnv.HasDoltDataDir()
 }
 
-// IsIncompleteDatabaseDir reports whether the database directory rooted at |fs| holds a database whose creation
-// never finished, either because it carries the in-progress marker or because it has Dolt storage without the
-// repo state file that every complete database has. Discovery ignores such a directory, so it cannot be served.
-func IsIncompleteDatabaseDir(fs filesys.Filesys) bool {
-	if dbfactory.IsDatabaseInProgress(fs) {
-		return true
-	}
-	if exists, isDir := fs.Exists(dbfactory.DoltDir); !exists || !isDir {
-		return false
-	}
-	exists, _ := fs.Exists(getRepoStateFile())
-	return !exists
-}
-
 // initWorkingSetFromRepoState sets the working set for the env's head to mirror the contents of the repo state file.
 // This is only necessary to migrate repos written before this method was introduced, and can be removed after 1.0
 func (dEnv *DoltEnv) initWorkingSetFromRepoState(ctx context.Context) error {
@@ -428,7 +391,7 @@ func (dEnv *DoltEnv) HasDoltDir() bool {
 }
 
 func (dEnv *DoltEnv) HasDoltDataDir() bool {
-	if dEnv == nil {
+	if dEnv == nil || dEnv.FS == nil {
 		return false
 	}
 	exists, isDir := dEnv.FS.Exists(dbfactory.DoltDataDir)
