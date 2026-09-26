@@ -25,7 +25,7 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
+	urlpath "path"
 	"strconv"
 	"strings"
 
@@ -94,7 +94,7 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 	statusCode := http.StatusMethodNotAllowed
 	switch req.Method {
 	case http.MethodGet:
-		path = filepath.Clean(path)
+		path = urlpath.Clean(path)
 		if strings.HasPrefix(path, "../") || strings.Contains(path, "/../") || strings.HasSuffix(path, "/..") {
 			logger.Warn("bad request with .. in URL path")
 			respWr.WriteHeader(http.StatusBadRequest)
