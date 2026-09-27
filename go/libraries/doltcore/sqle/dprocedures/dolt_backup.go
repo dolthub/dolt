@@ -270,13 +270,8 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 		return fmt.Errorf("database '%s' already exists, use '--%s' to overwrite", lookupDbName, cli.ForceFlag)
 	}
 
-	if hasLookupDb {
-		err = dsess.Provider().DropDatabase(ctx, lookupDbName)
-		if err != nil {
-			return err
-		}
-	}
-
+	// A directory that is not a registered database cannot be preserved by the staged swap below;
+	// remove it, as a forced restore always has.
 	if lookupDbInFileSys && !hasLookupDb {
 		err = fileSys.Delete(lookupDbName, forceRestore)
 		if err != nil {
@@ -284,20 +279,11 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 		}
 	}
 
-	err = dsess.Provider().CreateDatabase(ctx, lookupDbName)
-	if err != nil {
-		return err
-	}
-
-	newDb, _, err := dsess.Provider().SessionDatabase(ctx, lookupDbName)
-	if err != nil {
-		return err
-	}
-
-	// Unlike CloneDatabaseFromRemote which clones tracking branches (remote refs), we need all local changes.
-	pull.WithDiscardingStatsCh(func(statsCh chan pull.Stats) {
-		err = actions.SyncRoots(ctx, remoteDb, newDb.DbData().Ddb, fileSys.TempDir(), actions.SyncRootsDBRelationshipUnrelated, statsCh)
-	})
+	// Stage the restored contents beside the data directory and swap them into place. The existing
+	// database (if any) keeps serving until the staged copy is complete, and an interrupted restore
+	// leaves it untouched: there is no state this procedure can be killed in that serves a
+	// partially-restored database under |lookupDbName|.
+	err = dsess.Provider().RestoreDatabaseFromRemote(ctx, lookupDbName, remoteDb)
 	if err == nil {
 		// XXX: Old SyncRoots ProgStarter behavior.
 		cli.Println()
