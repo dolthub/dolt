@@ -119,6 +119,12 @@ func isSearchPathSpace(c byte) bool {
 // to that user's name.
 func normalizeSearchPathSchema(ctx *sql.Context, schemaName string) string {
 	if schemaName == "$user" {
+		// DoltgreSQL can select a role without changing the authenticated
+		// connection user. DoltSession supplies that effective principal;
+		// ordinary sessions continue to return their connection user.
+		if principal, ok := ctx.Session.(interface{ GetUser() string }); ok {
+			return principal.GetUser()
+		}
 		client := ctx.Session.Client()
 		return client.User
 	}
