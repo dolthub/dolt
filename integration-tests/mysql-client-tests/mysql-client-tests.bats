@@ -89,6 +89,10 @@ assert_mariadb_version_auth_and_db_selection() {
     /build/bin/python/pymysql-test $USER $PORT $REPO_NAME
 }
 
+@test "python upsert triggers" {
+    /build/bin/python/insert-trigger-test $USER $PORT $REPO_NAME
+}
+
 @test "python sqlachemy client" {
     /build/bin/python/sqlalchemy-test $USER $PORT $REPO_NAME
 }
