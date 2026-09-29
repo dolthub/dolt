@@ -60,20 +60,3 @@ $ docker run --rm -it --entrypoint /bin/bash mysql-client-tests:mariadb-clients
 # /usr/local/mariadb-11.8/bin/mariadb --version
 # ldd /usr/local/mariadb-11.8/bin/mariadb
 ```
-
-## Compare Upsert Security Behavior With MySQL
-
-`python/insert-security-test.py` runs the same privilege assertions over
-PyMySQL against either Dolt or MySQL. Start a server, create a dedicated test database,
-and use an administrator account with an empty password:
-
-```bash
-python3 -m venv /tmp/mysql-client-venv
-/tmp/mysql-client-venv/bin/pip install PyMySQL cryptography
-/tmp/mysql-client-venv/bin/python python/insert-security-test.py root 3306 test_db
-```
-
-The test creates and removes its own tables and restricted users. It covers
-rejected upserts without UPDATE privilege and successful inserts and upserts with
-the required privileges.
-Authorization denials must return MySQL error 1142 with a `command denied` message.
