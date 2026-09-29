@@ -31,7 +31,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/dolthub/fslock"
+	filelocks "github.com/dolthub/file-locks"
 	"github.com/google/uuid"
 
 	git "github.com/dolthub/dolt/go/store/blobstore/internal/git"
@@ -762,7 +762,7 @@ func (gbs *GitBlobstore) maybeRunGC() {
 	}
 
 	lockPath := filepath.Join(gbs.gitDir, ".dolt-gc.lock")
-	lck, err := fslock.New(lockPath)
+	lck, err := filelocks.New(lockPath)
 	if err != nil {
 		return // can't open the lock directory, skip
 	}
