@@ -76,5 +76,4 @@ python3 -m venv /tmp/mysql-client-venv
 The test creates and removes its own tables, triggers, and restricted users. It covers
 rejected upserts without UPDATE privilege, update-trigger rejection and statement
 rollback, successful inserts, and trigger ordering and row images for mixed upserts.
-Dolt currently returns authorization error 1105 where MySQL returns 1142; the test
-accepts either code only with a `command denied` message.
+Authorization denials must return MySQL error 1142 with a `command denied` message.

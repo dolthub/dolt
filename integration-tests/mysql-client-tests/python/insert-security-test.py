@@ -15,12 +15,10 @@ def connect(user, port, database, password=""):
 
 
 def denied(cursor, query, code, message):
-    # Dolt currently reports authorization denials as 1105; MySQL uses 1142.
-    # Check the denial message as well, so unrelated errors cannot pass.
     try:
         cursor.execute(query)
     except pymysql.MySQLError as error:
-        assert error.args[0] in code, (query, error)
+        assert error.args[0] == code, (query, error)
         assert message in error.args[1], (query, error)
     else:
         raise AssertionError("Unexpectedly accepted: " + query)
@@ -51,23 +49,23 @@ def main():
                 admin.execute(f"GRANT {privileges} ON {db_identifier}.insert_security_h TO '{name}'@'%'")
 
             with connect("insert_security_attacker", port, database, "test-password") as conn, conn.cursor() as cur:
-                denied(cur, "UPDATE insert_security_h SET body = 'x' WHERE id = 1", (1142, 1105), "command denied")
-                denied(cur, "REPLACE INTO insert_security_h (id, body) VALUES (1, 'x')", (1142, 1105), "command denied")
+                denied(cur, "UPDATE insert_security_h SET body = 'x' WHERE id = 1", 1142, "command denied")
+                denied(cur, "REPLACE INTO insert_security_h (id, body) VALUES (1, 'x')", 1142, "command denied")
                 # Privileges are checked even if no duplicate would be found.
                 for row_id in (1, 99):
                     denied(cur, f"INSERT INTO insert_security_h (id, body) VALUES ({row_id}, 'ignored') "
-                           "ON DUPLICATE KEY UPDATE body = 'REWRITTEN', writer = 'victim@%'", (1142, 1105), "command denied")
+                           "ON DUPLICATE KEY UPDATE body = 'REWRITTEN', writer = 'victim@%'", 1142, "command denied")
                 rows(cur, "SELECT * FROM insert_security_h ORDER BY id", original)
                 cur.execute("INSERT INTO insert_security_h (id, body) VALUES (3, 'allowed')")
                 rows(cur, "SELECT body, writer = USER() FROM insert_security_h WHERE id = 3", (("allowed", 1),))
 
             with connect("insert_security_updater", port, database, "test-password") as conn, conn.cursor() as cur:
-                denied(cur, "UPDATE insert_security_h SET body = 'y' WHERE id = 2", (1644,), "append-only")
+                denied(cur, "UPDATE insert_security_h SET body = 'y' WHERE id = 2", 1644, "append-only")
                 denied(cur, "INSERT INTO insert_security_h (id, body) VALUES (2, 'ignored') "
-                       "ON DUPLICATE KEY UPDATE body = 'REWRITTEN2'", (1644,), "append-only")
+                       "ON DUPLICATE KEY UPDATE body = 'REWRITTEN2'", 1644, "append-only")
                 # Failure on the second row must roll back the first insert too.
                 denied(cur, "INSERT INTO insert_security_h (id, body) VALUES (4, 'new'), (2, 'ignored') "
-                       "ON DUPLICATE KEY UPDATE body = 'REWRITTEN2'", (1644,), "append-only")
+                       "ON DUPLICATE KEY UPDATE body = 'REWRITTEN2'", 1644, "append-only")
                 rows(cur, "SELECT * FROM insert_security_h WHERE id <= 2 ORDER BY id", original)
                 rows(cur, "SELECT id FROM insert_security_h WHERE id IN (4, 99)", ())
                 cur.execute("INSERT INTO insert_security_h (id, body) VALUES (5, 'new') "
