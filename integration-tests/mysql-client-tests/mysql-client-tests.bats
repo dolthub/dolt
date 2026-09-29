@@ -89,7 +89,7 @@ assert_mariadb_version_auth_and_db_selection() {
     /build/bin/python/pymysql-test $USER $PORT $REPO_NAME
 }
 
-@test "python upsert privileges and triggers" {
+@test "python upsert privileges" {
     /build/bin/python/insert-security-test $USER $PORT $REPO_NAME
 }
 
