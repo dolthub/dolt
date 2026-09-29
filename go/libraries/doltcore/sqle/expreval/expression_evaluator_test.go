@@ -60,7 +60,7 @@ func TestGetComparisonType(t *testing.T) {
 		},
 		{
 			"average > float(median)",
-			expression.NewGreaterThan(getAverage, expression.NewConvert(getMedian, "float")),
+			expression.NewGreaterThan(getAverage, expression.NewConvert(getMedian, gmstypes.Float32, expression.ConvertToFloat)),
 			2,
 			0,
 			VariableVariableCompare,
