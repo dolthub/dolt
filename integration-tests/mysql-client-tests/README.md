@@ -60,3 +60,11 @@ $ docker run --rm -it --entrypoint /bin/bash mysql-client-tests:mariadb-clients
 # /usr/local/mariadb-11.8/bin/mariadb --version
 # ldd /usr/local/mariadb-11.8/bin/mariadb
 ```
+
+## Compare Upsert Triggers With MySQL
+
+Run `python/insert-trigger-test.py root PORT DATABASE` with PyMySQL installed against
+Dolt or MySQL and a dedicated test database. It verifies update-trigger rejection,
+statement rollback, and insert/update trigger order and row images for mixed upserts.
+The administrator account must have an empty password; the test removes its tables
+and triggers on completion.
