@@ -129,13 +129,6 @@ type ClusterStandbyRemoteConfig interface {
 	RemoteURLTemplate() string
 }
 
-type JwksConfig struct {
-	Name        string            `yaml:"name"`
-	LocationUrl string            `yaml:"location_url"`
-	Claims      map[string]string `yaml:"claims"`
-	FieldsToLog []string          `yaml:"fields_to_log"`
-}
-
 // ServerConfig contains all of the configurable options for the MySQL-compatible server.
 type ServerConfig interface {
 	// Host returns the domain that the server will run on. Accepts an IPv4 or IPv6 address, in addition to localhost.
@@ -208,8 +201,6 @@ type ServerConfig interface {
 	MetricsTLSCert() string
 	MetricsTLSKey() string
 	MetricsTLSCA() string
-	MetricsJwksConfig() *JwksConfig
-	MetricsJWTRequiredForLocalhost() bool
 
 	// PrivilegeFilePath returns the path to the file which contains all needed privilege information in the form of a
 	// JSON string.
@@ -220,8 +211,6 @@ type ServerConfig interface {
 	UserVars() []UserSessionVars
 	// SystemVars is a map setting global SQL system variables. For example, `secure_file_priv`.
 	SystemVars() map[string]interface{}
-	// JwksConfig is an array containing jwks config
-	JwksConfig() []JwksConfig
 	// AllowCleartextPasswords is true if the server should accept cleartext passwords.
 	AllowCleartextPasswords() bool
 	// Socket is a path to the unix socket file
@@ -336,48 +325,45 @@ func ValidateConfig(config ServerConfig) error {
 }
 
 const (
-	HostKey                           = "host"
-	PortKey                           = "port"
-	UserKey                           = "user"
-	PasswordKey                       = "password"
-	ReadTimeoutKey                    = "net_read_timeout"
-	WriteTimeoutKey                   = "net_write_timeout"
-	ReadOnlyKey                       = "read_only"
-	LogLevelKey                       = "log_level"
-	LogFormatKey                      = "log_format"
-	AutoCommitKey                     = "autocommit"
-	DoltTransactionCommitKey          = "dolt_transaction_commit"
-	BranchActivityTrackingKey         = "branch_activity_tracking"
-	DataDirKey                        = "data_dir"
-	CfgDirKey                         = "cfg_dir"
-	MaxConnectionsKey                 = "max_connections"
-	MaxWaitConnectionsKey             = "back_log"
-	MaxWaitConnectionsTimeoutKey      = "max_connections_timeout"
-	TLSKeyKey                         = "tls_key"
-	TLSCertKey                        = "tls_cert"
-	RequireSecureTransportKey         = "require_secure_transport"
-	MaxLoggedQueryLenKey              = "max_logged_query_len"
-	ShouldEncodeLoggedQueryKey        = "should_encode_logged_query"
-	DisableClientMultiStatementsKey   = "disable_client_multi_statements"
-	MetricsLabelsKey                  = "metrics_labels"
-	MetricsHostKey                    = "metrics_host"
-	MetricsPortKey                    = "metrics_port"
-	MetricsTLSCertKey                 = "metrics_tls_cert"
-	MetricsTLSKeyKey                  = "metrics_tls_key"
-	MetricsTLSCAKey                   = "metrics_tls_ca"
-	MetricsJwksConfigKey              = "metrics_jwks_config"
-	MetricsJWTRequiredForLocalhostKey = "metrics_jwt_required_for_localhost"
-	PrivilegeFilePathKey              = "privilege_file_path"
-	BranchControlFilePathKey          = "branch_control_file_path"
-	UserVarsKey                       = "user_vars"
-	SystemVarsKey                     = "system_vars"
-	JwksConfigKey                     = "jwks_config"
-	AllowCleartextPasswordsKey        = "allow_cleartext_passwords"
-	SocketKey                         = "socket"
-	RemotesapiPortKey                 = "remotesapi_port"
-	RemotesapiReadOnlyKey             = "remotesapi_read_only"
-	ClusterConfigKey                  = "cluster_config"
-	EventSchedulerKey                 = "event_scheduler"
+	HostKey                         = "host"
+	PortKey                         = "port"
+	UserKey                         = "user"
+	PasswordKey                     = "password"
+	ReadTimeoutKey                  = "net_read_timeout"
+	WriteTimeoutKey                 = "net_write_timeout"
+	ReadOnlyKey                     = "read_only"
+	LogLevelKey                     = "log_level"
+	LogFormatKey                    = "log_format"
+	AutoCommitKey                   = "autocommit"
+	DoltTransactionCommitKey        = "dolt_transaction_commit"
+	BranchActivityTrackingKey       = "branch_activity_tracking"
+	DataDirKey                      = "data_dir"
+	CfgDirKey                       = "cfg_dir"
+	MaxConnectionsKey               = "max_connections"
+	MaxWaitConnectionsKey           = "back_log"
+	MaxWaitConnectionsTimeoutKey    = "max_connections_timeout"
+	TLSKeyKey                       = "tls_key"
+	TLSCertKey                      = "tls_cert"
+	RequireSecureTransportKey       = "require_secure_transport"
+	MaxLoggedQueryLenKey            = "max_logged_query_len"
+	ShouldEncodeLoggedQueryKey      = "should_encode_logged_query"
+	DisableClientMultiStatementsKey = "disable_client_multi_statements"
+	MetricsLabelsKey                = "metrics_labels"
+	MetricsHostKey                  = "metrics_host"
+	MetricsPortKey                  = "metrics_port"
+	MetricsTLSCertKey               = "metrics_tls_cert"
+	MetricsTLSKeyKey                = "metrics_tls_key"
+	MetricsTLSCAKey                 = "metrics_tls_ca"
+	PrivilegeFilePathKey            = "privilege_file_path"
+	BranchControlFilePathKey        = "branch_control_file_path"
+	UserVarsKey                     = "user_vars"
+	SystemVarsKey                   = "system_vars"
+	AllowCleartextPasswordsKey      = "allow_cleartext_passwords"
+	SocketKey                       = "socket"
+	RemotesapiPortKey               = "remotesapi_port"
+	RemotesapiReadOnlyKey           = "remotesapi_read_only"
+	ClusterConfigKey                = "cluster_config"
+	EventSchedulerKey               = "event_scheduler"
 )
 
 type SystemVariableTarget interface {
