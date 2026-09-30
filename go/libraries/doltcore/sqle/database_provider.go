@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -922,14 +921,12 @@ func (p *DoltDatabaseProvider) cleanupFailedDatabase(name string, dEnv *env.Dolt
 	delete(p.dbLocations, key)
 	p.mu.Unlock()
 
-	var closeErr, cacheErr, gitErr error
-	if dEnv != nil {
-		if absPath, err := dEnv.FS.Abs(""); err == nil {
-			cacheErr = dbfactory.DeleteFromSingletonCache(dbfactory.SingletonCacheKeyForDatabaseDir(absPath), false)
-			gitErr = dbfactory.CloseGitRemotesUnderRoot(absPath)
-		}
-		closeErr = dEnv.Close()
+	var cacheErr, gitErr error
+	if absPath, err := dEnv.FS.Abs(""); err == nil {
+		cacheErr = evictDatabaseSingletonCache(absPath, false)
+		gitErr = dbfactory.CloseGitRemotesUnderRoot(absPath)
 	}
+	closeErr := dEnv.Close()
 	delErr := p.fs.Delete(name, true)
 	return errors.Join(closeErr, cacheErr, gitErr, delErr)
 }
@@ -1215,10 +1212,7 @@ func (p *DoltDatabaseProvider) cloneDatabaseFromRemote(ctx *sql.Context, dbName,
 	if err != nil {
 		return err
 	}
-	if err = p.register(ctx, dbName, dEnv); err != nil {
-		return err
-	}
-	return p.afterCommit(ctx, dbName, dEnv)
+	return p.registerNewDatabase(ctx, dbName, dEnv)
 }
 
 // DropDatabase implements the sql.MutableDatabaseProvider interface
@@ -1321,7 +1315,7 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 	}
 
 	// If this database is re-created, we don't want to return any cached results.
-	err = dbfactory.DeleteFromSingletonCache(filepath.ToSlash(dropDbLoc+"/.dolt/noms"), true)
+	err = evictDatabaseSingletonCache(dropDbLoc, true)
 	if err != nil {
 		retErr = errors.Join(retErr, err)
 	}
@@ -1332,6 +1326,12 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 	}
 
 	return retErr
+}
+
+// evictDatabaseSingletonCache deletes the singleton cache entry for the
+// local database rooted at directory |dbDir|.
+func evictDatabaseSingletonCache(dbDir string, closeIt bool) error {
+	return dbfactory.DeleteFromSingletonCache(dbfactory.SingletonCacheKeyForDatabaseDir(dbDir), closeIt)
 }
 
 func (p *DoltDatabaseProvider) ListDroppedDatabases(ctx *sql.Context) ([]string, error) {
