@@ -15,7 +15,9 @@
 package blobstore
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"os/exec"
 	"testing"
 
@@ -112,4 +114,77 @@ func TestGitBlobstore_Get_ChunkedTree_InvalidPartsError(t *testing.T) {
 	_, _, err = GetBytes(ctx, bs, "chunked", AllRange)
 	require.Error(t, err)
 	require.False(t, IsNotFoundError(err))
+}
+
+type interceptingAPI struct {
+	git.GitAPI
+	BlobReaderCalls int
+	BlobSizesCalls  int
+	BlobSizeCalls   int
+}
+
+func (a *interceptingAPI) BlobReader(ctx context.Context, oid git.OID) (io.ReadCloser, error) {
+	a.BlobReaderCalls++
+	return a.GitAPI.BlobReader(ctx, oid)
+}
+
+func (a *interceptingAPI) BlobSizes(ctx context.Context, oids []git.OID) ([]int64, error) {
+	a.BlobSizesCalls++
+	return a.GitAPI.BlobSizes(ctx, oids)
+}
+
+func (a *interceptingAPI) BlobSize(ctx context.Context, oid git.OID) (int64, error) {
+	a.BlobSizeCalls++
+	return a.GitAPI.BlobSize(ctx, oid)
+}
+
+var _ git.GitAPI = (*interceptingAPI)(nil)
+
+func TestGitBlobstore_Regression_ReadsReinflateQuadratic(t *testing.T) {
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	_, localRepo, _ := newRemoteAndLocalRepos(t, ctx)
+	_, err := localRepo.SetRefToTree(ctx, DoltDataRef, nil, "seed empty")
+	require.NoError(t, err)
+
+	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
+		Identity:    testIdentity(),
+		MaxPartSize: 1024,
+	})
+	require.NoError(t, err)
+
+	chunk1 := bytes.Repeat([]byte("a"), 1024)
+	chunk2 := bytes.Repeat([]byte("b"), 1024)
+
+	_, err = PutBytes(ctx, bs, "c1", chunk1)
+	require.NoError(t, err)
+	_, err = PutBytes(ctx, bs, "c2", chunk2)
+	require.NoError(t, err)
+	_, err = bs.Concatenate(ctx, "largefile", []string{"c1", "c2"})
+	require.NoError(t, err)
+
+	_, err = bs.CheckAndPutManifest(ctx, "", nil)
+	require.NoError(t, err)
+
+	bsRead, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
+		Identity: testIdentity(),
+	})
+	require.NoError(t, err)
+
+	api := &interceptingAPI{GitAPI: bsRead.api}
+	bsRead.api = api
+
+	for i := 0; i < 5; i++ {
+		_, _, err := GetBytes(ctx, bsRead, "largefile", NewBlobRange(int64(i*10), 10))
+		require.NoError(t, err)
+	}
+
+	if api.BlobSizesCalls > 1 {
+		t.Fatalf("BlobSizes was called %d times, expected at most 1 (caching sizes)", api.BlobSizesCalls)
+	}
+
+	if api.BlobReaderCalls >= 5 {
+		t.Fatalf("BlobReader was called %d times, expected OID-level caching", api.BlobReaderCalls)
+	}
 }
