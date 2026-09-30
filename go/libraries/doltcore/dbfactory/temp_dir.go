@@ -134,11 +134,11 @@ func IsTempDirStale(path string) bool {
 	procStart, err := processStartTime(pid)
 	if err != nil {
 		if errors.Is(err, ErrProcUnavailable) {
-			// Process exists but start time unavailable (Darwin/BSD);
-			// assume active process to prevent purging live writes.
+			// Process exists but start time unavailable (Darwin/BSD).
+			// Assume active process to prevent purging live writes.
 			return false
 		}
-		// Process does not exist (ESRCH); creator has terminated.
+		// Process does not exist (ESRCH). Creator has terminated.
 		return true
 	}
 	// If the process holding this PID was launched after the directory

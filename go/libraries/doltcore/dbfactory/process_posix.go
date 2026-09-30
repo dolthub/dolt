@@ -36,7 +36,7 @@ var ErrProcUnavailable = errors.New("process start time unavailable")
 // /proc/<pid>/stat. If /proc is unavailable (such as on Darwin or
 // BSD), processStartTime tests process liveness via signal 0 per
 // [POSIX.1-2017 kill]. If the process does not exist, it returns
-// [os.ErrNotExist]; otherwise it returns ErrProcUnavailable.
+// [os.ErrNotExist]. Otherwise it returns ErrProcUnavailable.
 //
 // [POSIX.1-2017 kill]: https://pubs.opengroup.org/onlinepubs/9699919799/functions/kill.html
 func processStartTime(pid int) (time.Time, error) {

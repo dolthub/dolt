@@ -673,8 +673,8 @@ const (
 )
 
 // ScanXIDs reads all binary log files under |fs| and collects
-// the XIDs recorded in the binary log the way the MySQL server
-// does at restart ([binary log recovery]).
+// transaction XID values recorded in the logs as done during
+// [binary log recovery].
 //
 // If binary logging is disabled or the log directory does not exist,
 // ScanXIDs returns an empty map and nil error.
@@ -790,7 +790,7 @@ func Recover(ctx context.Context, fs filesys.Filesys) error {
 
 		dbName, _, u, _, ok := dbfactory.ParseTempDirMeta(cand)
 		if !ok {
-			// Non-standard temporary dir; skip or purge if stale.
+			// Non-standard temporary dir. Skip or purge if stale.
 			if dbfactory.IsTempDirStale(cand) {
 				if delErr := fs.Delete(cand, true); delErr != nil {
 					errs = append(errs, delErr)
@@ -800,7 +800,7 @@ func Recover(ctx context.Context, fs filesys.Filesys) error {
 		}
 
 		if !dbfactory.IsTempDirStale(cand) {
-			// Creator process is still alive; skip active write.
+			// Creator process is still alive. Skip active write.
 			continue
 		}
 
