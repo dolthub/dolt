@@ -895,21 +895,43 @@ func (p *DoltDatabaseProvider) commitFS(ctx *sql.Context, name string, fsTx *dbf
 }
 
 // afterCommit executes registered post-commit hooks on database
-// |name| with environment |newEnv| under |ctx|.
+// |name| with environment |newEnv| under |ctx|. If any hook fails,
+// afterCommit unregisters the database and deletes its directory.
 func (p *DoltDatabaseProvider) afterCommit(ctx *sql.Context, name string, newEnv *env.DoltEnv) error {
 	db, err := NewDatabase(ctx, name, newEnv.DbData(ctx), editor.Options{})
 	if err != nil {
-		return err
+		return errors.Join(err, p.cleanupFailedDatabase(name, newEnv))
 	}
 	// If we have any initialization hooks, invoke them, until any error is returned.
 	// By default, this will be NewConfigureReplicationDatabaseHook, which will set up
 	// replication for the new database if a remote url template is set.
 	for _, hook := range p.InitDatabaseHooks {
 		if err = hook(ctx, p, name, newEnv, db); err != nil {
-			return err
+			return errors.Join(err, p.cleanupFailedDatabase(name, newEnv))
 		}
 	}
 	return nil
+}
+
+// cleanupFailedDatabase undoes database registration and deletes its
+// directory |name| when initialization fails after filesystem commit.
+func (p *DoltDatabaseProvider) cleanupFailedDatabase(name string, dEnv *env.DoltEnv) error {
+	p.mu.Lock()
+	key := formatDbMapKeyName(name)
+	delete(p.databases, key)
+	delete(p.dbLocations, key)
+	p.mu.Unlock()
+
+	var closeErr, cacheErr, gitErr error
+	if dEnv != nil {
+		if absPath, err := dEnv.FS.Abs(""); err == nil {
+			cacheErr = dbfactory.DeleteFromSingletonCache(dbfactory.SingletonCacheKeyForDatabaseDir(absPath), false)
+			gitErr = dbfactory.CloseGitRemotesUnderRoot(absPath)
+		}
+		closeErr = dEnv.Close()
+	}
+	delErr := p.fs.Delete(name, true)
+	return errors.Join(closeErr, cacheErr, gitErr, delErr)
 }
 
 // ImplSchemaProvider supplies initial schemas for a database.
