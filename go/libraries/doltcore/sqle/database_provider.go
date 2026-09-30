@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/mysql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -912,21 +913,23 @@ func (p *DoltDatabaseProvider) commitFS(ctx *sql.Context, name string, fsTx *dbf
 // |name| with environment |newEnv| under |ctx|. Post-commit hook
 // failures emit warnings via [ctx.Warn] and keep the committed
 // database intact.
-// https://dev.mysql.com/doc/refman/8.4/en/atomic-ddl.html
+//
+// As stated in the MySQL Reference Manual on atomic DDL:
 // "An atomic DDL statement combines the data dictionary updates,
 // storage engine operations, and binary log writes associated with
 // a DDL operation into a single, atomic operation."
+// https://dev.mysql.com/doc/refman/8.4/en/atomic-ddl.html
 func (p *DoltDatabaseProvider) afterCommit(ctx *sql.Context, name string, newEnv *env.DoltEnv) error {
 	db, err := NewDatabase(ctx, name, newEnv.DbData(ctx), editor.Options{})
 	if err != nil {
-		ctx.Warn(1105, "database %s created, but failed to load database object: %v", name, err)
+		ctx.Warn(mysql.ERUnknownError, "database %s created, but failed to load database object: %v", name, err)
 		return nil
 	}
 	// If we have any initialization hooks, invoke them. Failures emit
 	// warnings and keep the committed database intact.
 	for _, hook := range p.InitDatabaseHooks {
 		if err = hook(ctx, p, name, newEnv, db); err != nil {
-			ctx.Warn(1105, "database %s created, but initialization hook failed: %v", name, err)
+			ctx.Warn(mysql.ERUnknownError, "database %s created, but initialization hook failed: %v", name, err)
 		}
 	}
 	return nil
@@ -1001,7 +1004,8 @@ type DropDatabaseHook func(ctx *sql.Context, name string)
 // DatabaseHookRegistrar is implemented by database providers that support registering
 // hooks for database init and drop lifecycle events.
 type DatabaseHookRegistrar interface {
-	// AddPreCommitDatabaseHook adds a PreCommitDatabaseHook that runs before storage commit.
+	// AddPreCommitDatabaseHook adds a PreCommitDatabaseHook that
+	// runs before storage commit.
 	AddPreCommitDatabaseHook(PreCommitDatabaseHook)
 	// AddInitDatabaseHook adds an InitDatabaseHook that runs whenever a database is created.
 	AddInitDatabaseHook(InitDatabaseHook)
@@ -1082,11 +1086,12 @@ func NewConfigureReplicationDatabaseHook(bThreads *sql.BackgroundThreads, ctxF f
 
 		newEnv.DoltDB(ctx).PrependCommitHooks(ctx, commitHooks...)
 
-		// After setting hooks on the newly created DB, we need to do the first push manually.
-		// Failure emits a warning and keeps the committed database.
+		// After setting hooks on the newly created DB, we need to do
+		// the first push manually. Failure emits a warning and keeps
+		// the committed database.
 		branchRef := ref.NewBranchRef(p.defaultBranch)
 		if pushErr := newEnv.DoltDB(ctx).ExecuteCommitHooks(ctx, branchRef.String()); pushErr != nil {
-			ctx.Warn(1105, "failed to push initial commit to replication remote: %v", pushErr)
+			ctx.Warn(mysql.ERUnknownError, "failed to push initial commit to replication remote: %v", pushErr)
 		}
 		return nil
 	}

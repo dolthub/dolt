@@ -53,11 +53,13 @@ func processStartTime(pid int) (time.Time, error) {
 	return time.Time{}, ErrProcUnavailable
 }
 
-// USER_HZ clock ticks per second, starttime field index in /proc/<pid>/stat, and nanoseconds per tick.
 const (
-	userHz               = 100
-	starttimeFieldIndex  = 19
-	tickNanoseconds      = int64(time.Second / userHz)
+	// userHz defines the USER_HZ clock ticks per second on Linux systems.
+	userHz = 100
+	// starttimeFieldIndex defines the 0-indexed position of starttime in /proc/<pid>/stat.
+	starttimeFieldIndex = 19
+	// tickNanoseconds defines the duration of each clock tick in nanoseconds.
+	tickNanoseconds = int64(time.Second / userHz)
 )
 
 // linuxProcessStartTime reads the start time of |pid| from
