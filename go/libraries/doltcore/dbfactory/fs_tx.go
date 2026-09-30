@@ -156,10 +156,12 @@ func (tx *FSCreateTx) Rollback() error {
 // On POSIX systems, [filesys.Filesys.MoveDir] executes atomic
 // [rename(2)].
 //
-// On Windows, renames lack formal POSIX atomicity guarantees;
-// [os.Rename] invokes [MoveFileExW], which moves within a volume
-// without copying and falls back to copy and delete across volumes.
-// Transient sharing violations are retried automatically by
+// On Windows, directory renames lack formal POSIX atomicity
+// guarantees. On NTFS, [os.Rename] invokes [MoveFileExW] on the
+// same volume. Directories are [B+ tree] index structures. Moving a
+// directory on the same volume updates its parent directory index
+// entry without copying files, making its contents visible all at
+// once. Transient sharing violations are retried automatically by
 // [filesys.Filesys.MoveDir]. If the destination path already exists,
 // the move fails with ErrExists.
 //
@@ -171,6 +173,7 @@ func (tx *FSCreateTx) Rollback() error {
 // [rename(2)]: https://pubs.opengroup.org/onlinepubs/9699919799/functions/rename.html
 // [os.Rename]: https://github.com/golang/go/blob/eaf3bc799a221cc375f188e8699c9330c1caf40a/src/internal/syscall/windows/syscall_windows.go#L355-L365
 // [MoveFileExW]: https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefileexw
+// [B+ tree]: https://learn.microsoft.com/en-us/sysinternals/resources/archive/v01n05
 func (tx *FSCreateTx) Commit() error {
 	if tx.done {
 		return nil
