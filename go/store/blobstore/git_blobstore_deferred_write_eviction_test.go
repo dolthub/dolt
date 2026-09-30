@@ -64,7 +64,7 @@ func TestGitBlobstore_PostFlushEviction_RacesDeferredWrite(t *testing.T) {
 
 	// MaxPartSize forces the chunked-tree representation for table files, matching
 	// the ".darc" archives in the report (stored as <key>/0001, <key>/0002, ...).
-	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
+	bs, err := newTestGitBlobstoreWithOptions(t, localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
 		RemoteName:  "origin",
 		Identity:    testIdentity(),
 		MaxPartSize: 3,

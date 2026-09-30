@@ -48,10 +48,13 @@ const (
 	// GitRemoteCacheDirName is the conventional directory, under a Dolt repository's
 	// `.dolt/`, that the Dolt CLI uses for git remote caches.
 	GitRemoteCacheDirName = "git-remote-cache"
-	GitRefParam           = "git_ref"
-	GitRemoteNameParam    = "git_remote_name"
-	defaultGitRef         = "refs/dolt/data"
-	defaultGitRemoteName  = "origin"
+	// GitRemoteOIDCacheDirName holds temporary decompressed object caches,
+	// beside GitRemoteCacheDirName under a Dolt repository's .dolt directory.
+	GitRemoteOIDCacheDirName = "git-remote-oid-cache"
+	GitRefParam              = "git_ref"
+	GitRemoteNameParam       = "git_remote_name"
+	defaultGitRef            = "refs/dolt/data"
+	defaultGitRemoteName     = "origin"
 )
 
 var ErrGitRemoteHasNoBranches = errors.New("git remote has no branches")
@@ -249,6 +252,7 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 
 	q := nbs.NewUnlimitedMemQuotaProvider()
 	bsOpts := blobstore.GitBlobstoreOptions{
+		OIDCacheDir:    filepath.Join(filepath.Dir(cacheRoot), GitRemoteOIDCacheDirName),
 		RemoteName:     remoteName,
 		InfoBranch:     blobstore.DefaultInfoBranch,
 		SyncForReadTTL: gitBlobstoreSyncForReadTTLOverride,

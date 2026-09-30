@@ -26,6 +26,24 @@ import (
 	git "github.com/dolthub/dolt/go/store/blobstore/internal/git"
 )
 
+func newTestGitBlobstore(t *testing.T, gitDir, ref string) (*GitBlobstore, error) {
+	return newTestGitBlobstoreWithOptions(t, gitDir, ref, GitBlobstoreOptions{})
+}
+
+func newTestGitBlobstoreWithIdentity(t *testing.T, gitDir, ref string, identity *git.Identity) (*GitBlobstore, error) {
+	return newTestGitBlobstoreWithOptions(t, gitDir, ref, GitBlobstoreOptions{Identity: identity})
+}
+
+func newTestGitBlobstoreWithOptions(t *testing.T, gitDir, ref string, opts GitBlobstoreOptions) (*GitBlobstore, error) {
+	t.Helper()
+	opts.OIDCache = NewMemoryOIDCache()
+	bs, err := NewGitBlobstoreWithOptions(gitDir, ref, opts)
+	if err == nil {
+		t.Cleanup(func() { require.NoError(t, bs.objectCache().Clear()) })
+	}
+	return bs, err
+}
+
 type fakeGitAPI struct {
 	tryResolveRefCommit func(ctx context.Context, ref string) (git.OID, bool, error)
 	resolvePathBlob     func(ctx context.Context, commit git.OID, path string) (git.OID, error)

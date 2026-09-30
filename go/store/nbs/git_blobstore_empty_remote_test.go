@@ -45,7 +45,7 @@ func TestNBS_GitBlobstore_EmptyRemote_OpenReturnsEmptyManifest(t *testing.T) {
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, "git remote add failed: %s", string(out))
 
-	store, err := NewGitStore(ctx, types.Format_DOLT.VersionString(), localRepo.GitDir, blobstore.DoltDataRef, blobstore.GitBlobstoreOptions{}, 0, NewUnlimitedMemQuotaProvider())
+	store, err := NewGitStore(ctx, types.Format_DOLT.VersionString(), localRepo.GitDir, blobstore.DoltDataRef, blobstore.GitBlobstoreOptions{OIDCache: blobstore.NewMemoryOIDCache()}, 0, NewUnlimitedMemQuotaProvider())
 	require.NoError(t, err)
 	defer store.Close()
 
@@ -70,7 +70,7 @@ func TestNBS_GitBlobstore_EmptyRemote_FirstManifestUpdateBootstrapsRef(t *testin
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, "git remote add failed: %s", string(out))
 
-	bs, err := blobstore.NewGitBlobstore(localRepo.GitDir, blobstore.DoltDataRef)
+	bs, err := blobstore.NewGitBlobstoreWithOptions(localRepo.GitDir, blobstore.DoltDataRef, blobstore.GitBlobstoreOptions{OIDCache: blobstore.NewMemoryOIDCache()})
 	require.NoError(t, err)
 
 	// Write a valid v5 manifest into the empty remote via the blobstore manifest updater.
@@ -97,7 +97,7 @@ func TestNBS_GitBlobstore_EmptyRemote_FirstManifestUpdateBootstrapsRef(t *testin
 	require.NoError(t, err, "git rev-parse failed: %s", string(revParseOut))
 
 	// Re-open via NBS and ensure manifest is readable.
-	store, err := NewGitStore(ctx, types.Format_DOLT.VersionString(), localRepo.GitDir, blobstore.DoltDataRef, blobstore.GitBlobstoreOptions{}, 0, NewUnlimitedMemQuotaProvider())
+	store, err := NewGitStore(ctx, types.Format_DOLT.VersionString(), localRepo.GitDir, blobstore.DoltDataRef, blobstore.GitBlobstoreOptions{OIDCache: blobstore.NewMemoryOIDCache()}, 0, NewUnlimitedMemQuotaProvider())
 	require.NoError(t, err)
 	defer store.Close()
 
@@ -130,7 +130,7 @@ func TestNBS_NewGitStore_DefaultsMaxPartSizeTo50MB(t *testing.T) {
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, "git remote add failed: %s", string(out))
 
-	store, err := NewGitStore(ctx, types.Format_DOLT.VersionString(), localRepo.GitDir, blobstore.DoltDataRef, blobstore.GitBlobstoreOptions{}, 0, NewUnlimitedMemQuotaProvider())
+	store, err := NewGitStore(ctx, types.Format_DOLT.VersionString(), localRepo.GitDir, blobstore.DoltDataRef, blobstore.GitBlobstoreOptions{OIDCache: blobstore.NewMemoryOIDCache()}, 0, NewUnlimitedMemQuotaProvider())
 	require.NoError(t, err)
 	defer store.Close()
 

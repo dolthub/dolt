@@ -55,7 +55,7 @@ func TestGitBlobstore_Prune_RemovesUnreferencedEntries(t *testing.T) {
 	_, err = localRunner.Run(ctx, git.RunOptions{}, "remote", "add", "origin", remoteRepo.GitDir)
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
+	bs, err := newTestGitBlobstoreWithOptions(t, localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
 		RemoteName: "origin",
 		Identity:   testIdentity(),
 	})
@@ -115,7 +115,7 @@ func TestGitBlobstore_Prune_CreatesOrphanCommit(t *testing.T) {
 	_, err = localRunner.Run(ctx, git.RunOptions{}, "remote", "add", "origin", remoteRepo.GitDir)
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
+	bs, err := newTestGitBlobstoreWithOptions(t, localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
 		RemoteName: "origin",
 		Identity:   testIdentity(),
 	})
@@ -164,7 +164,7 @@ func TestGitBlobstore_Prune_NoPruneWhenAllReferenced(t *testing.T) {
 	_, err = localRunner.Run(ctx, git.RunOptions{}, "remote", "add", "origin", remoteRepo.GitDir)
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
+	bs, err := newTestGitBlobstoreWithOptions(t, localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
 		RemoteName: "origin",
 		Identity:   testIdentity(),
 	})
@@ -221,7 +221,7 @@ func TestGitBlobstore_Prune_ChunkedAndSuffixedEntries(t *testing.T) {
 	_, err = localRunner.Run(ctx, git.RunOptions{}, "remote", "add", "origin", remoteRepo.GitDir)
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
+	bs, err := newTestGitBlobstoreWithOptions(t, localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
 		RemoteName: "origin",
 		Identity:   testIdentity(),
 	})

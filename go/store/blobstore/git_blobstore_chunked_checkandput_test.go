@@ -41,7 +41,7 @@ func TestGitBlobstore_CheckAndPut_ChunkedRoundTrip_CreateOnly(t *testing.T) {
 	_, err = localRunner.Run(ctx, git.RunOptions{}, "remote", "add", "origin", remoteRepo.GitDir)
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
+	bs, err := newTestGitBlobstoreWithOptions(t, localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
 		Identity:    testIdentity(),
 		MaxPartSize: 3,
 	})
@@ -75,12 +75,12 @@ func TestGitBlobstore_CheckAndPutManifest_MismatchWithChunkingEnabled(t *testing
 	require.NoError(t, err)
 
 	// Seed any commit so actualVersion != "".
-	bs0, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{Identity: testIdentity()})
+	bs0, err := newTestGitBlobstoreWithOptions(t, localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{Identity: testIdentity()})
 	require.NoError(t, err)
 	_, err = bs0.Put(ctx, "x", 1, bytes.NewReader([]byte("x")))
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
+	bs, err := newTestGitBlobstoreWithOptions(t, localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
 		Identity:    testIdentity(),
 		MaxPartSize: 3,
 	})

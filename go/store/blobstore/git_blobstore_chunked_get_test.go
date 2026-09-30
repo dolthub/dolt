@@ -55,7 +55,7 @@ func TestGitBlobstore_Get_ChunkedTree_AllAndRanges(t *testing.T) {
 	_, err = localRunner.Run(ctx, git.RunOptions{}, "remote", "add", "origin", remoteRepo.GitDir)
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstore(localRepo.GitDir, DoltDataRef)
+	bs, err := newTestGitBlobstore(t, localRepo.GitDir, DoltDataRef)
 	require.NoError(t, err)
 
 	wantAll := append(append([]byte(nil), part1...), part2...)
@@ -106,7 +106,7 @@ func TestGitBlobstore_Get_ChunkedTree_InvalidPartsError(t *testing.T) {
 	_, err = localRunner.Run(ctx, git.RunOptions{}, "remote", "add", "origin", remoteRepo.GitDir)
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstore(localRepo.GitDir, DoltDataRef)
+	bs, err := newTestGitBlobstore(t, localRepo.GitDir, DoltDataRef)
 	require.NoError(t, err)
 
 	_, _, err = GetBytes(ctx, bs, "chunked", AllRange)

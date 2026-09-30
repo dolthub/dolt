@@ -34,7 +34,7 @@ func TestGitBlobstore_CacheMerge_ImmutableKeyStableOnceCached(t *testing.T) {
 	}, "seed A")
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
+	bs, err := newTestGitBlobstoreWithOptions(t, localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
 		RemoteName: "origin",
 	})
 	require.NoError(t, err)
@@ -68,7 +68,7 @@ func TestGitBlobstore_CacheMerge_ManifestUpdatesAcrossFetches(t *testing.T) {
 	}, "seed M1")
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
+	bs, err := newTestGitBlobstoreWithOptions(t, localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
 		RemoteName: "origin",
 	})
 	require.NoError(t, err)

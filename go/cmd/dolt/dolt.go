@@ -574,6 +574,9 @@ or check the docs for questions about usage.`)
 		cliCtx.Close()
 	}
 	stop()
+	// Commands such as clone do not create a SQL engine, whose teardown
+	// normally closes shared Git remotes and their temporary OID caches.
+	dbfactory.TeardownGitRemotes(context.Background())
 
 	if err = dbfactory.CloseAllLocalDatabases(); err != nil {
 		cli.PrintErrln(err)

@@ -71,7 +71,7 @@ func TestGitBlobstoreReadSmoke_ManifestAndTableAccessPatterns(t *testing.T) {
 	remoteAddOut, err := cmd.CombinedOutput()
 	require.NoError(t, err, "git remote add failed: %s", string(remoteAddOut))
 
-	bs, err := blobstore.NewGitBlobstore(localRepo.GitDir, blobstore.DoltDataRef)
+	bs, err := blobstore.NewGitBlobstoreWithOptions(localRepo.GitDir, blobstore.DoltDataRef, blobstore.GitBlobstoreOptions{OIDCache: blobstore.NewMemoryOIDCache()})
 	require.NoError(t, err)
 
 	// 1) Manifest read path via blobstoreManifest.ParseIfExists.

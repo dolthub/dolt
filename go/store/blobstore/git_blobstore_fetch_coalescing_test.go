@@ -105,7 +105,7 @@ func newCountingBlobstore(t *testing.T, ctx context.Context, tree map[string][]b
 	_, err := remoteRepo.SetRefToTree(ctx, DoltDataRef, tree, "seed remote")
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
+	bs, err := newTestGitBlobstoreWithOptions(t, localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
 		RemoteName:     "origin",
 		SyncForReadTTL: ttl,
 	})

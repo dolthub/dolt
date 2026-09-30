@@ -77,8 +77,9 @@ func (l *limitReadCloser) Read(p []byte) (int, error) { return l.r.Read(p) }
 func (l *limitReadCloser) Close() error               { return l.c.Close() }
 
 type multiPartReadCloser struct {
-	ctx context.Context
-	api git.GitAPI
+	ctx       context.Context
+	api       git.GitAPI
+	openRange func(context.Context, git.OID, BlobRange) (io.ReadCloser, error)
 
 	slices []chunkPartSlice
 	curIdx int
@@ -128,6 +129,9 @@ func (m *multiPartReadCloser) ensureCurrent() error {
 }
 
 func (m *multiPartReadCloser) openSliceReader(s chunkPartSlice) (io.ReadCloser, error) {
+	if m.openRange != nil {
+		return m.openRange(m.ctx, git.OID(s.oidHex), NewBlobRange(s.offset, s.length))
+	}
 	rc, err := m.api.BlobReader(m.ctx, git.OID(s.oidHex))
 	if err != nil {
 		return nil, err
@@ -277,6 +281,9 @@ type GitBlobstore struct {
 	localRef          string
 	runner            *git.Runner
 	api               git.GitAPI
+	oidCache          OIDCache
+	oidCacheMu        sync.Mutex
+	oidSizeMu         sync.Mutex
 	remoteName        string
 	remoteTrackingRef string
 	// writeMu serializes operations that mutate shared git refs and/or perform
@@ -389,6 +396,13 @@ func NewGitBlobstoreWithIdentity(gitDir, ref string, identity *git.Identity) (*G
 
 // GitBlobstoreOptions configures optional behaviors of GitBlobstore.
 type GitBlobstoreOptions struct {
+	// OIDCache overrides the decompressed object cache (use memory in tests).
+	// The store clears this cache during teardown and close; do not share it
+	// with another store. A nil cache uses disk storage under OIDCacheDir.
+	OIDCache OIDCache
+	// OIDCacheDir holds instance-owned temporary cache directories. Defaults
+	// to an oid-cache directory beside gitDir.
+	OIDCacheDir string
 	// Identity, when non-nil, forces the author/committer identity for commits created by write paths.
 	Identity *git.Identity
 	// MaxPartSize enables chunked-object writes when non-zero.
@@ -434,6 +448,14 @@ func NewGitBlobstoreWithOptions(gitDir, ref string, opts GitBlobstoreOptions) (*
 	if syncForReadTTL == 0 {
 		syncForReadTTL = defaultSyncForReadTTL
 	}
+	oidCache := opts.OIDCache
+	if oidCache == nil {
+		cacheDir := opts.OIDCacheDir
+		if cacheDir == "" {
+			cacheDir = filepath.Join(filepath.Dir(gitDir), "oid-cache")
+		}
+		oidCache = NewDiskOIDCache(cacheDir)
+	}
 
 	return &GitBlobstore{
 		gitDir:            gitDir,
@@ -441,6 +463,7 @@ func NewGitBlobstoreWithOptions(gitDir, ref string, opts GitBlobstoreOptions) (*
 		localRef:          localRef,
 		runner:            r,
 		api:               git.NewGitAPIImpl(r),
+		oidCache:          oidCache,
 		remoteName:        remoteName,
 		remoteTrackingRef: remoteTrackingRef,
 		identity:          opts.Identity,
@@ -730,6 +753,7 @@ func (gbs *GitBlobstore) Teardown(ctx context.Context) error {
 	return errors.Join(
 		deleteIfExists(gbs.localRef),
 		deleteIfExists(gbs.remoteTrackingRef),
+		gbs.objectCache().Clear(),
 	)
 }
 
@@ -738,7 +762,7 @@ func (gbs *GitBlobstore) Close() error {
 	// again, and answers reads from what it has already cached. Nothing errors
 	// out on a read after Close today, and this keeps it that way.
 	gbs.quiesceSyncs(errGitStoreClosed)
-	return nil
+	return gbs.objectCache().Clear()
 }
 
 const gcInterval = 24 * time.Hour
@@ -1238,14 +1262,6 @@ func (gbs *GitBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 	return ok, nil
 }
 
-// RangeReadsWholeBlob reports that a ranged Get streams the whole blob, because git
-// cat-file has no server-side range and must read from byte zero.
-func (gbs *GitBlobstore) RangeReadsWholeBlob() bool {
-	return true
-}
-
-var _ interface{ RangeReadsWholeBlob() bool } = (*GitBlobstore)(nil)
-
 func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {
 	key, err := normalizeGitTreePath(key)
 	if err != nil {
@@ -1303,16 +1319,16 @@ func (gbs *GitBlobstore) getFromCache(ctx context.Context, key string, br BlobRa
 
 	switch obj.typ {
 	case git.ObjectTypeBlob:
-		sz, err := gbs.api.BlobSize(ctx, obj.oid)
+		sz, err := gbs.cachedBlobSize(ctx, obj.oid)
 		if err != nil {
 			return nil, 0, "", err
 		}
-		rc, err := gbs.api.BlobReader(ctx, obj.oid)
+		rc, err := gbs.openBlobRange(ctx, obj.oid, br)
 		if err != nil {
 			return nil, 0, "", err
 		}
 		// Per-key version: blob object id.
-		return sliceInlineBlob(rc, sz, br, obj.oid.String())
+		return rc, uint64(sz), obj.oid.String(), nil
 
 	case git.ObjectTypeTree:
 		// Per-key version: tree object id at this key.
@@ -1346,9 +1362,10 @@ func (gbs *GitBlobstore) openChunkedTreeRange(ctx context.Context, key string, b
 
 	// Stream across part blobs.
 	streamRC := &multiPartReadCloser{
-		ctx:    ctx,
-		api:    gbs.api,
-		slices: slices,
+		ctx:       ctx,
+		api:       gbs.api,
+		openRange: gbs.openBlobRange,
+		slices:    slices,
 	}
 	return streamRC, totalSize, nil
 }
@@ -1388,7 +1405,7 @@ func (gbs *GitBlobstore) validateAndSizeChunkedParts(ctx context.Context, entrie
 	}
 
 	// Size every part in one cat-file process rather than one per part.
-	sizes, err := gbs.api.BlobSizes(ctx, oids)
+	sizes, err := gbs.cachedBlobSizes(ctx, oids)
 	if err != nil {
 		return nil, 0, err
 	}

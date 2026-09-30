@@ -59,7 +59,7 @@ func TestGitBlobstore_ReadsUseCacheOnly_NoPathResolutionPlumbing(t *testing.T) {
 	}, "seed remote")
 	require.NoError(t, err)
 
-	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
+	bs, err := newTestGitBlobstoreWithOptions(t, localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
 		RemoteName: "origin",
 	})
 	require.NoError(t, err)
