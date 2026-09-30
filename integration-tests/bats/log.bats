@@ -1109,3 +1109,47 @@ export NO_COLOR=1
     ! [[ "$output" =~ "Initialize data repository" ]] || false
     ! [[ "$output" =~ "commit 1 br2" ]] || false
 }
+@test "log: long history decorates each commit with its own refs" {
+    for i in $(seq 1 200); do
+        echo "call dolt_commit('--allow-empty', '-m', 'commit $i');"
+    done | dolt sql
+
+    dolt tag tag_a HEAD~50
+    dolt tag tag_b HEAD~50
+    dolt branch old_branch HEAD~100
+    dolt remote add origin file://./remote
+    dolt push origin HEAD~150:main
+
+    head_hash=$(dolt sql -r csv -q "select dolt_hashof('HEAD')" | tail -1)
+    tagged_hash=$(dolt sql -r csv -q "select dolt_hashof('HEAD~50')" | tail -1)
+    branch_hash=$(dolt sql -r csv -q "select dolt_hashof('HEAD~100')" | tail -1)
+    remote_hash=$(dolt sql -r csv -q "select dolt_hashof('HEAD~150')" | tail -1)
+
+    log_output=$(dolt log --oneline --decorate=short | sed 's/\x1b\[[0-9;]*m//g')
+    readarray -t lines <<< "$log_output"
+    [ "${#lines[@]}" -eq 201 ]
+    [ "${lines[0]}" = "$head_hash (HEAD -> main) commit 200" ]
+    [ "${lines[50]}" = "$tagged_hash (tag: tag_a, tag: tag_b) commit 150" ]
+    [ "${lines[100]}" = "$branch_hash (old_branch) commit 100" ]
+    [ "${lines[150]}" = "$remote_hash (remotes/origin/main) commit 50" ]
+    [ "${lines[200]}" = "$(dolt sql -r csv -q "select dolt_hashof('HEAD~200')" | tail -1) Initialize data repository" ]
+
+    decorated=$(printf '%s\n' "${lines[@]}" | grep -c "(")
+    [ "$decorated" -eq 4 ]
+}
+
+@test "log: long history completes in linear time" {
+    # dolt log used to issue a full history walk per commit, taking ~18s for this
+    # history. The linear implementation takes well under a second.
+    for i in $(seq 1 3000); do
+        echo "call dolt_commit('--allow-empty', '-m', 'commit $i');"
+    done | dolt sql
+
+    start=$SECONDS
+    run dolt log
+    elapsed=$((SECONDS - start))
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "commit 3000" ]] || false
+    [[ "$output" =~ "Initialize data repository" ]] || false
+    [ "$elapsed" -lt 10 ] || { echo "dolt log took ${elapsed}s"; false; }
+}
