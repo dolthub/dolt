@@ -202,7 +202,6 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 		buffer.WriteString(s)
 		first = false
 	}
-	// TODO: we should select way more than just commit_hash
 	buffer.WriteString("select * from dolt_log(")
 
 	// TODO: we can avoid some logic if we make `--table` parameter required like it is in `dolt_log()`
