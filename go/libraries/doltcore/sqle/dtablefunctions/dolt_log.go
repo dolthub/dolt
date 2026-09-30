@@ -15,6 +15,7 @@
 package dtablefunctions
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -488,11 +489,11 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 
 	dbName := sess.Session.GetCurrentDatabase()
 	headRef, err := sess.CWBHeadRef(ctx, dbName)
-	if err == doltdb.ErrOperationNotSupportedInDetachedHead {
-		// In detached HEAD state, we can still resolve commits without a branch ref
+	if err != nil {
+		if !errors.Is(err, doltdb.ErrOperationNotSupportedInDetachedHead) {
+			return nil, err
+		}
 		headRef = nil
-	} else if err != nil {
-		return nil, err
 	}
 
 	for _, revisionStr := range revisionValStrs {

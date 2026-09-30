@@ -696,7 +696,7 @@ func getCommitInfo(sqlCtx *sql.Context, queryist cli.Queryist, ref string) (*Com
 
 // getCommitInfoWithOptions is getCommitInfo with caller-specified per-call options.
 func getCommitInfoWithOptions(sqlCtx *sql.Context, queryist cli.Queryist, ref string, opts commitInfoOptions) (*CommitInfo, error) {
-	hashOfHead, err := getHashOf(queryist, sqlCtx, "HEAD")
+	hashOfHead, err := getHashOf(queryist, sqlCtx, "HEAD") // TODO: This is stupid. We should not be retrieving HEAD every time
 	if err != nil {
 		return nil, fmt.Errorf("error getting hash of HEAD: %v", err)
 	}

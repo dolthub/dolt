@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
@@ -31,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/util/outputpager"
 	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 )
@@ -110,6 +112,7 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 	if err != nil {
 		return handleErrAndExit(err)
 	}
+	// TODO: instead of exhausting the iterator right away, we should incorporate some sort of pagination
 	logRows, err := cli.GetRowsForSql(queryist.Queryist, queryist.Context, query)
 	if err != nil {
 		return handleErrAndExit(err)
@@ -190,13 +193,8 @@ func collectTables(apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx
 // constructInterpolatedDoltLogQuery generates the sql query necessary to call the DOLT_LOG() function.
 // Also interpolates this query to prevent sql injection.
 func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context) (string, error) {
-
 	var buffer bytes.Buffer
-	var first bool
-	first = true
-
-	buffer.WriteString("select commit_hash from dolt_log(")
-
+	first := true
 	writeToBuffer := func(s string) {
 		if !first {
 			buffer.WriteString(", ")
@@ -204,7 +202,11 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 		buffer.WriteString(s)
 		first = false
 	}
+	// TODO: we should select way more than just commit_hash
+	buffer.WriteString("select * from dolt_log(")
 
+	// TODO: we can avoid some logic if we make `--table` parameter required like it is in `dolt_log()`
+	//  This way, we can easily see which arguments are refs and which are tables without `select hashof(...)`
 	params, tablesIndex, err := collectRevisions(apr, queryist, sqlCtx)
 	if err != nil {
 		return "", err
@@ -251,6 +253,11 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 		params = append(params, "--decorate="+resolveDecorateAuto(decorate))
 	}
 
+	writeToBuffer("'--parents'")
+	if apr.Contains(cli.ShowSignatureFlag) {
+		writeToBuffer("'--show-signature'")
+	}
+
 	buffer.WriteString(")")
 
 	if numLines, hasNumLines := apr.GetValue(cli.NumberFlag); hasNumLines {
@@ -295,27 +302,165 @@ func getExistingTables(revisions []string, queryist cli.Queryist, sqlCtx *sql.Co
 	return tableNames, nil
 }
 
-// logCommits takes a list of sql rows that have only 1 column, commit hash, and retrieves the commit info for each hash to be printed to std out
-func logCommits(apr *argparser.ArgParseResults, commitHashes []sql.Row, queryist cli.Queryist, sqlCtx *sql.Context) error {
-	opts := commitInfoOptions{showSignature: apr.Contains(cli.ShowSignatureFlag)}
-	var commitsInfo []CommitInfo
-	for _, hash := range commitHashes {
-		cmHash := hash[0].(string)
-		commit, err := getCommitInfoWithOptions(sqlCtx, queryist, cmHash, opts)
+func getBranchMaps(queryist cli.Queryist, sqlCtx *sql.Context, local bool) (map[string][]string, error) {
+	var query string
+	if local {
+		query = "select * from dolt_branches"
+	} else {
+		query = "select * from dolt_remote_branches"
+	}
+	rows, err := cli.GetRowsForSql(queryist, sqlCtx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	branchMap := make(map[string][]string)
+	for _, row := range rows {
+		name := row[0].(string)
+		hash := row[1].(string)
+		if _, ok := branchMap[hash]; !ok {
+			branchMap[hash] = make([]string, 0)
+		}
+		branchMap[hash] = append(branchMap[hash], name)
+	}
+	return branchMap, nil
+}
+
+func getTagMap(queryist cli.Queryist, sqlCtx *sql.Context) (map[string][]string, error) {
+	rows, err := cli.GetRowsForSql(queryist, sqlCtx, "select tag_name, tag_hash from dolt_tags")
+	if err != nil {
+		return nil, err
+	}
+	tagMap := make(map[string][]string)
+	for _, row := range rows {
+		name := row[0].(string)
+		hash := row[1].(string)
+		if _, ok := tagMap[hash]; !ok {
+			tagMap[hash] = make([]string, 0)
+		}
+		tagMap[hash] = append(tagMap[hash], name)
+	}
+	return tagMap, nil
+}
+
+// logCommits takes a list of sql rows and logs them
+func logCommits(apr *argparser.ArgParseResults, rows []sql.Row, queryist cli.Queryist, sqlCtx *sql.Context) error {
+	// TODO: concurrency worth it?
+	hashOfHead, err := getHashOf(queryist, sqlCtx, "HEAD")
+	if err != nil {
+		return fmt.Errorf("error getting hash of HEAD: %v", err)
+	}
+	// retrieve full list of branches and tags
+	localBranchMap, err := getBranchMaps(queryist, sqlCtx, true)
+	if err != nil {
+		return err
+	}
+	remoteBranchMap, err := getBranchMaps(queryist, sqlCtx, false)
+	if err != nil {
+		return err
+	}
+	tagMap, err := getTagMap(queryist, sqlCtx)
+	if err != nil {
+		return err
+	}
+
+	commitInfos := make([]*CommitInfo, 0, len(rows))
+	for _, row := range rows {
+		commitHashStr, ok := row[0].(string)
+		if !ok {
+			return fmt.Errorf("unexpected type for commit hash: %T", row[0])
+		}
+		committerName, ok := row[1].(string)
+		if !ok {
+			return fmt.Errorf("unexpected type for committer name: %T", row[1])
+		}
+		committerEmail, ok := row[2].(string)
+		if !ok {
+			return fmt.Errorf("unexpected type for committer email: %T", row[2])
+		}
+		committerDate, err := getTimestampColAsUint64(row[3])
 		if err != nil {
-			return err
+			return fmt.Errorf("error parsing committer timestamp '%v': %w", row[3], err)
 		}
-		if commit == nil {
-			return fmt.Errorf("no commits found for ref %s", cmHash)
+		commitMessage, ok := row[4].(string)
+		if !ok {
+			return fmt.Errorf("unexpected type for commit message: %T", row[4])
 		}
-		commitsInfo = append(commitsInfo, *commit)
+
+		var commitOrder uint64
+		switch v := row[5].(type) {
+		case uint64:
+			commitOrder = v
+		case string:
+			commitOrder, err = strconv.ParseUint(v, 10, 64)
+			if err != nil {
+				return fmt.Errorf("error parsing commit_order '%s': %v", v, err)
+			}
+		default:
+			return fmt.Errorf("unexpected type for commit_order: %T", v)
+		}
+
+		var parentHashStrs []string
+		if parentStr, ok := row[6].(string); ok && parentStr != "" {
+			parentHashStrs = strings.Split(parentStr, ", ")
+		}
+
+		// signature is NULL when --show-signature was not requested, so a non-string value here is
+		// expected; fall through with an empty default.
+		var signature string
+		if s, ok := row[8].(string); ok {
+			signature = s
+		}
+
+		authorName, ok := row[9].(string)
+		if !ok {
+			return fmt.Errorf("unexpected type for author name: %T", row[9])
+		}
+		authorEmail, ok := row[10].(string)
+		if !ok {
+			return fmt.Errorf("unexpected type for author email: %T", row[10])
+		}
+		authorDate, err := getTimestampColAsUint64(row[11])
+		if err != nil {
+			return fmt.Errorf("error parsing author timestamp '%v': %w", row[11], err)
+		}
+		commitMeta := &datas.CommitMeta{
+			Author: datas.CommitIdent{
+				Name:  authorName,
+				Email: authorEmail,
+				Date:  datas.CommitDateAt(time.UnixMilli(int64(authorDate))),
+			},
+			Committer: datas.CommitIdent{
+				Name:  committerName,
+				Email: committerEmail,
+				Date:  datas.CommitDateAt(time.UnixMilli(int64(committerDate))),
+			},
+			Description: commitMessage,
+			Signature:   signature,
+		}
+
+		localBranches := localBranchMap[commitHashStr]
+		remoteBranches := remoteBranchMap[commitHashStr]
+		tags := tagMap[commitHashStr]
+
+		commitInfo := &CommitInfo{
+			commitMeta:        commitMeta,
+			commitHash:        commitHashStr,
+			height:            commitOrder,
+			isHead:            commitHashStr == hashOfHead,
+			parentHashes:      parentHashStrs,
+			localBranchNames:  localBranches,
+			remoteBranchNames: remoteBranches,
+			tagNames:          tags,
+		}
+		commitInfos = append(commitInfos, commitInfo)
 	}
 
 	// Resolve auto before opening the pager. checkIsTerminal uses ExecuteWithStdioRestored,
 	// which mutates os.Stdout, and the pager block calls ExecuteWithStdioRestored too.
 	// Calling it from inside the pager block leaves the pager holding a stale stdout handle.
 	decoration := resolveDecorateAuto(apr.GetValueOrDefault(cli.DecorateFlag, cli.DecorateAuto))
-	return logToStdOut(apr, commitsInfo, sqlCtx, queryist, decoration)
+	return logToStdOut(apr, commitInfos, sqlCtx, queryist, decoration)
 }
 
 // resolveDecorateAuto returns DecorateShort when stdout is a terminal and DecorateNo
@@ -330,7 +475,7 @@ func resolveDecorateAuto(decorate string) string {
 	return cli.DecorateNo
 }
 
-func logCompact(pager *outputpager.Pager, apr *argparser.ArgParseResults, commits []CommitInfo, sqlCtx *sql.Context, queryist cli.Queryist, decoration string) error {
+func logCompact(pager *outputpager.Pager, apr *argparser.ArgParseResults, commits []*CommitInfo, sqlCtx *sql.Context, queryist cli.Queryist, decoration string) error {
 	color.NoColor = false
 	for _, comm := range commits {
 		if len(comm.parentHashes) < apr.GetIntOrDefault(cli.MinParentsFlag, 0) {
@@ -349,7 +494,7 @@ func logCompact(pager *outputpager.Pager, apr *argparser.ArgParseResults, commit
 		pager.Writer.Write([]byte(color.YellowString("%s ", chStr)))
 
 		if decoration != cli.DecorateNo {
-			printRefs(pager, &comm, decoration)
+			printRefs(pager, comm, decoration)
 		}
 
 		formattedDesc := strings.Replace(comm.commitMeta.Description, "\n", " ", -1) + "\n"
@@ -370,9 +515,9 @@ func logCompact(pager *outputpager.Pager, apr *argparser.ArgParseResults, commit
 	return nil
 }
 
-func logDefault(pager *outputpager.Pager, apr *argparser.ArgParseResults, commits []CommitInfo, sqlCtx *sql.Context, queryist cli.Queryist, decoration string) error {
+func logDefault(pager *outputpager.Pager, apr *argparser.ArgParseResults, commits []*CommitInfo, sqlCtx *sql.Context, queryist cli.Queryist, decoration string) error {
 	for _, comm := range commits {
-		PrintCommitInfo(pager, apr.GetIntOrDefault(cli.MinParentsFlag, 0), apr.Contains(cli.ParentsFlag), apr.Contains(cli.ShowSignatureFlag), decoration, &comm)
+		PrintCommitInfo(pager, apr.GetIntOrDefault(cli.MinParentsFlag, 0), apr.Contains(cli.ParentsFlag), apr.Contains(cli.ShowSignatureFlag), decoration, comm)
 		if apr.Contains(cli.StatFlag) {
 			if comm.parentHashes != nil && len(comm.parentHashes) == 1 { // don't print stats for merge commits
 				diffStats := make(map[string]*merge.MergeStats)
@@ -389,7 +534,7 @@ func logDefault(pager *outputpager.Pager, apr *argparser.ArgParseResults, commit
 	return nil
 }
 
-func logToStdOut(apr *argparser.ArgParseResults, commits []CommitInfo, sqlCtx *sql.Context, queryist cli.Queryist, decoration string) (err error) {
+func logToStdOut(apr *argparser.ArgParseResults, commits []*CommitInfo, sqlCtx *sql.Context, queryist cli.Queryist, decoration string) (err error) {
 	if cli.ExecuteWithStdioRestored == nil {
 		return nil
 	}
