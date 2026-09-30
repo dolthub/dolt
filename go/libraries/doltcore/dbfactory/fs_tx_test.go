@@ -278,3 +278,17 @@ func TestFSCreateTx_CommitNonEmptyDestination(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ErrExists))
 }
+
+func TestFSCreateTx_Recovery(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11533
+	fs := filesys.EmptyInMemFS("/")
+	u, err := uuid.NewV7()
+	require.NoError(t, err)
+
+	tx := NewFSCreateTxForRecovery(fs, ".tmp-dolt-test-123", "test", false, u)
+	require.NotNil(t, tx)
+	assert.Equal(t, u, tx.UUID())
+	assert.Equal(t, ".tmp-dolt-test-123", tx.TempPath())
+	assert.False(t, tx.DestPathExists())
+	assert.Nil(t, tx.FS())
+}
