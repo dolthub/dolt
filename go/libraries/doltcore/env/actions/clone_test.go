@@ -29,9 +29,8 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func TestEnvForCloneMarksIncomplete(t *testing.T) {
-	// A process killed after EnvForClone must leave the directory marked, so callers that die before the
-	// clone content is complete leave a directory that is ignored rather than served.
+func TestEnvForClone_WritesInTempDir(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11533
 	fs, err := filesys.LocalFilesysWithWorkingDir(t.TempDir())
 	require.NoError(t, err)
 	hdp := func() (string, error) { return fs.TempDir(), nil }
@@ -40,15 +39,26 @@ func TestEnvForCloneMarksIncomplete(t *testing.T) {
 	require.NoError(t, err)
 	defer dEnv.Close()
 
-	exists, isDir := dEnv.FS.Exists(dbfactory.SafeToIgnoreMarkerFile)
-	require.True(t, exists && !isDir, "EnvForClone must mark the directory before clone content arrives")
+	exists, _ := fs.Exists("cloned")
+	require.False(t, exists, "cloned must not exist before commit")
+
+	tempExists, _ := fs.Exists(tx.TempPath())
+	require.True(t, tempExists, "temp directory must exist")
+	require.True(t, dbfactory.IsTempDir(fs, tx.TempPath()))
 
 	require.NoError(t, tx.Commit())
-	exists, _ = dEnv.FS.Exists(dbfactory.SafeToIgnoreMarkerFile)
-	require.False(t, exists)
+
+	exists, _ = fs.Exists("cloned")
+	require.True(t, exists, "cloned must exist after commit")
+	doltExists, _ := fs.Exists(filepath.Join("cloned", dbfactory.DoltDir))
+	require.True(t, doltExists, ".dolt must exist after commit")
+
+	tempExists, _ = fs.Exists(tx.TempPath())
+	require.False(t, tempExists, "temp directory must be cleaned")
 }
 
 func TestRollbackRemovesCreatedDir(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11533
 	ctx := context.Background()
 	fs, err := filesys.LocalFilesysWithWorkingDir(t.TempDir())
 	require.NoError(t, err)
@@ -76,10 +86,12 @@ func TestRollbackRemovesCreatedDir(t *testing.T) {
 	require.NoError(t, retryTx.Commit())
 
 	// Reopen from disk to prove the retry's content landed in the new directory.
-	absPath, err := retry.FS.Abs("")
+	clonedFS, err := fs.WithWorkingDir("cloned")
+	require.NoError(t, err)
+	absPath, err := clonedFS.Abs("")
 	require.NoError(t, err)
 	require.NoError(t, dbfactory.DeleteFromSingletonCache(dbfactory.SingletonCacheKeyForDatabaseDir(absPath), true))
-	reopened := env.Load(ctx, hdp, retry.FS, doltdb.LocalDirDoltDB, "test")
+	reopened := env.Load(ctx, hdp, clonedFS, doltdb.LocalDirDoltDB, "test")
 	t.Cleanup(func() { reopened.Close() })
 	require.NoError(t, reopened.DBLoadError)
 	require.NoError(t, reopened.RSLoadErr)
@@ -88,8 +100,7 @@ func TestRollbackRemovesCreatedDir(t *testing.T) {
 }
 
 func TestRollbackKeepsUsersDir(t *testing.T) {
-	// Cloning into a directory the user already had must not delete that directory, only the Dolt state the
-	// clone wrote into it, marker included.
+	// https://github.com/dolthub/dolt/issues/11533
 	ctx := context.Background()
 	fs, err := filesys.LocalFilesysWithWorkingDir(t.TempDir())
 	require.NoError(t, err)
@@ -99,6 +110,7 @@ func TestRollbackKeepsUsersDir(t *testing.T) {
 	require.NoError(t, fs.WriteFile(filepath.Join("cloned", "keepme"), []byte("mine"), 0o644))
 
 	dEnv, tx, err := EnvForClone(ctx, types.Format_DOLT, env.NoRemote, "cloned", fs, "test", hdp)
+	require.NoError(t, err)
 	require.NoError(t, dEnv.Close())
 	require.NoError(t, tx.Rollback())
 
@@ -114,13 +126,12 @@ func TestRollbackKeepsUsersDir(t *testing.T) {
 }
 
 func TestEnvForCloneCleansUpAfterFailure(t *testing.T) {
-	// EnvForClone writes the marker before it can fail, so a failure inside it must take the directory with it.
 	ctx := context.Background()
 	fs, err := filesys.LocalFilesysWithWorkingDir(t.TempDir())
 	require.NoError(t, err)
 	hdp := func() (string, error) { return fs.TempDir(), nil }
 
-	// A file where the .dolt directory belongs fails the clone after the marker has been written.
+	// An existing file blocking .dolt fails the clone initialization.
 	require.NoError(t, fs.MkDirs("cloned"))
 	require.NoError(t, fs.WriteFile(filepath.Join("cloned", dbfactory.DoltDir), []byte("not a directory"), 0o644))
 

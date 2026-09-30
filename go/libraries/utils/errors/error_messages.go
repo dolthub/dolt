@@ -34,8 +34,9 @@ func CreateUndropErrorMessage(availableDatabases []string) string {
 // JoinCompat joins errs onto primary without wrapping primary with
 // [stderrors.Join] when all additional errs are nil.
 //
-// Callers relying on Go 1.13 single-error unwrapping ([stderrors.Unwrap])
-// cannot inspect the multi-error slice returned by [stderrors.Join].
+// Callers relying on Go 1.13 single-error unwrapping
+// ([stderrors.Unwrap]) cannot inspect the multi-error slice
+// returned by [stderrors.Join].
 //
 // TODO: Replace with [errors.Join] when GMS supports multi-error
 // unwrapping.

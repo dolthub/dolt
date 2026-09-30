@@ -84,13 +84,12 @@ func GetMultiEnvStorageMetadata(ctx context.Context, dataDirFS filesys.Filesys) 
 		}
 
 		dir := filepath.Base(path)
-
-		newFs, err := dataDirFS.WithWorkingDir(dir)
-		if err != nil {
+		if dbfactory.IsTempDir(dataDirFS, dir) {
 			return false
 		}
 
-		if marked, _ := newFs.Exists(dbfactory.SafeToIgnoreMarkerFile); marked {
+		newFs, err := dataDirFS.WithWorkingDir(dir)
+		if err != nil {
 			return false
 		}
 
@@ -100,8 +99,7 @@ func GetMultiEnvStorageMetadata(ctx context.Context, dataDirFS filesys.Filesys) 
 		}
 		envName := getRepoRootDir(path, string(os.PathSeparator))
 
-		// IncompleteEnv.Valid verifies that the database directory
-		// structure exists.
+		// For an incomplete environment, the .Valid() check basically just checks if there is a .dolt directory.
 		falseEnv := IncompleteEnv(newFs)
 		if !falseEnv.Valid() {
 			return false
@@ -195,7 +193,7 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 	seenDbNames := make(map[string]string)
 
 	// Anything that looks like it has a dolt database belongs here.
-	if marked, _ := dEnv.FS.Exists(dbfactory.SafeToIgnoreMarkerFile); marked {
+	if dbfactory.IsTempDir(dEnv.FS, "") {
 		path, _ := dEnv.FS.Abs("")
 		logrus.WithField("path", path).Warn("skipping in-progress database directory")
 	} else if dEnv.HasDoltDataDir() {
@@ -231,14 +229,13 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 		}
 
 		dir := filepath.Base(path)
-
-		newFs, err := dataDirFS.WithWorkingDir(dir)
-		if err != nil {
+		if dbfactory.IsTempDir(dataDirFS, dir) {
+			logrus.WithField("path", path).Warn("skipping in-progress database directory")
 			return false
 		}
 
-		if marked, _ := newFs.Exists(dbfactory.SafeToIgnoreMarkerFile); marked {
-			logrus.WithField("path", path).Warn("skipping in-progress database directory")
+		newFs, err := dataDirFS.WithWorkingDir(dir)
+		if err != nil {
 			return false
 		}
 

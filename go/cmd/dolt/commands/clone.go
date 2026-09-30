@@ -141,24 +141,26 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 	}
 
 	r := env.NewRemote(remoteName, remoteUrl, params)
-	var clonedEnv *env.DoltEnv
-	var fsTx *dbfactory.FsCreateTx
-	clonedEnv, fsTx, err = actions.EnvForClone(ctx, types.Format_DOLT, r, dir, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
+	var cloneEnv *env.DoltEnv
+	var fsTx *dbfactory.FSCreateTx
+	cloneEnv, fsTx, err = actions.EnvForClone(ctx, types.Format_DOLT, r, dir, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 	defer func() {
 		if verr != nil {
-			_ = errors.Join(clonedEnv.Close(), fsTx.Rollback())
+			if cerr := errors.Join(cloneEnv.Close(), fsTx.Rollback()); cerr != nil {
+				cli.PrintErrln(cerr.Error())
+			}
 		}
 	}()
 
 	var srcDB *doltdb.DoltDB
-	cloneRoot, err := dEnv.FS.Abs(dir)
+	cacheRoot, err := cloneEnv.FS.Abs("")
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
-	srcDB, verr = createRemote(ctx, r, dEnv, cloneRoot)
+	srcDB, verr = openRemoteDB(ctx, r, dEnv, cacheRoot)
 	if verr != nil {
 		return verr
 	}
@@ -173,7 +175,7 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 	dEnv = nil
 
 	pull.WithDiscardingStatsCh(func(statsCh chan pull.Stats) {
-		err = actions.CloneRemote(ctx, srcDB, remoteName, branch, singleBranch, depth, clonedEnv, statsCh)
+		err = actions.CloneRemote(ctx, srcDB, remoteName, branch, singleBranch, depth, cloneEnv, statsCh)
 	})
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
@@ -187,11 +189,13 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 		}
 	}
 
-	err = clonedEnv.RepoStateWriter().UpdateBranch(clonedEnv.RepoState.CWBHeadRef().GetPath(), env.BranchConfig{
-		Merge:  clonedEnv.RepoState.Head,
-		Remote: remoteName,
-	})
+	bCfg := env.BranchConfig{Merge: cloneEnv.RepoState.Head, Remote: remoteName}
+	err = cloneEnv.RepoStateWriter().UpdateBranch(cloneEnv.RepoState.CWBHeadRef().GetPath(), bCfg)
 	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	if err = cloneEnv.Close(); err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
@@ -240,17 +244,31 @@ func parseArgs(apr *argparser.ArgParseResults) (string, string, errhand.VerboseE
 	return dir, urlStr, nil
 }
 
-// createRemote opens the remote |r| for reading. |cloneRoot| is the absolute path of the directory
-// the local database is being created in, which is where a git remote keeps its cache repository.
+// createRemote opens the remote at |remoteUrl| for reading.
+// |cloneRoot| is the absolute path of the directory the local
+// database is being created in, which is where a git remote keeps its
+// cache repository.
 //
-// The remote is opened without the singleton and chunk caches, the way fetch, push and pull open one, so the
-// caller gets a view of its own. The caller owns the returned DoltDB and must close it.
-func createRemote(ctx context.Context, r env.Remote, dEnv *env.DoltEnv, cloneRoot string) (*doltdb.DoltDB, errhand.VerboseError) {
+// The remote is opened without the singleton and chunk caches, the
+// way fetch, push and pull open one, so the caller gets a view of its
+// own. The caller owns the returned DoltDB and must close it.
+func createRemote(ctx context.Context, remoteName, remoteUrl string, params map[string]string, dEnv *env.DoltEnv, cloneRoot string) (env.Remote, *doltdb.DoltDB, errhand.VerboseError) {
+	r := env.NewRemote(remoteName, remoteUrl, params)
+	ddb, verr := openRemoteDB(ctx, r, dEnv, cloneRoot)
+	if verr != nil {
+		return env.NoRemote, nil, verr
+	}
+	return r, ddb, nil
+}
+
+// openRemoteDB opens |r| for reading. |cacheRoot| is the absolute
+// path of the cache directory for a git remote repository.
+func openRemoteDB(ctx context.Context, r env.Remote, dEnv *env.DoltEnv, cacheRoot string) (*doltdb.DoltDB, errhand.VerboseError) {
 	cli.Printf("cloning %s\n", r.Url)
 
 	dialer := dbfactory.GRPCDialProvider(dEnv)
-	if strings.TrimSpace(cloneRoot) != "" {
-		dialer = remoteDialerWithGitCacheRoot{GRPCDialProvider: dEnv, root: cloneRoot}
+	if strings.TrimSpace(cacheRoot) != "" {
+		dialer = remoteDialerWithGitCacheRoot{GRPCDialProvider: dEnv, root: cacheRoot}
 	}
 	ddb, err := r.GetRemoteDBWithoutCaching(ctx, types.Format_DOLT, dialer)
 	if err != nil {

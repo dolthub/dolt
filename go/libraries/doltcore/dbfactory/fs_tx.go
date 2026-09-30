@@ -18,203 +18,201 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"syscall"
 
-	"github.com/dolthub/fslock"
+	"github.com/google/uuid"
 
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
-// SafeToIgnoreMarkerFile is the name of the in-progress database
-// marker file.
-//
-// Directory scans skip directories containing this file to avoid
-// serving incomplete or abandoned databases.
-const SafeToIgnoreMarkerFile = ".dolt_safe_to_ignore"
-
-// safeToIgnoreMarkerPerm is the marker's file mode, world-readable so
-// any process scanning the data directory can detect it.
-const safeToIgnoreMarkerPerm os.FileMode = 0o644
-
-// FsCreateTx coordinates database creation across processes using an
-// OS-level file lock on SafeToIgnoreMarkerFile.
-//
-// The lock is acquired via [filesys.CreateFilesysLock], using
-// [flock(2)] on POSIX systems and [LockFileEx] on Windows. The
-// operating system kernel releases the lock automatically when all
-// file descriptors close on process termination ([_exit(2)]).
-//
-// [flock(2)]: https://man7.org/linux/man-pages/man2/flock.2.html
-// [_exit(2)]: https://man7.org/linux/man-pages/man2/_exit.2.html
-// [LockFileEx]: https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-lockfileex
-type FsCreateTx struct {
-	fs      filesys.Filesys
-	path    string
-	lock    filesys.FilesysLock
-	cleanup func() error
-	done    bool
-}
-
-// ErrLocked indicates that another process holds the directory lock.
-var ErrLocked = errors.New("database directory lock is already held")
-
 // ErrExists indicates that a completed database already exists.
 var ErrExists = errors.New("database directory already exists")
 
-// BeginCreate starts creation of a database in |path| under |fs| by
-// writing an in-progress marker and acquiring an OS file lock.
+// SafeToIgnoreMarkerFile marks an incomplete database directory.
 //
-// If an abandoned incomplete database from a terminated process is
-// present, BeginCreate automatically reclaims it before acquiring the
-// lock.
+// Interrupted creations in older Dolt versions left this file
+// behind. IsTempDir checks for it to skip or reclaim them.
+const SafeToIgnoreMarkerFile = ".dolt_safe_to_ignore"
+
+// FSCreateTx coordinates database creation by isolating writes
+// in a temporary directory before moving to the final path.
 //
-// If another active process holds the lock, BeginCreate returns
-// ErrLocked. If a completed database already exists on disk,
-// BeginCreate returns ErrExists. Uncommitted state is removed on
-// FsCreateTx.Rollback, or finalized on FsCreateTx.Commit.
-func BeginCreate(fs filesys.Filesys, path string) (*FsCreateTx, error) {
-	exists, isDir := fs.Exists(path)
+// Uncommitted state is written to a temporary directory created on
+// the same filesystem volume. The database is made permanent via
+// FSCreateTx.Commit, or discarded via FSCreateTx.Rollback.
+type FSCreateTx struct {
+	fs             filesys.Filesys
+	subFs          filesys.Filesys
+	destPath       string
+	tempPath       string
+	destPathExists bool
+	done           bool
+	uuid           uuid.UUID
+}
+
+// BeginCreate starts database creation at |destPath| under |fs| by
+// provisioning an isolated temporary directory under |u|.
+//
+// If |u| is [uuid.Nil], a fallback UUIDv7 is generated via
+// [uuid.NewV7]. Uncommitted state remains isolated in the temporary
+// directory until FSCreateTx.Commit moves it to |destPath|. If
+// |destPath| already contains a complete database, BeginCreate
+// returns ErrExists.
+func BeginCreate(
+	fs filesys.Filesys,
+	destPath string,
+	u uuid.UUID,
+) (*FSCreateTx, error) {
+	exists, isDir := fs.Exists(destPath)
 	if exists && !isDir {
-		return nil, fmt.Errorf("%s is not a directory", path)
+		return nil, fmt.Errorf("%s is not a directory", destPath)
 	}
-
-	subFs, err := fs.WithWorkingDir(path)
-	if err != nil {
-		return nil, err
-	}
-
-	cleanup := func() error { return removeAll(fs, path) }
 
 	if exists {
-		cleanup = func() error { return removeDoltDir(fs, path) }
-		if marked, _ := subFs.Exists(SafeToIgnoreMarkerFile); marked {
-			lck, err := tryLockMarker(subFs)
-			if err != nil {
-				return nil, err
-			}
-			_ = lck.Unlock()
-			if err := cleanup(); err != nil {
-				return nil, err
-			}
-		} else if doltExists, _ := subFs.Exists(DoltDir); doltExists {
+		subFs, err := fs.WithWorkingDir(destPath)
+		if err != nil {
+			return nil, err
+		}
+		if doltExists, _ := subFs.Exists(DoltDir); doltExists {
 			return nil, ErrExists
 		}
 	}
 
-	if err := fs.MkDirs(path); err != nil {
-		return nil, err
-	}
-	if err := subFs.WriteFile(SafeToIgnoreMarkerFile, nil, safeToIgnoreMarkerPerm); err != nil {
-		return nil, err
-	}
-	lck, err := tryLockMarker(subFs)
+	tempPath, u, err := CreateTempDir(fs, destPath, exists, u)
 	if err != nil {
 		return nil, err
 	}
-	return &FsCreateTx{fs: fs, path: path, lock: lck, cleanup: cleanup}, nil
+
+	subFs, err := fs.WithWorkingDir(tempPath)
+	if err != nil {
+		_ = fs.Delete(tempPath, true)
+		return nil, err
+	}
+
+	return &FSCreateTx{
+		fs:             fs,
+		subFs:          subFs,
+		destPath:       destPath,
+		tempPath:       tempPath,
+		destPathExists: exists,
+		uuid:           u,
+	}, nil
 }
 
-// Rollback releases the OS file lock and cleans up uncommitted database
-// state from disk.
+// NewFSCreateTxForRecovery constructs an FSCreateTx from an
+// existing temporary directory for crash recovery roll-forward or
+// rollback.
+func NewFSCreateTxForRecovery(fs filesys.Filesys, tempPath, destPath string, destPathExists bool, u uuid.UUID) *FSCreateTx {
+	return &FSCreateTx{
+		fs:             fs,
+		destPath:       destPath,
+		tempPath:       tempPath,
+		destPathExists: destPathExists,
+		uuid:           u,
+	}
+}
+
+// FS returns the [filesys.Filesys] rooted at the temporary dir.
 //
-// If Commit was already called, Rollback is a no-op.
-func (tx *FsCreateTx) Rollback() error {
-	if tx == nil || tx.done {
+// Callers must perform all initial database writes using this
+// filesystem before calling FSCreateTx.Commit.
+func (tx *FSCreateTx) FS() filesys.Filesys {
+	return tx.subFs
+}
+
+// TempPath returns the path to the isolated temporary directory.
+func (tx *FSCreateTx) TempPath() string {
+	return tx.tempPath
+}
+
+// UUID returns the unique [uuid.UUID] generated for this
+// transaction's temporary directory.
+func (tx *FSCreateTx) UUID() uuid.UUID {
+	return tx.uuid
+}
+
+// DestPathExists reports whether the destination path existed
+// when database creation began.
+func (tx *FSCreateTx) DestPathExists() bool {
+	return tx.destPathExists
+}
+
+// Rollback discards uncommitted database state by deleting the
+// temporary directory.
+func (tx *FSCreateTx) Rollback() error {
+	if tx.done {
 		return nil
 	}
 	tx.done = true
-	unlockErr := tx.unlock()
-	var cleanErr error
-	if tx.cleanup != nil {
-		cleanErr = tx.cleanup()
-	}
-	return errors.Join(unlockErr, cleanErr)
+
+	cacheErr, gitErr := clearCaches(tx.fs, tx.tempPath)
+	delErr := tx.fs.Delete(tx.tempPath, true)
+	return errors.Join(cacheErr, gitErr, delErr)
 }
 
-// Commit releases the OS file lock and makes the database permanent by
-// removing the in-progress marker from disk.
+// Commit moves the temporary directory to the destination path.
 //
-// If Commit was already called, subsequent calls are a no-op.
-func (tx *FsCreateTx) Commit() error {
-	if tx == nil || tx.done {
+// On POSIX systems, [filesys.Filesys.MoveDir] executes atomic
+// [rename(2)].
+//
+// On Windows, directory renames lack formal POSIX atomicity
+// guarantees. Most Windows deployments run on NTFS, where
+// [os.Rename] invokes [MoveFileExW] on the same volume. In [NTFS],
+// directories are B-tree indexes ($I30). Moving a directory on the
+// same volume updates its parent directory index entry without
+// copying files, making its contents visible all at once. Transient
+// sharing violations are retried automatically by
+// [filesys.Filesys.MoveDir]. If the destination path already exists,
+// the move fails with ErrExists.
+//
+// Storage formats without atomic directory renames, such as FAT or
+// network shares, rely on write isolation to prevent exposing
+// partial database state, but cannot guarantee atomic commit
+// visibility.
+//
+// [rename(2)]: https://pubs.opengroup.org/onlinepubs/9699919799/functions/rename.html
+// [os.Rename]: https://github.com/golang/go/blob/eaf3bc799a221cc375f188e8699c9330c1caf40a/src/internal/syscall/windows/syscall_windows.go#L355-L365
+// [MoveFileExW]: https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefileexw
+// [NTFS]: https://learn.microsoft.com/en-us/windows/win32/fileio/file-streams
+func (tx *FSCreateTx) Commit() error {
+	if tx.done {
 		return nil
 	}
+
+	cacheErr, gitErr := clearCaches(tx.fs, tx.tempPath)
+
+	var moveErr error
+	if tx.destPathExists {
+		src := filepath.Join(tx.tempPath, DoltDir)
+		dest := filepath.Join(tx.destPath, DoltDir)
+		moveErr = tx.fs.MoveDir(src, dest)
+		if moveErr == nil {
+			_ = tx.fs.Delete(tx.tempPath, true)
+		}
+	} else {
+		moveErr = tx.fs.MoveDir(tx.tempPath, tx.destPath)
+	}
+
+	if moveErr != nil {
+		if errors.Is(moveErr, os.ErrExist) || errors.Is(moveErr, syscall.ENOTEMPTY) || errors.Is(moveErr, syscall.EEXIST) {
+			moveErr = errors.Join(ErrExists, moveErr)
+		}
+		return errors.Join(cacheErr, gitErr, moveErr)
+	}
+
 	tx.done = true
-	unlockErr := tx.unlock()
-	subFs, err := tx.fs.WithWorkingDir(tx.path)
-	if err != nil {
-		return errors.Join(unlockErr, err)
-	}
-	return errors.Join(unlockErr, removeMarker(subFs))
+	return errors.Join(cacheErr, gitErr)
 }
 
-// unlock releases the transaction's OS file lock if held.
-func (tx *FsCreateTx) unlock() error {
-	if tx.lock != nil {
-		err := tx.lock.Unlock()
-		tx.lock = nil
-		return err
-	}
-	return nil
-}
-
-// removeAll deletes the directory at |path| and clears in-memory
-// caches.
-func removeAll(fs filesys.Filesys, path string) error {
-	cacheErr, gitErr := clearCaches(fs, path)
-	return errors.Join(cacheErr, gitErr, fs.Delete(path, true))
-}
-
-// removeDoltDir deletes DoltDir and the marker file under |path| while
-// preserving the parent directory.
-func removeDoltDir(fs filesys.Filesys, path string) error {
-	cacheErr, gitErr := clearCaches(fs, path)
-	subFs, err := fs.WithWorkingDir(path)
-	if err != nil {
-		return errors.Join(cacheErr, gitErr, err)
-	}
-	var doltErr error
-	if exists, _ := subFs.Exists(DoltDir); exists {
-		doltErr = subFs.Delete(DoltDir, true)
-	}
-	return errors.Join(cacheErr, gitErr, doltErr, removeMarker(subFs))
-}
-
-// clearCaches removes singleton cache entries and closes git remotes
+// clearCaches removes singleton cache entries and closes remotes
 // under |path|.
 func clearCaches(fs filesys.Filesys, path string) (error, error) {
 	if absPath, err := fs.Abs(path); err == nil {
-		return DeleteFromSingletonCache(SingletonCacheKeyForDatabaseDir(absPath), false),
-			CloseGitRemotesUnderRoot(absPath)
+		k := SingletonCacheKeyForDatabaseDir(absPath)
+		cErr := DeleteFromSingletonCache(k, false)
+		gErr := CloseGitRemotesUnderRoot(absPath)
+		return cErr, gErr
 	}
 	return nil, nil
-}
-
-// tryLockMarker attempts to lock the in-progress marker file.
-//
-// It returns ErrLocked if another process holds the file lock.
-func tryLockMarker(subFs filesys.Filesys) (filesys.FilesysLock, error) {
-	absPath, err := subFs.Abs(SafeToIgnoreMarkerFile)
-	if err != nil {
-		return nil, err
-	}
-	lck := filesys.CreateFilesysLock(subFs, absPath)
-	locked, err := lck.TryLock()
-	if errors.Is(err, fslock.ErrLocked) || (!locked && err == nil) {
-		return nil, ErrLocked
-	}
-	if err != nil {
-		return nil, err
-	}
-	return lck, nil
-}
-
-// removeMarker durably removes the in-progress marker from |fs|.
-//
-// An already-absent marker is ignored.
-func removeMarker(fs filesys.Filesys) error {
-	err := fs.DeleteFileDurably(SafeToIgnoreMarkerFile)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	return err
 }

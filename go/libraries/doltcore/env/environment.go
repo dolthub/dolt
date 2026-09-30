@@ -391,7 +391,7 @@ func (dEnv *DoltEnv) HasDoltDir() bool {
 }
 
 func (dEnv *DoltEnv) HasDoltDataDir() bool {
-	if dEnv == nil || dEnv.FS == nil {
+	if dEnv == nil {
 		return false
 	}
 	exists, isDir := dEnv.FS.Exists(dbfactory.DoltDataDir)

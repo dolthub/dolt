@@ -1833,8 +1833,9 @@ type DatabaseUpdateListener interface {
 	// will be logged.
 	WorkingRootUpdated(ctx *sql.Context, databaseName string, branchName string, before RootValue, after RootValue) error
 
-	// DatabaseCreated is called when a new database, named |databaseName|, has been created.
-	DatabaseCreated(ctx *sql.Context, databaseName string) error
+	// DatabaseCreated is called when database |databaseName| is created
+	// with coordinator transaction |xid| under |ctx|.
+	DatabaseCreated(ctx *sql.Context, databaseName string, xid uint64) error
 
 	// DatabaseDropped is called with the database named |databaseName| has been dropped.
 	DatabaseDropped(ctx *sql.Context, databaseName string) error

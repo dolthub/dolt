@@ -16,6 +16,7 @@ package sqlserver
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -26,19 +27,26 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gocraft/dbr/v2"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testcommands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/binlogreplication"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/svcs"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 //TODO: server tests need to expose a higher granularity for server interactions:
@@ -871,4 +879,100 @@ func runDefaultBranchTests(t *testing.T, tests []defaultBranchTest, conn *dbr.Co
 		})
 	}
 	require.NoError(t, conn.Close())
+}
+
+func TestServer_CrashRecoveryRollForwardAndPurge(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11533
+	ctx := context.Background()
+	dEnv := dtestutils.CreateTestEnvForLocalFilesystem()
+	defer func() {
+		assert.NoError(t, dEnv.Close())
+	}()
+
+	fs := dEnv.FS
+	db, err := sqle.NewDatabase(ctx, "dolt", dEnv.DbData(ctx), editor.Options{})
+	require.NoError(t, err)
+	_, sqlCtx, err := sqle.NewTestEngine(dEnv, ctx, db)
+	require.NoError(t, err)
+
+	// Initialize LogManager and BinlogProducer to record a committed
+	// database creation event in the binary log.
+	lm, err := binlogreplication.NewLogManager(sqlCtx, fs)
+	require.NoError(t, err)
+	producer, err := binlogreplication.NewBinlogProducer(sqlCtx, fs)
+	require.NoError(t, err)
+	producer.LogManager(lm)
+
+	committedXID, u, err := sqle.NextXID()
+	require.NoError(t, err)
+	err = producer.DatabaseCreated(sqlCtx, "recovered_db", committedXID)
+	require.NoError(t, err)
+	require.NoError(t, lm.Close())
+
+	// Create committed temporary directory with matching UUIDv7 and
+	// valid Dolt repository inside.
+	deadPID := 99999999
+	scratchName := fmt.Sprintf("%srecovered_db-%d-%s", dbfactory.TempDirPrefix, deadPID, u.String())
+	require.NoError(t, fs.MkDirs(scratchName))
+	scratchFS, err := fs.WithWorkingDir(scratchName)
+	require.NoError(t, err)
+	scratchEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, scratchFS, doltdb.LocalDirDoltDB, "test")
+	require.NoError(t, scratchEnv.InitRepo(ctx, types.Format_DOLT, "test", "test@test.com", "main"))
+	require.NoError(t, scratchEnv.Close())
+
+	// Create uncommitted scratchpad from dead PID (no matching XID).
+	uncommittedUUID, err := uuid.NewV7()
+	require.NoError(t, err)
+	uncommittedName := fmt.Sprintf("%suncommitted_db-%d-%s", dbfactory.TempDirPrefix, deadPID, uncommittedUUID.String())
+	require.NoError(t, fs.MkDirs(uncommittedName))
+	junkFile := filepath.Join(uncommittedName, "junk.txt")
+	require.NoError(t, fs.WriteFile(junkFile, []byte("draft"), 0o644))
+
+	// Find an available port.
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	port := l.Addr().(*net.TCPAddr).Port
+	require.NoError(t, l.Close())
+
+	controller := svcs.NewController()
+	go func() {
+		args := []string{"-H", "127.0.0.1", "-P", fmt.Sprintf("%d", port), "-t", "5", "-l", "info"}
+		StartServer(context.Background(), "0.0.0", "dolt sql-server", args, dEnv, fs, controller)
+	}()
+	require.NoError(t, controller.WaitForStart())
+	defer func() {
+		controller.Stop()
+		_ = controller.WaitForStop()
+	}()
+
+	// Verify filesystem invariants after startup recovery barrier:
+	// - recovered_db rolled forward to destination directory
+	exists, _ := fs.Exists("recovered_db")
+	assert.True(t, exists, "recovered_db must be rolled forward")
+	scratchExists, _ := fs.Exists(scratchName)
+	assert.False(t, scratchExists, "scratchpad must be removed")
+
+	// - uncommitted_db purged
+	uncommittedExists, _ := fs.Exists(uncommittedName)
+	assert.False(t, uncommittedExists, "uncommitted must be purged")
+
+	// Verify database visibility through SQL network listener.
+	dsn := fmt.Sprintf("root@tcp(127.0.0.1:%d)/", port)
+	conn, err := dbr.Open("mysql", dsn, nil)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	sess := conn.NewSession(nil)
+	var databases []struct {
+		Database string `db:"Database"`
+	}
+	_, err = sess.SelectBySql("SHOW DATABASES;").LoadContext(ctx, &databases)
+	require.NoError(t, err)
+
+	dbMap := make(map[string]bool)
+	for _, d := range databases {
+		dbMap[d.Database] = true
+	}
+	assert.True(t, dbMap["recovered_db"], "recovered_db visible")
+	assert.False(t, dbMap["uncommitted_db"], "uncommitted_db hidden")
 }

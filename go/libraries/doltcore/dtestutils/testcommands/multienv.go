@@ -207,6 +207,10 @@ func (mr *MultiRepoTestSetup) CloneDB(fromRemote, dbName string) {
 		mr.Errhand(err)
 	}
 
+	if err = dEnv.Close(); err != nil {
+		mr.Errhand(err)
+	}
+
 	err = tx.Commit()
 	if err != nil {
 		mr.Errhand(err)
@@ -221,6 +225,21 @@ func (mr *MultiRepoTestSetup) CloneDB(fromRemote, dbName string) {
 		mr.Errhand(err)
 	}
 	defer os.Chdir(wd)
+
+	// Reopen from cloneDir: dEnv was closed before committing the
+	// temporary directory.
+	cloneFS, err := filesys.LocalFilesysWithWorkingDir(cloneDir)
+	if err != nil {
+		mr.Errhand(err)
+	}
+
+	dEnv = env.Load(ctx, mr.homeProv, cloneFS, doltdb.LocalDirDoltDB, dEnv.Version)
+	if dEnv.RSLoadErr != nil {
+		mr.Errhand(dEnv.RSLoadErr)
+	}
+	if dEnv.DBLoadError != nil {
+		mr.Errhand(dEnv.DBLoadError)
+	}
 
 	ddb := dEnv.DoltDB(ctx)
 

@@ -23,6 +23,7 @@ import (
 	"sync"
 
 	"github.com/dustin/go-humanize"
+	"github.com/google/uuid"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -57,28 +58,17 @@ var ErrUserNotFound = errors.New("could not determine user name. run dolt config
 var ErrEmailNotFound = errors.New("could not determine email. run dolt config --global --add user.email")
 var ErrCloneFailed = errors.New("clone failed")
 
-// EnvForClone creates a new [env.DoltEnv] and [dbfactory.FsCreateTx]
+// EnvForClone creates an [env.DoltEnv] and [dbfactory.FSCreateTx]
 // prepared to receive cloned content from |r|.
 //
-// The database directory at |dir| is guarded by an in-progress marker
-// and file lock during the clone. Callers must commit the transaction
-// with [dbfactory.FsCreateTx.Commit] when the clone finishes, or roll
-// it back with [dbfactory.FsCreateTx.Rollback] on failure.
-func EnvForClone(
-	ctx context.Context,
-	nbf *types.NomsBinFormat,
-	r env.Remote,
-	dir string,
-	fs filesys.Filesys,
-	version string,
-	homeProvider env.HomeDirProvider,
-) (_ *env.DoltEnv, _ *dbfactory.FsCreateTx, err error) {
+// Writes are isolated in a temporary directory during the clone.
+// Callers must commit the transaction with
+// [dbfactory.FSCreateTx.Commit] when the clone finishes, or roll
+// it back with [dbfactory.FSCreateTx.Rollback] on failure.
+func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, dir string, fs filesys.Filesys, version string, homeProvider env.HomeDirProvider) (_ *env.DoltEnv, _ *dbfactory.FSCreateTx, err error) {
 	var dEnv *env.DoltEnv
-	fsTx, err := dbfactory.BeginCreate(fs, dir)
+	fsTx, err := dbfactory.BeginCreate(fs, dir, uuid.Nil)
 	if err != nil {
-		if errors.Is(err, dbfactory.ErrLocked) {
-			return nil, nil, fmt.Errorf("%w: %s; lock is held by another process", ErrIncompleteRepository, dir)
-		}
 		if errors.Is(err, dbfactory.ErrExists) {
 			return nil, nil, fmt.Errorf("%w: %s", ErrRepositoryExists, dir)
 		}
@@ -90,12 +80,7 @@ func EnvForClone(
 		}
 	}()
 
-	newFs, err := fs.WithWorkingDir(dir)
-	if err != nil {
-		return nil, nil, fmt.Errorf("%w: %s; %s", ErrFailedToAccessDir, dir, err.Error())
-	}
-
-	dEnv = env.LoadWithoutDB(ctx, homeProvider, newFs, doltdb.LocalDirDoltDB, version)
+	dEnv = env.LoadWithoutDB(ctx, homeProvider, fsTx.FS(), doltdb.LocalDirDoltDB, version)
 	err = dEnv.InitRepoWithNoData(ctx, nbf)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to init repo: %w", err)

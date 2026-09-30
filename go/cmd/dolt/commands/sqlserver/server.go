@@ -194,6 +194,13 @@ func ConfigureServices(
 	}
 	controller.Register(InitFailsafes)
 
+	InitCrashRecovery := &svcs.AnonService{
+		InitF: func(ctx context.Context) error {
+			return binlogreplication.Recover(ctx, fs)
+		},
+	}
+	controller.Register(InitCrashRecovery)
+
 	var mrEnv *env.MultiRepoEnv
 	InitMultiEnv := &svcs.AnonService{
 		InitF: func(ctx context.Context) (err error) {
@@ -476,10 +483,9 @@ func ConfigureServices(
 				doltdb.RegisterDatabaseUpdateListener(binlogProducer)
 				doltBinlogPrimaryController.BinlogProducer(binlogProducer)
 
-				// Register binlog hooks for database creation/deletion
+				// Register binlog hook for database deletion
 				provider := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.DbProvider
 				if doltProvider, ok := provider.(*sqle.DoltDatabaseProvider); ok {
-					doltProvider.AddInitDatabaseHook(binlogreplication.NewBinlogInitDatabaseHook(nil, doltdb.DatabaseUpdateListeners))
 					doltProvider.AddDropDatabaseHook(binlogreplication.NewBinlogDropDatabaseHook(nil, doltdb.DatabaseUpdateListeners))
 				}
 			}

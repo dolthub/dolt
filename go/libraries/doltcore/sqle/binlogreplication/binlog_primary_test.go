@@ -15,14 +15,25 @@
 package binlogreplication
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
 	"testing"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 // doltReplicationPrimarySystemVars holds the system variables that must be set when the Dolt sql-server launches
@@ -1395,4 +1406,269 @@ func (h *harness) mustRestartMySqlReplicaServer() {
 	require.NoError(h.t, err)
 	h.replicaDatabase = h.primaryDatabase
 	h.primaryDatabase = prevPrimaryDatabase
+}
+
+func newTestSQLContext(t *testing.T) *sql.Context {
+	dEnv := dtestutils.CreateTestEnvForLocalFilesystem()
+	t.Cleanup(func() { require.NoError(t, dEnv.DoltDB(context.Background()).Close()) })
+	bgCtx := context.Background()
+	db, err := sqle.NewDatabase(bgCtx, "dolt", dEnv.DbData(bgCtx), editor.Options{})
+	require.NoError(t, err)
+	_, ctx, err := sqle.NewTestEngine(dEnv, bgCtx, db)
+	require.NoError(t, err)
+	return ctx
+}
+
+func TestBinlogProducer_DatabaseCreateWithXID(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11533
+	fs, err := filesys.LocalFilesysWithWorkingDir(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := newTestSQLContext(t)
+	lm, err := NewLogManager(ctx, fs)
+	require.NoError(t, err)
+	defer func() { assert.NoError(t, lm.currentBinlogFile.Close()) }()
+
+	producer, err := NewBinlogProducer(ctx, fs)
+	require.NoError(t, err)
+	producer.LogManager(lm)
+
+	expectedXID := uint64(0x018f3a5b7c8d9e0f)
+	err = producer.DatabaseCreated(ctx, "test_xid_db", expectedXID)
+	require.NoError(t, err)
+
+	binlogPath := filepath.Join(lm.binlogDirectory, lm.currentBinlogFileName)
+	file, err := openBinlogFileForReading(binlogPath)
+	require.NoError(t, err)
+	defer file.Close()
+
+	format := createBinlogFormat()
+
+	var foundXID bool
+	for {
+		event, err := readBinlogEventFromFile(file)
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+
+		if event.IsXID() {
+			actualXID, err := event.XID(*format)
+			require.NoError(t, err)
+			assert.Equal(t, expectedXID, actualXID)
+			foundXID = true
+		}
+	}
+	assert.True(t, foundXID, "binlog must contain an XID event")
+}
+
+func TestBinlogProducer_DatabaseCreated_NoXID(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11533
+	fs, err := filesys.LocalFilesysWithWorkingDir(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := newTestSQLContext(t)
+	lm, err := NewLogManager(ctx, fs)
+	require.NoError(t, err)
+	defer func() { assert.NoError(t, lm.currentBinlogFile.Close()) }()
+
+	producer, err := NewBinlogProducer(ctx, fs)
+	require.NoError(t, err)
+	producer.LogManager(lm)
+
+	err = producer.DatabaseCreated(ctx, "legacy_db", 0)
+	require.NoError(t, err)
+
+	binlogPath := filepath.Join(lm.binlogDirectory, lm.currentBinlogFileName)
+	file, err := openBinlogFileForReading(binlogPath)
+	require.NoError(t, err)
+	defer file.Close()
+
+	for {
+		event, err := readBinlogEventFromFile(file)
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+		assert.False(t, event.IsXID(), "DatabaseCreated without XID must not write XID event")
+	}
+}
+
+func TestBinlogProducer_NotifyDatabaseCreate(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11533
+	fs, err := filesys.LocalFilesysWithWorkingDir(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := newTestSQLContext(t)
+	lm, err := NewLogManager(ctx, fs)
+	require.NoError(t, err)
+	defer func() { assert.NoError(t, lm.currentBinlogFile.Close()) }()
+
+	producer, err := NewBinlogProducer(ctx, fs)
+	require.NoError(t, err)
+	producer.LogManager(lm)
+
+	doltdb.RegisterDatabaseUpdateListener(producer)
+	defer sqle.ResetDatabaseUpdateListenersForTesting()
+
+	expectedXID := uint64(0xaabbccddeeff0011)
+	err = sqle.NotifyDatabaseCreated(ctx, "notified_db", expectedXID)
+	require.NoError(t, err)
+
+	binlogPath := filepath.Join(lm.binlogDirectory, lm.currentBinlogFileName)
+	file, err := openBinlogFileForReading(binlogPath)
+	require.NoError(t, err)
+	defer file.Close()
+
+	format := createBinlogFormat()
+
+	var foundXID bool
+	for {
+		event, err := readBinlogEventFromFile(file)
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+
+		if event.IsXID() {
+			actualXID, err := event.XID(*format)
+			require.NoError(t, err)
+			assert.Equal(t, expectedXID, actualXID)
+			foundXID = true
+		}
+	}
+	assert.True(t, foundXID, "binlog must contain an XID event")
+}
+
+func TestScanXIDs_NoBinlogDir(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11533
+	fs, err := filesys.LocalFilesysWithWorkingDir(t.TempDir())
+	require.NoError(t, err)
+
+	xids, err := ScanXIDs(fs)
+	require.NoError(t, err)
+	assert.Nil(t, xids)
+	assert.False(t, sqle.HasXID(fs, 12345))
+}
+
+func TestTCRecover_RollForward(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11533
+	fs, err := filesys.LocalFilesysWithWorkingDir(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := newTestSQLContext(t)
+	lm, err := NewLogManager(ctx, fs)
+	require.NoError(t, err)
+
+	producer, err := NewBinlogProducer(ctx, fs)
+	require.NoError(t, err)
+	producer.LogManager(lm)
+
+	committedXID, u, err := sqle.NextXID()
+	require.NoError(t, err)
+	err = producer.DatabaseCreated(ctx, "recovered_db", committedXID)
+	require.NoError(t, err)
+	require.NoError(t, lm.currentBinlogFile.Close())
+	assert.True(t, sqle.HasXID(fs, committedXID))
+
+	deadPID := 99999999
+	scratchName := fmt.Sprintf("%srecovered_db-%d-%s", dbfactory.TempDirPrefix, deadPID, u.String())
+	require.NoError(t, fs.MkDirs(filepath.Join(scratchName, dbfactory.DoltDir)))
+	payloadFile := filepath.Join(scratchName, dbfactory.DoltDir, "payload.bin")
+	require.NoError(t, fs.WriteFile(payloadFile, []byte("committed_data"), 0o644))
+
+	err = Recover(context.Background(), fs)
+	require.NoError(t, err)
+
+	exists, _ := fs.Exists("recovered_db")
+	assert.True(t, exists, "committed scratchpad must be rolled forward to destination")
+
+	dataExists, _ := fs.Exists(filepath.Join("recovered_db", dbfactory.DoltDir, "payload.bin"))
+	assert.True(t, dataExists, "payload must be present in recovered database")
+
+	scratchExists, _ := fs.Exists(scratchName)
+	assert.False(t, scratchExists, "scratchpad directory must be moved, not remaining")
+}
+
+func TestTCRecover_PurgeUncommitted(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11533
+	fs, err := filesys.LocalFilesysWithWorkingDir(t.TempDir())
+	require.NoError(t, err)
+
+	_, u, err := sqle.NextXID()
+	require.NoError(t, err)
+
+	deadPID := 99999999
+	scratchName := fmt.Sprintf("%suncommitted_db-%d-%s", dbfactory.TempDirPrefix, deadPID, u.String())
+	require.NoError(t, fs.MkDirs(filepath.Join(scratchName, dbfactory.DoltDir)))
+
+	err = Recover(context.Background(), fs)
+	require.NoError(t, err)
+
+	destExists, _ := fs.Exists("uncommitted_db")
+	assert.False(t, destExists, "uncommitted database must not be created")
+
+	scratchExists, _ := fs.Exists(scratchName)
+	assert.False(t, scratchExists, "uncommitted scratchpad from dead process must be purged")
+}
+
+func TestTCRecover_LiveProcessPreserved(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11533
+	fs, err := filesys.LocalFilesysWithWorkingDir(t.TempDir())
+	require.NoError(t, err)
+
+	_, u, err := sqle.NextXID()
+	require.NoError(t, err)
+
+	livePID := os.Getpid()
+	scratchName := fmt.Sprintf("%sactive_db-%d-%s", dbfactory.TempDirPrefix, livePID, u.String())
+	require.NoError(t, fs.MkDirs(scratchName))
+	defer func() { assert.NoError(t, fs.Delete(scratchName, true)) }()
+
+	err = Recover(context.Background(), fs)
+	require.NoError(t, err)
+
+	scratchExists, _ := fs.Exists(scratchName)
+	assert.True(t, scratchExists, "active scratchpad owned by live process must survive recovery")
+}
+
+func TestTCRecover_InsideDestRollForward(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11533
+	fs, err := filesys.LocalFilesysWithWorkingDir(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := newTestSQLContext(t)
+	lm, err := NewLogManager(ctx, fs)
+	require.NoError(t, err)
+
+	producer, err := NewBinlogProducer(ctx, fs)
+	require.NoError(t, err)
+	producer.LogManager(lm)
+
+	committedXID, u, err := sqle.NextXID()
+	require.NoError(t, err)
+	err = producer.DatabaseCreated(ctx, "cloned_target", committedXID)
+	require.NoError(t, err)
+	require.NoError(t, lm.currentBinlogFile.Close())
+
+	destDir := "cloned_target"
+	require.NoError(t, fs.MkDirs(destDir))
+
+	deadPID := 99999999
+	scratchName := fmt.Sprintf("%s%d-%s", dbfactory.TempDirPrefix, deadPID, u.String())
+	scratchPath := filepath.Join(destDir, scratchName)
+
+	require.NoError(t, fs.MkDirs(filepath.Join(scratchPath, dbfactory.DoltDir)))
+	payloadFile := filepath.Join(scratchPath, dbfactory.DoltDir, "config.json")
+	require.NoError(t, fs.WriteFile(payloadFile, []byte("config"), 0o644))
+
+	err = Recover(context.Background(), fs)
+	require.NoError(t, err)
+
+	destDolt := filepath.Join(destDir, dbfactory.DoltDir)
+	exists, _ := fs.Exists(destDolt)
+	assert.True(t, exists, ".dolt must be moved into destination directory")
+
+	scratchExists, _ := fs.Exists(scratchPath)
+	assert.False(t, scratchExists, "scratchpad inside destination must be removed")
 }

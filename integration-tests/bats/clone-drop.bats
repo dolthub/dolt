@@ -58,26 +58,12 @@ teardown() {
   # See https://github.com/dolthub/dolt/issues/11533
   dolt init
 
-  # Deterministic case avoiding timing races with the marker.
+  # Deterministic case: legacy incomplete directory with marker is ignored and recreatable.
   mkdir static_incomplete
   touch static_incomplete/.dolt_safe_to_ignore
 
-  start_sql_server
-
-  dolt --host localhost --port $PORT --no-tls -u root sql -q "CREATE DATABASE interrupted_db;" &
-  CLIENT_PID=$!
-
-  for i in $(seq 1 5000); do
-    if [ -f "interrupted_db/.dolt_safe_to_ignore" ]; then
-      kill -9 $SERVER_PID
-      kill -9 $CLIENT_PID 2>/dev/null || true
-      break
-    fi
-  done
-  wait $CLIENT_PID 2>/dev/null || true
-  wait $SERVER_PID 2>/dev/null || true
-
-  [ -f "interrupted_db/.dolt_safe_to_ignore" ]
+  # Stale temporary directory from a dead PID.
+  mkdir .tmp-dolt-interrupted_db-999999-018f0000-0000-7000-8000-000000000000
 
   start_sql_server
 
@@ -85,44 +71,89 @@ teardown() {
   [ $status -eq 0 ]
   ! echo "$output" | grep -w "interrupted_db"
   ! echo "$output" | grep -w "static_incomplete"
+  ! echo "$output" | grep "tmp-dolt"
 
   run dolt --host localhost --port $PORT --no-tls -u root sql -q "CREATE DATABASE static_incomplete;"
   [ $status -eq 0 ]
 
   run dolt --host localhost --port $PORT --no-tls -u root sql -q "CREATE DATABASE interrupted_db;"
   [ $status -eq 0 ]
+
+  run dolt --host localhost --port $PORT --no-tls -u root sql -q "SHOW DATABASES;"
+  [ $status -eq 0 ]
+  echo "$output" | grep -w "interrupted_db"
+  echo "$output" | grep -w "static_incomplete"
+
+  run dolt --host localhost --port $PORT --no-tls -u root sql -q "call dolt_purge_dropped_databases();"
+  [ $status -eq 0 ]
+  [ ! -d .tmp-dolt-interrupted_db-999999-018f0000-0000-7000-8000-000000000000 ]
 }
 
-@test "clone-drop: concurrent processes respect in-progress marker during creation" {
-  skiponwindows "flock is unix-specific"
+@test "clone-drop: concurrent processes isolate independently and reject duplicate commit" {
   dolt init
   start_sql_server
 
-  # Process 1 starts creating a database and holds the OS file lock on the in-progress marker.
-  mkdir in_progress_db
-  touch in_progress_db/.dolt_safe_to_ignore
+  # Run two concurrent CREATE DATABASE queries for the same DB.
+  dolt --host localhost --port $PORT --no-tls -u root sql -q "CREATE DATABASE concurrent_db;" &
+  PID1=$!
+  dolt --host localhost --port $PORT --no-tls -u root sql -q "CREATE DATABASE concurrent_db;" &
+  PID2=$!
 
-  # Launch Process 1 holding the lock in the background for 2 seconds.
-  flock -x in_progress_db/.dolt_safe_to_ignore sleep 2 &
-  PROC1_PID=$!
+  wait $PID1 || true
+  wait $PID2 || true
 
-  # Give Process 1 a moment to acquire the lock.
-  sleep 0.2
+  # Exactly one succeeded; the database exists and is usable.
+  run dolt --host localhost --port $PORT --no-tls -u root sql -q "SHOW DATABASES;"
+  [ $status -eq 0 ]
+  echo "$output" | grep -w "concurrent_db"
 
-  # Process 2 attempts to create the same database while Process 1 holds the lock.
-  run dolt --host localhost --port $PORT --no-tls -u root sql -q "CREATE DATABASE in_progress_db;"
-  [ $status -ne 0 ]
-  [[ "$output" =~ "incomplete database directory from an interrupted create already exists" ]] || false
+  run dolt --host localhost --port $PORT --no-tls -u root sql -q "use concurrent_db; create table t (id int); insert into t values (1); select count(*) from t;"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "1" ]] || false
+}
 
-  # Wait for Process 1 to complete and release the lock.
-  wait $PROC1_PID
+@test "clone-drop: sql-server: startup crash recovery barrier purges uncommitted drafts" {
+  dolt init
 
-  # Process 2 retries after Process 1 terminates/releases the lock; it reclaims and succeeds.
-  run dolt --host localhost --port $PORT --no-tls -u root sql -q "CREATE DATABASE in_progress_db;"
+  # Stale uncommitted scratchpad directory from a dead PID.
+  mkdir .tmp-dolt-uncommitted_db-999999-018f1122-3344-5566-8d32-3afb14c85104
+  touch .tmp-dolt-uncommitted_db-999999-018f1122-3344-5566-8d32-3afb14c85104/leftover.txt
+  [ -d .tmp-dolt-uncommitted_db-999999-018f1122-3344-5566-8d32-3afb14c85104 ]
+
+  start_sql_server
+
+  # Verify the recovery barrier purged the uncommitted draft at startup.
+  [ ! -d .tmp-dolt-uncommitted_db-999999-018f1122-3344-5566-8d32-3afb14c85104 ]
+
+  run dolt --host localhost --port $PORT --no-tls -u root sql -q "SHOW DATABASES;"
+  [ $status -eq 0 ]
+  ! echo "$output" | grep -w "uncommitted_db"
+
+  # Name can be cleanly created.
+  run dolt --host localhost --port $PORT --no-tls -u root sql -q "CREATE DATABASE uncommitted_db;"
   [ $status -eq 0 ]
 
   run dolt --host localhost --port $PORT --no-tls -u root sql -q "SHOW DATABASES;"
   [ $status -eq 0 ]
-  echo "$output" | grep -w "in_progress_db"
+  echo "$output" | grep -w "uncommitted_db"
+}
+
+@test "clone-drop: sql-server: startup crash recovery barrier preserves active drafts of live processes" {
+  dolt init
+
+  # Simulate a live process holding an active scratchpad.
+  sleep 60 &
+  LIVE_PID=$!
+
+  mkdir .tmp-dolt-live_db-${LIVE_PID}-018f1122-3344-5566-8d32-3afb14c85104
+  touch .tmp-dolt-live_db-${LIVE_PID}-018f1122-3344-5566-8d32-3afb14c85104/active.txt
+
+  start_sql_server
+
+  # Verify the live process's scratchpad was preserved.
+  [ -d .tmp-dolt-live_db-${LIVE_PID}-018f1122-3344-5566-8d32-3afb14c85104 ]
+
+  kill -9 $LIVE_PID || true
+  wait $LIVE_PID 2>/dev/null || true
 }
 

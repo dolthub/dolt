@@ -137,23 +137,17 @@ func (cmd ReadTablesCmd) Exec(ctx context.Context, commandStr string, args []str
 		BuildVerrAndExit("Failed to get remote branches", err)
 	}
 
-	var fsTx *dbfactory.FsCreateTx
-	dEnv, fsTx, verr = initializeShallowCloneRepo(ctx, dEnv, srcDB.Format(), dir, env.GetDefaultBranch(dEnv, branches))
+	cloneEnv, fsTx, verr := initializeShallowCloneRepo(ctx, dEnv, srcDB.Format(), dir, env.GetDefaultBranch(dEnv, branches))
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
 	}
-
-	// The new database is marked in progress until the very end of this function. Anything that goes wrong
-	// before then leaves a database nothing can open, so remove it rather than leaving it on disk.
-	incompleteEnv := dEnv
 	defer func() {
-		if cerr := errors.Join(incompleteEnv.Close(), fsTx.Rollback()); cerr != nil {
+		if cerr := errors.Join(cloneEnv.Close(), fsTx.Rollback()); cerr != nil {
 			cli.PrintErrln(cerr.Error())
 		}
 	}()
 
-	destRoot, err := dEnv.WorkingRoot(ctx)
-
+	destRoot, err := cloneEnv.WorkingRoot(ctx)
 	if err != nil {
 		return BuildVerrAndExit("Failed to read working root", err)
 	}
@@ -167,24 +161,26 @@ func (cmd ReadTablesCmd) Exec(ctx context.Context, commandStr string, args []str
 	}
 
 	for _, tblName := range tblNames {
-		destRoot, verr = pullTableValue(ctx, dEnv, srcDB, srcRoot, destRoot, downloadLanguage, doltdb.TableName{Name: tblName}, commitStr)
+		destRoot, verr = pullTableValue(ctx, cloneEnv, srcDB, srcRoot, destRoot, downloadLanguage, doltdb.TableName{Name: tblName}, commitStr)
 
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
 	}
 
-	err = dEnv.UpdateWorkingRoot(ctx, destRoot)
-
+	err = cloneEnv.UpdateWorkingRoot(ctx, destRoot)
 	if err != nil {
 		return BuildVerrAndExit("Unable to update the working root for local database.", err)
+	}
+
+	if err = cloneEnv.Close(); err != nil {
+		return BuildVerrAndExit("Unable to finish creating the local database.", err)
 	}
 
 	err = fsTx.Commit()
 	if err != nil {
 		return BuildVerrAndExit("Unable to finish creating the local database.", err)
 	}
-	incompleteEnv = nil
 
 	return 0
 }
@@ -235,8 +231,7 @@ func pullTableValue(ctx context.Context, dEnv *env.DoltEnv, srcDB *doltdb.DoltDB
 func getRemoteDBAtCommit(ctx context.Context, remoteUrl string, remoteUrlParams map[string]string, commitStr string, dEnv *env.DoltEnv) (_ *doltdb.DoltDB, _ doltdb.RootValue, verr errhand.VerboseError) {
 	cacheRoot, _ := dEnv.GitCacheRoot()
 	var srcDB *doltdb.DoltDB
-	rem := env.NewRemote("temp", remoteUrl, remoteUrlParams)
-	srcDB, verr = createRemote(ctx, rem, dEnv, cacheRoot)
+	_, srcDB, verr = createRemote(ctx, "temp", remoteUrl, remoteUrlParams, dEnv, cacheRoot)
 
 	if verr != nil {
 		return nil, nil, verr
@@ -272,15 +267,12 @@ func getRemoteDBAtCommit(ctx context.Context, remoteUrl string, remoteUrlParams 
 	return srcDB, srcRoot, nil
 }
 
-func initializeShallowCloneRepo(ctx context.Context, dEnv *env.DoltEnv, nbf *types.NomsBinFormat, dir, branchName string) (_ *env.DoltEnv, _ *dbfactory.FsCreateTx, verr errhand.VerboseError) {
-	var err error
+func initializeShallowCloneRepo(ctx context.Context, dEnv *env.DoltEnv, nbf *types.NomsBinFormat, dir, branchName string) (_ *env.DoltEnv, _ *dbfactory.FSCreateTx, verr errhand.VerboseError) {
 	newEnv, fsTx, err := actions.EnvForClone(ctx, nbf, env.NoRemote, dir, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
-
 	if err != nil {
 		return nil, nil, errhand.VerboseErrorFromError(err)
 	}
 
-	// EnvForClone marked the directory in progress, so a failure here must take the directory with it.
 	defer func() {
 		if verr != nil {
 			if cerr := errors.Join(newEnv.Close(), fsTx.Rollback()); cerr != nil {

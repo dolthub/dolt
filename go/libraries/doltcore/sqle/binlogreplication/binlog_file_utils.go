@@ -16,7 +16,9 @@ package binlogreplication
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -49,10 +51,10 @@ func openBinlogFileForReading(logfile string) (*os.File, error) {
 	buffer := make([]byte, len(binlogFileMagicNumber))
 	bytesRead, err := file.Read(buffer)
 	if err != nil {
-		return nil, err
+		return nil, errors.Join(err, file.Close())
 	}
 	if bytesRead != len(binlogFileMagicNumber) || string(buffer) != string(binlogFileMagicNumber) {
-		return nil, fmt.Errorf("invalid magic number in binlog file!")
+		return nil, errors.Join(fmt.Errorf("invalid magic number in binlog file!"), file.Close())
 	}
 
 	return file, nil
@@ -62,8 +64,7 @@ func openBinlogFileForReading(logfile string) (*os.File, error) {
 // returns it. If no more events are available in the file, then io.EOF is returned.
 func readBinlogEventFromFile(file *os.File) (mysql.BinlogEvent, error) {
 	headerBuffer := make([]byte, 4+1+4+4+4+2)
-	_, err := file.Read(headerBuffer)
-	if err != nil {
+	if _, err := io.ReadFull(file, headerBuffer); err != nil {
 		return nil, err
 	}
 
@@ -72,10 +73,12 @@ func readBinlogEventFromFile(file *os.File) (mysql.BinlogEvent, error) {
 	//eventType := headerBuffer[4]
 	//serverId := binary.LittleEndian.Uint32(headerBuffer[5:5+4])
 	eventSize := binary.LittleEndian.Uint32(headerBuffer[9 : 9+4])
+	if eventSize < uint32(len(headerBuffer)) {
+		return nil, fmt.Errorf("invalid binlog event size %d: smaller than header", eventSize)
+	}
 
 	payloadBuffer := make([]byte, eventSize-uint32(len(headerBuffer)))
-	_, err = file.Read(payloadBuffer)
-	if err != nil {
+	if _, err := io.ReadFull(file, payloadBuffer); err != nil {
 		return nil, err
 	}
 

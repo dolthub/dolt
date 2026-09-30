@@ -15,7 +15,9 @@
 package binlogreplication
 
 import (
+	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -29,6 +31,8 @@ import (
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/sirupsen/logrus"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
@@ -626,3 +630,194 @@ func lookupBinlogExpireLogsSeconds(ctx *sql.Context) (int, error) {
 
 	return int(int32Value.(int32)), nil
 }
+
+// Close closes the currently open binary log file, if any.
+func (lm *logManager) Close() error {
+	lm.mu.Lock()
+	defer lm.mu.Unlock()
+	if lm.currentBinlogFile != nil {
+		err := lm.currentBinlogFile.Close()
+		lm.currentBinlogFile = nil
+		return err
+	}
+	return nil
+}
+
+func init() {
+	sqle.RegisterXIDChecker(hasXID)
+}
+
+// hasXID reports whether coordinator transaction identifier |xid|
+// is recorded in any binary log under |fs|.
+func hasXID(fs filesys.Filesys, xid sqle.XID) bool {
+	xids, err := ScanXIDs(fs)
+	if err != nil || xids == nil {
+		return false
+	}
+	_, ok := xids[xid]
+	return ok
+}
+
+const (
+	// formatDescriptionHeaderLength is the 19-byte common event header plus 57-byte fixed event data.
+	formatDescriptionHeaderLength = 19 + 57
+	// xidPayloadLength is the 8-byte uint64 XID in an XID event payload.
+	xidPayloadLength = 8
+)
+
+// ScanXIDs reads all binary log files under |fs| and returns the
+// set of coordinator transaction identifiers ([my_xid]) recorded
+// in the logs.
+//
+// If binary logging is disabled or the log directory does not exist,
+// ScanXIDs returns an empty map and nil error.
+//
+// [my_xid]: https://dev.mysql.com/doc/c-api/8.0/en/c-api-data-structures.html
+func ScanXIDs(fs filesys.Filesys) (map[uint64]struct{}, error) {
+	exists, isDir := fs.Exists(binlogDirectory)
+	if !exists || !isDir {
+		return nil, nil
+	}
+
+	xids := make(map[uint64]struct{})
+	err := fs.Iter(binlogDirectory, false, func(path string, _ int64, isDir bool) bool {
+		if isDir || !strings.HasPrefix(filepath.Base(path), "binlog-") {
+			return false
+		}
+		absPath, err := fs.Abs(path)
+		if err != nil {
+			return false
+		}
+		file, err := openBinlogFileForReading(absPath)
+		if err != nil {
+			return false
+		}
+		defer file.Close()
+
+		format := mysql.NewMySQL56BinlogFormat()
+		for {
+			event, err := readBinlogEventFromFile(file)
+			if err != nil {
+				break
+			}
+			bytes := event.Bytes()
+			if event.IsFormatDescription() {
+				if len(bytes) >= formatDescriptionHeaderLength {
+					if f, err := event.Format(); err == nil {
+						format = f
+					}
+				}
+			} else if event.IsXID() {
+				if len(bytes) >= int(format.HeaderLength)+xidPayloadLength {
+					if id, err := event.XID(format); err == nil && id != 0 {
+						xids[id] = struct{}{}
+					}
+				}
+			}
+		}
+		return false
+	})
+	return xids, err
+}
+
+// Recover scans |fs| under |ctx| for temporary database directories
+// left behind by abnormal termination, matching UUIDv7 coordinator
+// identifiers against committed binary log XIDs.
+//
+// Temporary directories whose XID appears in the binary log are
+// committed via [dbfactory.FSCreateTx.Commit]. Uncommitted temporary
+// directories created by terminated processes are purged via
+// [dbfactory.FSCreateTx.Rollback]. Active temporary directories owned
+// by live processes are preserved.
+func Recover(ctx context.Context, fs filesys.Filesys) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	committedXIDs, err := ScanXIDs(fs)
+	if err != nil {
+		return err
+	}
+
+	var candidates []string
+	var errs []error
+
+	// Scan top-level directory for temporary and database dirs.
+	err = fs.Iter(".", false, func(path string, _ int64, isDir bool) bool {
+		if !isDir {
+			return false
+		}
+		base := filepath.Base(path)
+		if strings.HasPrefix(base, dbfactory.TempDirPrefix) {
+			candidates = append(candidates, path)
+			return false
+		}
+
+		// Also check inside existing database dirs for clone temp dirs.
+		subErr := fs.Iter(path, false, func(subPath string, _ int64, subIsDir bool) bool {
+			if subIsDir && strings.HasPrefix(filepath.Base(subPath), dbfactory.TempDirPrefix) {
+				candidates = append(candidates, subPath)
+			}
+			return false
+		})
+		if subErr != nil {
+			errs = append(errs, subErr)
+		}
+		return false
+	})
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	for _, cand := range candidates {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		dbName, _, u, _, ok := dbfactory.ParseTempDirMeta(cand)
+		if !ok {
+			// Non-standard temporary dir; skip or purge if stale.
+			if dbfactory.IsTempDirStale(cand) {
+				if delErr := fs.Delete(cand, true); delErr != nil {
+					errs = append(errs, delErr)
+				}
+			}
+			continue
+		}
+
+		if !dbfactory.IsTempDirStale(cand) {
+			// Creator process is still alive; skip active write.
+			continue
+		}
+
+		var destPath string
+		var insideDest bool
+		if dbName != "" {
+			destPath = filepath.Join(filepath.Dir(cand), dbName)
+			insideDest = false
+		} else {
+			destPath = filepath.Dir(cand)
+			insideDest = true
+		}
+
+		tx := dbfactory.NewFSCreateTxForRecovery(fs, cand, destPath, insideDest, u)
+
+		xid := sqle.XIDFromUUIDv7(u)
+		_, committed := committedXIDs[xid]
+
+		if committed {
+			logrus.Infof("Crash recovery: rolling forward committed database %s (XID %d)", destPath, xid)
+			if rollErr := tx.Commit(); rollErr != nil {
+				errs = append(errs, rollErr)
+			}
+		} else {
+			logrus.Infof("Crash recovery: purging uncommitted temp dir %s (XID %d)", cand, xid)
+			if delErr := tx.Rollback(); delErr != nil {
+				errs = append(errs, delErr)
+			}
+		}
+	}
+
+	return errors.Join(errs...)
+}
+
