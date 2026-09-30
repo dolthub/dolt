@@ -53,6 +53,26 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+// DoltDatabaseProvider manages Dolt databases within an engine
+// catalog.
+//
+// Local database creation combines directory setup, storage commit,
+// and catalog registration into an atomic operation. As stated in
+// the reference documentation on [atomic DDL]:
+// "An atomic DDL statement combines the data dictionary updates,
+// storage engine operations, and binary log writes associated with
+// a DDL operation into a single, atomic operation."
+//
+// External effects such as remote pushes, cluster standby threads,
+// and replication controller state fall outside local commit
+// atomicity. As noted in the [Transactional Outbox] pattern:
+// "But without using 2PC, sending a message in the middle of a
+// transaction is not reliable." External steps execute after storage
+// commit, emit warnings on failure, and preserve the committed
+// database.
+//
+// [atomic DDL]: https://dev.mysql.com/doc/refman/8.4/en/atomic-ddl.html
+// [Transactional Outbox]: https://microservices.io/patterns/data/transactional-outbox.html
 type DoltDatabaseProvider struct {
 	fs           filesys.Filesys
 	remoteDialer dbfactory.GRPCDialProvider // TODO: why isn't this a method defined on the remote object
@@ -913,12 +933,6 @@ func (p *DoltDatabaseProvider) commitFS(ctx *sql.Context, name string, fsTx *dbf
 // |name| with environment |newEnv| under |ctx|. Post-commit hook
 // failures emit warnings via [ctx.Warn] and keep the committed
 // database intact.
-//
-// As stated in the MySQL Reference Manual on atomic DDL:
-// "An atomic DDL statement combines the data dictionary updates,
-// storage engine operations, and binary log writes associated with
-// a DDL operation into a single, atomic operation."
-// https://dev.mysql.com/doc/refman/8.4/en/atomic-ddl.html
 func (p *DoltDatabaseProvider) afterCommit(ctx *sql.Context, name string, newEnv *env.DoltEnv) error {
 	db, err := NewDatabase(ctx, name, newEnv.DbData(ctx), editor.Options{})
 	if err != nil {

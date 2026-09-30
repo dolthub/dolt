@@ -56,7 +56,8 @@ func processStartTime(pid int) (time.Time, error) {
 const (
 	// userHz defines the USER_HZ clock ticks per second on Linux systems.
 	userHz = 100
-	// starttimeFieldIndex defines the 0-indexed position of starttime in /proc/<pid>/stat.
+	// starttimeFieldIndex defines the 0-indexed position of
+	// starttime in /proc/<pid>/stat.
 	starttimeFieldIndex = 19
 	// tickNanoseconds defines the duration of each clock tick in nanoseconds.
 	tickNanoseconds = int64(time.Second / userHz)
