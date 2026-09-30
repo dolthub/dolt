@@ -154,7 +154,7 @@ func (b *binlogProducer) WorkingRootUpdated(ctx *sql.Context, databaseName strin
 //
 // If |xid| is 0, no XID event is recorded.
 //
-// [2PC]: https://dev.mysql.com/doc/refman/8.4/en/xa.html
+// [2PC]: https://dev.mysql.com/doc/refman/8.4/en/binary-log.html
 func (b *binlogProducer) DatabaseCreated(ctx *sql.Context, databaseName string, xid uint64) error {
 	// TODO: All of these need to be sequentially processed by a single goroutine, so that we can ensure the GTID
 	//       assignment happens sequentially and safely. Also... if a database is created, we need to process that

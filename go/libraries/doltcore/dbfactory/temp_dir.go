@@ -38,7 +38,7 @@ const (
 	uuidStringLength = 36
 	// uuidSuffixLength is the hyphen delimiter plus the 36-character UUID string.
 	uuidSuffixLength = uuidStringLength + 1
-	// expectedUUIDVersion is UUID version 7 per RFC 9562 §6.2.
+	// expectedUUIDVersion is UUID version 7 per RFC 9562 §5.7.
 	expectedUUIDVersion = 7
 )
 
@@ -53,11 +53,11 @@ const (
 //
 // The temporary directory is named with the target database name,
 // the creator process ID ([os.Getpid]), and the full 128-bit |u|
-// (time-ordered UUIDv7 as defined in [RFC 9562 §6.2]). If |u| is
+// (time-ordered UUIDv7 as defined in [RFC 9562 §5.7]). If |u| is
 // [uuid.Nil], a fallback UUIDv7 is generated via [uuid.NewV7].
 //
 // [rename(2)]: https://man7.org/linux/man-pages/man2/rename.2.html
-// [RFC 9562 §6.2]: https://www.rfc-editor.org/rfc/rfc9562.html#section-6.2
+// [RFC 9562 §5.7]: https://www.rfc-editor.org/rfc/rfc9562.html#section-5.7
 func CreateTempDir(fs filesys.Filesys, destPath string, insideDest bool, u uuid.UUID) (string, uuid.UUID, error) {
 	if u == uuid.Nil {
 		var err error

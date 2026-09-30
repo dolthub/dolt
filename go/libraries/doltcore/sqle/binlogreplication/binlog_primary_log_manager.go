@@ -672,14 +672,14 @@ const (
 	xidPayloadLength = 8
 )
 
-// ScanXIDs reads all binary log files under |fs| and returns the
-// set of coordinator transaction identifiers ([my_xid]) recorded
-// in the logs.
+// ScanXIDs reads all binary log files under |fs| and collects
+// the XIDs recorded in the binary log the way the MySQL server
+// does at restart ([binary log recovery]).
 //
 // If binary logging is disabled or the log directory does not exist,
 // ScanXIDs returns an empty map and nil error.
 //
-// [my_xid]: https://dev.mysql.com/doc/c-api/8.0/en/c-api-data-structures.html
+// [binary log recovery]: https://dev.mysql.com/doc/refman/8.4/en/binary-log.html
 func ScanXIDs(fs filesys.Filesys) (map[uint64]struct{}, error) {
 	exists, isDir := fs.Exists(binlogDirectory)
 	if !exists || !isDir {

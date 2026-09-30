@@ -689,7 +689,7 @@ func NewErrIncompleteDatabaseDir(db string) error {
 // collation |collation| under |ctx|, coordinating storage
 // initialization and binary logging via two-phase commit ([2PC]).
 //
-// [2PC]: https://dev.mysql.com/doc/refman/8.4/en/xa.html
+// [2PC]: https://dev.mysql.com/doc/refman/8.4/en/binary-log.html
 func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name string, collation sql.CollationID) (err error) {
 	// We have to validate the name before attempting to create a directory. If a directory contains a delimiter, when
 	// registerNewDatabase errors out a directory with the exact name will be leftover due to a process lock. This then

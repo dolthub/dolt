@@ -25,21 +25,20 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
-// XID is an 8-byte MySQL transaction identifier ([my_xid]) used by
-// the transaction coordinator to identify prepared and committed
-// transactions across the storage engine and binary log.
+// XID is the 64-bit transaction identifier that the binary log
+// records in an [Xid_log_event] for two-phase commit.
 //
-// [my_xid]: https://dev.mysql.com/doc/c-api/8.0/en/c-api-data-structures.html
+// [Xid_log_event]: https://dev.mysql.com/doc/dev/mysql-server/latest/classXid__log__event.html
 type XID = uint64
 
 // XIDFromUUIDv7 derives an XID from the time-ordered high 64 bits
 // of |u|.
 //
-// As specified in [RFC 9562 §6.2], the high 64 bits encode a 48-bit
-// millisecond timestamp, version bits, and a sequence counter,
-// guaranteeing monotonic ordering and uniqueness.
+// As specified in [RFC 9562 §5.7], the high 64 bits hold the 48-bit
+// Unix millisecond timestamp followed by the version and rand_a
+// fields.
 //
-// [RFC 9562 §6.2]: https://www.rfc-editor.org/rfc/rfc9562.html#section-6.2
+// [RFC 9562 §5.7]: https://www.rfc-editor.org/rfc/rfc9562.html#section-5.7
 func XIDFromUUIDv7(u uuid.UUID) XID {
 	return binary.BigEndian.Uint64(u[0:8])
 }
