@@ -701,13 +701,7 @@ func getCommitInfoWithOptions(sqlCtx *sql.Context, queryist cli.Queryist, ref st
 		return nil, fmt.Errorf("error getting hash of HEAD: %v", err)
 	}
 
-	// --parents fills the parents column so CommitInfo.parentHashes is non-nil. --show-signature
-	// is opt-in so unsigned-commit queries do not pay the gpg verify cost.
-	flags := "'--parents'"
-	if opts.showSignature {
-		flags += ", '--show-signature'"
-	}
-	q, err := dbr.InterpolateForDialect("select * from dolt_log(?, "+flags+")", []interface{}{ref}, dialect.MySQL)
+	q, err := dbr.InterpolateForDialect("select * from dolt_log(?, "+commitInfoDoltLogFlags(opts)+") limit 1", []interface{}{ref}, dialect.MySQL)
 	if err != nil {
 		return nil, fmt.Errorf("error interpolating query: %v", err)
 	}
@@ -720,7 +714,41 @@ func getCommitInfoWithOptions(sqlCtx *sql.Context, queryist cli.Queryist, ref st
 		return nil, nil
 	}
 
-	row := rows[0]
+	commit, err := commitInfoFromDoltLogRow(rows[0], hashOfHead)
+	if err != nil {
+		return nil, err
+	}
+
+	commit.localBranchNames, err = getBranchesForHash(queryist, sqlCtx, commit.commitHash, true)
+	if err != nil {
+		return nil, fmt.Errorf("error getting branches for hash '%s': %v", commit.commitHash, err)
+	}
+	commit.remoteBranchNames, err = getBranchesForHash(queryist, sqlCtx, commit.commitHash, false)
+	if err != nil {
+		return nil, fmt.Errorf("error getting remote branches for hash '%s': %v", commit.commitHash, err)
+	}
+	commit.tagNames, err = getTagsForHash(queryist, sqlCtx, commit.commitHash)
+	if err != nil {
+		return nil, fmt.Errorf("error getting tags for hash '%s': %v", commit.commitHash, err)
+	}
+
+	return commit, nil
+}
+
+// commitInfoDoltLogFlags returns the dolt_log arguments needed for |commitInfoFromDoltLogRow| to parse its rows.
+// --parents fills the parents column so CommitInfo.parentHashes is non-nil. --show-signature is opt-in so
+// unsigned-commit queries do not pay the gpg verify cost.
+func commitInfoDoltLogFlags(opts commitInfoOptions) string {
+	flags := "'--parents'"
+	if opts.showSignature {
+		flags += ", '--show-signature'"
+	}
+	return flags
+}
+
+// commitInfoFromDoltLogRow parses a `select *` dolt_log row queried with |commitInfoDoltLogFlags|. Ref names are
+// left empty for the caller to fill.
+func commitInfoFromDoltLogRow(row sql.Row, hashOfHead string) (*CommitInfo, error) {
 	// The minimum column count this code reads positionally below. Hard-coded so a server
 	// that ships extra trailing columns in a future release stays forward-compatible.
 	const minCols = 12
@@ -805,29 +833,67 @@ func getCommitInfoWithOptions(sqlCtx *sql.Context, queryist cli.Queryist, ref st
 		Signature:   signature,
 	}
 
-	localBranches, err := getBranchesForHash(queryist, sqlCtx, commitHashStr, true)
+	return &CommitInfo{
+		commitMeta:   commitMeta,
+		commitHash:   commitHashStr,
+		height:       commitOrder,
+		isHead:       commitHashStr == hashOfHead,
+		parentHashes: parentHashStrs,
+	}, nil
+}
+
+// commitRefNames maps commit hashes to the names of the refs pointing at them.
+type commitRefNames struct {
+	localBranches  map[string][]string
+	remoteBranches map[string][]string
+	tags           map[string][]string
+}
+
+// loadCommitRefNames reads every branch, remote branch, and tag in three queries, so callers decorating many
+// commits avoid per-commit lookups.
+func loadCommitRefNames(queryist cli.Queryist, sqlCtx *sql.Context) (*commitRefNames, error) {
+	localBranches, err := getRefNamesByHash(queryist, sqlCtx, "select name, hash from dolt_branches")
 	if err != nil {
-		return nil, fmt.Errorf("error getting branches for hash '%s': %v", commitHashStr, err)
+		return nil, fmt.Errorf("error getting branches: %v", err)
 	}
-	remoteBranches, err := getBranchesForHash(queryist, sqlCtx, commitHashStr, false)
+	remoteBranches, err := getRefNamesByHash(queryist, sqlCtx, "select name, hash from dolt_remote_branches")
 	if err != nil {
-		return nil, fmt.Errorf("error getting remote branches for hash '%s': %v", commitHashStr, err)
+		return nil, fmt.Errorf("error getting remote branches: %v", err)
 	}
-	tags, err := getTagsForHash(queryist, sqlCtx, commitHashStr)
+	tags, err := getRefNamesByHash(queryist, sqlCtx, "select tag_name, tag_hash from dolt_tags")
 	if err != nil {
-		return nil, fmt.Errorf("error getting tags for hash '%s': %v", commitHashStr, err)
+		return nil, fmt.Errorf("error getting tags: %v", err)
+	}
+	return &commitRefNames{localBranches: localBranches, remoteBranches: remoteBranches, tags: tags}, nil
+}
+
+// getRefNamesByHash groups the (name, hash) rows of |query| by hash, preserving row order within each group.
+func getRefNamesByHash(queryist cli.Queryist, sqlCtx *sql.Context, query string) (map[string][]string, error) {
+	rows, err := cli.GetRowsForSql(queryist, sqlCtx, query)
+	if err != nil {
+		return nil, err
 	}
 
-	return &CommitInfo{
-		commitMeta:        commitMeta,
-		commitHash:        commitHashStr,
-		height:            commitOrder,
-		isHead:            commitHashStr == hashOfHead,
-		parentHashes:      parentHashStrs,
-		localBranchNames:  localBranches,
-		remoteBranchNames: remoteBranches,
-		tagNames:          tags,
-	}, nil
+	namesByHash := make(map[string][]string)
+	for _, row := range rows {
+		name, err := cli.QueryValueAsString(row[0])
+		if err != nil {
+			return nil, err
+		}
+		hash, err := cli.QueryValueAsString(row[1])
+		if err != nil {
+			return nil, err
+		}
+		namesByHash[hash] = append(namesByHash[hash], name)
+	}
+	return namesByHash, nil
+}
+
+// decorate fills the ref names of |commit| from |refs|.
+func (refs *commitRefNames) decorate(commit *CommitInfo) {
+	commit.localBranchNames = refs.localBranches[commit.commitHash]
+	commit.remoteBranchNames = refs.remoteBranches[commit.commitHash]
+	commit.tagNames = refs.tags[commit.commitHash]
 }
 
 func getBranchesForHash(queryist cli.Queryist, sqlCtx *sql.Context, targetHash string, getLocalBranches bool) ([]string, error) {
