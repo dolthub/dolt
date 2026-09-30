@@ -1349,7 +1349,8 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 	}
 
 	// If this database is re-created, we don't want to return any cached results.
-	err = evictDatabaseSingletonCache(dropDbLoc, true)
+	cacheKey := dbfactory.SingletonCacheKeyForDatabaseDir(dropDbLoc)
+	err = dbfactory.DeleteFromSingletonCache(cacheKey, true)
 	if err != nil {
 		retErr = errors.Join(retErr, err)
 	}
@@ -1360,12 +1361,6 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 	}
 
 	return retErr
-}
-
-// evictDatabaseSingletonCache deletes the singleton cache entry for the
-// local database rooted at directory |dbDir|.
-func evictDatabaseSingletonCache(dbDir string, closeIt bool) error {
-	return dbfactory.DeleteFromSingletonCache(dbfactory.SingletonCacheKeyForDatabaseDir(dbDir), closeIt)
 }
 
 func (p *DoltDatabaseProvider) ListDroppedDatabases(ctx *sql.Context) ([]string, error) {

@@ -127,7 +127,7 @@ func CleanupTempDirs(ctx context.Context, fs filesys.Filesys, parentDir string, 
 // is stale by testing creator process liveness and operating system
 // PID reuse.
 func IsTempDirStale(path string) bool {
-	pid, createdAt, ok := parseTempDirMeta(filepath.Base(path))
+	_, pid, _, createdAt, ok := ParseTempDirMeta(filepath.Base(path))
 	if !ok {
 		return false
 	}
@@ -177,11 +177,4 @@ func ParseTempDirMeta(dirName string) (dbName string, pid int, u uuid.UUID, crea
 	}
 	sec, nsec := parsedUUID.Time().UnixTime()
 	return dbName, parsedPID, parsedUUID, time.Unix(sec, nsec), true
-}
-
-// parseTempDirMeta extracts the creator PID and creation timestamp
-// from temporary directory name |dirName|.
-func parseTempDirMeta(dirName string) (int, time.Time, bool) {
-	_, pid, _, createdAt, ok := ParseTempDirMeta(dirName)
-	return pid, createdAt, ok
 }
