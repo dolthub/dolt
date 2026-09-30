@@ -103,8 +103,7 @@ func newPersistedBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore,
 	}
 	src, err := newReaderFromIndexData(ctx, q, data, name, rdr, blockSize)
 	if err != nil {
-		_ = rdr.Close()
-		return nil, err
+		return nil, errors.Join(err, rdr.Close())
 	}
 	return src, nil
 }

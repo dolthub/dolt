@@ -257,6 +257,7 @@ func (b *persistReadCountingBlobstore) Get(ctx context.Context, key string, br b
 }
 
 func TestBlobstorePersistersPersistSpooling(t *testing.T) {
+	// Regression coverage for https://github.com/dolthub/dolt/issues/11916.
 	constructors := map[string]func(blobstore.Blobstore) tablePersister{
 		"split": func(bs blobstore.Blobstore) tablePersister {
 			return &blobstorePersister{bs, NewUnlimitedMemQuotaProvider(), s3BlockSize}
@@ -328,6 +329,7 @@ func TestBlobstorePersistersPersistSpooling(t *testing.T) {
 }
 
 func TestSingleBlobBSPersisterConjoinReusesSpools(t *testing.T) {
+	// Regression coverage for https://github.com/dolthub/dolt/issues/11916.
 	for _, reopen := range []bool{false, true} {
 		t.Run(fmt.Sprintf("reopen=%v", reopen), func(t *testing.T) {
 			ctx := context.Background()
