@@ -56,23 +56,21 @@ import (
 // DoltDatabaseProvider manages Dolt databases within an engine
 // catalog.
 //
-// Local database creation combines directory setup, storage commit,
-// and catalog registration into an atomic operation. As stated in
-// the reference documentation on [atomic DDL]:
-// "An atomic DDL statement combines the data dictionary updates,
-// storage engine operations, and binary log writes associated with
-// a DDL operation into a single, atomic operation."
+// In [atomic DDL], data dictionary updates, storage operations,
+// and binary log writes combine into a single atomic operation.
+// Dolt mirrors this by making directory creation, storage commit,
+// and catalog registration atomic and crash safe.
 //
-// External effects such as remote pushes, cluster standby threads,
-// and replication controller state fall outside local commit
-// atomicity. As noted in the [Transactional Outbox] pattern:
-// "But without using 2PC, sending a message in the middle of a
-// transaction is not reliable." External steps execute after storage
-// commit, emit warnings on failure, and preserve the committed
-// database.
+// External side effects such as remote pushes, cluster standby
+// threads, and controller state fall outside local transaction
+// commit. Without two-phase commit across external systems,
+// sending messages during a local transaction cannot guarantee
+// reliable delivery, as described in the [transactional outbox]
+// pattern. These steps run after storage commit, emit warnings
+// on failure, and preserve the committed database.
 //
 // [atomic DDL]: https://dev.mysql.com/doc/refman/8.4/en/atomic-ddl.html
-// [Transactional Outbox]: https://microservices.io/patterns/data/transactional-outbox.html
+// [transactional outbox]: https://microservices.io/patterns/data/transactional-outbox.html
 type DoltDatabaseProvider struct {
 	fs           filesys.Filesys
 	remoteDialer dbfactory.GRPCDialProvider // TODO: why isn't this a method defined on the remote object
