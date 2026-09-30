@@ -301,7 +301,9 @@ type GitBlobstore struct {
 	// by this blobstore should exceed maxPartSize bytes.
 	//
 	// A zero value means "disabled" (store values inline as a single git blob).
-	maxPartSize uint64
+	maxPartSize       uint64
+	maxHistoryCommits int
+	resetOnPrune      bool
 
 	// pendingWrites accumulates non-manifest writes that will be flushed in a single
 	// commit+push when CheckAndPutManifest is called. This avoids per-key
@@ -393,6 +395,12 @@ func NewGitBlobstoreWithIdentity(gitDir, ref string, identity *git.Identity) (*G
 
 // GitBlobstoreOptions configures optional behaviors of GitBlobstore.
 type GitBlobstoreOptions struct {
+	// MaxHistoryCommits limits reachable Git commits. Nil defaults to 64;
+	// zero means unlimited. Negative values are invalid.
+	MaxHistoryCommits *int
+	// ResetHistoryOnPrune creates a parentless commit when obsolete tables
+	// are removed. Nil defaults to true. False retains parents up to the limit.
+	ResetHistoryOnPrune *bool
 	// Identity, when non-nil, forces the author/committer identity for commits created by write paths.
 	Identity *git.Identity
 	// MaxPartSize enables chunked-object writes when non-zero.
@@ -418,6 +426,17 @@ type GitBlobstoreOptions struct {
 const defaultSyncForReadTTL = 1 * time.Second
 
 func NewGitBlobstoreWithOptions(gitDir, ref string, opts GitBlobstoreOptions) (*GitBlobstore, error) {
+	maxHistoryCommits := maxParentedCommits
+	if opts.MaxHistoryCommits != nil {
+		maxHistoryCommits = *opts.MaxHistoryCommits
+		if maxHistoryCommits < 0 {
+			return nil, fmt.Errorf("gitblobstore: max history commits must be non-negative")
+		}
+	}
+	resetHistoryOnPrune := true
+	if opts.ResetHistoryOnPrune != nil {
+		resetHistoryOnPrune = *opts.ResetHistoryOnPrune
+	}
 	r, err := git.NewRunner(gitDir)
 	if err != nil {
 		return nil, err
@@ -455,6 +474,8 @@ func NewGitBlobstoreWithOptions(gitDir, ref string, opts GitBlobstoreOptions) (*
 		anchorVersion:     anchorVersion,
 		identity:          opts.Identity,
 		maxPartSize:       opts.MaxPartSize,
+		maxHistoryCommits: maxHistoryCommits,
+		resetOnPrune:      resetHistoryOnPrune,
 		cacheObjects:      make(map[string]cachedGitObject),
 		cacheChildren:     make(map[string][]git.TreeEntry),
 		syncForReadTTL:    syncForReadTTL,
@@ -1651,14 +1672,16 @@ func (gbs *GitBlobstore) buildCommitForKeyWrite(ctx context.Context, parent git.
 	}
 
 	// Use parent commit when available so git push can compute incremental deltas
-	// instead of enumerating the full tree. After maxParentedCommits in the
-	// existing chain, create a parentless commit to sever history so git gc can
-	// prune old objects. Also force an orphan commit when entries were pruned so
-	// the old bloated tree becomes immediately unreachable from the new tip.
+	// instead of enumerating the full tree. Sever history at the configured
+	// limit, or on pruning when enabled, so git gc can reclaim obsolete objects.
 	var parentPtr *git.OID
-	if hasParent && parent != "" && prunedEntries == 0 {
-		depth, err := gbs.api.RevListCount(ctx, parent, maxParentedCommits+1)
-		if err == nil && depth < maxParentedCommits {
+	if hasParent && parent != "" && (prunedEntries == 0 || !gbs.resetOnPrune) {
+		keepParent := gbs.maxHistoryCommits == 0
+		if !keepParent {
+			depth, err := gbs.api.RevListCount(ctx, parent, gbs.maxHistoryCommits)
+			keepParent = err == nil && depth < gbs.maxHistoryCommits
+		}
+		if keepParent {
 			p := parent
 			parentPtr = &p
 		}
