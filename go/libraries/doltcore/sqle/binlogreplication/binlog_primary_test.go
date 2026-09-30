@@ -1419,22 +1419,29 @@ func newTestSQLContext(t *testing.T) *sql.Context {
 	return ctx
 }
 
-func TestBinlogProducer_DatabaseCreateWithXID(t *testing.T) {
-	// https://github.com/dolthub/dolt/issues/11533
+// newTestProducer creates and wires a test log manager and binlog
+// producer on a temporary filesystem.
+func newTestProducer(t *testing.T) (filesys.Filesys, *sql.Context, *logManager, *binlogProducer) {
 	fs, err := filesys.LocalFilesysWithWorkingDir(t.TempDir())
 	require.NoError(t, err)
 
 	ctx := newTestSQLContext(t)
 	lm, err := NewLogManager(ctx, fs)
 	require.NoError(t, err)
-	defer func() { assert.NoError(t, lm.currentBinlogFile.Close()) }()
+	t.Cleanup(func() { assert.NoError(t, lm.currentBinlogFile.Close()) })
 
 	producer, err := NewBinlogProducer(ctx, fs)
 	require.NoError(t, err)
 	producer.LogManager(lm)
+	return fs, ctx, lm, producer
+}
+
+func TestBinlogProducer_DatabaseCreateWithXID(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11533
+	_, ctx, lm, producer := newTestProducer(t)
 
 	expectedXID := uint64(0x018f3a5b7c8d9e0f)
-	err = producer.DatabaseCreated(ctx, "test_xid_db", expectedXID)
+	err := producer.DatabaseCreated(ctx, "test_xid_db", expectedXID)
 	require.NoError(t, err)
 
 	binlogPath := filepath.Join(lm.binlogDirectory, lm.currentBinlogFileName)
@@ -1464,19 +1471,9 @@ func TestBinlogProducer_DatabaseCreateWithXID(t *testing.T) {
 
 func TestBinlogProducer_DatabaseCreated_NoXID(t *testing.T) {
 	// https://github.com/dolthub/dolt/issues/11533
-	fs, err := filesys.LocalFilesysWithWorkingDir(t.TempDir())
-	require.NoError(t, err)
+	_, ctx, lm, producer := newTestProducer(t)
 
-	ctx := newTestSQLContext(t)
-	lm, err := NewLogManager(ctx, fs)
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, lm.currentBinlogFile.Close()) }()
-
-	producer, err := NewBinlogProducer(ctx, fs)
-	require.NoError(t, err)
-	producer.LogManager(lm)
-
-	err = producer.DatabaseCreated(ctx, "legacy_db", 0)
+	err := producer.DatabaseCreated(ctx, "legacy_db", 0)
 	require.NoError(t, err)
 
 	binlogPath := filepath.Join(lm.binlogDirectory, lm.currentBinlogFileName)
@@ -1496,23 +1493,13 @@ func TestBinlogProducer_DatabaseCreated_NoXID(t *testing.T) {
 
 func TestBinlogProducer_NotifyDatabaseCreate(t *testing.T) {
 	// https://github.com/dolthub/dolt/issues/11533
-	fs, err := filesys.LocalFilesysWithWorkingDir(t.TempDir())
-	require.NoError(t, err)
-
-	ctx := newTestSQLContext(t)
-	lm, err := NewLogManager(ctx, fs)
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, lm.currentBinlogFile.Close()) }()
-
-	producer, err := NewBinlogProducer(ctx, fs)
-	require.NoError(t, err)
-	producer.LogManager(lm)
+	_, ctx, lm, producer := newTestProducer(t)
 
 	doltdb.RegisterDatabaseUpdateListener(producer)
 	defer sqle.ResetDatabaseUpdateListenersForTesting()
 
 	expectedXID := uint64(0xaabbccddeeff0011)
-	err = sqle.NotifyDatabaseCreated(ctx, "notified_db", expectedXID)
+	err := sqle.NotifyDatabaseCreated(ctx, "notified_db", expectedXID)
 	require.NoError(t, err)
 
 	binlogPath := filepath.Join(lm.binlogDirectory, lm.currentBinlogFileName)
