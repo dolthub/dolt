@@ -92,13 +92,14 @@ type DoltDatabaseProvider struct {
 
 	txLocks keymutex.Keymutex
 
-	defaultBranch      string
-	dbFactoryUrl       string
-	DropDatabaseHooks  []DropDatabaseHook
-	InitDatabaseHooks  []InitDatabaseHook
-	gitRemotes         map[string]*doltdb.DoltDB
-	gitRemotesMu       *sync.Mutex
-	implSchemaProvider ImplSchemaProvider
+	defaultBranch          string
+	dbFactoryUrl           string
+	DropDatabaseHooks      []DropDatabaseHook
+	InitDatabaseHooks      []InitDatabaseHook
+	PreCommitDatabaseHooks []PreCommitDatabaseHook
+	gitRemotes             map[string]*doltdb.DoltDB
+	gitRemotesMu           *sync.Mutex
+	implSchemaProvider     ImplSchemaProvider
 }
 
 // ProviderFactory creates a sql.DatabaseProvider for use as the engine's analyzer catalog
@@ -300,6 +301,12 @@ func (p *DoltDatabaseProvider) AddInitDatabaseHook(hook InitDatabaseHook) {
 	p.InitDatabaseHooks = append(p.InitDatabaseHooks, hook)
 }
 
+// AddPreCommitDatabaseHook adds a PreCommitDatabaseHook to this
+// provider. The hook is invoked before committing creation to disk.
+func (p *DoltDatabaseProvider) AddPreCommitDatabaseHook(hook PreCommitDatabaseHook) {
+	p.PreCommitDatabaseHooks = append(p.PreCommitDatabaseHooks, hook)
+}
+
 // AddDropDatabaseHook adds a DropDatabaseHook to this provider. The hook will be invoked
 // whenever this provider drops a database.
 func (p *DoltDatabaseProvider) AddDropDatabaseHook(hook DropDatabaseHook) {
@@ -358,16 +365,17 @@ func (p *DoltDatabaseProvider) Teardown(ctx context.Context) {
 	p.gitRemotesMu.Unlock()
 }
 
-// Installs an InitDatabaseHook which configures new databases--those
+// Installs hooks which configure new databases--those
 // created with `CREATE DATABASE` and `call dolt_clone` for
 // example--for push replication. Pull-on-read replication is already
 // managed separately by wrapping the database instance in
 // `registerNewDatabase`.
 //
 // If the databases that are being managed by |DoltDatabaseProvider| have
-// been through |ApplyReplicationConfig|, then this hook should probably
-// also be installed.
+// been through |ApplyReplicationConfig|, then these hooks should
+// probably also be installed.
 func (p *DoltDatabaseProvider) InstallReplicationInitDatabaseHook(bThreads *sql.BackgroundThreads, ctxF func(context.Context) (*sql.Context, error)) {
+	p.AddPreCommitDatabaseHook(NewConfigureReplicationPreCommitHook())
 	p.AddInitDatabaseHook(NewConfigureReplicationDatabaseHook(bThreads, ctxF))
 }
 
@@ -776,6 +784,12 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 		}
 	}
 
+	for _, hook := range p.PreCommitDatabaseHooks {
+		if err = hook(ctx, p, name, tempEnv); err != nil {
+			return err
+		}
+	}
+
 	dEnv, err := p.commitFS(ctx, name, fsTx, tempEnv, "TODO", xid)
 	if err != nil {
 		return err
@@ -895,41 +909,27 @@ func (p *DoltDatabaseProvider) commitFS(ctx *sql.Context, name string, fsTx *dbf
 }
 
 // afterCommit executes registered post-commit hooks on database
-// |name| with environment |newEnv| under |ctx|. If any hook fails,
-// afterCommit unregisters the database and deletes its directory.
+// |name| with environment |newEnv| under |ctx|. Post-commit hook
+// failures emit warnings via [ctx.Warn] and keep the committed
+// database intact.
+// https://dev.mysql.com/doc/refman/8.4/en/atomic-ddl.html
+// "An atomic DDL statement combines the data dictionary updates,
+// storage engine operations, and binary log writes associated with
+// a DDL operation into a single, atomic operation."
 func (p *DoltDatabaseProvider) afterCommit(ctx *sql.Context, name string, newEnv *env.DoltEnv) error {
 	db, err := NewDatabase(ctx, name, newEnv.DbData(ctx), editor.Options{})
 	if err != nil {
-		return errors.Join(err, p.cleanupFailedDatabase(name, newEnv))
+		ctx.Warn(1105, "database %s created, but failed to load database object: %v", name, err)
+		return nil
 	}
-	// If we have any initialization hooks, invoke them, until any error is returned.
-	// By default, this will be NewConfigureReplicationDatabaseHook, which will set up
-	// replication for the new database if a remote url template is set.
+	// If we have any initialization hooks, invoke them. Failures emit
+	// warnings and keep the committed database intact.
 	for _, hook := range p.InitDatabaseHooks {
 		if err = hook(ctx, p, name, newEnv, db); err != nil {
-			return errors.Join(err, p.cleanupFailedDatabase(name, newEnv))
+			ctx.Warn(1105, "database %s created, but initialization hook failed: %v", name, err)
 		}
 	}
 	return nil
-}
-
-// cleanupFailedDatabase undoes database registration and deletes its
-// directory |name| when initialization fails after filesystem commit.
-func (p *DoltDatabaseProvider) cleanupFailedDatabase(name string, dEnv *env.DoltEnv) error {
-	p.mu.Lock()
-	key := formatDbMapKeyName(name)
-	delete(p.databases, key)
-	delete(p.dbLocations, key)
-	p.mu.Unlock()
-
-	var cacheErr, gitErr error
-	if absPath, err := dEnv.FS.Abs(""); err == nil {
-		cacheErr = evictDatabaseSingletonCache(absPath, false)
-		gitErr = dbfactory.CloseGitRemotesUnderRoot(absPath)
-	}
-	closeErr := dEnv.Close()
-	delErr := p.fs.Delete(name, true)
-	return errors.Join(closeErr, cacheErr, gitErr, delErr)
 }
 
 // ImplSchemaProvider supplies initial schemas for a database.
@@ -994,26 +994,25 @@ func validateDBName(dbName string) error {
 	return nil
 }
 
+type PreCommitDatabaseHook func(ctx *sql.Context, pro *DoltDatabaseProvider, name string, tempEnv *env.DoltEnv) error
 type InitDatabaseHook func(ctx *sql.Context, pro *DoltDatabaseProvider, name string, env *env.DoltEnv, db dsess.SqlDatabase) error
 type DropDatabaseHook func(ctx *sql.Context, name string)
 
 // DatabaseHookRegistrar is implemented by database providers that support registering
 // hooks for database init and drop lifecycle events.
 type DatabaseHookRegistrar interface {
+	// AddPreCommitDatabaseHook adds a PreCommitDatabaseHook that runs before storage commit.
+	AddPreCommitDatabaseHook(PreCommitDatabaseHook)
 	// AddInitDatabaseHook adds an InitDatabaseHook that runs whenever a database is created.
 	AddInitDatabaseHook(InitDatabaseHook)
 	// AddDropDatabaseHook adds a DropDatabaseHook that runs whenever a database is dropped.
 	AddDropDatabaseHook(DropDatabaseHook)
 }
 
-// NewConfigureReplicationDatabaseHook sets up the hooks to push to a remote to replicate a newly created database.
-//
-// For a new database, this hook
-// 1) creates a new remote based on dsess.ReplicationRemoteURLTemplate
-// 2) Installed push-on-write replication hooks based on existing sql.SystemVariables on the *DoltDB
-// 3) Triggers the push-on-write hook for the default branch.
-func NewConfigureReplicationDatabaseHook(bThreads *sql.BackgroundThreads, ctxF func(context.Context) (*sql.Context, error)) InitDatabaseHook {
-	return func(ctx *sql.Context, p *DoltDatabaseProvider, name string, newEnv *env.DoltEnv, _ dsess.SqlDatabase) error {
+// NewConfigureReplicationPreCommitHook creates the remote
+// configuration in the database temporary environment before commit.
+func NewConfigureReplicationPreCommitHook() PreCommitDatabaseHook {
+	return func(ctx *sql.Context, p *DoltDatabaseProvider, name string, tempEnv *env.DoltEnv) error {
 		_, replicationRemoteName, _ := sql.SystemVariables.GetGlobal(dsess.ReplicateToRemote)
 		if replicationRemoteName == "" {
 			return nil
@@ -1039,14 +1038,38 @@ func NewConfigureReplicationDatabaseHook(bThreads *sql.BackgroundThreads, ctxF f
 
 		// TODO: params for AWS, others that need them
 		r := env.NewRemote(remoteName, remoteUrl, nil)
-		err := r.Prepare(ctx, newEnv.DoltDB(ctx).Format(), p.remoteDialer)
+		err := r.Prepare(ctx, tempEnv.DoltDB(ctx).Format(), p.remoteDialer)
 		if err != nil {
 			return err
 		}
 
-		err = newEnv.AddRemote(r)
+		err = tempEnv.AddRemote(r)
 		if err != env.ErrRemoteAlreadyExists && err != nil {
 			return err
+		}
+		return nil
+	}
+}
+
+// NewConfigureReplicationDatabaseHook sets up hooks to push to a
+// remote to replicate a newly created database.
+//
+// For a new database, this hook
+// 1) Installs push-on-write replication hooks based on existing
+// sql.SystemVariables on the *DoltDB
+// 2) Starts async replication threads if configured
+// 3) Triggers the push-on-write hook for the default branch (failures
+// warn and keep the database).
+func NewConfigureReplicationDatabaseHook(bThreads *sql.BackgroundThreads, ctxF func(context.Context) (*sql.Context, error)) InitDatabaseHook {
+	return func(ctx *sql.Context, p *DoltDatabaseProvider, name string, newEnv *env.DoltEnv, _ dsess.SqlDatabase) error {
+		_, replicationRemoteName, _ := sql.SystemVariables.GetGlobal(dsess.ReplicateToRemote)
+		if replicationRemoteName == "" {
+			return nil
+		}
+
+		_, remoteUrlTemplate, _ := sql.SystemVariables.GetGlobal(dsess.ReplicationRemoteURLTemplate)
+		if remoteUrlTemplate == "" {
+			return nil
 		}
 
 		commitHooks, startAsyncThreads, err := GetCommitHooks(ctx, "["+name+"]", newEnv, cli.CliErr)
@@ -1059,9 +1082,13 @@ func NewConfigureReplicationDatabaseHook(bThreads *sql.BackgroundThreads, ctxF f
 
 		newEnv.DoltDB(ctx).PrependCommitHooks(ctx, commitHooks...)
 
-		// After setting hooks on the newly created DB, we need to do the first push manually
+		// After setting hooks on the newly created DB, we need to do the first push manually.
+		// Failure emits a warning and keeps the committed database.
 		branchRef := ref.NewBranchRef(p.defaultBranch)
-		return newEnv.DoltDB(ctx).ExecuteCommitHooks(ctx, branchRef.String())
+		if pushErr := newEnv.DoltDB(ctx).ExecuteCommitHooks(ctx, branchRef.String()); pushErr != nil {
+			ctx.Warn(1105, "failed to push initial commit to replication remote: %v", pushErr)
+		}
+		return nil
 	}
 }
 
@@ -1205,6 +1232,12 @@ func (p *DoltDatabaseProvider) cloneDatabaseFromRemote(ctx *sql.Context, dbName,
 	err = tempEnv.RepoStateWriter().UpdateBranch(tempEnv.RepoState.CWBHeadRef().GetPath(), bCfg)
 	if err != nil {
 		return err
+	}
+
+	for _, hook := range p.PreCommitDatabaseHooks {
+		if err = hook(ctx, p, dbName, tempEnv); err != nil {
+			return err
+		}
 	}
 
 	p.mu.Lock()

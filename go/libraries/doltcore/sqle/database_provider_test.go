@@ -481,6 +481,7 @@ func TestResolveCaseVariantBranchConflict(t *testing.T) {
 }
 
 func TestCreateDatabaseFailureLeavesNothingBehind(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11533
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnvForLocalFilesystem()
 	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(ctx), editor.Options{})
@@ -490,7 +491,7 @@ func TestCreateDatabaseFailureLeavesNothingBehind(t *testing.T) {
 	pro := dsess.DSessFromSess(sqlCtx.Session).Provider().(*DoltDatabaseProvider)
 
 	failCreate := true
-	pro.AddInitDatabaseHook(func(_ *sql.Context, _ *DoltDatabaseProvider, _ string, _ *env.DoltEnv, _ dsess.SqlDatabase) error {
+	pro.AddPreCommitDatabaseHook(func(_ *sql.Context, _ *DoltDatabaseProvider, _ string, _ *env.DoltEnv) error {
 		if failCreate {
 			return errors.New("there was an error initializing this database. abort!")
 		}
@@ -538,6 +539,30 @@ func TestCreateDatabaseFailureLeavesNothingBehind(t *testing.T) {
 	assert.True(t, ok, "the retried database's table must be on disk in its own directory")
 }
 
+func TestCreateDatabasePostCommitHookFailureWarnsAndKeepsDatabase(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11533
+	ctx := context.Background()
+	dEnv := dtestutils.CreateTestEnvForLocalFilesystem()
+	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(ctx), editor.Options{})
+	require.NoError(t, err)
+	engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db)
+	require.NoError(t, err)
+	pro := dsess.DSessFromSess(sqlCtx.Session).Provider().(*DoltDatabaseProvider)
+
+	pro.AddInitDatabaseHook(func(_ *sql.Context, _ *DoltDatabaseProvider, _ string, _ *env.DoltEnv, _ dsess.SqlDatabase) error {
+		return errors.New("post-commit hook failed")
+	})
+
+	require.NoError(t, ExecuteSqlOnEngine(sqlCtx, engine, "CREATE DATABASE postcommitdb;"))
+	assert.NotEmpty(t, sqlCtx.Session.Warnings(), "post-commit hook failure must emit a warning")
+
+	exists, isDir := dEnv.FS.Exists("postcommitdb")
+	assert.True(t, exists && isDir, "database directory must be kept intact on post-commit failure")
+
+	_, err = pro.Database(sqlCtx, "postcommitdb")
+	require.NoError(t, err, "database must remain registered despite post-commit hook failure")
+}
+
 func TestCloneDatabaseFailureLeavesNothingBehind(t *testing.T) {
 	// https://github.com/dolthub/dolt/issues/11533
 	ctx := context.Background()
@@ -560,6 +585,62 @@ func TestCloneDatabaseFailureLeavesNothingBehind(t *testing.T) {
 		return false
 	})
 	require.NoError(t, err)
+}
+
+func TestCloneDatabasePreCommitHookFailureLeavesNothingBehind(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11533
+	ctx := context.Background()
+	dEnv := dtestutils.CreateTestEnvForLocalFilesystem()
+	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(ctx), editor.Options{})
+	require.NoError(t, err)
+	_, sqlCtx, err := NewTestEngine(dEnv, ctx, db)
+	require.NoError(t, err)
+	pro := dsess.DSessFromSess(sqlCtx.Session).Provider().(*DoltDatabaseProvider)
+	pro.SetRemoteDialer(env.NewGRPCDialProviderFromDoltEnv(dEnv))
+
+	pro.AddPreCommitDatabaseHook(func(_ *sql.Context, _ *DoltDatabaseProvider, _ string, _ *env.DoltEnv) error {
+		return errors.New("clone pre-commit hook failure")
+	})
+
+	err = pro.CloneDatabaseFromRemote(sqlCtx, "failclone", "main", "origin", "file://unreachable", -1, nil)
+	require.Error(t, err)
+	exists, _ := dEnv.FS.Exists("failclone")
+	assert.False(t, exists, "failed clone must not leave destination directory")
+
+	err = dEnv.FS.Iter("", false, func(path string, _ int64, _ bool) bool {
+		base := filepath.Base(path)
+		assert.False(t, strings.HasPrefix(base, dbfactory.TempDirPrefix), "no scratchpad should remain: %s", path)
+		return false
+	})
+	require.NoError(t, err)
+}
+
+func TestCreateDatabasePreCommitRemoteSurvivesCommitFS(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11533
+	ctx := context.Background()
+	dEnv := dtestutils.CreateTestEnvForLocalFilesystem()
+	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(ctx), editor.Options{})
+	require.NoError(t, err)
+	engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db)
+	require.NoError(t, err)
+	pro := dsess.DSessFromSess(sqlCtx.Session).Provider().(*DoltDatabaseProvider)
+
+	pro.AddPreCommitDatabaseHook(func(ctx *sql.Context, _ *DoltDatabaseProvider, name string, tempEnv *env.DoltEnv) error {
+		r := env.NewRemote("testremote", "file:///tmp/dummy", nil)
+		return tempEnv.AddRemote(r)
+	})
+
+	require.NoError(t, ExecuteSqlOnEngine(sqlCtx, engine, "CREATE DATABASE remotedb;"))
+
+	sqlDb, err := pro.Database(sqlCtx, "remotedb")
+	require.NoError(t, err)
+	doltDb, ok := sqlDb.(Database)
+	require.True(t, ok)
+
+	remotes, err := doltDb.DbData().Rsr.GetRemotes()
+	require.NoError(t, err)
+	_, hasRemote := remotes.Get("testremote")
+	assert.True(t, hasRemote, "remote added in pre-commit hook must survive commitFS")
 }
 
 func TestDuplicateDatabaseNameSkipped(t *testing.T) {
