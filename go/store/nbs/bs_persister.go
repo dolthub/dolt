@@ -83,12 +83,30 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, behavior dherrors.Fa
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	}
 
-	rdr := &bsTableReaderAt{key: name, bs: bsp.bs}
-	src, err := newReaderFromIndexData(ctx, bsp.q, data, address, rdr, bsp.blockSize)
+	src, err := newPersistedBSTableChunkSource(ctx, bsp.bs, bsp.q, data, address, bsp.blockSize)
 	if err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	}
 	return src, gcBehavior_Continue, nil
+}
+
+// newPersistedBSTableChunkSource uses the table bytes already available at persist
+// time to spool stores with expensive ranged reads, avoiding a blob readback.
+func newPersistedBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore, q MemoryQuotaProvider, data []byte, name hash.Hash, blockSize uint64) (chunkSource, error) {
+	var rdr tableReaderAt = &bsTableReaderAt{key: name.String(), bs: bs}
+	if shouldSpool(bs) {
+		spooled, err := spoolTableReaderAt(bytes.NewReader(data))
+		if err != nil {
+			return nil, err
+		}
+		rdr = spooled
+	}
+	src, err := newReaderFromIndexData(ctx, q, data, name, rdr, blockSize)
+	if err != nil {
+		_ = rdr.Close()
+		return nil, err
+	}
+	return src, nil
 }
 
 // ConjoinAll implements tablePersister.

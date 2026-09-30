@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -27,6 +28,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/blobstore"
 )
 
@@ -241,4 +243,140 @@ func TestSpoolingTableReaderAt(t *testing.T) {
 	require.NoError(t, ra.Close())
 	_, err = os.Stat(path)
 	require.True(t, os.IsNotExist(err), "temp file must be removed once the last reference closes")
+}
+
+// persistReadCountingBlobstore tracks blob reads after Persist returns.
+type persistReadCountingBlobstore struct {
+	wholeBlobBlobstore
+	gets int
+}
+
+func (b *persistReadCountingBlobstore) Get(ctx context.Context, key string, br blobstore.BlobRange) (io.ReadCloser, uint64, string, error) {
+	b.gets++
+	return b.InMemoryBlobstore.Get(ctx, key, br)
+}
+
+func TestBlobstorePersistersPersistSpooling(t *testing.T) {
+	constructors := map[string]func(blobstore.Blobstore) tablePersister{
+		"split": func(bs blobstore.Blobstore) tablePersister {
+			return &blobstorePersister{bs, NewUnlimitedMemQuotaProvider(), s3BlockSize}
+		},
+		"single": func(bs blobstore.Blobstore) tablePersister {
+			return &singleBlobBSPersister{bs, NewUnlimitedMemQuotaProvider(), s3BlockSize}
+		},
+		"no-conjoin": func(bs blobstore.Blobstore) tablePersister {
+			return &noConjoinBlobstorePersister{bs, NewUnlimitedMemQuotaProvider(), s3BlockSize}
+		},
+	}
+	for name, constructor := range constructors {
+		t.Run(name, func(t *testing.T) {
+			for _, spool := range []bool{true, false} {
+				t.Run(fmt.Sprint(spool), func(t *testing.T) {
+					bs := &persistReadCountingBlobstore{wholeBlobBlobstore: wholeBlobBlobstore{blobstore.NewInMemoryBlobstore(""), spool}}
+					data := [][]byte{[]byte("first chunk"), []byte("second chunk"), []byte("third chunk")}
+					cs, err := persistTableData(constructor(bs), data...)
+					require.NoError(t, err)
+					sourceClosed := false
+					t.Cleanup(func() {
+						if !sourceClosed {
+							require.NoError(t, cs.close())
+						}
+					})
+					require.Zero(t, bs.gets, "Persist must not read back the table")
+					var path string
+					if spool {
+						ra, ok := cs.(*chunkSourceAdapter).r.(*spoolingTableReaderAt)
+						require.True(t, ok)
+						path = ra.f.Name()
+					}
+					clone, err := cs.clone()
+					require.NoError(t, err)
+					cloneClosed := false
+					defer func() {
+						if !cloneClosed {
+							_ = clone.close()
+						}
+					}()
+					for i := 0; i < 3; i++ {
+						for _, c := range data {
+							got, _, err := clone.get(context.Background(), computeAddr(c), nil, &Stats{})
+							require.NoError(t, err)
+							require.Equal(t, c, got)
+						}
+					}
+					if spool {
+						require.Zero(t, bs.gets, "chunk reads must use the spool")
+					} else {
+						require.Positive(t, bs.gets, "stores with cheap range reads still read the blobstore")
+					}
+					require.NoError(t, clone.close())
+					cloneClosed = true
+					if spool {
+						_, err := os.Stat(path)
+						require.NoError(t, err, "the original source still owns the spool")
+						t.Cleanup(func() {
+							require.NoError(t, cs.close())
+							sourceClosed = true
+							_, err := os.Stat(path)
+							require.True(t, os.IsNotExist(err), "closing the last source removes the spool")
+						})
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestSingleBlobBSPersisterConjoinReusesSpools(t *testing.T) {
+	for _, reopen := range []bool{false, true} {
+		t.Run(fmt.Sprintf("reopen=%v", reopen), func(t *testing.T) {
+			ctx := context.Background()
+			bs := &persistReadCountingBlobstore{wholeBlobBlobstore: wholeBlobBlobstore{blobstore.NewInMemoryBlobstore(""), true}}
+			p := &singleBlobBSPersister{bs, NewUnlimitedMemQuotaProvider(), s3BlockSize}
+			data := [][]byte{[]byte("first table chunk"), []byte("second table chunk")}
+			var sources chunkSources
+			var paths []string
+			t.Cleanup(func() {
+				for _, path := range paths {
+					_, err := os.Stat(path)
+					require.True(t, os.IsNotExist(err), "conjoin must not leak references to input spools")
+				}
+			})
+			for _, c := range data {
+				cs, err := persistTableData(p, c)
+				require.NoError(t, err)
+				if reopen {
+					name, count := cs.hash(), cs.count()
+					require.NoError(t, cs.close())
+					cs, err = p.Open(ctx, name, count, openOpts{}, &Stats{})
+					require.NoError(t, err)
+				}
+				sources = append(sources, cs)
+				paths = append(paths, cs.(*chunkSourceAdapter).r.(*spoolingTableReaderAt).f.Name())
+				t.Cleanup(func() { require.NoError(t, cs.close()) })
+			}
+			bs.gets = 0
+			cs, cleanup, err := p.ConjoinAll(ctx, dherrors.FatalBehaviorError, sources, &Stats{})
+			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, cs.close()); cleanup() })
+			require.Equal(t, 1, bs.gets, "only the conjoined output is read back for spooling")
+			for _, c := range data {
+				got, _, err := cs.get(ctx, computeAddr(c), nil, &Stats{})
+				require.NoError(t, err)
+				require.Equal(t, c, got)
+			}
+			require.Equal(t, 1, bs.gets, "chunk reads use the output spool")
+			for _, src := range sources {
+				ra := src.(*chunkSourceAdapter).r.(*spoolingTableReaderAt)
+				require.Equal(t, int32(1), *ra.cnt, "conjoin closes its readers without closing the source")
+			}
+			// Input spools must remain usable until their owning sources close.
+			t.Cleanup(func() {
+				for _, path := range paths {
+					_, err := os.Stat(path)
+					require.NoError(t, err)
+				}
+			})
+		})
+	}
 }
