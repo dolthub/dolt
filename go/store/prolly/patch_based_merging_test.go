@@ -91,7 +91,7 @@ func producePatches[K ~[]byte, O tree.Ordering[K]](
 				err = cerr
 			}
 		}()
-		err = tree.SendPatches(ctx, ld, rd, patches, collide)
+		err = tree.SendPatches(ctx, ld, rd, patches, collide, false)
 		return
 	})
 
