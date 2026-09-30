@@ -815,6 +815,8 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 		}
 	}
 
+	// Not registerNewDatabase: hooks run after p.mu is released,
+	// because their failure cleanup locks p.mu.
 	return p.afterCommit(ctx, name, dEnv)
 }
 
