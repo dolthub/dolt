@@ -745,7 +745,7 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 	}
 	defer func() {
 		if !HasXID(p.fs, xid) {
-			_ = fsTx.Rollback()
+			err = errors.Join(err, fsTx.Rollback())
 		}
 	}()
 
@@ -1126,7 +1126,7 @@ func (p *DoltDatabaseProvider) CloneDatabaseFromRemote(
 	cloneXID := XIDFromUUIDv7(fsTx.UUID())
 	defer func() {
 		if !HasXID(p.fs, cloneXID) {
-			_ = fsTx.Rollback()
+			err = errors.Join(err, fsTx.Rollback())
 		}
 	}()
 	defer tempEnv.Close()

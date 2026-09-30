@@ -171,7 +171,6 @@ func (tx *FSCreateTx) Rollback() error {
 // visibility.
 //
 // [rename(2)]: https://pubs.opengroup.org/onlinepubs/9699919799/functions/rename.html
-// [os.Rename]: https://github.com/golang/go/blob/eaf3bc799a221cc375f188e8699c9330c1caf40a/src/internal/syscall/windows/syscall_windows.go#L355-L365
 // [MoveFileExW]: https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefileexw
 // [B+ tree]: https://learn.microsoft.com/en-us/sysinternals/resources/archive/v01n05
 func (tx *FSCreateTx) Commit() error {
