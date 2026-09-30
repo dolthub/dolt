@@ -1672,3 +1672,42 @@ func TestTCRecover_InsideDestRollForward(t *testing.T) {
 	scratchExists, _ := fs.Exists(scratchPath)
 	assert.False(t, scratchExists, "scratchpad inside destination must be removed")
 }
+
+func TestTCRecover_CorruptBinlogReturnsErrorAndPreservesTempDir(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11533
+	fs, err := filesys.LocalFilesysWithWorkingDir(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := newTestSQLContext(t)
+	lm, err := NewLogManager(ctx, fs)
+	require.NoError(t, err)
+
+	producer, err := NewBinlogProducer(ctx, fs)
+	require.NoError(t, err)
+	producer.LogManager(lm)
+
+	committedXID, u, err := sqle.NextXID()
+	require.NoError(t, err)
+	err = producer.DatabaseCreated(ctx, "corrupt_test_db", committedXID)
+	require.NoError(t, err)
+	require.NoError(t, lm.currentBinlogFile.Close())
+
+	binlogPath := filepath.Join(lm.binlogDirectory, lm.currentBinlogFileName)
+	wc, err := fs.OpenForWriteAppend(binlogPath, 0o644)
+	require.NoError(t, err)
+	_, err = wc.Write([]byte{0x01, 0x02, 0x03, 0x04})
+	require.NoError(t, err)
+	require.NoError(t, wc.Close())
+
+	deadPID := 99999999
+	scratchName := fmt.Sprintf("%scorrupt_test_db-%d-%s", dbfactory.TempDirPrefix, deadPID, u.String())
+	require.NoError(t, fs.MkDirs(filepath.Join(scratchName, dbfactory.DoltDir)))
+
+	err = Recover(context.Background(), fs)
+	require.Error(t, err)
+
+	scratchExists, _ := fs.Exists(scratchName)
+	assert.True(t, scratchExists, "scratchpad must be preserved on corrupt binlog recovery error")
+
+	assert.True(t, sqle.HasXID(fs, committedXID), "hasXID should be conservative on scan error")
+}

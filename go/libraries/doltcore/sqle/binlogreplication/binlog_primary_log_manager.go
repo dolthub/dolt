@@ -649,9 +649,16 @@ func init() {
 
 // hasXID reports whether coordinator transaction identifier |xid|
 // is recorded in any binary log under |fs|.
+//
+// If scanning fails due to a read or corruption error, hasXID
+// conservatively returns true to prevent premature rollback of
+// potentially committed transactions.
 func hasXID(fs filesys.Filesys, xid sqle.XID) bool {
 	xids, err := ScanXIDs(fs)
-	if err != nil || xids == nil {
+	if err != nil {
+		return true
+	}
+	if xids == nil {
 		return false
 	}
 	_, ok := xids[xid]
@@ -680,17 +687,20 @@ func ScanXIDs(fs filesys.Filesys) (map[uint64]struct{}, error) {
 	}
 
 	xids := make(map[uint64]struct{})
+	var scanErr error
 	err := fs.Iter(binlogDirectory, false, func(path string, _ int64, isDir bool) bool {
 		if isDir || !strings.HasPrefix(filepath.Base(path), "binlog-") {
 			return false
 		}
 		absPath, err := fs.Abs(path)
 		if err != nil {
-			return false
+			scanErr = err
+			return true
 		}
 		file, err := openBinlogFileForReading(absPath)
 		if err != nil {
-			return false
+			scanErr = err
+			return true
 		}
 		defer file.Close()
 
@@ -698,7 +708,11 @@ func ScanXIDs(fs filesys.Filesys) (map[uint64]struct{}, error) {
 		for {
 			event, err := readBinlogEventFromFile(file)
 			if err != nil {
-				break
+				if errors.Is(err, io.EOF) {
+					break
+				}
+				scanErr = err
+				return true
 			}
 			bytes := event.Bytes()
 			if event.IsFormatDescription() {
@@ -717,7 +731,7 @@ func ScanXIDs(fs filesys.Filesys) (map[uint64]struct{}, error) {
 		}
 		return false
 	})
-	return xids, err
+	return xids, errors.Join(err, scanErr)
 }
 
 // Recover scans |fs| under |ctx| for temporary database directories
