@@ -1332,10 +1332,47 @@ func (p *DoltDatabaseProvider) UndropDatabase(ctx *sql.Context, name string) (er
 		return err
 	}
 
+	xid, _, err := NextXID()
+	if err != nil {
+		return err
+	}
+	if err := NotifyDatabaseCreated(ctx, exactCaseName, xid); err != nil {
+		return err
+	}
+
 	// Use LoadWithoutDB so we can apply db-load params before any DB is opened.
 	newEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, newFs, p.dbFactoryUrl, "TODO")
 	p.applyDBLoadParamsToEnv(newEnv)
+
+	if err := replicateExistingData(ctx, newEnv.DoltDB(ctx), p.defaultBranch, exactCaseName); err != nil {
+		return err
+	}
+
 	return p.registerNewDatabase(ctx, exactCaseName, newEnv)
+}
+
+// replicateExistingData replicates existing data from |ddb| to
+// registered [doltdb.DatabaseUpdateListeners] for |databaseName| on
+// |branchName| when a database is undropped.
+func replicateExistingData(ctx *sql.Context, ddb *doltdb.DoltDB, branchName string, databaseName string) error {
+	roots, err := ddb.ResolveBranchRoots(ctx, ref.NewBranchRef(branchName))
+	if err == doltdb.ErrBranchNotFound {
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	emptyRoot, err := doltdb.EmptyRootValue(ctx, roots.Working.VRW(), roots.Working.NodeStore())
+	if err != nil {
+		return err
+	}
+
+	for _, listener := range doltdb.DatabaseUpdateListeners {
+		if err := listener.WorkingRootUpdated(ctx, databaseName, branchName, emptyRoot, roots.Working); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // PurgeDroppedDatabases permanently deletes all dropped databases that have been stashed away in case they need

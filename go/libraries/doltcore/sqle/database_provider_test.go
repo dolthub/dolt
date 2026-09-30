@@ -598,3 +598,57 @@ func TestCloneDatabaseDuplicateNameRejected(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, sql.ErrDatabaseExists.Is(err))
 }
+
+type testDatabaseUpdateListener struct {
+	created      []string
+	createdXIDs  []uint64
+	updatedRoots []string
+}
+
+var _ doltdb.DatabaseUpdateListener = (*testDatabaseUpdateListener)(nil)
+
+func (t *testDatabaseUpdateListener) WorkingRootUpdated(ctx *sql.Context, dbName string, branch string, before, after doltdb.RootValue) error {
+	t.updatedRoots = append(t.updatedRoots, dbName)
+	return nil
+}
+
+func (t *testDatabaseUpdateListener) DatabaseCreated(ctx *sql.Context, dbName string, xid uint64) error {
+	t.created = append(t.created, dbName)
+	t.createdXIDs = append(t.createdXIDs, xid)
+	return nil
+}
+
+func (t *testDatabaseUpdateListener) DatabaseDropped(ctx *sql.Context, dbName string) error {
+	return nil
+}
+
+func TestUndropNotifiesDatabaseUpdateListener(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11533
+	ctx := context.Background()
+	dEnv := dtestutils.CreateTestEnvForLocalFilesystem()
+	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(ctx), editor.Options{})
+	require.NoError(t, err)
+	engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db)
+	require.NoError(t, err)
+	pro := dsess.DSessFromSess(sqlCtx.Session).Provider().(*DoltDatabaseProvider)
+
+	listener := &testDatabaseUpdateListener{}
+	doltdb.RegisterDatabaseUpdateListener(listener)
+	defer ResetDatabaseUpdateListenersForTesting()
+
+	err = ExecuteSqlOnEngine(sqlCtx, engine, "CREATE DATABASE undrop_test;")
+	require.NoError(t, err)
+	assert.Contains(t, listener.created, "undrop_test")
+
+	err = ExecuteSqlOnEngine(sqlCtx, engine, "DROP DATABASE undrop_test;")
+	require.NoError(t, err)
+
+	listener.created = nil
+	listener.updatedRoots = nil
+
+	err = pro.UndropDatabase(sqlCtx, "undrop_test")
+	require.NoError(t, err)
+
+	assert.Contains(t, listener.created, "undrop_test")
+	assert.Contains(t, listener.updatedRoots, "undrop_test")
+}
