@@ -18,11 +18,17 @@
 package file
 
 import (
+	"errors"
 	"os"
 	"syscall"
 	"time"
 
 	"golang.org/x/sys/windows"
+)
+
+const (
+	maxRetryWait        = 10000 * time.Millisecond
+	retryWaitMultiplier = 10
 )
 
 // Rename functions exactly like os.Rename, except that it retries upon failure on Windows. This "fixes" some errors
@@ -36,6 +42,37 @@ func Rename(oldpath, newpath string) error {
 		}
 	}
 	return err
+}
+
+// MoveDir moves a directory from |oldpath| to |newpath| on Windows
+// without replacing an existing destination. It retries only transient
+// sharing violations, and returns an error wrapping [os.ErrExist] if
+// the destination already exists.
+func MoveDir(oldpath, newpath string) error {
+	from, err := syscall.UTF16PtrFromString(oldpath)
+	if err != nil {
+		return &os.LinkError{Op: "MoveDir", Old: oldpath, New: newpath, Err: err}
+	}
+	to, err := syscall.UTF16PtrFromString(newpath)
+	if err != nil {
+		return &os.LinkError{Op: "MoveDir", Old: oldpath, New: newpath, Err: err}
+	}
+
+	err = windows.MoveFileEx(from, to, 0)
+	if isSharingViolation(err) {
+		for waitTime := time.Millisecond; isSharingViolation(err) && waitTime <= maxRetryWait; waitTime *= retryWaitMultiplier {
+			time.Sleep(waitTime)
+			err = windows.MoveFileEx(from, to, 0)
+		}
+	}
+	if err != nil {
+		linkErr := &os.LinkError{Op: "MoveDir", Old: oldpath, New: newpath, Err: err}
+		if _, statErr := os.Lstat(newpath); statErr == nil {
+			return errors.Join(os.ErrExist, linkErr)
+		}
+		return linkErr
+	}
+	return nil
 }
 
 // Remove functions exactly like os.Remove, except that it retries upon failure on Windows. This "fixes" some errors
@@ -81,6 +118,17 @@ func isAccessError(err error) bool {
 		if ok && (sysErr == windows.ERROR_ACCESS_DENIED || sysErr == windows.ERROR_SHARING_VIOLATION) {
 			return true
 		}
+	}
+	return false
+}
+
+func isSharingViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	var errno syscall.Errno
+	if errors.As(err, &errno) {
+		return errno == windows.ERROR_SHARING_VIOLATION || errno == windows.ERROR_LOCK_VIOLATION
 	}
 	return false
 }
