@@ -727,15 +727,16 @@ func (gbs *GitBlobstore) Teardown(ctx context.Context) error {
 	gbs.cacheMu.RLock()
 	head := gbs.cacheHead
 	gbs.cacheMu.RUnlock()
+	var anchorErr error
 	if head != "" {
 		anchor := RemoteTrackingRef(gbs.remoteName, gbs.remoteRef, "last")
 		if err := gbs.api.UpdateRefCAS(ctx, anchor, head, gbs.anchorVersion, "gitblobstore: retain fetch anchor"); err != nil {
 			current, ok, resolveErr := gbs.api.TryResolveRefCommit(ctx, anchor)
 			// If another session changed the anchor, leave that anchor untouched
-			// and continue deleting our private refs. Otherwise preserve our
-			// private refs because publishing our anchor failed.
+			// and ignore the CAS failure. Otherwise report the failure, but still
+			// clean up our private refs since teardown may never be retried.
 			if resolveErr != nil || !ok || current == gbs.anchorVersion {
-				return errors.Join(err, resolveErr)
+				anchorErr = errors.Join(err, resolveErr)
 			}
 		} else {
 			gbs.anchorVersion = head
@@ -758,6 +759,7 @@ func (gbs *GitBlobstore) Teardown(ctx context.Context) error {
 	}
 
 	return errors.Join(
+		anchorErr,
 		deleteIfExists(gbs.localRef),
 		deleteIfExists(gbs.remoteTrackingRef),
 	)

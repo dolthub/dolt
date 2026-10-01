@@ -106,7 +106,7 @@ func TestGitBlobstore_Teardown_OlderSessionCannotReplaceAnchor(t *testing.T) {
 	require.NotContains(t, string(reachable), oldHead, "replacing the anchor must release disconnected history")
 }
 
-func TestGitBlobstore_Teardown_AnchorFailureKeepsPrivateRef(t *testing.T) {
+func TestGitBlobstore_Teardown_AnchorFailureCleansPrivateRefs(t *testing.T) {
 	requireGitOnPath(t)
 	ctx := context.Background()
 	remote, local, runner := newRemoteAndLocalRepos(t, ctx)
@@ -116,13 +116,19 @@ func TestGitBlobstore_Teardown_AnchorFailureKeepsPrivateRef(t *testing.T) {
 	require.NoError(t, err)
 	_, err = bs.Exists(ctx, "manifest")
 	require.NoError(t, err)
+	api := git.NewGitAPIImpl(runner)
+	head, err := api.ResolveRefCommit(ctx, bs.remoteTrackingRef)
+	require.NoError(t, err)
+	require.NoError(t, api.UpdateRef(ctx, bs.localRef, head, "seed private local ref"))
 	anchor := RemoteTrackingRef("origin", DoltDataRef, "last")
 	lock := filepath.Join(local.GitDir, filepath.FromSlash(anchor)+".lock")
 	require.NoError(t, os.WriteFile(lock, nil, 0600))
 	require.Error(t, bs.Teardown(ctx))
-	_, exists, err := git.NewGitAPIImpl(runner).TryResolveRefCommit(ctx, bs.remoteTrackingRef)
-	require.NoError(t, err)
-	require.True(t, exists)
+	for _, ref := range []string{bs.localRef, bs.remoteTrackingRef} {
+		_, exists, err := api.TryResolveRefCommit(ctx, ref)
+		require.NoError(t, err)
+		require.False(t, exists, "teardown should remove private ref %s even when publishing the anchor fails", ref)
+	}
 	require.NoError(t, os.Remove(lock))
 	require.NoError(t, bs.Teardown(ctx))
 }
