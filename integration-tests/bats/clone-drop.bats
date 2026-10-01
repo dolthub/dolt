@@ -116,14 +116,14 @@ teardown() {
   dolt init
 
   # Stale uncommitted scratchpad directory from a dead PID.
-  mkdir .tmp-dolt-uncommitted_db-999999-018f1122-3344-5566-8d32-3afb14c85104
-  touch .tmp-dolt-uncommitted_db-999999-018f1122-3344-5566-8d32-3afb14c85104/leftover.txt
-  [ -d .tmp-dolt-uncommitted_db-999999-018f1122-3344-5566-8d32-3afb14c85104 ]
+  mkdir .tmp-dolt-uncommitted_db-999999-018f1122-3344-7566-8d32-3afb14c85104
+  touch .tmp-dolt-uncommitted_db-999999-018f1122-3344-7566-8d32-3afb14c85104/leftover.txt
+  [ -d .tmp-dolt-uncommitted_db-999999-018f1122-3344-7566-8d32-3afb14c85104 ]
 
   start_sql_server
 
   # Verify the recovery barrier purged the uncommitted draft at startup.
-  [ ! -d .tmp-dolt-uncommitted_db-999999-018f1122-3344-5566-8d32-3afb14c85104 ]
+  [ ! -d .tmp-dolt-uncommitted_db-999999-018f1122-3344-7566-8d32-3afb14c85104 ]
 
   run dolt --host localhost --port $PORT --no-tls -u root sql -q "SHOW DATABASES;"
   [ $status -eq 0 ]
