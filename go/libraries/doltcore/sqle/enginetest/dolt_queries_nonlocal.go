@@ -17,6 +17,7 @@ package enginetest
 import (
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/go-mysql-server/testutils"
 )
 
@@ -136,14 +137,71 @@ var NonlocalScripts = []queries.ScriptTest{
 	{
 		Name: "creating a table matching a nonlocal table rule results in an error",
 		SetUpScript: []string{
-			"CALL DOLT_BRANCH('other')",
 			`INSERT INTO dolt_nonlocal_tables(table_name, target_ref, options) VALUES
 				("nonlocal_table", "main", "immediate")`,
+			"CALL DOLT_COMMIT('-Am', 'add nonlocal rule')",
+			"CALL DOLT_BRANCH('other')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query:    "CALL DOLT_CHECKOUT('other');",
+				Expected: []sql.Row{{0, "Switched to branch 'other'"}},
+			},
+			{
 				Query:          "CREATE TABLE nonlocal_table (pk char(8) PRIMARY KEY);",
 				ExpectedErrStr: "Cannot create table name nonlocal_table because it matches a name present in dolt_nonlocal_tables.",
+			},
+		},
+	},
+	// https://github.com/dolthub/dolt/issues/11995
+	{
+		Name: "creating a table matching a nonlocal table rule is only allowed on the rule's target branch",
+		SetUpScript: []string{
+			`INSERT INTO dolt_nonlocal_tables (table_name, target_ref, options) VALUES
+				('global_*', 'main', 'immediate')`,
+			"CALL DOLT_COMMIT('-Am', 'add nonlocal rule');",
+			"CALL DOLT_BRANCH('other');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CREATE TABLE global_a (id INT PRIMARY KEY);",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "CREATE TABLE global_b (id INT, CONSTRAINT pk_b PRIMARY KEY (id));",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "CALL DOLT_CHECKOUT('other');",
+				Expected: []sql.Row{{0, "Switched to branch 'other'"}},
+			},
+			{
+				Query:          "CREATE TABLE global_c (id INT PRIMARY KEY);",
+				ExpectedErrStr: "Cannot create table name global_c because it matches a name present in dolt_nonlocal_tables.",
+			},
+			{
+				Query:          "CREATE TABLE global_d (id INT, CONSTRAINT pk_d PRIMARY KEY (id));",
+				ExpectedErrStr: "Cannot create table name global_d because it matches a name present in dolt_nonlocal_tables.",
+			},
+		},
+	},
+	{
+		Name: "creating a table matching a nonlocal table rule with ref_table set or a frozen tag target is rejected on the target branch",
+		SetUpScript: []string{
+			"CALL DOLT_TAG('v1')",
+			`INSERT INTO dolt_nonlocal_tables(table_name, target_ref, ref_table, options) VALUES
+				("renamed_*", "main", "other_name", "immediate"),
+				("tagged_*", "v1", "", "immediate")`,
+			"CALL DOLT_COMMIT('-Am', 'add nonlocal rules')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CREATE TABLE renamed_a (id INT PRIMARY KEY);",
+				ExpectedErrStr: "Cannot create table name renamed_a because it matches a name present in dolt_nonlocal_tables.",
+			},
+			{
+				Query:          "CREATE TABLE tagged_a (id INT PRIMARY KEY);",
+				ExpectedErrStr: "Cannot create table name tagged_a because it matches a name present in dolt_nonlocal_tables.",
 			},
 		},
 	},
