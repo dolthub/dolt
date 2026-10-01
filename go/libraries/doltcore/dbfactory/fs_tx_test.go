@@ -16,6 +16,7 @@ package dbfactory
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -316,4 +317,61 @@ func TestFSCreateTx_CommitRemovesLegacyMarker(t *testing.T) {
 
 	markerExists, _ := fs.Exists(markerPath)
 	assert.False(t, markerExists, "legacy marker must be removed after commit")
+}
+
+func TestFSCreateTx_CommitOverTmpScaffolding(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11533
+	parentDir := t.TempDir()
+	fs, err := filesys.LocalFilesysWithWorkingDir(parentDir)
+	require.NoError(t, err)
+
+	destDir := "clone_target_with_tmp"
+	require.NoError(t, fs.MkDirs(filepath.Join(destDir, DoltDir, "tmp")))
+
+	u, err := uuid.NewV7()
+	require.NoError(t, err)
+
+	tempDirName := fmt.Sprintf("%stest-%s", TempDirPrefix, u.String())
+	tempDirPath := filepath.Join(destDir, tempDirName)
+	require.NoError(t, fs.MkDirs(filepath.Join(tempDirPath, DoltDir)))
+	payloadFile := filepath.Join(tempDirPath, DoltDir, "config.json")
+	require.NoError(t, fs.WriteFile(payloadFile, []byte("repo_config"), 0o644))
+
+	tx := NewFSCreateTxForRecovery(fs, tempDirPath, destDir, true, u)
+	require.NoError(t, tx.Commit())
+
+	destDolt := filepath.Join(destDir, DoltDir)
+	exists, _ := fs.Exists(destDolt)
+	assert.True(t, exists, ".dolt must exist in destDir")
+
+	destConfig := filepath.Join(destDir, DoltDir, "config.json")
+	configExists, _ := fs.Exists(destConfig)
+	assert.True(t, configExists, "committed content must exist in dest/.dolt")
+}
+
+func TestFSCreateTx_CommitOverRealContentFails(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11533
+	parentDir := t.TempDir()
+	fs, err := filesys.LocalFilesysWithWorkingDir(parentDir)
+	require.NoError(t, err)
+
+	destDir := "existing_real_db"
+	require.NoError(t, fs.MkDirs(filepath.Join(destDir, DoltDir, "noms")))
+	realData := filepath.Join(destDir, DoltDir, "noms", "manifest")
+	require.NoError(t, fs.WriteFile(realData, []byte("real_manifest"), 0o644))
+
+	u, err := uuid.NewV7()
+	require.NoError(t, err)
+
+	tempDirName := fmt.Sprintf("%stest-%s", TempDirPrefix, u.String())
+	tempDirPath := filepath.Join(destDir, tempDirName)
+	require.NoError(t, fs.MkDirs(filepath.Join(tempDirPath, DoltDir)))
+
+	tx := NewFSCreateTxForRecovery(fs, tempDirPath, destDir, true, u)
+	err = tx.Commit()
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrExists))
+
+	manifestExists, _ := fs.Exists(realData)
+	assert.True(t, manifestExists, "existing database content must remain intact")
 }

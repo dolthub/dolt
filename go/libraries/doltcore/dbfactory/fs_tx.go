@@ -184,6 +184,8 @@ func (tx *FSCreateTx) Commit() error {
 	if tx.destPathExists {
 		src := filepath.Join(tx.tempPath, DoltDir)
 		dest := filepath.Join(tx.destPath, DoltDir)
+		_ = tx.fs.Delete(filepath.Join(dest, "tmp"), false)
+		_ = tx.fs.Delete(dest, false)
 		moveErr = tx.fs.MoveDir(src, dest)
 		if moveErr == nil {
 			_ = tx.fs.Delete(tx.tempPath, true)
