@@ -278,7 +278,8 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 }
 
 // Environment overrides repository/global configuration supplied by the caller.
-func gitRemoteHistoryOptions(params map[string]interface{}) (opts blobstore.GitBlobstoreOptions, err error) {
+func gitRemoteHistoryOptions(params map[string]interface{}) (blobstore.GitBlobstoreOptions, error) {
+	var opts blobstore.GitBlobstoreOptions
 	for _, setting := range []struct{ key, env string }{
 		{config.GitRemoteMaxHistoryCommits, "DOLT_GIT_REMOTE_MAX_HISTORY_COMMITS"},
 		{config.GitRemoteResetOnPrune, "DOLT_GIT_REMOTE_RESET_HISTORY_ON_PRUNE"},
@@ -298,16 +299,24 @@ func gitRemoteHistoryOptions(params map[string]interface{}) (opts blobstore.GitB
 		switch setting.key {
 		case config.GitRemoteMaxHistoryCommits:
 			n, parseErr := strconv.Atoi(value)
-			if parseErr != nil || n < 0 {
+			if parseErr != nil {
+				return opts, fmt.Errorf("%s must be a non-negative integer (0 means unlimited), got %q: %w", setting.key, value, parseErr)
+			}
+			if n < 0 {
 				return opts, fmt.Errorf("%s must be a non-negative integer (0 means unlimited), got %q", setting.key, value)
 			}
 			opts.MaxHistoryCommits = &n
 		case config.GitRemoteResetOnPrune:
-			if value != "true" && value != "false" {
+			var resetOnPrune bool
+			switch value {
+			case "true":
+				resetOnPrune = true
+			case "false":
+				resetOnPrune = false
+			default:
 				return opts, fmt.Errorf("%s must be true or false, got %q", setting.key, value)
 			}
-			b := value == "true"
-			opts.ResetHistoryOnPrune = &b
+			opts.ResetHistoryOnPrune = &resetOnPrune
 		}
 	}
 	return opts, nil

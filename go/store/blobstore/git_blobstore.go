@@ -1674,17 +1674,9 @@ func (gbs *GitBlobstore) buildCommitForKeyWrite(ctx context.Context, parent git.
 	// Use parent commit when available so git push can compute incremental deltas
 	// instead of enumerating the full tree. Sever history at the configured
 	// limit, or on pruning when enabled, so git gc can reclaim obsolete objects.
-	var parentPtr *git.OID
-	if hasParent && parent != "" && (prunedEntries == 0 || !gbs.resetOnPrune) {
-		keepParent := gbs.maxHistoryCommits == 0
-		if !keepParent {
-			depth, err := gbs.api.RevListCount(ctx, parent, gbs.maxHistoryCommits)
-			keepParent = err == nil && depth < gbs.maxHistoryCommits
-		}
-		if keepParent {
-			p := parent
-			parentPtr = &p
-		}
+	parentPtr, err := gbs.historyParent(ctx, parent, hasParent, prunedEntries)
+	if err != nil {
+		return "", err
 	}
 	commitOID, err := gbs.api.CommitTree(ctx, treeOID, parentPtr, msg, gbs.identity)
 	if err != nil && gbs.identity == nil && isMissingGitIdentityErr(err) {
@@ -1694,6 +1686,32 @@ func (gbs *GitBlobstore) buildCommitForKeyWrite(ctx context.Context, parent git.
 		return "", err
 	}
 	return commitOID, nil
+}
+
+// historyParent decides whether the next commit retains the existing history.
+func (gbs *GitBlobstore) historyParent(ctx context.Context, parent git.OID, hasParent bool, prunedEntries int) (*git.OID, error) {
+	if !hasParent {
+		return nil, nil
+	}
+	if parent == "" {
+		return nil, nil
+	}
+	if gbs.resetOnPrune {
+		if prunedEntries > 0 {
+			return nil, nil
+		}
+	}
+	if gbs.maxHistoryCommits == 0 {
+		return &parent, nil
+	}
+	depth, err := gbs.api.RevListCount(ctx, parent, gbs.maxHistoryCommits)
+	if err != nil {
+		return nil, fmt.Errorf("gitblobstore: counting history commits: %w", err)
+	}
+	if depth >= gbs.maxHistoryCommits {
+		return nil, nil
+	}
+	return &parent, nil
 }
 
 func (gbs *GitBlobstore) removeKeyConflictsFromIndex(ctx context.Context, parent git.OID, indexFile string, key string, newIsChunked bool) error {

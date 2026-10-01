@@ -7,6 +7,7 @@ package dbfactory
 
 import (
 	"os"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -22,14 +23,18 @@ func TestGitRemoteHistoryOptions(t *testing.T) {
 		limit   *int
 		reset   *bool
 		invalid bool
+		wantErr error
 	}{
 		{name: "unset"},
 		{name: "explicit zero", params: map[string]interface{}{config.GitRemoteMaxHistoryCommits: "0", config.GitRemoteResetOnPrune: "false"}, limit: intPtr(0), reset: boolPtr(false)},
 		{name: "configured", params: map[string]interface{}{config.GitRemoteMaxHistoryCommits: "256", config.GitRemoteResetOnPrune: "true"}, limit: intPtr(256), reset: boolPtr(true)},
 		{name: "environment overrides", params: map[string]interface{}{config.GitRemoteMaxHistoryCommits: "invalid", config.GitRemoteResetOnPrune: "invalid"}, env: map[string]string{"DOLT_GIT_REMOTE_MAX_HISTORY_COMMITS": "0", "DOLT_GIT_REMOTE_RESET_HISTORY_ON_PRUNE": "false"}, limit: intPtr(0), reset: boolPtr(false)},
 		{name: "negative", params: map[string]interface{}{config.GitRemoteMaxHistoryCommits: "-1"}, invalid: true},
-		{name: "empty", env: map[string]string{"DOLT_GIT_REMOTE_MAX_HISTORY_COMMITS": ""}, invalid: true},
-		{name: "overflow", params: map[string]interface{}{config.GitRemoteMaxHistoryCommits: "999999999999999999999"}, invalid: true},
+		{name: "empty", env: map[string]string{"DOLT_GIT_REMOTE_MAX_HISTORY_COMMITS": ""}, invalid: true, wantErr: strconv.ErrSyntax},
+		{name: "overflow", params: map[string]interface{}{config.GitRemoteMaxHistoryCommits: "999999999999999999999"}, invalid: true, wantErr: strconv.ErrRange},
+		{name: "non-string", params: map[string]interface{}{config.GitRemoteMaxHistoryCommits: 2}, invalid: true},
+		{name: "uppercase bool", params: map[string]interface{}{config.GitRemoteResetOnPrune: "TRUE"}, invalid: true},
+		{name: "numeric bool", params: map[string]interface{}{config.GitRemoteResetOnPrune: "1"}, invalid: true},
 		{name: "invalid bool", params: map[string]interface{}{config.GitRemoteResetOnPrune: "yes"}, invalid: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -43,6 +48,9 @@ func TestGitRemoteHistoryOptions(t *testing.T) {
 			opts, err := gitRemoteHistoryOptions(tc.params)
 			if tc.invalid {
 				require.Error(t, err)
+				if tc.wantErr != nil {
+					require.ErrorIs(t, err, tc.wantErr)
+				}
 				return
 			}
 			require.NoError(t, err)

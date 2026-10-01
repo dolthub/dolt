@@ -109,7 +109,11 @@ func (r *Remote) GetRemoteDB(ctx context.Context, nbf *types.NomsBinFormat, dial
 	}
 
 	params[dbfactory.GRPCDialProviderParam] = dialer
-	if u, err := earl.Parse(r.Url); err == nil && u != nil && strings.HasPrefix(strings.ToLower(u.Scheme), "git+") {
+	u, err := earl.Parse(r.Url)
+	if err != nil {
+		return nil, err
+	}
+	if strings.HasPrefix(strings.ToLower(u.Scheme), "git+") {
 		params[dbfactory.GitRemoteNameParam] = r.Name
 		if err := addGitRemoteHistoryConfig(params, dialer); err != nil {
 			return nil, err
@@ -133,7 +137,11 @@ func (r *Remote) Prepare(ctx context.Context, nbf *types.NomsBinFormat, dialer d
 	}
 
 	params[dbfactory.GRPCDialProviderParam] = dialer
-	if u, err := earl.Parse(r.Url); err == nil && u != nil && strings.HasPrefix(strings.ToLower(u.Scheme), "git+") {
+	u, err := earl.Parse(r.Url)
+	if err != nil {
+		return err
+	}
+	if strings.HasPrefix(strings.ToLower(u.Scheme), "git+") {
 		params[dbfactory.GitRemoteNameParam] = r.Name
 		if err := addGitRemoteHistoryConfig(params, dialer); err != nil {
 			return err
@@ -168,7 +176,11 @@ func (r *Remote) GetRemoteDBWithoutCaching(ctx context.Context, nbf *types.NomsB
 	params[dbfactory.DisableSingletonCacheParam] = "true"
 	params[dbfactory.NoCachingParameter] = "true"
 	params[dbfactory.GRPCDialProviderParam] = dialer
-	if u, err := earl.Parse(r.Url); err == nil && u != nil && strings.HasPrefix(strings.ToLower(u.Scheme), "git+") {
+	u, err := earl.Parse(r.Url)
+	if err != nil {
+		return nil, err
+	}
+	if strings.HasPrefix(strings.ToLower(u.Scheme), "git+") {
 		params[dbfactory.GitRemoteNameParam] = r.Name
 		if err := addGitRemoteHistoryConfig(params, dialer); err != nil {
 			return nil, err
@@ -194,25 +206,19 @@ func addGitRemoteHistoryConfig(params map[string]interface{}, dialer dbfactory.G
 			}
 		}
 	}
-	globalPath, err := getGlobalCfgPath(GetCurrentUserHomeDir)
+	cfg, err := loadDoltConfig(GetCurrentUserHomeDir, fs)
 	if err != nil {
 		return err
 	}
-	// Read global first, then overwrite with the initiating repository's local
-	// settings. Missing files are normal, including during clone.
-	for _, path := range []string{globalPath, getLocalConfigPath()} {
-		if exists, _ := fs.Exists(path); !exists {
+	for _, key := range []string{config.GitRemoteMaxHistoryCommits, config.GitRemoteResetOnPrune} {
+		value, err := cfg.GetString(key)
+		if errors.Is(err, config.ErrConfigParamNotFound) {
 			continue
 		}
-		cfg, err := config.FromFile(path, fs)
 		if err != nil {
-			return err
+			return fmt.Errorf("reading %s: %w", key, err)
 		}
-		for _, key := range []string{config.GitRemoteMaxHistoryCommits, config.GitRemoteResetOnPrune} {
-			if value, err := cfg.GetString(key); err == nil {
-				params[key] = value
-			}
-		}
+		params[key] = value
 	}
 	return nil
 }
