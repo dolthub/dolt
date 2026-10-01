@@ -834,4 +834,3 @@ func Recover(ctx context.Context, fs filesys.Filesys) error {
 
 	return errors.Join(errs...)
 }
-

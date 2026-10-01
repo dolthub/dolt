@@ -63,4 +63,3 @@ func TestHasXID_DefaultUnregistered(t *testing.T) {
 	ResetXIDCheckerForTesting()
 	assert.False(t, HasXID(nil, 12345))
 }
-
