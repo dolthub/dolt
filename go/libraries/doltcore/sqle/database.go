@@ -1989,16 +1989,8 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 		return ErrInvalidTableName.New(tableName)
 	}
 
-	root, err := db.GetRoot(ctx)
-	if err != nil {
+	if err := db.checkNonlocalTableName(ctx, tableName); err != nil {
 		return err
-	}
-	_, hasNonlocalTable, err := db.getNonlocalTableEntry(ctx, root, tableName)
-	if err != nil {
-		return err
-	}
-	if hasNonlocalTable {
-		return ErrNonlocalTableName.New(tableName)
 	}
 
 	return db.createSqlTable(ctx, tableName, db.schemaName, sch, collation, comment)
@@ -2032,7 +2024,33 @@ func (db Database) CreateIndexedTable(ctx *sql.Context, tableName string, sch sq
 		return ErrInvalidTableName.New(tableName)
 	}
 
+	if err := db.checkNonlocalTableName(ctx, tableName); err != nil {
+		return err
+	}
+
 	return db.createIndexedSqlTable(ctx, tableName, db.schemaName, sch, idxDef, collation, comment)
+}
+
+// checkNonlocalTableName returns an error if |tableName| matches a
+// nonlocal rule that would resolve it to a table on another branch
+// or under another name.
+func (db Database) checkNonlocalTableName(ctx *sql.Context, tableName string) error {
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return err
+	}
+	entry, matched, err := db.getNonlocalTableEntry(ctx, root, tableName)
+	if err != nil {
+		return err
+	}
+	if !matched {
+		return nil
+	}
+	if entry.Ref == db.revision &&
+		strings.EqualFold(entry.NewTableName, tableName) {
+		return nil
+	}
+	return ErrNonlocalTableName.New(tableName)
 }
 
 // CreateFulltextTableNames returns a set of names that will be used to create Full-Text pseudo-index tables.
