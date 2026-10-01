@@ -37,7 +37,6 @@ func TestEnvForClone_WritesInTempDir(t *testing.T) {
 
 	dEnv, tx, err := EnvForClone(context.Background(), types.Format_DOLT, env.NoRemote, "cloned", fs, "test", hdp)
 	require.NoError(t, err)
-	defer dEnv.Close()
 
 	exists, _ := fs.Exists("cloned")
 	require.False(t, exists, "cloned must not exist before commit")
@@ -46,6 +45,7 @@ func TestEnvForClone_WritesInTempDir(t *testing.T) {
 	require.True(t, tempExists, "temp directory must exist")
 	require.True(t, dbfactory.IsTempDir(fs, tx.TempPath()))
 
+	require.NoError(t, dEnv.Close())
 	require.NoError(t, tx.Commit())
 
 	exists, _ = fs.Exists("cloned")
@@ -83,6 +83,7 @@ func TestRollbackRemovesCreatedDir(t *testing.T) {
 	require.NoError(t, cfg.SetStrings(map[string]string{config.UserNameKey: "test", config.UserEmailKey: "test@test.com"}))
 	require.NoError(t, InitEmptyClonedRepo(ctx, retry))
 	require.NoError(t, retry.InitializeRepoState(ctx, env.DefaultInitBranch))
+	require.NoError(t, retry.Close())
 	require.NoError(t, retryTx.Commit())
 
 	// Reopen from disk to prove the retry's content landed in the new directory.
