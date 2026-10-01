@@ -292,3 +292,28 @@ func TestFSCreateTx_Recovery(t *testing.T) {
 	assert.False(t, tx.DestPathExists())
 	assert.Nil(t, tx.FS())
 }
+
+func TestFSCreateTx_CommitRemovesLegacyMarker(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11533
+	parentDir := t.TempDir()
+	fs, err := filesys.LocalFilesysWithWorkingDir(parentDir)
+	require.NoError(t, err)
+
+	destDir := "existing_clone_target"
+	require.NoError(t, fs.MkDirs(destDir))
+	markerPath := filepath.Join(destDir, SafeToIgnoreMarkerFile)
+	require.NoError(t, fs.WriteFile(markerPath, nil, 0o644))
+
+	tx, err := BeginCreate(fs, destDir, uuid.Nil)
+	require.NoError(t, err)
+	require.NoError(t, tx.FS().MkDirs(DoltDir))
+
+	require.NoError(t, tx.Commit())
+
+	destDolt := filepath.Join(destDir, DoltDir)
+	exists, _ := fs.Exists(destDolt)
+	assert.True(t, exists, ".dolt must exist in destDir")
+
+	markerExists, _ := fs.Exists(markerPath)
+	assert.False(t, markerExists, "legacy marker must be removed after commit")
+}

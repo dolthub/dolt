@@ -187,6 +187,7 @@ func (tx *FSCreateTx) Commit() error {
 		moveErr = tx.fs.MoveDir(src, dest)
 		if moveErr == nil {
 			_ = tx.fs.Delete(tx.tempPath, true)
+			_ = tx.fs.Delete(filepath.Join(tx.destPath, SafeToIgnoreMarkerFile), false)
 		}
 	} else {
 		moveErr = tx.fs.MoveDir(tx.tempPath, tx.destPath)
