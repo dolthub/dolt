@@ -45,9 +45,9 @@ func Rename(oldpath, newpath string) error {
 }
 
 // MoveDir moves a directory from |oldpath| to |newpath| on Windows
-// without replacing an existing destination. It retries only transient
-// sharing violations, and returns an error wrapping [os.ErrExist] if
-// the destination already exists.
+// without replacing an existing destination. It retries locked or
+// access-denied moves, but stops retrying as soon as the destination
+// path exists and returns an error wrapping [os.ErrExist].
 func MoveDir(oldpath, newpath string) error {
 	from, err := syscall.UTF16PtrFromString(oldpath)
 	if err != nil {
@@ -59,10 +59,20 @@ func MoveDir(oldpath, newpath string) error {
 	}
 
 	err = windows.MoveFileEx(from, to, 0)
-	if isSharingViolation(err) {
-		for waitTime := time.Millisecond; isSharingViolation(err) && waitTime <= maxRetryWait; waitTime *= retryWaitMultiplier {
+	if isMoveRetryable(err) {
+		if _, statErr := os.Lstat(newpath); statErr == nil {
+			linkErr := &os.LinkError{Op: "MoveDir", Old: oldpath, New: newpath, Err: err}
+			return errors.Join(os.ErrExist, linkErr)
+		}
+		for waitTime := time.Millisecond; isMoveRetryable(err) && waitTime <= maxRetryWait; waitTime *= retryWaitMultiplier {
 			time.Sleep(waitTime)
 			err = windows.MoveFileEx(from, to, 0)
+			if err != nil {
+				if _, statErr := os.Lstat(newpath); statErr == nil {
+					linkErr := &os.LinkError{Op: "MoveDir", Old: oldpath, New: newpath, Err: err}
+					return errors.Join(os.ErrExist, linkErr)
+				}
+			}
 		}
 	}
 	if err != nil {
@@ -120,6 +130,10 @@ func isAccessError(err error) bool {
 		}
 	}
 	return false
+}
+
+func isMoveRetryable(err error) bool {
+	return isAccessError(err) || isSharingViolation(err)
 }
 
 func isSharingViolation(err error) bool {
