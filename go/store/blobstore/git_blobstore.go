@@ -279,6 +279,10 @@ type GitBlobstore struct {
 	api               git.GitAPI
 	remoteName        string
 	remoteTrackingRef string
+	// anchorVersion is the persistent negotiation ref observed before this
+	// instance fetches. Teardown uses CAS so an older session cannot overwrite
+	// an anchor published by another session. Protected by writeMu after open.
+	anchorVersion git.OID
 	// writeMu serializes operations that mutate shared git refs and/or perform
 	// remote-managed write workflows (commit + push + cache update).
 	writeMu sync.Mutex
@@ -297,7 +301,9 @@ type GitBlobstore struct {
 	// by this blobstore should exceed maxPartSize bytes.
 	//
 	// A zero value means "disabled" (store values inline as a single git blob).
-	maxPartSize uint64
+	maxPartSize       uint64
+	maxHistoryCommits int
+	resetOnPrune      bool
 
 	// pendingWrites accumulates non-manifest writes that will be flushed in a single
 	// commit+push when CheckAndPutManifest is called. This avoids per-key
@@ -389,6 +395,12 @@ func NewGitBlobstoreWithIdentity(gitDir, ref string, identity *git.Identity) (*G
 
 // GitBlobstoreOptions configures optional behaviors of GitBlobstore.
 type GitBlobstoreOptions struct {
+	// MaxHistoryCommits limits reachable Git commits. Nil defaults to 64;
+	// zero means unlimited. Negative values are invalid.
+	MaxHistoryCommits *int
+	// ResetHistoryOnPrune creates a parentless commit when obsolete tables
+	// are removed. Nil defaults to true. False retains parents up to the limit.
+	ResetHistoryOnPrune *bool
 	// Identity, when non-nil, forces the author/committer identity for commits created by write paths.
 	Identity *git.Identity
 	// MaxPartSize enables chunked-object writes when non-zero.
@@ -414,6 +426,17 @@ type GitBlobstoreOptions struct {
 const defaultSyncForReadTTL = 1 * time.Second
 
 func NewGitBlobstoreWithOptions(gitDir, ref string, opts GitBlobstoreOptions) (*GitBlobstore, error) {
+	maxHistoryCommits := maxParentedCommits
+	if opts.MaxHistoryCommits != nil {
+		maxHistoryCommits = *opts.MaxHistoryCommits
+		if maxHistoryCommits < 0 {
+			return nil, fmt.Errorf("gitblobstore: max history commits must be non-negative")
+		}
+	}
+	resetHistoryOnPrune := true
+	if opts.ResetHistoryOnPrune != nil {
+		resetHistoryOnPrune = *opts.ResetHistoryOnPrune
+	}
 	r, err := git.NewRunner(gitDir)
 	if err != nil {
 		return nil, err
@@ -427,6 +450,11 @@ func NewGitBlobstoreWithOptions(gitDir, ref string, opts GitBlobstoreOptions) (*
 	instanceID := uuid.NewString()
 	remoteTrackingRef := RemoteTrackingRef(remoteName, remoteRef, instanceID)
 	localRef := OwnedLocalRef(remoteName, remoteRef, instanceID)
+	api := git.NewGitAPIImpl(r)
+	anchorVersion, _, err := api.TryResolveRefCommit(context.Background(), RemoteTrackingRef(remoteName, remoteRef, "last"))
+	if err != nil {
+		return nil, err
+	}
 
 	infoBranch := ResolveInfoBranch(opts.InfoBranch)
 
@@ -440,11 +468,14 @@ func NewGitBlobstoreWithOptions(gitDir, ref string, opts GitBlobstoreOptions) (*
 		remoteRef:         remoteRef,
 		localRef:          localRef,
 		runner:            r,
-		api:               git.NewGitAPIImpl(r),
+		api:               api,
 		remoteName:        remoteName,
 		remoteTrackingRef: remoteTrackingRef,
+		anchorVersion:     anchorVersion,
 		identity:          opts.Identity,
 		maxPartSize:       opts.MaxPartSize,
+		maxHistoryCommits: maxHistoryCommits,
+		resetOnPrune:      resetHistoryOnPrune,
 		cacheObjects:      make(map[string]cachedGitObject),
 		cacheChildren:     make(map[string][]git.TreeEntry),
 		syncForReadTTL:    syncForReadTTL,
@@ -695,8 +726,8 @@ func (gbs *GitBlobstore) CleanupOwnedLocalRef(ctx context.Context) error {
 	return err
 }
 
-// Teardown best-effort deletes this instance's UUID-owned refs and
-// periodically runs git gc to repack the cache repository.
+// Teardown preserves one persistent fetch-negotiation anchor, deletes this
+// instance's UUID-owned refs, and periodically repacks the cache repository.
 func (gbs *GitBlobstore) Teardown(ctx context.Context) error {
 	// The gc below repacks the object store a fetch writes into, and the ref
 	// deletions remove the remote-tracking ref it writes, so no read-path fetch
@@ -711,6 +742,27 @@ func (gbs *GitBlobstore) Teardown(ctx context.Context) error {
 
 	gbs.writeMu.Lock()
 	defer gbs.writeMu.Unlock()
+
+	// cacheHead includes successful pushes as well as fetches; the tracking ref
+	// alone can still point at the head from before our last push.
+	gbs.cacheMu.RLock()
+	head := gbs.cacheHead
+	gbs.cacheMu.RUnlock()
+	var anchorErr error
+	if head != "" {
+		anchor := RemoteTrackingRef(gbs.remoteName, gbs.remoteRef, "last")
+		if err := gbs.api.UpdateRefCAS(ctx, anchor, head, gbs.anchorVersion, "gitblobstore: retain fetch anchor"); err != nil {
+			current, ok, resolveErr := gbs.api.TryResolveRefCommit(ctx, anchor)
+			// If another session changed the anchor, leave that anchor untouched
+			// and ignore the CAS failure. Otherwise report the failure, but still
+			// clean up our private refs since teardown may never be retried.
+			if resolveErr != nil || !ok || current == gbs.anchorVersion {
+				anchorErr = errors.Join(err, resolveErr)
+			}
+		} else {
+			gbs.anchorVersion = head
+		}
+	}
 
 	deleteIfExists := func(ref string) error {
 		if ref == "" {
@@ -728,6 +780,7 @@ func (gbs *GitBlobstore) Teardown(ctx context.Context) error {
 	}
 
 	return errors.Join(
+		anchorErr,
 		deleteIfExists(gbs.localRef),
 		deleteIfExists(gbs.remoteTrackingRef),
 	)
@@ -1621,17 +1674,11 @@ func (gbs *GitBlobstore) buildCommitForKeyWrite(ctx context.Context, parent git.
 	}
 
 	// Use parent commit when available so git push can compute incremental deltas
-	// instead of enumerating the full tree. After maxParentedCommits in the
-	// existing chain, create a parentless commit to sever history so git gc can
-	// prune old objects. Also force an orphan commit when entries were pruned so
-	// the old bloated tree becomes immediately unreachable from the new tip.
-	var parentPtr *git.OID
-	if hasParent && parent != "" && prunedEntries == 0 {
-		depth, err := gbs.api.RevListCount(ctx, parent, maxParentedCommits+1)
-		if err == nil && depth < maxParentedCommits {
-			p := parent
-			parentPtr = &p
-		}
+	// instead of enumerating the full tree. Sever history at the configured
+	// limit, or on pruning when enabled, so git gc can reclaim obsolete objects.
+	parentPtr, err := gbs.historyParent(ctx, parent, hasParent, prunedEntries)
+	if err != nil {
+		return "", err
 	}
 	commitOID, err := gbs.api.CommitTree(ctx, treeOID, parentPtr, msg, gbs.identity)
 	if err != nil && gbs.identity == nil && isMissingGitIdentityErr(err) {
@@ -1641,6 +1688,32 @@ func (gbs *GitBlobstore) buildCommitForKeyWrite(ctx context.Context, parent git.
 		return "", err
 	}
 	return commitOID, nil
+}
+
+// historyParent decides whether the next commit retains the existing history.
+func (gbs *GitBlobstore) historyParent(ctx context.Context, parent git.OID, hasParent bool, prunedEntries int) (*git.OID, error) {
+	if !hasParent {
+		return nil, nil
+	}
+	if parent == "" {
+		return nil, nil
+	}
+	if gbs.resetOnPrune {
+		if prunedEntries > 0 {
+			return nil, nil
+		}
+	}
+	if gbs.maxHistoryCommits == 0 {
+		return &parent, nil
+	}
+	depth, err := gbs.api.RevListCount(ctx, parent, gbs.maxHistoryCommits)
+	if err != nil {
+		return nil, fmt.Errorf("gitblobstore: counting history commits: %w", err)
+	}
+	if depth >= gbs.maxHistoryCommits {
+		return nil, nil
+	}
+	return &parent, nil
 }
 
 func (gbs *GitBlobstore) removeKeyConflictsFromIndex(ctx context.Context, parent git.OID, indexFile string, key string, newIsChunked bool) error {
