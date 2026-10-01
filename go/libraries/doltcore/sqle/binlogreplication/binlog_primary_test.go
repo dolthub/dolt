@@ -201,7 +201,7 @@ func TestBinlogPrimary(t *testing.T) {
 	})
 
 	h.requirePrimaryResults("SHOW BINARY LOG STATUS", [][]any{
-		{"binlog-main.000001", "2377", "", "", uuid + ":1-3"}})
+		{"binlog-main.000001", "2408", "", "", uuid + ":1-3"}})
 }
 
 // TestBinlogPrimary_textTypes tests serialization for empty, NULL, and non-empty TEXT
@@ -464,7 +464,7 @@ func TestBinlogPrimary_Rotation(t *testing.T) {
 	})
 
 	h.requirePrimaryResults("show binary logs;", [][]any{
-		{"binlog-main.000001", "10318", "No"},
+		{"binlog-main.000001", "10349", "No"},
 		{"binlog-main.000002", "10481", "No"},
 		{"binlog-main.000003", "1027", "No"},
 	})
@@ -486,7 +486,7 @@ func TestBinlogPrimary_AutoPurging(t *testing.T) {
 		h.primaryDatabase.MustExec(fmt.Sprintf("insert into db01.t values (%d);", i))
 	}
 	h.requirePrimaryResults("SHOW BINARY LOGS;", [][]any{
-		{"binlog-main.000001", "21346", "No"},
+		{"binlog-main.000001", "21377", "No"},
 	})
 
 	// Restart and confirm the binary log has been purged
@@ -705,7 +705,7 @@ func TestBinlogPrimary_PrimaryRestart(t *testing.T) {
 
 	// Only one binary log file should be present on a fresh server
 	h.requirePrimaryResults("show binary logs;", [][]any{
-		{"binlog-main.000001", "263", "No"},
+		{"binlog-main.000001", "294", "No"},
 	})
 
 	// Create a table on the primary and assert that it gets replicated
@@ -728,7 +728,7 @@ func TestBinlogPrimary_PrimaryRestart(t *testing.T) {
 
 	// A new binary log file is created on each server restart
 	h.requirePrimaryResults("show binary logs;", [][]any{
-		{"binlog-main.000001", "549", "No"},
+		{"binlog-main.000001", "580", "No"},
 		{"binlog-main.000002", "191", "No"},
 	})
 
@@ -765,7 +765,7 @@ func TestBinlogPrimary_PrimaryRestartBeforeReplicaConnects(t *testing.T) {
 
 	// Verify that the Dolt primary server has two binary log files
 	h.requirePrimaryResults("SHOW BINARY LOGS;", [][]any{
-		{"binlog-main.000001", "312", "No"},
+		{"binlog-main.000001", "343", "No"},
 		{"binlog-main.000002", "191", "No"},
 	})
 }
