@@ -279,6 +279,10 @@ type GitBlobstore struct {
 	api               git.GitAPI
 	remoteName        string
 	remoteTrackingRef string
+	// anchorVersion is the persistent negotiation ref observed before this
+	// instance fetches. Teardown uses CAS so an older session cannot overwrite
+	// an anchor published by another session. Protected by writeMu after open.
+	anchorVersion git.OID
 	// writeMu serializes operations that mutate shared git refs and/or perform
 	// remote-managed write workflows (commit + push + cache update).
 	writeMu sync.Mutex
@@ -427,6 +431,11 @@ func NewGitBlobstoreWithOptions(gitDir, ref string, opts GitBlobstoreOptions) (*
 	instanceID := uuid.NewString()
 	remoteTrackingRef := RemoteTrackingRef(remoteName, remoteRef, instanceID)
 	localRef := OwnedLocalRef(remoteName, remoteRef, instanceID)
+	api := git.NewGitAPIImpl(r)
+	anchorVersion, _, err := api.TryResolveRefCommit(context.Background(), RemoteTrackingRef(remoteName, remoteRef, "last"))
+	if err != nil {
+		return nil, err
+	}
 
 	infoBranch := ResolveInfoBranch(opts.InfoBranch)
 
@@ -440,9 +449,10 @@ func NewGitBlobstoreWithOptions(gitDir, ref string, opts GitBlobstoreOptions) (*
 		remoteRef:         remoteRef,
 		localRef:          localRef,
 		runner:            r,
-		api:               git.NewGitAPIImpl(r),
+		api:               api,
 		remoteName:        remoteName,
 		remoteTrackingRef: remoteTrackingRef,
+		anchorVersion:     anchorVersion,
 		identity:          opts.Identity,
 		maxPartSize:       opts.MaxPartSize,
 		cacheObjects:      make(map[string]cachedGitObject),
@@ -695,8 +705,8 @@ func (gbs *GitBlobstore) CleanupOwnedLocalRef(ctx context.Context) error {
 	return err
 }
 
-// Teardown best-effort deletes this instance's UUID-owned refs and
-// periodically runs git gc to repack the cache repository.
+// Teardown preserves one persistent fetch-negotiation anchor, deletes this
+// instance's UUID-owned refs, and periodically repacks the cache repository.
 func (gbs *GitBlobstore) Teardown(ctx context.Context) error {
 	// The gc below repacks the object store a fetch writes into, and the ref
 	// deletions remove the remote-tracking ref it writes, so no read-path fetch
@@ -711,6 +721,27 @@ func (gbs *GitBlobstore) Teardown(ctx context.Context) error {
 
 	gbs.writeMu.Lock()
 	defer gbs.writeMu.Unlock()
+
+	// cacheHead includes successful pushes as well as fetches; the tracking ref
+	// alone can still point at the head from before our last push.
+	gbs.cacheMu.RLock()
+	head := gbs.cacheHead
+	gbs.cacheMu.RUnlock()
+	var anchorErr error
+	if head != "" {
+		anchor := RemoteTrackingRef(gbs.remoteName, gbs.remoteRef, "last")
+		if err := gbs.api.UpdateRefCAS(ctx, anchor, head, gbs.anchorVersion, "gitblobstore: retain fetch anchor"); err != nil {
+			current, ok, resolveErr := gbs.api.TryResolveRefCommit(ctx, anchor)
+			// If another session changed the anchor, leave that anchor untouched
+			// and ignore the CAS failure. Otherwise report the failure, but still
+			// clean up our private refs since teardown may never be retried.
+			if resolveErr != nil || !ok || current == gbs.anchorVersion {
+				anchorErr = errors.Join(err, resolveErr)
+			}
+		} else {
+			gbs.anchorVersion = head
+		}
+	}
 
 	deleteIfExists := func(ref string) error {
 		if ref == "" {
@@ -728,6 +759,7 @@ func (gbs *GitBlobstore) Teardown(ctx context.Context) error {
 	}
 
 	return errors.Join(
+		anchorErr,
 		deleteIfExists(gbs.localRef),
 		deleteIfExists(gbs.remoteTrackingRef),
 	)
