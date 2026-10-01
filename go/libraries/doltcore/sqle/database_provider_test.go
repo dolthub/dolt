@@ -733,3 +733,49 @@ func TestUndropNotifiesDatabaseUpdateListener(t *testing.T) {
 	assert.Contains(t, listener.created, "undrop_test")
 	assert.Contains(t, listener.updatedRoots, "undrop_test")
 }
+
+func TestInitDatabaseHookReceivesRegisteredDatabaseGlobalState(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11533
+	ctx := context.Background()
+	dEnv := dtestutils.CreateTestEnvForLocalFilesystem()
+	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(ctx), editor.Options{})
+	require.NoError(t, err)
+	engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db)
+	require.NoError(t, err)
+	pro := dsess.DSessFromSess(sqlCtx.Session).Provider().(*DoltDatabaseProvider)
+
+	var hookDb dsess.SqlDatabase
+	pro.AddInitDatabaseHook(func(ctx *sql.Context, _ *DoltDatabaseProvider, name string, _ *env.DoltEnv, db dsess.SqlDatabase) error {
+		hookDb = db
+		return nil
+	})
+
+	require.NoError(t, ExecuteSqlOnEngine(sqlCtx, engine, "CREATE DATABASE hooktest;"))
+
+	sqlDb, err := pro.Database(sqlCtx, "hooktest")
+	require.NoError(t, err)
+	require.NotNil(t, hookDb)
+	type testKey struct{}
+	tracker := &testSequenceTracker{}
+	err = hookDb.(Database).GetGlobalState().AddSequenceTracker(sqlCtx, testKey{}, tracker)
+	require.NoError(t, err)
+	gotTracker, err := sqlDb.(Database).GetGlobalState().GetSequenceTracker(sqlCtx, testKey{})
+	require.NoError(t, err)
+	assert.Equal(t, tracker, gotTracker)
+}
+
+type testSequenceTracker struct{}
+
+func (t *testSequenceTracker) AcquireLock(_ *sql.Context, _ doltdb.TableName) (func(), error) {
+	return func() {}, nil
+}
+
+func (t *testSequenceTracker) DropRelation(_ *sql.Context, _ doltdb.TableName, _ ...*doltdb.WorkingSet) error {
+	return nil
+}
+
+func (t *testSequenceTracker) MergeRoots(_ context.Context, _ ...doltdb.Rootish) error {
+	return nil
+}
+
+func (t *testSequenceTracker) Close() {}

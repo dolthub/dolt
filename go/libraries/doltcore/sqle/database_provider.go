@@ -814,7 +814,8 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 		return err
 	}
 
-	if err = p.register(ctx, name, dEnv); err != nil {
+	db, err := p.register(ctx, name, dEnv)
+	if err != nil {
 		return err
 	}
 
@@ -849,7 +850,7 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 	}
 
 	// Hooks run after p.mu is released, since their failure cleanup takes p.mu.
-	return p.afterCommit(ctx, name, dEnv)
+	return p.afterCommit(ctx, name, dEnv, db)
 }
 
 // setDefaultCollation sets the database default |collation| on
@@ -928,19 +929,14 @@ func (p *DoltDatabaseProvider) commitFS(ctx *sql.Context, name string, fsTx *dbf
 }
 
 // afterCommit executes registered post-commit hooks on database
-// |name| with environment |newEnv| under |ctx|. Post-commit hook
-// failures emit warnings via [ctx.Warn] and keep the committed
-// database intact.
-func (p *DoltDatabaseProvider) afterCommit(ctx *sql.Context, name string, newEnv *env.DoltEnv) error {
-	db, err := NewDatabase(ctx, name, newEnv.DbData(ctx), editor.Options{})
-	if err != nil {
-		ctx.Warn(mysql.ERUnknownError, "database %s created, but failed to load database object: %v", name, err)
-		return nil
-	}
+// |name| with environment |newEnv| and database |db| under |ctx|.
+// Post-commit hook failures emit warnings via [ctx.Warn] and keep
+// the committed database intact.
+func (p *DoltDatabaseProvider) afterCommit(ctx *sql.Context, name string, newEnv *env.DoltEnv, db Database) error {
 	// If we have any initialization hooks, invoke them. Failures emit
 	// warnings and keep the committed database intact.
 	for _, hook := range p.InitDatabaseHooks {
-		if err = hook(ctx, p, name, newEnv, db); err != nil {
+		if err := hook(ctx, p, name, newEnv, db); err != nil {
 			ctx.Warn(mysql.ERUnknownError, "database %s created, but initialization hook failed: %v", name, err)
 		}
 	}
@@ -1458,26 +1454,27 @@ func (p *DoltDatabaseProvider) PurgeDroppedDatabases(ctx *sql.Context) error {
 // function is responsible for instantiating the new Database instance and updating the tracking metadata
 // in this provider. If any problems are encountered while registering the new database, an error is returned.
 func (p *DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string, newEnv *env.DoltEnv) error {
-	if err := p.register(ctx, name, newEnv); err != nil {
+	db, err := p.register(ctx, name, newEnv)
+	if err != nil {
 		return err
 	}
-	return p.afterCommit(ctx, name, newEnv)
+	return p.afterCommit(ctx, name, newEnv, db)
 }
 
 // register adds an initialized database |newEnv| named |name|
 // into the provider tracking maps under |ctx|. It must be called
 // with p.mu locked.
-func (p *DoltDatabaseProvider) register(ctx *sql.Context, name string, newEnv *env.DoltEnv) error {
+func (p *DoltDatabaseProvider) register(ctx *sql.Context, name string, newEnv *env.DoltEnv) (Database, error) {
 	// Creating normal database names with revision delimiters can create ambiguity in methods that do not have access
 	// to some sort database table (e.g., client-side evaluations through server queries).
 	err := validateDBName(name)
 	if err != nil {
-		return err
+		return Database{}, err
 	}
 
 	// This method MUST be called with the provider's mutex locked
 	if err = lockutil.AssertRWMutexIsLocked(p.mu); err != nil {
-		return fmt.Errorf("unable to register new database without database provider mutex being locked")
+		return Database{}, fmt.Errorf("unable to register new database without database provider mutex being locked")
 	}
 
 	// Ensure any provider-supplied DB load params are applied before any lazy DB load occurs.
@@ -1488,14 +1485,14 @@ func (p *DoltDatabaseProvider) register(ctx *sql.Context, name string, newEnv *e
 	ddb := newEnv.DoltDB(ctx)
 	err = errors.Join(newEnv.DBLoadError, newEnv.CfgLoadErr)
 	if err != nil {
-		return err
+		return Database{}, err
 	}
 	if ddb == nil {
-		return fmt.Errorf("nil DoltDB value after loading database %s; cannot create database", name)
+		return Database{}, fmt.Errorf("nil DoltDB value after loading database %s; cannot create database", name)
 	}
 	db, err := NewDatabase(ctx, name, newEnv.DbData(ctx), editor.Options{})
 	if err != nil {
-		return err
+		return Database{}, err
 	}
 
 	// Push replication is configured by InitDatabaseHooks, but pull-on-read
@@ -1503,16 +1500,16 @@ func (p *DoltDatabaseProvider) register(ctx *sql.Context, name string, newEnv *e
 	// Transform the |db| into the replicating one if we need to.
 	sdb, err := applyReadReplicationConfigToDatabase(ctx, newEnv, db)
 	if err != nil {
-		return err
+		return Database{}, err
 	}
 
 	key := formatDbMapKeyName(db.Name())
 	if _, exists := p.databases[key]; exists {
-		return sql.ErrDatabaseExists.New(name)
+		return Database{}, sql.ErrDatabaseExists.New(name)
 	}
 	p.databases[key] = sdb
 	p.dbLocations[key] = newEnv.FS
-	return nil
+	return db, nil
 }
 
 // invalidateDbStateInAllSessions removes the db state for this database from every session. This is necessary when a
