@@ -550,6 +550,24 @@ func TestConversionsScripts(t *testing.T) {
 	enginetest.TestConversionsScripts(t, h)
 }
 
+func TestNumericScripts(t *testing.T) {
+	h := newDoltServerTestHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestNumericScripts(t, h)
+}
+
+func TestOrderingScripts(t *testing.T) {
+	h := newDoltServerTestHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestOrderingScripts(t, h)
+}
+
+func TestSetOperationsScripts(t *testing.T) {
+	h := newDoltServerTestHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestSetOperationsScripts(t, h)
+}
+
 func TestEnumsAndSetsScripts(t *testing.T) {
 	h := newDoltServerTestHarness(t).WithConfigureStats(true)
 	defer h.Close()
@@ -2076,6 +2094,27 @@ func TestConversionsScriptsPrepared(t *testing.T) {
 	h := newDoltHarness(t).WithConfigureStats(true)
 	defer h.Close()
 	enginetest.TestConversionsScriptsPrepared(t, h)
+}
+
+func TestNumericScriptsPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestNumericScriptsPrepared(t, h)
+}
+
+func TestOrderingScriptsPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestOrderingScriptsPrepared(t, h)
+}
+
+func TestSetOperationsScriptsPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestSetOperationsScriptsPrepared(t, h)
 }
 
 func TestEnumsAndSetsScriptsPrepared(t *testing.T) {
