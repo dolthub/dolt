@@ -406,8 +406,7 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 		return nonlocalTable, true, nil
 	}
 	table, found, err := db.getSystemTableInsensitiveWithRoot(ctx, head, ds, root, tblName, asOf)
-	// An absent dolt.rebase must not fall back to a user table named dolt_rebase.
-	if err != nil || found || (resolve.UseSearchPath && lwrName == doltdb.RebaseTableName) {
+	if err != nil || found {
 		return table, found, err
 	}
 	return db.getUserTableInsensitiveWithRoot(ctx, root, tblName, requireOverrideTable)
@@ -420,11 +419,6 @@ func (db Database) getSystemTableInsensitiveWithRoot(ctx *sql.Context, head *dol
 	// TODO: these tables that cache a root value at construction time should not, they need to get it from the session
 	//  at runtime
 	switch {
-	case resolve.UseSearchPath && lwrName == doltdb.RebaseTableName:
-		// Resolve the Doltgres compatibility name dolt_rebase as dolt.rebase.
-		db.schemaName = doltdb.DoltNamespace
-		return db.getUserTableInsensitiveWithRoot(ctx, root, doltdb.GetRebaseTableName(), requireOverrideTable)
-
 	case lwrName == doltdb.DoltDiffTablePrefix+doltdb.SchemasTableName:
 		// Special handling for dolt_diff_dolt_schemas
 		// Get the HEAD commit
@@ -842,6 +836,17 @@ func (db Database) getSystemTableInsensitiveWithRoot(ctx *sql.Context, head *dol
 		} else {
 			versionableTable := backingTable.(dtables.VersionableTable)
 			dt, found = dtables.NewIgnoreTable(ctx, versionableTable, db.schemaName), true
+		}
+	case doltdb.GetRebaseTableName(), doltdb.RebaseTableName:
+		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
+		if err != nil {
+			return nil, false, err
+		}
+		if !resolve.UseSearchPath || isDoltgresSystemTable {
+			if resolve.UseSearchPath && lwrName == doltdb.RebaseTableName {
+				db.schemaName = doltdb.DoltNamespace
+			}
+			return db.getUserTableInsensitiveWithRoot(ctx, root, doltdb.GetRebaseTableName(), requireOverrideTable)
 		}
 	case doltdb.GetDocTableName(), doltdb.DocTableName:
 		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
