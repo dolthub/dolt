@@ -51,6 +51,45 @@ func shortTempDir(t *testing.T) string {
 	return dir
 }
 
+func TestGitRemoteCacheKey(t *testing.T) {
+	root := t.TempDir()
+	key := func(root, rawURL string, ref interface{}) string {
+		t.Helper()
+		u, err := url.Parse(rawURL)
+		require.NoError(t, err)
+		params := map[string]interface{}{GitCacheRootParam: root}
+		if ref != nil {
+			params[GitRefParam] = ref
+		}
+		got, err := GitRemoteCacheKey(u, params)
+		require.NoError(t, err)
+		return got
+	}
+	const remoteURL = "git+https://example.com/repo.git"
+	base := key(root, remoteURL, nil)
+	for _, ref := range []interface{}{"", "  ", "refs/dolt/data", " refs/dolt/data "} {
+		require.Equal(t, base, key(root, remoteURL, ref))
+	}
+	require.NotEqual(t, base, key(filepath.Join(root, "other-db"), remoteURL, nil))
+	require.NotEqual(t, base, key(root, "git+https://example.com/other.git", nil))
+	require.NotEqual(t, base, key(root, "git+https://example.com/Repo.git", nil))
+	require.NotEqual(t, base, key(root, remoteURL, "refs/dolt/other"))
+	require.NotEqual(t, base, key(root, remoteURL, "refs/dolt/Data"))
+	// Query and fragment handling must match the factory's URL parsing.
+	require.Equal(t, base, key(root, remoteURL+"?ref=ignored#ignored", nil))
+
+	u, err := url.Parse(remoteURL)
+	require.NoError(t, err)
+	for _, params := range []map[string]interface{}{
+		nil,
+		{GitCacheRootParam: ""},
+		{GitCacheRootParam: 42},
+	} {
+		_, err := GitRemoteCacheKey(u, params)
+		require.ErrorContains(t, err, GitCacheRootParam)
+	}
+}
+
 func TestGitRemoteURLString(t *testing.T) {
 	tests := []struct {
 		name     string

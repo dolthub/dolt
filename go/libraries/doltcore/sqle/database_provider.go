@@ -43,6 +43,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
+	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/keymutex"
 	"github.com/dolthub/dolt/go/libraries/utils/lockutil"
@@ -616,10 +617,28 @@ func (p *DoltDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.No
 		}
 	}
 
-	key := strings.ToLower(r.Url)
-	isGit := strings.HasPrefix(key, "git+")
+	isGit := strings.HasPrefix(strings.ToLower(r.Url), "git+")
+	var key string
 
 	if isGit {
+		params := make(map[string]interface{}, len(r.Params)+1)
+		for k, v := range r.Params {
+			params[k] = v
+		}
+		if provider, ok := dialer.(dbfactory.GitCacheRootProvider); ok {
+			if root, ok := provider.GitCacheRoot(); ok {
+				params[dbfactory.GitCacheRootParam] = filepath.Join(root, dbfactory.DoltDir, dbfactory.GitRemoteCacheDirName)
+			}
+		}
+		u, err := earl.Parse(r.Url)
+		if err != nil {
+			return nil, err
+		}
+		key, err = dbfactory.GitRemoteCacheKey(u, params)
+		if err != nil {
+			return nil, err
+		}
+
 		p.gitRemotesMu.Lock()
 		cached, ok := p.gitRemotes[key]
 		p.gitRemotesMu.Unlock()
