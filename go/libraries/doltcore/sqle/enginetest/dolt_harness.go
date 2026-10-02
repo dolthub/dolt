@@ -674,3 +674,7 @@ func (d *DoltHarness) ValidateEngine(ctx *sql.Context, e *gms.Engine) (err error
 	}
 	return
 }
+
+func (d *DoltHarness) SupportsValueRow() bool {
+	return true
+}
