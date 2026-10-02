@@ -15,7 +15,6 @@
 package dtablefunctions
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -315,7 +314,7 @@ func (ds *DiffStatTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 		}
 		diffStat, hasDiff, err := getDiffStatNodeFromDelta(ctx, delta, fromRefDetails.root, toRefDetails.root, tblName)
 		if err != nil {
-			if errors.Is(err, diff.ErrPrimaryKeySetChanged) {
+			if diff.ErrPrimaryKeySetChanged.Is(err) {
 				ctx.Warn(dtables.PrimaryKeyChangeWarningCode, "stat for table %s cannot be determined. Primary key set changed.", tblName)
 				// Report an empty diff for tables that have primary key set changes
 				diffStats = append(diffStats, diffStatNode{tblName: tblName})

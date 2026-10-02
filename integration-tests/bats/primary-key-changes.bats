@@ -371,7 +371,7 @@ teardown() {
 
     run dolt diff --stat
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "failed to compute diff stat for table t: primary key set changed" ]] || false
+    [[ "$output" =~ "primary key set changed" ]] || false
 
     dolt add .
 
