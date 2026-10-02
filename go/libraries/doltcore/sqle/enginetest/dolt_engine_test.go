@@ -544,28 +544,58 @@ func TestAggregationScripts(t *testing.T) {
 	enginetest.TestAggregationScripts(t, h)
 }
 
+func TestAlterTableScripts(t *testing.T) {
+	h := newDoltServerTestHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestAlterTableScripts(t, h)
+}
+
+func TestAutoIncrementScripts(t *testing.T) {
+	h := newDoltServerTestHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestAutoIncrementScripts(t, h)
+}
+
+func TestCharsetCollationScripts(t *testing.T) {
+	h := newDoltServerTestHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestCharsetCollationScripts(t, h)
+}
+
+func TestColumnDefaultsScripts(t *testing.T) {
+	h := newDoltServerTestHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestColumnDefaultsScripts(t, h)
+}
+
 func TestConversionsScripts(t *testing.T) {
 	h := newDoltServerTestHarness(t).WithConfigureStats(true)
 	defer h.Close()
 	enginetest.TestConversionsScripts(t, h)
 }
 
-func TestNumericScripts(t *testing.T) {
+func TestDatabaseDefinitionsScripts(t *testing.T) {
 	h := newDoltServerTestHarness(t).WithConfigureStats(true)
 	defer h.Close()
-	enginetest.TestNumericScripts(t, h)
+	enginetest.TestDatabaseDefinitionsScripts(t, h)
 }
 
-func TestOrderingScripts(t *testing.T) {
+func TestDeleteScripts(t *testing.T) {
 	h := newDoltServerTestHarness(t).WithConfigureStats(true)
 	defer h.Close()
-	enginetest.TestOrderingScripts(t, h)
+	enginetest.TestDeleteScripts(t, h)
 }
 
-func TestSetOperationsScripts(t *testing.T) {
+func TestDescendingIndexesScripts(t *testing.T) {
 	h := newDoltServerTestHarness(t).WithConfigureStats(true)
 	defer h.Close()
-	enginetest.TestSetOperationsScripts(t, h)
+	enginetest.TestDescendingIndexesScripts(t, h)
+}
+
+func TestDropTableScripts(t *testing.T) {
+	h := newDoltServerTestHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestDropTableScripts(t, h)
 }
 
 func TestEnumsAndSetsScripts(t *testing.T) {
@@ -580,40 +610,124 @@ func TestExpressionsScripts(t *testing.T) {
 	enginetest.TestExpressionsScripts(t, h)
 }
 
-func TestIndexesScripts(t *testing.T) {
+func TestForeignKeyResolutionScripts(t *testing.T) {
 	h := newDoltServerTestHarness(t).WithConfigureStats(true)
 	defer h.Close()
-	enginetest.TestIndexesScripts(t, h)
+	enginetest.TestForeignKeyResolutionScripts(t, h)
 }
 
-func TestIntegersScripts(t *testing.T) {
+func TestForeignKeyTypesScripts(t *testing.T) {
 	h := newDoltServerTestHarness(t).WithConfigureStats(true)
 	defer h.Close()
-	enginetest.TestIntegersScripts(t, h)
+	enginetest.TestForeignKeyTypesScripts(t, h)
 }
 
-func TestJoinsAndSubqueriesScripts(t *testing.T) {
+func TestIndexKeyTypesScripts(t *testing.T) {
 	h := newDoltServerTestHarness(t).WithConfigureStats(true)
 	defer h.Close()
-	enginetest.TestJoinsAndSubqueriesScripts(t, h)
+	enginetest.TestIndexKeyTypesScripts(t, h)
 }
 
-func TestSchemaScripts(t *testing.T) {
+func TestIndexRegressionScripts(t *testing.T) {
 	h := newDoltServerTestHarness(t).WithConfigureStats(true)
 	defer h.Close()
-	enginetest.TestSchemaScripts(t, h)
+	enginetest.TestIndexRegressionScripts(t, h)
 }
 
-func TestSessionScripts(t *testing.T) {
+func TestInsertIgnoreRegressionScripts(t *testing.T) {
 	h := newDoltServerTestHarness(t).WithConfigureStats(true)
 	defer h.Close()
-	enginetest.TestSessionScripts(t, h)
+	enginetest.TestInsertIgnoreRegressionScripts(t, h)
 }
 
-func TestStringsScripts(t *testing.T) {
+func TestInsertRegressionScripts(t *testing.T) {
 	h := newDoltServerTestHarness(t).WithConfigureStats(true)
 	defer h.Close()
-	enginetest.TestStringsScripts(t, h)
+	enginetest.TestInsertRegressionScripts(t, h)
+}
+
+func TestJSONFunctionsScripts(t *testing.T) {
+	h := newDoltServerTestHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestJSONFunctionsScripts(t, h)
+}
+
+func TestJoinsScripts(t *testing.T) {
+	h := newDoltServerTestHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestJoinsScripts(t, h)
+}
+
+func TestNameResolutionScripts(t *testing.T) {
+	h := newDoltServerTestHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestNameResolutionScripts(t, h)
+}
+
+func TestNumericScripts(t *testing.T) {
+	h := newDoltServerTestHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestNumericScripts(t, h)
+}
+
+func TestOrderingScripts(t *testing.T) {
+	h := newDoltServerTestHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestOrderingScripts(t, h)
+}
+
+func TestPrimaryKeysScripts(t *testing.T) {
+	h := newDoltServerTestHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestPrimaryKeysScripts(t, h)
+}
+
+func TestProceduresScripts(t *testing.T) {
+	h := newDoltServerTestHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestProceduresScripts(t, h)
+}
+
+func TestSessionResultsScripts(t *testing.T) {
+	h := newDoltServerTestHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestSessionResultsScripts(t, h)
+}
+
+func TestSetOperationsScripts(t *testing.T) {
+	h := newDoltServerTestHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestSetOperationsScripts(t, h)
+}
+
+func TestStatisticsScripts(t *testing.T) {
+	h := newDoltServerTestHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestStatisticsScripts(t, h)
+}
+
+func TestStringFunctionsScripts(t *testing.T) {
+	h := newDoltServerTestHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestStringFunctionsScripts(t, h)
+}
+
+func TestStringMatchingScripts(t *testing.T) {
+	h := newDoltServerTestHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestStringMatchingScripts(t, h)
+}
+
+func TestSubqueriesScripts(t *testing.T) {
+	h := newDoltServerTestHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestSubqueriesScripts(t, h)
+}
+
+func TestTableDefinitionsScripts(t *testing.T) {
+	h := newDoltServerTestHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestTableDefinitionsScripts(t, h)
 }
 
 func TestTemporalScripts(t *testing.T) {
@@ -622,10 +736,46 @@ func TestTemporalScripts(t *testing.T) {
 	enginetest.TestTemporalScripts(t, h)
 }
 
-func TestWritesScripts(t *testing.T) {
+func TestTransactionsScripts(t *testing.T) {
 	h := newDoltServerTestHarness(t).WithConfigureStats(true)
 	defer h.Close()
-	enginetest.TestWritesScripts(t, h)
+	enginetest.TestTransactionsScripts(t, h)
+}
+
+func TestTupleComparisonsScripts(t *testing.T) {
+	h := newDoltServerTestHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestTupleComparisonsScripts(t, h)
+}
+
+func TestUUIDScripts(t *testing.T) {
+	h := newDoltServerTestHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestUUIDScripts(t, h)
+}
+
+func TestUpdateJoinsScripts(t *testing.T) {
+	h := newDoltServerTestHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestUpdateJoinsScripts(t, h)
+}
+
+func TestUpdateRegressionScripts(t *testing.T) {
+	h := newDoltServerTestHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestUpdateRegressionScripts(t, h)
+}
+
+func TestVariablesScripts(t *testing.T) {
+	h := newDoltServerTestHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestVariablesScripts(t, h)
+}
+
+func TestViewsScripts(t *testing.T) {
+	h := newDoltServerTestHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestViewsScripts(t, h)
 }
 
 func TestNumericErrorScripts(t *testing.T) {
@@ -2089,6 +2239,34 @@ func TestAggregationScriptsPrepared(t *testing.T) {
 	enginetest.TestAggregationScriptsPrepared(t, h)
 }
 
+func TestAlterTableScriptsPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestAlterTableScriptsPrepared(t, h)
+}
+
+func TestAutoIncrementScriptsPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestAutoIncrementScriptsPrepared(t, h)
+}
+
+func TestCharsetCollationScriptsPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestCharsetCollationScriptsPrepared(t, h)
+}
+
+func TestColumnDefaultsScriptsPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestColumnDefaultsScriptsPrepared(t, h)
+}
+
 func TestConversionsScriptsPrepared(t *testing.T) {
 	skipPreparedTests(t)
 	h := newDoltHarness(t).WithConfigureStats(true)
@@ -2096,25 +2274,32 @@ func TestConversionsScriptsPrepared(t *testing.T) {
 	enginetest.TestConversionsScriptsPrepared(t, h)
 }
 
-func TestNumericScriptsPrepared(t *testing.T) {
+func TestDatabaseDefinitionsScriptsPrepared(t *testing.T) {
 	skipPreparedTests(t)
 	h := newDoltHarness(t).WithConfigureStats(true)
 	defer h.Close()
-	enginetest.TestNumericScriptsPrepared(t, h)
+	enginetest.TestDatabaseDefinitionsScriptsPrepared(t, h)
 }
 
-func TestOrderingScriptsPrepared(t *testing.T) {
+func TestDeleteScriptsPrepared(t *testing.T) {
 	skipPreparedTests(t)
 	h := newDoltHarness(t).WithConfigureStats(true)
 	defer h.Close()
-	enginetest.TestOrderingScriptsPrepared(t, h)
+	enginetest.TestDeleteScriptsPrepared(t, h)
 }
 
-func TestSetOperationsScriptsPrepared(t *testing.T) {
+func TestDescendingIndexesScriptsPrepared(t *testing.T) {
 	skipPreparedTests(t)
 	h := newDoltHarness(t).WithConfigureStats(true)
 	defer h.Close()
-	enginetest.TestSetOperationsScriptsPrepared(t, h)
+	enginetest.TestDescendingIndexesScriptsPrepared(t, h)
+}
+
+func TestDropTableScriptsPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestDropTableScriptsPrepared(t, h)
 }
 
 func TestEnumsAndSetsScriptsPrepared(t *testing.T) {
@@ -2131,46 +2316,144 @@ func TestExpressionsScriptsPrepared(t *testing.T) {
 	enginetest.TestExpressionsScriptsPrepared(t, h)
 }
 
-func TestIndexesScriptsPrepared(t *testing.T) {
+func TestForeignKeyResolutionScriptsPrepared(t *testing.T) {
 	skipPreparedTests(t)
 	h := newDoltHarness(t).WithConfigureStats(true)
 	defer h.Close()
-	enginetest.TestIndexesScriptsPrepared(t, h)
+	enginetest.TestForeignKeyResolutionScriptsPrepared(t, h)
 }
 
-func TestIntegersScriptsPrepared(t *testing.T) {
+func TestForeignKeyTypesScriptsPrepared(t *testing.T) {
 	skipPreparedTests(t)
 	h := newDoltHarness(t).WithConfigureStats(true)
 	defer h.Close()
-	enginetest.TestIntegersScriptsPrepared(t, h)
+	enginetest.TestForeignKeyTypesScriptsPrepared(t, h)
 }
 
-func TestJoinsAndSubqueriesScriptsPrepared(t *testing.T) {
+func TestIndexKeyTypesScriptsPrepared(t *testing.T) {
 	skipPreparedTests(t)
 	h := newDoltHarness(t).WithConfigureStats(true)
 	defer h.Close()
-	enginetest.TestJoinsAndSubqueriesScriptsPrepared(t, h)
+	enginetest.TestIndexKeyTypesScriptsPrepared(t, h)
 }
 
-func TestSchemaScriptsPrepared(t *testing.T) {
+func TestIndexRegressionScriptsPrepared(t *testing.T) {
 	skipPreparedTests(t)
 	h := newDoltHarness(t).WithConfigureStats(true)
 	defer h.Close()
-	enginetest.TestSchemaScriptsPrepared(t, h)
+	enginetest.TestIndexRegressionScriptsPrepared(t, h)
 }
 
-func TestSessionScriptsPrepared(t *testing.T) {
+func TestInsertIgnoreRegressionScriptsPrepared(t *testing.T) {
 	skipPreparedTests(t)
 	h := newDoltHarness(t).WithConfigureStats(true)
 	defer h.Close()
-	enginetest.TestSessionScriptsPrepared(t, h)
+	enginetest.TestInsertIgnoreRegressionScriptsPrepared(t, h)
 }
 
-func TestStringsScriptsPrepared(t *testing.T) {
+func TestInsertRegressionScriptsPrepared(t *testing.T) {
 	skipPreparedTests(t)
 	h := newDoltHarness(t).WithConfigureStats(true)
 	defer h.Close()
-	enginetest.TestStringsScriptsPrepared(t, h)
+	enginetest.TestInsertRegressionScriptsPrepared(t, h)
+}
+
+func TestJSONFunctionsScriptsPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestJSONFunctionsScriptsPrepared(t, h)
+}
+
+func TestJoinsScriptsPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestJoinsScriptsPrepared(t, h)
+}
+
+func TestNameResolutionScriptsPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestNameResolutionScriptsPrepared(t, h)
+}
+
+func TestNumericScriptsPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestNumericScriptsPrepared(t, h)
+}
+
+func TestOrderingScriptsPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestOrderingScriptsPrepared(t, h)
+}
+
+func TestPrimaryKeysScriptsPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestPrimaryKeysScriptsPrepared(t, h)
+}
+
+func TestProceduresScriptsPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestProceduresScriptsPrepared(t, h)
+}
+
+func TestSessionResultsScriptsPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestSessionResultsScriptsPrepared(t, h)
+}
+
+func TestSetOperationsScriptsPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestSetOperationsScriptsPrepared(t, h)
+}
+
+func TestStatisticsScriptsPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestStatisticsScriptsPrepared(t, h)
+}
+
+func TestStringFunctionsScriptsPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestStringFunctionsScriptsPrepared(t, h)
+}
+
+func TestStringMatchingScriptsPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestStringMatchingScriptsPrepared(t, h)
+}
+
+func TestSubqueriesScriptsPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestSubqueriesScriptsPrepared(t, h)
+}
+
+func TestTableDefinitionsScriptsPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestTableDefinitionsScriptsPrepared(t, h)
 }
 
 func TestTemporalScriptsPrepared(t *testing.T) {
@@ -2180,11 +2463,53 @@ func TestTemporalScriptsPrepared(t *testing.T) {
 	enginetest.TestTemporalScriptsPrepared(t, h)
 }
 
-func TestWritesScriptsPrepared(t *testing.T) {
+func TestTransactionsScriptsPrepared(t *testing.T) {
 	skipPreparedTests(t)
 	h := newDoltHarness(t).WithConfigureStats(true)
 	defer h.Close()
-	enginetest.TestWritesScriptsPrepared(t, h)
+	enginetest.TestTransactionsScriptsPrepared(t, h)
+}
+
+func TestTupleComparisonsScriptsPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestTupleComparisonsScriptsPrepared(t, h)
+}
+
+func TestUUIDScriptsPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestUUIDScriptsPrepared(t, h)
+}
+
+func TestUpdateJoinsScriptsPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestUpdateJoinsScriptsPrepared(t, h)
+}
+
+func TestUpdateRegressionScriptsPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestUpdateRegressionScriptsPrepared(t, h)
+}
+
+func TestVariablesScriptsPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestVariablesScriptsPrepared(t, h)
+}
+
+func TestViewsScriptsPrepared(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t).WithConfigureStats(true)
+	defer h.Close()
+	enginetest.TestViewsScriptsPrepared(t, h)
 }
 
 func TestInsertScriptsPrepared(t *testing.T) {
