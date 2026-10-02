@@ -24,7 +24,6 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	cmd "github.com/dolthub/dolt/go/cmd/dolt/commands"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
@@ -196,8 +195,7 @@ func (mr *MultiRepoTestSetup) CloneDB(fromRemote, dbName string) {
 		mr.Errhand(err)
 	}
 
-	dEnv := env.LoadWithoutDB(context.Background(), mr.homeProv, filesys.LocalFS, doltdb.LocalDirDoltDB, "test")
-	dEnv, err = actions.EnvForClone(ctx, srcDB.Format(), r, cloneDir, dEnv.FS, dEnv.Version, mr.homeProv)
+	dEnv, tx, err := actions.EnvForClone(ctx, srcDB.Format(), r, cloneDir, filesys.LocalFS, "test", mr.homeProv)
 	if err != nil {
 		mr.Errhand(err)
 	}
@@ -209,7 +207,11 @@ func (mr *MultiRepoTestSetup) CloneDB(fromRemote, dbName string) {
 		mr.Errhand(err)
 	}
 
-	err = dbfactory.ClearDatabaseInProgress(dEnv.FS)
+	if err = dEnv.Close(); err != nil {
+		mr.Errhand(err)
+	}
+
+	err = tx.Commit()
 	if err != nil {
 		mr.Errhand(err)
 	}
@@ -223,6 +225,21 @@ func (mr *MultiRepoTestSetup) CloneDB(fromRemote, dbName string) {
 		mr.Errhand(err)
 	}
 	defer os.Chdir(wd)
+
+	// Reopen from cloneDir: dEnv was closed before committing the
+	// temporary directory.
+	cloneFS, err := filesys.LocalFilesysWithWorkingDir(cloneDir)
+	if err != nil {
+		mr.Errhand(err)
+	}
+
+	dEnv = env.Load(ctx, mr.homeProv, cloneFS, doltdb.LocalDirDoltDB, dEnv.Version)
+	if dEnv.RSLoadErr != nil {
+		mr.Errhand(dEnv.RSLoadErr)
+	}
+	if dEnv.DBLoadError != nil {
+		mr.Errhand(dEnv.DBLoadError)
+	}
 
 	ddb := dEnv.DoltDB(ctx)
 

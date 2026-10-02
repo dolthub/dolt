@@ -147,8 +147,15 @@ func (b *binlogProducer) WorkingRootUpdated(ctx *sql.Context, databaseName strin
 	return b.logManager.WriteEvents(ctx, binlogEvents...)
 }
 
-// DatabaseCreated implements the doltdb.DatabaseUpdateListener interface.
-func (b *binlogProducer) DatabaseCreated(ctx *sql.Context, databaseName string) error {
+// DatabaseCreated implements two-phase commit ([2PC]) binary
+// logging for newly created database |databaseName| under |ctx|,
+// recording GTID, Query, and XID events with coordinator identifier
+// |xid|.
+//
+// If |xid| is 0, no XID event is recorded.
+//
+// [2PC]: https://dev.mysql.com/doc/refman/8.4/en/binary-log.html
+func (b *binlogProducer) DatabaseCreated(ctx *sql.Context, databaseName string, xid uint64) error {
 	// TODO: All of these need to be sequentially processed by a single goroutine, so that we can ensure the GTID
 	//       assignment happens sequentially and safely. Also... if a database is created, we need to process that
 	//       update before any data updates to the database itself. Seems like that race could happen otherwise?
@@ -166,6 +173,9 @@ func (b *binlogProducer) DatabaseCreated(ctx *sql.Context, databaseName string) 
 
 	createDatabaseStatement := fmt.Sprintf("create database `%s`;", databaseName)
 	binlogEvents = append(binlogEvents, b.newQueryEvent(databaseName, createDatabaseStatement))
+	if xid != 0 {
+		binlogEvents = append(binlogEvents, b.newXIDEventWithXID(xid))
+	}
 
 	return b.logManager.WriteEvents(ctx, binlogEvents...)
 }
@@ -583,6 +593,12 @@ func (b *binlogProducer) newQueryEvent(databaseName, query string) mysql.BinlogE
 // newXIDEvent returns a new XID BinlogEvent and updates the stream's log position.
 func (b *binlogProducer) newXIDEvent() mysql.BinlogEvent {
 	return mysql.NewXIDEvent(*b.binlogFormat, b.binlogEventMeta)
+}
+
+// newXIDEventWithXID returns a new XID binlog event carrying
+// coordinator |xid| and updates the stream's log position.
+func (b *binlogProducer) newXIDEventWithXID(xid uint64) mysql.BinlogEvent {
+	return mysql.NewXIDEventWithXID(*b.binlogFormat, b.binlogEventMeta, xid)
 }
 
 // newTableMapEvent returns a new TableMap BinlogEvent for the specified |tableId| and |tableMap|, and updates the
