@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"io"
 
+	goerrors "gopkg.in/src-d/go-errors.v1"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -28,7 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-var ErrPrimaryKeySetChanged = errors.New("primary key set changed")
+var ErrPrimaryKeySetChanged = goerrors.NewKind("primary key set changed")
 
 type DiffStatProgress struct {
 	Adds, Removes, Changes, CellChanges, NewRowSize, OldRowSize, NewCellSize, OldCellSize uint64
@@ -80,7 +82,7 @@ func StatForTableDelta(ctx context.Context, ch chan DiffStatProgress, td TableDe
 	}
 
 	if !schema.ArePrimaryKeySetsDiffable(fromSch, toSch) {
-		return fmt.Errorf("failed to compute diff stat for table %s: %w", td.CurName(), ErrPrimaryKeySetChanged)
+		return fmt.Errorf("failed to compute diff stat for table %s: %w", td.CurName(), ErrPrimaryKeySetChanged.New())
 	}
 
 	keyless, err := td.IsKeyless(ctx)

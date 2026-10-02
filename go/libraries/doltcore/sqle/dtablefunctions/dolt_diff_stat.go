@@ -21,6 +21,8 @@ import (
 	"math"
 	"strings"
 
+	goerrors "gopkg.in/src-d/go-errors.v1"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -315,7 +317,8 @@ func (ds *DiffStatTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 		}
 		diffStat, hasDiff, err := getDiffStatNodeFromDelta(ctx, delta, fromRefDetails.root, toRefDetails.root, tblName)
 		if err != nil {
-			if errors.Is(err, diff.ErrPrimaryKeySetChanged) {
+			var kErr *goerrors.Error
+			if diff.ErrPrimaryKeySetChanged.Is(err) || (errors.As(err, &kErr) && diff.ErrPrimaryKeySetChanged.Is(kErr)) {
 				ctx.Warn(dtables.PrimaryKeyChangeWarningCode, "stat for table %s cannot be determined. Primary key set changed.", tblName)
 				// Report an empty diff for tables that have primary key set changes
 				diffStats = append(diffStats, diffStatNode{tblName: tblName})
