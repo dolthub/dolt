@@ -621,14 +621,9 @@ func (p *DoltDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.No
 	var key string
 
 	if isGit {
-		params := make(map[string]interface{}, len(r.Params)+1)
-		for k, v := range r.Params {
-			params[k] = v
-		}
-		if provider, ok := dialer.(dbfactory.GitCacheRootProvider); ok {
-			if root, ok := provider.GitCacheRoot(); ok {
-				params[dbfactory.GitCacheRootParam] = filepath.Join(root, dbfactory.DoltDir, dbfactory.GitRemoteCacheDirName)
-			}
+		params, err := r.DBFactoryParams(dialer)
+		if err != nil {
+			return nil, err
 		}
 		u, err := earl.Parse(r.Url)
 		if err != nil {

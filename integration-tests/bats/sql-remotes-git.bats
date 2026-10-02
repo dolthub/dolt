@@ -52,8 +52,10 @@ teardown() {
 
     dolt "${client_args[@]}" --use-db db2 sql -q "
         call dolt_remote('add', '--ref', 'refs/dolt/db2', 'origin', '$remote_url');"
-    # An absent ref may report an empty-remote error, but must not fetch db1.
-    run dolt "${client_args[@]}" --use-db db2 sql -q "call dolt_fetch('origin');"
+    # Fetching an absent ref succeeds without fetching any branches from db1.
+    run dolt "${client_args[@]}" --use-db db2 sql -r csv -q "call dolt_fetch('origin');"
+    [ "$status" -eq 0 ]
+    [ "$output" = $'status\n0' ]
     run dolt "${client_args[@]}" --use-db db2 sql -r csv -q "select count(*) from dolt_remote_branches;"
     [ "$status" -eq 0 ]
     local fetched_branch_count="${lines[1]}"
@@ -132,6 +134,7 @@ teardown() {
 }
 
 @test "sql-remotes-git: sql-server uses default refs for databases with separate repositories" {
+    # Related cache-isolation coverage for https://github.com/dolthub/dolt/issues/12011.
     local base="$PWD"
     mkdir srv client
     for db in db1 db2; do
