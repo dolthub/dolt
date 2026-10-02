@@ -410,7 +410,7 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 	if err != nil || found || (resolve.UseSearchPath && lwrName == doltdb.RebaseTableName) {
 		return table, found, err
 	}
-	return db.getUserTableInsensitiveWithRoot(ctx, root, tblName, false)
+	return db.getUserTableInsensitiveWithRoot(ctx, root, tblName, requireOverrideTable)
 }
 
 // getSystemTableInsensitiveWithRoot resolves supported system tables from the specified root.
@@ -423,7 +423,7 @@ func (db Database) getSystemTableInsensitiveWithRoot(ctx *sql.Context, head *dol
 	case resolve.UseSearchPath && lwrName == doltdb.RebaseTableName:
 		// Resolve the Doltgres compatibility name dolt_rebase as dolt.rebase.
 		db.schemaName = doltdb.DoltNamespace
-		return db.getUserTableInsensitiveWithRoot(ctx, root, doltdb.GetRebaseTableName(), false)
+		return db.getUserTableInsensitiveWithRoot(ctx, root, doltdb.GetRebaseTableName(), requireOverrideTable)
 
 	case lwrName == doltdb.DoltDiffTablePrefix+doltdb.SchemasTableName:
 		// Special handling for dolt_diff_dolt_schemas
@@ -965,15 +965,11 @@ func (db Database) getSystemTableInsensitiveWithRoot(ctx *sql.Context, head *dol
 }
 
 // getUserTableInsensitiveWithRoot loads a user table from root, or an empty table when only its override schema exists.
-// If |allowNonlocalSchemaFallback| is true, a nonlocal target absent from the schema override commit uses its own schema.
-func (db Database) getUserTableInsensitiveWithRoot(ctx *sql.Context, root doltdb.RootValue, tblName string, allowNonlocalSchemaFallback bool) (sql.Table, bool, error) {
+func (db Database) getUserTableInsensitiveWithRoot(ctx *sql.Context, root doltdb.RootValue, tblName string, policy missingOverridePolicy) (sql.Table, bool, error) {
 	// TODO: this should reuse the root, not lookup the db state again
-	table, found, overrideSchemaMissing, err := db.loadTable(ctx, root, tblName)
+	table, found, err := db.getTableUsingMissingOverridePolicy(ctx, root, tblName, policy)
 	if err != nil {
 		return nil, false, err
-	}
-	if overrideSchemaMissing && !allowNonlocalSchemaFallback {
-		return nil, false, fmt.Errorf("unable to find table '%s' at overridden schema root", table.Name())
 	}
 	if found {
 		return table, true, nil
@@ -1056,7 +1052,9 @@ func (db Database) getNonlocalTable(ctx *sql.Context, root doltdb.RootValue, lwr
 		return nil, false, err
 	}
 
-	table, found, err := targetDb.getUserTableInsensitiveWithRoot(ctx, targetRoot, nonlocalTableEntry.NewTableName, true)
+	// Because this is a non-local table, we allow it to be missing from the schema override root
+	// via the useOriginalSchemaIfMissing arg.
+	table, found, err := targetDb.getUserTableInsensitiveWithRoot(ctx, targetRoot, nonlocalTableEntry.NewTableName, useOriginalSchemaIfMissing)
 	if err != nil || !found || branchExists {
 		return table, found, err
 	}
@@ -1531,59 +1529,64 @@ func (db Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]stri
 	return filterDoltInternalTables(tblNames, db.schemaName, showSystemTables), nil
 }
 
+// missingOverridePolicy controls how an existing table absent from the schema override root is loaded.
+type missingOverridePolicy byte
+
+const (
+	// requireOverrideTable is the correct policy for most cases: if a schema override root does not
+	// contain a table, an error is triggered.
+	requireOverrideTable missingOverridePolicy = iota
+	// useOriginalSchemaIfMissing is appropriate to use when a valid table is being used, but won't be
+	// present in a schema override root (i.e. a non-local table).
+	useOriginalSchemaIfMissing
+)
+
 // getTable returns the user table with the given baseName from the root given
 func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName string) (sql.Table, bool, error) {
-	table, found, overrideSchemaMissing, err := db.loadTable(ctx, root, tableName)
-	if err != nil {
-		return nil, false, err
-	}
-	if overrideSchemaMissing {
-		return nil, false, fmt.Errorf("unable to find table '%s' at overridden schema root", table.Name())
-	}
-	return table, found, nil
+	return db.getTableUsingMissingOverridePolicy(ctx, root, tableName, requireOverrideTable)
 }
 
-// loadTable loads a user table from root and applies any configured schema override.
-// On success, found reports whether the data table exists; overrideSchemaMissing reports that
-// it retains its own schema because the override lacks it. Both flags are false on errors.
+// getTableUsingMissingOverridePolicy loads a user table from root and applies any configured schema override.
+// The policy determines whether a missing override is an error or if the original schema is used. This is
+// primarily intended to allow non-local tables to be used when a schema override is in place.
 // Tables with a configured schema override are never cached.
-func (db Database) loadTable(ctx *sql.Context, root doltdb.RootValue, tableName string) (table sql.Table, found bool, overrideSchemaMissing bool, err error) {
+func (db Database) getTableUsingMissingOverridePolicy(ctx *sql.Context, root doltdb.RootValue, tableName string, policy missingOverridePolicy) (sql.Table, bool, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 	dbState, ok, err := sess.LookupDbState(ctx, db.RevisionQualifiedName())
 	if err != nil {
-		return nil, false, false, err
+		return nil, false, err
 	}
 	if !ok {
-		return nil, false, false, fmt.Errorf("no state for database %s", db.RevisionQualifiedName())
+		return nil, false, fmt.Errorf("no state for database %s", db.RevisionQualifiedName())
 	}
 
 	overriddenSchemaRoot, err := resolveOverriddenSchemaRoot(ctx, db)
 	if err != nil {
-		return nil, false, false, err
+		return nil, false, err
 	}
 
 	// If schema hasn't been overridden, we can use a cached table if one exists
 	if overriddenSchemaRoot == nil {
 		key, err := doltdb.NewDataCacheKey(root)
 		if err != nil {
-			return nil, false, false, err
+			return nil, false, err
 		}
 
 		cachedTable, ok := dbState.SessionCache().GetCachedTable(key, dsess.TableCacheKey{Name: tableName, Schema: db.schemaName})
 		if ok {
 			rebound, err := cachedTable.RebindDatabase(ctx, db)
 			if err != nil {
-				return nil, false, false, err
+				return nil, false, err
 			}
-			return rebound, true, false, nil
+			return rebound, true, nil
 		}
 	}
 
 	tblName, tbl, tblExists, err := db.resolveUserTable(ctx, root, doltdb.TableName{Schema: db.schemaName, Name: tableName})
 	if err != nil {
-		return nil, false, false, err
+		return nil, false, err
 	} else if !tblExists {
-		return nil, false, false, nil
+		return nil, false, nil
 	}
 
 	tableName = tblName.Name
@@ -1592,32 +1595,34 @@ func (db Database) loadTable(ctx *sql.Context, root doltdb.RootValue, tableName 
 
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
-		return nil, false, false, err
+		return nil, false, err
 	}
 
 	if overriddenSchemaRoot != nil {
 		overrideFound, err := overrideSchemaForTable(ctx, tableName, tbl, overriddenSchemaRoot)
 		if err != nil {
-			return nil, false, false, err
+			return nil, false, err
 		}
-		overrideSchemaMissing = !overrideFound
+		if !overrideFound && policy == requireOverrideTable {
+			return nil, false, fmt.Errorf("unable to find table '%s' at overridden schema root", tableName)
+		}
 	}
 
 	loadedTable, err := db.newDoltTable(ctx, tableName, sch, tbl)
 	if err != nil {
-		return nil, false, false, err
+		return nil, false, err
 	}
 
 	// If the schema hasn't been overridden, cache the table
 	if overriddenSchemaRoot == nil {
 		key, err := doltdb.NewDataCacheKey(root)
 		if err != nil {
-			return nil, false, false, err
+			return nil, false, err
 		}
 		dbState.SessionCache().CacheTable(key, dsess.TableCacheKey{Name: tableName, Schema: db.schemaName}, loadedTable)
 	}
 
-	return loadedTable, true, overrideSchemaMissing, nil
+	return loadedTable, true, nil
 }
 
 // resolveUserTable returns the table with the given name from the root given. The table name is resolved in a
