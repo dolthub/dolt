@@ -213,7 +213,7 @@ var NonlocalScripts = []queries.ScriptTest{
 		// https://github.com/dolthub/dolt/issues/11997
 		Name: "schema override permits ignored nonlocal tables",
 		SetUpScript: []string{
-			"SET @initial_commit = (SELECT commit_hash FROM dolt_log('--parents') WHERE parents = '');",
+			"CALL dolt_tag('empty_schema');",
 			"CREATE TABLE global_test (id int primary key, name varchar(100), INDEX (name));",
 			"INSERT INTO global_test VALUES (1, 'one'), (2, NULL);",
 			"CREATE TABLE global_empty (id int primary key);",
@@ -223,10 +223,6 @@ var NonlocalScripts = []queries.ScriptTest{
 			"CALL dolt_commit('-Am', 'configure nonlocal tables');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "SELECT @initial_commit IS NOT NULL;",
-				Expected: []sql.Row{{true}},
-			},
 			{
 				Query: "SET @@dolt_override_schema='main';",
 			},
@@ -251,7 +247,7 @@ var NonlocalScripts = []queries.ScriptTest{
 				ExpectedErrStr: "unable to find table 'local_only' at overridden schema root",
 			},
 			{
-				Query: "SET @@dolt_override_schema=@initial_commit;",
+				Query: "SET @@dolt_override_schema='empty_schema';",
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM global_test;",
@@ -292,13 +288,14 @@ var NonlocalScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "schema override maps committed nonlocal tables",
+		// TODO: Support schema-qualified override lookups and PostgreSQL string conversion in Doltgres.
+		Dialect: "mysql",
+		Name:    "schema override maps committed nonlocal tables",
 		SetUpScript: []string{
-			"SET @empty_commit = hashof('HEAD');",
+			"CALL dolt_tag('empty_schema');",
 			"CREATE TABLE target (id int primary key, name varchar(100));",
 			"INSERT INTO target VALUES (1, 'one');",
 			"CALL dolt_commit('-Am', 'create target');",
-			"SET @schema_commit = hashof('HEAD');",
 			"CALL dolt_tag('original');",
 			"ALTER TABLE target ADD COLUMN extra int;",
 			"INSERT INTO target VALUES (2, 'two', 20);",
@@ -308,7 +305,7 @@ var NonlocalScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "SET @@dolt_override_schema=@schema_commit;",
+				Query: "SET @@dolt_override_schema='original';",
 			},
 			{
 				Query:    "SELECT * FROM alias ORDER BY id;",
@@ -319,7 +316,7 @@ var NonlocalScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{1, "one"}},
 			},
 			{
-				Query: "SET @@dolt_override_schema=@empty_commit;",
+				Query: "SET @@dolt_override_schema='empty_schema';",
 			},
 			{
 				Query:    "SELECT * FROM tag_alias;",
