@@ -39,7 +39,6 @@ const (
 const (
 	DoltCommitOnTransactionCommit        = "dolt_transaction_commit"
 	DoltCommitOnTransactionCommitMessage = "dolt_transaction_commit_message"
-	TransactionsDisabledSysVar           = "dolt_transactions_disabled"
 	ForceTransactionCommit               = "dolt_force_transaction_commit"
 	CurrentBatchModeKey                  = "batch_mode"
 	DoltOverrideSchema                   = "dolt_override_schema"
