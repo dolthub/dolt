@@ -112,14 +112,12 @@ type PerformanceYAMLConfig struct {
 }
 
 type MetricsYAMLConfig struct {
-	Labels                  map[string]string `yaml:"labels"`
-	Host                    *string           `yaml:"host,omitempty"`
-	Port                    *int              `yaml:"port,omitempty"`
-	TlsCert                 *string           `yaml:"tls_cert,omitempty" minver:"1.78.2"`
-	TlsKey                  *string           `yaml:"tls_key,omitempty" minver:"1.78.2"`
-	TlsCa                   *string           `yaml:"tls_ca,omitempty" minver:"1.78.2"`
-	Jwks                    *JwksConfig       `yaml:"jwks,omitempty" minver:"1.79.0"`
-	JWTRequiredForLocalhost *bool             `yaml:"jwt_required_for_localhost,omitempty" minver:"1.79.0"`
+	Labels  map[string]string `yaml:"labels"`
+	Host    *string           `yaml:"host,omitempty"`
+	Port    *int              `yaml:"port,omitempty"`
+	TlsCert *string           `yaml:"tls_cert,omitempty" minver:"1.78.2"`
+	TlsKey  *string           `yaml:"tls_key,omitempty" minver:"1.78.2"`
+	TlsCa   *string           `yaml:"tls_ca,omitempty" minver:"1.78.2"`
 }
 
 type RemotesapiYAMLConfig struct {
@@ -167,7 +165,6 @@ type YAMLConfig struct {
 	// TODO: Rename to UserVars_
 	Vars            []UserSessionVars      `yaml:"user_session_vars"`
 	SystemVars_     map[string]interface{} `yaml:"system_variables,omitempty" minver:"1.11.1"`
-	Jwks            []JwksConfig           `yaml:"jwks"`
 	GoldenMysqlConn *string                `yaml:"golden_mysql_conn,omitempty"`
 	MetricsConfig   MetricsYAMLConfig      `yaml:"metrics,omitempty"`
 	ClusterCfg      *ClusterYAMLConfig     `yaml:"cluster,omitempty"`
@@ -241,14 +238,12 @@ func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 		DataDirStr: ptr(cfg.DataDir()),
 		CfgDirStr:  ptr(cfg.CfgDir()),
 		MetricsConfig: MetricsYAMLConfig{
-			Labels:                  cfg.MetricsLabels(),
-			Host:                    nillableStrPtr(cfg.MetricsHost()),
-			Port:                    ptr(cfg.MetricsPort()),
-			TlsCert:                 ptr(cfg.MetricsTLSCert()),
-			TlsKey:                  ptr(cfg.MetricsTLSKey()),
-			TlsCa:                   ptr(cfg.MetricsTLSCA()),
-			Jwks:                    cfg.MetricsJwksConfig(),
-			JWTRequiredForLocalhost: ptr(cfg.MetricsJWTRequiredForLocalhost()),
+			Labels:  cfg.MetricsLabels(),
+			Host:    nillableStrPtr(cfg.MetricsHost()),
+			Port:    ptr(cfg.MetricsPort()),
+			TlsCert: ptr(cfg.MetricsTLSCert()),
+			TlsKey:  ptr(cfg.MetricsTLSKey()),
+			TlsCa:   ptr(cfg.MetricsTLSCA()),
 		},
 		RemotesapiConfig: RemotesapiYAMLConfig{
 			Port_:     cfg.RemotesapiPort(),
@@ -259,7 +254,6 @@ func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 		BranchControlFile: ptr(cfg.BranchControlFilePath()),
 		SystemVars_:       systemVars,
 		Vars:              cfg.UserVars(),
-		Jwks:              cfg.JwksConfig(),
 	}
 }
 
@@ -319,14 +313,12 @@ func ServerConfigSetValuesAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 		DataDirStr: zeroIf(ptr(cfg.DataDir()), !cfg.ValueSet(DataDirKey)),
 		CfgDirStr:  zeroIf(ptr(cfg.CfgDir()), !cfg.ValueSet(CfgDirKey)),
 		MetricsConfig: MetricsYAMLConfig{
-			Labels:                  zeroIf(cfg.MetricsLabels(), !cfg.ValueSet(MetricsLabelsKey)),
-			Host:                    zeroIf(ptr(cfg.MetricsHost()), !cfg.ValueSet(MetricsHostKey)),
-			Port:                    zeroIf(ptr(cfg.MetricsPort()), !cfg.ValueSet(MetricsPortKey)),
-			TlsCert:                 zeroIf(ptr(cfg.MetricsTLSCert()), !cfg.ValueSet(MetricsTLSCertKey)),
-			TlsKey:                  zeroIf(ptr(cfg.MetricsTLSKey()), !cfg.ValueSet(MetricsTLSKeyKey)),
-			TlsCa:                   zeroIf(ptr(cfg.MetricsTLSCA()), !cfg.ValueSet(MetricsTLSCAKey)),
-			Jwks:                    zeroIf(cfg.MetricsJwksConfig(), !cfg.ValueSet(MetricsJwksConfigKey)),
-			JWTRequiredForLocalhost: zeroIf(ptr(cfg.MetricsJWTRequiredForLocalhost()), !cfg.ValueSet(MetricsJWTRequiredForLocalhostKey)),
+			Labels:  zeroIf(cfg.MetricsLabels(), !cfg.ValueSet(MetricsLabelsKey)),
+			Host:    zeroIf(ptr(cfg.MetricsHost()), !cfg.ValueSet(MetricsHostKey)),
+			Port:    zeroIf(ptr(cfg.MetricsPort()), !cfg.ValueSet(MetricsPortKey)),
+			TlsCert: zeroIf(ptr(cfg.MetricsTLSCert()), !cfg.ValueSet(MetricsTLSCertKey)),
+			TlsKey:  zeroIf(ptr(cfg.MetricsTLSKey()), !cfg.ValueSet(MetricsTLSKeyKey)),
+			TlsCa:   zeroIf(ptr(cfg.MetricsTLSCA()), !cfg.ValueSet(MetricsTLSCAKey)),
 		},
 		RemotesapiConfig: RemotesapiYAMLConfig{
 			Port_:     zeroIf(cfg.RemotesapiPort(), !cfg.ValueSet(RemotesapiPortKey)),
@@ -337,7 +329,6 @@ func ServerConfigSetValuesAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 		BranchControlFile: zeroIf(ptr(cfg.BranchControlFilePath()), !cfg.ValueSet(BranchControlFilePathKey)),
 		SystemVars_:       zeroIf(systemVars, !cfg.ValueSet(SystemVarsKey)),
 		Vars:              zeroIf(cfg.UserVars(), !cfg.ValueSet(UserVarsKey)),
-		Jwks:              zeroIf(cfg.JwksConfig(), !cfg.ValueSet(JwksConfigKey)),
 	}
 }
 
@@ -502,10 +493,6 @@ func (cfg YAMLConfig) withPlaceholdersFilledIn() YAMLConfig {
 			"dolt_transaction_commit": 1,
 			"dolt_log_level":          "info",
 		}
-	}
-
-	if len(withPlaceholders.Jwks) == 0 {
-		withPlaceholders.Jwks = []JwksConfig{}
 	}
 
 	return withPlaceholders
@@ -814,18 +801,6 @@ func (cfg YAMLConfig) MetricsTLSCA() string {
 	return *cfg.MetricsConfig.TlsCa
 }
 
-func (cfg YAMLConfig) MetricsJwksConfig() *JwksConfig {
-	return cfg.MetricsConfig.Jwks
-}
-
-func (cfg YAMLConfig) MetricsJWTRequiredForLocalhost() bool {
-	if cfg.MetricsConfig.JWTRequiredForLocalhost == nil {
-		return false
-	}
-
-	return *cfg.MetricsConfig.JWTRequiredForLocalhost
-}
-
 func (cfg YAMLConfig) RemotesapiPort() *int {
 	return cfg.RemotesapiConfig.Port_
 }
@@ -898,14 +873,6 @@ func (cfg YAMLConfig) SystemVars() map[string]interface{} {
 	}
 
 	return cfg.SystemVars_
-}
-
-// wksConfig is JSON Web Key Set config, and used to validate a user authed with a jwt (JSON Web Token).
-func (cfg YAMLConfig) JwksConfig() []JwksConfig {
-	if cfg.Jwks != nil {
-		return cfg.Jwks
-	}
-	return nil
 }
 
 func (cfg YAMLConfig) AllowCleartextPasswords() bool {
