@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtablefunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 )
@@ -2013,6 +2014,96 @@ on a.to_pk = b.to_pk;`,
 				Query: "SELECT to_pk, to_c1, diff_type FROM dolt_diff('HEAD~2', 'HEAD~1', 'the_table') ORDER BY to_pk;",
 				// the_table was committed before the ignore pattern existed, so it must appear.
 				Expected: []sql.Row{{1, 10, "added"}, {2, 20, "added"}},
+			},
+		},
+	},
+	// See https://github.com/dolthub/dolt/issues/12013
+	{
+		Name: "diff across primary key column addition",
+		SetUpScript: []string{
+			"CREATE TABLE t (a INT NOT NULL, b INT NOT NULL, v INT, PRIMARY KEY (a));",
+			"INSERT INTO t VALUES (1,9,10),(2,8,20),(3,7,30),(5,5,50),(6,4,60);",
+			"CALL DOLT_COMMIT('-Am','c1 base');",
+			"UPDATE t SET v = 21 WHERE a = 2;",
+			"CALL DOLT_COMMIT('-am','c2 edit before pk change');",
+			"ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY (b, a);",
+			"CALL DOLT_COMMIT('-am','c3 pk (a) -> (b,a)');",
+			"UPDATE t SET v = 11 WHERE a = 1;",
+			"INSERT INTO t VALUES (4,6,40);",
+			"DELETE FROM t WHERE a = 3;",
+			"CALL DOLT_COMMIT('-am','c4 edits after pk change');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "SELECT * FROM dolt_diff('HEAD~3', 'HEAD', 't');",
+				ExpectedErr: diff.ErrPrimaryKeySetChanged,
+			},
+			{
+				Query:       "SELECT * FROM dolt_diff('HEAD~2', 'HEAD~1', 't');",
+				ExpectedErr: diff.ErrPrimaryKeySetChanged,
+			},
+			{
+				Query:       "SELECT * FROM dolt_diff('HEAD', 'HEAD~3', 't');",
+				ExpectedErr: diff.ErrPrimaryKeySetChanged,
+			},
+			{
+				Query:       "SELECT * FROM dolt_diff('HEAD~3..HEAD', 't');",
+				ExpectedErr: diff.ErrPrimaryKeySetChanged,
+			},
+			{
+				Query:       "SELECT * FROM dolt_diff('HEAD~3...HEAD', 't');",
+				ExpectedErr: diff.ErrPrimaryKeySetChanged,
+			},
+		},
+	},
+	{
+		Name: "diff across primary key column drop",
+		SetUpScript: []string{
+			"CREATE TABLE coll (a INT, b INT, PRIMARY KEY (a, b));",
+			"INSERT INTO coll VALUES (1, 10), (1, 20);",
+			"CALL DOLT_COMMIT('-Am', 'c1');",
+			"DELETE FROM coll WHERE b = 20;",
+			"ALTER TABLE coll DROP PRIMARY KEY, DROP COLUMN b, ADD PRIMARY KEY (a);",
+			"CALL DOLT_COMMIT('-am', 'c2');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "SELECT * FROM dolt_diff('HEAD~1', 'HEAD', 'coll');",
+				ExpectedErr: diff.ErrPrimaryKeySetChanged,
+			},
+		},
+	},
+	{
+		Name: "diff across primary key column replacement",
+		SetUpScript: []string{
+			"CREATE TABLE miss (a INT PRIMARY KEY, x INT);",
+			"INSERT INTO miss VALUES (1, 10);",
+			"CALL DOLT_COMMIT('-Am', 'c1');",
+			"ALTER TABLE miss DROP PRIMARY KEY, DROP COLUMN a, ADD COLUMN c INT NOT NULL, ADD PRIMARY KEY (c);",
+			"CALL DOLT_COMMIT('-am', 'c2');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "SELECT * FROM dolt_diff('HEAD~1', 'HEAD', 'miss');",
+				ExpectedErr: diff.ErrPrimaryKeySetChanged,
+			},
+		},
+	},
+	{
+		Name: "diff across primary key column type length change",
+		SetUpScript: []string{
+			"CREATE TABLE t (a VARCHAR(20) PRIMARY KEY, v INT);",
+			"INSERT INTO t VALUES ('row1', 10);",
+			"CALL DOLT_COMMIT('-Am', 'c1');",
+			"ALTER TABLE t MODIFY COLUMN a VARCHAR(30);",
+			"INSERT INTO t VALUES ('row2', 20);",
+			"UPDATE t SET v = 11 WHERE a = 'row1';",
+			"CALL DOLT_COMMIT('-am', 'c2');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT diff_type, from_a, to_a, from_v, to_v FROM dolt_diff('HEAD~1', 'HEAD', 't') ORDER BY coalesce(to_a, from_a);",
+				Expected: []sql.Row{{"modified", "row1", "row1", 10, 11}, {"added", nil, "row2", nil, 20}},
 			},
 		},
 	},
