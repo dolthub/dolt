@@ -95,7 +95,7 @@ func TestSingleQuery(t *testing.T) {
 		},
 	}
 
-	enginetest.TestQueryWithEngine(t, harness, engine, test)
+	enginetest.TestQuery(t, harness, engine, test)
 }
 
 func TestSchemaOverrides(t *testing.T) {
