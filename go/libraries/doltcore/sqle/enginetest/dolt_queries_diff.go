@@ -2016,6 +2016,26 @@ on a.to_pk = b.to_pk;`,
 			},
 		},
 	},
+	{
+		Name: "dolt_diff with subquery arguments",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int primary key, c1 varchar(100));",
+			"INSERT INTO t VALUES (1, 'a');",
+			"CALL DOLT_COMMIT('-Am', 'base');",
+			"UPDATE t SET c1 = 'b' WHERE pk = 1;",
+			"CALL DOLT_COMMIT('-am', 'change');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT to_pk, to_c1, from_c1 FROM dolt_diff((SELECT commit_hash FROM dolt_log ORDER BY date DESC LIMIT 1 OFFSET 1), (SELECT commit_hash FROM dolt_log ORDER BY date DESC LIMIT 1), 't');",
+				Expected: []sql.Row{{1, "b", "a"}},
+			},
+			{
+				Query:       "SELECT to_pk FROM dolt_diff((SELECT commit_hash FROM dolt_log), 'HEAD', 't');",
+				ExpectedErr: sql.ErrExpectedSingleRow,
+			},
+		},
+	},
 }
 
 var DiffStatTableFunctionScriptTests = []queries.ScriptTest{
@@ -5958,6 +5978,34 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 					{2, "two", interface{}(nil), interface{}(nil)},
 					{2, "two", interface{}(nil), interface{}(nil)},
 				},
+			},
+		},
+	},
+	{
+		Name: "dolt_commit_diff filtered by subqueries",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int primary key, c1 varchar(100));",
+			"INSERT INTO t VALUES (1, 'a');",
+			"CALL DOLT_COMMIT('-Am', 'base');",
+			"UPDATE t SET c1 = 'b' WHERE pk = 1;",
+			"CALL DOLT_COMMIT('-am', 'change');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT to_pk FROM dolt_commit_diff_t WHERE to_commit = (SELECT commit_hash FROM dolt_log ORDER BY date DESC LIMIT 1) AND from_commit = (SELECT commit_hash FROM dolt_log ORDER BY date DESC LIMIT 1 OFFSET 1);",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT d.to_pk FROM dolt_commit_diff_t d WHERE d.to_commit = (SELECT commit_hash FROM dolt_log ORDER BY date DESC LIMIT 1) AND d.from_commit = HASHOF('HEAD~');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:       "SELECT to_pk FROM dolt_commit_diff_t WHERE to_commit = (SELECT commit_hash FROM dolt_log) AND from_commit = HASHOF('HEAD~');",
+				ExpectedErr: sql.ErrExpectedSingleRow,
+			},
+			{
+				Query:    "SELECT to_pk FROM dolt_commit_diff_t WHERE to_commit = (SELECT commit_hash FROM dolt_log WHERE 1 = 0) AND from_commit = HASHOF('HEAD~');",
+				Expected: []sql.Row{},
 			},
 		},
 	},
