@@ -225,7 +225,7 @@ func RunVersionedQueriesTest(t *testing.T, h DoltEnginetestHarness) {
 	require.NoError(t, err)
 
 	for _, tt := range queries.VersionedQueries {
-		enginetest.TestQueryWithEngine(t, h, e, tt)
+		enginetest.TestQuery(t, h, e, tt)
 	}
 
 	for _, tt := range queries.VersionedScripts {
