@@ -130,6 +130,14 @@ var DoltSystemVariables = []sql.SystemVariable{
 		Type:              types.NewSystemBoolType(dsess.DoltCommitOnTransactionCommit),
 		Default:           int8(0),
 	},
+	&sql.MysqlSystemVariable{ // If true, Dolt commits can include every dirty branch of one database.
+		Name:              dsess.DoltMultiBranchCommit,
+		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Both),
+		Dynamic:           true,
+		SetVarHintApplies: false,
+		Type:              types.NewSystemBoolType(dsess.DoltMultiBranchCommit),
+		Default:           int8(0),
+	},
 	&sql.MysqlSystemVariable{ // If set, use this message for automatic Dolt commits
 		Name:              dsess.DoltCommitOnTransactionCommitMessage,
 		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Both),
@@ -432,6 +440,14 @@ func AddDoltSystemVariables() {
 			Dynamic:           true,
 			SetVarHintApplies: false,
 			Type:              types.NewSystemBoolType(dsess.DoltCommitOnTransactionCommit),
+			Default:           int8(0),
+		},
+		&sql.MysqlSystemVariable{ // If true, Dolt commits can include every dirty branch of one database.
+			Name:              dsess.DoltMultiBranchCommit,
+			Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Both),
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemBoolType(dsess.DoltMultiBranchCommit),
 			Default:           int8(0),
 		},
 		&sql.MysqlSystemVariable{ // If set, use this message for automatic Dolt commits
