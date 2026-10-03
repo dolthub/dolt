@@ -15,7 +15,12 @@
 package iohelp
 
 import (
+	"bytes"
+	"io"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -52,4 +57,38 @@ func TestReadWithStatsCloseIsIdempotent(t *testing.T) {
 		rdr.Close()
 		assert.Equal(t, 2, closer.cnt)
 	})
+}
+
+func TestReadWithStatsUnknownSize(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		size int64
+		want float64
+	}{
+		{"known size", 8, 0.5},                  // Four bytes read out of an advertised eight is 50%.
+		{"unknown HTTP content length", -1, -1}, // HTTP uses -1 when the response length is unknown.
+		{"zero size", 0, -1},                    // A zero total cannot be used to calculate a percentage.
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			rdr := NewReaderWithStats(bytes.NewBufferString("data"), tt.size)
+			defer rdr.Close()
+			// Consume all four bytes of "data" before starting updates so every sample sees the same count.
+			_, err := io.ReadAll(rdr)
+			require.NoError(t, err)
+			updates := make(chan ReadStats, 1)
+			rdr.Start(func(s ReadStats) {
+				select {
+				case updates <- s:
+				default:
+				}
+			})
+			select {
+			case stats := <-updates:
+				require.Equal(t, uint64(4), stats.Read)
+				require.Equal(t, tt.want, stats.Percent)
+			case <-time.After(5 * time.Second):
+				t.Fatal("no read statistics received")
+			}
+		})
+	}
 }
