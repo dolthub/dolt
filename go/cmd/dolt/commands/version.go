@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -40,6 +41,15 @@ const (
 	versionCheckFile        = "version_check.txt"
 	disableVersionCheckFile = "disable_version_check.txt"
 )
+
+// latestReleaseCheckTimeout bounds the GitHub latest-release request.
+// 3s is long enough for a healthy api.github.com response (typically well under 1s)
+// and short enough that `dolt version` stays usable for CI and health checks.
+var latestReleaseCheckTimeout = 3 * time.Second
+
+var newLatestReleaseGitHubClient = func() *github.Client {
+	return github.NewClient(&http.Client{Timeout: latestReleaseCheckTimeout})
+}
 
 var versionDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Displays the version for the Dolt binary.",
@@ -157,6 +167,7 @@ func checkAndPrintVersionOutOfDateWarning(curVersion string, dEnv *env.DoltEnv) 
 	}
 	path := filepath.Join(homeDir, dbfactory.DoltDir, versionCheckFile)
 
+	needsRefresh := true
 	if exists, _ := dEnv.FS.Exists(path); exists {
 		vCheck, err := dEnv.FS.ReadFile(path)
 		if err != nil {
@@ -164,21 +175,12 @@ func checkAndPrintVersionOutOfDateWarning(curVersion string, dEnv *env.DoltEnv) 
 		}
 
 		latestRelease = strings.ReplaceAll(string(vCheck), "\n", "")
-		lastCheckDate, _ := dEnv.FS.LastModified(path)
-		if lastCheckDate.Before(time.Now().AddDate(0, 0, -7)) {
-			latestRelease, verr = getLatestDoltReleaseAndRecord(path, dEnv)
-			if verr != nil {
-				return verr
-			}
-		} else {
-			if !isVersionFormattedCorrectly(latestRelease) {
-				latestRelease, verr = getLatestDoltReleaseAndRecord(path, dEnv)
-				if verr != nil {
-					return verr
-				}
-			}
+		lastCheckDate, hasModTime := dEnv.FS.LastModified(path)
+		if hasModTime && !isVersionCheckStale(lastCheckDate) {
+			needsRefresh = false
 		}
-	} else {
+	}
+	if needsRefresh {
 		latestRelease, verr = getLatestDoltReleaseAndRecord(path, dEnv)
 		if verr != nil {
 			return verr
@@ -209,17 +211,23 @@ func checkAndPrintVersionOutOfDateWarning(curVersion string, dEnv *env.DoltEnv) 
 // getLatestDoltRelease returns the latest release of Dolt from GitHub and records the release and current date in the
 // version check file.
 func getLatestDoltReleaseAndRecord(path string, dEnv *env.DoltEnv) (string, errhand.VerboseError) {
-	client := github.NewClient(nil)
-	release, resp, err := client.Repositories.GetLatestRelease(context.Background(), "dolthub", "dolt")
-	if err == nil && resp.StatusCode == 200 {
-		releaseName := strings.TrimPrefix(*release.TagName, "v")
+	client := newLatestReleaseGitHubClient()
+	ctx, cancel := context.WithTimeout(context.Background(), latestReleaseCheckTimeout)
+	defer cancel()
 
-		err = dEnv.FS.WriteFile(path, []byte(releaseName), os.ModePerm)
-		if err == nil {
-			return releaseName, nil
-		}
+	releaseName := ""
+	release, resp, err := client.Repositories.GetLatestRelease(ctx, "dolthub", "dolt")
+	if err == nil && resp != nil && resp.StatusCode == 200 && release != nil && release.TagName != nil {
+		releaseName = strings.TrimPrefix(*release.TagName, "v")
 	}
-	return "", nil
+
+	// Record successes and failures so a failed check is retried only after the interval expires.
+	_ = dEnv.FS.WriteFile(path, []byte(releaseName), os.ModePerm)
+	return releaseName, nil
+}
+
+func isVersionCheckStale(lastCheck time.Time) bool {
+	return lastCheck.Before(time.Now().AddDate(0, 0, -7))
 }
 
 // isOutOfDate compares the current version of Dolt to the given latest release version and returns true if the current
@@ -245,23 +253,6 @@ func isOutOfDate(curVersion, latestRelease string) (bool, errhand.VerboseError) 
 	}
 
 	return false, nil
-}
-
-// isVersionFormattedCorrectly checks if the given version string is formatted correctly, i.e. is of the form
-// major.minor.patch where each part is an integer.
-func isVersionFormattedCorrectly(version string) bool {
-	versionParts := strings.Split(version, ".")
-	if len(versionParts) != 3 {
-		return false
-	}
-
-	for _, part := range versionParts {
-		if _, err := strconv.Atoi(part); err != nil {
-			return false
-		}
-	}
-
-	return true
 }
 
 // Prints a warning about how to disable the version out-of-date check, limited to once per version.
