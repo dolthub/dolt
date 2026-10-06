@@ -51,6 +51,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
@@ -2528,7 +2529,7 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 		if err != nil {
 			return sql.ViewDefinition{}, false, err
 		}
-		return sql.ViewDefinition{Name: viewName, TextDefinition: blameViewTextDef, CreateViewStatement: fmt.Sprintf("CREATE VIEW `%s` AS %s", viewName, blameViewTextDef)}, true, nil
+		return sql.ViewDefinition{Name: viewName, TextDefinition: blameViewTextDef, CreateViewStatement: fmt.Sprintf("CREATE VIEW %s AS %s", sqlfmt.QuoteIdentifier(ctx, viewName), blameViewTextDef)}, true, nil
 	}
 
 	schTblHash, ok, err := root.GetTableHash(ctx, doltdb.TableName{Name: doltdb.SchemasTableName, Schema: db.schemaName})

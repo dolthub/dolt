@@ -47,7 +47,7 @@ const (
 											coalesce(to_commit_date, from_commit_date) DESC
 									) row_num
 				             FROM
-				                 ` + "`dolt_diff_%s`" + ` -- tableName
+				                 %s -- diffTableName
 				            )
 				SELECT
 				    %s  -- pksSelectExpression
@@ -123,6 +123,6 @@ func createDoltBlameViewExpression(ctx *sql.Context, tableName string, pks []sch
 		pksSelectExpression += fmt.Sprintf("sd.%s AS %s, ", toPk, formatter.QuoteIdentifier(pk.Name))
 	}
 
-	return fmt.Sprintf(viewExpressionTemplate, allToPks, pksPartitionByExpression, tableName,
-		pksSelectExpression, pksOrderByExpression), nil
+	return fmt.Sprintf(viewExpressionTemplate, allToPks, pksPartitionByExpression,
+		formatter.QuoteIdentifier(doltdb.DoltDiffTablePrefix+tableName), pksSelectExpression, pksOrderByExpression), nil
 }
