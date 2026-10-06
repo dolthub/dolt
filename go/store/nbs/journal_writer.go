@@ -154,7 +154,9 @@ type journalWriter struct {
 	unsyncd     uint64
 	uncmpSz     uint64
 	// off indicates the last position that has been written to the journal buffer
-	off         int64
+	off int64
+	// zeroedTo is the end of the zero-filled region ahead of |off|
+	zeroedTo    int64
 	maxNovel    int
 	lock        sync.RWMutex
 	batchCrc    uint32
@@ -556,7 +558,7 @@ func (wr *journalWriter) commitRootHashUnlocked(ctx context.Context, behavior dh
 	func() {
 		defer trace.StartRegion(ctx, "sync").End()
 
-		err = wr.journal.Sync()
+		err = syncJournalData(wr.journal)
 	}()
 	if err != nil {
 		return dherrors.Fatalf(behavior, "%w: error syncing journal", err)
@@ -631,12 +633,39 @@ func (wr *journalWriter) getBytes(ctx context.Context, behavior dherrors.FatalBe
 // flush writes buffered data into the journal file.
 func (wr *journalWriter) flush(ctx context.Context, behavior dherrors.FatalBehavior) (err error) {
 	defer trace.StartRegion(ctx, "flush journal").End()
+	if err = wr.zeroFillAhead(ctx, int64(len(wr.buf))); err != nil {
+		return dherrors.Fatalf(behavior, "%w: error zero-filling database journal file", err)
+	}
 	if _, err = wr.journal.WriteAt(wr.buf, wr.off); err != nil {
 		return dherrors.Fatalf(behavior, "%w: error writing to database journal file", err)
 	}
 	wr.off += int64(len(wr.buf))
 	wr.buf = wr.buf[:0]
 	return
+}
+
+// zeroFillAhead ensures the |n| bytes about to be written at |wr.off| land in
+// zero-filled space, extending that space by |journalZeroFillStep| at a time.
+// Bootstrapping treats a zero record length as the end of the journal and
+// truncates the remaining zeros.
+func (wr *journalWriter) zeroFillAhead(ctx context.Context, n int64) error {
+	end := wr.off + n
+	if journalZeroFillStep == 0 || end <= wr.zeroedTo {
+		return nil
+	}
+	defer trace.StartRegion(ctx, "zero fill journal").End()
+	target := end + journalZeroFillStep
+	zeros := make([]byte, min(int64(1<<20), target-wr.off))
+	for o := max(wr.zeroedTo, wr.off); o < target; o += int64(len(zeros)) {
+		if _, err := wr.journal.WriteAt(zeros[:min(int64(len(zeros)), target-o)], o); err != nil {
+			return err
+		}
+	}
+	if err := syncJournalData(wr.journal); err != nil {
+		return err
+	}
+	wr.zeroedTo = target
+	return nil
 }
 
 // maybeFlush flushes buffered data, if any exists.
@@ -724,6 +753,11 @@ func (wr *journalWriter) Close() (err error) {
 			_ = wr.indexWriter.Flush()
 		}
 		_ = wr.index.Close()
+	}
+	if wr.zeroedTo > wr.off {
+		if terr := wr.journal.Truncate(wr.off); terr != nil {
+			err = terr
+		}
 	}
 	if cerr := wr.journal.Sync(); cerr != nil {
 		err = cerr

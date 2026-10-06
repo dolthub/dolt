@@ -588,3 +588,49 @@ func TestRangeIndex(t *testing.T) {
 	assert.Equal(t, 0, idx.novelCount())
 	assert.Equal(t, len(data), int(idx.count()))
 }
+
+func TestJournalWriterZeroFillAhead(t *testing.T) {
+	if journalZeroFillStep == 0 {
+		t.Skip("journal zero-fill is disabled on this platform")
+	}
+	ctx := context.Background()
+	path := newTestFilePath(t)
+	j := newTestJournalWriter(t, path)
+	data := randomCompressedChunks(256)
+	var last hash.Hash
+	for _, cc := range data {
+		require.NoError(t, j.writeCompressedChunk(ctx, dherrors.FatalBehaviorError, cc))
+		last = cc.Hash()
+	}
+	require.NoError(t, j.commitRootHash(ctx, dherrors.FatalBehaviorError, last))
+
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, info.Size(), j.off+journalZeroFillStep, "the journal is zero-filled ahead of its records")
+
+	// Reopen without closing, as after a crash: the zeros end the journal and are truncated.
+	reopened, _, err := openJournalWriter(ctx, path)
+	require.NoError(t, err)
+	recovered, err := reopened.bootstrapJournal(ctx, true, nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, last, recovered)
+	assert.Equal(t, j.off, reopened.off)
+	validateAllLookups(t, reopened, data)
+	info, err = os.Stat(path)
+	require.NoError(t, err)
+	assert.Equal(t, reopened.off, info.Size())
+
+	// A clean close leaves no zero tail.
+	more := randomCompressedChunks(16)
+	for _, cc := range more {
+		require.NoError(t, reopened.writeCompressedChunk(ctx, dherrors.FatalBehaviorError, cc))
+		last = cc.Hash()
+	}
+	require.NoError(t, reopened.commitRootHash(ctx, dherrors.FatalBehaviorError, last))
+	end := reopened.off
+	require.NoError(t, reopened.Close())
+	info, err = os.Stat(path)
+	require.NoError(t, err)
+	assert.Equal(t, end, info.Size())
+	require.NoError(t, j.journal.Close())
+}
