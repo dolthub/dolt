@@ -650,7 +650,7 @@ func (wr *journalWriter) flush(ctx context.Context, behavior dherrors.FatalBehav
 // truncates the remaining zeros.
 func (wr *journalWriter) zeroFillAhead(ctx context.Context, n int64) error {
 	end := wr.off + n
-	if journalZeroFillStep == 0 || end <= wr.zeroedTo {
+	if journalZeroFillStep == 0 || n == 0 || end <= wr.zeroedTo {
 		return nil
 	}
 	defer trace.StartRegion(ctx, "zero fill journal").End()

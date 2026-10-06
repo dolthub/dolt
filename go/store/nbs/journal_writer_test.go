@@ -634,3 +634,36 @@ func TestJournalWriterZeroFillAhead(t *testing.T) {
 	assert.Equal(t, end, info.Size())
 	require.NoError(t, j.journal.Close())
 }
+
+// Bytes past the last valid record may be evidence of data loss for fsck, so a
+// journal that writes nothing must leave them alone.
+func TestJournalWriterCloseWithoutWritesLeavesTrailingBytes(t *testing.T) {
+	ctx := context.Background()
+	path := newTestFilePath(t)
+	j := newTestJournalWriter(t, path)
+	cc := randomCompressedChunks(1)
+	for _, c := range cc {
+		require.NoError(t, j.writeCompressedChunk(ctx, dherrors.FatalBehaviorError, c))
+		require.NoError(t, j.commitRootHash(ctx, dherrors.FatalBehaviorError, c.Hash()))
+	}
+	require.NoError(t, j.Close())
+
+	reopened, _, err := openJournalWriter(ctx, path)
+	require.NoError(t, err)
+	_, err = reopened.bootstrapJournal(ctx, true, nil, nil)
+	require.NoError(t, err)
+
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	require.NoError(t, err)
+	_, err = f.Write([]byte{0, 0x50, 0, 1, 'g', 'a', 'r', 'b', 'a', 'g', 'e'})
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+	grown := info.Size()
+
+	require.NoError(t, reopened.Close())
+	info, err = os.Stat(path)
+	require.NoError(t, err)
+	assert.Equal(t, grown, info.Size())
+}
