@@ -17,6 +17,7 @@ package env
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -93,42 +94,47 @@ func NewTestDoltCliConfigFromHierarchy(ch *config.ConfigHierarchy, fs filesys.Fi
 }
 
 func LoadDoltCliConfig(hdp HomeDirProvider, fs filesys.ReadWriteFS) (*DoltCliConfig, error) {
-	ch := config.NewConfigHierarchy()
-
-	lPath := getLocalConfigPath()
-	if exists, _ := fs.Exists(lPath); exists {
-		lCfg, err := config.FromFile(lPath, fs)
-
-		if err == nil {
-			ch.AddConfig(localConfigName, lCfg)
+	ch, err := loadDoltConfig(hdp, fs)
+	if err != nil {
+		return nil, err
+	}
+	if _, hasGlobalConfig := ch.GetConfig(globalConfigName); !hasGlobalConfig {
+		globalPath, err := getGlobalCfgPath(hdp)
+		if err != nil {
+			return nil, err
 		}
+		globalConfig, err := config.NewFileConfig(globalPath, fs, map[string]string{})
+		if err != nil {
+			return nil, err
+		}
+		ch.AddConfig(globalConfigName, globalConfig)
 	}
-
-	gPath, err := getGlobalCfgPath(hdp)
-	if err != nil {
-		return nil, err
-	}
-
-	gCfg, err := ensureGlobalConfig(gPath, fs)
-	if err != nil {
-		return nil, err
-	}
-
-	ch.AddConfig(globalConfigName, gCfg)
-
 	return &DoltCliConfig{ch, ch, fs}, nil
 }
 
-func ensureGlobalConfig(path string, fs filesys.ReadWriteFS) (config.ReadWriteConfig, error) {
-	if exists, isDir := fs.Exists(path); exists {
-		if isDir {
-			return nil, errors.New("A directory exists where this file should be. path: " + path)
-		}
-
-		return config.FromFile(path, fs)
+// loadDoltConfig reads existing configuration without creating files. Local
+// settings take precedence over global settings. Missing files are normal,
+// including during clone; all other read and parse errors are returned.
+func loadDoltConfig(hdp HomeDirProvider, fs filesys.ReadWriteFS) (*config.ConfigHierarchy, error) {
+	globalPath, err := getGlobalCfgPath(hdp)
+	if err != nil {
+		return nil, err
 	}
-
-	return config.NewFileConfig(path, fs, map[string]string{})
+	ch := config.NewConfigHierarchy()
+	for _, location := range []struct{ name, path string }{
+		{localConfigName, getLocalConfigPath()},
+		{globalConfigName, globalPath},
+	} {
+		cfg, err := config.FromFile(location.path, fs)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("loading %s config %q: %w", location.name, location.path, err)
+		}
+		ch.AddConfig(location.name, cfg)
+	}
+	return ch, nil
 }
 
 // CreateLocalConfig creates a new repository local config file with the values from |val|
