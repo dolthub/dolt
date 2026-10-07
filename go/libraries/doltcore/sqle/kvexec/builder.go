@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/aggregation"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/rowexec"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -33,11 +34,35 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-type Builder struct{}
+type Builder struct {
+	// fallback executes the plan nodes that kvexec has no KV-native
+	// implementation for. A lookup join whose left side is not a KV source
+	// builds that side with it. It is the exec builder this Builder is
+	// registered with, which delegates back here, so it is wired up after
+	// construction.
+	fallback sql.NodeExecBuilder
+}
 
 var _ sql.NodeExecBuilder = (*Builder)(nil)
 
-func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, error) {
+// SetFallbackBuilder supplies the builder used for plan nodes kvexec cannot
+// execute itself. Call it once, with the exec builder this Builder was
+// registered with.
+func (b *Builder) SetFallbackBuilder(fallback sql.NodeExecBuilder) {
+	b.fallback = fallback
+}
+
+// NewExecBuilder returns the exec builder a Dolt engine should run with: the
+// GMS row executor with kvexec's KV-native operators taking priority, wired so
+// that kvexec can hand the nodes it does not implement back to GMS.
+func NewExecBuilder(overrides sql.EngineOverrides) *rowexec.BaseBuilder {
+	kvb := &Builder{}
+	eb := rowexec.NewBuilder(kvb, overrides)
+	kvb.SetFallbackBuilder(eb)
+	return eb
+}
+
+func (b *Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, error) {
 
 	// TODO: join optimization limits should be relaxed:
 	//  - expression types supported
@@ -55,9 +80,13 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 		case n.Op.IsLookup():
 			// conditions to use this fast path for lookup joins:
 			// (1) lookup or left lookup join
-			// (2) left-side is something we read KVs from (table or indexscan, ex: no subqueries)
-			// (3) right-side is an index lookup, by definition
-			// (4) the key expressions for the lookup are literals or columns (ex: no arithmetic yet)
+			// (2) right-side is an index lookup, by definition
+			// (3) the key expressions for the lookup are literals or columns (ex: no arithmetic yet)
+			//
+			// When the left-side is also something we read KVs from (table or
+			// indexscan) we join KV-to-KV. Otherwise |newRowLookupKvIter| keeps
+			// the left side as rows, which still avoids rebuilding a row
+			// iterator over the right side for every left row.
 
 			ita, ok := getIndexedTableAccess(n.Right())
 			if !ok || len(r) > 0 || !simpleLookupExpressions(ita.Expressions()) {
@@ -70,36 +99,38 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 			}
 
 			srcMap, srcIter, _, srcSchema, srcTags, srcFilter, err := getSourceKv(ctx, n.Left(), true)
-			if err != nil || srcSchema == nil {
+			if err != nil {
 				return nil, nil
 			}
 
-			keyLookupMapper, err := newLookupKeyMapping(
-				ctx,
-				srcSchema,
-				dstIter.InputKeyDesc(),
-				ita.Expressions(),
-				ita.Index().ColumnExpressionTypes(ctx),
-				srcMap.NodeStore(),
-			)
-			if err != nil || !keyLookupMapper.valid(ctx) {
-				return nil, nil
+			if srcSchema != nil {
+				keyLookupMapper, err := newLookupKeyMapping(
+					ctx,
+					srcSchema,
+					dstIter.InputKeyDesc(),
+					ita.Expressions(),
+					ita.Index().ColumnExpressionTypes(ctx),
+					srcMap.NodeStore(),
+				)
+				if err == nil && keyLookupMapper.valid(ctx) {
+					split := len(srcTags)
+					projections := append(srcTags, dstTags...)
+					rowJoiner := newRowJoiner(ctx, []schema.Schema{srcSchema, dstIter.Schema()}, []int{split}, projections, dstIter.NodeStore())
+					return newLookupKvIter(
+						srcIter,
+						dstIter,
+						keyLookupMapper,
+						rowJoiner,
+						srcFilter,
+						dstFilter,
+						n.Filter,
+						n.Op.IsLeftOuter(),
+						n.Op.IsExcludeNulls(),
+					)
+				}
 			}
 
-			split := len(srcTags)
-			projections := append(srcTags, dstTags...)
-			rowJoiner := newRowJoiner(ctx, []schema.Schema{srcSchema, dstIter.Schema()}, []int{split}, projections, dstIter.NodeStore())
-			return newLookupKvIter(
-				srcIter,
-				dstIter,
-				keyLookupMapper,
-				rowJoiner,
-				srcFilter,
-				dstFilter,
-				n.Filter,
-				n.Op.IsLeftOuter(),
-				n.Op.IsExcludeNulls(),
-			)
+			return b.newRowLookupKvIter(ctx, n, r, ita, dstIter, dstTags, dstFilter)
 		case n.Op.IsMerge():
 			if leftState, err := getMergeKv(ctx, n.Left()); err == nil {
 				if rightState, err := getMergeKv(ctx, n.Right()); err == nil {
@@ -271,10 +302,19 @@ func newRowJoiner(ctx *sql.Context, schemas []schema.Schema, splits []int, proje
 }
 
 func (m *prollyToSqlJoiner) buildRow(ctx context.Context, tuples ...val.Tuple) (sql.Row, error) {
+	row := make(sql.Row, m.outCnt)
+	if err := m.buildRowInto(ctx, row, tuples...); err != nil {
+		return nil, err
+	}
+	return row, nil
+}
+
+// buildRowInto decodes |tuples| into |row|, which must have room for the
+// joiner's output columns.
+func (m *prollyToSqlJoiner) buildRowInto(ctx context.Context, row sql.Row, tuples ...val.Tuple) error {
 	if len(tuples) != 2*len(m.desc) {
 		panic("invalid KV count for prollyToSqlJoiner")
 	}
-	row := make(sql.Row, m.outCnt)
 	split := 0
 	var err error
 	var tup val.Tuple
@@ -292,7 +332,7 @@ func (m *prollyToSqlJoiner) buildRow(ctx context.Context, tuples ...val.Tuple) (
 			outputIdx := m.ordMappings[split+j]
 			row[outputIdx], err = tree.GetField(ctx, desc.keyDesc, idx, tup, m.ns)
 			if err != nil {
-				return nil, err
+				return err
 			}
 		}
 		tup = tuples[2*i+1]
@@ -300,11 +340,11 @@ func (m *prollyToSqlJoiner) buildRow(ctx context.Context, tuples ...val.Tuple) (
 			outputIdx := m.ordMappings[split+len(desc.keyMappings)+j]
 			row[outputIdx], err = tree.GetField(ctx, desc.valDesc, idx, tup, m.ns)
 			if err != nil {
-				return nil, err
+				return err
 			}
 		}
 	}
-	return row, nil
+	return nil
 }
 
 func getPhysicalColCount(schemas []schema.Schema, splits []int, projections []uint64) int {
