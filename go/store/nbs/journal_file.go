@@ -33,25 +33,24 @@ func (jf *journalFile) writeAt(off int64, p []byte) (int, error) {
 	if len(p) == 0 {
 		return 0, nil
 	}
-	if err := jf.prepare(off, off+int64(len(p))); err != nil {
-		return 0, err
+	n, err := jf.f.WriteAt(p, off)
+	if err != nil {
+		return n, err
 	}
-	return jf.f.WriteAt(p, off)
+	return n, jf.prepare(off + int64(n))
 }
 
-func (jf *journalFile) prepare(off, end int64) error {
+// prepare zero-fills past |end|. The next syncData makes it durable.
+func (jf *journalFile) prepare(end int64) error {
 	if journalPadBufferSize == 0 || end <= jf.preparedThrough {
 		return nil
 	}
 	target := end + journalPadBufferSize
-	zeros := make([]byte, min(int64(1<<20), target-off))
-	for o := max(jf.preparedThrough, off); o < target; o += int64(len(zeros)) {
+	zeros := make([]byte, min(int64(1<<20), target-end))
+	for o := end; o < target; o += int64(len(zeros)) {
 		if _, err := jf.f.WriteAt(zeros[:min(int64(len(zeros)), target-o)], o); err != nil {
 			return err
 		}
-	}
-	if err := syncFileData(jf.f); err != nil {
-		return err
 	}
 	jf.preparedThrough = target
 	return nil
