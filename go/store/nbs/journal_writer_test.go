@@ -588,3 +588,78 @@ func TestRangeIndex(t *testing.T) {
 	assert.Equal(t, 0, idx.novelCount())
 	assert.Equal(t, len(data), int(idx.count()))
 }
+
+func TestJournalWriterZeroFillAhead(t *testing.T) {
+	if journalPadBufferSize == 0 {
+		t.Skip("journal padding is disabled on this platform")
+	}
+	ctx := context.Background()
+	path := newTestFilePath(t)
+	j := newTestJournalWriter(t, path)
+	data := randomCompressedChunks(256)
+	var last hash.Hash
+	for _, cc := range data {
+		require.NoError(t, j.writeCompressedChunk(ctx, dherrors.FatalBehaviorError, cc))
+		last = cc.Hash()
+	}
+	require.NoError(t, j.commitRootHash(ctx, dherrors.FatalBehaviorError, last))
+
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, info.Size(), j.off+journalPadBufferSize)
+
+	reopened, _, err := openJournalWriter(ctx, path)
+	require.NoError(t, err)
+	recovered, err := reopened.bootstrapJournal(ctx, true, nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, last, recovered)
+	assert.Equal(t, j.off, reopened.off)
+	validateAllLookups(t, reopened, data)
+	info, err = os.Stat(path)
+	require.NoError(t, err)
+	assert.Equal(t, reopened.off, info.Size())
+
+	more := randomCompressedChunks(16)
+	for _, cc := range more {
+		require.NoError(t, reopened.writeCompressedChunk(ctx, dherrors.FatalBehaviorError, cc))
+		last = cc.Hash()
+	}
+	require.NoError(t, reopened.commitRootHash(ctx, dherrors.FatalBehaviorError, last))
+	end := reopened.off
+	require.NoError(t, reopened.Close())
+	info, err = os.Stat(path)
+	require.NoError(t, err)
+	assert.Equal(t, end, info.Size())
+	require.NoError(t, j.journal.f.Close())
+}
+
+func TestJournalWriterCloseWithoutWritesLeavesTrailingBytes(t *testing.T) {
+	ctx := context.Background()
+	path := newTestFilePath(t)
+	j := newTestJournalWriter(t, path)
+	cc := randomCompressedChunks(1)
+	for _, c := range cc {
+		require.NoError(t, j.writeCompressedChunk(ctx, dherrors.FatalBehaviorError, c))
+		require.NoError(t, j.commitRootHash(ctx, dherrors.FatalBehaviorError, c.Hash()))
+	}
+	require.NoError(t, j.Close())
+
+	reopened, _, err := openJournalWriter(ctx, path)
+	require.NoError(t, err)
+	_, err = reopened.bootstrapJournal(ctx, true, nil, nil)
+	require.NoError(t, err)
+
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	require.NoError(t, err)
+	_, err = f.Write([]byte{0, 0x50, 0, 1, 'g', 'a', 'r', 'b', 'a', 'g', 'e'})
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+	grown := info.Size()
+
+	require.NoError(t, reopened.Close())
+	info, err = os.Stat(path)
+	require.NoError(t, err)
+	assert.Equal(t, grown, info.Size())
+}
