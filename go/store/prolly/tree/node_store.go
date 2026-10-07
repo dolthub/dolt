@@ -236,13 +236,23 @@ func (ns *nodeStore) ReadBytes(ctx context.Context, h hash.Hash) (result []byte,
 		return nil, err
 	}
 
+	var leaves [][]byte
+	size := 0
 	err = WalkNodes(ctx, n, ns, func(ctx context.Context, n *Node) error {
 		if n.IsLeaf() {
-			result = append(result, n.GetValue(0)...)
+			leaves = append(leaves, n.GetValue(0))
+			size += len(n.GetValue(0))
 		}
 		return nil
 	})
-	return result, err
+	if err != nil {
+		return nil, err
+	}
+	result = make([]byte, 0, size)
+	for _, l := range leaves {
+		result = append(result, l...)
+	}
+	return result, nil
 }
 
 // CompareJsonAdaptiveValues implements val.JsonAdaptiveValueComparator. The work is done by
