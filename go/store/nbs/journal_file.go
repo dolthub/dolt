@@ -29,7 +29,7 @@ func newJournalFile(f *os.File) *journalFile {
 
 // writeAt pads ahead of |p| when needed. An empty write never pads, leaving
 // any bytes past the last record for fsck.
-func (jf *journalFile) writeAt(off int64, p []byte) (int, error) {
+func (jf *journalFile) writeAt(p []byte, off int64) (int, error) {
 	if len(p) == 0 {
 		return 0, nil
 	}
@@ -45,14 +45,13 @@ func (jf *journalFile) prepare(end int64) error {
 	if journalPadBufferSize == 0 || end <= jf.preparedThrough {
 		return nil
 	}
-	target := end + journalPadBufferSize
-	zeros := make([]byte, min(int64(1<<20), target-end))
-	for o := end; o < target; o += int64(len(zeros)) {
-		if _, err := jf.f.WriteAt(zeros[:min(int64(len(zeros)), target-o)], o); err != nil {
-			return err
-		}
+	// The zeros must be written: extending with Truncate leaves a sparse hole,
+	// and writing into a hole changes block allocation, which fdatasync must
+	// then commit.
+	if _, err := jf.f.WriteAt(make([]byte, journalPadBufferSize), end); err != nil {
+		return err
 	}
-	jf.preparedThrough = target
+	jf.preparedThrough = end + journalPadBufferSize
 	return nil
 }
 

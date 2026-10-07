@@ -631,7 +631,7 @@ func (wr *journalWriter) getBytes(ctx context.Context, behavior dherrors.FatalBe
 // flush writes buffered data into the journal file.
 func (wr *journalWriter) flush(ctx context.Context, behavior dherrors.FatalBehavior) (err error) {
 	defer trace.StartRegion(ctx, "flush journal").End()
-	if _, err = wr.journal.writeAt(wr.off, wr.buf); err != nil {
+	if _, err = wr.journal.writeAt(wr.buf, wr.off); err != nil {
 		return dherrors.Fatalf(behavior, "%w: error writing to database journal file", err)
 	}
 	wr.off += int64(len(wr.buf))

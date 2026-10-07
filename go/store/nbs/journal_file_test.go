@@ -44,7 +44,7 @@ func TestJournalFileWriteAtPreparesAhead(t *testing.T) {
 	}
 	jf, path := newTestJournalFile(t)
 	data := []byte("record")
-	n, err := jf.writeAt(0, data)
+	n, err := jf.writeAt(data, 0)
 	require.NoError(t, err)
 	assert.Equal(t, len(data), n)
 	assert.Equal(t, int64(len(data))+journalPadBufferSize, jf.preparedThrough)
@@ -55,14 +55,14 @@ func TestJournalFileWriteAtPreparesAhead(t *testing.T) {
 	assert.Equal(t, data, contents[:len(data)])
 	assert.True(t, bytes.Equal(contents[len(data):], make([]byte, len(contents)-len(data))))
 
-	_, err = jf.writeAt(int64(len(data)), data)
+	_, err = jf.writeAt(data, int64(len(data)))
 	require.NoError(t, err)
 	assert.Equal(t, int64(len(data))+journalPadBufferSize, jf.preparedThrough)
 }
 
 func TestJournalFileEmptyWritePreparesNothing(t *testing.T) {
 	jf, path := newTestJournalFile(t)
-	n, err := jf.writeAt(100, nil)
+	n, err := jf.writeAt(nil, 100)
 	require.NoError(t, err)
 	assert.Equal(t, 0, n)
 	assert.Equal(t, int64(0), jf.preparedThrough)
@@ -72,7 +72,7 @@ func TestJournalFileEmptyWritePreparesNothing(t *testing.T) {
 func TestJournalFileFinishTruncatesPreparedSpace(t *testing.T) {
 	jf, path := newTestJournalFile(t)
 	data := []byte("record")
-	_, err := jf.writeAt(0, data)
+	_, err := jf.writeAt(data, 0)
 	require.NoError(t, err)
 	require.NoError(t, jf.finish(int64(len(data))))
 	assert.Equal(t, int64(len(data)), fileSize(t, path))
