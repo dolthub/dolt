@@ -16,6 +16,9 @@ package kvexec
 
 import (
 	"context"
+	"fmt"
+	"io"
+	"strings"
 	"testing"
 
 	gms "github.com/dolthub/go-mysql-server"
@@ -122,7 +125,10 @@ func TestRowLookupJoin(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			iter := buildJoinWithKvexec(t, engine, sqlCtx, tt.query)
-			_, ok := iter.(*rowLookupJoinKvIter)
+			lookup, ok := iter.(*lookupJoinKvIter)
+			if ok {
+				_, ok = lookup.src.(*rowLookupJoinSource)
+			}
 			require.Equalf(t, tt.doKvex, ok, "expected row lookup kvexec: %t, got %T", tt.doKvex, iter)
 		})
 	}
@@ -180,7 +186,8 @@ func TestRowLookupJoinResults(t *testing.T) {
 		t.Run(tt.query, func(t *testing.T) {
 			if !tt.multiJoin {
 				iter := buildJoinWithKvexec(t, engine, sqlCtx, tt.query)
-				require.IsTypef(t, &rowLookupJoinKvIter{}, iter, "query does not exercise the operator under test, got %T", iter)
+				require.IsType(t, &lookupJoinKvIter{}, iter)
+				require.IsType(t, &rowLookupJoinSource{}, iter.(*lookupJoinKvIter).src)
 			}
 
 			// analyze separately for each builder, plan nodes can hold
@@ -217,7 +224,7 @@ func buildJoinWithKvexec(t *testing.T, engine *gms.Engine, sqlCtx *sql.Context, 
 	return iter
 }
 
-func setupRowLookupJoinEngine(t *testing.T, setup []string) (*gms.Engine, *sql.Context) {
+func setupRowLookupJoinEngine(t testing.TB, setup []string) (*gms.Engine, *sql.Context) {
 	t.Helper()
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
@@ -241,7 +248,7 @@ func setupRowLookupJoinEngine(t *testing.T, setup []string) (*gms.Engine, *sql.C
 	return engine, sqlCtx
 }
 
-func analyzeQuery(t *testing.T, engine *gms.Engine, sqlCtx *sql.Context, query string) sql.Node {
+func analyzeQuery(t testing.TB, engine *gms.Engine, sqlCtx *sql.Context, query string) sql.Node {
 	t.Helper()
 	binder := planbuilder.New(sqlCtx, engine.EngineAnalyzer().Catalog, engine.EventScheduler)
 	node, _, _, qFlags, err := binder.Parse(query, nil, false)
@@ -249,4 +256,51 @@ func analyzeQuery(t *testing.T, engine *gms.Engine, sqlCtx *sql.Context, query s
 	node, err = engine.EngineAnalyzer().Analyze(sqlCtx, node, nil, qFlags)
 	require.NoError(t, err)
 	return node
+}
+
+func BenchmarkRowLookupJoin(b *testing.B) {
+	setup := []string{
+		"CREATE TABLE src (id INT PRIMARY KEY, v INT)",
+		"CREATE TABLE dst (id INT PRIMARY KEY, v INT)",
+	}
+	values := make([]string, 500)
+	for i := range values {
+		values[i] = fmt.Sprintf("(%d,%d)", i, i)
+	}
+
+	setup = append(setup, "INSERT INTO src VALUES "+strings.Join(values, ","))
+	setup = append(setup, "INSERT INTO dst VALUES "+strings.Join(values, ","))
+	engine, ctx := setupRowLookupJoinEngine(b, setup)
+	query := `SELECT /*+ LOOKUP_JOIN(l,r) */ l.id, r.v
+FROM (SELECT * FROM src LIMIT 1000) l JOIN dst r ON r.id=l.id`
+	for _, fast := range []bool{false, true} {
+		name := "generic"
+		builder := rowexec.NewBuilder(nil, sql.EngineOverrides{})
+		if fast {
+			name = "kvexec"
+			builder = NewExecBuilder(sql.EngineOverrides{})
+		}
+
+		builder.Runner = engine.EngineAnalyzer().Runner
+		b.Run(name, func(b *testing.B) {
+			node := analyzeQuery(b, engine, ctx, query)
+			b.ReportAllocs()
+			b.ResetTimer()
+			for b.Loop() {
+				iter, err := builder.Build(ctx, node, nil)
+				require.NoError(b, err)
+				count := 0
+				for {
+					_, err = iter.Next(ctx)
+					if err == io.EOF {
+						break
+					}
+					require.NoError(b, err)
+					count++
+				}
+				require.NoError(b, iter.Close(ctx))
+				require.Equal(b, 500, count)
+			}
+		})
+	}
 }

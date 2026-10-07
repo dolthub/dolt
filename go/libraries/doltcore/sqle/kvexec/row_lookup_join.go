@@ -15,16 +15,14 @@
 package kvexec
 
 import (
-	"io"
-
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/pool"
-	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -82,19 +80,28 @@ func (b *Builder) newRowLookupKvIter(
 	if len(keyTypes) < len(keyExprs) || keyDesc.Count() < len(keyExprs) {
 		return nil, nil
 	}
+	comparisons := make([]sql.Expression, len(keyExprs))
 	for i, e := range keyExprs {
 		if !lookupKeyEncodingSupported(keyDesc.Types[i].Enc) {
 			return nil, nil
 		}
+
 		if gf, ok := e.(*expression.GetField); ok && (gf.Index() < 0 || gf.Index() >= srcLen) {
 			// key columns have to resolve inside the left row
 			return nil, nil
 		}
-	}
+		_, srcExtended := e.Type(ctx).(sql.ExtendedType)
+		_, dstExtended := keyTypes[i].Type.(sql.ExtendedType)
+		if srcExtended != dstExtended {
+			return nil, nil
+		}
 
-	joinFilter := n.Filter
-	if lit, ok := joinFilter.(*expression.Literal); ok && lit.Value() == true {
-		joinFilter = nil
+		if !srcExtended && !e.Type(ctx).Equals(keyTypes[i].Type) {
+			comparisons[i] = expression.NewEquals(
+				expression.NewGetField(0, e.Type(ctx), "source", true),
+				expression.NewGetField(1, keyTypes[i].Type, "key", true),
+			)
+		}
 	}
 
 	ns := dstIterGen.NodeStore()
@@ -103,155 +110,71 @@ func (b *Builder) newRowLookupKvIter(
 		return nil, err
 	}
 
-	return &rowLookupJoinKvIter{
-		srcIter:    srcIter,
-		srcLen:     srcLen,
-		dstIterGen: dstIterGen,
-		keyTupleMapper: &rowLookupMapping{
-			ns:       ns,
-			pool:     ns.Pool(),
-			targetKb: val.NewTupleBuilder(keyDesc, ns),
-			keyExprs: keyExprs,
-			keyTypes: keyTypes,
-			nullSafe: ita.NullMask(),
+	return &lookupJoinKvIter{
+		src: &rowLookupJoinSource{
+			iter:   srcIter,
+			srcLen: srcLen,
+			mapping: &rowLookupMapping{
+				ns:            ns,
+				pool:          ns.Pool(),
+				targetKb:      val.NewTupleBuilder(keyDesc, ns),
+				keyExprs:      keyExprs,
+				keyTypes:      keyTypes,
+				nullSafe:      ita.NullMask(),
+				comparisons:   comparisons,
+				comparisonRow: make(sql.Row, 2),
+			},
+			joiner: newRowJoiner(ctx, []schema.Schema{dstIterGen.Schema()}, nil, dstTags, ns),
 		},
-		joiner:     newRowJoiner(ctx, []schema.Schema{dstIterGen.Schema()}, nil, dstTags, ns),
-		fullRow:    make(sql.Row, srcLen+dstLen),
-		dstFilter:  dstFilter,
-		joinFilter: joinFilter,
-		isLeftJoin: n.Op.IsLeftOuter(),
+		srcLen:       srcLen,
+		dstIterGen:   dstIterGen,
+		dstFilter:    dstFilter,
+		joinFilter:   n.Filter,
+		isLeftJoin:   n.Op.IsLeftOuter(),
+		excludeNulls: n.Op.IsExcludeNulls(),
 	}, nil
 }
 
-// rowLookupJoinKvIter joins a SQL row source on the left to KV index lookups on
-// the right.
-type rowLookupJoinKvIter struct {
-	// TODO: we want to build KV-side static expression implementations
-	// so that we can execute filters more efficiently
-	srcIter sql.RowIter
-	// srcLen is the width of the left node schema
-	srcLen int
-
-	dstIter    prolly.MapIter
-	dstIterGen index.SecondaryLookupIterGen
-
-	// keyTupleMapper encodes a dstKey from the left row
-	keyTupleMapper *rowLookupMapping
-
-	// joiner decodes the KV pairs read from the right side
-	joiner *prollyToSqlJoiner
-
-	dstFilter  sql.Expression
-	joinFilter sql.Expression
-
-	// fullRow is the current left row followed by the current right row. It is
-	// reused across iterations and copied into every returned row.
-	fullRow sql.Row
-
-	// LEFT_JOIN impl details
-	isLeftJoin   bool
-	returnedARow bool
+// rowLookupJoinSource keeps the left side as SQL rows and decodes only the
+// right side's storage tuples.
+type rowLookupJoinSource struct {
+	iter    sql.RowIter
+	srcLen  int
+	row     sql.Row
+	mapping *rowLookupMapping
+	joiner  *prollyToSqlJoiner
 }
 
-var _ sql.RowIter = (*rowLookupJoinKvIter)(nil)
-
-func (l *rowLookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
-	for {
-		// (1) initialize secondary iter if does not exist yet
-		// (2) read from secondary until EOF
-		// (3) convert and filter the secondary row, then concat
-		if l.dstIter == nil {
-			// if secondary iterator does not exist:
-			//   (1) read the next row from the left iterator
-			//   (2) encode the lookup key from its values
-			//   (3) initialize secondary iterator with that key
-			l.returnedARow = false
-
-			srcRow, err := l.srcIter.Next(ctx)
-			if err != nil {
-				return nil, err
-			}
-			// the left iter begins with rows from the outer scope; strip those away
-			copy(l.fullRow, srcRow[len(srcRow)-l.srcLen:])
-			l.nullifyDst()
-
-			dstKey, canMatch, err := l.keyTupleMapper.dstKeyTuple(ctx, l.fullRow)
-			if err != nil {
-				return nil, err
-			}
-			if !canMatch {
-				// no right row can match this key, so skip the lookup
-				if l.isLeftJoin {
-					return l.resultRow(), nil
-				}
-				continue
-			}
-
-			l.dstIter, err = l.dstIterGen.New(ctx, dstKey)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		dstKey, dstVal, err := l.dstIter.Next(ctx)
-		if err != nil && err != io.EOF {
-			return nil, err
-		}
-
-		if dstKey == nil {
-			l.dstIter = nil
-			if !l.isLeftJoin || l.returnedARow {
-				continue
-			}
-			l.nullifyDst()
-		} else if err := l.joiner.buildRowInto(ctx, l.fullRow[l.srcLen:], dstKey, dstVal); err != nil {
-			return nil, err
-		}
-
-		// side-specific filters are currently hoisted
-		if l.dstFilter != nil && dstKey != nil {
-			res, err := sql.EvaluateCondition(ctx, l.dstFilter, l.fullRow[l.srcLen:])
-			if err != nil {
-				return nil, err
-			}
-			if !sql.IsTrue(res) {
-				continue
-			}
-		}
-		if l.joinFilter != nil {
-			res, err := sql.EvaluateCondition(ctx, l.joinFilter, l.fullRow)
-			if err != nil {
-				return nil, err
-			}
-			if !sql.IsTrue(res) && dstKey != nil {
-				continue
-			}
-		}
-		l.returnedARow = true
-		return l.resultRow(), nil
+func (s *rowLookupJoinSource) nextLookupKey(ctx *sql.Context) (val.Tuple, bool, error) {
+	row, err := s.iter.Next(ctx)
+	if err != nil {
+		return nil, false, err
 	}
+
+	s.row = row[len(row)-s.srcLen:]
+	return s.mapping.dstKeyTuple(ctx, s.row)
 }
 
-// nullifyDst clears the right half of |fullRow| so a row left over from an
-// earlier match cannot leak into a null extended row.
-func (l *rowLookupJoinKvIter) nullifyDst() {
-	clear(l.fullRow[l.srcLen:])
+func (s *rowLookupJoinSource) buildRow(ctx *sql.Context, key, value val.Tuple) (sql.Row, error) {
+	row := make(sql.Row, s.srcLen+s.joiner.outCnt)
+	copy(row, s.row)
+	if key != nil {
+		if err := s.joiner.buildRowInto(ctx, row[s.srcLen:], key, value); err != nil {
+			return nil, err
+		}
+	}
+
+	return row, nil
 }
 
-func (l *rowLookupJoinKvIter) resultRow() sql.Row {
-	ret := make(sql.Row, len(l.fullRow))
-	copy(ret, l.fullRow)
-	return ret
-}
-
-func (l *rowLookupJoinKvIter) Close(ctx *sql.Context) error {
-	l.dstIter = nil
-	if l.srcIter == nil {
+func (s *rowLookupJoinSource) Close(ctx *sql.Context) error {
+	if s.iter == nil {
 		return nil
 	}
-	srcIter := l.srcIter
-	l.srcIter = nil
-	return srcIter.Close(ctx)
+
+	iter := s.iter
+	s.iter = nil
+	return iter.Close(ctx)
 }
 
 // rowLookupMapping is responsible for generating keys for lookups into the
@@ -265,7 +188,9 @@ type rowLookupMapping struct {
 	keyTypes []sql.ColumnExpressionType
 	// nullSafe marks the key columns compared with the null safe equality
 	// operator, which is the only way a NULL key matches anything
-	nullSafe []bool
+	nullSafe      []bool
+	comparisons   []sql.Expression
+	comparisonRow sql.Row
 }
 
 // dstKeyTuple encodes the destination lookup key for |row|. The boolean return
@@ -279,6 +204,7 @@ func (m *rowLookupMapping) dstKeyTuple(ctx *sql.Context, row sql.Row) (val.Tuple
 			m.targetKb.Recycle()
 			return nil, false, err
 		}
+
 		if v == nil {
 			if i >= len(m.nullSafe) || !m.nullSafe[i] {
 				m.targetKb.Recycle()
@@ -288,15 +214,34 @@ func (m *rowLookupMapping) dstKeyTuple(ctx *sql.Context, row sql.Row) (val.Tuple
 			// encodes as NULL
 			continue
 		}
-		v, inRange, err := convertLookupKeyValue(ctx, m.keyTypes[i].Type, v)
-		if err != nil {
-			m.targetKb.Recycle()
-			return nil, false, err
-		}
+		original := v
+		v, inRange, err := convertLookupKeyValue(ctx, e.Type(ctx), m.keyTypes[i].Type, v)
 		if inRange != sql.InRange {
 			m.targetKb.Recycle()
 			return nil, false, nil
 		}
+
+		if err != nil {
+			m.targetKb.Recycle()
+			return nil, false, err
+		}
+		// Index matching may remove the equality from the join filter, so a
+		// rounded or truncated lookup key must still satisfy the comparison.
+		if cmp := m.comparisons[i]; cmp != nil {
+			m.comparisonRow[0], m.comparisonRow[1] = original, v
+			result, err := cmp.Eval(ctx, m.comparisonRow)
+			if err != nil || !sql.IsTrue(result) {
+				m.targetKb.Recycle()
+				return nil, false, err
+			}
+		} else if src, ok := e.Type(ctx).(sql.ExtendedType); ok && !src.Equals(m.keyTypes[i].Type) {
+			equal, err := extendedLookupKeyMatches(ctx, src, m.keyTypes[i].Type.(sql.ExtendedType), original, v)
+			if err != nil || !equal {
+				m.targetKb.Recycle()
+				return nil, false, err
+			}
+		}
+
 		if err = tree.PutField(ctx, m.ns, m.targetKb, i, v); err != nil {
 			m.targetKb.Recycle()
 			return nil, false, err
@@ -308,20 +253,56 @@ func (m *rowLookupMapping) dstKeyTuple(ctx *sql.Context, row sql.Row) (val.Tuple
 	if err != nil {
 		return nil, false, err
 	}
+
 	return tup, true, nil
 }
 
-// convertLookupKeyValue converts a key value to the type of the index column it
-// is compared against. It mirrors the conversion GMS performs when building an
-// index lookup from a row, so both execution paths agree on which rows a key
-// matches.
-func convertLookupKeyValue(ctx *sql.Context, colTyp sql.Type, v interface{}) (interface{}, sql.ConvertInRange, error) {
+// extendedLookupKeyMatches compares in the source representation, since extended
+// types can use incompatible Go values (for example, decimals and integers).
+func extendedLookupKeyMatches(ctx *sql.Context, src, dst sql.ExtendedType, original, converted interface{}) (bool, error) {
+	if types.IsFloat(dst) && !types.IsFloat(src) {
+		// Comparisons against approximate values widen integers to floating point.
+		return true, nil
+	}
+
+	restored, status, err := src.ConvertToType(ctx, dst, converted, 'a')
+	if err != nil || status != sql.InRange {
+		return false, err
+	}
+
+	cmp, err := src.Compare(ctx, original, restored)
+	return cmp == 0, err
+}
+
+// convertLookupKeyValue preserves source type information during conversion.
+// A value outside the index column's domain cannot match any indexed row.
+func convertLookupKeyValue(ctx *sql.Context, srcTyp, colTyp sql.Type, v interface{}) (interface{}, sql.ConvertInRange, error) {
+	if src, ok := srcTyp.(sql.ExtendedType); ok {
+		if dst, ok := colTyp.(sql.ExtendedType); ok {
+			return dst.ConvertToType(ctx, src, v, 'a')
+		}
+	}
+
+	// ENUM and SET rows contain ordinals whose meaning belongs to the source
+	// type; converting those ordinals directly can select a different label.
+	if types.IsEnum(srcTyp) || types.IsSet(srcTyp) {
+		var err error
+		v, _, err = types.ConvertToCollatedString(ctx, v, srcTyp)
+		if err != nil {
+			return nil, sql.InRange, err
+		}
+	}
+
 	v, inRange, err := colTyp.Convert(ctx, v)
+	if types.ErrLengthBeyondLimit.Is(err) || types.ErrConvertToDecimalLimit.Is(err) {
+		return nil, sql.Overflow, nil
+	}
+
 	if err != nil && sql.ErrTruncatedIncorrect.Is(err) {
-		// for this purpose, truncation errors are acceptable and we only look
-		// at the in-range status
+		// Truncation produces a candidate key; the caller still checks equality.
 		err = nil
 	}
+
 	return v, inRange, err
 }
 
@@ -336,7 +317,8 @@ func lookupKeyEncodingSupported(enc val.Encoding) bool {
 		val.Int32Enc, val.Uint32Enc, val.Int64Enc, val.Uint64Enc,
 		val.Float32Enc, val.Float64Enc, val.Bit64Enc, val.DecimalEnc,
 		val.YearEnc, val.DateEnc, val.TimeEnc, val.DatetimeEnc,
-		val.EnumEnc, val.SetEnc, val.StringEnc, val.ByteStringEnc:
+		val.EnumEnc, val.SetEnc, val.StringEnc, val.ByteStringEnc,
+		val.ExtendedEnc, val.ExtendedAddrEnc, val.ExtendedAdaptiveEnc:
 		return true
 	default:
 		return false
