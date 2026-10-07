@@ -590,8 +590,8 @@ func TestRangeIndex(t *testing.T) {
 }
 
 func TestJournalWriterZeroFillAhead(t *testing.T) {
-	if journalZeroFillStep == 0 {
-		t.Skip("journal zero-fill is disabled on this platform")
+	if journalPrepareStep == 0 {
+		t.Skip("journal preparation is disabled on this platform")
 	}
 	ctx := context.Background()
 	path := newTestFilePath(t)
@@ -606,7 +606,7 @@ func TestJournalWriterZeroFillAhead(t *testing.T) {
 
 	info, err := os.Stat(path)
 	require.NoError(t, err)
-	assert.GreaterOrEqual(t, info.Size(), j.off+journalZeroFillStep, "the journal is zero-filled ahead of its records")
+	assert.GreaterOrEqual(t, info.Size(), j.off+journalPrepareStep, "the journal is zero-filled ahead of its records")
 
 	// Reopen without closing, as after a crash: the zeros end the journal and are truncated.
 	reopened, _, err := openJournalWriter(ctx, path)
@@ -632,7 +632,7 @@ func TestJournalWriterZeroFillAhead(t *testing.T) {
 	info, err = os.Stat(path)
 	require.NoError(t, err)
 	assert.Equal(t, end, info.Size())
-	require.NoError(t, j.journal.Close())
+	require.NoError(t, j.journal.f.Close())
 }
 
 // Bytes past the last valid record may be evidence of data loss for fsck, so a

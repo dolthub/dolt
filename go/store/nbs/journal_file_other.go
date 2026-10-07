@@ -18,10 +18,10 @@ package nbs
 
 import "os"
 
-// journalZeroFillStep is zero: the zero-fill-ahead benefit has only been
+// journalPrepareStep is zero: the benefit of zero-filling ahead has only been
 // measured with Linux fdatasync.
-const journalZeroFillStep = 0
+const journalPrepareStep = 0
 
-func syncJournalData(f *os.File) error {
+func syncFileData(f *os.File) error {
 	return f.Sync()
 }

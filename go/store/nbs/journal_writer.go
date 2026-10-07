@@ -102,7 +102,7 @@ func openJournalWriter(ctx context.Context, path string) (wr *journalWriter, exi
 
 	return &journalWriter{
 		buf:     make([]byte, 0, journalWriterBuffSize),
-		journal: f,
+		journal: newJournalFile(f),
 		path:    path,
 	}, true, nil
 }
@@ -126,7 +126,7 @@ func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, e
 
 	return &journalWriter{
 		buf:     make([]byte, 0, journalWriterBuffSize),
-		journal: f,
+		journal: newJournalFile(f),
 		path:    path,
 	}, nil
 }
@@ -145,7 +145,7 @@ func deleteJournalAndIndexFiles(ctx context.Context, path string) (err error) {
 
 type journalWriter struct {
 	ranges      rangeIndex
-	journal     *os.File
+	journal     *journalFile
 	indexWriter *bufio.Writer
 	index       *os.File
 	path        string
@@ -154,9 +154,7 @@ type journalWriter struct {
 	unsyncd     uint64
 	uncmpSz     uint64
 	// off indicates the last position that has been written to the journal buffer
-	off int64
-	// zeroedTo is the end of the zero-filled region ahead of |off|
-	zeroedTo    int64
+	off         int64
 	maxNovel    int
 	lock        sync.RWMutex
 	batchCrc    uint32
@@ -197,7 +195,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, canWrite bool, re
 	// process the non-indexed portion of the journal starting at |wr.indexed|,
 	// at minimum the non-indexed portion will include a root hash record.
 	// Index lookups are added to the ongoing batch to re-synchronize.
-	wr.off, err = processJournalRecords(ctx, wr.path, wr.journal, canWrite, wr.indexed, func(o int64, r journalRec) error {
+	wr.off, err = processJournalRecords(ctx, wr.path, wr.journal.f, canWrite, wr.indexed, func(o int64, r journalRec) error {
 		switch r.kind {
 		case chunkJournalRecKind:
 			rng := Range{
@@ -361,7 +359,7 @@ func (wr *journalWriter) readJournalIndex(ctx context.Context, canWrite bool) er
 
 			// |r.end| is expected to point to a root hash record in |wr.journal|
 			// containing a hash equal to |r.lastRoot|, validate this here
-			if h, err := peekRootHashAt(wr.journal, int64(m.batchEnd)); err != nil {
+			if h, err := peekRootHashAt(wr.journal.f, int64(m.batchEnd)); err != nil {
 				return err
 			} else if h != m.latestHash {
 				return fmt.Errorf("invalid index record hash (%s != %s)", h.String(), m.latestHash.String())
@@ -558,7 +556,7 @@ func (wr *journalWriter) commitRootHashUnlocked(ctx context.Context, behavior dh
 	func() {
 		defer trace.StartRegion(ctx, "sync").End()
 
-		err = syncJournalData(wr.journal)
+		err = wr.journal.syncData()
 	}()
 	if err != nil {
 		return dherrors.Fatalf(behavior, "%w: error syncing journal", err)
@@ -600,7 +598,7 @@ func (wr *journalWriter) readAt(p []byte, off int64) (n int, err error) {
 			bp = p[fread:]
 			p = p[:fread]
 		}
-		if n, err = wr.journal.ReadAt(p, off); err != nil {
+		if n, err = wr.journal.f.ReadAt(p, off); err != nil {
 			return 0, err
 		}
 		off = 0
@@ -633,39 +631,12 @@ func (wr *journalWriter) getBytes(ctx context.Context, behavior dherrors.FatalBe
 // flush writes buffered data into the journal file.
 func (wr *journalWriter) flush(ctx context.Context, behavior dherrors.FatalBehavior) (err error) {
 	defer trace.StartRegion(ctx, "flush journal").End()
-	if err = wr.zeroFillAhead(ctx, int64(len(wr.buf))); err != nil {
-		return dherrors.Fatalf(behavior, "%w: error zero-filling database journal file", err)
-	}
-	if _, err = wr.journal.WriteAt(wr.buf, wr.off); err != nil {
+	if _, err = wr.journal.writeAt(wr.off, wr.buf); err != nil {
 		return dherrors.Fatalf(behavior, "%w: error writing to database journal file", err)
 	}
 	wr.off += int64(len(wr.buf))
 	wr.buf = wr.buf[:0]
 	return
-}
-
-// zeroFillAhead ensures the |n| bytes about to be written at |wr.off| land in
-// zero-filled space, extending that space by |journalZeroFillStep| at a time.
-// Bootstrapping treats a zero record length as the end of the journal and
-// truncates the remaining zeros.
-func (wr *journalWriter) zeroFillAhead(ctx context.Context, n int64) error {
-	end := wr.off + n
-	if journalZeroFillStep == 0 || n == 0 || end <= wr.zeroedTo {
-		return nil
-	}
-	defer trace.StartRegion(ctx, "zero fill journal").End()
-	target := end + journalZeroFillStep
-	zeros := make([]byte, min(int64(1<<20), target-wr.off))
-	for o := max(wr.zeroedTo, wr.off); o < target; o += int64(len(zeros)) {
-		if _, err := wr.journal.WriteAt(zeros[:min(int64(len(zeros)), target-o)], o); err != nil {
-			return err
-		}
-	}
-	if err := syncJournalData(wr.journal); err != nil {
-		return err
-	}
-	wr.zeroedTo = target
-	return nil
 }
 
 // maybeFlush flushes buffered data, if any exists.
@@ -754,15 +725,10 @@ func (wr *journalWriter) Close() (err error) {
 		}
 		_ = wr.index.Close()
 	}
-	if wr.zeroedTo > wr.off {
-		if terr := wr.journal.Truncate(wr.off); terr != nil {
-			err = terr
-		}
-	}
-	if cerr := wr.journal.Sync(); cerr != nil {
+	if cerr := wr.journal.finish(wr.off); cerr != nil {
 		err = cerr
 	}
-	if cerr := wr.journal.Close(); cerr != nil {
+	if cerr := wr.journal.f.Close(); cerr != nil {
 		err = cerr
 	} else {
 		// Nil out the journal after the file has been closed, so that it's obvious it's been closed
