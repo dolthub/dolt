@@ -15,6 +15,7 @@
 package tree
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -70,6 +71,13 @@ type BlobBuilder struct {
 	chunkSize int
 	topLevel  int
 	levelCap  int
+	prior     []priorLeaf
+	leafIndex int
+}
+
+type priorLeaf struct {
+	data []byte
+	addr hash.Hash
 }
 
 func (b *BlobBuilder) SetNodeStore(ns NodeStore) {
@@ -86,6 +94,8 @@ func (b *BlobBuilder) Reset() {
 	b.subtrees = nil
 	b.lastN = nil
 	b.levelCap = 0
+	b.prior = nil
+	b.leafIndex = 0
 }
 
 // Init calculates tree dimensions for a given blob.
@@ -173,6 +183,11 @@ func (lw *blobLeafWriter) Write(ctx context.Context, r io.Reader) (hash.Hash, ui
 	n, err := r.Read(lw.buf)
 	if err != nil {
 		return hash.Hash{}, 0, err
+	}
+	i := lw.bb.leafIndex
+	lw.bb.leafIndex++
+	if lw.bb.topLevel > 0 && i < len(lw.bb.prior) && bytes.Equal(lw.bb.prior[i].data, lw.buf[:n]) {
+		return lw.bb.prior[i].addr, 1, nil
 	}
 	h, err := lw.bb.write(ctx, zeroKeys, [][]byte{lw.buf[:n]}, leafSubtrees, 0)
 	return h, 1, err

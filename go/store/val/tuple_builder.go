@@ -589,7 +589,19 @@ func (tb *TupleBuilder) PutAdaptiveExtendedFromInline(ctx context.Context, i int
 	return tb.PutAdaptiveFromInline(ctx, i, v)
 }
 
+// PutAdaptiveBytesFromInlineReusing is PutAdaptiveBytesFromInline for a value
+// replacing the out-of-band value at |prior|, which a PriorBytesWriter can
+// partially reuse.
+func (tb *TupleBuilder) PutAdaptiveBytesFromInlineReusing(ctx context.Context, i int, v []byte, prior hash.Hash) error {
+	tb.Desc.ExpectEncoding(i, BytesAdaptiveEnc)
+	return tb.putAdaptiveFromInline(ctx, i, v, prior)
+}
+
 func (tb *TupleBuilder) PutAdaptiveFromInline(ctx context.Context, i int, v []byte) error {
+	return tb.putAdaptiveFromInline(ctx, i, v, hash.Hash{})
+}
+
+func (tb *TupleBuilder) putAdaptiveFromInline(ctx context.Context, i int, v []byte, prior hash.Hash) error {
 
 	inlineSize := int64(len(v) + 1) // include extra header byte
 	if inlineSize > int64(tb.tupleLengthTarget) {
@@ -599,7 +611,13 @@ func (tb *TupleBuilder) PutAdaptiveFromInline(ctx context.Context, i int, v []by
 		lengthSize, _ := makeVarInt(blobLength, tb.buf[tb.pos:])
 		outOfBandSize := lengthSize + hash.ByteLen
 
-		blobHash, err := tb.vs.WriteBytes(ctx, []byte(v))
+		var blobHash hash.Hash
+		var err error
+		if pw, ok := tb.vs.(PriorBytesWriter); ok && !prior.IsEmpty() {
+			blobHash, err = pw.WriteBytesReusing(ctx, v, prior)
+		} else {
+			blobHash, err = tb.vs.WriteBytes(ctx, []byte(v))
+		}
 		if err != nil {
 			return err
 		}

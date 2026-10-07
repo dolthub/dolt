@@ -262,6 +262,11 @@ func (ns *nodeStore) CompareJsonAdaptiveValues(ctx context.Context, l, r val.Ada
 	return compareJsonAdaptiveValues(ctx, ns, l, r)
 }
 
+// WriteBytesReusing implements val.PriorBytesWriter.
+func (ns *nodeStore) WriteBytesReusing(ctx context.Context, b []byte, prior hash.Hash) (hash.Hash, error) {
+	return SerializeBytesToAddrReusing(ctx, ns, b, prior)
+}
+
 func (ns *nodeStore) WriteBytes(ctx context.Context, b []byte) (hash.Hash, error) {
 	_, h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader(b), len(b))
 	return h, err
