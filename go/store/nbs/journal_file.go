@@ -16,14 +16,10 @@ package nbs
 
 import "os"
 
-// journalFile owns how the chunk journal is written to disk and made durable.
-// Writes land in space zero-filled ahead of them, in |journalPrepareStep|
-// increments, so that syncData does not also have to commit a file size
-// change. Bootstrapping treats a zero record length as the end of the journal
-// and truncates the zeros after it.
+// journalFile writes the chunk journal, zero-padding ahead of writes so that
+// syncs do not change the file size.
 type journalFile struct {
-	f *os.File
-	// preparedThrough is the end of the zero-filled region.
+	f               *os.File
 	preparedThrough int64
 }
 
@@ -31,10 +27,8 @@ func newJournalFile(f *os.File) *journalFile {
 	return &journalFile{f: f}
 }
 
-// writeAt writes |p| at |off|, first zero-filling past the write if it would
-// extend beyond the prepared region. An empty write prepares nothing: bytes
-// past the journal's last valid record are left alone unless records are
-// written over them.
+// writeAt pads ahead of |p| when needed. An empty write never pads, leaving
+// any bytes past the last record for fsck.
 func (jf *journalFile) writeAt(off int64, p []byte) (int, error) {
 	if len(p) == 0 {
 		return 0, nil
@@ -46,10 +40,10 @@ func (jf *journalFile) writeAt(off int64, p []byte) (int, error) {
 }
 
 func (jf *journalFile) prepare(off, end int64) error {
-	if journalPrepareStep == 0 || end <= jf.preparedThrough {
+	if journalPadBufferSize == 0 || end <= jf.preparedThrough {
 		return nil
 	}
-	target := end + journalPrepareStep
+	target := end + journalPadBufferSize
 	zeros := make([]byte, min(int64(1<<20), target-off))
 	for o := max(jf.preparedThrough, off); o < target; o += int64(len(zeros)) {
 		if _, err := jf.f.WriteAt(zeros[:min(int64(len(zeros)), target-o)], o); err != nil {
@@ -63,13 +57,11 @@ func (jf *journalFile) prepare(off, end int64) error {
 	return nil
 }
 
-// syncData makes everything written so far durable.
 func (jf *journalFile) syncData() error {
 	return syncFileData(jf.f)
 }
 
-// finish truncates any prepared space past |off|, the end of the journal's
-// records, and syncs the file.
+// finish truncates padding past |off| and syncs.
 func (jf *journalFile) finish(off int64) error {
 	if jf.preparedThrough > off {
 		if err := jf.f.Truncate(off); err != nil {

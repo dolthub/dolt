@@ -4,13 +4,14 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//	http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package nbs
 
 import (
@@ -38,26 +39,25 @@ func fileSize(t *testing.T, path string) int64 {
 }
 
 func TestJournalFileWriteAtPreparesAhead(t *testing.T) {
-	if journalPrepareStep == 0 {
-		t.Skip("journal preparation is disabled on this platform")
+	if journalPadBufferSize == 0 {
+		t.Skip("journal padding is disabled on this platform")
 	}
 	jf, path := newTestJournalFile(t)
 	data := []byte("record")
 	n, err := jf.writeAt(0, data)
 	require.NoError(t, err)
 	assert.Equal(t, len(data), n)
-	assert.Equal(t, int64(len(data))+journalPrepareStep, jf.preparedThrough)
+	assert.Equal(t, int64(len(data))+journalPadBufferSize, jf.preparedThrough)
 	assert.Equal(t, jf.preparedThrough, fileSize(t, path))
 
 	contents, err := os.ReadFile(path)
 	require.NoError(t, err)
 	assert.Equal(t, data, contents[:len(data)])
-	assert.True(t, bytes.Equal(contents[len(data):], make([]byte, len(contents)-len(data))), "prepared space is zero-filled")
+	assert.True(t, bytes.Equal(contents[len(data):], make([]byte, len(contents)-len(data))))
 
-	// A write inside the prepared region prepares nothing more.
 	_, err = jf.writeAt(int64(len(data)), data)
 	require.NoError(t, err)
-	assert.Equal(t, int64(len(data))+journalPrepareStep, jf.preparedThrough)
+	assert.Equal(t, int64(len(data))+journalPadBufferSize, jf.preparedThrough)
 }
 
 func TestJournalFileEmptyWritePreparesNothing(t *testing.T) {

@@ -590,8 +590,8 @@ func TestRangeIndex(t *testing.T) {
 }
 
 func TestJournalWriterZeroFillAhead(t *testing.T) {
-	if journalPrepareStep == 0 {
-		t.Skip("journal preparation is disabled on this platform")
+	if journalPadBufferSize == 0 {
+		t.Skip("journal padding is disabled on this platform")
 	}
 	ctx := context.Background()
 	path := newTestFilePath(t)
@@ -606,9 +606,8 @@ func TestJournalWriterZeroFillAhead(t *testing.T) {
 
 	info, err := os.Stat(path)
 	require.NoError(t, err)
-	assert.GreaterOrEqual(t, info.Size(), j.off+journalPrepareStep, "the journal is zero-filled ahead of its records")
+	assert.GreaterOrEqual(t, info.Size(), j.off+journalPadBufferSize)
 
-	// Reopen without closing, as after a crash: the zeros end the journal and are truncated.
 	reopened, _, err := openJournalWriter(ctx, path)
 	require.NoError(t, err)
 	recovered, err := reopened.bootstrapJournal(ctx, true, nil, nil)
@@ -620,7 +619,6 @@ func TestJournalWriterZeroFillAhead(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, reopened.off, info.Size())
 
-	// A clean close leaves no zero tail.
 	more := randomCompressedChunks(16)
 	for _, cc := range more {
 		require.NoError(t, reopened.writeCompressedChunk(ctx, dherrors.FatalBehaviorError, cc))
@@ -635,8 +633,6 @@ func TestJournalWriterZeroFillAhead(t *testing.T) {
 	require.NoError(t, j.journal.f.Close())
 }
 
-// Bytes past the last valid record may be evidence of data loss for fsck, so a
-// journal that writes nothing must leave them alone.
 func TestJournalWriterCloseWithoutWritesLeavesTrailingBytes(t *testing.T) {
 	ctx := context.Background()
 	path := newTestFilePath(t)

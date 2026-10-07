@@ -22,15 +22,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// journalPrepareStep is how far past a write the journal is zero-filled.
-// Writing into blocks that already hold data lets fdatasync skip the
-// filesystem metadata commit that appending (or writing into sparse or
-// fallocate'd space) would require on every journal sync.
-const journalPrepareStep = 4 << 20
+const journalPadBufferSize = 4 << 20
 
-// syncFileData makes the file's data durable. fdatasync flushes the data and
-// any metadata needed to read it back (size, block allocation), but not
-// timestamps.
 func syncFileData(f *os.File) error {
 	return unix.Fdatasync(int(f.Fd()))
 }

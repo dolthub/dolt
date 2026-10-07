@@ -18,9 +18,8 @@ package nbs
 
 import "os"
 
-// journalPrepareStep is zero: the benefit of zero-filling ahead has only been
-// measured with Linux fdatasync.
-const journalPrepareStep = 0
+// fdatasync is Linux specific; other platforms do not pad.
+const journalPadBufferSize = 0
 
 func syncFileData(f *os.File) error {
 	return f.Sync()
