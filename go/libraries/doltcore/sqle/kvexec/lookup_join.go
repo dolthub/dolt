@@ -35,19 +35,32 @@ import (
 // source representation here lets SQL rows and storage tuples share the same
 // lookup, filtering, and outer-join state machine.
 type lookupJoinSource interface {
+	// nextLookupKey advances to the next source row and encodes its destination
+	// lookup key, retaining the source row for buildRow. The boolean is false
+	// when no destination row can match. Returns io.EOF when the source is exhausted.
 	nextLookupKey(*sql.Context) (val.Tuple, bool, error)
+
+	// buildRow combines the current source row with the destination key and value
+	// tuples in a new SQL row. Nil destination tuples produce a null-extended row.
 	buildRow(*sql.Context, val.Tuple, val.Tuple) (sql.Row, error)
+
+	// Close releases the source iterator's resources.
 	Close(*sql.Context) error
 }
 
 type lookupJoinKvIter struct {
-	src          lookupJoinSource
-	srcLen       int
-	dstIter      prolly.MapIter
-	dstIterGen   index.SecondaryLookupIterGen
-	srcFilter    sql.Expression
-	dstFilter    sql.Expression
-	joinFilter   sql.Expression
+	src        lookupJoinSource
+	srcLen     int
+	dstIter    prolly.MapIter
+	dstIterGen index.SecondaryLookupIterGen
+
+	// TODO: we want to build KV-side static expression implementations
+	// so that we can execute filters more efficiently
+	srcFilter  sql.Expression
+	dstFilter  sql.Expression
+	joinFilter sql.Expression
+
+	// LEFT_JOIN impl details
 	isLeftJoin   bool
 	excludeNulls bool
 	returnedARow bool
@@ -87,13 +100,21 @@ func newLookupKvIter(
 
 func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 	for {
+		// (1) initialize secondary iter if does not exist yet
+		// (2) read from secondary until EOF
+		// (3) concat, convert, filter primary/secondary rows
 		if l.dstIter == nil {
+			// if secondary iterator does not exist:
+			//   (1) read the next source row or KV pair
+			//   (2) map it into destination key form
+			//   (3) initialize secondary iterator with that key
 			l.returnedARow = false
 			key, canMatch, err := l.src.nextLookupKey(ctx)
 			if err != nil {
 				return nil, err
 			}
 
+			// Skip the lookup when no right row can match this key.
 			if canMatch {
 				l.dstIter, err = l.dstIterGen.New(ctx, key)
 				if err != nil {
@@ -123,6 +144,7 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 			return nil, err
 		}
 
+		// side-specific filters are currently hoisted
 		if l.srcFilter != nil {
 			res, err := sql.EvaluateCondition(ctx, l.srcFilter, ret[:l.srcLen])
 			if err != nil {
@@ -153,6 +175,7 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 			}
 
 			if res == nil && l.excludeNulls {
+				// override default left join behavior
 				continue
 			}
 
@@ -167,11 +190,13 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 }
 
 type kvLookupJoinSource struct {
-	iter    prolly.MapIter
+	iter prolly.MapIter
+	// mapping inputs (key, value) to create a destination key
 	mapping *lookupMapping
-	joiner  *prollyToSqlJoiner
-	key     val.Tuple
-	value   val.Tuple
+	// projections
+	joiner *prollyToSqlJoiner
+	key    val.Tuple
+	value  val.Tuple
 }
 
 func (s *kvLookupJoinSource) nextLookupKey(ctx *sql.Context) (val.Tuple, bool, error) {

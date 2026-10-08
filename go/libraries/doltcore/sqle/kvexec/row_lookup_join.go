@@ -138,11 +138,14 @@ func (b *Builder) newRowLookupKvIter(
 // rowLookupJoinSource keeps the left side as SQL rows and decodes only the
 // right side's storage tuples.
 type rowLookupJoinSource struct {
-	iter    sql.RowIter
-	srcLen  int
-	row     sql.Row
+	iter sql.RowIter
+	// srcLen is the width of the left node schema
+	srcLen int
+	row    sql.Row
+	// mapping encodes a destination key from the left row
 	mapping *rowLookupMapping
-	joiner  *prollyToSqlJoiner
+	// joiner decodes the KV pairs read from the right side
+	joiner *prollyToSqlJoiner
 }
 
 func (s *rowLookupJoinSource) nextLookupKey(ctx *sql.Context) (val.Tuple, bool, error) {
@@ -151,6 +154,7 @@ func (s *rowLookupJoinSource) nextLookupKey(ctx *sql.Context) (val.Tuple, bool, 
 		return nil, false, err
 	}
 
+	// the left iter begins with rows from the outer scope; strip those away
 	s.row = row[len(row)-s.srcLen:]
 	return s.mapping.dstKeyTuple(ctx, s.row)
 }
