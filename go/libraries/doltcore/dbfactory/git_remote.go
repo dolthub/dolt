@@ -199,15 +199,7 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 		return nil, nil, nil, err
 	}
 
-	cacheRoot, ok, err := resolveGitCacheRoot(params)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	if !ok {
-		return nil, nil, nil, fmt.Errorf("%s is required for git remotes", GitCacheRootParam)
-	}
-
-	cacheRepo, err := cacheRepoPath(cacheRoot, remoteURL.String(), ref)
+	cacheRepo, err := GitRemoteCacheKey(urlObj, params)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -419,6 +411,25 @@ func resolveGitCacheRoot(params map[string]interface{}) (root string, ok bool, e
 		return "", false, fmt.Errorf("%s cannot be empty", GitCacheRootParam)
 	}
 	return s, true, nil
+}
+
+// GitRemoteCacheKey returns the local bare repository path used as the cache key
+// by both GitRemoteFactory and the SQL database provider. It identifies a remote
+// by its local database cache root, underlying URL, and effective Git ref.
+// URL paths and refs retain their case; omitted or blank refs use the default.
+func GitRemoteCacheKey(urlObj *url.URL, params map[string]interface{}) (string, error) {
+	remoteURL, ref, err := parseGitRemoteFactoryURL(urlObj, params)
+	if err != nil {
+		return "", err
+	}
+	cacheRoot, ok, err := resolveGitCacheRoot(params)
+	if err != nil {
+		return "", err
+	}
+	if !ok {
+		return "", fmt.Errorf("%s is required for git remotes", GitCacheRootParam)
+	}
+	return cacheRepoPath(cacheRoot, remoteURL.String(), ref)
 }
 
 func cacheRepoPath(cacheBase, remoteURL, ref string) (string, error) {

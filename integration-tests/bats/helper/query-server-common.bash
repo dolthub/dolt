@@ -169,6 +169,23 @@ stop_sql_server() {
 }
 
 definePORT() {
+  if [ "$IS_WINDOWS" == true ]; then
+    python - <<'EOF'
+import random
+import socket
+
+for _ in range(100):
+  port = random.randint(2048, 6143)
+  s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+  s.settimeout(0.1)
+  if s.connect_ex(('127.0.0.1', port)) != 0:
+    s.close()
+    print(port)
+    break
+  s.close()
+EOF
+    return
+  fi
   for i in {0..99}
   do
     port=$((RANDOM % 4096 + 2048))

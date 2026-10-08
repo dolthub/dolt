@@ -17,6 +17,7 @@ package enginetest
 import (
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/go-mysql-server/testutils"
 )
 
@@ -136,14 +137,71 @@ var NonlocalScripts = []queries.ScriptTest{
 	{
 		Name: "creating a table matching a nonlocal table rule results in an error",
 		SetUpScript: []string{
-			"CALL DOLT_BRANCH('other')",
 			`INSERT INTO dolt_nonlocal_tables(table_name, target_ref, options) VALUES
 				("nonlocal_table", "main", "immediate")`,
+			"CALL DOLT_COMMIT('-Am', 'add nonlocal rule')",
+			"CALL DOLT_BRANCH('other')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query:    "CALL DOLT_CHECKOUT('other');",
+				Expected: []sql.Row{{0, "Switched to branch 'other'"}},
+			},
+			{
 				Query:          "CREATE TABLE nonlocal_table (pk char(8) PRIMARY KEY);",
 				ExpectedErrStr: "Cannot create table name nonlocal_table because it matches a name present in dolt_nonlocal_tables.",
+			},
+		},
+	},
+	// https://github.com/dolthub/dolt/issues/11995
+	{
+		Name: "creating a table matching a nonlocal table rule is only allowed on the rule's target branch",
+		SetUpScript: []string{
+			`INSERT INTO dolt_nonlocal_tables (table_name, target_ref, options) VALUES
+				('global_*', 'main', 'immediate')`,
+			"CALL DOLT_COMMIT('-Am', 'add nonlocal rule');",
+			"CALL DOLT_BRANCH('other');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CREATE TABLE global_a (id INT PRIMARY KEY);",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "CREATE TABLE global_b (id INT, CONSTRAINT pk_b PRIMARY KEY (id));",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "CALL DOLT_CHECKOUT('other');",
+				Expected: []sql.Row{{0, "Switched to branch 'other'"}},
+			},
+			{
+				Query:          "CREATE TABLE global_c (id INT PRIMARY KEY);",
+				ExpectedErrStr: "Cannot create table name global_c because it matches a name present in dolt_nonlocal_tables.",
+			},
+			{
+				Query:          "CREATE TABLE global_d (id INT, CONSTRAINT pk_d PRIMARY KEY (id));",
+				ExpectedErrStr: "Cannot create table name global_d because it matches a name present in dolt_nonlocal_tables.",
+			},
+		},
+	},
+	{
+		Name: "creating a table matching a nonlocal table rule with ref_table set or a frozen tag target is rejected on the target branch",
+		SetUpScript: []string{
+			"CALL DOLT_TAG('v1')",
+			`INSERT INTO dolt_nonlocal_tables(table_name, target_ref, ref_table, options) VALUES
+				("renamed_*", "main", "other_name", "immediate"),
+				("tagged_*", "v1", "", "immediate")`,
+			"CALL DOLT_COMMIT('-Am', 'add nonlocal rules')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CREATE TABLE renamed_a (id INT PRIMARY KEY);",
+				ExpectedErrStr: "Cannot create table name renamed_a because it matches a name present in dolt_nonlocal_tables.",
+			},
+			{
+				Query:          "CREATE TABLE tagged_a (id INT PRIMARY KEY);",
+				ExpectedErrStr: "Cannot create table name tagged_a because it matches a name present in dolt_nonlocal_tables.",
 			},
 		},
 	},
@@ -206,6 +264,166 @@ var NonlocalScripts = []queries.ScriptTest{
 			{
 				Query:    "show tables;",
 				Expected: []sql.Row{{"foo"}},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/11997
+		Name: "schema override permits ignored nonlocal tables",
+		SetUpScript: []string{
+			"CALL dolt_tag('empty_schema');",
+			"CREATE TABLE global_test (id int primary key, name varchar(100), INDEX (name));",
+			"INSERT INTO global_test VALUES (1, 'one'), (2, NULL);",
+			"CREATE TABLE global_empty (id int primary key);",
+			"CREATE TABLE local_only (id int primary key);",
+			"INSERT INTO dolt_ignore VALUES ('global_*', true), ('local_only', true);",
+			"INSERT INTO dolt_nonlocal_tables (table_name, target_ref, options) VALUES ('global_*', 'main', 'immediate');",
+			"CALL dolt_commit('-Am', 'configure nonlocal tables');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SET @@dolt_override_schema='main';",
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM global_test;",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "SELECT * FROM global_test ORDER BY id;",
+				Expected: []sql.Row{{1, "one"}, {2, nil}},
+			},
+			{
+				Query:    "SELECT id FROM global_test WHERE name = 'one';",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT * FROM global_empty;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:          "SELECT * FROM local_only;",
+				ExpectedErrStr: "unable to find table 'local_only' at overridden schema root",
+			},
+			{
+				Query: "SET @@dolt_override_schema='empty_schema';",
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM global_test;",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query: "SET @@dolt_override_schema='doesNotExist';",
+			},
+			{
+				Query:          "SELECT * FROM global_test;",
+				ExpectedErrStr: "unable to resolve schema override value: branch not found: doesNotExist",
+			},
+		},
+	},
+	{
+		Name: "schema override permits ignored nonlocal aliases on another branch",
+		SetUpScript: []string{
+			"INSERT INTO dolt_ignore VALUES ('global_*', true);",
+			"INSERT INTO dolt_nonlocal_tables (table_name, target_ref, ref_table, options) VALUES ('alias', 'main', 'global_test', 'immediate');",
+			"CALL dolt_commit('-Am', 'configure nonlocal alias');",
+			"CALL dolt_branch('other');",
+			"CREATE TABLE global_test (id int primary key, name varchar(100));",
+			"INSERT INTO global_test VALUES (1, 'one');",
+			"CALL dolt_checkout('other');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SET @@dolt_override_schema='main';",
+			},
+			{
+				Query:    "SELECT * FROM alias;",
+				Expected: []sql.Row{{1, "one"}},
+			},
+			{
+				Query:          "SELECT * FROM `mydb/main`.global_test;",
+				ExpectedErrStr: "unable to find table 'global_test' at overridden schema root",
+			},
+		},
+	},
+	{
+		// TODO: Support schema-qualified override lookups and PostgreSQL string conversion in Doltgres.
+		Dialect: "mysql",
+		Name:    "schema override maps committed nonlocal tables",
+		SetUpScript: []string{
+			"CALL dolt_tag('empty_schema');",
+			"CREATE TABLE target (id int primary key, name varchar(100));",
+			"INSERT INTO target VALUES (1, 'one');",
+			"CALL dolt_commit('-Am', 'create target');",
+			"CALL dolt_tag('original');",
+			"ALTER TABLE target ADD COLUMN extra int;",
+			"INSERT INTO target VALUES (2, 'two', 20);",
+			"CALL dolt_commit('-am', 'extend target');",
+			"CALL dolt_checkout('-b', 'other');",
+			"INSERT INTO dolt_nonlocal_tables (table_name, target_ref, ref_table, options) VALUES ('alias', 'main', 'target', 'immediate'), ('tag_alias', 'original', 'target', 'immediate');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SET @@dolt_override_schema='original';",
+			},
+			{
+				Query:    "SELECT * FROM alias ORDER BY id;",
+				Expected: []sql.Row{{1, "one"}, {2, "two"}},
+			},
+			{
+				Query:    "SELECT * FROM tag_alias;",
+				Expected: []sql.Row{{1, "one"}},
+			},
+			{
+				Query: "SET @@dolt_override_schema='empty_schema';",
+			},
+			{
+				Query:    "SELECT * FROM tag_alias;",
+				Expected: []sql.Row{{1, "one"}},
+			},
+			{
+				Query:    "SELECT * FROM alias ORDER BY id;",
+				Expected: []sql.Row{{1, "one", nil}, {2, "two", 20}},
+			},
+		},
+	},
+	{
+		Name: "conflict updates use the local backing table despite a nonlocal rule",
+		SetUpScript: []string{
+			"CREATE TABLE target (id int primary key, value int);",
+			"INSERT INTO target VALUES (1, 0);",
+			"CALL dolt_commit('-Am', 'create target');",
+			"CALL dolt_checkout('-b', 'other');",
+			"UPDATE target SET value = 10;",
+			"CALL dolt_commit('-am', 'other value');",
+			"CALL dolt_checkout('main');",
+			"UPDATE target SET value = 20;",
+			"CALL dolt_commit('-am', 'main value');",
+			"SET @@dolt_force_transaction_commit = 1;",
+			"CALL dolt_merge('other');",
+			"INSERT INTO dolt_nonlocal_tables (table_name, target_ref, options) VALUES ('target', 'other', 'immediate');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT base_value, our_value, their_value FROM dolt_conflicts_target;",
+				Expected: []sql.Row{{0, 20, 10}},
+			},
+			{
+				Query:    "SELECT value FROM target;",
+				Expected: []sql.Row{{10}},
+			},
+			{
+				Query: "UPDATE dolt_conflicts_target SET our_value = 30 WHERE our_id = 1;",
+			},
+			{
+				Query: "DELETE FROM dolt_nonlocal_tables WHERE table_name = 'target';",
+			},
+			{
+				Query:    "SELECT value FROM target;",
+				Expected: []sql.Row{{30}},
+			},
+			{
+				Query:    "SELECT value FROM `mydb/other`.target;",
+				Expected: []sql.Row{{10}},
 			},
 		},
 	},
