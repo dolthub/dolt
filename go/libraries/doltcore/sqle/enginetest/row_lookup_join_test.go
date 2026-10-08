@@ -742,62 +742,104 @@ ORDER BY l.id, r.id`,
 			`INSERT INTO duplicates VALUES (1,2,'keep'),(1,2,'keep'),(1,2,'drop'),(1,NULL,'nullb')`,
 		},
 		Assertions: []queries.ScriptTestAssertion{
-			{Query: `SELECT /*+ LOOKUP_JOIN(l,r) */ l.id, r.payload
+			{
+				Query: `SELECT /*+ LOOKUP_JOIN(l,r) */ l.id, r.payload
 FROM (SELECT * FROM sources LIMIT 1000) l
 LEFT JOIN targets r ON r.a=l.a AND r.b=l.b
-ORDER BY l.id, r.payload`, Expected: []sql.Row{{1, "drop"}, {1, "keep"}, {2, nil}, {3, nil}, {4, nil}, {5, "drop"}, {5, "keep"}, {6, nil}}},
-			{Query: `SELECT /*+ LOOKUP_JOIN(l,r) */ l.id, r.payload
+ORDER BY l.id, r.payload`,
+				Expected: []sql.Row{{1, "drop"}, {1, "keep"}, {2, nil}, {3, nil}, {4, nil}, {5, "drop"}, {5, "keep"}, {6, nil}},
+			},
+			{
+				Query: `SELECT /*+ LOOKUP_JOIN(l,r) */ l.id, r.payload
 FROM (SELECT * FROM sources LIMIT 1000) l
 LEFT JOIN targets r ON r.a <=> l.a AND r.b <=> l.b
-ORDER BY l.id, r.payload`, Expected: []sql.Row{{1, "drop"}, {1, "keep"}, {2, nil}, {3, "nullb"}, {4, "nulla"}, {5, "drop"}, {5, "keep"}, {6, nil}}},
-			{Query: `SELECT /*+ LOOKUP_JOIN(l,r) */ l.id, r.payload
+ORDER BY l.id, r.payload`,
+				Expected: []sql.Row{{1, "drop"}, {1, "keep"}, {2, nil}, {3, "nullb"}, {4, "nulla"}, {5, "drop"}, {5, "keep"}, {6, nil}},
+			},
+			{
+				Query: `SELECT /*+ LOOKUP_JOIN(l,r) */ l.id, r.payload
 FROM (SELECT * FROM sources LIMIT 1000) l
 LEFT JOIN targets r ON r.a=l.a AND r.b=l.b AND r.payload='keep'
-ORDER BY l.id, r.payload`, Expected: []sql.Row{{1, "keep"}, {2, nil}, {3, nil}, {4, nil}, {5, "keep"}, {6, nil}}},
-			{Query: `SELECT /*+ LOOKUP_JOIN(l,r) */ l.id, r.payload
+ORDER BY l.id, r.payload`,
+				Expected: []sql.Row{{1, "keep"}, {2, nil}, {3, nil}, {4, nil}, {5, "keep"}, {6, nil}},
+			},
+			{
+				Query: `SELECT /*+ LOOKUP_JOIN(l,r) */ l.id, r.payload
 FROM (SELECT * FROM sources LIMIT 1000) l
 LEFT JOIN targets r ON r.a=l.a AND r.b=l.b AND r.payload='missing'
-ORDER BY l.id, r.payload`, Expected: []sql.Row{{1, nil}, {2, nil}, {3, nil}, {4, nil}, {5, nil}, {6, nil}}},
-			{Query: `SELECT /*+ LOOKUP_JOIN(l,r) */ l.id, r.payload
+ORDER BY l.id, r.payload`,
+				Expected: []sql.Row{{1, nil}, {2, nil}, {3, nil}, {4, nil}, {5, nil}, {6, nil}},
+			},
+			{
+				Query: `SELECT /*+ LOOKUP_JOIN(l,r) */ l.id, r.payload
 FROM (SELECT * FROM sources LIMIT 1000) l
 LEFT JOIN targets r ON r.a=l.a AND r.b=2
-ORDER BY l.id, r.payload`, Expected: []sql.Row{{1, "drop"}, {1, "keep"}, {2, "drop"}, {2, "keep"}, {3, "drop"}, {3, "keep"}, {4, nil}, {5, "drop"}, {5, "keep"}, {6, nil}}},
-			{Query: `SELECT /*+ LOOKUP_JOIN(l,r) */ l.id, r.payload
+ORDER BY l.id, r.payload`,
+				Expected: []sql.Row{{1, "drop"}, {1, "keep"}, {2, "drop"}, {2, "keep"}, {3, "drop"}, {3, "keep"}, {4, nil}, {5, "drop"}, {5, "keep"}, {6, nil}},
+			},
+			{
+				Query: `SELECT /*+ LOOKUP_JOIN(l,r) */ l.id, r.payload
 FROM (SELECT * FROM sources LIMIT 1000) l
 LEFT JOIN targets r ON r.a=l.a
-ORDER BY l.id, r.payload`, Expected: []sql.Row{{1, "drop"}, {1, "keep"}, {1, "nullb"}, {2, "drop"}, {2, "keep"}, {2, "nullb"}, {3, "drop"}, {3, "keep"}, {3, "nullb"}, {4, nil}, {5, "drop"}, {5, "keep"}, {5, "nullb"}, {6, nil}}},
-			{Query: `SELECT /*+ LOOKUP_JOIN(l,r) */ l.id, r.payload
+ORDER BY l.id, r.payload`,
+				Expected: []sql.Row{{1, "drop"}, {1, "keep"}, {1, "nullb"}, {2, "drop"}, {2, "keep"}, {2, "nullb"}, {3, "drop"}, {3, "keep"}, {3, "nullb"}, {4, nil}, {5, "drop"}, {5, "keep"}, {5, "nullb"}, {6, nil}},
+			},
+			{
+				Query: `SELECT /*+ LOOKUP_JOIN(l,r) */ l.id, r.payload
 FROM (SELECT * FROM sources LIMIT 1000) l
 LEFT JOIN duplicates r ON r.a=l.a AND r.b=l.b
-ORDER BY l.id, r.payload`, Expected: []sql.Row{{1, "drop"}, {1, "keep"}, {1, "keep"}, {2, nil}, {3, nil}, {4, nil}, {5, "drop"}, {5, "keep"}, {5, "keep"}, {6, nil}}},
-			{Query: `SELECT /*+ LOOKUP_JOIN(l,r) */ l.id, r.payload
+ORDER BY l.id, r.payload`,
+				Expected: []sql.Row{{1, "drop"}, {1, "keep"}, {1, "keep"}, {2, nil}, {3, nil}, {4, nil}, {5, "drop"}, {5, "keep"}, {5, "keep"}, {6, nil}},
+			},
+			{
+				Query: `SELECT /*+ LOOKUP_JOIN(l,r) */ l.id, r.payload
 FROM (SELECT * FROM sources LIMIT 1000) l
 LEFT JOIN duplicates r ON r.a <=> l.a AND r.b <=> l.b
-ORDER BY l.id, r.payload`, Expected: []sql.Row{{1, "drop"}, {1, "keep"}, {1, "keep"}, {2, nil}, {3, "nullb"}, {4, nil}, {5, "drop"}, {5, "keep"}, {5, "keep"}, {6, nil}}},
-			{Query: `SELECT /*+ LOOKUP_JOIN(l,r) */ l.id, r.payload
+ORDER BY l.id, r.payload`,
+				Expected: []sql.Row{{1, "drop"}, {1, "keep"}, {1, "keep"}, {2, nil}, {3, "nullb"}, {4, nil}, {5, "drop"}, {5, "keep"}, {5, "keep"}, {6, nil}},
+			},
+			{
+				Query: `SELECT /*+ LOOKUP_JOIN(l,r) */ l.id, r.payload
 FROM (SELECT * FROM sources LIMIT 1000) l
 LEFT JOIN duplicates r ON r.a=l.a AND r.b=l.b AND r.payload='keep'
-ORDER BY l.id, r.payload`, Expected: []sql.Row{{1, "keep"}, {1, "keep"}, {2, nil}, {3, nil}, {4, nil}, {5, "keep"}, {5, "keep"}, {6, nil}}},
-			{Query: `SELECT /*+ LOOKUP_JOIN(l,r) */ l.id, r.payload
+ORDER BY l.id, r.payload`,
+				Expected: []sql.Row{{1, "keep"}, {1, "keep"}, {2, nil}, {3, nil}, {4, nil}, {5, "keep"}, {5, "keep"}, {6, nil}},
+			},
+			{
+				Query: `SELECT /*+ LOOKUP_JOIN(l,r) */ l.id, r.payload
 FROM (SELECT * FROM sources LIMIT 1000) l
 LEFT JOIN duplicates r ON r.a=l.a AND r.b=l.b AND r.payload='missing'
-ORDER BY l.id, r.payload`, Expected: []sql.Row{{1, nil}, {2, nil}, {3, nil}, {4, nil}, {5, nil}, {6, nil}}},
-			{Query: `SELECT /*+ LOOKUP_JOIN(l,r) */ l.id, r.payload
+ORDER BY l.id, r.payload`,
+				Expected: []sql.Row{{1, nil}, {2, nil}, {3, nil}, {4, nil}, {5, nil}, {6, nil}},
+			},
+			{
+				Query: `SELECT /*+ LOOKUP_JOIN(l,r) */ l.id, r.payload
 FROM (SELECT * FROM sources LIMIT 1000) l
 LEFT JOIN duplicates r ON r.a=l.a AND r.b=2
-ORDER BY l.id, r.payload`, Expected: []sql.Row{{1, "drop"}, {1, "keep"}, {1, "keep"}, {2, "drop"}, {2, "keep"}, {2, "keep"}, {3, "drop"}, {3, "keep"}, {3, "keep"}, {4, nil}, {5, "drop"}, {5, "keep"}, {5, "keep"}, {6, nil}}},
-			{Query: `SELECT /*+ LOOKUP_JOIN(l,r) */ l.id, r.payload
+ORDER BY l.id, r.payload`,
+				Expected: []sql.Row{{1, "drop"}, {1, "keep"}, {1, "keep"}, {2, "drop"}, {2, "keep"}, {2, "keep"}, {3, "drop"}, {3, "keep"}, {3, "keep"}, {4, nil}, {5, "drop"}, {5, "keep"}, {5, "keep"}, {6, nil}},
+			},
+			{
+				Query: `SELECT /*+ LOOKUP_JOIN(l,r) */ l.id, r.payload
 FROM (SELECT * FROM sources LIMIT 1000) l
 LEFT JOIN duplicates r ON r.a=l.a
-ORDER BY l.id, r.payload`, Expected: []sql.Row{{1, "drop"}, {1, "keep"}, {1, "keep"}, {1, "nullb"}, {2, "drop"}, {2, "keep"}, {2, "keep"}, {2, "nullb"}, {3, "drop"}, {3, "keep"}, {3, "keep"}, {3, "nullb"}, {4, nil}, {5, "drop"}, {5, "keep"}, {5, "keep"}, {5, "nullb"}, {6, nil}}},
-			{Query: `WITH grouped AS (SELECT a, COUNT(*) AS n FROM sources GROUP BY a)
+ORDER BY l.id, r.payload`,
+				Expected: []sql.Row{{1, "drop"}, {1, "keep"}, {1, "keep"}, {1, "nullb"}, {2, "drop"}, {2, "keep"}, {2, "keep"}, {2, "nullb"}, {3, "drop"}, {3, "keep"}, {3, "keep"}, {3, "nullb"}, {4, nil}, {5, "drop"}, {5, "keep"}, {5, "keep"}, {5, "nullb"}, {6, nil}},
+			},
+			{
+				Query: `WITH grouped AS (SELECT a, COUNT(*) AS n FROM sources GROUP BY a)
 SELECT /*+ LOOKUP_JOIN(g,r) */ g.a, g.n, r.id
 FROM grouped g LEFT JOIN targets r ON r.a=g.a
-ORDER BY g.a, r.id`, Expected: []sql.Row{{nil, 1, nil}, {1, 4, 1}, {1, 4, 2}, {1, 4, 3}, {9, 1, nil}}},
-			{Query: `SELECT /*+ LOOKUP_JOIN(l,r) */ l.id, r.id
+ORDER BY g.a, r.id`,
+				Expected: []sql.Row{{nil, 1, nil}, {1, 4, 1}, {1, 4, 2}, {1, 4, 3}, {9, 1, nil}},
+			},
+			{
+				Query: `SELECT /*+ LOOKUP_JOIN(l,r) */ l.id, r.id
 FROM (SELECT * FROM sources LIMIT 1000) l
 JOIN targets r ON r.a=l.a AND r.b=l.b
-ORDER BY l.id, r.id LIMIT 1`, Expected: []sql.Row{{1, 1}}},
+ORDER BY l.id, r.id LIMIT 1`,
+				Expected: []sql.Row{{1, 1}},
+			},
 		},
 	},
 }
