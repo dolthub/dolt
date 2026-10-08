@@ -195,6 +195,7 @@ func (ns *nodeStore) Write(ctx context.Context, nd *Node) (hash.Hash, error) {
 	if err := ns.store.Put(ctx, c, getAddrs); err != nil {
 		return hash.Hash{}, err
 	}
+	nd.nodeHash.Store(c.Hash())
 	ns.cache.insert(key, nd)
 	return c.Hash(), nil
 }
