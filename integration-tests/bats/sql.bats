@@ -59,6 +59,49 @@ teardown() {
     rm -rf .doltcfg
 }
 
+@test "sql: Dolt executable comments" {
+    run dolt sql -r csv -q "SELECT /*DOLT! 1 + */ 2 AS n"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "3" ]
+
+    run dolt sql -r csv -q "/*dolt! SET @dolt_marker = 7 */; SELECT @dolt_marker AS n;"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "7" ]
+
+    run dolt sql -r csv -q "SELECT 2 AS n /*DOLT ordinary comment */"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "2" ]
+
+    # A Dolt-only function can add a column while leaving valid SQL for MySQL.
+    run dolt sql -r csv -q "SELECT commit_hash FROM dolt_log LIMIT 1"
+    [ "$status" -eq 0 ]
+    head_hash="${lines[1]}"
+    run dolt sql -r csv -q "SELECT /*DOLT! DOLT_HASHOF('HEAD') AS commit_hash, */ 1 AS portable"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "$head_hash,1" ]
+
+    # MySQL ignores the version-control calls; Dolt commits the first row and resets the second.
+    run dolt sql <<'SQL'
+CREATE TABLE comment_portability (pk INT PRIMARY KEY);
+INSERT INTO comment_portability VALUES (1);
+/*DOLT! CALL DOLT_ADD('comment_portability') */;
+/*dolt! CALL DOLT_COMMIT('-m', 'commit from executable comment') */;
+INSERT INTO comment_portability VALUES (2);
+/*DOLT! CALL DOLT_RESET('--hard') */;
+SQL
+    [ "$status" -eq 0 ]
+
+    # The commit call must execute, and the hard reset must discard only the uncommitted row.
+    run dolt sql -r csv -q "SELECT message FROM dolt_log LIMIT 1"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "commit from executable comment" ]
+    run dolt sql -r csv -q "SELECT pk FROM comment_portability ORDER BY pk"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [ "${lines[1]}" = "1" ]
+
+}
+
 @test "sql: check configurations with all default options" {
     # remove any previous config directories
     rm -rf .doltcfg
@@ -980,6 +1023,20 @@ SQL
     [[ "$output" =~ "not found" ]] || false
 }
 
+@test "sql: boolean query results use numeric output" {
+    run dolt sql -r csv -q "select count(*) > 0 as positive, count(*) < 0 as negative from (select 1) t"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "1,0" ]
+
+    run dolt sql -q "select count(*) > 0 as positive, count(*) < 0 as negative from (select 1) t"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| 1        | 0        |" ]] || false
+
+    run dolt sql -r csv -q "select 'true' as text_value, true as boolean_value, null as null_value"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "true,1," ]
+}
+
 @test "sql: output formats" {
     dolt sql <<SQL
     CREATE TABLE test (
@@ -1032,6 +1089,22 @@ SQL
     run dolt sql -r parquet -q "select @@character_set_client"
     [ $status -eq 0 ]
     [[ "$output" =~ "utf8mb4" ]] || false
+}
+
+@test "sql: jsonl result format" {
+    run dolt sql -r jsonl -q "select 1 as id union all select 2 as id"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [ "${lines[0]}" = '{"id":1}' ]
+    [ "${lines[1]}" = '{"id":2}' ]
+
+    run dolt sql -r JSONL -q "select 1 as id where false"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+
+    run dolt sql -r json -q "select 1 as id"
+    [ "$status" -eq 0 ]
+    [ "$output" = '{"rows": [{"id":1}]}' ]
 }
 
 @test "sql: empty output exports properly" {

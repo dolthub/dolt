@@ -56,12 +56,7 @@ func addColumnToTable(
 	root doltdb.RootValue,
 	tbl *doltdb.Table,
 	tblName string,
-	tag uint64,
-	newColName string,
-	typeInfo typeinfo.TypeInfo,
-	nullable Nullable,
-	defaultVal *sql.ColumnDefaultValue,
-	comment string,
+	newCol schema.Column,
 	order *sql.ColumnOrder,
 ) (*doltdb.Table, error) {
 	oldSchema, err := tbl.GetSchema(ctx)
@@ -69,12 +64,7 @@ func addColumnToTable(
 		return nil, err
 	}
 
-	if err := validateNewColumn(ctx, root, tbl, tblName, tag, newColName, typeInfo); err != nil {
-		return nil, err
-	}
-
-	newCol, err := createColumn(nullable, newColName, tag, typeInfo, defaultVal.String(), comment)
-	if err != nil {
+	if err := validateNewColumn(ctx, root, tbl, tblName, newCol.Tag, newCol.Name, newCol.TypeInfo); err != nil {
 		return nil, err
 	}
 
@@ -88,8 +78,12 @@ func addColumnToTable(
 		return nil, err
 	}
 
+	if newCol.Virtual {
+		return newTable, nil
+	}
+
 	// TODO: we do a second pass in the engine to set a default if there is one. We should only do a single table scan.
-	return newTable.AddColumnToRows(ctx, newColName, newSchema)
+	return newTable.AddColumnToRows(ctx, newCol.Name, newSchema)
 }
 
 func orderToOrder(order *sql.ColumnOrder) *schema.ColumnOrder {

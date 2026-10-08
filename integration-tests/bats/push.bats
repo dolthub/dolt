@@ -51,6 +51,25 @@ teardown() {
     [[ "$output" =~ "t1" ]] || false
 }
 
+@test "push: reject invalid destination branch names" {
+    cd repo1
+    for branch in /bad ////origin/bad bad..name bad.lock bad/; do
+        run dolt push origin "main:$branch"
+        [ "$status" -ne 0 ]
+        [[ "$output" =~ "not a valid user branch name" ]] || false
+    done
+
+    dolt push origin main:valid/nested
+    dolt push origin main:refs/heads/qualified
+    cd ../repo2
+    dolt fetch origin
+    run dolt branch -r
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "origin/valid/nested" ]] || false
+    [[ "$output" =~ "origin/qualified" ]] || false
+    [[ ! "$output" =~ "bad" ]] || false
+}
+
 @test "push: push custom remote" {
     cd repo1
     setup_remote_server

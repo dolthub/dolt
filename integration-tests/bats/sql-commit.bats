@@ -152,7 +152,7 @@ SELECT $head_variable
 SQL
 
     [ $status -eq 0 ]
-    [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ \|[[:space:]]+1[[:space:]]+\| ]] || false
 
     # Verify that the head commit changes.
     [[ ! "$output" =~ $head_commit ]] || false
@@ -177,7 +177,7 @@ SELECT $head_variable = HASHOF('head');
 SQL
 
     [ $status -eq 0 ]
-    [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ \|[[:space:]]+1[[:space:]]+\| ]] || false
 
     run dolt log -n1
     [ $status -eq 0 ]
@@ -204,7 +204,7 @@ SELECT $head_variable = HASHOF('head');
 SQL
 
     [ $status -eq 0 ]
-    [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ \|[[:space:]]+1[[:space:]]+\| ]] || false
 
     run dolt log -n1
     [ $status -eq 0 ]

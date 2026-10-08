@@ -489,6 +489,21 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "+ | 1" ]] || false
     [[ ! "$output" =~ "- | 2" ]] || false
+
+    # https://github.com/dolthub/dolt/issues/5414
+    # --reverse must not be parsed as a value attached to the -r option.
+    # This exercises the reported short-option / long-flag collision using
+    # existing diff options; --diff-mode does not currently have a -m alias.
+    run dolt diff --reverse --merge-base main branch1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "- | 1" ]] || false
+    [[ ! "$output" =~ "+ | 2" ]] || false
+    reverse_merge_base="$output"
+
+    run dolt diff -r tabular --reverse --merge-base main branch1
+    [ "$status" -eq 0 ]
+    [ "$output" = "$reverse_merge_base" ]
+
 }
 
 @test "diff: data and schema changes" {
@@ -1186,6 +1201,17 @@ SQL
     [[ "$output" =~ "pv1" ]] || false
     [[ "$output" =~ "cv1" ]] || false
     [[ "$output" =~ "Primary key sets differ between revisions for table 'a', skipping data diff" ]] || false
+
+    # https://github.com/dolthub/dolt/issues/6124
+    run dolt sql -r csv <<'SQL'
+CREATE TABLE changed_pk(pk INT PRIMARY KEY); CALL dolt_commit('-Am','create'); ALTER TABLE changed_pk MODIFY COLUMN pk VARCHAR(10); CALL dolt_commit('-am','alter'); ALTER TABLE changed_pk ADD COLUMN col1 VARCHAR(20); CALL dolt_commit('-am','column');
+SQL
+    [ "$status" -eq 0 ]
+    run dolt diff HEAD HEAD~2
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'Primary key sets differ' ]] || false
+    [[ "$output" =~ '-  `col1` varchar(20)' ]] || false
+    [[ "$output" =~ '+  `pk` int NOT NULL' ]] || false
 }
 
 @test "diff: sql update queries only show changed columns" {
@@ -1782,10 +1808,10 @@ SQL
     [ "${lines[0]}" = "+------------+-----------+-------------+---------------+" ]
     [ "${lines[1]}" = "| Table name | Diff type | Data change | Schema change |" ]
     [ "${lines[2]}" = "+------------+-----------+-------------+---------------+" ]
-    [ "${lines[3]}" = "| t1         | dropped   | false       | true          |" ]
-    [ "${lines[4]}" = "| t2         | modified  | false       | true          |" ]
-    [ "${lines[5]}" = "| t3         | modified  | true        | false         |" ]
-    [ "${lines[6]}" = "| t4         | added     | false       | true          |" ]
+    [[ "${lines[3]}" =~ ^\|[[:space:]]+t1[[:space:]]+\|[[:space:]]+dropped[[:space:]]+\|[[:space:]]+0[[:space:]]+\|[[:space:]]+1[[:space:]]+\|$ ]] || false
+    [[ "${lines[4]}" =~ ^\|[[:space:]]+t2[[:space:]]+\|[[:space:]]+modified[[:space:]]+\|[[:space:]]+0[[:space:]]+\|[[:space:]]+1[[:space:]]+\|$ ]] || false
+    [[ "${lines[5]}" =~ ^\|[[:space:]]+t3[[:space:]]+\|[[:space:]]+modified[[:space:]]+\|[[:space:]]+1[[:space:]]+\|[[:space:]]+0[[:space:]]+\|$ ]] || false
+    [[ "${lines[6]}" =~ ^\|[[:space:]]+t4[[:space:]]+\|[[:space:]]+added[[:space:]]+\|[[:space:]]+0[[:space:]]+\|[[:space:]]+1[[:space:]]+\|$ ]] || false
     [ "${lines[7]}" = "+------------+-----------+-------------+---------------+" ]
 
     run dolt diff --name-only

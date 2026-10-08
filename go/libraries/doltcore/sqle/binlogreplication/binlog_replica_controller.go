@@ -213,13 +213,13 @@ func (d *doltBinlogReplicaController) SetReplicationSourceOptions(ctx *sql.Conte
 	for _, option := range options {
 		switch strings.ToUpper(option.Name) {
 		case "SOURCE_HOST":
-			value, err := getOptionValueAsString(option)
+			value, err := getOptionValue[string](option, "a string")
 			if err != nil {
 				return err
 			}
 			replicaSourceInfo.Host = value
 		case "SOURCE_SSL":
-			intValue, err := getOptionValueAsInt(option)
+			intValue, err := getOptionValue[int](option, "an integer")
 			if err != nil {
 				return err
 			}
@@ -231,37 +231,37 @@ func (d *doltBinlogReplicaController) SetReplicationSourceOptions(ctx *sql.Conte
 				return fmt.Errorf("SOURCE_SSL may only be set to 0 or 1")
 			}
 		case "SOURCE_USER":
-			value, err := getOptionValueAsString(option)
+			value, err := getOptionValue[string](option, "a string")
 			if err != nil {
 				return err
 			}
 			replicaSourceInfo.User = value
 		case "SOURCE_PASSWORD":
-			value, err := getOptionValueAsString(option)
+			value, err := getOptionValue[string](option, "a string")
 			if err != nil {
 				return err
 			}
 			replicaSourceInfo.Password = value
 		case "SOURCE_PORT":
-			intValue, err := getOptionValueAsInt(option)
+			intValue, err := getOptionValue[int](option, "an integer")
 			if err != nil {
 				return err
 			}
 			replicaSourceInfo.Port = uint16(intValue)
 		case "SOURCE_CONNECT_RETRY":
-			intValue, err := getOptionValueAsInt(option)
+			intValue, err := getOptionValue[int](option, "an integer")
 			if err != nil {
 				return err
 			}
 			replicaSourceInfo.ConnectRetryInterval = uint32(intValue)
 		case "SOURCE_RETRY_COUNT":
-			intValue, err := getOptionValueAsInt(option)
+			intValue, err := getOptionValue[int](option, "an integer")
 			if err != nil {
 				return err
 			}
 			replicaSourceInfo.ConnectRetryCount = uint64(intValue)
 		case "SOURCE_AUTO_POSITION":
-			intValue, err := getOptionValueAsInt(option)
+			intValue, err := getOptionValue[int](option, "an integer")
 			if err != nil {
 				return err
 			}
@@ -278,30 +278,24 @@ func (d *doltBinlogReplicaController) SetReplicationSourceOptions(ctx *sql.Conte
 }
 
 // SetReplicationFilterOptions implements the BinlogReplicaController interface.
-func (d *doltBinlogReplicaController) SetReplicationFilterOptions(_ *sql.Context, options []binlogreplication.ReplicationOption) error {
-	for _, option := range options {
-		switch strings.ToUpper(option.Name) {
-		case "REPLICATE_DO_TABLE":
-			value, err := getOptionValueAsTableNames(option)
-			if err != nil {
-				return err
-			}
-			err = d.filters.setDoTables(value)
-			if err != nil {
-				return err
-			}
-		case "REPLICATE_IGNORE_TABLE":
-			value, err := getOptionValueAsTableNames(option)
-			if err != nil {
-				return err
-			}
-			err = d.filters.setIgnoreTables(value)
-			if err != nil {
-				return err
-			}
-		default:
-			return fmt.Errorf("unsupported replication filter option: %s", option.Name)
-		}
+func (d *doltBinlogReplicaController) SetReplicationFilterOptions(ctx *sql.Context, options []binlogreplication.ReplicationOption) error {
+	d.operationMutex.Lock()
+	defer d.operationMutex.Unlock()
+
+	if d.applier.IsRunning() {
+		return sql.ErrReplicaRunning.New()
+	}
+
+	lowerCaseTableNames, err := ctx.GetSessionVariable(ctx, "lower_case_table_names")
+	if err != nil {
+		return err
+	}
+	lowerCaseTableNamesValue, ok := lowerCaseTableNames.(int64)
+	if !ok {
+		return fmt.Errorf("unexpected value type for lower_case_table_names: %T", lowerCaseTableNames)
+	}
+	if err := d.filters.setOptions(options, lowerCaseTableNamesValue != 0); err != nil {
+		return err
 	}
 
 	// TODO: Consider persisting filter settings. MySQL doesn't actually do this... unlike CHANGE REPLICATION SOURCE,
@@ -336,8 +330,7 @@ func (d *doltBinlogReplicaController) GetReplicaStatus(ctx *sql.Context) (*binlo
 	copy.SourceServerUuid = replicaSourceInfo.Uuid
 	copy.ConnectRetry = replicaSourceInfo.ConnectRetryInterval
 	copy.SourceRetryCount = replicaSourceInfo.ConnectRetryCount
-	copy.ReplicateDoTables = d.filters.getDoTables()
-	copy.ReplicateIgnoreTables = d.filters.getIgnoreTables()
+	copy.ReplicateDoTables, copy.ReplicateIgnoreTables, copy.ReplicateWildDoTables, copy.ReplicateWildIgnoreTables = d.filters.tableFilters()
 
 	if d.applier.currentPosition != nil {
 		copy.ExecutedGtidSet = d.applier.currentPosition.GTIDSet.String()
@@ -372,7 +365,7 @@ func (d *doltBinlogReplicaController) ResetReplica(ctx *sql.Context, resetAll bo
 			return err
 		}
 
-		d.filters = newFilterConfiguration()
+		d.filters.clear()
 	}
 
 	return nil
@@ -456,34 +449,15 @@ func (d *doltBinlogReplicaController) Close() {
 // Helper functions
 //
 
-func getOptionValueAsString(option binlogreplication.ReplicationOption) (string, error) {
-	stringOptionValue, ok := option.Value.(binlogreplication.StringReplicationOptionValue)
+// getOptionValue returns a replication option's native value with a consistent type error.
+func getOptionValue[T any](option binlogreplication.ReplicationOption, expectedType string) (T, error) {
+	value, ok := option.Value.(T)
 	if ok {
-		return stringOptionValue.GetValueAsString(), nil
+		return value, nil
 	}
 
-	return "", fmt.Errorf("unsupported value type for option %q; found %T, "+
-		"but expected a string", option.Name, option.Value.GetValue())
-}
-
-func getOptionValueAsInt(option binlogreplication.ReplicationOption) (int, error) {
-	integerOptionValue, ok := option.Value.(binlogreplication.IntegerReplicationOptionValue)
-	if ok {
-		return integerOptionValue.GetValueAsInt(), nil
-	}
-
-	return 0, fmt.Errorf("unsupported value type for option %q; found %T, "+
-		"but expected an integer", option.Name, option.Value.GetValue())
-}
-
-func getOptionValueAsTableNames(option binlogreplication.ReplicationOption) ([]sql.UnresolvedTable, error) {
-	tableNamesOptionValue, ok := option.Value.(binlogreplication.TableNamesReplicationOptionValue)
-	if ok {
-		return tableNamesOptionValue.GetValueAsTableList(), nil
-	}
-
-	return nil, fmt.Errorf("unsupported value type for option %q; found %T, "+
-		"but expected a list of tables", option.Name, option.Value.GetValue())
+	var zero T
+	return zero, fmt.Errorf("unsupported value type for option %q; found %T, but expected %s", option.Name, option.Value, expectedType)
 }
 
 func verifyAllTablesAreQualified(urts []sql.UnresolvedTable) error {

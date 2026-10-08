@@ -16,6 +16,8 @@ package val
 
 import (
 	"context"
+
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // ExtendedTupleComparator is a comparator that properly handles extended types.
@@ -118,6 +120,11 @@ func (c *ExtendedTupleComparator) Validated(types []Type) TupleComparator {
 		return innerCmp
 	}
 	return &ExtendedTupleComparator{innerCmp: innerCmp, handlers: c.handlers, vs: vs}
+}
+
+// Order implements the TupleComparator interface.
+func (c *ExtendedTupleComparator) Order(i int) sql.IndexColumnOrder {
+	return c.innerCmp.Order(i)
 }
 
 // WithValueStore implements the TupleComparator interface.

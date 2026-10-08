@@ -36,10 +36,6 @@ func FromDoltSchema(ctx context.Context, dbName, tableName string, sch schema.Sc
 	var i int
 	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		sqlType := col.TypeInfo.ToSqlType()
-		var extra string
-		if col.AutoIncrement {
-			extra = "auto_increment"
-		}
 
 		var deflt, generated, onUpdate *sql.ColumnDefaultValue
 		if col.Default != "" {
@@ -49,7 +45,13 @@ func FromDoltSchema(ctx context.Context, dbName, tableName string, sch schema.Sc
 			generated = sql.NewUnresolvedColumnDefaultValue(col.Generated)
 		}
 		if col.OnUpdate != "" {
-			onUpdate = sql.NewUnresolvedColumnDefaultValue(col.OnUpdate)
+			// OnUpdate values are always stored unparenthesized
+			// (e.g. CURRENT_TIMESTAMP(3)). Marking Literal avoids
+			// wrapping in parentheses during formatting.
+			onUpdate = &sql.ColumnDefaultValue{
+				Expr:    &sql.UnresolvedColumnDefault{ExprString: col.OnUpdate},
+				Literal: true,
+			}
 		}
 
 		cols[i] = &sql.Column{
@@ -65,7 +67,6 @@ func FromDoltSchema(ctx context.Context, dbName, tableName string, sch schema.Sc
 			AutoIncrement:  col.AutoIncrement,
 			Comment:        col.Comment,
 			Virtual:        col.Virtual,
-			Extra:          extra,
 			Hidden:         col.Hidden,
 			HiddenSystem:   col.SystemHidden,
 		}

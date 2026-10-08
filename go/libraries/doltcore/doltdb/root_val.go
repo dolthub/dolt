@@ -813,7 +813,7 @@ func (tn TableName) MarshalNoms(vrw types.ValueReadWriter) (val types.Value, err
 	return types.String(tn.Name), nil
 }
 
-func (tn TableName) UnmarshalNoms(ctx context.Context, nbf *types.NomsBinFormat, v types.Value) error {
+func (tn *TableName) UnmarshalNoms(ctx context.Context, nbf *types.NomsBinFormat, v types.Value) error {
 	str, ok := v.(types.String)
 	if !ok {
 		return fmt.Errorf("could not unmarshal %v to doltdb.TableName; expected only a string.", v)

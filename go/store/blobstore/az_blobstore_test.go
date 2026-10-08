@@ -532,7 +532,8 @@ func TestAzureBlobstore_Get(t *testing.T) {
 		rc, size, version, err := bs.Get(ctx, "mykey", NewBlobRange(-3, 0))
 		require.NoError(t, err)
 		defer rc.Close()
-		assert.Equal(t, uint64(3), size)
+		// Matches size returned from GetProperties.
+		assert.Equal(t, uint64(100), size)
 		assert.Equal(t, "test-etag", version)
 
 		data, err := io.ReadAll(rc)

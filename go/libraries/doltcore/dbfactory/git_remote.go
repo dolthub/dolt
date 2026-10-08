@@ -24,13 +24,15 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/dolthub/fslock"
+	filelocks "github.com/dolthub/file-locks"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/gitauth"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -188,20 +190,16 @@ func rebaseCachedEntry(ctx context.Context, entry gitRemoteCacheEntry) (datas.Da
 }
 
 func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
+	bsOpts, err := gitRemoteHistoryOptions(params)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	remoteURL, ref, err := parseGitRemoteFactoryURL(urlObj, params)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	cacheRoot, ok, err := resolveGitCacheRoot(params)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	if !ok {
-		return nil, nil, nil, fmt.Errorf("%s is required for git remotes", GitCacheRootParam)
-	}
-
-	cacheRepo, err := cacheRepoPath(cacheRoot, remoteURL.String(), ref)
+	cacheRepo, err := GitRemoteCacheKey(urlObj, params)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -220,7 +218,7 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	if err := os.MkdirAll(hashDir, 0o755); err != nil {
 		return nil, nil, nil, err
 	}
-	initLock, err := fslock.New(filepath.Join(hashDir, "init.lock"))
+	initLock, err := filelocks.New(filepath.Join(hashDir, "init.lock"))
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -248,11 +246,9 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	}
 
 	q := nbs.NewUnlimitedMemQuotaProvider()
-	bsOpts := blobstore.GitBlobstoreOptions{
-		RemoteName:     remoteName,
-		InfoBranch:     blobstore.DefaultInfoBranch,
-		SyncForReadTTL: gitBlobstoreSyncForReadTTLOverride,
-	}
+	bsOpts.RemoteName = remoteName
+	bsOpts.InfoBranch = blobstore.DefaultInfoBranch
+	bsOpts.SyncForReadTTL = gitBlobstoreSyncForReadTTLOverride
 	nbsCS, err := nbs.NewGitStore(ctx, nbf.VersionString(), cacheRepo, ref, bsOpts, memlimit.MemtableSize(), q)
 	if err != nil {
 		return nil, nil, nil, err
@@ -271,6 +267,51 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	gitRemoteCache[cacheRepo] = gitRemoteCacheEntry{db: db, vrw: vrw, ns: ns}
 	gitRemoteCacheMu.Unlock()
 	return db, vrw, ns, nil
+}
+
+// Environment overrides repository/global configuration supplied by the caller.
+func gitRemoteHistoryOptions(params map[string]interface{}) (blobstore.GitBlobstoreOptions, error) {
+	var opts blobstore.GitBlobstoreOptions
+	for _, setting := range []struct{ key, env string }{
+		{config.GitRemoteMaxHistoryCommits, "DOLT_GIT_REMOTE_MAX_HISTORY_COMMITS"},
+		{config.GitRemoteResetOnPrune, "DOLT_GIT_REMOTE_RESET_HISTORY_ON_PRUNE"},
+	} {
+		value, present := os.LookupEnv(setting.env)
+		if !present {
+			if raw, ok := params[setting.key]; ok {
+				value, present = raw.(string)
+				if !present {
+					return opts, fmt.Errorf("%s must be a string", setting.key)
+				}
+			}
+		}
+		if !present {
+			continue
+		}
+		switch setting.key {
+		case config.GitRemoteMaxHistoryCommits:
+			n, parseErr := strconv.Atoi(value)
+			if parseErr != nil {
+				return opts, fmt.Errorf("%s must be a non-negative integer (0 means unlimited), got %q: %w", setting.key, value, parseErr)
+			}
+			if n < 0 {
+				return opts, fmt.Errorf("%s must be a non-negative integer (0 means unlimited), got %q", setting.key, value)
+			}
+			opts.MaxHistoryCommits = &n
+		case config.GitRemoteResetOnPrune:
+			var resetOnPrune bool
+			switch value {
+			case "true":
+				resetOnPrune = true
+			case "false":
+				resetOnPrune = false
+			default:
+				return opts, fmt.Errorf("%s must be true or false, got %q", setting.key, value)
+			}
+			opts.ResetHistoryOnPrune = &resetOnPrune
+		}
+	}
+	return opts, nil
 }
 
 func ensureRemoteHasBranches(ctx context.Context, gitDir string, remoteName string, remoteURL string) error {
@@ -370,6 +411,25 @@ func resolveGitCacheRoot(params map[string]interface{}) (root string, ok bool, e
 		return "", false, fmt.Errorf("%s cannot be empty", GitCacheRootParam)
 	}
 	return s, true, nil
+}
+
+// GitRemoteCacheKey returns the local bare repository path used as the cache key
+// by both GitRemoteFactory and the SQL database provider. It identifies a remote
+// by its local database cache root, underlying URL, and effective Git ref.
+// URL paths and refs retain their case; omitted or blank refs use the default.
+func GitRemoteCacheKey(urlObj *url.URL, params map[string]interface{}) (string, error) {
+	remoteURL, ref, err := parseGitRemoteFactoryURL(urlObj, params)
+	if err != nil {
+		return "", err
+	}
+	cacheRoot, ok, err := resolveGitCacheRoot(params)
+	if err != nil {
+		return "", err
+	}
+	if !ok {
+		return "", fmt.Errorf("%s is required for git remotes", GitCacheRootParam)
+	}
+	return cacheRepoPath(cacheRoot, remoteURL.String(), ref)
 }
 
 func cacheRepoPath(cacheBase, remoteURL, ref string) (string, error) {

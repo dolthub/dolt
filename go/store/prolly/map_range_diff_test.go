@@ -282,7 +282,7 @@ func makeRandomOpenStopRangeTest(kd *val.TupleDesc, tuples [][2]val.Tuple) range
 	start := tuples[i][0]
 	stop := tuples[j][0]
 
-	rng, err := OpenStopRange(ctx, start, stop, kd)
+	rng, err := openStopRange(ctx, start, stop, kd)
 	if err != nil {
 		panic(err)
 	}
@@ -292,13 +292,13 @@ func makeRandomOpenStopRangeTest(kd *val.TupleDesc, tuples [][2]val.Tuple) range
 func makeRandomGreaterOrEqualRangeTest(kd *val.TupleDesc, tuples [][2]val.Tuple) rangeDiffTest {
 	i := rand.Intn(len(tuples))
 	start := tuples[i][0]
-	return rangeDiffTest{tuples: tuples, rng: GreaterOrEqualRange(start, kd)}
+	return rangeDiffTest{tuples: tuples, rng: greaterOrEqualRange(start, kd)}
 }
 
 func makeRandomLesserRangeTest(kd *val.TupleDesc, tuples [][2]val.Tuple) rangeDiffTest {
 	i := rand.Intn(len(tuples))
 	end := tuples[i][0]
-	return rangeDiffTest{tuples: tuples, rng: LesserRange(end, kd)}
+	return rangeDiffTest{tuples: tuples, rng: lesserRange(end, kd)}
 }
 
 func getPairsInRange(tuples [][2]val.Tuple, rng Range) (keys [][2]val.Tuple) {

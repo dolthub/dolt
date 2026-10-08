@@ -256,6 +256,10 @@ func (tc testCompare) Validated(types []Type) TupleComparator {
 	return tc
 }
 
+func (tc testCompare) Order(i int) sql.IndexColumnOrder {
+	return sql.IndexColumnOrder{}
+}
+
 func (tc testCompare) WithValueStore(vs ValueStore) TupleComparator {
 	return testCompare{vs: vs}
 }

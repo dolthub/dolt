@@ -165,7 +165,7 @@ rename table temp__t1 to t1;
 SQL
     run dolt sql -q "select count(*)=0 from dolt_status;"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ \|[[:space:]]+1[[:space:]]+\| ]] || false
 
     run dolt diff t1
     [ "$status" -eq 0 ]

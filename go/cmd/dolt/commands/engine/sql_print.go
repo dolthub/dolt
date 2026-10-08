@@ -44,6 +44,7 @@ const (
 	FormatTabular PrintResultFormat = iota
 	FormatCsv
 	FormatJson
+	FormatJsonl
 	FormatNull // used for profiling
 	FormatVertical
 	FormatParquet
@@ -110,6 +111,11 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 		case FormatJson:
 			var err error
 			wr, err = json.NewJSONSqlWriter(iohelp.NopWrCloser(writerStream), sqlSch)
+			if err != nil {
+				return
+			}
+		case FormatJsonl:
+			wr, err = json.NewJSONLSqlWriter(iohelp.NopWrCloser(writerStream), sqlSch)
 			if err != nil {
 				return
 			}

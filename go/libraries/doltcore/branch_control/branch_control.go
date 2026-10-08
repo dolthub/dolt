@@ -234,6 +234,20 @@ func (controller *Controller) SaveData(ctx context.Context, fs filesys.Filesys) 
 // permissions.
 func CheckAccess(ctx context.Context, flags Permissions) error {
 	branchAwareSession := GetBranchAwareSession(ctx)
+	if branchAwareSession == nil {
+		return nil
+	}
+	branch, err := branchAwareSession.GetBranch()
+	if err != nil {
+		return err
+	}
+	return CheckAccessForBranch(ctx, branchAwareSession.GetCurrentDatabase(), branch, flags)
+}
+
+// CheckAccessForBranch checks permissions on the named database and branch without
+// changing the session's selected database. Local non-SQL contexts are allowed.
+func CheckAccessForBranch(ctx context.Context, database, branch string, flags Permissions) error {
+	branchAwareSession := GetBranchAwareSession(ctx)
 	// A nil session means we're not in the SQL context, so we allow all operations
 	if branchAwareSession == nil {
 		return nil
@@ -248,11 +262,7 @@ func CheckAccess(ctx context.Context, flags Permissions) error {
 
 	user := branchAwareSession.GetUser()
 	host := branchAwareSession.GetHost()
-	database := getDatabaseNameOnly(branchAwareSession.GetCurrentDatabase())
-	branch, err := branchAwareSession.GetBranch()
-	if err != nil {
-		return err
-	}
+	database = getDatabaseNameOnly(database)
 	// Get the permissions for the branch, user, and host combination
 	_, perms := controller.Access.Match(database, branch, user, host)
 	if perms&flags == flags {

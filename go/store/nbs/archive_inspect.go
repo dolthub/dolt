@@ -109,7 +109,7 @@ func NewArchiveInspectorFromFileWithMmap(ctx context.Context, archivePath string
 	dummyHash := hash.Hash{}
 	stats := &Stats{}
 
-	archiveReader, err := newArchiveReader(ctx, fra, dummyHash, uint64(fra.sz), q, stats)
+	archiveReader, err := newArchiveReader(ctx, fra, dummyHash, uint64(fra.sz), q, openOpts{}, stats)
 	if err != nil {
 		fra.Close()
 		return nil, err

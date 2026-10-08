@@ -39,7 +39,7 @@ type archiveChunkSource struct {
 
 var _ chunkSource = &archiveChunkSource{}
 
-func newArchiveChunkSource(ctx context.Context, dir string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider, mmapArchiveIndexes bool, refs refCounter, stats *Stats) (*archiveChunkSource, error) {
+func newArchiveChunkSource(ctx context.Context, dir string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider, mmapArchiveIndexes bool, refs refCounter, opts openOpts, stats *Stats) (*archiveChunkSource, error) {
 	archiveFile := filepath.Join(dir, h.String()+ArchiveFileSuffix)
 
 	fra, err := newFileReaderAt(archiveFile, mmapArchiveIndexes)
@@ -47,11 +47,28 @@ func newArchiveChunkSource(ctx context.Context, dir string, h hash.Hash, chunkCo
 		return nil, err
 	}
 
-	aRdr, err := newArchiveReader(ctx, fra, h, uint64(fra.sz), q, stats)
+	aRdr, err := newArchiveReader(ctx, fra, h, uint64(fra.sz), q, opts, stats)
 	if err != nil {
-		return nil, err
+		fra.Close()
+		return nil, fmt.Errorf("%s: %w", archiveFile, err)
 	}
+
+	if err = checkArchiveChunkCount(aRdr, chunkCount); err != nil {
+		aRdr.close()
+		return nil, fmt.Errorf("%s: %w", archiveFile, err)
+	}
+
 	return &archiveChunkSource{aRdr: aRdr, file: archiveFile, refs: refs, blockSize: fileBlockSize}, nil
+}
+
+// checkArchiveChunkCount checks the archive against the chunk count the manifest
+// recorded for it. |chunkCount| of 0 means the caller does not have one.
+func checkArchiveChunkCount(aRdr archiveReader, chunkCount uint32) error {
+	if chunkCount != 0 && chunkCount != aRdr.count() {
+		return fmt.Errorf("%w: the manifest says this archive holds %d chunks, but its footer says %d",
+			ErrCorruptArchiveIndex, chunkCount, aRdr.count())
+	}
+	return nil
 }
 
 func newAWSArchiveChunkSource(ctx context.Context,
@@ -60,6 +77,7 @@ func newAWSArchiveChunkSource(ctx context.Context,
 	name string,
 	chunkCount uint32,
 	q MemoryQuotaProvider,
+	opts openOpts,
 	stats *Stats) (cs chunkSource, err error) {
 
 	footer, err := q.AcquireQuotaByteSlice(ctx, int(archiveFooterSize))
@@ -79,10 +97,16 @@ func newAWSArchiveChunkSource(ctx context.Context,
 		return emptyChunkSource{}, fmt.Errorf("invalid archive file path: %s", name)
 	}
 
-	aRdr, err := newArchiveReaderFromFooter(ctx, &s3TableReaderAt{s3, name}, hashId, sz, footer, q, stats)
+	aRdr, err := newArchiveReaderFromFooter(ctx, &s3TableReaderAt{s3, name}, hashId, sz, footer, q, opts, stats)
 	if err != nil {
-		return emptyChunkSource{}, err
+		return emptyChunkSource{}, fmt.Errorf("%s: %w", name, err)
 	}
+
+	if err = checkArchiveChunkCount(aRdr, chunkCount); err != nil {
+		aRdr.close()
+		return emptyChunkSource{}, fmt.Errorf("%s: %w", name, err)
+	}
+
 	return &archiveChunkSource{aRdr: aRdr, refs: noopRefCounter{}, blockSize: s3BlockSize}, nil
 }
 

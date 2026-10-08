@@ -1,0 +1,133 @@
+name: Schedule PR CI
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, labeled, unlabeled, ready_for_review, converted_to_draft]
+  workflow_run:
+    # GitHub requires literal workflow names here (no catch-all subscription).
+    # This list only wakes the controller; it discovers PR runs and admission
+    # steps at runtime. Keep it in sync when adding or renaming a PR workflow.
+    workflows:
+      - "Test Bats Unix Remote"
+      - "Test Bats Unix"
+      - "Test Benchmark Runner Utility Works"
+      - "Test Binlog"
+      - "Check for correctness_approved label"
+      - "Check for performance_approved label"
+      - "Check Formatting, Committers and Generated Code"
+      - "Check Compatibility"
+      - "Test Data Dump Loading integrations"
+      - "Test Go"
+      - "Test Bats Unix"
+      - "Test MySQL Client integrations"
+      - "Test ORM integrations"
+      - "sql-server Integration Tests"
+      - "Test Integration with DoltgreSQL"
+      - "Run Import Benchmark on Pull Requests"
+      - "Run Merge Benchmark on Pull Requests"
+      - "Benchmark Pull Requests"
+      - "Benchmark SQL Correctness on PR"
+      - "Run Systab Benchmark on Pull Requests"
+      - "Benchmark Mini Sysbench Performance on PR"
+      - "Test CI scheduling"
+      - "Notify CI review"
+    types: [in_progress, completed]
+  schedule:
+    # Off the hour; repeated reconciliation recovers missed events and delayed runs.
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+    inputs:
+      pull_number:
+        description: PR number to recheck against its deferral labels and reviews
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  cancel-deferred:
+    if: github.event_name == 'workflow_run' && github.event.action == 'in_progress'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          sparse-checkout: .github/actions/check-deferred-ci
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { cancelDeferredRun } = require('./.github/actions/check-deferred-ci');
+            await cancelDeferredRun({ github, context });
+  candidates:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.action != 'in_progress' &&
+       (github.event.workflow_run.event == 'pull_request_review' ||
+        github.event.workflow_run.conclusion != 'success'))
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      prs: ${{ steps.candidates.outputs.result }}
+    steps:
+      # This privileged controller only reads code from the base repository's default branch.
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          sparse-checkout: .github/actions/check-deferred-ci
+      - id: candidates
+        uses: actions/github-script@v7
+        env:
+          PULL_NUMBER: ${{ inputs.pull_number }}
+          CI_TIMEZONE: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
+        with:
+          script: |
+            const { candidates } = require('./.github/actions/check-deferred-ci');
+            return await candidates({ github, context, pullNumber: process.env.PULL_NUMBER,
+              timezone: process.env.CI_TIMEZONE });
+  reconcile:
+    needs: candidates
+    if: needs.candidates.outputs.prs != '[]'
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        pr: ${{ fromJSON(needs.candidates.outputs.prs) }}
+    # Events and the timer share a per-PR lock. Periodic reconciliation also recovers
+    # events replaced in GitHub's single pending concurrency slot.
+    concurrency:
+      group: ci-scheduling-${{ matrix.pr }}
+      cancel-in-progress: false
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      # PR labels and comments require write access, including in forks with issues disabled.
+      pull-requests: write
+      issues: write
+      statuses: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          sparse-checkout: .github/actions/check-deferred-ci
+      - uses: actions/github-script@v7
+        env:
+          PULL_NUMBER: ${{ matrix.pr }}
+          CI_TIMEZONE: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
+        with:
+          script: |
+            const { reconcile } = require('./.github/actions/check-deferred-ci');
+            await reconcile({ github, context, pullNumber: Number(process.env.PULL_NUMBER),
+              timezone: process.env.CI_TIMEZONE });

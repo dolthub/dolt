@@ -35,6 +35,10 @@ jobs:
     steps:
       # Docker entrypoint and docker tests in general may use more space than is available in the GitHub default runner,
       # so we remove unused pre-installed programs.
+      - name: Check deferred CI
+        uses: $/.github/actions/check-deferred-ci
+        with:
+          timezone: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
       - name: Free disk space
         run: |
           NAME="DISK-CLEANUP"
@@ -55,11 +59,11 @@ jobs:
             echo "DOLT_BATS_AWS_EXISTING_REPO=aws_remote_bats_tests__dolt__" >> $GITHUB_ENV
           fi
       - name: Configure filter tags for lambda bats
-        if: ${{ env.use_credentials == 'true' }}
+        if: env.use_credentials == 'true'
         run: |
           echo "BATS_FILTER=--filter-tags no_lambda" >> $GITHUB_ENV
       - name: Configure AWS Credentials
-        if: ${{ env.use_credentials == 'true' }}
+        if: env.use_credentials == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}

@@ -117,6 +117,11 @@ func (c CollationTupleComparator) WithValueStore(vs val.ValueStore) val.TupleCom
 	return CollationTupleComparator{Collations: c.Collations, vs: vs}
 }
 
+// Order implements TupleComparator
+func (c CollationTupleComparator) Order(i int) sql.IndexColumnOrder {
+	return sql.IndexColumnOrder{}
+}
+
 func collationCompare(ctx context.Context, typ val.Type, collation sql.CollationID, left, right []byte, vs val.ValueStore) (int, error) {
 	// order NULLs first
 	if left == nil || right == nil {

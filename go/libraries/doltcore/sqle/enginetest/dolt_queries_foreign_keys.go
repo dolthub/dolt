@@ -181,4 +181,39 @@ var DoltForeignKeyTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// See https://github.com/dolthub/doltgresql/issues/3517
+		Name: "renaming an index keeps foreign keys backed by that index valid",
+		SetUpScript: []string{
+			"CREATE TABLE parent (id INT NOT NULL PRIMARY KEY, u INT, UNIQUE KEY u_idx (u));",
+			"CREATE TABLE child (id INT NOT NULL PRIMARY KEY, a INT NOT NULL, b INT, KEY a_idx (a), KEY b_idx (b), CONSTRAINT a_fk FOREIGN KEY (a) REFERENCES parent (id), CONSTRAINT b_fk FOREIGN KEY (b) REFERENCES parent (u));",
+			"INSERT INTO parent VALUES (1, 10);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "ALTER TABLE child RENAME INDEX A_IDX TO a_idx_new;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "ALTER TABLE parent RENAME INDEX u_idx TO u_idx_new;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:            "CALL DOLT_COMMIT('-Am', 'renamed indexes');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "INSERT INTO child VALUES (1, 1, 10);",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:       "INSERT INTO child VALUES (2, 2, 10);",
+				ExpectedErr: sql.ErrForeignKeyChildViolation,
+			},
+			{
+				Query:       "INSERT INTO child VALUES (3, 1, 20);",
+				ExpectedErr: sql.ErrForeignKeyChildViolation,
+			},
+		},
+	},
 }

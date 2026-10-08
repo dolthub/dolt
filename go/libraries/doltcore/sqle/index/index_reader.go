@@ -90,10 +90,22 @@ func NewRangePartitionIter(ctx *sql.Context, t DoltTableable, lookup sql.IndexLo
 		return nil, err
 	}
 	return &rangePartitionIter{
-		prollyRanges: prollyRanges,
+		prollyRanges: rangesInScanOrder(prollyRanges, lookup.IsReverse),
 		curr:         0,
 		isReverse:    lookup.IsReverse,
 	}, nil
+}
+
+// rangesInScanOrder returns |ranges| in the order a scan visits them. |ranges| arrives sorted by
+// the physical position of its lower bounds (see prolly.SortRangesByStart), so a reverse scan
+// visits them back to front. The input is left untouched.
+func rangesInScanOrder(ranges []prolly.Range, reverse bool) []prolly.Range {
+	if !reverse {
+		return ranges
+	}
+	ordered := slices.Clone(ranges)
+	slices.Reverse(ordered)
+	return ordered
 }
 
 func newPointPartitionIter(ctx *sql.Context, lookup sql.IndexLookup, idx *doltIndex) (sql.PartitionIter, error) {
@@ -130,10 +142,13 @@ func (p *pointPartition) Next(c *sql.Context) (sql.Partition, error) {
 	return *p, nil
 }
 
+// rangePartitionIter hands out one partition per range, in scan order.
 type rangePartitionIter struct {
+	// prollyRanges is in scan order, so it is walked front to back regardless of isReverse.
 	prollyRanges []prolly.Range
 	curr         int
-	isReverse    bool
+	// isReverse is the direction each partition is scanned in.
+	isReverse bool
 }
 
 // Close is required by the sql.PartitionIter interface. Does nothing.
@@ -153,11 +168,7 @@ func (itr *rangePartitionIter) nextProllyPartition() (sql.Partition, error) {
 
 	var bytes [4]byte
 	binary.BigEndian.PutUint32(bytes[:], uint32(itr.curr))
-	i := itr.curr
-	if itr.isReverse {
-		i = len(itr.prollyRanges) - 1 - i
-	}
-	pr := itr.prollyRanges[i]
+	pr := itr.prollyRanges[itr.curr]
 	itr.curr += 1
 
 	return rangePartition{
@@ -472,9 +483,7 @@ func NewSequenceRangeIter(ctx context.Context, irIter IndexRangeIterable, ranges
 	if len(ranges) == 0 {
 		return &strictLookupIter{}, nil
 	}
-	if reverse {
-		slices.Reverse(ranges)
-	}
+	ranges = rangesInScanOrder(ranges, reverse)
 	// TODO: probably need to do something with Doltgres ranges here?
 	cur, err := irIter.NewRangeMapIter(ctx, ranges[0], reverse)
 	if err != nil || len(ranges) < 2 {
@@ -492,10 +501,12 @@ func NewSequenceRangeIter(ctx context.Context, irIter IndexRangeIterable, ranges
 // sequenceRangeIter iterates a list of ranges into
 // an underlying map.
 type sequenceRangeIter struct {
-	cur             prolly.MapIter
-	irIter          IndexRangeIterable
+	cur    prolly.MapIter
+	irIter IndexRangeIterable
+	// remainingRanges is in scan order, so it is consumed front to back regardless of reverse.
 	remainingRanges []prolly.Range
-	reverse         bool
+	// reverse is the direction each range is scanned in.
+	reverse bool
 }
 
 var _ prolly.MapIter = (*sequenceRangeIter)(nil)
