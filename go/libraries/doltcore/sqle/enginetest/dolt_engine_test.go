@@ -95,7 +95,7 @@ func TestSingleQuery(t *testing.T) {
 		},
 	}
 
-	enginetest.TestQueryWithEngine(t, harness, engine, test)
+	enginetest.TestQuery(t, harness, engine, test)
 }
 
 func TestSchemaOverrides(t *testing.T) {
@@ -1118,16 +1118,10 @@ func TestNaturalJoin(t *testing.T) {
 	enginetest.TestNaturalJoin(t, h)
 }
 
-func TestNaturalJoinEqual(t *testing.T) {
-	h := newDoltHarness(t)
-	defer h.Close()
-	enginetest.TestNaturalJoinEqual(t, h)
-}
-
 func TestNaturalJoinDisjoint(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestNaturalJoinEqual(t, h)
+	enginetest.TestNaturalJoinDisjoint(t, h)
 }
 
 func TestInnerNestedInNaturalJoins(t *testing.T) {
