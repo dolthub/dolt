@@ -16,6 +16,9 @@ package nbs
 
 import "os"
 
+// journalPadZeros stays in BSS and is shared by all journal padding writes.
+var journalPadZeros [journalPadBufferSize]byte
+
 // journalFile writes the chunk journal, zero-padding ahead of writes so that
 // syncs do not change the file size.
 type journalFile struct {
@@ -48,7 +51,7 @@ func (jf *journalFile) prepare(end int64) error {
 	// The zeros must be written: extending with Truncate leaves a sparse hole,
 	// and writing into a hole changes block allocation, which fdatasync must
 	// then commit.
-	if _, err := jf.f.WriteAt(make([]byte, journalPadBufferSize), end); err != nil {
+	if _, err := jf.f.WriteAt(journalPadZeros[:], end); err != nil {
 		return err
 	}
 	jf.preparedThrough = end + journalPadBufferSize
