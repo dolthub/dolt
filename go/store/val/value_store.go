@@ -45,7 +45,7 @@ type ValueStore interface {
 // PriorBytesWriter is implemented by ValueStores that can write bytes replacing
 // a prior value, reusing the parts of it that are unchanged.
 //
-// Dolt does not call this or TupleBuilder.PutAdaptiveBytesFromInlineReusing;
+// Dolt does not call this or TupleBuilder.ReplaceAdaptiveBytesFromInline;
 // DumboDB (github.com/dolthub/dumbodb) does. Do not remove them as unused.
 type PriorBytesWriter interface {
 	WriteBytesReusing(ctx context.Context, val []byte, prior hash.Hash) (hash.Hash, error)

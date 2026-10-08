@@ -589,12 +589,12 @@ func (tb *TupleBuilder) PutAdaptiveExtendedFromInline(ctx context.Context, i int
 	return tb.PutAdaptiveFromInline(ctx, i, v)
 }
 
-// PutAdaptiveBytesFromInlineReusing is PutAdaptiveBytesFromInline for a value
-// replacing the out-of-band value at |prior|, which a PriorBytesWriter can
+// ReplaceAdaptiveBytesFromInline is PutAdaptiveBytesFromInline for |newBytes|
+// replacing the out-of-band value at |oldHash|, which a PriorBytesWriter can
 // partially reuse.
-func (tb *TupleBuilder) PutAdaptiveBytesFromInlineReusing(ctx context.Context, i int, v []byte, prior hash.Hash) error {
+func (tb *TupleBuilder) ReplaceAdaptiveBytesFromInline(ctx context.Context, i int, oldHash hash.Hash, newBytes []byte) error {
 	tb.Desc.ExpectEncoding(i, BytesAdaptiveEnc)
-	return tb.putAdaptiveFromInline(ctx, i, v, prior)
+	return tb.putAdaptiveFromInline(ctx, i, newBytes, oldHash)
 }
 
 func (tb *TupleBuilder) PutAdaptiveFromInline(ctx context.Context, i int, v []byte) error {

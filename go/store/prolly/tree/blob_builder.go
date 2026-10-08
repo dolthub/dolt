@@ -75,6 +75,9 @@ type BlobBuilder struct {
 	leafIndex int
 }
 
+// priorLeaf is a leaf of the blob being replaced. When the new blob's leaf at
+// the same position holds the same data, BlobBuilder reuses addr instead of
+// writing the leaf again.
 type priorLeaf struct {
 	data []byte
 	addr hash.Hash
