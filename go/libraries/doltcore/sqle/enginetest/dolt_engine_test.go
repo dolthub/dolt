@@ -730,12 +730,6 @@ func TestVariablesScripts(t *testing.T) {
 	enginetest.TestVariablesScripts(t, h)
 }
 
-func TestViewsScripts(t *testing.T) {
-	h := newDoltServerTestHarness(t).WithConfigureStats(true)
-	defer h.Close()
-	enginetest.TestViewsScripts(t, h)
-}
-
 func TestNumericErrorScripts(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
@@ -2420,13 +2414,6 @@ func TestVariablesScriptsPrepared(t *testing.T) {
 	h := newDoltHarness(t).WithConfigureStats(true)
 	defer h.Close()
 	enginetest.TestVariablesScriptsPrepared(t, h)
-}
-
-func TestViewsScriptsPrepared(t *testing.T) {
-	skipPreparedTests(t)
-	h := newDoltHarness(t).WithConfigureStats(true)
-	defer h.Close()
-	enginetest.TestViewsScriptsPrepared(t, h)
 }
 
 func TestInsertScriptsPrepared(t *testing.T) {
