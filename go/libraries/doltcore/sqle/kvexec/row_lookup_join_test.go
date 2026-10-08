@@ -23,13 +23,18 @@ import (
 
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/rowexec"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // rowLookupJoinSetup is shared by the tests below.
@@ -102,6 +107,38 @@ func TestRowLookupJoin(t *testing.T) {
 		{
 			name:   "accept key encodings the kv-to-kv path rejects",
 			query:  "select /*+ LOOKUP_JOIN(d,big) */ d.x, big.h from (select distinct x, y from xy) d join big on big.g = d.x",
+			doKvex: true,
+		},
+		{
+			name: "accept a lookup join feeding another lookup",
+			query: `SELECT /*+ LOOKUP_JOIN(d,ab) LOOKUP_JOIN(ab,sec) JOIN_ORDER(d,ab,sec) */ d.x, ab.b, sec.p
+FROM (SELECT x, y FROM xy LIMIT 10) d
+LEFT JOIN ab ON ab.a = d.x
+LEFT JOIN sec ON sec.s = ab.a`,
+			doKvex: true,
+		},
+		{
+			name: "accept two materialized subqueries feeding a lookup",
+			query: `SELECT /*+ LOOKUP_JOIN(j,ab) */ j.x, j.y, ab.b
+FROM (
+ SELECT d.x, e.y
+ FROM (SELECT x, y FROM xy LIMIT 10) d
+ JOIN (SELECT x, y FROM xy LIMIT 10) e ON e.x = d.x
+ LIMIT 10
+) j
+LEFT JOIN ab ON ab.a = j.y`,
+			doKvex: true,
+		},
+		{
+			name: "accept materialized join feeding a lookup",
+			query: `SELECT /*+ LOOKUP_JOIN(j,sec) */ j.x, j.b, sec.p
+FROM (
+ SELECT /*+ LOOKUP_JOIN(d,ab) */ d.x, ab.b
+ FROM (SELECT x, y FROM xy LIMIT 10) d
+ LEFT JOIN ab ON ab.a = d.x
+ LIMIT 10
+) j
+LEFT JOIN sec ON sec.s = j.x`,
 			doKvex: true,
 		},
 		{
@@ -203,6 +240,105 @@ func TestRowLookupJoinResults(t *testing.T) {
 			require.NoError(t, err)
 
 			require.Equal(t, expected, actual)
+		})
+	}
+}
+
+// TestRowLookupAdaptiveKeys checks the actual prolly lookup, including when the
+// stored key and lookup key represent equal bytes with different storage layouts.
+func TestRowLookupAdaptiveKeys(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		enc      val.Encoding
+		plainEnc val.Encoding
+		typ      sql.Type
+		binary   bool
+	}{
+		{
+			name:     "string",
+			enc:      val.StringAdaptiveEnc,
+			plainEnc: val.StringEnc,
+			typ:      types.LongText,
+		},
+		{
+			name:     "bytes",
+			enc:      val.BytesAdaptiveEnc,
+			plainEnc: val.ByteStringEnc,
+			typ:      types.LongBlob,
+			binary:   true,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			require.True(t, lookupKeyEncodingSupported(tt.enc))
+			ctx := sql.NewEmptyContext()
+			ns := tree.NewTestNodeStore()
+			for _, sourceEnc := range []val.Encoding{tt.plainEnc, tt.enc} {
+				for _, targetEnc := range []val.Encoding{tt.plainEnc, tt.enc} {
+					for _, value := range []string{"", "abc", "abc\x00", "a\x00bc", "é日本語", strings.Repeat("abcd", 100), strings.Repeat("abcd", 5000)} {
+						t.Run(fmt.Sprintf("%d_to_%d_length_%d", sourceEnc, targetEnc, len(value)), func(t *testing.T) {
+							sourceDesc := val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{ValueStore: ns}, val.Type{Enc: sourceEnc})
+							targetDesc := val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{ValueStore: ns}, val.Type{Enc: targetEnc})
+							var input interface{} = value
+							if tt.binary {
+								input = []byte(value)
+							}
+
+							sourceBuilder := val.NewTupleBuilder(sourceDesc, ns).WithMaxRowSize(64)
+							require.NoError(t, tree.PutField(ctx, ns, sourceBuilder, 0, input))
+							source, err := sourceBuilder.Build(ctx, ns.Pool())
+							require.NoError(t, err)
+							decoded, err := tree.GetField(ctx, sourceDesc, 0, source, ns)
+							require.NoError(t, err)
+							mapping := rowLookupMapping{
+								ns:          ns,
+								pool:        ns.Pool(),
+								targetKb:    val.NewTupleBuilder(targetDesc, ns),
+								keyExprs:    []sql.Expression{expression.NewGetField(0, tt.typ, "v", false)},
+								keyTypes:    []sql.ColumnExpressionType{{Type: tt.typ}},
+								comparisons: make([]sql.Expression, 1),
+							}
+							lookup, canMatch, err := mapping.dstKeyTuple(ctx, sql.Row{decoded})
+							require.NoError(t, err)
+							require.True(t, canMatch)
+
+							// Force the stored index key out of band for the medium and large
+							// values. The medium lookup key fits inline in its own tuple.
+							storedBuilder := val.NewTupleBuilder(targetDesc, ns).WithMaxRowSize(64)
+							require.NoError(t, tree.PutField(ctx, ns, storedBuilder, 0, input))
+							stored, err := storedBuilder.Build(ctx, ns.Pool())
+							require.NoError(t, err)
+							if targetEnc == tt.enc && len(value) == 400 {
+								require.True(t, val.AdaptiveValue(targetDesc.GetField(0, stored)).IsOutOfBand())
+								require.False(t, val.AdaptiveValue(targetDesc.GetField(0, lookup)).IsOutOfBand())
+							}
+
+							m, err := prolly.NewMapFromTuples(ctx, ns, targetDesc, val.NewTupleDescriptor(), stored, val.EmptyTuple)
+							require.NoError(t, err)
+							found, err := m.Has(ctx, lookup)
+							require.NoError(t, err)
+							require.True(t, found)
+
+							// A differing byte (including a trailing NUL) must not match.
+							differentValue := value + "x"
+							if strings.HasSuffix(value, "\x00") {
+								differentValue = strings.TrimSuffix(value, "\x00")
+							}
+
+							var different interface{} = differentValue
+							if tt.binary {
+								different = []byte(differentValue)
+							}
+
+							lookup, canMatch, err = mapping.dstKeyTuple(ctx, sql.Row{different})
+							require.NoError(t, err)
+							require.True(t, canMatch)
+							found, err = m.Has(ctx, lookup)
+							require.NoError(t, err)
+							require.False(t, found)
+						})
+					}
+				}
+			}
 		})
 	}
 }

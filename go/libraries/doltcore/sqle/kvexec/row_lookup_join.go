@@ -311,10 +311,10 @@ func convertLookupKeyValue(ctx *sql.Context, srcTyp, colTyp sql.Type, v interfac
 }
 
 // lookupKeyEncodingSupported returns whether a SQL value converted to an index
-// column type can be written into a key field with |enc|. The encodings left
-// out either address content stored outside the tuple or accept a narrower Go
-// type than type conversion produces, so joins on those columns stay on the
-// GMS path.
+// column type can be written into a key field with |enc|. Other encodings
+// continue to use the generic executor.
+// tree.PutField handles adaptive values, including inline and out-of-band storage,
+// using the destination encoding rather than copying the source bytes.
 func lookupKeyEncodingSupported(enc val.Encoding) bool {
 	switch enc {
 	case val.Int8Enc, val.Uint8Enc, val.Int16Enc, val.Uint16Enc,
@@ -322,6 +322,7 @@ func lookupKeyEncodingSupported(enc val.Encoding) bool {
 		val.Float32Enc, val.Float64Enc, val.Bit64Enc, val.DecimalEnc,
 		val.YearEnc, val.DateEnc, val.TimeEnc, val.DatetimeEnc,
 		val.EnumEnc, val.SetEnc, val.StringEnc, val.ByteStringEnc,
+		val.StringAdaptiveEnc, val.BytesAdaptiveEnc, val.JsonAdaptiveEnc,
 		val.ExtendedEnc, val.ExtendedAddrEnc, val.ExtendedAdaptiveEnc:
 		return true
 	default:

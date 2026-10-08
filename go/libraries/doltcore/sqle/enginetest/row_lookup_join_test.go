@@ -842,4 +842,152 @@ ORDER BY l.id, r.id LIMIT 1`,
 			},
 		},
 	},
+	{
+		Name: "multi-table lookup join shapes",
+		SetUpScript: []string{
+			`CREATE TABLE shape_src (id INT PRIMARY KEY, v BIGINT)`,
+			`CREATE TABLE shape_mid (id INT PRIMARY KEY, v SMALLINT)`,
+			`CREATE INDEX mid_v ON shape_mid(v)`,
+			`CREATE TABLE shape_tail (id INT PRIMARY KEY, v INT)`,
+			`CREATE INDEX tail_v ON shape_tail(v)`,
+			`CREATE TABLE shape_bridge (v SMALLINT, tail_id INT, payload INT, PRIMARY KEY(v,tail_id))`,
+			`INSERT INTO shape_src VALUES (1,1),(2,2),(3,32768),(4,NULL),(5,3),(6,1),(7,9)`,
+			`INSERT INTO shape_mid VALUES (11,1),(12,1),(13,2),(14,NULL),(15,3)`,
+			`INSERT INTO shape_tail VALUES (21,11),(22,11),(23,13),(24,NULL),(25,99)`,
+			`INSERT INTO shape_bridge VALUES (1,21,101),(1,22,102),(2,23,103)`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// subquery table subquery.
+				Query: `SELECT /*+ LOOKUP_JOIN(l,r) JOIN_ORDER(l,r,q) */ l.id, r.id, q.id
+FROM (SELECT * FROM shape_src LIMIT 100) l
+JOIN shape_mid r ON r.v = l.v
+JOIN (SELECT * FROM shape_tail LIMIT 100) q ON q.v = r.id
+ORDER BY l.id, r.id, q.id`,
+				Expected: []sql.Row{{1, 11, 21}, {1, 11, 22}, {2, 13, 23}, {6, 11, 21}, {6, 11, 22}},
+			},
+			{
+				// outer subquery table subquery.
+				Query: `SELECT /*+ LOOKUP_JOIN(l,r) JOIN_ORDER(l,r,q) */ l.id, r.id, q.id
+FROM (SELECT * FROM shape_src LIMIT 100) l
+LEFT JOIN shape_mid r ON r.v = l.v
+LEFT JOIN (SELECT * FROM shape_tail LIMIT 100) q ON q.v = r.id
+ORDER BY l.id, r.id, q.id`,
+				Expected: []sql.Row{{1, 11, 21}, {1, 11, 22}, {1, 12, nil}, {2, 13, 23}, {3, nil, nil}, {4, nil, nil}, {5, 15, nil}, {6, 11, 21}, {6, 11, 22}, {6, 12, nil}, {7, nil, nil}},
+			},
+			{
+				// two consecutive index lookups.
+				Query: `SELECT /*+ LOOKUP_JOIN(l,r) LOOKUP_JOIN(r,q) JOIN_ORDER(l,r,q) */ l.id, r.id, q.id
+FROM (SELECT * FROM shape_src LIMIT 100) l
+LEFT JOIN shape_mid r ON r.v = l.v
+LEFT JOIN shape_tail q ON q.v = r.id
+ORDER BY l.id, r.id, q.id`,
+				Expected: []sql.Row{{1, 11, 21}, {1, 11, 22}, {1, 12, nil}, {2, 13, 23}, {3, nil, nil}, {4, nil, nil}, {5, 15, nil}, {6, 11, 21}, {6, 11, 22}, {6, 12, nil}, {7, nil, nil}},
+			},
+			{
+				// two subqueries feed an index lookup.
+				Query: `SELECT /*+ LOOKUP_JOIN(l,r) JOIN_ORDER(l,q,r) */ l.id, q.id, r.id
+FROM (SELECT * FROM shape_src LIMIT 100) l
+JOIN (SELECT * FROM shape_src LIMIT 100) q ON q.v = l.v AND q.id > l.id
+LEFT JOIN shape_mid r ON r.v = q.v
+ORDER BY l.id, q.id, r.id`,
+				Expected: []sql.Row{{1, 6, 11}, {1, 6, 12}},
+			},
+			{
+				// materialized join feeds an index lookup.
+				Query: `SELECT /*+ LOOKUP_JOIN(j,q) JOIN_ORDER(j,q) */ j.lid, j.rid, q.id
+FROM (
+ SELECT /*+ LOOKUP_JOIN(l,r) JOIN_ORDER(l,r) */ l.id AS lid, r.id AS rid
+ FROM (SELECT * FROM shape_src LIMIT 100) l
+ LEFT JOIN shape_mid r ON r.v = l.v
+ LIMIT 100
+) j
+LEFT JOIN shape_tail q ON q.v = j.rid
+ORDER BY j.lid, j.rid, q.id`,
+				Expected: []sql.Row{{1, 11, 21}, {1, 11, 22}, {1, 12, nil}, {2, 13, 23}, {3, nil, nil}, {4, nil, nil}, {5, 15, nil}, {6, 11, 21}, {6, 11, 22}, {6, 12, nil}, {7, nil, nil}},
+			},
+			{
+				// aggregates on both sides of indexed table.
+				Query: `SELECT /*+ LOOKUP_JOIN(l,r) JOIN_ORDER(l,r,q) */ l.v, l.n, r.id, q.n
+FROM (SELECT v, COUNT(*) AS n FROM shape_src GROUP BY v) l
+LEFT JOIN shape_mid r ON r.v = l.v
+LEFT JOIN (SELECT v, COUNT(*) AS n FROM shape_tail GROUP BY v) q ON q.v = r.id
+ORDER BY l.v, r.id`,
+				Expected: []sql.Row{{nil, 1, nil, nil}, {1, 2, 11, 2}, {1, 2, 12, nil}, {2, 1, 13, 1}, {3, 1, 15, nil}, {9, 1, nil, nil}, {32768, 1, nil, nil}},
+			},
+			{
+				// union source and filtered subquery.
+				Query: `SELECT /*+ LOOKUP_JOIN(l,r) JOIN_ORDER(l,r,q) */ l.id, r.id, q.id
+FROM (
+ SELECT id, v FROM shape_src WHERE id <= 2
+ UNION ALL
+ SELECT id, v FROM shape_src WHERE id = 1
+) l
+LEFT JOIN shape_mid r ON r.v = l.v AND r.id <> 12
+LEFT JOIN (SELECT * FROM shape_tail WHERE id > 21 LIMIT 100) q ON q.v = r.id
+ORDER BY l.id, r.id, q.id`,
+				Expected: []sql.Row{{1, 11, 22}, {1, 11, 22}, {2, 13, 23}},
+			},
+			{
+				// composite lookup uses two earlier relations.
+				Query: `SELECT /*+ LOOKUP_JOIN(l,r) LOOKUP_JOIN(r,b) JOIN_ORDER(l,r,q,b) */ l.id, r.id, q.id, b.payload
+FROM (SELECT * FROM shape_src LIMIT 100) l
+LEFT JOIN shape_mid r ON r.v = l.v
+LEFT JOIN (SELECT * FROM shape_tail LIMIT 100) q ON q.v = r.id
+LEFT JOIN shape_bridge b ON b.v = r.v AND b.tail_id = q.id
+ORDER BY l.id, r.id, q.id`,
+				Expected: []sql.Row{{1, 11, 21, 101}, {1, 11, 22, 102}, {1, 12, nil, nil}, {2, 13, 23, 103}, {3, nil, nil, nil}, {4, nil, nil, nil}, {5, 15, nil, nil}, {6, 11, 21, 101}, {6, 11, 22, 102}, {6, 12, nil, nil}, {7, nil, nil, nil}},
+			},
+			{
+				// reused cte around indexed table.
+				Query: `WITH s AS (SELECT * FROM shape_src LIMIT 100)
+SELECT /*+ LOOKUP_JOIN(l,r) JOIN_ORDER(l,r,q) */ l.id, r.id, q.id
+FROM s l
+JOIN shape_mid r ON r.v = l.v
+JOIN s q ON q.v = r.v AND q.id > l.id
+ORDER BY l.id, r.id, q.id`,
+				Expected: []sql.Row{{1, 11, 6}, {1, 12, 6}},
+			},
+			{
+				// computed join output feeds lookup.
+				Query: `SELECT /*+ LOOKUP_JOIN(j,q) JOIN_ORDER(j,q) */ j.lid, j.rid, q.id
+FROM (
+ SELECT /*+ LOOKUP_JOIN(l,r) JOIN_ORDER(l,r) */ l.id AS lid, r.id AS rid, r.id + 10 AS next_id
+ FROM (SELECT * FROM shape_src LIMIT 100) l
+ LEFT JOIN shape_mid r ON r.v = l.v
+ LIMIT 100
+) j
+LEFT JOIN shape_tail q ON q.id = j.next_id
+ORDER BY j.lid, j.rid, q.id`,
+				Expected: []sql.Row{{1, 11, 21}, {1, 12, 22}, {2, 13, 23}, {3, nil, nil}, {4, nil, nil}, {5, 15, 25}, {6, 11, 21}, {6, 12, 22}, {7, nil, nil}},
+			},
+			{
+				// rejected middle rows propagate nulls.
+				Query: `SELECT /*+ LOOKUP_JOIN(l,r) LOOKUP_JOIN(r,q) JOIN_ORDER(l,r,q) */ l.id, r.id, q.id
+FROM (SELECT * FROM shape_src LIMIT 100) l
+LEFT JOIN shape_mid r ON r.v = l.v AND r.id < 0
+LEFT JOIN shape_tail q ON q.v = r.id
+ORDER BY l.id, r.id, q.id`,
+				Expected: []sql.Row{{1, nil, nil}, {2, nil, nil}, {3, nil, nil}, {4, nil, nil}, {5, nil, nil}, {6, nil, nil}, {7, nil, nil}},
+			},
+			{
+				// outer then inner join rejects missing middle rows.
+				Query: `SELECT /*+ LOOKUP_JOIN(l,r) LOOKUP_JOIN(r,q) JOIN_ORDER(l,r,q) */ l.id, r.id, q.id
+FROM (SELECT * FROM shape_src LIMIT 100) l
+LEFT JOIN shape_mid r ON r.v = l.v
+JOIN shape_tail q ON q.v = r.id
+ORDER BY l.id, r.id, q.id`,
+				Expected: []sql.Row{{1, 11, 21}, {1, 11, 22}, {2, 13, 23}, {6, 11, 21}, {6, 11, 22}},
+			},
+			{
+				// limited result across nested joins.
+				Query: `SELECT /*+ LOOKUP_JOIN(l,r) JOIN_ORDER(l,r,q) */ l.id, r.id, q.id
+FROM (SELECT * FROM shape_src LIMIT 100) l
+LEFT JOIN shape_mid r ON r.v = l.v
+LEFT JOIN (SELECT * FROM shape_tail LIMIT 100) q ON q.v = r.id
+ORDER BY l.id, r.id, q.id LIMIT 3 OFFSET 1`,
+				Expected: []sql.Row{{1, 11, 22}, {1, 12, nil}, {2, 13, 23}},
+			},
+		},
+	},
 }
