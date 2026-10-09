@@ -236,6 +236,79 @@ var ConflictingMergeBasesScripts = []queries.ScriptTest{
 	},
 }
 
+// CrissCrossMergeReaderScripts check that functions and tables describing a merge use the same virtual merge base as
+// DOLT_MERGE.
+var CrissCrossMergeReaderScripts = []queries.ScriptTest{
+	{
+		Name:        "criss-cross merge preview: schema tip taller than the fork point",
+		SetUpScript: schemaBranchCrissCrossSetup(0),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('feature', 'main');",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT count(*) FROM dolt_preview_merge_conflicts('feature', 'main', 't');",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name:        "criss-cross merge preview: merge bases conflict and the sides resolved them differently",
+		SetUpScript: conflictingMergeBasesSetup("--ours"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('x', 'y');",
+				Expected: []sql.Row{{"t", uint64(1), uint64(0)}},
+			},
+			{
+				Query:    "SELECT base_id, base_v, our_v, their_v FROM dolt_preview_merge_conflicts('x', 'y', 't');",
+				Expected: []sql.Row{{1, "orig", "x", "y"}},
+			},
+		},
+	},
+	{
+		// The merge bases x1 and y1 each add a column, so only the virtual merge base has both a and b.
+		Name: "criss-cross merge: schema conflicts report the virtual merge base schema",
+		SetUpScript: []string{
+			"SET @@autocommit = 0;",
+			"CREATE TABLE t (id INT PRIMARY KEY, v INT);",
+			"CALL DOLT_COMMIT('-Am', 'c1');",
+			"CALL DOLT_BRANCH('x');",
+			"CALL DOLT_BRANCH('y');",
+			"CALL DOLT_CHECKOUT('x');",
+			"ALTER TABLE t ADD COLUMN a INT;",
+			"CALL DOLT_COMMIT('-am', 'x1');",
+			"CALL DOLT_CHECKOUT('y');",
+			"ALTER TABLE t ADD COLUMN b INT;",
+			"CALL DOLT_COMMIT('-am', 'y1');",
+			"CALL DOLT_CHECKOUT('x');",
+			"CALL DOLT_MERGE('y', '-m', 'x2');",
+			"CALL DOLT_CHECKOUT('y');",
+			"CALL DOLT_MERGE('x~1', '-m', 'y2');",
+			"ALTER TABLE t MODIFY COLUMN v BIGINT;",
+			"CALL DOLT_COMMIT('-am', 'y3');",
+			"CALL DOLT_CHECKOUT('x');",
+			"ALTER TABLE t MODIFY COLUMN v VARCHAR(20);",
+			"CALL DOLT_COMMIT('-am', 'x3');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT count(*) FROM dolt_merge_bases('x', 'y');",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "CALL DOLT_MERGE('y');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT table_name, base_schema LIKE '%`a` int%' AND base_schema LIKE '%`b` int%' FROM dolt_schema_conflicts;",
+				Expected: []sql.Row{{"t", true}},
+			},
+		},
+	},
+}
+
 var MergeBasesTableFunctionScripts = []queries.ScriptTest{
 	{
 		Name:        "dolt_merge_bases: lists every merge base of a criss-cross history",

@@ -31,10 +31,11 @@ const (
 	virtualMergeBaseDescription = "virtual merge base"
 )
 
-// mergeBaseForMerge returns the commit to use as the base when merging |left| and |right|. When they have several best
+// ResolveMergeBase returns the commit to use as the base when merging |left| and |right|. When they have several best
 // common ancestors, it returns a virtual merge base built by merging those ancestors together, as git's merge-ort
-// does. The virtual merge base is a dangling commit whose parents are the merged ancestors.
-func mergeBaseForMerge(ctx *sql.Context, ddb *doltdb.DoltDB, tableResolver doltdb.TableResolver, left, right *doltdb.Commit, opts editor.Options) (*doltdb.Commit, error) {
+// does. The virtual merge base is a dangling commit written to |ddb| whose parents are the merged ancestors. It
+// depends only on |left| and |right|, so every caller gets the same commit.
+func ResolveMergeBase(ctx *sql.Context, ddb *doltdb.DoltDB, left, right *doltdb.Commit) (*doltdb.Commit, error) {
 	optCmts, err := doltdb.GetCommitAncestors(ctx, left, right)
 	if err != nil {
 		return nil, err
@@ -56,7 +57,7 @@ func mergeBaseForMerge(ctx *sql.Context, ddb *doltdb.DoltDB, tableResolver doltd
 	}
 	virtualBase := bases[0]
 	for _, base := range bases[1:] {
-		virtualBase, err = mergeIntoVirtualBase(ctx, ddb, tableResolver, virtualBase, base, opts)
+		virtualBase, err = mergeIntoVirtualBase(ctx, ddb, virtualBase, base)
 		if err != nil {
 			return nil, err
 		}
@@ -67,8 +68,8 @@ func mergeBaseForMerge(ctx *sql.Context, ddb *doltdb.DoltDB, tableResolver doltd
 // mergeIntoVirtualBase merges |x| and |y| into a dangling commit. A table that conflicts or violates constraints in
 // this merge is taken unchanged from the merge base of |x| and |y|, so the outer merge reports the disagreement
 // instead of hiding it. git's merge-ort likewise keeps the base version of content it cannot merge here.
-func mergeIntoVirtualBase(ctx *sql.Context, ddb *doltdb.DoltDB, tableResolver doltdb.TableResolver, x, y *doltdb.Commit, opts editor.Options) (*doltdb.Commit, error) {
-	base, err := mergeBaseForMerge(ctx, ddb, tableResolver, x, y, opts)
+func mergeIntoVirtualBase(ctx *sql.Context, ddb *doltdb.DoltDB, x, y *doltdb.Commit) (*doltdb.Commit, error) {
+	base, err := ResolveMergeBase(ctx, ddb, x, y)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +86,7 @@ func mergeIntoVirtualBase(ctx *sql.Context, ddb *doltdb.DoltDB, tableResolver do
 		return nil, err
 	}
 
-	result, err := MergeRoots(ctx, tableResolver, xRoot, yRoot, baseRoot, y, base, opts, MergeOpts{KeepSchemaConflicts: true})
+	result, err := MergeRoots(ctx, doltdb.SimpleTableResolver{}, xRoot, yRoot, baseRoot, y, base, editor.Options{}, MergeOpts{KeepSchemaConflicts: true})
 	if err != nil {
 		return nil, err
 	}

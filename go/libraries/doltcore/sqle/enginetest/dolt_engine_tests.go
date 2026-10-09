@@ -1014,8 +1014,16 @@ func RunDoltMergeTests(t *testing.T, h DoltEnginetestHarness) {
 	}
 }
 
+func concatScripts(scriptLists ...[]queries.ScriptTest) []queries.ScriptTest {
+	var all []queries.ScriptTest
+	for _, scripts := range scriptLists {
+		all = append(all, scripts...)
+	}
+	return all
+}
+
 func RunDoltCrissCrossMergeTests(t *testing.T, h DoltEnginetestHarness) {
-	for _, script := range append(CrissCrossMergeScripts, ConflictingMergeBasesScripts...) {
+	for _, script := range concatScripts(CrissCrossMergeScripts, ConflictingMergeBasesScripts, CrissCrossMergeReaderScripts) {
 		func() {
 			h := h.NewHarness(t)
 			defer h.Close()

@@ -56,7 +56,7 @@ const (
 // MergeCommits merges |mergeCommit| into |commit|. When they have several best common ancestors, the merge base is a
 // virtual commit written to |ddb| that merges those ancestors together.
 func MergeCommits(ctx *sql.Context, ddb *doltdb.DoltDB, tableResolver doltdb.TableResolver, commit, mergeCommit *doltdb.Commit, opts editor.Options) (*Result, error) {
-	ancCommit, err := mergeBaseForMerge(ctx, ddb, tableResolver, commit, mergeCommit, opts)
+	ancCommit, err := ResolveMergeBase(ctx, ddb, commit, mergeCommit)
 	if err != nil {
 		return nil, err
 	}
