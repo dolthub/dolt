@@ -1023,7 +1023,7 @@ func concatScripts(scriptLists ...[]queries.ScriptTest) []queries.ScriptTest {
 }
 
 func RunDoltCrissCrossMergeTests(t *testing.T, h DoltEnginetestHarness) {
-	for _, script := range concatScripts(CrissCrossMergeScripts, ConflictingMergeBasesScripts, CrissCrossMergeReaderScripts) {
+	for _, script := range concatScripts(CrissCrossMergeScripts, ConflictingMergeBasesScripts, CrissCrossMergeReaderScripts, CountCommitsScripts) {
 		func() {
 			h := h.NewHarness(t)
 			defer h.Close()

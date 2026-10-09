@@ -399,6 +399,63 @@ var ThreeDotScripts = []queries.ScriptTest{
 	},
 }
 
+// CountCommitsScripts expect the counts of git rev-list --left-right --count from...to on an equivalent history.
+var CountCommitsScripts = []queries.ScriptTest{
+	{
+		Name: "dolt_count_commits: single fork",
+		SetUpScript: []string{
+			"CREATE TABLE t (id INT PRIMARY KEY);",
+			"CALL DOLT_COMMIT('-Am', 'c1');",
+			"CALL DOLT_BRANCH('other');",
+			"INSERT INTO t VALUES (1);",
+			"CALL DOLT_COMMIT('-am', 'main 1');",
+			"INSERT INTO t VALUES (2);",
+			"CALL DOLT_COMMIT('-am', 'main 2');",
+			"CALL DOLT_CHECKOUT('other');",
+			"INSERT INTO t VALUES (3);",
+			"CALL DOLT_COMMIT('-am', 'other 1');",
+			"CALL DOLT_CHECKOUT('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_COUNT_COMMITS('--from', 'main', '--to', 'other');",
+				Expected: []sql.Row{{uint64(2), uint64(1)}},
+			},
+			{
+				Query:    "CALL DOLT_COUNT_COMMITS('--from', 'main', '--to', 'main');",
+				Expected: []sql.Row{{uint64(0), uint64(0)}},
+			},
+			{
+				Query:    "CALL DOLT_MERGE('other', '-m', 'merge other');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				// main 1, main 2 and the merge commit; git rev-list --left-right --count main...other gives 3 0.
+				Query:    "CALL DOLT_COUNT_COMMITS('--from', 'main', '--to', 'other');",
+				Expected: []sql.Row{{uint64(3), uint64(0)}},
+			},
+		},
+	},
+	{
+		Name:        "dolt_count_commits: several merge bases",
+		SetUpScript: schemaBranchCrissCrossSetup(2),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_COUNT_COMMITS('--from', 'main', '--to', 'feature');",
+				Expected: []sql.Row{{uint64(2), uint64(2)}},
+			},
+			{
+				Query:    "CALL DOLT_COUNT_COMMITS('--from', 'feature', '--to', 'main');",
+				Expected: []sql.Row{{uint64(2), uint64(2)}},
+			},
+			{
+				Query:    "CALL DOLT_COUNT_COMMITS('--from', 'main', '--to', 'schema');",
+				Expected: []sql.Row{{uint64(5), uint64(0)}},
+			},
+		},
+	},
+}
+
 var MergeBasesTableFunctionScripts = []queries.ScriptTest{
 	{
 		Name:        "dolt_merge_bases: lists every merge base of a criss-cross history",

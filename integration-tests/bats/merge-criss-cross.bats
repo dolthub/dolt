@@ -231,3 +231,24 @@ setup_conflicting_merge_bases() {
     [[ ! "$output" =~ "c2: seed rows on main" ]] || false
     [[ ! "$output" =~ "multiple merge bases" ]] || false
 }
+
+@test "merge-criss-cross: status counts commits ahead of upstream after a merge, like git" {
+    mkdir remote
+    dolt remote add origin file://remote
+    dolt sql -q "CREATE TABLE t (id INT PRIMARY KEY);"
+    dolt commit -Am "c1"
+    dolt branch feature
+    dolt checkout feature
+    dolt sql -q "INSERT INTO t VALUES (1);"
+    dolt commit -am "f1"
+    dolt checkout main
+    dolt sql -q "INSERT INTO t VALUES (2);"
+    dolt commit -am "c2"
+    dolt push -u origin main
+    dolt merge feature -m "merge feature"
+
+    # f1 and the merge commit are not in origin/main; git status reports 2.
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Your branch is ahead of 'origin/main' by 2 commits." ]] || false
+}
