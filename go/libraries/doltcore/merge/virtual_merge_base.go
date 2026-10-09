@@ -183,7 +183,7 @@ func takeUnmergedTablesFromBase(ctx *sql.Context, result *Result, baseRoot doltd
 }
 
 // virtualMergeBaseMeta derives every field from |x| and |y|, so merging the same commits always yields the same hash.
-func virtualMergeBaseMeta(ctx *sql.Context, x, y *doltdb.Commit) (*datas.CommitMeta, error) {
+func virtualMergeBaseMeta(ctx context.Context, x, y *doltdb.Commit) (*datas.CommitMeta, error) {
 	xDate, err := committerDate(ctx, x)
 	if err != nil {
 		return nil, err
@@ -200,7 +200,17 @@ func virtualMergeBaseMeta(ctx *sql.Context, x, y *doltdb.Commit) (*datas.CommitM
 }
 
 // sortOldestFirst orders |commits| by committer date, oldest first, breaking ties by hash.
-func sortOldestFirst(ctx *sql.Context, commits []*doltdb.Commit) error {
+func sortOldestFirst(ctx context.Context, commits []*doltdb.Commit) error {
+	return sortByCommitterDate(ctx, commits, false)
+}
+
+// sortNewestFirst orders |commits| by committer date, newest first, breaking ties by hash. git orders merge bases this
+// way.
+func sortNewestFirst(ctx context.Context, commits []*doltdb.Commit) error {
+	return sortByCommitterDate(ctx, commits, true)
+}
+
+func sortByCommitterDate(ctx context.Context, commits []*doltdb.Commit, newestFirst bool) error {
 	type datedCommit struct {
 		commit *doltdb.Commit
 		date   time.Time
@@ -220,7 +230,7 @@ func sortOldestFirst(ctx *sql.Context, commits []*doltdb.Commit) error {
 	}
 	sort.Slice(dated, func(i, j int) bool {
 		if !dated[i].date.Equal(dated[j].date) {
-			return dated[i].date.Before(dated[j].date)
+			return dated[i].date.Before(dated[j].date) != newestFirst
 		}
 		return dated[i].hash < dated[j].hash
 	})
@@ -230,7 +240,7 @@ func sortOldestFirst(ctx *sql.Context, commits []*doltdb.Commit) error {
 	return nil
 }
 
-func committerDate(ctx *sql.Context, c *doltdb.Commit) (time.Time, error) {
+func committerDate(ctx context.Context, c *doltdb.Commit) (time.Time, error) {
 	meta, err := c.GetCommitMeta(ctx)
 	if err != nil {
 		return time.Time{}, err

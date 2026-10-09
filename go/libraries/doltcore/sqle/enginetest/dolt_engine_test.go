@@ -1455,6 +1455,11 @@ func TestDoltCrissCrossMerge(t *testing.T) {
 	RunDoltCrissCrossMergeTests(t, h)
 }
 
+func TestDoltMergeBaseSelection(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltMergeBaseSelectionTests(t, h)
+}
+
 func TestDoltMergeBasesTableFunction(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunDoltMergeBasesTableFunctionTests(t, h)

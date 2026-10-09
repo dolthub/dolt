@@ -309,6 +309,34 @@ var CrissCrossMergeReaderScripts = []queries.ScriptTest{
 	},
 }
 
+// MergeBaseSelectionScripts run with a commit clock that advances on every commit. With several merge bases, the single
+// merge base is the newest one, as in git, even when another is taller.
+var MergeBaseSelectionScripts = []queries.ScriptTest{
+	{
+		Name:        "merge base selection: the newest merge base wins over a taller one",
+		SetUpScript: schemaBranchCrissCrossSetup(2),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT message FROM dolt_log('--all') WHERE commit_hash = dolt_merge_base('main', 'feature');",
+				Expected: []sql.Row{{"s2: add column m"}},
+			},
+			{
+				Query:    "SELECT message FROM dolt_log('--all') WHERE commit_hash = dolt_merge_base('feature', 'main');",
+				Expected: []sql.Row{{"s2: add column m"}},
+			},
+			{
+				Query:    "SELECT (SELECT merge_base FROM dolt_merge_bases('main', 'feature') LIMIT 1) = dolt_merge_base('main', 'feature');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				// git diff main...feature also diffs against the schema tip and reports the inherited rows as added.
+				Query:    "SELECT to_id FROM dolt_diff('main...feature', 't') WHERE diff_type = 'added' ORDER BY to_id;",
+				Expected: []sql.Row{{1}, {2}, {3}, {4}, {50}},
+			},
+		},
+	},
+}
+
 var MergeBasesTableFunctionScripts = []queries.ScriptTest{
 	{
 		Name:        "dolt_merge_bases: lists every merge base of a criss-cross history",

@@ -184,3 +184,17 @@ setup_conflicting_merge_bases() {
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = "orig,x,y" ]
 }
+
+@test "merge-criss-cross: merge-base returns the newest merge base, like git" {
+    # The fork point is taller than the schema tip, but the schema tip is newer.
+    setup_schema_branch_criss_cross 2
+    schema_tip=$(get_head_commit schema)
+
+    run dolt merge-base main feature
+    [ "$status" -eq 0 ]
+    [ "$output" = "$schema_tip" ]
+
+    run dolt merge-base --all main feature
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "$schema_tip" ]
+}
