@@ -592,12 +592,6 @@ func TestIndexKeyTypesScripts(t *testing.T) {
 	enginetest.TestIndexKeyTypesScripts(t, h)
 }
 
-func TestIndexRegressionScripts(t *testing.T) {
-	h := newDoltServerTestHarness(t).WithConfigureStats(true)
-	defer h.Close()
-	enginetest.TestIndexRegressionScripts(t, h)
-}
-
 func TestInsertIgnoreRegressionScripts(t *testing.T) {
 	h := newDoltServerTestHarness(t).WithConfigureStats(true)
 	defer h.Close()
@@ -2253,11 +2247,11 @@ func TestIndexKeyTypesScriptsPrepared(t *testing.T) {
 	enginetest.TestIndexKeyTypesScriptsPrepared(t, h)
 }
 
-func TestIndexRegressionScriptsPrepared(t *testing.T) {
+func TestIndexesPrepared(t *testing.T) {
 	skipPreparedTests(t)
 	h := newDoltHarness(t).WithConfigureStats(true)
 	defer h.Close()
-	enginetest.TestIndexRegressionScriptsPrepared(t, h)
+	enginetest.TestIndexesPrepared(t, h)
 }
 
 func TestInsertIgnoreRegressionScriptsPrepared(t *testing.T) {
