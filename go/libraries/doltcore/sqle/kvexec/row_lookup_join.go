@@ -27,17 +27,9 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// newRowLookupKvIter returns a lookup join iterator for joins whose right side
-// is a Dolt index lookup but whose left side is not a KV source: a CTE, a
-// derived table, an aggregation, or another join. GMS executes that shape by
-// building a fresh row iterator over the right side for every left row, which
-// for a single row index lookup costs an index scan builder, a sql.Range to
-// prolly.Range conversion, a partition iterator and a table row iterator per
-// row. Here the left side stays rows while the right side is read as KV pairs,
-// so only the lookup key is rebuilt per row.
-//
-// Returns a nil iterator and nil error when the shape is unsupported, which
-// sends the join back to GMS.
+// newRowLookupKvIter returns a lookup join iterator for joins whose right side is a Dolt index lookup but whose
+// left side is some GMS-native plan shape (e.g. a subquery, a CTE, etc.)
+// A nil result signals to the builder to fall back to the vanilla row_exec path
 func (b *Builder) newRowLookupKvIter(
 	ctx *sql.Context,
 	n *plan.JoinNode,
@@ -48,17 +40,16 @@ func (b *Builder) newRowLookupKvIter(
 	dstFilter sql.Expression,
 ) (sql.RowIter, error) {
 	if b.fallback == nil {
-		// without a fallback builder we have no way to execute the left side
 		return nil, nil
 	}
+
 	if n.ScopeLen != 0 {
-		// the left row would carry outer scope columns we do not account for
+		// we don't have the logic here to account for outer scope field index adjustments
 		return nil, nil
 	}
 
 	idx := ita.Index()
 	if idx == nil || idx.IsSpatial() || idx.IsFullText() || idx.IsVector() {
-		// these indexes are not keyed by the join columns
 		return nil, nil
 	}
 
@@ -71,7 +62,6 @@ func (b *Builder) newRowLookupKvIter(
 	srcLen := len(n.Left().Schema(ctx))
 	dstLen := len(n.Right().Schema(ctx))
 	if srcLen == 0 || len(dstTags) != dstLen {
-		// the joiner projections have to line up with the join schema
 		return nil, nil
 	}
 
@@ -82,14 +72,15 @@ func (b *Builder) newRowLookupKvIter(
 	}
 	comparisons := make([]sql.Expression, len(keyExprs))
 	for i, e := range keyExprs {
+		// unsupported key encodings return nil, which signals the row_exec builder to use the vanilla building path
 		if !lookupKeyEncodingSupported(keyDesc.Types[i].Enc) {
 			return nil, nil
 		}
 
 		if gf, ok := e.(*expression.GetField); ok && (gf.Index() < 0 || gf.Index() >= srcLen) {
-			// key columns have to resolve inside the left row
 			return nil, nil
 		}
+
 		_, srcExtended := e.Type(ctx).(sql.ExtendedType)
 		_, dstExtended := keyTypes[i].Type.(sql.ExtendedType)
 		if srcExtended != dstExtended {
@@ -142,7 +133,7 @@ type rowLookupJoinSource struct {
 	// srcLen is the width of the left node schema
 	srcLen int
 	row    sql.Row
-	// mapping encodes a destination key from the left row
+	// mapping is responsible for generating lookup keys from the left row
 	mapping *rowLookupMapping
 	// joiner decodes the KV pairs read from the right side
 	joiner *prollyToSqlJoiner
@@ -197,9 +188,8 @@ type rowLookupMapping struct {
 	comparisonRow sql.Row
 }
 
-// dstKeyTuple encodes the destination lookup key for |row|. The boolean return
-// is false when no destination row can match the key, either because a key
-// value is NULL under a regular equality comparison or because it falls outside
+// dstKeyTuple encodes the destination lookup key for |row|. The boolean return is false when no destination row
+// can match the key, either because a key value is NULL under a regular equality comparison or because it falls outside
 // the range of its index column.
 func (m *rowLookupMapping) dstKeyTuple(ctx *sql.Context, row sql.Row) (val.Tuple, bool, error) {
 	for i, e := range m.keyExprs {
@@ -229,6 +219,7 @@ func (m *rowLookupMapping) dstKeyTuple(ctx *sql.Context, row sql.Row) (val.Tuple
 			m.targetKb.Recycle()
 			return nil, false, err
 		}
+
 		// Index matching may remove the equality from the join filter, so a
 		// rounded or truncated lookup key must still satisfy the comparison.
 		if cmp := m.comparisons[i]; cmp != nil {
@@ -251,6 +242,7 @@ func (m *rowLookupMapping) dstKeyTuple(ctx *sql.Context, row sql.Row) (val.Tuple
 			return nil, false, err
 		}
 	}
+
 	// the key can be a prefix of the index, BuildPermissive leaves the
 	// remaining fields NULL
 	tup, err := m.targetKb.BuildPermissive(ctx, m.pool)
@@ -278,8 +270,8 @@ func extendedLookupKeyMatches(ctx *sql.Context, src, dst sql.ExtendedType, origi
 	return cmp == 0, err
 }
 
-// convertLookupKeyValue preserves source type information during conversion.
-// A value outside the index column's domain cannot match any indexed row.
+// convertLookupKeyValue converts a SQL value from the source type to the destination type, returning the
+// converted value, whether it is in range, and any error encountered.
 func convertLookupKeyValue(ctx *sql.Context, srcTyp, colTyp sql.Type, v interface{}) (interface{}, sql.ConvertInRange, error) {
 	if src, ok := srcTyp.(sql.ExtendedType); ok {
 		if dst, ok := colTyp.(sql.ExtendedType); ok {
@@ -287,8 +279,10 @@ func convertLookupKeyValue(ctx *sql.Context, srcTyp, colTyp sql.Type, v interfac
 		}
 	}
 
-	// ENUM and SET rows contain ordinals whose meaning belongs to the source
-	// type; converting those ordinals directly can select a different label.
+	// ENUM and SET types are represented in memory as integer ordinals for their label values. Values are
+	// equivalent if they have the same label, but the ordinals may differ between source and destination types.
+	// Therefore, we convert them to their string representation first, such that a value of e.g. `green` compares
+	// the same on both sides of the join, even if the source and destination types have different label orders.
 	if types.IsEnum(srcTyp) || types.IsSet(srcTyp) {
 		var err error
 		v, _, err = types.ConvertToCollatedString(ctx, v, srcTyp)
@@ -303,7 +297,7 @@ func convertLookupKeyValue(ctx *sql.Context, srcTyp, colTyp sql.Type, v interfac
 	}
 
 	if err != nil && sql.ErrTruncatedIncorrect.Is(err) {
-		// Truncation produces a candidate key; the caller still checks equality.
+		// A truncated value can still be used as a lookup key if it matches the destination type
 		err = nil
 	}
 
@@ -311,10 +305,7 @@ func convertLookupKeyValue(ctx *sql.Context, srcTyp, colTyp sql.Type, v interfac
 }
 
 // lookupKeyEncodingSupported returns whether a SQL value converted to an index
-// column type can be written into a key field with |enc|. Other encodings
-// continue to use the generic executor.
-// tree.PutField handles adaptive values, including inline and out-of-band storage,
-// using the destination encoding rather than copying the source bytes.
+// column type can be written into a key field with |enc|.
 func lookupKeyEncodingSupported(enc val.Encoding) bool {
 	switch enc {
 	case val.Int8Enc, val.Uint8Enc, val.Int16Enc, val.Uint16Enc,

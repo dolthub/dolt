@@ -31,19 +31,13 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// lookupJoinSource supplies lookup keys and assembles result rows. Keeping the
-// source representation here lets SQL rows and storage tuples share the same
-// lookup, filtering, and outer-join state machine.
+// lookupJoinSource is a helper interface for kv exec that allows us to abstract the left side of a lookup join.
 type lookupJoinSource interface {
-	// nextLookupKey advances to the next source row and encodes its destination
-	// lookup key, retaining the source row for buildRow. The boolean is false
-	// when no destination row can match. Returns io.EOF when the source is exhausted.
+	// nextLookupKey returns the next key from the left hand side to lookup in the destination iterator.
+	// It returns a boolean indicating whether a match is possible for this key. io.EOF ends iteration.
 	nextLookupKey(*sql.Context) (val.Tuple, bool, error)
-
-	// buildRow combines the current source row with the destination key and value
-	// tuples in a new SQL row. Nil destination tuples produce a null-extended row.
+	// buildRow builds a result row for the left and right sides of a join result
 	buildRow(*sql.Context, val.Tuple, val.Tuple) (sql.Row, error)
-
 	// Close releases the source iterator's resources.
 	Close(*sql.Context) error
 }
@@ -156,7 +150,6 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 			}
 		}
 
-		// A right-side filter must not reject a null-extended outer row.
 		if l.dstFilter != nil && dstKey != nil {
 			res, err := sql.EvaluateCondition(ctx, l.dstFilter, ret[l.srcLen:])
 			if err != nil {
@@ -175,7 +168,6 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 			}
 
 			if res == nil && l.excludeNulls {
-				// override default left join behavior
 				continue
 			}
 
@@ -189,6 +181,8 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 }
 
+// kvLookupJoinSource is a lookupJoinSource implementation that uses a prolly.MapIter as the source of keys to lookup
+// in the destination iterator
 type kvLookupJoinSource struct {
 	iter prolly.MapIter
 	// mapping inputs (key, value) to create a destination key
@@ -222,8 +216,7 @@ func (s *kvLookupJoinSource) Close(*sql.Context) error {
 	return nil
 }
 
-// lookupMapping is responsible for generating keys for lookups into
-// the destination iterator.
+// lookupMapping is responsible for generating keys for lookups into the destination iterator.
 type lookupMapping struct {
 	ns         tree.NodeStore
 	pool       pool.BuffPool

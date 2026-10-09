@@ -82,11 +82,6 @@ func (b *Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, e
 			// (1) lookup or left lookup join
 			// (2) right-side is an index lookup, by definition
 			// (3) the key expressions for the lookup are literals or columns (ex: no arithmetic yet)
-			//
-			// When the left-side is also something we read KVs from (table or
-			// indexscan) we join KV-to-KV. Otherwise |newRowLookupKvIter| keeps
-			// the left side as rows, which still avoids rebuilding a row
-			// iterator over the right side for every left row.
 
 			ita, ok := getIndexedTableAccess(n.Right())
 			if !ok || len(r) > 0 || !simpleLookupExpressions(ita.Expressions()) {
@@ -104,33 +99,10 @@ func (b *Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, e
 			}
 
 			if srcSchema != nil {
-				keyLookupMapper, err := newLookupKeyMapping(
-					ctx,
-					srcSchema,
-					dstIter.InputKeyDesc(),
-					ita.Expressions(),
-					ita.Index().ColumnExpressionTypes(ctx),
-					srcMap.NodeStore(),
-				)
-				if err == nil && keyLookupMapper.valid(ctx) {
-					split := len(srcTags)
-					projections := append(srcTags, dstTags...)
-					rowJoiner := newRowJoiner(ctx, []schema.Schema{srcSchema, dstIter.Schema()}, []int{split}, projections, dstIter.NodeStore())
-					return newLookupKvIter(
-						srcIter,
-						dstIter,
-						keyLookupMapper,
-						rowJoiner,
-						srcFilter,
-						dstFilter,
-						n.Filter,
-						n.Op.IsLeftOuter(),
-						n.Op.IsExcludeNulls(),
-					)
-				}
+				return b.newTupleLookupKvIter(ctx, srcSchema, dstIter, ita, srcMap, srcTags, dstTags, srcIter, srcFilter, dstFilter, n)
+			} else {
+				return b.newRowLookupKvIter(ctx, n, r, ita, dstIter, dstTags, dstFilter)
 			}
-
-			return b.newRowLookupKvIter(ctx, n, r, ita, dstIter, dstTags, dstFilter)
 		case n.Op.IsMerge():
 			if leftState, err := getMergeKv(ctx, n.Left()); err == nil {
 				if rightState, err := getMergeKv(ctx, n.Right()); err == nil {
@@ -171,6 +143,51 @@ func (b *Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, e
 	}
 
 	return nil, nil
+}
+
+// newTupleLookupKvIter returns a KV iter for a join whose left and right side are both prolly indexes
+func (b *Builder) newTupleLookupKvIter(
+	ctx *sql.Context,
+	srcSchema schema.Schema,
+	dstIter index.SecondaryLookupIterGen,
+	ita *plan.IndexedTableAccess,
+	srcMap prolly.Map,
+	srcTags []uint64,
+	dstTags []uint64,
+	srcIter prolly.MapIter,
+	srcFilter sql.Expression,
+	dstFilter sql.Expression,
+	n *plan.JoinNode,
+) (sql.RowIter, error) {
+
+	keyLookupMapper, err := newLookupKeyMapping(
+		ctx,
+		srcSchema,
+		dstIter.InputKeyDesc(),
+		ita.Expressions(),
+		ita.Index().ColumnExpressionTypes(ctx),
+		srcMap.NodeStore(),
+	)
+	if err != nil || !keyLookupMapper.valid(ctx) {
+		// A nil result (from an invalid mapper) signals to the builder that the lookup join cannot be executed with
+		// a KV-native operator, and should be built with the fallback builder.
+		return nil, err
+	}
+
+	split := len(srcTags)
+	projections := append(srcTags, dstTags...)
+	rowJoiner := newRowJoiner(ctx, []schema.Schema{srcSchema, dstIter.Schema()}, []int{split}, projections, dstIter.NodeStore())
+	return newLookupKvIter(
+		srcIter,
+		dstIter,
+		keyLookupMapper,
+		rowJoiner,
+		srcFilter,
+		dstFilter,
+		n.Filter,
+		n.Op.IsLeftOuter(),
+		n.Op.IsExcludeNulls(),
+	)
 }
 
 func getIndexedTableAccess(n sql.Node) (*plan.IndexedTableAccess, bool) {
@@ -309,8 +326,7 @@ func (m *prollyToSqlJoiner) buildRow(ctx context.Context, tuples ...val.Tuple) (
 	return row, nil
 }
 
-// buildRowInto decodes |tuples| into |row|, which must have room for the
-// joiner's output columns.
+// buildRowInto decodes |tuples| into |row| (which must have space for all the values)
 func (m *prollyToSqlJoiner) buildRowInto(ctx context.Context, row sql.Row, tuples ...val.Tuple) error {
 	if len(tuples) != 2*len(m.desc) {
 		panic("invalid KV count for prollyToSqlJoiner")
