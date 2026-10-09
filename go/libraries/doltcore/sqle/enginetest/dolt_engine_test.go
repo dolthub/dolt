@@ -1460,6 +1460,11 @@ func TestDoltMergeBaseSelection(t *testing.T) {
 	RunDoltMergeBaseSelectionTests(t, h)
 }
 
+func TestDoltMergeBaseSelectionPrepared(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltMergeBaseSelectionPreparedTests(t, h)
+}
+
 func TestDoltMergeBasesTableFunction(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunDoltMergeBasesTableFunctionTests(t, h)

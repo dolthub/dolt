@@ -198,3 +198,36 @@ setup_conflicting_merge_bases() {
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = "$schema_tip" ]
 }
+
+@test "merge-criss-cross: three-dot diff warns about several merge bases, like git" {
+    setup_schema_branch_criss_cross 2
+    schema_tip=$(get_head_commit schema)
+
+    run dolt diff main...feature
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "warning: main...feature: multiple merge bases, using $schema_tip" ]] || false
+
+    run dolt diff main...schema
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "multiple merge bases" ]] || false
+}
+
+# bats test_tags=no_lambda
+@test "merge-criss-cross: sql shell shows the three-dot diff warning" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    setup_schema_branch_criss_cross 2
+
+    run $BATS_TEST_DIRNAME/merge-criss-cross-diff-warning.expect
+    [ "$status" -eq 0 ]
+}
+
+@test "merge-criss-cross: three-dot log excludes every merge base, like git" {
+    setup_schema_branch_criss_cross 2
+
+    run dolt log --oneline main...feature
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "f1: feature adds row 50" ]] || false
+    [[ "$output" =~ "c3: main edits row 1 and deletes row 2" ]] || false
+    [[ ! "$output" =~ "c2: seed rows on main" ]] || false
+    [[ ! "$output" =~ "multiple merge bases" ]] || false
+}

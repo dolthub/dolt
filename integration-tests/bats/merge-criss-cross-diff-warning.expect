@@ -1,0 +1,15 @@
+#!/usr/bin/expect
+
+set timeout 5
+set env(NO_COLOR) 1
+
+source  "$env(BATS_CWD)/helper/common_expect_functions.tcl"
+
+spawn dolt sql
+
+expect_with_defaults                                                                        {dolt-repo-.*>} { send "select count(*) from dolt_diff('main...feature', 't');\r"; }
+
+expect_with_defaults_2 {Warning \(Code 1105\): main\.\.\.feature: multiple merge bases, using} {dolt-repo-.*>} { send "quit;\r"; }
+
+expect eof
+exit

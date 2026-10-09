@@ -19,6 +19,8 @@ import (
 
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtablefunctions"
 )
 
 // schemaBranchCrissCrossSetup builds the history from https://github.com/dolthub/dolt/issues/12050: a data-free
@@ -332,6 +334,66 @@ var MergeBaseSelectionScripts = []queries.ScriptTest{
 				// git diff main...feature also diffs against the schema tip and reports the inherited rows as added.
 				Query:    "SELECT to_id FROM dolt_diff('main...feature', 't') WHERE diff_type = 'added' ORDER BY to_id;",
 				Expected: []sql.Row{{1}, {2}, {3}, {4}, {50}},
+			},
+		},
+	},
+}
+
+// ThreeDotScripts run with a commit clock that advances on every commit. Like git diff A...B, three-dot diffs use the
+// newest merge base and warn that there are several. Like git log A...B, three-dot logs exclude every merge base.
+var ThreeDotScripts = []queries.ScriptTest{
+	{
+		Name:        "three-dot ranges with several merge bases",
+		SetUpScript: schemaBranchCrissCrossSetup(2),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:                           "SELECT count(*) FROM dolt_diff('main...feature', 't');",
+				Expected:                        []sql.Row{{5}},
+				ExpectedWarning:                 dtablefunctions.MultipleMergeBasesWarningCode,
+				ExpectedWarningsCount:           1,
+				ExpectedWarningMessageSubstring: "main...feature: multiple merge bases, using ",
+			},
+			{
+				Query:                           "SELECT table_name, rows_added FROM dolt_diff_stat('main...feature');",
+				Expected:                        []sql.Row{{"t", int64(5)}},
+				ExpectedWarning:                 dtablefunctions.MultipleMergeBasesWarningCode,
+				ExpectedWarningsCount:           1,
+				ExpectedWarningMessageSubstring: "main...feature: multiple merge bases, using ",
+			},
+			{
+				Query:                           "SELECT to_table_name, data_change FROM dolt_diff_summary('main...feature');",
+				Expected:                        []sql.Row{{"t", true}},
+				ExpectedWarning:                 dtablefunctions.MultipleMergeBasesWarningCode,
+				ExpectedWarningsCount:           1,
+				ExpectedWarningMessageSubstring: "main...feature: multiple merge bases, using ",
+			},
+			{
+				Query:                           "SELECT count(*) > 0 FROM dolt_patch('main...feature');",
+				Expected:                        []sql.Row{{true}},
+				ExpectedWarning:                 dtablefunctions.MultipleMergeBasesWarningCode,
+				ExpectedWarningsCount:           1,
+				ExpectedWarningMessageSubstring: "main...feature: multiple merge bases, using ",
+			},
+			{
+				Query:    "SELECT count(*) FROM dolt_diff('main...schema', 't');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SHOW WARNINGS;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "SELECT message FROM dolt_log('main...feature') ORDER BY message;",
+				Expected: []sql.Row{
+					{"c3: main edits row 1 and deletes row 2"},
+					{"f1: feature adds row 50"},
+					{"merge schema into feature"},
+					{"merge schema into main"},
+				},
+			},
+			{
+				Query:    "SHOW WARNINGS;",
+				Expected: []sql.Row{},
 			},
 		},
 	},

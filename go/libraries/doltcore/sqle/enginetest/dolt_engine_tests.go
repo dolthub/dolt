@@ -1036,12 +1036,25 @@ func RunDoltCrissCrossMergeTests(t *testing.T, h DoltEnginetestHarness) {
 func RunDoltMergeBaseSelectionTests(t *testing.T, h DoltEnginetestHarness) {
 	cleanup := installTestCommitClock(&testCommitClock{})
 	defer cleanup()
-	for _, script := range MergeBaseSelectionScripts {
+	for _, script := range concatScripts(MergeBaseSelectionScripts, ThreeDotScripts) {
 		func() {
 			h := h.NewHarness(t)
 			defer h.Close()
 			h.Setup(setup.MydbData)
 			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func RunDoltMergeBaseSelectionPreparedTests(t *testing.T, h DoltEnginetestHarness) {
+	cleanup := installTestCommitClock(&testCommitClock{})
+	defer cleanup()
+	for _, script := range concatScripts(MergeBaseSelectionScripts, ThreeDotScripts) {
+		func() {
+			h := h.NewHarness(t)
+			defer h.Close()
+			h.Setup(setup.MydbData)
+			enginetest.TestScriptPrepared(t, h, script)
 		}()
 	}
 }
