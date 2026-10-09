@@ -586,18 +586,6 @@ func TestExpressionsScripts(t *testing.T) {
 	enginetest.TestExpressionsScripts(t, h)
 }
 
-func TestForeignKeyResolutionScripts(t *testing.T) {
-	h := newDoltServerTestHarness(t).WithConfigureStats(true)
-	defer h.Close()
-	enginetest.TestForeignKeyResolutionScripts(t, h)
-}
-
-func TestForeignKeyTypesScripts(t *testing.T) {
-	h := newDoltServerTestHarness(t).WithConfigureStats(true)
-	defer h.Close()
-	enginetest.TestForeignKeyTypesScripts(t, h)
-}
-
 func TestIndexKeyTypesScripts(t *testing.T) {
 	h := newDoltServerTestHarness(t).WithConfigureStats(true)
 	defer h.Close()
@@ -2244,18 +2232,18 @@ func TestExpressionsScriptsPrepared(t *testing.T) {
 	enginetest.TestExpressionsScriptsPrepared(t, h)
 }
 
-func TestForeignKeyResolutionScriptsPrepared(t *testing.T) {
+func TestForeignKeyResolutionPrepared(t *testing.T) {
 	skipPreparedTests(t)
 	h := newDoltHarness(t).WithConfigureStats(true)
 	defer h.Close()
-	enginetest.TestForeignKeyResolutionScriptsPrepared(t, h)
+	enginetest.TestForeignKeyResolutionPrepared(t, h)
 }
 
-func TestForeignKeyTypesScriptsPrepared(t *testing.T) {
+func TestForeignKeyTypesPrepared(t *testing.T) {
 	skipPreparedTests(t)
 	h := newDoltHarness(t).WithConfigureStats(true)
 	defer h.Close()
-	enginetest.TestForeignKeyTypesScriptsPrepared(t, h)
+	enginetest.TestForeignKeyTypesPrepared(t, h)
 }
 
 func TestIndexKeyTypesScriptsPrepared(t *testing.T) {
