@@ -86,7 +86,36 @@ func longRunningFeatureSetup() []string {
 	for cycle := 4; cycle <= 6; cycle++ {
 		script = append(script, schemaBranchMigrationCycle(cycle)...)
 	}
-	return script
+	return append(script, "CALL DOLT_CHECKOUT('main');")
+}
+
+// conflictingMergeBasesSetup builds a criss-cross whose two merge bases, x1 and y1, both changed row 1. x2 merges y1
+// into x1 keeping x1's value; y2 merges x1 into y1 keeping |y2Resolution|'s value.
+func conflictingMergeBasesSetup(y2Resolution string) []string {
+	return []string{
+		"SET @@autocommit = 0;",
+		"CREATE TABLE t (id INT PRIMARY KEY, v VARCHAR(20));",
+		"INSERT INTO t VALUES (1, 'orig'), (2, 'orig');",
+		"CALL DOLT_COMMIT('-Am', 'c1');",
+		"CALL DOLT_BRANCH('x');",
+		"CALL DOLT_BRANCH('y');",
+		"CALL DOLT_CHECKOUT('x');",
+		"UPDATE t SET v = 'x' WHERE id = 1;",
+		"CALL DOLT_COMMIT('-am', 'x1');",
+		"CALL DOLT_CHECKOUT('y');",
+		"UPDATE t SET v = 'y' WHERE id = 1;",
+		"CALL DOLT_COMMIT('-am', 'y1');",
+		"CALL DOLT_CHECKOUT('x');",
+		"CALL DOLT_MERGE('y');",
+		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
+		"UPDATE t SET v = 'x2' WHERE id = 2;",
+		"CALL DOLT_COMMIT('-am', 'x2');",
+		"CALL DOLT_CHECKOUT('y');",
+		"CALL DOLT_MERGE('x~1');",
+		"CALL DOLT_CONFLICTS_RESOLVE('" + y2Resolution + "', 't');",
+		"CALL DOLT_COMMIT('-am', 'y2');",
+		"CALL DOLT_CHECKOUT('x');",
+	}
 }
 
 var mergeMainIntoFeatureIsClean = []queries.ScriptTestAssertion{
@@ -105,7 +134,6 @@ var mergeMainIntoFeatureIsClean = []queries.ScriptTestAssertion{
 var CrissCrossMergeScripts = []queries.ScriptTest{
 	{
 		Name:        "criss-cross merge: schema tip taller than the fork point",
-		Skip:        true, // merge uses a single merge base: https://github.com/dolthub/dolt/issues/12050
 		SetUpScript: schemaBranchCrissCrossSetup(0),
 		Assertions: append(mergeMainIntoFeatureIsClean,
 			queries.ScriptTestAssertion{
@@ -116,7 +144,6 @@ var CrissCrossMergeScripts = []queries.ScriptTest{
 	},
 	{
 		Name:        "criss-cross merge: schema tip taller than the fork point, feature into main",
-		Skip:        true, // merge uses a single merge base: https://github.com/dolthub/dolt/issues/12050
 		SetUpScript: schemaBranchCrissCrossSetup(0),
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -131,7 +158,6 @@ var CrissCrossMergeScripts = []queries.ScriptTest{
 	},
 	{
 		Name:        "criss-cross merge: fork point as tall as the schema tip",
-		Skip:        true, // merge uses a single merge base: https://github.com/dolthub/dolt/issues/12050
 		SetUpScript: schemaBranchCrissCrossSetup(1),
 		Assertions: append(mergeMainIntoFeatureIsClean,
 			queries.ScriptTestAssertion{
@@ -152,7 +178,6 @@ var CrissCrossMergeScripts = []queries.ScriptTest{
 	},
 	{
 		Name:        "criss-cross merge: long-running feature across many schema migrations",
-		Skip:        true, // merge uses a single merge base: https://github.com/dolthub/dolt/issues/12050
 		SetUpScript: longRunningFeatureSetup(),
 		Assertions: append(mergeMainIntoFeatureIsClean,
 			queries.ScriptTestAssertion{
@@ -168,6 +193,46 @@ var CrissCrossMergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{10}},
 			},
 		),
+	},
+}
+
+var ConflictingMergeBasesScripts = []queries.ScriptTest{
+	{
+		// git reports this conflict too. A single merge base would silently take one side's value.
+		Name:        "criss-cross merge: merge bases conflict and the sides resolved them differently",
+		SetUpScript: conflictingMergeBasesSetup("--ours"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT count(*) FROM dolt_merge_bases('x', 'y');",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "CALL DOLT_MERGE('y');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_id, base_v, our_v, their_v FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{1, "orig", "x", "y"}},
+			},
+			{
+				Query:    "SELECT id, v FROM t ORDER BY id;",
+				Expected: []sql.Row{{1, "x"}, {2, "x2"}},
+			},
+		},
+	},
+	{
+		Name:        "criss-cross merge: merge bases conflict and the sides resolved them the same way",
+		SetUpScript: conflictingMergeBasesSetup("--theirs"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT id, v FROM t ORDER BY id;",
+				Expected: []sql.Row{{1, "x"}, {2, "x2"}},
+			},
+		},
 	},
 }
 

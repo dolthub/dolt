@@ -53,15 +53,12 @@ const (
 	ConflictDiffTypeRemoved  = "removed"
 )
 
-func MergeCommits(ctx *sql.Context, tableResolver doltdb.TableResolver, commit, mergeCommit *doltdb.Commit, opts editor.Options) (*Result, error) {
-	optCmt, err := doltdb.GetCommitAncestor(ctx, commit, mergeCommit)
+// MergeCommits merges |mergeCommit| into |commit|. When they have several best common ancestors, the merge base is a
+// virtual commit written to |ddb| that merges those ancestors together.
+func MergeCommits(ctx *sql.Context, ddb *doltdb.DoltDB, tableResolver doltdb.TableResolver, commit, mergeCommit *doltdb.Commit, opts editor.Options) (*Result, error) {
+	ancCommit, err := mergeBaseForMerge(ctx, ddb, tableResolver, commit, mergeCommit, opts)
 	if err != nil {
 		return nil, err
-	}
-	ancCommit, ok := optCmt.ToCommit()
-	if !ok {
-		// Ancestor commit should have been resolved before getting this far.
-		return nil, doltdb.ErrGhostCommitRuntimeFailure
 	}
 
 	ourRoot, err := commit.GetRootValue(ctx)

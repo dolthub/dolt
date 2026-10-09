@@ -1015,7 +1015,7 @@ func RunDoltMergeTests(t *testing.T, h DoltEnginetestHarness) {
 }
 
 func RunDoltCrissCrossMergeTests(t *testing.T, h DoltEnginetestHarness) {
-	for _, script := range CrissCrossMergeScripts {
+	for _, script := range append(CrissCrossMergeScripts, ConflictingMergeBasesScripts...) {
 		func() {
 			h := h.NewHarness(t)
 			defer h.Close()

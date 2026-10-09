@@ -46,7 +46,6 @@ setup_schema_branch_criss_cross() {
 }
 
 @test "merge-criss-cross: cli merge of main into feature applies main's edits and deletes" {
-    skip "merge uses a single merge base: https://github.com/dolthub/dolt/issues/12050"
     setup_schema_branch_criss_cross 0
 
     run dolt merge main -m "merge main into feature"
@@ -61,7 +60,6 @@ setup_schema_branch_criss_cross() {
 }
 
 @test "merge-criss-cross: sql merge of main into feature applies main's edits and deletes" {
-    skip "merge uses a single merge base: https://github.com/dolthub/dolt/issues/12050"
     setup_schema_branch_criss_cross 0
 
     run dolt sql -r csv <<SQL
@@ -77,7 +75,6 @@ SQL
 }
 
 @test "merge-criss-cross: equally tall merge bases merge the same way every time" {
-    skip "merge uses a single merge base: https://github.com/dolthub/dolt/issues/12050"
     # Equally tall bases were chosen by commit hash, which depends on commit timestamps, so check several histories.
     for i in 1 2 3 4 5; do
         mkdir "repo$i" && cd "repo$i"
