@@ -20,10 +20,12 @@ import (
 	"errors"
 	"io"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
 	git "github.com/dolthub/dolt/go/store/blobstore/internal/git"
+	"github.com/dolthub/dolt/go/store/testutils/gitrepo"
 )
 
 type fakeGitAPI struct {
@@ -339,4 +341,30 @@ func (t *trackedReadCloser) Close() error {
 		t.onClose()
 	}
 	return nil
+}
+
+func requireRemoteManifest(t *testing.T, ctx context.Context, remoteRepo *gitrepo.Repo, want string) {
+	t.Helper()
+
+	got, _, err := GetBytes(ctx, newCloneBlobstore(t, ctx, remoteRepo), "manifest", AllRange)
+	require.NoError(t, err)
+	require.Equal(t, want, string(got))
+}
+
+func newCloneBlobstore(t *testing.T, ctx context.Context, remoteRepo *gitrepo.Repo) *GitBlobstore {
+	t.Helper()
+
+	localRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/clone.git")
+	require.NoError(t, err)
+	runner, err := git.NewRunner(localRepo.GitDir)
+	require.NoError(t, err)
+	_, err = runner.Run(ctx, git.RunOptions{}, "remote", "add", "origin", remoteRepo.GitDir)
+	require.NoError(t, err)
+	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
+		RemoteName:     "origin",
+		SyncForReadTTL: time.Nanosecond,
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, bs.Close()) })
+	return bs
 }

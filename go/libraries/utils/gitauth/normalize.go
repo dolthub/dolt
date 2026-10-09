@@ -54,6 +54,10 @@ func (e *NonInteractiveAuthError) Unwrap() error { return e.Cause }
 // outliving process still holds is an auth failure, so those keep their own error
 // and get no hints. A cancelled command surfaces as the child's kill signal, so
 // |ctx|'s error is joined in for callers that test for it.
+//
+// A local file git could not open or create, which |output| reports as
+// "cannot open '" or "unable to create '", is not an auth failure either, so
+// |err| is returned unchanged with no hints.
 func NormalizeError(ctx context.Context, err error, output []byte) error {
 	if err == nil {
 		return nil
@@ -66,6 +70,10 @@ func NormalizeError(ctx context.Context, err error, output []byte) error {
 		return errors.Join(ctxErr, err)
 	}
 	if errors.Is(err, exec.ErrWaitDelay) {
+		return err
+	}
+	lower := bytes.ToLower(output)
+	if bytes.Contains(lower, []byte("cannot open '")) || bytes.Contains(lower, []byte("unable to create '")) {
 		return err
 	}
 	return &NonInteractiveAuthError{

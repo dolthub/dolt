@@ -23,6 +23,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"sync/atomic"
 )
 
 // GitAPIImpl implements GitAPI using the git CLI plumbing commands, via Runner.
@@ -30,6 +31,9 @@ import (
 // without requiring a working tree checkout.
 type GitAPIImpl struct {
 	r *Runner
+	// noWriteFetchHeadUnsupported is set once git rejects --no-write-fetch-head,
+	// which git before 2.29 does not know, so later fetches leave it out.
+	noWriteFetchHeadUnsupported atomic.Bool
 }
 
 var _ GitAPI = (*GitAPIImpl)(nil)
@@ -390,7 +394,19 @@ func (a *GitAPIImpl) FetchRef(ctx context.Context, remote string, srcRef string,
 	// fetch refspecs. Without this, stale tracking refs from default refspecs
 	// can cause directory/file conflicts that make git exit 1 even when our
 	// specific refspec succeeds.
-	_, err := a.r.Run(ctx, RunOptions{}, "fetch", "--no-tags", "--refmap=", remote, refspec)
+	// --no-write-fetch-head: the refspec updates dstRef and nothing reads
+	// FETCH_HEAD, so the fetch does not need that file to be writable.
+	unsupported := a.noWriteFetchHeadUnsupported.Load()
+	args := []string{"fetch", "--no-tags"}
+	if !unsupported {
+		args = append(args, "--no-write-fetch-head")
+	}
+	args = append(args, "--refmap=", remote, refspec)
+	_, err := a.r.Run(ctx, RunOptions{}, args...)
+	if err != nil && !unsupported && isUnknownOptionErr(err, "no-write-fetch-head") {
+		a.noWriteFetchHeadUnsupported.Store(true)
+		return a.FetchRef(ctx, remote, srcRef, dstRef)
+	}
 	if err != nil && isRemoteRefNotFoundErr(err) {
 		return &RefNotFoundError{Ref: srcRef}
 	}
@@ -444,6 +460,19 @@ func isRefNotFoundErr(err error) bool {
 	return strings.Contains(msg, "needed a single revision") ||
 		strings.Contains(msg, "unknown revision") ||
 		strings.Contains(msg, "not a valid object name")
+}
+
+// gitUsageExitCode is the exit code git gives for a command line it rejects.
+const gitUsageExitCode = 129
+
+// isUnknownOptionErr reports whether git rejected its command line because it
+// does not know |option|.
+func isUnknownOptionErr(err error, option string) bool {
+	var ce *CmdError
+	if !errors.As(err, &ce) || ce.ExitCode != gitUsageExitCode {
+		return false
+	}
+	return strings.Contains(string(ce.Output), "unknown option `"+option+"'")
 }
 
 func isRemoteRefNotFoundErr(err error) bool {

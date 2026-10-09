@@ -345,7 +345,8 @@ type GitBlobstore struct {
 	// (via mergeCacheFromHead). Used to skip redundant back-to-back fetches.
 	lastSyncedAt time.Time
 	// syncForReadTTL controls how long a recent sync remains valid. When non-zero,
-	// syncForRead will skip the fetch if the last sync completed within this duration.
+	// syncForRead and the first attempt of remoteManagedWrite skip the fetch if
+	// the last sync completed within this duration.
 	// Defaults to defaultSyncForReadTTL. Set to 0 to disable dedup (useful in tests).
 	syncForReadTTL time.Duration
 
@@ -421,8 +422,9 @@ type GitBlobstoreOptions struct {
 // NewGitBlobstoreWithOptions creates a GitBlobstore rooted at |gitDir| and |ref|.
 // defaultSyncForReadTTL is the default dedup window for syncForRead. Back-to-back
 // reads within this window reuse the cached state instead of re-fetching from remote.
-// The write path (fetchAlignAndMergeForWrite) always does its own unconditional fetch,
-// so this only affects read-path callers (Get/Exists).
+//
+// A GitBlobstore write's first attempt within it builds on the cached head,
+// and the push lease rejects it if the remote has moved.
 const defaultSyncForReadTTL = 1 * time.Second
 
 func NewGitBlobstoreWithOptions(gitDir, ref string, opts GitBlobstoreOptions) (*GitBlobstore, error) {
@@ -689,11 +691,11 @@ func (gbs *GitBlobstore) syncedWithinTTL() bool {
 	return !gbs.lastSyncedAt.IsZero() && time.Since(gbs.lastSyncedAt) < ttl
 }
 
-// hasSyncedHead reports whether the cache has ever been merged from a commit.
-func (gbs *GitBlobstore) hasSyncedHead() bool {
+// syncedHead returns the last commit merged into the cache, or "" if none.
+func (gbs *GitBlobstore) syncedHead() git.OID {
 	gbs.cacheMu.RLock()
 	defer gbs.cacheMu.RUnlock()
-	return gbs.cacheHead != ""
+	return gbs.cacheHead
 }
 
 func (gbs *GitBlobstore) Path() string {
@@ -855,8 +857,7 @@ func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
 	}
 
 	// Dedup guard: skip the fetch if we synced recently. The write path
-	// (fetchAlignAndMergeForWrite) always does its own unconditional fetch,
-	// so this only affects read-path callers (Get/Exists).
+	// applies the same guard to its first attempt in remoteManagedWrite.
 	if gbs.syncedWithinTTL() {
 		return nil
 	}
@@ -1034,6 +1035,8 @@ func (gbs *GitBlobstore) fetchAndMergeForRead(ctx context.Context) error {
 		// (manifest ParseIfExists) against a freshly-initialized remote.
 		var rnf *git.RefNotFoundError
 		if errors.As(err, &rnf) && rnf.Ref == gbs.remoteRef {
+			// An empty cache is in sync with an empty store.
+			gbs.markSyncedIfHeadUnchanged("")
 			return nil
 		}
 		return err
@@ -1074,11 +1077,6 @@ func (gbs *GitBlobstore) fetchAlignAndMergeForWrite(ctx context.Context) (remote
 	}
 	if !ok {
 		return "", false, &git.RefNotFoundError{Ref: gbs.remoteTrackingRef}
-	}
-
-	// Force-set owned local ref to remote head (remote is source-of-truth).
-	if err := gbs.api.UpdateRef(ctx, gbs.localRef, remoteHead, "gitblobstore: sync write"); err != nil {
-		return "", false, err
 	}
 
 	// Merge cache to reflect fetched contents.
@@ -1163,8 +1161,17 @@ func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string
 	policy := gbs.casRetryPolicy(ctx)
 
 	var ver string
+	attempt := 0
 	op := func() error {
-		remoteHead, okRemote, err := gbs.fetchAlignAndMergeForWrite(ctx)
+		attempt++
+		// A first attempt within the sync TTL reuses the synced head. The push
+		// lease rejects it if the remote moved, and the retry fetches.
+		remoteHead, okRemote := gbs.syncedHead(), true
+		cached := attempt == 1 && remoteHead != "" && gbs.syncedWithinTTL()
+		var err error
+		if !cached {
+			remoteHead, okRemote, err = gbs.fetchAlignAndMergeForWrite(ctx)
+		}
 		if err != nil {
 			var fe *gitblobstoreFetchRefError
 			if errors.As(err, &fe) {
@@ -1176,6 +1183,10 @@ func (gbs *GitBlobstore) remoteManagedWrite(ctx context.Context, key, msg string
 		// Apply this operation's changes on top of the remote head (or empty store).
 		newCommit, err := build(remoteHead, okRemote)
 		if err != nil {
+			// The cached head may be stale, so refetch before reporting a mismatch.
+			if cached && errors.As(err, new(CheckAndPutError)) {
+				return err
+			}
 			return backoff.Permanent(err)
 		}
 
@@ -1341,7 +1352,7 @@ func (gbs *GitBlobstore) syncedAbsent(key string) bool {
 	if key == gitblobstoreManifestKey {
 		return false
 	}
-	if !gbs.hasSyncedHead() {
+	if gbs.syncedHead() == "" {
 		return false
 	}
 	_, ok := gbs.cacheGetObject(key)

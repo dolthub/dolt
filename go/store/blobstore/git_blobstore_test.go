@@ -1242,3 +1242,31 @@ func TestGitBlobstore_CheckAndPut_UpdateSuccess(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []byte("keep\n"), got)
 }
+
+func TestGitBlobstore_PushWithUnopenableFetchHead(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11904
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	remoteRepo, localRepo, _ := newRemoteAndLocalRepos(t, ctx)
+	_, err := remoteRepo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
+		"manifest": []byte("v0\n"),
+	}, "seed remote")
+	require.NoError(t, err)
+	require.NoError(t, os.Mkdir(filepath.Join(localRepo.GitDir, "FETCH_HEAD"), 0o755))
+
+	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
+		RemoteName: "origin",
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, bs.Close()) })
+
+	_, version, err := GetBytes(ctx, bs, "manifest", AllRange)
+	require.NoError(t, err)
+	_, err = bs.Put(ctx, "table1", 5, bytes.NewReader([]byte("data\n")))
+	require.NoError(t, err)
+	_, err = bs.CheckAndPutManifest(ctx, version, []byte("v1\n"))
+	require.NoError(t, err)
+
+	requireRemoteManifest(t, ctx, remoteRepo, "v1\n")
+}
