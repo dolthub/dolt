@@ -550,12 +550,6 @@ func TestAutoIncrementScripts(t *testing.T) {
 	enginetest.TestAutoIncrementScripts(t, h)
 }
 
-func TestCharsetCollationScripts(t *testing.T) {
-	h := newDoltServerTestHarness(t).WithConfigureStats(true)
-	defer h.Close()
-	enginetest.TestCharsetCollationScripts(t, h)
-}
-
 func TestConversionsScripts(t *testing.T) {
 	h := newDoltServerTestHarness(t).WithConfigureStats(true)
 	defer h.Close()
@@ -2187,11 +2181,11 @@ func TestAutoIncrementScriptsPrepared(t *testing.T) {
 	enginetest.TestAutoIncrementScriptsPrepared(t, h)
 }
 
-func TestCharsetCollationScriptsPrepared(t *testing.T) {
+func TestCharsetCollationEnginePrepared(t *testing.T) {
 	skipPreparedTests(t)
 	h := newDoltHarness(t).WithConfigureStats(true)
 	defer h.Close()
-	enginetest.TestCharsetCollationScriptsPrepared(t, h)
+	enginetest.TestCharsetCollationEnginePrepared(t, h)
 }
 
 func TestColumnDefaultsPrepared(t *testing.T) {
