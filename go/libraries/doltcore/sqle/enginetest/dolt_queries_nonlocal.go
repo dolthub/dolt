@@ -185,6 +185,52 @@ var NonlocalScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	// https://github.com/dolthub/dolt/issues/12039
+	{
+		Name: "CREATE TABLE IF NOT EXISTS for existing nonlocal table succeeds on non-target branch",
+		SetUpScript: []string{
+			`CREATE TABLE global_migrations_history (
+  migration_id varchar(150) NOT NULL,
+  product_version varchar(32) NOT NULL,
+  CONSTRAINT pk_global_migrations_history PRIMARY KEY (migration_id)
+);`,
+			`INSERT INTO dolt_nonlocal_tables (table_name, target_ref, options) VALUES ('global_*', 'main', 'immediate');`,
+			`INSERT INTO dolt_ignore (pattern, ignored) VALUES ('global_*', true);`,
+			`CALL DOLT_COMMIT('-Am', 'share global_* tables across branches');`,
+			`INSERT INTO global_migrations_history VALUES ('20240101000000_Initial', '10.0.0');`,
+			`CALL DOLT_BRANCH('schema');`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: `CREATE TABLE IF NOT EXISTS global_migrations_history (
+  migration_id varchar(150) NOT NULL,
+  product_version varchar(32) NOT NULL,
+  CONSTRAINT pk_global_migrations_history PRIMARY KEY (migration_id)
+);`,
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "CALL DOLT_CHECKOUT('schema');",
+				Expected: []sql.Row{{0, "Switched to branch 'schema'"}},
+			},
+			{
+				Query:    "SELECT * FROM global_migrations_history;",
+				Expected: []sql.Row{{"20240101000000_Initial", "10.0.0"}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'global_migrations_history';",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query: `CREATE TABLE IF NOT EXISTS global_migrations_history (
+  migration_id varchar(150) NOT NULL,
+  product_version varchar(32) NOT NULL,
+  CONSTRAINT pk_global_migrations_history PRIMARY KEY (migration_id)
+);`,
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+		},
+	},
 	{
 		Name: "creating a table matching a nonlocal table rule with ref_table set or a frozen tag target is rejected on the target branch",
 		SetUpScript: []string{
