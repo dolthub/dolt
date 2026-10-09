@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
-	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	_ "github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
@@ -39,7 +38,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/gcctx"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	dblr "github.com/dolthub/dolt/go/libraries/doltcore/sqle/binlogreplication"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
@@ -83,7 +81,6 @@ type SqlEngineConfig struct {
 	Autocommit                 bool
 	DoltTransactionCommit      bool
 	Bulk                       bool
-	JwksConfig                 []servercfg.JwksConfig
 	SystemVariables            SystemVariables
 	ClusterController          *cluster.Controller
 	AutoGCController           *sqle.AutoGCController
@@ -269,10 +266,6 @@ func NewSqlEngine(
 
 	// Setup the engine.
 	engine.Analyzer.Catalog.MySQLDb.SetPersister(persister)
-
-	engine.Analyzer.Catalog.MySQLDb.SetPlugins(map[string]mysql_db.PlaintextAuthPlugin{
-		"authentication_dolt_jwt": NewAuthenticateDoltJWTPlugin(config.JwksConfig),
-	})
 
 	if config.AutoGCController != nil {
 		err = config.AutoGCController.RunBackgroundThread(bThreads, sqlEngine.NewDefaultContext)

@@ -58,7 +58,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	httputils "github.com/dolthub/dolt/go/libraries/utils/http"
 	"github.com/dolthub/dolt/go/libraries/utils/svcs"
 	"github.com/dolthub/dolt/go/store/chunks"
 	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
@@ -278,7 +277,6 @@ func ConfigureServices(
 				Autocommit:                 cfg.ServerConfig.AutoCommit(),
 				DoltTransactionCommit:      cfg.ServerConfig.DoltTransactionCommit(),
 				BranchActivityTracking:     cfg.ServerConfig.BranchActivityTracking(),
-				JwksConfig:                 cfg.ServerConfig.JwksConfig(),
 				SystemVariables:            cfg.ServerConfig.SystemVars(),
 				ClusterController:          clusterController,
 				BinlogReplicaController:    binlogreplication.DoltBinlogReplicaController,
@@ -658,49 +656,9 @@ func ConfigureServices(
 
 				mux := http.NewServeMux()
 				metricsHandler := promhttp.Handler()
-				jwksConfig := cfg.ServerConfig.MetricsJwksConfig()
-				enableMetricsAuth := jwksConfig != nil
-				requireLocalhostAuth := cfg.ServerConfig.MetricsJWTRequiredForLocalhost()
 
-				logrus.Infof("Starting metrics server. auth_enabled = %t, addr = %s, require_localhost_auth = %t", enableMetricsAuth, addr, requireLocalhostAuth)
-
-				if enableMetricsAuth {
-					mux.Handle("/metrics", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-						if !requireLocalhostAuth {
-							isLocal, err := httputils.IsLocalRequest(r)
-							logrus.Info("Metrics JWT not required for localhost isLocal:", isLocal, "err:", err)
-							if err != nil {
-								logrus.Warnf("error checking if request is local for /metrics (assuming remote) request: %v.", err)
-							} else if isLocal {
-								metricsHandler.ServeHTTP(w, r)
-								return
-							}
-						}
-
-						auth := r.Header.Get("Authorization")
-						if auth == "" || !strings.HasPrefix(auth, "Bearer ") {
-							w.Header().Set("WWW-Authenticate", `Bearer realm="metrics"`)
-							http.Error(w, "unauthorized", http.StatusUnauthorized)
-							return
-						}
-
-						valid, _, err := validateJWT(jwksConfig, strings.TrimPrefix(auth, "Bearer "), time.Now())
-						if err != nil {
-							logrus.Warnf("JWT validation error for /metrics: %v", err)
-							http.Error(w, "auth failed", http.StatusUnauthorized)
-							return
-						} else if !valid {
-							logrus.Warnf("JWT validation error for /metrics: JWT token is invalid")
-							http.Error(w, "invalid token", http.StatusUnauthorized)
-							return
-						}
-
-						metricsHandler.ServeHTTP(w, r)
-					}))
-
-				} else {
-					mux.Handle("/metrics", metricsHandler)
-				}
+				logrus.Infof("Starting metrics server. addr = %s", addr)
+				mux.Handle("/metrics", metricsHandler)
 
 				metSrv.srv = &http.Server{
 					Addr:      addr,

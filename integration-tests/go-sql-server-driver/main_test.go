@@ -21,14 +21,14 @@ import (
 	"testing"
 )
 
-// We generate various TLS keys and certificates and some JWKS/JWT material
-// which the tests reference. We do this once for the test run, because it can
-// be expensive, and we expose the location of the generated files through an
-// environment variable. dtestutils/sql_server_driver interpolates that
-// environment variable into a few fields in the test definition.
+// We generate various TLS keys and certificates which the tests reference. We
+// do this once for the test run, because it can be expensive, and we expose
+// the location of the generated files through an environment variable.
+// dtestutils/sql_server_driver interpolates that environment variable into a
+// few fields in the test definition.
 //
-// It's good enough for now, and it keeps us from checking in certificates or
-// JWT which will expire at some point in the future.
+// It's good enough for now, and it keeps us from checking in certificates
+// which will expire at some point in the future.
 func TestMain(m *testing.M) {
 	os.Setenv("DOLT_GC_SCHEDULER", "NONE")
 	old := os.Getenv("TESTGENDIR")
@@ -40,10 +40,6 @@ func TestMain(m *testing.M) {
 		log.Fatalf("could not create temp dir: %v", err)
 	}
 	defer os.RemoveAll(gendir)
-	err = GenerateTestJWTs(gendir)
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
 	err = GenerateX509Certs(gendir)
 	if err != nil {
 		log.Fatalf("%v", err)
@@ -66,11 +62,6 @@ func InitGlobalDynamicPorts() {
 func TestConfig(t *testing.T) {
 	t.Parallel()
 	RunTestsFile(t, "tests/sql-server-config.yaml")
-}
-
-func TestJWTAuth(t *testing.T) {
-	t.Parallel()
-	RunTestsFile(t, "tests/sql-server-jwt-auth.yaml")
 }
 
 func TestCluster(t *testing.T) {
