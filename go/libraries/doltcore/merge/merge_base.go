@@ -34,3 +34,19 @@ func MergeBase(ctx context.Context, left, right *doltdb.Commit) (base hash.Hash,
 
 	return ancestor.HashOf()
 }
+
+// MergeBases returns every best common ancestor of |left| and |right|, the same set as `git merge-base --all`.
+func MergeBases(ctx context.Context, left, right *doltdb.Commit) ([]hash.Hash, error) {
+	optCmts, err := doltdb.GetCommitAncestors(ctx, left, right)
+	if err != nil {
+		return nil, err
+	}
+	bases := make([]hash.Hash, len(optCmts))
+	for i, optCmt := range optCmts {
+		if _, ok := optCmt.ToCommit(); !ok {
+			return nil, doltdb.ErrGhostCommitEncountered
+		}
+		bases[i] = optCmt.Addr
+	}
+	return bases, nil
+}
