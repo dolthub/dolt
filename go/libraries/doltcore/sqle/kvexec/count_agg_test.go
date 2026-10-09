@@ -121,7 +121,7 @@ func TestCountAgg(t *testing.T) {
 			j := getAgg(sqlCtx, node)
 			require.NotNil(t, j)
 
-			iter, err := Builder{}.Build(sqlCtx, j, nil)
+			iter, err := (&Builder{}).Build(sqlCtx, j, nil)
 			_, ok := iter.(*countAggKvIter)
 			require.Equalf(t, tt.doRowexec, ok, "expected do row exec: %t", tt.doRowexec)
 		})

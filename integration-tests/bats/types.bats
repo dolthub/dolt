@@ -1329,11 +1329,11 @@ SQL
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 11:22:00.000000 " ]] || false
-    dolt sql -q "REPLACE INTO test VALUES (1, '850:00:00');"
+    dolt sql -q "REPLACE INTO test VALUES (1, '838:59:59');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 838:59:59.000000 " ]] || false
-    dolt sql -q "REPLACE INTO test VALUES (1, '-850:00:00');"
+    dolt sql -q "REPLACE INTO test VALUES (1, '-838:59:59');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " -838:59:59.000000 " ]] || false
