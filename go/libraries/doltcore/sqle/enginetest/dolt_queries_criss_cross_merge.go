@@ -170,3 +170,46 @@ var CrissCrossMergeScripts = []queries.ScriptTest{
 		),
 	},
 }
+
+var MergeBasesTableFunctionScripts = []queries.ScriptTest{
+	{
+		Name:        "dolt_merge_bases: lists every merge base of a criss-cross history",
+		SetUpScript: schemaBranchCrissCrossSetup(0),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT l.message FROM dolt_merge_bases('main', 'feature') b " +
+					"JOIN dolt_log('--all') l ON l.commit_hash = b.merge_base ORDER BY l.message;",
+				Expected: []sql.Row{{"c2: seed rows on main"}, {"s2: add column m"}},
+			},
+			{
+				Query:    "SELECT count(*) FROM dolt_merge_bases(hashof('feature'), 'main');",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "SELECT dolt_merge_base('main', 'feature') IN (SELECT merge_base FROM dolt_merge_bases('main', 'feature'));",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query: "SELECT l.message FROM dolt_merge_bases('main', 'schema') b " +
+					"JOIN dolt_log('--all') l ON l.commit_hash = b.merge_base;",
+				Expected: []sql.Row{{"s2: add column m"}},
+			},
+			{
+				Query:    "SELECT count(*) FROM dolt_merge_bases('main', NULL);",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "SELECT * FROM dolt_merge_bases('main');",
+				ExpectedErrStr: "function 'dolt_merge_bases' expected 2 arguments, 1 received",
+			},
+			{
+				Query:          "SELECT * FROM dolt_merge_bases('main', 'feature', 'schema');",
+				ExpectedErrStr: "function 'dolt_merge_bases' expected 2 arguments, 3 received",
+			},
+			{
+				Query:          "SELECT * FROM dolt_merge_bases('main', 'nonexistent');",
+				ExpectedErrStr: "branch not found: nonexistent",
+			},
+		},
+	},
+}
