@@ -348,11 +348,7 @@ func executeMerge(
 	if err != nil {
 		return nil, err
 	}
-	ddb, ok := sess.GetDoltDB(ctx, dbName)
-	if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(dbName)
-	}
-	result, err := merge.MergeCommits(ctx, ddb, sqlDB, head, cm, opts)
+	result, err := merge.MergeCommits(ctx, sqlDB, head, cm, opts)
 	if err != nil {
 		switch err {
 		case doltdb.ErrUpToDate:

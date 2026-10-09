@@ -133,3 +133,54 @@ SQL
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
 }
+
+# x1 and y1 both change row 1 and are merged into each other's branches, which keep different values. Merging y into
+# x then conflicts against a virtual merge base, which no branch references.
+setup_conflicting_merge_bases() {
+    dolt sql -q "CREATE TABLE t (id INT PRIMARY KEY, v VARCHAR(20)); INSERT INTO t VALUES (1, 'orig');"
+    dolt commit -Am "c1"
+    dolt branch x
+    dolt branch y
+    dolt checkout x
+    dolt sql -q "UPDATE t SET v = 'x' WHERE id = 1;"
+    dolt commit -am "x1"
+    dolt checkout y
+    dolt sql -q "UPDATE t SET v = 'y' WHERE id = 1;"
+    dolt commit -am "y1"
+    dolt checkout x
+    dolt merge y || true
+    dolt conflicts resolve --ours t
+    dolt commit -am "x2"
+    dolt checkout y
+    dolt merge x~1 || true
+    dolt conflicts resolve --ours t
+    dolt commit -am "y2"
+    dolt checkout x
+}
+
+@test "merge-criss-cross: conflicts keep their virtual merge base values after gc" {
+    setup_conflicting_merge_bases
+
+    run dolt merge y
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "CONFLICT" ]] || false
+
+    dolt gc
+
+    run dolt sql -q "SELECT base_v, our_v, their_v FROM dolt_conflicts_t;" -r csv
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "orig,x,y" ]
+}
+
+@test "merge-criss-cross: committed conflicts keep their virtual merge base values after gc" {
+    setup_conflicting_merge_bases
+
+    run dolt merge y
+    [ "$status" -ne 0 ]
+    dolt commit --force -am "commit with conflicts"
+    dolt gc
+
+    run dolt sql -q "SELECT base_v, our_v, their_v FROM dolt_conflicts_t;" -r csv
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "orig,x,y" ]
+}

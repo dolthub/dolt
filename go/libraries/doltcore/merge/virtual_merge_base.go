@@ -15,6 +15,7 @@
 package merge
 
 import (
+	"context"
 	"sort"
 	"time"
 
@@ -23,6 +24,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -31,33 +35,55 @@ const (
 	virtualMergeBaseDescription = "virtual merge base"
 )
 
+func init() {
+	doltdb.RebuildVirtualMergeBase = rebuildVirtualMergeBase
+}
+
+// virtualMergeBase is the ancestor Rootish of a merge against a virtual merge base. Conflicts record its merge bases so
+// that it can be rebuilt after garbage collection.
+type virtualMergeBase struct {
+	*doltdb.Commit
+	mergeBases []hash.Hash
+}
+
 // ResolveMergeBase returns the commit to use as the base when merging |left| and |right|. When they have several best
 // common ancestors, it returns a virtual merge base built by merging those ancestors together, as git's merge-ort
-// does. The virtual merge base is a dangling commit written to |ddb| whose parents are the merged ancestors. It
-// depends only on |left| and |right|, so every caller gets the same commit.
-func ResolveMergeBase(ctx *sql.Context, ddb *doltdb.DoltDB, left, right *doltdb.Commit) (*doltdb.Commit, error) {
+// does. The virtual merge base is a dangling commit whose parents are the merged ancestors. It depends only on the
+// merge bases, so every caller gets the same commit.
+func ResolveMergeBase(ctx *sql.Context, left, right *doltdb.Commit) (*doltdb.Commit, error) {
+	base, _, err := resolveMergeBase(ctx, left, right)
+	return base, err
+}
+
+// resolveMergeBase returns the merge base of |left| and |right| and the best common ancestors it was built from.
+func resolveMergeBase(ctx *sql.Context, left, right *doltdb.Commit) (*doltdb.Commit, []*doltdb.Commit, error) {
 	optCmts, err := doltdb.GetCommitAncestors(ctx, left, right)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	bases := make([]*doltdb.Commit, len(optCmts))
 	for i, optCmt := range optCmts {
 		base, ok := optCmt.ToCommit()
 		if !ok {
-			return nil, doltdb.ErrGhostCommitRuntimeFailure
+			return nil, nil, doltdb.ErrGhostCommitRuntimeFailure
 		}
 		bases[i] = base
 	}
+	base, err := mergeMergeBases(ctx, bases)
+	return base, bases, err
+}
+
+func mergeMergeBases(ctx *sql.Context, bases []*doltdb.Commit) (*doltdb.Commit, error) {
 	if len(bases) == 1 {
 		return bases[0], nil
 	}
-
-	if err = sortOldestFirst(ctx, bases); err != nil {
+	if err := sortOldestFirst(ctx, bases); err != nil {
 		return nil, err
 	}
 	virtualBase := bases[0]
 	for _, base := range bases[1:] {
-		virtualBase, err = mergeIntoVirtualBase(ctx, ddb, virtualBase, base)
+		var err error
+		virtualBase, err = mergeIntoVirtualBase(ctx, virtualBase, base)
 		if err != nil {
 			return nil, err
 		}
@@ -65,11 +91,37 @@ func ResolveMergeBase(ctx *sql.Context, ddb *doltdb.DoltDB, left, right *doltdb.
 	return virtualBase, nil
 }
 
+func rebuildVirtualMergeBase(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, mergeBases []hash.Hash) (doltdb.RootValue, error) {
+	bases := make([]*doltdb.Commit, len(mergeBases))
+	for i, addr := range mergeBases {
+		dc, err := datas.LoadCommitAddr(ctx, vrw, addr)
+		if err != nil {
+			return nil, err
+		}
+		if dc.IsGhost() {
+			return nil, doltdb.ErrGhostCommitEncountered
+		}
+		if bases[i], err = doltdb.NewCommit(ctx, vrw, ns, dc); err != nil {
+			return nil, err
+		}
+	}
+
+	sqlCtx, ok := ctx.(*sql.Context)
+	if !ok {
+		sqlCtx = sql.NewContext(ctx)
+	}
+	virtualBase, err := mergeMergeBases(sqlCtx, bases)
+	if err != nil {
+		return nil, err
+	}
+	return virtualBase.GetRootValue(ctx)
+}
+
 // mergeIntoVirtualBase merges |x| and |y| into a dangling commit. A table that conflicts or violates constraints in
 // this merge is taken unchanged from the merge base of |x| and |y|, so the outer merge reports the disagreement
 // instead of hiding it. git's merge-ort likewise keeps the base version of content it cannot merge here.
-func mergeIntoVirtualBase(ctx *sql.Context, ddb *doltdb.DoltDB, x, y *doltdb.Commit) (*doltdb.Commit, error) {
-	base, err := ResolveMergeBase(ctx, ddb, x, y)
+func mergeIntoVirtualBase(ctx *sql.Context, x, y *doltdb.Commit) (*doltdb.Commit, error) {
+	base, err := ResolveMergeBase(ctx, x, y)
 	if err != nil {
 		return nil, err
 	}
@@ -94,16 +146,11 @@ func mergeIntoVirtualBase(ctx *sql.Context, ddb *doltdb.DoltDB, x, y *doltdb.Com
 	if err != nil {
 		return nil, err
 	}
-	_, mergedRootHash, err := ddb.WriteRootValue(ctx, mergedRoot)
-	if err != nil {
-		return nil, err
-	}
-
 	meta, err := virtualMergeBaseMeta(ctx, x, y)
 	if err != nil {
 		return nil, err
 	}
-	return ddb.CommitDanglingWithParentCommits(ctx, mergedRootHash, []*doltdb.Commit{x, y}, meta)
+	return doltdb.NewDanglingCommit(ctx, mergedRoot, []*doltdb.Commit{x, y}, meta)
 }
 
 func takeUnmergedTablesFromBase(ctx *sql.Context, result *Result, baseRoot doltdb.RootValue) (doltdb.RootValue, error) {

@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -28,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -82,6 +84,65 @@ func TestMergeBases(t *testing.T) {
 	bases, err = MergeBases(ctx, x1, y1)
 	require.NoError(t, err)
 	assert.Equal(t, []hash.Hash{mustHashOf(t, initial)}, bases)
+}
+
+func TestResolveMergeBaseRebuild(t *testing.T) {
+	ctx := sql.NewEmptyContext()
+	fs := filesys.NewInMemFS([]string{"/home", "/work"}, nil, "/work")
+	dEnv := env.LoadWithoutDB(ctx, func() (string, error) { return "/home", nil }, fs, doltdb.InMemDoltDB, "test")
+	require.NoError(t, dEnv.InitRepo(ctx, types.Format_DOLT, name, email, env.DefaultInitBranch))
+	ddb := dEnv.DoltDB(ctx)
+
+	initial := resolveCommit(t, ddb, env.DefaultInitBranch)
+	root, err := initial.GetRootValue(ctx)
+	require.NoError(t, err)
+	_, rootHash, err := ddb.WriteRootValue(ctx, root)
+	require.NoError(t, err)
+	commitTime := time.UnixMilli(0)
+	commitOn := func(branch string, parents ...*doltdb.Commit) *doltdb.Commit {
+		commitTime = commitTime.Add(time.Second)
+		meta, err := datas.NewCommitMetaWithAuthor(name, email, "commit", commitTime)
+		require.NoError(t, err)
+		specs := make([]*doltdb.CommitSpec, len(parents))
+		for i, p := range parents {
+			specs[i], err = doltdb.NewCommitSpec(mustHashOf(t, p).String())
+			require.NoError(t, err)
+		}
+		c, err := ddb.CommitWithParentSpecs(ctx, rootHash, ref.NewBranchRef(branch), specs, meta)
+		require.NoError(t, err)
+		return c
+	}
+	x1 := commitOn("x", initial)
+	y1 := commitOn("y", initial)
+	x2 := commitOn("x", x1, y1)
+	y2 := commitOn("y", y1, x1)
+
+	virtualBase, err := ResolveMergeBase(ctx, x2, y2)
+	require.NoError(t, err)
+	again, err := ResolveMergeBase(ctx, y2, x2)
+	require.NoError(t, err)
+	assert.Equal(t, mustHashOf(t, virtualBase), mustHashOf(t, again))
+	parents, err := virtualBase.ParentHashes(ctx)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []hash.Hash{mustHashOf(t, x1), mustHashOf(t, y1)}, parents)
+
+	virtualRoot, err := virtualBase.GetRootValue(ctx)
+	require.NoError(t, err)
+	virtualRootHash, err := virtualRoot.HashOf()
+	require.NoError(t, err)
+
+	collected := hash.Of([]byte("garbage collected virtual merge base"))
+	rebuilt, err := doltdb.LoadConflictBaseRoot(ctx, ddb.ValueReadWriter(), ddb.NodeStore(), prolly.ConflictMetadata{
+		BaseRootIsh: collected,
+		MergeBases:  []hash.Hash{mustHashOf(t, y1), mustHashOf(t, x1)},
+	})
+	require.NoError(t, err)
+	rebuiltHash, err := rebuilt.HashOf()
+	require.NoError(t, err)
+	assert.Equal(t, virtualRootHash, rebuiltHash)
+
+	_, err = doltdb.LoadConflictBaseRoot(ctx, ddb.ValueReadWriter(), ddb.NodeStore(), prolly.ConflictMetadata{BaseRootIsh: collected})
+	assert.Error(t, err)
 }
 
 func resolveCommit(t *testing.T, ddb *doltdb.DoltDB, branch string) *doltdb.Commit {

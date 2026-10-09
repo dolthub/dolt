@@ -307,7 +307,7 @@ func resolveBranchesToRoots(ctx *sql.Context, db dsess.SqlDatabase, leftBranch, 
 		return rootInfo{}, err
 	}
 
-	ancCm, err := merge.ResolveMergeBase(ctx, db.DbData().Ddb, leftCm, rightCm)
+	ancCm, err := merge.ResolveMergeBase(ctx, leftCm, rightCm)
 	if err != nil {
 		return rootInfo{}, err
 	}

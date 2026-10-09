@@ -222,7 +222,11 @@ func (t *Table) getProllyConflictSchemas(ctx context.Context, tblName TableName)
 		return nil, nil, nil, err
 	}
 
-	baseTbl, baseOk, err := tableFromRootIsh(ctx, t.ValueReadWriter(), t.NodeStore(), art.Metadata.BaseRootIsh, tblName)
+	baseRoot, err := LoadConflictBaseRoot(ctx, t.ValueReadWriter(), t.NodeStore(), art.Metadata)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	baseTbl, baseOk, err := baseRoot.GetTable(ctx, tblName)
 	if err != nil {
 		return nil, nil, nil, err
 	}
