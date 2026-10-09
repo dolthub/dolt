@@ -119,7 +119,8 @@ func rebuildVirtualMergeBase(ctx context.Context, vrw types.ValueReadWriter, ns 
 
 // mergeIntoVirtualBase merges |x| and |y| into a dangling commit. A table that conflicts or violates constraints in
 // this merge is taken unchanged from the merge base of |x| and |y|, so the outer merge reports the disagreement
-// instead of hiding it. git's merge-ort likewise keeps the base version of content it cannot merge here.
+// instead of hiding it. git's merge-ort keeps the base version only for binary files and symlinks, and keeps conflict
+// markers in text files; rows cannot hold conflict markers, so tables follow the binary file rule.
 func mergeIntoVirtualBase(ctx *sql.Context, x, y *doltdb.Commit) (*doltdb.Commit, error) {
 	base, err := ResolveMergeBase(ctx, x, y)
 	if err != nil {
