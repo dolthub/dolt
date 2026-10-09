@@ -33,6 +33,7 @@ func TestNormalizeError_AlwaysWrapsAndAppendsHints(t *testing.T) {
 		{"enter passphrase", "Enter passphrase for key '/tmp/fake_key': "},
 		{"connection closed", "Connection closed by UNKNOWN port 65535\nfatal: Could not read from remote repository."},
 		{"empty output", ""},
+		{"ssh agent", "Could not open a connection to your authentication agent.\nPermission denied (publickey)."},
 	}
 
 	for _, tt := range cases {
@@ -96,5 +97,25 @@ func TestNormalizeError_WaitDelayExpired(t *testing.T) {
 	var niae *NonInteractiveAuthError
 	if errors.As(got, &niae) {
 		t.Fatalf("expected no credential hints for an expired wait, got: %v", got)
+	}
+}
+
+func TestNormalizeError_LocalFileOpenFailureHasNoCredentialHints(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11904
+	for _, output := range []string{
+		"error: cannot open '/home/u/.dolt/git-remote-cache/abc/repo.git/FETCH_HEAD': Permission denied",
+		"error: cannot open 'C:\\Users\\u\\.dolt\\git-remote-cache\\abc\\repo.git/FETCH_HEAD': Permission denied",
+		"error: cannot lock ref 'refs/dolt/remotes/origin/data': Unable to create '/home/u/.dolt/git-remote-cache/abc/repo.git/refs/dolt/remotes/origin/data.lock': File exists.",
+	} {
+		cause := errors.New("git fetch failed: exit status 255\noutput:\n" + output)
+
+		got := NormalizeError(context.Background(), cause, []byte(output))
+
+		if msg := got.Error(); strings.Contains(msg, "hint:") {
+			t.Fatalf("local file failure carries credential hints:\n%s", msg)
+		}
+		if !errors.Is(got, cause) || !strings.Contains(got.Error(), output) {
+			t.Fatalf("local file failure lost the git error: %v", got)
+		}
 	}
 }
