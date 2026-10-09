@@ -1450,6 +1450,11 @@ func TestDoltMerge(t *testing.T) {
 	RunDoltMergeTests(t, h)
 }
 
+func TestDoltCrissCrossMerge(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltCrissCrossMergeTests(t, h)
+}
+
 func TestDoltMergePrepared(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunDoltMergePreparedTests(t, h)

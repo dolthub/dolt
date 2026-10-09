@@ -1014,6 +1014,17 @@ func RunDoltMergeTests(t *testing.T, h DoltEnginetestHarness) {
 	}
 }
 
+func RunDoltCrissCrossMergeTests(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range CrissCrossMergeScripts {
+		func() {
+			h := h.NewHarness(t)
+			defer h.Close()
+			h.Setup(setup.MydbData)
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
 func RunDoltMergePreparedTests(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range MergeScripts {
 		// harness can't reset effectively when there are new commits / branches created, so use a new harness for

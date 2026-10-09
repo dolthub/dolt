@@ -1,0 +1,172 @@
+// Copyright 2026 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package enginetest
+
+import (
+	"fmt"
+
+	"github.com/dolthub/go-mysql-server/enginetest/queries"
+	"github.com/dolthub/go-mysql-server/sql"
+)
+
+// schemaBranchCrissCrossSetup builds the history from https://github.com/dolthub/dolt/issues/12050: a data-free
+// |schema| branch is merged into both |main| and |feature|, giving them two best common ancestors: the feature's fork
+// point and the |schema| tip. |extraSeedCommits| adds commits to main before the fork, which controls whether the fork
+// point is shorter than (0), as tall as (1), or taller than (2) the |schema| tip.
+func schemaBranchCrissCrossSetup(extraSeedCommits int) []string {
+	script := []string{
+		"CREATE TABLE t (id INT PRIMARY KEY, v VARCHAR(20));",
+		"CALL DOLT_COMMIT('-Am', 'c1: create table');",
+		"CALL DOLT_BRANCH('schema');",
+		"INSERT INTO t VALUES (1, 'seed'), (2, 'seed');",
+		"CALL DOLT_COMMIT('-am', 'c2: seed rows on main');",
+	}
+	for i := 0; i < extraSeedCommits; i++ {
+		script = append(script,
+			fmt.Sprintf("INSERT INTO t VALUES (%d, 'seed');", i+3),
+			fmt.Sprintf("CALL DOLT_COMMIT('-am', 'c2-%d: more seed rows');", i+3))
+	}
+	return append(script,
+		"CALL DOLT_BRANCH('feature');",
+		"UPDATE t SET v = 'edited on main' WHERE id = 1;",
+		"DELETE FROM t WHERE id = 2;",
+		"CALL DOLT_COMMIT('-am', 'c3: main edits row 1 and deletes row 2');",
+		"CALL DOLT_CHECKOUT('feature');",
+		"INSERT INTO t VALUES (50, 'feature');",
+		"CALL DOLT_COMMIT('-am', 'f1: feature adds row 50');",
+		"CALL DOLT_CHECKOUT('schema');",
+		"ALTER TABLE t ADD COLUMN n INT NULL;",
+		"CALL DOLT_COMMIT('-am', 's1: add column n');",
+		"ALTER TABLE t ADD COLUMN m INT NULL;",
+		"CALL DOLT_COMMIT('-am', 's2: add column m');",
+		"CALL DOLT_CHECKOUT('main');",
+		"CALL DOLT_MERGE('schema', '-m', 'merge schema into main');",
+		"CALL DOLT_CHECKOUT('feature');",
+		"CALL DOLT_MERGE('schema', '-m', 'merge schema into feature');",
+		"CALL DOLT_CHECKOUT('main');",
+	)
+}
+
+// schemaBranchMigrationCycle adds a column on |schema|, merges it into |main| and |feature|, and changes data on both.
+func schemaBranchMigrationCycle(cycle int) []string {
+	return []string{
+		"CALL DOLT_CHECKOUT('schema');",
+		fmt.Sprintf("ALTER TABLE t ADD COLUMN x%d INT NULL;", cycle),
+		fmt.Sprintf("CALL DOLT_COMMIT('-am', 's: add column x%d');", cycle),
+		"CALL DOLT_CHECKOUT('main');",
+		fmt.Sprintf("INSERT INTO t (id, v) VALUES (%d, 'main');", 100+cycle),
+		fmt.Sprintf("UPDATE t SET v = 'edited on main %d' WHERE id = 1;", cycle),
+		fmt.Sprintf("CALL DOLT_COMMIT('-am', 'main data %d');", cycle),
+		"CALL DOLT_MERGE('schema', '-m', 'merge schema into main');",
+		"CALL DOLT_CHECKOUT('feature');",
+		fmt.Sprintf("INSERT INTO t (id, v) VALUES (%d, 'feature');", 200+cycle),
+		fmt.Sprintf("CALL DOLT_COMMIT('-am', 'feature data %d');", cycle),
+		"CALL DOLT_MERGE('schema', '-m', 'merge schema into feature');",
+	}
+}
+
+func longRunningFeatureSetup() []string {
+	script := schemaBranchCrissCrossSetup(0)
+	for cycle := 1; cycle <= 3; cycle++ {
+		script = append(script, schemaBranchMigrationCycle(cycle)...)
+	}
+	script = append(script, "CALL DOLT_CHECKOUT('feature');", "CALL DOLT_MERGE('main', '-m', 'first sync with main');")
+	for cycle := 4; cycle <= 6; cycle++ {
+		script = append(script, schemaBranchMigrationCycle(cycle)...)
+	}
+	return script
+}
+
+var mergeMainIntoFeatureIsClean = []queries.ScriptTestAssertion{
+	{
+		Query:    "CALL DOLT_CHECKOUT('feature');",
+		Expected: []sql.Row{{0, "Switched to branch 'feature'"}},
+	},
+	{
+		Query:    "CALL DOLT_MERGE('main', '-m', 'merge main into feature');",
+		Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+	},
+}
+
+// CrissCrossMergeScripts expect the results of git's default merge strategy, which merges several best common
+// ancestors into a virtual merge base. Expected rows match git 2.39 run on an equivalent history.
+var CrissCrossMergeScripts = []queries.ScriptTest{
+	{
+		Name:        "criss-cross merge: schema tip taller than the fork point",
+		Skip:        true, // merge uses a single merge base: https://github.com/dolthub/dolt/issues/12050
+		SetUpScript: schemaBranchCrissCrossSetup(0),
+		Assertions: append(mergeMainIntoFeatureIsClean,
+			queries.ScriptTestAssertion{
+				Query:    "SELECT id, v, n, m FROM t ORDER BY id;",
+				Expected: []sql.Row{{1, "edited on main", nil, nil}, {50, "feature", nil, nil}},
+			},
+		),
+	},
+	{
+		Name:        "criss-cross merge: schema tip taller than the fork point, feature into main",
+		Skip:        true, // merge uses a single merge base: https://github.com/dolthub/dolt/issues/12050
+		SetUpScript: schemaBranchCrissCrossSetup(0),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature', '-m', 'merge feature into main');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT id, v FROM t ORDER BY id;",
+				Expected: []sql.Row{{1, "edited on main"}, {50, "feature"}},
+			},
+		},
+	},
+	{
+		Name:        "criss-cross merge: fork point as tall as the schema tip",
+		Skip:        true, // merge uses a single merge base: https://github.com/dolthub/dolt/issues/12050
+		SetUpScript: schemaBranchCrissCrossSetup(1),
+		Assertions: append(mergeMainIntoFeatureIsClean,
+			queries.ScriptTestAssertion{
+				Query:    "SELECT id, v FROM t ORDER BY id;",
+				Expected: []sql.Row{{1, "edited on main"}, {3, "seed"}, {50, "feature"}},
+			},
+		),
+	},
+	{
+		Name:        "criss-cross merge: fork point taller than the schema tip",
+		SetUpScript: schemaBranchCrissCrossSetup(2),
+		Assertions: append(mergeMainIntoFeatureIsClean,
+			queries.ScriptTestAssertion{
+				Query:    "SELECT id, v FROM t ORDER BY id;",
+				Expected: []sql.Row{{1, "edited on main"}, {3, "seed"}, {4, "seed"}, {50, "feature"}},
+			},
+		),
+	},
+	{
+		Name:        "criss-cross merge: long-running feature across many schema migrations",
+		Skip:        true, // merge uses a single merge base: https://github.com/dolthub/dolt/issues/12050
+		SetUpScript: longRunningFeatureSetup(),
+		Assertions: append(mergeMainIntoFeatureIsClean,
+			queries.ScriptTestAssertion{
+				Query: "SELECT id, v FROM t ORDER BY id;",
+				Expected: []sql.Row{
+					{1, "edited on main 6"}, {50, "feature"},
+					{101, "main"}, {102, "main"}, {103, "main"}, {104, "main"}, {105, "main"}, {106, "main"},
+					{201, "feature"}, {202, "feature"}, {203, "feature"}, {204, "feature"}, {205, "feature"}, {206, "feature"},
+				},
+			},
+			queries.ScriptTestAssertion{
+				Query:    "SELECT count(*) FROM information_schema.columns WHERE table_name = 't';",
+				Expected: []sql.Row{{10}},
+			},
+		),
+	},
+}
