@@ -111,6 +111,7 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~sql-fetch.bats~
 ~foreign-keys-invert-pk.bats~
 ~merge-base.bats~
+~merge-criss-cross.bats~
 ~auto_increment.bats~
 ~creds.bats~
 ~schema-conflicts.bats~

@@ -111,3 +111,28 @@ SQL
     [ "${lines[3]}" = "4,seed" ]
     [ "${lines[4]}" = "50,feature" ]
 }
+
+@test "merge-criss-cross: merge-base --all lists every merge base" {
+    setup_schema_branch_criss_cross 0
+    fork_point=$(dolt sql -q "SELECT commit_hash FROM dolt_log('--all') WHERE message = 'c2: seed rows on main';" -r csv | tail -n 1)
+    schema_tip=$(get_head_commit schema)
+
+    run dolt merge-base --all main feature
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "$fork_point" ]] || false
+    [[ "$output" =~ "$schema_tip" ]] || false
+
+    run dolt merge-base --all feature main
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+
+    run dolt merge-base --all main schema
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+    [ "$output" = "$schema_tip" ]
+
+    run dolt merge-base main feature
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+}
