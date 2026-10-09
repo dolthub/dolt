@@ -76,3 +76,27 @@ func TestRunner_WaitDelayBoundsAbandonedPipe(t *testing.T) {
 	}
 	readHelperPid(t, pidFile)
 }
+
+func TestRunner_LocalFileFailureKeepsCmdErrorWithoutHints(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11904
+	t.Parallel()
+
+	ctx := context.Background()
+	localRepo, r, _, _ := newFetchableRepos(t, ctx)
+	if err := os.Mkdir(filepath.Join(localRepo.GitDir, "FETCH_HEAD"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := r.Run(ctx, RunOptions{}, "fetch", "--no-tags", "--refmap=", "origin", "+refs/dolt/data:refs/dolt/remotes/origin/data")
+
+	var ce *CmdError
+	if !errors.As(err, &ce) {
+		t.Fatalf("expected a *CmdError, got %T: %v", err, err)
+	}
+	if !strings.Contains(string(ce.Output), "cannot open '") {
+		t.Fatalf("expected git's cannot open line in the output, got %q", ce.Output)
+	}
+	if strings.Contains(err.Error(), "hint:") {
+		t.Fatalf("local file failure carries credential hints:\n%v", err)
+	}
+}

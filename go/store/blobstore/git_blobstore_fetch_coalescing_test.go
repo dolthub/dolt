@@ -15,7 +15,9 @@
 package blobstore
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -102,8 +104,10 @@ func newCountingBlobstore(t *testing.T, ctx context.Context, tree map[string][]b
 	t.Helper()
 
 	remoteRepo, localRepo, _ := newRemoteAndLocalRepos(t, ctx)
-	_, err := remoteRepo.SetRefToTree(ctx, DoltDataRef, tree, "seed remote")
-	require.NoError(t, err)
+	if tree != nil {
+		_, err := remoteRepo.SetRefToTree(ctx, DoltDataRef, tree, "seed remote")
+		require.NoError(t, err)
+	}
 
 	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
 		RemoteName:     "origin",
@@ -461,4 +465,129 @@ func TestGitBlobstore_TeardownEndsAndDrainsTheFetch(t *testing.T) {
 	require.Zero(t, counting.inFlight.Load(), "Teardown returned with a fetch still running")
 	require.ErrorIs(t, <-readDone, errGitStoreTornDown, "a read caught by Teardown must say what happened")
 	require.ErrorIs(t, counting.awaitCanceledFetch(t), errGitStoreTornDown)
+}
+
+func TestGitBlobstore_SequentialWritesDoNotRefetchUnchangedRemote(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11904
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	bs, remoteRepo, counting := newCountingBlobstore(t, ctx, map[string][]byte{
+		"manifest": []byte("v0\n"),
+	}, defaultSyncForReadTTL)
+
+	const writes = 5
+	version, err := bs.Put(ctx, "manifest", 3, bytes.NewReader([]byte("v1\n")))
+	require.NoError(t, err)
+	for i := 2; i <= writes; i++ {
+		body := []byte(fmt.Sprintf("v%d\n", i))
+		version, err = bs.CheckAndPutManifest(ctx, version, body)
+		require.NoError(t, err)
+	}
+
+	require.LessOrEqual(t, counting.total.Load(), int64(1),
+		"%d writes against an unchanged remote ran %d identical fetches", writes, counting.total.Load())
+	requireRemoteManifest(t, ctx, remoteRepo, fmt.Sprintf("v%d\n", writes))
+	got, _, err := GetBytes(ctx, bs, "manifest", AllRange)
+	require.NoError(t, err)
+	require.Equal(t, fmt.Sprintf("v%d\n", writes), string(got))
+}
+
+func TestGitBlobstore_CachedHeadVersionMismatchRefetches(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11904
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	bs, remoteRepo, counting := newCountingBlobstore(t, ctx, map[string][]byte{
+		"manifest": []byte("v0\n"),
+	}, time.Hour)
+	_, err := bs.Put(ctx, "manifest", 3, bytes.NewReader([]byte("v1\n")))
+	require.NoError(t, err)
+
+	other := newCloneBlobstore(t, ctx, remoteRepo)
+	_, otherVersion, err := GetBytes(ctx, other, "manifest", AllRange)
+	require.NoError(t, err)
+	otherVersion, err = other.CheckAndPutManifest(ctx, otherVersion, []byte("other\n"))
+	require.NoError(t, err)
+
+	before := counting.total.Load()
+	_, err = bs.CheckAndPutManifest(ctx, otherVersion, []byte("v2\n"))
+	require.NoError(t, err)
+	require.Equal(t, before+1, counting.total.Load())
+	requireRemoteManifest(t, ctx, remoteRepo, "v2\n")
+}
+
+func TestGitBlobstore_WriteAfterSyncTTLRefetches(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11904
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	const ttl = 10 * time.Millisecond
+	bs, remoteRepo, counting := newCountingBlobstore(t, ctx, map[string][]byte{
+		"manifest": []byte("v0\n"),
+	}, ttl)
+	version, err := bs.Put(ctx, "manifest", 3, bytes.NewReader([]byte("v1\n")))
+	require.NoError(t, err)
+	require.Equal(t, int64(1), counting.total.Load())
+
+	time.Sleep(5 * ttl)
+	_, err = bs.CheckAndPutManifest(ctx, version, []byte("v2\n"))
+	require.NoError(t, err)
+	require.Equal(t, int64(2), counting.total.Load(), "a write after the sync TTL must fetch")
+	requireRemoteManifest(t, ctx, remoteRepo, "v2\n")
+}
+
+func TestGitBlobstore_WriteOverCachedHeadSeesAnotherWriter(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11904
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	bs, remoteRepo, _ := newCountingBlobstore(t, ctx, map[string][]byte{
+		"manifest": []byte("v0\n"),
+	}, time.Hour)
+	version, err := bs.Put(ctx, "manifest", 3, bytes.NewReader([]byte("v1\n")))
+	require.NoError(t, err)
+
+	other := newCloneBlobstore(t, ctx, remoteRepo)
+	_, otherVersion, err := GetBytes(ctx, other, "manifest", AllRange)
+	require.NoError(t, err)
+	require.Equal(t, version, otherVersion)
+	otherVersion, err = other.CheckAndPutManifest(ctx, otherVersion, []byte("other\n"))
+	require.NoError(t, err)
+
+	_, err = bs.CheckAndPutManifest(ctx, version, []byte("stale\n"))
+	var cpe CheckAndPutError
+	require.ErrorAs(t, err, &cpe)
+	require.Equal(t, otherVersion, cpe.ActualVersion)
+	requireRemoteManifest(t, ctx, remoteRepo, "other\n")
+
+	_, err = bs.CheckAndPutManifest(ctx, otherVersion, []byte("v2\n"))
+	require.NoError(t, err)
+	requireRemoteManifest(t, ctx, remoteRepo, "v2\n")
+}
+
+func TestGitBlobstore_FirstPushToMissingRefDoesNotRefetch(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11904
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	bs, remoteRepo, counting := newCountingBlobstore(t, ctx, nil, defaultSyncForReadTTL)
+
+	const reads = 5
+	for i := 0; i < reads; i++ {
+		ok, err := bs.Exists(ctx, "manifest")
+		require.NoError(t, err)
+		require.False(t, ok)
+		ok, err = bs.Exists(ctx, "table1")
+		require.NoError(t, err)
+		require.False(t, ok)
+	}
+	require.LessOrEqual(t, counting.total.Load(), int64(1),
+		"%d reads of a remote with no data ref ran %d identical fetches", reads, counting.total.Load())
+
+	before := counting.total.Load()
+	_, err := bs.Put(ctx, "manifest", 3, bytes.NewReader([]byte("v1\n")))
+	require.NoError(t, err)
+	require.LessOrEqual(t, counting.total.Load()-before, int64(1))
+	requireRemoteManifest(t, ctx, remoteRepo, "v1\n")
 }

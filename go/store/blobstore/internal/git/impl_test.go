@@ -34,6 +34,9 @@ import (
 // in place of git for the cmdReadCloser tests.
 func TestMain(m *testing.M) {
 	// See https://abhinavg.net/2022/05/15/hijack-testmain/
+	if os.Getenv(gitBefore229Env) != "" {
+		os.Exit(runGitBefore229(os.Args[1:]))
+	}
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "stdoutfail":
@@ -1210,4 +1213,100 @@ func TestCmdReadCloser_DrainedNonZeroExitSurfaces(t *testing.T) {
 	if ce.ExitCode != 3 {
 		t.Fatalf("exit code: got %d, want 3", ce.ExitCode)
 	}
+}
+
+func TestGitAPIImpl_FetchRef_UnopenableFetchHead(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11904
+	t.Parallel()
+
+	ctx := context.Background()
+	localRepo, _, localAPI, remoteHead := newFetchableRepos(t, ctx)
+	if err := os.Mkdir(filepath.Join(localRepo.GitDir, "FETCH_HEAD"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := localAPI.FetchRef(ctx, "origin", "refs/dolt/data", "refs/dolt/remotes/origin/data"); err != nil {
+		t.Fatalf("FetchRef failed on an unopenable FETCH_HEAD it does not need: %v", err)
+	}
+	requireTrackingRef(t, ctx, localAPI, remoteHead)
+}
+
+func newFetchableRepos(t *testing.T, ctx context.Context) (localRepo *gitrepo.Repo, localRunner *Runner, localAPI GitAPI, remoteHead OID) {
+	t.Helper()
+
+	remoteRepo, _, _ := newTestRepo(t, ctx)
+	c1, err := remoteRepo.SetRefToTree(ctx, "refs/dolt/data", nil, "seed remote")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	localRepo, localRunner, localAPI = newTestRepo(t, ctx)
+	if _, err := localRunner.Run(ctx, RunOptions{}, "remote", "add", "origin", remoteRepo.GitDir); err != nil {
+		t.Fatal(err)
+	}
+	return localRepo, localRunner, localAPI, OID(c1)
+}
+
+func requireTrackingRef(t *testing.T, ctx context.Context, api GitAPI, want OID) {
+	t.Helper()
+
+	got, ok, err := api.TryResolveRefCommit(ctx, "refs/dolt/remotes/origin/data")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || got != want {
+		t.Fatalf("tracking ref: got %q (found %v), want %q", got, ok, want)
+	}
+}
+
+func TestGitAPIImpl_FetchRef_GitWithoutNoWriteFetchHead(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11904
+	t.Parallel()
+
+	ctx := context.Background()
+	localRepo, _, _, remoteHead := newFetchableRepos(t, ctx)
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := NewRunnerWithGitPath(localRepo.GitDir, exe)
+	r.extraEnv = []string{gitBefore229Env + "=1"}
+	api := NewGitAPIImpl(r)
+
+	for i := 0; i < 2; i++ {
+		if err := api.FetchRef(ctx, "origin", "refs/dolt/data", "refs/dolt/remotes/origin/data"); err != nil {
+			t.Fatalf("FetchRef %d with git before 2.29: %v", i+1, err)
+		}
+	}
+	requireTrackingRef(t, ctx, api, remoteHead)
+}
+
+// gitBefore229Env makes the test binary stand in for a git older than 2.29.
+const gitBefore229Env = "DOLT_TEST_GIT_BEFORE_2_29"
+
+// runGitBefore229 rejects --no-write-fetch-head the way git before 2.29 does
+// and runs the real git for any other |args|.
+func runGitBefore229(args []string) int {
+	for _, a := range args {
+		if a == "--no-write-fetch-head" {
+			if _, err := os.Stderr.WriteString("error: unknown option `no-write-fetch-head'\n"); err != nil {
+				return 1
+			}
+			return gitUsageExitCode
+		}
+	}
+	gitPath, err := exec.LookPath("git")
+	if err != nil {
+		return 1
+	}
+	cmd := exec.Command(gitPath, args...)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	if err := cmd.Run(); err != nil {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			return ee.ExitCode()
+		}
+		return 1
+	}
+	return 0
 }
