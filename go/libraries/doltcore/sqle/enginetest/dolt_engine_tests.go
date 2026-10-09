@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"testing"
 	"time"
 
@@ -417,7 +418,9 @@ func RunForeignKeyBranchesTest(t *testing.T, h DoltEnginetestHarness) {
 			SkipResultsCheck: true,
 		},
 	}
-	for _, script := range queries.ForeignKeyTests {
+	// These collections together contain the original ForeignKeyTests, including
+	// cases relocated by the script refactor. All must run against branch databases.
+	for _, script := range slices.Concat(queries.ForeignKeyTests, queries.ForeignKeyTypeTests, queries.ForeignKeyResolutionTests) {
 		// New harness for every script because we create branches
 		h := h.NewHarness(t)
 		h.Setup(setup.MydbData, setup.Parent_childData)
@@ -446,7 +449,9 @@ func RunForeignKeyBranchesPreparedTest(t *testing.T, h DoltEnginetestHarness) {
 			SkipResultsCheck: true,
 		},
 	}
-	for _, script := range queries.ForeignKeyTests {
+	// These collections together contain the original ForeignKeyTests, including
+	// cases relocated by the script refactor. All must run against branch databases.
+	for _, script := range slices.Concat(queries.ForeignKeyTests, queries.ForeignKeyTypeTests, queries.ForeignKeyResolutionTests) {
 		// New harness for every script because we create branches
 		h := h.NewHarness(t)
 		h.Setup(setup.MydbData, setup.Parent_childData)
