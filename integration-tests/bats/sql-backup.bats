@@ -195,6 +195,57 @@ EOF
     [[ "$output" =~ i.*3.*4 ]] || false
 }
 
+@test "sql-backup: dolt_backup restore stashes the replaced database and leaves no staging debris" {
+    backupFileUrl="file://$BATS_TEST_TMPDIR/backups"
+
+    dolt sql -q "create database db1;"
+    dolt sql -q "use db1; create table t1 (pk int primary key); insert into t1 values (42); call dolt_commit('-Am', 'creating table t1');"
+    dolt sql -q "use db1; call dolt_backup('sync-url', '$backupFileUrl');"
+    dolt sql -q "use db1; update t1 set pk=100; call dolt_commit('-Am', 'updating table t1');"
+
+    dolt sql -q "use db1; call dolt_backup('restore', '--force', '$backupFileUrl', 'db1');"
+
+    # The restored contents are served under the name.
+    run dolt sql -q "use db1; select * from t1;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "42" ]] || false
+
+    # The replaced contents are recoverable from the dropped-databases stash.
+    run dolt sql -q "call dolt_undrop();"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "db1" ]] || false
+
+    # The restore staged its transfer aside and cleaned up after itself.
+    if [ -d .dolt_restore_staging ]; then
+        [ -z "$(ls -A .dolt_restore_staging)" ] || false
+    fi
+}
+
+@test "sql-backup: abandoned restore staging state is never served and never blocks a restore" {
+    backupFileUrl="file://$BATS_TEST_TMPDIR/backups"
+
+    dolt sql -q "create database db1;"
+    dolt sql -q "use db1; create table t1 (pk int primary key); insert into t1 values (42); call dolt_commit('-Am', 'creating table t1');"
+    dolt sql -q "use db1; call dolt_backup('sync-url', '$backupFileUrl');"
+
+    # Simulate the remains of a restore that was killed mid-transfer.
+    mkdir -p .dolt_restore_staging/db1-1234-99999
+    touch .dolt_restore_staging/db1-1234-99999/.dolt_safe_to_ignore
+    mkdir -p .dolt_restore_staging/db1-1234-99999/.dolt
+
+    # The debris is not served as a database.
+    run dolt sql -q "show databases;"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "staging" ]] || false
+
+    # And it does not block a retry of the restore.
+    run dolt sql -q "call dolt_backup('restore', '--force', '$backupFileUrl', 'db1');"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "use db1; select * from t1;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "42" ]] || false
+}
+
 @test "sql-backup: dolt_backup unrecognized" {
     run dolt sql -q "call dolt_backup('unregonized', 'hostedapidb-0', 'file:///some_directory')"
     [ "$status" -ne 0 ]
