@@ -53,15 +53,22 @@ const (
 	ConflictDiffTypeRemoved  = "removed"
 )
 
+// MergeCommits merges |mergeCommit| into |commit|. When they have several best common ancestors, the merge base is a
+// virtual commit that merges those ancestors together.
 func MergeCommits(ctx *sql.Context, tableResolver doltdb.TableResolver, commit, mergeCommit *doltdb.Commit, opts editor.Options) (*Result, error) {
-	optCmt, err := doltdb.GetCommitAncestor(ctx, commit, mergeCommit)
+	ancCommit, mergeBases, err := resolveMergeBase(ctx, commit, mergeCommit)
 	if err != nil {
 		return nil, err
 	}
-	ancCommit, ok := optCmt.ToCommit()
-	if !ok {
-		// Ancestor commit should have been resolved before getting this far.
-		return nil, doltdb.ErrGhostCommitRuntimeFailure
+	var ancestor doltdb.Rootish = ancCommit
+	if len(mergeBases) > 1 {
+		addrs := make([]hash.Hash, len(mergeBases))
+		for i, base := range mergeBases {
+			if addrs[i], err = base.HashOf(); err != nil {
+				return nil, err
+			}
+		}
+		ancestor = virtualMergeBase{Commit: ancCommit, mergeBases: addrs}
 	}
 
 	ourRoot, err := commit.GetRootValue(ctx)
@@ -83,7 +90,7 @@ func MergeCommits(ctx *sql.Context, tableResolver doltdb.TableResolver, commit, 
 		IsCherryPick:        false,
 		KeepSchemaConflicts: true,
 	}
-	return MergeRoots(ctx, tableResolver, ourRoot, theirRoot, ancRoot, mergeCommit, ancCommit, opts, mo)
+	return MergeRoots(ctx, tableResolver, ourRoot, theirRoot, ancRoot, mergeCommit, ancestor, opts, mo)
 }
 
 type Result struct {

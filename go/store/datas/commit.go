@@ -613,3 +613,64 @@ func (r *CommitByHeightHeap) PopCommitsOfHeight(h uint64) []*Commit {
 	}
 	return ret
 }
+
+const (
+	reachableFromLeft uint8 = 1 << iota
+	reachableFromRight
+	ancestorOfMergeBase
+)
+
+// FindAllCommonAncestors returns every best common ancestor of |c1| and |c2|: each common ancestor that is not an
+// ancestor of another common ancestor, the same set as `git merge-base --all`. The result is empty when there is no
+// common ancestor. Refs of |c1| are dereferenced through |vr1|, while refs of |c2| are dereferenced through |vr2|.
+// Ancestors of ghost commits are not visited.
+func FindAllCommonAncestors(ctx context.Context, c1, c2 *Commit, vr1, vr2 types.ValueReader) ([]hash.Hash, error) {
+	// Commits are visited tallest first. A parent is always shorter than its children, so every flag a commit can
+	// receive is already set when it is visited.
+	flags := make(map[hash.Hash]uint8)
+	queue := &CommitByHeightHeap{}
+	unresolved := 0
+	markReachable := func(c *Commit, newFlags uint8) {
+		prev, queued := flags[c.Addr()]
+		flags[c.Addr()] = prev | newFlags
+		if !queued {
+			heap.Push(queue, c)
+			if newFlags&ancestorOfMergeBase == 0 {
+				unresolved++
+			}
+		} else if prev&ancestorOfMergeBase == 0 && newFlags&ancestorOfMergeBase != 0 {
+			unresolved--
+		}
+	}
+
+	markReachable(c1, reachableFromLeft)
+	markReachable(c2, reachableFromRight)
+	var mergeBases []hash.Hash
+	for unresolved > 0 {
+		c := heap.Pop(queue).(*Commit)
+		cFlags := flags[c.Addr()]
+		if cFlags&ancestorOfMergeBase == 0 {
+			unresolved--
+			if cFlags&reachableFromLeft != 0 && cFlags&reachableFromRight != 0 {
+				mergeBases = append(mergeBases, c.Addr())
+				cFlags |= ancestorOfMergeBase
+			}
+		}
+		if c.IsGhost() {
+			continue
+		}
+
+		vr := vr1
+		if cFlags&reachableFromLeft == 0 {
+			vr = vr2
+		}
+		parents, err := GetCommitParents(ctx, vr, c.NomsValue())
+		if err != nil {
+			return nil, err
+		}
+		for _, p := range parents {
+			markReachable(p, cFlags)
+		}
+	}
+	return mergeBases, nil
+}

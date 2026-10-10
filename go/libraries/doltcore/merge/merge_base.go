@@ -22,15 +22,39 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
+// MergeBase returns the best common ancestor of |left| and |right|. When there are several, it returns the one with the
+// newest committer date, as `git merge-base` does.
 func MergeBase(ctx context.Context, left, right *doltdb.Commit) (base hash.Hash, err error) {
-	optCmt, err := doltdb.GetCommitAncestor(ctx, left, right)
+	bases, err := MergeBases(ctx, left, right)
 	if err != nil {
 		return base, err
 	}
-	ancestor, ok := optCmt.ToCommit()
-	if !ok {
-		return base, doltdb.ErrGhostCommitEncountered
-	}
+	return bases[0], nil
+}
 
-	return ancestor.HashOf()
+// MergeBases returns every best common ancestor of |left| and |right|, newest committer date first, the same list as
+// `git merge-base --all`.
+func MergeBases(ctx context.Context, left, right *doltdb.Commit) ([]hash.Hash, error) {
+	optCmts, err := doltdb.GetCommitAncestors(ctx, left, right)
+	if err != nil {
+		return nil, err
+	}
+	commits := make([]*doltdb.Commit, len(optCmts))
+	for i, optCmt := range optCmts {
+		c, ok := optCmt.ToCommit()
+		if !ok {
+			return nil, doltdb.ErrGhostCommitEncountered
+		}
+		commits[i] = c
+	}
+	if err = sortNewestFirst(ctx, commits); err != nil {
+		return nil, err
+	}
+	bases := make([]hash.Hash, len(commits))
+	for i, c := range commits {
+		if bases[i], err = c.HashOf(); err != nil {
+			return nil, err
+		}
+	}
+	return bases, nil
 }

@@ -1171,6 +1171,49 @@ var DoltOnlyRevisionTableFunctionPrivilegeTests = []queries.UserPrivilegeTest{
 		},
 	},
 	{
+		Name: "dolt_merge_bases privilege checking with revision database",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY, col1 varchar(20));",
+			"CREATE TABLE test2 (pk BIGINT PRIMARY KEY, col1 varchar(20));",
+			"call dolt_commit('-Am', 'first commit');",
+			"CREATE USER tester@localhost;",
+			"call dolt_branch('b1');",
+			"use mydb/b1;",
+		},
+		Assertions: []queries.UserPrivilegeTestAssertion{
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT count(*) FROM dolt_merge_bases('main', 'b1');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT SELECT ON mydb.test TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT count(*) FROM dolt_merge_bases('main', 'b1');",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT SELECT ON mydb.* TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT count(*) FROM dolt_merge_bases('main', 'b1');",
+				Expected: []sql.Row{{int64(1)}},
+			},
+		},
+	},
+	{
 		Name: "dolt_log privilege checking with revision database",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk BIGINT PRIMARY KEY, col1 varchar(20));",

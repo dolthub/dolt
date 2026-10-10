@@ -181,6 +181,35 @@ func GetCommitAncestor(ctx context.Context, cm1, cm2 *Commit) (*OptionalCommit, 
 	return &OptionalCommit{cmt, addr}, nil
 }
 
+// GetCommitAncestors returns every best common ancestor of |cm1| and |cm2|, the same set as `git merge-base --all`.
+func GetCommitAncestors(ctx context.Context, cm1, cm2 *Commit) ([]*OptionalCommit, error) {
+	addrs, err := datas.FindAllCommonAncestors(ctx, cm1.dCommit, cm2.dCommit, cm1.vrw, cm2.vrw)
+	if err != nil {
+		return nil, err
+	}
+	if len(addrs) == 0 {
+		return nil, ErrNoCommonAncestor
+	}
+
+	ancestors := make([]*OptionalCommit, len(addrs))
+	for i, addr := range addrs {
+		targetCommit, err := datas.LoadCommitAddr(ctx, cm1.vrw, addr)
+		if err != nil {
+			return nil, err
+		}
+		if targetCommit.IsGhost() {
+			ancestors[i] = &OptionalCommit{nil, addr}
+			continue
+		}
+		cmt, err := NewCommit(ctx, cm1.vrw, cm1.ns, targetCommit)
+		if err != nil {
+			return nil, err
+		}
+		ancestors[i] = &OptionalCommit{cmt, addr}
+	}
+	return ancestors, nil
+}
+
 func getCommitAncestorAddr(ctx context.Context, c1, c2 *datas.Commit, vrw1, vrw2 types.ValueReadWriter, ns1, ns2 tree.NodeStore) (hash.Hash, error) {
 	ancestorAddr, ok, err := datas.FindCommonAncestor(ctx, c1, c2, vrw1, vrw2, ns1, ns2)
 	if err != nil {

@@ -30,4 +30,5 @@ var DoltTableFunctions = []sql.TableFunction{
 	&QueryDiffTableFunction{},
 	&TestsRunTableFunction{},
 	&JsonDiffTableFunction{},
+	&MergeBasesTableFunction{},
 }

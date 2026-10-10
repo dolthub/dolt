@@ -1371,6 +1371,9 @@ func newConflictMerger(ctx context.Context, tm *TableMerger, ae *prolly.Artifact
 	m := prolly.ConflictMetadata{
 		BaseRootIsh: baseHash,
 	}
+	if virtualBase, ok := tm.ancestorSrc.(virtualMergeBase); ok {
+		m.MergeBases = virtualBase.mergeBases
+	}
 	meta, err := json.Marshal(m)
 	if err != nil {
 		return nil, err

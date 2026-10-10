@@ -1014,6 +1014,73 @@ func RunDoltMergeTests(t *testing.T, h DoltEnginetestHarness) {
 	}
 }
 
+func concatScripts(scriptLists ...[]queries.ScriptTest) []queries.ScriptTest {
+	var all []queries.ScriptTest
+	for _, scripts := range scriptLists {
+		all = append(all, scripts...)
+	}
+	return all
+}
+
+func RunDoltCrissCrossMergeTests(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range concatScripts(CrissCrossMergeScripts, ConflictingMergeBasesScripts, CrissCrossMergeReaderScripts, CountCommitsScripts) {
+		func() {
+			h := h.NewHarness(t)
+			defer h.Close()
+			h.Setup(setup.MydbData)
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func RunDoltMergeBaseSelectionTests(t *testing.T, h DoltEnginetestHarness) {
+	cleanup := installTestCommitClock(&testCommitClock{})
+	defer cleanup()
+	for _, script := range concatScripts(MergeBaseSelectionScripts, ThreeDotScripts) {
+		func() {
+			h := h.NewHarness(t)
+			defer h.Close()
+			h.Setup(setup.MydbData)
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func RunDoltMergeBaseSelectionPreparedTests(t *testing.T, h DoltEnginetestHarness) {
+	cleanup := installTestCommitClock(&testCommitClock{})
+	defer cleanup()
+	for _, script := range concatScripts(MergeBaseSelectionScripts, ThreeDotScripts) {
+		func() {
+			h := h.NewHarness(t)
+			defer h.Close()
+			h.Setup(setup.MydbData)
+			enginetest.TestScriptPrepared(t, h, script)
+		}()
+	}
+}
+
+func RunDoltMergeBasesTableFunctionTests(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range MergeBasesTableFunctionScripts {
+		func() {
+			h := h.NewHarness(t)
+			defer h.Close()
+			h.Setup(setup.MydbData)
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func RunDoltMergeBasesTableFunctionPreparedTests(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range MergeBasesTableFunctionScripts {
+		func() {
+			h := h.NewHarness(t)
+			defer h.Close()
+			h.Setup(setup.MydbData)
+			enginetest.TestScriptPrepared(t, h, script)
+		}()
+	}
+}
+
 func RunDoltMergePreparedTests(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range MergeScripts {
 		// harness can't reset effectively when there are new commits / branches created, so use a new harness for

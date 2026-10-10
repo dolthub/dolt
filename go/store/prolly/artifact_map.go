@@ -573,6 +573,9 @@ type ConflictArtifact struct {
 type ConflictMetadata struct {
 	// BaseRootIsh is the target hash of the working set holding the base value for the conflict.
 	BaseRootIsh hash.Hash `json:"bc"`
+	// MergeBases are set when BaseRootIsh is a virtual merge base built from several merge bases. The virtual merge
+	// base is not referenced by any ref, so it can be rebuilt from these after garbage collection.
+	MergeBases []hash.Hash `json:"mb,omitempty"`
 }
 
 // ConstraintViolationMeta is the json metadata for foreign key constraint violations
