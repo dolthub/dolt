@@ -375,7 +375,9 @@ type prollyKeylessIndexIter struct {
 	clusteredMap val.OrdinalMapping
 	clusteredBld *val.TupleBuilder
 
-	eg      *errgroup.Group
+	eg *errgroup.Group
+	// cancel stops this iterator's producer without canceling the caller's context.
+	cancel  context.CancelFunc
 	rowChan chan sql.Row
 
 	valueDesc *val.TupleDesc
@@ -417,7 +419,8 @@ func newProllyKeylessIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range
 	sch := idx.Schema()
 	_, vm, om := projectionMappings(sch, projections)
 
-	eg, c := errgroup.WithContext(ctx)
+	workerCtx, cancel := context.WithCancel(ctx)
+	eg, c := errgroup.WithContext(workerCtx)
 
 	iter := prollyKeylessIndexIter{
 		idx:          idx,
@@ -426,6 +429,7 @@ func newProllyKeylessIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range
 		clusteredMap: indexMap,
 		clusteredBld: keyBld,
 		eg:           eg,
+		cancel:       cancel,
 		rowChan:      make(chan sql.Row, indexLookupBufSize),
 		valueMap:     vm,
 		ordMap:       om,
@@ -516,6 +520,9 @@ func (p prollyKeylessIndexIter) keylessRowsFromValueTuple(ctx context.Context, n
 	return
 }
 
+// Close stops and joins the keyless index row producer before returning.
 func (p prollyKeylessIndexIter) Close(*sql.Context) error {
+	p.cancel()
+	_ = p.eg.Wait()
 	return nil
 }
