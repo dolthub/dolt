@@ -77,6 +77,17 @@ type DoltSession struct {
 	branchActivityTracker *doltdb.BranchActivityTracker
 }
 
+// GetSessionVariable consults DoltgreSQL's scoped PostgreSQL settings when
+// that integrator has installed a value. MySQL sessions retain GMS behavior.
+func (s *DoltSession) GetSessionVariable(ctx *sql.Context, name string) (interface{}, error) {
+	if reader, ok := s.DoltgresSessObj.(interface{ DoltgresSettingValue(string) (any, bool) }); ok {
+		if value, found := reader.DoltgresSettingValue(name); found {
+			return value, nil
+		}
+	}
+	return s.Session.GetSessionVariable(ctx, name)
+}
+
 // DoltgresSessionLifecycle is implemented by Doltgres session state that needs
 // notification when a transaction ends or its session caches must be cleared.
 // Keeping this interface here avoids coupling Dolt to Doltgres packages.
