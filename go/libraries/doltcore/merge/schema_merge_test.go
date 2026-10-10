@@ -116,6 +116,9 @@ func TestSchemaMerge(t *testing.T) {
 	t.Run("adaptive encoding tests", func(t *testing.T) {
 		testSchemaMerge(t, adaptiveEncodingTests)
 	})
+	t.Run("generated column tests", func(t *testing.T) {
+		testSchemaMerge(t, generatedColumnTests)
+	})
 }
 
 var columnAddDropTests = []schemaMergeTest{
@@ -1187,6 +1190,30 @@ var simpleConflictTests = []schemaMergeTest{
 		left:     tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (a))   "), row(1, "2", float32(3.0))),
 		right:    tbl(sch("CREATE TABLE t (a int, b char(20), c float, PRIMARY KEY (b))   "), row(1, "2", float32(3.0))),
 		conflict: true,
+	},
+}
+
+var generatedColumnTests = []schemaMergeTest{
+	{
+		name:     "conflicting generated column adds: same name, different expressions",
+		ancestor: *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c1 int)")),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c1 int, computed int AS (c1 * 2) VIRTUAL)")),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c1 int, computed int AS (c1 * 3) VIRTUAL)")),
+		conflict: true,
+	},
+	{
+		name:     "conflicting generated column adds: same expression, different stored types",
+		ancestor: *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c1 int)")),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c1 int, computed int AS (c1 * 2) VIRTUAL)")),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c1 int, computed int AS (c1 * 2) STORED)")),
+		conflict: true,
+	},
+	{
+		name:     "convergent generated column adds",
+		ancestor: *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c1 int)")),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c1 int, computed int AS (c1 * 2) VIRTUAL)")),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c1 int, computed int AS (c1 * 2) VIRTUAL)")),
+		merged:   *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c1 int, computed int AS (c1 * 2) VIRTUAL)")),
 	},
 }
 
