@@ -1422,6 +1422,14 @@ func TestBranchTransactions(t *testing.T) {
 	RunBranchTransactionTest(t, h)
 }
 
+func TestMultiBranchTransactions(t *testing.T) {
+	RunMultiBranchTransactionTests(t, newDoltEnginetestHarness(t), false)
+}
+
+func TestMultiBranchTransactionsPrepared(t *testing.T) {
+	RunMultiBranchTransactionTests(t, newDoltEnginetestHarness(t), true)
+}
+
 func TestMultiDbTransactions(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunMultiDbTransactionsTest(t, h)
@@ -2058,6 +2066,30 @@ func TestDoltCommit(t *testing.T) {
 func TestDoltCommitPrepared(t *testing.T) {
 	harness := newDoltEnginetestHarness(t)
 	RunDoltCommitTestsPrepared(t, harness)
+}
+
+func TestDoltCommitAll(t *testing.T) {
+	RunDoltCommitAllTests(t, newDoltEnginetestHarness(t))
+}
+
+func TestDoltCommitAllPrepared(t *testing.T) {
+	RunDoltCommitAllTestsPrepared(t, newDoltEnginetestHarness(t))
+}
+
+func TestDoltCommitAllTransactions(t *testing.T) {
+	RunDoltCommitAllTransactionTests(t, newDoltEnginetestHarness(t), false)
+}
+
+func TestDoltCommitAllTransactionsPrepared(t *testing.T) {
+	RunDoltCommitAllTransactionTests(t, newDoltEnginetestHarness(t), true)
+}
+
+func TestMultiBranchCommit(t *testing.T) {
+	RunMultiBranchCommitTests(t, newDoltEnginetestHarness(t), false)
+}
+
+func TestMultiBranchCommitPrepared(t *testing.T) {
+	RunMultiBranchCommitTests(t, newDoltEnginetestHarness(t), true)
 }
 
 func TestQueriesPrepared(t *testing.T) {

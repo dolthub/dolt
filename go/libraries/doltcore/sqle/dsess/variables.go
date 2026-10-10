@@ -38,6 +38,7 @@ const (
 // General system variables
 const (
 	DoltCommitOnTransactionCommit        = "dolt_transaction_commit"
+	DoltMultiBranchCommit                = "dolt_multi_branch_commit"
 	DoltCommitOnTransactionCommitMessage = "dolt_transaction_commit_message"
 	TransactionsDisabledSysVar           = "dolt_transactions_disabled"
 	ForceTransactionCommit               = "dolt_force_transaction_commit"

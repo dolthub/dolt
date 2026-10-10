@@ -27,6 +27,7 @@ import (
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 // BranchControlTest is used to define a test using the branch control system. The root account is used with any queries
@@ -2445,6 +2446,56 @@ var BranchControlTests = []BranchControlTest{
 			},
 		},
 	},
+}
+
+type databaseChangeRecordingSession struct {
+	sql.Session
+	changes []string
+}
+
+func (s *databaseChangeRecordingSession) SetCurrentDatabase(name string) {
+	s.changes = append(s.changes, name)
+	s.Session.SetCurrentDatabase(name)
+}
+
+func TestDoltCommitAllChecksEveryBranch(t *testing.T) {
+	for _, query := range []string{"CALL dolt_commit_all('-am', 'denied')", "CALL dolt_commit('-am', 'denied')", "COMMIT"} {
+		t.Run(query, func(t *testing.T) {
+			harness := newDoltHarness(t)
+			defer harness.Close()
+			engine, err := harness.NewEngine(t)
+			require.NoError(t, err)
+			defer engine.Close()
+			ctx := enginetest.NewContext(harness)
+			ctx.WithClient(sql.Client{User: "root", Address: "localhost"})
+			engine.EngineAnalyzer().Catalog.MySQLDb.AddRootAccount()
+			engine.EngineAnalyzer().Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
+			for _, query := range append(append([]string{}, TestUserSetUpScripts...),
+				"INSERT INTO dolt_branch_control VALUES ('%', 'main', 'testuser', 'localhost', 'merge')",
+				"SET autocommit = 0",
+				"INSERT INTO test VALUES (2, 2)",
+				"INSERT INTO `mydb/other`.test VALUES (3, 3)") {
+				enginetest.RunQueryWithContext(t, engine, harness, ctx, query)
+			}
+			ctx = ctx.WithClient(sql.Client{User: "testuser", Address: "localhost"})
+			enginetest.RunQueryWithContext(t, engine, harness, ctx, "SET @@dolt_multi_branch_commit=1")
+			enginetest.RunQueryWithContext(t, engine, harness, ctx, "SET @@dolt_transaction_commit=1")
+			sess := dsess.DSessFromSess(ctx.Session)
+			recorder := &databaseChangeRecordingSession{Session: sess.Session}
+			sess.Session = recorder
+			enginetest.AssertErrWithCtx(t, engine, harness, ctx, query, nil, branch_control.ErrIncorrectPermissions)
+			require.Empty(t, recorder.changes, "permission checks must not switch databases, even temporarily")
+			enginetest.TestQueryWithContext(t, ctx, engine, harness, "SELECT database()", []sql.Row{{"mydb"}}, nil, nil, nil)
+			ctx = ctx.WithClient(sql.Client{User: "root", Address: "localhost"})
+			for _, dbName := range []string{"mydb", "mydb/other"} {
+				enginetest.TestQueryWithContext(t, ctx, engine, harness, "SELECT * FROM `"+dbName+"`.test AS OF 'HEAD'", []sql.Row{{1, 1}}, nil, nil, nil)
+			}
+			enginetest.RunQueryWithContext(t, engine, harness, ctx, query)
+			require.Empty(t, recorder.changes, "successful batch preparation must not switch databases")
+			enginetest.TestQueryWithContext(t, ctx, engine, harness, "SELECT * FROM test AS OF 'HEAD'", []sql.Row{{1, 1}, {2, 2}}, nil, nil, nil)
+			enginetest.TestQueryWithContext(t, ctx, engine, harness, "SELECT * FROM `mydb/other`.test AS OF 'HEAD'", []sql.Row{{1, 1}, {3, 3}}, nil, nil, nil)
+		})
+	}
 }
 
 func TestBranchControl(t *testing.T) {
