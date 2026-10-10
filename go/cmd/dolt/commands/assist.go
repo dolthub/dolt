@@ -41,19 +41,28 @@ import (
 )
 
 const (
-	providerOpenAi     = "openai"
-	providerOrcaRouter = "orcarouter"
-	openAiApiBase      = "https://api.openai.com/v1"
-	orcaRouterApiBase  = "https://api.orcarouter.ai/v1"
-	openAiDefaultModel = "gpt-3.5-turbo"
-	orcaRouterModel    = "orcarouter/auto"
+	providerOpenAi           = "openai"
+	providerOrcaRouter       = "orcarouter"
+	providerCheaperInference = "cheaperinference"
+	openAiApiBase            = "https://api.openai.com/v1"
+	orcaRouterApiBase        = "https://api.orcarouter.ai/v1"
+	cheaperInferenceApiBase  = "https://api.cheaperinference.com/v1"
+	openAiDefaultModel       = "gpt-3.5-turbo"
+	orcaRouterModel          = "orcarouter/auto"
+	cheaperInferenceModel    = "gpt-5.4-mini"
 )
 
 var assistDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Assists with dolt commands and queries.",
 	LongDesc: `Assists with dolt commands and queries. Can run dolt commands or SQL queries on your behalf based on your questions or instructions, as well as answer questions about your database.
 
-Powered by a chat API. An API key is required. By default the assistant uses OpenAI's chat API, so set the OPENAI_API_KEY environment variable. To use OrcaRouter instead, pass --provider orcarouter and set the ORCAROUTER_API_KEY environment variable. OrcaRouter is an OpenAI-compatible AI gateway that routes to many models from a single endpoint (https://www.orcarouter.ai).
+Powered by a chat API. An API key is required. Accepted values for {{.EmphasisLeft}}--provider{{.EmphasisRight}}:
+
+	- openai (default) - requires OPENAI_API_KEY. Default model: gpt-3.5-turbo.
+
+	- orcarouter - requires ORCAROUTER_API_KEY. Default model: orcarouter/auto.
+
+	- cheaperinference - requires CHEAPER_INFERENCE_API_KEY. Default model: gpt-5.4-mini.
 `,
 	Synopsis: []string{
 		"[--debug] [--model {{.LessThan}}modelId{{.GreaterThan}}] [--provider {{.LessThan}}provider{{.GreaterThan}}]",
@@ -93,8 +102,10 @@ func (a *Assist) Exec(ctx context.Context, commandStr string, args []string, dEn
 		apiKeyEnv, apiBaseUrl, defaultModel, providerName = dconfig.EnvOpenAiKey, openAiApiBase, openAiDefaultModel, "OpenAI"
 	case providerOrcaRouter:
 		apiKeyEnv, apiBaseUrl, defaultModel, providerName = dconfig.EnvOrcaRouterKey, orcaRouterApiBase, orcaRouterModel, "OrcaRouter"
+	case providerCheaperInference:
+		apiKeyEnv, apiBaseUrl, defaultModel, providerName = dconfig.EnvCheaperInferenceKey, cheaperInferenceApiBase, cheaperInferenceModel, "Cheaper Inference"
 	default:
-		cli.PrintErrf("Unknown provider %q. Supported providers are %q and %q.\n", provider, providerOpenAi, providerOrcaRouter)
+		cli.PrintErrf("Unknown provider %q. Supported providers are %q, %q and %q.\n", provider, providerOpenAi, providerOrcaRouter, providerCheaperInference)
 		return 1
 	}
 
@@ -644,8 +655,7 @@ func (a Assist) ArgParser() *argparser.ArgParser {
 		"The ID of the chat model to use for the assistant. Defaults to gpt-3.5-turbo for OpenAI. "+
 			"See https://platform.openai.com/docs/models/overview for a full list of OpenAI models.")
 	ap.SupportsString("provider", "p", "provider",
-		"The chat API provider to use. One of \"openai\" (default) or \"orcarouter\". When set to \"orcarouter\", "+
-			"the ORCAROUTER_API_KEY environment variable must be set and the default model is orcarouter/auto.")
+		"The chat API provider to use. One of \"openai\" (default), \"orcarouter\" or \"cheaperinference\".")
 	ap.SupportsFlag("debug", "d", "log API requests to and from the assistant")
 	return ap
 }
