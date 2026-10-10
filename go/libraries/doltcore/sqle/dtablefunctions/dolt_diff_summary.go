@@ -357,7 +357,7 @@ func getSummaryForDelta(ctx *sql.Context, delta diff.TableDelta, sqledb dsess.Sq
 
 	if !schema.ArePrimaryKeySetsDiffable(delta.FromSch, delta.ToSch) {
 		if shouldErrorOnPKChange {
-			return nil, fmt.Errorf("failed to compute diff summary for table %s: %w", delta.CurName(), diff.ErrPrimaryKeySetChanged)
+			return nil, diff.ErrPrimaryKeySetChanged.New()
 		}
 
 		ctx.Warn(dtables.PrimaryKeyChangeWarningCode, dtables.PrimaryKeyChangeWarning, fromDetails.hashStr, toDetails.hashStr)
