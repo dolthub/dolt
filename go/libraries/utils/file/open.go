@@ -30,6 +30,12 @@ func Rename(oldpath, newpath string) error {
 	return os.Rename(oldpath, newpath)
 }
 
+// MoveDir moves a directory from |oldpath| to |newpath|, failing if
+// the destination already exists.
+func MoveDir(oldpath, newpath string) error {
+	return os.Rename(oldpath, newpath)
+}
+
 // Remove functions exactly like os.Remove, except that it retries upon failure on Windows. This "fixes" some errors
 // that appear on Windows.
 func Remove(name string) error {
