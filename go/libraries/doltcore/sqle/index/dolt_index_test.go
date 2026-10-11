@@ -22,6 +22,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/cockroachdb/apd/v3"
@@ -1553,5 +1554,42 @@ func TestSplitNullsFromRange(t *testing.T) {
 		assert.Equal(t, sql.NullRangeColumnExpr(types.Int8), rs[0][1])
 		assert.Equal(t, sql.AboveNull{}, rs[1][1].LowerBound)
 		assert.Equal(t, sql.Below{Key: 10}, rs[1][1].UpperBound)
+	})
+}
+
+// TestKeylessIndexIterCloseStopsProducer checks that closing a keyless index
+// iterator before EOF stops its background row producer while the caller's
+// context is still live. Ten duplicates overfill the eight-row buffer, so the
+// producer is blocked on a send when Close is called.
+func TestKeylessIndexIterCloseStopsProducer(t *testing.T) {
+	ctx := context.Background()
+	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.Close()
+	root, err := sqle.ExecuteSql(ctx, dEnv, `
+CREATE TABLE keyless (v BIGINT);
+CREATE INDEX idx_v ON keyless(v);
+INSERT INTO keyless VALUES (1), (1), (1), (1), (1), (1), (1), (1), (1), (1);
+`)
+	require.NoError(t, err)
+	tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: "keyless"})
+	require.NoError(t, err)
+	require.True(t, ok)
+	indexes, err := index.DoltIndexesFromTable(ctx, "dolt", "keyless", tbl)
+	require.NoError(t, err)
+	idx := indexes[0].(index.DoltIndex)
+
+	// synctest.Test fails if the producer goroutine is still blocked when the
+	// test function returns.
+	synctest.Test(t, func(t *testing.T) {
+		sqlCtx := sql.NewEmptyContext()
+		lookup, err := sql.NewMySQLIndexBuilder(sqlCtx, idx).Equals(sqlCtx, idx.Expressions()[0], nil, 1).Build(sqlCtx)
+		require.NoError(t, err)
+		pkSch, err := sqlutil.FromDoltSchema(sqlCtx, "", "keyless", idx.Schema())
+		require.NoError(t, err)
+		iter, err := index.RowIterForIndexLookup(sqlCtx, NoCacheTableable{tbl}, lookup, pkSch, nil)
+		require.NoError(t, err)
+		_, err = iter.Next(sqlCtx)
+		require.NoError(t, err)
+		require.NoError(t, iter.Close(sqlCtx))
 	})
 }
