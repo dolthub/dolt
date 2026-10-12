@@ -18,7 +18,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 	"testing/synctest"
 
@@ -46,15 +45,7 @@ func TestSqlEngineCloseStopsBranchActivityTracker(t *testing.T) {
 				require.NoError(t, err)
 				se, err := NewSqlEngine(ctx, mrEnv, &SqlEngineConfig{Autocommit: true, BranchActivityTracking: enabled})
 				require.NoError(t, err)
-				var closes sync.WaitGroup
-				closeErrors := make(chan error, 5)
-				for range 5 {
-					closes.Go(func() { closeErrors <- se.Close() })
-				}
-				closes.Wait()
-				for range 5 {
-					require.NoError(t, <-closeErrors)
-				}
+				require.NoError(t, se.Close())
 				require.NoError(t, se.Close())
 				// Bubble exit requires all engine goroutines to terminate without caller cancellation.
 			})

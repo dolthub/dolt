@@ -30,8 +30,7 @@ func TestSqlEngineCloseStopsBinlogManager(t *testing.T) {
 	root, home := t.TempDir(), t.TempDir()
 	// Bubble exit fails if any goroutine created by the engine remains blocked.
 	synctest.Test(t, func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := context.Background()
 		fs, err := filesys.LocalFS.WithWorkingDir(root)
 		require.NoError(t, err)
 		rootEnv := env.LoadWithoutDB(ctx, func() (string, error) { return home, nil }, fs, doltdb.LocalDirDoltDB, "test")
@@ -45,9 +44,6 @@ func TestSqlEngineCloseStopsBinlogManager(t *testing.T) {
 		// Failed construction must also release the manager it already created.
 		_, err = NewSqlEngine(ctx, mrEnv, &SqlEngineConfig{PrivFilePath: root})
 		require.Error(t, err)
-		// Upstream branch activity tracking uses the construction context.
-		// The primary manager must terminate on Close, independently of it.
-		cancel()
 		synctest.Wait()
 	})
 }
