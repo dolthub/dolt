@@ -254,7 +254,7 @@ func (cmd DebugCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			case <-wait:
 				done = true
 			default:
-				execDebugMode(queryist.Context, sqlEng, queryFile, continueOnError, format)
+				execDebugMode(queryist.Context, sqlEng, queryFile, continueOnError, format, cliCtx)
 			}
 		}
 	}()
@@ -279,7 +279,7 @@ func (cmd DebugCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			case <-wait:
 				done = true
 			default:
-				execDebugMode(queryist.Context, sqlEng, queryFile, continueOnError, format)
+				execDebugMode(queryist.Context, sqlEng, queryFile, continueOnError, format, cliCtx)
 			}
 		}
 	}()
@@ -304,7 +304,7 @@ func (cmd DebugCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			case <-wait:
 				done = true
 			default:
-				execDebugMode(queryist.Context, sqlEng, queryFile, continueOnError, format)
+				execDebugMode(queryist.Context, sqlEng, queryFile, continueOnError, format, cliCtx)
 			}
 		}
 	}()
@@ -418,7 +418,7 @@ func debugAnalyze(ctx *sql.Context, tempDir string, sqlEng *engine.SqlEngine, sq
 	return planBuf.Flush()
 }
 
-func execDebugMode(ctx *sql.Context, qryist cli.Queryist, queryFile *os.File, continueOnErr bool, format engine.PrintResultFormat) error {
+func execDebugMode(ctx *sql.Context, qryist cli.Queryist, queryFile *os.File, continueOnErr bool, format engine.PrintResultFormat, cliCtx cli.CliContext) error {
 	_, err := queryFile.Seek(0, 0)
 	if err != nil {
 		return err
@@ -428,6 +428,6 @@ func execDebugMode(ctx *sql.Context, qryist cli.Queryist, queryFile *os.File, co
 	}()
 	input := bufio.NewReader(transform.NewReader(queryFile, textunicode.BOMOverride(transform.Nop)))
 
-	_, err = execBatchMode(ctx, qryist, input, continueOnErr, format, false)
+	_, err = execBatchMode(ctx, qryist, input, continueOnErr, format, false, cliCtx)
 	return err
 }

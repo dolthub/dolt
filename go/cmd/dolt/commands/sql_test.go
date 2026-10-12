@@ -582,3 +582,12 @@ func TestDelete(t *testing.T) {
 		})
 	}
 }
+
+func TestPreprocessQuery_UnknownSlashCommandReturnsError(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/12065
+	// The name stops at ;, so the statement after it is not part of the name.
+	_, cmd, newQuery, err := preprocessQuery(`\notacommand; select 1`, "", nil)
+	require.ErrorContains(t, err, `Unknown command: \notacommand.`)
+	assert.Nil(t, cmd)
+	assert.Empty(t, newQuery)
+}

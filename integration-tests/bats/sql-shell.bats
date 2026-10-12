@@ -199,6 +199,15 @@ teardown() {
     [ "$output" = $'count(*)\n0' ]
 }
 
+@test "sql-shell: backslash commands are reported on entry and respect quotes and comments" {
+    # https://github.com/dolthub/dolt/issues/12065
+    skiponwindows "Need to install expect and make this script work on windows."
+    run $BATS_TEST_DIRNAME/sql-shell-backslash-commands.expect
+    echo "$output"
+
+    [ "$status" -eq 0 ]
+}
+
 # Regression coverage for https://github.com/dolthub/dolt/issues/11137
 # bats test_tags=no_lambda
 @test "sql-shell: status slash command works without --branch flag" {

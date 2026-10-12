@@ -1,0 +1,83 @@
+#!/usr/bin/expect
+
+set timeout 5
+set env(NO_COLOR) 1
+
+source  "$env(BATS_CWD)/helper/common_expect_functions.tcl"
+
+spawn dolt sql
+
+set prompt {dolt-repo-[0-9]+/main\*?> }
+
+# An unknown backslash command is reported as soon as it is entered, without waiting for ';'.
+expect_with_defaults $prompt { send "\\notacommand\r" }
+expect_with_defaults_2 {Unknown command: \\notacommand\. Use} $prompt { }
+
+# A backslash-led line inside a quoted string does not split the statement.
+expect_with_defaults $prompt { send "select 'first\r" }
+expect_with_defaults {-> } { send "\\second\r" }
+expect_with_defaults {-> } { send "third' as v;\r" }
+expect_with_defaults {1 row in set} { }
+
+# \c discards held text, so the next statement runs on its own.
+expect_with_defaults $prompt { send "select 'abc\r" }
+expect_with_defaults {-> } { send "\\second\r" }
+expect_with_defaults {-> } { send "\\c\r" }
+expect_with_defaults $prompt { send "select 1 as one;\r" }
+expect_with_defaults {1 row in set} { }
+
+# An interrupt discards held text the same way.
+expect_with_defaults $prompt { send "select 'xyz\r" }
+expect_with_defaults {-> } { send "\\second\r" }
+expect_with_defaults {-> } { send "\003" }
+expect_with_defaults $prompt { send "select 2 as two;\r" }
+expect_with_defaults {1 row in set} { }
+
+# A known command mid-statement runs when it is entered, and the statement completes after it.
+expect_with_defaults $prompt { send "select 1\r" }
+expect_with_defaults {-> } { send "\\ls\r" }
+expect_with_defaults_2 {ables in working set} {-> } { send ";\r" }
+expect_with_defaults {1 row in set} { }
+
+# An unknown command mid-statement is reported when it is entered, and the statement still runs.
+expect_with_defaults $prompt { send "select 2 as two\r" }
+expect_with_defaults {-> } { send "\\nosuch\r" }
+expect_with_defaults_2 {Unknown command: \\nosuch\. Use} {-> } { send ";\r" }
+expect_with_defaults_2 {\| 2 +\|} {1 row in set} { }
+
+# A backslash inside quotes is literal.
+expect_with_defaults $prompt { send "select '\\ls' as lit;\r" }
+expect_with_defaults_2 {\| ls +\|} {1 row in set} { }
+
+# A command after a blank line at the start of a statement runs when it is entered.
+expect_with_defaults $prompt { send "\r" }
+expect_with_defaults {-> } { send "\\ls\r" }
+expect_with_defaults_2 {ables in working set} $prompt { send "select 3 as three;\r" }
+expect_with_defaults {1 row in set} { }
+
+# A command after a line comment runs, because the comment ends with its line.
+expect_with_defaults $prompt { send "select 1 -- note\r" }
+expect_with_defaults {-> } { send "\\ls\r" }
+expect_with_defaults_2 {ables in working set} {-> } { send ";\r" }
+expect_with_defaults {1 row in set} { }
+
+# A backslash inside a block comment is text, so it does not run.
+expect_with_defaults $prompt { send "select /* a\r" }
+expect_with_defaults {-> } { send "\\ls\r" }
+expect_without_pattern {ables in working set} { }
+expect_with_defaults {-> } { send "*/ 4 as four;\r" }
+expect_with_defaults {1 row in set} { }
+
+# \c outside quotes discards the statement, so the next statement runs on its own.
+expect_with_defaults $prompt { send "select 5,\r" }
+expect_with_defaults {-> } { send "\\c\r" }
+expect_with_defaults $prompt { send "select 6 as six;\r" }
+expect_with_defaults {1 row in set} { }
+
+expect_with_defaults $prompt { send "exit\r" }
+expect {
+    eof {}
+    timeout { exit 1 }
+}
+set waitval [wait -i $spawn_id]
+exit [lindex $waitval 3]

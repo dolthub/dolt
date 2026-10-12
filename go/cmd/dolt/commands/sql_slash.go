@@ -33,6 +33,7 @@ var slashCmds = []cli.Command{
 	DiffCmd{},
 	LogCmd{},
 	ShowCmd{},
+	LsCmd{},
 	AddCmd{},
 	CommitCmd{},
 	CheckoutCmd{},

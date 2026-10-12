@@ -180,3 +180,32 @@ SQL
   [ "$status" -eq 0 ]
   [[ "$output" =~ "$EXPECTED" ]] || false
 }
+
+@test "sql-batch: unknown backslash command is reported, not sent to SQL" {
+    # https://github.com/dolthub/dolt/issues/12065
+    run bash -c "printf '\\\\notacommand\\n' | dolt sql"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Unknown command: \\notacommand." ]] || false
+    [[ ! "$output" =~ "syntax error" ]] || false
+}
+
+@test "sql-batch: ls and status run as in the shell" {
+    # https://github.com/dolthub/dolt/issues/12065
+    dolt sql -q "create table tbl_one (pk int primary key)"
+    run bash -c "printf '\\\\ls\\n\\\\status\\n' | dolt sql"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Tables in working set:" ]] || false
+    [[ "$output" =~ "tbl_one" ]] || false
+    [[ "$output" =~ "On branch" ]] || false
+}
+
+@test "sql-batch: commands that need the interactive shell are rejected" {
+    # https://github.com/dolthub/dolt/issues/12065
+    run bash -c "printf '\\\\edit\\n' | dolt sql"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "\\edit runs only in the interactive shell" ]] || false
+
+    run bash -c "printf '\\\\pager\\n' | dolt sql"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "\\pager runs only in the interactive shell" ]] || false
+}

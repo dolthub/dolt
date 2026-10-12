@@ -289,6 +289,11 @@ func (s *StreamScanner) seekDelimiter() (error, bool) {
 
 			switch s.buf[i] {
 			case newline:
+				// Ends a backslash command at its line. The next Scan counts the newline.
+				if s.buf[s.state.start] == backslash {
+					s.state.end = i
+					return nil, true
+				}
 				s.lineNum++
 				if s.state.insideLineComment {
 					s.state.insideLineComment = false
