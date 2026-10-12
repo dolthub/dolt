@@ -21,7 +21,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/eventscheduler"
@@ -64,8 +63,6 @@ type SqlEngine struct {
 	fs                    filesys.Filesys
 	clusterController     *cluster.Controller
 	branchActivityTracker *doltdb.BranchActivityTracker
-	closeOnce             sync.Once
-	closeErr              error
 }
 
 type sessionFactory func(mysqlSess *sql.BaseSession, pro sql.DatabaseProvider) (*dsess.DoltSession, error)
@@ -232,10 +229,7 @@ func NewSqlEngine(
 		IsServerLocked: config.IsServerLocked,
 	}).WithBackgroundThreads(bThreads)
 
-	if err := configureBinlogPrimaryController(engine); err != nil {
-		return nil, err
-	}
-	primaryController := engine.Analyzer.Catalog.BinlogPrimaryController.(*dblr.DoltBinlogPrimaryController)
+	primaryController := configureBinlogPrimaryController(engine)
 	initialized := false
 	defer func() {
 		if !initialized {
@@ -522,27 +516,26 @@ func (se *SqlEngine) ClusterController() *cluster.Controller {
 }
 
 // Close releases the engine's resources and waits for its background goroutines.
-// It is safe to call more than once or concurrently.
+// It is safe to call more than once.
 func (se *SqlEngine) Close() error {
-	se.closeOnce.Do(func() {
-		if se.engine != nil {
-			if se.engine.Analyzer.Catalog.BinlogReplicaController != nil {
-				dblr.DoltBinlogReplicaController.Close()
-			}
-			if primary, ok := se.engine.Analyzer.Catalog.BinlogPrimaryController.(*dblr.DoltBinlogPrimaryController); ok {
-				primary.Close()
-			}
-			se.closeErr = se.engine.Close()
+	var err error
+	if se.engine != nil {
+		if se.engine.Analyzer.Catalog.BinlogReplicaController != nil {
+			dblr.DoltBinlogReplicaController.Close()
 		}
-		if se.branchActivityTracker != nil {
-			se.branchActivityTracker.Close()
+		if primary, ok := se.engine.Analyzer.Catalog.BinlogPrimaryController.(*dblr.DoltBinlogPrimaryController); ok {
+			primary.Close()
 		}
-		if se.provider != nil {
-			se.provider.Teardown(context.Background())
-			se.provider.Close()
-		}
-	})
-	return se.closeErr
+		err = se.engine.Close()
+	}
+	if se.branchActivityTracker != nil {
+		se.branchActivityTracker.Close()
+	}
+	if se.provider != nil {
+		se.provider.Teardown(context.Background())
+		se.provider.Close()
+	}
+	return err
 }
 
 // configureBinlogReplicaController configures the binlog replication controller with the |engine|.
@@ -561,10 +554,10 @@ func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engin
 // NOTE: By default, binary logging for Dolt is not enabled, which differs from MySQL's @@log_bin default. Dolt's
 // binary logging is initially an opt-in feature, but we may change that after measuring and tuning the
 // performance hit that binary logging adds.
-func configureBinlogPrimaryController(engine *gms.Engine) error {
+func configureBinlogPrimaryController(engine *gms.Engine) *dblr.DoltBinlogPrimaryController {
 	primaryController := dblr.NewDoltBinlogPrimaryController()
 	engine.Analyzer.Catalog.BinlogPrimaryController = primaryController
-	return nil
+	return primaryController
 }
 
 // configureEventScheduler configures the event scheduler with the |engine| for executing events, a |sessFactory|
