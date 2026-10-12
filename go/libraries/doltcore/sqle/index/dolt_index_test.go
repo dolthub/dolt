@@ -1559,8 +1559,7 @@ func TestSplitNullsFromRange(t *testing.T) {
 
 // TestKeylessIndexIterCloseStopsProducer checks that closing a keyless index
 // iterator before EOF stops its background row producer while the caller's
-// context is still live. Ten duplicates overfill the eight-row buffer, so the
-// producer is blocked on a send when Close is called.
+// context is still live.
 func TestKeylessIndexIterCloseStopsProducer(t *testing.T) {
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
@@ -1579,7 +1578,7 @@ INSERT INTO keyless VALUES (1), (1), (1), (1), (1), (1), (1), (1), (1), (1);
 	idx := indexes[0].(index.DoltIndex)
 
 	// synctest.Test fails if the producer goroutine is still blocked when the
-	// test function returns.
+	// test function returns.Cl
 	synctest.Test(t, func(t *testing.T) {
 		sqlCtx := sql.NewEmptyContext()
 		lookup, err := sql.NewMySQLIndexBuilder(sqlCtx, idx).Equals(sqlCtx, idx.Expressions()[0], nil, 1).Build(sqlCtx)
