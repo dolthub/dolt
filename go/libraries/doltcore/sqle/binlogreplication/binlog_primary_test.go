@@ -15,6 +15,7 @@
 package binlogreplication
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -22,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dolthub/vitess/go/mysql"
 	"github.com/stretchr/testify/require"
 )
 
@@ -435,6 +437,19 @@ func TestBinlogPrimary_Rotation(t *testing.T) {
 	h.setupForDoltToMySqlReplication()
 	h.startReplicationAndCreateTestDb(h.doltPort)
 
+	// Keep a second real replication stream active through rotation. Removing it
+	// must leave the MySQL replica's stream usable.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	secondReplica, err := mysql.Connect(ctx, &mysql.ConnParams{Host: "127.0.0.1", Port: h.doltPort, Uname: "admin"})
+	require.NoError(t, err)
+	defer secondReplica.Close()
+	require.NoError(t, secondReplica.SendBinlogDumpCommand(43, mysql.Position{GTIDSet: mysql.Mysql56GTIDSet{}}))
+	require.NoError(t, secondReplica.Conn.SetReadDeadline(time.Now().Add(30*time.Second)))
+	firstEvent, err := secondReplica.ReadBinlogEvent()
+	require.NoError(t, err)
+	require.True(t, firstEvent.IsRotate())
+
 	// Change the binlog rotation threshold on the primary to 10KB (instead of the default 1GB)
 	h.primaryDatabase.MustExec("SET @@GLOBAL.max_binlog_size = 10240;")
 
@@ -457,6 +472,37 @@ func TestBinlogPrimary_Rotation(t *testing.T) {
 		{"binlog-main.000002", "10481", "No"},
 		{"binlog-main.000003", "1027", "No"},
 	})
+
+	// Confirm that the second stream reached the latest transaction, then
+	// disconnect it while the primary and the first replica remain running.
+	require.NoError(t, secondReplica.Conn.SetReadDeadline(time.Now().Add(30*time.Second)))
+	format := mysql.NewMySQL56BinlogFormat()
+	for {
+		event, err := secondReplica.ReadBinlogEvent()
+		require.NoError(t, err)
+		if !event.IsGTID() {
+			continue
+		}
+		gtid, _, err := event.GTID(format)
+		require.NoError(t, err)
+		if gtid.String() == uuid+":102" {
+			break
+		}
+	}
+	secondReplica.Close()
+	for i := 100; i < 110; i++ {
+		h.primaryDatabase.MustExec(fmt.Sprintf("insert into t values (%d);", i))
+	}
+	require.Eventually(t, func() bool {
+		var connections int
+		err := h.primaryDatabase.Get(&connections, fmt.Sprintf(
+			"SELECT COUNT(*) FROM information_schema.processlist WHERE id = %d", secondReplica.ConnectionID))
+		return err == nil && connections == 0
+	}, 30*time.Second, 10*time.Millisecond, "disconnected replica must leave the primary's process list")
+	// Write again after removal has completed to prove the remaining stream is usable.
+	h.primaryDatabase.MustExec("insert into t values (110);")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("SELECT MAX(n) FROM t;", [][]any{{"110"}})
 }
 
 // TestBinlogPrimary_AutoPurging tests that the primary server correctly purges binary log files older than
