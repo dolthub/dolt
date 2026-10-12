@@ -43,6 +43,12 @@ func NewDoltBinlogPrimaryController() *DoltBinlogPrimaryController {
 	}
 }
 
+// Close stops the primary's binlog streams and releases its manager goroutine.
+// It is safe to call more than once.
+func (d *DoltBinlogPrimaryController) Close() {
+	d.streamerManager.Close()
+}
+
 func (d *DoltBinlogPrimaryController) BinlogProducer(binlogProducer *binlogProducer) {
 	d.binlogProducer = binlogProducer
 	d.streamerManager.logManager = binlogProducer.logManager
