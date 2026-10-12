@@ -231,6 +231,13 @@ func NewSqlEngine(
 	if err := configureBinlogPrimaryController(engine); err != nil {
 		return nil, err
 	}
+	primaryController := engine.Analyzer.Catalog.BinlogPrimaryController.(*dblr.DoltBinlogPrimaryController)
+	initialized := false
+	defer func() {
+		if !initialized {
+			primaryController.Close()
+		}
+	}()
 
 	config.ClusterController.SetIsStandbyCallback(func(isStandby bool) {
 		pro.SetIsStandby(isStandby)
@@ -368,6 +375,7 @@ func NewSqlEngine(
 		}
 	}
 
+	initialized = true
 	return sqlEngine, nil
 }
 
@@ -508,6 +516,9 @@ func (se *SqlEngine) Close() error {
 	if se.engine != nil {
 		if se.engine.Analyzer.Catalog.BinlogReplicaController != nil {
 			dblr.DoltBinlogReplicaController.Close()
+		}
+		if primary, ok := se.engine.Analyzer.Catalog.BinlogPrimaryController.(*dblr.DoltBinlogPrimaryController); ok {
+			primary.Close()
 		}
 		err = se.engine.Close()
 	}
