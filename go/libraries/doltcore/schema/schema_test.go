@@ -259,7 +259,8 @@ func TestValidateForInsert(t *testing.T) {
 	})
 }
 
-func TestArePrimaryKeySetsDiffable(t *testing.T) {
+func TestComparePrimaryKeysMergeCompatibility(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/12067
 	tests := []struct {
 		Name     string
 		From     Schema
@@ -339,7 +340,7 @@ func TestArePrimaryKeySetsDiffable(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
-			d := ArePrimaryKeySetsDiffable(test.From, test.To)
+			d := ComparePrimaryKeys(test.From, test.To) == PrimaryKeysSameTags
 			require.Equal(t, test.Diffable, d)
 
 			// If they are diffable then we should be able to map their schemas from one to another.
@@ -352,7 +353,110 @@ func TestArePrimaryKeySetsDiffable(t *testing.T) {
 	}
 }
 
-func TestArePrimaryKeySetsDiffableTypeChanges(t *testing.T) {
+func TestComparePrimaryKeysOutcomes(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/12067
+	primaryKey := func(name string, tag uint64, kind types.NomsKind) Column {
+		return NewColumn(name, tag, kind, true)
+	}
+	newSchema := func(cols ...Column) Schema {
+		return MustSchemaFromCols(NewColCollection(cols...))
+	}
+
+	tests := []struct {
+		Name       string
+		From       Schema
+		To         Schema
+		Comparison PrimaryKeyComparisonType
+	}{
+		{
+			Name:       "same_tags",
+			From:       newSchema(primaryKey("pk", 1, types.IntKind)),
+			To:         newSchema(primaryKey("pk", 1, types.IntKind)),
+			Comparison: PrimaryKeysSameTags,
+		},
+		{
+			Name:       "renamed_column_same_tag",
+			From:       newSchema(primaryKey("pk", 1, types.IntKind)),
+			To:         newSchema(primaryKey("id", 1, types.IntKind)),
+			Comparison: PrimaryKeysSameTags,
+		},
+		{
+			Name:       "retagged_same_name_and_type",
+			From:       newSchema(primaryKey("pk", 1, types.IntKind)),
+			To:         newSchema(primaryKey("pk", 2, types.IntKind)),
+			Comparison: primaryKeysRetagged,
+		},
+		{
+			Name:       "multi_column_retagged_later_column",
+			From:       newSchema(primaryKey("a", 1, types.IntKind), primaryKey("b", 2, types.StringKind)),
+			To:         newSchema(primaryKey("a", 1, types.IntKind), primaryKey("b", 3, types.StringKind)),
+			Comparison: primaryKeysRetagged,
+		},
+		{
+			Name:       "multi_column_different_later_name",
+			From:       newSchema(primaryKey("a", 1, types.IntKind), primaryKey("b", 2, types.StringKind)),
+			To:         newSchema(primaryKey("a", 1, types.IntKind), primaryKey("c", 3, types.StringKind)),
+			Comparison: PrimaryKeysDiffer,
+		},
+		{
+			Name:       "new_tag_different_name",
+			From:       newSchema(primaryKey("pk", 1, types.IntKind)),
+			To:         newSchema(primaryKey("id", 2, types.IntKind)),
+			Comparison: PrimaryKeysDiffer,
+		},
+		{
+			Name:       "new_tag_different_type",
+			From:       newSchema(primaryKey("pk", 1, types.IntKind)),
+			To:         newSchema(primaryKey("pk", 2, types.StringKind)),
+			Comparison: PrimaryKeysDiffer,
+		},
+		{
+			Name:       "different_column_count",
+			From:       newSchema(primaryKey("pk", 1, types.IntKind)),
+			To:         newSchema(primaryKey("pk", 1, types.IntKind), primaryKey("val", 2, types.IntKind)),
+			Comparison: PrimaryKeysDiffer,
+		},
+		{
+			Name:       "keyless_and_keyed",
+			From:       newSchema(NewColumn("val", 1, types.IntKind, false)),
+			To:         newSchema(primaryKey("pk", 2, types.IntKind)),
+			Comparison: PrimaryKeysDiffer,
+		},
+		{
+			Name:       "both_keyless",
+			From:       newSchema(NewColumn("val", 1, types.IntKind, false)),
+			To:         newSchema(NewColumn("val", 2, types.IntKind, false)),
+			Comparison: PrimaryKeysSameTags,
+		},
+		{
+			Name:       "nil_and_nil",
+			From:       nil,
+			To:         nil,
+			Comparison: PrimaryKeysDiffer,
+		},
+		{
+			Name:       "names_differ_by_unicode_case_fold",
+			From:       newSchema(primaryKey("ς", 1, types.StringKind)),
+			To:         newSchema(primaryKey("Σ", 2, types.StringKind)),
+			Comparison: PrimaryKeysDiffer,
+		},
+		{
+			Name:       "crossed_tags_between_key_columns",
+			From:       newSchema(primaryKey("a", 1, types.IntKind), primaryKey("b", 2, types.IntKind)),
+			To:         newSchema(primaryKey("a", 2, types.IntKind), primaryKey("b", 3, types.IntKind)),
+			Comparison: PrimaryKeysDiffer,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			require.Equal(t, test.Comparison, ComparePrimaryKeys(test.From, test.To))
+		})
+	}
+}
+
+func TestComparePrimaryKeysDiffersOnTypeChange(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/12067
 	// New format compares underlying SQL types
 	tests := []struct {
 		Name     string
@@ -372,7 +476,7 @@ func TestArePrimaryKeySetsDiffableTypeChanges(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
-			d := ArePrimaryKeySetsDiffable(test.From, test.To)
+			d := ComparePrimaryKeys(test.From, test.To) == PrimaryKeysSameTags
 			require.Equal(t, test.Diffable, d)
 		})
 	}
