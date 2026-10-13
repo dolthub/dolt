@@ -89,3 +89,38 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ ^1$ ]] || false
 }
+
+@test "merge-base: --all" {
+    run dolt merge-base --all main two
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+    [ "$output" = "$(dolt merge-base main two)" ]
+
+    dolt checkout -b x main
+    dolt sql -q "INSERT INTO test VALUES (10);"
+    dolt commit -am "commit X"
+    dolt branch x1
+    dolt checkout -b y main
+    dolt sql -q "INSERT INTO test VALUES (20);"
+    dolt commit -am "commit Y"
+    dolt merge x1 -m "commit Y2"
+    dolt checkout x
+    dolt merge y~1 -m "commit X2"
+
+    # # # # # # # # # # # # # # # # # # # # # # # #
+    #                                             #
+    #               -- (X) -- (X2) <-- (x)        #
+    #             /       \  /                    #
+    #  ... -- (C)          \/                     #
+    #             \        /\                     #
+    #               -- (Y) -- (Y2) <-- (y)        #
+    #                                             #
+    # # # # # # # # # # # # # # # # # # # # # # # #
+
+    # Like git, the merge base with the newest commit date comes first.
+    run dolt merge-base --all x y
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [ "${lines[0]}" = "$(get_head_commit y~1)" ]
+    [ "${lines[1]}" = "$(get_head_commit x~1)" ]
+}
