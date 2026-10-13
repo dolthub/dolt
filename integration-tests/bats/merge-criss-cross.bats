@@ -68,3 +68,15 @@ setup_schema_branch_criss_cross() {
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
 }
+
+@test "merge-criss-cross: merge-base --all lists the newest merge base first, like git" {
+    # The fork point is taller than the schema tip, but the schema tip is newer.
+    setup_schema_branch_criss_cross 2
+    fork_point=$(dolt sql -q "SELECT commit_hash FROM dolt_log('--all') WHERE message = 'c2-4: more seed rows';" -r csv | tail -n 1)
+    schema_tip=$(get_head_commit schema)
+
+    run dolt merge-base --all main feature
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "$schema_tip" ]
+    [ "${lines[1]}" = "$fork_point" ]
+}
