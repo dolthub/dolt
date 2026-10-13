@@ -75,17 +75,17 @@ func (g *testGraph) resolver() HashResolver {
 	return g
 }
 
-// parseTestGraph builds a graph from lines of "name parent1 parent2 ...". A name prefixed with "~" is a ghost: a commit
-// whose parents are listed for computing heights but cannot be resolved.
+// parseTestGraph builds a graph from lines of "commit: parent1 parent2", listing each commit after its parents. A
+// commit prefixed with "~" is a ghost: its parents are listed only to compute heights, and the walk cannot see them.
 func parseTestGraph(spec string) *testGraph {
 	g := newTestGraph()
 	for _, line := range strings.Split(spec, "\n") {
-		fields := strings.Fields(line)
-		if len(fields) == 0 {
+		commit, parents, ok := strings.Cut(line, ":")
+		if !ok {
 			continue
 		}
-		name, ghost := strings.CutPrefix(fields[0], "~")
-		g.add(name, ghost, fields[1:]...)
+		name, ghost := strings.CutPrefix(strings.TrimSpace(commit), "~")
+		g.add(name, ghost, strings.Fields(parents)...)
 	}
 	return g
 }
@@ -190,50 +190,50 @@ func (g *testGraph) ancestorsIn(parents map[string][]string, names ...string) ma
 	return seen
 }
 
-type mergeBasesScenario struct {
-	name        string
-	graph       string
-	left, right string
-	bases       []string
-}
-
-// crissCrossRounds builds two branches that merge each other every round, starting from |fork|. Round i adds x<i>
-// and y<i>, each merging the other branch's previous commit.
+// crissCrossRounds builds two branches from |fork| that merge each other every round:
+//
+//	fork -- x0 -- x1 -- x2 -- ... -- x<rounds>
+//	fork -- y0 -- y1 -- y2 -- ... -- y<rounds>
+//	x<i> = merge(x<i-1>, y<i-1>), y<i> = merge(y<i-1>, x<i-1>)
 func crissCrossRounds(fork string, rounds int) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "x0 %s\ny0 %s\n", fork, fork)
+	fmt.Fprintf(&b, "x0: %s\ny0: %s\n", fork, fork)
 	for i := 1; i <= rounds; i++ {
-		fmt.Fprintf(&b, "x%d x%d y%d\ny%d y%d x%d\n", i, i-1, i-1, i, i-1, i-1)
+		fmt.Fprintf(&b, "x%d: x%d y%d\ny%d: y%d x%d\n", i, i-1, i-1, i, i-1, i-1)
 	}
 	return b.String()
 }
 
-// chain adds |n| commits named <prefix>1..<prefix>n on top of |from| and returns the graph lines and the last name.
+// chain builds |n| commits on top of |from| and returns them and the last one:
+//
+//	from -- <prefix>1 -- <prefix>2 -- ... -- <prefix><n>
 func chain(prefix, from string, n int) (string, string) {
 	var b strings.Builder
 	prev := from
 	for i := 1; i <= n; i++ {
 		name := fmt.Sprintf("%s%d", prefix, i)
-		fmt.Fprintf(&b, "%s %s\n", name, prev)
+		fmt.Fprintf(&b, "%s: %s\n", name, prev)
 		prev = name
 	}
 	return b.String(), prev
 }
 
-// fanIn builds |n| independent commits p1..pn on top of root. m1 merges them in order and m2 in reverse order, so m1
+// fanIn builds |n| independent commits p1..p<n> on top of root. m1 merges them in order and m2 in reverse order, so m1
 // and m2 have |n| merge bases. For n = 3:
 //
-//	p1, p2, p3 are children of root
-//	m1_1 = merge(p1, p2)    m2_1 = merge(p3, p2)
-//	m1   = merge(m1_1, p3)  m2   = merge(m2_1, p1)
+//	root -- p1
+//	root -- p2
+//	root -- p3
+//	m1_1 = merge(p1, p2), m1 = merge(m1_1, p3)
+//	m2_1 = merge(p3, p2), m2 = merge(m2_1, p1)
 func fanIn(n int) string {
 	var b strings.Builder
-	b.WriteString("root\n")
+	b.WriteString("root:\n")
 	var ps []string
 	for i := 1; i <= n; i++ {
 		p := fmt.Sprintf("p%d", i)
 		ps = append(ps, p)
-		fmt.Fprintf(&b, "%s root\n", p)
+		fmt.Fprintf(&b, "%s: root\n", p)
 	}
 	reversed := make([]string, n)
 	for i, p := range ps {
@@ -249,121 +249,212 @@ func fanIn(n int) string {
 			if i == n-2 {
 				name = side.name
 			}
-			fmt.Fprintf(&b, "%s %s %s\n", name, prev, p)
+			fmt.Fprintf(&b, "%s: %s %s\n", name, prev, p)
 			prev = name
 		}
 	}
 	return b.String()
 }
 
-// fourBranches builds branches a, b, c and d from root. c and d merge each other every round. a and b each pull in
-// c or d occasionally, and a and b merge each other once.
-func fourBranches() string {
-	var b strings.Builder
-	b.WriteString("root\na0 root\nb0 root\nc0 root\nd0 root\n")
-	for i := 1; i <= 10; i++ {
-		fmt.Fprintf(&b, "c%d c%d d%d\nd%d d%d c%d\n", i, i-1, i-1, i, i-1, i-1)
-		switch i {
-		case 3:
-			fmt.Fprintf(&b, "a%d a%d c%d\nb%d b%d\n", i, i-1, i, i, i-1)
-		case 4:
-			fmt.Fprintf(&b, "a%d a%d\nb%d b%d d%d\n", i, i-1, i, i-1, i)
-		case 6:
-			fmt.Fprintf(&b, "a%d a%d b%d\nb%d b%d\n", i, i-1, i-1, i, i-1)
-		case 7:
-			fmt.Fprintf(&b, "a%d a%d d%d\nb%d b%d\n", i, i-1, i, i, i-1)
-		case 8:
-			fmt.Fprintf(&b, "a%d a%d\nb%d b%d c%d\n", i, i-1, i, i-1, i)
-		default:
-			fmt.Fprintf(&b, "a%d a%d\nb%d b%d\n", i, i-1, i, i-1)
-		}
-	}
-	return b.String()
+// linearHistory is a fork and an unrelated root:
+//
+//	root -- a1 -- a2 -- a3
+//	              a2 -- b3
+//	unrelated
+const linearHistory = `
+	root:
+	a1: root
+	a2: a1
+	a3: a2
+	b3: a2
+	unrelated:
+`
+
+// crissCross is the smallest history with two merge bases:
+//
+//	root -- x0 -- x1
+//	root -- y0 -- y1
+//	x1 = merge(x0, y0), y1 = merge(y0, x0)
+const crissCross = `
+	root:
+	x0: root
+	y0: root
+	x1: x0 y0
+	y1: y0 x0
+`
+
+// fourBranches has branches a, b, c and d from root. c and d merge each other every round, and a and b merge from the
+// others now and then:
+//
+//	root -- a0 -- a1 -- ... -- a10
+//	root -- b0 -- b1 -- ... -- b10
+//	root -- c0 -- c1 -- ... -- c10    c<i> = merge(c<i-1>, d<i-1>)
+//	root -- d0 -- d1 -- ... -- d10    d<i> = merge(d<i-1>, c<i-1>)
+//	a3 = merge(a2, c3), a6 = merge(a5, b5), a7 = merge(a6, d7)
+//	b4 = merge(b3, d4), b8 = merge(b7, c8)
+const fourBranches = `
+	root:
+	a0: root
+	b0: root
+	c0: root
+	d0: root
+	c1: c0 d0
+	d1: d0 c0
+	a1: a0
+	b1: b0
+	c2: c1 d1
+	d2: d1 c1
+	a2: a1
+	b2: b1
+	c3: c2 d2
+	d3: d2 c2
+	a3: a2 c3
+	b3: b2
+	c4: c3 d3
+	d4: d3 c3
+	a4: a3
+	b4: b3 d4
+	c5: c4 d4
+	d5: d4 c4
+	a5: a4
+	b5: b4
+	c6: c5 d5
+	d6: d5 c5
+	a6: a5 b5
+	b6: b5
+	c7: c6 d6
+	d7: d6 c6
+	a7: a6 d7
+	b7: b6
+	c8: c7 d7
+	d8: d7 c7
+	a8: a7
+	b8: b7 c8
+	c9: c8 d8
+	d9: d8 c8
+	a9: a8
+	b9: b8
+	c10: c9 d9
+	d10: d9 c9
+	a10: a9
+	b10: b9
+`
+
+type mergeBasesScenario struct {
+	name        string
+	graph       string
+	left, right string
+	bases       []string
 }
 
 // mergeBasesScenarios lists named histories and their expected merge bases. TestGetMergeBases also checks each expected
 // result against referenceMergeBases. Every scenario without a ghost was built in a git repository with the same
 // commits, and `git merge-base --all` (git 2.39) returned the same merge bases.
 func mergeBasesScenarios() []mergeBasesScenario {
-	linear := "root\na1 root\na2 a1\na3 a2\nb3 a2\nunrelated\n"
-	tallLeft, tallLeftTip := chain("l", "f", 500)
+	// root -- f -- l1 -- ... -- l500
+	//      f -- r1
+	lopsided, lopsidedTip := chain("l", "f", 500)
+	// root -- t1 -- ... -- t3000 -- x0 -- x1
+	//                      t3000 -- y0 -- y1
+	//                      x1 = merge(x0, y0), y1 = merge(y0, x0)
 	trunk, trunkTip := chain("t", "root", 3000)
-	longSide, longSideTip := chain("k", "p1", 100)
 	return []mergeBasesScenario{
-		{name: "same commit", graph: linear, left: "a2", right: "a2", bases: []string{"a2"}},
-		{name: "ancestor", graph: linear, left: "a1", right: "a3", bases: []string{"a1"}},
-		{name: "fork", graph: linear, left: "a3", right: "b3", bases: []string{"a2"}},
-		{name: "unrelated histories", graph: linear, left: "a3", right: "unrelated"},
-		{
-			name:  "criss-cross",
-			graph: "root\n" + crissCrossRounds("root", 1),
-			left:  "x1", right: "y1", bases: []string{"x0", "y0"},
-		},
+		{name: "same commit", graph: linearHistory, left: "a2", right: "a2", bases: []string{"a2"}},
+		{name: "ancestor", graph: linearHistory, left: "a1", right: "a3", bases: []string{"a1"}},
+		{name: "fork", graph: linearHistory, left: "a3", right: "b3", bases: []string{"a2"}},
+		{name: "unrelated histories", graph: linearHistory, left: "a3", right: "unrelated"},
+		{name: "criss-cross", graph: crissCross, left: "x1", right: "y1", bases: []string{"x0", "y0"}},
+		{name: "a criss-cross commit against one of its bases", graph: crissCross, left: "x0", right: "y1", bases: []string{"x0"}},
 		{name: "3 bases", graph: fanIn(3), left: "m1", right: "m2", bases: []string{"p1", "p2", "p3"}},
 		{name: "4 bases", graph: fanIn(4), left: "m1", right: "m2", bases: []string{"p1", "p2", "p3", "p4"}},
 		{name: "5 bases", graph: fanIn(5), left: "m1", right: "m2", bases: []string{"p1", "p2", "p3", "p4", "p5"}},
 		{name: "6 bases", graph: fanIn(6), left: "m1", right: "m2", bases: []string{"p1", "p2", "p3", "p4", "p5", "p6"}},
 		{
 			name:  "repeated criss-cross keeps only the last round",
-			graph: "root\n" + crissCrossRounds("root", 20),
+			graph: "root:\n" + crissCrossRounds("root", 20),
 			left:  "x20", right: "y20", bases: []string{"x19", "y19"},
 		},
 		{
 			name:  "repeated criss-cross, tip against an older round",
-			graph: "root\n" + crissCrossRounds("root", 20),
+			graph: "root:\n" + crissCrossRounds("root", 20),
 			left:  "x20", right: "y5", bases: []string{"y5"},
 		},
 		{
+			// The history from https://github.com/dolthub/dolt/issues/12050:
+			//
+			//	root -- f -- main1 -- main2
+			//	        f -- feat1 -- feat2
+			//	root -- s1 -- s2 -- s3
+			//	main2 = merge(main1, s3), feat2 = merge(feat1, s3)
 			name: "schema branch: the fork point and the schema tip",
-			graph: "root\nf root\nmain1 f\nfeat1 f\ns1 root\ns2 s1\ns3 s2\n" +
-				"main2 main1 s3\nfeat2 feat1 s3\n",
+			graph: `
+				root:
+				f: root
+				main1: f
+				feat1: f
+				s1: root
+				s2: s1
+				s3: s2
+				main2: main1 s3
+				feat2: feat1 s3`,
 			left: "main2", right: "feat2", bases: []string{"f", "s3"},
 		},
 		{
-			name: "bases far apart in height",
-			graph: "root\nlow root\n" + func() string { s, _ := chain("h", "root", 60); return s }() +
-				"left low h60\nright h60 low\n",
-			left: "left", right: "right", bases: []string{"h60", "low"},
+			//	root -- low
+			//	root -- h1 -- h2 -- h3
+			//	left = merge(low, h3), right = merge(h3, low)
+			name: "bases at different heights",
+			graph: `
+				root:
+				low: root
+				h1: root
+				h2: h1
+				h3: h2
+				left: low h3
+				right: h3 low`,
+			left: "left", right: "right", bases: []string{"h3", "low"},
 		},
 		{
-			name:  "a common ancestor reached by a long side path is not a base",
-			graph: "root\np1 root\np2 p1\np3 p2\n" + longSide + "c1 p3 " + longSideTip + "\nj1 p1\nc2 p3 j1\n",
-			left:  "c1", right: "c2", bases: []string{"p3"},
+			// p1 is a common ancestor through k3 and j1, but it is an ancestor of the merge base p3.
+			//
+			//	root -- p1 -- p2 -- p3
+			//	        p1 -- k1 -- k2 -- k3
+			//	        p1 -- j1
+			//	c1 = merge(p3, k3), c2 = merge(p3, j1)
+			name: "a common ancestor reached by another path is not a base",
+			graph: `
+				root:
+				p1: root
+				p2: p1
+				p3: p2
+				k1: p1
+				k2: k1
+				k3: k2
+				j1: p1
+				c1: p3 k3
+				c2: p3 j1`,
+			left: "c1", right: "c2", bases: []string{"p3"},
 		},
-		{
-			name:  "four branches, two of which cross-merge every round",
-			graph: fourBranches(),
-			left:  "a10", right: "b10", bases: []string{"b5", "d7"},
-		},
-		{
-			name:  "four branches, the cross-merging pair",
-			graph: fourBranches(),
-			left:  "c10", right: "d10", bases: []string{"c9", "d9"},
-		},
-		{
-			name:  "four branches, one side against a cross-merging branch",
-			graph: fourBranches(),
-			left:  "a10", right: "d10", bases: []string{"d7"},
-		},
+		{name: "four branches, two of which cross-merge every round", graph: fourBranches, left: "a10", right: "b10", bases: []string{"b5", "d7"}},
+		{name: "four branches, the cross-merging pair", graph: fourBranches, left: "c10", right: "d10", bases: []string{"c9", "d9"}},
+		{name: "four branches, one side against a cross-merging branch", graph: fourBranches, left: "a10", right: "d10", bases: []string{"d7"}},
 		{
 			name:  "lopsided: 500 commits on one side, 1 on the other",
-			graph: "root\nf root\n" + tallLeft + "r1 f\n",
-			left:  tallLeftTip, right: "r1", bases: []string{"f"},
+			graph: "root:\nf: root\n" + lopsided + "r1: f\n",
+			left:  lopsidedTip, right: "r1", bases: []string{"f"},
 		},
 		{
+			// root -- x0 -- x1 -- l1 -- ... -- l500
+			// root -- y0 -- y1
+			// x1 = merge(x0, y0), y1 = merge(y0, x0)
 			name:  "lopsided criss-cross: 500 commits after the cross merge on one side",
-			graph: "root\n" + crissCrossRounds("root", 1) + func() string { s, _ := chain("l", "x1", 500); return s }(),
+			graph: crissCross + func() string { s, _ := chain("l", "x1", 500); return s }(),
 			left:  "l500", right: "y1", bases: []string{"x0", "y0"},
 		},
 		{
 			name:  "criss-cross on top of a long history",
-			graph: "root\n" + trunk + crissCrossRounds(trunkTip, 1),
+			graph: "root:\n" + trunk + crissCrossRounds(trunkTip, 1),
 			left:  "x1", right: "y1", bases: []string{"x0", "y0"},
-		},
-		{
-			name:  "a criss-cross commit against one of its bases",
-			graph: "root\n" + crissCrossRounds("root", 1),
-			left:  "x0", right: "y1", bases: []string{"x0"},
 		},
 	}
 }
@@ -391,20 +482,79 @@ func TestGetMergeBases(t *testing.T) {
 }
 
 // A ghost's parents are unknown and could be any commit, so a walk of both sides cannot tell which common ancestors lie
-// beyond it.
+// beyond it. In these histories, ~g is the ghost.
 func TestGetMergeBasesErrorsOnGhosts(t *testing.T) {
 	tests := []struct {
 		name        string
 		graph       string
 		left, right string
 	}{
-		{name: "a ghost reachable from both sides", graph: "root\n~g root\nx g\ny g\n", left: "x", right: "y"},
-		{name: "a ghost reachable from one side", graph: "root\n~g root\nx0 g\ny0 root\nx1 x0 y0\ny1 y0 x0\n", left: "x1", right: "y1"},
-		{name: "a ghost hiding a merge base", graph: "root\na root\nb root\n~g a\nl g b\nr a b\n", left: "l", right: "r"},
-		{name: "a ghost as an argument", graph: "root\n~g root\nx root\n", left: "g", right: "x"},
 		{
-			name:  "a ghost below one merge base while another commit is undecided",
-			graph: "root\n~g root\na g\nb root\nl a b\nr a b\n", left: "l", right: "r",
+			//	root -- ~g -- x
+			//	        ~g -- y
+			name: "a ghost reachable from both sides",
+			graph: `
+				root:
+				~g: root
+				x: g
+				y: g`,
+			left: "x", right: "y",
+		},
+		{
+			//	root -- ~g -- x0 -- x1
+			//	root -- y0 -- y1
+			//	x1 = merge(x0, y0), y1 = merge(y0, x0)
+			name: "a ghost reachable from one side",
+			graph: `
+				root:
+				~g: root
+				x0: g
+				y0: root
+				x1: x0 y0
+				y1: y0 x0`,
+			left: "x1", right: "y1",
+		},
+		{
+			// With full history the merge bases are a and b, but a is reachable from l only through ~g.
+			//
+			//	root -- a -- ~g
+			//	root -- b
+			//	l = merge(g, b), r = merge(a, b)
+			name: "a ghost hiding a merge base",
+			graph: `
+				root:
+				a: root
+				b: root
+				~g: a
+				l: g b
+				r: a b`,
+			left: "l", right: "r",
+		},
+		{
+			//	root -- ~g
+			//	root -- x
+			name: "a ghost as an argument",
+			graph: `
+				root:
+				~g: root
+				x: root`,
+			left: "g", right: "x",
+		},
+		{
+			// a is found first, but b is still undecided when the walk reads a's parent ~g.
+			//
+			//	root -- ~g -- a
+			//	root -- b
+			//	l = merge(a, b), r = merge(a, b)
+			name: "a ghost below one merge base while another commit is undecided",
+			graph: `
+				root:
+				~g: root
+				a: g
+				b: root
+				l: a b
+				r: a b`,
+			left: "l", right: "r",
 		},
 	}
 	for _, tt := range tests {
@@ -422,7 +572,8 @@ func TestGetMergeBasesErrorsOnGhosts(t *testing.T) {
 }
 
 // The walk stops once every commit left to visit is an ancestor of a merge base, before reading the parents of the
-// last merge base, so a ghost below the merge bases is never reached.
+// last merge base, so a ghost below the merge bases is never reached. In these histories, ~g is a shallow clone's
+// missing history.
 func TestGetMergeBasesDoesNotReachGhostsBelowTheMergeBases(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -430,9 +581,40 @@ func TestGetMergeBasesDoesNotReachGhostsBelowTheMergeBases(t *testing.T) {
 		left, right string
 		bases       []string
 	}{
-		{name: "a fork whose base is a shallow clone's root", graph: "~g\nroot g\nx root\ny root\n", left: "x", right: "y", bases: []string{"root"}},
-		{name: "a criss-cross above a ghost", graph: "~g\nroot g\nx0 root\ny0 root\nx1 x0 y0\ny1 y0 x0\n", left: "x1", right: "y1", bases: []string{"x0", "y0"}},
-		{name: "one side is the shallow clone's root", graph: "~g\nroot g\nx root\n", left: "root", right: "x", bases: []string{"root"}},
+		{
+			//	~g -- root -- x
+			//	      root -- y
+			name: "a fork whose base is a shallow clone's root",
+			graph: `
+				~g:
+				root: g
+				x: root
+				y: root`,
+			left: "x", right: "y", bases: []string{"root"},
+		},
+		{
+			//	~g -- root -- x0 -- x1
+			//	      root -- y0 -- y1
+			//	x1 = merge(x0, y0), y1 = merge(y0, x0)
+			name: "a criss-cross above a ghost",
+			graph: `
+				~g:
+				root: g
+				x0: root
+				y0: root
+				x1: x0 y0
+				y1: y0 x0`,
+			left: "x1", right: "y1", bases: []string{"x0", "y0"},
+		},
+		{
+			//	~g -- root -- x
+			name: "one side is the shallow clone's root",
+			graph: `
+				~g:
+				root: g
+				x: root`,
+			left: "root", right: "x", bases: []string{"root"},
+		},
 	}
 	forEachWalk(t, func(t *testing.T, withIndex bool) {
 		for _, tt := range tests {
@@ -448,6 +630,7 @@ func TestGetMergeBasesDoesNotReachGhostsBelowTheMergeBases(t *testing.T) {
 
 // With an ancestry index, only the side with the shorter tip is walked, and not below a common commit. A ghost is
 // harmless when it is on the other side, or below a merge base; otherwise its unknown parents could hide a merge base.
+// In these histories, names starting with ~ are ghosts.
 func TestGetMergeBasesWithIndexGhosts(t *testing.T) {
 	ok := []struct {
 		name        string
@@ -456,17 +639,57 @@ func TestGetMergeBasesWithIndexGhosts(t *testing.T) {
 		bases       []string
 	}{
 		{
-			name:  "a ghost on the side that is not walked",
-			graph: "root\na root\n~g a\nl1 g\nl2 l1\nl3 l2\nr a\n", left: "l3", right: "r", bases: []string{"a"},
+			// r is walked; l3, behind ~g, is only looked up in the index.
+			//
+			//	root -- a -- ~g -- l1 -- l2 -- l3
+			//	        a -- r
+			name: "a ghost on the side that is not walked",
+			graph: `
+				root:
+				a: root
+				~g: a
+				l1: g
+				l2: l1
+				l3: l2
+				r: a`,
+			left: "l3", right: "r", bases: []string{"a"},
 		},
 		{
-			// shallow-clone.bats "clone depth 5 on complex main": c and v1 are not in the clone.
-			name:  "a ghost below the merge base on the walked side",
-			graph: "~c\n~v1 c\nv2 v1\nv3 v2\nv4 v3\nv5 v4\nv6 c\nv7 v6\nm1 v7 v3\nv8 m1\n", left: "v5", right: "v8", bases: []string{"v3"},
+			// shallow-clone.bats "clone depth 5 on complex main", whose clone lacks c and v1. v8 is walked: it reaches
+			// v3, a merge base, and then ~c, which the index shows is below v3.
+			//
+			//	~c -- ~v1 -- v2 -- v3 -- v4 -- v5
+			//	~c -- v6 -- v7 -- m1 -- v8
+			//	m1 = merge(v7, v3)
+			name: "a ghost below the merge base on the walked side",
+			graph: `
+				~c:
+				~v1: c
+				v2: v1
+				v3: v2
+				v4: v3
+				v5: v4
+				v6: c
+				v7: v6
+				m1: v7 v3
+				v8: m1`,
+			left: "v5", right: "v8", bases: []string{"v3"},
 		},
 		{
-			name:  "a commit below a ghost below the merge base",
-			graph: "root\n~g root\nb g\nk root\nw b k\no b\n", left: "o", right: "w", bases: []string{"b"},
+			// w is walked. root is reached through k, and the index shows it is below the merge base b.
+			//
+			//	root -- ~g -- b -- o
+			//	root -- k
+			//	w = merge(b, k)
+			name: "a commit below a ghost below the merge base",
+			graph: `
+				root:
+				~g: root
+				b: g
+				k: root
+				w: b k
+				o: b`,
+			left: "o", right: "w", bases: []string{"b"},
 		},
 	}
 	for _, tt := range ok {
@@ -483,8 +706,34 @@ func TestGetMergeBasesWithIndexGhosts(t *testing.T) {
 		graph       string
 		left, right string
 	}{
-		{name: "a ghost on the walked side above the merge base", graph: "root\na root\n~g a\nr g\nl1 a\nl2 l1\nl3 l2\nl4 l3\n", left: "r", right: "l4"},
-		{name: "a ghost merge base", graph: "root\n~g root\nx g\ny g\n", left: "x", right: "y"},
+		{
+			// r is walked and reaches ~g, which is not below any merge base.
+			//
+			//	root -- a -- ~g -- r
+			//	        a -- l1 -- l2 -- l3 -- l4
+			name: "a ghost on the walked side above the merge base",
+			graph: `
+				root:
+				a: root
+				~g: a
+				r: g
+				l1: a
+				l2: l1
+				l3: l2
+				l4: l3`,
+			left: "r", right: "l4",
+		},
+		{
+			//	root -- ~g -- x
+			//	        ~g -- y
+			name: "a ghost merge base",
+			graph: `
+				root:
+				~g: root
+				x: g
+				y: g`,
+			left: "x", right: "y",
+		},
 	}
 	for _, tt := range fails {
 		t.Run(tt.name, func(t *testing.T) {
@@ -502,8 +751,10 @@ func TestGetMergeBasesWithIndexGhosts(t *testing.T) {
 }
 
 func TestGetMergeBasesWithIndexWalksTheShorterSide(t *testing.T) {
+	// root -- f -- l1 -- ... -- l500
+	//      f -- r1
 	tall, tallTip := chain("l", "f", 500)
-	g := parseTestGraph("root\nf root\n" + tall + "r1 f\n")
+	g := parseTestGraph("root:\nf: root\n" + tall + "r1: f\n")
 	g.withIndex = true
 	assert.Equal(t, []string{"f"}, g.mergeBases(t, tallTip, "r1"))
 	assert.Equal(t, []string{"f"}, g.mergeBases(t, "r1", tallTip))
@@ -513,18 +764,27 @@ func TestGetMergeBasesWithIndexWalksTheShorterSide(t *testing.T) {
 
 func TestGetMergeBasesStopsAtTheBases(t *testing.T) {
 	forEachWalk(t, func(t *testing.T, withIndex bool) {
+		// root -- t1 -- ... -- t3000 -- x0 -- x1
+		//                      t3000 -- y0 -- y1
+		//                      x1 = merge(x0, y0), y1 = merge(y0, x0)
 		trunk, trunkTip := chain("t", "root", 3000)
-		g := parseTestGraph("root\n" + trunk + crissCrossRounds(trunkTip, 1))
+		g := parseTestGraph("root:\n" + trunk + crissCrossRounds(trunkTip, 1))
 		g.withIndex = withIndex
 		assert.Equal(t, []string{"x0", "y0"}, g.mergeBases(t, "x1", "y1"))
 		assert.Less(t, g.resolved, 20, "the walk should not descend into the history below the merge bases")
 	})
 }
 
+// Each side's commits are resolved by its own resolver, as when pushing compares a local and a remote commit. Both
+// resolvers know the shared history:
+//
+//	root -- x0 -- x1    (x1 only in the left resolver)
+//	root -- y0 -- y1    (y1 only in the right resolver)
+//	x1 = merge(x0, y0), y1 = merge(y0, x0)
 func TestGetMergeBasesPerSideResolvers(t *testing.T) {
-	shared := "root\nx0 root\ny0 root\n"
-	left := parseTestGraph(shared + "x1 x0 y0\n")
-	right := parseTestGraph(shared + "y1 y0 x0\n")
+	shared := "root:\nx0: root\ny0: root\n"
+	left := parseTestGraph(shared + "x1: x0 y0\n")
+	right := parseTestGraph(shared + "y1: y0 x0\n")
 	bases, err := GetMergeBases(context.Background(), left, hashOfName("x1"), right, hashOfName("y1"))
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []hash.Hash{hashOfName("x0"), hashOfName("y0")}, bases)
