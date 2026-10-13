@@ -61,15 +61,15 @@ type DiffTable struct {
 	targetSch schema.Schema
 	// the schema for the diff table itself. Once from and to are converted to
 	// targetSch, the commit names and dates are inserted.
-	diffTableSch      schema.Schema
-	ddb               *doltdb.DoltDB
-	head              *doltdb.Commit
-	headCommitClosure *prolly.CommitClosure
-	table             *doltdb.Table
-	tableName         doltdb.TableName
-	sqlSch            sql.PrimaryKeySchema
-	partitionFilters  []sql.Expression
-	headHash          hash.Hash
+	diffTableSch     schema.Schema
+	ddb              *doltdb.DoltDB
+	head             *doltdb.Commit
+	headAncestry     *doltdb.CommitAncestry
+	table            *doltdb.Table
+	tableName        doltdb.TableName
+	sqlSch           sql.PrimaryKeySchema
+	partitionFilters []sql.Expression
+	headHash         hash.Hash
 }
 
 var PrimaryKeyChangeWarning = "cannot render full diff between commits %s and %s due to primary key set change"
@@ -211,29 +211,22 @@ var commitMetaColumns = set.NewStrSet([]string{toCommit, fromCommit, toCommitDat
 // CommitIsInScope returns true if a given commit hash is head or is
 // visible from the current head's ancestry graph.
 func (dt *DiffTable) CommitIsInScope(ctx context.Context, height uint64, h hash.Hash) (bool, error) {
-	cc, err := dt.HeadCommitClosure(ctx)
+	a, err := dt.HeadAncestry(ctx)
 	if err != nil {
 		return false, err
 	}
-	headHash, err := dt.HeadHash()
-	if err != nil {
-		return false, err
-	}
-	if headHash == h {
-		return true, nil
-	}
-	return cc.ContainsKey(ctx, h, height)
+	return a.Contains(ctx, h, height)
 }
 
-func (dt *DiffTable) HeadCommitClosure(ctx context.Context) (*prolly.CommitClosure, error) {
-	if dt.headCommitClosure == nil {
-		cc, err := dt.head.GetCommitClosure(ctx)
-		dt.headCommitClosure = &cc
+func (dt *DiffTable) HeadAncestry(ctx context.Context) (*doltdb.CommitAncestry, error) {
+	if dt.headAncestry == nil {
+		a, err := dt.head.GetAncestry(ctx)
 		if err != nil {
 			return nil, err
 		}
+		dt.headAncestry = a
 	}
-	return dt.headCommitClosure, nil
+	return dt.headAncestry, nil
 }
 
 func (dt *DiffTable) HeadHash() (hash.Hash, error) {
@@ -378,11 +371,11 @@ func (dt *DiffTable) fromCommitLookupPartitions(ctx *sql.Context, hashes []hash.
 // its child are one level apart, and there is no branching that creates the potential
 // for a child higher in the graph.
 func (dt *DiffTable) scanHeightForChild(ctx *sql.Context, parent hash.Hash, height uint64) (*doltdb.Commit, hash.Hash, error) {
-	cc, err := dt.HeadCommitClosure(ctx)
+	a, err := dt.HeadAncestry(ctx)
 	if err != nil {
 		return nil, hash.Hash{}, err
 	}
-	iter, err := cc.IterHeight(ctx, height)
+	iter, err := a.IterHeight(ctx, height)
 	if err != nil {
 		return nil, hash.Hash{}, err
 	}

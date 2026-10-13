@@ -31,20 +31,19 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/gpg"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/prolly"
 )
 
 // LogTable is a sql.Table implementation that implements a system table which shows the dolt commit log
 type LogTable struct {
-	ddb               *doltdb.DoltDB
-	head              *doltdb.Commit
-	headCommitClosure *prolly.CommitClosure
-	dbName            string
-	tableName         string
-	headHash          hash.Hash
-	refs              *refsCache
-	projectedCols     []string
-	schema            sql.Schema
+	ddb           *doltdb.DoltDB
+	head          *doltdb.Commit
+	headAncestry  *doltdb.CommitAncestry
+	dbName        string
+	tableName     string
+	headHash      hash.Hash
+	refs          *refsCache
+	projectedCols []string
+	schema        sql.Schema
 }
 
 // refsCache holds the commit-hash-to-refs map shared by every iterator a LogTable spawns.
@@ -368,29 +367,14 @@ func (dt *LogTable) commitHashPartitionIter(ctx *sql.Context, lookup sql.IndexLo
 // CommitIsInScope returns true if a given commit hash is head or is
 // visible from the current head's ancestry graph.
 func (dt *LogTable) CommitIsInScope(ctx context.Context, height uint64, h hash.Hash) (bool, error) {
-	headHash, err := dt.HeadHash()
-	if err != nil {
-		return false, err
-	}
-	if headHash == h {
-		return true, nil
-	}
-	cc, err := dt.HeadCommitClosure(ctx)
-	if err != nil {
-		return false, err
-	}
-	return cc.ContainsKey(ctx, h, height)
-}
-
-func (dt *LogTable) HeadCommitClosure(ctx context.Context) (*prolly.CommitClosure, error) {
-	if dt.headCommitClosure == nil {
-		cc, err := dt.head.GetCommitClosure(ctx)
-		dt.headCommitClosure = &cc
+	if dt.headAncestry == nil {
+		a, err := dt.head.GetAncestry(ctx)
 		if err != nil {
-			return nil, err
+			return false, err
 		}
+		dt.headAncestry = a
 	}
-	return dt.headCommitClosure, nil
+	return dt.headAncestry.Contains(ctx, h, height)
 }
 
 func (dt *LogTable) HeadHash() (hash.Hash, error) {
