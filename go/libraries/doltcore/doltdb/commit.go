@@ -219,63 +219,52 @@ func GetCommitAncestors(ctx context.Context, cm1, cm2 *Commit) ([]*OptionalCommi
 // commitResolver resolves commits in |vrw| for commitgraph, and answers ancestry questions from the parent closures
 // stored with each commit.
 type commitResolver struct {
-	vrw      types.ValueReadWriter
-	ns       tree.NodeStore
-	closures map[hash.Hash]commitWithClosure
-}
-
-type commitWithClosure struct {
-	height  uint64
-	closure prolly.CommitClosure
+	vrw       types.ValueReadWriter
+	ns        tree.NodeStore
+	ancestors map[hash.Hash]*CommitAncestry
 }
 
 func newCommitResolver(vrw types.ValueReadWriter, ns tree.NodeStore) *commitResolver {
-	return &commitResolver{vrw: vrw, ns: ns, closures: make(map[hash.Hash]commitWithClosure)}
+	return &commitResolver{vrw: vrw, ns: ns, ancestors: make(map[hash.Hash]*CommitAncestry)}
 }
 
 func (r *commitResolver) IsAncestor(ctx context.Context, ancestor *commitgraph.CommitInfo, descendant hash.Hash) (bool, error) {
-	d, err := r.loadClosure(ctx, descendant)
+	a, err := r.ancestry(ctx, descendant)
 	if err != nil {
 		return false, err
 	}
-	// A parentless commit has an empty closure; every ancestor of a commit is shorter than it.
-	if ancestor.Height >= d.height {
-		return ancestor.Hash == descendant, nil
-	}
-	return d.closure.ContainsKey(ctx, ancestor.Hash, ancestor.Height)
+	return a.Contains(ctx, ancestor.Hash, ancestor.Height)
 }
 
 func (r *commitResolver) GhostHeight(ctx context.Context, ghost hash.Hash, child *commitgraph.CommitInfo) (uint64, error) {
-	c, err := r.loadClosure(ctx, child.Hash)
+	a, err := r.ancestry(ctx, child.Hash)
 	if err != nil {
 		return 0, err
 	}
-	for height := c.height - 1; height > 0; height-- {
-		if ok, err := c.closure.ContainsKey(ctx, ghost, height); err != nil || ok {
-			return height, err
-		}
-	}
-	return 0, fmt.Errorf("commit %s is not in the parent closure of %s", ghost, child.Hash)
+	return a.HeightOf(ctx, ghost)
 }
 
-func (r *commitResolver) loadClosure(ctx context.Context, h hash.Hash) (commitWithClosure, error) {
-	if c, ok := r.closures[h]; ok {
-		return c, nil
+func (r *commitResolver) ancestry(ctx context.Context, h hash.Hash) (*CommitAncestry, error) {
+	if a, ok := r.ancestors[h]; ok {
+		return a, nil
 	}
 	dc, err := datas.LoadCommitAddr(ctx, r.vrw, h)
 	if err != nil {
-		return commitWithClosure{}, err
+		return nil, err
 	}
 	if dc.IsGhost() {
-		return commitWithClosure{}, fmt.Errorf("%w Missing commit: %s", ErrGhostCommitEncountered, h)
+		return nil, fmt.Errorf("%w Missing commit: %s", ErrGhostCommitEncountered, h)
 	}
-	closure, err := getCommitClosure(ctx, dc, r.vrw, r.ns)
+	c, err := NewCommit(ctx, r.vrw, r.ns, dc)
 	if err != nil {
-		return commitWithClosure{}, err
+		return nil, err
 	}
-	c := commitWithClosure{height: dc.Height(), closure: closure}
-	r.closures[h] = c
-	return c, nil
+	a, err := c.GetAncestry(ctx)
+	if err != nil {
+		return nil, err
+	}
+	r.ancestors[h] = a
+	return a, nil
 }
 
 func (r *commitResolver) ResolveCommitHash(ctx context.Context, h hash.Hash) (*commitgraph.CommitInfo, error) {
