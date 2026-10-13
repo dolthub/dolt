@@ -91,6 +91,8 @@ type entry struct {
 	info      *CommitInfo
 	invisible bool
 	queued    bool
+	// flags is used by GetMergeBases.
+	flags uint8
 }
 
 type pq struct {
