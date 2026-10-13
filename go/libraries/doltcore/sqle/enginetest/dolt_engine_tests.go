@@ -1047,6 +1047,8 @@ func RunDoltMergeTests(t *testing.T, h DoltEnginetestHarness) {
 }
 
 func RunDoltMergeBasesTableFunctionTests(t *testing.T, h DoltEnginetestHarness) {
+	cleanup := installTestCommitClock(&testCommitClock{})
+	defer cleanup()
 	for _, script := range MergeBasesTableFunctionScripts {
 		func() {
 			h := h.NewHarness(t)
@@ -1057,20 +1059,9 @@ func RunDoltMergeBasesTableFunctionTests(t *testing.T, h DoltEnginetestHarness) 
 	}
 }
 
-func RunDoltMergeBasesOrderTests(t *testing.T, h DoltEnginetestHarness) {
+func RunDoltMergeBasesTableFunctionPreparedTests(t *testing.T, h DoltEnginetestHarness) {
 	cleanup := installTestCommitClock(&testCommitClock{})
 	defer cleanup()
-	for _, script := range append(MergeBasesOrderScripts, MergeBasesManyScripts...) {
-		func() {
-			h := h.NewHarness(t)
-			defer h.Close()
-			h.Setup(setup.MydbData)
-			enginetest.TestScript(t, h, script)
-		}()
-	}
-}
-
-func RunDoltMergeBasesTableFunctionPreparedTests(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range MergeBasesTableFunctionScripts {
 		func() {
 			h := h.NewHarness(t)

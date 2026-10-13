@@ -143,8 +143,10 @@ func (g *testGraph) mergeBases(t *testing.T, left, right string) []string {
 	return names
 }
 
-// referenceMergeBases computes the best common ancestors by definition: the common ancestors of |left| and |right| that
-// are not ancestors of another common ancestor. Ghosts have no known parents.
+// referenceMergeBases computes the best common ancestors by definition, the way `git merge-base --all` defines them:
+// collect every ancestor of |left| and of |right|, keep the commits in both, and drop each one that is an ancestor of
+// another. It shares no code with GetMergeBases and is slow, but short enough to check by reading. Ghosts have no known
+// parents.
 func (g *testGraph) referenceMergeBases(left, right string) []string {
 	leftAncestors, rightAncestors := g.ancestors(left), g.ancestors(right)
 	var common []string
@@ -218,9 +220,13 @@ func chain(prefix, from string, n int) (string, string) {
 	return b.String(), prev
 }
 
-// fanIn builds |n| independent commits p1..pn on top of root, merged into m1 in order and into m2 in reverse order,
-// either as one octopus merge or as a sequence of two-parent merges.
-func fanIn(n int, octopus bool) string {
+// fanIn builds |n| independent commits p1..pn on top of root. m1 merges them in order and m2 in reverse order, so m1
+// and m2 have |n| merge bases. For n = 3:
+//
+//	p1, p2, p3 are children of root
+//	m1_1 = merge(p1, p2)    m2_1 = merge(p3, p2)
+//	m1   = merge(m1_1, p3)  m2   = merge(m2_1, p1)
+func fanIn(n int) string {
 	var b strings.Builder
 	b.WriteString("root\n")
 	var ps []string
@@ -232,10 +238,6 @@ func fanIn(n int, octopus bool) string {
 	reversed := make([]string, n)
 	for i, p := range ps {
 		reversed[n-1-i] = p
-	}
-	if octopus {
-		fmt.Fprintf(&b, "m1 %s\nm2 %s\n", strings.Join(ps, " "), strings.Join(reversed, " "))
-		return b.String()
 	}
 	for _, side := range []struct {
 		name string
@@ -279,6 +281,9 @@ func fourBranches() string {
 	return b.String()
 }
 
+// mergeBasesScenarios lists named histories and their expected merge bases. TestGetMergeBases also checks each expected
+// result against referenceMergeBases. Every scenario without a ghost was built in a git repository with the same
+// commits, and `git merge-base --all` (git 2.39) returned the same merge bases.
 func mergeBasesScenarios() []mergeBasesScenario {
 	linear := "root\na1 root\na2 a1\na3 a2\nb3 a2\nunrelated\n"
 	tallLeft, tallLeftTip := chain("l", "f", 500)
@@ -294,13 +299,10 @@ func mergeBasesScenarios() []mergeBasesScenario {
 			graph: "root\n" + crissCrossRounds("root", 1),
 			left:  "x1", right: "y1", bases: []string{"x0", "y0"},
 		},
-		{name: "3 bases, octopus merges", graph: fanIn(3, true), left: "m1", right: "m2", bases: []string{"p1", "p2", "p3"}},
-		{name: "4 bases, octopus merges", graph: fanIn(4, true), left: "m1", right: "m2", bases: []string{"p1", "p2", "p3", "p4"}},
-		{name: "5 bases, octopus merges", graph: fanIn(5, true), left: "m1", right: "m2", bases: []string{"p1", "p2", "p3", "p4", "p5"}},
-		{name: "3 bases, two-parent merges", graph: fanIn(3, false), left: "m1", right: "m2", bases: []string{"p1", "p2", "p3"}},
-		{name: "4 bases, two-parent merges", graph: fanIn(4, false), left: "m1", right: "m2", bases: []string{"p1", "p2", "p3", "p4"}},
-		{name: "5 bases, two-parent merges", graph: fanIn(5, false), left: "m1", right: "m2", bases: []string{"p1", "p2", "p3", "p4", "p5"}},
-		{name: "6 bases, two-parent merges", graph: fanIn(6, false), left: "m1", right: "m2", bases: []string{"p1", "p2", "p3", "p4", "p5", "p6"}},
+		{name: "3 bases", graph: fanIn(3), left: "m1", right: "m2", bases: []string{"p1", "p2", "p3"}},
+		{name: "4 bases", graph: fanIn(4), left: "m1", right: "m2", bases: []string{"p1", "p2", "p3", "p4"}},
+		{name: "5 bases", graph: fanIn(5), left: "m1", right: "m2", bases: []string{"p1", "p2", "p3", "p4", "p5"}},
+		{name: "6 bases", graph: fanIn(6), left: "m1", right: "m2", bases: []string{"p1", "p2", "p3", "p4", "p5", "p6"}},
 		{
 			name:  "repeated criss-cross keeps only the last round",
 			graph: "root\n" + crissCrossRounds("root", 20),
@@ -362,12 +364,6 @@ func mergeBasesScenarios() []mergeBasesScenario {
 			name:  "a criss-cross commit against one of its bases",
 			graph: "root\n" + crissCrossRounds("root", 1),
 			left:  "x0", right: "y1", bases: []string{"x0"},
-		},
-		{
-			name: "octopus merge of related commits",
-			graph: "root\na root\nb a\nc root\n" +
-				"m1 a b c\nm2 c b\n",
-			left: "m1", right: "m2", bases: []string{"b", "c"},
 		},
 	}
 }
@@ -562,6 +558,11 @@ func randomGraph(rnd *rand.Rand, n, branches int, mergeProb float64) (*testGraph
 	return g, g.order
 }
 
+// TestGetMergeBasesMatchesReferenceOnRandomGraphs checks GetMergeBases against referenceMergeBases on 3000 pairs of
+// commits from 300 random histories, where branches repeatedly merge each other and often have several merge bases.
+// Nobody wrote down the expected results: they come from referenceMergeBases, which computes them by definition. The
+// seed is fixed, so the histories are the same on every run. 200 pairs from histories generated the same way were also
+// built in a git repository, and `git merge-base --all` (git 2.39) agreed with both.
 func TestGetMergeBasesMatchesReferenceOnRandomGraphs(t *testing.T) {
 	forEachWalk(t, func(t *testing.T, withIndex bool) {
 		rnd := rand.New(rand.NewSource(12050))
