@@ -40,9 +40,17 @@ type Repo struct {
 // InitBare initializes a new bare git repository at |dir|.
 // For portability across git versions, callers should generally pass a path that
 // does not exist yet.
+//
+// It turns off git's detached auto-maintenance, so no background git process
+// outlives a test.
 func InitBare(ctx context.Context, dir string) (*Repo, error) {
 	if err := runGit(ctx, "", "", "", "init", "--bare", dir); err != nil {
 		return nil, err
+	}
+	for _, key := range []string{"maintenance.autoDetach", "gc.autoDetach"} {
+		if err := runGit(ctx, dir, "", "", "config", key, "false"); err != nil {
+			return nil, err
+		}
 	}
 	return &Repo{GitDir: dir}, nil
 }

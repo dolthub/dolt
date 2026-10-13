@@ -23,6 +23,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"sync/atomic"
 )
 
 // GitAPIImpl implements GitAPI using the git CLI plumbing commands, via Runner.
@@ -30,6 +31,8 @@ import (
 // without requiring a working tree checkout.
 type GitAPIImpl struct {
 	r *Runner
+	// noWriteFetchHeadUnsupported indicates whether git lacks the flag.
+	noWriteFetchHeadUnsupported atomic.Bool
 }
 
 var _ GitAPI = (*GitAPIImpl)(nil)
@@ -390,7 +393,18 @@ func (a *GitAPIImpl) FetchRef(ctx context.Context, remote string, srcRef string,
 	// fetch refspecs. Without this, stale tracking refs from default refspecs
 	// can cause directory/file conflicts that make git exit 1 even when our
 	// specific refspec succeeds.
-	_, err := a.r.Run(ctx, RunOptions{}, "fetch", "--no-tags", "--refmap=", remote, refspec)
+	// --no-write-fetch-head: dolt reads only the tracking ref, not FETCH_HEAD.
+	unsupported := a.noWriteFetchHeadUnsupported.Load()
+	args := []string{"fetch", "--no-tags"}
+	if !unsupported {
+		args = append(args, "--no-write-fetch-head")
+	}
+	args = append(args, "--refmap=", remote, refspec)
+	_, err := a.r.Run(ctx, RunOptions{}, args...)
+	if err != nil && !unsupported && isUnknownOptionErr(err, "no-write-fetch-head") {
+		a.noWriteFetchHeadUnsupported.Store(true)
+		return a.FetchRef(ctx, remote, srcRef, dstRef)
+	}
 	if err != nil && isRemoteRefNotFoundErr(err) {
 		return &RefNotFoundError{Ref: srcRef}
 	}
@@ -444,6 +458,18 @@ func isRefNotFoundErr(err error) bool {
 	return strings.Contains(msg, "needed a single revision") ||
 		strings.Contains(msg, "unknown revision") ||
 		strings.Contains(msg, "not a valid object name")
+}
+
+// gitUsageExitCode is the status git exits with after a usage error.
+const gitUsageExitCode = 129
+
+// isUnknownOptionErr reports whether git says |option| is unknown.
+func isUnknownOptionErr(err error, option string) bool {
+	var ce *CmdError
+	if !errors.As(err, &ce) || ce.ExitCode != gitUsageExitCode {
+		return false
+	}
+	return strings.Contains(string(ce.Output), "unknown option `"+option+"'")
 }
 
 func isRemoteRefNotFoundErr(err error) bool {

@@ -895,7 +895,7 @@ const (
 func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir string, relationship SyncRootsDBRelationship, statsCh chan pull.Stats) error {
 	srcRoot, err := srcDb.NomsRoot(ctx)
 	if err != nil {
-		return nil
+		return fmt.Errorf("sync roots: failed to read source root: %w", err)
 	}
 
 	destRoot, err := destDb.NomsRoot(ctx)

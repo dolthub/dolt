@@ -51,6 +51,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
@@ -2104,6 +2105,11 @@ func (db Database) checkNonlocalTableName(ctx *sql.Context, tableName string) er
 		strings.EqualFold(entry.NewTableName, tableName) {
 		return nil
 	}
+	if _, exists, err := db.getNonlocalTable(ctx, root, strings.ToLower(tableName)); err != nil {
+		return err
+	} else if exists {
+		return sql.ErrTableAlreadyExists.New(tableName)
+	}
 	return ErrNonlocalTableName.New(tableName)
 }
 
@@ -2528,7 +2534,7 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 		if err != nil {
 			return sql.ViewDefinition{}, false, err
 		}
-		return sql.ViewDefinition{Name: viewName, TextDefinition: blameViewTextDef, CreateViewStatement: fmt.Sprintf("CREATE VIEW `%s` AS %s", viewName, blameViewTextDef)}, true, nil
+		return sql.ViewDefinition{Name: viewName, TextDefinition: blameViewTextDef, CreateViewStatement: fmt.Sprintf("CREATE VIEW %s AS %s", sqlfmt.QuoteIdentifier(ctx, viewName), blameViewTextDef)}, true, nil
 	}
 
 	schTblHash, ok, err := root.GetTableHash(ctx, doltdb.TableName{Name: doltdb.SchemasTableName, Schema: db.schemaName})

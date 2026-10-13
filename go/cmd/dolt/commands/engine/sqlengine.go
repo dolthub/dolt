@@ -28,7 +28,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
-	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	_ "github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/sirupsen/logrus"
@@ -57,12 +56,13 @@ import (
 
 // SqlEngine packages up the context necessary to run sql queries against dsqle.
 type SqlEngine struct {
-	provider          *sqle.DoltDatabaseProvider
-	ContextFactory    sql.ContextFactory
-	dsessFactory      sessionFactory
-	engine            *gms.Engine
-	fs                filesys.Filesys
-	clusterController *cluster.Controller
+	provider              *sqle.DoltDatabaseProvider
+	ContextFactory        sql.ContextFactory
+	dsessFactory          sessionFactory
+	engine                *gms.Engine
+	fs                    filesys.Filesys
+	clusterController     *cluster.Controller
+	branchActivityTracker *doltdb.BranchActivityTracker
 }
 
 type sessionFactory func(mysqlSess *sql.BaseSession, pro sql.DatabaseProvider) (*dsess.DoltSession, error)
@@ -229,9 +229,13 @@ func NewSqlEngine(
 		IsServerLocked: config.IsServerLocked,
 	}).WithBackgroundThreads(bThreads)
 
-	if err := configureBinlogPrimaryController(engine); err != nil {
-		return nil, err
-	}
+	primaryController := configureBinlogPrimaryController(engine)
+	initialized := false
+	defer func() {
+		if !initialized {
+			primaryController.Close()
+		}
+	}()
 
 	config.ClusterController.SetIsStandbyCallback(func(isStandby bool) {
 		pro.SetIsStandby(isStandby)
@@ -304,8 +308,14 @@ func NewSqlEngine(
 	engine.Analyzer.Catalog.StatsProvider = statsPro
 
 	branchActivityTracker := doltdb.NewBranchActivityTracker(ctx, config.BranchActivityTracking)
+	sqlEngine.branchActivityTracker = branchActivityTracker
+	defer func() {
+		if !initialized {
+			branchActivityTracker.Close()
+		}
+	}()
 
-	engine.Analyzer.ExecBuilder = rowexec.NewBuilder(kvexec.Builder{}, engine.Analyzer.Overrides)
+	engine.Analyzer.ExecBuilder = kvexec.NewExecBuilder(engine.Analyzer.Overrides)
 	engine.Analyzer.ExecBuilder.Runner = engine.Analyzer.Runner
 	sessFactory := doltSessionFactory(pro, statsPro, mrEnv.Config(), bcController, gcSafepointController, config.Autocommit, branchActivityTracker)
 	sqlEngine.provider = pro
@@ -369,6 +379,7 @@ func NewSqlEngine(
 		}
 	}
 
+	initialized = true
 	return sqlEngine, nil
 }
 
@@ -504,13 +515,21 @@ func (se *SqlEngine) ClusterController() *cluster.Controller {
 	return se.clusterController
 }
 
+// Close releases the engine's resources and waits for its background goroutines.
+// It is safe to call more than once.
 func (se *SqlEngine) Close() error {
 	var err error
 	if se.engine != nil {
 		if se.engine.Analyzer.Catalog.BinlogReplicaController != nil {
 			dblr.DoltBinlogReplicaController.Close()
 		}
+		if primary, ok := se.engine.Analyzer.Catalog.BinlogPrimaryController.(*dblr.DoltBinlogPrimaryController); ok {
+			primary.Close()
+		}
 		err = se.engine.Close()
+	}
+	if se.branchActivityTracker != nil {
+		se.branchActivityTracker.Close()
 	}
 	if se.provider != nil {
 		se.provider.Teardown(context.Background())
@@ -535,10 +554,10 @@ func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engin
 // NOTE: By default, binary logging for Dolt is not enabled, which differs from MySQL's @@log_bin default. Dolt's
 // binary logging is initially an opt-in feature, but we may change that after measuring and tuning the
 // performance hit that binary logging adds.
-func configureBinlogPrimaryController(engine *gms.Engine) error {
+func configureBinlogPrimaryController(engine *gms.Engine) *dblr.DoltBinlogPrimaryController {
 	primaryController := dblr.NewDoltBinlogPrimaryController()
 	engine.Analyzer.Catalog.BinlogPrimaryController = primaryController
-	return nil
+	return primaryController
 }
 
 // configureEventScheduler configures the event scheduler with the |engine| for executing events, a |sessFactory|

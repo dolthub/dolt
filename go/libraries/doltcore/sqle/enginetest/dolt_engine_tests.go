@@ -417,14 +417,30 @@ func RunForeignKeyBranchesTest(t *testing.T, h DoltEnginetestHarness) {
 			SkipResultsCheck: true,
 		},
 	}
-	for _, script := range queries.ForeignKeyTests {
-		// New harness for every script because we create branches
-		h := h.NewHarness(t)
-		h.Setup(setup.MydbData, setup.Parent_childData)
-		modifiedScript := script
-		modifiedScript.SetUpScript = append(setupPrefix, modifiedScript.SetUpScript...)
-		modifiedScript.Assertions = append(assertionsPrefix, modifiedScript.Assertions...)
-		enginetest.TestScript(t, h, modifiedScript)
+	// These collections together contain the original ForeignKeyTests, including
+	// cases relocated by the script refactor. All must run against branch databases.
+	for _, suite := range []struct {
+		scripts            []queries.ScriptTest
+		parentChildFixture bool
+	}{
+		{scripts: queries.ForeignKeyTests, parentChildFixture: true},
+		{scripts: queries.ForeignKeyTypeTests},
+		{scripts: queries.ForeignKeyResolutionTests},
+	} {
+		for _, script := range suite.scripts {
+			// New harness for every script because we create branches
+			h := h.NewHarness(t)
+			if suite.parentChildFixture {
+				h.Setup(setup.MydbData, setup.Parent_childData)
+			} else {
+				h.Setup(setup.MydbData)
+			}
+
+			modifiedScript := script
+			modifiedScript.SetUpScript = append(setupPrefix, modifiedScript.SetUpScript...)
+			modifiedScript.Assertions = append(assertionsPrefix, modifiedScript.Assertions...)
+			enginetest.TestScript(t, h, modifiedScript)
+		}
 	}
 
 	for _, script := range ForeignKeyBranchTests {
@@ -446,14 +462,30 @@ func RunForeignKeyBranchesPreparedTest(t *testing.T, h DoltEnginetestHarness) {
 			SkipResultsCheck: true,
 		},
 	}
-	for _, script := range queries.ForeignKeyTests {
-		// New harness for every script because we create branches
-		h := h.NewHarness(t)
-		h.Setup(setup.MydbData, setup.Parent_childData)
-		modifiedScript := script
-		modifiedScript.SetUpScript = append(setupPrefix, modifiedScript.SetUpScript...)
-		modifiedScript.Assertions = append(assertionsPrefix, modifiedScript.Assertions...)
-		enginetest.TestScriptPrepared(t, h, modifiedScript)
+	// These collections together contain the original ForeignKeyTests, including
+	// cases relocated by the script refactor. All must run against branch databases.
+	for _, suite := range []struct {
+		scripts            []queries.ScriptTest
+		parentChildFixture bool
+	}{
+		{scripts: queries.ForeignKeyTests, parentChildFixture: true},
+		{scripts: queries.ForeignKeyTypeTests},
+		{scripts: queries.ForeignKeyResolutionTests},
+	} {
+		for _, script := range suite.scripts {
+			// New harness for every script because we create branches
+			h := h.NewHarness(t)
+			if suite.parentChildFixture {
+				h.Setup(setup.MydbData, setup.Parent_childData)
+			} else {
+				h.Setup(setup.MydbData)
+			}
+
+			modifiedScript := script
+			modifiedScript.SetUpScript = append(setupPrefix, modifiedScript.SetUpScript...)
+			modifiedScript.Assertions = append(assertionsPrefix, modifiedScript.Assertions...)
+			enginetest.TestScriptPrepared(t, h, modifiedScript)
+		}
 	}
 
 	for _, script := range ForeignKeyBranchTests {

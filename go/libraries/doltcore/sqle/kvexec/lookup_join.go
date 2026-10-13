@@ -31,26 +31,28 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+// lookupJoinSource is a helper interface for kv exec that allows us to abstract the left side of a lookup join.
+type lookupJoinSource interface {
+	// nextLookupKey returns the next key from the left hand side to lookup in the destination iterator.
+	// It returns a boolean indicating whether a match is possible for this key. io.EOF ends iteration.
+	nextLookupKey(*sql.Context) (val.Tuple, bool, error)
+	// buildRow builds a result row for the left and right sides of a join result
+	buildRow(*sql.Context, val.Tuple, val.Tuple) (sql.Row, error)
+	// Close releases the source iterator's resources.
+	Close(*sql.Context) error
+}
+
 type lookupJoinKvIter struct {
+	src        lookupJoinSource
+	srcLen     int
+	dstIter    prolly.MapIter
+	dstIterGen index.SecondaryLookupIterGen
+
 	// TODO: we want to build KV-side static expression implementations
 	// so that we can execute filters more efficiently
 	srcFilter  sql.Expression
 	dstFilter  sql.Expression
 	joinFilter sql.Expression
-
-	srcIter    prolly.MapIter
-	dstIter    prolly.MapIter
-	dstIterGen index.SecondaryLookupIterGen
-
-	// keyTupleMapper inputs (srcKey, srcVal) to create a dstKey
-	keyTupleMapper *lookupMapping
-
-	// projections
-	joiner *prollyToSqlJoiner
-
-	dstKey val.Tuple
-	srcKey val.Tuple
-	srcVal val.Tuple
 
 	// LEFT_JOIN impl details
 	isLeftJoin   bool
@@ -58,11 +60,12 @@ type lookupJoinKvIter struct {
 	returnedARow bool
 }
 
-func (l *lookupJoinKvIter) Close(_ *sql.Context) error {
-	return nil
-}
-
 var _ sql.RowIter = (*lookupJoinKvIter)(nil)
+
+func (l *lookupJoinKvIter) Close(ctx *sql.Context) error {
+	l.dstIter = nil
+	return l.src.Close(ctx)
+}
 
 func newLookupKvIter(
 	srcIter prolly.MapIter,
@@ -73,22 +76,19 @@ func newLookupKvIter(
 	isLeftJoin bool,
 	excludeNulls bool,
 ) (*lookupJoinKvIter, error) {
-	if lit, ok := joinFilter.(*expression.Literal); ok {
-		if lit.Value() == true {
-			joinFilter = nil
-		}
-	}
-
 	return &lookupJoinKvIter{
-		srcIter:        srcIter,
-		dstIterGen:     targetIter,
-		joiner:         joiner,
-		keyTupleMapper: mapping,
-		srcFilter:      srcFilter,
-		dstFilter:      dstFilter,
-		joinFilter:     joinFilter,
-		isLeftJoin:     isLeftJoin,
-		excludeNulls:   excludeNulls,
+		src: &kvLookupJoinSource{
+			iter:    srcIter,
+			mapping: mapping,
+			joiner:  joiner,
+		},
+		srcLen:       joiner.kvSplits[0],
+		dstIterGen:   targetIter,
+		srcFilter:    srcFilter,
+		dstFilter:    dstFilter,
+		joinFilter:   joinFilter,
+		isLeftJoin:   isLeftJoin,
+		excludeNulls: excludeNulls,
 	}, nil
 }
 
@@ -97,91 +97,126 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 		// (1) initialize secondary iter if does not exist yet
 		// (2) read from secondary until EOF
 		// (3) concat, convert, filter primary/secondary rows
-		var err error
 		if l.dstIter == nil {
 			// if secondary iterator does not exist:
-			//   (1) read the next KV pair from the primary iterator
-			//   (2) perform tuple mapping into destination key form
-			//   (3) initialize secondary iterator with |dstKey|
+			//   (1) read the next source row or KV pair
+			//   (2) map it into destination key form
+			//   (3) initialize secondary iterator with that key
 			l.returnedARow = false
-
-			l.srcKey, l.srcVal, err = l.srcIter.Next(ctx)
-			if err != nil {
-				return nil, err
-			}
-			if l.srcKey == nil {
-				return nil, io.EOF
-			}
-
-			l.dstKey, err = l.keyTupleMapper.dstKeyTuple(ctx, l.srcKey, l.srcVal)
+			key, canMatch, err := l.src.nextLookupKey(ctx)
 			if err != nil {
 				return nil, err
 			}
 
-			l.dstIter, err = l.dstIterGen.New(ctx, l.dstKey)
-			if err != nil {
-				return nil, err
+			// Skip the lookup when no right row can match this key.
+			if canMatch {
+				l.dstIter, err = l.dstIterGen.New(ctx, key)
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 
-		dstKey, dstVal, err := l.dstIter.Next(ctx)
-		if err != nil && err != io.EOF {
-			return nil, err
+		var dstKey, dstVal val.Tuple
+		if l.dstIter != nil {
+			var err error
+			dstKey, dstVal, err = l.dstIter.Next(ctx)
+			if err != nil && err != io.EOF {
+				return nil, err
+			}
 		}
 
 		if dstKey == nil {
 			l.dstIter = nil
-			emitLeftJoinNullRow := l.isLeftJoin && !l.returnedARow
-			if !emitLeftJoinNullRow {
+			if !l.isLeftJoin || l.returnedARow {
 				continue
 			}
 		}
 
-		ret, err := l.joiner.buildRow(ctx, l.srcKey, l.srcVal, dstKey, dstVal)
+		ret, err := l.src.buildRow(ctx, dstKey, dstVal)
 		if err != nil {
 			return nil, err
 		}
 
 		// side-specific filters are currently hoisted
 		if l.srcFilter != nil {
-			res, err := sql.EvaluateCondition(ctx, l.srcFilter, ret[:l.joiner.kvSplits[0]])
+			res, err := sql.EvaluateCondition(ctx, l.srcFilter, ret[:l.srcLen])
 			if err != nil {
 				return nil, err
 			}
+
 			if !sql.IsTrue(res) {
 				continue
 			}
 		}
-		if l.dstFilter != nil && l.dstKey != nil {
-			res, err := sql.EvaluateCondition(ctx, l.dstFilter, ret[l.joiner.kvSplits[0]:])
+
+		if l.dstFilter != nil && dstKey != nil {
+			res, err := sql.EvaluateCondition(ctx, l.dstFilter, ret[l.srcLen:])
 			if err != nil {
 				return nil, err
 			}
+
 			if !sql.IsTrue(res) {
 				continue
 			}
 		}
+
 		if l.joinFilter != nil {
 			res, err := sql.EvaluateCondition(ctx, l.joinFilter, ret)
 			if err != nil {
 				return nil, err
 			}
+
 			if res == nil && l.excludeNulls {
-				// override default left join behavior
-				l.dstKey = nil
 				continue
 			}
+
 			if !sql.IsTrue(res) && dstKey != nil {
 				continue
 			}
 		}
+
 		l.returnedARow = true
 		return ret, nil
 	}
 }
 
-// lookupMapping is responsible for generating keys for lookups into
-// the destination iterator.
+// kvLookupJoinSource is a lookupJoinSource implementation that uses a prolly.MapIter as the source of keys to lookup
+// in the destination iterator
+type kvLookupJoinSource struct {
+	iter prolly.MapIter
+	// mapping inputs (key, value) to create a destination key
+	mapping *lookupMapping
+	// projections
+	joiner *prollyToSqlJoiner
+	key    val.Tuple
+	value  val.Tuple
+}
+
+func (s *kvLookupJoinSource) nextLookupKey(ctx *sql.Context) (val.Tuple, bool, error) {
+	var err error
+	s.key, s.value, err = s.iter.Next(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+
+	if s.key == nil {
+		return nil, false, io.EOF
+	}
+
+	key, err := s.mapping.dstKeyTuple(ctx, s.key, s.value)
+	return key, true, err
+}
+
+func (s *kvLookupJoinSource) buildRow(ctx *sql.Context, key, value val.Tuple) (sql.Row, error) {
+	return s.joiner.buildRow(ctx, s.key, s.value, key, value)
+}
+
+func (s *kvLookupJoinSource) Close(*sql.Context) error {
+	return nil
+}
+
+// lookupMapping is responsible for generating keys for lookups into the destination iterator.
 type lookupMapping struct {
 	ns         tree.NodeStore
 	pool       pool.BuffPool
