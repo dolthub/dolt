@@ -336,16 +336,6 @@ func mergeBasesScenarios() []mergeBasesScenario {
 				"m1 a b c\nm2 c b\n",
 			left: "m1", right: "m2", bases: []string{"b", "c"},
 		},
-		{
-			name:  "a ghost reachable from both sides",
-			graph: "root\n~g root\nx g\ny g\n",
-			left:  "x", right: "y", bases: []string{"g"},
-		},
-		{
-			name:  "a ghost in a criss-cross",
-			graph: "root\n~g root\nx0 g\ny0 root\nx1 x0 y0\ny1 y0 x0\n",
-			left:  "x1", right: "y1", bases: []string{"x0", "y0"},
-		},
 	}
 }
 
@@ -358,6 +348,55 @@ func TestGetMergeBases(t *testing.T) {
 			require.Equal(t, expected, g.referenceMergeBases(s.left, s.right), "scenario disagrees with the reference")
 			assert.Equal(t, expected, g.mergeBases(t, s.left, s.right))
 			assert.Equal(t, expected, g.mergeBases(t, s.right, s.left))
+		})
+	}
+}
+
+// A ghost's parents are unknown and could be any commit, so the walk cannot tell which common ancestors lie beyond it.
+func TestGetMergeBasesErrorsOnGhosts(t *testing.T) {
+	tests := []struct {
+		name        string
+		graph       string
+		left, right string
+	}{
+		{name: "a ghost reachable from both sides", graph: "root\n~g root\nx g\ny g\n", left: "x", right: "y"},
+		{name: "a ghost reachable from one side", graph: "root\n~g root\nx0 g\ny0 root\nx1 x0 y0\ny1 y0 x0\n", left: "x1", right: "y1"},
+		{name: "a ghost hiding a merge base", graph: "root\na root\nb root\n~g a\nl g b\nr a b\n", left: "l", right: "r"},
+		{name: "a ghost as an argument", graph: "root\n~g root\nx root\n", left: "g", right: "x"},
+		{
+			name:  "a ghost below one merge base while another commit is undecided",
+			graph: "root\n~g root\na g\nb root\nl a b\nr a b\n", left: "l", right: "r",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := parseTestGraph(tt.graph)
+			for _, order := range [][2]string{{tt.left, tt.right}, {tt.right, tt.left}} {
+				_, err := GetMergeBases(context.Background(), g, hashOfName(order[0]), g, hashOfName(order[1]))
+				assert.ErrorIs(t, err, ErrGhostCommit, "merge bases of %s and %s", order[0], order[1])
+			}
+		})
+	}
+}
+
+// The walk stops once every commit left to visit is an ancestor of a merge base, before reading the parents of the
+// last merge base, so a ghost below the merge bases is never reached.
+func TestGetMergeBasesDoesNotReachGhostsBelowTheMergeBases(t *testing.T) {
+	tests := []struct {
+		name        string
+		graph       string
+		left, right string
+		bases       []string
+	}{
+		{name: "a fork whose base is a shallow clone's root", graph: "~g\nroot g\nx root\ny root\n", left: "x", right: "y", bases: []string{"root"}},
+		{name: "a criss-cross above a ghost", graph: "~g\nroot g\nx0 root\ny0 root\nx1 x0 y0\ny1 y0 x0\n", left: "x1", right: "y1", bases: []string{"x0", "y0"}},
+		{name: "one side is the shallow clone's root", graph: "~g\nroot g\nx root\n", left: "root", right: "x", bases: []string{"root"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := parseTestGraph(tt.graph)
+			assert.Equal(t, tt.bases, g.mergeBases(t, tt.left, tt.right))
+			assert.Equal(t, tt.bases, g.mergeBases(t, tt.right, tt.left))
 		})
 	}
 }
