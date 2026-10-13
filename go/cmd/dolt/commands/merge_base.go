@@ -31,7 +31,7 @@ var mergeBaseDocs = cli.CommandDocumentationContent{
 	ShortDesc: `Find the common ancestor of two commits.`,
 	LongDesc: `Find the common ancestor of two commits, and return the ancestor's commit hash.
 
-When the commits have more than one best common ancestor, one of them is returned. Use {{.EmphasisLeft}}--all{{.EmphasisRight}} to print every best common ancestor, one per line.`,
+When the commits have more than one best common ancestor, one of them is returned. Use {{.EmphasisLeft}}--all{{.EmphasisRight}} to print every best common ancestor, one per line, newest first.`,
 	Synopsis: []string{
 		`[--all] {{.LessThan}}commit spec{{.GreaterThan}} {{.LessThan}}commit spec{{.GreaterThan}}`,
 	},

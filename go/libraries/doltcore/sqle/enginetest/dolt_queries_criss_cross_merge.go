@@ -101,3 +101,29 @@ var MergeBasesTableFunctionScripts = []queries.ScriptTest{
 		},
 	},
 }
+
+// MergeBasesOrderScripts run with a commit clock that advances on every commit. dolt_merge_bases lists the newest merge
+// base first, as `git merge-base --all` does, even when another merge base is taller.
+var MergeBasesOrderScripts = []queries.ScriptTest{
+	{
+		Name:        "dolt_merge_bases: newest merge base first",
+		SetUpScript: schemaBranchCrissCrossSetup(2),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT l.message FROM (SELECT merge_base FROM dolt_merge_bases('main', 'feature') LIMIT 1 OFFSET 0) b " +
+					"JOIN dolt_log('--all') l ON l.commit_hash = b.merge_base;",
+				Expected: []sql.Row{{"s2: add column m"}},
+			},
+			{
+				Query: "SELECT l.message FROM (SELECT merge_base FROM dolt_merge_bases('main', 'feature') LIMIT 1 OFFSET 1) b " +
+					"JOIN dolt_log('--all') l ON l.commit_hash = b.merge_base;",
+				Expected: []sql.Row{{"c2-4: more seed rows"}},
+			},
+			{
+				Query: "SELECT l.message FROM (SELECT merge_base FROM dolt_merge_bases('feature', 'main') LIMIT 1 OFFSET 0) b " +
+					"JOIN dolt_log('--all') l ON l.commit_hash = b.merge_base;",
+				Expected: []sql.Row{{"s2: add column m"}},
+			},
+		},
+	},
+}
