@@ -24,9 +24,10 @@ import (
 // schemaBranchCrissCrossSetup builds the history from https://github.com/dolthub/dolt/issues/12050. A data-free schema
 // branch is merged into both main and feature, so they have two merge bases, c2 and s2:
 //
-//	main:    c1 -- c2 -- c3 -- merge schema
-//	feature:       c2 -- f1 -- merge schema
-//	schema:  c1 -- s1 -- s2
+//	c1 -- c2 -- c3 -- m    main
+//	 |     \-- f1 -- f    feature
+//	 \-- s1 -- s2          schema
+//	m = merge(c3, s2), f = merge(f1, s2)
 //
 // |extraSeedCommits| adds c2-3, c2-4, ... after c2, and feature forks from the last of them instead. That makes the
 // fork point shorter than (0), as tall as (1), or taller than (2) s2.
