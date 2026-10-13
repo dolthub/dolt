@@ -654,8 +654,8 @@ seed_and_start_serial_remote() {
     mkdir clones
     cd clones
     dolt clone --depth 2 file://../file-remote
-    # (val 3) is the first commit the depth 2 clone does not have.
-    missing=$(cd ../remote && dolt sql -q "select hashof('HEAD~2')" -r csv | tail -n 1)
+    # The walk follows the fetched branch, the shorter side, and reaches (val 2), which the clone does not have.
+    missing=$(cd ../remote && dolt sql -q "select hashof('HEAD~3')" -r csv | tail -n 1)
 
     # Push a branch rooted at (val 2), which the shallow clone does not have.
     dolt clone file://../file-remote full-clone

@@ -16,6 +16,8 @@ package merge
 
 import (
 	"context"
+	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -98,4 +100,96 @@ func mustHashOf(t *testing.T, c *doltdb.Commit) hash.Hash {
 	h, err := c.HashOf()
 	require.NoError(t, err)
 	return h
+}
+
+// GetCommitAncestor must keep returning what datas.FindCommonAncestor returns: the tallest common ancestor, and on a
+// tie the one with the larger hash.
+func TestGetCommitAncestorMatchesFindCommonAncestor(t *testing.T) {
+	ctx := context.Background()
+	fs := filesys.NewInMemFS([]string{"/home", "/work"}, nil, "/work")
+	dEnv := env.LoadWithoutDB(ctx, func() (string, error) { return "/home", nil }, fs, doltdb.InMemDoltDB, "test")
+	require.NoError(t, dEnv.InitRepo(ctx, types.Format_DOLT, name, email, env.DefaultInitBranch))
+	ddb := dEnv.DoltDB(ctx)
+
+	initial := resolveCommit(t, ddb, env.DefaultInitBranch)
+	root, err := initial.GetRootValue(ctx)
+	require.NoError(t, err)
+	_, rootHash, err := ddb.WriteRootValue(ctx, root)
+	require.NoError(t, err)
+
+	commitTime := time.UnixMilli(0)
+	commitCount := 0
+	commit := func(parents ...*doltdb.Commit) *doltdb.Commit {
+		commitTime = commitTime.Add(time.Second)
+		commitCount++
+		meta, err := datas.NewCommitMetaWithAuthor(name, email, "commit", commitTime)
+		require.NoError(t, err)
+		specs := make([]*doltdb.CommitSpec, len(parents))
+		for i, p := range parents {
+			specs[i], err = doltdb.NewCommitSpec(mustHashOf(t, p).String())
+			require.NoError(t, err)
+		}
+		// Every commit gets its own branch, so that any parent list is legal.
+		c, err := ddb.CommitWithParentSpecs(ctx, rootHash, ref.NewBranchRef(fmt.Sprintf("c%d", commitCount)), specs, meta)
+		require.NoError(t, err)
+		return c
+	}
+	findCommonAncestor := func(left, right *doltdb.Commit) hash.Hash {
+		l, err := datas.LoadCommitAddr(ctx, ddb.ValueReadWriter(), mustHashOf(t, left))
+		require.NoError(t, err)
+		r, err := datas.LoadCommitAddr(ctx, ddb.ValueReadWriter(), mustHashOf(t, right))
+		require.NoError(t, err)
+		h, ok, err := datas.FindCommonAncestor(ctx, l, r, ddb.ValueReadWriter(), ddb.ValueReadWriter(), ddb.NodeStore(), ddb.NodeStore())
+		require.NoError(t, err)
+		require.True(t, ok)
+		return h
+	}
+
+	rnd := rand.New(rand.NewSource(12050))
+	ties := 0
+	for graph := 0; graph < 30; graph++ {
+		branches := 2 + rnd.Intn(4)
+		tips := make([]*doltdb.Commit, branches)
+		for i := range tips {
+			tips[i] = commit(initial)
+		}
+		all := append([]*doltdb.Commit{}, tips...)
+		for i := 0; i < 30; i++ {
+			b := rnd.Intn(branches)
+			parents := []*doltdb.Commit{tips[b]}
+			if other := tips[rnd.Intn(branches)]; rnd.Float64() < 0.5 && mustHashOf(t, other) != mustHashOf(t, tips[b]) {
+				parents = append(parents, other)
+			}
+			tips[b] = commit(parents...)
+			all = append(all, tips[b])
+		}
+		for pair := 0; pair < 20; pair++ {
+			left, right := all[rnd.Intn(len(all))], all[rnd.Intn(len(all))]
+			expected := findCommonAncestor(left, right)
+			optCmt, err := doltdb.GetCommitAncestor(ctx, left, right)
+			require.NoError(t, err)
+			require.Equal(t, expected, optCmt.Addr, "graph %d, pair %d", graph, pair)
+
+			bases, err := MergeBases(ctx, left, right)
+			require.NoError(t, err)
+			if len(bases) > 1 {
+				heights := map[uint64]int{}
+				for _, b := range bases {
+					optCmt, err := ddb.ReadCommit(ctx, b)
+					require.NoError(t, err)
+					c, ok := optCmt.ToCommit()
+					require.True(t, ok)
+					h, err := c.Height()
+					require.NoError(t, err)
+					heights[h]++
+				}
+				for _, n := range heights {
+					if n > 1 {
+						ties++
+					}
+				}
+			}
+		}
+	}
+	assert.Greater(t, ties, 0, "the random histories should include merge bases of equal height")
 }

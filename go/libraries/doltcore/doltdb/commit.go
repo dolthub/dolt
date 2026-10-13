@@ -160,31 +160,33 @@ func getCommitClosure(ctx context.Context, cmt *datas.Commit, vrw types.ValueRea
 
 var ErrNoCommonAncestor = errors.New("no common ancestor")
 
+// GetCommitAncestor returns the tallest best common ancestor of |cm1| and |cm2|, breaking ties by the larger hash.
 func GetCommitAncestor(ctx context.Context, cm1, cm2 *Commit) (*OptionalCommit, error) {
-	addr, err := getCommitAncestorAddr(ctx, cm1.dCommit, cm2.dCommit, cm1.vrw, cm2.vrw, cm1.ns, cm2.ns)
+	ancestors, err := GetCommitAncestors(ctx, cm1, cm2)
 	if err != nil {
 		return nil, err
 	}
-
-	targetCommit, err := datas.LoadCommitAddr(ctx, cm1.vrw, addr)
-	if err != nil {
-		return nil, err
+	var tallest *OptionalCommit
+	var tallestHeight uint64
+	for _, ancestor := range ancestors {
+		c, ok := ancestor.ToCommit()
+		if !ok {
+			return nil, ErrGhostCommitRuntimeFailure
+		}
+		height, err := c.Height()
+		if err != nil {
+			return nil, err
+		}
+		if tallest == nil || height > tallestHeight || (height == tallestHeight && tallest.Addr.Less(ancestor.Addr)) {
+			tallest, tallestHeight = ancestor, height
+		}
 	}
-
-	if targetCommit.IsGhost() {
-		return &OptionalCommit{nil, addr}, nil
-	}
-
-	cmt, err := NewCommit(ctx, cm1.vrw, cm1.ns, targetCommit)
-	if err != nil {
-		return nil, err
-	}
-	return &OptionalCommit{cmt, addr}, nil
+	return tallest, nil
 }
 
 // GetCommitAncestors returns every best common ancestor of |cm1| and |cm2|, the same set as `git merge-base --all`.
 func GetCommitAncestors(ctx context.Context, cm1, cm2 *Commit) ([]*OptionalCommit, error) {
-	addrs, err := commitgraph.GetMergeBases(ctx, commitResolver{cm1.vrw}, cm1.dCommit.Addr(), commitResolver{cm2.vrw}, cm2.dCommit.Addr())
+	addrs, err := commitgraph.GetMergeBases(ctx, newCommitResolver(cm1.vrw, cm1.ns), cm1.dCommit.Addr(), newCommitResolver(cm2.vrw, cm2.ns), cm2.dCommit.Addr())
 	var ghostErr *commitgraph.GhostCommitError
 	if errors.As(err, &ghostErr) {
 		return nil, fmt.Errorf("%w Missing commit: %s", ErrGhostCommitEncountered, ghostErr.Hash)
@@ -214,12 +216,69 @@ func GetCommitAncestors(ctx context.Context, cm1, cm2 *Commit) ([]*OptionalCommi
 	return ancestors, nil
 }
 
-// commitResolver resolves commits in |vrw| for commitgraph.
+// commitResolver resolves commits in |vrw| for commitgraph, and answers ancestry questions from the parent closures
+// stored with each commit.
 type commitResolver struct {
-	vrw types.ValueReadWriter
+	vrw      types.ValueReadWriter
+	ns       tree.NodeStore
+	closures map[hash.Hash]commitWithClosure
 }
 
-func (r commitResolver) ResolveCommitHash(ctx context.Context, h hash.Hash) (*commitgraph.CommitInfo, error) {
+type commitWithClosure struct {
+	height  uint64
+	closure prolly.CommitClosure
+}
+
+func newCommitResolver(vrw types.ValueReadWriter, ns tree.NodeStore) *commitResolver {
+	return &commitResolver{vrw: vrw, ns: ns, closures: make(map[hash.Hash]commitWithClosure)}
+}
+
+func (r *commitResolver) IsAncestor(ctx context.Context, ancestor *commitgraph.CommitInfo, descendant hash.Hash) (bool, error) {
+	d, err := r.loadClosure(ctx, descendant)
+	if err != nil {
+		return false, err
+	}
+	// A parentless commit has an empty closure; every ancestor of a commit is shorter than it.
+	if ancestor.Height >= d.height {
+		return ancestor.Hash == descendant, nil
+	}
+	return d.closure.ContainsKey(ctx, ancestor.Hash, ancestor.Height)
+}
+
+func (r *commitResolver) GhostHeight(ctx context.Context, ghost hash.Hash, child *commitgraph.CommitInfo) (uint64, error) {
+	c, err := r.loadClosure(ctx, child.Hash)
+	if err != nil {
+		return 0, err
+	}
+	for height := c.height - 1; height > 0; height-- {
+		if ok, err := c.closure.ContainsKey(ctx, ghost, height); err != nil || ok {
+			return height, err
+		}
+	}
+	return 0, fmt.Errorf("commit %s is not in the parent closure of %s", ghost, child.Hash)
+}
+
+func (r *commitResolver) loadClosure(ctx context.Context, h hash.Hash) (commitWithClosure, error) {
+	if c, ok := r.closures[h]; ok {
+		return c, nil
+	}
+	dc, err := datas.LoadCommitAddr(ctx, r.vrw, h)
+	if err != nil {
+		return commitWithClosure{}, err
+	}
+	if dc.IsGhost() {
+		return commitWithClosure{}, fmt.Errorf("%w Missing commit: %s", ErrGhostCommitEncountered, h)
+	}
+	closure, err := getCommitClosure(ctx, dc, r.vrw, r.ns)
+	if err != nil {
+		return commitWithClosure{}, err
+	}
+	c := commitWithClosure{height: dc.Height(), closure: closure}
+	r.closures[h] = c
+	return c, nil
+}
+
+func (r *commitResolver) ResolveCommitHash(ctx context.Context, h hash.Hash) (*commitgraph.CommitInfo, error) {
 	dc, err := datas.LoadCommitAddr(ctx, r.vrw, h)
 	if err != nil {
 		return nil, err
@@ -236,19 +295,6 @@ func (r commitResolver) ResolveCommitHash(ctx context.Context, h hash.Hash) (*co
 		return nil, err
 	}
 	return &commitgraph.CommitInfo{Hash: h, Height: dc.Height(), Parents: parents}, nil
-}
-
-func getCommitAncestorAddr(ctx context.Context, c1, c2 *datas.Commit, vrw1, vrw2 types.ValueReadWriter, ns1, ns2 tree.NodeStore) (hash.Hash, error) {
-	ancestorAddr, ok, err := datas.FindCommonAncestor(ctx, c1, c2, vrw1, vrw2, ns1, ns2)
-	if err != nil {
-		return hash.Hash{}, err
-	}
-
-	if !ok {
-		return hash.Hash{}, ErrNoCommonAncestor
-	}
-
-	return ancestorAddr, nil
 }
 
 func (c *Commit) CanFastForwardTo(ctx context.Context, new *Commit) (bool, error) {
