@@ -423,6 +423,7 @@ func TestComparePrimaryKeysOutcomes(t *testing.T) {
 			Comparison: PrimaryKeysDiffer,
 		},
 		{
+			// The hidden row id always has KeylessRowIdTag, so key tags cannot differ.
 			Name:       "both_keyless",
 			From:       newSchema(NewColumn("val", 1, types.IntKind, false)),
 			To:         newSchema(NewColumn("val", 2, types.IntKind, false)),

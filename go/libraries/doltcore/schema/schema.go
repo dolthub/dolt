@@ -286,9 +286,13 @@ const (
 // ComparePrimaryKeys reports how the primary keys of |fromSchema| and
 // |toSchema| compare.
 //
-// Rows match by key unless the result is PrimaryKeysDiffer. Diff callers use
-// that check. Merges must require PrimaryKeysSameTags, because they match rows
-// by column tag.
+// Diffs match rows unless the result is PrimaryKeysDiffer. Merges require
+// PrimaryKeysSameTags, because they match rows by column tag.
+//
+// Two keyless schemas return PrimaryKeysSameTags, since neither has key columns
+// that can differ. A keyed schema against a keyless one returns
+// PrimaryKeysDiffer, and [diff.Stat] rejects that pairing. Nil inputs are
+// handled by [diff.StatForTableDelta].
 func ComparePrimaryKeys(fromSchema, toSchema Schema) PrimaryKeyComparisonType {
 	if fromSchema == nil && toSchema == nil {
 		return PrimaryKeysDiffer
