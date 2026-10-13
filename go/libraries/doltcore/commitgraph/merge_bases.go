@@ -17,9 +17,13 @@ package commitgraph
 import (
 	"container/heap"
 	"context"
+	"errors"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
+
+// ErrGhostCommit is returned when a walk reaches a ghost commit, whose parents are unknown.
+var ErrGhostCommit = errors.New("ghost commit encountered")
 
 const (
 	reachableFromLeft uint8 = 1 << iota
@@ -30,7 +34,8 @@ const (
 // GetMergeBases returns every best common ancestor of |left| and |right|: each common ancestor that is not an ancestor
 // of another common ancestor, the same set as `git merge-base --all`. The result is empty when there is no common
 // ancestor. |left| is resolved through |leftResolver| and |right| through |rightResolver|; every other commit is
-// resolved through the resolver of the commit it was first reached from. Ghost commits are boundaries.
+// resolved through the resolver of the commit it was first reached from. Reaching a ghost commit returns
+// ErrGhostCommit: its parents are unknown, so the merge bases cannot be determined.
 func GetMergeBases(ctx context.Context, leftResolver HashResolver, left hash.Hash, rightResolver HashResolver, right hash.Hash) ([]hash.Hash, error) {
 	q := mergeBaseQueue{newPQ()}
 	unresolved := 0
@@ -38,6 +43,9 @@ func GetMergeBases(ctx context.Context, leftResolver HashResolver, left hash.Has
 		e, err := q.get(ctx, r, h)
 		if err != nil {
 			return err
+		}
+		if e.info.IsGhost {
+			return ErrGhostCommit
 		}
 		prev := e.flags
 		e.flags |= flags
@@ -69,6 +77,11 @@ func GetMergeBases(ctx context.Context, leftResolver HashResolver, left hash.Has
 				e.flags |= ancestorOfMergeBase
 			}
 		}
+		// Every commit left to visit is an ancestor of a merge base, and so are |e|'s parents. Stopping here keeps the
+		// walk from reaching a ghost that cannot change the result.
+		if unresolved == 0 && e.flags&ancestorOfMergeBase != 0 {
+			break
+		}
 		for _, p := range e.info.Parents {
 			if err := markReachable(e.resolver, p, e.flags); err != nil {
 				return nil, err
@@ -79,7 +92,7 @@ func GetMergeBases(ctx context.Context, leftResolver HashResolver, left hash.Has
 }
 
 // mergeBaseQueue pops the tallest commit first. A parent is always shorter than its children, so every flag a commit
-// can receive is set before it is popped. Ghosts have no height and are popped last, after all of their children.
+// can receive is set before it is popped.
 type mergeBaseQueue struct {
 	*pq
 }

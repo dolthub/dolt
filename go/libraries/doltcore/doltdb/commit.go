@@ -185,7 +185,9 @@ func GetCommitAncestor(ctx context.Context, cm1, cm2 *Commit) (*OptionalCommit, 
 // GetCommitAncestors returns every best common ancestor of |cm1| and |cm2|, the same set as `git merge-base --all`.
 func GetCommitAncestors(ctx context.Context, cm1, cm2 *Commit) ([]*OptionalCommit, error) {
 	addrs, err := commitgraph.GetMergeBases(ctx, commitResolver{cm1.vrw}, cm1.dCommit.Addr(), commitResolver{cm2.vrw}, cm2.dCommit.Addr())
-	if err != nil {
+	if errors.Is(err, commitgraph.ErrGhostCommit) {
+		return nil, ErrGhostCommitEncountered
+	} else if err != nil {
 		return nil, err
 	}
 	if len(addrs) == 0 {

@@ -615,6 +615,66 @@ seed_and_start_serial_remote() {
     [[ "$output" =~ "27" ]] # 1+2+11+13 = 27.
 }
 
+@test "shallow-clone: merge-base --all of a fork in a depth 1 clone" {
+    seed_local_remote
+    cd remote
+    dolt remote add origin file://../file-remote
+    dolt push origin main
+    cd ..
+
+    mkdir clones
+    cd clones
+    dolt clone --depth 1 file://../file-remote
+    cd file-remote
+    cloned_head=$(get_head_commit)
+
+    dolt checkout -b branch
+    dolt sql -q "insert into vals values (6, 'six')"
+    dolt commit -a -m "Added Val: 6"
+    dolt checkout main
+    dolt sql -q "insert into vals values (7, 'seven')"
+    dolt commit -a -m "Added Val: 7"
+
+    run dolt merge-base --all main branch
+    [ "$status" -eq 0 ]
+    [ "$output" = "$cloned_head" ]
+
+    run dolt sql -q "select count(*) from dolt_merge_bases('main', 'branch')" -r csv
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "1" ]
+}
+
+@test "shallow-clone: merge-base --all errors when the histories meet beyond the shallow clone" {
+    seed_local_remote
+    cd remote
+    dolt remote add origin file://../file-remote
+    dolt push origin main
+    cd ..
+
+    mkdir clones
+    cd clones
+    dolt clone --depth 2 file://../file-remote
+
+    # Push a branch rooted at (val 2), which the shallow clone does not have.
+    dolt clone file://../file-remote full-clone
+    cd full-clone
+    dolt reset --hard HEAD~3
+    dolt sql -q "insert into vals (i,s) values (13, 'val 13')"
+    dolt commit -a -m "Added Val: 13"
+    dolt push origin HEAD:refs/heads/brch
+
+    cd ../file-remote
+    dolt fetch
+
+    run dolt merge-base --all main origin/brch
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "shallow clone" ]] || false
+
+    run dolt sql -q "select * from dolt_merge_bases('main', 'origin/brch')"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "shallow clone" ]] || false
+}
+
 # complex repository is 14 commits with the following dag:
 #
 # (init) <- (table create) <- (val 1) <- (val 2) <- (val 3) <- (val 4) <- (val 5) <- (merge 2)                [main]
