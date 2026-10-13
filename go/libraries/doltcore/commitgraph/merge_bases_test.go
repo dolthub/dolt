@@ -373,7 +373,10 @@ func TestGetMergeBasesErrorsOnGhosts(t *testing.T) {
 			g := parseTestGraph(tt.graph)
 			for _, order := range [][2]string{{tt.left, tt.right}, {tt.right, tt.left}} {
 				_, err := GetMergeBases(context.Background(), g, hashOfName(order[0]), g, hashOfName(order[1]))
-				assert.ErrorIs(t, err, ErrGhostCommit, "merge bases of %s and %s", order[0], order[1])
+				var ghostErr *GhostCommitError
+				if assert.ErrorAs(t, err, &ghostErr, "merge bases of %s and %s", order[0], order[1]) {
+					assert.Equal(t, hashOfName("g"), ghostErr.Hash)
+				}
 			}
 		})
 	}
