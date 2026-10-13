@@ -645,7 +645,15 @@ func (dp DiffPartition) Key() []byte {
 }
 
 func (dp DiffPartition) GetRowIter(ctx *sql.Context) (sql.RowIter, error) {
-	return newProllyDiffIter(ctx, dp, dp.fromSch, dp.toSch, dp.ranges)
+	fromSch := dp.fromSch
+	if fromSch == nil {
+		fromSch = schema.EmptySchema
+	}
+	toSch := dp.toSch
+	if toSch == nil {
+		toSch = schema.EmptySchema
+	}
+	return newProllyDiffIter(ctx, dp, fromSch, toSch, dp.ranges)
 }
 
 // isDiffablePartition checks if the commit pair for this partition is "diffable".

@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -121,6 +122,10 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, tar
 		nodeStore = dp.to.NodeStore()
 	} else {
 		nodeStore = dp.from.NodeStore()
+	}
+
+	if err := diff.CheckPrimaryKeys(from, to, fsch, tsch); err != nil {
+		return prollyDiffIter{}, err
 	}
 
 	fromConverter, err := NewProllyRowConverter(ctx, fsch, targetFromSchema, ctx.Warn, nodeStore)
