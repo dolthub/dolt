@@ -17,13 +17,19 @@ package commitgraph
 import (
 	"container/heap"
 	"context"
-	"errors"
+	"fmt"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-// ErrGhostCommit is returned when a walk reaches a ghost commit, whose parents are unknown.
-var ErrGhostCommit = errors.New("ghost commit encountered")
+// GhostCommitError is returned when a walk reaches a ghost commit, whose parents are unknown.
+type GhostCommitError struct {
+	Hash hash.Hash
+}
+
+func (e *GhostCommitError) Error() string {
+	return fmt.Sprintf("ghost commit encountered: %s", e.Hash)
+}
 
 const (
 	reachableFromLeft uint8 = 1 << iota
@@ -34,8 +40,8 @@ const (
 // GetMergeBases returns every best common ancestor of |left| and |right|: each common ancestor that is not an ancestor
 // of another common ancestor, the same set as `git merge-base --all`. The result is empty when there is no common
 // ancestor. |left| is resolved through |leftResolver| and |right| through |rightResolver|; every other commit is
-// resolved through the resolver of the commit it was first reached from. Reaching a ghost commit returns
-// ErrGhostCommit: its parents are unknown, so the merge bases cannot be determined.
+// resolved through the resolver of the commit it was first reached from. Reaching a ghost commit returns a
+// GhostCommitError: its parents are unknown, so the merge bases cannot be determined.
 func GetMergeBases(ctx context.Context, leftResolver HashResolver, left hash.Hash, rightResolver HashResolver, right hash.Hash) ([]hash.Hash, error) {
 	q := mergeBaseQueue{newPQ()}
 	unresolved := 0
@@ -45,7 +51,7 @@ func GetMergeBases(ctx context.Context, leftResolver HashResolver, left hash.Has
 			return err
 		}
 		if e.info.IsGhost {
-			return ErrGhostCommit
+			return &GhostCommitError{Hash: h}
 		}
 		prev := e.flags
 		e.flags |= flags

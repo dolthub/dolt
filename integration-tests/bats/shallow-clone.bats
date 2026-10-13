@@ -654,6 +654,8 @@ seed_and_start_serial_remote() {
     mkdir clones
     cd clones
     dolt clone --depth 2 file://../file-remote
+    # (val 3) is the first commit the depth 2 clone does not have.
+    missing=$(cd ../remote && dolt sql -q "select hashof('HEAD~2')" -r csv | tail -n 1)
 
     # Push a branch rooted at (val 2), which the shallow clone does not have.
     dolt clone file://../file-remote full-clone
@@ -669,10 +671,12 @@ seed_and_start_serial_remote() {
     run dolt merge-base --all main origin/brch
     [ "$status" -ne 0 ]
     [[ "$output" =~ "shallow clone" ]] || false
+    [[ "$output" =~ "$missing" ]] || false
 
     run dolt sql -q "select * from dolt_merge_bases('main', 'origin/brch')"
     [ "$status" -ne 0 ]
     [[ "$output" =~ "shallow clone" ]] || false
+    [[ "$output" =~ "$missing" ]] || false
 }
 
 # complex repository is 14 commits with the following dag:
