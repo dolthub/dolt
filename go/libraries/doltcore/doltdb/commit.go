@@ -186,7 +186,7 @@ func GetCommitAncestor(ctx context.Context, cm1, cm2 *Commit) (*OptionalCommit, 
 
 // GetCommitAncestors returns every best common ancestor of |cm1| and |cm2|, the same set as `git merge-base --all`.
 func GetCommitAncestors(ctx context.Context, cm1, cm2 *Commit) ([]*OptionalCommit, error) {
-	addrs, err := commitgraph.GetMergeBases(ctx, newCommitResolver(cm1.vrw, cm1.ns), cm1.dCommit.Addr(), newCommitResolver(cm2.vrw, cm2.ns), cm2.dCommit.Addr())
+	addrs, err := commitgraph.GetMergeBases(ctx, newCommitResolverFor(cm1), cm1.dCommit.Addr(), newCommitResolverFor(cm2), cm2.dCommit.Addr())
 	var ghostErr *commitgraph.GhostCommitError
 	if errors.As(err, &ghostErr) {
 		return nil, fmt.Errorf("%w Missing commit: %s", ErrGhostCommitEncountered, ghostErr.Hash)
@@ -214,76 +214,6 @@ func GetCommitAncestors(ctx context.Context, cm1, cm2 *Commit) ([]*OptionalCommi
 		ancestors[i] = &OptionalCommit{cmt, addr}
 	}
 	return ancestors, nil
-}
-
-// commitResolver resolves commits in |vrw| for commitgraph, and answers ancestry questions from the parent closures
-// stored with each commit.
-type commitResolver struct {
-	vrw       types.ValueReadWriter
-	ns        tree.NodeStore
-	ancestors map[hash.Hash]*CommitAncestry
-}
-
-func newCommitResolver(vrw types.ValueReadWriter, ns tree.NodeStore) *commitResolver {
-	return &commitResolver{vrw: vrw, ns: ns, ancestors: make(map[hash.Hash]*CommitAncestry)}
-}
-
-func (r *commitResolver) IsAncestor(ctx context.Context, ancestor *commitgraph.CommitInfo, descendant hash.Hash) (bool, error) {
-	a, err := r.ancestry(ctx, descendant)
-	if err != nil {
-		return false, err
-	}
-	return a.Contains(ctx, ancestor.Hash, ancestor.Height)
-}
-
-func (r *commitResolver) GhostHeight(ctx context.Context, ghost hash.Hash, child *commitgraph.CommitInfo) (uint64, error) {
-	a, err := r.ancestry(ctx, child.Hash)
-	if err != nil {
-		return 0, err
-	}
-	return a.HeightOf(ctx, ghost)
-}
-
-func (r *commitResolver) ancestry(ctx context.Context, h hash.Hash) (*CommitAncestry, error) {
-	if a, ok := r.ancestors[h]; ok {
-		return a, nil
-	}
-	dc, err := datas.LoadCommitAddr(ctx, r.vrw, h)
-	if err != nil {
-		return nil, err
-	}
-	if dc.IsGhost() {
-		return nil, fmt.Errorf("%w Missing commit: %s", ErrGhostCommitEncountered, h)
-	}
-	c, err := NewCommit(ctx, r.vrw, r.ns, dc)
-	if err != nil {
-		return nil, err
-	}
-	a, err := c.GetAncestry(ctx)
-	if err != nil {
-		return nil, err
-	}
-	r.ancestors[h] = a
-	return a, nil
-}
-
-func (r *commitResolver) ResolveCommitHash(ctx context.Context, h hash.Hash) (*commitgraph.CommitInfo, error) {
-	dc, err := datas.LoadCommitAddr(ctx, r.vrw, h)
-	if err != nil {
-		return nil, err
-	}
-	if dc.IsGhost() {
-		return &commitgraph.CommitInfo{Hash: h, IsGhost: true}, nil
-	}
-	sm, ok := dc.NomsValue().(types.SerialMessage)
-	if !ok {
-		return nil, fmt.Errorf("expected SerialMessage type for commit value, found %T", dc.NomsValue())
-	}
-	parents, err := types.SerialCommitParentAddrs(r.vrw.Format(), sm)
-	if err != nil {
-		return nil, err
-	}
-	return &commitgraph.CommitInfo{Hash: h, Height: dc.Height(), Parents: parents}, nil
 }
 
 func (c *Commit) CanFastForwardTo(ctx context.Context, new *Commit) (bool, error) {
