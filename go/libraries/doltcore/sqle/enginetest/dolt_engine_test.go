@@ -1600,6 +1600,16 @@ func TestDoltMerge(t *testing.T) {
 	RunDoltMergeTests(t, h)
 }
 
+func TestDoltMergeBasesTableFunction(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltMergeBasesTableFunctionTests(t, h)
+}
+
+func TestDoltMergeBasesTableFunctionPrepared(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltMergeBasesTableFunctionPreparedTests(t, h)
+}
+
 func TestDoltMergePrepared(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunDoltMergePreparedTests(t, h)
