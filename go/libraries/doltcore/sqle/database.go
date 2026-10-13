@@ -2105,6 +2105,11 @@ func (db Database) checkNonlocalTableName(ctx *sql.Context, tableName string) er
 		strings.EqualFold(entry.NewTableName, tableName) {
 		return nil
 	}
+	if _, exists, err := db.getNonlocalTable(ctx, root, strings.ToLower(tableName)); err != nil {
+		return err
+	} else if exists {
+		return sql.ErrTableAlreadyExists.New(tableName)
+	}
 	return ErrNonlocalTableName.New(tableName)
 }
 

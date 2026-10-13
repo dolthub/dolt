@@ -355,12 +355,21 @@ func getSummaryForDelta(ctx *sql.Context, delta diff.TableDelta, sqledb dsess.Sq
 		return summ, nil
 	}
 
-	if !schema.ArePrimaryKeySetsDiffable(delta.FromSch, delta.ToSch) {
+	if schema.ComparePrimaryKeys(delta.FromSch, delta.ToSch) == schema.PrimaryKeysDiffer {
 		if shouldErrorOnPKChange {
 			return nil, fmt.Errorf("failed to compute diff summary for table %s: %w", delta.CurName(), diff.ErrPrimaryKeySetChanged)
 		}
 
 		ctx.Warn(dtables.PrimaryKeyChangeWarningCode, dtables.PrimaryKeyChangeWarning, fromDetails.hashStr, toDetails.hashStr)
+		return nil, nil
+	}
+
+	// A table whose only change is column tags has no observable change.
+	hasChanges, err := delta.HasChangesIgnoringColumnTags(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !hasChanges {
 		return nil, nil
 	}
 

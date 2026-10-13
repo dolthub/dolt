@@ -26,6 +26,28 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 )
 
+// dropAndRecreateScript returns a script that drops and recreates
+// t1 in one commit with a primary key of type |keyType|.
+func dropAndRecreateScript(keyType string) []string {
+	return []string{
+		fmt.Sprintf("create table t1 (id %s primary key, name varchar(10));", keyType),
+		"insert into t1 values (1, 'dolt');",
+		"set @Commit1 = '';",
+		"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-Am', 'create_table');",
+
+		"update t1 set name = 'doltgres' where id = 1;",
+		"set @Commit2 = '';",
+		"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-Am', 'update_value');",
+
+		fmt.Sprintf("create table temp__t1 (id %s primary key, name varchar(10));", keyType),
+		"insert into temp__t1 values (1, 'dolt');",
+		"drop table t1;",
+		"rename table temp__t1 to t1;",
+		"set @Commit3 = '';",
+		"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-Am', 'drop and recreate');",
+	}
+}
+
 var DiffSystemTableScriptTests = []queries.ScriptTest{
 	{
 		// See https://github.com/dolthub/dolt/issues/11159
@@ -815,6 +837,81 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 					{"t1"},
 					{"t2"},
 				},
+			},
+		},
+	},
+	// https://github.com/dolthub/dolt/issues/12067
+	{
+		Name:        "table drop and recreate with identical primary key keeps per-commit diff history",
+		SetUpScript: dropAndRecreateScript("int"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_diff_t1;",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "SELECT to_id, to_name, from_id, from_name, diff_type FROM dolt_diff_t1 WHERE to_commit=@Commit3;",
+				Expected: []sql.Row{{1, "dolt", 1, "doltgres", "modified"}},
+			},
+			{
+				Query:    "SELECT to_id, to_name, from_id, from_name, diff_type FROM dolt_diff_t1 WHERE to_commit=@Commit2;",
+				Expected: []sql.Row{{1, "doltgres", 1, "dolt", "modified"}},
+			},
+			{
+				Query:    "SELECT to_id, to_name, from_id, from_name, diff_type FROM dolt_diff_t1 WHERE to_commit=@Commit1;",
+				Expected: []sql.Row{{1, "dolt", nil, nil, "added"}},
+			},
+		},
+	},
+	{
+		Name:        "table drop and recreate with identical decimal primary key keeps per-commit diff history",
+		SetUpScript: dropAndRecreateScript("decimal(10,2)"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_diff_t1;",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "SELECT to_name, from_name, diff_type FROM dolt_diff_t1 WHERE to_commit=@Commit3;",
+				Expected: []sql.Row{{"dolt", "doltgres", "modified"}},
+			},
+		},
+	},
+	{
+		Name:        "table drop and recreate with identical enum primary key keeps per-commit diff history",
+		SetUpScript: dropAndRecreateScript("enum('a','b')"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_diff_t1;",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "SELECT to_name, from_name, diff_type FROM dolt_diff_t1 WHERE to_commit=@Commit3;",
+				Expected: []sql.Row{{"dolt", "doltgres", "modified"}},
+			},
+		},
+	},
+	{
+		Name: "crossed primary key tags warn in diff instead of diffing",
+		SetUpScript: []string{
+			"create table t1 (a int, b int, primary key (a, b));",
+			"CALL dolt_update_column_tag('t1', 'a', '9001');",
+			"CALL dolt_update_column_tag('t1', 'b', '9002');",
+			"insert into t1 values (1, 2);",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-Am', 'create_table');",
+			"CALL dolt_update_column_tag('t1', 'b', '9003');",
+			"CALL dolt_update_column_tag('t1', 'a', '9002');",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-Am', 'cross tags');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:                           "SELECT COUNT(*) FROM dolt_diff_t1;",
+				ExpectedWarning:                 dtables.PrimaryKeyChangeWarningCode,
+				ExpectedWarningsCount:           1,
+				ExpectedWarningMessageSubstring: "due to primary key set change",
+				Expected:                        []sql.Row{{0}},
 			},
 		},
 	},
@@ -2718,6 +2815,17 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 			},
 		},
 	},
+	// https://github.com/dolthub/dolt/issues/12067
+	{
+		Name:        "table drop and recreate with identical primary key reports modified row in diff stat",
+		SetUpScript: dropAndRecreateScript("int"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT rows_modified, cells_modified, old_row_count, new_row_count FROM dolt_diff_stat(@Commit2, @Commit3, 't1');",
+				Expected: []sql.Row{{1, 1, 1, 1}},
+			},
+		},
+	},
 }
 
 var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
@@ -3490,6 +3598,17 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{"t", "t", "modified", false, true},
 				},
+			},
+		},
+	},
+	// https://github.com/dolthub/dolt/issues/12067
+	{
+		Name:        "table drop and recreate with identical primary key reports modified data in diff summary",
+		SetUpScript: dropAndRecreateScript("int"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT diff_type, data_change FROM dolt_diff_summary(@Commit2, @Commit3, 't1');",
+				Expected: []sql.Row{{"modified", true}},
 			},
 		},
 	},
@@ -4300,6 +4419,17 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 				Query: "SELECT DISTINCT table_name FROM dolt_patch('HEAD~2', 'HEAD~1', 'the_table');",
 				// the_table was committed before the ignore pattern existed, so it must appear.
 				Expected: []sql.Row{{"the_table"}},
+			},
+		},
+	},
+	// https://github.com/dolthub/dolt/issues/12067
+	{
+		Name:        "table drop and recreate with identical primary key generates an UPDATE in diff patch",
+		SetUpScript: dropAndRecreateScript("int"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch(@Commit2, @Commit3, 't1');",
+				Expected: []sql.Row{{1, "t1", "data", "UPDATE `t1` SET `name`='dolt' WHERE `id`=1;"}},
 			},
 		},
 	},

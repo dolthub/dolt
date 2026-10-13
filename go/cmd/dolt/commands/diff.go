@@ -1632,7 +1632,7 @@ func diffRows(
 		rowWriter = realWriter
 	}
 
-	if !schema.ArePrimaryKeySetsDiffable(fromSch, toSch) {
+	if schema.ComparePrimaryKeys(fromSch, toSch) == schema.PrimaryKeysDiffer {
 		err := rowWriter.Close(sqlCtx)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
