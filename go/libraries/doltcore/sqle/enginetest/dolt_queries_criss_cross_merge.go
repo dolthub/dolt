@@ -21,10 +21,15 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
-// schemaBranchCrissCrossSetup builds the history from https://github.com/dolthub/dolt/issues/12050: a data-free
-// |schema| branch is merged into both |main| and |feature|, giving them two best common ancestors: the feature's fork
-// point and the |schema| tip. |extraSeedCommits| adds commits to main before the fork, which controls whether the fork
-// point is shorter than (0), as tall as (1), or taller than (2) the |schema| tip.
+// schemaBranchCrissCrossSetup builds the history from https://github.com/dolthub/dolt/issues/12050. A data-free schema
+// branch is merged into both main and feature, so they have two merge bases, c2 and s2:
+//
+//	main:    c1 -- c2 -- c3 -- merge schema
+//	feature:       c2 -- f1 -- merge schema
+//	schema:  c1 -- s1 -- s2
+//
+// |extraSeedCommits| adds c2-3, c2-4, ... after c2, and feature forks from the last of them instead. That makes the
+// fork point shorter than (0), as tall as (1), or taller than (2) s2.
 func schemaBranchCrissCrossSetup(extraSeedCommits int) []string {
 	script := []string{
 		"CREATE TABLE t (id INT PRIMARY KEY, v VARCHAR(20));",
@@ -100,6 +105,7 @@ var MergeBasesTableFunctionScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		// The fork point c2-4 is taller than s2, but s2 was committed later, so it comes first, as in git.
 		Name:        "dolt_merge_bases: newest merge base first",
 		SetUpScript: schemaBranchCrissCrossSetup(2),
 		Assertions: []queries.ScriptTestAssertion{
@@ -150,6 +156,8 @@ var MergeBasesTableFunctionScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		// x: create table -- x1 -- merge y1 -- x2 -- merge y2 -- ... -- x5 -- merge y5
+		// y: create table -- y1 -- merge x1 -- y2 -- merge x2 -- ... -- y5 -- merge x5
 		Name: "dolt_merge_bases: repeated criss-cross merges keep only the last round",
 		SetUpScript: func() []string {
 			script := []string{
@@ -189,8 +197,12 @@ var MergeBasesTableFunctionScripts = []queries.ScriptTest{
 	},
 }
 
-// fanInSetup creates branches p1..p|n| from main with one commit each, and merges them into m1 in order and into m2 in
-// reverse order, so m1 and m2 have |n| merge bases.
+// fanInSetup builds n branches with one commit each, merged into m1 in order and into m2 in reverse order, so m1 and m2
+// have |n| merge bases, p1..p<n>:
+//
+//	p<i>: create table -- p<i>                              for i = 1..n
+//	m1:   create table -- m1 -- merge p1 -- ... -- merge p<n>
+//	m2:   create table -- m2 -- merge p<n> -- ... -- merge p1
 func fanInSetup(n int) []string {
 	script := []string{
 		"CREATE TABLE t (id INT PRIMARY KEY, v VARCHAR(20));",
@@ -222,8 +234,11 @@ func fanInSetup(n int) []string {
 	return append(script, "CALL DOLT_CHECKOUT('main');")
 }
 
-// crossMergeRound adds a commit to branches |x| and |y|, tags them <x><round> and <y><round>, and merges each tag into
-// the other branch, so the two branches criss-cross every round.
+// crossMergeRound adds a commit to each of |x| and |y|, tags them, and merges each tag into the other branch, so the
+// branches criss-cross every round:
+//
+//	x: ... -- <x><round> -- merge <y><round>
+//	y: ... -- <y><round> -- merge <x><round>
 func crossMergeRound(x, y string, round int) []string {
 	return []string{
 		fmt.Sprintf("CALL DOLT_CHECKOUT('%s');", x),
@@ -240,8 +255,12 @@ func crossMergeRound(x, y string, round int) []string {
 	}
 }
 
-// fourBranchesSetup creates branches a, b, c and d. c and d cross-merge every round for 4 rounds. After round 2, a
-// and b each commit and then merge c and d respectively. Then a gets 20 more commits and b gets 1.
+// fourBranchesSetup builds branches a, b, c and d from the "create table" commit. c and d cross-merge for 4 rounds
+// (see crossMergeRound), and a and b pull in c and d after round 2:
+//
+//	c, d: c1/d1 -- c2/d2 -- c3/d3 -- c4/d4, cross-merging every round
+//	a:    a 0 -- merge c (its tip after round 2) -- a 1 -- ... -- a 20
+//	b:    b 0 -- merge d (its tip after round 2) -- b 1
 func fourBranchesSetup() []string {
 	script := []string{
 		"CREATE TABLE t (id INT PRIMARY KEY, v VARCHAR(20));",
