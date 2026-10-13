@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/commitgraph"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -183,7 +184,7 @@ func GetCommitAncestor(ctx context.Context, cm1, cm2 *Commit) (*OptionalCommit, 
 
 // GetCommitAncestors returns every best common ancestor of |cm1| and |cm2|, the same set as `git merge-base --all`.
 func GetCommitAncestors(ctx context.Context, cm1, cm2 *Commit) ([]*OptionalCommit, error) {
-	addrs, err := datas.FindAllCommonAncestors(ctx, cm1.dCommit, cm2.dCommit, cm1.vrw, cm2.vrw)
+	addrs, err := commitgraph.GetMergeBases(ctx, commitResolver{cm1.vrw}, cm1.dCommit.Addr(), commitResolver{cm2.vrw}, cm2.dCommit.Addr())
 	if err != nil {
 		return nil, err
 	}
@@ -208,6 +209,30 @@ func GetCommitAncestors(ctx context.Context, cm1, cm2 *Commit) ([]*OptionalCommi
 		ancestors[i] = &OptionalCommit{cmt, addr}
 	}
 	return ancestors, nil
+}
+
+// commitResolver resolves commits in |vrw| for commitgraph.
+type commitResolver struct {
+	vrw types.ValueReadWriter
+}
+
+func (r commitResolver) ResolveCommitHash(ctx context.Context, h hash.Hash) (*commitgraph.CommitInfo, error) {
+	dc, err := datas.LoadCommitAddr(ctx, r.vrw, h)
+	if err != nil {
+		return nil, err
+	}
+	if dc.IsGhost() {
+		return &commitgraph.CommitInfo{Hash: h, IsGhost: true}, nil
+	}
+	sm, ok := dc.NomsValue().(types.SerialMessage)
+	if !ok {
+		return nil, fmt.Errorf("expected SerialMessage type for commit value, found %T", dc.NomsValue())
+	}
+	parents, err := types.SerialCommitParentAddrs(r.vrw.Format(), sm)
+	if err != nil {
+		return nil, err
+	}
+	return &commitgraph.CommitInfo{Hash: h, Height: dc.Height(), Parents: parents}, nil
 }
 
 func getCommitAncestorAddr(ctx context.Context, c1, c2 *datas.Commit, vrw1, vrw2 types.ValueReadWriter, ns1, ns2 tree.NodeStore) (hash.Hash, error) {
