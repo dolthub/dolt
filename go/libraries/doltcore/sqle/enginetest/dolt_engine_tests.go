@@ -1060,7 +1060,7 @@ func RunDoltMergeBasesTableFunctionTests(t *testing.T, h DoltEnginetestHarness) 
 func RunDoltMergeBasesOrderTests(t *testing.T, h DoltEnginetestHarness) {
 	cleanup := installTestCommitClock(&testCommitClock{})
 	defer cleanup()
-	for _, script := range MergeBasesOrderScripts {
+	for _, script := range append(MergeBasesOrderScripts, MergeBasesManyScripts...) {
 		func() {
 			h := h.NewHarness(t)
 			defer h.Close()
