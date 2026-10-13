@@ -28,23 +28,51 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-// testGraph is an in-memory HashResolver. Commits are named, and their heights are computed from their parents.
+// testGraph is an in-memory HashResolver. Commits are named, and their heights are computed from their parents. With
+// |withIndex| set, it is also an AncestryIndex, as the stored parent closures of Dolt commits are.
 type testGraph struct {
-	infos    map[hash.Hash]*CommitInfo
-	names    map[hash.Hash]string
-	heights  map[string]uint64
-	parents  map[string][]string
-	order    []string
-	resolved int
+	infos   map[hash.Hash]*CommitInfo
+	names   map[hash.Hash]string
+	heights map[string]uint64
+	// parents are the parents the walk can see. A ghost has none.
+	parents map[string][]string
+	// indexedParents are the true parents, which an ancestry index knows even for a ghost.
+	indexedParents map[string][]string
+	order          []string
+	withIndex      bool
+	resolved       int
+	indexLookups   int
 }
 
 func newTestGraph() *testGraph {
 	return &testGraph{
-		infos:   map[hash.Hash]*CommitInfo{},
-		names:   map[hash.Hash]string{},
-		heights: map[string]uint64{},
-		parents: map[string][]string{},
+		infos:          map[hash.Hash]*CommitInfo{},
+		names:          map[hash.Hash]string{},
+		heights:        map[string]uint64{},
+		parents:        map[string][]string{},
+		indexedParents: map[string][]string{},
 	}
+}
+
+// indexedTestGraph adds an AncestryIndex to a testGraph.
+type indexedTestGraph struct {
+	*testGraph
+}
+
+func (g indexedTestGraph) IsAncestor(_ context.Context, ancestor *CommitInfo, descendant hash.Hash) (bool, error) {
+	g.indexLookups++
+	return g.ancestorsIn(g.indexedParents, g.names[descendant])[g.names[ancestor.Hash]], nil
+}
+
+func (g indexedTestGraph) GhostHeight(_ context.Context, ghost hash.Hash, _ *CommitInfo) (uint64, error) {
+	return g.heights[g.names[ghost]], nil
+}
+
+func (g *testGraph) resolver() HashResolver {
+	if g.withIndex {
+		return indexedTestGraph{g}
+	}
+	return g
 }
 
 // parseTestGraph builds a graph from lines of "name parent1 parent2 ...". A name prefixed with "~" is a ghost: a commit
@@ -79,6 +107,7 @@ func (g *testGraph) add(name string, ghost bool, parents ...string) {
 	h := hashOfName(name)
 	g.heights[name] = height
 	g.parents[name] = parents
+	g.indexedParents[name] = parents
 	g.names[h] = name
 	g.order = append(g.order, name)
 	if ghost {
@@ -104,7 +133,7 @@ func (g *testGraph) ResolveCommitHash(_ context.Context, h hash.Hash) (*CommitIn
 
 func (g *testGraph) mergeBases(t *testing.T, left, right string) []string {
 	t.Helper()
-	bases, err := GetMergeBases(context.Background(), g, hashOfName(left), g, hashOfName(right))
+	bases, err := GetMergeBases(context.Background(), g.resolver(), hashOfName(left), g.resolver(), hashOfName(right))
 	require.NoError(t, err)
 	names := make([]string, len(bases))
 	for i, b := range bases {
@@ -139,8 +168,12 @@ func (g *testGraph) referenceMergeBases(left, right string) []string {
 	return bases
 }
 
-// ancestors returns |names| and all of their ancestors.
+// ancestors returns |names| and all of their ancestors that the walk can see.
 func (g *testGraph) ancestors(names ...string) map[string]bool {
+	return g.ancestorsIn(g.parents, names...)
+}
+
+func (g *testGraph) ancestorsIn(parents map[string][]string, names ...string) map[string]bool {
 	seen := map[string]bool{}
 	stack := append([]string{}, names...)
 	for len(stack) > 0 {
@@ -150,7 +183,7 @@ func (g *testGraph) ancestors(names ...string) map[string]bool {
 			continue
 		}
 		seen[c] = true
-		stack = append(stack, g.parents[c]...)
+		stack = append(stack, parents[c]...)
 	}
 	return seen
 }
@@ -339,20 +372,30 @@ func mergeBasesScenarios() []mergeBasesScenario {
 	}
 }
 
-func TestGetMergeBases(t *testing.T) {
-	for _, s := range mergeBasesScenarios() {
-		t.Run(s.name, func(t *testing.T) {
-			g := parseTestGraph(s.graph)
-			expected := append([]string{}, s.bases...)
-			sort.Strings(expected)
-			require.Equal(t, expected, g.referenceMergeBases(s.left, s.right), "scenario disagrees with the reference")
-			assert.Equal(t, expected, g.mergeBases(t, s.left, s.right))
-			assert.Equal(t, expected, g.mergeBases(t, s.right, s.left))
-		})
-	}
+// forEachWalk runs |test| walking both sides, and walking one side against an AncestryIndex of the other.
+func forEachWalk(t *testing.T, test func(t *testing.T, withIndex bool)) {
+	t.Run("both sides", func(t *testing.T) { test(t, false) })
+	t.Run("one side with an ancestry index", func(t *testing.T) { test(t, true) })
 }
 
-// A ghost's parents are unknown and could be any commit, so the walk cannot tell which common ancestors lie beyond it.
+func TestGetMergeBases(t *testing.T) {
+	forEachWalk(t, func(t *testing.T, withIndex bool) {
+		for _, s := range mergeBasesScenarios() {
+			t.Run(s.name, func(t *testing.T) {
+				g := parseTestGraph(s.graph)
+				g.withIndex = withIndex
+				expected := append([]string{}, s.bases...)
+				sort.Strings(expected)
+				require.Equal(t, expected, g.referenceMergeBases(s.left, s.right), "scenario disagrees with the reference")
+				assert.Equal(t, expected, g.mergeBases(t, s.left, s.right))
+				assert.Equal(t, expected, g.mergeBases(t, s.right, s.left))
+			})
+		}
+	})
+}
+
+// A ghost's parents are unknown and could be any commit, so a walk of both sides cannot tell which common ancestors lie
+// beyond it.
 func TestGetMergeBasesErrorsOnGhosts(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -395,20 +438,91 @@ func TestGetMergeBasesDoesNotReachGhostsBelowTheMergeBases(t *testing.T) {
 		{name: "a criss-cross above a ghost", graph: "~g\nroot g\nx0 root\ny0 root\nx1 x0 y0\ny1 y0 x0\n", left: "x1", right: "y1", bases: []string{"x0", "y0"}},
 		{name: "one side is the shallow clone's root", graph: "~g\nroot g\nx root\n", left: "root", right: "x", bases: []string{"root"}},
 	}
-	for _, tt := range tests {
+	forEachWalk(t, func(t *testing.T, withIndex bool) {
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				g := parseTestGraph(tt.graph)
+				g.withIndex = withIndex
+				assert.Equal(t, tt.bases, g.mergeBases(t, tt.left, tt.right))
+				assert.Equal(t, tt.bases, g.mergeBases(t, tt.right, tt.left))
+			})
+		}
+	})
+}
+
+// With an ancestry index, only the side with the shorter tip is walked, and not below a common commit. A ghost is
+// harmless when it is on the other side, or below a merge base; otherwise its unknown parents could hide a merge base.
+func TestGetMergeBasesWithIndexGhosts(t *testing.T) {
+	ok := []struct {
+		name        string
+		graph       string
+		left, right string
+		bases       []string
+	}{
+		{
+			name:  "a ghost on the side that is not walked",
+			graph: "root\na root\n~g a\nl1 g\nl2 l1\nl3 l2\nr a\n", left: "l3", right: "r", bases: []string{"a"},
+		},
+		{
+			// shallow-clone.bats "clone depth 5 on complex main": c and v1 are not in the clone.
+			name:  "a ghost below the merge base on the walked side",
+			graph: "~c\n~v1 c\nv2 v1\nv3 v2\nv4 v3\nv5 v4\nv6 c\nv7 v6\nm1 v7 v3\nv8 m1\n", left: "v5", right: "v8", bases: []string{"v3"},
+		},
+		{
+			name:  "a commit below a ghost below the merge base",
+			graph: "root\n~g root\nb g\nk root\nw b k\no b\n", left: "o", right: "w", bases: []string{"b"},
+		},
+	}
+	for _, tt := range ok {
 		t.Run(tt.name, func(t *testing.T) {
 			g := parseTestGraph(tt.graph)
+			g.withIndex = true
 			assert.Equal(t, tt.bases, g.mergeBases(t, tt.left, tt.right))
 			assert.Equal(t, tt.bases, g.mergeBases(t, tt.right, tt.left))
 		})
 	}
+
+	fails := []struct {
+		name        string
+		graph       string
+		left, right string
+	}{
+		{name: "a ghost on the walked side above the merge base", graph: "root\na root\n~g a\nr g\nl1 a\nl2 l1\nl3 l2\nl4 l3\n", left: "r", right: "l4"},
+		{name: "a ghost merge base", graph: "root\n~g root\nx g\ny g\n", left: "x", right: "y"},
+	}
+	for _, tt := range fails {
+		t.Run(tt.name, func(t *testing.T) {
+			g := parseTestGraph(tt.graph)
+			g.withIndex = true
+			for _, order := range [][2]string{{tt.left, tt.right}, {tt.right, tt.left}} {
+				_, err := GetMergeBases(context.Background(), g.resolver(), hashOfName(order[0]), g.resolver(), hashOfName(order[1]))
+				var ghostErr *GhostCommitError
+				if assert.ErrorAs(t, err, &ghostErr, "merge bases of %s and %s", order[0], order[1]) {
+					assert.Equal(t, hashOfName("g"), ghostErr.Hash)
+				}
+			}
+		})
+	}
+}
+
+func TestGetMergeBasesWithIndexWalksTheShorterSide(t *testing.T) {
+	tall, tallTip := chain("l", "f", 500)
+	g := parseTestGraph("root\nf root\n" + tall + "r1 f\n")
+	g.withIndex = true
+	assert.Equal(t, []string{"f"}, g.mergeBases(t, tallTip, "r1"))
+	assert.Equal(t, []string{"f"}, g.mergeBases(t, "r1", tallTip))
+	assert.Less(t, g.resolved, 10, "only the short side should be walked")
+	assert.Less(t, g.indexLookups, 10)
 }
 
 func TestGetMergeBasesStopsAtTheBases(t *testing.T) {
-	trunk, trunkTip := chain("t", "root", 3000)
-	g := parseTestGraph("root\n" + trunk + crissCrossRounds(trunkTip, 1))
-	assert.Equal(t, []string{"x0", "y0"}, g.mergeBases(t, "x1", "y1"))
-	assert.Less(t, g.resolved, 20, "the walk should not descend into the history below the merge bases")
+	forEachWalk(t, func(t *testing.T, withIndex bool) {
+		trunk, trunkTip := chain("t", "root", 3000)
+		g := parseTestGraph("root\n" + trunk + crissCrossRounds(trunkTip, 1))
+		g.withIndex = withIndex
+		assert.Equal(t, []string{"x0", "y0"}, g.mergeBases(t, "x1", "y1"))
+		assert.Less(t, g.resolved, 20, "the walk should not descend into the history below the merge bases")
+	})
 }
 
 func TestGetMergeBasesPerSideResolvers(t *testing.T) {
@@ -449,18 +563,21 @@ func randomGraph(rnd *rand.Rand, n, branches int, mergeProb float64) (*testGraph
 }
 
 func TestGetMergeBasesMatchesReferenceOnRandomGraphs(t *testing.T) {
-	rnd := rand.New(rand.NewSource(12050))
-	maxBases := 0
-	for seed := 0; seed < 300; seed++ {
-		g, commits := randomGraph(rnd, 30+rnd.Intn(50), 2+rnd.Intn(5), 0.2+rnd.Float64()*0.6)
-		for pair := 0; pair < 10; pair++ {
-			left, right := commits[rnd.Intn(len(commits))], commits[rnd.Intn(len(commits))]
-			expected := g.referenceMergeBases(left, right)
-			maxBases = max(maxBases, len(expected))
-			if !assert.Equal(t, expected, g.mergeBases(t, left, right), "graph %d: merge bases of %s and %s", seed, left, right) {
-				return
+	forEachWalk(t, func(t *testing.T, withIndex bool) {
+		rnd := rand.New(rand.NewSource(12050))
+		maxBases := 0
+		for seed := 0; seed < 300; seed++ {
+			g, commits := randomGraph(rnd, 30+rnd.Intn(50), 2+rnd.Intn(5), 0.2+rnd.Float64()*0.6)
+			g.withIndex = withIndex
+			for pair := 0; pair < 10; pair++ {
+				left, right := commits[rnd.Intn(len(commits))], commits[rnd.Intn(len(commits))]
+				expected := g.referenceMergeBases(left, right)
+				maxBases = max(maxBases, len(expected))
+				if !assert.Equal(t, expected, g.mergeBases(t, left, right), "graph %d: merge bases of %s and %s", seed, left, right) {
+					return
+				}
 			}
 		}
-	}
-	assert.GreaterOrEqual(t, maxBases, 3, "random graphs should include pairs with several merge bases")
+		assert.GreaterOrEqual(t, maxBases, 3, "random graphs should include pairs with several merge bases")
+	})
 }
