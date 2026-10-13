@@ -55,7 +55,10 @@ func MergeBases(ctx context.Context, left, right *doltdb.Commit) ([]hash.Hash, e
 	return sortNewestFirst(ctx, commits)
 }
 
-// sortNewestFirst returns the hashes of |commits| ordered by committer date, newest first, breaking ties by hash.
+// sortNewestFirst returns the hashes of |commits| ordered by committer date, newest first, breaking ties by hash. git
+// orders merge bases the same way (commit_list_insert_by_date in commit-reach.c). Checked with git 2.39: in one history,
+// swapping the committer dates of two merge bases swaps their order in `git merge-base --all`, regardless of their
+// heights, and author dates do not affect it. git leaves commits with equal dates in no defined order.
 func sortNewestFirst(ctx context.Context, commits []*doltdb.Commit) ([]hash.Hash, error) {
 	type datedCommit struct {
 		date time.Time

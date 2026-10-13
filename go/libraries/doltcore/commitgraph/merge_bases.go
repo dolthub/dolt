@@ -92,8 +92,8 @@ func walkBothSides(ctx context.Context, q mergeBaseQueue, leftTip, rightTip *ent
 		if e.info.IsGhost {
 			return &GhostCommitError{Hash: h}
 		}
-		prev := e.flags
-		e.flags |= flags
+		prev := e.mergeBaseFlags
+		e.mergeBaseFlags |= flags
 		if !e.queued {
 			e.queued = true
 			heap.Push(q, e)
@@ -115,20 +115,20 @@ func walkBothSides(ctx context.Context, q mergeBaseQueue, leftTip, rightTip *ent
 	var mergeBases []hash.Hash
 	for unresolved > 0 {
 		e := heap.Pop(q).(*entry)
-		if e.flags&ancestorOfMergeBase == 0 {
+		if e.mergeBaseFlags&ancestorOfMergeBase == 0 {
 			unresolved--
-			if e.flags&reachableFromLeft != 0 && e.flags&reachableFromRight != 0 {
+			if e.mergeBaseFlags&reachableFromLeft != 0 && e.mergeBaseFlags&reachableFromRight != 0 {
 				mergeBases = append(mergeBases, e.info.Hash)
-				e.flags |= ancestorOfMergeBase
+				e.mergeBaseFlags |= ancestorOfMergeBase
 			}
 		}
 		// Every commit left to visit is an ancestor of a merge base, and so are |e|'s parents. Stopping here keeps the
 		// walk from reaching a ghost that cannot change the result.
-		if unresolved == 0 && e.flags&ancestorOfMergeBase != 0 {
+		if unresolved == 0 && e.mergeBaseFlags&ancestorOfMergeBase != 0 {
 			break
 		}
 		for _, p := range e.info.Parents {
-			if err := markReachable(e.resolver, p, e.flags); err != nil {
+			if err := markReachable(e.resolver, p, e.mergeBaseFlags); err != nil {
 				return nil, err
 			}
 		}

@@ -59,6 +59,9 @@ func schemaBranchCrissCrossSetup(extraSeedCommits int) []string {
 	)
 }
 
+// MergeBasesTableFunctionScripts run with a commit clock that advances on every commit, so later commits have later
+// committer dates. dolt_merge_bases lists the newest merge base first, as `git merge-base --all` does, even when another
+// merge base is taller.
 var MergeBasesTableFunctionScripts = []queries.ScriptTest{
 	{
 		Name:        "dolt_merge_bases: lists every merge base of a criss-cross history",
@@ -72,10 +75,6 @@ var MergeBasesTableFunctionScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT count(*) FROM dolt_merge_bases(hashof('feature'), 'main');",
 				Expected: []sql.Row{{2}},
-			},
-			{
-				Query:    "SELECT dolt_merge_base('main', 'feature') IN (SELECT merge_base FROM dolt_merge_bases('main', 'feature'));",
-				Expected: []sql.Row{{true}},
 			},
 			{
 				Query: "SELECT l.message FROM dolt_merge_bases('main', 'schema') b " +
@@ -100,11 +99,6 @@ var MergeBasesTableFunctionScripts = []queries.ScriptTest{
 			},
 		},
 	},
-}
-
-// MergeBasesOrderScripts run with a commit clock that advances on every commit. dolt_merge_bases lists the newest merge
-// base first, as `git merge-base --all` does, even when another merge base is taller.
-var MergeBasesOrderScripts = []queries.ScriptTest{
 	{
 		Name:        "dolt_merge_bases: newest merge base first",
 		SetUpScript: schemaBranchCrissCrossSetup(2),
@@ -123,6 +117,73 @@ var MergeBasesOrderScripts = []queries.ScriptTest{
 				Query: "SELECT l.message FROM (SELECT merge_base FROM dolt_merge_bases('feature', 'main') LIMIT 1 OFFSET 0) b " +
 					"JOIN dolt_log('main', 'feature', 'schema') l ON l.commit_hash = b.merge_base;",
 				Expected: []sql.Row{{"s2: add column m"}},
+			},
+		},
+	},
+	{
+		Name:        "dolt_merge_bases: 3 merge bases",
+		SetUpScript: fanInSetup(3),
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: orderedMergeBaseBranches("m1", "m2"), Expected: []sql.Row{{"p3"}, {"p2"}, {"p1"}}},
+			{Query: orderedMergeBaseBranches("m2", "m1"), Expected: []sql.Row{{"p3"}, {"p2"}, {"p1"}}},
+			{
+				Query:    "SELECT dolt_merge_base('m1', 'm2') IN (SELECT merge_base FROM dolt_merge_bases('m1', 'm2'));",
+				Expected: []sql.Row{{true}},
+			},
+			{Query: orderedMergeBaseBranches("m1", "p2"), Expected: []sql.Row{{"p2"}}},
+			{Query: orderedMergeBaseBranches("p1", "p2"), Expected: []sql.Row{{"main"}}},
+		},
+	},
+	{
+		Name:        "dolt_merge_bases: 4 merge bases",
+		SetUpScript: fanInSetup(4),
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: orderedMergeBaseBranches("m1", "m2"), Expected: []sql.Row{{"p4"}, {"p3"}, {"p2"}, {"p1"}}},
+		},
+	},
+	{
+		Name:        "dolt_merge_bases: 5 merge bases",
+		SetUpScript: fanInSetup(5),
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: orderedMergeBaseBranches("m1", "m2"), Expected: []sql.Row{{"p5"}, {"p4"}, {"p3"}, {"p2"}, {"p1"}}},
+			{Query: "SELECT count(*) FROM dolt_merge_bases('m2', 'm1');", Expected: []sql.Row{{5}}},
+		},
+	},
+	{
+		Name: "dolt_merge_bases: repeated criss-cross merges keep only the last round",
+		SetUpScript: func() []string {
+			script := []string{
+				"CREATE TABLE t (id INT PRIMARY KEY, v VARCHAR(20));",
+				"CALL DOLT_COMMIT('-Am', 'create table');",
+				"CALL DOLT_BRANCH('x');",
+				"CALL DOLT_BRANCH('y');",
+			}
+			for round := 1; round <= 5; round++ {
+				script = append(script, crossMergeRound("x", "y", round)...)
+			}
+			return script
+		}(),
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: orderedMergeBaseTags("x", "y"), Expected: []sql.Row{{"y5"}, {"x5"}}},
+			{Query: orderedMergeBaseTags("y", "x"), Expected: []sql.Row{{"y5"}, {"x5"}}},
+			{Query: orderedMergeBaseTags("x", "y3"), Expected: []sql.Row{{"y3"}}},
+		},
+	},
+	{
+		Name:        "dolt_merge_bases: four branches, two of which cross-merge every round",
+		SetUpScript: fourBranchesSetup(),
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: orderedMergeBaseTags("a", "b"), Expected: []sql.Row{{"d2"}, {"c2"}}},
+			{Query: orderedMergeBaseTags("c", "d"), Expected: []sql.Row{{"d4"}, {"c4"}}},
+			{
+				Query: "SELECT l.message FROM dolt_merge_bases('a', 'd') b " +
+					"JOIN dolt_log('a', 'b', 'c', 'd') l ON l.commit_hash = b.merge_base;",
+				Expected: []sql.Row{{"c merges d2"}},
+			},
+			{
+				Query: "SELECT l.message FROM dolt_merge_bases('b', 'c') b " +
+					"JOIN dolt_log('a', 'b', 'c', 'd') l ON l.commit_hash = b.merge_base;",
+				Expected: []sql.Row{{"d merges c2"}},
 			},
 		},
 	},
@@ -228,75 +289,4 @@ func orderedMergeBaseBranches(left, right string) string {
 func orderedMergeBaseTags(left, right string) string {
 	return fmt.Sprintf("SELECT tg.tag_name FROM (SELECT merge_base, ROW_NUMBER() OVER () AS rn FROM dolt_merge_bases('%s', '%s')) b "+
 		"JOIN dolt_tags tg ON tg.tag_hash = b.merge_base ORDER BY b.rn;", left, right)
-}
-
-// MergeBasesManyScripts run with a commit clock that advances on every commit, so the order of merge bases is fixed.
-var MergeBasesManyScripts = []queries.ScriptTest{
-	{
-		Name:        "dolt_merge_bases: 3 merge bases",
-		SetUpScript: fanInSetup(3),
-		Assertions: []queries.ScriptTestAssertion{
-			{Query: orderedMergeBaseBranches("m1", "m2"), Expected: []sql.Row{{"p3"}, {"p2"}, {"p1"}}},
-			{Query: orderedMergeBaseBranches("m2", "m1"), Expected: []sql.Row{{"p3"}, {"p2"}, {"p1"}}},
-			{
-				Query:    "SELECT dolt_merge_base('m1', 'm2') IN (SELECT merge_base FROM dolt_merge_bases('m1', 'm2'));",
-				Expected: []sql.Row{{true}},
-			},
-			{Query: orderedMergeBaseBranches("m1", "p2"), Expected: []sql.Row{{"p2"}}},
-			{Query: orderedMergeBaseBranches("p1", "p2"), Expected: []sql.Row{{"main"}}},
-		},
-	},
-	{
-		Name:        "dolt_merge_bases: 4 merge bases",
-		SetUpScript: fanInSetup(4),
-		Assertions: []queries.ScriptTestAssertion{
-			{Query: orderedMergeBaseBranches("m1", "m2"), Expected: []sql.Row{{"p4"}, {"p3"}, {"p2"}, {"p1"}}},
-		},
-	},
-	{
-		Name:        "dolt_merge_bases: 5 merge bases",
-		SetUpScript: fanInSetup(5),
-		Assertions: []queries.ScriptTestAssertion{
-			{Query: orderedMergeBaseBranches("m1", "m2"), Expected: []sql.Row{{"p5"}, {"p4"}, {"p3"}, {"p2"}, {"p1"}}},
-			{Query: "SELECT count(*) FROM dolt_merge_bases('m2', 'm1');", Expected: []sql.Row{{5}}},
-		},
-	},
-	{
-		Name: "dolt_merge_bases: repeated criss-cross merges keep only the last round",
-		SetUpScript: func() []string {
-			script := []string{
-				"CREATE TABLE t (id INT PRIMARY KEY, v VARCHAR(20));",
-				"CALL DOLT_COMMIT('-Am', 'create table');",
-				"CALL DOLT_BRANCH('x');",
-				"CALL DOLT_BRANCH('y');",
-			}
-			for round := 1; round <= 5; round++ {
-				script = append(script, crossMergeRound("x", "y", round)...)
-			}
-			return script
-		}(),
-		Assertions: []queries.ScriptTestAssertion{
-			{Query: orderedMergeBaseTags("x", "y"), Expected: []sql.Row{{"y5"}, {"x5"}}},
-			{Query: orderedMergeBaseTags("y", "x"), Expected: []sql.Row{{"y5"}, {"x5"}}},
-			{Query: orderedMergeBaseTags("x", "y3"), Expected: []sql.Row{{"y3"}}},
-		},
-	},
-	{
-		Name:        "dolt_merge_bases: four branches, two of which cross-merge every round",
-		SetUpScript: fourBranchesSetup(),
-		Assertions: []queries.ScriptTestAssertion{
-			{Query: orderedMergeBaseTags("a", "b"), Expected: []sql.Row{{"d2"}, {"c2"}}},
-			{Query: orderedMergeBaseTags("c", "d"), Expected: []sql.Row{{"d4"}, {"c4"}}},
-			{
-				Query: "SELECT l.message FROM dolt_merge_bases('a', 'd') b " +
-					"JOIN dolt_log('a', 'b', 'c', 'd') l ON l.commit_hash = b.merge_base;",
-				Expected: []sql.Row{{"c merges d2"}},
-			},
-			{
-				Query: "SELECT l.message FROM dolt_merge_bases('b', 'c') b " +
-					"JOIN dolt_log('a', 'b', 'c', 'd') l ON l.commit_hash = b.merge_base;",
-				Expected: []sql.Row{{"d merges c2"}},
-			},
-		},
-	},
 }

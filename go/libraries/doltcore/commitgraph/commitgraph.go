@@ -87,12 +87,11 @@ func GetDotDotIterator(
 // --- priority queue --------------------------------------------------------
 
 type entry struct {
-	resolver  HashResolver
-	info      *CommitInfo
-	invisible bool
-	queued    bool
-	// flags is used by GetMergeBases.
-	flags uint8
+	resolver       HashResolver
+	info           *CommitInfo
+	invisible      bool
+	queued         bool
+	mergeBaseFlags uint8
 }
 
 type pq struct {

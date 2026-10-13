@@ -37,8 +37,6 @@ When the commits have more than one best common ancestor, one of them is returne
 	},
 }
 
-const mergeBaseAllFlag = "all"
-
 type MergeBaseCmd struct{}
 
 // Name returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
@@ -58,7 +56,7 @@ func (cmd MergeBaseCmd) Docs() *cli.CommandDocumentation {
 
 func (cmd MergeBaseCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 2)
-	ap.SupportsFlag(mergeBaseAllFlag, "", "Print every best common ancestor instead of one.")
+	ap.SupportsFlag(cli.AllFlag, "", "Print every best common ancestor instead of one.")
 	return ap
 }
 
@@ -85,7 +83,7 @@ func (cmd MergeBaseCmd) Exec(ctx context.Context, commandStr string, args []stri
 	}
 
 	query := "SELECT DOLT_MERGE_BASE(?, ?)"
-	if apr.Contains(mergeBaseAllFlag) {
+	if apr.Contains(cli.AllFlag) {
 		query = "SELECT merge_base FROM DOLT_MERGE_BASES(?, ?)"
 	}
 	interpolatedQuery, err := dbr.InterpolateForDialect(query, []interface{}{apr.Arg(0), apr.Arg(1)}, dialect.MySQL)
