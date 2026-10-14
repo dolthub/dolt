@@ -14,7 +14,43 @@
 
 package doltdb
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+func TestForeignKeyEqualDefsReferentialActions(t *testing.T) {
+	fk := ForeignKey{
+		Name:                   "fk1",
+		TableName:              TableName{Name: "child"},
+		TableIndex:             "child_idx",
+		TableColumns:           []uint64{1},
+		ReferencedTableName:    TableName{Name: "parent"},
+		ReferencedTableIndex:   "parent_idx",
+		ReferencedTableColumns: []uint64{2},
+		OnUpdate:               ForeignKeyReferentialAction_Cascade,
+		OnDelete:               ForeignKeyReferentialAction_Cascade,
+	}
+	assert.True(t, fk.EqualDefs(fk))
+
+	tests := []struct {
+		name   string
+		modify func(*ForeignKey)
+	}{
+		{"ON UPDATE", func(other *ForeignKey) { other.OnUpdate = ForeignKeyReferentialAction_SetNull }},
+		{"ON DELETE", func(other *ForeignKey) { other.OnDelete = ForeignKeyReferentialAction_SetNull }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			other := fk
+			test.modify(&other)
+			assert.False(t, fk.EqualDefs(other))
+			assert.False(t, other.EqualDefs(fk))
+			assert.False(t, fk.DeepEquals(other))
+		})
+	}
+}
 
 func BenchmarkForeignKeyHashOf(b *testing.B) {
 	fk := ForeignKey{
