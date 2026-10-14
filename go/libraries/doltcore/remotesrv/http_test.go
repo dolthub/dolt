@@ -37,7 +37,8 @@ func (rejectingDBCache) Get(context.Context, string, string) (RemoteSrvStore, er
 func TestUploadRejectsTraversalPath(t *testing.T) {
 	fileID := hash.New(GoodHash).String()
 	handler := newFileHandler(logrus.NewEntry(logrus.New()), rejectingDBCache{}, nil, false, identitySealer{})
-	for _, repoPath := range []string{"../outside", "org/../outside", "org/./repo", "org\\..\\outside"} {
+	// A leading slash becomes an absolute path after ServeHTTP trims one slash.
+	for _, repoPath := range []string{"../outside", "org/../outside", "org/./repo", "org\\..\\outside", "/org/repo"} {
 		t.Run(repoPath, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "http://example.com/"+repoPath+"/"+fileID+"?num_chunks=1&content_length=3", strings.NewReader("abc"))
 			resp := httptest.NewRecorder()

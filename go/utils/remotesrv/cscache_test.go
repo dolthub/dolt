@@ -57,3 +57,28 @@ func TestLocalCSCacheKeepsRepositoriesInRoot(t *testing.T) {
 	_, err = os.Stat(filepath.Join(root, "org", "repo"))
 	require.NoError(t, err)
 }
+
+func TestLocalCSCacheWithSymlinkedRoot(t *testing.T) {
+	parent := t.TempDir()
+	target := filepath.Join(parent, "target")
+	require.NoError(t, os.Mkdir(target, 0755))
+	root := filepath.Join(parent, "root")
+	require.NoError(t, os.Symlink(target, root))
+	fs, err := filesys.LocalFilesysWithWorkingDir(root)
+	require.NoError(t, err)
+	cache := NewLocalCSCache(fs)
+
+	store, err := cache.Get(context.Background(), "org/repo", types.Format_DOLT.VersionString())
+	require.NoError(t, err)
+	require.NoError(t, store.Close())
+	_, err = os.Stat(filepath.Join(target, "org", "repo"))
+	require.NoError(t, err)
+
+	outside := filepath.Join(parent, "outside")
+	require.NoError(t, os.Mkdir(outside, 0755))
+	require.NoError(t, os.Symlink(outside, filepath.Join(target, "link")))
+	_, err = cache.Get(context.Background(), "link/repo", types.Format_DOLT.VersionString())
+	require.Error(t, err)
+	_, err = os.Stat(filepath.Join(outside, "repo"))
+	require.True(t, os.IsNotExist(err))
+}
