@@ -417,9 +417,15 @@ func executeFFMerge(ctx *sql.Context, dbName string, squash bool, ws *doltdb.Wor
 
 	// We only fully commit our transaction when we are not squashing.
 	if !squash {
-		err = commitMergeWorkingSets(ctx, sess, dbName)
+		// The purpose of this transaction is solely state management, to mark it as non-dirty after bringing it up
+		// up to date with the new branch head we just forwarded. There may still be other dirty working sets on other
+		// branches.
+		// TODO: merge is still always on a single branch, even though we now allow committing to multiple branches in a
+		//  single commit. This mismatch might not play well with committing to multiple branch heads in the same
+		//  transaction in some edge cases. Needs more thought.
+		err = sess.CommitWorkingSet(ctx, dbName, sess.GetTransaction())
 		if err != nil {
-			return ws, err
+			return nil, err
 		}
 	}
 
