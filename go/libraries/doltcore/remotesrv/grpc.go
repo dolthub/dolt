@@ -159,7 +159,7 @@ func (rs *RemoteChunkStore) getRelativeStorePath(ctx context.Context, cs RemoteS
 	if err != nil {
 		return "", err
 	}
-	return prefix, nil
+	return filepath.ToSlash(prefix), nil
 }
 
 func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remotesapi.GetDownloadLocsRequest) (*remotesapi.GetDownloadLocsResponse, error) {
