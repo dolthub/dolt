@@ -47,6 +47,9 @@ var slashCmds = []cli.Command{
 	WarningOff{},
 }
 
+// slashWordRegex matches one quoted word, or one run of non-space characters.
+var slashWordRegex = regexp.MustCompile(`"[^"\\]*(?:\\.[^"\\]*)*"|\S+`)
+
 // parseSlashCmd parses a command line string into a slice of strings, splitting on spaces, but allowing spaces within
 // double quotes. For example, the string `foo "bar baz"` would be parsed into the slice `[]string{"foo", "bar baz"}`.
 // This is quick and dirty for slash command prototype, and doesn't try and handle all the crazy edge cases that come
@@ -57,8 +60,7 @@ func parseSlashCmd(cmd string) []string {
 	cmd = strings.TrimRight(cmd, " \t\n\r\v\f")
 	cmd = strings.TrimLeft(cmd, " \t\n\r\v\f")
 
-	r := regexp.MustCompile(`"[^"\\]*(?:\\.[^"\\]*)*"|\S+`)
-	cmdWords := r.FindAllString(cmd, -1)
+	cmdWords := slashWordRegex.FindAllString(cmd, -1)
 
 	for i := range cmdWords {
 		if cmdWords[i][0] == '"' {
@@ -178,11 +180,9 @@ func (s SlashHelp) ArgParser() *argparser.ArgParser {
 // take just command names or a command with arguments and a "\" prefix.
 func findSlashCmd(cmd string) (cli.Command, bool) {
 	cmd = strings.TrimPrefix(cmd, `\`)
-	words := strings.Split(cmd, " ")
-	if len(words) == 0 {
-		return nil, false
+	if i := strings.IndexByte(cmd, ' '); i >= 0 {
+		cmd = cmd[:i]
 	}
-	cmd = words[0]
 
 	for _, cmdInst := range slashCmds {
 		if cmdInst.Name() == cmd {

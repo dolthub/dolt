@@ -183,10 +183,20 @@ SQL
 
 @test "sql-batch: unknown backslash command is reported, not sent to SQL" {
     # https://github.com/dolthub/dolt/issues/12065
-    run bash -c "printf '\\\\notacommand\\n' | dolt sql"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "Unknown command: \\notacommand." ]] || false
-    [[ ! "$output" =~ "syntax error" ]] || false
+    for input in '\notacommand' '\notacommand; select 1'; do
+        run bash -c "printf '%s\n' '$input' | dolt sql"
+        [ "$status" -eq 1 ]
+        [[ "$output" =~ "Unknown command: \\notacommand." ]] || false
+        [[ ! "$output" =~ "syntax error" ]] || false
+    done
+}
+
+@test "sql-batch: a hash comment hides a backslash command" {
+    # https://github.com/dolthub/dolt/issues/12065
+    run bash -c "printf '%s\n' 'select 42 as answer # ; \\ls' ';' | dolt sql"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "42" ]] || false
+    [[ ! "$output" =~ "Tables in working set" ]] || false
 }
 
 @test "sql-batch: ls and status run as in the shell" {
@@ -208,4 +218,42 @@ SQL
     run bash -c "printf '\\\\pager\\n' | dolt sql"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "\\pager runs only in the interactive shell" ]] || false
+}
+
+@test "sql-batch: backslash commands run mid-line and mid-statement" {
+    # https://github.com/dolthub/dolt/issues/12065
+    dolt sql -q "create table MARK (pk int primary key)"
+    run bash -c "printf '%s\n' 'select 41 + 1 as answer \\ls' ';' | dolt sql"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "MARK" ]] || false
+    [[ "$output" =~ "42" ]] || false
+
+    run bash -c "printf '%s\n' 'select 41 + 1 as answer' '\\ls' ';' | dolt sql"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "MARK" ]] || false
+    [[ "$output" =~ "42" ]] || false
+
+    run bash -c "printf '%s\n' 'select 41 + 1 as answer' '\\y' ';' | dolt sql"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Unknown command: \\y." ]] || false
+    [[ "$output" =~ "42" ]] || false
+    [[ ! "$output" =~ "syntax error" ]] || false
+}
+
+@test "sql-batch: backslash c discards the statement being entered" {
+    # https://github.com/dolthub/dolt/issues/12065
+    run bash -c "printf '%s\n' 'select 5,' '\\c' 'select 6 as six;' | dolt sql"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "six" ]] || false
+    [[ "$output" =~ "6" ]] || false
+    [[ ! "$output" =~ "syntax error" ]] || false
+}
+
+@test "sql-batch: a command after a statement on its line runs before that statement" {
+    # https://github.com/dolthub/dolt/issues/12065
+    dolt sql -q "create table MARK (pk int primary key)"
+    run bash -c "printf '%s\n' 'select 7 as seven; \\ls' | dolt sql"
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" =~ "Tables in working set" ]] || false
+    [[ "$output" =~ "seven" ]] || false
 }

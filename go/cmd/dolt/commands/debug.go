@@ -391,12 +391,15 @@ func debugAnalyze(ctx *sql.Context, tempDir string, sqlEng *engine.SqlEngine, sq
 		cli.CliErr = origCliErr
 	}()
 
-	scanner := NewStreamScanner(sqlFile)
+	scanner := newCommandScanner(sqlFile)
 	var query string
 	for scanner.Scan() {
 		if fileReadProg != nil {
 			updateFileReadProgressOutput()
 			fileReadProg.setReadBytes(int64(len(scanner.Bytes())))
+		}
+		if scanner.isCommand() {
+			continue
 		}
 		query += scanner.Text()
 		if len(query) == 0 || query == "\n" {

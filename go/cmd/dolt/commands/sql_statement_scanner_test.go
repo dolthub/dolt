@@ -309,6 +309,7 @@ in quote'`,
 				i++
 			}
 
+			require.Equal(t, len(tt.statements), i)
 			require.NoError(t, scanner.Err())
 		})
 	}
