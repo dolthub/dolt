@@ -78,22 +78,6 @@ var doltMergeSchema = []*sql.Column{
 	},
 }
 
-// commitMergeWorkingSets ends a merge transaction without discarding edits made
-// on other branches. The session's single-working-set helper deliberately only
-// commits the branch it is given, so the merge procedure selects the whole batch.
-func commitMergeWorkingSets(ctx *sql.Context, sess *dsess.DoltSession, dbName string) error {
-	dirty := sess.DirtyBranches()
-	if len(dirty) <= 1 {
-		return sess.CommitWorkingSet(ctx, dbName, sess.GetTransaction())
-	}
-	names := make([]string, len(dirty))
-	for i, branch := range dirty {
-		names[i] = branch.DbName + "/" + branch.Branch
-	}
-	_, err := sess.DoltCommitMulti(ctx, sess.GetTransaction(), names, make([]*doltdb.PendingCommit, len(names)))
-	return err
-}
-
 // doltMerge is the stored procedure version for the CLI command `dolt merge`.
 func doltMerge(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	commitHash, hasConflicts, ff, message, err := doDoltMerge(ctx, args)
@@ -168,7 +152,7 @@ func doDoltMerge(ctx *sql.Context, args []string) (string, int, int, string, err
 			return "", noConflictsOrViolations, threeWayMerge, "", err
 		}
 
-		err = commitMergeWorkingSets(ctx, sess, dbName)
+		err = sess.CommitWorkingSet(ctx, dbName, sess.GetTransaction())
 		if err != nil {
 			return "", noConflictsOrViolations, threeWayMerge, "", err
 		}
