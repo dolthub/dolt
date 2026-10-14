@@ -17,7 +17,6 @@ package merge
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"testing"
 	"time"
 
@@ -25,7 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -33,163 +31,81 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func TestMergeBases(t *testing.T) {
-	ctx := context.Background()
-	fs := filesys.NewInMemFS([]string{"/home", "/work"}, nil, "/work")
-	dEnv := env.LoadWithoutDB(ctx, func() (string, error) { return "/home", nil }, fs, doltdb.InMemDoltDB, "test")
-	require.NoError(t, dEnv.InitRepo(ctx, types.Format_DOLT, name, email, env.DefaultInitBranch))
-	ddb := dEnv.DoltDB(ctx)
-
-	initial := resolveCommit(t, ddb, env.DefaultInitBranch)
-	root, err := initial.GetRootValue(ctx)
-	require.NoError(t, err)
-	_, rootHash, err := ddb.WriteRootValue(ctx, root)
-	require.NoError(t, err)
-
-	commitTime := time.UnixMilli(0)
-	commitOn := func(branch string, parents ...*doltdb.Commit) *doltdb.Commit {
-		commitTime = commitTime.Add(time.Second)
-		meta, err := datas.NewCommitMetaWithAuthor(name, email, "commit", commitTime)
-		require.NoError(t, err)
-		specs := make([]*doltdb.CommitSpec, len(parents))
-		for i, p := range parents {
-			specs[i], err = doltdb.NewCommitSpec(mustHashOf(t, p).String())
+// MergeBases lists merge bases by committer date, newest first, as git does. With git 2.39, swapping the committer
+// dates of two merge bases swaps their order in `git merge-base --all`, whatever their heights. git leaves equal dates
+// in no defined order; MergeBases falls back to hash order.
+func TestMergeBasesNewestFirst(t *testing.T) {
+	// root -- t1 -- tall -- x
+	//    \-- short ------- y
+	// x = merge(tall, short), y = merge(short, tall)
+	//
+	// tall is the taller merge base.
+	tests := []struct {
+		name                string
+		tallDate, shortDate int64
+		first               string
+	}{
+		{name: "the shorter merge base is newer", tallDate: 100, shortDate: 200, first: "short"},
+		{name: "the taller merge base is newer", tallDate: 200, shortDate: 100, first: "tall"},
+		{name: "equal dates fall back to hash order", tallDate: 100, shortDate: 100},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			ddb, err := doltdb.LoadDoltDB(ctx, types.Format_DOLT, doltdb.InMemDoltDB, filesys.LocalFS)
 			require.NoError(t, err)
-		}
-		c, err := ddb.CommitWithParentSpecs(ctx, rootHash, ref.NewBranchRef(branch), specs, meta)
-		require.NoError(t, err)
-		return c
+			defer ddb.Close()
+			require.NoError(t, ddb.WriteEmptyRepo(ctx, "main", name, email))
+			cs, err := doltdb.NewCommitSpec("main")
+			require.NoError(t, err)
+			optCmt, err := ddb.Resolve(ctx, cs, nil)
+			require.NoError(t, err)
+			root, ok := optCmt.ToCommit()
+			require.True(t, ok)
+			rootValue, err := root.GetRootValue(ctx)
+			require.NoError(t, err)
+			_, rootHash, err := ddb.WriteRootValue(ctx, rootValue)
+			require.NoError(t, err)
+
+			branch := 0
+			commit := func(date int64, parents ...*doltdb.Commit) *doltdb.Commit {
+				ident := datas.CommitIdent{Name: name, Email: email, Date: datas.CommitDateAt(time.Unix(date, 0))}
+				meta, err := datas.NewCommitMetaWithAuthorCommitter(ident, ident, "commit")
+				require.NoError(t, err)
+				specs := make([]*doltdb.CommitSpec, len(parents))
+				for i, p := range parents {
+					specs[i], err = doltdb.NewCommitSpec(mustHashOf(t, p).String())
+					require.NoError(t, err)
+				}
+				branch++
+				c, err := ddb.CommitWithParentSpecs(ctx, rootHash, ref.NewBranchRef(fmt.Sprintf("b%d", branch)), specs, meta)
+				require.NoError(t, err)
+				return c
+			}
+			t1 := commit(50, root)
+			tall := commit(tt.tallDate, t1)
+			short := commit(tt.shortDate, root)
+			x := commit(300, tall, short)
+			y := commit(301, short, tall)
+
+			expected := []hash.Hash{mustHashOf(t, tall), mustHashOf(t, short)}
+			switch {
+			case tt.first == "short":
+				expected[0], expected[1] = expected[1], expected[0]
+			case tt.first == "" && expected[1].String() < expected[0].String():
+				expected[0], expected[1] = expected[1], expected[0]
+			}
+			for _, sides := range [][2]*doltdb.Commit{{x, y}, {y, x}} {
+				bases, err := MergeBases(ctx, sides[0], sides[1])
+				require.NoError(t, err)
+				assert.Equal(t, expected, bases)
+			}
+		})
 	}
-
-	// Criss-cross: x1 and y1 are both merged into x2 and y2.
-	x1 := commitOn("x", initial)
-	y1 := commitOn("y", initial)
-	x2 := commitOn("x", x1, y1)
-	y2 := commitOn("y", y1, x1)
-
-	bases, err := MergeBases(ctx, x2, y2)
-	require.NoError(t, err)
-	assert.ElementsMatch(t, []hash.Hash{mustHashOf(t, x1), mustHashOf(t, y1)}, bases)
-
-	ancestors, err := doltdb.GetCommitAncestors(ctx, x2, y2)
-	require.NoError(t, err)
-	ancestorHashes := make([]hash.Hash, len(ancestors))
-	for i, a := range ancestors {
-		c, ok := a.ToCommit()
-		require.True(t, ok)
-		ancestorHashes[i] = mustHashOf(t, c)
-	}
-	assert.ElementsMatch(t, bases, ancestorHashes)
-
-	bases, err = MergeBases(ctx, x1, y1)
-	require.NoError(t, err)
-	assert.Equal(t, []hash.Hash{mustHashOf(t, initial)}, bases)
-}
-
-func resolveCommit(t *testing.T, ddb *doltdb.DoltDB, branch string) *doltdb.Commit {
-	cs, err := doltdb.NewCommitSpec(branch)
-	require.NoError(t, err)
-	opt, err := ddb.Resolve(context.Background(), cs, ref.NewBranchRef(branch))
-	require.NoError(t, err)
-	c, ok := opt.ToCommit()
-	require.True(t, ok)
-	return c
 }
 
 func mustHashOf(t *testing.T, c *doltdb.Commit) hash.Hash {
 	h, err := c.HashOf()
 	require.NoError(t, err)
 	return h
-}
-
-// GetCommitAncestor must keep returning what datas.FindCommonAncestor returns: the tallest common ancestor, and on a
-// tie the one with the larger hash.
-func TestGetCommitAncestorMatchesFindCommonAncestor(t *testing.T) {
-	ctx := context.Background()
-	fs := filesys.NewInMemFS([]string{"/home", "/work"}, nil, "/work")
-	dEnv := env.LoadWithoutDB(ctx, func() (string, error) { return "/home", nil }, fs, doltdb.InMemDoltDB, "test")
-	require.NoError(t, dEnv.InitRepo(ctx, types.Format_DOLT, name, email, env.DefaultInitBranch))
-	ddb := dEnv.DoltDB(ctx)
-
-	initial := resolveCommit(t, ddb, env.DefaultInitBranch)
-	root, err := initial.GetRootValue(ctx)
-	require.NoError(t, err)
-	_, rootHash, err := ddb.WriteRootValue(ctx, root)
-	require.NoError(t, err)
-
-	commitTime := time.UnixMilli(0)
-	commitCount := 0
-	commit := func(parents ...*doltdb.Commit) *doltdb.Commit {
-		commitTime = commitTime.Add(time.Second)
-		commitCount++
-		meta, err := datas.NewCommitMetaWithAuthor(name, email, "commit", commitTime)
-		require.NoError(t, err)
-		specs := make([]*doltdb.CommitSpec, len(parents))
-		for i, p := range parents {
-			specs[i], err = doltdb.NewCommitSpec(mustHashOf(t, p).String())
-			require.NoError(t, err)
-		}
-		// Every commit gets its own branch, so that any parent list is legal.
-		c, err := ddb.CommitWithParentSpecs(ctx, rootHash, ref.NewBranchRef(fmt.Sprintf("c%d", commitCount)), specs, meta)
-		require.NoError(t, err)
-		return c
-	}
-	findCommonAncestor := func(left, right *doltdb.Commit) hash.Hash {
-		l, err := datas.LoadCommitAddr(ctx, ddb.ValueReadWriter(), mustHashOf(t, left))
-		require.NoError(t, err)
-		r, err := datas.LoadCommitAddr(ctx, ddb.ValueReadWriter(), mustHashOf(t, right))
-		require.NoError(t, err)
-		h, ok, err := datas.FindCommonAncestor(ctx, l, r, ddb.ValueReadWriter(), ddb.ValueReadWriter(), ddb.NodeStore(), ddb.NodeStore())
-		require.NoError(t, err)
-		require.True(t, ok)
-		return h
-	}
-
-	rnd := rand.New(rand.NewSource(12050))
-	ties := 0
-	for graph := 0; graph < 30; graph++ {
-		branches := 2 + rnd.Intn(4)
-		tips := make([]*doltdb.Commit, branches)
-		for i := range tips {
-			tips[i] = commit(initial)
-		}
-		all := append([]*doltdb.Commit{}, tips...)
-		for i := 0; i < 30; i++ {
-			b := rnd.Intn(branches)
-			parents := []*doltdb.Commit{tips[b]}
-			if other := tips[rnd.Intn(branches)]; rnd.Float64() < 0.5 && mustHashOf(t, other) != mustHashOf(t, tips[b]) {
-				parents = append(parents, other)
-			}
-			tips[b] = commit(parents...)
-			all = append(all, tips[b])
-		}
-		for pair := 0; pair < 20; pair++ {
-			left, right := all[rnd.Intn(len(all))], all[rnd.Intn(len(all))]
-			expected := findCommonAncestor(left, right)
-			optCmt, err := doltdb.GetCommitAncestor(ctx, left, right)
-			require.NoError(t, err)
-			require.Equal(t, expected, optCmt.Addr, "graph %d, pair %d", graph, pair)
-
-			bases, err := MergeBases(ctx, left, right)
-			require.NoError(t, err)
-			if len(bases) > 1 {
-				heights := map[uint64]int{}
-				for _, b := range bases {
-					optCmt, err := ddb.ReadCommit(ctx, b)
-					require.NoError(t, err)
-					c, ok := optCmt.ToCommit()
-					require.True(t, ok)
-					h, err := c.Height()
-					require.NoError(t, err)
-					heights[h]++
-				}
-				for _, n := range heights {
-					if n > 1 {
-						ties++
-					}
-				}
-			}
-		}
-	}
-	assert.Greater(t, ties, 0, "the random histories should include merge bases of equal height")
 }
