@@ -36,23 +36,23 @@ import (
 
 // doltCommit is the stored procedure version for the CLI command `dolt commit`.
 func doltCommit(ctx *sql.Context, args ...string) (sql.RowIter, error) {
-	if len(dsess.DSessFromSess(ctx.Session).DirtyBranches()) > 1 {
-		multi, err := dsess.GetBooleanSystemVar(ctx, dsess.DoltMultiBranchCommit)
+	multi, err := dsess.GetBooleanSystemVar(ctx, dsess.DoltMultiBranchCommit)
+	if err != nil {
+		return nil, err
+	}
+
+	if multi {
+		rows, err := doDoltCommitAll(ctx, args...)
 		if err != nil {
 			return nil, err
 		}
-		if multi {
-			rows, err := doDoltCommitAll(ctx, args...)
-			if err != nil {
-				return nil, err
-			}
-			// Keep dolt_commit's hash-only result schema, with one row per branch.
-			for i, row := range rows {
-				rows[i] = sql.Row{row[1]}
-			}
-			return sql.RowsToRowIter(rows...), nil
+		// Keep dolt_commit's hash-only result schema, with one row per branch.
+		for i, row := range rows {
+			rows[i] = sql.Row{row[1]}
 		}
+		return sql.RowsToRowIter(rows...), nil
 	}
+
 	commitHash, skipped, err := doDoltCommit(ctx, args)
 	if err != nil {
 		return nil, err
