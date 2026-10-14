@@ -25,7 +25,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -89,17 +88,16 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 
 	logger = logger.WithField("unsealed_url", req.URL.String())
 
-	path := strings.TrimLeft(req.URL.Path, "/")
+	path := strings.TrimPrefix(req.URL.Path, "/")
+	if err := ValidateRepoPath(path); err != nil {
+		logger.WithError(err).Warn("bad request with invalid URL path")
+		respWr.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
 	statusCode := http.StatusMethodNotAllowed
 	switch req.Method {
 	case http.MethodGet:
-		path = filepath.Clean(path)
-		if strings.HasPrefix(path, "../") || strings.Contains(path, "/../") || strings.HasSuffix(path, "/..") {
-			logger.Warn("bad request with .. in URL path")
-			respWr.WriteHeader(http.StatusBadRequest)
-			return
-		}
 		i := strings.LastIndex(path, "/")
 		if i == -1 {
 			logger.Warn("bad request with -1 LastIndex of '/' for path")
