@@ -10,7 +10,7 @@ require (
 	github.com/bcicen/jstream v1.0.0
 	github.com/boltdb/bolt v1.3.1
 	github.com/denisbrodbeck/machineid v1.0.1
-	github.com/dolthub/ishell v0.0.0-20261013192657-3284b03c75d0
+	github.com/dolthub/ishell v0.0.0-20261014193146-384f68285acb
 	github.com/dolthub/sqllogictest/go v0.0.0-20240618184124-ca47f9354216
 	github.com/dolthub/vitess v0.0.0-20261007222241-441dd42e89d4
 	github.com/dustin/go-humanize v1.0.1
