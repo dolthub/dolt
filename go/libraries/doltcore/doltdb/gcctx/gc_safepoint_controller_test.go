@@ -102,7 +102,7 @@ func TestGCSafepointController(t *testing.T) {
 				return nil
 			}
 			controller := NewGCSafepointController()
-			waiter := controller.Waiter(context.Background(), nil, block)
+			waiter := mustWaiter(t, controller, nil, block)
 			waiter.Wait(context.Background())
 		})
 		t.Run("OnlyThisSession", func(t *testing.T) {
@@ -115,7 +115,7 @@ func TestGCSafepointController(t *testing.T) {
 			sess := &visitable{}
 			controller := NewGCSafepointController()
 			controller.SessionCommandBegin(sess)
-			waiter := controller.Waiter(context.Background(), sess, block)
+			waiter := mustWaiter(t, controller, sess, block)
 			waiter.Wait(context.Background())
 			controller.SessionCommandEnd(sess)
 			controller.SessionEnd(sess)
@@ -143,7 +143,7 @@ func TestGCSafepointController(t *testing.T) {
 				}
 				return nil
 			}
-			waiter := controller.Waiter(context.Background(), nil, wait)
+			waiter := mustWaiter(t, controller, nil, wait)
 			go func() {
 				waiter.Wait(context.Background())
 				close(waitDone)
@@ -184,7 +184,7 @@ func TestGCSafepointController(t *testing.T) {
 				}
 				return nil
 			}
-			waiter := controller.Waiter(context.Background(), nil, wait)
+			waiter := mustWaiter(t, controller, nil, wait)
 			var waitErr error
 			go func() {
 				ctx, cancel := context.WithCancel(context.Background())
@@ -234,7 +234,7 @@ func TestGCSafepointController(t *testing.T) {
 				}
 				return nil
 			}
-			waiter := controller.Waiter(context.Background(), nil, wait)
+			waiter := mustWaiter(t, controller, nil, wait)
 			waitDone := make(chan struct{})
 			go func() {
 				waiter.Wait(context.Background())
@@ -285,12 +285,72 @@ func TestGCSafepointController(t *testing.T) {
 
 			controller.SessionEnd(quiesced)
 			controller.SessionEnd(running)
-			err := controller.Waiter(context.Background(), nil, func(context.Context, GCRootsProvider) error {
+			waiter = mustWaiter(t, controller, nil, func(context.Context, GCRootsProvider) error {
 				panic("unexpected registered session")
-			}).Wait(context.Background())
+			})
+			err := waiter.Wait(context.Background())
 			require.NoError(t, err)
 		})
 	})
+}
+
+func TestConcurrentWaiterRejectedWhileVisitIsRunning(t *testing.T) {
+	controller := NewGCSafepointController()
+	visiting := &visitable{}
+	controller.SessionCommandBegin(visiting)
+	controller.SessionCommandEnd(visiting)
+
+	visitStarted := make(chan struct{})
+	finishVisit := make(chan struct{})
+	first := mustWaiter(t, controller, nil, func(context.Context, GCRootsProvider) error {
+		close(visitStarted)
+		<-finishVisit
+		return nil
+	})
+	<-visitStarted
+	// A session can end while its roots are being visited. The first waiter
+	// still owns that visit even though the session is no longer registered.
+	controller.SessionEnd(visiting)
+
+	running := &visitable{}
+	controller.SessionCommandBegin(running)
+	second, err := controller.Waiter(context.Background(), nil, func(context.Context, GCRootsProvider) error {
+		return nil
+	})
+	require.ErrorIs(t, err, ErrConcurrentSafepoint)
+	require.Nil(t, second)
+
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	firstDone := make(chan error, 1)
+	go func() { firstDone <- first.Wait(canceled) }()
+	select {
+	case <-firstDone:
+		t.Fatal("canceled waiter returned while its own visit was still running")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	close(finishVisit)
+	require.ErrorIs(t, <-firstDone, context.Canceled)
+
+	// A later call to Wait on the finished waiter must not cancel a new
+	// waiter's pending callback.
+	secondVisited := make(chan struct{})
+	second = mustWaiter(t, controller, nil, func(context.Context, GCRootsProvider) error {
+		close(secondVisited)
+		return nil
+	})
+	require.ErrorIs(t, first.Wait(canceled), context.Canceled)
+	controller.SessionCommandEnd(running)
+	<-secondVisited
+	require.NoError(t, second.Wait(context.Background()))
+}
+
+func mustWaiter(t *testing.T, controller *GCSafepointController, thisSession GCRootsProvider, visit func(context.Context, GCRootsProvider) error) *GCSafepointWaiter {
+	t.Helper()
+	waiter, err := controller.Waiter(context.Background(), thisSession, visit)
+	require.NoError(t, err)
+	return waiter
 }
 
 type visitable struct {

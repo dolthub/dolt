@@ -28,7 +28,13 @@ type GCSafepointController struct {
 	// All known sessions. The first command registers the session
 	// here and SessionEnd causes it to be removed.
 	sessions map[GCRootsProvider]*GCSafepointSessionState
+	// A controller can only have one waiter at a time. In particular, a
+	// canceled waiter must never count down another waiter's callbacks.
+	activeWaiter *GCSafepointWaiter
 }
+
+// ErrConcurrentSafepoint is returned when another waiter is still active.
+var ErrConcurrentSafepoint = errors.New("another GC safepoint is already in progress")
 
 // A GCRootsProvider is the thing that a GCSafepointController
 // tracks. It also calls it a |session|, as it represents a client
@@ -119,6 +125,9 @@ type GCSafepointWaiter struct {
 	wg         sync.WaitGroup
 	mu         sync.Mutex
 	err        error
+	waitOnce   sync.Once
+	waitDone   chan struct{}
+	waitErr    error
 }
 
 func NewGCSafepointController() *GCSafepointController {
@@ -136,19 +145,16 @@ func NewGCSafepointController() *GCSafepointController {
 // will never quiesce. Instead, the caller should ensure that |visitQuiescedSession| is called on
 // its own session.
 //
-// After creating a Waiter, it is an error to create a new Waiter before the |Wait| method of the
-// original watier has returned. This error is not guaranteed to always be detected.
-func (c *GCSafepointController) Waiter(ctx context.Context, thisSession GCRootsProvider, visitQuiescedSession func(context.Context, GCRootsProvider) error) *GCSafepointWaiter {
+// A second Waiter cannot be created until the first one has drained its visits.
+func (c *GCSafepointController) Waiter(ctx context.Context, thisSession GCRootsProvider, visitQuiescedSession func(context.Context, GCRootsProvider) error) (*GCSafepointWaiter, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	ret := &GCSafepointWaiter{controller: c}
+	if c.activeWaiter != nil {
+		return nil, ErrConcurrentSafepoint
+	}
+	ret := &GCSafepointWaiter{controller: c, waitDone: make(chan struct{})}
+	c.activeWaiter = ret
 	for sess, state := range c.sessions {
-		// If an existing session already has a |CommandEndCallback| registered,
-		// then more than one |Waiter| would be outstanding on this
-		// SafepointController. This is an error and is not supported.
-		if state.CommandEndCallback != nil {
-			panic("Attempt to create more than one GCSafepointWaiter.")
-		}
 		if sess == thisSession {
 			continue
 		}
@@ -167,8 +173,8 @@ func (c *GCSafepointController) Waiter(ctx context.Context, thisSession GCRootsP
 			go func() {
 				err := visitQuiescedSession(ctx, sess)
 				ret.accumulateErrors(err)
-				ret.wg.Done()
 				state.EndOutstandingVisitCall()
+				ret.wg.Done()
 			}()
 		}
 		if state.OutstandingCommand {
@@ -181,7 +187,7 @@ func (c *GCSafepointController) Waiter(ctx context.Context, thisSession GCRootsP
 			work()
 		}
 	}
-	return ret
+	return ret, nil
 }
 
 func (w *GCSafepointWaiter) accumulateErrors(err error) {
@@ -210,6 +216,20 @@ func (w *GCSafepointWaiter) accumulateErrors(err error) {
 // cancel callbacks or to return early in the case that errors
 // are seen from the callback functions.
 func (w *GCSafepointWaiter) Wait(ctx context.Context) error {
+	w.waitOnce.Do(func() {
+		w.waitErr = w.wait(ctx)
+		w.controller.mu.Lock()
+		if w.controller.activeWaiter == w {
+			w.controller.activeWaiter = nil
+		}
+		w.controller.mu.Unlock()
+		close(w.waitDone)
+	})
+	<-w.waitDone
+	return w.waitErr
+}
+
+func (w *GCSafepointWaiter) wait(ctx context.Context) error {
 	done := make(chan struct{})
 	go func() {
 		w.wg.Wait()

@@ -189,8 +189,8 @@ func (sc *sessionAwareSafepointController) BeginGC(ctx context.Context, keeper f
 	if err != nil {
 		return err
 	}
-	sc.waiter = sc.controller.Waiter(ctx, sc.callSession, sc.visit)
-	return nil
+	sc.waiter, err = sc.controller.Waiter(ctx, sc.callSession, sc.visit)
+	return err
 }
 
 func (sc *sessionAwareSafepointController) EstablishPreFinalizeSafepoint(ctx context.Context) error {
