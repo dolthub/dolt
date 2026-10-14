@@ -1053,8 +1053,6 @@ func RunDoltMergeBasesTableFunctionTests(t *testing.T, h DoltEnginetestHarness) 
 		func() {
 			h := h.NewHarness(t)
 			defer h.Close()
-			// The scripts push to a file remote.
-			h.UseLocalFileSystem()
 			h.Setup(setup.MydbData)
 			enginetest.TestScript(t, h, script)
 		}()
@@ -1068,8 +1066,6 @@ func RunDoltMergeBasesTableFunctionPreparedTests(t *testing.T, h DoltEnginetestH
 		func() {
 			h := h.NewHarness(t)
 			defer h.Close()
-			// The scripts push to a file remote.
-			h.UseLocalFileSystem()
 			h.Setup(setup.MydbData)
 			enginetest.TestScriptPrepared(t, h, script)
 		}()

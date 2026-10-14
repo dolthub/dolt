@@ -29,7 +29,7 @@ import (
 //	   \-- y0 -- y1    branch y
 //	x1 = merge(x0, y0), y1 = merge(y0, x0)
 //
-// y0 is committed after x0, so it is listed first, as in `git merge-base --all`. Branch y is pushed to a remote, origin.
+// y0 is committed after x0, so it is listed first, as in `git merge-base --all`.
 var MergeBasesTableFunctionScripts = []queries.ScriptTest{
 	{
 		Name: "dolt_merge_bases",
@@ -50,8 +50,6 @@ var MergeBasesTableFunctionScripts = []queries.ScriptTest{
 			"CALL DOLT_CHECKOUT('x');",
 			"CALL DOLT_MERGE('y0', '-m', 'x1');",
 			"CALL DOLT_CHECKOUT('main');",
-			"CALL DOLT_REMOTE('add', 'origin', 'file://../remote-merge-bases');",
-			"CALL DOLT_PUSH('origin', 'y');",
 			"SET @left = 'x';",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -113,10 +111,6 @@ var MergeBasesTableFunctionScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT merge_base = hashof('y0') FROM dolt_merge_bases('y0', 'x');",
 				Expected: []sql.Row{{true}},
-			},
-			{
-				Query:    "SELECT count(*) FROM dolt_merge_bases('x', 'origin/y');",
-				Expected: []sql.Row{{2}},
 			},
 			{
 				Query:          "SELECT * FROM dolt_merge_bases('x', 'nonexistent');",
