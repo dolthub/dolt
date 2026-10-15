@@ -21,6 +21,8 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -64,6 +66,20 @@ type rowV struct {
 var vD *val.TupleDesc
 var vB *val.TupleBuilder
 var syncPool = pool.NewBuffPool()
+
+func newOwnedMergeContext() *sql.Context {
+	vars := variables.NewEngineVariables()
+	// merge is below sqle in the package graph, so these tests register the
+	// Dolt setting read by the merge path on their own bundle.
+	vars.System.AddSystemVariables([]sql.SystemVariable{&sql.MysqlSystemVariable{
+		Name:    "dolt_dont_merge_json",
+		Dynamic: true,
+		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Both),
+		Type:    sqltypes.NewSystemBoolType("dolt_dont_merge_json"),
+		Default: int8(0),
+	}})
+	return sql.NewContextWithVariables(context.Background(), vars)
+}
 
 func (v rowV) value() val.Tuple {
 	vB.PutInt64(0, int64(v.col1))
@@ -300,7 +316,7 @@ func TestMergeCommits(t *testing.T) {
 	}
 	opts := editor.TestEditorOptions(vrw)
 	// TODO: stats
-	merged, _, err := merger.MergeTable(sql.NewContext(context.Background()), doltdb.TableName{Name: tableName}, opts, MergeOpts{IsCherryPick: false})
+	merged, _, err := merger.MergeTable(newOwnedMergeContext(), doltdb.TableName{Name: tableName}, opts, MergeOpts{IsCherryPick: false})
 	if err != nil {
 		t.Fatal(err)
 	}
