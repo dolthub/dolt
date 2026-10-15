@@ -1859,6 +1859,11 @@ func (p *DoltDatabaseProvider) Function(_ *sql.Context, schema, name string) (sq
 	return fn, true
 }
 
+// CallsAggregate implements the FunctionProvider interface
+func (p *DoltDatabaseProvider) CallsAggregate(_ *sql.Context, schema, name string, args func() []sql.Expression) (bool, error) {
+	return true, nil
+}
+
 func (p *DoltDatabaseProvider) Register(d sql.ExternalStoredProcedureDetails) {
 	p.externalProcedures.Register(d)
 }
