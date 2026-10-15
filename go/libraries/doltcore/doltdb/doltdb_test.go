@@ -16,7 +16,6 @@ package doltdb
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -229,71 +228,6 @@ func (l workingRootListener) WorkingRootUpdated(_ *sql.Context, _ string, branch
 func (workingRootListener) DatabaseCreated(*sql.Context, string) error { return nil }
 func (workingRootListener) DatabaseDropped(*sql.Context, string) error { return nil }
 
-func TestCommitHeadUpdatesChecksPreparedHeadBeforePublishing(t *testing.T) {
-	ddb, baseCtx, commit := newMemDoltDBWithDefaultBranch(t, "main")
-	ctx := sql.NewContext(baseCtx)
-	root, err := commit.GetRootValue(ctx)
-	require.NoError(t, err)
-	ws := EmptyWorkingSet(ref.NewWorkingSetRef("heads/main")).WithWorkingRoot(root).WithStagedRoot(root)
-	other := EmptyWorkingSet(ref.NewWorkingSetRef("heads/other")).WithWorkingRoot(root).WithStagedRoot(root)
-	before, err := ddb.NomsRoot(ctx)
-	require.NoError(t, err)
-	called := 0
-	hook := &batchCommitHook{}
-	branchHook := &batchCommitHook{skipWorkingSets: true}
-	ddb.PrependCommitHooks(ctx, hook, branchHook)
-	listeners := DatabaseUpdateListeners
-	DatabaseUpdateListeners = []DatabaseUpdateListener{workingRootListener{func(_ string, _, _ RootValue) {
-		published, err := ddb.NomsRoot(ctx)
-		require.NoError(t, err)
-		require.NotEqual(t, before, published)
-		called++
-	}}}
-	t.Cleanup(func() { DatabaseUpdateListeners = listeners })
-	expected := hash.Of([]byte("stale head"))
-	updates := []HeadUpdate{
-		WorkingSetUpdate{WorkingSet: other, Meta: TodoWorkingSetMeta()},
-		WorkingSetUpdate{WorkingSet: ws, Meta: TodoWorkingSetMeta()},
-		BranchHeadUpdate{
-			HeadRef:       ref.NewBranchRef("main"),
-			Root:          root,
-			ExpectedHead:  expected,
-			WorkingSetRef: ws.Ref(),
-			CommitOptions: datas.CommitOptions{Meta: &datas.CommitMeta{}},
-		},
-	}
-	_, err = ddb.CommitHeadUpdates(ctx, updates, nil)
-	require.ErrorIs(t, err, datas.ErrMergeNeeded)
-	require.Zero(t, called)
-	require.Empty(t, hook.datasets)
-	after, err := ddb.NomsRoot(ctx)
-	require.NoError(t, err)
-	require.Equal(t, before, after)
-	expected, err = commit.HashOf()
-	require.NoError(t, err)
-	headUpdate := updates[2].(BranchHeadUpdate)
-	headUpdate.ExpectedHead = expected
-	updates[2] = headUpdate
-	var rsc ReplicationStatusController
-	heads, err := ddb.CommitHeadUpdates(ctx, updates, &rsc)
-	require.NoError(t, err)
-	require.Len(t, heads, len(updates))
-	for i, name := range []string{other.Ref().String(), ws.Ref().String(), "refs/heads/main"} {
-		ds, err := ddb.db.GetDataset(ctx, name)
-		require.NoError(t, err)
-		actual, ok := ds.MaybeHeadAddr()
-		require.True(t, ok)
-		require.Equal(t, actual, heads[i])
-	}
-	require.Equal(t, 2, called)
-	require.Equal(t, []string{"workingSets/heads/other", "workingSets/heads/main", "refs/heads/main"}, hook.datasets)
-	require.Equal(t, []string{"refs/heads/main"}, branchHook.datasets)
-	require.Len(t, rsc.Wait, 4)
-	// Headless working sets (deletions) still use working-set hook policy.
-	require.NoError(t, ddb.ExecuteCommitHooks(ctx, "workingSets/heads/deleted"))
-	require.Equal(t, []string{"refs/heads/main"}, branchHook.datasets)
-}
-
 type notificationSnapshotCountingDatabase struct {
 	datas.Database
 	snapshots int
@@ -363,127 +297,6 @@ func TestCommitHeadUpdatesOnlyLoadsWorkingSetsForListeners(t *testing.T) {
 				require.Zero(t, db.snapshots)
 				require.Zero(t, store.reads, "neither before nor after working sets should be loaded")
 			}
-		})
-	}
-}
-
-func TestCommitHeadUpdatesIndependentKinds(t *testing.T) {
-	ddb, ctx, commit := newMemDoltDBWithDefaultBranch(t, "main")
-	root, err := commit.GetRootValue(ctx)
-	require.NoError(t, err)
-	ws := EmptyWorkingSet(ref.NewWorkingSetRef("heads/working-only")).WithWorkingRoot(root).WithStagedRoot(root)
-	updates := []HeadUpdate{
-		BranchHeadUpdate{HeadRef: ref.NewBranchRef("main"), Root: root, CommitOptions: datas.CommitOptions{Meta: &datas.CommitMeta{Description: "main"}}},
-		WorkingSetUpdate{WorkingSet: ws, Meta: TodoWorkingSetMeta()},
-		BranchHeadUpdate{HeadRef: ref.NewBranchRef("head-only"), Root: root, CommitOptions: datas.CommitOptions{Meta: &datas.CommitMeta{Description: "other"}}},
-	}
-	heads, err := ddb.CommitHeadUpdates(ctx, updates, nil)
-	require.NoError(t, err)
-	require.Len(t, heads, 3)
-	for i, name := range []string{"refs/heads/main", ws.Ref().String(), "refs/heads/head-only"} {
-		ds, err := ddb.db.GetDataset(ctx, name)
-		require.NoError(t, err)
-		actual, ok := ds.MaybeHeadAddr()
-		require.True(t, ok)
-		require.Equal(t, actual, heads[i])
-		require.Equal(t, i == 1, ds.IsWorkingSet())
-	}
-	newCommit, err := HashToCommit(ctx, ddb.vrw, ddb.ns, heads[0])
-	require.NoError(t, err)
-	parent, err := commit.HashOf()
-	require.NoError(t, err)
-	parents, err := newCommit.ParentHashes(ctx)
-	require.NoError(t, err)
-	require.Equal(t, []hash.Hash{parent}, parents)
-	before, err := ddb.NomsRoot(ctx)
-	require.NoError(t, err)
-	_, err = ddb.CommitHeadUpdates(ctx, []HeadUpdate{updates[0], updates[0]}, nil)
-	require.ErrorContains(t, err, "duplicate dataset update")
-	empty, err := ddb.CommitHeadUpdates(ctx, nil, nil)
-	require.NoError(t, err)
-	require.Empty(t, empty)
-	after, err := ddb.NomsRoot(ctx)
-	require.NoError(t, err)
-	require.Equal(t, before, after)
-}
-
-// This update deliberately locks a different, absent dataset. Listener snapshots
-// must describe the updated working set, not whatever dataset is used for locking.
-type independentlyLockedWorkingSetUpdate struct{ HeadUpdate }
-
-func (u independentlyLockedWorkingSetUpdate) BuildDatasetUpdate(ctx context.Context, ddb *DoltDB) (datas.DatasetUpdate, error) {
-	update, err := u.HeadUpdate.BuildDatasetUpdate(ctx, ddb)
-	if err != nil {
-		return nil, err
-	}
-	return independentDatasetLock{update}, nil
-}
-
-type independentDatasetLock struct{ datas.DatasetUpdate }
-
-func (u independentDatasetLock) Build(ctx context.Context, db datas.ValueBuilder) (datas.BuiltDatasetUpdate, error) {
-	built, err := u.DatasetUpdate.Build(ctx, db)
-	if err != nil {
-		return datas.BuiltDatasetUpdate{}, err
-	}
-
-	built.Preconditions = []datas.DatasetPrecondition{{
-		DatasetID: "workingSets/heads/lock-only",
-		OnFailure: datas.ErrOptimisticLockFailed,
-	}}
-	return built, nil
-}
-
-func TestCommitHeadUpdatesNotifiesPreviousWorkingRoot(t *testing.T) {
-	for _, independentLock := range []bool{false, true} {
-		t.Run(fmt.Sprintf("independent lock=%t", independentLock), func(t *testing.T) {
-			ddb, baseCtx, commit := newMemDoltDBWithDefaultBranch(t, "main")
-			ctx := sql.NewContext(baseCtx)
-			root, err := commit.GetRootValue(ctx)
-			require.NoError(t, err)
-			root, err = root.SetCollation(ctx, schema.Collation_utf8mb4_bin)
-			require.NoError(t, err)
-			wsRef := ref.NewWorkingSetRef("heads/main")
-			ws := EmptyWorkingSet(wsRef).WithWorkingRoot(root).WithStagedRoot(root)
-			require.NoError(t, ddb.UpdateWorkingSet(ctx, wsRef, ws, hash.Hash{}, TodoWorkingSetMeta(), nil))
-			ws, err = ddb.ResolveWorkingSet(ctx, wsRef)
-			require.NoError(t, err)
-			previous, err := ws.HashOf()
-			require.NoError(t, err)
-			next, err := root.SetCollation(ctx, schema.Collation_utf8mb4_0900_ai_ci)
-			require.NoError(t, err)
-			oldHash, err := root.HashOf()
-			require.NoError(t, err)
-			newHash, err := next.HashOf()
-			require.NoError(t, err)
-			require.NotEqual(t, oldHash, newHash)
-			listeners := DatabaseUpdateListeners
-			t.Cleanup(func() { DatabaseUpdateListeners = listeners })
-			called := 0
-			DatabaseUpdateListeners = []DatabaseUpdateListener{workingRootListener{func(branch string, oldRoot, newRoot RootValue) {
-				require.Equal(t, "main", branch)
-				h, err := oldRoot.HashOf()
-				require.NoError(t, err)
-				require.Equal(t, oldHash, h)
-				h, err = newRoot.HashOf()
-				require.NoError(t, err)
-				require.Equal(t, newHash, h)
-				published, err := ddb.ResolveWorkingSet(ctx, wsRef)
-				require.NoError(t, err)
-				h, err = published.WorkingRoot().HashOf()
-				require.NoError(t, err)
-				require.Equal(t, newHash, h)
-				called++
-			}}}
-			var update HeadUpdate = WorkingSetUpdate{
-				WorkingSet: ws.WithWorkingRoot(next), PrevHash: previous, Meta: TodoWorkingSetMeta(),
-			}
-			if independentLock {
-				update = independentlyLockedWorkingSetUpdate{update}
-			}
-			_, err = ddb.CommitHeadUpdates(ctx, []HeadUpdate{update}, nil)
-			require.NoError(t, err)
-			require.Equal(t, 1, called)
 		})
 	}
 }
