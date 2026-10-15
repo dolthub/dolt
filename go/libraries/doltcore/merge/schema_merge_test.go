@@ -1716,7 +1716,7 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 				var mo merge.MergeOpts
 				var eo editor.Options
 				// attempt merge before skipping to assert no panics
-				result, err := merge.MergeRoots(sql.NewContext(ctx), doltdb.SimpleTableResolver{}, l, r, a, rootish{r}, rootish{a}, eo, mo)
+				result, err := merge.MergeRoots(newOwnedMergeContext(ctx), doltdb.SimpleTableResolver{}, l, r, a, rootish{r}, rootish{a}, eo, mo)
 				maybeSkip(t, test, flipSides)
 
 				if test.conflict {
