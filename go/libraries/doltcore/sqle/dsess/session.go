@@ -503,7 +503,7 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 
 			// TODO: this check is relatively expensive, we should cache this value when it changes instead of looking it
 			//  up on each transaction start
-			if _, v, ok := sql.SystemVariables.GetGlobal(ReadReplicaRemote); ok && v != "" {
+			if _, v, ok := ctx.SystemVariables().GetGlobal(ReadReplicaRemote); ok && v != "" {
 				err := ddb.Rebase(ctx)
 				if err != nil && !IgnoreReplicationErrors() {
 					return nil, err
@@ -1614,7 +1614,11 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	revisionQualifiedName := strings.ToLower(db.RevisionQualifiedName())
 	baseName, _ := doltdb.SplitRevisionDbName(revisionQualifiedName)
 
-	DefineSystemVariablesForDB(baseName)
+	if owner := d.EngineVariables(); owner != nil {
+		DefineSystemVariablesForDBInRegistry(owner.System, baseName)
+	} else {
+		DefineSystemVariablesForDB(baseName)
+	}
 
 	tx, usingDoltTransaction := d.GetTransaction().(*DoltTransaction)
 
@@ -1905,7 +1909,11 @@ func (d *DoltSession) PersistGlobal(ctx *sql.Context, sysVarName string, value i
 		return ErrSessionNotPersistable
 	}
 
-	sysVar, _, err := validatePersistableSysVar(sysVarName)
+	vars := sql.SystemVariables
+	if owner := d.EngineVariables(); owner != nil {
+		vars = owner.System
+	}
+	sysVar, _, err := validatePersistableSysVarInRegistry(vars, sysVarName)
 	if err != nil {
 		return err
 	}
@@ -1933,7 +1941,11 @@ func (d *DoltSession) RemovePersistedGlobal(sysVarName string) error {
 		return ErrSessionNotPersistable
 	}
 
-	sysVar, _, err := validatePersistableSysVar(sysVarName)
+	vars := sql.SystemVariables
+	if owner := d.EngineVariables(); owner != nil {
+		vars = owner.System
+	}
+	sysVar, _, err := validatePersistableSysVarInRegistry(vars, sysVarName)
 	if err != nil {
 		return err
 	}
@@ -1968,7 +1980,11 @@ func (d *DoltSession) GetPersistedValue(k string) (interface{}, error) {
 		return nil, ErrSessionNotPersistable
 	}
 
-	return getPersistedValue(d.globalsConf, k)
+	vars := sql.SystemVariables
+	if owner := d.EngineVariables(); owner != nil {
+		vars = owner.System
+	}
+	return getPersistedValueInRegistry(vars, d.globalsConf, k)
 }
 
 // SystemVariablesInConfig returns a list of System Variables associated with the session
@@ -1976,7 +1992,17 @@ func (d *DoltSession) SystemVariablesInConfig() ([]sql.SystemVariable, error) {
 	if d.globalsConf == nil {
 		return nil, ErrSessionNotPersistable
 	}
-	sysVars, _, err := SystemVariablesInConfig(d.globalsConf)
+	vars := sql.SystemVariables
+	if owner := d.EngineVariables(); owner != nil {
+		vars = owner.System
+	}
+	var sysVars []sql.SystemVariable
+	var err error
+	if d.EngineVariables() != nil {
+		sysVars, _, err = SystemVariablesInConfigWithRegistry(vars, d.globalsConf)
+	} else {
+		sysVars, _, err = SystemVariablesInConfig(d.globalsConf)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -2447,7 +2473,7 @@ func DefaultHead(ctx *sql.Context, baseName string, db SqlDatabase) (string, err
 	head := ""
 
 	// First check the global variable for the default branch
-	_, val, ok := sql.SystemVariables.GetGlobal(DefaultBranchKey(baseName))
+	_, val, ok := ctx.SystemVariables().GetGlobal(DefaultBranchKey(baseName))
 	if ok {
 		head = val.(string)
 		branchRef, err := ref.Parse(head)

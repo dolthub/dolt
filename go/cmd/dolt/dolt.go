@@ -30,6 +30,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 	"github.com/pkg/profile"
 	"github.com/tidwall/gjson"
@@ -54,6 +55,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
@@ -493,9 +495,8 @@ func runMain() int {
 	}
 	defer tempfiles.MovableTempFileProvider.Clean()
 
-	// Find all database names and add global variables for them. This needs to
-	// occur before a call to dsess.InitPersistedSystemVars. Otherwise, database
-	// specific persisted system vars will fail to load.
+	// Register database-specific variable definitions before loading persisted
+	// values, so those settings can be decoded.
 	//
 	// In general, there is a lot of work TODO in this area. System global
 	// variables are persisted to the Dolt local config if found and if not
@@ -510,7 +511,11 @@ func runMain() int {
 	// variables like `${db_name}_default_branch` (maybe these should not be
 	// part of Dolt config in the first place!).
 	var mrEnv *env.MultiRepoEnv
+	var cliEngineVars *sql.EngineVariables
 	if needsDBLoad(cfg.subCommand) {
+		if initCliContext(cfg.subCommand) {
+			cliEngineVars = sqle.NewEngineVariables()
+		}
 		mrEnv, err = env.MultiEnvForDirectory(ctx, cfg.dataDirFS, dEnv)
 		if err != nil {
 			cli.PrintErrln("failed to load database names:", err.Error())
@@ -518,6 +523,9 @@ func runMain() int {
 		}
 		_ = mrEnv.Iter(func(dbName string, dEnv *env.DoltEnv) (stop bool, err error) {
 			dsess.DefineSystemVariablesForDB(dbName)
+			if cliEngineVars != nil {
+				dsess.DefineSystemVariablesForDBInRegistry(cliEngineVars.System, dbName)
+			}
 			return false, nil
 		})
 
@@ -525,6 +533,11 @@ func runMain() int {
 		err = dsess.InitPersistedSystemVars(dEnv)
 		if err != nil {
 			cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
+		}
+		if cliEngineVars != nil {
+			if err := dsess.InitPersistedSystemVarsWithRegistry(cliEngineVars.System, dEnv); err != nil {
+				cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
+			}
 		}
 	}
 
@@ -538,7 +551,7 @@ func runMain() int {
 		}
 		cfg.apr = aprAlt
 
-		lateBind, err := buildLateBinder(ctx, cfg.cwdFs, dEnv, mrEnv, creds, cfg.apr, cfg.subCommand, verboseEngineSetup)
+		lateBind, err := buildLateBinder(ctx, cfg.cwdFs, dEnv, mrEnv, creds, cfg.apr, cfg.subCommand, verboseEngineSetup, cliEngineVars)
 
 		if err != nil {
 			cli.PrintErrln(color.RedString("%v", err))
@@ -633,7 +646,7 @@ func resolveDataDirDeeply(gArgs *argparser.ArgParseResults, subCmd string, remai
 
 // buildLateBinder builds a LateBindQueryist for which is used to obtain the Queryist used for the length of the
 // command execution.
-func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, rootEnv *env.DoltEnv, mrEnv *env.MultiRepoEnv, creds *cli.UserPassword, apr *argparser.ArgParseResults, subcommandName string, verbose bool) (cli.LateBindQueryist, error) {
+func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, rootEnv *env.DoltEnv, mrEnv *env.MultiRepoEnv, creds *cli.UserPassword, apr *argparser.ArgParseResults, subcommandName string, verbose bool, vars *sql.EngineVariables) (cli.LateBindQueryist, error) {
 
 	var targetEnv *env.DoltEnv = nil
 
@@ -814,7 +827,7 @@ If you're interested in running this command against a remote host, hit us up on
 	if verbose {
 		cli.Println("verbose: starting local mode")
 	}
-	return commands.BuildSqlEngineQueryist(ctx, cwdFS, mrEnv, creds, apr)
+	return commands.BuildSqlEngineQueryistWithVariables(ctx, cwdFS, mrEnv, creds, apr, vars)
 }
 
 // doc is currently used only when a `initCliContext` command is specified. This will include all commands in time,
