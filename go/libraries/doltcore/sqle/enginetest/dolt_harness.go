@@ -52,7 +52,6 @@ type DoltHarness struct {
 	t                     *testing.T
 	multiRepoEnv          *env.MultiRepoEnv
 	session               *dsess.DoltSession
-	statsSession          *dsess.DoltSession
 	branchControl         *branch_control.Controller
 	branchActivityTracker *doltdb.BranchActivityTracker
 	gcSafepointController *gcctx.GCSafepointController
@@ -288,17 +287,24 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 
 		bThreads := sql.NewBackgroundThreads()
 
-		var err error
-		d.statsSession, err = dsess.NewDoltSession(d.newBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, nil, d.branchActivityTracker)
-		require.NoError(t, err)
-		ctxGen := func(ctx context.Context) (*sql.Context, error) {
-			client := sql.Client{Address: "localhost", User: "root"}
-			return sql.NewContextWithVariables(ctx, d.variables, sql.WithSession(d.newStatsSessionWithClient(client))), nil
-		}
-		// xxx: stats threads can't be tied to single test cycle,
-		// this is only OK for enginetests
+		// The stats worker can outlive a harness setup cycle. Capture this
+		// engine's dependencies rather than reading mutable harness fields.
+		statsConfig := d.multiRepoEnv.Config()
+		statsVariables := d.variables
+		statsBranchControl := d.branchControl
+		statsActivityTracker := d.branchActivityTracker
 		statsPro := statspro.NewStatsController(logrus.StandardLogger(), sql.NewBackgroundThreads(), d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
 		d.statsPro = statsPro
+		ctxGen := func(ctx context.Context) (*sql.Context, error) {
+			client := sql.Client{Address: "localhost", User: "root"}
+			base := sql.NewBaseSessionWithClientServerWithVariables("address", client, 1, statsVariables)
+			session, err := dsess.NewDoltSession(base, doltProvider, statsConfig, statsBranchControl, statsPro, writer.NewWriteSession, nil, statsActivityTracker)
+			if err != nil {
+				return nil, err
+			}
+			session.SetCurrentDatabase("mydb")
+			return sql.NewContextWithVariables(ctx, statsVariables, sql.WithSession(session)), nil
+		}
 
 		d.session, err = dsess.NewDoltSession(d.newBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, d.gcSafepointController, d.branchActivityTracker)
 		require.NoError(t, err)
@@ -474,16 +480,6 @@ func (d *DoltHarness) newSessionWithClient(client sql.Client) *dsess.DoltSession
 	return dSession
 }
 
-func (d *DoltHarness) newStatsSessionWithClient(client sql.Client) *dsess.DoltSession {
-	localConfig := d.multiRepoEnv.Config()
-	pro := d.statsSession.Provider()
-
-	dSession, err := dsess.NewDoltSession(sql.NewBaseSessionWithClientServerWithVariables("address", client, 1, d.variables), pro.(dsess.DoltDatabaseProvider), localConfig, d.branchControl, d.statsPro, writer.NewWriteSession, nil, d.branchActivityTracker)
-	dSession.SetCurrentDatabase("mydb")
-	require.NoError(d.t, err)
-	return dSession
-}
-
 func (d *DoltHarness) SupportsNativeIndexCreation() bool {
 	return true
 }
@@ -582,6 +578,10 @@ func (d *DoltHarness) Close() {
 }
 
 func (d *DoltHarness) closeProvider() {
+	if d.statsPro != nil {
+		d.statsPro.Close()
+		d.statsPro = nil
+	}
 	if d.provider != nil {
 		dbs := d.provider.AllDatabases(sql.NewContextWithVariables(context.Background(), d.variables))
 		for _, db := range dbs {
