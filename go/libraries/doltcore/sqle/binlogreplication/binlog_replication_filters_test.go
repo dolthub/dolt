@@ -15,6 +15,7 @@
 package binlogreplication
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"testing"
@@ -22,6 +23,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	gmsbinlogreplication "github.com/dolthub/go-mysql-server/sql/binlogreplication"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/stretchr/testify/require"
 )
@@ -127,7 +129,7 @@ func TestTableFilterPrecedence(t *testing.T) {
 // TestConcurrentReplicationFilterUpdates verifies successful updates to different filter types are not lost.
 func TestConcurrentReplicationFilterUpdates(t *testing.T) {
 	controller := newDoltBinlogReplicaController()
-	ctx := sql.NewEmptyContext()
+	ctx := sql.NewContextWithVariables(context.Background(), variables.NewEngineVariables())
 	doOption := *gmsbinlogreplication.NewReplicationOption("REPLICATE_DO_TABLE", []sql.UnresolvedTable{plan.NewUnresolvedTable("included", "db")})
 	ignoreOption := *gmsbinlogreplication.NewReplicationOption("REPLICATE_IGNORE_TABLE", []sql.UnresolvedTable{plan.NewUnresolvedTable("ignored", "db")})
 
