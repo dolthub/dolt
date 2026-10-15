@@ -28,7 +28,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
-	_ "github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/sirupsen/logrus"
 
@@ -149,7 +148,18 @@ func NewSqlEngine(
 	}
 
 	// Some database initialization logic depends on system variables, load them before the databases
-	err := applySystemVariables(sql.SystemVariables, config.SystemVariables)
+	engineVars := config.EngineVariables
+	vars := sql.SystemVariables
+	if engineVars != nil {
+		vars = engineVars.System
+		if err := mrEnv.Iter(func(name string, _ *env.DoltEnv) (bool, error) {
+			dsess.DefineSystemVariablesForDBInRegistry(vars, name)
+			return false, nil
+		}); err != nil {
+			return nil, err
+		}
+	}
+	err := applySystemVariables(vars, config.SystemVariables, engineVars)
 	if err != nil {
 		return nil, err
 	}
@@ -161,12 +171,12 @@ func NewSqlEngine(
 
 	bThreads := sql.NewBackgroundThreads()
 	var runAsyncThreads sqle.RunAsyncThreads
-	dbs, runAsyncThreads, err = sqle.ApplyReplicationConfig(ctx, mrEnv, cli.CliOut, dbs...)
+	dbs, runAsyncThreads, err = sqle.ApplyReplicationConfigWithRegistry(ctx, mrEnv, cli.CliOut, vars, dbs...)
 	if err != nil {
 		return nil, err
 	}
 
-	config.ClusterController.ManageSystemVariables(sql.SystemVariables)
+	config.ClusterController.ManageSystemVariables(vars)
 
 	err = config.ClusterController.ApplyStandbyReplicationConfig(ctx, mrEnv, dbs...)
 	if err != nil {
@@ -228,8 +238,9 @@ func NewSqlEngine(
 	sqlEngine := &SqlEngine{}
 	// Create the engine
 	engine := gms.New(analyzer.NewBuilder(engineProvider).AddOverrides(config.EngineOverrides).Build(), &gms.Config{
-		IsReadOnly:     config.IsReadOnly,
-		IsServerLocked: config.IsServerLocked,
+		IsReadOnly:      config.IsReadOnly,
+		IsServerLocked:  config.IsServerLocked,
+		EngineVariables: engineVars,
 	}).WithBackgroundThreads(bThreads)
 
 	primaryController := configureBinlogPrimaryController(engine)
@@ -252,9 +263,9 @@ func NewSqlEngine(
 		if readOnly {
 			readOnlyInt = 1
 		}
-		sql.SystemVariables.AssignValues(map[string]interface{}{
+		_ = applySystemVariables(vars, map[string]interface{}{
 			"read_only": readOnlyInt,
-		})
+		}, engineVars)
 	})
 
 	// Load in privileges from file, if it exists
@@ -291,17 +302,20 @@ func NewSqlEngine(
 		pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, config.AutoGCController.DropDatabaseHook())
 		// XXX: We force session aware safepoint controller if auto_gc is on.
 		dprocedures.UseSessionAwareSafepointController = true
-		sql.SystemVariables.AssignValues(map[string]interface{}{
+		err = applySystemVariables(vars, map[string]interface{}{
 			dsess.DoltAutoGCEnabled: int8(1),
-		})
+		}, engineVars)
 	} else {
-		sql.SystemVariables.AssignValues(map[string]interface{}{
+		err = applySystemVariables(vars, map[string]interface{}{
 			dsess.DoltAutoGCEnabled: int8(0),
-		})
+		}, engineVars)
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	var statsPro sql.StatsProvider
-	_, enabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsEnabled)
+	_, enabled, _ := vars.GetGlobal(dsess.DoltStatsEnabled)
 	if enabled.(int8) == 1 {
 		statsPro = statspro.NewStatsController(logrus.StandardLogger(), bThreads, mrEnv.GetEnv(mrEnv.GetFirstDatabase()))
 	} else {
@@ -323,7 +337,12 @@ func NewSqlEngine(
 	sessFactory := doltSessionFactory(pro, statsPro, mrEnv.Config(), bcController, gcSafepointController, config.Autocommit, branchActivityTracker)
 	sqlEngine.provider = pro
 	sqlEngine.dsessFactory = sessFactory
-	sqlEngine.ContextFactory = sqlContextFactory
+	sqlEngine.ContextFactory = func(ctx context.Context, opts ...sql.ContextOption) *sql.Context {
+		if engineVars != nil {
+			opts = append([]sql.ContextOption{sql.WithEngineVariables(engineVars)}, opts...)
+		}
+		return sqlContextFactory(ctx, opts...)
+	}
 	sqlEngine.engine = engine
 	sqlEngine.fs = pro.FileSystem()
 	sqlEngine.clusterController = config.ClusterController
@@ -355,7 +374,7 @@ func NewSqlEngine(
 		}
 	}
 
-	err = sql.SystemVariables.SetGlobal(sqlCtx, dsess.DoltCommitOnTransactionCommit, config.DoltTransactionCommit)
+	err = vars.SetGlobal(sqlCtx, dsess.DoltCommitOnTransactionCommit, config.DoltTransactionCommit)
 	if err != nil {
 		return nil, err
 	}
@@ -371,7 +390,7 @@ func NewSqlEngine(
 	engine.Analyzer.Catalog.BinlogConsumer = dblr.DoltBinlogConsumer
 
 	if config.BinlogReplicaController != nil {
-		binLogSession, err := sessFactory(sql.NewBaseSession(), pro)
+		binLogSession, err := sessFactory(sql.NewBaseSessionWithVariables(engineVars), pro)
 		if err != nil {
 			return nil, err
 		}
@@ -396,8 +415,13 @@ func NewRebasedSqlEngine(engine *gms.Engine, dbs map[string]dsess.SqlDatabase) *
 	}
 }
 
-func applySystemVariables(vars sql.SystemVariableRegistry, cfg SystemVariables) error {
+func applySystemVariables(vars sql.SystemVariableRegistry, cfg SystemVariables, owner *sql.EngineVariables) error {
 	if cfg != nil {
+		if owner != nil {
+			if aware, ok := vars.(sql.ContextAwareSystemVariableRegistry); ok {
+				return aware.AssignValuesWithContext(sql.NewContextWithVariables(context.Background(), owner), cfg)
+			}
+		}
 		return vars.AssignValues(cfg)
 	}
 	return nil
@@ -424,7 +448,7 @@ func (se *SqlEngine) InitStats(ctx context.Context) error {
 	dbs := pro.AllDatabases(sqlCtx)
 	statsPro := se.GetUnderlyingEngine().Analyzer.Catalog.StatsProvider
 	if sc, ok := statsPro.(*statspro.StatsController); ok {
-		_, memOnly, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly)
+		_, memOnly, _ := sqlCtx.SystemVariables().GetGlobal(dsess.DoltStatsMemoryOnly)
 		sc.SetMemOnly(memOnly.(int8) == 1)
 
 		if adder, ok := se.GetUnderlyingEngine().Analyzer.Catalog.DbProvider.(sqle.DatabaseHookRegistrar); ok {
@@ -442,7 +466,7 @@ func (se *SqlEngine) InitStats(ctx context.Context) error {
 			return err
 		}
 
-		if _, paused, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsPaused); paused.(int8) == 0 {
+		if _, paused, _ := sqlCtx.SystemVariables().GetGlobal(dsess.DoltStatsPaused); paused.(int8) == 0 {
 			if err = sc.Restart(sqlCtx); err != nil {
 				return err
 			}
@@ -469,7 +493,7 @@ func (se *SqlEngine) NewContext(ctx context.Context, session sql.Session) (*sql.
 
 // NewDefaultContext returns a new sql.Context with a new default dolt session.
 func (se *SqlEngine) NewDefaultContext(ctx context.Context) (*sql.Context, error) {
-	session, err := se.NewDoltSession(ctx, sql.NewBaseSession())
+	session, err := se.NewDoltSession(ctx, sql.NewBaseSessionWithVariables(se.sessionVariables()))
 	if err != nil {
 		return nil, err
 	}
@@ -490,6 +514,13 @@ func (se *SqlEngine) NewLocalContext(ctx context.Context) (*sql.Context, error) 
 // NewDoltSession creates a new DoltSession from a BaseSession
 func (se *SqlEngine) NewDoltSession(_ context.Context, mysqlSess *sql.BaseSession) (*dsess.DoltSession, error) {
 	return se.dsessFactory(mysqlSess, se.provider)
+}
+
+func (se *SqlEngine) sessionVariables() *sql.EngineVariables {
+	if se.engine != nil && se.engine.IsolatedVariables() {
+		return se.engine.Variables()
+	}
+	return nil
 }
 
 // Query execute a SQL statement and return values for printing.
@@ -575,7 +606,11 @@ func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, ctxFac
 	// The session's client is set to the event_scheduler superuser so that the event
 	// executor has access to all databases when privileges are enabled.
 	getCtxFunc := func() (*sql.Context, error) {
-		sess, err := sessFactory(sql.NewBaseSession(), pro)
+		var owner *sql.EngineVariables
+		if engine.IsolatedVariables() {
+			owner = engine.Variables()
+		}
+		sess, err := sessFactory(sql.NewBaseSessionWithVariables(owner), pro)
 		if err != nil {
 			return nil, err
 		}
@@ -752,17 +787,26 @@ type ConfigOption func(*SqlEngineConfig)
 // NewSqlEngineForEnv returns a SqlEngine configured for the environment provided, with a single root user.
 // Returns the new engine, the first database name, and any error that occurred.
 func NewSqlEngineForEnv(ctx context.Context, dEnv *env.DoltEnv, options ...ConfigOption) (*SqlEngine, string, error) {
+	config := &SqlEngineConfig{
+		ServerUser:      "root",
+		ServerHost:      "localhost",
+		EngineVariables: sqle.NewEngineVariables(),
+	}
+	for _, opt := range options {
+		opt(config)
+	}
 	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.FS, dEnv)
 	if err != nil {
 		return nil, "", err
 	}
-
-	config := &SqlEngineConfig{
-		ServerUser: "root",
-		ServerHost: "localhost",
-	}
-	for _, opt := range options {
-		opt(config)
+	if config.EngineVariables != nil {
+		_ = mrEnv.Iter(func(name string, _ *env.DoltEnv) (bool, error) {
+			dsess.DefineSystemVariablesForDBInRegistry(config.EngineVariables.System, name)
+			return false, nil
+		})
+		if err := dsess.InitPersistedSystemVarsWithRegistry(config.EngineVariables.System, dEnv); err != nil {
+			logrus.Warnf("unable to load persisted system variables: %v", err)
+		}
 	}
 
 	engine, err := NewSqlEngine(
