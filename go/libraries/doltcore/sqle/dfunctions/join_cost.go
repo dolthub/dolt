@@ -20,6 +20,7 @@ import (
 
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -77,7 +78,12 @@ func (c *JoinCost) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.Provider()
-	eng := gms.NewDefault(pro)
+	vars := ctx.EngineVariables()
+	if vars == nil {
+		return nil, fmt.Errorf("dolt_join_cost requires an engine variable owner")
+	}
+	eng := gms.New(analyzer.NewDefault(pro), &gms.Config{EngineVariables: vars})
+	defer eng.Close()
 
 	binder := planbuilder.New(ctx, eng.Analyzer.Catalog, eng.EventScheduler)
 	parsed, _, _, qFlags, err := binder.Parse(q, nil, false)
