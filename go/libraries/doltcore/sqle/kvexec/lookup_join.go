@@ -303,6 +303,7 @@ func newLookupKeyMapping(
 	var litTuple val.Tuple
 	var err error
 	if litDesc.Count() > 0 {
+		// A NULL literal key is valid here. Build would reject it.
 		litTuple, err = litTb.BuildPermissive(ctx, ns.Pool())
 		if err != nil {
 			return nil, err
