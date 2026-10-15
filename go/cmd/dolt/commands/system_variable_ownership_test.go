@@ -22,6 +22,9 @@ func TestRestrictLoadFileUsesCliEngineRegistry(t *testing.T) {
 	_, afterB, _ := b.System.GetGlobal("secure_file_priv")
 	require.Equal(t, wd, afterA)
 	require.Equal(t, beforeB, afterB)
+	sessionValue, err := ctxA.Session.GetSessionVariable(ctxA, "secure_file_priv")
+	require.NoError(t, err)
+	require.Equal(t, wd, sessionValue)
 }
 
 type legacySystemVariableRegistry struct{ sql.SystemVariableRegistry }
