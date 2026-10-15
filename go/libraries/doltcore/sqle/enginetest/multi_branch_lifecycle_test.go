@@ -22,7 +22,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
