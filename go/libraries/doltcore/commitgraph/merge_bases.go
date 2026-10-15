@@ -44,8 +44,11 @@ type AncestryIndex interface {
 type mergeBaseFlags uint8
 
 const (
+	// reachableFromLeft marks the left commit and its ancestors.
 	reachableFromLeft mergeBaseFlags = 1 << iota
+	// reachableFromRight marks the right commit and its ancestors.
 	reachableFromRight
+	// ancestorOfMergeBase marks a merge base already found and its ancestors, which cannot be merge bases.
 	ancestorOfMergeBase
 )
 
