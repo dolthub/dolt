@@ -43,9 +43,12 @@ func TestRegistryAwareDatabaseAndPersistedDefinitions(t *testing.T) {
 	require.Same(t, b, detached.EngineVariables())
 }
 
-func TestDoltSessionRequiresOwnedBaseSession(t *testing.T) {
-	_, err := NewDoltSession(sql.NewBaseSession(), emptyDatabaseProvider(), config.NewMapConfig(nil), nil, nil, nil, nil, nil)
-	require.ErrorContains(t, err, "engine variable bundle")
+func TestDoltSessionRetainsBaseSessionVariables(t *testing.T) {
+	vars := variables.NewEngineVariables()
+	base := sql.NewBaseSessionWithVariables(vars)
+	session, err := NewDoltSession(base, emptyDatabaseProvider(), config.NewMapConfig(nil), nil, nil, nil, nil, nil)
+	require.NoError(t, err)
+	require.Same(t, vars, session.EngineVariables())
 
 	a := DefaultSession(emptyDatabaseProvider(), nil)
 	b := DefaultSession(emptyDatabaseProvider(), nil)
