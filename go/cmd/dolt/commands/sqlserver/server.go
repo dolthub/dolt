@@ -1252,10 +1252,6 @@ func newSessionBuilder(se *engine.SqlEngine, config servercfg.ServerConfig) serv
 }
 
 // getConfigFromServerConfig processes ServerConfig and returns server.Config for sql-server.
-func getConfigFromServerConfig(serverConfig servercfg.ServerConfig, plf server.ProtocolListenerFunc) (server.Config, error) {
-	return getConfigFromServerConfigWithVariables(serverConfig, plf, nil)
-}
-
 func getConfigFromServerConfigWithVariables(serverConfig servercfg.ServerConfig, plf server.ProtocolListenerFunc, vars *sql.EngineVariables) (server.Config, error) {
 	serverConf, err := handleProtocolAndAddress(serverConfig)
 	if err != nil {
@@ -1272,11 +1268,7 @@ func getConfigFromServerConfigWithVariables(serverConfig servercfg.ServerConfig,
 		return server.Config{}, err
 	}
 
-	if vars != nil {
-		serverConf, err = serverConf.NewConfigWithVariables(vars)
-	} else {
-		serverConf, err = serverConf.NewConfig()
-	}
+	serverConf, err = serverConf.NewConfigWithVariables(vars)
 	if err != nil {
 		return server.Config{}, err
 	}
