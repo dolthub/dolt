@@ -680,32 +680,33 @@ func (db *database) PersistGhostCommitIDs(ctx context.Context, ghosts hash.HashS
 	return err
 }
 
-// ValueBuilder constructs and writes immutable values without publishing dataset updates.
-type ValueBuilder interface {
+// valueBuilder is a limited subset of Database used to construct values to commit
+type valueBuilder interface {
 	BuildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (*Commit, error)
 	WriteValue(ctx context.Context, v types.Value) (types.Ref, error)
 	Format() *types.NomsBinFormat
 }
 
-// DatasetUpdate builds a value and the preconditions for publishing it in an atomic batch.
+// DatasetUpdate is an update to a single dataset to commit as part of an atomic batch.
+// Implementors must be defined in this package.
 type DatasetUpdate interface {
 	// DatasetID returns the ID of the dataset to update.
 	DatasetID() string
-	// Build writes the immutable value and declares the conditions required to publish it.
-	Build(ctx context.Context, db ValueBuilder) (BuiltDatasetUpdate, error)
+	// build writes an immutable value and returns the metadata object that will be used to commit it
+	build(ctx context.Context, vb valueBuilder) (writtenDatasetUpdate, error)
 }
 
-// BuiltDatasetUpdate contains a written value and its publication preconditions.
+// writtenDatasetUpdate contains a written value and its publication preconditions.
 // Preconditions are checked against the original dataset map on every root update attempt.
-type BuiltDatasetUpdate struct {
+type writtenDatasetUpdate struct {
 	NewHead       hash.Hash
-	Preconditions []DatasetPrecondition
+	Preconditions []datasetCommitPrecondition
 }
 
-// DatasetPrecondition compares a dataset's current head with ExpectedHead.
+// datasetCommitPrecondition compares a dataset's current head with ExpectedHead.
 // A zero ExpectedHead denotes an absent dataset. NotEqual reverses the comparison.
 // OnFailure defaults to ErrOptimisticLockFailed when nil.
-type DatasetPrecondition struct {
+type datasetCommitPrecondition struct {
 	DatasetID    string
 	ExpectedHead hash.Hash
 	NotEqual     bool
@@ -729,15 +730,15 @@ func (w WorkingSetUpdate) DatasetID() string {
 	return w.WorkingSetDS
 }
 
-func (w WorkingSetUpdate) Build(ctx context.Context, db ValueBuilder) (BuiltDatasetUpdate, error) {
+func (w WorkingSetUpdate) build(ctx context.Context, db valueBuilder) (writtenDatasetUpdate, error) {
 	head, err := newWorkingSet(ctx, db, w.WorkingSet)
 	if err != nil {
-		return BuiltDatasetUpdate{}, err
+		return writtenDatasetUpdate{}, err
 	}
 
-	return BuiltDatasetUpdate{
+	return writtenDatasetUpdate{
 		NewHead: head,
-		Preconditions: []DatasetPrecondition{{
+		Preconditions: []datasetCommitPrecondition{{
 			DatasetID:    w.WorkingSetDS,
 			ExpectedHead: w.PrevWsHash,
 			OnFailure:    ErrOptimisticLockFailed,
@@ -760,10 +761,10 @@ func (c CommitUpdate) DatasetID() string {
 	return c.CommitDS.ID()
 }
 
-func (c CommitUpdate) Build(ctx context.Context, db ValueBuilder) (BuiltDatasetUpdate, error) {
+func (c CommitUpdate) build(ctx context.Context, db valueBuilder) (writtenDatasetUpdate, error) {
 	expected, _ := c.CommitDS.MaybeHeadAddr()
 	if !c.ExpectedHead.IsEmpty() && expected != c.ExpectedHead {
-		return BuiltDatasetUpdate{}, ErrMergeNeeded
+		return writtenDatasetUpdate{}, ErrMergeNeeded
 	}
 
 	// Prepend the current head hash to the list of parents if one was provided. This is only necessary if parents were
@@ -779,29 +780,29 @@ func (c CommitUpdate) Build(ctx context.Context, db ValueBuilder) (BuiltDatasetU
 
 	commit, err := db.BuildNewCommit(ctx, c.CommitDS, c.RootVal, c.CommitOpts)
 	if err != nil {
-		return BuiltDatasetUpdate{}, err
+		return writtenDatasetUpdate{}, err
 	}
 
 	commitRef, err := db.WriteValue(ctx, commit.NomsValue())
 	if err != nil {
-		return BuiltDatasetUpdate{}, err
+		return writtenDatasetUpdate{}, err
 	}
 
-	var preconditions []DatasetPrecondition
+	var preconditions []datasetCommitPrecondition
 	if c.WorkingSetDS != "" {
-		preconditions = append(preconditions, DatasetPrecondition{
+		preconditions = append(preconditions, datasetCommitPrecondition{
 			DatasetID:    c.WorkingSetDS,
 			ExpectedHead: c.PrevWsHash,
 			OnFailure:    ErrOptimisticLockFailed,
 		})
 	}
-	preconditions = append(preconditions, DatasetPrecondition{
+	preconditions = append(preconditions, datasetCommitPrecondition{
 		DatasetID:    c.DatasetID(),
 		ExpectedHead: expected,
 		OnFailure:    ErrMergeNeeded,
 	})
 
-	return BuiltDatasetUpdate{
+	return writtenDatasetUpdate{
 		NewHead:       commitRef.TargetHash(),
 		Preconditions: preconditions,
 	}, nil
@@ -819,16 +820,16 @@ var _ DatasetUpdate = PrebuiltCommitUpdate{}
 
 func (c PrebuiltCommitUpdate) DatasetID() string { return c.CommitDS.ID() }
 
-func (c PrebuiltCommitUpdate) Build(ctx context.Context, db ValueBuilder) (BuiltDatasetUpdate, error) {
+func (c PrebuiltCommitUpdate) build(ctx context.Context, db valueBuilder) (writtenDatasetUpdate, error) {
 	r, err := db.WriteValue(ctx, c.Commit.NomsValue())
 	if err != nil {
-		return BuiltDatasetUpdate{}, err
+		return writtenDatasetUpdate{}, err
 	}
 
 	expected, _ := c.CommitDS.MaybeHeadAddr()
-	return BuiltDatasetUpdate{
+	return writtenDatasetUpdate{
 		NewHead: r.TargetHash(),
-		Preconditions: []DatasetPrecondition{
+		Preconditions: []datasetCommitPrecondition{
 			{
 				DatasetID:    c.DatasetID(),
 				ExpectedHead: expected,
@@ -852,7 +853,7 @@ func (db *database) CommitDatasets(
 	if len(atomicCommit) == 0 {
 		return []Dataset{}, nil
 	}
-	pending := make([]BuiltDatasetUpdate, len(atomicCommit))
+	pending := make([]writtenDatasetUpdate, len(atomicCommit))
 	seen := make(map[string]struct{}, len(atomicCommit))
 
 	for i, cmt := range atomicCommit {
@@ -863,7 +864,7 @@ func (db *database) CommitDatasets(
 			return nil, fmt.Errorf("duplicate dataset update: %s", cmt.DatasetID())
 		}
 		seen[cmt.DatasetID()] = struct{}{}
-		built, err := cmt.Build(ctx, db)
+		built, err := cmt.build(ctx, db)
 		if err != nil {
 			return nil, err
 		}

@@ -211,7 +211,7 @@ type interleavedDatasetUpdate struct {
 	afterBuild func()
 }
 
-func (u interleavedDatasetUpdate) Build(ctx context.Context, db ValueBuilder) (BuiltDatasetUpdate, error) {
+func (u interleavedDatasetUpdate) Build(ctx context.Context, db valueBuilder) (writtenDatasetUpdate, error) {
 	h, err := u.DatasetUpdate.Build(ctx, db)
 	if err == nil {
 		u.afterBuild()
