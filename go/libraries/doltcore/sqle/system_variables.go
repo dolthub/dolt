@@ -20,7 +20,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	_ "github.com/dolthub/go-mysql-server/sql/variables"
+	"github.com/dolthub/go-mysql-server/sql/variables"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -31,329 +31,356 @@ func init() {
 	AddDoltSystemVariables()
 }
 
-var DoltSystemVariables = []sql.SystemVariable{
-	&sql.MysqlSystemVariable{
-		Name:              "log_bin_branch",
-		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Persist),
-		Dynamic:           true,
-		SetVarHintApplies: false,
-		Type:              types.NewSystemStringType("log_bin_branch"),
-		Default:           "main",
-	},
-	&sql.MysqlSystemVariable{
-		Name:              dsess.DoltOverrideSchema,
-		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Both),
-		Dynamic:           true,
-		SetVarHintApplies: false,
-		Type:              types.NewSystemStringType(dsess.DoltOverrideSchema),
-		Default:           "",
-	},
-	&sql.MysqlSystemVariable{
-		Name:              dsess.ReplicateToRemote,
-		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Global),
-		Dynamic:           true,
-		SetVarHintApplies: false,
-		Type:              types.NewSystemStringType(dsess.ReplicateToRemote),
-		Default:           "",
-	},
-	&sql.MysqlSystemVariable{
-		Name:              dsess.ReplicationRemoteURLTemplate,
-		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Global),
-		Dynamic:           true,
-		SetVarHintApplies: false,
-		Type:              types.NewSystemStringType(dsess.ReplicationRemoteURLTemplate),
-		Default:           "",
-	},
-	&sql.MysqlSystemVariable{
-		Name:              dsess.ReadReplicaRemote,
-		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Global),
-		Dynamic:           true,
-		SetVarHintApplies: false,
-		Type:              types.NewSystemStringType(dsess.ReadReplicaRemote),
-		Default:           "",
-	},
-	&sql.MysqlSystemVariable{
-		Name:              dsess.ReadReplicaForcePull,
-		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Global),
-		Dynamic:           true,
-		SetVarHintApplies: false,
-		Type:              types.NewSystemBoolType(dsess.ReadReplicaForcePull),
-		Default:           int8(1),
-	},
-	&sql.MysqlSystemVariable{
-		Name:              dsess.SkipReplicationErrors,
-		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Global),
-		Dynamic:           true,
-		SetVarHintApplies: false,
-		Type:              types.NewSystemBoolType(dsess.SkipReplicationErrors),
-		Default:           int8(0),
-	},
-	&sql.MysqlSystemVariable{
-		Name:              dsess.ReplicateHeads,
-		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Global),
-		Dynamic:           true,
-		SetVarHintApplies: false,
-		Type:              types.NewSystemStringType(dsess.ReplicateHeads),
-		Default:           "",
-	},
-	&sql.MysqlSystemVariable{
-		Name:              dsess.ReplicateAllHeads,
-		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Global),
-		Dynamic:           true,
-		SetVarHintApplies: false,
-		Type:              types.NewSystemBoolType(dsess.ReplicateAllHeads),
-		Default:           int8(0),
-	},
-	&sql.MysqlSystemVariable{
-		Name:              dsess.AsyncReplication,
-		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Global),
-		Dynamic:           true,
-		SetVarHintApplies: false,
-		Type:              types.NewSystemBoolType(dsess.AsyncReplication),
-		Default:           int8(0),
-	},
-	&sql.MysqlSystemVariable{
-		// MySQL exposes this as the --replicate-ignore-db CLI parameter, but we don't want to
-		// expose all the MySQL replication settings through the CLI, so we use this sys var.
-		Name:              "binlog_ignore_dbs",
-		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Both),
-		Dynamic:           true,
-		SetVarHintApplies: false,
-		Type:              types.NewSystemStringType("binlog_ignore_dbs"),
-		Default:           "",
-	},
-	&sql.MysqlSystemVariable{ // If true, causes a Dolt commit to occur when you commit a transaction.
-		Name:              dsess.DoltCommitOnTransactionCommit,
-		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Both),
-		Dynamic:           true,
-		SetVarHintApplies: false,
-		Type:              types.NewSystemBoolType(dsess.DoltCommitOnTransactionCommit),
-		Default:           int8(0),
-	},
-	&sql.MysqlSystemVariable{ // If true, Dolt commits can include every dirty branch of one database.
-		Name:              dsess.DoltMultiBranchCommit,
-		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Both),
-		Dynamic:           true,
-		SetVarHintApplies: false,
-		Type:              types.NewSystemBoolType(dsess.DoltMultiBranchCommit),
-		Default:           int8(0),
-	},
-	&sql.MysqlSystemVariable{ // If set, use this message for automatic Dolt commits
-		Name:              dsess.DoltCommitOnTransactionCommitMessage,
-		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Both),
-		Dynamic:           true,
-		SetVarHintApplies: false,
-		Type:              types.NewSystemStringType(dsess.DoltCommitOnTransactionCommitMessage),
-		Default:           "",
-	},
-	&sql.MysqlSystemVariable{
-		Name:              dsess.TransactionsDisabledSysVar,
-		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Session),
-		Dynamic:           true,
-		SetVarHintApplies: false,
-		Type:              types.NewSystemBoolType(dsess.TransactionsDisabledSysVar),
-		Default:           int8(0),
-	},
-	&sql.MysqlSystemVariable{ // If true, disables the conflict and constraint violation check when you commit a transaction.
-		Name:              dsess.ForceTransactionCommit,
-		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Both),
-		Dynamic:           true,
-		SetVarHintApplies: false,
-		Type:              types.NewSystemBoolType(dsess.ForceTransactionCommit),
-		Default:           int8(0),
-	},
-	&sql.MysqlSystemVariable{
-		Name:              dsess.CurrentBatchModeKey,
-		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Session),
-		Dynamic:           true,
-		SetVarHintApplies: false,
-		Type:              types.NewSystemIntType(dsess.CurrentBatchModeKey, -9223372036854775808, 9223372036854775807, false),
-		Default:           int64(0),
-	},
-	&sql.MysqlSystemVariable{ // If true, disables the conflict violation check when you commit a transaction.
-		Name:              dsess.AllowCommitConflicts,
-		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Session),
-		Dynamic:           true,
-		SetVarHintApplies: false,
-		Type:              types.NewSystemBoolType(dsess.AllowCommitConflicts),
-		Default:           int8(0),
-	},
-	&sql.MysqlSystemVariable{
-		Name:              dsess.AwsCredsFile,
-		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Session),
-		Dynamic:           false,
-		SetVarHintApplies: false,
-		Type:              types.NewSystemStringType(dsess.AwsCredsFile),
-		Default:           "",
-	},
-	&sql.MysqlSystemVariable{
-		Name:              dsess.AwsCredsProfile,
-		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Session),
-		Dynamic:           false,
-		SetVarHintApplies: false,
-		Type:              types.NewSystemStringType(dsess.AwsCredsProfile),
-		Default:           "",
-	},
-	&sql.MysqlSystemVariable{
-		Name:              dsess.AwsCredsRegion,
-		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Session),
-		Dynamic:           false,
-		SetVarHintApplies: false,
-		Type:              types.NewSystemStringType(dsess.AwsCredsRegion),
-		Default:           "",
-	},
-	&sql.MysqlSystemVariable{
-		Name:              dsess.ShowBranchDatabases,
-		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Both),
-		Dynamic:           true,
-		SetVarHintApplies: false,
-		Type:              types.NewSystemBoolType(dsess.ShowBranchDatabases),
-		Default:           int8(0),
-	},
-	&sql.MysqlSystemVariable{
-		Name:    dsess.DoltClusterAckWritesTimeoutSecs,
-		Dynamic: true,
-		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Persist),
-		Type:    types.NewSystemIntType(dsess.DoltClusterAckWritesTimeoutSecs, 0, 60, false),
-		Default: int64(0),
-	},
-	&sql.MysqlSystemVariable{
-		Name:    dsess.ShowSystemTables,
-		Dynamic: true,
-		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Both),
-		Type:    types.NewSystemBoolType(dsess.ShowSystemTables),
-		Default: int8(0),
-	},
-	&sql.MysqlSystemVariable{
-		Name:    "dolt_dont_merge_json",
-		Dynamic: true,
-		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Both),
-		Type:    types.NewSystemBoolType("dolt_dont_merge_json"),
-		Default: int8(0),
-	},
-	&sql.MysqlSystemVariable{
-		Name:    "dolt_optimize_json",
-		Dynamic: true,
-		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Both),
-		Type:    types.NewSystemBoolType("dolt_optimize_json"),
-		Default: int8(1),
-	},
-	&sql.MysqlSystemVariable{
-		Name:    dsess.DoltStatsEnabled,
-		Dynamic: true,
-		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
-		Type:    types.NewSystemBoolType(dsess.DoltStatsEnabled),
-		Default: int8(1),
-	},
-	&sql.MysqlSystemVariable{
-		Name:    dsess.DoltStatsPaused,
-		Dynamic: true,
-		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
-		Type:    types.NewSystemBoolType(dsess.DoltStatsPaused),
-		Default: int8(1),
-	},
-	&sql.MysqlSystemVariable{
-		Name:    dsess.DoltStatsMemoryOnly,
-		Dynamic: true,
-		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
-		Type:    types.NewSystemBoolType(dsess.DoltStatsMemoryOnly),
-		Default: int8(0),
-	},
-	&sql.MysqlSystemVariable{
-		Name:    dsess.DoltStatsJobInterval,
-		Dynamic: true,
-		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
-		Type:    types.NewSystemIntType(dsess.DoltStatsJobInterval, 0, math.MaxInt, false),
-		Default: int64(30 * time.Millisecond / time.Millisecond),
-	},
-	&sql.MysqlSystemVariable{
-		Name:    dsess.DoltStatsGCInterval,
-		Dynamic: true,
-		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
-		Type:    types.NewSystemIntType(dsess.DoltStatsGCInterval, 0, math.MaxInt, false),
-		Default: int64(time.Hour / time.Millisecond),
-	},
-	&sql.MysqlSystemVariable{
-		Name:    dsess.DoltStatsGCEnabled,
-		Dynamic: true,
-		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
-		Type:    types.NewSystemBoolType(dsess.DoltStatsGCEnabled),
-		Default: int8(1),
-	},
-	&sql.MysqlSystemVariable{
-		Name:    dsess.DoltStatsBranches,
-		Dynamic: true,
-		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
-		Type:    types.NewSystemStringType(dsess.DoltStatsBranches),
-		Default: "",
-	},
-	&sql.MysqlSystemVariable{
-		Name:    dsess.DoltAutoGCEnabled,
-		Dynamic: false,
-		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
-		Type:    types.NewSystemBoolType(dsess.DoltAutoGCEnabled),
-		Default: int8(1),
-	},
-	&sql.MysqlSystemVariable{
-		Name:    dsess.AllowCICreation,
-		Dynamic: true,
-		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
-		Type:    types.NewSystemBoolType(dsess.AllowCICreation),
-		Default: int8(0),
-	},
-	&sql.MysqlSystemVariable{
-		Name:    actions.DoltCommitVerificationGroups,
-		Dynamic: true,
-		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
-		Type:    types.NewSystemStringType(actions.DoltCommitVerificationGroups),
-		Default: "",
-	},
-	&sql.MysqlSystemVariable{
-		Name:    dsess.DoltAuthorName,
-		Dynamic: true,
-		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
-		Type:    types.NewSystemStringType(dsess.DoltAuthorName),
-		Default: "",
-	},
-	&sql.MysqlSystemVariable{
-		Name:    dsess.DoltAuthorEmail,
-		Dynamic: true,
-		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
-		Type:    types.NewSystemStringType(dsess.DoltAuthorEmail),
-		Default: "",
-	},
-	&sql.MysqlSystemVariable{
-		Name:    dsess.DoltAuthorDate,
-		Dynamic: true,
-		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
-		Type:    types.NewSystemStringType(dsess.DoltAuthorDate),
-		Default: "",
-	},
-	&sql.MysqlSystemVariable{
-		Name:    dsess.DoltCommitterName,
-		Dynamic: true,
-		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
-		Type:    types.NewSystemStringType(dsess.DoltCommitterName),
-		Default: "",
-	},
-	&sql.MysqlSystemVariable{
-		Name:    dsess.DoltCommitterEmail,
-		Dynamic: true,
-		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
-		Type:    types.NewSystemStringType(dsess.DoltCommitterEmail),
-		Default: "",
-	},
-	&sql.MysqlSystemVariable{
-		Name:    dsess.DoltCommitterDate,
-		Dynamic: true,
-		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
-		Type:    types.NewSystemStringType(dsess.DoltCommitterDate),
-		Default: "",
-	},
+var DoltSystemVariables = newDoltSystemVariables()
+
+func newDoltSystemVariables() []sql.SystemVariable {
+	return []sql.SystemVariable{
+		&sql.MysqlSystemVariable{
+			Name:              "log_bin_branch",
+			Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Persist),
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemStringType("log_bin_branch"),
+			Default:           "main",
+		},
+		&sql.MysqlSystemVariable{
+			Name:              dsess.DoltOverrideSchema,
+			Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Both),
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemStringType(dsess.DoltOverrideSchema),
+			Default:           "",
+		},
+		&sql.MysqlSystemVariable{
+			Name:              dsess.ReplicateToRemote,
+			Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Global),
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemStringType(dsess.ReplicateToRemote),
+			Default:           "",
+		},
+		&sql.MysqlSystemVariable{
+			Name:              dsess.ReplicationRemoteURLTemplate,
+			Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Global),
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemStringType(dsess.ReplicationRemoteURLTemplate),
+			Default:           "",
+		},
+		&sql.MysqlSystemVariable{
+			Name:              dsess.ReadReplicaRemote,
+			Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Global),
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemStringType(dsess.ReadReplicaRemote),
+			Default:           "",
+		},
+		&sql.MysqlSystemVariable{
+			Name:              dsess.ReadReplicaForcePull,
+			Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Global),
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemBoolType(dsess.ReadReplicaForcePull),
+			Default:           int8(1),
+		},
+		&sql.MysqlSystemVariable{
+			Name:              dsess.SkipReplicationErrors,
+			Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Global),
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemBoolType(dsess.SkipReplicationErrors),
+			Default:           int8(0),
+		},
+		&sql.MysqlSystemVariable{
+			Name:              dsess.ReplicateHeads,
+			Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Global),
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemStringType(dsess.ReplicateHeads),
+			Default:           "",
+		},
+		&sql.MysqlSystemVariable{
+			Name:              dsess.ReplicateAllHeads,
+			Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Global),
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemBoolType(dsess.ReplicateAllHeads),
+			Default:           int8(0),
+		},
+		&sql.MysqlSystemVariable{
+			Name:              dsess.AsyncReplication,
+			Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Global),
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemBoolType(dsess.AsyncReplication),
+			Default:           int8(0),
+		},
+		&sql.MysqlSystemVariable{
+			// MySQL exposes this as the --replicate-ignore-db CLI parameter, but we don't want to
+			// expose all the MySQL replication settings through the CLI, so we use this sys var.
+			Name:              "binlog_ignore_dbs",
+			Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Both),
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemStringType("binlog_ignore_dbs"),
+			Default:           "",
+		},
+		&sql.MysqlSystemVariable{ // If true, causes a Dolt commit to occur when you commit a transaction.
+			Name:              dsess.DoltCommitOnTransactionCommit,
+			Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Both),
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemBoolType(dsess.DoltCommitOnTransactionCommit),
+			Default:           int8(0),
+		},
+		&sql.MysqlSystemVariable{ // If true, Dolt commits can include every dirty branch of one database.
+			Name:              dsess.DoltMultiBranchCommit,
+			Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Both),
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemBoolType(dsess.DoltMultiBranchCommit),
+			Default:           int8(0),
+		},
+		&sql.MysqlSystemVariable{ // If set, use this message for automatic Dolt commits
+			Name:              dsess.DoltCommitOnTransactionCommitMessage,
+			Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Both),
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemStringType(dsess.DoltCommitOnTransactionCommitMessage),
+			Default:           "",
+		},
+		&sql.MysqlSystemVariable{
+			Name:              dsess.TransactionsDisabledSysVar,
+			Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Session),
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemBoolType(dsess.TransactionsDisabledSysVar),
+			Default:           int8(0),
+		},
+		&sql.MysqlSystemVariable{ // If true, disables the conflict and constraint violation check when you commit a transaction.
+			Name:              dsess.ForceTransactionCommit,
+			Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Both),
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemBoolType(dsess.ForceTransactionCommit),
+			Default:           int8(0),
+		},
+		&sql.MysqlSystemVariable{
+			Name:              dsess.CurrentBatchModeKey,
+			Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Session),
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemIntType(dsess.CurrentBatchModeKey, -9223372036854775808, 9223372036854775807, false),
+			Default:           int64(0),
+		},
+		&sql.MysqlSystemVariable{ // If true, disables the conflict violation check when you commit a transaction.
+			Name:              dsess.AllowCommitConflicts,
+			Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Session),
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemBoolType(dsess.AllowCommitConflicts),
+			Default:           int8(0),
+		},
+		&sql.MysqlSystemVariable{
+			Name:              dsess.AwsCredsFile,
+			Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Session),
+			Dynamic:           false,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemStringType(dsess.AwsCredsFile),
+			Default:           "",
+		},
+		&sql.MysqlSystemVariable{
+			Name:              dsess.AwsCredsProfile,
+			Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Session),
+			Dynamic:           false,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemStringType(dsess.AwsCredsProfile),
+			Default:           "",
+		},
+		&sql.MysqlSystemVariable{
+			Name:              dsess.AwsCredsRegion,
+			Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Session),
+			Dynamic:           false,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemStringType(dsess.AwsCredsRegion),
+			Default:           "",
+		},
+		&sql.MysqlSystemVariable{
+			Name:              dsess.ShowBranchDatabases,
+			Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Both),
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemBoolType(dsess.ShowBranchDatabases),
+			Default:           int8(0),
+		},
+		&sql.MysqlSystemVariable{
+			Name:    dsess.DoltClusterAckWritesTimeoutSecs,
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Persist),
+			Type:    types.NewSystemIntType(dsess.DoltClusterAckWritesTimeoutSecs, 0, 60, false),
+			Default: int64(0),
+		},
+		&sql.MysqlSystemVariable{
+			Name:    dsess.ShowSystemTables,
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Both),
+			Type:    types.NewSystemBoolType(dsess.ShowSystemTables),
+			Default: int8(0),
+		},
+		&sql.MysqlSystemVariable{
+			Name:    "dolt_dont_merge_json",
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Both),
+			Type:    types.NewSystemBoolType("dolt_dont_merge_json"),
+			Default: int8(0),
+		},
+		&sql.MysqlSystemVariable{
+			Name:    "dolt_optimize_json",
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Both),
+			Type:    types.NewSystemBoolType("dolt_optimize_json"),
+			Default: int8(1),
+		},
+		&sql.MysqlSystemVariable{
+			Name:    dsess.DoltStatsEnabled,
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
+			Type:    types.NewSystemBoolType(dsess.DoltStatsEnabled),
+			Default: int8(1),
+		},
+		&sql.MysqlSystemVariable{
+			Name:    dsess.DoltStatsPaused,
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
+			Type:    types.NewSystemBoolType(dsess.DoltStatsPaused),
+			Default: int8(1),
+		},
+		&sql.MysqlSystemVariable{
+			Name:    dsess.DoltStatsMemoryOnly,
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
+			Type:    types.NewSystemBoolType(dsess.DoltStatsMemoryOnly),
+			Default: int8(0),
+		},
+		&sql.MysqlSystemVariable{
+			Name:    dsess.DoltStatsJobInterval,
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
+			Type:    types.NewSystemIntType(dsess.DoltStatsJobInterval, 0, math.MaxInt, false),
+			Default: int64(30 * time.Millisecond / time.Millisecond),
+		},
+		&sql.MysqlSystemVariable{
+			Name:    dsess.DoltStatsGCInterval,
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
+			Type:    types.NewSystemIntType(dsess.DoltStatsGCInterval, 0, math.MaxInt, false),
+			Default: int64(time.Hour / time.Millisecond),
+		},
+		&sql.MysqlSystemVariable{
+			Name:    dsess.DoltStatsGCEnabled,
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
+			Type:    types.NewSystemBoolType(dsess.DoltStatsGCEnabled),
+			Default: int8(1),
+		},
+		&sql.MysqlSystemVariable{
+			Name:    dsess.DoltStatsBranches,
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
+			Type:    types.NewSystemStringType(dsess.DoltStatsBranches),
+			Default: "",
+		},
+		&sql.MysqlSystemVariable{
+			Name:    dsess.DoltAutoGCEnabled,
+			Dynamic: false,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
+			Type:    types.NewSystemBoolType(dsess.DoltAutoGCEnabled),
+			Default: int8(1),
+		},
+		&sql.MysqlSystemVariable{
+			Name:    dsess.AllowCICreation,
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
+			Type:    types.NewSystemBoolType(dsess.AllowCICreation),
+			Default: int8(0),
+		},
+		&sql.MysqlSystemVariable{
+			Name:    actions.DoltCommitVerificationGroups,
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
+			Type:    types.NewSystemStringType(actions.DoltCommitVerificationGroups),
+			Default: "",
+		},
+		&sql.MysqlSystemVariable{
+			Name:    dsess.DoltAuthorName,
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
+			Type:    types.NewSystemStringType(dsess.DoltAuthorName),
+			Default: "",
+		},
+		&sql.MysqlSystemVariable{
+			Name:    dsess.DoltAuthorEmail,
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
+			Type:    types.NewSystemStringType(dsess.DoltAuthorEmail),
+			Default: "",
+		},
+		&sql.MysqlSystemVariable{
+			Name:    dsess.DoltAuthorDate,
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
+			Type:    types.NewSystemStringType(dsess.DoltAuthorDate),
+			Default: "",
+		},
+		&sql.MysqlSystemVariable{
+			Name:    dsess.DoltCommitterName,
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
+			Type:    types.NewSystemStringType(dsess.DoltCommitterName),
+			Default: "",
+		},
+		&sql.MysqlSystemVariable{
+			Name:    dsess.DoltCommitterEmail,
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
+			Type:    types.NewSystemStringType(dsess.DoltCommitterEmail),
+			Default: "",
+		},
+		&sql.MysqlSystemVariable{
+			Name:    dsess.DoltCommitterDate,
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
+			Type:    types.NewSystemStringType(dsess.DoltCommitterDate),
+			Default: "",
+		},
+	}
 }
 
 func AddDoltSystemVariables() {
-	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
+	addDoltSystemVariables(sql.SystemVariables, DoltSystemVariables)
+}
+
+// NewEngineVariables constructs a fresh GMS bundle with Dolt's definitions.
+func NewEngineVariables() *sql.EngineVariables {
+	vars := variables.NewEngineVariables()
+	AddDoltSystemVariablesToRegistry(vars.System)
+	return vars
+}
+
+// AddDoltSystemVariablesToRegistry registers fresh Dolt definitions in one
+// engine's registry. The inline catalog is registered first, followed by the
+// exported catalog, matching AddDoltSystemVariables duplicate precedence.
+func AddDoltSystemVariablesToRegistry(vars sql.SystemVariableRegistry) {
+	addDoltSystemVariables(vars, newDoltSystemVariables())
+}
+
+func addDoltSystemVariables(vars sql.SystemVariableRegistry, exported []sql.SystemVariable) {
+	vars.AddSystemVariables(newInlineDoltSystemVariables())
+	vars.AddSystemVariables(exported)
+}
+
+func newInlineDoltSystemVariables() []sql.SystemVariable {
+	return []sql.SystemVariable{
 		&sql.MysqlSystemVariable{
 			Name:              "log_bin_branch",
 			Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Persist),
@@ -662,8 +689,7 @@ func AddDoltSystemVariables() {
 			Type:    types.NewSystemStringType(dsess.DoltCommitterDate),
 			Default: "",
 		},
-	})
-	sql.SystemVariables.AddSystemVariables(DoltSystemVariables)
+	}
 }
 
 func ReadReplicaForcePull() bool {
