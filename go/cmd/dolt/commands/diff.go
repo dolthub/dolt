@@ -653,8 +653,9 @@ func (dArgs *diffArgs) applyMergeBase(queryist cli.Queryist, sqlCtx *sql.Context
 	return nil
 }
 
+// getCommonAncestor returns the newest merge base of |c1| and |c2|. Like git diff, it warns when there are several.
 func getCommonAncestor(queryist cli.Queryist, sqlCtx *sql.Context, c1, c2 string) (string, error) {
-	q, err := dbr.InterpolateForDialect("select dolt_merge_base(?, ?)", []interface{}{c1, c2}, dialect.MySQL)
+	q, err := dbr.InterpolateForDialect("select merge_base from dolt_merge_bases(?, ?)", []interface{}{c1, c2}, dialect.MySQL)
 	if err != nil {
 		return "", fmt.Errorf("error interpolating query: %w", err)
 	}
@@ -662,10 +663,13 @@ func getCommonAncestor(queryist cli.Queryist, sqlCtx *sql.Context, c1, c2 string
 	if err != nil {
 		return "", err
 	}
-	if len(rows) != 1 {
-		return "", errors.New("unexpected number of rows returned from dolt_merge_base")
+	if len(rows) == 0 {
+		return "", errors.New("no rows returned from dolt_merge_bases")
 	}
 	ancestor := rows[0][0].(string)
+	if len(rows) > 1 {
+		cli.PrintErrln(fmt.Sprintf("warning: %s...%s: multiple merge bases, using %s", c1, c2, ancestor))
+	}
 	return ancestor, nil
 }
 

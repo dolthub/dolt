@@ -109,26 +109,17 @@ func countCommits(ctx *sql.Context, args ...string) (ahead uint64, behind uint64
 		return 0, 0, err
 	}
 
-	optCmt, err = doltdb.GetCommitAncestor(ctx, fromCommit, toCommit)
-	if err != nil {
-		return 0, 0, err
-	}
-	ancestor, ok := optCmt.ToCommit()
-	if !ok {
-		return 0, 0, doltdb.ErrGhostCommitEncountered
-	}
-
-	ancestorHash, err := ancestor.HashOf()
-	if err != nil {
+	// Unrelated histories are an error, rather than counting every commit on each side.
+	if _, err = doltdb.GetCommitAncestor(ctx, fromCommit, toCommit); err != nil {
 		return 0, 0, err
 	}
 
 	if fromHash != toHash {
-		behind, err = countCommitsInRange(ctx, ddb, toHash, ancestorHash)
+		ahead, err = countCommitsExcluding(ctx, ddb, fromHash, toHash)
 		if err != nil {
 			return 0, 0, err
 		}
-		ahead, err = countCommitsInRange(ctx, ddb, fromHash, ancestorHash)
+		behind, err = countCommitsExcluding(ctx, ddb, toHash, fromHash)
 		if err != nil {
 			return 0, 0, err
 		}
@@ -137,27 +128,21 @@ func countCommits(ctx *sql.Context, args ...string) (ahead uint64, behind uint64
 	return ahead, behind, nil
 }
 
-// countCommitsInRange returns the number of commits between the given starting point to trace back to the given target point.
-// The starting commit must be a descendant of the target commit. Target commit must be a common ancestor commit.
-func countCommitsInRange(ctx context.Context, ddb *doltdb.DoltDB, startCommitHash, targetCommitHash hash.Hash) (uint64, error) {
-	itr, iErr := commitwalk.GetTopologicalOrderIterator[context.Context](ctx, ddb, []hash.Hash{startCommitHash}, nil)
-	if iErr != nil {
-		return 0, iErr
+// countCommitsExcluding returns the number of commits reachable from |include| but not from |exclude|, the count of
+// `git rev-list exclude..include`.
+func countCommitsExcluding(ctx context.Context, ddb *doltdb.DoltDB, include, exclude hash.Hash) (uint64, error) {
+	itr, err := commitwalk.GetDotDotRevisionsIterator[context.Context](ctx, ddb, []hash.Hash{include}, ddb, []hash.Hash{exclude}, nil)
+	if err != nil {
+		return 0, err
 	}
-	count := 0
+	var count uint64
 	for {
-		nextHash, _, _, _, err := itr.Next(ctx)
+		_, _, _, _, err = itr.Next(ctx)
 		if err == io.EOF {
-			return 0, fmt.Errorf("no match found to ancestor commit")
+			return count, nil
 		} else if err != nil {
 			return 0, err
 		}
-
-		if nextHash == targetCommitHash {
-			break
-		}
-		count += 1
+		count++
 	}
-
-	return uint64(count), nil
 }
