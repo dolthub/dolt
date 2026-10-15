@@ -335,7 +335,7 @@ func TestGCSafepointConcurrentWaiters(t *testing.T) {
 					t.Fatal("visited during command")
 				case <-secondStarted:
 					t.Fatal("visited during command")
-				default:
+				case <-time.After(50 * time.Millisecond):
 				}
 				controller.SessionCommandEnd(sess)
 			}
@@ -387,6 +387,7 @@ func TestGCSafepointCancelOnlyOwnPendingVisits(t *testing.T) {
 	cancel()
 	require.ErrorIs(t, first.Wait(ctx), context.Canceled)
 	controller.SessionCommandEnd(sess)
+	require.NoError(t, controller.SessionCommandBegin(sess))
 	require.NoError(t, second.Wait(context.Background()))
 	<-secondVisited
 	select {
@@ -394,6 +395,7 @@ func TestGCSafepointCancelOnlyOwnPendingVisits(t *testing.T) {
 		t.Fatal("canceled waiter visited the session")
 	default:
 	}
+	controller.SessionCommandEnd(sess)
 	controller.SessionEnd(sess)
 }
 
