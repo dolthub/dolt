@@ -21,6 +21,7 @@ import (
 
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -208,7 +209,12 @@ func runCommitVerification(ctx *sql.Context, testGroups []string) error {
 	}
 
 	provider := session.GenericProvider()
-	engine := gms.NewDefault(provider)
+	vars := ctx.EngineVariables()
+	if vars == nil {
+		return fmt.Errorf("commit verification requires an engine variable owner")
+	}
+	engine := gms.New(analyzer.NewDefault(provider), &gms.Config{EngineVariables: vars})
+	defer engine.Close()
 
 	return runTestsUsingDtablefunctions(ctx, engine, testGroups)
 }
