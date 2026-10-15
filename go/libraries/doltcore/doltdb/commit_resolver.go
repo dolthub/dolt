@@ -21,11 +21,13 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/commitgraph"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // CommitResolver resolves commits for commitgraph, and answers ancestry questions from their parent closures.
 type CommitResolver struct {
-	load      func(ctx context.Context, h hash.Hash) (*OptionalCommit, error)
+	loader    commitLoader
 	commits   map[hash.Hash]*OptionalCommit
 	ancestors map[hash.Hash]*CommitAncestry
 }
@@ -33,37 +35,52 @@ type CommitResolver struct {
 var _ commitgraph.HashResolver = (*CommitResolver)(nil)
 var _ commitgraph.AncestryIndex = (*CommitResolver)(nil)
 
-func NewCommitResolver(ddb *DoltDB) *CommitResolver {
-	return newCommitResolver(ddb.ResolveHash)
+// commitLoader loads a commit, or a ghost, by its hash. *DoltDB is one.
+type commitLoader interface {
+	ResolveHash(ctx context.Context, h hash.Hash) (*OptionalCommit, error)
 }
 
-// newCommitResolverFor resolves commits in the store of |c|.
-func newCommitResolverFor(c *Commit) *CommitResolver {
-	return newCommitResolver(func(ctx context.Context, h hash.Hash) (*OptionalCommit, error) {
-		dc, err := datas.LoadCommitAddr(ctx, c.vrw, h)
-		if err != nil {
+// commitStore loads commits from a store without a DoltDB, such as the store a Commit was read from.
+type commitStore struct {
+	vrw types.ValueReadWriter
+	ns  tree.NodeStore
+}
+
+func (s commitStore) ResolveHash(ctx context.Context, h hash.Hash) (*OptionalCommit, error) {
+	dc, err := datas.LoadCommitAddr(ctx, s.vrw, h)
+	if err != nil {
+		return nil, err
+	}
+	oc := &OptionalCommit{Addr: h}
+	if !dc.IsGhost() {
+		if oc.Commit, err = NewCommit(ctx, s.vrw, s.ns, dc); err != nil {
 			return nil, err
 		}
-		oc := &OptionalCommit{Addr: h}
-		if !dc.IsGhost() {
-			if oc.Commit, err = NewCommit(ctx, c.vrw, c.ns, dc); err != nil {
-				return nil, err
-			}
-		}
-		return oc, nil
-	})
+	}
+	return oc, nil
 }
 
-func newCommitResolver(load func(ctx context.Context, h hash.Hash) (*OptionalCommit, error)) *CommitResolver {
+// NewCommitResolver returns a CommitResolver that loads commits through |ddb| and its commit cache.
+func NewCommitResolver(ddb *DoltDB) *CommitResolver {
+	return newCommitResolver(ddb)
+}
+
+// newCommitResolverFor returns a CommitResolver that loads commits from the store of |c|.
+func newCommitResolverFor(c *Commit) *CommitResolver {
+	return newCommitResolver(commitStore{vrw: c.vrw, ns: c.ns})
+}
+
+func newCommitResolver(loader commitLoader) *CommitResolver {
 	return &CommitResolver{
-		load:      load,
+		loader:    loader,
 		commits:   make(map[hash.Hash]*OptionalCommit),
 		ancestors: make(map[hash.Hash]*CommitAncestry),
 	}
 }
 
+// ResolveCommitHash implements commitgraph.HashResolver.
 func (r *CommitResolver) ResolveCommitHash(ctx context.Context, h hash.Hash) (*commitgraph.CommitInfo, error) {
-	oc, err := r.load(ctx, h)
+	oc, err := r.loader.ResolveHash(ctx, h)
 	if err != nil {
 		return nil, err
 	}
@@ -92,6 +109,7 @@ func (r *CommitResolver) LookupOptionalCommit(h hash.Hash) *OptionalCommit {
 	return r.commits[h]
 }
 
+// IsAncestor implements commitgraph.AncestryIndex, looking |ancestor| up in the parent closure of |descendant|.
 func (r *CommitResolver) IsAncestor(ctx context.Context, ancestor *commitgraph.CommitInfo, descendant hash.Hash) (bool, error) {
 	a, err := r.ancestry(ctx, descendant)
 	if err != nil {
@@ -100,6 +118,7 @@ func (r *CommitResolver) IsAncestor(ctx context.Context, ancestor *commitgraph.C
 	return a.Contains(ctx, ancestor.Hash, ancestor.Height)
 }
 
+// GhostHeight implements commitgraph.AncestryIndex, finding |ghost| in the parent closure of |child|.
 func (r *CommitResolver) GhostHeight(ctx context.Context, ghost hash.Hash, child *commitgraph.CommitInfo) (uint64, error) {
 	a, err := r.ancestry(ctx, child.Hash)
 	if err != nil {
@@ -115,7 +134,7 @@ func (r *CommitResolver) ancestry(ctx context.Context, h hash.Hash) (*CommitAnce
 	oc, ok := r.commits[h]
 	if !ok {
 		var err error
-		if oc, err = r.load(ctx, h); err != nil {
+		if oc, err = r.loader.ResolveHash(ctx, h); err != nil {
 			return nil, err
 		}
 	}

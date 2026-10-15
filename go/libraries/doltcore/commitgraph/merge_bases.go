@@ -40,8 +40,11 @@ type AncestryIndex interface {
 	GhostHeight(ctx context.Context, ghost hash.Hash, child *CommitInfo) (uint64, error)
 }
 
+// mergeBaseFlags record how GetMergeBases reached a commit.
+type mergeBaseFlags uint8
+
 const (
-	reachableFromLeft uint8 = 1 << iota
+	reachableFromLeft mergeBaseFlags = 1 << iota
 	reachableFromRight
 	ancestorOfMergeBase
 )
@@ -84,7 +87,7 @@ func GetMergeBases(ctx context.Context, leftResolver HashResolver, left hash.Has
 // it reaches is an error.
 func walkBothSides(ctx context.Context, q mergeBaseQueue, leftTip, rightTip *entry) ([]hash.Hash, error) {
 	unresolved := 0
-	markReachable := func(r HashResolver, h hash.Hash, flags uint8) error {
+	markReachable := func(r HashResolver, h hash.Hash, flags mergeBaseFlags) error {
 		e, err := q.get(ctx, r, h)
 		if err != nil {
 			return err

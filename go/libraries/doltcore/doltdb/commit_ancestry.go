@@ -29,6 +29,7 @@ type CommitAncestry struct {
 	closure prolly.CommitClosure
 }
 
+// GetAncestry loads the parent closure of |c|.
 func (c *Commit) GetAncestry(ctx context.Context) (*CommitAncestry, error) {
 	h, err := c.HashOf()
 	if err != nil {
