@@ -15,7 +15,6 @@
 package binlogreplication
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -25,7 +24,7 @@ import (
 // getServerId returns the @@server_id global system variable value. If the value of @@server_id is 0 or is not a
 // uint32 value, then an error is returned.
 func getServerId(ctx *sql.Context) (uint32, error) {
-	_, value, ok := sql.SystemVariables.GetGlobal("server_id")
+	_, value, ok := ctx.SystemVariables().GetGlobal("server_id")
 	if !ok {
 		return 0, fmt.Errorf("global variable 'server_id' not found")
 	}
@@ -49,8 +48,8 @@ func getServerId(ctx *sql.Context) (uint32, error) {
 
 // getServerUuid returns the global @@server_uuid system variable value. If the value of @@server_uuid
 // is empty or is not a string, then an error is returned.
-func getServerUuid(_ context.Context) (string, error) {
-	_, serverUuidValue, ok := sql.SystemVariables.GetGlobal("server_uuid")
+func getServerUuid(ctx *sql.Context) (string, error) {
+	_, serverUuidValue, ok := ctx.SystemVariables().GetGlobal("server_uuid")
 	if !ok {
 		return "", fmt.Errorf("global variable 'server_uuid' not found")
 	}
