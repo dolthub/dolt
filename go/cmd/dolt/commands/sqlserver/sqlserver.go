@@ -22,7 +22,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 	"github.com/sirupsen/logrus"
 
@@ -30,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/svcs"
@@ -343,10 +343,7 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 		return err
 	}
 
-	err = servercfg.ApplySystemVariables(nil, serverConfig, sql.SystemVariables)
-	if err != nil {
-		return err
-	}
+	engineVars := sqle.NewEngineVariables()
 
 	cli.Printf("Starting server with Config %v\n", servercfg.ConfigInfo(serverConfig))
 
@@ -364,6 +361,7 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 	skipRootUserInitialization := apr.Contains(skipRootUserInitialization)
 
 	startError, closeError := Serve(ctx, &Config{
+		EngineVariables:  engineVars,
 		Version:          versionStr,
 		ServerConfig:     serverConfig,
 		Controller:       controller,
