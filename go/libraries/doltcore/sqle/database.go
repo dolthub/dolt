@@ -2848,7 +2848,14 @@ func (db Database) doltSchemaTableHash(ctx *sql.Context) (hash.Hash, error) {
 
 // createEventDefinitionFromFragment creates an EventDefinition instance from the schema fragment |frag|.
 func (db Database) createEventDefinitionFromFragment(ctx *sql.Context, frag schemaFragment) (*sql.EventDefinition, error) {
-	b := planbuilder.New(ctx, db.getCatalog(ctx), db.getEventScheduler(ctx))
+	vars := ctx.EngineVariables()
+	if vars == nil {
+		return nil, fmt.Errorf("event definition requires an engine variable owner")
+	}
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	engine := sqle.New(analyzer.NewDefault(doltSession.Provider()), &sqle.Config{EngineVariables: vars})
+	defer engine.Close()
+	b := planbuilder.New(ctx, engine.Analyzer.Catalog, engine.EventScheduler)
 	b.SetParserOptions(sql.NewSqlModeFromString(frag.sqlMode).ParserOptions())
 	parsed, _, _, _, err := b.Parse(updateEventStatusTemporarilyForNonDefaultBranch(db.revision, frag.fragment), nil, false)
 	if err != nil {
@@ -2872,18 +2879,6 @@ func (db Database) createEventDefinitionFromFragment(ctx *sql.Context, frag sche
 	event.SqlMode = frag.sqlMode
 
 	return &event, nil
-}
-
-// getCatalog creates and returns the analyzer.Catalog instance for this database.
-func (db Database) getCatalog(ctx *sql.Context) *analyzer.Catalog {
-	doltSession := dsess.DSessFromSess(ctx.Session)
-	return sqle.NewDefault(doltSession.Provider()).Analyzer.Catalog
-}
-
-// getEventScheduler retrieves the EventScheduler for this database
-func (db Database) getEventScheduler(ctx *sql.Context) sql.EventScheduler {
-	doltSession := dsess.DSessFromSess(ctx.Session)
-	return sqle.NewDefault(doltSession.Provider()).EventScheduler
 }
 
 // SaveEvent implements sql.EventDatabase.
