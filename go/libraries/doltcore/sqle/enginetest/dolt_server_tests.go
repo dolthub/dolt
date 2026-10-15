@@ -18,6 +18,7 @@ import (
 	"context"
 	gosql "database/sql"
 	"math/rand"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -587,10 +588,25 @@ func startServer(t *testing.T, withPort bool, host string, unixSocketPath string
 	if unixSocketPath != "" {
 		serverConfig = serverConfig.WithSocket(unixSocketPath)
 	}
+	serverConfigWithFiles := isolatedServerConfig{
+		ServerConfig:          serverConfig,
+		privilegeFilePath:     filepath.Join(t.TempDir(), "privileges.db"),
+		branchControlFilePath: filepath.Join(t.TempDir(), "branch_control.db"),
+	}
 
-	onEnv, config := startServerOnEnv(t, serverConfig, dEnv)
+	onEnv, config := startServerOnEnv(t, serverConfigWithFiles, dEnv)
 	return dEnv, onEnv, config
 }
+
+type isolatedServerConfig struct {
+	servercfg.ServerConfig
+	privilegeFilePath     string
+	branchControlFilePath string
+}
+
+func (c isolatedServerConfig) PrivilegeFilePath() string { return c.privilegeFilePath }
+
+func (c isolatedServerConfig) BranchControlFilePath() string { return c.branchControlFilePath }
 
 func assertResultsEqual(t *testing.T, expected []sql.Row, rows *gosql.Rows) {
 	columnTypes, err := rows.ColumnTypes()
