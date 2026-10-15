@@ -15,6 +15,7 @@
 package enginetest
 
 import (
+	"context"
 	gosql "database/sql"
 	"fmt"
 	"os"
@@ -967,6 +968,10 @@ func TestBlobs(t *testing.T) {
 			t.Run(fmt.Sprintf("prepared=%t", prepared), func(t *testing.T) {
 				h := newDoltHarness(t)
 				defer h.Close()
+				vars := sqle.NewEngineVariables()
+				h.WithEngineVariables(vars)
+				ctx := sql.NewContextWithVariables(context.Background(), vars)
+				require.NoError(t, vars.System.(sql.ContextAwareSystemVariableRegistry).AssignValuesWithContext(ctx, map[string]interface{}{"secure_file_priv": dir}))
 				if prepared {
 					enginetest.TestScriptPrepared(t, h, script)
 				} else {
