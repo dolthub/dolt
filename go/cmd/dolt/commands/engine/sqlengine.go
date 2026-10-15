@@ -385,8 +385,13 @@ func NewSqlEngine(
 		}
 	}
 
-	dblr.DoltBinlogConsumer.SetEngine(engine)
-	engine.Analyzer.Catalog.BinlogConsumer = dblr.DoltBinlogConsumer
+	if config.BinlogReplicaController == nil {
+		engine.Analyzer.Catalog.BinlogConsumer = dblr.NewDoltBinlogConsumer(engine)
+	} else {
+		// The replica controller and BINLOG consumer share an applier.
+		dblr.DoltBinlogConsumer.SetEngine(engine)
+		engine.Analyzer.Catalog.BinlogConsumer = dblr.DoltBinlogConsumer
+	}
 
 	if config.BinlogReplicaController != nil {
 		binLogSession, err := sessFactory(sql.NewBaseSessionWithVariables(engineVars), pro)
