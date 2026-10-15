@@ -1002,6 +1002,10 @@ ORDER BY l.id, r.id, q.id LIMIT 3 OFFSET 1`,
 			`INSERT INTO t2 VALUES (1, 1), (2, NULL)`,
 			`CREATE TABLE t3 (c0 INT PRIMARY KEY)`,
 			`INSERT INTO t3 VALUES (1)`,
+			`CREATE TABLE s4 (id INT PRIMARY KEY, x INT, y INT)`,
+			`INSERT INTO s4 VALUES (1, 1, 104), (2, 1, NULL), (3, NULL, 104)`,
+			`CREATE TABLE t4 (a INT NOT NULL, b INT NOT NULL, PRIMARY KEY (a, b))`,
+			`INSERT INTO t4 VALUES (1, 104), (1, 1), (2, 104)`,
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -1031,6 +1035,22 @@ ORDER BY l.id, r.id, q.id LIMIT 3 OFFSET 1`,
 			{
 				Query:    `SELECT /*+ LOOKUP_JOIN(t1,t0) */ * FROM t1 LEFT JOIN t0 ON t0.c0 = NULL AND t0.c0 = 1`,
 				Expected: []sql.Row{{1, nil}},
+			},
+			{
+				Query:    `SELECT /*+ LOOKUP_JOIN(s4,t4) */ s4.id, t4.a, t4.b FROM s4 LEFT JOIN t4 ON t4.a <=> NULL AND t4.b = s4.y ORDER BY s4.id, t4.a, t4.b`,
+				Expected: []sql.Row{{1, nil, nil}, {2, nil, nil}, {3, nil, nil}},
+			},
+			{
+				Query:    `SELECT /*+ LOOKUP_JOIN(s4,t4) */ s4.id, t4.a, t4.b FROM s4 JOIN t4 ON t4.a <=> NULL AND t4.b = s4.y ORDER BY s4.id, t4.a, t4.b`,
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    `SELECT /*+ LOOKUP_JOIN(s4,t4) */ s4.id, t4.a, t4.b FROM s4 LEFT JOIN t4 ON t4.a = NULL AND t4.b = s4.y ORDER BY s4.id, t4.a, t4.b`,
+				Expected: []sql.Row{{1, nil, nil}, {2, nil, nil}, {3, nil, nil}},
+			},
+			{
+				Query:    `SELECT /*+ LOOKUP_JOIN(s4,t4) */ s4.id, t4.a, t4.b FROM s4 LEFT JOIN t4 ON t4.a <=> NULL AND t4.b <=> NULL ORDER BY s4.id, t4.a, t4.b`,
+				Expected: []sql.Row{{1, nil, nil}, {2, nil, nil}, {3, nil, nil}},
 			},
 		},
 	},

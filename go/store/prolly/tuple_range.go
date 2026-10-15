@@ -394,7 +394,9 @@ func IncrementTuple(ctx context.Context, start val.Tuple, n int, desc *val.Tuple
 	default:
 		return nil, false, nil
 	}
-	stop, err := tb.Build(ctx, pool)
+	// The prefix fields come from a key of this index, where a NULL-safe
+	// lookup may leave one NULL. A strict Build would reject that NULL.
+	stop, err := tb.BuildPermissive(ctx, pool)
 	if err != nil {
 		return nil, false, err
 	}
