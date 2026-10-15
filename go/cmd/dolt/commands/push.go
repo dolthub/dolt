@@ -197,14 +197,19 @@ func handlePushError(err error, usage cli.UsagePrinter) int {
 	}
 
 	var verr errhand.VerboseError
-	switch err {
-	case actions.ErrUnknownPushErr:
-		s, ok := status.FromError(err)
-		if ok && s.Code() == codes.PermissionDenied {
+	switch {
+	case errors.Is(err, actions.ErrUnknownPushErr):
+		s := status.Convert(err)
+		var rpcErr *remotestorage.RpcError
+		isRPC := errors.As(err, &rpcErr)
+		if isRPC {
+			s = remotestorage.GetStatus(rpcErr)
+		}
+		if s.Code() == codes.PermissionDenied {
 			cli.Println("hint: have you logged into DoltHub using 'dolt login'?")
 			cli.Println("hint: check that user.email in 'dolt config --list' has write perms to DoltHub repo")
 		}
-		if rpcErr, ok := err.(*remotestorage.RpcError); ok {
+		if isRPC {
 			verr = errhand.BuildDError("error: push failed").AddCause(err).AddDetails("%s", rpcErr.FullDetails()).Build()
 		} else {
 			verr = errhand.BuildDError("error: push failed").AddCause(err).Build()
