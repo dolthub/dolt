@@ -23,10 +23,10 @@ func TestRegistryAwareDatabaseAndPersistedDefinitions(t *testing.T) {
 			Dynamic: true, Type: types.NewSystemStringType("private_custom"), Default: "original",
 		}})
 	}
-	conf := config.NewMapConfig(map[string]string{"private_custom": "persisted"})
+	conf := config.NewMapConfig(map[string]string{"private_custom": "persisted", "unknown_private": "ignored"})
 	loaded, missing, err := SystemVariablesInConfigWithRegistry(a.System, conf)
 	require.NoError(t, err)
-	require.Empty(t, missing)
+	require.Equal(t, []string{"unknown_private"}, missing)
 	require.Len(t, loaded, 1)
 	require.Equal(t, "persisted", loaded[0].GetDefault())
 	a.System.AddSystemVariables(loaded)
