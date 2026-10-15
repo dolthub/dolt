@@ -279,6 +279,39 @@ func TestValidateGetUploadLocsRequest(t *testing.T) {
 	}
 }
 
+func TestValidateRepoPathTraversal(t *testing.T) {
+	for _, repoPath := range []string{
+		"../outside", "org/../outside", "org/./repo", "/absolute/repo",
+		"org\\..\\outside", "org//repo",
+	} {
+		t.Run(repoPath, func(t *testing.T) {
+			assert.Error(t, ValidateGetUploadLocsRequest(&remotesapi.GetUploadLocsRequest{RepoPath: repoPath}))
+		})
+	}
+	for _, repoID := range []*remotesapi.RepoId{
+		{Org: "..", RepoName: "repo"},
+		{Org: "org", RepoName: "../outside"},
+	} {
+		assert.Error(t, ValidateGetUploadLocsRequest(&remotesapi.GetUploadLocsRequest{RepoId: repoID}))
+	}
+	assert.NoError(t, ValidateGetUploadLocsRequest(&remotesapi.GetUploadLocsRequest{RepoPath: GoodRepoPath}))
+}
+
+func TestValidateUploadTableFileIDs(t *testing.T) {
+	for _, details := range [][]*remotesapi.TableFileDetails{
+		{nil},
+		{{Id: ShortHash}},
+		{{Id: LongHash}},
+	} {
+		assert.Error(t, ValidateGetUploadLocsRequest(&remotesapi.GetUploadLocsRequest{
+			RepoPath: GoodRepoPath, TableFileDetails: details,
+		}))
+	}
+	assert.NoError(t, ValidateGetUploadLocsRequest(&remotesapi.GetUploadLocsRequest{
+		RepoPath: GoodRepoPath, TableFileDetails: []*remotesapi.TableFileDetails{{Id: GoodHash}},
+	}))
+}
+
 func TestValidateRebaseRequest(t *testing.T) {
 	for i, errMsg := range []*remotesapi.RebaseRequest{
 		{},

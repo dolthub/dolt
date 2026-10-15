@@ -189,6 +189,8 @@ func (sc *sessionAwareSafepointController) BeginGC(ctx context.Context, keeper f
 	if err != nil {
 		return err
 	}
+	// The GC does not change callSession's roots after this point. Waiter
+	// lets other concurrent GCs visit it until Wait (or cancellation) returns.
 	sc.waiter = sc.controller.Waiter(ctx, sc.callSession, sc.visit)
 	return nil
 }
