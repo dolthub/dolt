@@ -99,13 +99,16 @@ teardown() {
     dolt checkout -b x main
     dolt sql -q "INSERT INTO test VALUES (10);"
     dolt commit -am "commit X"
-    dolt branch x1
+    X=$(get_head_commit)
     dolt checkout -b y main
     dolt sql -q "INSERT INTO test VALUES (20);"
+    # Make Y's commit date later than X's.
+    sleep 1
     dolt commit -am "commit Y"
-    dolt merge x1 -m "commit Y2"
+    Y=$(get_head_commit)
+    dolt merge "$X" -m "commit Y2"
     dolt checkout x
-    dolt merge y~1 -m "commit X2"
+    dolt merge "$Y" -m "commit X2"
 
     # # # # # # # # # # # # # # # # # # # # # # # #
     #                                             #
@@ -115,12 +118,15 @@ teardown() {
     #             \        /\                     #
     #               -- (Y) -- (Y2) <-- (y)        #
     #                                             #
+    #  X2 merges Y, and Y2 merges X, so x and y   #
+    #  have two merge bases: X and Y.             #
+    #                                             #
     # # # # # # # # # # # # # # # # # # # # # # # #
 
-    # Like git, the merge base with the newest commit date comes first.
+    # Like git, the merge base with the newest commit date comes first: Y was committed after X.
     run dolt merge-base --all x y
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
-    [ "${lines[0]}" = "$(get_head_commit y~1)" ]
-    [ "${lines[1]}" = "$(get_head_commit x~1)" ]
+    [ "${lines[0]}" = "$Y" ]
+    [ "${lines[1]}" = "$X" ]
 }
