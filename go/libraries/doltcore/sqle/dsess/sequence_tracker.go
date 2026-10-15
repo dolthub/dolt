@@ -131,7 +131,9 @@ func NewSequenceTrackerFromRoots[
 
 func getGCSafepointController(ctx context.Context) *gcctx.GCSafepointController {
 	if sqlCtx, ok := ctx.(*sql.Context); ok {
-		return DSessFromSess(sqlCtx.Session).GCSafepointController()
+		if doltSess, ok := sqlCtx.Session.(*DoltSession); ok {
+			return doltSess.GCSafepointController()
+		}
 	}
 	return gcctx.GetGCSafepointController(ctx)
 }
