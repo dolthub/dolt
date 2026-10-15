@@ -167,19 +167,6 @@ func (tx *DoltTransaction) GetInitialRoot(dbName string) (hash.Hash, bool) {
 	return startPoint.rootHash, ok
 }
 
-// CommitWorkingSet attempts to merge the working set given into the current working set.
-// Uses the same algorithm as merge.RootMerger:
-// |current working set working root| is the root
-// |workingSet.workingRoot| is the mergeRoot
-// |tx.startRoot| is ancRoot
-// if workingSet.workingRoot == ancRoot, attempt a fast-forward merge
-// TODO: Non-working roots aren't merged into the working set and just stomp any changes made there. We need merge
-// strategies for staged as well as merge state.
-func (tx *DoltTransaction) CommitWorkingSet(ctx *sql.Context, workingSet *doltdb.WorkingSet, dbName string) (*doltdb.WorkingSet, error) {
-	ws, _, err := tx.doCommit(ctx, workingSet, nil, dbName)
-	return ws, err
-}
-
 // prepareDoltCommit merges a pending commit with the current HEAD without publishing it.
 func prepareDoltCommit(ctx *sql.Context,
 	dbName string,
@@ -206,7 +193,7 @@ func prepareDoltCommit(ctx *sql.Context,
 		return nil, nil, doltdb.ErrGhostCommitRuntimeFailure
 	}
 
-	// We already got a new staged root via merge or ff via the doCommit method, so now apply it to the STAGED value
+	// We already got a new staged root via merge or ff via commitHeads, so now apply it to the STAGED value
 	// we're about to commit.
 	pending.Roots.Staged = workingSet.StagedRoot()
 
@@ -264,16 +251,6 @@ func prepareDoltCommit(ctx *sql.Context,
 	workingSet = workingSet.ClearMerge()
 
 	return workingSet, &pending, nil
-}
-
-// DoltCommit commits the working set and creates a new DoltCommit as specified, in one atomic write
-func (tx *DoltTransaction) DoltCommit(
-	ctx *sql.Context,
-	workingSet *doltdb.WorkingSet,
-	commit *doltdb.PendingCommit,
-	dbName string,
-) (*doltdb.WorkingSet, *doltdb.Commit, error) {
-	return tx.doCommit(ctx, workingSet, commit, dbName)
 }
 
 func WaitForReplicationController(ctx *sql.Context, rsc doltdb.ReplicationStatusController) {
@@ -352,26 +329,6 @@ type workingSetAndHead struct {
 	workingSet *doltdb.WorkingSet
 	// commit is the dolt commit to create, or nil if only the working set is being committed
 	commit *doltdb.PendingCommit
-}
-
-// doCommit commits the working set and creates a new DoltCommit as specified, in one atomic write
-func (tx *DoltTransaction) doCommit(
-	ctx *sql.Context,
-	workingSet *doltdb.WorkingSet,
-	commit *doltdb.PendingCommit,
-	dbName string,
-) (*doltdb.WorkingSet, *doltdb.Commit, error) {
-	workingSets, commits, err := tx.commitHeads(ctx, []workingSetAndHead{{
-		dbName:     dbName,
-		workingSet: workingSet,
-		commit:     commit,
-	}})
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// limited to a single element, as above
-	return workingSets[0], commits[0], nil
 }
 
 // commitHeads atomically commits the head updates given
@@ -518,7 +475,7 @@ func (tx *DoltTransaction) commitHeads(
 		heads, err := startPoint.db.CommitHeadUpdates(ctx, updates, &rsc)
 		WaitForReplicationController(ctx, rsc)
 
-		// The check in doCommit can go stale before the ref update, so the storage layer compares the head against
+		// The amended HEAD check can go stale before the ref update, so the storage layer compares the head against
 		// AmendedCommit once more, atomically with the update. A failure there surfaces the same way.
 		if errors.Is(err, datas.ErrMergeNeeded) {
 			for _, change := range changes {
@@ -559,7 +516,7 @@ func (tx *DoltTransaction) commitHeads(
 
 // mergeRoots merges the roots in the existing working set with the one being committed and returns the resulting
 // working set. Conflicts are automatically resolved with "accept ours" if the session settings dictate it.
-// Currently merges working and staged roots as necessary. HEAD root is only handled by the DoltCommit function.
+// Currently merges working and staged roots as necessary. HEAD roots are merged by prepareDoltCommit.
 func (tx *DoltTransaction) mergeRoots(
 	ctx *sql.Context,
 	dbName string,

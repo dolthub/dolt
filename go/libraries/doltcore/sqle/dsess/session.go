@@ -536,7 +536,7 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 	// Any non-error path must set the ctx's transaction to nil even if no work was done, because the engine only clears
 	// out transaction state in some cases. Changes to only branch heads (creating a new branch, reset, etc.) have no
 	// changes to commit visible to the transaction logic, but they still need a new transaction on the next statement.
-	// See comment in |commitBranchState|
+	// See comment in |commitBranchStates|
 	defer func() {
 		if err == nil {
 			d.notifyDoltgresTransactionCommitted()
@@ -624,12 +624,7 @@ func (d *DoltSession) doltCommit(ctx *sql.Context, tx sql.Transaction, dirties [
 		return err
 	}
 
-	// Nothing to stage, so fall back to CommitWorkingSet logic instead
-	if pendingCommit == nil {
-		return d.commitWorkingSet(ctx, dirties[0], tx)
-	}
-
-	_, err = d.DoltCommit(ctx, dbName, tx, pendingCommit)
+	_, err = d.commitBranchStates(ctx, dirties, tx, []*doltdb.PendingCommit{pendingCommit})
 	return err
 }
 
@@ -703,11 +698,36 @@ func (d *DoltSession) commitBranchStates(
 		}
 	}
 
-	_, commits, err := dtx.commitHeads(ctx, changes)
+	workingSets, commits, err := dtx.commitHeads(ctx, changes)
 	if err != nil {
 		return nil, err
 	}
 
+	// Refresh cached state before returning: stored procedures can continue using it before the next
+	// transaction starts. In particular, staged changes must be compared against the newly committed HEAD.
+	for i, state := range states {
+		if commits[i] != nil {
+			headRoot, err := commits[i].GetRootValue(ctx)
+			if err != nil {
+				return nil, err
+			}
+
+			state.headCommit = commits[i]
+			state.headRoot = headRoot
+		}
+
+		state.workingSet = workingSets[i]
+		if state.writeSession != nil {
+			if err := state.writeSession.SetWorkingSet(ctx, workingSets[i]); err != nil {
+				return nil, err
+			}
+		}
+
+		state.dirty = false
+	}
+
+	// The engine clears transactions for COMMIT, but other callers (including stored procedures) must
+	// clear them themselves so the next statement starts a new transaction.
 	ctx.SetTransaction(nil)
 	return commits, nil
 }
@@ -817,7 +837,8 @@ func (d *DoltSession) IsBranchDirty(dbName, branch string) bool {
 	return ok && branchState.dirty
 }
 
-// CommitWorkingSet commits the named working set named without creating a new dolt commit.
+// CommitWorkingSet commits the named working set without creating a new dolt commit. Changes on other
+// branches remain uncommitted and are carried into a new transaction.
 // Clients should typically use CommitTransaction, which performs additional checks, instead of this method.
 func (d *DoltSession) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.Transaction) error {
 	state, ok, err := d.lookupDbState(ctx, dbName)
@@ -829,21 +850,47 @@ func (d *DoltSession) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.T
 	}
 
 	_, err = d.commitBranchStates(ctx, []*branchState{state}, tx, nil)
-	if err == nil {
-		d.notifyDoltgresTransactionCommitted()
-	}
-	return err
-}
-
-// commitWorkingSet commits the working set for the branch state given, without creating a new dolt commit.
-func (d *DoltSession) commitWorkingSet(ctx *sql.Context, branchState *branchState, tx sql.Transaction) error {
-	commitFunc := func(ctx *sql.Context, dtx *DoltTransaction, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, *doltdb.Commit, error) {
-		ws, err := dtx.CommitWorkingSet(ctx, workingSet, branchState.RevisionDbName())
-		return ws, nil, err
+	if err != nil {
+		return err
 	}
 
-	_, err := d.commitBranchState(ctx, branchState, tx, commitFunc)
-	return err
+	d.notifyDoltgresTransactionCommitted()
+	remaining := d.dirtyWorkingSets()
+	if len(remaining) == 0 {
+		return nil
+	}
+
+	// A merge can commit one branch while others still have pending edits. Preserve those edits across
+	// the transaction boundary, rebasing them onto the new snapshot so concurrent writes aren't lost.
+	dtx := tx.(*DoltTransaction) // checked by commitBranchStates
+	if _, err := d.StartTransaction(ctx, dtx.tCharacteristic); err != nil {
+		return err
+	}
+
+	for _, branch := range remaining {
+		name := branch.RevisionDbName()
+		current, _, err := d.lookupDbState(ctx, name)
+		if err != nil {
+			return err
+		}
+
+		start := dtx.dbStartPoints[strings.ToLower(branch.dbState.dbName)]
+		ancestor, err := start.db.ResolveWorkingSetAtRoot(ctx, branch.WorkingSet().Ref(), start.rootHash)
+		if err != nil {
+			return err
+		}
+
+		ws, err := dtx.mergeRoots(ctx, name, ancestor, current.WorkingSet(), branch.WorkingSet(), branch.EditOpts())
+		if err != nil {
+			return err
+		}
+
+		if err := d.SetWorkingSet(ctx, name, ws); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // DoltCommit commits the currently checked out working set, creating a new dolt commit with the properties given.
@@ -859,28 +906,13 @@ func (d *DoltSession) DoltCommit(
 	if len(d.dirtyWorkingSets()) > 1 {
 		return nil, ErrDirtyWorkingSets
 	}
-	commitFunc := func(ctx *sql.Context, dtx *DoltTransaction, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, *doltdb.Commit, error) {
-		ws, commit, err := dtx.DoltCommit(
-			ctx,
-			workingSet.WithWorkingRoot(commit.Roots.Working).WithStagedRoot(commit.Roots.Staged),
-			commit,
-			dbName)
-		if err != nil {
-			return nil, nil, err
-		}
-		return ws, commit, nil
-	}
 
-	c, err := d.commitCurrentHead(ctx, dbName, tx, commitFunc)
+	commits, err := d.DoltCommitMulti(ctx, tx, []string{dbName}, []*doltdb.PendingCommit{commit})
 	if err != nil {
 		return nil, err
 	}
 
-	branch, b, e := d.CurrentHead(ctx, dbName)
-	if e == nil && b {
-		doltdb.BranchActivityWriteEvent(ctx, dbName, branch)
-	}
-	return c, nil
+	return commits[0], nil
 }
 
 // DoltCommitMulti commits a new commit for the databases named, using the pending commits provided.
@@ -917,63 +949,6 @@ func (d *DoltSession) DoltCommitMulti(
 		d.notifyDoltgresTransactionCommitted()
 	}
 	return commits, err
-}
-
-// doCommitFunc is a function to write to the database, which involves updating the working set and potentially
-// updating HEAD with a new commit
-type doCommitFunc func(ctx *sql.Context, dtx *DoltTransaction, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, *doltdb.Commit, error)
-
-// commitBranchState performs a commit for the branch state given, using the doCommitFunc provided
-func (d *DoltSession) commitBranchState(
-	ctx *sql.Context,
-	branchState *branchState,
-	tx sql.Transaction,
-	commitFunc doCommitFunc,
-) (*doltdb.Commit, error) {
-	dtx, ok := tx.(*DoltTransaction)
-	if !ok {
-		return nil, fmt.Errorf("expected a DoltTransaction")
-	}
-
-	updatedWs, newCommit, err := commitFunc(ctx, dtx, branchState.WorkingSet())
-	if err != nil {
-		return nil, err
-	}
-
-	// When a dolt commit was created, update the branch state to reflect the new HEAD. Without this, subsequent
-	// operations within the same stored procedure call (e.g. a multi-commit revert loop) would see a stale
-	// headRoot and treat the just-staged changes as uncommitted staged changes.
-	if newCommit != nil {
-		headRoot, err := newCommit.GetRootValue(ctx)
-		if err != nil {
-			return nil, err
-		}
-		branchState.headCommit = newCommit
-		branchState.headRoot = headRoot
-		if updatedWs != nil {
-			branchState.workingSet = updatedWs
-		}
-	}
-
-	// Anything that commits a transaction needs its current transaction state cleared so that the next statement starts
-	// a new transaction. This should in principle be done by the engine, but it currently only understands explicit
-	// COMMIT statements. Any other statements that commit a transaction, including stored procedures, needs to do this
-	// themselves.
-	d.notifyDoltgresTransactionCommitted()
-	ctx.SetTransaction(nil)
-	return newCommit, nil
-}
-
-// commitCurrentHead commits the current HEAD for the database given, using the doCommitFunc provided
-func (d *DoltSession) commitCurrentHead(ctx *sql.Context, dbName string, tx sql.Transaction, commitFunc doCommitFunc) (*doltdb.Commit, error) {
-	branchState, ok, err := d.lookupDbState(ctx, dbName)
-	if err != nil {
-		return nil, err
-	} else if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(dbName)
-	}
-
-	return d.commitBranchState(ctx, branchState, tx, commitFunc)
 }
 
 // PendingCommitAllStaged returns a pending commit with all tables staged. Returns nil if there are no changes to stage.
