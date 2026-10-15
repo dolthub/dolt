@@ -87,10 +87,12 @@ teardown() {
 
 # Regression coverage for https://github.com/dolthub/dolt/issues/10863
 # bats test_tags=no_lambda
-@test "sql-shell: comment-only query is skipped silently, no warning" {
+@test "sql-shell: comments and backslash commands are handled in the shell" {
     skiponwindows "Need to install expect and make this script work on windows."
+    # https://github.com/dolthub/dolt/issues/12065
     run $BATS_TEST_DIRNAME/sql-shell-comment-only-query.expect
 
+    [ "$status" -eq 0 ]
     ! [[ "$output" =~ "query was empty after trimming comments" ]] || false
     ! [[ "$output" =~ "Empty set, 1 warning" ]] || false
     ! [[ "$output" =~ "No query specified" ]] || false

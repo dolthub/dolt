@@ -30,6 +30,7 @@ const (
 	backslash      = '\\'
 	backtick       = '`'
 	hyphen         = '-'
+	hashSign       = '#'
 	asterisk       = '*'
 	slash          = '/'
 	newline        = '\n'
@@ -46,7 +47,7 @@ var delimPrefix = []byte("delimiter ")
 type StreamScanner struct {
 	inp       io.Reader
 	err       error
-	state     *qState
+	state     qState
 	buf       []byte
 	delimiter []byte
 	maxSize   int
@@ -54,11 +55,47 @@ type StreamScanner struct {
 	fill      int
 	lineNum   int
 	isEOF     bool
+
+	// splitCommands ends a token before each unquoted backslash.
+	splitCommands bool
+	discarded     int // bytes discarded from the front of buf
 }
 
 // NewStreamScanner returns a new StreamScanner
 func NewStreamScanner(r io.Reader) *StreamScanner {
-	return &StreamScanner{inp: r, buf: make([]byte, pageSize), maxSize: maxStatementBufferBytes, delimiter: []byte(";"), state: new(qState)}
+	return &StreamScanner{inp: r, buf: make([]byte, pageSize), maxSize: maxStatementBufferBytes, delimiter: []byte(";")}
+}
+
+// newCommandScanner returns a StreamScanner that splits at backslash commands.
+func newCommandScanner(r io.Reader) *StreamScanner {
+	s := NewStreamScanner(r)
+	s.splitCommands = true
+	return s
+}
+
+// isCommand reports whether the current token is a backslash command.
+func (s *StreamScanner) isCommand() bool {
+	return s.state.start < s.state.end && s.buf[s.state.start] == backslash
+}
+
+// commandFollowsOnLine reports whether a command follows on the same line. It
+// advances s.i over the horizontal whitespace, so the next Scan starts there.
+func (s *StreamScanner) commandFollowsOnLine() bool {
+	for ; ; s.i++ {
+		if s.i >= s.fill {
+			// read could discard the token's bytes when the buffer is full.
+			if s.fill >= s.maxSize || s.read() != nil || s.i >= s.fill {
+				return false
+			}
+		}
+		switch s.buf[s.i] {
+		case ' ', '\t', '\r', '\v', '\f':
+		case backslash:
+			return true
+		default:
+			return false
+		}
+	}
 }
 
 type qState struct {
@@ -71,9 +108,12 @@ type qState struct {
 	quoteChar                      byte // the opening quote character of the current quote being parsed, or 0 if the current parse location isn't inside a quoted string
 	lastChar                       byte // the last character parsed
 	ignoreNextChar                 bool // whether to ignore the next character
-	seenNonWhitespaceChar          bool // whether we have encountered a non-whitespace character since we returned the last token
 	insideBlockComment             bool
 	insideLineComment              bool
+
+	// endsStatement reports that the token ends a statement, at a delimiter
+	// or at the end of input.
+	endsStatement bool
 }
 
 func (qs qState) insideComment() bool {
@@ -91,9 +131,9 @@ func (qs qState) ignoreDelimiters() bool {
 }
 
 func (s *StreamScanner) Scan() bool {
-	s.resetState()
+	s.state = qState{}
 
-	if s.i >= s.fill {
+	if s.i >= s.fill && !s.isEOF {
 		// initialize buffer
 		if err := s.read(); err != nil {
 			s.err = err
@@ -132,6 +172,7 @@ func (s *StreamScanner) Scan() bool {
 		} else if s.isEOF && s.i == s.fill {
 			// token terminates with file
 			s.state.end = s.fill
+			s.state.endsStatement = true
 			return true
 		}
 		// haven't found delimiter yet, keep reading
@@ -170,10 +211,6 @@ func (s *StreamScanner) truncate() {
 	s.state.end = s.i
 }
 
-func (s *StreamScanner) resetState() {
-	s.state = &qState{}
-}
-
 func (s *StreamScanner) read() error {
 	if s.fill >= s.maxSize {
 		// if script exceeds buffer that's OK, if
@@ -183,6 +220,7 @@ func (s *StreamScanner) read() error {
 		}
 		// discard previous queries, resulting buffer will start
 		// at the current |start|
+		s.discarded += s.state.start
 		s.fill -= s.state.start
 		s.i -= s.state.start
 		s.state.end = s.state.start
@@ -266,19 +304,13 @@ func (s *StreamScanner) seekDelimiter() (error, bool) {
 	for ; s.i < s.fill; s.i++ {
 		i := s.i
 		if !s.state.ignoreNextChar {
-			// this doesn't handle unicode characters correctly and will break on some things, but it's only used for line
-			// number reporting.
-			if !s.state.seenNonWhitespaceChar && !unicode.IsSpace(rune(s.buf[i])) {
-				s.state.seenNonWhitespaceChar = true
-			}
-
 			// check if we've matched the delimiter string
 			if !s.state.ignoreDelimiters() && s.buf[i] == s.delimiter[s.state.numConsecutiveDelimiterMatches] {
 				s.state.numConsecutiveDelimiterMatches++
 				if s.state.numConsecutiveDelimiterMatches == len(s.delimiter) {
 					s.state.end = s.i - len(s.delimiter) + 1
+					s.state.endsStatement = true
 					s.i++
-					s.state.lastChar = 0
 					return nil, true
 				}
 				s.state.lastChar = s.buf[i]
@@ -289,6 +321,11 @@ func (s *StreamScanner) seekDelimiter() (error, bool) {
 
 			switch s.buf[i] {
 			case newline:
+				// Ends a backslash command at its line. The next Scan counts the newline.
+				if s.buf[s.state.start] == backslash {
+					s.state.end = i
+					return nil, true
+				}
 				s.lineNum++
 				if s.state.insideLineComment {
 					s.state.insideLineComment = false
@@ -296,7 +333,6 @@ func (s *StreamScanner) seekDelimiter() (error, bool) {
 					if s.state.start == s.state.lineCommentStart {
 						s.i++
 						s.truncate()
-						s.state.lastChar = 0
 						return nil, true
 					}
 				}
@@ -305,6 +341,12 @@ func (s *StreamScanner) seekDelimiter() (error, bool) {
 				// ie "--", begin line comment.
 				if !s.state.ignoreDelimiters() && s.state.lastChar == hyphen {
 					s.state.lineCommentStart = i - 1
+					s.state.insideLineComment = true
+				}
+			case hashSign:
+				// A hash starts a line comment, unless it is inside a quote or comment.
+				if !s.state.ignoreDelimiters() {
+					s.state.lineCommentStart = i
 					s.state.insideLineComment = true
 				}
 			case asterisk:
@@ -319,6 +361,11 @@ func (s *StreamScanner) seekDelimiter() (error, bool) {
 					s.state.insideBlockComment = false
 				}
 			case backslash:
+				// Ends the SQL before a command. Inside quotes or comments, \ is text.
+				if s.splitCommands && !s.state.ignoreDelimiters() && i > s.state.start && s.buf[s.state.start] != backslash {
+					s.state.end = i
+					return nil, true
+				}
 				s.state.numConsecutiveBackslashes++
 			case sQuote, dQuote, backtick:
 				// ignore quotes inside comments

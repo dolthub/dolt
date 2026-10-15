@@ -63,3 +63,12 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "IndexedTableAccess" ]] || false
 }
+
+@test "debug: analyze skips backslash commands in a -f file" {
+    # https://github.com/dolthub/dolt/issues/12065
+    printf '%s\n' '\status' 'select 42 as answer;' > cmds.sql
+    run dolt debug -f cmds.sql -t 1 -o out
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "syntax error" ]] || false
+    [[ "$(cat out/plan.txt)" =~ "select 42 as answer" ]] || false
+}

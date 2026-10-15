@@ -266,6 +266,31 @@ in quote'`,
 			},
 			lineNums: []int{1, 2, 2, 3, 7},
 		},
+		{
+			// A backslash command ends at its line. The next line is a new statement.
+			input: "\\tables\nselect 1;",
+			statements: []string{
+				`\tables`,
+				`select 1`,
+			},
+			lineNums: []int{1, 2},
+		},
+		{
+			input: `\tables; select 1`,
+			statements: []string{
+				`\tables`,
+				`select 1`,
+			},
+			lineNums: []int{1, 1},
+		},
+		{
+			// A backslash-led line inside a quoted string is not a command.
+			input: "select 'first\n\\second\nthird' as v;",
+			statements: []string{
+				"select 'first\n\\second\nthird' as v",
+			},
+			lineNums: []int{1},
+		},
 	}
 
 	for _, tt := range testcases {
@@ -284,6 +309,7 @@ in quote'`,
 				i++
 			}
 
+			require.Equal(t, len(tt.statements), i)
 			require.NoError(t, scanner.Err())
 		})
 	}

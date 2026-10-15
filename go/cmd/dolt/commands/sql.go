@@ -106,7 +106,10 @@ const (
 	// MySQL handles both --binary-as-hex and --skip-binary-as-hex with one option definition
 	// and uses disabled_my_option to distinguish between enable/disable
 
-	welcomeMsg = `# Welcome to the DoltSQL shell.
+	editCommand = "\\edit"
+	// clearStatementTerminator discards the statement being entered.
+	clearStatementTerminator = "\\c"
+	welcomeMsg               = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
 # "exit" or "quit" (or Ctrl-D) to exit. "\help" for help.`
 )
@@ -245,7 +248,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		if apr.Contains(saveFlag) {
 			return SaveQuery(queryist.Context, queryist.Queryist, apr, query, format, usage, binaryAsHex)
 		}
-		return queryMode(queryist.Context, queryist.Queryist, apr, query, format, usage, binaryAsHex)
+		return queryMode(queryist.Context, queryist.Queryist, apr, query, format, usage, binaryAsHex, cliCtx)
 	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
 		return executeSavedQuery(queryist.Context, queryist.Queryist, savedQueryName, format, usage, binaryAsHex)
 	} else if apr.Contains(listSavedFlag) {
@@ -296,7 +299,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			}
 		} else {
 			input = transform.NewReader(input, textunicode.BOMOverride(transform.Nop))
-			info, err := execBatchMode(queryist.Context, queryist.Queryist, input, continueOnError, format, binaryAsHex)
+			info, err := execBatchMode(queryist.Context, queryist.Queryist, input, continueOnError, format, binaryAsHex, cliCtx)
 			if err != nil {
 				return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.VerboseErrorFromError(err), usage)
 			}
@@ -407,11 +410,12 @@ func queryMode(
 	format engine.PrintResultFormat,
 	usage cli.UsagePrinter,
 	binaryAsHex bool,
+	cliCtx cli.CliContext,
 ) int {
 	_, continueOnError := apr.GetValue(continueFlag)
 
 	input := strings.NewReader(query)
-	info, err := execBatchMode(ctx, qryist, input, continueOnError, format, binaryAsHex)
+	info, err := execBatchMode(ctx, qryist, input, continueOnError, format, binaryAsHex, cliCtx)
 	if err != nil {
 		return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
 	}
@@ -655,11 +659,38 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 
 // execBatchMode runs all the queries in the input reader.
 // It returns metadata about the executed statements.
-func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, continueOnErr bool, format engine.PrintResultFormat, binaryAsHex bool) (batchExecInfo, error) {
+func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, continueOnErr bool, format engine.PrintResultFormat, binaryAsHex bool, cliCtx cli.CliContext) (batchExecInfo, error) {
 	var info batchExecInfo
 	var stmtCount int
-	scanner := NewStreamScanner(input)
+	scanner := newCommandScanner(input)
 	var query string
+	var statementLine int
+	// runCmd runs a batch command on the statement being entered. A failure at
+	// a statement start ends the batch unless continueOnErr is set.
+	runCmd := func(text string) error {
+		cmd := strings.TrimSpace(text)
+		if cmd == clearStatementTerminator {
+			query = ""
+			return nil
+		}
+		info.isLoneDoltCheckout = false
+		_, subCmd, err := preprocessQuery(cmd)
+		switch subCmd.(type) {
+		case SlashEdit, SlashPager, WarningOn, WarningOff:
+			err = fmt.Errorf("\\%s runs only in the interactive shell", subCmd.Name())
+		}
+		if err == nil {
+			err = handleSlashCommand(ctx, subCmd, text, cliCtx)
+		}
+		if err == nil {
+			return nil
+		}
+		if query == "" && !continueOnErr {
+			return err
+		}
+		cli.PrintErrln(err.Error())
+		return nil
+	}
 	for scanner.Scan() {
 		// The session we get is wrapped in a command begin/end block.
 		// By ending the command and starting a new one, Auto GC is able
@@ -670,8 +701,30 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 			updateFileReadProgressOutput()
 			fileReadProg.setReadBytes(int64(len(scanner.Bytes())))
 		}
-		query += scanner.Text()
+		// A command runs where it appears. The SQL around it is one statement.
+		text := scanner.Text()
+		endsStatement := scanner.state.endsStatement
+		if scanner.isCommand() {
+			if err := runCmd(text); err != nil {
+				return batchExecInfo{}, err
+			}
+		} else {
+			if query == "" {
+				statementLine = scanner.state.statementStartLine
+			}
+			query += text
+			if endsStatement && scanner.commandFollowsOnLine() && scanner.Scan() {
+				// A same-line command runs before the statement it follows.
+				if err := runCmd(scanner.Text()); err != nil {
+					return batchExecInfo{}, err
+				}
+			}
+		}
+		if !endsStatement {
+			continue
+		}
 		if len(query) == 0 || query == "\n" {
+			query = ""
 			continue
 		}
 
@@ -679,10 +732,11 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 
 		sqlStatement, err := sqlparser.ParseWithOptions(ctx, query, sqlMode.ParserOptions())
 		if err == sqlparser.ErrEmpty {
+			query = ""
 			continue
 		} else if err != nil {
 			info.isLoneDoltCheckout = false
-			err = buildBatchSqlErr(scanner.state.statementStartLine, query, err)
+			err = buildBatchSqlErr(statementLine, query, err)
 			if !continueOnErr {
 				return batchExecInfo{}, err
 			} else {
@@ -698,7 +752,7 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 		sqlSch, rowIter, _, err := processParsedQuery(ctx, query, qryist, sqlStatement)
 		if err != nil {
 			info.isLoneDoltCheckout = false
-			err = buildBatchSqlErr(scanner.state.statementStartLine, query, err)
+			err = buildBatchSqlErr(statementLine, query, err)
 			if !continueOnErr {
 				return batchExecInfo{}, err
 			} else {
@@ -718,7 +772,7 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 			err = engine.PrettyPrintResults(ctx, format, sqlSch, rowIter, false, false, false, binaryAsHex)
 			if err != nil {
 				info.isLoneDoltCheckout = false
-				err = buildBatchSqlErr(scanner.state.statementStartLine, query, err)
+				err = buildBatchSqlErr(statementLine, query, err)
 				if !continueOnErr {
 					return batchExecInfo{}, err
 				} else {
@@ -759,13 +813,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 	}
 
 	verticalOutputLineTerminators := []string{"\\g", "\\G"}
-	// clearStatementTerminator mirrors the MySQL client's `\c` escape: it discards the statement
-	// currently being entered (however many lines it spans) without executing it.
-	clearStatementTerminator := "\\c"
-	backSlashCommands := make([]string, 0, len(slashCmds))
-	for _, cmd := range slashCmds {
-		backSlashCommands = append(backSlashCommands, "\\"+cmd.Name())
-	}
+	specialTerminators := append(verticalOutputLineTerminators, clearStatementTerminator)
 
 	shellConf := ishell.UninterpretedConfig{
 		ReadlineConfig: &rlConf,
@@ -773,8 +821,27 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 			"quit", "exit", "quit()", "exit()",
 		},
 		LineTerminator:     ";",
-		SpecialTerminators: append(append([]string{}, verticalOutputLineTerminators...), clearStatementTerminator),
-		BackSlashCmds:      backSlashCommands,
+		SpecialTerminators: specialTerminators,
+		BackSlashCmdAt: func(input, line string) int {
+			if !strings.Contains(line, "\\") {
+				return -1
+			}
+			scanner := newCommandScanner(strings.NewReader(input + line))
+			for scanner.Scan() {
+				if !scanner.isCommand() {
+					continue
+				}
+				// A line ending in a special terminator keeps its stop.
+				cmd := strings.TrimSpace(scanner.Text())
+				for _, terminator := range specialTerminators {
+					if strings.HasSuffix(cmd, terminator) {
+						return -1
+					}
+				}
+				return scanner.discarded + scanner.state.start - len(input)
+			}
+			return -1
+		},
 	}
 
 	shell := ishell.NewUninterpreted(&shellConf)
@@ -826,7 +893,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 			return
 		}
 
-		// \c cancels the statement currently being entered, matching the MySQL client. The buffered
+		// \c cancels the statement currently being entered. The buffered
 		// input is discarded without being executed or recorded in history, and the shell resets to
 		// a fresh prompt.
 		if strings.HasSuffix(query, clearStatementTerminator) {
@@ -851,7 +918,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 
 		var nextPrompt string
 		var multiPrompt string
-		cont := func() bool {
+		func() {
 			subCtx, stop := signal.NotifyContext(initialCtx, os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
@@ -861,13 +928,15 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 			defer stopAfter()
 			sqlCtx.SetQueryTime(time.Now())
 
-			cmdType, subCmd, newQuery, err := preprocessQuery(query, lastSqlCmd, cliCtx)
+			cmdType, subCmd, err := preprocessQuery(query)
+			if err == nil && cmdType == TransformCommand {
+				query, err = execEditor(lastSqlCmd, ".sql", cliCtx)
+				// Trailing newlines are common in editors, so may as well trim all whitespace.
+				query = strings.TrimRight(query, " \t\n\r\v\f")
+			}
 			if err != nil {
 				shell.Println(color.RedString(err.Error()))
-				return true
-			}
-
-			if cmdType == DoltCliCommand {
+			} else if cmdType == DoltCliCommand {
 				_, okOn := subCmd.(WarningOn)
 				_, okOff := subCmd.(WarningOff)
 
@@ -898,7 +967,6 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 				}
 			} else {
 				if cmdType == TransformCommand {
-					query = newQuery
 					trackHistory(shell, query+";")
 				}
 				lastSqlCmd = query
@@ -937,13 +1005,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 			}
 
 			nextPrompt, multiPrompt = postCommandUpdate(sqlCtx, qryist)
-
-			return true
 		}()
-
-		if !cont {
-			return
-		}
 
 		shell.SetPrompt(nextPrompt)
 		shell.SetMultiPrompt(multiPrompt)
@@ -968,42 +1030,38 @@ func trackHistory(shell *ishell.Shell, query string) {
 	}
 }
 
+// CommandType says how the shell or batch handles a query.
 type CommandType int
 
-// CommandType is used to determine how to handle a query. See preprocessQuery.
 const (
+	// DoltCliCommand runs the [cli.Command] for a backslash command.
 	DoltCliCommand CommandType = iota
+	// SqlShellCommand sends the query to SQL. An unknown backslash command is
+	// reported as an error instead.
 	SqlShellCommand
+	// TransformCommand is a bare \edit. The shell replaces the query with the
+	// last statement as edited in $EDITOR. The [cli.Command] is SlashEdit, so
+	// batch rejects it with the other interactive-only commands.
 	TransformCommand
 )
 
-// preprocessQuery takes the user's query and returns the command type, the command, and the query to execute. The
-// CommandType returned is going to be used to determine how to handle the query.
-//   - DoltCliCommand: the cli.Command returned should be executed. Query string is empty, and should be ignored.
-//   - TransformCommand: The 'lastQuery' argument will be transformed into something else, using the EDITOR.
-//     The query returned will be the edited query, and should be entered into the user's command history. The cli.Command will be nil.
-//   - SqlShellCommand: cli.Command will be nil. The query returned will be identical to the query passed in.
-func preprocessQuery(query, lastQuery string, cliCtx cli.CliContext) (CommandType, cli.Command, string, error) {
-	// strip leading whitespace
-	query = strings.TrimLeft(query, " \t\n\r\v\f")
+// preprocessQuery classifies the trimmed |query| from shell or batch input
+// without running it. The returned CommandType says how to handle the query.
+func preprocessQuery(query string) (CommandType, cli.Command, error) {
 	if strings.HasPrefix(query, "\\") {
-		if query == "\\edit" {
+		if query == editCommand {
 			// \edit is a special case. Maybe we'll generalize this in the future.
-			updatedQuery, err := execEditor(lastQuery, ".sql", cliCtx)
-			if err != nil {
-				return TransformCommand, nil, "", err
-			}
-			// Trailing newlines are common in editors, so may as well trim all whitespace.
-			updatedQuery = strings.TrimRight(updatedQuery, " \t\n\r\v\f")
-			return TransformCommand, nil, updatedQuery, nil
+			return TransformCommand, SlashEdit{}, nil
 		}
 
-		cmd, ok := findSlashCmd(query[1:])
+		name := strings.TrimSuffix(strings.Fields(query)[0], ";")
+		cmd, ok := findSlashCmd(name[1:])
 		if ok {
-			return DoltCliCommand, cmd, "", nil
+			return DoltCliCommand, cmd, nil
 		}
+		return SqlShellCommand, nil, fmt.Errorf("Unknown command: %s. Use `\\help` for a list of commands.", name)
 	}
-	return SqlShellCommand, nil, query, nil
+	return SqlShellCommand, nil, nil
 }
 
 // postCommandUpdate is a helper function that is run after the shell has completed a command. It updates the database
