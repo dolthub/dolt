@@ -990,4 +990,48 @@ ORDER BY l.id, r.id, q.id LIMIT 3 OFFSET 1`,
 			},
 		},
 	},
+	// https://github.com/dolthub/dolt/issues/12100
+	{
+		Name: "lookup join with a NULL literal key",
+		SetUpScript: []string{
+			`CREATE TABLE t0 (c0 INT PRIMARY KEY)`,
+			`INSERT INTO t0 VALUES (1)`,
+			`CREATE TABLE t1 (c0 INT)`,
+			`INSERT INTO t1 VALUES (1)`,
+			`CREATE TABLE t2 (id INT PRIMARY KEY, c0 INT, KEY k0 (c0))`,
+			`INSERT INTO t2 VALUES (1, 1), (2, NULL)`,
+			`CREATE TABLE t3 (c0 INT PRIMARY KEY)`,
+			`INSERT INTO t3 VALUES (1)`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    `SELECT /*+ LOOKUP_JOIN(t1,t0) */ * FROM t1 LEFT JOIN t0 ON t0.c0 = NULL`,
+				Expected: []sql.Row{{1, nil}},
+			},
+			{
+				Query:    `SELECT /*+ LOOKUP_JOIN(t1,t0) */ * FROM t1 LEFT JOIN t0 ON t0.c0 <=> NULL`,
+				Expected: []sql.Row{{1, nil}},
+			},
+			{
+				Query:    `SELECT /*+ LOOKUP_JOIN(t1,t2) */ t1.c0, t2.id FROM t1 LEFT JOIN t2 ON t2.c0 <=> NULL`,
+				Expected: []sql.Row{{1, 2}},
+			},
+			{
+				Query:    `SELECT /*+ LOOKUP_JOIN(t1,t2) */ t1.c0, t2.id FROM t1 LEFT JOIN t2 ON t2.c0 = NULL`,
+				Expected: []sql.Row{{1, nil}},
+			},
+			{
+				Query:    `SELECT /*+ LOOKUP_JOIN(t1,t2) */ t1.c0, t2.id FROM t1 JOIN t2 ON t2.c0 = NULL`,
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    `SELECT /*+ LOOKUP_JOIN(t3,t0) */ t3.c0 AS src, t0.c0 AS dst FROM t3 LEFT JOIN t0 ON t0.c0 = NULL`,
+				Expected: []sql.Row{{1, nil}},
+			},
+			{
+				Query:    `SELECT /*+ LOOKUP_JOIN(t1,t0) */ * FROM t1 LEFT JOIN t0 ON t0.c0 = NULL AND t0.c0 = 1`,
+				Expected: []sql.Row{{1, nil}},
+			},
+		},
+	},
 }

@@ -303,7 +303,7 @@ func newLookupKeyMapping(
 	var litTuple val.Tuple
 	var err error
 	if litDesc.Count() > 0 {
-		litTuple, err = litTb.Build(ctx, ns.Pool())
+		litTuple, err = litTb.BuildPermissive(ctx, ns.Pool())
 		if err != nil {
 			return nil, err
 		}
