@@ -615,6 +615,176 @@ seed_and_start_serial_remote() {
     [[ "$output" =~ "27" ]] # 1+2+11+13 = 27.
 }
 
+@test "shallow-clone: merge-base --all of a fork in a depth 1 clone" {
+    seed_local_remote
+    cd remote
+    dolt remote add origin file://../file-remote
+    dolt push origin main
+    cd ..
+
+    mkdir clones
+    cd clones
+    dolt clone --depth 1 file://../file-remote
+    cd file-remote
+    cloned_head=$(get_head_commit)
+
+    dolt checkout -b branch
+    dolt sql -q "insert into vals values (6, 'six')"
+    dolt commit -a -m "Added Val: 6"
+    dolt checkout main
+    dolt sql -q "insert into vals values (7, 'seven')"
+    dolt commit -a -m "Added Val: 7"
+
+    run dolt merge-base --all main branch
+    [ "$status" -eq 0 ]
+    [ "$output" = "$cloned_head" ]
+
+    run dolt sql -q "select count(*) from dolt_merge_bases('main', 'branch')" -r csv
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "1" ]
+}
+
+@test "shallow-clone: merge-base --all errors when the histories meet beyond the shallow clone" {
+    seed_local_remote
+    cd remote
+    dolt remote add origin file://../file-remote
+    dolt push origin main
+    cd ..
+
+    mkdir clones
+    cd clones
+    dolt clone --depth 2 file://../file-remote
+    # The walk follows the fetched branch, the shorter side, and reaches (val 2), which the clone does not have.
+    missing=$(cd ../remote && dolt sql -q "select hashof('HEAD~3')" -r csv | tail -n 1)
+
+    # Push a branch rooted at (val 2), which the shallow clone does not have.
+    dolt clone file://../file-remote full-clone
+    cd full-clone
+    dolt reset --hard HEAD~3
+    dolt sql -q "insert into vals (i,s) values (13, 'val 13')"
+    dolt commit -a -m "Added Val: 13"
+    dolt push origin HEAD:refs/heads/brch
+
+    cd ../file-remote
+    dolt fetch
+
+    run dolt merge-base --all main origin/brch
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "shallow clone" ]] || false
+    [[ "$output" =~ "$missing" ]] || false
+
+    run dolt sql -q "select * from dolt_merge_bases('main', 'origin/brch')"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "shallow clone" ]] || false
+    [[ "$output" =~ "$missing" ]] || false
+}
+
+@test "shallow-clone: merge base far below the shallow clone" {
+    # remote:
+    #   main:    m0 <- m1 <- ... <- m10 <- ... <- m48 <- m49 <- m50
+    #                                 \
+    #   feature:                       f1 <- ... <- f10
+    #
+    # The clone has m48..m50 and, after fetching, f1..f10. m10, the only merge base, is a ghost 40 commits down.
+    mkdir remote
+    cd remote
+    dolt init
+    dolt sql -q "create table t (i int primary key)"
+    dolt commit -Am "m0"
+    for i in $(seq 1 50); do
+        dolt sql -q "insert into t values ($i)"
+        dolt commit -am "m$i"
+    done
+    dolt checkout -b feature HEAD~40
+    for i in $(seq 1 10); do
+        dolt sql -q "insert into t values ($((1000 + i)))"
+        dolt commit -am "f$i"
+    done
+    m10=$(dolt sql -q "select hashof('main~40')" -r csv | tail -n 1)
+    [ "${#m10}" -eq 32 ]
+    dolt remote add origin file://../file-remote
+    dolt push origin main
+    dolt push origin feature
+    cd ..
+
+    mkdir clones
+    cd clones
+    dolt clone --depth 3 file://../file-remote
+    cd file-remote
+    dolt fetch origin feature
+
+    run dolt merge-base main origin/feature
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "shallow clone" ]] || false
+    [[ "$output" =~ "Missing commit: $m10" ]] || false
+
+    run dolt merge-base --all main origin/feature
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "Missing commit: $m10" ]] || false
+}
+
+@test "shallow-clone: merge errors when one of two merge bases is not in the shallow clone" {
+    # remote:
+    #   main:    m0 <- a1 <- ... <- a20 <------------ H
+    #             \                   \              /
+    #   b:         b1 <- ... <- b19 <- \ ------ b20 /
+    #                             \     \
+    #   feature:                   \     f1 <- f2
+    #                               \--------/
+    #
+    # H merges b20 into main, and f2 merges b19 into feature. main and feature have two merge bases, a20 and b19.
+    # The clone has H, a20 and b20, and after fetching f1 and f2; b19 is a ghost. Rather than merge with a20 alone,
+    # Dolt reports b19 as missing.
+    mkdir remote
+    cd remote
+    dolt init
+    dolt sql -q "create table t (i int primary key)"
+    dolt commit -Am "m0"
+    dolt branch b
+    for i in $(seq 1 20); do
+        dolt sql -q "insert into t values ($i)"
+        dolt commit -am "a$i"
+    done
+    dolt checkout b
+    for i in $(seq 1 20); do
+        dolt sql -q "insert into t values ($((100 + i)))"
+        dolt commit -am "b$i"
+    done
+    b19=$(dolt sql -q "select hashof('b~1')" -r csv | tail -n 1)
+    [ "${#b19}" -eq 32 ]
+    dolt checkout main
+    dolt merge b -m "H"
+    dolt remote add origin file://../file-remote
+    dolt push origin main
+    cd ..
+
+    mkdir clones
+    cd clones
+    dolt clone --depth 2 file://../file-remote
+
+    cd ../remote
+    dolt checkout -b feature main~1
+    dolt sql -q "insert into t values (500)"
+    dolt commit -am "f1"
+    dolt merge "$b19" -m "f2"
+    dolt push origin feature
+
+    cd ../clones/file-remote
+    dolt fetch origin feature
+
+    run dolt merge-base --all main origin/feature
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "Missing commit: $b19" ]] || false
+
+    run dolt merge-base main origin/feature
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "Missing commit: $b19" ]] || false
+
+    run dolt merge origin/feature -m "merge feature"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "Missing commit: $b19" ]] || false
+}
+
 # complex repository is 14 commits with the following dag:
 #
 # (init) <- (table create) <- (val 1) <- (val 2) <- (val 3) <- (val 4) <- (val 5) <- (merge 2)                [main]
