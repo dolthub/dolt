@@ -54,8 +54,8 @@ type BranchHeadUpdate struct {
 	HeadRef       ref.DoltRef
 	Root          RootValue
 	CommitOptions datas.CommitOptions
-	// ExpectedHead is the head used to prepare the commit. When nonzero, both
-	// this hash and the dataset snapshot taken by BuildDatasetUpdate are checked.
+	// ExpectedHead is the head used to prepare the commit. When nonzero, it must match
+	// the dataset snapshot used to build the commit, which must remain current until publication.
 	ExpectedHead hash.Hash
 	// WorkingSetRef optionally locks an associated working set at PrevWsHash.
 	// A zero reference omits this additional lock; the branch head is always checked.

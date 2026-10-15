@@ -421,8 +421,18 @@ func (u independentlyLockedWorkingSetUpdate) BuildDatasetUpdate(ctx context.Cont
 
 type independentDatasetLock struct{ datas.DatasetUpdate }
 
-func (independentDatasetLock) LockDatasetID() string   { return "workingSets/heads/lock-only" }
-func (independentDatasetLock) LockPrevHash() hash.Hash { return hash.Hash{} }
+func (u independentDatasetLock) Build(ctx context.Context, db datas.ValueBuilder) (datas.BuiltDatasetUpdate, error) {
+	built, err := u.DatasetUpdate.Build(ctx, db)
+	if err != nil {
+		return datas.BuiltDatasetUpdate{}, err
+	}
+
+	built.Preconditions = []datas.DatasetPrecondition{{
+		DatasetID: "workingSets/heads/lock-only",
+		OnFailure: datas.ErrOptimisticLockFailed,
+	}}
+	return built, nil
+}
 
 func TestCommitHeadUpdatesNotifiesPreviousWorkingRoot(t *testing.T) {
 	for _, independentLock := range []bool{false, true} {

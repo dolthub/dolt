@@ -168,6 +168,7 @@ func (tx *DoltTransaction) GetInitialRoot(dbName string) (hash.Hash, bool) {
 }
 
 // prepareDoltCommit merges a pending commit with the current HEAD without publishing it.
+// The returned hash identifies the exact HEAD used to prepare the commit.
 func prepareDoltCommit(ctx *sql.Context,
 	dbName string,
 	doltDb *doltdb.DoltDB,
@@ -175,22 +176,27 @@ func prepareDoltCommit(ctx *sql.Context,
 	commit *doltdb.PendingCommit,
 	workingSet *doltdb.WorkingSet,
 	mergeOpts editor.Options,
-) (*doltdb.WorkingSet, *doltdb.PendingCommit, error) {
+) (*doltdb.WorkingSet, *doltdb.PendingCommit, hash.Hash, error) {
 	pending := *commit
 
 	headRef, err := workingSet.Ref().ToHeadRef()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, hash.Hash{}, err
 	}
 
 	headSpec, _ := doltdb.NewCommitSpec("HEAD")
 	optCmt, err := doltDb.Resolve(ctx, headSpec, headRef)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, hash.Hash{}, err
 	}
 	curHead, ok := optCmt.ToCommit()
 	if !ok {
-		return nil, nil, doltdb.ErrGhostCommitRuntimeFailure
+		return nil, nil, hash.Hash{}, doltdb.ErrGhostCommitRuntimeFailure
+	}
+
+	expectedHead, err := curHead.HashOf()
+	if err != nil {
+		return nil, nil, hash.Hash{}, err
 	}
 
 	// We already got a new staged root via merge or ff via commitHeads, so now apply it to the STAGED value
@@ -202,15 +208,15 @@ func prepareDoltCommit(ctx *sql.Context,
 	if curHead != nil {
 		curRootVal, err := curHead.ResolveRootValue(ctx)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, hash.Hash{}, err
 		}
 		curRootValHash, err := curRootVal.HashOf()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, hash.Hash{}, err
 		}
 		headRootValHash, err := pending.Roots.Head.HashOf()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, hash.Hash{}, err
 		}
 
 		if curRootValHash != headRootValHash {
@@ -224,7 +230,7 @@ func prepareDoltCommit(ctx *sql.Context,
 
 			tableResolver, err := GetTableResolver(ctx, dbName)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, hash.Hash{}, err
 			}
 			result, err := merge.MergeRoots(
 				ctx,
@@ -237,7 +243,7 @@ func prepareDoltCommit(ctx *sql.Context,
 				mergeOpts,
 				merge.MergeOpts{})
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, hash.Hash{}, err
 			}
 			pending.Roots.Staged = result.Root
 
@@ -250,7 +256,7 @@ func prepareDoltCommit(ctx *sql.Context,
 
 	workingSet = workingSet.ClearMerge()
 
-	return workingSet, &pending, nil
+	return workingSet, &pending, expectedHead, nil
 }
 
 func WaitForReplicationController(ctx *sql.Context, rsc doltdb.ReplicationStatusController) {
@@ -431,16 +437,7 @@ func (tx *DoltTransaction) commitHeads(
 			pending := change.commit
 			var expectedHead hash.Hash
 			if pending != nil {
-				headRef, err := ws.Ref().ToHeadRef()
-				if err != nil {
-					return nil, nil, err
-				}
-				head, err := startPoint.db.GetHashForRefStr(ctx, headRef.String())
-				if err != nil {
-					return nil, nil, err
-				}
-				expectedHead = *head
-				ws, pending, err = prepareDoltCommit(ctx, change.dbName, startPoint.db, workingSetsAtTxStart[i], pending, ws, states[i].EditOpts())
+				ws, pending, expectedHead, err = prepareDoltCommit(ctx, change.dbName, startPoint.db, workingSetsAtTxStart[i], pending, ws, states[i].EditOpts())
 				if err != nil {
 					return nil, nil, err
 				}
@@ -465,8 +462,6 @@ func (tx *DoltTransaction) commitHeads(
 					Root:          pending.Roots.Staged,
 					CommitOptions: pending.CommitOptions,
 					ExpectedHead:  expectedHead,
-					WorkingSetRef: ws.Ref(),
-					PrevWsHash:    existingHash,
 				})
 			}
 		}

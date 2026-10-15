@@ -60,7 +60,7 @@ type WorkingSetSpec struct {
 //
 // ```
 // where M is a struct type and R is a ref type.
-func newWorkingSet(ctx context.Context, db *database, workingSetSpec WorkingSetSpec) (hash.Hash, error) {
+func newWorkingSet(ctx context.Context, db ValueBuilder, workingSetSpec WorkingSetSpec) (hash.Hash, error) {
 	meta := workingSetSpec.Meta
 	workingRef := workingSetSpec.WorkingRoot
 	stagedRef := workingSetSpec.StagedRoot

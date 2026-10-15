@@ -680,20 +680,36 @@ func (db *database) PersistGhostCommitIDs(ctx context.Context, ghosts hash.HashS
 	return err
 }
 
-// DatasetUpdate knows how to update a single dataset as part of an atomic batch. Updates can provide optimistic lock
-// values to check, and these values may be on a dataset other than one being updated.
+// ValueBuilder constructs and writes immutable values without publishing dataset updates.
+type ValueBuilder interface {
+	BuildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (*Commit, error)
+	WriteValue(ctx context.Context, v types.Value) (types.Ref, error)
+	Format() *types.NomsBinFormat
+}
+
+// DatasetUpdate builds a value and the preconditions for publishing it in an atomic batch.
 type DatasetUpdate interface {
-	// DatasetID returns the ID of the dataset to update
+	// DatasetID returns the ID of the dataset to update.
 	DatasetID() string
-	// BuildCommitValue writes the value to write as a commit to the dataset and returns a ref to it
-	BuildCommitValue(ctx context.Context, db *database) (hash.Hash, error)
-	// LockDatasetID returns the ID of the dataset to check for optimistic locking. See |LockPrevHash|.
-	LockDatasetID() string
-	// LockPrevHash returns the expected hash of the current head of |LockDatasetId()|.
-	// This value must be current for the update to succeed.
-	LockPrevHash() hash.Hash
-	// validateHead checks any additional constraints on the dataset being updated.
-	validateHead(ctx context.Context, datasets prolly.AddressMap, newHead hash.Hash) error
+	// Build writes the immutable value and declares the conditions required to publish it.
+	Build(ctx context.Context, db ValueBuilder) (BuiltDatasetUpdate, error)
+}
+
+// BuiltDatasetUpdate contains a written value and its publication preconditions.
+// Preconditions are checked against the original dataset map on every root update attempt.
+type BuiltDatasetUpdate struct {
+	NewHead       hash.Hash
+	Preconditions []DatasetPrecondition
+}
+
+// DatasetPrecondition compares a dataset's current head with ExpectedHead.
+// A zero ExpectedHead denotes an absent dataset. NotEqual reverses the comparison.
+// OnFailure defaults to ErrOptimisticLockFailed when nil.
+type DatasetPrecondition struct {
+	DatasetID    string
+	ExpectedHead hash.Hash
+	NotEqual     bool
+	OnFailure    error
 }
 
 // WorkingSetUpdate is a DatasetUpdate that updates a working set.
@@ -713,26 +729,26 @@ func (w WorkingSetUpdate) DatasetID() string {
 	return w.WorkingSetDS
 }
 
-func (w WorkingSetUpdate) BuildCommitValue(ctx context.Context, db *database) (hash.Hash, error) {
-	return newWorkingSet(ctx, db, w.WorkingSet)
-}
+func (w WorkingSetUpdate) Build(ctx context.Context, db ValueBuilder) (BuiltDatasetUpdate, error) {
+	head, err := newWorkingSet(ctx, db, w.WorkingSet)
+	if err != nil {
+		return BuiltDatasetUpdate{}, err
+	}
 
-func (w WorkingSetUpdate) LockDatasetID() string {
-	return w.WorkingSetDS
-}
-
-func (w WorkingSetUpdate) LockPrevHash() hash.Hash {
-	return w.PrevWsHash
-}
-
-func (w WorkingSetUpdate) validateHead(context.Context, prolly.AddressMap, hash.Hash) error {
-	return nil
+	return BuiltDatasetUpdate{
+		NewHead: head,
+		Preconditions: []DatasetPrecondition{{
+			DatasetID:    w.WorkingSetDS,
+			ExpectedHead: w.PrevWsHash,
+			OnFailure:    ErrOptimisticLockFailed,
+		}},
+	}, nil
 }
 
 type CommitUpdate struct {
 	CommitDS Dataset
-	// ExpectedHead, when nonzero, additionally requires the head used to prepare the update.
-	// It is checked inside the atomic root update, alongside the working-set lock.
+	// ExpectedHead, when nonzero, must match the dataset snapshot used to build the commit.
+	// Publication then checks that this snapshot is still current.
 	ExpectedHead hash.Hash
 	CommitOpts   CommitOptions
 	WorkingSetDS string
@@ -744,7 +760,12 @@ func (c CommitUpdate) DatasetID() string {
 	return c.CommitDS.ID()
 }
 
-func (c CommitUpdate) BuildCommitValue(ctx context.Context, db *database) (hash.Hash, error) {
+func (c CommitUpdate) Build(ctx context.Context, db ValueBuilder) (BuiltDatasetUpdate, error) {
+	expected, _ := c.CommitDS.MaybeHeadAddr()
+	if !c.ExpectedHead.IsEmpty() && expected != c.ExpectedHead {
+		return BuiltDatasetUpdate{}, ErrMergeNeeded
+	}
+
 	// Prepend the current head hash to the list of parents if one was provided. This is only necessary if parents were
 	// provided because we fill it in automatically in buildNewCommit otherwise.
 	if len(c.CommitOpts.Parents) > 0 && c.CommitOpts.AmendedCommit.IsEmpty() && !c.CommitOpts.Force {
@@ -758,36 +779,32 @@ func (c CommitUpdate) BuildCommitValue(ctx context.Context, db *database) (hash.
 
 	commit, err := db.BuildNewCommit(ctx, c.CommitDS, c.RootVal, c.CommitOpts)
 	if err != nil {
-		return hash.Hash{}, err
+		return BuiltDatasetUpdate{}, err
 	}
 
 	commitRef, err := db.WriteValue(ctx, commit.NomsValue())
 	if err != nil {
-		return hash.Hash{}, err
+		return BuiltDatasetUpdate{}, err
 	}
 
-	return commitRef.TargetHash(), nil
-}
-
-func (c CommitUpdate) LockDatasetID() string {
-	return c.WorkingSetDS
-}
-
-func (c CommitUpdate) LockPrevHash() hash.Hash {
-	return c.PrevWsHash
-}
-
-func (c CommitUpdate) validateHead(ctx context.Context, datasets prolly.AddressMap, newHead hash.Hash) error {
-	current, err := datasets.Get(ctx, c.DatasetID())
-	if err != nil {
-		return err
+	var preconditions []DatasetPrecondition
+	if c.WorkingSetDS != "" {
+		preconditions = append(preconditions, DatasetPrecondition{
+			DatasetID:    c.WorkingSetDS,
+			ExpectedHead: c.PrevWsHash,
+			OnFailure:    ErrOptimisticLockFailed,
+		})
 	}
-	expected, _ := c.CommitDS.MaybeHeadAddr()
-	if current != expected || (!c.ExpectedHead.IsEmpty() && current != c.ExpectedHead) {
-		return ErrMergeNeeded
-	}
+	preconditions = append(preconditions, DatasetPrecondition{
+		DatasetID:    c.DatasetID(),
+		ExpectedHead: expected,
+		OnFailure:    ErrMergeNeeded,
+	})
 
-	return nil
+	return BuiltDatasetUpdate{
+		NewHead:       commitRef.TargetHash(),
+		Preconditions: preconditions,
+	}, nil
 }
 
 var _ DatasetUpdate = &CommitUpdate{}
@@ -800,31 +817,31 @@ type PrebuiltCommitUpdate struct {
 
 var _ DatasetUpdate = PrebuiltCommitUpdate{}
 
-func (c PrebuiltCommitUpdate) DatasetID() string       { return c.CommitDS.ID() }
-func (c PrebuiltCommitUpdate) LockDatasetID() string   { return "" }
-func (c PrebuiltCommitUpdate) LockPrevHash() hash.Hash { return hash.Hash{} }
+func (c PrebuiltCommitUpdate) DatasetID() string { return c.CommitDS.ID() }
 
-func (c PrebuiltCommitUpdate) BuildCommitValue(ctx context.Context, db *database) (hash.Hash, error) {
+func (c PrebuiltCommitUpdate) Build(ctx context.Context, db ValueBuilder) (BuiltDatasetUpdate, error) {
 	r, err := db.WriteValue(ctx, c.Commit.NomsValue())
 	if err != nil {
-		return hash.Hash{}, err
+		return BuiltDatasetUpdate{}, err
 	}
-	return r.TargetHash(), nil
-}
 
-func (c PrebuiltCommitUpdate) validateHead(ctx context.Context, datasets prolly.AddressMap, newHead hash.Hash) error {
-	current, err := datasets.Get(ctx, c.DatasetID())
-	if err != nil {
-		return err
-	}
 	expected, _ := c.CommitDS.MaybeHeadAddr()
-	if current != expected {
-		return ErrMergeNeeded
-	}
-	if !current.IsEmpty() && current == newHead {
-		return ErrAlreadyCommitted
-	}
-	return nil
+	return BuiltDatasetUpdate{
+		NewHead: r.TargetHash(),
+		Preconditions: []DatasetPrecondition{
+			{
+				DatasetID:    c.DatasetID(),
+				ExpectedHead: expected,
+				OnFailure:    ErrMergeNeeded,
+			},
+			{
+				DatasetID:    c.DatasetID(),
+				ExpectedHead: r.TargetHash(),
+				NotEqual:     true,
+				OnFailure:    ErrAlreadyCommitted,
+			},
+		},
+	}, nil
 }
 
 // CommitDatasets updates the given Datasets atomically.
@@ -835,7 +852,7 @@ func (db *database) CommitDatasets(
 	if len(atomicCommit) == 0 {
 		return []Dataset{}, nil
 	}
-	pending := make([]hash.Hash, len(atomicCommit))
+	pending := make([]BuiltDatasetUpdate, len(atomicCommit))
 	seen := make(map[string]struct{}, len(atomicCommit))
 
 	for i, cmt := range atomicCommit {
@@ -846,33 +863,38 @@ func (db *database) CommitDatasets(
 			return nil, fmt.Errorf("duplicate dataset update: %s", cmt.DatasetID())
 		}
 		seen[cmt.DatasetID()] = struct{}{}
-		newRefHash, err := cmt.BuildCommitValue(ctx, db)
+		built, err := cmt.Build(ctx, db)
 		if err != nil {
 			return nil, err
 		}
-		pending[i] = newRefHash
+		pending[i] = built
 	}
 
 	currentDatasets, err := db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
 		ae := am.Editor()
 
-		for i := range atomicCommit {
-			if lockID := atomicCommit[i].LockDatasetID(); lockID != "" {
-				currHash, err := am.Get(ctx, lockID)
+		for _, built := range pending {
+			for _, condition := range built.Preconditions {
+				current, err := am.Get(ctx, condition.DatasetID)
 				if err != nil {
 					return prolly.AddressMap{}, err
 				}
-				if currHash != atomicCommit[i].LockPrevHash() {
+				matches := current == condition.ExpectedHead
+				if condition.NotEqual {
+					matches = !matches
+				}
+
+				if !matches {
+					if condition.OnFailure != nil {
+						return prolly.AddressMap{}, condition.OnFailure
+					}
 					return prolly.AddressMap{}, ErrOptimisticLockFailed
 				}
 			}
+		}
 
-			if err := atomicCommit[i].validateHead(ctx, am, pending[i]); err != nil {
-				return prolly.AddressMap{}, err
-			}
-
-			err := ae.Update(ctx, atomicCommit[i].DatasetID(), pending[i])
-			if err != nil {
+		for i, built := range pending {
+			if err := ae.Update(ctx, atomicCommit[i].DatasetID(), built.NewHead); err != nil {
 				return prolly.AddressMap{}, err
 			}
 		}
