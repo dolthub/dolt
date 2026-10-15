@@ -307,14 +307,9 @@ func resolveBranchesToRoots(ctx *sql.Context, db dsess.SqlDatabase, leftBranch, 
 		return rootInfo{}, err
 	}
 
-	optCm, err := doltdb.GetCommitAncestor(ctx, leftCm, rightCm)
+	ancCm, err := merge.ResolveMergeBase(ctx, leftCm, rightCm)
 	if err != nil {
 		return rootInfo{}, err
-	}
-
-	ancCm, ok := optCm.ToCommit()
-	if !ok {
-		return rootInfo{}, doltdb.ErrGhostCommitEncountered
 	}
 
 	rightRoot, err := rightCm.GetRootValue(ctx)

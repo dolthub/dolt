@@ -52,39 +52,56 @@ func MergeBases(ctx context.Context, left, right *doltdb.Commit) ([]hash.Hash, e
 		}
 		commits[i] = c
 	}
-	return sortNewestFirst(ctx, commits)
+	if err = sortByCommitterDate(ctx, commits, true); err != nil {
+		return nil, err
+	}
+	bases := make([]hash.Hash, len(commits))
+	for i, c := range commits {
+		if bases[i], err = c.HashOf(); err != nil {
+			return nil, err
+		}
+	}
+	return bases, nil
 }
 
-// sortNewestFirst returns the hashes of |commits| ordered by committer date, newest first, breaking ties by hash. git
-// orders merge bases the same way (commit_list_insert_by_date in commit-reach.c). Checked with git 2.39: in one history,
+// sortByCommitterDate orders |commits| by committer date, newest or oldest first, breaking ties by hash. git orders
+// merge bases newest first (commit_list_insert_by_date in commit-reach.c). Checked with git 2.39: in one history,
 // swapping the committer dates of two merge bases swaps their order in `git merge-base --all`, regardless of their
 // heights, and author dates do not affect it. git leaves commits with equal dates in no defined order.
-func sortNewestFirst(ctx context.Context, commits []*doltdb.Commit) ([]hash.Hash, error) {
+func sortByCommitterDate(ctx context.Context, commits []*doltdb.Commit, newestFirst bool) error {
 	type datedCommit struct {
-		date time.Time
-		hash hash.Hash
+		commit *doltdb.Commit
+		date   time.Time
+		hash   string
 	}
 	dated := make([]datedCommit, len(commits))
 	for i, c := range commits {
-		meta, err := c.GetCommitMeta(ctx)
+		date, err := committerDate(ctx, c)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		h, err := c.HashOf()
 		if err != nil {
-			return nil, err
+			return err
 		}
-		dated[i] = datedCommit{date: time.UnixMilli(int64(meta.TimestampMillis())), hash: h}
+		dated[i] = datedCommit{commit: c, date: date, hash: h.String()}
 	}
 	sort.Slice(dated, func(i, j int) bool {
 		if !dated[i].date.Equal(dated[j].date) {
-			return dated[i].date.After(dated[j].date)
+			return dated[i].date.Before(dated[j].date) != newestFirst
 		}
-		return dated[i].hash.String() < dated[j].hash.String()
+		return dated[i].hash < dated[j].hash
 	})
-	hashes := make([]hash.Hash, len(dated))
 	for i := range dated {
-		hashes[i] = dated[i].hash
+		commits[i] = dated[i].commit
 	}
-	return hashes, nil
+	return nil
+}
+
+func committerDate(ctx context.Context, c *doltdb.Commit) (time.Time, error) {
+	meta, err := c.GetCommitMeta(ctx)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return time.UnixMilli(int64(meta.TimestampMillis())), nil
 }
