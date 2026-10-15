@@ -54,3 +54,11 @@ func TestDoltSessionRetainsBaseSessionVariables(t *testing.T) {
 	b := DefaultSession(emptyDatabaseProvider(), nil)
 	require.NotSame(t, a.EngineVariables(), b.EngineVariables())
 }
+
+func TestRegistryAwareSessionConstructorsRejectNil(t *testing.T) {
+	require.PanicsWithValue(t, "DefaultSessionWithVariables requires an engine variable bundle", func() {
+		DefaultSessionWithVariables(emptyDatabaseProvider(), nil, nil)
+	})
+	_, err := NewDetachedSessionWithVariables(emptyDatabaseProvider(), config.NewMapConfig(nil), nil, nil, nil, nil, nil, nil)
+	require.ErrorContains(t, err, "requires an engine variable bundle")
+}

@@ -150,17 +150,17 @@ var _ sql.TransactionSession = (*DoltSession)(nil)
 var _ expranalysis.SessionDbProvider = (*DoltSession)(nil)
 var _ branch_control.ContextConvertible = (*DoltSession)(nil)
 
-// DefaultSession creates a standalone DoltSession with fresh GMS defaults.
-// Engine callers should pass their Dolt bundle to DefaultSessionWithVariables.
+// DefaultSession creates a standalone DoltSession with fresh GMS definitions.
+// It cannot attach to an existing engine. Engine callers should pass their Dolt
+// bundle to DefaultSessionWithVariables.
 func DefaultSession(pro DoltDatabaseProvider, sessFunc WriteSessFunc) *DoltSession {
 	return DefaultSessionWithVariables(pro, sessFunc, variables.NewEngineVariables())
 }
 
 // DefaultSessionWithVariables creates a default session bound to an engine.
-// A nil bundle creates fresh state.
 func DefaultSessionWithVariables(pro DoltDatabaseProvider, sessFunc WriteSessFunc, vars *sql.EngineVariables) *DoltSession {
 	if vars == nil {
-		vars = variables.NewEngineVariables()
+		panic("DefaultSessionWithVariables requires an engine variable bundle")
 	}
 	return &DoltSession{
 		Session:          sql.NewBaseSessionWithVariables(vars),
@@ -178,10 +178,9 @@ func DefaultSessionWithVariables(pro DoltDatabaseProvider, sessFunc WriteSessFun
 	}
 }
 
-// NewDetachedSession returns a DoltSession backed by a fresh sql.BaseSession
-// rather than one supplied by a client connection. Use it when an external
-// session manager owns the DoltSession lifecycle and SQL requests run against
-// a *sql.Context pointing at this session instead of a per-connection one.
+// NewDetachedSession returns a DoltSession with fresh GMS definitions. It
+// cannot attach to an existing engine. Use NewDetachedSessionWithVariables
+// when an external session manager owns the DoltSession lifecycle.
 func NewDetachedSession(
 	pro DoltDatabaseProvider,
 	conf config.ReadWriteConfig,
@@ -207,7 +206,7 @@ func NewDetachedSessionWithVariables(
 	vars *sql.EngineVariables,
 ) (*DoltSession, error) {
 	if vars == nil {
-		vars = variables.NewEngineVariables()
+		return nil, fmt.Errorf("NewDetachedSessionWithVariables requires an engine variable bundle")
 	}
 	return NewDoltSession(
 		sql.NewBaseSessionWithVariables(vars),

@@ -158,12 +158,11 @@ func NewSqlEngine(
 	}); err != nil {
 		return nil, err
 	}
-	err := applySystemVariables(vars, config.SystemVariables, engineVars)
+	bootstrapCtx := sql.NewContextWithVariables(ctx, engineVars)
+	err := applySystemVariables(bootstrapCtx, config.SystemVariables)
 	if err != nil {
 		return nil, err
 	}
-	bootstrapCtx := sql.NewContextWithVariables(ctx, engineVars)
-
 	dbs, locations, err := CollectDBs(bootstrapCtx, mrEnv)
 	if err != nil {
 		return nil, err
@@ -263,9 +262,11 @@ func NewSqlEngine(
 		if readOnly {
 			readOnlyInt = 1
 		}
-		_ = applySystemVariables(vars, map[string]interface{}{
+		if err := applySystemVariables(sql.NewContextWithVariables(context.Background(), engineVars), map[string]interface{}{
 			"read_only": readOnlyInt,
-		}, engineVars)
+		}); err != nil {
+			logrus.WithError(err).Warn("could not update read_only system variable")
+		}
 	})
 
 	// Load in privileges from file, if it exists
@@ -302,13 +303,13 @@ func NewSqlEngine(
 		pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, config.AutoGCController.DropDatabaseHook())
 		// XXX: We force session aware safepoint controller if auto_gc is on.
 		dprocedures.UseSessionAwareSafepointController = true
-		err = applySystemVariables(vars, map[string]interface{}{
+		err = applySystemVariables(bootstrapCtx, map[string]interface{}{
 			dsess.DoltAutoGCEnabled: int8(1),
-		}, engineVars)
+		})
 	} else {
-		err = applySystemVariables(vars, map[string]interface{}{
+		err = applySystemVariables(bootstrapCtx, map[string]interface{}{
 			dsess.DoltAutoGCEnabled: int8(0),
-		}, engineVars)
+		})
 	}
 	if err != nil {
 		return nil, err
@@ -418,14 +419,21 @@ func NewRebasedSqlEngine(engine *gms.Engine, dbs map[string]dsess.SqlDatabase) *
 	}
 }
 
-func applySystemVariables(vars sql.SystemVariableRegistry, cfg SystemVariables, owner *sql.EngineVariables) error {
+func applySystemVariables(ctx *sql.Context, cfg SystemVariables) error {
 	if cfg != nil {
-		if owner != nil {
-			if aware, ok := vars.(sql.ContextAwareSystemVariableRegistry); ok {
-				return aware.AssignValuesWithContext(sql.NewContextWithVariables(context.Background(), owner), cfg)
-			}
+		if ctx == nil || ctx.EngineVariables() == nil {
+			return fmt.Errorf("system variable assignment requires an owning context")
 		}
-		return vars.AssignValues(cfg)
+		sessionOwner, ok := ctx.Session.(sql.EngineVariablesProvider)
+		if !ok || sessionOwner.EngineVariables() != ctx.EngineVariables() {
+			return fmt.Errorf("system variable assignment requires a session with the context's owner")
+		}
+		vars := ctx.SystemVariables()
+		aware, ok := vars.(sql.ContextAwareSystemVariableRegistry)
+		if !ok {
+			return fmt.Errorf("system variable registry %T does not support context-aware assignment", vars)
+		}
+		return aware.AssignValuesWithContext(ctx, cfg)
 	}
 	return nil
 }

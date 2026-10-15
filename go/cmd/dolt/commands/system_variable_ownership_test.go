@@ -23,3 +23,12 @@ func TestRestrictLoadFileUsesCliEngineRegistry(t *testing.T) {
 	require.Equal(t, wd, afterA)
 	require.Equal(t, beforeB, afterB)
 }
+
+type legacySystemVariableRegistry struct{ sql.SystemVariableRegistry }
+
+func TestRestrictLoadFileRejectsRegistryWithoutContextAssignment(t *testing.T) {
+	vars := sqle.NewEngineVariables()
+	vars.System = legacySystemVariableRegistry{vars.System}
+	ctx := sql.NewContextWithVariables(context.Background(), vars)
+	require.ErrorContains(t, restrictLoadFileToWorkingDirectory(ctx), "does not support context-aware assignment")
+}

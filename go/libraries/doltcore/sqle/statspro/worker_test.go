@@ -700,23 +700,24 @@ func emptySetupDetail(t *testing.T, threads *sql.BackgroundThreads, memOnly bool
 	})
 
 	setTimers(t, ctx, 1*time.Millisecond, 100*time.Millisecond)
+	vars := ctx.SystemVariables().(sql.ContextAwareSystemVariableRegistry)
 	if memOnly {
-		ctx.SystemVariables().AssignValues(map[string]interface{}{
+		require.NoError(t, vars.AssignValuesWithContext(ctx, map[string]interface{}{
 			dsess.DoltStatsMemoryOnly: int8(1),
-		})
+		}))
 	} else {
-		ctx.SystemVariables().AssignValues(map[string]interface{}{
+		require.NoError(t, vars.AssignValuesWithContext(ctx, map[string]interface{}{
 			dsess.DoltStatsMemoryOnly: int8(0),
-		})
+		}))
 	}
 	if gcEnabled {
-		ctx.SystemVariables().AssignValues(map[string]interface{}{
+		require.NoError(t, vars.AssignValuesWithContext(ctx, map[string]interface{}{
 			dsess.DoltStatsGCEnabled: int8(1),
-		})
+		}))
 	} else {
-		ctx.SystemVariables().AssignValues(map[string]interface{}{
+		require.NoError(t, vars.AssignValuesWithContext(ctx, map[string]interface{}{
 			dsess.DoltStatsGCEnabled: int8(0),
-		})
+		}))
 	}
 
 	sc := sqlEng.Analyzer.Catalog.StatsProvider.(*StatsController)
