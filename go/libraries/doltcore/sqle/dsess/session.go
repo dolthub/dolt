@@ -838,8 +838,11 @@ func (d *DoltSession) IsBranchDirty(dbName, branch string) bool {
 }
 
 // CommitWorkingSet commits the named working set without creating a new dolt commit.
-// No other working set may have pending transaction changes.
-// Clients should typically use CommitTransaction, which performs additional checks, instead of this method.
+// Only the named working set may have pending changes, or ErrDirtyWorkingSets is returned.
+//
+// This is a specialized method for use mainly by stored procedures and internal state management. Clients should
+// typically use CommitTransaction, which performs additional checks, instead of this method. CommitTransaction also
+// automatically handles pending changes on multiple heads correctly.
 func (d *DoltSession) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.Transaction) error {
 	state, ok, err := d.lookupDbState(ctx, dbName)
 	if err != nil {

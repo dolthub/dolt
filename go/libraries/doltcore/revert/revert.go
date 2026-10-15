@@ -369,8 +369,8 @@ func AbortRevert(ctx *sql.Context, dbName string) error {
 		return fmt.Errorf("error: There is no revert in progress")
 	}
 
-	// Aborting can reset HEAD and commit this working set. Check other branches before either
-	// mutation, while allowing pending conflict-resolution edits on the branch being aborted.
+	// Aborting can reset HEAD and commit this working set. If there are any changes on other working sets, we will
+	// stomp them when we do this. So we assert that only the target working set is dirty.
 	baseName, _ := doltdb.SplitRevisionDbName(dbName)
 	headRef, err := ws.Ref().ToHeadRef()
 	if err != nil {
