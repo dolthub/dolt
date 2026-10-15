@@ -26,11 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
-// TODO: get rid of me, use an integration point to define new sysvars
-func init() {
-	AddDoltSystemVariables()
-}
-
 var DoltSystemVariables = newDoltSystemVariables()
 
 func newDoltSystemVariables() []sql.SystemVariable {
@@ -348,10 +343,6 @@ func newDoltSystemVariables() []sql.SystemVariable {
 	}
 }
 
-func AddDoltSystemVariables() {
-	addDoltSystemVariables(sql.SystemVariables, DoltSystemVariables)
-}
-
 // NewEngineVariables constructs a fresh GMS bundle with Dolt's definitions.
 func NewEngineVariables() *sql.EngineVariables {
 	vars := variables.NewEngineVariables()
@@ -361,7 +352,7 @@ func NewEngineVariables() *sql.EngineVariables {
 
 // AddDoltSystemVariablesToRegistry registers fresh Dolt definitions in one
 // engine's registry. The inline catalog is registered first, followed by the
-// exported catalog, matching AddDoltSystemVariables duplicate precedence.
+// exported catalog; definitions in the exported catalog take precedence.
 func AddDoltSystemVariablesToRegistry(vars sql.SystemVariableRegistry) {
 	addDoltSystemVariables(vars, newDoltSystemVariables())
 }
@@ -674,10 +665,6 @@ func newInlineDoltSystemVariables() []sql.SystemVariable {
 			Default: "",
 		},
 	}
-}
-
-func ReadReplicaForcePull() bool {
-	return ReadReplicaForcePullWithRegistry(sql.SystemVariables)
 }
 
 // ReadReplicaForcePullWithRegistry reads the current setting from an engine's registry.

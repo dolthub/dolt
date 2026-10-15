@@ -136,6 +136,34 @@ func TestSqlEngineCapturesBundleFromReusableConfig(t *testing.T) {
 	require.Same(t, varsB, ctxB.EngineVariables())
 }
 
+func TestNewSqlEngineCreatesFreshVariablesByDefault(t *testing.T) {
+	ctx := context.Background()
+	mrA, cfg, _ := lifecycleEngineEnvironment(t, ctx, t.TempDir(), t.TempDir())
+	engineA, err := NewSqlEngine(ctx, mrA, cfg)
+	require.NoError(t, err)
+	defer engineA.Close()
+
+	mrB, _, _ := lifecycleEngineEnvironment(t, ctx, t.TempDir(), t.TempDir())
+	engineB, err := NewSqlEngine(ctx, mrB, cfg)
+	require.NoError(t, err)
+	defer engineB.Close()
+
+	varsA := engineA.GetUnderlyingEngine().Variables()
+	varsB := engineB.GetUnderlyingEngine().Variables()
+	require.NotSame(t, varsA, varsB)
+	require.Nil(t, cfg.EngineVariables, "default construction must not retain state in a reusable config")
+	ctxA, err := engineA.NewLocalContext(ctx)
+	require.NoError(t, err)
+	ctxB, err := engineB.NewLocalContext(ctx)
+	require.NoError(t, err)
+	require.Same(t, varsA, ctxA.EngineVariables())
+	require.Same(t, varsB, ctxB.EngineVariables())
+	require.NoError(t, varsA.System.SetGlobal(ctxA, "max_connections", int64(71)))
+	_, maxB, ok := varsB.System.GetGlobal("max_connections")
+	require.True(t, ok)
+	require.NotEqualValues(t, 71, maxB)
+}
+
 // TestSqlEngineFailedConstructionStopsWorkers checks cleanup on errors before and after tracker creation.
 func TestSqlEngineFailedConstructionStopsWorkers(t *testing.T) {
 	for _, malformed := range []bool{false, true} {

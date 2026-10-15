@@ -32,14 +32,15 @@ import (
 )
 
 func TestCommitHooksNoErrors(t *testing.T) {
-	ctx := sql.NewEmptyContext()
+	vars := NewEngineVariables()
+	ctx := sql.NewContextWithVariables(context.Background(), vars)
 	dEnv, err := CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer dEnv.Close()
 
-	sql.SystemVariables.SetGlobal(ctx, dsess.SkipReplicationErrors, true)
-	sql.SystemVariables.SetGlobal(ctx, dsess.ReplicateToRemote, "unknown")
-	hooks, _, err := GetCommitHooks(context.Background(), "", dEnv, &buffer.Buffer{})
+	vars.System.SetGlobal(ctx, dsess.SkipReplicationErrors, true)
+	vars.System.SetGlobal(ctx, dsess.ReplicateToRemote, "unknown")
+	hooks, _, err := GetCommitHooksWithRegistry(ctx, "", dEnv, &buffer.Buffer{}, vars.System)
 	assert.NoError(t, err)
 	if len(hooks) < 1 {
 		t.Error("failed to produce noop hook")
@@ -53,7 +54,8 @@ func TestCommitHooksNoErrors(t *testing.T) {
 }
 
 func TestCommitHooksBackgroundThreadsUniqueNames(t *testing.T) {
-	ctx := sql.NewEmptyContext()
+	vars := NewEngineVariables()
+	ctx := sql.NewContextWithVariables(context.Background(), vars)
 	dEnv, err := CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer dEnv.Close()
@@ -68,14 +70,14 @@ func TestCommitHooksBackgroundThreadsUniqueNames(t *testing.T) {
 	}))
 	require.NoError(t, err)
 
-	sql.SystemVariables.SetGlobal(ctx, dsess.ReplicateToRemote, "origin")
-	sql.SystemVariables.SetGlobal(ctx, dsess.AsyncReplication, "true")
-	_, runThreads, err := GetCommitHooks(context.Background(), "[dbname]", dEnv, &buffer.Buffer{})
+	vars.System.SetGlobal(ctx, dsess.ReplicateToRemote, "origin")
+	vars.System.SetGlobal(ctx, dsess.AsyncReplication, "true")
+	_, runThreads, err := GetCommitHooksWithRegistry(ctx, "[dbname]", dEnv, &buffer.Buffer{}, vars.System)
 	require.NoError(t, err)
 	require.NotNil(t, runThreads)
 	bt := &testBackgroundThreads{make(map[string]func(context.Context))}
 	runThreads(bt, func(ctx context.Context) (*sql.Context, error) {
-		return sql.NewEmptyContext(), nil
+		return sql.NewContextWithVariables(ctx, vars), nil
 	})
 	assert.Len(t, bt.threads, 2)
 	for k := range bt.threads {

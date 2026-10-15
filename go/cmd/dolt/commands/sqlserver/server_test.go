@@ -390,7 +390,8 @@ func TestReadReplica(t *testing.T) {
 		dsess.ReplicateHeads:    "main",
 		dsess.DoltStatsEnabled:  "false",
 	})
-	dsess.InitPersistedSystemVars(multiSetup.GetEnv(readReplicaDbName))
+	vars := sqle.NewEngineVariables()
+	require.NoError(t, dsess.InitPersistedSystemVarsWithRegistry(vars.System, multiSetup.GetEnv(readReplicaDbName)))
 
 	// start server as read replica
 	sc := svcs.NewController()
@@ -402,10 +403,11 @@ func TestReadReplica(t *testing.T) {
 	os.Chdir(multiSetup.DbPaths[readReplicaDbName])
 	go func() {
 		err, _ = Serve(context.Background(), &Config{
-			Version:      "0.0.0",
-			ServerConfig: serverConfig,
-			Controller:   sc,
-			DoltEnv:      multiSetup.GetEnv(readReplicaDbName),
+			Version:         "0.0.0",
+			ServerConfig:    serverConfig,
+			Controller:      sc,
+			DoltEnv:         multiSetup.GetEnv(readReplicaDbName),
+			EngineVariables: vars,
 		})
 		require.NoError(t, err)
 	}()
@@ -430,7 +432,7 @@ func TestReadReplica(t *testing.T) {
 
 		// Configure the read replica to pull the new feature branch we just created
 		config.NewPrefixConfig(localCfg, env.SqlServerGlobalsPrefix).SetStrings(map[string]string{dsess.ReadReplicaRemote: "remote1", dsess.ReplicateHeads: "main,feature"})
-		dsess.InitPersistedSystemVars(multiSetup.GetEnv(readReplicaDbName))
+		require.NoError(t, dsess.InitPersistedSystemVarsWithRegistry(vars.System, multiSetup.GetEnv(readReplicaDbName)))
 
 		var res []int
 		q := sess.SelectBySql("call dolt_checkout('feature');")

@@ -22,7 +22,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
-	_ "github.com/dolthub/go-mysql-server/sql/variables"
+	"github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/src-d/go-errors.v1"
 
@@ -98,13 +98,14 @@ func TestDoltgresTransactionLifecycle(t *testing.T) {
 }
 
 func TestDoltgresSemanticTransactionLifecycle(t *testing.T) {
-	if _, _, ok := sql.SystemVariables.GetGlobal(TransactionsDisabledSysVar); !ok {
-		sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{&sql.MysqlSystemVariable{
+	vars := variables.NewEngineVariables()
+	if _, _, ok := vars.System.GetGlobal(TransactionsDisabledSysVar); !ok {
+		vars.System.AddSystemVariables([]sql.SystemVariable{&sql.MysqlSystemVariable{
 			Name: TransactionsDisabledSysVar, Scope: sql.GetMysqlScope(sql.SystemVariableScope_Session),
 			Dynamic: true, Type: sqltypes.NewSystemBoolType(TransactionsDisabledSysVar), Default: int8(0),
 		}})
 	}
-	sess := DefaultSession(emptyDatabaseProvider(), nil)
+	sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, vars)
 	lifecycle := &countingDoltgresTransactionLifecycle{pending: true}
 	sess.DoltgresSessObj = lifecycle
 	ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
@@ -251,6 +252,7 @@ func TestNewPersistedSystemVariables(t *testing.T) {
 }
 
 func TestValidatePeristableSystemVar(t *testing.T) {
+	vars := variables.NewEngineVariables()
 	tests := []struct {
 		Err  *errors.Kind
 		Name string
@@ -271,7 +273,7 @@ func TestValidatePeristableSystemVar(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
-			if sysVar, _, err := validatePersistableSysVar(tt.Name); tt.Err != nil {
+			if sysVar, _, err := ValidatePersistableSysVarInRegistry(vars.System, tt.Name); tt.Err != nil {
 				assert.True(t, tt.Err.Is(err))
 			} else {
 				assert.Equal(t, tt.Name, sysVar.GetName())
@@ -374,6 +376,7 @@ func TestSetPersistedValue(t *testing.T) {
 }
 
 func TestGetPersistedValue(t *testing.T) {
+	vars := variables.NewEngineVariables()
 	tests := []struct {
 		ExpectedRes interface{}
 		Name        string
@@ -446,7 +449,7 @@ func TestGetPersistedValue(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
 			conf := config.NewMapConfig(map[string]string{tt.Name: tt.Value})
-			if val, err := getPersistedValue(conf, tt.Name); tt.Err {
+			if val, err := GetPersistedValueInRegistry(vars.System, conf, tt.Name); tt.Err {
 				assert.Error(t, err)
 			} else {
 				assert.Equal(t, tt.ExpectedRes, val)
