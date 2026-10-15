@@ -20,6 +20,7 @@ import (
 
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -34,10 +35,11 @@ func PrepareCreateTableStmt(ctx context.Context, sqlDb dsess.SqlDatabase) (*sql.
 		return nil, nil, nil
 	}
 
-	engine := sqle.NewDefault(pro)
+	vars := NewEngineVariables()
+	engine := sqle.New(analyzer.NewDefault(pro), &sqle.Config{EngineVariables: vars})
 
-	sess := dsess.DefaultSession(pro, writer.NewWriteSession)
-	sqlCtx := sql.NewContext(ctx, sql.WithSession(sess))
+	sess := dsess.DefaultSessionWithVariables(pro, writer.NewWriteSession, vars)
+	sqlCtx := sql.NewContextWithVariables(ctx, vars, sql.WithSession(sess))
 	sqlCtx.SetCurrentDatabase(sqlDb.Name())
 	return sqlCtx, engine, sess
 }

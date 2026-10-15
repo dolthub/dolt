@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
 var tableName = "people"
@@ -47,6 +48,25 @@ func DEnvWithSeedDataForTest(ctx context.Context, t *testing.T) *env.DoltEnv {
 		dEnv.Close()
 	})
 	return dEnv
+}
+
+func TestBuildSqlEngineQueryistUsesPreparedBundle(t *testing.T) {
+	ctx := t.Context()
+	dEnv := DEnvWithSeedDataForTest(ctx, t)
+	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.FS, dEnv)
+	require.NoError(t, err)
+	vars := sqle.NewEngineVariables()
+	binder, verr := BuildSqlEngineQueryistWithVariables(ctx, dEnv.FS, mrEnv, &cli.UserPassword{}, argparser.NewEmptyResults(), vars)
+	require.Nil(t, verr)
+	result, err := binder(ctx)
+	require.NoError(t, err)
+	require.Same(t, vars, result.Context.EngineVariables())
+	result.Closer()
+
+	second, err := binder(ctx)
+	require.NoError(t, err)
+	require.NotSame(t, vars, second.Context.EngineVariables())
+	second.Closer()
 }
 
 // Smoke test: Console opens and exits
