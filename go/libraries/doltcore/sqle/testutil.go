@@ -114,8 +114,19 @@ func ExecuteSqlOnEngine(ctx *sql.Context, engine *sqle.Engine, statements string
 	return nil
 }
 
-func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.DoltDatabaseProvider, config config.ReadWriteConfig, statsPro sql.StatsProvider, gcSafepointController *gcctx.GCSafepointController) *sql.Context {
-	s, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, config, branch_control.CreateDefaultController(ctx), statsPro, writer.NewWriteSession, gcSafepointController, nil)
+// NewTestSQLCtxWithProvider creates a test context. With no owner it uses fresh
+// Dolt definitions; callers testing an existing engine must pass its bundle.
+func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.DoltDatabaseProvider, config config.ReadWriteConfig, statsPro sql.StatsProvider, gcSafepointController *gcctx.GCSafepointController, owner ...*sql.EngineVariables) *sql.Context {
+	var vars *sql.EngineVariables
+	if len(owner) == 0 {
+		vars = NewEngineVariables()
+	} else {
+		vars = owner[0]
+		if vars == nil {
+			panic("NewTestSQLCtxWithProvider requires a non-nil engine variable bundle when an owner is supplied")
+		}
+	}
+	s, err := dsess.NewDoltSession(sql.NewBaseSessionWithVariables(vars), pro, config, branch_control.CreateDefaultController(ctx), statsPro, writer.NewWriteSession, gcSafepointController, nil)
 	if err != nil {
 		panic(err)
 	}

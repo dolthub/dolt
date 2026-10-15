@@ -45,3 +45,24 @@ func TestBinlogVariablesUseOwningRegistry(t *testing.T) {
 	require.Equal(t, "11111111-1111-1111-1111-111111111111:1", lmA.availableGtids.String())
 	require.Empty(t, lmB.availableGtids.String())
 }
+
+type legacyBinlogRegistry struct{ sql.SystemVariableRegistry }
+
+func TestBinlogVariableAssignmentRequiresContextAwareRegistry(t *testing.T) {
+	vars := variables.NewEngineVariables()
+	vars.System = legacyBinlogRegistry{vars.System}
+	ctx := sql.NewContextWithVariables(context.Background(), vars)
+	require.ErrorContains(t, assignSystemVariables(ctx, vars.System, map[string]any{"server_id": uint32(3)}), "does not support context-aware assignment")
+}
+
+type uncomparableBinlogRegistry struct {
+	sql.ContextAwareSystemVariableRegistry
+	marker map[string]bool
+}
+
+func TestBinlogVariableAssignmentRejectsUncomparableRegistry(t *testing.T) {
+	vars := variables.NewEngineVariables()
+	vars.System = uncomparableBinlogRegistry{ContextAwareSystemVariableRegistry: vars.System.(sql.ContextAwareSystemVariableRegistry), marker: map[string]bool{}}
+	ctx := sql.NewContextWithVariables(context.Background(), vars)
+	require.ErrorContains(t, assignSystemVariables(ctx, vars.System, map[string]any{"server_id": uint32(3)}), "does not match")
+}

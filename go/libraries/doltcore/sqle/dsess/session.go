@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -26,6 +27,7 @@ import (
 
 	"github.com/cockroachdb/apd/v3"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -161,14 +163,18 @@ var _ sql.TransactionSession = (*DoltSession)(nil)
 var _ expranalysis.SessionDbProvider = (*DoltSession)(nil)
 var _ branch_control.ContextConvertible = (*DoltSession)(nil)
 
-// DefaultSession creates a DoltSession with default values
+// DefaultSession creates a standalone DoltSession with fresh GMS definitions.
+// It cannot attach to an existing engine. Engine callers should pass their Dolt
+// bundle to DefaultSessionWithVariables.
 func DefaultSession(pro DoltDatabaseProvider, sessFunc WriteSessFunc) *DoltSession {
-	return DefaultSessionWithVariables(pro, sessFunc, nil)
+	return DefaultSessionWithVariables(pro, sessFunc, variables.NewEngineVariables())
 }
 
 // DefaultSessionWithVariables creates a default session bound to an engine.
-// A nil bundle uses the default GMS session behavior.
 func DefaultSessionWithVariables(pro DoltDatabaseProvider, sessFunc WriteSessFunc, vars *sql.EngineVariables) *DoltSession {
+	if !completeEngineVariableBundle(vars) {
+		panic("DefaultSessionWithVariables requires a complete engine variable bundle")
+	}
 	return &DoltSession{
 		Session:          sql.NewBaseSessionWithVariables(vars),
 		username:         "",
@@ -185,10 +191,9 @@ func DefaultSessionWithVariables(pro DoltDatabaseProvider, sessFunc WriteSessFun
 	}
 }
 
-// NewDetachedSession returns a DoltSession backed by a fresh sql.BaseSession
-// rather than one supplied by a client connection. Use it when an external
-// session manager owns the DoltSession lifecycle and SQL requests run against
-// a *sql.Context pointing at this session instead of a per-connection one.
+// NewDetachedSession returns a DoltSession with fresh GMS definitions. It
+// cannot attach to an existing engine. Use NewDetachedSessionWithVariables
+// when an external session manager owns the DoltSession lifecycle.
 func NewDetachedSession(
 	pro DoltDatabaseProvider,
 	conf config.ReadWriteConfig,
@@ -198,7 +203,7 @@ func NewDetachedSession(
 	gcSafepointController *gcctx.GCSafepointController,
 	branchActivityTracker *doltdb.BranchActivityTracker,
 ) (*DoltSession, error) {
-	return NewDetachedSessionWithVariables(pro, conf, branchController, statsProvider, writeSessProv, gcSafepointController, branchActivityTracker, nil)
+	return NewDetachedSessionWithVariables(pro, conf, branchController, statsProvider, writeSessProv, gcSafepointController, branchActivityTracker, variables.NewEngineVariables())
 }
 
 // NewDetachedSessionWithVariables constructs a detached session against the
@@ -213,6 +218,9 @@ func NewDetachedSessionWithVariables(
 	branchActivityTracker *doltdb.BranchActivityTracker,
 	vars *sql.EngineVariables,
 ) (*DoltSession, error) {
+	if !completeEngineVariableBundle(vars) {
+		return nil, fmt.Errorf("NewDetachedSessionWithVariables requires a complete engine variable bundle")
+	}
 	return NewDoltSession(
 		sql.NewBaseSessionWithVariables(vars),
 		pro,
@@ -223,6 +231,23 @@ func NewDetachedSessionWithVariables(
 		gcSafepointController,
 		branchActivityTracker,
 	)
+}
+
+func completeEngineVariableBundle(vars *sql.EngineVariables) bool {
+	return vars != nil && !nilVariableRegistry(vars.System) && !nilVariableRegistry(vars.Status)
+}
+
+func nilVariableRegistry(registry any) bool {
+	if registry == nil {
+		return true
+	}
+	v := reflect.ValueOf(registry)
+	switch v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return v.IsNil()
+	default:
+		return false
+	}
 }
 
 // NewDoltSession creates a DoltSession object from a standard sql.Session and 0 or more Database objects.
