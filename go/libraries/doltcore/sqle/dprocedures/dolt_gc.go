@@ -96,14 +96,14 @@ func (sc killConnectionsSafepointController) EstablishPreFinalizeSafepoint(ctx c
 	return nil
 }
 
-func checkEpochSame(origEpoch int) error {
+func checkEpochSame(ctx *sql.Context, origEpoch int) error {
 	// Here we need to sanity check role and epoch.
 	if origEpoch != -1 {
-		if _, role, ok := sql.SystemVariables.GetGlobal(dsess.DoltClusterRoleVariable); ok {
+		if _, role, ok := ctx.SystemVariables().GetGlobal(dsess.DoltClusterRoleVariable); ok {
 			if role.(string) != "primary" {
 				return fmt.Errorf("dolt_gc failed: when we began we were a primary in a cluster, but now our role is %s", role.(string))
 			}
-			_, epoch, ok := sql.SystemVariables.GetGlobal(dsess.DoltClusterRoleEpochVariable)
+			_, epoch, ok := ctx.SystemVariables().GetGlobal(dsess.DoltClusterRoleEpochVariable)
 			if !ok {
 				return fmt.Errorf("dolt_gc failed: when we began we were a primary in a cluster, but we can no longer read the cluster role epoch.")
 			}
@@ -118,7 +118,7 @@ func checkEpochSame(origEpoch int) error {
 }
 
 func (sc killConnectionsSafepointController) EstablishPostFinalizeSafepoint(ctx context.Context) error {
-	err := checkEpochSame(sc.origEpoch)
+	err := checkEpochSame(sc.callCtx, sc.origEpoch)
 	if err != nil {
 		return err
 	}
@@ -318,12 +318,12 @@ func RunDoltGC(ctx *sql.Context, ddb *doltdb.DoltDB, gcConfig chunks.GCConfig, d
 		// with killConnections safepoints should be safe now,
 		// but we retain this legacy behavior for now.
 		origepoch := -1
-		if _, role, ok := sql.SystemVariables.GetGlobal(dsess.DoltClusterRoleVariable); ok {
+		if _, role, ok := ctx.SystemVariables().GetGlobal(dsess.DoltClusterRoleVariable); ok {
 			// TODO: magic constant...
 			if role.(string) != "primary" {
 				return fmt.Errorf("cannot run a full dolt_gc() while cluster replication is enabled and role is %s; must be the primary", role.(string))
 			}
-			_, epoch, ok := sql.SystemVariables.GetGlobal(dsess.DoltClusterRoleEpochVariable)
+			_, epoch, ok := ctx.SystemVariables().GetGlobal(dsess.DoltClusterRoleEpochVariable)
 			if !ok {
 				return fmt.Errorf("internal error: cannot run a full dolt_gc(); cluster replication is enabled but could not read %s", dsess.DoltClusterRoleEpochVariable)
 			}

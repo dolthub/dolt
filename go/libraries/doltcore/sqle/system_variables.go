@@ -677,7 +677,12 @@ func newInlineDoltSystemVariables() []sql.SystemVariable {
 }
 
 func ReadReplicaForcePull() bool {
-	_, forcePull, ok := sql.SystemVariables.GetGlobal(dsess.ReadReplicaForcePull)
+	return ReadReplicaForcePullWithRegistry(sql.SystemVariables)
+}
+
+// ReadReplicaForcePullWithRegistry reads the current setting from an engine's registry.
+func ReadReplicaForcePullWithRegistry(vars sql.SystemVariableRegistry) bool {
+	_, forcePull, ok := vars.GetGlobal(dsess.ReadReplicaForcePull)
 	if !ok {
 		panic("dolt system variables not loaded")
 	}

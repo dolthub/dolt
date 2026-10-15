@@ -112,8 +112,17 @@ func RunAutoIncrementTrackerLockModeTest(t *testing.T, harness DoltEnginetestHar
 // In a real use case, these interleaved operations would be happening in different sessions on different threads.
 // In order to make the test behave predictably, we manually interleave the two iterators.
 func testAutoIncrementTrackerWithLockMode(t *testing.T, harness DoltEnginetestHarness, lockMode int64) {
-	err := sql.SystemVariables.AssignValues(map[string]interface{}{"innodb_autoinc_lock_mode": lockMode})
-	require.NoError(t, err)
+	harness = harness.NewHarness(t)
+	if localHarness, ok := harness.(*DoltHarness); ok {
+		vars := sqle.NewEngineVariables()
+		localHarness.WithEngineVariables(vars)
+		ctx := sql.NewContextWithVariables(context.Background(), vars)
+		err := vars.System.(sql.ContextAwareSystemVariableRegistry).AssignValuesWithContext(ctx, map[string]interface{}{"innodb_autoinc_lock_mode": lockMode})
+		require.NoError(t, err)
+	} else {
+		// External harnesses use the default registry.
+		require.NoError(t, sql.SystemVariables.AssignValues(map[string]interface{}{"innodb_autoinc_lock_mode": lockMode}))
+	}
 
 	setupScripts := []setup.SetupScript{[]string{
 		"CREATE TABLE test1 (pk int NOT NULL PRIMARY KEY AUTO_INCREMENT,c0 int,index t1_c_index (c0));",
@@ -125,7 +134,6 @@ func testAutoIncrementTrackerWithLockMode(t *testing.T, harness DoltEnginetestHa
 		"CREATE VIEW sequence5bit AS SELECT b1.v + 2*b2.v + 4*b3.v + 8*b4.v + 16*b5.v AS v from bin b1, bin b2, bin b3, bin b4, bin b5;",
 	}}
 
-	harness = harness.NewHarness(t)
 	defer harness.Close()
 	harness.Setup(setup.MydbData, setupScripts)
 	e := mustNewEngine(t, harness)
