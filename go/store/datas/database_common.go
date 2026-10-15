@@ -746,15 +746,24 @@ func (w WorkingSetUpdate) build(ctx context.Context, db valueBuilder) (writtenDa
 	}, nil
 }
 
+// CommitUpdate updates a branch head. It uses two locks: the branch head value that was used to prepare the
+// commit provided, as well as the working set value that was included in that commit. Both must be current for the
+// commit to succeed.
 type CommitUpdate struct {
+	// CommitDS is the Dataset to update with a new commit.
 	CommitDS Dataset
 	// ExpectedHead, when nonzero, must match the dataset snapshot used to build the commit.
-	// Publication then checks that this snapshot is still current.
+	// Without this check, it would be possible for another writer to change the branch head before we acquire the update
+	// lock, which invalidates the invariant that we prepared a commit value using the current HEAD as parent.
 	ExpectedHead hash.Hash
-	CommitOpts   CommitOptions
+	// CommitOpts are the options used to build the commit.
+	CommitOpts CommitOptions
+	// WorkingSetDS, when non-empty, is the Dataset containing the working set that was used to build the commit.
 	WorkingSetDS string
-	PrevWsHash   hash.Hash
-	RootVal      types.Value
+	// PrevWsHash, when nonzero, must match the current working set at write time for commit to succeed.
+	PrevWsHash hash.Hash
+	// RootVal is the value to commit.
+	RootVal types.Value
 }
 
 func (c CommitUpdate) DatasetID() string {
@@ -762,11 +771,6 @@ func (c CommitUpdate) DatasetID() string {
 }
 
 func (c CommitUpdate) build(ctx context.Context, db valueBuilder) (writtenDatasetUpdate, error) {
-	expected, _ := c.CommitDS.MaybeHeadAddr()
-	if !c.ExpectedHead.IsEmpty() && expected != c.ExpectedHead {
-		return writtenDatasetUpdate{}, ErrMergeNeeded
-	}
-
 	// Prepend the current head hash to the list of parents if one was provided. This is only necessary if parents were
 	// provided because we fill it in automatically in buildNewCommit otherwise.
 	if len(c.CommitOpts.Parents) > 0 && c.CommitOpts.AmendedCommit.IsEmpty() && !c.CommitOpts.Force {
@@ -796,11 +800,14 @@ func (c CommitUpdate) build(ctx context.Context, db valueBuilder) (writtenDatase
 			OnFailure:    ErrOptimisticLockFailed,
 		})
 	}
-	preconditions = append(preconditions, datasetCommitPrecondition{
-		DatasetID:    c.DatasetID(),
-		ExpectedHead: expected,
-		OnFailure:    ErrMergeNeeded,
-	})
+
+	if !c.ExpectedHead.IsEmpty() {
+		preconditions = append(preconditions, datasetCommitPrecondition{
+			DatasetID:    c.DatasetID(),
+			ExpectedHead: c.ExpectedHead,
+			OnFailure:    ErrMergeNeeded,
+		})
+	}
 
 	return writtenDatasetUpdate{
 		NewHead:       commitRef.TargetHash(),
