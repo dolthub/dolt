@@ -112,6 +112,11 @@ func Serve(
 	if cfg.Controller == nil {
 		cfg.Controller = svcs.NewController()
 	}
+	if cfg.EngineVariables == nil {
+		isolated := *cfg
+		isolated.EngineVariables = sqle.NewEngineVariables()
+		cfg = &isolated
+	}
 
 	ConfigureServices(cfg)
 
@@ -127,21 +132,19 @@ func ConfigureServices(
 	cfg *Config,
 ) {
 	controller := cfg.Controller
-	vars := sql.SystemVariables
-	if cfg.EngineVariables != nil {
-		vars = cfg.EngineVariables.System
+	if cfg.EngineVariables == nil {
+		cfg.EngineVariables = sqle.NewEngineVariables()
 	}
+	vars := cfg.EngineVariables.System
 	ValidateConfigStep := &svcs.AnonService{
 		InitF: func(context.Context) error {
 			return servercfg.ValidateConfig(cfg.ServerConfig)
 		},
 	}
 	controller.Register(ValidateConfigStep)
-	if cfg.EngineVariables != nil {
-		controller.Register(&svcs.AnonService{InitF: func(ctx context.Context) error {
-			return servercfg.ApplySystemVariables(sql.NewContextWithVariables(ctx, cfg.EngineVariables), cfg.ServerConfig, vars)
-		}})
-	}
+	controller.Register(&svcs.AnonService{InitF: func(ctx context.Context) error {
+		return servercfg.ApplySystemVariables(sql.NewContextWithVariables(ctx, cfg.EngineVariables), cfg.ServerConfig, vars)
+	}})
 
 	lgr := logrus.StandardLogger()
 	lgr.SetOutput(cli.CliErr)
@@ -182,7 +185,7 @@ func ConfigureServices(
 	InitMultiEnv := &svcs.AnonService{
 		InitF: func(ctx context.Context) (err error) {
 			mrEnv, err = env.MultiEnvForDirectory(ctx, fs, cfg.DoltEnv)
-			if err == nil && cfg.EngineVariables != nil {
+			if err == nil {
 				err = mrEnv.Iter(func(name string, _ *env.DoltEnv) (bool, error) {
 					dsess.DefineSystemVariablesForDBInRegistry(vars, name)
 					return false, nil
@@ -220,20 +223,11 @@ func ConfigureServices(
 	// prevent races and to prevent different components seeing different configured variables.
 	PersistNondeterministicSystemVarDefaults := &svcs.AnonService{
 		InitF: func(ctx context.Context) error {
-			var err error
-			if cfg.EngineVariables != nil {
-				err = dsess.PersistSystemVarDefaultsWithRegistry(vars, cfg.DoltEnv)
-			} else {
-				err = dsess.PersistSystemVarDefaults(cfg.DoltEnv)
-			}
+			err := dsess.PersistSystemVarDefaultsWithRegistry(vars, cfg.DoltEnv)
 			if err != nil {
 				logrus.Errorf("unable to persist system variable defaults: %v", err)
 			}
-			if cfg.EngineVariables != nil {
-				err = dsess.InitPersistedSystemVarsWithRegistry(vars, cfg.DoltEnv)
-			} else {
-				err = dsess.InitPersistedSystemVars(cfg.DoltEnv)
-			}
+			err = dsess.InitPersistedSystemVarsWithRegistry(vars, cfg.DoltEnv)
 			if err != nil {
 				logrus.Errorf("unable to init persisted system variables: %v", err)
 			}

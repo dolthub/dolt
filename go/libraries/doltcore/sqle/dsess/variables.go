@@ -84,11 +84,6 @@ const (
 
 const URLTemplateDatabasePlaceholder = "{database}"
 
-// DefineSystemVariablesForDB defines per database dolt-session variables in the engine as necessary
-func DefineSystemVariablesForDB(name string) {
-	DefineSystemVariablesForDBInRegistry(sql.SystemVariables, name)
-}
-
 // DefineSystemVariablesForDBInRegistry defines the variables for one database
 // in the supplied engine registry.
 func DefineSystemVariablesForDBInRegistry(vars sql.SystemVariableRegistry, name string) {
@@ -206,12 +201,6 @@ func GetBooleanSystemVar(ctx *sql.Context, varName string) (bool, error) {
 	}
 
 	return i8 == int8(1), nil
-}
-
-// IgnoreReplicationErrors returns true if the dolt_skip_replication_errors system variable is set to true, which means
-// that errors that occur during replication should be logged and ignored.
-func IgnoreReplicationErrors() bool {
-	return IgnoreReplicationErrorsWithRegistry(sql.SystemVariables)
 }
 
 // IgnoreReplicationErrorsWithRegistry reads the current value from the owning engine.

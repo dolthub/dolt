@@ -143,6 +143,7 @@ var _ DoltEnginetestHarness = &DoltHarness{}
 func newDoltHarness(t *testing.T) *DoltHarness {
 	dh := &DoltHarness{
 		t:                     t,
+		variables:             sqle.NewEngineVariables(),
 		skippedQueries:        defaultSkippedQueries,
 		parallelism:           1,
 		branchActivityTracker: doltdb.NewBranchActivityTracker(context.Background(), true), // Default to enabled for tests

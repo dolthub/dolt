@@ -39,13 +39,8 @@ type BackgroundThreads interface {
 
 type RunAsyncThreads func(BackgroundThreads, func(context.Context) (*sql.Context, error)) error
 
-// GetCommitHooks creates a list of hooks to execute on database commit. Hooks that cannot be created because of an
-// error in configuration will not prevent the server from starting, and will instead log errors.
-func GetCommitHooks(ctx context.Context, nameSuffix string, dEnv *env.DoltEnv, logger io.Writer) ([]doltdb.CommitHook, RunAsyncThreads, error) {
-	return GetCommitHooksWithRegistry(ctx, nameSuffix, dEnv, logger, sql.SystemVariables)
-}
-
-// GetCommitHooksWithRegistry constructs hooks that retain one engine registry.
+// GetCommitHooksWithRegistry creates commit hooks that retain one engine registry.
+// Invalid configuration is logged and does not prevent the server from starting.
 func GetCommitHooksWithRegistry(ctx context.Context, nameSuffix string, dEnv *env.DoltEnv, logger io.Writer, vars sql.SystemVariableRegistry) ([]doltdb.CommitHook, RunAsyncThreads, error) {
 	postCommitHooks := make([]doltdb.CommitHook, 0)
 	hook, runThreads, err := getPushOnWriteHookWithRegistry(ctx, nameSuffix, dEnv, logger, vars)
@@ -87,10 +82,6 @@ func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEn
 // configured through sql SystemVariables. This is called both at
 // startup, for the entire set of databases, and is called when
 // we create new databases through |registerNewDatabases|.
-func applyReadReplicationConfigToDatabase(ctx context.Context, dEnv *env.DoltEnv, db dsess.SqlDatabase) (dsess.SqlDatabase, error) {
-	return applyReadReplicationConfigToDatabaseWithRegistry(ctx, dEnv, db, sql.SystemVariables)
-}
-
 func applyReadReplicationConfigToDatabaseWithRegistry(ctx context.Context, dEnv *env.DoltEnv, db dsess.SqlDatabase, vars sql.SystemVariableRegistry) (dsess.SqlDatabase, error) {
 	if _, remote, ok := vars.GetGlobal(dsess.ReadReplicaRemote); ok && remote != "" {
 		remoteName, ok := remote.(string)
@@ -105,10 +96,6 @@ func applyReadReplicationConfigToDatabaseWithRegistry(ctx context.Context, dEnv 
 		}
 	}
 	return db, nil
-}
-
-func ApplyReplicationConfig(ctx context.Context, mrEnv *env.MultiRepoEnv, logger io.Writer, dbs ...dsess.SqlDatabase) ([]dsess.SqlDatabase, RunAsyncThreads, error) {
-	return ApplyReplicationConfigWithRegistry(ctx, mrEnv, logger, sql.SystemVariables, dbs...)
 }
 
 // ApplyReplicationConfigWithRegistry constructs replication state using the

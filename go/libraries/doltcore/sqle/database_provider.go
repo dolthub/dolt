@@ -966,7 +966,7 @@ func NewConfigureReplicationDatabaseHook(bThreads *sql.BackgroundThreads, ctxF f
 			return err
 		}
 
-		commitHooks, startAsyncThreads, err := GetCommitHooks(ctx, "["+name+"]", newEnv, cli.CliErr)
+		commitHooks, startAsyncThreads, err := GetCommitHooksWithRegistry(ctx, "["+name+"]", newEnv, cli.CliErr, ctx.SystemVariables())
 		if err != nil {
 			return err
 		}
@@ -1355,7 +1355,7 @@ func (p *DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string
 	// Push replication is configured by InitDatabaseHooks, but pull-on-read
 	// replication is a special type of wrapper database, |ReadReplicaDatabase|.
 	// Transform the |db| into the replicating one if we need to.
-	sdb, err := applyReadReplicationConfigToDatabase(ctx, newEnv, db)
+	sdb, err := applyReadReplicationConfigToDatabaseWithRegistry(ctx, newEnv, db, ctx.SystemVariables())
 	if err != nil {
 		return err
 	}

@@ -351,7 +351,7 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootVal
 		return nil, nil, err
 	}
 
-	sess := dsess.DefaultSession(pro, writer.NewWriteSession)
+	sess := dsess.DefaultSessionWithVariables(pro, writer.NewWriteSession, dsqle.NewEngineVariables())
 
 	sqlCtx := sql.NewContext(ctx, sql.WithSession(sess))
 	err = sqlCtx.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, false)

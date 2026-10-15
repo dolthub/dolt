@@ -23,6 +23,7 @@ import (
 
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -114,15 +115,20 @@ func ExecuteSqlOnEngine(ctx *sql.Context, engine *sqle.Engine, statements string
 	return nil
 }
 
-func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.DoltDatabaseProvider, config config.ReadWriteConfig, statsPro sql.StatsProvider, gcSafepointController *gcctx.GCSafepointController) *sql.Context {
-	s, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, config, branch_control.CreateDefaultController(ctx), statsPro, writer.NewWriteSession, gcSafepointController, nil)
+func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.DoltDatabaseProvider, config config.ReadWriteConfig, statsPro sql.StatsProvider, gcSafepointController *gcctx.GCSafepointController, owner ...*sql.EngineVariables) *sql.Context {
+	vars := NewEngineVariables()
+	if len(owner) > 0 {
+		vars = owner[0]
+	}
+	s, err := dsess.NewDoltSession(sql.NewBaseSessionWithVariables(vars), pro, config, branch_control.CreateDefaultController(ctx), statsPro, writer.NewWriteSession, gcSafepointController, nil)
 	if err != nil {
 		panic(err)
 	}
 
 	s.SetCurrentDatabase("dolt")
-	return sql.NewContext(
+	return sql.NewContextWithVariables(
 		ctx,
+		vars,
 		sql.WithSession(s),
 	)
 }
@@ -136,10 +142,11 @@ func NewTestEngine(dEnv *env.DoltEnv, ctx context.Context, db dsess.SqlDatabase)
 	}
 	gcSafepointController := gcctx.NewGCSafepointController()
 
-	engine := sqle.NewDefault(pro)
+	vars := NewEngineVariables()
+	engine := sqle.New(analyzer.NewDefault(pro), &sqle.Config{EngineVariables: vars})
 
 	config, _ := dEnv.Config.GetConfig(env.GlobalConfig)
-	sqlCtx := NewTestSQLCtxWithProvider(ctx, pro, config, nil, gcSafepointController)
+	sqlCtx := NewTestSQLCtxWithProvider(ctx, pro, config, nil, gcSafepointController, vars)
 	sqlCtx.SetCurrentDatabase(db.Name())
 	return engine, sqlCtx, nil
 }

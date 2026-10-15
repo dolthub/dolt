@@ -950,12 +950,6 @@ func TestBlobs(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "md5_binary")
 		require.NoError(t, os.WriteFile(path, []byte{0xff, 0x00, 0x80, 'a', 'b', 'c'}, 0600))
-		_, oldSecureFilePriv, ok := sql.SystemVariables.GetGlobal("secure_file_priv")
-		require.True(t, ok)
-		require.NoError(t, sql.SystemVariables.AssignValues(map[string]interface{}{"secure_file_priv": dir}))
-		t.Cleanup(func() {
-			require.NoError(t, sql.SystemVariables.AssignValues(map[string]interface{}{"secure_file_priv": oldSecureFilePriv}))
-		})
 		script := queries.ScriptTest{
 			Name: "MD5 of binary file contents",
 			Assertions: []queries.ScriptTestAssertion{{
@@ -967,6 +961,9 @@ func TestBlobs(t *testing.T) {
 			t.Run(fmt.Sprintf("prepared=%t", prepared), func(t *testing.T) {
 				h := newDoltHarness(t)
 				defer h.Close()
+				vars := sqle.NewEngineVariables()
+				h.WithEngineVariables(vars)
+				require.NoError(t, vars.System.AssignValues(map[string]interface{}{"secure_file_priv": dir}))
 				if prepared {
 					enginetest.TestScriptPrepared(t, h, script)
 				} else {

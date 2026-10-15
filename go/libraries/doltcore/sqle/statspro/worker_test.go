@@ -701,20 +701,20 @@ func emptySetupDetail(t *testing.T, threads *sql.BackgroundThreads, memOnly bool
 
 	setTimers(t, ctx, 1*time.Millisecond, 100*time.Millisecond)
 	if memOnly {
-		sql.SystemVariables.AssignValues(map[string]interface{}{
+		ctx.SystemVariables().AssignValues(map[string]interface{}{
 			dsess.DoltStatsMemoryOnly: int8(1),
 		})
 	} else {
-		sql.SystemVariables.AssignValues(map[string]interface{}{
+		ctx.SystemVariables().AssignValues(map[string]interface{}{
 			dsess.DoltStatsMemoryOnly: int8(0),
 		})
 	}
 	if gcEnabled {
-		sql.SystemVariables.AssignValues(map[string]interface{}{
+		ctx.SystemVariables().AssignValues(map[string]interface{}{
 			dsess.DoltStatsGCEnabled: int8(1),
 		})
 	} else {
-		sql.SystemVariables.AssignValues(map[string]interface{}{
+		ctx.SystemVariables().AssignValues(map[string]interface{}{
 			dsess.DoltStatsGCEnabled: int8(0),
 		})
 	}
@@ -856,6 +856,7 @@ func executeQueryResults(ctx *sql.Context, eng *gms.Engine, query string) ([]sql
 }
 
 func newTestEngine(ctx context.Context, t *testing.T, dEnv *env.DoltEnv, threads *sql.BackgroundThreads) (*gms.Engine, *sql.Context) {
+	vars := sqle.NewEngineVariables()
 	pro, err := sqle.NewDoltDatabaseProviderWithDatabases("main", dEnv.FS, nil, nil, sql.EngineOverrides{})
 	if err != nil {
 		panic(err)
@@ -873,7 +874,7 @@ func newTestEngine(ctx context.Context, t *testing.T, dEnv *env.DoltEnv, threads
 
 	gcSafepointController := gcctx.NewGCSafepointController()
 
-	doltSession, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, dEnv.Config.WriteableConfig(), branch_control.CreateDefaultController(ctx), sc, writer.NewWriteSession, gcSafepointController, nil)
+	doltSession, err := dsess.NewDoltSession(sql.NewBaseSessionWithVariables(vars), pro, dEnv.Config.WriteableConfig(), branch_control.CreateDefaultController(ctx), sc, writer.NewWriteSession, gcSafepointController, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -882,7 +883,7 @@ func newTestEngine(ctx context.Context, t *testing.T, dEnv *env.DoltEnv, threads
 	sqlCtx.SetCurrentDatabase(mrEnv.GetFirstDatabase())
 
 	ctxGen := func(ctx context.Context) (*sql.Context, error) {
-		doltSession, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, dEnv.Config.WriteableConfig(), branch_control.CreateDefaultController(ctx), sc, writer.NewWriteSession, gcSafepointController, nil)
+		doltSession, err := dsess.NewDoltSession(sql.NewBaseSessionWithVariables(vars), pro, dEnv.Config.WriteableConfig(), branch_control.CreateDefaultController(ctx), sc, writer.NewWriteSession, gcSafepointController, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -893,8 +894,9 @@ func newTestEngine(ctx context.Context, t *testing.T, dEnv *env.DoltEnv, threads
 	pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, NewDropDatabaseHook(sc))
 
 	sqlEng := gms.New(analyzer.NewBuilder(pro).Build(), &gms.Config{
-		IsReadOnly:     false,
-		IsServerLocked: false,
+		IsReadOnly:      false,
+		IsServerLocked:  false,
+		EngineVariables: vars,
 	})
 
 	if err := sc.Init(sqlCtx, pro, ctxGen, pro.AllDatabases(sqlCtx)); err != nil {
@@ -906,17 +908,17 @@ func newTestEngine(ctx context.Context, t *testing.T, dEnv *env.DoltEnv, threads
 
 func setTimers(t *testing.T, ctx *sql.Context, jobI, gcI time.Duration) {
 	if jobI > 0 {
-		_, origJob, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsJobInterval)
-		sql.SystemVariables.SetGlobal(ctx, dsess.DoltStatsJobInterval, strconv.Itoa(int(jobI/time.Millisecond)))
+		_, origJob, _ := ctx.SystemVariables().GetGlobal(dsess.DoltStatsJobInterval)
+		ctx.SystemVariables().SetGlobal(ctx, dsess.DoltStatsJobInterval, strconv.Itoa(int(jobI/time.Millisecond)))
 		t.Cleanup(func() {
-			sql.SystemVariables.SetGlobal(ctx, dsess.DoltStatsJobInterval, origJob)
+			ctx.SystemVariables().SetGlobal(ctx, dsess.DoltStatsJobInterval, origJob)
 		})
 	}
 	if gcI > 0 {
-		_, origGc, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsGCInterval)
-		sql.SystemVariables.SetGlobal(ctx, dsess.DoltStatsGCInterval, strconv.Itoa(int(gcI/time.Millisecond)))
+		_, origGc, _ := ctx.SystemVariables().GetGlobal(dsess.DoltStatsGCInterval)
+		ctx.SystemVariables().SetGlobal(ctx, dsess.DoltStatsGCInterval, strconv.Itoa(int(gcI/time.Millisecond)))
 		t.Cleanup(func() {
-			sql.SystemVariables.SetGlobal(ctx, dsess.DoltStatsGCInterval, origGc)
+			ctx.SystemVariables().SetGlobal(ctx, dsess.DoltStatsGCInterval, origGc)
 		})
 	}
 }

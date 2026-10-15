@@ -18,6 +18,11 @@ func TestSequenceTrackerLockModeUsesOwningRegistry(t *testing.T) {
 
 	require.Equal(t, LockMode(0), currentLockMode(ctxA))
 	require.Equal(t, LockMode(2), currentLockMode(ctxB))
+	bootstrapCtx := sql.NewContextWithVariables(context.Background(), a)
+	bootstrapTracker, err := NewAutoIncrementTracker(bootstrapCtx, "bootstrap_db")
+	require.NoError(t, err)
+	defer bootstrapTracker.Close()
+	require.Equal(t, LockMode(0), bootstrapTracker.lockMode)
 
 	trackerA, err := NewAutoIncrementTracker(ctxA, "db")
 	require.NoError(t, err)

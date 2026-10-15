@@ -513,31 +513,21 @@ func runMain() int {
 	var mrEnv *env.MultiRepoEnv
 	var cliEngineVars *sql.EngineVariables
 	if needsDBLoad(cfg.subCommand) {
-		if initCliContext(cfg.subCommand) {
-			cliEngineVars = sqle.NewEngineVariables()
-		}
+		cliEngineVars = sqle.NewEngineVariables()
 		mrEnv, err = env.MultiEnvForDirectory(ctx, cfg.dataDirFS, dEnv)
 		if err != nil {
 			cli.PrintErrln("failed to load database names:", err.Error())
 			return 1
 		}
 		_ = mrEnv.Iter(func(dbName string, dEnv *env.DoltEnv) (stop bool, err error) {
-			dsess.DefineSystemVariablesForDB(dbName)
-			if cliEngineVars != nil {
-				dsess.DefineSystemVariablesForDBInRegistry(cliEngineVars.System, dbName)
-			}
+			dsess.DefineSystemVariablesForDBInRegistry(cliEngineVars.System, dbName)
 			return false, nil
 		})
 
 		// TODO: we set persisted vars here, and this should be deferred until after we know what command line arguments might change them
-		err = dsess.InitPersistedSystemVars(dEnv)
+		err = dsess.InitPersistedSystemVarsWithRegistry(cliEngineVars.System, dEnv)
 		if err != nil {
 			cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
-		}
-		if cliEngineVars != nil {
-			if err := dsess.InitPersistedSystemVarsWithRegistry(cliEngineVars.System, dEnv); err != nil {
-				cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
-			}
 		}
 	}
 
