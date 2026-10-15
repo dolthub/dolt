@@ -19,7 +19,6 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -156,7 +155,7 @@ var testCases = []testCase{
 }
 
 func TestRowMerge(t *testing.T) {
-	ctx := sql.NewEmptyContext()
+	ctx := newOwnedMergeContext()
 
 	tests := make([]rowMergeTest, len(testCases))
 	for i, t := range testCases {
