@@ -418,6 +418,11 @@ func (tx *DoltTransaction) commitHeads(
 		lockIDs[i] = baseDbName + "\u0000" + change.workingSet.Ref().String()
 	}
 
+	name, email, _, _, err := ResolveNameEmail(ctx, DoltCommitterName, DoltCommitterEmail)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	// All callers acquire branch locks in the same order.
 	// This makes deadlock between two transactions impossible.
 	sort.Strings(lockIDs)
@@ -429,11 +434,6 @@ func (tx *DoltTransaction) commitHeads(
 			return nil, nil, err
 		}
 		defer sess.Provider().TxLocks().Unlock(id)
-	}
-
-	name, email, _, _, err := ResolveNameEmail(ctx, DoltCommitterName, DoltCommitterEmail)
-	if err != nil {
-		return nil, nil, err
 	}
 
 	for attempt := 0; attempt < maxTxCommitRetries; attempt++ {
