@@ -6,10 +6,12 @@
 # more concerned with covering remotesrv functionality.
 
 load $BATS_TEST_DIRNAME/helper/common.bash
+load $BATS_TEST_DIRNAME/helper/remotesrv-common.bash
 
 remotesrv_pid=
 setup() {
     skiponwindows "tests are flaky on Windows"
+    setup_remotesrv_ports
     setup_common
 }
 
@@ -42,11 +44,11 @@ _do_read_from_remotesrv_repo_mode_scenario() {
     dolt add vals
     dolt commit -m 'initial vals.'
 
-    remotesrv --http-port 1234 --repo-mode &
+    remotesrv --http-port "$REMOTESRV_HTTP_PORT" --grpc-port "$REMOTESRV_GRPC_PORT" --repo-mode &
     remotesrv_pid=$!
 
     cd ../cloned
-    dolt clone http://localhost:50051/test-org/test-repo repo1
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo repo1
     cd repo1
     run dolt ls
     [[ "$output" =~ "vals" ]] || false
@@ -58,7 +60,7 @@ _do_read_from_remotesrv_repo_mode_scenario() {
     dolt sql -q 'insert into vals (i) values (6), (7), (8), (9), (10);'
     dolt commit -am 'add some vals'
 
-    remotesrv --http-port 1234 --repo-mode &
+    remotesrv --http-port "$REMOTESRV_HTTP_PORT" --grpc-port "$REMOTESRV_GRPC_PORT" --repo-mode &
     remotesrv_pid=$!
 
     cd ../cloned/repo1
@@ -90,11 +92,11 @@ _do_write_to_remotesrv_repo_mode_scenario() {
     dolt add vals
     dolt commit -m 'create vals table.'
 
-    remotesrv --http-port 1234 --repo-mode &
+    remotesrv --http-port "$REMOTESRV_HTTP_PORT" --grpc-port "$REMOTESRV_GRPC_PORT" --repo-mode &
     remotesrv_pid=$!
 
     cd ../cloned
-    dolt clone http://localhost:50051/test-org/test-repo repo1
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo repo1
     cd repo1
     dolt sql -q 'insert into vals values (1), (2), (3), (4), (5);'
     dolt commit -am 'insert some values'
@@ -125,11 +127,11 @@ _do_write_to_remotesrv_repo_mode_scenario() {
     dolt add vals
     dolt commit -m 'create vals table.'
 
-    remotesrv --http-port 1234 --repo-mode &
+    remotesrv --http-port "$REMOTESRV_HTTP_PORT" --grpc-port "$REMOTESRV_GRPC_PORT" --repo-mode &
     remotesrv_pid=$!
 
     cd ../cloned
-    dolt clone http://localhost:50051/test-org/test-repo repo1
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo repo1
     cd repo1
     dolt sql -q 'insert into vals values (1), (2), (3), (4), (5);'
     dolt commit -am 'insert some values'
@@ -154,11 +156,11 @@ _do_write_to_remotesrv_repo_mode_scenario() {
     dolt commit -m 'create vals table.'
     dolt sql -q 'insert into vals values (38320)' # Dirty the remote.
 
-    remotesrv --http-port 1234 --repo-mode &
+    remotesrv --http-port "$REMOTESRV_HTTP_PORT" --grpc-port "$REMOTESRV_GRPC_PORT" --repo-mode &
     remotesrv_pid=$!
 
     cd ../cloned
-    dolt clone http://localhost:50051/test-org/test-repo repo1
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo repo1
     cd repo1
     dolt sql -q 'insert into vals values (9778), (12433);'
     dolt commit -am 'insert two unique values'
@@ -192,11 +194,11 @@ _do_write_to_remotesrv_repo_mode_scenario() {
     dolt add vals
     dolt commit -m 'create vals table.'
 
-    remotesrv --http-port 1234 --repo-mode -read-only &
+    remotesrv --http-port "$REMOTESRV_HTTP_PORT" --grpc-port "$REMOTESRV_GRPC_PORT" --repo-mode -read-only &
     remotesrv_pid=$!
 
     cd ../cloned
-    dolt clone http://localhost:50051/test-org/test-repo repo1
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo repo1
     cd repo1
     dolt sql -q 'insert into vals values (1), (2), (3), (4), (5);'
     dolt commit -am 'insert some values'
@@ -219,11 +221,11 @@ _do_grpc_and_http_same_port_scenario() {
     dolt add vals
     dolt commit -m 'create vals table.'
 
-    remotesrv --grpc-port 1234 --http-port 1234 --repo-mode &
+    remotesrv --grpc-port "$REMOTESRV_HTTP_PORT" --http-port "$REMOTESRV_HTTP_PORT" --repo-mode &
     remotesrv_pid=$!
 
     cd ../cloned
-    dolt clone http://localhost:1234/test-org/test-repo repo1
+    dolt clone http://localhost:$REMOTESRV_HTTP_PORT/test-org/test-repo repo1
 }
 
 @test "remotesrv: can run grpc and http on same port, new RPC" {
