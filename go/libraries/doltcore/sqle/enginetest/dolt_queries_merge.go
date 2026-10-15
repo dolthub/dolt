@@ -1500,6 +1500,11 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:          "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
+				ExpectedErrStr: "cannot merge with uncommitted changes",
+			},
+			{Query: "COMMIT", SkipResultsCheck: true},
+			{
+				Query:          "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
 				ExpectedErrStr: "error: local changes would be stomped by merge:\n\ttest\n Please commit your changes before you merge.",
 			},
 			{

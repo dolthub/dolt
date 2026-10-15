@@ -138,6 +138,19 @@ func doDoltMerge(ctx *sql.Context, args []string) (string, int, int, string, err
 	}
 
 	if apr.Contains(cli.AbortParam) {
+		// Abort may discard edits on its target, but must not discard other working sets.
+		baseName, _ := doltdb.SplitRevisionDbName(dbName)
+		headRef, err := ws.Ref().ToHeadRef()
+		if err != nil {
+			return "", noConflictsOrViolations, threeWayMerge, "", err
+		}
+
+		for _, dirty := range sess.DirtyBranches() {
+			if !strings.EqualFold(dirty.DbName, baseName) || !strings.EqualFold(dirty.Branch, headRef.GetPath()) {
+				return "", noConflictsOrViolations, threeWayMerge, "", ErrUncommittedChanges.New()
+			}
+		}
+
 		if !ws.MergeActive() {
 			return "", noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("fatal: There is no merge to abort")
 		}
@@ -147,7 +160,7 @@ func doDoltMerge(ctx *sql.Context, args []string) (string, int, int, string, err
 			return "", noConflictsOrViolations, threeWayMerge, "", err
 		}
 
-		err := sess.SetWorkingSet(ctx, dbName, ws)
+		err = sess.SetWorkingSet(ctx, dbName, ws)
 		if err != nil {
 			return "", noConflictsOrViolations, threeWayMerge, "", err
 		}
@@ -208,6 +221,12 @@ func performMerge(
 	msg string,
 	skipVerification bool,
 ) (*doltdb.WorkingSet, string, int, int, string, error) {
+	// Merge can move HEAD and end the transaction. Check every working set before either
+	// mutation. This also covers merges performed by dolt_pull.
+	if len(sess.DirtyBranches()) != 0 {
+		return ws, "", noConflictsOrViolations, threeWayMerge, "", ErrUncommittedChanges.New()
+	}
+
 	// todo: allow merges even when an existing merge is uncommitted
 	if ws.MergeActive() {
 		return ws, "", noConflictsOrViolations, threeWayMerge, "", doltdb.ErrMergeActive
@@ -401,12 +420,7 @@ func executeFFMerge(ctx *sql.Context, dbName string, squash bool, ws *doltdb.Wor
 
 	// We only fully commit our transaction when we are not squashing.
 	if !squash {
-		// The purpose of this transaction is solely state management, to mark it as non-dirty after bringing it up
-		// up to date with the new branch head we just forwarded. There may still be other dirty working sets on other
-		// branches.
-		// TODO: merge is still always on a single branch, even though we now allow committing to multiple branches in a
-		//  single commit. This mismatch might not play well with committing to multiple branch heads in the same
-		//  transaction in some edge cases. Needs more thought.
+		// Persist the working set and end the transaction so the next statement sees the new HEAD.
 		err = sess.CommitWorkingSet(ctx, dbName, sess.GetTransaction())
 		if err != nil {
 			return nil, err

@@ -69,7 +69,7 @@ var DoltCommitAllTransactionTests = []queries.TransactionTest{
 			{Query: "/* client a */ select * from `mydb/b2`.t as of 'HEAD'", Expected: []sql.Row{{1, 0}}},
 		}},
 	{
-		Name: "fast-forward merge keeps other branch edits private and rollbackable",
+		Name: "merge rejects other branch edits without changing heads",
 		SetUpScript: []string{
 			"create table t (pk int primary key, v int)", "insert into t values (1, 0)",
 			"call dolt_commit('-Am', 'setup')", "call dolt_branch('b1')", "call dolt_branch('b2')",
@@ -82,16 +82,16 @@ var DoltCommitAllTransactionTests = []queries.TransactionTest{
 			{Query: "/* client b */ start transaction", SkipResultsCheck: true},
 			{Query: "/* client b */ insert into `mydb/b2`.t values (4, 40)", SkipResultsCheck: true},
 			{Query: "/* client b */ commit", SkipResultsCheck: true},
-			{Query: "/* client a */ call dolt_merge('b1')", SkipResultsCheck: true},
-			{Query: "/* client a */ select * from `mydb/b2`.t order by pk", Expected: []sql.Row{{1, 0}, {3, 30}, {4, 40}}},
+			{Query: "/* client a */ call dolt_merge('b1')", ExpectedErrStr: "cannot merge with uncommitted changes"},
+			{Query: "/* client a */ select * from `mydb/b2`.t order by pk", Expected: []sql.Row{{1, 0}, {3, 30}}},
 			{Query: "/* client b */ select * from `mydb/b2`.t order by pk", Expected: []sql.Row{{1, 0}, {4, 40}}},
 			{Query: "/* client a */ rollback", SkipResultsCheck: true},
 			{Query: "/* client a */ select * from `mydb/b2`.t order by pk", Expected: []sql.Row{{1, 0}, {4, 40}}},
-			{Query: "/* client a */ select * from t as of 'HEAD' order by pk", Expected: []sql.Row{{1, 0}, {2, 20}}},
+			{Query: "/* client a */ select * from t as of 'HEAD' order by pk", Expected: []sql.Row{{1, 0}}},
 		},
 	},
 	{
-		Name: "fast-forward merge preserves other staged edits for a later commit",
+		Name: "merge rejection preserves other staged edits for a later commit",
 		SetUpScript: []string{
 			"create table t (pk int primary key, v int)", "insert into t values (1, 0)",
 			"call dolt_commit('-Am', 'setup')", "call dolt_branch('b1')", "call dolt_branch('b2')",
@@ -104,7 +104,7 @@ var DoltCommitAllTransactionTests = []queries.TransactionTest{
 			{Query: "/* client a */ insert into t values (3, 30)", SkipResultsCheck: true},
 			{Query: "/* client a */ call dolt_add('.')", SkipResultsCheck: true},
 			{Query: "/* client a */ use mydb", SkipResultsCheck: true},
-			{Query: "/* client a */ call dolt_merge('b1')", SkipResultsCheck: true},
+			{Query: "/* client a */ call dolt_merge('b1')", ExpectedErrStr: "cannot merge with uncommitted changes"},
 			{Query: "/* client b */ start transaction", SkipResultsCheck: true},
 			{Query: "/* client b */ insert into `mydb/b2`.t values (4, 40)", SkipResultsCheck: true},
 			{Query: "/* client b */ commit", SkipResultsCheck: true},
@@ -176,7 +176,7 @@ var DoltCommitAllTests = []queries.ScriptTest{
 			{Query: "select count(*) = @before_count from `mydb/b1`.dolt_log", Expected: []sql.Row{{true}}},
 			{Query: "select count(*) = @before_count from `mydb/b2`.dolt_log", Expected: []sql.Row{{true}}},
 		}},
-	{Name: "fast-forward merge preserves other dirty branch working sets",
+	{Name: "merge requires every working set to be transactionally clean",
 		SetUpScript: []string{
 			"create table t (pk int primary key, v int)",
 			"insert into t values (1, 0)",
@@ -191,6 +191,10 @@ var DoltCommitAllTests = []queries.ScriptTest{
 			"insert into `mydb/b2`.t values (3, 30)",
 		},
 		Assertions: []queries.ScriptTestAssertion{
+			{Query: "call dolt_merge('b1')", ExpectedErrStr: "cannot merge with uncommitted changes"},
+			{Query: "select * from t order by pk", Expected: []sql.Row{{1, 0}}},
+			{Query: "select * from `mydb/b2`.t order by pk", Expected: []sql.Row{{1, 0}, {3, 30}}},
+			{Query: "commit", SkipResultsCheck: true},
 			{Query: "call dolt_merge('b1')", SkipResultsCheck: true},
 			{Query: "select * from t order by pk", Expected: []sql.Row{{1, 0}, {2, 20}}},
 			{Query: "select * from `mydb/b2`.t order by pk", Expected: []sql.Row{{1, 0}, {3, 30}}},

@@ -837,8 +837,8 @@ func (d *DoltSession) IsBranchDirty(dbName, branch string) bool {
 	return ok && branchState.dirty
 }
 
-// CommitWorkingSet commits the named working set without creating a new dolt commit. Changes on other
-// branches remain uncommitted and are carried into a new transaction.
+// CommitWorkingSet commits the named working set without creating a new dolt commit.
+// No other working set may have pending transaction changes.
 // Clients should typically use CommitTransaction, which performs additional checks, instead of this method.
 func (d *DoltSession) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.Transaction) error {
 	state, ok, err := d.lookupDbState(ctx, dbName)
@@ -849,47 +849,18 @@ func (d *DoltSession) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.T
 		return sql.ErrDatabaseNotFound.New(dbName)
 	}
 
+	for _, dirty := range d.dirtyWorkingSets() {
+		if dirty != state {
+			return ErrDirtyWorkingSets
+		}
+	}
+
 	_, err = d.commitBranchStates(ctx, []*branchState{state}, tx, nil)
 	if err != nil {
 		return err
 	}
 
 	d.notifyDoltgresTransactionCommitted()
-	remaining := d.dirtyWorkingSets()
-	if len(remaining) == 0 {
-		return nil
-	}
-
-	// A merge can commit one branch while others still have pending edits. Preserve those edits across
-	// the transaction boundary, rebasing them onto the new snapshot so concurrent writes aren't lost.
-	dtx := tx.(*DoltTransaction) // checked by commitBranchStates
-	if _, err := d.StartTransaction(ctx, dtx.tCharacteristic); err != nil {
-		return err
-	}
-
-	for _, branch := range remaining {
-		name := branch.RevisionDbName()
-		current, _, err := d.lookupDbState(ctx, name)
-		if err != nil {
-			return err
-		}
-
-		start := dtx.dbStartPoints[strings.ToLower(branch.dbState.dbName)]
-		ancestor, err := start.db.ResolveWorkingSetAtRoot(ctx, branch.WorkingSet().Ref(), start.rootHash)
-		if err != nil {
-			return err
-		}
-
-		ws, err := dtx.mergeRoots(ctx, name, ancestor, current.WorkingSet(), branch.WorkingSet(), branch.EditOpts())
-		if err != nil {
-			return err
-		}
-
-		if err := d.SetWorkingSet(ctx, name, ws); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
