@@ -86,10 +86,16 @@ const URLTemplateDatabasePlaceholder = "{database}"
 
 // DefineSystemVariablesForDB defines per database dolt-session variables in the engine as necessary
 func DefineSystemVariablesForDB(name string) {
+	DefineSystemVariablesForDBInRegistry(sql.SystemVariables, name)
+}
+
+// DefineSystemVariablesForDBInRegistry defines the variables for one database
+// in the supplied engine registry.
+func DefineSystemVariablesForDBInRegistry(vars sql.SystemVariableRegistry, name string) {
 	name, _ = doltdb.SplitRevisionDbName(name)
 
-	if _, _, ok := sql.SystemVariables.GetGlobal(name + HeadKeySuffix); !ok {
-		sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
+	if _, _, ok := vars.GetGlobal(name + HeadKeySuffix); !ok {
+		vars.AddSystemVariables([]sql.SystemVariable{
 			&sql.MysqlSystemVariable{
 				Name:              HeadRefKey(name),
 				Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Session),

@@ -85,12 +85,14 @@ type SqlEngineConfig struct {
 	Bulk                       bool
 	JwksConfig                 []servercfg.JwksConfig
 	SystemVariables            SystemVariables
-	ClusterController          *cluster.Controller
-	AutoGCController           *sqle.AutoGCController
-	BinlogReplicaController    binlogreplication.BinlogReplicaController
-	EventSchedulerStatus       eventscheduler.SchedulerStatus
-	BranchActivityTracking     bool
-	EngineOverrides            sql.EngineOverrides
+	// EngineVariables holds a bundle initialized before engine construction.
+	EngineVariables         *sql.EngineVariables
+	ClusterController       *cluster.Controller
+	AutoGCController        *sqle.AutoGCController
+	BinlogReplicaController binlogreplication.BinlogReplicaController
+	EventSchedulerStatus    eventscheduler.SchedulerStatus
+	BranchActivityTracking  bool
+	EngineOverrides         sql.EngineOverrides
 
 	// DBLoadParams are optional parameters passed through to database loading for local file-backed databases.
 	// These are merged into the params map used by doltdb/env load routines.
