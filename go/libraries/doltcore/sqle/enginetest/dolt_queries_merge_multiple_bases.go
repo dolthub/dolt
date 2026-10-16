@@ -315,7 +315,8 @@ func longRunningConflictSetup() []string {
 // AllMergeMultipleBasesScripts returns the merges with several merge bases and the resolutions of their conflicts.
 func AllMergeMultipleBasesScripts() []queries.ScriptTest {
 	var scripts []queries.ScriptTest
-	for _, list := range [][]queries.ScriptTest{MergeMultipleBasesScripts, MergeMultipleBasesResolveOursScripts} {
+	for _, list := range [][]queries.ScriptTest{MergeMultipleBasesScripts, MergeMultipleBasesResolveOursScripts,
+		MergeMultipleBasesResolveTheirsScripts} {
 		scripts = append(scripts, list...)
 	}
 	return scripts
@@ -336,6 +337,23 @@ var MergeMultipleBasesResolveOursScripts = []queries.ScriptTest{
 	resolvedMergeScript("merge bases that conflict on a deleted row, resolved differently: resolve with ours", deleteAgainstEditSetup(false, true), "y",
 		[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');"},
 		"SELECT * FROM t ORDER BY id;", []sql.Row{{2, "x", "y"}}),
+}
+
+// MergeMultipleBasesResolveTheirsScripts resolve each conflicting merge against a virtual merge base by taking theirs,
+// as `git checkout --theirs` does for the same history. Where ours deleted the row, theirs restores it.
+var MergeMultipleBasesResolveTheirsScripts = []queries.ScriptTest{
+	resolvedMergeScript("long-running schema branch with a conflict: resolve with theirs", longRunningConflictSetup(), "main",
+		[]string{"CALL DOLT_CONFLICTS_RESOLVE('--theirs', 't');"},
+		"SELECT id, v, w FROM t WHERE id IN (1, 3) ORDER BY id;", []sql.Row{{1, "main 6", "seed"}, {3, "main", "feature"}}),
+	resolvedMergeScript("conflicting merge bases, resolved differently: resolve with theirs", conflictingMergeBasesSetup("x wins", "y wins", false), "y",
+		[]string{"CALL DOLT_CONFLICTS_RESOLVE('--theirs', 't');"},
+		"SELECT * FROM t ORDER BY id;", []sql.Row{{1, "y wins", "seed"}, {2, "x", "y"}}),
+	resolvedMergeScript("conflicting merge bases, one side resolved to the old value: resolve with theirs", conflictingMergeBasesSetup("seed", "y", false), "y",
+		[]string{"CALL DOLT_CONFLICTS_RESOLVE('--theirs', 't');"},
+		"SELECT * FROM t ORDER BY id;", []sql.Row{{1, "y", "seed"}, {2, "x", "y"}}),
+	resolvedMergeScript("merge bases that conflict on a deleted row, resolved differently: resolve with theirs", deleteAgainstEditSetup(false, true), "y",
+		[]string{"CALL DOLT_CONFLICTS_RESOLVE('--theirs', 't');"},
+		"SELECT * FROM t ORDER BY id;", []sql.Row{{1, "y", "seed"}, {2, "x", "y"}}),
 }
 
 // MergeMultipleBasesScripts merge branches that have more than one merge base. The expected results are git's: each
