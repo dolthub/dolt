@@ -3273,8 +3273,24 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query:          "commit",
-				ExpectedErrStr: "no changes to dolt_commit on branch main",
+				Query:    "commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from `mydb/b1`.t1 as of 'HEAD' order by a",
+				Expected: []sql.Row{{1}, {2}},
+			},
+			{
+				Query:    "select count(*) from `mydb/b1`.dolt_log where message = 'Transaction commit'",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select count(*) from `mydb/b1`.dolt_log where message = 'Transaction commit'",
+				Expected: []sql.Row{{1}},
 			},
 			{
 				Query:    "select * from `mydb/main`.t1 order by a",
@@ -3328,7 +3344,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "call dolt_commit('-am', 'changes on b1')",
-				ExpectedErrStr: "nothing to commit", // this error is different from what you get with @@dolt_transaction_commit
+				ExpectedErrStr: "nothing to commit",
 			},
 			{
 				Query:    "use mydb/b1",
@@ -3360,8 +3376,24 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "insert into `mydb/b1`.t1 values (1)",
-				ExpectedErrStr: "no changes to dolt_commit on branch main",
+				Query:    "insert into `mydb/b1`.t1 values (1)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+			},
+			{
+				Query:    "select * from `mydb/b1`.t1 as of 'HEAD' order by a",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "select count(*) from `mydb/b1`.dolt_log where message = 'Transaction commit'",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select count(*) from `mydb/b1`.dolt_log where message = 'Transaction commit'",
+				Expected: []sql.Row{{1}},
 			},
 			{
 				Query:    "use mydb/b1",
@@ -3547,7 +3579,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "call dolt_commit('-am', 'changes on b1')",
-				ExpectedErrStr: "nothing to commit", // this error is different from what you get with @@dolt_transaction_commit
+				ExpectedErrStr: "nothing to commit",
 			},
 			{
 				Query:    "use db1/b1",
@@ -3564,6 +3596,46 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 			{
 				Query:    "select message from dolt_log order by date desc limit 1",
 				Expected: []sql.Row{{"other changes on b1"}},
+			},
+		},
+	},
+	{
+		Name: "empty dolt_commit with automatic commits and another dirty database",
+		SetUpScript: []string{
+			"create database db1",
+			"create table db1.t1 (a int)",
+			"use db1",
+			"call dolt_commit('-Am', 'new table')",
+			"call dolt_branch('b1')",
+			"use mydb",
+			"set autocommit = off",
+			"set dolt_transaction_commit = on",
+			"insert into `db1/b1`.t1 values (1)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_commit('-am', 'no changes here')",
+				ExpectedErrStr: "nothing to commit",
+			},
+			{
+				Query:    "select * from `db1/b1`.t1 as of 'HEAD'",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "select count(*) from `db1/b1`.dolt_log where message = 'Transaction commit'",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:          "call dolt_commit('-am', 'still no changes')",
+				ExpectedErrStr: "nothing to commit",
+			},
+			{
+				Query:    "commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select count(*) from `db1/b1`.dolt_log where message = 'Transaction commit'",
+				Expected: []sql.Row{{1}},
 			},
 		},
 	},
@@ -3644,8 +3716,24 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "insert into `db1/b1`.t1 values (1)",
-				ExpectedErrStr: "no changes to dolt_commit on database mydb",
+				Query:    "insert into `db1/b1`.t1 values (1)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+			},
+			{
+				Query:    "select * from `db1/b1`.t1 as of 'HEAD' order by a",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "select count(*) from `db1/b1`.dolt_log where message = 'Transaction commit'",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select count(*) from `db1/b1`.dolt_log where message = 'Transaction commit'",
+				Expected: []sql.Row{{1}},
 			},
 		},
 	},
@@ -3675,8 +3763,24 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query:          "commit",
-				ExpectedErrStr: "no changes to dolt_commit on database mydb",
+				Query:    "commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from `db1/b1`.t1 as of 'HEAD' order by a",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "select count(*) from `db1/b1`.dolt_log where message = 'Transaction commit'",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select count(*) from `db1/b1`.dolt_log where message = 'Transaction commit'",
+				Expected: []sql.Row{{1}},
 			},
 		},
 	},

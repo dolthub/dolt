@@ -565,8 +565,8 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) er
 
 // doltCommit performs a dolt commit for the current transaction.
 // If @@dolt_multi_branch_commit is enabled, all dirty working sets are committed with corresponding dolt commits on
-// their respective branch HEADS. Otherwise, only the current checked out branch is committed, and an error is
-// returned if there are any other dirty working sets.
+// their respective branch HEADS. Otherwise, at most one branch may be dirty, regardless of the selected database
+// or checked out branch.
 func (d *DoltSession) doltCommit(ctx *sql.Context, tx sql.Transaction, dirties []*branchState) error {
 	multiBranchCommit, err := GetBooleanSystemVar(ctx, DoltMultiBranchCommit)
 	if err != nil {
@@ -603,26 +603,26 @@ func (d *DoltSession) doltCommit(ctx *sql.Context, tx sql.Transaction, dirties [
 		return err
 	}
 
-	return d.doltCommitBranchStates(ctx, dbName, tx, dirties, commitStagedProps)
+	return d.doltCommitBranchStates(ctx, tx, dirties, commitStagedProps)
 }
 
 // doltCommitBranchStates performs a dolt commit for the given branch states. A new commit is created for each head
 // in addition to working sets being persisted.
 func (d *DoltSession) doltCommitBranchStates(
 	ctx *sql.Context,
-	dbName string,
 	tx sql.Transaction,
 	branches []*branchState,
 	commitStagedProps actions.CommitStagedProps,
 ) error {
-	baseName, _ := doltdb.SplitRevisionDbName(dbName)
+	var baseName string
 	pending := make([]*doltdb.PendingCommit, len(branches))
 
 	for i, branch := range branches {
-		if !strings.EqualFold(baseName, branch.dbState.dbName) {
+		if i > 0 && !strings.EqualFold(baseName, branch.dbState.dbName) {
 			return ErrMultipleDatabases
 		}
 
+		baseName = branch.dbState.dbName
 		name := branch.RevisionDbName()
 		if err := d.validateDoltCommit(name, branch); err != nil {
 			return err
