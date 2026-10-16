@@ -611,34 +611,22 @@ func (d *DoltSession) doltCommit(ctx *sql.Context, tx sql.Transaction, dirties [
 		return err
 	}
 
-	if len(dirties) > 1 {
-		return d.doltCommitAllDirtyBranches(ctx, dbName, tx, dirties, commitStagedProps)
-	}
-
-	if err := d.validateDoltCommit(dbName, dirties[0]); err != nil {
-		return err
-	}
-
-	pendingCommit, err := d.PendingCommitAllStaged(ctx, dbName, dirties[0], commitStagedProps)
-	if err != nil {
-		return err
-	}
-
-	_, err = d.commitBranchStates(ctx, dirties, tx, []*doltdb.PendingCommit{pendingCommit})
-	return err
+	return d.doltCommitBranchStates(ctx, dbName, tx, dirties, commitStagedProps)
 }
 
-func (d *DoltSession) doltCommitAllDirtyBranches(
+// doltCommitBranchStates performs a dolt commit for the given branch states. A new commit is created for each head
+// in addition to working sets being persisted.
+func (d *DoltSession) doltCommitBranchStates(
 	ctx *sql.Context,
 	dbName string,
 	tx sql.Transaction,
-	dirties []*branchState,
+	branches []*branchState,
 	commitStagedProps actions.CommitStagedProps,
 ) error {
 	baseName, _ := doltdb.SplitRevisionDbName(dbName)
-	pending := make([]*doltdb.PendingCommit, len(dirties))
+	pending := make([]*doltdb.PendingCommit, len(branches))
 
-	for i, branch := range dirties {
+	for i, branch := range branches {
 		if !strings.EqualFold(baseName, branch.dbState.dbName) {
 			return ErrMultipleDatabases
 		}
@@ -658,7 +646,7 @@ func (d *DoltSession) doltCommitAllDirtyBranches(
 		}
 	}
 
-	_, err := d.commitBranchStates(ctx, dirties, tx, pending)
+	_, err := d.commitBranchStates(ctx, branches, tx, pending)
 	return err
 }
 
