@@ -456,7 +456,7 @@ func (itr *prollyConflictRowIter) nextConflictVals(ctx *sql.Context) (confVal Co
 	confVal.Hash = ca.TheirRootIsh
 	confVal.Id = GetConflictId(ca.Key, confVal.Hash)
 
-	err = itr.loadTableMaps(ctx, ca.Metadata.BaseRootIsh, ca.TheirRootIsh)
+	err = itr.loadTableMaps(ctx, ca.Metadata, ca.TheirRootIsh)
 	if err != nil {
 		return ConflictVal{}, err
 	}
@@ -488,9 +488,9 @@ func (itr *prollyConflictRowIter) nextConflictVals(ctx *sql.Context) (confVal Co
 
 // loadTableMaps loads the maps specified in the metadata if they are different from
 // the currently loaded maps. |baseHash| and |theirHash| are table hashes.
-func (itr *prollyConflictRowIter) loadTableMaps(ctx *sql.Context, baseHash, theirHash hash.Hash) error {
-	if itr.baseHash.Compare(baseHash) != 0 {
-		rv, err := doltdb.LoadRootValueFromRootIshAddr(ctx, itr.vrw, itr.ns, baseHash)
+func (itr *prollyConflictRowIter) loadTableMaps(ctx *sql.Context, meta prolly.ConflictMetadata, theirHash hash.Hash) error {
+	if baseHash := meta.BaseRootIsh; itr.baseHash.Compare(baseHash) != 0 {
+		rv, err := doltdb.LoadConflictBaseRoot(ctx, itr.vrw, itr.ns, meta)
 		if err != nil {
 			return err
 		}
