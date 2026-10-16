@@ -534,9 +534,12 @@ func (d *DoltSession) clear() {
 // working sets, or may additionally create a new dolt commit for the current HEAD.
 func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error {
 	dirties := d.dirtyWorkingSets()
+
 	if TransactionsDisabled(ctx) || len(dirties) == 0 {
 		// Even without a batch to publish, a successful COMMIT ends the transaction.
-		// Head-only changes also need a new snapshot on the next statement.
+		// The engine clears transaction state only on COMMIT statements, but other kinds of statements that implicitly
+		// deal with transactions (e.g. merge) need this state clear here, so that they get a new transaction
+		// on the next statement.
 		d.notifyDoltgresTransactionCommitted()
 		ctx.SetTransaction(nil)
 		return nil
