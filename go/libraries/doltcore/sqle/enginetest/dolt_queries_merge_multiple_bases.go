@@ -149,9 +149,14 @@ var longRunningRows = []sql.Row{
 // b to 'y'. So x1 and y1 conflict on row 1's a, and row 2 merges cleanly to a = 'x', b = 'y'. x2 and y2 resolve
 // the conflict to |xResolution| and |yResolution|. With |xLater|, x3 then sets row 2's a to 'x later'.
 func conflictingMergeBasesSetup(xResolution, yResolution string, xLater bool) []string {
+	return conflictingMergeBasesSetupWithTable("CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100), b VARCHAR(100));",
+		xResolution, yResolution, xLater)
+}
+
+func conflictingMergeBasesSetupWithTable(createTable, xResolution, yResolution string, xLater bool) []string {
 	script := []string{
 		"SET @@autocommit = 0;",
-		"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100), b VARCHAR(100));",
+		createTable,
 		"INSERT INTO t VALUES (1, 'seed', 'seed'), (2, 'seed', 'seed');",
 		"CALL DOLT_COMMIT('-Am', 'c1');",
 		"CALL DOLT_BRANCH('x');",
@@ -180,6 +185,105 @@ func conflictingMergeBasesSetup(xResolution, yResolution string, xLater bool) []
 			"CALL DOLT_COMMIT('-am', 'x3');")
 	}
 	return script
+}
+
+// threeMergeBasesSetup builds two branches with three merge bases, p1, p2 and p3, two of which conflict:
+//
+//	c1 -- m1start -- merge p1 -- merge p2 -- merge p3 -- edit row 2    m1
+//	 |\-- m2start -- merge p3 -- merge p2 -- merge p1 -- edit row 3    m2
+//	 |\-- p1    sets rows 1 and 2's a to 'p1'
+//	 |\-- p2    sets rows 1 and 3's a to 'p2'
+//	 \-- p3     sets row 4's b to 'p3'
+//
+// c1 seeds rows 1 to 4 with a = b = 'seed'. p1 and p2 conflict on row 1's a, and m1 and m2 both resolve it to
+// 'resolved'. m1start and m2start add rows 10 and 20.
+func threeMergeBasesSetup() []string {
+	return []string{
+		"SET @@autocommit = 0;",
+		"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100), b VARCHAR(100));",
+		"INSERT INTO t VALUES (1, 'seed', 'seed'), (2, 'seed', 'seed'), (3, 'seed', 'seed'), (4, 'seed', 'seed');",
+		"CALL DOLT_COMMIT('-Am', 'c1');",
+		"CALL DOLT_BRANCH('p1');",
+		"CALL DOLT_BRANCH('p2');",
+		"CALL DOLT_BRANCH('p3');",
+		"CALL DOLT_BRANCH('m1');",
+		"CALL DOLT_BRANCH('m2');",
+		"CALL DOLT_CHECKOUT('p1');",
+		"UPDATE t SET a = 'p1' WHERE id IN (1, 2);",
+		"CALL DOLT_COMMIT('-am', 'p1');",
+		"CALL DOLT_CHECKOUT('p2');",
+		"UPDATE t SET a = 'p2' WHERE id IN (1, 3);",
+		"CALL DOLT_COMMIT('-am', 'p2');",
+		"CALL DOLT_CHECKOUT('p3');",
+		"UPDATE t SET b = 'p3' WHERE id = 4;",
+		"CALL DOLT_COMMIT('-am', 'p3');",
+		"CALL DOLT_CHECKOUT('m1');",
+		"INSERT INTO t VALUES (10, 'm1', NULL);",
+		"CALL DOLT_COMMIT('-am', 'm1start');",
+		"CALL DOLT_MERGE('p1', '-m', 'm1 merges p1');",
+		"CALL DOLT_MERGE('p2', '-m', 'm1 merges p2');",
+		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
+		"UPDATE t SET a = 'resolved' WHERE id = 1;",
+		"CALL DOLT_COMMIT('-am', 'm1 merges p2');",
+		"CALL DOLT_MERGE('p3', '-m', 'm1 merges p3');",
+		"UPDATE t SET b = 'm1' WHERE id = 2;",
+		"CALL DOLT_COMMIT('-am', 'm1 edits row 2');",
+		"CALL DOLT_CHECKOUT('m2');",
+		"INSERT INTO t VALUES (20, 'm2', NULL);",
+		"CALL DOLT_COMMIT('-am', 'm2start');",
+		"CALL DOLT_MERGE('p3', '-m', 'm2 merges p3');",
+		"CALL DOLT_MERGE('p2', '-m', 'm2 merges p2');",
+		"CALL DOLT_MERGE('p1', '-m', 'm2 merges p1');",
+		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
+		"UPDATE t SET a = 'resolved' WHERE id = 1;",
+		"CALL DOLT_COMMIT('-am', 'm2 merges p1');",
+		"UPDATE t SET b = 'm2' WHERE id = 3;",
+		"CALL DOLT_COMMIT('-am', 'm2 edits row 3');",
+		"CALL DOLT_CHECKOUT('m1');",
+	}
+}
+
+// deleteAgainstEditSetup builds a criss-cross whose merge bases, x1 and y1, conflict on whether row 1 exists:
+//
+//	c1 -- x1 -- x2    x
+//	  \-- y1 -- y2    y
+//	x2 = merge(x1, y1), y2 = merge(y1, x1)
+//
+// c1 seeds rows 1 and 2 with a = b = 'seed'. x1 deletes row 1 and sets row 2's a to 'x'; y1 sets row 1's a to 'y'
+// and row 2's b to 'y'. x2 and y2 resolve row 1 by deleting it, or by keeping y1's row, as |xKeeps| and |yKeeps| say.
+func deleteAgainstEditSetup(xKeeps, yKeeps bool) []string {
+	resolve := func(keep bool) string {
+		if keep {
+			return "REPLACE INTO t VALUES (1, 'y', 'seed');"
+		}
+		return "DELETE FROM t WHERE id = 1;"
+	}
+	return []string{
+		"SET @@autocommit = 0;",
+		"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100), b VARCHAR(100));",
+		"INSERT INTO t VALUES (1, 'seed', 'seed'), (2, 'seed', 'seed');",
+		"CALL DOLT_COMMIT('-Am', 'c1');",
+		"CALL DOLT_BRANCH('x');",
+		"CALL DOLT_BRANCH('y');",
+		"CALL DOLT_CHECKOUT('x');",
+		"DELETE FROM t WHERE id = 1;",
+		"UPDATE t SET a = 'x' WHERE id = 2;",
+		"CALL DOLT_COMMIT('-am', 'x1');",
+		"CALL DOLT_CHECKOUT('y');",
+		"UPDATE t SET a = 'y' WHERE id = 1;",
+		"UPDATE t SET b = 'y' WHERE id = 2;",
+		"CALL DOLT_COMMIT('-am', 'y1');",
+		"CALL DOLT_BRANCH('y1');",
+		"CALL DOLT_MERGE('x', '-m', 'y2');",
+		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
+		resolve(yKeeps),
+		"CALL DOLT_COMMIT('-am', 'y2');",
+		"CALL DOLT_CHECKOUT('x');",
+		"CALL DOLT_MERGE('y1', '-m', 'x2');",
+		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
+		resolve(xKeeps),
+		"CALL DOLT_COMMIT('-am', 'x2');",
+	}
 }
 
 // MergeMultipleBasesScripts merge branches that have more than one merge base. The expected results are git's: each
@@ -392,6 +496,89 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT base_a, our_a, their_a FROM dolt_conflicts_t;",
 				Expected: []sql.Row{{"seed", "seed", "y"}},
+			},
+		},
+	},
+	{
+		// The merge bases p1, p2 and p3 are merged together, oldest first, including p1 and p2's conflict.
+		Name:        "three merge bases: merge m2 into m1",
+		SetUpScript: threeMergeBasesSetup(),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('m2', '-m', 'merge m2 into m1');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query: "SELECT * FROM t ORDER BY id;",
+				Expected: []sql.Row{{1, "resolved", "seed"}, {2, "p1", "m1"}, {3, "p2", "m2"}, {4, "seed", "p3"},
+					{10, "m1", nil}, {20, "m2", nil}},
+			},
+		},
+	},
+	{
+		Name:        "merge bases that conflict on a deleted row, both deleting it: merge y into x",
+		SetUpScript: deleteAgainstEditSetup(false, false),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY id;",
+				Expected: []sql.Row{{2, "x", "y"}},
+			},
+		},
+	},
+	{
+		Name:        "merge bases that conflict on a deleted row, both keeping it: merge y into x",
+		SetUpScript: deleteAgainstEditSetup(true, true),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY id;",
+				Expected: []sql.Row{{1, "y", "seed"}, {2, "x", "y"}},
+			},
+		},
+	},
+	{
+		// x2 deleted row 1 and y2 kept it, so row 1 conflicts, as in git.
+		Name:        "merge bases that conflict on a deleted row, resolved differently: merge y into x",
+		SetUpScript: deleteAgainstEditSetup(false, true),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_id, base_a, our_id, their_id, their_a FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{1, "seed", nil, 1, "y"}},
+			},
+		},
+	},
+	{
+		// As "then an edit to a row they merged cleanly", with a secondary index on b that must match the rows.
+		Name: "conflicting merge bases with a secondary index: merge y into x",
+		SetUpScript: conflictingMergeBasesSetupWithTable(
+			"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100), b VARCHAR(100), INDEX idx_b (b));", "resolved", "resolved", true),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY id;",
+				Expected: []sql.Row{{1, "resolved", "seed"}, {2, "x later", "y"}},
+			},
+			{
+				Query:    "SELECT id FROM t FORCE INDEX (idx_b) WHERE b = 'y';",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "SELECT id FROM t FORCE INDEX (idx_b) WHERE b = 'seed';",
+				Expected: []sql.Row{{1}},
 			},
 		},
 	},
