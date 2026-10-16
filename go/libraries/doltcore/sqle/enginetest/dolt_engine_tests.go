@@ -1047,7 +1047,7 @@ func RunDoltMergeTests(t *testing.T, h DoltEnginetestHarness) {
 }
 
 func RunDoltMergeMultipleBasesTests(t *testing.T, h DoltEnginetestHarness) {
-	for _, script := range MergeMultipleBasesScripts {
+	for _, script := range AllMergeMultipleBasesScripts() {
 		func() {
 			h := h.NewHarness(t)
 			defer h.Close()
@@ -1058,7 +1058,7 @@ func RunDoltMergeMultipleBasesTests(t *testing.T, h DoltEnginetestHarness) {
 }
 
 func RunDoltMergeMultipleBasesPreparedTests(t *testing.T, h DoltEnginetestHarness) {
-	for _, script := range MergeMultipleBasesScripts {
+	for _, script := range AllMergeMultipleBasesScripts() {
 		func() {
 			h := h.NewHarness(t)
 			defer h.Close()
