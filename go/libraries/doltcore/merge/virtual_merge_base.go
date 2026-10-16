@@ -106,6 +106,16 @@ func ResolveMergeBase(ctx *sql.Context, left, right *doltdb.Commit) (*doltdb.Com
 	return base, err
 }
 
+// ResolveMergeBaseRootish returns the ancestor to merge |left| and |right| against: their merge base, or a virtual
+// merge base that also carries the cells where their merge bases conflicted.
+func ResolveMergeBaseRootish(ctx *sql.Context, left, right *doltdb.Commit) (doltdb.Rootish, error) {
+	base, bases, conflicted, err := resolveMergeBase(ctx, left, right)
+	if err != nil {
+		return nil, err
+	}
+	return mergeBaseRootish(base, bases, conflicted)
+}
+
 // resolveMergeBase returns the merge base of |left| and |right|, the best common ancestors it was built from, and the
 // cells where those ancestors conflicted.
 func resolveMergeBase(ctx *sql.Context, left, right *doltdb.Commit) (*doltdb.Commit, []*doltdb.Commit, conflictedCells, error) {

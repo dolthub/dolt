@@ -307,7 +307,7 @@ func resolveBranchesToRoots(ctx *sql.Context, db dsess.SqlDatabase, leftBranch, 
 		return rootInfo{}, err
 	}
 
-	ancCm, err := merge.ResolveMergeBase(ctx, leftCm, rightCm)
+	ancCm, err := merge.ResolveMergeBaseRootish(ctx, leftCm, rightCm)
 	if err != nil {
 		return rootInfo{}, err
 	}
@@ -320,7 +320,7 @@ func resolveBranchesToRoots(ctx *sql.Context, db dsess.SqlDatabase, leftBranch, 
 	if err != nil {
 		return rootInfo{}, err
 	}
-	baseRoot, err := ancCm.GetRootValue(ctx)
+	baseRoot, err := ancCm.ResolveRootValue(ctx)
 	if err != nil {
 		return rootInfo{}, err
 	}
@@ -343,7 +343,7 @@ func getTablesWithConflicts(ctx *sql.Context, db dsess.SqlDatabase, baseBranch, 
 		return nil, err
 	}
 
-	merger, err := merge.NewMerger(ri.leftRoot, ri.rightRoot, ri.baseRoot, ri.rightRoot, ri.baseRoot, ri.leftRoot.VRW(), ri.leftRoot.NodeStore())
+	merger, err := merge.NewMerger(ri.leftRoot, ri.rightRoot, ri.baseRoot, ri.rightRoot, ri.ancCm, ri.leftRoot.VRW(), ri.leftRoot.NodeStore())
 	if err != nil {
 		return nil, err
 	}
@@ -437,12 +437,16 @@ func getDataConflictsForTable(ctx *sql.Context, tm *merge.TableMerger, tblName d
 		return nil, err
 	}
 
+	cellChecker := tm.NewVirtualBaseConflictChecker(valueMerger, ancRows)
 	var numDataConflicts uint64 = 0
 	for {
 		diff, err := differ.Next(ctx)
 		if errors.Is(err, io.EOF) {
 			break
 		} else if err != nil {
+			return nil, err
+		}
+		if diff, err = cellChecker.Check(ctx, diff); err != nil {
 			return nil, err
 		}
 		switch diff.Op {

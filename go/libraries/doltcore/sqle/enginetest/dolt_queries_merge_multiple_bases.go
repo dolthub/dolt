@@ -500,6 +500,21 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		// The previews report the conflict that the merge finds.
+		Name:        "conflicting merge bases, one side resolved to the old value: preview merging y into x",
+		SetUpScript: conflictingMergeBasesSetup("seed", "y", false),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('x', 'y');",
+				Expected: []sql.Row{{"t", uint64(1), uint64(0)}},
+			},
+			{
+				Query:    "SELECT base_a, our_a, their_a FROM dolt_preview_merge_conflicts('x', 'y', 't');",
+				Expected: []sql.Row{{"seed", "seed", "y"}},
+			},
+		},
+	},
+	{
 		// The merge bases p1, p2 and p3 are merged together, oldest first, including p1 and p2's conflict.
 		Name:        "three merge bases: merge m2 into m1",
 		SetUpScript: threeMergeBasesSetup(),
