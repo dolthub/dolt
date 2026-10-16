@@ -476,6 +476,12 @@ func (rm *RootMerger) MaybeShortCircuit(ctx context.Context, tm *TableMerger, op
 		return nil, nil, &MergeStats{Operation: TableRemoved}, nil
 	}
 
+	// A table with conflicted cells in a virtual merge base needs a row merge even when one side matches the base,
+	// because those cells count as changed on both sides.
+	if len(tm.virtualBaseConflicts()) > 0 {
+		return nil, nil, nil, nil
+	}
+
 	// Changes only in root, table unmodified
 	if rightHash == baseHash {
 		return tm.leftTbl, tm.leftRootObj, &MergeStats{Operation: TableUnmodified}, nil
