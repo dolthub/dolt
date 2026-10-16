@@ -22,7 +22,8 @@ import (
 )
 
 // schemaBranchSetup builds the history from https://github.com/dolthub/dolt/issues/12050. A schema branch is merged
-// into main and feature, and never receives their changes, so main and feature have two merge bases, c2 and s2:
+// into main and feature, and never receives their changes, so main and feature have two merge bases, the fork point
+// and s2:
 //
 //	c1 -- c2 -- c3 -- m    main
 //	 |     \-- f1 -- f    feature
@@ -30,28 +31,51 @@ import (
 //	m = merge(c3, s2), f = merge(f1, s2)
 //
 // c2 seeds rows 1 and 2. c3 edits row 1 and deletes row 2. f1 adds row 50. s1 and s2 add columns n and m.
-var schemaBranchSetup = []string{
-	"CREATE TABLE t (id INT PRIMARY KEY, v VARCHAR(100));",
-	"CALL DOLT_COMMIT('-Am', 'c1');",
-	"CALL DOLT_BRANCH('schema');",
-	"INSERT INTO t VALUES (1, 'seed'), (2, 'seed');",
-	"CALL DOLT_COMMIT('-am', 'c2');",
-	"CALL DOLT_BRANCH('feature');",
-	"UPDATE t SET v = 'edited on main' WHERE id = 1;",
-	"DELETE FROM t WHERE id = 2;",
-	"CALL DOLT_COMMIT('-am', 'c3');",
-	"CALL DOLT_CHECKOUT('feature');",
-	"INSERT INTO t VALUES (50, 'feature');",
-	"CALL DOLT_COMMIT('-am', 'f1');",
-	"CALL DOLT_CHECKOUT('schema');",
-	"ALTER TABLE t ADD COLUMN n VARCHAR(100);",
-	"CALL DOLT_COMMIT('-am', 's1');",
-	"ALTER TABLE t ADD COLUMN m VARCHAR(100);",
-	"CALL DOLT_COMMIT('-am', 's2');",
-	"CALL DOLT_CHECKOUT('main');",
-	"CALL DOLT_MERGE('schema', '-m', 'm');",
-	"CALL DOLT_CHECKOUT('feature');",
-	"CALL DOLT_MERGE('schema', '-m', 'f');",
+//
+// |extraSeedCommits| adds c2-3, c2-4, ... after c2, each seeding one more row, and feature forks from the last of
+// them, which makes the fork point as tall as s2 (1) or taller (2). With |schemaFirst|, s1 and s2 are committed
+// before c2, so the fork point is newer than s2.
+func schemaBranchSetup(extraSeedCommits int, schemaFirst bool) []string {
+	schema := []string{
+		"CALL DOLT_CHECKOUT('schema');",
+		"ALTER TABLE t ADD COLUMN n VARCHAR(100);",
+		"CALL DOLT_COMMIT('-am', 's1');",
+		"ALTER TABLE t ADD COLUMN m VARCHAR(100);",
+		"CALL DOLT_COMMIT('-am', 's2');",
+		"CALL DOLT_CHECKOUT('main');",
+	}
+	script := []string{
+		"CREATE TABLE t (id INT PRIMARY KEY, v VARCHAR(100));",
+		"CALL DOLT_COMMIT('-Am', 'c1');",
+		"CALL DOLT_BRANCH('schema');",
+	}
+	if schemaFirst {
+		script = append(script, schema...)
+	}
+	script = append(script,
+		"INSERT INTO t VALUES (1, 'seed'), (2, 'seed');",
+		"CALL DOLT_COMMIT('-am', 'c2');")
+	for i := 0; i < extraSeedCommits; i++ {
+		script = append(script,
+			fmt.Sprintf("INSERT INTO t VALUES (%d, 'seed');", 3+i),
+			fmt.Sprintf("CALL DOLT_COMMIT('-am', 'c2-%d');", 3+i))
+	}
+	script = append(script,
+		"CALL DOLT_BRANCH('feature');",
+		"UPDATE t SET v = 'edited on main' WHERE id = 1;",
+		"DELETE FROM t WHERE id = 2;",
+		"CALL DOLT_COMMIT('-am', 'c3');",
+		"CALL DOLT_CHECKOUT('feature');",
+		"INSERT INTO t VALUES (50, 'feature');",
+		"CALL DOLT_COMMIT('-am', 'f1');")
+	if !schemaFirst {
+		script = append(script, schema...)
+	}
+	return append(script,
+		"CALL DOLT_CHECKOUT('main');",
+		"CALL DOLT_MERGE('schema', '-m', 'm');",
+		"CALL DOLT_CHECKOUT('feature');",
+		"CALL DOLT_MERGE('schema', '-m', 'f');")
 }
 
 // longRunningSchemaBranchSetup builds six cycles of the schema branch pattern, with feature merging main once after
@@ -121,7 +145,7 @@ var longRunningRows = []sql.Row{
 var MergeMultipleBasesScripts = []queries.ScriptTest{
 	{
 		Name:        "schema branch: merge main into feature",
-		SetUpScript: append(append([]string{}, schemaBranchSetup...), "CALL DOLT_CHECKOUT('feature');"),
+		SetUpScript: append(schemaBranchSetup(0, false), "CALL DOLT_CHECKOUT('feature');"),
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('main', '-m', 'merge main into feature');",
@@ -135,7 +159,7 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 	},
 	{
 		Name:        "schema branch: merge feature into main",
-		SetUpScript: append(append([]string{}, schemaBranchSetup...), "CALL DOLT_CHECKOUT('main');"),
+		SetUpScript: append(schemaBranchSetup(0, false), "CALL DOLT_CHECKOUT('main');"),
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('feature', '-m', 'merge feature into main');",
@@ -144,6 +168,53 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT * FROM t ORDER BY id;",
 				Expected: []sql.Row{{1, "edited on main", nil, nil}, {50, "feature", nil, nil}},
+			},
+		},
+	},
+	{
+		// The fork point c2-3 is as tall as s2.
+		Name:        "schema branch, fork point as tall as the schema tip: merge main into feature",
+		SetUpScript: append(schemaBranchSetup(1, false), "CALL DOLT_CHECKOUT('feature');"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('main', '-m', 'merge main into feature');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY id;",
+				Expected: []sql.Row{{1, "edited on main", nil, nil}, {3, "seed", nil, nil}, {50, "feature", nil, nil}},
+			},
+		},
+	},
+	{
+		// The fork point c2-4 is taller than s2.
+		Name:        "schema branch, fork point taller than the schema tip: merge feature into main",
+		SetUpScript: append(schemaBranchSetup(2, false), "CALL DOLT_CHECKOUT('main');"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature', '-m', 'merge feature into main');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query: "SELECT * FROM t ORDER BY id;",
+				Expected: []sql.Row{{1, "edited on main", nil, nil}, {3, "seed", nil, nil}, {4, "seed", nil, nil},
+					{50, "feature", nil, nil}},
+			},
+		},
+	},
+	{
+		// The fork point c2-4 is taller than s2 and newer, which changes the order the merge bases are merged in.
+		Name:        "schema branch, schema tip older than the fork point: merge main into feature",
+		SetUpScript: append(schemaBranchSetup(2, true), "CALL DOLT_CHECKOUT('feature');"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('main', '-m', 'merge main into feature');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query: "SELECT * FROM t ORDER BY id;",
+				Expected: []sql.Row{{1, "edited on main", nil, nil}, {3, "seed", nil, nil}, {4, "seed", nil, nil},
+					{50, "feature", nil, nil}},
 			},
 		},
 	},
