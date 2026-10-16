@@ -139,6 +139,49 @@ var longRunningRows = []sql.Row{
 	{206, "feature", nil},
 }
 
+// conflictingMergeBasesSetup builds a criss-cross whose merge bases, x1 and y1, conflict with each other:
+//
+//	c1 -- x1 -- x2 [-- x3]    x
+//	  \-- y1 -- y2            y
+//	x2 = merge(x1, y1), y2 = merge(y1, x1)
+//
+// c1 seeds rows 1 and 2 with a = b = 'seed'. x1 sets a to 'x' in both rows, and y1 sets row 1's a to 'y' and row 2's
+// b to 'y'. So x1 and y1 conflict on row 1's a, and row 2 merges cleanly to a = 'x', b = 'y'. x2 and y2 resolve
+// the conflict to |xResolution| and |yResolution|. With |xLater|, x3 then sets row 2's a to 'x later'.
+func conflictingMergeBasesSetup(xResolution, yResolution string, xLater bool) []string {
+	script := []string{
+		"SET @@autocommit = 0;",
+		"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100), b VARCHAR(100));",
+		"INSERT INTO t VALUES (1, 'seed', 'seed'), (2, 'seed', 'seed');",
+		"CALL DOLT_COMMIT('-Am', 'c1');",
+		"CALL DOLT_BRANCH('x');",
+		"CALL DOLT_BRANCH('y');",
+		"CALL DOLT_CHECKOUT('x');",
+		"UPDATE t SET a = 'x';",
+		"CALL DOLT_COMMIT('-am', 'x1');",
+		"CALL DOLT_CHECKOUT('y');",
+		"UPDATE t SET a = 'y' WHERE id = 1;",
+		"UPDATE t SET b = 'y' WHERE id = 2;",
+		"CALL DOLT_COMMIT('-am', 'y1');",
+		"CALL DOLT_BRANCH('y1');",
+		"CALL DOLT_MERGE('x', '-m', 'y2');",
+		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
+		fmt.Sprintf("UPDATE t SET a = '%s' WHERE id = 1;", yResolution),
+		"CALL DOLT_COMMIT('-am', 'y2');",
+		"CALL DOLT_CHECKOUT('x');",
+		"CALL DOLT_MERGE('y1', '-m', 'x2');",
+		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
+		fmt.Sprintf("UPDATE t SET a = '%s' WHERE id = 1;", xResolution),
+		"CALL DOLT_COMMIT('-am', 'x2');",
+	}
+	if xLater {
+		script = append(script,
+			"UPDATE t SET a = 'x later' WHERE id = 2;",
+			"CALL DOLT_COMMIT('-am', 'x3');")
+	}
+	return script
+}
+
 // MergeMultipleBasesScripts merge branches that have more than one merge base. The expected results are git's: each
 // history was also built in git, with a directory per table, a file per row and a line per column value, and `git
 // merge` (git 2.39) produced the same rows and conflicts.
@@ -284,6 +327,71 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT id, v, w FROM t WHERE id <> 1 ORDER BY id;",
 				Expected: append([]sql.Row{{3, "main", "feature"}}, longRunningRows...),
+			},
+		},
+	},
+	{
+		// x2 and y2 resolve the conflict between the merge bases the same way.
+		Name:        "conflicting merge bases, resolved the same way: merge y into x",
+		SetUpScript: conflictingMergeBasesSetup("resolved", "resolved", false),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY id;",
+				Expected: []sql.Row{{1, "resolved", "seed"}, {2, "x", "y"}},
+			},
+		},
+	},
+	{
+		// x2 and y2 resolve it differently, so row 1 conflicts again. Its base value is c1's, the base of x1 and y1.
+		Name:        "conflicting merge bases, resolved differently: merge y into x",
+		SetUpScript: conflictingMergeBasesSetup("x wins", "y wins", false),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_id, base_a, base_b, our_a, our_b, their_a, their_b FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{1, "seed", "seed", "x wins", "seed", "y wins", "seed"}},
+			},
+			{
+				Query:    "SELECT * FROM t WHERE id = 2;",
+				Expected: []sql.Row{{2, "x", "y"}},
+			},
+		},
+	},
+	{
+		// Row 2 merged cleanly between the merge bases, so x3's later edit to it does not conflict.
+		Name:        "conflicting merge bases, then an edit to a row they merged cleanly: merge y into x",
+		SetUpScript: conflictingMergeBasesSetup("resolved", "resolved", true),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY id;",
+				Expected: []sql.Row{{1, "resolved", "seed"}, {2, "x later", "y"}},
+			},
+		},
+	},
+	{
+		// x2 resolves the conflict back to c1's value. That is still a change from the conflicted merge bases, as in
+		// git, so row 1 conflicts instead of taking y2's value.
+		Name:        "conflicting merge bases, one side resolved to the old value: merge y into x",
+		SetUpScript: conflictingMergeBasesSetup("seed", "y", false),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_a, our_a, their_a FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{"seed", "seed", "y"}},
 			},
 		},
 	},

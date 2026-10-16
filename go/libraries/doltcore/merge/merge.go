@@ -56,19 +56,13 @@ const (
 // MergeCommits merges |mergeCommit| into |commit|. When they have several best common ancestors, the merge base is a
 // virtual commit that merges those ancestors together.
 func MergeCommits(ctx *sql.Context, tableResolver doltdb.TableResolver, commit, mergeCommit *doltdb.Commit, opts editor.Options) (*Result, error) {
-	ancCommit, mergeBases, err := resolveMergeBase(ctx, commit, mergeCommit)
+	ancCommit, mergeBases, conflicted, err := resolveMergeBase(ctx, commit, mergeCommit)
 	if err != nil {
 		return nil, err
 	}
-	var ancestor doltdb.Rootish = ancCommit
-	if len(mergeBases) > 1 {
-		addrs := make([]hash.Hash, len(mergeBases))
-		for i, base := range mergeBases {
-			if addrs[i], err = base.HashOf(); err != nil {
-				return nil, err
-			}
-		}
-		ancestor = virtualMergeBase{Commit: ancCommit, mergeBases: addrs}
+	ancestor, err := mergeBaseRootish(ancCommit, mergeBases, conflicted)
+	if err != nil {
+		return nil, err
 	}
 
 	ourRoot, err := commit.GetRootValue(ctx)

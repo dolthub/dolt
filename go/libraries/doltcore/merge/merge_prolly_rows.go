@@ -259,7 +259,9 @@ func computeProllyTreePatches(
 	needsSecondaryIndexMerge := len(sec.leftIdxes) > 0 && !mergeInfo.InvalidateSecondaryIndexes
 	// either skip if there's secondary indexes, or merge secondary indexes.
 	needsSchemaMigration := mergeInfo.RightNeedsRewrite || mergeInfo.LeftNeedsRewrite
-	canFastMergeProllyTrees := !keyless &&
+	conflicted := tm.virtualBaseConflicts()
+	canFastMergeProllyTrees := len(conflicted) == 0 &&
+		!keyless &&
 		!needsUniquenessValidation &&
 		!needsCheckValidation &&
 		!needsNullValidation &&
@@ -365,6 +367,11 @@ func computeProllyTreePatches(
 				break
 			} else if err != nil {
 				return nil, nil, err
+			}
+			if row, ok := conflicted[string(diff.Key)]; ok {
+				if diff, err = conflictOnConflictedCells(ctx, diff, row, ancRows, valueMerger); err != nil {
+					return nil, nil, err
+				}
 			}
 
 			cnt, err := uniq.validateDiff(ctx, diff)
@@ -572,6 +579,68 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 // treeRowMergePolicy adapts the caller's policy to the storage layer's
 // callback, supplying the table, the merged value descriptor and the node
 // store. Returns nil when no policy is installed.
+// virtualBaseConflicts returns the rows of this table that have conflicted cells in a virtual merge base.
+func (tm *TableMerger) virtualBaseConflicts() map[string]conflictedRow {
+	if virtualBase, ok := tm.ancestorSrc.(virtualMergeBase); ok {
+		return virtualBase.conflicted[tm.name]
+	}
+	return nil
+}
+
+// conflictOnConflictedCells turns |diff| into a conflict when its two sides differ in a cell of |row| that conflicted
+// in the virtual merge base. Like git, which leaves conflict markers there, it treats those cells as changed on both
+// sides, so a change on one side does not win over the other.
+func conflictOnConflictedCells(ctx context.Context, diff tree.ThreeWayDiff, row conflictedRow, ancRows prolly.Map, vm *valueMerger) (tree.ThreeWayDiff, error) {
+	base, err := getRow(ctx, ancRows, diff.Key)
+	if err != nil {
+		return diff, err
+	}
+	var left, right val.Tuple
+	switch diff.Op {
+	case tree.DiffOpLeftAdd, tree.DiffOpLeftModify, tree.DiffOpLeftDelete:
+		left, right = diff.Left, base
+	case tree.DiffOpRightAdd, tree.DiffOpRightModify, tree.DiffOpRightDelete:
+		left, right = base, diff.Right
+	case tree.DiffOpDivergentModifyResolved, tree.DiffOpDivergentDeleteResolved:
+		left, right = diff.Left, diff.Right
+	default:
+		return diff, nil
+	}
+	if !conflictedCellsDiffer(row, left, right, vm) {
+		return diff, nil
+	}
+	op := tree.DiffOpDivergentModifyConflict
+	if left == nil || right == nil {
+		op = tree.DiffOpDivergentDeleteConflict
+	}
+	return tree.ThreeWayDiff{Op: op, Key: diff.Key, Base: base, Left: left, Right: right}, nil
+}
+
+func conflictedCellsDiffer(row conflictedRow, left, right val.Tuple, vm *valueMerger) bool {
+	if left == nil || right == nil {
+		return left != nil || right != nil
+	}
+	differs := func(i int) bool {
+		l, _, _ := getColumn(&left, &vm.leftMapping, i)
+		r, _, _ := getColumn(&right, &vm.rightMapping, i)
+		return !bytes.Equal(l, r)
+	}
+	if row.wholeRow {
+		for i := 0; i < vm.numCols; i++ {
+			if differs(i) {
+				return true
+			}
+		}
+		return false
+	}
+	for _, tag := range row.tags {
+		if i, ok := vm.resultSchema.GetNonPKCols().StoredIndexByTag(tag); ok && differs(i) {
+			return true
+		}
+	}
+	return false
+}
+
 func (tm *TableMerger) treeRowMergePolicy(mergedSch schema.Schema) tree.RowMergePolicy {
 	if tm.rowMergePolicy == nil {
 		return nil
