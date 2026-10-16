@@ -1,0 +1,19 @@
+name: Notify CI review
+
+on:
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+
+# This is a permissions bridge, not a test: fork PR review events have read-only
+# tokens and cannot rerun CI. Completing this workflow wakes the trusted
+# workflow_run controller, which fetches live PR/review data with its own token.
+# Without this notification, approvals would wait for the 15-minute poll.
+permissions: {}
+
+jobs:
+  notify:
+    if: contains(github.event.pull_request.labels.*.name, 'defer-ci-review')
+    runs-on: ubuntu-22.04
+    timeout-minutes: 1
+    steps:
+      - run: echo 'The PR CI scheduler will recheck the current review state.'

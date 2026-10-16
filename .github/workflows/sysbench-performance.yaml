@@ -9,9 +9,13 @@ on:
 jobs:
   performance:
     name: Trigger Mini Benchmark Latency K8s Workflow
-    if: github.actor != 'dependabot[bot]'
+    if: ${{ github.actor != 'dependabot[bot]' }}
     runs-on: ubuntu-22.04
     steps:
+      - name: Check deferred CI
+        uses: $/.github/actions/check-deferred-ci
+        with:
+          timezone: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
       - name: Build benchmark payload (main HEAD + PR HEAD)
         uses: actions/github-script@v7
         id: build_payload

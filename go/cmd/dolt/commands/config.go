@@ -71,6 +71,12 @@ Valid configuration variables:
 
 	- push.autoSetupRemote - if set to "true" assume --set-upstream on default push when no upstream tracking exists for the current branch.
 
+	- git-remote.max-history-commits - maximum reachable Git data commits (default 64; 0 means unlimited).
+
+	- git-remote.reset-history-on-prune - reset Git history when obsolete tables are removed (default true).
+
+Environment variables DOLT_GIT_REMOTE_MAX_HISTORY_COMMITS and DOLT_GIT_REMOTE_RESET_HISTORY_ON_PRUNE override local and global config. Longer Git histories improve incremental transfers but retain obsolete data until history is reset. These settings affect the shared Git remote's data history. For unlimited history, set max-history-commits to 0 and reset-history-on-prune to false.
+
 Credential helpers use the Bazel credential helper protocol. Dolt invokes the configured executable with the {{.EmphasisLeft}}get{{.EmphasisRight}} argument and sends the canonical remotesapi origin on stdin:
 
 	{"uri":"https://example.com:443"}

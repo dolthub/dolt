@@ -24,23 +24,24 @@ package nbs
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-func newAWSTableFileChunkSource(ctx context.Context, s3 *s3ObjectReader, al awsLimits, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
+func newAWSTableFileChunkSource(ctx context.Context, s3 *s3ObjectReader, al awsLimits, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, opts openOpts, stats *Stats) (cs chunkSource, err error) {
 	var tra tableReaderAt
-	index, err := loadTableIndex(ctx, stats, chunkCount, q, func(p []byte) error {
-		n, _, err := s3.readS3ObjectFromEnd(ctx, name.String(), p, stats)
+	index, err := loadTableIndex(ctx, stats, name, chunkCount, q, opts, func(p []byte) (uint64, error) {
+		n, sz, err := s3.readS3ObjectFromEnd(ctx, name.String(), p, stats)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		if len(p) != n {
-			return errors.New("failed to read all data")
+			return 0, errors.New("failed to read all data")
 		}
 		tra = &s3TableReaderAt{key: name.String(), s3: s3}
-		return nil
+		return sz, nil
 	})
 	if err != nil {
 		return &chunkSourceAdapter{}, err
@@ -54,18 +55,22 @@ func newAWSTableFileChunkSource(ctx context.Context, s3 *s3ObjectReader, al awsL
 	return &chunkSourceAdapter{tr, name}, nil
 }
 
-func loadTableIndex(ctx context.Context, stats *Stats, cnt uint32, q MemoryQuotaProvider, loadIndexBytes func(p []byte) error) (tableIndex, error) {
+// loadTableIndex reads and parses the index of the table file named |name|.
+// |loadIndexBytes| fills the given buffer with the tail of the file and
+// returns the total size of the file, or 0 if it does not know it.
+func loadTableIndex(ctx context.Context, stats *Stats, name hash.Hash, cnt uint32, q MemoryQuotaProvider, opts openOpts, loadIndexBytes func(p []byte) (uint64, error)) (onHeapTableIndex, error) {
 	idxSz := int(indexSize(cnt) + footerSize)
 	offsetSz := int((cnt - (cnt / 2)) * offsetSize)
 	buf, err := q.AcquireQuotaByteSlice(ctx, idxSz+offsetSz)
 	if err != nil {
-		return nil, err
+		return onHeapTableIndex{}, err
 	}
 
 	t1 := time.Now()
-	if err := loadIndexBytes(buf[:idxSz]); err != nil {
+	fileSz, err := loadIndexBytes(buf[:idxSz])
+	if err != nil {
 		q.ReleaseQuotaBytes(len(buf))
-		return nil, err
+		return onHeapTableIndex{}, err
 	}
 	stats.IndexReadLatency.SampleTimeSince(t1)
 	stats.IndexBytesPerRead.Sample(uint64(len(buf)))
@@ -73,6 +78,15 @@ func loadTableIndex(ctx context.Context, stats *Stats, cnt uint32, q MemoryQuota
 	idx, err := parseTableIndexWithOffsetBuff(buf[:idxSz], buf[idxSz:], q)
 	if err != nil {
 		q.ReleaseQuotaBytes(len(buf))
+		return onHeapTableIndex{}, err
 	}
-	return idx, err
+
+	if err = idx.checkTableFileSize(fileSz); err == nil && opts.deepValidate {
+		err = idx.deepValidate(name)
+	}
+	if err != nil {
+		_ = idx.Close()
+		return onHeapTableIndex{}, fmt.Errorf("%s: %w", name.String(), err)
+	}
+	return idx, nil
 }

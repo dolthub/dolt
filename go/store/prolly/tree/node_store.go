@@ -103,7 +103,7 @@ func NewNodeStore(cs chunks.ChunkStore) NodeStore {
 
 // Read implements NodeStore.
 func (ns *nodeStore) Read(ctx context.Context, ref hash.Hash) (*Node, error) {
-	n, ok := ns.cache.get(ref)
+	n, key, ok := ns.cache.get(ref)
 	if ok {
 		return n, nil
 	}
@@ -118,7 +118,7 @@ func (ns *nodeStore) Read(ctx context.Context, ref hash.Hash) (*Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	ns.cache.insert(ref, n)
+	ns.cache.insert(key, n)
 
 	return n, nil
 }
@@ -127,13 +127,15 @@ func (ns *nodeStore) Read(ctx context.Context, ref hash.Hash) (*Node, error) {
 func (ns *nodeStore) ReadMany(ctx context.Context, addrs hash.HashSlice) ([]*Node, error) {
 	found := make(map[hash.Hash]*Node)
 	gets := hash.HashSet{}
+	keys := make(map[hash.Hash]cacheKey)
 
 	for _, r := range addrs {
-		n, ok := ns.cache.get(r)
+		n, key, ok := ns.cache.get(r)
 		if ok {
 			found[r] = n
 		} else {
 			gets.Insert(r)
+			keys[r] = key
 		}
 	}
 
@@ -159,8 +161,12 @@ func (ns *nodeStore) ReadMany(ctx context.Context, addrs hash.HashSlice) ([]*Nod
 	nodes := make([]*Node, len(addrs))
 	for i, addr := range addrs {
 		nodes[i], ok = found[addr]
-		if ok {
-			ns.cache.insert(addr, nodes[i])
+		if !ok {
+			continue
+		}
+		// Anything not in |keys| came out of the cache already.
+		if key, fetched := keys[addr]; fetched {
+			ns.cache.insert(key, nodes[i])
 		}
 	}
 	return nodes, nil
@@ -183,10 +189,14 @@ func (ns *nodeStore) Write(ctx context.Context, nd *Node) (hash.Hash, error) {
 		}
 	}
 
+	// Taken before the Put so that a purge racing with it drops the
+	// insert below.
+	_, key, _ := ns.cache.get(c.Hash())
 	if err := ns.store.Put(ctx, c, getAddrs); err != nil {
 		return hash.Hash{}, err
 	}
-	ns.cache.insert(c.Hash(), nd)
+	nd.nodeHash.Store(c.Hash())
+	ns.cache.insert(key, nd)
 	return c.Hash(), nil
 }
 
@@ -226,13 +236,23 @@ func (ns *nodeStore) ReadBytes(ctx context.Context, h hash.Hash) (result []byte,
 		return nil, err
 	}
 
+	var leaves [][]byte
+	size := 0
 	err = WalkNodes(ctx, n, ns, func(ctx context.Context, n *Node) error {
 		if n.IsLeaf() {
-			result = append(result, n.GetValue(0)...)
+			leaves = append(leaves, n.GetValue(0))
+			size += len(n.GetValue(0))
 		}
 		return nil
 	})
-	return result, err
+	if err != nil {
+		return nil, err
+	}
+	result = make([]byte, 0, size)
+	for _, l := range leaves {
+		result = append(result, l...)
+	}
+	return result, nil
 }
 
 // CompareJsonAdaptiveValues implements val.JsonAdaptiveValueComparator. The work is done by
@@ -240,6 +260,11 @@ func (ns *nodeStore) ReadBytes(ctx context.Context, h hash.Hash) (result []byte,
 // MySQL's JSON ordering rules.
 func (ns *nodeStore) CompareJsonAdaptiveValues(ctx context.Context, l, r val.AdaptiveValue) (int, error) {
 	return compareJsonAdaptiveValues(ctx, ns, l, r)
+}
+
+// WriteBytesReusing implements val.PriorBytesWriter.
+func (ns *nodeStore) WriteBytesReusing(ctx context.Context, b []byte, prior hash.Hash) (hash.Hash, error) {
+	return SerializeBytesToAddrReusing(ctx, ns, b, prior)
 }
 
 func (ns *nodeStore) WriteBytes(ctx context.Context, b []byte) (hash.Hash, error) {

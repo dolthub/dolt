@@ -73,6 +73,8 @@ type BranchActivityTracker struct {
 	systemStartTime time.Time
 	activityChan    chan branchActivityEvent
 	trackingEnabled bool
+	cancel          context.CancelFunc
+	done            chan struct{}
 }
 
 // IsTrackingEnabled returns whether branch activity tracking is enabled
@@ -82,24 +84,32 @@ func (t *BranchActivityTracker) IsTrackingEnabled() bool {
 
 // NewBranchActivityTracker creates a new branch activity tracker instance
 func NewBranchActivityTracker(ctx context.Context, trackingEnabled bool) *BranchActivityTracker {
+	ctx, cancel := context.WithCancel(ctx)
 	tracker := &BranchActivityTracker{
 		readTimes:       make(map[branchActivityKey]time.Time),
 		writeTimes:      make(map[branchActivityKey]time.Time),
 		systemStartTime: time.Now(),
 		activityChan:    make(chan branchActivityEvent, 64),
 		trackingEnabled: trackingEnabled,
+		cancel:          cancel,
+		done:            make(chan struct{}),
 	}
 
-	// Start background processor, we ignore the cancel function as the tracker doesn't have a lifecycle.
-	ctx, cancel := context.WithCancel(ctx)
-	_ = cancel // silence the linter.
 	go tracker.processEvents(ctx)
 
 	return tracker
 }
 
+// Close stops the background processor and waits for it to exit.
+// It is safe to call more than once or concurrently.
+func (t *BranchActivityTracker) Close() {
+	t.cancel()
+	<-t.done
+}
+
 // processEvents processes activity events in the background
 func (t *BranchActivityTracker) processEvents(ctx context.Context) {
+	defer close(t.done)
 	for {
 		select {
 		case event := <-t.activityChan:

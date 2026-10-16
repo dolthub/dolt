@@ -31,17 +31,56 @@ import (
 type ThreeWayDiffer[K ~[]byte, O Ordering[K]] struct {
 	lIter, rIter              Differ[K, O]
 	resolveCb                 resolveCb
+	rowMergePolicy            RowMergePolicy
 	lDiff                     Diff
 	rDiff                     Diff
 	lDone                     bool
 	rDone                     bool
 	keyless                   bool
 	leftAndRightSchemasDiffer bool
+	schemaChangeInMerge       bool
 }
 
 //var _ DiffIter = (*threeWayDiffer[Item, val.TupleDesc])(nil)
 
 type resolveCb func(*sql.Context, val.Tuple, val.Tuple, val.Tuple) (val.Tuple, bool, error)
+
+// RowMergeStatus is a RowMergePolicy's answer for one three-way row decision.
+type RowMergeStatus int
+
+const (
+	// RowMergeDefer, the zero value, leaves the row to the default merge.
+	RowMergeDefer RowMergeStatus = iota
+	// RowMergeResolved supplies the merged row; a nil tuple deletes it.
+	RowMergeResolved
+	// RowMergeConflict records the row as a data conflict.
+	RowMergeConflict
+)
+
+// RowMergePolicy decides one three-way row, convergent edits included. Any of
+// left, right, base may be nil: a nil base is an insert on both sides, a nil
+// left or right a delete on that side.
+type RowMergePolicy func(ctx *sql.Context, left, right, base val.Tuple) (val.Tuple, RowMergeStatus, error)
+
+// RunRowMergePolicy runs policy and decodes its status so both merge paths
+// interpret it identically. handled is false for RowMergeDefer. When handled,
+// merged carries the resolved row (nil deletes) and conflict marks a conflict.
+func RunRowMergePolicy(ctx *sql.Context, policy RowMergePolicy, left, right, base val.Tuple) (handled bool, merged val.Tuple, conflict bool, err error) {
+	merged, status, err := policy(ctx, left, right, base)
+	if err != nil {
+		return false, nil, false, err
+	}
+	switch status {
+	case RowMergeDefer:
+		return false, nil, false, nil
+	case RowMergeResolved:
+		return true, merged, false, nil
+	case RowMergeConflict:
+		return true, nil, true, nil
+	default:
+		return false, nil, false, fmt.Errorf("unknown RowMergeStatus %d", status)
+	}
+}
 
 // ThreeWayDiffInfo stores contextual data that can influence the diff.
 // If |LeftSchemaChange| is true, then the left side's bytes have a different interpretation from the base,
@@ -65,6 +104,7 @@ func NewThreeWayDiffer[K, V ~[]byte, O Ordering[K]](
 	right StaticMap[K, V, O],
 	base StaticMap[K, V, O],
 	resolveCb resolveCb,
+	rowMergePolicy RowMergePolicy,
 	keyless bool,
 	diffInfo ThreeWayDiffInfo,
 	order O,
@@ -80,12 +120,18 @@ func NewThreeWayDiffer[K, V ~[]byte, O Ordering[K]](
 		return nil, err
 	}
 
+	schemaChangeInMerge := diffInfo.LeftSchemaChange ||
+		diffInfo.RightSchemaChange ||
+		diffInfo.LeftAndRightSchemasDiffer
+
 	return &ThreeWayDiffer[K, O]{
 		lIter:                     ld,
 		rIter:                     rd,
 		resolveCb:                 resolveCb,
+		rowMergePolicy:            rowMergePolicy,
 		keyless:                   keyless,
 		leftAndRightSchemasDiffer: diffInfo.LeftAndRightSchemasDiffer,
+		schemaChangeInMerge:       schemaChangeInMerge,
 	}, nil
 }
 
@@ -184,6 +230,15 @@ func (d *ThreeWayDiffer[K, O]) Next(ctx *sql.Context) (ThreeWayDiff, error) {
 			}
 			return res, nil
 		case dsMatch:
+			handled, policyRes, policyErr := d.applyRowMergePolicy(ctx)
+			if policyErr != nil {
+				return ThreeWayDiff{}, policyErr
+			}
+			if handled {
+				res = policyRes
+				nextState = dsMatchFinalize
+				continue
+			}
 			if d.lDiff.To == nil && d.rDiff.To == nil {
 				res = d.newConvergentEdit(d.lDiff.Key, d.lDiff.To, d.lDiff.Type)
 			} else if d.lDiff.To == nil || d.rDiff.To == nil {
@@ -307,6 +362,32 @@ func (d *ThreeWayDiffer[K, O]) newRightEdit(key, base, right Item, typ DiffType)
 		Base:  val.Tuple(base),
 		Right: val.Tuple(right),
 	}
+}
+
+// applyRowMergePolicy consults the policy for the current matched key and
+// reports whether it decided the row.
+func (d *ThreeWayDiffer[K, O]) applyRowMergePolicy(ctx *sql.Context) (handled bool, res ThreeWayDiff, err error) {
+	// Keyless rows carry a cardinality rather than an identity, and a
+	// schema-changing merge needs a builder the policy does not have; both
+	// defer to the default merge.
+	if d.rowMergePolicy == nil || d.keyless || d.schemaChangeInMerge {
+		return false, ThreeWayDiff{}, nil
+	}
+	handled, merged, conflict, err := RunRowMergePolicy(ctx, d.rowMergePolicy,
+		val.Tuple(d.lDiff.To), val.Tuple(d.rDiff.To), val.Tuple(d.lDiff.From))
+	if err != nil || !handled {
+		return false, ThreeWayDiff{}, err
+	}
+	if conflict {
+		if d.lDiff.To == nil || d.rDiff.To == nil {
+			return true, d.newDivergentDeleteConflict(d.lDiff.Key, d.lDiff.From, d.lDiff.To, d.rDiff.To), nil
+		}
+		return true, d.newDivergentClashConflict(d.lDiff.Key, d.lDiff.From, d.lDiff.To, d.rDiff.To), nil
+	}
+	if merged == nil {
+		return true, d.newDivergentDeleteResolved(d.lDiff.Key, d.lDiff.From, d.lDiff.To, d.rDiff.To), nil
+	}
+	return true, d.newDivergentResolved(d.lDiff.Key, d.lDiff.To, d.rDiff.To, Item(merged)), nil
 }
 
 func (d *ThreeWayDiffer[K, O]) newConvergentEdit(key, left Item, typ DiffType) ThreeWayDiff {

@@ -128,16 +128,14 @@ func (bs *OCIBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.R
 		return nil, 0, "", err
 	}
 
+	// The whole object's size. For a ranged request only the Content-Range
+	// carries it; ContentLength is the length of the range, so it is only a
+	// usable fallback when the whole object was requested.
 	var size uint64
-	// Try to get total size from Content-Range header first (for range requests)
 	if res.RawResponse != nil && res.RawResponse.Header != nil {
-		contentRange := res.RawResponse.Header.Get("Content-Range")
-		if contentRange != "" {
-			size = parseContentRangeSize(contentRange)
-		}
+		size = parseContentRangeSize(res.RawResponse.Header.Get("Content-Range"))
 	}
-	// Fall back to Content-Length if no Content-Range (full object request)
-	if size == 0 && res.ContentLength != nil {
+	if size == 0 && br.isAllRange() && res.ContentLength != nil {
 		size = uint64(*res.ContentLength)
 	}
 

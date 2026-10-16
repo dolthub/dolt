@@ -17,7 +17,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"text/template"
@@ -226,7 +228,7 @@ func (d *DynamicResources) GetOrAllocateTempDir(name string) string {
 
 func (d *DynamicResources) ApplyTemplate(s string) string {
 	tmpl, err := template.New("sql").Funcs(map[string]any{
-		"get_port": d.GetOrAllocatePort,
+		"get_port":    d.GetOrAllocatePort,
 		"get_tempdir": d.GetOrAllocateTempDir,
 	}).Parse(s)
 	require.NoError(d.t, err)
@@ -272,10 +274,102 @@ func newTestLogWriter(t *testing.T) io.Writer {
 	return w
 }
 
+// How long we let a single `dolt fsck` run before killing it. Only ever
+// reached on a database large enough or damaged enough that the report is
+// unlikely to arrive at all; we would rather lose the report than hang CI.
+const fsckTimeout = 5 * time.Minute
+
+// logFsckOnFailure arranges to run `dolt fsck` against every database beneath
+// |dc|'s working directory and log the output, if and only if the test failed.
+//
+// These tests observe corruption indirectly: a query panics, or a connection
+// drops, and the database itself is deleted during cleanup. The fsck report is
+// what distinguishes a chunk that is genuinely gone from the store from one
+// that is present but unreachable through a table file index.
+//
+// Register this before the server's stop hook so that, cleanups running in
+// reverse order, fsck sees the database after the server has released it.
+func logFsckOnFailure(t *testing.T, dc driver.DoltCmdable) {
+	t.Cleanup(func() {
+		if !t.Failed() {
+			return
+		}
+		root := dc.DoltCmd().Dir
+		dbs, err := findDoltDatabases(root)
+		if err != nil {
+			t.Logf("could not look for databases to fsck under %s: %v", root, err)
+			return
+		}
+		if len(dbs) == 0 {
+			t.Logf("found no databases to fsck under %s", root)
+			return
+		}
+		for _, db := range dbs {
+			if _, reported := fsckReported.LoadOrStore(t.Name()+"\x00"+db, true); reported {
+				// A test can make several servers, and their directories
+				// can nest, so the same database can be reachable from
+				// more than one of them. Report each one once.
+				continue
+			}
+			t.Logf("dolt fsck %s:\n%s", db, runFsck(dc, db))
+		}
+	})
+}
+
+// Databases already reported by logFsckOnFailure, keyed by test name and
+// database directory.
+var fsckReported sync.Map
+
+// runFsck runs `dolt fsck` in |dir| and returns its combined output, with any
+// failure to run it or interpret its exit status appended.
+func runFsck(dc driver.DoltCmdable, dir string) string {
+	var out bytes.Buffer
+	cmd := dc.DoltCmd("fsck", "--quiet")
+	cmd.Dir = dir
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	if err := cmd.Start(); err != nil {
+		return "failed to run dolt fsck: " + err.Error()
+	}
+	timer := time.AfterFunc(fsckTimeout, func() {
+		cmd.Process.Kill()
+	})
+	defer timer.Stop()
+	if err := cmd.Wait(); err != nil {
+		// A non-zero exit is how fsck reports corruption, so this is a
+		// normal outcome here and the output above is the interesting part.
+		out.WriteString("\ndolt fsck exited with: " + err.Error())
+	}
+	return out.String()
+}
+
+// findDoltDatabases returns the directory of every Dolt database at or beneath
+// |root|. A database is a directory holding .dolt/noms, which is what fsck
+// requires; a .dolt holding only global config, as DOLT_ROOT_PATH does, is not
+// one.
+func findDoltDatabases(root string) ([]string, error) {
+	var ret []string
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			// A directory we cannot read is not worth failing the walk over.
+			return nil
+		}
+		if !d.IsDir() || d.Name() != ".dolt" {
+			return nil
+		}
+		if info, err := os.Stat(filepath.Join(path, "noms")); err == nil && info.IsDir() {
+			ret = append(ret, filepath.Dir(path))
+		}
+		return fs.SkipDir
+	})
+	return ret, err
+}
+
 func MakeServer(t *testing.T, dc driver.DoltCmdable, s *driver.Server, resources *DynamicResources, manualOps ...driver.SqlServerOpt) *driver.SqlServer {
 	if s == nil {
 		return nil
 	}
+	logFsckOnFailure(t, dc)
 	args := make([]string, len(s.Args))
 	for i := range args {
 		args[i] = resources.ApplyTemplate(s.Args[i])

@@ -515,6 +515,7 @@ func (pm *PreviewMergeConflictsTableFunction) RowIter(ctx *sql.Context, row sql.
 		rightRows.Tuples(),
 		ancRows.Tuples(),
 		valueMerger.TryMerge,
+		nil,
 		keyless,
 		diffInfo,
 		leftRows.Tuples().Order,

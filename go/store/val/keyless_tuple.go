@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/binary"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/zeebo/xxh3"
 
 	"github.com/dolthub/dolt/go/store/pool"
@@ -108,4 +109,9 @@ func (k *keylessCompare) Validated(types []Type) TupleComparator {
 // WithValueStore implements TupleComparator
 func (k *keylessCompare) WithValueStore(vs ValueStore) TupleComparator {
 	return &keylessCompare{vs: vs}
+}
+
+// Order implements TupleComparator
+func (k *keylessCompare) Order(i int) sql.IndexColumnOrder {
+	return sql.IndexColumnOrder{}
 }

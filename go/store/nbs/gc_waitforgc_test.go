@@ -105,7 +105,7 @@ func TestWaitForGCNotTrappedAcrossCycles(t *testing.T) {
 	// With the gcCycleCounter fix, it detects the cycle change and breaks
 	// out.
 	st.lockedEndGC()
-	require.NoError(t, st.lockedBeginGC(func(hash.Hash) bool { return false }))
+	require.NoError(t, st.lockedBeginGC(ctx, func(hash.Hash) bool { return false }))
 	st.mu.Unlock()
 
 	// --- Assert: the goroutine is NOT trapped (regression check) ----------
@@ -126,5 +126,59 @@ func TestWaitForGCNotTrappedAcrossCycles(t *testing.T) {
 		<-putDone
 		t.Fatal("goroutine trapped in waitForGC across GC cycles — " +
 			"waitForGC does not distinguish between GC generations")
+	}
+}
+
+// TestWaitForGCWakesOnContextCancel covers the cancellation half of
+// waitForGC's contract. A sync.Cond wait cannot select on a context, so
+// without broadcastOnCancel a Put blocked behind a GC keeper sleeps
+// until the GC cycle ends, no matter what its context says.
+func TestWaitForGCWakesOnContextCancel(t *testing.T) {
+	ctx := context.Background()
+
+	_, _, _, st := makeStoreWithFakes(t)
+	defer st.Close()
+
+	c := chunks.NewChunk([]byte("wakes-on-context-cancel"))
+	err := st.Put(ctx, c, noopGetAddrs)
+	require.NoError(t, err)
+	ok, err := st.Commit(ctx, c.Hash(), hash.Hash{})
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	// Always blocks, so the Put below parks in waitForGC.
+	keeperCalled := make(chan struct{}, 1)
+	keeper := func(h hash.Hash) bool {
+		select {
+		case keeperCalled <- struct{}{}:
+		default:
+		}
+		return true
+	}
+	require.NoError(t, st.BeginGC(t.Context(), keeper, chunks.GCMode_Full))
+	defer st.EndGC(chunks.GCMode_Full)
+
+	putCtx, cancelPut := context.WithCancel(ctx)
+	defer cancelPut()
+	putDone := make(chan error, 1)
+	go func() {
+		putDone <- st.Put(putCtx, c, noopGetAddrs)
+	}()
+
+	// addChunk holds nbs.mu until it parks in gcCond.Wait(), so
+	// acquiring nbs.mu means the Put is parked.
+	<-keeperCalled
+	st.mu.Lock()
+	st.mu.Unlock()
+
+	// The GC is still in progress and its cycle has not changed, so
+	// cancellation is the only thing which can release the Put.
+	cancelPut()
+
+	select {
+	case err := <-putDone:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(3 * time.Second):
+		t.Fatal("Put stayed parked in waitForGC after its context was canceled")
 	}
 }

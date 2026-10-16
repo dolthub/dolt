@@ -18,11 +18,11 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/go-mysql-server/testutils"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
@@ -53,7 +53,7 @@ type MergeScriptTest struct {
 
 type doltCommitValidator struct{}
 
-var _ enginetest.CustomValueValidator = &doltCommitValidator{}
+var _ testutils.CustomValueValidator = &doltCommitValidator{}
 var hashRegex = regexp.MustCompile(`^[0-9a-v]{32}$`)
 
 func (dcv *doltCommitValidator) Validate(val interface{}) (bool, error) {
@@ -1309,6 +1309,164 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "merge abort rejects pending edits on mydb/b2",
+		SetUpScript: []string{
+			"create table t (pk int primary key, v int)",
+			"insert into t values (1, 0)",
+			"call dolt_commit('-Am', 'setup')",
+			"call dolt_branch('b1')",
+			"call dolt_branch('b2')",
+			"use mydb/b1",
+			"update t set v=1",
+			"call dolt_commit('-am', 'branch change')",
+			"use mydb",
+			"update t set v=2",
+			"call dolt_commit('-am', 'main change')",
+			"create database other",
+			"create table other.t (pk int primary key, v int)",
+			"set autocommit=0",
+			"call dolt_merge('b1')",
+			"insert into `mydb/b2`.t values (9, 9)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_merge('--abort')",
+				ExpectedErrStr: "cannot merge with uncommitted changes",
+			},
+			{
+				Query: "select count(*) from dolt_conflicts",
+				Expected: []sql.Row{
+					{1},
+				},
+			},
+			{
+				Query: "select * from t as of 'HEAD'",
+				Expected: []sql.Row{
+					{1, 2},
+				},
+			},
+			{
+				Query: "select * from `mydb/b2`.t where pk=9",
+				Expected: []sql.Row{
+					{9, 9},
+				},
+			},
+			{
+				Query:            "rollback",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from `mydb/b2`.t where pk=9",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "call dolt_merge('b1')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "update t set v=99",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "call dolt_merge('--abort')",
+				Expected: []sql.Row{
+					{"", 0, 0, "merge aborted"},
+				},
+			},
+			{
+				Query: "select * from t",
+				Expected: []sql.Row{
+					{1, 2},
+				},
+			},
+			{
+				Query: "select count(*) from dolt_conflicts",
+				Expected: []sql.Row{
+					{0},
+				},
+			},
+		},
+	},
+	{
+		Name: "merge abort rejects pending edits on other",
+		SetUpScript: []string{
+			"create table t (pk int primary key, v int)",
+			"insert into t values (1, 0)",
+			"call dolt_commit('-Am', 'setup')",
+			"call dolt_branch('b1')",
+			"call dolt_branch('b2')",
+			"use mydb/b1",
+			"update t set v=1",
+			"call dolt_commit('-am', 'branch change')",
+			"use mydb",
+			"update t set v=2",
+			"call dolt_commit('-am', 'main change')",
+			"create database other",
+			"create table other.t (pk int primary key, v int)",
+			"set autocommit=0",
+			"call dolt_merge('b1')",
+			"insert into `other`.t values (9, 9)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_merge('--abort')",
+				ExpectedErrStr: "cannot merge with uncommitted changes",
+			},
+			{
+				Query: "select count(*) from dolt_conflicts",
+				Expected: []sql.Row{
+					{1},
+				},
+			},
+			{
+				Query: "select * from t as of 'HEAD'",
+				Expected: []sql.Row{
+					{1, 2},
+				},
+			},
+			{
+				Query: "select * from `other`.t where pk=9",
+				Expected: []sql.Row{
+					{9, 9},
+				},
+			},
+			{
+				Query:            "rollback",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from `other`.t where pk=9",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "call dolt_merge('b1')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "update t set v=99",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "call dolt_merge('--abort')",
+				Expected: []sql.Row{
+					{"", 0, 0, "merge aborted"},
+				},
+			},
+			{
+				Query: "select * from t",
+				Expected: []sql.Row{
+					{1, 2},
+				},
+			},
+			{
+				Query: "select count(*) from dolt_conflicts",
+				Expected: []sql.Row{
+					{0},
+				},
+			},
+		},
+	},
+	{
 		Name: "CALL DOLT_MERGE with conflicts can be aborted when autocommit is off",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
@@ -1475,6 +1633,570 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "merge 'b1' rejects pending edits on mydb",
+		SetUpScript: []string{
+			"create table t (pk int primary key)",
+			"call dolt_commit('-Am', 'setup')",
+			"call dolt_branch('b1')",
+			"call dolt_branch('b2')",
+			"use mydb/b1",
+			"insert into t values (1)",
+			"call dolt_commit('-am', 'advance')",
+			"create database other",
+			"create table other.t (pk int primary key)",
+			"use mydb",
+			"set autocommit=0",
+			"insert into `mydb`.t values (9)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_merge('b1')",
+				ExpectedErrStr: "cannot merge with uncommitted changes",
+			},
+			{
+				Query:    "select * from t as of 'HEAD'",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select * from `mydb`.t",
+				Expected: []sql.Row{
+					{9},
+				},
+			},
+			{
+				Query: "select is_merging from dolt_merge_status",
+				Expected: []sql.Row{
+					{false},
+				},
+			},
+			{
+				Query:            "rollback",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from `mydb`.t",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "merge 'b1' rejects pending edits on mydb/b2",
+		SetUpScript: []string{
+			"create table t (pk int primary key)",
+			"call dolt_commit('-Am', 'setup')",
+			"call dolt_branch('b1')",
+			"call dolt_branch('b2')",
+			"use mydb/b1",
+			"insert into t values (1)",
+			"call dolt_commit('-am', 'advance')",
+			"create database other",
+			"create table other.t (pk int primary key)",
+			"use mydb",
+			"set autocommit=0",
+			"insert into `mydb/b2`.t values (9)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_merge('b1')",
+				ExpectedErrStr: "cannot merge with uncommitted changes",
+			},
+			{
+				Query:    "select * from t as of 'HEAD'",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select * from `mydb/b2`.t",
+				Expected: []sql.Row{
+					{9},
+				},
+			},
+			{
+				Query: "select is_merging from dolt_merge_status",
+				Expected: []sql.Row{
+					{false},
+				},
+			},
+			{
+				Query:            "rollback",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from `mydb/b2`.t",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "merge 'b1' rejects pending edits on other",
+		SetUpScript: []string{
+			"create table t (pk int primary key)",
+			"call dolt_commit('-Am', 'setup')",
+			"call dolt_branch('b1')",
+			"call dolt_branch('b2')",
+			"use mydb/b1",
+			"insert into t values (1)",
+			"call dolt_commit('-am', 'advance')",
+			"create database other",
+			"create table other.t (pk int primary key)",
+			"use mydb",
+			"set autocommit=0",
+			"insert into `other`.t values (9)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_merge('b1')",
+				ExpectedErrStr: "cannot merge with uncommitted changes",
+			},
+			{
+				Query:    "select * from t as of 'HEAD'",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select * from `other`.t",
+				Expected: []sql.Row{
+					{9},
+				},
+			},
+			{
+				Query: "select is_merging from dolt_merge_status",
+				Expected: []sql.Row{
+					{false},
+				},
+			},
+			{
+				Query:            "rollback",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from `other`.t",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "merge '--no-ff', 'b1' rejects pending edits on mydb",
+		SetUpScript: []string{
+			"create table t (pk int primary key)",
+			"call dolt_commit('-Am', 'setup')",
+			"call dolt_branch('b1')",
+			"call dolt_branch('b2')",
+			"use mydb/b1",
+			"insert into t values (1)",
+			"call dolt_commit('-am', 'advance')",
+			"create database other",
+			"create table other.t (pk int primary key)",
+			"use mydb",
+			"set autocommit=0",
+			"insert into `mydb`.t values (9)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_merge('--no-ff', 'b1')",
+				ExpectedErrStr: "cannot merge with uncommitted changes",
+			},
+			{
+				Query:    "select * from t as of 'HEAD'",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select * from `mydb`.t",
+				Expected: []sql.Row{
+					{9},
+				},
+			},
+			{
+				Query: "select is_merging from dolt_merge_status",
+				Expected: []sql.Row{
+					{false},
+				},
+			},
+			{
+				Query:            "rollback",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from `mydb`.t",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "merge '--no-ff', 'b1' rejects pending edits on mydb/b2",
+		SetUpScript: []string{
+			"create table t (pk int primary key)",
+			"call dolt_commit('-Am', 'setup')",
+			"call dolt_branch('b1')",
+			"call dolt_branch('b2')",
+			"use mydb/b1",
+			"insert into t values (1)",
+			"call dolt_commit('-am', 'advance')",
+			"create database other",
+			"create table other.t (pk int primary key)",
+			"use mydb",
+			"set autocommit=0",
+			"insert into `mydb/b2`.t values (9)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_merge('--no-ff', 'b1')",
+				ExpectedErrStr: "cannot merge with uncommitted changes",
+			},
+			{
+				Query:    "select * from t as of 'HEAD'",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select * from `mydb/b2`.t",
+				Expected: []sql.Row{
+					{9},
+				},
+			},
+			{
+				Query: "select is_merging from dolt_merge_status",
+				Expected: []sql.Row{
+					{false},
+				},
+			},
+			{
+				Query:            "rollback",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from `mydb/b2`.t",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "merge '--no-ff', 'b1' rejects pending edits on other",
+		SetUpScript: []string{
+			"create table t (pk int primary key)",
+			"call dolt_commit('-Am', 'setup')",
+			"call dolt_branch('b1')",
+			"call dolt_branch('b2')",
+			"use mydb/b1",
+			"insert into t values (1)",
+			"call dolt_commit('-am', 'advance')",
+			"create database other",
+			"create table other.t (pk int primary key)",
+			"use mydb",
+			"set autocommit=0",
+			"insert into `other`.t values (9)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_merge('--no-ff', 'b1')",
+				ExpectedErrStr: "cannot merge with uncommitted changes",
+			},
+			{
+				Query:    "select * from t as of 'HEAD'",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select * from `other`.t",
+				Expected: []sql.Row{
+					{9},
+				},
+			},
+			{
+				Query: "select is_merging from dolt_merge_status",
+				Expected: []sql.Row{
+					{false},
+				},
+			},
+			{
+				Query:            "rollback",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from `other`.t",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "merge '--squash', 'b1' rejects pending edits on mydb",
+		SetUpScript: []string{
+			"create table t (pk int primary key)",
+			"call dolt_commit('-Am', 'setup')",
+			"call dolt_branch('b1')",
+			"call dolt_branch('b2')",
+			"use mydb/b1",
+			"insert into t values (1)",
+			"call dolt_commit('-am', 'advance')",
+			"create database other",
+			"create table other.t (pk int primary key)",
+			"use mydb",
+			"set autocommit=0",
+			"insert into `mydb`.t values (9)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_merge('--squash', 'b1')",
+				ExpectedErrStr: "cannot merge with uncommitted changes",
+			},
+			{
+				Query:    "select * from t as of 'HEAD'",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select * from `mydb`.t",
+				Expected: []sql.Row{
+					{9},
+				},
+			},
+			{
+				Query: "select is_merging from dolt_merge_status",
+				Expected: []sql.Row{
+					{false},
+				},
+			},
+			{
+				Query:            "rollback",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from `mydb`.t",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "merge '--squash', 'b1' rejects pending edits on mydb/b2",
+		SetUpScript: []string{
+			"create table t (pk int primary key)",
+			"call dolt_commit('-Am', 'setup')",
+			"call dolt_branch('b1')",
+			"call dolt_branch('b2')",
+			"use mydb/b1",
+			"insert into t values (1)",
+			"call dolt_commit('-am', 'advance')",
+			"create database other",
+			"create table other.t (pk int primary key)",
+			"use mydb",
+			"set autocommit=0",
+			"insert into `mydb/b2`.t values (9)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_merge('--squash', 'b1')",
+				ExpectedErrStr: "cannot merge with uncommitted changes",
+			},
+			{
+				Query:    "select * from t as of 'HEAD'",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select * from `mydb/b2`.t",
+				Expected: []sql.Row{
+					{9},
+				},
+			},
+			{
+				Query: "select is_merging from dolt_merge_status",
+				Expected: []sql.Row{
+					{false},
+				},
+			},
+			{
+				Query:            "rollback",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from `mydb/b2`.t",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "merge '--squash', 'b1' rejects pending edits on other",
+		SetUpScript: []string{
+			"create table t (pk int primary key)",
+			"call dolt_commit('-Am', 'setup')",
+			"call dolt_branch('b1')",
+			"call dolt_branch('b2')",
+			"use mydb/b1",
+			"insert into t values (1)",
+			"call dolt_commit('-am', 'advance')",
+			"create database other",
+			"create table other.t (pk int primary key)",
+			"use mydb",
+			"set autocommit=0",
+			"insert into `other`.t values (9)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_merge('--squash', 'b1')",
+				ExpectedErrStr: "cannot merge with uncommitted changes",
+			},
+			{
+				Query:    "select * from t as of 'HEAD'",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select * from `other`.t",
+				Expected: []sql.Row{
+					{9},
+				},
+			},
+			{
+				Query: "select is_merging from dolt_merge_status",
+				Expected: []sql.Row{
+					{false},
+				},
+			},
+			{
+				Query:            "rollback",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from `other`.t",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "merge '--no-commit', 'b1' rejects pending edits on mydb",
+		SetUpScript: []string{
+			"create table t (pk int primary key)",
+			"call dolt_commit('-Am', 'setup')",
+			"call dolt_branch('b1')",
+			"call dolt_branch('b2')",
+			"use mydb/b1",
+			"insert into t values (1)",
+			"call dolt_commit('-am', 'advance')",
+			"create database other",
+			"create table other.t (pk int primary key)",
+			"use mydb",
+			"set autocommit=0",
+			"insert into `mydb`.t values (9)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_merge('--no-commit', 'b1')",
+				ExpectedErrStr: "cannot merge with uncommitted changes",
+			},
+			{
+				Query:    "select * from t as of 'HEAD'",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select * from `mydb`.t",
+				Expected: []sql.Row{
+					{9},
+				},
+			},
+			{
+				Query: "select is_merging from dolt_merge_status",
+				Expected: []sql.Row{
+					{false},
+				},
+			},
+			{
+				Query:            "rollback",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from `mydb`.t",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "merge '--no-commit', 'b1' rejects pending edits on mydb/b2",
+		SetUpScript: []string{
+			"create table t (pk int primary key)",
+			"call dolt_commit('-Am', 'setup')",
+			"call dolt_branch('b1')",
+			"call dolt_branch('b2')",
+			"use mydb/b1",
+			"insert into t values (1)",
+			"call dolt_commit('-am', 'advance')",
+			"create database other",
+			"create table other.t (pk int primary key)",
+			"use mydb",
+			"set autocommit=0",
+			"insert into `mydb/b2`.t values (9)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_merge('--no-commit', 'b1')",
+				ExpectedErrStr: "cannot merge with uncommitted changes",
+			},
+			{
+				Query:    "select * from t as of 'HEAD'",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select * from `mydb/b2`.t",
+				Expected: []sql.Row{
+					{9},
+				},
+			},
+			{
+				Query: "select is_merging from dolt_merge_status",
+				Expected: []sql.Row{
+					{false},
+				},
+			},
+			{
+				Query:            "rollback",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from `mydb/b2`.t",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "merge '--no-commit', 'b1' rejects pending edits on other",
+		SetUpScript: []string{
+			"create table t (pk int primary key)",
+			"call dolt_commit('-Am', 'setup')",
+			"call dolt_branch('b1')",
+			"call dolt_branch('b2')",
+			"use mydb/b1",
+			"insert into t values (1)",
+			"call dolt_commit('-am', 'advance')",
+			"create database other",
+			"create table other.t (pk int primary key)",
+			"use mydb",
+			"set autocommit=0",
+			"insert into `other`.t values (9)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_merge('--no-commit', 'b1')",
+				ExpectedErrStr: "cannot merge with uncommitted changes",
+			},
+			{
+				Query:    "select * from t as of 'HEAD'",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select * from `other`.t",
+				Expected: []sql.Row{
+					{9},
+				},
+			},
+			{
+				Query: "select is_merging from dolt_merge_status",
+				Expected: []sql.Row{
+					{false},
+				},
+			},
+			{
+				Query:            "rollback",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from `other`.t",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
 		Name: "CALL DOLT_MERGE complains when a merge overrides local changes",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
@@ -1497,6 +2219,14 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT * FROM dolt_preview_merge_conflicts('main', 'feature-branch', 'test')",
 				Expected: []sql.Row{},
+			},
+			{
+				Query:          "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
+				ExpectedErrStr: "cannot merge with uncommitted changes",
+			},
+			{
+				Query:            "COMMIT",
+				SkipResultsCheck: true,
 			},
 			{
 				Query:          "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
@@ -1675,6 +2405,27 @@ var MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	// https://github.com/dolthub/dolt/issues/8822
+	{
+		Name: "Test concurrent merges with overlapping indexes",
+		SetUpScript: []string{
+			"CREATE TABLE overlap_indexes(pk INT PRIMARY KEY,v INT,UNIQUE KEY uniq(v),KEY idx(v))",
+			"INSERT INTO overlap_indexes VALUES(1,1)",
+			"CALL dolt_commit('-Am','base')",
+			"CALL dolt_checkout('-b','other')",
+			"INSERT INTO overlap_indexes VALUES(2,2)",
+			"CALL dolt_commit('-am','other')",
+			"CALL dolt_checkout('main')",
+			"INSERT INTO overlap_indexes VALUES(3,3)",
+			"CALL dolt_commit('-am','main')",
+			"CALL dolt_merge('other')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "SELECT * FROM overlap_indexes ORDER BY pk", Expected: []sql.Row{{int32(1), int32(1)}, {int32(2), int32(2)}, {int32(3), int32(3)}}},
+			{Query: "SELECT /*+ LOOKUP_JOIN(w, o) JOIN_ORDER(w, o) */ o.* FROM (SELECT 2 AS v) w JOIN overlap_indexes o ON w.v = o.v", Expected: []sql.Row{{int32(2), int32(2)}}},
+			{Query: "SELECT /*+ LOOKUP_JOIN(w, o) JOIN_ORDER(w, o) */ o.* FROM (SELECT 3 AS v) w JOIN overlap_indexes o ON w.v = o.v", Expected: []sql.Row{{int32(3), int32(3)}}},
+		},
+	},
 	{
 		Name: "unique keys, update violation from left",
 		SetUpScript: []string{
@@ -1787,6 +2538,30 @@ var MergeScripts = []queries.ScriptTest{
 					{"t", byte(0), "constraint violation"},
 				},
 			},
+		},
+	},
+	// https://github.com/dolthub/dolt/issues/6612
+	{
+		// charset and collation ALTER TABLE syntax is MySQL-specific
+		Dialect: "mysql",
+		Name:    "Test feature data preservation across collation merges",
+		SetUpScript: []string{
+			"CREATE TABLE t(pk VARCHAR(255) PRIMARY KEY,v VARCHAR(255)) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+			"CALL dolt_commit('-Am','base')",
+			"CALL dolt_checkout('-b','feature')",
+			"INSERT INTO t VALUES('1','first')",
+			"CALL dolt_commit('-am','first row')",
+			"CALL dolt_checkout('main')",
+			"ALTER TABLE t COLLATE utf8mb4_0900_bin",
+			"ALTER TABLE t MODIFY v VARCHAR(255) NOT NULL CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin",
+			"CALL dolt_commit('-am','collation')",
+			"CALL dolt_checkout('feature')",
+			"CALL dolt_merge('main','-m','merge')",
+			"INSERT INTO t VALUES('2','second')",
+			"CALL dolt_commit('-am','second row')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "SELECT to_pk,to_v,diff_type FROM dolt_commit_diff_t WHERE to_commit=HASHOF('feature') AND from_commit=DOLT_MERGE_BASE('main','feature') ORDER BY to_pk", Expected: []sql.Row{{"1", "first", "added"}, {"2", "second", "added"}}},
 		},
 	},
 	// Behavior between new and old format diverges in the case where right adds

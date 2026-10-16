@@ -24,7 +24,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dolthub/fslock"
+	filelocks "github.com/dolthub/file-locks"
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
@@ -161,10 +161,26 @@ func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context, behavior dher
 
 	canCreate := !j.backing.readOnly()
 
+	// If we fail the bootstrap, rollback to an uninitialized state
+	// so that future accesses can try again.
+	var created bool
+	defer func() {
+		if err == nil {
+			return
+		}
+		err = errors.Join(err, j.abortBootstrap(ctx, created))
+	}()
+
 	if canCreate && !ok { // create new journal file
+		// Creating a journal is bounded work and its best to succeed if
+		// we can once we start. Detach from the caller's context so its
+		// cancelation doesn't cause us to fail half way through.
+		ctx := context.WithoutCancel(ctx)
+
 		if err = j.createProtectedJournalWriter(ctx); err != nil {
 			return err
 		}
+		created = true
 
 		_, err = j.wr.bootstrapJournal(ctx, canCreate, j.reflogRingBuffer, warningsCb)
 		if err != nil {
@@ -359,7 +375,7 @@ func (j *ChunkJournal) ConjoinAll(ctx context.Context, behavior dherrors.FatalBe
 }
 
 // Open implements tablePersister.
-func (j *ChunkJournal) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
+func (j *ChunkJournal) Open(ctx context.Context, name hash.Hash, chunkCount uint32, opts openOpts, stats *Stats) (chunkSource, error) {
 	if name == journalAddr {
 		// Open is a tablePersister method with no FatalBehavior parameter; if it has to
 		// bootstrap the journal, fail with an error rather than crashing the process.
@@ -368,7 +384,7 @@ func (j *ChunkJournal) Open(ctx context.Context, name hash.Hash, chunkCount uint
 		}
 		return journalChunkSource{journal: j.wr}, nil
 	}
-	return j.persister.Open(ctx, name, chunkCount, stats)
+	return j.persister.Open(ctx, name, chunkCount, opts, stats)
 }
 
 // Exists implements tablePersister.
@@ -505,6 +521,32 @@ func (j *ChunkJournal) flushToBackingManifest(ctx context.Context, behavior dher
 	return nil
 }
 
+// abortBootstrap returns the ChunkJournal to its uninitialized state
+// after a failed bootstrapJournalWriter. A later call will be
+// responsible for boostraping. |created| says whether the failed call
+// made the journal file, in which case we should delete it as part of
+// cleanup.
+func (j *ChunkJournal) abortBootstrap(ctx context.Context, created bool) error {
+	if j.wr == nil {
+		return nil
+	}
+	if created {
+		return j.dropJournalWriter(ctx)
+	}
+
+	curr := j.wr
+	j.wr = nil
+	// A retry replays the journal from the beginning, so drop the roots this
+	// attempt collected rather than recording them twice.
+	if !reflogDisabled {
+		j.reflogRingBuffer.Truncate()
+	}
+	j.persister.pruneMu.RLock()
+	defer j.persister.pruneMu.RUnlock()
+	defer j.persister.removeProtected(journalAddr)
+	return curr.Close()
+}
+
 func (j *ChunkJournal) dropJournalWriter(ctx context.Context) error {
 	curr := j.wr
 	if curr == nil {
@@ -552,8 +594,19 @@ func (j *ChunkJournal) maybeInit(ctx context.Context, behavior dherrors.FatalBeh
 func (j *ChunkJournal) Close() (err error) {
 	if j.wr != nil {
 		err = j.wr.Close()
-		// flush the latest root to the backing manifest
-		if !j.backing.readOnly() {
+		// Flush the latest root to the backing manifest.
+		//
+		// If j.contents is empty --- its lock is the zero
+		// value --- then there is nothing to flush; there is
+		// no root and there are no other table files. This
+		// happens if we bootstrapped the journal in a store
+		// with no manifest but then never successfully landed
+		// a root update before we got to this Close call. In
+		// that case, it's fine to write no manifest at
+		// all. Attempting to write a manifest with no root
+		// value and no referenced table files (or a 0 chunk
+		// vvvv file) is not clearly better behavior.
+		if !j.backing.readOnly() && !j.contents.lock.IsEmpty() {
 			// Let caller implement FatalBehavior.
 			cerr := j.flushToBackingManifest(context.Background(), dherrors.FatalBehaviorError, j.contents, &Stats{})
 			if err == nil {
@@ -639,8 +692,8 @@ func (c journalConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees []t
 	return c.child.chooseConjoinees(pruned)
 }
 
-func newJournalLock(dir string, timeout time.Duration, failOnTimeout bool) (*fslock.Lock, chunks.ExclusiveAccessMode, error) {
-	lock, err := fslock.New(filepath.Join(dir, lockFileName))
+func newJournalLock(dir string, timeout time.Duration, failOnTimeout bool) (*filelocks.Lock, chunks.ExclusiveAccessMode, error) {
+	lock, err := filelocks.New(filepath.Join(dir, lockFileName))
 	if err != nil {
 		return nil, chunks.ExclusiveAccessMode_ReadOnly, err
 	}
@@ -648,13 +701,13 @@ func newJournalLock(dir string, timeout time.Duration, failOnTimeout bool) (*fsl
 	// if we succeed, hold the file lock until we close the journalManifest
 	if timeout == 0 {
 		err = lock.TryLock()
-		if errors.Is(err, fslock.ErrLocked) {
-			err = fslock.ErrTimeout
+		if errors.Is(err, filelocks.ErrLocked) {
+			err = filelocks.ErrTimeout
 		}
 	} else {
 		err = lock.LockWithTimeout(timeout)
 	}
-	if errors.Is(err, fslock.ErrTimeout) {
+	if errors.Is(err, filelocks.ErrTimeout) {
 		// We didn't acquire the lock; close the *Lock instance and
 		// either fail or fall back to read-only mode.
 		_ = lock.Close()
@@ -673,7 +726,7 @@ func newJournalLock(dir string, timeout time.Duration, failOnTimeout bool) (*fsl
 // newJournalManifest makes a new file manifest.
 // When failOnTimeout is true, callers want a hard error instead of falling back to read-only mode.
 // (The behavior change is implemented separately; this is the plumbing flag.)
-func newJournalManifest(ctx context.Context, dir string, lock *fslock.Lock) (m *journalManifest, err error) {
+func newJournalManifest(ctx context.Context, dir string, lock *filelocks.Lock) (m *journalManifest, err error) {
 	m = &journalManifest{dir: dir, lock: lock}
 
 	var f *os.File
@@ -701,7 +754,7 @@ func newJournalManifest(ctx context.Context, dir string, lock *fslock.Lock) (m *
 }
 
 type journalManifest struct {
-	lock *fslock.Lock
+	lock *filelocks.Lock
 	dir  string
 }
 

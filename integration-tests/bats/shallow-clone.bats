@@ -71,7 +71,7 @@ seed_and_start_serial_remote() {
 
     run dolt sql -q "select count(*) = 1 from dolt_log()"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ \|[[:space:]]+1[[:space:]]+\| ]] || false
 
     # Verify that the table is complete.
     run dolt sql -q "select sum(i) from vals"
@@ -95,7 +95,7 @@ seed_and_start_serial_remote() {
 
     run dolt sql -q "select count(*) = 1 from dolt_log()"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ \|[[:space:]]+1[[:space:]]+\| ]] || false
 
     run dolt sql -q "select * from dolt_log"
     [ "$status" -eq 0 ]
@@ -108,7 +108,7 @@ seed_and_start_serial_remote() {
     # count(*) is served from table statistics, not a row scan, so it needs its own check.
     run dolt sql -q "select count(*) = 1 from dolt_log"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ \|[[:space:]]+1[[:space:]]+\| ]] || false
 }
 
 @test "shallow-clone: dolt_clone depth 2" {
@@ -126,7 +126,7 @@ seed_and_start_serial_remote() {
 
     run dolt sql -q "select count(*) = 2 from dolt_log()"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ \|[[:space:]]+1[[:space:]]+\| ]] || false
 
     # Verify that the table is complete.
     run dolt sql -q "select sum(i) from vals"
@@ -153,7 +153,7 @@ seed_and_start_serial_remote() {
 
     run dolt sql -q "select count(*) = 1 from dolt_log()"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ \|[[:space:]]+1[[:space:]]+\| ]] || false
 
     # Verify that the table is complete.
     run dolt sql -q "select sum(i) from vals"
@@ -280,7 +280,7 @@ seed_and_start_serial_remote() {
 
     run dolt sql -q "select count(*) = 3 from dolt_log()"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ \|[[:space:]]+1[[:space:]]+\| ]] || false
 
     # See https://github.com/dolthub/dolt/issues/11230
     run dolt sql -q "select * from dolt_log"
@@ -293,7 +293,7 @@ seed_and_start_serial_remote() {
 
     run dolt sql -q "select count(*) = 3 from dolt_log"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ \|[[:space:]]+1[[:space:]]+\| ]] || false
 
     # dolt_diff table will show two rows, because each row is a delta.
     run dolt sql -q "select * from dolt_diff"
@@ -311,16 +311,16 @@ seed_and_start_serial_remote() {
     # A full clone would have 5 commits with i=1, so if we have 3, we are looking good.
     run dolt sql -q "select count(*) = 3 from dolt_history_vals where i = 1"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ \|[[:space:]]+1[[:space:]]+\| ]] || false
 
     # A full clone would have 2 commits with i=4, and our shallow clone has all the commits for that row.
     run dolt sql -q "select count(*) = 2 from dolt_history_vals where i = 4"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ \|[[:space:]]+1[[:space:]]+\| ]] || false
 
     run dolt sql -q "select count(distinct commit_hash) = 3 from dolt_history_vals"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ \|[[:space:]]+1[[:space:]]+\| ]] || false
 
     # Verify that the table is complete.
     run dolt sql -q "select sum(i) from vals"
@@ -374,7 +374,7 @@ seed_and_start_serial_remote() {
 
     run dolt sql -q "select count(*) = 7 from dolt_log()"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ \|[[:space:]]+1[[:space:]]+\| ]] || false
 
     run dolt show HEAD~6
     [ "$status" -eq 0 ]
@@ -430,12 +430,12 @@ seed_and_start_serial_remote() {
 
     run dolt sql -q "select count(*) = 1 from dolt_log()"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ \|[[:space:]]+1[[:space:]]+\| ]] || false
 
 ## not working at the moment.... NM4.
 ##    run dolt sql -q "select count(*) = 1 from dolt_log"
 ##    [ "$status" -eq 0 ]
-##    [[ "$output" =~ "true" ]] || false
+##    [[ "$output" =~ \|[[:space:]]+1[[:space:]]+\| ]] || false
 
     # Verify that the table is complete.
     run dolt sql -q "select sum(i) from vals"
@@ -669,12 +669,12 @@ seed_and_start_complex_remote() {
 
     run dolt sql -q "select count(*) = 1 from dolt_log()"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ \|[[:space:]]+1[[:space:]]+\| ]] || false
 
     ## not working at the moment.... NM4.
     ##    run dolt sql -q "select count(*) = 1 from dolt_log"
     ##    [ "$status" -eq 0 ]
-    ##    [[ "$output" =~ "true" ]] || false
+    ##    [[ "$output" =~ \|[[:space:]]+1[[:space:]]+\| ]] || false
 
     # Verify that the table is complete.
     run dolt sql -q "select sum(i) from vals"
@@ -700,12 +700,12 @@ seed_and_start_complex_remote() {
 
     run dolt sql -q "select count(*) = 3 from dolt_log()"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ \|[[:space:]]+1[[:space:]]+\| ]] || false
 
     ## not working at the moment.... NM4.
     ##    run dolt sql -q "select count(*) = 1 from dolt_log"
     ##    [ "$status" -eq 0 ]
-    ##    [[ "$output" =~ "true" ]] || false
+    ##    [[ "$output" =~ \|[[:space:]]+1[[:space:]]+\| ]] || false
 
     # compare the diff between the two parents of the merge commit.
     run dolt diff HEAD^..HEAD^2

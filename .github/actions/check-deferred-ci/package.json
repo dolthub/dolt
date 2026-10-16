@@ -1,0 +1,7 @@
+{
+  "name": "dolt-ci-scheduling-tests",
+  "private": true,
+  "scripts": {
+    "test": "node --test *.test.js"
+  }
+}

@@ -214,7 +214,7 @@ SELECT count(*)=0 FROM dolt_diff_test;
 SQL
     [ $status -eq 0 ]
     # Represents that the diff table marks a change from the recent commit.
-    [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ \|[[:space:]]+1[[:space:]]+\| ]] || false
 }
 
 @test "sql-reset: No rows in dolt_status table after DOLT_RESET('--hard') on committed table." {
@@ -225,7 +225,7 @@ SQL
 
     run dolt sql -q "SELECT count(*)=0 FROM dolt_status"
     [ $status -eq 0 ]
-    [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ \|[[:space:]]+1[[:space:]]+\| ]] || false
 }
 
 @test "sql-reset: CALL DOLT_RESET --hard properly maintains session variables." {
@@ -301,7 +301,7 @@ SQL
 
     run dolt sql -r csv -q "select * from dolt_status_ignored"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "test2,0,new table,true" ]] || false
+    [[ "$output" =~ test2,0,new[[:space:]]+table,1(,|[[:space:]]|$) ]] || false
 
     run dolt sql -q "select * from test2"
     [ "$status" -eq 0 ]

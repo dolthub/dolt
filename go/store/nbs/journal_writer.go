@@ -102,7 +102,7 @@ func openJournalWriter(ctx context.Context, path string) (wr *journalWriter, exi
 
 	return &journalWriter{
 		buf:     make([]byte, 0, journalWriterBuffSize),
-		journal: f,
+		journal: newJournalFile(f),
 		path:    path,
 	}, true, nil
 }
@@ -126,7 +126,7 @@ func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, e
 
 	return &journalWriter{
 		buf:     make([]byte, 0, journalWriterBuffSize),
-		journal: f,
+		journal: newJournalFile(f),
 		path:    path,
 	}, nil
 }
@@ -136,12 +136,16 @@ func deleteJournalAndIndexFiles(ctx context.Context, path string) (err error) {
 		return err
 	}
 	idxPath := filepath.Join(filepath.Dir(path), journalIndexFileName)
-	return os.Remove(idxPath)
+	// The index doesn't necessarily exist, even if the journal did.
+	if err = os.Remove(idxPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
 }
 
 type journalWriter struct {
 	ranges      rangeIndex
-	journal     *os.File
+	journal     *journalFile
 	indexWriter *bufio.Writer
 	index       *os.File
 	path        string
@@ -191,7 +195,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, canWrite bool, re
 	// process the non-indexed portion of the journal starting at |wr.indexed|,
 	// at minimum the non-indexed portion will include a root hash record.
 	// Index lookups are added to the ongoing batch to re-synchronize.
-	wr.off, err = processJournalRecords(ctx, wr.path, wr.journal, canWrite, wr.indexed, func(o int64, r journalRec) error {
+	wr.off, err = processJournalRecords(ctx, wr.path, wr.journal.f, canWrite, wr.indexed, func(o int64, r journalRec) error {
 		switch r.kind {
 		case chunkJournalRecKind:
 			rng := Range{
@@ -355,7 +359,7 @@ func (wr *journalWriter) readJournalIndex(ctx context.Context, canWrite bool) er
 
 			// |r.end| is expected to point to a root hash record in |wr.journal|
 			// containing a hash equal to |r.lastRoot|, validate this here
-			if h, err := peekRootHashAt(wr.journal, int64(m.batchEnd)); err != nil {
+			if h, err := peekRootHashAt(wr.journal.f, int64(m.batchEnd)); err != nil {
 				return err
 			} else if h != m.latestHash {
 				return fmt.Errorf("invalid index record hash (%s != %s)", h.String(), m.latestHash.String())
@@ -552,7 +556,7 @@ func (wr *journalWriter) commitRootHashUnlocked(ctx context.Context, behavior dh
 	func() {
 		defer trace.StartRegion(ctx, "sync").End()
 
-		err = wr.journal.Sync()
+		err = wr.journal.syncData()
 	}()
 	if err != nil {
 		return dherrors.Fatalf(behavior, "%w: error syncing journal", err)
@@ -594,7 +598,7 @@ func (wr *journalWriter) readAt(p []byte, off int64) (n int, err error) {
 			bp = p[fread:]
 			p = p[:fread]
 		}
-		if n, err = wr.journal.ReadAt(p, off); err != nil {
+		if n, err = wr.journal.f.ReadAt(p, off); err != nil {
 			return 0, err
 		}
 		off = 0
@@ -627,7 +631,7 @@ func (wr *journalWriter) getBytes(ctx context.Context, behavior dherrors.FatalBe
 // flush writes buffered data into the journal file.
 func (wr *journalWriter) flush(ctx context.Context, behavior dherrors.FatalBehavior) (err error) {
 	defer trace.StartRegion(ctx, "flush journal").End()
-	if _, err = wr.journal.WriteAt(wr.buf, wr.off); err != nil {
+	if _, err = wr.journal.writeAt(wr.buf, wr.off); err != nil {
 		return dherrors.Fatalf(behavior, "%w: error writing to database journal file", err)
 	}
 	wr.off += int64(len(wr.buf))
@@ -721,10 +725,10 @@ func (wr *journalWriter) Close() (err error) {
 		}
 		_ = wr.index.Close()
 	}
-	if cerr := wr.journal.Sync(); cerr != nil {
+	if cerr := wr.journal.finish(wr.off); cerr != nil {
 		err = cerr
 	}
-	if cerr := wr.journal.Close(); cerr != nil {
+	if cerr := wr.journal.f.Close(); cerr != nil {
 		err = cerr
 	} else {
 		// Nil out the journal after the file has been closed, so that it's obvious it's been closed

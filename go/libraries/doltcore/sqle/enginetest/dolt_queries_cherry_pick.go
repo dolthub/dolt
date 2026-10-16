@@ -17,11 +17,11 @@ package enginetest
 import (
 	"time"
 
-	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/go-mysql-server/testutils"
 )
 
 // timeValidator validates that a value is a time.Time with the expected date/time
@@ -29,7 +29,7 @@ type timeValidator struct {
 	expectedTime time.Time
 }
 
-var _ enginetest.CustomValueValidator = &timeValidator{}
+var _ testutils.CustomValueValidator = &timeValidator{}
 
 func (tv *timeValidator) Validate(val interface{}) (bool, error) {
 	t, ok := val.(time.Time)

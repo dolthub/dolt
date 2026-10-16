@@ -225,7 +225,7 @@ func RunVersionedQueriesTest(t *testing.T, h DoltEnginetestHarness) {
 	require.NoError(t, err)
 
 	for _, tt := range queries.VersionedQueries {
-		enginetest.TestQueryWithEngine(t, h, e, tt)
+		enginetest.TestQuery(t, h, e, tt)
 	}
 
 	for _, tt := range queries.VersionedScripts {
@@ -417,14 +417,30 @@ func RunForeignKeyBranchesTest(t *testing.T, h DoltEnginetestHarness) {
 			SkipResultsCheck: true,
 		},
 	}
-	for _, script := range queries.ForeignKeyTests {
-		// New harness for every script because we create branches
-		h := h.NewHarness(t)
-		h.Setup(setup.MydbData, setup.Parent_childData)
-		modifiedScript := script
-		modifiedScript.SetUpScript = append(setupPrefix, modifiedScript.SetUpScript...)
-		modifiedScript.Assertions = append(assertionsPrefix, modifiedScript.Assertions...)
-		enginetest.TestScript(t, h, modifiedScript)
+	// These collections together contain the original ForeignKeyTests, including
+	// cases relocated by the script refactor. All must run against branch databases.
+	for _, suite := range []struct {
+		scripts            []queries.ScriptTest
+		parentChildFixture bool
+	}{
+		{scripts: queries.ForeignKeyTests, parentChildFixture: true},
+		{scripts: queries.ForeignKeyTypeTests},
+		{scripts: queries.ForeignKeyResolutionTests},
+	} {
+		for _, script := range suite.scripts {
+			// New harness for every script because we create branches
+			h := h.NewHarness(t)
+			if suite.parentChildFixture {
+				h.Setup(setup.MydbData, setup.Parent_childData)
+			} else {
+				h.Setup(setup.MydbData)
+			}
+
+			modifiedScript := script
+			modifiedScript.SetUpScript = append(setupPrefix, modifiedScript.SetUpScript...)
+			modifiedScript.Assertions = append(assertionsPrefix, modifiedScript.Assertions...)
+			enginetest.TestScript(t, h, modifiedScript)
+		}
 	}
 
 	for _, script := range ForeignKeyBranchTests {
@@ -446,14 +462,30 @@ func RunForeignKeyBranchesPreparedTest(t *testing.T, h DoltEnginetestHarness) {
 			SkipResultsCheck: true,
 		},
 	}
-	for _, script := range queries.ForeignKeyTests {
-		// New harness for every script because we create branches
-		h := h.NewHarness(t)
-		h.Setup(setup.MydbData, setup.Parent_childData)
-		modifiedScript := script
-		modifiedScript.SetUpScript = append(setupPrefix, modifiedScript.SetUpScript...)
-		modifiedScript.Assertions = append(assertionsPrefix, modifiedScript.Assertions...)
-		enginetest.TestScriptPrepared(t, h, modifiedScript)
+	// These collections together contain the original ForeignKeyTests, including
+	// cases relocated by the script refactor. All must run against branch databases.
+	for _, suite := range []struct {
+		scripts            []queries.ScriptTest
+		parentChildFixture bool
+	}{
+		{scripts: queries.ForeignKeyTests, parentChildFixture: true},
+		{scripts: queries.ForeignKeyTypeTests},
+		{scripts: queries.ForeignKeyResolutionTests},
+	} {
+		for _, script := range suite.scripts {
+			// New harness for every script because we create branches
+			h := h.NewHarness(t)
+			if suite.parentChildFixture {
+				h.Setup(setup.MydbData, setup.Parent_childData)
+			} else {
+				h.Setup(setup.MydbData)
+			}
+
+			modifiedScript := script
+			modifiedScript.SetUpScript = append(setupPrefix, modifiedScript.SetUpScript...)
+			modifiedScript.Assertions = append(assertionsPrefix, modifiedScript.Assertions...)
+			enginetest.TestScriptPrepared(t, h, modifiedScript)
+		}
 	}
 
 	for _, script := range ForeignKeyBranchTests {
@@ -1787,10 +1819,100 @@ func RunDoltCommitTests(t *testing.T, harness DoltEnginetestHarness) {
 	}
 }
 
+func RunDoltCommitAllTests(t *testing.T, harness DoltEnginetestHarness) {
+	defer harness.Close()
+	for _, script := range DoltCommitAllTests {
+		h := harness.NewHarness(t)
+		enginetest.TestScript(t, h, script)
+		h.Close()
+	}
+}
+
 func RunDoltCommitTestsPrepared(t *testing.T, harness DoltEnginetestHarness) {
 	defer harness.Close()
 	for _, script := range DoltCommitTests {
 		enginetest.TestScriptPrepared(t, harness, script)
+	}
+}
+
+func RunDoltCommitAllTestsPrepared(t *testing.T, harness DoltEnginetestHarness) {
+	defer harness.Close()
+	for _, script := range DoltCommitAllTests {
+		h := harness.NewHarness(t)
+		enginetest.TestScriptPrepared(t, h, script)
+		h.Close()
+	}
+}
+
+func RunDoltCommitAllTransactionTests(t *testing.T, harness DoltEnginetestHarness, prepared bool) {
+	defer harness.Close()
+	for _, script := range append(DoltCommitAllTransactionTests, MultiBranchHeadTransactionTests...) {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestTransactionScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestTransactionScript(t, h, script)
+			}
+		}()
+	}
+}
+
+func RunMultiBranchTransactionTests(t *testing.T, harness DoltEnginetestHarness, prepared bool) {
+	defer harness.Close()
+	for _, script := range MultiBranchWorkingSetTransactionTests {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestTransactionScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestTransactionScript(t, h, script)
+			}
+		}()
+	}
+}
+
+func RunMultiBranchCommitTests(t *testing.T, harness DoltEnginetestHarness, prepared bool) {
+	defer harness.Close()
+	for _, script := range DoltMultiBranchCommitTests {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestScript(t, h, script)
+			}
+		}()
+	}
+	for _, group := range []struct {
+		name  string
+		tests []queries.TransactionTest
+	}{
+		{
+			name:  "dolt_commit",
+			tests: MultiBranchExplicitCommitTransactions,
+		},
+		{
+			name:  "transaction_commit",
+			tests: MultiBranchAutomaticCommitTransactions,
+		},
+	} {
+		t.Run(group.name, func(t *testing.T) {
+			for _, script := range group.tests {
+				func() {
+					h := harness.NewHarness(t)
+					defer h.Close()
+					if prepared {
+						enginetest.TestTransactionScriptPrepared(t, h, script)
+					} else {
+						enginetest.TestTransactionScript(t, h, script)
+					}
+				}()
+			}
+		})
 	}
 }
 

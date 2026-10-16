@@ -2252,19 +2252,19 @@ EOF
 
     run dolt sql -q "SELECT name,dirty FROM dolt_branches"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "br1  | false" ]] || false
-    [[ "$output" =~ "br2  | true " ]] || false
-    [[ "$output" =~ "br3  | true" ]] || false
-    [[ "$output" =~ "main | false" ]] || false
+    [[ "$output" =~ br1[[:space:]]+\|[[:space:]]+0[[:space:]]+\| ]] || false
+    [[ "$output" =~ br2[[:space:]]+\|[[:space:]]+1[[:space:]]+\| ]] || false
+    [[ "$output" =~ br3[[:space:]]+\|[[:space:]]+1[[:space:]]+\| ]] || false
+    [[ "$output" =~ main[[:space:]]+\|[[:space:]]+0[[:space:]]+\| ]] || false
 
     # Verify that the dolt_branches table show the same output, regardless of the checked out branch.
     dolt checkout br1
     run dolt sql -q "SELECT name,dirty FROM dolt_branches"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "br1  | false" ]] || false
-    [[ "$output" =~ "br2  | true " ]] || false
-    [[ "$output" =~ "br3  | true" ]] || false
-    [[ "$output" =~ "main | false" ]] || false
+    [[ "$output" =~ br1[[:space:]]+\|[[:space:]]+0[[:space:]]+\| ]] || false
+    [[ "$output" =~ br2[[:space:]]+\|[[:space:]]+1[[:space:]]+\| ]] || false
+    [[ "$output" =~ br3[[:space:]]+\|[[:space:]]+1[[:space:]]+\| ]] || false
+    [[ "$output" =~ main[[:space:]]+\|[[:space:]]+0[[:space:]]+\| ]] || false
 }
 
 @test "sql-server: warning log on forced __dolt_local_user__ drop after restart" {

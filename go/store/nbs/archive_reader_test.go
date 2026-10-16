@@ -66,7 +66,7 @@ func TestInMemoryArchiveIndexReaderQuota(t *testing.T) {
 		assert.Equal(t, uint64(0), q.Usage())
 		ctx := context.Background()
 		stats := &Stats{}
-		reader, err := newArchiveReader(ctx, tra, h, uint64(tra.sz), q, stats)
+		reader, err := newArchiveReader(ctx, tra, h, uint64(tra.sz), q, openOpts{deepValidate: true}, stats)
 		require.NoError(t, err)
 
 		// It should have acquired quote.
@@ -129,7 +129,7 @@ func TestInMemoryArchiveIndexReaderQuota(t *testing.T) {
 				assert.Equal(t, uint64(0), q.Usage())
 				ctx := context.Background()
 				stats := &Stats{}
-				_, err = newArchiveReader(ctx, &errorAfter{tra, afterBytes}, h, uint64(tra.sz), q, stats)
+				_, err = newArchiveReader(ctx, &errorAfter{tra, afterBytes}, h, uint64(tra.sz), q, openOpts{deepValidate: true}, stats)
 				require.Error(t, err)
 				assert.Equal(t, uint64(0), q.Usage())
 				require.NoError(t, tra.Close())
@@ -157,7 +157,7 @@ func TestInMemoryArchiveIndexReaderQuota(t *testing.T) {
 				assert.Equal(t, uint64(0), q.Usage())
 				ctx := context.Background()
 				stats := &Stats{}
-				_, err = newArchiveReader(ctx, tra, h, uint64(tra.sz), &q, stats)
+				_, err = newArchiveReader(ctx, tra, h, uint64(tra.sz), &q, openOpts{deepValidate: true}, stats)
 				require.Error(t, err)
 				assert.Equal(t, uint64(0), q.Usage())
 			})
@@ -251,7 +251,7 @@ func chunkRefFor(t *testing.T, ar archiveReader, h hash.Hash) resolvedChunk {
 
 func openMixedReader(t *testing.T, ctx context.Context, arc mixedArchive, rd tableReaderAt) archiveReader {
 	t.Helper()
-	ar, err := newArchiveReader(ctx, rd, arc.name, uint64(len(arc.data)), NewUnlimitedMemQuotaProvider(), &Stats{})
+	ar, err := newArchiveReader(ctx, rd, arc.name, uint64(len(arc.data)), NewUnlimitedMemQuotaProvider(), openOpts{deepValidate: true}, &Stats{})
 	require.NoError(t, err)
 	t.Cleanup(func() { ar.close() })
 	return ar

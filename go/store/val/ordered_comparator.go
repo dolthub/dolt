@@ -109,7 +109,7 @@ func (c *OrderedTupleComparator) WithValueStore(vs ValueStore) TupleComparator {
 	return &OrderedTupleComparator{innerCmp: c.innerCmp.WithValueStore(vs), orders: c.orders}
 }
 
-// Order returns the sort order of field `i`.
+// Order implements the TupleComparator interface.
 func (c *OrderedTupleComparator) Order(i int) sql.IndexColumnOrder {
 	return c.orders[i]
 }

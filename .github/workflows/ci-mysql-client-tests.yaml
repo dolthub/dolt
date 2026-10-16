@@ -15,6 +15,10 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     steps:
+      - name: Check deferred CI
+        uses: $/.github/actions/check-deferred-ci
+        with:
+          timezone: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
       - name: Checkout
         uses: actions/checkout@v6
         with:

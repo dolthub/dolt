@@ -102,15 +102,24 @@ func (r *Remote) GetParamOrDefault(pName, defVal string) string {
 	return val
 }
 
-func (r *Remote) GetRemoteDB(ctx context.Context, nbf *types.NomsBinFormat, dialer dbfactory.GRPCDialProvider) (*doltdb.DoltDB, error) {
+// DBFactoryParams returns a fresh parameter map for opening or identifying this
+// remote. Git cache lookups and database opens must use the same cache root.
+func (r *Remote) DBFactoryParams(dialer dbfactory.GRPCDialProvider) (map[string]interface{}, error) {
 	params := make(map[string]interface{})
 	for k, v := range r.Params {
 		params[k] = v
 	}
 
 	params[dbfactory.GRPCDialProviderParam] = dialer
-	if u, err := earl.Parse(r.Url); err == nil && u != nil && strings.HasPrefix(strings.ToLower(u.Scheme), "git+") {
+	u, err := earl.Parse(r.Url)
+	if err != nil {
+		return nil, err
+	}
+	if strings.HasPrefix(strings.ToLower(u.Scheme), "git+") {
 		params[dbfactory.GitRemoteNameParam] = r.Name
+		if err := addGitRemoteHistoryConfig(params, dialer); err != nil {
+			return nil, err
+		}
 		if p, ok := dialer.(dbfactory.GitCacheRootProvider); ok {
 			if root, ok := p.GitCacheRoot(); ok {
 				params[dbfactory.GitCacheRootParam] = filepath.Join(root, dbfactory.DoltDir, dbfactory.GitRemoteCacheDirName)
@@ -118,27 +127,24 @@ func (r *Remote) GetRemoteDB(ctx context.Context, nbf *types.NomsBinFormat, dial
 		}
 	}
 
+	return params, nil
+}
+
+func (r *Remote) GetRemoteDB(ctx context.Context, nbf *types.NomsBinFormat, dialer dbfactory.GRPCDialProvider) (*doltdb.DoltDB, error) {
+	params, err := r.DBFactoryParams(dialer)
+	if err != nil {
+		return nil, err
+	}
 	return doltdb.LoadDoltDBWithParams(ctx, nbf, r.Url, filesys2.LocalFS, params)
 }
 
 // Prepare does whatever work is necessary to prepare the remote given to receive pushes. Not all remote types can
 // support this operations and must be prepared manually. For existing remotes, no work is done.
 func (r *Remote) Prepare(ctx context.Context, nbf *types.NomsBinFormat, dialer dbfactory.GRPCDialProvider) error {
-	params := make(map[string]interface{})
-	for k, v := range r.Params {
-		params[k] = v
+	params, err := r.DBFactoryParams(dialer)
+	if err != nil {
+		return err
 	}
-
-	params[dbfactory.GRPCDialProviderParam] = dialer
-	if u, err := earl.Parse(r.Url); err == nil && u != nil && strings.HasPrefix(strings.ToLower(u.Scheme), "git+") {
-		params[dbfactory.GitRemoteNameParam] = r.Name
-		if p, ok := dialer.(dbfactory.GitCacheRootProvider); ok {
-			if root, ok := p.GitCacheRoot(); ok {
-				params[dbfactory.GitCacheRootParam] = filepath.Join(root, dbfactory.DoltDir, dbfactory.GitRemoteCacheDirName)
-			}
-		}
-	}
-
 	return dbfactory.PrepareDB(ctx, nbf, r.Url, params)
 }
 
@@ -155,23 +161,41 @@ func (r *Remote) Prepare(ctx context.Context, nbf *types.NomsBinFormat, dialer d
 // for closing the returned [doltdb.DoltDB] when done to release file descriptors and other
 // associated resources.
 func (r *Remote) GetRemoteDBWithoutCaching(ctx context.Context, nbf *types.NomsBinFormat, dialer dbfactory.GRPCDialProvider) (*doltdb.DoltDB, error) {
-	params := make(map[string]interface{})
-	for k, v := range r.Params {
-		params[k] = v
+	params, err := r.DBFactoryParams(dialer)
+	if err != nil {
+		return nil, err
 	}
 	params[dbfactory.DisableSingletonCacheParam] = "true"
 	params[dbfactory.NoCachingParameter] = "true"
-	params[dbfactory.GRPCDialProviderParam] = dialer
-	if u, err := earl.Parse(r.Url); err == nil && u != nil && strings.HasPrefix(strings.ToLower(u.Scheme), "git+") {
-		params[dbfactory.GitRemoteNameParam] = r.Name
-		if p, ok := dialer.(dbfactory.GitCacheRootProvider); ok {
-			if root, ok := p.GitCacheRoot(); ok {
-				params[dbfactory.GitCacheRootParam] = filepath.Join(root, dbfactory.DoltDir, dbfactory.GitRemoteCacheDirName)
+	return doltdb.LoadDoltDBWithParams(ctx, nbf, r.Url, filesys2.LocalFS, params)
+}
+
+func addGitRemoteHistoryConfig(params map[string]interface{}, dialer dbfactory.GRPCDialProvider) error {
+	var fs filesys2.Filesys = filesys2.LocalFS
+	if p, ok := dialer.(dbfactory.GitCacheRootProvider); ok {
+		if root, ok := p.GitCacheRoot(); ok {
+			var err error
+			fs, err = fs.WithWorkingDir(root)
+			if err != nil {
+				return err
 			}
 		}
 	}
-
-	return doltdb.LoadDoltDBWithParams(ctx, nbf, r.Url, filesys2.LocalFS, params)
+	cfg, err := loadDoltConfig(GetCurrentUserHomeDir, fs)
+	if err != nil {
+		return err
+	}
+	for _, key := range []string{config.GitRemoteMaxHistoryCommits, config.GitRemoteResetOnPrune} {
+		value, err := cfg.GetString(key)
+		if errors.Is(err, config.ErrConfigParamNotFound) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("reading %s: %w", key, err)
+		}
+		params[key] = value
+	}
+	return nil
 }
 
 func (r Remote) WithParams(params map[string]string) Remote {
@@ -367,6 +391,9 @@ func getPushTargetFromRefSpec(refSpec ref.RefSpec, currentBranch ref.DoltRef, re
 	var err error
 	switch src.GetType() {
 	case ref.BranchRefType:
+		if !ref.IsValidBranchName(dest.GetPath()) {
+			return nil, fmt.Errorf("%w: '%s'", doltdb.ErrInvBranchName, dest.GetPath())
+		}
 		remoteRef, err = GetTrackingRef(dest, *remote)
 	case ref.TagRefType:
 		if setUpstream {

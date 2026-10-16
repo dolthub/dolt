@@ -28,7 +28,6 @@ import (
 	"github.com/dolthub/go-mysql-server/memory"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
-	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
@@ -148,7 +147,7 @@ func newDoltEnginetestHarness(t *testing.T) DoltEnginetestHarness {
 // newDoltServerTestHarness creates a harness that starts a MySQL server
 // and runs tests by connecting to the server with a driver. This is useful
 // for testing the server's handler.
-func newDoltServerTestHarness(t *testing.T) DoltEnginetestHarness {
+func newDoltServerTestHarness(t *testing.T) *DoltHarness {
 	dh := newDoltHarness(t)
 	dh.server = true
 	return dh
@@ -288,7 +287,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		if err != nil {
 			return nil, err
 		}
-		e.Analyzer.ExecBuilder = rowexec.NewBuilder(kvexec.Builder{}, e.Analyzer.Overrides)
+		e.Analyzer.ExecBuilder = kvexec.NewExecBuilder(e.Analyzer.Overrides)
 		e.Analyzer.ExecBuilder.Runner = e.Analyzer.Runner
 		d.engine = e
 
@@ -673,4 +672,8 @@ func (d *DoltHarness) ValidateEngine(ctx *sql.Context, e *gms.Engine) (err error
 		}
 	}
 	return
+}
+
+func (d *DoltHarness) SupportsValueRow() bool {
+	return true
 }

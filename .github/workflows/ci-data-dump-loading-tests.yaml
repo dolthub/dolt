@@ -16,6 +16,10 @@ jobs:
     timeout-minutes: 30
     name: Run tests
     steps:
+      - name: Check deferred CI
+        uses: $/.github/actions/check-deferred-ci
+        with:
+          timezone: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
       - name: Checkout
         uses: actions/checkout@v6
       - name: Copy go package
