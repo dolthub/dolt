@@ -316,7 +316,7 @@ func longRunningConflictSetup() []string {
 func AllMergeMultipleBasesScripts() []queries.ScriptTest {
 	var scripts []queries.ScriptTest
 	for _, list := range [][]queries.ScriptTest{MergeMultipleBasesScripts, MergeMultipleBasesResolveOursScripts,
-		MergeMultipleBasesResolveTheirsScripts, MergeMultipleBasesResolveByEditScripts} {
+		MergeMultipleBasesResolveTheirsScripts, MergeMultipleBasesResolveByEditScripts, MergeMultipleBasesAbortScripts} {
 		scripts = append(scripts, list...)
 	}
 	return scripts
@@ -374,6 +374,42 @@ var MergeMultipleBasesResolveByEditScripts = []queries.ScriptTest{
 	resolvedMergeScript("merge bases that conflict on a deleted row, resolved differently: resolve by editing the row", deleteAgainstEditSetup(false, true), "y",
 		[]string{"REPLACE INTO t VALUES (1, 'edited', 'edited');", "DELETE FROM dolt_conflicts_t;"},
 		"SELECT * FROM t ORDER BY id;", []sql.Row{{1, "edited", "edited"}, {2, "x", "y"}}),
+}
+
+// abortedMergeScript merges |source| after |setup|, expecting conflicts, aborts the merge, and checks that |query|
+// returns |expected|, the rows before the merge, and that no merge or conflict is left, as `git merge --abort` does.
+func abortedMergeScript(name string, setup []string, source string, query string, expected []sql.Row) queries.ScriptTest {
+	return queries.ScriptTest{
+		Name:        name,
+		SetUpScript: setup,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    fmt.Sprintf("CALL DOLT_MERGE('%s', '-m', 'merge %s');", source, source),
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "CALL DOLT_MERGE('--abort');",
+				Expected: []sql.Row{{"", 0, 0, "merge aborted"}},
+			},
+			{Query: query, Expected: expected},
+			{Query: "SELECT count(*) FROM dolt_conflicts;", Expected: []sql.Row{{0}}},
+			{Query: "SELECT is_merging FROM dolt_merge_status;", Expected: []sql.Row{{false}}},
+			{Query: "SELECT count(*) FROM dolt_status;", Expected: []sql.Row{{0}}},
+		},
+	}
+}
+
+// MergeMultipleBasesAbortScripts abort each conflicting merge against a virtual merge base.
+var MergeMultipleBasesAbortScripts = []queries.ScriptTest{
+	abortedMergeScript("long-running schema branch with a conflict: abort", longRunningConflictSetup(), "main",
+		"SELECT id, v, w FROM t WHERE id IN (1, 2, 3) OR id > 103 AND id < 200 ORDER BY id;",
+		[]sql.Row{{1, "feature 5", "seed"}, {2, "seed", "seed"}, {3, "seed", "feature"}}),
+	abortedMergeScript("conflicting merge bases, resolved differently: abort", conflictingMergeBasesSetup("x wins", "y wins", false), "y",
+		"SELECT * FROM t ORDER BY id;", []sql.Row{{1, "x wins", "seed"}, {2, "x", "y"}}),
+	abortedMergeScript("conflicting merge bases, one side resolved to the old value: abort", conflictingMergeBasesSetup("seed", "y", false), "y",
+		"SELECT * FROM t ORDER BY id;", []sql.Row{{1, "seed", "seed"}, {2, "x", "y"}}),
+	abortedMergeScript("merge bases that conflict on a deleted row, resolved differently: abort", deleteAgainstEditSetup(false, true), "y",
+		"SELECT * FROM t ORDER BY id;", []sql.Row{{2, "x", "y"}}),
 }
 
 // MergeMultipleBasesScripts merge branches that have more than one merge base. The expected results are git's: each
