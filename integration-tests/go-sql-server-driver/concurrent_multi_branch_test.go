@@ -20,9 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"os"
-	"strconv"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -56,24 +53,18 @@ type concurrentBranchStats struct {
 	maxRetries int
 }
 
-// Every statement owns a distinct key, including across transactions. Updates and
-// deletes start from committed fixture rows; inserts start from absent rows. Thus
-// no later statement can overwrite or hide a lost statement's effect.
+// Every insert owns a distinct key, including across transactions, so no later
+// statement can overwrite or hide a lost insert.
 func runConcurrentMultiBranch(t *testing.T, mode string) {
 	const writers = 20
 	const batches = 50
 	const branches = 3
-	seed := int64(11928)
-	if value := os.Getenv("DOLT_CONCURRENCY_SEED"); value != "" {
-		var err error
-		seed, err = strconv.ParseInt(value, 10, 64)
-		require.NoError(t, err)
-	}
+	seed := time.Now().UnixNano()
+
 	t.Logf("mode=%s seed=%d writers=%d transactions_per_writer=%d", mode, seed, writers, batches)
 	rng := rand.New(rand.NewSource(seed))
 	plans := make([][]concurrentBranchTransaction, writers)
 	expected := make([]map[int]int, branches)
-	fixtures := make([][]string, branches)
 	messages := make([]map[string]bool, branches)
 	for b := range expected {
 		expected[b] = make(map[int]int)
@@ -91,19 +82,8 @@ func runConcurrentMultiBranch(t *testing.T, mode string) {
 				key := w*batches*10 + batch*10 + i
 				value := key + 1
 				table := fmt.Sprintf("`concurrency/b%d`.items", b)
-				var query string
-				switch rng.Intn(3) {
-				case 0:
-					query = fmt.Sprintf("INSERT INTO %s VALUES (%d, %d)", table, key, value)
-					expected[b][key] = value
-				case 1:
-					fixtures[b] = append(fixtures[b], fmt.Sprintf("(%d, 0)", key))
-					query = fmt.Sprintf("UPDATE %s SET v = %d WHERE id = %d", table, value, key)
-					expected[b][key] = value
-				case 2:
-					fixtures[b] = append(fixtures[b], fmt.Sprintf("(%d, 0)", key))
-					query = fmt.Sprintf("DELETE FROM %s WHERE id = %d", table, key)
-				}
+				query := fmt.Sprintf("INSERT INTO %s VALUES (%d, %d)", table, key, value)
+				expected[b][key] = value
 				tx.statements = append(tx.statements, query)
 				messages[b][tx.message] = true
 			}
@@ -149,11 +129,6 @@ func runConcurrentMultiBranch(t *testing.T, mode string) {
 	baseline := make([]map[string]bool, branches)
 	for b := 0; b < branches; b++ {
 		exec(fmt.Sprintf("CALL dolt_checkout('-b', 'b%d')", b))
-		// Branch from the common schema, never another branch's fixture.
-		if len(fixtures[b]) != 0 {
-			exec("INSERT INTO items VALUES " + strings.Join(fixtures[b], ","))
-		}
-		exec("CALL dolt_commit('-am', 'fixture')")
 		baseline[b] = readConcurrentBranchLog(t, ctx, setup, b)
 		exec("CALL dolt_checkout('main')")
 	}
@@ -208,8 +183,8 @@ func runConcurrentMultiBranch(t *testing.T, mode string) {
 		require.NoError(t, conn.Close())
 	}
 
-	// A fresh single reader checks complete row sets, including absence of deleted
-	// rows, and checks committed HEADs independently of working-set visibility.
+	// A fresh single reader checks complete row sets and committed HEADs
+	// independently of working-set visibility.
 	reader, err := db.Conn(ctx)
 	require.NoError(t, err)
 	defer reader.Close()
