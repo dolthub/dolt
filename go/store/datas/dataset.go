@@ -631,9 +631,14 @@ func (ds Dataset) HeadWorkingSet() (*WorkingSetHead, error) {
 	return ds.head.HeadWorkingSet()
 }
 
-// HasHead() returns 'true' if this dataset has a Head Commit, false otherwise.
+// HasHead returns 'true' if this dataset has a Head Commit, false otherwise.
 func (ds Dataset) HasHead() bool {
 	return ds.head != nil
+}
+
+// IsEmpty returns 'true' if this dataset is the zero value
+func (ds Dataset) IsEmpty() bool {
+	return ds.head == nil && ds.id == ""
 }
 
 // MaybeHeadValue returns the Value field of the current head Commit, if

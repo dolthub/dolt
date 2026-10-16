@@ -684,6 +684,13 @@ func (ws *WorkingSet) HashOf() (hash.Hash, error) {
 	return *ws.addr, nil
 }
 
+// WithRef returns a copy of this working set belonging to the given ref.
+func (ws *WorkingSet) WithRef(wsRef ref.WorkingSetRef) *WorkingSet {
+	updated := *ws
+	updated.Name = wsRef.GetPath()
+	return &updated
+}
+
 // Ref returns a WorkingSetRef for this WorkingSet.
 func (ws *WorkingSet) Ref() ref.WorkingSetRef {
 	return ref.NewWorkingSetRef(ws.Name)
