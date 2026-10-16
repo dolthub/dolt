@@ -15,6 +15,8 @@
 package enginetest
 
 import (
+	"fmt"
+
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 )
@@ -52,6 +54,67 @@ var schemaBranchSetup = []string{
 	"CALL DOLT_MERGE('schema', '-m', 'f');",
 }
 
+// longRunningSchemaBranchSetup builds six cycles of the schema branch pattern, with feature merging main once after
+// cycle 3:
+//
+//	c0 -- c1 -- main1 -- m1 -- ... -- main6 -- m6                 main
+//	 |     \-- feat1 -- f1 -- ... -- sync -- ... -- feat6 -- f6    feature
+//	 \-- s1 -- s2 -- s3 -- s4 -- s5 -- s6                         schema
+//	m<i> = merge(main<i>, s<i>), f<i> = merge(feat<i>, s<i>), sync = merge(f3, m3)
+//
+// c1 seeds rows 1, 2 and 3. In cycle i, s<i> adds column x<i>, main<i> inserts row 100+i and sets row 1 to
+// "main <i>", and feat<i> inserts row 200+i. main5 also deletes row 2. With |conflict|, feat5 also sets row 1 to
+// "feature 5", and row 3 is edited in different columns: v on main5 and w on feat5.
+func longRunningSchemaBranchSetup(conflict bool) []string {
+	script := []string{
+		"CREATE TABLE t (id INT PRIMARY KEY, v VARCHAR(100), w VARCHAR(100));",
+		"CALL DOLT_COMMIT('-Am', 'c0');",
+		"CALL DOLT_BRANCH('schema');",
+		"INSERT INTO t VALUES (1, 'seed', 'seed'), (2, 'seed', 'seed'), (3, 'seed', 'seed');",
+		"CALL DOLT_COMMIT('-am', 'c1');",
+		"CALL DOLT_BRANCH('feature');",
+	}
+	for i := 1; i <= 6; i++ {
+		script = append(script,
+			"CALL DOLT_CHECKOUT('schema');",
+			fmt.Sprintf("ALTER TABLE t ADD COLUMN x%d VARCHAR(100);", i),
+			fmt.Sprintf("CALL DOLT_COMMIT('-am', 's%d');", i),
+			"CALL DOLT_CHECKOUT('main');",
+			fmt.Sprintf("INSERT INTO t (id, v) VALUES (%d, 'main');", 100+i),
+			fmt.Sprintf("UPDATE t SET v = 'main %d' WHERE id = 1;", i))
+		if i == 5 {
+			script = append(script, "DELETE FROM t WHERE id = 2;")
+			if conflict {
+				script = append(script, "UPDATE t SET v = 'main' WHERE id = 3;")
+			}
+		}
+		script = append(script,
+			fmt.Sprintf("CALL DOLT_COMMIT('-am', 'main%d');", i),
+			fmt.Sprintf("CALL DOLT_MERGE('schema', '-m', 'm%d');", i),
+			"CALL DOLT_CHECKOUT('feature');",
+			fmt.Sprintf("INSERT INTO t (id, v) VALUES (%d, 'feature');", 200+i))
+		if conflict && i == 5 {
+			script = append(script,
+				"UPDATE t SET v = 'feature 5' WHERE id = 1;",
+				"UPDATE t SET w = 'feature' WHERE id = 3;")
+		}
+		script = append(script,
+			fmt.Sprintf("CALL DOLT_COMMIT('-am', 'feat%d');", i),
+			fmt.Sprintf("CALL DOLT_MERGE('schema', '-m', 'f%d');", i))
+		if i == 3 {
+			script = append(script, "CALL DOLT_MERGE('main', '-m', 'sync');")
+		}
+	}
+	return script
+}
+
+// longRunningRows are the rows of t, other than rows 1 and 3, after main and feature merge in either direction.
+var longRunningRows = []sql.Row{
+	{101, "main", nil}, {102, "main", nil}, {103, "main", nil}, {104, "main", nil}, {105, "main", nil}, {106, "main", nil},
+	{201, "feature", nil}, {202, "feature", nil}, {203, "feature", nil}, {204, "feature", nil}, {205, "feature", nil},
+	{206, "feature", nil},
+}
+
 // MergeMultipleBasesScripts merge branches that have more than one merge base. The expected results are git's: each
 // history was also built in git, with a directory per table, a file per row and a line per column value, and `git
 // merge` (git 2.39) produced the same rows and conflicts.
@@ -81,6 +144,75 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT * FROM t ORDER BY id;",
 				Expected: []sql.Row{{1, "edited on main", nil, nil}, {50, "feature", nil, nil}},
+			},
+		},
+	},
+	{
+		Name:        "long-running schema branch: merge main into feature",
+		SetUpScript: append(longRunningSchemaBranchSetup(false), "CALL DOLT_CHECKOUT('feature');"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('main', '-m', 'merge main into feature');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT id, v, w FROM t ORDER BY id;",
+				Expected: append([]sql.Row{{1, "main 6", "seed"}, {3, "seed", "seed"}}, longRunningRows...),
+			},
+			{
+				Query:    "SELECT count(*) FROM information_schema.columns WHERE table_schema = database() AND table_name = 't';",
+				Expected: []sql.Row{{9}},
+			},
+		},
+	},
+	{
+		Name:        "long-running schema branch: merge feature into main",
+		SetUpScript: append(longRunningSchemaBranchSetup(false), "CALL DOLT_CHECKOUT('main');"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature', '-m', 'merge feature into main');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT id, v, w FROM t ORDER BY id;",
+				Expected: append([]sql.Row{{1, "main 6", "seed"}, {3, "seed", "seed"}}, longRunningRows...),
+			},
+		},
+	},
+	{
+		// Row 1 conflicts against its value when feature last merged main. Row 3 merges, column by column.
+		Name:        "long-running schema branch with a conflict: merge main into feature",
+		SetUpScript: append(longRunningSchemaBranchSetup(true), "CALL DOLT_CHECKOUT('feature');", "SET @@autocommit = 0;"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('main', '-m', 'merge main into feature');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_id, base_v, base_w, our_v, our_w, their_v, their_w FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{1, "main 3", "seed", "feature 5", "seed", "main 6", "seed"}},
+			},
+			{
+				Query:    "SELECT id, v, w FROM t WHERE id <> 1 ORDER BY id;",
+				Expected: append([]sql.Row{{3, "main", "feature"}}, longRunningRows...),
+			},
+		},
+	},
+	{
+		Name:        "long-running schema branch with a conflict: merge feature into main",
+		SetUpScript: append(longRunningSchemaBranchSetup(true), "CALL DOLT_CHECKOUT('main');", "SET @@autocommit = 0;"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature', '-m', 'merge feature into main');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_id, base_v, base_w, our_v, our_w, their_v, their_w FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{1, "main 3", "seed", "main 6", "seed", "feature 5", "seed"}},
+			},
+			{
+				Query:    "SELECT id, v, w FROM t WHERE id <> 1 ORDER BY id;",
+				Expected: append([]sql.Row{{3, "main", "feature"}}, longRunningRows...),
 			},
 		},
 	},
