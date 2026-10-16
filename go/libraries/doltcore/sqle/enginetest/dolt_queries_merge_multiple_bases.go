@@ -316,7 +316,7 @@ func longRunningConflictSetup() []string {
 func AllMergeMultipleBasesScripts() []queries.ScriptTest {
 	var scripts []queries.ScriptTest
 	for _, list := range [][]queries.ScriptTest{MergeMultipleBasesScripts, MergeMultipleBasesResolveOursScripts,
-		MergeMultipleBasesResolveTheirsScripts} {
+		MergeMultipleBasesResolveTheirsScripts, MergeMultipleBasesResolveByEditScripts} {
 		scripts = append(scripts, list...)
 	}
 	return scripts
@@ -354,6 +354,26 @@ var MergeMultipleBasesResolveTheirsScripts = []queries.ScriptTest{
 	resolvedMergeScript("merge bases that conflict on a deleted row, resolved differently: resolve with theirs", deleteAgainstEditSetup(false, true), "y",
 		[]string{"CALL DOLT_CONFLICTS_RESOLVE('--theirs', 't');"},
 		"SELECT * FROM t ORDER BY id;", []sql.Row{{1, "y", "seed"}, {2, "x", "y"}}),
+}
+
+// MergeMultipleBasesResolveByEditScripts resolve each conflicting merge against a virtual merge base by writing the
+// row, here every column 'edited', and then deleting the conflict, as editing the file does in git.
+var MergeMultipleBasesResolveByEditScripts = []queries.ScriptTest{
+	resolvedMergeScript("long-running schema branch with a conflict: resolve by editing the row", longRunningConflictSetup(), "main",
+		[]string{
+			"REPLACE INTO t (id, v, w, x1, x2, x3, x4, x5, x6) VALUES (1, 'edited', 'edited', 'edited', 'edited', 'edited', 'edited', 'edited', 'edited');",
+			"DELETE FROM dolt_conflicts_t;",
+		},
+		"SELECT id, v, w, x6 FROM t WHERE id IN (1, 3) ORDER BY id;", []sql.Row{{1, "edited", "edited", "edited"}, {3, "main", "feature", nil}}),
+	resolvedMergeScript("conflicting merge bases, resolved differently: resolve by editing the row", conflictingMergeBasesSetup("x wins", "y wins", false), "y",
+		[]string{"REPLACE INTO t VALUES (1, 'edited', 'edited');", "DELETE FROM dolt_conflicts_t;"},
+		"SELECT * FROM t ORDER BY id;", []sql.Row{{1, "edited", "edited"}, {2, "x", "y"}}),
+	resolvedMergeScript("conflicting merge bases, one side resolved to the old value: resolve by editing the row", conflictingMergeBasesSetup("seed", "y", false), "y",
+		[]string{"REPLACE INTO t VALUES (1, 'edited', 'edited');", "DELETE FROM dolt_conflicts_t;"},
+		"SELECT * FROM t ORDER BY id;", []sql.Row{{1, "edited", "edited"}, {2, "x", "y"}}),
+	resolvedMergeScript("merge bases that conflict on a deleted row, resolved differently: resolve by editing the row", deleteAgainstEditSetup(false, true), "y",
+		[]string{"REPLACE INTO t VALUES (1, 'edited', 'edited');", "DELETE FROM dolt_conflicts_t;"},
+		"SELECT * FROM t ORDER BY id;", []sql.Row{{1, "edited", "edited"}, {2, "x", "y"}}),
 }
 
 // MergeMultipleBasesScripts merge branches that have more than one merge base. The expected results are git's: each
