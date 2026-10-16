@@ -182,3 +182,5 @@ The Dolt SQL Server image supports the following environment variables:
 - `DOLT_SERVER_TIMEOUT`: Sets the server startup timeout in seconds (default: 300). A value of 0 means no timeout.
 
 The user will be granted all privileges on the database specified by `DOLT_DATABASE`/`MYSQL_DATABASE` if provided.
+
+The entrypoint runs this setup and any initialization scripts only when `.init_completed` is absent. It writes the marker after initialization succeeds, and subsequent starts skip these steps.
