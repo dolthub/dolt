@@ -138,14 +138,6 @@ var DoltSystemVariables = []sql.SystemVariable{
 		Type:              types.NewSystemStringType(dsess.DoltCommitOnTransactionCommitMessage),
 		Default:           "",
 	},
-	&sql.MysqlSystemVariable{
-		Name:              dsess.TransactionsDisabledSysVar,
-		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Session),
-		Dynamic:           true,
-		SetVarHintApplies: false,
-		Type:              types.NewSystemBoolType(dsess.TransactionsDisabledSysVar),
-		Default:           int8(0),
-	},
 	&sql.MysqlSystemVariable{ // If true, disables the conflict and constraint violation check when you commit a transaction.
 		Name:              dsess.ForceTransactionCommit,
 		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Both),
@@ -441,14 +433,6 @@ func AddDoltSystemVariables() {
 			SetVarHintApplies: false,
 			Type:              types.NewSystemStringType(dsess.DoltCommitOnTransactionCommitMessage),
 			Default:           "",
-		},
-		&sql.MysqlSystemVariable{
-			Name:              dsess.TransactionsDisabledSysVar,
-			Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Session),
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              types.NewSystemBoolType(dsess.TransactionsDisabledSysVar),
-			Default:           int8(0),
 		},
 		&sql.MysqlSystemVariable{ // If true, disables the conflict and constraint violation check when you commit a transaction.
 			Name:              dsess.ForceTransactionCommit,

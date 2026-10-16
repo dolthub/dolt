@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	_ "github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/src-d/go-errors.v1"
@@ -81,7 +80,7 @@ func TestDoltgresTransactionLifecycle(t *testing.T) {
 	sess := DefaultSession(emptyDatabaseProvider(), nil)
 	lifecycle := &countingDoltgresTransactionLifecycle{pending: true}
 	sess.DoltgresSessObj = lifecycle
-	tx := DisabledTransaction{}
+	tx := &DoltTransaction{}
 	ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
 
 	assert.NoError(t, sess.Rollback(ctx, tx))
@@ -98,12 +97,6 @@ func TestDoltgresTransactionLifecycle(t *testing.T) {
 }
 
 func TestDoltgresSemanticTransactionLifecycle(t *testing.T) {
-	if _, _, ok := sql.SystemVariables.GetGlobal(TransactionsDisabledSysVar); !ok {
-		sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{&sql.MysqlSystemVariable{
-			Name: TransactionsDisabledSysVar, Scope: sql.GetMysqlScope(sql.SystemVariableScope_Session),
-			Dynamic: true, Type: sqltypes.NewSystemBoolType(TransactionsDisabledSysVar), Default: int8(0),
-		}})
-	}
 	sess := DefaultSession(emptyDatabaseProvider(), nil)
 	lifecycle := &countingDoltgresTransactionLifecycle{pending: true}
 	sess.DoltgresSessObj = lifecycle
