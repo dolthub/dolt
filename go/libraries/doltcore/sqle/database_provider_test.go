@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"errors"
+	"io"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -489,4 +490,146 @@ func TestCloneDatabaseDuplicateNameRejected(t *testing.T) {
 	err := pro.CloneDatabaseFromRemote(sqlCtx, "DOLT", "main", "origin", "file:///nonexistent", -1, nil)
 	require.Error(t, err)
 	assert.True(t, sql.ErrDatabaseExists.Is(err))
+}
+
+// TestRestoreDatabaseFromRemote covers the staged, atomic dolt_backup restore path. The invariant
+// under test: no observable state - success, failure, or interruption - serves a partially
+// restored database, and a failed restore leaves the database being replaced fully intact.
+func TestRestoreDatabaseFromRemote(t *testing.T) {
+	ctx := context.Background()
+
+	// makeSrc builds a separate database with a recognizable table to restore from.
+	makeSrc := func(t *testing.T) *doltdb.DoltDB {
+		srcEnv := dtestutils.CreateTestEnvForLocalFilesystem()
+		srcDb, err := NewDatabase(ctx, "dolt", srcEnv.DbData(ctx), editor.Options{})
+		require.NoError(t, err)
+		srcEngine, srcCtx, err := NewTestEngine(srcEnv, ctx, srcDb)
+		require.NoError(t, err)
+		srcCtx.SetCurrentDatabase("dolt")
+		require.NoError(t, ExecuteSqlOnEngine(srcCtx, srcEngine,
+			"CREATE TABLE from_backup (pk int primary key);\nINSERT INTO from_backup VALUES (42);"))
+		return srcEnv.DoltDB(ctx)
+	}
+
+	// setup builds an engine over a disk-backed data dir holding a database with contents that a
+	// broken restore must not damage.
+	setup := func(t *testing.T) (*sqle.Engine, *sql.Context, *DoltDatabaseProvider, *env.DoltEnv) {
+		dEnv := dtestutils.CreateTestEnvForLocalFilesystem()
+		db, err := NewDatabase(ctx, "dolt", dEnv.DbData(ctx), editor.Options{})
+		require.NoError(t, err)
+		engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db)
+		require.NoError(t, err)
+		pro := dsess.DSessFromSess(sqlCtx.Session).Provider().(*DoltDatabaseProvider)
+
+		require.NoError(t, ExecuteSqlOnEngine(sqlCtx, engine, "CREATE DATABASE mydb;"))
+		sqlCtx.SetCurrentDatabase("mydb")
+		require.NoError(t, ExecuteSqlOnEngine(sqlCtx, engine,
+			"CREATE TABLE precious (pk int primary key);\nINSERT INTO precious VALUES (1);"))
+		return engine, sqlCtx, pro, dEnv
+	}
+
+	// assertNoStagingDebris verifies nothing is left under the restore staging directory.
+	assertNoStagingDebris := func(t *testing.T, fs filesys.Filesys) {
+		if exists, _ := fs.Exists(restoreStagingDirectoryName); !exists {
+			return
+		}
+		var entries []string
+		_ = fs.Iter(restoreStagingDirectoryName, false, func(path string, size int64, isDir bool) bool {
+			entries = append(entries, path)
+			return false
+		})
+		assert.Empty(t, entries, "restore staging directory must not accumulate debris")
+	}
+
+	// querySucceeds runs a query through the engine and drains its rows; ExecuteSqlOnEngine
+	// refuses SELECT statements.
+	querySucceeds := func(sqlCtx *sql.Context, engine *sqle.Engine, query string) error {
+		_, iter, _, err := engine.Query(sqlCtx, query)
+		if err != nil {
+			return err
+		}
+		defer iter.Close(sqlCtx)
+		for {
+			if _, err := iter.Next(sqlCtx); err == io.EOF {
+				return nil
+			} else if err != nil {
+				return err
+			}
+		}
+	}
+
+	t.Run("completed restore swaps contents and stashes the old database", func(t *testing.T) {
+		engine, sqlCtx, pro, dEnv := setup(t)
+		srcDb := makeSrc(t)
+		defer srcDb.Close()
+
+		require.NoError(t, pro.RestoreDatabaseFromRemote(sqlCtx, "mydb", srcDb))
+
+		sqlCtx.SetCurrentDatabase("mydb")
+		require.NoError(t, querySucceeds(sqlCtx, engine, "SELECT * FROM from_backup;"),
+			"the restored contents must be served under the database name")
+		require.Error(t, querySucceeds(sqlCtx, engine, "SELECT * FROM precious;"),
+			"the replaced contents must be gone from the database name")
+
+		dropped, err := pro.ListDroppedDatabases(sqlCtx)
+		require.NoError(t, err)
+		assert.Contains(t, dropped, "mydb", "the replaced contents must be recoverable from the stash")
+
+		newFs, err := dEnv.FS.WithWorkingDir("mydb")
+		require.NoError(t, err)
+		assert.False(t, dbfactory.IsDatabaseInProgress(newFs), "a completed restore must not leave the marker")
+		assertNoStagingDebris(t, dEnv.FS)
+	})
+
+	t.Run("restore into a name with no existing database", func(t *testing.T) {
+		engine, sqlCtx, pro, dEnv := setup(t)
+		srcDb := makeSrc(t)
+		defer srcDb.Close()
+
+		require.NoError(t, pro.RestoreDatabaseFromRemote(sqlCtx, "freshdb", srcDb))
+
+		sqlCtx.SetCurrentDatabase("freshdb")
+		require.NoError(t, querySucceeds(sqlCtx, engine, "SELECT * FROM from_backup;"))
+		assertNoStagingDebris(t, dEnv.FS)
+	})
+
+	t.Run("failed restore leaves the existing database untouched", func(t *testing.T) {
+		engine, sqlCtx, pro, dEnv := setup(t)
+
+		// A source that dies partway through the transfer: reads from a closed store fail.
+		srcDb := makeSrc(t)
+		require.NoError(t, srcDb.Close())
+
+		err := pro.RestoreDatabaseFromRemote(sqlCtx, "mydb", srcDb)
+		require.Error(t, err)
+
+		// The database being replaced is fully intact and still served.
+		sqlCtx.SetCurrentDatabase("mydb")
+		require.NoError(t, querySucceeds(sqlCtx, engine, "SELECT * FROM precious;"),
+			"a failed restore must leave the existing database serving its old contents")
+
+		// Nothing of the failed attempt remains anywhere.
+		assertNoStagingDebris(t, dEnv.FS)
+		newFs, err := dEnv.FS.WithWorkingDir("mydb")
+		require.NoError(t, err)
+		assert.False(t, dbfactory.IsDatabaseInProgress(newFs))
+
+		// A retry with a healthy source succeeds.
+		srcDb2 := makeSrc(t)
+		defer srcDb2.Close()
+		require.NoError(t, pro.RestoreDatabaseFromRemote(sqlCtx, "mydb", srcDb2))
+		require.NoError(t, querySucceeds(sqlCtx, engine, "SELECT * FROM from_backup;"))
+	})
+
+	t.Run("restore excludes concurrent creation of the same name", func(t *testing.T) {
+		_, _, pro, _ := newProviderEngine(t)
+
+		require.NoError(t, pro.reserveRestoringDatabase("contested"))
+		assert.Error(t, pro.reserveRestoringDatabase("contested"), "a second restore of the same name must be refused")
+		assert.Error(t, pro.reserveCreatingDatabase("contested"), "a clone of a name being restored must be refused")
+		pro.releaseCreatingDatabase("contested")
+
+		require.NoError(t, pro.reserveRestoringDatabase("contested"), "the name must be free again after release")
+		pro.releaseCreatingDatabase("contested")
+	})
 }

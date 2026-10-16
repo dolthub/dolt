@@ -523,6 +523,10 @@ func (e emptyRevisionDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context,
 	return nil
 }
 
+func (e emptyRevisionDatabaseProvider) RestoreDatabaseFromRemote(ctx *sql.Context, dbName string, srcDb *doltdb.DoltDB) error {
+	return nil
+}
+
 func (e emptyRevisionDatabaseProvider) CreateDatabase(ctx *sql.Context, dbName string) error {
 	return nil
 }
