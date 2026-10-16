@@ -51,6 +51,45 @@ func shortTempDir(t *testing.T) string {
 	return dir
 }
 
+func TestGitRemoteCacheKey(t *testing.T) {
+	root := t.TempDir()
+	key := func(root, rawURL string, ref interface{}) string {
+		t.Helper()
+		u, err := url.Parse(rawURL)
+		require.NoError(t, err)
+		params := map[string]interface{}{GitCacheRootParam: root}
+		if ref != nil {
+			params[GitRefParam] = ref
+		}
+		got, err := GitRemoteCacheKey(u, params)
+		require.NoError(t, err)
+		return got
+	}
+	const remoteURL = "git+https://example.com/repo.git"
+	base := key(root, remoteURL, nil)
+	for _, ref := range []interface{}{"", "  ", "refs/dolt/data", " refs/dolt/data "} {
+		require.Equal(t, base, key(root, remoteURL, ref))
+	}
+	require.NotEqual(t, base, key(filepath.Join(root, "other-db"), remoteURL, nil))
+	require.NotEqual(t, base, key(root, "git+https://example.com/other.git", nil))
+	require.NotEqual(t, base, key(root, "git+https://example.com/Repo.git", nil))
+	require.NotEqual(t, base, key(root, remoteURL, "refs/dolt/other"))
+	require.NotEqual(t, base, key(root, remoteURL, "refs/dolt/Data"))
+	// Query and fragment handling must match the factory's URL parsing.
+	require.Equal(t, base, key(root, remoteURL+"?ref=ignored#ignored", nil))
+
+	u, err := url.Parse(remoteURL)
+	require.NoError(t, err)
+	for _, params := range []map[string]interface{}{
+		nil,
+		{GitCacheRootParam: ""},
+		{GitCacheRootParam: 42},
+	} {
+		_, err := GitRemoteCacheKey(u, params)
+		require.ErrorContains(t, err, GitCacheRootParam)
+	}
+}
+
 func TestGitRemoteURLString(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -133,25 +172,52 @@ func TestGitRemoteFactory_GitFile_CachesUnderRepoDoltDirAndCanWrite(t *testing.T
 	require.True(t, ok, "expected ValueReadWriter to be *types.ValueStore, got %T", vrw)
 	cs := vs.ChunkStore()
 
-	// Minimal write: put one chunk and commit its hash as the root.
-	c := chunks.NewChunk([]byte("hello\n"))
-	err = cs.Put(ctx, c, func(chunks.Chunk) chunks.InsertAddrsCb {
-		return func(context.Context, hash.HashSet, chunks.PendingRefExists) error { return nil }
-	})
-	require.NoError(t, err)
-
-	last, err := cs.Root(ctx)
-	require.NoError(t, err)
-	okCommit, err := cs.Commit(ctx, c.Hash(), last)
-	require.NoError(t, err)
-	require.True(t, okCommit)
-
+	commitOneChunk(t, ctx, cs)
 	require.NoError(t, db.Close())
 
 	// Remote should now have refs/dolt/data.
 	cmd := exec.CommandContext(ctx, "git", "--git-dir", remoteRepo.GitDir, "rev-parse", "--verify", "--quiet", "refs/dolt/data^{commit}")
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, "git rev-parse failed: %s", strings.TrimSpace(string(out)))
+}
+
+func TestGitRemoteFactory_GitFile_SHA256RemoteCanWrite(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/12060
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found on PATH")
+	}
+
+	ctx := context.Background()
+	remoteRepo := newSHA256Remote(t, ctx, filepath.Join(shortTempDir(t), "remote.git"))
+
+	remotePath := filepath.ToSlash(remoteRepo.GitDir)
+	urlStr := "git+file://" + remotePath
+	params := map[string]interface{}{
+		GitCacheRootParam: filepath.Join(shortTempDir(t), DoltDir, GitRemoteCacheDirName),
+	}
+
+	db, vrw, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, params)
+	require.NoError(t, err)
+	commitOneChunk(t, ctx, vrw.(*types.ValueStore).ChunkStore())
+	require.NoError(t, db.Close())
+
+	out, err := exec.CommandContext(ctx, "git", "--git-dir", remoteRepo.GitDir, "rev-parse", "--verify", "--quiet", "refs/dolt/data^{commit}").CombinedOutput()
+	require.NoError(t, err, "git rev-parse failed: %s", strings.TrimSpace(string(out)))
+}
+
+func TestGitRemoteFactory_RemoteInitFlagsIgnoresStderr(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/12060
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found on PATH")
+	}
+
+	ctx := context.Background()
+	dir := shortTempDir(t)
+	remoteURL := "file://" + filepath.ToSlash(newSHA256Remote(t, ctx, filepath.Join(dir, "remote.git")).GitDir)
+	t.Setenv("GIT_TRACE", "1")
+	flags, err := remoteInitFlags(ctx, filepath.Join(dir, "cache.git"), remoteURL)
+	require.NoError(t, err)
+	require.Equal(t, []string{"--object-format=sha256"}, flags)
 }
 
 func TestGitRemoteFactory_TwoClientsDistinctCacheDirsRoundtrip(t *testing.T) {
@@ -419,4 +485,34 @@ func TestGitRemoteFactory_GitCacheRootParamUsedVerbatim(t *testing.T) {
 		}
 	}
 	require.True(t, found, "expected the cache repo directly under <git_cache_root>/<hash>/repo.git")
+}
+
+// commitOneChunk puts one chunk into |cs| and commits its hash as the root,
+// which pushes it to the git remote behind |cs|.
+func commitOneChunk(t *testing.T, ctx context.Context, cs chunks.ChunkStore) {
+	t.Helper()
+	c := chunks.NewChunk([]byte("hello\n"))
+	err := cs.Put(ctx, c, func(chunks.Chunk) chunks.InsertAddrsCb {
+		return func(context.Context, hash.HashSet, chunks.PendingRefExists) error { return nil }
+	})
+	require.NoError(t, err)
+	last, err := cs.Root(ctx)
+	require.NoError(t, err)
+	ok, err := cs.Commit(ctx, c.Hash(), last)
+	require.NoError(t, err)
+	require.True(t, ok)
+}
+
+// newSHA256Remote creates a bare SHA-256 repository at |dir| with one commit
+// on refs/heads/main. It skips the test when git cannot create one.
+func newSHA256Remote(t *testing.T, ctx context.Context, dir string) *gitrepo.Repo {
+	t.Helper()
+	out, err := exec.CommandContext(ctx, "git", "init", "--bare", "--object-format=sha256", dir).CombinedOutput()
+	if err != nil {
+		t.Skipf("git cannot create a SHA-256 repository: %s", strings.TrimSpace(string(out)))
+	}
+	repo := &gitrepo.Repo{GitDir: dir}
+	_, err = repo.SetRefToTree(ctx, "refs/heads/main", map[string][]byte{"README": []byte("seed\n")}, "seed")
+	require.NoError(t, err)
+	return repo
 }

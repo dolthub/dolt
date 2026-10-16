@@ -153,6 +153,22 @@ parquet() {
   fi
 }
 
+wait_for_file() {
+  local file="$1"
+  local retries="${2:-40}"
+  local interval="${3:-0.1}"
+
+  for ((i=0; i<retries; i++)); do
+    if [ -f "$file" ]; then
+      return 0
+    fi
+    sleep "$interval"
+  done
+
+  echo "Timed out waiting for file: $file"
+  return 1
+}
+
 nativevar DOLT_ROOT_PATH $BATS_TMPDIR/config-$$ /p
 dolt config --global --add metrics.disabled true > /dev/null 2>&1
 set_dolt_user "Bats Tests" "bats@email.fake" 

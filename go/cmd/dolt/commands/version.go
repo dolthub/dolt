@@ -16,6 +16,8 @@ package commands
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -39,7 +41,11 @@ const (
 	verboseFlag             = "verbose"
 	versionCheckFile        = "version_check.txt"
 	disableVersionCheckFile = "disable_version_check.txt"
+	versionCacheTTL         = 7 * 24 * time.Hour
+	versionHTTPTimeout      = 3 * time.Second
 )
+
+var errUnableToGetLatestRelease = errhand.BuildDError("unable to query latest released Dolt version").Build()
 
 var versionDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Displays the version for the Dolt binary.",
@@ -148,48 +154,39 @@ func (cmd VersionCmd) ExecWithArgParser(ctx context.Context, apr *argparser.ArgP
 // is. Restricts this check to at most once per week unless the build version is ahead of the stored latest release version.
 // Also prints a warning about how to disable this check once per version.
 func checkAndPrintVersionOutOfDateWarning(curVersion string, dEnv *env.DoltEnv) errhand.VerboseError {
-	var latestRelease string
-	var verr errhand.VerboseError
-
 	homeDir, err := dEnv.GetUserHomeDir()
 	if err != nil {
 		return errhand.BuildDError("error: failed to get user home directory").AddCause(err).Build()
 	}
-	path := filepath.Join(homeDir, dbfactory.DoltDir, versionCheckFile)
 
-	if exists, _ := dEnv.FS.Exists(path); exists {
-		vCheck, err := dEnv.FS.ReadFile(path)
+	cachePath := filepath.Join(homeDir, dbfactory.DoltDir, versionCheckFile)
+	var cachedRelease string
+	var lastModified time.Time
+	if exists, isDir := dEnv.FS.Exists(cachePath); exists && !isDir {
+		if lm, ok := dEnv.FS.LastModified(cachePath); ok {
+			lastModified = lm
+		}
+		data, err := dEnv.FS.ReadFile(cachePath)
 		if err != nil {
 			return errhand.BuildDError("error: failed to read version check file").AddCause(err).Build()
 		}
+		cachedRelease = strings.ReplaceAll(string(data), "\n", "")
+	}
 
-		latestRelease = strings.ReplaceAll(string(vCheck), "\n", "")
-		lastCheckDate, _ := dEnv.FS.LastModified(path)
-		if lastCheckDate.Before(time.Now().AddDate(0, 0, -7)) {
-			latestRelease, verr = getLatestDoltReleaseAndRecord(path, dEnv)
-			if verr != nil {
-				return verr
+	latestRelease := cachedRelease
+	if time.Since(lastModified) > versionCacheTTL {
+		latestRelease, err = getLatestDoltReleaseAndRecord(cachePath, dEnv)
+		if errors.Is(err, errUnableToGetLatestRelease) {
+			cli.Print(color.YellowString("Warning: unable to query latest released Dolt version"))
+			if err := dEnv.FS.WriteFile(cachePath, []byte(cachedRelease), os.ModePerm); err != nil {
+				return errhand.BuildDError("error: failed to write version check file").AddCause(err).Build()
 			}
-		} else {
-			if !isVersionFormattedCorrectly(latestRelease) {
-				latestRelease, verr = getLatestDoltReleaseAndRecord(path, dEnv)
-				if verr != nil {
-					return verr
-				}
-			}
-		}
-	} else {
-		latestRelease, verr = getLatestDoltReleaseAndRecord(path, dEnv)
-		if verr != nil {
-			return verr
+		} else if err != nil {
+			return errhand.BuildDError("error: failed to get latest Dolt release").AddCause(err).Build()
 		}
 	}
 
-	// If we still don't have a valid latestRelease, even after trying to query it, then skip the out of date
-	// check and print a warning message. This can happen for example, if we get a 403 from GitHub when
-	// querying for the latest release tag.
-	if latestRelease == "" {
-		cli.Print(color.YellowString("Warning: unable to query latest released Dolt version"))
+	if !isVersionFormattedCorrectly(latestRelease) {
 		return nil
 	}
 
@@ -209,17 +206,23 @@ func checkAndPrintVersionOutOfDateWarning(curVersion string, dEnv *env.DoltEnv) 
 // getLatestDoltRelease returns the latest release of Dolt from GitHub and records the release and current date in the
 // version check file.
 func getLatestDoltReleaseAndRecord(path string, dEnv *env.DoltEnv) (string, errhand.VerboseError) {
-	client := github.NewClient(nil)
+	client := github.NewClient(&http.Client{
+		Timeout: versionHTTPTimeout,
+	})
 	release, resp, err := client.Repositories.GetLatestRelease(context.Background(), "dolthub", "dolt")
-	if err == nil && resp.StatusCode == 200 {
-		releaseName := strings.TrimPrefix(*release.TagName, "v")
-
-		err = dEnv.FS.WriteFile(path, []byte(releaseName), os.ModePerm)
-		if err == nil {
-			return releaseName, nil
-		}
+	if err != nil {
+		return "", errUnableToGetLatestRelease
 	}
-	return "", nil
+	if resp == nil || resp.StatusCode != http.StatusOK || release == nil || release.TagName == nil {
+		return "", errUnableToGetLatestRelease
+	}
+
+	releaseName := strings.TrimPrefix(*release.TagName, "v")
+	if err := dEnv.FS.WriteFile(path, []byte(releaseName), os.ModePerm); err != nil {
+		return "", errhand.BuildDError("error: failed to write version check file").AddCause(err).Build()
+	}
+
+	return releaseName, nil
 }
 
 // isOutOfDate compares the current version of Dolt to the given latest release version and returns true if the current

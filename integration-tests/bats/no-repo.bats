@@ -11,6 +11,7 @@ teardown() {
     cd ../
     teardown_common
     rm -rf $BATS_TMPDIR/no-dolt-dir-$$
+    teardown_tcp_tarpit
 }
 
 @test "no-repo: checking we have a dolt executable available" {
@@ -458,3 +459,82 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [[ "$output" =~ "Failed to load the global config" ]] || false
     [[ "$output" =~ "permission denied" ]] || false
 }
+
+with_http_proxy_env() {
+    # httpproxy.FromEnvironment checks both exports.
+    export https_proxy="http://$1:$2"
+    export HTTPS_PROXY="http://$1:$2"
+}
+
+assert_failed_http_version_check() {
+    run dolt version
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt version "[0-9]+.[0-9]+.[0-9]+ ]] || false
+    [[ "$output" =~ "Warning: unable to query latest released Dolt version" ]] || false
+    [ -f "$DOLT_ROOT_PATH/.dolt/version_check.txt" ]
+
+    run dolt version
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "Warning: unable to query latest released Dolt version" ]] || false
+}
+
+@test "no-repo: dolt version records failed check and does not retry on unreachable network" {
+    # https://github.com/dolthub/dolt/issues/12021
+    rm -f "$DOLT_ROOT_PATH"/.dolt/version_check.txt
+    with_http_proxy_env "127.0.0.1" "$(definePORT)"
+
+    assert_failed_http_version_check
+}
+
+# Start a passive TCP listening socket that accepts 3-way handshake, but never
+# responds to any data sent.
+# Globals:
+#   TARPIT_PID
+#   TARPIT_READY
+# Arguments:
+#   1: tarpit_host
+#   2: tarpit_port
+setup_tcp_tarpit() {
+    TARPIT_HOST="$1"
+    TARPIT_PORT="$2"
+    with_http_proxy_env "$TARPIT_HOST" "$TARPIT_PORT"
+
+    TARPIT_READY="$BATS_TEST_TMPDIR/tarpit$$.ready"
+    python - <<EOF >/dev/null 2>&1 3>&- &
+import socket
+import threading
+
+s = socket.socket()
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind(('$TARPIT_HOST', $TARPIT_PORT))
+s.listen(1)
+open('$TARPIT_READY', 'w').close()
+threading.Event().wait()
+EOF
+    TARPIT_PID=$!
+
+    wait_for_file "$TARPIT_READY"
+}
+
+teardown_tcp_tarpit() {
+    if [ -n "${TARPIT_PID:-}" ]; then
+        kill "$TARPIT_PID" 2>/dev/null || true
+        wait "$TARPIT_PID" 2>/dev/null || true
+        TARPIT_PID=""
+    fi
+    rm -f "${TARPIT_READY:-}"
+}
+
+@test "no-repo: dolt version records failed check and does not retry on slow proxy" {
+    # https://github.com/dolthub/dolt/issues/12021
+    rm -f "$DOLT_ROOT_PATH"/.dolt/version_check.txt
+    setup_tcp_tarpit "127.0.0.1" "$(definePORT)"
+
+    START=$SECONDS
+    assert_failed_http_version_check
+    ELAPSED=$((SECONDS - START))
+    [ "$ELAPSED" -ge 3 ] # versionHTTPTimeout
+    # The second version check must skip HTTP request after a cached fail.
+    [ "$ELAPSED" -lt 6 ]
+}
+

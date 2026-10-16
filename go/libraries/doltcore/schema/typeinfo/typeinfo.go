@@ -113,7 +113,7 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 	case sqltypes.Date:
 		return DateType, nil
 	case sqltypes.Time:
-		return TimeType, nil
+		return CreateTimeTypeFromSqlType(sqlType.(gmstypes.TimeType)), nil
 	case sqltypes.Year:
 		return YearType, nil
 	case sqltypes.Geometry:

@@ -158,7 +158,9 @@ func computeProllyTreePatches(
 	s *MergeStats) (*secondaryMerger, *conflictMerger, error) {
 	ns := tm.ns
 
-	iter, err := threeWayDiffer(ctx, tm, valueMerger, diffInfo)
+	rowPolicy := tm.treeRowMergePolicy(finalSch)
+
+	iter, err := threeWayDiffer(ctx, tm, valueMerger, diffInfo, rowPolicy)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -275,13 +277,39 @@ func computeProllyTreePatches(
 			return nil, nil, err
 		}
 		err = tree.SendPatches(ctx, lDiff, rDiff, patchBuffer, func(left, right tree.Diff) (tree.Diff, bool) {
-			// On conflict, attempt to merge rows
-			m, b, err := valueMerger.TryMerge(ctx, val.Tuple(left.To), val.Tuple(right.To), val.Tuple(left.From))
-			if err != nil {
-				mergeErr = err
+			var mergedRow val.Tuple
+			var resolved bool
+			policyDecided := false
+			if rowPolicy != nil {
+				handled, merged, conflict, pErr := tree.RunRowMergePolicy(ctx, rowPolicy,
+					val.Tuple(left.To), val.Tuple(right.To), val.Tuple(left.From))
+				if pErr != nil {
+					mergeErr = pErr
+					return tree.Diff{}, false
+				}
+				if handled {
+					// The policy settled the row: take its merged value, or
+					// record a conflict (an unresolved row) when it declined.
+					mergedRow = merged
+					resolved = !conflict
+					policyDecided = true
+				}
+			}
+			if !policyDecided && left.To == nil && right.To == nil {
+				// Convergent delete: nothing to merge, and TryMerge panics on
+				// two nil sides.
 				return tree.Diff{}, false
 			}
-			if !b {
+			if !policyDecided {
+				// On conflict, attempt to merge rows
+				var err error
+				mergedRow, resolved, err = valueMerger.TryMerge(ctx, val.Tuple(left.To), val.Tuple(right.To), val.Tuple(left.From))
+				if err != nil {
+					mergeErr = err
+					return tree.Diff{}, false
+				}
+			}
+			if !resolved {
 				s.DataConflicts++
 				conflictDiff := tree.ThreeWayDiff{
 					Op:    tree.DiffOpDivergentModifyConflict,
@@ -302,7 +330,7 @@ func computeProllyTreePatches(
 				tempTupleValue, err := remapTupleWithColumnDefaults(
 					ctx,
 					val.Tuple(left.Key),
-					m,
+					mergedRow,
 					finalSch.GetValueDescriptor(valueMerger.ns),
 					valueMerger.rightMapping,
 					tm,
@@ -315,13 +343,13 @@ func computeProllyTreePatches(
 					mergeErr = err
 					return tree.Diff{}, false
 				}
-				m = tempTupleValue
+				mergedRow = tempTupleValue
 			}
 
 			mergeDiff := left
-			mergeDiff.To = tree.Item(m)
-			return mergeDiff, b
-		})
+			mergeDiff.To = tree.Item(mergedRow)
+			return mergeDiff, resolved
+		}, rowPolicy != nil)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -541,7 +569,34 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 	return finalTbl, s, nil
 }
 
-func threeWayDiffer(ctx context.Context, tm *TableMerger, valueMerger *valueMerger, diffInfo tree.ThreeWayDiffInfo) (*tree.ThreeWayDiffer[val.Tuple, *val.TupleDesc], error) {
+// treeRowMergePolicy adapts the caller's policy to the storage layer's
+// callback, supplying the table, the merged value descriptor and the node
+// store. Returns nil when no policy is installed.
+func (tm *TableMerger) treeRowMergePolicy(mergedSch schema.Schema) tree.RowMergePolicy {
+	if tm.rowMergePolicy == nil {
+		return nil
+	}
+	policy, tblName, ns := tm.rowMergePolicy, tm.name, tm.ns
+	valDesc := mergedSch.GetValueDescriptor(ns)
+	return func(ctx *sql.Context, left, right, base val.Tuple) (val.Tuple, tree.RowMergeStatus, error) {
+		return policy(ctx, RowMergeInput{
+			Table:     tblName,
+			Base:      base,
+			Left:      left,
+			Right:     right,
+			ValueDesc: valDesc,
+			NodeStore: ns,
+		})
+	}
+}
+
+func threeWayDiffer(
+	ctx context.Context,
+	tm *TableMerger,
+	valueMerger *valueMerger,
+	diffInfo tree.ThreeWayDiffInfo,
+	rowPolicy tree.RowMergePolicy,
+) (*tree.ThreeWayDiffer[val.Tuple, *val.TupleDesc], error) {
 	lr, err := tm.leftTbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err
@@ -575,6 +630,7 @@ func threeWayDiffer(ctx context.Context, tm *TableMerger, valueMerger *valueMerg
 		rightRows.Tuples(),
 		ancRows.Tuples(),
 		valueMerger.TryMerge,
+		rowPolicy,
 		valueMerger.keyless,
 		diffInfo,
 		leftRows.Tuples().Order,

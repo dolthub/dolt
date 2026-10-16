@@ -23,7 +23,7 @@ import (
 )
 
 func TestMapCommitsWithChildrenAndPosition(t *testing.T) {
-	commits := []CommitInfo{
+	commits := []*CommitInfo{
 		{commitHash: "hash1", parentHashes: []string{"hash2"}, commitMeta: &datas.CommitMeta{Description: "Commit 1"}},
 		{commitHash: "hash2", parentHashes: []string{}, commitMeta: &datas.CommitMeta{Description: "Commit 2"}},
 	}
@@ -40,8 +40,8 @@ func TestMapCommitsWithChildrenAndPosition(t *testing.T) {
 func TestComputeColumnEnds(t *testing.T) {
 	// Test with two commits, one parent and one child
 	commits := []*commitInfoWithChildren{
-		{Commit: CommitInfo{commitHash: "hash1", parentHashes: []string{"hash2"}}, Children: []string{}, Row: 0},
-		{Commit: CommitInfo{commitHash: "hash2", parentHashes: []string{}}, Children: []string{"hash1"}, Row: 1},
+		{Commit: &CommitInfo{commitHash: "hash1", parentHashes: []string{"hash2"}}, Children: []string{}, Row: 0},
+		{Commit: &CommitInfo{commitHash: "hash2", parentHashes: []string{}}, Children: []string{"hash1"}, Row: 1},
 	}
 	commitsMap := map[string]*commitInfoWithChildren{
 		"hash1": commits[0],
@@ -59,10 +59,10 @@ func TestComputeColumnEnds(t *testing.T) {
 	//         /  \
 	//   1M - 2M - 3M (main)
 	commits = []*commitInfoWithChildren{
-		{Commit: CommitInfo{commitHash: "3M", parentHashes: []string{"2M", "1A"}}, Children: []string{}, Row: 0},
-		{Commit: CommitInfo{commitHash: "1A", parentHashes: []string{"2M"}}, Children: []string{"3M"}, Row: 1},
-		{Commit: CommitInfo{commitHash: "2M", parentHashes: []string{"1M"}}, Children: []string{"1A", "3M"}, Row: 2},
-		{Commit: CommitInfo{commitHash: "1M", parentHashes: []string{}}, Children: []string{"2M"}, Row: 3},
+		{Commit: &CommitInfo{commitHash: "3M", parentHashes: []string{"2M", "1A"}}, Children: []string{}, Row: 0},
+		{Commit: &CommitInfo{commitHash: "1A", parentHashes: []string{"2M"}}, Children: []string{"3M"}, Row: 1},
+		{Commit: &CommitInfo{commitHash: "2M", parentHashes: []string{"1M"}}, Children: []string{"1A", "3M"}, Row: 2},
+		{Commit: &CommitInfo{commitHash: "1M", parentHashes: []string{}}, Children: []string{"2M"}, Row: 3},
 	}
 	commitsMap = map[string]*commitInfoWithChildren{
 		"1M": commits[3],
@@ -81,8 +81,8 @@ func TestComputeColumnEnds(t *testing.T) {
 func TestDrawCommitDotsAndBranchPaths(t *testing.T) {
 	// Test with two commits, one parent and one child
 	commits := []*commitInfoWithChildren{
-		{Commit: CommitInfo{commitHash: "hash1", parentHashes: []string{"hash2"}, commitMeta: &datas.CommitMeta{Description: "Commit 1"}}, Children: []string{}, Row: 0},
-		{Commit: CommitInfo{commitHash: "hash2", parentHashes: []string{}, commitMeta: &datas.CommitMeta{Description: "Commit 2"}}, Children: []string{"hash1"}, Row: 1},
+		{Commit: &CommitInfo{commitHash: "hash1", parentHashes: []string{"hash2"}, commitMeta: &datas.CommitMeta{Description: "Commit 1"}}, Children: []string{}, Row: 0},
+		{Commit: &CommitInfo{commitHash: "hash2", parentHashes: []string{}, commitMeta: &datas.CommitMeta{Description: "Commit 2"}}, Children: []string{"hash1"}, Row: 1},
 	}
 	commitsMap := map[string]*commitInfoWithChildren{
 		"hash1": commits[0],
@@ -107,7 +107,7 @@ func TestDrawCommitDotsAndBranchPaths(t *testing.T) {
 func TestExpandGraphBasedOnCommitMetaDataHeight(t *testing.T) {
 	commits := []*commitInfoWithChildren{
 		{
-			Commit: CommitInfo{
+			Commit: &CommitInfo{
 				commitHash: "hash1",
 				commitMeta: &datas.CommitMeta{
 					Description: "This is a longer commit message\nthat spans multiple lines\nfor testing purposes",
@@ -117,7 +117,7 @@ func TestExpandGraphBasedOnCommitMetaDataHeight(t *testing.T) {
 			Row: 0,
 		},
 		{
-			Commit: CommitInfo{
+			Commit: &CommitInfo{
 				commitHash: "hash2",
 				commitMeta: &datas.CommitMeta{
 					Description: "Short commit message",
@@ -141,7 +141,7 @@ func TestExpandGraphBasedOnGraphShape(t *testing.T) {
 	// Test with two commits, one parent and one branch child, the graph is two dots in the same column
 	commits := []*commitInfoWithChildren{
 		{
-			Commit: CommitInfo{
+			Commit: &CommitInfo{
 				commitHash: "hash1",
 				commitMeta: &datas.CommitMeta{
 					Description: "This is a longer commit message\nthat spans multiple lines\nfor testing purposes",
@@ -152,7 +152,7 @@ func TestExpandGraphBasedOnGraphShape(t *testing.T) {
 			Row:      0,
 		},
 		{
-			Commit: CommitInfo{
+			Commit: &CommitInfo{
 				commitHash: "hash2",
 				commitMeta: &datas.CommitMeta{
 					Description: "Short commit message",
@@ -179,7 +179,7 @@ func TestExpandGraphBasedOnGraphShape(t *testing.T) {
 	// Test with three commits, with one merge commit
 	commits = []*commitInfoWithChildren{
 		{
-			Commit: CommitInfo{
+			Commit: &CommitInfo{
 				commitHash: "hash1",
 				commitMeta: &datas.CommitMeta{
 					Description: "This is a longer commit message\nthat spans multiple lines\nfor testing purposes",
@@ -190,7 +190,7 @@ func TestExpandGraphBasedOnGraphShape(t *testing.T) {
 			Row:      0,
 		},
 		{
-			Commit: CommitInfo{
+			Commit: &CommitInfo{
 				commitHash: "hash2",
 				commitMeta: &datas.CommitMeta{
 					Description: "Short commit message",
@@ -201,7 +201,7 @@ func TestExpandGraphBasedOnGraphShape(t *testing.T) {
 			Row:      1,
 		},
 		{
-			Commit: CommitInfo{
+			Commit: &CommitInfo{
 				commitHash: "hash3",
 				commitMeta: &datas.CommitMeta{
 					Description: "Short commit message",

@@ -433,6 +433,7 @@ func getDataConflictsForTable(ctx *sql.Context, tm *merge.TableMerger, tblName d
 		rightRows.Tuples(),
 		ancRows.Tuples(),
 		valueMerger.TryMerge,
+		nil,
 		keyless,
 		diffInfo,
 		leftRows.Tuples().Order,

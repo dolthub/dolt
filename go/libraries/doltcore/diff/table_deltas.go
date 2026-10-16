@@ -608,7 +608,7 @@ func (td TableDelta) HasDataChanged(ctx context.Context) (bool, error) {
 }
 
 func (td TableDelta) HasPrimaryKeySetChanged() bool {
-	return !schema.ArePrimaryKeySetsDiffable(td.FromSch, td.ToSch)
+	return schema.ComparePrimaryKeys(td.FromSch, td.ToSch) != schema.PrimaryKeysSameTags
 }
 
 func (td TableDelta) HasChanges() (bool, error) {

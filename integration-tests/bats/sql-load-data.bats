@@ -391,7 +391,7 @@ fields terminated by ','
 lines terminated by '\n'
 SQL
     [ $status -ne 0 ]
-    [[ $output =~ "555555 out of range for tinyint" ]] || false
+    [[ $output =~ "Out of range value for column 'c5' at row 1" ]] || false
 }
 
 @test "sql-load-data: date types" {

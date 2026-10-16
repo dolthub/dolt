@@ -812,6 +812,36 @@ func SerializeBytesToAddr(ctx context.Context, ns NodeStore, r io.Reader, dataSi
 	return node, addr, nil
 }
 
+// SerializeBytesToAddrReusing is SerializeBytesToAddr for a blob replacing the
+// blob at |prior|: leaves whose bytes are unchanged are reused, not rewritten.
+func SerializeBytesToAddrReusing(ctx context.Context, ns NodeStore, data []byte, prior hash.Hash) (hash.Hash, error) {
+	leaves, err := blobLeaves(ctx, ns, prior)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	bb := ns.BlobBuilder()
+	defer ns.PutBlobBuilder(bb)
+	bb.Init(len(data))
+	bb.prior = leaves
+	_, addr, err := bb.Chunk(ctx, bytes.NewReader(data))
+	return addr, err
+}
+
+func blobLeaves(ctx context.Context, ns NodeStore, root hash.Hash) ([]priorLeaf, error) {
+	nd, err := ns.Read(ctx, root)
+	if err != nil {
+		return nil, err
+	}
+	var leaves []priorLeaf
+	err = WalkNodes(ctx, nd, ns, func(ctx context.Context, n *Node) error {
+		if n.IsLeaf() {
+			leaves = append(leaves, priorLeaf{data: n.GetValue(0), addr: n.HashOf()})
+		}
+		return nil
+	})
+	return leaves, err
+}
+
 func convJson(ctx context.Context, v interface{}) (res sql.JSONWrapper, err error) {
 	v, _, err = types.JSON.Convert(ctx, v)
 	if err != nil {

@@ -180,7 +180,7 @@ func TestLookupJoin(t *testing.T) {
 			j := getJoin(sqlCtx, node)
 			require.NotNil(t, j)
 
-			iter, err := Builder{}.Build(sqlCtx, j, nil)
+			iter, err := (&Builder{}).Build(sqlCtx, j, nil)
 			_, ok := iter.(*lookupJoinKvIter)
 			require.Equalf(t, tt.doRowexec, ok, "expected do row exec: %t", tt.doRowexec)
 		})

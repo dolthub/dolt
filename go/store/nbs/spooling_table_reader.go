@@ -51,12 +51,16 @@ func newSpoolingTableReaderAt(ctx context.Context, bs blobstore.Blobstore, key s
 		return nil, err
 	}
 	defer rc.Close()
+	return spoolTableReaderAt(rc)
+}
 
+// spoolTableReaderAt copies table bytes into a temp file owned by the reader.
+func spoolTableReaderAt(r io.Reader) (*spoolingTableReaderAt, error) {
 	f, err := tempfiles.MovableTempFileProvider.NewFile("", "nbs-spool-")
 	if err != nil {
 		return nil, err
 	}
-	sz, err := io.Copy(f, rc)
+	sz, err := io.Copy(f, r)
 	if err != nil {
 		f.Close()
 		_ = file.Remove(f.Name())

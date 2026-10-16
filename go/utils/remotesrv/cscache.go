@@ -16,7 +16,10 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
@@ -46,6 +49,9 @@ func NewLocalCSCache(filesys filesys.Filesys) *LocalCSCache {
 func (cache *LocalCSCache) Get(ctx context.Context, repopath, nbfVerStr string) (remotesrv.RemoteSrvStore, error) {
 	cache.mu.Lock()
 	defer cache.mu.Unlock()
+	if err := remotesrv.ValidateRepoPath(repopath); err != nil {
+		return nil, err
+	}
 
 	id := filepath.FromSlash(repopath)
 
@@ -53,13 +59,33 @@ func (cache *LocalCSCache) Get(ctx context.Context, repopath, nbfVerStr string) 
 		return cs, nil
 	}
 
-	err := cache.fs.MkDirs(id)
+	rootPath, err := cache.fs.Abs(".")
 	if err != nil {
 		return nil, err
 	}
-	path, err := cache.fs.Abs(id)
+	root, err := os.OpenRoot(rootPath)
 	if err != nil {
 		return nil, err
+	}
+	defer root.Close()
+
+	// Root.MkdirAll keeps symlinks and concurrent path changes from creating
+	// directories outside the storage root.
+	err = root.MkdirAll(id, os.ModePerm)
+	if err != nil {
+		return nil, err
+	}
+	path, err := filepath.EvalSymlinks(filepath.Join(rootPath, id))
+	if err != nil {
+		return nil, err
+	}
+	resolvedRoot, err := filepath.EvalSymlinks(rootPath)
+	if err != nil {
+		return nil, err
+	}
+	rel, err := filepath.Rel(resolvedRoot, path)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return nil, fmt.Errorf("repository path %q escapes storage root", repopath)
 	}
 
 	newCS, err := nbs.NewLocalStore(ctx, nbfVerStr, path, defaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider(), false)

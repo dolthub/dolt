@@ -119,6 +119,50 @@ SQL
     [[ "$output" =~ "trigger1,INSERT,test,1,,SET new.v1 = new.v1 + 1,BEFORE,root@localhost,utf8mb4,utf8mb4_0900_bin,utf8mb4_0900_bin" ]] || false
 }
 
+@test "triggers: CSV update imports fire update triggers with omitted columns" {
+    # Regression for https://github.com/dolthub/dolt/issues/5925.
+    dolt sql <<SQL
+CREATE TABLE test (pk INT PRIMARY KEY, c1 INT, ts TIMESTAMP);
+CREATE TRIGGER test_bi BEFORE INSERT ON test FOR EACH ROW SET NEW.ts = '2000-01-01 00:00:00';
+CREATE TRIGGER test_bu BEFORE UPDATE ON test FOR EACH ROW SET NEW.ts = TIMESTAMPADD(SECOND, 1, OLD.ts);
+INSERT INTO test (pk, c1) VALUES (5, 5);
+SQL
+
+    cat <<CSV > in.csv
+pk,c1
+0,0
+1,1
+CSV
+    run dolt table import -u test in.csv
+    [ "$status" -eq 0 ]
+
+    run dolt sql -r csv -q "SELECT * FROM test ORDER BY pk"
+    [ "$status" -eq 0 ]
+    [ "$output" = $'pk,c1,ts\n0,0,2000-01-01 00:00:00\n1,1,2000-01-01 00:00:00\n5,5,2000-01-01 00:00:00' ]
+
+    # Even identical CSV values must run the update trigger for existing keys.
+    run dolt table import -u test in.csv
+    [ "$status" -eq 0 ]
+
+    run dolt sql -r csv -q "SELECT * FROM test ORDER BY pk"
+    [ "$status" -eq 0 ]
+    [ "$output" = $'pk,c1,ts\n0,0,2000-01-01 00:00:01\n1,1,2000-01-01 00:00:01\n5,5,2000-01-01 00:00:00' ]
+
+    cat <<CSV > in.csv
+pk,c1
+0,1
+1,2
+2,3
+CSV
+    run dolt table import -u test in.csv
+    [ "$status" -eq 0 ]
+
+    # Updates preserve OLD.ts for the update trigger; new keys use the insert trigger.
+    run dolt sql -r csv -q "SELECT * FROM test ORDER BY pk"
+    [ "$status" -eq 0 ]
+    [ "$output" = $'pk,c1,ts\n0,1,2000-01-01 00:00:02\n1,2,2000-01-01 00:00:02\n2,3,2000-01-01 00:00:00\n5,5,2000-01-01 00:00:00' ]
+}
+
 @test "triggers: Writing directly into dolt_schemas is forbidden" {
     dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT);"
     dolt sql -q "CREATE VIEW view1 AS SELECT v1 FROM test;"
