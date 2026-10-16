@@ -286,6 +286,58 @@ func deleteAgainstEditSetup(xKeeps, yKeeps bool) []string {
 	}
 }
 
+// resolvedMergeScript merges |source| after |setup|, expecting conflicts, runs |resolve| to resolve them, commits, and
+// checks that |query| returns |expected|. |expected| is git's result for the same history and resolution.
+func resolvedMergeScript(name string, setup []string, source string, resolve []string, query string, expected []sql.Row) queries.ScriptTest {
+	assertions := []queries.ScriptTestAssertion{
+		{
+			Query:    fmt.Sprintf("CALL DOLT_MERGE('%s', '-m', 'merge %s');", source, source),
+			Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+		},
+	}
+	for _, statement := range resolve {
+		assertions = append(assertions, queries.ScriptTestAssertion{Query: statement, SkipResultsCheck: true})
+	}
+	assertions = append(assertions,
+		queries.ScriptTestAssertion{Query: "SELECT count(*) FROM dolt_conflicts;", Expected: []sql.Row{{0}}},
+		queries.ScriptTestAssertion{Query: fmt.Sprintf("CALL DOLT_COMMIT('-am', 'resolve merge of %s');", source), SkipResultsCheck: true},
+		queries.ScriptTestAssertion{Query: query, Expected: expected},
+		queries.ScriptTestAssertion{Query: "SELECT count(*) FROM dolt_status;", Expected: []sql.Row{{0}}},
+	)
+	return queries.ScriptTest{Name: name, SetUpScript: setup, Assertions: assertions}
+}
+
+// longRunningConflictSetup is longRunningSchemaBranchSetup with a conflict, on feature, without autocommit.
+func longRunningConflictSetup() []string {
+	return append(longRunningSchemaBranchSetup(true), "CALL DOLT_CHECKOUT('feature');", "SET @@autocommit = 0;")
+}
+
+// AllMergeMultipleBasesScripts returns the merges with several merge bases and the resolutions of their conflicts.
+func AllMergeMultipleBasesScripts() []queries.ScriptTest {
+	var scripts []queries.ScriptTest
+	for _, list := range [][]queries.ScriptTest{MergeMultipleBasesScripts, MergeMultipleBasesResolveOursScripts} {
+		scripts = append(scripts, list...)
+	}
+	return scripts
+}
+
+// MergeMultipleBasesResolveOursScripts resolve each conflicting merge against a virtual merge base by keeping ours,
+// as `git checkout --ours` does for the same history.
+var MergeMultipleBasesResolveOursScripts = []queries.ScriptTest{
+	resolvedMergeScript("long-running schema branch with a conflict: resolve with ours", longRunningConflictSetup(), "main",
+		[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');"},
+		"SELECT id, v, w FROM t WHERE id IN (1, 3) ORDER BY id;", []sql.Row{{1, "feature 5", "seed"}, {3, "main", "feature"}}),
+	resolvedMergeScript("conflicting merge bases, resolved differently: resolve with ours", conflictingMergeBasesSetup("x wins", "y wins", false), "y",
+		[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');"},
+		"SELECT * FROM t ORDER BY id;", []sql.Row{{1, "x wins", "seed"}, {2, "x", "y"}}),
+	resolvedMergeScript("conflicting merge bases, one side resolved to the old value: resolve with ours", conflictingMergeBasesSetup("seed", "y", false), "y",
+		[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');"},
+		"SELECT * FROM t ORDER BY id;", []sql.Row{{1, "seed", "seed"}, {2, "x", "y"}}),
+	resolvedMergeScript("merge bases that conflict on a deleted row, resolved differently: resolve with ours", deleteAgainstEditSetup(false, true), "y",
+		[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');"},
+		"SELECT * FROM t ORDER BY id;", []sql.Row{{2, "x", "y"}}),
+}
+
 // MergeMultipleBasesScripts merge branches that have more than one merge base. The expected results are git's: each
 // history was also built in git, with a directory per table, a file per row and a line per column value, and `git
 // merge` (git 2.39) produced the same rows and conflicts.
