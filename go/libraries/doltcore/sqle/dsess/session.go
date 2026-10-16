@@ -532,24 +532,13 @@ func (d *DoltSession) clear() {
 
 // CommitTransaction commits the in-progress transaction. Depending on session settings, this may write only a new
 // working sets, or may additionally create a new dolt commit for the current HEAD.
-func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (err error) {
-	// Any non-error path must set the ctx's transaction to nil even if no work was done, because the engine only clears
-	// out transaction state in some cases. Changes to only branch heads (creating a new branch, reset, etc.) have no
-	// changes to commit visible to the transaction logic, but they still need a new transaction on the next statement.
-	// See comment in |commitBranchStates|
-	defer func() {
-		if err == nil {
-			d.notifyDoltgresTransactionCommitted()
-			ctx.SetTransaction(nil)
-		}
-	}()
-
-	if TransactionsDisabled(ctx) {
-		return nil
-	}
-
+func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error {
 	dirties := d.dirtyWorkingSets()
-	if len(dirties) == 0 {
+	if TransactionsDisabled(ctx) || len(dirties) == 0 {
+		// Even without a batch to publish, a successful COMMIT ends the transaction.
+		// Head-only changes also need a new snapshot on the next statement.
+		d.notifyDoltgresTransactionCommitted()
+		ctx.SetTransaction(nil)
 		return nil
 	}
 
@@ -717,6 +706,7 @@ func (d *DoltSession) commitBranchStates(
 	// The engine clears transactions for COMMIT, but other callers (including stored procedures) must
 	// clear them themselves so the next statement starts a new transaction.
 	ctx.SetTransaction(nil)
+	d.notifyDoltgresTransactionCommitted()
 	return commits, nil
 }
 
@@ -847,12 +837,7 @@ func (d *DoltSession) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.T
 	}
 
 	_, err = d.commitBranchStates(ctx, []*branchState{state}, tx, nil)
-	if err != nil {
-		return err
-	}
-
-	d.notifyDoltgresTransactionCommitted()
-	return nil
+	return err
 }
 
 // DoltCommit commits the currently checked out working set, creating a new dolt commit with the properties given.
@@ -906,11 +891,7 @@ func (d *DoltSession) DoltCommitMulti(
 		states[i] = state
 	}
 
-	commits, err := d.commitBranchStates(ctx, states, tx, pending)
-	if err == nil {
-		d.notifyDoltgresTransactionCommitted()
-	}
-	return commits, err
+	return d.commitBranchStates(ctx, states, tx, pending)
 }
 
 // PendingCommitAllStaged returns a pending commit with all tables staged. Returns nil if there are no changes to stage.
