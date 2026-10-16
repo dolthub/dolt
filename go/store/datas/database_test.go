@@ -88,15 +88,35 @@ func (suite *DatabaseSuite) TestCommitDatasetsAtomic() {
 	root, err := suite.db.WriteValue(ctx, types.String("working root"))
 	suite.Require().NoError(err)
 	var updates []DatasetUpdate
-	for _, name := range []string{"a", "b", "c"} {
+	for _, name := range []string{
+		"a",
+		"b",
+		"c",
+	} {
 		head, err := suite.db.GetDataset(ctx, "refs/heads/"+name)
 		suite.Require().NoError(err)
 		head, err = CommitValue(ctx, suite.db, head, types.String("initial"))
 		suite.Require().NoError(err)
+		expectedHead, _ := head.MaybeHeadAddr()
 		wsID := "workingSets/heads/" + name
 		updates = append(updates,
-			WorkingSetUpdate{WorkingSetDS: wsID, WorkingSet: WorkingSetSpec{Meta: &WorkingSetMeta{}, WorkingRoot: root, StagedRoot: root}},
-			&CommitUpdate{CommitDS: head, WorkingSetDS: wsID, RootVal: types.String("next"), CommitOpts: CommitOptions{Meta: &CommitMeta{}}},
+			WorkingSetUpdate{
+				WorkingSetDS: wsID,
+				WorkingSet: WorkingSetSpec{
+					Meta:        &WorkingSetMeta{},
+					WorkingRoot: root,
+					StagedRoot:  root,
+				},
+			},
+			&CommitUpdate{
+				CommitDS:     head,
+				ExpectedHead: expectedHead,
+				WorkingSetDS: wsID,
+				RootVal:      types.String("next"),
+				CommitOpts: CommitOptions{
+					Meta: &CommitMeta{},
+				},
+			},
 		)
 	}
 	before, err := suite.db.rt.Root(ctx)
@@ -122,8 +142,7 @@ func (suite *DatabaseSuite) TestCommitDatasetsAtomic() {
 	// Pointer and value updates obey the same branch-head checks.
 	stale = append([]DatasetUpdate(nil), updates...)
 	lastCommit := *stale[5].(*CommitUpdate)
-	lastCommit.CommitDS, err = suite.db.GetDatasetByRootHash(ctx, lastCommit.DatasetID(), hash.Hash{})
-	suite.Require().NoError(err)
+	lastCommit.ExpectedHead = hash.Of([]byte("stale prepared head"))
 	stale[5] = &lastCommit
 	_, err = suite.db.CommitDatasets(ctx, stale)
 	suite.ErrorIs(err, ErrMergeNeeded)
@@ -185,7 +204,9 @@ func (suite *DatabaseSuite) TestCommitDatasetsStandaloneBranchWorkingSetPrecondi
 		CommitDS:     head,
 		WorkingSetDS: ws.ID(),
 		RootVal:      types.String("commit"),
-		CommitOpts:   CommitOptions{Meta: &CommitMeta{}},
+		CommitOpts: CommitOptions{
+			Meta: &CommitMeta{},
+		},
 	}
 	before, err := suite.db.rt.Root(ctx)
 	suite.Require().NoError(err)
@@ -211,8 +232,8 @@ type interleavedDatasetUpdate struct {
 	afterBuild func()
 }
 
-func (u interleavedDatasetUpdate) Build(ctx context.Context, db valueBuilder) (writtenDatasetUpdate, error) {
-	h, err := u.DatasetUpdate.Build(ctx, db)
+func (u interleavedDatasetUpdate) build(ctx context.Context, db valueBuilder) (writtenDatasetUpdate, error) {
+	h, err := u.DatasetUpdate.build(ctx, db)
 	if err == nil {
 		u.afterBuild()
 	}
@@ -220,7 +241,11 @@ func (u interleavedDatasetUpdate) Build(ctx context.Context, db valueBuilder) (w
 }
 
 func (suite *DatabaseSuite) TestCommitDatasetsHeadChangesDuringBuild() {
-	for _, mode := range []string{"ordinary", "force", "amend"} {
+	for _, mode := range []string{
+		"ordinary",
+		"force",
+		"amend",
+	} {
 		suite.Run(mode, func() {
 			ctx := context.Background()
 			ds, err := suite.db.GetDataset(ctx, "refs/heads/"+mode)
@@ -230,7 +255,9 @@ func (suite *DatabaseSuite) TestCommitDatasetsHeadChangesDuringBuild() {
 			expected, _ := ds.MaybeHeadAddr()
 			root, err := suite.db.WriteValue(ctx, types.String("working root"))
 			suite.Require().NoError(err)
-			opts := CommitOptions{Meta: &CommitMeta{}}
+			opts := CommitOptions{
+				Meta: &CommitMeta{},
+			}
 			switch mode {
 			case "force":
 				opts.Force = true
@@ -239,11 +266,21 @@ func (suite *DatabaseSuite) TestCommitDatasetsHeadChangesDuringBuild() {
 			}
 			var concurrentRoot hash.Hash
 			updates := []DatasetUpdate{
-				WorkingSetUpdate{WorkingSetDS: "workingSets/heads/other-" + mode, WorkingSet: WorkingSetSpec{
-					Meta: &WorkingSetMeta{}, WorkingRoot: root, StagedRoot: root,
-				}},
+				WorkingSetUpdate{
+					WorkingSetDS: "workingSets/heads/other-" + mode,
+					WorkingSet: WorkingSetSpec{
+						Meta:        &WorkingSetMeta{},
+						WorkingRoot: root,
+						StagedRoot:  root,
+					},
+				},
 				interleavedDatasetUpdate{
-					DatasetUpdate: CommitUpdate{CommitDS: ds, ExpectedHead: expected, RootVal: types.String("batch"), CommitOpts: opts},
+					DatasetUpdate: CommitUpdate{
+						CommitDS:     ds,
+						ExpectedHead: expected,
+						RootVal:      types.String("batch"),
+						CommitOpts:   opts,
+					},
 					afterBuild: func() {
 						_, err := CommitValue(ctx, suite.db, ds, types.String("concurrent"))
 						suite.Require().NoError(err)
@@ -281,7 +318,10 @@ func (s *commitInterleavingStore) Commit(ctx context.Context, current, last hash
 }
 
 func (suite *DatabaseSuite) TestCommitDatasetsRechecksPreconditionsOnRetry() {
-	for _, changedID := range []string{"refs/heads/main", "refs/heads/unrelated"} {
+	for _, changedID := range []string{
+		"refs/heads/main",
+		"refs/heads/unrelated",
+	} {
 		suite.Run(changedID, func() {
 			ctx := context.Background()
 			storage := &chunks.TestStorage{}
@@ -291,7 +331,10 @@ func (suite *DatabaseSuite) TestCommitDatasetsRechecksPreconditionsOnRetry() {
 			suite.Require().NoError(err)
 			head, err = CommitValue(ctx, writer, head, types.String("initial"))
 			suite.Require().NoError(err)
-			store := &commitInterleavingStore{ChunkStore: storage.NewViewWithDefaultFormat()}
+			expectedHead, _ := head.MaybeHeadAddr()
+			store := &commitInterleavingStore{
+				ChunkStore: storage.NewViewWithDefaultFormat(),
+			}
 			publisher := NewDatabase(store).(*database)
 			defer publisher.Close()
 			other, err := writer.GetDataset(ctx, changedID)
@@ -317,11 +360,16 @@ func (suite *DatabaseSuite) TestCommitDatasetsRechecksPreconditionsOnRetry() {
 				},
 				interleavedDatasetUpdate{
 					DatasetUpdate: CommitUpdate{
-						CommitDS:   head,
-						RootVal:    types.String("batch"),
-						CommitOpts: CommitOptions{Meta: &CommitMeta{}},
+						CommitDS:     head,
+						ExpectedHead: expectedHead,
+						RootVal:      types.String("batch"),
+						CommitOpts: CommitOptions{
+							Meta: &CommitMeta{},
+						},
 					},
-					afterBuild: func() { builds++ },
+					afterBuild: func() {
+						builds++
+					},
 				},
 			}
 			_, err = publisher.CommitDatasets(ctx, updates)
@@ -523,13 +571,24 @@ func (suite *DatabaseSuite) TestPrebuiltCommitUpdate() {
 	ctx := context.Background()
 	ds, err := suite.db.GetDataset(ctx, "prebuilt")
 	suite.Require().NoError(err)
-	commit, err := suite.db.BuildNewCommit(ctx, ds, types.String("root"), CommitOptions{Meta: &CommitMeta{}})
+	commit, err := suite.db.BuildNewCommit(ctx, ds, types.String("root"), CommitOptions{
+		Meta: &CommitMeta{},
+	})
 	suite.Require().NoError(err)
-	updated, err := suite.db.CommitDatasets(ctx, []DatasetUpdate{PrebuiltCommitUpdate{CommitDS: ds, Commit: commit}})
+	updated, err := suite.db.CommitDatasets(ctx, []DatasetUpdate{PrebuiltCommitUpdate{
+		CommitDS: ds,
+		Commit:   commit,
+	}})
 	suite.Require().NoError(err)
-	_, err = suite.db.CommitDatasets(ctx, []DatasetUpdate{PrebuiltCommitUpdate{CommitDS: ds, Commit: commit}})
+	_, err = suite.db.CommitDatasets(ctx, []DatasetUpdate{PrebuiltCommitUpdate{
+		CommitDS: ds,
+		Commit:   commit,
+	}})
 	suite.ErrorIs(err, ErrMergeNeeded)
-	_, err = suite.db.CommitDatasets(ctx, []DatasetUpdate{&PrebuiltCommitUpdate{CommitDS: updated[0], Commit: commit}})
+	_, err = suite.db.CommitDatasets(ctx, []DatasetUpdate{&PrebuiltCommitUpdate{
+		CommitDS: updated[0],
+		Commit:   commit,
+	}})
 	suite.ErrorIs(err, ErrAlreadyCommitted)
 	actual, err := suite.db.GetDataset(ctx, ds.ID())
 	suite.Require().NoError(err)

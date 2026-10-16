@@ -110,8 +110,11 @@ func TestDoltgresSemanticTransactionLifecycle(t *testing.T) {
 
 	if _, _, ok := sql.SystemVariables.GetGlobal(DoltCommitOnTransactionCommit); !ok {
 		sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{&sql.MysqlSystemVariable{
-			Name: DoltCommitOnTransactionCommit, Scope: sql.GetMysqlScope(sql.SystemVariableScope_Session),
-			Dynamic: true, Type: sqltypes.NewSystemBoolType(DoltCommitOnTransactionCommit), Default: int8(0),
+			Name:    DoltCommitOnTransactionCommit,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
+			Dynamic: true,
+			Type:    sqltypes.NewSystemBoolType(DoltCommitOnTransactionCommit),
+			Default: int8(0),
 		}})
 	}
 	sess := DefaultSession(emptyDatabaseProvider(), nil)
@@ -152,8 +155,12 @@ func TestDoltTransactionRepeatedSavepointNames(t *testing.T) {
 	tx := &DoltTransaction{postgresSavepoints: true}
 	first := map[string]doltdb.RootValue{"first": nil}
 	second := map[string]doltdb.RootValue{"second": nil}
-	firstDirty := map[string]bool{"mydb/main": true}
-	secondDirty := map[string]bool{"mydb/other": true}
+	firstDirty := map[string]bool{
+		"mydb/main": true,
+	}
+	secondDirty := map[string]bool{
+		"mydb/other": true,
+	}
 	tx.CreateSavepoint("same", first, firstDirty)
 	tx.CreateSavepoint("child", map[string]doltdb.RootValue{}, nil)
 	tx.CreateSavepoint("same", second, secondDirty)
@@ -167,10 +174,22 @@ func TestDoltTransactionRepeatedSavepointNames(t *testing.T) {
 
 func TestDoltTransactionDefaultSavepointSemantics(t *testing.T) {
 	tx := &DoltTransaction{}
-	tx.CreateSavepoint("Same", map[string]doltdb.RootValue{"first": nil}, map[string]bool{"mydb/main": true})
-	tx.CreateSavepoint("same", map[string]doltdb.RootValue{"second": nil}, map[string]bool{"mydb/other": true})
-	assert.Equal(t, map[string]doltdb.RootValue{"second": nil}, tx.RollbackToSavepoint("SAME").roots)
-	assert.Equal(t, map[string]bool{"mydb/other": true}, tx.RollbackToSavepoint("SAME").dirtyBranches)
+	tx.CreateSavepoint("Same", map[string]doltdb.RootValue{
+		"first": nil,
+	}, map[string]bool{
+		"mydb/main": true,
+	})
+	tx.CreateSavepoint("same", map[string]doltdb.RootValue{
+		"second": nil,
+	}, map[string]bool{
+		"mydb/other": true,
+	})
+	assert.Equal(t, map[string]doltdb.RootValue{
+		"second": nil,
+	}, tx.RollbackToSavepoint("SAME").roots)
+	assert.Equal(t, map[string]bool{
+		"mydb/other": true,
+	}, tx.RollbackToSavepoint("SAME").dirtyBranches)
 	assert.True(t, tx.ClearSavepoint("Same"))
 	assert.Nil(t, tx.RollbackToSavepoint("same"))
 }

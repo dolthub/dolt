@@ -1846,7 +1846,7 @@ func RunDoltCommitAllTestsPrepared(t *testing.T, harness DoltEnginetestHarness) 
 
 func RunDoltCommitAllTransactionTests(t *testing.T, harness DoltEnginetestHarness, prepared bool) {
 	defer harness.Close()
-	for _, script := range append(DoltCommitAllTransactionTests, multiBranchTransactionTests(true)...) {
+	for _, script := range append(DoltCommitAllTransactionTests, MultiBranchHeadTransactionTests...) {
 		func() {
 			h := harness.NewHarness(t)
 			defer h.Close()
@@ -1861,7 +1861,7 @@ func RunDoltCommitAllTransactionTests(t *testing.T, harness DoltEnginetestHarnes
 
 func RunMultiBranchTransactionTests(t *testing.T, harness DoltEnginetestHarness, prepared bool) {
 	defer harness.Close()
-	for _, script := range multiBranchTransactionTests(false) {
+	for _, script := range MultiBranchWorkingSetTransactionTests {
 		func() {
 			h := harness.NewHarness(t)
 			defer h.Close()
@@ -1887,13 +1887,21 @@ func RunMultiBranchCommitTests(t *testing.T, harness DoltEnginetestHarness, prep
 			}
 		}()
 	}
-	for _, automatic := range []bool{false, true} {
-		name := "dolt_commit"
-		if automatic {
-			name = "transaction_commit"
-		}
-		t.Run(name, func(t *testing.T) {
-			for _, script := range multiBranchCommitVariableTransactions(automatic) {
+	for _, group := range []struct {
+		name  string
+		tests []queries.TransactionTest
+	}{
+		{
+			name:  "dolt_commit",
+			tests: MultiBranchExplicitCommitTransactions,
+		},
+		{
+			name:  "transaction_commit",
+			tests: MultiBranchAutomaticCommitTransactions,
+		},
+	} {
+		t.Run(group.name, func(t *testing.T) {
+			for _, script := range group.tests {
 				func() {
 					h := harness.NewHarness(t)
 					defer h.Close()

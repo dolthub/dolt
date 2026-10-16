@@ -216,17 +216,27 @@ type batchCommitHook struct {
 
 func (h *batchCommitHook) Execute(_ context.Context, ds datas.Dataset, _ *DoltDB) (func(context.Context) error, error) {
 	h.datasets = append(h.datasets, ds.ID())
-	return func(context.Context) error { return nil }, nil
+	return func(context.Context) error {
+		return nil
+	}, nil
 }
-func (h *batchCommitHook) ExecuteForWorkingSets() bool { return !h.skipWorkingSets }
-func (*batchCommitHook) ExecuteForReplicaWrite() bool  { return false }
+func (h *batchCommitHook) ExecuteForWorkingSets() bool {
+	return !h.skipWorkingSets
+}
+func (*batchCommitHook) ExecuteForReplicaWrite() bool {
+	return false
+}
 
 func (l workingRootListener) WorkingRootUpdated(_ *sql.Context, _ string, branch string, previous, current RootValue) error {
 	l.updated(branch, previous, current)
 	return nil
 }
-func (workingRootListener) DatabaseCreated(*sql.Context, string) error { return nil }
-func (workingRootListener) DatabaseDropped(*sql.Context, string) error { return nil }
+func (workingRootListener) DatabaseCreated(*sql.Context, string) error {
+	return nil
+}
+func (workingRootListener) DatabaseDropped(*sql.Context, string) error {
+	return nil
+}
 
 type notificationSnapshotCountingDatabase struct {
 	datas.Database
@@ -270,21 +280,31 @@ func TestCommitHeadUpdatesOnlyLoadsWorkingSetsForListeners(t *testing.T) {
 			require.NoError(t, err)
 
 			listeners := DatabaseUpdateListeners
-			t.Cleanup(func() { DatabaseUpdateListeners = listeners })
+			t.Cleanup(func() {
+				DatabaseUpdateListeners = listeners
+			})
 			DatabaseUpdateListeners = nil
 			called := 0
 			if test.listener {
-				DatabaseUpdateListeners = []DatabaseUpdateListener{workingRootListener{func(_ string, _, _ RootValue) { called++ }}}
+				DatabaseUpdateListeners = []DatabaseUpdateListener{workingRootListener{func(_ string, _, _ RootValue) {
+					called++
+				}}}
 			}
 			if test.sqlContext {
 				ctx = sql.NewContext(ctx)
 			}
-			db := &notificationSnapshotCountingDatabase{Database: ddb.db.Database}
+			db := &notificationSnapshotCountingDatabase{
+				Database: ddb.db.Database,
+			}
 			ddb.db.Database = db
-			store := &notificationValueCountingStore{ValueReadWriter: ddb.vrw}
+			store := &notificationValueCountingStore{
+				ValueReadWriter: ddb.vrw,
+			}
 			ddb.vrw = store
 			heads, err := ddb.CommitHeadUpdates(ctx, []HeadUpdate{WorkingSetUpdate{
-				WorkingSet: ws, PrevHash: previous, Meta: TodoWorkingSetMeta(),
+				WorkingSet: ws,
+				PrevHash:   previous,
+				Meta:       TodoWorkingSetMeta(),
 			}}, nil)
 			require.NoError(t, err)
 			require.Len(t, heads, 1)
