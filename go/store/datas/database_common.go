@@ -544,6 +544,8 @@ func (db *database) BuildNewCommit(ctx context.Context, ds Dataset, v types.Valu
 	return newCommitForValue(ctx, ds.db.chunkStore(), ds.db, ds.db.nodeStore(), v, opts)
 }
 
+// Commit writes a new commit to the database and updates the dataset head to point at it.
+// Only useful when establishing the first commit on a new HEAD.
 func (db *database) Commit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (Dataset, error) {
 	commit, err := db.BuildNewCommit(ctx, ds, v, opts)
 	if err != nil {
@@ -552,6 +554,9 @@ func (db *database) Commit(ctx context.Context, ds Dataset, v types.Value, opts 
 	return db.WriteCommit(ctx, ds, commit)
 }
 
+// WriteCommit writes the given commit to the database and updates the dataset head to point at it.
+// This method is only ever used when initializing the first commit in a new database, and isn't generally safe to use
+// for other use cases. Use CommitDatasets instead.
 func (db *database) WriteCommit(ctx context.Context, ds Dataset, commit *Commit) (Dataset, error) {
 	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error {
 		_, err := db.CommitDatasets(ctx, []DatasetUpdate{PrebuiltCommitUpdate{CommitDS: ds, Commit: commit}})

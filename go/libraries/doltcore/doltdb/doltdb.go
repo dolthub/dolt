@@ -1112,6 +1112,9 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 	return ddb.CommitValue(ctx, dref, val, commitOpts)
 }
 
+// CommitValue commits the value given to the branch given, using the commit options provided.
+// This is a naked write to the dataset without any of the checks usually performed when writing a new commit.
+// It's only for specialized admin use cases. Use Commit instead.
 func (ddb *DoltDB) CommitValue(ctx context.Context, dref ref.DoltRef, val types.Value, commitOpts datas.CommitOptions) (*Commit, error) {
 	ds, err := ddb.db.GetDataset(ctx, dref.String())
 	if err != nil {

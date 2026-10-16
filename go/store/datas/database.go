@@ -72,22 +72,12 @@ type Database interface {
 	// if necessary before any update is performed.
 	BuildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (*Commit, error)
 
-	// Commit updates the Commit that ds.ID() in this database points at. All
-	// Values that have been written to this Database are guaranteed to be
-	// persistent after Commit() returns successfully.
-	//
-	// The new Commit struct is constructed using v, opts.ParentsList, and
-	// opts.Meta. If opts.ParentsList is empty then the head value from
-	// |ds| is used as the parent. If opts.Meta is the zero value the
-	// Commit struct as an empty Meta struct.
-	//
-	// If the update cannot be performed because the existing dataset head
-	// is not a common ancestor of the constructed commit struct, returns
-	// an 'ErrMergeNeeded' error.
+	// Commit writes the value given to the dataset given. Currently only used to initialize new datasets.
+	// For writes to existing datasets, CommitDatasets or SetHead is more appropriate.
 	Commit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (Dataset, error)
 
-	// WriteCommit has the same behavior as Commit but accepts an already-constructed Commit
-	// instead of constructing one from a Value and CommitOptions
+	// WriteCommit writes the value given to the dataset given. Currently only used to initialize new datasets.
+	// For writes to existing datasets, CommitDatasets or SetHead is more appropriate.
 	WriteCommit(ctx context.Context, ds Dataset, commit *Commit) (Dataset, error)
 
 	// Tag stores an immutable reference to a Commit. It takes a Hash to
@@ -119,7 +109,7 @@ type Database interface {
 	// upon return as well.
 	UpdateWorkingSet(ctx context.Context, ds Dataset, workingSet WorkingSetSpec, prevHash hash.Hash) (Dataset, error)
 
-	// CommitDatasets atomically updates every dataset, or leaves all heads unchanged on failure.
+	// CommitDatasets atomically updates every dataset given, or leaves all heads unchanged on failure.
 	// Results are returned in the same order as updates.
 	CommitDatasets(ctx context.Context, updates []DatasetUpdate) ([]Dataset, error)
 
