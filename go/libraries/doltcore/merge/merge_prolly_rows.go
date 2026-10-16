@@ -259,8 +259,8 @@ func computeProllyTreePatches(
 	needsSecondaryIndexMerge := len(sec.leftIdxes) > 0 && !mergeInfo.InvalidateSecondaryIndexes
 	// either skip if there's secondary indexes, or merge secondary indexes.
 	needsSchemaMigration := mergeInfo.RightNeedsRewrite || mergeInfo.LeftNeedsRewrite
-	conflicted := tm.virtualBaseConflicts()
-	canFastMergeProllyTrees := len(conflicted) == 0 &&
+	cellChecker := tm.NewVirtualBaseConflictChecker(valueMerger, ancRows)
+	canFastMergeProllyTrees := !cellChecker.HasConflictedCells() &&
 		!keyless &&
 		!needsUniquenessValidation &&
 		!needsCheckValidation &&
@@ -368,10 +368,8 @@ func computeProllyTreePatches(
 			} else if err != nil {
 				return nil, nil, err
 			}
-			if row, ok := conflicted[string(diff.Key)]; ok {
-				if diff, err = conflictOnConflictedCells(ctx, diff, row, ancRows, valueMerger); err != nil {
-					return nil, nil, err
-				}
+			if diff, err = cellChecker.Check(ctx, diff); err != nil {
+				return nil, nil, err
 			}
 
 			cnt, err := uniq.validateDiff(ctx, diff)
@@ -585,6 +583,33 @@ func (tm *TableMerger) virtualBaseConflicts() map[string]conflictedRow {
 		return virtualBase.conflicted[tm.name]
 	}
 	return nil
+}
+
+// VirtualBaseConflictChecker finds the conflicts a merge has in cells that conflicted between the merge bases of its
+// virtual merge base.
+type VirtualBaseConflictChecker struct {
+	rows    map[string]conflictedRow
+	ancRows prolly.Map
+	vm      *valueMerger
+}
+
+// NewVirtualBaseConflictChecker returns a checker for this table, whose ancestor rows are |ancRows|.
+func (tm *TableMerger) NewVirtualBaseConflictChecker(vm *valueMerger, ancRows prolly.Map) VirtualBaseConflictChecker {
+	return VirtualBaseConflictChecker{rows: tm.virtualBaseConflicts(), ancRows: ancRows, vm: vm}
+}
+
+// HasConflictedCells reports whether the table has any conflicted cells to check.
+func (c VirtualBaseConflictChecker) HasConflictedCells() bool {
+	return len(c.rows) > 0
+}
+
+// Check returns |diff|, or a conflict in its place when its two sides differ in a conflicted cell.
+func (c VirtualBaseConflictChecker) Check(ctx context.Context, diff tree.ThreeWayDiff) (tree.ThreeWayDiff, error) {
+	row, ok := c.rows[string(diff.Key)]
+	if !ok {
+		return diff, nil
+	}
+	return conflictOnConflictedCells(ctx, diff, row, c.ancRows, c.vm)
 }
 
 // conflictOnConflictedCells turns |diff| into a conflict when its two sides differ in a cell of |row| that conflicted
