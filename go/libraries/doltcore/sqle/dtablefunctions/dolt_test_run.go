@@ -185,9 +185,13 @@ func (trtf *TestsRunTableFunction) Name() string {
 
 // RowIter implements the sql.Node interface
 func (trtf *TestsRunTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter, error) {
+	vars := ctx.EngineVariables()
+	if vars == nil {
+		return nil, fmt.Errorf("dolt_test_run requires an engine variable owner")
+	}
 	pro := trtf.catalog.(sql.DatabaseProvider) // checked by WithCatalog
 	runner := *trtf
-	runner.engine = gms.New(analyzer.NewDefault(pro), &gms.Config{EngineVariables: ctx.EngineVariables()})
+	runner.engine = gms.New(analyzer.NewDefault(pro), &gms.Config{EngineVariables: vars})
 	defer runner.engine.Close()
 
 	args := runner.getOptionsString()

@@ -30,11 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
-// TODO: get rid of me, use an integration point to define new sysvars
-func init() {
-	AddDoltSystemVariables()
-}
-
 var DoltSystemVariables = newDoltSystemVariables()
 
 // DoltSystemVariableNames returns the names of Dolt's exported system variable
@@ -371,10 +366,6 @@ func newDoltSystemVariables() []sql.SystemVariable {
 	}
 }
 
-func AddDoltSystemVariables() {
-	addDoltSystemVariables(sql.SystemVariables, DoltSystemVariables)
-}
-
 // NewEngineVariables constructs a fresh GMS bundle with Dolt's definitions.
 func NewEngineVariables() *sql.EngineVariables {
 	vars := variables.NewEngineVariables()
@@ -384,13 +375,9 @@ func NewEngineVariables() *sql.EngineVariables {
 
 // AssignSystemVariables sets global values in |ctx|'s engine registry, running
 // change callbacks with |ctx|. |ctx|'s session must belong to the same engine.
-// An unbound |ctx| assigns to the global registry.
 func AssignSystemVariables(ctx *sql.Context, vals map[string]any) error {
-	if ctx == nil {
-		return fmt.Errorf("system variable assignment requires a context")
-	}
-	if ctx.EngineVariables() == nil {
-		return sql.SystemVariables.AssignValues(vals)
+	if ctx == nil || ctx.EngineVariables() == nil {
+		return fmt.Errorf("system variable assignment requires an owning context")
 	}
 	owner, ok := ctx.Session.(sql.EngineVariablesProvider)
 	if !ok || owner.EngineVariables() != ctx.EngineVariables() {
@@ -432,7 +419,7 @@ func NewEngineVariablesForEnv(mrEnv *env.MultiRepoEnv, dEnv *env.DoltEnv) (*sql.
 
 // AddDoltSystemVariablesToRegistry registers fresh Dolt definitions in one
 // engine's registry. The inline catalog is registered first, followed by the
-// exported catalog, matching AddDoltSystemVariables duplicate precedence.
+// exported catalog; definitions in the exported catalog take precedence.
 func AddDoltSystemVariablesToRegistry(vars sql.SystemVariableRegistry) {
 	addDoltSystemVariables(vars, newDoltSystemVariables())
 }
@@ -753,10 +740,6 @@ func newInlineDoltSystemVariables() []sql.SystemVariable {
 			Default: "",
 		},
 	}
-}
-
-func ReadReplicaForcePull() bool {
-	return ReadReplicaForcePullWithRegistry(sql.SystemVariables)
 }
 
 // ReadReplicaForcePullWithRegistry reads the current setting from an engine's registry.

@@ -149,13 +149,11 @@ func NewSqlEngine(
 	}
 
 	// Some database initialization logic depends on system variables, load them before the databases
-	// Without a bundle the engine shares the global registries, as callers that
-	// predate engine-owned variables expect.
 	engineVars := config.EngineVariables
-	var vars sql.SystemVariableRegistry = sql.SystemVariables
-	if engineVars != nil {
-		vars = engineVars.System
+	if engineVars == nil {
+		engineVars = sqle.NewEngineVariables()
 	}
+	vars := engineVars.System
 	if err := mrEnv.Iter(func(name string, _ *env.DoltEnv) (bool, error) {
 		dsess.DefineSystemVariablesForDBInRegistry(vars, name)
 		return false, nil
