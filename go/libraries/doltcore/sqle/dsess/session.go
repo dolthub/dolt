@@ -27,7 +27,6 @@ import (
 
 	"github.com/cockroachdb/apd/v3"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -163,11 +162,11 @@ var _ sql.TransactionSession = (*DoltSession)(nil)
 var _ expranalysis.SessionDbProvider = (*DoltSession)(nil)
 var _ branch_control.ContextConvertible = (*DoltSession)(nil)
 
-// DefaultSession creates a standalone DoltSession with fresh GMS definitions.
-// It cannot attach to an existing engine. Engine callers should pass their Dolt
+// DefaultSession creates a DoltSession with default values. Its unbound base
+// session uses the global variable registries; engine callers should pass their
 // bundle to DefaultSessionWithVariables.
 func DefaultSession(pro DoltDatabaseProvider, sessFunc WriteSessFunc) *DoltSession {
-	return DefaultSessionWithVariables(pro, sessFunc, variables.NewEngineVariables())
+	return defaultSession(pro, sessFunc, sql.NewBaseSession())
 }
 
 // DefaultSessionWithVariables creates a default session bound to an engine.
@@ -175,8 +174,12 @@ func DefaultSessionWithVariables(pro DoltDatabaseProvider, sessFunc WriteSessFun
 	if !completeEngineVariableBundle(vars) {
 		panic("DefaultSessionWithVariables requires a complete engine variable bundle")
 	}
+	return defaultSession(pro, sessFunc, sql.NewBaseSessionWithVariables(vars))
+}
+
+func defaultSession(pro DoltDatabaseProvider, sessFunc WriteSessFunc, base *sql.BaseSession) *DoltSession {
 	return &DoltSession{
-		Session:          sql.NewBaseSessionWithVariables(vars),
+		Session:          base,
 		username:         "",
 		email:            "",
 		dbStates:         make(map[string]*DatabaseSessionState),
@@ -191,9 +194,11 @@ func DefaultSessionWithVariables(pro DoltDatabaseProvider, sessFunc WriteSessFun
 	}
 }
 
-// NewDetachedSession returns a DoltSession with fresh GMS definitions. It
-// cannot attach to an existing engine. Use NewDetachedSessionWithVariables
-// when an external session manager owns the DoltSession lifecycle.
+// NewDetachedSession returns a DoltSession backed by a fresh, unbound
+// sql.BaseSession rather than one supplied by a client connection. Use it when
+// an external session manager owns the DoltSession lifecycle and SQL requests
+// run against a *sql.Context pointing at this session instead of a
+// per-connection one. NewDetachedSessionWithVariables binds it to an engine.
 func NewDetachedSession(
 	pro DoltDatabaseProvider,
 	conf config.ReadWriteConfig,
@@ -203,7 +208,7 @@ func NewDetachedSession(
 	gcSafepointController *gcctx.GCSafepointController,
 	branchActivityTracker *doltdb.BranchActivityTracker,
 ) (*DoltSession, error) {
-	return NewDetachedSessionWithVariables(pro, conf, branchController, statsProvider, writeSessProv, gcSafepointController, branchActivityTracker, variables.NewEngineVariables())
+	return NewDoltSession(sql.NewBaseSession(), pro, conf, branchController, statsProvider, writeSessProv, gcSafepointController, branchActivityTracker)
 }
 
 // NewDetachedSessionWithVariables constructs a detached session against the

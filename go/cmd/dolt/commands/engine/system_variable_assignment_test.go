@@ -41,5 +41,5 @@ func TestApplySystemVariablesRejectsMissingContextAssignment(t *testing.T) {
 	vars.System = legacyRegistry{vars.System}
 	ctx := sql.NewContextWithVariables(context.Background(), vars)
 	require.ErrorContains(t, applySystemVariables(ctx, SystemVariables{"max_connections": int64(321)}), "does not support context-aware assignment")
-	require.ErrorContains(t, applySystemVariables(nil, SystemVariables{"max_connections": int64(321)}), "requires an owning context")
+	require.ErrorContains(t, applySystemVariables(nil, SystemVariables{"max_connections": int64(321)}), "requires a context")
 }
