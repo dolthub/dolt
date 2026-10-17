@@ -26,6 +26,7 @@ import (
 
 	"github.com/cockroachdb/apd/v3"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -97,14 +98,6 @@ func (d *DoltSession) EngineVariables() *sql.EngineVariables {
 	return nil
 }
 
-// systemVariables returns the registry of the engine that owns this session.
-func (d *DoltSession) systemVariables() sql.SystemVariableRegistry {
-	if engineVars := d.EngineVariables(); engineVars != nil {
-		return engineVars.System
-	}
-	return sql.SystemVariables
-}
-
 // DoltgresSessionLifecycle is implemented by Doltgres session state that needs
 // notification when a transaction ends or its session caches must be cleared.
 // Keeping this interface here avoids coupling Dolt to Doltgres packages.
@@ -169,21 +162,17 @@ var _ sql.TransactionSession = (*DoltSession)(nil)
 var _ expranalysis.SessionDbProvider = (*DoltSession)(nil)
 var _ branch_control.ContextConvertible = (*DoltSession)(nil)
 
-// DefaultSession creates a DoltSession with default values. Its unbound base
-// session uses the global variable registries; engine callers should pass their
+// DefaultSession creates a standalone DoltSession with fresh GMS definitions.
+// It cannot attach to an existing engine. Engine callers should pass their Dolt
 // bundle to DefaultSessionWithVariables.
 func DefaultSession(pro DoltDatabaseProvider, sessFunc WriteSessFunc) *DoltSession {
-	return defaultSession(pro, sessFunc, sql.NewBaseSession())
+	return DefaultSessionWithVariables(pro, sessFunc, variables.NewEngineVariables())
 }
 
 // DefaultSessionWithVariables creates a default session bound to an engine.
 func DefaultSessionWithVariables(pro DoltDatabaseProvider, sessFunc WriteSessFunc, vars *sql.EngineVariables) *DoltSession {
-	return defaultSession(pro, sessFunc, sql.NewBaseSessionWithVariables(vars))
-}
-
-func defaultSession(pro DoltDatabaseProvider, sessFunc WriteSessFunc, base *sql.BaseSession) *DoltSession {
 	return &DoltSession{
-		Session:          base,
+		Session:          sql.NewBaseSessionWithVariables(vars),
 		username:         "",
 		email:            "",
 		dbStates:         make(map[string]*DatabaseSessionState),
@@ -198,11 +187,9 @@ func defaultSession(pro DoltDatabaseProvider, sessFunc WriteSessFunc, base *sql.
 	}
 }
 
-// NewDetachedSession returns a DoltSession backed by a fresh, unbound
-// sql.BaseSession rather than one supplied by a client connection. Use it when
-// an external session manager owns the DoltSession lifecycle and SQL requests
-// run against a *sql.Context pointing at this session instead of a
-// per-connection one. NewDetachedSessionWithVariables binds it to an engine.
+// NewDetachedSession returns a DoltSession with fresh GMS definitions. It
+// cannot attach to an existing engine. Use NewDetachedSessionWithVariables
+// when an external session manager owns the DoltSession lifecycle.
 func NewDetachedSession(
 	pro DoltDatabaseProvider,
 	conf config.ReadWriteConfig,
@@ -212,7 +199,7 @@ func NewDetachedSession(
 	gcSafepointController *gcctx.GCSafepointController,
 	branchActivityTracker *doltdb.BranchActivityTracker,
 ) (*DoltSession, error) {
-	return NewDoltSession(sql.NewBaseSession(), pro, conf, branchController, statsProvider, writeSessProv, gcSafepointController, branchActivityTracker)
+	return NewDetachedSessionWithVariables(pro, conf, branchController, statsProvider, writeSessProv, gcSafepointController, branchActivityTracker, variables.NewEngineVariables())
 }
 
 // NewDetachedSessionWithVariables constructs a detached session against the
@@ -251,6 +238,9 @@ func NewDoltSession(
 	gcSafepointController *gcctx.GCSafepointController,
 	branchActivityTracker *doltdb.BranchActivityTracker,
 ) (*DoltSession, error) {
+	if sqlSess == nil || sqlSess.EngineVariables() == nil {
+		return nil, errors.New("Dolt session requires an engine variable bundle")
+	}
 	username := conf.GetStringOrDefault(config.UserNameKey, "")
 	email := conf.GetStringOrDefault(config.UserEmailKey, "")
 	globals := config.NewPrefixConfig(conf, env.SqlServerGlobalsPrefix)
@@ -1628,7 +1618,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	revisionQualifiedName := strings.ToLower(db.RevisionQualifiedName())
 	baseName, _ := doltdb.SplitRevisionDbName(revisionQualifiedName)
 
-	DefineSystemVariablesForDBInRegistry(d.systemVariables(), baseName)
+	DefineSystemVariablesForDBInRegistry(d.EngineVariables().System, baseName)
 
 	tx, usingDoltTransaction := d.GetTransaction().(*DoltTransaction)
 
@@ -1919,7 +1909,8 @@ func (d *DoltSession) PersistGlobal(ctx *sql.Context, sysVarName string, value i
 		return ErrSessionNotPersistable
 	}
 
-	sysVar, _, err := validatePersistableSysVarInRegistry(d.systemVariables(), sysVarName)
+	vars := d.EngineVariables().System
+	sysVar, _, err := validatePersistableSysVarInRegistry(vars, sysVarName)
 	if err != nil {
 		return err
 	}
@@ -1947,7 +1938,8 @@ func (d *DoltSession) RemovePersistedGlobal(sysVarName string) error {
 		return ErrSessionNotPersistable
 	}
 
-	sysVar, _, err := validatePersistableSysVarInRegistry(d.systemVariables(), sysVarName)
+	vars := d.EngineVariables().System
+	sysVar, _, err := validatePersistableSysVarInRegistry(vars, sysVarName)
 	if err != nil {
 		return err
 	}
@@ -1982,7 +1974,8 @@ func (d *DoltSession) GetPersistedValue(k string) (interface{}, error) {
 		return nil, ErrSessionNotPersistable
 	}
 
-	return getPersistedValueInRegistry(d.systemVariables(), d.globalsConf, k)
+	vars := d.EngineVariables().System
+	return getPersistedValueInRegistry(vars, d.globalsConf, k)
 }
 
 // SystemVariablesInConfig returns a list of System Variables associated with the session
@@ -1990,7 +1983,8 @@ func (d *DoltSession) SystemVariablesInConfig() ([]sql.SystemVariable, error) {
 	if d.globalsConf == nil {
 		return nil, ErrSessionNotPersistable
 	}
-	sysVars, _, err := SystemVariablesInConfigWithRegistry(d.systemVariables(), d.globalsConf)
+	vars := d.EngineVariables().System
+	sysVars, _, err := SystemVariablesInConfigWithRegistry(vars, d.globalsConf)
 	if err != nil {
 		return nil, err
 	}
@@ -2113,11 +2107,6 @@ func initializeBranchWorkingSet(ctx *sql.Context, db SqlDatabase, dbState *Initi
 		hash.Hash{}, doltdb.TodoWorkingSetMeta(), nil)
 }
 
-// validatePersistedSysVar checks whether a system variable exists and is dynamic
-func validatePersistableSysVar(name string) (sql.SystemVariable, interface{}, error) {
-	return validatePersistableSysVarInRegistry(sql.SystemVariables, name)
-}
-
 // ValidatePersistableSysVarInRegistry validates a persisted setting against
 // the definitions owned by one engine.
 func ValidatePersistableSysVarInRegistry(vars sql.SystemVariableRegistry, name string) (sql.SystemVariable, interface{}, error) {
@@ -2133,11 +2122,6 @@ func validatePersistableSysVarInRegistry(vars sql.SystemVariableRegistry, name s
 		return nil, nil, sql.ErrSystemVariableReadOnly.New(name)
 	}
 	return sysVar, val, nil
-}
-
-// getPersistedValue reads and converts a config value to the associated MysqlSystemVariable type
-func getPersistedValue(conf config.ReadableConfig, k string) (interface{}, error) {
-	return getPersistedValueInRegistry(sql.SystemVariables, conf, k)
 }
 
 // GetPersistedValueInRegistry decodes a persisted value using one engine's
@@ -2249,18 +2233,11 @@ func setPersistedValue(conf config.WritableConfig, key string, value interface{}
 	}
 }
 
-// SystemVariablesInConfig returns system variables from the persisted config
-// and a list of persisted keys that have no corresponding definition in
-// |sql.SystemVariables|.
-func SystemVariablesInConfig(conf config.ReadableConfig) ([]sql.SystemVariable, []string, error) {
-	return systemVariablesInConfig(sql.SystemVariables, conf, false)
-}
-
 // SystemVariablesInConfigWithRegistry reads persisted defaults from one
 // registry without mutating definitions already registered in that engine.
 // Custom non-MySQL definitions must implement PersistedVariableDefinitionCloner.
 func SystemVariablesInConfigWithRegistry(vars sql.SystemVariableRegistry, conf config.ReadableConfig) ([]sql.SystemVariable, []string, error) {
-	return systemVariablesInConfig(vars, conf, true)
+	return systemVariablesInConfig(vars, conf)
 }
 
 // PersistedVariableDefinitionCloner supplies an independent definition when
@@ -2269,7 +2246,7 @@ type PersistedVariableDefinitionCloner interface {
 	CloneSystemVariable() sql.SystemVariable
 }
 
-func systemVariablesInConfig(vars sql.SystemVariableRegistry, conf config.ReadableConfig, clone bool) ([]sql.SystemVariable, []string, error) {
+func systemVariablesInConfig(vars sql.SystemVariableRegistry, conf config.ReadableConfig) ([]sql.SystemVariable, []string, error) {
 	allVars := make([]sql.SystemVariable, conf.Size())
 	var missingKeys []string
 	i := 0
@@ -2288,21 +2265,19 @@ func systemVariablesInConfig(vars sql.SystemVariableRegistry, conf config.Readab
 		}
 		// getPersistedVal already checked for errors
 		sysVar, _, _ := vars.GetGlobal(k)
-		if clone {
-			switch v := sysVar.(type) {
-			case *sql.MysqlSystemVariable:
-				copy := *v
-				if v.Scope != nil {
-					scope := *v.Scope
-					copy.Scope = &scope
-				}
-				sysVar = &copy
-			case PersistedVariableDefinitionCloner:
-				sysVar = v.CloneSystemVariable()
-			default:
-				err = fmt.Errorf("persisted variable %q has no independent definition factory (%T)", k, sysVar)
-				return true
+		switch v := sysVar.(type) {
+		case *sql.MysqlSystemVariable:
+			copy := *v
+			if v.Scope != nil {
+				scope := *v.Scope
+				copy.Scope = &scope
 			}
+			sysVar = &copy
+		case PersistedVariableDefinitionCloner:
+			sysVar = v.CloneSystemVariable()
+		default:
+			err = fmt.Errorf("persisted variable %q has no independent definition factory (%T)", k, sysVar)
+			return true
 		}
 		sysVar.SetDefault(def)
 		allVars[i] = sysVar
@@ -2317,27 +2292,17 @@ func systemVariablesInConfig(vars sql.SystemVariableRegistry, conf config.Readab
 
 var initMu = sync.Mutex{}
 
-// InitPersistedSystemVars loads persisted global system variables from
-// configuration into [sql.SystemVariables].
-//
-// The environment's local and global configuration stores are searched
-// for persisted variables, and each definition is initialized with its
-// persisted value. Returns an error if reading configuration fails.
-func InitPersistedSystemVars(dEnv *env.DoltEnv) error {
-	return initPersistedSystemVars(sql.SystemVariables, dEnv, false)
-}
-
 // InitPersistedSystemVarsWithRegistry loads defaults into one engine registry.
 func InitPersistedSystemVarsWithRegistry(vars sql.SystemVariableRegistry, dEnv *env.DoltEnv) error {
-	return initPersistedSystemVars(vars, dEnv, true)
+	return initPersistedSystemVars(vars, dEnv)
 }
 
-func initPersistedSystemVars(vars sql.SystemVariableRegistry, dEnv *env.DoltEnv, clone bool) error {
+func initPersistedSystemVars(vars sql.SystemVariableRegistry, dEnv *env.DoltEnv) error {
 	initMu.Lock()
 	defer initMu.Unlock()
 
-	// Find all the persisted global vars and load their values into sql.SystemVariables
-	persistedGlobalVars, err := findPersistedGlobalVarsInRegistry(vars, dEnv, clone)
+	// Find all persisted global variables and load their values into this registry.
+	persistedGlobalVars, err := findPersistedGlobalVarsInRegistry(vars, dEnv)
 	if err != nil {
 		return err
 	}
@@ -2345,26 +2310,18 @@ func initPersistedSystemVars(vars sql.SystemVariableRegistry, dEnv *env.DoltEnv,
 	return nil
 }
 
-// PersistSystemVarDefaults persists any SQL system variables that have non-deterministic default values, and
-// must have their generated default value persisted to disk. If the system variable is already persisted to disk,
-// then no changes are made. Currently, the only SQL system variable that requires persisting its default value
-// is @@server_uuid, since we need a consistent value used each time the server is started.
-func PersistSystemVarDefaults(dEnv *env.DoltEnv) error {
-	return persistSystemVarDefaults(sql.SystemVariables, dEnv, false)
-}
-
 // PersistSystemVarDefaultsWithRegistry persists generated defaults from one
 // engine registry, including that engine's server_uuid.
 func PersistSystemVarDefaultsWithRegistry(vars sql.SystemVariableRegistry, dEnv *env.DoltEnv) error {
-	return persistSystemVarDefaults(vars, dEnv, true)
+	return persistSystemVarDefaults(vars, dEnv)
 }
 
-func persistSystemVarDefaults(vars sql.SystemVariableRegistry, dEnv *env.DoltEnv, clone bool) error {
+func persistSystemVarDefaults(vars sql.SystemVariableRegistry, dEnv *env.DoltEnv) error {
 	initMu.Lock()
 	defer initMu.Unlock()
 
-	// Find all the persisted global vars and load their values into sql.SystemVariables
-	persistedGlobalVars, err := findPersistedGlobalVarsInRegistry(vars, dEnv, clone)
+	// Find all persisted global variables and load their values into this registry.
+	persistedGlobalVars, err := findPersistedGlobalVarsInRegistry(vars, dEnv)
 	if err != nil {
 		return err
 	}
@@ -2384,13 +2341,13 @@ func persistSystemVarDefaults(vars sql.SystemVariableRegistry, dEnv *env.DoltEnv
 // findPersistedGlobalVars searches the local and global configuration for the specified Dolt environment |dEnv| and
 // finds all global persisted system variables. Since global system vars can be persisted in either the local or
 // global configuration stores, this function searches both.
-func findPersistedGlobalVarsInRegistry(vars sql.SystemVariableRegistry, dEnv *env.DoltEnv, clone bool) (persistedGlobalVars []sql.SystemVariable, err error) {
+func findPersistedGlobalVarsInRegistry(vars sql.SystemVariableRegistry, dEnv *env.DoltEnv) (persistedGlobalVars []sql.SystemVariable, err error) {
 	foundConfig := false
 	for _, confScope := range []env.ConfigScope{env.LocalConfig, env.GlobalConfig} {
 		if conf, ok := dEnv.Config.GetConfig(confScope); ok {
 			foundConfig = true
 			pfxConfig := config.NewPrefixConfig(conf, env.SqlServerGlobalsPrefix)
-			globalVars, missingKeys, err := systemVariablesInConfig(vars, pfxConfig, clone)
+			globalVars, missingKeys, err := systemVariablesInConfig(vars, pfxConfig)
 			if err != nil {
 				return nil, err
 			}

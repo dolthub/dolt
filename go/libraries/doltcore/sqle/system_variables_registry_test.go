@@ -27,6 +27,12 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
+func TestAssignSystemVariablesRejectsUnboundContext(t *testing.T) {
+	vals := map[string]any{"max_connections": int64(7)}
+	require.ErrorContains(t, AssignSystemVariables(nil, vals), "requires an owning context")
+	require.ErrorContains(t, AssignSystemVariables(sql.NewEmptyContext(), vals), "requires an owning context")
+}
+
 func TestNewEngineVariablesForEnv(t *testing.T) {
 	ctx := context.Background()
 	dEnv := CreateTestEnv()

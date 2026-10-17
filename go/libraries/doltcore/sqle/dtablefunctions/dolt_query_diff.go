@@ -70,6 +70,9 @@ func (tf *QueryDiffTableFunction) WithCatalog(c sql.Catalog) (sql.TableFunction,
 	if !ok {
 		return nil, fmt.Errorf("unable to get database provider")
 	}
+	if tf.ctx == nil || tf.ctx.EngineVariables() == nil {
+		return nil, fmt.Errorf("dolt_query_diff requires an engine variable owner")
+	}
 	newInstance.engine = gms.New(analyzer.NewDefault(pro), &gms.Config{EngineVariables: tf.ctx.EngineVariables()})
 	err := newInstance.analyzeQueries()
 	if err != nil {

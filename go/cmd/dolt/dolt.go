@@ -55,7 +55,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -493,8 +492,8 @@ func runMain() int {
 	}
 	defer tempfiles.MovableTempFileProvider.Clean()
 
-	// Register database-specific variable definitions before loading persisted
-	// values, so those settings can be decoded.
+	// Engines that bind to these databases load persisted system variables
+	// with sqle.NewEngineVariablesForEnv.
 	//
 	// In general, there is a lot of work TODO in this area. System global
 	// variables are persisted to the Dolt local config if found and if not
@@ -514,17 +513,6 @@ func runMain() int {
 		if err != nil {
 			cli.PrintErrln("failed to load database names:", err.Error())
 			return 1
-		}
-		_ = mrEnv.Iter(func(dbName string, dEnv *env.DoltEnv) (stop bool, err error) {
-			dsess.DefineSystemVariablesForDB(dbName)
-			return false, nil
-		})
-
-		// TODO: we set persisted vars here, and this should be deferred until after we know what command line arguments might change them
-		err = dsess.InitPersistedSystemVars(dEnv)
-		// With a CLI context, the late binder loads and reports these itself.
-		if err != nil && !initCliContext(cfg.subCommand) {
-			cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
 		}
 	}
 
