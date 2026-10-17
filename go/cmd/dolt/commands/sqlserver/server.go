@@ -1224,8 +1224,15 @@ func newSessionBuilder(se *engine.SqlEngine, config servercfg.ServerConfig) serv
 		userToSessionVars[curr.Name] = curr.Vars
 	}
 
+	// Sessions on a non-isolated engine stay unbound, so nested engines can
+	// run their contexts.
+	var vars *sql.EngineVariables
+	if eng := se.GetUnderlyingEngine(); eng.IsolatedVariables() {
+		vars = eng.Variables()
+	}
+
 	return func(ctx context.Context, conn *mysql.Conn, addr string) (sql.Session, error) {
-		baseSession, err := sql.BaseSessionFromConnectionWithVariables(ctx, conn, addr, se.GetUnderlyingEngine().Variables())
+		baseSession, err := sql.BaseSessionFromConnectionWithVariables(ctx, conn, addr, vars)
 		if err != nil {
 			return nil, err
 		}
