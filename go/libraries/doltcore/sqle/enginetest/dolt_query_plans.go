@@ -124,6 +124,13 @@ var DoltCommitPlanTests = []queries.QueryPlanTest{
 			"",
 	},
 	{
+		Query: "select message from dolt_log;",
+		ExpectedPlan: "Table\n" +
+			" ├─ name: dolt_log\n" +
+			" └─ columns: [message]\n" +
+			"",
+	},
+	{
 		Query: "select * from dolt_diff order by commit_hash;",
 		ExpectedPlan: "Sort(dolt_diff.commit_hash ASC)\n" +
 			" └─ Table\n" +
