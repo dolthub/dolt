@@ -22,7 +22,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
-	_ "github.com/dolthub/go-mysql-server/sql/variables"
+	"github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/src-d/go-errors.v1"
 
@@ -101,27 +101,31 @@ func TestDoltgresTransactionLifecycle(t *testing.T) {
 	assert.Equal(t, 2, lifecycle.transactionEnds)
 }
 
-func TestDoltgresSemanticTransactionLifecycle(t *testing.T) {
-	if _, _, ok := sql.SystemVariables.GetGlobal(TransactionsDisabledSysVar); !ok {
-		sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{&sql.MysqlSystemVariable{
+// newTransactionTestVariables returns a bundle defining the Dolt session
+// variables read by transaction start and commit.
+func newTransactionTestVariables() *sql.EngineVariables {
+	vars := variables.NewEngineVariables()
+	vars.System.AddSystemVariables([]sql.SystemVariable{
+		&sql.MysqlSystemVariable{
 			Name:    TransactionsDisabledSysVar,
 			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
 			Dynamic: true,
 			Type:    sqltypes.NewSystemBoolType(TransactionsDisabledSysVar),
 			Default: int8(0),
-		}})
-	}
-
-	if _, _, ok := sql.SystemVariables.GetGlobal(DoltCommitOnTransactionCommit); !ok {
-		sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{&sql.MysqlSystemVariable{
+		},
+		&sql.MysqlSystemVariable{
 			Name:    DoltCommitOnTransactionCommit,
 			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
 			Dynamic: true,
 			Type:    sqltypes.NewSystemBoolType(DoltCommitOnTransactionCommit),
 			Default: int8(0),
-		}})
-	}
-	sess := DefaultSession(emptyDatabaseProvider(), nil)
+		},
+	})
+	return vars
+}
+
+func TestDoltgresSemanticTransactionLifecycle(t *testing.T) {
+	sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, newTransactionTestVariables())
 	lifecycle := &countingDoltgresTransactionLifecycle{pending: true}
 	sess.DoltgresSessObj = lifecycle
 	ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
@@ -199,16 +203,6 @@ func TestCommitBranchStatesNotifiesDoltgres(t *testing.T) {
 }
 
 func TestCommitTransactionWithoutBatchNotifiesDoltgres(t *testing.T) {
-	if _, _, ok := sql.SystemVariables.GetGlobal(TransactionsDisabledSysVar); !ok {
-		sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{&sql.MysqlSystemVariable{
-			Name:    TransactionsDisabledSysVar,
-			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
-			Dynamic: true,
-			Type:    sqltypes.NewSystemBoolType(TransactionsDisabledSysVar),
-			Default: int8(0),
-		}})
-	}
-
 	for _, disabled := range []bool{
 		false,
 		true,
@@ -219,7 +213,7 @@ func TestCommitTransactionWithoutBatchNotifiesDoltgres(t *testing.T) {
 		}
 
 		t.Run(name, func(t *testing.T) {
-			sess := DefaultSession(emptyDatabaseProvider(), nil)
+			sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, newTransactionTestVariables())
 			ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
 			assert.NoError(t, sess.SetSessionVariable(ctx, TransactionsDisabledSysVar, disabled))
 			if disabled {
