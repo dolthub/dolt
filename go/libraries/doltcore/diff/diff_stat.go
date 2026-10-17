@@ -34,7 +34,7 @@ type DiffStatProgress struct {
 	Adds, Removes, Changes, CellChanges, NewRowSize, OldRowSize, NewCellSize, OldCellSize uint64
 }
 
-type prollyReporter func(ctx context.Context, vMapping val.OrdinalMapping, fromD, toD *val.TupleDesc, change tree.Diff, ch chan<- DiffStatProgress) error
+type prollyReporter func(ctx context.Context, vMapping val.OrdinalMapping, fromD, toD *val.TupleDesc, change tree.Diff) (DiffStatProgress, error)
 
 // Stat reports a stat of diff changes between two values
 // todo: make package private once dolthub is migrated
@@ -47,7 +47,9 @@ func Stat(ctx context.Context, ch chan DiffStatProgress, from, to durable.Index,
 	if err != nil {
 		return err
 	}
-	ch <- DiffStatProgress{OldRowSize: fc, NewRowSize: tc}
+	if err := sendDiffStat(ctx, ch, DiffStatProgress{OldRowSize: fc, NewRowSize: tc}); err != nil {
+		return err
+	}
 
 	fk, tk := schema.IsKeyless(fromSch), schema.IsKeyless(toSch)
 	var keyless bool
@@ -64,14 +66,11 @@ func Stat(ctx context.Context, ch chan DiffStatProgress, from, to durable.Index,
 func StatForTableDelta(ctx context.Context, ch chan DiffStatProgress, td TableDelta) error {
 	// Check for root objects first, as they're handled differently
 	if td.FromRootObject != nil && td.ToRootObject != nil {
-		ch <- DiffStatProgress{Changes: 1}
-		return nil
+		return sendDiffStat(ctx, ch, DiffStatProgress{Changes: 1})
 	} else if td.FromRootObject == nil && td.ToRootObject != nil {
-		ch <- DiffStatProgress{Adds: 1}
-		return nil
+		return sendDiffStat(ctx, ch, DiffStatProgress{Adds: 1})
 	} else if td.FromRootObject != nil && td.ToRootObject == nil {
-		ch <- DiffStatProgress{Removes: 1}
-		return nil
+		return sendDiffStat(ctx, ch, DiffStatProgress{Removes: 1})
 	}
 
 	fromSch, toSch, err := td.GetSchemas(ctx)
@@ -102,6 +101,38 @@ func diffProllyTrees(ctx context.Context, ch chan DiffStatProgress, keyless bool
 		return err
 	}
 
+	// Keyed row counts are stored in the tree. When either side is empty,
+	// every row on the other side is an addition or deletion; no values need
+	// to be read or compared. Keyless tree counts count distinct tuples, not
+	// their cardinalities, so they must still be traversed.
+	if !keyless {
+		var fc, tc uint64
+		if from != nil {
+			fc, err = from.Count()
+			if err != nil {
+				return err
+			}
+		}
+		if to != nil {
+			tc, err = to.Count()
+			if err != nil {
+				return err
+			}
+		}
+		sizes := DiffStatProgress{
+			OldRowSize: fc, NewRowSize: tc,
+			OldCellSize: uint64(fromSch.GetAllCols().Size()) * fc,
+			NewCellSize: uint64(toSch.GetAllCols().Size()) * tc,
+		}
+		if fc == 0 || tc == 0 {
+			sizes.Adds, sizes.Removes = tc, fc
+			return sendDiffStat(ctx, ch, sizes)
+		}
+		if err := sendDiffStat(ctx, ch, sizes); err != nil {
+			return err
+		}
+	}
+
 	var f, t prolly.Map
 	if from != nil {
 		f, err = durable.ProllyMapFromIndex(from)
@@ -115,69 +146,59 @@ func diffProllyTrees(ctx context.Context, ch chan DiffStatProgress, keyless bool
 			return err
 		}
 	}
-
 	_, fVD := f.Descriptors()
 	_, tVD := t.Descriptors()
-
-	var rpr prollyReporter
+	var reporter prollyReporter = statPkChange
 	if keyless {
-		rpr = reportKeylessChanges
-	} else {
-		var fc uint64
-		if from != nil {
-			fc, err = from.Count()
-			if err != nil {
-				return err
-			}
-		}
-
-		cfc := uint64(len(fromSch.GetAllCols().GetColumns())) * fc
-		var tc uint64
-		if to != nil {
-			tc, err = to.Count()
-			if err != nil {
-				return err
-			}
-		}
-
-		ctc := uint64(len(toSch.GetAllCols().GetColumns())) * tc
-		rpr = reportPkChanges
-		ch <- DiffStatProgress{
-			OldRowSize:  fc,
-			NewRowSize:  tc,
-			OldCellSize: cfc,
-			NewCellSize: ctc,
-		}
+		reporter = statKeylessChange
 	}
 
-	// TODO: Use `vMapping` to determine whether columns have been added or removed. If so, then all rows should
-	// count as modifications in the diff.
-	considerAllRowsModified := false
-	err = prolly.DiffMaps(ctx, f, t, considerAllRowsModified, func(ctx context.Context, diff tree.Diff) error {
-		return rpr(ctx, vMapping, fVD, tVD, diff, ch)
+	// Progress consumers only need additive totals. Batch events rather than
+	// synchronizing with the consumer for every changed row.
+	var pending DiffStatProgress
+	changes := 0
+	flush := func() error {
+		if changes == 0 {
+			return nil
+		}
+		if err := sendDiffStat(ctx, ch, pending); err != nil {
+			return err
+		}
+		pending = DiffStatProgress{}
+		changes = 0
+		return nil
+	}
+	// TODO: Use vMapping to account for columns added or removed on otherwise
+	// unchanged rows, matching the existing diff-stat schema-change behavior.
+	err = prolly.DiffMaps(ctx, f, t, false, func(ctx context.Context, change tree.Diff) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		stat, err := reporter(ctx, vMapping, fVD, tVD, change)
+		if err != nil {
+			return err
+		}
+		pending.Adds += stat.Adds
+		pending.Removes += stat.Removes
+		pending.Changes += stat.Changes
+		pending.CellChanges += stat.CellChanges
+		changes++
+		if changes == diffStatBatchSize {
+			return flush()
+		}
+		return nil
 	})
 	if err != nil && err != io.EOF {
 		return err
 	}
-	return nil
+	return flush()
 }
 
-func reportPkChanges(ctx context.Context, vMapping val.OrdinalMapping, fromD, toD *val.TupleDesc, change tree.Diff, ch chan<- DiffStatProgress) error {
-	var stat DiffStatProgress
-	switch change.Type {
-	case tree.AddedDiff:
-		stat.Adds++
-	case tree.RemovedDiff:
-		stat.Removes++
-	case tree.ModifiedDiff:
-		cellChanges, err := prollyCountCellDiff(ctx, vMapping, fromD, toD, val.Tuple(change.From), val.Tuple(change.To))
-		if err != nil {
-			return err
-		}
-		stat.CellChanges = cellChanges
-		stat.Changes++
-	default:
-		return errors.New("unknown change type")
+const diffStatBatchSize = 1024
+
+func sendDiffStat(ctx context.Context, ch chan<- DiffStatProgress, stat DiffStatProgress) error {
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	select {
 	case ch <- stat:
@@ -187,7 +208,27 @@ func reportPkChanges(ctx context.Context, vMapping val.OrdinalMapping, fromD, to
 	}
 }
 
-func reportKeylessChanges(ctx context.Context, vMapping val.OrdinalMapping, fromD, toD *val.TupleDesc, change tree.Diff, ch chan<- DiffStatProgress) error {
+func statPkChange(ctx context.Context, vMapping val.OrdinalMapping, fromD, toD *val.TupleDesc, change tree.Diff) (DiffStatProgress, error) {
+	var stat DiffStatProgress
+	switch change.Type {
+	case tree.AddedDiff:
+		stat.Adds++
+	case tree.RemovedDiff:
+		stat.Removes++
+	case tree.ModifiedDiff:
+		cellChanges, err := prollyCountCellDiff(ctx, vMapping, fromD, toD, val.Tuple(change.From), val.Tuple(change.To))
+		if err != nil {
+			return stat, err
+		}
+		stat.CellChanges = cellChanges
+		stat.Changes++
+	default:
+		return stat, errors.New("unknown change type")
+	}
+	return stat, nil
+}
+
+func statKeylessChange(ctx context.Context, vMapping val.OrdinalMapping, fromD, toD *val.TupleDesc, change tree.Diff) (DiffStatProgress, error) {
 	var stat DiffStatProgress
 	var n, n2 uint64
 	switch change.Type {
@@ -206,14 +247,9 @@ func reportKeylessChanges(ctx context.Context, vMapping val.OrdinalMapping, from
 			stat.Removes += n - n2
 		}
 	default:
-		return errors.New("unknown change type")
+		return stat, errors.New("unknown change type")
 	}
-	select {
-	case ch <- stat:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
+	return stat, nil
 }
 
 // prollyCountCellDiff counts the number of changes columns between two tuples
