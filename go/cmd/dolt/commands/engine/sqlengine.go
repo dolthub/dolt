@@ -560,6 +560,9 @@ func (se *SqlEngine) Close() error {
 			primary.Close()
 		}
 		err = se.engine.Close()
+		if stats, ok := se.engine.Analyzer.Catalog.StatsProvider.(*statspro.StatsController); ok {
+			stats.Close()
+		}
 	}
 	if se.branchActivityTracker != nil {
 		se.branchActivityTracker.Close()
