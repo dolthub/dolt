@@ -60,7 +60,7 @@ setup_docker_initdb() {
 setup_docker_node() {
   local name="$1"; shift
   local role="$1"; shift
-  local remote_host="$1"; shift
+  local remote_hosts="$1"; shift
   local config="$BATS_TEST_TMPDIR/$name.yaml"
   cat > "$config" <<EOF
 listener:
@@ -68,8 +68,17 @@ listener:
   port: 3306
 cluster:
   standby_remotes:
-    - name: standby
-      remote_url_template: http://${remote_host}:50051/{database}
+EOF
+  IFS=',' read -ra hosts <<< "$remote_hosts"
+  local idx=1
+  for host in "${hosts[@]}"; do
+    cat >> "$config" <<EOF
+    - name: standby_${idx}
+      remote_url_template: http://${host}:50051/{database}
+EOF
+    idx=$((idx + 1))
+  done
+  cat >> "$config" <<EOF
   bootstrap_role: $role
   remotesapi:
     port: 50051
@@ -90,7 +99,7 @@ setup() {
 }
 
 teardown_docker() {
-  local artifacts_dir="${DOLT_TEST_ARTIFACTS_DIR:-${DOLT_TEST_EVIDENCE_DIR:-$BATS_TMPDIR}}"
+  local artifacts_dir="${DOLT_TEST_ARTIFACTS_DIR:-$BATS_TMPDIR}"
   mkdir -p "$artifacts_dir"
   for name in $(docker ps -a --filter "name=$TEST_PREFIX" --format '{{.Names}}'); do
     docker logs "$name" > "$artifacts_dir/${name}.log" 2>&1 || true
@@ -904,6 +913,29 @@ EOF
 }
 
 # bats test_tags=no_lambda
+@test "docker-entrypoint: error on invalid init sql fails promptly with removal hint" {
+  # https://github.com/dolthub/dolt/issues/12115
+  cname="${TEST_PREFIX}bad-init-sql"
+
+  setup_docker_initdb 01-bad.sql << 'EOF'
+THIS IS INVALID SQL;
+EOF
+
+  run docker run -d --name "$cname" --mount "$INITDB_MOUNT" "$TEST_IMAGE"
+  [ $status -eq 0 ]
+
+  run docker wait "$cname"
+  [ $status -eq 0 ]
+  [ "$output" -eq 1 ]
+
+  docker logs "$cname" > "$BATS_TMPDIR/${cname}.log" 2>&1
+  run grep -F "syntax error" "$BATS_TMPDIR/${cname}.log"
+  [ $status -eq 0 ]
+  run grep -F "Remove this container with 'docker rm -f <container_name>' before retrying" "$BATS_TMPDIR/${cname}.log"
+  [ $status -eq 0 ]
+}
+
+# bats test_tags=no_lambda
 @test "docker-entrypoint: GRANT privileges in init script does not require CREATE USER" {
   # Customer error: "error on line 5 for query GRANT ALL PRIVILEGES ON *.* TO 'nautobot'@'%':
   #                  You are not allowed to create a user with GRANT"
@@ -1147,6 +1179,52 @@ EOF
 
   run -0 docker exec "$cname_a" dolt sql -q "SELECT User, Host FROM mysql.user WHERE User='app';" -r csv
   log_output_has "app"
+}
+
+# bats test_tags=no_lambda
+@test "docker-entrypoint: bring up new replica after cluster is running" {
+  # https://github.com/dolthub/dolt/issues/12115
+  cname_a="${TEST_PREFIX}node-a"
+  cname_b="${TEST_PREFIX}node-b"
+  cname_c="${TEST_PREFIX}node-c"
+  net="${TEST_PREFIX}cluster-net"
+
+  docker network create "$net"
+
+  # Primary configured to replicate to node-b and future replica node-c
+  setup_docker_node "$cname_a" primary "${cname_b},${cname_c}" --network "$net" --network-alias "$cname_a" \
+    -e DOLT_ROOT_PASSWORD=rootpw -e DOLT_DATABASE=mydb -e DOLT_USER=app -e DOLT_PASSWORD=apppw -e DOLT_USER_HOST=%
+
+  # Standby node-b started with same cluster environment variables
+  setup_docker_node "$cname_b" standby "$cname_a" --network "$net" --network-alias "$cname_b" \
+    -e DOLT_ROOT_PASSWORD=rootpw -e DOLT_DATABASE=mydb -e DOLT_USER=app -e DOLT_PASSWORD=apppw -e DOLT_USER_HOST=%
+
+  # Write initial data to primary
+  docker exec "$cname_a" dolt sql -q "USE mydb; CREATE TABLE t (id INT PRIMARY KEY, val VARCHAR(50)); INSERT INTO t VALUES (1, 'initial');"
+
+  # Confirm replication to node-b
+  wait_for_server_ready "$cname_b" "SELECT val FROM mydb.t WHERE id=1;" "initial" 30000
+
+  # Bring up brand new replica node-c while cluster is running, with same cluster environment variables
+  setup_docker_node "$cname_c" standby "$cname_a" --network "$net" --network-alias "$cname_c" \
+    -e DOLT_ROOT_PASSWORD=rootpw -e DOLT_DATABASE=mydb -e DOLT_USER=app -e DOLT_PASSWORD=apppw -e DOLT_USER_HOST=%
+
+  # Write more data on primary
+  docker exec "$cname_a" dolt sql -q "USE mydb; INSERT INTO t VALUES (2, 'replicated-to-c');"
+
+  # Verify new replica node-c is running and has all replicated data
+  run -0 docker inspect -f '{{.State.Running}} {{.State.ExitCode}}' "$cname_c"
+  log_output_has "^true 0$"
+
+  wait_for_server_ready "$cname_c" "SELECT val FROM mydb.t WHERE id=2;" "replicated-to-c" 30000
+
+  run -0 docker exec "$cname_c" dolt sql -q "SELECT COUNT(*) FROM mydb.t;" -r csv
+  log_output_has "2"
+
+  run -0 docker exec "$cname_c" dolt sql -q "SELECT @@GLOBAL.dolt_cluster_role;" -r csv
+  log_output_has "standby"
+
+  wait_for_server_ready "$cname_c" "SELECT User FROM mysql.user WHERE User='app';" "app" 30000
 }
 
 # bats test_tags=no_lambda

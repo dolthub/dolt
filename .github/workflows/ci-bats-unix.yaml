@@ -6,6 +6,7 @@ on:
     paths:
       - 'go/**'
       - 'integration-tests/**'
+      - 'docker/**'
       - '.github/workflows/ci-bats-unix.yaml'
       - '.github/actions/setup-go-toolchain/**'
       - '.github/actions/build-dolt/**'

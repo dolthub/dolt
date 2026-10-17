@@ -102,7 +102,7 @@ exec_mysql() {
       return 0
     fi
 
-    if echo "$output" | grep -qiE "Error [0-9]+ \([A-Z0-9]+\)"; then
+    if echo "$output" | grep -qiE "Error [0-9]+ \([A-Z0-9]+\)|syntax error|Error parsing SQL"; then
       mysql_error "$error_message$(echo "$output" | grep -iE "Error|error")"
     fi
 
@@ -403,7 +403,16 @@ _main() {
 
   # `dolt sql` can hold locks that prevent the server from starting during system hangs without this func
   dolt_server_initializer "$@"
+
   if [[ ! -f $INIT_COMPLETED ]]; then
+    if dolt sql -q "SHOW VARIABLES LIKE 'dolt_cluster_role';" -r csv 2>/dev/null | grep -q "dolt_cluster_role,standby"; then
+      mysql_note "Server is a cluster standby replica; skipping initial database and user provisioning."
+      touch "$INIT_COMPLETED"
+      mysql_note "Dolt init process done. Ready for connections."
+      wait "$SERVER_PID"
+      return 0
+    fi
+
     create_database_from_env
 
     create_user_from_env
