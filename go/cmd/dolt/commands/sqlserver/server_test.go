@@ -291,6 +291,36 @@ func TestServerSelect(t *testing.T) {
 	}
 }
 
+func TestIsolatedServerStartup(t *testing.T) {
+	dEnv, err := sqle.CreateEnvWithSeedData()
+	require.NoError(t, err)
+	defer dEnv.Close()
+	port, err := sql.GetEmptyPort()
+	require.NoError(t, err)
+	serverConfig := DefaultCommandLineServerConfig().withLogLevel(servercfg.LogLevel_Fatal).WithPort(port)
+	vars := sqle.NewEngineVariables()
+	controller := svcs.NewController()
+	go func() {
+		_, _ = Serve(context.Background(), &Config{
+			Version: "0.0.0", ServerConfig: serverConfig, Controller: controller,
+			DoltEnv: dEnv, EngineVariables: vars,
+		})
+	}()
+	require.NoError(t, controller.WaitForStart())
+	defer func() {
+		controller.Stop()
+		require.NoError(t, controller.WaitForStop())
+	}()
+
+	conn, err := dbr.Open("mysql", servercfg.ConnectionString(serverConfig, "dolt"), nil)
+	require.NoError(t, err)
+	defer conn.Close()
+	var count int
+	err = conn.NewSession(nil).Select("COUNT(*)").From("people").LoadOneContext(context.Background(), &count)
+	require.NoError(t, err)
+	require.Equal(t, 3, count)
+}
+
 // If a port is already in use, throw error "Port XXXX already in use."
 func TestServerFailsIfPortInUse(t *testing.T) {
 	controller := svcs.NewController()
