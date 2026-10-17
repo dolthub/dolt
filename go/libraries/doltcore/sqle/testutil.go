@@ -23,6 +23,7 @@ import (
 
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -132,8 +133,9 @@ func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.DoltDatabaseProvid
 	}
 
 	s.SetCurrentDatabase("dolt")
-	return sql.NewContext(
+	return sql.NewContextWithVariables(
 		ctx,
+		vars,
 		sql.WithSession(s),
 	)
 }
@@ -147,10 +149,11 @@ func NewTestEngine(dEnv *env.DoltEnv, ctx context.Context, db dsess.SqlDatabase)
 	}
 	gcSafepointController := gcctx.NewGCSafepointController()
 
-	engine := sqle.NewDefault(pro)
+	vars := NewEngineVariables()
+	engine := sqle.New(analyzer.NewDefault(pro), &sqle.Config{EngineVariables: vars})
 
 	config, _ := dEnv.Config.GetConfig(env.GlobalConfig)
-	sqlCtx := NewTestSQLCtxWithProvider(ctx, pro, config, nil, gcSafepointController)
+	sqlCtx := NewTestSQLCtxWithProvider(ctx, pro, config, nil, gcSafepointController, vars)
 	sqlCtx.SetCurrentDatabase(db.Name())
 	return engine, sqlCtx, nil
 }

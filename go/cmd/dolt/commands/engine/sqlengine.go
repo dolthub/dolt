@@ -170,14 +170,14 @@ func NewSqlEngine(
 
 	bThreads := sql.NewBackgroundThreads()
 	var runAsyncThreads sqle.RunAsyncThreads
-	dbs, runAsyncThreads, err = sqle.ApplyReplicationConfigWithRegistry(ctx, mrEnv, cli.CliOut, vars, dbs...)
+	dbs, runAsyncThreads, err = sqle.ApplyReplicationConfigWithRegistry(bootstrapCtx, mrEnv, cli.CliOut, vars, dbs...)
 	if err != nil {
 		return nil, err
 	}
 
 	config.ClusterController.ManageSystemVariables(vars)
 
-	err = config.ClusterController.ApplyStandbyReplicationConfig(ctx, mrEnv, dbs...)
+	err = config.ClusterController.ApplyStandbyReplicationConfig(bootstrapCtx, mrEnv, dbs...)
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +204,7 @@ func NewSqlEngine(
 	}
 
 	b := env.GetDefaultInitBranch(mrEnv.Config())
-	engineProvider, err := factory.NewProvider(ctx, b, mrEnv.FileSystem(), all, locations, config.EngineOverrides)
+	engineProvider, err := factory.NewProvider(bootstrapCtx, b, mrEnv.FileSystem(), all, locations, config.EngineOverrides)
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +298,7 @@ func NewSqlEngine(
 		if err != nil {
 			return nil, err
 		}
-		config.AutoGCController.ApplyCommitHooks(ctx, mrEnv, dbs...)
+		config.AutoGCController.ApplyCommitHooks(bootstrapCtx, mrEnv, dbs...)
 		pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, config.AutoGCController.InitDatabaseHook())
 		pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, config.AutoGCController.DropDatabaseHook())
 		// XXX: We force session aware safepoint controller if auto_gc is on.
