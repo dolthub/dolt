@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
@@ -107,11 +108,16 @@ func TestNewSqlEngineForEnvLoadsPersistedDefaults(t *testing.T) {
 		c.DBLoadParams = cfg.DBLoadParams
 	})
 	require.NoError(t, err)
-	defer se.Close()
 	require.True(t, se.GetUnderlyingEngine().IsolatedVariables())
 	_, value, ok := se.GetUnderlyingEngine().Variables().System.GetGlobal("max_connections")
 	require.True(t, ok)
 	require.EqualValues(t, 91, value)
+	stats := se.GetUnderlyingEngine().Analyzer.Catalog.StatsProvider.(*statspro.StatsController)
+	sqlCtx, err := se.NewDefaultContext(ctx)
+	require.NoError(t, err)
+	defer sql.SessionEnd(sqlCtx.Session)
+	require.NoError(t, se.Close())
+	require.ErrorContains(t, stats.Restart(sqlCtx), "StatsController is closed")
 }
 
 func TestSqlEngineCapturesBundleFromReusableConfig(t *testing.T) {
