@@ -147,11 +147,13 @@ func NewSqlEngine(
 	}
 
 	// Some database initialization logic depends on system variables, load them before the databases
+	// Without a bundle the engine shares the global registries, as callers that
+	// predate engine-owned variables expect.
 	engineVars := config.EngineVariables
-	if engineVars == nil {
-		engineVars = sqle.NewEngineVariables()
+	var vars sql.SystemVariableRegistry = sql.SystemVariables
+	if engineVars != nil {
+		vars = engineVars.System
 	}
-	vars := engineVars.System
 	if err := mrEnv.Iter(func(name string, _ *env.DoltEnv) (bool, error) {
 		dsess.DefineSystemVariablesForDBInRegistry(vars, name)
 		return false, nil
@@ -421,8 +423,11 @@ func NewRebasedSqlEngine(engine *gms.Engine, dbs map[string]dsess.SqlDatabase) *
 
 func applySystemVariables(ctx *sql.Context, cfg SystemVariables) error {
 	if cfg != nil {
-		if ctx == nil || ctx.EngineVariables() == nil {
-			return fmt.Errorf("system variable assignment requires an owning context")
+		if ctx == nil {
+			return fmt.Errorf("system variable assignment requires a context")
+		}
+		if ctx.EngineVariables() == nil {
+			return sql.SystemVariables.AssignValues(cfg)
 		}
 		sessionOwner, ok := ctx.Session.(sql.EngineVariablesProvider)
 		if !ok || sessionOwner.EngineVariables() != ctx.EngineVariables() {

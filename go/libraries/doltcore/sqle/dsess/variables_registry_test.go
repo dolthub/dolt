@@ -85,9 +85,8 @@ func TestDoltSessionRetainsBaseSessionVariables(t *testing.T) {
 	require.NoError(t, err)
 	require.Same(t, vars, session.EngineVariables())
 
-	a := DefaultSession(emptyDatabaseProvider(), nil)
-	b := DefaultSession(emptyDatabaseProvider(), nil)
-	require.NotSame(t, a.EngineVariables(), b.EngineVariables())
+	// DefaultSession keeps an unbound base session on the global registries.
+	require.Nil(t, DefaultSession(emptyDatabaseProvider(), nil).EngineVariables())
 }
 
 func TestRegistryAwareSessionConstructorsRejectIncompleteBundles(t *testing.T) {

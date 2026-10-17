@@ -209,11 +209,8 @@ func runCommitVerification(ctx *sql.Context, testGroups []string) error {
 	}
 
 	provider := session.GenericProvider()
-	vars := ctx.EngineVariables()
-	if vars == nil {
-		return fmt.Errorf("commit verification requires an engine variable owner")
-	}
-	engine := gms.New(analyzer.NewDefault(provider), &gms.Config{EngineVariables: vars})
+	// An unbound context gets an engine on the global registries.
+	engine := gms.New(analyzer.NewDefault(provider), &gms.Config{EngineVariables: ctx.EngineVariables()})
 	defer engine.Close()
 
 	return runTestsUsingDtablefunctions(ctx, engine, testGroups)
