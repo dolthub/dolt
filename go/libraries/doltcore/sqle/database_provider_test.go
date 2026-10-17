@@ -38,13 +38,8 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
-func setGlobalSqlVariable(t *testing.T, name string, val interface{}) {
-	ctx := sql.NewEmptyContext()
-	_, cur, _ := sql.SystemVariables.GetGlobal(name)
-	t.Cleanup(func() {
-		sql.SystemVariables.SetGlobal(ctx, name, cur)
-	})
-	sql.SystemVariables.SetGlobal(ctx, name, val)
+func setGlobalSqlVariable(t *testing.T, ctx *sql.Context, name string, val interface{}) {
+	require.NoError(t, ctx.SystemVariables().SetGlobal(ctx, name, val))
 }
 
 func TestDatabaseProvider(t *testing.T) {
@@ -63,7 +58,7 @@ func TestDatabaseProvider(t *testing.T) {
 
 		ctxF := func(ctx context.Context) (*sql.Context, error) {
 			config, _ := dEnv.Config.GetConfig(env.GlobalConfig)
-			sqlCtx := NewTestSQLCtxWithProvider(ctx, pro, config, nil, sess.GCSafepointController())
+			sqlCtx := NewTestSQLCtxWithProvider(ctx, pro, config, nil, sess.GCSafepointController(), engine.Variables())
 			sqlCtx.SetCurrentDatabase(db.Name())
 			return sqlCtx, nil
 		}
@@ -97,9 +92,9 @@ func TestDatabaseProvider(t *testing.T) {
 				assert.True(t, ok, "expect hook to be PushOnWriteHook, it is %T", hooks[0])
 			})
 			t.Run("PushOnWriteReplication", func(t *testing.T) {
-				setGlobalSqlVariable(t, dsess.ReplicateToRemote, "fileremote")
-				setGlobalSqlVariable(t, dsess.ReplicationRemoteURLTemplate, "mem://remote_{database}")
 				engine, sqlCtx, pro := setup(t)
+				setGlobalSqlVariable(t, sqlCtx, dsess.ReplicateToRemote, "fileremote")
+				setGlobalSqlVariable(t, sqlCtx, dsess.ReplicationRemoteURLTemplate, "mem://remote_{database}")
 
 				err := ExecuteSqlOnEngine(sqlCtx, engine, "CREATE DATABASE mytest;")
 				require.NoError(t, err)
@@ -118,11 +113,10 @@ func TestDatabaseProvider(t *testing.T) {
 				assert.True(t, ok, "expect hook to be PushOnWriteHook, it is %T", hooks[1])
 			})
 			t.Run("AsyncPushOnWrite", func(t *testing.T) {
-				setGlobalSqlVariable(t, dsess.ReplicateToRemote, "fileremote")
-				setGlobalSqlVariable(t, dsess.ReplicationRemoteURLTemplate, "mem://remote_{database}")
-				setGlobalSqlVariable(t, dsess.AsyncReplication, dsess.SysVarTrue)
-
 				engine, sqlCtx, pro := setup(t)
+				setGlobalSqlVariable(t, sqlCtx, dsess.ReplicateToRemote, "fileremote")
+				setGlobalSqlVariable(t, sqlCtx, dsess.ReplicationRemoteURLTemplate, "mem://remote_{database}")
+				setGlobalSqlVariable(t, sqlCtx, dsess.AsyncReplication, dsess.SysVarTrue)
 
 				err := ExecuteSqlOnEngine(sqlCtx, engine, "CREATE DATABASE mytest;")
 				require.NoError(t, err)

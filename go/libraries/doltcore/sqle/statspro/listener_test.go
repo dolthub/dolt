@@ -179,10 +179,10 @@ func TestListening(t *testing.T) {
 	})
 	t.Run("WaitBlocksOnStatsCollection", func(t *testing.T) {
 		sqlCtx, sqlEng, sc := emptySetup(t, bthreads, true, true)
-		_, orig, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsJobInterval)
-		sql.SystemVariables.SetGlobal(sqlCtx, dsess.DoltStatsJobInterval, "60000000000")
+		_, orig, _ := sqlCtx.SystemVariables().GetGlobal(dsess.DoltStatsJobInterval)
+		sqlCtx.SystemVariables().SetGlobal(sqlCtx, dsess.DoltStatsJobInterval, "60000000000")
 		t.Cleanup(func() {
-			sql.SystemVariables.SetGlobal(sqlCtx, dsess.DoltStatsJobInterval, orig)
+			sqlCtx.SystemVariables().SetGlobal(sqlCtx, dsess.DoltStatsJobInterval, orig)
 		})
 		require.NoError(t, executeQuery(sqlCtx, sqlEng, "create table xy (x int primary key, y int)"))
 		require.NoError(t, sc.Restart(ctx))
