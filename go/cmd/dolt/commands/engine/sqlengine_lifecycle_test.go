@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
@@ -105,11 +106,16 @@ func TestNewSqlEngineForEnvLoadsPersistedDefaults(t *testing.T) {
 		c.DBLoadParams = cfg.DBLoadParams
 	})
 	require.NoError(t, err)
-	defer se.Close()
 	require.True(t, se.GetUnderlyingEngine().IsolatedVariables())
 	_, value, ok := se.GetUnderlyingEngine().Variables().System.GetGlobal("max_connections")
 	require.True(t, ok)
 	require.EqualValues(t, 91, value)
+	stats := se.GetUnderlyingEngine().Analyzer.Catalog.StatsProvider.(*statspro.StatsController)
+	sqlCtx, err := se.NewDefaultContext(ctx)
+	require.NoError(t, err)
+	defer sql.SessionEnd(sqlCtx.Session)
+	require.NoError(t, se.Close())
+	require.ErrorContains(t, stats.Restart(sqlCtx), "StatsController is closed")
 }
 
 func TestSqlEngineCapturesBundleFromReusableConfig(t *testing.T) {
@@ -134,6 +140,27 @@ func TestSqlEngineCapturesBundleFromReusableConfig(t *testing.T) {
 	ctxB, err := engineB.NewDefaultContext(ctx)
 	require.NoError(t, err)
 	require.Same(t, varsB, ctxB.EngineVariables())
+}
+
+// TestNewSqlEngineWithoutBundleSharesGlobalRegistries checks the contract that
+// embedders built before engine-owned variables rely on.
+func TestNewSqlEngineWithoutBundleSharesGlobalRegistries(t *testing.T) {
+	ctx := context.Background()
+	mrEnv, cfg, _ := lifecycleEngineEnvironment(t, ctx, t.TempDir(), t.TempDir())
+	se, err := NewSqlEngine(ctx, mrEnv, cfg)
+	require.NoError(t, err)
+	defer se.Close()
+
+	require.False(t, se.GetUnderlyingEngine().IsolatedVariables())
+	require.NotNil(t, sql.StatusVariables)
+	sess, err := se.NewDoltSession(ctx, sql.NewBaseSession())
+	require.NoError(t, err)
+	require.Nil(t, sess.EngineVariables())
+	sqlCtx := se.ContextFactory(ctx, sql.WithSession(sess))
+	_, iter, _, err := se.Query(sqlCtx, "SELECT @@max_connections")
+	require.NoError(t, err)
+	_, err = sql.RowIterToRows(sqlCtx, iter)
+	require.NoError(t, err)
 }
 
 // TestSqlEngineFailedConstructionStopsWorkers checks cleanup on errors before and after tracker creation.

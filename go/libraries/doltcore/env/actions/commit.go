@@ -21,6 +21,7 @@ import (
 
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -55,8 +56,8 @@ const (
 // getCommitRunTestGroups returns the test groups to run for commit operations
 // Returns empty slice if no tests should be run, ["*"] if all tests should be run,
 // or specific group names if only those groups should be run
-func getCommitRunTestGroups() []string {
-	_, val, ok := sql.SystemVariables.GetGlobal(DoltCommitVerificationGroups)
+func getCommitRunTestGroups(ctx *sql.Context) []string {
+	_, val, ok := ctx.SystemVariables().GetGlobal(DoltCommitVerificationGroups)
 	if !ok {
 		return nil
 	}
@@ -176,7 +177,7 @@ func GetCommitStaged(
 	}
 
 	if !props.SkipVerification {
-		testGroups := getCommitRunTestGroups()
+		testGroups := getCommitRunTestGroups(ctx)
 		if len(testGroups) > 0 {
 			err := runCommitVerification(ctx, testGroups)
 			if err != nil {
@@ -208,7 +209,9 @@ func runCommitVerification(ctx *sql.Context, testGroups []string) error {
 	}
 
 	provider := session.GenericProvider()
-	engine := gms.NewDefault(provider)
+	// An unbound context gets an engine on the global registries.
+	engine := gms.New(analyzer.NewDefault(provider), &gms.Config{EngineVariables: ctx.EngineVariables()})
+	defer engine.Close()
 
 	return runTestsUsingDtablefunctions(ctx, engine, testGroups)
 }

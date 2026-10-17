@@ -25,6 +25,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
+type typedNilSystemRegistry struct{ sql.SystemVariableRegistry }
+type typedNilStatusRegistry struct{ sql.StatusVariableRegistry }
+
 func TestRegistryAwareDatabaseAndPersistedDefinitions(t *testing.T) {
 	a, b := variables.NewEngineVariables(), variables.NewEngineVariables()
 	DefineSystemVariablesForDBInRegistry(a.System, "private_db")
@@ -55,4 +58,34 @@ func TestRegistryAwareDatabaseAndPersistedDefinitions(t *testing.T) {
 	detached, err := NewDetachedSessionWithVariables(emptyDatabaseProvider(), config.NewMapConfig(nil), nil, nil, nil, nil, nil, b)
 	require.NoError(t, err)
 	require.Same(t, b, detached.EngineVariables())
+}
+
+func TestDoltSessionRetainsBaseSessionVariables(t *testing.T) {
+	vars := variables.NewEngineVariables()
+	base := sql.NewBaseSessionWithVariables(vars)
+	session, err := NewDoltSession(base, emptyDatabaseProvider(), config.NewMapConfig(nil), nil, nil, nil, nil, nil)
+	require.NoError(t, err)
+	require.Same(t, vars, session.EngineVariables())
+
+	// DefaultSession keeps an unbound base session on the global registries.
+	require.Nil(t, DefaultSession(emptyDatabaseProvider(), nil).EngineVariables())
+}
+
+func TestRegistryAwareSessionConstructorsRejectIncompleteBundles(t *testing.T) {
+	complete := variables.NewEngineVariables()
+	for name, vars := range map[string]*sql.EngineVariables{
+		"nil":              nil,
+		"missing system":   {Status: complete.Status},
+		"missing status":   {System: complete.System},
+		"typed nil system": {System: (*typedNilSystemRegistry)(nil), Status: complete.Status},
+		"typed nil status": {System: complete.System, Status: (*typedNilStatusRegistry)(nil)},
+	} {
+		t.Run(name, func(t *testing.T) {
+			require.PanicsWithValue(t, "DefaultSessionWithVariables requires a complete engine variable bundle", func() {
+				DefaultSessionWithVariables(emptyDatabaseProvider(), nil, vars)
+			})
+			_, err := NewDetachedSessionWithVariables(emptyDatabaseProvider(), config.NewMapConfig(nil), nil, nil, nil, nil, nil, vars)
+			require.EqualError(t, err, "NewDetachedSessionWithVariables requires a complete engine variable bundle")
+		})
+	}
 }

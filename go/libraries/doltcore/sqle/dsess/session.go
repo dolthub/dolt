@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -161,16 +162,24 @@ var _ sql.TransactionSession = (*DoltSession)(nil)
 var _ expranalysis.SessionDbProvider = (*DoltSession)(nil)
 var _ branch_control.ContextConvertible = (*DoltSession)(nil)
 
-// DefaultSession creates a DoltSession with default values
+// DefaultSession creates a DoltSession with default values. Its unbound base
+// session uses the global variable registries; engine callers should pass their
+// bundle to DefaultSessionWithVariables.
 func DefaultSession(pro DoltDatabaseProvider, sessFunc WriteSessFunc) *DoltSession {
-	return DefaultSessionWithVariables(pro, sessFunc, nil)
+	return defaultSession(pro, sessFunc, sql.NewBaseSession())
 }
 
 // DefaultSessionWithVariables creates a default session bound to an engine.
-// A nil bundle uses the default GMS session behavior.
 func DefaultSessionWithVariables(pro DoltDatabaseProvider, sessFunc WriteSessFunc, vars *sql.EngineVariables) *DoltSession {
+	if !completeEngineVariableBundle(vars) {
+		panic("DefaultSessionWithVariables requires a complete engine variable bundle")
+	}
+	return defaultSession(pro, sessFunc, sql.NewBaseSessionWithVariables(vars))
+}
+
+func defaultSession(pro DoltDatabaseProvider, sessFunc WriteSessFunc, base *sql.BaseSession) *DoltSession {
 	return &DoltSession{
-		Session:          sql.NewBaseSessionWithVariables(vars),
+		Session:          base,
 		username:         "",
 		email:            "",
 		dbStates:         make(map[string]*DatabaseSessionState),
@@ -185,10 +194,11 @@ func DefaultSessionWithVariables(pro DoltDatabaseProvider, sessFunc WriteSessFun
 	}
 }
 
-// NewDetachedSession returns a DoltSession backed by a fresh sql.BaseSession
-// rather than one supplied by a client connection. Use it when an external
-// session manager owns the DoltSession lifecycle and SQL requests run against
-// a *sql.Context pointing at this session instead of a per-connection one.
+// NewDetachedSession returns a DoltSession backed by a fresh, unbound
+// sql.BaseSession rather than one supplied by a client connection. Use it when
+// an external session manager owns the DoltSession lifecycle and SQL requests
+// run against a *sql.Context pointing at this session instead of a
+// per-connection one. NewDetachedSessionWithVariables binds it to an engine.
 func NewDetachedSession(
 	pro DoltDatabaseProvider,
 	conf config.ReadWriteConfig,
@@ -198,7 +208,7 @@ func NewDetachedSession(
 	gcSafepointController *gcctx.GCSafepointController,
 	branchActivityTracker *doltdb.BranchActivityTracker,
 ) (*DoltSession, error) {
-	return NewDetachedSessionWithVariables(pro, conf, branchController, statsProvider, writeSessProv, gcSafepointController, branchActivityTracker, nil)
+	return NewDoltSession(sql.NewBaseSession(), pro, conf, branchController, statsProvider, writeSessProv, gcSafepointController, branchActivityTracker)
 }
 
 // NewDetachedSessionWithVariables constructs a detached session against the
@@ -213,6 +223,9 @@ func NewDetachedSessionWithVariables(
 	branchActivityTracker *doltdb.BranchActivityTracker,
 	vars *sql.EngineVariables,
 ) (*DoltSession, error) {
+	if !completeEngineVariableBundle(vars) {
+		return nil, fmt.Errorf("NewDetachedSessionWithVariables requires a complete engine variable bundle")
+	}
 	return NewDoltSession(
 		sql.NewBaseSessionWithVariables(vars),
 		pro,
@@ -223,6 +236,23 @@ func NewDetachedSessionWithVariables(
 		gcSafepointController,
 		branchActivityTracker,
 	)
+}
+
+func completeEngineVariableBundle(vars *sql.EngineVariables) bool {
+	return vars != nil && !nilVariableRegistry(vars.System) && !nilVariableRegistry(vars.Status)
+}
+
+func nilVariableRegistry(registry any) bool {
+	if registry == nil {
+		return true
+	}
+	v := reflect.ValueOf(registry)
+	switch v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return v.IsNil()
+	default:
+		return false
+	}
 }
 
 // NewDoltSession creates a DoltSession object from a standard sql.Session and 0 or more Database objects.
@@ -494,7 +524,7 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 			rrd, ok := db.(RemoteReadReplicaDatabase)
 			if ok && rrd.ValidReplicaState(ctx) {
 				err := rrd.PullFromRemote(ctx)
-				if err != nil && !IgnoreReplicationErrors() {
+				if err != nil && !IgnoreReplicationErrorsWithRegistry(ctx.SystemVariables()) {
 					return nil, fmt.Errorf("replication error: %w", err)
 				} else if err != nil {
 					WarnReplicationError(ctx, err)
@@ -505,7 +535,7 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 			//  up on each transaction start
 			if _, v, ok := ctx.SystemVariables().GetGlobal(ReadReplicaRemote); ok && v != "" {
 				err := ddb.Rebase(ctx)
-				if err != nil && !IgnoreReplicationErrors() {
+				if err != nil && !IgnoreReplicationErrorsWithRegistry(ctx.SystemVariables()) {
 					return nil, err
 				} else if err != nil {
 					WarnReplicationError(ctx, err)
