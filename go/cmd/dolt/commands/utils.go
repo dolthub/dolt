@@ -134,8 +134,7 @@ func BuildSqlEngineQueryist(ctx context.Context, cwdFS filesys.Filesys, mrEnv *e
 }
 
 // BuildSqlEngineQueryistWithVariables uses a bundle prepared before database
-// loading for the first local engine. Later bindings get fresh bundles. With a
-// nil bundle, every engine uses the global variable registries.
+// loading for the first local engine. Later bindings get fresh bundles.
 func BuildSqlEngineQueryistWithVariables(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.MultiRepoEnv, creds *cli.UserPassword, apr *argparser.ArgParseResults, vars *sql.EngineVariables) (cli.LateBindQueryist, errhand.VerboseError) {
 	if ctx == nil || cwdFS == nil || mrEnv == nil || creds == nil || apr == nil {
 		return nil, errhand.VerboseErrorFromError(fmt.Errorf("Invariant violated. Nil argument provided to BuildSqlEngineQueryist"))
@@ -258,7 +257,6 @@ func newLateBindingEngine(
 		ServerHost:         "localhost",
 		Autocommit:         true,
 	}
-	isolated := initialVars != nil
 	var varsMu sync.Mutex
 	var lateBinder cli.LateBindQueryist = func(ctx context.Context, opts ...cli.LateBindQueryistOption) (res cli.LateBindQueryistResult, err error) {
 		config := *baseConfig
@@ -270,7 +268,7 @@ func newLateBindingEngine(
 		config.EngineVariables = initialVars
 		initialVars = nil
 		varsMu.Unlock()
-		if config.EngineVariables == nil && isolated {
+		if config.EngineVariables == nil {
 			config.EngineVariables = sqle.NewEngineVariables()
 			if err := mrEnv.Iter(func(name string, _ *env.DoltEnv) (bool, error) {
 				dsess.DefineSystemVariablesForDBInRegistry(config.EngineVariables.System, name)
