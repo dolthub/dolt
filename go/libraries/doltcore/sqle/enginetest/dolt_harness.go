@@ -459,7 +459,6 @@ func (d *DoltHarness) NewContextWithClient(client sql.Client) *sql.Context {
 	return sql.NewContextWithVariables(context.Background(), d.variables, sql.WithSession(d.newSessionWithClient(client)))
 }
 
-
 func (d *DoltHarness) NewSession() *sql.Context {
 	d.session = d.newSessionWithClient(sql.Client{Address: "localhost", User: "root"})
 	return d.NewContext()
