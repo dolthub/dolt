@@ -106,7 +106,6 @@ func TestNewSqlEngineForEnvLoadsPersistedDefaults(t *testing.T) {
 		c.DBLoadParams = cfg.DBLoadParams
 	})
 	require.NoError(t, err)
-	require.True(t, se.GetUnderlyingEngine().IsolatedVariables())
 	_, value, ok := se.GetUnderlyingEngine().Variables().System.GetGlobal("max_connections")
 	require.True(t, ok)
 	require.EqualValues(t, 91, value)
@@ -114,6 +113,7 @@ func TestNewSqlEngineForEnvLoadsPersistedDefaults(t *testing.T) {
 	sqlCtx, err := se.NewDefaultContext(ctx)
 	require.NoError(t, err)
 	defer sql.SessionEnd(sqlCtx.Session)
+	require.Same(t, se.GetUnderlyingEngine().Variables(), sqlCtx.EngineVariables())
 	require.NoError(t, se.Close())
 	require.ErrorContains(t, stats.Restart(sqlCtx), "StatsController is closed")
 }

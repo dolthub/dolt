@@ -622,11 +622,7 @@ func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, ctxFac
 	// The session's client is set to the event_scheduler superuser so that the event
 	// executor has access to all databases when privileges are enabled.
 	getCtxFunc := func() (*sql.Context, error) {
-		var owner *sql.EngineVariables
-		if engine.IsolatedVariables() {
-			owner = engine.Variables()
-		}
-		sess, err := sessFactory(sql.NewBaseSessionWithVariables(owner), pro)
+		sess, err := sessFactory(sql.NewBaseSessionWithVariables(config.EngineVariables), pro)
 		if err != nil {
 			return nil, err
 		}
