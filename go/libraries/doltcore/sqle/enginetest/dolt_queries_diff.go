@@ -915,6 +915,98 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	// https://github.com/dolthub/dolt/issues/12139
+	{
+		Name: "dolt_diff_<table> to_commit IN lookup for commits sharing a parent",
+		SetUpScript: []string{
+			"create table t (pk int primary key, v varchar(10));",
+			"insert into t values (1, 'a'), (2, 'b');",
+			"call dolt_commit('-Am', 'c1');",
+			"call dolt_branch('feat');",
+			"call dolt_checkout('feat');",
+			"update t set v = 'b2' where pk = 2;",
+			"call dolt_commit('-am', 'c2');",
+			"call dolt_checkout('main');",
+			"update t set v = 'a2' where pk = 1;",
+			"call dolt_commit('-am', 'c3');",
+			"call dolt_merge('--no-ff', 'feat', '-m', 'merge');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: `SELECT (SELECT message FROM dolt_log WHERE commit_hash = to_commit) AS to_c,
+						(SELECT message FROM dolt_log WHERE commit_hash = from_commit) AS from_c,
+						to_pk, to_v
+					FROM dolt_diff_t
+					WHERE to_commit IN (hashof('feat'), hashof('main~1'))
+					ORDER BY to_c, to_pk;`,
+				Expected: []sql.Row{{"c2", "c1", 2, "b2"}, {"c3", "c1", 1, "a2"}},
+			},
+			{
+				Query: `SELECT (SELECT message FROM dolt_log WHERE commit_hash = to_commit) AS to_c,
+						(SELECT message FROM dolt_log WHERE commit_hash = from_commit) AS from_c,
+						to_pk, to_v
+					FROM dolt_diff_t
+					WHERE to_commit IN (hashof('main'), hashof('feat'), hashof('main~1'))
+					ORDER BY to_c, from_c, to_pk;`,
+				Expected: []sql.Row{{"c2", "c1", 2, "b2"}, {"c3", "c1", 1, "a2"}, {"merge", "c2", 1, "a2"}, {"merge", "c3", 2, "b2"}},
+			},
+			{
+				Query: `SELECT (SELECT message FROM dolt_log WHERE commit_hash = to_commit) AS to_c,
+						(SELECT message FROM dolt_log WHERE commit_hash = from_commit) AS from_c,
+						to_pk, to_v
+					FROM dolt_diff_t
+					WHERE from_commit = hashof('main~2')
+					ORDER BY to_c, to_pk;`,
+				Expected: []sql.Row{{"c2", "c1", 2, "b2"}, {"c3", "c1", 1, "a2"}},
+			},
+			{
+				Query: `SELECT (SELECT message FROM dolt_log WHERE commit_hash = to_commit) AS to_c,
+						(SELECT message FROM dolt_log WHERE commit_hash = from_commit) AS from_c,
+						to_pk, to_v
+					FROM dolt_diff_t
+					WHERE from_commit = hashof('feat~1')
+					ORDER BY to_c, to_pk;`,
+				Expected: []sql.Row{{"c2", "c1", 2, "b2"}, {"c3", "c1", 1, "a2"}},
+			},
+			{
+				Query: `SELECT (SELECT message FROM dolt_log WHERE commit_hash = to_commit) AS to_c,
+						(SELECT message FROM dolt_log WHERE commit_hash = from_commit) AS from_c,
+						to_pk, to_v
+					FROM dolt_diff_t
+					WHERE from_commit IN (hashof('main~2'), hashof('feat'), hashof('main~1'))
+					ORDER BY to_c, from_c, to_pk;`,
+				Expected: []sql.Row{{"c2", "c1", 2, "b2"}, {"c3", "c1", 1, "a2"}, {"merge", "c2", 1, "a2"}, {"merge", "c3", 2, "b2"}},
+			},
+			{
+				Query: `SELECT to_pk, to_v
+					FROM dolt_diff_t
+					WHERE from_commit = hashof('main');`,
+				Expected: []sql.Row{},
+			},
+			{
+				Query: `SELECT (SELECT message FROM dolt_log WHERE commit_hash = to_commit) AS to_c,
+						(SELECT message FROM dolt_log WHERE commit_hash = from_commit) AS from_c,
+						to_pk, to_v, diff_type
+					FROM dolt_diff_t
+					ORDER BY to_c, from_c, to_pk;`,
+				Expected: []sql.Row{{"c1", "checkpoint enginetest database mydb", 1, "a", "added"}, {"c1", "checkpoint enginetest database mydb", 2, "b", "added"}, {"c2", "c1", 2, "b2", "modified"}, {"c3", "c1", 1, "a2", "modified"}, {"merge", "c2", 1, "a2", "modified"}, {"merge", "c3", 2, "b2", "modified"}},
+			},
+			{
+				Query:    "INSERT INTO t VALUES (3, 'c');",
+				Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
+			},
+			{
+				Query: `SELECT CASE WHEN to_commit = 'WORKING' THEN 'WORKING'
+						ELSE (SELECT message FROM dolt_log WHERE commit_hash = to_commit) END AS to_c,
+						(SELECT message FROM dolt_log WHERE commit_hash = from_commit) AS from_c,
+						to_pk, to_v, diff_type
+					FROM dolt_diff_t
+					WHERE to_commit IN ('WORKING', 'WORKING', hashof('feat'), hashof('feat'))
+					ORDER BY to_c, to_pk;`,
+				Expected: []sql.Row{{"WORKING", "merge", 3, "c", "added"}, {"c2", "c1", 2, "b2", "modified"}},
+			},
+		},
+	},
 }
 
 var Dolt1DiffSystemTableScripts = []queries.ScriptTest{
@@ -7118,7 +7210,7 @@ left join dolt_commit_diff_xy cd
 		queries: []systabQuery{
 			{
 				query: "select count(*) from dolt_diff_x where from_commit = @m2h2",
-				exp:   []sql.Row{{4}},
+				exp:   []sql.Row{{6}},
 			},
 		},
 	},
