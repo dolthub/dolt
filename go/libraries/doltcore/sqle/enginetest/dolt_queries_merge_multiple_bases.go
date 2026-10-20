@@ -19,6 +19,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
 // schemaBranchSetup builds the history from https://github.com/dolthub/dolt/issues/12050. A schema branch is merged
@@ -283,6 +284,106 @@ func deleteAgainstEditSetup(xKeeps, yKeeps bool) []string {
 		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
 		resolve(xKeeps),
 		"CALL DOLT_COMMIT('-am', 'x2');",
+	}
+}
+
+// nestedCrissCrossSetup builds two criss-crosses, one on top of the other, so that the merge bases of x3 and y3 are
+// x2 and y2, whose own merge bases are x1 and y1:
+//
+//	c1 -- x1 -- x2 -- x3    x
+//	  \-- y1 -- y2 -- y3    y
+//	x2 = merge(x1, y1), y2 = merge(y1, x1)
+//	x3 = merge(x2, y2), y3 = merge(y2, x2)
+//
+// The first criss-cross is conflictingMergeBasesSetup's, with row 1's a resolved to 'seed' in x2 and to 'y' in y2.
+// x2 and y2 conflict on it again, because it conflicted between x1 and y1. x3 and y3 resolve it to 'y' and 'q'.
+func nestedCrissCrossSetup() []string {
+	return append(conflictingMergeBasesSetup("seed", "y", false),
+		"CALL DOLT_BRANCH('x2');",
+		"CALL DOLT_CHECKOUT('y');",
+		"CALL DOLT_BRANCH('y2');",
+		"CALL DOLT_MERGE('x2', '-m', 'y3');",
+		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
+		"UPDATE t SET a = 'q' WHERE id = 1;",
+		"CALL DOLT_COMMIT('-am', 'y3');",
+		"CALL DOLT_CHECKOUT('x');",
+		"CALL DOLT_MERGE('y2', '-m', 'x3');",
+		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
+		"UPDATE t SET a = 'y' WHERE id = 1;",
+		"CALL DOLT_COMMIT('-am', 'x3');",
+	)
+}
+
+// schemaChangingMergeBasesSetup builds a criss-cross whose merge bases, x1 and y1, conflict and have different
+// schemas:
+//
+//	c1 -- x1 -- x2    x
+//	  \-- y1 -- y2    y
+//	x2 = merge(x1, y1), y2 = merge(y1, x1)
+//
+// c1 seeds rows 1 and 2 with a = b = 'seed'. x1 adds column c, sets row 1's a to 'x', and adds row 3. y1 sets row 1's
+// a to 'y'. So x1 and y1 conflict on row 1's a, and row 3 merges cleanly. x2 resolves the conflict to 'x wins'; y2
+// resolves it back to 'seed' and deletes row 3.
+func schemaChangingMergeBasesSetup() []string {
+	return []string{
+		"SET @@autocommit = 0;",
+		"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100), b VARCHAR(100));",
+		"INSERT INTO t VALUES (1, 'seed', 'seed'), (2, 'seed', 'seed');",
+		"CALL DOLT_COMMIT('-Am', 'c1');",
+		"CALL DOLT_BRANCH('x');",
+		"CALL DOLT_BRANCH('y');",
+		"CALL DOLT_CHECKOUT('x');",
+		"ALTER TABLE t ADD COLUMN c VARCHAR(100);",
+		"UPDATE t SET a = 'x' WHERE id = 1;",
+		"INSERT INTO t VALUES (3, 'x', 'x', 'x');",
+		"CALL DOLT_COMMIT('-am', 'x1');",
+		"CALL DOLT_BRANCH('x1');",
+		"CALL DOLT_CHECKOUT('y');",
+		"UPDATE t SET a = 'y' WHERE id = 1;",
+		"CALL DOLT_COMMIT('-am', 'y1');",
+		"CALL DOLT_BRANCH('y1');",
+		"CALL DOLT_MERGE('x1', '-m', 'y2');",
+		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
+		"UPDATE t SET a = 'seed' WHERE id = 1;",
+		"DELETE FROM t WHERE id = 3;",
+		"CALL DOLT_COMMIT('-am', 'y2');",
+		"CALL DOLT_CHECKOUT('x');",
+		"CALL DOLT_MERGE('y1', '-m', 'x2');",
+		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
+		"UPDATE t SET a = 'x wins' WHERE id = 1;",
+		"CALL DOLT_COMMIT('-am', 'x2');",
+	}
+}
+
+// jsonMergeBasesSetup builds a criss-cross whose merge bases, x1 and y1, add different keys to a JSON document:
+//
+//	c1 -- x1 -- x2 -- x3    x
+//	  \-- y1 -- y2          y
+//	x2 = merge(x1, y1), y2 = merge(y1, x1)
+//
+// c1 seeds row 1 with j = {}. x1 adds key x and y1 adds key y, which x2 and y2 merge to {"x": 1, "y": 1}. x3 sets x
+// to 2.
+func jsonMergeBasesSetup() []string {
+	return []string{
+		"SET @@autocommit = 0;",
+		"CREATE TABLE t (id INT PRIMARY KEY, j JSON);",
+		"INSERT INTO t VALUES (1, '{}');",
+		"CALL DOLT_COMMIT('-Am', 'c1');",
+		"CALL DOLT_BRANCH('x');",
+		"CALL DOLT_BRANCH('y');",
+		"CALL DOLT_CHECKOUT('x');",
+		`UPDATE t SET j = '{"x": 1}';`,
+		"CALL DOLT_COMMIT('-am', 'x1');",
+		"CALL DOLT_BRANCH('x1');",
+		"CALL DOLT_CHECKOUT('y');",
+		`UPDATE t SET j = '{"y": 1}';`,
+		"CALL DOLT_COMMIT('-am', 'y1');",
+		"CALL DOLT_BRANCH('y1');",
+		"CALL DOLT_MERGE('x1', '-m', 'y2');",
+		"CALL DOLT_CHECKOUT('x');",
+		"CALL DOLT_MERGE('y1', '-m', 'x2');",
+		`UPDATE t SET j = '{"x": 2, "y": 1}';`,
+		"CALL DOLT_COMMIT('-am', 'x3');",
 	}
 }
 
@@ -720,6 +821,103 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT id FROM t FORCE INDEX (idx_b) WHERE b = 'seed';",
 				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		// x3 drops t, and y2 resolved the conflict between the merge bases back to c1's value, so y2's t is the
+		// virtual merge base's. y2 still changed row 1's a from the conflicted merge bases, as in git, so dropping t
+		// conflicts. git conflicts on row 1's file; Dolt conflicts on the whole table.
+		Name: "conflicting merge bases, one side dropping the table: merge y into x",
+		SetUpScript: append(conflictingMergeBasesSetup("x wins", "seed", false),
+			"DROP TABLE t;",
+			"CALL DOLT_COMMIT('-am', 'x3');"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT table_name, our_schema, description FROM dolt_schema_conflicts;",
+				Expected: []sql.Row{{"t", "<deleted>", "cannot merge a table deletion with data modification"}},
+			},
+			{
+				Query:    "SELECT table_name, status FROM dolt_status;",
+				Expected: []sql.Row{{"t", "schema conflict"}},
+			},
+		},
+	},
+	{
+		// The merge bases x1 and y1 have different schemas. They still merge row by row: row 3 is in the virtual merge
+		// base, so y2's delete of it wins, and row 1's a conflicted between them, so x2's and y2's resolutions
+		// conflict.
+		Name:        "conflicting merge bases with different schemas: merge y into x",
+		SetUpScript: schemaChangingMergeBasesSetup(),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_id, base_a, our_a, their_a FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{1, "seed", "x wins", "seed"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY id;",
+				Expected: []sql.Row{{1, "x wins", "seed", nil}, {2, "seed", "seed", nil}},
+			},
+		},
+	},
+	{
+		// Row 1's a conflicted between x1 and y1, so it conflicts between x2 and y2 even though x2 holds c1's value.
+		// It is marked in their virtual merge base too, so x3's and y3's resolutions conflict.
+		Name:        "nested criss-cross: merge y into x",
+		SetUpScript: nestedCrissCrossSetup(),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_a, our_a, their_a FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{"seed", "y", "q"}},
+			},
+		},
+	},
+	{
+		// x2 and y2 resolve the conflict between the merge bases to the same value, and y3 changes the column's type
+		// without changing the value. The values are equal in the merged type, so they do not conflict.
+		Name: "conflicting merge bases, resolved the same way, then a type change: merge y into x",
+		SetUpScript: append(conflictingMergeBasesSetup("resolved", "resolved", false),
+			"CALL DOLT_CHECKOUT('y');",
+			"ALTER TABLE t MODIFY COLUMN a TEXT;",
+			"CALL DOLT_COMMIT('-am', 'y3');",
+			"CALL DOLT_CHECKOUT('x');"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY id;",
+				Expected: []sql.Row{{1, "resolved", "seed"}, {2, "x", "y"}},
+			},
+		},
+	},
+	{
+		// The virtual merge base merges x1's and y1's JSON documents to {"x": 1, "y": 1} whatever
+		// @@dolt_dont_merge_json is, so that it can be rebuilt the same way in any session. Only x3 changed the
+		// document from it.
+		Name:        "merge bases with merged JSON documents, with @@dolt_dont_merge_json: merge y into x",
+		SetUpScript: append(jsonMergeBasesSetup(), "SET @@dolt_dont_merge_json = 1;"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT j FROM t;",
+				Expected: []sql.Row{{types.MustJSON(`{"x": 2, "y": 1}`)}},
 			},
 		},
 	},
