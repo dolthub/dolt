@@ -90,14 +90,6 @@ func (s *DoltSession) GetSessionVariable(ctx *sql.Context, name string) (interfa
 	return s.Session.GetSessionVariable(ctx, name)
 }
 
-// EngineVariables exposes the bundle retained by the underlying GMS session.
-func (d *DoltSession) EngineVariables() *sql.EngineVariables {
-	if owner, ok := d.Session.(sql.EngineVariablesProvider); ok {
-		return owner.EngineVariables()
-	}
-	return nil
-}
-
 // DoltgresSessionLifecycle is implemented by Doltgres session state that needs
 // notification when a transaction ends or its session caches must be cleared.
 // Keeping this interface here avoids coupling Dolt to Doltgres packages.
