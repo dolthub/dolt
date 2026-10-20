@@ -61,6 +61,9 @@ type MergeOpts struct {
 	// inspection. Returning tree.RowMergeDefer keeps the standard behaviour for
 	// that row.
 	RowMergePolicy RowMergePolicy
+	// AlwaysMergeJSON merges concurrent edits to a JSON document regardless of @@dolt_dont_merge_json, for merges whose
+	// result must not depend on session settings.
+	AlwaysMergeJSON bool
 }
 
 // RowMergeInput describes one three-way row decision offered to a policy.
@@ -112,10 +115,14 @@ type TableMerger struct {
 	// exception is for the dolt_verify_constraints() stored procedure, which allows callers to
 	// only record constraint violations for a specified subset of tables.
 	recordViolations bool
+
+	alwaysMergeJSON bool
 }
 
 func (tm TableMerger) GetNewValueMerger(ctx context.Context, mergeSch schema.Schema, leftRows prolly.Map) *valueMerger {
-	return NewValueMerger(ctx, mergeSch, tm.leftSch, tm.rightSch, tm.ancSch, leftRows.Pool(), leftRows.NodeStore())
+	vm := NewValueMerger(ctx, mergeSch, tm.leftSch, tm.rightSch, tm.ancSch, leftRows.Pool(), leftRows.NodeStore())
+	vm.alwaysMergeJSON = tm.alwaysMergeJSON
+	return vm
 }
 
 func rowsFromTable(ctx context.Context, tbl *doltdb.Table) (prolly.Map, error) {
@@ -311,6 +318,7 @@ func (rm *RootMerger) MakeTableMerger(ctx context.Context, tblName doltdb.TableN
 		ns:               rm.ns,
 		recordViolations: recordViolations,
 		rowMergePolicy:   mergeOpts.RowMergePolicy,
+		alwaysMergeJSON:  mergeOpts.AlwaysMergeJSON,
 	}
 
 	var err error
@@ -457,7 +465,8 @@ func (rm *RootMerger) MaybeShortCircuit(ctx context.Context, tm *TableMerger, op
 			childTable = tm.leftTbl
 			childHash = leftHash
 		}
-		if childHash != baseHash {
+		// Conflicted cells of a virtual merge base count as changed on the surviving side even when it matches the base.
+		if childHash != baseHash || len(tm.virtualBaseConflicts()) > 0 {
 			if areRootObjs {
 				return nil, nil, nil, nil
 			} else {

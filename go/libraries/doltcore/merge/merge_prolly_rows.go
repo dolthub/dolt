@@ -574,9 +574,6 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 	return finalTbl, s, nil
 }
 
-// treeRowMergePolicy adapts the caller's policy to the storage layer's
-// callback, supplying the table, the merged value descriptor and the node
-// store. Returns nil when no policy is installed.
 // virtualBaseConflicts returns the rows of this table that have conflicted cells in a virtual merge base.
 func (tm *TableMerger) virtualBaseConflicts() map[string]conflictedRow {
 	if virtualBase, ok := tm.ancestorSrc.(virtualMergeBase); ok {
@@ -631,8 +628,9 @@ func conflictOnConflictedCells(ctx context.Context, diff tree.ThreeWayDiff, row 
 	default:
 		return diff, nil
 	}
-	if !conflictedCellsDiffer(row, left, right, vm) {
-		return diff, nil
+	differ, err := conflictedCellsDiffer(ctx, row, left, right, vm)
+	if err != nil || !differ {
+		return diff, err
 	}
 	op := tree.DiffOpDivergentModifyConflict
 	if left == nil || right == nil {
@@ -641,31 +639,65 @@ func conflictOnConflictedCells(ctx context.Context, diff tree.ThreeWayDiff, row 
 	return tree.ThreeWayDiff{Op: op, Key: diff.Key, Base: base, Left: left, Right: right}, nil
 }
 
-func conflictedCellsDiffer(row conflictedRow, left, right val.Tuple, vm *valueMerger) bool {
+// conflictedCellsDiffer reports whether |left| and |right| hold different values in a cell of |row|. A tuple that
+// holds the base row in place of an unchanged side has that side's bytes, so each is read with its side's schema.
+func conflictedCellsDiffer(ctx context.Context, row conflictedRow, left, right val.Tuple, vm *valueMerger) (bool, error) {
 	if left == nil || right == nil {
-		return left != nil || right != nil
+		return left != nil || right != nil, nil
 	}
-	differs := func(i int) bool {
-		l, _, _ := getColumn(&left, &vm.leftMapping, i)
-		r, _, _ := getColumn(&right, &vm.rightMapping, i)
-		return !bytes.Equal(l, r)
+	differs := func(i int) (bool, error) {
+		l, err := vm.mergedCell(ctx, vm.leftVD, vm.leftMapping, left, i)
+		if err != nil {
+			return false, err
+		}
+		r, err := vm.mergedCell(ctx, vm.rightVD, vm.rightMapping, right, i)
+		if err != nil {
+			return false, err
+		}
+		equal, err := vm.mergedCellsEqual(ctx, i, l, r)
+		return !equal, err
 	}
 	if row.wholeRow {
 		for i := 0; i < vm.numCols; i++ {
-			if differs(i) {
-				return true
+			if d, err := differs(i); err != nil || d {
+				return d, err
 			}
 		}
-		return false
+		return false, nil
 	}
 	for _, tag := range row.tags {
-		if i, ok := vm.resultSchema.GetNonPKCols().StoredIndexByTag(tag); ok && differs(i) {
-			return true
+		i, ok := vm.resultSchema.GetNonPKCols().StoredIndexByTag(tag)
+		if !ok {
+			continue
+		}
+		if d, err := differs(i); err != nil || d {
+			return d, err
 		}
 	}
-	return false
+	return false, nil
 }
 
+// mergedCell returns column |i| of the merged schema from |row|, converted to its type in the merged schema. |vd| and
+// |mapping| describe the schema of |row|. A column missing from that schema is NULL.
+func (m *valueMerger) mergedCell(ctx context.Context, vd *val.TupleDesc, mapping val.OrdinalMapping, row val.Tuple, i int) (interface{}, error) {
+	if mapping[i] == -1 {
+		return nil, nil
+	}
+	return convert(ctx, vd, m.mergedColumnType(i), mapping[i], row, m.ns)
+}
+
+func (m *valueMerger) mergedCellsEqual(ctx context.Context, i int, a, b interface{}) (bool, error) {
+	cmp, err := m.mergedColumnType(i).Compare(ctx, a, b)
+	return cmp == 0, err
+}
+
+func (m *valueMerger) mergedColumnType(i int) sql.Type {
+	return m.resultSchema.GetNonPKCols().GetByIndex(i).TypeInfo.ToSqlType()
+}
+
+// treeRowMergePolicy adapts the caller's policy to the storage layer's
+// callback, supplying the table, the merged value descriptor and the node
+// store. Returns nil when no policy is installed.
 func (tm *TableMerger) treeRowMergePolicy(mergedSch schema.Schema) tree.RowMergePolicy {
 	if tm.rowMergePolicy == nil {
 		return nil
@@ -2060,6 +2092,7 @@ type valueMerger struct {
 	baseToResultMapping                    val.OrdinalMapping
 	syncPool                               pool.BuffPool
 	keyless                                bool
+	alwaysMergeJSON                        bool
 	ns                                     tree.NodeStore
 	valueBuilder                           *val.TupleBuilder
 }
@@ -2441,13 +2474,16 @@ func (m *valueMerger) processColumn(ctx *sql.Context, i int, left, right, base v
 		}
 		// concurrent modification
 		// if the result type is JSON, we can attempt to merge the JSON changes.
-		dontMergeJsonVar, err := ctx.Session.GetSessionVariable(ctx, "dolt_dont_merge_json")
-		if err != nil {
-			return nil, true, err
-		}
-		disallowJsonMerge, err := sql.ConvertToBool(ctx, dontMergeJsonVar)
-		if err != nil {
-			return nil, true, err
+		disallowJsonMerge := false
+		if !m.alwaysMergeJSON {
+			dontMergeJsonVar, err := ctx.Session.GetSessionVariable(ctx, "dolt_dont_merge_json")
+			if err != nil {
+				return nil, true, err
+			}
+			disallowJsonMerge, err = sql.ConvertToBool(ctx, dontMergeJsonVar)
+			if err != nil {
+				return nil, true, err
+			}
 		}
 		if !disallowJsonMerge {
 			// if any of the values are NULL, this is an unresolvable conflict
