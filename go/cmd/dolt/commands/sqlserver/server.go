@@ -226,6 +226,7 @@ func ConfigureServices(
 			}
 			err = dsess.InitPersistedSystemVarsWithRegistry(vars, cfg.DoltEnv)
 			if err != nil {
+				cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
 				logrus.Errorf("unable to init persisted system variables: %v", err)
 			}
 			// Always return nil, because we don't want an invalid config value to prevent
