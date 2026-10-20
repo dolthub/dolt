@@ -56,3 +56,21 @@ func TestRegistryAwareDatabaseAndPersistedDefinitions(t *testing.T) {
 	require.NoError(t, err)
 	require.Same(t, b, detached.EngineVariables())
 }
+
+func TestPersistedDefinitionsSkipUnknownKeys(t *testing.T) {
+	vars := variables.NewEngineVariables()
+	vars.System.AddSystemVariables([]sql.SystemVariable{&sql.MysqlSystemVariable{
+		Name: "private_known", Scope: sql.GetMysqlScope(sql.SystemVariableScope_Global),
+		Dynamic: true, Type: types.NewSystemStringType("private_known"), Default: "original",
+	}})
+	conf := config.NewMapConfig(map[string]string{
+		"private_known":   "persisted",
+		"private_unknown": "persisted",
+	})
+	loaded, missing, err := SystemVariablesInConfigWithRegistry(vars.System, conf)
+	require.NoError(t, err)
+	require.Len(t, loaded, 1)
+	require.NotNil(t, loaded[0])
+	require.Equal(t, "private_known", loaded[0].GetName())
+	require.Equal(t, []string{"private_unknown"}, missing)
+}
