@@ -1368,7 +1368,7 @@ func isCheckReferenced(ctx *sql.Context, sch schema.Schema, chk schema.Check) (b
 	}
 
 	for _, col := range colNames {
-		_, ok := sch.GetAllCols().GetByName(col)
+		_, ok := sch.GetAllCols().GetByNameCaseInsensitive(col)
 		if !ok {
 			return false, nil
 		}

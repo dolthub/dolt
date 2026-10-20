@@ -958,6 +958,71 @@ var SchemaChangeTestsConstraints = []MergeScriptTest{
 		},
 	},
 	{
+		Name: "check constraints on mixed-case columns with divergent data and schema changes",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"create table t (id varchar(8) primary key, accelClockEnabled int not null default 0, constraint chk_accel check (`accelClockEnabled` <= 255));",
+			"insert into t values ('r1', 1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column coachModeEnabled int not null default 0 after accelClockEnabled;",
+			"alter table t add column mascotModeType varchar(255) after coachModeEnabled;",
+			"alter table t add constraint chk_coach check (COACHMODEENABLED <= 255);",
+		},
+		LeftSetUpScript: []string{
+			"update t set accelClockEnabled = 2 where id = 'r1';",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "select table_name, description from dolt_schema_conflicts;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{"r1", 2, 0, nil}},
+			},
+			{
+				Query:       "update t set accelClockEnabled = 256 where id = 'r1';",
+				ExpectedErr: sql.ErrCheckConstraintViolated,
+			},
+			{
+				Query:       "update t set coachModeEnabled = 256 where id = 'r1';",
+				ExpectedErr: sql.ErrCheckConstraintViolated,
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{"r1", 2, 0, nil}},
+			},
+		},
+	},
+	{
+		Name: "check constraint references a deleted mixed-case column",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"create table t (id int primary key, coachModeEnabled int);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add constraint chk_coach check (coachModeEnabled <= 255);",
+		},
+		LeftSetUpScript: []string{
+			"alter table t drop column coachModeEnabled;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "select table_name, description from dolt_schema_conflicts;",
+				Expected: []sql.Row{{"t", "check 'chk_coach' references a column that will be deleted after merge"}},
+			},
+		},
+	},
+	{
 		Name: "altering a check constraint on one side",
 		AncSetUpScript: []string{
 			"create table t (pk int primary key, c1 varchar(100));",
