@@ -493,9 +493,8 @@ func runMain() int {
 	}
 	defer tempfiles.MovableTempFileProvider.Clean()
 
-	// Find all database names and add global variables for them. This needs to
-	// occur before a call to dsess.InitPersistedSystemVars. Otherwise, database
-	// specific persisted system vars will fail to load.
+	// Register database-specific variable definitions before loading persisted
+	// values, so those settings can be decoded.
 	//
 	// In general, there is a lot of work TODO in this area. System global
 	// variables are persisted to the Dolt local config if found and if not
@@ -814,7 +813,7 @@ If you're interested in running this command against a remote host, hit us up on
 	if verbose {
 		cli.Println("verbose: starting local mode")
 	}
-	return commands.BuildSqlEngineQueryist(ctx, cwdFS, mrEnv, creds, apr)
+	return commands.BuildSqlEngineQueryistForEnv(ctx, cwdFS, mrEnv, rootEnv, creds, apr)
 }
 
 // doc is currently used only when a `initCliContext` command is specified. This will include all commands in time,

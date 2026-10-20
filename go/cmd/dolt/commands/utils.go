@@ -24,7 +24,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -130,13 +129,13 @@ func NewArgFreeCliContext(ctx context.Context, dEnv *env.DoltEnv, cwd filesys.Fi
 // BuildSqlEngineQueryist Utility function to build a local SQLEngine for use interacting with data on disk using
 // SQL queries. ctx, cwdFS, mrEnv, and apr must all be non-nil.
 func BuildSqlEngineQueryist(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.MultiRepoEnv, creds *cli.UserPassword, apr *argparser.ArgParseResults) (cli.LateBindQueryist, errhand.VerboseError) {
-	return BuildSqlEngineQueryistWithVariables(ctx, cwdFS, mrEnv, creds, apr, nil)
+	return BuildSqlEngineQueryistForEnv(ctx, cwdFS, mrEnv, nil, creds, apr)
 }
 
-// BuildSqlEngineQueryistWithVariables uses a bundle prepared before database
-// loading for the first local engine. Later bindings get fresh bundles. With a
-// nil bundle, every engine uses the global variable registries.
-func BuildSqlEngineQueryistWithVariables(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.MultiRepoEnv, creds *cli.UserPassword, apr *argparser.ArgParseResults, vars *sql.EngineVariables) (cli.LateBindQueryist, errhand.VerboseError) {
+// BuildSqlEngineQueryistForEnv is BuildSqlEngineQueryist with each binding's
+// persisted globals loaded from |rootEnv|. See sqle.NewEngineVariablesForEnv
+// for a nil |rootEnv|.
+func BuildSqlEngineQueryistForEnv(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.MultiRepoEnv, rootEnv *env.DoltEnv, creds *cli.UserPassword, apr *argparser.ArgParseResults) (cli.LateBindQueryist, errhand.VerboseError) {
 	if ctx == nil || cwdFS == nil || mrEnv == nil || creds == nil || apr == nil {
 		return nil, errhand.VerboseErrorFromError(fmt.Errorf("Invariant violated. Nil argument provided to BuildSqlEngineQueryist"))
 	}
@@ -231,7 +230,7 @@ func BuildSqlEngineQueryistWithVariables(ctx context.Context, cwdFS filesys.File
 		database = dbName + "/" + useBranch
 	}
 
-	binder, err := newLateBindingEngine(cfgDirPath, privsFp, branchControlFilePath, creds, database, mrEnv, vars)
+	binder, err := newLateBindingEngine(cfgDirPath, privsFp, branchControlFilePath, creds, database, mrEnv, rootEnv)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
 	}
@@ -246,7 +245,7 @@ func newLateBindingEngine(
 	creds *cli.UserPassword,
 	database string,
 	mrEnv *env.MultiRepoEnv,
-	initialVars *sql.EngineVariables,
+	rootEnv *env.DoltEnv,
 ) (cli.LateBindQueryist, error) {
 
 	baseConfig := &engine.SqlEngineConfig{
@@ -258,42 +257,17 @@ func newLateBindingEngine(
 		ServerHost:         "localhost",
 		Autocommit:         true,
 	}
-	isolated := initialVars != nil
-	var varsMu sync.Mutex
 	var lateBinder cli.LateBindQueryist = func(ctx context.Context, opts ...cli.LateBindQueryistOption) (res cli.LateBindQueryistResult, err error) {
 		config := *baseConfig
 		// We've deferred loading the database as long as we can.
 		// If we're binding the Queryist, that means that engine is actually
 		// going to be used.
 		mrEnv.ReloadDBs(ctx)
-		varsMu.Lock()
-		config.EngineVariables = initialVars
-		initialVars = nil
-		varsMu.Unlock()
-		if config.EngineVariables == nil && isolated {
-			config.EngineVariables = sqle.NewEngineVariables()
-			if err := mrEnv.Iter(func(name string, _ *env.DoltEnv) (bool, error) {
-				dsess.DefineSystemVariablesForDBInRegistry(config.EngineVariables.System, name)
-				return false, nil
-			}); err != nil {
-				return res, err
-			}
-			if dEnv := mrEnv.GetEnv(mrEnv.GetFirstDatabase()); dEnv != nil {
-				if err := dsess.InitPersistedSystemVarsWithRegistry(config.EngineVariables.System, dEnv); err != nil {
-					cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
-				}
-			} else {
-				// A CLI engine may start outside any database. The MultiRepoEnv still
-				// carries the root environment's merged local/global configuration.
-				persisted := configpkg.NewPrefixConfig(mrEnv.Config(), env.SqlServerGlobalsPrefix)
-				definitions, _, err := dsess.SystemVariablesInConfigWithRegistry(config.EngineVariables.System, persisted)
-				if err != nil {
-					cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
-				} else {
-					config.EngineVariables.System.AddSystemVariables(definitions)
-				}
-			}
+		vars, varsErr := sqle.NewEngineVariablesForEnv(mrEnv, rootEnv)
+		if varsErr != nil {
+			cli.Printf("error: failed to load persisted global variables: %s\n", varsErr.Error())
 		}
+		config.EngineVariables = vars
 
 		queryistConfig := &cli.LateBindQueryistConfig{}
 		for _, opt := range opts {
