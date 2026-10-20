@@ -153,7 +153,7 @@ func TestNewSqlEngineWithoutBundleSharesGlobalRegistries(t *testing.T) {
 	require.NoError(t, err)
 	defer se.Close()
 
-	require.False(t, se.GetUnderlyingEngine().IsolatedVariables())
+	require.Same(t, sql.SystemVariables, se.GetUnderlyingEngine().Variables().System)
 	require.NotNil(t, sql.StatusVariables)
 	sess, err := se.NewDoltSession(ctx, sql.NewBaseSession())
 	require.NoError(t, err)
