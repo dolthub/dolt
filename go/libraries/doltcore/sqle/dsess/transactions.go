@@ -263,7 +263,7 @@ func WaitForReplicationController(ctx *sql.Context, rsc doltdb.ReplicationStatus
 	if len(rsc.Wait) == 0 {
 		return
 	}
-	_, timeout, ok := sql.SystemVariables.GetGlobal(DoltClusterAckWritesTimeoutSecs)
+	_, timeout, ok := ctx.SystemVariables().GetGlobal(DoltClusterAckWritesTimeoutSecs)
 	if !ok {
 		return
 	}

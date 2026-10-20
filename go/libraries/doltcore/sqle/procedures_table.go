@@ -384,7 +384,7 @@ func DoltProceduresGetAll(ctx *sql.Context, db Database, procedureName string) (
 		if s, ok := sqlRow[4].(string); ok {
 			d.SqlMode = s
 		} else {
-			defaultSqlMode, err := loadDefaultSqlMode()
+			defaultSqlMode, err := loadDefaultSqlMode(ctx)
 			if err != nil {
 				return nil, err
 			}
