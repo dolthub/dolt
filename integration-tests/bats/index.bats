@@ -45,6 +45,27 @@ teardown() {
     [[ "${#lines[@]}" == "2" ]] || false
 }
 
+@test "index: rebuild evaluates generated columns with persisted variables" {
+    dolt sql -q "SET @@PERSIST.time_zone = '+05:00';"
+    dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, a varchar(20), d datetime, rl int AS (regexp_like(a, 'h.*')) VIRTUAL, ut bigint AS (unix_timestamp(d)) VIRTUAL, INDEX irl(rl), INDEX iut(ut));"
+    dolt sql -q "INSERT INTO t (pk, a, d) VALUES (1, 'hi', '2020-01-01 05:00:00');"
+    run dolt index cat t iut -r csv
+    [ "$status" -eq "0" ]
+    [[ "${lines[1]}" =~ "1577836800,1" ]] || false
+
+    run dolt index rebuild t irl
+    [ "$status" -eq "0" ]
+    run dolt index rebuild t iut
+    [ "$status" -eq "0" ]
+
+    run dolt index cat t irl -r csv
+    [ "$status" -eq "0" ]
+    [[ "${lines[1]}" =~ "1,1" ]] || false
+    run dolt index cat t iut -r csv
+    [ "$status" -eq "0" ]
+    [[ "${lines[1]}" =~ "1577836800,1" ]] || false
+}
+
 @test "index: Permissive index names" {
     dolt sql <<SQL
 CREATE TABLE test(
