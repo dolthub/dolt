@@ -163,8 +163,10 @@ var _ expranalysis.SessionDbProvider = (*DoltSession)(nil)
 var _ branch_control.ContextConvertible = (*DoltSession)(nil)
 
 // DefaultSession creates a standalone DoltSession with fresh GMS definitions.
-// It cannot attach to an existing engine. Engine callers should pass their Dolt
-// bundle to DefaultSessionWithVariables.
+// It cannot attach to an existing engine.
+//
+// Deprecated: its bundle has no Dolt system variables, which Dolt code
+// requires. Use DefaultSessionWithVariables.
 func DefaultSession(pro DoltDatabaseProvider, sessFunc WriteSessFunc) *DoltSession {
 	return DefaultSessionWithVariables(pro, sessFunc, variables.NewEngineVariables())
 }
@@ -188,8 +190,10 @@ func DefaultSessionWithVariables(pro DoltDatabaseProvider, sessFunc WriteSessFun
 }
 
 // NewDetachedSession returns a DoltSession with fresh GMS definitions. It
-// cannot attach to an existing engine. Use NewDetachedSessionWithVariables
-// when an external session manager owns the DoltSession lifecycle.
+// cannot attach to an existing engine.
+//
+// Deprecated: its bundle has no Dolt system variables, which Dolt code
+// requires. Use NewDetachedSessionWithVariables.
 func NewDetachedSession(
 	pro DoltDatabaseProvider,
 	conf config.ReadWriteConfig,
