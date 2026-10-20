@@ -35,7 +35,7 @@ import (
 )
 
 func TestDoltSessionInit(t *testing.T) {
-	dsess := DefaultSession(emptyDatabaseProvider(), nil)
+	dsess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
 	conf := config.NewMapConfig(make(map[string]string))
 	assert.Equal(t, conf, dsess.globalsConf)
 }
@@ -82,7 +82,7 @@ func (l *countingDoltgresTransactionLifecycle) DoltgresSessionCacheClear() {
 }
 
 func TestDoltgresTransactionLifecycle(t *testing.T) {
-	sess := DefaultSession(emptyDatabaseProvider(), nil)
+	sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
 	lifecycle := &countingDoltgresTransactionLifecycle{pending: true}
 	sess.DoltgresSessObj = lifecycle
 	tx := DisabledTransaction{}
@@ -160,7 +160,7 @@ func TestDoltgresSemanticTransactionLifecycle(t *testing.T) {
 }
 
 func TestCommitBranchStatesNotifiesDoltgres(t *testing.T) {
-	sess := DefaultSession(emptyDatabaseProvider(), nil)
+	sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
 	ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
 	tx := &DoltTransaction{}
 	ctx.SetTransaction(tx)
@@ -295,13 +295,13 @@ func TestDirtyBranches(t *testing.T) {
 	}
 
 	t.Run("no branch states", func(t *testing.T) {
-		sess := DefaultSession(emptyDatabaseProvider(), nil)
+		sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
 		assert.Empty(t, sess.DirtyBranches())
 		assert.False(t, sess.IsBranchDirty("db1", "main"))
 	})
 
 	t.Run("no dirty branch states", func(t *testing.T) {
-		sess := DefaultSession(emptyDatabaseProvider(), nil)
+		sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
 		addBranchState(sess, "db1", "main", false)
 		assert.Empty(t, sess.DirtyBranches())
 		assert.False(t, sess.IsBranchDirty("db1", "main"))
@@ -309,7 +309,7 @@ func TestDirtyBranches(t *testing.T) {
 
 	// Two dirty branches of one database: two pairs, one database name.
 	t.Run("multiple dirty branches in one database", func(t *testing.T) {
-		sess := DefaultSession(emptyDatabaseProvider(), nil)
+		sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
 		addBranchState(sess, "db1", "main", true)
 		addBranchState(sess, "db1", "feature", true)
 		addBranchState(sess, "db1", "clean", false)
@@ -326,7 +326,7 @@ func TestDirtyBranches(t *testing.T) {
 	})
 
 	t.Run("dirty branches across databases", func(t *testing.T) {
-		sess := DefaultSession(emptyDatabaseProvider(), nil)
+		sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
 		addBranchState(sess, "db1", "main", true)
 		addBranchState(sess, "db2", "main", false)
 		addBranchState(sess, "db3", "feature", true)
@@ -344,7 +344,7 @@ func TestDirtyBranches(t *testing.T) {
 
 	// Both maps are keyed lowercased, as lookupDbState assumes.
 	t.Run("lookup folds case", func(t *testing.T) {
-		sess := DefaultSession(emptyDatabaseProvider(), nil)
+		sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
 		addBranchState(sess, "db1", "Feature", true)
 
 		assert.True(t, sess.IsBranchDirty("DB1", "feature"))
@@ -353,7 +353,7 @@ func TestDirtyBranches(t *testing.T) {
 
 	// The joined form could not express this.
 	t.Run("database name containing a revision delimiter", func(t *testing.T) {
-		sess := DefaultSession(emptyDatabaseProvider(), nil)
+		sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
 		addBranchState(sess, "db/one", "main", true)
 
 		assert.Equal(t, []DirtyBranch{{DbName: "db/one", Branch: "main"}}, sess.DirtyBranches())
@@ -362,7 +362,7 @@ func TestDirtyBranches(t *testing.T) {
 }
 
 func TestNewPersistedSystemVariables(t *testing.T) {
-	dsess := DefaultSession(emptyDatabaseProvider(), nil)
+	dsess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
 	conf := config.NewMapConfig(map[string]string{"max_connections": "1000"})
 	dsess = dsess.WithGlobals(conf)
 
