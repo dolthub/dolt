@@ -2458,12 +2458,6 @@ func (s *databaseChangeRecordingSession) SetCurrentDatabase(name string) {
 	s.Session.SetCurrentDatabase(name)
 }
 
-// EngineVariables forwards the wrapped session's owner, which embedding the
-// sql.Session interface does not promote.
-func (s *databaseChangeRecordingSession) EngineVariables() *sql.EngineVariables {
-	return s.Session.(sql.EngineVariablesProvider).EngineVariables()
-}
-
 func TestDoltCommitAllChecksEveryBranch(t *testing.T) {
 	for _, query := range []string{
 		"CALL dolt_commit_all('-am', 'denied')",
