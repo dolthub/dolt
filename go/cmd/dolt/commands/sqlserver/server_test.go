@@ -210,10 +210,11 @@ func TestServerGoodParams(t *testing.T) {
 			sc := svcs.NewController()
 			go func(config servercfg.ServerConfig, sc *svcs.Controller) {
 				_, _ = Serve(context.Background(), &Config{
-					Version:      "0.0.0",
-					ServerConfig: config,
-					Controller:   sc,
-					DoltEnv:      env,
+					Version:         "0.0.0",
+					ServerConfig:    config,
+					Controller:      sc,
+					DoltEnv:         env,
+					EngineVariables: sqle.NewEngineVariables(),
 				})
 			}(test, sc)
 			err = sc.WaitForStart()
@@ -243,10 +244,11 @@ func TestServerSelect(t *testing.T) {
 	defer sc.Stop()
 	go func() {
 		_, _ = Serve(context.Background(), &Config{
-			Version:      "0.0.0",
-			ServerConfig: serverConfig,
-			Controller:   sc,
-			DoltEnv:      env,
+			Version:         "0.0.0",
+			ServerConfig:    serverConfig,
+			Controller:      sc,
+			DoltEnv:         env,
+			EngineVariables: sqle.NewEngineVariables(),
 		})
 	}()
 	err = sc.WaitForStart()
@@ -319,6 +321,19 @@ func TestIsolatedServerStartup(t *testing.T) {
 	err = conn.NewSession(nil).Select("COUNT(*)").From("people").LoadOneContext(context.Background(), &count)
 	require.NoError(t, err)
 	require.Equal(t, 3, count)
+}
+
+func TestServeRequiresEngineVariables(t *testing.T) {
+	dEnv, err := sqle.CreateEnvWithSeedData()
+	require.NoError(t, err)
+	defer dEnv.Close()
+	startErr, closeErr := Serve(context.Background(), &Config{
+		Version:      "0.0.0",
+		ServerConfig: DefaultCommandLineServerConfig().withLogLevel(servercfg.LogLevel_Fatal),
+		DoltEnv:      dEnv,
+	})
+	require.ErrorIs(t, startErr, ErrNilEngineVariables)
+	require.NoError(t, closeErr)
 }
 
 // If a port is already in use, throw error "Port XXXX already in use."
@@ -458,10 +473,11 @@ func TestReadOnlySystemVariable(t *testing.T) {
 	defer sc.Stop()
 	go func() {
 		_, _ = Serve(context.Background(), &Config{
-			Version:      "0.0.0",
-			ServerConfig: serverConfig,
-			Controller:   sc,
-			DoltEnv:      dEnv,
+			Version:         "0.0.0",
+			ServerConfig:    serverConfig,
+			Controller:      sc,
+			DoltEnv:         dEnv,
+			EngineVariables: sqle.NewEngineVariables(),
 		})
 	}()
 	err = sc.WaitForStart()
@@ -557,10 +573,11 @@ func TestPortSystemVariable(t *testing.T) {
 	defer sc.Stop()
 	go func() {
 		_, _ = Serve(context.Background(), &Config{
-			Version:      "0.0.0",
-			ServerConfig: serverConfig,
-			Controller:   sc,
-			DoltEnv:      dEnv,
+			Version:         "0.0.0",
+			ServerConfig:    serverConfig,
+			Controller:      sc,
+			DoltEnv:         dEnv,
+			EngineVariables: sqle.NewEngineVariables(),
 		})
 	}()
 	err = sc.WaitForStart()
@@ -606,10 +623,11 @@ func TestReadOnlyEnforcement(t *testing.T) {
 	defer sc.Stop()
 	go func() {
 		_, _ = Serve(context.Background(), &Config{
-			Version:      "0.0.0",
-			ServerConfig: serverConfig,
-			Controller:   sc,
-			DoltEnv:      dEnv,
+			Version:         "0.0.0",
+			ServerConfig:    serverConfig,
+			Controller:      sc,
+			DoltEnv:         dEnv,
+			EngineVariables: sqle.NewEngineVariables(),
 		})
 	}()
 	err = sc.WaitForStart()
@@ -772,10 +790,11 @@ func TestServerSetDefaultBranch(t *testing.T) {
 	defer sc.Stop()
 	go func() {
 		_, _ = Serve(context.Background(), &Config{
-			Version:      "0.0.0",
-			ServerConfig: serverConfig,
-			Controller:   sc,
-			DoltEnv:      dEnv,
+			Version:         "0.0.0",
+			ServerConfig:    serverConfig,
+			Controller:      sc,
+			DoltEnv:         dEnv,
+			EngineVariables: sqle.NewEngineVariables(),
 		})
 	}()
 	err = sc.WaitForStart()

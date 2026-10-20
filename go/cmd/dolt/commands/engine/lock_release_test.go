@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
@@ -67,10 +68,11 @@ func TestCreateDatabase_ReleasesLockOnEngineClose(t *testing.T) {
 	require.NoError(t, err)
 
 	seCfg := &SqlEngineConfig{
-		ServerUser:   "root",
-		ServerHost:   "localhost",
-		Autocommit:   true,
-		DBLoadParams: dbLoadParams,
+		ServerUser:      "root",
+		ServerHost:      "localhost",
+		Autocommit:      true,
+		DBLoadParams:    dbLoadParams,
+		EngineVariables: sqle.NewEngineVariables(),
 	}
 
 	se, err := NewSqlEngine(ctx, mrEnv, seCfg)

@@ -144,32 +144,16 @@ func TestSqlEngineCapturesBundleFromReusableConfig(t *testing.T) {
 	require.Same(t, varsB, ctxB.EngineVariables())
 }
 
-func TestNewSqlEngineCreatesFreshVariablesByDefault(t *testing.T) {
+func TestNewSqlEngineRequiresEngineVariables(t *testing.T) {
 	ctx := context.Background()
-	mrA, cfg, _ := lifecycleEngineEnvironment(t, ctx, t.TempDir(), t.TempDir())
-	engineA, err := NewSqlEngine(ctx, mrA, cfg)
-	require.NoError(t, err)
-	defer engineA.Close()
-
-	mrB, _, _ := lifecycleEngineEnvironment(t, ctx, t.TempDir(), t.TempDir())
-	engineB, err := NewSqlEngine(ctx, mrB, cfg)
-	require.NoError(t, err)
-	defer engineB.Close()
-
-	varsA := engineA.GetUnderlyingEngine().Variables()
-	varsB := engineB.GetUnderlyingEngine().Variables()
-	require.NotSame(t, varsA, varsB)
-	require.Nil(t, cfg.EngineVariables, "default construction must not retain state in a reusable config")
-	ctxA, err := engineA.NewLocalContext(ctx)
-	require.NoError(t, err)
-	ctxB, err := engineB.NewLocalContext(ctx)
-	require.NoError(t, err)
-	require.Same(t, varsA, ctxA.EngineVariables())
-	require.Same(t, varsB, ctxB.EngineVariables())
-	require.NoError(t, varsA.System.SetGlobal(ctxA, "max_connections", int64(71)))
-	_, maxB, ok := varsB.System.GetGlobal("max_connections")
-	require.True(t, ok)
-	require.NotEqualValues(t, 71, maxB)
+	mrEnv, cfg, _ := lifecycleEngineEnvironment(t, ctx, t.TempDir(), t.TempDir())
+	cfg.EngineVariables = nil
+	se, err := NewSqlEngine(ctx, mrEnv, cfg)
+	require.ErrorIs(t, err, ErrNilEngineVariables)
+	require.Nil(t, se)
+	se, err = NewSqlEngine(ctx, mrEnv, nil)
+	require.ErrorIs(t, err, ErrNilEngineVariables)
+	require.Nil(t, se)
 }
 
 // TestSqlEngineFailedConstructionStopsWorkers checks cleanup on errors before and after tracker creation.
@@ -222,10 +206,11 @@ func lifecycleEngineEnvironment(t *testing.T, ctx context.Context, root, home st
 	mrEnv, err := env.MultiEnvForDirectory(ctx, fs, rootEnv)
 	require.NoError(t, err)
 	return mrEnv, &SqlEngineConfig{
-		ServerUser:   "root",
-		ServerHost:   "localhost",
-		Autocommit:   true,
-		DBLoadParams: params,
+		ServerUser:      "root",
+		ServerHost:      "localhost",
+		Autocommit:      true,
+		DBLoadParams:    params,
+		EngineVariables: sqle.NewEngineVariables(),
 	}, rootEnv
 }
 

@@ -103,6 +103,9 @@ type EngineInitializer interface {
 	InitializeEngine(ctx context.Context, engine *engine.SqlEngine) error
 }
 
+// ErrNilEngineVariables is the startup error of a server configured without an engine variable bundle.
+var ErrNilEngineVariables = errors.New("sqlserver: Config.EngineVariables is required")
+
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
 func Serve(
 	ctx context.Context,
@@ -112,12 +115,6 @@ func Serve(
 	if cfg.Controller == nil {
 		cfg.Controller = svcs.NewController()
 	}
-	if cfg.EngineVariables == nil {
-		isolated := *cfg
-		isolated.EngineVariables = sqle.NewEngineVariables()
-		cfg = &isolated
-	}
-
 	ConfigureServices(cfg)
 
 	go cfg.Controller.Start(ctx)
@@ -133,7 +130,10 @@ func ConfigureServices(
 ) {
 	controller := cfg.Controller
 	if cfg.EngineVariables == nil {
-		cfg.EngineVariables = sqle.NewEngineVariables()
+		controller.Register(&svcs.AnonService{InitF: func(context.Context) error {
+			return ErrNilEngineVariables
+		}})
+		return
 	}
 	vars := cfg.EngineVariables.System
 	ValidateConfigStep := &svcs.AnonService{
