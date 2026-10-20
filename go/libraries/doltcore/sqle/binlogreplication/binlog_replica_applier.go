@@ -606,7 +606,7 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 
 		// Record the last GTID processed after the commit
 		a.currentPosition.GTIDSet = a.currentPosition.GTIDSet.AddGTID(a.currentGtid)
-		err := assignSystemVariables(ctx, ctx.SystemVariables(), map[string]interface{}{"gtid_executed": a.currentPosition.GTIDSet.String()})
+		err := sqle.AssignSystemVariables(ctx, map[string]interface{}{"gtid_executed": a.currentPosition.GTIDSet.String()})
 		if err != nil {
 			ctx.GetLogger().Errorf("unable to set @@GLOBAL.gtid_executed: %s", err.Error())
 		}

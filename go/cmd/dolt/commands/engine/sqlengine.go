@@ -427,25 +427,10 @@ func NewRebasedSqlEngine(engine *gms.Engine, dbs map[string]dsess.SqlDatabase) *
 }
 
 func applySystemVariables(ctx *sql.Context, cfg SystemVariables) error {
-	if cfg != nil {
-		if ctx == nil {
-			return fmt.Errorf("system variable assignment requires a context")
-		}
-		if ctx.EngineVariables() == nil {
-			return sql.SystemVariables.AssignValues(cfg)
-		}
-		sessionOwner, ok := ctx.Session.(sql.EngineVariablesProvider)
-		if !ok || sessionOwner.EngineVariables() != ctx.EngineVariables() {
-			return fmt.Errorf("system variable assignment requires a session with the context's owner")
-		}
-		vars := ctx.SystemVariables()
-		aware, ok := vars.(sql.ContextAwareSystemVariableRegistry)
-		if !ok {
-			return fmt.Errorf("system variable registry %T does not support context-aware assignment", vars)
-		}
-		return aware.AssignValuesWithContext(ctx, cfg)
+	if cfg == nil {
+		return nil
 	}
-	return nil
+	return sqle.AssignSystemVariables(ctx, cfg)
 }
 
 // InitStats initializes stats threads. We separate construction

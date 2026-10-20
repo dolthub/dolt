@@ -27,6 +27,16 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
+func TestAssignSystemVariablesRequiresSessionOwner(t *testing.T) {
+	a, b := NewEngineVariables(), NewEngineVariables()
+	ctx := sql.NewContextWithVariables(context.Background(), a, sql.WithSession(sql.NewBaseSessionWithVariables(b)))
+	require.ErrorContains(t, AssignSystemVariables(ctx, map[string]any{"max_connections": int64(7)}), "session with the context's owner")
+	_, value, _ := a.System.GetGlobal("max_connections")
+	require.NotEqualValues(t, 7, value)
+	_, value, _ = b.System.GetGlobal("max_connections")
+	require.NotEqualValues(t, 7, value)
+}
+
 func TestDoltSystemVariableNames(t *testing.T) {
 	defs := newDoltSystemVariables()
 	names := DoltSystemVariableNames()

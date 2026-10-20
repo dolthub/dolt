@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -48,7 +49,6 @@ var BinlogBranch = "main"
 // Note that the initial version of binlogProducer currently delivers the generated binlog events directly to the
 // connected replicas, without actually writing them to a real binlog file on disk.
 type binlogProducer struct {
-	variables       sql.SystemVariableRegistry
 	binlogFormat    *mysql.BinlogFormat
 	mu              *sync.Mutex
 	gtidPosition    *mysql.Position
@@ -70,7 +70,6 @@ func NewBinlogProducer(ctx *sql.Context, fs filesys.Filesys) (*binlogProducer, e
 	}
 
 	b := &binlogProducer{
-		variables:       ctx.SystemVariables(),
 		binlogEventMeta: *binlogEventMeta,
 		binlogFormat:    binlogFormat,
 		mu:              &sync.Mutex{},
@@ -243,7 +242,7 @@ func (b *binlogProducer) initializeGtidPosition(ctx *sql.Context, fs filesys.Fil
 	b.gtidSequence = int64(i + 1)
 
 	logrus.Tracef("setting @@gtid_executed to %s", b.gtidPosition.GTIDSet.String())
-	return assignSystemVariables(ctx, b.variables, map[string]any{
+	return sqle.AssignSystemVariables(ctx, map[string]any{
 		"gtid_executed": b.gtidPosition.GTIDSet.String()})
 }
 
@@ -273,7 +272,7 @@ func (b *binlogProducer) createGtidEvent(ctx *sql.Context) (mysql.BinlogEvent, e
 		return nil, fmt.Errorf("unable to store GTID executed metadata to disk: %s", err.Error())
 	}
 
-	err = assignSystemVariables(ctx, b.variables, map[string]any{
+	err = sqle.AssignSystemVariables(ctx, map[string]any{
 		"gtid_executed": b.gtidPosition.GTIDSet.String()})
 	if err != nil {
 		return nil, err
