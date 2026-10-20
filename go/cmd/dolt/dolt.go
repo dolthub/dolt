@@ -522,7 +522,8 @@ func runMain() int {
 
 		// TODO: we set persisted vars here, and this should be deferred until after we know what command line arguments might change them
 		err = dsess.InitPersistedSystemVars(dEnv)
-		if err != nil {
+		// With a CLI context, the late binder loads and reports these itself.
+		if err != nil && !initCliContext(cfg.subCommand) {
 			cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
 		}
 	}
