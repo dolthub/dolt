@@ -22,9 +22,41 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/buffer"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/datas"
 )
+
+func TestNewEngineVariablesForEnv(t *testing.T) {
+	ctx := context.Background()
+	dEnv := CreateTestEnv()
+	defer dEnv.Close()
+	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.FS, dEnv)
+	require.NoError(t, err)
+	defaultBranch := dsess.DefaultBranchKey(mrEnv.GetFirstDatabase())
+	persist := func(name, value string) {
+		require.NoError(t, dEnv.Config.WriteableConfig().SetStrings(map[string]string{
+			env.SqlServerGlobalsPrefix + "." + name: value,
+		}))
+	}
+	persist("max_connections", "91")
+	persist(defaultBranch, "other")
+
+	vars, err := NewEngineVariablesForEnv(mrEnv, nil)
+	require.NoError(t, err)
+	_, value, ok := vars.System.GetGlobal("max_connections")
+	require.True(t, ok)
+	require.EqualValues(t, 91, value)
+	_, value, ok = vars.System.GetGlobal(defaultBranch)
+	require.True(t, ok)
+	require.Equal(t, "other", value)
+
+	persist("max_connections", "string")
+	vars, err = NewEngineVariablesForEnv(mrEnv, dEnv)
+	require.ErrorContains(t, err, "max_connections")
+	_, _, ok = vars.System.GetGlobal(defaultBranch)
+	require.True(t, ok)
+}
 
 func TestDoltSystemVariablesIndependentRegistries(t *testing.T) {
 	a, b := NewEngineVariables(), NewEngineVariables()
