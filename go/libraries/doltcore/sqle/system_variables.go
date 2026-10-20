@@ -35,6 +35,17 @@ func init() {
 
 var DoltSystemVariables = newDoltSystemVariables()
 
+// DoltSystemVariableNames returns the names of Dolt's exported system variable
+// definitions.
+func DoltSystemVariableNames() []string {
+	defs := newDoltSystemVariables()
+	names := make([]string, len(defs))
+	for i, def := range defs {
+		names[i] = def.GetName()
+	}
+	return names
+}
+
 func newDoltSystemVariables() []sql.SystemVariable {
 	return []sql.SystemVariable{
 		&sql.MysqlSystemVariable{

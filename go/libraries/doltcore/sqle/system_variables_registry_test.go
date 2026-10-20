@@ -27,6 +27,15 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
+func TestDoltSystemVariableNames(t *testing.T) {
+	defs := newDoltSystemVariables()
+	names := DoltSystemVariableNames()
+	require.Len(t, names, len(defs))
+	for i, def := range defs {
+		require.Equal(t, def.GetName(), names[i])
+	}
+}
+
 func TestNewEngineVariablesForEnv(t *testing.T) {
 	ctx := context.Background()
 	dEnv := CreateTestEnv()
