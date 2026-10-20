@@ -59,6 +59,7 @@ type SqlEngine struct {
 	ContextFactory        sql.ContextFactory
 	dsessFactory          sessionFactory
 	engine                *gms.Engine
+	variables             *sql.EngineVariables // nil when the engine shares the global registries
 	fs                    filesys.Filesys
 	clusterController     *cluster.Controller
 	branchActivityTracker *doltdb.BranchActivityTracker
@@ -348,6 +349,7 @@ func NewSqlEngine(
 		return sqlContextFactory(ctx, opts...)
 	}
 	sqlEngine.engine = engine
+	sqlEngine.variables = engineVars
 	sqlEngine.fs = pro.FileSystem()
 	sqlEngine.clusterController = config.ClusterController
 
@@ -512,7 +514,7 @@ func (se *SqlEngine) NewContext(ctx context.Context, session sql.Session) (*sql.
 
 // NewDefaultContext returns a new sql.Context with a new default dolt session.
 func (se *SqlEngine) NewDefaultContext(ctx context.Context) (*sql.Context, error) {
-	session, err := se.NewDoltSession(ctx, sql.NewBaseSessionWithVariables(se.sessionVariables()))
+	session, err := se.NewDoltSession(ctx, sql.NewBaseSessionWithVariables(se.variables))
 	if err != nil {
 		return nil, err
 	}
@@ -533,13 +535,6 @@ func (se *SqlEngine) NewLocalContext(ctx context.Context) (*sql.Context, error) 
 // NewDoltSession creates a new DoltSession from a BaseSession
 func (se *SqlEngine) NewDoltSession(_ context.Context, mysqlSess *sql.BaseSession) (*dsess.DoltSession, error) {
 	return se.dsessFactory(mysqlSess, se.provider)
-}
-
-func (se *SqlEngine) sessionVariables() *sql.EngineVariables {
-	if se.engine != nil && se.engine.IsolatedVariables() {
-		return se.engine.Variables()
-	}
-	return nil
 }
 
 // Query execute a SQL statement and return values for printing.
