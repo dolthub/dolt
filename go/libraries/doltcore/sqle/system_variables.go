@@ -15,7 +15,6 @@
 package sqle
 
 import (
-	"fmt"
 	"math"
 	"time"
 
@@ -401,24 +400,6 @@ func NewEngineVariables() *sql.EngineVariables {
 	vars := variables.NewEngineVariables()
 	AddDoltSystemVariablesToRegistry(vars.System)
 	return vars
-}
-
-// AssignSystemVariables sets global values in |ctx|'s engine registry, running
-// change callbacks with |ctx|. |ctx|'s session must belong to the same engine.
-func AssignSystemVariables(ctx *sql.Context, vals map[string]any) error {
-	if ctx == nil || ctx.EngineVariables() == nil {
-		return fmt.Errorf("system variable assignment requires an owning context")
-	}
-	owner, ok := ctx.Session.(sql.EngineVariablesProvider)
-	if !ok || owner.EngineVariables() != ctx.EngineVariables() {
-		return fmt.Errorf("system variable assignment requires a session with the context's owner")
-	}
-	vars := ctx.SystemVariables()
-	aware, ok := vars.(sql.ContextAwareSystemVariableRegistry)
-	if !ok {
-		return fmt.Errorf("system variable registry %T does not support context-aware assignment", vars)
-	}
-	return aware.AssignValuesWithContext(ctx, vals)
 }
 
 // NewEngineVariablesForEnv returns a fresh bundle with the per-database

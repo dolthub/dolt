@@ -118,7 +118,7 @@ func testAutoIncrementTrackerWithLockMode(t *testing.T, harness DoltEnginetestHa
 		vars := sqle.NewEngineVariables()
 		localHarness.WithEngineVariables(vars)
 		ctx := sql.NewContextWithVariables(context.Background(), vars)
-		err := vars.System.(sql.ContextAwareSystemVariableRegistry).AssignValuesWithContext(ctx, map[string]interface{}{"innodb_autoinc_lock_mode": lockMode})
+		err := vars.System.AssignValues(ctx, map[string]interface{}{"innodb_autoinc_lock_mode": lockMode})
 		require.NoError(t, err)
 	} else {
 		t.Skip("harness does not expose engine variables")

@@ -965,7 +965,7 @@ func TestBlobs(t *testing.T) {
 				vars := sqle.NewEngineVariables()
 				h.WithEngineVariables(vars)
 				ctx := sql.NewContextWithVariables(context.Background(), vars)
-				require.NoError(t, vars.System.(sql.ContextAwareSystemVariableRegistry).AssignValuesWithContext(ctx, map[string]interface{}{"secure_file_priv": dir}))
+				require.NoError(t, vars.System.AssignValues(ctx, map[string]interface{}{"secure_file_priv": dir}))
 				if prepared {
 					enginetest.TestScriptPrepared(t, h, script)
 				} else {
