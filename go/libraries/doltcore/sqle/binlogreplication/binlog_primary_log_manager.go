@@ -38,6 +38,7 @@ var binlogDirectory = filepath.Join(".dolt", "binlog")
 // rotating the log files, listing the available log files, purging old log files, and keeping track of what GTIDs
 // are available in the log files.
 type logManager struct {
+	variables             sql.SystemVariableRegistry
 	fs                    filesys.Filesys
 	availableGtids        mysql.GTIDSet
 	mu                    *sync.Mutex
@@ -53,13 +54,14 @@ type logManager struct {
 // underneath the specified |fs| filesystem. This method also initializes the binlog logging system, including
 // rotating to a new log file and purging expired log files.
 func NewLogManager(ctx *sql.Context, fs filesys.Filesys) (*logManager, error) {
-	binlogFormat := createBinlogFormat()
+	binlogFormat := createBinlogFormat(ctx)
 	binlogEventMeta, err := createBinlogEventMetadata(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	lm := &logManager{
+		variables:       ctx.SystemVariables(),
 		mu:              &sync.Mutex{},
 		fs:              fs,
 		binlogFormat:    *binlogFormat,
@@ -112,7 +114,7 @@ func NewLogManager(ctx *sql.Context, fs filesys.Filesys) (*logManager, error) {
 func (lm *logManager) initializeAvailableGtids() (err error) {
 	// Initialize availableGtids from @@gtid_executed – we start by assuming we have all executed GTIDs available
 	// in the logs, and then adjust availableGtids based on which GTIDs we detect have been purged.
-	_, gtidExecutedValue, ok := sql.SystemVariables.GetGlobal("gtid_executed")
+	_, gtidExecutedValue, ok := lm.variables.GetGlobal("gtid_executed")
 	if !ok {
 		return fmt.Errorf("unable to find system variable @@gtid_executed")
 	}
@@ -124,7 +126,7 @@ func (lm *logManager) initializeAvailableGtids() (err error) {
 		return err
 	}
 
-	_, gtidPurgedValue, ok := sql.SystemVariables.GetGlobal("gtid_purged")
+	_, gtidPurgedValue, ok := lm.variables.GetGlobal("gtid_purged")
 	if !ok {
 		return fmt.Errorf("unable to find system variable @@gtid_purged")
 	}
@@ -149,7 +151,7 @@ func (lm *logManager) initializeAvailableGtids() (err error) {
 // adding a Rotate event to the previous log has NOT occurred yet (otherwise adding the Rotate event would update the
 // log file's last modified time and would not be purged).
 func (lm *logManager) purgeExpiredLogFiles(ctx *sql.Context) error {
-	expireLogsSeconds, err := lookupBinlogExpireLogsSeconds(ctx)
+	expireLogsSeconds, err := lm.lookupBinlogExpireLogsSeconds(ctx)
 	if expireLogsSeconds == 0 {
 		// If @@binlog_expire_logs_seconds is set to 0, then binlog files are never automatically expired
 		return nil
@@ -212,7 +214,7 @@ func (lm *logManager) initializePurgedGtids(ctx *sql.Context) error {
 		if sequenceNumber > 1 {
 			gtidPurged := fmt.Sprintf("%s:%d", gtid.SourceServer(), sequenceNumber-1)
 			logrus.Debugf("setting gtid_purged to: %s", gtidPurged)
-			return sql.SystemVariables.SetGlobal(ctx, "gtid_purged", gtidPurged)
+			return lm.variables.SetGlobal(ctx, "gtid_purged", gtidPurged)
 		} else {
 			return nil
 		}
@@ -220,12 +222,12 @@ func (lm *logManager) initializePurgedGtids(ctx *sql.Context) error {
 
 	// If there are no GTID events in any of the files, then all GTIDs have been purged, so
 	// initialize @@gtid_purged with the value of @@gtid_executed.
-	_, gtidExecutedValue, ok := sql.SystemVariables.GetGlobal("gtid_executed")
+	_, gtidExecutedValue, ok := lm.variables.GetGlobal("gtid_executed")
 	if !ok {
 		return fmt.Errorf("unable to find system variable @@gtid_executed")
 	}
 	logrus.Debugf("no available GTIDs found in logs, setting gtid_purged to: %s", gtidExecutedValue)
-	return sql.SystemVariables.SetGlobal(ctx, "gtid_purged", gtidExecutedValue)
+	return lm.variables.SetGlobal(ctx, "gtid_purged", gtidExecutedValue)
 }
 
 // findLogFileForPosition searches through the available binlog files on disk for the first log file that
@@ -490,7 +492,7 @@ func (lm *logManager) initializeCurrentLogFile(ctx *sql.Context, binlogFormat my
 	// TODO: Instead of using the @@gtid_executed system variable, logManager could keep track of which GTIDs
 	//       it has seen logged and use that as the source of truth for the Previous GTIDs event. This would
 	//       eliminate a race condition.
-	_, rawValue, ok := sql.SystemVariables.GetGlobal("gtid_executed")
+	_, rawValue, ok := lm.variables.GetGlobal("gtid_executed")
 	if !ok {
 		panic("unable to find @@gtid_executed system variable")
 	}
@@ -519,7 +521,7 @@ func (lm *logManager) WriteEvents(ctx *sql.Context, binlogEvents ...mysql.Binlog
 // writeEventsHelper writes |binlogEvents| to the current binlog file. This function is NOT synchronized, and is only
 // intended to be used from code inside logManager that needs to be called transitively from the WriteEvents method.
 func (lm *logManager) writeEventsHelper(ctx *sql.Context, binlogEvents ...mysql.BinlogEvent) error {
-	maxBinlogSize, err := lookupMaxBinlogSize(ctx)
+	maxBinlogSize, err := lm.lookupMaxBinlogSize(ctx)
 	if err != nil {
 		return err
 	}
@@ -598,8 +600,8 @@ func (lm *logManager) currentBinlogFilepath() string {
 
 // lookupMaxBinlogSize looks up the value of the @@max_binlog_size system variable and returns it, along with any
 // errors encountered while looking it up.
-func lookupMaxBinlogSize(ctx *sql.Context) (int, error) {
-	_, value, ok := sql.SystemVariables.GetGlobal("max_binlog_size")
+func (lm *logManager) lookupMaxBinlogSize(ctx *sql.Context) (int, error) {
+	_, value, ok := lm.variables.GetGlobal("max_binlog_size")
 	if !ok {
 		return 0, fmt.Errorf("system variable @@max_binlog_size not found")
 	}
@@ -613,8 +615,8 @@ func lookupMaxBinlogSize(ctx *sql.Context) (int, error) {
 
 // lookupBinlogExpireLogsSeconds looks up the value of the @@binlog_expire_logs_seconds system variable and returns
 // it, along with any errors encountered while looking it up.
-func lookupBinlogExpireLogsSeconds(ctx *sql.Context) (int, error) {
-	_, value, ok := sql.SystemVariables.GetGlobal("binlog_expire_logs_seconds")
+func (lm *logManager) lookupBinlogExpireLogsSeconds(ctx *sql.Context) (int, error) {
+	_, value, ok := lm.variables.GetGlobal("binlog_expire_logs_seconds")
 	if !ok {
 		return -1, fmt.Errorf("unable to find system variable @@binlog_expire_logs_seconds")
 	}

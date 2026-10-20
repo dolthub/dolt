@@ -148,37 +148,39 @@ func NewSqlEngine(
 	}
 
 	// Some database initialization logic depends on system variables, load them before the databases
+	// Without a bundle the engine shares the global registries, as callers that
+	// predate engine-owned variables expect.
 	engineVars := config.EngineVariables
-	vars := sql.SystemVariables
+	var vars sql.SystemVariableRegistry = sql.SystemVariables
 	if engineVars != nil {
 		vars = engineVars.System
-		if err := mrEnv.Iter(func(name string, _ *env.DoltEnv) (bool, error) {
-			dsess.DefineSystemVariablesForDBInRegistry(vars, name)
-			return false, nil
-		}); err != nil {
-			return nil, err
-		}
 	}
-	err := applySystemVariables(vars, config.SystemVariables, engineVars)
+	if err := mrEnv.Iter(func(name string, _ *env.DoltEnv) (bool, error) {
+		dsess.DefineSystemVariablesForDBInRegistry(vars, name)
+		return false, nil
+	}); err != nil {
+		return nil, err
+	}
+	bootstrapCtx := sql.NewContextWithVariables(ctx, engineVars)
+	err := applySystemVariables(bootstrapCtx, config.SystemVariables)
 	if err != nil {
 		return nil, err
 	}
-
-	dbs, locations, err := CollectDBs(ctx, mrEnv)
+	dbs, locations, err := CollectDBs(bootstrapCtx, mrEnv)
 	if err != nil {
 		return nil, err
 	}
 
 	bThreads := sql.NewBackgroundThreads()
 	var runAsyncThreads sqle.RunAsyncThreads
-	dbs, runAsyncThreads, err = sqle.ApplyReplicationConfigWithRegistry(ctx, mrEnv, cli.CliOut, vars, dbs...)
+	dbs, runAsyncThreads, err = sqle.ApplyReplicationConfigWithRegistry(bootstrapCtx, mrEnv, cli.CliOut, vars, dbs...)
 	if err != nil {
 		return nil, err
 	}
 
 	config.ClusterController.ManageSystemVariables(vars)
 
-	err = config.ClusterController.ApplyStandbyReplicationConfig(ctx, mrEnv, dbs...)
+	err = config.ClusterController.ApplyStandbyReplicationConfig(bootstrapCtx, mrEnv, dbs...)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +207,7 @@ func NewSqlEngine(
 	}
 
 	b := env.GetDefaultInitBranch(mrEnv.Config())
-	engineProvider, err := factory.NewProvider(ctx, b, mrEnv.FileSystem(), all, locations, config.EngineOverrides)
+	engineProvider, err := factory.NewProvider(bootstrapCtx, b, mrEnv.FileSystem(), all, locations, config.EngineOverrides)
 	if err != nil {
 		return nil, err
 	}
@@ -263,9 +265,11 @@ func NewSqlEngine(
 		if readOnly {
 			readOnlyInt = 1
 		}
-		_ = applySystemVariables(vars, map[string]interface{}{
+		if err := applySystemVariables(sql.NewContextWithVariables(context.Background(), engineVars), map[string]interface{}{
 			"read_only": readOnlyInt,
-		}, engineVars)
+		}); err != nil {
+			logrus.WithError(err).Warn("could not update read_only system variable")
+		}
 	})
 
 	// Load in privileges from file, if it exists
@@ -297,18 +301,18 @@ func NewSqlEngine(
 		if err != nil {
 			return nil, err
 		}
-		config.AutoGCController.ApplyCommitHooks(ctx, mrEnv, dbs...)
+		config.AutoGCController.ApplyCommitHooks(bootstrapCtx, mrEnv, dbs...)
 		pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, config.AutoGCController.InitDatabaseHook())
 		pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, config.AutoGCController.DropDatabaseHook())
 		// XXX: We force session aware safepoint controller if auto_gc is on.
 		dprocedures.UseSessionAwareSafepointController = true
-		err = applySystemVariables(vars, map[string]interface{}{
+		err = applySystemVariables(bootstrapCtx, map[string]interface{}{
 			dsess.DoltAutoGCEnabled: int8(1),
-		}, engineVars)
+		})
 	} else {
-		err = applySystemVariables(vars, map[string]interface{}{
+		err = applySystemVariables(bootstrapCtx, map[string]interface{}{
 			dsess.DoltAutoGCEnabled: int8(0),
-		}, engineVars)
+		})
 	}
 	if err != nil {
 		return nil, err
@@ -386,8 +390,13 @@ func NewSqlEngine(
 		}
 	}
 
-	dblr.DoltBinlogConsumer.SetEngine(engine)
-	engine.Analyzer.Catalog.BinlogConsumer = dblr.DoltBinlogConsumer
+	if config.BinlogReplicaController == nil {
+		engine.Analyzer.Catalog.BinlogConsumer = dblr.NewDoltBinlogConsumer(engine)
+	} else {
+		// The replica controller and BINLOG consumer share an applier.
+		dblr.DoltBinlogConsumer.SetEngine(engine)
+		engine.Analyzer.Catalog.BinlogConsumer = dblr.DoltBinlogConsumer
+	}
 
 	if config.BinlogReplicaController != nil {
 		binLogSession, err := sessFactory(sql.NewBaseSessionWithVariables(engineVars), pro)
@@ -415,14 +424,24 @@ func NewRebasedSqlEngine(engine *gms.Engine, dbs map[string]dsess.SqlDatabase) *
 	}
 }
 
-func applySystemVariables(vars sql.SystemVariableRegistry, cfg SystemVariables, engineVars *sql.EngineVariables) error {
+func applySystemVariables(ctx *sql.Context, cfg SystemVariables) error {
 	if cfg != nil {
-		if engineVars != nil {
-			if aware, ok := vars.(sql.ContextAwareSystemVariableRegistry); ok {
-				return aware.AssignValuesWithContext(sql.NewContextWithVariables(context.Background(), engineVars), cfg)
-			}
+		if ctx == nil {
+			return fmt.Errorf("system variable assignment requires a context")
 		}
-		return vars.AssignValues(cfg)
+		if ctx.EngineVariables() == nil {
+			return sql.SystemVariables.AssignValues(cfg)
+		}
+		sessionOwner, ok := ctx.Session.(sql.EngineVariablesProvider)
+		if !ok || sessionOwner.EngineVariables() != ctx.EngineVariables() {
+			return fmt.Errorf("system variable assignment requires a session with the context's owner")
+		}
+		vars := ctx.SystemVariables()
+		aware, ok := vars.(sql.ContextAwareSystemVariableRegistry)
+		if !ok {
+			return fmt.Errorf("system variable registry %T does not support context-aware assignment", vars)
+		}
+		return aware.AssignValuesWithContext(ctx, cfg)
 	}
 	return nil
 }

@@ -23,6 +23,7 @@ import (
 
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 )
 
@@ -69,7 +70,8 @@ func (tf *QueryDiffTableFunction) WithCatalog(c sql.Catalog) (sql.TableFunction,
 	if !ok {
 		return nil, fmt.Errorf("unable to get database provider")
 	}
-	newInstance.engine = gms.NewDefault(pro)
+	// An unbound context gets an engine on the global registries.
+	newInstance.engine = gms.New(analyzer.NewDefault(pro), &gms.Config{EngineVariables: tf.ctx.EngineVariables()})
 	err := newInstance.analyzeQueries()
 	if err != nil {
 		return nil, err

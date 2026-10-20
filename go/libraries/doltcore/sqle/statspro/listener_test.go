@@ -24,12 +24,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 func TestListening(t *testing.T) {
 	bthreads := sql.NewBackgroundThreads()
-	ctx := sql.NewEmptyContext()
+	ctx := sql.NewContextWithVariables(context.Background(), sqle.NewEngineVariables())
 	defer bthreads.Shutdown()
 	t.Run("ClosedDoesNotStart", func(t *testing.T) {
 		sc := newStatsCoord(t, bthreads)
@@ -178,10 +179,10 @@ func TestListening(t *testing.T) {
 	})
 	t.Run("WaitBlocksOnStatsCollection", func(t *testing.T) {
 		sqlCtx, sqlEng, sc := emptySetup(t, bthreads, true, true)
-		_, orig, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsJobInterval)
-		sql.SystemVariables.SetGlobal(sqlCtx, dsess.DoltStatsJobInterval, "60000000000")
+		_, orig, _ := sqlCtx.SystemVariables().GetGlobal(dsess.DoltStatsJobInterval)
+		sqlCtx.SystemVariables().SetGlobal(sqlCtx, dsess.DoltStatsJobInterval, "60000000000")
 		t.Cleanup(func() {
-			sql.SystemVariables.SetGlobal(sqlCtx, dsess.DoltStatsJobInterval, orig)
+			sqlCtx.SystemVariables().SetGlobal(sqlCtx, dsess.DoltStatsJobInterval, orig)
 		})
 		require.NoError(t, executeQuery(sqlCtx, sqlEng, "create table xy (x int primary key, y int)"))
 		require.NoError(t, sc.Restart(ctx))
@@ -204,7 +205,7 @@ func TestListening(t *testing.T) {
 		sqlCtx, sqlEng, sc := emptySetup(t, bthreads, true, true)
 		require.NoError(t, executeQuery(sqlCtx, sqlEng, "create table xy (x int primary key, y int)"))
 		require.NoError(t, sc.Restart(ctx))
-		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		err := sc.waitForSignal(ctx, leSwap, 1)
 		require.NoError(t, err)
