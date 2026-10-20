@@ -22,8 +22,10 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/go-mysql-server/sql/variables"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
 // TODO: get rid of me, use an integration point to define new sysvars
@@ -365,6 +367,32 @@ func NewEngineVariables() *sql.EngineVariables {
 	vars := variables.NewEngineVariables()
 	AddDoltSystemVariablesToRegistry(vars.System)
 	return vars
+}
+
+// NewEngineVariablesForEnv returns a fresh bundle with the per-database
+// variables of every database in |mrEnv| defined and persisted globals loaded
+// from |dEnv|. A nil |dEnv| loads them from the first database's environment,
+// or from |mrEnv|'s config when it has no databases. A persisted-variable
+// error is returned along with the bundle, which is usable without them.
+func NewEngineVariablesForEnv(mrEnv *env.MultiRepoEnv, dEnv *env.DoltEnv) (*sql.EngineVariables, error) {
+	vars := NewEngineVariables()
+	_ = mrEnv.Iter(func(name string, _ *env.DoltEnv) (bool, error) {
+		dsess.DefineSystemVariablesForDBInRegistry(vars.System, name)
+		return false, nil
+	})
+	if dEnv == nil {
+		dEnv = mrEnv.GetEnv(mrEnv.GetFirstDatabase())
+	}
+	if dEnv != nil {
+		return vars, dsess.InitPersistedSystemVarsWithRegistry(vars.System, dEnv)
+	}
+	persisted := config.NewPrefixConfig(mrEnv.Config(), env.SqlServerGlobalsPrefix)
+	definitions, _, err := dsess.SystemVariablesInConfigWithRegistry(vars.System, persisted)
+	if err != nil {
+		return vars, err
+	}
+	vars.System.AddSystemVariables(definitions)
+	return vars, nil
 }
 
 // AddDoltSystemVariablesToRegistry registers fresh Dolt definitions in one
