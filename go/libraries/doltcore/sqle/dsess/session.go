@@ -2298,7 +2298,7 @@ func systemVariablesInConfig(vars sql.SystemVariableRegistry, conf config.Readab
 	if err != nil {
 		return nil, nil, err
 	}
-	return allVars, missingKeys, nil
+	return allVars[:i], missingKeys, nil
 }
 
 var initMu = sync.Mutex{}
