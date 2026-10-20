@@ -6,10 +6,12 @@
 # behavior of other commands and stored procedures.
 
 load $BATS_TEST_DIRNAME/helper/common.bash
+load $BATS_TEST_DIRNAME/helper/remotesrv-common.bash
 
 remotesrv_pid=""
 setup() {
     skiponwindows "tests are flaky on Windows"
+    setup_remotesrv_ports
     setup_no_dolt_init
 }
 
@@ -50,7 +52,7 @@ seed_and_start_serial_remote() {
     seed_local_remote
     cd remote
 
-    remotesrv --http-port 1234 --repo-mode &
+    remotesrv --http-port "$REMOTESRV_HTTP_PORT" --grpc-port "$REMOTESRV_GRPC_PORT" --repo-mode &
     remotesrv_pid=$!
 
     cd ..
@@ -62,7 +64,7 @@ seed_and_start_serial_remote() {
     mkdir clones
     cd clones
 
-    dolt sql -q "call dolt_clone('--depth', '1','http://localhost:50051/test-org/test-repo')"
+    dolt sql -q "call dolt_clone('--depth', '1','http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo')"
     cd test-repo
 
     run dolt log --oneline --decorate=no
@@ -86,7 +88,7 @@ seed_and_start_serial_remote() {
     mkdir clones
     cd clones
 
-    dolt sql -q "call dolt_clone('--depth', '1','http://localhost:50051/test-org/test-repo')"
+    dolt sql -q "call dolt_clone('--depth', '1','http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo')"
     cd test-repo
 
     run dolt log --oneline --decorate=no
@@ -116,7 +118,7 @@ seed_and_start_serial_remote() {
 
     mkdir clones
     cd clones
-    run dolt sql -q "call dolt_clone('--depth', '2','http://localhost:50051/test-org/test-repo')"
+    run dolt sql -q "call dolt_clone('--depth', '2','http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo')"
     [ "$status" -eq 0 ]
     cd test-repo
 
@@ -167,7 +169,7 @@ seed_and_start_serial_remote() {
     mkdir clones
     cd clones
 
-    dolt sql -q "call dolt_clone('--depth', '1','http://localhost:50051/test-org/test-repo')"
+    dolt sql -q "call dolt_clone('--depth', '1','http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo')"
 
     cd test-repo
     dolt gc
@@ -253,7 +255,7 @@ seed_and_start_serial_remote() {
     mkdir clones
     cd clones
 
-    dolt clone --depth 1 http://localhost:50051/test-org/test-repo
+    dolt clone --depth 1 http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd test-repo
 
     dolt remote add altremote file://../file-remote-alt
@@ -269,7 +271,7 @@ seed_and_start_serial_remote() {
     mkdir clones
     cd clones
 
-    run dolt clone --depth 3 http://localhost:50051/test-org/test-repo
+    run dolt clone --depth 3 http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     [ "$status" -eq 0 ]
 
     cd test-repo
@@ -363,7 +365,7 @@ seed_and_start_serial_remote() {
     cd clones
 
     # Depth is far greater than actual history length.
-    run dolt clone --depth 42 http://localhost:50051/test-org/test-repo
+    run dolt clone --depth 42 http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     [ "$status" -eq 0 ]
 
     cd test-repo
@@ -387,7 +389,7 @@ seed_and_start_serial_remote() {
     mkdir clones
     cd clones
 
-    run dolt clone --depth 3 http://localhost:50051/test-org/test-repo
+    run dolt clone --depth 3 http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     [ "$status" -eq 0 ]
 
     cd test-repo
@@ -403,7 +405,7 @@ seed_and_start_serial_remote() {
     mkdir clones
     cd clones
 
-    run dolt clone --depth 2 http://localhost:50051/test-org/test-repo
+    run dolt clone --depth 2 http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     [ "$status" -eq 0 ]
 
     cd test-repo
@@ -420,7 +422,7 @@ seed_and_start_serial_remote() {
     mkdir clones
     cd clones
 
-    dolt clone --depth 1 http://localhost:50051/test-org/test-repo
+    dolt clone --depth 1 http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd test-repo
 
     run dolt log --oneline --decorate=no
@@ -472,7 +474,7 @@ seed_and_start_serial_remote() {
     mkdir clones
     cd clones
 
-    dolt clone --depth 1 http://localhost:50051/test-org/test-repo
+    dolt clone --depth 1 http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd test-repo
 
     dolt sql -q "insert into vals (i,s) values (42, \"val 42\")"
@@ -489,7 +491,7 @@ seed_and_start_serial_remote() {
 
     # Do a full clone and verify that the commit is there.
     cd ..
-    dolt clone http://localhost:50051/test-org/test-repo full-clone
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo full-clone
     cd full-clone
 
     run dolt show HEAD
@@ -508,10 +510,10 @@ seed_and_start_serial_remote() {
     cd clones
 
     # initial clone
-    dolt clone --depth 2 http://localhost:50051/test-org/test-repo
+    dolt clone --depth 2 http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
 
     # clone another copy, and push to remote srv.
-    dolt clone http://localhost:50051/test-org/test-repo full-clone
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo full-clone
     cd full-clone
 
     dolt sql -q "insert into vals (i,s) values (23, \"val 23\")"
@@ -541,10 +543,10 @@ seed_and_start_serial_remote() {
   cd clones
 
   # initial clone
-  dolt clone --depth 2 http://localhost:50051/test-org/test-repo
+  dolt clone --depth 2 http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
 
   # clone another copy, and push new branch to remote srv.
-  dolt clone http://localhost:50051/test-org/test-repo full-clone
+  dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo full-clone
   cd full-clone
 
   # Create two new commits on top of commit which exists in shallow clone.
@@ -581,10 +583,10 @@ seed_and_start_serial_remote() {
     cd clones
 
     # initial clone
-    dolt clone --depth 2 http://localhost:50051/test-org/test-repo
+    dolt clone --depth 2 http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
 
     # clone another copy, and push new branch to remote srv.
-    dolt clone http://localhost:50051/test-org/test-repo full-clone
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo full-clone
     cd full-clone
     # Create two new commits rooted from a commit which doesn't exist in the
     dolt reset --hard HEAD~3 # HEAD~3 == (val 2)
@@ -818,7 +820,7 @@ seed_and_start_complex_remote() {
     dolt checkout main
     dolt merge brch~2
 
-    remotesrv --http-port 1234 --repo-mode &
+    remotesrv --http-port "$REMOTESRV_HTTP_PORT" --grpc-port "$REMOTESRV_GRPC_PORT" --repo-mode &
     remotesrv_pid=$!
 
     cd ..
@@ -830,7 +832,7 @@ seed_and_start_complex_remote() {
     mkdir clones
     cd clones
 
-    dolt clone --depth 1 http://localhost:50051/test-org/test-repo
+    dolt clone --depth 1 http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd test-repo
 
     run dolt log --oneline --decorate=no
@@ -861,7 +863,7 @@ seed_and_start_complex_remote() {
     # GHOST <- (val 5) <-\
     #                     (merge 2)     [main]
     # GHOST <- (val 8) <-/
-    dolt clone --depth 2 http://localhost:50051/test-org/test-repo
+    dolt clone --depth 2 http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd test-repo
 
     run dolt log --oneline --decorate=no
@@ -897,7 +899,7 @@ seed_and_start_complex_remote() {
     # GHOST <- (val 3) <-\
     #                     \
     # GHOST <- (val 7) <- (merge 1) <- (val 8) <- (val 9) <- (val 10)  [brch]
-    dolt clone --depth 5 --branch brch http://localhost:50051/test-org/test-repo
+    dolt clone --depth 5 --branch brch http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd test-repo
 
     run dolt status
@@ -932,7 +934,7 @@ seed_and_start_complex_remote() {
     # GHOST <- (val 2) <- (val 3) <- (val 4) <- (val 5) <- (merge 2)  [main]
     #                               \                     /
     # GHOST <- (val 6) <-(val 7) <- (merge 1) <- (val 8)
-    dolt clone --depth 5 http://localhost:50051/test-org/test-repo
+    dolt clone --depth 5 http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd test-repo
 
     run dolt log --oneline --decorate=no

@@ -17,28 +17,29 @@
 package sqlserver
 
 import (
-	"os"
+	"golang.org/x/sys/windows"
 )
 
 // ProcessExists reports whether a process with pid is running.
 //
-// On Windows, [os.FindProcess] invokes the Win32 [OpenProcess] API.
-// If the process does not exist, OpenProcess fails. If it succeeds,
-// [os.Process.Release] must be called to close the handle via
-// [CloseHandle] and avoid leaking kernel resources per Microsoft
-// documentation.
+// On Windows, a process object can outlive the process while another
+// handle remains open. A zero-timeout [WaitForSingleObject] distinguishes
+// running processes from terminated processes whose objects still exist.
+// The handle is closed via [CloseHandle] to avoid leaking kernel resources.
 //
 // [CloseHandle]: https://learn.microsoft.com/windows/win32/api/handleapi/nf-handleapi-closehandle
+// [WaitForSingleObject]: https://learn.microsoft.com/windows/win32/api/synchapi/nf-synchapi-waitforsingleobject
+//
 // [OpenProcess]: https://learn.microsoft.com/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocess
-// [os.FindProcess]: https://go.dev/src/os/exec_windows.go
 func ProcessExists(pid int) bool {
 	if pid <= 0 {
 		return false
 	}
-	p, err := os.FindProcess(pid)
+	handle, err := windows.OpenProcess(windows.SYNCHRONIZE, false, uint32(pid))
 	if err != nil {
 		return false
 	}
-	_ = p.Release()
-	return true
+	defer windows.CloseHandle(handle)
+	status, err := windows.WaitForSingleObject(handle, 0)
+	return err == nil && status == uint32(windows.WAIT_TIMEOUT)
 }
