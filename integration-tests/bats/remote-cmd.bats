@@ -69,6 +69,23 @@ teardown() {
     [[ "$output" =~ "otherhost" ]] || false
 }
 
+@test "remote-cmd: remove clears branch upstream configs for the removed remote" {
+    mkdir ../remote
+    dolt remote add origin file://../remote
+    dolt sql -q "create table t (pk int primary key)"
+    dolt add .
+    dolt commit -m "initial"
+    dolt checkout -b b1
+    dolt push -u origin b1:other
+    run grep '"b1"' .dolt/repo_state.json
+    [ "$status" -eq 0 ]
+
+    dolt remote remove origin
+
+    run grep '"b1"' .dolt/repo_state.json
+    [ "$status" -eq 1 ]
+}
+
 @test "remote-cmd: remove non-existent" {
     run dolt remote remove origin
     [ "$status" -eq 1 ]
