@@ -227,7 +227,7 @@ func NewDetachedSessionWithVariables(
 }
 
 // NewDoltSession creates a DoltSession object from a standard sql.Session and 0 or more Database objects.
-// sqlSess may be any *sql.BaseSession; callers with no per-connection session should use NewDetachedSession.
+// sqlSess may be any *sql.BaseSession; callers with no per-connection session should use NewDetachedSessionWithVariables.
 func NewDoltSession(
 	sqlSess *sql.BaseSession,
 	pro DoltDatabaseProvider,
@@ -2107,12 +2107,8 @@ func initializeBranchWorkingSet(ctx *sql.Context, db SqlDatabase, dbState *Initi
 		hash.Hash{}, doltdb.TodoWorkingSetMeta(), nil)
 }
 
-// ValidatePersistableSysVarInRegistry validates a persisted setting against
+// validatePersistableSysVarInRegistry validates a persisted setting against
 // the definitions owned by one engine.
-func ValidatePersistableSysVarInRegistry(vars sql.SystemVariableRegistry, name string) (sql.SystemVariable, interface{}, error) {
-	return validatePersistableSysVarInRegistry(vars, name)
-}
-
 func validatePersistableSysVarInRegistry(vars sql.SystemVariableRegistry, name string) (sql.SystemVariable, interface{}, error) {
 	sysVar, val, ok := vars.GetGlobal(name)
 	if !ok {
@@ -2124,12 +2120,8 @@ func validatePersistableSysVarInRegistry(vars sql.SystemVariableRegistry, name s
 	return sysVar, val, nil
 }
 
-// GetPersistedValueInRegistry decodes a persisted value using one engine's
+// getPersistedValueInRegistry decodes a persisted value using one engine's
 // variable definition and current value type.
-func GetPersistedValueInRegistry(vars sql.SystemVariableRegistry, conf config.ReadableConfig, k string) (interface{}, error) {
-	return getPersistedValueInRegistry(vars, conf, k)
-}
-
 func getPersistedValueInRegistry(vars sql.SystemVariableRegistry, conf config.ReadableConfig, k string) (interface{}, error) {
 	v, err := conf.GetString(k)
 	if err != nil {

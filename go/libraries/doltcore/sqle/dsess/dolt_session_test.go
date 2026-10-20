@@ -396,7 +396,7 @@ func TestValidatePeristableSystemVar(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
-			if sysVar, _, err := ValidatePersistableSysVarInRegistry(vars.System, tt.Name); tt.Err != nil {
+			if sysVar, _, err := validatePersistableSysVarInRegistry(vars.System, tt.Name); tt.Err != nil {
 				assert.True(t, tt.Err.Is(err))
 			} else {
 				assert.Equal(t, tt.Name, sysVar.GetName())
@@ -572,7 +572,7 @@ func TestGetPersistedValue(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
 			conf := config.NewMapConfig(map[string]string{tt.Name: tt.Value})
-			if val, err := GetPersistedValueInRegistry(vars.System, conf, tt.Name); tt.Err {
+			if val, err := getPersistedValueInRegistry(vars.System, conf, tt.Name); tt.Err {
 				assert.Error(t, err)
 			} else {
 				assert.Equal(t, tt.ExpectedRes, val)
