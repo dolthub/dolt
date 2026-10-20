@@ -794,26 +794,21 @@ type ConfigOption func(*SqlEngineConfig)
 // NewSqlEngineForEnv returns a SqlEngine configured for the environment provided, with a single root user.
 // Returns the new engine, the first database name, and any error that occurred.
 func NewSqlEngineForEnv(ctx context.Context, dEnv *env.DoltEnv, options ...ConfigOption) (*SqlEngine, string, error) {
-	config := &SqlEngineConfig{
-		ServerUser:      "root",
-		ServerHost:      "localhost",
-		EngineVariables: sqle.NewEngineVariables(),
-	}
-	for _, opt := range options {
-		opt(config)
-	}
 	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.FS, dEnv)
 	if err != nil {
 		return nil, "", err
 	}
-	if config.EngineVariables != nil {
-		_ = mrEnv.Iter(func(name string, _ *env.DoltEnv) (bool, error) {
-			dsess.DefineSystemVariablesForDBInRegistry(config.EngineVariables.System, name)
-			return false, nil
-		})
-		if err := dsess.InitPersistedSystemVarsWithRegistry(config.EngineVariables.System, dEnv); err != nil {
-			logrus.Warnf("unable to load persisted system variables: %v", err)
-		}
+	vars, err := sqle.NewEngineVariablesForEnv(mrEnv, dEnv)
+	if err != nil {
+		logrus.Warnf("unable to load persisted system variables: %v", err)
+	}
+	config := &SqlEngineConfig{
+		ServerUser:      "root",
+		ServerHost:      "localhost",
+		EngineVariables: vars,
+	}
+	for _, opt := range options {
+		opt(config)
 	}
 
 	engine, err := NewSqlEngine(

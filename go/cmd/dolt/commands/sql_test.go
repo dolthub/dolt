@@ -50,23 +50,34 @@ func DEnvWithSeedDataForTest(ctx context.Context, t *testing.T) *env.DoltEnv {
 	return dEnv
 }
 
-func TestBuildSqlEngineQueryistUsesPreparedBundle(t *testing.T) {
+func TestBuildSqlEngineQueryistLoadsRootEnvPersistedVariables(t *testing.T) {
 	ctx := t.Context()
 	dEnv := DEnvWithSeedDataForTest(ctx, t)
+	rootEnv := DEnvWithSeedDataForTest(ctx, t)
+	setMaxConnections := func(dEnv *env.DoltEnv, value string) {
+		require.NoError(t, dEnv.Config.WriteableConfig().SetStrings(map[string]string{
+			env.SqlServerGlobalsPrefix + ".max_connections": value,
+		}))
+	}
+	setMaxConnections(dEnv, "91")
+	setMaxConnections(rootEnv, "92")
 	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.FS, dEnv)
 	require.NoError(t, err)
-	vars := sqle.NewEngineVariables()
-	binder, verr := BuildSqlEngineQueryistWithVariables(ctx, dEnv.FS, mrEnv, &cli.UserPassword{}, argparser.NewEmptyResults(), vars)
+	binder, verr := BuildSqlEngineQueryistForEnv(ctx, dEnv.FS, mrEnv, rootEnv, &cli.UserPassword{}, argparser.NewEmptyResults())
 	require.Nil(t, verr)
-	result, err := binder(ctx)
-	require.NoError(t, err)
-	require.Same(t, vars, result.Context.EngineVariables())
-	result.Closer()
 
+	first, err := binder(ctx)
+	require.NoError(t, err)
+	defer first.Closer()
 	second, err := binder(ctx)
 	require.NoError(t, err)
-	require.NotSame(t, vars, second.Context.EngineVariables())
-	second.Closer()
+	defer second.Closer()
+	require.NotSame(t, first.Context.EngineVariables(), second.Context.EngineVariables())
+	for _, res := range []cli.LateBindQueryistResult{first, second} {
+		_, value, ok := res.Context.SystemVariables().GetGlobal("max_connections")
+		require.True(t, ok)
+		require.EqualValues(t, 92, value)
+	}
 }
 
 // Smoke test: Console opens and exits
