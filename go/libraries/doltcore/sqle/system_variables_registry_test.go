@@ -33,6 +33,14 @@ func TestAssignSystemVariablesRejectsUnboundContext(t *testing.T) {
 	require.ErrorContains(t, AssignSystemVariables(sql.NewEmptyContext(), vals), "requires an owning context")
 }
 
+func TestDoltSystemVariableNames(t *testing.T) {
+	names := DoltSystemVariableNames()
+	for name := range unlistedDoltSystemVariables {
+		require.NotContains(t, names, name)
+	}
+	require.Len(t, names, len(newDoltSystemVariables())-len(unlistedDoltSystemVariables))
+}
+
 func TestNewEngineVariablesForEnv(t *testing.T) {
 	ctx := context.Background()
 	dEnv := CreateTestEnv()
@@ -67,13 +75,8 @@ func TestNewEngineVariablesForEnv(t *testing.T) {
 func TestDoltSystemVariablesIndependentRegistries(t *testing.T) {
 	a, b := NewEngineVariables(), NewEngineVariables()
 
-	effective := make(map[string]sql.SystemVariable)
-	for _, list := range [][]sql.SystemVariable{newInlineDoltSystemVariables(), newDoltSystemVariables()} {
-		for _, expected := range list {
-			effective[expected.GetName()] = expected
-		}
-	}
-	for name, expected := range effective {
+	for _, expected := range newDoltSystemVariables() {
+		name := expected.GetName()
 		defA, _, ok := a.System.GetGlobal(name)
 		require.True(t, ok, name)
 		defB, _, ok := b.System.GetGlobal(name)
