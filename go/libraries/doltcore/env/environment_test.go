@@ -283,32 +283,3 @@ func TestBestEffortDelete(t *testing.T) {
 		t.Error("Dir should be empty after delete.")
 	}
 }
-
-func TestRemoveRemoteClearsBranchUpstreams(t *testing.T) {
-	dEnv, _ := createTestEnv(false, false)
-	ctx := context.Background()
-	require.NoError(t, dEnv.InitRepo(ctx, types.Format_DOLT, "aoeu aoeu", "aoeu@aoeu.org", DefaultInitBranch))
-	defer dEnv.Close()
-
-	require.NoError(t, dEnv.AddRemote(NewRemote("origin", "file:///user/bheni/origin", nil)))
-	require.NoError(t, dEnv.AddRemote(NewRemote("other", "file:///user/bheni/other", nil)))
-	require.NoError(t, dEnv.UpdateBranch("b1", BranchConfig{Merge: ref.MarshalableRef{Ref: ref.NewBranchRef("main")}, Remote: "origin"}))
-	require.NoError(t, dEnv.UpdateBranch("b2", BranchConfig{Merge: ref.MarshalableRef{Ref: ref.NewBranchRef("main")}, Remote: "other"}))
-
-	require.NoError(t, dEnv.RemoveRemote(ctx, "origin"))
-
-	_, ok := dEnv.RepoState.Branches.Get("b1")
-	assert.False(t, ok, "upstream config pointing at the removed remote should be cleared")
-	_, ok = dEnv.RepoState.Branches.Get("b2")
-	assert.True(t, ok, "upstream config for other remotes should be kept")
-
-	reloaded, err := LoadRepoState(dEnv.FS)
-	require.NoError(t, err)
-	_, ok = reloaded.Branches.Get("b1")
-	assert.False(t, ok, "cleared upstream should also be gone from repo_state.json")
-}
-
-func TestClearBranchUpstreamsForRemoteNilBranches(t *testing.T) {
-	// A repo_state.json without a "branches" key must not panic.
-	ClearBranchUpstreamsForRemote(nil, "origin")
-}

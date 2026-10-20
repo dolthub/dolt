@@ -232,12 +232,14 @@ func (rs *RepoState) AddRemote(r Remote) {
 
 func (rs *RepoState) RemoveRemote(r Remote) {
 	rs.Remotes.Delete(r.Name)
-	ClearBranchUpstreamsForRemote(rs.Branches, r.Name)
+	UnsetRemoteUpstream(rs.Branches, r.Name)
 }
 
-// ClearBranchUpstreamsForRemote removes the upstream configuration of every branch that tracks the named remote, so
-// that removing a remote does not leave behind a merge ref that looks like an upstream on the local repository.
-func ClearBranchUpstreamsForRemote(branches *concurrentmap.Map[string, BranchConfig], remoteName string) {
+// UnsetRemoteUpstream removes branch tracking configuration for |remoteName|.
+//
+// Any branch in |branches| tracking |remoteName| is deleted from the map.
+// If |branches| is nil, UnsetRemoteUpstream does nothing.
+func UnsetRemoteUpstream(branches *concurrentmap.Map[string, BranchConfig], remoteName string) {
 	if branches == nil {
 		return
 	}

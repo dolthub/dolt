@@ -157,6 +157,5 @@ func removeRemote(ctx *sql.Context, dbd env.DbData[*sql.Context], apr *argparser
 		}
 	}
 
-	// Rsw.RemoveRemote also drops the upstream config of every branch tracking this remote.
 	return dbd.Rsw.RemoveRemote(ctx, remote.Name)
 }

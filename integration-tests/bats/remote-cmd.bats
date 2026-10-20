@@ -69,21 +69,29 @@ teardown() {
     [[ "$output" =~ "otherhost" ]] || false
 }
 
-@test "remote-cmd: remove clears branch upstream configs for the removed remote" {
-    mkdir ../remote
-    dolt remote add origin file://../remote
+@test "remote-cmd: remove unsets branch upstream tracking" {
+    # https://github.com/dolthub/dolt/issues/11529
+    mkdir remote1 remote2
+    dolt remote add origin file://remote1
+    dolt remote add other file://remote2
     dolt sql -q "create table t (pk int primary key)"
     dolt add .
     dolt commit -m "initial"
-    dolt checkout -b b1
+    dolt branch b1
     dolt push -u origin b1:other
+    dolt branch b2
+    dolt push -u other b2:main
     run grep '"b1"' .dolt/repo_state.json
+    [ "$status" -eq 0 ]
+    run grep '"b2"' .dolt/repo_state.json
     [ "$status" -eq 0 ]
 
     dolt remote remove origin
 
     run grep '"b1"' .dolt/repo_state.json
     [ "$status" -eq 1 ]
+    run grep '"b2"' .dolt/repo_state.json
+    [ "$status" -eq 0 ]
 }
 
 @test "remote-cmd: remove non-existent" {

@@ -72,6 +72,14 @@ teardown() {
 @test "sql-pull: dolt_pull default custom remote" {
     cd repo2
     dolt remote remove origin
+
+    # https://github.com/dolthub/dolt/issues/11529
+    run dolt sql -q "call dolt_pull()"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "There is no tracking information for the current branch" ]] || false
+
+    dolt fetch test-remote
+    dolt branch --set-upstream-to test-remote/main
     dolt sql -q "call dolt_pull()"
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
