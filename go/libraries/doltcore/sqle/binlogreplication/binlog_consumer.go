@@ -47,8 +47,8 @@ var DoltBinlogConsumer = &doltBinlogConsumer{
 }
 
 // NewDoltBinlogConsumer returns a consumer with its own engine pointer and
-// binlog event state. Embedded engines without a replica controller must not
-// share these fields through the legacy consumer.
+// binlog event state, so engines without a replica controller do not share
+// the state of DoltBinlogConsumer.
 func NewDoltBinlogConsumer(engine *gms.Engine) gmsbin.BinlogConsumer {
 	return &doltBinlogConsumer{
 		applier: newBinlogReplicaApplier(newFilterConfiguration()),
