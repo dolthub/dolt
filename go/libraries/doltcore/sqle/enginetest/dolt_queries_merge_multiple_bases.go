@@ -20,6 +20,8 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
+
+	dtu "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 )
 
 // schemaBranchSetup builds the history from https://github.com/dolthub/dolt/issues/12050. A schema branch is merged
@@ -155,37 +157,17 @@ func conflictingMergeBasesSetup(xResolution, yResolution string, xLater bool) []
 }
 
 func conflictingMergeBasesSetupWithTable(createTable, xResolution, yResolution string, xLater bool) []string {
-	script := []string{
-		"SET @@autocommit = 0;",
-		createTable,
-		"INSERT INTO t (id, a, b) VALUES (1, 'seed', 'seed'), (2, 'seed', 'seed');",
-		"CALL DOLT_COMMIT('-Am', 'c1');",
-		"CALL DOLT_BRANCH('x');",
-		"CALL DOLT_BRANCH('y');",
-		"CALL DOLT_CHECKOUT('x');",
-		"UPDATE t SET a = 'x';",
-		"CALL DOLT_COMMIT('-am', 'x1');",
-		"CALL DOLT_CHECKOUT('y');",
-		"UPDATE t SET a = 'y' WHERE id = 1;",
-		"UPDATE t SET b = 'y' WHERE id = 2;",
-		"CALL DOLT_COMMIT('-am', 'y1');",
-		"CALL DOLT_BRANCH('y1');",
-		"CALL DOLT_MERGE('x', '-m', 'y2');",
-		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
-		fmt.Sprintf("UPDATE t SET a = '%s' WHERE id = 1;", yResolution),
-		"CALL DOLT_COMMIT('-am', 'y2');",
-		"CALL DOLT_CHECKOUT('x');",
-		"CALL DOLT_MERGE('y1', '-m', 'x2');",
-		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
-		fmt.Sprintf("UPDATE t SET a = '%s' WHERE id = 1;", xResolution),
-		"CALL DOLT_COMMIT('-am', 'x2');",
+	c := dtu.CrissCross{
+		Seed: []string{createTable, "INSERT INTO t (id, a, b) VALUES (1, 'seed', 'seed'), (2, 'seed', 'seed');"},
+		X1:   []string{"UPDATE t SET a = 'x';"},
+		Y1:   []string{"UPDATE t SET a = 'y' WHERE id = 1;", "UPDATE t SET b = 'y' WHERE id = 2;"},
+		Y2:   []string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", fmt.Sprintf("UPDATE t SET a = '%s' WHERE id = 1;", yResolution)},
+		X2:   []string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", fmt.Sprintf("UPDATE t SET a = '%s' WHERE id = 1;", xResolution)},
 	}
 	if xLater {
-		script = append(script,
-			"UPDATE t SET a = 'x later' WHERE id = 2;",
-			"CALL DOLT_COMMIT('-am', 'x3');")
+		c.XLater = []string{"UPDATE t SET a = 'x later' WHERE id = 2;"}
 	}
-	return script
+	return c.Script()
 }
 
 // threeMergeBasesSetup builds two branches with three merge bases, p1, p2 and p3, two of which conflict:
@@ -199,49 +181,24 @@ func conflictingMergeBasesSetupWithTable(createTable, xResolution, yResolution s
 // c1 seeds rows 1 to 4 with a = b = 'seed'. p1 and p2 conflict on row 1's a, and m1 and m2 both resolve it to
 // 'resolved'. m1start and m2start add rows 10 and 20.
 func threeMergeBasesSetup() []string {
-	return []string{
-		"SET @@autocommit = 0;",
-		"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100), b VARCHAR(100));",
-		"INSERT INTO t VALUES (1, 'seed', 'seed'), (2, 'seed', 'seed'), (3, 'seed', 'seed'), (4, 'seed', 'seed');",
-		"CALL DOLT_COMMIT('-Am', 'c1');",
-		"CALL DOLT_BRANCH('p1');",
-		"CALL DOLT_BRANCH('p2');",
-		"CALL DOLT_BRANCH('p3');",
-		"CALL DOLT_BRANCH('m1');",
-		"CALL DOLT_BRANCH('m2');",
-		"CALL DOLT_CHECKOUT('p1');",
-		"UPDATE t SET a = 'p1' WHERE id IN (1, 2);",
-		"CALL DOLT_COMMIT('-am', 'p1');",
-		"CALL DOLT_CHECKOUT('p2');",
-		"UPDATE t SET a = 'p2' WHERE id IN (1, 3);",
-		"CALL DOLT_COMMIT('-am', 'p2');",
-		"CALL DOLT_CHECKOUT('p3');",
-		"UPDATE t SET b = 'p3' WHERE id = 4;",
-		"CALL DOLT_COMMIT('-am', 'p3');",
-		"CALL DOLT_CHECKOUT('m1');",
-		"INSERT INTO t VALUES (10, 'm1', NULL);",
-		"CALL DOLT_COMMIT('-am', 'm1start');",
-		"CALL DOLT_MERGE('p1', '-m', 'm1 merges p1');",
-		"CALL DOLT_MERGE('p2', '-m', 'm1 merges p2');",
-		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
-		"UPDATE t SET a = 'resolved' WHERE id = 1;",
-		"CALL DOLT_COMMIT('-am', 'm1 merges p2');",
-		"CALL DOLT_MERGE('p3', '-m', 'm1 merges p3');",
-		"UPDATE t SET b = 'm1' WHERE id = 2;",
-		"CALL DOLT_COMMIT('-am', 'm1 edits row 2');",
-		"CALL DOLT_CHECKOUT('m2');",
-		"INSERT INTO t VALUES (20, 'm2', NULL);",
-		"CALL DOLT_COMMIT('-am', 'm2start');",
-		"CALL DOLT_MERGE('p3', '-m', 'm2 merges p3');",
-		"CALL DOLT_MERGE('p2', '-m', 'm2 merges p2');",
-		"CALL DOLT_MERGE('p1', '-m', 'm2 merges p1');",
-		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
-		"UPDATE t SET a = 'resolved' WHERE id = 1;",
-		"CALL DOLT_COMMIT('-am', 'm2 merges p1');",
-		"UPDATE t SET b = 'm2' WHERE id = 3;",
-		"CALL DOLT_COMMIT('-am', 'm2 edits row 3');",
-		"CALL DOLT_CHECKOUT('m1');",
-	}
+	resolve := []string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "UPDATE t SET a = 'resolved' WHERE id = 1;"}
+	return dtu.ThreeMergeBases{
+		Seed: []string{
+			"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100), b VARCHAR(100));",
+			"INSERT INTO t VALUES (1, 'seed', 'seed'), (2, 'seed', 'seed'), (3, 'seed', 'seed'), (4, 'seed', 'seed');",
+		},
+		P: [3][]string{
+			{"UPDATE t SET a = 'p1' WHERE id IN (1, 2);"},
+			{"UPDATE t SET a = 'p2' WHERE id IN (1, 3);"},
+			{"UPDATE t SET b = 'p3' WHERE id = 4;"},
+		},
+		M1Start: []string{"INSERT INTO t VALUES (10, 'm1', NULL);"},
+		M1:      [3][]string{nil, resolve, nil},
+		M1Later: []string{"UPDATE t SET b = 'm1' WHERE id = 2;"},
+		M2Start: []string{"INSERT INTO t VALUES (20, 'm2', NULL);"},
+		M2:      [3][]string{resolve, nil, nil},
+		M2Later: []string{"UPDATE t SET b = 'm2' WHERE id = 3;"},
+	}.Script()
 }
 
 // deleteAgainstEditSetup builds a criss-cross whose merge bases, x1 and y1, conflict on whether row 1 exists:
@@ -253,38 +210,22 @@ func threeMergeBasesSetup() []string {
 // c1 seeds rows 1 and 2 with a = b = 'seed'. x1 deletes row 1 and sets row 2's a to 'x'; y1 sets row 1's a to 'y'
 // and row 2's b to 'y'. x2 and y2 resolve row 1 by deleting it, or by keeping y1's row, as |xKeeps| and |yKeeps| say.
 func deleteAgainstEditSetup(xKeeps, yKeeps bool) []string {
-	resolve := func(keep bool) string {
+	resolve := func(keep bool) []string {
 		if keep {
-			return "REPLACE INTO t VALUES (1, 'y', 'seed');"
+			return []string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "REPLACE INTO t VALUES (1, 'y', 'seed');"}
 		}
-		return "DELETE FROM t WHERE id = 1;"
+		return []string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "DELETE FROM t WHERE id = 1;"}
 	}
-	return []string{
-		"SET @@autocommit = 0;",
-		"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100), b VARCHAR(100));",
-		"INSERT INTO t VALUES (1, 'seed', 'seed'), (2, 'seed', 'seed');",
-		"CALL DOLT_COMMIT('-Am', 'c1');",
-		"CALL DOLT_BRANCH('x');",
-		"CALL DOLT_BRANCH('y');",
-		"CALL DOLT_CHECKOUT('x');",
-		"DELETE FROM t WHERE id = 1;",
-		"UPDATE t SET a = 'x' WHERE id = 2;",
-		"CALL DOLT_COMMIT('-am', 'x1');",
-		"CALL DOLT_CHECKOUT('y');",
-		"UPDATE t SET a = 'y' WHERE id = 1;",
-		"UPDATE t SET b = 'y' WHERE id = 2;",
-		"CALL DOLT_COMMIT('-am', 'y1');",
-		"CALL DOLT_BRANCH('y1');",
-		"CALL DOLT_MERGE('x', '-m', 'y2');",
-		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
-		resolve(yKeeps),
-		"CALL DOLT_COMMIT('-am', 'y2');",
-		"CALL DOLT_CHECKOUT('x');",
-		"CALL DOLT_MERGE('y1', '-m', 'x2');",
-		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
-		resolve(xKeeps),
-		"CALL DOLT_COMMIT('-am', 'x2');",
-	}
+	return dtu.CrissCross{
+		Seed: []string{
+			"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100), b VARCHAR(100));",
+			"INSERT INTO t VALUES (1, 'seed', 'seed'), (2, 'seed', 'seed');",
+		},
+		X1: []string{"DELETE FROM t WHERE id = 1;", "UPDATE t SET a = 'x' WHERE id = 2;"},
+		Y1: []string{"UPDATE t SET a = 'y' WHERE id = 1;", "UPDATE t SET b = 'y' WHERE id = 2;"},
+		Y2: resolve(yKeeps),
+		X2: resolve(xKeeps),
+	}.Script()
 }
 
 // nestedCrissCrossSetup builds two criss-crosses, one on top of the other, so that the merge bases of x3 and y3 are
@@ -298,19 +239,17 @@ func deleteAgainstEditSetup(xKeeps, yKeeps bool) []string {
 // The first criss-cross is conflictingMergeBasesSetup's, with row 1's a resolved to 'seed' in x2 and to 'y' in y2.
 // x2 and y2 conflict on it again, because it conflicted between x1 and y1. x3 and y3 resolve it to 'y' and 'q'.
 func nestedCrissCrossSetup() []string {
-	return append(conflictingMergeBasesSetup("seed", "y", false),
-		"CALL DOLT_BRANCH('x2');",
-		"CALL DOLT_CHECKOUT('y');",
-		"CALL DOLT_BRANCH('y2');",
-		"CALL DOLT_MERGE('x2', '-m', 'y3');",
-		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
-		"UPDATE t SET a = 'q' WHERE id = 1;",
-		"CALL DOLT_COMMIT('-am', 'y3');",
-		"CALL DOLT_CHECKOUT('x');",
-		"CALL DOLT_MERGE('y2', '-m', 'x3');",
-		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
-		"UPDATE t SET a = 'y' WHERE id = 1;",
-		"CALL DOLT_COMMIT('-am', 'x3');",
+	return nestedRowPresenceSetup(
+		[]string{
+			"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100), b VARCHAR(100));",
+			"INSERT INTO t (id, a, b) VALUES (1, 'seed', 'seed'), (2, 'seed', 'seed');",
+		},
+		[]string{"UPDATE t SET a = 'x';"},
+		[]string{"UPDATE t SET a = 'y' WHERE id = 1;", "UPDATE t SET b = 'y' WHERE id = 2;"},
+		[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "UPDATE t SET a = 'y' WHERE id = 1;"},
+		[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "UPDATE t SET a = 'seed' WHERE id = 1;"},
+		[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "UPDATE t SET a = 'q' WHERE id = 1;"},
+		[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "UPDATE t SET a = 'y' WHERE id = 1;"},
 	)
 }
 
@@ -325,34 +264,20 @@ func nestedCrissCrossSetup() []string {
 // a to 'y'. So x1 and y1 conflict on row 1's a, and row 3 merges cleanly. x2 resolves the conflict to 'x wins'; y2
 // resolves it back to 'seed' and deletes row 3.
 func schemaChangingMergeBasesSetup() []string {
-	return []string{
-		"SET @@autocommit = 0;",
-		"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100), b VARCHAR(100));",
-		"INSERT INTO t VALUES (1, 'seed', 'seed'), (2, 'seed', 'seed');",
-		"CALL DOLT_COMMIT('-Am', 'c1');",
-		"CALL DOLT_BRANCH('x');",
-		"CALL DOLT_BRANCH('y');",
-		"CALL DOLT_CHECKOUT('x');",
-		"ALTER TABLE t ADD COLUMN c VARCHAR(100);",
-		"UPDATE t SET a = 'x' WHERE id = 1;",
-		"INSERT INTO t VALUES (3, 'x', 'x', 'x');",
-		"CALL DOLT_COMMIT('-am', 'x1');",
-		"CALL DOLT_BRANCH('x1');",
-		"CALL DOLT_CHECKOUT('y');",
-		"UPDATE t SET a = 'y' WHERE id = 1;",
-		"CALL DOLT_COMMIT('-am', 'y1');",
-		"CALL DOLT_BRANCH('y1');",
-		"CALL DOLT_MERGE('x1', '-m', 'y2');",
-		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
-		"UPDATE t SET a = 'seed' WHERE id = 1;",
-		"DELETE FROM t WHERE id = 3;",
-		"CALL DOLT_COMMIT('-am', 'y2');",
-		"CALL DOLT_CHECKOUT('x');",
-		"CALL DOLT_MERGE('y1', '-m', 'x2');",
-		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
-		"UPDATE t SET a = 'x wins' WHERE id = 1;",
-		"CALL DOLT_COMMIT('-am', 'x2');",
-	}
+	return dtu.CrissCross{
+		Seed: []string{
+			"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100), b VARCHAR(100));",
+			"INSERT INTO t VALUES (1, 'seed', 'seed'), (2, 'seed', 'seed');",
+		},
+		X1: []string{
+			"ALTER TABLE t ADD COLUMN c VARCHAR(100);",
+			"UPDATE t SET a = 'x' WHERE id = 1;",
+			"INSERT INTO t VALUES (3, 'x', 'x', 'x');",
+		},
+		Y1: []string{"UPDATE t SET a = 'y' WHERE id = 1;"},
+		Y2: []string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "UPDATE t SET a = 'seed' WHERE id = 1;", "DELETE FROM t WHERE id = 3;"},
+		X2: []string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "UPDATE t SET a = 'x wins' WHERE id = 1;"},
+	}.Script()
 }
 
 // jsonMergeBasesSetup builds a criss-cross whose merge bases, x1 and y1, add different keys to a JSON document:
@@ -364,27 +289,12 @@ func schemaChangingMergeBasesSetup() []string {
 // c1 seeds row 1 with j = {}. x1 adds key x and y1 adds key y, which x2 and y2 merge to {"x": 1, "y": 1}. x3 sets x
 // to 2.
 func jsonMergeBasesSetup() []string {
-	return []string{
-		"SET @@autocommit = 0;",
-		"CREATE TABLE t (id INT PRIMARY KEY, j JSON);",
-		"INSERT INTO t VALUES (1, '{}');",
-		"CALL DOLT_COMMIT('-Am', 'c1');",
-		"CALL DOLT_BRANCH('x');",
-		"CALL DOLT_BRANCH('y');",
-		"CALL DOLT_CHECKOUT('x');",
-		`UPDATE t SET j = '{"x": 1}';`,
-		"CALL DOLT_COMMIT('-am', 'x1');",
-		"CALL DOLT_BRANCH('x1');",
-		"CALL DOLT_CHECKOUT('y');",
-		`UPDATE t SET j = '{"y": 1}';`,
-		"CALL DOLT_COMMIT('-am', 'y1');",
-		"CALL DOLT_BRANCH('y1');",
-		"CALL DOLT_MERGE('x1', '-m', 'y2');",
-		"CALL DOLT_CHECKOUT('x');",
-		"CALL DOLT_MERGE('y1', '-m', 'x2');",
-		`UPDATE t SET j = '{"x": 2, "y": 1}';`,
-		"CALL DOLT_COMMIT('-am', 'x3');",
-	}
+	return dtu.CrissCross{
+		Seed:   []string{"CREATE TABLE t (id INT PRIMARY KEY, j JSON);", "INSERT INTO t VALUES (1, '{}');"},
+		X1:     []string{`UPDATE t SET j = '{"x": 1}';`},
+		Y1:     []string{`UPDATE t SET j = '{"y": 1}';`},
+		XLater: []string{`UPDATE t SET j = '{"x": 2, "y": 1}';`},
+	}.Script()
 }
 
 // crissCrossSetup builds a criss-cross from c1, made by |seed|:
@@ -395,17 +305,11 @@ func jsonMergeBasesSetup() []string {
 //
 // |x1| and |y1| make x1 and y1. |y2| and |x2| resolve the merges that make y2 and x2 before they are committed.
 func crissCrossSetup(seed, x1, y1, y2, x2 []string) []string {
-	script := append([]string{"SET @@autocommit = 0;"}, seed...)
-	script = append(script, "CALL DOLT_COMMIT('-Am', 'c1');", "CALL DOLT_BRANCH('x');", "CALL DOLT_BRANCH('y');",
-		"CALL DOLT_CHECKOUT('x');")
-	script = append(script, x1...)
-	script = append(script, "CALL DOLT_COMMIT('-am', 'x1');", "CALL DOLT_BRANCH('x1');", "CALL DOLT_CHECKOUT('y');")
-	script = append(script, y1...)
-	script = append(script, "CALL DOLT_COMMIT('-am', 'y1');", "CALL DOLT_BRANCH('y1');", "CALL DOLT_MERGE('x1', '-m', 'y2');")
-	script = append(script, y2...)
-	script = append(script, "CALL DOLT_COMMIT('-am', 'y2');", "CALL DOLT_CHECKOUT('x');", "CALL DOLT_MERGE('y1', '-m', 'x2');")
-	script = append(script, x2...)
-	return append(script, "CALL DOLT_COMMIT('-am', 'x2');")
+	return crissCross(seed, x1, y1, y2, x2).Script()
+}
+
+func crissCross(seed, x1, y1, y2, x2 []string) dtu.CrissCross {
+	return dtu.CrissCross{Seed: seed, X1: x1, Y1: y1, Y2: y2, X2: x2}
 }
 
 // conflictedRowWithCleanCellsSetup builds a criss-cross whose merge bases, x1 and y1, conflict on two cells of a row
@@ -423,7 +327,7 @@ func conflictedRowWithCleanCellsSetup(xD, yD string, xLater bool) []string {
 	resolve := func(d string) string {
 		return fmt.Sprintf("UPDATE t SET a = 'resolved', b = 'x', c = 'y', d = %s WHERE id = 1;", d)
 	}
-	script := crissCrossSetup(
+	c := crissCross(
 		[]string{
 			"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100), b VARCHAR(100), c VARCHAR(100), d VARCHAR(100));",
 			"INSERT INTO t VALUES (1, 'seed', 'seed', 'seed', NULL);",
@@ -434,9 +338,9 @@ func conflictedRowWithCleanCellsSetup(xD, yD string, xLater bool) []string {
 		[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", resolve(xD)},
 	)
 	if xLater {
-		script = append(script, "UPDATE t SET b = 'x later' WHERE id = 1;", "CALL DOLT_COMMIT('-am', 'x3');")
+		c.XLater = []string{"UPDATE t SET b = 'x later' WHERE id = 1;"}
 	}
-	return script
+	return c.Script()
 }
 
 // addAddSetup builds a criss-cross whose merge bases, x1 and y1, both add row 3, with different values:
@@ -475,56 +379,24 @@ func addAddSetup(xResolution, yResolution string) []string {
 // change, and p2's row 3. m1 and m2 resolve every conflict with ours, and finally set row 1 to |m1Row1| and |m2Row1|,
 // the values of a and b. m1 deletes row 2 and m2 keeps c1's.
 func foldedConflictsSetup(m1Row1, m2Row1 string) []string {
-	return []string{
-		"SET @@autocommit = 0;",
-		"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100), b VARCHAR(100));",
-		"INSERT INTO t VALUES (1, 'seed', 'seed'), (2, 'seed', 'seed'), (3, 'seed', 'seed');",
-		"CALL DOLT_COMMIT('-Am', 'c1');",
-		"CALL DOLT_BRANCH('p1');",
-		"CALL DOLT_BRANCH('p2');",
-		"CALL DOLT_BRANCH('p3');",
-		"CALL DOLT_BRANCH('m1');",
-		"CALL DOLT_BRANCH('m2');",
-		"CALL DOLT_CHECKOUT('p1');",
-		"UPDATE t SET a = 'p1' WHERE id = 1;",
-		"DELETE FROM t WHERE id = 2;",
-		"CALL DOLT_COMMIT('-am', 'p1');",
-		"CALL DOLT_CHECKOUT('p2');",
-		"UPDATE t SET a = 'p2', b = 'p2' WHERE id = 1;",
-		"UPDATE t SET b = 'p2' WHERE id = 3;",
-		"CALL DOLT_COMMIT('-am', 'p2');",
-		"CALL DOLT_CHECKOUT('p3');",
-		"UPDATE t SET b = 'p3' WHERE id = 1;",
-		"UPDATE t SET a = 'p3' WHERE id = 2;",
-		"CALL DOLT_COMMIT('-am', 'p3');",
-		"CALL DOLT_CHECKOUT('m1');",
-		"INSERT INTO t VALUES (10, 'm1', NULL);",
-		"CALL DOLT_COMMIT('-am', 'm1start');",
-		"CALL DOLT_MERGE('p1', '-m', 'm1 merges p1');",
-		"CALL DOLT_MERGE('p2', '-m', 'm1 merges p2');",
-		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
-		"CALL DOLT_COMMIT('-am', 'm1 merges p2');",
-		"CALL DOLT_MERGE('p3', '-m', 'm1 merges p3');",
-		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
-		"CALL DOLT_COMMIT('-am', 'm1 merges p3');",
-		fmt.Sprintf("REPLACE INTO t VALUES (1, %s);", m1Row1),
-		"DELETE FROM t WHERE id = 2;",
-		"CALL DOLT_COMMIT('-am', 'm1');",
-		"CALL DOLT_CHECKOUT('m2');",
-		"INSERT INTO t VALUES (20, 'm2', NULL);",
-		"CALL DOLT_COMMIT('-am', 'm2start');",
-		"CALL DOLT_MERGE('p3', '-m', 'm2 merges p3');",
-		"CALL DOLT_MERGE('p2', '-m', 'm2 merges p2');",
-		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
-		"CALL DOLT_COMMIT('-am', 'm2 merges p2');",
-		"CALL DOLT_MERGE('p1', '-m', 'm2 merges p1');",
-		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
-		"CALL DOLT_COMMIT('-am', 'm2 merges p1');",
-		fmt.Sprintf("REPLACE INTO t VALUES (1, %s);", m2Row1),
-		"REPLACE INTO t VALUES (2, 'seed', 'seed');",
-		"CALL DOLT_COMMIT('-am', 'm2');",
-		"CALL DOLT_CHECKOUT('m1');",
-	}
+	ours := []string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');"}
+	return dtu.ThreeMergeBases{
+		Seed: []string{
+			"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100), b VARCHAR(100));",
+			"INSERT INTO t VALUES (1, 'seed', 'seed'), (2, 'seed', 'seed'), (3, 'seed', 'seed');",
+		},
+		P: [3][]string{
+			{"UPDATE t SET a = 'p1' WHERE id = 1;", "DELETE FROM t WHERE id = 2;"},
+			{"UPDATE t SET a = 'p2', b = 'p2' WHERE id = 1;", "UPDATE t SET b = 'p2' WHERE id = 3;"},
+			{"UPDATE t SET b = 'p3' WHERE id = 1;", "UPDATE t SET a = 'p3' WHERE id = 2;"},
+		},
+		M1Start: []string{"INSERT INTO t VALUES (10, 'm1', NULL);"},
+		M1:      [3][]string{nil, ours, ours},
+		M1Later: []string{fmt.Sprintf("REPLACE INTO t VALUES (1, %s);", m1Row1), "DELETE FROM t WHERE id = 2;"},
+		M2Start: []string{"INSERT INTO t VALUES (20, 'm2', NULL);"},
+		M2:      [3][]string{ours, ours, nil},
+		M2Later: []string{fmt.Sprintf("REPLACE INTO t VALUES (1, %s);", m2Row1), "REPLACE INTO t VALUES (2, 'seed', 'seed');"},
+	}.Script()
 }
 
 // previewParityScript previews merging |source| into the checked-out |target| after |setup|, checks that the preview
@@ -577,7 +449,7 @@ func previewParityScript(name string, setup []string, target, source, table, col
 // c1 seeds row 1 with a = b = 0. x1 sets a and b to 1, and y1 sets a to 3. So x1 and y1 conflict on a, merge b to 1,
 // and have different values of g. x2 and y2 resolve a to |xA| and |yA|, and keep b = 1. With |xLater|, x3 sets b to 2.
 func storedGeneratedMergeBasesSetup(xA, yA int, xLater bool) []string {
-	script := crissCrossSetup(
+	c := crissCross(
 		[]string{
 			"CREATE TABLE t (id INT PRIMARY KEY, a INT, b INT, g INT AS (a + b) STORED, INDEX ib (b), INDEX ig (g));",
 			"INSERT INTO t (id, a, b) VALUES (1, 0, 0);",
@@ -588,9 +460,9 @@ func storedGeneratedMergeBasesSetup(xA, yA int, xLater bool) []string {
 		[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", fmt.Sprintf("UPDATE t SET a = %d, b = 1 WHERE id = 1;", xA)},
 	)
 	if xLater {
-		script = append(script, "UPDATE t SET b = 2 WHERE id = 1;", "CALL DOLT_COMMIT('-am', 'x3');")
+		c.XLater = []string{"UPDATE t SET b = 2 WHERE id = 1;"}
 	}
-	return script
+	return c.Script()
 }
 
 // jsonInConflictedRowSetup builds a criss-cross whose merge bases, x1 and y1, conflict on a, and change the JSON
@@ -604,7 +476,7 @@ func storedGeneratedMergeBasesSetup(xA, yA int, xLater bool) []string {
 // the row to a = 'resolved' and j = |resolvedJ|, and x3 sets j to |laterJ|.
 func jsonInConflictedRowSetup(xJ, yJ, resolvedJ, laterJ string) []string {
 	resolve := fmt.Sprintf("UPDATE t SET a = 'resolved', j = '%s' WHERE id = 1;", resolvedJ)
-	return append(crissCrossSetup(
+	c := crissCross(
 		[]string{
 			"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100), j JSON);",
 			"INSERT INTO t VALUES (1, 'seed', '{}');",
@@ -613,7 +485,9 @@ func jsonInConflictedRowSetup(xJ, yJ, resolvedJ, laterJ string) []string {
 		[]string{fmt.Sprintf("UPDATE t SET a = 'y', j = '%s' WHERE id = 1;", yJ)},
 		[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", resolve},
 		[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", resolve},
-	), fmt.Sprintf("UPDATE t SET j = '%s' WHERE id = 1;", laterJ), "CALL DOLT_COMMIT('-am', 'x3');")
+	)
+	c.XLater = []string{fmt.Sprintf("UPDATE t SET j = '%s' WHERE id = 1;", laterJ)}
+	return c.Script()
 }
 
 // keylessMergeBasesSetup builds a criss-cross whose merge bases, x1 and y1, conflict on a row of a keyless table:
@@ -633,7 +507,7 @@ func keylessMergeBasesSetup(xCopies, yCopies int, xDeletesN bool) []string {
 		}
 		return statements
 	}
-	script := crissCrossSetup(
+	c := crissCross(
 		[]string{
 			"CREATE TABLE t (a VARCHAR(100), b VARCHAR(100));",
 			"INSERT INTO t VALUES ('r', '1');",
@@ -644,9 +518,9 @@ func keylessMergeBasesSetup(xCopies, yCopies int, xDeletesN bool) []string {
 		resolve(xCopies),
 	)
 	if xDeletesN {
-		script = append(script, "DELETE FROM t WHERE a = 'n';", "CALL DOLT_COMMIT('-am', 'x3');")
+		c.XLater = []string{"DELETE FROM t WHERE a = 'n';"}
 	}
-	return script
+	return c.Script()
 }
 
 // schemaConflictingMergeBasesSetup builds a criss-cross whose merge bases, x1 and y1, have a schema conflict, which
@@ -660,51 +534,25 @@ func keylessMergeBasesSetup(xCopies, yCopies int, xDeletesN bool) []string {
 // and ym as INT, so the merges are clean. x3 drops c and adds it as |xType|, and with |xSetsC| sets row 1's c to 5. y3
 // sets row 1's a to 'y edit' and deletes row 2. The merge bases of x3 and y3 are x1 and y1.
 func schemaConflictingMergeBasesSetup(xType string, xSetsC bool) []string {
-	setC := "SELECT 1;"
+	c := dtu.CrissCross{
+		Seed:   []string{"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100));", "INSERT INTO t VALUES (1, 'seed');"},
+		X1:     []string{"ALTER TABLE t ADD COLUMN c INT;", "INSERT INTO t VALUES (2, 'two', NULL);"},
+		Y1:     []string{"ALTER TABLE t ADD COLUMN c VARCHAR(100);"},
+		YM:     []string{"ALTER TABLE t DROP COLUMN c;", "ALTER TABLE t ADD COLUMN c INT;"},
+		XM:     []string{"ALTER TABLE t DROP COLUMN c;", "ALTER TABLE t ADD COLUMN c VARCHAR(100);"},
+		XLater: []string{"ALTER TABLE t DROP COLUMN c;", fmt.Sprintf("ALTER TABLE t ADD COLUMN c %s;", xType)},
+		YLater: []string{"UPDATE t SET a = 'y edit' WHERE id = 1;", "DELETE FROM t WHERE id = 2;"},
+	}
 	if xSetsC {
-		setC = "UPDATE t SET c = 5 WHERE id = 1;"
+		c.XLater = append(c.XLater, "UPDATE t SET c = 5 WHERE id = 1;")
 	}
-	return []string{
-		"SET @@autocommit = 0;",
-		"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100));",
-		"INSERT INTO t VALUES (1, 'seed');",
-		"CALL DOLT_COMMIT('-Am', 'c1');",
-		"CALL DOLT_BRANCH('x');",
-		"CALL DOLT_BRANCH('y');",
-		"CALL DOLT_CHECKOUT('x');",
-		"ALTER TABLE t ADD COLUMN c INT;",
-		"INSERT INTO t VALUES (2, 'two', NULL);",
-		"CALL DOLT_COMMIT('-am', 'x1');",
-		"CALL DOLT_BRANCH('x1');",
-		"CALL DOLT_CHECKOUT('y');",
-		"ALTER TABLE t ADD COLUMN c VARCHAR(100);",
-		"CALL DOLT_COMMIT('-am', 'y1');",
-		"CALL DOLT_BRANCH('y1');",
-		"ALTER TABLE t DROP COLUMN c;",
-		"ALTER TABLE t ADD COLUMN c INT;",
-		"CALL DOLT_COMMIT('-am', 'ym');",
-		"CALL DOLT_MERGE('x1', '-m', 'y2');",
-		"CALL DOLT_CHECKOUT('x');",
-		"ALTER TABLE t DROP COLUMN c;",
-		"ALTER TABLE t ADD COLUMN c VARCHAR(100);",
-		"CALL DOLT_COMMIT('-am', 'xm');",
-		"CALL DOLT_MERGE('y1', '-m', 'x2');",
-		"ALTER TABLE t DROP COLUMN c;",
-		fmt.Sprintf("ALTER TABLE t ADD COLUMN c %s;", xType),
-		setC,
-		"CALL DOLT_COMMIT('-am', 'x3');",
-		"CALL DOLT_CHECKOUT('y');",
-		"UPDATE t SET a = 'y edit' WHERE id = 1;",
-		"DELETE FROM t WHERE id = 2;",
-		"CALL DOLT_COMMIT('-am', 'y3');",
-		"CALL DOLT_CHECKOUT('x');",
-	}
+	return c.Script()
 }
 
 // keylessSchemaChangeMergeBasesSetup is keylessMergeBasesSetup, where x1 also adds column c, so that the sides of the
 // merge of x1 and y1 have different schemas.
 func keylessSchemaChangeMergeBasesSetup() []string {
-	return append(crissCrossSetup(
+	c := crissCross(
 		[]string{
 			"CREATE TABLE t (a VARCHAR(100), b VARCHAR(100));",
 			"INSERT INTO t VALUES ('r', '1');",
@@ -713,7 +561,9 @@ func keylessSchemaChangeMergeBasesSetup() []string {
 		[]string{"DELETE FROM t WHERE a = 'r';"},
 		[]string{"DELETE FROM dolt_conflicts_t;", "DELETE FROM t WHERE a = 'r';", "INSERT INTO t VALUES ('r', '1', NULL);"},
 		[]string{"DELETE FROM dolt_conflicts_t;", "DELETE FROM t WHERE a = 'r';", "INSERT INTO t VALUES ('r', '1', NULL);"},
-	), "DELETE FROM t WHERE a = 'n';", "CALL DOLT_COMMIT('-am', 'x3');")
+	)
+	c.XLater = []string{"DELETE FROM t WHERE a = 'n';"}
+	return c.Script()
 }
 
 // nestedRowPresenceSetup builds two criss-crosses, one on top of the other, as nestedCrissCrossSetup does, around row 3:
@@ -725,12 +575,9 @@ func keylessSchemaChangeMergeBasesSetup() []string {
 //
 // c1 seeds row 1. |level1| makes x1 and y1, which conflict on row 3, and |x2|, |y2|, |x3| and |y3| resolve the merges.
 func nestedRowPresenceSetup(seed []string, x1, y1, y2, x2, y3, x3 []string) []string {
-	script := append(crissCrossSetup(seed, x1, y1, y2, x2), "CALL DOLT_BRANCH('x2');", "CALL DOLT_CHECKOUT('y');",
-		"CALL DOLT_BRANCH('y2');", "CALL DOLT_MERGE('x2', '-m', 'y3');")
-	script = append(script, y3...)
-	script = append(script, "CALL DOLT_COMMIT('-am', 'y3');", "CALL DOLT_CHECKOUT('x');", "CALL DOLT_MERGE('y2', '-m', 'x3');")
-	script = append(script, x3...)
-	return append(script, "CALL DOLT_COMMIT('-am', 'x3');")
+	c := crissCross(seed, x1, y1, y2, x2)
+	c.Nested, c.Y3, c.X3 = true, y3, x3
+	return c.Script()
 }
 
 // unconvertibleMergeBasesSetup builds a criss-cross whose merge bases, x1 and y1, change column c's type differently,
@@ -746,40 +593,27 @@ func nestedRowPresenceSetup(seed []string, x1, y1, y2, x2, y3, x3 []string) []st
 // conflict in the virtual merge base, which keeps c1's value for row 1 and NULL for row 3, so x3 and y3 conflict on
 // both rows.
 func unconvertibleMergeBasesSetup() []string {
-	return []string{
-		"SET @@autocommit = 0;",
-		"SET @@dolt_allow_commit_conflicts = 1;",
-		"CREATE TABLE t (id INT PRIMARY KEY, c INT, d VARCHAR(20));",
-		"INSERT INTO t VALUES (1, 1, 'seed'), (2, 2, 'seed');",
-		"CALL DOLT_COMMIT('-Am', 'c1');",
-		"CALL DOLT_BRANCH('x');",
-		"CALL DOLT_BRANCH('y');",
-		"CALL DOLT_CHECKOUT('x');",
-		"ALTER TABLE t MODIFY c VARCHAR(20);",
-		"UPDATE t SET c = 'not-an-int' WHERE id = 1;",
-		"INSERT INTO t VALUES (3, 'not-an-int', 'three');",
-		"CALL DOLT_COMMIT('-am', 'x1');",
-		"CALL DOLT_BRANCH('x1');",
-		"CALL DOLT_CHECKOUT('y');",
-		"ALTER TABLE t MODIFY c BIGINT;",
-		"CALL DOLT_COMMIT('-am', 'y1');",
-		"CALL DOLT_BRANCH('y1');",
-		"ALTER TABLE t MODIFY c VARCHAR(20);",
-		"CALL DOLT_COMMIT('-am', 'ym');",
-		"CALL DOLT_MERGE('x1', '-m', 'y2');",
-		"UPDATE t SET c = '7' WHERE id IN (1, 3);",
-		"ALTER TABLE t MODIFY c BIGINT;",
-		"UPDATE t SET d = 'same' WHERE id = 1;",
-		"CALL DOLT_COMMIT('-am', 'y3');",
-		"CALL DOLT_CHECKOUT('x');",
-		"UPDATE t SET c = '5' WHERE id IN (1, 3);",
-		"ALTER TABLE t MODIFY c BIGINT;",
-		"CALL DOLT_COMMIT('-am', 'xm');",
-		"CALL DOLT_MERGE('y1', '-m', 'x2');",
-		"UPDATE t SET c = 1, d = 'same' WHERE id = 1;",
-		"UPDATE t SET c = NULL WHERE id = 3;",
-		"CALL DOLT_COMMIT('-am', 'x3');",
-	}
+	return dtu.CrissCross{
+		Seed: []string{
+			"SET @@dolt_allow_commit_conflicts = 1;",
+			"CREATE TABLE t (id INT PRIMARY KEY, c INT, d VARCHAR(20));",
+			"INSERT INTO t VALUES (1, 1, 'seed'), (2, 2, 'seed');",
+		},
+		X1: []string{
+			"ALTER TABLE t MODIFY c VARCHAR(20);",
+			"UPDATE t SET c = 'not-an-int' WHERE id = 1;",
+			"INSERT INTO t VALUES (3, 'not-an-int', 'three');",
+		},
+		Y1: []string{"ALTER TABLE t MODIFY c BIGINT;"},
+		YM: []string{"ALTER TABLE t MODIFY c VARCHAR(20);"},
+		XM: []string{"UPDATE t SET c = '5' WHERE id IN (1, 3);", "ALTER TABLE t MODIFY c BIGINT;"},
+		YLater: []string{
+			"UPDATE t SET c = '7' WHERE id IN (1, 3);",
+			"ALTER TABLE t MODIFY c BIGINT;",
+			"UPDATE t SET d = 'same' WHERE id = 1;",
+		},
+		XLater: []string{"UPDATE t SET c = 1, d = 'same' WHERE id = 1;", "UPDATE t SET c = NULL WHERE id = 3;"},
+	}.Script()
 }
 
 // resolvedMergeScript merges |source| after |setup|, expecting conflicts, runs |resolve| to resolve them, commits, and
