@@ -226,6 +226,7 @@ func main() {
 	os.Exit(runMain())
 }
 
+// runMain executes the Dolt CLI process and returns the exit code.
 func runMain() int {
 	args := os.Args[1:]
 
@@ -470,15 +471,8 @@ func runMain() int {
 	events.SetGlobalCollector(events.NewCollector(doltversion.Version, metricsEmitter))
 
 	// try verifying contents of local config
-	localConfig, ok := dEnv.Config.GetConfig(env.LocalConfig)
-	if ok {
-		localConfig.Iter(func(name, val string) (stop bool) {
-			option := strings.ToLower(name)
-			if _, ok := config.ConfigOptions[option]; !ok && !strings.HasPrefix(option, env.SqlServerGlobalsPrefix) {
-				cli.PrintErrf("Warning: Unknown local config option '%s'. Use `dolt config --local --unset %s` to remove.", name, name)
-			}
-			return false
-		})
+	if localConfig, ok := dEnv.Config.GetConfig(env.LocalConfig); ok {
+		warnIfUnknownConfigOptions(localConfig, env.LocalConfig)
 	}
 
 	defer emitUsageEvents(metricsEmitter, cfg.subCommand)
@@ -982,13 +976,7 @@ func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapCo
 		panic("runtime error. tmpEnv.Config is nil by no tmpEnv.CfgLoadErr set")
 	}
 
-	globalConfig.Iter(func(name, val string) (stop bool) {
-		option := strings.ToLower(name)
-		if _, ok := config.ConfigOptions[option]; !ok && !strings.HasPrefix(option, env.SqlServerGlobalsPrefix) {
-			cli.PrintErrf("Warning: Unknown global config option '%s'. Use `dolt config --global --unset %s` to remove.\n", name, name)
-		}
-		return false
-	})
+	warnIfUnknownConfigOptions(globalConfig, env.GlobalConfig)
 
 	hasGlobalArgs := false
 	for _, option := range globalArgParser.Supported {
@@ -1065,6 +1053,22 @@ func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapCo
 	}
 
 	return cfg, false, 0
+}
+
+// warnIfUnknownConfigOptions prints a warning for any unrecognized config
+// options in |cfg|.
+func warnIfUnknownConfigOptions(cfg config.ReadableConfig, scope env.ConfigScope) {
+	scopeName := scope.String()
+	cfg.Iter(func(name, val string) (stop bool) {
+		option := strings.ToLower(name)
+		if _, ok := config.ConfigOptions[option]; ok ||
+			strings.HasPrefix(option, env.SqlServerGlobalsPrefix) ||
+			strings.HasPrefix(option, env.SqlServerClusterPrefix) {
+			return false
+		}
+		cli.PrintErrf("Warning: Unknown %s config option '%s'. Use `dolt config --%s --unset %s` to remove.\n", scopeName, name, scopeName, name)
+		return false
+	})
 }
 
 func applyDirectoryArgs(cwdFs filesys.Filesys, apr *argparser.ArgParseResults) (filesys.Filesys, error) {

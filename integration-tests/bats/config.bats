@@ -85,6 +85,20 @@ function no_stdout {
     [[ "$output" =~ "Warning: Unknown local config option 'local'. Use \`dolt config --local --unset local\` to remove." ]] || false
 }
 
+@test "config: dolt sql does not warn on persisted sqlserver.cluster global config options" {
+    # https://github.com/dolthub/dolt/issues/12127
+    mkdir -p "$DOLT_ROOT_PATH/.dolt"
+    cat > "$DOLT_ROOT_PATH/.dolt/config_global.json" <<EOF
+{
+  "sqlserver.cluster.dolt_cluster_role": "standby",
+  "sqlserver.cluster.dolt_cluster_role_epoch": "1"
+}
+EOF
+    run dolt sql -q "SELECT 1"
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "Warning: Unknown global config option" ]] || false
+}
+
 @test "config: set a global config variable" {
     run dolt config --global --add user.name steph
     [ "$status" -eq 0 ]

@@ -50,6 +50,9 @@ const (
 const (
 	// SqlServerGlobalsPrefix is config namespace accessible by the SQL engine (ex: sqlserver.global.key)
 	SqlServerGlobalsPrefix = "sqlserver.global"
+
+	// SqlServerClusterPrefix is the prefix where sql-server persists cluster state.
+	SqlServerClusterPrefix = "sqlserver.cluster"
 )
 
 // String gives the string name of an element that was used when it was added to the ConfigHierarchy, which is the
