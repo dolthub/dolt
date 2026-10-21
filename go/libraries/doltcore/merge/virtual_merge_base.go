@@ -187,9 +187,10 @@ func rebuildVirtualMergeBase(ctx context.Context, vrw types.ValueReadWriter, ns 
 // mergeIntoVirtualBase merges |x| and |y| into a dangling commit, and returns the cells where they conflicted. Cells
 // that merge cleanly keep their merged value, and a conflicted cell keeps the value of the merge base of |x| and |y|.
 // git's merge-ort keeps conflict markers in the conflicted lines of text files instead; a cell cannot hold them, so
-// the returned cells are treated as changed on both sides when merging against the virtual merge base. A keyless table,
-// or a table whose schema conflicts, is taken whole from that merge base. Like git's, the virtual merge base is never
-// checked out, so it keeps the merged rows even where they violate a constraint, and drops the violations.
+// the returned cells are treated as changed on both sides when merging against the virtual merge base. A conflicted row
+// of a keyless table keeps the merge base's copies, and a table whose schema conflicts is taken whole from it. Like
+// git's, the virtual merge base is never checked out, so it keeps the merged rows even where they violate a
+// constraint, and drops the violations.
 func mergeIntoVirtualBase(ctx *sql.Context, x, y *doltdb.Commit) (*doltdb.Commit, conflictedCells, error) {
 	base, bases, baseConflicts, err := resolveMergeBase(ctx, x, y)
 	if err != nil {
@@ -282,8 +283,9 @@ func resolveVirtualBaseConflicts(ctx *sql.Context, result *Result, xRoot, yRoot,
 // mergeConflictedRowsByCell rewrites each conflicted row of table |name| in |root| as a cell-by-cell merge of the row
 // in |xRoot| and |yRoot| against |baseRoot|, keeping the base value of each cell that conflicts. Cells that
 // |baseConflicts| marks in the merge base count as changed on both sides. Cells are compared as values of the merged
-// schema, so the three sides may have different schemas. It returns the table without artifacts and the conflicted
-// cells, or a nil table when the table is keyless or missing from |xRoot| or |yRoot|.
+// schema, so the three sides may have different schemas. A conflicted row of a keyless table keeps its copies in
+// |baseRoot| whole. It returns the table without artifacts and the conflicted cells, or a nil table when the table is
+// missing from |xRoot| or |yRoot|, or is keyless with different schemas.
 func mergeConflictedRowsByCell(ctx *sql.Context, root, xRoot, yRoot, baseRoot doltdb.RootValue, name doltdb.TableName, baseConflicts map[string]conflictedRow) (*doltdb.Table, map[string]conflictedRow, error) {
 	merged, _, err := root.GetTable(ctx, name)
 	if err != nil {
@@ -293,9 +295,7 @@ func mergeConflictedRowsByCell(ctx *sql.Context, root, xRoot, yRoot, baseRoot do
 	if err != nil {
 		return nil, nil, err
 	}
-	if schema.IsKeyless(sch) {
-		return nil, nil, nil
-	}
+	keyless := schema.IsKeyless(sch)
 	ns := merged.NodeStore()
 	schemas := make([]schema.Schema, 3)
 	sides := make([]prolly.Map, 3)
@@ -324,6 +324,11 @@ func mergeConflictedRowsByCell(ctx *sql.Context, root, xRoot, yRoot, baseRoot do
 		}
 	}
 	xRows, yRows, baseRows := sides[0], sides[1], sides[2]
+	// A keyless row is identified by its values, so the sides of a keyless table must have the same schema.
+	if keyless && (!schema.SchemasAreEqual(sch, schemas[0]) || !schema.SchemasAreEqual(sch, schemas[1]) ||
+		!schema.SchemasAreEqual(sch, schemas[2])) {
+		return nil, nil, nil
+	}
 	vm := NewValueMerger(ctx, sch, schemas[0], schemas[1], schemas[2], xRows.Pool(), ns)
 
 	idx, err := merged.GetRowData(ctx)
@@ -377,6 +382,20 @@ func mergeConflictedRowsByCell(ctx *sql.Context, root, xRoot, yRoot, baseRoot do
 		b, err := getRow(ctx, baseRows, art.Key)
 		if err != nil {
 			return nil, nil, err
+		}
+		// The merge bases of a conflicted keyless row disagree on how many copies of it there are. Like a conflicted
+		// line in git's text merge, it keeps its base's copies and is marked.
+		if keyless {
+			if b == nil {
+				err = mut.Delete(ctx, art.Key)
+			} else {
+				err = mut.Put(ctx, art.Key, b)
+			}
+			if err != nil {
+				return nil, nil, err
+			}
+			rows[string(art.Key)] = conflictedRow{wholeRow: true}
+			continue
 		}
 
 		var row conflictedRow

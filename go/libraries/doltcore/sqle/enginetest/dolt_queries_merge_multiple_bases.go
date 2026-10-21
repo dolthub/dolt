@@ -616,6 +616,39 @@ func jsonInConflictedRowSetup(xJ, yJ, resolvedJ, laterJ string) []string {
 	), fmt.Sprintf("UPDATE t SET j = '%s' WHERE id = 1;", laterJ), "CALL DOLT_COMMIT('-am', 'x3');")
 }
 
+// keylessMergeBasesSetup builds a criss-cross whose merge bases, x1 and y1, conflict on a row of a keyless table:
+//
+//	c1 -- x1 -- x2 [-- x3]    x
+//	  \-- y1 -- y2            y
+//	x2 = merge(x1, y1), y2 = merge(y1, x1)
+//
+// c1 seeds one copy of row r = ('r', '1'). x1 adds a second copy and row n = ('n', 'x'); y1 deletes r. So x1 and y1
+// conflict on how many copies of r there are, and n merges cleanly. x2 and y2 resolve the conflict to |xCopies| and
+// |yCopies| copies of r. With |xDeletesN|, x3 deletes n.
+func keylessMergeBasesSetup(xCopies, yCopies int, xDeletesN bool) []string {
+	resolve := func(copies int) []string {
+		statements := []string{"DELETE FROM dolt_conflicts_t;", "DELETE FROM t WHERE a = 'r';"}
+		for i := 0; i < copies; i++ {
+			statements = append(statements, "INSERT INTO t VALUES ('r', '1');")
+		}
+		return statements
+	}
+	script := crissCrossSetup(
+		[]string{
+			"CREATE TABLE t (a VARCHAR(100), b VARCHAR(100));",
+			"INSERT INTO t VALUES ('r', '1');",
+		},
+		[]string{"INSERT INTO t VALUES ('r', '1'), ('n', 'x');"},
+		[]string{"DELETE FROM t WHERE a = 'r';"},
+		resolve(yCopies),
+		resolve(xCopies),
+	)
+	if xDeletesN {
+		script = append(script, "DELETE FROM t WHERE a = 'n';", "CALL DOLT_COMMIT('-am', 'x3');")
+	}
+	return script
+}
+
 // resolvedMergeScript merges |source| after |setup|, expecting conflicts, runs |resolve| to resolve them, commits, and
 // checks that |query| returns |expected|. |expected| is git's result for the same history and resolution.
 func resolvedMergeScript(name string, setup []string, source string, resolve []string, query string, expected []sql.Row) queries.ScriptTest {
@@ -1778,6 +1811,53 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT base_a, CAST(base_j AS CHAR), CAST(our_j AS CHAR), CAST(their_j AS CHAR) FROM dolt_conflicts_t;",
 				Expected: []sql.Row{{"seed", "{}", `{"k": 4}`, `{"k": 3}`}},
+			},
+		},
+	},
+	{
+		// n merged cleanly between the merge bases, so the virtual merge base has it, and x3's delete of it wins. x2 and
+		// y2 agree on r.
+		Name:        "keyless merge bases that conflict on a row, then a delete of a row they merged cleanly: merge y into x",
+		SetUpScript: keylessMergeBasesSetup(1, 1, true),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY a;",
+				Expected: []sql.Row{{"r", "1"}},
+			},
+		},
+	},
+	{
+		Name: "keyless merge bases that conflict on a row, then a delete of a row they merged cleanly: merge x into y",
+		SetUpScript: append(keylessMergeBasesSetup(1, 1, true),
+			"CALL DOLT_CHECKOUT('y');"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('x', '-m', 'merge x into y');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY a;",
+				Expected: []sql.Row{{"r", "1"}},
+			},
+		},
+	},
+	{
+		// x2 keeps two copies of r and y2 one, c1's count. The merge bases conflicted on r, so y2's one copy is still a
+		// change from them, and r conflicts. The virtual merge base has c1's one copy.
+		Name:        "keyless merge bases that conflict on a row, resolved differently: merge y into x",
+		SetUpScript: keylessMergeBasesSetup(2, 1, false),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_a, base_cardinality, our_cardinality, their_cardinality FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{"r", uint64(1), uint64(2), uint64(1)}},
 			},
 		},
 	},

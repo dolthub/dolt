@@ -204,9 +204,10 @@ func TestVirtualMergeBaseFullTextIndexes(t *testing.T) {
 	}
 }
 
-// TestVirtualMergeBaseFullTextIndexesOfKeylessTable is TestVirtualMergeBaseFullTextIndexes for a keyless table, which
-// a virtual merge base takes whole from the merge base of its merge bases when they conflict. c1 seeds the row 'seed';
-// x1 changes it to 'alpha' and y1 to 'bravo', and x2 and y2 resolve the conflict by keeping ours.
+// TestVirtualMergeBaseFullTextIndexesOfKeylessTable is TestVirtualMergeBaseFullTextIndexes for a keyless table. c1
+// seeds the row 'seed'; x1 changes it to 'alpha' and y1 to 'bravo', and x2 and y2 resolve the conflict by keeping ours.
+// x1 and y1 both delete 'seed', which a keyless merge counts as a conflict, so the virtual merge base keeps c1's copy
+// of it, and their added rows.
 func TestVirtualMergeBaseFullTextIndexesOfKeylessTable(t *testing.T) {
 	ctx := context.Background()
 	dEnv := dtu.CreateTestEnv()
@@ -255,10 +256,10 @@ func TestVirtualMergeBaseFullTextIndexesOfKeylessTable(t *testing.T) {
 	}
 
 	for query, expected := range map[string][]sql.Row{
-		"SELECT a FROM t;": {{"seed"}},
+		"SELECT a FROM t ORDER BY a;":                      {{"alpha"}, {"bravo"}, {"seed"}},
 		"SELECT a FROM t WHERE MATCH(a) AGAINST('seed');":  {{"seed"}},
-		"SELECT a FROM t WHERE MATCH(a) AGAINST('alpha');": nil,
-		"SELECT a FROM t WHERE MATCH(a) AGAINST('bravo');": nil,
+		"SELECT a FROM t WHERE MATCH(a) AGAINST('alpha');": {{"alpha"}},
+		"SELECT a FROM t WHERE MATCH(a) AGAINST('bravo');": {{"bravo"}},
 	} {
 		_, iter, _, err := eng.Query(sqlCtx, query)
 		require.NoError(t, err)

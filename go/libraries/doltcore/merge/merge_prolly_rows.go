@@ -653,6 +653,10 @@ func conflictedCellsDiffer(ctx context.Context, row conflictedRow, left, right v
 	if left == nil || right == nil {
 		return left != nil || right != nil, nil
 	}
+	// A keyless row is its values, so its sides differ only in how many copies they hold.
+	if vm.keyless {
+		return !bytes.Equal(left, right), nil
+	}
 	differs := func(i int) (bool, error) {
 		l, err := vm.mergedCell(ctx, vm.leftVD, vm.leftMapping, left, i)
 		if err != nil {
