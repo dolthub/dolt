@@ -158,7 +158,7 @@ func conflictingMergeBasesSetupWithTable(createTable, xResolution, yResolution s
 	script := []string{
 		"SET @@autocommit = 0;",
 		createTable,
-		"INSERT INTO t VALUES (1, 'seed', 'seed'), (2, 'seed', 'seed');",
+		"INSERT INTO t (id, a, b) VALUES (1, 'seed', 'seed'), (2, 'seed', 'seed');",
 		"CALL DOLT_COMMIT('-Am', 'c1');",
 		"CALL DOLT_BRANCH('x');",
 		"CALL DOLT_BRANCH('y');",
@@ -918,6 +918,127 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT j FROM t;",
 				Expected: []sql.Row{{types.MustJSON(`{"x": 2, "y": 1}`)}},
+			},
+		},
+	},
+	{
+		// A virtual generated column comes before a, so a's stored position differs from its position among all
+		// columns.
+		Name: "conflicting merge bases with a virtual generated column first, resolved differently: merge y into x",
+		SetUpScript: conflictingMergeBasesSetupWithTable(
+			"CREATE TABLE t (id INT PRIMARY KEY, g INT AS (id * 2) VIRTUAL, a VARCHAR(100), b VARCHAR(100));",
+			"x wins", "y wins", false),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_a, base_b, our_a, our_b, their_a, their_b FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{"seed", "seed", "x wins", "seed", "y wins", "seed"}},
+			},
+			{
+				Query:    "SELECT * FROM t WHERE id = 2;",
+				Expected: []sql.Row{{2, 4, "x", "y"}},
+			},
+		},
+	},
+	{
+		Name: "conflicting merge bases with a virtual generated column first, resolved the same way: merge y into x",
+		SetUpScript: conflictingMergeBasesSetupWithTable(
+			"CREATE TABLE t (id INT PRIMARY KEY, g INT AS (id * 2) VIRTUAL, a VARCHAR(100), b VARCHAR(100));",
+			"resolved", "resolved", true),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY id;",
+				Expected: []sql.Row{{1, 2, "resolved", "seed"}, {2, 4, "x later", "y"}},
+			},
+		},
+	},
+	{
+		// s is generated from a and b. It changes with a in x1 and y1, but a generated value is computed, not merged,
+		// so x3's later edit to b does not conflict with y2.
+		Name: "conflicting merge bases with a stored generated column, then an edit to its source: merge y into x",
+		SetUpScript: append(conflictingMergeBasesSetupWithTable(
+			"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100), b VARCHAR(100), s VARCHAR(201) AS (CONCAT(a, '-', b)) STORED);",
+			"resolved", "resolved", false),
+			"UPDATE t SET b = 'x later' WHERE id = 1;",
+			"CALL DOLT_COMMIT('-am', 'x3');"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY id;",
+				Expected: []sql.Row{{1, "resolved", "x later", "resolved-x later"}, {2, "x", "y", "x-y"}},
+			},
+		},
+	},
+	{
+		// y3 moves a after b, so a is at a different position in each side's schema.
+		Name: "conflicting merge bases, resolved the same way, then a column move: merge y into x",
+		SetUpScript: append(conflictingMergeBasesSetup("resolved", "resolved", false),
+			"CALL DOLT_CHECKOUT('y');",
+			"ALTER TABLE t MODIFY COLUMN a VARCHAR(100) AFTER b;",
+			"CALL DOLT_COMMIT('-am', 'y3');",
+			"CALL DOLT_CHECKOUT('x');"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT id, a, b FROM t ORDER BY id;",
+				Expected: []sql.Row{{1, "resolved", "seed"}, {2, "x", "y"}},
+			},
+		},
+	},
+	{
+		// As "one side resolved to the old value", with a type change on y. x2 holds c1's value, but it still
+		// conflicts with y2's.
+		Name: "conflicting merge bases, one side resolved to the old value, then a type change: merge y into x",
+		SetUpScript: append(conflictingMergeBasesSetup("seed", "y", false),
+			"CALL DOLT_CHECKOUT('y');",
+			"ALTER TABLE t MODIFY COLUMN a TEXT;",
+			"CALL DOLT_COMMIT('-am', 'y3');",
+			"CALL DOLT_CHECKOUT('x');"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_a, our_a, their_a FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{"seed", "seed", "y"}},
+			},
+		},
+	},
+	{
+		// y3 drops a, whose value conflicted between the merge bases, after x2 and y2 resolved it differently. As with
+		// a single merge base, dropping a column that the other side changed conflicts on the row.
+		Name: "conflicting merge bases, resolved differently, then a drop of the conflicted column: merge y into x",
+		SetUpScript: append(conflictingMergeBasesSetup("x wins", "y wins", false),
+			"CALL DOLT_CHECKOUT('y');",
+			"ALTER TABLE t DROP COLUMN a;",
+			"CALL DOLT_COMMIT('-am', 'y3');",
+			"CALL DOLT_CHECKOUT('x');"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT table_name, description FROM dolt_schema_conflicts;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT base_a, base_b, our_b, our_diff_type, their_b, their_diff_type FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{"seed", "seed", "seed", "modified", "seed", "modified"}},
 			},
 		},
 	},

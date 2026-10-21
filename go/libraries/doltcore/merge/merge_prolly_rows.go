@@ -322,7 +322,8 @@ func computeProllyTreePatches(
 				}
 				err = conflicts.merge(ctx, conflictDiff, nil)
 			}
-			if hasStoredGeneratedColumns(finalSch) {
+			// A conflicted row keeps the left side's row, so there is no merged row to generate values for.
+			if resolved && mergedRow != nil && hasStoredGeneratedColumns(finalSch) {
 				defaults, err := resolveDefaults(ctx, tm.name.Name, finalSch, tm.rightSch)
 				if err != nil {
 					mergeErr = err
@@ -659,6 +660,9 @@ func conflictedCellsDiffer(ctx context.Context, row conflictedRow, left, right v
 	}
 	if row.wholeRow {
 		for i := 0; i < vm.numCols; i++ {
+			if vm.resultSchema.GetNonPKCols().GetByStoredIndex(i).Generated != "" {
+				continue
+			}
 			if d, err := differs(i); err != nil || d {
 				return d, err
 			}
@@ -692,7 +696,7 @@ func (m *valueMerger) mergedCellsEqual(ctx context.Context, i int, a, b interfac
 }
 
 func (m *valueMerger) mergedColumnType(i int) sql.Type {
-	return m.resultSchema.GetNonPKCols().GetByIndex(i).TypeInfo.ToSqlType()
+	return m.resultSchema.GetNonPKCols().GetByStoredIndex(i).TypeInfo.ToSqlType()
 }
 
 // treeRowMergePolicy adapts the caller's policy to the storage layer's
@@ -2339,10 +2343,10 @@ func (m *valueMerger) processColumn(ctx *sql.Context, i int, left, right, base v
 	leftCol, leftColIdx, leftColExists := getColumn(&left, &m.leftMapping, i)
 	rightCol, rightColIdx, rightColExists := getColumn(&right, &m.rightMapping, i)
 	resultType := m.resultVD.Types[i]
-	resultColumn := m.resultSchema.GetNonPKCols().GetByIndex(i)
+	resultColumn := m.resultSchema.GetNonPKCols().GetByStoredIndex(i)
 	generatedColumn := resultColumn.Generated != ""
 
-	sqlType := m.resultSchema.GetNonPKCols().GetByIndex(i).TypeInfo.ToSqlType()
+	sqlType := resultColumn.TypeInfo.ToSqlType()
 
 	// We previously asserted that left and right are not nil.
 	// But base can be nil in the event of convergent inserts.

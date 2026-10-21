@@ -337,10 +337,10 @@ func mergeConflictedRowsByCell(ctx *sql.Context, root, xRoot, yRoot, baseRoot do
 		return nil, nil, err
 	}
 
-	var tags []uint64
+	var stored []schema.Column
 	for _, col := range sch.GetNonPKCols().GetColumns() {
 		if !col.Virtual {
-			tags = append(tags, col.Tag)
+			stored = append(stored, col)
 		}
 	}
 	builder := val.NewTupleBuilder(sch.GetValueDescriptor(ns), ns)
@@ -370,7 +370,7 @@ func mergeConflictedRowsByCell(ctx *sql.Context, root, xRoot, yRoot, baseRoot do
 		var row conflictedRow
 		wholeRow := x == nil || y == nil || b == nil
 		baseRow := baseConflicts[string(art.Key)]
-		for i, tag := range tags {
+		for i, col := range stored {
 			var bv interface{}
 			if b != nil {
 				if bv, err = vm.mergedCell(ctx, vm.baseVD, vm.baseMapping, b, i); err != nil {
@@ -379,10 +379,13 @@ func mergeConflictedRowsByCell(ctx *sql.Context, root, xRoot, yRoot, baseRoot do
 			}
 			cell := bv
 			if !wholeRow {
-				cell, err = mergeCell(ctx, vm, i, x, y, bv, baseRow.wholeRow || slices.Contains(baseRow.tags, tag))
+				cell, err = mergeCell(ctx, vm, i, x, y, bv, baseRow.wholeRow || slices.Contains(baseRow.tags, col.Tag))
 				if errors.Is(err, errCellConflict) {
+					// A generated value is computed from its sources, so only they conflict.
 					cell = bv
-					row.tags = append(row.tags, tag)
+					if col.Generated == "" {
+						row.tags = append(row.tags, col.Tag)
+					}
 				} else if err != nil {
 					return nil, nil, err
 				}
