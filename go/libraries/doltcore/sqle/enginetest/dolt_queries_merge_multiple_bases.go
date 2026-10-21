@@ -552,6 +552,10 @@ func schemaConflictingMergeBasesSetup(xType string, xSetsC bool) []string {
 // keylessSchemaChangeMergeBasesSetup is keylessMergeBasesSetup, where x1 also adds column c, so that the sides of the
 // merge of x1 and y1 have different schemas.
 func keylessSchemaChangeMergeBasesSetup() []string {
+	return keylessSchemaChangeMergeBases().Script()
+}
+
+func keylessSchemaChangeMergeBases() dtu.CrissCross {
 	c := crissCross(
 		[]string{
 			"CREATE TABLE t (a VARCHAR(100), b VARCHAR(100));",
@@ -563,7 +567,7 @@ func keylessSchemaChangeMergeBasesSetup() []string {
 		[]string{"DELETE FROM dolt_conflicts_t;", "DELETE FROM t WHERE a = 'r';", "INSERT INTO t VALUES ('r', '1', NULL);"},
 	)
 	c.XLater = []string{"DELETE FROM t WHERE a = 'n';"}
-	return c.Script()
+	return c
 }
 
 // nestedRowPresenceSetup builds two criss-crosses, one on top of the other, as nestedCrissCrossSetup does, around row 3:
@@ -614,6 +618,24 @@ func unconvertibleMergeBasesSetup() []string {
 		},
 		XLater: []string{"UPDATE t SET c = 1, d = 'same' WHERE id = 1;", "UPDATE t SET c = NULL WHERE id = 3;"},
 	}.Script()
+}
+
+// timeDefaultMergeBases builds a criss-cross whose merge bases, x1 and y1, give a row a time default when merged:
+//
+//	c1 -- x1 -- x2    x
+//	  \-- y1 -- y2    y
+//	x2 = merge(x1, y1), y2 = merge(y1, x1)
+//
+// x1 adds ts with a CURRENT_TIMESTAMP default and sets row 1's a to 'x'; y1 sets it to 'y' and adds row 2, which has no
+// ts until merged with x1. x2 and y2 set a to 'x2' and 'y2' in both rows.
+func timeDefaultMergeBases() dtu.CrissCross {
+	return crissCross(
+		[]string{"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100));", "INSERT INTO t VALUES (1, 'seed');"},
+		[]string{"ALTER TABLE t ADD COLUMN ts DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6);", "UPDATE t SET a = 'x' WHERE id = 1;"},
+		[]string{"UPDATE t SET a = 'y' WHERE id = 1;", "INSERT INTO t VALUES (2, 'two');"},
+		[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "UPDATE t SET a = 'y2';"},
+		[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "UPDATE t SET a = 'x2';"},
+	)
 }
 
 // resolvedMergeScript merges |source| after |setup|, expecting conflicts, runs |resolve| to resolve them, commits, and
@@ -2014,17 +2036,8 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 		// x1 adds ts with a time default, and y1 adds row 2, so merging them gives row 2 a default ts. The
 		// virtual merge base takes its own date for it, the later of x1's and y1's commit dates, so that previewing
 		// later, or rebuilding it, gives the same value.
-		Name: "merge bases that give a row a time default: merge y into x",
-		SetUpScript: crissCrossSetup(
-			[]string{
-				"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100));",
-				"INSERT INTO t VALUES (1, 'seed');",
-			},
-			[]string{"ALTER TABLE t ADD COLUMN ts DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6);", "UPDATE t SET a = 'x' WHERE id = 1;"},
-			[]string{"UPDATE t SET a = 'y' WHERE id = 1;", "INSERT INTO t VALUES (2, 'two');"},
-			[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "UPDATE t SET a = 'y2';"},
-			[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "UPDATE t SET a = 'x2';"},
-		),
+		Name:        "merge bases that give a row a time default: merge y into x",
+		SetUpScript: timeDefaultMergeBases().Script(),
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT base_ts = (SELECT MAX(date) FROM dolt_log('--all') WHERE message IN ('x1', 'y1')) FROM dolt_preview_merge_conflicts('x', 'y', 't') WHERE base_id = 2;",

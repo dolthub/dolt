@@ -17,6 +17,12 @@ package dtestutils
 import (
 	"fmt"
 	"strings"
+
+	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 )
 
 // CrissCross is a history in which branches x and y each merge the other's first commit, so that they have two merge
@@ -149,4 +155,57 @@ func commitAndBranch(branch, name string) []string {
 		s = append(s, fmt.Sprintf("CALL DOLT_BRANCH('%s');", name))
 	}
 	return s
+}
+
+// StaleIndexes returns the secondary indexes of the tables of |root|, as "table.index", that differ from the indexes
+// their rows build. It skips Full-Text and vector indexes, which are not built from the rows alone.
+func StaleIndexes(ctx *sql.Context, root doltdb.RootValue) ([]string, error) {
+	names, err := root.GetTableNames(ctx, doltdb.DefaultSchemaName, false)
+	if err != nil {
+		return nil, err
+	}
+	var stale []string
+	for _, name := range names {
+		tbl, _, err := root.GetTable(ctx, doltdb.TableName{Name: name})
+		if err != nil {
+			return nil, err
+		}
+		sch, err := tbl.GetSchema(ctx)
+		if err != nil {
+			return nil, err
+		}
+		rowData, err := tbl.GetRowData(ctx)
+		if err != nil {
+			return nil, err
+		}
+		rows, err := durable.ProllyMapFromIndex(rowData)
+		if err != nil {
+			return nil, err
+		}
+		for _, index := range sch.Indexes().AllIndexes() {
+			if index.IsFullText() || index.IsVector() {
+				continue
+			}
+			stored, err := tbl.GetIndexRowData(ctx, index.Name())
+			if err != nil {
+				return nil, err
+			}
+			built, err := creation.BuildProllyIndexExternal(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, name, index, rows, nil, nil)
+			if err != nil {
+				return nil, err
+			}
+			storedHash, err := stored.HashOf()
+			if err != nil {
+				return nil, err
+			}
+			builtHash, err := built.HashOf()
+			if err != nil {
+				return nil, err
+			}
+			if storedHash != builtHash {
+				stale = append(stale, name+"."+index.Name())
+			}
+		}
+	}
+	return stale, nil
 }
