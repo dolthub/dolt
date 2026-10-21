@@ -2011,4 +2011,28 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// h is generated from g, which is generated from a and b, so the virtual merge base computes g before h.
+		Name: "conflicting merge bases with chained stored generated columns, resolved differently: merge y into x",
+		SetUpScript: crissCrossSetup(
+			[]string{
+				"CREATE TABLE t (id INT PRIMARY KEY, a INT, b INT, g INT AS (a + b) STORED, h INT AS (g * 10) STORED);",
+				"INSERT INTO t (id, a, b) VALUES (1, 0, 0);",
+			},
+			[]string{"UPDATE t SET a = 1, b = 1 WHERE id = 1;"},
+			[]string{"UPDATE t SET a = 3 WHERE id = 1;"},
+			[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "UPDATE t SET a = 20, b = 1 WHERE id = 1;"},
+			[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "UPDATE t SET a = 10, b = 1 WHERE id = 1;"},
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_a, base_b, base_g, base_h FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{0, 1, 1, 10}},
+			},
+		},
+	},
 }

@@ -68,6 +68,33 @@ var doltCommit = &doltCommitValidator{}
 
 var MergeScripts = []queries.ScriptTest{
 	{
+		// h is generated from g, which is generated from a and b, so the merge computes g before h.
+		Name:    "merge resolving a row both sides changed computes chained stored generated columns",
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"CREATE TABLE t (id INT PRIMARY KEY, a INT, b INT, g INT AS (a + b) STORED, h INT AS (g * 10) STORED);",
+			"INSERT INTO t (id, a, b) VALUES (1, 0, 1);",
+			"CALL DOLT_COMMIT('-Am', 'c1');",
+			"CALL DOLT_BRANCH('other');",
+			"UPDATE t SET a = 10;",
+			"CALL DOLT_COMMIT('-am', 'main');",
+			"CALL DOLT_CHECKOUT('other');",
+			"UPDATE t SET b = 2;",
+			"CALL DOLT_COMMIT('-am', 'other');",
+			"CALL DOLT_CHECKOUT('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t;",
+				Expected: []sql.Row{{1, 10, 2, 12, 120}},
+			},
+		},
+	},
+	{
 		// The conflicts table leaves out the virtual column v, so deleting a conflict must find its columns without it.
 		Name:    "delete conflicts of a table with a virtual column",
 		Dialect: "mysql",

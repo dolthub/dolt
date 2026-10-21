@@ -1974,50 +1974,44 @@ func remapTupleWithColumnDefaults(
 		}
 	}
 
-	for _, to := range secondPass {
-		col := mergedSch.GetNonPKCols().GetByStoredIndex(to)
-		err := writeTupleExpression(ctx, keyTuple, valueTuple, defaultExprs[to], col, rowSch, tm, tb, to)
+	if len(secondPass) > 0 {
+		row, err := index.BuildRow(ctx, keyTuple, valueTuple, rowSch, tm.ns)
 		if err != nil {
 			return nil, err
+		}
+		for _, to := range secondPass {
+			col := mergedSch.GetNonPKCols().GetByStoredIndex(to)
+			value, err := evalColumnExpression(ctx, defaultExprs[to], col, row, rowSch, tm.name.Name)
+			if err != nil {
+				return nil, err
+			}
+			if err = tree.PutField(ctx, tm.ns, tb, to, value); err != nil {
+				return nil, err
+			}
 		}
 	}
 
 	return tb.Build(ctx, pool)
 }
 
-// writeTupleExpression attempts to evaluate the expression string |exprString| against the row provided and write it
-// to the provided index in the tuple builder. This is necessary for column default values and generated columns.
-func writeTupleExpression(
-	ctx *sql.Context,
-	keyTuple val.Tuple,
-	valueTuple val.Tuple,
-	expr sql.Expression,
-	col schema.Column,
-	sch schema.Schema,
-	tm *TableMerger,
-	tb *val.TupleBuilder,
-	colIdx int,
-) error {
+// evalColumnExpression evaluates |expr|, the default or generated value of column |col|, against |row|, of schema
+// |sch|, and converts it to |col|'s type. It sets |col| in |row| to the value, so that a later generated column that
+// depends on |col| sees it.
+func evalColumnExpression(ctx *sql.Context, expr sql.Expression, col schema.Column, row sql.Row, sch schema.Schema, tableName string) (interface{}, error) {
 	if !expr.Resolved() {
-		return ErrUnableToMergeColumnDefaultValue.New(expr.String(), tm.name)
+		return nil, ErrUnableToMergeColumnDefaultValue.New(expr.String(), tableName)
 	}
-
-	row, err := index.BuildRow(ctx, keyTuple, valueTuple, sch, tm.ns)
-	if err != nil {
-		return err
-	}
-
 	value, err := expr.Eval(ctx, row)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
-	value, _, err = col.TypeInfo.ToSqlType().Convert(ctx, value)
-	if err != nil {
-		return err
+	if value, _, err = col.TypeInfo.ToSqlType().Convert(ctx, value); err != nil {
+		return nil, err
 	}
-
-	return tree.PutField(ctx, tm.ns, tb, colIdx, value)
+	if i := sch.GetAllCols().IndexOf(col.Name); i >= 0 && i < len(row) {
+		row[i] = value
+	}
+	return value, nil
 }
 
 // convertValueToNewType handles converting a value from a previous type into a new type. |value| is the value from

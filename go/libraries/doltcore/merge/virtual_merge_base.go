@@ -545,6 +545,7 @@ func (e *tableEdits) set(ctx context.Context, key, value val.Tuple) error {
 // virtualRowMerger merges the rows of a table in two merge bases cell by cell into rows of schema |sch|.
 type virtualRowMerger struct {
 	vm        *valueMerger
+	tableName string
 	sch       schema.Schema
 	stored    []schema.Column
 	generated []sql.Expression
@@ -559,6 +560,7 @@ type virtualRowMerger struct {
 func newVirtualRowMerger(ctx *sql.Context, name doltdb.TableName, sch schema.Schema, sides virtualMergeSides, ns tree.NodeStore, conversionConflicts bool) (*virtualRowMerger, error) {
 	rm := &virtualRowMerger{
 		vm:                  NewValueMerger(ctx, sch, sides.xSch, sides.ySch, sides.baseSch, sides.x.Pool(), ns),
+		tableName:           name.Name,
 		sch:                 sch,
 		builder:             val.NewTupleBuilder(sch.GetValueDescriptor(ns), ns),
 		ns:                  ns,
@@ -688,7 +690,7 @@ func (rm *virtualRowMerger) build(ctx *sql.Context, key val.Tuple) (val.Tuple, e
 	if err != nil || rm.generated == nil {
 		return value, err
 	}
-	return generateStoredColumns(ctx, rm.builder, rm.cells, rm.stored, rm.generated, rm.sch, key, value, rm.ns)
+	return generateStoredColumns(ctx, rm.builder, rm.cells, rm.stored, rm.generated, rm.sch, rm.tableName, key, value, rm.ns)
 }
 
 // mergeKeylessRowsUnderBaseSchema merges how many copies of each row of keyless table |sides| there are under the
@@ -873,7 +875,7 @@ func buildRowValue(ctx context.Context, builder *val.TupleBuilder, cells []inter
 
 // generateStoredColumns returns the row value of |cells| with each stored generated column computed from the row
 // |key| and |value|, as a merge computes them for the rows it merges.
-func generateStoredColumns(ctx *sql.Context, builder *val.TupleBuilder, cells []interface{}, stored []schema.Column, generated []sql.Expression, sch schema.Schema, key, value val.Tuple, ns tree.NodeStore) (val.Tuple, error) {
+func generateStoredColumns(ctx *sql.Context, builder *val.TupleBuilder, cells []interface{}, stored []schema.Column, generated []sql.Expression, sch schema.Schema, tableName string, key, value val.Tuple, ns tree.NodeStore) (val.Tuple, error) {
 	row, err := index.BuildRow(ctx, key, value, sch, ns)
 	if err != nil {
 		return nil, err
@@ -882,11 +884,7 @@ func generateStoredColumns(ctx *sql.Context, builder *val.TupleBuilder, cells []
 		if col.Generated == "" {
 			continue
 		}
-		v, err := generated[i].Eval(ctx, row)
-		if err != nil {
-			return nil, err
-		}
-		if cells[i], _, err = col.TypeInfo.ToSqlType().Convert(ctx, v); err != nil {
+		if cells[i], err = evalColumnExpression(ctx, generated[i], col, row, sch, tableName); err != nil {
 			return nil, err
 		}
 	}
