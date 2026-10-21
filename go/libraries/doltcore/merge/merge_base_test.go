@@ -118,6 +118,18 @@ func TestResolveMergeBaseRebuild(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestConflictedCellsAdd(t *testing.T) {
+	table := doltdb.TableName{Name: "t"}
+	var cells conflictedCells
+	cells = cells.add(conflictedCells{table: {"row 1": {tags: []uint64{1}}, "row 2": {wholeRow: true}}})
+	cells = cells.add(conflictedCells{table: {"row 1": {tags: []uint64{2}}, "row 2": {tags: []uint64{1}}, "row 3": {tags: []uint64{3}}}})
+	assert.Equal(t, conflictedCells{table: {
+		"row 1": {tags: []uint64{1, 2}},
+		"row 2": {wholeRow: true, tags: []uint64{1}},
+		"row 3": {tags: []uint64{3}},
+	}}, cells)
+}
+
 // newTestHistory returns an in-memory database, its root commit, and a function that commits with |parents| and a
 // committer date of |date| seconds. Each commit gets its own branch, so that any parent list is legal.
 func newTestHistory(t *testing.T) (*doltdb.DoltDB, *doltdb.Commit, func(date int64, parents ...*doltdb.Commit) *doltdb.Commit) {

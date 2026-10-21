@@ -460,6 +460,73 @@ func addAddSetup(xResolution, yResolution string) []string {
 	)
 }
 
+// foldedConflictsSetup builds two branches whose three merge bases, p1, p2 and p3, conflict in different pairs, so
+// that folding them into one virtual merge base finds conflicts in more than one fold:
+//
+//	c1 -- m1start -- merge p1 -- merge p2 -- merge p3 -- m1    m1
+//	 |\-- m2start -- merge p3 -- merge p2 -- merge p1 -- m2    m2
+//	 |\-- p1    sets row 1's a to 'p1' and deletes row 2
+//	 |\-- p2    sets row 1's a and b to 'p2', and row 3's b to 'p2'
+//	 \-- p3     sets row 1's b to 'p3', and row 2's a to 'p3'
+//
+// c1 seeds rows 1 to 3 with a = b = 'seed'. p1 and p2 conflict on row 1's a, p2 and p3 on row 1's b, and p1 and p3 on
+// row 2, which one deletes and the other changes. Whatever order the merge bases fold in, the virtual merge base has
+// c1's row 1, with a and b conflicted, c1's row 2, which git's merge-ort also takes unmarked for a delete against a
+// change, and p2's row 3. m1 and m2 resolve every conflict with ours, and finally set row 1 to |m1Row1| and |m2Row1|,
+// the values of a and b. m1 deletes row 2 and m2 keeps c1's.
+func foldedConflictsSetup(m1Row1, m2Row1 string) []string {
+	return []string{
+		"SET @@autocommit = 0;",
+		"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100), b VARCHAR(100));",
+		"INSERT INTO t VALUES (1, 'seed', 'seed'), (2, 'seed', 'seed'), (3, 'seed', 'seed');",
+		"CALL DOLT_COMMIT('-Am', 'c1');",
+		"CALL DOLT_BRANCH('p1');",
+		"CALL DOLT_BRANCH('p2');",
+		"CALL DOLT_BRANCH('p3');",
+		"CALL DOLT_BRANCH('m1');",
+		"CALL DOLT_BRANCH('m2');",
+		"CALL DOLT_CHECKOUT('p1');",
+		"UPDATE t SET a = 'p1' WHERE id = 1;",
+		"DELETE FROM t WHERE id = 2;",
+		"CALL DOLT_COMMIT('-am', 'p1');",
+		"CALL DOLT_CHECKOUT('p2');",
+		"UPDATE t SET a = 'p2', b = 'p2' WHERE id = 1;",
+		"UPDATE t SET b = 'p2' WHERE id = 3;",
+		"CALL DOLT_COMMIT('-am', 'p2');",
+		"CALL DOLT_CHECKOUT('p3');",
+		"UPDATE t SET b = 'p3' WHERE id = 1;",
+		"UPDATE t SET a = 'p3' WHERE id = 2;",
+		"CALL DOLT_COMMIT('-am', 'p3');",
+		"CALL DOLT_CHECKOUT('m1');",
+		"INSERT INTO t VALUES (10, 'm1', NULL);",
+		"CALL DOLT_COMMIT('-am', 'm1start');",
+		"CALL DOLT_MERGE('p1', '-m', 'm1 merges p1');",
+		"CALL DOLT_MERGE('p2', '-m', 'm1 merges p2');",
+		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
+		"CALL DOLT_COMMIT('-am', 'm1 merges p2');",
+		"CALL DOLT_MERGE('p3', '-m', 'm1 merges p3');",
+		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
+		"CALL DOLT_COMMIT('-am', 'm1 merges p3');",
+		fmt.Sprintf("REPLACE INTO t VALUES (1, %s);", m1Row1),
+		"DELETE FROM t WHERE id = 2;",
+		"CALL DOLT_COMMIT('-am', 'm1');",
+		"CALL DOLT_CHECKOUT('m2');",
+		"INSERT INTO t VALUES (20, 'm2', NULL);",
+		"CALL DOLT_COMMIT('-am', 'm2start');",
+		"CALL DOLT_MERGE('p3', '-m', 'm2 merges p3');",
+		"CALL DOLT_MERGE('p2', '-m', 'm2 merges p2');",
+		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
+		"CALL DOLT_COMMIT('-am', 'm2 merges p2');",
+		"CALL DOLT_MERGE('p1', '-m', 'm2 merges p1');",
+		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
+		"CALL DOLT_COMMIT('-am', 'm2 merges p1');",
+		fmt.Sprintf("REPLACE INTO t VALUES (1, %s);", m2Row1),
+		"REPLACE INTO t VALUES (2, 'seed', 'seed');",
+		"CALL DOLT_COMMIT('-am', 'm2');",
+		"CALL DOLT_CHECKOUT('m1');",
+	}
+}
+
 // resolvedMergeScript merges |source| after |setup|, expecting conflicts, runs |resolve| to resolve them, commits, and
 // checks that |query| returns |expected|. |expected| is git's result for the same history and resolution.
 func resolvedMergeScript(name string, setup []string, source string, resolve []string, query string, expected []sql.Row) queries.ScriptTest {
@@ -1438,6 +1505,43 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT * FROM u ORDER BY id;",
 				Expected: []sql.Row{{1, "x2"}},
+			},
+		},
+	},
+	{
+		// m1 and m2 disagree on row 1's a, which conflicted between p1 and p2, and agree on its b. m2 holds c1's a, the
+		// virtual merge base's value, which is still a change from the conflicted merge bases. m2 also holds c1's row 2,
+		// which is no change from the virtual merge base, so m1's delete wins, as in git. Row 3, which the merge bases
+		// merged cleanly, and the rows m1start and m2start added, merge cleanly.
+		Name:        "three merge bases that conflict in different folds, tips disagreeing on the first conflicted cell: merge m2 into m1",
+		SetUpScript: foldedConflictsSetup("'m1', 'both'", "'seed', 'both'"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('m2', '-m', 'merge m2 into m1');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_id, base_a, base_b, our_id, our_a, our_b, their_id, their_a, their_b FROM dolt_conflicts_t ORDER BY base_id;",
+				Expected: []sql.Row{{1, "seed", "seed", 1, "m1", "both", 1, "seed", "both"}},
+			},
+			{
+				Query:    "SELECT * FROM t WHERE id <> 1 ORDER BY id;",
+				Expected: []sql.Row{{3, "seed", "p2"}, {10, "m1", nil}, {20, "m2", nil}},
+			},
+		},
+	},
+	{
+		// As above, with m1 and m2 disagreeing on row 1's b, which conflicted between p2 and p3, instead of its a.
+		Name:        "three merge bases that conflict in different folds, tips disagreeing on the second conflicted cell: merge m2 into m1",
+		SetUpScript: foldedConflictsSetup("'both', 'seed'", "'both', 'm2'"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('m2', '-m', 'merge m2 into m1');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_id, base_a, base_b, our_id, our_a, our_b, their_id, their_a, their_b FROM dolt_conflicts_t ORDER BY base_id;",
+				Expected: []sql.Row{{1, "seed", "seed", 1, "both", "seed", 1, "both", "m2"}},
 			},
 		},
 	},

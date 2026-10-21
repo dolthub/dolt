@@ -60,7 +60,7 @@ type virtualMergeBase struct {
 type conflictedCells map[doltdb.TableName]map[string]conflictedRow
 
 // conflictedRow lists the conflicted cells of one row by column tag. With |wholeRow|, the row itself conflicted, as
-// when one merge base deleted it and another changed it.
+// when two merge bases added it with different values.
 type conflictedRow struct {
 	wholeRow bool
 	tags     []uint64
@@ -369,6 +369,9 @@ func mergeConflictedRowsByCell(ctx *sql.Context, root, xRoot, yRoot, baseRoot do
 
 		builder.Recycle()
 		var row conflictedRow
+		// A row that one merge base deleted and the other changed takes the base's row unmarked, as git's merge-ort takes
+		// the base's version of a file for a modify/delete conflict. A row added twice is marked, as git's text merge of
+		// two added files leaves conflict markers.
 		wholeRow := x == nil || y == nil || b == nil
 		baseRow := baseConflicts[string(art.Key)]
 		for i, col := range stored {
@@ -407,7 +410,7 @@ func mergeConflictedRowsByCell(ctx *sql.Context, root, xRoot, yRoot, baseRoot do
 		if err != nil {
 			return nil, nil, err
 		}
-		if wholeRow {
+		if wholeRow && b == nil {
 			rows[string(art.Key)] = conflictedRow{wholeRow: true}
 		} else if len(row.tags) > 0 {
 			rows[string(art.Key)] = row
