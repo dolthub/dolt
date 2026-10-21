@@ -68,9 +68,49 @@ var doltCommit = &doltCommitValidator{}
 
 var MergeScripts = []queries.ScriptTest{
 	{
+		// The conflicts table leaves out the virtual column v, so deleting a conflict must find its columns without it.
+		Name:    "delete conflicts of a table with a virtual column",
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"SET @@dolt_allow_commit_conflicts = 1;",
+			"CREATE TABLE t (id INT PRIMARY KEY, a INT, v INT AS (a + 1) VIRTUAL);",
+			"CALL DOLT_COMMIT('-Am', 'base');",
+			"CALL DOLT_BRANCH('other');",
+			"INSERT INTO t (id, a) VALUES (1, 10);",
+			"CALL DOLT_COMMIT('-am', 'main insert');",
+			"CALL DOLT_CHECKOUT('other');",
+			"INSERT INTO t (id, a) VALUES (1, 20);",
+			"CALL DOLT_COMMIT('-am', 'other insert');",
+			"CALL DOLT_CHECKOUT('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT our_id, our_a, their_id, their_a FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{1, 10, 1, 20}},
+			},
+			{
+				Query:            "DELETE FROM dolt_conflicts_t;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT * FROM t;",
+				Expected: []sql.Row{{1, 10, 11}},
+			},
+		},
+	},
+	{
 		// Both sides change row 1, and the merge resolves it cell by cell. Its stored generated column g changes as a
 		// result, and the index on g must have the new value.
-		Name: "merge resolving a row both sides changed updates the index on a stored generated column",
+		Name:    "merge resolving a row both sides changed updates the index on a stored generated column",
+		Dialect: "mysql",
 		SetUpScript: []string{
 			"CREATE TABLE t (id INT PRIMARY KEY, a INT, b INT, g INT AS (a + b) STORED, INDEX ig (g));",
 			"INSERT INTO t (id, a, b) VALUES (1, 0, 1);",

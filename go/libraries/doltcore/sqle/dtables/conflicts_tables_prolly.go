@@ -640,8 +640,9 @@ func newProllyConflictDeleter(ctx *sql.Context, ct ProllyConflictsTable) *prolly
 	vB := val.NewTupleBuilder(vd, ct.artM.NodeStore())
 	p := ct.artM.Pool()
 
-	baseColSize := ct.baseSch.GetAllCols().Size()
-	ourColSize := ct.ourSch.GetAllCols().Size()
+	// The conflicts table leaves out virtual columns.
+	baseColSize := ct.baseSch.GetPKCols().Size() + ct.baseSch.GetNonPKCols().StoredSize()
+	ourColSize := ct.ourSch.GetPKCols().Size() + ct.ourSch.GetNonPKCols().StoredSize()
 	// root_ish, base_cols..., our_cols, our_diff_type
 	ourDiffTypeIdx := 1 + baseColSize + ourColSize
 
