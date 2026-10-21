@@ -559,9 +559,17 @@ type virtualRowMerger struct {
 	conversionConflicts bool
 }
 
+// newVirtualBaseValueMerger returns a value merger of the sides of a virtual merge base, which merges JSON documents
+// whatever the session's setting, so that the virtual merge base does not depend on it.
+func newVirtualBaseValueMerger(ctx *sql.Context, sch schema.Schema, sides virtualMergeSides, ns tree.NodeStore) *valueMerger {
+	vm := NewValueMerger(ctx, sch, sides.xSch, sides.ySch, sides.baseSch, sides.x.Pool(), ns)
+	vm.alwaysMergeJSON = true
+	return vm
+}
+
 func newVirtualRowMerger(ctx *sql.Context, name doltdb.TableName, sch schema.Schema, sides virtualMergeSides, ns tree.NodeStore, conversionConflicts bool) (*virtualRowMerger, error) {
 	rm := &virtualRowMerger{
-		vm:                  NewValueMerger(ctx, sch, sides.xSch, sides.ySch, sides.baseSch, sides.x.Pool(), ns),
+		vm:                  newVirtualBaseValueMerger(ctx, sch, sides, ns),
 		tableName:           name.Name,
 		sch:                 sch,
 		builder:             val.NewTupleBuilder(sch.GetValueDescriptor(ns), ns),
@@ -628,7 +636,7 @@ func (rm *virtualRowMerger) merge(ctx *sql.Context, key, x, y, b val.Tuple, base
 		if col.Generated != "" {
 			continue
 		}
-		cell, err := mergeCell(ctx, vm, i, x, y, b, bv, baseRow.wholeRow || slices.Contains(baseRow.tags, col.Tag))
+		cell, err := mergeCell(ctx, vm, i, x, y, b, baseRow.wholeRow || slices.Contains(baseRow.tags, col.Tag))
 		if errors.Is(err, errCellConflict) || (err != nil && rm.conversionConflicts) {
 			row.tags = append(row.tags, col.Tag)
 		} else if err != nil {
@@ -888,66 +896,32 @@ func generateStoredColumns(ctx *sql.Context, builder *val.TupleBuilder, cells []
 
 var errCellConflict = errors.New("cell conflict")
 
-// mergeCell returns the merge of column |i| of rows |x| and |y| against the base row |b|, whose value is |bv|, or
-// errCellConflict. JSON documents merge as they do in a merge of rows. A cell |markedInBase| conflicted in the merge
-// base, so it counts as changed on both sides.
-func mergeCell(ctx context.Context, vm *valueMerger, i int, x, y, b val.Tuple, bv interface{}, markedInBase bool) (interface{}, error) {
-	xv, err := vm.mergedCell(ctx, vm.leftVD, vm.leftMapping, x, i)
-	if err != nil {
-		return nil, err
-	}
-	yv, err := vm.mergedCell(ctx, vm.rightVD, vm.rightMapping, y, i)
-	if err != nil {
-		return nil, err
-	}
-	if equal, err := vm.mergedCellsEqual(ctx, i, xv, yv); err != nil || equal {
-		return xv, err
-	}
+// mergeCell returns the merge of column |i| of rows |x| and |y| against the base row |b|, as a merge of the rows
+// merges it, or errCellConflict. A cell |markedInBase| conflicted in the merge base, so it counts as changed on both
+// sides.
+func mergeCell(ctx *sql.Context, vm *valueMerger, i int, x, y, b val.Tuple, markedInBase bool) (interface{}, error) {
 	if markedInBase {
+		xv, err := vm.mergedCell(ctx, vm.leftVD, vm.leftMapping, x, i)
+		if err != nil {
+			return nil, err
+		}
+		yv, err := vm.mergedCell(ctx, vm.rightVD, vm.rightMapping, y, i)
+		if err != nil {
+			return nil, err
+		}
+		if equal, err := vm.mergedCellsEqual(ctx, i, xv, yv); err != nil || equal {
+			return xv, err
+		}
 		return nil, errCellConflict
 	}
-	if equal, err := vm.mergedCellsEqual(ctx, i, yv, bv); err != nil || equal {
-		return xv, err
+	cell, conflict, err := vm.processColumn(ctx, i, x, y, b)
+	if err != nil {
+		return nil, err
 	}
-	if equal, err := vm.mergedCellsEqual(ctx, i, xv, bv); err != nil || equal {
-		return yv, err
-	}
-	return mergeJSONCell(ctx, vm, i, x, y, b)
-}
-
-// mergeJSONCell returns the merge of the JSON documents in column |i| of rows |x| and |y| against row |b|, or
-// errCellConflict when the column is not JSON in all three or the documents do not merge.
-func mergeJSONCell(ctx context.Context, vm *valueMerger, i int, x, y, b val.Tuple) (interface{}, error) {
-	enc := vm.resultVD.Types[i].Enc
-	if enc != val.JsonAdaptiveEnc && enc != val.JSONAddrEnc {
+	if conflict {
 		return nil, errCellConflict
 	}
-	var fields [3][]byte
-	for side, s := range []struct {
-		vd      *val.TupleDesc
-		mapping val.OrdinalMapping
-		row     val.Tuple
-	}{{vm.baseVD, vm.baseMapping, b}, {vm.leftVD, vm.leftMapping, x}, {vm.rightVD, vm.rightMapping, y}} {
-		j := s.mapping[i]
-		if j == -1 || s.vd.Types[j].Enc != enc {
-			return nil, errCellConflict
-		}
-		if fields[side] = s.row.GetField(j); fields[side] == nil {
-			return nil, errCellConflict
-		}
-	}
-	var merged interface{}
-	var conflict bool
-	var err error
-	if enc == val.JsonAdaptiveEnc {
-		merged, conflict, err = vm.mergeJSONAdaptive(ctx, fields[0], fields[1], fields[2])
-	} else {
-		merged, conflict, err = vm.mergeJSONAddr(ctx, fields[0], fields[1], fields[2])
-	}
-	if err == nil && conflict {
-		err = errCellConflict
-	}
-	return merged, err
+	return cell, nil
 }
 
 func getRow(ctx context.Context, rows prolly.Map, key val.Tuple) (val.Tuple, error) {

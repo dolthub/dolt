@@ -2035,4 +2035,21 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// As above, with @@dolt_dont_merge_json set. The virtual merge base merges the JSON documents whatever the
+		// setting, so x3's change to j is still the only one.
+		Name: "merge bases that conflict on a row and merge its JSON document, with @@dolt_dont_merge_json: merge y into x",
+		SetUpScript: append(jsonInConflictedRowSetup(`{"x": 1}`, `{"y": 1}`, `{"x": 1, "y": 1}`, `{"x": 2, "y": 1}`),
+			"SET @@dolt_dont_merge_json = 1;"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t;",
+				Expected: []sql.Row{{1, "resolved", types.MustJSON(`{"x": 2, "y": 1}`)}},
+			},
+		},
+	},
 }
