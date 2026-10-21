@@ -2000,6 +2000,31 @@ func remapTupleWithColumnDefaults(
 	return tb.Build(ctx, pool)
 }
 
+// ComputeStoredGeneratedColumns sets the stored generated columns of |row|, a row of table |tableName| with schema
+// |sch|, from its other columns, in order.
+func ComputeStoredGeneratedColumns(ctx *sql.Context, tableName string, sch schema.Schema, row sql.Row) error {
+	if !hasStoredGeneratedColumns(sch) {
+		return nil
+	}
+	exprs, err := resolveDefaults(ctx, tableName, sch, sch)
+	if err != nil {
+		return err
+	}
+	i := 0
+	for _, col := range sch.GetNonPKCols().GetColumns() {
+		if col.Virtual {
+			continue
+		}
+		if col.Generated != "" {
+			if _, err = evalColumnExpression(ctx, exprs[i], col, row, sch, tableName); err != nil {
+				return err
+			}
+		}
+		i++
+	}
+	return nil
+}
+
 // evalColumnExpression evaluates |expr|, the default or generated value of column |col|, against |row|, of schema
 // |sch|, and converts it to |col|'s type. It sets |col| in |row| to the value, so that a later generated column that
 // depends on |col| sees it.

@@ -68,6 +68,156 @@ var doltCommit = &doltCommitValidator{}
 
 var MergeScripts = []queries.ScriptTest{
 	{
+		// A composite key and a virtual column. main deletes (1, 'a') and other changes it, both add (3, 'c') with
+		// different values, and both change (1, 'b'). Deleting conflicts one at a time finds each by its key from ours,
+		// from base when ours deleted the row, and from theirs when there is no base row.
+		Name:    "delete conflicts one at a time with a composite key and a virtual column",
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"SET @@dolt_allow_commit_conflicts = 1;",
+			"CREATE TABLE t (k1 INT, k2 VARCHAR(10), a INT, v INT AS (a + 1) VIRTUAL, b INT, PRIMARY KEY (k1, k2));",
+			"INSERT INTO t (k1, k2, a, b) VALUES (1, 'a', 1, 1), (1, 'b', 2, 2);",
+			"CALL DOLT_COMMIT('-Am', 'base');",
+			"CALL DOLT_BRANCH('other');",
+			"DELETE FROM t WHERE k2 = 'a';",
+			"UPDATE t SET a = 10 WHERE k2 = 'b';",
+			"INSERT INTO t (k1, k2, a, b) VALUES (3, 'c', 30, 3);",
+			"CALL DOLT_COMMIT('-am', 'main');",
+			"CALL DOLT_CHECKOUT('other');",
+			"UPDATE t SET a = 20;",
+			"INSERT INTO t (k1, k2, a, b) VALUES (3, 'c', 40, 3);",
+			"CALL DOLT_COMMIT('-am', 'other');",
+			"CALL DOLT_CHECKOUT('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_k2, our_k2, their_k2 FROM dolt_conflicts_t ORDER BY their_k2;",
+				Expected: []sql.Row{{"a", nil, "a"}, {"b", "b", "b"}, {nil, "c", "c"}},
+			},
+			{
+				Query:            "DELETE FROM dolt_conflicts_t WHERE their_k2 = 'a';",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SELECT their_k2 FROM dolt_conflicts_t ORDER BY their_k2;",
+				Expected: []sql.Row{{"b"}, {"c"}},
+			},
+			{
+				Query:            "DELETE FROM dolt_conflicts_t WHERE their_k2 = 'c';",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SELECT their_k2 FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{"b"}},
+			},
+			{
+				Query:          "UPDATE dolt_conflicts_t SET our_a = 'not-an-int' WHERE their_k2 = 'b';",
+				ExpectedErrStr: "error: 'not-an-int' is not a valid value for 'int'",
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY k1, k2;",
+				Expected: []sql.Row{{1, "b", 10, 11, 2}, {3, "c", 30, 31, 3}},
+			},
+		},
+	},
+	{
+		// A keyless table with a virtual column. main adds a copy of row (1, 1) and of (2, 2), and other deletes both,
+		// so they conflict. Deleting the conflict on (1, 1) leaves the one on (2, 2).
+		Name:    "delete one conflict of a keyless table with a virtual column",
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"SET @@dolt_allow_commit_conflicts = 1;",
+			"CREATE TABLE t (a INT, v INT AS (a + 1) VIRTUAL, b INT);",
+			"INSERT INTO t (a, b) VALUES (1, 1), (2, 2);",
+			"CALL DOLT_COMMIT('-Am', 'base');",
+			"CALL DOLT_BRANCH('other');",
+			"INSERT INTO t (a, b) VALUES (1, 1), (2, 2);",
+			"CALL DOLT_COMMIT('-am', 'main');",
+			"CALL DOLT_CHECKOUT('other');",
+			"DELETE FROM t;",
+			"CALL DOLT_COMMIT('-am', 'other');",
+			"CALL DOLT_CHECKOUT('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_a, base_cardinality, our_cardinality, their_cardinality FROM dolt_conflicts_t ORDER BY base_a;",
+				Expected: []sql.Row{{1, uint64(1), uint64(2), uint64(0)}, {2, uint64(1), uint64(2), uint64(0)}},
+			},
+			{
+				Query:            "DELETE FROM dolt_conflicts_t WHERE base_a = 1;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SELECT base_a FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{2}},
+			},
+		},
+	},
+	{
+		// main and other each add a different virtual column, at different positions, and conflict on rows 1 and 2.
+		// Updating one conflict's our_a through the conflicts table updates the row, and its stored generated column
+		// g and the index on it. Deleting that conflict leaves the other.
+		Name:    "update and delete conflicts with different virtual columns on each side",
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"SET @@dolt_allow_commit_conflicts = 1;",
+			"CREATE TABLE t (id INT PRIMARY KEY, a INT, b INT, g INT AS (a * 10) STORED, INDEX ig (g));",
+			"INSERT INTO t (id, a, b) VALUES (1, 1, 1), (2, 2, 2);",
+			"CALL DOLT_COMMIT('-Am', 'base');",
+			"CALL DOLT_BRANCH('other');",
+			"ALTER TABLE t ADD COLUMN v1 INT AS (a + 1) VIRTUAL AFTER a;",
+			"UPDATE t SET a = 10;",
+			"CALL DOLT_COMMIT('-am', 'main');",
+			"CALL DOLT_CHECKOUT('other');",
+			"ALTER TABLE t ADD COLUMN v2 INT AS (b + 1) VIRTUAL;",
+			"UPDATE t SET a = 20;",
+			"CALL DOLT_COMMIT('-am', 'other');",
+			"CALL DOLT_CHECKOUT('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT column_name FROM information_schema.columns WHERE table_name = 'dolt_conflicts_t' AND column_name LIKE '%v_' ORDER BY 1;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT base_id, base_a, our_a, our_g, their_a, their_g FROM dolt_conflicts_t ORDER BY base_id;",
+				Expected: []sql.Row{{1, 1, 10, 100, 20, 200}, {2, 2, 10, 100, 20, 200}},
+			},
+			{
+				Query:    "UPDATE dolt_conflicts_t SET our_a = their_a WHERE our_id = 1;",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY id;",
+				Expected: []sql.Row{{1, 20, 21, 1, 200, 2}, {2, 10, 11, 2, 100, 3}},
+			},
+			{
+				Query:    "SELECT id FROM t FORCE INDEX (ig) WHERE g = 200;",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:            "DELETE FROM dolt_conflicts_t WHERE our_id = 1;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SELECT our_id FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{2}},
+			},
+		},
+	},
+	{
 		// As "delete conflicts of a table with a virtual column", for a keyless table, whose conflicts are found by
 		// their values.
 		Name:    "delete conflicts of a keyless table with a virtual column",

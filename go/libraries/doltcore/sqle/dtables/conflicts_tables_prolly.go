@@ -554,6 +554,7 @@ func (itr *prollyConflictRowIter) Close(ctx *sql.Context) error {
 // modifying rows in the conflict table. Any updates to the conflict table our
 // columns are applied on the source table.
 type prollyConflictOurTableUpdater struct {
+	tableName                 string
 	baseSch, ourSch, theirSch schema.Schema
 	srcUpdater                sql.RowUpdater
 	versionMappings           *versionMappings
@@ -574,6 +575,8 @@ func newProllyConflictOurTableUpdater(ctx *sql.Context, ct ProllyConflictsTable)
 	}))
 	ourUpdater := ct.sqlTable.Updater(markedCtx)
 	return &prollyConflictOurTableUpdater{
+		tableName:       ct.tblName.Name,
+		ourSch:          ct.ourSch,
 		srcUpdater:      ourUpdater,
 		versionMappings: ct.versionMappings,
 		pkOrdinals:      ct.ourSch.GetPkOrdinals(),
@@ -592,6 +595,10 @@ func (cu *prollyConflictOurTableUpdater) Update(ctx *sql.Context, oldRow sql.Row
 			ourOldRow[i] = oldRow[j]
 			ourNewRow[i] = newRow[j]
 		}
+	}
+	// An update of the table's other columns computes its stored generated columns again.
+	if err := merge.ComputeStoredGeneratedColumns(ctx, cu.tableName, cu.ourSch, ourNewRow); err != nil {
+		return err
 	}
 
 	return cu.srcUpdater.Update(ctx, ourOldRow, ourNewRow)
