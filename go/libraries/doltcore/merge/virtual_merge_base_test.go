@@ -561,6 +561,55 @@ func TestVirtualMergeBaseSpecialIndexes(t *testing.T) {
 	}, rows)
 }
 
+// TestVirtualMergeBaseVectorIndex checks nearest-neighbor searches of a virtual merge base's vector index:
+//
+//	c1 -- x1 -- x2    x
+//	  \-- y1 -- y2    y
+//	x2 = merge(x1, y1), y2 = merge(y1, x1)
+//
+// c1 has rows 1 at [50,60] and 2 at [42,52]. x1 moves row 1 to [0,0] and adds row 3 at [10,10]; y1 moves row 1 to
+// [99,99] and adds row 3 at [90,90]. So the virtual merge base has row 1 back at [50,60], row 2 untouched, and no row
+// 3. Each probe is nearest to one of its rows, and nearer still to a vector it must not have.
+func TestVirtualMergeBaseVectorIndex(t *testing.T) {
+	probe := func(v string) string {
+		return "(SELECT '" + v + "', id FROM t ORDER BY VEC_DISTANCE(e, STRING_TO_VECTOR('" + v + "')) LIMIT 1)"
+	}
+	rows := virtualMergeBaseRows(t, []string{
+		"SET @@autocommit = 0;",
+		"CREATE TABLE t (id INT PRIMARY KEY, e VECTOR(2) NOT NULL, VECTOR INDEX vidx (e));",
+		"INSERT INTO t VALUES (1, STRING_TO_VECTOR('[50,60]')), (2, STRING_TO_VECTOR('[42,52]'));",
+		"CALL DOLT_COMMIT('-Am', 'c1');",
+		"CALL DOLT_BRANCH('x');",
+		"CALL DOLT_BRANCH('y');",
+		"CALL DOLT_CHECKOUT('x');",
+		"UPDATE t SET e = STRING_TO_VECTOR('[0,0]') WHERE id = 1;",
+		"INSERT INTO t VALUES (3, STRING_TO_VECTOR('[10,10]'));",
+		"CALL DOLT_COMMIT('-am', 'x1');",
+		"CALL DOLT_BRANCH('x1');",
+		"CALL DOLT_CHECKOUT('y');",
+		"UPDATE t SET e = STRING_TO_VECTOR('[99,99]') WHERE id = 1;",
+		"INSERT INTO t VALUES (3, STRING_TO_VECTOR('[90,90]'));",
+		"CALL DOLT_COMMIT('-am', 'y1');",
+		"CALL DOLT_BRANCH('y1');",
+		"CALL DOLT_MERGE('x1', '-m', 'y2');",
+		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
+		"CALL DOLT_COMMIT('-am', 'y2');",
+		"CALL DOLT_CHECKOUT('x');",
+		"CALL DOLT_MERGE('y1', '-m', 'x2');",
+		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
+		"CALL DOLT_COMMIT('-am', 'x2');",
+	}, probe("[0,0]")+" UNION ALL "+probe("[10,10]")+" UNION ALL "+probe("[99,99]")+" UNION ALL "+probe("[90,90]")+
+		" UNION ALL "+probe("[50,60]")+" UNION ALL (SELECT 'rows', count(*) FROM t);")
+	assert.Equal(t, []sql.Row{
+		{"[0,0]", int64(2)},
+		{"[10,10]", int64(2)},
+		{"[99,99]", int64(1)},
+		{"[90,90]", int64(1)},
+		{"[50,60]", int64(1)},
+		{"rows", int64(2)},
+	}, rows)
+}
+
 func resolveBranch(t *testing.T, ctx *sql.Context, ddb *doltdb.DoltDB, branch string) *doltdb.Commit {
 	spec, err := doltdb.NewCommitSpec(branch)
 	require.NoError(t, err)
