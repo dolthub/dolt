@@ -733,6 +733,55 @@ func nestedRowPresenceSetup(seed []string, x1, y1, y2, x2, y3, x3 []string) []st
 	return append(script, "CALL DOLT_COMMIT('-am', 'x3');")
 }
 
+// unconvertibleMergeBasesSetup builds a criss-cross whose merge bases, x1 and y1, change column c's type differently,
+// a schema conflict, so that the virtual merge base keeps c1's schema, where c is INT:
+//
+//	c1 -- x1 -- xm -- x2 -- x3    x
+//	  \-- y1 -- ym -- y2 -- y3    y
+//	x2 = merge(xm, y1), y2 = merge(ym, x1)
+//
+// x1 makes c VARCHAR, sets row 1's c to 'not-an-int', and adds row 3 with c 'not-an-int'. y1 makes c BIGINT. xm and
+// ym change c's type to match the other before merging, and x and y end with c BIGINT. x3 sets row 1's c to 1, c1's
+// value, and row 3's to NULL; y3 sets both to 7. Both set row 1's d to 'same'. The values that do not convert to INT
+// conflict in the virtual merge base, which keeps c1's value for row 1 and NULL for row 3, so x3 and y3 conflict on
+// both rows.
+func unconvertibleMergeBasesSetup() []string {
+	return []string{
+		"SET @@autocommit = 0;",
+		"SET @@dolt_allow_commit_conflicts = 1;",
+		"CREATE TABLE t (id INT PRIMARY KEY, c INT, d VARCHAR(20));",
+		"INSERT INTO t VALUES (1, 1, 'seed'), (2, 2, 'seed');",
+		"CALL DOLT_COMMIT('-Am', 'c1');",
+		"CALL DOLT_BRANCH('x');",
+		"CALL DOLT_BRANCH('y');",
+		"CALL DOLT_CHECKOUT('x');",
+		"ALTER TABLE t MODIFY c VARCHAR(20);",
+		"UPDATE t SET c = 'not-an-int' WHERE id = 1;",
+		"INSERT INTO t VALUES (3, 'not-an-int', 'three');",
+		"CALL DOLT_COMMIT('-am', 'x1');",
+		"CALL DOLT_BRANCH('x1');",
+		"CALL DOLT_CHECKOUT('y');",
+		"ALTER TABLE t MODIFY c BIGINT;",
+		"CALL DOLT_COMMIT('-am', 'y1');",
+		"CALL DOLT_BRANCH('y1');",
+		"ALTER TABLE t MODIFY c VARCHAR(20);",
+		"CALL DOLT_COMMIT('-am', 'ym');",
+		"CALL DOLT_MERGE('x1', '-m', 'y2');",
+		"UPDATE t SET c = '7' WHERE id IN (1, 3);",
+		"ALTER TABLE t MODIFY c BIGINT;",
+		"UPDATE t SET d = 'same' WHERE id = 1;",
+		"CALL DOLT_COMMIT('-am', 'y3');",
+		"CALL DOLT_CHECKOUT('x');",
+		"UPDATE t SET c = '5' WHERE id IN (1, 3);",
+		"ALTER TABLE t MODIFY c BIGINT;",
+		"CALL DOLT_COMMIT('-am', 'xm');",
+		"CALL DOLT_MERGE('y1', '-m', 'x2');",
+		"UPDATE t SET c = 1, d = 'same' WHERE id = 1;",
+		"UPDATE t SET c = NULL WHERE id = 3;",
+		"CALL DOLT_COMMIT('-am', 'x3');",
+	}
+}
+
 // resolvedMergeScript merges |source| after |setup|, expecting conflicts, runs |resolve| to resolve them, commits, and
 // checks that |query| returns |expected|. |expected| is git's result for the same history and resolution.
 func resolvedMergeScript(name string, setup []string, source string, resolve []string, query string, expected []sql.Row) queries.ScriptTest {
@@ -2146,6 +2195,34 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT base_ts = (SELECT MAX(date) FROM dolt_log('--all') WHERE message IN ('x1', 'y1')) FROM dolt_preview_merge_conflicts('x', 'y', 't') WHERE base_id = 2;",
 				Expected: []sql.Row{{true}},
+			},
+		},
+	},
+	{
+		Name:        "merge bases with a schema conflict and values that do not convert to the base's schema: merge y into x",
+		SetUpScript: unconvertibleMergeBasesSetup(),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_id, base_c, base_d, our_c, their_c FROM dolt_conflicts_t ORDER BY base_id;",
+				Expected: []sql.Row{{1, 1, "seed", 1, 7}, {3, nil, "three", nil, 7}},
+			},
+		},
+	},
+	{
+		Name:        "merge bases with a schema conflict and values that do not convert to the base's schema: merge x into y",
+		SetUpScript: append(unconvertibleMergeBasesSetup(), "CALL DOLT_CHECKOUT('y');"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('x', '-m', 'merge x into y');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_id, base_c, base_d, our_c, their_c FROM dolt_conflicts_t ORDER BY base_id;",
+				Expected: []sql.Row{{1, 1, "seed", 7, 1}, {3, nil, "three", 7, nil}},
 			},
 		},
 	},

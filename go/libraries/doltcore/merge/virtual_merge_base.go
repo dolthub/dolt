@@ -675,20 +675,26 @@ func (rm *virtualRowMerger) conversionError(err error) error {
 	return err
 }
 
-// rowFrom returns |row|, of the schema that |vd| and |mapping| describe, as a row of the merger's schema.
+// rowFrom returns |row|, of the schema that |vd| and |mapping| describe, as a row of the merger's schema. Under the
+// base's schema of a table whose schema conflicts, a value that does not convert to it is NULL, and its cell is
+// conflicted.
 func (rm *virtualRowMerger) rowFrom(ctx *sql.Context, key, row val.Tuple, vd *val.TupleDesc, mapping val.OrdinalMapping) (val.Tuple, conflictedRow, error) {
-	for i := range rm.stored {
+	var conflicted conflictedRow
+	for i, col := range rm.stored {
 		cell, err := rm.vm.mergedCell(ctx, vd, mapping, row, i)
 		if err != nil {
-			if rm.conversionConflicts {
-				return nil, conflictedRow{wholeRow: true}, nil
+			if !rm.conversionConflicts {
+				return nil, conflictedRow{}, err
 			}
-			return nil, conflictedRow{}, err
+			cell = nil
+			if col.Generated == "" {
+				conflicted.tags = append(conflicted.tags, col.Tag)
+			}
 		}
 		rm.cells[i] = cell
 	}
 	value, err := rm.build(ctx, key)
-	return value, conflictedRow{}, err
+	return value, conflicted, err
 }
 
 // sidesEqual reports whether |a| and |b| hold the same values in the stored columns of the merger's schema, apart
@@ -728,6 +734,8 @@ func mergeKeylessRowsUnderBaseSchema(ctx *sql.Context, sch schema.Schema, sides 
 	type copies struct {
 		value   val.Tuple
 		x, y, b uint64
+		// unconvertible is set when a side's row has a value that does not convert to |sch|.
+		unconvertible bool
 	}
 	counts := make(map[string]*copies)
 	var order []string
@@ -749,7 +757,8 @@ func mergeKeylessRowsUnderBaseSchema(ctx *sql.Context, sch schema.Schema, sides 
 				return nil, nil, err
 			}
 			n := val.ReadKeylessCardinality(value)
-			if value, err = keylessValueUnder(ctx, builder, sch, srcSch, srcVD, value, ns); err != nil {
+			var converted bool
+			if value, converted, err = keylessValueUnder(ctx, builder, sch, srcSch, srcVD, value, ns); err != nil {
 				return nil, nil, err
 			}
 			key := string(val.HashTupleFromValue(pool, value))
@@ -759,6 +768,7 @@ func mergeKeylessRowsUnderBaseSchema(ctx *sql.Context, sch schema.Schema, sides 
 				counts[key] = c
 				order = append(order, key)
 			}
+			c.unconvertible = c.unconvertible || !converted
 			*[]*uint64{&c.x, &c.y, &c.b}[side] += n
 		}
 	}
@@ -769,6 +779,8 @@ func mergeKeylessRowsUnderBaseSchema(ctx *sql.Context, sch schema.Schema, sides 
 		c := counts[key]
 		n := c.b
 		switch {
+		case c.unconvertible:
+			conflicted[key] = true
 		case c.x == c.y || c.y == c.b:
 			n = c.x
 		case c.x == c.b:
@@ -787,9 +799,11 @@ func mergeKeylessRowsUnderBaseSchema(ctx *sql.Context, sch schema.Schema, sides 
 	return edits, conflicted, nil
 }
 
-// keylessValueUnder returns keyless row |value| of schema |srcSch| as a row of schema |sch|, with the same copies.
-// Columns |srcSch| lacks are NULL, and a value that does not convert to its column's type is NULL.
-func keylessValueUnder(ctx *sql.Context, builder *val.TupleBuilder, sch, srcSch schema.Schema, srcVD *val.TupleDesc, value val.Tuple, ns tree.NodeStore) (val.Tuple, error) {
+// keylessValueUnder returns keyless row |value| of schema |srcSch| as a row of schema |sch|, with the same copies, and
+// whether all its values convert. Columns |srcSch| lacks are NULL, and so is a value that does not convert to its
+// column's type.
+func keylessValueUnder(ctx *sql.Context, builder *val.TupleBuilder, sch, srcSch schema.Schema, srcVD *val.TupleDesc, value val.Tuple, ns tree.NodeStore) (val.Tuple, bool, error) {
+	converted := true
 	builder.Recycle()
 	builder.PutUint64(0, val.ReadKeylessCardinality(value))
 	i := 0
@@ -804,16 +818,18 @@ func keylessValueUnder(ctx *sql.Context, builder *val.TupleBuilder, sch, srcSch 
 		}
 		v, err := tree.GetField(ctx, srcVD, j+1, value, ns)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		if v, _, err = col.TypeInfo.ToSqlType().Convert(ctx, v); err != nil {
+			converted = false
 			continue
 		}
 		if err = tree.PutField(ctx, ns, builder, i, v); err != nil {
-			return nil, err
+			return nil, false, err
 		}
 	}
-	return builder.BuildPermissive(ctx, ns.Pool())
+	built, err := builder.BuildPermissive(ctx, ns.Pool())
+	return built, converted, err
 }
 
 // finishVirtualTable returns |tbl| with the rows of |edits|, its secondary indexes updated for them, and no artifacts.

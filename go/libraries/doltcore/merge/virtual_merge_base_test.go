@@ -269,6 +269,128 @@ func TestVirtualMergeBaseFullTextIndexesOfKeylessTable(t *testing.T) {
 	}
 }
 
+// virtualMergeBaseRows builds a history with |queries|, resolves the virtual merge base of branches x and y, and
+// returns the rows |query| reads from it.
+func virtualMergeBaseRows(t *testing.T, queries []string, query string) []sql.Row {
+	ctx := context.Background()
+	dEnv := dtu.CreateTestEnv()
+	t.Cleanup(func() { dEnv.DoltDB(ctx).Close() })
+	dbName, eng := engineFromEnvironment(ctx, dEnv)
+	sqlCtx, err := eng.NewLocalContext(ctx)
+	require.NoError(t, err)
+	sqlCtx.SetCurrentDatabase(dbName)
+	for _, q := range queries {
+		require.NoError(t, executeQuery(sqlCtx, eng, q), q)
+	}
+	x, y := resolveBranch(t, sqlCtx, dEnv.DoltDB(ctx), "x"), resolveBranch(t, sqlCtx, dEnv.DoltDB(ctx), "y")
+	virtualBase, err := merge.ResolveMergeBase(sqlCtx, x, y)
+	require.NoError(t, err)
+	h, err := virtualBase.HashOf()
+	require.NoError(t, err)
+	for _, q := range []string{"CALL DOLT_BRANCH('virtual', '" + h.String() + "');", "CALL DOLT_CHECKOUT('virtual');"} {
+		require.NoError(t, executeQuery(sqlCtx, eng, q), q)
+	}
+	_, iter, _, err := eng.Query(sqlCtx, query)
+	require.NoError(t, err)
+	rows, err := sql.RowIterToRows(sqlCtx, iter)
+	require.NoError(t, err)
+	return rows
+}
+
+// TestVirtualMergeBaseUnconvertibleValues checks a virtual merge base whose merge bases change column c's type
+// differently, a schema conflict, so that it keeps c1's schema, where c is INT:
+//
+//	c1 -- x1 -- xm -- x2    x
+//	  \-- y1 -- ym -- y2    y
+//	x2 = merge(xm, y1), y2 = merge(ym, x1)
+//
+// x1 makes c VARCHAR, sets row 1's c to 'not-an-int' and d to 'x1', changes row 2's d, and adds row 3 with c
+// 'not-an-int'. y1 makes c BIGINT and sets row 1's d to 'y1'. xm and ym change c's type to match the other before
+// merging. A value that does not convert to INT conflicts: an existing row keeps c1's value, and a row only x1 has
+// keeps its other values, with NULL in c.
+func TestVirtualMergeBaseUnconvertibleValues(t *testing.T) {
+	rows := virtualMergeBaseRows(t, unconvertibleHistory("not-an-int"), "SELECT * FROM t ORDER BY id;")
+	assert.Equal(t, []sql.Row{{int32(1), int32(1), "seed"}, {int32(2), int32(2), "x"}, {int32(3), nil, "three"}}, rows)
+
+	// A value that converts takes part in the merge: x1's change to row 1's c wins, and row 3 keeps it.
+	rows = virtualMergeBaseRows(t, unconvertibleHistory("42"), "SELECT * FROM t ORDER BY id;")
+	assert.Equal(t, []sql.Row{{int32(1), int32(42), "seed"}, {int32(2), int32(2), "x"}, {int32(3), int32(42), "three"}}, rows)
+}
+
+// unconvertibleHistory is TestVirtualMergeBaseUnconvertibleValues's history, with x1 setting c to |value|.
+func unconvertibleHistory(value string) []string {
+	return []string{
+		"SET @@autocommit = 0;",
+		"CREATE TABLE t (id INT PRIMARY KEY, c INT, d VARCHAR(20));",
+		"INSERT INTO t VALUES (1, 1, 'seed'), (2, 2, 'seed');",
+		"CALL DOLT_COMMIT('-Am', 'c1');",
+		"CALL DOLT_BRANCH('x');",
+		"CALL DOLT_BRANCH('y');",
+		"CALL DOLT_CHECKOUT('x');",
+		"ALTER TABLE t MODIFY c VARCHAR(20);",
+		"UPDATE t SET c = '" + value + "', d = 'x1' WHERE id = 1;",
+		"UPDATE t SET d = 'x' WHERE id = 2;",
+		"INSERT INTO t VALUES (3, '" + value + "', 'three');",
+		"CALL DOLT_COMMIT('-am', 'x1');",
+		"CALL DOLT_BRANCH('x1');",
+		"CALL DOLT_CHECKOUT('y');",
+		"ALTER TABLE t MODIFY c BIGINT;",
+		"UPDATE t SET d = 'y1' WHERE id = 1;",
+		"CALL DOLT_COMMIT('-am', 'y1');",
+		"CALL DOLT_BRANCH('y1');",
+		"ALTER TABLE t MODIFY c VARCHAR(20);",
+		"CALL DOLT_COMMIT('-am', 'ym');",
+		"CALL DOLT_MERGE('x1', '-m', 'y2');",
+		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
+		"CALL DOLT_COMMIT('-am', 'y2');",
+		"CALL DOLT_CHECKOUT('x');",
+		"UPDATE t SET c = '5';",
+		"ALTER TABLE t MODIFY c BIGINT;",
+		"CALL DOLT_COMMIT('-am', 'xm');",
+		"CALL DOLT_MERGE('y1', '-m', 'x2');",
+		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
+		"CALL DOLT_COMMIT('-am', 'x2');",
+	}
+}
+
+// TestVirtualMergeBaseUnconvertibleKeylessValues is TestVirtualMergeBaseUnconvertibleValues for a keyless table. x1
+// adds the row ('not-an-int', 'k'), whose c does not convert to INT, and y1 adds (2, 'y'). The row that does not
+// convert conflicts, and keeps the copies c1 has of it, none; the other row merges.
+func TestVirtualMergeBaseUnconvertibleKeylessValues(t *testing.T) {
+	rows := virtualMergeBaseRows(t, []string{
+		"SET @@autocommit = 0;",
+		"CREATE TABLE t (c INT, d VARCHAR(20));",
+		"INSERT INTO t VALUES (1, 'a');",
+		"CALL DOLT_COMMIT('-Am', 'c1');",
+		"CALL DOLT_BRANCH('x');",
+		"CALL DOLT_BRANCH('y');",
+		"CALL DOLT_CHECKOUT('x');",
+		"ALTER TABLE t MODIFY c VARCHAR(20);",
+		"INSERT INTO t VALUES ('not-an-int', 'k');",
+		"CALL DOLT_COMMIT('-am', 'x1');",
+		"CALL DOLT_BRANCH('x1');",
+		"CALL DOLT_CHECKOUT('y');",
+		"ALTER TABLE t MODIFY c BIGINT;",
+		"INSERT INTO t VALUES (2, 'y');",
+		"CALL DOLT_COMMIT('-am', 'y1');",
+		"CALL DOLT_BRANCH('y1');",
+		"ALTER TABLE t MODIFY c VARCHAR(20);",
+		"CALL DOLT_COMMIT('-am', 'ym');",
+		"SET @@dolt_allow_commit_conflicts = 1;",
+		"CALL DOLT_MERGE('x1', '-m', 'y2');",
+		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
+		"CALL DOLT_COMMIT('-am', 'y2');",
+		"CALL DOLT_CHECKOUT('x');",
+		"DELETE FROM t WHERE c = 'not-an-int';",
+		"ALTER TABLE t MODIFY c BIGINT;",
+		"CALL DOLT_COMMIT('-am', 'xm');",
+		"CALL DOLT_MERGE('y1', '-m', 'x2');",
+		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
+		"CALL DOLT_COMMIT('-am', 'x2');",
+	}, "SELECT * FROM t ORDER BY c;")
+	assert.Equal(t, []sql.Row{{int32(1), "a"}, {int32(2), "y"}}, rows)
+}
+
 func resolveBranch(t *testing.T, ctx *sql.Context, ddb *doltdb.DoltDB, branch string) *doltdb.Commit {
 	spec, err := doltdb.NewCommitSpec(branch)
 	require.NoError(t, err)
