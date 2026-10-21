@@ -230,28 +230,40 @@ func mergeIntoVirtualBase(ctx *sql.Context, x, y *doltdb.Commit) (*doltdb.Commit
 }
 
 // resolveVirtualBaseConflicts gives every conflicted row of |result| its cell-by-cell merge, and removes the merge's
-// artifacts, which a virtual merge base does not keep.
+// artifacts, which a virtual merge base does not keep. A table whose schema conflicts between |xRoot| and |yRoot|
+// keeps its schema in |baseRoot|, and its rows merge cell by cell under that schema.
 func resolveVirtualBaseConflicts(ctx *sql.Context, result *Result, xRoot, yRoot, baseRoot doltdb.RootValue, baseConflicts conflictedCells) (doltdb.RootValue, conflictedCells, error) {
 	schemaConflicts := make(map[doltdb.TableName]bool)
 	for _, name := range SchemaConflictTableNames(result.SchemaConflicts) {
 		schemaConflicts[name] = true
 	}
+	tables := make(map[doltdb.TableName]bool)
+	for name, stats := range result.Stats {
+		if stats.HasArtifacts() {
+			tables[name] = true
+		}
+	}
+	for name := range schemaConflicts {
+		tables[name] = true
+	}
 
 	root := result.Root
 	conflicted := make(conflictedCells)
-	for name, stats := range result.Stats {
+	for name := range tables {
 		// Full-Text pseudo-index tables are rebuilt from their parent tables.
-		if (!stats.HasArtifacts() && !schemaConflicts[name]) || doltdb.IsFullTextTable(name.Name) {
+		if doltdb.IsFullTextTable(name.Name) {
 			continue
 		}
 		var tbl *doltdb.Table
 		var rows map[string]conflictedRow
 		var err error
-		if !schemaConflicts[name] {
+		if schemaConflicts[name] {
+			tbl, rows, err = mergeRowsUnderBaseSchema(ctx, xRoot, yRoot, baseRoot, name, baseConflicts[name])
+		} else {
 			tbl, rows, err = mergeConflictedRowsByCell(ctx, root, xRoot, yRoot, baseRoot, name, baseConflicts[name])
-			if err != nil {
-				return nil, nil, err
-			}
+		}
+		if err != nil {
+			return nil, nil, err
 		}
 		if tbl == nil {
 			if root, err = takeTableFromBase(ctx, root, baseRoot, name); err != nil {
@@ -269,14 +281,6 @@ func resolveVirtualBaseConflicts(ctx *sql.Context, result *Result, xRoot, yRoot,
 			conflicted[name] = rows
 		}
 	}
-	for name := range schemaConflicts {
-		if _, ok := result.Stats[name]; !ok {
-			var err error
-			if root, err = takeTableFromBase(ctx, root, baseRoot, name); err != nil {
-				return nil, nil, err
-			}
-		}
-	}
 	return root, conflicted, nil
 }
 
@@ -285,7 +289,7 @@ func resolveVirtualBaseConflicts(ctx *sql.Context, result *Result, xRoot, yRoot,
 // |baseConflicts| marks in the merge base count as changed on both sides. Cells are compared as values of the merged
 // schema, so the three sides may have different schemas. A conflicted row of a keyless table keeps its copies in
 // |baseRoot| whole. It returns the table without artifacts and the conflicted cells, or a nil table when the table is
-// missing from |xRoot| or |yRoot|, or is keyless with different schemas.
+// missing from |xRoot| or |yRoot|.
 func mergeConflictedRowsByCell(ctx *sql.Context, root, xRoot, yRoot, baseRoot doltdb.RootValue, name doltdb.TableName, baseConflicts map[string]conflictedRow) (*doltdb.Table, map[string]conflictedRow, error) {
 	merged, _, err := root.GetTable(ctx, name)
 	if err != nil {
@@ -295,41 +299,15 @@ func mergeConflictedRowsByCell(ctx *sql.Context, root, xRoot, yRoot, baseRoot do
 	if err != nil {
 		return nil, nil, err
 	}
-	keyless := schema.IsKeyless(sch)
-	ns := merged.NodeStore()
-	schemas := make([]schema.Schema, 3)
-	sides := make([]prolly.Map, 3)
-	for i, sideRoot := range []doltdb.RootValue{xRoot, yRoot, baseRoot} {
-		tbl, ok, err := sideRoot.GetTable(ctx, name)
-		if err != nil {
-			return nil, nil, err
-		}
-		var idx durable.Index
-		if ok {
-			if schemas[i], err = tbl.GetSchema(ctx); err != nil {
-				return nil, nil, err
-			}
-			idx, err = tbl.GetRowData(ctx)
-		} else if sideRoot == baseRoot {
-			schemas[i] = sch
-			idx, err = durable.NewEmptyPrimaryIndex(ctx, merged.ValueReadWriter(), ns, sch)
-		} else {
-			return nil, nil, nil
-		}
-		if err != nil {
-			return nil, nil, err
-		}
-		if sides[i], err = durable.ProllyMapFromIndex(idx); err != nil {
-			return nil, nil, err
-		}
+	sides, ok, err := loadSides(ctx, merged, sch, name, xRoot, yRoot, baseRoot, true)
+	if err != nil || !ok {
+		return nil, nil, err
 	}
-	xRows, yRows, baseRows := sides[0], sides[1], sides[2]
-	// A keyless row is identified by its values, so the sides of a keyless table must have the same schema.
-	if keyless && (!schema.SchemasAreEqual(sch, schemas[0]) || !schema.SchemasAreEqual(sch, schemas[1]) ||
-		!schema.SchemasAreEqual(sch, schemas[2])) {
-		return nil, nil, nil
+	// A keyless row is identified by its values, which a different schema changes, so such a table merges under the
+	// base's schema.
+	if schema.IsKeyless(sch) && !sides.sameSchemas(sch) {
+		return mergeRowsUnderBaseSchema(ctx, xRoot, yRoot, baseRoot, name, baseConflicts)
 	}
-	vm := NewValueMerger(ctx, sch, schemas[0], schemas[1], schemas[2], xRows.Pool(), ns)
 
 	idx, err := merged.GetRowData(ctx)
 	if err != nil {
@@ -347,21 +325,10 @@ func mergeConflictedRowsByCell(ctx *sql.Context, root, xRoot, yRoot, baseRoot do
 	if err != nil {
 		return nil, nil, err
 	}
-
-	var stored []schema.Column
-	for _, col := range sch.GetNonPKCols().GetColumns() {
-		if !col.Virtual {
-			stored = append(stored, col)
-		}
+	rm, err := newVirtualRowMerger(ctx, name, sch, sides, merged.NodeStore(), false)
+	if err != nil {
+		return nil, nil, err
 	}
-	var generated []sql.Expression
-	if hasStoredGeneratedColumns(sch) {
-		if generated, err = resolveDefaults(ctx, name.Name, sch, sch); err != nil {
-			return nil, nil, err
-		}
-	}
-	builder := val.NewTupleBuilder(sch.GetValueDescriptor(ns), ns)
-	cells := make([]interface{}, len(stored))
 	mut := mergedRows.Mutate()
 	rows := make(map[string]conflictedRow)
 	for {
@@ -371,110 +338,461 @@ func mergeConflictedRowsByCell(ctx *sql.Context, root, xRoot, yRoot, baseRoot do
 		} else if err != nil {
 			return nil, nil, err
 		}
-		x, err := getRow(ctx, xRows, art.Key)
-		if err != nil {
-			return nil, nil, err
-		}
-		y, err := getRow(ctx, yRows, art.Key)
-		if err != nil {
-			return nil, nil, err
-		}
-		b, err := getRow(ctx, baseRows, art.Key)
+		x, y, b, err := sides.rows(ctx, art.Key)
 		if err != nil {
 			return nil, nil, err
 		}
 		// The merge bases of a conflicted keyless row disagree on how many copies of it there are. Like a conflicted
 		// line in git's text merge, it keeps its base's copies and is marked.
-		if keyless {
-			if b == nil {
-				err = mut.Delete(ctx, art.Key)
-			} else {
-				err = mut.Put(ctx, art.Key, b)
-			}
-			if err != nil {
+		if rm.keyless {
+			if err = putOrDelete(ctx, mut, art.Key, b); err != nil {
 				return nil, nil, err
 			}
 			rows[string(art.Key)] = conflictedRow{wholeRow: true}
 			continue
 		}
-
-		var row conflictedRow
-		// A row that one merge base deleted and the other changed takes the base's row unmarked, as git's merge-ort takes
-		// the base's version of a file for a modify/delete conflict. A row added twice is marked, as git's text merge of
-		// two added files leaves conflict markers.
-		wholeRow := x == nil || y == nil || b == nil
-		baseRow := baseConflicts[string(art.Key)]
-		for i, col := range stored {
-			var bv interface{}
-			if b != nil {
-				if bv, err = vm.mergedCell(ctx, vm.baseVD, vm.baseMapping, b, i); err != nil {
-					return nil, nil, err
-				}
-			}
-			cells[i] = bv
-			// A generated value is computed from its sources below, so only they conflict.
-			if !wholeRow && col.Generated == "" {
-				cells[i], err = mergeCell(ctx, vm, i, x, y, b, bv, baseRow.wholeRow || slices.Contains(baseRow.tags, col.Tag))
-				if errors.Is(err, errCellConflict) {
-					cells[i] = bv
-					row.tags = append(row.tags, col.Tag)
-				} else if err != nil {
-					return nil, nil, err
-				}
-			}
-		}
-
-		if b == nil && wholeRow {
-			err = mut.Delete(ctx, art.Key)
-		} else {
-			var value val.Tuple
-			if value, err = buildRowValue(ctx, builder, cells, ns); err == nil && generated != nil && !wholeRow {
-				value, err = generateStoredColumns(ctx, builder, cells, stored, generated, sch, art.Key, value, ns)
-			}
-			if err == nil {
-				err = mut.Put(ctx, art.Key, value)
-			}
-		}
+		value, row, err := rm.merge(ctx, art.Key, x, y, b, baseConflicts[string(art.Key)])
 		if err != nil {
 			return nil, nil, err
 		}
-		if wholeRow && b == nil {
-			rows[string(art.Key)] = conflictedRow{wholeRow: true}
-		} else if len(row.tags) > 0 {
+		if err = putOrDelete(ctx, mut, art.Key, value); err != nil {
+			return nil, nil, err
+		}
+		if row.wholeRow || len(row.tags) > 0 {
 			rows[string(art.Key)] = row
 		}
 	}
+	tbl, err := finishVirtualTable(ctx, merged, sch, name, mut)
+	return tbl, rows, err
+}
 
-	newRows, err := mut.Map(ctx)
+// mergeRowsUnderBaseSchema returns table |name| of |baseRoot|, with the rows of |xRoot| and |yRoot| merged into it cell
+// by cell under its schema, and the conflicted cells. Columns that |baseRoot| lacks are left out. It is for a table
+// whose schema conflicts between |xRoot| and |yRoot|: a merge against the virtual merge base then compares the tips'
+// schemas with the base's, as a merge with that base alone would. It returns a nil table when |baseRoot| lacks the
+// table.
+func mergeRowsUnderBaseSchema(ctx *sql.Context, xRoot, yRoot, baseRoot doltdb.RootValue, name doltdb.TableName, baseConflicts map[string]conflictedRow) (*doltdb.Table, map[string]conflictedRow, error) {
+	baseTbl, ok, err := baseRoot.GetTable(ctx, name)
+	if err != nil || !ok {
+		return nil, nil, err
+	}
+	sch, err := baseTbl.GetSchema(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	tbl, err := merged.UpdateRows(ctx, durable.IndexFromProllyMap(newRows))
+	sides, _, err := loadSides(ctx, baseTbl, sch, name, xRoot, yRoot, baseRoot, false)
 	if err != nil {
 		return nil, nil, err
+	}
+	ns := baseTbl.NodeStore()
+	if schema.IsKeyless(sch) {
+		mut, err := mergeKeylessRowsUnderBaseSchema(ctx, sch, sides, ns)
+		if err != nil {
+			return nil, nil, err
+		}
+		rows := make(map[string]conflictedRow)
+		for key := range mut.conflicted {
+			rows[key] = conflictedRow{wholeRow: true}
+		}
+		tbl, err := finishVirtualTable(ctx, baseTbl, sch, name, mut.MutableMap)
+		return tbl, rows, err
+	}
+
+	rm, err := newVirtualRowMerger(ctx, name, sch, sides, ns, true)
+	if err != nil {
+		return nil, nil, err
+	}
+	keys, err := changedKeys(ctx, sides.base, sides.x, sides.y)
+	if err != nil {
+		return nil, nil, err
+	}
+	mut := sides.base.Mutate()
+	rows := make(map[string]conflictedRow)
+	for _, key := range keys {
+		x, y, b, err := sides.rows(ctx, key)
+		if err != nil {
+			return nil, nil, err
+		}
+		value, row, err := rm.merge(ctx, key, x, y, b, baseConflicts[string(key)])
+		if err != nil {
+			return nil, nil, err
+		}
+		if err = putOrDelete(ctx, mut, key, value); err != nil {
+			return nil, nil, err
+		}
+		if row.wholeRow || len(row.tags) > 0 {
+			rows[string(key)] = row
+		}
+	}
+	tbl, err := finishVirtualTable(ctx, baseTbl, sch, name, mut)
+	return tbl, rows, err
+}
+
+// virtualMergeSides holds the rows and schemas of a table in the two merge bases of a virtual merge base, x and y, and
+// in their merge base.
+type virtualMergeSides struct {
+	x, y, base          prolly.Map
+	xSch, ySch, baseSch schema.Schema
+}
+
+// loadSides loads table |name| from each root. A root without the table has no rows of it, with schema |sch|. With
+// |requireMergeBases|, it reports false when |xRoot| or |yRoot| lacks the table.
+func loadSides(ctx *sql.Context, tbl *doltdb.Table, sch schema.Schema, name doltdb.TableName, xRoot, yRoot, baseRoot doltdb.RootValue, requireMergeBases bool) (virtualMergeSides, bool, error) {
+	var sides virtualMergeSides
+	rows := []*prolly.Map{&sides.x, &sides.y, &sides.base}
+	schemas := []*schema.Schema{&sides.xSch, &sides.ySch, &sides.baseSch}
+	for i, sideRoot := range []doltdb.RootValue{xRoot, yRoot, baseRoot} {
+		sideTbl, ok, err := sideRoot.GetTable(ctx, name)
+		if err != nil {
+			return sides, false, err
+		}
+		var idx durable.Index
+		if ok {
+			if *schemas[i], err = sideTbl.GetSchema(ctx); err != nil {
+				return sides, false, err
+			}
+			idx, err = sideTbl.GetRowData(ctx)
+		} else if requireMergeBases && sideRoot != baseRoot {
+			return sides, false, nil
+		} else {
+			*schemas[i] = sch
+			idx, err = durable.NewEmptyPrimaryIndex(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch)
+		}
+		if err != nil {
+			return sides, false, err
+		}
+		if *rows[i], err = durable.ProllyMapFromIndex(idx); err != nil {
+			return sides, false, err
+		}
+	}
+	return sides, true, nil
+}
+
+func (s virtualMergeSides) sameSchemas(sch schema.Schema) bool {
+	return schema.SchemasAreEqual(sch, s.xSch) && schema.SchemasAreEqual(sch, s.ySch) && schema.SchemasAreEqual(sch, s.baseSch)
+}
+
+func (s virtualMergeSides) rows(ctx context.Context, key val.Tuple) (x, y, b val.Tuple, err error) {
+	if x, err = getRow(ctx, s.x, key); err != nil {
+		return
+	}
+	if y, err = getRow(ctx, s.y, key); err != nil {
+		return
+	}
+	b, err = getRow(ctx, s.base, key)
+	return
+}
+
+// changedKeys returns the keys of the rows that differ between |base| and |x| or |y|.
+func changedKeys(ctx context.Context, base, x, y prolly.Map) ([]val.Tuple, error) {
+	seen := make(map[string]bool)
+	var keys []val.Tuple
+	for _, side := range []prolly.Map{x, y} {
+		err := prolly.DiffMaps(ctx, base, side, false, func(_ context.Context, diff tree.Diff) error {
+			key := val.Tuple(diff.Key)
+			if !seen[string(key)] {
+				seen[string(key)] = true
+				keys = append(keys, slices.Clone(key))
+			}
+			return nil
+		})
+		if err != nil && !errors.Is(err, io.EOF) {
+			return nil, err
+		}
+	}
+	return keys, nil
+}
+
+func putOrDelete(ctx context.Context, mut *prolly.MutableMap, key, value val.Tuple) error {
+	if value == nil {
+		return mut.Delete(ctx, key)
+	}
+	return mut.Put(ctx, key, value)
+}
+
+// virtualRowMerger merges the rows of a table in two merge bases cell by cell into rows of schema |sch|.
+type virtualRowMerger struct {
+	vm        *valueMerger
+	sch       schema.Schema
+	stored    []schema.Column
+	generated []sql.Expression
+	builder   *val.TupleBuilder
+	cells     []interface{}
+	ns        tree.NodeStore
+	keyless   bool
+	// Under the base's schema of a table whose schema conflicts, a cell that does not convert to it conflicts.
+	conversionConflicts bool
+}
+
+func newVirtualRowMerger(ctx *sql.Context, name doltdb.TableName, sch schema.Schema, sides virtualMergeSides, ns tree.NodeStore, conversionConflicts bool) (*virtualRowMerger, error) {
+	rm := &virtualRowMerger{
+		vm:                  NewValueMerger(ctx, sch, sides.xSch, sides.ySch, sides.baseSch, sides.x.Pool(), ns),
+		sch:                 sch,
+		builder:             val.NewTupleBuilder(sch.GetValueDescriptor(ns), ns),
+		ns:                  ns,
+		keyless:             schema.IsKeyless(sch),
+		conversionConflicts: conversionConflicts,
+	}
+	for _, col := range sch.GetNonPKCols().GetColumns() {
+		if !col.Virtual {
+			rm.stored = append(rm.stored, col)
+		}
+	}
+	rm.cells = make([]interface{}, len(rm.stored))
+	if hasStoredGeneratedColumns(sch) {
+		var err error
+		if rm.generated, err = resolveDefaults(ctx, name.Name, sch, sch); err != nil {
+			return nil, err
+		}
+	}
+	return rm, nil
+}
+
+// merge returns the merge of row |key|, |x| and |y| against |b|, or nil for no row, and its conflicted cells. A cell
+// marked in |baseRow| counts as changed on both sides.
+func (rm *virtualRowMerger) merge(ctx *sql.Context, key, x, y, b val.Tuple, baseRow conflictedRow) (val.Tuple, conflictedRow, error) {
+	vm := rm.vm
+	switch {
+	case b == nil && x != nil && y != nil:
+		// A row added twice is marked unless both added the same row, as git's text merge of two added files leaves
+		// conflict markers.
+		equal, err := rm.sidesEqual(ctx, x, vm.leftVD, vm.leftMapping, y, vm.rightVD, vm.rightMapping)
+		if err != nil || !equal {
+			return nil, conflictedRow{wholeRow: true}, rm.conversionError(err)
+		}
+		return rm.rowFrom(ctx, key, x, vm.leftVD, vm.leftMapping)
+	case b == nil && x != nil:
+		return rm.rowFrom(ctx, key, x, vm.leftVD, vm.leftMapping)
+	case b == nil && y != nil:
+		return rm.rowFrom(ctx, key, y, vm.rightVD, vm.rightMapping)
+	case x == nil && y == nil:
+		return nil, conflictedRow{}, nil
+	case x == nil || y == nil:
+		// A row that one merge base deleted and the other changed takes the base's row unmarked, as git's merge-ort
+		// takes the base's version of a file for a modify/delete conflict.
+		kept, vd, mapping := y, vm.rightVD, vm.rightMapping
+		if y == nil {
+			kept, vd, mapping = x, vm.leftVD, vm.leftMapping
+		}
+		unchanged, err := rm.sidesEqual(ctx, kept, vd, mapping, b, vm.baseVD, vm.baseMapping)
+		if err = rm.conversionError(err); err != nil || unchanged {
+			return nil, conflictedRow{}, err
+		}
+		return rm.rowFrom(ctx, key, b, vm.baseVD, vm.baseMapping)
+	}
+
+	var row conflictedRow
+	for i, col := range rm.stored {
+		bv, err := vm.mergedCell(ctx, vm.baseVD, vm.baseMapping, b, i)
+		if err != nil {
+			return nil, row, err
+		}
+		rm.cells[i] = bv
+		// A generated value is computed from its sources below, so only they conflict.
+		if col.Generated != "" {
+			continue
+		}
+		cell, err := mergeCell(ctx, vm, i, x, y, b, bv, baseRow.wholeRow || slices.Contains(baseRow.tags, col.Tag))
+		if errors.Is(err, errCellConflict) || (err != nil && rm.conversionConflicts) {
+			row.tags = append(row.tags, col.Tag)
+		} else if err != nil {
+			return nil, row, err
+		} else {
+			rm.cells[i] = cell
+		}
+	}
+	value, err := rm.build(ctx, key)
+	return value, row, err
+}
+
+// conversionError returns nil for an error converting a cell to a row of a table whose schema conflicts.
+func (rm *virtualRowMerger) conversionError(err error) error {
+	if rm.conversionConflicts {
+		return nil
+	}
+	return err
+}
+
+// rowFrom returns |row|, of the schema that |vd| and |mapping| describe, as a row of the merger's schema.
+func (rm *virtualRowMerger) rowFrom(ctx *sql.Context, key, row val.Tuple, vd *val.TupleDesc, mapping val.OrdinalMapping) (val.Tuple, conflictedRow, error) {
+	for i := range rm.stored {
+		cell, err := rm.vm.mergedCell(ctx, vd, mapping, row, i)
+		if err != nil {
+			if rm.conversionConflicts {
+				return nil, conflictedRow{wholeRow: true}, nil
+			}
+			return nil, conflictedRow{}, err
+		}
+		rm.cells[i] = cell
+	}
+	value, err := rm.build(ctx, key)
+	return value, conflictedRow{}, err
+}
+
+// sidesEqual reports whether |a| and |b| hold the same values in the stored columns of the merger's schema, apart
+// from generated ones.
+func (rm *virtualRowMerger) sidesEqual(ctx context.Context, a val.Tuple, aVD *val.TupleDesc, aMapping val.OrdinalMapping, b val.Tuple, bVD *val.TupleDesc, bMapping val.OrdinalMapping) (bool, error) {
+	for i, col := range rm.stored {
+		if col.Generated != "" {
+			continue
+		}
+		av, err := rm.vm.mergedCell(ctx, aVD, aMapping, a, i)
+		if err != nil {
+			return false, err
+		}
+		bv, err := rm.vm.mergedCell(ctx, bVD, bMapping, b, i)
+		if err != nil {
+			return false, err
+		}
+		if equal, err := rm.vm.mergedCellsEqual(ctx, i, av, bv); err != nil || !equal {
+			return false, err
+		}
+	}
+	return true, nil
+}
+
+func (rm *virtualRowMerger) build(ctx *sql.Context, key val.Tuple) (val.Tuple, error) {
+	value, err := buildRowValue(ctx, rm.builder, rm.cells, rm.ns)
+	if err != nil || rm.generated == nil {
+		return value, err
+	}
+	return generateStoredColumns(ctx, rm.builder, rm.cells, rm.stored, rm.generated, rm.sch, key, value, rm.ns)
+}
+
+// keylessMutation is the rows of a keyless table under the base's schema, and the keys of those that conflicted.
+type keylessMutation struct {
+	*prolly.MutableMap
+	conflicted map[string]bool
+}
+
+// mergeKeylessRowsUnderBaseSchema merges how many copies of each row of keyless table |sides| there are under the
+// base's schema |sch|, matching rows by their values under it. A row whose merge bases disagree on its copies keeps the
+// base's copies and is conflicted.
+func mergeKeylessRowsUnderBaseSchema(ctx *sql.Context, sch schema.Schema, sides virtualMergeSides, ns tree.NodeStore) (keylessMutation, error) {
+	type copies struct {
+		value   val.Tuple
+		x, y, b uint64
+	}
+	counts := make(map[string]*copies)
+	var order []string
+	vd := sch.GetValueDescriptor(ns)
+	builder := val.NewTupleBuilder(vd, ns)
+	pool := sides.base.Pool()
+	for side, rows := range []prolly.Map{sides.x, sides.y, sides.base} {
+		srcSch := []schema.Schema{sides.xSch, sides.ySch, sides.baseSch}[side]
+		srcVD := srcSch.GetValueDescriptor(ns)
+		iter, err := rows.IterAll(ctx)
+		if err != nil {
+			return keylessMutation{}, err
+		}
+		for {
+			_, value, err := iter.Next(ctx)
+			if errors.Is(err, io.EOF) {
+				break
+			} else if err != nil {
+				return keylessMutation{}, err
+			}
+			n := val.ReadKeylessCardinality(value)
+			if value, err = keylessValueUnder(ctx, builder, sch, srcSch, srcVD, value, ns); err != nil {
+				return keylessMutation{}, err
+			}
+			key := string(val.HashTupleFromValue(pool, value))
+			c, ok := counts[key]
+			if !ok {
+				c = &copies{value: value}
+				counts[key] = c
+				order = append(order, key)
+			}
+			*[]*uint64{&c.x, &c.y, &c.b}[side] += n
+		}
+	}
+
+	mut := keylessMutation{MutableMap: sides.base.Mutate(), conflicted: make(map[string]bool)}
+	for _, key := range order {
+		c := counts[key]
+		n := c.b
+		switch {
+		case c.x == c.y || c.y == c.b:
+			n = c.x
+		case c.x == c.b:
+			n = c.y
+		default:
+			mut.conflicted[key] = true
+		}
+		var err error
+		if n == 0 {
+			err = mut.Delete(ctx, val.Tuple(key))
+		} else {
+			value, _ := val.ModifyKeylessCardinality(pool, c.value, int64(n)-int64(val.ReadKeylessCardinality(c.value)))
+			err = mut.Put(ctx, val.Tuple(key), value)
+		}
+		if err != nil {
+			return keylessMutation{}, err
+		}
+	}
+	return mut, nil
+}
+
+// keylessValueUnder returns keyless row |value| of schema |srcSch| as a row of schema |sch|, with the same copies.
+// Columns |srcSch| lacks are NULL, and a value that does not convert to its column's type is NULL.
+func keylessValueUnder(ctx *sql.Context, builder *val.TupleBuilder, sch, srcSch schema.Schema, srcVD *val.TupleDesc, value val.Tuple, ns tree.NodeStore) (val.Tuple, error) {
+	builder.Recycle()
+	builder.PutUint64(0, val.ReadKeylessCardinality(value))
+	i := 0
+	for _, col := range sch.GetNonPKCols().GetColumns() {
+		if col.Virtual {
+			continue
+		}
+		i++
+		j := findNonPKColumnMappingByTagOrName(srcSch, col)
+		if j == -1 {
+			continue
+		}
+		v, err := tree.GetField(ctx, srcVD, j+1, value, ns)
+		if err != nil {
+			return nil, err
+		}
+		if v, _, err = col.TypeInfo.ToSqlType().Convert(ctx, v); err != nil {
+			continue
+		}
+		if err = tree.PutField(ctx, ns, builder, i, v); err != nil {
+			return nil, err
+		}
+	}
+	return builder.BuildPermissive(ctx, ns.Pool())
+}
+
+// finishVirtualTable returns |tbl| with the rows of |mut|, secondary indexes built from them, and no artifacts.
+func finishVirtualTable(ctx *sql.Context, tbl *doltdb.Table, sch schema.Schema, name doltdb.TableName, mut *prolly.MutableMap) (*doltdb.Table, error) {
+	ns := tbl.NodeStore()
+	newRows, err := mut.Map(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if tbl, err = tbl.UpdateRows(ctx, durable.IndexFromProllyMap(newRows)); err != nil {
+		return nil, err
 	}
 	indexes, err := tbl.GetIndexSet(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	for _, index := range sch.Indexes().AllIndexes() {
 		built, err := creation.BuildProllyIndexExternal(ctx, tbl.ValueReadWriter(), ns, sch, name.Name, index, newRows, nil, nil)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		if indexes, err = indexes.PutIndex(ctx, index.Name(), built); err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 	if tbl, err = tbl.SetIndexSet(ctx, indexes); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	emptyArtifacts, err := durable.NewEmptyArtifactIndex(ctx, tbl.ValueReadWriter(), ns, sch)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	tbl, err = tbl.SetArtifacts(ctx, emptyArtifacts)
-	return tbl, rows, err
+	return tbl.SetArtifacts(ctx, emptyArtifacts)
 }
 
 func buildRowValue(ctx context.Context, builder *val.TupleBuilder, cells []interface{}, ns tree.NodeStore) (val.Tuple, error) {

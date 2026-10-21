@@ -649,6 +649,73 @@ func keylessMergeBasesSetup(xCopies, yCopies int, xDeletesN bool) []string {
 	return script
 }
 
+// schemaConflictingMergeBasesSetup builds a criss-cross whose merge bases, x1 and y1, have a schema conflict, which
+// x and y avoid as the schema conflict error says, by changing their own schema to match before merging:
+//
+//	c1 -- x1 -- xm -- x2 -- x3    x
+//	  \-- y1 -- ym -- y2 -- y3    y
+//	x2 = merge(xm, y1), y2 = merge(ym, x1)
+//
+// c1 seeds row 1. x1 adds column c as INT and row 2; y1 adds c as VARCHAR. xm drops c and adds it again as VARCHAR,
+// and ym as INT, so the merges are clean. x3 drops c and adds it as |xType|, and with |xSetsC| sets row 1's c to 5. y3
+// sets row 1's a to 'y edit' and deletes row 2. The merge bases of x3 and y3 are x1 and y1.
+func schemaConflictingMergeBasesSetup(xType string, xSetsC bool) []string {
+	setC := "SELECT 1;"
+	if xSetsC {
+		setC = "UPDATE t SET c = 5 WHERE id = 1;"
+	}
+	return []string{
+		"SET @@autocommit = 0;",
+		"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100));",
+		"INSERT INTO t VALUES (1, 'seed');",
+		"CALL DOLT_COMMIT('-Am', 'c1');",
+		"CALL DOLT_BRANCH('x');",
+		"CALL DOLT_BRANCH('y');",
+		"CALL DOLT_CHECKOUT('x');",
+		"ALTER TABLE t ADD COLUMN c INT;",
+		"INSERT INTO t VALUES (2, 'two', NULL);",
+		"CALL DOLT_COMMIT('-am', 'x1');",
+		"CALL DOLT_BRANCH('x1');",
+		"CALL DOLT_CHECKOUT('y');",
+		"ALTER TABLE t ADD COLUMN c VARCHAR(100);",
+		"CALL DOLT_COMMIT('-am', 'y1');",
+		"CALL DOLT_BRANCH('y1');",
+		"ALTER TABLE t DROP COLUMN c;",
+		"ALTER TABLE t ADD COLUMN c INT;",
+		"CALL DOLT_COMMIT('-am', 'ym');",
+		"CALL DOLT_MERGE('x1', '-m', 'y2');",
+		"CALL DOLT_CHECKOUT('x');",
+		"ALTER TABLE t DROP COLUMN c;",
+		"ALTER TABLE t ADD COLUMN c VARCHAR(100);",
+		"CALL DOLT_COMMIT('-am', 'xm');",
+		"CALL DOLT_MERGE('y1', '-m', 'x2');",
+		"ALTER TABLE t DROP COLUMN c;",
+		fmt.Sprintf("ALTER TABLE t ADD COLUMN c %s;", xType),
+		setC,
+		"CALL DOLT_COMMIT('-am', 'x3');",
+		"CALL DOLT_CHECKOUT('y');",
+		"UPDATE t SET a = 'y edit' WHERE id = 1;",
+		"DELETE FROM t WHERE id = 2;",
+		"CALL DOLT_COMMIT('-am', 'y3');",
+		"CALL DOLT_CHECKOUT('x');",
+	}
+}
+
+// keylessSchemaChangeMergeBasesSetup is keylessMergeBasesSetup, where x1 also adds column c, so that the sides of the
+// merge of x1 and y1 have different schemas.
+func keylessSchemaChangeMergeBasesSetup() []string {
+	return append(crissCrossSetup(
+		[]string{
+			"CREATE TABLE t (a VARCHAR(100), b VARCHAR(100));",
+			"INSERT INTO t VALUES ('r', '1');",
+		},
+		[]string{"ALTER TABLE t ADD COLUMN c VARCHAR(100);", "INSERT INTO t VALUES ('r', '1', NULL), ('n', 'x', NULL);"},
+		[]string{"DELETE FROM t WHERE a = 'r';"},
+		[]string{"DELETE FROM dolt_conflicts_t;", "DELETE FROM t WHERE a = 'r';", "INSERT INTO t VALUES ('r', '1', NULL);"},
+		[]string{"DELETE FROM dolt_conflicts_t;", "DELETE FROM t WHERE a = 'r';", "INSERT INTO t VALUES ('r', '1', NULL);"},
+	), "DELETE FROM t WHERE a = 'n';", "CALL DOLT_COMMIT('-am', 'x3');")
+}
+
 // resolvedMergeScript merges |source| after |setup|, expecting conflicts, runs |resolve| to resolve them, commits, and
 // checks that |query| returns |expected|. |expected| is git's result for the same history and resolution.
 func resolvedMergeScript(name string, setup []string, source string, resolve []string, query string, expected []sql.Row) queries.ScriptTest {
@@ -1858,6 +1925,89 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT base_a, base_cardinality, our_cardinality, their_cardinality FROM dolt_conflicts_t;",
 				Expected: []sql.Row{{"r", uint64(1), uint64(2), uint64(1)}},
+			},
+		},
+	},
+	{
+		// x1 and y1 have a schema conflict on c, but x3 and y3 agree on c, so the merge takes it. The virtual merge base
+		// keeps c1's schema, without c, and merges the rows of x1 and y1, so it has row 2, and y3's delete of it wins.
+		Name:        "merge bases with a schema conflict, tips agreeing on the schema: merge y into x",
+		SetUpScript: schemaConflictingMergeBasesSetup("INT", false),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY id;",
+				Expected: []sql.Row{{1, "y edit", nil}},
+			},
+		},
+	},
+	{
+		Name: "merge bases with a schema conflict, tips agreeing on the schema: merge x into y",
+		SetUpScript: append(schemaConflictingMergeBasesSetup("INT", false),
+			"CALL DOLT_CHECKOUT('y');"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('x', '-m', 'merge x into y');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY id;",
+				Expected: []sql.Row{{1, "y edit", nil}},
+			},
+		},
+	},
+	{
+		// The virtual merge base has no c, so x3 and y3 both added it, and their values of it conflict, as they would
+		// with one merge base without c.
+		Name:        "merge bases with a schema conflict, tips agreeing on the schema and not on a value: merge y into x",
+		SetUpScript: schemaConflictingMergeBasesSetup("INT", true),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_id, base_a, our_a, our_c, their_a, their_c FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{1, "seed", "seed", 5, "y edit", nil}},
+			},
+		},
+	},
+	{
+		// x3 and y3 disagree on c too, so the merge has the schema conflict a merge with one merge base would have.
+		Name:        "merge bases with a schema conflict, tips disagreeing on the schema: merge y into x",
+		SetUpScript: schemaConflictingMergeBasesSetup("VARCHAR(100)", true),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT table_name, description FROM dolt_schema_conflicts;",
+				Expected: []sql.Row{{"t", "incompatible column types for column 'c': VarString(utf8mb4_0900_bin, 100, SQL: VarChar) and Int32"}},
+			},
+		},
+	},
+	{
+		// The sides of the merge of x1 and y1 have different schemas, so the virtual merge base matches their rows by
+		// their values under c1's schema, without c, and has one copy of each of r and n. x3 and y3 both have c, so
+		// every row conflicts, as it would in a merge with that base alone; x3's delete of n is one of them.
+		Name:        "keyless merge bases with different schemas, then a delete of a row they merged cleanly: merge y into x",
+		SetUpScript: keylessSchemaChangeMergeBasesSetup(),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY a;",
+				Expected: []sql.Row{{"r", "1", nil}},
+			},
+			{
+				Query:    "SELECT base_a, base_cardinality, our_cardinality, their_cardinality FROM dolt_conflicts_t ORDER BY base_a;",
+				Expected: []sql.Row{{"n", uint64(1), uint64(0), uint64(1)}, {"r", uint64(1), uint64(1), uint64(1)}},
 			},
 		},
 	},
