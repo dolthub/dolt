@@ -166,6 +166,127 @@ func TestVirtualMergeBaseRebuiltAfterGC(t *testing.T) {
 
 }
 
+// TestVirtualMergeBaseRebuiltAfterGCVariants runs checkRebuiltAfterGC on virtual merge bases with stored generated
+// columns, a Full-Text index, keyless rows under their merge base's schema, and a time default.
+func TestVirtualMergeBaseRebuiltAfterGCVariants(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		setup []string
+	}{
+		{
+			// The chained stored generated columns g and h, with an index on h, as in "conflicting merge bases with
+			// chained stored generated columns".
+			name: "chained stored generated columns",
+			setup: crissCrossSetup(
+				[]string{
+					"CREATE TABLE t (id INT PRIMARY KEY, a INT, b INT, g INT AS (a + b) STORED, h INT AS (g * 10) STORED, INDEX ih (h));",
+					"INSERT INTO t (id, a, b) VALUES (1, 0, 0);",
+				},
+				[]string{"UPDATE t SET a = 1, b = 1 WHERE id = 1;"},
+				[]string{"UPDATE t SET a = 3 WHERE id = 1;"},
+				[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "UPDATE t SET a = 20, b = 1 WHERE id = 1;"},
+				[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "UPDATE t SET a = 10, b = 1 WHERE id = 1;"},
+			),
+		},
+		{
+			// x1 and y1 conflict on row 1's indexed a, and x2 and y2 resolve it differently.
+			name: "Full-Text index",
+			setup: crissCrossSetup(
+				[]string{
+					"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100), FULLTEXT INDEX fa (a));",
+					"INSERT INTO t VALUES (1, 'seed'), (2, 'seed');",
+				},
+				[]string{"UPDATE t SET a = 'alpha';"},
+				[]string{"UPDATE t SET a = 'bravo' WHERE id = 1;"},
+				[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "UPDATE t SET a = 'yresolved' WHERE id = 1;"},
+				[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "UPDATE t SET a = 'xresolved' WHERE id = 1;"},
+			),
+		},
+		{
+			name:  "keyless rows under their merge base's schema",
+			setup: keylessSchemaChangeMergeBasesSetup(),
+		},
+		{
+			// x1 adds ts with a time default, and y1 adds row 2, which takes the default in the virtual merge base.
+			name: "time default",
+			setup: crissCrossSetup(
+				[]string{
+					"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100));",
+					"INSERT INTO t VALUES (1, 'seed');",
+				},
+				[]string{"ALTER TABLE t ADD COLUMN ts DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6);", "UPDATE t SET a = 'x' WHERE id = 1;"},
+				[]string{"UPDATE t SET a = 'y' WHERE id = 1;", "INSERT INTO t VALUES (2, 'two');"},
+				[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "UPDATE t SET a = 'y2';"},
+				[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "UPDATE t SET a = 'x2';"},
+			),
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			checkRebuiltAfterGC(t, test.setup)
+		})
+	}
+}
+
+// checkRebuiltAfterGC builds |history|, merges branch y into x, which must conflict on table t against a
+// virtual merge base, and garbage collects the virtual merge base. It checks that the virtual merge base is gone, that
+// rebuilding it gives the same root, that a fresh session reads the same conflicts from it, and that resolving them
+// commits.
+func checkRebuiltAfterGC(t *testing.T, history []string) {
+	h := newDoltHarness(t)
+	defer h.Close()
+	h.Setup(setup.MydbData)
+	e := mustNewEngine(t, h)
+	defer e.Close()
+	query := func(ctx *sql.Context, q string) []sql.Row {
+		_, iter, _, err := e.Query(ctx, q)
+		require.NoError(t, err, q)
+		rows, err := sql.RowIterToRows(ctx, iter)
+		require.NoError(t, err, q)
+		return rows
+	}
+	ctx := enginetest.NewContext(h)
+	for _, q := range history {
+		query(ctx, q)
+	}
+	merging := enginetest.NewSession(h)
+	for _, q := range []string{"SET @@dolt_allow_commit_conflicts = 1;", "CALL DOLT_CHECKOUT('x');", "CALL DOLT_MERGE('y', '-m', 'merge y into x');"} {
+		query(merging, q)
+	}
+	conflictsQuery := "SELECT * FROM dolt_conflicts_t ORDER BY dolt_conflict_id;"
+	before := query(merging, conflictsQuery)
+	require.NotEmpty(t, before)
+
+	db, ok := h.provider.BaseDatabase(merging, "mydb")
+	require.True(t, ok)
+	ddb := db.(dsess.SqlDatabase).DbData().Ddb
+	vrw, ns := ddb.ValueReadWriter(), ddb.NodeStore()
+	meta := conflictMetadata(t, merging, ddb, "x")
+	require.NotEmpty(t, meta.MergeBases)
+	cached, err := doltdb.LoadConflictBaseRoot(merging, vrw, ns, meta)
+	require.NoError(t, err)
+	cachedHash, err := cached.HashOf()
+	require.NoError(t, err)
+
+	query(merging, "CALL DOLT_GC();")
+	stored, err := vrw.ReadValue(merging, meta.BaseRootIsh)
+	require.NoError(t, err)
+	require.Nil(t, stored, "garbage collection removes the virtual merge base")
+
+	after := enginetest.NewSession(h)
+	query(after, "CALL DOLT_CHECKOUT('x');")
+	assert.Equal(t, before, query(after, conflictsQuery))
+	rebuilt, err := doltdb.LoadConflictBaseRoot(after, vrw, ns, meta)
+	require.NoError(t, err)
+	rebuiltHash, err := rebuilt.HashOf()
+	require.NoError(t, err)
+	assert.Equal(t, cachedHash, rebuiltHash)
+
+	query(after, "SET @@dolt_allow_commit_conflicts = 1;")
+	query(after, "CALL DOLT_CONFLICTS_RESOLVE('--theirs', 't');")
+	query(after, "CALL DOLT_COMMIT('-am', 'resolve merge of y');")
+	assert.Equal(t, []sql.Row{{int64(0)}}, query(after, "SELECT count(*) FROM dolt_status;"))
+}
+
 // conflictMetadata returns the metadata of the conflicts of table t in the working set of |branch|, which must all
 // have the same metadata.
 func conflictMetadata(t *testing.T, ctx *sql.Context, ddb *doltdb.DoltDB, branch string) prolly.ConflictMetadata {
