@@ -372,6 +372,13 @@ func computeProllyTreePatches(
 			if diff, err = cellChecker.Check(ctx, diff); err != nil {
 				return nil, nil, err
 			}
+			// The validators and the primary and secondary indexes all take a merged row with its generated columns
+			// computed.
+			if diff.Op == tree.DiffOpDivergentModifyResolved {
+				if diff.Merged, err = pri.withGeneratedColumns(ctx, diff.Key, diff.Merged); err != nil {
+					return nil, nil, err
+				}
+			}
 
 			cnt, err := uniq.validateDiff(ctx, diff)
 			if err != nil {
@@ -1609,34 +1616,7 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 		// the table will have an unexpected root hash.
 		return m.patchBuffer.SendKV(ctx, tree.Item(diff.Key), nil)
 	case tree.DiffOpDivergentModifyResolved:
-		// any generated columns need to be re-resolved because their computed values may have changed as a result of
-		// the merge
-		merged := diff.Merged
-		if hasStoredGeneratedColumns(m.finalSch) {
-			defaults, err := resolveDefaults(ctx, m.tableMerger.name.Name, m.finalSch, m.tableMerger.rightSch)
-			if err != nil {
-				return err
-			}
-
-			tempTupleValue, err := remapTupleWithColumnDefaults(
-				ctx,
-				diff.Key,
-				merged,
-				m.finalSch.GetValueDescriptor(m.valueMerger.ns),
-				m.valueMerger.rightMapping,
-				m.tableMerger,
-				m.tableMerger.rightSch,
-				m.finalSch,
-				defaults,
-				m.valueMerger.syncPool,
-				true)
-			if err != nil {
-				return err
-			}
-			merged = tempTupleValue
-		}
-
-		return m.patchBuffer.SendKV(ctx, tree.Item(diff.Key), tree.Item(merged))
+		return m.patchBuffer.SendKV(ctx, tree.Item(diff.Key), tree.Item(diff.Merged))
 	case tree.DiffOpLeftAdd, tree.DiffOpLeftModify, tree.DiffOpDivergentModifyConflict, tree.DiffOpDivergentDeleteConflict:
 		// Remapping when there's no schema change is harmless, but slow.
 		if !m.mergeInfo.LeftNeedsRewrite {
@@ -1664,6 +1644,30 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 	default:
 		return fmt.Errorf("unexpected diffOp for editing primary index: %s", diff.Op)
 	}
+}
+
+// withGeneratedColumns returns |merged| with its stored generated columns computed again, because a merge may have
+// changed their sources.
+func (m *primaryMerger) withGeneratedColumns(ctx *sql.Context, key, merged val.Tuple) (val.Tuple, error) {
+	if !hasStoredGeneratedColumns(m.finalSch) {
+		return merged, nil
+	}
+	defaults, err := resolveDefaults(ctx, m.tableMerger.name.Name, m.finalSch, m.tableMerger.rightSch)
+	if err != nil {
+		return nil, err
+	}
+	return remapTupleWithColumnDefaults(
+		ctx,
+		key,
+		merged,
+		m.finalSch.GetValueDescriptor(m.valueMerger.ns),
+		m.valueMerger.rightMapping,
+		m.tableMerger,
+		m.tableMerger.rightSch,
+		m.finalSch,
+		defaults,
+		m.valueMerger.syncPool,
+		true)
 }
 
 func resolveDefaults(ctx *sql.Context, tableName string, mergedSchema schema.Schema, sourceSchema schema.Schema) ([]sql.Expression, error) {

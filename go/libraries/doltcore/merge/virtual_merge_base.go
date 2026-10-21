@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -344,7 +345,14 @@ func mergeConflictedRowsByCell(ctx *sql.Context, root, xRoot, yRoot, baseRoot do
 			stored = append(stored, col)
 		}
 	}
+	var generated []sql.Expression
+	if hasStoredGeneratedColumns(sch) {
+		if generated, err = resolveDefaults(ctx, name.Name, sch, sch); err != nil {
+			return nil, nil, err
+		}
+	}
 	builder := val.NewTupleBuilder(sch.GetValueDescriptor(ns), ns)
+	cells := make([]interface{}, len(stored))
 	mut := mergedRows.Mutate()
 	rows := make(map[string]conflictedRow)
 	for {
@@ -367,7 +375,6 @@ func mergeConflictedRowsByCell(ctx *sql.Context, root, xRoot, yRoot, baseRoot do
 			return nil, nil, err
 		}
 
-		builder.Recycle()
 		var row conflictedRow
 		// A row that one merge base deleted and the other changed takes the base's row unmarked, as git's merge-ort takes
 		// the base's version of a file for a modify/delete conflict. A row added twice is marked, as git's text merge of
@@ -381,21 +388,16 @@ func mergeConflictedRowsByCell(ctx *sql.Context, root, xRoot, yRoot, baseRoot do
 					return nil, nil, err
 				}
 			}
-			cell := bv
-			if !wholeRow {
-				cell, err = mergeCell(ctx, vm, i, x, y, bv, baseRow.wholeRow || slices.Contains(baseRow.tags, col.Tag))
+			cells[i] = bv
+			// A generated value is computed from its sources below, so only they conflict.
+			if !wholeRow && col.Generated == "" {
+				cells[i], err = mergeCell(ctx, vm, i, x, y, bv, baseRow.wholeRow || slices.Contains(baseRow.tags, col.Tag))
 				if errors.Is(err, errCellConflict) {
-					// A generated value is computed from its sources, so only they conflict.
-					cell = bv
-					if col.Generated == "" {
-						row.tags = append(row.tags, col.Tag)
-					}
+					cells[i] = bv
+					row.tags = append(row.tags, col.Tag)
 				} else if err != nil {
 					return nil, nil, err
 				}
-			}
-			if err = tree.PutField(ctx, ns, builder, i, cell); err != nil {
-				return nil, nil, err
 			}
 		}
 
@@ -403,7 +405,10 @@ func mergeConflictedRowsByCell(ctx *sql.Context, root, xRoot, yRoot, baseRoot do
 			err = mut.Delete(ctx, art.Key)
 		} else {
 			var value val.Tuple
-			if value, err = builder.BuildPermissive(ctx, ns.Pool()); err == nil {
+			if value, err = buildRowValue(ctx, builder, cells, ns); err == nil && generated != nil && !wholeRow {
+				value, err = generateStoredColumns(ctx, builder, cells, stored, generated, sch, art.Key, value, ns)
+			}
+			if err == nil {
 				err = mut.Put(ctx, art.Key, value)
 			}
 		}
@@ -447,6 +452,38 @@ func mergeConflictedRowsByCell(ctx *sql.Context, root, xRoot, yRoot, baseRoot do
 	}
 	tbl, err = tbl.SetArtifacts(ctx, emptyArtifacts)
 	return tbl, rows, err
+}
+
+func buildRowValue(ctx context.Context, builder *val.TupleBuilder, cells []interface{}, ns tree.NodeStore) (val.Tuple, error) {
+	builder.Recycle()
+	for i, cell := range cells {
+		if err := tree.PutField(ctx, ns, builder, i, cell); err != nil {
+			return nil, err
+		}
+	}
+	return builder.BuildPermissive(ctx, ns.Pool())
+}
+
+// generateStoredColumns returns the row value of |cells| with each stored generated column computed from the row
+// |key| and |value|, as a merge computes them for the rows it merges.
+func generateStoredColumns(ctx *sql.Context, builder *val.TupleBuilder, cells []interface{}, stored []schema.Column, generated []sql.Expression, sch schema.Schema, key, value val.Tuple, ns tree.NodeStore) (val.Tuple, error) {
+	row, err := index.BuildRow(ctx, key, value, sch, ns)
+	if err != nil {
+		return nil, err
+	}
+	for i, col := range stored {
+		if col.Generated == "" {
+			continue
+		}
+		v, err := generated[i].Eval(ctx, row)
+		if err != nil {
+			return nil, err
+		}
+		if cells[i], _, err = col.TypeInfo.ToSqlType().Convert(ctx, v); err != nil {
+			return nil, err
+		}
+	}
+	return buildRowValue(ctx, builder, cells, ns)
 }
 
 var errCellConflict = errors.New("cell conflict")

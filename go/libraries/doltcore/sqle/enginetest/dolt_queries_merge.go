@@ -68,6 +68,37 @@ var doltCommit = &doltCommitValidator{}
 
 var MergeScripts = []queries.ScriptTest{
 	{
+		// Both sides change row 1, and the merge resolves it cell by cell. Its stored generated column g changes as a
+		// result, and the index on g must have the new value.
+		Name: "merge resolving a row both sides changed updates the index on a stored generated column",
+		SetUpScript: []string{
+			"CREATE TABLE t (id INT PRIMARY KEY, a INT, b INT, g INT AS (a + b) STORED, INDEX ig (g));",
+			"INSERT INTO t (id, a, b) VALUES (1, 0, 1);",
+			"CALL DOLT_COMMIT('-Am', 'c1');",
+			"CALL DOLT_BRANCH('other');",
+			"UPDATE t SET a = 10;",
+			"CALL DOLT_COMMIT('-am', 'main');",
+			"CALL DOLT_CHECKOUT('other');",
+			"UPDATE t SET a = 10, b = 2;",
+			"CALL DOLT_COMMIT('-am', 'other');",
+			"CALL DOLT_CHECKOUT('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t;",
+				Expected: []sql.Row{{1, 10, 2, 12}},
+			},
+			{
+				Query:    "SELECT id FROM t FORCE INDEX (ig) WHERE g = 12;",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
 		// https://github.com/dolthub/dolt/issues/7275
 		Name: "keyless table merge with constraint violations",
 		SetUpScript: []string{

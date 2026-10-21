@@ -567,6 +567,32 @@ func previewParityScript(name string, setup []string, target, source, table, col
 	return queries.ScriptTest{Name: name, SetUpScript: setup, Assertions: assertions}
 }
 
+// storedGeneratedMergeBasesSetup builds a criss-cross whose merge bases, x1 and y1, conflict on a, a source of the
+// stored generated column g = a + b:
+//
+//	c1 -- x1 -- x2 [-- x3]    x
+//	  \-- y1 -- y2            y
+//	x2 = merge(x1, y1), y2 = merge(y1, x1)
+//
+// c1 seeds row 1 with a = b = 0. x1 sets a and b to 1, and y1 sets a to 3. So x1 and y1 conflict on a, merge b to 1,
+// and have different values of g. x2 and y2 resolve a to |xA| and |yA|, and keep b = 1. With |xLater|, x3 sets b to 2.
+func storedGeneratedMergeBasesSetup(xA, yA int, xLater bool) []string {
+	script := crissCrossSetup(
+		[]string{
+			"CREATE TABLE t (id INT PRIMARY KEY, a INT, b INT, g INT AS (a + b) STORED, INDEX ib (b), INDEX ig (g));",
+			"INSERT INTO t (id, a, b) VALUES (1, 0, 0);",
+		},
+		[]string{"UPDATE t SET a = 1, b = 1 WHERE id = 1;"},
+		[]string{"UPDATE t SET a = 3 WHERE id = 1;"},
+		[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", fmt.Sprintf("UPDATE t SET a = %d, b = 1 WHERE id = 1;", yA)},
+		[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", fmt.Sprintf("UPDATE t SET a = %d, b = 1 WHERE id = 1;", xA)},
+	)
+	if xLater {
+		script = append(script, "UPDATE t SET b = 2 WHERE id = 1;", "CALL DOLT_COMMIT('-am', 'x3');")
+	}
+	return script
+}
+
 // resolvedMergeScript merges |source| after |setup|, expecting conflicts, runs |resolve| to resolve them, commits, and
 // checks that |query| returns |expected|. |expected| is git's result for the same history and resolution.
 func resolvedMergeScript(name string, setup []string, source string, resolve []string, query string, expected []sql.Row) queries.ScriptTest {
@@ -700,6 +726,15 @@ var MergeMultipleBasesPreviewScripts = []queries.ScriptTest{
 	previewParityScript("preview: conflicting merge bases, one side resolved to the old value: merge x into y",
 		append(conflictingMergeBasesSetup("seed", "y", false), "CALL DOLT_CHECKOUT('y');"), "y", "x", "t", "base_a, our_a, their_a",
 		[]sql.Row{{"t", uint64(1), uint64(0)}}, []sql.Row{{"seed", "y", "seed"}}),
+	previewParityScript("preview: conflicting merge bases with a virtual generated column first: merge y into x",
+		conflictingMergeBasesSetupWithTable(
+			"CREATE TABLE t (id INT PRIMARY KEY, g INT AS (id * 2) VIRTUAL, a VARCHAR(100), b VARCHAR(100));",
+			"x wins", "y wins", false),
+		"x", "y", "t", "base_a, base_b, our_a, their_a", []sql.Row{{"t", uint64(1), uint64(0)}},
+		[]sql.Row{{"seed", "seed", "x wins", "y wins"}}),
+	previewParityScript("preview: conflicting merge bases with a stored generated column, resolved differently: merge y into x",
+		storedGeneratedMergeBasesSetup(10, 20, false), "x", "y", "t", "base_a, base_b, base_g, our_a, their_a",
+		[]sql.Row{{"t", uint64(1), uint64(0)}}, []sql.Row{{0, 1, 1, 10, 20}}),
 	previewParityScript("preview: conflicting merge bases, resolved the same way: merge y into x",
 		conflictingMergeBasesSetup("resolved", "resolved", false), "x", "y", "t", "", nil, nil),
 	previewParityScript("preview: conflicting merge bases, resolved the same way, then a type change: merge y into x",
@@ -1619,6 +1654,57 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT base_id, base_a, base_b, our_id, our_a, our_b, their_id, their_a, their_b FROM dolt_conflicts_t ORDER BY base_id;",
 				Expected: []sql.Row{{1, "seed", "seed", 1, "both", "seed", 1, "both", "m2"}},
+			},
+		},
+	},
+	{
+		// g differs between x1 and y1 because a does, but a generated value is computed, not merged, so only a
+		// conflicts. x2 and y2 resolve a the same way, and x3's change to b, and so to g, merges cleanly.
+		Name:        "conflicting merge bases with a stored generated column, then a change to another source: merge y into x",
+		SetUpScript: storedGeneratedMergeBasesSetup(10, 10, true),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t;",
+				Expected: []sql.Row{{1, 10, 2, 12}},
+			},
+			{
+				Query:    "SELECT id FROM t FORCE INDEX (ig) WHERE g = 12;",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		Name: "conflicting merge bases with a stored generated column, then a change to another source: merge x into y",
+		SetUpScript: append(storedGeneratedMergeBasesSetup(10, 10, true),
+			"CALL DOLT_CHECKOUT('y');"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('x', '-m', 'merge x into y');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t;",
+				Expected: []sql.Row{{1, 10, 2, 12}},
+			},
+		},
+	},
+	{
+		// x2 and y2 resolve a differently, so a conflicts. The virtual merge base has c1's a, x1's b, and g computed from
+		// them.
+		Name:        "conflicting merge bases with a stored generated column, resolved differently: merge y into x",
+		SetUpScript: storedGeneratedMergeBasesSetup(10, 20, false),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_a, base_b, base_g, our_a, our_g, their_a, their_g FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{0, 1, 1, 10, 11, 20, 21}},
 			},
 		},
 	},
