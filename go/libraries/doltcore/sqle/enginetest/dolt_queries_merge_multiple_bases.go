@@ -527,6 +527,46 @@ func foldedConflictsSetup(m1Row1, m2Row1 string) []string {
 	}
 }
 
+// previewParityScript previews merging |source| into the checked-out |target| after |setup|, checks that the preview
+// changes nothing, then merges and checks that the merge finds what the preview did. |summary| is the expected
+// dolt_preview_merge_conflicts_summary, and |conflicts| the rows of |columns| from table |table|'s conflicts. With no
+// summary rows, the merge must be clean.
+func previewParityScript(name string, setup []string, target, source, table, columns string, summary, conflicts []sql.Row) queries.ScriptTest {
+	merge := queries.ScriptTestAssertion{
+		Query:    fmt.Sprintf("CALL DOLT_MERGE('%s', '-m', 'merge %s into %s');", source, source, target),
+		Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+	}
+	if len(summary) == 0 {
+		merge.Expected = []sql.Row{{doltCommit, 0, 0, "merge successful"}}
+	}
+	assertions := []queries.ScriptTestAssertion{
+		{Query: "SET @head = hashof('HEAD');", SkipResultsCheck: true},
+		{
+			Query:    fmt.Sprintf("SELECT * FROM dolt_preview_merge_conflicts_summary('%s', '%s');", target, source),
+			Expected: summary,
+		},
+	}
+	if conflicts != nil {
+		assertions = append(assertions, queries.ScriptTestAssertion{
+			Query:    fmt.Sprintf("SELECT %s FROM dolt_preview_merge_conflicts('%s', '%s', '%s');", columns, target, source, table),
+			Expected: conflicts,
+		})
+	}
+	assertions = append(assertions,
+		queries.ScriptTestAssertion{Query: "SELECT hashof('HEAD') = @head;", Expected: []sql.Row{{true}}},
+		queries.ScriptTestAssertion{Query: "SELECT count(*) FROM dolt_status;", Expected: []sql.Row{{0}}},
+		queries.ScriptTestAssertion{Query: "SELECT is_merging FROM dolt_merge_status;", Expected: []sql.Row{{false}}},
+		merge,
+	)
+	if conflicts != nil {
+		assertions = append(assertions, queries.ScriptTestAssertion{
+			Query:    fmt.Sprintf("SELECT %s FROM dolt_conflicts_%s;", columns, table),
+			Expected: conflicts,
+		})
+	}
+	return queries.ScriptTest{Name: name, SetUpScript: setup, Assertions: assertions}
+}
+
 // resolvedMergeScript merges |source| after |setup|, expecting conflicts, runs |resolve| to resolve them, commits, and
 // checks that |query| returns |expected|. |expected| is git's result for the same history and resolution.
 func resolvedMergeScript(name string, setup []string, source string, resolve []string, query string, expected []sql.Row) queries.ScriptTest {
@@ -557,7 +597,8 @@ func longRunningConflictSetup() []string {
 func AllMergeMultipleBasesScripts() []queries.ScriptTest {
 	var scripts []queries.ScriptTest
 	for _, list := range [][]queries.ScriptTest{MergeMultipleBasesScripts, MergeMultipleBasesResolveOursScripts,
-		MergeMultipleBasesResolveTheirsScripts, MergeMultipleBasesResolveByEditScripts, MergeMultipleBasesAbortScripts} {
+		MergeMultipleBasesResolveTheirsScripts, MergeMultipleBasesResolveByEditScripts, MergeMultipleBasesAbortScripts,
+		MergeMultipleBasesPreviewScripts} {
 		scripts = append(scripts, list...)
 	}
 	return scripts
@@ -651,6 +692,42 @@ var MergeMultipleBasesAbortScripts = []queries.ScriptTest{
 		"SELECT * FROM t ORDER BY id;", []sql.Row{{1, "seed", "seed"}, {2, "x", "y"}}),
 	abortedMergeScript("merge bases that conflict on a deleted row, resolved differently: abort", deleteAgainstEditSetup(false, true), "y",
 		"SELECT * FROM t ORDER BY id;", []sql.Row{{2, "x", "y"}}),
+}
+
+// MergeMultipleBasesPreviewScripts preview merges against a virtual merge base, and check that the merges find the
+// same conflicts.
+var MergeMultipleBasesPreviewScripts = []queries.ScriptTest{
+	previewParityScript("preview: conflicting merge bases, one side resolved to the old value: merge x into y",
+		append(conflictingMergeBasesSetup("seed", "y", false), "CALL DOLT_CHECKOUT('y');"), "y", "x", "t", "base_a, our_a, their_a",
+		[]sql.Row{{"t", uint64(1), uint64(0)}}, []sql.Row{{"seed", "y", "seed"}}),
+	previewParityScript("preview: conflicting merge bases, resolved the same way: merge y into x",
+		conflictingMergeBasesSetup("resolved", "resolved", false), "x", "y", "t", "", nil, nil),
+	previewParityScript("preview: conflicting merge bases, resolved the same way, then a type change: merge y into x",
+		append(conflictingMergeBasesSetup("resolved", "resolved", false),
+			"CALL DOLT_CHECKOUT('y');", "ALTER TABLE t MODIFY COLUMN a TEXT;", "CALL DOLT_COMMIT('-am', 'y3');",
+			"CALL DOLT_CHECKOUT('x');"),
+		"x", "y", "t", "", nil, nil),
+	previewParityScript("preview: merge bases that add a row with different values, one side deleting it: merge y into x",
+		addAddSetup("DELETE FROM t WHERE id = 3;", "REPLACE INTO t VALUES (3, 'y');"), "x", "y", "t",
+		"base_id, our_id, their_id, their_a", []sql.Row{{"t", uint64(1), uint64(0)}}, []sql.Row{{nil, nil, 3, "y"}}),
+	previewParityScript("preview: merge bases that add a row with different values, one side deleting it: merge x into y",
+		append(addAddSetup("DELETE FROM t WHERE id = 3;", "REPLACE INTO t VALUES (3, 'y');"), "CALL DOLT_CHECKOUT('y');"),
+		"y", "x", "t", "base_id, our_id, our_a, their_id", []sql.Row{{"t", uint64(1), uint64(0)}}, []sql.Row{{nil, 3, "y", nil}}),
+	previewParityScript("preview: conflicting merge bases with different schemas: merge y into x",
+		schemaChangingMergeBasesSetup(), "x", "y", "t", "base_id, base_a, our_a, their_a",
+		[]sql.Row{{"t", uint64(1), uint64(0)}}, []sql.Row{{1, "seed", "x wins", "seed"}}),
+	previewParityScript("preview: nested criss-cross: merge y into x",
+		nestedCrissCrossSetup(), "x", "y", "t", "base_a, our_a, their_a",
+		[]sql.Row{{"t", uint64(1), uint64(0)}}, []sql.Row{{"seed", "y", "q"}}),
+	previewParityScript("preview: nested criss-cross: merge x into y",
+		append(nestedCrissCrossSetup(), "CALL DOLT_CHECKOUT('y');"), "y", "x", "t", "base_a, our_a, their_a",
+		[]sql.Row{{"t", uint64(1), uint64(0)}}, []sql.Row{{"seed", "q", "y"}}),
+	previewParityScript("preview: three merge bases that conflict in different folds: merge m2 into m1",
+		foldedConflictsSetup("'m1', 'both'", "'seed', 'both'"), "m1", "m2", "t", "base_id, base_a, our_a, their_a",
+		[]sql.Row{{"t", uint64(1), uint64(0)}}, []sql.Row{{1, "seed", "m1", "seed"}}),
+	previewParityScript("preview: conflicting merge bases, one side dropping the table: merge y into x",
+		append(conflictingMergeBasesSetup("x wins", "seed", false), "DROP TABLE t;", "CALL DOLT_COMMIT('-am', 'x3');"),
+		"x", "y", "t", "", []sql.Row{{"t", nil, uint64(1)}}, nil),
 }
 
 // MergeMultipleBasesScripts merge branches that have more than one merge base. The expected results are git's: each

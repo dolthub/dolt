@@ -369,7 +369,14 @@ func getTablesWithConflicts(ctx *sql.Context, db dsess.SqlDatabase, baseBranch, 
 
 		// short-circuit here if we can
 		finished, _, stats, err := merger.MaybeShortCircuit(ctx, tm, mergeOpts)
-		if err != nil {
+		if errors.Is(err, merge.ErrTableDeletedAndModified) || errors.Is(err, merge.ErrTableDeletedAndSchemaModified) {
+			// As in merge.MergeRoots, a table deleted on one side and modified on the other is a schema conflict,
+			// except for a Full-Text table, whose parent table reports any conflict.
+			if !doltdb.IsFullTextTable(tblName.Name) {
+				conflicted = append(conflicted, tableConflict{tableName: tblName, numSchemaConflicts: 1})
+			}
+			continue
+		} else if err != nil {
 			return nil, err
 		}
 		if finished != nil || stats != nil {
