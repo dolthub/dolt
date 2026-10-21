@@ -78,7 +78,6 @@ func (c *JoinCost) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.Provider()
-	// An unbound context gets an engine on the global registries.
 	eng := gms.New(analyzer.NewDefault(pro), &gms.Config{EngineVariables: ctx.EngineVariables()})
 	defer eng.Close()
 

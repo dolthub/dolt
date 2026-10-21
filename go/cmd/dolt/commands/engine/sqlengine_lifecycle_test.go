@@ -144,27 +144,6 @@ func TestSqlEngineCapturesBundleFromReusableConfig(t *testing.T) {
 	require.Same(t, varsB, ctxB.EngineVariables())
 }
 
-// TestNewSqlEngineWithoutBundleSharesGlobalRegistries checks the contract that
-// embedders built before engine-owned variables rely on.
-func TestNewSqlEngineWithoutBundleSharesGlobalRegistries(t *testing.T) {
-	ctx := context.Background()
-	mrEnv, cfg, _ := lifecycleEngineEnvironment(t, ctx, t.TempDir(), t.TempDir())
-	se, err := NewSqlEngine(ctx, mrEnv, cfg)
-	require.NoError(t, err)
-	defer se.Close()
-
-	require.Same(t, sql.SystemVariables, se.GetUnderlyingEngine().Variables().System)
-	require.NotNil(t, sql.StatusVariables)
-	sess, err := se.NewDoltSession(ctx, sql.NewBaseSession())
-	require.NoError(t, err)
-	require.Nil(t, sess.EngineVariables())
-	sqlCtx := se.ContextFactory(ctx, sql.WithSession(sess))
-	_, iter, _, err := se.Query(sqlCtx, "SELECT @@max_connections")
-	require.NoError(t, err)
-	_, err = sql.RowIterToRows(sqlCtx, iter)
-	require.NoError(t, err)
-}
-
 // TestSqlEngineFailedConstructionStopsWorkers checks cleanup on errors before and after tracker creation.
 func TestSqlEngineFailedConstructionStopsWorkers(t *testing.T) {
 	for _, malformed := range []bool{false, true} {

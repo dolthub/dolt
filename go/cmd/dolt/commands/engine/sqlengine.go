@@ -386,7 +386,7 @@ func NewSqlEngine(
 	}
 
 	if engine.EventScheduler == nil {
-		err = configureEventScheduler(config, engine, sqlEngine.ContextFactory, sessFactory, pro)
+		err = configureEventScheduler(config, engine, engineVars, sqlEngine.ContextFactory, sessFactory, pro)
 		if err != nil {
 			return nil, err
 		}
@@ -601,14 +601,14 @@ func configureBinlogPrimaryController(engine *gms.Engine) *dblr.DoltBinlogPrimar
 	return primaryController
 }
 
-// configureEventScheduler configures the event scheduler with the |engine| for executing events, a |sessFactory|
-// for creating sessions, and a DoltDatabaseProvider, |pro|.
-func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, ctxFactory sql.ContextFactory, sessFactory sessionFactory, pro *sqle.DoltDatabaseProvider) error {
+// configureEventScheduler configures the event scheduler with the |engine| for executing events, its variable bundle
+// |engineVars|, a |sessFactory| for creating sessions, and a DoltDatabaseProvider, |pro|.
+func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, engineVars *sql.EngineVariables, ctxFactory sql.ContextFactory, sessFactory sessionFactory, pro *sqle.DoltDatabaseProvider) error {
 	// getCtxFunc is used to create new session with a new context for event scheduler.
 	// The session's client is set to the event_scheduler superuser so that the event
 	// executor has access to all databases when privileges are enabled.
 	getCtxFunc := func() (*sql.Context, error) {
-		sess, err := sessFactory(sql.NewBaseSessionWithVariables(config.EngineVariables), pro)
+		sess, err := sessFactory(sql.NewBaseSessionWithVariables(engineVars), pro)
 		if err != nil {
 			return nil, err
 		}

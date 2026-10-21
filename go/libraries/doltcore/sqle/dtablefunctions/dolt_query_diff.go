@@ -70,7 +70,6 @@ func (tf *QueryDiffTableFunction) WithCatalog(c sql.Catalog) (sql.TableFunction,
 	if !ok {
 		return nil, fmt.Errorf("unable to get database provider")
 	}
-	// An unbound context gets an engine on the global registries.
 	newInstance.engine = gms.New(analyzer.NewDefault(pro), &gms.Config{EngineVariables: tf.ctx.EngineVariables()})
 	err := newInstance.analyzeQueries()
 	if err != nil {

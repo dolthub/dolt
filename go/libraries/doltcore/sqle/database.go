@@ -2848,7 +2848,6 @@ func (db Database) doltSchemaTableHash(ctx *sql.Context) (hash.Hash, error) {
 
 // createEventDefinitionFromFragment creates an EventDefinition instance from the schema fragment |frag|.
 func (db Database) createEventDefinitionFromFragment(ctx *sql.Context, frag schemaFragment) (*sql.EventDefinition, error) {
-	// An unbound context gets an engine on the global registries.
 	doltSession := dsess.DSessFromSess(ctx.Session)
 	engine := sqle.New(analyzer.NewDefault(doltSession.Provider()), &sqle.Config{EngineVariables: ctx.EngineVariables()})
 	defer engine.Close()
