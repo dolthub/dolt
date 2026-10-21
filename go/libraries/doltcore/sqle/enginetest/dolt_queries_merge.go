@@ -68,6 +68,43 @@ var doltCommit = &doltCommitValidator{}
 
 var MergeScripts = []queries.ScriptTest{
 	{
+		// As "delete conflicts of a table with a virtual column", for a keyless table, whose conflicts are found by
+		// their values.
+		Name:    "delete conflicts of a keyless table with a virtual column",
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"SET @@dolt_allow_commit_conflicts = 1;",
+			"CREATE TABLE t (a INT, v INT AS (a + 1) VIRTUAL, b INT);",
+			"INSERT INTO t (a, b) VALUES (1, 1);",
+			"CALL DOLT_COMMIT('-Am', 'base');",
+			"CALL DOLT_BRANCH('other');",
+			"INSERT INTO t (a, b) VALUES (1, 1);",
+			"CALL DOLT_COMMIT('-am', 'main adds a copy');",
+			"CALL DOLT_CHECKOUT('other');",
+			"DELETE FROM t;",
+			"CALL DOLT_COMMIT('-am', 'other deletes it');",
+			"CALL DOLT_CHECKOUT('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_a, base_b, our_a, our_b, base_cardinality, our_cardinality, their_cardinality FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{1, 1, 1, 1, uint64(1), uint64(2), uint64(0)}},
+			},
+			{
+				Query:            "DELETE FROM dolt_conflicts_t;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
 		// h is generated from g, which is generated from a and b, so the merge computes g before h.
 		Name:    "merge resolving a row both sides changed computes chained stored generated columns",
 		Dialect: "mysql",
