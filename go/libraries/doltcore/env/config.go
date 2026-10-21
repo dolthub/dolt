@@ -51,18 +51,9 @@ const (
 	// SqlServerGlobalsPrefix is config namespace accessible by the SQL engine (ex: sqlserver.global.key)
 	SqlServerGlobalsPrefix = "sqlserver.global"
 
-	// SqlServerClusterPrefix is the config namespace where sql-server persists cluster state (ex: sqlserver.cluster.dolt_cluster_role)
+	// SqlServerClusterPrefix is the prefix where sql-server persists cluster state.
 	SqlServerClusterPrefix = "sqlserver.cluster"
 )
-
-// IsKnownConfigOption returns true if |option| is a recognized config option, or falls under one of the namespaces
-// written by sql-server. |option| is expected to be lower case.
-func IsKnownConfigOption(option string) bool {
-	if _, ok := config.ConfigOptions[option]; ok {
-		return true
-	}
-	return strings.HasPrefix(option, SqlServerGlobalsPrefix) || strings.HasPrefix(option, SqlServerClusterPrefix)
-}
 
 // String gives the string name of an element that was used when it was added to the ConfigHierarchy, which is the
 // same name that is used to retrieve that element of the string hierarchy.

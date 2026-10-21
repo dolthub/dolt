@@ -122,12 +122,3 @@ func TestWritableDoltConfigNoLocal(t *testing.T) {
 	_, err = gCfg.GetString("test")
 	assert.Equal(t, config.ErrConfigParamNotFound, err)
 }
-
-func TestIsKnownConfigOption(t *testing.T) {
-	assert.True(t, IsKnownConfigOption(config.UserNameKey))
-	assert.True(t, IsKnownConfigOption("sqlserver.global.dolt_stats_paused"))
-	assert.True(t, IsKnownConfigOption("sqlserver.cluster.dolt_cluster_role"))
-	assert.True(t, IsKnownConfigOption("sqlserver.cluster.dolt_cluster_role_epoch"))
-	assert.False(t, IsKnownConfigOption("global"))
-	assert.False(t, IsKnownConfigOption("sqlserver.foo"))
-}
