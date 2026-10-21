@@ -92,6 +92,9 @@ type Result struct {
 	SchemaConflicts       []SchemaConflict
 	Stats                 map[doltdb.TableName]*MergeStats
 	CommitVerificationErr error
+	// FullTextRebuilds are the tables whose Full-Text pseudo-index tables the merge did not rebuild because of
+	// MergeOpts.SkipFullTextRebuild.
+	FullTextRebuilds []doltdb.TableName
 }
 
 func (r Result) HasSchemaConflicts() bool {
@@ -336,7 +339,8 @@ func MergeRoots(
 		}
 	}
 
-	mergedRoot, err = rebuildFullTextIndexes(ctx, mergedRoot, ourRoot, theirRoot, visitedTables)
+	var fullTextRebuilds []doltdb.TableName
+	mergedRoot, fullTextRebuilds, err = rebuildFullTextIndexes(ctx, mergedRoot, ourRoot, theirRoot, visitedTables, !mergeOpts.SkipFullTextRebuild)
 	if err != nil {
 		return nil, err
 	}
@@ -378,9 +382,10 @@ func MergeRoots(
 	}
 
 	return &Result{
-		Root:            mergedRoot,
-		SchemaConflicts: schConflicts,
-		Stats:           tblToStats,
+		Root:             mergedRoot,
+		SchemaConflicts:  schConflicts,
+		Stats:            tblToStats,
+		FullTextRebuilds: fullTextRebuilds,
 	}, nil
 }
 

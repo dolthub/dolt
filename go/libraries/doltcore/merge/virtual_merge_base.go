@@ -214,12 +214,18 @@ func mergeIntoVirtualBase(ctx *sql.Context, x, y *doltdb.Commit) (*doltdb.Commit
 		return nil, nil, err
 	}
 
-	result, err := MergeRoots(ctx, doltdb.SimpleTableResolver{}, xRoot, yRoot, baseRoot, y, ancestor, editor.Options{}, MergeOpts{KeepSchemaConflicts: true, AlwaysMergeJSON: true})
+	result, err := MergeRoots(ctx, doltdb.SimpleTableResolver{}, xRoot, yRoot, baseRoot, y, ancestor, editor.Options{}, MergeOpts{KeepSchemaConflicts: true, AlwaysMergeJSON: true, SkipFullTextRebuild: true})
 	if err != nil {
 		return nil, nil, err
 	}
-	mergedRoot, conflicted, err := resolveVirtualBaseConflicts(ctx, result, xRoot, yRoot, baseRoot, baseConflicts)
+	mergedRoot, rewritten, conflicted, err := resolveVirtualBaseConflicts(ctx, result, xRoot, yRoot, baseRoot, baseConflicts)
 	if err != nil {
+		return nil, nil, err
+	}
+	for _, name := range result.FullTextRebuilds {
+		rewritten[name] = true
+	}
+	if mergedRoot, err = rebuildVirtualBaseFullTextIndexes(ctx, mergedRoot, rewritten); err != nil {
 		return nil, nil, err
 	}
 	meta, err := virtualMergeBaseMeta(ctx, x, y)
@@ -233,7 +239,8 @@ func mergeIntoVirtualBase(ctx *sql.Context, x, y *doltdb.Commit) (*doltdb.Commit
 // resolveVirtualBaseConflicts gives every conflicted row of |result| its cell-by-cell merge, and removes the merge's
 // artifacts, which a virtual merge base does not keep. A table whose schema conflicts between |xRoot| and |yRoot|
 // keeps its schema in |baseRoot|, and its rows merge cell by cell under that schema.
-func resolveVirtualBaseConflicts(ctx *sql.Context, result *Result, xRoot, yRoot, baseRoot doltdb.RootValue, baseConflicts conflictedCells) (doltdb.RootValue, conflictedCells, error) {
+// It also returns the tables it rewrote.
+func resolveVirtualBaseConflicts(ctx *sql.Context, result *Result, xRoot, yRoot, baseRoot doltdb.RootValue, baseConflicts conflictedCells) (doltdb.RootValue, map[doltdb.TableName]bool, conflictedCells, error) {
 	schemaConflicts := make(map[doltdb.TableName]bool)
 	for _, name := range SchemaConflictTableNames(result.SchemaConflicts) {
 		schemaConflicts[name] = true
@@ -264,25 +271,22 @@ func resolveVirtualBaseConflicts(ctx *sql.Context, result *Result, xRoot, yRoot,
 			tbl, rows, err = mergeConflictedRowsByCell(ctx, root, xRoot, yRoot, baseRoot, name, baseConflicts[name])
 		}
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		if tbl == nil {
 			if root, err = takeTableFromBase(ctx, root, baseRoot, name); err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 			continue
 		}
 		if root, err = root.PutTable(ctx, name, tbl); err != nil {
-			return nil, nil, err
-		}
-		if root, err = rebuildFullTextIndexesOf(ctx, root, name, tbl); err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		if len(rows) > 0 {
 			conflicted[name] = rows
 		}
 	}
-	return root, conflicted, nil
+	return root, tables, conflicted, nil
 }
 
 // mergeConflictedRowsByCell rewrites each conflicted row of table |name| in |root| as a cell-by-cell merge of the row
@@ -1022,16 +1026,30 @@ func fullTextTableNames(ctx *sql.Context, root doltdb.RootValue, name doltdb.Tab
 	return names, nil
 }
 
-// rebuildFullTextIndexesOf rebuilds the Full-Text pseudo-index tables of |tbl|, table |name| of |root|, from its rows.
-func rebuildFullTextIndexesOf(ctx *sql.Context, root doltdb.RootValue, name doltdb.TableName, tbl *doltdb.Table) (doltdb.RootValue, error) {
-	sch, err := tbl.GetSchema(ctx)
-	if err != nil {
-		return nil, err
+// rebuildVirtualBaseFullTextIndexes builds the Full-Text pseudo-index tables of tables |names| of |root|, a virtual
+// merge base, from their rows. The merge that made |root| skips that, since the virtual merge base rewrites rows after
+// it.
+func rebuildVirtualBaseFullTextIndexes(ctx *sql.Context, root doltdb.RootValue, names map[doltdb.TableName]bool) (doltdb.RootValue, error) {
+	for name := range names {
+		tbl, ok, err := root.GetTable(ctx, name)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			continue
+		}
+		sch, err := tbl.GetSchema(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !sch.Indexes().ContainsFullTextIndex() {
+			continue
+		}
+		if root, err = rebuildFullTextIndexesForTable(ctx, rebuildableFulltextTable{Name: name.Name, Table: tbl, Schema: sch}, root); err != nil {
+			return nil, err
+		}
 	}
-	if !sch.Indexes().ContainsFullTextIndex() {
-		return root, nil
-	}
-	return rebuildFullTextIndexesForTable(ctx, rebuildableFulltextTable{Name: name.Name, Table: tbl, Schema: sch}, root)
+	return root, nil
 }
 
 // virtualMergeBaseMeta derives every field from |x| and |y|, so merging the same commits always yields the same hash.

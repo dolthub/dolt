@@ -64,6 +64,9 @@ type MergeOpts struct {
 	// AlwaysMergeJSON merges concurrent edits to a JSON document regardless of @@dolt_dont_merge_json, for merges whose
 	// result must not depend on session settings.
 	AlwaysMergeJSON bool
+	// SkipFullTextRebuild leaves the Full-Text pseudo-index tables of merged tables as the merge left them, for a
+	// caller that brings them up to date itself.
+	SkipFullTextRebuild bool
 }
 
 // RowMergeInput describes one three-way row decision offered to a policy.
