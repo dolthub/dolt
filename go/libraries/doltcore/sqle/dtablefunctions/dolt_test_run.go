@@ -187,7 +187,6 @@ func (trtf *TestsRunTableFunction) Name() string {
 func (trtf *TestsRunTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter, error) {
 	pro := trtf.catalog.(sql.DatabaseProvider) // checked by WithCatalog
 	runner := *trtf
-	// An unbound context gets an engine on the global registries.
 	runner.engine = gms.New(analyzer.NewDefault(pro), &gms.Config{EngineVariables: ctx.EngineVariables()})
 	defer runner.engine.Close()
 

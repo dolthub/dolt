@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -179,9 +178,6 @@ func DefaultSession(pro DoltDatabaseProvider, sessFunc WriteSessFunc) *DoltSessi
 
 // DefaultSessionWithVariables creates a default session bound to an engine.
 func DefaultSessionWithVariables(pro DoltDatabaseProvider, sessFunc WriteSessFunc, vars *sql.EngineVariables) *DoltSession {
-	if !completeEngineVariableBundle(vars) {
-		panic("DefaultSessionWithVariables requires a complete engine variable bundle")
-	}
 	return defaultSession(pro, sessFunc, sql.NewBaseSessionWithVariables(vars))
 }
 
@@ -231,9 +227,6 @@ func NewDetachedSessionWithVariables(
 	branchActivityTracker *doltdb.BranchActivityTracker,
 	vars *sql.EngineVariables,
 ) (*DoltSession, error) {
-	if !completeEngineVariableBundle(vars) {
-		return nil, fmt.Errorf("NewDetachedSessionWithVariables requires a complete engine variable bundle")
-	}
 	return NewDoltSession(
 		sql.NewBaseSessionWithVariables(vars),
 		pro,
@@ -244,23 +237,6 @@ func NewDetachedSessionWithVariables(
 		gcSafepointController,
 		branchActivityTracker,
 	)
-}
-
-func completeEngineVariableBundle(vars *sql.EngineVariables) bool {
-	return vars != nil && !nilVariableRegistry(vars.System) && !nilVariableRegistry(vars.Status)
-}
-
-func nilVariableRegistry(registry any) bool {
-	if registry == nil {
-		return true
-	}
-	v := reflect.ValueOf(registry)
-	switch v.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
-		return v.IsNil()
-	default:
-		return false
-	}
 }
 
 // NewDoltSession creates a DoltSession object from a standard sql.Session and 0 or more Database objects.

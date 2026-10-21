@@ -209,7 +209,6 @@ func runCommitVerification(ctx *sql.Context, testGroups []string) error {
 	}
 
 	provider := session.GenericProvider()
-	// An unbound context gets an engine on the global registries.
 	engine := gms.New(analyzer.NewDefault(provider), &gms.Config{EngineVariables: ctx.EngineVariables()})
 	defer engine.Close()
 

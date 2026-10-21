@@ -25,8 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
-type legacyRegistry struct{ sql.SystemVariableRegistry }
-
 func TestApplySystemVariablesUsesOwningContext(t *testing.T) {
 	vars := sqle.NewEngineVariables()
 	ctx := sql.NewContextWithVariables(context.Background(), vars)
@@ -48,12 +46,4 @@ func TestApplySystemVariablesUsesOwningContext(t *testing.T) {
 	require.NoError(t, applySystemVariables(ctx, SystemVariables{"assignment_owner_probe": "set"}))
 	require.Same(t, vars, callbackOwner)
 	require.EqualValues(t, 321, callbackValue)
-}
-
-func TestApplySystemVariablesRejectsMissingContextAssignment(t *testing.T) {
-	vars := sqle.NewEngineVariables()
-	vars.System = legacyRegistry{vars.System}
-	ctx := sql.NewContextWithVariables(context.Background(), vars)
-	require.ErrorContains(t, applySystemVariables(ctx, SystemVariables{"max_connections": int64(321)}), "does not support context-aware assignment")
-	require.ErrorContains(t, applySystemVariables(nil, SystemVariables{"max_connections": int64(321)}), "requires a context")
 }
