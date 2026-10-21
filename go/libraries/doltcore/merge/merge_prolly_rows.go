@@ -683,6 +683,12 @@ func conflictedCellsDiffer(ctx context.Context, row conflictedRow, left, right v
 	for _, tag := range row.tags {
 		i, ok := vm.resultSchema.GetNonPKCols().StoredIndexByTag(tag)
 		if !ok {
+			// The merge drops the column. It differs if only one side dropped it.
+			_, leftHas := vm.leftSchema.GetNonPKCols().StoredIndexByTag(tag)
+			_, rightHas := vm.rightSchema.GetNonPKCols().StoredIndexByTag(tag)
+			if leftHas != rightHas {
+				return true, nil
+			}
 			continue
 		}
 		if d, err := differs(i); err != nil || d {

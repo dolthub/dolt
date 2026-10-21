@@ -20,6 +20,7 @@ import (
 	"errors"
 	"io"
 	"slices"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -215,6 +216,14 @@ func mergeIntoVirtualBase(ctx *sql.Context, x, y *doltdb.Commit) (*doltdb.Commit
 	if err != nil {
 		return nil, nil, err
 	}
+	date, err := virtualMergeBaseDate(ctx, x, y)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Column defaults that read the time, like CURRENT_TIMESTAMP, take the virtual merge base's date, so that it is
+	// built the same way every time.
+	ctx = ctx.WithQuery(ctx.Query())
+	ctx.SetQueryTime(date)
 
 	result, err := MergeRoots(ctx, doltdb.SimpleTableResolver{}, xRoot, yRoot, baseRoot, y, ancestor, editor.Options{}, MergeOpts{KeepSchemaConflicts: true, AlwaysMergeJSON: true, SkipFullTextRebuild: true})
 	if err != nil {
@@ -230,7 +239,8 @@ func mergeIntoVirtualBase(ctx *sql.Context, x, y *doltdb.Commit) (*doltdb.Commit
 	if mergedRoot, err = rebuildVirtualBaseFullTextIndexes(ctx, mergedRoot, rewritten); err != nil {
 		return nil, nil, err
 	}
-	meta, err := virtualMergeBaseMeta(ctx, x, y)
+	ident := datas.CommitIdent{Name: virtualMergeBaseName, Email: virtualMergeBaseEmail, Date: datas.CommitDateAt(date)}
+	meta, err := datas.NewCommitMetaWithAuthorCommitter(ident, ident, virtualMergeBaseDescription)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -605,6 +615,10 @@ func (rm *virtualRowMerger) merge(ctx *sql.Context, key, x, y, b val.Tuple, base
 			return nil, conflictedRow{wholeRow: true}, rm.conversionError(err)
 		}
 		return rm.rowFrom(ctx, key, x, vm.leftVD, vm.leftMapping)
+	case b == nil && baseRow.wholeRow:
+		// The merge base marks the absent row as added twice, so a row on one side is a change against a delete on
+		// the other, and keeps the merge base's absent, marked row, as git keeps conflict markers.
+		return nil, conflictedRow{wholeRow: true}, nil
 	case b == nil && x != nil:
 		return rm.rowFrom(ctx, key, x, vm.leftVD, vm.leftMapping)
 	case b == nil && y != nil:
@@ -612,17 +626,21 @@ func (rm *virtualRowMerger) merge(ctx *sql.Context, key, x, y, b val.Tuple, base
 	case x == nil && y == nil:
 		return nil, conflictedRow{}, nil
 	case x == nil || y == nil:
-		// A row that one merge base deleted and the other changed takes the base's row unmarked, as git's merge-ort
-		// takes the base's version of a file for a modify/delete conflict.
+		// A row that one merge base deleted and the other changed takes the base's row, as git's merge-ort takes the
+		// base's version of a file for a modify/delete conflict, with the marks the base has. A row the merge base
+		// marks counts as changed on the side that kept it.
 		kept, vd, mapping := y, vm.rightVD, vm.rightMapping
 		if y == nil {
 			kept, vd, mapping = x, vm.leftVD, vm.leftMapping
 		}
-		unchanged, err := rm.sidesEqual(ctx, kept, vd, mapping, b, vm.baseVD, vm.baseMapping)
-		if err = rm.conversionError(err); err != nil || unchanged {
-			return nil, conflictedRow{}, err
+		if !baseRow.wholeRow && len(baseRow.tags) == 0 {
+			unchanged, err := rm.sidesEqual(ctx, kept, vd, mapping, b, vm.baseVD, vm.baseMapping)
+			if err = rm.conversionError(err); err != nil || unchanged {
+				return nil, conflictedRow{}, err
+			}
 		}
-		return rm.rowFrom(ctx, key, b, vm.baseVD, vm.baseMapping)
+		value, _, err := rm.rowFrom(ctx, key, b, vm.baseVD, vm.baseMapping)
+		return value, baseRow, err
 	}
 
 	var row conflictedRow
@@ -1019,19 +1037,18 @@ func rebuildVirtualBaseFullTextIndexes(ctx *sql.Context, root doltdb.RootValue, 
 	return root, nil
 }
 
-// virtualMergeBaseMeta derives every field from |x| and |y|, so merging the same commits always yields the same hash.
-func virtualMergeBaseMeta(ctx context.Context, x, y *doltdb.Commit) (*datas.CommitMeta, error) {
+// virtualMergeBaseDate returns the date of a virtual merge base of |x| and |y|: the later of their committer dates.
+func virtualMergeBaseDate(ctx context.Context, x, y *doltdb.Commit) (time.Time, error) {
 	xDate, err := committerDate(ctx, x)
 	if err != nil {
-		return nil, err
+		return time.Time{}, err
 	}
 	yDate, err := committerDate(ctx, y)
 	if err != nil {
-		return nil, err
+		return time.Time{}, err
 	}
 	if yDate.After(xDate) {
-		xDate = yDate
+		return yDate, nil
 	}
-	ident := datas.CommitIdent{Name: virtualMergeBaseName, Email: virtualMergeBaseEmail, Date: datas.CommitDateAt(xDate)}
-	return datas.NewCommitMetaWithAuthorCommitter(ident, ident, virtualMergeBaseDescription)
+	return xDate, nil
 }

@@ -716,6 +716,23 @@ func keylessSchemaChangeMergeBasesSetup() []string {
 	), "DELETE FROM t WHERE a = 'n';", "CALL DOLT_COMMIT('-am', 'x3');")
 }
 
+// nestedRowPresenceSetup builds two criss-crosses, one on top of the other, as nestedCrissCrossSetup does, around row 3:
+//
+//	c1 -- x1 -- x2 -- x3    x
+//	  \-- y1 -- y2 -- y3    y
+//	x2 = merge(x1, y1), y2 = merge(y1, x1)
+//	x3 = merge(x2, y2), y3 = merge(y2, x2)
+//
+// c1 seeds row 1. |level1| makes x1 and y1, which conflict on row 3, and |x2|, |y2|, |x3| and |y3| resolve the merges.
+func nestedRowPresenceSetup(seed []string, x1, y1, y2, x2, y3, x3 []string) []string {
+	script := append(crissCrossSetup(seed, x1, y1, y2, x2), "CALL DOLT_BRANCH('x2');", "CALL DOLT_CHECKOUT('y');",
+		"CALL DOLT_BRANCH('y2');", "CALL DOLT_MERGE('x2', '-m', 'y3');")
+	script = append(script, y3...)
+	script = append(script, "CALL DOLT_COMMIT('-am', 'y3');", "CALL DOLT_CHECKOUT('x');", "CALL DOLT_MERGE('y2', '-m', 'x3');")
+	script = append(script, x3...)
+	return append(script, "CALL DOLT_COMMIT('-am', 'x3');")
+}
+
 // resolvedMergeScript merges |source| after |setup|, expecting conflicts, runs |resolve| to resolve them, commits, and
 // checks that |query| returns |expected|. |expected| is git's result for the same history and resolution.
 func resolvedMergeScript(name string, setup []string, source string, resolve []string, query string, expected []sql.Row) queries.ScriptTest {
@@ -2049,6 +2066,86 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT * FROM t;",
 				Expected: []sql.Row{{1, "resolved", types.MustJSON(`{"x": 2, "y": 1}`)}},
+			},
+		},
+	},
+	{
+		// x2 resolves a back to c1's value, which is the virtual merge base's, and y3 drops a. x2's value is
+		// still a change from the conflicted merge bases, as in git, so dropping a conflicts.
+		Name: "conflicting merge bases, one side resolved to the old value, then a drop of the conflicted column: merge y into x",
+		SetUpScript: append(conflictingMergeBasesSetup("seed", "y", false),
+			"CALL DOLT_CHECKOUT('y');",
+			"ALTER TABLE t DROP COLUMN a;",
+			"CALL DOLT_COMMIT('-am', 'y3');",
+			"CALL DOLT_CHECKOUT('x');"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+		},
+	},
+	{
+		// x1 and y1 add row 3 differently, so it is marked and absent in their virtual merge base. x2 keeps
+		// x1's row and y2 deletes it, which conflicts again; x3 keeps x1's row and y3 sets it to 'q'. Against the
+		// virtual merge base of x2 and y2, row 3 is still marked, so x3 and y3 conflict.
+		Name: "nested criss-cross, a row added twice, then kept and deleted: merge y into x",
+		SetUpScript: nestedRowPresenceSetup(
+			[]string{"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100));", "INSERT INTO t VALUES (1, 'seed');"},
+			[]string{"INSERT INTO t VALUES (3, 'x');"},
+			[]string{"INSERT INTO t VALUES (3, 'y');"},
+			[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "DELETE FROM t WHERE id = 3;"},
+			[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "REPLACE INTO t VALUES (3, 'x');"},
+			[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "REPLACE INTO t VALUES (3, 'q');"},
+			[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "REPLACE INTO t VALUES (3, 'x');"},
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+		},
+	},
+	{
+		// x1 and y1 conflict on row 1's a, which their virtual merge base marks, keeping 'seed'. x2 deletes
+		// row 1 and y2 keeps it with a = 'seed', which conflicts again; x3 keeps it deleted and y3 sets a to 'q'.
+		// Against the virtual merge base of x2 and y2, row 1 is still marked, so x3 and y3 conflict.
+		Name: "nested criss-cross, a conflicted row, then deleted and kept with the old value: merge y into x",
+		SetUpScript: nestedRowPresenceSetup(
+			[]string{"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100));", "INSERT INTO t VALUES (1, 'seed');"},
+			[]string{"UPDATE t SET a = 'x' WHERE id = 1;"},
+			[]string{"UPDATE t SET a = 'y' WHERE id = 1;"},
+			[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "UPDATE t SET a = 'seed' WHERE id = 1;"},
+			[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "DELETE FROM t WHERE id = 1;"},
+			[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "REPLACE INTO t VALUES (1, 'q');"},
+			[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "DELETE FROM t WHERE id = 1;"},
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+		},
+	},
+	{
+		// x1 adds ts with a time default, and y1 adds row 2, so merging them gives row 2 a default ts. The
+		// virtual merge base takes its own date for it, the later of x1's and y1's commit dates, so that previewing
+		// later, or rebuilding it, gives the same value.
+		Name: "merge bases that give a row a time default: merge y into x",
+		SetUpScript: crissCrossSetup(
+			[]string{
+				"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100));",
+				"INSERT INTO t VALUES (1, 'seed');",
+			},
+			[]string{"ALTER TABLE t ADD COLUMN ts DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6);", "UPDATE t SET a = 'x' WHERE id = 1;"},
+			[]string{"UPDATE t SET a = 'y' WHERE id = 1;", "INSERT INTO t VALUES (2, 'two');"},
+			[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "UPDATE t SET a = 'y2';"},
+			[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "UPDATE t SET a = 'x2';"},
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT base_ts = (SELECT MAX(date) FROM dolt_log('--all') WHERE message IN ('x1', 'y1')) FROM dolt_preview_merge_conflicts('x', 'y', 't') WHERE base_id = 2;",
+				Expected: []sql.Row{{true}},
 			},
 		},
 	},
