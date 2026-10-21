@@ -408,6 +408,37 @@ func crissCrossSetup(seed, x1, y1, y2, x2 []string) []string {
 	return append(script, "CALL DOLT_COMMIT('-am', 'x2');")
 }
 
+// conflictedRowWithCleanCellsSetup builds a criss-cross whose merge bases, x1 and y1, conflict on two cells of a row
+// and change its other cells cleanly:
+//
+//	c1 -- x1 -- x2 [-- x3]    x
+//	  \-- y1 -- y2            y
+//	x2 = merge(x1, y1), y2 = merge(y1, x1)
+//
+// c1 seeds row 1 with a = b = c = 'seed' and d NULL. x1 sets a, b and d to 'x'; y1 sets a, c and d to 'y'. So x1 and
+// y1 conflict on a, whose base is 'seed', and on d, whose base is NULL, and merge b to 'x' and c to 'y'. x2 and y2
+// resolve the row to a = 'resolved', b = 'x', c = 'y', and d = |xD| and |yD|, SQL literals. With |xLater|, x3 then
+// sets b to 'x later'.
+func conflictedRowWithCleanCellsSetup(xD, yD string, xLater bool) []string {
+	resolve := func(d string) string {
+		return fmt.Sprintf("UPDATE t SET a = 'resolved', b = 'x', c = 'y', d = %s WHERE id = 1;", d)
+	}
+	script := crissCrossSetup(
+		[]string{
+			"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100), b VARCHAR(100), c VARCHAR(100), d VARCHAR(100));",
+			"INSERT INTO t VALUES (1, 'seed', 'seed', 'seed', NULL);",
+		},
+		[]string{"UPDATE t SET a = 'x', b = 'x', d = 'x' WHERE id = 1;"},
+		[]string{"UPDATE t SET a = 'y', c = 'y', d = 'y' WHERE id = 1;"},
+		[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", resolve(yD)},
+		[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", resolve(xD)},
+	)
+	if xLater {
+		script = append(script, "UPDATE t SET b = 'x later' WHERE id = 1;", "CALL DOLT_COMMIT('-am', 'x3');")
+	}
+	return script
+}
+
 // resolvedMergeScript merges |source| after |setup|, expecting conflicts, runs |resolve| to resolve them, commits, and
 // checks that |query| returns |expected|. |expected| is git's result for the same history and resolution.
 func resolvedMergeScript(name string, setup []string, source string, resolve []string, query string, expected []sql.Row) queries.ScriptTest {
@@ -1207,6 +1238,68 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT count(*) FROM dolt_constraint_violations_t;",
 				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		// b and c merged cleanly between the merge bases, so the virtual merge base keeps them, and x3's later edit
+		// to b does not conflict, although a and d in the same row conflicted.
+		Name:        "merge bases that conflict on two cells of a row, then an edit to a clean cell: merge y into x",
+		SetUpScript: conflictedRowWithCleanCellsSetup("NULL", "NULL", true),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t;",
+				Expected: []sql.Row{{1, "resolved", "x later", "y", nil}},
+			},
+		},
+	},
+	{
+		Name: "merge bases that conflict on two cells of a row, then an edit to a clean cell: merge x into y",
+		SetUpScript: append(conflictedRowWithCleanCellsSetup("NULL", "NULL", true),
+			"CALL DOLT_CHECKOUT('y');"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('x', '-m', 'merge x into y');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t;",
+				Expected: []sql.Row{{1, "resolved", "x later", "y", nil}},
+			},
+		},
+	},
+	{
+		// x2 and y2 agree on a but not on d, the second conflicted cell, whose base is NULL. y2 keeps NULL, which is
+		// still a change from the conflicted merge bases, so d conflicts.
+		Name:        "merge bases that conflict on two cells of a row, resolved differently in the second: merge y into x",
+		SetUpScript: conflictedRowWithCleanCellsSetup("'x wins'", "NULL", false),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_a, base_b, base_c, base_d, our_a, our_b, our_c, our_d, their_a, their_b, their_c, their_d FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{"seed", "x", "y", nil, "resolved", "x", "y", "x wins", "resolved", "x", "y", nil}},
+			},
+		},
+	},
+	{
+		Name: "merge bases that conflict on two cells of a row, resolved differently in the second: merge x into y",
+		SetUpScript: append(conflictedRowWithCleanCellsSetup("'x wins'", "NULL", false),
+			"CALL DOLT_CHECKOUT('y');"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('x', '-m', 'merge x into y');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_a, base_b, base_c, base_d, our_a, our_b, our_c, our_d, their_a, their_b, their_c, their_d FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{"seed", "x", "y", nil, "resolved", "x", "y", nil, "resolved", "x", "y", "x wins"}},
 			},
 		},
 	},
