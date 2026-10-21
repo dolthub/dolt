@@ -246,20 +246,11 @@ func ConfigureServices(
 	// prevent races and to prevent different components seeing different configured variables.
 	PersistNondeterministicSystemVarDefaults := &svcs.AnonService{
 		InitF: func(ctx context.Context) error {
-			var err error
-			if cfg.EngineVariables != nil {
-				err = dsess.PersistSystemVarDefaultsWithRegistry(vars, cfg.DoltEnv)
-			} else {
-				err = dsess.PersistSystemVarDefaults(cfg.DoltEnv)
-			}
+			err := dsess.PersistSystemVarDefaultsWithRegistry(vars, cfg.DoltEnv)
 			if err != nil {
 				logrus.Errorf("unable to persist system variable defaults: %v", err)
 			}
-			if cfg.EngineVariables != nil {
-				err = dsess.InitPersistedSystemVarsWithRegistry(vars, cfg.DoltEnv)
-			} else {
-				err = dsess.InitPersistedSystemVars(cfg.DoltEnv)
-			}
+			err = dsess.InitPersistedSystemVarsWithRegistry(vars, cfg.DoltEnv)
 			if err != nil {
 				logrus.Errorf("unable to init persisted system variables: %v", err)
 			}
@@ -1291,8 +1282,8 @@ func getConfigFromServerConfigWithVariables(serverConfig servercfg.ServerConfig,
 	}
 
 	// An explicitly configured version takes precedence over the registry default.
-	if verstionString, hasVersionString := serverConfig.SystemVars()["version"]; hasVersionString {
-		serverConf.Version = fmt.Sprint(verstionString)
+	if versionString, hasVersionString := serverConfig.SystemVars()["version"]; hasVersionString {
+		serverConf.Version = fmt.Sprint(versionString)
 	}
 	serverConf.ConnReadTimeout = readTimeout
 	serverConf.ConnWriteTimeout = writeTimeout

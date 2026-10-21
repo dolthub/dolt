@@ -415,11 +415,11 @@ func NewRebasedSqlEngine(engine *gms.Engine, dbs map[string]dsess.SqlDatabase) *
 	}
 }
 
-func applySystemVariables(vars sql.SystemVariableRegistry, cfg SystemVariables, owner *sql.EngineVariables) error {
+func applySystemVariables(vars sql.SystemVariableRegistry, cfg SystemVariables, engineVars *sql.EngineVariables) error {
 	if cfg != nil {
-		if owner != nil {
+		if engineVars != nil {
 			if aware, ok := vars.(sql.ContextAwareSystemVariableRegistry); ok {
-				return aware.AssignValuesWithContext(sql.NewContextWithVariables(context.Background(), owner), cfg)
+				return aware.AssignValuesWithContext(sql.NewContextWithVariables(context.Background(), engineVars), cfg)
 			}
 		}
 		return vars.AssignValues(cfg)
@@ -609,11 +609,7 @@ func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, ctxFac
 	// The session's client is set to the event_scheduler superuser so that the event
 	// executor has access to all databases when privileges are enabled.
 	getCtxFunc := func() (*sql.Context, error) {
-		var owner *sql.EngineVariables
-		if engine.IsolatedVariables() {
-			owner = engine.Variables()
-		}
-		sess, err := sessFactory(sql.NewBaseSessionWithVariables(owner), pro)
+		sess, err := sessFactory(sql.NewBaseSessionWithVariables(config.EngineVariables), pro)
 		if err != nil {
 			return nil, err
 		}
