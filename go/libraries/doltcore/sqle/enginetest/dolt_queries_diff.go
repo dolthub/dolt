@@ -915,8 +915,8 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
-	// https://github.com/dolthub/dolt/issues/12139
 	{
+		// https://github.com/dolthub/dolt/issues/12139
 		Name: "dolt_diff_<table> to_commit IN lookup for commits sharing a parent",
 		SetUpScript: []string{
 			"create table t (pk int primary key, v varchar(10));",
