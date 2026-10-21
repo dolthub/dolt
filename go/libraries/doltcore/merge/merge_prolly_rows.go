@@ -2085,6 +2085,9 @@ func mergeTableArtifacts(ctx context.Context, tm *TableMerger, mergeTbl *doltdb.
 	return mergeTbl.SetArtifacts(ctx, idx)
 }
 
+// DontMergeJSONVariable is the session variable that turns off merging concurrent edits to a JSON document.
+const DontMergeJSONVariable = "dolt_dont_merge_json"
+
 // valueMerger attempts to resolve three-ways diffs on the same
 // key but with conflicting values. A successful resolve produces
 // a three-way cell edit (tree.DiffOpDivergentModifyResolved).
@@ -2482,7 +2485,7 @@ func (m *valueMerger) processColumn(ctx *sql.Context, i int, left, right, base v
 		// if the result type is JSON, we can attempt to merge the JSON changes.
 		disallowJsonMerge := false
 		if !m.alwaysMergeJSON {
-			dontMergeJsonVar, err := ctx.Session.GetSessionVariable(ctx, "dolt_dont_merge_json")
+			dontMergeJsonVar, err := ctx.Session.GetSessionVariable(ctx, DontMergeJSONVariable)
 			if err != nil {
 				return nil, true, err
 			}

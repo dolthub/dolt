@@ -37,6 +37,8 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+// The commit metadata of a virtual merge base. A virtual merge base is a dangling commit that no ref points to, so
+// users do not see it.
 const (
 	virtualMergeBaseName        = "Dolt"
 	virtualMergeBaseEmail       = "virtual-merge-base@dolthub.com"
@@ -845,15 +847,8 @@ func updateSecondaryIndex(ctx *sql.Context, tbl *doltdb.Table, indexes durable.I
 		return nil, err
 	}
 	for _, edit := range edits {
-		if edit.old != nil {
-			if err = mut.DeleteEntry(ctx, edit.key, edit.old); err != nil {
-				return nil, err
-			}
-		}
-		if edit.new != nil {
-			if err = mut.InsertEntry(ctx, edit.key, edit.new); err != nil {
-				return nil, err
-			}
+		if err = applyEdit(ctx, mut, edit.key, edit.old, edit.new); err != nil {
+			return nil, err
 		}
 	}
 	updated, err := mut.Map(ctx)

@@ -25,6 +25,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
@@ -242,10 +243,10 @@ func newDoltSystemVariables() []sql.SystemVariable {
 			Default: int8(0),
 		},
 		&sql.MysqlSystemVariable{
-			Name:    "dolt_dont_merge_json",
+			Name:    merge.DontMergeJSONVariable,
 			Dynamic: true,
 			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Both),
-			Type:    types.NewSystemBoolType("dolt_dont_merge_json"),
+			Type:    types.NewSystemBoolType(merge.DontMergeJSONVariable),
 			Default: int8(0),
 		},
 		&sql.MysqlSystemVariable{
@@ -626,10 +627,10 @@ func newInlineDoltSystemVariables() []sql.SystemVariable {
 			Default: int8(0),
 		},
 		&sql.MysqlSystemVariable{
-			Name:    "dolt_dont_merge_json",
+			Name:    merge.DontMergeJSONVariable,
 			Dynamic: true,
 			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Both),
-			Type:    types.NewSystemBoolType("dolt_dont_merge_json"),
+			Type:    types.NewSystemBoolType(merge.DontMergeJSONVariable),
 			Default: int8(0),
 		},
 		&sql.MysqlSystemVariable{
