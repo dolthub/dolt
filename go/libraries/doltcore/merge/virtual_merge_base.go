@@ -391,7 +391,7 @@ func mergeConflictedRowsByCell(ctx *sql.Context, root, xRoot, yRoot, baseRoot do
 			cells[i] = bv
 			// A generated value is computed from its sources below, so only they conflict.
 			if !wholeRow && col.Generated == "" {
-				cells[i], err = mergeCell(ctx, vm, i, x, y, bv, baseRow.wholeRow || slices.Contains(baseRow.tags, col.Tag))
+				cells[i], err = mergeCell(ctx, vm, i, x, y, b, bv, baseRow.wholeRow || slices.Contains(baseRow.tags, col.Tag))
 				if errors.Is(err, errCellConflict) {
 					cells[i] = bv
 					row.tags = append(row.tags, col.Tag)
@@ -488,9 +488,10 @@ func generateStoredColumns(ctx *sql.Context, builder *val.TupleBuilder, cells []
 
 var errCellConflict = errors.New("cell conflict")
 
-// mergeCell returns the merge of column |i| of rows |x| and |y| against the base value |bv|, or errCellConflict. A
-// cell |markedInBase| conflicted in the merge base, so it counts as changed on both sides.
-func mergeCell(ctx context.Context, vm *valueMerger, i int, x, y val.Tuple, bv interface{}, markedInBase bool) (interface{}, error) {
+// mergeCell returns the merge of column |i| of rows |x| and |y| against the base row |b|, whose value is |bv|, or
+// errCellConflict. JSON documents merge as they do in a merge of rows. A cell |markedInBase| conflicted in the merge
+// base, so it counts as changed on both sides.
+func mergeCell(ctx context.Context, vm *valueMerger, i int, x, y, b val.Tuple, bv interface{}, markedInBase bool) (interface{}, error) {
 	xv, err := vm.mergedCell(ctx, vm.leftVD, vm.leftMapping, x, i)
 	if err != nil {
 		return nil, err
@@ -511,7 +512,42 @@ func mergeCell(ctx context.Context, vm *valueMerger, i int, x, y val.Tuple, bv i
 	if equal, err := vm.mergedCellsEqual(ctx, i, xv, bv); err != nil || equal {
 		return yv, err
 	}
-	return nil, errCellConflict
+	return mergeJSONCell(ctx, vm, i, x, y, b)
+}
+
+// mergeJSONCell returns the merge of the JSON documents in column |i| of rows |x| and |y| against row |b|, or
+// errCellConflict when the column is not JSON in all three or the documents do not merge.
+func mergeJSONCell(ctx context.Context, vm *valueMerger, i int, x, y, b val.Tuple) (interface{}, error) {
+	enc := vm.resultVD.Types[i].Enc
+	if enc != val.JsonAdaptiveEnc && enc != val.JSONAddrEnc {
+		return nil, errCellConflict
+	}
+	var fields [3][]byte
+	for side, s := range []struct {
+		vd      *val.TupleDesc
+		mapping val.OrdinalMapping
+		row     val.Tuple
+	}{{vm.baseVD, vm.baseMapping, b}, {vm.leftVD, vm.leftMapping, x}, {vm.rightVD, vm.rightMapping, y}} {
+		j := s.mapping[i]
+		if j == -1 || s.vd.Types[j].Enc != enc {
+			return nil, errCellConflict
+		}
+		if fields[side] = s.row.GetField(j); fields[side] == nil {
+			return nil, errCellConflict
+		}
+	}
+	var merged interface{}
+	var conflict bool
+	var err error
+	if enc == val.JsonAdaptiveEnc {
+		merged, conflict, err = vm.mergeJSONAdaptive(ctx, fields[0], fields[1], fields[2])
+	} else {
+		merged, conflict, err = vm.mergeJSONAddr(ctx, fields[0], fields[1], fields[2])
+	}
+	if err == nil && conflict {
+		err = errCellConflict
+	}
+	return merged, err
 }
 
 func getRow(ctx context.Context, rows prolly.Map, key val.Tuple) (val.Tuple, error) {

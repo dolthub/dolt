@@ -593,6 +593,29 @@ func storedGeneratedMergeBasesSetup(xA, yA int, xLater bool) []string {
 	return script
 }
 
+// jsonInConflictedRowSetup builds a criss-cross whose merge bases, x1 and y1, conflict on a, and change the JSON
+// document j of the same row:
+//
+//	c1 -- x1 -- x2 -- x3    x
+//	  \-- y1 -- y2          y
+//	x2 = merge(x1, y1), y2 = merge(y1, x1)
+//
+// c1 seeds row 1 with a = 'seed' and j = {}. x1 and y1 set a to 'x' and 'y', and j to |xJ| and |yJ|. x2 and y2 resolve
+// the row to a = 'resolved' and j = |resolvedJ|, and x3 sets j to |laterJ|.
+func jsonInConflictedRowSetup(xJ, yJ, resolvedJ, laterJ string) []string {
+	resolve := fmt.Sprintf("UPDATE t SET a = 'resolved', j = '%s' WHERE id = 1;", resolvedJ)
+	return append(crissCrossSetup(
+		[]string{
+			"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100), j JSON);",
+			"INSERT INTO t VALUES (1, 'seed', '{}');",
+		},
+		[]string{fmt.Sprintf("UPDATE t SET a = 'x', j = '%s' WHERE id = 1;", xJ)},
+		[]string{fmt.Sprintf("UPDATE t SET a = 'y', j = '%s' WHERE id = 1;", yJ)},
+		[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", resolve},
+		[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", resolve},
+	), fmt.Sprintf("UPDATE t SET j = '%s' WHERE id = 1;", laterJ), "CALL DOLT_COMMIT('-am', 'x3');")
+}
+
 // resolvedMergeScript merges |source| after |setup|, expecting conflicts, runs |resolve| to resolve them, commits, and
 // checks that |query| returns |expected|. |expected| is git's result for the same history and resolution.
 func resolvedMergeScript(name string, setup []string, source string, resolve []string, query string, expected []sql.Row) queries.ScriptTest {
@@ -735,6 +758,9 @@ var MergeMultipleBasesPreviewScripts = []queries.ScriptTest{
 	previewParityScript("preview: conflicting merge bases with a stored generated column, resolved differently: merge y into x",
 		storedGeneratedMergeBasesSetup(10, 20, false), "x", "y", "t", "base_a, base_b, base_g, our_a, their_a",
 		[]sql.Row{{"t", uint64(1), uint64(0)}}, []sql.Row{{0, 1, 1, 10, 20}}),
+	previewParityScript("preview: merge bases that conflict on a row and merge its JSON document: merge y into x",
+		jsonInConflictedRowSetup(`{"x": 1}`, `{"y": 1}`, `{"x": 1, "y": 1}`, `{"x": 2, "y": 1}`), "x", "y", "t", "",
+		nil, nil),
 	previewParityScript("preview: conflicting merge bases, resolved the same way: merge y into x",
 		conflictingMergeBasesSetup("resolved", "resolved", false), "x", "y", "t", "", nil, nil),
 	previewParityScript("preview: conflicting merge bases, resolved the same way, then a type change: merge y into x",
@@ -1705,6 +1731,53 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT base_a, base_b, base_g, our_a, our_g, their_a, their_g FROM dolt_conflicts_t;",
 				Expected: []sql.Row{{0, 1, 1, 10, 11, 20, 21}},
+			},
+		},
+	},
+	{
+		// x1 and y1 add different keys to j, which merge cleanly, although a in the same row conflicts. So the virtual
+		// merge base has j = {"x": 1, "y": 1}, and x3's later change to it merges cleanly.
+		Name:        "merge bases that conflict on a row and merge its JSON document, then a change to the document: merge y into x",
+		SetUpScript: jsonInConflictedRowSetup(`{"x": 1}`, `{"y": 1}`, `{"x": 1, "y": 1}`, `{"x": 2, "y": 1}`),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t;",
+				Expected: []sql.Row{{1, "resolved", types.MustJSON(`{"x": 2, "y": 1}`)}},
+			},
+		},
+	},
+	{
+		Name: "merge bases that conflict on a row and merge its JSON document, then a change to the document: merge x into y",
+		SetUpScript: append(jsonInConflictedRowSetup(`{"x": 1}`, `{"y": 1}`, `{"x": 1, "y": 1}`, `{"x": 2, "y": 1}`),
+			"CALL DOLT_CHECKOUT('y');"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('x', '-m', 'merge x into y');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t;",
+				Expected: []sql.Row{{1, "resolved", types.MustJSON(`{"x": 2, "y": 1}`)}},
+			},
+		},
+	},
+	{
+		// x1 and y1 change the same key of j, which does not merge, so j conflicts between them, and x3's change to it
+		// conflicts with y2's resolution.
+		Name:        "merge bases that conflict on a row and on its JSON document, then a change to the document: merge y into x",
+		SetUpScript: jsonInConflictedRowSetup(`{"k": 1}`, `{"k": 2}`, `{"k": 3}`, `{"k": 4}`),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_a, CAST(base_j AS CHAR), CAST(our_j AS CHAR), CAST(their_j AS CHAR) FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{"seed", "{}", `{"k": 4}`, `{"k": 3}`}},
 			},
 		},
 	},
