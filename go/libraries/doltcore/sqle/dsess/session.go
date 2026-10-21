@@ -97,6 +97,14 @@ func (d *DoltSession) EngineVariables() *sql.EngineVariables {
 	return nil
 }
 
+// systemVariables returns the registry of the engine that owns this session.
+func (d *DoltSession) systemVariables() sql.SystemVariableRegistry {
+	if engineVars := d.EngineVariables(); engineVars != nil {
+		return engineVars.System
+	}
+	return sql.SystemVariables
+}
+
 // DoltgresSessionLifecycle is implemented by Doltgres session state that needs
 // notification when a transaction ends or its session caches must be cleared.
 // Keeping this interface here avoids coupling Dolt to Doltgres packages.
@@ -1614,11 +1622,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	revisionQualifiedName := strings.ToLower(db.RevisionQualifiedName())
 	baseName, _ := doltdb.SplitRevisionDbName(revisionQualifiedName)
 
-	if owner := d.EngineVariables(); owner != nil {
-		DefineSystemVariablesForDBInRegistry(owner.System, baseName)
-	} else {
-		DefineSystemVariablesForDB(baseName)
-	}
+	DefineSystemVariablesForDBInRegistry(d.systemVariables(), baseName)
 
 	tx, usingDoltTransaction := d.GetTransaction().(*DoltTransaction)
 
@@ -1909,11 +1913,7 @@ func (d *DoltSession) PersistGlobal(ctx *sql.Context, sysVarName string, value i
 		return ErrSessionNotPersistable
 	}
 
-	vars := sql.SystemVariables
-	if owner := d.EngineVariables(); owner != nil {
-		vars = owner.System
-	}
-	sysVar, _, err := validatePersistableSysVarInRegistry(vars, sysVarName)
+	sysVar, _, err := validatePersistableSysVarInRegistry(d.systemVariables(), sysVarName)
 	if err != nil {
 		return err
 	}
@@ -1941,11 +1941,7 @@ func (d *DoltSession) RemovePersistedGlobal(sysVarName string) error {
 		return ErrSessionNotPersistable
 	}
 
-	vars := sql.SystemVariables
-	if owner := d.EngineVariables(); owner != nil {
-		vars = owner.System
-	}
-	sysVar, _, err := validatePersistableSysVarInRegistry(vars, sysVarName)
+	sysVar, _, err := validatePersistableSysVarInRegistry(d.systemVariables(), sysVarName)
 	if err != nil {
 		return err
 	}
@@ -1980,11 +1976,7 @@ func (d *DoltSession) GetPersistedValue(k string) (interface{}, error) {
 		return nil, ErrSessionNotPersistable
 	}
 
-	vars := sql.SystemVariables
-	if owner := d.EngineVariables(); owner != nil {
-		vars = owner.System
-	}
-	return getPersistedValueInRegistry(vars, d.globalsConf, k)
+	return getPersistedValueInRegistry(d.systemVariables(), d.globalsConf, k)
 }
 
 // SystemVariablesInConfig returns a list of System Variables associated with the session
@@ -1992,17 +1984,7 @@ func (d *DoltSession) SystemVariablesInConfig() ([]sql.SystemVariable, error) {
 	if d.globalsConf == nil {
 		return nil, ErrSessionNotPersistable
 	}
-	vars := sql.SystemVariables
-	if owner := d.EngineVariables(); owner != nil {
-		vars = owner.System
-	}
-	var sysVars []sql.SystemVariable
-	var err error
-	if d.EngineVariables() != nil {
-		sysVars, _, err = SystemVariablesInConfigWithRegistry(vars, d.globalsConf)
-	} else {
-		sysVars, _, err = SystemVariablesInConfig(d.globalsConf)
-	}
+	sysVars, _, err := SystemVariablesInConfigWithRegistry(d.systemVariables(), d.globalsConf)
 	if err != nil {
 		return nil, err
 	}
