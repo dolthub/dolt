@@ -2,87 +2,74 @@ module github.com/dolthub/dolt/go
 
 require (
 	cloud.google.com/go/storage v1.56.0
-	github.com/BurntSushi/toml v1.1.0
-	github.com/HdrHistogram/hdrhistogram-go v1.1.2
-	github.com/abiosoft/readline v0.0.0-20180607040430-155bce2042db
-	github.com/andreyvit/diff v0.0.0-20170406064948-c7f18ee00883
-	github.com/attic-labs/kingpin v2.2.7-0.20180312050558-442efcfac769+incompatible
-	github.com/bcicen/jstream v1.0.0
-	github.com/boltdb/bolt v1.3.1
-	github.com/denisbrodbeck/machineid v1.0.1
-	github.com/dolthub/ishell v0.0.0-20260414231531-5f031e3e9037
-	github.com/dolthub/sqllogictest/go v0.0.0-20240618184124-ca47f9354216
-	github.com/dolthub/vitess v0.0.0-20261014211039-3e903c0f05d3
-	github.com/dustin/go-humanize v1.0.1
-	github.com/fatih/color v1.13.0
-	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
-	github.com/go-sql-driver/mysql v1.9.3
-	github.com/gocraft/dbr/v2 v2.7.2
-	github.com/golang/snappy v0.0.4
-	github.com/google/uuid v1.6.0
-	github.com/juju/gnuflag v0.0.0-20171113085948-2ce1bb71843d
-	github.com/mattn/go-isatty v0.0.17
-	github.com/mattn/go-runewidth v0.0.13
-	github.com/pkg/errors v0.9.1
-	github.com/pkg/profile v1.5.0
-	github.com/rivo/uniseg v0.2.0
-	github.com/sergi/go-diff v1.1.0
-	github.com/silvasur/buzhash v0.0.0-20160816060738-9bdec3dec7c6
-	github.com/sirupsen/logrus v1.8.3
-	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
-	github.com/stretchr/testify v1.11.1
-	github.com/tealeg/xlsx v1.0.5
-	go.uber.org/zap v1.27.0
-	golang.org/x/crypto v0.52.0
-	golang.org/x/net v0.55.0
-	golang.org/x/sync v0.20.0
-	golang.org/x/sys v0.45.0
-	google.golang.org/api v0.264.0
-	google.golang.org/grpc v1.83.1
-	google.golang.org/protobuf v1.36.12
-	gopkg.in/src-d/go-errors.v1 v1.0.0
-	gopkg.in/yaml.v2 v2.4.0
-)
-
-require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.21.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.13.1
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.6.4
+	github.com/BurntSushi/toml v1.1.0
+	github.com/HdrHistogram/hdrhistogram-go v1.1.2
 	github.com/Shopify/toxiproxy/v2 v2.5.0
+	github.com/abiosoft/readline v0.0.0-20180607040430-155bce2042db
 	github.com/aliyun/aliyun-oss-go-sdk v2.2.5+incompatible
+	github.com/andreyvit/diff v0.0.0-20170406064948-c7f18ee00883
+	github.com/attic-labs/kingpin v2.2.7-0.20180312050558-442efcfac769+incompatible
 	github.com/aws/aws-sdk-go-v2 v1.41.5
 	github.com/aws/aws-sdk-go-v2/config v1.29.8
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.17.64
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.41.0
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.97.3
 	github.com/aws/smithy-go v1.24.2
+	github.com/bcicen/jstream v1.0.0
+	github.com/boltdb/bolt v1.3.1
 	github.com/cenkalti/backoff/v4 v4.1.3
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/cockroachdb/apd/v3 v3.2.3
 	github.com/creasty/defaults v1.6.0
+	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/dolthub/aws-sdk-go-ini-parser v0.0.0-20250305001723-2821c37f6c12
 	github.com/dolthub/dolt-mcp v0.3.4
 	github.com/dolthub/eventsapi_schema v0.0.0-20260715220557-d9b4a1c6b4d4
 	github.com/dolthub/file-locks v0.1.2
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.20.1-0.20261016230655-239e0ad6b2f9
+	github.com/dolthub/go-mysql-server v0.20.1-0.20261021071138-ab3c968514ce
 	github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63
+	github.com/dolthub/ishell v0.0.0-20260414231531-5f031e3e9037
+	github.com/dolthub/sqllogictest/go v0.0.0-20240618184124-ca47f9354216
+	github.com/dolthub/vitess v0.0.0-20261014211039-3e903c0f05d3
+	github.com/dustin/go-humanize v1.0.1
 	github.com/edsrzf/mmap-go v1.2.0
 	github.com/esote/minmaxheap v1.0.0
+	github.com/fatih/color v1.13.0
+	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
+	github.com/go-sql-driver/mysql v1.9.3
+	github.com/gocraft/dbr/v2 v2.7.2
+	github.com/golang/snappy v0.0.4
 	github.com/google/btree v1.1.2
 	github.com/google/go-github/v57 v57.0.0
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
+	github.com/google/uuid v1.6.0
 	github.com/hashicorp/golang-lru/v2 v2.0.2
 	github.com/jmoiron/sqlx v1.3.4
+	github.com/juju/gnuflag v0.0.0-20171113085948-2ce1bb71843d
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/kylelemons/godebug v1.1.0
 	github.com/lib/pq v1.10.7
+	github.com/mattn/go-isatty v0.0.17
+	github.com/mattn/go-runewidth v0.0.13
 	github.com/mohae/uvarint v0.0.0-20160208145430-c3f9e62bf2b0
 	github.com/oracle/oci-go-sdk/v65 v65.55.0
+	github.com/pkg/errors v0.9.1
+	github.com/pkg/profile v1.5.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/procfs v0.16.1
+	github.com/rivo/uniseg v0.2.0
 	github.com/rs/zerolog v1.28.0
+	github.com/sergi/go-diff v1.1.0
 	github.com/shirou/gopsutil/v4 v4.25.12
+	github.com/silvasur/buzhash v0.0.0-20160816060738-9bdec3dec7c6
+	github.com/sirupsen/logrus v1.8.3
+	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
+	github.com/stretchr/testify v1.11.1
+	github.com/tealeg/xlsx v1.0.5
 	github.com/tidwall/gjson v1.14.4
 	github.com/tidwall/sjson v1.2.5
 	github.com/vbauerster/mpb/v8 v8.0.2
@@ -96,10 +83,20 @@ require (
 	go.opentelemetry.io/otel/exporters/jaeger v1.17.0
 	go.opentelemetry.io/otel/sdk v1.44.0
 	go.opentelemetry.io/otel/trace v1.44.0
+	go.uber.org/zap v1.27.0
+	golang.org/x/crypto v0.52.0
 	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
+	golang.org/x/net v0.55.0
+	golang.org/x/sync v0.20.0
+	golang.org/x/sys v0.45.0
 	golang.org/x/text v0.37.0
 	gonum.org/v1/plot v0.11.0
+	google.golang.org/api v0.264.0
+	google.golang.org/grpc v1.83.1
+	google.golang.org/protobuf v1.36.12
 	gopkg.in/go-jose/go-jose.v2 v2.6.3
+	gopkg.in/src-d/go-errors.v1 v1.0.0
+	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
