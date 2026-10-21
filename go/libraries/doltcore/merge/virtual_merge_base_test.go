@@ -391,6 +391,46 @@ func TestVirtualMergeBaseUnconvertibleKeylessValues(t *testing.T) {
 	assert.Equal(t, []sql.Row{{int32(1), "a"}, {int32(2), "y"}}, rows)
 }
 
+// TestVirtualMergeBaseKeylessRowsCollapse checks a virtual merge base of a keyless table whose merge bases have
+// different schemas, so that it matches their rows by their values under c1's schema, (a):
+//
+//	c1 -- x1 -- x2    x
+//	  \-- y1 -- y2    y
+//	x2 = merge(x1, y1), y2 = merge(y1, x1)
+//
+// c1 has one copy each of rows 7, 8 and 9. x1 adds column c, and has two copies of (7, 1) and three of (7, 2), which
+// are all row 7 under c1's schema. y1 deletes row 8. So the virtual merge base has five copies of row 7, none of row
+// 8, and one of row 9.
+func TestVirtualMergeBaseKeylessRowsCollapse(t *testing.T) {
+	rows := virtualMergeBaseRows(t, []string{
+		"SET @@autocommit = 0;",
+		"SET @@dolt_allow_commit_conflicts = 1;",
+		"CREATE TABLE t (a INT);",
+		"INSERT INTO t VALUES (7), (8), (9);",
+		"CALL DOLT_COMMIT('-Am', 'c1');",
+		"CALL DOLT_BRANCH('x');",
+		"CALL DOLT_BRANCH('y');",
+		"CALL DOLT_CHECKOUT('x');",
+		"ALTER TABLE t ADD COLUMN c INT;",
+		"UPDATE t SET c = 1 WHERE a = 7;",
+		"INSERT INTO t VALUES (7, 1), (7, 2), (7, 2), (7, 2);",
+		"CALL DOLT_COMMIT('-am', 'x1');",
+		"CALL DOLT_BRANCH('x1');",
+		"CALL DOLT_CHECKOUT('y');",
+		"DELETE FROM t WHERE a = 8;",
+		"CALL DOLT_COMMIT('-am', 'y1');",
+		"CALL DOLT_BRANCH('y1');",
+		"CALL DOLT_MERGE('x1', '-m', 'y2');",
+		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
+		"CALL DOLT_COMMIT('-am', 'y2');",
+		"CALL DOLT_CHECKOUT('x');",
+		"CALL DOLT_MERGE('y1', '-m', 'x2');",
+		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
+		"CALL DOLT_COMMIT('-am', 'x2');",
+	}, "SELECT a, count(*) FROM t GROUP BY a ORDER BY a;")
+	assert.Equal(t, []sql.Row{{int32(7), int64(5)}, {int32(9), int64(1)}}, rows)
+}
+
 func resolveBranch(t *testing.T, ctx *sql.Context, ddb *doltdb.DoltDB, branch string) *doltdb.Commit {
 	spec, err := doltdb.NewCommitSpec(branch)
 	require.NoError(t, err)
