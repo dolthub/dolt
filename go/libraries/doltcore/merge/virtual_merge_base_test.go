@@ -431,6 +431,35 @@ func TestVirtualMergeBaseKeylessRowsCollapse(t *testing.T) {
 	assert.Equal(t, []sql.Row{{int32(7), int64(5)}, {int32(9), int64(1)}}, rows)
 }
 
+// TestVirtualMergeBaseFullTextIndexesOfCleanRows is TestVirtualMergeBaseFullTextIndexes for merge bases that change
+// different rows, x1 row 1's a to 'alpha' and y1 row 2's to 'bravo', which merge cleanly. Merging them still has to
+// rebuild the Full-Text index, which the virtual merge base does after its rows are merged.
+func TestVirtualMergeBaseFullTextIndexesOfCleanRows(t *testing.T) {
+	rows := virtualMergeBaseRows(t, []string{
+		"SET @@autocommit = 0;",
+		"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100), FULLTEXT INDEX fa (a));",
+		"INSERT INTO t VALUES (1, 'seed'), (2, 'seed'), (3, 'seed');",
+		"CALL DOLT_COMMIT('-Am', 'c1');",
+		"CALL DOLT_BRANCH('x');",
+		"CALL DOLT_BRANCH('y');",
+		"CALL DOLT_CHECKOUT('x');",
+		"UPDATE t SET a = 'alpha' WHERE id = 1;",
+		"CALL DOLT_COMMIT('-am', 'x1');",
+		"CALL DOLT_BRANCH('x1');",
+		"CALL DOLT_CHECKOUT('y');",
+		"UPDATE t SET a = 'bravo' WHERE id = 2;",
+		"CALL DOLT_COMMIT('-am', 'y1');",
+		"CALL DOLT_BRANCH('y1');",
+		"CALL DOLT_MERGE('x1', '-m', 'y2');",
+		"CALL DOLT_CHECKOUT('x');",
+		"CALL DOLT_MERGE('y1', '-m', 'x2');",
+	}, `SELECT 'alpha', id FROM t WHERE MATCH(a) AGAINST('alpha')
+		UNION ALL SELECT 'bravo', id FROM t WHERE MATCH(a) AGAINST('bravo')
+		UNION ALL SELECT 'seed', id FROM t WHERE MATCH(a) AGAINST('seed')
+		ORDER BY 1, 2;`)
+	assert.Equal(t, []sql.Row{{"alpha", int32(1)}, {"bravo", int32(2)}, {"seed", int32(3)}}, rows)
+}
+
 func resolveBranch(t *testing.T, ctx *sql.Context, ddb *doltdb.DoltDB, branch string) *doltdb.Commit {
 	spec, err := doltdb.NewCommitSpec(branch)
 	require.NoError(t, err)
