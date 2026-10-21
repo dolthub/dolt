@@ -239,7 +239,8 @@ func resolveVirtualBaseConflicts(ctx *sql.Context, result *Result, xRoot, yRoot,
 	root := result.Root
 	conflicted := make(conflictedCells)
 	for name, stats := range result.Stats {
-		if !stats.HasArtifacts() && !schemaConflicts[name] {
+		// Full-Text pseudo-index tables are rebuilt from their parent tables.
+		if (!stats.HasArtifacts() && !schemaConflicts[name]) || doltdb.IsFullTextTable(name.Name) {
 			continue
 		}
 		var tbl *doltdb.Table
@@ -258,6 +259,9 @@ func resolveVirtualBaseConflicts(ctx *sql.Context, result *Result, xRoot, yRoot,
 			continue
 		}
 		if root, err = root.PutTable(ctx, name, tbl); err != nil {
+			return nil, nil, err
+		}
+		if root, err = rebuildFullTextIndexesOf(ctx, root, name, tbl); err != nil {
 			return nil, nil, err
 		}
 		if len(rows) > 0 {
@@ -559,15 +563,76 @@ func getRow(ctx context.Context, rows prolly.Map, key val.Tuple) (val.Tuple, err
 	return value, err
 }
 
+// takeTableFromBase replaces table |name| of |root|, and its Full-Text pseudo-index tables, with those of |baseRoot|.
 func takeTableFromBase(ctx *sql.Context, root, baseRoot doltdb.RootValue, name doltdb.TableName) (doltdb.RootValue, error) {
-	baseTable, ok, err := baseRoot.GetTable(ctx, name)
+	merged, err := fullTextTableNames(ctx, root, name)
 	if err != nil {
 		return nil, err
 	}
-	if ok {
-		return root.PutTable(ctx, name, baseTable)
+	for _, tableName := range append(merged, name) {
+		if ok, err := root.HasTable(ctx, tableName); err != nil {
+			return nil, err
+		} else if ok {
+			if root, err = root.RemoveTables(ctx, true, true, tableName); err != nil {
+				return nil, err
+			}
+		}
 	}
-	return root.RemoveTables(ctx, true, true, name)
+	base, err := fullTextTableNames(ctx, baseRoot, name)
+	if err != nil {
+		return nil, err
+	}
+	for _, tableName := range append(base, name) {
+		tbl, ok, err := baseRoot.GetTable(ctx, tableName)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			continue
+		}
+		if root, err = root.PutTable(ctx, tableName, tbl); err != nil {
+			return nil, err
+		}
+	}
+	return root, nil
+}
+
+// fullTextTableNames returns the Full-Text pseudo-index tables of table |name| in |root|.
+func fullTextTableNames(ctx *sql.Context, root doltdb.RootValue, name doltdb.TableName) ([]doltdb.TableName, error) {
+	tbl, ok, err := root.GetTable(ctx, name)
+	if err != nil || !ok {
+		return nil, err
+	}
+	sch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[string]bool)
+	var names []doltdb.TableName
+	for _, idx := range sch.Indexes().AllIndexes() {
+		if !idx.IsFullText() {
+			continue
+		}
+		for _, tableName := range idx.FullTextProperties().TableNameSlice() {
+			if !seen[tableName] {
+				seen[tableName] = true
+				names = append(names, doltdb.TableName{Name: tableName, Schema: name.Schema})
+			}
+		}
+	}
+	return names, nil
+}
+
+// rebuildFullTextIndexesOf rebuilds the Full-Text pseudo-index tables of |tbl|, table |name| of |root|, from its rows.
+func rebuildFullTextIndexesOf(ctx *sql.Context, root doltdb.RootValue, name doltdb.TableName, tbl *doltdb.Table) (doltdb.RootValue, error) {
+	sch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !sch.Indexes().ContainsFullTextIndex() {
+		return root, nil
+	}
+	return rebuildFullTextIndexesForTable(ctx, rebuildableFulltextTable{Name: name.Name, Table: tbl, Schema: sch}, root)
 }
 
 // virtualMergeBaseMeta derives every field from |x| and |y|, so merging the same commits always yields the same hash.

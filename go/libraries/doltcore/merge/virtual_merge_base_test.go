@@ -131,6 +131,143 @@ func TestVirtualMergeBaseIndexes(t *testing.T) {
 	}
 }
 
+// TestVirtualMergeBaseFullTextIndexes checks that searching a virtual merge base's Full-Text index finds its rows:
+//
+//	c1 -- x1 -- x2    x
+//	  \-- y1 -- y2    y
+//	x2 = merge(x1, y1), y2 = merge(y1, x1)
+//
+// c1 seeds rows 1 and 2 with a = b = 'seed'. x1 sets a to 'alpha' in both rows, and y1 sets row 1's a to 'bravo' and
+// row 2's b to 'y'. So x1 and y1 conflict on row 1's a, which the virtual merge base sets back to 'seed', and merge
+// row 2 to a = 'alpha', b = 'y'.
+func TestVirtualMergeBaseFullTextIndexes(t *testing.T) {
+	ctx := context.Background()
+	dEnv := dtu.CreateTestEnv()
+	defer dEnv.DoltDB(ctx).Close()
+	dbName, eng := engineFromEnvironment(ctx, dEnv)
+	sqlCtx, err := eng.NewLocalContext(ctx)
+	require.NoError(t, err)
+	sqlCtx.SetCurrentDatabase(dbName)
+
+	for _, query := range []string{
+		"SET @@autocommit = 0;",
+		"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100), b VARCHAR(100), FULLTEXT INDEX fa (a));",
+		"INSERT INTO t VALUES (1, 'seed', 'seed'), (2, 'seed', 'seed');",
+		"CALL DOLT_COMMIT('-Am', 'c1');",
+		"CALL DOLT_BRANCH('x');",
+		"CALL DOLT_BRANCH('y');",
+		"CALL DOLT_CHECKOUT('x');",
+		"UPDATE t SET a = 'alpha';",
+		"CALL DOLT_COMMIT('-am', 'x1');",
+		"CALL DOLT_BRANCH('x1');",
+		"CALL DOLT_CHECKOUT('y');",
+		"UPDATE t SET a = 'bravo' WHERE id = 1;",
+		"UPDATE t SET b = 'y' WHERE id = 2;",
+		"CALL DOLT_COMMIT('-am', 'y1');",
+		"CALL DOLT_BRANCH('y1');",
+		"CALL DOLT_MERGE('x1', '-m', 'y2');",
+		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
+		"UPDATE t SET a = 'resolved' WHERE id = 1;",
+		"CALL DOLT_COMMIT('-am', 'y2');",
+		"CALL DOLT_CHECKOUT('x');",
+		"CALL DOLT_MERGE('y1', '-m', 'x2');",
+		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
+		"UPDATE t SET a = 'resolved' WHERE id = 1;",
+		"CALL DOLT_COMMIT('-am', 'x2');",
+	} {
+		require.NoError(t, executeQuery(sqlCtx, eng, query), query)
+	}
+
+	x, y := resolveBranch(t, sqlCtx, dEnv.DoltDB(ctx), "x"), resolveBranch(t, sqlCtx, dEnv.DoltDB(ctx), "y")
+	virtualBase, err := merge.ResolveMergeBase(sqlCtx, x, y)
+	require.NoError(t, err)
+	virtualBaseHash, err := virtualBase.HashOf()
+	require.NoError(t, err)
+	for _, query := range []string{
+		"CALL DOLT_BRANCH('virtual', '" + virtualBaseHash.String() + "');",
+		"CALL DOLT_CHECKOUT('virtual');",
+	} {
+		require.NoError(t, executeQuery(sqlCtx, eng, query), query)
+	}
+
+	for word, ids := range map[string][]sql.Row{
+		"seed":     {{int32(1)}},
+		"alpha":    {{int32(2)}},
+		"bravo":    nil,
+		"resolved": nil,
+	} {
+		_, iter, _, err := eng.Query(sqlCtx, "SELECT id FROM t WHERE MATCH(a) AGAINST('"+word+"') ORDER BY id;")
+		require.NoError(t, err)
+		rows, err := sql.RowIterToRows(sqlCtx, iter)
+		require.NoError(t, err)
+		assert.Equal(t, ids, rows, "rows matching %s", word)
+	}
+}
+
+// TestVirtualMergeBaseFullTextIndexesOfKeylessTable is TestVirtualMergeBaseFullTextIndexes for a keyless table, which
+// a virtual merge base takes whole from the merge base of its merge bases when they conflict. c1 seeds the row 'seed';
+// x1 changes it to 'alpha' and y1 to 'bravo', and x2 and y2 resolve the conflict by keeping ours.
+func TestVirtualMergeBaseFullTextIndexesOfKeylessTable(t *testing.T) {
+	ctx := context.Background()
+	dEnv := dtu.CreateTestEnv()
+	defer dEnv.DoltDB(ctx).Close()
+	dbName, eng := engineFromEnvironment(ctx, dEnv)
+	sqlCtx, err := eng.NewLocalContext(ctx)
+	require.NoError(t, err)
+	sqlCtx.SetCurrentDatabase(dbName)
+
+	for _, query := range []string{
+		"SET @@autocommit = 0;",
+		"CREATE TABLE t (a VARCHAR(100), FULLTEXT INDEX fa (a));",
+		"INSERT INTO t VALUES ('seed');",
+		"CALL DOLT_COMMIT('-Am', 'c1');",
+		"CALL DOLT_BRANCH('x');",
+		"CALL DOLT_BRANCH('y');",
+		"CALL DOLT_CHECKOUT('x');",
+		"UPDATE t SET a = 'alpha';",
+		"CALL DOLT_COMMIT('-am', 'x1');",
+		"CALL DOLT_BRANCH('x1');",
+		"CALL DOLT_CHECKOUT('y');",
+		"UPDATE t SET a = 'bravo';",
+		"CALL DOLT_COMMIT('-am', 'y1');",
+		"CALL DOLT_BRANCH('y1');",
+		"CALL DOLT_MERGE('x1', '-m', 'y2');",
+		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
+		"CALL DOLT_COMMIT('-am', 'y2');",
+		"CALL DOLT_CHECKOUT('x');",
+		"CALL DOLT_MERGE('y1', '-m', 'x2');",
+		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
+		"CALL DOLT_COMMIT('-am', 'x2');",
+	} {
+		require.NoError(t, executeQuery(sqlCtx, eng, query), query)
+	}
+
+	x, y := resolveBranch(t, sqlCtx, dEnv.DoltDB(ctx), "x"), resolveBranch(t, sqlCtx, dEnv.DoltDB(ctx), "y")
+	virtualBase, err := merge.ResolveMergeBase(sqlCtx, x, y)
+	require.NoError(t, err)
+	virtualBaseHash, err := virtualBase.HashOf()
+	require.NoError(t, err)
+	for _, query := range []string{
+		"CALL DOLT_BRANCH('virtual', '" + virtualBaseHash.String() + "');",
+		"CALL DOLT_CHECKOUT('virtual');",
+	} {
+		require.NoError(t, executeQuery(sqlCtx, eng, query), query)
+	}
+
+	for query, expected := range map[string][]sql.Row{
+		"SELECT a FROM t;": {{"seed"}},
+		"SELECT a FROM t WHERE MATCH(a) AGAINST('seed');":  {{"seed"}},
+		"SELECT a FROM t WHERE MATCH(a) AGAINST('alpha');": nil,
+		"SELECT a FROM t WHERE MATCH(a) AGAINST('bravo');": nil,
+	} {
+		_, iter, _, err := eng.Query(sqlCtx, query)
+		require.NoError(t, err)
+		rows, err := sql.RowIterToRows(sqlCtx, iter)
+		require.NoError(t, err)
+		assert.Equal(t, expected, rows, query)
+	}
+}
+
 func resolveBranch(t *testing.T, ctx *sql.Context, ddb *doltdb.DoltDB, branch string) *doltdb.Commit {
 	spec, err := doltdb.NewCommitSpec(branch)
 	require.NoError(t, err)
