@@ -387,6 +387,27 @@ func jsonMergeBasesSetup() []string {
 	}
 }
 
+// crissCrossSetup builds a criss-cross from c1, made by |seed|:
+//
+//	c1 -- x1 -- x2    x
+//	  \-- y1 -- y2    y
+//	x2 = merge(x1, y1), y2 = merge(y1, x1)
+//
+// |x1| and |y1| make x1 and y1. |y2| and |x2| resolve the merges that make y2 and x2 before they are committed.
+func crissCrossSetup(seed, x1, y1, y2, x2 []string) []string {
+	script := append([]string{"SET @@autocommit = 0;"}, seed...)
+	script = append(script, "CALL DOLT_COMMIT('-Am', 'c1');", "CALL DOLT_BRANCH('x');", "CALL DOLT_BRANCH('y');",
+		"CALL DOLT_CHECKOUT('x');")
+	script = append(script, x1...)
+	script = append(script, "CALL DOLT_COMMIT('-am', 'x1');", "CALL DOLT_BRANCH('x1');", "CALL DOLT_CHECKOUT('y');")
+	script = append(script, y1...)
+	script = append(script, "CALL DOLT_COMMIT('-am', 'y1');", "CALL DOLT_BRANCH('y1');", "CALL DOLT_MERGE('x1', '-m', 'y2');")
+	script = append(script, y2...)
+	script = append(script, "CALL DOLT_COMMIT('-am', 'y2');", "CALL DOLT_CHECKOUT('x');", "CALL DOLT_MERGE('y1', '-m', 'x2');")
+	script = append(script, x2...)
+	return append(script, "CALL DOLT_COMMIT('-am', 'x2');")
+}
+
 // resolvedMergeScript merges |source| after |setup|, expecting conflicts, runs |resolve| to resolve them, commits, and
 // checks that |query| returns |expected|. |expected| is git's result for the same history and resolution.
 func resolvedMergeScript(name string, setup []string, source string, resolve []string, query string, expected []sql.Row) queries.ScriptTest {
@@ -1039,6 +1060,153 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT base_a, base_b, our_b, our_diff_type, their_b, their_diff_type FROM dolt_conflicts_t;",
 				Expected: []sql.Row{{"seed", "seed", "seed", "modified", "seed", "modified"}},
+			},
+		},
+	},
+	{
+		// x1 and y1 each give a different row the unique value 'u', so merging them violates the unique key on a. The
+		// virtual merge base keeps both rows with 'u', without the violation, and its index on a must still build.
+		// x2 and y2 each change a different row away from 'u', so the merge is clean and valid.
+		Name: "merge bases that violate a unique key together: merge y into x",
+		SetUpScript: crissCrossSetup(
+			[]string{
+				"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100), UNIQUE KEY ua (a));",
+				"INSERT INTO t VALUES (1, 'seed 1'), (2, 'seed 2');",
+			},
+			[]string{"UPDATE t SET a = 'u' WHERE id = 1;"},
+			[]string{"UPDATE t SET a = 'u' WHERE id = 2;"},
+			[]string{"UPDATE t SET a = 'y2' WHERE id = 2;", "DELETE FROM dolt_constraint_violations_t;"},
+			[]string{"UPDATE t SET a = 'x2' WHERE id = 1;", "DELETE FROM dolt_constraint_violations_t;"},
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY id;",
+				Expected: []sql.Row{{1, "x2"}, {2, "y2"}},
+			},
+			{
+				Query:    "SELECT id FROM t FORCE INDEX (ua) WHERE a = 'y2';",
+				Expected: []sql.Row{{2}},
+			},
+		},
+	},
+	{
+		// As above, but x2 and y2 each move the other row away from 'u'. Each takes the other's change, so the merged
+		// rows hold neither 'u'.
+		Name: "merge bases that violate a unique key together, each side moving the other row: merge y into x",
+		SetUpScript: crissCrossSetup(
+			[]string{
+				"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100), UNIQUE KEY ua (a));",
+				"INSERT INTO t VALUES (1, 'seed 1'), (2, 'seed 2');",
+			},
+			[]string{"UPDATE t SET a = 'u' WHERE id = 1;"},
+			[]string{"UPDATE t SET a = 'u' WHERE id = 2;"},
+			[]string{"UPDATE t SET a = 'y2' WHERE id = 1;", "DELETE FROM dolt_constraint_violations_t;"},
+			[]string{"UPDATE t SET a = 'x2' WHERE id = 2;", "DELETE FROM dolt_constraint_violations_t;"},
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY id;",
+				Expected: []sql.Row{{1, "y2"}, {2, "x2"}},
+			},
+		},
+	},
+	{
+		// Merging x1 and y1 violates the check on row 1. The virtual merge base keeps the merged row; x2 and y2 each
+		// fix it, the same way, so the merge is clean.
+		Name: "merge bases that violate a check constraint together: merge y into x",
+		SetUpScript: crissCrossSetup(
+			[]string{
+				"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100), b VARCHAR(100), CHECK (a <> b));",
+				"INSERT INTO t VALUES (1, 'seed a', 'seed b');",
+			},
+			[]string{"UPDATE t SET a = 'z' WHERE id = 1;"},
+			[]string{"UPDATE t SET b = 'z' WHERE id = 1;"},
+			[]string{"UPDATE t SET b = 'fixed' WHERE id = 1;", "DELETE FROM dolt_constraint_violations_t;"},
+			[]string{"UPDATE t SET b = 'fixed' WHERE id = 1;", "DELETE FROM dolt_constraint_violations_t;"},
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY id;",
+				Expected: []sql.Row{{1, "z", "fixed"}},
+			},
+		},
+	},
+	{
+		// x1 deletes parent 2 and y1 adds a child of it, so merging them violates the foreign key. y2 drops the child
+		// and x2 restores the parent. Against the virtual merge base, which has the child but not the parent, y2
+		// deleted the child and x2 added the parent, so the merge is clean and valid.
+		Name: "merge bases that violate a foreign key together: merge y into x",
+		SetUpScript: crissCrossSetup(
+			[]string{
+				"CREATE TABLE parent (id INT PRIMARY KEY);",
+				"CREATE TABLE child (id INT PRIMARY KEY, pid INT, FOREIGN KEY (pid) REFERENCES parent (id));",
+				"INSERT INTO parent VALUES (1), (2);",
+			},
+			[]string{"DELETE FROM parent WHERE id = 2;"},
+			[]string{"INSERT INTO child VALUES (10, 2);"},
+			[]string{"DELETE FROM dolt_constraint_violations_child;", "DELETE FROM child WHERE id = 10;"},
+			[]string{"DELETE FROM dolt_constraint_violations_child;", "INSERT INTO parent VALUES (2);"},
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM parent ORDER BY id;",
+				Expected: []sql.Row{{1}, {2}},
+			},
+			{
+				Query:    "SELECT * FROM child;",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		// x1 and y1 conflict on row 1's b, and also violate the unique key on a together. The virtual merge base keeps
+		// row 1's clean a, 'u', next to row 2's 'u', and c1's b. x2 and y2 keep their own row 1, so b conflicts again,
+		// and y2's row 1 has a = 'seed 1', a change from the virtual merge base. Both move row 2 to 'fixed'.
+		Name: "merge bases with a conflict and a unique key violation: merge y into x",
+		SetUpScript: crissCrossSetup(
+			[]string{
+				"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100), b VARCHAR(100), UNIQUE KEY ua (a));",
+				"INSERT INTO t VALUES (1, 'seed 1', 'seed'), (2, 'seed 2', 'seed');",
+			},
+			[]string{"UPDATE t SET a = 'u', b = 'x' WHERE id = 1;"},
+			[]string{"UPDATE t SET a = 'u' WHERE id = 2;", "UPDATE t SET b = 'y' WHERE id = 1;"},
+			[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "UPDATE t SET a = 'fixed' WHERE id = 2;",
+				"DELETE FROM dolt_constraint_violations_t;"},
+			[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", "UPDATE t SET a = 'fixed' WHERE id = 2;",
+				"DELETE FROM dolt_constraint_violations_t;"},
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_id, base_a, base_b, our_a, our_b, their_a, their_b FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{1, "u", "seed", "u", "x", "seed 1", "y"}},
+			},
+			{
+				Query:    "SELECT * FROM t WHERE id = 2;",
+				Expected: []sql.Row{{2, "fixed", "seed"}},
+			},
+			{
+				Query:    "SELECT count(*) FROM dolt_constraint_violations_t;",
+				Expected: []sql.Row{{0}},
 			},
 		},
 	},

@@ -187,7 +187,8 @@ func rebuildVirtualMergeBase(ctx context.Context, vrw types.ValueReadWriter, ns 
 // that merge cleanly keep their merged value, and a conflicted cell keeps the value of the merge base of |x| and |y|.
 // git's merge-ort keeps conflict markers in the conflicted lines of text files instead; a cell cannot hold them, so
 // the returned cells are treated as changed on both sides when merging against the virtual merge base. A keyless table,
-// or a table whose schema conflicts, is taken whole from that merge base.
+// or a table whose schema conflicts, is taken whole from that merge base. Like git's, the virtual merge base is never
+// checked out, so it keeps the merged rows even where they violate a constraint, and drops the violations.
 func mergeIntoVirtualBase(ctx *sql.Context, x, y *doltdb.Commit) (*doltdb.Commit, conflictedCells, error) {
 	base, bases, baseConflicts, err := resolveMergeBase(ctx, x, y)
 	if err != nil {
