@@ -161,7 +161,33 @@ func ConfigureServices(
 				return fmt.Errorf("unknown log format: %s", cfg.ServerConfig.LogFormat())
 			}
 
-			vars.AddSystemVariables([]sql.SystemVariable{newLogLevelSystemVariable(logrus.GetLevel().String())})
+			vars.AddSystemVariables([]sql.SystemVariable{
+				&sql.MysqlSystemVariable{
+					Name:              dsess.DoltLogLevel,
+					Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Global),
+					Dynamic:           true,
+					SetVarHintApplies: false,
+					Type: types.NewSystemEnumType(dsess.DoltLogLevel,
+						logrus.PanicLevel.String(),
+						logrus.FatalLevel.String(),
+						logrus.ErrorLevel.String(),
+						logrus.WarnLevel.String(),
+						logrus.InfoLevel.String(),
+						logrus.DebugLevel.String(),
+						logrus.TraceLevel.String(),
+					),
+					Default: logrus.GetLevel().String(),
+					NotifyChanged: func(ctx *sql.Context, _ sql.SystemVariableScope, v sql.SystemVarValue) error {
+						level, err := logrus.ParseLevel(v.Val.(string))
+						if err != nil {
+							return fmt.Errorf("could not parse requested log level %s as a log level. dolt_log_level variable value and logging behavior will diverge.", v.Val.(string))
+						}
+
+						logrus.SetLevel(level)
+						return nil
+					},
+				},
+			})
 			return nil
 		},
 	}
@@ -983,36 +1009,6 @@ func ConfigureServices(
 
 	// Optionally start an MCP HTTP server
 	registerMCPService(controller, cfg, lgr)
-}
-
-// newLogLevelSystemVariable keeps its value in the owning engine. The standard
-// logrus logger is process-wide, so changing this variable also changes the
-// logging threshold for other engines using that logger.
-func newLogLevelSystemVariable(defaultLevel string) sql.SystemVariable {
-	return &sql.MysqlSystemVariable{
-		Name:              dsess.DoltLogLevel,
-		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Global),
-		Dynamic:           true,
-		SetVarHintApplies: false,
-		Type: types.NewSystemEnumType(dsess.DoltLogLevel,
-			logrus.PanicLevel.String(),
-			logrus.FatalLevel.String(),
-			logrus.ErrorLevel.String(),
-			logrus.WarnLevel.String(),
-			logrus.InfoLevel.String(),
-			logrus.DebugLevel.String(),
-			logrus.TraceLevel.String(),
-		),
-		Default: defaultLevel,
-		NotifyChanged: func(_ *sql.Context, _ sql.SystemVariableScope, v sql.SystemVarValue) error {
-			level, err := logrus.ParseLevel(v.Val.(string))
-			if err != nil {
-				return fmt.Errorf("could not parse requested log level %s as a log level. dolt_log_level variable value and logging behavior will diverge.", v.Val.(string))
-			}
-			logrus.SetLevel(level)
-			return nil
-		},
-	}
 }
 
 // heartbeatService is a service that sends a heartbeat event to the metrics server once a day
