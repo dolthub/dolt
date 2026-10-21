@@ -15,6 +15,7 @@
 package merge
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -329,7 +330,7 @@ func mergeConflictedRowsByCell(ctx *sql.Context, root, xRoot, yRoot, baseRoot do
 	if err != nil {
 		return nil, nil, err
 	}
-	mut := mergedRows.Mutate()
+	edits := newTableEdits(mergedRows)
 	rows := make(map[string]conflictedRow)
 	for {
 		art, err := conflicts.Next(ctx)
@@ -345,7 +346,7 @@ func mergeConflictedRowsByCell(ctx *sql.Context, root, xRoot, yRoot, baseRoot do
 		// The merge bases of a conflicted keyless row disagree on how many copies of it there are. Like a conflicted
 		// line in git's text merge, it keeps its base's copies and is marked.
 		if rm.keyless {
-			if err = putOrDelete(ctx, mut, art.Key, b); err != nil {
+			if err = edits.set(ctx, art.Key, b); err != nil {
 				return nil, nil, err
 			}
 			rows[string(art.Key)] = conflictedRow{wholeRow: true}
@@ -355,14 +356,14 @@ func mergeConflictedRowsByCell(ctx *sql.Context, root, xRoot, yRoot, baseRoot do
 		if err != nil {
 			return nil, nil, err
 		}
-		if err = putOrDelete(ctx, mut, art.Key, value); err != nil {
+		if err = edits.set(ctx, art.Key, value); err != nil {
 			return nil, nil, err
 		}
 		if row.wholeRow || len(row.tags) > 0 {
 			rows[string(art.Key)] = row
 		}
 	}
-	tbl, err := finishVirtualTable(ctx, merged, sch, name, mut)
+	tbl, err := finishVirtualTable(ctx, merged, sch, name, edits)
 	return tbl, rows, err
 }
 
@@ -386,15 +387,15 @@ func mergeRowsUnderBaseSchema(ctx *sql.Context, xRoot, yRoot, baseRoot doltdb.Ro
 	}
 	ns := baseTbl.NodeStore()
 	if schema.IsKeyless(sch) {
-		mut, err := mergeKeylessRowsUnderBaseSchema(ctx, sch, sides, ns)
+		edits, conflicted, err := mergeKeylessRowsUnderBaseSchema(ctx, sch, sides, ns)
 		if err != nil {
 			return nil, nil, err
 		}
 		rows := make(map[string]conflictedRow)
-		for key := range mut.conflicted {
+		for key := range conflicted {
 			rows[key] = conflictedRow{wholeRow: true}
 		}
-		tbl, err := finishVirtualTable(ctx, baseTbl, sch, name, mut.MutableMap)
+		tbl, err := finishVirtualTable(ctx, baseTbl, sch, name, edits)
 		return tbl, rows, err
 	}
 
@@ -406,7 +407,7 @@ func mergeRowsUnderBaseSchema(ctx *sql.Context, xRoot, yRoot, baseRoot doltdb.Ro
 	if err != nil {
 		return nil, nil, err
 	}
-	mut := sides.base.Mutate()
+	edits := newTableEdits(sides.base)
 	rows := make(map[string]conflictedRow)
 	for _, key := range keys {
 		x, y, b, err := sides.rows(ctx, key)
@@ -417,14 +418,14 @@ func mergeRowsUnderBaseSchema(ctx *sql.Context, xRoot, yRoot, baseRoot doltdb.Ro
 		if err != nil {
 			return nil, nil, err
 		}
-		if err = putOrDelete(ctx, mut, key, value); err != nil {
+		if err = edits.set(ctx, key, value); err != nil {
 			return nil, nil, err
 		}
 		if row.wholeRow || len(row.tags) > 0 {
 			rows[string(key)] = row
 		}
 	}
-	tbl, err := finishVirtualTable(ctx, baseTbl, sch, name, mut)
+	tbl, err := finishVirtualTable(ctx, baseTbl, sch, name, edits)
 	return tbl, rows, err
 }
 
@@ -503,11 +504,38 @@ func changedKeys(ctx context.Context, base, x, y prolly.Map) ([]val.Tuple, error
 	return keys, nil
 }
 
-func putOrDelete(ctx context.Context, mut *prolly.MutableMap, key, value val.Tuple) error {
-	if value == nil {
-		return mut.Delete(ctx, key)
+// tableEdits are the rows a virtual merge base sets in a table, with the rows they replace, so that its secondary
+// indexes can be updated for only those rows.
+type tableEdits struct {
+	start prolly.Map
+	mut   *prolly.MutableMap
+	rows  []rowEdit
+}
+
+type rowEdit struct {
+	key, old, new val.Tuple
+}
+
+func newTableEdits(rows prolly.Map) *tableEdits {
+	return &tableEdits{start: rows, mut: rows.Mutate()}
+}
+
+// set sets row |key| to |value|, or deletes it when |value| is nil.
+func (e *tableEdits) set(ctx context.Context, key, value val.Tuple) error {
+	old, err := getRow(ctx, e.start, key)
+	if err != nil || bytes.Equal(old, value) {
+		return err
 	}
-	return mut.Put(ctx, key, value)
+	if value == nil {
+		err = e.mut.Delete(ctx, key)
+	} else {
+		err = e.mut.Put(ctx, key, value)
+	}
+	if err != nil {
+		return err
+	}
+	e.rows = append(e.rows, rowEdit{key: slices.Clone(key), old: old, new: value})
+	return nil
 }
 
 // virtualRowMerger merges the rows of a table in two merge bases cell by cell into rows of schema |sch|.
@@ -659,16 +687,10 @@ func (rm *virtualRowMerger) build(ctx *sql.Context, key val.Tuple) (val.Tuple, e
 	return generateStoredColumns(ctx, rm.builder, rm.cells, rm.stored, rm.generated, rm.sch, key, value, rm.ns)
 }
 
-// keylessMutation is the rows of a keyless table under the base's schema, and the keys of those that conflicted.
-type keylessMutation struct {
-	*prolly.MutableMap
-	conflicted map[string]bool
-}
-
 // mergeKeylessRowsUnderBaseSchema merges how many copies of each row of keyless table |sides| there are under the
 // base's schema |sch|, matching rows by their values under it. A row whose merge bases disagree on its copies keeps the
 // base's copies and is conflicted.
-func mergeKeylessRowsUnderBaseSchema(ctx *sql.Context, sch schema.Schema, sides virtualMergeSides, ns tree.NodeStore) (keylessMutation, error) {
+func mergeKeylessRowsUnderBaseSchema(ctx *sql.Context, sch schema.Schema, sides virtualMergeSides, ns tree.NodeStore) (*tableEdits, map[string]bool, error) {
 	type copies struct {
 		value   val.Tuple
 		x, y, b uint64
@@ -683,18 +705,18 @@ func mergeKeylessRowsUnderBaseSchema(ctx *sql.Context, sch schema.Schema, sides 
 		srcVD := srcSch.GetValueDescriptor(ns)
 		iter, err := rows.IterAll(ctx)
 		if err != nil {
-			return keylessMutation{}, err
+			return nil, nil, err
 		}
 		for {
 			_, value, err := iter.Next(ctx)
 			if errors.Is(err, io.EOF) {
 				break
 			} else if err != nil {
-				return keylessMutation{}, err
+				return nil, nil, err
 			}
 			n := val.ReadKeylessCardinality(value)
 			if value, err = keylessValueUnder(ctx, builder, sch, srcSch, srcVD, value, ns); err != nil {
-				return keylessMutation{}, err
+				return nil, nil, err
 			}
 			key := string(val.HashTupleFromValue(pool, value))
 			c, ok := counts[key]
@@ -707,7 +729,8 @@ func mergeKeylessRowsUnderBaseSchema(ctx *sql.Context, sch schema.Schema, sides 
 		}
 	}
 
-	mut := keylessMutation{MutableMap: sides.base.Mutate(), conflicted: make(map[string]bool)}
+	edits := newTableEdits(sides.base)
+	conflicted := make(map[string]bool)
 	for _, key := range order {
 		c := counts[key]
 		n := c.b
@@ -717,20 +740,17 @@ func mergeKeylessRowsUnderBaseSchema(ctx *sql.Context, sch schema.Schema, sides 
 		case c.x == c.b:
 			n = c.y
 		default:
-			mut.conflicted[key] = true
+			conflicted[key] = true
 		}
-		var err error
-		if n == 0 {
-			err = mut.Delete(ctx, val.Tuple(key))
-		} else {
-			value, _ := val.ModifyKeylessCardinality(pool, c.value, int64(n)-int64(val.ReadKeylessCardinality(c.value)))
-			err = mut.Put(ctx, val.Tuple(key), value)
+		var value val.Tuple
+		if n > 0 {
+			value, _ = val.ModifyKeylessCardinality(pool, c.value, int64(n)-int64(val.ReadKeylessCardinality(c.value)))
 		}
-		if err != nil {
-			return keylessMutation{}, err
+		if err := edits.set(ctx, val.Tuple(key), value); err != nil {
+			return nil, nil, err
 		}
 	}
-	return mut, nil
+	return edits, conflicted, nil
 }
 
 // keylessValueUnder returns keyless row |value| of schema |srcSch| as a row of schema |sch|, with the same copies.
@@ -762,10 +782,11 @@ func keylessValueUnder(ctx *sql.Context, builder *val.TupleBuilder, sch, srcSch 
 	return builder.BuildPermissive(ctx, ns.Pool())
 }
 
-// finishVirtualTable returns |tbl| with the rows of |mut|, secondary indexes built from them, and no artifacts.
-func finishVirtualTable(ctx *sql.Context, tbl *doltdb.Table, sch schema.Schema, name doltdb.TableName, mut *prolly.MutableMap) (*doltdb.Table, error) {
+// finishVirtualTable returns |tbl| with the rows of |edits|, its secondary indexes updated for them, and no artifacts.
+// The rows that |edits| starts from are |tbl|'s, which its secondary indexes match.
+func finishVirtualTable(ctx *sql.Context, tbl *doltdb.Table, sch schema.Schema, name doltdb.TableName, edits *tableEdits) (*doltdb.Table, error) {
 	ns := tbl.NodeStore()
-	newRows, err := mut.Map(ctx)
+	newRows, err := edits.mut.Map(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -777,11 +798,11 @@ func finishVirtualTable(ctx *sql.Context, tbl *doltdb.Table, sch schema.Schema, 
 		return nil, err
 	}
 	for _, index := range sch.Indexes().AllIndexes() {
-		built, err := creation.BuildProllyIndexExternal(ctx, tbl.ValueReadWriter(), ns, sch, name.Name, index, newRows, nil, nil)
+		updated, err := updateSecondaryIndex(ctx, tbl, indexes, sch, name, index, newRows, edits.rows)
 		if err != nil {
 			return nil, err
 		}
-		if indexes, err = indexes.PutIndex(ctx, index.Name(), built); err != nil {
+		if indexes, err = indexes.PutIndex(ctx, index.Name(), updated); err != nil {
 			return nil, err
 		}
 	}
@@ -793,6 +814,47 @@ func finishVirtualTable(ctx *sql.Context, tbl *doltdb.Table, sch schema.Schema, 
 		return nil, err
 	}
 	return tbl.SetArtifacts(ctx, emptyArtifacts)
+}
+
+// updateSecondaryIndex returns |index| of |indexes| with the entries of the rows in |edits| replaced. A vector or
+// Full-Text index, or one missing from |indexes|, is built again from |rows|.
+func updateSecondaryIndex(ctx *sql.Context, tbl *doltdb.Table, indexes durable.IndexSet, sch schema.Schema, name doltdb.TableName, index schema.Index, rows prolly.Map, edits []rowEdit) (durable.Index, error) {
+	ok, err := indexes.HasIndex(ctx, index.Name())
+	if err != nil {
+		return nil, err
+	}
+	if !ok || index.IsVector() || index.IsFullText() {
+		return creation.BuildProllyIndexExternal(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, name.Name, index, rows, nil, nil)
+	}
+	idx, err := indexes.GetIndex(ctx, sch, nil, index.Name())
+	if err != nil {
+		return nil, err
+	}
+	m, err := durable.ProllyMapFromIndex(idx)
+	if err != nil {
+		return nil, err
+	}
+	mut, err := NewMutableSecondaryIdx(ctx, m, sch, sch, name.Name, index)
+	if err != nil {
+		return nil, err
+	}
+	for _, edit := range edits {
+		if edit.old != nil {
+			if err = mut.DeleteEntry(ctx, edit.key, edit.old); err != nil {
+				return nil, err
+			}
+		}
+		if edit.new != nil {
+			if err = mut.InsertEntry(ctx, edit.key, edit.new); err != nil {
+				return nil, err
+			}
+		}
+	}
+	updated, err := mut.Map(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return durable.IndexFromProllyMap(updated), nil
 }
 
 func buildRowValue(ctx context.Context, builder *val.TupleBuilder, cells []interface{}, ns tree.NodeStore) (val.Tuple, error) {
