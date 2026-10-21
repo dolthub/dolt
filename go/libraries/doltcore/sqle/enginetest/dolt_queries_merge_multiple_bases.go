@@ -439,6 +439,27 @@ func conflictedRowWithCleanCellsSetup(xD, yD string, xLater bool) []string {
 	return script
 }
 
+// addAddSetup builds a criss-cross whose merge bases, x1 and y1, both add row 3, with different values:
+//
+//	c1 -- x1 -- x2    x
+//	  \-- y1 -- y2    y
+//	x2 = merge(x1, y1), y2 = merge(y1, x1)
+//
+// c1 seeds row 1. x1 adds row 3 with a = 'x', and y1 with a = 'y'. Their merge base has no row 3, so the virtual merge
+// base has none either. x2 and y2 resolve row 3 with |xResolution| and |yResolution|.
+func addAddSetup(xResolution, yResolution string) []string {
+	return crissCrossSetup(
+		[]string{
+			"CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100));",
+			"INSERT INTO t VALUES (1, 'seed');",
+		},
+		[]string{"INSERT INTO t VALUES (3, 'x');"},
+		[]string{"INSERT INTO t VALUES (3, 'y');"},
+		[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", yResolution},
+		[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');", xResolution},
+	)
+}
+
 // resolvedMergeScript merges |source| after |setup|, expecting conflicts, runs |resolve| to resolve them, commits, and
 // checks that |query| returns |expected|. |expected| is git's result for the same history and resolution.
 func resolvedMergeScript(name string, setup []string, source string, resolve []string, query string, expected []sql.Row) queries.ScriptTest {
@@ -1300,6 +1321,123 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT base_a, base_b, base_c, base_d, our_a, our_b, our_c, our_d, their_a, their_b, their_c, their_d FROM dolt_conflicts_t;",
 				Expected: []sql.Row{{"seed", "x", "y", nil, "resolved", "x", "y", nil, "resolved", "x", "y", "x wins"}},
+			},
+		},
+	},
+	{
+		// x2 and y2 agree on row 3, so the merge takes it.
+		Name:        "merge bases that add a row with different values, resolved the same way: merge y into x",
+		SetUpScript: addAddSetup("REPLACE INTO t VALUES (3, 'same');", "REPLACE INTO t VALUES (3, 'same');"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY id;",
+				Expected: []sql.Row{{1, "seed"}, {3, "same"}},
+			},
+		},
+	},
+	{
+		// Row 3 has no base: base_id is NULL, unlike a base row with NULL values.
+		Name:        "merge bases that add a row with different values, resolved differently: merge y into x",
+		SetUpScript: addAddSetup("REPLACE INTO t VALUES (3, 'x');", "REPLACE INTO t VALUES (3, 'y');"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_id, base_a, our_id, our_a, their_id, their_a FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{nil, nil, 3, "x", 3, "y"}},
+			},
+		},
+	},
+	{
+		Name:        "merge bases that add a row with different values, resolved differently: merge x into y",
+		SetUpScript: append(addAddSetup("REPLACE INTO t VALUES (3, 'x');", "REPLACE INTO t VALUES (3, 'y');"), "CALL DOLT_CHECKOUT('y');"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('x', '-m', 'merge x into y');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_id, base_a, our_id, our_a, their_id, their_a FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{nil, nil, 3, "y", 3, "x"}},
+			},
+		},
+	},
+	{
+		// x2 deletes row 3 and y2 keeps it. The virtual merge base has no row 3, but y2's row is still a change from the\n\t\t// conflicted merge bases, as in git, so it conflicts with the delete instead of being added.
+		Name:        "merge bases that add a row with different values, one side deleting it: merge y into x",
+		SetUpScript: addAddSetup("DELETE FROM t WHERE id = 3;", "REPLACE INTO t VALUES (3, 'y');"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_id, base_a, our_id, our_a, their_id, their_a FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{nil, nil, nil, nil, 3, "y"}},
+			},
+		},
+	},
+	{
+		Name:        "merge bases that add a row with different values, one side deleting it: merge x into y",
+		SetUpScript: append(addAddSetup("DELETE FROM t WHERE id = 3;", "REPLACE INTO t VALUES (3, 'y');"), "CALL DOLT_CHECKOUT('y');"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('x', '-m', 'merge x into y');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_id, base_a, our_id, our_a, their_id, their_a FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{nil, nil, 3, "y", nil, nil}},
+			},
+		},
+	},
+	{
+		Name:        "merge bases that add a row with different values, both deleting it: merge y into x",
+		SetUpScript: addAddSetup("DELETE FROM t WHERE id = 3;", "DELETE FROM t WHERE id = 3;"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY id;",
+				Expected: []sql.Row{{1, "seed"}},
+			},
+		},
+	},
+	{
+		// x1 and y1 each create table u, which c1 lacks, with different values in row 1 and the same row 2. The virtual
+		// merge base has u with row 2 but without row 1. x2 and y2 resolve row 1 differently, and y2 deletes row 2,
+		// which stays deleted.
+		Name: "merge bases that create a table with different rows, resolved differently: merge y into x",
+		SetUpScript: crissCrossSetup(
+			[]string{"CREATE TABLE t (id INT PRIMARY KEY);"},
+			[]string{"CREATE TABLE u (id INT PRIMARY KEY, a VARCHAR(100));", "INSERT INTO u VALUES (1, 'x'), (2, 'same');",
+				"CALL DOLT_ADD('u');"},
+			[]string{"CREATE TABLE u (id INT PRIMARY KEY, a VARCHAR(100));", "INSERT INTO u VALUES (1, 'y'), (2, 'same');",
+				"CALL DOLT_ADD('u');"},
+			[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 'u');", "UPDATE u SET a = 'y2' WHERE id = 1;",
+				"DELETE FROM u WHERE id = 2;"},
+			[]string{"CALL DOLT_CONFLICTS_RESOLVE('--ours', 'u');", "UPDATE u SET a = 'x2' WHERE id = 1;"},
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y into x');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_id, base_a, our_id, our_a, their_id, their_a FROM dolt_conflicts_u;",
+				Expected: []sql.Row{{nil, nil, 1, "x2", 1, "y2"}},
+			},
+			{
+				Query:    "SELECT * FROM u ORDER BY id;",
+				Expected: []sql.Row{{1, "x2"}},
 			},
 		},
 	},
