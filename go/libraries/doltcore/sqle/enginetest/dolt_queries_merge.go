@@ -68,6 +68,65 @@ var doltCommit = &doltCommitValidator{}
 
 var MergeScripts = []queries.ScriptTest{
 	{
+		// main sets row 1's a to 4 and other sets its b to 6, each valid. Merged, g = a + b is 10, which duplicates row
+		// 2's g in the unique index on it, so the merge records a violation.
+		Name:    "merge whose generated value violates a unique key only once computed",
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"SET @@dolt_allow_commit_conflicts = 1;",
+			"SET @@dolt_force_transaction_commit = 1;",
+			"CREATE TABLE t (id INT PRIMARY KEY, a INT, b INT, g INT AS (a + b) STORED, UNIQUE INDEX ug (g));",
+			"INSERT INTO t (id, a, b) VALUES (1, 0, 0), (2, 5, 5);",
+			"CALL DOLT_COMMIT('-Am', 'base');",
+			"CALL DOLT_BRANCH('other');",
+			"UPDATE t SET a = 4 WHERE id = 1;",
+			"CALL DOLT_COMMIT('-am', 'main');",
+			"CALL DOLT_CHECKOUT('other');",
+			"UPDATE t SET b = 6 WHERE id = 1;",
+			"CALL DOLT_COMMIT('-am', 'other');",
+			"CALL DOLT_CHECKOUT('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT violation_type, id, g FROM dolt_constraint_violations_t ORDER BY id;",
+				Expected: []sql.Row{{"unique index", 1, 10}, {"unique index", 2, 10}},
+			},
+		},
+	},
+	{
+		// As above, with a check on g instead of a unique key.
+		Name:    "merge whose generated value violates a check only once computed",
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"SET @@dolt_allow_commit_conflicts = 1;",
+			"SET @@dolt_force_transaction_commit = 1;",
+			"CREATE TABLE t (id INT PRIMARY KEY, a INT, b INT, g INT AS (a + b) STORED, CHECK (g <= 6));",
+			"INSERT INTO t (id, a, b) VALUES (1, 0, 0);",
+			"CALL DOLT_COMMIT('-Am', 'base');",
+			"CALL DOLT_BRANCH('other');",
+			"UPDATE t SET a = 4 WHERE id = 1;",
+			"CALL DOLT_COMMIT('-am', 'main');",
+			"CALL DOLT_CHECKOUT('other');",
+			"UPDATE t SET b = 6 WHERE id = 1;",
+			"CALL DOLT_COMMIT('-am', 'other');",
+			"CALL DOLT_CHECKOUT('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT violation_type, id, g FROM dolt_constraint_violations_t;",
+				Expected: []sql.Row{{"check constraint", 1, 10}},
+			},
+		},
+	},
+	{
 		// A composite key and a virtual column. main deletes (1, 'a') and other changes it, both add (3, 'c') with
 		// different values, and both change (1, 'b'). Deleting conflicts one at a time finds each by its key from ours,
 		// from base when ours deleted the row, and from theirs when there is no base row.
