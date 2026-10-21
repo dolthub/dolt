@@ -448,7 +448,7 @@ func wrapForStandby(db dsess.SqlDatabase, standby bool) dsess.SqlDatabase {
 // TODO: distinct error for not found v. others
 func (p *DoltDatabaseProvider) attemptCloneReplica(ctx *sql.Context, dbName string) error {
 	// TODO: these need some reworking, they don't make total sense together
-	_, readReplicaRemoteName, _ := sql.SystemVariables.GetGlobal(dsess.ReadReplicaRemote)
+	_, readReplicaRemoteName, _ := ctx.SystemVariables().GetGlobal(dsess.ReadReplicaRemote)
 	if readReplicaRemoteName == "" {
 		// not a read replica DB
 		return nil
@@ -457,7 +457,7 @@ func (p *DoltDatabaseProvider) attemptCloneReplica(ctx *sql.Context, dbName stri
 	remoteName := readReplicaRemoteName.(string)
 
 	// TODO: error handling when not set
-	_, remoteUrlTemplate, _ := sql.SystemVariables.GetGlobal(dsess.ReplicationRemoteURLTemplate)
+	_, remoteUrlTemplate, _ := ctx.SystemVariables().GetGlobal(dsess.ReplicationRemoteURLTemplate)
 	if remoteUrlTemplate == "" {
 		return nil
 	}
@@ -927,11 +927,11 @@ type DatabaseHookRegistrar interface {
 //
 // For a new database, this hook
 // 1) creates a new remote based on dsess.ReplicationRemoteURLTemplate
-// 2) Installed push-on-write replication hooks based on existing sql.SystemVariables on the *DoltDB
+// 2) installs push-on-write replication hooks using the active engine's variables on the *DoltDB
 // 3) Triggers the push-on-write hook for the default branch.
 func NewConfigureReplicationDatabaseHook(bThreads *sql.BackgroundThreads, ctxF func(context.Context) (*sql.Context, error)) InitDatabaseHook {
 	return func(ctx *sql.Context, p *DoltDatabaseProvider, name string, newEnv *env.DoltEnv, _ dsess.SqlDatabase) error {
-		_, replicationRemoteName, _ := sql.SystemVariables.GetGlobal(dsess.ReplicateToRemote)
+		_, replicationRemoteName, _ := ctx.SystemVariables().GetGlobal(dsess.ReplicateToRemote)
 		if replicationRemoteName == "" {
 			return nil
 		}
@@ -941,7 +941,7 @@ func NewConfigureReplicationDatabaseHook(bThreads *sql.BackgroundThreads, ctxF f
 			return nil
 		}
 
-		_, remoteUrlTemplate, _ := sql.SystemVariables.GetGlobal(dsess.ReplicationRemoteURLTemplate)
+		_, remoteUrlTemplate, _ := ctx.SystemVariables().GetGlobal(dsess.ReplicationRemoteURLTemplate)
 		if remoteUrlTemplate == "" {
 			return nil
 		}
@@ -966,7 +966,7 @@ func NewConfigureReplicationDatabaseHook(bThreads *sql.BackgroundThreads, ctxF f
 			return err
 		}
 
-		commitHooks, startAsyncThreads, err := GetCommitHooks(ctx, "["+name+"]", newEnv, cli.CliErr)
+		commitHooks, startAsyncThreads, err := GetCommitHooksWithRegistry(ctx, "["+name+"]", newEnv, cli.CliErr, ctx.SystemVariables())
 		if err != nil {
 			return err
 		}
@@ -1355,7 +1355,7 @@ func (p *DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string
 	// Push replication is configured by InitDatabaseHooks, but pull-on-read
 	// replication is a special type of wrapper database, |ReadReplicaDatabase|.
 	// Transform the |db| into the replicating one if we need to.
-	sdb, err := applyReadReplicationConfigToDatabase(ctx, newEnv, db)
+	sdb, err := applyReadReplicationConfigToDatabaseWithRegistry(ctx, newEnv, db, ctx.SystemVariables())
 	if err != nil {
 		return err
 	}
@@ -1718,12 +1718,12 @@ func (p *DoltDatabaseProvider) databaseForClone(ctx *sql.Context, revDB string) 
 
 // TODO: figure out the right contract: which variables must be set? What happens if they aren't all set?
 func readReplicationActive(ctx *sql.Context) bool {
-	_, readReplicaRemoteName, _ := sql.SystemVariables.GetGlobal(dsess.ReadReplicaRemote)
+	_, readReplicaRemoteName, _ := ctx.SystemVariables().GetGlobal(dsess.ReadReplicaRemote)
 	if readReplicaRemoteName == "" {
 		return false
 	}
 
-	_, remoteUrlTemplate, _ := sql.SystemVariables.GetGlobal(dsess.ReplicationRemoteURLTemplate)
+	_, remoteUrlTemplate, _ := ctx.SystemVariables().GetGlobal(dsess.ReplicationRemoteURLTemplate)
 	if remoteUrlTemplate == "" {
 		return false
 	}

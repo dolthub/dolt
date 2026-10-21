@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -62,7 +63,7 @@ var _ doltdb.DatabaseUpdateListener = (*binlogProducer)(nil)
 // returned binlogProducer as a DatabaseUpdateListener before it will start receiving database updates and start
 // producing binlog events.
 func NewBinlogProducer(ctx *sql.Context, fs filesys.Filesys) (*binlogProducer, error) {
-	binlogFormat := createBinlogFormat()
+	binlogFormat := createBinlogFormat(ctx)
 	binlogEventMeta, err := createBinlogEventMetadata(ctx)
 	if err != nil {
 		return nil, err
@@ -74,7 +75,7 @@ func NewBinlogProducer(ctx *sql.Context, fs filesys.Filesys) (*binlogProducer, e
 		mu:              &sync.Mutex{},
 	}
 
-	if err = b.initializeGtidPosition(fs); err != nil {
+	if err = b.initializeGtidPosition(ctx, fs); err != nil {
 		return nil, err
 	}
 
@@ -189,7 +190,7 @@ func (b *binlogProducer) DatabaseDropped(ctx *sql.Context, databaseName string) 
 // in this binlogStreamerManager instance. If the gtidPosition has already been loaded
 // from disk and initialized, this method simply returns. If any problems were encountered
 // loading the GTID position from disk, or parsing its value, an error is returned.
-func (b *binlogProducer) initializeGtidPosition(fs filesys.Filesys) error {
+func (b *binlogProducer) initializeGtidPosition(ctx *sql.Context, fs filesys.Filesys) error {
 	if b.gtidPosition != nil {
 		return nil
 	}
@@ -241,7 +242,7 @@ func (b *binlogProducer) initializeGtidPosition(fs filesys.Filesys) error {
 	b.gtidSequence = int64(i + 1)
 
 	logrus.Tracef("setting @@gtid_executed to %s", b.gtidPosition.GTIDSet.String())
-	return sql.SystemVariables.AssignValues(map[string]any{
+	return sqle.AssignSystemVariables(ctx, map[string]any{
 		"gtid_executed": b.gtidPosition.GTIDSet.String()})
 }
 
@@ -271,7 +272,7 @@ func (b *binlogProducer) createGtidEvent(ctx *sql.Context) (mysql.BinlogEvent, e
 		return nil, fmt.Errorf("unable to store GTID executed metadata to disk: %s", err.Error())
 	}
 
-	err = sql.SystemVariables.AssignValues(map[string]any{
+	err = sqle.AssignSystemVariables(ctx, map[string]any{
 		"gtid_executed": b.gtidPosition.GTIDSet.String()})
 	if err != nil {
 		return nil, err
@@ -790,10 +791,10 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 
 // createBinlogFormat returns a new BinlogFormat that describes the format of this binlog stream, which will always
 // be a MySQL 5.6+ compatible binlog format.
-func createBinlogFormat() *mysql.BinlogFormat {
+func createBinlogFormat(ctx *sql.Context) *mysql.BinlogFormat {
 	binlogFormat := mysql.NewMySQL56BinlogFormat()
 
-	_, value, ok := sql.SystemVariables.GetGlobal("binlog_checksum")
+	_, value, ok := ctx.SystemVariables().GetGlobal("binlog_checksum")
 	if !ok {
 		panic("unable to read binlog_checksum system variable")
 	}

@@ -87,10 +87,16 @@ const URLTemplateDatabasePlaceholder = "{database}"
 
 // DefineSystemVariablesForDB defines per database dolt-session variables in the engine as necessary
 func DefineSystemVariablesForDB(name string) {
+	DefineSystemVariablesForDBInRegistry(sql.SystemVariables, name)
+}
+
+// DefineSystemVariablesForDBInRegistry defines the variables for one database
+// in the supplied engine registry.
+func DefineSystemVariablesForDBInRegistry(vars sql.SystemVariableRegistry, name string) {
 	name, _ = doltdb.SplitRevisionDbName(name)
 
-	if _, _, ok := sql.SystemVariables.GetGlobal(name + HeadKeySuffix); !ok {
-		sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
+	if _, _, ok := vars.GetGlobal(name + HeadKeySuffix); !ok {
+		vars.AddSystemVariables([]sql.SystemVariable{
 			&sql.MysqlSystemVariable{
 				Name:              HeadRefKey(name),
 				Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Session),
@@ -206,7 +212,12 @@ func GetBooleanSystemVar(ctx *sql.Context, varName string) (bool, error) {
 // IgnoreReplicationErrors returns true if the dolt_skip_replication_errors system variable is set to true, which means
 // that errors that occur during replication should be logged and ignored.
 func IgnoreReplicationErrors() bool {
-	_, skip, ok := sql.SystemVariables.GetGlobal(SkipReplicationErrors)
+	return IgnoreReplicationErrorsWithRegistry(sql.SystemVariables)
+}
+
+// IgnoreReplicationErrorsWithRegistry reads the current value from the owning engine.
+func IgnoreReplicationErrorsWithRegistry(vars sql.SystemVariableRegistry) bool {
+	_, skip, ok := vars.GetGlobal(SkipReplicationErrors)
 	if !ok {
 		panic("dolt system variables not loaded")
 	}

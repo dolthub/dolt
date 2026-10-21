@@ -212,18 +212,6 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 	}
 
-	// restrict LOAD FILE invocations to current directory
-	wd, err := os.Getwd()
-	if err != nil {
-		wd = "/dev/null"
-	}
-	err = sql.SystemVariables.AssignValues(map[string]interface{}{
-		"secure_file_priv": wd,
-	})
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-
 	// Determine binary-as-hex behavior from flags (default false for non-interactive modes)
 	binaryAsHex := apr.Contains(binaryAsHexFlag)
 	if binaryAsHex && apr.Contains(skipBinaryAsHexFlag) { // We stray from MYSQL here to make usage clear for users
@@ -239,6 +227,11 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	})
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	if !queryist.IsRemote {
+		if err := restrictLoadFileToWorkingDirectory(queryist.Context); err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
 	}
 
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
@@ -324,6 +317,19 @@ func sqlHandleVErrAndExitCode(queryist cli.Queryist, verr errhand.VerboseError, 
 	}
 
 	return 0
+}
+
+// restrictLoadFileToWorkingDirectory sets secure_file_priv to the working
+// directory in the local engine that |ctx| is bound to.
+func restrictLoadFileToWorkingDirectory(ctx *sql.Context) error {
+	if ctx == nil || ctx.EngineVariables() == nil {
+		return fmt.Errorf("LOAD_FILE restriction requires an owning context")
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		wd = "/dev/null"
+	}
+	return dsqle.AssignSystemVariables(ctx, map[string]any{"secure_file_priv": wd})
 }
 
 // handleLegacyArguments is a temporary function to parse args, and print a error and explanation when the old form is provided.

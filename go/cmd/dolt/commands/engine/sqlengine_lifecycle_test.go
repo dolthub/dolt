@@ -16,6 +16,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -31,8 +32,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // TestSqlEngineCloseStopsWorkers checks engine-owned cleanup with a real database and live caller context.
@@ -40,7 +43,7 @@ func TestSqlEngineCloseStopsWorkers(t *testing.T) {
 	root, home := t.TempDir(), t.TempDir()
 	synctest.Test(t, func(t *testing.T) {
 		ctx := context.Background()
-		mrEnv, cfg := lifecycleEngineEnvironment(t, ctx, root, home)
+		mrEnv, cfg, _ := lifecycleEngineEnvironment(t, ctx, root, home)
 		cfg.BranchActivityTracking = true
 		se, err := NewSqlEngine(ctx, mrEnv, cfg)
 		require.NoError(t, err)
@@ -54,6 +57,91 @@ func TestSqlEngineCloseStopsWorkers(t *testing.T) {
 		require.Equal(t, []sql.Row{{"lifecycle"}}, lifecycleQuery(t, se, sqlCtx, "SELECT DATABASE()"))
 		// synctest detects any engine workers left running after Close.
 	})
+}
+
+func TestIndependentSqlEngineBootstrap(t *testing.T) {
+	ctx := context.Background()
+	engines := make([]*SqlEngine, 2)
+	for i, maxConnections := range []string{"71", "83"} {
+		_, cfg, dEnv := lifecycleEngineEnvironment(t, ctx, t.TempDir(), t.TempDir())
+		require.NoError(t, dEnv.InitRepo(ctx, types.Format_DOLT, "test", "test@example.com", env.DefaultInitBranch))
+		mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.FS, dEnv)
+		require.NoError(t, err)
+		cfg.EngineVariables = sqle.NewEngineVariables()
+		require.NoError(t, dEnv.Config.WriteableConfig().SetStrings(map[string]string{
+			env.SqlServerGlobalsPrefix + ".max_connections": maxConnections,
+		}))
+		if i == 0 {
+			dsess.DefineSystemVariablesForDBInRegistry(cfg.EngineVariables.System, "private_db")
+		}
+		require.NoError(t, dsess.PersistSystemVarDefaultsWithRegistry(cfg.EngineVariables.System, dEnv))
+		require.NoError(t, dsess.InitPersistedSystemVarsWithRegistry(cfg.EngineVariables.System, dEnv))
+		engines[i], err = NewSqlEngine(ctx, mrEnv, cfg)
+		require.NoError(t, err)
+		defer engines[i].Close()
+		require.Same(t, cfg.EngineVariables, engines[i].GetUnderlyingEngine().Variables())
+		localCtx, err := engines[i].NewLocalContext(ctx)
+		require.NoError(t, err)
+		require.Same(t, cfg.EngineVariables, localCtx.EngineVariables())
+		require.Equal(t, maxConnections, fmt.Sprint(lifecycleQuery(t, engines[i], localCtx, "SELECT @@global.max_connections")[0][0]))
+	}
+
+	varsA := engines[0].GetUnderlyingEngine().Variables().System
+	varsB := engines[1].GetUnderlyingEngine().Variables().System
+	_, uuidA, _ := varsA.GetGlobal("server_uuid")
+	_, uuidB, _ := varsB.GetGlobal("server_uuid")
+	require.NotEqual(t, uuidA, uuidB)
+	_, _, ok := varsB.GetGlobal(dsess.HeadKey("private_db"))
+	require.False(t, ok)
+	_, maxB, _ := varsB.GetGlobal("max_connections")
+	require.EqualValues(t, 83, maxB)
+}
+
+func TestNewSqlEngineForEnvLoadsPersistedDefaults(t *testing.T) {
+	ctx := context.Background()
+	_, cfg, dEnv := lifecycleEngineEnvironment(t, ctx, t.TempDir(), t.TempDir())
+	require.NoError(t, dEnv.InitRepo(ctx, types.Format_DOLT, "test", "test@example.com", env.DefaultInitBranch))
+	require.NoError(t, dEnv.Config.WriteableConfig().SetStrings(map[string]string{
+		env.SqlServerGlobalsPrefix + ".max_connections": "91",
+	}))
+	se, _, err := NewSqlEngineForEnv(ctx, dEnv, func(c *SqlEngineConfig) {
+		c.DBLoadParams = cfg.DBLoadParams
+	})
+	require.NoError(t, err)
+	_, value, ok := se.GetUnderlyingEngine().Variables().System.GetGlobal("max_connections")
+	require.True(t, ok)
+	require.EqualValues(t, 91, value)
+	stats := se.GetUnderlyingEngine().Analyzer.Catalog.StatsProvider.(*statspro.StatsController)
+	sqlCtx, err := se.NewDefaultContext(ctx)
+	require.NoError(t, err)
+	defer sql.SessionEnd(sqlCtx.Session)
+	require.Same(t, se.GetUnderlyingEngine().Variables(), sqlCtx.EngineVariables())
+	require.NoError(t, se.Close())
+	require.ErrorContains(t, stats.Restart(sqlCtx), "StatsController is closed")
+}
+
+func TestSqlEngineCapturesBundleFromReusableConfig(t *testing.T) {
+	ctx := context.Background()
+	mrA, cfg, _ := lifecycleEngineEnvironment(t, ctx, t.TempDir(), t.TempDir())
+	varsA := sqle.NewEngineVariables()
+	cfg.EngineVariables = varsA
+	engineA, err := NewSqlEngine(ctx, mrA, cfg)
+	require.NoError(t, err)
+	defer engineA.Close()
+
+	mrB, _, _ := lifecycleEngineEnvironment(t, ctx, t.TempDir(), t.TempDir())
+	varsB := sqle.NewEngineVariables()
+	cfg.EngineVariables = varsB
+	engineB, err := NewSqlEngine(ctx, mrB, cfg)
+	require.NoError(t, err)
+	defer engineB.Close()
+
+	ctxA, err := engineA.NewDefaultContext(ctx)
+	require.NoError(t, err)
+	require.Same(t, varsA, ctxA.EngineVariables())
+	ctxB, err := engineB.NewDefaultContext(ctx)
+	require.NoError(t, err)
+	require.Same(t, varsB, ctxB.EngineVariables())
 }
 
 // TestSqlEngineFailedConstructionStopsWorkers checks cleanup on errors before and after tracker creation.
@@ -72,7 +160,7 @@ func TestSqlEngineFailedConstructionStopsWorkers(t *testing.T) {
 			}
 			synctest.Test(t, func(t *testing.T) {
 				ctx := context.Background()
-				mrEnv, cfg := lifecycleEngineEnvironment(t, ctx, root, home)
+				mrEnv, cfg, _ := lifecycleEngineEnvironment(t, ctx, root, home)
 				cfg.PrivFilePath = privs
 				cfg.BranchActivityTracking = true
 				se, err := NewSqlEngine(ctx, mrEnv, cfg)
@@ -89,7 +177,7 @@ func TestSqlEngineFailedConstructionStopsWorkers(t *testing.T) {
 }
 
 // lifecycleEngineEnvironment configures a disk-backed engine that owns its storage lifetime.
-func lifecycleEngineEnvironment(t *testing.T, ctx context.Context, root, home string) (*env.MultiRepoEnv, *SqlEngineConfig) {
+func lifecycleEngineEnvironment(t *testing.T, ctx context.Context, root, home string) (*env.MultiRepoEnv, *SqlEngineConfig, *env.DoltEnv) {
 	t.Helper()
 	fs, err := filesys.LocalFS.WithWorkingDir(root)
 	require.NoError(t, err)
@@ -110,7 +198,7 @@ func lifecycleEngineEnvironment(t *testing.T, ctx context.Context, root, home st
 		ServerHost:   "localhost",
 		Autocommit:   true,
 		DBLoadParams: params,
-	}
+	}, rootEnv
 }
 
 // lifecycleQuery executes a statement completely, including its commit and iterator cleanup.

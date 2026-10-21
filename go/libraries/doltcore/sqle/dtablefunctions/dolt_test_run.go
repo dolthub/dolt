@@ -24,6 +24,7 @@ import (
 	"github.com/cockroachdb/apd/v3"
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
@@ -83,12 +84,10 @@ func (trtf *TestsRunTableFunction) NewInstance(ctx *sql.Context, database sql.Da
 func (trtf *TestsRunTableFunction) WithCatalog(c sql.Catalog) (sql.TableFunction, error) {
 	newInstance := *trtf
 	newInstance.catalog = c
-	pro, ok := c.(sql.DatabaseProvider)
+	_, ok := c.(sql.DatabaseProvider)
 	if !ok {
 		return nil, fmt.Errorf("unable to get database provider")
 	}
-	newInstance.engine = gms.NewDefault(pro)
-
 	return &newInstance, nil
 }
 
@@ -186,20 +185,25 @@ func (trtf *TestsRunTableFunction) Name() string {
 
 // RowIter implements the sql.Node interface
 func (trtf *TestsRunTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter, error) {
-	args := trtf.getOptionsString()
+	pro := trtf.catalog.(sql.DatabaseProvider) // checked by WithCatalog
+	runner := *trtf
+	runner.engine = gms.New(analyzer.NewDefault(pro), &gms.Config{EngineVariables: ctx.EngineVariables()})
+	defer runner.engine.Close()
+
+	args := runner.getOptionsString()
 	if len(args) == 0 { // We treat no arguments as a wildcard
 		args = append(args, "*")
 	}
 
 	var resultRows []sql.Row
 	for _, arg := range args {
-		testRows, err := trtf.getDoltTestsData(ctx, strings.Trim(arg, "'"))
+		testRows, err := runner.getDoltTestsData(ctx, strings.Trim(arg, "'"))
 		if err != nil {
 			return nil, err
 		}
 
 		for _, row := range testRows {
-			result, err := trtf.queryAndAssert(ctx, row)
+			result, err := runner.queryAndAssert(ctx, row)
 			if err != nil {
 				return nil, err
 			}

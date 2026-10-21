@@ -307,7 +307,7 @@ func TestMergeConcurrency(t *testing.T) {
 }
 
 func runConcurrentTxs(ctx context.Context, eng *engine.SqlEngine, seed int) error {
-	sess, err := eng.NewDoltSession(ctx, sql.NewBaseSession())
+	sess, err := eng.NewDoltSession(ctx, sql.NewBaseSessionWithVariables(eng.GetUnderlyingEngine().Variables()))
 	if err != nil {
 		return err
 	}
