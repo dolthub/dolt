@@ -272,6 +272,12 @@ func TestVirtualMergeBaseFullTextIndexesOfKeylessTable(t *testing.T) {
 // virtualMergeBaseRows builds a history with |queries|, resolves the virtual merge base of branches x and y, and
 // returns the rows |query| reads from it.
 func virtualMergeBaseRows(t *testing.T, queries []string, query string) []sql.Row {
+	_, rows := virtualMergeBase(t, queries, query)
+	return rows
+}
+
+// virtualMergeBase is virtualMergeBaseRows, and also returns the virtual merge base's root.
+func virtualMergeBase(t *testing.T, queries []string, query string) (doltdb.RootValue, []sql.Row) {
 	ctx := context.Background()
 	dEnv := dtu.CreateTestEnv()
 	t.Cleanup(func() { dEnv.DoltDB(ctx).Close() })
@@ -285,6 +291,9 @@ func virtualMergeBaseRows(t *testing.T, queries []string, query string) []sql.Ro
 	x, y := resolveBranch(t, sqlCtx, dEnv.DoltDB(ctx), "x"), resolveBranch(t, sqlCtx, dEnv.DoltDB(ctx), "y")
 	virtualBase, err := merge.ResolveMergeBase(sqlCtx, x, y)
 	require.NoError(t, err)
+	root, err := virtualBase.GetRootValue(sqlCtx)
+	require.NoError(t, err)
+	assertIndexesMatchRows(t, sqlCtx, root)
 	h, err := virtualBase.HashOf()
 	require.NoError(t, err)
 	for _, q := range []string{"CALL DOLT_BRANCH('virtual', '" + h.String() + "');", "CALL DOLT_CHECKOUT('virtual');"} {
@@ -294,7 +303,38 @@ func virtualMergeBaseRows(t *testing.T, queries []string, query string) []sql.Ro
 	require.NoError(t, err)
 	rows, err := sql.RowIterToRows(sqlCtx, iter)
 	require.NoError(t, err)
-	return rows
+	return root, rows
+}
+
+// assertIndexesMatchRows checks that each secondary index, apart from Full-Text and vector indexes, of each table of
+// |root| is the index its rows build.
+func assertIndexesMatchRows(t *testing.T, ctx *sql.Context, root doltdb.RootValue) {
+	names, err := root.GetTableNames(ctx, doltdb.DefaultSchemaName, false)
+	require.NoError(t, err)
+	for _, name := range names {
+		tbl, _, err := root.GetTable(ctx, doltdb.TableName{Name: name})
+		require.NoError(t, err)
+		sch, err := tbl.GetSchema(ctx)
+		require.NoError(t, err)
+		rowData, err := tbl.GetRowData(ctx)
+		require.NoError(t, err)
+		rows, err := durable.ProllyMapFromIndex(rowData)
+		require.NoError(t, err)
+		for _, index := range sch.Indexes().AllIndexes() {
+			if index.IsFullText() || index.IsVector() {
+				continue
+			}
+			stored, err := tbl.GetIndexRowData(ctx, index.Name())
+			require.NoError(t, err)
+			built, err := creation.BuildProllyIndexExternal(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, name, index, rows, nil, nil)
+			require.NoError(t, err)
+			storedHash, err := stored.HashOf()
+			require.NoError(t, err)
+			builtHash, err := built.HashOf()
+			require.NoError(t, err)
+			assert.Equal(t, builtHash, storedHash, "index %s of %s does not match the rows of the virtual merge base", index.Name(), name)
+		}
+	}
 }
 
 // TestVirtualMergeBaseUnconvertibleValues checks a virtual merge base whose merge bases change column c's type
@@ -458,6 +498,67 @@ func TestVirtualMergeBaseFullTextIndexesOfCleanRows(t *testing.T) {
 		UNION ALL SELECT 'seed', id FROM t WHERE MATCH(a) AGAINST('seed')
 		ORDER BY 1, 2;`)
 	assert.Equal(t, []sql.Row{{"alpha", int32(1)}, {"bravo", int32(2)}, {"seed", int32(3)}}, rows)
+}
+
+// TestVirtualMergeBaseSpecialIndexes checks a virtual merge base's indexes against its rows, for a composite string key,
+// a prefix index, a nullable unique index and a composite index:
+//
+//	c1 -- x1 -- x2    x
+//	  \-- y1 -- y2    y
+//	x2 = merge(x1, y1), y2 = merge(y1, x1)
+//
+// x1 and y1 conflict on row 1's a, which they change out of its prefix, on row 2's a, which they change within it, on
+// row 3's b, which they change from NULL, and on row 6's b, which x1 changes to NULL, and both add row 5, so the
+// virtual merge base takes c1's values back into those indexes and leaves row 5 out. Row 4 is untouched.
+func TestVirtualMergeBaseSpecialIndexes(t *testing.T) {
+	_, rows := virtualMergeBase(t, []string{
+		"SET @@autocommit = 0;",
+		"CREATE TABLE t (k1 VARCHAR(10), k2 INT, a VARCHAR(100), b VARCHAR(100), PRIMARY KEY (k1, k2), INDEX ip (a(3)), UNIQUE INDEX ub (b), INDEX iab (a, b));",
+		"INSERT INTO t VALUES ('r', 1, 'seedling', 'u1'), ('r', 2, 'seedless', 'u2'), ('r', 3, 'same', NULL), ('r', 4, 'keep', 'k'), ('r', 6, 'six', 'b6');",
+		"CALL DOLT_COMMIT('-Am', 'c1');",
+		"CALL DOLT_BRANCH('x');",
+		"CALL DOLT_BRANCH('y');",
+		"CALL DOLT_CHECKOUT('x');",
+		"UPDATE t SET a = 'xavier' WHERE k2 = 1;",
+		"UPDATE t SET a = 'seedxx' WHERE k2 = 2;",
+		"UPDATE t SET b = 'x3' WHERE k2 = 3;",
+		"UPDATE t SET b = NULL WHERE k2 = 6;",
+		"INSERT INTO t VALUES ('r', 5, 'xx', 'x5');",
+		"CALL DOLT_COMMIT('-am', 'x1');",
+		"CALL DOLT_BRANCH('x1');",
+		"CALL DOLT_CHECKOUT('y');",
+		"UPDATE t SET a = 'yvonne' WHERE k2 = 1;",
+		"UPDATE t SET a = 'seedyy' WHERE k2 = 2;",
+		"UPDATE t SET b = 'y3' WHERE k2 = 3;",
+		"UPDATE t SET b = 'y6' WHERE k2 = 6;",
+		"INSERT INTO t VALUES ('r', 5, 'yy', 'y5');",
+		"CALL DOLT_COMMIT('-am', 'y1');",
+		"CALL DOLT_BRANCH('y1');",
+		"CALL DOLT_MERGE('x1', '-m', 'y2');",
+		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
+		"CALL DOLT_COMMIT('-am', 'y2');",
+		"CALL DOLT_CHECKOUT('x');",
+		"CALL DOLT_MERGE('y1', '-m', 'x2');",
+		"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
+		"CALL DOLT_COMMIT('-am', 'x2');",
+	}, `SELECT 'table', k2, a, b FROM t
+		UNION ALL SELECT 'ip', k2, a, b FROM t FORCE INDEX (ip) WHERE a LIKE 'see%'
+		UNION ALL SELECT 'ub', k2, a, b FROM t FORCE INDEX (ub) WHERE b IS NULL
+		UNION ALL SELECT 'ub', k2, a, b FROM t FORCE INDEX (ub) WHERE b = 'b6'
+		UNION ALL SELECT 'iab', k2, a, b FROM t FORCE INDEX (iab) WHERE a = 'seedling'
+		ORDER BY 1, 2;`)
+	assert.Equal(t, []sql.Row{
+		{"iab", int32(1), "seedling", "u1"},
+		{"ip", int32(1), "seedling", "u1"},
+		{"ip", int32(2), "seedless", "u2"},
+		{"table", int32(1), "seedling", "u1"},
+		{"table", int32(2), "seedless", "u2"},
+		{"table", int32(3), "same", nil},
+		{"table", int32(4), "keep", "k"},
+		{"table", int32(6), "six", "b6"},
+		{"ub", int32(3), "same", nil},
+		{"ub", int32(6), "six", "b6"},
+	}, rows)
 }
 
 func resolveBranch(t *testing.T, ctx *sql.Context, ddb *doltdb.DoltDB, branch string) *doltdb.Commit {
