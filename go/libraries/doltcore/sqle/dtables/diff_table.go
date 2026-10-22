@@ -159,16 +159,19 @@ func (dt *DiffTable) Collation() sql.CollationID {
 }
 
 func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	return dt.PartitionRanges(ctx, nil)
+	return dt.partitionsForRanges(ctx, nil)
 }
 
-// PartitionRanges creates a [sql.PartitionIter] across all commits reachable
-// from HEAD.
+// partitionsForRanges creates a [sql.PartitionIter] across all commits
+// reachable from HeadHash, limiting rows to the primary key |ranges|.
 //
-// It diffs each reachable commit against its parents via
-// [commitwalk.GetTopologicalOrderIterator], preceded by an uncommitted working
-// set partition filtered by |ranges|.
-func (dt *DiffTable) PartitionRanges(ctx *sql.Context, ranges []prolly.Range) (sql.PartitionIter, error) {
+// The [commitwalk.GetTopologicalOrderIterator] visits each commit once,
+// covering a merge commit and both of its parents before walking deeper
+// so the most recent commits are shown first.
+//
+// The working set DiffPartition, unless unchanged, is created and buffered
+// since it's a [doltdb.RootValue] outside the commit graph.
+func (dt *DiffTable) partitionsForRanges(ctx *sql.Context, ranges []prolly.Range) (sql.PartitionIter, error) {
 	headHash, err := dt.HeadHash()
 	if err != nil {
 		return nil, err
@@ -184,7 +187,7 @@ func (dt *DiffTable) PartitionRanges(ctx *sql.Context, ranges []prolly.Range) (s
 		return nil, err
 	}
 
-	dps := &DiffPartitions{
+	dpi := &diffPartitionIter{
 		tblName:    dt.tableName,
 		cmItr:      cmItr,
 		selectFunc: sf,
@@ -193,11 +196,19 @@ func (dt *DiffTable) PartitionRanges(ctx *sql.Context, ranges []prolly.Range) (s
 		ranges:     ranges,
 	}
 
-	if err := dt.addWorkingPartition(ctx, dps, headHash); err != nil {
+	workingInfo, err := dt.workingTableInfo(ctx)
+	if err != nil {
+		return nil, err
+	}
+	headInfo, err := tableInfoForCommit(ctx, dt.tableName, dt.head, headHash)
+	if err != nil {
+		return nil, err
+	}
+	if err := dpi.queue(ctx, headInfo, workingInfo); err != nil {
 		return nil, err
 	}
 
-	return dps, nil
+	return dpi, nil
 }
 
 var commitMetaColumns = set.NewStrSet([]string{toCommit, fromCommit, toCommitDate, fromCommitDate})
@@ -250,7 +261,7 @@ func (dt *DiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) 
 		if len(hashes) == 0 {
 			return sql.PartitionsToPartitionIter(), nil
 		}
-		return dt.toCommitLookupPartitions(ctx, hashes, commits)
+		return dt.partitionsForToCommits(ctx, hashes, commits)
 	case index.FromCommitIndexId:
 		hs, ok := index.LookupToPointSelectStr(lookup)
 		if !ok {
@@ -260,23 +271,28 @@ func (dt *DiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) 
 		if len(hashes) == 0 {
 			return sql.PartitionsToPartitionIter(), nil
 		}
-		return dt.fromCommitLookupPartitions(ctx, hashes, commits)
+		return dt.partitionsForFromCommits(ctx, hashes, commits)
 	default:
 		ranges, err := index.ProllyRangesFromIndexLookup(ctx, lookup)
 		if err != nil {
 			return nil, err
 		}
-		return dt.PartitionRanges(ctx, ranges)
+		return dt.partitionsForRanges(ctx, ranges)
 	}
 }
 
-// fromCommitLookupPartitions creates a [sql.PartitionIter] for the specified
-// parent |hashes| and |commits|.
+// partitionsForFromCommits creates a [sql.PartitionIter] that traverses the
+// commit graph from HeadHash to find the children of parent commits specified
+// by |hashes| and |commits|.
 //
-// It configures a [commitwalk.GetTopologicalOrderIterator] down to the minimum
-// height of the requested parents, retaining every child referencing a selected
-// parent.
-func (dt *DiffTable) fromCommitLookupPartitions(ctx *sql.Context, hashes []hash.Hash, commits []*doltdb.Commit) (sql.PartitionIter, error) {
+// The [commitwalk.GetTopologicalOrderIterator] halts at the minimum height of
+// the target parents, since no commit at or below that height can reference
+// them.
+//
+// The in-scope parent |hashes| are recorded in diffPartitionIter.parentHashFilter
+// so only child commits referencing those parents are later evaluated. The
+// working set DiffPartition is buffered similarly to partitionsForRanges.
+func (dt *DiffTable) partitionsForFromCommits(ctx *sql.Context, hashes []hash.Hash, commits []*doltdb.Commit) (sql.PartitionIter, error) {
 	headHash, err := dt.HeadHash()
 	if err != nil {
 		return nil, err
@@ -287,19 +303,28 @@ func (dt *DiffTable) fromCommitLookupPartitions(ctx *sql.Context, hashes []hash.
 		return nil, err
 	}
 
-	dps := &DiffPartitions{
+	dpi := &diffPartitionIter{
 		tblName:    dt.tableName,
 		selectFunc: sf,
 		toSch:      dt.targetSch,
 		fromSch:    dt.targetSch,
 	}
 
-	selected := make(hash.HashSet, len(hashes))
+	parentHashFilter := make(hash.HashSet, len(hashes))
 	var minHeight uint64
 
 	for i, h := range hashes {
+		// The working root only has this parent.
 		if h == headHash {
-			if err := dt.addWorkingPartition(ctx, dps, headHash); err != nil {
+			workingInfo, err := dt.workingTableInfo(ctx)
+			if err != nil {
+				return nil, err
+			}
+			headInfo, err := tableInfoForCommit(ctx, dt.tableName, dt.head, headHash)
+			if err != nil {
+				return nil, err
+			}
+			if err := dpi.queue(ctx, headInfo, workingInfo); err != nil {
 				return nil, err
 			}
 			continue
@@ -317,31 +342,33 @@ func (dt *DiffTable) fromCommitLookupPartitions(ctx *sql.Context, hashes []hash.
 		if !ok {
 			continue
 		}
-		if len(selected) == 0 || height < minHeight {
+		// len check to detect first in-scope commit height.
+		if len(parentHashFilter) == 0 || height < minHeight {
 			minHeight = height
 		}
-		selected.Insert(h)
+		parentHashFilter.Insert(h)
 	}
 
-	if len(selected) == 0 {
-		return dps, nil
+	// After dpi.buf helps skips graph walk to immediately return io.EOF.
+	if len(parentHashFilter) == 0 {
+		return dpi, nil
 	}
 
 	cmItr, err := commitwalk.GetTopologicalOrderIterator[*sql.Context](ctx, dt.ddb, []hash.Hash{headHash}, nil)
 	if err != nil {
 		return nil, err
 	}
-	dps.cmItr = cmItr
-	dps.fromCommits = selected
-	dps.minHeight = minHeight
+	dpi.cmItr = cmItr
+	dpi.parentHashFilter = parentHashFilter
+	dpi.minHeight = minHeight
 
-	return dps, nil
+	return dpi, nil
 }
 
 // tableInfoForCommit loads the TblInfoAtCommit for |tableName| at |cm|.
 //
-// It resolves the [doltdb.Table] and its schema hash from the root value of
-// |cm|, packaging the committer timestamp with the commit address |hs|.
+// It loads the [doltdb.Table] and table hash from the root of |cm|, pairing
+// them with the committer timestamp and commit address |hs|.
 func tableInfoForCommit(ctx *sql.Context, tableName doltdb.TableName, cm *doltdb.Commit, hs hash.Hash) (TblInfoAtCommit, error) {
 	r, err := cm.GetRootValue(ctx)
 	if err != nil {
@@ -359,7 +386,7 @@ func tableInfoForCommit(ctx *sql.Context, tableName doltdb.TableName, cm *doltdb
 		if err != nil {
 			return TblInfoAtCommit{}, err
 		}
-	} // Still want the commit metadata below.
+	} // Still retain metadata when !ok for tbl deletion or addition.
 
 	meta, err := cm.GetCommitMeta(ctx)
 	if err != nil {
@@ -370,13 +397,16 @@ func tableInfoForCommit(ctx *sql.Context, tableName doltdb.TableName, cm *doltdb
 	return NewTblInfoAtCommit(hs.String(), &ts, tbl, tblHash), nil
 }
 
-// toCommitLookupPartitions creates a [sql.PartitionIter] for the specified
-// child |hashes| and |commits|.
+// partitionsForToCommits creates a [sql.PartitionIter] that finds the parents
+// of child commits specified by |hashes| and |commits|.
 //
-// It filters the requested |commits| to those in scope and configures a
-// [doltdb.CommitSliceIter] so each commit's parent diffs are resolved lazily as
-// DiffPartitions.Next advances.
-func (dt *DiffTable) toCommitLookupPartitions(ctx *sql.Context, hashes []hash.Hash, commits []*doltdb.Commit) (sql.PartitionIter, error) {
+// Because each commit points directly to its own parents, pairs can be found
+// without walking the commit graph from HeadHash. The in-scope |commits| are
+// wrapped in a [doltdb.CommitSliceIter] to be later resolved lazily as the
+// partition iterator advances.
+//
+// The working set DiffPartition is buffered similarly to partitionsForRanges.
+func (dt *DiffTable) partitionsForToCommits(ctx *sql.Context, hashes []hash.Hash, commits []*doltdb.Commit) (sql.PartitionIter, error) {
 	headHash, err := dt.HeadHash()
 	if err != nil {
 		return nil, err
@@ -387,7 +417,7 @@ func (dt *DiffTable) toCommitLookupPartitions(ctx *sql.Context, hashes []hash.Ha
 		return nil, err
 	}
 
-	dps := &DiffPartitions{
+	dpi := &diffPartitionIter{
 		tblName:    dt.tableName,
 		selectFunc: sf,
 		toSch:      dt.targetSch,
@@ -398,8 +428,19 @@ func (dt *DiffTable) toCommitLookupPartitions(ctx *sql.Context, hashes []hash.Ha
 	inScopeCommits := make([]*doltdb.Commit, 0, len(commits))
 
 	for i, h := range hashes {
+		// The working root has a root hash but no commit object.
+		// HashesToCommits uses headHash as a placeholder and a nil commit
+		// to indicate the working root.
 		if h == headHash && commits[i] == nil {
-			if err := dt.addWorkingPartition(ctx, dps, headHash); err != nil {
+			workingInfo, err := dt.workingTableInfo(ctx)
+			if err != nil {
+				return nil, err
+			}
+			headInfo, err := tableInfoForCommit(ctx, dt.tableName, dt.head, headHash)
+			if err != nil {
+				return nil, err
+			}
+			if err := dpi.queue(ctx, headInfo, workingInfo); err != nil {
 				return nil, err
 			}
 			continue
@@ -422,29 +463,22 @@ func (dt *DiffTable) toCommitLookupPartitions(ctx *sql.Context, hashes []hash.Ha
 		inScopeCommits = append(inScopeCommits, cm)
 	}
 
-	if len(inScopeCommits) > 0 {
-		dps.cmItr = doltdb.NewCommitSliceIter[*sql.Context](inScopeCommits, inScopeHashes)
+	// After dpi.buf helps skip alloc and interfacing with the iter.
+	if len(inScopeCommits) == 0 {
+		return dpi, nil
 	}
 
-	return dps, nil
+	dpi.cmItr = doltdb.NewCommitSliceIter[*sql.Context](inScopeCommits, inScopeHashes)
+	return dpi, nil
 }
 
-// addWorkingPartition appends a partition diffing the uncommitted working set
-// against |headHash|.
-//
-// If table changes exist between the working root and HEAD, the partition is
-// appended to the DiffPartitions buffer.
-func (dt *DiffTable) addWorkingPartition(ctx *sql.Context, dps *DiffPartitions, headHash hash.Hash) error {
+// workingTableInfo returns TblInfoAtCommit for the uncommitted working root.
+func (dt *DiffTable) workingTableInfo(ctx *sql.Context) (TblInfoAtCommit, error) {
 	workingTblHash, _, err := dt.workingRoot.GetTableHash(ctx, dt.tableName)
 	if err != nil {
-		return err
+		return TblInfoAtCommit{}, err
 	}
-	workingInfo := TblInfoAtCommit{name: "WORKING", tbl: dt.table, tblHash: workingTblHash}
-	headInfo, err := tableInfoForCommit(ctx, dt.tableName, dt.head, headHash)
-	if err != nil {
-		return err
-	}
-	return dps.queuePartition(ctx, workingInfo, headInfo)
+	return TblInfoAtCommit{name: doltdb.Working, tbl: dt.table, tblHash: workingTblHash}, nil
 }
 
 // GetIndexes implements sql.IndexAddressable
@@ -588,37 +622,45 @@ func SelectFuncForFilters(ctx *sql.Context, filters []sql.Expression) (partition
 	}, nil
 }
 
-var _ sql.PartitionIter = &DiffPartitions{}
+var _ sql.PartitionIter = &diffPartitionIter{}
 
-// DiffPartitions a collection of partitions. Implements PartitionItr
-type DiffPartitions struct {
-	tblName     doltdb.TableName
-	cmItr       doltdb.CommitItr[*sql.Context]
-	toSch       schema.Schema
-	fromSch     schema.Schema
-	selectFunc  partitionSelectFunc
-	fromCommits hash.HashSet
-	ranges      []prolly.Range
-	buf         []DiffPartition
-	minHeight   uint64
-	stopNext    bool
+// diffPartitionIter a collection of partitions. Implements PartitionItr
+type diffPartitionIter struct {
+	tblName          doltdb.TableName
+	cmItr            doltdb.CommitItr[*sql.Context]
+	toSch            schema.Schema
+	fromSch          schema.Schema
+	selectFunc       partitionSelectFunc
+	parentHashFilter hash.HashSet
+	ranges           []prolly.Range
+	buf              []DiffPartition
+	// minHeight halts Next on the first commit at or below this height.
+	// In a topological walk, it reduces search space to target parents.
+	minHeight uint64
+	stopNext  bool
 }
 
-// Next returns the next [sql.Partition] in the iteration sequence.
+// Next returns the next DiffPartition by advancing the configured commit
+// iterator to match commits with their parents.
 //
-// It drains buffered partitions before advancing the [doltdb.CommitItr].
-// If a partition crosses an altered primary key boundary that can only be
-// diffed approximately, Next returns that partition and halts subsequent
-// iteration.
-func (dps *DiffPartitions) Next(ctx *sql.Context) (sql.Partition, error) {
-	if dps.stopNext {
+// A buffer is used for any DiffPartition that does not map 1:1 with the commit
+// iterator. Merge commits can yield multiple partitions across merge parents,
+// but Next can only return them one at a time. The working root lives outside
+// the commit graph, so it's typically buffered upfront too by constructors.
+//
+// If primary key column definitions or types differ, Next emits a warning. A
+// partition can be returned if the schema is mapped approximately, but any
+// later iteration will halt and return [io.EOF] to avoid older commits that
+// can't be mapped to the current schema.
+func (dpi *diffPartitionIter) Next(ctx *sql.Context) (sql.Partition, error) {
+	if dpi.stopNext {
 		return nil, io.EOF
 	}
 
 	for {
-		if len(dps.buf) > 0 {
-			next := dps.buf[0]
-			dps.buf = dps.buf[1:]
+		if len(dpi.buf) > 0 {
+			next := dpi.buf[0]
+			dpi.buf = dpi.buf[1:]
 
 			simpleDiff, fuzzyDiff, err := next.isDiffablePartition(ctx)
 			if err != nil {
@@ -632,21 +674,22 @@ func (dps *DiffPartitions) Next(ctx *sql.Context) (sql.Partition, error) {
 
 			if !simpleDiff && fuzzyDiff {
 				ctx.Warn(PrimaryKeyChangeWarningCode, PrimaryKeyChangeWarning, next.fromName, next.toName)
-				dps.stopNext = true
+				// TODO(#11140): Halting drops unrelated partitions in sibling branches.
+				dpi.stopNext = true
 			}
 
 			return next, nil
 		}
 
-		if dps.cmItr == nil {
+		if dpi.cmItr == nil {
 			return nil, io.EOF
 		}
 
-		cmHash, optCmt, _, height, err := dps.cmItr.Next(ctx)
+		cmHash, optCmt, _, height, err := dpi.cmItr.Next(ctx)
 		if err != nil {
 			return nil, err
 		}
-		if dps.minHeight > 0 && height <= dps.minHeight {
+		if dpi.minHeight > 0 && height <= dpi.minHeight {
 			return nil, io.EOF
 		}
 		cm, ok := optCmt.ToCommit()
@@ -654,68 +697,55 @@ func (dps *DiffPartitions) Next(ctx *sql.Context) (sql.Partition, error) {
 			return nil, doltdb.ErrGhostCommitRuntimeFailure
 		}
 
-		if err := dps.processCommit(ctx, cmHash, cm); err != nil {
+		if err := dpi.queueForCommit(ctx, cmHash, cm); err != nil {
 			return nil, err
 		}
 	}
 }
 
-// processCommit resolves parent revisions for |cm| and queues diff partitions
-// for any modified table states.
-//
-// It iterates each parent of |cm|, filtering by fromCommits when configured and
-// delegating to addParentPartition.
-func (dps *DiffPartitions) processCommit(ctx *sql.Context, cmHash hash.Hash, cm *doltdb.Commit) error {
+// queueForCommit pairs |cm| with its parent(s) and queues a DiffPartition
+// whenever the table's data or schema differ.
+func (dpi *diffPartitionIter) queueForCommit(ctx *sql.Context, cmHash hash.Hash, cm *doltdb.Commit) error {
 	phs, err := cm.ParentHashes(ctx)
 	if err != nil {
 		return err
 	}
 
 	var toInfo TblInfoAtCommit
-	loaded := false
-
 	for i, ph := range phs {
-		if dps.fromCommits != nil && !dps.fromCommits.Has(ph) {
+		if dpi.parentHashFilter != nil && !dpi.parentHashFilter.Has(ph) {
 			continue
 		}
-		if !loaded {
-			toInfo, err = tableInfoForCommit(ctx, dps.tblName, cm, cmHash)
+		// If filter set, avoid initializing toInfo until target parent.
+		if toInfo.IsEmpty() {
+			toInfo, err = tableInfoForCommit(ctx, dpi.tblName, cm, cmHash)
 			if err != nil {
 				return err
 			}
-			loaded = true
 		}
 		optParent, err := cm.GetParent(ctx, i)
 		if err != nil {
 			return err
 		}
-		if err := dps.addParentPartition(ctx, toInfo, optParent); err != nil {
+		parentCm, ok := optParent.ToCommit()
+		if !ok {
+			return doltdb.ErrGhostCommitEncountered
+		}
+		fromInfo, err := tableInfoForCommit(ctx, dpi.tblName, parentCm, optParent.Addr)
+		if err != nil {
+			return err
+		}
+		if err := dpi.queue(ctx, fromInfo, toInfo); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// addParentPartition resolves |optParent| and queues a diff partition against
-// |toInfo|.
-//
-// If |optParent| resolves to a [doltdb.Commit] and table hashes differ, the
-// partition is appended to the buffer.
-func (dps *DiffPartitions) addParentPartition(ctx *sql.Context, toInfo TblInfoAtCommit, optParent *doltdb.OptionalCommit) error {
-	parentCm, ok := optParent.ToCommit()
-	if !ok {
-		return doltdb.ErrGhostCommitEncountered
-	}
-	fromInfo, err := tableInfoForCommit(ctx, dps.tblName, parentCm, optParent.Addr)
-	if err != nil {
-		return err
-	}
-	return dps.queuePartition(ctx, toInfo, fromInfo)
-}
-
-// queuePartition appends a DiffPartition comparing |toInfo| and |fromInfo| to
-// the buffer if table hashes differ and the partition satisfies selectFunc.
-func (dps *DiffPartitions) queuePartition(ctx *sql.Context, toInfo, fromInfo TblInfoAtCommit) error {
+// queue pairs |fromInfo| and |toInfo| into a DiffPartition and appends it to
+// the buffer if the table changed and satisfied the configured partition
+// filters.
+func (dpi *diffPartitionIter) queue(ctx *sql.Context, fromInfo, toInfo TblInfoAtCommit) error {
 	if toInfo.tblHash == fromInfo.tblHash {
 		return nil
 	}
@@ -726,19 +756,19 @@ func (dps *DiffPartitions) queuePartition(ctx *sql.Context, toInfo, fromInfo Tbl
 		fromName: fromInfo.name,
 		toDate:   toInfo.date,
 		fromDate: fromInfo.date,
-		fromSch:  dps.fromSch,
-		toSch:    dps.toSch,
-		ranges:   dps.ranges,
+		fromSch:  dpi.fromSch,
+		toSch:    dpi.toSch,
+		ranges:   dpi.ranges,
 	}
-	selected, err := dps.selectFunc(ctx, partition)
+	selected, err := dpi.selectFunc(ctx, partition)
 	if err != nil || !selected {
 		return err
 	}
-	dps.buf = append(dps.buf, partition)
+	dpi.buf = append(dpi.buf, partition)
 	return nil
 }
 
-func (dps *DiffPartitions) Close(*sql.Context) error {
+func (dpi *diffPartitionIter) Close(*sql.Context) error {
 	return nil
 }
 
