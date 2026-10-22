@@ -658,15 +658,7 @@ func conflictedCellsDiffer(ctx context.Context, row conflictedRow, left, right v
 		return !bytes.Equal(left, right), nil
 	}
 	differs := func(i int) (bool, error) {
-		l, err := vm.mergedCell(ctx, vm.leftVD, vm.leftMapping, left, i)
-		if err != nil {
-			return false, err
-		}
-		r, err := vm.mergedCell(ctx, vm.rightVD, vm.rightMapping, right, i)
-		if err != nil {
-			return false, err
-		}
-		equal, err := vm.mergedCellsEqual(ctx, i, l, r)
+		equal, err := vm.cellsEqual(ctx, i, sideLeft, left, sideRight, right)
 		return !equal, err
 	}
 	if row.wholeRow {
@@ -698,17 +690,43 @@ func conflictedCellsDiffer(ctx context.Context, row conflictedRow, left, right v
 	return false, nil
 }
 
-// mergedCell returns column |i| of the merged schema from |row|, converted to its type in the merged schema. |vd| and
-// |mapping| describe the schema of |row|. A column missing from that schema is NULL.
-func (m *valueMerger) mergedCell(ctx context.Context, vd *val.TupleDesc, mapping val.OrdinalMapping, row val.Tuple, i int) (interface{}, error) {
+// mergeSide is the left, right or base side of a valueMerger's merge.
+type mergeSide int
+
+const (
+	sideLeft mergeSide = iota
+	sideRight
+	sideBase
+)
+
+// mergedCell returns column |i| of the merged schema from |row|, a row of |side|, converted to its type in the merged
+// schema. A column missing from |side|'s schema is NULL.
+func (m *valueMerger) mergedCell(ctx context.Context, side mergeSide, row val.Tuple, i int) (interface{}, error) {
+	vd, mapping := m.leftVD, m.leftMapping
+	switch side {
+	case sideRight:
+		vd, mapping = m.rightVD, m.rightMapping
+	case sideBase:
+		vd, mapping = m.baseVD, m.baseMapping
+	}
 	if mapping[i] == -1 {
 		return nil, nil
 	}
 	return convert(ctx, vd, m.mergedColumnType(i), mapping[i], row, m.ns)
 }
 
-func (m *valueMerger) mergedCellsEqual(ctx context.Context, i int, a, b interface{}) (bool, error) {
-	cmp, err := m.mergedColumnType(i).Compare(ctx, a, b)
+// cellsEqual reports whether row |a| of |aSide| and row |b| of |bSide| hold the same value in column |i| of the merged
+// schema.
+func (m *valueMerger) cellsEqual(ctx context.Context, i int, aSide mergeSide, a val.Tuple, bSide mergeSide, b val.Tuple) (bool, error) {
+	av, err := m.mergedCell(ctx, aSide, a, i)
+	if err != nil {
+		return false, err
+	}
+	bv, err := m.mergedCell(ctx, bSide, b, i)
+	if err != nil {
+		return false, err
+	}
+	cmp, err := m.mergedColumnType(i).Compare(ctx, av, bv)
 	return cmp == 0, err
 }
 

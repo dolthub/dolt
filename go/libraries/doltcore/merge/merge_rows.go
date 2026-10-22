@@ -61,9 +61,6 @@ type MergeOpts struct {
 	// inspection. Returning tree.RowMergeDefer keeps the standard behaviour for
 	// that row.
 	RowMergePolicy RowMergePolicy
-	// AlwaysMergeJSON merges concurrent edits to a JSON document regardless of @@dolt_dont_merge_json, for merges whose
-	// result must not depend on session settings.
-	AlwaysMergeJSON bool
 	// SkipFullTextRebuild leaves the Full-Text pseudo-index tables of merged tables as the merge left them, for a
 	// caller that brings them up to date itself.
 	SkipFullTextRebuild bool
@@ -118,14 +115,10 @@ type TableMerger struct {
 	// exception is for the dolt_verify_constraints() stored procedure, which allows callers to
 	// only record constraint violations for a specified subset of tables.
 	recordViolations bool
-
-	alwaysMergeJSON bool
 }
 
 func (tm TableMerger) GetNewValueMerger(ctx context.Context, mergeSch schema.Schema, leftRows prolly.Map) *valueMerger {
-	vm := NewValueMerger(ctx, mergeSch, tm.leftSch, tm.rightSch, tm.ancSch, leftRows.Pool(), leftRows.NodeStore())
-	vm.alwaysMergeJSON = tm.alwaysMergeJSON
-	return vm
+	return NewValueMerger(ctx, mergeSch, tm.leftSch, tm.rightSch, tm.ancSch, leftRows.Pool(), leftRows.NodeStore())
 }
 
 func rowsFromTable(ctx context.Context, tbl *doltdb.Table) (prolly.Map, error) {
@@ -321,7 +314,6 @@ func (rm *RootMerger) MakeTableMerger(ctx context.Context, tblName doltdb.TableN
 		ns:               rm.ns,
 		recordViolations: recordViolations,
 		rowMergePolicy:   mergeOpts.RowMergePolicy,
-		alwaysMergeJSON:  mergeOpts.AlwaysMergeJSON,
 	}
 
 	var err error

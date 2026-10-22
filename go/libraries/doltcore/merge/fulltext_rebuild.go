@@ -185,7 +185,75 @@ func tableNeedsFullTextIndexRebuild(ctx *sql.Context, tblName string, tbl *doltd
 }
 
 func rebuildFullTextIndexesForTable(ctx *sql.Context, tableToRebuild rebuildableFulltextTable, mergedRoot doltdb.RootValue) (doltdb.RootValue, error) {
-	return editFullTextIndexes(ctx, tableToRebuild, mergedRoot, true, func(ftEditor fulltext.TableEditor) error {
+	parentTable, err := createFulltextTable(ctx, tableToRebuild.Name, mergedRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	var configTable *fulltextTable
+	var tableSet []fulltext.TableSet
+	allFTDoltTables := make(map[string]*fulltextTable)
+	for _, idx := range tableToRebuild.Schema.Indexes().AllIndexes() {
+		if !idx.IsFullText() {
+			continue
+		}
+		props := idx.FullTextProperties()
+		// Purge the existing data in each table
+		mergedRoot, err = purgeFulltextTableData(ctx, mergedRoot, props.TableNameSlice()...)
+		if err != nil {
+			return nil, err
+		}
+		// The config table is shared, and it's not written to during this process
+		if configTable == nil {
+			configTable, err = createFulltextTable(ctx, props.ConfigTable, mergedRoot)
+			if err != nil {
+				return nil, err
+			}
+			allFTDoltTables[props.ConfigTable] = configTable
+		}
+		positionTable, err := createFulltextTable(ctx, props.PositionTable, mergedRoot)
+		if err != nil {
+			return nil, err
+		}
+		docCountTable, err := createFulltextTable(ctx, props.DocCountTable, mergedRoot)
+		if err != nil {
+			return nil, err
+		}
+		globalCountTable, err := createFulltextTable(ctx, props.GlobalCountTable, mergedRoot)
+		if err != nil {
+			return nil, err
+		}
+		rowCountTable, err := createFulltextTable(ctx, props.RowCountTable, mergedRoot)
+		if err != nil {
+			return nil, err
+		}
+		allFTDoltTables[props.PositionTable] = positionTable
+		allFTDoltTables[props.DocCountTable] = docCountTable
+		allFTDoltTables[props.GlobalCountTable] = globalCountTable
+		allFTDoltTables[props.RowCountTable] = rowCountTable
+		ftIndex, err := index.ConvertFullTextToSql(ctx, "", tableToRebuild.Name, tableToRebuild.Schema, idx)
+		if err != nil {
+			return nil, err
+		}
+		tableSet = append(tableSet, fulltext.TableSet{
+			Index:       ftIndex.(fulltext.Index),
+			Position:    positionTable,
+			DocCount:    docCountTable,
+			GlobalCount: globalCountTable,
+			RowCount:    rowCountTable,
+		})
+	}
+
+	// We'll write the entire contents of our table into the Full-Text editor
+	ftEditor, err := fulltext.CreateEditor(ctx, parentTable, configTable, tableSet...)
+	if err != nil {
+		return nil, err
+	}
+	err = func() error {
+		defer ftEditor.Close(ctx)
+		ftEditor.StatementBegin(ctx)
+		defer ftEditor.StatementComplete(ctx)
+
 		rowIter, err := createRowIterForTable(ctx, tableToRebuild.Table, tableToRebuild.Schema)
 		if err != nil {
 			return err
@@ -202,80 +270,6 @@ func rebuildFullTextIndexesForTable(ctx *sql.Context, tableToRebuild rebuildable
 			return err
 		}
 		return nil
-	})
-}
-
-// editFullTextIndexes runs |edit| with a Full-Text editor of the pseudo-index tables of |table| in |root|, which it
-// first empties with |purge|, and returns |root| with the edited pseudo-index tables.
-func editFullTextIndexes(ctx *sql.Context, table rebuildableFulltextTable, root doltdb.RootValue, purge bool, edit func(fulltext.TableEditor) error) (doltdb.RootValue, error) {
-	parentTable, err := createFulltextTable(ctx, table.Name, root)
-	if err != nil {
-		return nil, err
-	}
-
-	var configTable *fulltextTable
-	var tableSet []fulltext.TableSet
-	allFTDoltTables := make(map[string]*fulltextTable)
-	for _, idx := range table.Schema.Indexes().AllIndexes() {
-		if !idx.IsFullText() {
-			continue
-		}
-		props := idx.FullTextProperties()
-		if purge {
-			if root, err = purgeFulltextTableData(ctx, root, props.TableNameSlice()...); err != nil {
-				return nil, err
-			}
-		}
-		// The config table is shared, and it's not written to during this process
-		if configTable == nil {
-			configTable, err = createFulltextTable(ctx, props.ConfigTable, root)
-			if err != nil {
-				return nil, err
-			}
-			allFTDoltTables[props.ConfigTable] = configTable
-		}
-		positionTable, err := createFulltextTable(ctx, props.PositionTable, root)
-		if err != nil {
-			return nil, err
-		}
-		docCountTable, err := createFulltextTable(ctx, props.DocCountTable, root)
-		if err != nil {
-			return nil, err
-		}
-		globalCountTable, err := createFulltextTable(ctx, props.GlobalCountTable, root)
-		if err != nil {
-			return nil, err
-		}
-		rowCountTable, err := createFulltextTable(ctx, props.RowCountTable, root)
-		if err != nil {
-			return nil, err
-		}
-		allFTDoltTables[props.PositionTable] = positionTable
-		allFTDoltTables[props.DocCountTable] = docCountTable
-		allFTDoltTables[props.GlobalCountTable] = globalCountTable
-		allFTDoltTables[props.RowCountTable] = rowCountTable
-		ftIndex, err := index.ConvertFullTextToSql(ctx, "", table.Name, table.Schema, idx)
-		if err != nil {
-			return nil, err
-		}
-		tableSet = append(tableSet, fulltext.TableSet{
-			Index:       ftIndex.(fulltext.Index),
-			Position:    positionTable,
-			DocCount:    docCountTable,
-			GlobalCount: globalCountTable,
-			RowCount:    rowCountTable,
-		})
-	}
-
-	ftEditor, err := fulltext.CreateEditor(ctx, parentTable, configTable, tableSet...)
-	if err != nil {
-		return nil, err
-	}
-	err = func() error {
-		defer ftEditor.Close(ctx)
-		ftEditor.StatementBegin(ctx)
-		defer ftEditor.StatementComplete(ctx)
-		return edit(ftEditor)
 	}()
 	if err != nil {
 		return nil, err
@@ -287,12 +281,13 @@ func editFullTextIndexes(ctx *sql.Context, table rebuildableFulltextTable, root 
 		if err != nil {
 			return nil, err
 		}
-		root, err = root.PutTable(ctx, doltdb.TableName{Name: ftTable.Name()}, newTbl)
+		mergedRoot, err = mergedRoot.PutTable(ctx, doltdb.TableName{Name: ftTable.Name()}, newTbl)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return root, nil
+
+	return mergedRoot, nil
 }
 
 // createRowIterForTable creates a sql.RowIter for the given table.
