@@ -15,17 +15,26 @@
 package remotesrv
 
 import (
+	"bytes"
 	"context"
+	"crypto/md5"
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type rejectingDBCache struct{}
@@ -46,4 +55,71 @@ func TestUploadRejectsTraversalPath(t *testing.T) {
 			require.Equal(t, http.StatusBadRequest, resp.Code)
 		})
 	}
+}
+
+type singleStoreDBCache struct {
+	store RemoteSrvStore
+}
+
+func (c singleStoreDBCache) Get(context.Context, string, string) (RemoteSrvStore, error) {
+	return c.store, nil
+}
+
+func TestUploadVerifiesBodyAndDoesNotReplace(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	store, err := nbs.NewLocalStore(ctx, types.Format_DOLT.VersionString(), dir, 1<<20, nbs.NewUnlimitedMemQuotaProvider(), false)
+	require.NoError(t, err)
+	defer store.Close()
+	handler := newFileHandler(logrus.NewEntry(logrus.New()), singleStoreDBCache{store}, nil, false, identitySealer{})
+
+	fileID, data, _, err := nbs.WriteChunks([]chunks.Chunk{chunks.NewChunk([]byte("a chunk"))})
+	require.NoError(t, err)
+	filePath := filepath.Join(dir, fileID)
+
+	put := func(t *testing.T, contentLength int, contentHash []byte, body []byte) int {
+		url := fmt.Sprintf("http://example.com/org/repo/%s?num_chunks=1&content_length=%d&content_hash=%s",
+			fileID, contentLength, base64.RawURLEncoding.EncodeToString(contentHash))
+		req := httptest.NewRequest(http.MethodPut, url, bytes.NewReader(body))
+		resp := httptest.NewRecorder()
+		handler.ServeHTTP(resp, req)
+		return resp.Code
+	}
+	md5Of := func(b []byte) []byte {
+		sum := md5.Sum(b)
+		return sum[:]
+	}
+	requireNoFile := func(t *testing.T) {
+		_, err := os.Stat(filePath)
+		require.ErrorIs(t, err, os.ErrNotExist)
+	}
+
+	garbage := bytes.Repeat([]byte("x"), len(data))
+
+	t.Run("HashMismatch", func(t *testing.T) {
+		require.Equal(t, http.StatusBadRequest, put(t, len(data), md5Of(data), garbage))
+		requireNoFile(t)
+	})
+	t.Run("BodyShort", func(t *testing.T) {
+		require.Equal(t, http.StatusBadRequest, put(t, len(data)+1, md5Of(data), data))
+		requireNoFile(t)
+	})
+	t.Run("BodyLong", func(t *testing.T) {
+		require.Equal(t, http.StatusBadRequest, put(t, len(data)-1, md5Of(data), data))
+		requireNoFile(t)
+	})
+	t.Run("Lands", func(t *testing.T) {
+		require.Equal(t, http.StatusOK, put(t, len(data), md5Of(data), data))
+		got, err := os.ReadFile(filePath)
+		require.NoError(t, err)
+		require.Equal(t, data, got)
+	})
+	t.Run("DoesNotReplace", func(t *testing.T) {
+		// A well formed upload of other bytes to an existing file ID
+		// succeeds, but leaves the existing file in place.
+		require.Equal(t, http.StatusOK, put(t, len(garbage), md5Of(garbage), garbage))
+		got, err := os.ReadFile(filePath)
+		require.NoError(t, err)
+		require.Equal(t, data, got)
+	})
 }
