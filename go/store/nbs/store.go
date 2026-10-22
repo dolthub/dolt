@@ -2080,7 +2080,11 @@ func getRefCheck(nbs *NomsBlockStore, base func([]hasRecord) (hash.HashSet, erro
 	}
 }
 
-// For each chunk in sources, walk all its addresses with |getAddrs| and ensure that none are missing from a call to |refCheck|.
+var ErrChunkHashMismatch = errors.New("chunk data does not hash to its address")
+
+// For each chunk in sources, check that its data hashes to its address, then
+// walk all its addresses with |getAddrs| and ensure that none are missing from
+// a call to |refCheck|.
 func refCheckAllSources(ctx context.Context, getAddrs chunks.InsertAddrsCurry, refCheck func([]hasRecord) (hash.HashSet, error), sources chunkSourceSet, stats *Stats) error {
 	if refCheck == nil {
 		return nil
@@ -2089,6 +2093,13 @@ func refCheckAllSources(ctx context.Context, getAddrs chunks.InsertAddrsCurry, r
 	// TODO: Bigger batching.
 	checkDeps := func(c chunks.Chunk) {
 		if checkErr != nil {
+			return
+		}
+		// Chunks are read back by address, from whichever source has
+		// them, so a chunk whose data does not hash to its address
+		// could shadow the real one.
+		if actual := hash.Of(c.Data()); actual != c.Hash() {
+			checkErr = fmt.Errorf("cannot add table files: %w: chunk %s hashes to %s", ErrChunkHashMismatch, c.Hash(), actual)
 			return
 		}
 		addrs := make(hash.HashSet)

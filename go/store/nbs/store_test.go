@@ -692,3 +692,49 @@ func TestWaitForGC(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestAddTableFilesChecksChunkHashes(t *testing.T) {
+	ctx := context.Background()
+	st, _, _ := makeTestLocalStore(t, defaultMaxTables)
+	defer st.Close()
+
+	// The ref check, and with it the hash check, only runs against a
+	// store with a root.
+	root := chunks.NewChunk([]byte("root"))
+	require.NoError(t, st.Put(ctx, root, noopGetAddrs))
+	ok, err := st.Commit(ctx, root.Hash(), hash.Hash{})
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	addTableFile := func(t *testing.T, cs ...chunks.Chunk) error {
+		name, data, _, err := WriteChunks(cs)
+		require.NoError(t, err)
+		pending, err := st.WriteTableFile(ctx, name, 0, len(cs), nil, func() (io.ReadCloser, uint64, error) {
+			return io.NopCloser(bytes.NewReader(data)), uint64(len(data)), nil
+		})
+		require.NoError(t, err)
+		defer pending.Close()
+		return st.AddTableFilesToManifest(ctx, map[string]int{name: len(cs)}, noopGetAddrs)
+	}
+
+	t.Run("Valid", func(t *testing.T) {
+		require.NoError(t, addTableFile(t, chunks.NewChunk([]byte("valid"))))
+	})
+	t.Run("ForgedRoot", func(t *testing.T) {
+		before, err := st.Sources(ctx)
+		require.NoError(t, err)
+
+		// A table file's name derives from its chunk addresses alone,
+		// and |root| already landed in a table file of its own. Add a
+		// second chunk so that the forged file gets a new name.
+		forged := chunks.NewChunkWithHash(root.Hash(), []byte("forged"))
+		require.ErrorIs(t, addTableFile(t, forged, chunks.NewChunk([]byte("other"))), ErrChunkHashMismatch)
+
+		after, err := st.Sources(ctx)
+		require.NoError(t, err)
+		require.Equal(t, len(before.TableFiles), len(after.TableFiles))
+		got, err := st.Get(ctx, root.Hash())
+		require.NoError(t, err)
+		require.Equal(t, root.Data(), got.Data())
+	})
+}
