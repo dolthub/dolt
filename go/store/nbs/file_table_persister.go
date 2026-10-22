@@ -257,6 +257,11 @@ func (ftp *fsTablePersister) TryMoveCmpChunkTableWriter(ctx context.Context, fil
 // handle must be closed after the file has been Open'd or is no longer needed.
 // The pruneMu read lock is held for the entire operation.
 //
+// A file that already exists under the final name is never replaced: it may be
+// live, open and mmapped, and its replacement is not known to open. Instead the
+// temp file is discarded and the existing file is touched, so that it reads as
+// freshly landed to pruneUnreferencedWithGrace.
+//
 // If writeFn fails, or the temp file cannot be closed or renamed, the inflight
 // temp file is removed before returning the error. This matters for callers
 // like ConjoinAll, where an I/O error reading a source under FatalBehaviorError
@@ -286,9 +291,17 @@ func (ftp *fsTablePersister) writeAndProtect(finalName string, writeFn func(temp
 		_ = file.Remove(tempName)
 		return nil, err
 	}
-	if err = file.Rename(tempName, filepath.Join(ftp.dir, finalName)); err != nil {
+	finalPath := filepath.Join(ftp.dir, finalName)
+	if err = file.RenameNoReplace(tempName, finalPath); err != nil {
 		_ = file.Remove(tempName)
-		return nil, err
+		if !errors.Is(err, fs.ErrExist) {
+			return nil, err
+		}
+		// pruneMu keeps the existing file from being pruned out from
+		// under us until it is protected below.
+		if err = file.Touch(finalPath); err != nil {
+			return nil, err
+		}
 	}
 	return ftp.addPending(addr), nil
 }

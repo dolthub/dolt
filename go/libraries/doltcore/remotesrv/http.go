@@ -285,11 +285,22 @@ type uploadreader struct {
 	checksum     gohash.Hash
 }
 
+// Read verifies the body against the table file details as it reads it. A
+// mismatch is returned in place of io.EOF, so that the table file writer
+// reading it fails before the file lands.
 func (u *uploadreader) Read(p []byte) (n int, err error) {
 	n, err = u.r.Read(p)
 	if err == nil || err == io.EOF {
 		u.totalread += n
 		u.checksum.Write(p[:n])
+	}
+	if u.expectedread != 0 && uint64(u.totalread) > u.expectedread {
+		return n, errBodyLengthTFDMismatch
+	}
+	if err == io.EOF {
+		if verr := u.verify(); verr != nil {
+			return n, verr
+		}
 	}
 	return n, err
 }
@@ -297,11 +308,7 @@ func (u *uploadreader) Read(p []byte) (n int, err error) {
 var errBodyLengthTFDMismatch = errors.New("body upload length did not match table file details")
 var errBodyHashTFDMismatch = errors.New("body upload hash did not match table file details")
 
-func (u *uploadreader) Close() error {
-	cerr := u.r.Close()
-	if cerr != nil {
-		return cerr
-	}
+func (u *uploadreader) verify() error {
 	if u.expectedread != 0 && u.expectedread != uint64(u.totalread) {
 		return errBodyLengthTFDMismatch
 	}
@@ -310,6 +317,10 @@ func (u *uploadreader) Close() error {
 		return errBodyHashTFDMismatch
 	}
 	return nil
+}
+
+func (u *uploadreader) Close() error {
+	return u.r.Close()
 }
 
 func writeTableFile(ctx context.Context, logger *logrus.Entry, dbCache DBCache, path, fileId string, splitOffset uint64, numChunks int, contentHash []byte, contentLength uint64, body io.ReadCloser) (*logrus.Entry, int, error) {
