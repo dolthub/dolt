@@ -407,7 +407,8 @@ func (w *prollyTableWriter) Close(ctx *sql.Context) error {
 	if w.errEncountered != nil {
 		return w.errEncountered
 	}
-	return w.flush(ctx)
+	//return w.flush(ctx)
+	return nil
 }
 
 func (w *prollyTableWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
