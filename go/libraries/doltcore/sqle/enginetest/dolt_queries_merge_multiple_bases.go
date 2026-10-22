@@ -815,6 +815,11 @@ var MergeMultipleBasesAbortScripts = []queries.ScriptTest{
 // MergeMultipleBasesPreviewScripts preview merges against a virtual merge base, and check that the merges find the
 // same conflicts.
 var MergeMultipleBasesPreviewScripts = []queries.ScriptTest{
+	// x2 resolves the conflict back to c1's value. That is still a change from the conflicted merge bases, as in git,
+	// so row 1 conflicts instead of taking y2's value.
+	previewParityScript("preview: conflicting merge bases, one side resolved to the old value: merge y into x",
+		conflictingMergeBasesSetup("seed", "y", false), "x", "y", "t", "base_a, our_a, their_a",
+		[]sql.Row{{"t", uint64(1), uint64(0)}}, []sql.Row{{"seed", "seed", "y"}}),
 	previewParityScript("preview: conflicting merge bases, one side resolved to the old value: merge x into y",
 		append(conflictingMergeBasesSetup("seed", "y", false), "CALL DOLT_CHECKOUT('y');"), "y", "x", "t", "base_a, our_a, their_a",
 		[]sql.Row{{"t", uint64(1), uint64(0)}}, []sql.Row{{"seed", "y", "seed"}}),
@@ -846,6 +851,8 @@ var MergeMultipleBasesPreviewScripts = []queries.ScriptTest{
 	previewParityScript("preview: conflicting merge bases with different schemas: merge y into x",
 		schemaChangingMergeBasesSetup(), "x", "y", "t", "base_id, base_a, our_a, their_a",
 		[]sql.Row{{"t", uint64(1), uint64(0)}}, []sql.Row{{1, "seed", "x wins", "seed"}}),
+	// Row 1's a conflicted between x1 and y1, so it conflicts between x2 and y2 even though x2 holds c1's value. It
+	// is marked in their virtual merge base too, so x3's and y3's resolutions conflict.
 	previewParityScript("preview: nested criss-cross: merge y into x",
 		nestedCrissCrossSetup(), "x", "y", "t", "base_a, our_a, their_a",
 		[]sql.Row{{"t", uint64(1), uint64(0)}}, []sql.Row{{"seed", "y", "q"}}),
@@ -980,27 +987,6 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 		conflictingMergeBasesSetup("resolved", "resolved", true),
 		"y", true,
 		check{"SELECT * FROM t ORDER BY id;", []sql.Row{{1, "resolved", "seed"}, {2, "x later", "y"}}}),
-	// x2 resolves the conflict back to c1's value. That is still a change from the conflicted merge bases, as in
-	// git, so row 1 conflicts instead of taking y2's value.
-	mergeScript("conflicting merge bases, one side resolved to the old value: merge y into x",
-		conflictingMergeBasesSetup("seed", "y", false),
-		"y", false,
-		check{"SELECT base_a, our_a, their_a FROM dolt_conflicts_t;", []sql.Row{{"seed", "seed", "y"}}}),
-	{
-		// The previews report the conflict that the merge finds.
-		Name:        "conflicting merge bases, one side resolved to the old value: preview merging y into x",
-		SetUpScript: conflictingMergeBasesSetup("seed", "y", false),
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('x', 'y');",
-				Expected: []sql.Row{{"t", uint64(1), uint64(0)}},
-			},
-			{
-				Query:    "SELECT base_a, our_a, their_a FROM dolt_preview_merge_conflicts('x', 'y', 't');",
-				Expected: []sql.Row{{"seed", "seed", "y"}},
-			},
-		},
-	},
 	// The merge bases p1, p2 and p3 are merged together, oldest first, including p1 and p2's conflict.
 	mergeScript("three merge bases: merge m2 into m1",
 		threeMergeBasesSetup(),
@@ -1046,12 +1032,6 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 		"y", false,
 		check{"SELECT base_id, base_a, our_a, their_a FROM dolt_conflicts_t;", []sql.Row{{1, "seed", "x wins", "seed"}}},
 		check{"SELECT * FROM t ORDER BY id;", []sql.Row{{1, "x wins", "seed", nil}, {2, "seed", "seed", nil}}}),
-	// Row 1's a conflicted between x1 and y1, so it conflicts between x2 and y2 even though x2 holds c1's value.
-	// It is marked in their virtual merge base too, so x3's and y3's resolutions conflict.
-	mergeScript("nested criss-cross: merge y into x",
-		nestedCrissCrossSetup(),
-		"y", false,
-		check{"SELECT base_a, our_a, their_a FROM dolt_conflicts_t;", []sql.Row{{"seed", "y", "q"}}}),
 	// x2 and y2 resolve the conflict between the merge bases to the same value, and y3 changes the column's type
 	// without changing the value. The values are equal in the merged type, so they do not conflict.
 	mergeScript("conflicting merge bases, resolved the same way, then a type change: merge y into x",
