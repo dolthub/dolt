@@ -2568,6 +2568,16 @@ EOF
     [[ ! "$output" =~ "| + | 20 |" ]] || false
 }
 
+@test "diff: ...B diffs B against the merge base of HEAD and B" {
+    criss_cross
+
+    # Like git diff ...branchB, the omitted side is HEAD, which is branchA.
+    run dolt diff ...branchB
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "warning: HEAD...branchB: multiple merge bases, using $BASE_B" ]
+    [[ "$output" =~ "| + | 10 |" ]] || false
+}
+
 @test "diff: A...B with one merge base does not warn" {
     criss_cross
 

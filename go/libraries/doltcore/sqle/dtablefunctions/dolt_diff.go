@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/transform"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/vitess/go/mysql"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -404,10 +405,6 @@ func loadDetailsForRefs(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db
 	return fromDetails, toDetails, nil
 }
 
-// MultipleMergeBasesWarningCode is the code of the warning raised when a three-dot diff has several merge bases. Dolt
-// raises its own warnings with 1105, MySQL's code for an unknown error.
-const MultipleMergeBasesWarningCode = 1105
-
 // warnOnce adds a warning unless the statement already has it. A table function can resolve its arguments several
 // times while a statement is analyzed.
 func warnOnce(ctx *sql.Context, code int, message string) {
@@ -446,13 +443,12 @@ func resolveCommitStrings(ctx *sql.Context, fromRef, toRef, dotRef interface{}, 
 				return "", "", err
 			}
 
-			// Like git diff A...B, use the newest merge base and warn when there are several.
 			mergeBases, err := merge.MergeBases(ctx, rightCm, leftCm)
 			if err != nil {
 				return "", "", err
 			}
 			if len(mergeBases) > 1 {
-				warnOnce(ctx, MultipleMergeBasesWarningCode, fmt.Sprintf("%s: multiple merge bases, using %s", dotStr, mergeBases[0]))
+				warnOnce(ctx, mysql.ERUnknownError, fmt.Sprintf("%s: multiple merge bases, using %s", dotStr, mergeBases[0]))
 			}
 
 			return mergeBases[0].String(), refs[1], nil

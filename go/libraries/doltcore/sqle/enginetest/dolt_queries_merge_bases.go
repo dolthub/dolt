@@ -17,8 +17,7 @@ package enginetest
 import (
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtablefunctions"
+	"github.com/dolthub/vitess/go/mysql"
 )
 
 // taggedCrissCrossSetup builds a criss-cross, the smallest one with two merge bases, tagged baseA and baseB:
@@ -167,35 +166,35 @@ var ThreeDotScripts = []queries.ScriptTest{
 				// From baseB, which has row 2, to branchB, which has rows 1 and 2.
 				Query:                           "SELECT diff_type, to_id FROM dolt_diff('branchA...branchB', 't');",
 				Expected:                        []sql.Row{{"added", int32(1)}},
-				ExpectedWarning:                 dtablefunctions.MultipleMergeBasesWarningCode,
+				ExpectedWarning:                 mysql.ERUnknownError,
 				ExpectedWarningsCount:           1,
 				ExpectedWarningMessageSubstring: "branchA...branchB: multiple merge bases, using ",
 			},
 			{
 				Query:                           "SELECT diff_type, to_id FROM dolt_diff('branchB...branchA', 't');",
 				Expected:                        []sql.Row{{"added", int32(1)}},
-				ExpectedWarning:                 dtablefunctions.MultipleMergeBasesWarningCode,
+				ExpectedWarning:                 mysql.ERUnknownError,
 				ExpectedWarningsCount:           1,
 				ExpectedWarningMessageSubstring: "branchB...branchA: multiple merge bases, using ",
 			},
 			{
 				Query:                           "SELECT table_name, rows_added FROM dolt_diff_stat('branchA...branchB');",
 				Expected:                        []sql.Row{{"t", int64(1)}},
-				ExpectedWarning:                 dtablefunctions.MultipleMergeBasesWarningCode,
+				ExpectedWarning:                 mysql.ERUnknownError,
 				ExpectedWarningsCount:           1,
 				ExpectedWarningMessageSubstring: "branchA...branchB: multiple merge bases, using ",
 			},
 			{
 				Query:                           "SELECT to_table_name, data_change FROM dolt_diff_summary('branchA...branchB');",
 				Expected:                        []sql.Row{{"t", true}},
-				ExpectedWarning:                 dtablefunctions.MultipleMergeBasesWarningCode,
+				ExpectedWarning:                 mysql.ERUnknownError,
 				ExpectedWarningsCount:           1,
 				ExpectedWarningMessageSubstring: "branchA...branchB: multiple merge bases, using ",
 			},
 			{
 				Query:                           "SELECT statement FROM dolt_patch('branchA...branchB');",
 				Expected:                        []sql.Row{{"INSERT INTO `t` (`id`) VALUES (1);"}},
-				ExpectedWarning:                 dtablefunctions.MultipleMergeBasesWarningCode,
+				ExpectedWarning:                 mysql.ERUnknownError,
 				ExpectedWarningsCount:           1,
 				ExpectedWarningMessageSubstring: "branchA...branchB: multiple merge bases, using ",
 			},

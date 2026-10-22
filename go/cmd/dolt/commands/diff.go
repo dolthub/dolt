@@ -683,23 +683,23 @@ func (dArgs *diffArgs) applyDotRevisions(queryist cli.Queryist, sqlCtx *sql.Cont
 	if strings.Contains(args[0], "...") {
 		refs := strings.Split(args[0], "...")
 
-		if len(refs[0]) > 0 {
-			right := refs[1]
-			// Use current HEAD if right side of `...` does not exist
-			if len(refs[1]) == 0 {
-				right = "HEAD"
-			}
-
-			// Like git diff A...B, use the newest merge base and warn when there are several.
-			mergeBases, err := getMergeBases(queryist, sqlCtx, refs[0], right)
-			if err != nil {
-				return err
-			}
-			if len(mergeBases) > 1 {
-				cli.PrintErrln(fmt.Sprintf("warning: %s...%s: multiple merge bases, using %s", refs[0], right, mergeBases[0]))
-			}
-			dArgs.fromRef = mergeBases[0]
+		// Use current HEAD for an omitted side of `...`
+		left, right := refs[0], refs[1]
+		if len(left) == 0 {
+			left = "HEAD"
 		}
+		if len(right) == 0 {
+			right = "HEAD"
+		}
+
+		mergeBases, err := getMergeBases(queryist, sqlCtx, left, right)
+		if err != nil {
+			return err
+		}
+		if len(mergeBases) > 1 {
+			cli.PrintErrln(fmt.Sprintf("warning: %s...%s: multiple merge bases, using %s", left, right, mergeBases[0]))
+		}
+		dArgs.fromRef = mergeBases[0]
 
 		if len(refs[1]) > 0 {
 			dArgs.toRef = refs[1]
