@@ -47,6 +47,14 @@ func (k prollyKeylessWriter) Map(ctx context.Context) (prolly.MapInterface, erro
 	return k.mut.Map(ctx)
 }
 
+func (k prollyKeylessWriter) CheckpointMap(ctx context.Context) (prolly.MapInterface, error) {
+	return k.mut.CheckpointMap(ctx)
+}
+
+func (k prollyKeylessWriter) HasUncommittedEdits() bool {
+	return k.mut.HasUncheckpointedEdits()
+}
+
 // ValidateKeyViolations returns nil for keyless writers, because there are no keys, so violations are possible
 func (k prollyKeylessWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error {
 	return nil
@@ -234,6 +242,16 @@ func (writer prollyKeylessSecondaryWriter) Name() string {
 // Map implements the interface indexWriter.
 func (writer prollyKeylessSecondaryWriter) Map(ctx context.Context) (prolly.MapInterface, error) {
 	return writer.mut.Map(ctx)
+}
+
+// CheckpointMap implements the interface indexWriter.
+func (writer prollyKeylessSecondaryWriter) CheckpointMap(ctx context.Context) (prolly.MapInterface, error) {
+	return writer.mut.CheckpointMap(ctx)
+}
+
+// HasUncommittedEdits implements the interface indexWriter.
+func (writer prollyKeylessSecondaryWriter) HasUncommittedEdits() bool {
+	return writer.mut.HasUncheckpointedEdits()
 }
 
 func (writer prollyKeylessSecondaryWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {

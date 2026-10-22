@@ -891,6 +891,201 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 		},
 	},
+	{
+		// Edits from completed statements are materialized into the working set lazily, when the session reads it.
+		Name: "edits from earlier statements are visible later in the transaction",
+		SetUpScript: []string{
+			"create table t (x int primary key, y int, key (y))",
+			"insert into t values (1, 1)",
+			"call dolt_commit('-Am', 'create t')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t values (2, 2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ update t set y = 10 where x = 1",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:    "/* client a */ insert into t values (3, 3)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ select * from t where y = 10",
+				Expected: []sql.Row{{1, 10}},
+			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{1, 10}, {2, 2}, {3, 3}},
+			},
+			{
+				Query:    "/* client a */ insert into t values (4, 4)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ select table_name, staged, status from dolt_status",
+				Expected: []sql.Row{{"t", byte(0), "modified"}},
+			},
+			{
+				Query:    "/* client a */ select to_x, diff_type from dolt_diff_t where to_commit = 'WORKING' order by to_x",
+				Expected: []sql.Row{{1, "modified"}, {2, "added"}, {3, "added"}, {4, "added"}},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}},
+			},
+			{
+				Query:    "/* client a */ insert into t values (5, 5)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 10}, {2, 2}, {3, 3}, {4, 4}, {5, 5}},
+			},
+		},
+	},
+	{
+		Name: "a failed statement discards only its own edits",
+		SetUpScript: []string{
+			"create table t (x int primary key, y int, unique key (y))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t values (1, 1)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:       "/* client a */ insert into t values (2, 2), (3, 1)",
+				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+			{
+				Query:    "/* client a */ insert into t values (4, 4)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:       "/* client a */ insert into t values (5, 5), (4, 6)",
+				ExpectedErr: sql.ErrPrimaryKeyViolation,
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}, {4, 4}},
+			},
+		},
+	},
+	{
+		Name: "a failed statement with many edits discards only its own edits",
+		SetUpScript: []string{
+			"create table digits (d int primary key)",
+			"insert into digits values (0), (1), (2), (3), (4), (5), (6), (7), (8), (9)",
+			"create table t (x int primary key)",
+			"insert into t values (-1)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t values (-2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				// enough rows to flush pending edits within the statement before it fails
+				Query:       "/* client a */ insert into t select a.d + b.d*10 + c.d*100 + d.d*1000 + e.d*10000 from digits a, digits b, digits c, digits d, digits e union all select -1",
+				ExpectedErr: sql.ErrPrimaryKeyViolation,
+			},
+			{
+				Query:    "/* client a */ insert into t values (-3)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ select count(*) from t",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{-3}, {-2}, {-1}},
+			},
+		},
+	},
+	{
+		Name: "rollback and savepoints discard pending edits",
+		SetUpScript: []string{
+			"create table t (x int primary key auto_increment, y int)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t (y) values (1)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, InsertID: 1}}},
+			},
+			{
+				Query:    "/* client a */ rollback",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from t",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t (y) values (2)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, InsertID: 2}}},
+			},
+			{
+				Query:    "/* client a */ savepoint s1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t (y) values (3)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, InsertID: 3}}},
+			},
+			{
+				Query:    "/* client a */ rollback to savepoint s1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t (y) values (4)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, InsertID: 4}}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{2, 2}, {4, 4}},
+			},
+		},
+	},
 }
 
 var DoltConflictHandlingTests = []queries.TransactionTest{

@@ -50,6 +50,12 @@ type prollyWriteSession struct {
 	workingSet    *doltdb.WorkingSet
 	setter        dsess.SessionRootSetter
 	targetStaging bool
+	// deferMaterialization leaves the edits of completed statements in their table writers, rather than
+	// materializing them into |workingSet| when each statement completes. The owner of the session must call
+	// MaterializePending before reading |workingSet|.
+	deferMaterialization bool
+	// materializing is true while MaterializePending is running
+	materializing bool
 }
 
 var _ dsess.WriteSession = &prollyWriteSession{}
@@ -106,6 +112,90 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, tblName doltdb.Tab
 
 	s.tables[tblName] = tblWriter
 	return tblWriter, nil
+}
+
+// SetDeferMaterialization implements WriteSession
+func (s *prollyWriteSession) SetDeferMaterialization(deferMaterialization bool) {
+	s.deferMaterialization = deferMaterialization
+}
+
+// HasPendingEdits implements WriteSession
+func (s *prollyWriteSession) HasPendingEdits() bool {
+	if s.materializing {
+		return false
+	}
+	for _, tblWriter := range s.tables {
+		if tblWriter.pending {
+			return true
+		}
+	}
+	return false
+}
+
+// PendingTables implements WriteSession
+func (s *prollyWriteSession) PendingTables() []doltdb.TableName {
+	var names []doltdb.TableName
+	for tblName, tblWriter := range s.tables {
+		if tblWriter.pending {
+			names = append(names, tblName)
+		}
+	}
+	return names
+}
+
+// MaterializePending implements WriteSession
+func (s *prollyWriteSession) MaterializePending(ctx *sql.Context) (*doltdb.WorkingSet, error) {
+	if s.materializing {
+		return s.workingSet, nil
+	}
+	s.materializing = true
+	defer func() {
+		s.materializing = false
+	}()
+
+	var root doltdb.RootValue
+	if s.targetStaging {
+		root = s.workingSet.StagedRoot()
+	} else {
+		root = s.workingSet.WorkingRoot()
+	}
+
+	changed := false
+	for tblName, tblWriter := range s.tables {
+		if !tblWriter.pending {
+			continue
+		}
+		tbl, err := tblWriter.materialize(ctx)
+		if err != nil {
+			return nil, err
+		}
+		root, err = root.PutTable(ctx, tblName, tbl)
+		if err != nil {
+			return nil, err
+		}
+		changed = true
+	}
+
+	if changed {
+		if s.targetStaging {
+			s.workingSet = s.workingSet.WithStagedRoot(root)
+		} else {
+			s.workingSet = s.workingSet.WithWorkingRoot(root)
+		}
+	}
+	return s.workingSet, nil
+}
+
+// materializeAndSet materializes pending edits and sets the resulting root in the session.
+func (s *prollyWriteSession) materializeAndSet(ctx *sql.Context) error {
+	ws, err := s.MaterializePending(ctx)
+	if err != nil {
+		return err
+	}
+	if s.targetStaging {
+		return s.setter(ctx, s.dbName, ws.StagedRoot())
+	}
+	return s.setter(ctx, s.dbName, ws.WorkingRoot())
 }
 
 // SetWorkingSet implements WriteSession

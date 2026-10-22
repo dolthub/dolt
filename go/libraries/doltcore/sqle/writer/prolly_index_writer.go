@@ -85,6 +85,10 @@ func getPrimaryKeylessProllyWriter(ctx context.Context, t *doltdb.Table, schStat
 type indexWriter interface {
 	Name() string
 	Map(ctx context.Context) (prolly.MapInterface, error)
+	// CheckpointMap materializes the index as of the last Commit, excluding uncommitted writes.
+	CheckpointMap(ctx context.Context) (prolly.MapInterface, error)
+	// HasUncommittedEdits returns true if writes have been made since the last Commit.
+	HasUncommittedEdits() bool
 	ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error
 	Insert(ctx context.Context, sqlRow sql.Row) error
 	Delete(ctx context.Context, sqlRow sql.Row) error
@@ -123,6 +127,14 @@ func (m prollyIndexWriter) Name() string {
 
 func (m prollyIndexWriter) Map(ctx context.Context) (prolly.MapInterface, error) {
 	return m.mut.Map(ctx)
+}
+
+func (m prollyIndexWriter) CheckpointMap(ctx context.Context) (prolly.MapInterface, error) {
+	return m.mut.CheckpointMap(ctx)
+}
+
+func (m prollyIndexWriter) HasUncommittedEdits() bool {
+	return m.mut.HasUncheckpointedEdits()
 }
 
 func (m prollyIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.Row) (val.Tuple, error) {
@@ -371,6 +383,14 @@ func (m prollySecondaryIndexWriter) Name() string {
 
 func (m prollySecondaryIndexWriter) Map(ctx context.Context) (prolly.MapInterface, error) {
 	return m.mut.MapInterface(ctx)
+}
+
+func (m prollySecondaryIndexWriter) CheckpointMap(ctx context.Context) (prolly.MapInterface, error) {
+	return m.mut.CheckpointMapInterface(ctx)
+}
+
+func (m prollySecondaryIndexWriter) HasUncommittedEdits() bool {
+	return m.mut.HasUncheckpointedEdits()
 }
 
 func (m prollySecondaryIndexWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error {

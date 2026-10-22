@@ -59,6 +59,9 @@ type prollyTableWriter struct {
 	aiSet      bool // True when an INSERT/UPDATE affects the auto increment value
 
 	errEncountered error
+	// pending is true when edits from completed statements have not been materialized into the write session's
+	// working set. See prollyWriteSession.deferMaterialization.
+	pending bool
 
 	virtualExpressions []sql.Expression
 }
@@ -407,7 +410,21 @@ func (w *prollyTableWriter) Close(ctx *sql.Context) error {
 	if w.errEncountered != nil {
 		return w.errEncountered
 	}
+	if w.deferMaterialization() {
+		// Leave the statement's edits in our index writers. They're materialized into the working set when the
+		// session next reads it.
+		if err := w.StatementComplete(ctx); err != nil {
+			return err
+		}
+		w.pending = true
+		return nil
+	}
 	return w.flush(ctx)
+}
+
+func (w *prollyTableWriter) deferMaterialization() bool {
+	s, ok := w.writeSess.(*prollyWriteSession)
+	return ok && s.deferMaterialization
 }
 
 func (w *prollyTableWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
@@ -454,6 +471,7 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, tbl *doltdb.Table) error {
 	}
 
 	w.tbl = tbl
+	w.pending = false
 	w.sch = schState.DoltSchema
 	w.sqlSch = schState.PkSchema.Schema
 	w.primary = newPrimary
@@ -466,8 +484,43 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, tbl *doltdb.Table) error {
 
 // table materializes all changes to the primary key, secondary keys, and auto increments to a new doltdb.Table
 func (w *prollyTableWriter) table(ctx *sql.Context) (tbl *doltdb.Table, err error) {
+	return w.tableFromMaps(ctx, indexWriter.Map)
+}
+
+// materialize returns a doltdb.Table containing all edits from completed statements, excluding the edits of any
+// statement in progress. If no statement is in progress, the writer is reset to the returned table.
+func (w *prollyTableWriter) materialize(ctx *sql.Context) (*doltdb.Table, error) {
+	inProgress := w.primary.HasUncommittedEdits()
+	for _, secondary := range w.secondary {
+		inProgress = inProgress || secondary.HasUncommittedEdits()
+	}
+
+	if inProgress {
+		tbl, err := w.tableFromMaps(ctx, indexWriter.CheckpointMap)
+		if err != nil {
+			return nil, err
+		}
+		// Our index writers still hold every edit, so the next materialization rebuilds all of them on top of |tbl|.
+		w.tbl = tbl
+		w.pending = false
+		return tbl, nil
+	}
+
+	tbl, err := w.table(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err = w.Reset(ctx, tbl); err != nil {
+		return nil, err
+	}
+	w.pending = false
+	return tbl, nil
+}
+
+// tableFromMaps builds a doltdb.Table from the maps that |getMap| returns for each index writer.
+func (w *prollyTableWriter) tableFromMaps(ctx *sql.Context, getMap func(indexWriter, context.Context) (prolly.MapInterface, error)) (tbl *doltdb.Table, err error) {
 	// flush primary row storage
-	priMap, err := w.primary.Map(ctx)
+	priMap, err := getMap(w.primary, ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -484,7 +537,7 @@ func (w *prollyTableWriter) table(ctx *sql.Context) (tbl *doltdb.Table, err erro
 
 	for _, secIdxWriter := range w.secondary {
 		var secMap prolly.MapInterface
-		secMap, err = secIdxWriter.Map(ctx)
+		secMap, err = getMap(secIdxWriter, ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -523,6 +576,12 @@ func (w *prollyTableWriter) table(ctx *sql.Context) (tbl *doltdb.Table, err erro
 }
 
 func (w *prollyTableWriter) flush(ctx *sql.Context) error {
+	if w.deferMaterialization() {
+		// Materialize this table along with any other pending tables, so that the root we set in the session
+		// contains every completed edit.
+		w.pending = true
+		return w.writeSess.(*prollyWriteSession).materializeAndSet(ctx)
+	}
 	tbl, err := w.table(ctx)
 	if err != nil {
 		return err

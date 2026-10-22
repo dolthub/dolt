@@ -48,6 +48,21 @@ type WriteSession interface {
 	// SetOptions sets the editor.Options for this session.
 	SetOptions(opts editor.Options)
 
+	// SetDeferMaterialization controls whether the edits of completed statements are materialized into the working
+	// set as each statement completes. When deferred, edits accumulate in the session's TableWriters until
+	// MaterializePending is called, and the session's owner must do so before reading the working set.
+	SetDeferMaterialization(deferMaterialization bool)
+
+	// HasPendingEdits returns true if edits from completed statements have not been materialized into the working set.
+	HasPendingEdits() bool
+
+	// PendingTables returns the names of tables with edits that have not been materialized into the working set.
+	PendingTables() []doltdb.TableName
+
+	// MaterializePending materializes all pending edits into the working set and returns it. The edits of a
+	// statement in progress are not included.
+	MaterializePending(ctx *sql.Context) (*doltdb.WorkingSet, error)
+
 	WriteSessionFlusher
 }
 

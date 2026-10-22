@@ -316,12 +316,45 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 		return tbl, ok, nil
 	}
 
-	root, err := db.GetRoot(ctx)
+	root, err := db.resolutionRoot(ctx, tblName)
 	if err != nil {
 		return nil, false, err
 	}
 
 	return db.getTableInsensitiveWithRoot(ctx, nil, ds, root, tblName, "")
+}
+
+// resolutionRoot returns the root to resolve |tblName| against. Resolving a user table only reads its schema, and the
+// table reads its data from the session when accessed, so user tables are resolved against SchemaRoot. This lets a run
+// of write statements accumulate its edits instead of materializing them for each statement.
+func (db Database) resolutionRoot(ctx *sql.Context, tblName string) (doltdb.RootValue, error) {
+	if doltdb.IsSystemTable(doltdb.TableName{Name: tblName, Schema: db.schemaName}) {
+		return db.GetRoot(ctx)
+	}
+	return db.SchemaRoot(ctx)
+}
+
+// SchemaRoot returns the session's working root without materializing pending edits to the rows of user tables. Its
+// schemas and system tables are current, but the rows of its user tables may not be. Use GetRoot to read table data.
+func (db Database) SchemaRoot(ctx *sql.Context) (doltdb.RootValue, error) {
+	sess := dsess.DSessFromSess(ctx.Session)
+	state, ok, err := sess.LookupDbStateWithoutMaterializing(ctx, db.RevisionQualifiedName())
+	if err != nil {
+		return nil, err
+	}
+	if !ok || state.WriteSession() == nil || anySystemTables(state.WriteSession().PendingTables()) {
+		return db.GetRoot(ctx)
+	}
+	return state.WorkingRoot(), nil
+}
+
+func anySystemTables(names []doltdb.TableName) bool {
+	for _, name := range names {
+		if doltdb.IsSystemTable(name) {
+			return true
+		}
+	}
+	return false
 }
 
 func (db Database) getDoltDBTableInsensitive(ctx *sql.Context, tblName doltdb.TableName, readNonlocalTables readNonlocalTablesFlag) (doltdb.TableName, *doltdb.Table, bool, error) {
@@ -1558,7 +1591,7 @@ func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName s
 // Tables with a configured schema override are never cached.
 func (db Database) getTableUsingMissingOverridePolicy(ctx *sql.Context, root doltdb.RootValue, tableName string, policy missingOverridePolicy) (sql.Table, bool, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
-	dbState, ok, err := sess.LookupDbState(ctx, db.RevisionQualifiedName())
+	dbState, ok, err := sess.LookupDbStateWithoutMaterializing(ctx, db.RevisionQualifiedName())
 	if err != nil {
 		return nil, false, err
 	}
@@ -1655,7 +1688,8 @@ func (db Database) resolveUserTable(ctx *sql.Context, root doltdb.RootValue, tab
 // first result.
 func (db Database) tableInsensitive(ctx *sql.Context, root doltdb.RootValue, tableName doltdb.TableName) (doltdb.TableName, *doltdb.Table, bool, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
-	dbState, ok, err := sess.LookupDbState(ctx, db.RevisionQualifiedName())
+	// We only need the session cache, tables are read from |root|
+	dbState, ok, err := sess.LookupDbStateWithoutMaterializing(ctx, db.RevisionQualifiedName())
 	if err != nil {
 		return doltdb.TableName{}, nil, false, err
 	}
@@ -2514,7 +2548,8 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 
 // GetViewDefinition implements sql.ViewDatabase
 func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.ViewDefinition, bool, error) {
-	root, err := db.GetRoot(ctx)
+	// Views are defined by schemas and system tables only
+	root, err := db.SchemaRoot(ctx)
 	if err != nil {
 		return sql.ViewDefinition{}, false, err
 	}
@@ -2548,7 +2583,7 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 	key := doltdb.DataCacheKey{Hash: schTblHash}
 
 	ds := dsess.DSessFromSess(ctx.Session)
-	dbState, _, err := ds.LookupDbState(ctx, db.RevisionQualifiedName())
+	dbState, _, err := ds.LookupDbStateWithoutMaterializing(ctx, db.RevisionQualifiedName())
 	if err != nil {
 		return sql.ViewDefinition{}, false, err
 	}
@@ -2662,7 +2697,8 @@ func (db Database) DropView(ctx *sql.Context, name string) error {
 
 // GetTriggers implements sql.TriggerDatabase.
 func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error) {
-	root, err := db.GetRoot(ctx)
+	// Triggers are defined by system tables only
+	root, err := db.SchemaRoot(ctx)
 	if err != nil {
 		return nil, nil
 	}
@@ -2673,7 +2709,7 @@ func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error
 	}
 
 	ds := dsess.DSessFromSess(ctx.Session)
-	dbState, _, err := ds.LookupDbState(ctx, db.RevisionQualifiedName())
+	dbState, _, err := ds.LookupDbStateWithoutMaterializing(ctx, db.RevisionQualifiedName())
 	if err != nil {
 		return nil, nil
 	}
