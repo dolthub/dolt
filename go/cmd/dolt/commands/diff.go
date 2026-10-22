@@ -641,32 +641,39 @@ func (dArgs *diffArgs) applyDiffRoots(queryist cli.Queryist, sqlCtx *sql.Context
 }
 
 // applyMergeBase applies the merge base of two revisions to the |from| root
-// values.
+// values. Like git diff --merge-base, it fails when there are several.
 func (dArgs *diffArgs) applyMergeBase(queryist cli.Queryist, sqlCtx *sql.Context, leftStr, rightStr string) error {
-	mergeBaseStr, err := getCommonAncestor(queryist, sqlCtx, leftStr, rightStr)
+	mergeBases, err := getMergeBases(queryist, sqlCtx, leftStr, rightStr)
 	if err != nil {
 		return err
 	}
+	if len(mergeBases) > 1 {
+		return errors.New("multiple merge bases found")
+	}
 
-	dArgs.fromRef = mergeBaseStr
+	dArgs.fromRef = mergeBases[0]
 
 	return nil
 }
 
-func getCommonAncestor(queryist cli.Queryist, sqlCtx *sql.Context, c1, c2 string) (string, error) {
-	q, err := dbr.InterpolateForDialect("select dolt_merge_base(?, ?)", []interface{}{c1, c2}, dialect.MySQL)
+// getMergeBases returns the merge bases of |c1| and |c2|, newest first.
+func getMergeBases(queryist cli.Queryist, sqlCtx *sql.Context, c1, c2 string) ([]string, error) {
+	q, err := dbr.InterpolateForDialect("select merge_base from dolt_merge_bases(?, ?)", []interface{}{c1, c2}, dialect.MySQL)
 	if err != nil {
-		return "", fmt.Errorf("error interpolating query: %w", err)
+		return nil, fmt.Errorf("error interpolating query: %w", err)
 	}
 	rows, err := cli.GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	if len(rows) != 1 {
-		return "", errors.New("unexpected number of rows returned from dolt_merge_base")
+	if len(rows) == 0 {
+		return nil, fmt.Errorf("no merge base of %s and %s", c1, c2)
 	}
-	ancestor := rows[0][0].(string)
-	return ancestor, nil
+	mergeBases := make([]string, len(rows))
+	for i, row := range rows {
+		mergeBases[i] = row[0].(string)
+	}
+	return mergeBases, nil
 }
 
 // applyDotRevisions applies the appropriate |from| and |to| root values to the
@@ -683,10 +690,15 @@ func (dArgs *diffArgs) applyDotRevisions(queryist cli.Queryist, sqlCtx *sql.Cont
 				right = "HEAD"
 			}
 
-			err := dArgs.applyMergeBase(queryist, sqlCtx, refs[0], right)
+			// Like git diff A...B, use the newest merge base and warn when there are several.
+			mergeBases, err := getMergeBases(queryist, sqlCtx, refs[0], right)
 			if err != nil {
 				return err
 			}
+			if len(mergeBases) > 1 {
+				cli.PrintErrln(fmt.Sprintf("warning: %s...%s: multiple merge bases, using %s", refs[0], right, mergeBases[0]))
+			}
+			dArgs.fromRef = mergeBases[0]
 		}
 
 		if len(refs[1]) > 0 {
