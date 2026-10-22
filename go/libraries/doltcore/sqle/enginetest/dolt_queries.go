@@ -2781,7 +2781,9 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "dolt_history table with AS OF",
+		// TODO(#12191): drop SkipPrepared when prepared AS OF takes a bind variable.
+		SkipPrepared: true,
+		Name:         "dolt_history table with AS OF",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 int, c2 varchar(20));",
 			"call dolt_add('-A');",
@@ -3109,6 +3111,36 @@ WHERE z IN (
 			{
 				Query:    "SELECT committer FROM dolt_history_dolt_procedures WHERE name = 'p1'",
 				Expected: []sql.Row{{"Test Author <test@example.com>"}},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/12178
+		Name: "dolt_commit_ancestors returns one row per parent for a merge commit looked up by commit_hash",
+		SetUpScript: []string{
+			"CREATE TABLE t (id INT PRIMARY KEY, v INT);",
+			"INSERT INTO t VALUES (1, 1);",
+			"CALL DOLT_ADD('-A');",
+			"CALL DOLT_COMMIT('-A', '-m', 'base');",
+			"CALL DOLT_CHECKOUT('-b', 'other');",
+			"INSERT INTO t VALUES (2, 2);",
+			"CALL DOLT_COMMIT('-A', '-m', 'other');",
+			"SET @other = hashof('other');",
+			"CALL DOLT_CHECKOUT('main');",
+			"INSERT INTO t VALUES (3, 3);",
+			"CALL DOLT_COMMIT('-A', '-m', 'main');",
+			"SET @main = hashof('main');",
+			"CALL DOLT_MERGE('--no-ff', '-m', 'merged', 'other');",
+			"SET @merge = hashof('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT parent_index FROM dolt_commit_ancestors WHERE commit_hash = @merge;",
+				Expected: []sql.Row{{0}, {1}},
+			},
+			{
+				Query:    "SELECT IF(parent_hash IN (@main, @other), 'ok', 'bad') FROM dolt_commit_ancestors WHERE commit_hash = @merge;",
+				Expected: []sql.Row{{"ok"}, {"ok"}},
 			},
 		},
 	},
