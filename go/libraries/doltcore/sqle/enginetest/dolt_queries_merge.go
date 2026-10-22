@@ -66,7 +66,322 @@ func (dcv *doltCommitValidator) Validate(val interface{}) (bool, error) {
 
 var doltCommit = &doltCommitValidator{}
 
+// twoBranchSetup commits |seed| as base, then makes branch other, commits |onMain| on main and |onOther| on other, and
+// checks out main.
+func twoBranchSetup(seed, onMain, onOther []string) []string {
+	s := append(append([]string{}, seed...), "CALL DOLT_COMMIT('-Am', 'base');", "CALL DOLT_BRANCH('other');")
+	s = append(append(s, onMain...), "CALL DOLT_COMMIT('-am', 'main');", "CALL DOLT_CHECKOUT('other');")
+	return append(append(s, onOther...), "CALL DOLT_COMMIT('-am', 'other');", "CALL DOLT_CHECKOUT('main');")
+}
+
 var MergeScripts = []queries.ScriptTest{
+	{
+		// main sets row 1's a to 4 and other sets its b to 6, each valid. Merged, g = a + b is 10, which duplicates row
+		// 2's g in the unique index on it, so the merge records a violation.
+		Name:    "merge whose generated value violates a unique key only once computed",
+		Dialect: "mysql",
+		SetUpScript: twoBranchSetup(
+			[]string{
+				"SET @@dolt_allow_commit_conflicts = 1;",
+				"SET @@dolt_force_transaction_commit = 1;",
+				"CREATE TABLE t (id INT PRIMARY KEY, a INT, b INT, g INT AS (a + b) STORED, UNIQUE INDEX ug (g));",
+				"INSERT INTO t (id, a, b) VALUES (1, 0, 0), (2, 5, 5);",
+			},
+			[]string{
+				"UPDATE t SET a = 4 WHERE id = 1;",
+			},
+			[]string{
+				"UPDATE t SET b = 6 WHERE id = 1;",
+			},
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT violation_type, id, g FROM dolt_constraint_violations_t ORDER BY id;",
+				Expected: []sql.Row{{"unique index", 1, 10}, {"unique index", 2, 10}},
+			},
+		},
+	},
+	{
+		// As above, with a check on g instead of a unique key.
+		Name:    "merge whose generated value violates a check only once computed",
+		Dialect: "mysql",
+		SetUpScript: twoBranchSetup(
+			[]string{
+				"SET @@dolt_allow_commit_conflicts = 1;",
+				"SET @@dolt_force_transaction_commit = 1;",
+				"CREATE TABLE t (id INT PRIMARY KEY, a INT, b INT, g INT AS (a + b) STORED, CHECK (g <= 6));",
+				"INSERT INTO t (id, a, b) VALUES (1, 0, 0);",
+			},
+			[]string{
+				"UPDATE t SET a = 4 WHERE id = 1;",
+			},
+			[]string{
+				"UPDATE t SET b = 6 WHERE id = 1;",
+			},
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT violation_type, id, g FROM dolt_constraint_violations_t;",
+				Expected: []sql.Row{{"check constraint", 1, 10}},
+			},
+		},
+	},
+	{
+		// A composite key and a virtual column. main deletes (1, 'a') and other changes it, both add (3, 'c') with
+		// different values, and both change (1, 'b'). Deleting conflicts one at a time finds each by its key from ours,
+		// from base when ours deleted the row, and from theirs when there is no base row.
+		Name:    "delete conflicts one at a time with a composite key and a virtual column",
+		Dialect: "mysql",
+		SetUpScript: twoBranchSetup(
+			[]string{
+				"SET @@dolt_allow_commit_conflicts = 1;",
+				"CREATE TABLE t (k1 INT, k2 VARCHAR(10), a INT, v INT AS (a + 1) VIRTUAL, b INT, PRIMARY KEY (k1, k2));",
+				"INSERT INTO t (k1, k2, a, b) VALUES (1, 'a', 1, 1), (1, 'b', 2, 2);",
+			},
+			[]string{
+				"DELETE FROM t WHERE k2 = 'a';",
+				"UPDATE t SET a = 10 WHERE k2 = 'b';",
+				"INSERT INTO t (k1, k2, a, b) VALUES (3, 'c', 30, 3);",
+			},
+			[]string{
+				"UPDATE t SET a = 20;",
+				"INSERT INTO t (k1, k2, a, b) VALUES (3, 'c', 40, 3);",
+			},
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_k2, our_k2, their_k2 FROM dolt_conflicts_t ORDER BY their_k2;",
+				Expected: []sql.Row{{"a", nil, "a"}, {"b", "b", "b"}, {nil, "c", "c"}},
+			},
+			{
+				Query:            "DELETE FROM dolt_conflicts_t WHERE their_k2 = 'a';",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SELECT their_k2 FROM dolt_conflicts_t ORDER BY their_k2;",
+				Expected: []sql.Row{{"b"}, {"c"}},
+			},
+			{
+				Query:            "DELETE FROM dolt_conflicts_t WHERE their_k2 = 'c';",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SELECT their_k2 FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{"b"}},
+			},
+			{
+				Query:          "UPDATE dolt_conflicts_t SET our_a = 'not-an-int' WHERE their_k2 = 'b';",
+				ExpectedErrStr: "error: 'not-an-int' is not a valid value for 'int'",
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY k1, k2;",
+				Expected: []sql.Row{{1, "b", 10, 11, 2}, {3, "c", 30, 31, 3}},
+			},
+		},
+	},
+	{
+		// A keyless table with a virtual column. main adds a copy of row (1, 1) and of (2, 2), and other deletes both,
+		// so they conflict. Deleting the conflict on (1, 1) leaves the one on (2, 2).
+		Name:    "delete one conflict of a keyless table with a virtual column",
+		Dialect: "mysql",
+		SetUpScript: twoBranchSetup(
+			[]string{
+				"SET @@dolt_allow_commit_conflicts = 1;",
+				"CREATE TABLE t (a INT, v INT AS (a + 1) VIRTUAL, b INT);",
+				"INSERT INTO t (a, b) VALUES (1, 1), (2, 2);",
+			},
+			[]string{
+				"INSERT INTO t (a, b) VALUES (1, 1), (2, 2);",
+			},
+			[]string{
+				"DELETE FROM t;",
+			},
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_a, base_cardinality, our_cardinality, their_cardinality FROM dolt_conflicts_t ORDER BY base_a;",
+				Expected: []sql.Row{{1, uint64(1), uint64(2), uint64(0)}, {2, uint64(1), uint64(2), uint64(0)}},
+			},
+			{
+				Query:            "DELETE FROM dolt_conflicts_t WHERE base_a = 1;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SELECT base_a FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{2}},
+			},
+		},
+	},
+	{
+		// main and other each add a different virtual column, at different positions, and conflict on rows 1 and 2.
+		// Updating one conflict's our_a through the conflicts table updates the row, and its stored generated column
+		// g and the index on it. Deleting that conflict leaves the other.
+		Name:    "update and delete conflicts with different virtual columns on each side",
+		Dialect: "mysql",
+		SetUpScript: twoBranchSetup(
+			[]string{
+				"SET @@dolt_allow_commit_conflicts = 1;",
+				"CREATE TABLE t (id INT PRIMARY KEY, a INT, b INT, g INT AS (a * 10) STORED, INDEX ig (g));",
+				"INSERT INTO t (id, a, b) VALUES (1, 1, 1), (2, 2, 2);",
+			},
+			[]string{
+				"ALTER TABLE t ADD COLUMN v1 INT AS (a + 1) VIRTUAL AFTER a;",
+				"UPDATE t SET a = 10;",
+			},
+			[]string{
+				"ALTER TABLE t ADD COLUMN v2 INT AS (b + 1) VIRTUAL;",
+				"UPDATE t SET a = 20;",
+			},
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT column_name FROM information_schema.columns WHERE table_name = 'dolt_conflicts_t' AND column_name LIKE '%v_' ORDER BY 1;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT base_id, base_a, our_a, our_g, their_a, their_g FROM dolt_conflicts_t ORDER BY base_id;",
+				Expected: []sql.Row{{1, 1, 10, 100, 20, 200}, {2, 2, 10, 100, 20, 200}},
+			},
+			{
+				Query:    "UPDATE dolt_conflicts_t SET our_a = their_a WHERE our_id = 1;",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY id;",
+				Expected: []sql.Row{{1, 20, 21, 1, 200, 2}, {2, 10, 11, 2, 100, 3}},
+			},
+			{
+				Query:    "SELECT id FROM t FORCE INDEX (ig) WHERE g = 200;",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:            "DELETE FROM dolt_conflicts_t WHERE our_id = 1;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SELECT our_id FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{2}},
+			},
+		},
+	},
+	{
+		// h is generated from g, which is generated from a and b, so the merge computes g before h.
+		Name:    "merge resolving a row both sides changed computes chained stored generated columns",
+		Dialect: "mysql",
+		SetUpScript: twoBranchSetup(
+			[]string{
+				"CREATE TABLE t (id INT PRIMARY KEY, a INT, b INT, g INT AS (a + b) STORED, h INT AS (g * 10) STORED);",
+				"INSERT INTO t (id, a, b) VALUES (1, 0, 1);",
+			},
+			[]string{
+				"UPDATE t SET a = 10;",
+			},
+			[]string{
+				"UPDATE t SET b = 2;",
+			},
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t;",
+				Expected: []sql.Row{{1, 10, 2, 12, 120}},
+			},
+		},
+	},
+	{
+		// The conflicts table leaves out the virtual column v, so deleting a conflict must find its columns without it.
+		Name:    "delete conflicts of a table with a virtual column",
+		Dialect: "mysql",
+		SetUpScript: twoBranchSetup(
+			[]string{
+				"SET @@dolt_allow_commit_conflicts = 1;",
+				"CREATE TABLE t (id INT PRIMARY KEY, a INT, v INT AS (a + 1) VIRTUAL);",
+			},
+			[]string{
+				"INSERT INTO t (id, a) VALUES (1, 10);",
+			},
+			[]string{
+				"INSERT INTO t (id, a) VALUES (1, 20);",
+			},
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT our_id, our_a, their_id, their_a FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{1, 10, 1, 20}},
+			},
+			{
+				Query:            "DELETE FROM dolt_conflicts_t;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT * FROM t;",
+				Expected: []sql.Row{{1, 10, 11}},
+			},
+		},
+	},
+	{
+		// Both sides change row 1, and the merge resolves it cell by cell. Its stored generated column g changes as a
+		// result, and the index on g must have the new value.
+		Name:    "merge resolving a row both sides changed updates the index on a stored generated column",
+		Dialect: "mysql",
+		SetUpScript: twoBranchSetup(
+			[]string{
+				"CREATE TABLE t (id INT PRIMARY KEY, a INT, b INT, g INT AS (a + b) STORED, INDEX ig (g));",
+				"INSERT INTO t (id, a, b) VALUES (1, 0, 1);",
+			},
+			[]string{
+				"UPDATE t SET a = 10;",
+			},
+			[]string{
+				"UPDATE t SET a = 10, b = 2;",
+			},
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t;",
+				Expected: []sql.Row{{1, 10, 2, 12}},
+			},
+			{
+				Query:    "SELECT id FROM t FORCE INDEX (ig) WHERE g = 12;",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
 	{
 		// https://github.com/dolthub/dolt/issues/7275
 		Name: "keyless table merge with constraint violations",

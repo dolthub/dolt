@@ -307,14 +307,9 @@ func resolveBranchesToRoots(ctx *sql.Context, db dsess.SqlDatabase, leftBranch, 
 		return rootInfo{}, err
 	}
 
-	optCm, err := doltdb.GetCommitAncestor(ctx, leftCm, rightCm)
+	ancCm, err := merge.ResolveMergeBaseRootish(ctx, leftCm, rightCm)
 	if err != nil {
 		return rootInfo{}, err
-	}
-
-	ancCm, ok := optCm.ToCommit()
-	if !ok {
-		return rootInfo{}, doltdb.ErrGhostCommitEncountered
 	}
 
 	rightRoot, err := rightCm.GetRootValue(ctx)
@@ -325,7 +320,7 @@ func resolveBranchesToRoots(ctx *sql.Context, db dsess.SqlDatabase, leftBranch, 
 	if err != nil {
 		return rootInfo{}, err
 	}
-	baseRoot, err := ancCm.GetRootValue(ctx)
+	baseRoot, err := ancCm.ResolveRootValue(ctx)
 	if err != nil {
 		return rootInfo{}, err
 	}
@@ -348,7 +343,7 @@ func getTablesWithConflicts(ctx *sql.Context, db dsess.SqlDatabase, baseBranch, 
 		return nil, err
 	}
 
-	merger, err := merge.NewMerger(ri.leftRoot, ri.rightRoot, ri.baseRoot, ri.rightRoot, ri.baseRoot, ri.leftRoot.VRW(), ri.leftRoot.NodeStore())
+	merger, err := merge.NewMerger(ri.leftRoot, ri.rightRoot, ri.baseRoot, ri.rightRoot, ri.ancCm, ri.leftRoot.VRW(), ri.leftRoot.NodeStore())
 	if err != nil {
 		return nil, err
 	}
@@ -374,7 +369,14 @@ func getTablesWithConflicts(ctx *sql.Context, db dsess.SqlDatabase, baseBranch, 
 
 		// short-circuit here if we can
 		finished, _, stats, err := merger.MaybeShortCircuit(ctx, tm, mergeOpts)
-		if err != nil {
+		if errors.Is(err, merge.ErrTableDeletedAndModified) || errors.Is(err, merge.ErrTableDeletedAndSchemaModified) {
+			// As in merge.MergeRoots, a table deleted on one side and modified on the other is a schema conflict,
+			// except for a Full-Text table, whose parent table reports any conflict.
+			if !doltdb.IsFullTextTable(tblName.Name) {
+				conflicted = append(conflicted, tableConflict{tableName: tblName, numSchemaConflicts: 1})
+			}
+			continue
+		} else if err != nil {
 			return nil, err
 		}
 		if finished != nil || stats != nil {
@@ -442,12 +444,16 @@ func getDataConflictsForTable(ctx *sql.Context, tm *merge.TableMerger, tblName d
 		return nil, err
 	}
 
+	cellChecker := tm.NewVirtualBaseConflictChecker(valueMerger, ancRows)
 	var numDataConflicts uint64 = 0
 	for {
 		diff, err := differ.Next(ctx)
 		if errors.Is(err, io.EOF) {
 			break
 		} else if err != nil {
+			return nil, err
+		}
+		if diff, err = cellChecker.Check(ctx, diff); err != nil {
 			return nil, err
 		}
 		switch diff.Op {

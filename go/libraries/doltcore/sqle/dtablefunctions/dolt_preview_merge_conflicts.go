@@ -526,6 +526,7 @@ func (pm *PreviewMergeConflictsTableFunction) RowIter(ctx *sql.Context, row sql.
 
 	return &previewMergeConflictsTableFunctionRowIter{
 		itr:          differ,
+		cellChecker:  tm.NewVirtualBaseConflictChecker(valueMerger, ancRows),
 		tblName:      pm.tblName,
 		vrw:          pm.rootInfo.leftRoot.VRW(),
 		ns:           leftRows.NodeStore(),
@@ -581,6 +582,7 @@ type previewMergeConflictsTableFunctionRowIter struct {
 	vrw          dtypes.ValueReadWriter
 	ns           tree.NodeStore
 	itr          *tree.ThreeWayDiffer[val.Tuple, *val.TupleDesc]
+	cellChecker  merge.VirtualBaseConflictChecker
 	tblName      doltdb.TableName
 	ourRows      prolly.Map
 	theirRows    prolly.Map
@@ -626,6 +628,9 @@ func (itr *previewMergeConflictsTableFunctionRowIter) nextConflictVals(ctx *sql.
 	for {
 		ca, err := itr.itr.Next(ctx)
 		if err != nil {
+			return dtables.ConflictVal{}, err
+		}
+		if ca, err = itr.cellChecker.Check(ctx, ca); err != nil {
 			return dtables.ConflictVal{}, err
 		}
 		isConflict := ca.Op == tree.DiffOpDivergentModifyConflict || ca.Op == tree.DiffOpDivergentDeleteConflict

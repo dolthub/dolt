@@ -61,6 +61,9 @@ type MergeOpts struct {
 	// inspection. Returning tree.RowMergeDefer keeps the standard behaviour for
 	// that row.
 	RowMergePolicy RowMergePolicy
+	// SkipFullTextRebuild leaves the Full-Text pseudo-index tables of merged tables as the merge left them, for a
+	// caller that brings them up to date itself.
+	SkipFullTextRebuild bool
 }
 
 // RowMergeInput describes one three-way row decision offered to a policy.
@@ -457,7 +460,8 @@ func (rm *RootMerger) MaybeShortCircuit(ctx context.Context, tm *TableMerger, op
 			childTable = tm.leftTbl
 			childHash = leftHash
 		}
-		if childHash != baseHash {
+		// Conflicted cells of a virtual merge base count as changed on the surviving side even when it matches the base.
+		if childHash != baseHash || len(tm.virtualBaseConflicts()) > 0 {
 			if areRootObjs {
 				return nil, nil, nil, nil
 			} else {
@@ -474,6 +478,12 @@ func (rm *RootMerger) MaybeShortCircuit(ctx context.Context, tm *TableMerger, op
 		}
 		// fast-forward
 		return nil, nil, &MergeStats{Operation: TableRemoved}, nil
+	}
+
+	// A table with conflicted cells in a virtual merge base needs a row merge even when one side matches the base,
+	// because those cells count as changed on both sides.
+	if len(tm.virtualBaseConflicts()) > 0 {
+		return nil, nil, nil, nil
 	}
 
 	// Changes only in root, table unmodified

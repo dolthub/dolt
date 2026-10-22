@@ -35,13 +35,15 @@ type rebuildableFulltextTable struct {
 	Schema schema.Schema
 }
 
-// rebuildFullTextIndexes scans the mergedRoot and rebuilds all of the pseudo-index tables that were modified by both
-// roots (ours and theirs), or had parents that were modified by both roots.
-func rebuildFullTextIndexes(ctx *sql.Context, mergedRoot, ourRoot, theirRoot doltdb.RootValue, visitedTables map[string]struct{}) (doltdb.RootValue, error) {
+// rebuildFullTextIndexes scans the mergedRoot and, with |rebuild|, rebuilds all of the pseudo-index tables that were
+// modified by both roots (ours and theirs), or had parents that were modified by both roots. Without |rebuild|, it
+// returns the parent tables it would have rebuilt. It removes orphaned pseudo-index tables either way.
+func rebuildFullTextIndexes(ctx *sql.Context, mergedRoot, ourRoot, theirRoot doltdb.RootValue, visitedTables map[string]struct{}, rebuild bool) (doltdb.RootValue, []doltdb.TableName, error) {
+	var skipped []doltdb.TableName
 	// Grab a list of all tables on the root
 	allTableNames, err := mergedRoot.GetTableNames(ctx, doltdb.DefaultSchemaName, false)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Contains all of the tables for which we need to rebuild full-text indexes.
@@ -83,14 +85,14 @@ func rebuildFullTextIndexes(ctx *sql.Context, mergedRoot, ourRoot, theirRoot dol
 
 		tbl, ok, err := mergedRoot.GetTable(ctx, doltdb.TableName{Name: tblName})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if !ok {
-			return nil, fmt.Errorf("attempted to load `%s` during Full-Text merge but it could not be found", tblName)
+			return nil, nil, fmt.Errorf("attempted to load `%s` during Full-Text merge but it could not be found", tblName)
 		}
 		sch, err := tbl.GetSchema(ctx)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if !sch.Indexes().ContainsFullTextIndex() {
 			continue
@@ -99,9 +101,11 @@ func rebuildFullTextIndexes(ctx *sql.Context, mergedRoot, ourRoot, theirRoot dol
 		// Also adds items to |doNotDeleteTables|.
 		needsRebuild, err := tableNeedsFullTextIndexRebuild(ctx, tblName, tbl, sch, mergedRoot, ourRoot, theirRoot, visitedTables, doNotDeleteTables)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		if needsRebuild {
+		if needsRebuild && !rebuild {
+			skipped = append(skipped, doltdb.TableName{Name: tblName})
+		} else if needsRebuild {
 			tablesToRebuild = append(tablesToRebuild, rebuildableFulltextTable{
 				Name:   tblName,
 				Table:  tbl,
@@ -115,7 +119,7 @@ func rebuildFullTextIndexes(ctx *sql.Context, mergedRoot, ourRoot, theirRoot dol
 	for _, tableToRebuild := range tablesToRebuild {
 		mergedRoot, err = rebuildFullTextIndexesForTable(ctx, tableToRebuild, mergedRoot)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
@@ -127,11 +131,11 @@ func rebuildFullTextIndexes(ctx *sql.Context, mergedRoot, ourRoot, theirRoot dol
 		// TODO: schema name
 		mergedRoot, err = mergedRoot.RemoveTables(ctx, true, true, doltdb.TableName{Name: tblName})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
-	return mergedRoot, nil
+	return mergedRoot, skipped, nil
 }
 
 func tableNeedsFullTextIndexRebuild(ctx *sql.Context, tblName string, tbl *doltdb.Table, sch schema.Schema,
