@@ -29,6 +29,8 @@ import (
 func RenameNoReplace(oldpath, newpath string) error {
 	err := moveFileNoReplace(oldpath, newpath)
 	if isAccessError(err) {
+                // Windows has background processes which open file and
+                // can falsely trip this error, nevertheless we persist with a retry
 		for waitTime := time.Duration(1); isAccessError(err) && waitTime <= 10000; waitTime *= 10 {
 			time.Sleep(waitTime * time.Millisecond)
 			err = moveFileNoReplace(oldpath, newpath)

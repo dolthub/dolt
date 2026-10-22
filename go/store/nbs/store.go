@@ -2095,9 +2095,6 @@ func refCheckAllSources(ctx context.Context, getAddrs chunks.InsertAddrsCurry, r
 		if checkErr != nil {
 			return
 		}
-		// Chunks are read back by address, from whichever source has
-		// them, so a chunk whose data does not hash to its address
-		// could shadow the real one.
 		if actual := hash.Of(c.Data()); actual != c.Hash() {
 			checkErr = fmt.Errorf("cannot add table files: %w: chunk %s hashes to %s", ErrChunkHashMismatch, c.Hash(), actual)
 			return
