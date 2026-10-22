@@ -17,134 +17,214 @@ package enginetest
 import (
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/mysql"
 )
+
+// taggedCrissCrossSetup builds a criss-cross, the smallest one with two merge bases, tagged baseA and baseB:
+//
+//	main -- baseA -- mergeA    branchA
+//	    \-- baseB -- mergeB    branchB
+//	mergeA = merge(baseA, baseB), mergeB = merge(baseB, baseA)
+//
+// baseB is committed after baseA, so it is listed first, as in `git merge-base --all`. The scripts using it run with a
+// commit clock that advances on every commit, so later commits have later committer dates.
+func taggedCrissCrossSetup() []string {
+	return []string{
+		"CREATE TABLE t (id INT PRIMARY KEY);",
+		"CALL DOLT_COMMIT('-Am', 'main');",
+		"CALL DOLT_BRANCH('branchA');",
+		"CALL DOLT_BRANCH('branchB');",
+		"CALL DOLT_CHECKOUT('branchA');",
+		"INSERT INTO t VALUES (1);",
+		"CALL DOLT_COMMIT('-am', 'baseA');",
+		"CALL DOLT_TAG('baseA');",
+		"CALL DOLT_CHECKOUT('branchB');",
+		"INSERT INTO t VALUES (2);",
+		"CALL DOLT_COMMIT('-am', 'baseB');",
+		"CALL DOLT_TAG('baseB');",
+		"CALL DOLT_MERGE('baseA', '-m', 'mergeB');",
+		"CALL DOLT_CHECKOUT('branchA');",
+		"CALL DOLT_MERGE('baseB', '-m', 'mergeA');",
+		"CALL DOLT_CHECKOUT('main');",
+	}
+}
 
 // MergeBasesTableFunctionScripts test what the dolt_merge_bases table function adds on top of the merge base walk,
 // which the commitgraph and merge tests cover: how arguments are evaluated and resolved, and how the function behaves
-// in a query. They run with a commit clock that advances on every commit, so later commits have later committer dates.
-//
-// The history is a criss-cross, the smallest one with two merge bases, tagged x0 and y0:
-//
-//	main -- x0 -- x1    branch x
-//	   \-- y0 -- y1    branch y
-//	x1 = merge(x0, y0), y1 = merge(y0, x0)
-//
-// y0 is committed after x0, so it is listed first, as in `git merge-base --all`.
+// in a query.
 var MergeBasesTableFunctionScripts = []queries.ScriptTest{
 	{
-		Name: "dolt_merge_bases",
-		SetUpScript: []string{
-			"CREATE TABLE t (id INT PRIMARY KEY);",
-			"CALL DOLT_COMMIT('-Am', 'main');",
-			"CALL DOLT_BRANCH('x');",
-			"CALL DOLT_BRANCH('y');",
-			"CALL DOLT_CHECKOUT('x');",
-			"INSERT INTO t VALUES (1);",
-			"CALL DOLT_COMMIT('-am', 'x0');",
-			"CALL DOLT_TAG('x0');",
-			"CALL DOLT_CHECKOUT('y');",
-			"INSERT INTO t VALUES (2);",
-			"CALL DOLT_COMMIT('-am', 'y0');",
-			"CALL DOLT_TAG('y0');",
-			"CALL DOLT_MERGE('x0', '-m', 'y1');",
-			"CALL DOLT_CHECKOUT('x');",
-			"CALL DOLT_MERGE('y0', '-m', 'x1');",
-			"CALL DOLT_CHECKOUT('main');",
-			"SET @left = 'x';",
-		},
+		Name:        "dolt_merge_bases",
+		SetUpScript: append(taggedCrissCrossSetup(), "SET @left = 'branchA';"),
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// ROW_NUMBER() keeps the order of the table function's rows.
-				Query: "SELECT tg.tag_name FROM (SELECT merge_base, ROW_NUMBER() OVER () AS rn FROM dolt_merge_bases('x', 'y')) b " +
+				Query: "SELECT tg.tag_name FROM (SELECT merge_base, ROW_NUMBER() OVER () AS rn FROM dolt_merge_bases('branchA', 'branchB')) b " +
 					"JOIN dolt_tags tg ON tg.tag_hash = b.merge_base ORDER BY b.rn;",
-				Expected: []sql.Row{{"y0"}, {"x0"}},
+				Expected: []sql.Row{{"baseB"}, {"baseA"}},
 			},
 			{
-				Query: "SELECT tg.tag_name FROM (SELECT merge_base, ROW_NUMBER() OVER () AS rn FROM dolt_merge_bases('y', 'x')) b " +
+				Query: "SELECT tg.tag_name FROM (SELECT merge_base, ROW_NUMBER() OVER () AS rn FROM dolt_merge_bases('branchB', 'branchA')) b " +
 					"JOIN dolt_tags tg ON tg.tag_hash = b.merge_base ORDER BY b.rn;",
-				Expected: []sql.Row{{"y0"}, {"x0"}},
+				Expected: []sql.Row{{"baseB"}, {"baseA"}},
 			},
 			{
-				Query:    "SELECT merge_base = hashof('main') FROM dolt_merge_bases('main', 'x');",
+				Query:    "SELECT merge_base = hashof('main') FROM dolt_merge_bases('main', 'branchA');",
 				Expected: []sql.Row{{true}},
 			},
 
 			// Arguments are expressions.
 			{
-				Query:    "SELECT count(*) FROM dolt_merge_bases(CONCAT('', 'x'), LOWER('Y'));",
+				Query:    "SELECT count(*) FROM dolt_merge_bases(CONCAT('branch', 'A'), CONCAT('branch', UPPER('b')));",
 				Expected: []sql.Row{{2}},
 			},
 			{
-				Query:    "SELECT count(*) FROM dolt_merge_bases(@left, 'y');",
+				Query:    "SELECT count(*) FROM dolt_merge_bases(@left, 'branchB');",
 				Expected: []sql.Row{{2}},
 			},
 			{
-				Query:    "SELECT count(*) FROM dolt_merge_bases(hashof('x'), hashof('y'));",
+				Query:    "SELECT count(*) FROM dolt_merge_bases(hashof('branchA'), hashof('branchB'));",
 				Expected: []sql.Row{{2}},
 			},
 			{
-				Query:    "SELECT count(*) FROM dolt_merge_bases(NULL, 'y');",
+				Query:    "SELECT count(*) FROM dolt_merge_bases(NULL, 'branchB');",
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:    "SELECT count(*) FROM dolt_merge_bases('x', NULL);",
+				Query:    "SELECT count(*) FROM dolt_merge_bases('branchA', NULL);",
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:          "SELECT * FROM dolt_merge_bases(1, 'y');",
+				Query:          "SELECT * FROM dolt_merge_bases(1, 'branchB');",
 				ExpectedErrStr: "received '1' when expecting string",
 			},
 			{
-				Query:          "SELECT * FROM dolt_merge_bases('x');",
+				Query:          "SELECT * FROM dolt_merge_bases('branchA');",
 				ExpectedErrStr: "function 'dolt_merge_bases' expected 2 arguments, 1 received",
 			},
 			{
-				Query:          "SELECT * FROM dolt_merge_bases('x', 'y', 'main');",
+				Query:          "SELECT * FROM dolt_merge_bases('branchA', 'branchB', 'main');",
 				ExpectedErrStr: "function 'dolt_merge_bases' expected 2 arguments, 3 received",
 			},
 
 			// Arguments resolve like other commit specs.
 			{
-				Query:    "SELECT merge_base = hashof('x0') FROM dolt_merge_bases('x~1', 'y');",
+				Query:    "SELECT merge_base = hashof('baseA') FROM dolt_merge_bases('branchA~1', 'branchB');",
 				Expected: []sql.Row{{true}},
 			},
 			{
-				Query:    "SELECT merge_base = hashof('y0') FROM dolt_merge_bases('y0', 'x');",
+				Query:    "SELECT merge_base = hashof('baseB') FROM dolt_merge_bases('baseB', 'branchA');",
 				Expected: []sql.Row{{true}},
 			},
 			{
-				Query:          "SELECT * FROM dolt_merge_bases('x', 'nonexistent');",
+				Query:          "SELECT * FROM dolt_merge_bases('branchA', 'nonexistent');",
 				ExpectedErrStr: "branch not found: nonexistent",
 			},
 
 			// The function is a table in a query.
 			{
-				Query: "SELECT tg.tag_name FROM dolt_merge_bases('x', 'y') b " +
+				Query: "SELECT tg.tag_name FROM dolt_merge_bases('branchA', 'branchB') b " +
 					"JOIN dolt_tags tg ON tg.tag_hash = b.merge_base ORDER BY tg.tag_name;",
-				Expected: []sql.Row{{"x0"}, {"y0"}},
+				Expected: []sql.Row{{"baseA"}, {"baseB"}},
 			},
 			{
-				Query:    "SELECT count(*) FROM dolt_log('x') WHERE commit_hash IN (SELECT merge_base FROM dolt_merge_bases('x', 'y'));",
+				Query:    "SELECT count(*) FROM dolt_log('branchA') WHERE commit_hash IN (SELECT merge_base FROM dolt_merge_bases('branchA', 'branchB'));",
 				Expected: []sql.Row{{2}},
 			},
 			{
 				Query: "SELECT br.name, count(*) FROM dolt_branches br " +
-					"JOIN LATERAL (SELECT merge_base FROM dolt_merge_bases(br.name, 'y')) b GROUP BY br.name ORDER BY br.name;",
-				Expected: []sql.Row{{"main", 1}, {"x", 2}, {"y", 1}},
+					"JOIN LATERAL (SELECT merge_base FROM dolt_merge_bases(br.name, 'branchB')) b GROUP BY br.name ORDER BY br.name;",
+				Expected: []sql.Row{{"branchA", 2}, {"branchB", 1}, {"main", 1}},
 			},
 
 			// HEAD is the head of the current database's branch.
 			{
-				Query:    "USE `mydb/x`;",
+				Query:    "USE `mydb/branchA`;",
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "SELECT count(*) FROM dolt_merge_bases('HEAD', 'y');",
+				Query:    "SELECT count(*) FROM dolt_merge_bases('HEAD', 'branchB');",
 				Expected: []sql.Row{{2}},
 			},
 			{
-				Query:    "SELECT merge_base = hashof('main') FROM dolt_merge_bases('HEAD~2', 'y');",
+				Query:    "SELECT merge_base = hashof('main') FROM dolt_merge_bases('HEAD~2', 'branchB');",
 				Expected: []sql.Row{{true}},
+			},
+		},
+	},
+}
+
+// ThreeDotScripts test three-dot ranges of commits with several merge bases. Like git diff A...B, three-dot diffs use
+// the merge base with the newest committer date, baseB, and warn that there are several. Like git log A...B, three-dot
+// logs exclude every merge base.
+var ThreeDotScripts = []queries.ScriptTest{
+	{
+		Name:        "three-dot ranges with several merge bases",
+		SetUpScript: taggedCrissCrossSetup(),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// From baseB, which has row 2, to branchB, which has rows 1 and 2.
+				Query:                           "SELECT diff_type, to_id FROM dolt_diff('branchA...branchB', 't');",
+				Expected:                        []sql.Row{{"added", int32(1)}},
+				ExpectedWarning:                 mysql.ERUnknownError,
+				ExpectedWarningsCount:           1,
+				ExpectedWarningMessageSubstring: "branchA...branchB: multiple merge bases, using ",
+			},
+			{
+				Query:                           "SELECT diff_type, to_id FROM dolt_diff('branchB...branchA', 't');",
+				Expected:                        []sql.Row{{"added", int32(1)}},
+				ExpectedWarning:                 mysql.ERUnknownError,
+				ExpectedWarningsCount:           1,
+				ExpectedWarningMessageSubstring: "branchB...branchA: multiple merge bases, using ",
+			},
+			{
+				Query:                           "SELECT table_name, rows_added FROM dolt_diff_stat('branchA...branchB');",
+				Expected:                        []sql.Row{{"t", int64(1)}},
+				ExpectedWarning:                 mysql.ERUnknownError,
+				ExpectedWarningsCount:           1,
+				ExpectedWarningMessageSubstring: "branchA...branchB: multiple merge bases, using ",
+			},
+			{
+				Query:                           "SELECT to_table_name, data_change FROM dolt_diff_summary('branchA...branchB');",
+				Expected:                        []sql.Row{{"t", true}},
+				ExpectedWarning:                 mysql.ERUnknownError,
+				ExpectedWarningsCount:           1,
+				ExpectedWarningMessageSubstring: "branchA...branchB: multiple merge bases, using ",
+			},
+			{
+				Query:                           "SELECT statement FROM dolt_patch('branchA...branchB');",
+				Expected:                        []sql.Row{{"INSERT INTO `t` (`id`) VALUES (1);"}},
+				ExpectedWarning:                 mysql.ERUnknownError,
+				ExpectedWarningsCount:           1,
+				ExpectedWarningMessageSubstring: "branchA...branchB: multiple merge bases, using ",
+			},
+
+			// One merge base, or a two-dot range, does not warn.
+			{
+				Query:    "SELECT diff_type, to_id FROM dolt_diff('main...branchA', 't');",
+				Expected: []sql.Row{{"added", int32(1)}, {"added", int32(2)}},
+			},
+			{
+				Query:    "SHOW WARNINGS;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT count(*) FROM dolt_diff('branchA..branchB', 't');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SHOW WARNINGS;",
+				Expected: []sql.Row{},
+			},
+
+			// Neither baseA nor baseB is in branchA...branchB.
+			{
+				Query:    "SELECT message FROM dolt_log('branchA...branchB') ORDER BY message;",
+				Expected: []sql.Row{{"mergeA"}, {"mergeB"}},
+			},
+			{
+				Query:    "SHOW WARNINGS;",
+				Expected: []sql.Row{},
 			},
 		},
 	},

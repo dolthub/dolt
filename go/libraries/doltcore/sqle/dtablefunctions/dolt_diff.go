@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/transform"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/vitess/go/mysql"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -404,6 +405,17 @@ func loadDetailsForRefs(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db
 	return fromDetails, toDetails, nil
 }
 
+// warnOnce adds a warning unless the statement already has it. A table function can resolve its arguments several
+// times while a statement is analyzed.
+func warnOnce(ctx *sql.Context, code int, message string) {
+	for _, w := range ctx.Session.Warnings() {
+		if w.Code == code && w.Message == message {
+			return
+		}
+	}
+	ctx.Warn(code, "%s", message)
+}
+
 func resolveCommitStrings(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db dsess.SqlDatabase) (string, string, error) {
 	if dotRef != nil {
 		dotStr, err := interfaceToString(dotRef)
@@ -431,12 +443,15 @@ func resolveCommitStrings(ctx *sql.Context, fromRef, toRef, dotRef interface{}, 
 				return "", "", err
 			}
 
-			mergeBase, err := merge.MergeBase(ctx, rightCm, leftCm)
+			mergeBases, err := merge.MergeBases(ctx, rightCm, leftCm)
 			if err != nil {
 				return "", "", err
 			}
+			if len(mergeBases) > 1 {
+				warnOnce(ctx, mysql.ERUnknownError, fmt.Sprintf("%s: multiple merge bases, using %s", dotStr, mergeBases[0]))
+			}
 
-			return mergeBase.String(), refs[1], nil
+			return mergeBases[0].String(), refs[1], nil
 		} else {
 			refs := strings.Split(dotStr, "..")
 			return refs[0], refs[1], nil
