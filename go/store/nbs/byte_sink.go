@@ -48,7 +48,10 @@ func flushSinkToFile(sink ByteSink, path string) (err error) {
 	}()
 
 	err = sink.Flush(f)
-	return err
+	if err != nil {
+		return err
+	}
+	return f.Sync()
 }
 
 // A ByteSink is an interface for writing bytes which can later be flushed to a writer
@@ -207,7 +210,7 @@ func (sink *BlockBufferByteSink) Close() error {
 // BufferedFileByteSink is a ByteSink implementation that buffers some amount of data before it passes it
 // to a background writing thread to be flushed to a file.
 type BufferedFileByteSink struct {
-	wr           io.WriteCloser
+	wr           *os.File
 	writeCh      chan []byte
 	ae           *atomicerr.AtomicError
 	wg           *sync.WaitGroup
@@ -279,6 +282,13 @@ func (sink *BufferedFileByteSink) backgroundWrite() {
 		}
 
 		err = iohelp.WriteAll(sink.wr, buff)
+		sink.ae.SetIfError(err)
+	}
+
+	// FlushToFile may rename this file into place as a table file, so it
+	// must be durable first.
+	if err == nil {
+		err = sink.wr.Sync()
 		sink.ae.SetIfError(err)
 	}
 
