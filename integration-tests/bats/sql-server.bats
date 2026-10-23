@@ -2361,3 +2361,43 @@ EOF
   start_sql_server > server_log.txt 2>&1 && sleep 0.5
   grep -F "permission denied" server_log.txt
 }
+
+@test "sql-server: chunk journal write buffer and range index memory overhead per open database is bounded" {
+    # https://github.com/dolthub/dolt/issues/12179
+    start_multi_db_server repo1
+
+    create_database() {
+      local name="$1"
+      dolt sql -q "CREATE DATABASE $name;
+USE $name;
+CREATE TABLE t1 (id int primary key, v longtext);
+CREATE TABLE t2 (id int primary key, v longtext);
+INSERT INTO t1 VALUES (1, repeat('$name-a', 2500)), (2, repeat('$name-b', 2500));
+INSERT INTO t2 VALUES (1, repeat('$name-a', 2500)), (2, repeat('$name-b', 2500));
+CALL DOLT_COMMIT('-Am', 'initial');
+CALL DOLT_BRANCH('feature');
+UPDATE t1 SET v = repeat('$name-c', 2500) WHERE id = 1;
+CALL DOLT_COMMIT('-Am', 'update');"
+    }
+
+    # Initialize the first database to establish a post-warmup baseline.
+    create_database db_init
+    mem_start=$(get_memory_kb $SERVER_PID)
+
+    num_dbs=5
+    for i in $(seq 1 $num_dbs); do
+      create_database "db_$i"
+    done
+
+    mem_end=$(get_memory_kb $SERVER_PID)
+    stop_sql_server 1
+
+    [ -n "$mem_start" ]
+    [ -n "$mem_end" ]
+
+    growth_rate=$(( (mem_end - mem_start) / num_dbs ))
+
+    # Without lazy allocation, each database retains a 5MB journalWriterBuffSize.
+    journal_writer_buff_size_kb=$(( 5 * 1024 ))
+    [ "$growth_rate" -lt "$journal_writer_buff_size_kb" ]
+}

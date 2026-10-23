@@ -101,7 +101,7 @@ func openJournalWriter(ctx context.Context, path string) (wr *journalWriter, exi
 	}
 
 	return &journalWriter{
-		buf:     make([]byte, 0, journalWriterBuffSize),
+		buf:     nil,
 		journal: newJournalFile(f),
 		path:    path,
 	}, true, nil
@@ -125,7 +125,7 @@ func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, e
 	}
 
 	return &journalWriter{
-		buf:     make([]byte, 0, journalWriterBuffSize),
+		buf:     nil,
 		journal: newJournalFile(f),
 		path:    path,
 	}, nil
@@ -611,31 +611,63 @@ func (wr *journalWriter) readAt(p []byte, off int64) (n int, err error) {
 	return
 }
 
-// getBytes returns a buffer for writers to copy data into.
+// journalWriterMinBuffSize is the initial capacity of the chunk journal write
+// buffer (64 KB). It is sized to batch multiple compressed chunks per write
+// syscall while keeping the memory footprint per open journal small.
+const journalWriterMinBuffSize = 64 * 1024
+
+// getBytes reserves a contiguous slice of |n| bytes in buf for the caller to
+// populate. The returned slice is only valid until the next call to getBytes or
+// flush.
+//
+// When the buffer has not yet been allocated or cannot fit |n| bytes, getBytes
+// allocates or grows the buffer up to journalWriterBuffSize, sizing to at least
+// journalWriterMinBuffSize to avoid allocation churn on chunk writes.
+//
+// Because chunk records must be formatted as single contiguous slices,
+// individual records cannot exceed journalWriterBuffSize. If |n| exceeds this
+// ceiling, getBytes returns an error to prevent unbounded buffer growth.
 func (wr *journalWriter) getBytes(ctx context.Context, behavior dherrors.FatalBehavior, n int) (buf []byte, err error) {
-	c, l := cap(wr.buf), len(wr.buf)
-	if n > c {
-		err = fmt.Errorf("requested bytes (%d) exceeds capacity (%d)", n, c)
+	if n > int(journalWriterBuffSize) {
+		err = fmt.Errorf("requested bytes (%d) exceeds capacity (%d)", n, journalWriterBuffSize)
 		return
-	} else if n > c-l {
+	} else if n > cap(wr.buf)-len(wr.buf) {
 		if err = wr.flush(ctx, behavior); err != nil {
 			return
 		}
 	}
-	l = len(wr.buf)
+	if n > cap(wr.buf) {
+		wr.buf = make([]byte, 0, max(min(journalWriterMinBuffSize, int(journalWriterBuffSize)), n))
+	}
+	l := len(wr.buf)
 	wr.buf = wr.buf[:l+n]
 	buf = wr.buf[l : l+n]
 	return
 }
 
-// flush writes buffered data into the journal file.
+// flush writes buffered chunk data in buf to the journal file at off.
+//
+// If buf is empty, flush does nothing.
+//
+// After writing, off advances by the written bytes. Buffers larger than
+// journalWriterMinBuffSize are reset to nil to reclaim memory, while standard
+// buffers are retained to avoid allocation overhead on chunk writes.
+//
+// Any write error encountered is reported according to |behavior|.
 func (wr *journalWriter) flush(ctx context.Context, behavior dherrors.FatalBehavior) (err error) {
 	defer trace.StartRegion(ctx, "flush journal").End()
+	if len(wr.buf) == 0 {
+		return nil
+	}
 	if _, err = wr.journal.writeAt(wr.buf, wr.off); err != nil {
 		return dherrors.Fatalf(behavior, "%w: error writing to database journal file", err)
 	}
 	wr.off += int64(len(wr.buf))
-	wr.buf = wr.buf[:0]
+	if cap(wr.buf) > journalWriterMinBuffSize {
+		wr.buf = nil
+	} else {
+		wr.buf = wr.buf[:0]
+	}
 	return
 }
 
@@ -760,7 +792,7 @@ func toAddr16(full hash.Hash) (prefix addr16) {
 
 func newRangeIndex() rangeIndex {
 	return rangeIndex{
-		novel:  make(map[hash.Hash]Range, journalIndexDefaultMaxNovel),
+		novel:  make(map[hash.Hash]Range),
 		cached: make(map[addr16]Range),
 	}
 }
