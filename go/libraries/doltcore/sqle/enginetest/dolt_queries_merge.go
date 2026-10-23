@@ -4592,6 +4592,45 @@ var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// https://github.com/dolthub/dolt/issues/12186
+		Name: "delete keyless conflicts when column type differs between base and ours",
+		SetUpScript: []string{
+			"SET dolt_allow_commit_conflicts = on;",
+			"CREATE TABLE t (c INT, d VARCHAR(20));",
+			"INSERT INTO t VALUES (1, 'base');",
+			"CALL DOLT_COMMIT('-Am', 'base');",
+			"CALL DOLT_BRANCH('other');",
+			"ALTER TABLE t MODIFY c VARCHAR(20);",
+			"CALL DOLT_COMMIT('-am', 'ours');",
+			"CALL DOLT_CHECKOUT('other');",
+			"ALTER TABLE t MODIFY c VARCHAR(20);",
+			"CALL DOLT_COMMIT('-am', 'theirs');",
+			"CALL DOLT_CHECKOUT('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_c, base_d, our_c, our_d, our_diff_type FROM dolt_conflicts_t ORDER BY our_diff_type;",
+				Expected: []sql.Row{{nil, nil, "1", "base", "added"}, {1, "base", nil, nil, "removed"}},
+			},
+			{
+				Query:    "DELETE FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT * FROM t;",
+				Expected: []sql.Row{{"1", "base"}},
+			},
+		},
+	},
 }
 
 var DoltConflictTableNameTableTests = []queries.ScriptTest{
