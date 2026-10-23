@@ -102,8 +102,6 @@ func (ct *CommitAncestorsTable) PartitionRows(ctx *sql.Context, p sql.Partition)
 
 // GetIndexes implements sql.IndexAddressable
 func (ct *CommitAncestorsTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-	// A merge commit has more than one parent, creating two (commit, parent)
-	// pairs that share the same commit_hash, making commit_hash not unique.
 	return index.DoltCommitIndexes(ct.dbName, ct.Name(), ct.ddb, false)
 }
 
