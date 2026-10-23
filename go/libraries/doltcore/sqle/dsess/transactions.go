@@ -100,6 +100,8 @@ type savepoint struct {
 	roots         map[string]doltdb.RootValue
 	name          string
 	dirtyBranches map[string]bool
+	// pending holds the edits that had not been materialized into |roots| when the savepoint was created
+	pending map[string]PendingSnapshot
 }
 
 func NewDoltTransaction(
@@ -831,13 +833,13 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 // CreateSavepoint creates a new savepoint with the name and roots given. In
 // PostgreSQL mode a repeated name shadows the older savepoint until release;
 // the default MySQL mode replaces it.
-func (tx *DoltTransaction) CreateSavepoint(name string, roots map[string]doltdb.RootValue, dirtyBranches map[string]bool) {
+func (tx *DoltTransaction) CreateSavepoint(name string, roots map[string]doltdb.RootValue, dirtyBranches map[string]bool, pending map[string]PendingSnapshot) {
 	if !tx.postgresSavepoints {
 		if existing := tx.findSavepoint(name); existing >= 0 {
 			tx.savepoints = append(tx.savepoints[:existing], tx.savepoints[existing+1:]...)
 		}
 	}
-	tx.savepoints = append(tx.savepoints, savepoint{name: name, roots: roots, dirtyBranches: dirtyBranches})
+	tx.savepoints = append(tx.savepoints, savepoint{name: name, roots: roots, dirtyBranches: dirtyBranches, pending: pending})
 }
 
 // findSavepoint returns the index of the savepoint with the name given, or -1 if it doesn't exist

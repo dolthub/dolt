@@ -250,9 +250,9 @@ func TestDoltTransactionRepeatedSavepointNames(t *testing.T) {
 	secondDirty := map[string]bool{
 		"mydb/other": true,
 	}
-	tx.CreateSavepoint("same", first, firstDirty)
-	tx.CreateSavepoint("child", map[string]doltdb.RootValue{}, nil)
-	tx.CreateSavepoint("same", second, secondDirty)
+	tx.CreateSavepoint("same", first, firstDirty, nil)
+	tx.CreateSavepoint("child", map[string]doltdb.RootValue{}, nil, nil)
+	tx.CreateSavepoint("same", second, secondDirty, nil)
 	assert.Equal(t, second, tx.RollbackToSavepoint("same").roots)
 	assert.Equal(t, secondDirty, tx.RollbackToSavepoint("same").dirtyBranches)
 	assert.True(t, tx.ClearSavepoint("same"))
@@ -267,12 +267,12 @@ func TestDoltTransactionDefaultSavepointSemantics(t *testing.T) {
 		"first": nil,
 	}, map[string]bool{
 		"mydb/main": true,
-	})
+	}, nil)
 	tx.CreateSavepoint("same", map[string]doltdb.RootValue{
 		"second": nil,
 	}, map[string]bool{
 		"mydb/other": true,
-	})
+	}, nil)
 	assert.Equal(t, map[string]doltdb.RootValue{
 		"second": nil,
 	}, tx.RollbackToSavepoint("SAME").roots)
