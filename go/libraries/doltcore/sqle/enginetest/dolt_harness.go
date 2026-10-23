@@ -103,7 +103,13 @@ func (d *DoltHarness) WithConfigureStats(configureStats bool) DoltEnginetestHarn
 	return &nd
 }
 
+// NewHarness returns a new harness, running a server engine if |d| does.
+// Suite runners call it once per script, so the server setting must carry
+// over, or each run quietly falls back to the engine.
 func (d *DoltHarness) NewHarness(t *testing.T) DoltEnginetestHarness {
+	if d.server {
+		return newDoltServerTestHarness(t)
+	}
 	return newDoltHarness(t)
 }
 
