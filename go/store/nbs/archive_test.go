@@ -1229,6 +1229,32 @@ func TestArchiveDifferentByteSpanOrderProducesDifferentName(t *testing.T) {
 	require.NotEqual(t, nameA, nameB, "archives with same chunks but different byte span layouts must have different names")
 }
 
+func TestArchiveStreamWriterReusesDictionaryAfterCachePurge(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/12177
+	ctx := context.Background()
+	source, hashes := createTestArchive(t, 1, [][]byte{[]byte("first"), []byte("second")}, "{}")
+
+	next, err := NewArchiveStreamWriter(t.TempDir())
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, next.Cancel()) })
+
+	for i, h := range hashes {
+		if i == 1 {
+			source.dictCache.Purge()
+		}
+		tc, err := source.getAsToChunker(ctx, h, &Stats{})
+		require.NoError(t, err)
+		require.False(t, tc.IsEmpty())
+		_, err = next.AddChunk(tc)
+		require.NoError(t, err)
+	}
+
+	require.Len(t, next.dictMap, 1)
+	// Both values count byte spans, not bytes.
+	require.Equal(t, int(source.footer.byteSpanCount), len(next.writer.stagedBytes),
+		"copying the archive wrote duplicate dictionaries")
+}
+
 // Helper functions to create test data below...
 func hashWithPrefix(t *testing.T, prefix uint64) hash.Hash {
 	randomBytes := make([]byte, 20)
