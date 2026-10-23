@@ -196,6 +196,23 @@ func rebuildVirtualMergeBase(ctx context.Context, vrw types.ValueReadWriter, ns 
 // git's, the virtual merge base is never checked out, so it keeps the merged rows even where they violate a
 // constraint, and drops the violations.
 func mergeIntoVirtualBase(ctx *sql.Context, x, y *doltdb.Commit) (*doltdb.Commit, conflictedCells, error) {
+	// Column defaults that read the time, like CURRENT_TIMESTAMP, give it in the session's time zone. Using UTC builds
+	// the virtual merge base the same way in every session.
+	timeZone, err := ctx.GetSessionVariable(ctx, "time_zone")
+	if err != nil {
+		return nil, nil, err
+	}
+	if err = ctx.SetSessionVariable(ctx, "time_zone", "+00:00"); err != nil {
+		return nil, nil, err
+	}
+	virtualBase, conflicted, err := buildVirtualMergeBase(ctx, x, y)
+	if restoreErr := ctx.SetSessionVariable(ctx, "time_zone", timeZone); err == nil {
+		err = restoreErr
+	}
+	return virtualBase, conflicted, err
+}
+
+func buildVirtualMergeBase(ctx *sql.Context, x, y *doltdb.Commit) (*doltdb.Commit, conflictedCells, error) {
 	base, bases, baseConflicts, err := resolveMergeBase(ctx, x, y)
 	if err != nil {
 		return nil, nil, err

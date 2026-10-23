@@ -118,8 +118,8 @@ func TestVirtualMergeBaseRebuiltAfterGC(t *testing.T) {
 // checkRebuiltAfterGC builds |history|, merges branch y into x, which must conflict on table t against a virtual
 // merge base, and garbage collects the virtual merge base. It checks that the conflicts record the merge bases, that
 // the virtual merge base is gone while they remain, that metadata without merge bases cannot rebuild it, that a fresh
-// session reads the same conflicts, |expected| from |query| when set, whatever its JSON merge setting, that rebuilding
-// gives the same root with indexes that match its rows, and that resolving the conflicts commits.
+// session reads the same conflicts, |expected| from |query| when set, whatever its JSON merge setting and time zone,
+// that rebuilding gives the same root with indexes that match its rows, and that resolving the conflicts commits.
 func checkRebuiltAfterGC(t *testing.T, history dtu.CrissCross, query string, expected []sql.Row) {
 	h := newDoltHarness(t)
 	defer h.Close()
@@ -180,6 +180,7 @@ func checkRebuiltAfterGC(t *testing.T, history dtu.CrissCross, query string, exp
 	after := enginetest.NewSession(h)
 	run(after, "CALL DOLT_CHECKOUT('x');")
 	run(after, "SET @@dolt_dont_merge_json = 1;")
+	run(after, "SET time_zone = '-07:00';")
 	assert.Equal(t, before, run(after, query))
 	rebuilt, err := doltdb.LoadConflictBaseRoot(after, vrw, ns, meta)
 	require.NoError(t, err)

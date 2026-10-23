@@ -1326,13 +1326,32 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 		"y", false),
 	{
 		// x1 adds ts with a time default, and y1 adds row 2, so merging them gives row 2 a default ts. The
-		// virtual merge base takes its own date for it, the later of x1's and y1's commit dates, so that previewing
-		// later, or rebuilding it, gives the same value.
+		// virtual merge base takes its own date for it, the later of x1's and y1's commit dates, in UTC, so that
+		// previewing later, in any time zone, or rebuilding it, gives the same value.
 		Name:        "merge bases that give a row a time default: merge y into x",
 		SetUpScript: timeDefaultMergeBases().Script(),
 		Assertions: []queries.ScriptTestAssertion{
+			{Query: "SET time_zone = '-07:00';", SkipResultsCheck: true},
 			{
 				Query:    "SELECT base_ts = (SELECT MAX(date) FROM dolt_log('--all') WHERE message IN ('x1', 'y1')) FROM dolt_preview_merge_conflicts('x', 'y', 't') WHERE base_id = 2;",
+				Expected: []sql.Row{{true}},
+			},
+			{Query: "SET time_zone = '+00:00';", SkipResultsCheck: true},
+			{
+				Query:    "SELECT base_ts = (SELECT MAX(date) FROM dolt_log('--all') WHERE message IN ('x1', 'y1')) FROM dolt_preview_merge_conflicts('x', 'y', 't') WHERE base_id = 2;",
+				Expected: []sql.Row{{true}},
+			},
+			{Query: "SET time_zone = '-07:00';", SkipResultsCheck: true},
+			{
+				Query:    "CALL DOLT_MERGE('y', '-m', 'merge y');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT @@time_zone;",
+				Expected: []sql.Row{{"-07:00"}},
+			},
+			{
+				Query:    "SELECT base_ts = (SELECT MAX(date) FROM dolt_log('--all') WHERE message IN ('x1', 'y1')) FROM dolt_conflicts_t WHERE base_id = 2;",
 				Expected: []sql.Row{{true}},
 			},
 		},
