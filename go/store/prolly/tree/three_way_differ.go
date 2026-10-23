@@ -310,6 +310,8 @@ const (
 	DiffOpDivergentDeleteConflict               //divergentDeleteConflict
 	DiffOpDivergentModifyConflict               //divergentModifyConflict
 	DiffOpDivergentDeleteResolved               //divergentDeleteResolved
+	// DiffOpUnchanged is a flagged key that neither side changed. See FlaggedKeyDiffer.
+	DiffOpUnchanged //unchanged
 )
 
 // ThreeWayDiff is a generic object for encoding a three way diff.

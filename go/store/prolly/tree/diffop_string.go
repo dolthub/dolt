@@ -35,11 +35,12 @@ func _() {
 	_ = x[DiffOpDivergentDeleteConflict-10]
 	_ = x[DiffOpDivergentModifyConflict-11]
 	_ = x[DiffOpDivergentDeleteResolved-12]
+	_ = x[DiffOpUnchanged-13]
 }
 
-const _DiffOp_name = "leftAddrightAddleftDeleterightDeleteleftModifyrightModifyconvergentAddconvergentDeleteconvergentModifydivergentModifyResolveddivergentDeleteConflictdivergentModifyConflictdivergentDeleteResolved"
+const _DiffOp_name = "leftAddrightAddleftDeleterightDeleteleftModifyrightModifyconvergentAddconvergentDeleteconvergentModifydivergentModifyResolveddivergentDeleteConflictdivergentModifyConflictdivergentDeleteResolvedunchanged"
 
-var _DiffOp_index = [...]uint8{0, 7, 15, 25, 36, 46, 57, 70, 86, 102, 125, 148, 171, 194}
+var _DiffOp_index = [...]uint8{0, 7, 15, 25, 36, 46, 57, 70, 86, 102, 125, 148, 171, 194, 203}
 
 func (i DiffOp) String() string {
 	idx := int(i) - 0

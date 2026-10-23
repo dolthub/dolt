@@ -444,16 +444,16 @@ func getDataConflictsForTable(ctx *sql.Context, tm *merge.TableMerger, tblName d
 		return nil, err
 	}
 
-	cellChecker := tm.NewVirtualBaseConflictChecker(valueMerger, ancRows)
+	diffs, err := tm.NewVirtualBaseConflictChecker(valueMerger, ancRows).Wrap(ctx, differ)
+	if err != nil {
+		return nil, err
+	}
 	var numDataConflicts uint64 = 0
 	for {
-		diff, err := differ.Next(ctx)
+		diff, err := diffs.Next(ctx)
 		if errors.Is(err, io.EOF) {
 			break
 		} else if err != nil {
-			return nil, err
-		}
-		if diff, err = cellChecker.Check(ctx, diff); err != nil {
 			return nil, err
 		}
 		switch diff.Op {

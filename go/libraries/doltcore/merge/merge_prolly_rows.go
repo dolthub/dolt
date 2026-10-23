@@ -362,14 +362,15 @@ func computeProllyTreePatches(
 
 		return sec, conflicts, patchBuffer.SendDone(ctx)
 	} else {
+		diffs, err := cellChecker.Wrap(ctx, iter)
+		if err != nil {
+			return nil, nil, err
+		}
 		for {
-			diff, err := iter.Next(ctx)
+			diff, err := diffs.Next(ctx)
 			if errors.Is(err, io.EOF) {
 				break
 			} else if err != nil {
-				return nil, nil, err
-			}
-			if diff, err = cellChecker.Check(ctx, diff); err != nil {
 				return nil, nil, err
 			}
 			// The validators and the primary and secondary indexes all take a merged row with its generated columns
@@ -608,8 +609,17 @@ func (c VirtualBaseConflictChecker) HasConflictedCells() bool {
 	return len(c.rows) > 0
 }
 
-// Check returns |diff|, or a conflict in its place when its two sides differ in a conflicted cell.
-func (c VirtualBaseConflictChecker) Check(ctx context.Context, diff tree.ThreeWayDiff) (tree.ThreeWayDiff, error) {
+// Wrap returns |differ| with each diff of a row that has conflicted cells checked.
+func (c VirtualBaseConflictChecker) Wrap(ctx context.Context, differ *tree.ThreeWayDiffer[val.Tuple, *val.TupleDesc]) (*tree.FlaggedKeyDiffer[val.Tuple, *val.TupleDesc], error) {
+	keys := make([]val.Tuple, 0, len(c.rows))
+	for key := range c.rows {
+		keys = append(keys, val.Tuple(key))
+	}
+	return tree.NewFlaggedKeyDiffer(ctx, differ, c.ancRows.Tuples(), keys, c.check)
+}
+
+// check returns |diff|, or a conflict in its place when its two sides differ in a conflicted cell.
+func (c VirtualBaseConflictChecker) check(ctx *sql.Context, diff tree.ThreeWayDiff) (tree.ThreeWayDiff, error) {
 	row, ok := c.rows[string(diff.Key)]
 	if !ok {
 		return diff, nil
