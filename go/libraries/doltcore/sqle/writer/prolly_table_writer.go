@@ -16,8 +16,10 @@ package writer
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"strings"
+	"sync/atomic"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -34,6 +36,9 @@ import (
 
 // todo(andy): get from NodeStore
 var sharePool = pool.NewBuffPool()
+
+// lastCheckpoint numbers the checkpoints of every prollyTableWriter, so that each identifies a unique set of edits.
+var lastCheckpoint atomic.Uint64
 
 // AutoIncrementGetter is implemented by editors that support AUTO_INCREMENT to return the next value that will be
 // inserted.
@@ -62,6 +67,10 @@ type prollyTableWriter struct {
 	// pending is true when edits from completed statements have not been materialized into the write session's
 	// working set. See prollyWriteSession.deferMaterialization.
 	pending bool
+	// checkpoint identifies the edits of completed statements, and changes whenever they do.
+	checkpoint uint64
+	// view caches views of the index writers as of |checkpoint|. See pendingRows.
+	view *index.PendingRows
 
 	virtualExpressions []sql.Expression
 }
@@ -342,6 +351,9 @@ func (w *prollyTableWriter) DiscardChanges(ctx *sql.Context, errorEncountered er
 
 // StatementComplete implements TableWriter.
 func (w *prollyTableWriter) StatementComplete(ctx *sql.Context) error {
+	if w.hasUncommittedEdits() {
+		w.newCheckpoint()
+	}
 	err := w.primary.Commit(ctx)
 	for _, secondary := range w.secondary {
 		sErr := secondary.Commit(ctx)
@@ -438,7 +450,61 @@ func (w *prollyTableWriter) VisitGCRoots(ctx context.Context, roots func(hash.Ha
 			return err
 		}
 	}
+	if w.view != nil {
+		w.view.Primary.VisitGCRoots(roots)
+		for _, v := range w.view.Secondary {
+			v.VisitGCRoots(roots)
+		}
+	}
 	return nil
+}
+
+func (w *prollyTableWriter) hasUncommittedEdits() bool {
+	if w.primary.HasUncommittedEdits() {
+		return true
+	}
+	for _, secondary := range w.secondary {
+		if secondary.HasUncommittedEdits() {
+			return true
+		}
+	}
+	return false
+}
+
+// newCheckpoint is called whenever the edits of completed statements change.
+func (w *prollyTableWriter) newCheckpoint() {
+	w.checkpoint = lastCheckpoint.Add(1)
+	w.view = nil
+}
+
+// pendingRows returns views of this writer's indexes that include the edits of completed statements, but not those
+// of a statement in progress. It returns nil if any of its indexes can't provide a view.
+func (w *prollyTableWriter) pendingRows(ctx *sql.Context) (*index.PendingRows, error) {
+	if w.view != nil {
+		return w.view, nil
+	}
+
+	secondary := make(map[string]prolly.MapView, len(w.secondary))
+	for name, idx := range w.secondary {
+		v, ok, err := idx.CheckpointView(ctx)
+		if err != nil || !ok {
+			return nil, err
+		}
+		secondary[name] = v
+	}
+	primary, ok, err := w.primary.CheckpointView(ctx)
+	if err != nil || !ok {
+		return nil, err
+	}
+
+	var key [8]byte
+	binary.BigEndian.PutUint64(key[:], w.checkpoint)
+	w.view = &index.PendingRows{
+		Key:       doltdb.DataCacheKey{Hash: hash.Of(key[:])},
+		Primary:   primary,
+		Secondary: secondary,
+	}
+	return w.view, nil
 }
 
 // Reset puts the writer into a fresh state, updating the schema and index writers according to the newly given table.
@@ -472,6 +538,7 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, tbl *doltdb.Table) error {
 
 	w.tbl = tbl
 	w.pending = false
+	w.newCheckpoint()
 	w.sch = schState.DoltSchema
 	w.sqlSch = schState.PkSchema.Schema
 	w.primary = newPrimary
@@ -479,6 +546,41 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, tbl *doltdb.Table) error {
 	w.aiCol = schState.AutoIncCol
 	w.virtualExpressions = schState.VirtualExpressions
 
+	return nil
+}
+
+// writerSnapshot is the state of a prollyTableWriter with pending edits.
+type writerSnapshot struct {
+	tbl        *doltdb.Table
+	checkpoint uint64
+	rows       *index.PendingRows
+}
+
+// snapshot returns the state of the writer's pending edits, or false if its indexes can't provide views of them.
+func (w *prollyTableWriter) snapshot(ctx *sql.Context) (writerSnapshot, bool, error) {
+	rows, err := w.pendingRows(ctx)
+	if err != nil || rows == nil {
+		return writerSnapshot{}, false, err
+	}
+	return writerSnapshot{tbl: w.tbl, checkpoint: w.checkpoint, rows: rows}, true, nil
+}
+
+// restore returns the writer to the state of |snap|, discarding any edits made since.
+func (w *prollyTableWriter) restore(ctx *sql.Context, snap writerSnapshot) error {
+	if err := w.Reset(ctx, snap.tbl); err != nil {
+		return err
+	}
+	w.primary.RestoreView(snap.rows.Primary)
+	for name, idx := range w.secondary {
+		v, ok := snap.rows.Secondary[name]
+		if !ok {
+			return fmt.Errorf("no snapshot of index %s", name)
+		}
+		idx.RestoreView(v)
+	}
+	w.pending = true
+	w.checkpoint = snap.checkpoint
+	w.view = snap.rows
 	return nil
 }
 
@@ -490,12 +592,8 @@ func (w *prollyTableWriter) table(ctx *sql.Context) (tbl *doltdb.Table, err erro
 // materialize returns a doltdb.Table containing all edits from completed statements, excluding the edits of any
 // statement in progress. If no statement is in progress, the writer is reset to the returned table.
 func (w *prollyTableWriter) materialize(ctx *sql.Context) (*doltdb.Table, error) {
-	inProgress := w.primary.HasUncommittedEdits()
-	for _, secondary := range w.secondary {
-		inProgress = inProgress || secondary.HasUncommittedEdits()
-	}
-
-	if inProgress {
+	if w.hasUncommittedEdits() {
+		// Our index writers still hold every edit, so our views remain valid.
 		tbl, err := w.tableFromMaps(ctx, indexWriter.CheckpointMap)
 		if err != nil {
 			return nil, err

@@ -1243,42 +1243,55 @@ func (d *DoltSession) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, save
 		return fmt.Errorf("expected a DoltTransaction")
 	}
 
-	if err := d.materializeAllPending(ctx); err != nil {
-		return err
-	}
-
-	roots := make(map[string]doltdb.RootValue)
 	for _, db := range d.provider.DoltDatabases() {
 		// TODO: See TODO in CreateTransaction about needing to skip clusterDatabase and UserSpaceDatabases here :-/. (aaron@, 2025/03)
 		ddb := db.DbData().Ddb
 		if ddb != nil {
-			branchState, ok, err := d.lookupDbState(ctx, db.Name())
+			// load the session state of each database, so the savepoint includes its root
+			_, ok, err := d.lookupDbStateWithoutMaterializing(ctx, db.Name())
 			if err != nil {
 				return err
 			}
 			if !ok {
 				return fmt.Errorf("session state for database %s not found", db.Name())
 			}
-			if branchState.WorkingSet() != nil {
-				roots[strings.ToLower(branchState.RevisionDbName())] = branchState.WorkingSet().WorkingRoot()
-			}
 		}
 	}
 
 	// A physical database can have several branch states in this session.
-	dirtyBranches := make(map[string]bool)
+	var branches []*branchState
 	d.mu.Lock()
 	for _, dbState := range d.dbStates {
 		for _, branch := range dbState.heads {
-			if ws := branch.WorkingSet(); ws != nil {
-				roots[strings.ToLower(branch.RevisionDbName())] = ws.WorkingRoot()
-				dirtyBranches[strings.ToLower(branch.RevisionDbName())] = branch.dirty
+			if branch.WorkingSet() != nil {
+				branches = append(branches, branch)
 			}
 		}
 	}
 	d.mu.Unlock()
 
-	dtx.CreateSavepoint(savepointName, roots, dirtyBranches)
+	roots := make(map[string]doltdb.RootValue)
+	dirtyBranches := make(map[string]bool)
+	pending := make(map[string]PendingSnapshot)
+	for _, branch := range branches {
+		name := strings.ToLower(branch.RevisionDbName())
+		// Pending edits are saved without materializing them, unless they can't be.
+		if branch.writeSession != nil && branch.writeSession.HasPendingEdits() {
+			snap, ok, err := branch.writeSession.SnapshotPending(ctx)
+			if err != nil {
+				return err
+			}
+			if ok {
+				pending[name] = snap
+			} else if err = d.materializePending(ctx, branch); err != nil {
+				return err
+			}
+		}
+		roots[name] = branch.WorkingSet().WorkingRoot()
+		dirtyBranches[name] = branch.dirty
+	}
+
+	dtx.CreateSavepoint(savepointName, roots, dirtyBranches, pending)
 	if lifecycle, ok := d.DoltgresSessObj.(DoltgresTransactionLifecycle); ok {
 		lifecycle.DoltgresSavepointCreated(savepointName)
 	}
@@ -1325,6 +1338,23 @@ func (d *DoltSession) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, 
 		restore[name] = ws.WorkingRoot()
 	}
 	for dbName, root := range restore {
+		if snap, ok := point.pending[dbName]; ok {
+			// Restore the edits that were pending at the savepoint, rather than materializing those made since.
+			branch, _, err := d.lookupDbStateWithoutMaterializing(ctx, dbName)
+			if err != nil {
+				return err
+			}
+			branch.workingSet = branch.WorkingSet().WithWorkingRoot(root)
+			if err = branch.writeSession.RestorePending(ctx, branch.workingSet, snap); err != nil {
+				return err
+			}
+			if err = d.setDbSessionVars(ctx, branch, true); err != nil {
+				return err
+			}
+			branch.dirty = point.dirtyBranches[dbName]
+			continue
+		}
+
 		err := d.SetWorkingRoot(ctx, dbName, root)
 		if err != nil {
 			return err
@@ -2095,7 +2125,8 @@ func (d *DoltSession) GetBranch(ctx *sql.Context) (string, error) {
 		return "", nil
 	}
 
-	bs, _, err := d.LookupDbState(ctx, currentDb)
+	// we only need the working set's ref
+	bs, _, err := d.LookupDbStateWithoutMaterializing(ctx, currentDb)
 	if err != nil {
 		return "", err
 	}

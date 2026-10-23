@@ -35,7 +35,8 @@ func writerSchema(ctx *sql.Context, t *doltdb.Table, tableName doltdb.TableName,
 		return newWriterSchema(ctx, t, tableName, dbName)
 	}
 
-	dbState, ok, err := sess.LookupDbState(ctx, dbName)
+	// we only need the session cache
+	dbState, ok, err := sess.LookupDbStateWithoutMaterializing(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}

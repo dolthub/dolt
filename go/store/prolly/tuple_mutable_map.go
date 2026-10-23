@@ -68,23 +68,23 @@ func (mut *GenericMutableMap[M, T]) Map(ctx context.Context) (M, error) {
 // this map to |roots|: the roots of its static trees and any out-of-band values
 // referenced by its in-memory edits. It does not write to the NodeStore.
 func (mut *GenericMutableMap[M, T]) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
-	mut.visitTreeGCRoots(mut.tuples, roots)
+	visitMutableTreeGCRoots(mut.tuples, mut.keyDesc, mut.valDesc, roots)
 	if mut.stash != nil {
-		mut.visitTreeGCRoots(*mut.stash, roots)
+		visitMutableTreeGCRoots(*mut.stash, mut.keyDesc, mut.valDesc, roots)
 	}
 	return nil
 }
 
-func (mut *GenericMutableMap[M, T]) visitTreeGCRoots(tuples tree.MutableMap[val.Tuple, val.Tuple, *val.TupleDesc, T], roots func(hash.Hash) bool) {
+func visitMutableTreeGCRoots[T tree.MapInterface[val.Tuple, val.Tuple, *val.TupleDesc]](tuples tree.MutableMap[val.Tuple, val.Tuple, *val.TupleDesc, T], kd, vd *val.TupleDesc, roots func(hash.Hash) bool) {
 	roots(tuples.Static.GetRoot().HashOf())
 	for it := tuples.Edits.IterAtStart(); ; it.Advance() {
 		k, v := it.Current()
 		if k == nil {
 			break
 		}
-		visitTupleAddresses(val.Tuple(k), mut.keyDesc, roots)
+		visitTupleAddresses(val.Tuple(k), kd, roots)
 		if v != nil {
-			visitTupleAddresses(val.Tuple(v), mut.valDesc, roots)
+			visitTupleAddresses(val.Tuple(v), vd, roots)
 		}
 	}
 }

@@ -23,6 +23,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -141,6 +142,77 @@ func (s *prollyWriteSession) PendingTables() []doltdb.TableName {
 		}
 	}
 	return names
+}
+
+// PendingRows implements WriteSession
+func (s *prollyWriteSession) PendingRows(ctx *sql.Context, tblName doltdb.TableName) (*index.PendingRows, bool, error) {
+	tblWriter, ok := s.tables[tblName]
+	if !ok || !tblWriter.pending || s.materializing {
+		return nil, false, nil
+	}
+	rows, err := tblWriter.pendingRows(ctx)
+	return rows, true, err
+}
+
+// pendingSnapshot is the dsess.PendingSnapshot of a prollyWriteSession.
+type pendingSnapshot map[doltdb.TableName]pendingWriter
+
+type pendingWriter struct {
+	writer *prollyTableWriter
+	writerSnapshot
+}
+
+// SnapshotPending implements WriteSession
+func (s *prollyWriteSession) SnapshotPending(ctx *sql.Context) (dsess.PendingSnapshot, bool, error) {
+	snap := make(pendingSnapshot)
+	for tblName, tblWriter := range s.tables {
+		if !tblWriter.pending {
+			continue
+		}
+		ws, ok, err := tblWriter.snapshot(ctx)
+		if err != nil || !ok {
+			return nil, false, err
+		}
+		snap[tblName] = pendingWriter{writer: tblWriter, writerSnapshot: ws}
+	}
+	return snap, true, nil
+}
+
+// RestorePending implements WriteSession
+func (s *prollyWriteSession) RestorePending(ctx *sql.Context, ws *doltdb.WorkingSet, snapshot dsess.PendingSnapshot) error {
+	snap := snapshot.(pendingSnapshot)
+	s.workingSet = ws
+	var root doltdb.RootValue
+	if s.targetStaging {
+		root = ws.StagedRoot()
+	} else {
+		root = ws.WorkingRoot()
+	}
+
+	for tblName, tblWriter := range s.tables {
+		if _, ok := snap[tblName]; ok {
+			continue
+		}
+		tbl, ok, err := root.GetTable(ctx, tblName)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			delete(s.tables, tblName)
+			continue
+		}
+		if err = tblWriter.Reset(ctx, tbl); err != nil {
+			return err
+		}
+	}
+	// writers removed since the snapshot was taken are added back
+	for tblName, pw := range snap {
+		if err := pw.writer.restore(ctx, pw.writerSnapshot); err != nil {
+			return err
+		}
+		s.tables[tblName] = pw.writer
+	}
+	return nil
 }
 
 // MaterializePending implements WriteSession

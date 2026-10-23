@@ -324,11 +324,13 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 	return db.getTableInsensitiveWithRoot(ctx, nil, ds, root, tblName, "")
 }
 
-// resolutionRoot returns the root to resolve |tblName| against. Resolving a user table only reads its schema, and the
-// table reads its data from the session when accessed, so user tables are resolved against SchemaRoot. This lets a run
-// of write statements accumulate its edits instead of materializing them for each statement.
+// resolutionRoot returns the root to resolve |tblName| against. Resolving a table stored in the root, either a user
+// table or a writeable system table, only reads its schema, and the table reads its data from the session when
+// accessed, so these tables are resolved against SchemaRoot. This lets a run of write statements accumulate its edits
+// instead of materializing them for each statement. Generated system tables are computed from the whole root, so
+// they're resolved against a root with every edit materialized.
 func (db Database) resolutionRoot(ctx *sql.Context, tblName string) (doltdb.RootValue, error) {
-	if doltdb.IsSystemTable(doltdb.TableName{Name: tblName, Schema: db.schemaName}) {
+	if doltdb.IsReadOnlySystemTable(doltdb.TableName{Name: tblName, Schema: db.schemaName}) {
 		return db.GetRoot(ctx)
 	}
 	return db.SchemaRoot(ctx)

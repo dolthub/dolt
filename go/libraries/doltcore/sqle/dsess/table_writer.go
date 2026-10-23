@@ -21,10 +21,14 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/val"
 )
+
+// PendingSnapshot is the state of a WriteSession's pending edits, returned by WriteSession.SnapshotPending.
+type PendingSnapshot any
 
 // WriteSession encapsulates writes made within a SQL session.
 // It's responsible for creating and managing the lifecycle of TableWriter's.
@@ -58,6 +62,19 @@ type WriteSession interface {
 
 	// PendingTables returns the names of tables with edits that have not been materialized into the working set.
 	PendingTables() []doltdb.TableName
+
+	// PendingRows returns views of the rows of |tblName| that include its pending edits. It returns false if the
+	// table has no pending edits, and nil views if it has pending edits that can't be read without materializing
+	// them.
+	PendingRows(ctx *sql.Context, tblName doltdb.TableName) (*index.PendingRows, bool, error)
+
+	// SnapshotPending returns the session's pending edits, which RestorePending can later restore. It returns false
+	// if they can't be snapshotted without materializing them.
+	SnapshotPending(ctx *sql.Context) (PendingSnapshot, bool, error)
+
+	// RestorePending sets the session's working set to |ws| and its pending edits to those of |snapshot|,
+	// discarding any others. |ws| must be the working set the snapshot's edits were made to.
+	RestorePending(ctx *sql.Context, ws *doltdb.WorkingSet, snapshot PendingSnapshot) error
 
 	// MaterializePending materializes all pending edits into the working set and returns it. The edits of a
 	// statement in progress are not included.
