@@ -202,6 +202,11 @@ _do_write_to_remotesrv_repo_mode_scenario() {
     dolt commit -am 'insert some values'
     run dolt push origin main:main
     [[ "$status" != 0 ]] || false
+    [[ "$output" =~ "have you logged into DoltHub using 'dolt login'?" ]] || false
+    [[ "$output" =~ "check that user.email in 'dolt config --list' has write perms to DoltHub repo" ]] || false
+    [[ "$output" =~ "PermissionDenied" ]] || false
+    [[ "$output" =~ "this server only provides read-only access" ]] || false
+    [[ "$output" =~ "localhost:50051" ]] || false
 }
 
 _do_grpc_and_http_same_port_scenario() {
