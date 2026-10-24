@@ -47,6 +47,23 @@ func (k prollyKeylessWriter) Map(ctx context.Context) (prolly.MapInterface, erro
 	return k.mut.Map(ctx)
 }
 
+func (k prollyKeylessWriter) CheckpointMap(ctx context.Context) (prolly.MapInterface, error) {
+	return k.mut.CheckpointMap(ctx)
+}
+
+func (k prollyKeylessWriter) HasUncommittedEdits() bool {
+	return k.mut.HasUncheckpointedEdits()
+}
+
+func (k prollyKeylessWriter) CheckpointView(ctx context.Context) (prolly.MapView, bool, error) {
+	v, err := prolly.CheckpointView(ctx, k.mut)
+	return v, err == nil, err
+}
+
+func (k prollyKeylessWriter) RestoreView(v prolly.MapView) {
+	v.CopyTo(k.mut)
+}
+
 // ValidateKeyViolations returns nil for keyless writers, because there are no keys, so violations are possible
 func (k prollyKeylessWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error {
 	return nil
@@ -234,6 +251,27 @@ func (writer prollyKeylessSecondaryWriter) Name() string {
 // Map implements the interface indexWriter.
 func (writer prollyKeylessSecondaryWriter) Map(ctx context.Context) (prolly.MapInterface, error) {
 	return writer.mut.Map(ctx)
+}
+
+// CheckpointMap implements the interface indexWriter.
+func (writer prollyKeylessSecondaryWriter) CheckpointMap(ctx context.Context) (prolly.MapInterface, error) {
+	return writer.mut.CheckpointMap(ctx)
+}
+
+// HasUncommittedEdits implements the interface indexWriter.
+func (writer prollyKeylessSecondaryWriter) HasUncommittedEdits() bool {
+	return writer.mut.HasUncheckpointedEdits()
+}
+
+// CheckpointView implements the interface indexWriter.
+func (writer prollyKeylessSecondaryWriter) CheckpointView(ctx context.Context) (prolly.MapView, bool, error) {
+	v, err := prolly.CheckpointView(ctx, writer.mut)
+	return v, err == nil, err
+}
+
+// RestoreView implements the interface indexWriter.
+func (writer prollyKeylessSecondaryWriter) RestoreView(v prolly.MapView) {
+	v.CopyTo(writer.mut)
 }
 
 func (writer prollyKeylessSecondaryWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {

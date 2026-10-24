@@ -23,6 +23,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -50,6 +51,12 @@ type prollyWriteSession struct {
 	workingSet    *doltdb.WorkingSet
 	setter        dsess.SessionRootSetter
 	targetStaging bool
+	// deferMaterialization leaves the edits of completed statements in their table writers, rather than
+	// materializing them into |workingSet| when each statement completes. The owner of the session must call
+	// MaterializePending before reading |workingSet|.
+	deferMaterialization bool
+	// materializing is true while MaterializePending is running
+	materializing bool
 }
 
 var _ dsess.WriteSession = &prollyWriteSession{}
@@ -106,6 +113,161 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, tblName doltdb.Tab
 
 	s.tables[tblName] = tblWriter
 	return tblWriter, nil
+}
+
+// SetDeferMaterialization implements WriteSession
+func (s *prollyWriteSession) SetDeferMaterialization(deferMaterialization bool) {
+	s.deferMaterialization = deferMaterialization
+}
+
+// HasPendingEdits implements WriteSession
+func (s *prollyWriteSession) HasPendingEdits() bool {
+	if s.materializing {
+		return false
+	}
+	for _, tblWriter := range s.tables {
+		if tblWriter.pending {
+			return true
+		}
+	}
+	return false
+}
+
+// PendingTables implements WriteSession
+func (s *prollyWriteSession) PendingTables() []doltdb.TableName {
+	var names []doltdb.TableName
+	for tblName, tblWriter := range s.tables {
+		if tblWriter.pending {
+			names = append(names, tblName)
+		}
+	}
+	return names
+}
+
+// PendingRows implements WriteSession
+func (s *prollyWriteSession) PendingRows(ctx *sql.Context, tblName doltdb.TableName) (*index.PendingRows, bool, error) {
+	tblWriter, ok := s.tables[tblName]
+	if !ok || !tblWriter.pending || s.materializing {
+		return nil, false, nil
+	}
+	rows, err := tblWriter.pendingRows(ctx)
+	return rows, true, err
+}
+
+// pendingSnapshot is the dsess.PendingSnapshot of a prollyWriteSession.
+type pendingSnapshot map[doltdb.TableName]pendingWriter
+
+type pendingWriter struct {
+	writer *prollyTableWriter
+	writerSnapshot
+}
+
+// SnapshotPending implements WriteSession
+func (s *prollyWriteSession) SnapshotPending(ctx *sql.Context) (dsess.PendingSnapshot, bool, error) {
+	snap := make(pendingSnapshot)
+	for tblName, tblWriter := range s.tables {
+		if !tblWriter.pending {
+			continue
+		}
+		ws, ok, err := tblWriter.snapshot(ctx)
+		if err != nil || !ok {
+			return nil, false, err
+		}
+		snap[tblName] = pendingWriter{writer: tblWriter, writerSnapshot: ws}
+	}
+	return snap, true, nil
+}
+
+// RestorePending implements WriteSession
+func (s *prollyWriteSession) RestorePending(ctx *sql.Context, ws *doltdb.WorkingSet, snapshot dsess.PendingSnapshot) error {
+	snap := snapshot.(pendingSnapshot)
+	s.workingSet = ws
+	var root doltdb.RootValue
+	if s.targetStaging {
+		root = ws.StagedRoot()
+	} else {
+		root = ws.WorkingRoot()
+	}
+
+	for tblName, tblWriter := range s.tables {
+		if _, ok := snap[tblName]; ok {
+			continue
+		}
+		tbl, ok, err := root.GetTable(ctx, tblName)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			delete(s.tables, tblName)
+			continue
+		}
+		if err = tblWriter.Reset(ctx, tbl); err != nil {
+			return err
+		}
+	}
+	// writers removed since the snapshot was taken are added back
+	for tblName, pw := range snap {
+		if err := pw.writer.restore(ctx, pw.writerSnapshot); err != nil {
+			return err
+		}
+		s.tables[tblName] = pw.writer
+	}
+	return nil
+}
+
+// MaterializePending implements WriteSession
+func (s *prollyWriteSession) MaterializePending(ctx *sql.Context) (*doltdb.WorkingSet, error) {
+	if s.materializing {
+		return s.workingSet, nil
+	}
+	s.materializing = true
+	defer func() {
+		s.materializing = false
+	}()
+
+	var root doltdb.RootValue
+	if s.targetStaging {
+		root = s.workingSet.StagedRoot()
+	} else {
+		root = s.workingSet.WorkingRoot()
+	}
+
+	changed := false
+	for tblName, tblWriter := range s.tables {
+		if !tblWriter.pending {
+			continue
+		}
+		tbl, err := tblWriter.materialize(ctx)
+		if err != nil {
+			return nil, err
+		}
+		root, err = root.PutTable(ctx, tblName, tbl)
+		if err != nil {
+			return nil, err
+		}
+		changed = true
+	}
+
+	if changed {
+		if s.targetStaging {
+			s.workingSet = s.workingSet.WithStagedRoot(root)
+		} else {
+			s.workingSet = s.workingSet.WithWorkingRoot(root)
+		}
+	}
+	return s.workingSet, nil
+}
+
+// materializeAndSet materializes pending edits and sets the resulting root in the session.
+func (s *prollyWriteSession) materializeAndSet(ctx *sql.Context) error {
+	ws, err := s.MaterializePending(ctx)
+	if err != nil {
+		return err
+	}
+	if s.targetStaging {
+		return s.setter(ctx, s.dbName, ws.StagedRoot())
+	}
+	return s.setter(ctx, s.dbName, ws.WorkingRoot())
 }
 
 // SetWorkingSet implements WriteSession
