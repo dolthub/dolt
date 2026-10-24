@@ -41,6 +41,10 @@ const (
 	maxTxCommitRetries = 5
 )
 
+// TransactionRowMergePolicy, when non-nil, decides each row that both a committing transaction and a concurrently
+// committed transaction changed in the working set. A nil policy keeps the default merge.
+var TransactionRowMergePolicy merge.RowMergePolicy
+
 var ErrRetryTransaction = errors.New("this transaction conflicts with a committed transaction from another client")
 
 var ErrUnresolvedConflictsCommit = errors.New("Merge conflict detected, transaction rolled back. Merge conflicts must be resolved using the dolt_conflicts and dolt_schema_conflicts tables before committing a transaction. To commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1")
@@ -534,8 +538,8 @@ func (tx *DoltTransaction) mergeRoots(
 		return nil, err
 	}
 
-	if !rootsEqual(existingWorkingSet.WorkingRoot(), workingSet.WorkingRoot()) {
-		result, err := merge.MergeRoots(ctx, tableResolver, existingWorkingSet.WorkingRoot(), workingSet.WorkingRoot(), startState.WorkingRoot(), workingSet, startState, mergeOpts, merge.MergeOpts{})
+	if TransactionRowMergePolicy != nil || !rootsEqual(existingWorkingSet.WorkingRoot(), workingSet.WorkingRoot()) {
+		result, err := merge.MergeRoots(ctx, tableResolver, existingWorkingSet.WorkingRoot(), workingSet.WorkingRoot(), startState.WorkingRoot(), workingSet, startState, mergeOpts, merge.MergeOpts{RowMergePolicy: TransactionRowMergePolicy})
 		if err != nil {
 			return nil, err
 		}
