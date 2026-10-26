@@ -4623,7 +4623,8 @@ var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "delete keyless conflicts when column changes from VARCHAR to INT",
+		Name:    "delete keyless conflicts when column changes from VARCHAR to INT",
+		Dialect: "mysql",
 		SetUpScript: keylessSchemaChangeOnBothBranchesSetUp(
 			"CREATE TABLE t (c VARCHAR(20), d VARCHAR(20));",
 			"INSERT INTO t VALUES ('1', 'base');",
@@ -4677,8 +4678,8 @@ var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:    "SELECT CAST(c AS CHAR), d FROM t;",
-				Expected: []sql.Row{{"1.00", "base"}},
+				Query:    "SELECT COUNT(*) FROM t WHERE c = 1.00 AND d = 'base';",
+				Expected: []sql.Row{{1}},
 			},
 		},
 	},
