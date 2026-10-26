@@ -4544,6 +4544,14 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
 			{
+				Query:       "SELECT * from dolt_log('main..branch1', '--all');",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_log('main...branch1', '--all');",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
 				Query:       "SELECT * from dolt_log('main', '--not', '^branch1');",
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
@@ -5413,6 +5421,43 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 					{"Committer", "root@localhost", "Test Author", "author@example.com"},
 					{"Test Author", "author@example.com", "Test Author", "author@example.com"},
 				},
+			},
+		},
+	},
+	{
+		Name: "dolt_log --all includes every branch",
+		SetUpScript: []string{
+			"CALL dolt_commit('--allow-empty', '-m', 'on main');",
+			"CALL dolt_checkout('-b', 'feature');",
+			"CALL dolt_commit('--allow-empty', '-m', 'on feature');",
+			"CREATE TABLE t (pk int primary key);",
+			"CALL dolt_commit('-Am', 'add t on feature');",
+			"CALL dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT message FROM dolt_log() ORDER BY message;",
+				Expected: []sql.Row{{"Initialize data repository"}, {"on main"}},
+			},
+			{
+				Query:    "SELECT message FROM dolt_log('--all') ORDER BY message;",
+				Expected: []sql.Row{{"Initialize data repository"}, {"add t on feature"}, {"on feature"}, {"on main"}},
+			},
+			{
+				Query:    "SELECT message FROM dolt_log('--all', '--not', 'main') ORDER BY message;",
+				Expected: []sql.Row{{"add t on feature"}, {"on feature"}},
+			},
+			{
+				Query:    "SELECT message FROM dolt_log('main', '--all') ORDER BY message;",
+				Expected: []sql.Row{{"Initialize data repository"}, {"add t on feature"}, {"on feature"}, {"on main"}},
+			},
+			{
+				Query:    "SELECT message, refs FROM dolt_log('--all') ORDER BY message;",
+				Expected: []sql.Row{{"Initialize data repository", ""}, {"add t on feature", "feature"}, {"on feature", ""}, {"on main", "HEAD -> main"}},
+			},
+			{
+				Query:    "SELECT message FROM dolt_log('--all', '--tables', 't');",
+				Expected: []sql.Row{{"add t on feature"}},
 			},
 		},
 	},
