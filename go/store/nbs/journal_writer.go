@@ -159,7 +159,12 @@ type journalWriter struct {
 	lock        sync.RWMutex
 	batchCrc    uint32
 	currentRoot hash.Hash
+	// readers counts reads of the journal file made without |lock|. They
+	// register under |lock|, and Close waits for them before closing the file.
+	readers sync.WaitGroup
 }
+
+var errJournalWriterClosed = errors.New("journal writer is closed")
 
 var _ io.Closer = &journalWriter{}
 
@@ -470,6 +475,17 @@ func (wr *journalWriter) getCompressedChunkAtRange(r Range, h hash.Hash) (Compre
 	return NewCompressedChunk(hash.Hash(h), buf)
 }
 
+// readCompressedChunkAt reads the chunk at |r| directly from |f|. |r| must be
+// below the flushed offset of the journal, and the caller must hold a
+// |readers| pin so that |f| stays open.
+func readCompressedChunkAt(f *os.File, r Range, h hash.Hash) (CompressedChunk, error) {
+	buf := make([]byte, r.Length)
+	if _, err := f.ReadAt(buf, int64(r.Offset)); err != nil {
+		return CompressedChunk{}, err
+	}
+	return NewCompressedChunk(h, buf)
+}
+
 // getRange returns a Range for the chunk with addr |h|.
 func (wr *journalWriter) getRange(ctx context.Context, behavior dherrors.FatalBehavior, h hash.Hash) (rng Range, ok bool, err error) {
 	// callers will use |rng| to read directly from the
@@ -745,6 +761,8 @@ func (wr *journalWriter) Close() (err error) {
 		logrus.Warnf("journal writer has already been closed (%s)", wr.path)
 		return nil
 	}
+	// No new |readers| can register while we hold |lock|.
+	wr.readers.Wait()
 
 	// Let caller fatal on Close.
 	if err = wr.flush(context.Background(), dherrors.FatalBehaviorError); err != nil {
