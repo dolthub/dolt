@@ -630,6 +630,7 @@ type prollyConflictDeleter struct {
 	rs             RootSetter
 	kB             *val.TupleBuilder
 	vB             *val.TupleBuilder
+	baseVB         *val.TupleBuilder
 	ed             *prolly.ArtifactsEditor
 	kd             *val.TupleDesc
 	vd             *val.TupleDesc
@@ -645,6 +646,8 @@ func newProllyConflictDeleter(ctx *sql.Context, ct ProllyConflictsTable) *prolly
 
 	vd := ct.ourSch.GetValueDescriptor(ct.root.NodeStore())
 	vB := val.NewTupleBuilder(vd, ct.artM.NodeStore())
+	// base rows must be hashed with the base schema, which may differ from ours
+	baseVB := val.NewTupleBuilder(ct.baseSch.GetValueDescriptor(ct.root.NodeStore()), ct.artM.NodeStore())
 	p := ct.artM.Pool()
 
 	// The conflicts table leaves out virtual columns.
@@ -658,6 +661,7 @@ func newProllyConflictDeleter(ctx *sql.Context, ct ProllyConflictsTable) *prolly
 		vd:             vd,
 		kB:             kB,
 		vB:             vB,
+		baseVB:         baseVB,
 		pool:           p,
 		ed:             ed,
 		ct:             ct,
@@ -723,24 +727,26 @@ func (cd *prollyConflictDeleter) putPrimaryKeys(ctx *sql.Context, r sql.Row, num
 
 func (cd *prollyConflictDeleter) putKeylessHash(ctx *sql.Context, r sql.Row) error {
 	var rowVals sql.Row
+	vB := cd.vB
 	if r[cd.ourDiffTypeIdx] == merge.ConflictDiffTypeAdded {
 		// use our cols
 		rowVals = r[1+cd.baseColSize : 1+cd.baseColSize+cd.ourColSize]
 	} else {
 		// use base cols
 		rowVals = r[1 : 1+cd.baseColSize]
+		vB = cd.baseVB
 	}
 
 	// init cardinality to 0
-	cd.vB.PutUint64(0, 0)
+	vB.PutUint64(0, 0)
 	for i, v := range rowVals {
-		err := tree.PutField(ctx, cd.ed.NodeStore(), cd.vB, i+1, v)
+		err := tree.PutField(ctx, cd.ed.NodeStore(), vB, i+1, v)
 		if err != nil {
 			return err
 		}
 	}
 
-	v, err := cd.vB.Build(ctx, cd.pool)
+	v, err := vB.Build(ctx, cd.pool)
 	if err != nil {
 		return err
 	}
