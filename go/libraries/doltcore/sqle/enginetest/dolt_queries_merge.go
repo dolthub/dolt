@@ -4593,21 +4593,12 @@ var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		// https://github.com/dolthub/dolt/issues/12186
 		Name: "delete keyless conflicts when column type differs between base and ours",
-		SetUpScript: []string{
-			"SET dolt_allow_commit_conflicts = on;",
+		SetUpScript: keylessSchemaChangeOnBothBranchesSetUp(
 			"CREATE TABLE t (c INT, d VARCHAR(20));",
 			"INSERT INTO t VALUES (1, 'base');",
-			"CALL DOLT_COMMIT('-Am', 'base');",
-			"CALL DOLT_BRANCH('other');",
 			"ALTER TABLE t MODIFY c VARCHAR(20);",
-			"CALL DOLT_COMMIT('-am', 'ours');",
-			"CALL DOLT_CHECKOUT('other');",
-			"ALTER TABLE t MODIFY c VARCHAR(20);",
-			"CALL DOLT_COMMIT('-am', 'theirs');",
-			"CALL DOLT_CHECKOUT('main');",
-		},
+		),
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('other');",
@@ -4631,6 +4622,251 @@ var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "delete keyless conflicts when column changes from VARCHAR to INT",
+		SetUpScript: keylessSchemaChangeOnBothBranchesSetUp(
+			"CREATE TABLE t (c VARCHAR(20), d VARCHAR(20));",
+			"INSERT INTO t VALUES ('1', 'base');",
+			"ALTER TABLE t MODIFY c INT;",
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_c, base_d, our_c, our_d, our_diff_type FROM dolt_conflicts_t ORDER BY our_diff_type;",
+				Expected: []sql.Row{{nil, nil, 1, "base", "added"}, {"1", "base", nil, nil, "removed"}},
+			},
+			{
+				Query:    "DELETE FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT * FROM t;",
+				Expected: []sql.Row{{1, "base"}},
+			},
+		},
+	},
+	{
+		Name: "delete keyless conflicts when column changes from INT to DECIMAL",
+		SetUpScript: keylessSchemaChangeOnBothBranchesSetUp(
+			"CREATE TABLE t (c INT, d VARCHAR(20));",
+			"INSERT INTO t VALUES (1, 'base');",
+			"ALTER TABLE t MODIFY c DECIMAL(10,2);",
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "DELETE FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT CAST(c AS CHAR), d FROM t;",
+				Expected: []sql.Row{{"1.00", "base"}},
+			},
+		},
+	},
+	{
+		Name: "delete keyless conflicts when column changes from INT to BIGINT",
+		SetUpScript: keylessSchemaChangeOnBothBranchesSetUp(
+			"CREATE TABLE t (c INT, d VARCHAR(20));",
+			"INSERT INTO t VALUES (1, 'base');",
+			"ALTER TABLE t MODIFY c BIGINT;",
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "DELETE FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT * FROM t;",
+				Expected: []sql.Row{{1, "base"}},
+			},
+		},
+	},
+	{
+		Name: "delete keyless conflicts when column changes from VARCHAR to TEXT",
+		SetUpScript: keylessSchemaChangeOnBothBranchesSetUp(
+			"CREATE TABLE t (c VARCHAR(100), d INT);",
+			"INSERT INTO t VALUES ('hello', 1);",
+			"ALTER TABLE t MODIFY c TEXT;",
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "DELETE FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT * FROM t;",
+				Expected: []sql.Row{{"hello", 1}},
+			},
+		},
+	},
+	{
+		Name: "delete keyless conflicts when a column is dropped",
+		SetUpScript: keylessSchemaChangeOnBothBranchesSetUp(
+			"CREATE TABLE t (c INT, d VARCHAR(20), e INT);",
+			"INSERT INTO t VALUES (1, 'base', 5);",
+			"ALTER TABLE t DROP COLUMN e;",
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_c, base_d, base_e, our_c, our_d, our_diff_type FROM dolt_conflicts_t ORDER BY our_diff_type;",
+				Expected: []sql.Row{{nil, nil, nil, 1, "base", "added"}, {1, "base", 5, nil, nil, "removed"}},
+			},
+			{
+				Query:    "DELETE FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT * FROM t;",
+				Expected: []sql.Row{{1, "base"}},
+			},
+		},
+	},
+	{
+		Name: "delete keyless conflicts with duplicate rows when column type differs between base and ours",
+		SetUpScript: keylessSchemaChangeOnBothBranchesSetUp(
+			"CREATE TABLE t (c INT, d VARCHAR(20));",
+			"INSERT INTO t VALUES (1, 'base'), (1, 'base'), (2, 'x');",
+			"ALTER TABLE t MODIFY c VARCHAR(20);",
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query: "SELECT base_c, our_c, our_diff_type, base_cardinality, our_cardinality FROM dolt_conflicts_t ORDER BY our_diff_type, base_c, our_c;",
+				Expected: []sql.Row{
+					{nil, "1", "added", uint64(0), uint64(2)},
+					{nil, "2", "added", uint64(0), uint64(1)},
+					{1, nil, "removed", uint64(2), uint64(0)},
+					{2, nil, "removed", uint64(1), uint64(0)},
+				},
+			},
+			{
+				Query:    "DELETE FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{types.NewOkResult(4)}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY c, d;",
+				Expected: []sql.Row{{"1", "base"}, {"1", "base"}, {"2", "x"}},
+			},
+		},
+	},
+	{
+		Name: "delete subsets of keyless conflicts when column type differs between base and ours",
+		SetUpScript: keylessSchemaChangeOnBothBranchesSetUp(
+			"CREATE TABLE t (c INT, d VARCHAR(20));",
+			"INSERT INTO t VALUES (1, 'base'), (2, 'x');",
+			"ALTER TABLE t MODIFY c VARCHAR(20);",
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "DELETE FROM dolt_conflicts_t WHERE our_diff_type = 'removed';",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "SELECT our_c, our_diff_type FROM dolt_conflicts_t ORDER BY our_c;",
+				Expected: []sql.Row{{"1", "added"}, {"2", "added"}},
+			},
+			{
+				Query:    "DELETE FROM dolt_conflicts_t WHERE our_c = '2';",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "SELECT our_c, our_diff_type FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{"1", "added"}},
+			},
+			{
+				Query:    "DELETE FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_conflicts_t;",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY c;",
+				Expected: []sql.Row{{"1", "base"}, {"2", "x"}},
+			},
+		},
+	},
+}
+
+// keylessSchemaChangeOnBothBranchesSetUp creates and populates a table on main, then applies the same |alterTable|
+// on main and on branch 'other', leaving main checked out.
+func keylessSchemaChangeOnBothBranchesSetUp(createTable, insertRows, alterTable string) []string {
+	return []string{
+		"SET dolt_allow_commit_conflicts = on;",
+		createTable,
+		insertRows,
+		"CALL DOLT_COMMIT('-Am', 'base');",
+		"CALL DOLT_BRANCH('other');",
+		alterTable,
+		"CALL DOLT_COMMIT('-am', 'ours');",
+		"CALL DOLT_CHECKOUT('other');",
+		alterTable,
+		"CALL DOLT_COMMIT('-am', 'theirs');",
+		"CALL DOLT_CHECKOUT('main');",
+	}
 }
 
 var DoltConflictTableNameTableTests = []queries.ScriptTest{
