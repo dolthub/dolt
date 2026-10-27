@@ -232,11 +232,7 @@ func defaultFirstCommit(ctx *sql.Context, ddb *doltdb.DoltDB, headCommit *doltdb
 // buildSquashedCommit writes a dangling commit that carries |headCommit|'s tree and whose parents
 // are exactly |firstCommit|'s parents, authored by the current session user with |msg|.
 func buildSquashedCommit(ctx *sql.Context, ddb *doltdb.DoltDB, headCommit, firstCommit *doltdb.Commit, msg string) (*doltdb.Commit, error) {
-	headRoot, err := headCommit.GetRootValue(ctx)
-	if err != nil {
-		return nil, err
-	}
-	_, valHash, err := ddb.WriteRootValue(ctx, headRoot)
+	valHash, meta, err := writeRootWithSessionMeta(ctx, ddb, headCommit, msg)
 	if err != nil {
 		return nil, err
 	}
@@ -254,14 +250,28 @@ func buildSquashedCommit(ctx *sql.Context, ddb *doltdb.DoltDB, headCommit, first
 		parents = append(parents, parent)
 	}
 
+	return ddb.CommitDanglingWithParentCommits(ctx, valHash, parents, meta)
+}
+
+// writeRootWithSessionMeta writes |source|'s root and returns its hash with metadata for a commit authored by the
+// current session user with |msg|.
+func writeRootWithSessionMeta(ctx *sql.Context, ddb *doltdb.DoltDB, source *doltdb.Commit, msg string) (hash.Hash, *datas.CommitMeta, error) {
+	root, err := source.GetRootValue(ctx)
+	if err != nil {
+		return hash.Hash{}, nil, err
+	}
+	_, valHash, err := ddb.WriteRootValue(ctx, root)
+	if err != nil {
+		return hash.Hash{}, nil, err
+	}
+
 	name, email, _, _, err := dsess.ResolveNameEmail(ctx, dsess.DoltAuthorName, dsess.DoltAuthorEmail)
 	if err != nil {
-		return nil, err
+		return hash.Hash{}, nil, err
 	}
 	meta, err := datas.NewCommitMeta(name, email, msg)
 	if err != nil {
-		return nil, err
+		return hash.Hash{}, nil, err
 	}
-
-	return ddb.CommitDanglingWithParentCommits(ctx, valHash, parents, meta)
+	return valHash, meta, nil
 }

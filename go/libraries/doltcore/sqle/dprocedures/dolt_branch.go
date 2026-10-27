@@ -70,6 +70,12 @@ func doDoltBranch(ctx *sql.Context, args []string) (int, error) {
 		return 1, fmt.Errorf("Could not load database %s", dbName)
 	}
 
+	if apr.Contains(cli.OrphanFlag) {
+		if conflicting := apr.ContainsMany(cli.CopyFlag, cli.MoveFlag, cli.DeleteFlag, cli.DeleteForceFlag, cli.TrackFlag, cli.SetUpstreamToFlag, cli.RemoteParam); len(conflicting) > 0 {
+			return 1, fmt.Errorf("--%s cannot be used with --%s", cli.OrphanFlag, conflicting[0])
+		}
+	}
+
 	var rsc doltdb.ReplicationStatusController
 
 	switch {
@@ -467,6 +473,12 @@ func createNewBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *arg
 	if err != nil {
 		return err
 	}
+	if apr.Contains(cli.OrphanFlag) {
+		startPt, err = createOrphanCommit(ctx, dbData, startPt, branchName)
+		if err != nil {
+			return err
+		}
+	}
 	err = actions.CreateBranchWithStartPt(ctx, dbData, branchName, startPt, apr.Contains(cli.ForceFlag), rsc)
 	if err != nil {
 		return err
@@ -481,6 +493,55 @@ func createNewBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *arg
 	}
 
 	return nil
+}
+
+// createOrphanCommit writes a dangling, parentless commit holding the root of |startPt| and returns its hash. The
+// message names the start point so the commit cannot hash identically to the repository's initial commit.
+func createOrphanCommit(ctx *sql.Context, dbData env.DbData[*sql.Context], startPt, branchName string) (string, error) {
+	startCommit, err := resolveCommit(ctx, dbData, startPt)
+	if errors.Is(err, doltdb.ErrInvHash) || doltdb.IsNotACommit(err) {
+		return "", fmt.Errorf("fatal: '%s' is not a commit and a branch '%s' cannot be created from it", startPt, branchName)
+	} else if err != nil {
+		return "", err
+	}
+	startHash, err := startCommit.HashOf()
+	if err != nil {
+		return "", err
+	}
+	msg := fmt.Sprintf("Initialize orphan branch %s from %s", branchName, startHash.String())
+	rootHash, meta, err := writeRootWithSessionMeta(ctx, dbData.Ddb, startCommit, msg)
+	if err != nil {
+		return "", err
+	}
+	orphan, err := dbData.Ddb.CommitDanglingRoot(ctx, rootHash, meta)
+	if err != nil {
+		return "", err
+	}
+	orphanHash, err := orphan.HashOf()
+	if err != nil {
+		return "", err
+	}
+	return orphanHash.String(), nil
+}
+
+func resolveCommit(ctx *sql.Context, dbData env.DbData[*sql.Context], spec string) (*doltdb.Commit, error) {
+	cs, err := doltdb.NewCommitSpec(spec)
+	if err != nil {
+		return nil, err
+	}
+	headRef, err := dbData.Rsr.CWBHeadRef(ctx)
+	if err != nil {
+		return nil, err
+	}
+	optCmt, err := dbData.Ddb.Resolve(ctx, cs, headRef)
+	if err != nil {
+		return nil, err
+	}
+	commit, ok := optCmt.ToCommit()
+	if !ok {
+		return nil, doltdb.ErrGhostCommitEncountered
+	}
+	return commit, nil
 }
 
 // copyBranch takes arguments from |apr| to create a branch from another branch. If |giveAdminPrivs| is true, then the

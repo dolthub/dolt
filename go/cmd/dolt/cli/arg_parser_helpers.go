@@ -269,6 +269,7 @@ func CreateBranchArgParser() *argparser.ArgParser {
 	ap := createTracklessBranchArgParser()
 	ap.SupportsFlag(TrackFlag, "t", "Set up upstream configuration for a branch. Uses current branch as default")
 	ap.SupportsString(SetUpstreamToFlag, "u", "", "Set upstream configuration for a branch.")
+	ap.SupportsFlag(OrphanFlag, "", "Create a branch whose single commit has no parents and holds the contents of {{.LessThan}}start-point{{.GreaterThan}}.")
 
 	return ap
 }

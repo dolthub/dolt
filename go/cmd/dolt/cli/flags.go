@@ -64,6 +64,7 @@ const (
 	NotFlag                = "not"
 	NumberFlag             = "number"
 	OneLineFlag            = "oneline"
+	OrphanFlag             = "orphan"
 	OursFlag               = "ours"
 	OutputOnlyFlag         = "output-only"
 	OverwriteIgnoreFlag    = "overwrite-ignore"
