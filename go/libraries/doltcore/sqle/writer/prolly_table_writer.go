@@ -168,6 +168,7 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 			if uke, ok := err.(secondaryUniqueKeyError); ok {
 				return w.primary.(primaryIndexErrBuilder).errForSecondaryUniqueKeyError(ctx, uke)
 			}
+			return err
 		}
 	}
 	for _, wr := range w.secondary {
