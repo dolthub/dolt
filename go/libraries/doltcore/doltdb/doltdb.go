@@ -1183,7 +1183,9 @@ func (ddb *DoltDB) CommitDanglingRoot(ctx context.Context, valHash hash.Hash, cm
 
 // CommitDangling creates a new Commit for |val| that is not referenced by any DoltRef.
 func (ddb *DoltDB) CommitDangling(ctx context.Context, val types.Value, opts datas.CommitOptions) (*Commit, error) {
-	dcommit, err := datas.NewCommitForValue(ctx, datas.ChunkStoreFromDatabase(ddb.db), ddb.vrw, ddb.ns, val, opts)
+	cs := datas.ChunkStoreFromDatabase(ddb.db)
+
+	dcommit, err := datas.NewCommitForValue(ctx, cs, ddb.vrw, ddb.ns, val, opts)
 	if err != nil {
 		return nil, err
 	}

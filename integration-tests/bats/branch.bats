@@ -779,16 +779,10 @@ setup_origin_remote() {
 }
 
 @test "branch: --orphan commit message can be changed with commit --amend" {
-    if [ "$SQL_ENGINE" = "remote-engine" ]; then
-          skip "checks out a branch which is not allowed with remote server"
-    fi
     dolt branch --orphan orph
 
-    dolt checkout orph
-    run dolt status
-    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
-    dolt commit --amend -m "renamed"
-    run dolt log --oneline
+    dolt --branch orph commit --amend -m "renamed"
+    run dolt log --oneline orph
     [ "${#lines[@]}" -eq 1 ]
     [[ "$output" =~ "renamed" ]] || false
 }

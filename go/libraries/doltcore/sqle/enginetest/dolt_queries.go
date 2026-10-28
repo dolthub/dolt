@@ -4252,8 +4252,8 @@ var DoltBranchScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{doltCommit}},
 			},
 			{
-				Query:    "select count(*), max(message) from dolt_log;",
-				Expected: []sql.Row{{1, "renamed"}},
+				Query:    "select message from dolt_log;",
+				Expected: []sql.Row{{"renamed"}},
 			},
 		},
 	},

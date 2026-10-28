@@ -47,7 +47,7 @@ The command's second form creates a new branch head named {{.LessThan}}branchnam
 
 Note that this will create the new branch, but it will not switch the working tree to it; use {{.EmphasisLeft}}dolt checkout <newbranch>{{.EmphasisRight}} to switch to the new branch.
 
-With {{.EmphasisLeft}}--orphan{{.EmphasisRight}}, the new branch points at a new commit with no parents whose contents are those of {{.LessThan}}start-point{{.GreaterThan}}. The branch starts a history unrelated to every other branch. Use {{.EmphasisLeft}}dolt commit --amend{{.EmphasisRight}} on the new branch to change its commit message.
+With {{.EmphasisLeft}}--orphan{{.EmphasisRight}}, the new branch starts an unrelated history: a single parentless commit with the contents of {{.LessThan}}start-point{{.GreaterThan}}.
 
 With a {{.EmphasisLeft}}-m{{.EmphasisRight}}, {{.LessThan}}oldbranch{{.GreaterThan}} will be renamed to {{.LessThan}}newbranch{{.GreaterThan}}. If {{.LessThan}}newbranch{{.GreaterThan}} exists, -f must be used to force the rename to happen.
 
