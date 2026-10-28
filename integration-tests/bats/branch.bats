@@ -776,6 +776,10 @@ setup_origin_remote() {
     run dolt merge-base main orph
     [ "$status" -eq 1 ]
     [[ "$output" =~ "no common ancestor" ]] || false
+
+    run dolt merge-base --all main orph
+    [ "$status" -eq 1 ]
+    [[ "$output" == "" ]] || false
 }
 
 @test "branch: --orphan commit message can be changed with commit --amend" {

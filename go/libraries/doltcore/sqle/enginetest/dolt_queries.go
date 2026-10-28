@@ -4227,8 +4227,8 @@ var DoltBranchScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{1}},
 			},
 			{
-				Query:          "select * from dolt_merge_bases('main', 'orph');",
-				ExpectedErrStr: "no common ancestor",
+				Query:    "select * from dolt_merge_bases('main', 'orph');",
+				Expected: []sql.Row{},
 			},
 			{
 				Query:          "call dolt_branch('--orphan', 'orph');",

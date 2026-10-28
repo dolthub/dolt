@@ -95,6 +95,9 @@ func (cmd MergeBaseCmd) Exec(ctx context.Context, commandStr string, args []stri
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
+	if len(rows) == 0 {
+		return 1
+	}
 
 	for _, row := range rows {
 		cli.Println(row[0].(string))
