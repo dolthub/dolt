@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
@@ -96,7 +97,7 @@ func (cmd MergeBaseCmd) Exec(ctx context.Context, commandStr string, args []stri
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 	if len(rows) == 0 {
-		return 1
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(doltdb.ErrNoCommonAncestor), usage)
 	}
 
 	for _, row := range rows {

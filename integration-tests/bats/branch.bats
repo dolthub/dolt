@@ -779,7 +779,7 @@ setup_origin_remote() {
 
     run dolt merge-base --all main orph
     [ "$status" -eq 1 ]
-    [[ "$output" == "" ]] || false
+    [[ "$output" =~ "no common ancestor" ]] || false
 }
 
 @test "branch: --orphan commit message can be changed with commit --amend" {
@@ -802,6 +802,27 @@ setup_origin_remote() {
     [ "$status" -eq 1 ]
 }
 
+@test "branch: --orphan -f overwrites an existing branch" {
+    dolt sql -q "create table t (pk int primary key);"
+    dolt commit -Am "c1"
+    dolt branch --orphan orph
+
+    run dolt ls orph
+    [[ "$output" =~ "t" ]] || false
+
+    initial=$(dolt sql -q "select hashof('HEAD~1')" -r csv | tail -n 1)
+    run dolt branch --orphan -f orph HEAD~1
+    [ "$status" -eq 0 ]
+
+    run dolt log --oneline orph
+    [ "${#lines[@]}" -eq 1 ]
+    [[ "$output" =~ "Initialize orphan branch orph from $initial" ]] || false
+
+    run dolt ls orph
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No tables" ]] || false
+}
+
 @test "branch: --orphan argument errors" {
     run dolt branch --orphan
     [ "$status" -ne 0 ]
@@ -810,9 +831,6 @@ setup_origin_remote() {
     run dolt branch --orphan orph
     [ "$status" -eq 1 ]
     [[ "$output" =~ "A branch named 'orph' already exists" ]] || false
-
-    run dolt branch --orphan -f orph HEAD
-    [ "$status" -eq 0 ]
 
     run dolt branch --orphan other nosuch
     [ "$status" -eq 1 ]
