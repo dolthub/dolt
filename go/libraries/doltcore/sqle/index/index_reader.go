@@ -319,7 +319,7 @@ func NewIndexReaderBuilder(
 func newCoveringLookupBuilder(b *baseIndexImplBuilder) *coveringIndexImplBuilder {
 	var keyMap, valMap, ordMap val.OrdinalMapping
 	if b.idx.IsPrimaryKey() {
-		keyMap, valMap, ordMap = primaryIndexMapping(b.idx, b.projections)
+		keyMap, valMap, ordMap, _ = primaryIndexMapping(b.idx, b.projections)
 	} else {
 		keyMap, ordMap = coveringIndexMapping(b.idx, b.projections)
 	}
@@ -349,7 +349,7 @@ func newNonCoveringLookupBuilder(s *durableIndexState, b *baseIndexImplBuilder) 
 	priKd, _ := primary.Descriptors()
 	tbBld := val.NewTupleBuilder(priKd, primary.NodeStore())
 	pkMap := OrdinalMappingFromIndex(b.idx)
-	keyProj, valProj, ordProj := projectionMappings(b.idx.Schema(), b.projections)
+	keyProj, valProj, ordProj, _ := projectionMappings(b.idx.Schema(), b.projections)
 	return &nonCoveringIndexImplBuilder{
 		baseIndexImplBuilder: b,
 		pri:                  primary,

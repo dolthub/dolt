@@ -16,6 +16,7 @@ package index
 
 import (
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/sets"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -33,11 +34,14 @@ type prollyRowIter struct {
 	keyProj []int
 	valProj []int
 	// ordProj is a concatenated list of output ordinals for |keyProj| and |valProj|
-	ordProj []int
-	rowLen  int
+	ordProj          []int
+	rowLen           int
+	columnIds        sql.ColSet
+	projectedColumns sets.FastIntSet
 }
 
 var _ sql.RowIter = prollyRowIter{}
+var _ sql.ValueRowWriter = prollyRowIter{}
 
 func NewProllyRowIterForMap(sch schema.Schema, rows prolly.MapInterface, iter prolly.MapIter, projections []uint64) sql.RowIter {
 	if projections == nil {
@@ -73,17 +77,18 @@ func NewKeyedProllyRowIter(
 	projections []uint64,
 	ns tree.NodeStore,
 ) sql.RowIter {
-	keyProj, valProj, ordProj := projectionMappings(sch, projections)
+	keyProj, valProj, ordProj, projectedColumns := projectionMappings(sch, projections)
 
 	return prollyRowIter{
-		iter:    iter,
-		keyDesc: kd,
-		valDesc: vd,
-		keyProj: keyProj,
-		valProj: valProj,
-		ordProj: ordProj,
-		rowLen:  len(projections),
-		ns:      ns,
+		iter:             iter,
+		keyDesc:          kd,
+		valDesc:          vd,
+		keyProj:          keyProj,
+		valProj:          valProj,
+		ordProj:          ordProj,
+		rowLen:           len(projections),
+		ns:               ns,
+		projectedColumns: projectedColumns,
 	}
 }
 
@@ -94,7 +99,7 @@ func NewKeylessProllyRowIter(
 	projections []uint64,
 	ns tree.NodeStore,
 ) sql.RowIter {
-	_, valProj, ordProj := projectionMappings(sch, projections)
+	_, valProj, ordProj, _ := projectionMappings(sch, projections)
 
 	return &prollyKeylessIter{
 		iter:    iter,
@@ -108,10 +113,10 @@ func NewKeylessProllyRowIter(
 
 // projectionMappings returns data structures that specify 1) which fields we read
 // from key and value tuples, and 2) the position of those fields in the output row.
-func projectionMappings(sch schema.Schema, projections []uint64) (keyMap, valMap, ordMap val.OrdinalMapping) {
-	keyMap, valMap, ordMap = ProjectionMappingsForIndex(sch, projections)
+func projectionMappings(sch schema.Schema, projections []uint64) (keyMap, valMap, ordMap val.OrdinalMapping, projectedColumns sets.FastIntSet) {
+	keyMap, valMap, ordMap, projectedColumns = ProjectionMappingsForIndex(sch, projections)
 	adjustOffsetsForKeylessTable(sch, keyMap, valMap)
-	return keyMap, valMap, ordMap
+	return keyMap, valMap, ordMap, projectedColumns
 }
 
 func adjustOffsetsForKeylessTable(sch schema.Schema, keyMap val.OrdinalMapping, valMap val.OrdinalMapping) {
@@ -126,8 +131,9 @@ func adjustOffsetsForKeylessTable(sch schema.Schema, keyMap val.OrdinalMapping, 
 	}
 }
 
-func ProjectionMappingsForIndex(sch schema.Schema, projections []uint64) (keyMap, valMap, ordMap val.OrdinalMapping) {
+func ProjectionMappingsForIndex(sch schema.Schema, projections []uint64) (keyMap, valMap, ordMap val.OrdinalMapping, projectedColumns sets.FastIntSet) {
 	pks := sch.GetPKCols()
+	pkSize := pks.Size()
 	nonPks := sch.GetNonPKCols()
 
 	numPhysicalColumns := len(projections)
@@ -151,10 +157,12 @@ func ProjectionMappingsForIndex(sch schema.Schema, projections []uint64) (keyMap
 	nonKeyIdx := numPhysicalColumns - 1
 	for projNum, tag := range projections {
 		if idx, ok := pks.StoredIndexByTag(tag); ok && !pks.GetByStoredIndex(idx).Virtual {
+			projectedColumns.Add(idx)
 			allMap[keyIdx] = idx
 			allMap[numPhysicalColumns+keyIdx] = projNum
 			keyIdx++
 		} else if idx, ok := nonPks.StoredIndexByTag(tag); ok && !nonPks.GetByStoredIndex(idx).Virtual {
+			projectedColumns.Add(pkSize + idx)
 			allMap[nonKeyIdx] = idx
 			allMap[numPhysicalColumns+nonKeyIdx] = projNum
 			nonKeyIdx--
@@ -164,7 +172,7 @@ func ProjectionMappingsForIndex(sch schema.Schema, projections []uint64) (keyMap
 	keyMap = allMap[:keyIdx]
 	valMap = allMap[keyIdx:numPhysicalColumns]
 	ordMap = allMap[numPhysicalColumns:]
-	return keyMap, valMap, ordMap
+	return keyMap, valMap, ordMap, projectedColumns
 }
 
 func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
@@ -192,33 +200,51 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 }
 
 // NextValueRow implements the sql.ValueRowIter interface.
-func (it prollyRowIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, error) {
+func (it prollyRowIter) WriteNextValueRow(ctx *sql.Context, row sql.ValueRow) error {
 	key, value, err := it.iter.Next(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	row := make(sql.ValueRow, it.rowLen)
-	for i, idx := range it.keyProj {
-		outIdx := it.ordProj[i]
-		row[outIdx], err = tree.GetFieldValue(ctx, it.keyDesc, idx, key, it.ns)
+	pkCols := len(it.keyProj)
+	colId, _ := it.columnIds.Next(1)
+	colOffset, _ := it.projectedColumns.Next(0)
+
+	for _ = range it.keyProj {
+		row[colId], err = tree.GetFieldValue(ctx, it.keyDesc, colOffset, key, it.ns)
 		if err != nil {
-			return nil, err
+			return err
 		}
+		colId, _ = it.columnIds.Next(colId + 1)
+		colOffset, _ = it.projectedColumns.Next(colOffset + 1)
 	}
 
-	for i, idx := range it.valProj {
-		outIdx := it.ordProj[len(it.keyProj)+i]
-		row[outIdx], err = tree.GetFieldValue(ctx, it.valDesc, idx, value, it.ns)
+	for _ = range it.valProj {
+		row[colId], err = tree.GetFieldValue(ctx, it.valDesc, colOffset-pkCols, value, it.ns)
 		if err != nil {
-			return nil, err
+			return err
 		}
+		colId, _ = it.columnIds.Next(colId + 1)
+		colOffset, _ = it.projectedColumns.Next(colOffset + 1)
 	}
-	return row, nil
+	return nil
+}
+
+func (it prollyRowIter) WithColumns(columns sql.ColSet) sql.ValueRowWriter {
+	result := it
+	result.columnIds = columns
+	return result
+}
+
+func (it prollyRowIter) Columns() sql.ColSet {
+	return it.columnIds
 }
 
 // IsValueRowIter implements the sql.ValueRowIter interface.
-func (it prollyRowIter) IsValueRowIter(ctx *sql.Context) bool {
+func (it prollyRowIter) IsValueRowWriter(ctx *sql.Context) bool {
+	/*if it.columnIds.Empty() {
+		return false
+	}*/
 	for _, typ := range it.keyDesc.Types {
 		if typ.Enc == val.ExtendedEnc || typ.Enc == val.ExtendedAddrEnc || typ.Enc == val.ExtendedAdaptiveEnc {
 			return false

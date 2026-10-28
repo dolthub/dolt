@@ -16,6 +16,7 @@ package index
 
 import (
 	"context"
+	"github.com/dolthub/go-mysql-server/sql/sets"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/errguard"
@@ -78,7 +79,7 @@ func newProllyIndexIter(
 	kd, _ := primary.Descriptors()
 	pkBld := val.NewTupleBuilder(kd, primary.NodeStore())
 	pkMap := OrdinalMappingFromIndex(idx)
-	keyProj, valProj, ordProj := projectionMappings(idx.Schema(), projections)
+	keyProj, valProj, ordProj, _ := projectionMappings(idx.Schema(), projections)
 
 	iter := prollyIndexIter{
 		idx:         idx,
@@ -247,7 +248,7 @@ func newProllyCoveringIndexIter(
 
 	var keyMap, valMap, ordMap val.OrdinalMapping
 	if idx.IsPrimaryKey() {
-		keyMap, valMap, ordMap = primaryIndexMapping(idx, projections)
+		keyMap, valMap, ordMap, _ = primaryIndexMapping(idx, projections)
 	} else {
 		keyMap, ordMap = coveringIndexMapping(idx, projections)
 	}
@@ -362,7 +363,7 @@ func coveringIndexMapping(d DoltIndex, projections []uint64) (keyMap, ordMap val
 	return
 }
 
-func primaryIndexMapping(idx DoltIndex, projections []uint64) (keyProj, valProj, ordProj val.OrdinalMapping) {
+func primaryIndexMapping(idx DoltIndex, projections []uint64) (keyProj, valProj, ordProj val.OrdinalMapping, projectedColumns sets.FastIntSet) {
 	return ProjectionMappingsForIndex(idx.Schema(), projections)
 }
 
@@ -421,7 +422,7 @@ func newProllyKeylessIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range
 	indexMap := OrdinalMappingFromIndex(idx)
 	keyBld := val.NewTupleBuilder(keyDesc, clustered.NodeStore())
 	sch := idx.Schema()
-	_, vm, om := projectionMappings(sch, projections)
+	_, vm, om, _ := projectionMappings(sch, projections)
 
 	workerCtx, cancel := context.WithCancel(ctx)
 	eg, c := errgroup.WithContext(workerCtx)
