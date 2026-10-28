@@ -4241,6 +4241,7 @@ var DoltBranchScripts = []queries.ScriptTest{
 			{
 				Query:    "show tables as of 'orph';",
 				Expected: []sql.Row{},
+				Dialect:  "mysql",
 			},
 			{
 				Query:    "call dolt_checkout('orph');",
