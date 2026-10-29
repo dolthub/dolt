@@ -34,7 +34,7 @@ require (
 	github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63
 	github.com/dolthub/ishell v0.0.0-20260414231531-5f031e3e9037
 	github.com/dolthub/sqllogictest/go v0.0.0-20240618184124-ca47f9354216
-	github.com/dolthub/vitess v0.0.0-20261014211039-3e903c0f05d3
+	github.com/dolthub/vitess v0.0.0-20261029190845-f2ed042bce1d
 	github.com/dustin/go-humanize v1.0.1
 	github.com/edsrzf/mmap-go v1.2.0
 	github.com/esote/minmaxheap v1.0.0
