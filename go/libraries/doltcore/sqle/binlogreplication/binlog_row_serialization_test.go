@@ -15,6 +15,7 @@
 package binlogreplication
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -28,6 +29,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -124,6 +128,7 @@ func TestBinlogFullGeneratedColumns(t *testing.T) {
 	}
 }
 
+// binlogTestTable builds physical row storage while omitting virtual values.
 func binlogTestTable(t *testing.T, ctx *sql.Context, sch schema.Schema, rows []sql.Row) *doltdb.Table {
 	t.Helper()
 	ns := tree.NewTestNodeStore()
@@ -169,6 +174,7 @@ func binlogTestTable(t *testing.T, ctx *sql.Context, sch schema.Schema, rows []s
 	return table
 }
 
+// TestBinlogFullGeneratedColumnTypes checks declared types, dependencies, and multi-byte NULL bitmaps.
 func TestBinlogFullGeneratedColumnTypes(t *testing.T) {
 	ctx := sql.NewEmptyContext()
 	cols := make([]schema.Column, 10)
@@ -213,6 +219,7 @@ func TestBinlogFullGeneratedColumnTypes(t *testing.T) {
 	require.Equal(t, "NULL", values[8])
 }
 
+// TestBinlogFullGeneratedColumnTime preserves signed durations beyond 24 hours in generated images.
 func TestBinlogFullGeneratedColumnTime(t *testing.T) {
 	ctx := sql.NewEmptyContext()
 	cols := []schema.Column{
@@ -249,4 +256,88 @@ func TestBinlogFullGeneratedColumnTime(t *testing.T) {
 			require.Equal(t, []string{"1", duration, duration, "27"}, values)
 		})
 	}
+}
+
+// TestBinlogVirtualSchemaReset uses the target schema for before images after schema-changing resets.
+func TestBinlogVirtualSchemaReset(t *testing.T) {
+	for _, tc := range []struct {
+		name, columns, value, alter string
+		old, new                    []string
+	}{
+		{"expression", "a INT,g INT AS(a+1)VIRTUAL", "10", "ALTER TABLE t MODIFY g INT AS(a+2)VIRTUAL", []string{"1", "10", "12"}, []string{"1", "20", "22"}},
+		{"type", "a VARCHAR(20),g INT AS(length(a))VIRTUAL", "'0004'", "ALTER TABLE t MODIFY a INT", []string{"1", "4", "1"}, []string{"1", "20", "2"}},
+		{"numeric rounding", "a VARCHAR(20),g INT AS(a+1)VIRTUAL", "'4.6'", "ALTER TABLE t MODIFY a INT", []string{"1", "5", "6"}, []string{"1", "20", "21"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, run, root := binlogTestEngine(t)
+			run("CREATE TABLE t (id INT PRIMARY KEY," + tc.columns + ")")
+			run("INSERT INTO t(id,a) VALUES(1," + tc.value + ")")
+			run("CALL DOLT_ADD('-A')")
+			run("CALL DOLT_COMMIT('-m','before')")
+			run("CALL DOLT_CHECKOUT('-b','target')")
+			if tc.name == "numeric rounding" {
+				// Prepare a valid target without changing the source row retained on main.
+				run("UPDATE t SET a='4' WHERE id=1")
+			}
+			run(tc.alter)
+			run("UPDATE t SET a=20 WHERE id=1")
+			run("CALL DOLT_ADD('-A')")
+			run("CALL DOLT_COMMIT('-m','after')")
+			run("CALL DOLT_CHECKOUT('main')")
+			before := root()
+			run("CALL DOLT_RESET('--hard','target')")
+			after := root()
+			deltas, err := diff.GetTableDeltas(ctx, before, after)
+			require.NoError(t, err)
+			format := mysql.NewMySQL56BinlogFormat()
+			format.ChecksumAlgorithm = mysql.BinlogChecksumAlgOff
+			producer := &binlogProducer{binlogFormat: &format}
+
+			events, err := producer.createRowEvents(ctx, deltas, map[string]uint64{"t": 1})
+			require.NoError(t, err)
+			require.Len(t, events, 1)
+			require.True(t, events[0].IsUpdateRows())
+			table, ok, err := after.GetTable(ctx, doltdb.TableName{Name: "t"})
+			require.NoError(t, err)
+			require.True(t, ok)
+			tm, err := createTableMapFromDoltTable(ctx, "dolt", "t", table, false)
+			require.NoError(t, err)
+			rows, err := events[0].Rows(format, tm)
+			require.NoError(t, err)
+			require.Len(t, rows.Rows, 1)
+			old, err := rows.StringIdentifiesForTests(tm, 0)
+			require.NoError(t, err)
+			require.Equal(t, tc.old, old)
+			new, err := rows.StringValuesForTests(tm, 0)
+			require.NoError(t, err)
+			require.Equal(t, tc.new, new)
+		})
+	}
+}
+
+// binlogTestEngine provides an isolated SQL engine and access to its committed working roots.
+func binlogTestEngine(t *testing.T) (*sql.Context, func(string), func() doltdb.RootValue) {
+	t.Helper()
+	dEnv := sqle.CreateTestEnv()
+	t.Cleanup(func() { dEnv.Close() })
+	db, err := sqle.NewDatabase(context.Background(), "dolt", dEnv.DbData(context.Background()), editor.Options{})
+	require.NoError(t, err)
+	engine, ctx, err := sqle.NewTestEngine(dEnv, context.Background(), db)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, engine.Close()) })
+	run := func(query string) {
+		t.Helper()
+		_, iter, _, err := engine.Query(ctx, query)
+		require.NoError(t, err, query)
+		_, err = sql.RowIterToRows(ctx, iter)
+		require.NoError(t, err, query)
+	}
+	root := func() doltdb.RootValue {
+		t.Helper()
+		state, ok, err := ctx.Session.(*dsess.DoltSession).LookupDbState(ctx, "dolt")
+		require.NoError(t, err)
+		require.True(t, ok)
+		return state.WorkingRoot()
+	}
+	return ctx, run, root
 }
