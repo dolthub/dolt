@@ -195,6 +195,87 @@ func TestBinlogPrimary(t *testing.T) {
 		{"binlog-main.000001", "2377", "", "", uuid + ":1-3"}})
 }
 
+// TestBinlogPrimary_GTIDResumeFlags checks Debezium-style requests whose flags are
+// zero even though they include a binary GTID checkpoint.
+// https://github.com/dolthub/dolt/issues/12241
+func TestBinlogPrimary_GTIDResumeFlags(t *testing.T) {
+	for _, flags := range []uint16{0, mysql.BinlogThroughGTID} {
+		t.Run(fmt.Sprintf("flags_%d", flags), func(t *testing.T) {
+			h := newHarness(t)
+			h.startSqlServersWithDoltSystemVars(doltReplicationPrimarySystemVars)
+			h.setupForDoltToMySqlReplication()
+
+			h.primaryDatabase.MustExec("CREATE DATABASE cdc_probe")
+			h.primaryDatabase.MustExec("CREATE TABLE cdc_probe.contact (id INT PRIMARY KEY, image_url VARCHAR(100))")
+			h.primaryDatabase.MustExec("ALTER TABLE cdc_probe.contact RENAME COLUMN image_url TO image")
+			h.primaryDatabase.MustExec("INSERT INTO cdc_probe.contact VALUES (1, 'existing')")
+
+			var executed string
+			require.NoError(t, h.primaryDatabase.Get(&executed, "SELECT @@GLOBAL.gtid_executed"))
+			checkpoint, err := mysql.ParseMysql56GTIDSet(executed)
+			require.NoError(t, err)
+			require.NotEmpty(t, checkpoint.String())
+
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			stream, err := mysql.Connect(ctx, &mysql.ConnParams{
+				Host: "127.0.0.1", Port: h.doltPort, Uname: "admin",
+			})
+			require.NoError(t, err)
+			defer stream.Close()
+
+			// Send flags explicitly: SendBinlogDumpCommand sets BinlogThroughGTID
+			// automatically and would hide a regression in handling flags=0.
+			require.NoError(t, stream.WriteComBinlogDumpGTID(43, "", 4, flags,
+				checkpoint.(mysql.Mysql56GTIDSet).SIDBlock()))
+			h.primaryDatabase.MustExec("INSERT INTO cdc_probe.contact VALUES (2, 'new')")
+			require.NoError(t, stream.Conn.SetReadDeadline(time.Now().Add(10*time.Second)))
+
+			format := mysql.NewMySQL56BinlogFormat()
+			tableMaps := make(map[uint64]*mysql.TableMap)
+			var transaction mysql.GTID
+			sawNewRow := false
+			for {
+				event, err := stream.ReadBinlogEvent()
+				require.NoError(t, err, "waiting for the new transaction with flags=%d", flags)
+				if event.IsFormatDescription() {
+					format, err = event.Format()
+					require.NoError(t, err)
+					continue
+				}
+				event, _, err = event.StripChecksum(format)
+				require.NoError(t, err)
+				switch {
+				case event.IsGTID():
+					transaction, _, err = event.GTID(format)
+					require.NoError(t, err)
+					require.False(t, checkpoint.ContainsGTID(transaction),
+						"flags=%d replayed %s despite checkpoint %s", flags, transaction, executed)
+				case event.IsTableMap():
+					tableMaps[event.TableID(format)], err = event.TableMap(format)
+					require.NoError(t, err)
+				case event.IsWriteRows():
+					require.NotNil(t, transaction, "row arrived without a new GTID")
+					tableMap := tableMaps[event.TableID(format)]
+					require.NotNil(t, tableMap)
+					require.Equal(t, "cdc_probe", tableMap.Database)
+					require.Equal(t, "contact", tableMap.Name)
+					rows, err := event.Rows(format, tableMap)
+					require.NoError(t, err)
+					require.Len(t, rows.Rows, 1)
+					values, err := rows.StringValuesForTests(tableMap, 0)
+					require.NoError(t, err)
+					require.Equal(t, []string{"2", "new"}, values)
+					sawNewRow = true
+				case event.IsXID():
+					require.True(t, sawNewRow, "new transaction committed without its row event")
+					return
+				}
+			}
+		})
+	}
+}
+
 // TestBinlogPrimary_textTypes tests serialization for empty, NULL, and non-empty TEXT
 // and BLOB fields.
 // https://github.com/dolthub/dolt/issues/10601
