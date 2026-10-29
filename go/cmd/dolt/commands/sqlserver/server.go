@@ -46,6 +46,7 @@ import (
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/gcctx"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
@@ -219,8 +220,15 @@ func ConfigureServices(
 	}
 	controller.Register(InitMultiEnv)
 
+	// The server's sessions, including the ones the engine creates, all share this controller.
+	gcSafepointController := gcctx.NewGCSafepointController()
+
 	AssertNoDatabasesInAccessModeReadOnly := &svcs.AnonService{
 		InitF: func(ctx context.Context) (err error) {
+			ctx = gcctx.WithGCSafepointController(ctx, gcSafepointController)
+			defer gcctx.SessionEnd(ctx)
+			gcctx.SessionCommandBegin(ctx)
+			defer gcctx.SessionCommandEnd(ctx)
 			return mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
 				readOnly, err := dEnv.IsAccessModeReadOnly(ctx)
 				if err != nil {
@@ -303,6 +311,7 @@ func ConfigureServices(
 				SkipRootUserInitialization: cfg.SkipRootUserInit,
 				EngineOverrides:            cfg.ServerConfig.Overrides(),
 				ProviderFactory:            cfg.ProviderFactory,
+				GCSafepointController:      gcSafepointController,
 			}
 			return nil
 		},
