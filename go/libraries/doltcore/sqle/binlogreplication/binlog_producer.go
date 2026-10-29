@@ -423,6 +423,10 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 			}
 		}
 
+		resolved, err := resolveBinlogSchema(ctx, tableName.Name, sch)
+		if err != nil {
+			return nil, err
+		}
 		nonSystemHiddenCols := sch.GetAllCols().GetNonSystemHiddenCols()
 		tableId := tablesToId[tableName.Name]
 
@@ -444,7 +448,7 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 				// For inserted rows, there's no existing row to be identified, so
 				// we don't need to use the from schema.
 				data, nullBitmap, err := serializeRowToBinlogBytes(ctx,
-					sch, sch, diff.Key, diff.To, tableDelta.ToTable.NodeStore())
+					sch, sch, resolved, diff.Key, diff.To, tableDelta.ToTable.NodeStore())
 				if err != nil {
 					return err
 				}
@@ -459,7 +463,7 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 				// For an updated row, we don't need to use the "from" schema for the
 				// new values being updated.
 				data, nullColumns, err := serializeRowToBinlogBytes(ctx,
-					sch, sch, diff.Key, diff.To, tableDelta.ToTable.NodeStore())
+					sch, sch, resolved, diff.Key, diff.To, tableDelta.ToTable.NodeStore())
 				if err != nil {
 					return err
 				}
@@ -470,7 +474,7 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 				// case there have been any schema/type changes, and we need the "to" schema so
 				// that we can assemble and serialize the row information to the current schema.
 				identify, nullIdentifyColumns, err := serializeRowToBinlogBytes(ctx,
-					fromSch, sch, diff.Key, diff.From, tableDelta.FromTable.NodeStore())
+					fromSch, sch, resolved, diff.Key, diff.From, tableDelta.FromTable.NodeStore())
 				if err != nil {
 					return err
 				}
@@ -490,7 +494,7 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 				// correctly extract the values from the "from" diff, but also use the "to" schema to
 				// assemble and encode the values to the current schema.
 				identifyData, nullBitmap, err := serializeRowToBinlogBytes(ctx,
-					fromSch, sch, diff.Key, diff.From, tableDelta.FromTable.NodeStore())
+					fromSch, sch, resolved, diff.Key, diff.From, tableDelta.FromTable.NodeStore())
 				if err != nil {
 					return err
 				}
@@ -516,10 +520,8 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 				DataColumns: mysql.NewServerBitmap(len(nonSystemHiddenCols)),
 				Rows:        tableRowsToWrite,
 			}
-			for i, col := range nonSystemHiddenCols {
-				if !col.Virtual {
-					rows.DataColumns.Set(i, true)
-				}
+			for i := range nonSystemHiddenCols {
+				rows.DataColumns.Set(i, true)
 			}
 			events = append(events, b.newWriteRowsEvent(tableId, rows))
 		}
@@ -529,10 +531,8 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 				IdentifyColumns: mysql.NewServerBitmap(len(nonSystemHiddenCols)),
 				Rows:            tableRowsToDelete,
 			}
-			for i, col := range nonSystemHiddenCols {
-				if !col.Virtual {
-					rows.IdentifyColumns.Set(i, true)
-				}
+			for i := range nonSystemHiddenCols {
+				rows.IdentifyColumns.Set(i, true)
 			}
 			events = append(events, b.newDeleteRowsEvent(tableId, rows))
 		}
@@ -543,11 +543,9 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 				IdentifyColumns: mysql.NewServerBitmap(len(nonSystemHiddenCols)),
 				Rows:            tableRowsToUpdate,
 			}
-			for i, col := range nonSystemHiddenCols {
-				if !col.Virtual {
-					rows.DataColumns.Set(i, true)
-					rows.IdentifyColumns.Set(i, true)
-				}
+			for i := range nonSystemHiddenCols {
+				rows.DataColumns.Set(i, true)
+				rows.IdentifyColumns.Set(i, true)
 			}
 			events = append(events, b.newUpdateRowsEvent(tableId, rows))
 		}
@@ -720,8 +718,7 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 		return nil, err
 	}
 
-	// Include all non-system-hidden columns. Virtual generated columns still pass metadata, but
-	// don't ever pass a value, since the value isn't stored in a row tuple.
+	// Include all non-system-hidden columns, matching the full row images.
 	nonSystemHiddenCols := sch.GetAllCols().GetNonSystemHiddenCols()
 	types := make([]byte, len(nonSystemHiddenCols))
 	metadata := make([]uint16, len(nonSystemHiddenCols))

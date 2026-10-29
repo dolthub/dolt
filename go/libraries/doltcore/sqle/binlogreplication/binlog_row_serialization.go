@@ -21,6 +21,7 @@ import (
 	"github.com/dolthub/vitess/go/mysql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expranalysis"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -123,58 +124,82 @@ func (rsi *rowSerializationIter) findFromTupleIndex(pFromCol *schema.Column) int
 	return idx
 }
 
-// serializeRowToBinlogBytes serializes the row formed by |key| and |value| into a binlog encoded row. The |fromSch| is
-// the schema at the start of the diff, and is used to extract the values from |key| and |value|. The |toSch| is the
-// schema at the end of the diff and is used to serialize the data into the binlog encoding. In many cases, these two
-// schemas may be the same, but when there is a schema change, they will be two different schemas and both are needed
-// to correctly deserialize the data and then serialize it into the expected format.
-// For data stored out of band (e.g. BLOB, TEXT, GEOMETRY, JSON), |ns| is used to load the
-// out-of-band data. This function returns the binary representation of the row, as well as a bitmap that indicates
-// which fields of the row are null (and therefore don't contribute any bytes to the returned binary data).
-func serializeRowToBinlogBytes(ctx *sql.Context, fromSch, toSch schema.Schema, key, value tree.Item, ns tree.NodeStore) (data []byte, nullBitmap mysql.Bitmap, err error) {
-	nullBitmap = mysql.NewServerBitmap(toSch.GetAllCols().StoredSize())
+// resolveBinlogSchema resolves generated expressions once per table delta, rather than
+// once per row. Tables without virtual columns do not need expression analysis.
+func resolveBinlogSchema(ctx *sql.Context, tableName string, sch schema.Schema) (sql.Schema, error) {
+	for _, col := range sch.GetAllCols().GetColumns() {
+		if col.Virtual && !col.SystemHidden {
+			return expranalysis.ResolveSchema(ctx, tableName, sch)
+		}
+	}
+	return nil, nil
+}
 
+// serializeRowToBinlogBytes reads stored values using fromSch and emits a full row
+// image in toSch order. resolved contains toSch's analyzed generated expressions.
+// Virtual values must be evaluated separately for the before and after images;
+// they are not present in either storage tuple. System-hidden columns used by
+// functional indexes are excluded, just as they are from the table map.
+func serializeRowToBinlogBytes(ctx *sql.Context, fromSch, toSch schema.Schema, resolved sql.Schema, key, value tree.Item, ns tree.NodeStore) (data []byte, nullBitmap mysql.Bitmap, err error) {
+	cols := toSch.GetAllCols()
+	row := make(sql.Row, cols.Size())
 	iter := newRowSerializationIter(ctx, fromSch, toSch, key, value, ns)
-	rowIdx := -1
 	for iter.hasNext() {
-		rowIdx++
-		fromCol, toCol, fromDescriptor, tuple, tupleIdx := iter.nextColumn()
-
-		// If there is no matching "from" column, this then column must have been added during a schema change,
-		// so mark it as nil and continue to the next column.
+		fromCol, toCol, descriptor, tuple, tupleIdx := iter.nextColumn()
+		// A column added during a schema change has no value in the old image.
 		if fromCol == nil {
-			nullBitmap.Set(rowIdx, true)
 			continue
 		}
-
 		typ := fromCol.TypeInfo.ToSqlType()
 		deserializer, ok := typeSerializersMap[typ.Type()]
 		if !ok {
-			return nil, nullBitmap, fmt.Errorf("unsupported type: %v (%d)\n", typ.String(), typ.Type())
+			return nil, nullBitmap, fmt.Errorf("unsupported type: %v (%d)", typ.String(), typ.Type())
 		}
-
-		// Use the "from" column to deserialize the value from the old schema
-		value, err := deserializer.deserialize(ctx, typ, fromDescriptor, tuple, tupleIdx, ns)
+		v, err := deserializer.deserialize(ctx, typ, descriptor, tuple, tupleIdx, ns)
 		if err != nil {
 			return nil, nullBitmap, err
 		}
-		if value == nil {
-			nullBitmap.Set(rowIdx, true)
-			continue
-		}
-
-		// Use the "to" column to serialize the value to the new/current/target schema
-		serializer, ok := typeSerializersMap[toCol.TypeInfo.ToSqlType().Type()]
-		if !ok {
-			return nil, nullBitmap, fmt.Errorf("unsupported type: %v (%d)\n", typ.String(), typ.Type())
-		}
-
-		newData, err := serializer.serialize(ctx, toCol.TypeInfo.ToSqlType(), value, ns)
-		if err != nil {
-			return nil, mysql.Bitmap{}, err
-		}
-		data = append(data, newData...)
+		row[cols.TagToIdx[toCol.Tag]] = v
 	}
 
+	// All stored fields are loaded first: a generated column can refer to a
+	// later stored column. Evaluate virtual columns in schema order so that a
+	// generated expression can refer to an earlier generated column as well.
+	for i, col := range cols.GetColumns() {
+		if !col.Virtual || col.SystemHidden {
+			continue
+		}
+		v, err := resolved[i].Generated.Eval(ctx, row)
+		if err != nil {
+			return nil, nullBitmap, err
+		}
+		// Generated.Eval also converts to the declared column type, so dependent
+		// expressions see the same value that will be sent to the consumer.
+		row[i] = v
+	}
+
+	nullBitmap = mysql.NewServerBitmap(len(cols.GetNonSystemHiddenCols()))
+	rowIdx := 0
+	for i, col := range cols.GetColumns() {
+		if col.SystemHidden {
+			continue
+		}
+		v := row[i]
+		if v == nil {
+			nullBitmap.Set(rowIdx, true)
+		} else {
+			typ := col.TypeInfo.ToSqlType()
+			serializer, ok := typeSerializersMap[typ.Type()]
+			if !ok {
+				return nil, nullBitmap, fmt.Errorf("unsupported type: %v (%d)", typ.String(), typ.Type())
+			}
+			newData, err := serializer.serialize(ctx, typ, v, ns)
+			if err != nil {
+				return nil, nullBitmap, err
+			}
+			data = append(data, newData...)
+		}
+		rowIdx++
+	}
 	return data, nullBitmap, nil
 }
