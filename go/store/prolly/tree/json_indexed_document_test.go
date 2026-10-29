@@ -639,3 +639,43 @@ func TestIndexedJsonDocument_CreateLargeStringValues(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "\""+value+"\"", extractedValue)
 }
+
+func TestIndexedJsonDocument_NumberKinds(t *testing.T) {
+	ctx := sql.NewEmptyContext()
+	ns := NewTestNodeStore()
+	tests := []struct{ input, output, kind string }{
+		{"42", "42", "INTEGER"},
+		{"42.0", "42.0", "DOUBLE"},
+		{"4.2e1", "42.0", "DOUBLE"},
+		{"1.25", "1.25", "DOUBLE"},
+		{"-0.0", "-0.0", "DOUBLE"},
+		{"9007199254740993", "9007199254740993", "UNSIGNED INTEGER"},
+		{"18446744073709551615", "18446744073709551615", "UNSIGNED INTEGER"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			doc := newIndexedJsonDocumentFromValue(t, ctx, ns, tt.input)
+			encoded, err := doc.GetBytes(ctx)
+			require.NoError(t, err)
+			require.Equal(t, tt.output, string(encoded))
+			kind, err := doc.JsonType(ctx)
+			require.NoError(t, err)
+			require.Equal(t, tt.kind, kind)
+			reopened := NewIndexedJsonDocument(doc.m.Root, ns)
+			value, err := reopened.ToInterface(ctx)
+			require.NoError(t, err)
+			require.Equal(t, tt.kind, json.TypeOfJsonValue(value))
+		})
+	}
+	integer := newIndexedJsonDocumentFromValue(t, ctx, ns, `{"v":42}`)
+	double := newIndexedJsonDocumentFromValue(t, ctx, ns, `{"v":42.0}`)
+	integerBytes, err := integer.GetBytes(ctx)
+	require.NoError(t, err)
+	doubleBytes, err := double.GetBytes(ctx)
+	require.NoError(t, err)
+	require.NotEqual(t, integerBytes, doubleBytes)
+	// Numeric equality is independent of storage representation.
+	comparison, err := integer.Compare(ctx, double)
+	require.NoError(t, err)
+	require.Equal(t, 0, comparison)
+}

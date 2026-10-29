@@ -102,3 +102,28 @@ func TestJSONLWriterEmptyWritesNothing(t *testing.T) {
 	require.NoError(t, wr.Close(context.Background()))
 	require.Equal(t, "", buf.String())
 }
+
+func TestJSONWriterPreservesNumberKinds(t *testing.T) {
+	ctx := sql.NewEmptyContext()
+	sch, err := schema.SchemaFromCols(schema.NewColCollection(schema.Column{
+		Name: "payload", Tag: 0, Kind: types.JSONKind, TypeInfo: typeinfo.JSONType,
+	}))
+	require.NoError(t, err)
+	for _, sqlSchema := range []bool{false, true} {
+		var buf bytes.Buffer
+		var writer *RowWriter
+		if sqlSchema {
+			writer, err = NewJSONSqlWriter(iohelp.NopWrCloser(&buf), sql.Schema{&sql.Column{Name: "payload", Type: gmstypes.JSON}})
+		} else {
+			writer, err = NewJSONWriter(iohelp.NopWrCloser(&buf), sch)
+		}
+		require.NoError(t, err)
+		doc := gmstypes.MustJSON(`{"integer":42,"double":42.0,"large":18446744073709551615}`)
+		require.NoError(t, writer.WriteSqlRow(ctx, sql.Row{doc}))
+		require.NoError(t, writer.Close(ctx))
+		var decoded any
+		require.NoError(t, gmstypes.JsonUnmarshal(buf.Bytes(), &decoded))
+		payload := decoded.(map[string]any)["rows"].([]any)[0].(map[string]any)["payload"]
+		require.Equal(t, doc.Val, payload)
+	}
+}

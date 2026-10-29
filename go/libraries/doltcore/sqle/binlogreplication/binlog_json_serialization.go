@@ -256,8 +256,15 @@ func encodeJsonValue(jsonValue any) (typeId byte, buffer []byte, err error) {
 		buffer = append(buffer, []byte(v)...)
 		return jsonTypeString, buffer, nil
 
+	case int64:
+		buffer = binary.LittleEndian.AppendUint64(buffer, uint64(v))
+		return jsonTypeInt64, buffer, nil
+
+	case uint64:
+		buffer = binary.LittleEndian.AppendUint64(buffer, v)
+		return jsonTypeUint64, buffer, nil
+
 	case float64:
-		// NOTE: all our numbers end up being represented as float64s currently when we parse stored JSON
 		bits := math.Float64bits(v)
 		buffer = append(buffer, make([]byte, 8)...)
 		binary.LittleEndian.PutUint64(buffer, bits)
