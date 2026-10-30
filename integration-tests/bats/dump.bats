@@ -99,6 +99,33 @@ teardown() {
     [[ "$output" =~ "3,Table" ]] || false
 }
 
+@test "dump: SQL type - geometry bytes that need escaping roundtrip" {
+    # https://github.com/dolthub/dolt/issues/12257
+    # The x coordinates hold a 0x27 byte and a 0x5c byte.
+    dolt sql <<SQL
+CREATE TABLE t (pk INT PRIMARY KEY, p POINT);
+INSERT INTO t VALUES
+  (1, ST_GeomFromWKB(UNHEX('01010000000000000027000040000000000000F03F'))),
+  (2, ST_GeomFromWKB(UNHEX('0101000000000000005C000040000000000000F03F')));
+SQL
+
+    run dolt sql -r csv -q "SELECT pk, HEX(ST_AsBinary(p)) FROM t ORDER BY pk"
+    [ "$status" -eq 0 ]
+    expected="$output"
+
+    run dolt dump
+    [ "$status" -eq 0 ]
+    [ -f doltdump.sql ]
+
+    dolt sql -q "DROP TABLE t"
+    run dolt sql < doltdump.sql
+    [ "$status" -eq 0 ]
+
+    run dolt sql -r csv -q "SELECT pk, HEX(ST_AsBinary(p)) FROM t ORDER BY pk"
+    [ "$status" -eq 0 ]
+    [ "$output" = "$expected" ]
+}
+
 @test "dump: SQL type - no-create-db flag" {
     dolt sql -q "CREATE TABLE new_table(pk int primary key);"
     dolt sql -q "INSERT INTO new_table VALUES (1);"
