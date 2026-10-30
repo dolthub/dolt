@@ -78,7 +78,11 @@ func (c *JoinCost) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.Provider()
-	eng := gms.New(analyzer.NewDefault(pro), &gms.Config{EngineVariables: ctx.EngineVariables()})
+	vars := ctx.EngineVariables()
+	if vars == nil {
+		return nil, fmt.Errorf("dolt_join_cost requires an engine variable owner")
+	}
+	eng := gms.New(analyzer.NewDefault(pro), &gms.Config{EngineVariables: vars})
 	defer eng.Close()
 
 	binder := planbuilder.New(ctx, eng.Analyzer.Catalog, eng.EventScheduler)

@@ -16,6 +16,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -59,7 +60,7 @@ type SqlEngine struct {
 	ContextFactory        sql.ContextFactory
 	dsessFactory          sessionFactory
 	engine                *gms.Engine
-	variables             *sql.EngineVariables // nil when the engine shares the global registries
+	variables             *sql.EngineVariables
 	fs                    filesys.Filesys
 	clusterController     *cluster.Controller
 	branchActivityTracker *doltdb.BranchActivityTracker
@@ -86,7 +87,7 @@ type SqlEngineConfig struct {
 	Bulk                       bool
 	JwksConfig                 []servercfg.JwksConfig
 	SystemVariables            SystemVariables
-	// EngineVariables holds a bundle initialized before engine construction.
+	// EngineVariables is the engine's variable bundle, initialized before construction. Required.
 	EngineVariables         *sql.EngineVariables
 	ClusterController       *cluster.Controller
 	AutoGCController        *sqle.AutoGCController
@@ -109,12 +110,19 @@ type SqlEngineConfig struct {
 
 type SqlEngineConfigOption func(*SqlEngineConfig)
 
-// NewSqlEngine returns a SqlEngine
+// ErrNilEngineVariables is returned when an engine is configured without an engine variable bundle.
+var ErrNilEngineVariables = errors.New("engine: SqlEngineConfig.EngineVariables is required")
+
+// NewSqlEngine returns a SqlEngine. |config.EngineVariables| is required.
 func NewSqlEngine(
 	ctx context.Context,
 	mrEnv *env.MultiRepoEnv,
 	config *SqlEngineConfig,
 ) (*SqlEngine, error) {
+	if config == nil || config.EngineVariables == nil {
+		return nil, ErrNilEngineVariables
+	}
+
 	// Context validation is a testing mode that we run Dolt in
 	// during integration tests. It asserts that `context.Context`
 	// instances which reach the storage layer have gone through
@@ -137,7 +145,7 @@ func NewSqlEngine(
 
 	// Thread DB load params into each environment before any DB is loaded.
 	// (For already-loaded envs, these will not affect the existing instance.)
-	if config != nil && len(config.DBLoadParams) > 0 {
+	if len(config.DBLoadParams) > 0 {
 		_ = mrEnv.Iter(func(_ string, dEnv *env.DoltEnv) (stop bool, err error) {
 			if dEnv.DBLoadParams == nil {
 				dEnv.DBLoadParams = maps.Clone(config.DBLoadParams)
@@ -149,13 +157,8 @@ func NewSqlEngine(
 	}
 
 	// Some database initialization logic depends on system variables, load them before the databases
-	// Without a bundle the engine shares the global registries, as callers that
-	// predate engine-owned variables expect.
 	engineVars := config.EngineVariables
-	var vars sql.SystemVariableRegistry = sql.SystemVariables
-	if engineVars != nil {
-		vars = engineVars.System
-	}
+	vars := engineVars.System
 	if err := mrEnv.Iter(func(name string, _ *env.DoltEnv) (bool, error) {
 		dsess.DefineSystemVariablesForDBInRegistry(vars, name)
 		return false, nil
@@ -227,7 +230,7 @@ func NewSqlEngine(
 	}
 
 	pro.SetRemoteDialer(mrEnv.RemoteDialProvider())
-	if config != nil && len(config.DBLoadParams) > 0 {
+	if len(config.DBLoadParams) > 0 {
 		pro.SetDBLoadParams(config.DBLoadParams)
 	}
 
@@ -343,9 +346,7 @@ func NewSqlEngine(
 	sqlEngine.provider = pro
 	sqlEngine.dsessFactory = sessFactory
 	sqlEngine.ContextFactory = func(ctx context.Context, opts ...sql.ContextOption) *sql.Context {
-		if engineVars != nil {
-			opts = append([]sql.ContextOption{sql.WithEngineVariables(engineVars)}, opts...)
-		}
+		opts = append([]sql.ContextOption{sql.WithEngineVariables(engineVars)}, opts...)
 		return sqlContextFactory(ctx, opts...)
 	}
 	sqlEngine.engine = engine

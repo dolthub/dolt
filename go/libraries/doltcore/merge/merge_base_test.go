@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -83,7 +84,7 @@ func TestResolveMergeBaseRebuild(t *testing.T) {
 	// root -- x1 -- x2
 	//    \-- y1 -- y2
 	// x2 = merge(x1, y1), y2 = merge(y1, x1)
-	ctx := sql.NewEmptyContext()
+	ctx := sql.NewContextWithVariables(context.Background(), variables.NewEngineVariables())
 	ddb, root, commit := newTestHistory(t)
 	x1 := commit(100, root)
 	y1 := commit(200, root)

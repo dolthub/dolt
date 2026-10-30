@@ -103,6 +103,9 @@ type EngineInitializer interface {
 	InitializeEngine(ctx context.Context, engine *engine.SqlEngine) error
 }
 
+// ErrNilEngineVariables is the startup error of a server configured without an engine variable bundle.
+var ErrNilEngineVariables = errors.New("sqlserver: Config.EngineVariables is required")
+
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
 func Serve(
 	ctx context.Context,
@@ -112,7 +115,6 @@ func Serve(
 	if cfg.Controller == nil {
 		cfg.Controller = svcs.NewController()
 	}
-
 	ConfigureServices(cfg)
 
 	go cfg.Controller.Start(ctx)
@@ -127,21 +129,22 @@ func ConfigureServices(
 	cfg *Config,
 ) {
 	controller := cfg.Controller
-	vars := sql.SystemVariables
-	if cfg.EngineVariables != nil {
-		vars = cfg.EngineVariables.System
+	if cfg.EngineVariables == nil {
+		controller.Register(&svcs.AnonService{InitF: func(context.Context) error {
+			return ErrNilEngineVariables
+		}})
+		return
 	}
+	vars := cfg.EngineVariables.System
 	ValidateConfigStep := &svcs.AnonService{
 		InitF: func(context.Context) error {
 			return servercfg.ValidateConfig(cfg.ServerConfig)
 		},
 	}
 	controller.Register(ValidateConfigStep)
-	if cfg.EngineVariables != nil {
-		controller.Register(&svcs.AnonService{InitF: func(ctx context.Context) error {
-			return servercfg.ApplySystemVariables(sql.NewContextWithVariables(ctx, cfg.EngineVariables), cfg.ServerConfig, vars)
-		}})
-	}
+	controller.Register(&svcs.AnonService{InitF: func(ctx context.Context) error {
+		return servercfg.ApplySystemVariables(sql.NewContextWithVariables(ctx, cfg.EngineVariables), cfg.ServerConfig, vars)
+	}})
 
 	lgr := logrus.StandardLogger()
 	lgr.SetOutput(cli.CliErr)
@@ -208,7 +211,7 @@ func ConfigureServices(
 	InitMultiEnv := &svcs.AnonService{
 		InitF: func(ctx context.Context) (err error) {
 			mrEnv, err = env.MultiEnvForDirectory(ctx, fs, cfg.DoltEnv)
-			if err == nil && cfg.EngineVariables != nil {
+			if err == nil {
 				err = mrEnv.Iter(func(name string, _ *env.DoltEnv) (bool, error) {
 					dsess.DefineSystemVariablesForDBInRegistry(vars, name)
 					return false, nil
@@ -1246,10 +1249,6 @@ func newSessionBuilder(se *engine.SqlEngine, config servercfg.ServerConfig) serv
 }
 
 // getConfigFromServerConfig processes ServerConfig and returns server.Config for sql-server.
-func getConfigFromServerConfig(serverConfig servercfg.ServerConfig, plf server.ProtocolListenerFunc) (server.Config, error) {
-	return getConfigFromServerConfigWithVariables(serverConfig, plf, nil)
-}
-
 func getConfigFromServerConfigWithVariables(serverConfig servercfg.ServerConfig, plf server.ProtocolListenerFunc, vars *sql.EngineVariables) (server.Config, error) {
 	serverConf, err := handleProtocolAndAddress(serverConfig)
 	if err != nil {
@@ -1266,11 +1265,7 @@ func getConfigFromServerConfigWithVariables(serverConfig servercfg.ServerConfig,
 		return server.Config{}, err
 	}
 
-	if vars != nil {
-		serverConf, err = serverConf.NewConfigWithVariables(vars)
-	} else {
-		serverConf, err = serverConf.NewConfig()
-	}
+	serverConf, err = serverConf.NewConfigWithVariables(vars)
 	if err != nil {
 		return server.Config{}, err
 	}

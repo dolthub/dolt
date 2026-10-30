@@ -144,6 +144,18 @@ func TestSqlEngineCapturesBundleFromReusableConfig(t *testing.T) {
 	require.Same(t, varsB, ctxB.EngineVariables())
 }
 
+func TestNewSqlEngineRequiresEngineVariables(t *testing.T) {
+	ctx := context.Background()
+	mrEnv, cfg, _ := lifecycleEngineEnvironment(t, ctx, t.TempDir(), t.TempDir())
+	cfg.EngineVariables = nil
+	se, err := NewSqlEngine(ctx, mrEnv, cfg)
+	require.ErrorIs(t, err, ErrNilEngineVariables)
+	require.Nil(t, se)
+	se, err = NewSqlEngine(ctx, mrEnv, nil)
+	require.ErrorIs(t, err, ErrNilEngineVariables)
+	require.Nil(t, se)
+}
+
 // TestSqlEngineFailedConstructionStopsWorkers checks cleanup on errors before and after tracker creation.
 func TestSqlEngineFailedConstructionStopsWorkers(t *testing.T) {
 	for _, malformed := range []bool{false, true} {
@@ -194,10 +206,11 @@ func lifecycleEngineEnvironment(t *testing.T, ctx context.Context, root, home st
 	mrEnv, err := env.MultiEnvForDirectory(ctx, fs, rootEnv)
 	require.NoError(t, err)
 	return mrEnv, &SqlEngineConfig{
-		ServerUser:   "root",
-		ServerHost:   "localhost",
-		Autocommit:   true,
-		DBLoadParams: params,
+		ServerUser:      "root",
+		ServerHost:      "localhost",
+		Autocommit:      true,
+		DBLoadParams:    params,
+		EngineVariables: sqle.NewEngineVariables(),
 	}, rootEnv
 }
 
