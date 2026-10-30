@@ -751,11 +751,16 @@ func (lvs *ValueStore) GC(ctx context.Context, gcConfig chunks.GCConfig, oldGenR
 
 // The pre-finalize catch-up stops once a round takes at most
 // preFinalizeRoundTarget, since the copy after finalize() takes about as long
-// as the last round; once a round is no faster than the one before it, when
-// writes outpace the copy; or after maxPreFinalizeRounds rounds.
+// as the last round. It also stops once a round takes more than
+// preFinalizeMaxRoundRatio of the one before it, when writes keep pace with
+// the copy and more rounds would only lengthen the GC, or after
+// maxPreFinalizeRounds rounds. Since each round that continues is at most
+// that ratio of the one before, the rounds before the last take at most
+// 1/(1-ratio) times the first round in total.
 const (
-	preFinalizeRoundTarget = 200 * time.Millisecond
-	maxPreFinalizeRounds   = 64
+	preFinalizeRoundTarget   = 200 * time.Millisecond
+	preFinalizeMaxRoundRatio = 0.9
+	maxPreFinalizeRounds     = 64
 )
 
 func (lvs *ValueStore) gc(ctx context.Context,
@@ -803,7 +808,8 @@ func (lvs *ValueStore) gc(ctx context.Context,
 		if err != nil {
 			return nil, err
 		}
-		if took <= preFinalizeRoundTarget || (round > 1 && took >= prevRound) || round == maxPreFinalizeRounds {
+		converging := round == 1 || float64(took) <= preFinalizeMaxRoundRatio*float64(prevRound)
+		if took <= preFinalizeRoundTarget || !converging || round == maxPreFinalizeRounds {
 			break
 		}
 		prevRound = took
