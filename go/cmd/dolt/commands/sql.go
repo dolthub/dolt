@@ -1245,10 +1245,8 @@ func processParsedQuery(ctx *sql.Context, query string, qryist cli.Queryist, sql
 			}
 			// Allow only the file this statement names. The driver rejects any
 			// other path the server requests.
-			if s.Infile != "" {
-				mysql.RegisterLocalFile(s.Infile)
-				defer mysql.DeregisterLocalFile(s.Infile)
-			}
+			mysql.RegisterLocalFile(s.Infile)
+			defer mysql.DeregisterLocalFile(s.Infile)
 		}
 		sch, ri, _, err := qryist.Query(ctx, query)
 		if err != nil {

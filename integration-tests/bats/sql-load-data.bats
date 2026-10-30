@@ -585,19 +585,25 @@ lines terminated by '\n'
     [ $status -ne 0 ]
     [[ $output =~ "local_infile needs to be set to 1" ]] || false
 
-    dolt sql -q "set global local_infile=1"
     dolt sql -q "
+set global local_infile=1;
 load data local infile 'in.csv' into table t
 fields terminated by ','
 lines terminated by '\n'
 "
 
+    # A file the client cannot open is reported and loads nothing.
+    run dolt sql -q "load data local infile 'missing.csv' into table t"
+    [ $status -ne 0 ]
+    [[ $output =~ "missing.csv" ]] || false
+
     stop_sql_server
 
-    run dolt sql -r csv -q "select * from t"
+    run dolt sql -r csv -q "select * from t order by pk"
     [ $status -eq 0 ]
-    [[ $output =~ "0,0,0" ]] || false
-    [[ $output =~ "1,1,1" ]] || false
+    [ "${#lines[@]}" -eq 3 ]
+    [ "${lines[1]}" = "0,0,0" ]
+    [ "${lines[2]}" = "1,1,1" ]
 }
 
 @test "sql-load-data: sql-server mode" {
