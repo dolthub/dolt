@@ -30,6 +30,7 @@ import (
 	querypb "github.com/dolthub/vitess/go/vt/proto/query"
 	"github.com/mohae/uvarint"
 
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/val"
@@ -151,7 +152,11 @@ func GetField(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple, ns N
 	case val.StringAdaptiveEnc:
 		v, ok, err = td.GetStringAdaptiveValue(ctx, i, ns, tup)
 	case val.CommitAddrEnc:
-		v, ok = td.GetCommitAddr(i, tup)
+		var h hash.Hash
+		h, ok = td.GetCommitAddr(i, tup)
+		if ok {
+			v = h.String()
+		}
 	case val.CellEnc:
 		v, ok = td.GetCell(i, tup)
 	case val.ExtendedEnc:
@@ -302,7 +307,14 @@ func GetFieldValue(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple,
 		v.Val = td.GetField(i, tup)
 		return v, nil
 
-	case val.Hash128Enc, val.CommitAddrEnc, val.CellEnc:
+	case val.CommitAddrEnc:
+		v.Typ = querypb.Type_VARCHAR
+		if h, ok := td.GetCommitAddr(i, tup); ok {
+			v.Val = []byte(h.String())
+		}
+		return v, nil
+
+	case val.Hash128Enc, val.CellEnc:
 		v.Typ = querypb.Type_BLOB
 		v.Val = td.GetField(i, tup)
 		return v, nil
@@ -541,7 +553,11 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 		}
 		tb.PutStringAddr(i, h)
 	case val.CommitAddrEnc:
-		tb.PutCommitAddr(i, v.(hash.Hash))
+		h, err := commitAddrFromField(ctx, ns, v)
+		if err != nil {
+			return err
+		}
+		tb.PutCommitAddr(i, h)
 	case val.CellEnc:
 		if _, ok := v.([]byte); ok {
 			var err error
@@ -848,4 +864,30 @@ func convJson(ctx context.Context, v interface{}) (res sql.JSONWrapper, err erro
 		return nil, err
 	}
 	return v.(sql.JSONWrapper), nil
+}
+
+// commitAddrFromField returns the address for the value of a commit address field. Values written as strings come from
+// SQL, and must be checked here: a chunk that addresses a missing chunk is rejected when the store commits, which
+// discards the memtable it shares with every other session.
+func commitAddrFromField(ctx context.Context, ns NodeStore, v interface{}) (hash.Hash, error) {
+	s, ok := v.(string)
+	if !ok {
+		return v.(hash.Hash), nil
+	}
+	h, ok := hash.MaybeParse(s)
+	if !ok {
+		return hash.Hash{}, fmt.Errorf("invalid commit hash: %s", s)
+	}
+	fileID, err := ns.ChunkFileID(ctx, h)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	switch fileID {
+	case serial.CommitFileID:
+		return h, nil
+	case "":
+		return hash.Hash{}, fmt.Errorf("unable to resolve commit hash %s: target commit not found", s)
+	default:
+		return hash.Hash{}, fmt.Errorf("unable to resolve commit hash %s: not a commit", s)
+	}
 }

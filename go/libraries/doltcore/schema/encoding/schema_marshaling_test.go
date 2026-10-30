@@ -27,12 +27,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/constants"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 func getSqlTypes() []sql.Type {
@@ -217,4 +219,44 @@ func TestVectorIndexMarshalling(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestCommitAddrColumnSerialization checks that only columns stored as commit addresses have the schema field that
+// older clients reject. Those clients know the first 17 fields of a column, and can't read the encoding.
+func TestCommitAddrColumnSerialization(t *testing.T) {
+	const fieldsKnownToOlderClients = 17
+	ctx := context.Background()
+	varchar, err := typeinfo.FromSqlType(gmstypes.MustCreateString(sqltypes.VarChar, 32, sql.Collation_Default))
+	require.NoError(t, err)
+
+	pk := schema.NewColumn("pk", 1, types.IntKind, true)
+	addr, err := schema.NewColumnWithTypeInfo("addr", 2, varchar.WithEncoding(val.CommitAddrEnc), false, "", false, "")
+	require.NoError(t, err)
+	str, err := schema.NewColumnWithTypeInfo("str", 3, varchar, false, "", false, "")
+	require.NoError(t, err)
+	sch, err := schema.SchemaFromCols(schema.NewColCollection(pk, addr, str))
+	require.NoError(t, err)
+
+	buf, err := serializeSchemaAsFlatbuffer(ctx, sch)
+	require.NoError(t, err)
+	msg, err := serial.TryGetRootAsTableSchema(buf, serial.MessagePrefixSz)
+	require.NoError(t, err)
+	for i := 0; i < msg.ColumnsLength(); i++ {
+		var col serial.Column
+		_, err = msg.TryColumns(&col, i)
+		require.NoError(t, err)
+		isAddr := string(col.Name()) == "addr"
+		assert.Equal(t, isAddr, col.UsesCommitAddrEncoding(), string(col.Name()))
+		assert.Equal(t, isAddr, col.Table().NumFields() > fieldsKnownToOlderClients, string(col.Name()))
+	}
+
+	deserialized, err := deserializeSchemaFromFlatbuffer(ctx, buf)
+	require.NoError(t, err)
+	cols := deserialized.GetAllCols()
+	got, ok := cols.GetByName("addr")
+	require.True(t, ok)
+	assert.Equal(t, val.CommitAddrEnc, got.TypeInfo.Encoding())
+	got, ok = cols.GetByName("str")
+	require.True(t, ok)
+	assert.Equal(t, val.StringEnc, got.TypeInfo.Encoding())
 }

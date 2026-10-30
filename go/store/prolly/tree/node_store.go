@@ -23,6 +23,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -45,6 +46,9 @@ type NodeStore interface {
 
 	// Write writes a prolly tree Node to the store.
 	Write(ctx context.Context, nd *Node) (hash.Hash, error)
+
+	// ChunkFileID returns the file identifier of the chunk at |ref|, or an empty string if it is not in the store.
+	ChunkFileID(ctx context.Context, ref hash.Hash) (string, error)
 
 	// Pool returns a buffer pool.
 	Pool() pool.BuffPool
@@ -198,6 +202,18 @@ func (ns *nodeStore) Write(ctx context.Context, nd *Node) (hash.Hash, error) {
 	nd.nodeHash.Store(c.Hash())
 	ns.cache.insert(key, nd)
 	return c.Hash(), nil
+}
+
+// ChunkFileID implements NodeStore.
+func (ns *nodeStore) ChunkFileID(ctx context.Context, ref hash.Hash) (string, error) {
+	c, err := ns.store.Get(ctx, ref)
+	if err != nil {
+		return "", err
+	}
+	if c.IsEmpty() {
+		return "", nil
+	}
+	return serial.GetFileID(c.Data()), nil
 }
 
 // Pool implements NodeStore.
