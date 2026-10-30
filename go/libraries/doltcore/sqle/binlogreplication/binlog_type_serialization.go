@@ -531,17 +531,17 @@ func (t timeSerializer) deserialize(ctx context.Context, typ sql.Type, descripto
 	if !notNull {
 		return nil, nil
 	}
-	return time.UnixMicro(durationInMicroseconds), nil
+	return gmstypes.Timespan(durationInMicroseconds), nil
 }
 
 func (t timeSerializer) serialize(ctx context.Context, typ sql.Type, value interface{}, ns tree.NodeStore) (data []byte, err error) {
-	// NOTE: We don't use typ.Convert here, like we do in the other serializers,
-	//       because it does additional conversion logic that we don't want to undo.
-	timeValue, ok := value.(time.Time)
+	// Stored and generated TIME values use the SQL engine's duration type.
+	// Keeping microseconds directly preserves negative and >24-hour values.
+	timeValue, ok := value.(gmstypes.Timespan)
 	if !ok {
-		return nil, fmt.Errorf("1 - expected time.Time, but got %T", value)
+		return nil, fmt.Errorf("expected types.Timespan, but got %T", value)
 	}
-	durationInMicroseconds := timeValue.UnixMicro()
+	durationInMicroseconds := int64(timeValue)
 
 	negative := false
 	if durationInMicroseconds < 0 {
