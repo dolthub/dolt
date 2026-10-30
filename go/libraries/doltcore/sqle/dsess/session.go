@@ -1134,7 +1134,12 @@ func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func
 			if !strings.EqualFold(baseName, dbName) {
 				continue
 			}
-			h, err := rv.HashOf()
+			start, ok := dtx.dbStartPoints[dbName]
+			if !ok {
+				return fmt.Errorf("database %s unknown to transaction", dbName)
+			}
+			// A savepoint's root lives only in memory, and |keep| requires a stored chunk.
+			h, err := start.db.WriteGCRootValue(ctx, rv)
 			if err != nil {
 				return err
 			}
