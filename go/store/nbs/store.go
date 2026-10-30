@@ -192,9 +192,21 @@ func (nbs *NomsBlockStore) ensureLoad(ctx context.Context) error {
 	return nbs.loadErr
 }
 
+func (nbs *NomsBlockStore) checkNotClosed() error {
+	nbs.mu.RLock()
+	defer nbs.mu.RUnlock()
+	if nbs.closed {
+		return chunks.ErrStoreClosed
+	}
+	return nil
+}
+
 // IterateRoots iterates over the in-memory roots tracked by the ChunkJournal, if there is one.
 func (nbs *NomsBlockStore) IterateRoots(ctx context.Context, f func(root string, timestamp *time.Time) error) error {
 	if err := nbs.ensureLoad(ctx); err != nil {
+		return err
+	}
+	if err := nbs.checkNotClosed(); err != nil {
 		return err
 	}
 	cj := nbs.chunkJournal()
@@ -1336,15 +1348,21 @@ func (nbs *NomsBlockStore) Count(ctx context.Context) (uint32, error) {
 	if err := nbs.ensureLoad(ctx); err != nil {
 		return 0, err
 	}
-	count, tables := func() (count uint32, tables chunkReader) {
+	count, tables, err := func() (count uint32, tables chunkReader, err error) {
 		nbs.mu.RLock()
 		defer nbs.mu.RUnlock()
+		if nbs.closed {
+			return 0, nil, chunks.ErrStoreClosed
+		}
 		if nbs.memtable != nil {
 			count = nbs.memtable.count()
 		}
 
-		return count, nbs.tables
+		return count, nbs.tables, nil
 	}()
+	if err != nil {
+		return 0, err
+	}
 
 	return count + tables.count(), nil
 }
@@ -1563,6 +1581,9 @@ func (nbs *NomsBlockStore) Rebase(ctx context.Context) error {
 	valctx.ValidateContext(ctx)
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
+	if nbs.closed {
+		return chunks.ErrStoreClosed
+	}
 	return nbs.rebase(ctx)
 }
 
@@ -1601,6 +1622,9 @@ func (nbs *NomsBlockStore) Root(ctx context.Context) (hash.Hash, error) {
 	valctx.ValidateContext(ctx)
 	nbs.mu.RLock()
 	defer nbs.mu.RUnlock()
+	if nbs.closed {
+		return hash.Hash{}, chunks.ErrStoreClosed
+	}
 	return nbs.upstream.root, nil
 }
 
@@ -1890,6 +1914,9 @@ func (nbs *NomsBlockStore) Sources(ctx context.Context) (chunks.TableFileSources
 	valctx.ValidateContext(ctx)
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
+	if nbs.closed {
+		return chunks.TableFileSources{}, chunks.ErrStoreClosed
+	}
 
 	// This is our local view. Callers are responsible for Rebase() if they need it.
 	contents := nbs.upstream
@@ -2780,6 +2807,9 @@ func (nbs *NomsBlockStore) IterateAllChunks(ctx context.Context, cb func(chunk c
 	if err := nbs.ensureLoad(ctx); err != nil {
 		return err
 	}
+	if err := nbs.checkNotClosed(); err != nil {
+		return err
+	}
 	for _, v := range nbs.tables.novel {
 		err := v.iterateAllChunks(ctx, cb, nbs.stats)
 		if err != nil {
@@ -2803,6 +2833,9 @@ func (nbs *NomsBlockStore) IterateAllChunks(ctx context.Context, cb func(chunk c
 
 func (nbs *NomsBlockStore) TolerantIterateAllChunks(ctx context.Context, cb func(chunks.Chunk), errCb func(sourceFile string, err error)) error {
 	if err := nbs.ensureLoad(ctx); err != nil {
+		return err
+	}
+	if err := nbs.checkNotClosed(); err != nil {
 		return err
 	}
 	for _, v := range nbs.tables.novel {
