@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"time"
 
@@ -316,12 +317,38 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 		return tbl, ok, nil
 	}
 
+	// Generated system tables are computed from the rows of the whole working set
+	if doltdb.IsReadOnlySystemTable(doltdb.TableName{Name: tblName, Schema: db.schemaName}) {
+		if err := materializePending(ctx, db); err != nil {
+			return nil, false, err
+		}
+	}
+
 	root, err := db.GetRoot(ctx)
 	if err != nil {
 		return nil, false, err
 	}
 
 	return db.getTableInsensitiveWithRoot(ctx, nil, ds, root, tblName, "")
+}
+
+// materializePending materializes the session's pending edits to |db| into its working set. Callers that read the
+// rows of the working root, rather than reading tables through DoltTable, or that derive a new root from it, must
+// call this first.
+func materializePending(ctx *sql.Context, db dsess.SqlDatabase) error {
+	return dsess.DSessFromSess(ctx.Session).MaterializePending(ctx, db.RevisionQualifiedName())
+}
+
+// materializePendingTable is materializePending, but only materializes when |tblName| has pending edits.
+func materializePendingTable(ctx *sql.Context, db dsess.SqlDatabase, tblName doltdb.TableName) error {
+	state, ok, err := dsess.DSessFromSess(ctx.Session).LookupDbState(ctx, db.RevisionQualifiedName())
+	if err != nil || !ok || state.WriteSession() == nil {
+		return err
+	}
+	if slices.Contains(state.WriteSession().PendingTables(), tblName) {
+		return materializePending(ctx, db)
+	}
+	return nil
 }
 
 func (db Database) getDoltDBTableInsensitive(ctx *sql.Context, tblName doltdb.TableName, readNonlocalTables readNonlocalTablesFlag) (doltdb.TableName, *doltdb.Table, bool, error) {
@@ -1872,6 +1899,9 @@ func (db Database) GetRoot(ctx *sql.Context) (doltdb.RootValue, error) {
 // a null pointer. In the future, we should replace all uses of dbState.WorkingSet, including this, with a new interface
 // where users avoid handling the WorkingSet directly.
 func (db Database) GetWorkingSet(ctx *sql.Context) (*doltdb.WorkingSet, error) {
+	if err := materializePending(ctx, db); err != nil {
+		return nil, err
+	}
 	sess := dsess.DSessFromSess(ctx.Session)
 	dbState, ok, err := sess.LookupDbState(ctx, db.RevisionQualifiedName())
 	if err != nil {
@@ -2334,6 +2364,9 @@ func (db Database) CreateSchema(ctx *sql.Context, schemaName string) error {
 		return err
 	}
 
+	if err := materializePending(ctx, db); err != nil {
+		return err
+	}
 	root, err := db.GetRoot(ctx)
 	if err != nil {
 		return err
@@ -2364,6 +2397,9 @@ func (db Database) DropSchema(ctx *sql.Context, schemaName string) error {
 		return err
 	}
 
+	if err := materializePending(ctx, db); err != nil {
+		return err
+	}
 	root, err := db.GetRoot(ctx)
 	if err != nil {
 		return err
@@ -2456,6 +2492,9 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
+	if err := materializePending(ctx, db); err != nil {
+		return err
+	}
 	root, err := db.GetRoot(ctx)
 
 	if err != nil {
@@ -2514,6 +2553,10 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 
 // GetViewDefinition implements sql.ViewDatabase
 func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.ViewDefinition, bool, error) {
+	// views are cached by root, so the root must include any edits to dolt_schemas
+	if err := materializePendingTable(ctx, db, doltdb.TableName{Name: doltdb.SchemasTableName, Schema: db.schemaName}); err != nil {
+		return sql.ViewDefinition{}, false, err
+	}
 	root, err := db.GetRoot(ctx)
 	if err != nil {
 		return sql.ViewDefinition{}, false, err
@@ -2662,6 +2705,10 @@ func (db Database) DropView(ctx *sql.Context, name string) error {
 
 // GetTriggers implements sql.TriggerDatabase.
 func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error) {
+	// triggers are cached by root, so the root must include any edits to dolt_schemas
+	if err := materializePendingTable(ctx, db, doltdb.TableName{Name: doltdb.SchemasTableName, Schema: db.schemaName}); err != nil {
+		return nil, err
+	}
 	root, err := db.GetRoot(ctx)
 	if err != nil {
 		return nil, nil
@@ -3013,6 +3060,9 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 		return err
 	}
 
+	if err := materializePending(ctx, db); err != nil {
+		return err
+	}
 	root, err := db.GetRoot(ctx)
 	if err != nil {
 		return err
@@ -3127,6 +3177,9 @@ func (db Database) SetCollation(ctx *sql.Context, collation sql.CollationID) err
 	}
 	if collation == sql.Collation_Unspecified {
 		collation = sql.Collation_Default
+	}
+	if err := materializePending(ctx, db); err != nil {
+		return err
 	}
 	root, err := db.GetRoot(ctx)
 	if err != nil {

@@ -685,8 +685,6 @@ end
 				},
 			},
 			{
-				// For some reason, calling stored procedures disables inserts
-				Skip:  true,
 				Query: "select * from t2 order by 1",
 				Expected: []sql.Row{
 					{1, 1},

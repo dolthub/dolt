@@ -891,6 +891,600 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 		},
 	},
+	{
+		// Edits from completed statements are materialized into the working set lazily, when the session reads it.
+		Name: "edits from earlier statements are visible later in the transaction",
+		SetUpScript: []string{
+			"create table t (x int primary key, y int, key (y))",
+			"insert into t values (1, 1)",
+			"call dolt_commit('-Am', 'create t')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t values (2, 2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ update t set y = 10 where x = 1",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:    "/* client a */ insert into t values (3, 3)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ select * from t where y = 10",
+				Expected: []sql.Row{{1, 10}},
+			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{1, 10}, {2, 2}, {3, 3}},
+			},
+			{
+				Query:    "/* client a */ insert into t values (4, 4)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ select table_name, staged, status from dolt_status",
+				Expected: []sql.Row{{"t", byte(0), "modified"}},
+			},
+			{
+				Query:    "/* client a */ select to_x, diff_type from dolt_diff_t where to_commit = 'WORKING' order by to_x",
+				Expected: []sql.Row{{1, "modified"}, {2, "added"}, {3, "added"}, {4, "added"}},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}},
+			},
+			{
+				Query:    "/* client a */ insert into t values (5, 5)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 10}, {2, 2}, {3, 3}, {4, 4}, {5, 5}},
+			},
+		},
+	},
+	{
+		Name: "a failed statement discards only its own edits",
+		SetUpScript: []string{
+			"create table t (x int primary key, y int, unique key (y))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t values (1, 1)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:       "/* client a */ insert into t values (2, 2), (3, 1)",
+				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+			{
+				Query:    "/* client a */ insert into t values (4, 4)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:       "/* client a */ insert into t values (5, 5), (4, 6)",
+				ExpectedErr: sql.ErrPrimaryKeyViolation,
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}, {4, 4}},
+			},
+		},
+	},
+	{
+		Name: "a failed statement with many edits discards only its own edits",
+		SetUpScript: []string{
+			"create table digits (d int primary key)",
+			"insert into digits values (0), (1), (2), (3), (4), (5), (6), (7), (8), (9)",
+			"create table t (x int primary key)",
+			"insert into t values (-1)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t values (-2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				// enough rows to flush pending edits within the statement before it fails
+				Query:       "/* client a */ insert into t select a.d + b.d*10 + c.d*100 + d.d*1000 + e.d*10000 from digits a, digits b, digits c, digits d, digits e union all select -1",
+				ExpectedErr: sql.ErrPrimaryKeyViolation,
+			},
+			{
+				Query:    "/* client a */ insert into t values (-3)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ select count(*) from t",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{-3}, {-2}, {-1}},
+			},
+		},
+	},
+	{
+		Name: "rollback and savepoints discard pending edits",
+		SetUpScript: []string{
+			"create table t (x int primary key auto_increment, y int)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t (y) values (1)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, InsertID: 1}}},
+			},
+			{
+				Query:    "/* client a */ rollback",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from t",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t (y) values (2)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, InsertID: 2}}},
+			},
+			{
+				Query:    "/* client a */ savepoint s1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t (y) values (3)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, InsertID: 3}}},
+			},
+			{
+				Query:    "/* client a */ rollback to savepoint s1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t (y) values (4)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, InsertID: 4}}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{2, 2}, {4, 4}},
+			},
+		},
+	},
+	{
+		// Edits are only materialized into the working set when the transaction commits, or when a query reads the whole
+		// working set. Until then, reads of edited tables are served from the edits themselves.
+		Name: "reads of pending edits don't materialize them",
+		SetUpScript: []string{
+			"create table t (x int primary key, y int, z varchar(20), key (y), unique key (z))",
+			"create table k (a int, b int, key (b))",
+			"create table p (id int primary key)",
+			"create table c (id int primary key, pid int, foreign key (pid) references p(id) on delete cascade)",
+			"create table ai (id int primary key auto_increment, v int)",
+			"create table log (msg varchar(50))",
+			"create trigger trg after insert on ai for each row insert into log values (concat('ai ', new.v))",
+			"insert into t values (1, 1, 'one'), (5, 5, 'five')",
+			"insert into p values (1)",
+			"call dolt_commit('-Am', 'init')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ set @working = @@mydb_working",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client a */ insert into t values (2, 2, 'two'), (3, 3, 'three')",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "/* client a */ insert into k values (2, 2), (2, 2), (3, 3)",
+				Expected: []sql.Row{{types.NewOkResult(3)}},
+			},
+			{
+				Query:    "/* client a */ insert into p values (2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ insert into c values (1, 2), (2, 1)",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "/* client a */ update t set y = 10 where x = 1",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:    "/* client a */ delete from t where y = 5",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ update t set z = 'uno' where z = 'one'",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				// joins
+				Query:    "/* client a */ select t.x, k.a from t join k on t.y = k.b order by t.x, k.a",
+				Expected: []sql.Row{{2, 2}, {2, 2}, {3, 3}},
+			},
+			{
+				Query:    "/* client a */ select /*+ LOOKUP_JOIN(c, p) */ c.id, p.id from c join p on c.pid = p.id order by c.id",
+				Expected: []sql.Row{{1, 2}, {2, 1}},
+			},
+			{
+				Query:    "/* client a */ select /*+ MERGE_JOIN(c, p) */ c.id, p.id from c join p on c.pid = p.id order by c.id",
+				Expected: []sql.Row{{1, 2}, {2, 1}},
+			},
+			{
+				// table scans, and primary and secondary index lookups
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{1, 10, "uno"}, {2, 2, "two"}, {3, 3, "three"}},
+			},
+			{
+				Query:    "/* client a */ select * from t where x = 2",
+				Expected: []sql.Row{{2, 2, "two"}},
+			},
+			{
+				Query:    "/* client a */ select * from t where x > 1 order by x desc",
+				Expected: []sql.Row{{3, 3, "three"}, {2, 2, "two"}},
+			},
+			{
+				Query:    "/* client a */ select y from t where y >= 3 order by y",
+				Expected: []sql.Row{{3}, {10}},
+			},
+			{
+				Query:    "/* client a */ select x, z from t where y = 10",
+				Expected: []sql.Row{{1, "uno"}},
+			},
+			{
+				Query:    "/* client a */ select x from t where z = 'uno'",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "/* client a */ select x from t where z = 'one'",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select x from t where y = 5",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select y from t order by y desc limit 1",
+				Expected: []sql.Row{{10}},
+			},
+			{
+				Query:    "/* client a */ select count(*) from t",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				// keyless tables
+				Query:    "/* client a */ select * from k order by a, b",
+				Expected: []sql.Row{{2, 2}, {2, 2}, {3, 3}},
+			},
+			{
+				Query:    "/* client a */ select a from k where b = 2",
+				Expected: []sql.Row{{2}, {2}},
+			},
+			{
+				Query:    "/* client a */ delete from k where b = 3",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ select count(*) from k",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				// constraints are checked against pending edits
+				Query:       "/* client a */ insert into t values (4, 4, 'two')",
+				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+			{
+				Query:       "/* client a */ insert into t values (2, 4, 'four')",
+				ExpectedErr: sql.ErrPrimaryKeyViolation,
+			},
+			{
+				Query:       "/* client a */ insert into c values (3, 3)",
+				ExpectedErr: sql.ErrForeignKeyChildViolation,
+			},
+			{
+				Query:    "/* client a */ delete from p where id = 2",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ select * from c",
+				Expected: []sql.Row{{2, 1}},
+			},
+			{
+				// a statement reads the tables it writes as of its start
+				Query:    "/* client a */ insert into t select x + 10, y + 10, concat(z, '!') from t",
+				Expected: []sql.Row{{types.NewOkResult(3)}},
+			},
+			{
+				Query:    "/* client a */ select x from t order by x",
+				Expected: []sql.Row{{1}, {2}, {3}, {11}, {12}, {13}},
+			},
+			{
+				Query:    "/* client a */ update t set y = y + 1 where x > 10",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 3, Info: plan.UpdateInfo{Matched: 3, Updated: 3}}}},
+			},
+			{
+				Query:    "/* client a */ select sum(y) from t",
+				Expected: []sql.Row{{float64(10 + 2 + 3 + 21 + 13 + 14)}},
+			},
+			{
+				// triggers and auto increment
+				Query:    "/* client a */ insert into ai (v) values (7), (8)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 1}}},
+			},
+			{
+				Query:    "/* client a */ insert into ai (v) values (9)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, InsertID: 3}}},
+			},
+			{
+				Query:    "/* client a */ select * from ai order by id",
+				Expected: []sql.Row{{1, 7}, {2, 8}, {3, 9}},
+			},
+			{
+				Query:    "/* client a */ select * from log order by msg",
+				Expected: []sql.Row{{"ai 7"}, {"ai 8"}, {"ai 9"}},
+			},
+			{
+				Query:    "/* client a */ select @@mydb_working = @working",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 1, "one"}, {5, 5, "five"}},
+			},
+			{
+				// system tables computed from the working set materialize it
+				Query:    "/* client a */ select table_name, status from dolt_status order by table_name",
+				Expected: []sql.Row{{"ai", "modified"}, {"c", "modified"}, {"k", "modified"}, {"log", "modified"}, {"t", "modified"}},
+			},
+			{
+				Query:    "/* client a */ select @@mydb_working = @working",
+				Expected: []sql.Row{{false}},
+			},
+			{
+				Query:    "/* client a */ set @working = @@mydb_working",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client a */ insert into t values (20, 20, 'twenty')",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ select count(*) from t where y = 20",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "/* client a */ select @@mydb_working = @working",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select x, y, z from t order by x",
+				Expected: []sql.Row{{1, 10, "uno"}, {2, 2, "two"}, {3, 3, "three"}, {11, 21, "uno!"}, {12, 13, "two!"}, {13, 14, "three!"}, {20, 20, "twenty"}},
+			},
+			{
+				Query:    "/* client b */ select count(*) from k",
+				Expected: []sql.Row{{2}},
+			},
+		},
+	},
+	{
+		Name: "savepoints restore pending edits without materializing them",
+		SetUpScript: []string{
+			"create table t (x int primary key, y int, key (y))",
+			"create table log (msg varchar(50) primary key)",
+			"create table k (a int, b int, key (b))",
+			"create table u (id int primary key)",
+			"create trigger trg after insert on t for each row insert into log values (concat('t ', new.y))",
+			"insert into t values (1, 1)",
+			"call dolt_commit('-Am', 'init')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ set @working = @@mydb_working",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client a */ insert into t values (2, 2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ insert into k values (1, 1), (1, 1)",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				// the trigger fails, so the statement is rolled back to the savepoint made for it
+				Query:       "/* client a */ insert into t values (3, 3), (4, 2)",
+				ExpectedErr: sql.ErrPrimaryKeyViolation,
+			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{
+				Query:    "/* client a */ select * from log order by msg",
+				Expected: []sql.Row{{"t 1"}, {"t 2"}},
+			},
+			{
+				Query:    "/* client a */ insert into t values (3, 3)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ select * from t where y = 3",
+				Expected: []sql.Row{{3, 3}},
+			},
+			{
+				Query:    "/* client a */ savepoint s1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t values (5, 5)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ delete from k where b = 1",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "/* client a */ insert into k values (9, 9)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ rollback to savepoint s1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+			},
+			{
+				Query:    "/* client a */ select * from k",
+				Expected: []sql.Row{{1, 1}, {1, 1}},
+			},
+			{
+				Query:    "/* client a */ select * from log order by msg",
+				Expected: []sql.Row{{"t 1"}, {"t 2"}, {"t 3"}},
+			},
+			{
+				Query:    "/* client a */ select @@mydb_working = @working",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				// edits materialized after a savepoint are rolled back too
+				Query:    "/* client a */ savepoint s2",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t values (6, 6)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ select count(*) from dolt_status",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "/* client a */ insert into t values (7, 7)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ rollback to savepoint s2",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select x from t order by x",
+				Expected: []sql.Row{{1}, {2}, {3}},
+			},
+			{
+				Query:    "/* client a */ select x from t where y > 2",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				// as are tables first edited after a savepoint
+				Query:    "/* client a */ savepoint s3",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into u values (1)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ insert into t values (8, 8)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ select count(*) from u",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "/* client a */ rollback to savepoint s3",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select count(*) from u",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+			},
+			{
+				Query:    "/* client a */ insert into t values (9, 9)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {9, 9}},
+			},
+			{
+				Query:    "/* client b */ select * from log order by msg",
+				Expected: []sql.Row{{"t 1"}, {"t 2"}, {"t 3"}, {"t 9"}},
+			},
+			{
+				Query:    "/* client b */ select * from k",
+				Expected: []sql.Row{{1, 1}, {1, 1}},
+			},
+			{
+				Query:    "/* client b */ select count(*) from u",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
 }
 
 var DoltConflictHandlingTests = []queries.TransactionTest{
