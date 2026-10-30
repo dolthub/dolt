@@ -211,6 +211,9 @@ func NewSchemaTable(backingTable sql.Table) *SchemaTable {
 // getOrCreateDoltSchemasTable returns the `dolt_schemas` table in `db`, creating it if it does not already exist.
 // Also migrates data to the correct format if necessary.
 func getOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *WritableDoltTable, retErr error) {
+	if err := materializePending(ctx, db); err != nil {
+		return nil, err
+	}
 	root, err := db.GetRoot(ctx)
 	if err != nil {
 		return nil, err
@@ -322,6 +325,9 @@ func migrateOldSchemasTableToNew(ctx *sql.Context, db Database, schemasTable *Wr
 		return nil, err
 	}
 
+	if err := materializePending(ctx, db); err != nil {
+		return nil, err
+	}
 	root, err := db.GetRoot(ctx)
 	if err != nil {
 		return nil, err

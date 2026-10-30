@@ -57,6 +57,10 @@ type WriteSession interface {
 	// MaterializePending is called, and the session's owner must do so before reading the working set.
 	SetDeferMaterialization(deferMaterialization bool)
 
+	// Detach is called when the session's branch state is removed from its session. Edits of statements completed
+	// afterward are flushed to the session, along with any edits pending in the session's current branch state.
+	Detach()
+
 	// HasPendingEdits returns true if edits from completed statements have not been materialized into the working set.
 	HasPendingEdits() bool
 
@@ -73,7 +77,8 @@ type WriteSession interface {
 	SnapshotPending(ctx *sql.Context) (PendingSnapshot, bool, error)
 
 	// RestorePending sets the session's working set to |ws| and its pending edits to those of |snapshot|,
-	// discarding any others. |ws| must be the working set the snapshot's edits were made to.
+	// discarding any others. |ws| must be the working set the snapshot's edits were made to. A nil snapshot
+	// discards every pending edit.
 	RestorePending(ctx *sql.Context, ws *doltdb.WorkingSet, snapshot PendingSnapshot) error
 
 	// MaterializePending materializes all pending edits into the working set and returns it. The edits of a
