@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/vitess/go/sqltypes"
 	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -35,6 +36,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 var doltRebaseProcedureSchema = []*sql.Column{
@@ -62,6 +64,9 @@ var RebaseActionEnumType = types.MustCreateEnumType([]string{
 // This is used by Doltgres to update the dolt_rebase schema using Doltgres types.
 var GetDoltRebaseSystemTableSchema = getDoltRebaseSystemTableSchema
 
+// RebaseCommitHashColumn is the column of the dolt_rebase system table that names the commit of a plan step.
+const RebaseCommitHashColumn = "commit_hash"
+
 func getDoltRebaseSystemTableSchema() sql.Schema {
 	return []*sql.Column{
 		{
@@ -76,8 +81,8 @@ func getDoltRebaseSystemTableSchema() sql.Schema {
 			Nullable: false,
 		},
 		{
-			Name:     "commit_hash",
-			Type:     types.Text,
+			Name:     RebaseCommitHashColumn,
+			Type:     types.MustCreateString(sqltypes.VarChar, hash.StringLen, sql.Collation_Default),
 			Nullable: false,
 		},
 		{
