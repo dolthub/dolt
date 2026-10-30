@@ -754,3 +754,93 @@ setup_origin_remote() {
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "b1" ]] || false
 }
+
+@test "branch: --orphan creates an unrelated history with the start point's contents" {
+    dolt sql -q "create table t (pk int primary key);"
+    dolt sql -q "insert into t values (1);"
+    dolt commit -Am "c1"
+
+    run dolt branch --orphan orph
+    [ "$status" -eq 0 ]
+    [[ "$output" == "" ]] || false
+
+    run dolt log --oneline orph
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+    [[ "$output" =~ "Initialize orphan branch orph from" ]] || false
+
+    run dolt sql -q "select pk from t as of 'orph'" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+
+    run dolt merge-base main orph
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "no common ancestor" ]] || false
+
+    run dolt merge-base --all main orph
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "no common ancestor" ]] || false
+}
+
+@test "branch: --orphan commit message can be changed with commit --amend" {
+    dolt branch --orphan orph
+
+    dolt --branch orph commit --amend -m "renamed"
+    run dolt log --oneline orph
+    [ "${#lines[@]}" -eq 1 ]
+    [[ "$output" =~ "renamed" ]] || false
+}
+
+@test "branch: --orphan of the initial commit makes a second root" {
+    dolt branch --orphan alt_root HEAD
+
+    main_root=$(dolt log --oneline main | awk '{print $1}')
+    alt_root=$(dolt log --oneline alt_root | awk '{print $1}')
+    [ "$main_root" != "$alt_root" ]
+
+    run dolt merge-base main alt_root
+    [ "$status" -eq 1 ]
+}
+
+@test "branch: --orphan -f overwrites an existing branch" {
+    dolt sql -q "create table t (pk int primary key);"
+    dolt commit -Am "c1"
+    dolt branch --orphan orph
+
+    run dolt ls orph
+    [[ "$output" =~ "t" ]] || false
+
+    initial=$(dolt sql -q "select hashof('HEAD~1')" -r csv | tail -n 1)
+    run dolt branch --orphan -f orph HEAD~1
+    [ "$status" -eq 0 ]
+
+    run dolt log --oneline orph
+    [ "${#lines[@]}" -eq 1 ]
+    [[ "$output" =~ "Initialize orphan branch orph from $initial" ]] || false
+
+    run dolt ls orph
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No tables" ]] || false
+}
+
+@test "branch: --orphan argument errors" {
+    run dolt branch --orphan
+    [ "$status" -ne 0 ]
+
+    dolt branch --orphan orph
+    run dolt branch --orphan orph
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "A branch named 'orph' already exists" ]] || false
+
+    run dolt branch --orphan other nosuch
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'nosuch' is not a commit" ]] || false
+
+    run dolt branch --orphan -c main copy
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "--orphan cannot be used with --copy" ]] || false
+
+    run dolt branch --orphan -t tracked main
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "--orphan cannot be used with --track" ]] || false
+}

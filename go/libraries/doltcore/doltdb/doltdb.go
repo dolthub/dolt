@@ -1149,13 +1149,9 @@ func (ddb *DoltDB) CommitValue(ctx context.Context, dref ref.DoltRef, val types.
 // dangling commits are unreferenced by any branch or ref. They are created in the course of programmatic updates
 // such as rebase. You must create a ref to a dangling commit for it to be reachable
 func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash hash.Hash, parentCommits []*Commit, cm *datas.CommitMeta) (*Commit, error) {
-	val, err := ddb.vrw.MustReadValue(ctx, valHash)
+	val, err := ddb.readRootValueToCommit(ctx, valHash)
 	if err != nil {
 		return nil, err
-	}
-
-	if !isRootValue(ddb.vrw.Format(), val) {
-		return nil, errors.New("can't commit a value that is not a valid root value")
 	}
 
 	var parents []hash.Hash
@@ -1171,6 +1167,20 @@ func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash 
 	return ddb.CommitDangling(ctx, val, commitOpts)
 }
 
+// CommitDanglingRoot creates a parentless Commit for the root value at |valHash| that is not referenced by any DoltRef.
+func (ddb *DoltDB) CommitDanglingRoot(ctx context.Context, valHash hash.Hash, cm *datas.CommitMeta) (*Commit, error) {
+	val, err := ddb.readRootValueToCommit(ctx, valHash)
+	if err != nil {
+		return nil, err
+	}
+
+	dcommit, err := datas.NewRootCommitForValue(ctx, datas.ChunkStoreFromDatabase(ddb.db), ddb.vrw, ddb.ns, val, cm)
+	if err != nil {
+		return nil, err
+	}
+	return ddb.writeDanglingCommit(ctx, dcommit)
+}
+
 // CommitDangling creates a new Commit for |val| that is not referenced by any DoltRef.
 func (ddb *DoltDB) CommitDangling(ctx context.Context, val types.Value, opts datas.CommitOptions) (*Commit, error) {
 	cs := datas.ChunkStoreFromDatabase(ddb.db)
@@ -1179,12 +1189,24 @@ func (ddb *DoltDB) CommitDangling(ctx context.Context, val types.Value, opts dat
 	if err != nil {
 		return nil, err
 	}
+	return ddb.writeDanglingCommit(ctx, dcommit)
+}
 
-	_, err = ddb.vrw.WriteValue(ctx, dcommit.NomsValue())
+func (ddb *DoltDB) readRootValueToCommit(ctx context.Context, valHash hash.Hash) (types.Value, error) {
+	val, err := ddb.vrw.MustReadValue(ctx, valHash)
 	if err != nil {
 		return nil, err
 	}
+	if !isRootValue(ddb.vrw.Format(), val) {
+		return nil, errors.New("can't commit a value that is not a valid root value")
+	}
+	return val, nil
+}
 
+func (ddb *DoltDB) writeDanglingCommit(ctx context.Context, dcommit *datas.Commit) (*Commit, error) {
+	if _, err := ddb.vrw.WriteValue(ctx, dcommit.NomsValue()); err != nil {
+		return nil, err
+	}
 	return NewCommit(ctx, ddb.vrw, ddb.ns, dcommit)
 }
 

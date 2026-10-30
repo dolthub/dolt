@@ -94,6 +94,11 @@ func NewCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.Valu
 	return newCommitForValue(ctx, cs, vrw, ns, v, opts)
 }
 
+// NewRootCommitForValue creates a commit with no parents, starting a history unrelated to any other.
+func NewRootCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.ValueReadWriter, ns tree.NodeStore, v types.Value, meta *CommitMeta) (*Commit, error) {
+	return newCommitForValue(ctx, cs, vrw, ns, v, CommitOptions{Meta: meta})
+}
+
 // createStringIfDiffers writes |s| to |b| and returns its offset when |s| differs from |ref|.
 // When they match it returns a zero offset so the field is omitted from the serialized message.
 func createStringIfDiffers(b *flatbuffers.Builder, s, ref string) flatbuffers.UOffsetT {
