@@ -413,6 +413,17 @@ func (j *ChunkJournal) CopyTableFile(ctx context.Context, r io.Reader, fileId st
 	return j.persister.CopyTableFile(ctx, r, fileId, 0, 0)
 }
 
+var _ movingTableFilePersister = (*ChunkJournal)(nil)
+
+// TryMoveCmpChunkTableWriter implements movingTableFilePersister, so that GC
+// output lands by rename rather than by copying the whole file.
+func (j *ChunkJournal) TryMoveCmpChunkTableWriter(ctx context.Context, filename string, w GenericTableWriter) (io.Closer, error) {
+	if j.backing.readOnly() {
+		return nil, errReadOnlyManifest
+	}
+	return j.persister.TryMoveCmpChunkTableWriter(ctx, filename, w)
+}
+
 // Name implements manifest.
 func (j *ChunkJournal) Name() string {
 	return j.path
