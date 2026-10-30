@@ -80,13 +80,13 @@ type DoltSession struct {
 
 // GetSessionVariable consults DoltgreSQL's scoped PostgreSQL settings when
 // that integrator has installed a value. MySQL sessions retain GMS behavior.
-func (s *DoltSession) GetSessionVariable(ctx *sql.Context, name string) (interface{}, error) {
-	if reader, ok := s.DoltgresSessObj.(interface{ DoltgresSettingValue(string) (any, bool) }); ok {
+func (d *DoltSession) GetSessionVariable(ctx *sql.Context, name string) (interface{}, error) {
+	if reader, ok := d.DoltgresSessObj.(interface{ DoltgresSettingValue(string) (any, bool) }); ok {
 		if value, found := reader.DoltgresSettingValue(name); found {
 			return value, nil
 		}
 	}
-	return s.Session.GetSessionVariable(ctx, name)
+	return d.Session.GetSessionVariable(ctx, name)
 }
 
 // EngineVariables exposes the bundle retained by the underlying GMS session.
