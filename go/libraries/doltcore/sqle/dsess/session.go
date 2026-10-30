@@ -314,21 +314,10 @@ func GetTableResolver(ctx *sql.Context, dbName string) (doltdb.TableResolver, er
 }
 
 // lookupDbState is the private version of LookupDbState, returning a struct that has more information available than
-// the interface returned by the public method.
+// the interface returned by the public method. The returned state's WriteSession may hold edits that have not been
+// materialized into its working set. Callers that read the rows of the working set, or derive a new working set from
+// it, must materialize them first with materializePending.
 func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchState, bool, error) {
-	branchState, ok, err := d.lookupDbStateWithoutMaterializing(ctx, dbName)
-	if err != nil || !ok {
-		return nil, ok, err
-	}
-	if err = d.materializePending(ctx, branchState); err != nil {
-		return nil, false, err
-	}
-	return branchState, true, nil
-}
-
-// lookupDbStateWithoutMaterializing is lookupDbState, but leaves any pending table edits in the branch state's
-// WriteSession rather than materializing them into its working set.
-func (d *DoltSession) lookupDbStateWithoutMaterializing(ctx *sql.Context, dbName string) (*branchState, bool, error) {
 	baseName, rev := doltdb.SplitRevisionDbName(strings.ToLower(dbName))
 	d.mu.Lock()
 	dbState, dbStateFound := d.dbStates[baseName]
@@ -387,6 +376,16 @@ func (d *DoltSession) materializePending(ctx *sql.Context, bs *branchState) erro
 	return d.setDbSessionVars(ctx, bs, true)
 }
 
+// MaterializePending materializes any edits pending in the write session of the database named into its working set.
+// Callers that read the rows of the working set, or derive a new working set from it, must call this first.
+func (d *DoltSession) MaterializePending(ctx *sql.Context, dbName string) error {
+	bs, ok, err := d.lookupDbState(ctx, dbName)
+	if err != nil || !ok {
+		return err
+	}
+	return d.materializePending(ctx, bs)
+}
+
 // materializeAllPending materializes the pending edits of every branch state in this session.
 func (d *DoltSession) materializeAllPending(ctx *sql.Context) error {
 	d.mu.Lock()
@@ -414,20 +413,6 @@ func (d *DoltSession) materializeAllPending(ctx *sql.Context) error {
 // Also returns a bool indicating whether the database was found, and an error if one occurred.
 func (d *DoltSession) LookupDbState(ctx *sql.Context, dbName string) (SessionState, bool, error) {
 	s, ok, err := d.lookupDbState(ctx, dbName)
-	if err != nil {
-		return nil, false, err
-	}
-	if !ok {
-		return nil, false, nil
-	}
-	return s, true, nil
-}
-
-// LookupDbStateWithoutMaterializing is LookupDbState, but the returned state's WriteSession may hold edits that have
-// not been materialized into its working set. It is meant for callers that need the WriteSession or the schema of a
-// table, but not the working set's data. Callers must not derive a new working set from the returned state.
-func (d *DoltSession) LookupDbStateWithoutMaterializing(ctx *sql.Context, dbName string) (SessionState, bool, error) {
-	s, ok, err := d.lookupDbStateWithoutMaterializing(ctx, dbName)
 	if err != nil {
 		return nil, false, err
 	}
@@ -958,6 +943,9 @@ func (d *DoltSession) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.T
 	if !ok {
 		return sql.ErrDatabaseNotFound.New(dbName)
 	}
+	if err = d.materializePending(ctx, state); err != nil {
+		return err
+	}
 
 	for _, dirty := range d.dirtyWorkingSets() {
 		if dirty != state {
@@ -1016,6 +1004,9 @@ func (d *DoltSession) DoltCommitMulti(
 		}
 		if !ok {
 			return nil, sql.ErrDatabaseNotFound.New(dbName)
+		}
+		if err = d.materializePending(ctx, state); err != nil {
+			return nil, err
 		}
 		states[i] = state
 	}
@@ -1248,7 +1239,7 @@ func (d *DoltSession) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, save
 		ddb := db.DbData().Ddb
 		if ddb != nil {
 			// load the session state of each database, so the savepoint includes its root
-			_, ok, err := d.lookupDbStateWithoutMaterializing(ctx, db.Name())
+			_, ok, err := d.lookupDbState(ctx, db.Name())
 			if err != nil {
 				return err
 			}
@@ -1338,12 +1329,12 @@ func (d *DoltSession) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, 
 		restore[name] = ws.WorkingRoot()
 	}
 	for dbName, root := range restore {
-		if snap, ok := point.pending[dbName]; ok {
-			// Restore the edits that were pending at the savepoint, rather than materializing those made since.
-			branch, _, err := d.lookupDbStateWithoutMaterializing(ctx, dbName)
-			if err != nil {
-				return err
-			}
+		branch, _, err := d.lookupDbState(ctx, dbName)
+		if err != nil {
+			return err
+		}
+		if snap, ok := point.pending[dbName]; ok || (branch.writeSession != nil && branch.writeSession.HasPendingEdits()) {
+			// Restore the edits that were pending at the savepoint, if any, discarding those made since.
 			branch.workingSet = branch.WorkingSet().WithWorkingRoot(root)
 			if err = branch.writeSession.RestorePending(ctx, branch.workingSet, snap); err != nil {
 				return err
@@ -1355,12 +1346,7 @@ func (d *DoltSession) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, 
 			continue
 		}
 
-		err := d.SetWorkingRoot(ctx, dbName, root)
-		if err != nil {
-			return err
-		}
-		branch, _, err := d.lookupDbState(ctx, dbName)
-		if err != nil {
+		if err = d.SetWorkingRoot(ctx, dbName, root); err != nil {
 			return err
 		}
 		branch.dirty = point.dirtyBranches[dbName]
@@ -1420,13 +1406,17 @@ func (d *DoltSession) GetDbData(ctx *sql.Context, dbName string) (env.DbData[*sq
 	return branchState.dbData, true
 }
 
-// GetRoots returns the current roots for a given database associated with the session
+// GetRoots returns the current roots for a given database associated with the session, with any pending edits
+// materialized into the working root.
 func (d *DoltSession) GetRoots(ctx *sql.Context, dbName string) (doltdb.Roots, bool) {
 	branchState, ok, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
 		return doltdb.Roots{}, false
 	}
 	if !ok {
+		return doltdb.Roots{}, false
+	}
+	if err = d.materializePending(ctx, branchState); err != nil {
 		return doltdb.Roots{}, false
 	}
 
@@ -1611,6 +1601,10 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 	if ws.Ref() != branchState.WorkingSet().Ref() {
 		return fmt.Errorf("must switch working sets with SwitchWorkingSet")
 	}
+	if branchState.writeSession != nil && branchState.writeSession.HasPendingEdits() {
+		// |ws| was derived from a working set without the pending edits, so setting it would discard them.
+		return fmt.Errorf("cannot set the working set of %s while it has pending edits; materialize them first", dbName)
+	}
 	branchState.workingSet = ws
 
 	err = d.setDbSessionVars(ctx, branchState, true)
@@ -1673,12 +1667,15 @@ func (d *DoltSession) SwitchWorkingSet(
 
 func (d *DoltSession) WorkingSet(ctx *sql.Context, dbName string) (*doltdb.WorkingSet, error) {
 	// TODO: need to make sure we use a revision qualified DB name here
-	sessionState, _, err := d.LookupDbState(ctx, dbName)
+	sessionState, _, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}
 	if sessionState.WorkingSet() == nil {
 		return nil, doltdb.ErrOperationNotSupportedInDetachedHead
+	}
+	if err = d.materializePending(ctx, sessionState); err != nil {
+		return nil, err
 	}
 	return sessionState.WorkingSet(), nil
 }
@@ -2125,8 +2122,7 @@ func (d *DoltSession) GetBranch(ctx *sql.Context) (string, error) {
 		return "", nil
 	}
 
-	// we only need the working set's ref
-	bs, _, err := d.LookupDbStateWithoutMaterializing(ctx, currentDb)
+	bs, _, err := d.LookupDbState(ctx, currentDb)
 	if err != nil {
 		return "", err
 	}

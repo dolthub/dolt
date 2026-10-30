@@ -178,7 +178,7 @@ func (bs branchState) EditOpts() editor.Options {
 // branch state as each statement completes instead.
 func (bs *branchState) detach() {
 	if bs.writeSession != nil {
-		bs.writeSession.SetDeferMaterialization(false)
+		bs.writeSession.Detach()
 	}
 }
 

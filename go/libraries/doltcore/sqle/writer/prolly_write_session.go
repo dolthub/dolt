@@ -16,6 +16,7 @@ package writer
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -57,6 +58,8 @@ type prollyWriteSession struct {
 	deferMaterialization bool
 	// materializing is true while MaterializePending is running
 	materializing bool
+	// detached is true once the session's branch state has been removed from its session. See Detach.
+	detached bool
 }
 
 var _ dsess.WriteSession = &prollyWriteSession{}
@@ -113,6 +116,12 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, tblName doltdb.Tab
 
 	s.tables[tblName] = tblWriter
 	return tblWriter, nil
+}
+
+// Detach implements WriteSession
+func (s *prollyWriteSession) Detach() {
+	s.deferMaterialization = false
+	s.detached = true
 }
 
 // SetDeferMaterialization implements WriteSession
@@ -180,7 +189,8 @@ func (s *prollyWriteSession) SnapshotPending(ctx *sql.Context) (dsess.PendingSna
 
 // RestorePending implements WriteSession
 func (s *prollyWriteSession) RestorePending(ctx *sql.Context, ws *doltdb.WorkingSet, snapshot dsess.PendingSnapshot) error {
-	snap := snapshot.(pendingSnapshot)
+	// a nil snapshot has no pending edits
+	snap, _ := snapshot.(pendingSnapshot)
 	s.workingSet = ws
 	var root doltdb.RootValue
 	if s.targetStaging {
@@ -328,6 +338,14 @@ func (s *prollyWriteSession) Flush(ctx *sql.Context) (*doltdb.WorkingSet, error)
 
 // FlushTable puts the already materialized table into the working set
 func (s *prollyWriteSession) FlushTable(ctx *sql.Context, tblName doltdb.TableName, tbl *doltdb.Table) (flushed doltdb.RootValue, err error) {
+	if s.detached {
+		// Statements run after we were detached, such as those of a stored procedure, may have left edits pending in
+		// the session's current branch state. Our working set doesn't include them, so we carry them over to keep them.
+		if err = s.carryOverPending(ctx); err != nil {
+			return nil, err
+		}
+	}
+
 	if s.targetStaging {
 		flushed = s.workingSet.StagedRoot()
 		flushed, err = flushed.PutTable(ctx, tblName, tbl)
@@ -416,4 +434,50 @@ func (s *prollyWriteSession) flushAllTables(ctx *sql.Context) (doltdb.RootValue,
 	// TODO: seems like we should call s.setter to update the working set in the branch state,
 	//  but doing so causes Binlog replication tests to fail?
 	return flushed, nil
+}
+
+// carryOverPending materializes the edits pending in the session's current branch state for our database, and puts
+// the tables they edited into our working set.
+func (s *prollyWriteSession) carryOverPending(ctx *sql.Context) error {
+	sess, ok := ctx.Session.(*dsess.DoltSession)
+	if !ok {
+		return fmt.Errorf("expected a DoltSession, found %T", ctx.Session)
+	}
+	state, ok, err := sess.LookupDbState(ctx, s.dbName)
+	if err != nil || !ok || state.WriteSession() == nil {
+		return err
+	}
+	pending := state.WriteSession().PendingTables()
+	if len(pending) == 0 {
+		return nil
+	}
+	current, err := sess.WorkingSet(ctx, s.dbName)
+	if err != nil {
+		return err
+	}
+
+	from, to := current.WorkingRoot(), s.workingSet.WorkingRoot()
+	if s.targetStaging {
+		from, to = current.StagedRoot(), s.workingSet.StagedRoot()
+	}
+	for _, tblName := range pending {
+		tbl, ok, err := from.GetTable(ctx, tblName)
+		if err != nil {
+			return err
+		}
+		if ok {
+			to, err = to.PutTable(ctx, tblName, tbl)
+		} else {
+			to, err = to.RemoveTables(ctx, false, false, tblName)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	if s.targetStaging {
+		s.workingSet = s.workingSet.WithStagedRoot(to)
+	} else {
+		s.workingSet = s.workingSet.WithWorkingRoot(to)
+	}
+	return nil
 }

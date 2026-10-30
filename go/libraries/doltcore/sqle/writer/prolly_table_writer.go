@@ -353,6 +353,8 @@ func (w *prollyTableWriter) DiscardChanges(ctx *sql.Context, errorEncountered er
 func (w *prollyTableWriter) StatementComplete(ctx *sql.Context) error {
 	if w.hasUncommittedEdits() {
 		w.newCheckpoint()
+		// When materialization is deferred, the edits of completed statements are pending until it happens
+		w.pending = w.pending || w.deferMaterialization()
 	}
 	err := w.primary.Commit(ctx)
 	for _, secondary := range w.secondary {
@@ -423,13 +425,8 @@ func (w *prollyTableWriter) Close(ctx *sql.Context) error {
 		return w.errEncountered
 	}
 	if w.deferMaterialization() {
-		// Leave the statement's edits in our index writers. They're materialized into the working set when the
-		// session next reads it.
-		if err := w.StatementComplete(ctx); err != nil {
-			return err
-		}
-		w.pending = true
-		return nil
+		// Leave the statement's edits in our index writers, pending materialization into the working set.
+		return w.StatementComplete(ctx)
 	}
 	return w.flush(ctx)
 }
