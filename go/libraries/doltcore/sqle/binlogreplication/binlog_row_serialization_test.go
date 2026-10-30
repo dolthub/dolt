@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/stretchr/testify/require"
 
@@ -53,7 +54,7 @@ func TestBinlogFullGeneratedColumns(t *testing.T) {
 				name += "/stored"
 			}
 			t.Run(name, func(t *testing.T) {
-				ctx := sql.NewEmptyContext()
+				ctx := sql.NewContextWithVariables(context.Background(), variables.NewEngineVariables())
 				require.NoError(t, ctx.SetSessionVariable(ctx, "binlog_row_image", "FULL"))
 				cols := []schema.Column{
 					schema.NewColumn("id", 0, types.IntKind, !keyless),
@@ -176,7 +177,7 @@ func binlogTestTable(t *testing.T, ctx *sql.Context, sch schema.Schema, rows []s
 
 // TestBinlogFullGeneratedColumnTypes checks declared types, dependencies, and multi-byte NULL bitmaps.
 func TestBinlogFullGeneratedColumnTypes(t *testing.T) {
-	ctx := sql.NewEmptyContext()
+	ctx := sql.NewContextWithVariables(context.Background(), variables.NewEngineVariables())
 	cols := make([]schema.Column, 10)
 	names := []string{"id", "txt", "txt_len", "hidden_expr", "b", "b_len", "j", "j_num", "copy_num", "null_value"}
 	for i, name := range names {
@@ -221,7 +222,7 @@ func TestBinlogFullGeneratedColumnTypes(t *testing.T) {
 
 // TestBinlogFullGeneratedColumnTime preserves signed durations beyond 24 hours in generated images.
 func TestBinlogFullGeneratedColumnTime(t *testing.T) {
-	ctx := sql.NewEmptyContext()
+	ctx := sql.NewContextWithVariables(context.Background(), variables.NewEngineVariables())
 	cols := []schema.Column{
 		schema.NewColumn("id", 0, types.IntKind, true),
 		schema.NewColumn("t", 1, types.IntKind, false),
