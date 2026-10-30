@@ -230,6 +230,9 @@ func (nbs *NomsBlockStore) ChunkJournalSize(ctx context.Context) (int64, bool, e
 	}
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
+	if nbs.closed {
+		return 0, false, chunks.ErrStoreClosed
+	}
 	if cj := nbs.chunkJournal(); cj != nil {
 		return cj.Size(), true, nil
 	}
@@ -1993,6 +1996,9 @@ func (nbs *NomsBlockStore) Size(ctx context.Context) (uint64, error) {
 	}
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
+	if nbs.closed {
+		return 0, chunks.ErrStoreClosed
+	}
 
 	size := uint64(0)
 	for _, cs := range nbs.tables.upstream {

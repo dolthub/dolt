@@ -271,6 +271,14 @@ func TestNBSReadsFailAfterClose(t *testing.T) {
 			_, err := st.Sources(ctx)
 			return err
 		}},
+		{"Size", func(st *NomsBlockStore) error {
+			_, err := st.Size(ctx)
+			return err
+		}},
+		{"ChunkJournalSize", func(st *NomsBlockStore) error {
+			_, _, err := st.ChunkJournalSize(ctx)
+			return err
+		}},
 		{"IterateRoots", func(st *NomsBlockStore) error {
 			return st.IterateRoots(ctx, func(string, *time.Time) error { return nil })
 		}},
