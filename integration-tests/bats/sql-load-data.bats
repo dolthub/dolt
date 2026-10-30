@@ -573,31 +573,27 @@ SQL
     [ $status -eq 1 ]
     [[ $output =~ "LOCAL supported only in sql-server mode" ]] || false
 
-    start_sql_server 
+    start_sql_server
 
+    # The server still requires local_infile. The shell must not hide that
+    # behind the embedded-engine error.
     run dolt sql -q "
 load data local infile 'in.csv' into table t
 fields terminated by ','
 lines terminated by '\n'
 "
     [ $status -ne 0 ]
-    [[ $output =~ "LOCAL supported only in sql-server mode" ]] || false
+    [[ $output =~ "local_infile needs to be set to 1" ]] || false
 
-    # This should work but does not because of dolt sql
-    # mysql -e works locally
-    run dolt sql -q "
-set global local_infile=1;
+    dolt sql -q "set global local_infile=1"
+    dolt sql -q "
 load data local infile 'in.csv' into table t
 fields terminated by ','
 lines terminated by '\n'
 "
-    [ $status -ne 0 ]
-    [[ $output =~ "LOCAL supported only in sql-server mode" ]] || false
-    
+
     stop_sql_server
 
-    skip "dolt sql does not work with local infile but a mysql client does"
-    
     run dolt sql -r csv -q "select * from t"
     [ $status -eq 0 ]
     [[ $output =~ "0,0,0" ]] || false

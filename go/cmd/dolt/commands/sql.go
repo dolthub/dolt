@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/vitess/go/vt/vterrors"
 	"github.com/fatih/color"
 	"github.com/flynn-archive/go-shlex"
+	"github.com/go-sql-driver/mysql"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
 	textunicode "golang.org/x/text/encoding/unicode"
@@ -1201,6 +1202,12 @@ func processQuery(ctx *sql.Context, query string, qryist cli.Queryist) (sql.Sche
 	return processParsedQuery(ctx, query, qryist, sqlStatement)
 }
 
+// loadDataLocalQueryist is a client connected to a SQL server. LOAD DATA LOCAL
+// INFILE is read by that client. The embedded engine does not implement this.
+type loadDataLocalQueryist interface {
+	SupportsLoadDataLocal() bool
+}
+
 // processParsedQuery processes a single query with the parsed statement provided. The Root of the sqlEngine
 // will be updated if necessary. Returns the schema and the row iterator for the results, which may be nil,
 // and an error if one occurs.
@@ -1231,7 +1238,17 @@ func processParsedQuery(ctx *sql.Context, query string, qryist cli.Queryist, sql
 		return sch, newRowIter, nil, nil
 	case *sqlparser.Load:
 		if s.Local {
-			return nil, nil, nil, fmt.Errorf("LOCAL supported only in sql-server mode")
+			// The embedded engine has no client to stream a local file. A
+			// sql-server connection does: this process is the client.
+			if local, ok := qryist.(loadDataLocalQueryist); !ok || !local.SupportsLoadDataLocal() {
+				return nil, nil, nil, fmt.Errorf("LOCAL supported only in sql-server mode")
+			}
+			// Allow only the file this statement names. The driver rejects any
+			// other path the server requests.
+			if s.Infile != "" {
+				mysql.RegisterLocalFile(s.Infile)
+				defer mysql.DeregisterLocalFile(s.Infile)
+			}
 		}
 		sch, ri, _, err := qryist.Query(ctx, query)
 		if err != nil {
