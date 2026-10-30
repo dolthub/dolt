@@ -23,6 +23,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
+// insertManyRowsThenDuplicateKey inserts 100k new rows into t, then fails on a primary key that is already present.
+const insertManyRowsThenDuplicateKey = `insert into t (a, b)
+	select 200000 + d1.n + 10*d2.n + 100*d3.n + 1000*d4.n + 10000*d5.n, 'w'
+	from d d1, d d2, d d3, d d4, d d5
+	union all select 1, 'dup'`
+
 var DoltTransactionTests = []queries.TransactionTest{
 	{
 		Name: "duplicate inserts, autocommit on",
@@ -888,6 +894,96 @@ var DoltTransactionTests = []queries.TransactionTest{
 			{
 				Query:    "/* client a */ select * from t",
 				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		// The failing statement writes more edits than a table writer buffers, so part of it is flushed.
+		Name: "failed statement that flushed is rolled back",
+		SetUpScript: []string{
+			"create table d (n int primary key)",
+			"insert into d values (0), (1), (2), (3), (4), (5), (6), (7), (8), (9)",
+			"create table t (a int primary key, b varchar(10), key ib (b))",
+			"insert into t values (1, 'base')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:       "/* client a */ " + insertManyRowsThenDuplicateKey,
+				ExpectedErr: sql.ErrPrimaryKeyViolation,
+			},
+			{
+				Query:    "/* client a */ insert into t values (3, 'x')",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select count(*) from t",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "/* client b */ select a, b from t order by a",
+				Expected: []sql.Row{{1, "base"}, {3, "x"}},
+			},
+			{
+				// served by the secondary index
+				Query:    "/* client b */ select count(*) from t where b >= ''",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "/* client b */ select count(*) from t where b = 'w'",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		// The failing statement writes more edits than a table writer buffers, so part of it is flushed.
+		Name: "failed statement that flushed is rolled back, autocommit off",
+		SetUpScript: []string{
+			"create table d (n int primary key)",
+			"insert into d values (0), (1), (2), (3), (4), (5), (6), (7), (8), (9)",
+			"create table t (a int primary key, b varchar(10), key ib (b))",
+			"insert into t values (1, 'base')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ set autocommit = 0",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:       "/* client a */ " + insertManyRowsThenDuplicateKey,
+				ExpectedErr: sql.ErrPrimaryKeyViolation,
+			},
+			{
+				Query:    "/* client a */ insert into t values (3, 'x')",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select count(*) from t",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "/* client b */ select a, b from t order by a",
+				Expected: []sql.Row{{1, "base"}, {3, "x"}},
+			},
+			{
+				// served by the secondary index
+				Query:    "/* client b */ select count(*) from t where b >= ''",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "/* client b */ select count(*) from t where b = 'w'",
+				Expected: []sql.Row{{0}},
 			},
 		},
 	},

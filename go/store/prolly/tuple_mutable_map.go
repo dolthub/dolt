@@ -170,6 +170,7 @@ func (mut *GenericMutableMap[M, T]) Revert(ctx context.Context) {
 	// may be stashed in a separate tree.MutableMap
 	if mut.stash != nil {
 		mut.tuples = *mut.stash
+		mut.stash = nil
 		return
 	}
 	mut.tuples.Edits.Revert(ctx)
@@ -177,11 +178,14 @@ func (mut *GenericMutableMap[M, T]) Revert(ctx context.Context) {
 
 func (mut *GenericMutableMap[M, T]) flushPending(ctx context.Context, deep bool) error {
 	stash := mut.stash
-	// if our in-memory edit set contains a checkpoint, we
-	// must stash a copy of |mut.tuples| we can revert to.
+	// Applying our pending edits to |mut.tuples.Static| loses the state we
+	// would revert to, so we must first stash a copy of it, unless an
+	// earlier flush already did so.
 	if mut.tuples.Edits.HasCheckpoint() {
 		cp := mut.tuples.Copy()
-		cp.Edits.Revert(ctx)
+		if err := cp.Edits.Revert(ctx); err != nil {
+			return err
+		}
 		if deep {
 			// deep is used by online GC. In order to
 			// ensure that all internal chunk pointers in
@@ -211,6 +215,12 @@ func (mut *GenericMutableMap[M, T]) flushPending(ctx context.Context, deep bool)
 			stash = &tmpGMM.tuples
 		} else {
 			stash = &cp
+		}
+	} else if stash == nil {
+		// The checkpoint holds no edits, so it is just our static tree.
+		stash = &tree.MutableMap[val.Tuple, val.Tuple, *val.TupleDesc, T]{
+			Edits:  mut.tuples.Edits.EmptyCopy(),
+			Static: mut.tuples.Static,
 		}
 	}
 	serializer := mut.flusher.GetDefaultSerializer(ctx, mut)

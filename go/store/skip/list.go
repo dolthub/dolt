@@ -210,6 +210,11 @@ func (l *List) Put(ctx context.Context, key, val []byte) error {
 	return nil
 }
 
+// EmptyCopy returns a new, empty List with the same key order as |l|.
+func (l *List) EmptyCopy() *List {
+	return NewSkipList(l.keyOrder)
+}
+
 func (l *List) Copy() *List {
 	copies := make([]skipNode, len(l.nodes))
 	copy(copies, l.nodes)
