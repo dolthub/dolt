@@ -105,6 +105,10 @@ type SqlEngineConfig struct {
 	ProviderFactory sqle.ProviderFactory
 
 	FatalBehavior dherrors.FatalBehavior
+
+	// GCSafepointController is shared by engine construction and every session the engine creates. If nil, the
+	// engine creates its own.
+	GCSafepointController *gcctx.GCSafepointController
 }
 
 type SqlEngineConfigOption func(*SqlEngineConfig)
@@ -128,7 +132,13 @@ func NewSqlEngine(
 		valctx.EnableContextValidation()
 	}
 
-	gcSafepointController := gcctx.NewGCSafepointController()
+	var gcSafepointController *gcctx.GCSafepointController
+	if config != nil {
+		gcSafepointController = config.GCSafepointController
+	}
+	if gcSafepointController == nil {
+		gcSafepointController = gcctx.NewGCSafepointController()
+	}
 	ctx = gcctx.WithGCSafepointController(ctx, gcSafepointController)
 
 	defer gcctx.SessionEnd(ctx)
