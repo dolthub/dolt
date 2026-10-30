@@ -424,8 +424,8 @@ func (rm *RootMerger) MaybeShortCircuit(ctx context.Context, tm *TableMerger, op
 	}
 
 	// Both made identical changes
-	// For keyless tables, this counts as a conflict
-	if leftExists && rightExists && leftHash == rightHash && !schema.IsKeyless(tm.leftSch) {
+	// For keyless tables, this counts as a conflict, and a row merge policy decides each row of a table
+	if leftExists && rightExists && leftHash == rightHash && !schema.IsKeyless(tm.leftSch) && (opts.RowMergePolicy == nil || areRootObjs) {
 		return tm.leftTbl, tm.leftRootObj, &MergeStats{Operation: TableUnmodified}, nil
 	}
 
