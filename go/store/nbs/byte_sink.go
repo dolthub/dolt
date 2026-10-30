@@ -274,8 +274,14 @@ func (sink *BufferedFileByteSink) Write(src []byte) (int, error) {
 	return srcLen, nil
 }
 
+// bufferedFileByteSinkSyncInterval bounds how much data the final Sync in
+// backgroundWrite has left to flush. FlushToFile and Reader wait for that
+// Sync, and GC calls them while it blocks all reads and writes.
+const bufferedFileByteSinkSyncInterval = 64 << 20
+
 func (sink *BufferedFileByteSink) backgroundWrite() {
 	var err error
+	unsynced := 0
 	for buff := range sink.writeCh {
 		if err != nil {
 			continue // drain
@@ -283,6 +289,12 @@ func (sink *BufferedFileByteSink) backgroundWrite() {
 
 		err = iohelp.WriteAll(sink.wr, buff)
 		sink.ae.SetIfError(err)
+		unsynced += len(buff)
+		if err == nil && unsynced >= bufferedFileByteSinkSyncInterval {
+			err = sink.wr.Sync()
+			sink.ae.SetIfError(err)
+			unsynced = 0
+		}
 	}
 
 	// FlushToFile may rename this file into place as a table file, so it
