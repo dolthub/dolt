@@ -374,11 +374,10 @@ func (t *DoltTable) IndexCacheKey(ctx *sql.Context) (doltdb.DataCacheKey, bool, 
 }
 
 func (t *DoltTable) workingRoot(ctx *sql.Context) (doltdb.RootValue, error) {
-	root := t.lockedToRoot
-	if root == nil {
-		return t.getRoot(ctx)
+	if t.lockedToRoot != nil {
+		return t.lockedToRoot, nil
 	}
-	return root, nil
+	return t.getRoot(ctx)
 }
 
 // getRoot returns the current root value for this session, to be used for all table data access.
@@ -570,6 +569,7 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 		return nil, err
 	}
 
+	// TODO: this should retrieve from something else I guess
 	rows, err := table.GetRowData(ctx)
 	if err != nil {
 		return nil, err
