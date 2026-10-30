@@ -458,11 +458,18 @@ func (sc *StatsController) DropDbStats(ctx *sql.Context, sch, dbName string, flu
 }
 
 func (sc *StatsController) statsKey(ctx *sql.Context, schema, dbName, table string) (tableIndexesKey, error) {
-	dSess := dsess.DSessFromSess(ctx.Session)
-	branch, err := dSess.GetBranch(ctx)
-	if err != nil {
-		return tableIndexesKey{}, err
+	// Collection keys statistics by base database name and branch separately.
+	// An explicit revision takes precedence over the session's current branch.
+	dbName, branch := doltdb.SplitRevisionDbName(dbName)
+	if branch == "" {
+		dSess := dsess.DSessFromSess(ctx.Session)
+		var err error
+		branch, err = dSess.GetBranch(ctx)
+		if err != nil {
+			return tableIndexesKey{}, err
+		}
 	}
+
 	key := tableIndexesKey{
 		db:     strings.ToLower(dbName),
 		branch: strings.ToLower(branch),

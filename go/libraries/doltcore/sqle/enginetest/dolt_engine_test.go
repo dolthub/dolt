@@ -2140,6 +2140,11 @@ func TestStatsStorage(t *testing.T) {
 	RunStatsStorageTests(t, h)
 }
 
+func TestRevisionStatistics(t *testing.T) {
+	h := newDoltHarness(t)
+	RunRevisionStatisticsTests(t, h)
+}
+
 func TestJoinStats(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunJoinStatsTests(t, h)

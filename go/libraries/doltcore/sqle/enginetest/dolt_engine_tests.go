@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -1994,6 +1995,78 @@ func RunStatsStorageTests(t *testing.T, h DoltEnginetestHarness) {
 			defer h.Close()
 			enginetest.TestScriptWithEngine(t, e, h, script)
 		}()
+	}
+}
+
+// RunRevisionStatisticsTests verifies that qualifying a table with a branch does not
+// change its optimizer statistics, even when the session is on another branch.
+func RunRevisionStatisticsTests(t *testing.T, h DoltEnginetestHarness) {
+	h = h.WithConfigureStats(true)
+	defer h.Close()
+	h.Setup(setup.MydbData)
+	e := mustNewEngine(t, h)
+	defer e.Close()
+	ctx := enginetest.NewContext(h)
+	query := func(t *testing.T, q string) []sql.Row {
+		_, iter, _, err := e.Query(ctx, q)
+		require.NoError(t, err, q)
+		rows, err := sql.RowIterToRows(ctx, iter)
+		require.NoError(t, err, q)
+		return rows
+	}
+
+	query(t, "CREATE TABLE orders (w SMALLINT, d SMALLINT, id INT, carrier SMALLINT, PRIMARY KEY (w, d, id))")
+	query(t, "CREATE TABLE order_line (w SMALLINT, d SMALLINT, o_id INT, n SMALLINT, delivery INT, PRIMARY KEY (w, d, o_id, n))")
+	var orders, lines []string
+	for i := 1; i <= 300; i++ {
+		value := "1"
+		if i%3 == 0 {
+			value = "NULL"
+		}
+
+		orders = append(orders, fmt.Sprintf("(1,%d,%d,%s)", i%10+1, i, value))
+		for n := 1; n <= 10; n++ {
+			lines = append(lines, fmt.Sprintf("(1,%d,%d,%d,%s)", i%10+1, i, n, value))
+		}
+	}
+
+	query(t, "INSERT INTO orders VALUES "+strings.Join(orders, ","))
+	query(t, "INSERT INTO order_line VALUES "+strings.Join(lines, ","))
+	query(t, "CALL dolt_commit('-Am', 'load')")
+	query(t, "CALL dolt_checkout('-b', 'feature/stats')")
+	query(t, "DELETE FROM order_line WHERE o_id > 1")
+	query(t, "CALL dolt_commit('-am', 'smaller branch')")
+	query(t, "CALL dolt_stats_wait()")
+
+	joinQuery := func(db string) string {
+		prefix := ""
+		if db != "" {
+			prefix = "`" + db + "`."
+		}
+
+		return "SELECT COUNT(*) FROM " + prefix + "order_line ol JOIN " + prefix + "orders o " +
+			"ON o.w = ol.w AND o.d = ol.d AND o.id = ol.o_id " +
+			"WHERE (ol.delivery IS NULL AND o.carrier IS NOT NULL) OR " +
+			"(ol.delivery IS NOT NULL AND o.carrier IS NULL)"
+	}
+
+	plans := make(map[string][]sql.Row)
+	for _, branch := range []string{"main", "feature/stats"} {
+		query(t, "CALL dolt_checkout('"+branch+"')")
+		plans[branch] = query(t, "EXPLAIN FORMAT=TREE "+joinQuery(""))
+	}
+
+	// The branches have different cardinalities and should not share their plans.
+	require.NotEqual(t, plans["main"], plans["feature/stats"])
+	for _, sessionBranch := range []string{"main", "feature/stats"} {
+		query(t, "CALL dolt_checkout('"+sessionBranch+"')")
+		for _, branch := range []string{"main", "feature/stats"} {
+			t.Run(sessionBranch+"/"+branch, func(t *testing.T) {
+				q := joinQuery("mydb/" + branch)
+				assert.Equal(t, plans[branch], query(t, "EXPLAIN FORMAT=TREE "+q))
+				assert.Equal(t, query(t, joinQuery("")), query(t, q))
+			})
+		}
 	}
 }
 
