@@ -131,6 +131,54 @@ func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, e
 	}, nil
 }
 
+// detachJournalAndIndexFiles renames the journal at |path| and its index to
+// unique temp-prefixed names in the same directory and returns a func that
+// removes them. |remove| is nil only if the journal was not moved; an error
+// with a non-nil |remove| concerns the index alone.
+func detachJournalAndIndexFiles(path string) (remove func(), err error) {
+	dir := filepath.Dir(path)
+	detachedJournal, err := reserveTempTableName(dir)
+	if err != nil {
+		return nil, err
+	}
+	if err = os.Rename(path, detachedJournal); err != nil {
+		_ = os.Remove(detachedJournal)
+		return nil, err
+	}
+	detached := []string{detachedJournal}
+	idxPath := filepath.Join(dir, journalIndexFileName)
+	if detachedIdx, rerr := reserveTempTableName(dir); rerr == nil {
+		if rerr = os.Rename(idxPath, detachedIdx); rerr == nil {
+			detached = append(detached, detachedIdx)
+		} else {
+			_ = os.Remove(detachedIdx)
+		}
+	}
+	remove = func() {
+		for _, p := range detached {
+			_ = os.Remove(p)
+		}
+	}
+	// The index doesn't necessarily exist, even if the journal did.
+	if err = os.Remove(idxPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return remove, err
+	}
+	return remove, nil
+}
+
+func reserveTempTableName(dir string) (string, error) {
+	f, err := os.CreateTemp(dir, tempTablePrefix+"dropped_journal_*")
+	if err != nil {
+		return "", err
+	}
+	name := f.Name()
+	if err = f.Close(); err != nil {
+		_ = os.Remove(name)
+		return "", err
+	}
+	return name, nil
+}
+
 func deleteJournalAndIndexFiles(ctx context.Context, path string) (err error) {
 	if err = os.Remove(path); err != nil {
 		return err

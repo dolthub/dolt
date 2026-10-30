@@ -571,7 +571,16 @@ func (j *ChunkJournal) dropJournalWriter(ctx context.Context) error {
 	if err := curr.Close(); err != nil {
 		return err
 	}
-	return deleteJournalAndIndexFiles(ctx, curr.path)
+	// GC drops the journal from swapTables, holding nbs.mu while every read
+	// and write waits, and unlinking a large journal can take a long time.
+	// Rename it aside instead and remove it afterwards; if this process dies
+	// first, PruneTableFiles removes the temp-prefixed files.
+	remove, err := detachJournalAndIndexFiles(curr.path)
+	if remove == nil {
+		return deleteJournalAndIndexFiles(ctx, curr.path)
+	}
+	go remove()
+	return err
 }
 
 // ParseIfExists implements manifest.
