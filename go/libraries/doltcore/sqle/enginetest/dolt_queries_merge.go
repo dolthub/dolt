@@ -4438,6 +4438,146 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		// A keyless UPDATE is a delete plus an insert, so both branches delete 'seed' and neither side holds it.
+		Name: "dolt_conflicts_resolve --theirs on a keyless table with a fulltext index",
+		SetUpScript: []string{
+			"CREATE TABLE t (a VARCHAR(100), FULLTEXT INDEX fa (a))",
+			"INSERT INTO t VALUES ('seed')",
+			"CALL DOLT_COMMIT('-Am', 'c1')",
+			"CALL DOLT_BRANCH('x')",
+			"UPDATE t SET a = 'bravo'",
+			"CALL DOLT_COMMIT('-am', 'main')",
+			"CALL DOLT_CHECKOUT('x')",
+			"UPDATE t SET a = 'alpha'",
+			"CALL DOLT_COMMIT('-am', 'x')",
+			"CALL DOLT_CHECKOUT('main')",
+			"SET @@autocommit = 0",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('x')",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_a, base_cardinality, our_cardinality, their_cardinality FROM dolt_conflicts_t",
+				Expected: []sql.Row{{"seed", uint64(1), uint64(0), uint64(0)}},
+			},
+			{
+				Query:    "CALL DOLT_CONFLICTS_RESOLVE('--theirs', 't')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_conflicts_t",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM t",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "SELECT a FROM t WHERE MATCH(a) AGAINST('alpha')",
+				Expected: []sql.Row{{"alpha"}},
+			},
+			{
+				Query:    "SELECT a FROM t WHERE MATCH(a) AGAINST('bravo')",
+				Expected: []sql.Row{{"bravo"}},
+			},
+			{
+				Query:    "SELECT a FROM t WHERE MATCH(a) AGAINST('seed')",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "dolt_conflicts_resolve --theirs on a keyless table with a secondary index",
+		SetUpScript: []string{
+			"CREATE TABLE t (a VARCHAR(100), INDEX ia (a))",
+			"INSERT INTO t VALUES ('seed')",
+			"CALL DOLT_COMMIT('-Am', 'c1')",
+			"CALL DOLT_BRANCH('x')",
+			"UPDATE t SET a = 'bravo'",
+			"CALL DOLT_COMMIT('-am', 'main')",
+			"CALL DOLT_CHECKOUT('x')",
+			"UPDATE t SET a = 'alpha'",
+			"CALL DOLT_COMMIT('-am', 'x')",
+			"CALL DOLT_CHECKOUT('main')",
+			"SET @@autocommit = 0",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('x')",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_a, base_cardinality, our_cardinality, their_cardinality FROM dolt_conflicts_t",
+				Expected: []sql.Row{{"seed", uint64(1), uint64(0), uint64(0)}},
+			},
+			{
+				Query:    "CALL DOLT_CONFLICTS_RESOLVE('--theirs', 't')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_conflicts_t",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT a FROM t ORDER BY a",
+				Expected: []sql.Row{{"alpha"}, {"bravo"}},
+			},
+			{
+				Query:    "SELECT a FROM t WHERE a = 'alpha'",
+				Expected: []sql.Row{{"alpha"}},
+			},
+			{
+				Query:    "SELECT a FROM t WHERE a = 'seed'",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		// Our side is read from the working set at resolve time, so deleting the row there empties both sides.
+		Name: "dolt_conflicts_resolve --theirs after deleting a conflicted row in the working set",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk INT PRIMARY KEY, v INT, INDEX iv (v))",
+			"INSERT INTO t VALUES (1, 1), (2, 2)",
+			"CALL DOLT_COMMIT('-Am', 'c1')",
+			"CALL DOLT_BRANCH('x')",
+			"UPDATE t SET v = 10 WHERE pk = 1",
+			"CALL DOLT_COMMIT('-am', 'main')",
+			"CALL DOLT_CHECKOUT('x')",
+			"DELETE FROM t WHERE pk = 1",
+			"CALL DOLT_COMMIT('-am', 'x')",
+			"CALL DOLT_CHECKOUT('main')",
+			"SET @@autocommit = 0",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('x')",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "DELETE FROM t WHERE pk = 1",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "CALL DOLT_CONFLICTS_RESOLVE('--theirs', 't')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_conflicts_t",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT pk, v FROM t ORDER BY pk",
+				Expected: []sql.Row{{2, 2}},
+			},
+			{
+				Query:    "SELECT pk FROM t WHERE v = 10",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
 		Name: "no-ff merge commit uses author session variables for author identity",
 		SetUpScript: []string{
 			"CREATE TABLE t (pk INT PRIMARY KEY)",
