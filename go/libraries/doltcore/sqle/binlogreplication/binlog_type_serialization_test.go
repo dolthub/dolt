@@ -1639,7 +1639,7 @@ func TestJsonSerializer_AdaptiveEncoding_DocumentShapes(t *testing.T) {
 			// Reference: parse and encode independently — this is the wire output the
 			// production serializer must produce regardless of storage layout.
 			var refDoc interface{}
-			require.NoError(t, json.Unmarshal(jsonBytes, &refDoc))
+			require.NoError(t, gmstypes.JsonUnmarshal(jsonBytes, &refDoc))
 			refJsonBuf, err := encodeJsonDoc(ctx, gmstypes.JSONDocument{Val: refDoc})
 			require.NoError(t, err)
 			refLength := make([]byte, 4)

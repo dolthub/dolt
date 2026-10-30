@@ -16,7 +16,6 @@ package binlogreplication
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -125,7 +124,7 @@ func TestJsonSerialization_EncodedBytes(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			var jsonDoc any
-			require.NoError(t, json.Unmarshal([]byte(test.json), &jsonDoc))
+			require.NoError(t, gmstypes.JsonUnmarshal([]byte(test.json), &jsonDoc))
 			encoded, err := encodeJsonDoc(context.Background(), gmstypes.JSONDocument{Val: jsonDoc})
 			require.NoError(t, err)
 			require.Equal(t, test.expected, encoded)
@@ -210,7 +209,7 @@ func TestJsonSerialization_VitessRoundTrip(t *testing.T) {
 		},
 		{
 			json:           `["foo", "bar", 1, 2, 3]`,
-			expected:       "JSON_ARRAY('foo','bar',1E+00,2E+00,3E+00)",
+			expected:       "JSON_ARRAY('foo','bar',1,2,3)",
 			expectedTypeId: jsonTypeSmallArray,
 		},
 		{
@@ -274,7 +273,7 @@ func TestJsonSerialization_VitessRoundTrip(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			var jsonDoc any
-			require.NoError(t, json.Unmarshal([]byte(test.json), &jsonDoc))
+			require.NoError(t, gmstypes.JsonUnmarshal([]byte(test.json), &jsonDoc))
 			encoded, err := encodeJsonDoc(context.Background(), gmstypes.JSONDocument{Val: jsonDoc})
 
 			if test.expectedErr != "" {
@@ -320,4 +319,36 @@ func appendByteSlices(bytes ...[]byte) []byte {
 		pos += copy(result[pos:], byteSlice)
 	}
 	return result
+}
+
+func TestJsonSerialization_NumberKinds(t *testing.T) {
+	tests := []struct {
+		input, sql string
+		tag        byte
+	}{
+		{"42", "'42'", jsonTypeInt64},
+		{"-42", "'-42'", jsonTypeInt64},
+		{"42.0", "'4.2E+01'", jsonTypeDouble},
+		{"4.2e1", "'4.2E+01'", jsonTypeDouble},
+		{"1.25", "'1.25E+00'", jsonTypeDouble},
+		{"-0.0", "'-0E+00'", jsonTypeDouble},
+		{"9007199254740993", "'9007199254740993'", jsonTypeUint64},
+		{"-9223372036854775808", "'-9223372036854775808'", jsonTypeInt64},
+		{"9223372036854775807", "'9223372036854775807'", jsonTypeUint64},
+		{"18446744073709551615", "'18446744073709551615'", jsonTypeUint64},
+		{`[42,42.0]`, `JSON_ARRAY(42,4.2E+01)`, jsonTypeSmallArray},
+		{`{"from":42,"to":42.0}`, `JSON_OBJECT('from',42,'to',4.2E+01)`, jsonTypeSmallObject},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			// Use the SQL decoder: encoding/json alone normalizes all numbers to doubles.
+			doc := gmstypes.MustJSON(tt.input)
+			encoded, err := encodeJsonDoc(t.Context(), doc)
+			require.NoError(t, err)
+			require.Equal(t, tt.tag, encoded[0])
+			decoded, err := mysql.ConvertBinaryJSONToSQL(encoded)
+			require.NoError(t, err)
+			require.Equal(t, tt.sql, decoded)
+		})
+	}
 }

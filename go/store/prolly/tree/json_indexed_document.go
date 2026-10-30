@@ -817,7 +817,11 @@ func (i IndexedJsonDocument) JsonType(ctx context.Context) (string, error) {
 	case jsonTypeString:
 		return "STRING", nil
 	case jsonTypeNumber:
-		return "DOUBLE", nil
+		value, err := i.ToInterface(ctx)
+		if err != nil {
+			return "", err
+		}
+		return sqljson.TypeOfJsonValue(value), nil
 	default:
 		return "", fmt.Errorf("unknown json type category %v", typeCategory)
 	}

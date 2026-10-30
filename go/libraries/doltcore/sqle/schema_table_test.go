@@ -150,3 +150,26 @@ func TestV1SchemasTable(t *testing.T) {
 	require.Equal(t, 5, len(wrapper.backingTable.Schema(sqlCtx)))
 
 }
+
+func TestCreatedTimeJSONNumberKinds(t *testing.T) {
+	ctx := sql.NewEmptyContext()
+	tests := []struct {
+		doc  string
+		want int64
+	}{
+		{`{"CreatedAt":42}`, 42},
+		{`{"CreatedAt":42.0}`, 42},
+		{`{"CreatedAt":4294967296}`, 4294967296},
+	}
+	for _, tt := range tests {
+		t.Run(tt.doc, func(t *testing.T) {
+			got, err := getCreatedTime(ctx, gmstypes.MustJSON(tt.doc))
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+		})
+	}
+	for _, invalid := range []string{`{}`, `{"CreatedAt":"42"}`, `{"CreatedAt":18446744073709551615}`} {
+		_, err := getCreatedTime(ctx, gmstypes.MustJSON(invalid))
+		require.Error(t, err)
+	}
+}

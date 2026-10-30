@@ -2713,14 +2713,14 @@ func toJsonWrapper(baseJson any) (sql.JSONWrapper, error) {
 	switch x := baseJson.(type) {
 	case []byte:
 		var v any
-		err := json.Unmarshal(x, &v)
+		err := types.JsonUnmarshal(x, &v)
 		if err != nil {
 			return nil, err
 		}
 		return types.JSONDocument{Val: v}, nil
 	case string:
 		var v any
-		err := json.Unmarshal([]byte(x), &v)
+		err := types.JsonUnmarshal([]byte(x), &v)
 		if err != nil {
 			return nil, err
 		}
