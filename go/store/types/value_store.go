@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -748,6 +749,15 @@ func (lvs *ValueStore) GC(ctx context.Context, gcConfig chunks.GCConfig, oldGenR
 	return nil
 }
 
+// The pre-finalize catch-up stops once a round takes at most
+// preFinalizeRoundTarget, since the copy after finalize() takes about as long
+// as the last round; once a round is no faster than the one before it, when
+// writes outpace the copy; or after maxPreFinalizeRounds rounds.
+const (
+	preFinalizeRoundTarget = 200 * time.Millisecond
+	maxPreFinalizeRounds   = 64
+)
+
 func (lvs *ValueStore) gc(ctx context.Context,
 	toVisit hash.HashSet,
 	hashFilter chunks.HasManyFunc,
@@ -779,14 +789,25 @@ func (lvs *ValueStore) gc(ctx context.Context,
 	}
 
 	// Before we call finalize(), we can process the current set of
-	// NewGenToVisit. NewGen -> Finalize is going to block writes until
-	// we are done, so its best to keep it as small as possible.
-	next := lvs.readAndResetNewGenToVisit()
-	err = sweeper.SaveHashes(ctx, next)
-	if err != nil {
-		return nil, err
+	// NewGenToVisit. NewGen -> Finalize is going to block reads and writes
+	// until we are done, and everything written since the last round is
+	// copied inside that block, so repeat while rounds are still long and
+	// still getting shorter: a round only copies what arrived during the one
+	// before.
+	var prevRound time.Duration
+	for round := 1; ; round++ {
+		roundStart := time.Now()
+		next := lvs.readAndResetNewGenToVisit()
+		err = sweeper.SaveHashes(ctx, next)
+		took := time.Since(roundStart)
+		if err != nil {
+			return nil, err
+		}
+		if took <= preFinalizeRoundTarget || (round > 1 && took >= prevRound) || round == maxPreFinalizeRounds {
+			break
+		}
+		prevRound = took
 	}
-	next = nil
 
 	final := finalize()
 	err = sweeper.SaveHashes(ctx, final)
