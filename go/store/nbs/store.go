@@ -285,7 +285,7 @@ func (nbs *NomsBlockStore) getChunkLocations(ctx context.Context, hashes hash.Ha
 		}
 		if nbs.closed {
 			nbs.mu.Unlock()
-			return nil, errors.New("*NomsBlockStore is closed")
+			return nil, chunks.ErrStoreClosed
 		}
 		keeper, endRead, cycle := nbs.beginRead()
 		behavior := nbs.fatalBehavior
@@ -457,7 +457,7 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	if nbs.closed {
-		return manifestContents{}, false, errors.New("*NomsBlockStore is closed")
+		return manifestContents{}, false, chunks.ErrStoreClosed
 	}
 
 	err = nbs.startConjoinIfRequired(ctx)
@@ -1154,7 +1154,7 @@ func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 		}
 		if nbs.closed {
 			nbs.mu.Unlock()
-			return chunks.EmptyChunk, errors.New("*NomsBlockStore is closed")
+			return chunks.EmptyChunk, chunks.ErrStoreClosed
 		}
 		if nbs.memtable != nil {
 			data, gcb, err := nbs.memtable.get(ctx, h, nbs.keeperFunc, nbs.stats)
@@ -1262,7 +1262,7 @@ func (nbs *NomsBlockStore) getManyWithFunc(
 		}
 		if nbs.closed {
 			nbs.mu.Unlock()
-			return errors.New("*NomsBlockStore is closed")
+			return chunks.ErrStoreClosed
 		}
 		if nbs.memtable != nil {
 			// Read with |nbs.mu| held, so there is no unlocked read
@@ -1375,7 +1375,7 @@ func (nbs *NomsBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 		}
 		if nbs.closed {
 			nbs.mu.Unlock()
-			return false, errors.New("*NomsBlockStore is closed")
+			return false, chunks.ErrStoreClosed
 		}
 		if nbs.memtable != nil {
 			has, gcb, err := nbs.memtable.has(h, nbs.keeperFunc)
@@ -1450,7 +1450,7 @@ func (nbs *NomsBlockStore) hasManyDep(ctx context.Context, hashes hash.HashSet, 
 		}
 		if nbs.closed {
 			nbs.mu.Unlock()
-			return nil, errors.New("*NomsBlockStore is closed")
+			return nil, chunks.ErrStoreClosed
 		}
 		if nbs.memtable != nil {
 			// Read with |nbs.mu| held, so there is no unlocked read
@@ -2225,7 +2225,7 @@ func (nbs *NomsBlockStore) openChunkSourcesForManifestUpdateAndRebase(ctx contex
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	if nbs.closed {
-		return openChunkSourcesResult{}, errors.New("*NomsBlockStore is closed")
+		return openChunkSourcesResult{}, chunks.ErrStoreClosed
 	}
 	// These files are being admitted into the store from outside it --- a
 	// push, a pull, a manual AddTableFiles. We run the more expensive deep
@@ -2826,7 +2826,7 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec, mo
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	if nbs.closed {
-		return errors.New("*NomsBlockStore is closed")
+		return chunks.ErrStoreClosed
 	}
 
 	// Pre-open chunk sources for the new specs before updating the
