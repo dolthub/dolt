@@ -134,7 +134,11 @@ func generateNonCreateNonDropTableSqlSchemaDiff(ctx *sql.Context, formatter sql.
 			if cd.Old.Name != cd.New.Name {
 				ddlStatements = append(ddlStatements, AlterTableRenameColStmt(formatter, td.ToName.Name, cd.Old.Name, cd.New.Name))
 			}
-			if !cd.Old.TypeInfo.Equals(cd.New.TypeInfo) {
+			if !cd.Old.TypeInfo.Equals(cd.New.TypeInfo) ||
+				cd.Old.Default != cd.New.Default ||
+				cd.Old.OnUpdate != cd.New.OnUpdate ||
+				cd.Old.Comment != cd.New.Comment ||
+				!schema.ColConstraintsAreEqual(cd.Old.Constraints, cd.New.Constraints) {
 				ddlStatements = append(ddlStatements, AlterTableModifyColStmt(formatter, td.ToName.Name,
 					GenerateCreateTableColumnDefinition(ctx, formatter, *cd.New, sql.CollationID(td.ToSch.GetCollation()))))
 			}
@@ -176,6 +180,15 @@ func generateNonCreateNonDropTableSqlSchemaDiff(ctx *sql.Context, formatter sql.
 			ddlStatements = append(ddlStatements, AlterTableDropForeignKeyStmt(formatter, from.TableName, from.Name))
 			parentSch := toSchemas[fkDiff.To.ReferencedTableName]
 			ddlStatements = append(ddlStatements, AlterTableAddForeignKeyStmt(formatter, fkDiff.To, toSch, parentSch))
+		}
+	}
+
+	for _, checkDiff := range diffChecks(fromSch.Checks(), toSch.Checks()) {
+		if checkDiff.from != nil {
+			ddlStatements = append(ddlStatements, AlterTableDropCheckStmt(formatter, td.ToName.Name, checkDiff.from))
+		}
+		if checkDiff.to != nil {
+			ddlStatements = append(ddlStatements, AlterTableAddCheckStmt(formatter, td.ToName.Name, checkDiff.to))
 		}
 	}
 
@@ -418,9 +431,71 @@ func AlterTableAddIndexStmt(formatter sql.SchemaFormatter, tableName string, idx
 	var b strings.Builder
 	b.WriteString("ALTER TABLE ")
 	b.WriteString(formatter.QuoteIdentifier(tableName))
-	b.WriteString(" ADD INDEX ")
+	if idx.IsUnique() {
+		b.WriteString(" ADD UNIQUE INDEX ")
+	} else {
+		b.WriteString(" ADD INDEX ")
+	}
 	b.WriteString(formatter.QuoteIdentifier(idx.Name()))
 	b.WriteString("(" + strings.Join(indexColumnDDLExpressions(formatter, idx), ",") + ");")
+	return b.String()
+}
+
+// checkDelta is a check constraint that was added (to only), dropped (from only), or changed (both).
+type checkDelta struct {
+	from schema.Check
+	to   schema.Check
+}
+
+// diffChecks returns the check constraints that differ between two collections, matched by name. A check whose
+// expression or enforcement changed is reported as a drop followed by an add.
+func diffChecks(from, to schema.CheckCollection) []checkDelta {
+	var deltas []checkDelta
+	toByName := make(map[string]schema.Check)
+	if to != nil {
+		for _, c := range to.AllChecks() {
+			toByName[c.Name()] = c
+		}
+	}
+	fromByName := make(map[string]schema.Check)
+	if from != nil {
+		for _, c := range from.AllChecks() {
+			fromByName[c.Name()] = c
+			newCheck, ok := toByName[c.Name()]
+			if !ok {
+				deltas = append(deltas, checkDelta{from: c})
+			} else if c.Expression() != newCheck.Expression() || c.Enforced() != newCheck.Enforced() {
+				deltas = append(deltas, checkDelta{from: c, to: newCheck})
+			}
+		}
+	}
+	if to != nil {
+		for _, c := range to.AllChecks() {
+			if _, ok := fromByName[c.Name()]; !ok {
+				deltas = append(deltas, checkDelta{to: c})
+			}
+		}
+	}
+	return deltas
+}
+
+func AlterTableAddCheckStmt(formatter sql.SchemaFormatter, tableName string, check schema.Check) string {
+	var b strings.Builder
+	b.WriteString("ALTER TABLE ")
+	b.WriteString(formatter.QuoteIdentifier(tableName))
+	b.WriteString(" ADD ")
+	b.WriteString(strings.TrimSpace(GenerateCreateTableCheckConstraintClause(formatter, check)))
+	b.WriteRune(';')
+	return b.String()
+}
+
+func AlterTableDropCheckStmt(formatter sql.SchemaFormatter, tableName string, check schema.Check) string {
+	var b strings.Builder
+	b.WriteString("ALTER TABLE ")
+	b.WriteString(formatter.QuoteIdentifier(tableName))
+	b.WriteString(" DROP CONSTRAINT ")
+	b.WriteString(formatter.QuoteIdentifier(check.Name()))
+	b.WriteRune(';')
 	return b.String()
 }
 

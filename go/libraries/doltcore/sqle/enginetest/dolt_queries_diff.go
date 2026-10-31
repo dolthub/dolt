@@ -4433,6 +4433,39 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	// https://github.com/dolthub/dolt/issues/12271
+	{
+		Name: "schema patch keeps UNIQUE, CHECK and column definition changes on an existing table",
+		SetUpScript: []string{
+			"create table t (id int primary key, x int, y int);",
+			"call dolt_commit('-Am', 'create t');",
+			"set @Commit1 = hashof('HEAD');",
+			"create unique index u on t (x);",
+			"alter table t add constraint c check (x > 0);",
+			"alter table t modify x int not null default 5;",
+			"call dolt_commit('-Am', 'constrain t');",
+			"set @Commit2 = hashof('HEAD');",
+			"alter table t drop constraint c;",
+			"call dolt_commit('-Am', 'drop check');",
+			"set @Commit3 = hashof('HEAD');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT statement_order, statement FROM dolt_patch(@Commit1, @Commit2, 't') WHERE diff_type = 'schema';",
+				Expected: []sql.Row{
+					{1, "ALTER TABLE `t` MODIFY COLUMN `x` int NOT NULL DEFAULT '5';"},
+					{2, "ALTER TABLE `t` ADD UNIQUE INDEX `u`(`x`);"},
+					{3, "ALTER TABLE `t` ADD CONSTRAINT `c` CHECK ((`x` > 0));"},
+				},
+			},
+			{
+				Query: "SELECT statement_order, statement FROM dolt_patch(@Commit2, @Commit3, 't') WHERE diff_type = 'schema';",
+				Expected: []sql.Row{
+					{1, "ALTER TABLE `t` DROP CONSTRAINT `c`;"},
+				},
+			},
+		},
+	},
 }
 
 var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
