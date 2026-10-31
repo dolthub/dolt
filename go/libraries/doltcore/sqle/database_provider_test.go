@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -72,6 +73,82 @@ func TestDatabaseProvider(t *testing.T) {
 		pro.AddInitDatabaseHook(InstallSnoopingCommitHook)
 		return engine, sqlCtx, pro
 	}
+	t.Run("catalog snapshot survives an unrelated database drop", func(t *testing.T) {
+		// https://github.com/dolthub/dolt/issues/12122
+		engine, sqlCtx, pro := setup(t)
+		require.NoError(t, ExecuteSqlOnEngine(sqlCtx, engine,
+			"CREATE TABLE t (id INT PRIMARY KEY);\nINSERT INTO t VALUES (1);\nCREATE DATABASE other;"))
+		rows, err := QueryRows(sqlCtx, engine,
+			"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 't'")
+		require.NoError(t, err)
+		require.Equal(t, []sql.Row{{int64(1)}}, rows)
+
+		var dropErr error
+		dropped := false
+		engine.Analyzer.Catalog.DbProvider = &databaseProviderCallbacks{
+			DoltDatabaseProvider: pro,
+			afterAllDatabases: func(ctx *sql.Context, databases []sql.Database) {
+				for i, db := range databases {
+					if db.Name() == "other" {
+						databases[i] = &databaseCallbacks{Database: db, beforeGetTableNames: func(ctx *sql.Context) {
+							dropped = true
+							dropErr = pro.DropDatabase(ctx, "other")
+						}}
+					}
+				}
+			},
+		}
+		rows, err = QueryRows(sqlCtx, engine,
+			"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 't'")
+		require.True(t, dropped)
+		require.NoError(t, dropErr)
+		assert.NoError(t, err)
+		assert.Equal(t, []sql.Row{{int64(1)}}, rows)
+		rows, err = QueryRows(sqlCtx, engine, "SELECT 1 FROM t LIMIT 1")
+		require.NoError(t, err)
+		assert.Equal(t, []sql.Row{{int8(1)}}, rows)
+		rows, err = QueryRows(sqlCtx, engine, "SHOW TABLES LIKE 't'")
+		require.NoError(t, err)
+		assert.Equal(t, []sql.Row{{"t"}}, rows)
+	})
+	t.Run("table resolution retains its captured root", func(t *testing.T) {
+		engine, sqlCtx, pro := setup(t)
+		require.NoError(t, ExecuteSqlOnEngine(sqlCtx, engine,
+			"CREATE DATABASE other;\nCREATE TABLE other.t (id INT PRIMARY KEY);"))
+		db, ok := pro.BaseDatabase(sqlCtx, "other")
+		require.True(t, ok)
+		root, err := db.GetRoot(sqlCtx)
+		require.NoError(t, err)
+		// GetTableInsensitive reads the root before resolving the user table.
+		require.NoError(t, pro.DropDatabase(sqlCtx, "other"))
+		_, _, err = db.(Database).getTableUsingMissingOverridePolicy(sqlCtx, root, "t", requireOverrideTable)
+		assert.NoError(t, err)
+		_, _, _, err = db.(Database).tableInsensitive(sqlCtx, root, doltdb.TableName{Name: "t"})
+		assert.NoError(t, err)
+	})
+	t.Run("session initialization reports an absent database", func(t *testing.T) {
+		engine, sqlCtx, pro := setup(t)
+		require.NoError(t, ExecuteSqlOnEngine(sqlCtx, engine, "CREATE DATABASE other;"))
+		var dropErr error
+		dropped := false
+		provider := &databaseProviderCallbacks{
+			DoltDatabaseProvider: pro,
+			beforeBaseDatabase: func(ctx *sql.Context, name string) {
+				if name == "other" && !dropped {
+					dropped = true
+					// Use the other session, as a concurrent DROP DATABASE would.
+					dropErr = pro.DropDatabase(sqlCtx, name)
+				}
+			},
+		}
+		sess := dsess.DefaultSessionWithVariables(provider, nil, engine.Variables())
+		ctx := sql.NewContextWithVariables(context.Background(), engine.Variables(), sql.WithSession(sess))
+		_, ok, err := sess.LookupDbState(ctx, "other")
+		require.True(t, dropped)
+		require.NoError(t, dropErr)
+		assert.NoError(t, err)
+		assert.False(t, ok)
+	})
 	t.Run("ReplicationConfig", func(t *testing.T) {
 		t.Run("CreateDatabase", func(t *testing.T) {
 			t.Run("NoReplication", func(t *testing.T) {
@@ -483,4 +560,156 @@ func TestCloneDatabaseDuplicateNameRejected(t *testing.T) {
 	err := pro.CloneDatabaseFromRemote(sqlCtx, "DOLT", "main", "origin", "file:///nonexistent", -1, nil)
 	require.Error(t, err)
 	assert.True(t, sql.ErrDatabaseExists.Is(err))
+}
+
+type databaseProviderCallbacks struct {
+	dsess.DoltDatabaseProvider
+	afterAllDatabases  func(*sql.Context, []sql.Database)
+	beforeBaseDatabase func(*sql.Context, string)
+}
+
+// AllDatabases invokes the callback with the provider's snapshot.
+func (p *databaseProviderCallbacks) AllDatabases(ctx *sql.Context) []sql.Database {
+	databases := p.DoltDatabaseProvider.AllDatabases(ctx)
+	p.afterAllDatabases(ctx, databases)
+	return databases
+}
+
+// BaseDatabase invokes the callback before looking up the database.
+func (p *databaseProviderCallbacks) BaseDatabase(ctx *sql.Context, name string) (dsess.SqlDatabase, bool) {
+	p.beforeBaseDatabase(ctx, name)
+	return p.DoltDatabaseProvider.BaseDatabase(ctx, name)
+}
+
+type databaseCallbacks struct {
+	sql.Database
+	beforeGetTableNames func(*sql.Context)
+}
+
+// GetTableNames invokes the callback before enumerating tables.
+func (d *databaseCallbacks) GetTableNames(ctx *sql.Context) ([]string, error) {
+	d.beforeGetTableNames(ctx)
+	return d.Database.GetTableNames(ctx)
+}
+
+func TestDatabaseProviderCatalogSnapshot(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/12122
+	for _, tc := range []struct {
+		name         string
+		afterDrop    func(*sql.Context, *sqle.Engine, *DoltDatabaseProvider) error
+		expectedNext []sql.Row
+	}{
+		{"drop", func(*sql.Context, *sqle.Engine, *DoltDatabaseProvider) error { return nil }, []sql.Row{}},
+		{"undrop", func(ctx *sql.Context, _ *sqle.Engine, pro *DoltDatabaseProvider) error {
+			return pro.UndropDatabase(ctx, "other")
+		}, []sql.Row{{"original"}}},
+		{"recreate", func(ctx *sql.Context, engine *sqle.Engine, _ *DoltDatabaseProvider) error {
+			return ExecuteSqlOnEngine(ctx, engine,
+				"CREATE DATABASE other;\nCREATE TABLE other.replacement (id INT PRIMARY KEY);")
+		}, []sql.Row{{"replacement"}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			engine, sqlCtx, pro := newLocalProviderEngine(t)
+			require.NoError(t, ExecuteSqlOnEngine(sqlCtx, engine,
+				"CREATE DATABASE other;\nCREATE TABLE other.original (id INT PRIMARY KEY);"))
+			const query = `SELECT table_name FROM information_schema.tables
+WHERE table_schema = 'other' AND table_name IN ('original', 'replacement') ORDER BY table_name`
+			rows, err := QueryRows(sqlCtx, engine, query)
+			require.NoError(t, err)
+			require.Equal(t, []sql.Row{{"original"}}, rows)
+
+			var changeErr error
+			changed := false
+			engine.Analyzer.Catalog.DbProvider = &databaseProviderCallbacks{
+				DoltDatabaseProvider: pro,
+				afterAllDatabases: func(_ *sql.Context, databases []sql.Database) {
+					for i, db := range databases {
+						if db.Name() == "other" {
+							databases[i] = &databaseCallbacks{Database: db, beforeGetTableNames: func(ctx *sql.Context) {
+								if changed {
+									return
+								}
+								changed = true
+								changeErr = pro.DropDatabase(ctx, "other")
+								if changeErr == nil {
+									changeErr = tc.afterDrop(ctx, engine, pro)
+								}
+							}}
+						}
+					}
+				},
+			}
+			rows, err = QueryRows(sqlCtx, engine, query)
+			require.True(t, changed)
+			require.NoError(t, changeErr)
+			assert.NoError(t, err)
+			assert.Equal(t, []sql.Row{{"original"}}, rows, "the statement must retain its original metadata")
+
+			engine.Analyzer.Catalog.DbProvider = pro
+			rows, err = QueryRows(sqlCtx, engine, query)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectedNext, append([]sql.Row{}, rows...), "the next statement must see the resulting catalog")
+		})
+	}
+}
+
+func TestDoltDatabaseResolveWorkingSetAtRoot(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/12122
+	t.Run("retained handle after drop", func(t *testing.T) {
+		engine, sqlCtx, pro := newLocalProviderEngine(t)
+		require.NoError(t, ExecuteSqlOnEngine(sqlCtx, engine,
+			"CREATE DATABASE other;\nCREATE TABLE other.original (id INT PRIMARY KEY);"))
+		db, ok := pro.BaseDatabase(sqlCtx, "other")
+		require.True(t, ok)
+		ddb := db.DbData().Ddb
+		rootHash, err := ddb.NomsRoot(sqlCtx)
+		require.NoError(t, err)
+		wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef("main"))
+		require.NoError(t, err)
+		_, err = ddb.ResolveWorkingSetAtRoot(sqlCtx, wsRef, rootHash)
+		require.NoError(t, err)
+
+		require.NoError(t, pro.DropDatabase(sqlCtx, "other"))
+		ws, err := ddb.ResolveWorkingSetAtRoot(sqlCtx, wsRef, rootHash)
+		require.NoError(t, err, "a retained snapshot needs a readable storage handle")
+		_, found, err := ws.WorkingRoot().GetTable(sqlCtx, doltdb.TableName{Name: "original"})
+		require.NoError(t, err)
+		assert.True(t, found)
+	})
+}
+
+// newLocalProviderEngine creates an engine with disk-backed databases.
+func newLocalProviderEngine(t *testing.T) (*sqle.Engine, *sql.Context, *DoltDatabaseProvider) {
+	t.Helper()
+	ctx := context.Background()
+	dEnv := dtestutils.CreateTestEnvForLocalFilesystem()
+	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(ctx), editor.Options{})
+	require.NoError(t, err)
+	engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db)
+	require.NoError(t, err)
+	pro := dsess.DSessFromSess(sqlCtx.Session).Provider().(*DoltDatabaseProvider)
+	rootDir, err := dEnv.FS.Abs("..")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		for _, database := range pro.DoltDatabases() {
+			if database.Name() == "dolt" {
+				continue
+			}
+			fs, err := pro.FileSystemForDatabase(database.Name())
+			if err != nil {
+				t.Error(err)
+				continue
+			}
+			dir, err := fs.Abs("")
+			if err != nil {
+				t.Error(err)
+				continue
+			}
+			assert.NoError(t, dbfactory.DeleteFromSingletonCache(dbfactory.SingletonCacheKeyForDatabaseDir(dir), true))
+		}
+		pro.Close()
+		dEnv.Close()
+		assert.NoError(t, os.RemoveAll(rootDir))
+	})
+	return engine, sqlCtx, pro
 }
