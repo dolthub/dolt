@@ -88,6 +88,8 @@ type DoltTransaction struct {
 	savepoints         []savepoint
 	postgresSavepoints bool
 	tCharacteristic    sql.TransactionCharacteristic
+	// tempTables holds the data of the session's temporary tables when the transaction began
+	tempTables map[sql.Table]*doltdb.Table
 }
 
 type dbRoot struct {
@@ -100,6 +102,7 @@ type savepoint struct {
 	roots         map[string]doltdb.RootValue
 	name          string
 	dirtyBranches map[string]bool
+	tempTables    map[sql.Table]*doltdb.Table
 }
 
 func NewDoltTransaction(

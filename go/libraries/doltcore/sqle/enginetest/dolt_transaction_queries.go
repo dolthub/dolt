@@ -891,6 +891,71 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 		},
 	},
+	{
+		Name: "rollback undoes writes to temporary tables",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ create temporary table tmp (id int primary key)",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client a */ insert into tmp values (1)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into tmp values (2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ savepoint s",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into tmp values (3)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ create temporary table tmp2 (id int primary key)",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client a */ insert into tmp2 values (1)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ rollback to savepoint s",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from tmp order by id",
+				Expected: []sql.Row{{1}, {2}},
+			},
+			{
+				Query:    "/* client a */ select * from tmp2",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into tmp2 values (2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ rollback",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from tmp order by id",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "/* client a */ select * from tmp2",
+				Expected: []sql.Row{},
+			},
+		},
+	},
 }
 
 var DoltConflictHandlingTests = []queries.TransactionTest{
