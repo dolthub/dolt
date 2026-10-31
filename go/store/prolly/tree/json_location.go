@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"unicode"
 
 	"github.com/dolthub/go-mysql-server/sql/types"
 
@@ -225,10 +226,42 @@ func (p jsonLocation) toMysqlJsonPath() string {
 			result = fmt.Appendf(result, "[%d]", arrayIndex)
 		} else {
 			result = append(result, '.')
-			result = append(result, pathElement.key...)
+			result = appendMysqlJsonPathKey(result, pathElement.key)
 		}
 	}
 	return string(result)
+}
+
+// appendMysqlJsonPathKey appends an object key to a MySQL JSON path. Like MySQL, it leaves the key bare only when it is
+// a valid ECMAScript identifier, and otherwise wraps it in double quotes, escaping any quotes and backslashes.
+func appendMysqlJsonPathKey(path []byte, key []byte) []byte {
+	if isBareMysqlJsonPathKey(key) {
+		return append(path, key...)
+	}
+	path = append(path, '"')
+	for _, b := range key {
+		if b == '"' || b == '\\' {
+			path = append(path, '\\')
+		}
+		path = append(path, b)
+	}
+	return append(path, '"')
+}
+
+func isBareMysqlJsonPathKey(key []byte) bool {
+	if len(key) == 0 {
+		return false
+	}
+	for i, r := range string(key) {
+		if r == '_' || r == '$' || unicode.IsLetter(r) {
+			continue
+		}
+		if i > 0 && unicode.IsDigit(r) {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 // MySqlJsonPathFromKey generates the string used by MySQL JSON functions corresponding to the provided path from an indexed JSON doc
