@@ -59,6 +59,7 @@ var _ sql.CheckTable = &TempTable{}
 var _ sql.CheckAlterableTable = &TempTable{}
 var _ sql.StatisticsTable = &TempTable{}
 var _ sql.AutoIncrementTable = &TempTable{}
+var _ dsess.RestorableTemporaryTable = &TempTable{}
 
 func NewTempTable(
 	ctx *sql.Context,
@@ -193,6 +194,37 @@ func setTempTableRoot(t *TempTable) func(ctx *sql.Context, dbName string, newRoo
 
 		return nil
 	}
+}
+
+// RestoreTable implements dsess.RestorableTemporaryTable, replacing this table's data with the table given when a
+// transaction or savepoint is rolled back.
+func (t *TempTable) RestoreTable(ctx *sql.Context, tbl *doltdb.Table) error {
+	sch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return err
+	}
+
+	sess := dsess.DSessFromSess(ctx.Session)
+	dbState, ok, err := sess.LookupDbState(ctx, t.dbName)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("database %s not found in session", t.dbName)
+	}
+
+	ws := dbState.WorkingSet()
+	if ws == nil {
+		return doltdb.ErrOperationNotSupportedInDetachedHead
+	}
+
+	newRoot, err := ws.WorkingRoot().PutTable(ctx, doltdb.TableName{Name: t.tableName}, tbl)
+	if err != nil {
+		return err
+	}
+
+	t.sch = sch
+	return setTempTableRoot(t)(ctx, t.dbName, newRoot)
 }
 
 func (t *TempTable) RowCount(ctx *sql.Context) (uint64, bool, error) {

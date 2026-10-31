@@ -535,6 +535,10 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 		return nil, err
 	}
 	_, tx.postgresSavepoints = d.DoltgresSessObj.(DoltgresTransactionLifecycle)
+	tx.tempTables, err = d.snapshotTemporaryTables(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	// The engine sets the transaction after this call as well, but since we begin accessing data below, we need to set
 	// this now to avoid seeding the session state with stale data in some cases. The duplication is harmless since the
@@ -1050,8 +1054,12 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, dbName string, branchSt
 // Rollback rolls the given transaction back
 func (d *DoltSession) Rollback(ctx *sql.Context, tx sql.Transaction) error {
 	d.notifyDoltgresTransactionRolledBack()
-	// Nothing to do here, we just throw away all our work and let a new transaction begin next statement
+	// Throw away all our work and let a new transaction begin next statement. Temporary tables don't live in the
+	// session's roots, so they are restored separately.
 	d.clear()
+	if dtx, ok := tx.(*DoltTransaction); ok {
+		return d.restoreTemporaryTables(ctx, dtx.tempTables)
+	}
 	return nil
 }
 
@@ -1190,7 +1198,13 @@ func (d *DoltSession) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, save
 	}
 	d.mu.Unlock()
 
+	tempTables, err := d.snapshotTemporaryTables(ctx)
+	if err != nil {
+		return err
+	}
+
 	dtx.CreateSavepoint(savepointName, roots, dirtyBranches)
+	dtx.savepoints[len(dtx.savepoints)-1].tempTables = tempTables
 	if lifecycle, ok := d.DoltgresSessObj.(DoltgresTransactionLifecycle); ok {
 		lifecycle.DoltgresSavepointCreated(savepointName)
 	}
@@ -1246,6 +1260,9 @@ func (d *DoltSession) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, 
 			return err
 		}
 		branch.dirty = point.dirtyBranches[dbName]
+	}
+	if err := d.restoreTemporaryTables(ctx, point.tempTables); err != nil {
+		return err
 	}
 	if lifecycle, ok := d.DoltgresSessObj.(DoltgresTransactionLifecycle); ok {
 		lifecycle.DoltgresSavepointRolledBack(savepointName)
@@ -1773,6 +1790,66 @@ func (d *DoltSession) AddTemporaryTable(ctx *sql.Context, db string, tbl sql.Tab
 		d.tempTables[db] = make(map[string]sql.Table)
 	}
 	d.tempTables[db][strings.ToLower(tbl.Name())] = tbl
+
+	// A table created mid-transaction survives a rollback, but loses any rows written to it
+	rt, ok := tbl.(RestorableTemporaryTable)
+	dtx, inTx := ctx.GetTransaction().(*DoltTransaction)
+	if !ok || !inTx || dtx.tempTables == nil {
+		return
+	}
+	data, err := rt.DoltTable(ctx)
+	if err != nil {
+		return
+	}
+	dtx.tempTables[tbl] = data
+	for _, sp := range dtx.savepoints {
+		if sp.tempTables != nil {
+			sp.tempTables[tbl] = data
+		}
+	}
+}
+
+// RestorableTemporaryTable is a temporary table whose data can be snapshotted and restored, so that rolling back a
+// transaction or savepoint also undoes writes to it.
+type RestorableTemporaryTable interface {
+	sql.Table
+	DoltTable(ctx *sql.Context) (*doltdb.Table, error)
+	RestoreTable(ctx *sql.Context, tbl *doltdb.Table) error
+}
+
+// snapshotTemporaryTables returns the current data of every temporary table in this session.
+func (d *DoltSession) snapshotTemporaryTables(ctx *sql.Context) (map[sql.Table]*doltdb.Table, error) {
+	snapshot := make(map[sql.Table]*doltdb.Table)
+	for _, tables := range d.tempTables {
+		for _, tbl := range tables {
+			rt, ok := tbl.(RestorableTemporaryTable)
+			if !ok {
+				continue
+			}
+			data, err := rt.DoltTable(ctx)
+			if err != nil {
+				return nil, err
+			}
+			snapshot[tbl] = data
+		}
+	}
+	return snapshot, nil
+}
+
+// restoreTemporaryTables resets every temporary table in the snapshot given that still exists to its saved data.
+func (d *DoltSession) restoreTemporaryTables(ctx *sql.Context, snapshot map[sql.Table]*doltdb.Table) error {
+	for _, tables := range d.tempTables {
+		for _, tbl := range tables {
+			data, ok := snapshot[tbl]
+			if !ok {
+				continue
+			}
+			if err := tbl.(RestorableTemporaryTable).RestoreTable(ctx, data); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (d *DoltSession) DropTemporaryTable(ctx *sql.Context, db, name string) {
