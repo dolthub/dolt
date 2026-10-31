@@ -865,6 +865,19 @@ func (ddb *DoltDB) doWriteRootValue(ctx context.Context, rv RootValue, skipIfPre
 	return rv, ref, nil
 }
 
+// WriteGCRootValue persists |rv| if it is not already in the database and
+// returns the hash of the stored value, which is not |rv.HashOf()| when writing
+// changes its FeatureVersion. It is only for GC root collection: the caller
+// must pass the returned hash to the GC keeper, because an existing value is
+// not rewritten and so is not retained by this call. See doWriteRootValue.
+func (ddb *DoltDB) WriteGCRootValue(ctx context.Context, rv RootValue) (hash.Hash, error) {
+	_, ref, err := ddb.doWriteRootValue(ctx, rv, true)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	return ref.TargetHash(), nil
+}
+
 // Persists all relevant root values of the WorkingSet to the database and returns all hashes reachable
 // from the working set. This is used in GC, for example, where all dependencies of the in-memory working
 // set value need to be accounted for.
@@ -906,6 +919,26 @@ func (ddb *DoltDB) WorkingSetHashes(ctx context.Context, ws *WorkingSet) ([]hash
 		ret = append(ret, h)
 	}
 	return ret, nil
+}
+
+// WriteGCTable is WriteGCRootValue for a table which no root value references.
+func (ddb *DoltDB) WriteGCTable(ctx context.Context, tbl *Table) (hash.Hash, error) {
+	h, err := tbl.HashOf()
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	existing, err := ddb.vrw.ReadValue(ctx, h)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	if existing != nil {
+		return h, nil
+	}
+	ref, err := RefFromNomsTable(ctx, tbl)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	return ref.TargetHash(), nil
 }
 
 // ReadRootValue reads the RootValue associated with the hash given and returns it. Returns an error if the value cannot
