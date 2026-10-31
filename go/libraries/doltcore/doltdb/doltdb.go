@@ -865,6 +865,19 @@ func (ddb *DoltDB) doWriteRootValue(ctx context.Context, rv RootValue, skipIfPre
 	return rv, ref, nil
 }
 
+// WriteGCRootValue persists |rv| if it is not already in the database and
+// returns the hash of the stored value, which is not |rv.HashOf()| when writing
+// changes its FeatureVersion. It is only for GC root collection: the caller
+// must pass the returned hash to the GC keeper, because an existing value is
+// not rewritten and so is not retained by this call. See doWriteRootValue.
+func (ddb *DoltDB) WriteGCRootValue(ctx context.Context, rv RootValue) (hash.Hash, error) {
+	_, ref, err := ddb.doWriteRootValue(ctx, rv, true)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	return ref.TargetHash(), nil
+}
+
 // Persists all relevant root values of the WorkingSet to the database and returns all hashes reachable
 // from the working set. This is used in GC, for example, where all dependencies of the in-memory working
 // set value need to be accounted for.
