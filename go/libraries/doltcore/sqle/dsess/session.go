@@ -1061,6 +1061,7 @@ func (d *DoltSession) Rollback(ctx *sql.Context, tx sql.Transaction) error {
 // 1) All of the branchStates for the database.
 // 2) If there is an active transaction, the initial root for that transaction and any roots for any savepoints of that transaction.
 // 3) Working set roots in any writeSession.
+// 4) The roots of any temporary tables in the database.
 func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func(hash.Hash) bool) error {
 	dbName = strings.ToLower(dbName)
 	dbName, _ = doltdb.SplitRevisionDbName(dbName)
@@ -1111,6 +1112,9 @@ func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func
 				}
 			}
 		}
+		if err := d.visitTempTableGCRoots(ctx, dbState, keep); err != nil {
+			return err
+		}
 	}
 
 	tx := d.GetTransaction()
@@ -1144,6 +1148,33 @@ func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func
 		}
 	}
 
+	return nil
+}
+
+// visitTempTableGCRoots keeps the roots of the temporary tables stored in |dbState|'s database.
+func (d *DoltSession) visitTempTableGCRoots(ctx context.Context, dbState *DatabaseSessionState, keep func(hash.Hash) bool) error {
+	var ddb *doltdb.DoltDB
+	for _, head := range dbState.heads {
+		ddb = head.dbData.Ddb
+		break
+	}
+	for _, tables := range d.tempTables {
+		for _, tbl := range tables {
+			rooted, ok := tbl.(GCRootedTable)
+			if !ok {
+				return fmt.Errorf("temporary table %s does not provide GC roots", tbl.Name())
+			}
+			hashes, err := rooted.GCRoots(ctx, ddb)
+			if err != nil {
+				return err
+			}
+			for _, h := range hashes {
+				if keep(h) {
+					panic("gc safepoint establishment found inconsistent state; process could not guarantee it would be able to keep a chunk if we continue")
+				}
+			}
+		}
+	}
 	return nil
 }
 
@@ -1765,6 +1796,13 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 
 func (d *DoltSession) DatabaseCache(ctx *sql.Context) *DatabaseCache {
 	return d.dbCache
+}
+
+// GCRootedTable is a table whose chunks are not reachable from any of the session's roots.
+type GCRootedTable interface {
+	// GCRoots stores what the table holds only in memory, and returns the hashes that GC of |ddb| must keep.
+	// It returns nothing if the table is stored elsewhere: it may have outlived a dropped database of the same name.
+	GCRoots(ctx context.Context, ddb *doltdb.DoltDB) ([]hash.Hash, error)
 }
 
 func (d *DoltSession) AddTemporaryTable(ctx *sql.Context, db string, tbl sql.Table) {

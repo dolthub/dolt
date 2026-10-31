@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -45,8 +46,11 @@ type TempTable struct {
 
 	lookup sql.IndexLookup
 
-	ed   dsess.TableWriter
-	opts editor.Options
+	ddb *doltdb.DoltDB
+	// writeSession owns |ed|.
+	writeSession dsess.WriteSession
+	ed           dsess.TableWriter
+	opts         editor.Options
 }
 
 var _ sql.TemporaryTable = &TempTable{}
@@ -59,6 +63,7 @@ var _ sql.CheckTable = &TempTable{}
 var _ sql.CheckAlterableTable = &TempTable{}
 var _ sql.StatisticsTable = &TempTable{}
 var _ sql.AutoIncrementTable = &TempTable{}
+var _ dsess.GCRootedTable = &TempTable{}
 
 func NewTempTable(
 	ctx *sql.Context,
@@ -142,11 +147,12 @@ func NewTempTable(
 		pkSch:     pkSch,
 		table:     tbl,
 		sch:       sch,
+		ddb:       ddb,
 		opts:      opts,
 	}
 
-	writeSession := writer.NewWriteSession(db, newWs, ait, setTempTableRoot(tempTable), opts)
-	tempTable.ed, err = writeSession.GetTableWriter(ctx, doltdb.TableName{Name: name})
+	tempTable.writeSession = writer.NewWriteSession(db, newWs, ait, setTempTableRoot(tempTable), opts)
+	tempTable.ed, err = tempTable.writeSession.GetTableWriter(ctx, doltdb.TableName{Name: name})
 	if err != nil {
 		return nil, err
 	}
@@ -186,13 +192,31 @@ func setTempTableRoot(t *TempTable) func(ctx *sql.Context, dbName string, newRoo
 		}
 
 		writeSession := writer.NewWriteSession(t.dbName, newWs, ait, setTempTableRoot(t), t.opts)
-		t.ed, err = writeSession.GetTableWriter(ctx, doltdb.TableName{Name: t.tableName})
+		ed, err := writeSession.GetTableWriter(ctx, doltdb.TableName{Name: t.tableName})
 		if err != nil {
 			return err
 		}
+		t.writeSession, t.ed = writeSession, ed
 
 		return nil
 	}
+}
+
+// GCRoots implements dsess.GCRootedTable. The write session's root is the base for the next write, and it lags
+// |t.table| after index and check DDL, so each has chunks the other does not reach.
+func (t *TempTable) GCRoots(ctx context.Context, ddb *doltdb.DoltDB) ([]hash.Hash, error) {
+	if ddb != t.ddb {
+		return nil, nil
+	}
+	rootHash, err := t.ddb.WriteGCRootValue(ctx, t.writeSession.GetWorkingSet().WorkingRoot())
+	if err != nil {
+		return nil, err
+	}
+	tableHash, err := t.ddb.WriteGCTable(ctx, t.table)
+	if err != nil {
+		return nil, err
+	}
+	return []hash.Hash{rootHash, tableHash}, nil
 }
 
 func (t *TempTable) RowCount(ctx *sql.Context) (uint64, bool, error) {
