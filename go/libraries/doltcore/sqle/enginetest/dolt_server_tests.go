@@ -40,6 +40,58 @@ import (
 // in order to fully test branch deletion and renaming logic.
 var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 	{
+		Name: "Test branch changes with pending qualified writes",
+		SetUpScript: []string{
+			"CREATE TABLE t (k INT PRIMARY KEY);",
+			"CALL DOLT_COMMIT('-Am', 'init');",
+			"CALL DOLT_BRANCH('b');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "/* client a */ START TRANSACTION;", Expected: []sql.Row{}},
+			{Query: "/* client a */ INSERT INTO `dolt/b`.t VALUES (1);", Expected: []sql.Row{}},
+			{
+				Query:          "/* client b */ CALL DOLT_BRANCH('-d', 'b');",
+				ExpectedErrStr: "Error 1105 (HY000): unsafe to delete or rename branches in use in other sessions; use --force to force the change",
+			},
+			{
+				Query:          "/* client b */ CALL DOLT_BRANCH('-m', 'b', 'c');",
+				ExpectedErrStr: "Error 1105 (HY000): unsafe to delete or rename branches in use in other sessions; use --force to force the change",
+			},
+			{Query: "/* client a */ COMMIT;", Expected: []sql.Row{}},
+			{Query: "/* client b */ CALL DOLT_BRANCH('-m', 'b', 'c');", Expected: []sql.Row{{0}}},
+			{Query: "/* client a */ SELECT * FROM `dolt/c`.t;", Expected: []sql.Row{{1}}},
+		},
+	},
+	{
+		Name: "Test commit after forced branch removal",
+		SetUpScript: []string{
+			"CREATE TABLE t (k INT PRIMARY KEY);",
+			"CALL DOLT_COMMIT('-Am', 'init');",
+			"CALL DOLT_BRANCH('b');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "/* client a */ USE `dolt/b`;", Expected: []sql.Row{}},
+			{Query: "/* client a */ START TRANSACTION;", Expected: []sql.Row{}},
+			{Query: "/* client a */ INSERT INTO t VALUES (1);", Expected: []sql.Row{}},
+			{Query: "/* client a */ INSERT INTO `dolt/main`.t VALUES (2);", Expected: []sql.Row{}},
+			{Query: "/* client b */ CALL DOLT_BRANCH('-mf', 'b', 'c');", Expected: []sql.Row{{0}}},
+			{
+				Query:          "/* client a */ COMMIT;",
+				ExpectedErrStr: "Error 1213 (40001): serialization failure: branch working set was deleted: this transaction conflicts with a committed transaction from another client, try restarting transaction.",
+			},
+			{Query: "/* client a */ USE dolt;", Expected: []sql.Row{}},
+			{Query: "/* client a */ SELECT * FROM t;", Expected: []sql.Row{}},
+			{Query: "/* client a */ START TRANSACTION;", Expected: []sql.Row{}},
+			{Query: "/* client a */ INSERT INTO `dolt/c`.t VALUES (3);", Expected: []sql.Row{}},
+			{Query: "/* client b */ CALL DOLT_BRANCH('-D', 'c');", Expected: []sql.Row{{0}}},
+			{
+				Query:          "/* client a */ COMMIT;",
+				ExpectedErrStr: "Error 1213 (40001): serialization failure: branch working set was deleted: this transaction conflicts with a committed transaction from another client, try restarting transaction.",
+			},
+			{Query: "/* client a */ SELECT name FROM dolt_branches;", Expected: []sql.Row{{"main"}}},
+		},
+	},
+	{
 		Name: "Test multi-session behavior for deleting branches",
 		SetUpScript: []string{
 			"call dolt_branch('branch1');",

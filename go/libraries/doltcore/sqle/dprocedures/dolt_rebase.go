@@ -501,6 +501,12 @@ func abortRebase(ctx *sql.Context) error {
 		return err
 	}
 
+	// Discard the deleted branch's dirty state so autocommit does not try to publish its working set.
+	err = doltSession.RemoveBranchState(ctx, ctx.GetCurrentDatabase(), headRef.GetPath())
+	if err != nil {
+		return err
+	}
+
 	// Switch back to the original branch head
 	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(rebaseState.Branch()))
 	if err != nil {
