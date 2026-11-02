@@ -18,6 +18,7 @@ import (
 	"context"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
 // ChangeType is an enum that represents the type of change in a diff
@@ -67,4 +68,24 @@ type SchemaDiffWriter interface {
 	WriteSchemaDiff(schemaDiffStatement string) error
 	// Close finalizes the work of this writer.
 	Close() error
+}
+
+// ValuesEqual reports whether two values are equal for a diff.
+// It compares text exactly and uses the SQL type for other values.
+func ValuesEqual(ctx *sql.Context, typ sql.Type, fromValue, toValue interface{}) (bool, error) {
+	if types.IsTextOnly(typ) && fromValue != nil && toValue != nil {
+		fromText, fromOK, err := sql.Unwrap[string](ctx, fromValue)
+		if err != nil {
+			return false, err
+		}
+		toText, toOK, err := sql.Unwrap[string](ctx, toValue)
+		if err != nil {
+			return false, err
+		}
+		if fromOK && toOK {
+			return fromText == toText, nil
+		}
+	}
+	cmp, err := typ.Compare(ctx, fromValue, toValue)
+	return cmp == 0, err
 }

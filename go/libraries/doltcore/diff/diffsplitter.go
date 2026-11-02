@@ -118,6 +118,7 @@ func mapQuerySchemaToTargetSchema(query, target sql.Schema) (mapping []int, err 
 	return
 }
 
+// SplitDiffResultRow separates a diff result into old and new rows.
 func (ds DiffSplitter) SplitDiffResultRow(ctx *sql.Context, row sql.Row) (from, to RowDiff, err error) {
 	from = RowDiff{ColDiffs: make([]ChangeType, len(ds.targetSch))}
 	to = RowDiff{ColDiffs: make([]ChangeType, len(ds.targetSch))}
@@ -170,12 +171,12 @@ func (ds DiffSplitter) SplitDiffResultRow(ctx *sql.Context, row sql.Row) (from, 
 			to.Row[j] = row[i]
 		}
 		// now do field-wise comparison
-		var cmp int
 		for i, col := range ds.targetSch {
-			cmp, err = col.Type.Compare(ctx, from.Row[i], to.Row[i])
+			equal, err := ValuesEqual(ctx, col.Type, from.Row[i], to.Row[i])
 			if err != nil {
 				return RowDiff{}, RowDiff{}, err
-			} else if cmp != 0 {
+			}
+			if !equal {
 				from.ColDiffs[i] = ModifiedOld
 				to.ColDiffs[i] = ModifiedNew
 			} else {
