@@ -16,7 +16,6 @@ package nbs
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -67,6 +66,9 @@ func (r journalRec) payloadOffset() uint32 {
 
 // uncompressedPayloadSize returns the uncompressed size of the payload.
 func (r journalRec) uncompressedPayloadSize() (sz uint64) {
+	if r.kind == encChunkJournalRecKind {
+		return uint64(max(len(r.payload)-encJournalRecOverhead, 0))
+	}
 	// |r.payload| is snappy-encoded and starts with
 	// the uvarint-encoded uncompressed data size
 	sz, _ = binary.Uvarint(r.payload)
@@ -107,6 +109,11 @@ var journalRecordTimestampGenerator = func() uint64 {
 }
 
 func chunkRecordSize(c CompressedChunk) (recordSz, payloadOff uint32) {
+	return journalRecordSize(len(c.FullCompressedChunk))
+}
+
+// journalRecordSize is the size of a record like a chunk record with a payload of |payloadSz| bytes.
+func journalRecordSize(payloadSz int) (recordSz, payloadOff uint32) {
 	payloadOff += journalRecLenSz
 	payloadOff += journalRecTagSz + journalRecKindSz
 	payloadOff += journalRecTagSz + journalRecAddrSz
@@ -114,19 +121,27 @@ func chunkRecordSize(c CompressedChunk) (recordSz, payloadOff uint32) {
 
 	// Make sure the size of the chunk wouldn't overflow the uint32 record length
 	maxCompressedChunkSize := math.MaxUint32 - int(payloadOff+journalRecChecksumSz)
-	if len(c.FullCompressedChunk) > maxCompressedChunkSize {
+	if payloadSz > maxCompressedChunkSize {
 		panic(fmt.Sprintf("compressed chunk size (%d) is larger than max size allowed "+
-			"for chunk record (%d)", len(c.FullCompressedChunk), maxCompressedChunkSize))
+			"for chunk record (%d)", payloadSz, maxCompressedChunkSize))
 	}
 
 	recordSz = payloadOff
-	recordSz += uint32(len(c.FullCompressedChunk))
+	recordSz += uint32(payloadSz)
 	recordSz += journalRecChecksumSz
 
 	return recordSz, payloadOff
 }
 
 func rootHashRecordSize() (recordSz int) {
+	return rootRecordSize(0)
+}
+
+// rootRecordSize is the size of a root hash record with a payload of |payloadSz| bytes.
+func rootRecordSize(payloadSz int) (recordSz int) {
+	if payloadSz > 0 {
+		recordSz += journalRecTagSz + payloadSz
+	}
 	recordSz += journalRecLenSz
 	recordSz += journalRecTagSz + journalRecKindSz
 	recordSz += journalRecTagSz + journalRecAddrSz
@@ -136,27 +151,32 @@ func rootHashRecordSize() (recordSz int) {
 }
 
 func writeChunkRecord(buf []byte, c CompressedChunk) (n uint32) {
+	return writeJournalRecord(buf, chunkJournalRecKind, c.H, c.FullCompressedChunk)
+}
+
+// writeJournalRecord writes a record of |kind| laid out like a chunk record.
+func writeJournalRecord(buf []byte, kind journalRecKind, addr hash.Hash, payload []byte) (n uint32) {
 	// length – comes back as an unsigned 32 bit int, which aligns with the four bytes used
 	// in the journal storage protocol to store the total record length, assuring that we can't
 	// read a length that is too large to safely write.
-	l, _ := chunkRecordSize(c)
+	l, _ := journalRecordSize(len(payload))
 	writeUint32(buf[:journalRecLenSz], l)
 	n += journalRecLenSz
 	// kind
 	buf[n] = byte(kindJournalRecTag)
 	n += journalRecTagSz
-	buf[n] = byte(chunkJournalRecKind)
+	buf[n] = byte(kind)
 	n += journalRecKindSz
 	// address
 	buf[n] = byte(addrJournalRecTag)
 	n += journalRecTagSz
-	copy(buf[n:], c.H[:])
+	copy(buf[n:], addr[:])
 	n += journalRecAddrSz
 	// payload
 	buf[n] = byte(payloadJournalRecTag)
 	n += journalRecTagSz
-	copy(buf[n:], c.FullCompressedChunk)
-	n += uint32(len(c.FullCompressedChunk))
+	copy(buf[n:], payload)
+	n += uint32(len(payload))
 	// checksum
 	writeUint32(buf[n:], crc(buf[:n]))
 	n += journalRecChecksumSz
@@ -165,21 +185,26 @@ func writeChunkRecord(buf []byte, c CompressedChunk) (n uint32) {
 }
 
 func writeRootHashRecord(buf []byte, root hash.Hash) (n uint32) {
+	return writeRootRecord(buf, rootHashJournalRecKind, journalRecordTimestampGenerator(), root, nil)
+}
+
+// writeRootRecord writes a root hash record of |kind|, which has a payload only if |payload| is not empty.
+func writeRootRecord(buf []byte, kind journalRecKind, timestamp uint64, root hash.Hash, payload []byte) (n uint32) {
 	// length
-	l := rootHashRecordSize()
+	l := rootRecordSize(len(payload))
 	writeUint32(buf[:journalRecLenSz], uint32(l))
 	n += journalRecLenSz
 
 	// kind
 	buf[n] = byte(kindJournalRecTag)
 	n += journalRecTagSz
-	buf[n] = byte(rootHashJournalRecKind)
+	buf[n] = byte(kind)
 	n += journalRecKindSz
 
 	// timestamp
 	buf[n] = byte(timestampJournalRecTag)
 	n += journalRecTagSz
-	writeUint64(buf[n:], journalRecordTimestampGenerator())
+	writeUint64(buf[n:], timestamp)
 	n += journalRecTimestampSz
 
 	// address
@@ -188,7 +213,11 @@ func writeRootHashRecord(buf []byte, root hash.Hash) (n uint32) {
 	copy(buf[n:], root[:])
 	n += journalRecAddrSz
 
-	// empty payload
+	if len(payload) > 0 {
+		buf[n] = byte(payloadJournalRecTag)
+		n += journalRecTagSz
+		n += uint32(copy(buf[n:], payload))
+	}
 
 	// checksum
 	writeUint32(buf[n:], crc(buf[:n]))
@@ -541,7 +570,7 @@ ReadBatchGoto:
 						// found the second record! => possible data loss
 						return true, nil
 					}
-					if record.kind == rootHashJournalRecKind {
+					if isRootHashRecKind(record.kind) {
 						// found the first root hash record
 						firstRootFound = true
 					}
@@ -579,8 +608,8 @@ ReadBatchGoto:
 }
 
 func peekRootHashAt(journal io.ReaderAt, offset int64) (root hash.Hash, err error) {
-	expSz := rootHashRecordSize()
-	buf := make([]byte, expSz) // assumes len(rec) is exactly rootHashRecordSize
+	expSz := rootRecordSize(encJournalRecOverhead)
+	buf := make([]byte, expSz) // assumes len(rec) is at most the size of an encrypted root hash record
 	n, err := journal.ReadAt(buf, offset)
 	if errors.Is(err, io.EOF) {
 		err = nil // EOF is expected for last record
@@ -598,7 +627,7 @@ func peekRootHashAt(journal io.ReaderAt, offset int64) (root hash.Hash, err erro
 // is only used for error reporting, so it should be relative to the start of the journal file.
 func rootHashFromBuffer(buf []byte, offset int64) (root hash.Hash, err error) {
 	sz := readUint32(buf)
-	if sz > uint32(rootHashRecordSize()) {
+	if sz > uint32(rootRecordSize(encJournalRecOverhead)) {
 		err = fmt.Errorf("invalid root hash record size at %d", offset)
 		return
 	}
@@ -611,7 +640,7 @@ func rootHashFromBuffer(buf []byte, offset int64) (root hash.Hash, err error) {
 	var rec journalRec
 	if rec, err = readJournalRecord(buf); err != nil {
 		return
-	} else if rec.kind != rootHashJournalRecKind {
+	} else if !isRootHashRecKind(rec.kind) {
 		err = fmt.Errorf("expected root hash record, got kind: %d", rec.kind)
 		return
 	}
@@ -641,31 +670,7 @@ func writeUint64(buf []byte, u uint64) {
 // Returns any errors or warnings encountered when reading the bytes
 // and interpretting them as journal records.
 func VisitJournalReaderChunks(ctx context.Context, r io.Reader, off int64, cb func(chk CompressedChunk) error) error {
-	var warningErr error
-	_, _, _, err := processJournalRecordsReader(ctx, r, off, func(off int64, rec journalRec) error {
-		if warningErr != nil {
-			return warningErr
-		}
-		if rec.kind == chunkJournalRecKind {
-			// We are going to pass the payload along and it might outlive
-			// this call. The buffer which appears in the record is mutable
-			// and is going to be reused by our caller. Copy it here.
-			buf := bytes.Clone(rec.payload)
-			cchk, err := NewCompressedChunk(rec.address, buf)
-			if err != nil {
-				return fmt.Errorf("error making compressed chunk at off %v for address %v: %w", off, rec.address, err)
-			}
-			err = cb(cchk)
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	}, func(err error) {
-		warningErr = err
+	return visitJournalRecords(ctx, r, off, plainJournal{}, func(c ToChunker) error {
+		return cb(c.(CompressedChunk))
 	})
-	if err == io.EOF {
-		err = nil
-	}
-	return errors.Join(err, warningErr)
 }

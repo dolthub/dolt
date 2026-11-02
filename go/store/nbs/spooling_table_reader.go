@@ -144,7 +144,7 @@ func newSpooledBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore, n
 		return nil, errors.New("unexpected chunk count")
 	}
 
-	tr, err := newTableReader(ctx, index, ra, s3BlockSize)
+	tr, err := newTableReaderFor(ctx, index, ra, s3BlockSize, opts)
 	if err != nil {
 		_ = index.Close()
 		_ = ra.Close()

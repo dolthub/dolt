@@ -32,6 +32,7 @@ type singleBlobBSPersister struct {
 	bs        blobstore.Blobstore
 	q         MemoryQuotaProvider
 	blockSize uint64
+	persisterCodec
 }
 
 var _ tablePersister = &singleBlobBSPersister{}
@@ -53,7 +54,7 @@ func (bsp *singleBlobBSPersister) Persist(ctx context.Context, behavior dherrors
 		return nil, gcBehavior_Continue, err
 	}
 
-	src, err := newPersistedBSTableChunkSource(ctx, bsp.bs, bsp.q, data, address, bsp.blockSize)
+	src, err := newPersistedBSTableChunkSource(ctx, bsp.bs, bsp.q, data, address, bsp.blockSize, bsp.withCodec(openOpts{}))
 	if err != nil {
 		return nil, gcBehavior_Continue, err
 	}
@@ -61,7 +62,7 @@ func (bsp *singleBlobBSPersister) Persist(ctx context.Context, behavior dherrors
 }
 
 func (bsp *singleBlobBSPersister) ConjoinAll(ctx context.Context, behavior dherrors.FatalBehavior, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
-	plan, err := planRangeCopyConjoin(ctx, sources, bsp.q, stats)
+	plan, err := planRangeCopyConjoin(ctx, sources, bsp.q, bsp.storeCodec(), stats)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -105,15 +106,16 @@ func (bsp *singleBlobBSPersister) ConjoinAll(ctx context.Context, behavior dherr
 
 	var cs chunkSource
 	if plan.suffix == ArchiveFileSuffix {
-		cs, err = newBSArchiveChunkSource(ctx, bsp.bs, plan.name, bsp.q, openOpts{deepValidate: true}, stats)
+		cs, err = newBSArchiveChunkSource(ctx, bsp.bs, plan.name, bsp.q, bsp.withCodec(openOpts{deepValidate: true}), stats)
 	} else {
-		cs, err = newBSTableChunkSource(ctx, bsp.bs, plan.name, plan.chunkCount, bsp.q, openOpts{deepValidate: true}, stats)
+		cs, err = newBSTableChunkSource(ctx, bsp.bs, plan.name, plan.chunkCount, bsp.q, bsp.withCodec(openOpts{deepValidate: true}), stats)
 	}
 
 	return cs, func() {}, err
 }
 
 func (bsp *singleBlobBSPersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, opts openOpts, stats *Stats) (chunkSource, error) {
+	opts = bsp.withCodec(opts)
 	cs, err := newBSTableChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, opts, stats)
 	if err == nil {
 		return cs, nil

@@ -65,15 +65,10 @@ func (s journalChunkSource) hasMany(addrs []hasRecord, keeper keeperF) (bool, gc
 	return missing, gcBehavior_Continue, nil
 }
 
-func (s journalChunkSource) getCompressed(ctx context.Context, h hash.Hash, _ *Stats) (CompressedChunk, error) {
-	defer trace.StartRegion(ctx, "journalChunkSource.getCompressed").End()
-	return s.journal.getCompressedChunk(h)
-}
-
 func (s journalChunkSource) get(ctx context.Context, h hash.Hash, keeper keeperF, _ *Stats) ([]byte, gcBehavior, error) {
 	defer trace.StartRegion(ctx, "journalChunkSource.get").End()
 
-	cc, err := s.journal.getCompressedChunk(h)
+	cc, err := s.journal.getChunker(h)
 	if err != nil {
 		return nil, gcBehavior_Continue, err
 	} else if cc.IsEmpty() {
@@ -121,7 +116,9 @@ func (s journalChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.
 
 	var remaining bool
 	var fileReqs []journalRecord
-	var buffered []CompressedChunk
+	var buffered []journalRecord
+	var payloads [][]byte
+	var codec journalCodec
 	f, gcb, err := func() (*os.File, gcBehavior, error) {
 		s.journal.lock.RLock()
 		defer s.journal.lock.RUnlock()
@@ -151,14 +148,14 @@ func (s journalChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.
 			reqs[i].found = true
 		}
 		for _, rec := range bufReqs {
-			cc, err := s.journal.getCompressedChunkAtRange(rec.r, *reqs[rec.idx].a)
+			payload, err := s.journal.readPayload(rec.r)
 			if err != nil {
 				return nil, gcBehavior_Continue, err
-			} else if cc.IsEmpty() {
-				return nil, gcBehavior_Continue, errors.New("chunk in journal index was empty.")
 			}
-			buffered = append(buffered, cc)
+			buffered = append(buffered, rec)
+			payloads = append(payloads, payload)
 		}
+		codec = s.journal.codec
 		s.journal.readers.Add(len(fileReqs))
 		return s.journal.journal.f, gcBehavior_Continue, nil
 	}()
@@ -168,13 +165,12 @@ func (s journalChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.
 		return true, gcBehavior_Block, nil
 	}
 
-	for _, cc := range buffered {
+	for i, rec := range buffered {
 		eg.Go(func() error {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			found(ctx, cc)
-			return nil
+			return foundJournalChunk(ctx, codec, *reqs[rec.idx].a, payloads[i], found)
 		})
 	}
 
@@ -188,17 +184,25 @@ func (s journalChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			cc, err := readCompressedChunkAt(f, rec.r, *reqs[rec.idx].a)
+			payload, err := readPayloadAt(f, rec.r)
 			if err != nil {
 				return err
-			} else if cc.IsEmpty() {
-				return errors.New("chunk in journal index was empty.")
 			}
-			found(ctx, cc)
-			return nil
+			return foundJournalChunk(ctx, codec, *reqs[rec.idx].a, payload, found)
 		})
 	}
 	return remaining, gcBehavior_Continue, nil
+}
+
+func foundJournalChunk(ctx context.Context, codec journalCodec, h hash.Hash, payload []byte, found func(context.Context, ToChunker)) error {
+	cc, err := codec.chunker(h, payload)
+	if err != nil {
+		return err
+	} else if cc.IsEmpty() {
+		return errors.New("chunk in journal index was empty.")
+	}
+	found(ctx, cc)
+	return nil
 }
 
 func (s journalChunkSource) count() uint32 {
@@ -277,7 +281,7 @@ func (s journalChunkSource) iterateAllChunks(ctx context.Context, cb func(chunks
 			return context.Cause(ctx)
 		}
 
-		cchk, err := s.journal.getCompressedChunkAtRange(r, h)
+		cchk, err := s.journal.chunkerAtRange(r, h)
 		if err != nil {
 			return err
 		}
@@ -298,7 +302,7 @@ func (s journalChunkSource) iterateAllChunks(ctx context.Context, cb func(chunks
 		var h hash.Hash
 		copy(h[:], a16[:])
 
-		cchk, err := s.journal.getCompressedChunkAtRange(r, h)
+		cchk, err := s.journal.chunkerAtRange(r, h)
 		if err != nil {
 			return err
 		}
@@ -321,7 +325,7 @@ func (s journalChunkSource) tolerantIterateAllChunks(ctx context.Context, cb fun
 		if ctx.Err() != nil {
 			return
 		}
-		cchk, err := s.journal.getCompressedChunkAtRange(r, h)
+		cchk, err := s.journal.chunkerAtRange(r, h)
 		if err != nil {
 			errCb(fmt.Errorf("chunk %s: %w", h.String(), err))
 			continue
@@ -340,7 +344,7 @@ func (s journalChunkSource) tolerantIterateAllChunks(ctx context.Context, cb fun
 		}
 		var h hash.Hash
 		copy(h[:], a16[:])
-		cchk, err := s.journal.getCompressedChunkAtRange(r, h)
+		cchk, err := s.journal.chunkerAtRange(r, h)
 		if err != nil {
 			errCb(fmt.Errorf("chunk %s: %w", h.String(), err))
 			continue

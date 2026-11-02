@@ -32,6 +32,7 @@ type noConjoinBlobstorePersister struct {
 	bs        blobstore.Blobstore
 	q         MemoryQuotaProvider
 	blockSize uint64
+	persisterCodec
 }
 
 var _ tablePersister = &noConjoinBlobstorePersister{}
@@ -59,7 +60,7 @@ func (bsp *noConjoinBlobstorePersister) Persist(ctx context.Context, behavior dh
 		return nil, gcBehavior_Continue, err
 	}
 
-	src, err := newPersistedBSTableChunkSource(ctx, bsp.bs, bsp.q, data, address, bsp.blockSize)
+	src, err := newPersistedBSTableChunkSource(ctx, bsp.bs, bsp.q, data, address, bsp.blockSize, bsp.withCodec(openOpts{}))
 	if err != nil {
 		return nil, gcBehavior_Continue, err
 	}
@@ -73,6 +74,7 @@ func (bsp *noConjoinBlobstorePersister) ConjoinAll(ctx context.Context, behavior
 
 // Open a table named |name|, containing |chunkCount| chunks.
 func (bsp *noConjoinBlobstorePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, opts openOpts, stats *Stats) (chunkSource, error) {
+	opts = bsp.withCodec(opts)
 	cs, err := newBSTableChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, opts, stats)
 	if err == nil {
 		return cs, nil

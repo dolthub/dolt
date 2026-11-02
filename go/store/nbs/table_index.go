@@ -101,7 +101,7 @@ func ReadTableFooter(rd io.ReadSeeker) (chunkCount uint32, totalUncompressedData
 		return 0, 0, err
 	}
 
-	if string(footer[uint32Size+uint64Size:]) != magicNumber {
+	if string(footer[uint32Size+uint64Size:]) != magicNumber && !isEncryptedFooter(footer) {
 		// Give a nice error message if this is a table file format which we will support in the future.
 		possibleDarc := string(footer[len(footer)-doltMagicSize:])
 		if possibleDarc == doltMagicNumber {
@@ -164,6 +164,9 @@ func readTableIndexByCopy(ctx context.Context, rd io.ReadSeeker, q MemoryQuotaPr
 		return onHeapTableIndex{}, err
 	}
 	idxSz := int64(indexSize(chunkCount) + footerSize)
+	if idxSz, err = addEncryptedTailSize(rd, idxSz); err != nil {
+		return onHeapTableIndex{}, err
+	}
 	_, err = rd.Seek(-idxSz, io.SeekEnd)
 	if err != nil {
 		return onHeapTableIndex{}, err
@@ -230,7 +233,7 @@ var _ tableIndex = &onHeapTableIndex{}
 // occupied by lengths. |onHeapTableIndex| computes directly on the given
 // |indexBuff| and |offsetsBuff1| buffers.
 func newOnHeapTableIndex(indexBuff []byte, offsetsBuff1 []byte, count uint32, totalUncompressedData uint64, q MemoryQuotaProvider) (onHeapTableIndex, error) {
-	if len(indexBuff) != int(indexSize(count)+footerSize) {
+	if len(indexBuff) != int(indexSize(count)+footerSize+encryptedExtraSize(indexBuff)) {
 		return onHeapTableIndex{}, ErrWrongBufferSize
 	}
 
@@ -384,6 +387,10 @@ func (ti onHeapTableIndex) checkTableFileSize(actual uint64) error {
 func (ti onHeapTableIndex) deepValidate(name hash.Hash) error {
 	if err := ti.checkOrdinalsDistinct(); err != nil {
 		return err
+	}
+	if ti.encrypted() {
+		// Encrypted tables have random names.
+		return nil
 	}
 	return ti.verifyName(name)
 }
@@ -644,7 +651,7 @@ func (ti onHeapTableIndex) chunkCount() uint32 {
 // This assumes that the index follows immediately after the last chunk in the
 // file and that the last chunk in the file is in the index.
 func (ti onHeapTableIndex) tableFileSize() (sz uint64) {
-	sz = footerSize
+	sz = footerSize + encryptedExtraSize(ti.footer)
 	if ti.count > 0 {
 		last := ti.getIndexEntry(ti.count - 1)
 		sz += last.Offset()

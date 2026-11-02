@@ -367,9 +367,9 @@ func TestJournalIndexBootstrap(t *testing.T) {
 				last, err := journal.bootstrapJournal(ctx, true, nil, nil)
 				assert.NoError(t, err)
 				for _, e := range expected {
-					var act CompressedChunk
+					var act ToChunker
 					for a, exp := range e.records {
-						act, err = journal.getCompressedChunk(a)
+						act, err = journal.getChunker(a)
 						assert.NoError(t, err)
 						assert.Equal(t, exp, act)
 					}
@@ -458,7 +458,7 @@ func TestJournalIndexCorruptionRecovery(t *testing.T) {
 		require.Equal(t, last, got)
 
 		for h, cc := range data {
-			act, err := j.getCompressedChunk(h)
+			act, err := j.getChunker(h)
 			require.NoError(t, err)
 			require.Equal(t, cc, act)
 		}
@@ -532,7 +532,7 @@ func TestJournalIndexCorruptionRecovery(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, last, got)
 		for h, cc := range data {
-			act, err := j.getCompressedChunk(h)
+			act, err := j.getChunker(h)
 			require.NoError(t, err)
 			require.Equal(t, cc, act)
 		}

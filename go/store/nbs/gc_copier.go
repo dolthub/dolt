@@ -34,19 +34,28 @@ type gcCopier struct {
 	tfp    tableFilePersister
 }
 
-func newTableWriterFromArchiveLevel(archiveLevel chunks.GCArchiveLevel) (GenericTableWriter, error) {
+// newTableWriterFromArchiveLevel returns a writer that seals its records under |codec| if it is not nil.
+func newTableWriterFromArchiveLevel(archiveLevel chunks.GCArchiveLevel, codec storeCodec) (GenericTableWriter, error) {
 	switch archiveLevel {
 	case chunks.SimpleArchive:
-		return NewArchiveStreamWriter("")
+		w, err := NewArchiveStreamWriter("")
+		if err == nil && codec != nil {
+			w.writer.sealer, err = codec.newSpanSealer(true)
+		}
+		return w, err
 	case chunks.NoArchive:
-		return NewCmpChunkTableWriter("")
+		w, err := NewCmpChunkTableWriter("")
+		if err == nil && codec != nil {
+			w.sealer, err = codec.newTableSealer()
+		}
+		return w, err
 	default:
 		return nil, fmt.Errorf("invalid archive level: %d", archiveLevel)
 	}
 }
 
-func newGarbageCollectionCopier(archiveLevel chunks.GCArchiveLevel, tfp tableFilePersister) (*gcCopier, error) {
-	writer, err := newTableWriterFromArchiveLevel(archiveLevel)
+func newGarbageCollectionCopier(archiveLevel chunks.GCArchiveLevel, tfp tableFilePersister, codec storeCodec) (*gcCopier, error) {
+	writer, err := newTableWriterFromArchiveLevel(archiveLevel, codec)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +221,7 @@ type rotatingGCCopier struct {
 }
 
 func newRotatingGCCopier(archiveLevel chunks.GCArchiveLevel, tfp tableFilePersister, dest *NomsBlockStore, fileSizeLimit uint64, incrementalUpdateManifest bool) (*rotatingGCCopier, error) {
-	writer, err := newTableWriterFromArchiveLevel(archiveLevel)
+	writer, err := newTableWriterFromArchiveLevel(archiveLevel, dest.codec)
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +304,7 @@ func (gcc *rotatingGCCopier) rotate(ctx context.Context) error {
 		return gcc.finalizeChildWriter(ctx, previousCopier)
 	})
 
-	writer, err := newTableWriterFromArchiveLevel(gcc.archiveLevel)
+	writer, err := newTableWriterFromArchiveLevel(gcc.archiveLevel, gcc.dest.codec)
 	if err != nil {
 		return err
 	}

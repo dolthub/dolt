@@ -96,6 +96,9 @@ type lookupMeta struct {
 	batchEnd   int64
 	checkSum   uint32
 	latestHash hash.Hash
+	// keys and auth are an encrypted journal's key and authentication records in the batch.
+	keys [][]byte
+	auth []byte
 }
 
 const indexRecTypeSize = 1
@@ -123,6 +126,8 @@ func processIndexRecords(rd *bufio.Reader, sz int64, cb func(lookupMeta, []looku
 	var batchCrc uint32
 	var batch []lookup
 	var batchOff int64
+	var keys [][]byte
+	var auth []byte
 	for off < sz {
 		recTag, err := rd.ReadByte()
 		if err != nil {
@@ -140,14 +145,29 @@ func processIndexRecords(rd *bufio.Reader, sz int64, cb func(lookupMeta, []looku
 			batch = append(batch, l)
 			batchCrc = crc32.Update(batchCrc, crcTable, l.a[:])
 
+		case indexRecKey, indexRecAuth:
+			b, err := readIndexBytes(rd)
+			if err != nil {
+				return off, ignoreBenignIndexEOF(err)
+			}
+			batchOff += uint16Size + int64(len(b))
+			if recTag == indexRecAuth {
+				auth = b
+			} else {
+				keys = append(keys, b)
+				batchCrc = crc32.Update(batchCrc, crcTable, b)
+			}
+
 		case indexRecMeta:
 			m, err := readIndexMeta(rd)
 			if err != nil {
 				return off, ignoreBenignIndexEOF(err)
 			}
+			m.keys, m.auth = keys, auth
 			if err := cb(m, batch, batchCrc); err != nil {
 				return off, err
 			}
+			keys, auth = nil, nil
 			batch = nil
 			batchCrc = 0
 			off += batchOff + lookupMetaSz

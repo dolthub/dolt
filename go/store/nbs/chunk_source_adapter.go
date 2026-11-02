@@ -33,13 +33,13 @@ func (csa chunkSourceAdapter) suffix() string {
 	return ""
 }
 
-func newReaderFromIndexData(ctx context.Context, q MemoryQuotaProvider, idxData []byte, name hash.Hash, tra tableReaderAt, blockSize uint64) (cs chunkSource, err error) {
+func newReaderFromIndexData(ctx context.Context, q MemoryQuotaProvider, idxData []byte, name hash.Hash, tra tableReaderAt, blockSize uint64, opts openOpts) (cs chunkSource, err error) {
 	index, err := parseTableIndexByCopy(ctx, idxData, q)
 	if err != nil {
 		return nil, err
 	}
 
-	tr, err := newTableReader(ctx, index, tra, blockSize)
+	tr, err := newTableReaderFor(ctx, index, tra, blockSize, opts)
 	if err != nil {
 		return nil, err
 	}

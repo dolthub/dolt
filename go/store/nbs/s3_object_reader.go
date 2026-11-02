@@ -222,7 +222,7 @@ func (s3or *s3ObjectReader) objectExistsInChunkSource(ctx context.Context, name 
 		// dolt magic number is a version byte + DOLTARC. We ignore the version byte here.
 		return bytes.Equal(magic[magicNumberSize-doltMagicSize:], []byte(doltMagicNumber)), nil
 	} else {
-		return bytes.Equal(magic, []byte(magicNumber)), nil
+		return bytes.Equal(magic, []byte(magicNumber)) || isEncryptedFooter(magic), nil
 	}
 }
 
