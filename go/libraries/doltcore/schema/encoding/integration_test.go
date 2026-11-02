@@ -77,6 +77,7 @@ func parseSchemaString(t *testing.T, s string) schema.Schema {
 	require.NoError(t, err)
 	eng, db, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 	require.NoError(t, err)
+	defer eng.Close()
 	sqlCtx, err := eng.NewDefaultContext(ctx)
 	require.NoError(t, err)
 	defer sql.SessionEnd(sqlCtx.Session)
