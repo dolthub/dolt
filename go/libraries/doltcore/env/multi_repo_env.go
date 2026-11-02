@@ -51,6 +51,8 @@ type MultiRepoEnv struct {
 	fs           filesys.Filesys
 	cfg          config.ReadWriteConfig
 	dialProvider dbfactory.GRPCDialProvider
+	// carried is the caller's env, which the caller closes. Close closes every other env.
+	carried *DoltEnv
 }
 
 // StorageMetadataMap is a map of table file and archive paths to their metadata. It is used to surface specific
@@ -141,22 +143,24 @@ func MultiEnvForSingleEnv(ctx context.Context, env *DoltEnv) (*MultiRepoEnv, err
 func MultiEnvForConfigAndDirectory(ctx context.Context, config config.ReadWriteConfig, fs filesys.Filesys, dbLoadParams map[string]any) (*MultiRepoEnv, error) {
 	dEnv := LoadWithoutDB(ctx, GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, "")
 	dEnv.DBLoadParams = dbLoadParams
-	return multiEnvForConfigDirectoryEnv(ctx, config, fs, dEnv)
+	return multiEnvForConfigDirectoryEnv(ctx, config, fs, dEnv, nil)
 }
 
 // MultiEnvForDirectory returns a MultiRepoEnv for the directory rooted at the file system given. The doltEnv from the
 // invoking context is included. If it's non-nil and valid, it will be included in the returned MultiRepoEnv, and will
-// be the first database in all iterations.
+// be the first database in all iterations. The caller still owns |dEnv|: [MultiRepoEnv.Close] leaves it open.
 func MultiEnvForDirectory(
 	ctx context.Context,
 	dataDirFS filesys.Filesys,
 	dEnv *DoltEnv,
 ) (*MultiRepoEnv, error) {
 	config := dEnv.Config.WriteableConfig()
-	return multiEnvForConfigDirectoryEnv(ctx, config, dataDirFS, dEnv)
+	return multiEnvForConfigDirectoryEnv(ctx, config, dataDirFS, dEnv, dEnv)
 }
 
-func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteConfig, dataDirFS filesys.Filesys, dEnv *DoltEnv) (*MultiRepoEnv, error) {
+// multiEnvForConfigDirectoryEnv builds a MultiRepoEnv rooted at |dEnv|. |carried| is |dEnv| when the caller owns it,
+// or nil when the MultiRepoEnv does.
+func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteConfig, dataDirFS filesys.Filesys, dEnv, carried *DoltEnv) (*MultiRepoEnv, error) {
 	// Load current dataDirFS and put into mr env
 	var dbName string = "dolt"
 
@@ -186,6 +190,7 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 		fs:           dataDirFS,
 		cfg:          config,
 		dialProvider: NewGRPCDialProviderFromDoltEnv(dEnv),
+		carried:      carried,
 	}
 
 	envSet := map[string]*DoltEnv{}
@@ -276,7 +281,9 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 	})
 	if err != nil {
 		for _, dEnv := range openedEnvs {
-			dEnv.Close()
+			if dEnv != carried {
+				dEnv.Close()
+			}
 		}
 		return nil, err
 	}
@@ -350,14 +357,16 @@ func (mrEnv *MultiRepoEnv) Config() config.ReadWriteConfig {
 	return mrEnv.cfg
 }
 
-// Close closes all DoltDBs held by environments in this MultiRepoEnv.
+// Close closes the environments this MultiRepoEnv opened. It leaves open the env passed to [MultiEnvForDirectory],
+// which belongs to the caller. Closing more than once is safe.
 func (mrEnv *MultiRepoEnv) Close(ctx context.Context) error {
 	var errs []error
 	for _, namedEnv := range mrEnv.envs {
-		if ddb := namedEnv.env.DoltDB(ctx); ddb != nil {
-			if err := ddb.Close(); err != nil {
-				errs = append(errs, err)
-			}
+		if namedEnv.env == mrEnv.carried {
+			continue
+		}
+		if err := namedEnv.env.Close(); err != nil {
+			errs = append(errs, err)
 		}
 	}
 	return errors.Join(errs...)
