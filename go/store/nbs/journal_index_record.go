@@ -109,7 +109,8 @@ const (
 
 // processIndexRecords reads batches of chunk index lookups into the journal.
 // An index batch looks like |lookup|lookup|...|meta|. The first byte of a record
-// indicates whether it is a |lookup| or |meta|.
+// indicates whether it is a |lookup| or |meta|, or in an encrypted journal, a key or
+// authentication record.
 //
 // |off| tracks the end of the last fully-read batch; the caller truncates the
 // index to |off| to discard a partially written trailing batch. The returned

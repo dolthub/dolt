@@ -527,6 +527,8 @@ type ArchiveStreamWriter struct {
 	snappyQueue *[]CompressedChunk
 	snappyDict  *DecompBundle
 	chunkCount  int32
+	// sealedDicts maps the stored spans of copied sealed dictionaries, by hash, to their span ids.
+	sealedDicts map[hash.Hash]uint32
 }
 
 // NewArchiveStreamWriter returns a writer that builds an archive table file
@@ -609,11 +611,12 @@ func (asw *ArchiveStreamWriter) AddChunk(chunker ToChunker) (uint32, error) {
 	if ac, ok := chunker.(*ArchiveToChunker); ok {
 		return asw.writeArchiveToChunker(ac)
 	}
-	// A sealed chunk must never be opened into a plaintext archive.
-	if asw.writer.sealer != nil {
-		return asw.writer.sealer.addChunk(asw, chunker)
-	} else if _, ok := chunker.(SealedChunk); ok {
-		return 0, fmt.Errorf("%w: encrypted chunk %s added to a plaintext archive", ErrEncryptionMismatch, chunker.Hash().String())
+	if sc, ok := chunker.(SealedChunk); ok {
+		// A sealed chunk must never be opened into a plaintext archive.
+		if asw.writer.sealer == nil {
+			return 0, fmt.Errorf("%w: encrypted chunk %s added to a plaintext archive", ErrEncryptionMismatch, chunker.Hash().String())
+		}
+		return asw.addSealed(sc)
 	}
 	return 0, fmt.Errorf("Unknown chunk type: %T", chunker)
 }

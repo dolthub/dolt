@@ -111,7 +111,7 @@ func newPersistedBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore,
 
 // ConjoinAll implements tablePersister.
 func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, behavior dherrors.FatalBehavior, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
-	plan, err := planRangeCopyConjoin(ctx, sources, bsp.q, bsp.storeCodec(), stats)
+	plan, err := planRangeCopyConjoin(ctx, sources, bsp.q, bsp.codecOrPlain(), stats)
 	if err != nil {
 		return nil, nil, err
 	}

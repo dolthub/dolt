@@ -62,7 +62,7 @@ func (bsp *singleBlobBSPersister) Persist(ctx context.Context, behavior dherrors
 }
 
 func (bsp *singleBlobBSPersister) ConjoinAll(ctx context.Context, behavior dherrors.FatalBehavior, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
-	plan, err := planRangeCopyConjoin(ctx, sources, bsp.q, bsp.storeCodec(), stats)
+	plan, err := planRangeCopyConjoin(ctx, sources, bsp.q, bsp.codecOrPlain(), stats)
 	if err != nil {
 		return nil, nil, err
 	}

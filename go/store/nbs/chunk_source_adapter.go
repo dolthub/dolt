@@ -41,6 +41,7 @@ func newReaderFromIndexData(ctx context.Context, q MemoryQuotaProvider, idxData 
 
 	tr, err := newTableReaderFor(ctx, index, tra, blockSize, opts)
 	if err != nil {
+		index.Close()
 		return nil, err
 	}
 	return &chunkSourceAdapter{tr, name}, nil

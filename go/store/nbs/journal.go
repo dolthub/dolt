@@ -257,7 +257,7 @@ func (j *ChunkJournal) createProtectedJournalWriter(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	wr.codec = j.persister.storeCodec().newJournalCodec()
+	wr.codec = j.persister.codecOrPlain().newJournalCodec()
 	j.wr = wr
 	j.persister.addProtected(journalAddr)
 	return nil
@@ -275,7 +275,7 @@ func (j *ChunkJournal) openProtectedJournalWriter(ctx context.Context) (bool, er
 	} else if !ok {
 		return false, nil
 	}
-	wr.codec = j.persister.storeCodec().newJournalCodec()
+	wr.codec = j.persister.codecOrPlain().newJournalCodec()
 	j.wr = wr
 	j.persister.addProtected(journalAddr)
 	return true, nil

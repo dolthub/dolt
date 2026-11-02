@@ -641,8 +641,8 @@ func peekRootHashAt(journal io.ReaderAt, offset int64) (root hash.Hash, err erro
 	return rootHashFromBuffer(buf, offset)
 }
 
-// rootHashFromBuffer extracts the root hash from a root hash journal record stored in |buf|. The buffer must always
-// be exactly the size of a root hash record (i.e. rootHashRecordSize()), and the CRC is checked before parsing. |offset|
+// rootHashFromBuffer extracts the root hash from a root hash journal record stored at the start of |buf|, which is at
+// most the size of an encrypted root hash record. The CRC is checked before parsing. |offset|
 // is only used for error reporting, so it should be relative to the start of the journal file.
 func rootHashFromBuffer(buf []byte, offset int64) (root hash.Hash, err error) {
 	sz := readUint32(buf)

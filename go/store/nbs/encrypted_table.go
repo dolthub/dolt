@@ -19,6 +19,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -213,6 +214,8 @@ func (tw *CmpChunkTableWriter) addSealed(tc ToChunker) (uint32, error) {
 		}
 		if tw.sealer.adopt(ordinal, sc) {
 			record, uncLen = sc.sealedRecord(), len(chk.Data())
+		} else {
+			tc = ChunkToCompressedChunk(chk)
 		}
 	}
 	if record == nil {
@@ -263,7 +266,7 @@ func (tw *CmpChunkTableWriter) writeEncryptedTail() error {
 	return err
 }
 
-// newTableReaderFor is newTableReader for a table opened by a store, whose encryption it must match.
+// newTableReaderFor is newTableReader for a table whose records |opts|'s codec opens.
 func newTableReaderFor(ctx context.Context, index tableIndex, r tableReaderAt, blockSize uint64, opts openOpts) (tableReader, error) {
 	opener, err := tableOpener(index, opts)
 	if err != nil {
@@ -295,12 +298,16 @@ func tableOpener(index tableIndex, opts openOpts) (recordOpener, error) {
 	} else if !encrypted {
 		return nil, nil
 	}
-	return codec.openTable(fileKeys{
+	opener, err := codec.openTable(fileKeys{
 		keyBlock: ti.keyBlock(),
 		count:    ti.count,
 		position: func(ordinal uint32) uint64 { return ti.getIndexEntry(ordinal).Offset() },
 		adding:   opts.adding,
 	})
+	if err == nil && opener == nil {
+		err = errors.New("runtime error: no opener for an encrypted table file")
+	}
+	return opener, err
 }
 
 func (tr tableReader) chunkFromRecord(ctx context.Context, h hash.Hash, offset uint64, record []byte) (CompressedChunk, error) {
@@ -373,13 +380,13 @@ func sourceKeyBlock(cs chunkSource) ([]byte, uint32, bool, error) {
 func conjoinedKeyBlock(codec storeCodec, sources []sourceWithSize) ([]byte, bool, error) {
 	var parts []keyBlockPart
 	var start uint32
-	for i, sws := range sources {
+	for _, sws := range sources {
 		kb, count, encrypted, err := sourceKeyBlock(sws.source)
 		if err != nil {
 			return nil, false, err
 		}
-		if i > 0 && encrypted != (parts != nil) {
-			return nil, false, fmt.Errorf("%w: conjoining encrypted and plaintext files", ErrEncryptionMismatch)
+		if encrypted != codec.encrypted() {
+			return nil, false, fmt.Errorf("%w: conjoining files of other encryption", ErrEncryptionMismatch)
 		}
 		if encrypted {
 			parts = append(parts, keyBlockPart{keyBlock: kb, start: start, count: count})

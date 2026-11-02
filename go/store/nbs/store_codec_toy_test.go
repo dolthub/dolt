@@ -158,7 +158,7 @@ func (c *toyCodec) newSpanSealer(recompress bool) (spanSealer, error) {
 	if c.keyless {
 		return nil, errToyKeyless
 	}
-	return &toySpanSealer{toySealer: toySealer{key: c.key()}, recompress: recompress, copiedDicts: map[*toyDict]uint32{}}, nil
+	return &toySpanSealer{toySealer: toySealer{key: c.key()}, recompress: recompress}, nil
 }
 
 func (c *toyCodec) openTable(f fileKeys) (recordOpener, error) {
@@ -248,8 +248,7 @@ func (s *toySealer) keyBlock() ([]byte, error) {
 
 type toySpanSealer struct {
 	toySealer
-	recompress  bool
-	copiedDicts map[*toyDict]uint32
+	recompress bool
 }
 
 func (s *toySpanSealer) seal(ordinal uint32, ref spanRef, b []byte) ([]byte, error) {
@@ -264,40 +263,16 @@ func (s *toySpanSealer) seal(ordinal uint32, ref spanRef, b []byte) ([]byte, err
 	}
 }
 
-func (s *toySpanSealer) addChunk(asw *ArchiveStreamWriter, c ToChunker) (uint32, error) {
-	tc, ok := c.(*toyChunk)
-	if !ok {
-		return 0, fmt.Errorf("unknown chunk type %T", c)
+func (s *toySpanSealer) adopt(ordinal uint32, sc SealedChunk, dictCopied bool) bool {
+	tc, ok := sc.(*toyChunk)
+	if !ok || (s.recompress && tc.dict == nil) {
+		return false
 	}
-	if s.recompress && tc.dict == nil {
-		chk, err := tc.ToChunk()
-		if err != nil {
-			return 0, err
-		}
-		return asw.writeCompressedChunk(ChunkToCompressedChunk(chk))
+	if !dictCopied {
+		s.keys.add(ordinal-1, tc.dict.sealed.(*toyDict).key)
 	}
-	var dictId uint32
-	if tc.dict != nil {
-		d := tc.dict.sealed.(*toyDict)
-		if dictId = s.copiedDicts[d]; dictId == 0 {
-			var err error
-			if dictId, err = asw.writer.writeByteSpan(d.stored); err != nil {
-				return 0, err
-			}
-			s.keys.add(dictId-1, d.key)
-			s.copiedDicts[d] = dictId
-		}
-	}
-	dataId, err := asw.writer.writeByteSpan(tc.record)
-	if err != nil {
-		return 0, err
-	}
-	s.keys.add(dataId-1, tc.key)
-	asw.chunkCount++
-	if dictId == 0 {
-		return uint32(len(tc.record)), asw.writer.stageSnappyChunk(tc.h, dataId)
-	}
-	return uint32(len(tc.record)), asw.writer.stageZStdChunk(tc.h, dictId, dataId)
+	s.keys.add(ordinal, tc.key)
+	return true
 }
 
 type toyOpener struct {
@@ -432,6 +407,13 @@ func (tc *toyChunk) sealedRecord() []byte {
 	return tc.record
 }
 
+func (tc *toyChunk) sealedDict() []byte {
+	if tc.dict == nil {
+		return nil
+	}
+	return tc.dict.sealed.(*toyDict).stored
+}
+
 // toyJournal seals journal records as | key | sealed record |, so they copy as they are to table files and archives.
 type toyJournal struct {
 	codec   *toyCodec
@@ -533,7 +515,11 @@ func (j *toyJournal) indexedKey(key []byte) {
 	j.learn(key[0])
 }
 
+// sealBatch extends the batch until the journal has written a key, as a store that only replayed its journal has not.
 func (j *toyJournal) sealBatch(m lookupMeta) ([]byte, bool, error) {
+	if j.key == 0 {
+		return nil, false, nil
+	}
 	n := j.lookups
 	j.lookups = 0
 	return j.batchAuth(m, n), true, nil

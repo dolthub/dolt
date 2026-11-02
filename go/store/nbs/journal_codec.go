@@ -70,8 +70,9 @@ type sealedRecord struct {
 	key     []byte
 }
 
-// journalCodec seals what a chunk journal writes, and checks and opens what it reads. The journal writer's lock is
-// held for every call but chunker, which runs without it.
+// journalCodec seals what a chunk journal writes, and checks and opens what it reads. The journal writer holds its
+// lock for every call but chunker and locate, which may run concurrently under its read lock or without it. Slices
+// passed to the codec are valid only during the call.
 type journalCodec interface {
 	// replay checks a record read from the journal.
 	replay(ctx context.Context, off int64, r journalRec) error

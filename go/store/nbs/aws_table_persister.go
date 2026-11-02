@@ -245,7 +245,7 @@ func (s partsByPartNum) Swap(i, j int) {
 }
 
 func (s3p awsTablePersister) ConjoinAll(ctx context.Context, behavior dherrors.FatalBehavior, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
-	plan, err := planRangeCopyConjoin(ctx, sources, s3p.q, s3p.storeCodec(), stats)
+	plan, err := planRangeCopyConjoin(ctx, sources, s3p.q, s3p.codecOrPlain(), stats)
 	if err != nil {
 		return nil, nil, err
 	}

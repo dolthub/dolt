@@ -471,19 +471,38 @@ func (wr *journalWriter) hasAddr(h hash.Hash) (ok bool) {
 // getChunker reads the chunk with addr |h|. The codec opens it after the lock is released, since opening it may
 // call a key provider.
 func (wr *journalWriter) getChunker(h hash.Hash) (ToChunker, error) {
-	payload, err := func() ([]byte, error) {
-		wr.lock.RLock()
-		defer wr.lock.RUnlock()
-		r, ok := wr.ranges.get(h)
-		if !ok {
-			return nil, nil
-		}
-		return wr.readPayload(r)
-	}()
+	payload, err := wr.getPayload(h)
 	if err != nil || payload == nil {
 		return CompressedChunk{}, err
 	}
 	return wr.codec.chunker(h, payload)
+}
+
+// getPayload reads the record payload of the chunk with addr |h|, or nil if the journal does not have it.
+func (wr *journalWriter) getPayload(h hash.Hash) ([]byte, error) {
+	wr.lock.RLock()
+	defer wr.lock.RUnlock()
+	r, ok := wr.ranges.get(h)
+	if !ok {
+		return nil, nil
+	}
+	return wr.readPayload(r)
+}
+
+// chunkData returns the data of chunk |h| from its record's payload.
+func (wr *journalWriter) chunkData(h hash.Hash, payload []byte) ([]byte, error) {
+	var c ToChunker
+	var err error
+	if _, ok := wr.codec.(plainJournal); ok {
+		c, err = NewCompressedChunk(h, payload)
+	} else {
+		c, err = wr.codec.chunker(h, payload)
+	}
+	if err != nil {
+		return nil, err
+	}
+	chk, err := c.ToChunk()
+	return chk.Data(), err
 }
 
 // readPayloadAt reads the chunk record payload at |r| directly from |f|. |r| must be
@@ -586,6 +605,8 @@ func (wr *journalWriter) commitRootHashUnlocked(ctx context.Context, behavior dh
 	rec, err := wr.codec.sealRoot(ctx, root, ts)
 	if err != nil {
 		return err
+	} else if len(rec.payload) > encJournalRecOverhead {
+		return fmt.Errorf("root hash record payload of %d bytes is too large", len(rec.payload))
 	}
 	if err = wr.writeKeyRecord(ctx, behavior, rec.key); err != nil {
 		return err

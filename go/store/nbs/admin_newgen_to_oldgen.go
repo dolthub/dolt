@@ -30,6 +30,9 @@ func MoveNewGenToOldGen(
 	progress chan string,
 ) error {
 	if gs, ok := cs.(*GenerationalNBS); ok {
+		if err := checkGCCodecs(gs.newGen.codec, gs.oldGen.codec); err != nil {
+			return err
+		}
 		srcPath, _, err := gs.newGen.Path(ctx)
 		if err != nil {
 			return err

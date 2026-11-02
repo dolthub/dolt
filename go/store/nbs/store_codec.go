@@ -117,8 +117,9 @@ type spanRef struct {
 type spanSealer interface {
 	// seal returns the bytes to store for span |ordinal|, which holds |ref|.
 	seal(ordinal uint32, ref spanRef, b []byte) ([]byte, error)
-	// addChunk adds a chunk of a type the writer does not know, such as a SealedChunk.
-	addChunk(asw *ArchiveStreamWriter, c ToChunker) (uint32, error)
+	// adopt takes the keys of |sc|'s stored spans if they can be copied as they are: its data as span |ordinal|, and
+	// unless |dictCopied|, its dictionary as the span before.
+	adopt(ordinal uint32, sc SealedChunk, dictCopied bool) bool
 	keyBlock() ([]byte, error)
 }
 
@@ -136,6 +137,8 @@ type archiveSpans interface {
 type SealedChunk interface {
 	ToChunker
 	sealedRecord() []byte
+	// sealedDict returns the stored span of the dictionary a zstd chunk was compressed with, or nil.
+	sealedDict() []byte
 }
 
 type plainCodec struct{}
@@ -196,11 +199,11 @@ func (p persisterCodec) withCodec(opts openOpts) openOpts {
 
 // writeMemTable writes |mt| as a table file sealed under the persister's codec.
 func (p persisterCodec) writeMemTable(mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (hash.Hash, []byte, uint64, uint32, gcBehavior, error) {
-	mt.codec = p.storeCodec()
+	mt.codec = p.codecOrPlain()
 	return mt.write(haver, keeper, stats)
 }
 
-func (p persisterCodec) storeCodec() storeCodec {
+func (p persisterCodec) codecOrPlain() storeCodec {
 	if p.codec == nil {
 		return plainCodec{}
 	}

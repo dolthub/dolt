@@ -911,6 +911,10 @@ func (ar *archiveReader) walkSpans(ctx context.Context, cb func(chunks.Chunk) er
 func (ar *archiveReader) openSpan(ctx context.Context, id uint32, stored []byte, isDict map[uint32]bool, chunkOf map[uint32]uint32, dicts map[uint32]*DecompBundle) (*chunks.Chunk, error) {
 	if isDict[id] {
 		dict, err := ar.openDict(ctx, id, stored)
+		if dict != nil && ar.spans == nil {
+			// Reading a plaintext archive's chunks needs only the decompression dictionary.
+			dict = &DecompBundle{dDict: dict.dDict}
+		}
 		dicts[id] = dict
 		if err != nil {
 			return nil, fmt.Errorf("failure loading archive dictionary span %d: %w", id, err)

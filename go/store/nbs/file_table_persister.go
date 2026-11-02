@@ -330,7 +330,7 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, behavior dherrors
 }
 
 func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, behavior dherrors.FatalBehavior, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
-	plan, err := planRangeCopyConjoin(ctx, sources, ftp.q, ftp.storeCodec(), stats)
+	plan, err := planRangeCopyConjoin(ctx, sources, ftp.q, ftp.codecOrPlain(), stats)
 	if err != nil {
 		return emptyChunkSource{}, nil, err
 	}

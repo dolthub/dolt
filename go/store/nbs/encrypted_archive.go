@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // An encrypted archive has the version 3 layout with every byte span sealed, and a key block between the metadata
@@ -65,6 +67,9 @@ func (ar *archiveReader) openSpans(ctx context.Context, opts openOpts, stats *St
 		position: func(ordinal uint32) uint64 { return uint64(ordinal) },
 		adding:   opts.adding,
 	})
+	if err == nil && ar.spans == nil {
+		err = errors.New("runtime error: no opener for an encrypted archive")
+	}
 	return err
 }
 
@@ -160,8 +165,8 @@ func (k conjoinedKeys) seal(uint32, spanRef, []byte) ([]byte, error) {
 	return nil, errors.New("runtime error: conjoined archive spans are copied, not sealed")
 }
 
-func (k conjoinedKeys) addChunk(*ArchiveStreamWriter, ToChunker) (uint32, error) {
-	return 0, errors.New("runtime error: chunk added to a conjoined archive")
+func (k conjoinedKeys) adopt(uint32, SealedChunk, bool) bool {
+	return false
 }
 
 func (k conjoinedKeys) keyBlock() ([]byte, error) {
@@ -174,4 +179,45 @@ func conjoinSpanSealer(codec storeCodec, sources []sourceWithSize) (spanSealer, 
 		return nil, err
 	}
 	return conjoinedKeys(kb), nil
+}
+
+// addSealed copies |sc| as it is stored, with its dictionary once, if the sealer takes its keys, and otherwise
+// compresses and seals it again.
+func (asw *ArchiveStreamWriter) addSealed(sc SealedChunk) (uint32, error) {
+	dict := sc.sealedDict()
+	dictKey := hash.Of(dict)
+	dictId, copied := asw.sealedDicts[dictKey]
+	ordinal := uint32(len(asw.writer.stagedBytes))
+	if dict != nil && !copied {
+		ordinal++
+	}
+	if !asw.writer.sealer.adopt(ordinal, sc, dict == nil || copied) {
+		chk, err := sc.ToChunk()
+		if err != nil {
+			return 0, err
+		}
+		return asw.writeCompressedChunk(ChunkToCompressedChunk(chk))
+	}
+	var written uint32
+	if dict != nil && !copied {
+		var err error
+		if dictId, err = asw.writer.writeByteSpan(dict); err != nil {
+			return 0, err
+		}
+		if asw.sealedDicts == nil {
+			asw.sealedDicts = make(map[hash.Hash]uint32)
+		}
+		asw.sealedDicts[dictKey] = dictId
+		written += uint32(len(dict))
+	}
+	dataId, err := asw.writer.writeByteSpan(sc.sealedRecord())
+	if err != nil {
+		return written, err
+	}
+	written += uint32(len(sc.sealedRecord()))
+	asw.chunkCount++
+	if dict == nil {
+		return written, asw.writer.stageSnappyChunk(sc.Hash(), dataId)
+	}
+	return written, asw.writer.stageZStdChunk(sc.Hash(), dictId, dataId)
 }

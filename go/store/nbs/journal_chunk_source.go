@@ -68,20 +68,18 @@ func (s journalChunkSource) hasMany(addrs []hasRecord, keeper keeperF) (bool, gc
 func (s journalChunkSource) get(ctx context.Context, h hash.Hash, keeper keeperF, _ *Stats) ([]byte, gcBehavior, error) {
 	defer trace.StartRegion(ctx, "journalChunkSource.get").End()
 
-	cc, err := s.journal.getChunker(h)
-	if err != nil {
+	payload, err := s.journal.getPayload(h)
+	if err != nil || payload == nil {
 		return nil, gcBehavior_Continue, err
-	} else if cc.IsEmpty() {
-		return nil, gcBehavior_Continue, nil
 	}
 	if keeper != nil && keeper(h) {
 		return nil, gcBehavior_Block, nil
 	}
-	ch, err := cc.ToChunk()
+	data, err := s.journal.chunkData(h, payload)
 	if err != nil {
 		return nil, gcBehavior_Continue, err
 	}
-	return ch.Data(), gcBehavior_Continue, nil
+	return data, gcBehavior_Continue, nil
 }
 
 type journalRecord struct {
@@ -298,7 +296,7 @@ func (s journalChunkSource) iterateAllChunks(ctx context.Context, cb func(chunks
 			return context.Cause(ctx)
 		}
 
-		// We only have 16 bytes of the hash. The value returned here will have 4 0x00 bytes at the end.
+		// We only have 16 bytes of the hash; chunkerAtRange reads the rest from the record.
 		var h hash.Hash
 		copy(h[:], a16[:])
 
