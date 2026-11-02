@@ -59,7 +59,7 @@ type openOpts struct {
 	// their index, so they scan it instead. See
 	// [archiveReader.deepValidate].
 	deepValidate bool
-	// codec is the codec of the store opening the file; nil opens only plaintext files.
+	// codec is the codec of the store opening the file; nil opens it under the default codec for its format.
 	codec storeCodec
 	// adding is set when the file is being added to the store from elsewhere.
 	adding bool
