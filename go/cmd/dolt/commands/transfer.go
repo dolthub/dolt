@@ -26,6 +26,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -45,7 +46,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // TransferCmd serves repository data over stdin/stdout for SSH remote operations.
@@ -111,7 +111,7 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 	// Ignore SIGPIPE to prevent broken pipe crashes during SSH disconnect.
 	signal.Ignore(syscall.SIGPIPE)
 
-	cs, serverFS, err := resolveDatabaseChunkStore(ctx, dEnv)
+	dbCache, serverFS, err := resolveDatabaseChunkStore(ctx, dEnv)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -127,8 +127,6 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return HandleVErrAndExitCode(errhand.BuildDError("failed to create SMUX session").AddCause(err).Build(), usage)
 	}
 	defer session.Close()
-
-	dbCache := &singletonDBCache{cs: cs}
 
 	logger := logrus.New()
 	logger.SetOutput(os.Stderr)
@@ -209,7 +207,7 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 //     as root this yields "<dirName>", so HTTP paths are "<dirName>/<hash>". If
 //     the root equalled cs.Path() the prefix would be "." and the file handler
 //     would return HTTP 400 because it requires at least one "/" in the path.
-func resolveDatabaseChunkStore(ctx context.Context, dEnv *env.DoltEnv) (remotesrv.RemoteSrvStore, filesys.Filesys, error) {
+func resolveDatabaseChunkStore(ctx context.Context, dEnv *env.DoltEnv) (remotesrv.DBCache, filesys.Filesys, error) {
 	ddb := dEnv.DoltDB(ctx)
 	if ddb != nil && dEnv.DBLoadError == nil {
 		// Normal dolt repository.
@@ -219,7 +217,7 @@ func resolveDatabaseChunkStore(ctx context.Context, dEnv *env.DoltEnv) (remotesr
 		if !ok {
 			return nil, nil, fmt.Errorf("chunk store does not implement RemoteSrvStore")
 		}
-		return rss, dEnv.FS, nil
+		return &singletonDBCache{cs: rss}, dEnv.FS, nil
 	}
 
 	if !errors.Is(dEnv.DBLoadError, doltdb.ErrMissingDoltDataDir) {
@@ -231,19 +229,13 @@ func resolveDatabaseChunkStore(ctx context.Context, dEnv *env.DoltEnv) (remotesr
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to resolve bare repository path: %w", err)
 	}
-	q := nbs.NewUnlimitedMemQuotaProvider()
-	cs, err := nbs.NewLocalStore(ctx, types.Format_DOLT.VersionString(), absPath, remotesrv.MaxGRPCMessageSize, q, false)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to open bare repository at %s: %w", absPath, err)
-	}
-
 	// Root the HTTP filesystem at the parent so cs.Path() is a named subdirectory.
 	parentPath := filepath.Dir(absPath)
 	serverFS, err := filesys.LocalFilesysWithWorkingDir(parentPath)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to set up file server root at %s: %w", parentPath, err)
 	}
-	return cs, serverFS, nil
+	return &bareDBCache{path: absPath}, serverFS, nil
 }
 
 // transferHost is the virtual hostname used for HTTP requests routed through
@@ -266,6 +258,26 @@ type singletonDBCache struct {
 
 func (sdbc *singletonDBCache) Get(_ context.Context, _, _ string) (remotesrv.RemoteSrvStore, error) {
 	return sdbc.cs, nil
+}
+
+// bareDBCache opens a bare repository on first use, creating it in the format its first client asks for if it is new.
+type bareDBCache struct {
+	path string
+	mu   sync.Mutex
+	cs   *nbs.NomsBlockStore
+}
+
+func (c *bareDBCache) Get(ctx context.Context, _, nbfVerStr string) (remotesrv.RemoteSrvStore, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.cs == nil {
+		cs, err := nbs.NewLocalStore(ctx, nbfVerStr, c.path, remotesrv.MaxGRPCMessageSize, nbs.NewUnlimitedMemQuotaProvider(), false)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open bare repository at %s: %w", c.path, err)
+		}
+		c.cs = cs
+	}
+	return c.cs, nil
 }
 
 // stdioConn wraps an io.Reader and io.Writer as a net.Conn for use with SMUX.

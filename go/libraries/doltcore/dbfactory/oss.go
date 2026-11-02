@@ -98,7 +98,7 @@ func (fact OSSFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinForm
 	}
 
 	q := nbs.NewUnlimitedMemQuotaProvider()
-	return nbs.NewBSStore(ctx, nbf.VersionString(), bs, memlimit.MemtableSize(), q)
+	return nbs.NewBSStore(ctx, nbf.VersionString(), bs, memlimit.MemtableSize(), q, storeOptions.blockStore(nbf, "", params)...)
 }
 
 func ossConfigFromParams(params map[string]interface{}) ossCredential {

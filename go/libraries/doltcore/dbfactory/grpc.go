@@ -106,6 +106,10 @@ func (fact DoltRemoteFactory) newChunkStore(ctx context.Context, nbf *types.Noms
 		user = userParam.(string)
 		wsValidate = true
 	}
+	format, err := storeOptions.remote(params)
+	if err != nil {
+		return nil, err
+	}
 	cfg, err := dp.GetGRPCDialParams(grpcendpoint.Config{
 		Endpoint:           urlObj.Host,
 		Insecure:           fact.insecure,
@@ -128,7 +132,7 @@ func (fact DoltRemoteFactory) newChunkStore(ctx context.Context, nbf *types.Noms
 	}
 
 	csClient := remotesapi.NewChunkStoreServiceClient(conn)
-	cs, err := remotestorage.NewDoltChunkStoreFromPath(ctx, nbf, urlObj.Path, urlObj.Host, wsValidate, csClient)
+	cs, err := remotestorage.NewDoltChunkStoreFromPath(ctx, nbf, urlObj.Path, urlObj.Host, wsValidate, csClient, format)
 	if err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("could not access dolt url '%s': %w", urlObj.String(), err)

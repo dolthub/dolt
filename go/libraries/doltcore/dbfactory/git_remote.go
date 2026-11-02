@@ -189,6 +189,27 @@ func rebaseCachedEntry(ctx context.Context, entry gitRemoteCacheEntry) (datas.Da
 	return entry.db, entry.vrw, entry.ns, nil
 }
 
+// evictUnreusableGitRemote closes and forgets the cached store of |cacheRepo| if it cannot serve |params|.
+func evictUnreusableGitRemote(ctx context.Context, cacheRepo string, params map[string]interface{}) error {
+	gitRemoteCacheMu.Lock()
+	entry, ok := gitRemoteCache[cacheRepo]
+	gitRemoteCacheMu.Unlock()
+	if !ok || storeOptions.reusable(ctx, datas.ChunkStoreFromDatabase(entry.db), params) {
+		return nil
+	}
+	gitRemoteCacheMu.Lock()
+	if cur, ok := gitRemoteCache[cacheRepo]; !ok || cur.db != entry.db {
+		gitRemoteCacheMu.Unlock()
+		return nil
+	}
+	delete(gitRemoteCache, cacheRepo)
+	gitRemoteCacheMu.Unlock()
+	if g, ok := datas.ChunkStoreFromDatabase(entry.db).(gitSharedChunkStore); ok {
+		return g.ForceClose()
+	}
+	return entry.db.Close()
+}
+
 func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	bsOpts, err := gitRemoteHistoryOptions(params)
 	if err != nil {
@@ -204,6 +225,9 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 		return nil, nil, nil, err
 	}
 
+	if err := evictUnreusableGitRemote(ctx, cacheRepo, params); err != nil {
+		return nil, nil, nil, err
+	}
 	gitRemoteCacheMu.Lock()
 	if entry, ok := gitRemoteCache[cacheRepo]; ok {
 		gitRemoteCacheMu.Unlock()
@@ -252,7 +276,7 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	bsOpts.RemoteName = remoteName
 	bsOpts.InfoBranch = blobstore.DefaultInfoBranch
 	bsOpts.SyncForReadTTL = gitBlobstoreSyncForReadTTLOverride
-	nbsCS, err := nbs.NewGitStore(ctx, nbf.VersionString(), cacheRepo, ref, bsOpts, memlimit.MemtableSize(), q)
+	nbsCS, err := nbs.NewGitStore(ctx, nbf.VersionString(), cacheRepo, ref, bsOpts, memlimit.MemtableSize(), q, storeOptions.blockStore(nbf, "", params)...)
 	if err != nil {
 		return nil, nil, nil, err
 	}

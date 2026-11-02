@@ -248,6 +248,7 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 		}
 
 		newEnv := LoadWithoutDB(ctx, hdp, newFs, doltdb.LocalDirDoltDB, subVersion)
+		newEnv.ParentConfig = config
 		if len(dbLoadParams) > 0 {
 			newEnv.DBLoadParams = maps.Clone(dbLoadParams)
 		}

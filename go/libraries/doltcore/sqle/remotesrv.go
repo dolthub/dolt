@@ -23,6 +23,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -47,7 +48,11 @@ func (s remotesrvStore) Get(ctx context.Context, path, _ string) (remotesrv.Remo
 	db, err := sess.Provider().Database(sqlCtx, path)
 	if err != nil {
 		if s.createDBs && sql.ErrDatabaseNotFound.Is(err) {
-			err = sess.Provider().CreateDatabase(sqlCtx, path)
+			var params map[string]string
+			if params, err = env.CreateParamsForClient(ctx); err != nil {
+				return nil, err
+			}
+			err = dsess.CreateDatabaseWithParams(sqlCtx, sess.Provider(), path, params)
 			if err != nil {
 				return nil, err
 			}

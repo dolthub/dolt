@@ -147,7 +147,7 @@ func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore, recorder nbs.Stat
 		return fetcherDownloadRangesThread(ctx, downloadLocCh, fetchReqCh, locDoneCh)
 	})
 	eg.Go(func() error {
-		return fetcherDownloadURLThreads(ctx, fetchReqCh, locDoneCh, ret.resCh, dcs.csClient, ret.stats, dcs.httpFetcher, dcs.params, dcs.logf)
+		return fetcherDownloadURLThreads(ctx, fetchReqCh, locDoneCh, ret.resCh, dcs.csClient, ret.stats, dcs.httpFetcher, dcs.params, dcs.logf, dcs.format)
 	})
 
 	return ret
@@ -386,6 +386,7 @@ func fetcherRPCChunkLocationsThread(ctx context.Context, reqCh chan *remotesapi.
 	}
 
 	tfByID := make(map[uint32]*tableFileRec)
+	keysByID := make(map[uint32][]byte)
 
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.Go(func() error {
@@ -429,6 +430,9 @@ func fetcherRPCChunkLocationsThread(ctx context.Context, reqCh chan *remotesapi.
 			for _, rec := range resp.TableFiles {
 				tfByID[rec.TableFileId] = rec
 			}
+			for _, k := range resp.Keys {
+				keysByID[k.KeyId] = k.WrappedKey
+			}
 
 			if missingChunkCh != nil {
 				for _, idx := range resp.MissingIndexes {
@@ -446,7 +450,7 @@ func fetcherRPCChunkLocationsThread(ctx context.Context, reqCh chan *remotesapi.
 				}
 			}
 
-			locs, err := translateChunkLocations(req, resp.Locations, tfByID, getRepoId, repoPath)
+			locs, err := translateChunkLocations(req, resp.Locations, tfByID, keysByID, getRepoId, repoPath)
 			if err != nil {
 				return NewRpcError(err, "StreamChunkLocations", host, req)
 			}
@@ -468,7 +472,7 @@ func fetcherRPCChunkLocationsThread(ctx context.Context, reqCh chan *remotesapi.
 // file_id plus the DoltChunkStore's current (repo_id, repo_token,
 // repo_path) — the server no longer sends a per-DownloadLoc
 // RefreshTableFileUrlRequest.
-func translateChunkLocations(req *remotesapi.StreamChunkLocationsRequest, locations []*chunkLoc, tfByID map[uint32]*tableFileRec, getRepoId func() (*remotesapi.RepoId, string), repoPath string) ([]*remotesapi.DownloadLoc, error) {
+func translateChunkLocations(req *remotesapi.StreamChunkLocationsRequest, locations []*chunkLoc, tfByID map[uint32]*tableFileRec, keysByID map[uint32][]byte, getRepoId func() (*remotesapi.RepoId, string), repoPath string) ([]*remotesapi.DownloadLoc, error) {
 	if len(locations) == 0 {
 		return nil, nil
 	}
@@ -477,6 +481,7 @@ func translateChunkLocations(req *remotesapi.StreamChunkLocationsRequest, locati
 	// output is deterministic.
 	idOrder := make([]uint32, 0, len(tfByID))
 	rangesByID := make(map[uint32][]*remotesapi.RangeChunk)
+	keysByTF := make(map[uint32]*rangeKeys)
 	for _, cl := range locations {
 		bs, ok := hashAtIndex(req.ChunkHashes, cl.RequestIndex)
 		if !ok {
@@ -488,13 +493,28 @@ func translateChunkLocations(req *remotesapi.StreamChunkLocationsRequest, locati
 		if _, seen := rangesByID[cl.TableFileId]; !seen {
 			idOrder = append(idOrder, cl.TableFileId)
 		}
-		rangesByID[cl.TableFileId] = append(rangesByID[cl.TableFileId], &remotesapi.RangeChunk{
+		rc := &remotesapi.RangeChunk{
 			Hash:             bs,
 			Offset:           cl.Offset,
 			Length:           cl.Length,
 			DictionaryOffset: cl.DictionaryOffset,
 			DictionaryLength: cl.DictionaryLength,
-		})
+		}
+		if cl.KeyId != 0 || cl.DictionaryKeyId != 0 {
+			rk := keysByTF[cl.TableFileId]
+			if rk == nil {
+				rk = &rangeKeys{}
+				keysByTF[cl.TableFileId] = rk
+			}
+			var err error
+			if rc.KeyIndex, err = rk.ref(cl.KeyId, keysByID); err != nil {
+				return nil, err
+			}
+			if rc.DictionaryKeyIndex, err = rk.ref(cl.DictionaryKeyId, keysByID); err != nil {
+				return nil, err
+			}
+		}
+		rangesByID[cl.TableFileId] = append(rangesByID[cl.TableFileId], rc)
 	}
 
 	repoId, repoToken := getRepoId()
@@ -506,6 +526,7 @@ func translateChunkLocations(req *remotesapi.StreamChunkLocationsRequest, locati
 				HttpGetRange: &remotesapi.HttpGetRange{
 					Url:    rec.Url,
 					Ranges: rangesByID[id],
+					Keys:   keysByTF[id].list(),
 				},
 			},
 			RefreshAfter: rec.RefreshAfter,
@@ -519,6 +540,50 @@ func translateChunkLocations(req *remotesapi.StreamChunkLocationsRequest, locati
 		})
 	}
 	return out, nil
+}
+
+// rangeKeys numbers the record keys of one HttpGetRange as its ranges reference the keys of a stream.
+type rangeKeys struct {
+	keys  [][]byte
+	index map[uint32]uint32
+}
+
+// ref returns the RangeChunk key index of the stream's key |id|, or zero for none.
+func (rk *rangeKeys) ref(id uint32, keysByID map[uint32][]byte) (uint32, error) {
+	if id == 0 {
+		return 0, nil
+	}
+	if i, ok := rk.index[id]; ok {
+		return i, nil
+	}
+	k, ok := keysByID[id]
+	if !ok {
+		return 0, fmt.Errorf("server referenced unknown key_id %d", id)
+	}
+	if rk.index == nil {
+		rk.index = make(map[uint32]uint32)
+	}
+	rk.keys = append(rk.keys, k)
+	rk.index[id] = uint32(len(rk.keys))
+	return uint32(len(rk.keys)), nil
+}
+
+func (rk *rangeKeys) list() [][]byte {
+	if rk == nil {
+		return nil
+	}
+	return rk.keys
+}
+
+// rangeKey returns the key of |hgr| with RangeChunk key index |i|, or nil for zero.
+func rangeKey(hgr *remotesapi.HttpGetRange, i uint32) ([]byte, error) {
+	if i == 0 {
+		return nil, nil
+	}
+	if int(i) > len(hgr.Keys) {
+		return nil, fmt.Errorf("server referenced record key %d of %d", i, len(hgr.Keys))
+	}
+	return hgr.Keys[i-1], nil
 }
 
 func getMissingChunks(req *remotesapi.GetDownloadLocsRequest, resp *remotesapi.GetDownloadLocsResponse) (hash.HashSet, error) {
@@ -596,7 +661,7 @@ func newDownloads() downloads {
 	}
 }
 
-func (d downloads) Add(resp *remotesapi.DownloadLoc) {
+func (d downloads) Add(resp *remotesapi.DownloadLoc) error {
 	hgr := resp.Location.(*remotesapi.DownloadLoc_HttpGetRange).HttpGetRange
 	path := ResourcePath(hgr.Url)
 	if v, ok := d.refreshes[path]; ok {
@@ -611,10 +676,25 @@ func (d downloads) Add(resp *remotesapi.DownloadLoc) {
 			_, has := d.dictCache.getOrCreate(path, r.DictionaryOffset, r.DictionaryLength)
 			if !has {
 				d.dictRanges.Insert(hgr.Url, nil, r.DictionaryOffset, r.DictionaryLength, 0, 0)
+				if r.DictionaryKeyIndex != 0 {
+					key, err := rangeKey(hgr, r.DictionaryKeyIndex)
+					if err != nil {
+						return err
+					}
+					d.dictRanges.SetKey(hgr.Url, r.DictionaryOffset, key)
+				}
 			}
 		}
 		d.chunkRanges.Insert(hgr.Url, r.Hash[:], r.Offset, r.Length, r.DictionaryOffset, r.DictionaryLength)
+		if r.KeyIndex != 0 {
+			key, err := rangeKey(hgr, r.KeyIndex)
+			if err != nil {
+				return err
+			}
+			d.chunkRanges.SetKey(hgr.Url, r.Offset, key)
+		}
 	}
+	return nil
 }
 
 func toGetRange(rs []*ranges.GetRange) *GetRange {
@@ -627,6 +707,7 @@ func toGetRange(rs []*ranges.GetRange) *GetRange {
 			Length:     r.Length,
 			DictOffset: r.DictOffset,
 			DictLength: r.DictLength,
+			Key:        r.Key,
 		})
 	}
 	return ret
@@ -662,7 +743,9 @@ func fetcherDownloadRangesThread(ctx context.Context, locCh chan []*remotesapi.D
 				locCh = nil
 			} else {
 				for _, loc := range req {
-					downloads.Add(loc)
+					if err := downloads.Add(loc); err != nil {
+						return err
+					}
 				}
 			}
 		case req := <-reqCh:
@@ -759,13 +842,13 @@ func (cc *ConcurrencyControl) Run(ctx context.Context, done <-chan struct{}, ss 
 	}
 }
 
-func fetcherDownloadURLThreads(ctx context.Context, fetchReqCh chan fetchReq, doneCh chan struct{}, chunkCh chan nbs.ToChunker, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, fetcher HTTPFetcher, params NetworkRequestParams, logf func(string, ...interface{})) error {
+func fetcherDownloadURLThreads(ctx context.Context, fetchReqCh chan fetchReq, doneCh chan struct{}, chunkCh chan nbs.ToChunker, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, fetcher HTTPFetcher, params NetworkRequestParams, logf func(string, ...interface{}), format RepoFormat) error {
 	eg, ctx := errgroup.WithContext(ctx)
 	cc := &ConcurrencyControl{
 		MaxConcurrency: params.MaximumConcurrentDownloads,
 	}
 	f := func(ctx context.Context, shutdownCh <-chan struct{}) error {
-		return fetcherDownloadURLThread(ctx, fetchReqCh, shutdownCh, chunkCh, client, stats, cc, fetcher, params, logf)
+		return fetcherDownloadURLThread(ctx, fetchReqCh, shutdownCh, chunkCh, client, stats, cc, fetcher, params, logf, format)
 	}
 	threads := pool.NewDynamic(ctx, f, params.StartingConcurrentDownloads)
 	eg.Go(func() error {
@@ -791,24 +874,21 @@ func fetcherDownloadURLThreads(ctx context.Context, fetchReqCh chan fetchReq, do
 	return nil
 }
 
-func deliverChunkCallback(chunkCh chan nbs.ToChunker, path string, dictCache *dictionaryCache) func(context.Context, []byte, *Range) error {
+func deliverChunkCallback(chunkCh chan nbs.ToChunker, path string, dictCache *dictionaryCache, format RepoFormat) func(context.Context, []byte, *Range) error {
 	return func(ctx context.Context, bs []byte, rang *Range) error {
 		h := hash.New(rang.Hash[:])
-		var cc nbs.ToChunker
+		var bundle *nbs.DecompBundle
 		if rang.DictLength != 0 {
 			payload, _ := dictCache.getOrCreate(path, rang.DictOffset, rang.DictLength)
-			bundle, err := payload.Get()
-			if err != nil {
-				return err
-			}
-
-			cc = nbs.NewArchiveToChunker(h, bundle, bs)
-		} else {
 			var err error
-			cc, err = nbs.NewCompressedChunk(h, bs)
+			bundle, err = payload.Get()
 			if err != nil {
 				return err
 			}
+		}
+		cc, err := format.OpenChunk(ctx, h, rang.Key, bs, bundle)
+		if err != nil {
+			return err
 		}
 		select {
 		case chunkCh <- cc:
@@ -819,9 +899,9 @@ func deliverChunkCallback(chunkCh chan nbs.ToChunker, path string, dictCache *di
 	}
 }
 
-func setDictionaryCallback(dictCache *dictionaryCache, path string) func(context.Context, []byte, *Range) error {
+func setDictionaryCallback(dictCache *dictionaryCache, path string, format RepoFormat) func(context.Context, []byte, *Range) error {
 	return func(ctx context.Context, bs []byte, rang *Range) error {
-		bundle, err := nbs.NewDecompBundle(bs)
+		bundle, err := format.OpenDictionary(ctx, rang.Key, bs)
 		if err != nil {
 			return err
 		}
@@ -834,7 +914,7 @@ func setDictionaryCallback(dictCache *dictionaryCache, path string) func(context
 	}
 }
 
-func fetcherDownloadURLThread(ctx context.Context, fetchReqCh chan fetchReq, doneCh <-chan struct{}, chunkCh chan nbs.ToChunker, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, health reliable.HealthRecorder, fetcher HTTPFetcher, params NetworkRequestParams, logf func(string, ...interface{})) error {
+func fetcherDownloadURLThread(ctx context.Context, fetchReqCh chan fetchReq, doneCh <-chan struct{}, chunkCh chan nbs.ToChunker, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, health reliable.HealthRecorder, fetcher HTTPFetcher, params NetworkRequestParams, logf func(string, ...interface{}), format RepoFormat) error {
 	respCh := make(chan fetchResp, 1)
 	for {
 		select {
@@ -849,9 +929,9 @@ func fetcherDownloadURLThread(ctx context.Context, fetchReqCh chan fetchReq, don
 			case fetchResp := <-respCh:
 				var cb func(context.Context, []byte, *Range) error
 				if fetchResp.rangeType == rangeType_Chunk {
-					cb = deliverChunkCallback(chunkCh, fetchResp.path, fetchResp.dictCache)
+					cb = deliverChunkCallback(chunkCh, fetchResp.path, fetchResp.dictCache, format)
 				} else {
-					cb = setDictionaryCallback(fetchResp.dictCache, fetchResp.path)
+					cb = setDictionaryCallback(fetchResp.dictCache, fetchResp.path, format)
 				}
 				f := fetchResp.get.GetDownloadFunc(ctx, stats, health, fetcher, params, logf, cb, func(ctx context.Context, lastError error, resourcePath string) (string, error) {
 					return fetchResp.refresh(ctx, lastError, client)

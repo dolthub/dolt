@@ -43,6 +43,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/keymutex"
@@ -99,6 +100,7 @@ type DoltDatabaseProvider struct {
 	InitDatabaseHooks []InitDatabaseHook
 	gitRemotes        map[string]*doltdb.DoltDB
 	gitRemotesMu      *sync.Mutex
+	parentConfig      config.ReadableConfig
 }
 
 // ProviderFactory creates a sql.DatabaseProvider for use as the engine's analyzer catalog
@@ -129,6 +131,10 @@ type remoteDialerWithGitCacheRoot struct {
 	root string
 }
 
+func (d remoteDialerWithGitCacheRoot) Unwrap() dbfactory.GRPCDialProvider {
+	return d.GRPCDialProvider
+}
+
 func (d remoteDialerWithGitCacheRoot) GitCacheRoot() (string, bool) {
 	if strings.TrimSpace(d.root) == "" {
 		return "", false
@@ -143,6 +149,8 @@ var _ sql.CollatedDatabaseProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.ExternalStoredProcedureProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.TableFunctionProvider = (*DoltDatabaseProvider)(nil)
 var _ dsess.DoltDatabaseProvider = (*DoltDatabaseProvider)(nil)
+var _ dsess.RemoteDBForProvider = (*DoltDatabaseProvider)(nil)
+var _ dsess.ParamsDatabaseCreator = (*DoltDatabaseProvider)(nil)
 var _ DatabaseHookRegistrar = (*DoltDatabaseProvider)(nil)
 
 func (p *DoltDatabaseProvider) DefaultBranch() string {
@@ -268,6 +276,11 @@ func (p *DoltDatabaseProvider) SetRemoteDialer(provider dbfactory.GRPCDialProvid
 	p.remoteDialer = provider
 }
 
+// SetParentConfig sets the config that the environments of this provider's databases are nested in.
+func (p *DoltDatabaseProvider) SetParentConfig(cfg config.ReadableConfig) {
+	p.parentConfig = cfg
+}
+
 // SetDBLoadParams sets optional DB load params for newly created / registered databases. The provided map is cloned.
 func (p *DoltDatabaseProvider) SetDBLoadParams(params map[string]interface{}) {
 	p.mu.Lock()
@@ -282,6 +295,9 @@ func (p *DoltDatabaseProvider) SetDBLoadParams(params map[string]interface{}) {
 func (p *DoltDatabaseProvider) applyDBLoadParamsToEnv(dEnv *env.DoltEnv) {
 	if dEnv == nil {
 		return
+	}
+	if dEnv.ParentConfig == nil {
+		dEnv.ParentConfig = p.parentConfig
 	}
 	if len(p.dbLoadParams) == 0 {
 		return
@@ -601,9 +617,18 @@ func (p *DoltDatabaseProvider) allRevisionDbs(ctx *sql.Context, db dsess.SqlData
 }
 
 func (p *DoltDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r env.Remote) (*doltdb.DoltDB, error) {
+	return p.getRemoteDB(ctx, format, r, p.remoteDialer)
+}
+
+// GetRemoteDBFor returns the remote database |r| of |local|, opened as |local| opens its remotes.
+func (p *DoltDatabaseProvider) GetRemoteDBFor(ctx context.Context, local *doltdb.DoltDB, r env.Remote) (*doltdb.DoltDB, error) {
+	return p.getRemoteDB(ctx, local.Format(), r, env.RemoteDialerFor(local, p.remoteDialer))
+}
+
+func (p *DoltDatabaseProvider) getRemoteDB(ctx context.Context, format *types.NomsBinFormat, r env.Remote, remoteDialer dbfactory.GRPCDialProvider) (*doltdb.DoltDB, error) {
 	// For git remotes, thread through the initiating database's repo root so git caches can be located under
 	// `<repoRoot>/.dolt/...` instead of a user-global cache dir.
-	dialer := p.remoteDialer
+	dialer := remoteDialer
 	if sqlCtx, ok := ctx.(*sql.Context); ok {
 		baseName, _ := doltdb.SplitRevisionDbName(sqlCtx.GetCurrentDatabase())
 		dbKey := strings.ToLower(baseName)
@@ -612,7 +637,7 @@ func (p *DoltDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.No
 		p.mu.RUnlock()
 		if ok && dbLoc != nil {
 			if root, err := dbLoc.Abs("."); err == nil && strings.TrimSpace(root) != "" {
-				dialer = remoteDialerWithGitCacheRoot{GRPCDialProvider: p.remoteDialer, root: root}
+				dialer = remoteDialerWithGitCacheRoot{GRPCDialProvider: remoteDialer, root: root}
 			}
 		}
 	}
@@ -636,6 +661,11 @@ func (p *DoltDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.No
 
 		p.gitRemotesMu.Lock()
 		cached, ok := p.gitRemotes[key]
+		if ok && !dbfactory.ReusableStore(ctx, datas.ChunkStoreFromDatabase(doltdb.ExposeDatabaseFromDoltDB(cached)), params) {
+			delete(p.gitRemotes, key)
+			_ = cached.Close()
+			ok = false
+		}
 		p.gitRemotesMu.Unlock()
 		if ok {
 			return cached, nil
@@ -715,6 +745,15 @@ func (p *DoltDatabaseProvider) removeIncompleteDatabase(name string, dbEnv *env.
 }
 
 func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name string, collation sql.CollationID) (err error) {
+	return p.createDatabase(ctx, name, collation, nil)
+}
+
+// CreateDatabaseWithParams creates the database |name| with the dbfactory |params|, such as those of env.CopyParams.
+func (p *DoltDatabaseProvider) CreateDatabaseWithParams(ctx *sql.Context, name string, params map[string]string) error {
+	return p.createDatabase(ctx, name, sql.Collation_Default, params)
+}
+
+func (p *DoltDatabaseProvider) createDatabase(ctx *sql.Context, name string, collation sql.CollationID, params map[string]string) (err error) {
 	// We have to validate the name before attempting to create a directory. If a directory contains a delimiter, when
 	// registerNewDatabase errors out a directory with the exact name will be leftover due to a process lock. This then
 	// tricks GMS' call to HasDatabase on CREATE to believe a database already exists with |name|. We validate the name
@@ -782,6 +821,7 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 	// Use LoadWithoutDB so we can apply db-load params before any DB is opened.
 	newEnv = env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, newFs, p.dbFactoryUrl, "TODO")
 	p.applyDBLoadParamsToEnv(newEnv)
+	newEnv.AddDBLoadParams(params)
 
 	newDbStorageFormat := types.Format_DOLT
 	err = newEnv.InitRepo(ctx, newDbStorageFormat, sess.Username(), sess.Email(), p.defaultBranch)
@@ -1112,7 +1152,7 @@ func (p *DoltDatabaseProvider) envForClone(
 		return nil, nil, err
 	}
 
-	dEnv, err := actions.EnvForClone(ctx, srcDB.ValueReadWriter().Format(), r, dbName, p.fs, "VERSION", env.GetCurrentUserHomeDir)
+	dEnv, err := actions.EnvForClone(ctx, srcDB, r, dbName, p.fs, "VERSION", env.GetCurrentUserHomeDir, p.applyDBLoadParamsToEnv)
 	if err != nil {
 		return nil, nil, errors.Join(err, srcDB.Close())
 	}

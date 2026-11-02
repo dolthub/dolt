@@ -102,6 +102,7 @@ type DoltEnv struct {
 	DBLoadParams map[string]interface{}
 
 	UserPassConfig *creds.DoltCredsForPass
+	ParentConfig   config.ReadableConfig
 }
 
 func NewDoltEnv(version string, config *DoltCliConfig, repoState *RepoState, doltDB *doltdb.DoltDB, fs filesys.Filesys) *DoltEnv {
@@ -244,27 +245,37 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr s
 	return dEnv
 }
 
+// LoadParams returns the params that this environment loads its DoltDB with.
+func (dEnv *DoltEnv) LoadParams() (map[string]interface{}, error) {
+	mmapArchiveIndexes, err := dEnv.Config.GetBool(config.MmapArchiveIndexes, false)
+	if err != nil {
+		return nil, err
+	}
+
+	params, err := storage.loadParams(dEnv)
+	if err != nil {
+		return nil, err
+	}
+	if params == nil {
+		params = make(map[string]interface{}, len(dEnv.DBLoadParams)+1)
+	}
+	if mmapArchiveIndexes {
+		params[dbfactory.MMapArchiveIndexesParam] = struct{}{}
+	}
+
+	// Merge any environment-level DB load params.
+	for k, v := range dEnv.DBLoadParams {
+		params[k] = v
+	}
+	return params, nil
+}
+
 func LoadDoltDB(ctx context.Context, dEnv *DoltEnv) {
 	dEnv.loadDBOnce.Do(func() {
-		mmapArchiveIndexes, err := dEnv.Config.GetBool(config.MmapArchiveIndexes, false)
+		params, err := dEnv.LoadParams()
 		if err != nil {
 			dEnv.DBLoadError = err
 			return
-		}
-
-		var params map[string]interface{}
-		if mmapArchiveIndexes {
-			params = map[string]interface{}{dbfactory.MMapArchiveIndexesParam: struct{}{}}
-		}
-
-		// Merge any environment-level DB load params.
-		if len(dEnv.DBLoadParams) > 0 {
-			if params == nil {
-				params = make(map[string]interface{}, len(dEnv.DBLoadParams))
-			}
-			for k, v := range dEnv.DBLoadParams {
-				params[k] = v
-			}
 		}
 		ddb, dbLoadErr := doltdb.LoadDoltDBWithParams(ctx, types.Format_DOLT, dEnv.urlStr, dEnv.FS, params)
 		dEnv.doltDB = ddb

@@ -182,7 +182,7 @@ func TestTranslateChunkLocations(t *testing.T) {
 	}
 
 	t.Run("EmptyLocations", func(t *testing.T) {
-		locs, err := translateChunkLocations(buildReq(0), nil, nil, getRepoId, repoPath)
+		locs, err := translateChunkLocations(buildReq(0), nil, nil, nil, getRepoId, repoPath)
 		require.NoError(t, err)
 		assert.Nil(t, locs)
 	})
@@ -196,7 +196,7 @@ func TestTranslateChunkLocations(t *testing.T) {
 			{TableFileId: 1, RequestIndex: 0, Offset: 0, Length: 10},
 			{TableFileId: 1, RequestIndex: 1, Offset: 10, Length: 20},
 		}
-		locs, err := translateChunkLocations(req, locations, tfByID, getRepoId, repoPath)
+		locs, err := translateChunkLocations(req, locations, tfByID, nil, getRepoId, repoPath)
 		require.NoError(t, err)
 		require.Len(t, locs, 1)
 		hgr := locs[0].Location.(*remotesapi.DownloadLoc_HttpGetRange).HttpGetRange
@@ -218,7 +218,7 @@ func TestTranslateChunkLocations(t *testing.T) {
 			1: {TableFileId: 1, Url: "urlA", FileId: "file-1"},
 		}
 		locations := []*chunkLoc{{TableFileId: 1, RequestIndex: 0}}
-		locs, err := translateChunkLocations(req, locations, tfByID, getRepoId, repoPath)
+		locs, err := translateChunkLocations(req, locations, tfByID, nil, getRepoId, repoPath)
 		require.NoError(t, err)
 		require.Len(t, locs, 1)
 		hgr := locs[0].Location.(*remotesapi.DownloadLoc_HttpGetRange).HttpGetRange
@@ -235,7 +235,7 @@ func TestTranslateChunkLocations(t *testing.T) {
 			1: {TableFileId: 1, Url: "urlB", FileId: "file-1-b"},
 		}
 		locations := []*chunkLoc{{TableFileId: 1, RequestIndex: 0}}
-		locs, err := translateChunkLocations(req, locations, tfByID, getRepoId, repoPath)
+		locs, err := translateChunkLocations(req, locations, tfByID, nil, getRepoId, repoPath)
 		require.NoError(t, err)
 		require.Len(t, locs, 1)
 		hgr := locs[0].Location.(*remotesapi.DownloadLoc_HttpGetRange).HttpGetRange
@@ -247,7 +247,7 @@ func TestTranslateChunkLocations(t *testing.T) {
 		req := buildReq(1)
 		tfByID := map[uint32]*tableFileRec{}
 		locations := []*chunkLoc{{TableFileId: 42, RequestIndex: 0}}
-		locs, err := translateChunkLocations(req, locations, tfByID, getRepoId, repoPath)
+		locs, err := translateChunkLocations(req, locations, tfByID, nil, getRepoId, repoPath)
 		assert.Nil(t, locs)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "table_file_id 42")
@@ -259,7 +259,7 @@ func TestTranslateChunkLocations(t *testing.T) {
 			1: {TableFileId: 1, Url: "u"},
 		}
 		locations := []*chunkLoc{{TableFileId: 1, RequestIndex: 2}}
-		locs, err := translateChunkLocations(req, locations, tfByID, getRepoId, repoPath)
+		locs, err := translateChunkLocations(req, locations, tfByID, nil, getRepoId, repoPath)
 		assert.Nil(t, locs)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "out of range")
@@ -277,7 +277,7 @@ func TestTranslateChunkLocations(t *testing.T) {
 			{TableFileId: 5, RequestIndex: 1},
 			{TableFileId: 7, RequestIndex: 2},
 		}
-		locs, err := translateChunkLocations(req, locations, tfByID, getRepoId, repoPath)
+		locs, err := translateChunkLocations(req, locations, tfByID, nil, getRepoId, repoPath)
 		require.NoError(t, err)
 		require.Len(t, locs, 2)
 
@@ -297,7 +297,7 @@ func TestTranslateChunkLocations(t *testing.T) {
 			1: {TableFileId: 1, Url: "u", FileId: "f", RefreshAfter: now},
 		}
 		locations := []*chunkLoc{{TableFileId: 1, RequestIndex: 0}}
-		locs, err := translateChunkLocations(req, locations, tfByID, getRepoId, repoPath)
+		locs, err := translateChunkLocations(req, locations, tfByID, nil, getRepoId, repoPath)
 		require.NoError(t, err)
 		require.Len(t, locs, 1)
 		assert.Equal(t, now, locs[0].RefreshAfter)
@@ -311,7 +311,7 @@ func TestTranslateChunkLocations(t *testing.T) {
 			1: {TableFileId: 1, Url: "u"},
 		}
 		locations := []*chunkLoc{{TableFileId: 1, RequestIndex: 2, Offset: 0, Length: 10}}
-		locs, err := translateChunkLocations(req, locations, tfByID, getRepoId, repoPath)
+		locs, err := translateChunkLocations(req, locations, tfByID, nil, getRepoId, repoPath)
 		require.NoError(t, err)
 		require.Len(t, locs, 1)
 		hgr := locs[0].Location.(*remotesapi.DownloadLoc_HttpGetRange).HttpGetRange
