@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/datas"
 )
 
 var (
@@ -68,6 +69,14 @@ func doDoltBranch(ctx *sql.Context, args []string) (int, error) {
 	dbData, ok := dSess.GetDbData(ctx, dbName)
 	if !ok {
 		return 1, fmt.Errorf("Could not load database %s", dbName)
+	}
+
+	if apr.Contains(cli.OrphanFlag) {
+		for _, opt := range ap.Supported {
+			if opt.Name != cli.OrphanFlag && opt.Name != cli.ForceFlag && apr.Contains(opt.Name) {
+				return 1, fmt.Errorf("--%s cannot be used with --%s", cli.OrphanFlag, opt.Name)
+			}
+		}
 	}
 
 	var rsc doltdb.ReplicationStatusController
@@ -467,6 +476,9 @@ func createNewBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *arg
 	if err != nil {
 		return err
 	}
+	if apr.Contains(cli.OrphanFlag) {
+		return createOrphanBranch(ctx, dbData, branchName, startPt, apr.Contains(cli.ForceFlag), rsc)
+	}
 	err = actions.CreateBranchWithStartPt(ctx, dbData, branchName, startPt, apr.Contains(cli.ForceFlag), rsc)
 	if err != nil {
 		return err
@@ -481,6 +493,36 @@ func createNewBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *arg
 	}
 
 	return nil
+}
+
+// createOrphanBranch points |branchName| at a new parentless commit holding the root of |startPt|. The commit message
+// names the start point so the commit cannot hash identically to the repository's initial commit.
+func createOrphanBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], branchName, startPt string, force bool, rsc *doltdb.ReplicationStatusController) error {
+	startCommit, err := actions.ResolveNewBranchStartPt(ctx, dbData, branchName, startPt, force)
+	if err != nil {
+		return err
+	}
+	startHash, err := startCommit.HashOf()
+	if err != nil {
+		return err
+	}
+	root, err := startCommit.GetRootValue(ctx)
+	if err != nil {
+		return err
+	}
+	name, email, _, _, err := dsess.ResolveNameEmail(ctx, dsess.DoltAuthorName, dsess.DoltAuthorEmail)
+	if err != nil {
+		return err
+	}
+	meta, err := datas.NewCommitMeta(name, email, fmt.Sprintf("Initialize orphan branch %s from %s", branchName, startHash.String()))
+	if err != nil {
+		return err
+	}
+	orphan, err := dbData.Ddb.CommitDanglingRoot(ctx, root, meta)
+	if err != nil {
+		return err
+	}
+	return actions.CreateBranchAtCommit(ctx, dbData.Ddb, branchName, orphan, rsc)
 }
 
 // copyBranch takes arguments from |apr| to create a branch from another branch. If |giveAdminPrivs| is true, then the
