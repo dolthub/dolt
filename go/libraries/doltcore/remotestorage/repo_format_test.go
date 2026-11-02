@@ -73,10 +73,10 @@ func TestDownloadsAddKeys(t *testing.T) {
 	require.NoError(t, d.Add(loc([][]byte{[]byte("k"), []byte("dk")}, 1, 2)))
 	dict := toGetRange(d.dictRanges.DeleteMaxRegion())
 	require.Len(t, dict.Ranges, 1)
-	assert.Equal(t, []byte("dk"), dict.Ranges[0].Key)
+	assert.Equal(t, []byte("dk"), keyBytes(dict.Ranges[0].Key))
 	chunk := toGetRange(d.chunkRanges.DeleteMaxRegion())
 	require.Len(t, chunk.Ranges, 1)
-	assert.Equal(t, []byte("k"), chunk.Ranges[0].Key)
+	assert.Equal(t, []byte("k"), keyBytes(chunk.Ranges[0].Key))
 
 	d = newDownloads()
 	require.NoError(t, d.Add(loc(nil, 0, 0)))

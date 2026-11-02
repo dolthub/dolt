@@ -576,14 +576,21 @@ func (rk *rangeKeys) list() [][]byte {
 }
 
 // rangeKey returns the key of |hgr| with RangeChunk key index |i|, or nil for zero.
-func rangeKey(hgr *remotesapi.HttpGetRange, i uint32) ([]byte, error) {
+func rangeKey(hgr *remotesapi.HttpGetRange, i uint32) (*[]byte, error) {
 	if i == 0 {
 		return nil, nil
 	}
 	if int(i) > len(hgr.Keys) {
 		return nil, fmt.Errorf("server referenced record key %d of %d", i, len(hgr.Keys))
 	}
-	return hgr.Keys[i-1], nil
+	return &hgr.Keys[i-1], nil
+}
+
+func keyBytes(k *[]byte) []byte {
+	if k == nil {
+		return nil
+	}
+	return *k
 }
 
 func getMissingChunks(req *remotesapi.GetDownloadLocsRequest, resp *remotesapi.GetDownloadLocsResponse) (hash.HashSet, error) {
@@ -886,7 +893,7 @@ func deliverChunkCallback(chunkCh chan nbs.ToChunker, path string, dictCache *di
 				return err
 			}
 		}
-		cc, err := format.OpenChunk(ctx, h, rang.Key, bs, bundle)
+		cc, err := format.OpenChunk(ctx, h, keyBytes(rang.Key), bs, bundle)
 		if err != nil {
 			return err
 		}
@@ -901,7 +908,7 @@ func deliverChunkCallback(chunkCh chan nbs.ToChunker, path string, dictCache *di
 
 func setDictionaryCallback(dictCache *dictionaryCache, path string, format RepoFormat) func(context.Context, []byte, *Range) error {
 	return func(ctx context.Context, bs []byte, rang *Range) error {
-		bundle, err := format.OpenDictionary(ctx, rang.Key, bs)
+		bundle, err := format.OpenDictionary(ctx, keyBytes(rang.Key), bs)
 		payload, _ := dictCache.getOrCreate(path, rang.Offset, rang.Length)
 		payload.Set(bundle, err)
 		// XXX: For now, we fail here on any error, instead of when we try to use the dictionary...

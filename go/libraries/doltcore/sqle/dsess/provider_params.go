@@ -47,8 +47,16 @@ func CreateDatabaseWithParams(ctx *sql.Context, p DoltDatabaseProvider, name str
 	if len(params) == 0 {
 		return p.CreateDatabase(ctx, name)
 	}
-	if c, ok := p.(ParamsDatabaseCreator); ok {
-		return c.CreateDatabaseWithParams(ctx, name, params)
+	if err := CheckCreateDatabaseWithParams(p, params); err != nil {
+		return fmt.Errorf("cannot create database %s: %w", name, err)
 	}
-	return fmt.Errorf("cannot create database %s: %T does not take database params", name, p)
+	return p.(ParamsDatabaseCreator).CreateDatabaseWithParams(ctx, name, params)
+}
+
+// CheckCreateDatabaseWithParams fails if |p| cannot create a database with |params|.
+func CheckCreateDatabaseWithParams(p DoltDatabaseProvider, params map[string]string) error {
+	if _, ok := p.(ParamsDatabaseCreator); len(params) > 0 && !ok {
+		return fmt.Errorf("%T does not take database params", p)
+	}
+	return nil
 }

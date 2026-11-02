@@ -77,7 +77,7 @@ func (PlainFormat) OpenDictionary(_ context.Context, key []byte, data []byte) (*
 }
 
 func repoFormatOf(opts []RepoFormat) RepoFormat {
-	if len(opts) == 0 || opts[0] == nil {
+	if len(opts) == 0 {
 		return PlainFormat{}
 	}
 	return opts[0]

@@ -378,7 +378,7 @@ type Range struct {
 	Length     uint32
 	DictOffset uint64
 	DictLength uint32
-	Key        []byte
+	Key        *[]byte
 }
 
 func ResourcePath(urlS string) string {

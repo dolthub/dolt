@@ -57,9 +57,18 @@ func (plainTableFiles) fetched(nbs.ToChunker) error {
 	return nil
 }
 
-func (cfg PullTableFileWriterConfig) tableFiles() tableFileFormat {
+func (cfg *PullTableFileWriterConfig) tableFiles() tableFileFormat {
 	if cfg.format == nil {
 		return plainTableFiles{}
 	}
 	return cfg.format
+}
+
+// tableFileFormatFor is newTableFileFormat, which returns no format for a plain copy.
+func tableFileFormatFor(src, sink chunks.ChunkStore) (tableFileFormat, error) {
+	f, err := newTableFileFormat(src, sink)
+	if f == nil && err == nil {
+		f = plainTableFiles{}
+	}
+	return f, err
 }

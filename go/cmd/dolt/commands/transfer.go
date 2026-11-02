@@ -188,8 +188,8 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 }
 
 // resolveDatabaseChunkStore inspects the environment loaded from --data-dir and
-// returns the RemoteSrvStore to serve and the filesystem root to use for HTTP
-// file serving.
+// returns the cache of the store to serve, which opens a bare repository when a
+// client first asks for it, and the filesystem root to use for HTTP file serving.
 //
 // Two on-disk formats are supported:
 //

@@ -259,7 +259,7 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 	// database (lookupDbName) is a separate database created via [dsess.DoltSessionProvider.CreateDatabase]
 	// and follows the normal caching path.
 	defer remoteDb.Close()
-	params, err := env.CopyParams(ctx, remoteDb)
+	params, err := restoreParams(ctx, dsess.Provider(), remoteDb)
 	if err != nil {
 		return err
 	}
@@ -307,6 +307,16 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 		cli.Println()
 	}
 	return err
+}
+
+// restoreParams returns the params that |p| creates a database to restore |backup| into with, before anything is
+// dropped to make room for it.
+func restoreParams(ctx *sql.Context, p dsess.DoltDatabaseProvider, backup *doltdb.DoltDB) (map[string]string, error) {
+	params, err := env.RestoreParams(ctx, backup)
+	if err == nil {
+		err = dsess.CheckCreateDatabaseWithParams(p, params)
+	}
+	return params, err
 }
 
 // createDatabaseWithParams is dsess.CreateDatabaseWithParams, for functions whose dsess parameter hides the package.

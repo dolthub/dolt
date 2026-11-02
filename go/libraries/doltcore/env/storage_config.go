@@ -27,16 +27,19 @@ import (
 var storage storageConfig = plainStorage{}
 
 type storageConfig interface {
-	// loadParams returns new params, beyond its own, that |dEnv| loads its database with.
+	// loadParams returns new params that |dEnv| also loads its database with.
 	loadParams(dEnv *DoltEnv) (map[string]interface{}, error)
 	// remoteParams adds to |params| what a remote database opened through |dialer| needs.
 	remoteParams(params map[string]interface{}, dialer dbfactory.GRPCDialProvider) error
 	// remoteDialer returns the dialer, wrapping |dialer|, that opens the remotes of |local|.
 	remoteDialer(local *doltdb.DoltDB, dialer dbfactory.GRPCDialProvider) dbfactory.GRPCDialProvider
-	// copyParams returns the remote params that create a database to receive copies of |src|'s files.
+	// copyParams returns new remote params that create a database to receive copies of |src|'s files.
 	copyParams(ctx context.Context, src *doltdb.DoltDB) (map[string]string, error)
-	// createParamsFor returns the params that create a database for the remotesapi request of |ctx|.
-	createParamsFor(ctx context.Context) (map[string]string, error)
+	// restoreParams is copyParams for restoring backup |src|, which also checks that it can be restored before the
+	// database it replaces is dropped.
+	restoreParams(ctx context.Context, src *doltdb.DoltDB) (map[string]string, error)
+	// createParamsFor returns the params that create database |name| for the remotesapi request of |ctx|.
+	createParamsFor(ctx context.Context, name string) (map[string]string, error)
 	// fileSealer returns the sealer of the |kind| files of databases that |cfg| configures.
 	fileSealer(cfg config.ReadableConfig, kind string) file.Sealer
 }
@@ -59,12 +62,25 @@ func (plainStorage) copyParams(context.Context, *doltdb.DoltDB) (map[string]stri
 	return nil, nil
 }
 
-func (plainStorage) createParamsFor(context.Context) (map[string]string, error) {
+func (plainStorage) restoreParams(context.Context, *doltdb.DoltDB) (map[string]string, error) {
+	return nil, nil
+}
+
+func (plainStorage) createParamsFor(context.Context, string) (map[string]string, error) {
 	return nil, nil
 }
 
 func (plainStorage) fileSealer(config.ReadableConfig, string) file.Sealer {
 	return file.PlainSealer{}
+}
+
+// StorageLoadParams returns new params with only what the storage of |dEnv|'s database needs to open it.
+func (dEnv *DoltEnv) StorageLoadParams() (map[string]interface{}, error) {
+	params, err := storage.loadParams(dEnv)
+	if params == nil {
+		params = make(map[string]interface{})
+	}
+	return params, err
 }
 
 // AddDBLoadParams adds |params|, such as the params that create a database, to the params that this environment
@@ -86,6 +102,11 @@ func CopyParams(ctx context.Context, src *doltdb.DoltDB) (map[string]string, err
 	return storage.copyParams(ctx, src)
 }
 
+// RestoreParams returns the params that create a database to restore backup |src| into, failing if it cannot be.
+func RestoreParams(ctx context.Context, src *doltdb.DoltDB) (map[string]string, error) {
+	return storage.restoreParams(ctx, src)
+}
+
 // ForPushFrom returns |r| with the params that create its database, if it is missing, to receive a push of |local|.
 func (r *Remote) ForPushFrom(ctx context.Context, local *doltdb.DoltDB) (Remote, error) {
 	params, err := CopyParams(ctx, local)
@@ -100,9 +121,9 @@ func RemoteDialerFor(local *doltdb.DoltDB, dialer dbfactory.GRPCDialProvider) db
 	return storage.remoteDialer(local, dialer)
 }
 
-// CreateParamsForClient returns the params that create a database for the remotesapi request of |ctx|.
-func CreateParamsForClient(ctx context.Context) (map[string]string, error) {
-	return storage.createParamsFor(ctx)
+// CreateParamsForClient returns the params that create database |name| for the remotesapi request of |ctx|.
+func CreateParamsForClient(ctx context.Context, name string) (map[string]string, error) {
+	return storage.createParamsFor(ctx, name)
 }
 
 // FileSealer returns the sealer of the |kind| files, such as privileges, of databases that |cfg| configures.

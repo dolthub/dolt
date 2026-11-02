@@ -20,7 +20,8 @@ import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1;remotesapi";
 
-// Field numbers and enum values from 1000 are reserved for Dolt Enterprise.
+// Fields and enum values numbered from 1000 describe encrypted repositories, which Dolt Enterprise serves. Number
+// other new fields and values below 1000.
 
 service ChunkStoreService {
   rpc GetRepoMetadata(GetRepoMetadataRequest) returns (GetRepoMetadataResponse);
@@ -119,7 +120,7 @@ message HttpGetRange {
   string url = 1;
   repeated RangeChunk ranges = 2;
 
-  // Opaque keys of encrypted records, as stored, referenced by |ranges|.
+  // The wrapped keys of encrypted records, as stored, referenced by |ranges|.
   repeated bytes keys = 1000;
 }
 
@@ -249,7 +250,7 @@ message StreamChunkLocationsResponse {
     uint32 dictionary_key_id = 1001;
   }
 
-  // An opaque key of encrypted records, as stored. Like a
+  // A wrapped key of encrypted records, as stored. Like a
   // TableFileRecord, it is introduced before or in the same response
   // as any ChunkLocation that references it in this stream.
   message DataKey {
@@ -466,7 +467,7 @@ message ClientRepoFormat {
   string nbf_version = 1;
   string nbs_version = 2;
 
-  // The scope of encryption that a repository created for this request takes.
+  // The 16 byte, nonzero encryption scope that a repository created for this request takes.
   bytes encryption_scope = 1000;
 }
 

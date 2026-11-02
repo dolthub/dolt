@@ -49,7 +49,7 @@ func (s remotesrvStore) Get(ctx context.Context, path, _ string) (remotesrv.Remo
 	if err != nil {
 		if s.createDBs && sql.ErrDatabaseNotFound.Is(err) {
 			var params map[string]string
-			if params, err = env.CreateParamsForClient(ctx); err != nil {
+			if params, err = env.CreateParamsForClient(ctx, path); err != nil {
 				return nil, err
 			}
 			err = dsess.CreateDatabaseWithParams(sqlCtx, sess.Provider(), path, params)

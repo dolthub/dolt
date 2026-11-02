@@ -37,9 +37,9 @@ func (PlainSealer) Open(_ context.Context, _ string, data []byte, _ os.FileMode)
 	return data, nil
 }
 
-// SealerOf returns the first of |opts|, or a PlainSealer.
+// SealerOf returns the first of |opts|, or a PlainSealer if there are none.
 func SealerOf(opts []Sealer) Sealer {
-	if len(opts) == 0 || opts[0] == nil {
+	if len(opts) == 0 {
 		return PlainSealer{}
 	}
 	return opts[0]

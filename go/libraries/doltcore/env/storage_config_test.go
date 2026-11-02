@@ -38,10 +38,11 @@ import (
 type ToyStorage struct {
 	// Loaded holds the DBLoadParams of each environment as it loaded its database.
 	Loaded []map[string]interface{}
-	// Copied holds the databases that copy params were asked for.
-	Copied  []*doltdb.DoltDB
-	Sealed  []string
-	LoadErr error
+	// Copied and Restored hold the databases that copy and restore params were asked for.
+	Copied   []*doltdb.DoltDB
+	Restored []*doltdb.DoltDB
+	Sealed   []string
+	LoadErr  error
 }
 
 type toyDialer struct {
@@ -81,8 +82,13 @@ func (s *ToyStorage) copyParams(_ context.Context, src *doltdb.DoltDB) (map[stri
 	return map[string]string{"toy_copy": "1"}, nil
 }
 
-func (s *ToyStorage) createParamsFor(context.Context) (map[string]string, error) {
-	return map[string]string{"toy_create": "1"}, nil
+func (s *ToyStorage) restoreParams(_ context.Context, src *doltdb.DoltDB) (map[string]string, error) {
+	s.Restored = append(s.Restored, src)
+	return map[string]string{"toy_restore": "1"}, nil
+}
+
+func (s *ToyStorage) createParamsFor(_ context.Context, name string) (map[string]string, error) {
+	return map[string]string{"toy_create": name}, nil
 }
 
 func (s *ToyStorage) fileSealer(_ config.ReadableConfig, kind string) file.Sealer {
@@ -151,9 +157,9 @@ func TestStorageRemotes(t *testing.T) {
 	_, wrapped := RemoteDialerFor(src, testDialer{}).(toyDialer)
 	assert.True(t, wrapped)
 
-	create, err := CreateParamsForClient(ctx)
+	create, err := CreateParamsForClient(ctx, "db")
 	require.NoError(t, err)
-	assert.Equal(t, map[string]string{"toy_create": "1"}, create)
+	assert.Equal(t, map[string]string{"toy_create": "db"}, create)
 
 	sealer := FileSealer(nil, "privileges")
 	sealed, err := sealer.Seal(ctx, []byte("x"))

@@ -29,13 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func memSrcDB(t *testing.T) *doltdb.DoltDB {
-	ddb, err := doltdb.LoadDoltDB(context.Background(), types.Format_DOLT, doltdb.InMemDoltDB, filesys.LocalFS)
-	require.NoError(t, err)
-	t.Cleanup(func() { ddb.Close() })
-	return ddb
-}
-
 func TestEnvForCloneMarksDatabaseInProgress(t *testing.T) {
 	// A process killed after EnvForClone must leave the directory marked, so callers that die before the
 	// clone content is complete leave a directory that is ignored rather than served.
@@ -43,7 +36,7 @@ func TestEnvForCloneMarksDatabaseInProgress(t *testing.T) {
 	require.NoError(t, err)
 	hdp := func() (string, error) { return fs.TempDir(), nil }
 
-	dEnv, err := EnvForClone(context.Background(), memSrcDB(t), env.NoRemote, "cloned", fs, "test", hdp)
+	dEnv, err := EnvForClone(context.Background(), types.Format_DOLT, env.NoRemote, "cloned", fs, "test", hdp)
 	require.NoError(t, err)
 	defer dEnv.Close()
 
@@ -59,7 +52,7 @@ func TestAbortIncompleteCloneRemovesCreatedDir(t *testing.T) {
 	require.NoError(t, err)
 	hdp := func() (string, error) { return fs.TempDir(), nil }
 
-	dEnv, err := EnvForClone(ctx, memSrcDB(t), env.NoRemote, "cloned", fs, "test", hdp)
+	dEnv, err := EnvForClone(ctx, types.Format_DOLT, env.NoRemote, "cloned", fs, "test", hdp)
 	require.NoError(t, err)
 	require.NotNil(t, dEnv.DoltDB(ctx))
 	require.NoError(t, AbortIncompleteClone(dEnv, false /* dirExisted */))
@@ -71,7 +64,7 @@ func TestAbortIncompleteCloneRemovesCreatedDir(t *testing.T) {
 
 	// The retry must get a database of its own, not the store the aborted clone opened and left in the
 	// database cache pointing at deleted files.
-	retry, err := EnvForClone(ctx, memSrcDB(t), env.NoRemote, "cloned", fs, "test", hdp)
+	retry, err := EnvForClone(ctx, types.Format_DOLT, env.NoRemote, "cloned", fs, "test", hdp)
 	require.NoError(t, err)
 	cfg, ok := retry.Config.GetConfig(env.GlobalConfig)
 	require.True(t, ok)
@@ -103,7 +96,7 @@ func TestAbortIncompleteCloneKeepsUsersDir(t *testing.T) {
 	require.NoError(t, fs.MkDirs("cloned"))
 	require.NoError(t, fs.WriteFile(filepath.Join("cloned", "keepme"), []byte("mine"), 0o644))
 
-	dEnv, err := EnvForClone(ctx, memSrcDB(t), env.NoRemote, "cloned", fs, "test", hdp)
+	dEnv, err := EnvForClone(ctx, types.Format_DOLT, env.NoRemote, "cloned", fs, "test", hdp)
 	require.NoError(t, err)
 	require.NoError(t, AbortIncompleteClone(dEnv, true /* dirExisted */))
 
@@ -128,7 +121,7 @@ func TestEnvForCloneCleansUpAfterFailure(t *testing.T) {
 	require.NoError(t, fs.MkDirs("cloned"))
 	require.NoError(t, fs.WriteFile(filepath.Join("cloned", dbfactory.DoltDir), []byte("not a directory"), 0o644))
 
-	_, err = EnvForClone(ctx, memSrcDB(t), env.NoRemote, "cloned", fs, "test", hdp)
+	_, err = EnvForClone(ctx, types.Format_DOLT, env.NoRemote, "cloned", fs, "test", hdp)
 	require.Error(t, err)
 
 	clonedFs, err := fs.WithWorkingDir("cloned")

@@ -634,7 +634,7 @@ type HttpGetRange struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	Url    string                 `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`
 	Ranges []*RangeChunk          `protobuf:"bytes,2,rep,name=ranges,proto3" json:"ranges,omitempty"`
-	// Opaque keys of encrypted records, as stored, referenced by |ranges|.
+	// The wrapped keys of encrypted records, as stored, referenced by |ranges|.
 	Keys          [][]byte `protobuf:"bytes,1000,rep,name=keys,proto3" json:"keys,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -2001,7 +2001,7 @@ type ClientRepoFormat struct {
 	state      protoimpl.MessageState `protogen:"open.v1"`
 	NbfVersion string                 `protobuf:"bytes,1,opt,name=nbf_version,json=nbfVersion,proto3" json:"nbf_version,omitempty"`
 	NbsVersion string                 `protobuf:"bytes,2,opt,name=nbs_version,json=nbsVersion,proto3" json:"nbs_version,omitempty"`
-	// The scope of encryption that a repository created for this request takes.
+	// The 16 byte, nonzero encryption scope that a repository created for this request takes.
 	EncryptionScope []byte `protobuf:"bytes,1000,opt,name=encryption_scope,json=encryptionScope,proto3" json:"encryption_scope,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
@@ -2775,7 +2775,7 @@ func (x *StreamChunkLocationsResponse_ChunkLocation) GetDictionaryKeyId() uint32
 	return 0
 }
 
-// An opaque key of encrypted records, as stored. Like a
+// A wrapped key of encrypted records, as stored. Like a
 // TableFileRecord, it is introduced before or in the same response
 // as any ChunkLocation that references it in this stream.
 type StreamChunkLocationsResponse_DataKey struct {

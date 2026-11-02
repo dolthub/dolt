@@ -16,10 +16,6 @@ package remotesrv
 
 import (
 	"context"
-	"slices"
-
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -30,30 +26,25 @@ import (
 var storeFormats serverFormats = plainFormats{}
 
 type serverFormats interface {
-	// requiredCapability returns the capability a client needs to read a store of format |nbfVersion|, or
-	// CLIENT_CAPABILITY_UNSPECIFIED if it needs none.
-	requiredCapability(nbfVersion string) remotesapi.ClientCapability
+	// refuseClient returns the error to send a client with |caps| that cannot read a store of format |nbfVersion|.
+	refuseClient(nbfVersion string, caps []remotesapi.ClientCapability) error
 	// refusal returns the error to send a client for files a store refused to add with |err|, or nil to send |err|.
 	refusal(err error) error
 }
 
 type plainFormats struct{}
 
-func (plainFormats) requiredCapability(string) remotesapi.ClientCapability {
-	return remotesapi.ClientCapability_CLIENT_CAPABILITY_UNSPECIFIED
+func (plainFormats) refuseClient(string, []remotesapi.ClientCapability) error {
+	return nil
 }
 
 func (plainFormats) refusal(error) error {
 	return nil
 }
 
-// checkClientCapability refuses to locate the records of |cs| for a client without the capability its format needs.
+// checkClientCapability refuses to locate the records of |cs| for a client that cannot read them.
 func checkClientCapability(cs RemoteSrvStore, caps []remotesapi.ClientCapability) error {
-	c := storeFormats.requiredCapability(cs.Version())
-	if c != remotesapi.ClientCapability_CLIENT_CAPABILITY_UNSPECIFIED && !slices.Contains(caps, c) {
-		return status.Errorf(codes.FailedPrecondition, "upgrade your dolt client; this repository requires %v", c)
-	}
-	return nil
+	return storeFormats.refuseClient(cs.Version(), caps)
 }
 
 type repoFormatKey struct{}
@@ -63,7 +54,7 @@ func WithRepoFormat(ctx context.Context, f *remotesapi.ClientRepoFormat) context
 	return context.WithValue(ctx, repoFormatKey{}, f)
 }
 
-// RequestedRepoFormat returns the format a client sent with GetRepoMetadata, the request that creates repositories.
+// RequestedRepoFormat returns the format a client sent with GetRepoMetadata, which a repository it creates takes.
 func RequestedRepoFormat(ctx context.Context) (*remotesapi.ClientRepoFormat, bool) {
 	f, ok := ctx.Value(repoFormatKey{}).(*remotesapi.ClientRepoFormat)
 	return f, ok && f != nil

@@ -661,14 +661,17 @@ func (p *DoltDatabaseProvider) getRemoteDB(ctx context.Context, format *types.No
 
 		p.gitRemotesMu.Lock()
 		cached, ok := p.gitRemotes[key]
-		if ok && !dbfactory.ReusableStore(ctx, datas.ChunkStoreFromDatabase(doltdb.ExposeDatabaseFromDoltDB(cached)), params) {
-			delete(p.gitRemotes, key)
-			_ = cached.Close()
-			ok = false
-		}
 		p.gitRemotesMu.Unlock()
-		if ok {
+		// Checking whether the cached store can be reused may read it, so it runs without the lock.
+		if ok && dbfactory.ReusableStore(ctx, datas.ChunkStoreFromDatabase(doltdb.ExposeDatabaseFromDoltDB(cached)), params) {
 			return cached, nil
+		} else if ok {
+			p.gitRemotesMu.Lock()
+			if p.gitRemotes[key] == cached {
+				delete(p.gitRemotes, key)
+				_ = cached.Close()
+			}
+			p.gitRemotesMu.Unlock()
 		}
 	}
 
@@ -1152,7 +1155,7 @@ func (p *DoltDatabaseProvider) envForClone(
 		return nil, nil, err
 	}
 
-	dEnv, err := actions.EnvForClone(ctx, srcDB, r, dbName, p.fs, "VERSION", env.GetCurrentUserHomeDir, p.applyDBLoadParamsToEnv)
+	dEnv, err := actions.EnvForCloneOf(ctx, srcDB, r, dbName, p.fs, "VERSION", env.GetCurrentUserHomeDir, p.applyDBLoadParamsToEnv)
 	if err != nil {
 		return nil, nil, errors.Join(err, srcDB.Close())
 	}

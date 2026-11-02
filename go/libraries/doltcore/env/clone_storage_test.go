@@ -39,7 +39,7 @@ func TestEnvForCloneTakesCopyParamsBeforeInit(t *testing.T) {
 	require.NoError(t, err)
 	hdp := func() (string, error) { return fs.TempDir(), nil }
 	var configured bool
-	dEnv, err := actions.EnvForClone(ctx, src, env.NoRemote, "cloned", fs, "test", hdp, func(dEnv *env.DoltEnv) {
+	dEnv, err := actions.EnvForCloneOf(ctx, src, env.NoRemote, "cloned", fs, "test", hdp, func(dEnv *env.DoltEnv) {
 		configured = true
 		assert.False(t, dEnv.HasDoltDataDir(), "configure runs before the database is created")
 		dEnv.AddDBLoadParams(map[string]string{"configured": "1"})

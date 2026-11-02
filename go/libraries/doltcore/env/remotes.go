@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/url"
 	"path"
 	"path/filepath"
@@ -204,6 +205,7 @@ func addGitRemoteHistoryConfig(params map[string]interface{}, dialer dbfactory.G
 func (r Remote) WithParams(params map[string]string) Remote {
 	fetchSpecs := make([]string, len(r.FetchSpecs))
 	copy(fetchSpecs, r.FetchSpecs)
+	params = maps.Clone(params)
 	for k, v := range r.Params {
 		params[k] = v
 	}

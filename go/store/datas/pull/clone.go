@@ -35,7 +35,7 @@ var ErrNoData = errors.New("no data")
 var ErrCloneUnsupported = errors.New("clone unsupported")
 
 func Clone(ctx context.Context, srcCS, sinkCS chunks.ChunkStore, getAddrs chunks.InsertAddrsCurry, tempTableDir string, eventCh chan<- TableFileEvent) error {
-	format, err := newTableFileFormat(srcCS, sinkCS)
+	format, err := tableFileFormatFor(srcCS, sinkCS)
 	if err != nil {
 		return err
 	}

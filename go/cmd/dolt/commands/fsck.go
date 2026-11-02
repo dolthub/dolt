@@ -128,7 +128,7 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	progress := make(chan FsckProgressMessage, 32)
 	var report FsckReport
 
-	params, err := dEnv.LoadParams()
+	params, err := dEnv.StorageLoadParams()
 	if err != nil {
 		cli.PrintErrln("Could not load database params:", err.Error())
 		return 1

@@ -87,12 +87,22 @@ func AbortIncompleteClone(dEnv *env.DoltEnv, dirExisted bool) error {
 // The directory at |dir| is marked in progress before any state is written, so callers must clear the marker
 // with [dbfactory.ClearDatabaseInProgress] once the clone content is complete, or remove the state with
 // [AbortIncompleteClone] if the clone fails. A failure inside EnvForClone itself is cleaned up before it
-// returns. The new DoltEnv's database is created to receive copies of |src|'s files, after |configure| runs on it.
-func EnvForClone(ctx context.Context, src *doltdb.DoltDB, r env.Remote, dir string, fs filesys.Filesys, version string, homeProvider env.HomeDirProvider, configure ...func(*env.DoltEnv)) (_ *env.DoltEnv, err error) {
+// returns.
+func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, dir string, fs filesys.Filesys, version string, homeProvider env.HomeDirProvider) (_ *env.DoltEnv, err error) {
+	return envForClone(ctx, nbf, nil, r, dir, fs, version, homeProvider)
+}
+
+// EnvForCloneOf is EnvForClone for a clone of |src|, whose database is created to receive copies of |src|'s files
+// after |configure| runs on the new DoltEnv.
+func EnvForCloneOf(ctx context.Context, src *doltdb.DoltDB, r env.Remote, dir string, fs filesys.Filesys, version string, homeProvider env.HomeDirProvider, configure ...func(*env.DoltEnv)) (*env.DoltEnv, error) {
 	copyParams, err := env.CopyParams(ctx, src)
 	if err != nil {
 		return nil, err
 	}
+	return envForClone(ctx, src.Format(), copyParams, r, dir, fs, version, homeProvider, configure...)
+}
+
+func envForClone(ctx context.Context, nbf *types.NomsBinFormat, copyParams map[string]string, r env.Remote, dir string, fs filesys.Filesys, version string, homeProvider env.HomeDirProvider, configure ...func(*env.DoltEnv)) (_ *env.DoltEnv, err error) {
 	canCreate, err := env.CanCreateDatabaseAtPath(fs, dir)
 	if !canCreate {
 		if errors.Is(err, env.ErrCannotCreateDoltDirAlreadyExists) {
@@ -148,7 +158,7 @@ func EnvForClone(ctx context.Context, src *doltdb.DoltDB, r env.Remote, dir stri
 		f(dEnv)
 	}
 	dEnv.AddDBLoadParams(copyParams)
-	err = dEnv.InitRepoWithNoData(ctx, src.Format())
+	err = dEnv.InitRepoWithNoData(ctx, nbf)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init repo: %w", err)
 	}

@@ -272,7 +272,7 @@ func getRemoteDBAtCommit(ctx context.Context, remoteUrl string, remoteUrlParams 
 
 func initializeShallowCloneRepo(ctx context.Context, dEnv *env.DoltEnv, srcDB *doltdb.DoltDB, dir, branchName string, dirExisted bool) (_ *env.DoltEnv, verr errhand.VerboseError) {
 	var err error
-	newEnv, err := actions.EnvForClone(ctx, srcDB, env.NoRemote, dir, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
+	newEnv, err := actions.EnvForCloneOf(ctx, srcDB, env.NoRemote, dir, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
 
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)

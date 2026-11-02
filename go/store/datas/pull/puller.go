@@ -72,7 +72,7 @@ func NewPuller(
 	hashes []hash.Hash,
 	statsCh chan Stats,
 ) (*Puller, error) {
-	format, err := newTableFileFormat(srcCS, sinkCS)
+	format, err := tableFileFormatFor(srcCS, sinkCS)
 	if err != nil {
 		return nil, err
 	}

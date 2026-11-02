@@ -27,7 +27,7 @@ type nopSealer struct{ PlainSealer }
 
 func TestSealerOf(t *testing.T) {
 	assert.Equal(t, PlainSealer{}, SealerOf(nil))
-	assert.Equal(t, PlainSealer{}, SealerOf([]Sealer{nil}))
+	assert.Nil(t, SealerOf([]Sealer{nil}), "an explicit nil sealer is not taken for plaintext")
 	assert.Equal(t, nopSealer{}, SealerOf([]Sealer{nopSealer{}}))
 
 	ctx := context.Background()

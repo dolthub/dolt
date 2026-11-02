@@ -31,7 +31,7 @@ var standbyCheck = func(ctx context.Context, conn grpc.ClientConnInterface, remo
 	return nil
 }
 
-// grpcServices register services, beyond the replication service, that standbys serve. Dolt Enterprise adds to it.
+// grpcServices register services, beyond the replication service, that cluster members serve. Dolt Enterprise adds to it.
 var grpcServices []func(*grpc.Server)
 
 // openStandbyDB opens the database of standby |remoteName| that replicates |ddb|.

@@ -120,6 +120,8 @@ type StatsController struct {
 	quiescedAwake chan struct{}
 	guard         storageGuard
 	guarded       bool
+	// guardMemOnly is set when the guard could not open guarded stats storage, which SetMemOnly(false) keeps.
+	guardMemOnly bool
 }
 
 type rootStats struct {
@@ -187,7 +189,7 @@ func (sc *StatsController) SetBackgroundThreads(bgThreads *sql.BackgroundThreads
 func (sc *StatsController) SetMemOnly(v bool) {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
-	sc.memOnly = v
+	sc.memOnly = v || sc.guardMemOnly
 }
 
 func (sc *StatsController) SetEnableGc(v bool) {
@@ -593,7 +595,7 @@ func (sc *StatsController) lockedRotateStorage(ctx context.Context) error {
 	newKv, err := sc.initStorage(ctx, newStorageTarget)
 	if err != nil && sc.guarded {
 		sc.descError("opening a guarded stats database; keeping statistics in memory", err)
-		sc.memOnly = true
+		sc.memOnly, sc.guardMemOnly = true, true
 		sc.statsBackingDb = nil
 		return nil
 	}

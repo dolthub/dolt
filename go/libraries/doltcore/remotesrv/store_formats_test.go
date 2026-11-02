@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 
@@ -66,8 +67,11 @@ type toyFormats struct {
 	refused  error
 }
 
-func (f toyFormats) requiredCapability(string) remotesapi.ClientCapability {
-	return f.required
+func (f toyFormats) refuseClient(_ string, caps []remotesapi.ClientCapability) error {
+	if f.required != remotesapi.ClientCapability_CLIENT_CAPABILITY_UNSPECIFIED && !slices.Contains(caps, f.required) {
+		return status.Error(codes.FailedPrecondition, "toy repository")
+	}
+	return nil
 }
 
 func (f toyFormats) refusal(err error) error {
@@ -412,4 +416,40 @@ func TestKeyNumbering(t *testing.T) {
 	require.Len(t, dks, 1)
 	assert.Equal(t, uint32(4), dks[0].KeyId)
 	assert.Empty(t, kn.dataKeys())
+}
+
+// A plaintext store's locations carry no keys, so what goes over the wire is unchanged.
+func TestPlaintextLocationsHaveNoKeys(t *testing.T) {
+	prev := locateChunks
+	t.Cleanup(func() { locateChunks = prev })
+	locateChunks = func(ctx context.Context, cs RemoteSrvStore, hashes hash.HashSet) (map[string]map[hash.Hash]nbs.Range, locatedKeys, error) {
+		return nbs.GetChunkLocationsWithPathsAndKeys(ctx, cs, hashes)
+	}
+	withStoreFormats(t, plainFormats{})
+	ctx := context.Background()
+	r := startTestRemote(t, 16)
+
+	resp, err := r.client.GetDownloadLocations(ctx, &remotesapi.GetDownloadLocsRequest{RepoPath: "repo", ChunkHashes: r.hashList()})
+	require.NoError(t, err)
+	require.NotEmpty(t, resp.Locs)
+	for _, loc := range resp.Locs {
+		hgr := loc.GetHttpGetRange()
+		assert.Empty(t, hgr.Keys)
+		for _, rc := range hgr.Ranges {
+			assert.Zero(t, rc.KeyIndex)
+			assert.Zero(t, rc.DictionaryKeyIndex)
+		}
+	}
+
+	stream, err := r.client.StreamChunkLocations(ctx)
+	require.NoError(t, err)
+	require.NoError(t, stream.Send(&remotesapi.StreamChunkLocationsRequest{RepoPath: "repo", ChunkHashes: r.flatHashes()}))
+	sresp, err := stream.Recv()
+	require.NoError(t, err)
+	assert.Empty(t, sresp.Keys)
+	for _, cl := range sresp.Locations {
+		assert.Zero(t, cl.KeyId)
+		assert.Zero(t, cl.DictionaryKeyId)
+	}
+	require.NoError(t, stream.CloseSend())
 }
