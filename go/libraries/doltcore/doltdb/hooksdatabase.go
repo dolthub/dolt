@@ -16,6 +16,7 @@ package doltdb
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -54,6 +55,21 @@ func (ch *commitHooks) prepend(hooks ...CommitHook) {
 	ch.hooks = append(append(make([]CommitHook, 0, len(hooks)+len(ch.hooks)), hooks...), ch.hooks...)
 }
 
+// close unregisters every hook and closes those that implement [CloseableCommitHook].
+func (ch *commitHooks) close() error {
+	ch.mu.Lock()
+	hooks := ch.hooks
+	ch.hooks = nil
+	ch.mu.Unlock()
+	var errs []error
+	for _, h := range hooks {
+		if c, ok := h.(CloseableCommitHook); ok {
+			errs = append(errs, c.Close())
+		}
+	}
+	return errors.Join(errs...)
+}
+
 // get returns a copy of the currently registered hooks.
 func (ch *commitHooks) get() []CommitHook {
 	ch.mu.RLock()
@@ -88,6 +104,14 @@ type CommitHook interface {
 // or returned an error.
 type NotifyWaitFailedCommitHook interface {
 	NotifyWaitFailed()
+}
+
+// CloseableCommitHook is an optional interface for a CommitHook that holds resources, such as an open remote
+// database. [DoltDB.Close] closes the hooks registered on it that implement it, so such a hook must be registered on
+// only one DoltDB.
+type CloseableCommitHook interface {
+	CommitHook
+	Close() error
 }
 
 func (db hooksDatabase) withReplicationStatusController(rsc *ReplicationStatusController) hooksDatabase {
