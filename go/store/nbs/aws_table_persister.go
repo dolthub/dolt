@@ -97,6 +97,8 @@ func (s3p awsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCoun
 	)
 	if err == nil {
 		return cs, nil
+	} else if errors.As(err, &refusedFileError{}) {
+		return nil, err
 	}
 
 	return newAWSArchiveChunkSource(

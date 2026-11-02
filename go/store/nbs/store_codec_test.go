@@ -588,6 +588,12 @@ func TestToyCodecAWSStore(t *testing.T) {
 	}
 	require.NoError(t, conjoined.close())
 	cleanup()
+
+	// A plaintext store refuses the table rather than looking for an archive of that name.
+	plain := *st.persister.(*awsTablePersister)
+	plain.codec = plainCodec{}
+	_, err = plain.Open(ctx, sources[0].hash(), sources[0].count(), openOpts{}, &Stats{})
+	require.ErrorIs(t, err, ErrEncryptionMismatch)
 	require.NoError(t, st.Close())
 
 	st = open()

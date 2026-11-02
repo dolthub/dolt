@@ -263,11 +263,20 @@ func (tw *CmpChunkTableWriter) writeEncryptedTail() error {
 func newTableReaderFor(ctx context.Context, index tableIndex, r tableReaderAt, blockSize uint64, opts openOpts) (tableReader, error) {
 	opener, err := tableOpener(index, opts)
 	if err != nil {
-		return tableReader{}, err
+		return tableReader{}, refusedFileError{err}
 	}
 	tr, err := newTableReader(ctx, index, r, blockSize)
 	tr.opener = opener
 	return tr, err
+}
+
+// refusedFileError is an error from a store's codec refusing a file that exists.
+type refusedFileError struct {
+	error
+}
+
+func (e refusedFileError) Unwrap() error {
+	return e.error
 }
 
 func tableOpener(index tableIndex, opts openOpts) (recordOpener, error) {
