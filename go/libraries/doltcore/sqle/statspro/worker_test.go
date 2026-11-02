@@ -636,6 +636,23 @@ func TestRotateBackingDb(t *testing.T) {
 
 }
 
+func TestFailedRotateStorage(t *testing.T) {
+	threads := sql.NewBackgroundThreads()
+	defer threads.Shutdown()
+	ctx, _, sc := defaultSetup(t, threads, false, false)
+
+	prev, ok := sc.kv.(*prollyStats)
+	require.True(t, ok)
+
+	// Without a home directory provider, creating the new stats database fails.
+	sc.getUserHomeDir = nil
+	require.Error(t, sc.rotateStorage(ctx))
+
+	// The rotation closed |prev|, which must not be left in place to be used or closed again.
+	require.Same(t, prev.mem, sc.kv)
+	require.Equal(t, 4, sc.kv.Len())
+}
+
 func TestPanic(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
