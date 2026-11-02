@@ -902,10 +902,6 @@ func deliverChunkCallback(chunkCh chan nbs.ToChunker, path string, dictCache *di
 func setDictionaryCallback(dictCache *dictionaryCache, path string, format RepoFormat) func(context.Context, []byte, *Range) error {
 	return func(ctx context.Context, bs []byte, rang *Range) error {
 		bundle, err := format.OpenDictionary(ctx, rang.Key, bs)
-		if err != nil {
-			return err
-		}
-
 		payload, _ := dictCache.getOrCreate(path, rang.Offset, rang.Length)
 		payload.Set(bundle, err)
 		// XXX: For now, we fail here on any error, instead of when we try to use the dictionary...
