@@ -194,6 +194,12 @@ func (p persisterCodec) withCodec(opts openOpts) openOpts {
 	return opts
 }
 
+// writeMemTable writes |mt| as a table file sealed under the persister's codec.
+func (p persisterCodec) writeMemTable(mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (hash.Hash, []byte, uint64, uint32, gcBehavior, error) {
+	mt.codec = p.storeCodec()
+	return mt.write(haver, keeper, stats)
+}
+
 func (p persisterCodec) storeCodec() storeCodec {
 	if p.codec == nil {
 		return plainCodec{}
@@ -217,12 +223,6 @@ func (opts openOpts) fileCodec(encrypted bool) (storeCodec, error) {
 	}
 	_, codec, err := newStoreCodec(true, format)
 	return codec, err
-}
-
-func (nbs *NomsBlockStore) newMemTable() *memTable {
-	mt := newMemTable(nbs.memtableSz)
-	mt.codec = nbs.codec
-	return mt
 }
 
 // checkGCCodecs checks that garbage collection from |src| to |dest| can open and seal their records.
@@ -252,7 +252,7 @@ func (nbs *NomsBlockStore) settleCodec(exists bool, format string) (string, erro
 	if cs, ok := nbs.persister.(codecSetter); ok {
 		cs.setCodec(codec)
 	} else if codec.encrypted() && nbs.persister != nil {
-		return "", fmt.Errorf("%w: storage backend %T", ErrEncryptionUnsupported, nbs.persister)
+		return "", fmt.Errorf("storage backend %T does not support encrypted databases", nbs.persister)
 	}
 	nbs.codec = codec
 	return format, nil

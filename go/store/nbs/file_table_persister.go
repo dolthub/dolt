@@ -212,7 +212,7 @@ func (ftp *fsTablePersister) Persist(ctx context.Context, behavior dherrors.Fata
 	t1 := time.Now()
 	defer stats.PersistLatency.SampleTimeSince(t1)
 
-	name, data, _, chunkCount, gcb, err := mt.write(haver, keeper, stats)
+	name, data, _, chunkCount, gcb, err := ftp.writeMemTable(mt, haver, keeper, stats)
 	if err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	}

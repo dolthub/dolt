@@ -605,3 +605,24 @@ func TestToyCodecAWSStore(t *testing.T) {
 		require.Equal(t, chk.Data(), got.Data())
 	}
 }
+
+// A persister seals what it persists under its store's codec however the memTable was made.
+func TestToyCodecPersisterSeals(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	c := newToyCodec()
+	p := newFSTablePersister(dir, NewUnlimitedMemQuotaProvider(), false).(*fsTablePersister)
+	p.setCodec(c)
+	cs := toyChunks(10)
+	mt := newMemTable(1 << 20)
+	for _, chk := range cs {
+		mt.addChunk(chk.Hash(), chk.Data())
+	}
+	src, _, err := p.Persist(ctx, dherrors.FatalBehaviorError, mt, nil, nil, &Stats{})
+	require.NoError(t, err)
+	defer src.close()
+	b, err := os.ReadFile(filepath.Join(dir, src.hash().String()))
+	require.NoError(t, err)
+	require.True(t, isEncryptedFooter(b))
+	requireNoPlaintext(t, b, cs)
+}

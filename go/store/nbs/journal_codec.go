@@ -97,7 +97,7 @@ type plainJournal struct{}
 
 func (plainJournal) replay(_ context.Context, off int64, r journalRec) error {
 	if isEncryptedRecKind(r.kind) {
-		return fmt.Errorf("%w: journal record kind %d at offset %d: %w", ErrEncryptionMismatch, r.kind, off, ErrEncryptionUnsupported)
+		return fmt.Errorf("%w: encrypted journal record kind %d at offset %d", ErrEncryptionMismatch, r.kind, off)
 	}
 	return nil
 }

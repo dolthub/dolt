@@ -205,13 +205,17 @@ func (tw *CmpChunkTableWriter) addSealed(tc ToChunker) (uint32, error) {
 	ordinal := uint32(len(tw.prefixes))
 	var record []byte
 	var uncLen int
-	if sc, ok := tc.(SealedChunk); ok && tw.sealer.adopt(ordinal, sc) {
+	if sc, ok := tc.(SealedChunk); ok {
+		// Authenticate the record before taking its key.
 		chk, err := sc.ToChunk()
 		if err != nil {
 			return 0, err
 		}
-		record, uncLen = sc.sealedRecord(), len(chk.Data())
-	} else {
+		if tw.sealer.adopt(ordinal, sc) {
+			record, uncLen = sc.sealedRecord(), len(chk.Data())
+		}
+	}
+	if record == nil {
 		payload, n, err := snappyPayload(tc)
 		if err != nil {
 			return 0, err

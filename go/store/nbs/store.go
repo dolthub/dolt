@@ -1088,7 +1088,7 @@ func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, getAdd
 	for retry {
 		retry = false
 		if nbs.memtable == nil {
-			nbs.memtable = nbs.newMemTable()
+			nbs.memtable = newMemTable(nbs.memtableSz)
 		}
 
 		addChunkRes = nbs.memtable.addChunk(ch.Hash(), ch.Data())
@@ -1107,7 +1107,7 @@ func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, getAdd
 			}
 			nbs.addPendingRefsToHasCache()
 			nbs.tables = ts
-			nbs.memtable = nbs.newMemTable()
+			nbs.memtable = newMemTable(nbs.memtableSz)
 			addChunkRes = nbs.memtable.addChunk(ch.Hash(), ch.Data())
 		}
 		if addChunkRes == chunkAdded || addChunkRes == chunkExists {
