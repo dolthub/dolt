@@ -175,6 +175,9 @@ func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remot
 	if err != nil {
 		return nil, err
 	}
+	if err := checkClientCapability(cs, req.ClientCapabilities); err != nil {
+		return nil, err
+	}
 
 	hashes, _ := remotestorage.ParseByteSlices(req.ChunkHashes)
 
@@ -186,7 +189,7 @@ func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remot
 
 	numHashes := len(hashes)
 
-	locations, err := cs.GetChunkLocationsWithPaths(ctx, hashes)
+	locations, located, err := locateChunks(ctx, cs, hashes)
 	if err != nil {
 		logger.WithError(err).Error("error getting chunk locations for hashes")
 		return nil, err
@@ -227,6 +230,7 @@ func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remot
 		}).Trace("generated sealed url")
 
 		getRange := &remotesapi.HttpGetRange{Url: url.String(), Ranges: ranges}
+		addRangeKeys(getRange, located)
 		locs = append(locs, &remotesapi.DownloadLoc{Location: &remotesapi.DownloadLoc_HttpGetRange{HttpGetRange: getRange}})
 	}
 
@@ -290,12 +294,15 @@ func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStore
 			}
 		}
 
+		if err := checkClientCapability(cs, req.ClientCapabilities); err != nil {
+			return err
+		}
 		hashes, _ := remotestorage.ParseByteSlices(req.ChunkHashes)
 		if err != nil {
 			return err
 		}
 		numHashes += len(hashes)
-		locations, err := cs.GetChunkLocationsWithPaths(stream.Context(), hashes)
+		locations, located, err := locateChunks(stream.Context(), cs, hashes)
 		if err != nil {
 			logger.WithError(err).Error("error getting chunk locations for hashes")
 			return err
@@ -335,6 +342,7 @@ func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStore
 			}).Trace("generated sealed url")
 
 			getRange := &remotesapi.HttpGetRange{Url: url.String(), Ranges: ranges}
+			addRangeKeys(getRange, located)
 			locs = append(locs, &remotesapi.DownloadLoc{Location: &remotesapi.DownloadLoc_HttpGetRange{HttpGetRange: getRange}})
 		}
 
@@ -375,6 +383,7 @@ func (rs *RemoteChunkStore) StreamChunkLocations(stream remotesapi.ChunkStoreSer
 	// TableFileRecord overwrite semantics to make that transparent.
 	tfByPath := make(map[string]uint32)
 	var nextTFID uint32
+	var streamKeys keyNumbering
 
 	for {
 		req, err := stream.Recv()
@@ -405,6 +414,9 @@ func (rs *RemoteChunkStore) StreamChunkLocations(stream remotesapi.ChunkStoreSer
 				return err
 			}
 		}
+		if err := checkClientCapability(cs, req.ClientCapabilities); err != nil {
+			return err
+		}
 
 		// req.ChunkHashes is a flat 20-byte-per-hash buffer (validated
 		// above). Walk it to build a HashSet to pass to
@@ -425,7 +437,7 @@ func (rs *RemoteChunkStore) StreamChunkLocations(stream remotesapi.ChunkStoreSer
 		// GetChunkLocationsWithPaths deletes found hashes from
 		// |hashes|; the remainder is exactly the set the server
 		// could not find.
-		locations, err := cs.GetChunkLocationsWithPaths(stream.Context(), hashes)
+		locations, located, err := locateChunks(stream.Context(), cs, hashes)
 		if err != nil {
 			logger.WithError(err).Error("error getting chunk locations for hashes")
 			return err
@@ -467,6 +479,7 @@ func (rs *RemoteChunkStore) StreamChunkLocations(stream remotesapi.ChunkStoreSer
 			}
 
 			for h, r := range hashToRange {
+				keys := located.At(h, r.Offset, r.Length)
 				chunkLocs = append(chunkLocs, &remotesapi.StreamChunkLocationsResponse_ChunkLocation{
 					TableFileId:      id,
 					RequestIndex:     uint32(hashToIndex[h]),
@@ -474,6 +487,8 @@ func (rs *RemoteChunkStore) StreamChunkLocations(stream remotesapi.ChunkStoreSer
 					Length:           r.Length,
 					DictionaryOffset: r.DictOffset,
 					DictionaryLength: r.DictLength,
+					KeyId:            streamKeys.ref(keys.Key),
+					DictionaryKeyId:  streamKeys.ref(keys.DictKey),
 				})
 				numLocations++
 			}
@@ -492,6 +507,7 @@ func (rs *RemoteChunkStore) StreamChunkLocations(stream remotesapi.ChunkStoreSer
 			TableFiles:     tableFiles,
 			Locations:      chunkLocs,
 			MissingIndexes: missing,
+			Keys:           streamKeys.dataKeys(),
 		}); err != nil {
 			return err
 		}
@@ -666,6 +682,9 @@ func (rs *RemoteChunkStore) Commit(ctx context.Context, req *remotesapi.CommitRe
 	err = cs.AddTableFilesToManifest(ctx, updates, rs.getAddrs(cs.Version()))
 	if err != nil {
 		logger.WithError(err).Error("error calling AddTableFilesToManifest")
+		if refusal := storeFormats.refusal(err); refusal != nil {
+			return nil, refusal
+		}
 		code := codes.Internal
 		if errors.Is(err, nbs.ErrDanglingRef) || errors.Is(err, nbs.ErrTableFileNotFound) {
 			code = codes.FailedPrecondition
@@ -704,7 +723,7 @@ func (rs *RemoteChunkStore) GetRepoMetadata(ctx context.Context, req *remotesapi
 	logger = logger.WithField(RepoPathField, repoPath)
 	defer func() { logger.Trace("finished") }()
 
-	cs, err := rs.getOrCreateStore(ctx, logger, repoPath, req.ClientRepoFormat.NbfVersion)
+	cs, err := rs.getOrCreateStore(WithRepoFormat(ctx, req.ClientRepoFormat), logger, repoPath, req.ClientRepoFormat.NbfVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -756,6 +775,9 @@ func (rs *RemoteChunkStore) ListTableFiles(ctx context.Context, req *remotesapi.
 
 	cs, err := rs.getStore(ctx, logger, repoPath)
 	if err != nil {
+		return nil, err
+	}
+	if err := checkClientCapability(cs, req.ClientCapabilities); err != nil {
 		return nil, err
 	}
 
@@ -847,6 +869,9 @@ func (rs *RemoteChunkStore) AddTableFiles(ctx context.Context, req *remotesapi.A
 	err = cs.AddTableFilesToManifest(ctx, updates, rs.getAddrs(cs.Version()))
 	if err != nil {
 		logger.WithError(err).Error("error occurred updating the manifest")
+		if refusal := storeFormats.refusal(err); refusal != nil {
+			return nil, refusal
+		}
 		code := codes.Internal
 		if errors.Is(err, nbs.ErrDanglingRef) || errors.Is(err, nbs.ErrTableFileNotFound) {
 			code = codes.FailedPrecondition

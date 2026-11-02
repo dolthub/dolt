@@ -53,6 +53,10 @@ func (SSHRemoteFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat,
 // and HTTP over the subprocess's stdin/stdout using SMUX.
 func (SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	host, port, path, user := parseSSHURL(urlObj)
+	format, err := storeOptions.remote(params)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 	cmd, err := buildTransferCommand(host, port, path, user)
 	if err != nil {
@@ -160,7 +164,7 @@ func (SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 
 	// Create chunk store backed by the remote gRPC service.
 	client := remotesapi.NewChunkStoreServiceClient(grpcConn)
-	cs, err := remotestorage.NewDoltChunkStoreFromPath(procCtx, nbf, urlObj.Path, path, false, client)
+	cs, err := remotestorage.NewDoltChunkStoreFromPath(procCtx, nbf, urlObj.Path, path, false, client, format)
 	if err != nil {
 		conn.CloseWithErr(err)
 		return nil, nil, nil, sshRemoteError(stderrDone, &stderrBuf, path, "failed to create chunk store", err)

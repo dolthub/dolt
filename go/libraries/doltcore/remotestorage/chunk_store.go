@@ -134,6 +134,7 @@ type DoltChunkStore struct {
 	stats       cacheStats
 	logger      chunks.DebugLogger
 	wsValidate  bool
+	format      RepoFormat
 }
 
 // hasFeature reports whether |f| appears in |md|'s advertised
@@ -152,7 +153,9 @@ func NewDoltChunkStoreFromPath(
 	path, host string,
 	wsval bool,
 	csClient remotesapi.ChunkStoreServiceClient,
+	format ...RepoFormat,
 ) (*DoltChunkStore, error) {
+	clientFormat := repoFormatOf(format)
 	var repoId *remotesapi.RepoId
 
 	path = strings.Trim(path, "/")
@@ -169,11 +172,15 @@ func NewDoltChunkStoreFromPath(
 	metadata, err := csClient.GetRepoMetadata(ctx, &remotesapi.GetRepoMetadataRequest{
 		RepoId:   repoId,
 		RepoPath: path,
-		ClientRepoFormat: &remotesapi.ClientRepoFormat{
+		ClientRepoFormat: clientFormat.ClientFormat(&remotesapi.ClientRepoFormat{
 			NbfVersion: nbf.VersionString(),
 			NbsVersion: nbs.StorageVersion,
-		},
+		}),
 	})
+	if err != nil {
+		return nil, err
+	}
+	opened, err := clientFormat.Opened(metadata)
 	if err != nil {
 		return nil, err
 	}
@@ -197,6 +204,7 @@ func NewDoltChunkStoreFromPath(
 		httpFetcher: globalHttpFetcher,
 		params:      defaultRequestParams,
 		wsValidate:  wsval,
+		format:      opened,
 	}
 	err = cs.loadRoot(ctx)
 	if err != nil {
@@ -370,6 +378,7 @@ type Range struct {
 	Length     uint32
 	DictOffset uint64
 	DictLength uint32
+	Key        []byte
 }
 
 func ResourcePath(urlS string) string {
@@ -785,10 +794,10 @@ func (dcs *DoltChunkStore) refreshRepoMetadata(ctx context.Context) error {
 	mdReq := &remotesapi.GetRepoMetadataRequest{
 		RepoId:   dcs.repoId,
 		RepoPath: dcs.repoPath,
-		ClientRepoFormat: &remotesapi.ClientRepoFormat{
+		ClientRepoFormat: dcs.format.ClientFormat(&remotesapi.ClientRepoFormat{
 			NbfVersion: dcs.nbf.VersionString(),
 			NbsVersion: nbs.StorageVersion,
-		},
+		}),
 	}
 	metadata, err := dcs.csClient.GetRepoMetadata(ctx, mdReq)
 	if err != nil {
@@ -796,6 +805,9 @@ func (dcs *DoltChunkStore) refreshRepoMetadata(ctx context.Context) error {
 	}
 	if metadata.RepoToken != "" {
 		dcs.repoToken.Store(metadata.RepoToken)
+	}
+	if _, err := dcs.format.Opened(metadata); err != nil {
+		return err
 	}
 	dcs.metadata = metadata
 	return nil
@@ -875,10 +887,10 @@ func (dcs *DoltChunkStore) Commit(ctx context.Context, current, last hash.Hash) 
 		Current:        current[:],
 		Last:           last[:],
 		ChunkTableInfo: chnkTblInfo,
-		ClientRepoFormat: &remotesapi.ClientRepoFormat{
+		ClientRepoFormat: dcs.format.ClientFormat(&remotesapi.ClientRepoFormat{
 			NbfVersion: dcs.nbf.VersionString(),
 			NbsVersion: nbs.StorageVersion,
-		},
+		}),
 	}
 	dcs.repoToken.Store("")
 	resp, err = dcs.csClient.Commit(ctx, req)
@@ -949,7 +961,7 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context, hashToChunk map[has
 
 	// structuring so this can be done as multiple files in the future.
 	{
-		name, data, splitOffset, err := nbs.WriteChunks(chnks)
+		name, data, splitOffset, err := dcs.format.WriteTableFile(chnks)
 
 		if err != nil {
 			return map[hash.Hash]int{}, err
@@ -1133,10 +1145,10 @@ func (dcs *DoltChunkStore) AddTableFilesToManifest(ctx context.Context, fileIdTo
 		RepoToken:      token,
 		RepoPath:       dcs.repoPath,
 		ChunkTableInfo: chnkTblInfo,
-		ClientRepoFormat: &remotesapi.ClientRepoFormat{
+		ClientRepoFormat: dcs.format.ClientFormat(&remotesapi.ClientRepoFormat{
 			NbfVersion: dcs.nbf.VersionString(),
 			NbsVersion: nbs.StorageVersion,
-		},
+		}),
 	}
 
 	atResp, err := dcs.csClient.AddTableFiles(ctx, atReq)
