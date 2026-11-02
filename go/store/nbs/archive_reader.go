@@ -361,6 +361,26 @@ func (ar archiveReader) checkChunkRefs() error {
 	return nil
 }
 
+// checkChunkRef keeps a damaged index from causing empty or enormous reads.
+func (ar *archiveReader) checkChunkRef(rc resolvedChunk) error {
+	if err := ar.checkSpan(rc.dataId); err != nil || rc.dictId == 0 {
+		return err
+	}
+	return ar.checkSpan(rc.dictId)
+}
+
+func (ar *archiveReader) checkSpan(id uint32) error {
+	if id == 0 || id > ar.footer.byteSpanCount {
+		return fmt.Errorf("%w: byte span %d of %d", ErrCorruptArchiveIndex, id, ar.footer.byteSpanCount)
+	}
+	span := ar.getByteSpanByID(id)
+	end := span.offset + span.length
+	if span.length == 0 || end < span.offset || end > ar.footer.dataSpan().length {
+		return fmt.Errorf("%w: byte span %d at %d of length %d is outside the data section", ErrCorruptArchiveIndex, id, span.offset, span.length)
+	}
+	return nil
+}
+
 // newInMemoryArchiveIndexReader implements the original index loading logic for non-file readers
 func newInMemoryArchiveIndexReader(ctx context.Context, reader tableReaderAt, footer archiveFooter, q MemoryQuotaProvider, stats *Stats) (archiveIndexReader, error) {
 	byteOffSpan := footer.indexByteOffsetSpan()
@@ -618,6 +638,9 @@ func (ar *archiveReader) get(ctx context.Context, hash hash.Hash, stats *Stats) 
 	if !ok {
 		return nil, nil
 	}
+	if err := ar.checkChunkRef(rc); err != nil {
+		return nil, err
+	}
 	dict, data, err := ar.getRawByRef(ctx, rc.dictId, rc.dataId, stats)
 	if err != nil {
 		return nil, err
@@ -650,6 +673,9 @@ func (ar *archiveReader) getAsToChunker(ctx context.Context, h hash.Hash, stats 
 	rc, ok := ar.resolveChunk(h)
 	if !ok {
 		return CompressedChunk{}, nil
+	}
+	if err := ar.checkChunkRef(rc); err != nil {
+		return nil, err
 	}
 	dict, data, err := ar.getRawByRef(ctx, rc.dictId, rc.dataId, stats)
 	if err != nil {
@@ -706,6 +732,9 @@ func (ar *archiveReader) getRaw(ctx context.Context, hash hash.Hash, stats *Stat
 	rc, ok := ar.resolveChunk(hash)
 	if !ok {
 		return nil, nil, nil
+	}
+	if err = ar.checkChunkRef(rc); err != nil {
+		return nil, nil, err
 	}
 
 	return ar.getRawByRef(ctx, rc.dictId, rc.dataId, stats)
@@ -813,6 +842,9 @@ func (r *bridgeReaderAt) ReadAt(p []byte, off int64) (n int, err error) {
 }
 
 func (ar *archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error, stats *Stats) error {
+	if err := ar.checkByteSpans(); err != nil {
+		return err
+	}
 	return ar.walkSpans(ctx, cb, func(err error) error { return err }, stats)
 }
 
@@ -851,6 +883,9 @@ func (ar *archiveReader) walkSpans(ctx context.Context, cb func(chunks.Chunk) er
 		if ctx.Err() != nil {
 			return context.Cause(ctx)
 		}
+		if err := ar.checkSpan(id); err != nil {
+			return err
+		}
 		span := ar.getByteSpanByID(id)
 		for cap(buf) < int(span.length) {
 			buf = append(buf, make([]byte, cap(buf))...)
@@ -876,10 +911,10 @@ func (ar *archiveReader) walkSpans(ctx context.Context, cb func(chunks.Chunk) er
 func (ar *archiveReader) openSpan(ctx context.Context, id uint32, stored []byte, isDict map[uint32]bool, chunkOf map[uint32]uint32, dicts map[uint32]*DecompBundle) (*chunks.Chunk, error) {
 	if isDict[id] {
 		dict, err := ar.openDict(ctx, id, stored)
+		dicts[id] = dict
 		if err != nil {
 			return nil, fmt.Errorf("failure loading archive dictionary span %d: %w", id, err)
 		}
-		dicts[id] = dict
 		return nil, nil
 	}
 	i, ok := chunkOf[id]
@@ -888,9 +923,11 @@ func (ar *archiveReader) openSpan(ctx context.Context, id uint32, stored []byte,
 	}
 	rc := resolvedChunk{h: reconstructHashFromPrefixAndSuffix(ar.indexReader.getPrefix(i), ar.indexReader.getSuffix(i))}
 	rc.dictId, rc.dataId = ar.getChunkRef(int(i))
-	dict := dicts[rc.dictId]
-	if rc.dictId != 0 && dict == nil {
-		return nil, fmt.Errorf("chunk %s: dictionary span %d not loaded", rc.h.String(), rc.dictId)
+	dict, loaded := dicts[rc.dictId]
+	if rc.dictId != 0 && !loaded {
+		return nil, fmt.Errorf("%w: dictionary span %d does not precede the data span %d using it", ErrCorruptArchiveIndex, rc.dictId, id)
+	} else if rc.dictId != 0 && dict == nil {
+		return nil, fmt.Errorf("chunk %s: skipped due to failed dictionary span %d", rc.h.String(), rc.dictId)
 	}
 	data, err := ar.chunkData(ctx, rc, dict, stored)
 	if err != nil {

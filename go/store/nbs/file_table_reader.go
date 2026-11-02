@@ -273,6 +273,7 @@ func newTableFileMetadata(path string, chunkCount uint32) (*TableFileMetadata, e
 	if err != nil {
 		return nil, err
 	}
+	defer fra.Close()
 
 	idxSz := int64(indexSize(chunkCount) + footerSize)
 	idxSz, _ = addEncryptedTailSize(fra.f, idxSz)

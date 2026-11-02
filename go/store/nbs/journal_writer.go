@@ -369,6 +369,11 @@ func (wr *journalWriter) readJournalIndex(ctx context.Context, canWrite bool) er
 				return fmt.Errorf("index records do not cover contiguous region (%d != %d)", m.batchStart, prev)
 			}
 			prev = m.batchEnd
+			for _, l := range batch {
+				if l.r.Length > journalWriterBuffSize {
+					return fmt.Errorf("invalid index lookup length %d", l.r.Length)
+				}
+			}
 			if err := wr.codec.checkBatch(ectx, m, batch); err != nil {
 				return err
 			}

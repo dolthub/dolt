@@ -36,7 +36,13 @@ type MmapData struct {
 	originalData mmap.MMap
 }
 
-var mmapAlignment = int64(os.Getpagesize())
+// Windows maps views at its 64KB allocation granularity, not at page boundaries.
+var mmapAlignment = func() int64 {
+	if runtime.GOOS == "windows" {
+		return 64 << 10
+	}
+	return int64(os.Getpagesize())
+}()
 
 func (m MmapData) GetUint64(offset uint64) uint64 {
 	return binary.BigEndian.Uint64(m.data[offset : offset+uint64Size])
