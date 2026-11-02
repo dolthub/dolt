@@ -663,3 +663,22 @@ func TestFetcherRPCChunkLocationsThread_PermanentStreamError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "nope")
 }
+
+// A dictionary that fails to load fails the chunks waiting on it, rather than leaving them blocked.
+func TestSetDictionaryCallbackFailsWaiters(t *testing.T) {
+	dc := &dictionaryCache{}
+	waiting, _ := dc.getOrCreate("path", 10, 20)
+	err := setDictionaryCallback(dc, "path")(context.Background(), []byte("not a dictionary"), &Range{Offset: 10, Length: 20})
+	require.Error(t, err)
+	done := make(chan error)
+	go func() {
+		_, err := waiting.Get()
+		done <- err
+	}()
+	select {
+	case got := <-done:
+		require.Equal(t, err, got)
+	case <-time.After(10 * time.Second):
+		t.Fatal("a chunk waiting on the dictionary was not released")
+	}
+}
