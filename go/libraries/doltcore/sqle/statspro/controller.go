@@ -545,6 +545,10 @@ func (sc *StatsController) lockedRotateStorage(ctx context.Context) error {
 	}
 
 	sc.kv.Close()
+	// A failed rotation must not leave the closed store to be used or closed again.
+	if kv, ok := sc.kv.(*prollyStats); ok {
+		sc.kv = kv.mem
+	}
 
 	if sc.statsBackingDb != nil {
 		if err := sc.rm(sc.statsBackingDb); err != nil {

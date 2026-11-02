@@ -297,6 +297,9 @@ func (acs *archiveChunkSource) resolve(records []getRecord, keeper keeperF) ([]r
 			foundAll = false
 			continue
 		}
+		if err := acs.aRdr.checkChunkRef(rc); err != nil {
+			return nil, true, gcBehavior_Continue, err
+		}
 
 		if keeper != nil && keeper(h) {
 			return nil, true, gcBehavior_Block, nil
