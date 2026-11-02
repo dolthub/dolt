@@ -202,6 +202,9 @@ func readJournalRecord(buf []byte) (rec journalRec, err error) {
 	for len(buf) > journalRecChecksumSz {
 		tag := journalRecTag(buf[0])
 		buf = buf[journalRecTagSz:]
+		if err = checkJournalRecField(tag, buf); err != nil {
+			return
+		}
 		switch tag {
 		case kindJournalRecTag:
 			rec.kind = journalRecKind(buf[0])
@@ -226,6 +229,22 @@ func readJournalRecord(buf []byte) (rec journalRec, err error) {
 	}
 	rec.checksum = readUint32(buf[:journalRecChecksumSz])
 	return
+}
+
+func checkJournalRecField(tag journalRecTag, buf []byte) error {
+	sz := 0
+	switch tag {
+	case kindJournalRecTag:
+		sz = journalRecKindSz
+	case addrJournalRecTag:
+		sz = journalRecAddrSz
+	case timestampJournalRecTag:
+		sz = journalRecTimestampSz
+	}
+	if len(buf)-journalRecChecksumSz < sz {
+		return fmt.Errorf("journal record field %d overruns the record", tag)
+	}
+	return nil
 }
 
 // validateJournalRecord performs some sanity checks on the buffer |buf| containing a journal

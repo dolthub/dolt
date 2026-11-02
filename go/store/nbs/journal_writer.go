@@ -361,6 +361,11 @@ func (wr *journalWriter) readJournalIndex(ctx context.Context, canWrite bool) er
 				return fmt.Errorf("index records do not cover contiguous region (%d != %d)", m.batchStart, prev)
 			}
 			prev = m.batchEnd
+			for _, l := range batch {
+				if l.r.Length > journalWriterBuffSize {
+					return fmt.Errorf("invalid index lookup length %d", l.r.Length)
+				}
+			}
 
 			// |r.end| is expected to point to a root hash record in |wr.journal|
 			// containing a hash equal to |r.lastRoot|, validate this here
