@@ -17,6 +17,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -217,6 +218,62 @@ func TestSqlEngineFailedConstructionStopsWorkers(t *testing.T) {
 			})
 		})
 	}
+}
+
+// TestSqlEngineCloseLeavesBootstrapDatabases checks that an engine closes the databases it created and leaves the
+// databases it was given open, using the default load params.
+func TestSqlEngineCloseLeavesBootstrapDatabases(t *testing.T) {
+	ctx := context.Background()
+	root, home := t.TempDir(), t.TempDir()
+	fs, err := filesys.LocalFS.WithWorkingDir(root)
+	require.NoError(t, err)
+	params := map[string]interface{}{dbfactory.FailOnJournalLockTimeoutParam: struct{}{}}
+	rootEnv := env.LoadWithoutDB(ctx, func() (string, error) { return home, nil }, fs, doltdb.LocalDirDoltDB, "test")
+	rootEnv.DBLoadParams = maps.Clone(params)
+	require.NoError(t, rootEnv.Config.WriteableConfig().SetStrings(map[string]string{
+		config.UserNameKey:  "test",
+		config.UserEmailKey: "test@example.com",
+	}))
+	require.NoError(t, rootEnv.InitRepo(ctx, types.Format_DOLT, "test", "test@example.com", env.DefaultInitBranch))
+	defer rootEnv.Close()
+	cfg := &SqlEngineConfig{ServerUser: "root", ServerHost: "localhost", Autocommit: true, DBLoadParams: params}
+
+	runEngine := func(queries ...string) []sql.Row {
+		mrEnv, err := env.MultiEnvForDirectory(ctx, fs, rootEnv)
+		require.NoError(t, err)
+		defer func() { require.NoError(t, mrEnv.Close(ctx)) }()
+		cfg.EngineVariables = sqle.NewEngineVariables()
+		se, err := NewSqlEngine(ctx, mrEnv, cfg)
+		require.NoError(t, err)
+		defer func() { require.NoError(t, se.Close()) }()
+		sqlCtx, err := se.NewLocalContext(ctx)
+		require.NoError(t, err)
+		defer sql.SessionEnd(sqlCtx.Session)
+		var rows []sql.Row
+		for _, q := range queries {
+			rows = lifecycleQuery(t, se, sqlCtx, q)
+		}
+		return rows
+	}
+
+	runEngine(
+		"CREATE DATABASE created",
+		"CREATE TABLE created.t (pk int PRIMARY KEY)",
+		"INSERT INTO created.t VALUES (1)",
+	)
+
+	// The bootstrap database stays open after the engine closes.
+	_, err = rootEnv.WorkingRoot(ctx)
+	require.NoError(t, err)
+
+	// The created database was closed, so a later engine can open it, drop it, and create it again.
+	require.Equal(t, []sql.Row{{int32(1)}}, runEngine("SELECT pk FROM created.t"))
+	require.Equal(t, []sql.Row{{int64(0)}}, runEngine(
+		"DROP DATABASE created",
+		"CREATE DATABASE created",
+		"CREATE TABLE created.t (pk int PRIMARY KEY)",
+		"SELECT count(*) FROM created.t",
+	))
 }
 
 // lifecycleEngineEnvironment configures a disk-backed engine that owns its storage lifetime.
