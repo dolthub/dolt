@@ -477,9 +477,10 @@ func TestToyCodecJournalIndex(t *testing.T) {
 	idxPath := filepath.Join(filepath.Dir(path), journalIndexFileName)
 	idx, err := os.ReadFile(idxPath)
 	require.NoError(t, err)
-	i := bytes.IndexByte(idx, indexRecAuth)
+	// The toy authentication record is 8 bytes.
+	i := bytes.Index(idx, []byte{indexRecAuth, 0, 8})
 	require.GreaterOrEqual(t, i, 0)
-	idx[i+uint16Size+1] ^= 0xff
+	idx[i+1+uint16Size] ^= 0xff
 	require.NoError(t, os.WriteFile(idxPath, idx, 0644))
 	j, jc = reopen()
 	require.Equal(t, 1, jc.resets)
