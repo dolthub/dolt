@@ -39,6 +39,8 @@ type fakeDDB struct {
 	data             map[string]interface{}
 	t                *testing.T
 	numPuts, numGets int64
+	// vers is the format the store's manifest is written in, FormatDoltString if it is not set.
+	vers string
 }
 
 type record struct {
@@ -97,7 +99,7 @@ func (m *fakeDDB) PutItem(ctx context.Context, input *dynamodb.PutItemInput, opt
 
 	require.NotNil(m.t, input.Item[versAttr], "%s should have been present", versAttr)
 	require.IsType(m.t, (*ddbtypes.AttributeValueMemberS)(nil), input.Item[versAttr], "nbsVers should have been a String: %+v", input.Item[versAttr])
-	assert.Equal(m.t, constants.FormatDoltString, input.Item[versAttr].(*ddbtypes.AttributeValueMemberS).Value)
+	assert.Equal(m.t, m.format(), input.Item[versAttr].(*ddbtypes.AttributeValueMemberS).Value)
 
 	require.NotNil(m.t, input.Item[lockAttr], "%s should have been present", lockAttr)
 	require.IsType(m.t, (*ddbtypes.AttributeValueMemberB)(nil), input.Item[lockAttr], "lock should have been a blob: %+v", input.Item[lockAttr])
@@ -128,7 +130,7 @@ func (m *fakeDDB) PutItem(ctx context.Context, input *dynamodb.PutItemInput, opt
 		return nil, &ddbtypes.ConditionalCheckFailedException{}
 	}
 
-	m.putRecord(key, lock, root, constants.FormatDoltString, specs, apps)
+	m.putRecord(key, lock, root, m.format(), specs, apps)
 
 	atomic.AddInt64(&m.numPuts, 1)
 	return &dynamodb.PutItemOutput{}, nil
@@ -141,4 +143,11 @@ func checkCondition(current record, expressionAttrVals map[string]ddbtypes.Attri
 
 func (m *fakeDDB) NumGets() int64 {
 	return atomic.LoadInt64(&m.numGets)
+}
+
+func (m *fakeDDB) format() string {
+	if m.vers != "" {
+		return m.vers
+	}
+	return constants.FormatDoltString
 }

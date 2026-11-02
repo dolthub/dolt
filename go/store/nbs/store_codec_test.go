@@ -544,3 +544,57 @@ func TestToyCodecConjoin(t *testing.T) {
 		require.ErrorIs(t, err, ErrEncryptionMismatch)
 	})
 }
+
+func TestToyCodecAWSStore(t *testing.T) {
+	ctx := context.Background()
+	c := newToyCodec()
+	s3, ddb := makeFakeS3(t), makeFakeDDB(t)
+	ddb.vers = constants.EncryptedFormatString
+	open := func() *NomsBlockStore {
+		st, err := NewAWSStore(ctx, constants.EncryptedFormatString, "table", "db", "bucket", s3, ddb, 1<<10, NewUnlimitedMemQuotaProvider(), withToy(c))
+		require.NoError(t, err)
+		// Small parts, so conjoin copies records with UploadPartCopy.
+		st.persister.(*awsTablePersister).limits = awsLimits{partTarget: defaultS3PartSize, partMin: 1 << 10, partMax: 4 << 10}
+		return st
+	}
+	st := open()
+	var all []chunks.Chunk
+	for i := 0; i < 4; i++ {
+		cs := toyChunks(60 * (i + 1))[60*i:]
+		for _, chk := range cs {
+			require.NoError(t, st.Put(ctx, chk, noopGetAddrs))
+		}
+		all = append(all, cs...)
+		root, err := st.Root(ctx)
+		require.NoError(t, err)
+		ok, err := st.Commit(ctx, cs[0].Hash(), root)
+		require.NoError(t, err)
+		require.True(t, ok)
+	}
+	for _, data := range s3.data {
+		requireNoPlaintext(t, data, all)
+	}
+	var sources chunkSources
+	for _, cs := range st.tables.upstream {
+		sources = append(sources, cs)
+	}
+	require.Greater(t, len(sources), 1)
+	conjoined, cleanup, err := st.persister.(*awsTablePersister).ConjoinAll(ctx, dherrors.FatalBehaviorError, sources, &Stats{})
+	require.NoError(t, err)
+	for _, chk := range all {
+		got, _, err := conjoined.get(ctx, chk.Hash(), nil, &Stats{})
+		require.NoError(t, err)
+		require.Equal(t, chk.Data(), got)
+	}
+	require.NoError(t, conjoined.close())
+	cleanup()
+	require.NoError(t, st.Close())
+
+	st = open()
+	defer st.Close()
+	for _, chk := range all {
+		got, err := st.Get(ctx, chk.Hash())
+		require.NoError(t, err)
+		require.Equal(t, chk.Data(), got.Data())
+	}
+}
