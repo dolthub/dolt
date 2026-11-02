@@ -15,6 +15,7 @@
 package dtablefunctions
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -172,7 +173,9 @@ func (m *MergeBasesTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Ro
 		return nil, err
 	}
 	bases, err := merge.MergeBases(ctx, left, right)
-	if err != nil {
+	if errors.Is(err, doltdb.ErrNoCommonAncestor) {
+		return sql.RowsToRowIter(), nil
+	} else if err != nil {
 		return nil, err
 	}
 
