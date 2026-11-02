@@ -79,10 +79,11 @@ type fileKeys struct {
 	adding bool
 }
 
-// keyBlockPart is a source's key block in a conjoined file, whose records start at |start|.
+// keyBlockPart is the key block of |count| records starting at |start| in a conjoined file.
 type keyBlockPart struct {
 	keyBlock []byte
 	start    uint32
+	count    uint32
 }
 
 // recordSealer seals the records of a new file.

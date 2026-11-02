@@ -369,7 +369,7 @@ func conjoinedKeyBlock(codec storeCodec, sources []sourceWithSize) ([]byte, bool
 			return nil, false, fmt.Errorf("%w: conjoining encrypted and plaintext files", ErrEncryptionMismatch)
 		}
 		if encrypted {
-			parts = append(parts, keyBlockPart{keyBlock: kb, start: start})
+			parts = append(parts, keyBlockPart{keyBlock: kb, start: start, count: count})
 		}
 		start += count
 	}
