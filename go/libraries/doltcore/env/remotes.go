@@ -111,6 +111,9 @@ func (r *Remote) DBFactoryParams(dialer dbfactory.GRPCDialProvider) (map[string]
 	}
 
 	params[dbfactory.GRPCDialProviderParam] = dialer
+	if err := storage.remoteParams(params, dialer); err != nil {
+		return nil, err
+	}
 	u, err := earl.Parse(r.Url)
 	if err != nil {
 		return nil, err

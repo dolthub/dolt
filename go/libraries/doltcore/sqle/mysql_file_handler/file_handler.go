@@ -33,15 +33,18 @@ type Persister struct {
 	fileMutex      *sync.Mutex
 	privsFilePath  string
 	doltCfgDirPath string
+	sealer         file.Sealer
 }
 
 var _ mysql_db.MySQLDbPersistence = &Persister{}
 
-func NewPersister(fp string, dp string) *Persister {
+// NewPersister returns a persister of the privileges file at |fp|, which it seals with |sealer|, if given.
+func NewPersister(fp string, dp string, sealer ...file.Sealer) *Persister {
 	return &Persister{
 		privsFilePath:  fp,
 		doltCfgDirPath: dp,
 		fileMutex:      &sync.Mutex{},
+		sealer:         file.SealerOf(sealer),
 	}
 }
 
@@ -58,11 +61,15 @@ func (p *Persister) Persist(ctx *sql.Context, data []byte) error {
 		}
 	}
 
+	data, err := p.sealer.Seal(ctx, data)
+	if err != nil {
+		return err
+	}
 	return file.WriteFileAtomically(p.privsFilePath, bytes.NewReader(data), PermsFileMode)
 }
 
 // LoadData reads the mysql.db file, returns nil if empty or not found
-func (p Persister) LoadData(context.Context) ([]byte, error) {
+func (p Persister) LoadData(ctx context.Context) ([]byte, error) {
 	// do nothing if no filepath specified
 	if len(p.privsFilePath) == 0 {
 		return nil, nil
@@ -80,5 +87,5 @@ func (p Persister) LoadData(context.Context) ([]byte, error) {
 		return nil, nil
 	}
 
-	return buf, nil
+	return p.sealer.Open(ctx, p.privsFilePath, buf, PermsFileMode)
 }

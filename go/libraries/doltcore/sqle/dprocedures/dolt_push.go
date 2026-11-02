@@ -91,7 +91,7 @@ func doDoltPush(ctx *sql.Context, args []string) (int, string, error) {
 		remote = &rmt
 	}
 
-	remoteDB, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb.ValueReadWriter().Format(), *remote)
+	remoteDB, err := pushRemoteDB(ctx, sess.Provider(), dbData.Ddb, *remote)
 	if err != nil {
 		return cmdFailure, "", actions.HandleInitRemoteStorageClientErr(remote.Name, remote.Url, err)
 	}
@@ -139,4 +139,13 @@ func doDoltPush(ctx *sql.Context, args []string) (int, string, error) {
 	}
 	// TODO : set upstream should be persisted outside of session
 	return cmdSuccess, returnMsg, nil
+}
+
+// pushRemoteDB returns the remote database |r| to push |local| to.
+func pushRemoteDB(ctx *sql.Context, p dsess.DoltDatabaseProvider, local *doltdb.DoltDB, r env.Remote) (*doltdb.DoltDB, error) {
+	push, err := r.ForPushFrom(ctx, local)
+	if err != nil {
+		return nil, err
+	}
+	return dsess.GetRemoteDBFor(ctx, p, local, push)
 }
