@@ -51,6 +51,10 @@ type prollyWriteSession struct {
 	workingSet    *doltdb.WorkingSet
 	setter        dsess.SessionRootSetter
 	targetStaging bool
+
+	// lazyFlush leaves edits of completed statements in their table writers, instead of materializing them into
+	// the |workingSet| immediately.
+	lazyFlush bool
 }
 
 var _ dsess.WriteSession = &prollyWriteSession{}
@@ -156,6 +160,11 @@ func (s *prollyWriteSession) SetOptions(opts editor.Options) {
 	return
 }
 
+// SetLazyFlush implements WriteSession
+func (s *prollyWriteSession) SetLazyFlush(lazyFlush bool) {
+	s.lazyFlush = lazyFlush
+}
+
 // PendingRows implements WriteSession
 func (s *prollyWriteSession) PendingRows(tblName doltdb.TableName) *prolly.MutableMap {
 	tblWriter, ok := s.tables[tblName]
@@ -229,7 +238,7 @@ func (s *prollyWriteSession) flushAllTables(ctx *sql.Context) (doltdb.RootValue,
 		flushed = s.workingSet.WorkingRoot()
 	}
 
-	// Drain from the flushedTables channel and update RootValue with updated table
+	// Drain from the flushedTables channel and update RootValue with the updated table
 	eg := errgroup.Group{}
 	eg.Go(func() error {
 		var err error
