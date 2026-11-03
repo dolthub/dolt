@@ -415,6 +415,8 @@ func TestJournalWriterReadCorruptRange(t *testing.T) {
 		require.Error(t, err)
 		_, err = j.readPayload(Range{Offset: 1 << 40, Length: r.Length})
 		require.Error(t, err)
+		_, err = j.getCompressedChunkAtRange(Range{Offset: 1 << 63, Length: r.Length}, cc.H)
+		require.Error(t, err)
 	}
 }
 
