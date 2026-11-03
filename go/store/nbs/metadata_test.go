@@ -15,6 +15,7 @@
 package nbs
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -40,8 +41,8 @@ func TestGetStorageMetadataClosesFiles(t *testing.T) {
 	writeTestManifest(t, oldGen, writeTestArchive(t, oldGen))
 
 	before := openFileCount()
-	for i := 0; i < 4; i++ {
-		smd, err := GetStorageMetadata(ctx, dir, &Stats{}, false)
+	for _, mmap := range []bool{false, true} {
+		smd, err := GetStorageMetadata(ctx, dir, &Stats{}, mmap)
 		require.NoError(t, err)
 		require.Len(t, smd.artifacts, 2)
 	}
@@ -49,6 +50,7 @@ func TestGetStorageMetadataClosesFiles(t *testing.T) {
 	if before >= 0 {
 		require.LessOrEqual(t, openFileCount(), before)
 	}
+	require.False(t, mapsFileUnder(dir))
 }
 
 func writeTestManifest(t *testing.T, dir string, specs ...tableSpec) {
@@ -82,4 +84,10 @@ func openFileCount() int {
 		return -1
 	}
 	return len(entries)
+}
+
+// mapsFileUnder reports whether this process maps a file under |dir|, or false where it cannot tell.
+func mapsFileUnder(dir string) bool {
+	maps, err := os.ReadFile("/proc/self/maps")
+	return err == nil && bytes.Contains(maps, []byte(dir))
 }

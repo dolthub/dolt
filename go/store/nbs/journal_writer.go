@@ -683,6 +683,9 @@ func (wr *journalWriter) readAt(p []byte, off int64) (n int, err error) {
 		bp = p
 		off -= wr.off
 	}
+	if off > int64(len(wr.buf)-len(bp)) {
+		return n, fmt.Errorf("journal read of %d bytes is past the end of the journal", len(bp))
+	}
 	n += copy(bp, wr.buf[off:])
 	return
 }

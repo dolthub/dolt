@@ -888,7 +888,7 @@ func deliverChunkCallback(chunkCh chan nbs.ToChunker, path string, dictCache *di
 		if rang.DictLength != 0 {
 			payload, _ := dictCache.getOrCreate(path, rang.DictOffset, rang.DictLength)
 			var err error
-			bundle, err = payload.Get()
+			bundle, err = payload.Get(ctx)
 			if err != nil {
 				return err
 			}
@@ -975,9 +975,13 @@ type DictionaryPayload struct {
 	err  error
 }
 
-func (p *DictionaryPayload) Get() (*nbs.DecompBundle, error) {
-	<-p.done
-	return p.res, p.err
+func (p *DictionaryPayload) Get(ctx context.Context) (*nbs.DecompBundle, error) {
+	select {
+	case <-p.done:
+		return p.res, p.err
+	case <-ctx.Done():
+		return nil, context.Cause(ctx)
+	}
 }
 
 func (p *DictionaryPayload) Set(res *nbs.DecompBundle, err error) {

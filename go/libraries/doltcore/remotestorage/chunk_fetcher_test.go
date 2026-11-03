@@ -672,12 +672,29 @@ func TestSetDictionaryCallbackFailsWaiters(t *testing.T) {
 	require.Error(t, err)
 	done := make(chan error)
 	go func() {
-		_, err := waiting.Get()
+		_, err := waiting.Get(context.Background())
 		done <- err
 	}()
 	select {
 	case got := <-done:
 		require.Equal(t, err, got)
+	case <-time.After(10 * time.Second):
+		t.Fatal("a chunk waiting on the dictionary was not released")
+	}
+}
+
+// A chunk waiting on a dictionary whose download failed is released when the download threads are cancelled.
+func TestDeliverChunkCallbackStopsWaitingOnCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error)
+	go func() {
+		cb := deliverChunkCallback(make(chan nbs.ToChunker), "path", &dictionaryCache{}, PlainFormat{})
+		done <- cb(ctx, nil, &Range{Hash: make([]byte, hash.ByteLen), DictOffset: 10, DictLength: 20})
+	}()
+	cancel()
+	select {
+	case err := <-done:
+		require.ErrorIs(t, err, context.Canceled)
 	case <-time.After(10 * time.Second):
 		t.Fatal("a chunk waiting on the dictionary was not released")
 	}

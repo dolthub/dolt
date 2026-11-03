@@ -161,6 +161,8 @@ func newArchiveMetadata(ctx context.Context, reader tableReaderAt, name hash.Has
 	if err != nil {
 		return nil, err
 	}
+	// The caller closes |reader|.
+	defer aRdr.indexReader.Close()
 
 	metaSpan := aRdr.footer.metadataSpan()
 	metaRdr := newSectionReader(ctx, reader, int64(metaSpan.offset), int64(metaSpan.length), stats)

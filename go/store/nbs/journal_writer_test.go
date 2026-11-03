@@ -403,6 +403,21 @@ func TestJournalIndexBootstrap(t *testing.T) {
 	}
 }
 
+// The index batch checksum covers only addresses, so reads must reject a corrupt range rather than panic.
+func TestJournalWriterReadCorruptRange(t *testing.T) {
+	j := newTestJournalWriter(t, newTestFilePath(t))
+	for _, cc := range randomCompressedChunks(1) {
+		require.NoError(t, j.writeCompressedChunk(context.Background(), dherrors.FatalBehaviorError, cc))
+		r, _ := j.ranges.get(cc.H)
+		payload, err := j.readPayload(Range{Offset: r.Offset, Length: 2})
+		require.NoError(t, err)
+		_, err = j.codec.chunker(cc.H, payload)
+		require.Error(t, err)
+		_, err = j.readPayload(Range{Offset: 1 << 40, Length: r.Length})
+		require.Error(t, err)
+	}
+}
+
 // TestJournalIndexCorruptionRecovery verifies that a corrupt journal index does
 // not prevent the database from opening. The journal index (journal.idx) is an
 // optimization that is written without the same atomicity guarantees as the
