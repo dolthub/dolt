@@ -36,6 +36,36 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
   echo "$res"
 }
 
+# Removes a chunk from the journal, leaving anything that refers to it dangling.
+remove_chunk_from_journal() {
+  local journal=".dolt/noms/vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv"
+  dolt admin journal-inspect --filter-chunks "$1" "$journal"
+  mv "$journal.filtered" "$journal"
+  rm -f .dolt/noms/journal.idx
+}
+
+# Prints the hash that a ref or working set in the store root points to.
+root_entry() {
+  dolt admin show-root | awk -v name="$1" '$1 == name { print $2 }'
+}
+
+# Prints the working root of the working set stored at the given hash.
+working_root_of() {
+  dolt show "$1" | sed -n 's/.*WorkingRootAddr: #//p'
+}
+
+# Leaves an interactive rebase of branch feat onto main in progress.
+start_rebase() {
+  dolt sql <<SQL
+CREATE TABLE t (pk INT PRIMARY KEY);
+CALL dolt_commit('-Am', 'a');
+CALL dolt_checkout('-b', 'feat');
+INSERT INTO t VALUES (1);
+CALL dolt_commit('-am', 'b');
+SQL
+  dolt sql -q "CALL dolt_checkout('feat'); CALL dolt_rebase('-i', 'main');"
+}
+
 @test "fsck: bad commit" {
   mkdir .dolt
   cp -R $BATS_CWD/corrupt_dbs/bad_commit/* .dolt/
@@ -224,4 +254,77 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
   run dolt stash list
   [ "$status" -eq 0 ]
   [[ "$output" =~ "stash@{0}" ]] || false
+}
+
+@test "fsck: passes with a rebase in progress" {
+  dolt init
+  start_rebase
+
+  run dolt fsck
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "No problems found." ]] || false
+
+  # The working set is now the only thing that reaches the pre-rebase root.
+  dolt sql -q "CALL dolt_branch('-D', 'feat')"
+
+  run dolt fsck
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "No problems found." ]] || false
+}
+
+@test "fsck: passes with a merge in progress" {
+  dolt init
+  dolt sql -q "create table t (pk int primary key, v int); insert into t values (1, 1);"
+  dolt commit -Am "base"
+  dolt branch other
+  dolt sql -q "update t set v = 2 where pk = 1"
+  dolt commit -am "main"
+  dolt checkout other
+  dolt sql -q "update t set v = 3 where pk = 1"
+  dolt commit -am "other"
+  dolt checkout main
+
+  run dolt merge other
+  [[ "$output" =~ "CONFLICT" ]] || false
+
+  run dolt fsck
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "No problems found." ]] || false
+}
+
+@test "fsck: reports a missing pre-rebase working root" {
+  dolt init
+  start_rebase
+
+  local pre_rebase_root
+  pre_rebase_root="$(working_root_of "$(root_entry workingSets/heads/feat)")"
+  [ -n "$pre_rebase_root" ]
+
+  # With the branch gone only the working set reaches this root, so nothing but the working set walk can see it.
+  dolt sql -q "CALL dolt_branch('-D', 'feat')"
+  remove_chunk_from_journal "$pre_rebase_root"
+
+  run dolt fsck
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "workingSets/heads/dolt_rebase_feat (pre-rebase working root)" ]] || false
+  [[ "$output" =~ "failed to read tree $pre_rebase_root" ]] || false
+  ! [[ "$output" =~ "No problems found." ]] || false
+}
+
+@test "fsck: reports a missing working root and keeps checking the rest of the store" {
+  dolt init
+  dolt sql -q "create table t (pk int primary key);"
+  dolt commit -Am "create t"
+  dolt sql -q "insert into t values (1);"
+
+  local working_root
+  working_root="$(working_root_of "$(root_entry workingSets/heads/main)")"
+  [ -n "$working_root" ]
+  remove_chunk_from_journal "$working_root"
+
+  run dolt fsck
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "workingSets/heads/main (working root)" ]] || false
+  [[ "$output" =~ "failed to read tree $working_root" ]] || false
+  [[ "$output" =~ "Commit objects found" ]] || false
 }

@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
 const (
@@ -181,8 +182,9 @@ func benchmarkSysbenchQuery(b *testing.B, getQuery func(int) string) {
 func setupBenchmark(t *testing.B, dEnv *env.DoltEnv) (*sql.Context, *engine.SqlEngine) {
 	ctx := context.Background()
 	config := &engine.SqlEngineConfig{
-		ServerUser: "root",
-		Autocommit: true,
+		ServerUser:      "root",
+		Autocommit:      true,
+		EngineVariables: sqle.NewEngineVariables(),
 	}
 
 	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.FS, dEnv)

@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/datas"
 )
 
 var (
@@ -68,6 +69,14 @@ func doDoltBranch(ctx *sql.Context, args []string) (int, error) {
 	dbData, ok := dSess.GetDbData(ctx, dbName)
 	if !ok {
 		return 1, fmt.Errorf("Could not load database %s", dbName)
+	}
+
+	if apr.Contains(cli.OrphanFlag) {
+		for _, opt := range ap.Supported {
+			if opt.Name != cli.OrphanFlag && opt.Name != cli.ForceFlag && apr.Contains(opt.Name) {
+				return 1, fmt.Errorf("--%s cannot be used with --%s", cli.OrphanFlag, opt.Name)
+			}
+		}
 	}
 
 	var rsc doltdb.ReplicationStatusController
@@ -463,9 +472,12 @@ func createNewBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *arg
 		}
 	}
 
-	err = branch_control.CanCreateBranch(ctx, branchName)
+	err = checkCanCreateBranch(ctx, branchName, apr.Contains(cli.ForceFlag))
 	if err != nil {
 		return err
+	}
+	if apr.Contains(cli.OrphanFlag) {
+		return createOrphanBranch(ctx, dbData, branchName, startPt, apr.Contains(cli.ForceFlag), rsc)
 	}
 	err = actions.CreateBranchWithStartPt(ctx, dbData, branchName, startPt, apr.Contains(cli.ForceFlag), rsc)
 	if err != nil {
@@ -481,6 +493,50 @@ func createNewBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *arg
 	}
 
 	return nil
+}
+
+// checkCanCreateBranch returns an error if the current user may not create |branchName|, or, when |force| is set, may not
+// overwrite it.
+func checkCanCreateBranch(ctx *sql.Context, branchName string, force bool) error {
+	if err := branch_control.CanCreateBranch(ctx, branchName); err != nil {
+		return err
+	}
+	// Force can overwrite an existing branch, so it needs the permission to delete one. The check runs even if the
+	// branch does not exist: an unauthorized user could simply rerun the command without the force flag.
+	if force {
+		return branch_control.CanDeleteBranch(ctx, branchName)
+	}
+	return nil
+}
+
+// createOrphanBranch points |branchName| at a new parentless commit holding the root of |startPt|. The commit message
+// names the start point so the commit cannot hash identically to the repository's initial commit.
+func createOrphanBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], branchName, startPt string, force bool, rsc *doltdb.ReplicationStatusController) error {
+	startCommit, err := actions.ResolveNewBranchStartPt(ctx, dbData, branchName, startPt, force)
+	if err != nil {
+		return err
+	}
+	startHash, err := startCommit.HashOf()
+	if err != nil {
+		return err
+	}
+	root, err := startCommit.GetRootValue(ctx)
+	if err != nil {
+		return err
+	}
+	props, _, err := dsess.NewCommitStagedProps(ctx, fmt.Sprintf("Initialize orphan branch %s from %s", branchName, startHash.String()))
+	if err != nil {
+		return err
+	}
+	meta, err := datas.NewCommitMetaWithAuthorCommitter(props.Author, props.Committer, props.Message)
+	if err != nil {
+		return err
+	}
+	orphan, err := dbData.Ddb.CommitDanglingRoot(ctx, root, meta)
+	if err != nil {
+		return err
+	}
+	return actions.CreateBranchAtCommit(ctx, dbData.Ddb, branchName, orphan, rsc)
 }
 
 // copyBranch takes arguments from |apr| to create a branch from another branch. If |giveAdminPrivs| is true, then the
@@ -507,15 +563,8 @@ func copyBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argparse
 // copyABranch copies |srcBr| to |destBr|, forcing the copy if |force| is set, and giving branch control admin privileges
 // if |giveAdminPrivs| is set.
 func copyABranch(ctx *sql.Context, dbData env.DbData[*sql.Context], srcBr string, destBr string, force bool, giveAdminPrivs bool, rsc *doltdb.ReplicationStatusController) error {
-	if err := branch_control.CanCreateBranch(ctx, destBr); err != nil {
+	if err := checkCanCreateBranch(ctx, destBr, force); err != nil {
 		return err
-	}
-	// If force is enabled, we can overwrite the destination branch, so we require a permission check here, even if the
-	// destination branch doesn't exist. An unauthorized user could simply rerun the command without the force flag.
-	if force {
-		if err := branch_control.CanDeleteBranch(ctx, destBr); err != nil {
-			return err
-		}
 	}
 	err := actions.CopyBranchOnDB(ctx, dbData.Ddb, srcBr, destBr, force, rsc)
 	if err != nil {

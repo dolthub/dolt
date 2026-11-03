@@ -379,6 +379,21 @@ var BranchControlBlockTests = []BranchControlBlockTest{
 		ExpectedErr: branch_control.ErrCannotDeleteBranch,
 	},
 	{
+		Name:        "DOLT_BRANCH Force Create",
+		Query:       "CALL DOLT_BRANCH('-f', 'other', 'HEAD');",
+		ExpectedErr: branch_control.ErrCannotDeleteBranch,
+	},
+	{
+		Name:        "DOLT_BRANCH Force Orphan",
+		Query:       "CALL DOLT_BRANCH('--orphan', '-f', 'other');",
+		ExpectedErr: branch_control.ErrCannotDeleteBranch,
+	},
+	{
+		Name:        "DOLT_CHECKOUT Force Create",
+		Query:       "CALL DOLT_CHECKOUT('-B', 'other', 'HEAD');",
+		ExpectedErr: branch_control.ErrCannotDeleteBranch,
+	},
+	{
 		Name:        "DOLT_BRANCH Delete",
 		Query:       "CALL DOLT_BRANCH('-d', 'other');",
 		ExpectedErr: branch_control.ErrCannotDeleteBranch,
@@ -646,6 +661,42 @@ var BranchControlOtherDbBlockTests = []BranchControlBlockTest{
 }
 
 var BranchControlTests = []BranchControlTest{
+	{
+		Name: "Namespace entries block dolt_checkout from creating a branch",
+		SetUpScript: []string{
+			"DELETE FROM dolt_branch_control WHERE user = '%';",
+			"INSERT INTO dolt_branch_control VALUES ('%', '%', 'root', 'localhost', 'admin');",
+			"CREATE USER testuser@localhost;",
+			"GRANT ALL ON *.* TO testuser@localhost;",
+			"INSERT INTO dolt_branch_namespace_control VALUES ('%', 'locked%', 'root', 'localhost');",
+		},
+		Assertions: []BranchControlTestAssertion{
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "CALL DOLT_CHECKOUT('-b', 'lockedbranch');",
+				ExpectedErr: branch_control.ErrCannotCreateBranch,
+			},
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "CALL DOLT_CHECKOUT('-B', 'lockedbranch');",
+				ExpectedErr: branch_control.ErrCannotCreateBranch,
+			},
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "SELECT name FROM dolt_branches WHERE name LIKE 'locked%';",
+				Expected: []sql.Row{},
+			},
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "CALL DOLT_CHECKOUT('-b', 'openbranch');",
+				Expected: []sql.Row{{0, "Switched to branch 'openbranch'"}},
+			},
+		},
+	},
 	{
 		Name: "Namespace entries block",
 		SetUpScript: []string{

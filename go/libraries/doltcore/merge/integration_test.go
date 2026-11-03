@@ -369,10 +369,11 @@ func engineFromEnvironment(ctx context.Context, dEnv *env.DoltEnv) (dbName strin
 	}
 
 	eng, err = engine.NewSqlEngine(ctx, mrEnv, &engine.SqlEngineConfig{
-		IsReadOnly: false,
-		ServerUser: "root",
-		ServerHost: "localhost",
-		Autocommit: true,
+		IsReadOnly:      false,
+		ServerUser:      "root",
+		ServerHost:      "localhost",
+		Autocommit:      true,
+		EngineVariables: sqle.NewEngineVariables(),
 	})
 	if err != nil {
 		panic(err)

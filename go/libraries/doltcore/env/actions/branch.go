@@ -261,66 +261,85 @@ func upstreamOrHead[C doltdb.Context](ctx C, dbdata env.DbData[C], branch ref.Do
 }
 
 func CreateBranchWithStartPt[C doltdb.Context](ctx C, dbData env.DbData[C], newBranch, startPt string, force bool, rsc *doltdb.ReplicationStatusController) error {
-	err := createBranch(ctx, dbData, newBranch, startPt, force, rsc)
-
-	if err != nil {
-		if existsErr := BranchExistsError(err); existsErr != nil {
-			return existsErr
-		} else if err == doltdb.ErrInvBranchName {
-			return fmt.Errorf("fatal: '%s' is an invalid branch name.", newBranch)
-		} else if err == doltdb.ErrInvHash || doltdb.IsNotACommit(err) {
-			return fmt.Errorf("fatal: '%s' is not a commit and a branch '%s' cannot be created from it", startPt, newBranch)
-		} else {
-			return fmt.Errorf("fatal: Unexpected error creating branch '%s' : %v", newBranch, err)
-		}
-	}
-	err = branch_control.AddAdminForContext(ctx, newBranch)
+	startCommit, err := ResolveNewBranchStartPt(ctx, dbData, newBranch, startPt, force)
 	if err != nil {
 		return err
 	}
+	return CreateBranchAtCommit(ctx, dbData.Ddb, newBranch, startCommit, rsc)
+}
 
-	return nil
+// ResolveNewBranchStartPt returns the commit |startPt| names after checking that |newBranch| is a valid name and, unless
+// |force| is set, does not exist yet. Nothing is written.
+func ResolveNewBranchStartPt[C doltdb.Context](ctx C, dbData env.DbData[C], newBranch, startPt string, force bool) (*doltdb.Commit, error) {
+	headRef, err := dbData.Rsr.CWBHeadRef(ctx)
+	if err != nil {
+		return nil, newBranchError(err, newBranch)
+	}
+	startCommit, err := resolveNewBranchStartPt(ctx, dbData.Ddb, newBranch, startPt, force, headRef)
+	if err == doltdb.ErrInvHash || doltdb.IsNotACommit(err) {
+		return nil, fmt.Errorf("fatal: '%s' is not a commit and a branch '%s' cannot be created from it", startPt, newBranch)
+	} else if err != nil {
+		return nil, newBranchError(err, newBranch)
+	}
+	return startCommit, nil
+}
+
+// CreateBranchAtCommit points |newBranch| at |commit| and makes the current user an admin of the branch.
+func CreateBranchAtCommit[C doltdb.Context](ctx C, ddb *doltdb.DoltDB, newBranch string, commit *doltdb.Commit, rsc *doltdb.ReplicationStatusController) error {
+	err := ddb.NewBranchAtCommit(ctx, ref.NewBranchRef(newBranch), commit, rsc)
+	if err != nil {
+		return newBranchError(err, newBranch)
+	}
+	return branch_control.AddAdminForContext(ctx, newBranch)
+}
+
+func newBranchError(err error, newBranch string) error {
+	if existsErr := BranchExistsError(err); existsErr != nil {
+		return existsErr
+	} else if err == doltdb.ErrInvBranchName {
+		return fmt.Errorf("fatal: '%s' is an invalid branch name.", newBranch)
+	}
+	return fmt.Errorf("fatal: Unexpected error creating branch '%s' : %v", newBranch, err)
 }
 
 func CreateBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, newBranch, startingPoint string, force bool, headRef ref.DoltRef, rsc *doltdb.ReplicationStatusController) error {
-	branchRef := ref.NewBranchRef(newBranch)
-	hasRef, err := ddb.HasRef(ctx, branchRef)
+	cm, err := resolveNewBranchStartPt(ctx, ddb, newBranch, startingPoint, force, headRef)
 	if err != nil {
 		return err
 	}
+	return ddb.NewBranchAtCommit(ctx, ref.NewBranchRef(newBranch), cm, rsc)
+}
+
+func resolveNewBranchStartPt(ctx context.Context, ddb *doltdb.DoltDB, newBranch, startingPoint string, force bool, headRef ref.DoltRef) (*doltdb.Commit, error) {
+	branchRef := ref.NewBranchRef(newBranch)
+	hasRef, err := ddb.HasRef(ctx, branchRef)
+	if err != nil {
+		return nil, err
+	}
 
 	if !force && hasRef {
-		return &doltdb.ExistingRefError{Ref: branchRef}
+		return nil, &doltdb.ExistingRefError{Ref: branchRef}
 	}
 
 	if !doltdb.IsValidUserBranchName(newBranch) {
-		return doltdb.ErrInvBranchName
+		return nil, doltdb.ErrInvBranchName
 	}
 
 	cs, err := doltdb.NewCommitSpec(startingPoint)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	optCmt, err := ddb.Resolve(ctx, cs, headRef)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	cm, ok := optCmt.ToCommit()
 	if !ok {
-		return doltdb.ErrGhostCommitEncountered
+		return nil, doltdb.ErrGhostCommitEncountered
 	}
-
-	return ddb.NewBranchAtCommit(ctx, branchRef, cm, rsc)
-}
-
-func createBranch[C doltdb.Context](ctx C, dbData env.DbData[C], newBranch, startingPoint string, force bool, rsc *doltdb.ReplicationStatusController) error {
-	headRef, err := dbData.Rsr.CWBHeadRef(ctx)
-	if err != nil {
-		return err
-	}
-	return CreateBranchOnDB(ctx, dbData.Ddb, newBranch, startingPoint, force, headRef, rsc)
+	return cm, nil
 }
 
 var emptyHash = hash.Hash{}

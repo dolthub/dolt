@@ -950,6 +950,58 @@ seed_and_start_complex_remote() {
 
 
 
+@test "shallow-clone: fsck passes" {
+    seed_and_start_serial_remote
+
+    mkdir clones
+    cd clones
+
+    dolt clone --depth 1 http://localhost:50051/test-org/test-repo depth1
+    cd depth1
+
+    run dolt fsck
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No problems found." ]] || false
+
+    dolt sql -q "insert into vals (i,s) values (6, 'val 6')"
+    dolt commit -a -m "Added Val: 6"
+
+    run dolt fsck
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No problems found." ]] || false
+    cd ..
+
+    dolt clone --depth 3 http://localhost:50051/test-org/test-repo depth3
+    cd depth3
+
+    run dolt fsck
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No problems found." ]] || false
+}
+
+@test "shallow-clone: fsck passes with a rebase in progress" {
+    seed_and_start_serial_remote
+
+    mkdir clones
+    cd clones
+
+    dolt clone --depth 2 http://localhost:50051/test-org/test-repo
+    cd test-repo
+
+    dolt sql <<SQL
+CALL dolt_checkout('-b', 'feat');
+INSERT INTO vals VALUES (6, 'val 6');
+CALL dolt_commit('-am', 'Added Val: 6');
+SQL
+    dolt sql -q "insert into vals (i,s) values (7, 'val 7')"
+    dolt commit -a -m "Added Val: 7"
+    dolt sql -q "CALL dolt_checkout('feat'); CALL dolt_rebase('-i', 'main');"
+
+    run dolt fsck
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No problems found." ]] || false
+}
+
 # Tests to write:
 # - Fetch after initial clone
 #   - Fetch when no changes have happened.

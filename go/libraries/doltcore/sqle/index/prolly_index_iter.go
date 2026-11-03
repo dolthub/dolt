@@ -18,6 +18,7 @@ import (
 	"context"
 	"io"
 
+	"github.com/dolthub/go-mysql-server/errguard"
 	"github.com/dolthub/go-mysql-server/sql"
 	"golang.org/x/sync/errgroup"
 
@@ -387,6 +388,9 @@ type prollyKeylessIndexIter struct {
 	valueMap val.OrdinalMapping
 	ordMap   val.OrdinalMapping
 	sqlSch   sql.Schema
+	// projections are the column tags of the output rows. They may include
+	// virtual columns, which have an output ordinal but no stored value.
+	projections []uint64
 
 	card uint64
 	curr sql.ValueRow
@@ -435,9 +439,10 @@ func newProllyKeylessIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range
 		ordMap:       om,
 		valueDesc:    valDesc,
 		sqlSch:       pkSch.Schema,
+		projections:  projections,
 	}
 
-	eg.Go(func() error {
+	errguard.Go(eg, func() error {
 		return iter.queueRows(c)
 	})
 
@@ -503,7 +508,7 @@ func (p prollyKeylessIndexIter) queueRows(ctx context.Context) error {
 func (p prollyKeylessIndexIter) keylessRowsFromValueTuple(ctx context.Context, ns tree.NodeStore, value val.Tuple) (rows []sql.Row, err error) {
 	card := val.ReadKeylessCardinality(value)
 	rows = make([]sql.Row, card)
-	rows[0] = make(sql.Row, len(p.valueMap))
+	rows[0] = make(sql.Row, len(p.projections))
 
 	for i, idx := range p.valueMap {
 		outputIdx := p.ordMap[i]
