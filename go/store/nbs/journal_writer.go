@@ -610,6 +610,9 @@ func (wr *journalWriter) flushIndexRecord(ctx context.Context, root hash.Hash, e
 
 // readAt reads len(p) bytes from the journal at offset |off|.
 func (wr *journalWriter) readAt(p []byte, off int64) (n int, err error) {
+	if off < 0 {
+		return 0, fmt.Errorf("journal read at negative offset %d", off)
+	}
 	var bp []byte
 	if off < wr.off {
 		// fill some or all of |p| from |wr.file|
