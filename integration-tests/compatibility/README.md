@@ -17,8 +17,8 @@ initialization and don't rely on the `setup_repo.sh`. Forward compatibility is t
 for these tests (fewer versions are forward compatible at any given time), so that's the versions we
 do bidirectional testing against.
 
-Finally, there are tests for data that older clients can't read, which also do their own initialization.
-`test_files/bats/rebase_plan` checks that the current client can use a rebase left in progress by each version in
+Finally, there are tests for data that older versions can't read, which also do their own initialization.
+`test_files/bats/rebase_plan` checks that the current version can use a rebase left in progress by each version in
 `test_files/backward_compatible_versions.txt`. `test_files/bats/rebase_plan_breaking` checks that versions in
-`test_files/2_0_forward_compatible_versions.txt` fail with a clear error on a rebase plan from the current client, and
+`test_files/2_0_forward_compatible_versions.txt` fail with a clear error on a rebase plan from the current version, and
 are unaffected otherwise.

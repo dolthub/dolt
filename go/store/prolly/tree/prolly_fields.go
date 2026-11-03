@@ -872,7 +872,11 @@ func convJson(ctx context.Context, v interface{}) (res sql.JSONWrapper, err erro
 func commitAddrFromField(ctx context.Context, ns NodeStore, v interface{}) (hash.Hash, error) {
 	s, ok := v.(string)
 	if !ok {
-		return v.(hash.Hash), nil
+		h, ok := v.(hash.Hash)
+		if !ok {
+			return hash.Hash{}, fmt.Errorf("expected string or hash.Hash, got %T", v)
+		}
+		return h, nil
 	}
 	h, ok := hash.MaybeParse(s)
 	if !ok {

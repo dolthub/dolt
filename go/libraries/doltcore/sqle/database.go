@@ -3251,14 +3251,14 @@ func convertRebasePlanStepToRow(planMember rebase.RebasePlanStep) (sql.Row, erro
 	}, nil
 }
 
-// SaveRebasePlan implements the rebase.RebasePlanDatabase interface
-// storeRebaseCommitsAsAddresses returns |sch| with the commit hashes of a rebase plan stored as commit addresses, so
-// that the plan keeps its commits reachable. Commits in the plan may not be reachable from anything else, since a plan
-// can be edited and the branch being rebased can change while the rebase is paused. Columns that aren't plain strings,
-// which are the integrator-defined types of Doltgres, are left as they are.
+// storeRebaseCommitsAsAddresses is applied to the schema of the dolt_rebase table when a plan is saved. It stores the
+// commit_hash column as commit addresses, so that garbage collection keeps every commit the plan names. Those commits
+// can be unreachable from any branch while the rebase is paused, because the plan can be edited and the branch being
+// rebased can be changed.
 func storeRebaseCommitsAsAddresses(sch schema.Schema) (schema.Schema, error) {
 	cols := sch.GetAllCols().GetColumns()
 	for i := range cols {
+		// Only a plain string column can be stored as commit addresses.
 		if cols[i].Name == dprocedures.RebaseCommitHashColumn && cols[i].TypeInfo.Encoding() == val.StringEnc {
 			cols[i].TypeInfo = cols[i].TypeInfo.WithEncoding(val.CommitAddrEnc)
 		}
@@ -3266,6 +3266,7 @@ func storeRebaseCommitsAsAddresses(sch schema.Schema) (schema.Schema, error) {
 	return schema.NewSchema(schema.NewColCollection(cols...), sch.GetPkOrdinals(), sch.GetCollation(), sch.Indexes(), sch.Checks())
 }
 
+// SaveRebasePlan implements the rebase.RebasePlanDatabase interface
 func (db Database) SaveRebasePlan(ctx *sql.Context, plan *rebase.RebasePlan) error {
 	if resolve.UseSearchPath {
 		db.schemaName = doltdb.DoltNamespace

@@ -1,11 +1,10 @@
 #!/usr/bin/env bats
-# Rebase plan backward compatibility tests: an in-progress rebase started by an older dolt client must work in the
-# current client.
+# Rebase plan backward compatibility tests: a rebase left in progress by an older version of dolt must work with the
+# current version.
 #
-# Older clients store the commit hashes of the dolt_rebase table as text. The current client stores new plans as commit
-# addresses, but a plan is never migrated, so these tests cover the current client using a plan in the older format.
-#
-# Each test creates an isolated repository, so REPO_DIR just needs to be a clean scratch space.
+# Older versions store the commit hashes of the dolt_rebase table as text. The current version stores new plans as
+# commit addresses, but a plan is never migrated, so these tests cover the current version using a plan in the older
+# format.
 
 setup() {
     bats_load_library common.bash
@@ -22,7 +21,8 @@ teardown() {
     rm -rf bats_repo
 }
 
-# start_rebase_with_old_dolt leaves a rebase of branch feat, which adds commits b and c, onto main in progress.
+# start_rebase_with_old_dolt leaves an interactive rebase of branch feat onto main in progress. feat has two commits
+# that main doesn't, with messages "b" and "c", and main has one that feat doesn't, with message "d".
 start_rebase_with_old_dolt() {
     old_dolt init
     old_dolt sql <<SQL
@@ -42,7 +42,7 @@ CALL dolt_rebase('-i', 'main');
 SQL
 }
 
-@test "rebase_plan: current client reads a plan from an older client" {
+@test "rebase_plan: current version reads a plan from an older version" {
     start_rebase_with_old_dolt
     expected=$(old_dolt sql -r csv -q "CALL dolt_checkout('dolt_rebase_feat'); SELECT * FROM dolt_rebase ORDER BY rebase_order;")
 
@@ -62,7 +62,7 @@ SQL
     [[ "$output" =~ "0" ]] || false
 }
 
-@test "rebase_plan: current client finishes a rebase started by an older client" {
+@test "rebase_plan: current version finishes a rebase started by an older version" {
     start_rebase_with_old_dolt
 
     run new_dolt sql -q "CALL dolt_checkout('dolt_rebase_feat'); CALL dolt_rebase('--continue');"
@@ -79,7 +79,7 @@ SQL
     [[ ! "$output" =~ "dolt_rebase_feat" ]] || false
 }
 
-@test "rebase_plan: current client edits a plan from an older client" {
+@test "rebase_plan: current version edits a plan from an older version" {
     start_rebase_with_old_dolt
 
     run new_dolt sql -q "CALL dolt_checkout('dolt_rebase_feat'); UPDATE dolt_rebase SET action = 'drop' WHERE commit_message = 'b'; UPDATE dolt_rebase SET action = 'reword', commit_message = 'c2' WHERE commit_message = 'c'; CALL dolt_rebase('--continue');"
@@ -93,7 +93,7 @@ SQL
     [[ "$output" =~ "0" ]] || false
 }
 
-@test "rebase_plan: current client aborts a rebase started by an older client" {
+@test "rebase_plan: current version aborts a rebase started by an older version" {
     start_rebase_with_old_dolt
 
     run new_dolt sql -q "CALL dolt_checkout('dolt_rebase_feat'); CALL dolt_rebase('--abort');"
@@ -107,7 +107,7 @@ SQL
     [[ ! "$output" =~ "dolt_rebase_feat" ]] || false
 }
 
-@test "rebase_plan: current client finishes a rebase that an older client paused on a conflict" {
+@test "rebase_plan: current version finishes a rebase that an older version paused on a conflict" {
     old_dolt init
     old_dolt sql <<SQL
 CREATE TABLE t (pk INT NOT NULL PRIMARY KEY, v INT);
@@ -135,7 +135,7 @@ SQL
     [[ "$output" =~ "10" ]] || false
 }
 
-@test "rebase_plan: current client garbage collects a plan from an older client" {
+@test "rebase_plan: current version garbage collects a plan from an older version" {
     start_rebase_with_old_dolt
 
     run new_dolt gc

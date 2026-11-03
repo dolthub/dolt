@@ -24,11 +24,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// rebasePlanHarness runs queries against an engine with a rebase of feat, which adds commits b and c, onto main.
+// rebasePlanHarness runs queries against an engine with an interactive rebase of branch feat onto main in progress.
+// feat has two commits on top of main, with messages "b" and "c", so the plan has a step for each of them.
 type rebasePlanHarness struct {
-	h        *DoltHarness
-	e        enginetest.QueryEngine
-	rebasing *sql.Context
+	h *DoltHarness
+	e enginetest.QueryEngine
+	// planSession is the session that started the rebase. It has the rebase branch checked out, so it can read and
+	// edit the plan in dolt_rebase.
+	planSession *sql.Context
 }
 
 func newRebasePlanHarness(t *testing.T) *rebasePlanHarness {
@@ -38,7 +41,7 @@ func newRebasePlanHarness(t *testing.T) *rebasePlanHarness {
 	e := mustNewEngine(t, h)
 	t.Cleanup(func() { e.Close() })
 
-	r := &rebasePlanHarness{h: h, e: e, rebasing: enginetest.NewContext(h)}
+	r := &rebasePlanHarness{h: h, e: e, planSession: enginetest.NewContext(h)}
 	for _, q := range []string{
 		"CREATE TABLE t (pk INT PRIMARY KEY);",
 		"CALL DOLT_COMMIT('-Am', 'a');",
@@ -49,7 +52,7 @@ func newRebasePlanHarness(t *testing.T) *rebasePlanHarness {
 		"CALL DOLT_COMMIT('-am', 'c');",
 		"CALL DOLT_REBASE('-i', 'main');",
 	} {
-		r.run(t, r.rebasing, q)
+		r.run(t, r.planSession, q)
 	}
 	return r
 }
@@ -85,7 +88,8 @@ func TestRebasePlanCommitsSurviveGC(t *testing.T) {
 	}
 	for _, test := range []struct {
 		name string
-		// leave makes the plan's commits unreachable from any branch.
+		// leave edits the plan, the branches, or both, so that some commit named by the plan is reachable only
+		// through the plan.
 		leave func(t *testing.T, r *rebasePlanHarness)
 		// expected is the number of rows in t on feat when the rebase is done.
 		expected int64
@@ -98,7 +102,7 @@ func TestRebasePlanCommitsSurviveGC(t *testing.T) {
 		{
 			name: "commit of a dropped step",
 			leave: func(t *testing.T, r *rebasePlanHarness) {
-				r.run(t, r.rebasing, "UPDATE dolt_rebase SET action = 'drop' WHERE commit_message = 'c';")
+				r.run(t, r.planSession, "UPDATE dolt_rebase SET action = 'drop' WHERE commit_message = 'c';")
 				amendTip(t, r)
 			},
 			expected: 1,
@@ -106,8 +110,8 @@ func TestRebasePlanCommitsSurviveGC(t *testing.T) {
 		{
 			name: "commit of a step that already ran",
 			leave: func(t *testing.T, r *rebasePlanHarness) {
-				r.run(t, r.rebasing, "UPDATE dolt_rebase SET action = 'edit' WHERE commit_message = 'c';")
-				r.run(t, r.rebasing, "CALL DOLT_REBASE('--continue');")
+				r.run(t, r.planSession, "UPDATE dolt_rebase SET action = 'edit' WHERE commit_message = 'c';")
+				r.run(t, r.planSession, "CALL DOLT_REBASE('--continue');")
 				amendTip(t, r)
 			},
 			expected: 2,
@@ -119,7 +123,7 @@ func TestRebasePlanCommitsSurviveGC(t *testing.T) {
 				r.run(t, other, "CALL DOLT_CHECKOUT('-b', 'other');")
 				r.run(t, other, "INSERT INTO t VALUES (9);")
 				added := r.run(t, other, "CALL DOLT_COMMIT('-am', 'added');")[0][0].(string)
-				r.run(t, r.rebasing, "INSERT INTO dolt_rebase VALUES (3.00, 'pick', '"+added+"', 'added');")
+				r.run(t, r.planSession, "INSERT INTO dolt_rebase VALUES (3.00, 'pick', '"+added+"', 'added');")
 				r.run(t, r.session(t, ""), "CALL DOLT_BRANCH('-D', 'other');")
 			},
 			expected: 3,
@@ -142,7 +146,7 @@ func TestRebasePlanCommitsSurviveGC(t *testing.T) {
 // rejected write doesn't reach the chunk store, where a dangling address fails every session sharing the memtable.
 func TestRebasePlanRejectsInvalidCommits(t *testing.T) {
 	r := newRebasePlanHarness(t)
-	table := r.run(t, r.rebasing, "SELECT dolt_hashof_table('t');")[0][0].(string)
+	table := r.run(t, r.planSession, "SELECT dolt_hashof_table('t');")[0][0].(string)
 	for _, test := range []struct {
 		name     string
 		hash     string
@@ -161,9 +165,9 @@ func TestRebasePlanRejectsInvalidCommits(t *testing.T) {
 			r.run(t, bystander, "SET @@autocommit = 0;")
 			r.run(t, bystander, "INSERT INTO t VALUES (100);")
 
-			_, err := r.query(r.rebasing, "UPDATE dolt_rebase SET commit_hash = '"+test.hash+"' WHERE rebase_order = 1;")
+			_, err := r.query(r.planSession, "UPDATE dolt_rebase SET commit_hash = '"+test.hash+"' WHERE rebase_order = 1;")
 			require.ErrorContains(t, err, test.expected)
-			_, err = r.query(r.rebasing, "INSERT INTO dolt_rebase VALUES (5.00, 'pick', '"+test.hash+"', 'bad');")
+			_, err = r.query(r.planSession, "INSERT INTO dolt_rebase VALUES (5.00, 'pick', '"+test.hash+"', 'bad');")
 			require.ErrorContains(t, err, test.expected)
 
 			r.run(t, bystander, "COMMIT;")
@@ -172,9 +176,9 @@ func TestRebasePlanRejectsInvalidCommits(t *testing.T) {
 		})
 	}
 
-	assert.Equal(t, []sql.Row{{int64(2)}}, r.run(t, r.rebasing, "SELECT count(*) FROM dolt_rebase;"))
-	r.run(t, r.rebasing, "CALL DOLT_REBASE('--continue');")
-	assert.Equal(t, []sql.Row{{int64(2)}}, r.run(t, r.rebasing, "SELECT count(*) FROM t;"))
+	assert.Equal(t, []sql.Row{{int64(2)}}, r.run(t, r.planSession, "SELECT count(*) FROM dolt_rebase;"))
+	r.run(t, r.planSession, "CALL DOLT_REBASE('--continue');")
+	assert.Equal(t, []sql.Row{{int64(2)}}, r.run(t, r.planSession, "SELECT count(*) FROM t;"))
 }
 
 // TestRebasePlanHashesAreStrings checks that the commit addresses of a plan behave as the strings they replaced.
@@ -182,10 +186,10 @@ func TestRebasePlanHashesAreStrings(t *testing.T) {
 	r := newRebasePlanHarness(t)
 	b := r.run(t, r.session(t, "feat"), "SELECT commit_hash FROM dolt_log WHERE message = 'b';")[0][0].(string)
 	assert.Equal(t, []sql.Row{{b, "b"}},
-		r.run(t, r.rebasing, "SELECT commit_hash, commit_message FROM dolt_rebase WHERE commit_hash = '"+b+"';"))
-	assert.Equal(t, []sql.Row{{int32(32)}}, r.run(t, r.rebasing, "SELECT length(commit_hash) FROM dolt_rebase LIMIT 1;"))
-	r.run(t, r.rebasing, "UPDATE dolt_rebase SET commit_message = 'b2' WHERE commit_hash = '"+b+"';")
-	assert.Equal(t, []sql.Row{{b}}, r.run(t, r.rebasing, "SELECT commit_hash FROM dolt_rebase WHERE commit_message = 'b2';"))
+		r.run(t, r.planSession, "SELECT commit_hash, commit_message FROM dolt_rebase WHERE commit_hash = '"+b+"';"))
+	assert.Equal(t, []sql.Row{{int32(32)}}, r.run(t, r.planSession, "SELECT length(commit_hash) FROM dolt_rebase LIMIT 1;"))
+	r.run(t, r.planSession, "UPDATE dolt_rebase SET commit_message = 'b2' WHERE commit_hash = '"+b+"';")
+	assert.Equal(t, []sql.Row{{b}}, r.run(t, r.planSession, "SELECT commit_hash FROM dolt_rebase WHERE commit_message = 'b2';"))
 }
 
 // TestRebasePlanSchemaCannotChange checks that the table can't be altered. Encodings aren't considered when deciding
@@ -197,10 +201,10 @@ func TestRebasePlanSchemaCannotChange(t *testing.T) {
 		"ALTER TABLE dolt_rebase MODIFY COLUMN commit_hash TEXT NOT NULL;",
 		"ALTER TABLE dolt_rebase ADD COLUMN extra INT;",
 	} {
-		_, err := r.query(r.rebasing, q)
+		_, err := r.query(r.planSession, q)
 		assert.ErrorContains(t, err, "cannot be altered", q)
 	}
-	_, err := r.query(r.rebasing, "CREATE INDEX idx ON dolt_rebase (commit_hash);")
+	_, err := r.query(r.planSession, "CREATE INDEX idx ON dolt_rebase (commit_hash);")
 	assert.ErrorContains(t, err, "not indexable")
 }
 

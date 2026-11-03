@@ -94,7 +94,7 @@ func (ti *varStringType) Encoding() val.Encoding {
 
 // WithEncoding implements TypeInfo interface.
 func (ti *varStringType) WithEncoding(enc val.Encoding) TypeInfo {
-	// CommitAddrEnc stores the commit hashes of a dolt_rebase plan as addresses, so that they are walked as references.
+	// With CommitAddrEnc, values are the string form of a commit hash, stored as the commit's address.
 	if enc != val.StringEnc && enc != val.CommitAddrEnc {
 		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
 	}

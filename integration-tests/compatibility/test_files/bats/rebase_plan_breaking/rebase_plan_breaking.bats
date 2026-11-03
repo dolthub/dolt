@@ -1,11 +1,9 @@
 #!/usr/bin/env bats
-# Rebase plan forward compatibility tests: verify that older dolt clients fail with a clear error when reading a plan
-# from the current client, which stores the commit hashes of the dolt_rebase table as commit addresses.
+# Rebase plan forward compatibility tests: verify that older versions of dolt fail with a clear error when reading a
+# plan from the current version, which stores the commit hashes of the dolt_rebase table as commit addresses.
 #
-# Those columns are written with a new field of the column schema message, and older clients reject schemas with fields
-# they don't know with "table has unknown fields". Only the plan is affected, and it only exists during a rebase.
-#
-# Each test creates an isolated repository, so REPO_DIR just needs to be a clean scratch space.
+# Those columns are written with a new field of the column schema message, and older versions reject schemas with
+# fields they don't know with "table has unknown fields". Only the plan is affected, and it only exists during a rebase.
 
 setup() {
     bats_load_library common.bash
@@ -21,7 +19,8 @@ teardown() {
     rm -rf bats_repo
 }
 
-# start_rebase_with_new_dolt leaves a rebase of branch feat, which adds commits b and c, onto main in progress.
+# start_rebase_with_new_dolt leaves an interactive rebase of branch feat onto main in progress. feat has two commits
+# that main doesn't, with messages "b" and "c", and main has one that feat doesn't, with message "d".
 start_rebase_with_new_dolt() {
     new_dolt init
     new_dolt sql <<SQL
@@ -41,7 +40,7 @@ CALL dolt_rebase('-i', 'main');
 SQL
 }
 
-@test "rebase_plan_breaking: old client fails reading a plan from the current client" {
+@test "rebase_plan_breaking: old version fails reading a plan from the current version" {
     start_rebase_with_new_dolt
 
     run old_dolt sql -q "CALL dolt_checkout('dolt_rebase_feat'); SELECT * FROM dolt_rebase;"
@@ -51,7 +50,7 @@ SQL
     [[ ! "$output" =~ "goroutine" ]] || false
 }
 
-@test "rebase_plan_breaking: old client fails continuing a rebase, which the current client can still finish" {
+@test "rebase_plan_breaking: old version fails continuing a rebase, which the current version can still finish" {
     start_rebase_with_new_dolt
 
     run old_dolt sql -q "CALL dolt_checkout('dolt_rebase_feat'); CALL dolt_rebase('--continue');"
@@ -64,7 +63,7 @@ SQL
     [[ "$output" =~ "Successfully rebased" ]] || false
 }
 
-@test "rebase_plan_breaking: old client can still use other branches during a rebase" {
+@test "rebase_plan_breaking: old version can still use other branches during a rebase" {
     start_rebase_with_new_dolt
 
     run old_dolt sql -r csv -q "SELECT count(*) FROM t;"
@@ -81,7 +80,7 @@ SQL
     [[ ! "$output" =~ "goroutine" ]] || false
 }
 
-@test "rebase_plan_breaking: old client garbage collection keeps the commits of a plan" {
+@test "rebase_plan_breaking: old version garbage collection keeps the commits of a plan" {
     start_rebase_with_new_dolt
 
     # Rewriting the branch leaves the commit of the last plan step reachable only through the plan.
@@ -97,7 +96,7 @@ SQL
     [[ "$output" =~ "Successfully rebased" ]] || false
 }
 
-@test "rebase_plan_breaking: old client reads the repository once the rebase is finished" {
+@test "rebase_plan_breaking: old version reads the repository once the rebase is finished" {
     start_rebase_with_new_dolt
 
     run new_dolt sql -q "CALL dolt_checkout('dolt_rebase_feat'); CALL dolt_rebase('--continue');"
