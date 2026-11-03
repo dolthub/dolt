@@ -17,6 +17,7 @@ package sqle
 import (
 	"fmt"
 	"io"
+	"math"
 	"strings"
 	"time"
 
@@ -517,6 +518,7 @@ func loadDefaultSqlMode(ctx *sql.Context) (string, error) {
 	return s, nil
 }
 
+// getCreatedTime reads schema timestamps from integer and legacy double JSON values.
 func getCreatedTime(ctx *sql.Context, extraCol sql.JSONWrapper) (int64, error) {
 	doc, err := extraCol.ToInterface(ctx)
 	if err != nil {
@@ -535,9 +537,17 @@ func getCreatedTime(ctx *sql.Context, extraCol sql.JSONWrapper) (int64, error) {
 		return 0, err
 	}
 
-	f, ok := v.(float64)
-	if !ok {
-		return 0, err
+	switch value := v.(type) {
+	case int64:
+		return value, nil
+	case uint64:
+		if value <= math.MaxInt64 {
+			return int64(value), nil
+		}
+	case float64:
+		if value >= math.MinInt64 && value < 1<<63 {
+			return int64(value), nil
+		}
 	}
-	return int64(f), nil
+	return 0, err
 }

@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"io"
+	"math"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -149,4 +150,32 @@ func TestV1SchemasTable(t *testing.T) {
 	// modified dolt_schemas table.
 	require.Equal(t, 5, len(wrapper.backingTable.Schema(sqlCtx)))
 
+}
+
+// TestCreatedTimeJSONNumberKinds covers legacy doubles and type-preserving JSON values.
+func TestCreatedTimeJSONNumberKinds(t *testing.T) {
+	ctx := sql.NewEmptyContext()
+	for _, tt := range []struct {
+		name  string
+		value any
+		want  int64
+	}{
+		{"legacy double", float64(42), 42},
+		{"legacy fraction", 42.75, 42},
+		{"signed", int64(42), 42},
+		{"unsigned", uint64(1 << 32), 1 << 32},
+		{"minimum", int64(math.MinInt64), math.MinInt64},
+		{"maximum", uint64(math.MaxInt64), math.MaxInt64},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			doc := gmstypes.JSONDocument{Val: map[string]any{"CreatedAt": tt.value}}
+			got, err := getCreatedTime(ctx, doc)
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+		})
+	}
+	for _, value := range []any{nil, "42", uint64(math.MaxUint64), float64(1 << 63), math.NaN(), math.Inf(-1), math.Inf(1)} {
+		_, err := getCreatedTime(ctx, gmstypes.JSONDocument{Val: map[string]any{"CreatedAt": value}})
+		require.Error(t, err, "CreatedAt=%v (%T)", value, value)
+	}
 }

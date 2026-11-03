@@ -61,7 +61,7 @@ func TestJSONLWriterViaHeaderConfig(t *testing.T) {
 	require.NoError(t, wr.Close(context.Background()))
 
 	out := buf.String()
-	require.True(t, strings.HasSuffix(out, "\n"))
+	require.Equal(t, "{\"id\":0,\"payload\":{\"a\":1}}\n{\"id\":1,\"payload\":[1,2]}\n", out)
 
 	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
 	require.Len(t, lines, 2)
