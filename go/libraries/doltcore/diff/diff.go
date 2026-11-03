@@ -72,8 +72,9 @@ type SchemaDiffWriter interface {
 	Close() error
 }
 
-// ValuesEqual reports whether two values are equal for a diff.
-// It compares text exactly and uses the SQL type for other values.
+// ValuesEqual compares text exactly to detect changes ignored by collations.
+// It uses |typ| for other values and avoids loading text with matching content
+// addresses.
 func ValuesEqual(ctx *sql.Context, typ sql.Type, fromValue, toValue interface{}) (bool, error) {
 	if types.IsTextOnly(typ) && fromValue != nil && toValue != nil {
 		fromStorage, fromIsStorage := fromValue.(*val.TextStorage)
