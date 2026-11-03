@@ -19,6 +19,8 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
+
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // ChangeType is an enum that represents the type of change in a diff
@@ -74,6 +76,11 @@ type SchemaDiffWriter interface {
 // It compares text exactly and uses the SQL type for other values.
 func ValuesEqual(ctx *sql.Context, typ sql.Type, fromValue, toValue interface{}) (bool, error) {
 	if types.IsTextOnly(typ) && fromValue != nil && toValue != nil {
+		fromStorage, fromIsStorage := fromValue.(*val.TextStorage)
+		toStorage, toIsStorage := toValue.(*val.TextStorage)
+		if fromIsStorage && toIsStorage && fromStorage.Addr == toStorage.Addr {
+			return true, nil
+		}
 		fromText, fromOK, err := sql.Unwrap[string](ctx, fromValue)
 		if err != nil {
 			return false, err
