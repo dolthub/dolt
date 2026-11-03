@@ -410,6 +410,19 @@ func TestJournalIndexBootstrap(t *testing.T) {
 // garbage, or with garbage spliced into the middle. In all of those cases the
 // journal must still bootstrap successfully by rebuilding its state from the
 // journal file directly, which has its own per-record checksums.
+// The index batch checksum covers only addresses, so reads must reject a corrupt range rather than panic.
+func TestJournalWriterReadCorruptRange(t *testing.T) {
+	j := newTestJournalWriter(t, newTestFilePath(t))
+	for _, cc := range randomCompressedChunks(1) {
+		require.NoError(t, j.writeCompressedChunk(context.Background(), dherrors.FatalBehaviorError, cc))
+		r, _ := j.ranges.get(cc.H)
+		_, err := j.getCompressedChunkAtRange(Range{Offset: r.Offset, Length: 2}, cc.H)
+		require.Error(t, err)
+		_, err = j.getCompressedChunkAtRange(Range{Offset: 1 << 40, Length: r.Length}, cc.H)
+		require.Error(t, err)
+	}
+}
+
 func TestJournalIndexCorruptionRecovery(t *testing.T) {
 	// writeIndexedJournal writes a journal with |indexed| flushed index records
 	// followed by a final un-indexed ("novel") epoch, then closes it. It returns
