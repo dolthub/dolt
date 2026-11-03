@@ -4275,6 +4275,23 @@ var DoltBranchScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "dolt_branch --orphan uses the session committer",
+		SetUpScript: []string{
+			"set @@dolt_committer_name = 'Expected Committer';",
+			"set @@dolt_committer_email = 'committer@example.com';",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_branch('--orphan', 'orph');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select committer, email from dolt_log('orph');",
+				Expected: []sql.Row{{"Expected Committer", "committer@example.com"}},
+			},
+		},
+	},
+	{
 		Name: "dolt_branch --orphan argument errors",
 		Assertions: []queries.ScriptTestAssertion{
 			{

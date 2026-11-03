@@ -517,11 +517,11 @@ func createOrphanBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], branc
 	if err != nil {
 		return err
 	}
-	name, email, _, _, err := dsess.ResolveNameEmail(ctx, dsess.DoltAuthorName, dsess.DoltAuthorEmail)
+	props, _, err := dsess.NewCommitStagedProps(ctx, fmt.Sprintf("Initialize orphan branch %s from %s", branchName, startHash.String()))
 	if err != nil {
 		return err
 	}
-	meta, err := datas.NewCommitMeta(name, email, fmt.Sprintf("Initialize orphan branch %s from %s", branchName, startHash.String()))
+	meta, err := datas.NewCommitMetaWithAuthorCommitter(props.Author, props.Committer, props.Message)
 	if err != nil {
 		return err
 	}

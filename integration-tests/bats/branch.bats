@@ -823,6 +823,14 @@ setup_origin_remote() {
     [[ "$output" =~ "No tables" ]] || false
 }
 
+@test "branch: --orphan uses the committer from the environment" {
+    DOLT_COMMITTER_NAME="Env Committer" DOLT_COMMITTER_EMAIL="env@example.com" dolt branch --orphan orph
+
+    run dolt sql -q "select committer, email from dolt_log('orph')" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Env Committer,env@example.com" ]] || false
+}
+
 @test "branch: --orphan argument errors" {
     run dolt branch --orphan
     [ "$status" -ne 0 ]
