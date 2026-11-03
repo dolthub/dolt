@@ -7384,7 +7384,7 @@ var QueryDiffTableScriptTests = []queries.ScriptTest{
 	},
 	{
 		// https://github.com/dolthub/dolt/issues/12262
-		Name: "case-only text changes under case-insensitive collation and NULL transitions",
+		Name: "case-only text changes under case-insensitive collation and decimal NULL transitions are modified",
 		SetUpScript: []string{
 			`CREATE TABLE t (
 				id INT PRIMARY KEY,
@@ -7421,7 +7421,7 @@ var QueryDiffTableScriptTests = []queries.ScriptTest{
 	},
 	{
 		// https://github.com/dolthub/dolt/issues/12262
-		Name: "unchanged values alongside a modified integer",
+		Name: "rows with equal decimal, json, out-of-band text, varbinary, binary, and blob values are not reported as modified",
 		SetUpScript: []string{
 			`CREATE TABLE t (
 				id INT PRIMARY KEY,

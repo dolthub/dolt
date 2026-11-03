@@ -118,7 +118,10 @@ func mapQuerySchemaToTargetSchema(query, target sql.Schema) (mapping []int, err 
 	return
 }
 
-// SplitDiffResultRow separates a diff result into old and new rows.
+// SplitDiffResultRow splits |row| from a diff query into its old and new rows.
+// The query returns the old columns, then the new columns, then the diff type.
+// A modified row marks a column changed only when ValuesEqual reports that its
+// old and new values differ.
 func (ds DiffSplitter) SplitDiffResultRow(ctx *sql.Context, row sql.Row) (from, to RowDiff, err error) {
 	from = RowDiff{ColDiffs: make([]ChangeType, len(ds.targetSch))}
 	to = RowDiff{ColDiffs: make([]ChangeType, len(ds.targetSch))}

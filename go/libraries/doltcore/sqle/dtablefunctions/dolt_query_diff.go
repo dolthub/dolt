@@ -181,7 +181,9 @@ func (tf *QueryDiffTableFunction) Children() []sql.Node {
 	return nil
 }
 
-// compareRows compares primary keys and reports whether row values differ.
+// compareRows returns the primary key order of |row1| and |row2|, and whether
+// any column differs under [diff.ValuesEqual]. The order is zero when their
+// keys match.
 func (tf *QueryDiffTableFunction) compareRows(ctx *sql.Context, pkOrds []int, row1, row2 sql.Row) (int, bool, error) {
 	var cmp int
 	var err error

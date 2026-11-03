@@ -19,8 +19,6 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
-
-	"github.com/dolthub/dolt/go/store/val"
 )
 
 // ChangeType is an enum that represents the type of change in a diff
@@ -72,16 +70,24 @@ type SchemaDiffWriter interface {
 	Close() error
 }
 
-// ValuesEqual compares text exactly to detect changes ignored by collations.
-// It uses |typ| for other values and avoids loading text with matching content
+// contentAddressComparer is implemented by stored values that can match
+// another value by content address. Callers can check every storage type
+// through this interface instead of a type switch. A false result means the
+// values must be compared by content, since equal values can have different
 // addresses.
+type contentAddressComparer interface {
+	SameContentAddress(other interface{}) bool
+}
+
+// ValuesEqual reports whether |fromValue| and |toValue| match in a diff. Text
+// that unwraps to strings compares exactly, so case-only changes are reported.
+// Stored values with equal content addresses match without being loaded. Other
+// values compare with |typ|.
 func ValuesEqual(ctx *sql.Context, typ sql.Type, fromValue, toValue interface{}) (bool, error) {
+	if stored, ok := fromValue.(contentAddressComparer); ok && stored.SameContentAddress(toValue) {
+		return true, nil
+	}
 	if types.IsTextOnly(typ) && fromValue != nil && toValue != nil {
-		fromStorage, fromIsStorage := fromValue.(*val.TextStorage)
-		toStorage, toIsStorage := toValue.(*val.TextStorage)
-		if fromIsStorage && toIsStorage && fromStorage.Addr == toStorage.Addr {
-			return true, nil
-		}
 		fromText, fromOK, err := sql.Unwrap[string](ctx, fromValue)
 		if err != nil {
 			return false, err
