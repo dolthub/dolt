@@ -4335,6 +4335,38 @@ var DoltBranchScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "dolt_cherry_pick from an orphan branch",
+		SetUpScript: []string{
+			"create table t (pk int primary key);",
+			"insert into t values (1);",
+			"call dolt_commit('-Am', 'main c1');",
+			"call dolt_branch('--orphan', 'orph');",
+			"call dolt_checkout('orph');",
+			"create table o (pk int primary key);",
+			"insert into o values (10);",
+			"call dolt_commit('-Am', 'orph c1');",
+			"call dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_cherry_pick('orph');",
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
+			},
+			{
+				Query:    "select pk from o;",
+				Expected: []sql.Row{{10}},
+			},
+			{
+				Query:    "select pk from t;",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:          "call dolt_cherry_pick('orph~1');",
+				ExpectedErrStr: "cherry-picking a commit without parents is not supported",
+			},
+		},
+	},
+	{
 		Name: "dolt_branch --orphan argument errors",
 		Assertions: []queries.ScriptTestAssertion{
 			{
