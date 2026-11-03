@@ -211,13 +211,13 @@ func ConfigureServices(
 	InitMultiEnv := &svcs.AnonService{
 		InitF: func(ctx context.Context) (err error) {
 			mrEnv, err = env.MultiEnvForDirectory(ctx, fs, cfg.DoltEnv)
-			if err == nil {
-				err = mrEnv.Iter(func(name string, _ *env.DoltEnv) (bool, error) {
-					dsess.DefineSystemVariablesForDBInRegistry(vars, name)
-					return false, nil
-				})
+			if err != nil {
+				return err
 			}
-			return err
+			return mrEnv.Iter(func(name string, _ *env.DoltEnv) (bool, error) {
+				dsess.DefineSystemVariablesForDBInRegistry(vars, name)
+				return false, nil
+			})
 		},
 	}
 	controller.Register(InitMultiEnv)

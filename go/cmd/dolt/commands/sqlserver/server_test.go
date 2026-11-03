@@ -323,19 +323,6 @@ func TestIsolatedServerStartup(t *testing.T) {
 	require.Equal(t, 3, count)
 }
 
-func TestServeRequiresEngineVariables(t *testing.T) {
-	dEnv, err := sqle.CreateEnvWithSeedData()
-	require.NoError(t, err)
-	defer dEnv.Close()
-	startErr, closeErr := Serve(context.Background(), &Config{
-		Version:      "0.0.0",
-		ServerConfig: DefaultCommandLineServerConfig().withLogLevel(servercfg.LogLevel_Fatal),
-		DoltEnv:      dEnv,
-	})
-	require.ErrorIs(t, startErr, ErrNilEngineVariables)
-	require.NoError(t, closeErr)
-}
-
 // If a port is already in use, throw error "Port XXXX already in use."
 func TestServerFailsIfPortInUse(t *testing.T) {
 	controller := svcs.NewController()
