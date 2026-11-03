@@ -476,6 +476,13 @@ func createNewBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *arg
 	if err != nil {
 		return err
 	}
+	if apr.Contains(cli.ForceFlag) {
+		// Force can overwrite an existing branch, so it needs the permission to delete one, as in copyBranch. The check
+		// runs even if the branch does not exist: an unauthorized user could rerun the command without the force flag.
+		if err = branch_control.CanDeleteBranch(ctx, branchName); err != nil {
+			return err
+		}
+	}
 	if apr.Contains(cli.OrphanFlag) {
 		return createOrphanBranch(ctx, dbData, branchName, startPt, apr.Contains(cli.ForceFlag), rsc)
 	}

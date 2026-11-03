@@ -379,6 +379,16 @@ var BranchControlBlockTests = []BranchControlBlockTest{
 		ExpectedErr: branch_control.ErrCannotDeleteBranch,
 	},
 	{
+		Name:        "DOLT_BRANCH Force Create",
+		Query:       "CALL DOLT_BRANCH('-f', 'other', 'HEAD');",
+		ExpectedErr: branch_control.ErrCannotDeleteBranch,
+	},
+	{
+		Name:        "DOLT_BRANCH Force Orphan",
+		Query:       "CALL DOLT_BRANCH('--orphan', '-f', 'other');",
+		ExpectedErr: branch_control.ErrCannotDeleteBranch,
+	},
+	{
 		Name:        "DOLT_BRANCH Delete",
 		Query:       "CALL DOLT_BRANCH('-d', 'other');",
 		ExpectedErr: branch_control.ErrCannotDeleteBranch,
