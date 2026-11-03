@@ -472,16 +472,9 @@ func createNewBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *arg
 		}
 	}
 
-	err = branch_control.CanCreateBranch(ctx, branchName)
+	err = checkCanCreateBranch(ctx, branchName, apr.Contains(cli.ForceFlag))
 	if err != nil {
 		return err
-	}
-	if apr.Contains(cli.ForceFlag) {
-		// Force can overwrite an existing branch, so it needs the permission to delete one, as in copyBranch. The check
-		// runs even if the branch does not exist: an unauthorized user could rerun the command without the force flag.
-		if err = branch_control.CanDeleteBranch(ctx, branchName); err != nil {
-			return err
-		}
 	}
 	if apr.Contains(cli.OrphanFlag) {
 		return createOrphanBranch(ctx, dbData, branchName, startPt, apr.Contains(cli.ForceFlag), rsc)
@@ -499,6 +492,20 @@ func createNewBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *arg
 		}
 	}
 
+	return nil
+}
+
+// checkCanCreateBranch returns an error if the current user may not create |branchName|, or, when |force| is set, may not
+// overwrite it.
+func checkCanCreateBranch(ctx *sql.Context, branchName string, force bool) error {
+	if err := branch_control.CanCreateBranch(ctx, branchName); err != nil {
+		return err
+	}
+	// Force can overwrite an existing branch, so it needs the permission to delete one. The check runs even if the
+	// branch does not exist: an unauthorized user could simply rerun the command without the force flag.
+	if force {
+		return branch_control.CanDeleteBranch(ctx, branchName)
+	}
 	return nil
 }
 
@@ -556,15 +563,8 @@ func copyBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argparse
 // copyABranch copies |srcBr| to |destBr|, forcing the copy if |force| is set, and giving branch control admin privileges
 // if |giveAdminPrivs| is set.
 func copyABranch(ctx *sql.Context, dbData env.DbData[*sql.Context], srcBr string, destBr string, force bool, giveAdminPrivs bool, rsc *doltdb.ReplicationStatusController) error {
-	if err := branch_control.CanCreateBranch(ctx, destBr); err != nil {
+	if err := checkCanCreateBranch(ctx, destBr, force); err != nil {
 		return err
-	}
-	// If force is enabled, we can overwrite the destination branch, so we require a permission check here, even if the
-	// destination branch doesn't exist. An unauthorized user could simply rerun the command without the force flag.
-	if force {
-		if err := branch_control.CanDeleteBranch(ctx, destBr); err != nil {
-			return err
-		}
 	}
 	err := actions.CopyBranchOnDB(ctx, dbData.Ddb, srcBr, destBr, force, rsc)
 	if err != nil {
