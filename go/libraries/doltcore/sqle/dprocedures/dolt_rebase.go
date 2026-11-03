@@ -320,6 +320,14 @@ func startRebase(ctx *sql.Context, upstreamPoint string, commitBecomesEmptyHandl
 		return doltdb.ErrGhostCommitEncountered
 	}
 
+	// The rebase plan never includes root commits, so rebasing onto an unrelated history would silently drop the
+	// contents of this branch's root.
+	if _, err = doltdb.GetCommitAncestor(ctx, startCommit, upstreamCommit); errors.Is(err, doltdb.ErrNoCommonAncestor) {
+		return fmt.Errorf("cannot rebase branch '%s' onto '%s': %w", rebaseBranch, upstreamPoint, err)
+	} else if err != nil {
+		return err
+	}
+
 	// rebaseWorkingBranch is the name of the temporary branch used when performing a rebase. In Git, a rebase
 	// happens with a detached HEAD, but Dolt doesn't support that, we use a temporary branch.
 	rebaseWorkingBranch := "dolt_rebase_" + rebaseBranch

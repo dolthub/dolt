@@ -4292,6 +4292,49 @@ var DoltBranchScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "dolt_rebase refuses to rebase an orphan branch onto an unrelated history",
+		SetUpScript: []string{
+			"create table t (pk int primary key);",
+			"insert into t values (1);",
+			"call dolt_commit('-Am', 'main c1');",
+			"call dolt_branch('--orphan', 'solo');",
+			"call dolt_branch('--orphan', 'orph');",
+			"call dolt_checkout('orph');",
+			"insert into t values (2);",
+			"call dolt_commit('-am', 'orph c1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_rebase('main');",
+				ExpectedErrStr: "cannot rebase branch 'orph' onto 'main': no common ancestor",
+			},
+			{
+				Query:          "call dolt_rebase('-i', 'main');",
+				ExpectedErrStr: "cannot rebase branch 'orph' onto 'main': no common ancestor",
+			},
+			{
+				Query:    "select count(*) from dolt_branches where name like 'dolt_rebase_%';",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select count(*) from dolt_log;",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "select message from dolt_log limit 1;",
+				Expected: []sql.Row{{"orph c1"}},
+			},
+			{
+				Query:    "call dolt_checkout('solo');",
+				Expected: []sql.Row{{0, "Switched to branch 'solo'"}},
+			},
+			{
+				Query:          "call dolt_rebase('main');",
+				ExpectedErrStr: "cannot rebase branch 'solo' onto 'main': no common ancestor",
+			},
+		},
+	},
+	{
 		Name: "dolt_branch --orphan argument errors",
 		Assertions: []queries.ScriptTestAssertion{
 			{
