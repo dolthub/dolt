@@ -214,7 +214,7 @@ func (ks *keySplitter) Reset() {
 }
 
 const (
-	targetSize float64 = 4096
+	targetSize float64 = 1024
 	maxUint32  float64 = math.MaxUint32
 
 	// weibull params

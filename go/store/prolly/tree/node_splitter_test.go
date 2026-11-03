@@ -16,6 +16,7 @@ package tree
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"math"
 	"math/bits"
@@ -89,6 +90,33 @@ func TestKeySplitterDistribution(t *testing.T) {
 		fmt.Println(cumulative.Summary())
 		plotIntHistogram("cumulative_node_sizes_8-54.png", cumulative)
 	})
+}
+
+func TestDefaultSplitterNodeSizes(t *testing.T) {
+	split := defaultSplitterFactory(0)
+	key := make(Item, 8)
+	value := make(Item, 24)
+	var size, totalSize, chunks int
+
+	for i := uint64(0); i < 32_768; i++ {
+		binary.BigEndian.PutUint64(key, i)
+		require.NoError(t, split.Append(key, value))
+		size += len(key) + len(value)
+		if split.CrossedBoundary() {
+			totalSize += size
+			chunks++
+			size = 0
+			split.Reset()
+		}
+	}
+
+	require.Positive(t, chunks)
+	// Measure completed chunks, excluding the final partial chunk. The target
+	// applies to key/value bytes, not serialized node headers and offsets.
+	meanSize := float64(totalSize) / float64(chunks)
+	assert.GreaterOrEqual(t, meanSize, 768.0)
+	assert.LessOrEqual(t, meanSize, 1280.0)
+	t.Logf("mean key/value bytes per node: %.1f across %d chunks", meanSize, chunks)
 }
 
 func makeProllyTreeWithSizes(t *testing.T, fact splitterFactory, scale, keySz, valSz int) (nd *Node, ns NodeStore) {
