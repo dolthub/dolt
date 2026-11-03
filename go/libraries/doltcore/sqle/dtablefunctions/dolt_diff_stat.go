@@ -292,12 +292,18 @@ func (ds *DiffStatTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 
 	// If tableNameExpr defined, return a single table diff stat result
 	if ds.tableNameExpr != nil {
-		delta := findMatchingDelta(deltas, tableName)
-		schemaName := delta.FromName.Schema
-		if schemaName == "" {
-			schemaName = delta.ToName.Schema
+		resolvedName, err := resolveDeltaTableName(ctx, fromRefDetails.root, toRefDetails.root, tableName)
+		if err != nil {
+			return nil, err
 		}
-		diffStat, hasDiff, err := getDiffStatNodeFromDelta(ctx, delta, fromRefDetails.root, toRefDetails.root, doltdb.TableName{Name: tableName, Schema: schemaName})
+		delta := findMatchingDelta(deltas, resolvedName)
+		if resolvedName.Schema == "" {
+			resolvedName.Schema = delta.FromName.Schema
+		}
+		if resolvedName.Schema == "" {
+			resolvedName.Schema = delta.ToName.Schema
+		}
+		diffStat, hasDiff, err := getDiffStatNodeFromDelta(ctx, delta, fromRefDetails.root, toRefDetails.root, resolvedName)
 		if err != nil {
 			return nil, err
 		}
