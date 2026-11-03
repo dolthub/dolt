@@ -524,6 +524,10 @@ func (w *prollyTableWriter) table(ctx *sql.Context) (tbl *doltdb.Table, err erro
 	return tbl, nil
 }
 
+func (w *prollyTableWriter) PendingRows() *prolly.MutableMap {
+	return w.primary.(prollyIndexWriter).mut
+}
+
 func (w *prollyTableWriter) flush(ctx *sql.Context) error {
 	tbl, err := w.table(ctx)
 	if err != nil {

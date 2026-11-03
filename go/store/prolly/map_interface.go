@@ -38,13 +38,6 @@ type MapInterface interface {
 	KeyDesc() *val.TupleDesc
 }
 
-// MapInterface is a common interface for prolly-tree based maps that can be used as the basis of a mutable map that
-// implements MutableMapInterface.
-type MapInterfaceWithMutable interface {
-	MapInterface
-	MutateInterface() MutableMapInterface
-}
-
 // MutableMapInterface is a common interface for prolly-tree based maps that can be mutated.
 type MutableMapInterface interface {
 	NodeStore() tree.NodeStore
@@ -56,4 +49,11 @@ type MutableMapInterface interface {
 	IterRange(ctx context.Context, rng Range) (MapIter, error)
 	MapInterface(ctx context.Context) (MapInterface, error)
 	VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error
+}
+
+// MapInterfaceWithMutable is a common interface for prolly-tree based maps that can be used as the basis of a mutable map that
+// implements MutableMapInterface.
+type MapInterfaceWithMutable interface {
+	MapInterface
+	MutateInterface() MutableMapInterface
 }

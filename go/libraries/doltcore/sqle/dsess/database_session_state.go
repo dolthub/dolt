@@ -165,7 +165,7 @@ func (bs *branchState) SessionCache() *SessionCache {
 	return bs.dbState.headCache[strings.ToLower(bs.head)]
 }
 
-func (bs branchState) EditOpts() editor.Options {
+func (bs *branchState) EditOpts() editor.Options {
 	if bs.writeSession == nil {
 		return editor.Options{}
 	}

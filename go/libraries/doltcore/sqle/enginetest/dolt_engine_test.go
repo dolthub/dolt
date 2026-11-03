@@ -221,6 +221,7 @@ func TestSingleQueryPrepared(t *testing.T) {
 
 	harness := newDoltHarness(t)
 	// engine := enginetest.NewEngine(t, harness)
+	// engine := enginetest.NewEngine(t, harness)
 	// enginetest.CreateIndexes(t, harness, engine)
 	// engine := enginetest.NewSpatialEngine(t, harness)
 	engine, err := harness.NewEngine(t)

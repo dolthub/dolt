@@ -16,6 +16,7 @@ package writer
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -153,6 +154,15 @@ func (s *prollyWriteSession) GetOptions() editor.Options {
 func (s *prollyWriteSession) SetOptions(opts editor.Options) {
 	s.targetStaging = opts.TargetStaging
 	return
+}
+
+// PendingRows implements WriteSession
+func (s *prollyWriteSession) PendingRows(tblName doltdb.TableName) *prolly.MutableMap {
+	tblWriter, ok := s.tables[tblName]
+	if !ok {
+		return nil
+	}
+	return tblWriter.PendingRows()
 }
 
 // Flush implements WriteSessionFlusher
