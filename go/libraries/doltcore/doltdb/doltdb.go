@@ -1171,20 +1171,35 @@ func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash 
 	return ddb.CommitDangling(ctx, val, commitOpts)
 }
 
-// CommitDangling creates a new Commit for |val| that is not referenced by any DoltRef.
+// CommitDanglingRoot creates a parentless Commit for |root| that is not referenced by any DoltRef. |root| must already be
+// stored.
+func (ddb *DoltDB) CommitDanglingRoot(ctx context.Context, root RootValue, cm *datas.CommitMeta) (*Commit, error) {
+	dcommit, err := datas.NewCommitForValue(ctx, datas.ChunkStoreFromDatabase(ddb.db), ddb.vrw, ddb.ns, root.NomsValue(), datas.CommitOptions{Meta: cm})
+	if err != nil {
+		return nil, err
+	}
+	return ddb.writeDanglingCommit(ctx, dcommit)
+}
+
+// CommitDangling creates a new Commit for |val| that is not referenced by any DoltRef. |opts| must name at least one
+// parent; use CommitDanglingRoot for a commit with none.
 func (ddb *DoltDB) CommitDangling(ctx context.Context, val types.Value, opts datas.CommitOptions) (*Commit, error) {
+	if len(opts.Parents) == 0 {
+		return nil, errors.New("cannot create commit without parents")
+	}
 	cs := datas.ChunkStoreFromDatabase(ddb.db)
 
 	dcommit, err := datas.NewCommitForValue(ctx, cs, ddb.vrw, ddb.ns, val, opts)
 	if err != nil {
 		return nil, err
 	}
+	return ddb.writeDanglingCommit(ctx, dcommit)
+}
 
-	_, err = ddb.vrw.WriteValue(ctx, dcommit.NomsValue())
-	if err != nil {
+func (ddb *DoltDB) writeDanglingCommit(ctx context.Context, dcommit *datas.Commit) (*Commit, error) {
+	if _, err := ddb.vrw.WriteValue(ctx, dcommit.NomsValue()); err != nil {
 		return nil, err
 	}
-
 	return NewCommit(ctx, ddb.vrw, ddb.ns, dcommit)
 }
 
