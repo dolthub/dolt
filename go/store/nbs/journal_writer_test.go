@@ -403,13 +403,6 @@ func TestJournalIndexBootstrap(t *testing.T) {
 	}
 }
 
-// TestJournalIndexCorruptionRecovery verifies that a corrupt journal index does
-// not prevent the database from opening. The journal index (journal.idx) is an
-// optimization that is written without the same atomicity guarantees as the
-// journal itself, so a process or OS crash can leave it truncated, with trailing
-// garbage, or with garbage spliced into the middle. In all of those cases the
-// journal must still bootstrap successfully by rebuilding its state from the
-// journal file directly, which has its own per-record checksums.
 // The index batch checksum covers only addresses, so reads must reject a corrupt range rather than panic.
 func TestJournalWriterReadCorruptRange(t *testing.T) {
 	j := newTestJournalWriter(t, newTestFilePath(t))
@@ -423,6 +416,13 @@ func TestJournalWriterReadCorruptRange(t *testing.T) {
 	}
 }
 
+// TestJournalIndexCorruptionRecovery verifies that a corrupt journal index does
+// not prevent the database from opening. The journal index (journal.idx) is an
+// optimization that is written without the same atomicity guarantees as the
+// journal itself, so a process or OS crash can leave it truncated, with trailing
+// garbage, or with garbage spliced into the middle. In all of those cases the
+// journal must still bootstrap successfully by rebuilding its state from the
+// journal file directly, which has its own per-record checksums.
 func TestJournalIndexCorruptionRecovery(t *testing.T) {
 	// writeIndexedJournal writes a journal with |indexed| flushed index records
 	// followed by a final un-indexed ("novel") epoch, then closes it. It returns
