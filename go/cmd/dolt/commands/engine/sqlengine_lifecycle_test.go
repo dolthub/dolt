@@ -194,10 +194,11 @@ func lifecycleEngineEnvironment(t *testing.T, ctx context.Context, root, home st
 	mrEnv, err := env.MultiEnvForDirectory(ctx, fs, rootEnv)
 	require.NoError(t, err)
 	return mrEnv, &SqlEngineConfig{
-		ServerUser:   "root",
-		ServerHost:   "localhost",
-		Autocommit:   true,
-		DBLoadParams: params,
+		ServerUser:      "root",
+		ServerHost:      "localhost",
+		Autocommit:      true,
+		DBLoadParams:    params,
+		EngineVariables: sqle.NewEngineVariables(),
 	}, rootEnv
 }
 

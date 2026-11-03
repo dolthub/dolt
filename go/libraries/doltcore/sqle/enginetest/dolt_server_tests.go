@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/utils/svcs"
 )
 
@@ -552,10 +553,11 @@ func startServerOnEnv(t *testing.T, serverConfig servercfg.ServerConfig, dEnv *e
 	sc := svcs.NewController()
 	go func() {
 		_, _ = sqlserver.Serve(context.Background(), &sqlserver.Config{
-			Version:      "0.0.0",
-			ServerConfig: serverConfig,
-			Controller:   sc,
-			DoltEnv:      dEnv,
+			Version:         "0.0.0",
+			ServerConfig:    serverConfig,
+			Controller:      sc,
+			DoltEnv:         dEnv,
+			EngineVariables: sqle.NewEngineVariables(),
 		})
 	}()
 	err := sc.WaitForStart()
