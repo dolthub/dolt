@@ -158,6 +158,8 @@ func newArchiveMetadata(ctx context.Context, reader tableReaderAt, name hash.Has
 	if err != nil {
 		return nil, err
 	}
+	// The caller closes |reader|.
+	defer aRdr.indexReader.Close()
 
 	if aRdr.footer.formatVersion > archiveFormatVersionMax {
 		return nil, ErrInvalidFormatVersion
