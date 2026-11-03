@@ -29,22 +29,26 @@ import (
 
 // TestRebaseStateSurvivesGC starts an interactive rebase, leaves the pre-rebase root reachable only through the rebase
 // state of the working set, and checks that garbage collection keeps it.
+//
+// DOLT_GC also keeps the in-memory roots of the session that calls it, which include the rebase state, so these tests
+// call it from another session to check that the stored working set alone keeps the rebase state.
 func TestRebaseStateSurvivesGC(t *testing.T) {
 	for _, test := range []struct {
 		name string
-		// unreference makes the root of the branch being rebased unreachable from its branch.
-		unreference string
-		// abortedTo is the row count on feat after aborting the rebase, when feat still exists to abort to.
-		abortedTo []sql.Row
+		// orphanFeat deletes or moves feat, so that only the rebase state still references feat's original commits.
+		orphanFeat string
+		// rowsAfterAbort is the result of counting the rows of t after aborting the rebase. It is nil when feat was
+		// deleted, since there is then no branch to abort to.
+		rowsAfterAbort []sql.Row
 	}{
 		{
-			name:        "branch deleted",
-			unreference: "CALL DOLT_BRANCH('-D', 'feat');",
+			name:       "branch deleted",
+			orphanFeat: "CALL DOLT_BRANCH('-D', 'feat');",
 		},
 		{
-			name:        "branch moved",
-			unreference: "CALL DOLT_BRANCH('-f', 'feat', 'main');",
-			abortedTo:   []sql.Row{{int64(0)}},
+			name:           "branch moved",
+			orphanFeat:     "CALL DOLT_BRANCH('-f', 'feat', 'main');",
+			rowsAfterAbort: []sql.Row{{int64(0)}},
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -59,7 +63,7 @@ func TestRebaseStateSurvivesGC(t *testing.T) {
 				return rows
 			}
 
-			rebasing := enginetest.NewContext(h)
+			rebasing := enginetest.NewSession(h)
 			for _, q := range []string{
 				"CREATE TABLE t (pk INT PRIMARY KEY);",
 				"CALL DOLT_COMMIT('-Am', 'a');",
@@ -81,32 +85,31 @@ func TestRebaseStateSurvivesGC(t *testing.T) {
 			preRebaseHash, err := ws.RebaseState().PreRebaseWorkingRoot().HashOf()
 			require.NoError(t, err)
 
-			run(enginetest.NewSession(h), test.unreference)
+			run(rebasing, test.orphanFeat)
 			run(enginetest.NewSession(h), "CALL DOLT_GC();")
 
-			after := enginetest.NewSession(h)
-			ws, err = ddb.ResolveWorkingSet(after, wsRef)
+			ws, err = ddb.ResolveWorkingSet(rebasing, wsRef)
 			require.NoError(t, err)
 			kept, err := ws.RebaseState().PreRebaseWorkingRoot().HashOf()
 			require.NoError(t, err)
 			assert.Equal(t, preRebaseHash, kept)
 
-			run(after, "CALL DOLT_CHECKOUT('dolt_rebase_feat');")
-			assert.Equal(t, []sql.Row{{int64(0)}}, run(after, "SELECT count(*) FROM t;"))
-			assert.Equal(t, []sql.Row{{int64(0)}}, run(after, "SELECT count(*) FROM dolt_status;"))
-			assert.Equal(t, []sql.Row{{int64(1)}}, run(after, "SELECT count(*) FROM dolt_rebase;"))
+			assert.Equal(t, []sql.Row{{int64(0)}}, run(rebasing, "SELECT count(*) FROM t;"))
+			assert.Equal(t, []sql.Row{{int64(0)}}, run(rebasing, "SELECT count(*) FROM dolt_status;"))
+			assert.Equal(t, []sql.Row{{int64(1)}}, run(rebasing, "SELECT count(*) FROM dolt_rebase;"))
 
-			if test.abortedTo != nil {
-				run(after, "CALL DOLT_REBASE('--abort');")
-				assert.Equal(t, []sql.Row{{"feat"}}, run(after, "SELECT active_branch();"))
-				assert.Equal(t, test.abortedTo, run(after, "SELECT count(*) FROM t;"))
+			if test.rowsAfterAbort != nil {
+				run(rebasing, "CALL DOLT_REBASE('--abort');")
+				assert.Equal(t, []sql.Row{{"feat"}}, run(rebasing, "SELECT active_branch();"))
+				assert.Equal(t, test.rowsAfterAbort, run(rebasing, "SELECT count(*) FROM t;"))
 			}
 		})
 	}
 }
 
 // TestRebaseConflictStateSurvivesGC stops a rebase on a conflict, moves the rebase branch off of the commit the
-// cherry-pick recorded as its pre-merge HEAD, and checks that garbage collection keeps that commit.
+// cherry-pick recorded as its pre-merge HEAD, and checks that garbage collection keeps that commit. Like
+// TestRebaseStateSurvivesGC, it calls DOLT_GC from a session other than the one that rebases.
 func TestRebaseConflictStateSurvivesGC(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
@@ -119,7 +122,7 @@ func TestRebaseConflictStateSurvivesGC(t *testing.T) {
 		return rows
 	}
 
-	rebasing := enginetest.NewContext(h)
+	rebasing := enginetest.NewSession(h)
 	for _, q := range []string{
 		"CREATE TABLE t (pk INT PRIMARY KEY, v INT);",
 		"INSERT INTO t VALUES (0, 0);",
@@ -152,10 +155,9 @@ func TestRebaseConflictStateSurvivesGC(t *testing.T) {
 	preMergeHead, err := ws.MergeState().PreMergeHeadCommit().HashOf()
 	require.NoError(t, err)
 
-	// This reset moves the branch, but fails to commit its working set because of the conflict, leaving the merge state.
-	moving := enginetest.NewSession(h)
-	run(moving, "CALL DOLT_CHECKOUT('dolt_rebase_feat');")
-	_, err = queryRows(e, moving, "CALL DOLT_RESET('--soft', 'HEAD~1');")
+	// With conflicts disallowed, this reset moves the branch but fails to commit its working set, leaving the merge state.
+	run(rebasing, "SET @@dolt_allow_commit_conflicts = 0;")
+	_, err = queryRows(e, rebasing, "CALL DOLT_RESET('--soft', 'HEAD~1');")
 	require.ErrorContains(t, err, "Merge conflict detected")
 	head, err := ddb.ResolveCommitRef(rebasing, ref.NewBranchRef("dolt_rebase_feat"))
 	require.NoError(t, err)
@@ -165,18 +167,16 @@ func TestRebaseConflictStateSurvivesGC(t *testing.T) {
 
 	run(enginetest.NewSession(h), "CALL DOLT_GC();")
 
-	after := enginetest.NewSession(h)
-	ws, err = ddb.ResolveWorkingSet(after, wsRef)
+	ws, err = ddb.ResolveWorkingSet(rebasing, wsRef)
 	require.NoError(t, err)
 	kept, err := ws.MergeState().PreMergeHeadCommit().HashOf()
 	require.NoError(t, err)
 	assert.Equal(t, preMergeHead, kept)
-	roots, err := ddb.WorkingSetHashes(after, ws)
+	roots, err := ddb.WorkingSetHashes(rebasing, ws)
 	require.NoError(t, err)
 	assert.Contains(t, roots, preMergeHead, "an in-memory working set must keep it too")
 
-	run(after, "CALL DOLT_CHECKOUT('dolt_rebase_feat');")
-	assert.Equal(t, []sql.Row{{"t", uint64(1)}}, run(after, "SELECT `table`, num_conflicts FROM dolt_conflicts;"))
+	assert.Equal(t, []sql.Row{{"t", uint64(1)}}, run(rebasing, "SELECT `table`, num_conflicts FROM dolt_conflicts;"))
 }
 
 func queryRows(e enginetest.QueryEngine, ctx *sql.Context, q string) ([]sql.Row, error) {
