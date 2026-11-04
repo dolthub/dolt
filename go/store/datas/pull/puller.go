@@ -72,6 +72,10 @@ func NewPuller(
 	hashes []hash.Hash,
 	statsCh chan Stats,
 ) (*Puller, error) {
+	format, err := tableFileFormatFor(srcCS, sinkCS)
+	if err != nil {
+		return nil, err
+	}
 	// Sanity Check
 	hs := hash.NewHashSet(hashes...)
 	missing, err := srcCS.HasMany(ctx, hs)
@@ -119,6 +123,7 @@ func NewPuller(
 		TempDir:              tempDir,
 		DestStore:            sinkCS.(chunks.TableFileStore),
 		GetAddrs:             getAddrs,
+		format:               format,
 	})
 
 	p := &Puller{
@@ -443,6 +448,9 @@ func (p *Puller) Pull(ctx context.Context) error {
 
 			chnk, err := cChk.ToChunk()
 			if err != nil {
+				return err
+			}
+			if err := p.wr.cfg.tableFiles().fetched(cChk); err != nil {
 				return err
 			}
 

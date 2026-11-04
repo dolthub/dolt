@@ -15,6 +15,7 @@
 package remotesrv
 
 import (
+	"bytes"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -95,8 +96,13 @@ func ValidateGetRepoMetadataRequest(req *remotesapi.GetRepoMetadataRequest) erro
 	if req.ClientRepoFormat.NbsVersion != "4" && req.ClientRepoFormat.NbsVersion != "5" {
 		return fmt.Errorf("unsupported value for client_repo_format.nbs_version: %v; expected \"4\" or \"5\"", req.ClientRepoFormat.NbsVersion)
 	}
+	if s := req.ClientRepoFormat.EncryptionScope; len(s) != 0 && (len(s) != encryptionScopeLen || bytes.Equal(s, make([]byte, encryptionScopeLen))) {
+		return fmt.Errorf("expected client_repo_format.encryption_scope to be %d bytes, not all zero, was %x", encryptionScopeLen, s)
+	}
 	return nil
 }
+
+const encryptionScopeLen = 16
 
 func ValidateHasChunksRequest(req *remotesapi.HasChunksRequest) error {
 	if err := validateRepoRequest(req); err != nil {

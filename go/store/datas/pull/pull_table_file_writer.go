@@ -77,6 +77,7 @@ type PullTableFileWriterConfig struct {
 	// chunks to a new file. In bytes.
 	TargetFileSize       uint64
 	MaximumBufferedFiles int
+	format               tableFileFormat
 }
 
 type DestTableFileStore interface {
@@ -288,11 +289,7 @@ LOOP:
 			}
 
 			if curWr == nil {
-				if os.Getenv("DOLT_ARCHIVE_PULL_STREAMER") != "0" {
-					curWr, err = nbs.NewArchiveStreamWriter(w.cfg.TempDir)
-				} else {
-					curWr, err = nbs.NewCmpChunkTableWriter(w.cfg.TempDir)
-				}
+				curWr, err = w.cfg.tableFiles().newWriter(w.cfg.TempDir, os.Getenv("DOLT_ARCHIVE_PULL_STREAMER") != "0")
 				if err != nil {
 					curWr = nil
 					return err

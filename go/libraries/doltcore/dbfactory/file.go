@@ -171,10 +171,17 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 		// sketchy for any concurrent accessors, but this whole mechanism
 		// has already made callers reliquinish any notion that they are
 		// the sole owners of the Database they opened.
-		if err := datas.ChunkStoreFromDatabase(s.ddb).Rebase(ctx); err != nil {
+		cs := datas.ChunkStoreFromDatabase(s.ddb)
+		if err := cs.Rebase(ctx); err != nil {
 			return nil, nil, nil, err
 		}
-		return s.ddb, s.vrw, s.ns, nil
+		if storeOptions.reusable(ctx, cs, params) {
+			return s.ddb, s.vrw, s.ns, nil
+		}
+		delete(singletons, urlObj.Path)
+		if err := s.ddb.Close(); err != nil {
+			return nil, nil, nil, err
+		}
 	}
 
 	ddb, vrw, ns, err := fact.CreateDbNoCache(ctx, nbf, urlObj, params, nbs.JournalParserLoggingWarningsCb)
@@ -232,9 +239,9 @@ func (fact FileFactory) CreateDbNoCache(ctx context.Context, nbf *types.NomsBinF
 				opts.SkipLockFileTimeout = true
 			}
 		}
-		newGenSt, err = nbs.NewLocalJournalingStoreWithOptions(ctx, nbf.VersionString(), path, q, mmapArchiveIndexes, recCb, opts)
+		newGenSt, err = nbs.NewLocalJournalingStoreWithOptions(ctx, nbf.VersionString(), path, q, mmapArchiveIndexes, recCb, opts, storeOptions.blockStore(nbf, path, params)...)
 	} else {
-		newGenSt, err = nbs.NewLocalStore(ctx, nbf.VersionString(), path, memlimit.MemtableSize(), q, mmapArchiveIndexes)
+		newGenSt, err = nbs.NewLocalStore(ctx, nbf.VersionString(), path, memlimit.MemtableSize(), q, mmapArchiveIndexes, storeOptions.blockStore(nbf, path, params)...)
 	}
 
 	if err != nil {
@@ -254,7 +261,7 @@ func (fact FileFactory) CreateDbNoCache(ctx context.Context, nbf *types.NomsBinF
 		}
 	}
 
-	oldGenSt, err := nbs.NewLocalStore(ctx, newGenSt.Version(), oldgenPath, memlimit.MemtableSize(), q, mmapArchiveIndexes)
+	oldGenSt, err := nbs.NewLocalStore(ctx, newGenSt.Version(), oldgenPath, memlimit.MemtableSize(), q, mmapArchiveIndexes, storeOptions.oldGen(newGenSt)...)
 	if err != nil {
 		return nil, nil, nil, err
 	}
