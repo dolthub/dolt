@@ -507,7 +507,8 @@ func (pm *PreviewMergeConflictsTableFunction) RowIter(ctx *sql.Context, row sql.
 		return nil, err
 	}
 
-	baseHash, err := pm.rootInfo.ancCm.HashOf()
+	// The merger's ancestor is rekeyed when both sides changed the table's primary key the same way.
+	baseHash, err := merger.Ancestor().HashOf()
 	if err != nil {
 		return nil, err
 	}
@@ -542,7 +543,6 @@ func (pm *PreviewMergeConflictsTableFunction) RowIter(ctx *sql.Context, row sql.
 		ourRows:      leftRows,
 		keyless:      keyless,
 		ourSch:       pm.ourSch,
-		baseSch:      pm.baseSch,
 		offsets:      offsets,
 		cds:          cds,
 		baseRootish:  baseHash,
@@ -589,7 +589,6 @@ var _ sql.RowIter = &previewMergeConflictsTableFunctionRowIter{}
 
 type previewMergeConflictsTableFunctionRowIter struct {
 	ourSch       schema.Schema
-	baseSch      schema.Schema
 	vrw          dtypes.ValueReadWriter
 	ns           tree.NodeStore
 	itr          *tree.ThreeWayDiffer[val.Tuple, *val.TupleDesc]
@@ -701,12 +700,6 @@ func (itr *previewMergeConflictsTableFunctionRowIter) loadTableMaps(ctx *sql.Con
 		if err != nil {
 			return err
 		}
-		if ok {
-			if baseTbl, err = dtables.RekeyConflictBase(ctx, itr.tblName, baseTbl, itr.baseSch); err != nil {
-				return err
-			}
-		}
-
 		var idx durable.Index
 		if !ok {
 			idx, err = durable.NewEmptyPrimaryIndex(ctx, itr.vrw, itr.ns, itr.ourSch)

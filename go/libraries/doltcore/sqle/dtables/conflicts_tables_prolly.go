@@ -141,7 +141,6 @@ func (ct ProllyConflictsTable) Deleter(ctx *sql.Context) sql.RowDeleter {
 
 type prollyConflictRowIter struct {
 	ourSch    schema.Schema
-	baseSch   schema.Schema
 	vrw       types.ValueReadWriter
 	ns        tree.NodeStore
 	tblName   doltdb.TableName
@@ -250,7 +249,6 @@ func newProllyConflictRowIter(ctx *sql.Context, ct ProllyConflictsTable) (*proll
 		ourRows: ourRows,
 		keyless: keyless,
 		ourSch:  ct.ourSch,
-		baseSch: ct.baseSch,
 		cds:     cds,
 		offsets: offsets,
 	}, nil
@@ -492,19 +490,13 @@ func (itr *prollyConflictRowIter) nextConflictVals(ctx *sql.Context) (confVal Co
 // the currently loaded maps. |baseHash| and |theirHash| are table hashes.
 func (itr *prollyConflictRowIter) loadTableMaps(ctx *sql.Context, meta prolly.ConflictMetadata, theirHash hash.Hash) error {
 	if baseHash := meta.BaseRootIsh; itr.baseHash.Compare(baseHash) != 0 {
-		rv, err := doltdb.LoadConflictBaseRoot(ctx, itr.vrw, itr.ns, meta)
+		rv, err := doltdb.LoadConflictBaseRoot(ctx, itr.vrw, itr.ns, meta, theirHash)
 		if err != nil {
 			return err
 		}
 		baseTbl, ok, err := rv.GetTable(ctx, itr.tblName)
 		if err != nil {
 			return err
-		}
-
-		if ok {
-			if baseTbl, err = RekeyConflictBase(ctx, itr.tblName, baseTbl, itr.baseSch); err != nil {
-				return err
-			}
 		}
 
 		var idx durable.Index
@@ -552,26 +544,6 @@ func (itr *prollyConflictRowIter) loadTableMaps(ctx *sql.Context, meta prolly.Co
 	}
 
 	return nil
-}
-
-// RekeyConflictBase returns |baseTbl| keyed like |baseSch|, the conflict schema's base. They differ when the merge
-// rekeyed its ancestor because both sides changed the table's primary key the same way.
-func RekeyConflictBase(ctx *sql.Context, name doltdb.TableName, baseTbl *doltdb.Table, baseSch schema.Schema) (*doltdb.Table, error) {
-	sch, err := baseTbl.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if schema.ComparePrimaryKeys(baseSch, sch) == schema.PrimaryKeysSameTags {
-		return baseTbl, nil
-	}
-	rekeyed, ok, err := merge.RekeyTable(ctx, name, baseTbl, sch, baseSch)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, fmt.Errorf("cannot rekey the base of the conflicts of table %s", name)
-	}
-	return rekeyed, nil
 }
 
 func (itr *prollyConflictRowIter) Close(ctx *sql.Context) error {

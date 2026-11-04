@@ -209,7 +209,7 @@ func NewMerger(
 	if err != nil {
 		return nil, err
 	}
-	if anc, err = rekeyAncestorTables(ctx, left, right, anc, tblNames); err != nil {
+	if anc, ancestorSrc, err = rekeyAncestor(ctx, left, right, anc, ancestorSrc, tblNames); err != nil {
 		return nil, err
 	}
 	return &RootMerger{
@@ -221,6 +221,11 @@ func NewMerger(
 		vrw:      vrw,
 		ns:       ns,
 	}, nil
+}
+
+// Ancestor returns the Rootish that conflicts of this merge take their base from.
+func (rm *RootMerger) Ancestor() doltdb.Rootish {
+	return rm.ancSrc
 }
 
 // MergedResult returns either the merged table or merged root object. Both fields will never be set simultaneously.
