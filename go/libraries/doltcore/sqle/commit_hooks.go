@@ -337,15 +337,9 @@ type DynamicPushOnWriteHook struct {
 
 var _ doltdb.CommitHook = (*DynamicPushOnWriteHook)(nil)
 
-// NewDynamicPushOnWriteHook creates a DynamicPushOnWriteHook, parameterized by the environment and a logger. The configuration
-// options at this time can result in errors, for example if the provided remote does not exist. This is not the case
-// when the process is up and running. If bad configuration is detected at execution time, the error is logged and replication is skipped.
-func NewDynamicPushOnWriteHook(ctx context.Context, nameSuffix string, dEnv *env.DoltEnv, logger io.Writer) (*DynamicPushOnWriteHook, RunAsyncThreads, error) {
-	return NewDynamicPushOnWriteHookWithRegistry(ctx, nameSuffix, dEnv, logger, sql.SystemVariables)
-}
-
-// NewDynamicPushOnWriteHookWithRegistry retains the registry for live reads
-// after the hook has been installed on a database.
+// NewDynamicPushOnWriteHookWithRegistry creates a hook that retains its registry
+// for live configuration reads. Invalid configuration can fail construction;
+// configuration errors during execution are logged and replication is skipped.
 func NewDynamicPushOnWriteHookWithRegistry(ctx context.Context, nameSuffix string, dEnv *env.DoltEnv, logger io.Writer, vars sql.SystemVariableRegistry) (*DynamicPushOnWriteHook, RunAsyncThreads, error) {
 	remote, async, err := getReplicationValsFromRegistry(vars)
 	if err != nil {

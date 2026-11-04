@@ -294,7 +294,17 @@ SQL
 
 @test "fsck: reports a missing pre-rebase working root" {
   dolt init
-  start_rebase
+  dolt sql <<SQL
+CREATE TABLE t (pk INT PRIMARY KEY);
+INSERT INTO dolt_ignore VALUES ('ignored_*', true);
+CALL dolt_commit('-Am', 'a');
+CALL dolt_checkout('-b', 'feat');
+INSERT INTO t VALUES (1);
+CALL dolt_commit('-am', 'b');
+SQL
+  # The rebase plan reaches feat's commits, so an uncommitted ignored table is what makes the pre-rebase working root
+  # differ from every commit's root.
+  dolt sql -q "CALL dolt_checkout('feat'); CREATE TABLE ignored_t (pk INT PRIMARY KEY); CALL dolt_rebase('-i', 'main');"
 
   local pre_rebase_root
   pre_rebase_root="$(working_root_of "$(root_entry workingSets/heads/feat)")"

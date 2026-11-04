@@ -2141,6 +2141,12 @@ OuterLoop:
 
 // createSqlTable is the private version of CreateTable.
 func (db Database) createSqlTable(ctx *sql.Context, table string, schemaName string, sch sql.PrimaryKeySchema, collation sql.CollationID, comment string) error {
+	return db.createTransformedSqlTable(ctx, table, schemaName, sch, collation, comment, nil)
+}
+
+// createTransformedSqlTable is createSqlTable with |transform|, when it is not nil, applied to the Dolt schema of the
+// new table.
+func (db Database) createTransformedSqlTable(ctx *sql.Context, table string, schemaName string, sch sql.PrimaryKeySchema, collation sql.CollationID, comment string, transform func(schema.Schema) (schema.Schema, error)) error {
 	ws, err := db.GetWorkingSet(ctx)
 	if err != nil {
 		return err
@@ -2172,6 +2178,12 @@ func (db Database) createSqlTable(ctx *sql.Context, table string, schemaName str
 	doltSch, err := sqlutil.ToDoltSchema(ctx, root, tableName, sch, headRoot, collation)
 	if err != nil {
 		return err
+	}
+	if transform != nil {
+		doltSch, err = transform(doltSch)
+		if err != nil {
+			return err
+		}
 	}
 	doltSch.SetComment(comment)
 
@@ -2848,8 +2860,12 @@ func (db Database) doltSchemaTableHash(ctx *sql.Context) (hash.Hash, error) {
 
 // createEventDefinitionFromFragment creates an EventDefinition instance from the schema fragment |frag|.
 func (db Database) createEventDefinitionFromFragment(ctx *sql.Context, frag schemaFragment) (*sql.EventDefinition, error) {
+	vars := ctx.EngineVariables()
+	if vars == nil {
+		return nil, fmt.Errorf("event definition requires an engine variable owner")
+	}
 	doltSession := dsess.DSessFromSess(ctx.Session)
-	engine := sqle.New(analyzer.NewDefault(doltSession.Provider()), &sqle.Config{EngineVariables: ctx.EngineVariables()})
+	engine := sqle.New(analyzer.NewDefault(doltSession.Provider()), &sqle.Config{EngineVariables: vars})
 	defer engine.Close()
 	b := planbuilder.New(ctx, engine.Analyzer.Catalog, engine.EventScheduler)
 	b.SetParserOptions(sql.NewSqlModeFromString(frag.sqlMode).ParserOptions())
@@ -3239,6 +3255,21 @@ func convertRebasePlanStepToRow(planMember rebase.RebasePlanStep) (sql.Row, erro
 	}, nil
 }
 
+// storeRebaseCommitsAsAddresses is applied to the schema of the dolt_rebase table when a plan is saved. It stores the
+// commit_hash column as commit addresses, so that garbage collection keeps every commit the plan names. Those commits
+// can be unreachable from any branch while the rebase is paused, because the plan can be edited and the branch being
+// rebased can be changed.
+func storeRebaseCommitsAsAddresses(sch schema.Schema) (schema.Schema, error) {
+	cols := sch.GetAllCols().GetColumns()
+	for i := range cols {
+		// Only a plain string column can be stored as commit addresses.
+		if cols[i].Name == dprocedures.RebaseCommitHashColumn && cols[i].TypeInfo.Encoding() == val.StringEnc {
+			cols[i].TypeInfo = cols[i].TypeInfo.WithEncoding(val.CommitAddrEnc)
+		}
+	}
+	return schema.NewSchema(schema.NewColCollection(cols...), sch.GetPkOrdinals(), sch.GetCollation(), sch.Indexes(), sch.Checks())
+}
+
 // SaveRebasePlan implements the rebase.RebasePlanDatabase interface
 func (db Database) SaveRebasePlan(ctx *sql.Context, plan *rebase.RebasePlan) error {
 	if resolve.UseSearchPath {
@@ -3247,7 +3278,7 @@ func (db Database) SaveRebasePlan(ctx *sql.Context, plan *rebase.RebasePlan) err
 
 	pkSchema := sql.NewPrimaryKeySchema(dprocedures.GetDoltRebaseSystemTableSchema())
 	// we use createSqlTable, instead of CreateTable to avoid the "dolt_" reserved prefix table name check
-	err := db.createSqlTable(ctx, doltdb.GetRebaseTableName(), db.schemaName, pkSchema, sql.Collation_Default, "")
+	err := db.createTransformedSqlTable(ctx, doltdb.GetRebaseTableName(), db.schemaName, pkSchema, sql.Collation_Default, "", storeRebaseCommitsAsAddresses)
 	if err != nil {
 		return err
 	}

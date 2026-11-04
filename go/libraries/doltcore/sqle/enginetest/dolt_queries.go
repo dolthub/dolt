@@ -4202,6 +4202,203 @@ var DoltBranchScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt_branch --orphan creates a parentless commit with the start point's contents",
+		SetUpScript: []string{
+			"create table t (pk int primary key);",
+			"insert into t values (1);",
+			"call dolt_commit('-Am', 'c1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_branch('--orphan', 'orph');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select count(*) from dolt_log('orph');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "select message like 'Initialize orphan branch orph from %' from dolt_log('orph');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "select pk from t as of 'orph';",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "select * from dolt_merge_bases('main', 'orph');",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select dolt_merge_base('main', 'orph');",
+				Expected: []sql.Row{{nil}},
+			},
+			{
+				Query:          "call dolt_branch('--orphan', 'orph');",
+				ExpectedErrStr: "fatal: A branch named 'orph' already exists.",
+			},
+			{
+				Query:    "call dolt_branch('--orphan', '-f', 'orph', 'HEAD~1');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "show tables as of 'orph';",
+				Expected: []sql.Row{},
+				Dialect:  "mysql",
+			},
+			{
+				Query:    "call dolt_checkout('orph');",
+				Expected: []sql.Row{{0, "Switched to branch 'orph'"}},
+			},
+			{
+				Query:    "call dolt_commit('--amend', '-m', 'renamed');",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				Query:    "select message from dolt_log;",
+				Expected: []sql.Row{{"renamed"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_branch --orphan of the initial commit does not reuse its hash",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_branch('--orphan', 'alt_root', 'HEAD');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select count(*) from dolt_log('alt_root') where commit_hash in (select commit_hash from dolt_log('main'));",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "dolt_branch --orphan uses the session committer",
+		SetUpScript: []string{
+			"set @@dolt_committer_name = 'Expected Committer';",
+			"set @@dolt_committer_email = 'committer@example.com';",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_branch('--orphan', 'orph');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select committer, email from dolt_log('orph');",
+				Expected: []sql.Row{{"Expected Committer", "committer@example.com"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_rebase refuses to rebase an orphan branch onto an unrelated history",
+		SetUpScript: []string{
+			"create table t (pk int primary key);",
+			"insert into t values (1);",
+			"call dolt_commit('-Am', 'main c1');",
+			"call dolt_branch('--orphan', 'solo');",
+			"call dolt_branch('--orphan', 'orph');",
+			"call dolt_checkout('orph');",
+			"insert into t values (2);",
+			"call dolt_commit('-am', 'orph c1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_rebase('main');",
+				ExpectedErrStr: "cannot rebase branch 'orph' onto 'main': no common ancestor",
+			},
+			{
+				Query:          "call dolt_rebase('-i', 'main');",
+				ExpectedErrStr: "cannot rebase branch 'orph' onto 'main': no common ancestor",
+			},
+			{
+				Query:    "select count(*) from dolt_branches where name like 'dolt_rebase_%';",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select count(*) from dolt_log;",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "select message from dolt_log limit 1;",
+				Expected: []sql.Row{{"orph c1"}},
+			},
+			{
+				Query:    "call dolt_checkout('solo');",
+				Expected: []sql.Row{{0, "Switched to branch 'solo'"}},
+			},
+			{
+				Query:          "call dolt_rebase('main');",
+				ExpectedErrStr: "cannot rebase branch 'solo' onto 'main': no common ancestor",
+			},
+		},
+	},
+	{
+		Name: "dolt_cherry_pick from an orphan branch",
+		SetUpScript: []string{
+			"create table t (pk int primary key);",
+			"insert into t values (1);",
+			"call dolt_commit('-Am', 'main c1');",
+			"call dolt_branch('--orphan', 'orph');",
+			"call dolt_checkout('orph');",
+			"create table o (pk int primary key);",
+			"insert into o values (10);",
+			"call dolt_commit('-Am', 'orph c1');",
+			"call dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_cherry_pick('orph');",
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
+			},
+			{
+				Query:    "select pk from o;",
+				Expected: []sql.Row{{10}},
+			},
+			{
+				Query:    "select pk from t;",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:          "call dolt_cherry_pick('orph~1');",
+				ExpectedErrStr: "cherry-picking a commit without parents is not supported",
+			},
+		},
+	},
+	{
+		Name: "dolt_branch --orphan argument errors",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_branch('--orphan');",
+				ExpectedErrStr: "error: invalid usage",
+			},
+			{
+				Query:          "call dolt_branch('--orphan', 'a', 'b', 'c');",
+				ExpectedErrStr: "error: invalid usage",
+			},
+			{
+				Query:          "call dolt_branch('--orphan', '-c', 'main', 'copy');",
+				ExpectedErrStr: "--orphan cannot be used with --copy",
+			},
+			{
+				Query:          "call dolt_branch('--orphan', '-t', 'tracked', 'main');",
+				ExpectedErrStr: "--orphan cannot be used with --track",
+			},
+			{
+				Query:          "call dolt_branch('--orphan', 'orph', 'nosuch');",
+				ExpectedErrStr: "fatal: 'nosuch' is not a commit and a branch 'orph' cannot be created from it",
+			},
+			{
+				Query:          "call dolt_branch('--orphan', 'HEAD');",
+				ExpectedErrStr: "fatal: 'HEAD' is an invalid branch name.",
+			},
+			{
+				Query:    "select count(*) from dolt_branches;",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
 }
 
 var DoltResetTestScripts = []queries.ScriptTest{

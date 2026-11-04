@@ -19,6 +19,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 
 	gms "github.com/dolthub/go-mysql-server"
@@ -69,6 +70,9 @@ func (tf *QueryDiffTableFunction) WithCatalog(c sql.Catalog) (sql.TableFunction,
 	pro, ok := c.(sql.DatabaseProvider)
 	if !ok {
 		return nil, fmt.Errorf("unable to get database provider")
+	}
+	if tf.ctx == nil || tf.ctx.EngineVariables() == nil {
+		return nil, fmt.Errorf("dolt_query_diff requires an engine variable owner")
 	}
 	newInstance.engine = gms.New(analyzer.NewDefault(pro), &gms.Config{EngineVariables: tf.ctx.EngineVariables()})
 	err := newInstance.analyzeQueries()
@@ -180,6 +184,9 @@ func (tf *QueryDiffTableFunction) Children() []sql.Node {
 	return nil
 }
 
+// compareRows returns the primary key order of |row1| and |row2|, and whether
+// any column differs under [diff.ValuesEqual]. The order is zero when their
+// keys match.
 func (tf *QueryDiffTableFunction) compareRows(ctx *sql.Context, pkOrds []int, row1, row2 sql.Row) (int, bool, error) {
 	var cmp int
 	var err error
@@ -192,14 +199,18 @@ func (tf *QueryDiffTableFunction) compareRows(ctx *sql.Context, pkOrds []int, ro
 			break
 		}
 	}
-	var diff bool
+	var changed bool
 	for i := 0; i < len(row1); i++ {
-		if row1[i] != row2[i] {
-			diff = true
+		equal, err := diff.ValuesEqual(ctx, tf.schema1[i].Type, row1[i], row2[i])
+		if err != nil {
+			return 0, false, err
+		}
+		if !equal {
+			changed = true
 			break
 		}
 	}
-	return cmp, diff, nil
+	return cmp, changed, nil
 }
 
 // RowIter implements the sql.Node interface

@@ -3560,6 +3560,81 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		// https://github.com/dolthub/dolt/issues/12330
+		Name: "dolt_preview_merge_conflicts: column added before another column on their side",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk INT PRIMARY KEY, v INT);",
+			"INSERT INTO t VALUES (1, 10);",
+			"CALL DOLT_COMMIT('-Am', 'base');",
+			"CALL DOLT_BRANCH('right');",
+
+			"UPDATE t SET v = 12;",
+			"CALL DOLT_COMMIT('-am', 'left commit');",
+
+			"CALL DOLT_CHECKOUT('right');",
+			"ALTER TABLE t ADD COLUMN w INT DEFAULT 99 AFTER pk;",
+			"UPDATE t SET v = 11;",
+			"CALL DOLT_COMMIT('-am', 'right commit');",
+			"CALL DOLT_CHECKOUT('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT base_pk, base_v, our_pk, our_v, our_diff_type, their_pk, their_w, their_v, their_diff_type FROM dolt_preview_merge_conflicts('main', 'right', 't');",
+				Expected: []sql.Row{{1, 10, 1, 12, "modified", 1, 99, 11, "modified"}},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/12330
+		Name: "dolt_preview_merge_conflicts: column added on their side",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk INT PRIMARY KEY, v INT);",
+			"INSERT INTO t VALUES (1, 10);",
+			"CALL DOLT_COMMIT('-Am', 'base');",
+			"CALL DOLT_BRANCH('right');",
+
+			"UPDATE t SET v = 12;",
+			"CALL DOLT_COMMIT('-am', 'left commit');",
+
+			"CALL DOLT_CHECKOUT('right');",
+			"ALTER TABLE t ADD COLUMN c INT DEFAULT 7;",
+			"UPDATE t SET v = 11;",
+			"CALL DOLT_COMMIT('-am', 'right commit');",
+			"CALL DOLT_CHECKOUT('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT base_pk, base_v, our_pk, our_v, our_diff_type, their_pk, their_v, their_c, their_diff_type FROM dolt_preview_merge_conflicts('main', 'right', 't');",
+				Expected: []sql.Row{{1, 10, 1, 12, "modified", 1, 11, 7, "modified"}},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/12330
+		Name: "dolt_preview_merge_conflicts: column added on our side",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk INT PRIMARY KEY, v INT);",
+			"INSERT INTO t VALUES (1, 10);",
+			"CALL DOLT_COMMIT('-Am', 'base');",
+			"CALL DOLT_BRANCH('right');",
+
+			"ALTER TABLE t ADD COLUMN c INT DEFAULT 7;",
+			"UPDATE t SET v = 12;",
+			"CALL DOLT_COMMIT('-am', 'left commit');",
+
+			"CALL DOLT_CHECKOUT('right');",
+			"UPDATE t SET v = 11;",
+			"CALL DOLT_COMMIT('-am', 'right commit');",
+			"CALL DOLT_CHECKOUT('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT base_pk, base_v, our_pk, our_v, our_c, our_diff_type, their_pk, their_v, their_diff_type FROM dolt_preview_merge_conflicts('main', 'right', 't');",
+				Expected: []sql.Row{{1, 10, 1, 12, 7, "modified", 1, 11, "modified"}},
+			},
+		},
+	},
+	{
 		Name: "Merge errors if the primary key types have changed (even if the new type has the same NomsKind)",
 		SetUpScript: []string{
 			"CREATE TABLE t (pk1 bigint, pk2 bigint, PRIMARY KEY (pk1, pk2));",

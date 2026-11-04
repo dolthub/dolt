@@ -87,6 +87,10 @@ table Column {
   // data loss could occur during garbage collection or pull operations. This field forces clients from that release 
   // range to upgrade before reading schemas with adaptive encoded columns.
   adaptive_encoding_breaking_change:bool;
+
+  // a marker value only written when the column stores commit addresses, which will force older clients to upgrade
+  // before reading this data.
+  uses_commit_addr_encoding:bool;
 }
 
 table Index {

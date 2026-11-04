@@ -831,7 +831,7 @@ func (ddb *DoltDB) writeRootValue(ctx context.Context, rv RootValue) (RootValue,
 // skipped and a Ref to the existing value is returned.
 //
 // |skipIfPresent| is used by GC safepoint root collection (see
-// WorkingSetHashes / DoltSession.VisitGCRoots), where the returned hash is
+// WorkingSetGCHashes, RootValueGCHash and DoltSession.VisitGCRoots), where the returned hash is
 // immediately handed to the GC keeper. There, persisting an already-present
 // root value is redundant, and--because it dirties the store's memtable--it
 // defeats the no-op GC fast path (see NomsBlockStore.hasLocalGCNovelty), so
@@ -865,14 +865,21 @@ func (ddb *DoltDB) doWriteRootValue(ctx context.Context, rv RootValue, skipIfPre
 	return rv, ref, nil
 }
 
-// Persists all relevant root values of the WorkingSet to the database and returns all hashes reachable
-// from the working set. This is used in GC, for example, where all dependencies of the in-memory working
-// set value need to be accounted for.
-//
-// Root values that are already present in the database are not rewritten, so
-// that collecting the GC roots of an unchanged working set does not dirty the
-// store and defeat the no-op GC fast path. See doWriteRootValue.
-func (ddb *DoltDB) WorkingSetHashes(ctx context.Context, ws *WorkingSet) ([]hash.Hash, error) {
+// RootValueGCHash returns the hash that GC must keep to retain |rv|, first
+// persisting |rv| if it is not already in the database. Like
+// WorkingSetGCHashes, it is only for GC root collection. See doWriteRootValue.
+func (ddb *DoltDB) RootValueGCHash(ctx context.Context, rv RootValue) (hash.Hash, error) {
+	_, ref, err := ddb.doWriteRootValue(ctx, rv, true)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	return ref.TargetHash(), nil
+}
+
+// WorkingSetGCHashes returns the hashes that GC must keep to retain |ws|,
+// first persisting any of its root values that are not already in the
+// database. It is only for GC root collection. See doWriteRootValue.
+func (ddb *DoltDB) WorkingSetGCHashes(ctx context.Context, ws *WorkingSet) ([]hash.Hash, error) {
 	spec, err := ws.writeValues(ctx, ddb, nil, true)
 	if err != nil {
 		return nil, err
@@ -892,6 +899,13 @@ func (ddb *DoltDB) WorkingSetHashes(ctx context.Context, ws *WorkingSet) ([]hash
 		ret = append(ret, h)
 		h, err = spec.MergeState.PreMergeWorkingAddr()
 		ret = append(ret, h)
+		preMergeHead, err := spec.MergeState.PreMergeHeadCommit(ctx, ddb.vrw)
+		if err != nil {
+			return nil, err
+		}
+		if preMergeHead != nil {
+			ret = append(ret, preMergeHead.Addr())
+		}
 	}
 	if spec.RebaseState != nil {
 		ret = append(ret, spec.RebaseState.PreRebaseWorkingAddr())
@@ -906,6 +920,26 @@ func (ddb *DoltDB) WorkingSetHashes(ctx context.Context, ws *WorkingSet) ([]hash
 		ret = append(ret, h)
 	}
 	return ret, nil
+}
+
+// WriteGCTable is RootValueGCHash for a table which no root value references.
+func (ddb *DoltDB) WriteGCTable(ctx context.Context, tbl *Table) (hash.Hash, error) {
+	h, err := tbl.HashOf()
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	existing, err := ddb.vrw.ReadValue(ctx, h)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	if existing != nil {
+		return h, nil
+	}
+	ref, err := RefFromNomsTable(ctx, tbl)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	return ref.TargetHash(), nil
 }
 
 // ReadRootValue reads the RootValue associated with the hash given and returns it. Returns an error if the value cannot
@@ -1171,20 +1205,35 @@ func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash 
 	return ddb.CommitDangling(ctx, val, commitOpts)
 }
 
-// CommitDangling creates a new Commit for |val| that is not referenced by any DoltRef.
+// CommitDanglingRoot creates a parentless Commit for |root| that is not referenced by any DoltRef. |root| must already be
+// stored.
+func (ddb *DoltDB) CommitDanglingRoot(ctx context.Context, root RootValue, cm *datas.CommitMeta) (*Commit, error) {
+	dcommit, err := datas.NewCommitForValue(ctx, datas.ChunkStoreFromDatabase(ddb.db), ddb.vrw, ddb.ns, root.NomsValue(), datas.CommitOptions{Meta: cm})
+	if err != nil {
+		return nil, err
+	}
+	return ddb.writeDanglingCommit(ctx, dcommit)
+}
+
+// CommitDangling creates a new Commit for |val| that is not referenced by any DoltRef. |opts| must name at least one
+// parent; use CommitDanglingRoot for a commit with none.
 func (ddb *DoltDB) CommitDangling(ctx context.Context, val types.Value, opts datas.CommitOptions) (*Commit, error) {
+	if len(opts.Parents) == 0 {
+		return nil, errors.New("cannot create commit without parents")
+	}
 	cs := datas.ChunkStoreFromDatabase(ddb.db)
 
 	dcommit, err := datas.NewCommitForValue(ctx, cs, ddb.vrw, ddb.ns, val, opts)
 	if err != nil {
 		return nil, err
 	}
+	return ddb.writeDanglingCommit(ctx, dcommit)
+}
 
-	_, err = ddb.vrw.WriteValue(ctx, dcommit.NomsValue())
-	if err != nil {
+func (ddb *DoltDB) writeDanglingCommit(ctx context.Context, dcommit *datas.Commit) (*Commit, error) {
+	if _, err := ddb.vrw.WriteValue(ctx, dcommit.NomsValue()); err != nil {
 		return nil, err
 	}
-
 	return NewCommit(ctx, ddb.vrw, ddb.ns, dcommit)
 }
 

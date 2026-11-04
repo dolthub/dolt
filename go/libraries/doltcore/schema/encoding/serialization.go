@@ -283,6 +283,9 @@ func serializeSchemaColumns(ctx context.Context, b *fb.Builder, sch schema.Schem
 			serial.ColumnAddUsesAdaptiveEncoding(b, true)
 			serial.ColumnAddAdaptiveEncodingBreakingChange(b, true)
 		}
+		if col.TypeInfo.Encoding() == val.CommitAddrEnc {
+			serial.ColumnAddUsesCommitAddrEncoding(b, true)
+		}
 
 		if col.Hidden {
 			serial.ColumnAddHidden(b, col.Hidden)

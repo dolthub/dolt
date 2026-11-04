@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -83,7 +84,7 @@ func TestResolveMergeBaseRebuild(t *testing.T) {
 	// root -- x1 -- x2
 	//    \-- y1 -- y2
 	// x2 = merge(x1, y1), y2 = merge(y1, x1)
-	ctx := sql.NewEmptyContext()
+	ctx := sql.NewContextWithVariables(context.Background(), variables.NewEngineVariables())
 	ddb, root, commit := newTestHistory(t)
 	x1 := commit(100, root)
 	y1 := commit(200, root)
@@ -108,13 +109,13 @@ func TestResolveMergeBaseRebuild(t *testing.T) {
 	rebuilt, err := doltdb.LoadConflictBaseRoot(ctx, ddb.ValueReadWriter(), ddb.NodeStore(), prolly.ConflictMetadata{
 		BaseRootIsh: collected,
 		MergeBases:  []hash.Hash{mustHashOf(t, y1), mustHashOf(t, x1)},
-	})
+	}, hash.Hash{})
 	require.NoError(t, err)
 	rebuiltHash, err := rebuilt.HashOf()
 	require.NoError(t, err)
 	assert.Equal(t, virtualRootHash, rebuiltHash)
 
-	_, err = doltdb.LoadConflictBaseRoot(ctx, ddb.ValueReadWriter(), ddb.NodeStore(), prolly.ConflictMetadata{BaseRootIsh: collected})
+	_, err = doltdb.LoadConflictBaseRoot(ctx, ddb.ValueReadWriter(), ddb.NodeStore(), prolly.ConflictMetadata{BaseRootIsh: collected}, hash.Hash{})
 	assert.Error(t, err)
 }
 

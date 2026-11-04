@@ -246,7 +246,9 @@ func buildVirtualMergeBase(ctx *sql.Context, x, y *doltdb.Commit) (*doltdb.Commi
 	if err != nil {
 		return nil, nil, err
 	}
-	mergedRoot, rewritten, conflicted, err := resolveVirtualBaseConflicts(ctx, result, xRoot, yRoot, baseRoot, baseConflicts)
+	// The merge keys its conflicts like the ancestor it merged against, which has the tables whose primary key both
+	// merge bases changed rekeyed, so the conflicts read their base from that ancestor.
+	mergedRoot, rewritten, conflicted, err := resolveVirtualBaseConflicts(ctx, result, xRoot, yRoot, result.AncestorRoot, baseConflicts)
 	if err != nil {
 		return nil, nil, err
 	}

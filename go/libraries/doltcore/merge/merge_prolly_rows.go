@@ -584,8 +584,11 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 
 // virtualBaseConflicts returns the rows of this table that have conflicted cells in a virtual merge base.
 func (tm *TableMerger) virtualBaseConflicts() map[string]conflictedRow {
-	if virtualBase, ok := tm.ancestorSrc.(virtualMergeBase); ok {
-		return virtualBase.conflicted[tm.name]
+	switch base := tm.ancestorSrc.(type) {
+	case virtualMergeBase:
+		return base.conflicted[tm.name]
+	case rekeyedMergeBase:
+		return base.conflicted[tm.name]
 	}
 	return nil
 }
@@ -1501,7 +1504,9 @@ func (nv nullValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) (
 type conflictMerger struct {
 	ae           *prolly.ArtifactsEditor
 	rightRootish hash.Hash
-	meta         []byte
+	// baseAddr is the address of a base that only the conflicts keep reachable, or empty.
+	baseAddr hash.Hash
+	meta     []byte
 }
 
 func newConflictMerger(ctx context.Context, tm *TableMerger, ae *prolly.ArtifactsEditor) (*conflictMerger, error) {
@@ -1536,8 +1541,15 @@ func newConflictMerger(ctx context.Context, tm *TableMerger, ae *prolly.Artifact
 	m := prolly.ConflictMetadata{
 		BaseRootIsh: baseHash,
 	}
-	if virtualBase, ok := tm.ancestorSrc.(virtualMergeBase); ok {
-		m.MergeBases = virtualBase.mergeBases
+	// A rekeyed merge base is a dangling commit, so the conflicts keep it reachable by its address.
+	var baseAddr hash.Hash
+	switch base := tm.ancestorSrc.(type) {
+	case virtualMergeBase:
+		m.MergeBases = base.mergeBases
+	case rekeyedMergeBase:
+		baseAddr = baseHash
+		m.RekeyedFrom = base.from
+		m.MergeBases = base.mergeBases
 	}
 	meta, err := json.Marshal(m)
 	if err != nil {
@@ -1547,6 +1559,7 @@ func newConflictMerger(ctx context.Context, tm *TableMerger, ae *prolly.Artifact
 	return &conflictMerger{
 		meta:         meta,
 		rightRootish: rightHash,
+		baseAddr:     baseAddr,
 		ae:           ae,
 	}, nil
 }
@@ -1558,7 +1571,7 @@ func (m *conflictMerger) merge(ctx context.Context, diff tree.ThreeWayDiff, _ sc
 	default:
 		return fmt.Errorf("invalid conflict type: %s", diff.Op)
 	}
-	return m.ae.Add(ctx, diff.Key, m.rightRootish, prolly.ArtifactTypeConflict, m.meta, nil)
+	return m.ae.AddConflict(ctx, diff.Key, m.rightRootish, m.meta, m.baseAddr)
 }
 
 func (m *conflictMerger) finalize(ctx context.Context) (durable.ArtifactIndex, error) {

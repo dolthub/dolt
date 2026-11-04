@@ -105,7 +105,7 @@ jobs:
         if: steps.cache_hadoop.outputs.cache-hit != 'true'
         working-directory: ./.ci_bin
         run: |
-          curl -sSL -o hadoop-3.3.6.tar.gz https://dlcdn.apache.org/hadoop/common/hadoop-3.3.6/hadoop-3.3.6.tar.gz || curl -sSL -o hadoop-3.3.6.tar.gz https://archive.apache.org/dist/hadoop/common/hadoop-3.3.6/hadoop-3.3.6.tar.gz
+          curl -fsSL -o hadoop-3.3.6.tar.gz https://dolthub-tools.s3.us-west-2.amazonaws.com/hadoop-3.3.6.tar.gz
           tar -xzf hadoop-3.3.6.tar.gz
           rm -f hadoop-3.3.6.tar.gz
       - name: Add Hadoop to PATH

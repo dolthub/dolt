@@ -420,35 +420,11 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				ExpectedErrStr: rebase.ErrInvalidRebasePlanSquashFixupWithoutPick.Error(),
 			},
 			{
-				Query: "update dolt_rebase set action='pick', commit_hash='doesnotexist' where rebase_order=1;",
-				Expected: []sql.Row{{gmstypes.OkResult{
-					RowsAffected: 1,
-					InsertID:     0,
-					Info: plan.UpdateInfo{
-						Matched:  1,
-						Updated:  1,
-						Warnings: 0,
-					},
-				}}},
-			},
-			{
-				Query:          "call dolt_rebase('--continue');",
+				Query:          "update dolt_rebase set action='pick', commit_hash='doesnotexist' where rebase_order=1;",
 				ExpectedErrStr: "invalid commit hash: doesnotexist",
 			},
 			{
-				Query: "update dolt_rebase set commit_hash='0123456789abcdef0123456789abcdef' where rebase_order=1;",
-				Expected: []sql.Row{{gmstypes.OkResult{
-					RowsAffected: 1,
-					InsertID:     0,
-					Info: plan.UpdateInfo{
-						Matched:  1,
-						Updated:  1,
-						Warnings: 0,
-					},
-				}}},
-			},
-			{
-				Query:          "call dolt_rebase('--continue');",
+				Query:          "update dolt_rebase set action='pick', commit_hash='0123456789abcdef0123456789abcdef' where rebase_order=1;",
 				ExpectedErrStr: "unable to resolve commit hash 0123456789abcdef0123456789abcdef: target commit not found",
 			},
 		},

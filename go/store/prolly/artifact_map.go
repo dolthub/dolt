@@ -106,7 +106,7 @@ func NewArtifactMap(node *tree.Node, ns tree.NodeStore, srcKeyDesc *val.TupleDes
 // the corresponding row map and inserts the given |tups|. |tups| must be a key followed by a value.
 func NewArtifactMapFromTuples(ctx context.Context, ns tree.NodeStore, srcKeyDesc *val.TupleDesc, tups ...val.Tuple) (ArtifactMap, error) {
 	kd, vd := mergeArtifactsDescriptorsFromSource(srcKeyDesc, ns)
-	serializer := message.NewMergeArtifactSerializer(kd, ns.Pool())
+	serializer := message.NewMergeArtifactSerializer(kd, vd, ns.Pool())
 
 	ch, err := tree.NewEmptyChunker(ctx, ns, serializer)
 	if err != nil {
@@ -329,7 +329,7 @@ func (m ArtifactMap) iterAllOfTypes(ctx context.Context, artTypes ...ArtifactTyp
 }
 
 func MergeArtifactMaps(ctx context.Context, left, right, base ArtifactMap, cb tree.CollisionFn) (ArtifactMap, error) {
-	serializer := message.NewMergeArtifactSerializer(base.keyDesc, left.tuples.NodeStore.Pool())
+	serializer := message.NewMergeArtifactSerializer(base.keyDesc, base.valDesc, left.tuples.NodeStore.Pool())
 	// TODO: MergeArtifactMaps does not properly detect merge conflicts when one side adds a NULL to the end of its tuple.
 	// To fix this, accurate values of `leftSchemaChanged` and `rightSchemaChanged` must be computed.
 	// However, currently we do not expect the value of ArtifactMap.valDesc to be different across branches.
@@ -379,13 +379,29 @@ func (wr *ArtifactsEditor) Add(ctx context.Context, srcKey val.Tuple, srcRootish
 	if err != nil {
 		return err
 	}
+	return wr.putArtifact(ctx, key, meta, hash.Hash{})
+}
 
+// AddConflict adds a conflict for |srcKey| from |srcRootish| with |meta|. A non-empty |baseAddr| is stored as the
+// address of the conflict's base, which keeps a base that nothing else references from being garbage collected.
+func (wr *ArtifactsEditor) AddConflict(ctx context.Context, srcKey val.Tuple, srcRootish hash.Hash, meta []byte, baseAddr hash.Hash) error {
+	key, err := wr.BuildArtifactKey(ctx, srcKey, srcRootish, ArtifactTypeConflict, nil)
+	if err != nil {
+		return err
+	}
+	return wr.putArtifact(ctx, key, meta, baseAddr)
+}
+
+// putArtifact puts the artifact at |key| with |meta|, and with |baseAddr| when it is not empty.
+func (wr *ArtifactsEditor) putArtifact(ctx context.Context, key val.Tuple, meta []byte, baseAddr hash.Hash) error {
 	wr.artVB.PutJSON(0, meta)
+	if !baseAddr.IsEmpty() {
+		wr.artVB.PutCommitAddr(1, baseAddr)
+	}
 	value, err := wr.artVB.Build(ctx, wr.pool)
 	if err != nil {
 		return err
 	}
-
 	return wr.mut.Put(ctx, key, value)
 }
 
@@ -519,7 +535,7 @@ func (wr *ArtifactsEditor) Has(ctx context.Context, key val.Tuple) (bool, error)
 }
 
 func (wr *ArtifactsEditor) Flush(ctx context.Context) (ArtifactMap, error) {
-	s := message.NewMergeArtifactSerializer(wr.artKB.Desc, wr.NodeStore().Pool())
+	s := message.NewMergeArtifactSerializer(wr.artKB.Desc, wr.artVB.Desc, wr.NodeStore().Pool())
 
 	m, err := wr.mut.flushWithSerializer(ctx, s)
 	if err != nil {
@@ -576,6 +592,11 @@ type ConflictMetadata struct {
 	// MergeBases are set when BaseRootIsh is a virtual merge base built from several merge bases. The virtual merge
 	// base is not referenced by any ref, so it can be rebuilt from these after garbage collection.
 	MergeBases []hash.Hash `json:"mb,omitempty"`
+	// RekeyedFrom is set when BaseRootIsh is a rekeyed merge base: the merge base, with MergeBases when it is a
+	// virtual merge base, that was rekeyed to the primary key both sides of the merge changed a table to. The
+	// conflict's value holds the address of BaseRootIsh, but a client that predates that address does not keep it
+	// during garbage collection, so the rekeyed merge base can be rebuilt from this.
+	RekeyedFrom hash.Hash `json:"rk,omitzero"`
 }
 
 // ConstraintViolationMeta is the json metadata for foreign key constraint violations
@@ -705,8 +726,9 @@ func mergeArtifactsDescriptorsFromSource(srcKd *val.TupleDesc, vs val.ValueStore
 	// violation-info hash: violationInfoHashSize bytes derived from violation info (for distinct keys per row)
 	keyTypes = append(keyTypes, val.Type{Enc: val.ByteStringEnc, Nullable: false})
 
-	// json blob data
-	valTypes := []val.Type{{Enc: val.JSONEnc, Nullable: false}}
+	// json blob data, then the address of the base of a conflict when nothing else keeps the base reachable. The
+	// address is NULL otherwise, and artifacts written by older clients lack it.
+	valTypes := []val.Type{{Enc: val.JSONEnc, Nullable: false}, {Enc: val.CommitAddrEnc, Nullable: true}}
 
 	handlers := make([]val.TupleTypeHandler, len(keyTypes))
 	copy(handlers, srcKd.Handlers)
