@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql/sets"
 	"io"
 	"slices"
 
@@ -320,7 +319,7 @@ func NewIndexReaderBuilder(
 func newCoveringLookupBuilder(b *baseIndexImplBuilder) *coveringIndexImplBuilder {
 	var keyMap, valMap, ordMap val.OrdinalMapping
 	if b.idx.IsPrimaryKey() {
-		keyMap, valMap, ordMap, _ = primaryIndexMapping(b.idx, b.projections)
+		keyMap, valMap, ordMap = primaryIndexMapping(b.idx, b.projections)
 	} else {
 		keyMap, ordMap = coveringIndexMapping(b.idx, b.projections)
 	}
@@ -350,7 +349,7 @@ func newNonCoveringLookupBuilder(s *durableIndexState, b *baseIndexImplBuilder) 
 	priKd, _ := primary.Descriptors()
 	tbBld := val.NewTupleBuilder(priKd, primary.NodeStore())
 	pkMap := OrdinalMappingFromIndex(b.idx)
-	keyProj, valProj, ordProj, projectedColumns := projectionMappings(b.idx.Schema(), b.projections)
+	keyProj, valProj, ordProj := projectionMappings(b.idx.Schema(), b.projections)
 	return &nonCoveringIndexImplBuilder{
 		baseIndexImplBuilder: b,
 		pri:                  primary,
@@ -359,7 +358,6 @@ func newNonCoveringLookupBuilder(s *durableIndexState, b *baseIndexImplBuilder) 
 		keyMap:               keyProj,
 		valMap:               valProj,
 		ordMap:               ordProj,
-		projectedColumns:     projectedColumns,
 	}, nil
 }
 
@@ -577,7 +575,7 @@ func (ib *coveringIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part s
 	if err != nil {
 		return nil, err
 	}
-	columnIdMap := columnIdMapping(ib.idx, ib.projections, columnIds)
+	columnIdMap := columnIdMapping(ib.idx.Schema(), ib.projections, columnIds)
 	return prollyCoveringIndexIter{
 		idx:         ib.idx,
 		indexIter:   indexIter,
@@ -623,7 +621,6 @@ type nonCoveringIndexImplBuilder struct {
 	pkBld *val.TupleBuilder
 
 	pkMap, keyMap, valMap, ordMap val.OrdinalMapping
-	projectedColumns              sets.FastIntSet
 }
 
 type nonCoveringMapIter struct {
@@ -705,19 +702,20 @@ func (ib *nonCoveringIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, par
 	if err != nil {
 		return nil, err
 	}
+	columnIdMap := columnIdMapping(ib.idx.Schema(), ib.projections, columnIds)
 	return prollyIndexIter{
-		idx:              ib.idx,
-		indexIter:        indexIter,
-		primary:          ib.pri,
-		pkBld:            ib.pkBld,
-		pkMap:            ib.pkMap,
-		keyMap:           ib.keyMap,
-		valMap:           ib.valMap,
-		ordMap:           ib.ordMap,
-		sqlSch:           ib.sch.Schema,
-		projections:      ib.projections,
-		columnIds:        columnIds,
-		projectedColumns: ib.projectedColumns,
+		idx:         ib.idx,
+		indexIter:   indexIter,
+		primary:     ib.pri,
+		pkBld:       ib.pkBld,
+		pkMap:       ib.pkMap,
+		keyMap:      ib.keyMap,
+		valMap:      ib.valMap,
+		ordMap:      ib.ordMap,
+		sqlSch:      ib.sch.Schema,
+		projections: ib.projections,
+		columnIds:   columnIds,
+		columnIdMap: columnIdMap,
 	}, nil
 }
 

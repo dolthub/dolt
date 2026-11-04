@@ -15,13 +15,11 @@
 package index
 
 import (
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/sets"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type prollyRowIter struct {
@@ -34,10 +32,10 @@ type prollyRowIter struct {
 	keyProj []int
 	valProj []int
 	// ordProj is a concatenated list of output ordinals for |keyProj| and |valProj|
-	ordProj          []int
-	rowLen           int
-	columnIds        sql.ColSet
-	projectedColumns sets.FastIntSet
+	ordProj     []int
+	rowLen      int
+	columnIds   sql.ColSet
+	columnIdMap []sql.ColumnId
 }
 
 var _ sql.RowIter = prollyRowIter{}
@@ -79,18 +77,19 @@ func NewKeyedProllyRowIter(
 	ns tree.NodeStore,
 	columnIds sql.ColSet,
 ) sql.ValueRowWriter {
-	keyProj, valProj, ordProj, projectedColumns := projectionMappings(sch, projections)
+	keyProj, valProj, ordProj := projectionMappings(sch, projections)
+	columnIdMap := columnIdMapping(sch, projections, columnIds)
 	return prollyRowIter{
-		iter:             iter,
-		keyDesc:          kd,
-		valDesc:          vd,
-		keyProj:          keyProj,
-		valProj:          valProj,
-		ordProj:          ordProj,
-		rowLen:           len(projections),
-		ns:               ns,
-		projectedColumns: projectedColumns,
-		columnIds:        columnIds,
+		iter:        iter,
+		keyDesc:     kd,
+		valDesc:     vd,
+		keyProj:     keyProj,
+		valProj:     valProj,
+		ordProj:     ordProj,
+		rowLen:      len(projections),
+		ns:          ns,
+		columnIds:   columnIds,
+		columnIdMap: columnIdMap,
 	}
 }
 
@@ -102,26 +101,27 @@ func NewKeylessProllyRowIter(
 	ns tree.NodeStore,
 	columnIds sql.ColSet,
 ) sql.ValueRowWriter {
-	_, valProj, ordProj, projectedColumns := projectionMappings(sch, projections)
+	_, valProj, ordProj := projectionMappings(sch, projections)
+	columnIdMap := columnIdMapping(sch, projections, columnIds)
 
 	return &prollyKeylessIter{
-		iter:             iter,
-		valDesc:          vd,
-		valProj:          valProj,
-		ordProj:          ordProj,
-		rowLen:           len(projections),
-		ns:               ns,
-		projectedColumns: projectedColumns,
-		columnIds:        columnIds,
+		iter:        iter,
+		valDesc:     vd,
+		valProj:     valProj,
+		ordProj:     ordProj,
+		rowLen:      len(projections),
+		ns:          ns,
+		columnIds:   columnIds,
+		columnIdMap: columnIdMap,
 	}
 }
 
 // projectionMappings returns data structures that specify 1) which fields we read
 // from key and value tuples, and 2) the position of those fields in the output row.
-func projectionMappings(sch schema.Schema, projections []uint64) (keyMap, valMap, ordMap val.OrdinalMapping, projectedColumns sets.FastIntSet) {
-	keyMap, valMap, ordMap, projectedColumns = ProjectionMappingsForIndex(sch, projections)
+func projectionMappings(sch schema.Schema, projections []uint64) (keyMap, valMap, ordMap val.OrdinalMapping) {
+	keyMap, valMap, ordMap = ProjectionMappingsForIndex(sch, projections)
 	adjustOffsetsForKeylessTable(sch, keyMap, valMap)
-	return keyMap, valMap, ordMap, projectedColumns
+	return keyMap, valMap, ordMap
 }
 
 func adjustOffsetsForKeylessTable(sch schema.Schema, keyMap val.OrdinalMapping, valMap val.OrdinalMapping) {
@@ -136,9 +136,8 @@ func adjustOffsetsForKeylessTable(sch schema.Schema, keyMap val.OrdinalMapping, 
 	}
 }
 
-func ProjectionMappingsForIndex(sch schema.Schema, projections []uint64) (keyMap, valMap, ordMap val.OrdinalMapping, projectedColumns sets.FastIntSet) {
+func ProjectionMappingsForIndex(sch schema.Schema, projections []uint64) (keyMap, valMap, ordMap val.OrdinalMapping) {
 	pks := sch.GetPKCols()
-	pkSize := pks.Size()
 	nonPks := sch.GetNonPKCols()
 
 	numPhysicalColumns := len(projections)
@@ -162,12 +161,10 @@ func ProjectionMappingsForIndex(sch schema.Schema, projections []uint64) (keyMap
 	nonKeyIdx := numPhysicalColumns - 1
 	for projNum, tag := range projections {
 		if idx, ok := pks.StoredIndexByTag(tag); ok && !pks.GetByStoredIndex(idx).Virtual {
-			projectedColumns.Add(idx)
 			allMap[keyIdx] = idx
 			allMap[numPhysicalColumns+keyIdx] = projNum
 			keyIdx++
 		} else if idx, ok := nonPks.StoredIndexByTag(tag); ok && !nonPks.GetByStoredIndex(idx).Virtual {
-			projectedColumns.Add(pkSize + idx)
 			allMap[nonKeyIdx] = idx
 			allMap[numPhysicalColumns+nonKeyIdx] = projNum
 			nonKeyIdx--
@@ -177,7 +174,7 @@ func ProjectionMappingsForIndex(sch schema.Schema, projections []uint64) (keyMap
 	keyMap = allMap[:keyIdx]
 	valMap = allMap[keyIdx:numPhysicalColumns]
 	ordMap = allMap[numPhysicalColumns:]
-	return keyMap, valMap, ordMap, projectedColumns
+	return keyMap, valMap, ordMap
 }
 
 func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
@@ -211,26 +208,21 @@ func (it prollyRowIter) WriteNextValueRow(ctx *sql.Context, row sql.ValueRow) er
 		return err
 	}
 
-	pkCols := it.keyDesc.Count()
-	columnId, _ := it.columnIds.Next(1)
-	colOffset, _ := it.projectedColumns.Next(0)
-
-	for _ = range it.keyProj {
-		row[columnId], err = tree.GetFieldValue(ctx, it.keyDesc, colOffset, key, it.ns)
+	for i, idx := range it.keyProj {
+		columnId := it.columnIdMap[it.ordProj[i]]
+		row[columnId], err = tree.GetFieldValue(ctx, it.keyDesc, idx, key, it.ns)
 		if err != nil {
 			return err
 		}
-		columnId, _ = it.columnIds.Next(columnId + 1)
-		colOffset, _ = it.projectedColumns.Next(colOffset + 1)
 	}
 
-	for _ = range it.valProj {
-		row[columnId], err = tree.GetFieldValue(ctx, it.valDesc, colOffset-pkCols, value, it.ns)
+	for i, idx := range it.valProj {
+		columnId := it.columnIdMap[it.ordProj[len(it.keyProj)+i]]
+
+		row[columnId], err = tree.GetFieldValue(ctx, it.valDesc, idx, value, it.ns)
 		if err != nil {
 			return err
 		}
-		columnId, _ = it.columnIds.Next(columnId + 1)
-		colOffset, _ = it.projectedColumns.Next(colOffset + 1)
 	}
 	return nil
 }
@@ -268,17 +260,17 @@ func (it prollyRowIter) Close(ctx *sql.Context) error {
 }
 
 type prollyKeylessIter struct {
-	iter             prolly.MapIter
-	ns               tree.NodeStore
-	valDesc          *val.TupleDesc
-	valProj          []int
-	ordProj          []int
-	curr             sql.Row
-	currValRow       sql.ValueRow
-	rowLen           int
-	card             uint64
-	columnIds        sql.ColSet
-	projectedColumns sets.FastIntSet
+	iter        prolly.MapIter
+	ns          tree.NodeStore
+	valDesc     *val.TupleDesc
+	valProj     []int
+	ordProj     []int
+	curr        sql.Row
+	currValRow  sql.ValueRow
+	rowLen      int
+	card        uint64
+	columnIds   sql.ColSet
+	columnIdMap []sql.ColumnId
 }
 
 var _ sql.RowIter = &prollyKeylessIter{}
@@ -315,7 +307,7 @@ func (it *prollyKeylessIter) nextTuple(ctx *sql.Context) error {
 	return nil
 }
 
-// NextValueRow implements the sql.ValueRowIter interface.
+// WriteNextValueRow implements the sql.ValueRowWriter interface.
 func (it *prollyKeylessIter) WriteNextValueRow(ctx *sql.Context, row sql.ValueRow) error {
 	if it.card == 0 {
 		_, value, err := it.iter.Next(ctx)
@@ -325,16 +317,12 @@ func (it *prollyKeylessIter) WriteNextValueRow(ctx *sql.Context, row sql.ValueRo
 
 		it.card = val.ReadKeylessCardinality(value)
 
-		colId, _ := it.columnIds.Next(1)
-		colOffset, _ := it.projectedColumns.Next(0)
-
-		for _ = range it.valProj {
-			row[colId], err = tree.GetFieldValue(ctx, it.valDesc, colOffset, value, it.ns)
+		for i, idx := range it.valProj {
+			columnId := it.columnIdMap[it.ordProj[i]]
+			row[columnId], err = tree.GetFieldValue(ctx, it.valDesc, idx, value, it.ns)
 			if err != nil {
 				return err
 			}
-			colId, _ = it.columnIds.Next(colId + 1)
-			colOffset, _ = it.projectedColumns.Next(colOffset + 1)
 		}
 	}
 	it.card--

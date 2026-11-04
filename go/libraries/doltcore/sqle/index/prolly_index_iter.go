@@ -16,9 +16,9 @@ package index
 
 import (
 	"context"
-	"github.com/dolthub/go-mysql-server/sql/sets"
 	"io"
 	"slices"
+	"sync"
 
 	"github.com/dolthub/go-mysql-server/errguard"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -51,8 +51,8 @@ type prollyIndexIter struct {
 	projections []uint64
 	sqlSch      sql.Schema
 
-	columnIds        sql.ColSet
-	projectedColumns sets.FastIntSet
+	columnIds   sql.ColSet
+	columnIdMap []sql.ColumnId
 }
 
 var _ sql.ValueRowWriter = prollyIndexIter{}
@@ -84,21 +84,22 @@ func newProllyIndexIter(
 	kd, _ := primary.Descriptors()
 	pkBld := val.NewTupleBuilder(kd, primary.NodeStore())
 	pkMap := OrdinalMappingFromIndex(idx)
-	keyProj, valProj, ordProj, projectedColumns := projectionMappings(idx.Schema(), projections)
+	keyProj, valProj, ordProj := projectionMappings(idx.Schema(), projections)
+	columnIdMap := columnIdMapping(idx.Schema(), projections, columnIds)
 
 	iter := prollyIndexIter{
-		idx:              idx,
-		indexIter:        indexIter,
-		primary:          primary,
-		pkBld:            pkBld,
-		pkMap:            pkMap,
-		keyMap:           keyProj,
-		valMap:           valProj,
-		ordMap:           ordProj,
-		projections:      projections,
-		sqlSch:           pkSch.Schema,
-		columnIds:        columnIds,
-		projectedColumns: projectedColumns,
+		idx:         idx,
+		indexIter:   indexIter,
+		primary:     primary,
+		pkBld:       pkBld,
+		pkMap:       pkMap,
+		keyMap:      keyProj,
+		valMap:      valProj,
+		ordMap:      ordProj,
+		projections: projections,
+		sqlSch:      pkSch.Schema,
+		columnIds:   columnIds,
+		columnIdMap: columnIdMap,
 	}
 
 	return iter, nil
@@ -146,24 +147,19 @@ func (p prollyIndexIter) WriteNextValueRow(ctx *sql.Context, row sql.ValueRow) e
 
 	err = p.primary.Get(ctx, pk, func(key, value val.Tuple) error {
 		keyDesc, valDesc := p.primary.Descriptors()
-		pkCols := keyDesc.Count()
-		columnId, _ := p.columnIds.Next(1)
-		colOffset, _ := p.projectedColumns.Next(0)
-		for _, _ = range p.keyMap {
-			row[columnId], err = tree.GetFieldValue(ctx, keyDesc, colOffset, key, p.primary.NodeStore())
+		for i, idx := range p.keyMap {
+			columnId := p.columnIdMap[p.ordMap[i]]
+			row[columnId], err = tree.GetFieldValue(ctx, keyDesc, idx, key, p.primary.NodeStore())
 			if err != nil {
 				return err
 			}
-			columnId, _ = p.columnIds.Next(columnId + 1)
-			colOffset, _ = p.projectedColumns.Next(colOffset + 1)
 		}
-		for _, _ = range p.valMap {
-			row[columnId], err = tree.GetFieldValue(ctx, valDesc, colOffset-pkCols, value, p.primary.NodeStore())
+		for i, idx := range p.valMap {
+			columnId := p.columnIdMap[p.ordMap[len(p.keyMap)+i]]
+			row[columnId], err = tree.GetFieldValue(ctx, valDesc, idx, value, p.primary.NodeStore())
 			if err != nil {
 				return err
 			}
-			columnId, _ = p.columnIds.Next(columnId + 1)
-			colOffset, _ = p.projectedColumns.Next(colOffset + 1)
 		}
 		return nil
 	})
@@ -270,11 +266,11 @@ func newProllyCoveringIndexIter(
 
 	var keyMap, valMap, ordMap val.OrdinalMapping
 	if idx.IsPrimaryKey() {
-		keyMap, valMap, ordMap, _ = primaryIndexMapping(idx, projections)
+		keyMap, valMap, ordMap = primaryIndexMapping(idx, projections)
 	} else {
 		keyMap, ordMap = coveringIndexMapping(idx, projections)
 	}
-	columnIdMap := columnIdMapping(idx, projections, columnIds)
+	columnIdMap := columnIdMapping(idx.Schema(), projections, columnIds)
 
 	return prollyCoveringIndexIter{
 		idx:         idx,
@@ -382,16 +378,15 @@ func (p prollyCoveringIndexIter) Close(*sql.Context) error {
 	return nil
 }
 
-func columnIdMapping(d DoltIndex, projections []uint64, columnIds sql.ColSet) []sql.ColumnId {
+func columnIdMapping(tableSchema schema.Schema, projections []uint64, columnIds sql.ColSet) []sql.ColumnId {
 	result := make([]sql.ColumnId, len(projections))
-	tableSchema := d.Schema()
 	columnId, _ := columnIds.Next(1)
 	for _, tableColumn := range tableSchema.GetAllCols().GetColumns() {
 		projectionPosition := slices.Index(projections, tableColumn.Tag)
 		if projectionPosition >= 0 {
 			result[projectionPosition] = columnId
+			columnId, _ = columnIds.Next(columnId + 1)
 		}
-		columnId, _ = columnIds.Next(columnId + 1)
 	}
 	return result
 }
@@ -412,7 +407,7 @@ func coveringIndexMapping(d DoltIndex, projections []uint64) (keyMap, ordMap val
 	return
 }
 
-func primaryIndexMapping(idx DoltIndex, projections []uint64) (keyProj, valProj, ordProj val.OrdinalMapping, projectedColumns sets.FastIntSet) {
+func primaryIndexMapping(idx DoltIndex, projections []uint64) (keyProj, valProj, ordProj val.OrdinalMapping) {
 	return ProjectionMappingsForIndex(idx.Schema(), projections)
 }
 
@@ -426,7 +421,8 @@ type prollyKeylessIndexIter struct {
 	clusteredMap val.OrdinalMapping
 	clusteredBld *val.TupleBuilder
 
-	eg *errgroup.Group
+	eg        *errgroup.Group
+	queueFunc func()
 	// cancel stops this iterator's producer without canceling the caller's context.
 	cancel  context.CancelFunc
 	rowChan chan sql.Row
@@ -449,7 +445,7 @@ type prollyKeylessIndexIter struct {
 	columnIdMap []sql.ColumnId
 }
 
-var _ sql.RowIter = prollyKeylessIndexIter{}
+var _ sql.RowIter = &prollyKeylessIndexIter{}
 
 func newProllyKeylessIndexIter(
 	ctx *sql.Context,
@@ -460,10 +456,10 @@ func newProllyKeylessIndexIter(
 	rows, dsecondary durable.Index,
 	reverse bool,
 	columnIds sql.ColSet,
-) (prollyKeylessIndexIter, error) {
+) (*prollyKeylessIndexIter, error) {
 	secondary, err := durable.ProllyMapFromIndex(dsecondary)
 	if err != nil {
-		return prollyKeylessIndexIter{}, err
+		return nil, err
 	}
 	var indexIter prolly.MapIter
 	if reverse {
@@ -472,23 +468,23 @@ func newProllyKeylessIndexIter(
 		indexIter, err = secondary.IterRange(ctx, rng)
 	}
 	if err != nil {
-		return prollyKeylessIndexIter{}, err
+		return nil, err
 	}
 
 	clustered, err := durable.ProllyMapFromIndex(rows)
 	if err != nil {
-		return prollyKeylessIndexIter{}, err
+		return nil, err
 	}
 	keyDesc, valDesc := clustered.Descriptors()
 	indexMap := OrdinalMappingFromIndex(idx)
 	keyBld := val.NewTupleBuilder(keyDesc, clustered.NodeStore())
 	sch := idx.Schema()
-	_, vm, om, _ := projectionMappings(sch, projections)
+	_, vm, om := projectionMappings(sch, projections)
 
 	workerCtx, cancel := context.WithCancel(ctx)
 	eg, c := errgroup.WithContext(workerCtx)
 
-	columnIdMap := columnIdMapping(idx, projections, columnIds)
+	columnIdMap := columnIdMapping(idx.Schema(), projections, columnIds)
 	iter := prollyKeylessIndexIter{
 		idx:          idx,
 		indexIter:    indexIter,
@@ -507,15 +503,21 @@ func newProllyKeylessIndexIter(
 		columnIdMap:  columnIdMap,
 	}
 
-	errguard.Go(eg, func() error {
-		return iter.queueRows(c)
+	// TODO: DO NOT SUBMIT. Consider removing the channel approach entirely.
+	// We do this because we only want to create the goroutine if we're not using this as a ValueRowWriter
+	iter.queueFunc = sync.OnceFunc(func() {
+		errguard.Go(eg, func() error {
+			return iter.queueRows(c)
+		})
 	})
 
-	return iter, nil
+	return &iter, nil
 }
 
 // Next returns the next row from the iterator.
 func (p prollyKeylessIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
+
+	p.queueFunc()
 	r, ok := <-p.rowChan
 	if ok {
 		return r, nil
@@ -529,7 +531,7 @@ func (p prollyKeylessIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 }
 
 // WriteNextValueRow implements the sql.ValueRowWriter interface.
-func (p prollyKeylessIndexIter) WriteNextValueRow(ctx *sql.Context, row sql.ValueRow) error {
+func (p *prollyKeylessIndexIter) WriteNextValueRow(ctx *sql.Context, row sql.ValueRow) error {
 	if p.card == 0 {
 
 		idxKey, _, err := p.indexIter.Next(ctx)
@@ -558,7 +560,7 @@ func (p prollyKeylessIndexIter) WriteNextValueRow(ctx *sql.Context, row sql.Valu
 		p.card = val.ReadKeylessCardinality(value)
 
 		for i, idx := range p.valueMap {
-			outputIdx := p.ordMap[i]
+			outputIdx := p.columnIdMap[p.ordMap[i]]
 			row[outputIdx], err = tree.GetFieldValue(ctx, p.valueDesc, idx, value, p.clustered.NodeStore())
 			if err != nil {
 				return err
@@ -636,7 +638,7 @@ func (p prollyKeylessIndexIter) keylessRowsFromValueTuple(ctx context.Context, n
 
 	for i, idx := range p.valueMap {
 		columnId := p.ordMap[i]
-		rows[0][columnId], err = tree.GetFieldValue(ctx, p.valueDesc, idx, value, ns)
+		rows[0][columnId], err = tree.GetField(ctx, p.valueDesc, idx, value, ns)
 		if err != nil {
 			return nil, err
 		}
