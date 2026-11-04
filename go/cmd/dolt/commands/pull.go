@@ -325,6 +325,9 @@ func constructInterpolatedDoltPullQuery(apr *argparser.ArgParseResults) (string,
 	if apr.Contains(cli.NoEditFlag) {
 		args = append(args, "'--no-edit'")
 	}
+	if apr.Contains(cli.AllowUnrelatedHistoriesFlag) {
+		args = append(args, "'--"+cli.AllowUnrelatedHistoriesFlag+"'")
+	}
 	if apr.Contains(cli.RebaseParam) {
 		args = append(args, "'--rebase'")
 	}

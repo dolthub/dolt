@@ -119,6 +119,41 @@ func TestResolveMergeBaseRebuild(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestResolveMergeBaseOfUnrelatedHistories(t *testing.T) {
+	// root -- x
+	// other -- y, where other has no parents
+	ctx := sql.NewEmptyContext()
+	ddb, root, commit := newTestHistory(t)
+	rootValue, err := root.GetRootValue(ctx)
+	require.NoError(t, err)
+	meta, err := datas.NewCommitMeta(name, email, "other root")
+	require.NoError(t, err)
+	other, err := ddb.CommitDanglingRoot(ctx, rootValue, meta)
+	require.NoError(t, err)
+	x := commit(100, root)
+	y := commit(200, other)
+
+	emptyBase, err := ResolveMergeBase(ctx, x, y)
+	require.NoError(t, err)
+	again, err := ResolveMergeBase(ctx, y, x)
+	require.NoError(t, err)
+	assert.Equal(t, mustHashOf(t, emptyBase), mustHashOf(t, again))
+	assert.Equal(t, 0, emptyBase.NumParents())
+	emptyRoot, err := emptyBase.GetRootValue(ctx)
+	require.NoError(t, err)
+	tables, err := emptyRoot.GetTableNames(ctx, doltdb.DefaultSchemaName, true)
+	require.NoError(t, err)
+	assert.Empty(t, tables)
+
+	// A store that never held the empty merge base stands in for one where it was garbage collected.
+	otherDB, _, _ := newTestHistory(t)
+	loaded, err := doltdb.LoadConflictBaseRoot(ctx, otherDB.ValueReadWriter(), otherDB.NodeStore(), prolly.ConflictMetadata{BaseRootIsh: mustHashOf(t, emptyBase)}, hash.Hash{})
+	require.NoError(t, err)
+	tables, err = loaded.GetTableNames(ctx, doltdb.DefaultSchemaName, true)
+	require.NoError(t, err)
+	assert.Empty(t, tables)
+}
+
 func TestConflictedCellsAdd(t *testing.T) {
 	table := doltdb.TableName{Name: "t"}
 	var cells conflictedCells

@@ -248,8 +248,12 @@ func performMerge(
 
 	canFF, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC)
 	if errors.Is(err, doltdb.ErrNoCommonAncestor) {
-		return ws, "", noConflictsOrViolations, threeWayMerge, "", ErrUnrelatedHistories.New()
-	} else if err != nil {
+		if !spec.AllowUnrelatedHistories {
+			return ws, "", noConflictsOrViolations, threeWayMerge, "", ErrUnrelatedHistories.New()
+		}
+		canFF, err = false, nil
+	}
+	if err != nil {
 		switch err {
 		case doltdb.ErrIsAhead, doltdb.ErrUpToDate:
 			ctx.Warn(DoltMergeWarningCode, "%s", err.Error())
@@ -583,6 +587,7 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 		merge.WithForce(apr.Contains(cli.ForceFlag)),
 		merge.WithNoCommit(apr.Contains(cli.NoCommitFlag)),
 		merge.WithNoEdit(apr.Contains(cli.NoEditFlag)),
+		merge.WithAllowUnrelatedHistories(apr.Contains(cli.AllowUnrelatedHistoriesFlag)),
 	)
 }
 

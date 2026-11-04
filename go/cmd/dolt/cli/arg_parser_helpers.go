@@ -101,6 +101,7 @@ func CreateMergeArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(NoEditFlag, "", "Use an auto-generated commit message when creating a merge commit. The default for interactive CLI sessions is to open an editor.")
 	ap.SupportsString(AuthorParam, "", "author", "Specify an explicit author using the standard A U Thor {{.LessThan}}author@example.com{{.GreaterThan}} format.")
 	ap.SupportsFlag(SkipVerificationFlag, "", "Skip commit verification before merge")
+	ap.SupportsFlag(AllowUnrelatedHistoriesFlag, "", "Merge histories that share no common ancestor. The merge treats every table, row and schema as added by both sides.")
 
 	return ap
 }
@@ -251,6 +252,7 @@ func CreatePullArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(RebaseParam, "r", "After fetching, rebase the current branch on top of the upstream branch instead of merging.")
 	ap.SupportsFlag(SilentFlag, "", "Suppress progress information.")
 	ap.SupportsFlag(SkipVerificationFlag, "", "Skip commit verification before merge")
+	ap.SupportsFlag(AllowUnrelatedHistoriesFlag, "", "Merge histories that share no common ancestor. The merge treats every table, row and schema as added by both sides.")
 	return ap
 }
 

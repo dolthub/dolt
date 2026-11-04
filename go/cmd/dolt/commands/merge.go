@@ -290,6 +290,9 @@ func constructInterpolatedDoltMergeQuery(apr *argparser.ArgParseResults, cliCtx 
 	if apr.Contains(cli.NoEditFlag) {
 		writeToBuffer("--no-edit", false)
 	}
+	if apr.Contains(cli.AllowUnrelatedHistoriesFlag) {
+		writeToBuffer("--"+cli.AllowUnrelatedHistoriesFlag, false)
+	}
 
 	writeToBuffer("--author", false)
 	var author string
