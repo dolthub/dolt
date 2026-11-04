@@ -3560,6 +3560,7 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		// https://github.com/dolthub/dolt/issues/12330
 		Name: "dolt_preview_merge_conflicts: column added before another column on their side",
 		SetUpScript: []string{
 			"CREATE TABLE t (pk INT PRIMARY KEY, v INT);",
@@ -3584,6 +3585,7 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		// https://github.com/dolthub/dolt/issues/12330
 		Name: "dolt_preview_merge_conflicts: column added on their side",
 		SetUpScript: []string{
 			"CREATE TABLE t (pk INT PRIMARY KEY, v INT);",
@@ -3608,6 +3610,7 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		// https://github.com/dolthub/dolt/issues/12330
 		Name: "dolt_preview_merge_conflicts: column added on our side",
 		SetUpScript: []string{
 			"CREATE TABLE t (pk INT PRIMARY KEY, v INT);",

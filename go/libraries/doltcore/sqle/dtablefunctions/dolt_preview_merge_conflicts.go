@@ -371,8 +371,7 @@ func getConflictSchemasFromRoots(ctx *sql.Context, tblName doltdb.TableName, lef
 		return nil, nil, nil, err
 	}
 
-	ourSch, theirSch, baseSch, err := applySchemaFallbacks(schemas.our, schemas.their, schemas.base, ourOk, theirOk, baseOk)
-	return baseSch, ourSch, theirSch, err
+	return applySchemaFallbacks(schemas.our, schemas.their, schemas.base, ourOk, theirOk, baseOk)
 }
 
 type extractedSchemas struct {
@@ -407,7 +406,7 @@ func extractSchemas(ctx *sql.Context, ourTbl *doltdb.Table, ourOk bool, theirTbl
 	return schemas, nil
 }
 
-func applySchemaFallbacks(ourSch, theirSch, baseSch schema.Schema, ourOk, theirOk, baseOk bool) (schema.Schema, schema.Schema, schema.Schema, error) {
+func applySchemaFallbacks(ourSch, theirSch, baseSch schema.Schema, ourOk, theirOk, baseOk bool) (base, ours, theirs schema.Schema, err error) {
 	if !theirOk {
 		if ourOk {
 			theirSch = ourSch
@@ -431,7 +430,7 @@ func applySchemaFallbacks(ourSch, theirSch, baseSch schema.Schema, ourOk, theirO
 		return nil, nil, nil, fmt.Errorf("expected our schema to equal their schema since the table did not exist in the ancestor")
 	}
 
-	return ourSch, theirSch, baseSch, nil
+	return baseSch, ourSch, theirSch, nil
 }
 
 // RowIter implements the sql.Node interface
