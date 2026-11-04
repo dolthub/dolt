@@ -141,6 +141,7 @@ func (ct ProllyConflictsTable) Deleter(ctx *sql.Context) sql.RowDeleter {
 
 type prollyConflictRowIter struct {
 	ourSch    schema.Schema
+	baseSch   schema.Schema
 	vrw       types.ValueReadWriter
 	ns        tree.NodeStore
 	tblName   doltdb.TableName
@@ -249,6 +250,7 @@ func newProllyConflictRowIter(ctx *sql.Context, ct ProllyConflictsTable) (*proll
 		ourRows: ourRows,
 		keyless: keyless,
 		ourSch:  ct.ourSch,
+		baseSch: ct.baseSch,
 		cds:     cds,
 		offsets: offsets,
 	}, nil
@@ -499,6 +501,12 @@ func (itr *prollyConflictRowIter) loadTableMaps(ctx *sql.Context, meta prolly.Co
 			return err
 		}
 
+		if ok {
+			if baseTbl, err = RekeyConflictBase(ctx, itr.tblName, baseTbl, itr.baseSch); err != nil {
+				return err
+			}
+		}
+
 		var idx durable.Index
 		if !ok {
 			idx, err = durable.NewEmptyPrimaryIndex(ctx, itr.vrw, itr.ns, itr.ourSch)
@@ -544,6 +552,26 @@ func (itr *prollyConflictRowIter) loadTableMaps(ctx *sql.Context, meta prolly.Co
 	}
 
 	return nil
+}
+
+// RekeyConflictBase returns |baseTbl| keyed like |baseSch|, the conflict schema's base. They differ when the merge
+// rekeyed its ancestor because both sides changed the table's primary key the same way.
+func RekeyConflictBase(ctx *sql.Context, name doltdb.TableName, baseTbl *doltdb.Table, baseSch schema.Schema) (*doltdb.Table, error) {
+	sch, err := baseTbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if schema.ComparePrimaryKeys(baseSch, sch) == schema.PrimaryKeysSameTags {
+		return baseTbl, nil
+	}
+	rekeyed, ok, err := merge.RekeyTable(ctx, name, baseTbl, sch, baseSch)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("cannot rekey the base of the conflicts of table %s", name)
+	}
+	return rekeyed, nil
 }
 
 func (itr *prollyConflictRowIter) Close(ctx *sql.Context) error {
