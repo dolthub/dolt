@@ -48,9 +48,18 @@ func TestCheckDatabases(t *testing.T) {
 
 	assert.ErrorIs(t, CheckDatabases(pro), errToy)
 	assert.Equal(t, []string{"dolt"}, checked)
+	assert.ErrorIs(t, CheckDatabases(wrappedProvider{pro}), errToy, "a wrapped Dolt provider is checked")
 	assert.NoError(t, CheckDatabases(sql.NewDatabaseProvider()), "only Dolt databases are checked")
 
 	hook := NewBinlogInitDatabaseHook(ctx, nil)
 	assert.ErrorIs(t, hook(sql.NewEmptyContext(), pro, "created", dEnv, db), errToy)
-	assert.Equal(t, []string{"dolt", "created"}, checked)
+	assert.Equal(t, []string{"dolt", "dolt", "created"}, checked)
+}
+
+type wrappedProvider struct {
+	*sqle.DoltDatabaseProvider
+}
+
+func (w wrappedProvider) UnderlyingDoltProvider() *sqle.DoltDatabaseProvider {
+	return w.DoltDatabaseProvider
 }

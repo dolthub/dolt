@@ -28,8 +28,13 @@ var checkDatabase = func(name string, ddb *doltdb.DoltDB) error {
 
 // CheckDatabases returns an error if a database of |provider| may not be binary logged.
 func CheckDatabases(provider sql.DatabaseProvider) error {
-	p, ok := provider.(*sqle.DoltDatabaseProvider)
-	if !ok {
+	var p *sqle.DoltDatabaseProvider
+	switch pro := provider.(type) {
+	case *sqle.DoltDatabaseProvider:
+		p = pro
+	case sqle.DoltProviderUnwrapper:
+		p = pro.UnderlyingDoltProvider()
+	default:
 		return nil
 	}
 	for _, db := range p.DoltDatabases() {
