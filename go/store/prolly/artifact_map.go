@@ -379,14 +379,7 @@ func (wr *ArtifactsEditor) Add(ctx context.Context, srcKey val.Tuple, srcRootish
 	if err != nil {
 		return err
 	}
-
-	wr.artVB.PutJSON(0, meta)
-	value, err := wr.artVB.Build(ctx, wr.pool)
-	if err != nil {
-		return err
-	}
-
-	return wr.mut.Put(ctx, key, value)
+	return wr.putArtifact(ctx, key, meta, hash.Hash{})
 }
 
 // AddConflict adds a conflict for |srcKey| from |srcRootish| with |meta|. A non-empty |baseAddr| is stored as the
@@ -396,7 +389,11 @@ func (wr *ArtifactsEditor) AddConflict(ctx context.Context, srcKey val.Tuple, sr
 	if err != nil {
 		return err
 	}
+	return wr.putArtifact(ctx, key, meta, baseAddr)
+}
 
+// putArtifact puts the artifact at |key| with |meta|, and with |baseAddr| when it is not empty.
+func (wr *ArtifactsEditor) putArtifact(ctx context.Context, key val.Tuple, meta []byte, baseAddr hash.Hash) error {
 	wr.artVB.PutJSON(0, meta)
 	if !baseAddr.IsEmpty() {
 		wr.artVB.PutCommitAddr(1, baseAddr)
@@ -405,7 +402,6 @@ func (wr *ArtifactsEditor) AddConflict(ctx context.Context, srcKey val.Tuple, sr
 	if err != nil {
 		return err
 	}
-
 	return wr.mut.Put(ctx, key, value)
 }
 
