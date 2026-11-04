@@ -368,9 +368,9 @@ func TestJournalIndexBootstrap(t *testing.T) {
 				last, err := journal.bootstrapJournal(ctx, true, nil, nil)
 				assert.NoError(t, err)
 				for _, e := range expected {
-					var act CompressedChunk
+					var act ToChunker
 					for a, exp := range e.records {
-						act, err = journal.getCompressedChunk(a)
+						act, err = journal.getChunker(a)
 						assert.NoError(t, err)
 						assert.Equal(t, exp, act)
 					}
@@ -409,11 +409,13 @@ func TestJournalWriterReadCorruptRange(t *testing.T) {
 	for _, cc := range randomCompressedChunks(1) {
 		require.NoError(t, j.writeCompressedChunk(context.Background(), dherrors.FatalBehaviorError, cc))
 		r, _ := j.ranges.get(cc.H)
-		_, err := j.getCompressedChunkAtRange(Range{Offset: r.Offset, Length: 2}, cc.H)
+		payload, err := j.readPayload(Range{Offset: r.Offset, Length: 2})
+		require.NoError(t, err)
+		_, err = j.codec.chunker(cc.H, payload)
 		require.Error(t, err)
-		_, err = j.getCompressedChunkAtRange(Range{Offset: 1 << 40, Length: r.Length}, cc.H)
+		_, err = j.readPayload(Range{Offset: 1 << 40, Length: r.Length})
 		require.Error(t, err)
-		_, err = j.getCompressedChunkAtRange(Range{Offset: 1 << 63, Length: r.Length}, cc.H)
+		_, err = j.readPayload(Range{Offset: 1 << 63, Length: r.Length})
 		require.Error(t, err)
 	}
 }
@@ -474,7 +476,7 @@ func TestJournalIndexCorruptionRecovery(t *testing.T) {
 		require.Equal(t, last, got)
 
 		for h, cc := range data {
-			act, err := j.getCompressedChunk(h)
+			act, err := j.getChunker(h)
 			require.NoError(t, err)
 			require.Equal(t, cc, act)
 		}
@@ -563,7 +565,7 @@ func TestJournalIndexCorruptionRecovery(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, last, got)
 		for h, cc := range data {
-			act, err := j.getCompressedChunk(h)
+			act, err := j.getChunker(h)
 			require.NoError(t, err)
 			require.Equal(t, cc, act)
 		}
