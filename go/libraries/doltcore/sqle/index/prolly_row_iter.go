@@ -204,32 +204,32 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	return row, nil
 }
 
-// NextValueRow implements the sql.ValueRowIter interface.
+// WriteNextValueRow implements the sql.WriteNextValueRow interface.
 func (it prollyRowIter) WriteNextValueRow(ctx *sql.Context, row sql.ValueRow) error {
 	key, value, err := it.iter.Next(ctx)
 	if err != nil {
 		return err
 	}
 
-	pkCols := len(it.keyProj)
-	colId, _ := it.columnIds.Next(1)
+	pkCols := it.keyDesc.Count()
+	columnId, _ := it.columnIds.Next(1)
 	colOffset, _ := it.projectedColumns.Next(0)
 
 	for _ = range it.keyProj {
-		row[colId], err = tree.GetFieldValue(ctx, it.keyDesc, colOffset, key, it.ns)
+		row[columnId], err = tree.GetFieldValue(ctx, it.keyDesc, colOffset, key, it.ns)
 		if err != nil {
 			return err
 		}
-		colId, _ = it.columnIds.Next(colId + 1)
+		columnId, _ = it.columnIds.Next(columnId + 1)
 		colOffset, _ = it.projectedColumns.Next(colOffset + 1)
 	}
 
 	for _ = range it.valProj {
-		row[colId], err = tree.GetFieldValue(ctx, it.valDesc, colOffset-pkCols, value, it.ns)
+		row[columnId], err = tree.GetFieldValue(ctx, it.valDesc, colOffset-pkCols, value, it.ns)
 		if err != nil {
 			return err
 		}
-		colId, _ = it.columnIds.Next(colId + 1)
+		columnId, _ = it.columnIds.Next(columnId + 1)
 		colOffset, _ = it.projectedColumns.Next(colOffset + 1)
 	}
 	return nil
@@ -245,11 +245,11 @@ func (it prollyRowIter) Columns() sql.ColSet {
 	return it.columnIds
 }
 
-// IsValueRowIter implements the sql.ValueRowIter interface.
+// IsValueRowWriter implements the sql.ValueRowWriter interface.
 func (it prollyRowIter) IsValueRowWriter(ctx *sql.Context) bool {
-	/*if it.columnIds.Empty() {
+	if it.columnIds.Empty() {
 		return false
-	}*/
+	}
 	for _, typ := range it.keyDesc.Types {
 		if typ.Enc == val.ExtendedEnc || typ.Enc == val.ExtendedAddrEnc || typ.Enc == val.ExtendedAdaptiveEnc {
 			return false
