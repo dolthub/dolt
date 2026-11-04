@@ -306,6 +306,20 @@ func (db Database) GetGlobalState() globalstate.GlobalState {
 	return db.gs
 }
 
+func (db Database) materializePending(ctx *sql.Context) error {
+	dSess := dsess.DSessFromSess(ctx.Session)
+	state, ok, err := dSess.LookupDbState(ctx, db.RevisionQualifiedName())
+	if err != nil || !ok {
+		return err
+	}
+	wSess := state.WriteSession()
+	if wSess == nil {
+		return nil
+	}
+	_, err = wSess.Flush(ctx)
+	return err
+}
+
 // GetTableInsensitive is used when resolving tables in queries. It returns a best-effort case-insensitive match for
 // the table name given.
 func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Table, bool, error) {
@@ -2514,6 +2528,12 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 
 // GetViewDefinition implements sql.ViewDatabase
 func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.ViewDefinition, bool, error) {
+	// TODO: only materialize table instead of every table
+	// views are cached by root, so the root must include any edits to dolt_schemas
+	if err := db.materializePending(ctx); err != nil {
+		return sql.ViewDefinition{}, false, err
+	}
+
 	root, err := db.GetRoot(ctx)
 	if err != nil {
 		return sql.ViewDefinition{}, false, err
@@ -2662,6 +2682,11 @@ func (db Database) DropView(ctx *sql.Context, name string) error {
 
 // GetTriggers implements sql.TriggerDatabase.
 func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error) {
+	// triggers are cached by root, so the root must include any edits to dolt_schemas
+	if err := db.materializePending(ctx); err != nil {
+		return nil, err
+	}
+
 	root, err := db.GetRoot(ctx)
 	if err != nil {
 		return nil, nil

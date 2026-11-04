@@ -323,6 +323,21 @@ func (t *DoltTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.
 
 // DoltTable returns the underlying doltTable from the current session
 func (t *DoltTable) DoltTable(ctx *sql.Context) (*doltdb.Table, error) {
+	// Flush pending tables
+	sess := dsess.DSessFromSess(ctx.Session)
+	state, ok, err := sess.LookupDbState(ctx, t.db.RevisionQualifiedName())
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, nil
+	}
+	writeSess := state.WriteSession()
+	_, err = writeSess.Flush(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	root, err := t.workingRoot(ctx)
 	if err != nil {
 		return nil, err

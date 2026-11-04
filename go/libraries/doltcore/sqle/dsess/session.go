@@ -619,6 +619,7 @@ func (d *DoltSession) materializeAllPending(ctx *sql.Context) error {
 	}
 	d.mu.Unlock()
 
+	// TODO: concurrency?
 	for _, bs := range states {
 		if err := d.materializePending(ctx, bs); err != nil {
 			return err
@@ -630,9 +631,11 @@ func (d *DoltSession) materializeAllPending(ctx *sql.Context) error {
 // CommitTransaction commits the in-progress transaction. Depending on session settings, this may write only a new
 // working sets, or may additionally create a new dolt commit for the current HEAD.
 func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error {
+	if err := d.materializeAllPending(ctx); err != nil {
+		return err
+	}
 
 	dirties := d.dirtyWorkingSets()
-
 	if TransactionsDisabled(ctx) || len(dirties) == 0 {
 		// Even without a batch to publish, a successful COMMIT ends the transaction.
 		// The engine clears transaction state only on COMMIT statements, but other kinds of statements that implicitly
@@ -1353,6 +1356,9 @@ func (d *DoltSession) GetRoots(ctx *sql.Context, dbName string) (doltdb.Roots, b
 		return doltdb.Roots{}, false
 	}
 	if !ok {
+		return doltdb.Roots{}, false
+	}
+	if err = d.materializePending(ctx, branchState); err != nil {
 		return doltdb.Roots{}, false
 	}
 

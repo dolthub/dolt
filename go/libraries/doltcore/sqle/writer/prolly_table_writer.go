@@ -418,6 +418,7 @@ func (w *prollyTableWriter) Close(ctx *sql.Context) error {
 		return w.errEncountered
 	}
 	if w.deferMaterialization() {
+		w.pending = w.pending || w.deferMaterialization()
 		// TODO: why?
 		//return w.StatementComplete(ctx)
 		return nil
@@ -538,7 +539,15 @@ func (w *prollyTableWriter) table(ctx *sql.Context) (tbl *doltdb.Table, err erro
 }
 
 func (w *prollyTableWriter) PendingRows() *prolly.MutableMap {
-	return w.primary.(prollyIndexWriter).mut
+	// TODO: think of a better solution
+	switch pri := w.primary.(type) {
+	case prollyKeylessWriter:
+		return pri.mut
+	case prollyIndexWriter:
+		return pri.mut
+	default:
+		panic("unexpected primary writer type")
+	}
 }
 
 func (w *prollyTableWriter) flush(ctx *sql.Context) error {

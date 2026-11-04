@@ -121,19 +121,17 @@ func TestSingleScript(t *testing.T) {
 		{
 			Name: "lazy flush",
 			SetUpScript: []string{
-				"create table t (i int primary key);",
-				"set @autocommit = off;",
-				"start transaction;",
+				"create table t (i int, j int);",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "insert into t values (1);",
+					Query:    "insert into t values ();",
 					Expected: []sql.Row{},
 				},
 				{
 					Query: "select * from t;",
 					Expected: []sql.Row{
-						{1},
+						{nil, nil},
 					},
 				},
 			},
