@@ -1607,6 +1607,17 @@ func TestDoltMerge(t *testing.T) {
 	RunDoltMergeTests(t, h)
 }
 
+func TestDoltMergeSharedEmptyBase(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltMergeSharedEmptyBaseTests(t, h)
+}
+
+func TestDoltMergeUnrelatedHistories(t *testing.T) {
+	t.Skip("merging unrelated histories is not implemented: https://github.com/dolthub/dolt/issues/4468")
+	h := newDoltEnginetestHarness(t)
+	RunDoltMergeUnrelatedHistoriesTests(t, h)
+}
+
 func TestDoltMergeMultipleBases(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunDoltMergeMultipleBasesTests(t, h)
