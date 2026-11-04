@@ -1345,7 +1345,12 @@ var DoltTransactionTests = []queries.TransactionTest{
 				Expected: []sql.Row{{float64(10 + 2 + 3 + 21 + 13 + 14)}},
 			},
 			{
-				// triggers and auto increment
+				Query:    "/* client a */ select @@mydb_working = @working",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				// triggers and auto increment. Statements that fire triggers create a savepoint, which materializes
+				// pending edits.
 				Query:    "/* client a */ insert into ai (v) values (7), (8)",
 				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 1}}},
 			},
@@ -1362,8 +1367,8 @@ var DoltTransactionTests = []queries.TransactionTest{
 				Expected: []sql.Row{{"ai 7"}, {"ai 8"}, {"ai 9"}},
 			},
 			{
-				Query:    "/* client a */ select @@mydb_working = @working",
-				Expected: []sql.Row{{true}},
+				Query:    "/* client a */ set @working = @@mydb_working",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client b */ select * from t order by x",
@@ -1409,7 +1414,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 		},
 	},
 	{
-		Name: "savepoints restore pending edits without materializing them",
+		Name: "savepoints and rollbacks with pending edits",
 		SetUpScript: []string{
 			"create table t (x int primary key, y int, key (y))",
 			"create table log (msg varchar(50) primary key)",
@@ -1423,10 +1428,6 @@ var DoltTransactionTests = []queries.TransactionTest{
 			{
 				Query:    "/* client a */ start transaction",
 				Expected: []sql.Row{},
-			},
-			{
-				Query:    "/* client a */ set @working = @@mydb_working",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ insert into t values (2, 2)",
@@ -1490,11 +1491,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 				Expected: []sql.Row{{"t 1"}, {"t 2"}, {"t 3"}},
 			},
 			{
-				Query:    "/* client a */ select @@mydb_working = @working",
-				Expected: []sql.Row{{true}},
-			},
-			{
-				// edits materialized after a savepoint are rolled back too
+				// edits materialized by a system table read after a savepoint are rolled back too
 				Query:    "/* client a */ savepoint s2",
 				Expected: []sql.Row{},
 			},

@@ -60,10 +60,6 @@ func (k prollyKeylessWriter) CheckpointView(ctx context.Context) (prolly.MapView
 	return v, err == nil, err
 }
 
-func (k prollyKeylessWriter) RestoreView(v prolly.MapView) {
-	v.CopyTo(k.mut)
-}
-
 // ValidateKeyViolations returns nil for keyless writers, because there are no keys, so violations are possible
 func (k prollyKeylessWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error {
 	return nil
@@ -267,11 +263,6 @@ func (writer prollyKeylessSecondaryWriter) HasUncommittedEdits() bool {
 func (writer prollyKeylessSecondaryWriter) CheckpointView(ctx context.Context) (prolly.MapView, bool, error) {
 	v, err := prolly.CheckpointView(ctx, writer.mut)
 	return v, err == nil, err
-}
-
-// RestoreView implements the interface indexWriter.
-func (writer prollyKeylessSecondaryWriter) RestoreView(v prolly.MapView) {
-	v.CopyTo(writer.mut)
 }
 
 func (writer prollyKeylessSecondaryWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {

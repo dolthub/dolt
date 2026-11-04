@@ -75,12 +75,6 @@ func CheckpointView(ctx context.Context, mut *MutableMap) (MapView, error) {
 	}, nil
 }
 
-// CopyTo replaces the contents of |mut| with those of the MapView, discarding the edits and checkpoint of |mut|.
-func (v MapView) CopyTo(mut *MutableMap) {
-	mut.tuples = v.tuples.Copy()
-	mut.stash = nil
-}
-
 // Get fetches the Tuple pair keyed by |key|, if it exists, and passes it to |cb|.
 // If the |key| is not present in the MapView, a nil Tuple pair is passed to |cb|.
 func (v MapView) Get(ctx context.Context, key val.Tuple, cb tree.KeyValueFn[val.Tuple, val.Tuple]) error {

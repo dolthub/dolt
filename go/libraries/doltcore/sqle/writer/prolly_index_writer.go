@@ -91,8 +91,6 @@ type indexWriter interface {
 	HasUncommittedEdits() bool
 	// CheckpointView returns a view of the index as of the last Commit, or false if the index can't provide one.
 	CheckpointView(ctx context.Context) (prolly.MapView, bool, error)
-	// RestoreView replaces the contents of the index with those of a view returned by CheckpointView.
-	RestoreView(v prolly.MapView)
 	ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error
 	Insert(ctx context.Context, sqlRow sql.Row) error
 	Delete(ctx context.Context, sqlRow sql.Row) error
@@ -144,10 +142,6 @@ func (m prollyIndexWriter) HasUncommittedEdits() bool {
 func (m prollyIndexWriter) CheckpointView(ctx context.Context) (prolly.MapView, bool, error) {
 	v, err := prolly.CheckpointView(ctx, m.mut)
 	return v, err == nil, err
-}
-
-func (m prollyIndexWriter) RestoreView(v prolly.MapView) {
-	v.CopyTo(m.mut)
 }
 
 func (m prollyIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.Row) (val.Tuple, error) {
@@ -414,10 +408,6 @@ func (m prollySecondaryIndexWriter) CheckpointView(ctx context.Context) (prolly.
 	}
 	v, err := prolly.CheckpointView(ctx, mut)
 	return v, err == nil, err
-}
-
-func (m prollySecondaryIndexWriter) RestoreView(v prolly.MapView) {
-	v.CopyTo(m.mut.(*prolly.MutableMap))
 }
 
 func (m prollySecondaryIndexWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error {

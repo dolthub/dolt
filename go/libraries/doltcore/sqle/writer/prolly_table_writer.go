@@ -547,41 +547,6 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, tbl *doltdb.Table) error {
 	return nil
 }
 
-// writerSnapshot is the state of a prollyTableWriter with pending edits.
-type writerSnapshot struct {
-	tbl        *doltdb.Table
-	checkpoint uint64
-	rows       *index.PendingRows
-}
-
-// snapshot returns the state of the writer's pending edits, or false if its indexes can't provide views of them.
-func (w *prollyTableWriter) snapshot(ctx *sql.Context) (writerSnapshot, bool, error) {
-	rows, err := w.pendingRows(ctx)
-	if err != nil || rows == nil {
-		return writerSnapshot{}, false, err
-	}
-	return writerSnapshot{tbl: w.tbl, checkpoint: w.checkpoint, rows: rows}, true, nil
-}
-
-// restore returns the writer to the state of |snap|, discarding any edits made since.
-func (w *prollyTableWriter) restore(ctx *sql.Context, snap writerSnapshot) error {
-	if err := w.Reset(ctx, snap.tbl); err != nil {
-		return err
-	}
-	w.primary.RestoreView(snap.rows.Primary)
-	for name, idx := range w.secondary {
-		v, ok := snap.rows.Secondary[name]
-		if !ok {
-			return fmt.Errorf("no snapshot of index %s", name)
-		}
-		idx.RestoreView(v)
-	}
-	w.pending = true
-	w.checkpoint = snap.checkpoint
-	w.view = snap.rows
-	return nil
-}
-
 // table materializes all changes to the primary key, secondary keys, and auto increments to a new doltdb.Table
 func (w *prollyTableWriter) table(ctx *sql.Context) (tbl *doltdb.Table, err error) {
 	return w.tableFromMaps(ctx, indexWriter.Map)

@@ -121,17 +121,6 @@ func testCheckpointView(t *testing.T, rnd *rand.Rand, scale, maxPending int) {
 		edit(scale/2 + 5)
 		checkViewMatches(t, ctx, view, expected, spread)
 		mut.Revert(ctx)
-
-		// a MutableMap made from the view has its contents, and its edits don't change the view
-		restored := m.Mutate().WithMaxPending(maxPending)
-		require.NoError(t, restored.Put(ctx, randKey(), value(rnd.Int63())))
-		view.CopyTo(restored)
-		actual, err := restored.Map(ctx)
-		require.NoError(t, err)
-		assert.Equal(t, expected.HashOf(), actual.HashOf())
-		require.NoError(t, restored.Put(ctx, randKey(), value(rnd.Int63())))
-		require.NoError(t, restored.Delete(ctx, randKey()))
-		checkViewMatches(t, ctx, view, expected, spread)
 	}
 }
 
