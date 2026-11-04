@@ -359,6 +359,59 @@ var MergeSamePrimaryKeyChangeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// x and y both changed the primary key of t from (a) to (b), and changed row 1 differently. m1 and m2 each
+		// merge x and y, so merging m2 into m1 has the two merge bases x and y, and builds a virtual merge base by
+		// merging them against t's ancestor rekeyed to (b). The virtual merge base must read each conflicted row's
+		// base from that rekeyed ancestor. The row with b = 2 is a = 1, while the ancestor keyed on a holds a = 2 there.
+		Name: "same pk change on both sides: criss-cross merge reads the rekeyed ancestor",
+		SetUpScript: []string{
+			"CREATE TABLE t (a INT NOT NULL, b INT NOT NULL, v INT, w INT, PRIMARY KEY (a));",
+			"INSERT INTO t VALUES (1, 2, 10, 100), (2, 1, 20, 200);",
+			"CALL DOLT_COMMIT('-Am', 'base');",
+			"CALL DOLT_BRANCH('x');",
+			"CALL DOLT_BRANCH('y');",
+
+			"CALL DOLT_CHECKOUT('x');",
+			"ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY (b);",
+			"UPDATE t SET v = 11, w = 150 WHERE a = 1;",
+			"CALL DOLT_COMMIT('-am', 'x');",
+
+			"CALL DOLT_CHECKOUT('y');",
+			"ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY (b);",
+			"UPDATE t SET v = 12 WHERE a = 1;",
+			"CALL DOLT_COMMIT('-am', 'y');",
+
+			"SET @@autocommit = 0;",
+			"SET @@dolt_allow_commit_conflicts = 1;",
+			"CALL DOLT_CHECKOUT('-b', 'm1', 'x');",
+			"CALL DOLT_MERGE('y');",
+			"CALL DOLT_CONFLICTS_RESOLVE('--ours', 't');",
+			"CALL DOLT_COMMIT('-Am', 'm1');",
+
+			"CALL DOLT_CHECKOUT('-b', 'm2', 'y');",
+			"CALL DOLT_MERGE('x');",
+			"CALL DOLT_CONFLICTS_RESOLVE('--theirs', 't');",
+			"UPDATE t SET w = 160 WHERE a = 1;",
+			"CALL DOLT_COMMIT('-Am', 'm2');",
+			"CALL DOLT_CHECKOUT('m1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_merge_bases('m1', 'm2');",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				// Both sides hold v = 11, and only m2 changed w since the virtual merge base, so the row merges.
+				Query:    "CALL DOLT_MERGE('m2');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY a;",
+				Expected: []sql.Row{{1, 2, 11, 160}, {2, 1, 20, 200}},
+			},
+		},
+	},
 	// The merge refuses the cases below with an error rather than merging them.
 	{
 		Name: "same pk change on both sides: ancestor rows collide under the new key",
