@@ -210,6 +210,32 @@ branch', 'test', '%', 'admin')"
     dolt -u test2 -p '' sql -q "call dolt_branch('test-branch')"
 }
 
+@test "branch-control: branch namespace control applies to dolt_checkout" {
+    mkdir remote
+    dolt remote add origin file://remote
+    dolt branch locked-remote
+    dolt push origin locked-remote
+    dolt branch -D locked-remote
+
+    setup_test_user
+    dolt sql -q "insert into dolt_branch_namespace_control values ('dolt-repo-$$', 'locked-%', 'root', '%')"
+
+    start_sql_server
+
+    run dolt -u test -p '' sql -q "call dolt_checkout('-b', 'locked-new')"
+    [ $status -ne 0 ]
+    [[ $output =~ "cannot create a branch" ]] || false
+
+    # Checking out a remote branch creates a local branch tracking it
+    run dolt -u test -p '' sql -q "call dolt_checkout('locked-remote')"
+    [ $status -ne 0 ]
+    [[ $output =~ "cannot create a branch" ]] || false
+
+    run dolt -u test -p '' sql --result-format csv -q "select name from dolt_branches where name like 'locked-%'"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+}
+
 @test "branch-control: test longest match in branch namespace control" {
     setup_test_user
 
