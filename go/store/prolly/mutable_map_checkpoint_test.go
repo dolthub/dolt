@@ -43,6 +43,12 @@ func TestMutableMapCheckpoints(t *testing.T) {
 			t.Run("revert post-flush", func(t *testing.T) {
 				testRevertAfterFlush(t, s)
 			})
+			t.Run("revert post-flush without checkpointed edits", func(t *testing.T) {
+				testRevertAfterFlushWithoutCheckpointedEdits(t, s)
+			})
+			t.Run("revert twice post-flush", func(t *testing.T) {
+				testRevertTwiceAfterFlush(t, s)
+			})
 		})
 	}
 }
@@ -156,6 +162,85 @@ func testRevertAfterFlush(t *testing.T, scale int) {
 		assert.True(t, ok)
 	}
 
+	mut.Revert(ctx)
+
+	for _, ed := range pre {
+		ok, err := mut.Has(ctx, ed[0])
+		require.NoError(t, err)
+		assert.True(t, ok)
+	}
+	for _, ed := range post {
+		ok, err := mut.Has(ctx, ed[0])
+		require.NoError(t, err)
+		assert.False(t, ok)
+	}
+}
+
+// testRevertAfterFlushWithoutCheckpointedEdits reverts writes that were flushed when no checkpointed writes were
+// pending, either because none were ever made or because they were flushed before the checkpoint was taken.
+func testRevertAfterFlushWithoutCheckpointedEdits(t *testing.T, scale int) {
+	ctx := context.Background()
+	for _, flushBeforeCheckpoint := range []bool{false, true} {
+		m := ascendingIntMapWithStep(t, scale, 2)
+		mut := m.Mutate()
+
+		edits := ascendingTuplesWithStepAndStart(scale/5, 2, 1)
+		pre, post := edits[:scale/10], edits[scale/10:]
+		if !flushBeforeCheckpoint {
+			pre, post = nil, edits
+		}
+
+		for _, ed := range pre {
+			require.NoError(t, mut.Put(ctx, ed[0], ed[1]))
+		}
+		require.NoError(t, mut.flushPending(ctx, false))
+		require.NoError(t, mut.Checkpoint(ctx))
+
+		for i, ed := range post {
+			require.NoError(t, mut.Put(ctx, ed[0], ed[1]))
+			if i == len(post)/2 {
+				require.NoError(t, mut.flushPending(ctx, false))
+			}
+		}
+
+		mut.Revert(ctx)
+
+		for _, ed := range pre {
+			ok, err := mut.Has(ctx, ed[0])
+			require.NoError(t, err)
+			assert.True(t, ok)
+		}
+		for _, ed := range post {
+			ok, err := mut.Has(ctx, ed[0])
+			require.NoError(t, err)
+			assert.False(t, ok)
+		}
+	}
+}
+
+// testRevertTwiceAfterFlush reverts to a stashed checkpoint, then makes and reverts more writes.
+func testRevertTwiceAfterFlush(t *testing.T, scale int) {
+	ctx := context.Background()
+	m := ascendingIntMapWithStep(t, scale, 2)
+	mut := m.Mutate()
+
+	edits := ascendingTuplesWithStepAndStart(scale/5, 2, 1)
+	pre, post := edits[:scale/10], edits[scale/10:]
+
+	for _, ed := range pre {
+		require.NoError(t, mut.Put(ctx, ed[0], ed[1]))
+	}
+	require.NoError(t, mut.Checkpoint(ctx))
+
+	for _, ed := range post {
+		require.NoError(t, mut.Put(ctx, ed[0], ed[1]))
+	}
+	require.NoError(t, mut.flushPending(ctx, false))
+	mut.Revert(ctx)
+
+	for _, ed := range post {
+		require.NoError(t, mut.Put(ctx, ed[0], ed[1]))
+	}
 	mut.Revert(ctx)
 
 	for _, ed := range pre {
