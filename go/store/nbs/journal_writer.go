@@ -491,13 +491,16 @@ func (wr *journalWriter) getPayload(h hash.Hash) ([]byte, error) {
 
 // chunkData returns the data of chunk |h| from its record's payload.
 func (wr *journalWriter) chunkData(h hash.Hash, payload []byte) ([]byte, error) {
-	var c ToChunker
-	var err error
 	if _, ok := wr.codec.(plainJournal); ok {
-		c, err = NewCompressedChunk(h, payload)
-	} else {
-		c, err = wr.codec.chunker(h, payload)
+		// The concrete type keeps the plaintext chunk off the heap.
+		cc, err := NewCompressedChunk(h, payload)
+		if err != nil {
+			return nil, err
+		}
+		chk, err := cc.ToChunk()
+		return chk.Data(), err
 	}
+	c, err := wr.codec.chunker(h, payload)
 	if err != nil {
 		return nil, err
 	}

@@ -160,7 +160,9 @@ func (wr *journalWriter) indexLookup(l lookup) error {
 	if err := writeIndexLookup(wr.indexWriter, l); err != nil {
 		return err
 	}
-	wr.batchCrc = crc32.Update(wr.batchCrc, crcTable, l.a[:])
+	// Hashing a copy keeps |l| itself off the heap.
+	a := l.a
+	wr.batchCrc = crc32.Update(wr.batchCrc, crcTable, a[:])
 	wr.codec.indexedLookup(l)
 	return nil
 }
