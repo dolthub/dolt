@@ -254,7 +254,7 @@ func (pm *PreviewMergeConflictsTableFunction) generateSchema(ctx *sql.Context) e
 		return err
 	}
 
-	baseSch, ourSch, theirSch, err := getConflictSchemasFromRoots(ctx, tblName, ri.leftRoot, ri.rightRoot, ri.baseRoot)
+	ourSch, theirSch, baseSch, err := getConflictSchemasFromRoots(ctx, tblName, ri.leftRoot, ri.rightRoot, ri.baseRoot)
 	if err != nil {
 		return err
 	}
@@ -346,7 +346,7 @@ func getTableName(ctx *sql.Context, tableName string, ri rootInfo) (doltdb.Table
 	return doltdb.TableName{Name: tableName, Schema: schemaName}, nil
 }
 
-func getConflictSchemasFromRoots(ctx *sql.Context, tblName doltdb.TableName, leftRoot, rightRoot, baseRoot doltdb.RootValue) (base, sch, mergeSch schema.Schema, err error) {
+func getConflictSchemasFromRoots(ctx *sql.Context, tblName doltdb.TableName, leftRoot, rightRoot, baseRoot doltdb.RootValue) (ourSch, theirSch, baseSch schema.Schema, err error) {
 	ourTbl, ourOk, err := leftRoot.GetTable(ctx, tblName)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to get table from left root: %w", err)

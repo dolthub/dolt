@@ -7424,6 +7424,58 @@ var PreviewMergeConflictsFunctionScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// https://github.com/dolthub/dolt/issues/12251
+		Name: "schemas stay with their side when a branch drops a column",
+		SetUpScript: []string{
+			"create table t (k int primary key, x int, y int);",
+			"insert into t values (1, 2, 3);",
+			"call dolt_commit('-Am', 'base');",
+			"call dolt_checkout('-b', 'other');",
+			"alter table t drop column x;",
+			"update t set y = 7;",
+			"call dolt_commit('-am', 'other');",
+			"call dolt_checkout('main');",
+			"update t set y = 5;",
+			"call dolt_commit('-am', 'main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select base_y, our_y, their_y from dolt_preview_merge_conflicts('main', 'other', 't');",
+				Expected: []sql.Row{{3, 5, 7}},
+			},
+			{
+				Query:    "select base_x, our_x from dolt_preview_merge_conflicts('main', 'other', 't');",
+				Expected: []sql.Row{{2, 2}},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/12251
+		Name: "varchar conflict values are read with their side's schema",
+		SetUpScript: []string{
+			"create table t (k int primary key, x int, y varchar(8));",
+			"insert into t values (1, 2, '3');",
+			"call dolt_commit('-Am', 'base');",
+			"call dolt_checkout('-b', 'other');",
+			"alter table t drop column x;",
+			"update t set y = '7';",
+			"call dolt_commit('-am', 'other');",
+			"call dolt_checkout('main');",
+			"update t set y = '5';",
+			"call dolt_commit('-am', 'main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select base_y, our_y, their_y from dolt_preview_merge_conflicts('main', 'other', 't');",
+				Expected: []sql.Row{{"3", "5", "7"}},
+			},
+			{
+				Query:    "select base_x, our_x from dolt_preview_merge_conflicts('main', 'other', 't');",
+				Expected: []sql.Row{{2, 2}},
+			},
+		},
+	},
 }
 
 // convertMergeScriptTest converts a MergeScriptTest into a standard ScriptTest. If flipSides is true, then the
