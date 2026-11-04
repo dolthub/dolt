@@ -309,7 +309,7 @@ func (fs *localFS) MoveDir(srcPath, destPath string) (err error) {
 		return err
 	}
 
-	return file.Rename(srcPath, destPath)
+	return file.MoveDir(srcPath, destPath)
 }
 
 // converts a path to an absolute path.  If it's already an absolute path the input path will be returned unaltered

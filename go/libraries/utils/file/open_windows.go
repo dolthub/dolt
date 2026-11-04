@@ -18,11 +18,17 @@
 package file
 
 import (
+	"errors"
 	"os"
 	"syscall"
 	"time"
 
 	"golang.org/x/sys/windows"
+)
+
+const (
+	maxRetryWait        = 10000 * time.Millisecond
+	retryWaitMultiplier = 10
 )
 
 // Rename functions exactly like os.Rename, except that it retries upon failure on Windows. This "fixes" some errors
@@ -36,6 +42,40 @@ func Rename(oldpath, newpath string) error {
 		}
 	}
 	return err
+}
+
+// MoveDir moves a directory from |oldpath| to |newpath| on Windows
+// without replacing an existing destination. It retries locked or
+// access-denied moves, but stops retrying as soon as the destination
+// path exists and returns an error wrapping [os.ErrExist].
+func MoveDir(oldpath, newpath string) error {
+	from, err := syscall.UTF16PtrFromString(oldpath)
+	if err != nil {
+		return &os.LinkError{Op: "MoveDir", Old: oldpath, New: newpath, Err: err}
+	}
+	to, err := syscall.UTF16PtrFromString(newpath)
+	if err != nil {
+		return &os.LinkError{Op: "MoveDir", Old: oldpath, New: newpath, Err: err}
+	}
+
+	for waitTime := time.Millisecond; ; {
+		// [os.Rename] requests replacement, which Windows disallows for
+		// directories. MoveFileEx without replace still reports collisions
+		// as access-denied.
+		err = windows.MoveFileEx(from, to, 0)
+		if err == nil {
+			return nil
+		}
+		linkErr := &os.LinkError{Op: "MoveDir", Old: oldpath, New: newpath, Err: err}
+		if _, statErr := os.Lstat(newpath); statErr == nil {
+			return errors.Join(os.ErrExist, linkErr)
+		}
+		if !isMoveRetryable(err) || waitTime > maxRetryWait {
+			return linkErr
+		}
+		time.Sleep(waitTime)
+		waitTime *= retryWaitMultiplier
+	}
 }
 
 // Remove functions exactly like os.Remove, except that it retries upon failure on Windows. This "fixes" some errors
@@ -81,6 +121,21 @@ func isAccessError(err error) bool {
 		if ok && (sysErr == windows.ERROR_ACCESS_DENIED || sysErr == windows.ERROR_SHARING_VIOLATION) {
 			return true
 		}
+	}
+	return false
+}
+
+func isMoveRetryable(err error) bool {
+	return isAccessError(err) || isSharingViolation(err)
+}
+
+func isSharingViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	var errno syscall.Errno
+	if errors.As(err, &errno) {
+		return errno == windows.ERROR_SHARING_VIOLATION || errno == windows.ERROR_LOCK_VIOLATION
 	}
 	return false
 }
