@@ -132,6 +132,31 @@ func TestStoreOptionsReusable(t *testing.T) {
 	assert.False(t, ReusableStore(ctx, nil, nil))
 }
 
+func TestStoreOptionsReusableFileStore(t *testing.T) {
+	ctx := context.Background()
+	s := &toyStores{reuse: true}
+	withStoreOptions(t, s)
+	t.Cleanup(func() { _ = CloseAllLocalDatabases() })
+
+	urlStr := "file://" + filepath.ToSlash(t.TempDir())
+	params := map[string]interface{}{ChunkJournalParam: struct{}{}}
+	db1, _, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, params)
+	require.NoError(t, err)
+	db2, _, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, params)
+	require.NoError(t, err)
+	assert.True(t, db1 == db2)
+
+	s.reuse = false
+	db3, _, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, params)
+	require.NoError(t, err)
+	assert.True(t, db3 != db1, "an unreusable cached store is replaced")
+
+	s.reuse = true
+	db4, _, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, params)
+	require.NoError(t, err)
+	assert.True(t, db4 == db3)
+}
+
 type wrappingDialer struct {
 	GRPCDialProvider
 }
