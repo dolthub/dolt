@@ -8937,6 +8937,75 @@ var DoltTempTableScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "temporary table inline indexes",
+		// PostgreSQL does not support inline INDEX/UNIQUE KEY declarations, SHOW CREATE TABLE, or FORCE INDEX.
+		Dialect: "mysql",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "CREATE TEMPORARY TABLE inline_indexes (id VARCHAR(512), n INT, INDEX idx (id(255)), UNIQUE KEY uniq (n))",
+			},
+			{
+				Query: "INSERT INTO inline_indexes VALUES ('abc', 1), ('def', 2)",
+			},
+			{
+				Query:    "SHOW CREATE TABLE inline_indexes",
+				Expected: []sql.Row{{"inline_indexes", "CREATE TEMPORARY TABLE `inline_indexes` (\n  `id` varchar(512),\n  `n` int,\n  KEY `idx` (`id`(255)),\n  UNIQUE KEY `uniq` (`n`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:    "SELECT id, n FROM inline_indexes FORCE INDEX (idx) WHERE id = 'abc'",
+				Expected: []sql.Row{{"abc", 1}},
+			},
+			{
+				Query:       "INSERT INTO inline_indexes VALUES ('other', 1)",
+				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+			{
+				Query:    "SELECT id, n FROM inline_indexes ORDER BY n",
+				Expected: []sql.Row{{"abc", 1}, {"def", 2}},
+			},
+		},
+	},
+	{
+		Name: "temporary table inline index with AS SELECT",
+		// PostgreSQL does not support inline INDEX declarations in CTAS, SHOW CREATE TABLE, or FORCE INDEX.
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"CREATE TABLE source_entries (id VARCHAR(512))",
+			"INSERT INTO source_entries VALUES ('abc'), ('def')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "CREATE TEMPORARY TABLE mat_entries (INDEX mat_entries_id (id(255))) AS SELECT id FROM source_entries",
+			},
+			{
+				Query:    "SHOW CREATE TABLE mat_entries",
+				Expected: []sql.Row{{"mat_entries", "CREATE TEMPORARY TABLE `mat_entries` (\n  `id` varchar(512),\n  KEY `mat_entries_id` (`id`(255))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:    "SELECT id FROM mat_entries FORCE INDEX (mat_entries_id) WHERE id = 'abc'",
+				Expected: []sql.Row{{"abc"}},
+			},
+			{
+				Query: "CREATE INDEX by_id ON mat_entries (id)",
+			},
+			{
+				Query: "INSERT INTO mat_entries VALUES ('ghi')",
+			},
+			{
+				Query:    "SELECT id FROM mat_entries FORCE INDEX (mat_entries_id) WHERE id = 'ghi'",
+				Expected: []sql.Row{{"ghi"}},
+			},
+			{
+				Query:    "SELECT id FROM mat_entries FORCE INDEX (by_id) WHERE id = 'abc'",
+				Expected: []sql.Row{{"abc"}},
+			},
+			{
+				Query:    "SELECT id FROM mat_entries FORCE INDEX (by_id) WHERE id = 'ghi'",
+				Expected: []sql.Row{{"ghi"}},
+			},
+		},
+	},
+	{
 		Name: "temporary table tag collision",
 		SetUpScript: []string{
 			"CREATE TABLE note(a int, b int, userid int);",
