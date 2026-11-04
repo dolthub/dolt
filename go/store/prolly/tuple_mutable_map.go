@@ -64,7 +64,7 @@ func (mut *GenericMutableMap[M, T]) Map(ctx context.Context) (M, error) {
 	return mut.flusher.Map(ctx, mut)
 }
 
-func (mut *GenericMutableMap[M, T]) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+func (mut *GenericMutableMap[M, T]) VisitGCRoots(ctx context.Context, roots func(hash.Hash)) error {
 	// flushPending in order to ensure that our tuples.Static root
 	// is a chunk which includes all of the reachable chunks for
 	// our edits, including chunked internal values like text,

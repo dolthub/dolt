@@ -52,7 +52,7 @@ func (k prollyKeylessWriter) ValidateKeyViolations(ctx context.Context, sqlRow s
 	return nil
 }
 
-func (k prollyKeylessWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+func (k prollyKeylessWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash)) error {
 	return k.mut.VisitGCRoots(ctx, roots)
 }
 
@@ -236,7 +236,7 @@ func (writer prollyKeylessSecondaryWriter) Map(ctx context.Context) (prolly.MapI
 	return writer.mut.Map(ctx)
 }
 
-func (writer prollyKeylessSecondaryWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+func (writer prollyKeylessSecondaryWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash)) error {
 	return writer.mut.VisitGCRoots(ctx, roots)
 }
 
