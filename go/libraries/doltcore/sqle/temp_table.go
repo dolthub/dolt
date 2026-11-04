@@ -329,8 +329,11 @@ func (t *TempTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) error {
 		return err
 	}
 
-	t.table = ret.NewTable
-	return nil
+	t.table, t.sch = ret.NewTable, ret.Sch
+	// Publish the indexed table to the write session so its editor uses the new
+	// schema and doesn't replace it with the pre-index schema on the next write.
+	_, err = t.writeSession.FlushTable(ctx, doltdb.TableName{Name: t.tableName}, t.table)
+	return err
 }
 
 func (t *TempTable) DropIndex(ctx *sql.Context, indexName string) error {
