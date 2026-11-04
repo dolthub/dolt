@@ -148,6 +148,11 @@ type ConnectionQueryist struct {
 
 var _ cli.Queryist = &ConnectionQueryist{}
 
+// SupportsLoadDataLocal reports that statements run on this connection are
+// sent to a SQL server. LOAD DATA LOCAL INFILE reads the named file here and
+// streams it to that server.
+func (ConnectionQueryist) SupportsLoadDataLocal() bool { return true }
+
 func (c ConnectionQueryist) EnableGatherWarnings() {
 	*c.gatherWarnings = true
 }
