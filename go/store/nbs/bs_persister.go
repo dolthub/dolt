@@ -95,7 +95,7 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, behavior dherrors.Fa
 func newPersistedBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore, q MemoryQuotaProvider, data []byte, name hash.Hash, blockSize uint64) (chunkSource, error) {
 	var rdr tableReaderAt = &bsTableReaderAt{key: name.String(), bs: bs}
 	if shouldSpool(bs) {
-		spooled, err := spoolTableReaderAt(bytes.NewReader(data))
+		spooled, err := spoolTableReaderAt(spoolDir(bs), bytes.NewReader(data))
 		if err != nil {
 			return nil, err
 		}

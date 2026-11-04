@@ -353,6 +353,9 @@ type GitBlobstore struct {
 	// for a visible info branch pushed after each successful data write. The branch
 	// contains a single DOLT_REMOTE.md file with remote metadata. Empty means disabled.
 	infoBranch string
+
+	// spoolDir is the directory for local copies of this store's blobs.
+	spoolDir string
 }
 
 var _ Blobstore = (*GitBlobstore)(nil)
@@ -416,6 +419,9 @@ type GitBlobstoreOptions struct {
 	// SyncForReadTTL overrides the read-side fetch dedup window. Zero means
 	// use defaultSyncForReadTTL.
 	SyncForReadTTL time.Duration
+	// SpoolDir is the directory for local copies of this store's blobs. It is created
+	// when needed. Opening a table file through a store with no SpoolDir fails.
+	SpoolDir string
 }
 
 // NewGitBlobstoreWithOptions creates a GitBlobstore rooted at |gitDir| and |ref|.
@@ -480,6 +486,7 @@ func NewGitBlobstoreWithOptions(gitDir, ref string, opts GitBlobstoreOptions) (*
 		cacheChildren:     make(map[string][]git.TreeEntry),
 		syncForReadTTL:    syncForReadTTL,
 		infoBranch:        infoBranch,
+		spoolDir:          opts.SpoolDir,
 	}, nil
 }
 
@@ -1298,6 +1305,13 @@ func (gbs *GitBlobstore) RangeReadsWholeBlob() bool {
 }
 
 var _ interface{ RangeReadsWholeBlob() bool } = (*GitBlobstore)(nil)
+
+// SpoolDir returns the directory for local copies of this store's blobs.
+func (gbs *GitBlobstore) SpoolDir() string {
+	return gbs.spoolDir
+}
+
+var _ interface{ SpoolDir() string } = (*GitBlobstore)(nil)
 
 func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {
 	key, err := normalizeGitTreePath(key)
