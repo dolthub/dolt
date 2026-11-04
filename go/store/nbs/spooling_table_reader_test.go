@@ -30,6 +30,7 @@ import (
 
 	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/blobstore"
+	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 // wholeBlobBlobstore wraps an InMemoryBlobstore and advertises the spool capability.
@@ -39,6 +40,17 @@ type wholeBlobBlobstore struct {
 }
 
 func (w wholeBlobBlobstore) RangeReadsWholeBlob() bool { return w.spool }
+
+func (w wholeBlobBlobstore) SpoolDir() string { return testSpoolDir() }
+
+// testSpoolDir is the spool directory of the fake blobstores in this file.
+var testSpoolDir = sync.OnceValue(func() string {
+	dir, err := os.MkdirTemp("", "nbs-spool-test-")
+	if err != nil {
+		panic(err)
+	}
+	return dir
+})
 
 // fakeGetBlobstore overrides Get to return a canned reader and error.
 type fakeGetBlobstore struct {
@@ -51,10 +63,12 @@ func (f fakeGetBlobstore) Get(context.Context, string, blobstore.BlobRange) (io.
 	return f.rc, 0, "", f.err
 }
 
-// countSpoolFiles counts leftover spool temp files in the provider's temp dir.
+func (f fakeGetBlobstore) SpoolDir() string { return testSpoolDir() }
+
+// countSpoolFiles counts leftover spool files in the fake blobstores' spool directory.
 func countSpoolFiles(t *testing.T) int {
 	t.Helper()
-	matches, err := filepath.Glob(filepath.Join(os.TempDir(), "nbs-spool-*"))
+	matches, err := filepath.Glob(filepath.Join(testSpoolDir(), "nbs-spool-*"))
 	require.NoError(t, err)
 	return len(matches)
 }
@@ -66,7 +80,7 @@ func spoolBytes(t *testing.T, ctx context.Context, data []byte) (*spoolingTableR
 	bs := blobstore.NewInMemoryBlobstore("")
 	_, err := bs.Put(ctx, "table", int64(len(data)), bytes.NewReader(data))
 	require.NoError(t, err)
-	ra, err := newSpoolingTableReaderAt(ctx, bs, "table")
+	ra, err := newSpoolingTableReaderAt(ctx, wholeBlobBlobstore{bs, true}, "table")
 	require.NoError(t, err)
 	return ra, ra.f.Name()
 }
@@ -76,6 +90,61 @@ func TestShouldSpool(t *testing.T) {
 	require.False(t, shouldSpool(inmem), "a blobstore without the capability must not spool")
 	require.True(t, shouldSpool(wholeBlobBlobstore{inmem, true}))
 	require.False(t, shouldSpool(wholeBlobBlobstore{inmem, false}))
+}
+
+// spoolDirBlobstore is a blobstore with its own directory for spool files.
+type spoolDirBlobstore struct {
+	*blobstore.InMemoryBlobstore
+	dir string
+}
+
+func (s spoolDirBlobstore) SpoolDir() string { return s.dir }
+
+func TestSpoolingTableReaderAt_SpoolDir(t *testing.T) {
+	ctx := context.Background()
+	dir := filepath.Join(t.TempDir(), "not", "created", "yet")
+	bs := spoolDirBlobstore{blobstore.NewInMemoryBlobstore(""), dir}
+	_, err := bs.Put(ctx, "table", 5, bytes.NewReader([]byte("bytes")))
+	require.NoError(t, err)
+
+	ra, err := newSpoolingTableReaderAt(ctx, bs, "table")
+	require.NoError(t, err)
+	require.Equal(t, dir, filepath.Dir(ra.f.Name()))
+
+	require.NoError(t, ra.Close())
+	_, err = os.Stat(ra.f.Name())
+	require.True(t, os.IsNotExist(err), "closing the reader removes the spool")
+}
+
+func TestSpoolingTableReaderAt_NeverSpoolsToTempDir(t *testing.T) {
+	ctx := context.Background()
+
+	tempDir := t.TempDir()
+	oldProvider := tempfiles.MovableTempFileProvider
+	tempfiles.MovableTempFileProvider = tempfiles.NewTempFileProviderAt(tempDir)
+	t.Cleanup(func() { tempfiles.MovableTempFileProvider = oldProvider })
+
+	inmem := blobstore.NewInMemoryBlobstore("")
+	_, err := inmem.Put(ctx, "table", 5, bytes.NewReader([]byte("bytes")))
+	require.NoError(t, err)
+
+	for name, bs := range map[string]blobstore.Blobstore{
+		"no spool dir method": inmem,
+		"empty spool dir":     spoolDirBlobstore{inmem, ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := newSpoolingTableReaderAt(ctx, bs, "table")
+			require.ErrorIs(t, err, errNoSpoolDir)
+		})
+	}
+
+	ra, err := newSpoolingTableReaderAt(ctx, wholeBlobBlobstore{inmem, true}, "table")
+	require.NoError(t, err)
+	defer ra.Close()
+
+	entries, err := os.ReadDir(tempDir)
+	require.NoError(t, err)
+	require.Empty(t, entries, "the temp dir holds no spools")
 }
 
 func TestNewSpoolingTableReaderAt_GetError(t *testing.T) {
