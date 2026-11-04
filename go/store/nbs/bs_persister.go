@@ -38,6 +38,7 @@ type blobstorePersister struct {
 	bs        blobstore.Blobstore
 	q         MemoryQuotaProvider
 	blockSize uint64
+	persisterCodec
 }
 
 var _ tablePersister = &blobstorePersister{}
@@ -46,7 +47,7 @@ var _ tableFilePersister = &blobstorePersister{}
 // Persist makes the contents of mt durable. Chunks already present in
 // |haver| may be dropped in the process.
 func (bsp *blobstorePersister) Persist(ctx context.Context, behavior dherrors.FatalBehavior, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
-	address, data, splitOffset, chunkCount, gcb, err := mt.write(haver, keeper, stats)
+	address, data, splitOffset, chunkCount, gcb, err := bsp.writeMemTable(mt, haver, keeper, stats)
 	if err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	}
@@ -83,7 +84,7 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, behavior dherrors.Fa
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	}
 
-	src, err := newPersistedBSTableChunkSource(ctx, bsp.bs, bsp.q, data, address, bsp.blockSize)
+	src, err := newPersistedBSTableChunkSource(ctx, bsp.bs, bsp.q, data, address, bsp.blockSize, bsp.withCodec(openOpts{}))
 	if err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	}
@@ -92,7 +93,7 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, behavior dherrors.Fa
 
 // newPersistedBSTableChunkSource uses the table bytes already available at persist
 // time to spool stores with expensive ranged reads, avoiding a blob readback.
-func newPersistedBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore, q MemoryQuotaProvider, data []byte, name hash.Hash, blockSize uint64) (chunkSource, error) {
+func newPersistedBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore, q MemoryQuotaProvider, data []byte, name hash.Hash, blockSize uint64, opts openOpts) (chunkSource, error) {
 	var rdr tableReaderAt = &bsTableReaderAt{key: name.String(), bs: bs}
 	if shouldSpool(bs) {
 		spooled, err := spoolTableReaderAt(bytes.NewReader(data))
@@ -101,7 +102,7 @@ func newPersistedBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore,
 		}
 		rdr = spooled
 	}
-	src, err := newReaderFromIndexData(ctx, q, data, name, rdr, blockSize)
+	src, err := newReaderFromIndexData(ctx, q, data, name, rdr, blockSize, opts)
 	if err != nil {
 		return nil, errors.Join(err, rdr.Close())
 	}
@@ -110,7 +111,7 @@ func newPersistedBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore,
 
 // ConjoinAll implements tablePersister.
 func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, behavior dherrors.FatalBehavior, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
-	plan, err := planRangeCopyConjoin(ctx, sources, bsp.q, stats)
+	plan, err := planRangeCopyConjoin(ctx, sources, bsp.q, bsp.codecOrPlain(), stats)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -153,9 +154,9 @@ func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, behavior dherrors
 
 	var cs chunkSource
 	if plan.suffix == ArchiveFileSuffix {
-		cs, err = newBSArchiveChunkSource(ctx, bsp.bs, plan.name, bsp.q, openOpts{deepValidate: true}, stats)
+		cs, err = newBSArchiveChunkSource(ctx, bsp.bs, plan.name, bsp.q, bsp.withCodec(openOpts{deepValidate: true}), stats)
 	} else {
-		cs, err = newBSTableChunkSource(ctx, bsp.bs, plan.name, plan.chunkCount, bsp.q, openOpts{deepValidate: true}, stats)
+		cs, err = newBSTableChunkSource(ctx, bsp.bs, plan.name, plan.chunkCount, bsp.q, bsp.withCodec(openOpts{deepValidate: true}), stats)
 	}
 
 	return cs, func() {}, err
@@ -185,6 +186,9 @@ func (bsp *blobstorePersister) getRecordsSubObject(ctx context.Context, cs chunk
 func (bsp *blobstorePersister) hotCreateTableRecords(ctx context.Context, cs chunkSource) error {
 	cnt := cs.count()
 	off := tableTailOffset(cs.currentSize(), cnt)
+	if end := encryptedRecordsEnd(cs); end != 0 {
+		off = end
+	}
 	l := int64(off)
 	rng := blobstore.NewBlobRange(0, l)
 
@@ -224,6 +228,7 @@ func (bsp *blobstorePersister) hotCreateArchiveRecords(ctx context.Context, cs c
 
 // Open a table named |name|, containing |chunkCount| chunks.
 func (bsp *blobstorePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, opts openOpts, stats *Stats) (chunkSource, error) {
+	opts = bsp.withCodec(opts)
 	cs, err := newBSTableChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, opts, stats)
 	if err == nil {
 		return cs, nil
@@ -429,7 +434,7 @@ func newBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore, name has
 		return nil, errors.New("unexpected chunk count")
 	}
 
-	tr, err := newTableReader(ctx, index, &bsTableReaderAt{key: name.String(), bs: bs}, s3BlockSize)
+	tr, err := newTableReaderFor(ctx, index, &bsTableReaderAt{key: name.String(), bs: bs}, s3BlockSize, opts)
 	if err != nil {
 		_ = index.Close()
 		return nil, err

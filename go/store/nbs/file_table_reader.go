@@ -145,6 +145,10 @@ func nomsFileTableReader(ctx context.Context, path string, h hash.Hash, chunkCou
 		fra.Close()
 		return
 	}
+	if b, _, err = rereadEncryptedTail(ctx, q, b, len(b), uint64(fra.sz), fra.readTail); err != nil {
+		fra.Close()
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
 
 	index, err := parseTableIndex(ctx, b, q)
 	if err != nil {
@@ -173,11 +177,11 @@ func nomsFileTableReader(ctx context.Context, path string, h hash.Hash, chunkCou
 		}
 	}
 
-	tr, err := newTableReader(ctx, index, fra, fileBlockSize)
+	tr, err := newTableReaderFor(ctx, index, fra, fileBlockSize, opts)
 	if err != nil {
 		index.Close()
 		fra.Close()
-		return nil, err
+		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	return &fileTableReader{
 		tableReader: tr,
@@ -272,6 +276,7 @@ func newTableFileMetadata(path string, chunkCount uint32) (*TableFileMetadata, e
 	defer fra.Close()
 
 	idxSz := int64(indexSize(chunkCount) + footerSize)
+	idxSz, _ = addEncryptedTailSize(fra.f, idxSz)
 	indexOffset := fra.sz - idxSz
 
 	return &TableFileMetadata{

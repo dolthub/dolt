@@ -60,6 +60,8 @@ type CompressedChunk struct {
 	H hash.Hash
 	// true if the chunk is a ghost chunk.
 	ghost bool
+	// verify is set for a chunk opened from an encrypted record, which has no CRC; ToChunk checks its hash.
+	verify bool
 }
 
 var _ ToChunker = CompressedChunk{}
@@ -93,6 +95,9 @@ func (cmp CompressedChunk) ToChunk() (chunks.Chunk, error) {
 
 	data, err := snappy.Decode(nil, cmp.CompressedData)
 	if err != nil {
+		return chunks.Chunk{}, err
+	}
+	if err = cmp.verifyData(data); err != nil {
 		return chunks.Chunk{}, err
 	}
 	return chunks.NewChunkWithHash(cmp.H, data), nil
@@ -184,6 +189,7 @@ type tableReader struct {
 	prefixes        []uint64
 	prefixesCnt     *int32
 	prefixesCleanup func()
+	opener          recordOpener
 }
 
 // newTableReader parses a valid nbs table byte stream and returns a reader. buff must end with an NBS index
@@ -316,7 +322,7 @@ func (tr tableReader) get(ctx context.Context, h hash.Hash, keeper keeperF, stat
 		return nil, gcBehavior_Continue, errors.New("failed to read all data")
 	}
 
-	cmp, err := NewCompressedChunk(h, buff)
+	cmp, err := tr.chunkFromRecord(ctx, h, offset, buff)
 
 	if err != nil {
 		return nil, gcBehavior_Continue, err
@@ -398,7 +404,7 @@ func (tr tableReader) readAtOffsetsWithCB(
 	}
 
 	for i := range rb {
-		cmp, err := rb.ExtractChunkFromRead(buff, i)
+		cmp, err := tr.extractChunkFromRead(ctx, rb, buff, i)
 		if err != nil {
 			return err
 		}
@@ -715,7 +721,7 @@ func (tr tableReader) extract(ctx context.Context, chunks chan<- extractRecord) 
 		if uint32(n) != or.length {
 			return errors.New("did not read all data")
 		}
-		cmp, err := NewCompressedChunk(hash.Hash(*or.a), buff)
+		cmp, err := tr.chunkFromRecord(ctx, hash.Hash(*or.a), or.offset, buff)
 
 		if err != nil {
 			return err
@@ -777,6 +783,9 @@ func (tr tableReader) getRecordRanges(ctx context.Context, behavior dherrors.Fat
 			Length: r.length,
 		}
 	}
+	if err = tr.locateKeys(ctx, ranges); err != nil {
+		return nil, gcBehavior_Continue, err
+	}
 	return ranges, gcBehavior_Continue, nil
 }
 
@@ -810,6 +819,7 @@ func (tr tableReader) clone() (tableReader, error) {
 		idx:             idx,
 		r:               r,
 		blockSize:       tr.blockSize,
+		opener:          tr.opener,
 	}, nil
 }
 
@@ -867,7 +877,7 @@ func (tr tableReader) iterateAllChunks(ctx context.Context, cb func(chunk chunks
 		_, err := io.ReadFull(bufReader, buf[:chunk.length])
 		chunkData := buf[:chunk.length]
 
-		cchk, err := NewCompressedChunk(chunk.hash, chunkData)
+		cchk, err := tr.chunkFromRecord(ctx, chunk.hash, chunk.offset, chunkData)
 		if err != nil {
 			return err
 		}
@@ -937,7 +947,7 @@ func (tr tableReader) tolerantIterateAllChunks(ctx context.Context, cb func(chun
 			return
 		}
 
-		cchk, err := NewCompressedChunk(chunk.hash, chunkData)
+		cchk, err := tr.chunkFromRecord(ctx, chunk.hash, chunk.offset, chunkData)
 		if err != nil {
 			// Bytes were already consumed from the stream, so we can continue to the next chunk.
 			errCb(fmt.Errorf("chunk %s: %w", chunk.hash.String(), err))

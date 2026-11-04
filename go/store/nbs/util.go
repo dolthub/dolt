@@ -16,6 +16,7 @@ package nbs
 
 import (
 	"context"
+	"errors"
 	"io"
 	"math"
 
@@ -30,6 +31,9 @@ func IterChunks(ctx context.Context, rd io.ReadSeeker, cb func(chunk chunks.Chun
 	}
 
 	defer idx.Close()
+	if idx.encrypted() {
+		return errors.New("cannot iterate the chunks of an encrypted table file")
+	}
 
 	seen := make(map[hash.Hash]struct{})
 	for i := uint32(0); i < idx.chunkCount(); i++ {

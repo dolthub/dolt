@@ -87,6 +87,8 @@ type fsTablePersister struct {
 
 	// test hook: called in ConjoinAll after Rename but before Open.
 	_testFtpConjoinAfterRenameHook func()
+
+	persisterCodec
 }
 
 func (ftp *fsTablePersister) addProtected(h hash.Hash) {
@@ -164,7 +166,7 @@ func (ftp *fsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCoun
 	ftp.pruneMu.RLock()
 	defer ftp.pruneMu.RUnlock()
 	rc := fsTablePersisterRefCounter{ftp, name}
-	cs, err := newFileTableReader(ctx, ftp.dir, name, chunkCount, ftp.q, ftp.mmapArchiveIndexes, &rc, opts, stats)
+	cs, err := newFileTableReader(ctx, ftp.dir, name, chunkCount, ftp.q, ftp.mmapArchiveIndexes, &rc, ftp.withCodec(opts), stats)
 	if err != nil {
 		return nil, err
 	}
@@ -210,7 +212,7 @@ func (ftp *fsTablePersister) Persist(ctx context.Context, behavior dherrors.Fata
 	t1 := time.Now()
 	defer stats.PersistLatency.SampleTimeSince(t1)
 
-	name, data, _, chunkCount, gcb, err := mt.write(haver, keeper, stats)
+	name, data, _, chunkCount, gcb, err := ftp.writeMemTable(mt, haver, keeper, stats)
 	if err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	}
@@ -328,7 +330,7 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, behavior dherrors
 }
 
 func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, behavior dherrors.FatalBehavior, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
-	plan, err := planRangeCopyConjoin(ctx, sources, ftp.q, stats)
+	plan, err := planRangeCopyConjoin(ctx, sources, ftp.q, ftp.codecOrPlain(), stats)
 	if err != nil {
 		return emptyChunkSource{}, nil, err
 	}

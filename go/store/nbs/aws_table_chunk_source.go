@@ -47,7 +47,7 @@ func newAWSTableFileChunkSource(ctx context.Context, s3 *s3ObjectReader, al awsL
 		return &chunkSourceAdapter{}, err
 	}
 
-	tr, err := newTableReader(ctx, index, tra, s3BlockSize)
+	tr, err := newTableReaderFor(ctx, index, tra, s3BlockSize, opts)
 	if err != nil {
 		_ = index.Close()
 		return &chunkSourceAdapter{}, err
@@ -70,6 +70,9 @@ func loadTableIndex(ctx context.Context, stats *Stats, name hash.Hash, cnt uint3
 	fileSz, err := loadIndexBytes(buf[:idxSz])
 	if err != nil {
 		q.ReleaseQuotaBytes(len(buf))
+		return onHeapTableIndex{}, err
+	}
+	if buf, idxSz, err = rereadEncryptedTail(ctx, q, buf, idxSz, fileSz, loadIndexBytes); err != nil {
 		return onHeapTableIndex{}, err
 	}
 	stats.IndexReadLatency.SampleTimeSince(t1)

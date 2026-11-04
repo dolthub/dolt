@@ -81,6 +81,9 @@ type archiveWriter struct {
 	metadataLen     uint32
 	nameCheckSum    hash.Hash
 	fullMD5         md5Sum
+	// sealer seals the spans of an encrypted archive; nil for a plaintext one.
+	sealer      spanSealer
+	keyBlockLen uint32
 }
 
 /*
@@ -371,6 +374,9 @@ func (aw *archiveWriter) writeFooter() error {
 	if aw.workflowStage != stageFooter {
 		return fmt.Errorf("Runtime error: writeFooter called out of order")
 	}
+	if err := aw.writeKeyBlock(); err != nil {
+		return err
+	}
 
 	// Write out the index length
 	err := aw.writeUint64(aw.indexLen)
@@ -402,7 +408,7 @@ func (aw *archiveWriter) writeFooter() error {
 	}
 
 	// Write out the format version
-	_, err = aw.output.Write([]byte{archiveFormatVersionMax})
+	_, err = aw.output.Write([]byte{aw.formatVersion()})
 	if err != nil {
 		return err
 	}
@@ -428,6 +434,8 @@ func (aw *archiveWriter) writeFooter() error {
 // data in the index than implement a new format version. We've never used these checksums for anything.
 func (aw *archiveWriter) writeEmptyCheckSums() error {
 	var zeros [(3 * sha512.Size)]byte
+	// An encrypted archive keeps its key block length in the data checksum.
+	binary.BigEndian.PutUint32(zeros[:], aw.keyBlockLen)
 	written, err := aw.output.Write(zeros[:])
 	if err != nil {
 		return err
@@ -519,6 +527,8 @@ type ArchiveStreamWriter struct {
 	snappyQueue *[]CompressedChunk
 	snappyDict  *DecompBundle
 	chunkCount  int32
+	// sealedDicts maps the stored spans of copied sealed dictionaries, by hash, to their span ids.
+	sealedDicts map[hash.Hash]uint32
 }
 
 // NewArchiveStreamWriter returns a writer that builds an archive table file
@@ -552,7 +562,7 @@ func (asw *ArchiveStreamWriter) Finish() (uint32, string, error) {
 	if asw.snappyQueue != nil {
 		// There may be snappy chunks queued up because we didn't get enough to build a dictionary.
 		for _, cc := range *asw.snappyQueue {
-			dataId, err := asw.writer.writeByteSpan(cc.FullCompressedChunk)
+			dataId, err := asw.writer.writeSpan(spanRef{h: cc.H}, cc.FullCompressedChunk)
 			if err != nil {
 				return 0, "", err
 			}
@@ -600,6 +610,13 @@ func (asw *ArchiveStreamWriter) AddChunk(chunker ToChunker) (uint32, error) {
 	}
 	if ac, ok := chunker.(*ArchiveToChunker); ok {
 		return asw.writeArchiveToChunker(ac)
+	}
+	if sc, ok := chunker.(SealedChunk); ok {
+		// A sealed chunk must never be opened into a plaintext archive.
+		if asw.writer.sealer == nil {
+			return 0, fmt.Errorf("%w: encrypted chunk %s added to a plaintext archive", ErrEncryptionMismatch, chunker.Hash().String())
+		}
+		return asw.addSealed(sc)
 	}
 	return 0, fmt.Errorf("Unknown chunk type: %T", chunker)
 }
@@ -657,7 +674,7 @@ func (asw *ArchiveStreamWriter) writeArchiveToChunker(chunker *ArchiveToChunker)
 		compressedDict := gozstd.Compress(nil, *dict.rawDictionary)
 
 		// New dictionary. Write it out, and add id to the map.
-		dictId, err = asw.writer.writeByteSpan(compressedDict)
+		dictId, err = asw.writer.writeSpan(spanRef{isDict: true}, compressedDict)
 		if err != nil {
 			return 0, err
 		}
@@ -665,7 +682,7 @@ func (asw *ArchiveStreamWriter) writeArchiveToChunker(chunker *ArchiveToChunker)
 		asw.dictMap[dictHash] = dictId
 	}
 
-	dataId, err := asw.writer.writeByteSpan(chunker.chunkData)
+	dataId, err := asw.writer.writeSpan(spanRef{h: chunker.Hash(), dict: dictId}, chunker.chunkData)
 	if err != nil {
 		return bytesWritten, err
 	}
@@ -707,7 +724,7 @@ func (asw *ArchiveStreamWriter) writeCompressedChunk(chunker CompressedChunk) (b
 		}
 
 		// New dictionary. Write it out, and add id to the map.
-		dictId, err := asw.writer.writeByteSpan(compressedDict)
+		dictId, err := asw.writer.writeSpan(spanRef{isDict: true}, compressedDict)
 		if err != nil {
 			return 0, err
 		}
@@ -752,7 +769,7 @@ func (asw *ArchiveStreamWriter) convertSnappyAndStage(cc CompressedChunk) (uint3
 
 	compressedData := gozstd.CompressDict(nil, chk.Data(), asw.snappyDict.cDict)
 
-	dataId, err := asw.writer.writeByteSpan(compressedData)
+	dataId, err := asw.writer.writeSpan(spanRef{h: h, dict: dictId}, compressedData)
 	if err != nil {
 		return 0, err
 	}
@@ -790,7 +807,7 @@ func (aw *archiveWriter) conjoinAll(ctx context.Context, sources []chunkSource, 
 	}
 
 	// similar to cloud conjoin, we build the index first. It could come after in this case.
-	thePlan, err := planArchiveConjoin(ctx, srcSz, q, stats)
+	thePlan, err := planArchiveConjoin(ctx, srcSz, q, plainCodec{}, stats)
 	if err != nil {
 		return fmt.Errorf("failed to plan archive conjoin: %w", err)
 	}
@@ -835,7 +852,7 @@ type tableChunkRecord struct {
 // Used in quota memory allocation. See sizes.go and sizes_test.go.
 var tableChunkRecordSize int
 
-func planArchiveConjoin(ctx context.Context, sources []sourceWithSize, q MemoryQuotaProvider, stats *Stats) (plan compactionPlan, err error) {
+func planArchiveConjoin(ctx context.Context, sources []sourceWithSize, q MemoryQuotaProvider, codec storeCodec, stats *Stats) (plan compactionPlan, err error) {
 	if len(sources) < 2 {
 		return compactionPlan{}, fmt.Errorf("conjoinIndexes requires at least 2 archive readers, got %d", len(sources))
 	}
@@ -851,6 +868,9 @@ func planArchiveConjoin(ctx context.Context, sources []sourceWithSize, q MemoryQ
 	}
 	defer writer.Close()
 	aw := newArchiveWriterWithSink(writer)
+	if aw.sealer, err = conjoinSpanSealer(codec, orderedSrcs.sws); err != nil {
+		return compactionPlan{}, err
+	}
 
 	numByteSpans := 0
 	numChunks := 0
