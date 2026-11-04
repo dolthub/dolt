@@ -295,10 +295,14 @@ func (t *TempTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (
 }
 
 func (t *TempTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
+	return t.PartitionValueRowWriter(ctx, partition, sql.ColSet{})
+}
+
+func (t *TempTable) PartitionValueRowWriter(ctx *sql.Context, partition sql.Partition, columnIds sql.ColSet) (sql.ValueRowWriter, error) {
 	if !t.lookup.IsEmpty() {
-		return index.RowIterForIndexLookup(ctx, t, t.lookup, t.pkSch, nil)
+		return index.RowIterForIndexLookup(ctx, t, t.lookup, t.pkSch, nil, columnIds)
 	} else {
-		return partitionRows(ctx, t.table, nil, partition)
+		return partitionRows(ctx, t.table, nil, partition, columnIds)
 	}
 }
 
