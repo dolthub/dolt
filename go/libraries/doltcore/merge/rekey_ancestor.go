@@ -91,8 +91,9 @@ func rebuildRekeyedMergeBase(ctx context.Context, vrw types.ValueReadWriter, ns 
 }
 
 // rekeyAncestorTables rekeys the tables of |ancRoot| for rekeyAncestor, and returns whether it rekeyed any. It skips
-// the tables with |conflicted| cells, and with |skipUnrekeyable|, the tables whose rows collide or have a NULL under
-// the new primary key.
+// the tables with |conflicted| cells. It also skips the tables whose rows collide or have a NULL under the new primary
+// key, when |skipUnrekeyable| or when the table is the same on both sides: both sides ran the same migration, so the
+// merge takes the table without merging it and must not fail because its ancestor cannot be rekeyed.
 func rekeyAncestorTables(ctx *sql.Context, ourRoot, theirRoot, ancRoot doltdb.RootValue, conflicted conflictedCells, tblNames []doltdb.TableName, skipUnrekeyable bool) (doltdb.RootValue, bool, error) {
 	rekeyedAny := false
 	for _, name := range tblNames {
@@ -136,8 +137,12 @@ func rekeyAncestorTables(ctx *sql.Context, ourRoot, theirRoot, ancRoot doltdb.Ro
 		if !needsRekeyedAncestor(ourSch, theirSch, ancSch) {
 			continue
 		}
+		sameOnBothSides, err := sameTable(ourTbl, theirTbl)
+		if err != nil {
+			return nil, false, err
+		}
 		rekeyed, ok, err := RekeyTable(ctx, name, ancTbl, ancSch, ourSch)
-		if skipUnrekeyable && (ErrRekeyedAncestorCollision.Is(err) || ErrRekeyedAncestorNullKey.Is(err)) {
+		if (skipUnrekeyable || sameOnBothSides) && (ErrRekeyedAncestorCollision.Is(err) || ErrRekeyedAncestorNullKey.Is(err)) {
 			continue
 		} else if err != nil {
 			return nil, false, err
@@ -388,4 +393,16 @@ func tableHasArtifacts(ctx context.Context, tbl *doltdb.Table) (bool, error) {
 	}
 	cnt, err := arts.Count()
 	return cnt > 0, err
+}
+
+func sameTable(a, b *doltdb.Table) (bool, error) {
+	aHash, err := a.HashOf()
+	if err != nil {
+		return false, err
+	}
+	bHash, err := b.HashOf()
+	if err != nil {
+		return false, err
+	}
+	return aHash == bHash, nil
 }

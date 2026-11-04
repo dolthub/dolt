@@ -323,6 +323,42 @@ var MergeSamePrimaryKeyChangeScripts = []queries.ScriptTest{
 		},
 	},
 
+	{
+		// Both sides ran the same migration on c, a foreign key child whose ancestor can be rekeyed. The foreign key
+		// checks diff c against its rekeyed ancestor, so the row whose parent was already missing is not reported as a
+		// new violation.
+		Name: "same pk change on both sides: identical foreign key child keeps its existing dangling reference",
+		SetUpScript: []string{
+			"CREATE TABLE p (id INT PRIMARY KEY);",
+			"INSERT INTO p VALUES (1);",
+			"CREATE TABLE c (a INT NOT NULL, b INT NOT NULL, pid INT, PRIMARY KEY (a), FOREIGN KEY (pid) REFERENCES p (id));",
+			"SET foreign_key_checks = 0;",
+			"INSERT INTO c VALUES (1, 10, 1), (2, 20, 99);",
+			"SET foreign_key_checks = 1;",
+			"CREATE TABLE other (pk INT PRIMARY KEY);",
+			"CALL DOLT_COMMIT('-Am', 'base');",
+			"CALL DOLT_BRANCH('feature');",
+
+			"ALTER TABLE c DROP PRIMARY KEY, ADD PRIMARY KEY (b);",
+			"CALL DOLT_COMMIT('-Am', 'main');",
+
+			"CALL DOLT_CHECKOUT('feature');",
+			"ALTER TABLE c DROP PRIMARY KEY, ADD PRIMARY KEY (b);",
+			"INSERT INTO other VALUES (1);",
+			"CALL DOLT_COMMIT('-Am', 'feature');",
+			"CALL DOLT_CHECKOUT('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM dolt_constraint_violations_c;",
+				Expected: []sql.Row{},
+			},
+		},
+	},
 	// The merge refuses the cases below with an error rather than merging them.
 	{
 		Name: "same pk change on both sides: ancestor rows collide under the new key",
