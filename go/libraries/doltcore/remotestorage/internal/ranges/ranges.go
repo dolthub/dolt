@@ -38,8 +38,8 @@ type GetRange struct {
 	Url        string
 	Hash       []byte
 	Offset     uint64
-	Length     uint32
 	DictOffset uint64
+	Length     uint32
 	DictLength uint32
 	Region     *Region
 	// Key is the stored key that sealed the record, nil for a plaintext record. It is a pointer to keep ranges small.
