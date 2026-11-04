@@ -831,7 +831,7 @@ func (ddb *DoltDB) writeRootValue(ctx context.Context, rv RootValue) (RootValue,
 // skipped and a Ref to the existing value is returned.
 //
 // |skipIfPresent| is used by GC safepoint root collection (see
-// WorkingSetHashes / DoltSession.VisitGCRoots), where the returned hash is
+// WorkingSetGCHashes, RootValueGCHash and DoltSession.VisitGCRoots), where the returned hash is
 // immediately handed to the GC keeper. There, persisting an already-present
 // root value is redundant, and--because it dirties the store's memtable--it
 // defeats the no-op GC fast path (see NomsBlockStore.hasLocalGCNovelty), so
@@ -865,12 +865,10 @@ func (ddb *DoltDB) doWriteRootValue(ctx context.Context, rv RootValue, skipIfPre
 	return rv, ref, nil
 }
 
-// WriteGCRootValue persists |rv| if it is not already in the database and
-// returns the hash of the stored value, which is not |rv.HashOf()| when writing
-// changes its FeatureVersion. It is only for GC root collection: the caller
-// must pass the returned hash to the GC keeper, because an existing value is
-// not rewritten and so is not retained by this call. See doWriteRootValue.
-func (ddb *DoltDB) WriteGCRootValue(ctx context.Context, rv RootValue) (hash.Hash, error) {
+// RootValueGCHash returns the hash that GC must keep to retain |rv|, first
+// persisting |rv| if it is not already in the database. Like
+// WorkingSetGCHashes, it is only for GC root collection. See doWriteRootValue.
+func (ddb *DoltDB) RootValueGCHash(ctx context.Context, rv RootValue) (hash.Hash, error) {
 	_, ref, err := ddb.doWriteRootValue(ctx, rv, true)
 	if err != nil {
 		return hash.Hash{}, err
@@ -878,14 +876,10 @@ func (ddb *DoltDB) WriteGCRootValue(ctx context.Context, rv RootValue) (hash.Has
 	return ref.TargetHash(), nil
 }
 
-// Persists all relevant root values of the WorkingSet to the database and returns all hashes reachable
-// from the working set. This is used in GC, for example, where all dependencies of the in-memory working
-// set value need to be accounted for.
-//
-// Root values that are already present in the database are not rewritten, so
-// that collecting the GC roots of an unchanged working set does not dirty the
-// store and defeat the no-op GC fast path. See doWriteRootValue.
-func (ddb *DoltDB) WorkingSetHashes(ctx context.Context, ws *WorkingSet) ([]hash.Hash, error) {
+// WorkingSetGCHashes returns the hashes that GC must keep to retain |ws|,
+// first persisting any of its root values that are not already in the
+// database. It is only for GC root collection. See doWriteRootValue.
+func (ddb *DoltDB) WorkingSetGCHashes(ctx context.Context, ws *WorkingSet) ([]hash.Hash, error) {
 	spec, err := ws.writeValues(ctx, ddb, nil, true)
 	if err != nil {
 		return nil, err
