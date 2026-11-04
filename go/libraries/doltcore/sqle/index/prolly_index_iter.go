@@ -635,7 +635,7 @@ func (p prollyKeylessIndexIter) keylessRowsFromValueTuple(ctx context.Context, n
 	rows[0] = make(sql.Row, len(p.projections))
 
 	for i, idx := range p.valueMap {
-		columnId := p.columnIdMap[p.ordMap[i]]
+		columnId := p.ordMap[i]
 		rows[0][columnId], err = tree.GetFieldValue(ctx, p.valueDesc, idx, value, ns)
 		if err != nil {
 			return nil, err
