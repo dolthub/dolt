@@ -16,7 +16,6 @@ package writer
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/store/prolly"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -26,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly"
 )
 
 // NewWriteSession creates and returns a WriteSession. Inserting a nil root is not an error, as there are
