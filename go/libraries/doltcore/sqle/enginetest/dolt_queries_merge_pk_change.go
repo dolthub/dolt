@@ -250,6 +250,78 @@ var MergeSamePrimaryKeyChangeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// Both sides ran the same migration on t: remove the row whose b duplicates another, then key t on b. The
+		// branches differ only in another table, so t is the same on both sides and the merge takes it without merging
+		// it. The ancestor of t has two rows with the same b and cannot be rekeyed, but the merge never reads it, so
+		// branches that ran the same migration must not fail to merge because of it.
+		Name: "same pk change on both sides: identical sides merge although ancestor rows collide under the new key",
+		SetUpScript: []string{
+			"CREATE TABLE t (a INT NOT NULL, b INT NOT NULL, v INT, PRIMARY KEY (a));",
+			"INSERT INTO t VALUES (1, 7, 10), (2, 7, 20);",
+			"CREATE TABLE other (pk INT PRIMARY KEY);",
+			"CALL DOLT_COMMIT('-Am', 'base');",
+			"CALL DOLT_BRANCH('feature');",
+
+			"DELETE FROM t WHERE a = 2;",
+			"ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY (b);",
+			"CALL DOLT_COMMIT('-Am', 'main');",
+
+			"CALL DOLT_CHECKOUT('feature');",
+			"DELETE FROM t WHERE a = 2;",
+			"ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY (b);",
+			"INSERT INTO other VALUES (1);",
+			"CALL DOLT_COMMIT('-Am', 'feature');",
+			"CALL DOLT_CHECKOUT('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t;",
+				Expected: []sql.Row{{1, 7, 10}},
+			},
+			{
+				Query:    "SELECT * FROM other;",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		// Both sides ran the same migration on t: fill in the NULL in b, then key t on (a, b). As above, t is the
+		// same on both sides, so its ancestor, which has a NULL in the new primary key, must not fail the merge.
+		Name: "same pk change on both sides: identical sides merge although the ancestor has a NULL in the new key",
+		SetUpScript: []string{
+			"CREATE TABLE t (a INT NOT NULL, b INT, v INT, PRIMARY KEY (a));",
+			"INSERT INTO t VALUES (1, NULL, 10), (2, 2, 20);",
+			"CREATE TABLE other (pk INT PRIMARY KEY);",
+			"CALL DOLT_COMMIT('-Am', 'base');",
+			"CALL DOLT_BRANCH('feature');",
+
+			"UPDATE t SET b = 1 WHERE a = 1;",
+			"ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY (a, b);",
+			"CALL DOLT_COMMIT('-Am', 'main');",
+
+			"CALL DOLT_CHECKOUT('feature');",
+			"UPDATE t SET b = 1 WHERE a = 1;",
+			"ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY (a, b);",
+			"INSERT INTO other VALUES (1);",
+			"CALL DOLT_COMMIT('-Am', 'feature');",
+			"CALL DOLT_CHECKOUT('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY a;",
+				Expected: []sql.Row{{1, 1, 10}, {2, 2, 20}},
+			},
+		},
+	},
 
 	// The merge refuses the cases below with an error rather than merging them.
 	{
