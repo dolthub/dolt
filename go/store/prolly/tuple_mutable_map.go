@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
@@ -167,8 +168,26 @@ func (mut *GenericMutableMap[M, T]) Get(ctx context.Context, key val.Tuple, cb t
 	return mut.tuples.Get(ctx, key, cb)
 }
 
+// GetPrefix fetches the first Tuple pair with a key matching |key| in the fields of |prefixDesc|, and passes it to
+// |cb|. If no key matches, a nil Tuple pair is passed to |cb|.
 func (mut *GenericMutableMap[M, T]) GetPrefix(ctx context.Context, key val.Tuple, prefixDesc *val.TupleDesc, cb tree.KeyValueFn[val.Tuple, val.Tuple]) (err error) {
-	return mut.tuples.GetPrefix(ctx, key, prefixDesc, cb)
+	// A pending delete of the first matching key in the edits can shadow a different matching key in the static
+	// tree, so we merge the two.
+	rng, err := PrefixRange(ctx, key, prefixDesc)
+	if err != nil {
+		return err
+	}
+	iter, err := mut.IterRange(ctx, rng)
+	if err != nil {
+		return err
+	}
+	k, v, err := iter.Next(ctx)
+	if err == io.EOF {
+		return cb(nil, nil)
+	} else if err != nil {
+		return err
+	}
+	return cb(k, v)
 }
 
 // Has returns true if |key| is present in the MutableMap.
@@ -178,7 +197,11 @@ func (mut *GenericMutableMap[M, T]) Has(ctx context.Context, key val.Tuple) (ok 
 
 // HasPrefix returns true if a key with a matching prefix to |key| is present in the MutableMap.
 func (mut *GenericMutableMap[M, T]) HasPrefix(ctx context.Context, key val.Tuple, prefixDesc *val.TupleDesc) (ok bool, err error) {
-	return mut.tuples.HasPrefix(ctx, key, prefixDesc)
+	err = mut.GetPrefix(ctx, key, prefixDesc, func(k, _ val.Tuple) error {
+		ok = k != nil
+		return nil
+	})
+	return
 }
 
 // Checkpoint records a checkpoint that can be reverted to.
@@ -277,7 +300,19 @@ func (mut *GenericMutableMap[M, T]) IterAll(ctx context.Context) (MapIter, error
 // |stop|. If |start| and/or |stop| is nil, the range will be open
 // towards that end.
 func (mut *GenericMutableMap[M, T]) IterKeyRange(ctx context.Context, start, stop val.Tuple) (MapIter, error) {
-	return mut.tuples.Static.IterKeyRange(ctx, start, stop)
+	treeIter, err := mut.tuples.Static.IterKeyRange(ctx, start, stop)
+	if err != nil {
+		return nil, err
+	}
+	memIter, err := memIterFromKeyRange(ctx, mut.tuples.Edits, mut.keyDesc, start, stop)
+	if err != nil {
+		return nil, err
+	}
+	return &mutableMapIter[val.Tuple, val.Tuple, *val.TupleDesc]{
+		memory: memIter,
+		prolly: treeIter,
+		order:  mut.keyDesc,
+	}, nil
 }
 
 // IterRange returns a MapIter that iterates over a Range.
@@ -291,13 +326,35 @@ func (mut *GenericMutableMap[M, T]) IterRange(ctx context.Context, rng Range) (M
 		return nil, err
 	}
 
+	// |rng.Desc| may only describe a prefix of our keys, so we order the merge by the whole key
 	iter := &mutableMapIter[val.Tuple, val.Tuple, *val.TupleDesc]{
 		memory: memIter,
 		prolly: treeIter,
-		order:  rng.Desc,
+		order:  mut.keyDesc,
 	}
 
 	return filteredIter{iter: iter, rng: rng}, err
+}
+
+// IterRangeReverse returns a MapIter that iterates over a Range backwards.
+func (mut *GenericMutableMap[M, T]) IterRangeReverse(ctx context.Context, rng Range) (MapIter, error) {
+	treeIter, err := treeIterFromRangeReverse(ctx, mut.tuples.Static.GetRoot(), mut.tuples.Static.GetNodeStore(), rng)
+	if err != nil {
+		return nil, err
+	}
+	memIter, err := memIterFromRangeReverse(ctx, mut.tuples.Edits, rng)
+	if err != nil {
+		return nil, err
+	}
+
+	iter := &mutableMapIter[val.Tuple, val.Tuple, *val.TupleDesc]{
+		memory:  memIter,
+		prolly:  treeIter,
+		order:   mut.keyDesc,
+		reverse: true,
+	}
+
+	return filteredIter{iter: iter, rng: rng}, nil
 }
 
 // HasEdits returns true when the MutableMap has performed at least one Put or Delete operation. This does not indicate
@@ -309,6 +366,21 @@ func (mut *GenericMutableMap[M, T]) HasEdits() bool {
 // Descriptors returns the key and value val.TupleDesc.
 func (mut *GenericMutableMap[M, T]) Descriptors() (*val.TupleDesc, *val.TupleDesc) {
 	return mut.keyDesc, mut.valDesc
+}
+
+// KeyDesc returns the key val.TupleDesc.
+func (mut *GenericMutableMap[M, T]) KeyDesc() *val.TupleDesc {
+	return mut.keyDesc
+}
+
+// ValDesc returns the value val.TupleDesc.
+func (mut *GenericMutableMap[M, T]) ValDesc() *val.TupleDesc {
+	return mut.valDesc
+}
+
+// Pool returns the pool.BuffPool of the map's NodeStore.
+func (mut *GenericMutableMap[M, T]) Pool() pool.BuffPool {
+	return mut.NodeStore().Pool()
 }
 
 type tupleIter struct {
