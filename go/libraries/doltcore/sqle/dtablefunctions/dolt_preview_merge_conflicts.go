@@ -371,7 +371,8 @@ func getConflictSchemasFromRoots(ctx *sql.Context, tblName doltdb.TableName, lef
 		return nil, nil, nil, err
 	}
 
-	return applySchemaFallbacks(schemas.our, schemas.their, schemas.base, ourOk, theirOk, baseOk)
+	ourSch, theirSch, baseSch, err := applySchemaFallbacks(schemas.our, schemas.their, schemas.base, ourOk, theirOk, baseOk)
+	return baseSch, ourSch, theirSch, err
 }
 
 type extractedSchemas struct {
