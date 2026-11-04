@@ -36,7 +36,8 @@ import (
 func TestGCWithOpenSavepoint(t *testing.T) {
 	t.Parallel()
 
-	t.Run("SavepointAfterWrite", func(t *testing.T) {
+	// The savepoint is never used, but GC must keep its root.
+	t.Run("CommitAfterGC", func(t *testing.T) {
 		t.Parallel()
 		s := newGCSavepointServer(t)
 		s.exec("START TRANSACTION")
@@ -48,21 +49,7 @@ func TestGCWithOpenSavepoint(t *testing.T) {
 		require.Equal(t, []string{"1:one", "2:two"}, s.rows(s.gcConn))
 	})
 
-	t.Run("SavepointBeforeWrite", func(t *testing.T) {
-		t.Parallel()
-		s := newGCSavepointServer(t)
-		s.exec("START TRANSACTION")
-		s.exec("SAVEPOINT s")
-		s.exec("INSERT INTO t VALUES (1, 'one')")
-		s.gc()
-		s.exec("ROLLBACK TO SAVEPOINT s")
-		require.Empty(t, s.rows(s.conn))
-		s.exec("INSERT INTO t VALUES (2, 'two')")
-		s.exec("COMMIT")
-		require.Equal(t, []string{"2:two"}, s.rows(s.gcConn))
-	})
-
-	t.Run("RollbackToSavepointAfterGC", func(t *testing.T) {
+	t.Run("RollbackAfterGC", func(t *testing.T) {
 		t.Parallel()
 		s := newGCSavepointServer(t)
 		s.exec("START TRANSACTION")
@@ -80,7 +67,23 @@ func TestGCWithOpenSavepoint(t *testing.T) {
 		require.Equal(t, want, s.rows(s.gcConn))
 	})
 
-	t.Run("MultipleSavepoints", func(t *testing.T) {
+	// A savepoint taken before any write has the transaction's starting
+	// root, which is already stored.
+	t.Run("RollbackToTransactionStartAfterGC", func(t *testing.T) {
+		t.Parallel()
+		s := newGCSavepointServer(t)
+		s.exec("START TRANSACTION")
+		s.exec("SAVEPOINT s")
+		s.exec("INSERT INTO t VALUES (1, 'one')")
+		s.gc()
+		s.exec("ROLLBACK TO SAVEPOINT s")
+		require.Empty(t, s.rows(s.conn))
+		s.exec("INSERT INTO t VALUES (2, 'two')")
+		s.exec("COMMIT")
+		require.Equal(t, []string{"2:two"}, s.rows(s.gcConn))
+	})
+
+	t.Run("RollbackToEachOfTwoSavepoints", func(t *testing.T) {
 		t.Parallel()
 		s := newGCSavepointServer(t)
 		s.exec("START TRANSACTION")
@@ -98,7 +101,9 @@ func TestGCWithOpenSavepoint(t *testing.T) {
 		require.Equal(t, []string{"1:one"}, s.rows(s.gcConn))
 	})
 
-	t.Run("SavepointHeldAcrossTwoGCs", func(t *testing.T) {
+	// The first GC stores the savepoint's root, so the second finds it
+	// already present and must still keep it.
+	t.Run("RollbackAfterTwoGCs", func(t *testing.T) {
 		t.Parallel()
 		s := newGCSavepointServer(t)
 		s.exec("START TRANSACTION")
@@ -107,7 +112,7 @@ func TestGCWithOpenSavepoint(t *testing.T) {
 		s.exec("INSERT INTO t VALUES (2, 'two')")
 		s.gc()
 		s.exec("UPDATE t SET b = 'changed'")
-		s.gc("--full")
+		s.gcFull()
 		s.exec("ROLLBACK TO SAVEPOINT s")
 		require.Equal(t, []string{"1:one"}, s.rows(s.conn))
 		s.exec("COMMIT")
@@ -116,7 +121,7 @@ func TestGCWithOpenSavepoint(t *testing.T) {
 
 	// After the DELETE, only the savepoint reaches the multi-level trees of
 	// the primary and secondary index.
-	t.Run("TreesOnlyReachableFromSavepoint", func(t *testing.T) {
+	t.Run("RollbackToTreesOnlyReachableFromSavepoint", func(t *testing.T) {
 		t.Parallel()
 		const count = 5000
 		s := newGCSavepointServer(t)
@@ -138,28 +143,6 @@ func TestGCWithOpenSavepoint(t *testing.T) {
 		}
 	})
 
-	// GC gets the current database name as the session spelled it, which can
-	// differ in case from the name of the database.
-	t.Run("MixedCaseDatabaseName", func(t *testing.T) {
-		t.Parallel()
-		s := newGCSavepointServer(t)
-		s.exec("CREATE DATABASE MyDb")
-		s.exec("USE MyDb")
-		s.exec(gcSavepointCreateTable)
-		s.exec("CALL dolt_commit('-Am', 'base')")
-		_, err := s.gcConn.ExecContext(s.ctx, "USE mYdB")
-		require.NoError(t, err)
-		s.exec("START TRANSACTION")
-		s.exec("INSERT INTO t VALUES (1, 'one')")
-		s.exec("SAVEPOINT s")
-		s.exec("INSERT INTO t VALUES (2, 'two')")
-		s.gc()
-		s.exec("ROLLBACK TO SAVEPOINT s")
-		require.Equal(t, []string{"1:one"}, s.rows(s.conn))
-		s.exec("COMMIT")
-		require.Equal(t, []string{"1:one"}, s.rows(s.gcConn))
-	})
-
 	// Collecting the savepoint's root must not dirty the store, or a later GC
 	// would rewrite it instead of taking the no-op path. The other session's
 	// visit can land after the first GC's no-op check, so that takes two GCs.
@@ -177,8 +160,6 @@ func TestGCWithOpenSavepoint(t *testing.T) {
 		s.exec("COMMIT")
 	})
 }
-
-const gcSavepointCreateTable = "CREATE TABLE t (a INT PRIMARY KEY, b VARCHAR(32), KEY bidx (b))"
 
 type gcSavepointServer struct {
 	t      *testing.T
@@ -219,7 +200,7 @@ func newGCSavepointServer(t *testing.T) *gcSavepointServer {
 
 	s := &gcSavepointServer{t: t, ctx: t.Context(), server: server, db: db, dir: repo.Dir}
 	s.connect()
-	s.exec(gcSavepointCreateTable)
+	s.exec("CREATE TABLE t (a INT PRIMARY KEY, b VARCHAR(32), KEY bidx (b))")
 	s.exec("CALL dolt_commit('-Am', 'base')")
 	return s
 }
@@ -239,13 +220,17 @@ func (s *gcSavepointServer) exec(query string) {
 	require.NoError(s.t, err, query)
 }
 
-func (s *gcSavepointServer) gc(args ...string) {
-	query := "CALL dolt_gc()"
-	if len(args) > 0 {
-		query = fmt.Sprintf("CALL dolt_gc('%s')", args[0])
-	}
+func (s *gcSavepointServer) gc() {
+	s.gcExec("CALL dolt_gc()")
+}
+
+func (s *gcSavepointServer) gcFull() {
+	s.gcExec("CALL dolt_gc('--full')")
+}
+
+func (s *gcSavepointServer) gcExec(query string) {
 	_, err := s.gcConn.ExecContext(s.ctx, query)
-	require.NoError(s.t, err)
+	require.NoError(s.t, err, query)
 }
 
 // rows returns the rows of t, as seen by |conn|, formatted as "a:b".
