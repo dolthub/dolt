@@ -95,6 +95,11 @@ type DoltDatabaseProvider interface {
 	// (otherwise all branches are cloned), remoteName is the name for the remote created in the new database, and
 	// remoteUrl is a URL (e.g. "file:///dbs/db1") or an <org>/<database> path indicating a database hosted on DoltHub.
 	CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, depth int, remoteParams map[string]string) error
+	// RestoreDatabaseFromRemote replaces the contents of the database named |dbName| with the contents of
+	// the database |srcDb|. The incoming copy is staged aside and swapped into place, so no partially
+	// restored state is ever served under |dbName|; an interrupted restore leaves the existing database
+	// untouched. The previous contents, if any, move to the dropped-databases stash.
+	RestoreDatabaseFromRemote(ctx *sql.Context, dbName string, srcDb *doltdb.DoltDB) error
 	// SessionDatabase returns the SessionDatabase for the specified database, which may name a revision of a base
 	// database.
 	SessionDatabase(ctx *sql.Context, dbName string) (SqlDatabase, bool, error)
