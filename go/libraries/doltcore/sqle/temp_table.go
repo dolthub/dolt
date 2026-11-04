@@ -208,7 +208,7 @@ func (t *TempTable) GCRoots(ctx context.Context, ddb *doltdb.DoltDB) ([]hash.Has
 	if ddb != t.ddb {
 		return nil, nil
 	}
-	rootHash, err := t.ddb.WriteGCRootValue(ctx, t.writeSession.GetWorkingSet().WorkingRoot())
+	rootHash, err := t.ddb.RootValueGCHash(ctx, t.writeSession.GetWorkingSet().WorkingRoot())
 	if err != nil {
 		return nil, err
 	}

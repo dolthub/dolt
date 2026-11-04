@@ -1083,7 +1083,7 @@ func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func
 					panic("gc safepoint establishment found inconsistent state; process could not guarantee it would be able to keep a chunk if we continue")
 				}
 			} else if head.workingSet != nil {
-				hashes, err := head.dbData.Ddb.WorkingSetHashes(ctx, head.workingSet)
+				hashes, err := head.dbData.Ddb.WorkingSetGCHashes(ctx, head.workingSet)
 				if err != nil {
 					return err
 				}
@@ -1095,7 +1095,7 @@ func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func
 			}
 			if head.writeSession != nil {
 				ws := head.writeSession.GetWorkingSet()
-				hashes, err := head.dbData.Ddb.WorkingSetHashes(ctx, ws)
+				hashes, err := head.dbData.Ddb.WorkingSetGCHashes(ctx, ws)
 				if err != nil {
 					return err
 				}
@@ -1132,7 +1132,12 @@ func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func
 			if !strings.EqualFold(baseName, dbName) {
 				continue
 			}
-			h, err := rv.HashOf()
+			start, ok := dtx.dbStartPoints[strings.ToLower(dbName)]
+			if !ok {
+				return fmt.Errorf("database %s unknown to transaction", dbName)
+			}
+			// A savepoint's root lives only in memory, and |keep| requires a stored chunk.
+			h, err := start.db.RootValueGCHash(ctx, rv)
 			if err != nil {
 				return err
 			}
