@@ -21,6 +21,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
+
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 func TestMutableMapCheckpoints(t *testing.T) {
@@ -52,6 +55,9 @@ func TestMutableMapCheckpoints(t *testing.T) {
 			t.Run("checkpoint map", func(t *testing.T) {
 				testCheckpointMap(t, s)
 			})
+			t.Run("revert post-two-flushes", func(t *testing.T) {
+				testRevertAfterTwoFlushes(t, s)
+			})
 		})
 	}
 }
@@ -60,7 +66,7 @@ func testCheckpoint(t *testing.T, scale int) {
 	// create map with |s| even int64s
 	ctx := context.Background()
 	m := ascendingIntMapWithStep(t, scale, 2)
-	mut := m.Mutate()
+	mut := checkInvariants(t, m.Mutate())
 
 	edits := ascendingTuplesWithStepAndStart(scale/10, 2, 1)
 
@@ -90,7 +96,7 @@ func testRevertBeforeFlush(t *testing.T, scale int) {
 	// create map with |s| even int64s
 	ctx := context.Background()
 	m := ascendingIntMapWithStep(t, scale, 2)
-	mut := m.Mutate()
+	mut := checkInvariants(t, m.Mutate())
 
 	// create 2 edit sets: pre- and post- checkpoint
 	edits := ascendingTuplesWithStepAndStart(scale/5, 2, 1)
@@ -133,7 +139,7 @@ func testRevertAfterFlush(t *testing.T, scale int) {
 	// create map with |s| even int64s
 	ctx := context.Background()
 	m := ascendingIntMapWithStep(t, scale, 2)
-	mut := m.Mutate()
+	mut := checkInvariants(t, m.Mutate())
 
 	// create 2 edit sets: pre- and post- checkpoint
 	edits := ascendingTuplesWithStepAndStart(scale/5, 2, 1)
@@ -185,7 +191,7 @@ func testRevertAfterFlushWithoutCheckpointedEdits(t *testing.T, scale int) {
 	ctx := context.Background()
 	for _, flushBeforeCheckpoint := range []bool{false, true} {
 		m := ascendingIntMapWithStep(t, scale, 2)
-		mut := m.Mutate()
+		mut := checkInvariants(t, m.Mutate())
 
 		edits := ascendingTuplesWithStepAndStart(scale/5, 2, 1)
 		pre, post := edits[:scale/10], edits[scale/10:]
@@ -228,7 +234,7 @@ func testRevertAfterFlushWithoutCheckpointedEdits(t *testing.T, scale int) {
 func testRevertTwiceAfterFlush(t *testing.T, scale int) {
 	ctx := context.Background()
 	m := ascendingIntMapWithStep(t, scale, 2)
-	mut := m.Mutate()
+	mut := checkInvariants(t, m.Mutate())
 
 	edits := ascendingTuplesWithStepAndStart(scale/5, 2, 1)
 	pre, post := edits[:scale/10], edits[scale/10:]
@@ -266,7 +272,7 @@ func testCheckpointMap(t *testing.T, scale int) {
 	ctx := context.Background()
 	for _, flush := range []bool{false, true} {
 		m := ascendingIntMapWithStep(t, scale, 2)
-		mut := m.Mutate()
+		mut := checkInvariants(t, m.Mutate())
 
 		edits := ascendingTuplesWithStepAndStart(scale/5, 2, 1)
 		pre, post := edits[:scale/10], edits[scale/10:]
@@ -313,4 +319,89 @@ func testCheckpointMap(t *testing.T, scale int) {
 		require.NoError(t, err)
 		assert.Equal(t, scale+len(edits), cnt)
 	}
+}
+
+// testRevertAfterTwoFlushes reverts after a second flush, which must not replace the checkpoint captured by the first.
+func testRevertAfterTwoFlushes(t *testing.T, scale int) {
+	ctx := context.Background()
+	for _, checkpointedEdits := range []bool{false, true} {
+		m := ascendingIntMapWithStep(t, scale, 2)
+		mut := checkInvariants(t, m.Mutate())
+
+		edits := ascendingTuplesWithStepAndStart(scale/5, 2, 1)
+		pre, post := edits[:scale/10], edits[scale/10:]
+		if !checkpointedEdits {
+			pre, post = nil, edits
+		}
+
+		for _, ed := range pre {
+			require.NoError(t, mut.Put(ctx, ed[0], ed[1]))
+		}
+		require.NoError(t, mut.Checkpoint(ctx))
+
+		half := len(post) / 2
+		for _, ed := range post[:half] {
+			require.NoError(t, mut.Put(ctx, ed[0], ed[1]))
+		}
+		require.NoError(t, mut.flushPending(ctx))
+		for _, ed := range post[half:] {
+			require.NoError(t, mut.Put(ctx, ed[0], ed[1]))
+		}
+		require.NoError(t, mut.flushPending(ctx))
+
+		mut.Revert(ctx)
+
+		for _, ed := range pre {
+			ok, err := mut.Has(ctx, ed[0])
+			require.NoError(t, err)
+			assert.True(t, ok)
+		}
+		for _, ed := range post {
+			ok, err := mut.Has(ctx, ed[0])
+			require.NoError(t, err)
+			assert.False(t, ok)
+		}
+	}
+}
+
+// invariantCheckingMap asserts MutableMap's checkpoint invariants after every operation which can change them.
+type invariantCheckingMap struct {
+	*MutableMap
+	t *testing.T
+}
+
+func checkInvariants(t *testing.T, mut *MutableMap) invariantCheckingMap {
+	return invariantCheckingMap{MutableMap: mut, t: t}
+}
+
+func (m invariantCheckingMap) check() {
+	if fc := m.flushedCheckpoint; fc != nil {
+		require.False(m.t, m.tuples.Edits.HasCheckpointedEdits(), "checkpointed edits pending alongside flushedCheckpoint")
+		require.NotSame(m.t, m.tuples.Edits, fc.Edits, "flushedCheckpoint aliases tuples.Edits")
+	}
+}
+
+func (m invariantCheckingMap) Put(ctx context.Context, key, value val.Tuple) error {
+	defer m.check()
+	return m.MutableMap.Put(ctx, key, value)
+}
+
+func (m invariantCheckingMap) Checkpoint(ctx context.Context) error {
+	defer m.check()
+	return m.MutableMap.Checkpoint(ctx)
+}
+
+func (m invariantCheckingMap) Revert(ctx context.Context) {
+	defer m.check()
+	m.MutableMap.Revert(ctx)
+}
+
+func (m invariantCheckingMap) flushPending(ctx context.Context) error {
+	defer m.check()
+	return m.MutableMap.flushPending(ctx)
+}
+
+func (m invariantCheckingMap) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+	defer m.check()
+	return m.MutableMap.VisitGCRoots(ctx, roots)
 }

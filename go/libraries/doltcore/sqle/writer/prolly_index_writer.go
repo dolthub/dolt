@@ -97,7 +97,6 @@ type indexWriter interface {
 	Update(ctx context.Context, oldRow sql.Row, newRow sql.Row) error
 	Commit(ctx context.Context) error
 	Discard(ctx context.Context) error
-	HasEdits(ctx context.Context) bool
 	IterRange(ctx context.Context, rng prolly.Range) (prolly.MapIter, error)
 	VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error
 }
@@ -261,10 +260,6 @@ func (m prollyIndexWriter) VisitGCRoots(ctx context.Context, roots func(hash.Has
 func (m prollyIndexWriter) Discard(ctx context.Context) error {
 	m.mut.Revert(ctx)
 	return nil
-}
-
-func (m prollyIndexWriter) HasEdits(ctx context.Context) bool {
-	return m.mut.HasEdits()
 }
 
 func (m prollyIndexWriter) IterRange(ctx context.Context, rng prolly.Range) (prolly.MapIter, error) {
@@ -637,10 +632,6 @@ func (m prollySecondaryIndexWriter) Commit(ctx context.Context) error {
 func (m prollySecondaryIndexWriter) Discard(ctx context.Context) error {
 	m.mut.Revert(ctx)
 	return nil
-}
-
-func (m prollySecondaryIndexWriter) HasEdits(ctx context.Context) bool {
-	return m.mut.HasEdits()
 }
 
 func (m prollySecondaryIndexWriter) IterRange(ctx context.Context, rng prolly.Range) (prolly.MapIter, error) {

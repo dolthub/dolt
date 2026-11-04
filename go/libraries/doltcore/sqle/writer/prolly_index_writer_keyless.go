@@ -140,10 +140,6 @@ func (k prollyKeylessWriter) Discard(ctx context.Context) error {
 	return nil
 }
 
-func (k prollyKeylessWriter) HasEdits(ctx context.Context) bool {
-	return k.mut.HasEdits()
-}
-
 func (k prollyKeylessWriter) IterRange(ctx context.Context, rng prolly.Range) (prolly.MapIter, error) {
 	return k.mut.IterRange(ctx, rng)
 }
@@ -479,11 +475,6 @@ func (writer prollyKeylessSecondaryWriter) Commit(ctx context.Context) error {
 func (writer prollyKeylessSecondaryWriter) Discard(ctx context.Context) error {
 	writer.mut.Revert(ctx)
 	return nil
-}
-
-// HasEdits implements the interface indexWriter.
-func (writer prollyKeylessSecondaryWriter) HasEdits(ctx context.Context) bool {
-	return writer.mut.HasEdits()
 }
 
 func (writer prollyKeylessSecondaryWriter) IterRange(ctx context.Context, rng prolly.Range) (prolly.MapIter, error) {
