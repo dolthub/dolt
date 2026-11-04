@@ -61,6 +61,10 @@ type prollyTableWriter struct {
 	errEncountered error
 
 	virtualExpressions []sql.Expression
+
+	// pending is true when edits from completed statements have not been materialized into the write session's
+	// working set.
+	pending bool
 }
 
 var _ dsess.TableWriter = &prollyTableWriter{}
@@ -402,14 +406,23 @@ func (w *prollyTableWriter) AcquireAutoIncrementLock(ctx *sql.Context) (func(), 
 	return w.aiTracker.AcquireLock(ctx, w.tblName)
 }
 
+func (w *prollyTableWriter) deferMaterialization() bool {
+	sess, ok := w.writeSess.(*prollyWriteSession)
+	return ok && sess.deferMaterialization
+}
+
 // Close implements Closer
 func (w *prollyTableWriter) Close(ctx *sql.Context) error {
 	// We discard data changes in DiscardChanges, but this doesn't include schema changes, which we don't want to flushAllTables
 	if w.errEncountered != nil {
 		return w.errEncountered
 	}
-	//return w.flush(ctx)
-	return nil
+	if w.deferMaterialization() {
+		// TODO: why?
+		//return w.StatementComplete(ctx)
+		return nil
+	}
+	return w.flush(ctx)
 }
 
 func (w *prollyTableWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
@@ -529,6 +542,7 @@ func (w *prollyTableWriter) PendingRows() *prolly.MutableMap {
 }
 
 func (w *prollyTableWriter) flush(ctx *sql.Context) error {
+	// TODO: do we need to flush all other tables as well?
 	tbl, err := w.table(ctx)
 	if err != nil {
 		return err

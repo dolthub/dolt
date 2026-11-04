@@ -54,6 +54,12 @@ type WriteSession interface {
 	// TODO: probably shouldn't be mutable map interface
 	PendingRows(tblName doltdb.TableName) *prolly.MutableMap
 
+	// HasPendingEdits returns true if edits from completed statements have not been materialized into the working set.
+	HasPendingEdits() bool
+
+	// SetDeferMaterialization marks whether this session should leave changes in the writers or materialize immediately
+	SetDeferMaterialization(deferMaterialization bool)
+
 	WriteSessionFlusher
 }
 

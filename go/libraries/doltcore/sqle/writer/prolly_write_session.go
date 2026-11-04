@@ -52,9 +52,9 @@ type prollyWriteSession struct {
 	setter        dsess.SessionRootSetter
 	targetStaging bool
 
-	// lazyFlush leaves edits of completed statements in their table writers, instead of materializing them into
-	// the |workingSet| immediately.
-	lazyFlush bool
+	// deferMaterialization leaves edits of completed statements in their table writers, instead of materializing them
+	// into |workingSet| immediately.
+	deferMaterialization bool
 }
 
 var _ dsess.WriteSession = &prollyWriteSession{}
@@ -160,9 +160,9 @@ func (s *prollyWriteSession) SetOptions(opts editor.Options) {
 	return
 }
 
-// SetLazyFlush implements WriteSession
-func (s *prollyWriteSession) SetLazyFlush(lazyFlush bool) {
-	s.lazyFlush = lazyFlush
+// SetDeferMaterialization implements WriteSession
+func (s *prollyWriteSession) SetDeferMaterialization(deferMaterialization bool) {
+	s.deferMaterialization = deferMaterialization
 }
 
 // PendingRows implements WriteSession
@@ -172,6 +172,15 @@ func (s *prollyWriteSession) PendingRows(tblName doltdb.TableName) *prolly.Mutab
 		return nil
 	}
 	return tblWriter.PendingRows()
+}
+
+func (s *prollyWriteSession) HasPendingEdits() bool {
+	for _, tblWriter := range s.tables {
+		if tblWriter.pending {
+			return true
+		}
+	}
+	return false
 }
 
 // Flush implements WriteSessionFlusher
@@ -218,8 +227,11 @@ func (s *prollyWriteSession) flushAllTables(ctx *sql.Context) (doltdb.RootValue,
 	// Flush each table and send results to the flushedTables channel
 	flushedTables := make(chan flushedTable, 10)
 	wg := sync.WaitGroup{}
-	wg.Add(len(s.tables))
 	for tblName, tblWriter := range s.tables {
+		if !tblWriter.pending {
+			continue
+		}
+		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			tbl, err := tblWriter.table(ctx)
