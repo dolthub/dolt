@@ -95,6 +95,9 @@ type Result struct {
 	// FullTextRebuilds are the tables whose Full-Text pseudo-index tables the merge did not rebuild because of
 	// MergeOpts.SkipFullTextRebuild.
 	FullTextRebuilds []doltdb.TableName
+	// AncestorRoot is the ancestor the merge merged against: the ancestor passed to MergeRoots, with the tables whose
+	// primary key both sides changed the same way rekeyed to that key.
+	AncestorRoot doltdb.RootValue
 }
 
 func (r Result) HasSchemaConflicts() bool {
@@ -388,6 +391,7 @@ func MergeRoots(
 		SchemaConflicts:  schConflicts,
 		Stats:            tblToStats,
 		FullTextRebuilds: fullTextRebuilds,
+		AncestorRoot:     ancRoot,
 	}, nil
 }
 
