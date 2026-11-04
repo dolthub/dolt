@@ -2580,3 +2580,25 @@ func RunDoltCommitVerificationScripts(t *testing.T, harness DoltEnginetestHarnes
 		harness.Close()
 	}
 }
+
+func RunDoltMergeSamePrimaryKeyChangeTests(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range MergeSamePrimaryKeyChangeScripts {
+		func() {
+			h := h.NewHarness(t)
+			defer h.Close()
+			h.Setup(setup.MydbData)
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func RunDoltMergeSamePrimaryKeyChangePreparedTests(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range MergeSamePrimaryKeyChangeScripts {
+		func() {
+			h := h.NewHarness(t)
+			defer h.Close()
+			h.Setup(setup.MydbData)
+			enginetest.TestScriptPrepared(t, h, script)
+		}()
+	}
+}

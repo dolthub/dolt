@@ -109,13 +109,13 @@ func TestResolveMergeBaseRebuild(t *testing.T) {
 	rebuilt, err := doltdb.LoadConflictBaseRoot(ctx, ddb.ValueReadWriter(), ddb.NodeStore(), prolly.ConflictMetadata{
 		BaseRootIsh: collected,
 		MergeBases:  []hash.Hash{mustHashOf(t, y1), mustHashOf(t, x1)},
-	})
+	}, hash.Hash{})
 	require.NoError(t, err)
 	rebuiltHash, err := rebuilt.HashOf()
 	require.NoError(t, err)
 	assert.Equal(t, virtualRootHash, rebuiltHash)
 
-	_, err = doltdb.LoadConflictBaseRoot(ctx, ddb.ValueReadWriter(), ddb.NodeStore(), prolly.ConflictMetadata{BaseRootIsh: collected})
+	_, err = doltdb.LoadConflictBaseRoot(ctx, ddb.ValueReadWriter(), ddb.NodeStore(), prolly.ConflictMetadata{BaseRootIsh: collected}, hash.Hash{})
 	assert.Error(t, err)
 }
 

@@ -371,7 +371,16 @@ func getConflictSchemasFromRoots(ctx *sql.Context, tblName doltdb.TableName, lef
 		return nil, nil, nil, err
 	}
 
-	return applySchemaFallbacks(schemas.our, schemas.their, schemas.base, ourOk, theirOk, baseOk)
+	ourSch, theirSch, baseSch, err := applySchemaFallbacks(schemas.our, schemas.their, schemas.base, ourOk, theirOk, baseOk)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if baseOk && theirOk {
+		if baseSch, err = doltdb.ConflictBaseSchema(baseSch, theirSch); err != nil {
+			return nil, nil, nil, err
+		}
+	}
+	return ourSch, theirSch, baseSch, nil
 }
 
 type extractedSchemas struct {
@@ -440,7 +449,7 @@ func (pm *PreviewMergeConflictsTableFunction) RowIter(ctx *sql.Context, row sql.
 		return nil, err
 	}
 
-	merger, err := merge.NewMerger(pm.rootInfo.leftRoot, pm.rootInfo.rightRoot, pm.rootInfo.baseRoot, pm.rootInfo.rightCm, pm.rootInfo.ancCm, pm.rootInfo.leftRoot.VRW(), pm.rootInfo.leftRoot.NodeStore())
+	merger, err := merge.NewMerger(ctx, pm.rootInfo.leftRoot, pm.rootInfo.rightRoot, pm.rootInfo.baseRoot, pm.rootInfo.rightCm, pm.rootInfo.ancCm, pm.rootInfo.leftRoot.VRW(), pm.rootInfo.leftRoot.NodeStore())
 	if err != nil {
 		return nil, err
 	}
@@ -498,7 +507,8 @@ func (pm *PreviewMergeConflictsTableFunction) RowIter(ctx *sql.Context, row sql.
 		return nil, err
 	}
 
-	baseHash, err := pm.rootInfo.ancCm.HashOf()
+	// The merger's ancestor is rekeyed when both sides changed the table's primary key the same way.
+	baseHash, err := merger.Ancestor().HashOf()
 	if err != nil {
 		return nil, err
 	}
@@ -690,7 +700,6 @@ func (itr *previewMergeConflictsTableFunctionRowIter) loadTableMaps(ctx *sql.Con
 		if err != nil {
 			return err
 		}
-
 		var idx durable.Index
 		if !ok {
 			idx, err = durable.NewEmptyPrimaryIndex(ctx, itr.vrw, itr.ns, itr.ourSch)
