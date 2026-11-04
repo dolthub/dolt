@@ -389,7 +389,7 @@ func (h *commithook) attemptReplicate(ctx context.Context) {
 }
 
 // closeDestDBWithLock closes |destDB| after a failed push so the next attempt reopens the standby's database.
-// The caller holds h.mu.
+// The caller must hold h.mu.
 func (h *commithook) closeDestDBWithLock(destDB *doltdb.DoltDB) {
 	if h.destDB == destDB {
 		h.destDB = nil
