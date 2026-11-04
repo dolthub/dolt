@@ -332,10 +332,11 @@ func (t *DoltTable) DoltTable(ctx *sql.Context) (*doltdb.Table, error) {
 	if !ok {
 		return nil, nil
 	}
-	writeSess := state.WriteSession()
-	_, err = writeSess.Flush(ctx)
-	if err != nil {
-		return nil, err
+	if writeSess := state.WriteSession(); writeSess != nil {
+		_, err = writeSess.Flush(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	root, err := t.workingRoot(ctx)
