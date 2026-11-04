@@ -73,12 +73,24 @@ func (cmd InitCmd) Docs() *cli.CommandDocumentation {
 	return cli.NewCommandDocumentation(initDocs, ap)
 }
 
+// initParamFlag is a flag of init that creates the database with |params|.
+type initParamFlag struct {
+	name, desc string
+	params     map[string]string
+}
+
+// initParamFlags are the flags of init that set the params a new database is created with. Dolt Enterprise adds to it.
+var initParamFlags []initParamFlag
+
 func (cmd InitCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 	ap.SupportsString(usernameParamName, "", "name", fmt.Sprintf("The name used in commits to this repo. If not provided will be taken from {{.EmphasisLeft}}%s{{.EmphasisRight}} in the global config.", config.UserNameKey))
 	ap.SupportsString(emailParamName, "", "email", fmt.Sprintf("The email address used. If not provided will be taken from {{.EmphasisLeft}}%s{{.EmphasisRight}} in the global config.", config.UserEmailKey))
 	ap.SupportsString(cli.DateParam, "", "date", "Specify the date used in the initial commit. If not specified the current system time is used.")
 	ap.SupportsString(initBranchParamName, "b", "branch", fmt.Sprintf("The branch name used to initialize this database. If not provided will be taken from {{.EmphasisLeft}}%s{{.EmphasisRight}} in the global config. If unset, the default initialized branch will be named '%s'.", config.InitBranchName, env.DefaultInitBranch))
+	for _, f := range initParamFlags {
+		ap.SupportsFlag(f.name, "", f.desc)
+	}
 	ap.SupportsFlag(funHashFlag, "", "") // This flag is an easter egg. We can't currently prevent it from being listed in the help, but the description is deliberately left blank.
 	return ap
 }
@@ -154,6 +166,11 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		commitMetaGenerator = datas.MakeFunCommitMetaGenerator(name, email, t)
 	}
 
+	for _, f := range initParamFlags {
+		if apr.Contains(f.name) {
+			dEnv.AddDBLoadParams(f.params)
+		}
+	}
 	err := dEnv.InitRepoWithCommitMetaGenerator(context.Background(), types.Format_DOLT, initBranch, commitMetaGenerator)
 	if err != nil {
 		cli.PrintErrln(color.RedString("Failed to initialize directory as a data repo. %s", err.Error()))

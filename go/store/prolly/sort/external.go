@@ -42,6 +42,7 @@ type tupleSorter struct {
 	fileMax   int
 	fileCnt   int
 	batchSize int
+	sealer    SpillSealer
 }
 
 func NewTupleSorter(batchSize, fileMax int, keyCmp func(val.Tuple, val.Tuple) bool, tmpProv tempfiles.TempFileProvider) *tupleSorter {
@@ -81,7 +82,7 @@ func (a *tupleSorter) Flush(ctx context.Context) (iter keyIterable, err error) {
 	if err != nil {
 		return nil, err
 	}
-	allKeys := newKeyFile(newF, a.inProg.byteLim)
+	allKeys := sealedKeyFile(newKeyFile(newF, a.inProg.byteLim), a.sealer)
 	defer func() {
 		if err != nil {
 			allKeys.Close()
@@ -128,6 +129,7 @@ func (a *tupleSorter) flushMem(ctx context.Context) error {
 			return err
 		}
 		a.inProg = newKeyMem(a.batchSize)
+		a.inProg.sealer = a.sealer
 		if len(a.files) == 0 {
 			a.files = append(a.files, []keyIterable{newFile})
 		} else {
@@ -166,7 +168,7 @@ func (a *tupleSorter) compact(ctx context.Context, level int) error {
 	if err != nil {
 		return err
 	}
-	outF := newKeyFile(newF, a.batchSize)
+	outF := sealedKeyFile(newKeyFile(newF, a.batchSize), a.sealer)
 	func() {
 		if err != nil {
 			outF.Close()
@@ -203,6 +205,7 @@ type keyMem struct {
 	keys    []val.Tuple
 	byteCnt int
 	byteLim int
+	sealer  SpillSealer
 }
 
 func (k *keyMem) insert(key val.Tuple) bool {
@@ -217,7 +220,7 @@ func (k *keyMem) insert(key val.Tuple) bool {
 
 func (k *keyMem) flush(f *os.File, cmp func(val.Tuple, val.Tuple) bool) (*keyFile, error) {
 	k.sort(cmp)
-	kf := newKeyFile(f, k.byteLim)
+	kf := sealedKeyFile(newKeyFile(f, k.byteLim), k.sealer)
 	for _, k := range k.keys {
 		if err := kf.append(k); err != nil {
 			return nil, err
@@ -274,6 +277,7 @@ type keyFile struct {
 	f         *os.File
 	buf       *bufio.Writer
 	batchSize int
+	seal      SpillFileSealer
 }
 
 func (f *keyFile) IterAll(ctx context.Context) (KeyIter, error) {
@@ -285,7 +289,11 @@ func (f *keyFile) IterAll(ctx context.Context) (KeyIter, error) {
 	}
 	file := f.f
 	f.f = nil
-	return &keyFileReader{buf: bufio.NewReader(file), f: file}, nil
+	r := &keyFileReader{buf: bufio.NewReader(file), f: file}
+	if f.seal != nil {
+		r.rdr = f.seal.Reader()
+	}
+	return r, nil
 }
 
 func (f *keyFile) Close() {
@@ -298,6 +306,9 @@ func (f *keyFile) Close() {
 
 // append writes |keySize|key| to the intermediate file
 func (f *keyFile) append(k val.Tuple) error {
+	if f.seal != nil {
+		k = f.seal.Seal(k)
+	}
 	v := uint32(len(k))
 	var sizeBuf [4]byte
 	writeUint32(sizeBuf[:], v)
@@ -315,6 +326,7 @@ func (f *keyFile) append(k val.Tuple) error {
 type keyFileReader struct {
 	buf *bufio.Reader
 	f   *os.File
+	rdr SpillFileReader
 }
 
 const (
@@ -330,6 +342,9 @@ func writeUint32(buf []byte, u uint32) {
 }
 
 func (r *keyFileReader) Next(ctx context.Context) (val.Tuple, error) {
+	if r.rdr != nil {
+		return r.rdr.Next(r.buf)
+	}
 	var keySizeBuf [4]byte
 	if _, err := io.ReadFull(r.buf, keySizeBuf[:]); err != nil {
 		return nil, err

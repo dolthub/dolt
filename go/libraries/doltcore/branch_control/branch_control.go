@@ -27,6 +27,7 @@ import (
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
@@ -67,6 +68,7 @@ type Controller struct {
 
 	branchControlFilePath string
 	doltConfigDirPath     string
+	sealer                file.Sealer
 }
 
 // CreateDefaultController returns a default controller, which only has a single entry allowing all users to have write
@@ -81,14 +83,15 @@ func CreateDefaultController(ctx context.Context) *Controller {
 }
 
 // LoadData loads the data from the given location and returns a controller. Returns the default controller if the
-// `branchControlFilePath` is empty.
-func LoadData(ctx context.Context, branchControlFilePath string, doltConfigDirPath string) (*Controller, error) {
+// `branchControlFilePath` is empty. The file is opened and saved with |sealer|, if given.
+func LoadData(ctx context.Context, branchControlFilePath string, doltConfigDirPath string, sealer ...file.Sealer) (*Controller, error) {
 	accessTbl := newAccess()
 	controller := &Controller{
 		Access:                accessTbl,
 		Namespace:             newNamespace(accessTbl),
 		branchControlFilePath: branchControlFilePath,
 		doltConfigDirPath:     doltConfigDirPath,
+		sealer:                file.SealerOf(sealer),
 	}
 
 	// Do not attempt to load from an empty file path
@@ -101,6 +104,9 @@ func LoadData(ctx context.Context, branchControlFilePath string, doltConfigDirPa
 	data, err := os.ReadFile(branchControlFilePath)
 	if err != nil && !goerrors.Is(err, os.ErrNotExist) {
 		return nil, err
+	}
+	if data, err = controller.sealer.Open(ctx, branchControlFilePath, data, 0660); err != nil {
+		return nil, fmt.Errorf("failed to read '%s': %w", branchControlFilePath, err)
 	}
 
 	err = controller.LoadData(ctx, data /* isFirstLoad */, true)
@@ -215,7 +221,11 @@ func (controller *Controller) SaveData(ctx context.Context, fs filesys.Filesys) 
 	b.FinishWithFileIdentifier(root, []byte(serial.BranchControlFileID))
 	data := b.Bytes[b.Head()-serial.MessagePrefixSz:]
 
-	err := fs.WriteFile(controller.branchControlFilePath, data, 0660)
+	sealed, err := controller.sealer.Seal(ctx, data)
+	if err != nil {
+		return err
+	}
+	err = fs.WriteFile(controller.branchControlFilePath, sealed, 0660)
 	if err != nil {
 		return err
 	}

@@ -258,6 +258,7 @@ func (sc *StatsController) newStatsForRoot(ctx *sql.Context, gcKv *memStats, byp
 			if !ok {
 				return fmt.Errorf("get dolt db dolt database not found %s", db.Name())
 			}
+			sc.noteDB(ctx, ddb)
 			branches, err := ddb.GetBranches(ctx)
 			if err != nil {
 				return err
