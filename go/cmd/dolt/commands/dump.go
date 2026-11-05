@@ -15,6 +15,7 @@
 package commands
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -128,15 +129,18 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to get tables").AddCause(err).Build(), usage)
 	}
-	if len(tblNames) == 0 {
-		cli.Println("No tables to export.")
-		return 0
-	}
 
 	force := apr.Contains(forceParam)
 	schemaOnly := apr.Contains(schemaOnlyFlag)
 	resFormat, _ := apr.GetValue(FormatFlag)
 	resFormat = strings.TrimPrefix(resFormat, ".")
+
+	// Only the SQL format can export the schema elements that live outside of the user
+	// tables, so for the row formats an empty table list really means nothing to do.
+	if len(tblNames) == 0 && resFormat != emptyFileExt && resFormat != sqlFileExt {
+		cli.Println("No tables to export.")
+		return 0
+	}
 
 	outputFileOrDirName, vErr := validateDumpArgs(apr)
 	if vErr != nil {
@@ -171,6 +175,21 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		} else {
 			if !strings.HasSuffix(outputFileOrDirName, ".sql") {
 				outputFileOrDirName = fmt.Sprintf("%s.sql", outputFileOrDirName)
+			}
+		}
+
+		// Views, triggers and procedures are not tables, so a database whose only
+		// contents are schema elements still has something to export. Collect them into
+		// memory first and only give up when the working set holds neither tables nor
+		// schema elements, so that no file is written for a genuinely empty database.
+		if len(tblNames) == 0 {
+			var elements bytes.Buffer
+			if err := writeSchemaElements(sqlCtx, engine, root, &elements); err != nil {
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+			}
+			if elements.Len() == 0 {
+				cli.Println("No tables to export.")
+				return 0
 			}
 		}
 
@@ -218,6 +237,20 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	return 0
 }
 
+// writeSchemaElements writes the non-table schema elements (views, triggers, procedures)
+// to w.
+func writeSchemaElements(ctx *sql.Context, eng *engine.SqlEngine, root doltdb.RootValue, w io.Writer) error {
+	if err := dumpViews(ctx, eng, root, w); err != nil {
+		return err
+	}
+
+	if err := dumpTriggers(ctx, eng, root, w); err != nil {
+		return err
+	}
+
+	return dumpProcedures(ctx, eng, root, w)
+}
+
 // dumpSchemaElements writes the non-table schema elements (views, triggers, procedures) to the file path given
 func dumpSchemaElements(ctx *sql.Context, eng *engine.SqlEngine, root doltdb.RootValue, fs filesys.Filesys, path string) errhand.VerboseError {
 	writer, err := fs.OpenForWriteAppend(path, os.ModePerm)
@@ -225,30 +258,18 @@ func dumpSchemaElements(ctx *sql.Context, eng *engine.SqlEngine, root doltdb.Roo
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	err = dumpViews(ctx, eng, root, writer)
-	if err != nil {
+	if err = writeSchemaElements(ctx, eng, root, writer); err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	err = dumpTriggers(ctx, eng, root, writer)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	err = dumpProcedures(ctx, eng, root, writer)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	err = writer.Close()
-	if err != nil {
+	if err = writer.Close(); err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
 	return nil
 }
 
-func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root doltdb.RootValue, writer io.WriteCloser) (rerr error) {
+func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root doltdb.RootValue, writer io.Writer) (rerr error) {
 	_, _, ok, err := doltdb.GetTableInsensitive(sqlCtx, root, doltdb.TableName{Name: doltdb.ProceduresTableName})
 	if err != nil {
 		return err
@@ -323,7 +344,7 @@ func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root doltdb.R
 	return nil
 }
 
-func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root doltdb.RootValue, writer io.WriteCloser) (rerr error) {
+func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root doltdb.RootValue, writer io.Writer) (rerr error) {
 	_, _, ok, err := doltdb.GetTableInsensitive(sqlCtx, root, doltdb.TableName{Name: doltdb.SchemasTableName})
 	if err != nil {
 		return err
@@ -400,7 +421,7 @@ func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root doltdb.Roo
 	return nil
 }
 
-func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root doltdb.RootValue, writer io.WriteCloser) (rerr error) {
+func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root doltdb.RootValue, writer io.Writer) (rerr error) {
 	_, _, ok, err := doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: doltdb.SchemasTableName})
 	if err != nil {
 		return err
@@ -509,7 +530,7 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root doltdb.RootValue
 // a SQL statement to set the @@SQL_MODE to |sqlMode|. If |newSqlMode| is the identical to the current session's
 // SQL_MODE (the default, global @@SQL_MODE), then no statements are written to |writer|. The boolean return code
 // indicates if any statements were written.
-func changeSqlMode(ctx *sql.Context, writer io.WriteCloser, newSqlMode string) (bool, error) {
+func changeSqlMode(ctx *sql.Context, writer io.Writer, newSqlMode string) (bool, error) {
 	if newSqlMode == "" {
 		return false, nil
 	}
@@ -543,7 +564,7 @@ func changeSqlMode(ctx *sql.Context, writer io.WriteCloser, newSqlMode string) (
 // resetSqlMode outputs a SQL statement to |writer| to reset @@SQL_MODE back to the previous value stored
 // by the last call to changeSqlMode. This function should only be called after changeSqlMode, otherwise the
 // @previousSqlMode variable will not be set correctly.
-func resetSqlMode(writer io.WriteCloser) error {
+func resetSqlMode(writer io.Writer) error {
 	return iohelp.WriteLine(writer, "SET @@SQL_MODE=@previousSqlMode;")
 }
 
