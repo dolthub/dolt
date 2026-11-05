@@ -25,6 +25,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
+	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
@@ -122,14 +123,27 @@ func TestStoreOptionsReusable(t *testing.T) {
 
 	key := filepath.Join(t.TempDir(), "repo.git")
 	cache(key)
-	require.NoError(t, evictUnreusableGitRemote(ctx, key, nil))
+	_, ok, err := cachedGitRemote(ctx, key, nil)
+	require.NoError(t, err)
+	assert.True(t, ok)
 	assert.True(t, cached(key))
 	assert.True(t, ReusableStore(ctx, nil, nil))
 
 	s.reuse = false
-	require.NoError(t, evictUnreusableGitRemote(ctx, key, nil))
+	_, ok, err = cachedGitRemote(ctx, key, nil)
+	require.NoError(t, err)
+	assert.False(t, ok, "an unreusable store is not returned")
 	assert.False(t, cached(key))
 	assert.False(t, ReusableStore(ctx, nil, nil))
+}
+
+// mismatchedStore is a cached store whose manifest has since been created in another format.
+type mismatchedStore struct {
+	chunks.ChunkStore
+}
+
+func (mismatchedStore) Rebase(context.Context) error {
+	return nbs.ErrEncryptionMismatch
 }
 
 func TestStoreOptionsReusableFileStore(t *testing.T) {
@@ -155,6 +169,18 @@ func TestStoreOptionsReusableFileStore(t *testing.T) {
 	db4, _, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, params)
 	require.NoError(t, err)
 	assert.True(t, db4 == db3)
+
+	path, err := earl.Parse(urlStr)
+	require.NoError(t, err)
+	cs := mismatchedStore{(&chunks.MemoryStorage{}).NewView()}
+	singletonLock.Lock()
+	stale := datas.NewTypesDatabase(types.NewValueStore(cs), tree.NewNodeStore(cs))
+	singletons[path.Path] = singletonDB{ddb: stale}
+	singletonLock.Unlock()
+	require.NoError(t, db4.Close())
+	db5, _, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, params)
+	require.NoError(t, err)
+	assert.True(t, db5 != stale, "a store whose manifest changed format is reopened")
 }
 
 type wrappingDialer struct {

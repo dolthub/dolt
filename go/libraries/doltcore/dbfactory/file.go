@@ -172,11 +172,13 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 		// has already made callers reliquinish any notion that they are
 		// the sole owners of the Database they opened.
 		cs := datas.ChunkStoreFromDatabase(s.ddb)
-		if err := cs.Rebase(ctx); err != nil {
-			return nil, nil, nil, err
-		}
-		if storeOptions.reusable(ctx, cs, params) {
+		err := cs.Rebase(ctx)
+		if err == nil && storeOptions.reusable(ctx, cs, params) {
 			return s.ddb, s.vrw, s.ns, nil
+		}
+		// A store whose manifest was since created in another format is reopened.
+		if err != nil && !errors.Is(err, nbs.ErrEncryptionMismatch) {
+			return nil, nil, nil, err
 		}
 		delete(singletons, urlObj.Path)
 		if err := s.ddb.Close(); err != nil {

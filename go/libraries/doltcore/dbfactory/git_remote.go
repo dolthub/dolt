@@ -189,25 +189,28 @@ func rebaseCachedEntry(ctx context.Context, entry gitRemoteCacheEntry) (datas.Da
 	return entry.db, entry.vrw, entry.ns, nil
 }
 
-// evictUnreusableGitRemote closes and forgets the cached store of |cacheRepo| if it cannot serve |params|.
-func evictUnreusableGitRemote(ctx context.Context, cacheRepo string, params map[string]interface{}) error {
-	gitRemoteCacheMu.Lock()
-	entry, ok := gitRemoteCache[cacheRepo]
-	gitRemoteCacheMu.Unlock()
-	if !ok || storeOptions.reusable(ctx, datas.ChunkStoreFromDatabase(entry.db), params) {
-		return nil
-	}
-	gitRemoteCacheMu.Lock()
-	if cur, ok := gitRemoteCache[cacheRepo]; !ok || cur.db != entry.db {
+// cachedGitRemote returns the cached store of |cacheRepo| if it can serve |params|. A cached store that cannot is
+// closed and forgotten.
+func cachedGitRemote(ctx context.Context, cacheRepo string, params map[string]interface{}) (gitRemoteCacheEntry, bool, error) {
+	for {
+		gitRemoteCacheMu.Lock()
+		entry, ok := gitRemoteCache[cacheRepo]
 		gitRemoteCacheMu.Unlock()
-		return nil
+		if !ok || storeOptions.reusable(ctx, datas.ChunkStoreFromDatabase(entry.db), params) {
+			return entry, ok, nil
+		}
+		gitRemoteCacheMu.Lock()
+		if cur, ok := gitRemoteCache[cacheRepo]; !ok || cur.db != entry.db {
+			gitRemoteCacheMu.Unlock()
+			continue
+		}
+		delete(gitRemoteCache, cacheRepo)
+		gitRemoteCacheMu.Unlock()
+		if g, ok := datas.ChunkStoreFromDatabase(entry.db).(gitSharedChunkStore); ok {
+			return gitRemoteCacheEntry{}, false, g.ForceClose()
+		}
+		return gitRemoteCacheEntry{}, false, entry.db.Close()
 	}
-	delete(gitRemoteCache, cacheRepo)
-	gitRemoteCacheMu.Unlock()
-	if g, ok := datas.ChunkStoreFromDatabase(entry.db).(gitSharedChunkStore); ok {
-		return g.ForceClose()
-	}
-	return entry.db.Close()
 }
 
 func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
@@ -225,15 +228,11 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 		return nil, nil, nil, err
 	}
 
-	if err := evictUnreusableGitRemote(ctx, cacheRepo, params); err != nil {
+	if entry, ok, err := cachedGitRemote(ctx, cacheRepo, params); err != nil {
 		return nil, nil, nil, err
-	}
-	gitRemoteCacheMu.Lock()
-	if entry, ok := gitRemoteCache[cacheRepo]; ok {
-		gitRemoteCacheMu.Unlock()
+	} else if ok {
 		return rebaseCachedEntry(ctx, entry)
 	}
-	gitRemoteCacheMu.Unlock()
 
 	remoteName := resolveGitRemoteName(params)
 
@@ -286,12 +285,15 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	ns := tree.NewNodeStore(cs)
 	db := datas.NewTypesDatabase(vrw, ns)
 
-	gitRemoteCacheMu.Lock()
-	if entry, ok := gitRemoteCache[cacheRepo]; ok {
-		gitRemoteCacheMu.Unlock()
+	if entry, ok, err := cachedGitRemote(ctx, cacheRepo, params); err != nil || ok {
 		_ = nbsCS.Close()
+		if err != nil {
+			return nil, nil, nil, err
+		}
 		return rebaseCachedEntry(ctx, entry)
 	}
+	// Only CreateDB adds entries, under |initLock|, so none can appear before this one.
+	gitRemoteCacheMu.Lock()
 	gitRemoteCache[cacheRepo] = gitRemoteCacheEntry{db: db, vrw: vrw, ns: ns}
 	gitRemoteCacheMu.Unlock()
 	return db, vrw, ns, nil
