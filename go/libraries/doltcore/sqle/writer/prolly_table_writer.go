@@ -552,30 +552,26 @@ func (w *prollyTableWriter) table(ctx *sql.Context) (tbl *doltdb.Table, err erro
 	return w.tableFromMaps(ctx, indexWriter.Map)
 }
 
-// materialize returns a doltdb.Table containing all edits from completed statements, excluding the edits of any
-// statement in progress. If no statement is in progress, the writer is reset to the returned table.
-func (w *prollyTableWriter) materialize(ctx *sql.Context) (*doltdb.Table, error) {
+// pendingTable returns a doltdb.Table containing all edits from completed statements, excluding the edits of any
+// statement in progress. It doesn't modify the writer, so it may run concurrently with other writers' flushes. Once
+// the returned table is in the working set, the caller must call materialized.
+func (w *prollyTableWriter) pendingTable(ctx *sql.Context) (*doltdb.Table, error) {
 	if w.hasUncommittedEdits() {
-		// Our index writers still hold every edit, so our views remain valid.
-		tbl, err := w.tableFromMaps(ctx, indexWriter.CheckpointMap)
-		if err != nil {
-			return nil, err
-		}
-		// Our index writers still hold every edit, so the next materialization rebuilds all of them on top of |tbl|.
+		return w.tableFromMaps(ctx, indexWriter.CheckpointMap)
+	}
+	return w.table(ctx)
+}
+
+// materialized records that |tbl|, returned by pendingTable, is in the working set. If no statement is in progress,
+// the writer is reset to |tbl|. Otherwise our index writers still hold every edit, so our views remain valid and the
+// next materialization rebuilds all of them on top of |tbl|.
+func (w *prollyTableWriter) materialized(ctx *sql.Context, tbl *doltdb.Table) error {
+	if w.hasUncommittedEdits() {
 		w.tbl = tbl
 		w.pending = false
-		return tbl, nil
+		return nil
 	}
-
-	tbl, err := w.table(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if err = w.Reset(ctx, tbl); err != nil {
-		return nil, err
-	}
-	w.pending = false
-	return tbl, nil
+	return w.Reset(ctx, tbl)
 }
 
 // tableFromMaps builds a doltdb.Table from the maps that |getMap| returns for each index writer.
@@ -641,7 +637,7 @@ func (w *prollyTableWriter) flush(ctx *sql.Context) error {
 		// Materialize this table along with any other pending tables, so that the root we set in the session
 		// contains every completed edit.
 		w.pending = true
-		return w.writeSess.(*prollyWriteSession).materializeAndSet(ctx)
+		return w.writeSess.(*prollyWriteSession).flushPending(ctx)
 	}
 	tbl, err := w.table(ctx)
 	if err != nil {
