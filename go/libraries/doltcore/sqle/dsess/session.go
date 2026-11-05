@@ -372,12 +372,24 @@ func (d *DoltSession) LookupDbState(ctx *sql.Context, dbName string) (SessionSta
 }
 
 // RemoveDbState invalidates any cached db state in this session, for example, if a database is dropped.
-func (d *DoltSession) RemoveDbState(_ *sql.Context, dbName string) error {
+func (d *DoltSession) RemoveDbState(ctx *sql.Context, dbName string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	delete(d.dbStates, strings.ToLower(dbName))
+	key := strings.ToLower(dbName)
+	dbState, ok := d.dbStates[key]
+	delete(d.dbStates, key)
 	// also clear out any db-level caches for this db
 	d.dbCache.Clear()
+
+	// The database is gone either way, so its state is dropped even if this fails. Another session's writers belong
+	// to its own goroutine and can't be inspected from here.
+	if ok && ctx != nil && ctx.Session == d {
+		for _, bs := range dbState.heads {
+			if err := bs.checkNoOpenWriters(); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 
@@ -394,8 +406,14 @@ func (d *DoltSession) RemoveBranchState(ctx *sql.Context, dbName string, branchN
 	}
 
 	d.mu.Lock()
+	bs, hadState := checkedOutState.dbState.heads[strings.ToLower(branchName)]
 	delete(checkedOutState.dbState.heads, strings.ToLower(branchName))
 	d.mu.Unlock()
+	// The branch is gone either way, so its state is dropped even if this fails.
+	var writersErr error
+	if hadState {
+		writersErr = bs.checkNoOpenWriters()
+	}
 
 	db, ok := d.provider.BaseDatabase(ctx, baseName)
 	if !ok {
@@ -411,7 +429,7 @@ func (d *DoltSession) RemoveBranchState(ctx *sql.Context, dbName string, branchN
 
 	// also clear out any db-level caches for this db
 	d.dbCache.Clear()
-	return nil
+	return writersErr
 }
 
 // RenameBranchState replaces all references to a renamed branch with its new name
@@ -427,11 +445,11 @@ func (d *DoltSession) RenameBranchState(ctx *sql.Context, dbName string, oldBran
 	}
 
 	d.mu.Lock()
+	defer d.mu.Unlock()
 	branch, ok := checkedOutState.dbState.heads[strings.ToLower(oldBranchName)]
 
 	if !ok {
 		// nothing to rename
-		d.mu.Unlock()
 		return nil
 	}
 
@@ -439,11 +457,11 @@ func (d *DoltSession) RenameBranchState(ctx *sql.Context, dbName string, oldBran
 	branch.head = strings.ToLower(newBranchName)
 	checkedOutState.dbState.heads[strings.ToLower(newBranchName)] = branch
 
-	d.mu.Unlock()
-
 	// also clear out any db-level caches for this db
 	d.dbCache.Clear()
-	return nil
+
+	// The branch is renamed either way. Its write session still resolves its branch state by the old name.
+	return branch.checkNoOpenWriters()
 }
 
 // SetValidateErr sets an error on this session to be returned from every call
@@ -489,7 +507,9 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	}
 
 	// New transaction, clear all session state
-	d.clear()
+	if err := d.clear(); err != nil {
+		return nil, err
+	}
 
 	// Take a snapshot of the current noms root for every database under management
 	doltDatabases := d.provider.DoltDatabases()
@@ -533,7 +553,9 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	// The engine sets the transaction after this call as well, but since we begin accessing data below, we need to set
 	// this now to avoid seeding the session state with stale data in some cases. The duplication is harmless since the
 	// code below cannot error. Additionally we clear any state that was cached by replication updates in the block above.
-	d.clear()
+	if err := d.clear(); err != nil {
+		return nil, err
+	}
 	ctx.SetTransaction(tx)
 	d.notifyDoltgresTransactionStarted()
 
@@ -566,16 +588,24 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	return tx, nil
 }
 
-// clear clears all DB state for this session
-func (d *DoltSession) clear() {
+// clear clears all DB state for this session. It drops nothing if any branch state has open table writers.
+func (d *DoltSession) clear() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
+	for _, dbState := range d.dbStates {
+		for _, bs := range dbState.heads {
+			if err := bs.checkNoOpenWriters(); err != nil {
+				return err
+			}
+		}
+	}
 	for _, dbState := range d.dbStates {
 		for head := range dbState.heads {
 			delete(dbState.heads, head)
 		}
 	}
+	return nil
 }
 
 // CommitTransaction commits the in-progress transaction. Depending on session settings, this may write only a new
@@ -874,8 +904,8 @@ func (d *DoltSession) IsBranchDirty(dbName, branch string) bool {
 	return ok && branchState.dirty
 }
 
-// IsWritingDatabase reports whether the current transaction has uncommitted changes to, or has opened a table writer
-// on, any branch of |dbName|. A table writer may belong to a statement that is still running. |dbName| must be a base
+// IsWritingDatabase reports whether the current transaction has uncommitted changes to, or has a table writer open on,
+// any branch of |dbName|. An open table writer belongs to a statement that is still running. |dbName| must be a base
 // name, not revision-qualified.
 func (d *DoltSession) IsWritingDatabase(dbName string) bool {
 	d.mu.Lock()
@@ -885,7 +915,7 @@ func (d *DoltSession) IsWritingDatabase(dbName string) bool {
 		return false
 	}
 	for _, branchState := range dbState.heads {
-		if branchState.dirty || (branchState.writeSession != nil && branchState.writeSession.HasTableWriters()) {
+		if branchState.dirty || (branchState.writeSession != nil && branchState.writeSession.HasOpenTableWriters()) {
 			return true
 		}
 	}
@@ -1071,8 +1101,7 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, dbName string, branchSt
 func (d *DoltSession) Rollback(ctx *sql.Context, tx sql.Transaction) error {
 	d.notifyDoltgresTransactionRolledBack()
 	// Nothing to do here, we just throw away all our work and let a new transaction begin next statement
-	d.clear()
-	return nil
+	return d.clear()
 }
 
 // VisitGCRoots invokes the provided keep function for every root in this session for the database named.
@@ -1761,6 +1790,11 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	// TODO: this no longer gets called at session creation time, so the error handling below never occurs when a
 	//  database is deleted out from under a running server
 	adapter := NewSessionStateAdapter(d, db.Name(), dbState.Remotes, dbState.Branches, dbState.Backups)
+	if existing, ok := sessionState.heads[strings.ToLower(db.Revision())]; ok {
+		if err := existing.checkNoOpenWriters(); err != nil {
+			return err
+		}
+	}
 	branchState := sessionState.NewEmptyBranchState(db.Revision(), db.RevisionType())
 	branchState.readOnly = dbState.ReadOnly
 	branchState.dbData = dbState.DbData

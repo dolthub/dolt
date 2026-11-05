@@ -48,8 +48,8 @@ type WriteSession interface {
 	// SetOptions sets the editor.Options for this session.
 	SetOptions(opts editor.Options)
 
-	// HasTableWriters returns whether any TableWriter has been created in this WriteSession.
-	HasTableWriters() bool
+	// HasOpenTableWriters returns whether any TableWriter this session has handed out hasn't been closed since.
+	HasOpenTableWriters() bool
 
 	WriteSessionFlusher
 }

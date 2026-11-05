@@ -70,6 +70,7 @@ func (s *prollyWriteSession) VisitGCRoots(ctx context.Context, roots func(hash.H
 // GetTableWriter implements WriteSession
 func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, tblName doltdb.TableName) (dsess.TableWriter, error) {
 	if tw, ok := s.tables[tblName]; ok {
+		tw.open = true
 		return tw, nil
 	}
 
@@ -103,8 +104,19 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, tblName doltdb.Tab
 		return nil, err
 	}
 
+	tblWriter.open = true
 	s.tables[tblName] = tblWriter
 	return tblWriter, nil
+}
+
+// HasOpenTableWriters implements WriteSession
+func (s *prollyWriteSession) HasOpenTableWriters() bool {
+	for _, tw := range s.tables {
+		if tw.open {
+			return true
+		}
+	}
+	return false
 }
 
 // SetWorkingSet implements WriteSession
@@ -152,11 +164,6 @@ func (s *prollyWriteSession) GetOptions() editor.Options {
 func (s *prollyWriteSession) SetOptions(opts editor.Options) {
 	s.targetStaging = opts.TargetStaging
 	return
-}
-
-// HasTableWriters implements WriteSession
-func (s *prollyWriteSession) HasTableWriters() bool {
-	return len(s.tables) > 0
 }
 
 // Flush implements WriteSessionFlusher

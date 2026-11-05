@@ -15,6 +15,8 @@
 package dsess
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -24,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
+	"github.com/dolthub/dolt/go/libraries/utils/dynassert"
 )
 
 // InitialDbState is the initial state of a database, as returned by SessionDatabase.InitialDBState. It is used to
@@ -143,6 +146,21 @@ func (dbState *DatabaseSessionState) NewEmptyBranchState(head string, revisionTy
 	}
 
 	return b
+}
+
+// ErrOpenTableWriters is returned when a branch state would be dropped while its write session has open table writers.
+var ErrOpenTableWriters = errors.New("cannot drop session state with open table writers")
+
+// checkNoOpenWriters returns an error if this branch state's write session has open table writers. Those writers
+// flush through the write session into this branch state, so it must outlive them. Panics when dynamic asserts are
+// enabled.
+func (bs *branchState) checkNoOpenWriters() error {
+	if bs.writeSession == nil || !bs.writeSession.HasOpenTableWriters() {
+		return nil
+	}
+	err := fmt.Errorf("%w: %s", ErrOpenTableWriters, bs.RevisionDbName())
+	dynassert.Assert(false, "%s", err.Error())
+	return err
 }
 
 // RevisionDbName returns the revision-qualified database name for this branch state

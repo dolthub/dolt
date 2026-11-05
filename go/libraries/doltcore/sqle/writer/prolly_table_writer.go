@@ -64,6 +64,10 @@ type prollyTableWriter struct {
 
 	errEncountered error
 
+	// open is set when GetTableWriter hands out this writer and cleared by Close. Writers are shared per table, so any
+	// holder's Close clears it.
+	open bool
+
 	virtualExpressions []sql.Expression
 }
 
@@ -411,6 +415,7 @@ func (w *prollyTableWriter) AcquireAutoIncrementLock(ctx *sql.Context) (func(), 
 
 // Close implements Closer
 func (w *prollyTableWriter) Close(ctx *sql.Context) error {
+	w.open = false
 	// We discard data changes in DiscardChanges, but this doesn't include schema changes, which we don't want to flushAllTables
 	if w.errEncountered != nil {
 		return w.errEncountered
