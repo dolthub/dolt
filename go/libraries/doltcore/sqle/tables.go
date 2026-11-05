@@ -1155,16 +1155,12 @@ func (t *WritableDoltTable) GetNextAutoIncrementValue(ctx *sql.Context, potentia
 		return 0, sql.ErrNoAutoIncrementCol
 	}
 
-	ed, err := t.getTableEditor(ctx)
+	// This only reads the tracker, so it doesn't take a table writer that would then need closing.
+	ait, err := dsess.GetAutoIncrementTracker(ctx, t.db.gs)
 	if err != nil {
 		return 0, err
 	}
-
-	if multiTableEditor, ok := ed.(fulltext.MultiTableEditor); ok {
-		return multiTableEditor.PrimaryEditor().(writer.AutoIncrementGetter).GetNextAutoIncrementValue(ctx, potentialVal)
-	} else {
-		return ed.(writer.AutoIncrementGetter).GetNextAutoIncrementValue(ctx, potentialVal)
-	}
+	return ait.Next(ctx, t.TableName(), potentialVal)
 }
 
 func (t *DoltTable) GetChecks(ctx *sql.Context) ([]sql.CheckDefinition, error) {
@@ -1828,7 +1824,11 @@ func (t *AlterableDoltTable) RewriteInserter(
 
 	// Restore the next auto increment value, since it was cleared when we truncated the table
 	if t.autoIncCol.AutoIncrement {
-		err = t.AutoIncrementSetter(ctx).SetAutoIncrementValue(ctx, nextAutoIncValue)
+		setter := t.AutoIncrementSetter(ctx)
+		err = setter.SetAutoIncrementValue(ctx, nextAutoIncValue)
+		if closeErr := setter.Close(ctx); err == nil {
+			err = closeErr
+		}
 		if err != nil {
 			return nil, err
 		}
