@@ -136,6 +136,12 @@ func TeardownGitRemotes(ctx context.Context) {
 	}
 }
 
+// GitRemoteSpoolDirForRepo returns the spool directory of the git remotes of the Dolt
+// repository at |repoRoot|, the directory that holds its `.dolt` directory.
+func GitRemoteSpoolDirForRepo(repoRoot string) string {
+	return filepath.Join(repoRoot, DoltDir, GitRemoteCacheDirName, GitRemoteSpoolDirName)
+}
+
 // gitRemoteSpoolDir returns the spool directory for the cache repository at |cacheRepo|,
 // which is <git cache root>/<hash>/repo.git.
 func gitRemoteSpoolDir(cacheRepo string) string {

@@ -157,6 +157,51 @@ func TestUnlockSpoolDir_PanicsOnError(t *testing.T) {
 	require.Panics(t, func() { unlockSpoolDir(lock, dir) })
 }
 
+func TestCleanSpoolDir(t *testing.T) {
+	t.Run("missing directory", func(t *testing.T) {
+		dir := filepath.Join(t.TempDir(), "spools")
+		require.NoError(t, CleanSpoolDir(dir))
+		_, err := os.Stat(dir)
+		require.True(t, os.IsNotExist(err), "cleaning must not make the directory")
+	})
+	t.Run("unused directory", func(t *testing.T) {
+		dir := newTestSpoolDir(t)
+		orphan := writeOrphan(t, dir, "nbs-spool-orphan")
+		require.NoError(t, CleanSpoolDir(dir))
+		_, err := os.Stat(orphan)
+		require.True(t, os.IsNotExist(err), "the orphan must be removed")
+		require.NoError(t, otherProcess(t, dir).TryLock(), "cleaning must not keep the lock")
+	})
+	t.Run("directory in use", func(t *testing.T) {
+		dir := newTestSpoolDir(t)
+		live := writeOrphan(t, dir, "nbs-spool-live")
+		require.NoError(t, otherProcess(t, dir).RLock())
+		require.NoError(t, CleanSpoolDir(dir), "a live process is not an error")
+		_, err := os.Stat(live)
+		require.NoError(t, err, "another live process may be using this spool")
+	})
+	t.Run("this process is using it", func(t *testing.T) {
+		dir := newTestSpoolDir(t)
+		require.NoError(t, holdSpoolDir(context.Background(), dir))
+		ours := writeOrphan(t, dir, "nbs-spool-ours")
+		require.NoError(t, CleanSpoolDir(dir))
+		_, err := os.Stat(ours)
+		require.NoError(t, err)
+	})
+	t.Run("cleanup fails", func(t *testing.T) {
+		if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+			t.Skip("needs a directory this user cannot remove files from")
+		}
+		dir := newTestSpoolDir(t)
+		writeOrphan(t, dir, "nbs-spool-orphan")
+		lock := otherProcess(t, dir)
+		require.NoError(t, os.Chmod(dir, 0o555))
+		t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+		require.ErrorIs(t, CleanSpoolDir(dir), os.ErrPermission)
+		require.NoError(t, lock.TryLock(), "a failed cleanup must not keep the lock")
+	})
+}
+
 func TestReleaseSpoolDir(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, ReleaseSpoolDir(filepath.Join(t.TempDir(), "never-held")))

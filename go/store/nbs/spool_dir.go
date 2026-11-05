@@ -36,6 +36,9 @@ import (
 // lock, it leaves the directory alone, without waiting. Orphans then wait for the next
 // process that finds the directory unused.
 //
+// The dolt binary also calls CleanSpoolDir when it starts, so that orphans do not wait for
+// a process to spool.
+//
 // Reads do not touch the lock. They use files which are already open, in a directory
 // that cannot be cleaned while this process holds its shared lock.
 //
@@ -103,15 +106,7 @@ func holdSpoolDir(ctx context.Context, dir string) error {
 	if err != nil {
 		return err
 	}
-	// Cleaning up is only worth one attempt: if another process holds the lock, skip the
-	// cleanup and move on without waiting.
-	err = lock.TryLock()
-	if err == nil {
-		err = removeOrphanedSpools(dir)
-		unlockSpoolDir(lock, dir)
-	} else if errors.Is(err, filelocks.ErrLocked) {
-		err = nil
-	}
+	err = tryCleanSpoolDir(lock, dir)
 	if err == nil {
 		err = lock.RLockWithContext(ctx)
 	}
@@ -120,6 +115,38 @@ func holdSpoolDir(ctx context.Context, dir string) error {
 	}
 	h.lock = lock
 	return nil
+}
+
+// CleanSpoolDir removes the spools left in |dir| by dead processes, if no live process is
+// using it. It does not wait for a lock, and it does nothing if |dir| does not exist.
+func CleanSpoolDir(dir string) error {
+	if _, err := os.Stat(dir); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	lock, err := filelocks.New(filepath.Join(dir, spoolDirLockName))
+	if err != nil {
+		return err
+	}
+	return errors.Join(tryCleanSpoolDir(lock, dir), lock.Close())
+}
+
+// tryCleanSpoolDir cleans |dir| if it can take |lock| exclusively right away. Cleaning up
+// is only worth one attempt: if another process holds the lock, it skips the cleanup and
+// moves on without waiting.
+func tryCleanSpoolDir(lock *filelocks.Lock, dir string) error {
+	err := lock.TryLock()
+	if errors.Is(err, filelocks.ErrLocked) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	err = removeOrphanedSpools(dir)
+	unlockSpoolDir(lock, dir)
+	return err
 }
 
 // removeOrphanedSpools removes everything in |dir| except its lock file. The caller holds
