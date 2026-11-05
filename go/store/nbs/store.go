@@ -469,9 +469,11 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 	if err != nil {
 		return manifestContents{}, false, err
 	}
+	// The files are committed once they are in the manifest, even if the rebase that follows fails.
+	installed := false
 	defer func() {
-		if err == nil && !gcGenDifferent {
-			err = commit()
+		if installed {
+			err = errors.Join(err, commit())
 		}
 	}()
 
@@ -482,6 +484,9 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 			return manifestContents{}, false, ferr
 		} else if !ok {
 			contents = manifestContents{nbfVers: nbs.upstream.nbfVers}
+		}
+		if err = nbs.checkManifestCodec(ok, contents); err != nil {
+			return manifestContents{}, false, err
 		}
 
 		if gcGen != nil && *gcGen != contents.gcGen {
@@ -520,6 +525,7 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 		}
 
 		if !hasWork {
+			installed = true
 			// Even though our specs are already in the manifest, our
 			// in-memory table set may not include them (e.g. if the NBS
 			// was initialized before the manifest was populated by a
@@ -571,6 +577,7 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 			break
 		}
 	}
+	installed = true
 
 	// Rebase to the updated manifest contents. If a concurrent
 	// conjoin in another process deleted files between our manifest
