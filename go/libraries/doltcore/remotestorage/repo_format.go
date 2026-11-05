@@ -29,7 +29,8 @@ import (
 type RepoFormat interface {
 	// ClientFormat returns the format to send in place of |f|, which a server creates a missing repository in.
 	ClientFormat(f *remotesapi.ClientRepoFormat) *remotesapi.ClientRepoFormat
-	// Opened returns the format of the repository |md| describes, or an error if it cannot be used.
+	// Opened returns the format of the repository |md| describes, or an error if it cannot be used. A store keeps the
+	// format it opened with, and calls Opened on it again only to check the metadata of a refresh.
 	Opened(md *remotesapi.GetRepoMetadataResponse) (RepoFormat, error)
 	// WriteTableFile returns the table file of |chnks| to upload.
 	WriteTableFile(chnks []chunks.Chunk) (name string, data []byte, splitOffset uint64, err error)
