@@ -402,7 +402,10 @@ func (tx *DoltTransaction) commitHeads(
 	for attempt := 0; attempt < maxTxCommitRetries; attempt++ {
 		updates := make([]doltdb.HeadUpdate, 0, 2*len(changes))
 		workingSets := make([]*doltdb.WorkingSet, len(changes))
+		// commitIdxs records the index in updates (and therefore in the returned heads) of each change's commit, or -1
+		commitIdxs := make([]int, len(changes))
 		for i, change := range changes {
+			commitIdxs[i] = -1
 			ws := change.workingSet
 			existing, err := startPoint.db.ResolveWorkingSet(ctx, ws.Ref())
 			newWorkingSet := errors.Is(err, doltdb.ErrWorkingSetNotFound)
@@ -457,6 +460,7 @@ func (tx *DoltTransaction) commitHeads(
 				if err != nil {
 					return nil, nil, err
 				}
+				commitIdxs[i] = len(updates)
 				updates = append(updates, doltdb.BranchHeadUpdate{
 					HeadRef:       headRef,
 					Root:          pending.Roots.Staged,
@@ -489,23 +493,22 @@ func (tx *DoltTransaction) commitHeads(
 			return nil, nil, err
 		}
 
-		// Fill in the commits to return
-		// The length of the list to return is the same as the number of changes, but may contain nil elements
-		// We always pass them to the doltdb layer above in the order [workingSet, (commit)], where commit is optional.
-		// So the result we get back may have a different number of elements than 2*changes, and we need to conditionally
-		// skip some indexes when building the set of commits to return.
+		// Fill in the commits to return. The length of the list to return is the same as the number of changes, but
+		// may contain nil elements for changes that didn't produce a commit.
 		commits := make([]*doltdb.Commit, len(changes))
-		for i, change := range changes {
-			if change.commit != nil {
-				commits[i], err = doltdb.HashToCommit(
-					ctx,
-					startPoint.db.ValueReadWriter(),
-					startPoint.db.NodeStore(),
-					heads[2*i+1],
-				)
-				if err != nil {
-					return nil, nil, err
-				}
+		for i, idx := range commitIdxs {
+			if idx < 0 {
+				continue
+			}
+
+			commits[i], err = doltdb.HashToCommit(
+				ctx,
+				startPoint.db.ValueReadWriter(),
+				startPoint.db.NodeStore(),
+				heads[idx],
+			)
+			if err != nil {
+				return nil, nil, err
 			}
 		}
 
