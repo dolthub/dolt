@@ -95,14 +95,10 @@ func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, di
 // EnvForCloneOf is EnvForClone for a clone of |src|, whose database is created to receive copies of |src|'s files
 // after |configure| runs on the new DoltEnv.
 func EnvForCloneOf(ctx context.Context, src *doltdb.DoltDB, r env.Remote, dir string, fs filesys.Filesys, version string, homeProvider env.HomeDirProvider, configure ...func(*env.DoltEnv)) (*env.DoltEnv, error) {
-	copyParams, err := env.CopyParams(ctx, src)
-	if err != nil {
-		return nil, err
-	}
-	return envForClone(ctx, src.Format(), copyParams, r, dir, fs, version, homeProvider, configure...)
+	return envForClone(ctx, src.Format(), src, r, dir, fs, version, homeProvider, configure...)
 }
 
-func envForClone(ctx context.Context, nbf *types.NomsBinFormat, copyParams map[string]string, r env.Remote, dir string, fs filesys.Filesys, version string, homeProvider env.HomeDirProvider, configure ...func(*env.DoltEnv)) (_ *env.DoltEnv, err error) {
+func envForClone(ctx context.Context, nbf *types.NomsBinFormat, src *doltdb.DoltDB, r env.Remote, dir string, fs filesys.Filesys, version string, homeProvider env.HomeDirProvider, configure ...func(*env.DoltEnv)) (_ *env.DoltEnv, err error) {
 	canCreate, err := env.CanCreateDatabaseAtPath(fs, dir)
 	if !canCreate {
 		if errors.Is(err, env.ErrCannotCreateDoltDirAlreadyExists) {
@@ -157,7 +153,13 @@ func envForClone(ctx context.Context, nbf *types.NomsBinFormat, copyParams map[s
 	for _, f := range configure {
 		f(dEnv)
 	}
-	dEnv.AddDBLoadParams(copyParams)
+	if src != nil {
+		copyParams, err := env.CopyParams(ctx, src)
+		if err != nil {
+			return nil, err
+		}
+		dEnv.AddDBLoadParams(copyParams)
+	}
 	err = dEnv.InitRepoWithNoData(ctx, nbf)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init repo: %w", err)

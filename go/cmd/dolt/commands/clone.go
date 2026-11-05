@@ -161,6 +161,10 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 	// Create a new Dolt env for the clone
 	clonedEnv, err := actions.EnvForCloneOf(ctx, srcDB, r, dir, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
 	if err != nil {
+		// A git remote keeps its cache in the directory, so one this clone created is removed.
+		if !userDirExists {
+			err = errors.Join(err, dbfactory.CloseGitRemotesUnderRoot(cloneRoot), dEnv.FS.Delete(dir, true))
+		}
 		return errhand.VerboseErrorFromError(err)
 	}
 

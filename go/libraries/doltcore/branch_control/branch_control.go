@@ -105,8 +105,10 @@ func LoadData(ctx context.Context, branchControlFilePath string, doltConfigDirPa
 	if err != nil && !goerrors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
-	if data, err = controller.sealer.Open(ctx, branchControlFilePath, data, 0660); err != nil {
-		return nil, fmt.Errorf("failed to read '%s': %w", branchControlFilePath, err)
+	if len(data) > 0 {
+		if data, err = controller.sealer.Open(ctx, branchControlFilePath, data, 0660); err != nil {
+			return nil, fmt.Errorf("failed to read '%s': %w", branchControlFilePath, err)
+		}
 	}
 
 	err = controller.LoadData(ctx, data /* isFirstLoad */, true)

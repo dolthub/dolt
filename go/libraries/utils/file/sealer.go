@@ -21,6 +21,7 @@ import (
 
 // Sealer seals the contents of a file at rest, and opens them. Dolt stores them as they are; see PlainSealer.
 type Sealer interface {
+	// Seal returns |contents| sealed. It must not modify |contents|.
 	Seal(ctx context.Context, contents []byte) ([]byte, error)
 	// Open returns the contents of the file at |path|, read as |data|. It may rewrite the file with |perm|.
 	Open(ctx context.Context, path string, data []byte, perm os.FileMode) ([]byte, error)

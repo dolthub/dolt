@@ -43,6 +43,7 @@ type ToyStorage struct {
 	Restored []*doltdb.DoltDB
 	Sealed   []string
 	LoadErr  error
+	CopyErr  error
 }
 
 type toyDialer struct {
@@ -79,7 +80,7 @@ func (s *ToyStorage) remoteDialer(_ *doltdb.DoltDB, dialer dbfactory.GRPCDialPro
 
 func (s *ToyStorage) copyParams(_ context.Context, src *doltdb.DoltDB) (map[string]string, error) {
 	s.Copied = append(s.Copied, src)
-	return map[string]string{"toy_copy": "1"}, nil
+	return map[string]string{"toy_copy": "1"}, s.CopyErr
 }
 
 func (s *ToyStorage) restoreParams(_ context.Context, src *doltdb.DoltDB) (map[string]string, error) {

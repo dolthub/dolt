@@ -511,6 +511,9 @@ func ConfigureServices(
 
 				// Register binlog hooks for database creation/deletion
 				provider := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.DbProvider
+				if u, ok := provider.(sqle.DoltProviderUnwrapper); ok {
+					provider = u.UnderlyingDoltProvider()
+				}
 				if doltProvider, ok := provider.(*sqle.DoltDatabaseProvider); ok {
 					doltProvider.AddInitDatabaseHook(binlogreplication.NewBinlogInitDatabaseHook(nil, doltdb.DatabaseUpdateListeners))
 					doltProvider.AddDropDatabaseHook(binlogreplication.NewBinlogDropDatabaseHook(nil, doltdb.DatabaseUpdateListeners))

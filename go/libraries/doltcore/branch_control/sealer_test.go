@@ -16,6 +16,7 @@ package branch_control
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -41,6 +42,9 @@ func (reversingSealer) Seal(_ context.Context, contents []byte) ([]byte, error) 
 }
 
 func (reversingSealer) Open(_ context.Context, _ string, data []byte, _ os.FileMode) ([]byte, error) {
+	if len(data) == 0 {
+		return nil, errors.New("no sealed data")
+	}
 	return reversed(data), nil
 }
 
@@ -50,7 +54,7 @@ func TestBranchControlFileSealer(t *testing.T) {
 	path := filepath.Join(dir, "branch_control.db")
 
 	controller, err := LoadData(ctx, path, dir, reversingSealer{})
-	require.NoError(t, err)
+	require.NoError(t, err, "a missing file is not opened")
 	require.NoError(t, controller.SaveData(ctx, filesys.LocalFS))
 	saved := *controller.Serialized.Load()
 	stored, err := os.ReadFile(path)
