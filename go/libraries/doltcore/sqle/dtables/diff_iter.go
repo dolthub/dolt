@@ -124,8 +124,13 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, tar
 		nodeStore = dp.from.NodeStore()
 	}
 
-	if err := diff.CheckPrimaryKeys(from, to, fsch, tsch); err != nil {
-		return prollyDiffIter{}, err
+	if dp.rekeyedFrom != nil {
+		from, fsch = *dp.rekeyedFrom, dp.rekeyedFromSch
+	} else if dp.from != nil {
+		var err error
+		if from, fsch, err = diff.RekeyForDiff(ctx, dp.tblName, nodeStore, from, fsch, tsch); err != nil {
+			return prollyDiffIter{}, err
+		}
 	}
 
 	fromConverter, err := NewProllyRowConverter(ctx, fsch, targetFromSchema, ctx.Warn, nodeStore)

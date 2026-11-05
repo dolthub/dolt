@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"io"
 
-	goerrors "gopkg.in/src-d/go-errors.v1"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -29,8 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
-
-var ErrPrimaryKeySetChanged = goerrors.NewKind("primary key set changed")
 
 type DiffStatProgress struct {
 	Adds, Removes, Changes, CellChanges, NewRowSize, OldRowSize, NewCellSize, OldCellSize uint64
@@ -81,18 +77,33 @@ func StatForTableDelta(ctx context.Context, ch chan DiffStatProgress, td TableDe
 		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
 	}
 
-	if schema.ComparePrimaryKeys(fromSch, toSch) == schema.PrimaryKeysDiffer {
-		return ErrPrimaryKeySetChanged.New()
+	fromRows, toRows, err := td.GetRowData(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Rows of a keyless table cannot be paired with rows of a keyed table, so every row is removed and added again.
+	if td.FromTable != nil && td.ToTable != nil && schema.IsKeyless(fromSch) != schema.IsKeyless(toSch) {
+		if err = diffProllyTrees(ctx, ch, schema.IsKeyless(fromSch), fromRows, nil, fromSch, schema.EmptySchema); err != nil {
+			return err
+		}
+		return diffProllyTrees(ctx, ch, schema.IsKeyless(toSch), nil, toRows, schema.EmptySchema, toSch)
 	}
 
 	keyless, err := td.IsKeyless(ctx)
 	if err != nil {
 		return err
 	}
-
-	fromRows, toRows, err := td.GetRowData(ctx)
-	if err != nil {
-		return err
+	if fromRows != nil && td.FromTable != nil {
+		fromMap, err := durable.ProllyMapFromIndex(fromRows)
+		if err != nil {
+			return err
+		}
+		fromMap, fromSch, err = RekeyForDiff(ctx, td.CurName(), td.FromTable.NodeStore(), fromMap, fromSch, toSch)
+		if err != nil {
+			return err
+		}
+		fromRows = durable.IndexFromProllyMap(fromMap)
 	}
 
 	return diffProllyTrees(ctx, ch, keyless, fromRows, toRows, fromSch, toSch)

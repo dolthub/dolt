@@ -26,9 +26,9 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 )
 
 const diffSummaryDefaultRowCount = 10
@@ -308,7 +308,7 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 			return NewDiffSummaryTableFunctionRowIter([]*diff.TableDeltaSummary{}), nil
 		}
 
-		summ, err := getSummaryForDelta(ctx, delta, sqledb, fromDetails, toDetails, true)
+		summ, err := getSummaryForDelta(ctx, delta)
 		if err != nil {
 			return nil, err
 		}
@@ -331,7 +331,7 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 			continue
 		}
 
-		summ, err := getSummaryForDelta(ctx, delta, sqledb, fromDetails, toDetails, false)
+		summ, err := getSummaryForDelta(ctx, delta)
 		if err != nil {
 			return nil, err
 		}
@@ -343,7 +343,7 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 	return NewDiffSummaryTableFunctionRowIter(diffSummaries), nil
 }
 
-func getSummaryForDelta(ctx *sql.Context, delta diff.TableDelta, sqledb dsess.SqlDatabase, fromDetails, toDetails *refDetails, shouldErrorOnPKChange bool) (*diff.TableDeltaSummary, error) {
+func getSummaryForDelta(ctx *sql.Context, delta diff.TableDelta) (*diff.TableDeltaSummary, error) {
 	if delta.FromTable == nil && delta.ToTable == nil && delta.FromRootObject == nil && delta.ToRootObject == nil {
 		if !strings.HasPrefix(delta.FromName.Name, diff.DBPrefix) && !strings.HasPrefix(delta.ToName.Name, diff.DBPrefix) {
 			return nil, nil
@@ -356,12 +356,7 @@ func getSummaryForDelta(ctx *sql.Context, delta diff.TableDelta, sqledb dsess.Sq
 	}
 
 	if schema.ComparePrimaryKeys(delta.FromSch, delta.ToSch) == schema.PrimaryKeysDiffer {
-		if shouldErrorOnPKChange {
-			return nil, diff.ErrPrimaryKeySetChanged.New()
-		}
-
-		ctx.Warn(dtables.PrimaryKeyChangeWarningCode, dtables.PrimaryKeyChangeWarning, fromDetails.hashStr, toDetails.hashStr)
-		return nil, nil
+		return getSummaryAcrossKeyChange(ctx, delta)
 	}
 
 	// A table whose only change is column tags has no observable change.
@@ -489,4 +484,34 @@ func getIgnorePatternsFromContext(ctx *sql.Context, database sql.Database) (dolt
 
 	// Return patterns for default schema
 	return ignorePatternMap[""], nil
+}
+
+// getSummaryAcrossKeyChange returns the summary of |delta|, whose primary key changed. Its data changed unless the rows
+// of its from table, rekeyed to the new primary key, equal the rows of its to table. Rows that cannot be rekeyed, as
+// when a column of the new primary key is new or two rows collide under it, have changed.
+func getSummaryAcrossKeyChange(ctx *sql.Context, delta diff.TableDelta) (*diff.TableDeltaSummary, error) {
+	summ, err := delta.GetSummary(ctx)
+	if err != nil || !summ.DataChange || delta.FromTable == nil || delta.ToTable == nil {
+		return summ, err
+	}
+	fromRows, err := delta.FromTable.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	fromMap, err := durable.ProllyMapFromIndex(fromRows)
+	if err != nil {
+		return nil, err
+	}
+	rekeyed, _, err := diff.RekeyForDiff(ctx, delta.CurName(), delta.FromTable.NodeStore(), fromMap, delta.FromSch, delta.ToSch)
+	if diff.ErrPrimaryKeySetChanged.Is(err) {
+		return summ, nil
+	} else if err != nil {
+		return nil, err
+	}
+	toHash, err := delta.ToTable.GetRowDataHash(ctx)
+	if err != nil {
+		return nil, err
+	}
+	summ.DataChange = rekeyed.HashOf() != toHash
+	return summ, nil
 }

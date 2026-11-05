@@ -342,6 +342,7 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 	ddb := sqledb.DbData().Ddb
 	toSchema, fromSchema := dtf.getSchemas()
 	dp := dtables.NewDiffPartition(
+		dtf.tableDelta.CurName(),
 		dtf.tableDelta.ToTable, dtf.tableDelta.FromTable,
 		dtf.toRefDetails.refStr, dtf.fromRefDetails.refStr,
 		dtf.toRefDetails.commitTime, dtf.fromRefDetails.commitTime,
@@ -730,6 +731,7 @@ func (dtf *DiffTableFunction) lookupPrimaryIndexPartition(ctx *sql.Context, look
 
 	toSchema, fromSchema := dtf.getSchemas()
 	partition := dtables.NewDiffPartition(
+		dtf.tableDelta.CurName(),
 		dtf.tableDelta.ToTable, dtf.tableDelta.FromTable,
 		dtf.toRefDetails.refStr, dtf.fromRefDetails.refStr,
 		dtf.toRefDetails.commitTime, dtf.fromRefDetails.commitTime,

@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 )
 
 const diffStatDefaultRowCount = 10
@@ -314,12 +313,6 @@ func (ds *DiffStatTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 		}
 		diffStat, hasDiff, err := getDiffStatNodeFromDelta(ctx, delta, fromRefDetails.root, toRefDetails.root, tblName)
 		if err != nil {
-			if diff.ErrPrimaryKeySetChanged.Is(err) {
-				ctx.Warn(dtables.PrimaryKeyChangeWarningCode, "stat for table %s cannot be determined. Primary key set changed.", tblName)
-				// Report an empty diff for tables that have primary key set changes
-				diffStats = append(diffStats, diffStatNode{tblName: tblName})
-				continue
-			}
 			return nil, err
 		}
 		if hasDiff {
@@ -468,8 +461,13 @@ func getDiffStat(ctx *sql.Context, td diff.TableDelta) (diff.DiffStatProgress, b
 		return diff.DiffStatProgress{}, false, false, err
 	}
 
-	keyless, err := td.IsKeyless(ctx)
-	if err != nil {
+	var keyless bool
+	var err error
+	if td.FromTable != nil && td.ToTable != nil && schema.IsKeyless(td.FromSch) != schema.IsKeyless(td.ToSch) {
+		// Rows of one side cannot be paired with rows of the other, so report rows added and deleted as for a keyless
+		// table.
+		keyless = true
+	} else if keyless, err = td.IsKeyless(ctx); err != nil {
 		return diff.DiffStatProgress{}, false, keyless, err
 	}
 

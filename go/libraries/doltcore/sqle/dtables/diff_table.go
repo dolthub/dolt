@@ -26,6 +26,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expreval"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
@@ -616,10 +617,15 @@ type DiffPartition struct {
 	toSch   schema.Schema
 	fromSch schema.Schema
 	ranges  []prolly.Range
+	tblName string
+	// rekeyedFrom holds the rows of |from| rekeyed to the primary key of |to| by isDiffablePartition, when it rekeyed them.
+	rekeyedFrom    *prolly.Map
+	rekeyedFromSch schema.Schema
 }
 
-func NewDiffPartition(to, from *doltdb.Table, toName, fromName string, toDate, fromDate *types.Timestamp, toSch, fromSch schema.Schema, ranges []prolly.Range) *DiffPartition {
+func NewDiffPartition(tblName string, to, from *doltdb.Table, toName, fromName string, toDate, fromDate *types.Timestamp, toSch, fromSch schema.Schema, ranges []prolly.Range) *DiffPartition {
 	return &DiffPartition{
+		tblName:  tblName,
 		to:       to,
 		from:     from,
 		toName:   toName,
@@ -651,10 +657,9 @@ func (dp DiffPartition) GetRowIter(ctx *sql.Context) (sql.RowIter, error) {
 
 // isDiffablePartition checks if the commit pair for this partition is "diffable".
 //
-// simpleDiff is returned when [schema.ComparePrimaryKeys] does not return
-// [schema.PrimaryKeysDiffer]. fuzzyDiff is returned when the keys can still be
-// mapped by [schema.MapSchemaBasedOnTagAndName]. Neither is returned when the
-// partition cannot be diffed.
+// simpleDiff is returned when rows of the two commits can be paired by primary key, rekeying the rows of |from| to
+// the primary key of |to| when needed. fuzzyDiff is returned when only one side is keyless, so that no rows pair.
+// Neither is returned when the partition cannot be diffed.
 func (dp *DiffPartition) isDiffablePartition(ctx *sql.Context) (simpleDiff bool, fuzzyDiff bool, err error) {
 	// dp.to is nil when a table has been deleted previously. In this case, we return
 	// false, to stop processing diffs, since that previously deleted table is considered
@@ -678,16 +683,35 @@ func (dp *DiffPartition) isDiffablePartition(ctx *sql.Context) (simpleDiff bool,
 		return false, false, err
 	}
 
-	easyDiff := schema.ComparePrimaryKeys(fromSch, toSch) != schema.PrimaryKeysDiffer
-	if easyDiff {
+	if schema.ComparePrimaryKeys(fromSch, toSch) != schema.PrimaryKeysDiffer {
 		return true, false, nil
 	}
 
-	_, _, err = schema.MapSchemaBasedOnTagAndName(fromSch, toSch)
-	if err == nil {
-		return false, true, nil
+	if schema.IsKeyless(fromSch) != schema.IsKeyless(toSch) {
+		_, _, err = schema.MapSchemaBasedOnTagAndName(fromSch, toSch)
+		return false, err == nil, nil
 	}
-	return false, false, nil
+
+	if !diff.NeedsRekeyForDiff(fromSch, toSch, dp.from.NodeStore()) {
+		return true, false, nil
+	}
+
+	fromRows, err := dp.from.GetRowData(ctx)
+	if err != nil {
+		return false, false, err
+	}
+	fromMap, err := durable.ProllyMapFromIndex(fromRows)
+	if err != nil {
+		return false, false, err
+	}
+	rekeyed, rekeyedSch, err := diff.RekeyForDiff(ctx, dp.tblName, dp.from.NodeStore(), fromMap, fromSch, toSch)
+	if diff.ErrPrimaryKeySetChanged.Is(err) {
+		return false, false, nil
+	} else if err != nil {
+		return false, false, err
+	}
+	dp.rekeyedFrom, dp.rekeyedFromSch = &rekeyed, rekeyedSch
+	return true, false, nil
 }
 
 type partitionSelectFunc func(*sql.Context, DiffPartition) (bool, error)
@@ -763,6 +787,7 @@ func (dps *DiffPartitions) processCommit(ctx *sql.Context, cmHash hash.Hash, cm 
 			fromSch:  dps.fromSch,
 			toSch:    dps.toSch,
 			ranges:   dps.ranges,
+			tblName:  dps.tblName.Name,
 		}
 		selected, err := dps.selectFunc(ctx, partition)
 

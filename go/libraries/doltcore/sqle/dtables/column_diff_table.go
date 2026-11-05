@@ -536,7 +536,7 @@ func calculateColDelta(ctx *sql.Context, ddb *doltdb.DoltDB, delta *diff.TableDe
 
 	now := time.Now() // accurate commit time returned elsewhere
 	// TODO: schema name?
-	dp := NewDiffPartition(delta.ToTable, delta.FromTable, delta.ToName.Name, delta.FromName.Name, (*dtypes.Timestamp)(&now), (*dtypes.Timestamp)(&now), delta.ToSch, delta.FromSch, nil)
+	dp := NewDiffPartition(delta.CurName(), delta.ToTable, delta.FromTable, delta.ToName.Name, delta.FromName.Name, (*dtypes.Timestamp)(&now), (*dtypes.Timestamp)(&now), delta.ToSch, delta.FromSch, nil)
 	ri := NewDiffPartitionRowIter(dp, ddb)
 
 	var resultColNames []string

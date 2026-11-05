@@ -16,6 +16,7 @@ package dtables
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -26,8 +27,8 @@ import (
 )
 
 // ProllyRowConverter can be used to convert key, value val.Tuple's from |inSchema|
-// to |outSchema|. Columns are matched based on names and primary key
-// membership. The output of the conversion process is a sql.Row.
+// to |outSchema|. Columns are matched by tag and name, preferring a column with the
+// same primary key membership. The output of the conversion process is a sql.Row.
 type ProllyRowConverter struct {
 	inSchema         schema.Schema
 	outSchema        schema.Schema
@@ -42,43 +43,11 @@ type ProllyRowConverter struct {
 }
 
 func NewProllyRowConverter(ctx *sql.Context, inSch, outSch schema.Schema, warnFn rowconv.WarnFunction, ns tree.NodeStore) (ProllyRowConverter, error) {
-	keyProj, valProj, err := schema.MapSchemaBasedOnTagAndName(inSch, outSch)
+	keyProj, pkTargetTypes, err := projectKeyColumns(inSch, outSch)
 	if err != nil {
 		return ProllyRowConverter{}, err
 	}
-
-	pkTargetTypes := make([]sql.Type, inSch.GetPKCols().Size())
-	nonPkTargetTypes := make([]sql.Type, inSch.GetNonPKCols().Size())
-
-	// Populate pkTargetTypes and nonPkTargetTypes with non-nil sql.Type if we need to do a type conversion
-	for i, j := range keyProj {
-		if j == -1 {
-			continue
-		}
-		inColType := inSch.GetPKCols().GetByIndex(i).TypeInfo.ToSqlType()
-		outColType := outSch.GetPKCols().GetByIndex(j).TypeInfo.ToSqlType()
-		if !inColType.Equals(outColType) {
-			pkTargetTypes[i] = outColType
-		}
-		// translate tuple offset to row placement
-		t := outSch.GetPKCols().GetByIndex(j).Tag
-		keyProj[i] = outSch.GetAllCols().TagToIdx[t]
-	}
-
-	for i, j := range valProj {
-		if j == -1 {
-			continue
-		}
-		inColType := inSch.GetNonPKCols().GetByIndex(i).TypeInfo.ToSqlType()
-		outColType := outSch.GetNonPKCols().GetByIndex(j).TypeInfo.ToSqlType()
-		if !inColType.Equals(outColType) {
-			nonPkTargetTypes[i] = outColType
-		}
-
-		// translate tuple offset to row placement
-		t := outSch.GetNonPKCols().GetByIndex(j).Tag
-		valProj[i] = outSch.GetAllCols().TagToIdx[t]
-	}
+	valProj, nonPkTargetTypes := projectNonKeyColumns(inSch, outSch)
 
 	if len(valProj) != 0 && schema.IsKeyless(inSch) {
 		// Adjust for cardinality
@@ -150,4 +119,70 @@ func (c ProllyRowConverter) putFields(ctx context.Context, tup val.Tuple, proj v
 		}
 	}
 	return nil
+}
+
+// projectKeyColumns maps each primary key column of |inSch| to its position in rows of |outSch|, where it may be a
+// non-key column after a primary key change, and returns the type to convert it to when that differs. It matches a key
+// column of |outSch| by tag, then by name and type, and then any column of |outSch| by tag, then by name.
+func projectKeyColumns(inSch, outSch schema.Schema) (val.OrdinalMapping, []sql.Type, error) {
+	inPK := inSch.GetPKCols()
+	proj := make(val.OrdinalMapping, inPK.Size())
+	targetTypes := make([]sql.Type, inPK.Size())
+	if inSch.GetAllCols().Size() == 0 || outSch.GetAllCols().Size() == 0 {
+		for i := range proj {
+			proj[i] = -1
+		}
+		return proj, targetTypes, nil
+	}
+	outPK, outCols := outSch.GetPKCols(), outSch.GetAllCols()
+	for i, col := range inPK.GetColumns() {
+		inType := col.TypeInfo.ToSqlType()
+		outCol, ok := outPK.GetByTag(col.Tag)
+		if !ok {
+			outCol, ok = outPK.GetByNameCaseInsensitive(col.Name)
+			ok = ok && outCol.TypeInfo.ToSqlType().Equals(inType)
+		}
+		if !ok {
+			outCol, ok = outCols.GetByTag(col.Tag)
+		}
+		if !ok {
+			outCol, ok = outCols.GetByName(col.Name)
+		}
+		if !ok {
+			return nil, nil, fmt.Errorf("could not map primary key column %s", col.Name)
+		}
+		proj[i] = outCols.TagToIdx[outCol.Tag]
+		if outType := outCol.TypeInfo.ToSqlType(); !inType.Equals(outType) {
+			targetTypes[i] = outType
+		}
+	}
+	return proj, targetTypes, nil
+}
+
+// projectNonKeyColumns maps each non-key column of |inSch| to its position in rows of |outSch| by name, where it may
+// be a key column after a primary key change, or to -1 when |outSch| lacks it, and returns the type to convert it to
+// when that differs.
+func projectNonKeyColumns(inSch, outSch schema.Schema) (val.OrdinalMapping, []sql.Type) {
+	inNonPK := inSch.GetNonPKCols()
+	proj := make(val.OrdinalMapping, inNonPK.Size())
+	targetTypes := make([]sql.Type, inNonPK.Size())
+	outNonPK, outCols := outSch.GetNonPKCols(), outSch.GetAllCols()
+	for i, col := range inNonPK.GetColumns() {
+		proj[i] = -1
+		if col.Virtual || outCols.Size() == 0 {
+			continue
+		}
+		outCol, ok := outNonPK.GetByName(col.Name)
+		if !ok {
+			outCol, ok = outSch.GetPKCols().GetByName(col.Name)
+		}
+		if !ok {
+			continue
+		}
+		proj[i] = outCols.TagToIdx[outCol.Tag]
+		if inType, outType := col.TypeInfo.ToSqlType(), outCol.TypeInfo.ToSqlType(); !inType.Equals(outType) {
+			targetTypes[i] = outType
+		}
+	}
+	return proj, targetTypes
 }
