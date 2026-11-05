@@ -7370,15 +7370,78 @@ var QueryDiffTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "SELECT * FROM dolt_query_diff('SELECT * FROM t', 'SELECT * FROM tt');",
 				Expected: []sql.Row{
-					{1, 1, nil, nil, "deleted"},
-					{2, 2, nil, nil, "deleted"},
-					{nil, nil, 1, 1, "added"},
-					{nil, nil, 2, 3, "added"},
+					{2, 2, 2, 3, "modified"},
 				},
 			},
 			{
 				Query:    "COMMIT;",
 				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/11621
+		Name: "dolt_query_diff across tables and databases with matching keyed schemas",
+		SetUpScript: []string{
+			"create table t (i int primary key, j int);",
+			"insert into t values (1, 1), (2, 2), (3, 3);",
+			"create table tt (i int primary key, j int);",
+			"insert into tt values (1, 1), (2, 3), (4, 4);",
+			"create table t_keyless (i int, j int);",
+			"insert into t_keyless values (1, 1), (2, 2);",
+			"create table tt_keyless (i int, j int);",
+			"insert into tt_keyless values (1, 1), (2, 3);",
+			"create database otherdb;",
+			"create table otherdb.t (i int primary key, j int);",
+			"insert into otherdb.t values (1, 1), (2, 5), (3, 3);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT * FROM dolt_query_diff('SELECT * FROM t', 'SELECT * FROM tt');",
+				Expected: []sql.Row{
+					{2, 2, 2, 3, "modified"},
+					{3, 3, nil, nil, "deleted"},
+					{nil, nil, 4, 4, "added"},
+				},
+			},
+			{
+				Query: "SELECT * FROM dolt_query_diff('SELECT * FROM t', 'SELECT * FROM otherdb.t');",
+				Expected: []sql.Row{
+					{2, 2, 2, 5, "modified"},
+				},
+			},
+			{
+				Query: "SELECT * FROM dolt_query_diff('SELECT * FROM t a', 'SELECT * FROM t b where i < 3');",
+				Expected: []sql.Row{
+					{3, 3, nil, nil, "deleted"},
+				},
+			},
+			{
+				// different column names still fall back to a keyless diff
+				Query: "SELECT * FROM dolt_query_diff('SELECT i, j FROM t where i = 1', 'SELECT i, j as k FROM tt where i = 1');",
+				Expected: []sql.Row{
+					{1, 1, nil, nil, "deleted"},
+					{nil, nil, 1, 1, "added"},
+				},
+			},
+			{
+				// no primary key in the projection still falls back to a keyless diff
+				Query: "SELECT * FROM dolt_query_diff('SELECT j FROM t where i < 3', 'SELECT j FROM tt where i < 3');",
+				Expected: []sql.Row{
+					{1, nil, "deleted"},
+					{2, nil, "deleted"},
+					{nil, 1, "added"},
+					{nil, 3, "added"},
+				},
+			},
+			{
+				Query: "SELECT * FROM dolt_query_diff('SELECT * FROM t_keyless', 'SELECT * FROM tt_keyless');",
+				Expected: []sql.Row{
+					{1, 1, nil, nil, "deleted"},
+					{2, 2, nil, nil, "deleted"},
+					{nil, nil, 1, 1, "added"},
+					{nil, nil, 2, 3, "added"},
+				},
 			},
 		},
 	},
