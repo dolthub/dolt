@@ -54,9 +54,11 @@ func newSpoolingTableReaderAt(ctx context.Context, bs blobstore.Blobstore, key s
 	return spoolTableReaderAt(rc)
 }
 
-// spoolTableReaderAt copies table bytes into a temp file owned by the reader.
+// spoolTableReaderAt copies table bytes into a temp file owned by the reader. The file is
+// made in this process's spool directory, see spoolDir.
 func spoolTableReaderAt(r io.Reader) (*spoolingTableReaderAt, error) {
-	f, err := tempfiles.MovableTempFileProvider.NewFile("", "nbs-spool-")
+	tfp := tempfiles.MovableTempFileProvider
+	f, err := tfp.NewFile(spoolDir(tfp.GetTempDir()), "nbs-spool-")
 	if err != nil {
 		return nil, err
 	}

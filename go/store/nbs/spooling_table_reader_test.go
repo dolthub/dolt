@@ -30,6 +30,7 @@ import (
 
 	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/blobstore"
+	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 // wholeBlobBlobstore wraps an InMemoryBlobstore and advertises the spool capability.
@@ -51,10 +52,11 @@ func (f fakeGetBlobstore) Get(context.Context, string, blobstore.BlobRange) (io.
 	return f.rc, 0, "", f.err
 }
 
-// countSpoolFiles counts leftover spool temp files in the provider's temp dir.
+// countSpoolFiles counts leftover spool temp files in this process's spool directory.
 func countSpoolFiles(t *testing.T) int {
 	t.Helper()
-	matches, err := filepath.Glob(filepath.Join(os.TempDir(), "nbs-spool-*"))
+	dir := spoolDir(tempfiles.MovableTempFileProvider.GetTempDir())
+	matches, err := filepath.Glob(filepath.Join(dir, "nbs-spool-*"))
 	require.NoError(t, err)
 	return len(matches)
 }
