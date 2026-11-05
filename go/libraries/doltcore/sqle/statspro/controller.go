@@ -552,17 +552,6 @@ func (sc *StatsController) lockedRotateStorage(ctx context.Context) error {
 	}
 
 	sc.kv.Close()
-	// A failed rotation must not leave the closed store to be used or closed again.
-	if kv, ok := sc.kv.(*prollyStats); ok {
-		sc.kv = kv.mem
-	}
-
-	if sc.statsBackingDb != nil {
-		if err := sc.rm(sc.statsBackingDb); err != nil {
-			return err
-		}
-	}
-
 	var mem *memStats
 	switch kv := sc.kv.(type) {
 	case *prollyStats:
@@ -572,9 +561,16 @@ func (sc *StatsController) lockedRotateStorage(ctx context.Context) error {
 	default:
 		mem = NewMemStats()
 	}
+	// Serve stats from memory until the new store opens, so a failed rotation doesn't leave the closed store in use.
+	sc.kv = mem
+
+	if sc.statsBackingDb != nil {
+		if err := sc.rm(sc.statsBackingDb); err != nil {
+			return err
+		}
+	}
 
 	if len(sc.dbFs) == 0 {
-		sc.kv = mem
 		sc.statsBackingDb = nil
 		return nil
 	}
