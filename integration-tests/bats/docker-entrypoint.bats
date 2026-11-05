@@ -3,6 +3,8 @@
 load $BATS_TEST_DIRNAME/helper/common.bash
 load $BATS_TEST_DIRNAME/helper/query-server-common.bash
 
+bats_require_minimum_version 1.5.0
+
 # These tests validate docker/docker-entrypoint.sh using a Docker image built from
 # docker/serverDockerfile in the repo root. They follow existing integration test conventions.
 
@@ -29,6 +31,62 @@ setup_file() {
   else
     echo "Using existing source-built image: $TEST_IMAGE" >&2
   fi
+
+  setup_docker_tmpdir
+}
+
+teardown_file() {
+  teardown_docker_tmpdir
+}
+
+setup_docker_tmpdir() {
+  DOCKER_TMPDIR="dolt-entrypoint-tmpdir-$$"
+  docker volume create "$DOCKER_TMPDIR" >/dev/null
+  export DOCKER_TMPDIR
+}
+
+teardown_docker_tmpdir() {
+  if [ -n "$DOCKER_TMPDIR" ]; then
+    docker volume rm -f "$DOCKER_TMPDIR" >/dev/null 2>&1 || true
+  fi
+}
+
+setup_docker_initdb() {
+  local filename="$1"
+  local subpath="${TEST_PREFIX}docker-entrypoint-initdb.d"
+  docker run --rm -i -v "$DOCKER_TMPDIR:/tmpdir" --entrypoint sh "$TEST_IMAGE" -c "mkdir -p /tmpdir/$subpath && cat > /tmpdir/$subpath/$filename && case '$filename' in *.sh) chmod +x /tmpdir/$subpath/$filename ;; esac"
+}
+
+setup_docker_node() {
+  local name="$1"; shift
+  local role="$1"; shift
+  local remote_hosts="$1"; shift
+  local config="$BATS_TEST_TMPDIR/$name.yaml"
+  cat > "$config" <<EOF
+listener:
+  host: 0.0.0.0
+  port: 3306
+cluster:
+  standby_remotes:
+EOF
+  IFS=',' read -ra hosts <<< "$remote_hosts"
+  local idx=1
+  for host in "${hosts[@]}"; do
+    cat >> "$config" <<EOF
+    - name: standby_${idx}
+      remote_url_template: http://${host}:50051/{database}
+EOF
+    idx=$((idx + 1))
+  done
+  cat >> "$config" <<EOF
+  bootstrap_role: $role
+  remotesapi:
+    port: 50051
+EOF
+  docker create --name "$name" "$@" "$TEST_IMAGE" --config=/tmp/server.yaml >/dev/null
+  docker cp "$config" "$name:/tmp/server.yaml"
+  docker start "$name" >/dev/null
+  wait_for_log "$name" "Dolt init process done. Ready for connections." 60
 }
 
 setup() {
@@ -36,10 +94,24 @@ setup() {
 
   PORT=$(definePORT)
   TEST_PREFIX="dolt-entrypoint-it-$$-"
+  # Uses a Docker volume subpath so containerized test runners can share init scripts with the daemon.
+  INITDB_MOUNT="type=volume,source=$DOCKER_TMPDIR,volume-subpath=${TEST_PREFIX}docker-entrypoint-initdb.d,target=/docker-entrypoint-initdb.d"
+}
+
+teardown_docker() {
+  local artifacts_dir="${DOLT_TEST_ARTIFACTS_DIR:-$BATS_TMPDIR}"
+  mkdir -p "$artifacts_dir"
+  for name in $(docker ps -a --filter "name=$TEST_PREFIX" --format '{{.Names}}'); do
+    docker logs "$name" > "$artifacts_dir/${name}.log" 2>&1 || true
+    docker inspect "$name" > "$artifacts_dir/${name}-inspect.json" 2>&1 || true
+    docker rm -f -v "$name" >/dev/null 2>&1 || true
+  done
+  docker network ls --filter "name=$TEST_PREFIX" --format '{{.Name}}' | xargs -r docker network rm >/dev/null 2>&1 || true
+  docker volume ls --filter "name=$TEST_PREFIX" --format '{{.Name}}' | xargs -r docker volume rm >/dev/null 2>&1 || true
 }
 
 teardown() {
-  docker ps -a --filter "name=$TEST_PREFIX" --format '{{.Names}}' | xargs -r docker rm -f >/dev/null 2>&1 || true
+  teardown_docker
   teardown_common
 }
 
@@ -60,28 +132,22 @@ run_container() {
 
 # Helper to run a container with port mapping and wait for server to be ready
 run_container_with_port() {
-  name="$1"; shift
-  port="$1"; shift
-  docker run -d --name "$name" -p "$port:3306" "$@" "$TEST_IMAGE" >/dev/null
-  wait_for_log "$name" "Server ready. Accepting connections."
-  wait_for_log "$name" "Dolt init process done. Ready for connections." 300
-
-  # Verify container is running
-  run docker ps --filter "name=$name" --format "{{.Names}}"
-  [ $status -eq 0 ]
-  [[ "$output" =~ ^"$name"$ ]] || false
-
-  wait_for_server_ready "$name"
+  local name="$1"; shift
+  local port="$1"; shift
+  run_container "$name" -p "$port:3306" "$@"
 }
 
 # Helper to wait for server to be ready for queries (following Dolt patterns)
 wait_for_server_ready() {
-  name="$1"
-  timeout_ms=8500  # Match standard Dolt timeout
-  end_time=$((SECONDS+($timeout_ms/1000)))
+  local name="$1"
+  local query="${2:-SELECT 1;}"
+  local pattern="${3:-}"
+  local timeout_ms="${4:-8500}"
+  local end_time=$((SECONDS+($timeout_ms/1000)))
 
   while [ $SECONDS -lt $end_time ]; do
-    if docker exec "$name" dolt sql -q "SELECT 1;" >/dev/null 2>&1; then
+    local res
+    if res=$(docker exec "$name" dolt sql -q "$query" 2>/dev/null) && [[ "$res" =~ $pattern ]]; then
       return 0
     fi
     sleep 0.2
@@ -91,12 +157,13 @@ wait_for_server_ready() {
 
 # Helper to wait for a log line to appear
 wait_for_log() {
-  name="$1"; shift
-  pattern="$1"; shift
-  timeout="${1:-15}"
+  local name="$1"; shift
+  local pattern="$1"; shift
+  local timeout="${1:-15}"
+  [ $# -gt 0 ] && shift # timeout is optional
   local end_time=$((SECONDS + timeout))
   while [ $SECONDS -lt $end_time ]; do
-    if docker logs "$name" 2>&1 | grep -q "$pattern"; then
+    if docker logs "$@" "$name" 2>&1 | grep -q "$pattern"; then
       return 0
     fi
     sleep 0.1
@@ -846,6 +913,29 @@ EOF
 }
 
 # bats test_tags=no_lambda
+@test "docker-entrypoint: error on invalid init sql fails promptly with removal hint" {
+  # https://github.com/dolthub/dolt/issues/12115
+  cname="${TEST_PREFIX}bad-init-sql"
+
+  setup_docker_initdb 01-bad.sql << 'EOF'
+THIS IS INVALID SQL;
+EOF
+
+  run docker run -d --name "$cname" --mount "$INITDB_MOUNT" "$TEST_IMAGE"
+  [ $status -eq 0 ]
+
+  run docker wait "$cname"
+  [ $status -eq 0 ]
+  [ "$output" -eq 1 ]
+
+  docker logs "$cname" > "$BATS_TMPDIR/${cname}.log" 2>&1
+  run grep -F "syntax error" "$BATS_TMPDIR/${cname}.log"
+  [ $status -eq 0 ]
+  run grep -F "Remove this container with 'docker rm -f <container_name>' before retrying" "$BATS_TMPDIR/${cname}.log"
+  [ $status -eq 0 ]
+}
+
+# bats test_tags=no_lambda
 @test "docker-entrypoint: GRANT privileges in init script does not require CREATE USER" {
   # Customer error: "error on line 5 for query GRANT ALL PRIVILEGES ON *.* TO 'nautobot'@'%':
   #                  You are not allowed to create a user with GRANT"
@@ -1050,4 +1140,199 @@ EOF
   for pid in "${stop_pids[@]}"; do
     wait $pid
   done
+}
+
+# bats test_tags=no_lambda
+@test "docker-entrypoint: demoted cluster standby restart with original DOLT environment" {
+  # https://github.com/dolthub/dolt/issues/12115
+  cname_a="${TEST_PREFIX}node-a"
+  cname_b="${TEST_PREFIX}node-b"
+  net="${TEST_PREFIX}cluster-net"
+
+  docker network create "$net"
+
+  setup_docker_node "$cname_a" primary node-b --network "$net" --network-alias node-a \
+    -e DOLT_ROOT_PASSWORD=rootpw -e DOLT_DATABASE=mydb -e DOLT_USER=app -e DOLT_PASSWORD=apppw -e DOLT_USER_HOST=%
+  setup_docker_node "$cname_b" standby node-a --network "$net" --network-alias node-b
+
+  wait_for_server_ready "$cname_b" "SHOW DATABASES;" "mydb" 30000
+  wait_for_server_ready "$cname_b" "SELECT User FROM mysql.user WHERE User='app';" "app" 30000
+
+  docker exec "$cname_a" dolt sql -q "CALL dolt_assume_cluster_role('standby', 1);"
+  docker exec "$cname_b" dolt sql -q "CALL dolt_assume_cluster_role('primary', 1);"
+
+  local restart_ts_a
+  restart_ts_a=$(date -u +"%Y-%m-%dT%H:%M:%S.%NZ")
+  docker restart "$cname_a"
+
+  wait_for_log "$cname_a" "Dolt init process done. Ready for connections." 30 --since "$restart_ts_a"
+
+  run -0 docker inspect -f '{{.State.Running}} {{.State.ExitCode}}' "$cname_a"
+  log_output_has "^true 0$"
+
+  # TODO(#12127): Dolt CLI warns on persisted sqlserver.cluster.* config keys until whitelisted.
+  run -0 docker exec "$cname_a" dolt sql -q "SELECT @@GLOBAL.dolt_cluster_role;" -r csv
+  log_output_has "standby"
+
+  run -0 docker exec "$cname_a" dolt sql -q "SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name='mydb';" -r csv
+  log_output_has "1"
+
+  run -0 docker exec "$cname_a" dolt sql -q "SELECT User, Host FROM mysql.user WHERE User='app';" -r csv
+  log_output_has "app"
+}
+
+# bats test_tags=no_lambda
+@test "docker-entrypoint: bring up new replica after cluster is running" {
+  # https://github.com/dolthub/dolt/issues/12115
+  cname_a="${TEST_PREFIX}node-a"
+  cname_b="${TEST_PREFIX}node-b"
+  cname_c="${TEST_PREFIX}node-c"
+  net="${TEST_PREFIX}cluster-net"
+
+  docker network create "$net"
+
+  # Primary configured to replicate to node-b and future replica node-c
+  setup_docker_node "$cname_a" primary "${cname_b},${cname_c}" --network "$net" --network-alias "$cname_a" \
+    -e DOLT_ROOT_PASSWORD=rootpw -e DOLT_DATABASE=mydb -e DOLT_USER=app -e DOLT_PASSWORD=apppw -e DOLT_USER_HOST=%
+
+  # Standby node-b started with same cluster environment variables
+  setup_docker_node "$cname_b" standby "$cname_a" --network "$net" --network-alias "$cname_b" \
+    -e DOLT_ROOT_PASSWORD=rootpw -e DOLT_DATABASE=mydb -e DOLT_USER=app -e DOLT_PASSWORD=apppw -e DOLT_USER_HOST=%
+
+  # Write initial data to primary
+  docker exec "$cname_a" dolt sql -q "USE mydb; CREATE TABLE t (id INT PRIMARY KEY, val VARCHAR(50)); INSERT INTO t VALUES (1, 'initial');"
+
+  # Confirm replication to node-b
+  wait_for_server_ready "$cname_b" "SELECT val FROM mydb.t WHERE id=1;" "initial" 30000
+
+  # Bring up brand new replica node-c while cluster is running, with same cluster environment variables
+  setup_docker_node "$cname_c" standby "$cname_a" --network "$net" --network-alias "$cname_c" \
+    -e DOLT_ROOT_PASSWORD=rootpw -e DOLT_DATABASE=mydb -e DOLT_USER=app -e DOLT_PASSWORD=apppw -e DOLT_USER_HOST=%
+
+  # Write more data on primary
+  docker exec "$cname_a" dolt sql -q "USE mydb; INSERT INTO t VALUES (2, 'replicated-to-c');"
+
+  # Verify new replica node-c is running and has all replicated data
+  run -0 docker inspect -f '{{.State.Running}} {{.State.ExitCode}}' "$cname_c"
+  log_output_has "^true 0$"
+
+  wait_for_server_ready "$cname_c" "SELECT val FROM mydb.t WHERE id=2;" "replicated-to-c" 30000
+
+  run -0 docker exec "$cname_c" dolt sql -q "SELECT COUNT(*) FROM mydb.t;" -r csv
+  log_output_has "2"
+
+  run -0 docker exec "$cname_c" dolt sql -q "SELECT @@GLOBAL.dolt_cluster_role;" -r csv
+  log_output_has "standby"
+
+  wait_for_server_ready "$cname_c" "SELECT User FROM mysql.user WHERE User='app';" "app" 30000
+}
+
+# bats test_tags=no_lambda
+@test "docker-entrypoint: completed initialization skips setup on restart" {
+  # https://github.com/dolthub/dolt/issues/12115
+  cname="${TEST_PREFIX}init-skip"
+  cname_repl="${TEST_PREFIX}init-skip-repl"
+
+  setup_docker_initdb 01-init.sql << 'EOF'
+USE origdb;
+CREATE TABLE runs (id INT PRIMARY KEY, message VARCHAR(50));
+INSERT INTO runs VALUES (1, 'initial run');
+EOF
+
+  run_container "$cname" \
+    -e DOLT_ROOT_PASSWORD=rootpass \
+    -e DOLT_DATABASE=origdb \
+    -e DOLT_USER=origuser \
+    -e DOLT_PASSWORD=origpass \
+    -e DOLT_USER_HOST=% \
+    --mount "$INITDB_MOUNT"
+
+  docker exec "$cname" test -f /var/lib/dolt/.init_completed
+
+  docker stop "$cname" >/dev/null
+
+  # Replacement container uses volumes from original with conflicting/new env vars.
+  # If initialization ran, DOLT_USER=root would trigger immediate validation failure.
+  run_container "$cname_repl" \
+    --volumes-from "$cname" \
+    -e DOLT_ROOT_PASSWORD=newrootpass \
+    -e DOLT_ROOT_HOST=newhost \
+    -e DOLT_DATABASE=newdb \
+    -e DOLT_USER=root \
+    -e DOLT_PASSWORD=newpass \
+    --mount "$INITDB_MOUNT"
+
+  run -0 docker inspect -f '{{.State.Running}} {{.State.ExitCode}}' "$cname_repl"
+  log_output_has "^true 0$"
+
+  # Original database and user preserved
+  run -0 docker exec "$cname_repl" dolt sql -q "SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name='origdb';" -r csv
+  [ "$output" = $'COUNT(*)\n1' ]
+
+  run -0 docker exec "$cname_repl" dolt sql -q "SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name='newdb';" -r csv
+  [ "$output" = $'COUNT(*)\n0' ]
+
+  run -0 docker exec "$cname_repl" dolt sql -q "SELECT User, Host FROM mysql.user WHERE User='origuser';" -r csv
+  [ "$output" = $'User,Host\noriguser,%' ]
+
+  run -0 docker exec "$cname_repl" dolt sql -q "SELECT COUNT(*) FROM mysql.user WHERE User='root' AND Host='newhost';" -r csv
+  [ "$output" = $'COUNT(*)\n0' ]
+
+  # Init script did not re-run (runs table still has exactly 1 row)
+  run -0 docker exec "$cname_repl" dolt sql -q "SELECT COUNT(*) FROM origdb.runs;" -r csv
+  [ "$output" = $'COUNT(*)\n1' ]
+}
+
+# bats test_tags=no_lambda
+@test "docker-entrypoint: failed initialization leaves marker absent and retries on restart" {
+  # https://github.com/dolthub/dolt/issues/12115
+  cname="${TEST_PREFIX}init-retry"
+
+  setup_docker_initdb 01-fail.sh << 'EOF'
+#!/bin/bash
+echo "intentional init failure" >&2
+exit 1
+EOF
+
+  docker run -d --name "$cname" --mount "$INITDB_MOUNT" "$TEST_IMAGE" >/dev/null
+
+  run -0 timeout 30 docker wait "$cname"
+  log_output_has "^1$"
+
+  # Marker was not written because initialization failed.
+  run -1 docker run --rm --volumes-from "$cname:ro" --entrypoint test "$TEST_IMAGE" -f /var/lib/dolt/.init_completed
+
+  setup_docker_initdb 01-fail.sh << 'EOF'
+#!/bin/bash
+echo "successful init retry"
+EOF
+
+  local restart_ts
+  restart_ts=$(date -u +"%Y-%m-%dT%H:%M:%S.%NZ")
+  docker start "$cname" >/dev/null
+  wait_for_log "$cname" "Dolt init process done. Ready for connections." 30 --since "$restart_ts"
+
+  docker exec "$cname" test -f /var/lib/dolt/.init_completed
+}
+
+
+# bats test_tags=no_lambda
+@test "docker-entrypoint: exec_mysql logs error to stderr on query failure" {
+  # https://github.com/dolthub/dolt/issues/12115
+  cname="${TEST_PREFIX}exec-mysql-err"
+
+  docker run -d --name "$cname" \
+    -e DOLT_ROOT_PASSWORD=rootpass \
+    -e DOLT_USER=testuser \
+    -e DOLT_PASSWORD=testpass \
+    -e DOLT_USER_HOST="bad'host" \
+    -e DOLT_SERVER_TIMEOUT=5 \
+    "$TEST_IMAGE" >/dev/null
+
+  run -0 timeout 30 docker wait "$cname"
+  log_output_has "^1$"
+
+  run -0 --separate-stderr docker logs "$cname"
+  output="$stderr" log_output_has "\[Error\] \[Entrypoint\] Failed to create user 'testuser':"
+  log_output_has "Remove this container with 'docker rm -f"
 }

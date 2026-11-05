@@ -194,9 +194,7 @@ var binlogScripts = []queries.ScriptTest{
 // TestBinlog tests the BINLOG statement functionality using the Dolt engine.
 func TestBinlog(t *testing.T) {
 	doltenginetest.RunScriptsWithEngineSetup(t, func(engine *gms.Engine) {
-		binlogConsumer := binlogreplication.DoltBinlogConsumer
-		binlogConsumer.SetEngine(engine)
-		engine.EngineAnalyzer().Catalog.BinlogConsumer = binlogConsumer
+		engine.EngineAnalyzer().Catalog.BinlogConsumer = binlogreplication.NewDoltBinlogConsumer(engine)
 	}, binlogScripts)
 }
 

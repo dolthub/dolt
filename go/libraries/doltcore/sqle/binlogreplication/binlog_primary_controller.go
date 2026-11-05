@@ -43,6 +43,12 @@ func NewDoltBinlogPrimaryController() *DoltBinlogPrimaryController {
 	}
 }
 
+// Close stops the primary's binlog streams and releases its manager goroutine.
+// It is safe to call more than once.
+func (d *DoltBinlogPrimaryController) Close() {
+	d.streamerManager.Close()
+}
+
 func (d *DoltBinlogPrimaryController) BinlogProducer(binlogProducer *binlogProducer) {
 	d.binlogProducer = binlogProducer
 	d.streamerManager.logManager = binlogProducer.logManager
@@ -72,7 +78,7 @@ func (d *DoltBinlogPrimaryController) validateReplicationConfiguration(ctx *sql.
 			"no binlog currently being recorded; make sure the server is started with @@log_bin enabled")
 	}
 
-	_, logBinValue, ok := sql.SystemVariables.GetGlobal("log_bin")
+	_, logBinValue, ok := ctx.SystemVariables().GetGlobal("log_bin")
 	if !ok {
 		return mysql.NewSQLError(mysql.ERUnknownError, "HY000", "unable to find system variable @@log_bin")
 	}
@@ -85,7 +91,7 @@ func (d *DoltBinlogPrimaryController) validateReplicationConfiguration(ctx *sql.
 			"no binlog currently being recorded; make sure the server is started with @@log_bin enabled")
 	}
 
-	_, gtidModeValue, ok := sql.SystemVariables.GetGlobal("gtid_mode")
+	_, gtidModeValue, ok := ctx.SystemVariables().GetGlobal("gtid_mode")
 	if !ok {
 		return mysql.NewSQLError(mysql.ERUnknownError, "HY000", "unable to find system variable @@log_bin")
 	}
@@ -98,7 +104,7 @@ func (d *DoltBinlogPrimaryController) validateReplicationConfiguration(ctx *sql.
 			"@@gtid_mode must be enabled for binlog replication")
 	}
 
-	_, enforceGtidConsistencyValue, ok := sql.SystemVariables.GetGlobal("enforce_gtid_consistency")
+	_, enforceGtidConsistencyValue, ok := ctx.SystemVariables().GetGlobal("enforce_gtid_consistency")
 	if !ok {
 		return mysql.NewSQLError(mysql.ERUnknownError, "HY000", "unable to find system variable @@log_bin")
 	}

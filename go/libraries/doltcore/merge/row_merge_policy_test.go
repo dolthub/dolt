@@ -27,6 +27,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
@@ -39,6 +40,10 @@ var fastPathSchema = sch("CREATE TABLE t (pk int PRIMARY KEY, a int, b int)")
 var differPathSchema = sch("CREATE TABLE t (pk int PRIMARY KEY, a int, b int, INDEX idx_a (a))")
 
 var policyTestSchema = fastPathSchema
+
+func newOwnedMergeContext(ctx context.Context) *sql.Context {
+	return sql.NewContextWithVariables(ctx, sqle.NewEngineVariables())
+}
 
 type policyInvocation struct {
 	table             string
@@ -81,7 +86,7 @@ func runPolicyMergeWithSchema(t *testing.T, schema namedSchema, data dataTest, p
 
 	var eo editor.Options
 	mo := merge.MergeOpts{RowMergePolicy: policy}
-	return merge.MergeRoots(sql.NewContext(ctx), doltdb.SimpleTableResolver{}, l, r, a, rootish{r}, rootish{a}, eo, mo)
+	return merge.MergeRoots(newOwnedMergeContext(ctx), doltdb.SimpleTableResolver{}, l, r, a, rootish{r}, rootish{a}, eo, mo)
 }
 
 // A policy installed through MergeOpts must reach the merge, be told which
@@ -271,7 +276,7 @@ func TestRowMergePolicy_DefersWhenSchemasDiffer(t *testing.T) {
 
 	var eo editor.Options
 	mo := merge.MergeOpts{RowMergePolicy: p.opt()}
-	result, err := merge.MergeRoots(sql.NewContext(ctx), doltdb.SimpleTableResolver{}, l, r, a, rootish{r}, rootish{a}, eo, mo)
+	result, err := merge.MergeRoots(newOwnedMergeContext(ctx), doltdb.SimpleTableResolver{}, l, r, a, rootish{r}, rootish{a}, eo, mo)
 	require.NoError(t, err)
 	require.Empty(t, p.calls, "a schema-changing merge must not consult the policy")
 	require.Zero(t, dataConflictCount(result), "the merge must use Dolt's own semantics")

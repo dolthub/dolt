@@ -53,15 +53,16 @@ const (
 	ConflictDiffTypeRemoved  = "removed"
 )
 
+// MergeCommits merges |mergeCommit| into |commit|. When they have several best common ancestors, the merge base is a
+// virtual commit that merges those ancestors together.
 func MergeCommits(ctx *sql.Context, tableResolver doltdb.TableResolver, commit, mergeCommit *doltdb.Commit, opts editor.Options) (*Result, error) {
-	optCmt, err := doltdb.GetCommitAncestor(ctx, commit, mergeCommit)
+	ancCommit, mergeBases, conflicted, err := resolveMergeBase(ctx, commit, mergeCommit)
 	if err != nil {
 		return nil, err
 	}
-	ancCommit, ok := optCmt.ToCommit()
-	if !ok {
-		// Ancestor commit should have been resolved before getting this far.
-		return nil, doltdb.ErrGhostCommitRuntimeFailure
+	ancestor, err := mergeBaseRootish(ancCommit, mergeBases, conflicted)
+	if err != nil {
+		return nil, err
 	}
 
 	ourRoot, err := commit.GetRootValue(ctx)
@@ -83,7 +84,7 @@ func MergeCommits(ctx *sql.Context, tableResolver doltdb.TableResolver, commit, 
 		IsCherryPick:        false,
 		KeepSchemaConflicts: true,
 	}
-	return MergeRoots(ctx, tableResolver, ourRoot, theirRoot, ancRoot, mergeCommit, ancCommit, opts, mo)
+	return MergeRoots(ctx, tableResolver, ourRoot, theirRoot, ancRoot, mergeCommit, ancestor, opts, mo)
 }
 
 type Result struct {
@@ -91,6 +92,12 @@ type Result struct {
 	SchemaConflicts       []SchemaConflict
 	Stats                 map[doltdb.TableName]*MergeStats
 	CommitVerificationErr error
+	// FullTextRebuilds are the tables whose Full-Text pseudo-index tables the merge did not rebuild because of
+	// MergeOpts.SkipFullTextRebuild.
+	FullTextRebuilds []doltdb.TableName
+	// AncestorRoot is the ancestor the merge merged against: the ancestor passed to MergeRoots, with the tables whose
+	// primary key both sides changed the same way rekeyed to that key.
+	AncestorRoot doltdb.RootValue
 }
 
 func (r Result) HasSchemaConflicts() bool {
@@ -226,10 +233,12 @@ func MergeRoots(
 	// Merge tables one at a time. This is done based on name. With table names from ourRoot being merged first,
 	// renaming a table will return delete/modify conflict error consistently.
 	// TODO: merge based on a more durable table identity that persists across renames
-	merger, err := NewMerger(ourRoot, theirRoot, ancRoot, theirs, ancestor, ourRoot.VRW(), ourRoot.NodeStore())
+	merger, err := NewMerger(ctx, ourRoot, theirRoot, ancRoot, theirs, ancestor, ourRoot.VRW(), ourRoot.NodeStore())
 	if err != nil {
 		return nil, err
 	}
+	// The foreign key checks diff the merged root against the ancestor, so they need its rekeyed tables too.
+	ancRoot = merger.anc
 
 	destSchemaNames, err := getDatabaseSchemaNames(ctx, ourRoot)
 	if err != nil {
@@ -335,7 +344,8 @@ func MergeRoots(
 		}
 	}
 
-	mergedRoot, err = rebuildFullTextIndexes(ctx, mergedRoot, ourRoot, theirRoot, visitedTables)
+	var fullTextRebuilds []doltdb.TableName
+	mergedRoot, fullTextRebuilds, err = rebuildFullTextIndexes(ctx, mergedRoot, ourRoot, theirRoot, visitedTables, !mergeOpts.SkipFullTextRebuild)
 	if err != nil {
 		return nil, err
 	}
@@ -377,9 +387,11 @@ func MergeRoots(
 	}
 
 	return &Result{
-		Root:            mergedRoot,
-		SchemaConflicts: schConflicts,
-		Stats:           tblToStats,
+		Root:             mergedRoot,
+		SchemaConflicts:  schConflicts,
+		Stats:            tblToStats,
+		FullTextRebuilds: fullTextRebuilds,
+		AncestorRoot:     ancRoot,
 	}, nil
 }
 

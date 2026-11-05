@@ -323,6 +323,7 @@ func RunAsyncReplicationThreads(bThreads BackgroundThreads, nameSuffix string, c
 type DynamicPushOnWriteHook struct {
 	mu      sync.Mutex
 	dEnv    *env.DoltEnv
+	vars    sql.SystemVariableRegistry
 	tempDir string
 	logger  io.Writer
 
@@ -336,11 +337,11 @@ type DynamicPushOnWriteHook struct {
 
 var _ doltdb.CommitHook = (*DynamicPushOnWriteHook)(nil)
 
-// NewDynamicPushOnWriteHook creates a DynamicPushOnWriteHook, parameterized by the environment and a logger. The configuration
-// options at this time can result in errors, for example if the provided remote does not exist. This is not the case
-// when the process is up and running. If bad configuration is detected at execution time, the error is logged and replication is skipped.
-func NewDynamicPushOnWriteHook(ctx context.Context, nameSuffix string, dEnv *env.DoltEnv, logger io.Writer) (*DynamicPushOnWriteHook, RunAsyncThreads, error) {
-	remote, async, err := getReplicationVals()
+// NewDynamicPushOnWriteHookWithRegistry creates a hook that retains its registry
+// for live configuration reads. Invalid configuration can fail construction;
+// configuration errors during execution are logged and replication is skipped.
+func NewDynamicPushOnWriteHookWithRegistry(ctx context.Context, nameSuffix string, dEnv *env.DoltEnv, logger io.Writer, vars sql.SystemVariableRegistry) (*DynamicPushOnWriteHook, RunAsyncThreads, error) {
+	remote, async, err := getReplicationValsFromRegistry(vars)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -364,6 +365,7 @@ func NewDynamicPushOnWriteHook(ctx context.Context, nameSuffix string, dEnv *env
 
 	return &DynamicPushOnWriteHook{
 		dEnv:      dEnv,
+		vars:      vars,
 		tempDir:   tmpDir,
 		logger:    logger,
 		remote:    remote,
@@ -375,8 +377,8 @@ func NewDynamicPushOnWriteHook(ctx context.Context, nameSuffix string, dEnv *env
 
 // getReplicationVals gets the current values of the `dolt_replicate_to_remote` and `dolt_async_replication` system
 // variables.
-func getReplicationVals() (string, bool, error) {
-	_, val, ok := sql.SystemVariables.GetGlobal(dsess.ReplicateToRemote)
+func getReplicationValsFromRegistry(vars sql.SystemVariableRegistry) (string, bool, error) {
+	_, val, ok := vars.GetGlobal(dsess.ReplicateToRemote)
 	if !ok {
 		return "", false, sql.ErrUnknownSystemVariable.New(dsess.ReplicateToRemote)
 	}
@@ -386,7 +388,7 @@ func getReplicationVals() (string, bool, error) {
 	}
 
 	async := false
-	if _, val, ok = sql.SystemVariables.GetGlobal(dsess.AsyncReplication); ok && val == dsess.SysVarTrue {
+	if _, val, ok = vars.GetGlobal(dsess.AsyncReplication); ok && val == dsess.SysVarTrue {
 		async = true
 	}
 
@@ -413,7 +415,7 @@ func getDestinationDb(ctx context.Context, dEnv *env.DoltEnv, remoteName string)
 }
 
 func (m *DynamicPushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db *doltdb.DoltDB) (func(context.Context) error, error) {
-	remoteName, async, err := getReplicationVals()
+	remoteName, async, err := getReplicationValsFromRegistry(m.vars)
 
 	// We only need the lock if the remote configuration has changed.
 	hook, err := func() (doltdb.CommitHook, error) {

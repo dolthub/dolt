@@ -19,7 +19,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
-	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
+	"github.com/dolthub/go-mysql-server/enginetest/setup"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/plan"
@@ -1167,6 +1167,49 @@ var DoltOnlyRevisionTableFunctionPrivilegeTests = []queries.UserPrivilegeTest{
 				Host:     "localhost",
 				Query:    "SELECT * FROM dolt_diff_summary('HEAD', 'WORKING');",
 				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "dolt_merge_bases privilege checking with revision database",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk BIGINT PRIMARY KEY, col1 varchar(20));",
+			"CREATE TABLE test2 (pk BIGINT PRIMARY KEY, col1 varchar(20));",
+			"call dolt_commit('-Am', 'first commit');",
+			"CREATE USER tester@localhost;",
+			"call dolt_branch('b1');",
+			"use mydb/b1;",
+		},
+		Assertions: []queries.UserPrivilegeTestAssertion{
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT count(*) FROM dolt_merge_bases('main', 'b1');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT SELECT ON mydb.test TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT count(*) FROM dolt_merge_bases('main', 'b1');",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT SELECT ON mydb.* TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT count(*) FROM dolt_merge_bases('main', 'b1');",
+				Expected: []sql.Row{{int64(1)}},
 			},
 		},
 	},

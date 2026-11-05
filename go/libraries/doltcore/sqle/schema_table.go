@@ -452,7 +452,7 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 				sqlModeString = s
 			}
 		} else {
-			defaultSqlMode, err := loadDefaultSqlMode()
+			defaultSqlMode, err := loadDefaultSqlMode(ctx)
 			if err != nil {
 				return nil, err
 			}
@@ -505,8 +505,8 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 
 // loadDefaultSqlMode loads the default value for the @@SQL_MODE system variable and returns it, along
 // with any unexpected errors encountered while reading the default value.
-func loadDefaultSqlMode() (string, error) {
-	global, _, ok := sql.SystemVariables.GetGlobal("SQL_MODE")
+func loadDefaultSqlMode(ctx *sql.Context) (string, error) {
+	global, _, ok := ctx.SystemVariables().GetGlobal("SQL_MODE")
 	if !ok {
 		return "", fmt.Errorf("unable to load default @@SQL_MODE")
 	}

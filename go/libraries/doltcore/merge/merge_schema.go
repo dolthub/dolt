@@ -187,10 +187,10 @@ func SchemaMerge(
 
 	// TODO: We'll remove this once it's possible to get diff and merge on different primary key sets
 	// TODO: decide how to merge different orders of PKS
-	if !schema.ArePrimaryKeySetsDiffable(ourSch, theirSch) {
+	if schema.ComparePrimaryKeys(ourSch, theirSch) != schema.PrimaryKeysSameTags {
 		return nil, SchemaConflict{}, mergeInfo, diffInfo, ErrMergeWithDifferentPks.New(tblName)
 	}
-	if !schema.ArePrimaryKeySetsDiffable(ourSch, ancSch) {
+	if schema.ComparePrimaryKeys(ourSch, ancSch) != schema.PrimaryKeysSameTags {
 		return nil, SchemaConflict{}, mergeInfo, diffInfo, ErrMergeWithDifferentPksFromAncestor.New(tblName)
 	}
 
@@ -1368,7 +1368,7 @@ func isCheckReferenced(ctx *sql.Context, sch schema.Schema, chk schema.Check) (b
 	}
 
 	for _, col := range colNames {
-		_, ok := sch.GetAllCols().GetByName(col)
+		_, ok := sch.GetAllCols().GetByNameCaseInsensitive(col)
 		if !ok {
 			return false, nil
 		}

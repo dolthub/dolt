@@ -164,7 +164,7 @@ import (
 */
 
 type commitInfoWithChildren struct {
-	Commit           CommitInfo
+	Commit           *CommitInfo
 	Children         []string
 	Col              int
 	Row              int
@@ -186,7 +186,7 @@ type branchPath struct {
 }
 
 // mapCommitsWithChildrenAndPosition gets the children of commits, and initialize the x and y coordinates of the commits
-func mapCommitsWithChildrenAndPosition(commits []CommitInfo) []*commitInfoWithChildren {
+func mapCommitsWithChildrenAndPosition(commits []*CommitInfo) []*commitInfoWithChildren {
 	childrenMap := make(map[string][]string)
 	for _, commit := range commits {
 		for _, parent := range commit.parentHashes {
@@ -321,14 +321,14 @@ func computeColumnEnds(commits []*commitInfoWithChildren, commitsMap map[string]
 	return commitsWithColPos, newCommitMap
 }
 
-func printLine(graph [][]string, col, row int, pager *outputpager.Pager, line string, commit CommitInfo, decoration string) {
+func printLine(graph [][]string, col, row int, pager *outputpager.Pager, line string, commit *CommitInfo, decoration string) {
 	graphLine := strings.Join(graph[row], "")
 
 	emptySpace := strings.Repeat(" ", col-len(graph[row]))
 	pager.Writer.Write([]byte(fmt.Sprintf("%s%s %s", graphLine, emptySpace, line)))
 
 	if decoration != cli.DecorateNo {
-		printRefs(pager, &commit, decoration)
+		printRefs(pager, commit, decoration)
 	}
 	pager.Writer.Write([]byte("\n"))
 }
@@ -379,7 +379,7 @@ func printOneLineGraph(graph [][]string, pager *outputpager.Pager, apr *argparse
 	// print the first commit
 	pager.Writer.Write([]byte(fmt.Sprintf("%s %s ", strings.Join(graph[commits[0].Row], ""), color.YellowString("commit %s", commits[0].Commit.commitHash))))
 	if decoration != cli.DecorateNo {
-		printRefs(pager, &commits[0].Commit, decoration)
+		printRefs(pager, commits[0].Commit, decoration)
 	}
 	pager.Writer.Write([]byte(color.WhiteString("%s\n", strings.Join(commits[0].formattedMessage, " "))))
 
@@ -393,7 +393,7 @@ func printOneLineGraph(graph [][]string, pager *outputpager.Pager, apr *argparse
 
 		pager.Writer.Write([]byte(fmt.Sprintf("%s %s ", strings.Join(graph[commits[i].Row], ""), color.YellowString("commit %s ", commits[i].Commit.commitHash))))
 		if decoration != cli.DecorateNo {
-			printRefs(pager, &commits[i].Commit, decoration)
+			printRefs(pager, commits[i].Commit, decoration)
 		}
 		pager.Writer.Write([]byte(color.WhiteString("%s\n", strings.Join(commits[i].formattedMessage, " "))))
 		previousRow = commits[i].Row
@@ -567,7 +567,7 @@ func drawCommitDotsAndBranchPaths(commits []*commitInfoWithChildren, commitsMap 
 	return graph
 }
 
-func logGraph(pager *outputpager.Pager, apr *argparser.ArgParseResults, commitInfos []CommitInfo) {
+func logGraph(pager *outputpager.Pager, apr *argparser.ArgParseResults, commitInfos []*CommitInfo) {
 	color.NoColor = false
 
 	commits := mapCommitsWithChildrenAndPosition(commitInfos)

@@ -128,3 +128,13 @@ teardown() {
     [[ "$output" =~ "invalid syntax" ]] || false
     [[ "$output" =~ "151" ]] || false
 }
+
+@test "sql-config: invalid persisted system variable error prints once" {
+    echo '{"sqlserver.global.max_connections":"string"}' > .dolt/config.json
+    for cmd in "sql -q 'select 1'" "status" "log"; do
+        run bash -c "dolt $cmd"
+        [ "$status" -eq 0 ]
+        count=$(echo "$output" | grep -c "failed to load persisted global variables: key: 'max_connections'")
+        [ "$count" -eq 1 ] || { echo "dolt $cmd printed the error $count times: $output"; false; }
+    done
+}

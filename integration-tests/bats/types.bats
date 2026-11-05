@@ -1314,7 +1314,7 @@ SQL
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,
-  v TIME,
+  v TIME(6),
   PRIMARY KEY (pk)
 );
 SQL
@@ -1329,17 +1329,16 @@ SQL
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 11:22:00.000000 " ]] || false
-    dolt sql -q "REPLACE INTO test VALUES (1, '850:00:00');"
+    dolt sql -q "REPLACE INTO test VALUES (1, '838:59:59');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 838:59:59.000000 " ]] || false
-    dolt sql -q "REPLACE INTO test VALUES (1, '-850:00:00');"
+    dolt sql -q "REPLACE INTO test VALUES (1, '-838:59:59');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " -838:59:59.000000 " ]] || false
 
     # check information_schema.COLUMNS table
-    # TODO: time precision is not supported, this type's 'datetime_precision' and 'column_type' should be '0', 'time' respectively.
     run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
     [[ "$output" =~ 'test,v,2,,YES,time,,,,,6,,,time(6),"","","insert,references,select,update","","",' ]] || false
 }

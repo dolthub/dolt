@@ -24,13 +24,15 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/dolthub/fslock"
+	filelocks "github.com/dolthub/file-locks"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/gitauth"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -188,20 +190,16 @@ func rebaseCachedEntry(ctx context.Context, entry gitRemoteCacheEntry) (datas.Da
 }
 
 func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
+	bsOpts, err := gitRemoteHistoryOptions(params)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	remoteURL, ref, err := parseGitRemoteFactoryURL(urlObj, params)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	cacheRoot, ok, err := resolveGitCacheRoot(params)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	if !ok {
-		return nil, nil, nil, fmt.Errorf("%s is required for git remotes", GitCacheRootParam)
-	}
-
-	cacheRepo, err := cacheRepoPath(cacheRoot, remoteURL.String(), ref)
+	cacheRepo, err := GitRemoteCacheKey(urlObj, params)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -220,7 +218,7 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	if err := os.MkdirAll(hashDir, 0o755); err != nil {
 		return nil, nil, nil, err
 	}
-	initLock, err := fslock.New(filepath.Join(hashDir, "init.lock"))
+	initLock, err := filelocks.New(filepath.Join(hashDir, "init.lock"))
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -234,25 +232,26 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 		}
 	}()
 
-	if err := ensureBareRepo(ctx, cacheRepo); err != nil {
+	gitURL := gitRemoteURLString(remoteURL)
+	initFlags, err := remoteInitFlags(ctx, cacheRepo, gitURL)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	// The cache repo must use the remote's object format. Git refuses to push
+	// between repositories with different hash algorithms.
+	if err := ensureBareRepo(ctx, cacheRepo, initFlags...); err != nil {
 		return nil, nil, nil, err
 	}
 
 	// Ensure the configured git remote exists and points to the underlying git remote URL.
-	gitURL := gitRemoteURLString(remoteURL)
 	if err := ensureGitRemoteURL(ctx, cacheRepo, remoteName, gitURL); err != nil {
-		return nil, nil, nil, err
-	}
-	if err := ensureRemoteHasBranches(ctx, cacheRepo, remoteName, gitURL); err != nil {
 		return nil, nil, nil, err
 	}
 
 	q := nbs.NewUnlimitedMemQuotaProvider()
-	bsOpts := blobstore.GitBlobstoreOptions{
-		RemoteName:     remoteName,
-		InfoBranch:     blobstore.DefaultInfoBranch,
-		SyncForReadTTL: gitBlobstoreSyncForReadTTLOverride,
-	}
+	bsOpts.RemoteName = remoteName
+	bsOpts.InfoBranch = blobstore.DefaultInfoBranch
+	bsOpts.SyncForReadTTL = gitBlobstoreSyncForReadTTLOverride
 	nbsCS, err := nbs.NewGitStore(ctx, nbf.VersionString(), cacheRepo, ref, bsOpts, memlimit.MemtableSize(), q)
 	if err != nil {
 		return nil, nil, nil, err
@@ -273,15 +272,82 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	return db, vrw, ns, nil
 }
 
-func ensureRemoteHasBranches(ctx context.Context, gitDir string, remoteName string, remoteURL string) error {
-	out, err := runGitInDir(ctx, gitDir, "ls-remote", "--heads", "--", remoteName)
+// Environment overrides repository/global configuration supplied by the caller.
+func gitRemoteHistoryOptions(params map[string]interface{}) (blobstore.GitBlobstoreOptions, error) {
+	var opts blobstore.GitBlobstoreOptions
+	for _, setting := range []struct{ key, env string }{
+		{config.GitRemoteMaxHistoryCommits, "DOLT_GIT_REMOTE_MAX_HISTORY_COMMITS"},
+		{config.GitRemoteResetOnPrune, "DOLT_GIT_REMOTE_RESET_HISTORY_ON_PRUNE"},
+	} {
+		value, present := os.LookupEnv(setting.env)
+		if !present {
+			if raw, ok := params[setting.key]; ok {
+				value, present = raw.(string)
+				if !present {
+					return opts, fmt.Errorf("%s must be a string", setting.key)
+				}
+			}
+		}
+		if !present {
+			continue
+		}
+		switch setting.key {
+		case config.GitRemoteMaxHistoryCommits:
+			n, parseErr := strconv.Atoi(value)
+			if parseErr != nil {
+				return opts, fmt.Errorf("%s must be a non-negative integer (0 means unlimited), got %q: %w", setting.key, value, parseErr)
+			}
+			if n < 0 {
+				return opts, fmt.Errorf("%s must be a non-negative integer (0 means unlimited), got %q", setting.key, value)
+			}
+			opts.MaxHistoryCommits = &n
+		case config.GitRemoteResetOnPrune:
+			var resetOnPrune bool
+			switch value {
+			case "true":
+				resetOnPrune = true
+			case "false":
+				resetOnPrune = false
+			default:
+				return opts, fmt.Errorf("%s must be true or false, got %q", setting.key, value)
+			}
+			opts.ResetHistoryOnPrune = &resetOnPrune
+		}
+	}
+	return opts, nil
+}
+
+// remoteInitFlags returns the git init flags that match the object format of
+// the remote at |remoteURL|, read from the length of a branch oid. A SHA-1
+// remote needs none, and git older than 2.29 rejects --object-format. git
+// ls-remote runs with |gitDir|, which need not exist, so the config of the
+// repository dolt runs in does not apply. It returns ErrGitRemoteHasNoBranches
+// when the remote has no branch.
+func remoteInitFlags(ctx context.Context, gitDir string, remoteURL string) ([]string, error) {
+	// The error omits |remoteURL|, which can hold credentials.
+	cmd, err := gitCmd(ctx, "--git-dir", gitDir, "ls-remote", "--heads", "--", remoteURL)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if strings.TrimSpace(out) == "" {
-		return fmt.Errorf("%w: cannot push to %q; initialize the repository with an initial branch/commit first", ErrGitRemoteHasNoBranches, remoteURL)
+	// Only stdout holds oids. stderr can carry ssh or GIT_TRACE lines.
+	out, err := cmd.Output()
+	if err != nil {
+		var stderr []byte
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			stderr = exitErr.Stderr
+		}
+		base := fmt.Errorf("git ls-remote --heads failed: %w\noutput:\n%s", err, strings.TrimSpace(string(stderr)))
+		return nil, gitauth.NormalizeError(ctx, base, stderr)
 	}
-	return nil
+	fields := strings.Fields(string(out))
+	if len(fields) == 0 {
+		return nil, fmt.Errorf("%w: cannot push to %q; initialize the repository with an initial branch/commit first", ErrGitRemoteHasNoBranches, remoteURL)
+	}
+	if len(fields[0]) == 64 {
+		return []string{"--object-format=sha256"}, nil
+	}
+	return nil, nil
 }
 
 func parseGitRemoteFactoryURL(urlObj *url.URL, params map[string]interface{}) (remoteURL *url.URL, ref string, err error) {
@@ -372,6 +438,25 @@ func resolveGitCacheRoot(params map[string]interface{}) (root string, ok bool, e
 	return s, true, nil
 }
 
+// GitRemoteCacheKey returns the local bare repository path used as the cache key
+// by both GitRemoteFactory and the SQL database provider. It identifies a remote
+// by its local database cache root, underlying URL, and effective Git ref.
+// URL paths and refs retain their case; omitted or blank refs use the default.
+func GitRemoteCacheKey(urlObj *url.URL, params map[string]interface{}) (string, error) {
+	remoteURL, ref, err := parseGitRemoteFactoryURL(urlObj, params)
+	if err != nil {
+		return "", err
+	}
+	cacheRoot, ok, err := resolveGitCacheRoot(params)
+	if err != nil {
+		return "", err
+	}
+	if !ok {
+		return "", fmt.Errorf("%s is required for git remotes", GitCacheRootParam)
+	}
+	return cacheRepoPath(cacheRoot, remoteURL.String(), ref)
+}
+
 func cacheRepoPath(cacheBase, remoteURL, ref string) (string, error) {
 	if strings.TrimSpace(cacheBase) == "" {
 		return "", fmt.Errorf("empty git cache base")
@@ -381,7 +466,7 @@ func cacheRepoPath(cacheBase, remoteURL, ref string) (string, error) {
 	return filepath.Join(cacheBase, h, "repo.git"), nil
 }
 
-func ensureBareRepo(ctx context.Context, gitDir string) error {
+func ensureBareRepo(ctx context.Context, gitDir string, initFlags ...string) error {
 	if gitDir == "" {
 		return fmt.Errorf("empty gitDir")
 	}
@@ -393,7 +478,7 @@ func ensureBareRepo(ctx context.Context, gitDir string) error {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	return runGitInitBare(ctx, gitDir)
+	return runGitInitBare(ctx, gitDir, initFlags...)
 }
 
 func ensureGitRemoteURL(ctx context.Context, gitDir string, remoteName string, remoteURL string) error {
@@ -444,7 +529,7 @@ func gitCmd(ctx context.Context, args ...string) (*exec.Cmd, error) {
 	return cmd, nil
 }
 
-func runGitInitBare(ctx context.Context, dir string) error {
+func runGitInitBare(ctx context.Context, dir string, initFlags ...string) error {
 	if strings.TrimSpace(dir) == "" {
 		return fmt.Errorf("empty dir")
 	}
@@ -452,16 +537,7 @@ func runGitInitBare(ctx context.Context, dir string) error {
 		return err
 	}
 	// Use `--git-dir` to make init idempotent if the directory already exists.
-	cmd, err := gitCmd(ctx, "--git-dir", dir, "init", "--bare")
-	if err != nil {
-		return err
-	}
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		base := fmt.Errorf("git init --bare failed: %w\noutput:\n%s", err, strings.TrimSpace(string(out)))
-		return gitauth.NormalizeError(ctx, base, out)
-	}
-	return nil
+	return runGitInDirNoOutput(ctx, dir, append([]string{"init", "--bare"}, initFlags...)...)
 }
 
 func runGitInDir(ctx context.Context, gitDir string, args ...string) (string, error) {

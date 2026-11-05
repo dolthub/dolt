@@ -188,6 +188,83 @@ func TestServerInterceptorUnauthenticatedWithoutClientHeaders(t *testing.T) {
 	})
 }
 
+func TestServerInterceptorUnauthenticatedClusterHeadersDoNotChangeRole(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		stream bool
+	}{
+		{name: "Unary"},
+		{name: "Stream", stream: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var si serverinterceptor
+			si.lgr = lgr
+			si.keyProvider = kp
+			si.setRole(RolePrimary, 10)
+			roleChanges := 0
+			si.roleSetter = func(role string, epoch int) {
+				roleChanges++
+				si.setRole(Role(role), epoch)
+			}
+			withClient(t, func(t *testing.T, client grpc_health_v1.HealthClient) {
+				ctx := metadata.AppendToOutgoingContext(context.Background(),
+					clusterRoleHeader, string(RolePrimary), clusterRoleEpochHeader, "11")
+				if tc.stream {
+					stream, err := client.Watch(ctx, &grpc_health_v1.HealthCheckRequest{})
+					require.NoError(t, err)
+					_, err = stream.Recv()
+					assert.Equal(t, codes.Unauthenticated, status.Code(err))
+				} else {
+					_, err := client.Check(ctx, &grpc_health_v1.HealthCheckRequest{})
+					assert.Equal(t, codes.Unauthenticated, status.Code(err))
+				}
+			}, si.Options(), nil)
+			assert.Equal(t, 0, roleChanges)
+			role, epoch := si.getRole()
+			assert.Equal(t, RolePrimary, role)
+			assert.Equal(t, 10, epoch)
+		})
+	}
+}
+
+func TestServerInterceptorAuthenticatedClusterHeadersChangeRole(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		stream bool
+	}{
+		{name: "Unary"},
+		{name: "Stream", stream: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var si serverinterceptor
+			si.lgr = lgr
+			si.keyProvider = kp
+			si.setRole(RolePrimary, 10)
+			roleChanges := 0
+			si.roleSetter = func(role string, epoch int) {
+				roleChanges++
+				si.setRole(Role(role), epoch)
+			}
+			withClient(t, func(t *testing.T, client grpc_health_v1.HealthClient) {
+				ctx := outboundCtx(RolePrimary, 11)
+				if tc.stream {
+					stream, err := client.Watch(ctx, &grpc_health_v1.HealthCheckRequest{})
+					require.NoError(t, err)
+					_, err = stream.Recv()
+					assert.Equal(t, codes.Unimplemented, status.Code(err))
+				} else {
+					_, err := client.Check(ctx, &grpc_health_v1.HealthCheckRequest{})
+					assert.Equal(t, codes.Unimplemented, status.Code(err))
+				}
+			}, si.Options(), nil)
+			assert.Equal(t, 1, roleChanges)
+			role, epoch := si.getRole()
+			assert.Equal(t, RoleStandby, role)
+			assert.Equal(t, 11, epoch)
+		})
+	}
+}
+
 func TestServerInterceptorAddsUnaryResponseHeaders(t *testing.T) {
 	var si serverinterceptor
 	si.setRole(RoleStandby, 10)

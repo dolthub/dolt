@@ -80,7 +80,7 @@ type UnresolvedFKDetails struct {
 }
 
 // EqualDefs returns whether two foreign keys have the same definition over the same column sets.
-// It does not compare table names or foreign key names.
+// It does not compare table names.
 func (fk ForeignKey) EqualDefs(other ForeignKey) bool {
 	if len(fk.TableColumns) != len(other.TableColumns) || len(fk.ReferencedTableColumns) != len(other.ReferencedTableColumns) {
 		return false

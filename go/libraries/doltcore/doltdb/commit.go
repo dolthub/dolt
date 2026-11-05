@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/commitgraph"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -159,39 +160,60 @@ func getCommitClosure(ctx context.Context, cmt *datas.Commit, vrw types.ValueRea
 
 var ErrNoCommonAncestor = errors.New("no common ancestor")
 
+// GetCommitAncestor returns the tallest best common ancestor of |cm1| and |cm2|, breaking ties by the larger hash.
 func GetCommitAncestor(ctx context.Context, cm1, cm2 *Commit) (*OptionalCommit, error) {
-	addr, err := getCommitAncestorAddr(ctx, cm1.dCommit, cm2.dCommit, cm1.vrw, cm2.vrw, cm1.ns, cm2.ns)
+	ancestors, err := GetCommitAncestors(ctx, cm1, cm2)
 	if err != nil {
 		return nil, err
 	}
-
-	targetCommit, err := datas.LoadCommitAddr(ctx, cm1.vrw, addr)
-	if err != nil {
-		return nil, err
+	var tallest *OptionalCommit
+	var tallestHeight uint64
+	for _, ancestor := range ancestors {
+		c, ok := ancestor.ToCommit()
+		if !ok {
+			return nil, ErrGhostCommitRuntimeFailure
+		}
+		height, err := c.Height()
+		if err != nil {
+			return nil, err
+		}
+		if tallest == nil || height > tallestHeight || (height == tallestHeight && tallest.Addr.Less(ancestor.Addr)) {
+			tallest, tallestHeight = ancestor, height
+		}
 	}
-
-	if targetCommit.IsGhost() {
-		return &OptionalCommit{nil, addr}, nil
-	}
-
-	cmt, err := NewCommit(ctx, cm1.vrw, cm1.ns, targetCommit)
-	if err != nil {
-		return nil, err
-	}
-	return &OptionalCommit{cmt, addr}, nil
+	return tallest, nil
 }
 
-func getCommitAncestorAddr(ctx context.Context, c1, c2 *datas.Commit, vrw1, vrw2 types.ValueReadWriter, ns1, ns2 tree.NodeStore) (hash.Hash, error) {
-	ancestorAddr, ok, err := datas.FindCommonAncestor(ctx, c1, c2, vrw1, vrw2, ns1, ns2)
-	if err != nil {
-		return hash.Hash{}, err
+// GetCommitAncestors returns every best common ancestor of |cm1| and |cm2|, the same set as `git merge-base --all`.
+func GetCommitAncestors(ctx context.Context, cm1, cm2 *Commit) ([]*OptionalCommit, error) {
+	addrs, err := commitgraph.GetMergeBases(ctx, newCommitResolverFor(cm1), cm1.dCommit.Addr(), newCommitResolverFor(cm2), cm2.dCommit.Addr())
+	var ghostErr *commitgraph.GhostCommitError
+	if errors.As(err, &ghostErr) {
+		return nil, fmt.Errorf("%w Missing commit: %s", ErrGhostCommitEncountered, ghostErr.Hash)
+	} else if err != nil {
+		return nil, err
+	}
+	if len(addrs) == 0 {
+		return nil, ErrNoCommonAncestor
 	}
 
-	if !ok {
-		return hash.Hash{}, ErrNoCommonAncestor
+	ancestors := make([]*OptionalCommit, len(addrs))
+	for i, addr := range addrs {
+		targetCommit, err := datas.LoadCommitAddr(ctx, cm1.vrw, addr)
+		if err != nil {
+			return nil, err
+		}
+		if targetCommit.IsGhost() {
+			ancestors[i] = &OptionalCommit{nil, addr}
+			continue
+		}
+		cmt, err := NewCommit(ctx, cm1.vrw, cm1.ns, targetCommit)
+		if err != nil {
+			return nil, err
+		}
+		ancestors[i] = &OptionalCommit{cmt, addr}
 	}
-
-	return ancestorAddr, nil
+	return ancestors, nil
 }
 
 func (c *Commit) CanFastForwardTo(ctx context.Context, new *Commit) (bool, error) {
@@ -282,14 +304,14 @@ func (c *Commit) ResolveRootValue(ctx context.Context) (RootValue, error) {
 
 // PendingCommit represents a commit that hasn't yet been written to storage. It contains a root value and options to
 // use when committing it. Use a PendingCommit when it's important to update the working set and HEAD together
-// atomically, via doltdb.CommitWithWorkingSet
+// atomically, via doltdb.CommitHeadUpdates.
 type PendingCommit struct {
 	Roots         Roots
 	Val           types.Value
 	CommitOptions datas.CommitOptions
 }
 
-// NewPendingCommit returns a new PendingCommit object to be written with doltdb.CommitWithWorkingSet.
+// NewPendingCommit returns a new PendingCommit object to be written with doltdb.CommitHeadUpdates.
 // |roots| are the current roots to include in the PendingCommit. roots.Staged is used as the new root to package in the
 // commit, once written.
 // |headRef| is the ref of the HEAD the commit will update

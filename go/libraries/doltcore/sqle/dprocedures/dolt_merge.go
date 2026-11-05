@@ -138,6 +138,20 @@ func doDoltMerge(ctx *sql.Context, args []string) (string, int, int, string, err
 	}
 
 	if apr.Contains(cli.AbortParam) {
+		baseName, _ := doltdb.SplitRevisionDbName(dbName)
+		headRef, err := ws.Ref().ToHeadRef()
+		if err != nil {
+			return "", noConflictsOrViolations, threeWayMerge, "", err
+		}
+
+		// The process of aborting will discard uncommitted changes on all dirty working sets.
+		// Therefore we assert that only the target working set has changes.
+		for _, dirty := range sess.DirtyBranches() {
+			if !strings.EqualFold(dirty.DbName, baseName) || !strings.EqualFold(dirty.Branch, headRef.GetPath()) {
+				return "", noConflictsOrViolations, threeWayMerge, "", ErrUncommittedChanges.New()
+			}
+		}
+
 		if !ws.MergeActive() {
 			return "", noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("fatal: There is no merge to abort")
 		}
@@ -147,7 +161,7 @@ func doDoltMerge(ctx *sql.Context, args []string) (string, int, int, string, err
 			return "", noConflictsOrViolations, threeWayMerge, "", err
 		}
 
-		err := sess.SetWorkingSet(ctx, dbName, ws)
+		err = sess.SetWorkingSet(ctx, dbName, ws)
 		if err != nil {
 			return "", noConflictsOrViolations, threeWayMerge, "", err
 		}
@@ -208,6 +222,14 @@ func performMerge(
 	msg string,
 	skipVerification bool,
 ) (*doltdb.WorkingSet, string, int, int, string, error) {
+	// Merge can move HEAD and end the transaction, discarding any changes. We assert that there are no dirty working
+	// sets (on the target branch or otherwise) before allowing a merge.
+	// TODO: it's possible in principle to relax this restriction, but it requires careful product thought and we
+	//  aren't sure how useful it is.
+	if len(sess.DirtyBranches()) != 0 {
+		return ws, "", noConflictsOrViolations, threeWayMerge, "", ErrUncommittedChanges.New()
+	}
+
 	// todo: allow merges even when an existing merge is uncommitted
 	if ws.MergeActive() {
 		return ws, "", noConflictsOrViolations, threeWayMerge, "", doltdb.ErrMergeActive
@@ -390,10 +412,11 @@ func executeFFMerge(ctx *sql.Context, dbName string, squash bool, ws *doltdb.Wor
 
 	ws = ws.WithWorkingRoot(workingRoot).WithStagedRoot(stagedRoot)
 
-	// We need to assign the working set to the session but ensure that its state is not labeled as dirty (ffs are clean
-	// merges). Hence, we go ahead and commit the working set to the transaction.
+	// Persist the new working set to the session. In the case of a squash, we're done.
+	// Otherwise, we commit the transaction as well. This serves two purposes:
+	// 1) It marks the working set no longer dirty.
+	// 2) It starts a new transaction, so that the next statement sees the new HEAD we just merged.
 	sess := dsess.DSessFromSess(ctx.Session)
-
 	err = sess.SetWorkingSet(ctx, dbName, ws)
 	if err != nil {
 		return ws, err
@@ -403,7 +426,7 @@ func executeFFMerge(ctx *sql.Context, dbName string, squash bool, ws *doltdb.Wor
 	if !squash {
 		err = sess.CommitWorkingSet(ctx, dbName, sess.GetTransaction())
 		if err != nil {
-			return ws, err
+			return nil, err
 		}
 	}
 

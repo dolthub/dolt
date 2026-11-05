@@ -18,7 +18,7 @@ import (
 	"errors"
 	"sync/atomic"
 
-	"github.com/dolthub/fslock"
+	filelocks "github.com/dolthub/file-locks"
 )
 
 const unlockedStateValue int32 = 0
@@ -81,7 +81,7 @@ func (memLock *InMemFileLock) Unlock() error {
 // LocalFileLock is the lock for the localFS
 type LocalFileLock struct {
 	filename string
-	lck      *fslock.Lock
+	lck      *filelocks.Lock
 }
 
 // NewLocalFileLock creates a new LocalFileLock
@@ -90,11 +90,11 @@ func NewLocalFileLock(fs Filesys, filename string) *LocalFileLock {
 }
 
 // TryLock attempts to lock the lock or fails if it is already locked. The
-// underlying fslock holds a directory handle for as long as it exists, so the
+// underlying lock holds the lock file open for as long as it exists, so the
 // lock is created here and released in Unlock; this keeps the handle open only
 // while the lock is held.
 func (locLock *LocalFileLock) TryLock() (bool, error) {
-	lck, err := fslock.New(locLock.filename)
+	lck, err := filelocks.New(locLock.filename)
 	if err != nil {
 		return false, err
 	}

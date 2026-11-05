@@ -102,7 +102,7 @@ func (ct *CommitAncestorsTable) PartitionRows(ctx *sql.Context, p sql.Partition)
 
 // GetIndexes implements sql.IndexAddressable
 func (ct *CommitAncestorsTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-	return index.DoltCommitIndexes(ct.dbName, ct.Name(), ct.ddb, true)
+	return index.DoltCommitIndexes(ct.dbName, ct.Name(), ct.ddb, false)
 }
 
 // IndexedAccess implements sql.IndexAddressable

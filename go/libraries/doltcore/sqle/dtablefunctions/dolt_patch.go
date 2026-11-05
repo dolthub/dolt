@@ -545,7 +545,7 @@ func canGetDataDiff(ctx *sql.Context, td diff.TableDelta) bool {
 	}
 
 	// not diffable
-	if !schema.ArePrimaryKeySetsDiffable(td.FromSch, td.ToSch) {
+	if schema.ComparePrimaryKeys(td.FromSch, td.ToSch) == schema.PrimaryKeysDiffer {
 		ctx.Session.Warn(&sql.Warning{
 			Level:   "Warning",
 			Code:    mysql.ERNotSupportedYet,

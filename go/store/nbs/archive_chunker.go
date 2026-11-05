@@ -30,6 +30,7 @@ type DecompBundle struct {
 	dDict         *gozstd.DDict
 	cDict         *gozstd.CDict
 	rawDictionary *[]byte
+	contentKey    hash.Hash
 }
 
 // NewDecompBundle creates a new DecompBundle from a zStd compressed dictionary. The input should be the same
@@ -50,7 +51,7 @@ func NewDecompBundle(compressedDict []byte) (*DecompBundle, error) {
 		return nil, err
 	}
 
-	return &DecompBundle{dDict: dict, rawDictionary: &rawDict, cDict: cDict}, nil
+	return &DecompBundle{dDict: dict, rawDictionary: &rawDict, cDict: cDict, contentKey: hash.Of(rawDict)}, nil
 }
 
 type ArchiveToChunker struct {

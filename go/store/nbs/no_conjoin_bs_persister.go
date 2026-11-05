@@ -59,8 +59,7 @@ func (bsp *noConjoinBlobstorePersister) Persist(ctx context.Context, behavior dh
 		return nil, gcBehavior_Continue, err
 	}
 
-	rdr := &bsTableReaderAt{key: name, bs: bsp.bs}
-	src, err := newReaderFromIndexData(ctx, bsp.q, data, address, rdr, bsp.blockSize)
+	src, err := newPersistedBSTableChunkSource(ctx, bsp.bs, bsp.q, data, address, bsp.blockSize)
 	if err != nil {
 		return nil, gcBehavior_Continue, err
 	}

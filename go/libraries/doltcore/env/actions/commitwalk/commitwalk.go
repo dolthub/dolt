@@ -27,54 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-// doltDBResolver adapts *doltdb.DoltDB to commitgraph.HashResolver.
-type doltDBResolver struct {
-	ddb *doltdb.DoltDB
-	// cache maps hashes to resolved OptionalCommits so the adapter layer
-	// can return them alongside commitgraph.CommitInfo results.
-	cache map[hash.Hash]*doltdb.OptionalCommit
-}
-
-func newResolver(ddb *doltdb.DoltDB) *doltDBResolver {
-	return &doltDBResolver{ddb: ddb, cache: make(map[hash.Hash]*doltdb.OptionalCommit)}
-}
-
-func (r *doltDBResolver) ResolveCommitHash(ctx context.Context, h hash.Hash) (*commitgraph.CommitInfo, error) {
-	oc, err := r.ddb.ResolveHash(ctx, h)
-	if err != nil {
-		return nil, err
-	}
-
-	r.cache[h] = oc
-
-	info := &commitgraph.CommitInfo{Hash: h}
-	commit, ok := oc.ToCommit()
-	if !ok {
-		info.IsGhost = true
-		return info, nil
-	}
-
-	info.Height, err = commit.Height()
-	if err != nil {
-		return nil, err
-	}
-
-	info.Meta, err = commit.GetCommitMeta(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, p := range commit.DatasParents() {
-		info.Parents = append(info.Parents, p.Addr())
-	}
-
-	return info, nil
-}
-
-func (r *doltDBResolver) lookupOptionalCommit(h hash.Hash) *doltdb.OptionalCommit {
-	return r.cache[h]
-}
-
 // GetDotDotRevisions returns the commits reachable from commit at hashes
 // `includedHeads` that are not reachable from hashes `excludedHeads`.
 // `includedHeads` and `excludedHeads` must be commits in `ddb`. Returns up
@@ -109,11 +61,11 @@ func GetDotDotRevisions(ctx context.Context, includedDB *doltdb.DoltDB, included
 // GetTopologicalOrderIterator returns an iterator for commits in reverse
 // topological order, wrapping the lightweight commitgraph.Iterator.
 func GetTopologicalOrderIterator[C doltdb.Context](ctx context.Context, ddb *doltdb.DoltDB, startCommitHashes []hash.Hash, matchFn func(*doltdb.OptionalCommit) (bool, error)) (doltdb.CommitItr[C], error) {
-	r := newResolver(ddb)
+	r := doltdb.NewCommitResolver(ddb)
 	var cgMatchFn func(*commitgraph.CommitInfo) (bool, error)
 	if matchFn != nil {
 		cgMatchFn = func(ci *commitgraph.CommitInfo) (bool, error) {
-			oc := r.lookupOptionalCommit(ci.Hash)
+			oc := r.LookupOptionalCommit(ci.Hash)
 			if oc == nil {
 				return true, nil
 			}
@@ -128,7 +80,7 @@ func GetTopologicalOrderIterator[C doltdb.Context](ctx context.Context, ddb *dol
 }
 
 type commiterator[C doltdb.Context] struct {
-	resolver *doltDBResolver
+	resolver *doltdb.CommitResolver
 	inner    commitgraph.Iterator
 }
 
@@ -140,7 +92,7 @@ func (iter *commiterator[C]) Next(ctx C) (hash.Hash, *doltdb.OptionalCommit, *da
 	if err != nil {
 		return hash.Hash{}, nil, nil, 0, err
 	}
-	oc := iter.resolver.lookupOptionalCommit(ci.Hash)
+	oc := iter.resolver.LookupOptionalCommit(ci.Hash)
 	if oc == nil {
 		oc = &doltdb.OptionalCommit{Addr: ci.Hash}
 	}
@@ -155,15 +107,15 @@ func (iter *commiterator[C]) Reset(ctx context.Context) error {
 // GetDotDotRevisionsIterator returns an iterator for commits generated with
 // the same semantics as GetDotDotRevisions.
 func GetDotDotRevisionsIterator[C doltdb.Context](ctx context.Context, includedDdb *doltdb.DoltDB, startCommitHashes []hash.Hash, excludedDdb *doltdb.DoltDB, excludingCommitHashes []hash.Hash, matchFn func(*doltdb.OptionalCommit) (bool, error)) (doltdb.CommitItr[C], error) {
-	inclR := newResolver(includedDdb)
-	exclR := newResolver(excludedDdb)
+	inclR := doltdb.NewCommitResolver(includedDdb)
+	exclR := doltdb.NewCommitResolver(excludedDdb)
 
 	var cgMatchFn func(*commitgraph.CommitInfo) (bool, error)
 	if matchFn != nil {
 		cgMatchFn = func(ci *commitgraph.CommitInfo) (bool, error) {
-			oc := inclR.lookupOptionalCommit(ci.Hash)
+			oc := inclR.LookupOptionalCommit(ci.Hash)
 			if oc == nil {
-				oc = exclR.lookupOptionalCommit(ci.Hash)
+				oc = exclR.LookupOptionalCommit(ci.Hash)
 			}
 			if oc == nil {
 				return true, nil
@@ -206,8 +158,8 @@ func GetTopNTopoOrderedCommitsMatching(ctx context.Context, ddb *doltdb.DoltDB, 
 }
 
 type dotDotCommiterator[C doltdb.Context] struct {
-	inclResolver *doltDBResolver
-	exclResolver *doltDBResolver
+	inclResolver *doltdb.CommitResolver
+	exclResolver *doltdb.CommitResolver
 	inner        commitgraph.Iterator
 }
 
@@ -219,9 +171,9 @@ func (i *dotDotCommiterator[C]) Next(ctx C) (hash.Hash, *doltdb.OptionalCommit, 
 	if err != nil {
 		return hash.Hash{}, nil, nil, 0, err
 	}
-	oc := i.inclResolver.lookupOptionalCommit(ci.Hash)
+	oc := i.inclResolver.LookupOptionalCommit(ci.Hash)
 	if oc == nil {
-		oc = i.exclResolver.lookupOptionalCommit(ci.Hash)
+		oc = i.exclResolver.LookupOptionalCommit(ci.Hash)
 	}
 	if oc == nil {
 		oc = &doltdb.OptionalCommit{Addr: ci.Hash}

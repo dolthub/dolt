@@ -284,6 +284,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root doltdb.Root
 	if err != nil {
 		return nil, err
 	}
+	// Closing the database stops its sequence tracker's background reads of the store.
 	defer eng.Close()
 
 	scanner := NewStreamScanner(strings.NewReader(query))
@@ -338,11 +339,16 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root doltdb.Root
 // rebaseSqlEngine packages up the context necessary to run sql queries against single root
 // The caller executes analyzed plans directly, without starting or committing SQL transactions.
 // Some functionality will not work on this kind of engine, e.g. many DOLT_ functions.
-func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue) (*sql.Context, *filterQueryRunner, error) {
+func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue) (_ *sql.Context, _ *filterQueryRunner, err error) {
 	db, err := dsqle.NewDatabase(ctx, filterDbName, dEnv.DbData(ctx), editor.Options{})
 	if err != nil {
 		return nil, nil, err
 	}
+	defer func() {
+		if err != nil {
+			db.Close()
+		}
+	}()
 
 	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.FS, dEnv)
 	if err != nil {
@@ -355,7 +361,8 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootVal
 		return nil, nil, err
 	}
 
-	sess := dsess.DefaultSession(pro, writer.NewWriteSession)
+	vars := dsqle.NewEngineVariables()
+	sess := dsess.DefaultSessionWithVariables(pro, writer.NewWriteSession, vars)
 
 	sqlCtx := sql.NewContext(ctx, sql.WithSession(sess))
 	err = sqlCtx.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, false)
@@ -372,7 +379,10 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootVal
 
 	sqlCtx.SetCurrentDatabase(filterDbName)
 
-	runner := &filterQueryRunner{Engine: sqle.New(azr, &sqle.Config{IsReadOnly: false})}
+	runner := &filterQueryRunner{
+		Engine: sqle.New(azr, &sqle.Config{IsReadOnly: false, EngineVariables: vars}),
+		db:     db,
+	}
 	// Stored procedures and triggers must use the same root-only execution path.
 	azr.Runner = runner
 	azr.ExecBuilder.Runner = runner
@@ -383,9 +393,18 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootVal
 // and commit wrappers that would replace that root or publish a live working set.
 type filterQueryRunner struct {
 	*sqle.Engine
+	// db is owned by the runner and closed in Close
+	db dsess.SqlDatabase
 }
 
 var _ sql.StatementRunner = (*filterQueryRunner)(nil)
+
+// Close closes the engine and the database it was built over.
+func (r *filterQueryRunner) Close() error {
+	err := r.Engine.Close()
+	r.db.Close()
+	return err
+}
 
 func (r *filterQueryRunner) QueryWithBindings(ctx *sql.Context, query string, parsed sqlparser.Statement, bindings map[string]sqlparser.Expr, qFlags *sql.QueryFlags) (sql.Schema, sql.RowIter, *sql.QueryFlags, error) {
 	binder := planbuilder.New(ctx, r.Analyzer.Catalog, r.EventScheduler)
@@ -420,7 +439,7 @@ func (r *filterQueryRunner) QueryWithBindings(ctx *sql.Context, query string, pa
 		return nil, nil, nil, err
 	}
 	// Finalize results and resource cleanup, but do not add a transaction-committing iterator.
-	iter, sch := rowexec.AddAccumulatorIter(ctx, iter)
+	iter, sch := rowexec.AddAccumulatorIter(ctx, iter, r.Analyzer.Overrides.CountMatchedRowsOnUpdate)
 	iter = plan.AddTrackedRowIter(ctx, node, iter)
 	iter = rowexec.AddExpressionCloser(ctx, node, iter)
 	if sch == nil {

@@ -183,6 +183,8 @@ func (c Column) Equals(other Column) bool {
 		c.IsPartOfPK == other.IsPartOfPK &&
 		c.TypeInfo.Equals(other.TypeInfo) &&
 		c.Default == other.Default &&
+		c.Generated == other.Generated &&
+		c.Virtual == other.Virtual &&
 		ColConstraintsAreEqual(c.Constraints, other.Constraints)
 }
 
@@ -192,5 +194,7 @@ func (c Column) EqualsWithoutTag(other Column) bool {
 		c.IsPartOfPK == other.IsPartOfPK &&
 		c.TypeInfo.Equals(other.TypeInfo) &&
 		c.Default == other.Default &&
+		c.Generated == other.Generated &&
+		c.Virtual == other.Virtual &&
 		ColConstraintsAreEqual(c.Constraints, other.Constraints)
 }

@@ -45,7 +45,7 @@ const (
 	providerOrcaRouter = "orcarouter"
 	openAiApiBase      = "https://api.openai.com/v1"
 	orcaRouterApiBase  = "https://api.orcarouter.ai/v1"
-	openAiDefaultModel = "gpt-3.5-turbo"
+	openAiDefaultModel = "gpt-5.6-terra"
 	orcaRouterModel    = "orcarouter/auto"
 )
 
@@ -641,7 +641,7 @@ func (a Assist) Docs() *cli.CommandDocumentation {
 func (a Assist) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(a.Name(), 0)
 	ap.SupportsString("model", "m", "model id",
-		"The ID of the chat model to use for the assistant. Defaults to gpt-3.5-turbo for OpenAI. "+
+		"The ID of the chat model to use for the assistant. Defaults to gpt-5.6-terra for OpenAI. "+
 			"See https://platform.openai.com/docs/models/overview for a full list of OpenAI models.")
 	ap.SupportsString("provider", "p", "provider",
 		"The chat API provider to use. One of \"openai\" (default) or \"orcarouter\". When set to \"orcarouter\", "+

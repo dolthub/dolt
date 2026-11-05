@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"sync"
-	"sync/atomic"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -43,82 +42,35 @@ type GCSafepointController struct {
 // session is alive. The method is responsible for passing every live
 // in-memory chunk address related to the given |db| to the provided
 // |roots| callback. If it cannot do this for some reason, it should
-// return an error, but in that case the GC will fail. A
-// |VisitGCRoots| function will never be called after a
-// |GCRootsProvider| is given to |gcctx.SessionCommandBegin| until it
-// is given to |gcctx.SessionCommandEnd| again. If there is an
-// outstanding call to |VisitGCRoots| when |sql.SessionCommandBegin|
-// is called with a given roots provider, that call will block until
-// the call to |VisitGCRoots| completes.
+// return an error, but in that case the GC will fail.
+// |VisitGCRoots| is called while the session is outside a command, or
+// while a GC initiated by that session has made it visitable through
+// Waiter. If there is an outstanding visit when SessionCommandBegin is
+// called, the new command blocks until the visit completes.
 type GCRootsProvider interface {
 	VisitGCRoots(ctx context.Context, db string, roots func(hash.Hash) bool) error
 }
 
 type GCSafepointSessionState struct {
-	// True when a command is outstanding on the session,
-	// false otherwise.
-	OutstandingCommand bool
-
-	// Registered when we create a GCSafepointWaiter if
-	// there is an outstanding command on the session
-	// at the time. This will be called when the session's
-	// SessionCommandEnd function is called.
-	CommandEndCallback func()
-
-	// When this channel is non-nil, it means that an
-	// outstanding visit session call is ongoing for this
-	// session. The CommandBegin callback will block until
-	// that call has completed.
-	QuiesceCallbackDone atomic.Value // chan struct{}
-}
-
-// Make is so that HasOutstandingVisitCall will return true and
-// BlockForOutstandingVisitCall will block until
-// EndOutstandingVisitCall is called.
-func (state *GCSafepointSessionState) BeginOutstandingVisitCall() {
-	state.QuiesceCallbackDone.Store(make(chan struct{}))
-}
-
-// Bracket the end of an outstanding visit call. Unblocks any
-// callers to |BlockForOutstandingVisitCall|. Must be paired
-// one-for-one with calls to |BeginOutstandingVisitCall|.
-func (state *GCSafepointSessionState) EndOutstandingVisitCall() {
-	close(state.QuiesceCallbackDone.Load().(chan struct{}))
-}
-
-// Peek whether |BlockForOutstandingVisitCall| would block.
-func (state *GCSafepointSessionState) HasOutstandingVisitCall() bool {
-	ch := state.QuiesceCallbackDone.Load().(chan struct{})
-	select {
-	case <-ch:
-		return false
-	default:
-		return true
-	}
-}
-
-func (state *GCSafepointSessionState) BlockForOutstandingVisitCall() {
-	ch := state.QuiesceCallbackDone.Load().(chan struct{})
-	<-ch
-}
-
-var closedCh = make(chan struct{})
-
-func init() {
-	close(closedCh)
-}
-
-func NewGCSafepointSessionState() *GCSafepointSessionState {
-	state := &GCSafepointSessionState{}
-	state.QuiesceCallbackDone.Store(closedCh)
-	return state
+	// All fields are protected by the controller mutex.
+	outstandingCommand bool
+	pending            map[*GCSafepointWaiter]struct{}
+	activeVisits       int
+	visitsDone         chan struct{} // closed when activeVisits reaches zero
+	gcWaiters          int           // own GC calls that allow visits during this command
 }
 
 type GCSafepointWaiter struct {
 	controller *GCSafepointController
-	wg         sync.WaitGroup
-	mu         sync.Mutex
-	err        error
+	ctx        context.Context
+	visit      func(context.Context, GCRootsProvider) error
+	selfState  *GCSafepointSessionState
+	release    sync.Once
+	// The remaining count and err are protected by controller.mu. done is closed
+	// when every visit has completed or been removed by cancellation.
+	remaining int
+	done      chan struct{}
+	err       error
 }
 
 func NewGCSafepointController() *GCSafepointController {
@@ -136,72 +88,74 @@ func NewGCSafepointController() *GCSafepointController {
 // will never quiesce. Instead, the caller should ensure that |visitQuiescedSession| is called on
 // its own session.
 //
-// After creating a Waiter, it is an error to create a new Waiter before the |Wait| method of the
-// original watier has returned. This error is not guaranteed to always be detected.
+// Multiple waiters may be outstanding at once. Each waiter visits the sessions known when it was
+// created, independently of the other waiters. The caller must have finished changing thisSession's
+// roots before calling Waiter: until Wait returns, other waiters may visit thisSession even though
+// its command is still open. This lets concurrent GC calls visit each other's sessions.
 func (c *GCSafepointController) Waiter(ctx context.Context, thisSession GCRootsProvider, visitQuiescedSession func(context.Context, GCRootsProvider) error) *GCSafepointWaiter {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	ret := &GCSafepointWaiter{controller: c}
-	for sess, state := range c.sessions {
-		// If an existing session already has a |CommandEndCallback| registered,
-		// then more than one |Waiter| would be outstanding on this
-		// SafepointController. This is an error and is not supported.
-		if state.CommandEndCallback != nil {
-			panic("Attempt to create more than one GCSafepointWaiter.")
+	ret := &GCSafepointWaiter{controller: c, ctx: ctx, visit: visitQuiescedSession, done: make(chan struct{})}
+	if state := c.sessions[thisSession]; state != nil && state.outstandingCommand {
+		ret.selfState = state
+		state.gcWaiters++
+		// This session may itself be blocking another GC. Its pending visits
+		// can now proceed without waiting for this command to end.
+		for w := range state.pending {
+			c.startVisit(state, thisSession, w)
+			delete(state.pending, w)
 		}
+	}
+	for sess, state := range c.sessions {
 		if sess == thisSession {
 			continue
 		}
-		// When this session's |visit| call is done, it will count down this
-		// waitgroup. The |Wait| method, in turn, will block on this waitgroup
-		// completing to know that all callback are done.
-		ret.wg.Add(1)
-		// The work we do when we visit the session, including bookkeeping.
-		work := func() {
-			// We don't set this until the callback is actually called.
-			// If we did set this outside of the callback, Wait's
-			// cleanup logic would need to change to ensure that the
-			// session is in a usable state when the callback gets
-			// canceled before ever being called.
-			state.BeginOutstandingVisitCall()
-			go func() {
-				err := visitQuiescedSession(ctx, sess)
-				ret.accumulateErrors(err)
-				ret.wg.Done()
-				state.EndOutstandingVisitCall()
-			}()
-		}
-		if state.OutstandingCommand {
-			// If a command is currently running on the session, register
-			// our work to run as soon as the command is done.
-			state.CommandEndCallback = work
+		ret.remaining++
+		if state.outstandingCommand && state.gcWaiters == 0 {
+			if state.pending == nil {
+				state.pending = make(map[*GCSafepointWaiter]struct{})
+			}
+			state.pending[ret] = struct{}{}
 		} else {
-			// When no command is running on the session, we can immediately
-			// visit it.
-			work()
+			c.startVisit(state, sess, ret)
 		}
+	}
+	if ret.remaining == 0 {
+		close(ret.done)
 	}
 	return ret
 }
 
-func (w *GCSafepointWaiter) accumulateErrors(err error) {
-	if err != nil {
-		w.mu.Lock()
-		w.err = errors.Join(w.err, err)
-		w.mu.Unlock()
+// startVisit is called with c.mu held. Counting the visit before starting the goroutine
+// prevents a new command from running while any waiter is visiting the session.
+func (c *GCSafepointController) startVisit(state *GCSafepointSessionState, sess GCRootsProvider, w *GCSafepointWaiter) {
+	if state.activeVisits == 0 {
+		state.visitsDone = make(chan struct{})
 	}
+	state.activeVisits++
+	go func() {
+		err := w.visit(w.ctx, sess)
+		c.mu.Lock()
+		w.err = errors.Join(w.err, err)
+		state.activeVisits--
+		if state.activeVisits == 0 {
+			close(state.visitsDone)
+		}
+		w.remaining--
+		if w.remaining == 0 {
+			close(w.done)
+		}
+		c.mu.Unlock()
+	}()
 }
 
-// |Wait| will block on the Waiter's waitgroup. A successful
+// |Wait| blocks until all of the waiter's visits are complete. A successful
 // return from this method signals that all sessions that were known
 // about when the waiter was created have been visited by the
 // |visitQuiescedSession| callback that was given to |Waiter|.
 //
-// This function will return early, and with an error, if the
-// supplied |ctx|'s |Done| channel delivers. In that case,
-// all sessions will not necessarily have been visited, but
-// any visit callbacks which were started will still have
-// completed.
+// If ctx is canceled, visits waiting for a command to end are removed.
+// Wait returns with an error after any visits already started complete.
 //
 // In addition to returning an error if the passed in |ctx|
 // is |Done| before the wait is finished, this function also
@@ -210,78 +164,72 @@ func (w *GCSafepointWaiter) accumulateErrors(err error) {
 // cancel callbacks or to return early in the case that errors
 // are seen from the callback functions.
 func (w *GCSafepointWaiter) Wait(ctx context.Context) error {
-	done := make(chan struct{})
-	go func() {
-		w.wg.Wait()
-		close(done)
-	}()
 	select {
-	case <-done:
+	case <-w.done:
+		w.releaseSelf()
 		return w.err
 	case <-ctx.Done():
 		w.controller.mu.Lock()
 		for _, state := range w.controller.sessions {
-			if state.CommandEndCallback != nil {
-				// Do not visit the session, but do
-				// count down the WaitGroup so that
-				// the goroutine above still completes.
-				w.wg.Done()
-				state.CommandEndCallback = nil
+			if _, ok := state.pending[w]; ok {
+				delete(state.pending, w)
+				w.remaining--
+				if w.remaining == 0 {
+					close(w.done)
+				}
 			}
 		}
 		w.controller.mu.Unlock()
-		// Once a session visit callback has started, we
-		// cannot cancel it. So we wait for all the inflight
-		// callbacks to be completed here, before returning.
-		<-done
+		// Visits already started cannot be canceled.
+		<-w.done
+		w.releaseSelf()
 		return errors.Join(context.Cause(ctx), w.err)
 	}
 }
 
-// Beginning a command on a session has three effects:
-//
-//  1. It registers the Session in the set of all
-//     known sessions, |c.sessions|, if this is our
-//     first time seeing it.
-//
-//  2. It blocks for any existing call to |CommandEndCallback|
-//     on this session to complete. If a call to |CommendEndCallback|
-//     is outstanding, our |QuiesceCallbackDone| a read from our
-//     |QuiesceCallbackDone| channel will block.
-//
-//  3. It sets |OutstandingCommand| for the Session to true. Only
-//     one command can be outstanding at a time, and whether a command
-//     is outstanding controls how |Waiter| treats the Session when it
-//     is setting up all Sessions to visit their GC roots.
+// releaseSelf ends the period in which other GCs can visit this waiter's
+// session. Visits started during that period must finish before its command
+// can resume. Only the final own waiter closes the period.
+func (w *GCSafepointWaiter) releaseSelf() {
+	w.release.Do(func() {
+		if w.selfState == nil {
+			return
+		}
+		c := w.controller
+		c.mu.Lock()
+		w.selfState.gcWaiters--
+		var visitsDone chan struct{}
+		if w.selfState.gcWaiters == 0 && w.selfState.activeVisits > 0 {
+			visitsDone = w.selfState.visitsDone
+		}
+		c.mu.Unlock()
+		if visitsDone != nil {
+			<-visitsDone
+		}
+	})
+}
+
+// SessionCommandBegin registers a new session and waits for all active visits
+// before allowing a new command to access its roots. It must not hold c.mu
+// while waiting, since visits need that mutex to finish.
 func (c *GCSafepointController) SessionCommandBegin(s GCRootsProvider) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	var state *GCSafepointSessionState
 	if state = c.sessions[s]; state == nil {
-		// Step #1: keep track of all seen sessions.
-		state = NewGCSafepointSessionState()
+		state = &GCSafepointSessionState{}
 		c.sessions[s] = state
 	}
-	if state.OutstandingCommand {
+	for state.activeVisits > 0 {
+		ch := state.visitsDone
+		c.mu.Unlock()
+		<-ch
+		c.mu.Lock()
+	}
+	if state.outstandingCommand {
 		panic("SessionCommandBegin called on a session that already had an outstanding command.")
 	}
-	// Step #2: Receiving from QuiesceCallbackDone blocks, then
-	// the callback for this Session is still outstanding. We
-	// don't want to block on this work finishing while holding
-	// the controller-wide lock, so we release it while we block.
-	if state.HasOutstandingVisitCall() {
-		c.mu.Unlock()
-		state.BlockForOutstandingVisitCall()
-		c.mu.Lock()
-		if state.OutstandingCommand {
-			// Concurrent calls to SessionCommandBegin. Bad times...
-			panic("SessionCommandBegin called on a session that already had an outstanding command.")
-		}
-	}
-	// Step #3. Record that a command is running so that Waiter
-	// will populate CommandEndCallback instead of running the
-	// visit logic immediately.
-	state.OutstandingCommand = true
+	state.outstandingCommand = true
 	return nil
 }
 
@@ -292,15 +240,12 @@ func (c *GCSafepointController) Validate(s GCRootsProvider) {
 	defer c.mu.Unlock()
 	if state := c.sessions[s]; state == nil {
 		panic("GCSafepointController.Validate; expected session with an open command, but no session registered with controller.")
-	} else if !state.OutstandingCommand {
+	} else if !state.outstandingCommand {
 		panic("GCSafepointController.Validate; expected session with an open command, but the registered session has OutstandingCommand == false.")
 	}
 }
 
-// SessionCommandEnd marks the end of a session command. It has for
-// effects that the session no longer has an OutstandingCommand and,
-// if CommandEndCallback was non-nil, the callback itself has been
-// called and the CommandEndCallback field has been reset to |nil|.
+// SessionCommandEnd starts every visit registered while the command was running.
 func (c *GCSafepointController) SessionCommandEnd(s GCRootsProvider) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -308,14 +253,14 @@ func (c *GCSafepointController) SessionCommandEnd(s GCRootsProvider) {
 	if state == nil {
 		panic("SessionCommandEnd called on a session that was not registered")
 	}
-	if state.OutstandingCommand != true {
+	if !state.outstandingCommand {
 		panic("SessionCommandEnd called on a session that did not have an outstanding command.")
 	}
-	if state.CommandEndCallback != nil {
-		state.CommandEndCallback()
-		state.CommandEndCallback = nil
+	for w := range state.pending {
+		c.startVisit(state, s, w)
+		delete(state.pending, w)
 	}
-	state.OutstandingCommand = false
+	state.outstandingCommand = false
 }
 
 // SessionEnd will remove the session from our tracked session state,
@@ -336,7 +281,7 @@ func (c *GCSafepointController) SessionEnd(s GCRootsProvider) {
 	defer c.mu.Unlock()
 	state := c.sessions[s]
 	if state != nil {
-		if state.OutstandingCommand == true {
+		if state.outstandingCommand {
 			panic("SessionEnd called on a session that had an outstanding command.")
 		}
 		delete(c.sessions, s)

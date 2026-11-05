@@ -116,21 +116,14 @@ func (cmd DebugCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		}
 	}
 
-	// restrict LOAD FILE invocations to current directory
-	wd, err := os.Getwd()
-	if err != nil {
-		wd = "/dev/null"
-	}
-	err = sql.SystemVariables.AssignValues(map[string]interface{}{
-		"secure_file_priv": wd,
-	})
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-
 	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	if !queryist.IsRemote {
+		if err := restrictLoadFileToWorkingDirectory(queryist.Context); err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
 	}
 
 	if queryist.IsRemote {

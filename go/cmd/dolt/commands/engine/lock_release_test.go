@@ -23,12 +23,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dolthub/fslock"
+	filelocks "github.com/dolthub/file-locks"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
@@ -67,10 +68,11 @@ func TestCreateDatabase_ReleasesLockOnEngineClose(t *testing.T) {
 	require.NoError(t, err)
 
 	seCfg := &SqlEngineConfig{
-		ServerUser:   "root",
-		ServerHost:   "localhost",
-		Autocommit:   true,
-		DBLoadParams: dbLoadParams,
+		ServerUser:      "root",
+		ServerHost:      "localhost",
+		Autocommit:      true,
+		DBLoadParams:    dbLoadParams,
+		EngineVariables: sqle.NewEngineVariables(),
 	}
 
 	se, err := NewSqlEngine(ctx, mrEnv, seCfg)
@@ -90,7 +92,7 @@ func TestCreateDatabase_ReleasesLockOnEngineClose(t *testing.T) {
 	_, err = os.Stat(lockPath)
 	require.NoError(t, err, "expected lock file to exist at %s", lockPath)
 
-	lck, err := fslock.New(lockPath)
+	lck, err := filelocks.New(lockPath)
 	require.NoError(t, err)
 	err = lck.LockWithTimeout(25 * time.Millisecond)
 	require.NoError(t, err, "expected lock to be free after engine close (path=%s)", lockPath)

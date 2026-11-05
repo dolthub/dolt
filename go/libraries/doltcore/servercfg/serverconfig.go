@@ -393,14 +393,16 @@ func ApplySystemVariables(ctx *sql.Context, cfg ServerConfig, sysVarTarget Syste
 		}
 	}
 
-	if cfg.ValueSet(ReadTimeoutKey) {
+	// A zero listener timeout disables the deadline; the SQL variable has a
+	// minimum of one second, so leave its default in that case.
+	if cfg.ValueSet(ReadTimeoutKey) && cfg.ReadTimeout() != 0 {
 		err := sysVarTarget.SetGlobal(ctx, "net_read_timeout", cfg.ReadTimeout())
 		if err != nil {
 			return err
 		}
 	}
 
-	if cfg.ValueSet(WriteTimeoutKey) {
+	if cfg.ValueSet(WriteTimeoutKey) && cfg.WriteTimeout() != 0 {
 		err := sysVarTarget.SetGlobal(ctx, "net_write_timeout", cfg.WriteTimeout())
 		if err != nil {
 			return err

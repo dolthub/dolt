@@ -116,6 +116,9 @@ func TestSchemaMerge(t *testing.T) {
 	t.Run("adaptive encoding tests", func(t *testing.T) {
 		testSchemaMerge(t, adaptiveEncodingTests)
 	})
+	t.Run("generated column tests", func(t *testing.T) {
+		testSchemaMerge(t, generatedColumnTests)
+	})
 }
 
 var columnAddDropTests = []schemaMergeTest{
@@ -1190,6 +1193,30 @@ var simpleConflictTests = []schemaMergeTest{
 	},
 }
 
+var generatedColumnTests = []schemaMergeTest{
+	{
+		name:     "conflicting generated column adds: same name, different expressions",
+		ancestor: *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c1 int)")),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c1 int, computed int AS (c1 * 2) VIRTUAL)")),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c1 int, computed int AS (c1 * 3) VIRTUAL)")),
+		conflict: true,
+	},
+	{
+		name:     "conflicting generated column adds: same expression, different stored types",
+		ancestor: *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c1 int)")),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c1 int, computed int AS (c1 * 2) VIRTUAL)")),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c1 int, computed int AS (c1 * 2) STORED)")),
+		conflict: true,
+	},
+	{
+		name:     "convergent generated column adds",
+		ancestor: *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c1 int)")),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c1 int, computed int AS (c1 * 2) VIRTUAL)")),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c1 int, computed int AS (c1 * 2) VIRTUAL)")),
+		merged:   *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c1 int, computed int AS (c1 * 2) VIRTUAL)")),
+	},
+}
+
 var jsonMergeTests = []schemaMergeTest{
 	{
 		name:     "json merge",
@@ -1689,7 +1716,7 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 				var mo merge.MergeOpts
 				var eo editor.Options
 				// attempt merge before skipping to assert no panics
-				result, err := merge.MergeRoots(sql.NewContext(ctx), doltdb.SimpleTableResolver{}, l, r, a, rootish{r}, rootish{a}, eo, mo)
+				result, err := merge.MergeRoots(newOwnedMergeContext(ctx), doltdb.SimpleTableResolver{}, l, r, a, rootish{r}, rootish{a}, eo, mo)
 				maybeSkip(t, test, flipSides)
 
 				if test.conflict {

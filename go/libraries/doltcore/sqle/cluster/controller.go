@@ -67,7 +67,7 @@ const RolePrimary Role = "primary"
 const RoleStandby Role = "standby"
 const RoleDetectedBrokenConfig Role = "detected_broken_config"
 
-const PersistentConfigPrefix = "sqlserver.cluster"
+const PersistentConfigPrefix = env.SqlServerClusterPrefix
 
 // State for any ongoing DROP DATABASE replication attempts we have
 // outstanding. When we create a database, we cancel all on going DROP DATABASE

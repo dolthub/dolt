@@ -21,7 +21,8 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	_ "github.com/dolthub/go-mysql-server/sql/variables"
+	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/src-d/go-errors.v1"
 
@@ -34,7 +35,7 @@ import (
 )
 
 func TestDoltSessionInit(t *testing.T) {
-	dsess := DefaultSession(emptyDatabaseProvider(), nil)
+	dsess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
 	conf := config.NewMapConfig(make(map[string]string))
 	assert.Equal(t, conf, dsess.globalsConf)
 }
@@ -44,6 +45,7 @@ type countingDoltgresTransactionLifecycle struct {
 	pending         bool
 	cacheClears     int
 	events          []string
+	onCommit        func()
 }
 
 func (l *countingDoltgresTransactionLifecycle) DoltgresTransactionStarted() {
@@ -51,6 +53,9 @@ func (l *countingDoltgresTransactionLifecycle) DoltgresTransactionStarted() {
 }
 func (l *countingDoltgresTransactionLifecycle) DoltgresTransactionCommitted() {
 	l.events = append(l.events, "commit")
+	if l.onCommit != nil {
+		l.onCommit()
+	}
 }
 func (l *countingDoltgresTransactionLifecycle) DoltgresTransactionRolledBack() {
 	l.events = append(l.events, "rollback")
@@ -76,8 +81,19 @@ func (l *countingDoltgresTransactionLifecycle) DoltgresSessionCacheClear() {
 	l.cacheClears++
 }
 
+// nonDoltTransaction is a sql.Transaction that the session must reject.
+type nonDoltTransaction struct{}
+
+func (nonDoltTransaction) String() string {
+	return "non-Dolt transaction"
+}
+
+func (nonDoltTransaction) IsReadOnly() bool {
+	return false
+}
+
 func TestDoltgresTransactionLifecycle(t *testing.T) {
-	sess := DefaultSession(emptyDatabaseProvider(), nil)
+	sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
 	lifecycle := &countingDoltgresTransactionLifecycle{pending: true}
 	sess.DoltgresSessObj = lifecycle
 	tx := &DoltTransaction{}
@@ -96,8 +112,24 @@ func TestDoltgresTransactionLifecycle(t *testing.T) {
 	assert.Equal(t, 2, lifecycle.transactionEnds)
 }
 
+// newTransactionTestVariables returns a bundle defining the Dolt session
+// variable read by transaction commit.
+func newTransactionTestVariables() *sql.EngineVariables {
+	vars := variables.NewEngineVariables()
+	vars.System.AddSystemVariables([]sql.SystemVariable{
+		&sql.MysqlSystemVariable{
+			Name:    DoltCommitOnTransactionCommit,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
+			Dynamic: true,
+			Type:    sqltypes.NewSystemBoolType(DoltCommitOnTransactionCommit),
+			Default: int8(0),
+		},
+	})
+	return vars
+}
+
 func TestDoltgresSemanticTransactionLifecycle(t *testing.T) {
-	sess := DefaultSession(emptyDatabaseProvider(), nil)
+	sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, newTransactionTestVariables())
 	lifecycle := &countingDoltgresTransactionLifecycle{pending: true}
 	sess.DoltgresSessObj = lifecycle
 	ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
@@ -123,31 +155,115 @@ func TestDoltgresSemanticTransactionLifecycle(t *testing.T) {
 		state.NewEmptyBranchState("main", RevisionTypeBranch).dirty = true
 		sess.dbStates[name] = state
 	}
-	assert.ErrorIs(t, sess.CommitTransaction(ctx, tx), ErrDirtyWorkingSets)
+	// An invalid transaction must not emit a successful commit notification.
+	assert.EqualError(t, sess.CommitTransaction(ctx, nil), "expected a DoltTransaction")
 	assert.Equal(t, "start", lifecycle.events[len(lifecycle.events)-1], "failed commit ended transaction")
 	assert.NoError(t, sess.Rollback(ctx, tx))
 	assert.Equal(t, 2, lifecycle.transactionEnds)
 	assert.Equal(t, "rollback", lifecycle.events[len(lifecycle.events)-1])
 }
 
+func TestCommitBranchStatesNotifiesDoltgres(t *testing.T) {
+	sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
+	ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
+	tx := &DoltTransaction{}
+	ctx.SetTransaction(tx)
+	lifecycle := &countingDoltgresTransactionLifecycle{
+		pending: true,
+		onCommit: func() {
+			assert.Nil(t, ctx.GetTransaction(), "clear the transaction before notifying Doltgres")
+		},
+	}
+	sess.DoltgresSessObj = lifecycle
+
+	// Validation failures leave the transaction active and emit no commit notification.
+	_, err := sess.commitBranchStates(ctx, nil, nonDoltTransaction{}, nil)
+	assert.Error(t, err)
+	assert.Same(t, tx, ctx.GetTransaction())
+	assert.Empty(t, lifecycle.events)
+	assert.Zero(t, lifecycle.transactionEnds)
+
+	_, err = sess.commitBranchStates(ctx, nil, tx, []*doltdb.PendingCommit{nil})
+	assert.Error(t, err)
+	assert.Same(t, tx, ctx.GetTransaction())
+	assert.Empty(t, lifecycle.events)
+	assert.Zero(t, lifecycle.transactionEnds)
+
+	_, err = sess.commitBranchStates(ctx, nil, tx, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"commit"}, lifecycle.events)
+	assert.Equal(t, 1, lifecycle.transactionEnds)
+	assert.Nil(t, ctx.GetTransaction())
+
+	// The public caller must not send a second notification after the batch completes.
+	ctx.SetTransaction(tx)
+	lifecycle.pending = true
+	lifecycle.events = nil
+	_, err = sess.DoltCommitMulti(ctx, tx, nil, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"commit"}, lifecycle.events)
+	assert.Equal(t, 2, lifecycle.transactionEnds)
+	assert.Nil(t, ctx.GetTransaction())
+}
+
+func TestCommitTransactionWithoutBatchNotifiesDoltgres(t *testing.T) {
+	sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, newTransactionTestVariables())
+	ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
+	tx := &DoltTransaction{}
+	ctx.SetTransaction(tx)
+	lifecycle := &countingDoltgresTransactionLifecycle{
+		pending: true,
+		onCommit: func() {
+			assert.Same(t, tx, ctx.GetTransaction(), "preserve notification order for commits without a batch")
+		},
+	}
+	sess.DoltgresSessObj = lifecycle
+
+	assert.NoError(t, sess.CommitTransaction(ctx, tx))
+	assert.Equal(t, []string{"commit"}, lifecycle.events)
+	assert.Equal(t, 1, lifecycle.transactionEnds)
+	assert.Nil(t, ctx.GetTransaction())
+}
+
 func TestDoltTransactionRepeatedSavepointNames(t *testing.T) {
 	tx := &DoltTransaction{postgresSavepoints: true}
 	first := map[string]doltdb.RootValue{"first": nil}
 	second := map[string]doltdb.RootValue{"second": nil}
-	tx.CreateSavepoint("same", first)
-	tx.CreateSavepoint("child", map[string]doltdb.RootValue{})
-	tx.CreateSavepoint("same", second)
-	assert.Equal(t, second, tx.RollbackToSavepoint("same"))
+	firstDirty := map[string]bool{
+		"mydb/main": true,
+	}
+	secondDirty := map[string]bool{
+		"mydb/other": true,
+	}
+	tx.CreateSavepoint("same", first, firstDirty)
+	tx.CreateSavepoint("child", map[string]doltdb.RootValue{}, nil)
+	tx.CreateSavepoint("same", second, secondDirty)
+	assert.Equal(t, second, tx.RollbackToSavepoint("same").roots)
+	assert.Equal(t, secondDirty, tx.RollbackToSavepoint("same").dirtyBranches)
 	assert.True(t, tx.ClearSavepoint("same"))
-	assert.Equal(t, first, tx.RollbackToSavepoint("same"))
+	assert.Equal(t, first, tx.RollbackToSavepoint("same").roots)
+	assert.Equal(t, firstDirty, tx.RollbackToSavepoint("same").dirtyBranches)
 	assert.False(t, tx.ClearSavepoint("child"))
 }
 
 func TestDoltTransactionDefaultSavepointSemantics(t *testing.T) {
 	tx := &DoltTransaction{}
-	tx.CreateSavepoint("Same", map[string]doltdb.RootValue{"first": nil})
-	tx.CreateSavepoint("same", map[string]doltdb.RootValue{"second": nil})
-	assert.Equal(t, map[string]doltdb.RootValue{"second": nil}, tx.RollbackToSavepoint("SAME"))
+	tx.CreateSavepoint("Same", map[string]doltdb.RootValue{
+		"first": nil,
+	}, map[string]bool{
+		"mydb/main": true,
+	})
+	tx.CreateSavepoint("same", map[string]doltdb.RootValue{
+		"second": nil,
+	}, map[string]bool{
+		"mydb/other": true,
+	})
+	assert.Equal(t, map[string]doltdb.RootValue{
+		"second": nil,
+	}, tx.RollbackToSavepoint("SAME").roots)
+	assert.Equal(t, map[string]bool{
+		"mydb/other": true,
+	}, tx.RollbackToSavepoint("SAME").dirtyBranches)
 	assert.True(t, tx.ClearSavepoint("Same"))
 	assert.Nil(t, tx.RollbackToSavepoint("same"))
 }
@@ -164,13 +280,13 @@ func TestDirtyBranches(t *testing.T) {
 	}
 
 	t.Run("no branch states", func(t *testing.T) {
-		sess := DefaultSession(emptyDatabaseProvider(), nil)
+		sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
 		assert.Empty(t, sess.DirtyBranches())
 		assert.False(t, sess.IsBranchDirty("db1", "main"))
 	})
 
 	t.Run("no dirty branch states", func(t *testing.T) {
-		sess := DefaultSession(emptyDatabaseProvider(), nil)
+		sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
 		addBranchState(sess, "db1", "main", false)
 		assert.Empty(t, sess.DirtyBranches())
 		assert.False(t, sess.IsBranchDirty("db1", "main"))
@@ -178,7 +294,7 @@ func TestDirtyBranches(t *testing.T) {
 
 	// Two dirty branches of one database: two pairs, one database name.
 	t.Run("multiple dirty branches in one database", func(t *testing.T) {
-		sess := DefaultSession(emptyDatabaseProvider(), nil)
+		sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
 		addBranchState(sess, "db1", "main", true)
 		addBranchState(sess, "db1", "feature", true)
 		addBranchState(sess, "db1", "clean", false)
@@ -195,7 +311,7 @@ func TestDirtyBranches(t *testing.T) {
 	})
 
 	t.Run("dirty branches across databases", func(t *testing.T) {
-		sess := DefaultSession(emptyDatabaseProvider(), nil)
+		sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
 		addBranchState(sess, "db1", "main", true)
 		addBranchState(sess, "db2", "main", false)
 		addBranchState(sess, "db3", "feature", true)
@@ -213,7 +329,7 @@ func TestDirtyBranches(t *testing.T) {
 
 	// Both maps are keyed lowercased, as lookupDbState assumes.
 	t.Run("lookup folds case", func(t *testing.T) {
-		sess := DefaultSession(emptyDatabaseProvider(), nil)
+		sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
 		addBranchState(sess, "db1", "Feature", true)
 
 		assert.True(t, sess.IsBranchDirty("DB1", "feature"))
@@ -222,7 +338,7 @@ func TestDirtyBranches(t *testing.T) {
 
 	// The joined form could not express this.
 	t.Run("database name containing a revision delimiter", func(t *testing.T) {
-		sess := DefaultSession(emptyDatabaseProvider(), nil)
+		sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
 		addBranchState(sess, "db/one", "main", true)
 
 		assert.Equal(t, []DirtyBranch{{DbName: "db/one", Branch: "main"}}, sess.DirtyBranches())
@@ -231,7 +347,7 @@ func TestDirtyBranches(t *testing.T) {
 }
 
 func TestNewPersistedSystemVariables(t *testing.T) {
-	dsess := DefaultSession(emptyDatabaseProvider(), nil)
+	dsess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
 	conf := config.NewMapConfig(map[string]string{"max_connections": "1000"})
 	dsess = dsess.WithGlobals(conf)
 
@@ -244,6 +360,7 @@ func TestNewPersistedSystemVariables(t *testing.T) {
 }
 
 func TestValidatePeristableSystemVar(t *testing.T) {
+	vars := variables.NewEngineVariables()
 	tests := []struct {
 		Err  *errors.Kind
 		Name string
@@ -264,7 +381,7 @@ func TestValidatePeristableSystemVar(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
-			if sysVar, _, err := validatePersistableSysVar(tt.Name); tt.Err != nil {
+			if sysVar, _, err := validatePersistableSysVarInRegistry(vars.System, tt.Name); tt.Err != nil {
 				assert.True(t, tt.Err.Is(err))
 			} else {
 				assert.Equal(t, tt.Name, sysVar.GetName())
@@ -367,6 +484,7 @@ func TestSetPersistedValue(t *testing.T) {
 }
 
 func TestGetPersistedValue(t *testing.T) {
+	vars := variables.NewEngineVariables()
 	tests := []struct {
 		ExpectedRes interface{}
 		Name        string
@@ -439,7 +557,7 @@ func TestGetPersistedValue(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
 			conf := config.NewMapConfig(map[string]string{tt.Name: tt.Value})
-			if val, err := getPersistedValue(conf, tt.Name); tt.Err {
+			if val, err := getPersistedValueInRegistry(vars.System, conf, tt.Name); tt.Err {
 				assert.Error(t, err)
 			} else {
 				assert.Equal(t, tt.ExpectedRes, val)

@@ -29,8 +29,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
-func getPushOnWriteHook(ctx context.Context, nameSuffix string, dEnv *env.DoltEnv, logger io.Writer) (doltdb.CommitHook, RunAsyncThreads, error) {
-	return NewDynamicPushOnWriteHook(ctx, nameSuffix, dEnv, logger)
+func getPushOnWriteHookWithRegistry(ctx context.Context, nameSuffix string, dEnv *env.DoltEnv, logger io.Writer, vars sql.SystemVariableRegistry) (doltdb.CommitHook, RunAsyncThreads, error) {
+	return NewDynamicPushOnWriteHookWithRegistry(ctx, nameSuffix, dEnv, logger, vars)
 }
 
 type BackgroundThreads interface {
@@ -39,11 +39,11 @@ type BackgroundThreads interface {
 
 type RunAsyncThreads func(BackgroundThreads, func(context.Context) (*sql.Context, error)) error
 
-// GetCommitHooks creates a list of hooks to execute on database commit. Hooks that cannot be created because of an
-// error in configuration will not prevent the server from starting, and will instead log errors.
-func GetCommitHooks(ctx context.Context, nameSuffix string, dEnv *env.DoltEnv, logger io.Writer) ([]doltdb.CommitHook, RunAsyncThreads, error) {
+// GetCommitHooksWithRegistry creates commit hooks that retain one engine registry.
+// Invalid configuration is logged and does not prevent the server from starting.
+func GetCommitHooksWithRegistry(ctx context.Context, nameSuffix string, dEnv *env.DoltEnv, logger io.Writer, vars sql.SystemVariableRegistry) ([]doltdb.CommitHook, RunAsyncThreads, error) {
 	postCommitHooks := make([]doltdb.CommitHook, 0)
-	hook, runThreads, err := getPushOnWriteHook(ctx, nameSuffix, dEnv, logger)
+	hook, runThreads, err := getPushOnWriteHookWithRegistry(ctx, nameSuffix, dEnv, logger, vars)
 	if err != nil {
 		path, _ := dEnv.FS.Abs(".")
 		logrus.Errorf("error loading replication for database at %s, replication disabled: %v", path, err)
@@ -71,7 +71,7 @@ func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEn
 	}
 
 	if sqlCtx, ok := ctx.(*sql.Context); ok {
-		sqlCtx.GetLogger().Infof(
+		sqlCtx.GetLogger().Debugf(
 			"replication enabled for database '%s' from remote '%s'", name, remoteName)
 	}
 
@@ -82,8 +82,8 @@ func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEn
 // configured through sql SystemVariables. This is called both at
 // startup, for the entire set of databases, and is called when
 // we create new databases through |registerNewDatabases|.
-func applyReadReplicationConfigToDatabase(ctx context.Context, dEnv *env.DoltEnv, db dsess.SqlDatabase) (dsess.SqlDatabase, error) {
-	if _, remote, ok := sql.SystemVariables.GetGlobal(dsess.ReadReplicaRemote); ok && remote != "" {
+func applyReadReplicationConfigToDatabaseWithRegistry(ctx context.Context, dEnv *env.DoltEnv, db dsess.SqlDatabase, vars sql.SystemVariableRegistry) (dsess.SqlDatabase, error) {
+	if _, remote, ok := vars.GetGlobal(dsess.ReadReplicaRemote); ok && remote != "" {
 		remoteName, ok := remote.(string)
 		if !ok {
 			return nil, sql.ErrInvalidSystemVariableValue.New(remote)
@@ -98,7 +98,9 @@ func applyReadReplicationConfigToDatabase(ctx context.Context, dEnv *env.DoltEnv
 	return db, nil
 }
 
-func ApplyReplicationConfig(ctx context.Context, mrEnv *env.MultiRepoEnv, logger io.Writer, dbs ...dsess.SqlDatabase) ([]dsess.SqlDatabase, RunAsyncThreads, error) {
+// ApplyReplicationConfigWithRegistry constructs replication state using the
+// supplied engine registry, including hooks that read live settings later.
+func ApplyReplicationConfigWithRegistry(ctx context.Context, mrEnv *env.MultiRepoEnv, logger io.Writer, vars sql.SystemVariableRegistry, dbs ...dsess.SqlDatabase) ([]dsess.SqlDatabase, RunAsyncThreads, error) {
 	outputDbs := make([]dsess.SqlDatabase, len(dbs))
 	asyncRunners := make([]RunAsyncThreads, len(dbs))
 	for i, db := range dbs {
@@ -108,13 +110,13 @@ func ApplyReplicationConfig(ctx context.Context, mrEnv *env.MultiRepoEnv, logger
 			continue
 		}
 		nameSuffix := "[" + db.Name() + "]"
-		postCommitHooks, runAsyncThreads, err := GetCommitHooks(ctx, nameSuffix, dEnv, logger)
+		postCommitHooks, runAsyncThreads, err := GetCommitHooksWithRegistry(ctx, nameSuffix, dEnv, logger, vars)
 		if err != nil {
 			return nil, nil, err
 		}
 		dEnv.DoltDB(ctx).PrependCommitHooks(ctx, postCommitHooks...)
 
-		outputDbs[i], err = applyReadReplicationConfigToDatabase(ctx, dEnv, db)
+		outputDbs[i], err = applyReadReplicationConfigToDatabaseWithRegistry(ctx, dEnv, db, vars)
 		if err != nil {
 			return nil, nil, err
 		}

@@ -18,10 +18,13 @@ import (
 	"fmt"
 	"testing"
 
+	sqle "github.com/dolthub/go-mysql-server"
+	"github.com/dolthub/go-mysql-server/memory"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 func TestFilterQueryDoesNotPublishWorkingSet(t *testing.T) {
@@ -77,4 +80,23 @@ func TestFilterQueryRejectsTransactionControl(t *testing.T) {
 			require.Equal(t, before, after)
 		})
 	}
+}
+
+type closeCountingDatabase struct {
+	dsess.SqlDatabase
+	closes *int
+}
+
+func (db closeCountingDatabase) Close() { *db.closes++ }
+
+// TestFilterQueryRunnerCloseClosesDatabase checks that the runner closes the database it owns, which stops its
+// sequence tracker's background store reads.
+func TestFilterQueryRunnerCloseClosesDatabase(t *testing.T) {
+	closes := 0
+	runner := &filterQueryRunner{
+		Engine: sqle.NewDefault(memory.NewDBProvider()),
+		db:     closeCountingDatabase{closes: &closes},
+	}
+	require.NoError(t, runner.Close())
+	require.Equal(t, 1, closes)
 }

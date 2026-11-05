@@ -17,11 +17,11 @@ package enginetest
 import (
 	"regexp"
 
-	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/go-mysql-server/testutils"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
@@ -30,7 +30,7 @@ import (
 // editPauseMessageValidator validates edit pause message format
 type editPauseMessageValidator struct{}
 
-var _ enginetest.CustomValueValidator = &editPauseMessageValidator{}
+var _ testutils.CustomValueValidator = &editPauseMessageValidator{}
 var editPauseRegex = regexp.MustCompile(`^edit action paused at commit [0-9a-v]{32} \(.+\)\.\s+You can now modify the working directory and stage changes\. When ready, continue the rebase by calling dolt_rebase\('--continue'\)$`)
 
 func (epmv *editPauseMessageValidator) Validate(val interface{}) (bool, error) {
@@ -420,35 +420,11 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				ExpectedErrStr: rebase.ErrInvalidRebasePlanSquashFixupWithoutPick.Error(),
 			},
 			{
-				Query: "update dolt_rebase set action='pick', commit_hash='doesnotexist' where rebase_order=1;",
-				Expected: []sql.Row{{gmstypes.OkResult{
-					RowsAffected: 1,
-					InsertID:     0,
-					Info: plan.UpdateInfo{
-						Matched:  1,
-						Updated:  1,
-						Warnings: 0,
-					},
-				}}},
-			},
-			{
-				Query:          "call dolt_rebase('--continue');",
+				Query:          "update dolt_rebase set action='pick', commit_hash='doesnotexist' where rebase_order=1;",
 				ExpectedErrStr: "invalid commit hash: doesnotexist",
 			},
 			{
-				Query: "update dolt_rebase set commit_hash='0123456789abcdef0123456789abcdef' where rebase_order=1;",
-				Expected: []sql.Row{{gmstypes.OkResult{
-					RowsAffected: 1,
-					InsertID:     0,
-					Info: plan.UpdateInfo{
-						Matched:  1,
-						Updated:  1,
-						Warnings: 0,
-					},
-				}}},
-			},
-			{
-				Query:          "call dolt_rebase('--continue');",
+				Query:          "update dolt_rebase set action='pick', commit_hash='0123456789abcdef0123456789abcdef' where rebase_order=1;",
 				ExpectedErrStr: "unable to resolve commit hash 0123456789abcdef0123456789abcdef: target commit not found",
 			},
 		},

@@ -1,5 +1,6 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
+load $BATS_TEST_DIRNAME/helper/criss-cross.bash
 
 setup() {
     setup_common
@@ -88,4 +89,20 @@ teardown() {
     run dolt sql -q "select dolt_merge_base('main', hashof('one')) = dolt_merge_base(hashof('main'),'one') FROM dual;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ ^1$ ]] || false
+}
+
+@test "merge-base: --all" {
+    run dolt merge-base --all main two
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+    [ "$output" = "$(dolt merge-base main two)" ]
+
+    criss_cross
+
+    # Like git, the merge base with the newest commit date comes first: baseB was committed after baseA.
+    run dolt merge-base --all branchA branchB
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [ "${lines[0]}" = "$BASE_B" ]
+    [ "${lines[1]}" = "$BASE_A" ]
 }

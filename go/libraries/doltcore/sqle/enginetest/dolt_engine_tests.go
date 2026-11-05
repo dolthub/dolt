@@ -19,13 +19,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
-	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
+	"github.com/dolthub/go-mysql-server/enginetest/setup"
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/memo"
@@ -112,8 +113,16 @@ func RunAutoIncrementTrackerLockModeTest(t *testing.T, harness DoltEnginetestHar
 // In a real use case, these interleaved operations would be happening in different sessions on different threads.
 // In order to make the test behave predictably, we manually interleave the two iterators.
 func testAutoIncrementTrackerWithLockMode(t *testing.T, harness DoltEnginetestHarness, lockMode int64) {
-	err := sql.SystemVariables.AssignValues(map[string]interface{}{"innodb_autoinc_lock_mode": lockMode})
-	require.NoError(t, err)
+	harness = harness.NewHarness(t)
+	if localHarness, ok := harness.(*DoltHarness); ok {
+		vars := sqle.NewEngineVariables()
+		localHarness.WithEngineVariables(vars)
+		ctx := sql.NewContextWithVariables(context.Background(), vars)
+		err := vars.System.(sql.ContextAwareSystemVariableRegistry).AssignValuesWithContext(ctx, map[string]interface{}{"innodb_autoinc_lock_mode": lockMode})
+		require.NoError(t, err)
+	} else {
+		t.Skip("harness does not expose engine variables")
+	}
 
 	setupScripts := []setup.SetupScript{[]string{
 		"CREATE TABLE test1 (pk int NOT NULL PRIMARY KEY AUTO_INCREMENT,c0 int,index t1_c_index (c0));",
@@ -125,7 +134,6 @@ func testAutoIncrementTrackerWithLockMode(t *testing.T, harness DoltEnginetestHa
 		"CREATE VIEW sequence5bit AS SELECT b1.v + 2*b2.v + 4*b3.v + 8*b4.v + 16*b5.v AS v from bin b1, bin b2, bin b3, bin b4, bin b5;",
 	}}
 
-	harness = harness.NewHarness(t)
 	defer harness.Close()
 	harness.Setup(setup.MydbData, setupScripts)
 	e := mustNewEngine(t, harness)
@@ -225,7 +233,7 @@ func RunVersionedQueriesTest(t *testing.T, h DoltEnginetestHarness) {
 	require.NoError(t, err)
 
 	for _, tt := range queries.VersionedQueries {
-		enginetest.TestQueryWithEngine(t, h, e, tt)
+		enginetest.TestQuery(t, h, e, tt)
 	}
 
 	for _, tt := range queries.VersionedScripts {
@@ -417,14 +425,30 @@ func RunForeignKeyBranchesTest(t *testing.T, h DoltEnginetestHarness) {
 			SkipResultsCheck: true,
 		},
 	}
-	for _, script := range queries.ForeignKeyTests {
-		// New harness for every script because we create branches
-		h := h.NewHarness(t)
-		h.Setup(setup.MydbData, setup.Parent_childData)
-		modifiedScript := script
-		modifiedScript.SetUpScript = append(setupPrefix, modifiedScript.SetUpScript...)
-		modifiedScript.Assertions = append(assertionsPrefix, modifiedScript.Assertions...)
-		enginetest.TestScript(t, h, modifiedScript)
+	// These collections together contain the original ForeignKeyTests, including
+	// cases relocated by the script refactor. All must run against branch databases.
+	for _, suite := range []struct {
+		scripts            []queries.ScriptTest
+		parentChildFixture bool
+	}{
+		{scripts: queries.ForeignKeyTests, parentChildFixture: true},
+		{scripts: queries.ForeignKeyTypeTests},
+		{scripts: queries.ForeignKeyResolutionTests},
+	} {
+		for _, script := range suite.scripts {
+			// New harness for every script because we create branches
+			h := h.NewHarness(t)
+			if suite.parentChildFixture {
+				h.Setup(setup.MydbData, setup.Parent_childData)
+			} else {
+				h.Setup(setup.MydbData)
+			}
+
+			modifiedScript := script
+			modifiedScript.SetUpScript = append(setupPrefix, modifiedScript.SetUpScript...)
+			modifiedScript.Assertions = append(assertionsPrefix, modifiedScript.Assertions...)
+			enginetest.TestScript(t, h, modifiedScript)
+		}
 	}
 
 	for _, script := range ForeignKeyBranchTests {
@@ -446,14 +470,30 @@ func RunForeignKeyBranchesPreparedTest(t *testing.T, h DoltEnginetestHarness) {
 			SkipResultsCheck: true,
 		},
 	}
-	for _, script := range queries.ForeignKeyTests {
-		// New harness for every script because we create branches
-		h := h.NewHarness(t)
-		h.Setup(setup.MydbData, setup.Parent_childData)
-		modifiedScript := script
-		modifiedScript.SetUpScript = append(setupPrefix, modifiedScript.SetUpScript...)
-		modifiedScript.Assertions = append(assertionsPrefix, modifiedScript.Assertions...)
-		enginetest.TestScriptPrepared(t, h, modifiedScript)
+	// These collections together contain the original ForeignKeyTests, including
+	// cases relocated by the script refactor. All must run against branch databases.
+	for _, suite := range []struct {
+		scripts            []queries.ScriptTest
+		parentChildFixture bool
+	}{
+		{scripts: queries.ForeignKeyTests, parentChildFixture: true},
+		{scripts: queries.ForeignKeyTypeTests},
+		{scripts: queries.ForeignKeyResolutionTests},
+	} {
+		for _, script := range suite.scripts {
+			// New harness for every script because we create branches
+			h := h.NewHarness(t)
+			if suite.parentChildFixture {
+				h.Setup(setup.MydbData, setup.Parent_childData)
+			} else {
+				h.Setup(setup.MydbData)
+			}
+
+			modifiedScript := script
+			modifiedScript.SetUpScript = append(setupPrefix, modifiedScript.SetUpScript...)
+			modifiedScript.Assertions = append(assertionsPrefix, modifiedScript.Assertions...)
+			enginetest.TestScriptPrepared(t, h, modifiedScript)
+		}
 	}
 
 	for _, script := range ForeignKeyBranchTests {
@@ -1010,6 +1050,54 @@ func RunDoltMergeTests(t *testing.T, h DoltEnginetestHarness) {
 			defer h.Close()
 			h.Setup(setup.MydbData)
 			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func RunDoltMergeMultipleBasesTests(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range AllMergeMultipleBasesScripts() {
+		func() {
+			h := h.NewHarness(t)
+			defer h.Close()
+			h.Setup(setup.MydbData)
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func RunDoltMergeMultipleBasesPreparedTests(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range AllMergeMultipleBasesScripts() {
+		func() {
+			h := h.NewHarness(t)
+			defer h.Close()
+			h.Setup(setup.MydbData)
+			enginetest.TestScriptPrepared(t, h, script)
+		}()
+	}
+}
+
+func RunDoltMergeBasesTableFunctionTests(t *testing.T, h DoltEnginetestHarness) {
+	cleanup := installTestCommitClock(&testCommitClock{})
+	defer cleanup()
+	for _, script := range concatScripts(MergeBasesTableFunctionScripts, ThreeDotScripts) {
+		func() {
+			h := h.NewHarness(t)
+			defer h.Close()
+			h.Setup(setup.MydbData)
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func RunDoltMergeBasesTableFunctionPreparedTests(t *testing.T, h DoltEnginetestHarness) {
+	cleanup := installTestCommitClock(&testCommitClock{})
+	defer cleanup()
+	for _, script := range concatScripts(MergeBasesTableFunctionScripts, ThreeDotScripts) {
+		func() {
+			h := h.NewHarness(t)
+			defer h.Close()
+			h.Setup(setup.MydbData)
+			enginetest.TestScriptPrepared(t, h, script)
 		}()
 	}
 }
@@ -1787,10 +1875,100 @@ func RunDoltCommitTests(t *testing.T, harness DoltEnginetestHarness) {
 	}
 }
 
+func RunDoltCommitAllTests(t *testing.T, harness DoltEnginetestHarness) {
+	defer harness.Close()
+	for _, script := range DoltCommitAllTests {
+		h := harness.NewHarness(t)
+		enginetest.TestScript(t, h, script)
+		h.Close()
+	}
+}
+
 func RunDoltCommitTestsPrepared(t *testing.T, harness DoltEnginetestHarness) {
 	defer harness.Close()
 	for _, script := range DoltCommitTests {
 		enginetest.TestScriptPrepared(t, harness, script)
+	}
+}
+
+func RunDoltCommitAllTestsPrepared(t *testing.T, harness DoltEnginetestHarness) {
+	defer harness.Close()
+	for _, script := range DoltCommitAllTests {
+		h := harness.NewHarness(t)
+		enginetest.TestScriptPrepared(t, h, script)
+		h.Close()
+	}
+}
+
+func RunDoltCommitAllTransactionTests(t *testing.T, harness DoltEnginetestHarness, prepared bool) {
+	defer harness.Close()
+	for _, script := range append(DoltCommitAllTransactionTests, MultiBranchHeadTransactionTests...) {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestTransactionScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestTransactionScript(t, h, script)
+			}
+		}()
+	}
+}
+
+func RunMultiBranchTransactionTests(t *testing.T, harness DoltEnginetestHarness, prepared bool) {
+	defer harness.Close()
+	for _, script := range MultiBranchWorkingSetTransactionTests {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestTransactionScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestTransactionScript(t, h, script)
+			}
+		}()
+	}
+}
+
+func RunMultiBranchCommitTests(t *testing.T, harness DoltEnginetestHarness, prepared bool) {
+	defer harness.Close()
+	for _, script := range DoltMultiBranchCommitTests {
+		func() {
+			h := harness.NewHarness(t)
+			defer h.Close()
+			if prepared {
+				enginetest.TestScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestScript(t, h, script)
+			}
+		}()
+	}
+	for _, group := range []struct {
+		name  string
+		tests []queries.TransactionTest
+	}{
+		{
+			name:  "dolt_commit",
+			tests: MultiBranchExplicitCommitTransactions,
+		},
+		{
+			name:  "transaction_commit",
+			tests: MultiBranchAutomaticCommitTransactions,
+		},
+	} {
+		t.Run(group.name, func(t *testing.T) {
+			for _, script := range group.tests {
+				func() {
+					h := harness.NewHarness(t)
+					defer h.Close()
+					if prepared {
+						enginetest.TestTransactionScriptPrepared(t, h, script)
+					} else {
+						enginetest.TestTransactionScript(t, h, script)
+					}
+				}()
+			}
+		})
 	}
 }
 
@@ -1816,6 +1994,78 @@ func RunStatsStorageTests(t *testing.T, h DoltEnginetestHarness) {
 			defer h.Close()
 			enginetest.TestScriptWithEngine(t, e, h, script)
 		}()
+	}
+}
+
+// RunRevisionStatisticsTests verifies that qualifying a table with a branch does not
+// change its optimizer statistics, even when the session is on another branch.
+func RunRevisionStatisticsTests(t *testing.T, h DoltEnginetestHarness) {
+	h = h.WithConfigureStats(true)
+	defer h.Close()
+	h.Setup(setup.MydbData)
+	e := mustNewEngine(t, h)
+	defer e.Close()
+	ctx := enginetest.NewContext(h)
+	query := func(t *testing.T, q string) []sql.Row {
+		_, iter, _, err := e.Query(ctx, q)
+		require.NoError(t, err, q)
+		rows, err := sql.RowIterToRows(ctx, iter)
+		require.NoError(t, err, q)
+		return rows
+	}
+
+	query(t, "CREATE TABLE orders (w SMALLINT, d SMALLINT, id INT, carrier SMALLINT, PRIMARY KEY (w, d, id))")
+	query(t, "CREATE TABLE order_line (w SMALLINT, d SMALLINT, o_id INT, n SMALLINT, delivery INT, PRIMARY KEY (w, d, o_id, n))")
+	var orders, lines []string
+	for i := 1; i <= 300; i++ {
+		value := "1"
+		if i%3 == 0 {
+			value = "NULL"
+		}
+
+		orders = append(orders, fmt.Sprintf("(1,%d,%d,%s)", i%10+1, i, value))
+		for n := 1; n <= 10; n++ {
+			lines = append(lines, fmt.Sprintf("(1,%d,%d,%d,%s)", i%10+1, i, n, value))
+		}
+	}
+
+	query(t, "INSERT INTO orders VALUES "+strings.Join(orders, ","))
+	query(t, "INSERT INTO order_line VALUES "+strings.Join(lines, ","))
+	query(t, "CALL dolt_commit('-Am', 'load')")
+	query(t, "CALL dolt_checkout('-b', 'feature/stats')")
+	query(t, "DELETE FROM order_line WHERE o_id > 1")
+	query(t, "CALL dolt_commit('-am', 'smaller branch')")
+	query(t, "CALL dolt_stats_wait()")
+
+	joinQuery := func(db string) string {
+		prefix := ""
+		if db != "" {
+			prefix = "`" + db + "`."
+		}
+
+		return "SELECT COUNT(*) FROM " + prefix + "order_line ol JOIN " + prefix + "orders o " +
+			"ON o.w = ol.w AND o.d = ol.d AND o.id = ol.o_id " +
+			"WHERE (ol.delivery IS NULL AND o.carrier IS NOT NULL) OR " +
+			"(ol.delivery IS NOT NULL AND o.carrier IS NULL)"
+	}
+
+	plans := make(map[string][]sql.Row)
+	for _, branch := range []string{"main", "feature/stats"} {
+		query(t, "CALL dolt_checkout('"+branch+"')")
+		plans[branch] = query(t, "EXPLAIN FORMAT=TREE "+joinQuery(""))
+	}
+
+	// The branches have different cardinalities and should not share their plans.
+	require.NotEqual(t, plans["main"], plans["feature/stats"])
+	for _, sessionBranch := range []string{"main", "feature/stats"} {
+		query(t, "CALL dolt_checkout('"+sessionBranch+"')")
+		for _, branch := range []string{"main", "feature/stats"} {
+			t.Run(sessionBranch+"/"+branch, func(t *testing.T) {
+				q := joinQuery("mydb/" + branch)
+				assert.Equal(t, plans[branch], query(t, "EXPLAIN FORMAT=TREE "+q))
+				assert.Equal(t, query(t, joinQuery("")), query(t, q))
+			})
+		}
 	}
 }
 
@@ -2328,5 +2578,27 @@ func RunDoltCommitVerificationScripts(t *testing.T, harness DoltEnginetestHarnes
 
 		enginetest.TestScript(t, harness, script)
 		harness.Close()
+	}
+}
+
+func RunDoltMergeSamePrimaryKeyChangeTests(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range MergeSamePrimaryKeyChangeScripts {
+		func() {
+			h := h.NewHarness(t)
+			defer h.Close()
+			h.Setup(setup.MydbData)
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func RunDoltMergeSamePrimaryKeyChangePreparedTests(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range MergeSamePrimaryKeyChangeScripts {
+		func() {
+			h := h.NewHarness(t)
+			defer h.Close()
+			h.Setup(setup.MydbData)
+			enginetest.TestScriptPrepared(t, h, script)
+		}()
 	}
 }

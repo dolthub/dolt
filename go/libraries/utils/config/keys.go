@@ -33,6 +33,8 @@ var ConfigOptions = map[string]struct{}{
 	ProfileKey:                 {},
 	VersionCheckDisabled:       {},
 	MmapArchiveIndexes:         {},
+	GitRemoteMaxHistoryCommits: {},
+	GitRemoteResetOnPrune:      {},
 }
 
 const UserEmailKey = "user.email"
@@ -74,3 +76,6 @@ const SignCommitsKey = "commit.gpgsign"
 const GPGSigningKeyKey = "user.signingkey"
 
 const MmapArchiveIndexes = "mmap_archive_indexes"
+
+const GitRemoteMaxHistoryCommits = "git-remote.max-history-commits"
+const GitRemoteResetOnPrune = "git-remote.reset-history-on-prune"

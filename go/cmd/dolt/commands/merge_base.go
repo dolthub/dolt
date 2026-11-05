@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
@@ -29,9 +30,11 @@ import (
 
 var mergeBaseDocs = cli.CommandDocumentationContent{
 	ShortDesc: `Find the common ancestor of two commits.`,
-	LongDesc:  `Find the common ancestor of two commits, and return the ancestor's commit hash.'`,
+	LongDesc: `Find the common ancestor of two commits, and return the ancestor's commit hash.
+
+When the commits have more than one best common ancestor, one of them is returned. Use {{.EmphasisLeft}}--all{{.EmphasisRight}} to print every best common ancestor, one per line, newest first.`,
 	Synopsis: []string{
-		`{{.LessThan}}commit spec{{.GreaterThan}} {{.LessThan}}commit spec{{.GreaterThan}}`,
+		`[--all] {{.LessThan}}commit spec{{.GreaterThan}} {{.LessThan}}commit spec{{.GreaterThan}}`,
 	},
 }
 
@@ -54,6 +57,7 @@ func (cmd MergeBaseCmd) Docs() *cli.CommandDocumentation {
 
 func (cmd MergeBaseCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 2)
+	ap.SupportsFlag(cli.AllFlag, "", "Print every best common ancestor instead of one.")
 	return ap
 }
 
@@ -79,17 +83,26 @@ func (cmd MergeBaseCmd) Exec(ctx context.Context, commandStr string, args []stri
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	interpolatedQuery, err := dbr.InterpolateForDialect("SELECT DOLT_MERGE_BASE(?, ?)", []interface{}{apr.Arg(0), apr.Arg(1)}, dialect.MySQL)
+	query := "SELECT DOLT_MERGE_BASE(?, ?)"
+	if apr.Contains(cli.AllFlag) {
+		query = "SELECT merge_base FROM DOLT_MERGE_BASES(?, ?)"
+	}
+	interpolatedQuery, err := dbr.InterpolateForDialect(query, []interface{}{apr.Arg(0), apr.Arg(1)}, dialect.MySQL)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	row, err := cli.GetRowsForSql(queryist.Queryist, queryist.Context, interpolatedQuery)
+	rows, err := cli.GetRowsForSql(queryist.Queryist, queryist.Context, interpolatedQuery)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
+	if len(rows) == 0 || rows[0][0] == nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(doltdb.ErrNoCommonAncestor), usage)
+	}
 
-	cli.Println(row[0][0].(string))
+	for _, row := range rows {
+		cli.Println(row[0].(string))
+	}
 
 	return 0
 }

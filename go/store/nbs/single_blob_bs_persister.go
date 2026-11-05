@@ -53,8 +53,7 @@ func (bsp *singleBlobBSPersister) Persist(ctx context.Context, behavior dherrors
 		return nil, gcBehavior_Continue, err
 	}
 
-	rdr := &bsTableReaderAt{key: name, bs: bsp.bs}
-	src, err := newReaderFromIndexData(ctx, bsp.q, data, address, rdr, bsp.blockSize)
+	src, err := newPersistedBSTableChunkSource(ctx, bsp.bs, bsp.q, data, address, bsp.blockSize)
 	if err != nil {
 		return nil, gcBehavior_Continue, err
 	}
@@ -74,17 +73,15 @@ func (bsp *singleBlobBSPersister) ConjoinAll(ctx context.Context, behavior dherr
 
 	name := plan.name.String() + plan.suffix
 
-	// Read chunk records from each source via range reads and stream them
+	// Read chunk records through each source so existing spools are reused, and stream them
 	// together with the merged index into a single blob. No intermediate
 	// .records or .tail blobs are created.
 	readers := make([]io.Reader, 0, len(plan.sources.sws)+1)
 	closers := make([]io.Closer, 0, len(plan.sources.sws))
 
 	for _, sws := range plan.sources.sws {
-		srcName := sws.source.hash().String() + sws.source.suffix()
 		dataLen := int64(sws.dataLen)
-		rng := blobstore.NewBlobRange(0, dataLen)
-		rdr, _, _, err := bsp.bs.Get(ctx, srcName, rng)
+		rdr, _, err := sws.source.reader(ctx, behavior)
 		if err != nil {
 			for _, c := range closers {
 				c.Close()

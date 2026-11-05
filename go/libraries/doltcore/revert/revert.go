@@ -17,6 +17,7 @@ package revert
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -366,6 +367,20 @@ func AbortRevert(ctx *sql.Context, dbName string) error {
 	}
 	if !ws.MergeState().IsRevert() {
 		return fmt.Errorf("error: There is no revert in progress")
+	}
+
+	// Aborting can reset HEAD and commit this working set. If there are any changes on other working sets, we will
+	// stomp them when we do this. So we assert that only the target working set is dirty.
+	baseName, _ := doltdb.SplitRevisionDbName(dbName)
+	headRef, err := ws.Ref().ToHeadRef()
+	if err != nil {
+		return err
+	}
+
+	for _, dirty := range doltSession.DirtyBranches() {
+		if !strings.EqualFold(dirty.DbName, baseName) || !strings.EqualFold(dirty.Branch, headRef.GetPath()) {
+			return dsess.ErrDirtyWorkingSets
+		}
 	}
 
 	roots, ok := doltSession.GetRoots(ctx, dbName)

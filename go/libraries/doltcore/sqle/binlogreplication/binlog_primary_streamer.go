@@ -33,6 +33,7 @@ import (
 // regular intervals. There is one streamer per connected replica.
 type binlogStreamer struct {
 	quitChan       chan struct{}
+	conn           *mysql.Conn
 	ticker         *time.Ticker
 	currentLogFile *os.File
 	skippingGtids  bool
@@ -62,6 +63,12 @@ func (streamer *binlogStreamer) startStream(ctx *sql.Context, conn *mysql.Conn, 
 		return err
 	}
 
+	defer func() {
+		if streamer.currentLogFile != nil {
+			_ = streamer.currentLogFile.Close()
+		}
+	}()
+
 	// Send a fake rotate event to let the replica know what file and position we're at
 	binlogEventMeta.NextLogPosition = 4
 	rotateEvent := mysql.NewFakeRotateEvent(*binlogFormat, *binlogEventMeta, filepath.Base(logfile))
@@ -69,8 +76,6 @@ func (streamer *binlogStreamer) startStream(ctx *sql.Context, conn *mysql.Conn, 
 		return err
 	}
 	_ = conn.FlushBuffer()
-
-	defer streamer.currentLogFile.Close()
 
 	for {
 		select {
@@ -167,10 +172,13 @@ func (streamer *binlogStreamer) streamNextEvents(_ *sql.Context, conn *mysql.Con
 	return nil
 }
 
-// binlogStreamerManager manages a collection of binlogStreamers, one for reach connected replica,
+// binlogStreamerManager manages a collection of binlogStreamers, one for each connected replica,
 // and implements the doltdb.DatabaseUpdateListener interface to receive notifications of database
 // changes that need to be turned into binlog events and then sent to connected replicas.
 type binlogStreamerManager struct {
+	doneChan       chan struct{}
+	closed         bool
+	streams        sync.WaitGroup
 	quitChan       chan struct{}
 	logManager     *logManager
 	streamers      []*binlogStreamer
@@ -183,22 +191,34 @@ func newBinlogStreamerManager() *binlogStreamerManager {
 		streamers:      make([]*binlogStreamer, 0),
 		streamersMutex: sync.Mutex{},
 		quitChan:       make(chan struct{}),
+		doneChan:       make(chan struct{}),
 	}
 
 	go func() {
-		for {
-			select {
-			case <-manager.quitChan:
-				streamers := manager.copyStreamers()
-				for _, streamer := range streamers {
-					streamer.quitChan <- struct{}{}
-				}
-				return
-			}
+		defer close(manager.doneChan)
+		<-manager.quitChan
+		for _, streamer := range manager.copyStreamers() {
+			// Closing the channel cannot block if a streamer is reading a file
+			// or writing to a replica. Closing its connection interrupts writes.
+			close(streamer.quitChan)
+			streamer.conn.Close()
 		}
 	}()
 
 	return manager
+}
+
+// Close stops admitting streams, interrupts existing streams, and waits for the
+// manager goroutine and all registered streams to exit. It is safe to call again.
+func (m *binlogStreamerManager) Close() {
+	m.streamersMutex.Lock()
+	if !m.closed {
+		m.closed = true
+		close(m.quitChan)
+	}
+	m.streamersMutex.Unlock()
+	<-m.doneChan
+	m.streams.Wait()
 }
 
 // copyStreamers returns a copy of the streamers owned by this streamer manager.
@@ -219,7 +239,11 @@ func (m *binlogStreamerManager) copyStreamers() []*binlogStreamer {
 // validation to have been completed before starting a binlog stream.
 func (m *binlogStreamerManager) StartStream(ctx *sql.Context, conn *mysql.Conn, executedGtids mysql.GTIDSet, binlogFormat *mysql.BinlogFormat, binlogEventMeta mysql.BinlogEventMetadata) error {
 	streamer := newBinlogStreamer()
-	m.addStreamer(streamer)
+	defer streamer.ticker.Stop()
+	streamer.conn = conn
+	if !m.addStreamer(streamer) {
+		return fmt.Errorf("binlog streamer manager is closed")
+	}
 	defer m.removeStreamer(streamer)
 
 	file, err := m.logManager.findLogFileForPosition(executedGtids)
@@ -231,11 +255,16 @@ func (m *binlogStreamerManager) StartStream(ctx *sql.Context, conn *mysql.Conn, 
 }
 
 // addStreamer adds |streamer| to the slice of streamers managed by this binlogStreamerManager.
-func (m *binlogStreamerManager) addStreamer(streamer *binlogStreamer) {
+func (m *binlogStreamerManager) addStreamer(streamer *binlogStreamer) bool {
 	m.streamersMutex.Lock()
 	defer m.streamersMutex.Unlock()
 
+	if m.closed {
+		return false
+	}
+	m.streams.Add(1)
 	m.streamers = append(m.streamers, streamer)
+	return true
 }
 
 // removeStreamer removes |streamer| from the slice of streamers managed by this binlogStreamerManager.
@@ -243,14 +272,13 @@ func (m *binlogStreamerManager) removeStreamer(streamer *binlogStreamer) {
 	m.streamersMutex.Lock()
 	defer m.streamersMutex.Unlock()
 
-	if len(m.streamers) == 0 {
-		return
-	}
-
-	m.streamers = make([]*binlogStreamer, len(m.streamers)-1, 0)
-	for _, element := range m.streamers {
-		if element != streamer {
-			m.streamers = append(m.streamers, element)
+	for i, element := range m.streamers {
+		if element == streamer {
+			copy(m.streamers[i:], m.streamers[i+1:])
+			m.streamers[len(m.streamers)-1] = nil
+			m.streamers = m.streamers[:len(m.streamers)-1]
+			m.streams.Done()
+			return
 		}
 	}
 }

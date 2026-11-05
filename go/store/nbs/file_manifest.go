@@ -32,7 +32,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dolthub/fslock"
+	filelocks "github.com/dolthub/file-locks"
 
 	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/libraries/utils/file"
@@ -102,7 +102,7 @@ func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
 
 // getFileManifest makes a new file manifest.
 func getFileManifest(ctx context.Context, dir string) (m manifest, err error) {
-	lock, err := fslock.New(filepath.Join(dir, lockFileName))
+	lock, err := filelocks.New(filepath.Join(dir, lockFileName))
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +139,7 @@ func getFileManifest(ctx context.Context, dir string) (m manifest, err error) {
 type fileManifest struct {
 	// lock is the dir/LOCK flock. It is a writer-exclusion lock.
 	// Update, UpdateGCGen and LockManifest take it.
-	lock *fslock.Lock
+	lock *filelocks.Lock
 	dir  string
 }
 
@@ -590,9 +590,9 @@ func updateWithChecker(_ context.Context, behavior dherrors.FatalBehavior, dir s
 	return newContents, nil
 }
 
-func tryFileLock(lock *fslock.Lock) (err error) {
+func tryFileLock(lock *filelocks.Lock) (err error) {
 	err = lock.LockWithTimeout(lockFileTimeout)
-	if errors.Is(err, fslock.ErrTimeout) {
+	if errors.Is(err, filelocks.ErrTimeout) {
 		err = fmt.Errorf("timed out reading database manifest: %w", err)
 	}
 	return

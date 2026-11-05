@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -249,7 +250,7 @@ func (mr *MultiRepoTestSetup) GetDB(dbName string) *doltdb.DoltDB {
 }
 
 func (mr *MultiRepoTestSetup) CommitWithWorkingSet(dbName string) *doltdb.Commit {
-	ctx := sql.NewEmptyContext()
+	ctx := sql.NewContextWithVariables(context.Background(), sqle.NewEngineVariables())
 	dEnv := mr.envs[dbName]
 	ws, err := dEnv.WorkingSet(ctx)
 	if err != nil {
@@ -282,23 +283,28 @@ func (mr *MultiRepoTestSetup) CommitWithWorkingSet(dbName string) *doltdb.Commit
 		panic("pending commit error: " + err.Error())
 	}
 
-	headRef, err := dEnv.RepoStateReader().CWBHeadRef(ctx)
+	headRef, err := ws.Ref().ToHeadRef()
 	if err != nil {
-		panic("couldn't get working set: " + err.Error())
+		panic(err)
 	}
-
-	commit, err := dEnv.DoltDB(ctx).CommitWithWorkingSet(
-		ctx,
-		headRef,
-		ws.Ref(),
-		pendingCommit,
-		ws.WithStagedRoot(pendingCommit.Roots.Staged).WithWorkingRoot(pendingCommit.Roots.Working).ClearMerge(),
-		prevHash,
-		doltdb.TodoWorkingSetMeta(),
-		nil,
-	)
+	ddb := dEnv.DoltDB(ctx)
+	heads, err := ddb.CommitHeadUpdates(ctx, []doltdb.HeadUpdate{doltdb.WorkingSetUpdate{
+		WorkingSet: ws.WithStagedRoot(pendingCommit.Roots.Staged).WithWorkingRoot(pendingCommit.Roots.Working).ClearMerge(),
+		PrevHash:   prevHash,
+		Meta:       doltdb.TodoWorkingSetMeta(),
+	}, doltdb.BranchHeadUpdate{
+		HeadRef:       headRef,
+		Root:          pendingCommit.Roots.Staged,
+		CommitOptions: pendingCommit.CommitOptions,
+		WorkingSetRef: ws.Ref(),
+		PrevWsHash:    prevHash,
+	}}, nil)
 	if err != nil {
 		panic("couldn't commit: " + err.Error())
+	}
+	commit, err := doltdb.HashToCommit(ctx, ddb.ValueReadWriter(), ddb.NodeStore(), heads[1])
+	if err != nil {
+		panic("couldn't read commit: " + err.Error())
 	}
 	return commit
 }

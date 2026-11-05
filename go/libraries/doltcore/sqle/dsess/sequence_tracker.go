@@ -74,11 +74,14 @@ type SequenceTracker[
 	relationSource doltdb.RelationSource[RelationType]
 }
 
-// currentLockMode returns the effective @@innodb_autoinc_lock_mode stored in global server vars
-func currentLockMode() LockMode {
-	_, i, _ := sql.SystemVariables.GetGlobal("innodb_autoinc_lock_mode")
-	if mode, ok := i.(int64); ok {
-		return LockMode(mode)
+// currentLockMode reads @@innodb_autoinc_lock_mode from the owning SQL context.
+// Contexts without an engine use the interleaved default.
+func currentLockMode(ctx context.Context) LockMode {
+	if sqlCtx, ok := ctx.(*sql.Context); ok && sqlCtx.EngineVariables() != nil {
+		_, i, _ := sqlCtx.SystemVariables().GetGlobal("innodb_autoinc_lock_mode")
+		if mode, ok := i.(int64); ok {
+			return LockMode(mode)
+		}
 	}
 	return LockMode_Interleaved
 }
@@ -99,6 +102,7 @@ func NewSequenceTrackerFromRoots[
 ](ctx context.Context, dbName string, relationSource doltdb.RelationSource[RelationType], roots ...doltdb.Rootish) (*SequenceTracker[RelationType, StateType, ValueType], error) {
 	ait := SequenceTracker[RelationType, StateType, ValueType]{
 		dbName:         dbName,
+		lockMode:       currentLockMode(ctx),
 		sequences:      &SyncMap[doltdb.TableName, StateType]{},
 		mm:             mutexmap.NewMutexMap(),
 		init:           make(chan struct{}),
@@ -126,7 +130,9 @@ func NewSequenceTrackerFromRoots[
 
 func getGCSafepointController(ctx context.Context) *gcctx.GCSafepointController {
 	if sqlCtx, ok := ctx.(*sql.Context); ok {
-		return DSessFromSess(sqlCtx.Session).GCSafepointController()
+		if doltSess, ok := sqlCtx.Session.(*DoltSession); ok {
+			return doltSess.GCSafepointController()
+		}
 	}
 	return gcctx.GetGCSafepointController(ctx)
 }
@@ -566,7 +572,6 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) initWithRoots(ctx 
 		}
 	}()
 
-	a.lockMode = currentLockMode()
 	a.initErr = a.mergeRoots(ctx, roots)
 }
 

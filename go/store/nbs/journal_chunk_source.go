@@ -19,9 +19,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"runtime/trace"
 	"sort"
-	"sync"
 
 	"golang.org/x/sync/errgroup"
 
@@ -110,65 +110,92 @@ func (s journalChunkSource) getMany(ctx context.Context, eg *errgroup.Group, req
 	}, keeper, stats)
 }
 
-// getManyCompressed implements chunkReader. Here we (1) synchronously check
-// the journal index for read ranges, (2) record if the source misses any
-// needed remaining chunks, (3) sort the lookups for efficient disk access,
-// and then (4) asynchronously perform reads. We release the journal read
-// lock after returning when all reads are completed, which can be after the
-// function returns.
+// getManyCompressed implements chunkReader. Under the journal read lock we
+// resolve read ranges and copy out any chunks still in the writer's unflushed
+// buffer. Chunks already flushed to the journal file are immutable while the
+// writer is open, so they are read asynchronously without the lock, keeping
+// journal writes from waiting on reads or |found| callbacks. A |readers| pin
+// per read keeps the file open until its callback returns.
 func (s journalChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
 	defer trace.StartRegion(ctx, "journalChunkSource.getManyCompressed").End()
 
 	var remaining bool
-	var jReqs []journalRecord
-	var wg sync.WaitGroup
-	s.journal.lock.RLock()
-	for i, r := range reqs {
-		if r.found {
-			continue
+	var fileReqs []journalRecord
+	var buffered []CompressedChunk
+	f, gcb, err := func() (*os.File, gcBehavior, error) {
+		s.journal.lock.RLock()
+		defer s.journal.lock.RUnlock()
+		if s.journal.journal == nil {
+			return nil, gcBehavior_Continue, errJournalWriterClosed
 		}
-		h := *r.a
-		rang, ok := s.journal.ranges.get(h)
-		if !ok {
-			remaining = true
-			continue
+		var bufReqs []journalRecord
+		for i, r := range reqs {
+			if r.found {
+				continue
+			}
+			h := *r.a
+			rang, ok := s.journal.ranges.get(h)
+			if !ok {
+				remaining = true
+				continue
+			}
+			if keeper != nil && keeper(h) {
+				return nil, gcBehavior_Block, nil
+			}
+			rec := journalRecord{r: rang, idx: i}
+			if int64(rang.Offset)+int64(rang.Length) <= s.journal.off {
+				fileReqs = append(fileReqs, rec)
+			} else {
+				bufReqs = append(bufReqs, rec)
+			}
+			reqs[i].found = true
 		}
-		if keeper != nil && keeper(h) {
-			s.journal.lock.RUnlock()
-			return true, gcBehavior_Block, nil
+		for _, rec := range bufReqs {
+			cc, err := s.journal.getCompressedChunkAtRange(rec.r, *reqs[rec.idx].a)
+			if err != nil {
+				return nil, gcBehavior_Continue, err
+			} else if cc.IsEmpty() {
+				return nil, gcBehavior_Continue, errors.New("chunk in journal index was empty.")
+			}
+			buffered = append(buffered, cc)
 		}
-		jReqs = append(jReqs, journalRecord{r: rang, idx: i})
-		reqs[i].found = true
+		s.journal.readers.Add(len(fileReqs))
+		return s.journal.journal.f, gcBehavior_Continue, nil
+	}()
+	if err != nil {
+		return remaining, gcBehavior_Continue, err
+	} else if gcb == gcBehavior_Block {
+		return true, gcBehavior_Block, nil
 	}
 
-	// sort chunks by journal locality
-	sort.Slice(jReqs, func(i, j int) bool {
-		return jReqs[i].r.Offset < jReqs[j].r.Offset
-	})
-
-	wg.Add(len(jReqs))
-	go func() {
-		wg.Wait()
-		s.journal.lock.RUnlock()
-	}()
-	for i := range jReqs {
-		// workers populate the parent error group
-		// record local workers for releasing lock
+	for _, cc := range buffered {
 		eg.Go(func() error {
-			defer wg.Done()
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			rec := jReqs[i]
-			a := reqs[rec.idx].a
-			if cc, err := s.journal.getCompressedChunkAtRange(rec.r, *a); err != nil {
+			found(ctx, cc)
+			return nil
+		})
+	}
+
+	// sort chunks by journal locality
+	sort.Slice(fileReqs, func(i, j int) bool {
+		return fileReqs[i].r.Offset < fileReqs[j].r.Offset
+	})
+	for _, rec := range fileReqs {
+		eg.Go(func() error {
+			defer s.journal.readers.Done()
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			cc, err := readCompressedChunkAt(f, rec.r, *reqs[rec.idx].a)
+			if err != nil {
 				return err
 			} else if cc.IsEmpty() {
 				return errors.New("chunk in journal index was empty.")
-			} else {
-				found(ctx, cc)
-				return nil
 			}
+			found(ctx, cc)
+			return nil
 		})
 	}
 	return remaining, gcBehavior_Continue, nil

@@ -68,15 +68,16 @@ func resolveOverriddenNonexistentTable(ctx *sql.Context, tblName string, db Data
 	return emptyTable.(sql.Table), true, nil
 }
 
-// overrideSchemaForTable loads the schema from |overriddenSchemaRoot| for the table named |tableName| and sets the
-// override on |tbl|. If there are any problems loading the overridden schema, this function returns an error.
-func overrideSchemaForTable(ctx *sql.Context, tableName string, tbl *doltdb.Table, overriddenSchemaRoot doltdb.RootValue) error {
+// overrideSchemaForTable applies the schema from |overriddenSchemaRoot| for |tableName| to |tbl|.
+// It returns false without changing the table if the override table is absent. Other lookup or schema-loading
+// failures return an error.
+func overrideSchemaForTable(ctx *sql.Context, tableName string, tbl *doltdb.Table, overriddenSchemaRoot doltdb.RootValue) (bool, error) {
 	overriddenTable, _, ok, err := doltdb.GetTableInsensitive(ctx, overriddenSchemaRoot, doltdb.TableName{Name: tableName})
 	if err != nil {
-		return fmt.Errorf("unable to find table '%s' at overridden schema root: %s", tableName, err.Error())
+		return false, fmt.Errorf("unable to find table '%s' at overridden schema root: %s", tableName, err.Error())
 	}
 	if !ok {
-		return fmt.Errorf("unable to find table '%s' at overridden schema root", tableName)
+		return false, nil
 	}
 
 	// TODO: Loading the schema is an expensive operation, so it would be more
@@ -84,11 +85,11 @@ func overrideSchemaForTable(ctx *sql.Context, tableName string, tbl *doltdb.Tabl
 	//       schemas are cached by root value, so it's safe to use the cache.
 	overriddenSchema, err := overriddenTable.GetSchema(ctx)
 	if err != nil {
-		return fmt.Errorf("unable to load overridden schema for table '%s': %s", tableName, err.Error())
+		return true, fmt.Errorf("unable to load overridden schema for table '%s': %s", tableName, err.Error())
 	}
 
 	tbl.OverrideSchema(overriddenSchema)
-	return nil
+	return true, nil
 }
 
 // getOverriddenSchemaValue returns a string value of the Dolt schema override session variable. If the

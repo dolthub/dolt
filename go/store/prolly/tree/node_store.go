@@ -23,6 +23,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -45,6 +46,9 @@ type NodeStore interface {
 
 	// Write writes a prolly tree Node to the store.
 	Write(ctx context.Context, nd *Node) (hash.Hash, error)
+
+	// ChunkFileID returns the file identifier of the chunk at |ref|, or an empty string if it is not in the store.
+	ChunkFileID(ctx context.Context, ref hash.Hash) (string, error)
 
 	// Pool returns a buffer pool.
 	Pool() pool.BuffPool
@@ -195,8 +199,21 @@ func (ns *nodeStore) Write(ctx context.Context, nd *Node) (hash.Hash, error) {
 	if err := ns.store.Put(ctx, c, getAddrs); err != nil {
 		return hash.Hash{}, err
 	}
+	nd.nodeHash.Store(c.Hash())
 	ns.cache.insert(key, nd)
 	return c.Hash(), nil
+}
+
+// ChunkFileID implements NodeStore.
+func (ns *nodeStore) ChunkFileID(ctx context.Context, ref hash.Hash) (string, error) {
+	c, err := ns.store.Get(ctx, ref)
+	if err != nil {
+		return "", err
+	}
+	if c.IsEmpty() {
+		return "", nil
+	}
+	return serial.GetFileID(c.Data()), nil
 }
 
 // Pool implements NodeStore.
@@ -235,13 +252,23 @@ func (ns *nodeStore) ReadBytes(ctx context.Context, h hash.Hash) (result []byte,
 		return nil, err
 	}
 
+	var leaves [][]byte
+	size := 0
 	err = WalkNodes(ctx, n, ns, func(ctx context.Context, n *Node) error {
 		if n.IsLeaf() {
-			result = append(result, n.GetValue(0)...)
+			leaves = append(leaves, n.GetValue(0))
+			size += len(n.GetValue(0))
 		}
 		return nil
 	})
-	return result, err
+	if err != nil {
+		return nil, err
+	}
+	result = make([]byte, 0, size)
+	for _, l := range leaves {
+		result = append(result, l...)
+	}
+	return result, nil
 }
 
 // CompareJsonAdaptiveValues implements val.JsonAdaptiveValueComparator. The work is done by
@@ -249,6 +276,11 @@ func (ns *nodeStore) ReadBytes(ctx context.Context, h hash.Hash) (result []byte,
 // MySQL's JSON ordering rules.
 func (ns *nodeStore) CompareJsonAdaptiveValues(ctx context.Context, l, r val.AdaptiveValue) (int, error) {
 	return compareJsonAdaptiveValues(ctx, ns, l, r)
+}
+
+// WriteBytesReusing implements val.PriorBytesWriter.
+func (ns *nodeStore) WriteBytesReusing(ctx context.Context, b []byte, prior hash.Hash) (hash.Hash, error) {
+	return SerializeBytesToAddrReusing(ctx, ns, b, prior)
 }
 
 func (ns *nodeStore) WriteBytes(ctx context.Context, b []byte) (hash.Hash, error) {
