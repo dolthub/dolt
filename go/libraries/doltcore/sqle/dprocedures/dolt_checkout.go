@@ -346,6 +346,9 @@ func checkoutRemoteBranch(
 		return "", fmt.Errorf("error: could not find %s", branchName)
 	} else if len(remoteRefs) == 1 {
 		remoteRef := remoteRefs[0]
+		if err = checkCanCreateBranch(ctx, branchName, false); err != nil {
+			return "", err
+		}
 		err = actions.CreateBranchWithStartPt(ctx, dbData, branchName, remoteRef.String(), false, rsc)
 		if err != nil {
 			return "", err
@@ -446,6 +449,9 @@ func checkoutNewBranch(
 		newBranchName = optionBBranch
 	}
 
+	if err = checkCanCreateBranch(ctx, newBranchName, createBranchForcibly); err != nil {
+		return "", "", err
+	}
 	err = actions.CreateBranchWithStartPt(ctx, dbData, newBranchName, startPt, createBranchForcibly, rsc)
 	if err != nil {
 		return "", "", err

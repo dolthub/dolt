@@ -343,7 +343,7 @@ func getTablesWithConflicts(ctx *sql.Context, db dsess.SqlDatabase, baseBranch, 
 		return nil, err
 	}
 
-	merger, err := merge.NewMerger(ri.leftRoot, ri.rightRoot, ri.baseRoot, ri.rightRoot, ri.ancCm, ri.leftRoot.VRW(), ri.leftRoot.NodeStore())
+	merger, err := merge.NewMerger(ctx, ri.leftRoot, ri.rightRoot, ri.baseRoot, ri.rightRoot, ri.ancCm, ri.leftRoot.VRW(), ri.leftRoot.NodeStore())
 	if err != nil {
 		return nil, err
 	}

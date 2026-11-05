@@ -94,7 +94,8 @@ func (ti *varStringType) Encoding() val.Encoding {
 
 // WithEncoding implements TypeInfo interface.
 func (ti *varStringType) WithEncoding(enc val.Encoding) TypeInfo {
-	if enc != val.StringEnc {
+	// With CommitAddrEnc, values are the string form of a commit hash, stored as the commit's address.
+	if enc != val.StringEnc && enc != val.CommitAddrEnc {
 		panic(fmt.Errorf("encoding %v is not valid for %T", enc, ti))
 	}
 	return &varStringType{sqlStringType: ti.sqlStringType, enc: enc}

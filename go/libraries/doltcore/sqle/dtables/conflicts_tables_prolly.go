@@ -490,7 +490,7 @@ func (itr *prollyConflictRowIter) nextConflictVals(ctx *sql.Context) (confVal Co
 // the currently loaded maps. |baseHash| and |theirHash| are table hashes.
 func (itr *prollyConflictRowIter) loadTableMaps(ctx *sql.Context, meta prolly.ConflictMetadata, theirHash hash.Hash) error {
 	if baseHash := meta.BaseRootIsh; itr.baseHash.Compare(baseHash) != 0 {
-		rv, err := doltdb.LoadConflictBaseRoot(ctx, itr.vrw, itr.ns, meta)
+		rv, err := doltdb.LoadConflictBaseRoot(ctx, itr.vrw, itr.ns, meta, theirHash)
 		if err != nil {
 			return err
 		}
