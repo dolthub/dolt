@@ -129,6 +129,7 @@ func gcToyStore(t *testing.T, st *NomsBlockStore, keep []chunks.Chunk, level chu
 	require.NoError(t, sweeper.SaveHashes(ctx, hs))
 	finalizer, err := sweeper.Finalize(ctx)
 	require.NoError(t, err)
+	defer finalizer.Close()
 	require.NoError(t, sweeper.Close(ctx))
 	return finalizer.SwapChunksInStore(ctx)
 }
