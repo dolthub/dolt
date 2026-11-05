@@ -61,17 +61,17 @@ func newSpoolingTableReaderAt(ctx context.Context, bs blobstore.Blobstore, key s
 		return nil, err
 	}
 	defer rc.Close()
-	return spoolTableReaderAt(spoolDir(bs), rc)
+	return spoolTableReaderAt(ctx, spoolDir(bs), rc)
 }
 
 // spoolTableReaderAt copies table bytes into a file in |dir| owned by the reader. Spools
 // never go to the temp directory, so |dir| is required. The file is made through the temp
 // file provider only so that Clean removes it if the reader is never closed.
-func spoolTableReaderAt(dir string, r io.Reader) (*spoolingTableReaderAt, error) {
+func spoolTableReaderAt(ctx context.Context, dir string, r io.Reader) (*spoolingTableReaderAt, error) {
 	if dir == "" {
 		return nil, errNoSpoolDir
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := holdSpoolDir(ctx, dir); err != nil {
 		return nil, err
 	}
 	f, err := tempfiles.MovableTempFileProvider.NewFile(dir, "nbs-spool-")

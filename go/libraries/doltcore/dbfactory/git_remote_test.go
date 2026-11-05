@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	filelocks "github.com/dolthub/file-locks"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -358,6 +359,37 @@ func TestEnsureGitRemoteURL_IdempotentRemoteAlreadyExists(t *testing.T) {
 	got, err := exec.CommandContext(ctx, "git", "--git-dir", gitDir, "remote", "get-url", remoteName).CombinedOutput()
 	require.NoError(t, err, "git remote get-url failed: %s", string(got))
 	require.Equal(t, remoteURL, strings.TrimSpace(string(got)))
+}
+
+func TestCloseGitRemotesUnderRoot_ReleasesSpoolDir(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found on PATH")
+	}
+
+	ctx := context.Background()
+	remoteRepo, err := gitrepo.InitBare(ctx, filepath.Join(shortTempDir(t), "remote.git"))
+	require.NoError(t, err)
+	_, err = remoteRepo.SetRefToTree(ctx, "refs/heads/main", map[string][]byte{"README": []byte("seed\n")}, "seed")
+	require.NoError(t, err)
+
+	root := shortTempDir(t)
+	cacheBase := filepath.Join(root, DoltDir, GitRemoteCacheDirName)
+	urlStr := "git+file://" + filepath.ToSlash(remoteRepo.GitDir)
+	_, vrw, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, map[string]interface{}{GitCacheRootParam: cacheBase})
+	require.NoError(t, err)
+	commitOneChunk(t, ctx, vrw.(*types.ValueStore).ChunkStore())
+
+	spoolDir := filepath.Join(cacheBase, GitRemoteSpoolDirName)
+	lock, err := filelocks.New(filepath.Join(spoolDir, "LOCK"))
+	require.NoError(t, err)
+	defer lock.Close()
+	require.ErrorIs(t, lock.TryLock(), filelocks.ErrLocked, "a store with spools holds the spool directory")
+
+	require.NoError(t, CloseGitRemotesUnderRoot(root))
+	require.NoError(t, lock.TryLock(), "closing the root's stores releases the spool directory")
+	spools, err := filepath.Glob(filepath.Join(spoolDir, "nbs-spool-*"))
+	require.NoError(t, err)
+	require.Empty(t, spools)
 }
 
 func TestCloseGitRemotesUnderRoot(t *testing.T) {

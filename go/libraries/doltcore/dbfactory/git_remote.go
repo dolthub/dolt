@@ -30,6 +30,7 @@ import (
 	"time"
 
 	filelocks "github.com/dolthub/file-locks"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -122,13 +123,23 @@ func TeardownGitRemotes(ctx context.Context) {
 	gitRemoteCache = map[string]gitRemoteCacheEntry{}
 	gitRemoteCacheMu.Unlock()
 
-	for _, entry := range entries {
+	for cacheRepo, entry := range entries {
 		cs := datas.ChunkStoreFromDatabase(entry.db)
 		_ = cs.Teardown(ctx)
 		if g, ok := cs.(gitSharedChunkStore); ok {
 			_ = g.ForceClose()
 		}
+		spoolDir := gitRemoteSpoolDir(cacheRepo)
+		if err := nbs.ReleaseSpoolDir(spoolDir); err != nil {
+			logrus.WithError(err).Errorf("releasing spool directory %s", spoolDir)
+		}
 	}
+}
+
+// gitRemoteSpoolDir returns the spool directory for the cache repository at |cacheRepo|,
+// which is <git cache root>/<hash>/repo.git.
+func gitRemoteSpoolDir(cacheRepo string) string {
+	return filepath.Join(filepath.Dir(filepath.Dir(cacheRepo)), GitRemoteSpoolDirName)
 }
 
 // CloseGitRemotesUnderRoot closes and forgets every cached git remote store whose cache repository lives
@@ -148,11 +159,11 @@ func CloseGitRemotesUnderRoot(root string) error {
 	}
 	prefix := filepath.Join(abs, DoltDir, GitRemoteCacheDirName) + string(filepath.Separator)
 
-	var closing []gitRemoteCacheEntry
+	closing := make(map[string]gitRemoteCacheEntry)
 	gitRemoteCacheMu.Lock()
 	for cacheRepo, entry := range gitRemoteCache {
 		if strings.HasPrefix(cacheRepo, prefix) {
-			closing = append(closing, entry)
+			closing[cacheRepo] = entry
 			delete(gitRemoteCache, cacheRepo)
 		}
 	}
@@ -161,10 +172,11 @@ func CloseGitRemotesUnderRoot(root string) error {
 	// Unlike [TeardownGitRemotes] this does not tear the store down first: tearing down repacks and prunes
 	// refs in the cache repository, which is about to be deleted along with the rest of |root|.
 	var errs []error
-	for _, entry := range closing {
+	for cacheRepo, entry := range closing {
 		if g, ok := datas.ChunkStoreFromDatabase(entry.db).(gitSharedChunkStore); ok {
 			errs = append(errs, g.ForceClose())
 		}
+		errs = append(errs, nbs.ReleaseSpoolDir(gitRemoteSpoolDir(cacheRepo)))
 	}
 	return errors.Join(errs...)
 }
@@ -255,7 +267,7 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	bsOpts.RemoteName = remoteName
 	bsOpts.InfoBranch = blobstore.DefaultInfoBranch
 	bsOpts.SyncForReadTTL = gitBlobstoreSyncForReadTTLOverride
-	bsOpts.SpoolDir = filepath.Join(filepath.Dir(hashDir), GitRemoteSpoolDirName)
+	bsOpts.SpoolDir = gitRemoteSpoolDir(cacheRepo)
 	nbsCS, err := nbs.NewGitStore(ctx, nbf.VersionString(), cacheRepo, ref, bsOpts, memlimit.MemtableSize(), q)
 	if err != nil {
 		return nil, nil, nil, err
