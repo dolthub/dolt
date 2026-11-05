@@ -20,8 +20,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"testing/iotest"
@@ -30,6 +33,9 @@ import (
 
 	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/blobstore"
+	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/testutils/gitrepo"
+	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
@@ -80,9 +86,10 @@ func spoolBytes(t *testing.T, ctx context.Context, data []byte) (*spoolingTableR
 	bs := blobstore.NewInMemoryBlobstore("")
 	_, err := bs.Put(ctx, "table", int64(len(data)), bytes.NewReader(data))
 	require.NoError(t, err)
-	ra, err := newSpoolingTableReaderAt(ctx, wholeBlobBlobstore{bs, true}, "table")
+	ra := newSpoolingTableReaderAt(wholeBlobBlobstore{bs, true}, "table", int64(len(data)))
+	f, err := ra.spool(ctx)
 	require.NoError(t, err)
-	return ra, ra.f.Name()
+	return ra, f.Name()
 }
 
 func TestShouldSpool(t *testing.T) {
@@ -107,12 +114,13 @@ func TestSpoolingTableReaderAt_SpoolDir(t *testing.T) {
 	_, err := bs.Put(ctx, "table", 5, bytes.NewReader([]byte("bytes")))
 	require.NoError(t, err)
 
-	ra, err := newSpoolingTableReaderAt(ctx, bs, "table")
+	ra := newSpoolingTableReaderAt(bs, "table", 5)
+	f, err := ra.spool(ctx)
 	require.NoError(t, err)
-	require.Equal(t, dir, filepath.Dir(ra.f.Name()))
+	require.Equal(t, dir, filepath.Dir(f.Name()))
 
 	require.NoError(t, ra.Close())
-	_, err = os.Stat(ra.f.Name())
+	_, err = os.Stat(f.Name())
 	require.True(t, os.IsNotExist(err), "closing the reader removes the spool")
 }
 
@@ -133,24 +141,193 @@ func TestSpoolingTableReaderAt_NeverSpoolsToTempDir(t *testing.T) {
 		"empty spool dir":     spoolDirBlobstore{inmem, ""},
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := newSpoolingTableReaderAt(ctx, bs, "table")
+			_, err := newSpoolingTableReaderAt(bs, "table", 5).spool(ctx)
 			require.ErrorIs(t, err, errNoSpoolDir)
 		})
 	}
 
-	ra, err := newSpoolingTableReaderAt(ctx, wholeBlobBlobstore{inmem, true}, "table")
-	require.NoError(t, err)
+	ra := newSpoolingTableReaderAt(wholeBlobBlobstore{inmem, true}, "table", 5)
 	defer ra.Close()
+	_, err = ra.spool(ctx)
+	require.NoError(t, err)
 
 	entries, err := os.ReadDir(tempDir)
 	require.NoError(t, err)
 	require.Empty(t, entries, "the temp dir holds no spools")
 }
 
+func TestSpoolingTableReaderAt_SpoolsOnceForConcurrentReads(t *testing.T) {
+	ctx := context.Background()
+	data := bytes.Repeat([]byte("0123456789abcdef"), 4096)
+	inmem := blobstore.NewInMemoryBlobstore("")
+	_, err := inmem.Put(ctx, "table", int64(len(data)), bytes.NewReader(data))
+	require.NoError(t, err)
+	bs := &persistReadCountingBlobstore{wholeBlobBlobstore: wholeBlobBlobstore{inmem, true}}
+
+	ra := newSpoolingTableReaderAt(bs, "table", int64(len(data)))
+	defer ra.Close()
+	var wg sync.WaitGroup
+	for i := 0; i < 16; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			p := make([]byte, 16)
+			_, err := ra.ReadAtWithStats(ctx, p, int64(i*16), &Stats{})
+			if err != nil {
+				t.Errorf("read: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+	require.Equal(t, 1, bs.gets, "concurrent reads spool the blob once")
+}
+
+func TestSpoolingTableReaderAt_FailedSpoolCanBeRetried(t *testing.T) {
+	ctx := context.Background()
+	before := countSpoolFiles(t)
+	inmem := blobstore.NewInMemoryBlobstore("")
+	_, err := inmem.Put(ctx, "table", 5, bytes.NewReader([]byte("bytes")))
+	require.NoError(t, err)
+
+	// The size is wrong, so the file must not be used, and must be removed.
+	wrong := newSpoolingTableReaderAt(wholeBlobBlobstore{inmem, true}, "table", 6)
+	_, err = wrong.ReadAtWithStats(ctx, make([]byte, 1), 0, &Stats{})
+	require.ErrorContains(t, err, "expected 6 bytes, got 5")
+	require.Equal(t, before, countSpoolFiles(t))
+
+	// A cancelled read fails on its own, and the next read spools.
+	ra := newSpoolingTableReaderAt(wholeBlobBlobstore{inmem, true}, "table", 5)
+	defer ra.Close()
+	ra.spooling <- struct{}{}
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	_, err = ra.ReadAtWithStats(cancelled, make([]byte, 1), 0, &Stats{})
+	require.ErrorIs(t, err, context.Canceled)
+	<-ra.spooling
+	p := make([]byte, 5)
+	_, err = ra.ReadAtWithStats(ctx, p, 0, &Stats{})
+	require.NoError(t, err)
+	require.Equal(t, []byte("bytes"), p)
+}
+
+func TestSpoolingTableReaderAt_ReaderStreamsWithoutSpooling(t *testing.T) {
+	ctx := context.Background()
+	before := countSpoolFiles(t)
+	inmem := blobstore.NewInMemoryBlobstore("")
+	_, err := inmem.Put(ctx, "table", 5, bytes.NewReader([]byte("bytes")))
+	require.NoError(t, err)
+
+	ra := newSpoolingTableReaderAt(wholeBlobBlobstore{inmem, true}, "table", 5)
+	rc, err := ra.Reader(ctx)
+	require.NoError(t, err)
+	got, err := io.ReadAll(rc)
+	require.NoError(t, err)
+	require.NoError(t, rc.Close())
+	require.Equal(t, []byte("bytes"), got)
+	require.Equal(t, before, countSpoolFiles(t), "a sequential read does not need a spool")
+	require.NoError(t, ra.Close())
+}
+
+// TestNBS_GitStore_OpenReadsOnlyIndexes opens a store on a git remote holding archives and
+// tables split into parts: nothing is spooled until chunks are read, and then only the tables
+// which hold them are.
+func TestNBS_GitStore_OpenReadsOnlyIndexes(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found on PATH")
+	}
+	ctx := context.Background()
+	remote, err := gitrepo.InitBare(ctx, t.TempDir()+"/remote.git")
+	require.NoError(t, err)
+	open := func(spoolDir string) *NomsBlockStore {
+		cache, err := gitrepo.InitBare(ctx, t.TempDir()+"/cache.git")
+		require.NoError(t, err)
+		out, err := exec.CommandContext(ctx, "git", "--git-dir", cache.GitDir, "remote", "add", "origin", remote.GitDir).CombinedOutput()
+		require.NoError(t, err, string(out))
+		st, err := NewGitStore(ctx, types.Format_DOLT.VersionString(), cache.GitDir, blobstore.DoltDataRef, blobstore.GitBlobstoreOptions{MaxPartSize: 8 * 1024, SpoolDir: spoolDir}, 0, NewUnlimitedMemQuotaProvider())
+		require.NoError(t, err)
+		return st
+	}
+	randomChunk := func(r *rand.Rand) chunks.Chunk {
+		data := make([]byte, 16*1024)
+		_, err := r.Read(data)
+		require.NoError(t, err)
+		return chunks.NewChunk(data)
+	}
+
+	// A writer pushes an archive and a table.
+	writer := open(t.TempDir())
+	defer writer.Close()
+	r := rand.New(rand.NewSource(1))
+	wr, err := NewArchiveStreamWriter(t.TempDir())
+	require.NoError(t, err)
+	inArchive := randomChunk(r)
+	_, err = wr.AddChunk(ChunkToCompressedChunk(inArchive))
+	require.NoError(t, err)
+	_, id, err := wr.Finish()
+	require.NoError(t, err)
+	chunkData, err := wr.ChunkDataLength()
+	require.NoError(t, err)
+	pending, err := writer.WriteTableFile(ctx, id, chunkData, wr.ChunkCount(), wr.GetMD5(), func() (io.ReadCloser, uint64, error) {
+		rc, err := wr.Reader()
+		return rc, wr.FullLength(), err
+	})
+	require.NoError(t, err)
+	require.NoError(t, pending.Close())
+	require.NoError(t, wr.Cancel())
+	require.NoError(t, writer.AddTableFilesToManifest(ctx, map[string]int{strings.TrimSuffix(id, ArchiveFileSuffix): wr.ChunkCount()}, noopGetAddrs))
+	inTable := randomChunk(r)
+	require.NoError(t, writer.Put(ctx, inTable, noopGetAddrs))
+	last, err := writer.Root(ctx)
+	require.NoError(t, err)
+	ok, err := writer.Commit(ctx, inTable.Hash(), last)
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	// A new store opens them without spooling either.
+	spoolDir := t.TempDir()
+	spools := func() int {
+		matches, err := filepath.Glob(filepath.Join(spoolDir, "nbs-spool-*"))
+		require.NoError(t, err)
+		return len(matches)
+	}
+	reader := open(spoolDir)
+	root, err := reader.Root(ctx)
+	require.NoError(t, err)
+	require.Equal(t, inTable.Hash(), root)
+	require.Len(t, reader.tables.upstream, 2)
+	require.Zero(t, spools(), "opening a store reads only indexes")
+
+	has, err := reader.Has(ctx, inArchive.Hash())
+	require.NoError(t, err)
+	require.True(t, has)
+	has, err = reader.Has(ctx, inTable.Hash())
+	require.NoError(t, err)
+	require.True(t, has)
+	require.Zero(t, spools(), "looking in the indexes does not spool")
+
+	got, err := reader.Get(ctx, inTable.Hash())
+	require.NoError(t, err)
+	require.Equal(t, inTable.Data(), got.Data())
+	require.Equal(t, 1, spools(), "reading a chunk spools only the table holding it")
+
+	got, err = reader.Get(ctx, inArchive.Hash())
+	require.NoError(t, err)
+	require.Equal(t, inArchive.Data(), got.Data())
+	require.Equal(t, 2, spools())
+
+	got, err = reader.Get(ctx, inArchive.Hash())
+	require.NoError(t, err)
+	require.Equal(t, inArchive.Data(), got.Data())
+	require.Equal(t, 2, spools(), "later reads use the spool")
+
+	require.NoError(t, reader.Close())
+	require.Zero(t, spools())
+}
+
 func TestNewSpoolingTableReaderAt_GetError(t *testing.T) {
 	before := countSpoolFiles(t)
 	bs := fakeGetBlobstore{blobstore.NewInMemoryBlobstore(""), nil, errors.New("boom")}
-	_, err := newSpoolingTableReaderAt(context.Background(), bs, "table")
+	_, err := newSpoolingTableReaderAt(bs, "table", 5).spool(context.Background())
 	require.Error(t, err)
 	require.Equal(t, before, countSpoolFiles(t), "no temp file when Get fails up front")
 }
@@ -160,7 +337,7 @@ func TestNewSpoolingTableReaderAt_CopyMidStreamError(t *testing.T) {
 	// A reader that yields some bytes then errors makes io.Copy write a partial temp file and fail.
 	partialThenErr := io.MultiReader(bytes.NewReader(make([]byte, 50)), iotest.ErrReader(errors.New("boom")))
 	bs := fakeGetBlobstore{blobstore.NewInMemoryBlobstore(""), io.NopCloser(partialThenErr), nil}
-	_, err := newSpoolingTableReaderAt(context.Background(), bs, "table")
+	_, err := newSpoolingTableReaderAt(bs, "table", 50).spool(context.Background())
 	require.Error(t, err)
 	require.Equal(t, before, countSpoolFiles(t), "partial temp file must be removed when io.Copy fails")
 }
@@ -177,14 +354,20 @@ func TestNewSpooledBSTableChunkSource_RoundTrip(t *testing.T) {
 	bs := wholeBlobBlobstore{inmem, true}
 
 	before := countSpoolFiles(t)
-	cs, err := newSpooledBSTableChunkSource(ctx, bs, tableHash, uint32(len(data)), NewUnlimitedMemQuotaProvider(), openOpts{}, &Stats{})
+	cs, err := newBSTableChunkSource(ctx, bs, tableHash, uint32(len(data)), NewUnlimitedMemQuotaProvider(), openOpts{}, &Stats{})
 	require.NoError(t, err)
-	require.Equal(t, before+1, countSpoolFiles(t), "opening the source spools exactly one temp file")
+	require.Equal(t, before, countSpoolFiles(t), "opening the source does not spool it")
+
+	has, _, err := cs.has(computeAddr(data[0]), nil)
+	require.NoError(t, err)
+	require.True(t, has)
+	require.Equal(t, before, countSpoolFiles(t), "looking in the index does not spool it")
 
 	for _, c := range data {
 		got, _, err := cs.get(ctx, computeAddr(c), nil, &Stats{})
 		require.NoError(t, err)
 		require.Equal(t, c, got)
+		require.Equal(t, before+1, countSpoolFiles(t), "reading chunks spools it exactly once")
 	}
 
 	require.NoError(t, cs.close())
@@ -203,9 +386,9 @@ func TestNewSpooledBSTableChunkSource_ChunkCountMismatch(t *testing.T) {
 	bs := wholeBlobBlobstore{inmem, true}
 
 	before := countSpoolFiles(t)
-	_, err = newSpooledBSTableChunkSource(ctx, bs, tableHash, uint32(len(data))+1, NewUnlimitedMemQuotaProvider(), openOpts{}, &Stats{})
+	_, err = newBSTableChunkSource(ctx, bs, tableHash, uint32(len(data))-1, NewUnlimitedMemQuotaProvider(), openOpts{}, &Stats{})
 	require.Error(t, err)
-	require.Equal(t, before, countSpoolFiles(t), "the temp file is removed when open fails")
+	require.Equal(t, before, countSpoolFiles(t), "nothing is spooled when open fails")
 }
 
 func TestSpoolingTableReaderAt_ConcurrentClonesAndClose(t *testing.T) {
@@ -357,7 +540,7 @@ func TestBlobstorePersistersPersistSpooling(t *testing.T) {
 					if spool {
 						ra, ok := cs.(*chunkSourceAdapter).r.(*spoolingTableReaderAt)
 						require.True(t, ok)
-						path = ra.f.Name()
+						path = ra.f.Load().Name()
 					}
 					clone, err := cs.clone()
 					require.NoError(t, err)
@@ -423,23 +606,33 @@ func TestSingleBlobBSPersisterConjoinReusesSpools(t *testing.T) {
 					require.NoError(t, err)
 				}
 				sources = append(sources, cs)
-				paths = append(paths, cs.(*chunkSourceAdapter).r.(*spoolingTableReaderAt).f.Name())
+				if f := cs.(*chunkSourceAdapter).r.(*spoolingTableReaderAt).f.Load(); f != nil {
+					paths = append(paths, f.Name())
+				}
 				t.Cleanup(func() { require.NoError(t, cs.close()) })
 			}
 			bs.gets = 0
 			cs, cleanup, err := p.ConjoinAll(ctx, dherrors.FatalBehaviorError, sources, &Stats{})
 			require.NoError(t, err)
 			t.Cleanup(func() { require.NoError(t, cs.close()); cleanup() })
-			require.Equal(t, 1, bs.gets, "only the conjoined output is read back for spooling")
+			// Conjoin reuses spools. Sources without one are streamed, not spooled. Opening the
+			// output reads only its index.
+			want := 1
+			if reopen {
+				want += len(data)
+				require.Empty(t, paths, "reopened sources have not been spooled")
+			}
+			require.Equal(t, want, bs.gets)
 			for _, c := range data {
 				got, _, err := cs.get(ctx, computeAddr(c), nil, &Stats{})
 				require.NoError(t, err)
 				require.Equal(t, c, got)
 			}
-			require.Equal(t, 1, bs.gets, "chunk reads use the output spool")
+			require.Equal(t, want+1, bs.gets, "the first chunk read spools the output, and later ones use its spool")
 			for _, src := range sources {
 				ra := src.(*chunkSourceAdapter).r.(*spoolingTableReaderAt)
-				require.Equal(t, int32(1), *ra.cnt, "conjoin closes its readers without closing the source")
+				require.Equal(t, int32(1), ra.cnt.Load(), "conjoin closes its readers without closing the source")
+				require.Equal(t, !reopen, ra.f.Load() != nil, "conjoin does not spool its sources")
 			}
 			// Input spools must remain usable until their owning sources close.
 			t.Cleanup(func() {

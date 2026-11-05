@@ -179,18 +179,18 @@ func TestReleaseSpoolDir(t *testing.T) {
 	require.Equal(t, filelocks.ErrLocked, other.TryLock())
 }
 
-func TestSpoolTableReaderAt_HoldsSpoolDir(t *testing.T) {
+func TestCreateSpoolFile_HoldsSpoolDir(t *testing.T) {
 	ctx := context.Background()
 	dir := newTestSpoolDir(t)
 	orphan := writeOrphan(t, dir, "nbs-spool-orphan")
 
-	ra, err := spoolTableReaderAt(ctx, dir, bytes.NewReader([]byte("table")))
+	f, _, err := createSpoolFile(ctx, dir, bytes.NewReader([]byte("table")))
 	require.NoError(t, err)
 	_, err = os.Stat(orphan)
 	require.True(t, os.IsNotExist(err))
 	require.Equal(t, filelocks.ErrLocked, otherProcess(t, dir).TryLock())
 
-	require.NoError(t, ra.Close())
-	_, err = os.Stat(ra.f.Name())
+	require.NoError(t, removeSpoolFile(f))
+	_, err = os.Stat(f.Name())
 	require.True(t, os.IsNotExist(err))
 }
