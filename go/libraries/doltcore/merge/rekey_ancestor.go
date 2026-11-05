@@ -158,6 +158,70 @@ func rekeyAncestorTables(ctx *sql.Context, ourRoot, theirRoot, ancRoot doltdb.Ro
 	return ancRoot, rekeyedAny, nil
 }
 
+// rekeyToOtherSide returns |root| with each table that kept the primary key of |ancRoot| rewritten to the primary key
+// that |otherRoot| changed it to. Merging two merge bases into a virtual merge base, a primary key change one of them
+// made is a change both tips share, so the base that predates it is rekeyed rather than failing the merge. Tables
+// whose rows collide or have a NULL under the new primary key are left alone.
+func rekeyToOtherSide(ctx *sql.Context, root, otherRoot, ancRoot doltdb.RootValue) (doltdb.RootValue, error) {
+	tblNames, err := doltdb.UnionTableNames(ctx, root)
+	if err != nil {
+		return nil, err
+	}
+	for _, name := range tblNames {
+		tbl, sch, ok, err := tableAndSchema(ctx, root, name)
+		if err != nil || !ok {
+			if err != nil {
+				return nil, err
+			}
+			continue
+		}
+		_, otherSch, ok, err := tableAndSchema(ctx, otherRoot, name)
+		if err != nil || !ok {
+			if err != nil {
+				return nil, err
+			}
+			continue
+		}
+		_, ancSch, ok, err := tableAndSchema(ctx, ancRoot, name)
+		if err != nil || !ok {
+			if err != nil {
+				return nil, err
+			}
+			continue
+		}
+		if schema.IsKeyless(sch) || schema.IsKeyless(otherSch) ||
+			schema.ComparePrimaryKeys(sch, ancSch) != schema.PrimaryKeysSameTags ||
+			schema.ComparePrimaryKeys(sch, otherSch) == schema.PrimaryKeysSameTags {
+			continue
+		}
+		rekeyed, ok, err := RekeyTable(ctx, name, tbl, sch, otherSch)
+		if ErrRekeyedAncestorCollision.Is(err) || ErrRekeyedAncestorNullKey.Is(err) {
+			continue
+		} else if err != nil {
+			return nil, err
+		}
+		if !ok {
+			continue
+		}
+		if root, err = root.PutTable(ctx, name, rekeyed); err != nil {
+			return nil, err
+		}
+	}
+	return root, nil
+}
+
+func tableAndSchema(ctx *sql.Context, root doltdb.RootValue, name doltdb.TableName) (*doltdb.Table, schema.Schema, bool, error) {
+	tbl, ok, err := root.GetTable(ctx, name)
+	if err != nil || !ok {
+		return nil, nil, false, err
+	}
+	sch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	return tbl, sch, true, nil
+}
+
 const rekeyedMergeBaseDescription = "rekeyed merge base"
 
 // rekeyedMergeBase is the ancestor Rootish of a merge whose ancestor had tables rekeyed to the primary key both sides

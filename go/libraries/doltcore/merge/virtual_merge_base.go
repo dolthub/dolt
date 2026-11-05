@@ -233,6 +233,12 @@ func buildVirtualMergeBase(ctx *sql.Context, x, y *doltdb.Commit) (*doltdb.Commi
 	if err != nil {
 		return nil, nil, err
 	}
+	if xRoot, err = rekeyToOtherSide(ctx, xRoot, yRoot, baseRoot); err != nil {
+		return nil, nil, err
+	}
+	if yRoot, err = rekeyToOtherSide(ctx, yRoot, xRoot, baseRoot); err != nil {
+		return nil, nil, err
+	}
 	date, err := virtualMergeBaseDate(ctx, x, y)
 	if err != nil {
 		return nil, nil, err
