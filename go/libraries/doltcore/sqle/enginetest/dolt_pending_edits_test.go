@@ -20,6 +20,9 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 // pendingEditsDerivingStatements read the whole working set or derive a new one from it. Each must include edits
@@ -59,7 +62,7 @@ func TestPendingEditsSurviveDerivedRoots(t *testing.T) {
 				Name:        q,
 				SetUpScript: []string{"create table t (x int primary key, y int)", "create table o (id int primary key)", "insert into o values (1)", "call dolt_commit('-Am', 'init')"},
 				Assertions: []queries.ScriptTestAssertion{
-					{Query: "/* client a */ start transaction", Expected: []sql.Row{}},
+					{Query: "/* client a */ set autocommit = 0", SkipResultsCheck: true},
 					{Query: "/* client a */ insert into t (x) values (1), (2)", SkipResultsCheck: true},
 					{Query: "/* client a */ " + q, SkipResultsCheck: true},
 					{Query: "/* client a */ select count(*) from " + tblName, Expected: []sql.Row{{2}}},
@@ -72,4 +75,42 @@ func TestPendingEditsSurviveDerivedRoots(t *testing.T) {
 			enginetest.TestTransactionScript(t, h, script)
 		})
 	}
+}
+
+// TestDeferMaterializationRequiresAutocommitOff asserts that the edits of completed statements are left pending only
+// when @@autocommit is off, and are materialized when the transaction commits.
+func TestDeferMaterializationRequiresAutocommitOff(t *testing.T) {
+	h := newDoltHarness(t)
+	defer h.Close()
+	e := mustNewEngine(t, h)
+	defer e.Close()
+	ctx := enginetest.NewContext(h)
+
+	hasPendingEdits := func() bool {
+		state, ok, err := dsess.DSessFromSess(ctx.Session).LookupDbState(ctx, "mydb")
+		require.NoError(t, err)
+		require.True(t, ok)
+		return state.WriteSession().HasPendingEdits()
+	}
+
+	enginetest.RunQueryWithContext(t, e, h, ctx, "create table t (x int primary key)")
+
+	// With autocommit on, an explicit transaction does not defer materialization
+	enginetest.RunQueryWithContext(t, e, h, ctx, "start transaction")
+	enginetest.RunQueryWithContext(t, e, h, ctx, "insert into t values (1)")
+	require.False(t, hasPendingEdits())
+	enginetest.RunQueryWithContext(t, e, h, ctx, "commit")
+
+	// With autocommit off, edits are pending until the transaction commits
+	enginetest.RunQueryWithContext(t, e, h, ctx, "set autocommit = 0")
+	enginetest.RunQueryWithContext(t, e, h, ctx, "insert into t values (2)")
+	require.True(t, hasPendingEdits())
+	enginetest.RunQueryWithContext(t, e, h, ctx, "commit")
+	require.False(t, hasPendingEdits())
+
+	// Turning autocommit back on stops deferring
+	enginetest.RunQueryWithContext(t, e, h, ctx, "set autocommit = 1")
+	enginetest.RunQueryWithContext(t, e, h, ctx, "insert into t values (3)")
+	enginetest.RunQueryWithContext(t, e, h, ctx, "insert into t values (4)")
+	require.False(t, hasPendingEdits())
 }

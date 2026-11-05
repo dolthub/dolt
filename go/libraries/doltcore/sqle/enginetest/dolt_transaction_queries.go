@@ -997,8 +997,8 @@ var DoltTransactionTests = []queries.TransactionTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
+				Query:            "/* client a */ set autocommit = 0",
+				SkipResultsCheck: true,
 			},
 			{
 				Query:    "/* client a */ insert into t values (2, 2)",
@@ -1057,8 +1057,8 @@ var DoltTransactionTests = []queries.TransactionTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
+				Query:            "/* client a */ set autocommit = 0",
+				SkipResultsCheck: true,
 			},
 			{
 				Query:    "/* client a */ insert into t values (1, 1)",
@@ -1096,8 +1096,8 @@ var DoltTransactionTests = []queries.TransactionTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
+				Query:            "/* client a */ set autocommit = 0",
+				SkipResultsCheck: true,
 			},
 			{
 				Query:    "/* client a */ insert into t values (-2)",
@@ -1133,8 +1133,8 @@ var DoltTransactionTests = []queries.TransactionTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
+				Query:            "/* client a */ set autocommit = 0",
+				SkipResultsCheck: true,
 			},
 			{
 				Query:    "/* client a */ insert into t (y) values (1)",
@@ -1200,8 +1200,8 @@ var DoltTransactionTests = []queries.TransactionTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
+				Query:            "/* client a */ set autocommit = 0",
+				SkipResultsCheck: true,
 			},
 			{
 				Query:    "/* client a */ set @working = @@mydb_working",
@@ -1426,8 +1426,8 @@ var DoltTransactionTests = []queries.TransactionTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
+				Query:            "/* client a */ set autocommit = 0",
+				SkipResultsCheck: true,
 			},
 			{
 				Query:    "/* client a */ insert into t values (2, 2)",
