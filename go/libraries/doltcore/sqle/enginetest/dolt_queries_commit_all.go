@@ -666,6 +666,47 @@ var DoltCommitAllTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "dolt_commit_all skip-empty with skipped branch sorting before committed branch",
+		SetUpScript: []string{
+			"create table t (pk int primary key, v int)",
+			"insert into t values (1, 0)",
+			"call dolt_commit('-Am', 'setup')",
+			"call dolt_branch('b1')",
+			"set autocommit = 0",
+			"insert into `mydb/b1`.t values (2, 20)",
+			"insert into t values (3, 30)",
+			"call dolt_add('.')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "call dolt_commit_all('--skip-empty', '-m', 'one branch')",
+				Expected: []sql.Row{
+					{"main", doltCommit},
+				},
+			},
+			{
+				Query: "select * from t as of 'HEAD' order by pk",
+				Expected: []sql.Row{
+					{1, 0},
+					{3, 30},
+				},
+			},
+			{
+				Query: "select * from `mydb/b1`.t as of 'HEAD'",
+				Expected: []sql.Row{
+					{1, 0},
+				},
+			},
+			{
+				Query: "select * from `mydb/b1`.t order by pk",
+				Expected: []sql.Row{
+					{1, 0},
+					{2, 20},
+				},
+			},
+		},
+	},
+	{
 		Name: "dolt_commit_all amends each branch independently",
 		SetUpScript: []string{
 			"create table t (pk int primary key, v int)",

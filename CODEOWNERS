@@ -4,7 +4,7 @@
 
 # These owners will be the default owners for everything in the repo.
 
-# * @defunkt
+# \* @defunkt
 
 # Order is important. The last matching pattern has the most precedence.
 
@@ -12,12 +12,12 @@
 
 # will be requested to review.
 
-# *.js @octocat @github/js
+# \*.js @octocat @github/js
 
 # You can also use email addresses if you prefer.
 
-# docs/* docs@example.com
+# docs/\* docs@example.com
 
 # Begin dolt repository owners
 
-integration-tests/mysql-client-tests/node/* @tbantle22
+integration-tests/mysql-client-tests/node/\* @eric-richardson1
