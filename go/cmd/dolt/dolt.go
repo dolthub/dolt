@@ -227,6 +227,18 @@ func main() {
 	os.Exit(runMain())
 }
 
+// cleanGitRemoteSpools removes the git remote spool files which dead processes left in
+// |mrEnv|'s databases. A failure does not concern the command being run, which may not use
+// a git remote at all, and the next process to start tries again.
+func cleanGitRemoteSpools(mrEnv *env.MultiRepoEnv) {
+	_ = mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (bool, error) {
+		if root, ok := dEnv.GitCacheRoot(); ok {
+			_ = tempfiles.CleanDir(dbfactory.GitRemoteSpoolDirForRepo(root))
+		}
+		return false, nil
+	})
+}
+
 // runMain executes the Dolt CLI process and returns the exit code.
 func runMain() int {
 	args := os.Args[1:]
@@ -510,6 +522,7 @@ func runMain() int {
 			cli.PrintErrln("failed to load database names:", err.Error())
 			return 1
 		}
+		cleanGitRemoteSpools(mrEnv)
 	}
 
 	var cliCtx cli.CliContext = nil
