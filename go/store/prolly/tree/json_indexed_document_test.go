@@ -462,6 +462,34 @@ func TestJsonCompare(t *testing.T) {
 	})
 }
 
+// TestIndexedJsonDocument_CompareNumericPrefixes checks later differences after numerically equal stored values.
+func TestIndexedJsonDocument_CompareNumericPrefixes(t *testing.T) {
+	ctx := sql.NewEmptyContext()
+	ns := NewTestNodeStore()
+	tests := []struct {
+		left, right string
+		comparison  int
+	}{
+		{`{"a":42,"b":0}`, `{"a":42.0,"b":1}`, -1},
+		{`[42,0]`, `[42.0,1]`, -1},
+		{`{"a":[42],"b":0}`, `{"a":[42.0],"b":1}`, -1},
+		{`{"a":42,"b":0}`, `{"a":42.0,"b":-0.0}`, 0},
+	}
+	for _, test := range tests {
+		t.Run(test.left+" vs "+test.right, func(t *testing.T) {
+			// Preserve stored numeric representations with both old and new GMS decoders.
+			left := newIndexedJsonDocumentFromValue(t, ctx, ns, types.NewLazyJSONDocument([]byte(test.left)))
+			right := newIndexedJsonDocumentFromValue(t, ctx, ns, types.NewLazyJSONDocument([]byte(test.right)))
+			comparison, err := left.Compare(ctx, right)
+			require.NoError(t, err)
+			require.Equal(t, test.comparison, comparison)
+			comparison, err = right.Compare(ctx, left)
+			require.NoError(t, err)
+			require.Equal(t, -test.comparison, comparison)
+		})
+	}
+}
+
 // TestIndexedJsonDocument_CompareMatchesInMemory verifies that comparing two IndexedJsonDocuments produces the same
 // result as comparing the equivalent in-memory JSONDocuments via types.CompareJSON, across a variety of document
 // sizes — including documents large enough to be split across multiple prolly tree chunks. This is the crucial
