@@ -41,11 +41,20 @@ type wholeBlobBlobstore struct {
 
 func (w wholeBlobBlobstore) RangeReadsWholeBlob() bool { return w.spool }
 
-func (w wholeBlobBlobstore) SpoolDir() string { return testSpoolDir() }
+func (w wholeBlobBlobstore) SpoolDir() *tempfiles.LockedDir { return testSpoolDir() }
+
+// testSpoolParent holds the spool directory of the fake blobstores in this file.
+var testSpoolParent = sync.OnceValue(func() string {
+	parent, err := os.MkdirTemp("", "nbs-spool-test-")
+	if err != nil {
+		panic(err)
+	}
+	return parent
+})
 
 // testSpoolDir is the spool directory of the fake blobstores in this file.
-var testSpoolDir = sync.OnceValue(func() string {
-	dir, err := os.MkdirTemp("", "nbs-spool-test-")
+var testSpoolDir = sync.OnceValue(func() *tempfiles.LockedDir {
+	dir, err := tempfiles.NewLockedDir(testSpoolParent())
 	if err != nil {
 		panic(err)
 	}
@@ -63,12 +72,12 @@ func (f fakeGetBlobstore) Get(context.Context, string, blobstore.BlobRange) (io.
 	return f.rc, 0, "", f.err
 }
 
-func (f fakeGetBlobstore) SpoolDir() string { return testSpoolDir() }
+func (f fakeGetBlobstore) SpoolDir() *tempfiles.LockedDir { return testSpoolDir() }
 
 // countSpoolFiles counts leftover spool files in the fake blobstores' spool directory.
 func countSpoolFiles(t *testing.T) int {
 	t.Helper()
-	matches, err := filepath.Glob(filepath.Join(testSpoolDir(), "nbs-spool-*"))
+	matches, err := filepath.Glob(filepath.Join(testSpoolParent(), "*", "nbs-spool-*"))
 	require.NoError(t, err)
 	return len(matches)
 }
@@ -95,21 +104,23 @@ func TestShouldSpool(t *testing.T) {
 // spoolDirBlobstore is a blobstore with its own directory for spool files.
 type spoolDirBlobstore struct {
 	*blobstore.InMemoryBlobstore
-	dir string
+	dir *tempfiles.LockedDir
 }
 
-func (s spoolDirBlobstore) SpoolDir() string { return s.dir }
+func (s spoolDirBlobstore) SpoolDir() *tempfiles.LockedDir { return s.dir }
 
 func TestSpoolingTableReaderAt_SpoolDir(t *testing.T) {
 	ctx := context.Background()
-	dir := filepath.Join(t.TempDir(), "not", "created", "yet")
+	parent := t.TempDir()
+	dir, err := tempfiles.NewLockedDir(parent)
+	require.NoError(t, err)
 	bs := spoolDirBlobstore{blobstore.NewInMemoryBlobstore(""), dir}
-	_, err := bs.Put(ctx, "table", 5, bytes.NewReader([]byte("bytes")))
+	_, err = bs.Put(ctx, "table", 5, bytes.NewReader([]byte("bytes")))
 	require.NoError(t, err)
 
 	ra, err := newSpoolingTableReaderAt(ctx, bs, "table")
 	require.NoError(t, err)
-	require.Equal(t, dir, filepath.Dir(ra.f.Name()))
+	require.Equal(t, parent, filepath.Dir(filepath.Dir(ra.f.Name())))
 
 	require.NoError(t, ra.Close())
 	_, err = os.Stat(ra.f.Name())
@@ -130,7 +141,7 @@ func TestSpoolingTableReaderAt_NeverSpoolsToTempDir(t *testing.T) {
 
 	for name, bs := range map[string]blobstore.Blobstore{
 		"no spool dir method": inmem,
-		"empty spool dir":     spoolDirBlobstore{inmem, ""},
+		"nil spool dir":       spoolDirBlobstore{inmem, nil},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := newSpoolingTableReaderAt(ctx, bs, "table")

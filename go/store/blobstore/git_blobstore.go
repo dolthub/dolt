@@ -35,6 +35,7 @@ import (
 	"github.com/google/uuid"
 
 	git "github.com/dolthub/dolt/go/store/blobstore/internal/git"
+	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 const gitblobstorePartNameWidth = 4 // "0001"
@@ -354,8 +355,8 @@ type GitBlobstore struct {
 	// contains a single DOLT_REMOTE.md file with remote metadata. Empty means disabled.
 	infoBranch string
 
-	// spoolDir is the directory for local copies of this store's blobs.
-	spoolDir string
+	// spoolDir holds local copies of this store's blobs.
+	spoolDir *tempfiles.LockedDir
 }
 
 var _ Blobstore = (*GitBlobstore)(nil)
@@ -419,9 +420,9 @@ type GitBlobstoreOptions struct {
 	// SyncForReadTTL overrides the read-side fetch dedup window. Zero means
 	// use defaultSyncForReadTTL.
 	SyncForReadTTL time.Duration
-	// SpoolDir is the directory for local copies of this store's blobs. It is created
-	// when needed. Opening a table file through a store with no SpoolDir fails.
-	SpoolDir string
+	// SpoolDir holds local copies of this store's blobs. Opening a table file through a
+	// store with no SpoolDir fails.
+	SpoolDir *tempfiles.LockedDir
 }
 
 // NewGitBlobstoreWithOptions creates a GitBlobstore rooted at |gitDir| and |ref|.
@@ -1306,12 +1307,12 @@ func (gbs *GitBlobstore) RangeReadsWholeBlob() bool {
 
 var _ interface{ RangeReadsWholeBlob() bool } = (*GitBlobstore)(nil)
 
-// SpoolDir returns the directory for local copies of this store's blobs.
-func (gbs *GitBlobstore) SpoolDir() string {
+// SpoolDir returns the directory holding local copies of this store's blobs.
+func (gbs *GitBlobstore) SpoolDir() *tempfiles.LockedDir {
 	return gbs.spoolDir
 }
 
-var _ interface{ SpoolDir() string } = (*GitBlobstore)(nil)
+var _ interface{ SpoolDir() *tempfiles.LockedDir } = (*GitBlobstore)(nil)
 
 func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {
 	key, err := normalizeGitTreePath(key)
