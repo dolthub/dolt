@@ -619,6 +619,10 @@ func (t *DoltTable) PrimaryKeySchema(ctx *sql.Context) sql.PrimaryKeySchema {
 
 // PartitionRows returns the table rows for the partition given
 func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
+	return t.PartitionValueRowWriter(ctx, partition, sql.ColSet{})
+}
+
+func (t *DoltTable) PartitionValueRowWriter(ctx *sql.Context, partition sql.Partition, columnIds sql.ColSet) (sql.ValueRowWriter, error) {
 	table, err := t.DoltTable(ctx)
 	if err != nil {
 		return nil, err
@@ -639,7 +643,7 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 		}
 	}
 
-	originalRowIter, err := partitionRows(ctx, table, projCols, partition)
+	originalRowIter, err := partitionRows(ctx, table, projCols, partition, columnIds)
 	if err != nil {
 		return originalRowIter, err
 	}
@@ -651,12 +655,12 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 	}
 }
 
-func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []uint64, partition sql.Partition) (sql.RowIter, error) {
+func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []uint64, partition sql.Partition, columnIds sql.ColSet) (sql.ValueRowWriter, error) {
 	switch typedPartition := partition.(type) {
 	case doltTablePartition:
-		return newRowIterator(ctx, t, projCols, typedPartition)
+		return newRowIterator(ctx, t, projCols, typedPartition, columnIds)
 	case index.SinglePartition:
-		return newRowIterator(ctx, t, projCols, doltTablePartition{rowData: typedPartition.RowData, end: NoUpperBound})
+		return newRowIterator(ctx, t, projCols, doltTablePartition{rowData: typedPartition.RowData, end: NoUpperBound}, columnIds)
 	}
 
 	return nil, errors.New("unsupported partition type")
@@ -2363,7 +2367,7 @@ func (t *AlterableDoltTable) getFirstAutoIncrementValue(
 
 	// Note that we aren't calling the public PartitionRows, because it always gets the table data from the session
 	// root, which hasn't been updated yet
-	rowIter, err := partitionRows(ctx, table, t.projectedCols, index.SinglePartition{RowData: rowData})
+	rowIter, err := partitionRows(ctx, table, t.projectedCols, index.SinglePartition{RowData: rowData}, sql.ColSet{})
 	if err != nil {
 		return 0, err
 	}

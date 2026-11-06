@@ -26,13 +26,13 @@ import (
 )
 
 // Returns a new row iterator for the table given
-func newRowIterator(ctx context.Context, tbl *doltdb.Table, projCols []uint64, partition doltTablePartition) (sql.RowIter, error) {
+func newRowIterator(ctx context.Context, tbl *doltdb.Table, projCols []uint64, partition doltTablePartition, columnIds sql.ColSet) (sql.ValueRowWriter, error) {
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return ProllyRowIterFromPartition(ctx, sch, projCols, partition)
+	return ProllyRowIterFromPartition(ctx, sch, projCols, partition, columnIds)
 }
 
 func ProllyRowIterFromPartition(
@@ -40,7 +40,8 @@ func ProllyRowIterFromPartition(
 	sch schema.Schema,
 	projections []uint64,
 	partition doltTablePartition,
-) (sql.RowIter, error) {
+	columnIds sql.ColSet,
+) (sql.ValueRowWriter, error) {
 	rows, err := durable.ProllyMapFromIndex(partition.rowData)
 	if err != nil {
 		return nil, err
@@ -59,7 +60,7 @@ func ProllyRowIterFromPartition(
 		return nil, err
 	}
 
-	return index.NewProllyRowIterForMap(sch, rows, iter, projections), nil
+	return index.NewProllyRowIterForMap(sch, rows, iter, projections, columnIds), nil
 }
 
 // SqlTableToRowIter returns a |sql.RowIter| for a full table scan for the given |table|. If
@@ -85,5 +86,5 @@ func SqlTableToRowIter(ctx *sql.Context, table *DoltTable, columns []uint64) (sq
 		rowData: data,
 	}
 
-	return newRowIterator(ctx, t, columns, p)
+	return newRowIterator(ctx, t, columns, p, sql.ColSet{})
 }
