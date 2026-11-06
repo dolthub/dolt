@@ -15,7 +15,6 @@
 package commands
 
 import (
-	"fmt"
 	"testing"
 
 	sqle "github.com/dolthub/go-mysql-server"
@@ -24,7 +23,9 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 func TestFilterQueryDoesNotPublishWorkingSet(t *testing.T) {
@@ -32,16 +33,21 @@ func TestFilterQueryDoesNotPublishWorkingSet(t *testing.T) {
 		"create table t (pk int primary key); insert into t values (1); alter table t add column x int; update t set x=2; create table u (pk int primary key); insert into u values (3)",
 		"create table t (pk int primary key); insert into t values (1); create table u (pk int primary key); insert into u values (3); select * from missing",
 		"create table t (pk int primary key);\nDELIMITER //\nCREATE PROCEDURE p() BEGIN INSERT INTO t VALUES (1); CREATE TABLE u (pk int primary key); INSERT INTO u VALUES (3); END//\nDELIMITER ;\nCALL p(); DROP PROCEDURE p;",
+		"create table t (pk int primary key); start transaction; insert into t values (1); create table u (pk int primary key); insert into u values (3); commit",
+		"create table t (pk int primary key); create table u (pk int primary key); start transaction; insert into t values (2); rollback; insert into t values (1); insert into u values (3)",
+		"create table t (pk int primary key); create table u (pk int primary key); insert into t values (1); savepoint s; insert into t values (2); rollback to s; release savepoint s; insert into u values (3)",
 	} {
 		t.Run(query, func(t *testing.T) {
 			ctx := t.Context()
 			dEnv := dtestutils.CreateTestEnv()
 			t.Cleanup(func() { dEnv.Close() })
+			head, err := dEnv.HeadCommit(ctx)
+			require.NoError(t, err)
 			original, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
-			before, err := dEnv.DoltDB(ctx).NomsRoot(ctx)
-			require.NoError(t, err)
-			result, err := processFilterQuery(ctx, dEnv, original, "test", query, false, true)
+			before := workingSetHash(t, dEnv)
+
+			result, err := processFilterQuery(ctx, dEnv, head, original, "test", query, false, true)
 			require.NoError(t, err)
 			for _, name := range []string{"t", "u"} {
 				table, ok, err := result.GetTable(ctx, doltdb.TableName{Name: name})
@@ -53,33 +59,44 @@ func TestFilterQueryDoesNotPublishWorkingSet(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, uint64(1), count)
 			}
-			after, err := dEnv.DoltDB(ctx).NomsRoot(ctx)
-			require.NoError(t, err)
-			require.Equal(t, before, after, "DDL and DML must only transform the supplied root")
+
+			require.Equal(t, before, workingSetHash(t, dEnv), "DDL and DML must only transform the supplied root")
+			requireNoScratchBranch(t, dEnv)
 		})
 	}
 }
 
-func TestFilterQueryRejectsTransactionControl(t *testing.T) {
-	for _, statement := range []string{
-		"start transaction", "commit", "rollback", "savepoint s", "rollback to s", "release savepoint s",
-		"\nDELIMITER //\nCREATE PROCEDURE p() BEGIN COMMIT; END//\nDELIMITER ;\nCALL p();",
-	} {
-		t.Run(statement, func(t *testing.T) {
-			ctx := t.Context()
-			dEnv := dtestutils.CreateTestEnv()
-			t.Cleanup(func() { dEnv.Close() })
-			original, err := dEnv.WorkingRoot(ctx)
-			require.NoError(t, err)
-			before, err := dEnv.DoltDB(ctx).NomsRoot(ctx)
-			require.NoError(t, err)
-			_, err = processFilterQuery(ctx, dEnv, original, "test", fmt.Sprintf("create table t (pk int primary key); %s", statement), false, false)
-			require.ErrorContains(t, err, "transaction control statements are not supported by filter-branch")
-			after, err := dEnv.DoltDB(ctx).NomsRoot(ctx)
-			require.NoError(t, err)
-			require.Equal(t, before, after)
-		})
-	}
+// TestFilterQueryDeletesScratchBranchOnError checks that a failed query leaves neither the scratch branch nor
+// changes to the current branch behind.
+func TestFilterQueryDeletesScratchBranchOnError(t *testing.T) {
+	ctx := t.Context()
+	dEnv := dtestutils.CreateTestEnv()
+	t.Cleanup(func() { dEnv.Close() })
+	head, err := dEnv.HeadCommit(ctx)
+	require.NoError(t, err)
+	original, err := dEnv.WorkingRoot(ctx)
+	require.NoError(t, err)
+	before := workingSetHash(t, dEnv)
+
+	_, err = processFilterQuery(ctx, dEnv, head, original, "test", "create table t (pk int primary key); select * from missing", false, false)
+	require.Error(t, err)
+	require.Equal(t, before, workingSetHash(t, dEnv))
+	requireNoScratchBranch(t, dEnv)
+}
+
+// workingSetHash returns the hash of the current branch's working set.
+func workingSetHash(t *testing.T, dEnv *env.DoltEnv) hash.Hash {
+	ws, err := dEnv.WorkingSet(t.Context())
+	require.NoError(t, err)
+	h, err := ws.HashOf()
+	require.NoError(t, err)
+	return h
+}
+
+func requireNoScratchBranch(t *testing.T, dEnv *env.DoltEnv) {
+	_, exists, err := dEnv.DoltDB(t.Context()).HasBranch(t.Context(), filterScratchBranch)
+	require.NoError(t, err)
+	require.False(t, exists)
 }
 
 type closeCountingDatabase struct {
@@ -89,14 +106,14 @@ type closeCountingDatabase struct {
 
 func (db closeCountingDatabase) Close() { *db.closes++ }
 
-// TestFilterQueryRunnerCloseClosesDatabase checks that the runner closes the database it owns, which stops its
-// sequence tracker's background store reads.
-func TestFilterQueryRunnerCloseClosesDatabase(t *testing.T) {
+// TestFilterEngineCloseClosesDatabase checks that the engine closes the database it owns, which stops its sequence
+// tracker's background store reads.
+func TestFilterEngineCloseClosesDatabase(t *testing.T) {
 	closes := 0
-	runner := &filterQueryRunner{
+	eng := &filterEngine{
 		Engine: sqle.NewDefault(memory.NewDBProvider()),
 		db:     closeCountingDatabase{closes: &closes},
 	}
-	require.NoError(t, runner.Close())
+	require.NoError(t, eng.Close())
 	require.Equal(t, 1, closes)
 }

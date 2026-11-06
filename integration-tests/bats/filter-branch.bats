@@ -83,6 +83,32 @@ teardown() {
     [[ "$output" =~ "4,4" ]] || false
 }
 
+@test "filter-branch: removes a leftover scratch branch" {
+    dolt branch dolt_filter_branch
+
+    dolt filter-branch --branches -q "DELETE FROM test WHERE pk > 1;"
+    run dolt branch
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "dolt_filter_branch" ]] || false
+
+    run dolt sql -q "SELECT count(*) FROM test" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2" ]] || false
+}
+
+@test "filter-branch: transaction control" {
+    dolt filter-branch -q "START TRANSACTION; INSERT INTO test VALUES (8,8); ROLLBACK; INSERT INTO test VALUES (9,9); SAVEPOINT s; INSERT INTO test VALUES (10,10); ROLLBACK TO s; COMMIT;"
+    run dolt sql -q "SELECT pk FROM test ORDER BY pk" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "9" ]] || false
+    [[ ! "$output" =~ "8" ]] || false
+    [[ ! "$output" =~ "10" ]] || false
+
+    run dolt branch
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "dolt_filter_branch" ]] || false
+}
+
 @test "filter-branch: filter tags" {
     dolt sql <<SQL
 create table t (pk int primary key);
