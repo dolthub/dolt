@@ -866,6 +866,24 @@ func (d *DoltSession) IsBranchDirty(dbName, branch string) bool {
 	return ok && branchState.dirty
 }
 
+// IsWritingDatabase reports whether the current transaction has uncommitted changes to, or has opened a table writer
+// on, any branch of |dbName|. A table writer may belong to a statement that is still running. |dbName| must be a base
+// name, not revision-qualified.
+func (d *DoltSession) IsWritingDatabase(dbName string) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	dbState, ok := d.dbStates[strings.ToLower(dbName)]
+	if !ok {
+		return false
+	}
+	for _, branchState := range dbState.heads {
+		if branchState.dirty || (branchState.writeSession != nil && branchState.writeSession.HasTableWriters()) {
+			return true
+		}
+	}
+	return false
+}
+
 // CommitWorkingSet commits the named working set without creating a new dolt commit.
 // Only the named working set may have pending changes, or ErrDirtyWorkingSets is returned.
 //

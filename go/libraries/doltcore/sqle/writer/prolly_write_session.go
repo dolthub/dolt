@@ -155,6 +155,11 @@ func (s *prollyWriteSession) SetOptions(opts editor.Options) {
 	return
 }
 
+// HasTableWriters implements WriteSession
+func (s *prollyWriteSession) HasTableWriters() bool {
+	return len(s.tables) > 0
+}
+
 // Flush implements WriteSessionFlusher
 func (s *prollyWriteSession) Flush(ctx *sql.Context) (*doltdb.WorkingSet, error) {
 	_, err := s.flushAllTables(ctx)
