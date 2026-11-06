@@ -29,10 +29,20 @@ import (
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
+var errNoSpoolDir = errors.New("cannot spool table file: blobstore has no spool directory")
+
 // shouldSpool reports whether |bs| needs its table files spooled to a local temp file.
 func shouldSpool(bs blobstore.Blobstore) bool {
 	s, ok := bs.(interface{ RangeReadsWholeBlob() bool })
 	return ok && s.RangeReadsWholeBlob()
+}
+
+// spoolDir returns the directory for the spool files of |bs|, or "" if it does not have one.
+func spoolDir(bs blobstore.Blobstore) string {
+	if s, ok := bs.(interface{ SpoolDir() string }); ok {
+		return s.SpoolDir()
+	}
+	return ""
 }
 
 // spoolingTableReaderAt serves random ReadAt over a blob that cannot do cheap ranged
@@ -51,12 +61,20 @@ func newSpoolingTableReaderAt(ctx context.Context, bs blobstore.Blobstore, key s
 		return nil, err
 	}
 	defer rc.Close()
-	return spoolTableReaderAt(rc)
+	return spoolTableReaderAt(spoolDir(bs), rc)
 }
 
-// spoolTableReaderAt copies table bytes into a temp file owned by the reader.
-func spoolTableReaderAt(r io.Reader) (*spoolingTableReaderAt, error) {
-	f, err := tempfiles.MovableTempFileProvider.NewFile("", "nbs-spool-")
+// spoolTableReaderAt copies table bytes into a file in |dir| owned by the reader. Spools
+// never go to the temp directory, so |dir| is required. The file is made through the temp
+// file provider only so that Clean removes it if the reader is never closed.
+func spoolTableReaderAt(dir string, r io.Reader) (*spoolingTableReaderAt, error) {
+	if dir == "" {
+		return nil, errNoSpoolDir
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, err
+	}
+	f, err := tempfiles.MovableTempFileProvider.NewFile(dir, "nbs-spool-")
 	if err != nil {
 		return nil, err
 	}
