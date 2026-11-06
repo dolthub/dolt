@@ -34,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
 )
@@ -524,4 +525,124 @@ func TestDroppedDatabaseReportsNotFound(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, ok)
 	})
+}
+
+// newLeaseTestEngine returns an engine with a database for each name in |dbNames|, the context it was created with,
+// and its provider.
+func newLeaseTestEngine(t *testing.T, dbNames ...string) (*sqle.Engine, *sql.Context, *DoltDatabaseProvider) {
+	ctx := context.Background()
+	dEnv := dtestutils.CreateTestEnvForLocalFilesystem()
+	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(ctx), editor.Options{})
+	require.NoError(t, err)
+	engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db)
+	require.NoError(t, err)
+
+	for _, name := range dbNames {
+		require.NoError(t, ExecuteSqlOnEngine(sqlCtx, engine, "CREATE DATABASE "+name+";"))
+	}
+
+	pro := dsess.DSessFromSess(sqlCtx.Session).Provider().(*DoltDatabaseProvider)
+	return engine, sqlCtx, pro
+}
+
+// newLeaseTestSession returns a new session for |engine| and |pro| that is running a command, which holds a lease on
+// each database in |leasedDbs|. The command ends when the test does, unless the caller ends it first.
+func newLeaseTestSession(t *testing.T, engine *sqle.Engine, pro *DoltDatabaseProvider, leasedDbs ...string) (*sql.Context, *dsess.DoltSession) {
+	sqlCtx := NewTestSQLCtxWithProvider(context.Background(), pro, config.NewMapConfig(map[string]string{}), nil, nil, engine.Variables())
+	sess := dsess.DSessFromSess(sqlCtx.Session)
+	require.NoError(t, sess.CommandBegin())
+	t.Cleanup(sess.ReleaseDatabaseLeases)
+
+	for _, name := range leasedDbs {
+		_, ok, err := sess.LookupDbState(sqlCtx, name)
+		require.NoError(t, err)
+		require.True(t, ok)
+	}
+
+	return sqlCtx, sess
+}
+
+// requireDone waits for |done| to receive and returns the received error, failing the test if that takes too long.
+func requireDone(t *testing.T, done <-chan error) error {
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(10 * time.Second):
+		require.FailNow(t, "timed out waiting for DROP DATABASE")
+		return nil
+	}
+}
+
+// TestDropDatabaseWaitsForLeases tests that DROP DATABASE waits for commands in other sessions using the database to
+// finish, and that the database cannot be used by new commands or re-created while it waits.
+func TestDropDatabaseWaitsForLeases(t *testing.T) {
+	engine, sqlCtx, pro := newLeaseTestEngine(t, "mytest")
+	readerCtx, reader := newLeaseTestSession(t, engine, pro, "mytest")
+
+	done := make(chan error, 1)
+	go func() {
+		done <- pro.DropDatabase(sqlCtx, "mytest")
+	}()
+
+	require.Never(t, func() bool { return len(done) > 0 }, 200*time.Millisecond, 10*time.Millisecond)
+
+	// The command holding the lease can still use the database
+	_, ok, err := reader.LookupDbState(readerCtx, "mytest")
+	require.NoError(t, err)
+	assert.True(t, ok)
+
+	// New commands cannot use it, and it cannot be re-created
+	otherCtx, other := newLeaseTestSession(t, engine, pro)
+	_, ok, err = other.LookupDbState(otherCtx, "mytest")
+	require.NoError(t, err)
+	assert.False(t, ok)
+	err = pro.CreateDatabase(otherCtx, "mytest")
+	assert.True(t, sql.ErrDatabaseExists.Is(err), "unexpected error: %v", err)
+
+	reader.CommandEnd()
+	require.NoError(t, requireDone(t, done))
+	assert.False(t, pro.HasDatabase(otherCtx, "mytest"))
+}
+
+// TestDropDatabaseCanceledWhileWaitingForLeases tests that a DROP DATABASE canceled while it waits for another
+// session's lease leaves the database in place.
+func TestDropDatabaseCanceledWhileWaitingForLeases(t *testing.T) {
+	engine, sqlCtx, pro := newLeaseTestEngine(t, "mytest")
+	readerCtx, reader := newLeaseTestSession(t, engine, pro, "mytest")
+
+	timeoutCtx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	err := pro.DropDatabase(sqlCtx.WithContext(timeoutCtx), "mytest")
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+
+	assert.True(t, pro.HasDatabase(sqlCtx, "mytest"))
+	_, ok, err := reader.LookupDbState(readerCtx, "mytest")
+	require.NoError(t, err)
+	assert.True(t, ok)
+
+	reader.CommandEnd()
+	require.NoError(t, pro.DropDatabase(sqlCtx, "mytest"))
+	assert.False(t, pro.HasDatabase(sqlCtx, "mytest"))
+}
+
+// TestDropDatabasesLeasedByEachOther tests that two sessions can each drop a database the other is using, since a
+// session releases its own leases before it waits for others.
+func TestDropDatabasesLeasedByEachOther(t *testing.T) {
+	engine, _, pro := newLeaseTestEngine(t, "db1", "db2")
+	ctx1, _ := newLeaseTestSession(t, engine, pro, "db2")
+	ctx2, _ := newLeaseTestSession(t, engine, pro, "db1")
+
+	done1 := make(chan error, 1)
+	done2 := make(chan error, 1)
+	go func() {
+		done1 <- pro.DropDatabase(ctx1, "db1")
+	}()
+	go func() {
+		done2 <- pro.DropDatabase(ctx2, "db2")
+	}()
+
+	require.NoError(t, requireDone(t, done1))
+	require.NoError(t, requireDone(t, done2))
+	assert.False(t, pro.HasDatabase(ctx1, "db1"))
+	assert.False(t, pro.HasDatabase(ctx1, "db2"))
 }

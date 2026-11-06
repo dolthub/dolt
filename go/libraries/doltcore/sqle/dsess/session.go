@@ -68,6 +68,7 @@ type DoltSession struct {
 	branchController      *branch_control.Controller
 	dbCache               *DatabaseCache
 	dbStates              map[string]*DatabaseSessionState
+	leases                *sessionLeases
 	tempTables            map[string]map[string]sql.Table
 	gcSafepointController *gcctx.GCSafepointController
 
@@ -178,6 +179,7 @@ func DefaultSessionWithVariables(pro DoltDatabaseProvider, sessFunc WriteSessFun
 		username:         "",
 		email:            "",
 		dbStates:         make(map[string]*DatabaseSessionState),
+		leases:           newSessionLeases(),
 		dbCache:          newDatabaseCache(),
 		provider:         pro,
 		tempTables:       make(map[string]map[string]sql.Table),
@@ -254,6 +256,7 @@ func NewDoltSession(
 		username:              username,
 		email:                 email,
 		dbStates:              make(map[string]*DatabaseSessionState),
+		leases:                newSessionLeases(),
 		dbCache:               newDatabaseCache(),
 		provider:              pro,
 		tempTables:            make(map[string]map[string]sql.Table),
@@ -313,7 +316,13 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 	baseName, rev := doltdb.SplitRevisionDbName(strings.ToLower(dbName))
 	d.mu.Lock()
 	dbState, dbStateFound := d.dbStates[baseName]
+	needsLease := d.leases.needsLease(baseName)
 	d.mu.Unlock()
+
+	if needsLease && !d.acquireLease(ctx, baseName) {
+		// The database is being dropped. Session state for it, if any, is about to be invalidated.
+		return nil, false, nil
+	}
 
 	if dbStateFound {
 		// If we got an unqualified name, use the current working set head
@@ -340,11 +349,6 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 
 	// Add the initial state to the session for future reuse
 	if err := d.addDB(ctx, database); err != nil {
-		// Loading state can fail because the database was dropped concurrently, after SessionDatabase returned it.
-		// Use BaseDatabase for the re-check, since unlike SessionDatabase it never attempts to clone the database.
-		if _, stillExists := d.provider.BaseDatabase(ctx, baseName); !stillExists {
-			return nil, false, nil
-		}
 		return nil, false, err
 	}
 
@@ -2097,21 +2101,78 @@ func (d *DoltSession) GetController() *branch_control.Controller {
 // outstanding SQL operations.
 func (d *DoltSession) CommandBegin() error {
 	if d.gcSafepointController != nil {
-		return d.gcSafepointController.SessionCommandBegin(d)
+		if err := d.gcSafepointController.SessionCommandBegin(d); err != nil {
+			return err
+		}
 	}
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.leases.beginCommand()
 	return nil
 }
 
 func (d *DoltSession) CommandEnd() {
+	d.mu.Lock()
+	released := d.leases.endCommand()
+	d.mu.Unlock()
+
+	releaseAll(released)
+
 	if d.gcSafepointController != nil {
 		d.gcSafepointController.SessionCommandEnd(d)
 	}
 }
 
 func (d *DoltSession) SessionEnd() {
+	d.ReleaseDatabaseLeases()
+
 	if d.gcSafepointController != nil {
 		d.gcSafepointController.SessionEnd(d)
 	}
+}
+
+// ReleaseDatabaseLeases releases every DatabaseLease this session holds. If the session is running a command, it
+// acquires leases again the next time the command resolves session state for a database.
+func (d *DoltSession) ReleaseDatabaseLeases() {
+	d.mu.Lock()
+	released := d.leases.takeAll()
+	d.mu.Unlock()
+
+	releaseAll(released)
+}
+
+// DatabaseLeaseHolder returns a value identifying this session as the holder of a DatabaseLease. Unlike the session
+// ID, it is unique to the session, and it is shared by copies of the session.
+func (d *DoltSession) DatabaseLeaseHolder() any {
+	return d.leases
+}
+
+// acquireLease acquires a DatabaseLease on the database named |baseName| for the current command, if the provider
+// supports leases. Returns false if the database is being dropped.
+func (d *DoltSession) acquireLease(ctx *sql.Context, baseName string) bool {
+	leaseProvider, ok := d.provider.(DatabaseLeaseProvider)
+	if !ok {
+		return true
+	}
+
+	lease, status := leaseProvider.AcquireDatabaseLease(ctx, baseName, d.DatabaseLeaseHolder())
+	switch status {
+	case DatabaseDropped:
+		return false
+	case DatabaseNotLeasable:
+		return true
+	}
+
+	d.mu.Lock()
+	kept := d.leases.add(baseName, lease)
+	d.mu.Unlock()
+
+	// Another goroutine of this command acquired a lease first, or the command ended
+	if !kept {
+		lease.Release()
+	}
+	return true
 }
 
 func (d *DoltSession) Validate() {

@@ -690,48 +690,29 @@ func (f failingInitDatabase) InitialDBState(ctx *sql.Context) (InitialDbState, e
 	return InitialDbState{DbData: env.DbData[*sql.Context]{Rsw: failingTempDirRsw{err: f.err}}}, nil
 }
 
-// droppingDatabaseProvider hands out a database from SessionDatabase, but reports whether the database still exists
-// from BaseDatabase according to |exists|.
-type droppingDatabaseProvider struct {
+// failingInitDatabaseProvider hands out a database that fails to produce its initial state.
+type failingInitDatabaseProvider struct {
 	emptyRevisionDatabaseProvider
-	db     SqlDatabase
-	exists bool
+	db SqlDatabase
 }
 
-func (p droppingDatabaseProvider) SessionDatabase(ctx *sql.Context, dbName string) (SqlDatabase, bool, error) {
+func (p failingInitDatabaseProvider) SessionDatabase(ctx *sql.Context, dbName string) (SqlDatabase, bool, error) {
 	return p.db, true, nil
 }
 
-func (p droppingDatabaseProvider) BaseDatabase(ctx *sql.Context, dbName string) (SqlDatabase, bool) {
-	if p.exists {
-		return p.db, true
-	}
-	return nil, false
+func (p failingInitDatabaseProvider) BaseDatabase(ctx *sql.Context, dbName string) (SqlDatabase, bool) {
+	return p.db, true
 }
 
-// TestLookupDbStateFailedAddDB tests that a failure to load a database's state is reported as "not found" when the
-// database was dropped concurrently, and as the original error otherwise, and that no state entry is left behind.
+// TestLookupDbStateFailedAddDB tests that a failure to load a database's state is reported, and that no state entry
+// is left behind.
 func TestLookupDbStateFailedAddDB(t *testing.T) {
 	loadErr := errors.NewKind("failed to load state").New()
-	db := failingInitDatabase{err: loadErr}
+	sess := DefaultSession(failingInitDatabaseProvider{db: failingInitDatabase{err: loadErr}}, nil)
+	ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
 
-	t.Run("database dropped", func(t *testing.T) {
-		sess := DefaultSession(droppingDatabaseProvider{db: db, exists: false}, nil)
-		ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
-
-		_, ok, err := sess.LookupDbState(ctx, "droppeddb")
-		assert.NoError(t, err)
-		assert.False(t, ok)
-		assert.NotContains(t, sess.dbStates, "droppeddb")
-	})
-
-	t.Run("database still exists", func(t *testing.T) {
-		sess := DefaultSession(droppingDatabaseProvider{db: db, exists: true}, nil)
-		ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
-
-		_, ok, err := sess.LookupDbState(ctx, "droppeddb")
-		assert.Equal(t, loadErr, err)
-		assert.False(t, ok)
-		assert.NotContains(t, sess.dbStates, "droppeddb")
-	})
+	_, ok, err := sess.LookupDbState(ctx, "droppeddb")
+	assert.Equal(t, loadErr, err)
+	assert.False(t, ok)
+	assert.NotContains(t, sess.dbStates, "droppeddb")
 }
