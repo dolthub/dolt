@@ -1563,7 +1563,7 @@ func (db Database) getTableUsingMissingOverridePolicy(ctx *sql.Context, root dol
 		return nil, false, err
 	}
 	if !ok {
-		return nil, false, fmt.Errorf("no state for database %s", db.RevisionQualifiedName())
+		return nil, false, sql.ErrDatabaseNotFound.New(db.RevisionQualifiedName())
 	}
 
 	overriddenSchemaRoot, err := resolveOverriddenSchemaRoot(ctx, db)
@@ -1660,7 +1660,7 @@ func (db Database) tableInsensitive(ctx *sql.Context, root doltdb.RootValue, tab
 		return doltdb.TableName{}, nil, false, err
 	}
 	if !ok {
-		return doltdb.TableName{}, nil, false, fmt.Errorf("no state for database %s", db.RevisionQualifiedName())
+		return doltdb.TableName{}, nil, false, sql.ErrDatabaseNotFound.New(db.RevisionQualifiedName())
 	}
 
 	// TODO: this logic is broken in the presence of schemas. It's set on a root value but always uses a single schema.
@@ -1859,7 +1859,9 @@ func (db Database) GetRoot(ctx *sql.Context) (doltdb.RootValue, error) {
 		return nil, err
 	}
 	if !ok {
-		return nil, fmt.Errorf("no root value found in session")
+		// The database is unknown to the session and the provider, e.g. it was dropped by another session after the
+		// caller obtained this Database. Return the typed error so callers can tell this apart from an internal failure.
+		return nil, sql.ErrDatabaseNotFound.New(db.RevisionQualifiedName())
 	}
 
 	return dbState.WorkingRoot(), nil
@@ -1878,7 +1880,7 @@ func (db Database) GetWorkingSet(ctx *sql.Context) (*doltdb.WorkingSet, error) {
 		return nil, err
 	}
 	if !ok {
-		return nil, fmt.Errorf("no root value found in session")
+		return nil, sql.ErrDatabaseNotFound.New(db.RevisionQualifiedName())
 	}
 	if dbState.WorkingSet() == nil {
 		return nil, doltdb.ErrOperationNotSupportedInDetachedHead
@@ -2560,9 +2562,12 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 	key := doltdb.DataCacheKey{Hash: schTblHash}
 
 	ds := dsess.DSessFromSess(ctx.Session)
-	dbState, _, err := ds.LookupDbState(ctx, db.RevisionQualifiedName())
+	dbState, ok, err := ds.LookupDbState(ctx, db.RevisionQualifiedName())
 	if err != nil {
 		return sql.ViewDefinition{}, false, err
+	}
+	if !ok {
+		return sql.ViewDefinition{}, false, sql.ErrDatabaseNotFound.New(db.RevisionQualifiedName())
 	}
 
 	if dbState.SessionCache().ViewsCached(key) {
@@ -2685,13 +2690,13 @@ func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error
 	}
 
 	ds := dsess.DSessFromSess(ctx.Session)
-	dbState, _, err := ds.LookupDbState(ctx, db.RevisionQualifiedName())
-	if err != nil {
+	dbState, ok, err := ds.LookupDbState(ctx, db.RevisionQualifiedName())
+	if err != nil || !ok {
+		// Lookup errors are not reported here; a database that no longer exists has no triggers either.
 		return nil, nil
 	}
 
 	var triggers []sql.TriggerDefinition
-	var ok bool
 	if triggers, ok = dbState.SessionCache().GetCachedTriggers(key, db.schemaName); ok {
 		return triggers, nil
 	}

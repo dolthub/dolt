@@ -340,6 +340,11 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 
 	// Add the initial state to the session for future reuse
 	if err := d.addDB(ctx, database); err != nil {
+		// Loading state can fail because the database was dropped concurrently, after SessionDatabase returned it.
+		// Use BaseDatabase for the re-check, since unlike SessionDatabase it never attempts to clone the database.
+		if _, stillExists := d.provider.BaseDatabase(ctx, baseName); !stillExists {
+			return nil, false, nil
+		}
 		return nil, false, err
 	}
 
@@ -1654,7 +1659,7 @@ func (d *DoltSession) setForeignKeyChecksSessionVar(ctx *sql.Context, key string
 
 // addDB adds the database given to this session. This establishes a starting root value for this session, as well as
 // other state tracking metadata.
-func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
+func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) (retErr error) {
 	revisionQualifiedName := strings.ToLower(db.RevisionQualifiedName())
 	baseName, _ := doltdb.SplitRevisionDbName(revisionQualifiedName)
 
@@ -1700,6 +1705,12 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	if !sessionStateExists {
 		sessionState = newEmptyDatabaseSessionState()
 		d.dbStates[baseName] = sessionState
+		// Don't leave a half-initialized entry behind on failure. d.mu is held until this function returns.
+		defer func() {
+			if retErr != nil {
+				delete(d.dbStates, baseName)
+			}
+		}()
 
 		var err error
 		sessionState.tmpFileDir, err = dbState.DbData.Rsw.TempTableFilesDir()
@@ -1714,7 +1725,8 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 
 		baseDb, ok := d.provider.BaseDatabase(ctx, baseName)
 		if !ok {
-			return fmt.Errorf("unable to find database %s, this is a bug", baseName)
+			// The database was dropped after the caller looked it up.
+			return sql.ErrDatabaseNotFound.New(baseName)
 		}
 
 		// The checkedOutRevSpec should be the checked out branch of the database if available, or the revision
