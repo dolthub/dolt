@@ -172,6 +172,22 @@ func (bs branchState) EditOpts() editor.Options {
 	return bs.WriteSession().GetOptions()
 }
 
+// detach is called when this branch state is removed from its session. Statements still running may hold TableWriters
+// from its WriteSession, for example when a stored procedure commits the transaction of the statement that called it.
+// Their edits can no longer be materialized through this branch state, so they're written to the session's current
+// branch state as each statement completes instead.
+func (bs *branchState) detach() {
+	if bs.writeSession != nil {
+		bs.writeSession.Detach()
+	}
+}
+
+// isDirty returns true if this branch state has uncommitted changes, including edits that have not been
+// materialized into its working set.
+func (bs *branchState) isDirty() bool {
+	return bs.dirty || (bs.writeSession != nil && bs.writeSession.HasPendingEdits())
+}
+
 func (bs *branchState) roots() doltdb.Roots {
 	if bs.WorkingSet() == nil {
 		return doltdb.Roots{

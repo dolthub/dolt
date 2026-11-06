@@ -16,6 +16,7 @@ package writer
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -50,6 +52,14 @@ type prollyWriteSession struct {
 	workingSet    *doltdb.WorkingSet
 	setter        dsess.SessionRootSetter
 	targetStaging bool
+	// deferMaterialization leaves the edits of completed statements in their table writers, rather than
+	// materializing them into |workingSet| when each statement completes. The owner of the session must call
+	// MaterializePending before reading |workingSet|.
+	deferMaterialization bool
+	// materializing is true while MaterializePending is running
+	materializing bool
+	// detached is true once the session's branch state has been removed from its session. See Detach.
+	detached bool
 }
 
 var _ dsess.WriteSession = &prollyWriteSession{}
@@ -78,14 +88,7 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, tblName doltdb.Tab
 	// fullTextRewriteEditor for one example, where the |ctx| maintains
 	// the old version of the data while fulltext indexes are rebuilt
 	// using this hidden empty workingSet.
-	var root doltdb.RootValue
-	if s.targetStaging {
-		root = s.workingSet.StagedRoot()
-	} else {
-		root = s.workingSet.WorkingRoot()
-	}
-
-	tbl, ok, err := root.GetTable(ctx, tblName)
+	tbl, ok, err := s.root().GetTable(ctx, tblName)
 	if err != nil {
 		return nil, err
 	}
@@ -106,6 +109,99 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, tblName doltdb.Tab
 
 	s.tables[tblName] = tblWriter
 	return tblWriter, nil
+}
+
+// Detach implements WriteSession
+func (s *prollyWriteSession) Detach() {
+	s.deferMaterialization = false
+	s.detached = true
+}
+
+// SetDeferMaterialization implements WriteSession
+func (s *prollyWriteSession) SetDeferMaterialization(deferMaterialization bool) {
+	s.deferMaterialization = deferMaterialization
+}
+
+// HasPendingEdits implements WriteSession
+func (s *prollyWriteSession) HasPendingEdits() bool {
+	if s.materializing {
+		return false
+	}
+	for _, tblWriter := range s.tables {
+		if tblWriter.pending {
+			return true
+		}
+	}
+	return false
+}
+
+// PendingTables implements WriteSession
+func (s *prollyWriteSession) PendingTables() []doltdb.TableName {
+	var names []doltdb.TableName
+	for tblName, tblWriter := range s.tables {
+		if tblWriter.pending {
+			names = append(names, tblName)
+		}
+	}
+	return names
+}
+
+// PendingRows implements WriteSession
+func (s *prollyWriteSession) PendingRows(ctx *sql.Context, tblName doltdb.TableName) (*index.PendingRows, bool, error) {
+	tblWriter, ok := s.tables[tblName]
+	if !ok || !tblWriter.pending || s.materializing {
+		return nil, false, nil
+	}
+	rows, err := tblWriter.pendingRows(ctx)
+	return rows, true, err
+}
+
+// MaterializePending implements WriteSession
+func (s *prollyWriteSession) MaterializePending(ctx *sql.Context) (*doltdb.WorkingSet, error) {
+	if _, err := s.materializePending(ctx); err != nil {
+		return nil, err
+	}
+	return s.workingSet, nil
+}
+
+// materializePending flushes the edits of completed statements in pending table writers into our working set, and
+// returns its updated root. The edits of a statement in progress are left in their table writers.
+func (s *prollyWriteSession) materializePending(ctx *sql.Context) (doltdb.RootValue, error) {
+	pending := make(map[doltdb.TableName]*prollyTableWriter)
+	if !s.materializing {
+		for tblName, tblWriter := range s.tables {
+			if tblWriter.pending {
+				pending[tblName] = tblWriter
+			}
+		}
+	}
+	if len(pending) == 0 {
+		return s.root(), nil
+	}
+
+	s.materializing = true
+	defer func() {
+		s.materializing = false
+	}()
+	root, tbls, err := s.flushTables(ctx, pending, (*prollyTableWriter).pendingTable)
+	if err != nil {
+		return nil, err
+	}
+	for tblName, tblWriter := range pending {
+		if err = tblWriter.materialized(ctx, tbls[tblName]); err != nil {
+			return nil, err
+		}
+	}
+	return root, nil
+}
+
+// flushPending materializes pending edits and sets the resulting root in the session.
+func (s *prollyWriteSession) flushPending(ctx *sql.Context) error {
+	root, err := s.materializePending(ctx)
+	if err != nil {
+		return err
+	}
+	return s.setter(ctx, s.dbName, root)
 }
 
 // SetWorkingSet implements WriteSession
@@ -166,21 +262,19 @@ func (s *prollyWriteSession) Flush(ctx *sql.Context) (*doltdb.WorkingSet, error)
 
 // FlushTable puts the already materialized table into the working set
 func (s *prollyWriteSession) FlushTable(ctx *sql.Context, tblName doltdb.TableName, tbl *doltdb.Table) (flushed doltdb.RootValue, err error) {
-	if s.targetStaging {
-		flushed = s.workingSet.StagedRoot()
-		flushed, err = flushed.PutTable(ctx, tblName, tbl)
-		if err != nil {
+	if s.detached {
+		// Statements run after we were detached, such as those of a stored procedure, may have left edits pending in
+		// the session's current branch state. Our working set doesn't include them, so we carry them over to keep them.
+		if err = s.carryOverPending(ctx); err != nil {
 			return nil, err
 		}
-		s.workingSet = s.workingSet.WithStagedRoot(flushed)
-	} else {
-		flushed = s.workingSet.WorkingRoot()
-		flushed, err = flushed.PutTable(ctx, tblName, tbl)
-		if err != nil {
-			return nil, err
-		}
-		s.workingSet = s.workingSet.WithWorkingRoot(flushed)
 	}
+
+	flushed, err = s.root().PutTable(ctx, tblName, tbl)
+	if err != nil {
+		return nil, err
+	}
+	s.setRoot(flushed)
 	err = s.setter(ctx, s.dbName, flushed)
 	if err != nil {
 		return nil, err
@@ -190,6 +284,36 @@ func (s *prollyWriteSession) FlushTable(ctx *sql.Context, tblName doltdb.TableNa
 
 // flushAllTables is the inner implementation for Flush that does not acquire any locks
 func (s *prollyWriteSession) flushAllTables(ctx *sql.Context) (doltdb.RootValue, error) {
+	flushed, _, err := s.flushTables(ctx, s.tables, (*prollyTableWriter).table)
+	// TODO: seems like we should call s.setter to update the working set in the branch state,
+	//  but doing so causes Binlog replication tests to fail?
+	return flushed, err
+}
+
+// root returns the root of our working set that our table writers edit.
+func (s *prollyWriteSession) root() doltdb.RootValue {
+	if s.targetStaging {
+		return s.workingSet.StagedRoot()
+	}
+	return s.workingSet.WorkingRoot()
+}
+
+// setRoot sets the root of our working set that our table writers edit.
+func (s *prollyWriteSession) setRoot(root doltdb.RootValue) {
+	if s.targetStaging {
+		s.workingSet = s.workingSet.WithStagedRoot(root)
+	} else {
+		s.workingSet = s.workingSet.WithWorkingRoot(root)
+	}
+}
+
+// flushTables builds a table from each of |writers| with |build|, concurrently, and puts them into our working set.
+// It returns the working set's updated root and the tables built.
+func (s *prollyWriteSession) flushTables(
+	ctx *sql.Context,
+	writers map[doltdb.TableName]*prollyTableWriter,
+	build func(*prollyTableWriter, *sql.Context) (*doltdb.Table, error),
+) (doltdb.RootValue, map[doltdb.TableName]*doltdb.Table, error) {
 	type flushedTable struct {
 		tblName doltdb.TableName
 		tbl     *doltdb.Table
@@ -199,11 +323,11 @@ func (s *prollyWriteSession) flushAllTables(ctx *sql.Context) (doltdb.RootValue,
 	// Flush each table and send results to the flushedTables channel
 	flushedTables := make(chan flushedTable, 10)
 	wg := sync.WaitGroup{}
-	wg.Add(len(s.tables))
-	for tblName, tblWriter := range s.tables {
+	wg.Add(len(writers))
+	for tblName, tblWriter := range writers {
 		go func() {
 			defer wg.Done()
-			tbl, err := tblWriter.table(ctx)
+			tbl, err := build(tblWriter, ctx)
 			flushedTables <- flushedTable{
 				tblName: tblName,
 				tbl:     tbl,
@@ -212,12 +336,8 @@ func (s *prollyWriteSession) flushAllTables(ctx *sql.Context) (doltdb.RootValue,
 		}()
 	}
 
-	var flushed doltdb.RootValue
-	if s.targetStaging {
-		flushed = s.workingSet.StagedRoot()
-	} else {
-		flushed = s.workingSet.WorkingRoot()
-	}
+	flushed := s.root()
+	tbls := make(map[doltdb.TableName]*doltdb.Table, len(writers))
 
 	// Drain from the flushedTables channel and update RootValue with updated table
 	eg := errgroup.Group{}
@@ -231,6 +351,7 @@ func (s *prollyWriteSession) flushAllTables(ctx *sql.Context) (doltdb.RootValue,
 			if err != nil {
 				return err
 			}
+			tbls[flushedTbl.tblName] = flushedTbl.tbl
 		}
 		return nil
 	})
@@ -242,16 +363,51 @@ func (s *prollyWriteSession) flushAllTables(ctx *sql.Context) (doltdb.RootValue,
 
 	// Wait for all flushed tables to be put onto the working set
 	if err := eg.Wait(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
+	s.setRoot(flushed)
+	return flushed, tbls, nil
+}
+
+// carryOverPending materializes the edits pending in the session's current branch state for our database, and puts
+// the tables they edited into our working set.
+func (s *prollyWriteSession) carryOverPending(ctx *sql.Context) error {
+	sess, ok := ctx.Session.(*dsess.DoltSession)
+	if !ok {
+		return fmt.Errorf("expected a DoltSession, found %T", ctx.Session)
+	}
+	state, ok, err := sess.LookupDbState(ctx, s.dbName)
+	if err != nil || !ok || state.WriteSession() == nil {
+		return err
+	}
+	pending := state.WriteSession().PendingTables()
+	if len(pending) == 0 {
+		return nil
+	}
+	current, err := sess.WorkingSet(ctx, s.dbName)
+	if err != nil {
+		return err
+	}
+
+	from, to := current.WorkingRoot(), s.root()
 	if s.targetStaging {
-		s.workingSet = s.workingSet.WithStagedRoot(flushed)
-	} else {
-		s.workingSet = s.workingSet.WithWorkingRoot(flushed)
+		from = current.StagedRoot()
 	}
-
-	// TODO: seems like we should call s.setter to update the working set in the branch state,
-	//  but doing so causes Binlog replication tests to fail?
-	return flushed, nil
+	for _, tblName := range pending {
+		tbl, ok, err := from.GetTable(ctx, tblName)
+		if err != nil {
+			return err
+		}
+		if ok {
+			to, err = to.PutTable(ctx, tblName, tbl)
+		} else {
+			to, err = to.RemoveTables(ctx, false, false, tblName)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	s.setRoot(to)
+	return nil
 }
