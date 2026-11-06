@@ -74,6 +74,12 @@ type DiffTable struct {
 
 var PrimaryKeyChangeWarning = "cannot render full diff between commits %s and %s due to primary key set change"
 
+// unpairedRowsWarning tells the user that rows sharing a primary key after a
+// key change are shown as removed or added rather than modified.
+//
+// It gives no count, since the query's filters may show only some of them.
+const unpairedRowsWarning = "some rows share a primary key across the primary key change between commits %s and %s, so they are shown as removed or added rather than modified"
+
 const PrimaryKeyChangeWarningCode int = 1105 // Since this is our own custom warning we'll use 1105, the code for an unknown error
 
 func getTableInsensitiveOrError(ctx *sql.Context, root doltdb.RootValue, tblName doltdb.TableName) (*doltdb.Table, doltdb.TableName, error) {
@@ -643,10 +649,10 @@ func (dp DiffPartition) GetRowIter(ctx *sql.Context) (sql.RowIter, error) {
 
 // isDiffablePartition checks if the commit pair for this partition is "diffable".
 //
-// simpleDiff is returned when [schema.ComparePrimaryKeys] does not return
-// [schema.PrimaryKeysDiffer]. fuzzyDiff is returned when the keys can still be
-// mapped by [schema.MapSchemaBasedOnTagAndName]. Neither is returned when the
-// partition cannot be diffed.
+// simpleDiff is returned when [diff.CanAlignPrimaryKeys] can pair the rows of
+// both sides by one primary key. fuzzyDiff is returned when the keys can still
+// be mapped by [schema.MapSchemaBasedOnTagAndName]. Neither is returned when
+// the partition cannot be diffed.
 func (dp *DiffPartition) isDiffablePartition(ctx *sql.Context) (simpleDiff bool, fuzzyDiff bool, err error) {
 	// dp.to is nil when a table has been deleted previously. In this case, we return
 	// false, to stop processing diffs, since that previously deleted table is considered
@@ -670,7 +676,7 @@ func (dp *DiffPartition) isDiffablePartition(ctx *sql.Context) (simpleDiff bool,
 		return false, false, err
 	}
 
-	easyDiff := schema.ComparePrimaryKeys(fromSch, toSch) != schema.PrimaryKeysDiffer
+	easyDiff := diff.CanAlignPrimaryKeys(fromSch, toSch)
 	if easyDiff {
 		return true, false, nil
 	}

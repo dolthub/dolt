@@ -15,7 +15,6 @@
 package dtablefunctions
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -30,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 )
 
 const diffStatDefaultRowCount = 10
@@ -315,12 +313,6 @@ func (ds *DiffStatTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 		}
 		diffStat, hasDiff, err := getDiffStatNodeFromDelta(ctx, delta, fromRefDetails.root, toRefDetails.root, tblName)
 		if err != nil {
-			if errors.Is(err, diff.ErrPrimaryKeySetChanged) {
-				ctx.Warn(dtables.PrimaryKeyChangeWarningCode, "stat for table %s cannot be determined. Primary key set changed.", tblName)
-				// Report an empty diff for tables that have primary key set changes
-				diffStats = append(diffStats, diffStatNode{tblName: tblName})
-				continue
-			}
 			return nil, err
 		}
 		if hasDiff {
@@ -469,16 +461,28 @@ func getDiffStat(ctx *sql.Context, td diff.TableDelta) (diff.DiffStatProgress, b
 		return diff.DiffStatProgress{}, false, false, err
 	}
 
-	keyless, err := td.IsKeyless(ctx)
+	isAddedAndDeletedOnly, err := hasOnlyAddedAndDeletedRows(ctx, td)
 	if err != nil {
-		return diff.DiffStatProgress{}, false, keyless, err
+		return diff.DiffStatProgress{}, false, false, err
 	}
 
 	if (acc.Adds+acc.Removes+acc.Changes) == 0 && (acc.OldCellSize-acc.NewCellSize) == 0 {
-		return diff.DiffStatProgress{}, false, keyless, nil
+		return diff.DiffStatProgress{}, false, isAddedAndDeletedOnly, nil
 	}
 
-	return acc, true, keyless, nil
+	return acc, true, isAddedAndDeletedOnly, nil
+}
+
+// hasOnlyAddedAndDeletedRows reports whether the stat of |td| counts only
+// added and deleted rows.
+//
+// Keyless rows pair only by content hash, so a changed row is a deleted row
+// and an added one. No rows pair across a gain or loss of the primary key.
+func hasOnlyAddedAndDeletedRows(ctx *sql.Context, td diff.TableDelta) (bool, error) {
+	if td.HasGainedOrLostPrimaryKey() {
+		return true, nil
+	}
+	return td.IsKeyless(ctx)
 }
 
 //------------------------------------

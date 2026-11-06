@@ -16,6 +16,7 @@ package diff
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 
@@ -571,6 +572,10 @@ func (td TableDelta) HasChangesIgnoringColumnTags(ctx context.Context) (bool, er
 	return !schema.SchemasAreEqual(fromSchema, toSchema), nil
 }
 
+// HasDataChanged reports whether the rows of td differ between its sides.
+//
+// A change of primary key alone reorders rows without changing them, so it is
+// not a data change.
 func (td TableDelta) HasDataChanged(ctx context.Context) (bool, error) {
 	// Database collation change is not a data change
 	if td.FromTable == nil && td.ToTable == nil && td.FromRootObject == nil && td.ToRootObject == nil {
@@ -604,7 +609,52 @@ func (td TableDelta) HasDataChanged(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return !fromRowDataHash.Equal(toRowDataHash), nil
+	if fromRowDataHash.Equal(toRowDataHash) {
+		return false, nil
+	}
+	if !needsAlignment(td.FromSch, td.ToSch) {
+		return true, nil
+	}
+	// The hashes also differ when only the primary key changed.
+	return td.hasAlignedDataChanged(ctx)
+}
+
+// hasAlignedDataChanged reports whether the rows of td differ once both sides
+// share one primary key. Prolly maps with the same rows have the same hash.
+//
+// HasDataChanged uses it when the hashes differ only because the key changed.
+//
+// A row with a NULL in the new primary key cannot exist unchanged on the side
+// keyed by it, so it is a data change.
+func (td TableDelta) hasAlignedDataChanged(ctx context.Context) (bool, error) {
+	fromRows, toRows, err := td.GetRowData(ctx)
+	if err != nil {
+		return false, err
+	}
+	from, to, err := alignIndexes(ctx, fromRows, toRows, td.FromSch, td.ToSch)
+	if errors.Is(err, durable.ErrRekeyNullKey) {
+		return true, nil
+	} else if err != nil {
+		return false, err
+	}
+	fromN, toN, err := CountUnpaired(from, to)
+	if err != nil || fromN+toN > 0 {
+		return fromN+toN > 0, err
+	}
+	return from.Rows.HashOf() != to.Rows.HashOf(), nil
+}
+
+// HasGainedOrLostPrimaryKey reports whether the table is keyed on one side of
+// td and keyless on the other. It is false for added and dropped tables,
+// which have one side.
+//
+// No key pairs rows across such a change, and IsKeyless returns an error for
+// it.
+func (td TableDelta) HasGainedOrLostPrimaryKey() bool {
+	if td.FromTable == nil || td.ToTable == nil {
+		return false
+	}
+	return schema.IsKeyless(td.FromSch) != schema.IsKeyless(td.ToSch)
 }
 
 func (td TableDelta) HasPrimaryKeySetChanged() bool {
