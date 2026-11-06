@@ -490,6 +490,7 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 		}
 
 		if gcGen != nil && *gcGen != contents.gcGen {
+			installed = false
 			return manifestContents{}, true, nil
 		}
 
@@ -592,6 +593,9 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 				ok, latest, ferr := nbs.manifest.ParseIfExists(ctx, nbs.stats, nil)
 				if ferr != nil {
 					return manifestContents{}, false, ferr
+				}
+				if err = nbs.checkManifestCodec(ok, latest); err != nil {
+					return manifestContents{}, false, err
 				}
 				if ok {
 					rebaseContents = latest
@@ -965,6 +969,7 @@ func newNomsBlockStore(ctx context.Context, nbfVerStr string, m manifest, p tabl
 	defer nbs.stats.OpenLatency.SampleTimeSince(t1)
 
 	if err = nbs.rebase(ctx); err != nil {
+		_ = m.Close()
 		return nil, err
 	}
 

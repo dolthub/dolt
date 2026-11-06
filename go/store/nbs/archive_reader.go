@@ -917,10 +917,11 @@ func (ar *archiveReader) openSpan(ctx context.Context, id uint32, stored []byte,
 			// Reading a plaintext archive's chunks needs only the decompression dictionary.
 			dict = &DecompBundle{dDict: dict.dDict}
 		}
-		dicts[id] = dict
 		if err != nil {
+			dicts[id] = nil
 			return nil, fmt.Errorf("failure loading archive dictionary span %d: %w", id, err)
 		}
+		dicts[id] = dict
 		return nil, nil
 	}
 	i, ok := chunkOf[id]
