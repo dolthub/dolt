@@ -49,10 +49,8 @@ RUN pip3 install mysql-connector-python PyMySQL sqlalchemy
 ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64/
 
 # install the current latest maven version, `v3.9.11`, because apt installed one does not work with jdk 17
-ADD https://archive.apache.org/dist/maven/maven-3/3.9.11/binaries/apache-maven-3.9.11-bin.tar.gz apache-maven-3.9.11-bin.tar.gz
-RUN tar zxvf apache-maven-3.9.11-bin.tar.gz && \
-    cp -r apache-maven-3.9.11 /opt && \
-    rm -rf apache-maven-3.9.11 apache-maven-3.9.11-bin.tar.gz
+ADD --checksum=sha256:4b7195b6a4f5c81af4c0212677a32ee8143643401bc6e1e8412e6b06ea82beac https://repo1.maven.org/maven2/org/apache/maven/apache-maven/3.9.11/apache-maven-3.9.11-bin.tar.gz /tmp/apache-maven-3.9.11-bin.tar.gz
+RUN tar -xzf /tmp/apache-maven-3.9.11-bin.tar.gz -C /opt
 
 # add maven binary
 ENV PATH=/opt/apache-maven-3.9.11/bin:$PATH
