@@ -796,8 +796,8 @@ func (gbs *GitBlobstore) Teardown(ctx context.Context) error {
 
 func (gbs *GitBlobstore) Close() error {
 	// Deliberately not paired with a resumeSyncs: a closed store never fetches
-	// again, and answers reads from what it has already cached. Nothing errors
-	// out on a read after Close today, and this keeps it that way.
+	// again, and answers reads from what it has already cached. The exception
+	// is a table with no spool yet, which can no longer make one.
 	gbs.quiesceSyncs(errGitStoreClosed)
 	if gbs.spoolDir != nil {
 		return gbs.spoolDir.Close()
@@ -1341,6 +1341,39 @@ func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.
 	return gbs.getFromCache(ctx, key, br)
 }
 
+// PinBlob returns a function which reads the whole of |key| as it is now. It keeps working
+// after a manifest update removes |key|, because it reads the git objects directly and they
+// outlive the key. Only a git gc which finds them unreachable can remove them.
+func (gbs *GitBlobstore) PinBlob(key string) (func(context.Context) (io.ReadCloser, error), error) {
+	key, err := normalizeGitTreePath(key)
+	if err != nil {
+		return nil, err
+	}
+	obj, ok := gbs.cacheGetObject(key)
+	if !ok {
+		return nil, NotFound{Key: key}
+	}
+	switch obj.typ {
+	case git.ObjectTypeBlob:
+		return func(ctx context.Context) (io.ReadCloser, error) {
+			return gbs.api.BlobReader(ctx, obj.oid)
+		}, nil
+
+	case git.ObjectTypeTree:
+		entries, ok := gbs.cacheListChildren(key)
+		if !ok {
+			return nil, NotFound{Key: key}
+		}
+		return func(ctx context.Context) (io.ReadCloser, error) {
+			rc, _, err := gbs.openChunkedEntriesRange(ctx, entries, AllRange)
+			return rc, err
+		}, nil
+
+	default:
+		return nil, fmt.Errorf("gitblobstore: unsupported object type %q for key %q", obj.typ, key)
+	}
+}
+
 // syncedAbsent reports that |key| does not exist, on the authority of the cache
 // alone, so the caller can skip fetching to find that out.
 //
@@ -1400,6 +1433,10 @@ func (gbs *GitBlobstore) openChunkedTreeRange(ctx context.Context, key string, b
 	if !ok {
 		return nil, 0, NotFound{Key: key}
 	}
+	return gbs.openChunkedEntriesRange(ctx, entries, br)
+}
+
+func (gbs *GitBlobstore) openChunkedEntriesRange(ctx context.Context, entries []git.TreeEntry, br BlobRange) (io.ReadCloser, uint64, error) {
 	parts, totalSize, err := gbs.validateAndSizeChunkedParts(ctx, entries)
 	if err != nil {
 		return nil, 0, err
