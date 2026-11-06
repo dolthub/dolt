@@ -415,7 +415,7 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	}
 
 	if !ok {
-		return nil, fmt.Errorf("couldn't find db state for database %s", t.db.Name())
+		return nil, sql.ErrDatabaseNotFound.New(t.db.RevisionQualifiedName())
 	}
 
 	indexes, ok := dbState.SessionCache().GetTableIndexesCache(key, t.Name())
@@ -1194,7 +1194,7 @@ func (t *DoltTable) GetChecks(ctx *sql.Context) ([]sql.CheckDefinition, error) {
 	}
 
 	if !ok {
-		return nil, fmt.Errorf("couldn't find db state for database %s", t.db.Name())
+		return nil, sql.ErrDatabaseNotFound.New(t.db.RevisionQualifiedName())
 	}
 
 	checks, ok := dbState.SessionCache().GetCachedTableChecks(key)

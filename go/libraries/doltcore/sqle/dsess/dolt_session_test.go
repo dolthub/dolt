@@ -664,3 +664,55 @@ func (e emptyRevisionDatabaseProvider) EngineOverrides() sql.EngineOverrides {
 func (e emptyRevisionDatabaseProvider) TxLocks() keymutex.Keymutex {
 	return keymutex.NewMapped()
 }
+
+// failingTempDirRsw is a RepoStateWriter whose TempTableFilesDir fails, which makes addDB fail after it has created
+// the session's state entry for the database.
+type failingTempDirRsw struct {
+	env.RepoStateWriter
+	err error
+}
+
+func (f failingTempDirRsw) TempTableFilesDir() (string, error) {
+	return "", f.err
+}
+
+// failingInitDatabase is a SqlDatabase that can be handed out by a provider but fails to produce its initial state.
+type failingInitDatabase struct {
+	SqlDatabase
+	err error
+}
+
+func (f failingInitDatabase) RevisionQualifiedName() string {
+	return "droppeddb"
+}
+
+func (f failingInitDatabase) InitialDBState(ctx *sql.Context) (InitialDbState, error) {
+	return InitialDbState{DbData: env.DbData[*sql.Context]{Rsw: failingTempDirRsw{err: f.err}}}, nil
+}
+
+// failingInitDatabaseProvider hands out a database that fails to produce its initial state.
+type failingInitDatabaseProvider struct {
+	emptyRevisionDatabaseProvider
+	db SqlDatabase
+}
+
+func (p failingInitDatabaseProvider) SessionDatabase(ctx *sql.Context, dbName string) (SqlDatabase, bool, error) {
+	return p.db, true, nil
+}
+
+func (p failingInitDatabaseProvider) BaseDatabase(ctx *sql.Context, dbName string) (SqlDatabase, bool) {
+	return p.db, true
+}
+
+// TestLookupDbStateFailedAddDB tests that a failure to load a database's state is reported, and that no state entry
+// is left behind.
+func TestLookupDbStateFailedAddDB(t *testing.T) {
+	loadErr := errors.NewKind("failed to load state").New()
+	sess := DefaultSession(failingInitDatabaseProvider{db: failingInitDatabase{err: loadErr}}, nil)
+	ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
+
+	_, ok, err := sess.LookupDbState(ctx, "droppeddb")
+	assert.Equal(t, loadErr, err)
+	assert.False(t, ok)
+	assert.NotContains(t, sess.dbStates, "droppeddb")
+}

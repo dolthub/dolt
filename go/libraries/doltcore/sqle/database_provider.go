@@ -91,6 +91,15 @@ type DoltDatabaseProvider struct {
 	// clone's on-disk directory is simply invisible until it registers.
 	creatingDatabases map[string]struct{}
 
+	// drainingDatabases names databases that DropDatabase has removed from p.databases, and that are waiting for
+	// other sessions to release their leases before they are torn down. Like creatingDatabases, it reserves the name
+	// but does not gate enumeration, since sessions holding leases on these databases may enumerate databases while
+	// the drop waits for them.
+	drainingDatabases map[string]struct{}
+
+	// leases tracks the leases sessions hold on databases in p.databases. See dsess.DatabaseLease.
+	leases *databaseLeases
+
 	txLocks keymutex.Keymutex
 
 	defaultBranch     string
@@ -223,6 +232,8 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 		databases:              dbs,
 		deletingDatabases:      make(map[string]struct{}),
 		creatingDatabases:      make(map[string]struct{}),
+		drainingDatabases:      make(map[string]struct{}),
+		leases:                 newDatabaseLeases(),
 		functions:              funcs,
 		tableFunctions:         tableFuncs,
 		externalProcedures:     externalProcedures,
@@ -1045,6 +1056,9 @@ func (p *DoltDatabaseProvider) checkDatabaseNameAvailableLocked(name string, che
 	if _, ok := p.creatingDatabases[key]; ok {
 		return sql.ErrDatabaseExists.New(name)
 	}
+	if _, ok := p.drainingDatabases[key]; ok {
+		return sql.ErrDatabaseExists.New(name)
+	}
 	if checkDisk {
 		exists, isDir := p.fs.Exists(name)
 		if exists && isDir {
@@ -1168,7 +1182,7 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 	}
 
 	var db dsess.SqlDatabase
-	var derivativeDbs []dsess.SqlDatabase
+	var derivativeDbs map[string]dsess.SqlDatabase
 	var dbLoc filesys.Filesys
 	var dbKey, dropDbLoc string
 	var closeDoltDBs bool
@@ -1198,15 +1212,18 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 		}
 		// We not only have to delete tracking metadata for this database, but also for any derivative
 		// ones we've stored as a result of USE or connection strings
+		derivativeDbs = make(map[string]dsess.SqlDatabase)
 		derivativeNamePrefix := strings.ToLower(dbKey + doltdb.DbRevisionDelimiter)
 		for dbName := range p.databases {
 			if strings.HasPrefix(strings.ToLower(dbName), derivativeNamePrefix) {
-				derivativeDbs = append(derivativeDbs, p.databases[dbName])
+				derivativeDbs[dbName] = p.databases[dbName]
 				delete(p.databases, dbName)
 			}
 		}
+
+		// Once the database is removed from p.databases, no new leases can be acquired on it.
 		delete(p.databases, dbKey)
-		p.deletingDatabases[dbKey] = struct{}{}
+		p.drainingDatabases[dbKey] = struct{}{}
 
 		closeDoltDBs = p.dbLoadParams != nil
 		if closeDoltDBs {
@@ -1217,6 +1234,30 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 	if err != nil {
 		return err
 	}
+
+	// Wait for commands in other sessions that are using the database to finish before invalidating their state and
+	// closing the database. This session releases its own leases first, so that two sessions dropping databases the
+	// other one is using don't wait on each other. The wait ends early if the query is canceled, in which case the
+	// database is restored. Cancellation is the only way out of one remaining cycle: a dolt_gc call holding a lease on
+	// this database waits for this session's command to end before it can finish.
+	sess := dsess.DSessFromSess(ctx.Session)
+	sess.ReleaseDatabaseLeases()
+	err = p.leases.awaitRelease(ctx, dbKey, sess.DatabaseLeaseHolder())
+	if err != nil {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		delete(p.drainingDatabases, dbKey)
+		p.databases[dbKey] = db
+		maps.Copy(p.databases, derivativeDbs)
+		return err
+	}
+
+	func() {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		delete(p.drainingDatabases, dbKey)
+		p.deletingDatabases[dbKey] = struct{}{}
+	}()
 	defer func() {
 		p.mu.Lock()
 		defer p.mu.Unlock()
