@@ -782,11 +782,8 @@ func (d *DoltSession) commitBranchStates(
 			state.headRoot = headRoot
 		}
 
-		state.workingSet = workingSets[i]
-		if state.writeSession != nil {
-			if err := state.writeSession.SetWorkingSet(ctx, workingSets[i]); err != nil {
-				return nil, err
-			}
+		if err := state.replaceWorkingSet(ctx, workingSets[i]); err != nil {
+			return nil, err
 		}
 
 		state.dirty = false
@@ -1148,9 +1145,9 @@ func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func
 					}
 				}
 			}
-			if head.writeSession != nil {
-				ws := head.writeSession.GetWorkingSet()
-				hashes, err := head.dbData.Ddb.WorkingSetGCHashes(ctx, ws)
+			// The working set can hold changes beyond the head commit.
+			if head.writeSession != nil && head.workingSet != nil {
+				hashes, err := head.dbData.Ddb.WorkingSetGCHashes(ctx, head.workingSet)
 				if err != nil {
 					return err
 				}
@@ -1575,21 +1572,37 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 	if ws.Ref() != branchState.WorkingSet().Ref() {
 		return fmt.Errorf("must switch working sets with SwitchWorkingSet")
 	}
-	branchState.workingSet = ws
+	if err = branchState.replaceWorkingSet(ctx, ws); err != nil {
+		return err
+	}
 
 	err = d.setDbSessionVars(ctx, branchState, true)
 	if err != nil {
 		return err
 	}
 
-	if branchState.writeSession != nil {
-		err = branchState.writeSession.SetWorkingSet(ctx, ws)
-		if err != nil {
-			return err
-		}
-	}
-
 	branchState.dirty = true
+	return nil
+}
+
+// setFlushedWorkingSet sets |bs|'s working set to |ws|, which its own write session flushed table writers into, so
+// they aren't reset. Like SetWorkingRoot, it does nothing if the roots are unchanged, so a flush without edits
+// doesn't make the branch state dirty.
+func (d *DoltSession) setFlushedWorkingSet(ctx *sql.Context, bs *branchState, ws *doltdb.WorkingSet) error {
+	if bs.workingSet == nil {
+		return doltdb.ErrOperationNotSupportedInDetachedHead
+	}
+	if rootsEqual(bs.workingSet.WorkingRoot(), ws.WorkingRoot()) && rootsEqual(bs.workingSet.StagedRoot(), ws.StagedRoot()) {
+		return nil
+	}
+	if bs.readOnly {
+		return fmt.Errorf("cannot set root on read-only session")
+	}
+	bs.workingSet = ws
+	if err := d.setDbSessionVars(ctx, bs, true); err != nil {
+		return err
+	}
+	bs.dirty = true
 	return nil
 }
 
@@ -1832,7 +1845,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 			if err != nil {
 				return err
 			}
-			branchState.writeSession = d.writeSessProv(revisionQualifiedName, branchState.workingSet, tracker, d.SetWorkingRoot, editOpts)
+			branchState.writeSession = d.writeSessProv(revisionQualifiedName, branchWorkingSetOwner{d, branchState}, tracker, editOpts)
 		}
 	}
 
@@ -2567,4 +2580,4 @@ func DefaultHead(ctx *sql.Context, baseName string, db SqlDatabase) (string, err
 // WriteSessFunc is a constructor that session builders use to
 // create fresh table editors.
 // The indirection avoids a writer/dsess package import cycle.
-type WriteSessFunc func(dbName string, ws *doltdb.WorkingSet, aiTracker *AutoIncrementTracker, setter SessionRootSetter, opts editor.Options) WriteSession
+type WriteSessFunc func(dbName string, owner WorkingSetOwner, aiTracker *AutoIncrementTracker, opts editor.Options) WriteSession

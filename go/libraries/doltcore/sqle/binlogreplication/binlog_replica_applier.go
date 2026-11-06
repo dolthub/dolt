@@ -841,7 +841,7 @@ func getTableWriter(ctx *sql.Context, engine *gms.Engine, tableName, databaseNam
 
 	ds := dsess.DSessFromSess(ctx.Session)
 	setter := ds.SetWorkingRoot
-	writeSession := writer.NewWriteSession(databaseName, ws, tracker, setter, sqlDatabase.EditOptions())
+	writeSession := writer.NewDetachedWriteSession(databaseName, ws, tracker, setter, sqlDatabase.EditOptions())
 
 	tableWriter, err := writeSession.GetTableWriter(ctx, doltdb.TableName{Name: tableName})
 	if err != nil {

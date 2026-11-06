@@ -405,7 +405,7 @@ func (wtm *WorkspaceTableModifier) getWorkspaceTableWriter(ctx *sql.Context, tar
 		return nil, nil, err
 	}
 
-	writeSession := writer.NewWriteSession(ctx.GetCurrentDatabase(), wtm.ws, gst, setter, editor.Options{TargetStaging: targetStaging})
+	writeSession := writer.NewDetachedWriteSession(ctx.GetCurrentDatabase(), wtm.ws, gst, setter, editor.Options{TargetStaging: targetStaging})
 	tableWriter, err := writeSession.GetTableWriter(ctx, wtm.tableName)
 	if err != nil {
 		return nil, nil, err

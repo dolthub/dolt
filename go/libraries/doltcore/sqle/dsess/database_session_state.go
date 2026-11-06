@@ -163,6 +163,33 @@ func (bs *branchState) checkNoOpenWriters() error {
 	return err
 }
 
+// replaceWorkingSet sets this branch state's working set from outside its write session, and rebuilds the write
+// session's table writers if the working root changed.
+func (bs *branchState) replaceWorkingSet(ctx *sql.Context, ws *doltdb.WorkingSet) error {
+	prev := bs.workingSet
+	bs.workingSet = ws
+	if bs.writeSession == nil || (prev != nil && rootsEqual(prev.WorkingRoot(), ws.WorkingRoot())) {
+		return nil
+	}
+	return bs.writeSession.ResetTableWriters(ctx)
+}
+
+// branchWorkingSetOwner is the WorkingSetOwner of a branch state's own write session.
+type branchWorkingSetOwner struct {
+	sess *DoltSession
+	bs   *branchState
+}
+
+var _ WorkingSetOwner = branchWorkingSetOwner{}
+
+func (o branchWorkingSetOwner) WorkingSet() *doltdb.WorkingSet {
+	return o.bs.workingSet
+}
+
+func (o branchWorkingSetOwner) SetFlushedWorkingSet(ctx *sql.Context, ws *doltdb.WorkingSet) error {
+	return o.sess.setFlushedWorkingSet(ctx, o.bs, ws)
+}
+
 // RevisionDbName returns the revision-qualified database name for this branch state
 func (bs *branchState) RevisionDbName() string {
 	return doltdb.RevisionDbName(bs.dbState.dbName, bs.head)

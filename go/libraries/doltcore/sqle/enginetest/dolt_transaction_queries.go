@@ -31,6 +31,41 @@ const insertManyRowsThenDuplicateKey = `insert into t (a, b)
 
 var DoltTransactionTests = []queries.TransactionTest{
 	{
+		Name: "a failed first write to dolt_ignore doesn't create it",
+		SetUpScript: []string{
+			"create table t (id int primary key)",
+			"call dolt_commit('-Am', 'init')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "/* client a */ start transaction",
+			},
+			{
+				Query:       "/* client a */ insert into dolt_ignore values ('a', true), ('a', false)",
+				ExpectedErr: sql.ErrPrimaryKeyViolation,
+			},
+			{
+				Query:    "/* client a */ insert into t values (1)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ select table_name from dolt_status order by 1",
+				Expected: []sql.Row{{"t"}},
+			},
+			{
+				Query:    "/* client a */ insert into dolt_ignore values ('a', true)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ select table_name from dolt_status order by 1",
+				Expected: []sql.Row{{"dolt_ignore"}, {"t"}},
+			},
+			{
+				Query: "/* client a */ commit",
+			},
+		},
+	},
+	{
 		Name: "duplicate inserts, autocommit on",
 		SetUpScript: []string{
 			"create table t (x int primary key, y int)",

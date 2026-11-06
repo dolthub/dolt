@@ -32,11 +32,16 @@ type WriteSession interface {
 	// GetTableWriter creates a TableWriter and adds it to the WriteSession.
 	GetTableWriter(ctx *sql.Context, table doltdb.TableName) (TableWriter, error)
 
-	// GetWorkingSet returns the session's current working set.
+	// GetTableWriterForNewTable is GetTableWriter for |tbl|, a table that isn't in the owner's working set yet. The
+	// table is added to it when the writer flushes.
+	GetTableWriterForNewTable(ctx *sql.Context, table doltdb.TableName, tbl *doltdb.Table) (TableWriter, error)
+
+	// GetWorkingSet returns its owner's current working set.
 	GetWorkingSet() *doltdb.WorkingSet
 
-	// SetWorkingSet modifies the state of the WriteSession. The WorkingSetRef of |ws| must match the existing Ref.
-	SetWorkingSet(ctx *sql.Context, ws *doltdb.WorkingSet) error
+	// ResetTableWriters rebuilds this session's table writers from its owner's working set, discarding their unflushed
+	// edits. The owner calls it when its working set is replaced other than through this session's own flushes.
+	ResetTableWriters(ctx *sql.Context) error
 
 	// VisitGCRoots is used to ensure that a write session's GC roots are retained
 	// in the case that a GC needs to proceed before the write session is flushed.
@@ -44,9 +49,6 @@ type WriteSession interface {
 
 	// GetOptions returns the editor.Options for this session.
 	GetOptions() editor.Options
-
-	// SetOptions sets the editor.Options for this session.
-	SetOptions(opts editor.Options)
 
 	// HasOpenTableWriters returns whether any TableWriter this session has handed out hasn't been closed since.
 	HasOpenTableWriters() bool
@@ -62,6 +64,15 @@ type TableWriter interface {
 
 // SessionRootSetter sets the root value for the session.
 type SessionRootSetter func(ctx *sql.Context, dbName string, root doltdb.RootValue) error
+
+// WorkingSetOwner holds the working set that a WriteSession reads its tables from and flushes them into.
+type WorkingSetOwner interface {
+	// WorkingSet returns the owner's current working set.
+	WorkingSet() *doltdb.WorkingSet
+	// SetFlushedWorkingSet replaces the owner's working set with |ws|, which its WriteSession built by flushing table
+	// writers into the current one.
+	SetFlushedWorkingSet(ctx *sql.Context, ws *doltdb.WorkingSet) error
+}
 
 // WriteSessionFlusher is responsible for flushing any pending edits to the session
 type WriteSessionFlusher interface {
