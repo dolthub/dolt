@@ -575,7 +575,8 @@ func (td TableDelta) HasChangesIgnoringColumnTags(ctx context.Context) (bool, er
 // HasDataChanged reports whether the rows of td differ between its sides.
 //
 // A change of primary key alone reorders rows without changing them, so it is
-// not a data change.
+// not a data change. When neither side can take the other's key, the rows
+// cannot be compared under one key, and differing rows count as changed.
 func (td TableDelta) HasDataChanged(ctx context.Context) (bool, error) {
 	// Database collation change is not a data change
 	if td.FromTable == nil && td.ToTable == nil && td.FromRootObject == nil && td.ToRootObject == nil {
@@ -612,7 +613,7 @@ func (td TableDelta) HasDataChanged(ctx context.Context) (bool, error) {
 	if fromRowDataHash.Equal(toRowDataHash) {
 		return false, nil
 	}
-	if !needsAlignment(td.FromSch, td.ToSch) {
+	if !needsAlignment(td.FromSch, td.ToSch) || !CanAlignPrimaryKeys(td.FromSch, td.ToSch) {
 		return true, nil
 	}
 	// The hashes also differ when only the primary key changed.

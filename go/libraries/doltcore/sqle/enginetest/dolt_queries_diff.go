@@ -3969,7 +3969,7 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 	},
 	{
 		// https://github.com/dolthub/dolt/issues/12013
-		Name: "replacing the primary key with a new column returns an error for dolt_diff_summary",
+		Name: "replacing the primary key with a new column reports a data and schema change in dolt_diff_summary",
 		SetUpScript: []string{
 			"CREATE TABLE t (a INT PRIMARY KEY, x INT);",
 			"INSERT INTO t VALUES (1, 10);",
@@ -3981,8 +3981,8 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "SELECT * FROM dolt_diff_summary('HEAD~', 'HEAD');",
-				ExpectedErrStr: "failed to compute diff summary for table t: primary key set changed from (a) to (c), and neither side has every column of the other's primary key with the same type",
+				Query:    "SELECT * FROM dolt_diff_summary('HEAD~', 'HEAD') ORDER BY to_table_name;",
+				Expected: []sql.Row{{"t", "t", "modified", true, true}, {"t2", "t2", "modified", true, false}},
 			},
 		},
 	},
