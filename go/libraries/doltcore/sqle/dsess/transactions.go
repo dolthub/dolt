@@ -408,9 +408,10 @@ func (tx *DoltTransaction) commitHeads(
 			commitIdxs[i] = -1
 			ws := change.workingSet
 			existing, err := startPoint.db.ResolveWorkingSet(ctx, ws.Ref())
-			newWorkingSet := errors.Is(err, doltdb.ErrWorkingSetNotFound)
-			if newWorkingSet {
-				existing = doltdb.EmptyWorkingSet(ws.Ref())
+			if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
+				// This working set existed at transaction start. A concurrent branch deletion or rename
+				// must abort the transaction, rather than recreate an unreachable working set.
+				return nil, nil, tx.rollbackAndErr(ctx, retryTransactionError("branch working set was deleted"))
 			} else if err != nil {
 				return nil, nil, err
 			}
@@ -425,7 +426,7 @@ func (tx *DoltTransaction) commitHeads(
 			}
 
 			ff := isFfMerge
-			if !newWorkingSet && !workingAndStagedEqual(existing, workingSetsAtTxStart[i]) {
+			if !workingAndStagedEqual(existing, workingSetsAtTxStart[i]) {
 				ff = notFfMerge
 				ws, err = tx.mergeRoots(ctx, change.dbName, workingSetsAtTxStart[i], existing, ws, states[i].EditOpts())
 				if err != nil {
