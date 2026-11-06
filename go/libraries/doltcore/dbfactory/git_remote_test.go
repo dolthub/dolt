@@ -175,7 +175,7 @@ func TestGitRemoteFactory_GitFile_CachesUnderRepoDoltDirAndCanWrite(t *testing.T
 	commitOneChunk(t, ctx, cs)
 
 	// The table just written is spooled under the cache root.
-	spools, err := filepath.Glob(filepath.Join(cacheBase, GitRemoteSpoolDirName, "nbs-spool-*"))
+	spools, err := filepath.Glob(filepath.Join(cacheBase, GitRemoteSpoolDirName, "*", "nbs-spool-*"))
 	require.NoError(t, err)
 	require.Len(t, spools, 1)
 
