@@ -19,7 +19,6 @@ import (
 	goerrors "errors"
 	"fmt"
 	"os"
-	"strings"
 	"sync/atomic"
 
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
@@ -27,6 +26,7 @@ import (
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
@@ -448,9 +448,8 @@ func HasDatabasePrivileges(ctx Context, database string) bool {
 	return hasSuper || isGlobalAdmin || isDatabaseAdmin
 }
 
-// getDatabaseNameOnly gets the database name only, which is useful for when the database name includes a revision.
-// This is a direct reimplementation of the logic in dsess.SplitRevisionDbName, however we cannot use that function due
-// to import cycles.
+// getDatabaseNameOnly strips any revision qualifier, `/` or `@` delimited, from |dbName|.
 func getDatabaseNameOnly(dbName string) string {
-	return strings.SplitN(dbName, "/", 2)[0]
+	base, _ := doltdb.SplitRevisionDbName(dbName)
+	return base
 }
