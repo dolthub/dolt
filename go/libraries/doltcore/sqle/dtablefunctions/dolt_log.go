@@ -47,6 +47,7 @@ type LogTableFunctionArgs struct {
 	decoration      string
 	showParents     bool
 	showSignature   bool
+	all             bool
 }
 
 // Name implements the sql.TableFunction interface
@@ -82,7 +83,7 @@ func (ltfa *LogTableFunctionArgs) validateRevisionStrings() error {
 	// no type validation needed here since getDoltArgs already validates expression types
 
 	for _, revisionStr := range ltfa.revisionStrs {
-		if strings.Contains(revisionStr, "..") && (len(ltfa.revisionStrs) > 1 || len(ltfa.notRevisionStrs) > 0) {
+		if strings.Contains(revisionStr, "..") && (len(ltfa.revisionStrs) > 1 || len(ltfa.notRevisionStrs) > 0 || ltfa.all) {
 			return sql.ErrInvalidArgumentDetails.New(ltfa.Name(), "revision cannot contain '..' or '...' if multiple revisions exist")
 		}
 	}
@@ -140,6 +141,7 @@ func (ltfa *LogTableFunctionArgs) addOptions(ctx *sql.Context, expressions []sql
 
 	ltfa.showParents = apr.Contains(cli.ParentsFlag)
 	ltfa.showSignature = apr.Contains(cli.ShowSignatureFlag)
+	ltfa.all = apr.Contains(cli.AllFlag)
 
 	// Default to short so ad-hoc SQL callers see refs without an extra flag. auto has no
 	// defined meaning here because the server has no tty signal, so accept it for back
@@ -271,6 +273,10 @@ func (ltf *LogTableFunction) getOptionsString() string {
 
 	if ltf.showSignature {
 		options = append(options, fmt.Sprintf("--%s", cli.ShowSignatureFlag))
+	}
+
+	if ltf.all {
+		options = append(options, fmt.Sprintf("--%s", cli.AllFlag))
 	}
 
 	if len(ltf.tableNames) > 0 {
@@ -513,6 +519,50 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		commits = append(commits, commit)
 	}
 
+	if args.all {
+		ddb := sqledb.DbData().Ddb
+		branches, err := ddb.GetBranchesWithHashes(ctx)
+		if err != nil {
+			return nil, err
+		}
+		remotes, err := ddb.GetRemotesWithHashes(ctx)
+		if err != nil {
+			return nil, err
+		}
+		heads := make([]hash.Hash, 0, len(branches)+len(remotes))
+		for _, b := range branches {
+			heads = append(heads, b.Hash)
+		}
+		for _, r := range remotes {
+			heads = append(heads, r.Hash)
+		}
+
+		// Dedupe so a repo whose refs all point at one commit keeps the single-commit path, which decorates HEAD.
+		seen := make(map[hash.Hash]struct{}, len(commits)+len(heads))
+		for _, c := range commits {
+			h, err := c.HashOf()
+			if err != nil {
+				return nil, err
+			}
+			seen[h] = struct{}{}
+		}
+		for _, h := range heads {
+			if _, ok := seen[h]; ok {
+				continue
+			}
+			seen[h] = struct{}{}
+			optCmt, err := ddb.ReadCommit(ctx, h)
+			if err != nil {
+				return nil, err
+			}
+			headCommit, ok := optCmt.ToCommit()
+			if !ok {
+				return nil, doltdb.ErrGhostCommitEncountered
+			}
+			commits = append(commits, headCommit)
+		}
+	}
+
 	var notCommits []*doltdb.Commit
 	for _, notRevisionStr := range notRevisionValStrs {
 		cs, err := doltdb.NewCommitSpec(notRevisionStr)
@@ -549,11 +599,21 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		return ltf.NewDotDotLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, commits, notCommits, matchFunc, cHashToRefs, ltf.tableNames, dtables.LogRowOptions{ShowParents: args.showParents, ShowSignature: args.showSignature})
 	}
 
-	if len(revisionValStrs) <= 1 && len(notRevisionValStrs) == 0 {
+	if len(commits) == 1 && len(notCommits) == 0 {
 		return ltf.NewLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, commits[0], matchFunc, cHashToRefs, ltf.tableNames, dtables.LogRowOptions{ShowParents: args.showParents, ShowSignature: args.showSignature})
 	}
 
-	return ltf.NewDotDotLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, commits, notCommits, matchFunc, cHashToRefs, ltf.tableNames, dtables.LogRowOptions{ShowParents: args.showParents, ShowSignature: args.showSignature})
+	iter, err := ltf.NewDotDotLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, commits, notCommits, matchFunc, cHashToRefs, ltf.tableNames, dtables.LogRowOptions{ShowParents: args.showParents, ShowSignature: args.showSignature})
+	if err != nil {
+		return nil, err
+	}
+	if args.all && len(revisionValStrs) == 0 {
+		// The multi-commit iterator leaves headHash unset; commits[0] is the session head.
+		if iter.headHash, err = commits[0].HashOf(); err != nil {
+			return nil, err
+		}
+	}
+	return iter, nil
 }
 
 var _ sql.RowIter = (*logTableFunctionRowIter)(nil)
