@@ -262,7 +262,7 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	}
 	nbsCS, err := nbs.NewGitStore(ctx, nbf.VersionString(), cacheRepo, ref, bsOpts, memlimit.MemtableSize(), q)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, errors.Join(err, bsOpts.SpoolDir.Close())
 	}
 
 	cs := gitSharedChunkStore{NomsBlockStore: nbsCS}
