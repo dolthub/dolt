@@ -581,6 +581,11 @@ func (d *DoltSession) clear() {
 // CommitTransaction commits the in-progress transaction. Depending on session settings, this may write only a new
 // working sets, or may additionally create a new dolt commit for the current HEAD.
 func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error {
+	// A statement that runs as part of another, as in a trigger, can't end that statement's transaction. Procedures
+	// that would are rejected before they run; this catches any that aren't.
+	if ctx.IsSubStatement() {
+		return sql.ErrCommitNotAllowedInSubStatement.New()
+	}
 	dirties := d.dirtyWorkingSets()
 
 	if TransactionsDisabled(ctx) || len(dirties) == 0 {
@@ -700,6 +705,9 @@ func (d *DoltSession) commitBranchStates(
 	tx sql.Transaction,
 	pending []*doltdb.PendingCommit,
 ) ([]*doltdb.Commit, error) {
+	if ctx.IsSubStatement() {
+		return nil, sql.ErrCommitNotAllowedInSubStatement.New()
+	}
 	dtx, ok := tx.(*DoltTransaction)
 	if !ok {
 		return nil, fmt.Errorf("expected a DoltTransaction")

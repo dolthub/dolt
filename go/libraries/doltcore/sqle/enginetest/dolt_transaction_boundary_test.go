@@ -20,10 +20,13 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
+	"gopkg.in/src-d/go-errors.v1"
 )
 
 // These tests check what happens to a transaction's writes where the transaction could end partway through a
-// statement. A CALL inside a transaction keeps the transaction's writes.
+// statement. A CALL inside a transaction keeps the transaction's writes. As in MySQL, a trigger, and any procedure it
+// calls, can't end its statement's transaction (ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG), so such a statement fails and
+// rolls back.
 
 type autocommitMode int
 
@@ -56,7 +59,9 @@ type boundaryCase struct {
 	setup      []string
 	explicitTx bool
 	statements []string
-	checks     []boundaryCheck
+	// errs are the statements that fail, with their errors.
+	errs   map[string]*errors.Kind
+	checks []boundaryCheck
 	// modes are the autocommit modes to run the case in. Nil means both.
 	modes []autocommitMode
 }
@@ -64,7 +69,7 @@ type boundaryCase struct {
 func (c boundaryCase) script(mode autocommitMode) queries.TransactionTest {
 	var assertions []queries.ScriptTestAssertion
 	stmt := func(q string) {
-		assertions = append(assertions, queries.ScriptTestAssertion{Query: "/* client a */ " + q, SkipResultsCheck: true})
+		assertions = append(assertions, queries.ScriptTestAssertion{Query: "/* client a */ " + q, SkipResultsCheck: true, ExpectedErr: c.errs[q]})
 	}
 	inTx := mode == autocommitOff || c.explicitTx
 	if mode == autocommitOff {
@@ -108,6 +113,27 @@ func withBoundarySetup(extra ...string) []string {
 }
 
 var threeRows = []sql.Row{{1, 1}, {2, 2}, {3, 3}}
+
+const rollbackTrigger = `create trigger trg after insert on t for each row
+begin
+	insert into t2 values (new.a, new.b);
+	rollback;
+end`
+
+const insertThree = "insert into t values (1, 1), (2, 2), (3, 3)"
+
+const branchTrigger = `create trigger trg after insert on t for each row
+begin
+	insert into t2 values (new.a, new.b);
+	call dolt_branch(concat('br', new.a));
+end`
+
+const commitTrigger = `create trigger trg after insert on t for each row
+begin
+	insert into t2 values (new.a, new.b);
+	call dolt_commit('-Am', concat('c', new.a));
+	insert into t3 values (new.a);
+end`
 
 var boundaryCases = []boundaryCase{
 	{
@@ -181,6 +207,125 @@ end`),
 			// #12356: the delete and the insert of 3 were undone by the CALL.
 			{query: "select * from t order by id", expected: []sql.Row{{2}, {3}, {4}}},
 			{query: "select * from u order by id", expected: []sql.Row{{10}}},
+		},
+	},
+	{
+		// As with COMMIT in MySQL, a trigger can't call a procedure that ends the transaction. These used to lose writes
+		// (#7737).
+		name:       "CREATE TRIGGER with a call to dolt_branch",
+		setup:      withBoundarySetup(),
+		statements: []string{branchTrigger, insertThree},
+		errs:       map[string]*errors.Kind{branchTrigger: sql.ErrCommitNotAllowedInSubStatement},
+		checks: []boundaryCheck{
+			{query: "select * from t order by a", expected: threeRows},
+			{query: "select * from t2 order by a", expected: []sql.Row{}},
+			{query: "select name from dolt_branches order by 1", expected: []sql.Row{{"main"}}},
+		},
+	},
+	{
+		name: "trigger inserts then calls a procedure that calls dolt_branch, over several rows",
+		setup: withBoundarySetup(
+			"create procedure pbr(n int) call dolt_branch(concat('br', n))",
+			`create trigger trg after insert on t for each row
+begin
+	insert into t2 values (new.a, new.b);
+	call pbr(new.a);
+end`),
+		statements: []string{insertThree},
+		errs:       map[string]*errors.Kind{insertThree: sql.ErrCommitNotAllowedInSubStatement},
+		checks: []boundaryCheck{
+			{query: "select * from t order by a", expected: []sql.Row{}},
+			{query: "select * from t2 order by a", expected: []sql.Row{}},
+			{query: "select name from dolt_branches order by 1", expected: []sql.Row{{"main"}}},
+		},
+	},
+	{
+		name:       "CREATE TRIGGER with a call to dolt_commit",
+		setup:      withBoundarySetup(),
+		statements: []string{commitTrigger, insertThree},
+		errs:       map[string]*errors.Kind{commitTrigger: sql.ErrCommitNotAllowedInSubStatement},
+		checks: []boundaryCheck{
+			{query: "select * from t order by a", expected: threeRows},
+			{query: "select * from t2 order by a", expected: []sql.Row{}},
+			{query: "select message from dolt_log order by date desc limit 1", expected: []sql.Row{{"init"}}},
+		},
+	},
+	{
+		name: "trigger calls a procedure that calls dolt_commit between writes, over several rows",
+		setup: withBoundarySetup(
+			"create procedure pc(n int) call dolt_commit('-Am', concat('c', n))",
+			`create trigger trg after insert on t for each row
+begin
+	insert into t2 values (new.a, new.b);
+	call pc(new.a);
+	insert into t3 values (new.a);
+end`),
+		statements: []string{insertThree},
+		errs:       map[string]*errors.Kind{insertThree: sql.ErrCommitNotAllowedInSubStatement},
+		checks: []boundaryCheck{
+			{query: "select * from t order by a", expected: []sql.Row{}},
+			{query: "select * from t2 order by a", expected: []sql.Row{}},
+			{query: "select * from t3 order by a", expected: []sql.Row{}},
+			{query: "select message from dolt_log order by date desc limit 1", expected: []sql.Row{{"init"}}},
+		},
+	},
+	{
+		// As in MySQL, a trigger can't contain DDL, and a procedure called from a trigger can't run it, so the statement
+		// fails and rolls back.
+		name: "DDL in a procedure called from a trigger",
+		setup: withBoundarySetup(
+			"create procedure pddl() create table if not exists n (id int primary key)",
+			`create trigger trg after insert on t for each row
+begin
+	insert into t2 values (new.a, new.b);
+	call pddl();
+end`),
+		statements: []string{insertThree},
+		errs:       map[string]*errors.Kind{insertThree: sql.ErrCommitNotAllowedInSubStatement},
+		checks: []boundaryCheck{
+			{query: "select * from t order by a", expected: []sql.Row{}},
+			{query: "select * from t2 order by a", expected: []sql.Row{}},
+			{query: "select count(*) from information_schema.tables where table_schema = 'mydb' and table_name = 'n'", expected: []sql.Row{{0}}},
+		},
+	},
+	{
+		// As in MySQL, a procedure called from a trigger can't end the transaction: the statement fails and rolls back,
+		// and the transaction's earlier writes are kept.
+		name: "ROLLBACK in a procedure called from a trigger",
+		setup: withBoundarySetup(
+			"create procedure prb() rollback",
+			`create trigger trg after insert on t for each row
+begin
+	insert into t2 values (new.a, new.b);
+	call prb();
+end`),
+		explicitTx: true,
+		statements: []string{
+			"insert into t3 values (9)",
+			"insert into t values (1, 1)",
+		},
+		errs: map[string]*errors.Kind{"insert into t values (1, 1)": sql.ErrCommitNotAllowedInSubStatement},
+		checks: []boundaryCheck{
+			{query: "select * from t3 order by a", expected: []sql.Row{{9}}},
+			{query: "select * from t order by a", expected: []sql.Row{}},
+			{query: "select * from t2 order by a", expected: []sql.Row{}},
+		},
+	},
+	{
+		// As in MySQL, CREATE TRIGGER rejects a ROLLBACK in the trigger body.
+		name:       "ROLLBACK directly in a trigger",
+		setup:      withBoundarySetup(),
+		explicitTx: true,
+		statements: []string{
+			"insert into t3 values (9)",
+			rollbackTrigger,
+			"insert into t values (1, 1)",
+		},
+		errs: map[string]*errors.Kind{rollbackTrigger: sql.ErrCommitNotAllowedInSubStatement},
+		checks: []boundaryCheck{
+			{query: "select * from t3 order by a", expected: []sql.Row{{9}}},
+			{query: "select * from t order by a", expected: []sql.Row{{1, 1}}},
+			{query: "select * from t2 order by a", expected: []sql.Row{}},
 		},
 	},
 }

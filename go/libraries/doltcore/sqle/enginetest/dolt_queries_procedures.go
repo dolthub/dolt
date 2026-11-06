@@ -807,12 +807,17 @@ end
 		},
 	},
 	{
+		// As with COMMIT in MySQL, a trigger can't call dolt_branch, which ends the transaction. This used to lose the
+		// trigger's writes (#7737).
 		Name: "dolt_branch in trigger",
 		SetUpScript: []string{
 			"create table t(a int primary key auto_increment, b int);",
 			"create table t2(a int primary key auto_increment, b int);",
 			"call dolt_commit('-Am', 'new table');",
-			`create trigger branch_trigger after insert on t for each row
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: `create trigger branch_trigger after insert on t for each row
 begin
   declare i int default 1;
 	commits: loop
@@ -837,34 +842,11 @@ begin
 	end loop commits;
 end
 `,
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query: "insert into t values (1, 1);",
-				Expected: []sql.Row{
-					{gmstypes.OkResult{RowsAffected: 1, InsertID: 1}},
-				},
+				ExpectedErr: sql.ErrCommitNotAllowedInSubStatement,
 			},
 			{
-				Query: "select name from dolt_branches order by 1",
-				Expected: []sql.Row{
-					{"branch1"},
-					{"branch2"},
-					{"branch3"},
-					{"branch4"},
-					{"main"},
-				},
-			},
-			{
-				// For some reason, calling stored procedures disables inserts
-				Skip:  true,
-				Query: "select * from t2 order by 1",
-				Expected: []sql.Row{
-					{1, 1},
-					{2, 2},
-					{3, 3},
-					{4, 4},
-				},
+				Query:    "select name from dolt_branches order by 1",
+				Expected: []sql.Row{{"main"}},
 			},
 		},
 	},
