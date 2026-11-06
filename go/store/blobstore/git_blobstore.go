@@ -799,6 +799,9 @@ func (gbs *GitBlobstore) Close() error {
 	// again, and answers reads from what it has already cached. Nothing errors
 	// out on a read after Close today, and this keeps it that way.
 	gbs.quiesceSyncs(errGitStoreClosed)
+	if gbs.spoolDir != nil {
+		return gbs.spoolDir.Close()
+	}
 	return nil
 }
 

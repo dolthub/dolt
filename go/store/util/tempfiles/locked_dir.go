@@ -23,6 +23,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	filelocks "github.com/dolthub/file-locks"
@@ -42,10 +43,21 @@ import (
 // A lock file is the last thing removed, while its lock is still held. Opening a lock file
 // makes it if it is not there, so one inside the directory could reappear partway through the
 // removal and stop the directory from being removed.
+//
+// Close gives the directory up once every file made in it has been removed with RemoveFile,
+// so an owner can close it while files are still in use.
 type LockedDir struct {
 	dir  string
 	lock *filelocks.Lock
+
+	mu sync.Mutex
+	// files is the number of files made by NewFile and not yet removed by RemoveFile.
+	files  int
+	closed bool
 }
+
+// ErrLockedDirClosed is returned by NewFile after Close.
+var ErrLockedDirClosed = errors.New("locked directory is closed")
 
 const (
 	lockedDirPrefix     = "locked-"
@@ -98,12 +110,51 @@ func tryNewLockedDir(parent string) (*LockedDir, error) {
 // NewFile makes a new temp file in the directory. It is made through MovableTempFileProvider
 // so that Clean removes it if it is never removed.
 func (d *LockedDir) NewFile(pattern string) (*os.File, error) {
-	return MovableTempFileProvider.NewFile(d.dir, pattern)
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.closed {
+		return nil, ErrLockedDirClosed
+	}
+	f, err := MovableTempFileProvider.NewFile(d.dir, pattern)
+	if err != nil {
+		return nil, err
+	}
+	d.files++
+	return f, nil
 }
 
 // RemoveFile closes and removes |f|, which NewFile made.
 func (d *LockedDir) RemoveFile(f *os.File) error {
-	return errors.Join(f.Close(), file.Remove(f.Name()))
+	err := errors.Join(f.Close(), file.Remove(f.Name()))
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.files--
+	if d.closed && d.files == 0 {
+		err = errors.Join(err, d.release())
+	}
+	return err
+}
+
+// Close removes the directory and gives up the lock, now if no files remain and otherwise when
+// the last one is removed. Closing twice is harmless.
+func (d *LockedDir) Close() error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.closed {
+		return nil
+	}
+	d.closed = true
+	if d.files == 0 {
+		return d.release()
+	}
+	return nil
+}
+
+// release removes the directory and gives up the lock. The caller holds d.mu.
+func (d *LockedDir) release() error {
+	err := removeLockedDir(d.dir)
+	unlockDir(d.lock, d.dir)
+	return errors.Join(err, d.lock.Close())
 }
 
 // CleanDir removes the LockedDirs in |parent| left by dead processes. It does not wait for a
