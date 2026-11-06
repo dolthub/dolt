@@ -35,6 +35,10 @@ var ErrNoData = errors.New("no data")
 var ErrCloneUnsupported = errors.New("clone unsupported")
 
 func Clone(ctx context.Context, srcCS, sinkCS chunks.ChunkStore, getAddrs chunks.InsertAddrsCurry, tempTableDir string, eventCh chan<- TableFileEvent) error {
+	format, err := tableFileFormatFor(srcCS, sinkCS)
+	if err != nil {
+		return err
+	}
 	srcTS, srcOK := srcCS.(chunks.TableFileStore)
 
 	if !srcOK {
@@ -57,7 +61,7 @@ func Clone(ctx context.Context, srcCS, sinkCS chunks.ChunkStore, getAddrs chunks
 		return fmt.Errorf("%w: sink db is not a Table File Store", ErrCloneUnsupported)
 	}
 
-	return clone(ctx, srcTS, sinkTS, sinkCS, getAddrs, tempTableDir, eventCh)
+	return clone(ctx, srcTS, sinkTS, sinkCS, getAddrs, tempTableDir, format, eventCh)
 }
 
 type CloneTableFileEvent int
@@ -95,7 +99,7 @@ func mapTableFiles(tblFiles []chunks.TableFile) ([]string, map[string]chunks.Tab
 
 const concurrentTableFileDownloads = 3
 
-func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chunks.ChunkStore, getAddrs chunks.InsertAddrsCurry, tempTableDir string, eventCh chan<- TableFileEvent) error {
+func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chunks.ChunkStore, getAddrs chunks.InsertAddrsCurry, tempTableDir string, format tableFileFormat, eventCh chan<- TableFileEvent) error {
 	sources, err := srcTS.Sources(ctx)
 	if err != nil {
 		return err
@@ -174,7 +178,7 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chun
 							Stats:      []iohelp.ReadStats{s},
 						})
 					})
-					writer, uploadFileID, err := convertJournalToTableFile(ctx, rdStats, 0, tempTableDir)
+					writer, uploadFileID, err := convertJournalToTableFile(ctx, rdStats, 0, tempTableDir, format)
 					rdStats.Close()
 					if err != nil {
 						return err
@@ -346,12 +350,12 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chun
 	return errors.New("clone left in indeterminate state: unexpected concurrent writes against the destination store prevented clone from setting the root of the database to be the same as source's root")
 }
 
-func convertJournalToTableFile(ctx context.Context, readCloser io.ReadCloser, off int64, tmpDir string) (*nbs.ArchiveStreamWriter, string, error) {
-	writer, err := nbs.NewArchiveStreamWriter(tmpDir)
+func convertJournalToTableFile(ctx context.Context, readCloser io.ReadCloser, off int64, tmpDir string, format tableFileFormat) (nbs.GenericTableWriter, string, error) {
+	writer, err := format.newWriter(tmpDir, true)
 	if err != nil {
 		return nil, "", err
 	}
-	err = nbs.VisitJournalReaderChunks(ctx, readCloser, off, func(cb nbs.CompressedChunk) error {
+	err = format.visitJournal(ctx, readCloser, off, func(cb nbs.ToChunker) error {
 		_, err := writer.AddChunk(cb)
 		return err
 	})

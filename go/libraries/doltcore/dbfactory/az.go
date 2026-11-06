@@ -75,7 +75,7 @@ func (fact AzureDBFactory) CreateDB(ctx context.Context, nbf *types.NomsBinForma
 
 	bs := blobstore.NewAzureBlobstore(azClient, containerName, blobPrefix)
 	q := nbs.NewUnlimitedMemQuotaProvider()
-	azStore, err := nbs.NewBSStore(ctx, nbf.VersionString(), bs, memlimit.MemtableSize(), q)
+	azStore, err := nbs.NewBSStore(ctx, nbf.VersionString(), bs, memlimit.MemtableSize(), q, storeOptions.blockStore(nbf, "", params)...)
 
 	if err != nil {
 		return nil, nil, nil, err

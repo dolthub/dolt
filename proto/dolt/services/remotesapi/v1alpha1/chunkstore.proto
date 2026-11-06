@@ -20,6 +20,9 @@ import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1;remotesapi";
 
+// Fields and enum values numbered from 1000 describe encrypted repositories, which Dolt Enterprise serves. Number
+// other new fields and values below 1000.
+
 service ChunkStoreService {
   rpc GetRepoMetadata(GetRepoMetadataRequest) returns (GetRepoMetadataResponse);
 
@@ -106,11 +109,19 @@ message RangeChunk {
   // compression (classic NOMS table file or journal chunk use snappy compression).
   uint64 dictionary_offset = 4;
   uint32 dictionary_length = 5;
+
+  // One plus the index into HttpGetRange.keys of the keys that sealed
+  // the chunk and its dictionary; zero is none.
+  uint32 key_index = 1000;
+  uint32 dictionary_key_index = 1001;
 }
 
 message HttpGetRange {
   string url = 1;
   repeated RangeChunk ranges = 2;
+
+  // The wrapped keys of encrypted records, as stored, referenced by |ranges|.
+  repeated bytes keys = 1000;
 }
 
 message DownloadLoc {
@@ -232,6 +243,20 @@ message StreamChunkLocationsResponse {
     // semantics as the existing RangeChunk.dictionary_{offset,length}.
     uint64 dictionary_offset = 5;
     uint32 dictionary_length = 6;
+
+    // The DataKey.key_id of the keys that sealed the chunk and its
+    // dictionary; zero is none.
+    uint32 key_id = 1000;
+    uint32 dictionary_key_id = 1001;
+  }
+
+  // A wrapped key of encrypted records, as stored. Like a
+  // TableFileRecord, it is introduced before or in the same response
+  // as any ChunkLocation that references it in this stream.
+  message DataKey {
+    // Nonzero, and scoped to the current server-side stream.
+    uint32 key_id = 1;
+    bytes wrapped_key = 2;
   }
 
   // If non-empty, advertises a new repo_token that the client should
@@ -255,6 +280,10 @@ message StreamChunkLocationsResponse {
   // Not a byte offset. Sent explicitly so the client does not have
   // to diff requested vs. returned.
   repeated uint32 missing_indexes = 4;
+
+  // Zero or more keys introduced by this response. Same rules as
+  // |table_files|.
+  repeated DataKey keys = 1000;
 }
 
 message TableFileDetails {
@@ -372,6 +401,9 @@ enum Feature {
   // prefer it to StreamDownloadLocations when this feature is
   // present.
   FEATURE_STREAM_CHUNK_LOCATIONS = 1;
+
+  // Server returns the keys of the encrypted records it locates.
+  FEATURE_ENCRYPTION = 1000;
 }
 
 // Capabilities the client declares about itself on every request
@@ -404,6 +436,10 @@ enum ClientCapability {
   // generally succeed against HTTP/2 URLs but can see degraded
   // performance under certain network conditions.
   CLIENT_CAPABILITY_HTTP2_DOWNLOAD = 1;
+
+  // The client reads the keys of encrypted records. Servers MUST NOT
+  // return the locations of encrypted records to clients without it.
+  CLIENT_CAPABILITY_ENCRYPTION = 1000;
 }
 
 message GetRepoMetadataResponse {
@@ -430,6 +466,9 @@ message GetRepoMetadataResponse {
 message ClientRepoFormat {
   string nbf_version = 1;
   string nbs_version = 2;
+
+  // The 16 byte, nonzero encryption scope that a repository created for this request takes.
+  bytes encryption_scope = 1000;
 }
 
 message ListTableFilesRequest  {

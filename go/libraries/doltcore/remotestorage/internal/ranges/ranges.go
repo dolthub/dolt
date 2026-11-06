@@ -38,10 +38,12 @@ type GetRange struct {
 	Url        string
 	Hash       []byte
 	Offset     uint64
-	Length     uint32
 	DictOffset uint64
+	Length     uint32
 	DictLength uint32
 	Region     *Region
+	// Key is the stored key that sealed the record, nil for a plaintext record. It is a pointer to keep ranges small.
+	Key *[]byte
 }
 
 // A |Region| represents a continuous range of bytes within in a Url.
@@ -238,6 +240,13 @@ func (t *Tree) Insert(url string, hash []byte, offset uint64, length uint32, dic
 			Score:        rand.Int(),
 		}
 		heap.Push(t.regions, ins.Region)
+	}
+}
+
+// SetKey sets the record key of the range at |offset| in |url|, if the tree holds it.
+func (t *Tree) SetKey(url string, offset uint64, key *[]byte) {
+	if gr, ok := t.t.Get(&GetRange{Url: url, Offset: offset}); ok {
+		gr.Key = key
 	}
 }
 
