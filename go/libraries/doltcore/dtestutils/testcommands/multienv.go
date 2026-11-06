@@ -198,7 +198,7 @@ func (mr *MultiRepoTestSetup) CloneDB(fromRemote, dbName string) {
 	}
 
 	dEnv := env.LoadWithoutDB(context.Background(), mr.homeProv, filesys.LocalFS, doltdb.LocalDirDoltDB, "test")
-	dEnv, err = actions.EnvForClone(ctx, srcDB.Format(), r, cloneDir, dEnv.FS, dEnv.Version, mr.homeProv)
+	dEnv, err = actions.EnvForCloneOf(ctx, srcDB, r, cloneDir, dEnv.FS, dEnv.Version, mr.homeProv)
 	if err != nil {
 		mr.Errhand(err)
 	}

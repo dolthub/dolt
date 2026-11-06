@@ -741,11 +741,18 @@ func buildBatchSqlErr(stmtStartLine int, query string, err error) error {
 	return formatQueryError(fmt.Sprintf("error on line %d for query %s", stmtStartLine, query), err)
 }
 
+// sqlHistoryFile returns the file that the shell keeps its history in, in place of |historyFile|, or "" to keep it only
+// in memory. Dolt Enterprise replaces it.
+var sqlHistoryFile = func(sqlCtx *sql.Context, cliCtx cli.CliContext, historyFile string) string {
+	return historyFile
+}
+
 // execShell starts a SQL shell. Returns when the user exits the shell. The Root of the sqlEngine may
 // be updated by any queries which were processed.
 func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResultFormat, cliCtx cli.CliContext, binaryAsHex bool) error {
 	_ = iohelp.WriteLine(cli.CliOut, welcomeMsg)
 	historyFile := filepath.Join(".sqlhistory") // history file written to working dir
+	historyFile = sqlHistoryFile(sqlCtx, cliCtx, historyFile)
 
 	initialPrompt, initialMultilinePrompt := postCommandUpdate(sqlCtx, qryist)
 

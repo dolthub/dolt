@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/url"
 	"path"
 	"path/filepath"
@@ -112,6 +113,9 @@ func (r *Remote) DBFactoryParams(dialer dbfactory.GRPCDialProvider) (map[string]
 	}
 
 	params[dbfactory.GRPCDialProviderParam] = dialer
+	if err := storage.remoteParams(params, dialer); err != nil {
+		return nil, err
+	}
 	u, err := earl.Parse(r.Url)
 	if err != nil {
 		return nil, err
@@ -202,6 +206,7 @@ func addGitRemoteHistoryConfig(params map[string]interface{}, dialer dbfactory.G
 func (r Remote) WithParams(params map[string]string) Remote {
 	fetchSpecs := make([]string, len(r.FetchSpecs))
 	copy(fetchSpecs, r.FetchSpecs)
+	params = maps.Clone(params)
 	for k, v := range r.Params {
 		params[k] = v
 	}

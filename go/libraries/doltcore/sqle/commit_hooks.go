@@ -407,7 +407,11 @@ func getDestinationDb(ctx context.Context, dEnv *env.DoltEnv, remoteName string)
 		return nil, fmt.Errorf("%w: '%s'", env.ErrRemoteNotFound, remoteName)
 	}
 
-	destDb, err := rem.GetRemoteDB(ctx, types.Format_DOLT, dEnv)
+	push, err := rem.ForPushFrom(ctx, dEnv.DoltDB(ctx))
+	if err != nil {
+		return nil, err
+	}
+	destDb, err := push.GetRemoteDB(ctx, types.Format_DOLT, dEnv)
 	if err != nil {
 		return nil, err
 	}

@@ -259,6 +259,10 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 	// database (lookupDbName) is a separate database created via [dsess.DoltSessionProvider.CreateDatabase]
 	// and follows the normal caching path.
 	defer remoteDb.Close()
+	params, err := restoreParams(ctx, dsess.Provider(), remoteDb)
+	if err != nil {
+		return err
+	}
 
 	lookupDbName := apr.Arg(2)
 	hasLookupDb := dsess.Provider().HasDatabase(ctx, lookupDbName)
@@ -284,7 +288,7 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 		}
 	}
 
-	err = dsess.Provider().CreateDatabase(ctx, lookupDbName)
+	err = createDatabaseWithParams(ctx, dsess.Provider(), lookupDbName, params)
 	if err != nil {
 		return err
 	}
@@ -305,6 +309,21 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 	return err
 }
 
+// restoreParams returns the params that |p| creates a database to restore |backup| into with, before anything is
+// dropped to make room for it.
+func restoreParams(ctx *sql.Context, p dsess.DoltDatabaseProvider, backup *doltdb.DoltDB) (map[string]string, error) {
+	params, err := env.RestoreParams(ctx, backup)
+	if err == nil {
+		err = dsess.CheckCreateDatabaseWithParams(p, params)
+	}
+	return params, err
+}
+
+// createDatabaseWithParams is dsess.CreateDatabaseWithParams, for functions whose dsess parameter hides the package.
+func createDatabaseWithParams(ctx *sql.Context, p dsess.DoltDatabaseProvider, name string, params map[string]string) error {
+	return dsess.CreateDatabaseWithParams(ctx, p, name, params)
+}
+
 // syncRemote syncs the roots from |dbData| to the remote specified by |remote|. It prepares the remote database
 // location using [dbfactory.PrepareDB], which creates directories for file:// URLs if they do not exist. The sync
 // operation copies all chunks from the source database to the destination, effectively overwriting the destination
@@ -321,7 +340,7 @@ func syncRemote(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.
 	// We primarily use this to initialize the directory for file URLs without a directory.
 	_ = dbfactory.PrepareDB(ctx, dbData.Ddb.Format(), remote.Url, params)
 
-	destDb, err := dsess.Provider().GetRemoteDB(ctx, dbData.Ddb.Format(), remote)
+	destDb, err := pushRemoteDB(ctx, dsess.Provider(), dbData.Ddb, remote)
 	if err != nil {
 		return err
 	}

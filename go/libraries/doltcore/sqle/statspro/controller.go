@@ -118,6 +118,10 @@ type StatsController struct {
 	// against the quiescedAwake channel which it installed at
 	// the beginning of that run.
 	quiescedAwake chan struct{}
+	guard         storageGuard
+	guarded       bool
+	// guardMemOnly is set when the guard could not open guarded stats storage, which SetMemOnly(false) keeps.
+	guardMemOnly bool
 }
 
 type rootStats struct {
@@ -158,6 +162,7 @@ func NewStatsController(logger *logrus.Logger, bgThreads *sql.BackgroundThreads,
 		kv:             NewMemStats(),
 		getUserHomeDir: dEnvHomeDir(dEnv),
 		dbLoadParams:   dEnvLoadParams(dEnv),
+		guard:          newStorageGuard(dEnv),
 		bgThreads:      bgThreads,
 		genCnt:         atomic.Uint64{},
 	}
@@ -184,7 +189,7 @@ func (sc *StatsController) SetBackgroundThreads(bgThreads *sql.BackgroundThreads
 func (sc *StatsController) SetMemOnly(v bool) {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
-	sc.memOnly = v
+	sc.memOnly = v || sc.guardMemOnly
 }
 
 func (sc *StatsController) SetEnableGc(v bool) {
@@ -231,6 +236,7 @@ func (sc *StatsController) AddFs(ctx *sql.Context, db dsess.SqlDatabase, fs file
 
 	firstDb := len(sc.dbFs) == 0
 	sc.dbFs[db.AliasedName()] = fs
+	sc.lockedNoteDB(ctx, db.DbData().Ddb)
 	if rotateOk && firstDb {
 		return sc.lockedRotateStorage(ctx)
 	}
@@ -340,6 +346,7 @@ func (sc *StatsController) AnalyzeTable(ctx *sql.Context, table sql.Table, dbNam
 	if err != nil {
 		return err
 	}
+	sc.noteDB(ctx, sqlDb.DbData().Ddb)
 
 	newStats := newRootStats()
 
@@ -582,6 +589,12 @@ func (sc *StatsController) lockedRotateStorage(ctx context.Context) error {
 	}
 
 	newKv, err := sc.initStorage(ctx, newStorageTarget)
+	if err != nil && sc.guarded {
+		sc.descError("opening a guarded stats database; keeping statistics in memory", err)
+		sc.memOnly, sc.guardMemOnly = true, true
+		sc.statsBackingDb = nil
+		return nil
+	}
 	if err != nil {
 		return err
 	}
@@ -634,6 +647,7 @@ func (sc *StatsController) initStorage(ctx context.Context, fs filesys.Filesys) 
 		dbLoadParams = make(map[string]interface{})
 	}
 	dbLoadParams[dbfactory.DisableSingletonCacheParam] = struct{}{}
+	sc.guard.params(dbLoadParams, sc.guarded)
 
 	var dEnv *env.DoltEnv
 	exists, isDir := statsFs.Exists("")
@@ -662,6 +676,12 @@ func (sc *StatsController) initStorage(ctx context.Context, fs filesys.Filesys) 
 	}
 
 	statsDdb := dEnv.DbData(ctx).Ddb
+	if sc.guarded {
+		if err := sc.guard.check(statsDdb); err != nil {
+			statsDdb.Close()
+			return nil, err
+		}
+	}
 	m, err := statsDdb.GetStatistics(ctx)
 	if err == nil {
 		// use preexisting map

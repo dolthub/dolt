@@ -36,6 +36,9 @@ func NewBinlogInitDatabaseHook(_ context.Context, listeners []doltdb.DatabaseUpd
 		denv *env.DoltEnv,
 		db dsess.SqlDatabase,
 	) error {
+		if err := checkDatabase(name, denv.DoltDB(ctx)); err != nil {
+			return err
+		}
 		for _, listener := range listeners {
 			err := listener.DatabaseCreated(ctx, name)
 			if err != nil {
