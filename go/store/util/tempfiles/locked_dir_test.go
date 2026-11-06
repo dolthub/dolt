@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	filelocks "github.com/dolthub/file-locks"
 	"github.com/stretchr/testify/require"
@@ -207,4 +208,106 @@ func TestNewLockedDir_RacingClean(t *testing.T) {
 		require.NoError(t, err, "iteration %d: a held lock file must not be removed", i)
 		require.NoError(t, d.lock.Close())
 	}
+}
+
+func TestLockedDir_Close(t *testing.T) {
+	parent := t.TempDir()
+	stat := func(path string) error {
+		_, err := os.Stat(path)
+		return err
+	}
+
+	t.Run("with no files", func(t *testing.T) {
+		d := newTestLockedDir(t, parent)
+		require.NoError(t, d.Close())
+		require.True(t, os.IsNotExist(stat(d.dir)))
+		require.True(t, os.IsNotExist(stat(d.dir+lockedDirLockSuffix)))
+		require.NoError(t, d.Close(), "closing twice is harmless")
+		_, err := d.NewFile("file-")
+		require.ErrorIs(t, err, ErrLockedDirClosed)
+	})
+	t.Run("files keep it until the last is removed", func(t *testing.T) {
+		d := newTestLockedDir(t, parent)
+		f1, err := d.NewFile("file-")
+		require.NoError(t, err)
+		f2, err := d.NewFile("file-")
+		require.NoError(t, err)
+		other := otherProcess(t, d.dir)
+
+		require.NoError(t, d.Close())
+		require.NoError(t, stat(f1.Name()), "a file may still be in use")
+		require.Equal(t, filelocks.ErrLocked, other.TryLock())
+		_, err = d.NewFile("file-")
+		require.ErrorIs(t, err, ErrLockedDirClosed)
+
+		require.NoError(t, d.RemoveFile(f1))
+		require.NoError(t, stat(d.dir))
+		require.Equal(t, filelocks.ErrLocked, other.TryLock())
+
+		require.NoError(t, d.RemoveFile(f2))
+		require.True(t, os.IsNotExist(stat(d.dir)))
+		require.True(t, os.IsNotExist(stat(d.dir+lockedDirLockSuffix)))
+	})
+	t.Run("removing a file while open keeps it", func(t *testing.T) {
+		d := newTestLockedDir(t, parent)
+		f, err := d.NewFile("file-")
+		require.NoError(t, err)
+		require.NoError(t, d.RemoveFile(f))
+		require.NoError(t, stat(d.dir), "only Close gives the directory up")
+		require.Equal(t, filelocks.ErrLocked, otherProcess(t, d.dir).TryLock())
+		require.NoError(t, d.Close())
+	})
+}
+
+// blockingTempFileProvider holds NewFile until the test lets it go on.
+type blockingTempFileProvider struct {
+	TempFileProvider
+	entered chan struct{}
+	proceed chan struct{}
+}
+
+func (p blockingTempFileProvider) NewFile(dir, pattern string) (*os.File, error) {
+	close(p.entered)
+	<-p.proceed
+	return p.TempFileProvider.NewFile(dir, pattern)
+}
+
+// A Close that runs while a file is being made has to wait for it, and then count it. If it did
+// not wait, it would remove the directory the file is about to go in.
+func TestLockedDir_CloseWaitsForFileBeingMade(t *testing.T) {
+	d := newTestLockedDir(t, t.TempDir())
+
+	provider := blockingTempFileProvider{MovableTempFileProvider, make(chan struct{}), make(chan struct{})}
+	MovableTempFileProvider = provider
+	t.Cleanup(func() { MovableTempFileProvider = provider.TempFileProvider })
+
+	type result struct {
+		f   *os.File
+		err error
+	}
+	made := make(chan result, 1)
+	go func() {
+		f, err := d.NewFile("file-")
+		made <- result{f, err}
+	}()
+	<-provider.entered
+
+	closed := make(chan error, 1)
+	go func() { closed <- d.Close() }()
+	select {
+	case <-closed:
+		close(provider.proceed)
+		<-made
+		require.Fail(t, "Close ran while a file was being made")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	close(provider.proceed)
+	res := <-made
+	require.NoError(t, res.err)
+	require.NoError(t, <-closed)
+	require.Equal(t, filelocks.ErrLocked, otherProcess(t, d.dir).TryLock(), "Close must count the file and keep the lock")
+	require.NoError(t, d.RemoveFile(res.f))
+	_, err := os.Stat(d.dir)
+	require.True(t, os.IsNotExist(err))
 }
