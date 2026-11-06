@@ -399,9 +399,8 @@ func (l strictnessLevel) policy(calls *int) merge.RowMergePolicy {
 
 // ---------------------------------------------------------------------------
 // The case matrix. pk 1 or 2 carries the case; pk 99 is ballast that only the
-// left side edits, so the two roots always differ (an identical pair short
-// circuits before any row is compared) and so every run also asserts that a
-// one-sided edit is not offered to the policy.
+// left side edits, so the two roots always differ and so every run also
+// asserts that a one-sided edit is not offered to the policy.
 // ---------------------------------------------------------------------------
 
 type levelCase struct {
@@ -758,4 +757,26 @@ func requireSameTables(t *testing.T, expected doltdb.RootValue, actual doltdb.Ro
 	act, err := doltdb.MapTableHashes(ctx, actual)
 	require.NoError(t, err)
 	require.Equal(t, exp, act, "merged tables must match the expected composition")
+}
+
+// Both sides changing a table identically merges without comparing any rows
+// when no policy is installed, so a policy must still be consulted for each
+// row that both sides changed.
+func TestRowMergePolicy_SeesConvergentEditsInIdenticalTables(t *testing.T) {
+	data := dataTest{
+		name:     "both sides set a=1 on row 1 and nothing else",
+		ancestor: []sql.Row{sql.NewRow(1, 0, 0), sql.NewRow(2, 0, 0)},
+		left:     []sql.Row{sql.NewRow(1, 1, 0), sql.NewRow(2, 0, 0)},
+		right:    []sql.Row{sql.NewRow(1, 1, 0), sql.NewRow(2, 0, 0)},
+		merged:   []sql.Row{sql.NewRow(1, 1, 0), sql.NewRow(2, 0, 0)},
+	}
+
+	p := &recordingRowMergePolicy{answer: func() (val.Tuple, tree.RowMergeStatus) {
+		return nil, tree.RowMergeConflict
+	}}
+	result, err := runPolicyMerge(t, data, p.opt())
+	require.NoError(t, err)
+	require.Len(t, p.calls, 1, "the convergent row must reach the policy")
+	require.Equal(t, 1, dataConflictCount(result),
+		"RowMergeConflict on a convergent edit must record a data conflict")
 }
