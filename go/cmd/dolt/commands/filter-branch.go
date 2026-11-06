@@ -25,11 +25,11 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
@@ -124,6 +124,12 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
+	// Remove a scratch branch left behind by an interrupted filter-branch, so that it isn't rewritten as a branch.
+	err = deleteScratchBranch(ctx, dEnv.DoltDB(ctx))
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
 	rootReplayer := &workingSetReplayer{
 		dEnv:          dEnv,
 		queryString:   queryString,
@@ -175,7 +181,12 @@ func (r *workingSetReplayer) ReplayRoot(ctx context.Context, root, _, _ doltdb.R
 		cli.Printf("processing commit %s\n", rootHashStr)
 	}
 
-	updatedRoot, err := processFilterQuery(ctx, r.dEnv, root, rootHashStr, r.queryString, r.verbose, r.continueOnErr)
+	head, err := r.dEnv.HeadCommit(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	updatedRoot, err := processFilterQuery(ctx, r.dEnv, head, root, rootHashStr, r.queryString, r.verbose, r.continueOnErr)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +235,7 @@ func (c *commitReplayer) ReplayCommit(ctx context.Context, commit, _, _ *doltdb.
 		cli.Printf("processing commit %s\n", cmHashStr)
 	}
 
-	updatedRoot, err := processFilterQuery(ctx, c.dEnv, root, cmHashStr, c.queryString, c.verbose, c.continueOnErr)
+	updatedRoot, err := processFilterQuery(ctx, c.dEnv, commit, root, cmHashStr, c.queryString, c.verbose, c.continueOnErr)
 	if err != nil {
 		return nil, err
 	}
@@ -275,8 +286,20 @@ func getNerf(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResu
 	return rebase.StopAtCommit(cm), nil
 }
 
-func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue, cmHashStr string, query string, verbose bool, continueOnErr bool) (doltdb.RootValue, error) {
-	sqlCtx, eng, err := rebaseSqlEngine(ctx, dEnv, root)
+func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, head *doltdb.Commit, root doltdb.RootValue, cmHashStr string, query string, verbose bool, continueOnErr bool) (_ doltdb.RootValue, err error) {
+	ddb := dEnv.DoltDB(ctx)
+	err = resetScratchBranch(ctx, ddb, head, root)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		deleteErr := deleteScratchBranch(ctx, ddb)
+		if err == nil {
+			err = deleteErr
+		}
+	}()
+
+	sqlCtx, eng, err := rebaseSqlEngine(ctx, dEnv)
 	if err != nil {
 		return nil, err
 	}
@@ -284,10 +307,6 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root doltdb.Root
 	defer eng.Close()
 
 	scanner := NewStreamScanner(strings.NewReader(query))
-	if err != nil {
-		return nil, err
-	}
-
 	for scanner.Scan() {
 		q := scanner.Text()
 
@@ -295,23 +314,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root doltdb.Root
 			cli.Printf("executing query: %s\n", q)
 		}
 
-		err = func() error {
-			_, itr, _, err := eng.Query(sqlCtx, q)
-			if err != nil {
-				return err
-			}
-
-			for {
-				_, err = itr.Next(sqlCtx)
-				if err == io.EOF {
-					break
-				} else if err != nil {
-					return err
-				}
-			}
-			return itr.Close(sqlCtx)
-		}()
-
+		err = runFilterQuery(sqlCtx, eng, q)
 		if err != nil {
 			if continueOnErr {
 				if verbose {
@@ -323,8 +326,13 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root doltdb.Root
 		}
 	}
 
-	sess := dsess.DSessFromSess(sqlCtx.Session)
-	ws, err := sess.WorkingSet(sqlCtx, filterDbName)
+	// Autocommit is off, so the queries' changes reach the scratch branch's working set when this transaction commits.
+	err = runFilterQuery(sqlCtx, eng, "COMMIT")
+	if err != nil {
+		return nil, err
+	}
+
+	ws, err := ddb.ResolveWorkingSet(ctx, filterScratchWorkingSetRef())
 	if err != nil {
 		return nil, err
 	}
@@ -332,11 +340,76 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root doltdb.Root
 	return ws.WorkingRoot(), nil
 }
 
-// rebaseSqlEngine packages up the context necessary to run sql queries against single root
-// The SQL engine returned has transactions disabled. This is to prevent transactions starts from overwriting the root
-// we set manually with the one at the working set of the HEAD being rebased.
+// runFilterQuery executes |query| and drains its results.
+func runFilterQuery(sqlCtx *sql.Context, eng *filterEngine, query string) error {
+	_, itr, _, err := eng.Query(sqlCtx, query)
+	if err != nil {
+		return err
+	}
+
+	for {
+		_, err = itr.Next(sqlCtx)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			itr.Close(sqlCtx)
+			return err
+		}
+	}
+
+	return itr.Close(sqlCtx)
+}
+
+// filterScratchBranch is the branch whose working set filter-branch queries transform. Like the branches created by
+// dolt_rebase, it is left behind if filter-branch is interrupted, and is replaced by the next filter-branch.
+const filterScratchBranch = "dolt_filter_branch"
+
+func filterScratchWorkingSetRef() ref.WorkingSetRef {
+	wsRef, _ := ref.WorkingSetRefForHead(ref.NewBranchRef(filterScratchBranch))
+	return wsRef
+}
+
+// resetScratchBranch points the scratch branch at |head|, and sets its working and staged roots to |root|.
+func resetScratchBranch(ctx context.Context, ddb *doltdb.DoltDB, head *doltdb.Commit, root doltdb.RootValue) error {
+	err := ddb.NewBranchAtCommit(ctx, ref.NewBranchRef(filterScratchBranch), head, nil)
+	if err != nil {
+		return err
+	}
+
+	wsRef := filterScratchWorkingSetRef()
+	ws, err := ddb.ResolveWorkingSet(ctx, wsRef)
+	if err != nil {
+		return err
+	}
+
+	prevHash, err := ws.HashOf()
+	if err != nil {
+		return err
+	}
+
+	ws = ws.WithWorkingRoot(root).WithStagedRoot(root)
+	return ddb.UpdateWorkingSet(ctx, wsRef, ws, prevHash, ws.Meta(), nil)
+}
+
+// deleteScratchBranch deletes the scratch branch and its working set, if they exist.
+func deleteScratchBranch(ctx context.Context, ddb *doltdb.DoltDB) error {
+	branchRef := ref.NewBranchRef(filterScratchBranch)
+	exists, err := ddb.HasRef(ctx, branchRef)
+	if err != nil || !exists {
+		return err
+	}
+
+	err = ddb.DeleteWorkingSet(ctx, filterScratchWorkingSetRef())
+	if err != nil {
+		return err
+	}
+
+	return ddb.DeleteBranch(ctx, branchRef, nil)
+}
+
+// rebaseSqlEngine returns an engine and context whose session runs queries against the scratch branch.
 // Some functionality will not work on this kind of engine, e.g. many DOLT_ functions.
-func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue) (_ *sql.Context, _ *engine.SqlEngine, err error) {
+func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv) (_ *sql.Context, _ *filterEngine, err error) {
 	db, err := dsqle.NewDatabase(ctx, filterDbName, dEnv.DbData(ctx), editor.Options{})
 	if err != nil {
 		return nil, nil, err
@@ -367,21 +440,25 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootVal
 		return nil, nil, err
 	}
 
-	err = sqlCtx.SetSessionVariable(sqlCtx, dsess.TransactionsDisabledSysVar, true)
-	if err != nil {
-		return nil, nil, err
+	sqlCtx.SetCurrentDatabase(filterDbName + doltdb.DbRevisionDelimiter + filterScratchBranch)
+
+	eng := &filterEngine{
+		Engine: sqle.New(analyzer.NewDefault(pro), &sqle.Config{IsReadOnly: false, EngineVariables: vars}),
+		db:     db,
 	}
+	return sqlCtx, eng, nil
+}
 
-	azr := analyzer.NewDefault(pro)
+// filterEngine is the engine filter-branch queries run on.
+type filterEngine struct {
+	*sqle.Engine
+	// db is owned by the engine and closed in Close
+	db dsess.SqlDatabase
+}
 
-	err = db.SetRoot(sqlCtx, root)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	sqlCtx.SetCurrentDatabase(filterDbName)
-
-	se := engine.NewRebasedSqlEngine(sqle.New(azr, &sqle.Config{IsReadOnly: false, EngineVariables: vars}), map[string]dsess.SqlDatabase{filterDbName: db})
-
-	return sqlCtx, se, nil
+// Close closes the engine and the database it was built over.
+func (e *filterEngine) Close() error {
+	err := e.Engine.Close()
+	e.db.Close()
+	return err
 }

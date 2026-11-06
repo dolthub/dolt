@@ -55,34 +55,6 @@ var ErrUnresolvedConstraintViolationsCommit = errors.New("Committing this transa
 // ConstraintViolationsListPrefix is the label appended before the violation list in commit errors.
 const ConstraintViolationsListPrefix = "\nConstraint violations: "
 
-// TODO: remove this
-func TransactionsDisabled(ctx *sql.Context) bool {
-	enabled, err := ctx.GetSessionVariable(ctx, TransactionsDisabledSysVar)
-	if err != nil {
-		panic(err)
-	}
-
-	switch enabled.(int8) {
-	case 0:
-		return false
-	case 1:
-		return true
-	default:
-		panic(fmt.Sprintf("Unexpected value %v", enabled))
-	}
-}
-
-// DisabledTransaction is a no-op transaction type that lets us feature-gate transaction logic changes
-type DisabledTransaction struct{}
-
-func (d DisabledTransaction) String() string {
-	return "Disabled transaction"
-}
-
-func (d DisabledTransaction) IsReadOnly() bool {
-	return false
-}
-
 type DoltTransaction struct {
 	dbStartPoints      map[string]dbRoot
 	savepoints         []savepoint
