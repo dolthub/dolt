@@ -29,7 +29,7 @@ import (
 )
 
 // TestForkedWorkingSet checks that a forked working set's flushes reach the branch state it was forked from, and that
-// they're refused once that branch state is dropped.
+// they're refused once something else changes that branch state's root or drops the branch state.
 func TestForkedWorkingSet(t *testing.T) {
 	ctx := context.Background()
 	dEnv := CreateTestEnv()
@@ -47,26 +47,46 @@ func TestForkedWorkingSet(t *testing.T) {
 	ws := state.WorkingSet()
 
 	sch := schema.MustSchemaFromCols(schema.NewColCollection(schema.NewColumn("pk", 1, types.IntKind, true)))
-	withT, err := doltdb.CreateEmptyTable(sqlCtx, ws.WorkingRoot(), doltdb.TableName{Name: "t"}, sch)
-	require.NoError(t, err)
-	withU, err := doltdb.CreateEmptyTable(sqlCtx, ws.WorkingRoot(), doltdb.TableName{Name: "u"}, sch)
-	require.NoError(t, err)
+	withTable := func(root doltdb.RootValue, name string) doltdb.RootValue {
+		root, err := doltdb.CreateEmptyTable(sqlCtx, root, doltdb.TableName{Name: name}, sch)
+		require.NoError(t, err)
+		return root
+	}
+	hasTable := func(name string) bool {
+		roots, ok := sess.GetRoots(sqlCtx, "dolt")
+		require.True(t, ok)
+		has, err := roots.Working.HasTable(sqlCtx, doltdb.TableName{Name: name})
+		require.NoError(t, err)
+		return has
+	}
 
+	// Each flush reaches the branch state, and a fork can flush more than once.
 	owner, err := sess.ForkWorkingSet(sqlCtx, "dolt", ws, false)
 	require.NoError(t, err)
+	withT := withTable(ws.WorkingRoot(), "t")
 	require.NoError(t, owner.SetFlushedWorkingSet(sqlCtx, ws.WithWorkingRoot(withT)))
-	has, err := state.WorkingRoot().HasTable(sqlCtx, doltdb.TableName{Name: "t"})
+	assert.True(t, hasTable("t"), "the flush didn't reach the branch state")
+	require.NoError(t, owner.SetFlushedWorkingSet(sqlCtx, ws.WithWorkingRoot(withTable(withT, "t2"))))
+	assert.True(t, hasTable("t2"), "the second flush didn't reach the branch state")
+
+	// A flush would revert a change made to the branch state since, so it's refused.
+	ws = state.WorkingSet()
+	owner, err = sess.ForkWorkingSet(sqlCtx, "dolt", ws, false)
 	require.NoError(t, err)
-	assert.True(t, has, "the flush didn't reach the branch state")
+	require.NoError(t, sess.SetWorkingRoot(sqlCtx, "dolt", withTable(ws.WorkingRoot(), "v")))
+	require.PanicsWithValue(t, "cannot flush a forked working set into session state that changed after the fork: dolt/main", func() {
+		_ = owner.SetFlushedWorkingSet(sqlCtx, ws.WithWorkingRoot(withTable(ws.WorkingRoot(), "u")))
+	})
+	assert.True(t, hasTable("v"), "the flush reverted the branch state's change")
+	assert.False(t, hasTable("u"), "the refused flush reached the branch state")
 
 	// Rolling back drops the branch state, so a flush through the fork would be lost.
+	ws = state.WorkingSet()
+	owner, err = sess.ForkWorkingSet(sqlCtx, "dolt", ws, false)
+	require.NoError(t, err)
 	require.NoError(t, sess.Rollback(sqlCtx, sqlCtx.GetTransaction()))
 	require.PanicsWithValue(t, "cannot flush into dropped session state: dolt/main", func() {
-		_ = owner.SetFlushedWorkingSet(sqlCtx, ws.WithWorkingRoot(withU))
+		_ = owner.SetFlushedWorkingSet(sqlCtx, ws.WithWorkingRoot(withTable(ws.WorkingRoot(), "u")))
 	})
-	roots, ok := sess.GetRoots(sqlCtx, "dolt")
-	require.True(t, ok)
-	has, err = roots.Working.HasTable(sqlCtx, doltdb.TableName{Name: "u"})
-	require.NoError(t, err)
-	assert.False(t, has, "the flush reached the new branch state")
+	assert.False(t, hasTable("u"), "the flush reached the new branch state")
 }

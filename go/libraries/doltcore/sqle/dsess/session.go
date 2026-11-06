@@ -1597,12 +1597,16 @@ func (d *DoltSession) setWorkingSetOf(ctx *sql.Context, branchState *branchState
 // ForkWorkingSet returns the WorkingSetOwner for a write session that starts from |ws|, a working set ahead of the
 // branch state for |dbName|, such as a table rewrite's. Each flush keeps the fork's working set and puts its working
 // root, or its staged root under |targetStaging|, into that branch state, as SetWorkingRoot and SetStagingRoot do.
+// That replaces the branch state's root wholesale, so a flush fails if anything else has changed it since the fork was
+// created or last flushed.
 func (d *DoltSession) ForkWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.WorkingSet, targetStaging bool) (WorkingSetOwner, error) {
 	branchState, _, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}
-	return &forkedWorkingSetOwner{sess: d, bs: branchState, ws: ws, targetStaging: targetStaging}, nil
+	o := &forkedWorkingSetOwner{sess: d, bs: branchState, ws: ws, targetStaging: targetStaging}
+	o.base = o.target(branchState.roots())
+	return o, nil
 }
 
 // isCurrentBranchState reports whether |bs| is still this session's state for its branch, rather than one dropped

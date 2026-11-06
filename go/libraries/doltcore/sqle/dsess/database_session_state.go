@@ -196,6 +196,16 @@ type forkedWorkingSetOwner struct {
 	bs            *branchState
 	ws            *doltdb.WorkingSet
 	targetStaging bool
+	// base is the root of |bs| that the next flush replaces, as of the fork's creation or its last flush.
+	base doltdb.RootValue
+}
+
+// target returns the root of |roots| that this fork's flushes replace.
+func (o *forkedWorkingSetOwner) target(roots doltdb.Roots) doltdb.RootValue {
+	if o.targetStaging {
+		return roots.Staged
+	}
+	return roots.Working
 }
 
 var _ WorkingSetOwner = (*forkedWorkingSetOwner)(nil)
@@ -205,22 +215,40 @@ func (o *forkedWorkingSetOwner) WorkingSet() *doltdb.WorkingSet {
 }
 
 // SetFlushedWorkingSet implements WorkingSetOwner. It refuses to flush into a branch state that has been dropped,
-// which would lose the writes. Panics when dynamic asserts are enabled.
+// which would lose the writes, or whose root has changed since |base|, which the flush would revert. Panics when
+// dynamic asserts are enabled.
 func (o *forkedWorkingSetOwner) SetFlushedWorkingSet(ctx *sql.Context, ws *doltdb.WorkingSet) error {
 	o.ws = ws
+	var err error
 	if !o.sess.isCurrentBranchState(o.bs) {
-		err := fmt.Errorf("%w: %s", ErrBranchStateDropped, o.bs.RevisionDbName())
+		err = fmt.Errorf("%w: %s", ErrBranchStateDropped, o.bs.RevisionDbName())
+	} else if !rootsEqual(o.target(o.bs.roots()), o.base) {
+		err = fmt.Errorf("%w: %s", ErrBranchStateChanged, o.bs.RevisionDbName())
+	}
+	if err != nil {
 		dynassert.Assert(false, "%s", err.Error())
 		return err
 	}
+
+	root := o.target(doltdb.Roots{Working: ws.WorkingRoot(), Staged: ws.StagedRoot()})
 	if o.targetStaging {
-		return o.sess.setStagingRootOf(ctx, o.bs, ws.StagedRoot())
+		err = o.sess.setStagingRootOf(ctx, o.bs, root)
+	} else {
+		err = o.sess.setWorkingRootOf(ctx, o.bs, root)
 	}
-	return o.sess.setWorkingRootOf(ctx, o.bs, ws.WorkingRoot())
+	if err != nil {
+		return err
+	}
+	o.base = root
+	return nil
 }
 
 // ErrBranchStateDropped is returned when a write session flushes into a branch state that has been dropped.
 var ErrBranchStateDropped = errors.New("cannot flush into dropped session state")
+
+// ErrBranchStateChanged is returned when a forked write session flushes into a branch state whose root something else
+// has changed since the fork was created or last flushed.
+var ErrBranchStateChanged = errors.New("cannot flush a forked working set into session state that changed after the fork")
 
 // RevisionDbName returns the revision-qualified database name for this branch state
 func (bs *branchState) RevisionDbName() string {
