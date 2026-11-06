@@ -265,6 +265,7 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	gitRemoteCacheMu.Lock()
 	if entry, ok := gitRemoteCache[cacheRepo]; ok {
 		gitRemoteCacheMu.Unlock()
+		_ = nbsCS.Close()
 		return rebaseCachedEntry(ctx, entry)
 	}
 	gitRemoteCache[cacheRepo] = gitRemoteCacheEntry{db: db, vrw: vrw, ns: ns}
