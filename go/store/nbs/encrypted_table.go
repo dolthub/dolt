@@ -338,8 +338,11 @@ func (tr tableReader) extractChunkFromRead(ctx context.Context, rb readBatch, bu
 }
 
 func (tr tableReader) locateKeys(ctx context.Context, ranges map[hash.Hash]Range) error {
+	if tr.opener == nil {
+		return nil
+	}
 	c := locatedKeysFrom(ctx)
-	if tr.opener == nil || c == nil {
+	if c == nil {
 		return nil
 	}
 	for h, r := range ranges {

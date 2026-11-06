@@ -89,7 +89,7 @@ type journalCodec interface {
 	chunker(h hash.Hash, payload []byte) (ToChunker, error)
 	// locate returns the range of chunk |h|'s record payload |r| that a remote client reads, and the stored key that
 	// sealed it.
-	locate(h hash.Hash, r Range, readAt func([]byte, int64) (int, error)) (Range, []byte, error)
+	locate(h hash.Hash, r Range, rd journalReaderAt) (Range, []byte, error)
 	// reset forgets what replay learned, before the journal is replayed from its start.
 	reset()
 }
@@ -130,7 +130,12 @@ func (plainJournal) chunker(h hash.Hash, payload []byte) (ToChunker, error) {
 	return NewCompressedChunk(h, payload)
 }
 
-func (plainJournal) locate(_ hash.Hash, r Range, _ func([]byte, int64) (int, error)) (Range, []byte, error) {
+// journalReaderAt reads the journal at an offset.
+type journalReaderAt interface {
+	readAt(p []byte, off int64) (int, error)
+}
+
+func (plainJournal) locate(_ hash.Hash, r Range, _ journalReaderAt) (Range, []byte, error) {
 	return r, nil, nil
 }
 
@@ -140,6 +145,9 @@ func (plainJournal) reset() {}
 func (wr *journalWriter) writeKeyRecord(ctx context.Context, behavior dherrors.FatalBehavior, key []byte) error {
 	if key == nil {
 		return nil
+	}
+	if len(key) > math.MaxUint16 {
+		return fmt.Errorf("journal key of %d bytes is too large", len(key))
 	}
 	recordLen, _ := journalRecordSize(len(key))
 	buf, err := wr.getBytes(ctx, behavior, int(recordLen))
@@ -285,7 +293,12 @@ func peekJournalVersion(path string) (string, bool, error) {
 	}
 	defer f.Close()
 	var hdr [journalRecLenSz + journalRecTagSz + journalRecKindSz]byte
-	if _, err = io.ReadFull(f, hdr[:]); err != nil || journalRecTag(hdr[journalRecLenSz]) != kindJournalRecTag {
+	if _, err = io.ReadFull(f, hdr[:]); errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return "", false, nil
+	} else if err != nil {
+		return "", false, err
+	}
+	if journalRecTag(hdr[journalRecLenSz]) != kindJournalRecTag {
 		return "", false, nil
 	}
 	switch kind := journalRecKind(hdr[journalRecLenSz+journalRecTagSz]); {

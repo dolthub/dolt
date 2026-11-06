@@ -137,6 +137,7 @@ func TestToyCodecTableFile(t *testing.T) {
 		}
 		ranges, _, err := tr.getRecordRanges(ctx, dherrors.FatalBehaviorError, toGetRecords(hs), nil)
 		require.NoError(t, err)
+		require.Len(t, ranges, len(cs))
 		for h, r := range ranges {
 			require.Len(t, keys.At(h, r.Offset, r.Length).Key, 1)
 		}
@@ -152,7 +153,8 @@ func TestToyCodecTableFile(t *testing.T) {
 		require.ErrorIs(t, err, ErrEncryptionMismatch)
 	})
 	t.Run("IterChunksRefuses", func(t *testing.T) {
-		require.Error(t, IterChunks(t.Context(), bytes.NewReader(data), func(chunks.Chunk) (bool, error) { return false, nil }))
+		err := IterChunks(t.Context(), bytes.NewReader(data), func(chunks.Chunk) (bool, error) { return false, nil })
+		require.ErrorContains(t, err, "encrypted table file")
 	})
 	t.Run("WrongKeyFails", func(t *testing.T) {
 		oc := newToyCodec()
@@ -179,6 +181,7 @@ func TestToyCodecCopiesSealedRecords(t *testing.T) {
 	t.Run("PlaintextWriterRefuses", func(t *testing.T) {
 		tw, err := NewCmpChunkTableWriter("")
 		require.NoError(t, err)
+		defer tw.Cancel()
 		_, err = tw.AddChunk(sealed[0])
 		require.ErrorIs(t, err, ErrEncryptionMismatch)
 		asw, err := NewArchiveStreamWriter(t.TempDir())
@@ -190,6 +193,7 @@ func TestToyCodecCopiesSealedRecords(t *testing.T) {
 
 	w, err := newTableWriterFromArchiveLevel(chunks.NoArchive, c)
 	require.NoError(t, err)
+	defer w.Cancel()
 	tw := w.(*CmpChunkTableWriter)
 	for _, sc := range sealed {
 		_, err = tw.AddChunk(sc)
@@ -275,19 +279,42 @@ func TestToyCodecArchive(t *testing.T) {
 			_, err = openToyArchive(t, data, name, openOpts{codec: plainCodec{}})
 			require.ErrorIs(t, err, ErrEncryptionMismatch)
 
+			keys := &LocatedKeys{keys: map[rangeLoc]RangeKeys{}}
+			hs := make(hash.HashSet)
+			for _, chk := range cs {
+				hs.Insert(chk.Hash())
+			}
+			acs := &archiveChunkSource{aRdr: ar}
+			ranges, _, err := acs.getRecordRanges(context.WithValue(t.Context(), locatedKeysKey{}, keys), dherrors.FatalBehaviorError, toGetRecords(hs), nil)
+			require.NoError(t, err)
+			require.Len(t, ranges, len(cs))
+			for h, r := range ranges {
+				k := keys.At(h, r.Offset, r.Length)
+				require.Len(t, k.Key, 1)
+				require.Equal(t, r.DictLength > 0, k.DictKey != nil, "a chunk compressed with a dictionary has its key")
+			}
+
 			// Copy every chunk still sealed into a new archive.
 			copier, err := c.newSpanSealer(false)
 			require.NoError(t, err)
+			var sealed []SealedChunk
 			copied, copiedName := writeToyArchive(t, copier, func(asw *ArchiveStreamWriter) {
 				for _, chk := range cs {
 					tc, err := ar.getAsToChunker(t.Context(), chk.Hash(), &Stats{})
 					require.NoError(t, err)
 					require.IsType(t, &toyChunk{}, tc)
+					sealed = append(sealed, tc.(SealedChunk))
 					_, err = asw.AddChunk(tc)
 					require.NoError(t, err)
 				}
 			})
 			require.Len(t, copied, len(data))
+			for _, sc := range sealed {
+				require.True(t, bytes.Contains(copied, sc.sealedRecord()), "a sealed record was not copied verbatim")
+				if d := sc.sealedDict(); d != nil {
+					require.True(t, bytes.Contains(copied, d), "a sealed dictionary was not copied verbatim")
+				}
+			}
 			ar2, err := openToyArchive(t, copied, copiedName, openOpts{codec: c})
 			require.NoError(t, err)
 			defer ar2.close()
@@ -352,11 +379,14 @@ func TestToyCodecLocalStore(t *testing.T) {
 	}
 	locs, keys, err := GetChunkLocationsWithPathsAndKeys(ctx, st, hashesOf(all))
 	require.NoError(t, err)
+	var n int
 	for _, byHash := range locs {
 		for h, r := range byHash {
 			require.NotNil(t, keys.At(h, r.Offset, r.Length).Key)
+			n++
 		}
 	}
+	require.Equal(t, len(all), n)
 
 	t.Run("PlaintextDolt", func(t *testing.T) {
 		withPlainDefault(t)

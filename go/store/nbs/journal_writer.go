@@ -531,7 +531,7 @@ func (wr *journalWriter) getRange(ctx context.Context, behavior dherrors.FatalBe
 	rng, ok = wr.ranges.get(h)
 	if ok {
 		var key []byte
-		if rng, key, err = wr.codec.locate(h, rng, wr.readAt); err == nil && key != nil {
+		if rng, key, err = wr.codec.locate(h, rng, wr); err == nil && key != nil {
 			locatedKeysFrom(ctx).note(h, rng, RangeKeys{Key: key})
 		}
 	}
