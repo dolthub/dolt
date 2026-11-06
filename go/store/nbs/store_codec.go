@@ -97,7 +97,7 @@ type recordSealer interface {
 
 // recordOpener opens the records of an encrypted file by position.
 type recordOpener interface {
-	// open returns the payload of chunk |h|'s |sealed| record.
+	// open returns the payload of chunk |h|'s |sealed| record, in a buffer the caller owns.
 	open(ctx context.Context, pos uint64, h hash.Hash, sealed []byte) ([]byte, error)
 	// sealedChunk returns chunk |h| with its record still sealed, for writers that copy it.
 	sealedChunk(ctx context.Context, pos uint64, h hash.Hash, sealed []byte) (SealedChunk, error)
@@ -125,6 +125,7 @@ type spanSealer interface {
 
 // archiveSpans opens the spans of an encrypted archive. Clones of its reader share it.
 type archiveSpans interface {
+	// openDict opens dictionary span |id|. |stored| is only valid during the call.
 	openDict(ctx context.Context, id uint32, stored []byte) (*DecompBundle, error)
 	// chunkData returns chunk |rc|'s data, checked against its address.
 	chunkData(ctx context.Context, rc resolvedChunk, dict *DecompBundle, stored []byte) ([]byte, error)
@@ -133,7 +134,8 @@ type archiveSpans interface {
 	storedKey(pos uint64) ([]byte, error)
 }
 
-// SealedChunk is a chunk read from an encrypted file with its record still sealed. ToChunk opens it.
+// SealedChunk is a chunk read from an encrypted file with its record still sealed. ToChunk opens it, without
+// modifying the sealed record.
 type SealedChunk interface {
 	ToChunker
 	sealedRecord() []byte

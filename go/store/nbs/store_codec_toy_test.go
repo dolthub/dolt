@@ -41,6 +41,10 @@ type toyCodec struct {
 	nextKey *atomic.Uint32
 	// added counts the commits of files added to the store.
 	added *atomic.Int32
+	// adopted counts the sealed records its writers copied as they are.
+	adopted *atomic.Int32
+	// refuseOpened, if set, is the error checkOpened refuses files with.
+	refuseOpened error
 }
 
 var errToyKeyless = errors.New("toy codec has no keys")
@@ -48,7 +52,7 @@ var errToyKeyless = errors.New("toy codec has no keys")
 var errToyTag = errors.New("toy record does not authenticate")
 
 func newToyCodec() *toyCodec {
-	return &toyCodec{nextKey: new(atomic.Uint32), added: new(atomic.Int32)}
+	return &toyCodec{nextKey: new(atomic.Uint32), added: new(atomic.Int32), adopted: new(atomic.Int32)}
 }
 
 // withToy opens a store under |c|, creating it encrypted.
@@ -151,14 +155,14 @@ func (c *toyCodec) newTableSealer() (recordSealer, error) {
 	if c.keyless {
 		return nil, errToyKeyless
 	}
-	return &toySealer{key: c.key()}, nil
+	return &toySealer{key: c.key(), adopted: c.adopted}, nil
 }
 
 func (c *toyCodec) newSpanSealer(recompress bool) (spanSealer, error) {
 	if c.keyless {
 		return nil, errToyKeyless
 	}
-	return &toySpanSealer{toySealer: toySealer{key: c.key()}, recompress: recompress}, nil
+	return &toySpanSealer{toySealer: toySealer{key: c.key(), adopted: c.adopted}, recompress: recompress}, nil
 }
 
 func (c *toyCodec) openTable(f fileKeys) (recordOpener, error) {
@@ -203,7 +207,7 @@ func (c *toyCodec) mergeKeyBlocks(parts []keyBlockPart) ([]byte, error) {
 }
 
 func (c *toyCodec) checkOpened(context.Context, *NomsBlockStore, chunkSourceSet, hash.Hash) error {
-	return nil
+	return c.refuseOpened
 }
 
 func (c *toyCodec) checkAdded(_ *NomsBlockStore, added chunkSourceSet) (func() error, error) {
@@ -223,8 +227,9 @@ func (c *toyCodec) checkAdded(_ *NomsBlockStore, added chunkSourceSet) (func() e
 }
 
 type toySealer struct {
-	key  byte
-	keys toyKeys
+	key     byte
+	keys    toyKeys
+	adopted *atomic.Int32
 }
 
 func (s *toySealer) seal(dst []byte, ordinal uint32, h hash.Hash, payload []byte) ([]byte, error) {
@@ -239,6 +244,7 @@ func (s *toySealer) adopt(ordinal uint32, sc SealedChunk) bool {
 		return false
 	}
 	s.keys.add(ordinal, tc.key)
+	s.adopted.Add(1)
 	return true
 }
 
@@ -272,6 +278,7 @@ func (s *toySpanSealer) adopt(ordinal uint32, sc SealedChunk, dictCopied bool) b
 		s.keys.add(ordinal-1, tc.dict.sealed.(*toyDict).key)
 	}
 	s.keys.add(ordinal, tc.key)
+	s.adopted.Add(1)
 	return true
 }
 
@@ -532,9 +539,9 @@ func (j *toyJournal) chunker(h hash.Hash, payload []byte) (ToChunker, error) {
 	return &toyChunk{codec: j.codec, h: h, key: payload[0], record: payload[1:]}, nil
 }
 
-func (j *toyJournal) locate(_ hash.Hash, r Range, readAt func([]byte, int64) (int, error)) (Range, []byte, error) {
+func (j *toyJournal) locate(_ hash.Hash, r Range, rd journalReaderAt) (Range, []byte, error) {
 	key := make([]byte, 1)
-	if _, err := readAt(key, int64(r.Offset)); err != nil {
+	if _, err := rd.readAt(key, int64(r.Offset)); err != nil {
 		return Range{}, nil, err
 	}
 	return Range{Offset: r.Offset + 1, Length: r.Length - 1}, key, nil

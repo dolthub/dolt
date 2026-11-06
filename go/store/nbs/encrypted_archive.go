@@ -98,8 +98,11 @@ func (ar *archiveReader) chunker(ctx context.Context, rc resolvedChunk, dict *De
 }
 
 func (ar *archiveReader) locateKeys(ctx context.Context, resolved []resolvedChunk) error {
+	if ar.spans == nil {
+		return nil
+	}
 	c := locatedKeysFrom(ctx)
-	if ar.spans == nil || c == nil {
+	if c == nil {
 		return nil
 	}
 	for _, rc := range resolved {

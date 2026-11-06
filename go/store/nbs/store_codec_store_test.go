@@ -16,6 +16,7 @@ package nbs
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -159,7 +160,9 @@ func TestToyCodecGC(t *testing.T) {
 				requireStoreHas(t, st, all)
 				// A second GC copies the records the first one sealed.
 				fillToyStore(t, st, 1, 5)
+				adopted := c.adopted.Load()
 				require.NoError(t, gcToyStore(t, st, all, level))
+				require.Greater(t, c.adopted.Load(), adopted)
 				requireStoreHas(t, st, all)
 				require.NoError(t, st.Close())
 				st = open()
@@ -270,6 +273,19 @@ func TestToyCodecAddTableFiles(t *testing.T) {
 		_, contents, err := fm.ParseIfExists(ctx, &Stats{}, nil)
 		require.NoError(t, err)
 		require.Len(t, contents.specs, 1, "the plaintext files are not added to the encrypted manifest")
+	})
+	t.Run("CheckOpenedRefuses", func(t *testing.T) {
+		errRefused := errors.New("refused")
+		rc := newToyCodec()
+		rc.refuseOpened = errRefused
+		dst, err := newLocalStore(ctx, types.Format_DOLT.VersionString(), t.TempDir(), 1<<10, 64, q, false, withToy(rc))
+		require.NoError(t, err)
+		defer dst.Close()
+		require.ErrorIs(t, copyTableFiles(t, src, dst), errRefused)
+		require.Zero(t, rc.added.Load())
+		root, err := dst.Root(ctx)
+		require.NoError(t, err)
+		require.True(t, root.IsEmpty())
 	})
 	t.Run("CommitsWhenRebaseFails", func(t *testing.T) {
 		dir := t.TempDir()
