@@ -81,13 +81,13 @@ type DoltSession struct {
 
 // GetSessionVariable consults DoltgreSQL's scoped PostgreSQL settings when
 // that integrator has installed a value. MySQL sessions retain GMS behavior.
-func (s *DoltSession) GetSessionVariable(ctx *sql.Context, name string) (interface{}, error) {
-	if reader, ok := s.DoltgresSessObj.(interface{ DoltgresSettingValue(string) (any, bool) }); ok {
+func (d *DoltSession) GetSessionVariable(ctx *sql.Context, name string) (interface{}, error) {
+	if reader, ok := d.DoltgresSessObj.(interface{ DoltgresSettingValue(string) (any, bool) }); ok {
 		if value, found := reader.DoltgresSettingValue(name); found {
 			return value, nil
 		}
 	}
-	return s.Session.GetSessionVariable(ctx, name)
+	return d.Session.GetSessionVariable(ctx, name)
 }
 
 // EngineVariables exposes the bundle retained by the underlying GMS session.
@@ -578,11 +578,58 @@ func (d *DoltSession) clear() {
 	}
 }
 
+// materializePending materializes any edits pending in |bs|'s WriteSession into its working set.
+func (d *DoltSession) materializePending(ctx *sql.Context, bs *branchState) error {
+	if bs.writeSession == nil || bs.workingSet == nil || !bs.writeSession.HasPendingEdits() {
+		return nil
+	}
+	ws, err := bs.writeSession.Flush(ctx)
+	if err != nil {
+		return err
+	}
+	bs.workingSet = ws
+	bs.dirty = true
+	return d.setDbSessionVars(ctx, bs, true)
+}
+
+// MaterializePending materializes any edits pending in the write session of the database named into its working set.
+// Callers that read the rows of the working set, or derive a new working set from it, must call this first.
+func (d *DoltSession) MaterializePending(ctx *sql.Context, dbName string) error {
+	bs, ok, err := d.lookupDbState(ctx, dbName)
+	if err != nil || !ok {
+		return err
+	}
+	return d.materializePending(ctx, bs)
+}
+
+// materializeAllPending materializes the pending edits of every branch state in this session.
+func (d *DoltSession) materializeAllPending(ctx *sql.Context) error {
+	d.mu.Lock()
+	var states []*branchState
+	for _, dbState := range d.dbStates {
+		for _, bs := range dbState.heads {
+			states = append(states, bs)
+		}
+	}
+	d.mu.Unlock()
+
+	// TODO: concurrency?
+	for _, bs := range states {
+		if err := d.materializePending(ctx, bs); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // CommitTransaction commits the in-progress transaction. Depending on session settings, this may write only a new
 // working sets, or may additionally create a new dolt commit for the current HEAD.
 func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error {
-	dirties := d.dirtyWorkingSets()
+	if err := d.materializeAllPending(ctx); err != nil {
+		return err
+	}
 
+	dirties := d.dirtyWorkingSets()
 	if TransactionsDisabled(ctx) || len(dirties) == 0 {
 		// Even without a batch to publish, a successful COMMIT ends the transaction.
 		// The engine clears transaction state only on COMMIT statements, but other kinds of statements that implicitly
@@ -1341,6 +1388,9 @@ func (d *DoltSession) GetRoots(ctx *sql.Context, dbName string) (doltdb.Roots, b
 	if !ok {
 		return doltdb.Roots{}, false
 	}
+	if err = d.materializePending(ctx, branchState); err != nil {
+		return doltdb.Roots{}, false
+	}
 
 	return branchState.roots(), true
 }
@@ -1775,6 +1825,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 				return err
 			}
 			branchState.writeSession = d.writeSessProv(revisionQualifiedName, branchState.workingSet, tracker, d.SetWorkingRoot, editOpts)
+			branchState.writeSession.SetDeferMaterialization(true) // By default, all write sessions defer materialization
 		}
 	}
 

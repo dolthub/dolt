@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly"
 )
 
 // NewWriteSession creates and returns a WriteSession. Inserting a nil root is not an error, as there are
@@ -50,6 +51,10 @@ type prollyWriteSession struct {
 	workingSet    *doltdb.WorkingSet
 	setter        dsess.SessionRootSetter
 	targetStaging bool
+
+	// deferMaterialization leaves edits of completed statements in their table writers, instead of materializing them
+	// into |workingSet| immediately.
+	deferMaterialization bool
 }
 
 var _ dsess.WriteSession = &prollyWriteSession{}
@@ -155,6 +160,29 @@ func (s *prollyWriteSession) SetOptions(opts editor.Options) {
 	return
 }
 
+// SetDeferMaterialization implements WriteSession
+func (s *prollyWriteSession) SetDeferMaterialization(deferMaterialization bool) {
+	s.deferMaterialization = deferMaterialization
+}
+
+// PendingRows implements WriteSession
+func (s *prollyWriteSession) PendingRows(tblName doltdb.TableName) *prolly.MutableMap {
+	tblWriter, ok := s.tables[tblName]
+	if !ok {
+		return nil
+	}
+	return tblWriter.PendingRows()
+}
+
+func (s *prollyWriteSession) HasPendingEdits() bool {
+	for _, tblWriter := range s.tables {
+		if tblWriter.pending {
+			return true
+		}
+	}
+	return false
+}
+
 // Flush implements WriteSessionFlusher
 func (s *prollyWriteSession) Flush(ctx *sql.Context) (*doltdb.WorkingSet, error) {
 	_, err := s.flushAllTables(ctx)
@@ -199,8 +227,11 @@ func (s *prollyWriteSession) flushAllTables(ctx *sql.Context) (doltdb.RootValue,
 	// Flush each table and send results to the flushedTables channel
 	flushedTables := make(chan flushedTable, 10)
 	wg := sync.WaitGroup{}
-	wg.Add(len(s.tables))
 	for tblName, tblWriter := range s.tables {
+		if !tblWriter.pending {
+			continue
+		}
+		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			tbl, err := tblWriter.table(ctx)
@@ -219,7 +250,7 @@ func (s *prollyWriteSession) flushAllTables(ctx *sql.Context) (doltdb.RootValue,
 		flushed = s.workingSet.WorkingRoot()
 	}
 
-	// Drain from the flushedTables channel and update RootValue with updated table
+	// Drain from the flushedTables channel and update RootValue with the updated table
 	eg := errgroup.Group{}
 	eg.Go(func() error {
 		var err error

@@ -53,6 +53,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -321,6 +323,22 @@ func (t *DoltTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.
 
 // DoltTable returns the underlying doltTable from the current session
 func (t *DoltTable) DoltTable(ctx *sql.Context) (*doltdb.Table, error) {
+	// Flush pending tables
+	sess := dsess.DSessFromSess(ctx.Session)
+	state, ok, err := sess.LookupDbState(ctx, t.db.RevisionQualifiedName())
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, nil
+	}
+	if writeSess := state.WriteSession(); writeSess != nil {
+		_, err = writeSess.Flush(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	root, err := t.workingRoot(ctx)
 	if err != nil {
 		return nil, err
@@ -374,11 +392,10 @@ func (t *DoltTable) IndexCacheKey(ctx *sql.Context) (doltdb.DataCacheKey, bool, 
 }
 
 func (t *DoltTable) workingRoot(ctx *sql.Context) (doltdb.RootValue, error) {
-	root := t.lockedToRoot
-	if root == nil {
-		return t.getRoot(ctx)
+	if t.lockedToRoot != nil {
+		return t.lockedToRoot, nil
 	}
-	return root, nil
+	return t.getRoot(ctx)
 }
 
 // getRoot returns the current root value for this session, to be used for all table data access.
@@ -563,17 +580,57 @@ func (t *DoltTable) sqlSchema(ctx *sql.Context) sql.PrimaryKeySchema {
 	return sqlSch
 }
 
+func (t *DoltTable) PendingRowsPartition(ctx *sql.Context) (sql.PartitionIter, error) {
+	// Look at the DbState from the WriteSession to get any edits to DoltTable
+	sess := dsess.DSessFromSess(ctx.Session)
+	state, ok, err := sess.LookupDbState(ctx, t.db.RevisionQualifiedName())
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, nil
+	}
+	writeSess := state.WriteSession()
+	if writeSess == nil {
+		return nil, nil
+	}
+	mutMap := writeSess.PendingRows(t.TableName())
+	if mutMap == nil {
+		return nil, nil
+	}
+	mapIter, err := mutMap.IterAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	kd, vd := mutMap.Descriptors()
+	tblPart := pendingTablePartition{
+		mapIter:   mapIter,
+		keyDesc:   kd,
+		valDesc:   vd,
+		nodeStore: mutMap.NodeStore(),
+	}
+	return sql.PartitionsToPartitionIter(tblPart), nil
+}
+
 // Partitions returns the partitions for this table.
 func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
+	partIter, err := t.PendingRowsPartition(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if partIter != nil {
+		return partIter, nil
+	}
+
 	table, err := t.DoltTable(ctx)
 	if err != nil {
 		return nil, err
 	}
-
 	rows, err := table.GetRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
+
 	partitions, err := partitionsFromRows(ctx, rows)
 	if err != nil {
 		return nil, err
@@ -619,6 +676,21 @@ func (t *DoltTable) PrimaryKeySchema(ctx *sql.Context) sql.PrimaryKeySchema {
 
 // PartitionRows returns the table rows for the partition given
 func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
+	if pTblPart, ok := partition.(pendingTablePartition); ok {
+		projCols := t.projectedCols
+		if projCols == nil {
+			projCols = t.sch.GetAllCols().Tags
+		}
+		return index.NewProllyRowIterForSchema(
+			t.sch,
+			pTblPart.mapIter,
+			pTblPart.keyDesc,
+			pTblPart.valDesc,
+			projCols,
+			pTblPart.nodeStore,
+		), nil
+	}
+
 	table, err := t.DoltTable(ctx)
 	if err != nil {
 		return nil, err
@@ -660,6 +732,20 @@ func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []uint64, partiti
 	}
 
 	return nil, errors.New("unsupported partition type")
+}
+
+type pendingTablePartition struct {
+	mapIter   prolly.MapIter
+	keyDesc   *val.TupleDesc
+	valDesc   *val.TupleDesc
+	nodeStore tree.NodeStore
+}
+
+var _ sql.Partition = pendingTablePartition{}
+
+// Key implements sql.Partition
+func (p pendingTablePartition) Key() []byte {
+	return []byte("pending")
 }
 
 // WritableDoltTable allows updating, deleting, and inserting new rows. It implements sql.UpdatableTable and friends.

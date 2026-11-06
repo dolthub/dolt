@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -47,6 +48,17 @@ type WriteSession interface {
 
 	// SetOptions sets the editor.Options for this session.
 	SetOptions(opts editor.Options)
+
+	// PendingRows returns the table data including any unmaterialized edits.
+	// TODO: Pick better name. PendingRows implies we're only returning new rows, when we're returning ALL rows.
+	// TODO: probably shouldn't be mutable map interface
+	PendingRows(tblName doltdb.TableName) *prolly.MutableMap
+
+	// HasPendingEdits returns true if edits from completed statements have not been materialized into the working set.
+	HasPendingEdits() bool
+
+	// SetDeferMaterialization marks whether this session should leave changes in the writers or materialize immediately
+	SetDeferMaterialization(deferMaterialization bool)
 
 	WriteSessionFlusher
 }
