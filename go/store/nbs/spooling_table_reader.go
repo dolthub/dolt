@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/utils/dynassert"
-	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
@@ -37,18 +36,19 @@ func shouldSpool(bs blobstore.Blobstore) bool {
 	return ok && s.RangeReadsWholeBlob()
 }
 
-// spoolDir returns the directory for the spool files of |bs|, or "" if it does not have one.
-func spoolDir(bs blobstore.Blobstore) string {
-	if s, ok := bs.(interface{ SpoolDir() string }); ok {
+// spoolDir returns the directory for the spool files of |bs|, or nil if it does not have one.
+func spoolDir(bs blobstore.Blobstore) *tempfiles.LockedDir {
+	if s, ok := bs.(interface{ SpoolDir() *tempfiles.LockedDir }); ok {
 		return s.SpoolDir()
 	}
-	return ""
+	return nil
 }
 
 // spoolingTableReaderAt serves random ReadAt over a blob that cannot do cheap ranged
 // reads. The whole blob is spooled once into a local temp file at construction. Every
 // read is served from that file, whose lifetime is bound to the open chunk source.
 type spoolingTableReaderAt struct {
+	dir *tempfiles.LockedDir
 	f   *os.File
 	sz  int64
 	cnt *int32 // clone() increments and Close() decrements it. The temp file is removed at zero.
@@ -67,25 +67,20 @@ func newSpoolingTableReaderAt(ctx context.Context, bs blobstore.Blobstore, key s
 // spoolTableReaderAt copies table bytes into a file in |dir| owned by the reader. Spools
 // never go to the temp directory, so |dir| is required. The file is made through the temp
 // file provider only so that Clean removes it if the reader is never closed.
-func spoolTableReaderAt(dir string, r io.Reader) (*spoolingTableReaderAt, error) {
-	if dir == "" {
+func spoolTableReaderAt(dir *tempfiles.LockedDir, r io.Reader) (*spoolingTableReaderAt, error) {
+	if dir == nil {
 		return nil, errNoSpoolDir
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, err
-	}
-	f, err := tempfiles.MovableTempFileProvider.NewFile(dir, "nbs-spool-")
+	f, err := dir.NewFile("nbs-spool-")
 	if err != nil {
 		return nil, err
 	}
 	sz, err := io.Copy(f, r)
 	if err != nil {
-		f.Close()
-		_ = file.Remove(f.Name())
-		return nil, err
+		return nil, errors.Join(err, dir.RemoveFile(f))
 	}
 	cnt := int32(1)
-	return &spoolingTableReaderAt{f: f, sz: sz, cnt: &cnt}, nil
+	return &spoolingTableReaderAt{dir: dir, f: f, sz: sz, cnt: &cnt}, nil
 }
 
 func (s *spoolingTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (n int, err error) {
@@ -134,8 +129,7 @@ func (s *spoolingTableReaderAt) Close() error {
 	if cnt != 0 {
 		return nil
 	}
-	name := s.f.Name()
-	return errors.Join(s.f.Close(), file.Remove(name))
+	return s.dir.RemoveFile(s.f)
 }
 
 // newSpooledBSTableChunkSource opens a table file by spooling it whole to a local temp

@@ -39,6 +39,7 @@ import (
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 const (
@@ -255,7 +256,10 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	bsOpts.RemoteName = remoteName
 	bsOpts.InfoBranch = blobstore.DefaultInfoBranch
 	bsOpts.SyncForReadTTL = gitBlobstoreSyncForReadTTLOverride
-	bsOpts.SpoolDir = filepath.Join(filepath.Dir(hashDir), GitRemoteSpoolDirName)
+	bsOpts.SpoolDir, err = tempfiles.NewLockedDir(filepath.Join(filepath.Dir(hashDir), GitRemoteSpoolDirName))
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	nbsCS, err := nbs.NewGitStore(ctx, nbf.VersionString(), cacheRepo, ref, bsOpts, memlimit.MemtableSize(), q)
 	if err != nil {
 		return nil, nil, nil, err
