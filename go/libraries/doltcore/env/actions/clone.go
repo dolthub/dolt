@@ -207,8 +207,13 @@ func clonePrint(eventCh <-chan pull.TableFileEvent) {
 			s := currStats[fileId]
 			bps := float64(s.Read) / s.Elapsed.Seconds()
 			rate := humanize.Bytes(uint64(bps)) + "/s"
-			p.Printf("Downloading file: %s (%s chunks) - %.2f%% downloaded, %s\n",
-				fileId, strhelp.CommaIfy(int64((*tableFiles[fileId]).NumChunks())), s.Percent*100, rate)
+			// A negative Percent means the total is unavailable; the transfer rate is still valid.
+			progress := "size unknown"
+			if s.Percent >= 0 {
+				progress = fmt.Sprintf("%.2f%% downloaded", s.Percent*100)
+			}
+			p.Printf("Downloading file: %s (%s chunks) - %s, %s\n",
+				fileId, strhelp.CommaIfy(int64((*tableFiles[fileId]).NumChunks())), progress, rate)
 		}
 		p.Display()
 	}

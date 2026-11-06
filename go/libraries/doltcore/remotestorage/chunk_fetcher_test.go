@@ -663,3 +663,39 @@ func TestFetcherRPCChunkLocationsThread_PermanentStreamError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "nope")
 }
+
+// A dictionary that fails to load fails the chunks waiting on it, rather than leaving them blocked.
+func TestSetDictionaryCallbackFailsWaiters(t *testing.T) {
+	dc := &dictionaryCache{}
+	waiting, _ := dc.getOrCreate("path", 10, 20)
+	err := setDictionaryCallback(dc, "path")(context.Background(), []byte("not a dictionary"), &Range{Offset: 10, Length: 20})
+	require.Error(t, err)
+	done := make(chan error)
+	go func() {
+		_, err := waiting.Get(context.Background())
+		done <- err
+	}()
+	select {
+	case got := <-done:
+		require.Equal(t, err, got)
+	case <-time.After(10 * time.Second):
+		t.Fatal("a chunk waiting on the dictionary was not released")
+	}
+}
+
+// A chunk waiting on a dictionary whose download failed is released when the download threads are cancelled.
+func TestDeliverChunkCallbackStopsWaitingOnCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error)
+	go func() {
+		cb := deliverChunkCallback(make(chan nbs.ToChunker), "path", &dictionaryCache{})
+		done <- cb(ctx, nil, &Range{Hash: make([]byte, hash.ByteLen), DictOffset: 10, DictLength: 20})
+	}()
+	cancel()
+	select {
+	case err := <-done:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(10 * time.Second):
+		t.Fatal("a chunk waiting on the dictionary was not released")
+	}
+}
