@@ -4344,6 +4344,37 @@ var MultiDbSavepointTests = []queries.TransactionTest{
 
 var AutoIncrementTransactionTests = []queries.TransactionTest{
 	{
+		Name: "a delete that matches no rows doesn't write the table",
+		SetUpScript: []string{
+			"create table t (id int primary key auto_increment)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "/* client a */ start transaction",
+			},
+			{
+				Query:    "/* client a */ insert into t values ()",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 0x1, InsertID: 0x1}}},
+			},
+			{
+				Query:    "/* client b */ insert into t values ()",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 0x1, InsertID: 0x2}}},
+			},
+			{
+				Query:    "/* client a */ set @h = dolt_hashof_table('t')",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client a */ delete from t where id = 100",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client a */ select dolt_hashof_table('t') = @h",
+				Expected: []sql.Row{{true}},
+			},
+		},
+	},
+	{
 		Name: "two auto increment values in two transactions",
 		SetUpScript: []string{
 			"create table t (x int primary key auto_increment, y text)",
