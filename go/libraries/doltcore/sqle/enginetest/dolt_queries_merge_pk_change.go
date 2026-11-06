@@ -412,6 +412,105 @@ var MergeSamePrimaryKeyChangeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// Each branch changed t's key and merged the data-free schema branch that changed it too, so main and feature
+		// have two merge bases: the fork point, keyed the old way, and schema, keyed the new way. Building the virtual
+		// merge base rekeys the fork point to the new key rather than failing on a one-sided key change.
+		Name: "same pk change on both sides: merge bases keyed differently",
+		SetUpScript: []string{
+			"CREATE TABLE t (a INT NOT NULL, b INT NOT NULL, d INT NOT NULL, PRIMARY KEY (a, b, d));",
+			"CALL DOLT_COMMIT('-Am', 'create t');",
+			"CALL DOLT_BRANCH('schema');",
+			"INSERT INTO t VALUES (1, 1, 1);",
+			"CALL DOLT_COMMIT('-am', 'row on main');",
+			"CALL DOLT_BRANCH('feature');",
+
+			"CALL DOLT_CHECKOUT('schema');",
+			"ALTER TABLE t DROP PRIMARY KEY, DROP COLUMN d, ADD PRIMARY KEY (a, b);",
+			"CALL DOLT_COMMIT('-am', 'key change on schema');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"ALTER TABLE t DROP PRIMARY KEY, DROP COLUMN d, ADD PRIMARY KEY (a, b);",
+			"CALL DOLT_COMMIT('-am', 'key change on main');",
+			"CALL DOLT_MERGE('schema', '-m', 'merge schema into main');",
+			"INSERT INTO t VALUES (2, 2);",
+			"CALL DOLT_COMMIT('-am', 'another row on main');",
+
+			"CALL DOLT_CHECKOUT('feature');",
+			"INSERT INTO t VALUES (3, 3, 1);",
+			"CALL DOLT_COMMIT('-am', 'row on feature');",
+			"ALTER TABLE t DROP PRIMARY KEY, DROP COLUMN d, ADD PRIMARY KEY (a, b);",
+			"CALL DOLT_COMMIT('-am', 'key change on feature');",
+			"CALL DOLT_MERGE('schema', '-m', 'merge schema into feature');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_merge_bases('main', 'feature');",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "CALL DOLT_MERGE('main', '-m', 'merge main into feature');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY a;",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+			},
+		},
+	},
+	{
+		// As above, with two schema branches, so main and feature have three merge bases. Folding the third into the
+		// virtual merge base of the first two also rekeys the fork point.
+		Name: "same pk change on both sides: three merge bases keyed differently",
+		SetUpScript: []string{
+			"CREATE TABLE t (a INT NOT NULL, b INT NOT NULL, d INT NOT NULL, PRIMARY KEY (a, b, d));",
+			"CALL DOLT_COMMIT('-Am', 'create t');",
+			"CALL DOLT_BRANCH('schema');",
+			"CALL DOLT_BRANCH('schema2');",
+			"INSERT INTO t VALUES (1, 1, 1);",
+			"CALL DOLT_COMMIT('-am', 'row on main');",
+			"CALL DOLT_BRANCH('feature');",
+
+			"CALL DOLT_CHECKOUT('schema');",
+			"ALTER TABLE t DROP PRIMARY KEY, DROP COLUMN d, ADD PRIMARY KEY (a, b);",
+			"CALL DOLT_COMMIT('-am', 'key change on schema');",
+
+			"CALL DOLT_CHECKOUT('schema2');",
+			"ALTER TABLE t DROP PRIMARY KEY, DROP COLUMN d, ADD PRIMARY KEY (a, b);",
+			"CREATE TABLE u (pk INT PRIMARY KEY);",
+			"CALL DOLT_COMMIT('-Am', 'key change on schema2');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"ALTER TABLE t DROP PRIMARY KEY, DROP COLUMN d, ADD PRIMARY KEY (a, b);",
+			"CALL DOLT_COMMIT('-am', 'key change on main');",
+			"CALL DOLT_MERGE('schema', '-m', 'merge schema into main');",
+			"CALL DOLT_MERGE('schema2', '-m', 'merge schema2 into main');",
+			"INSERT INTO t VALUES (2, 2);",
+			"CALL DOLT_COMMIT('-am', 'another row on main');",
+
+			"CALL DOLT_CHECKOUT('feature');",
+			"ALTER TABLE t DROP PRIMARY KEY, DROP COLUMN d, ADD PRIMARY KEY (a, b);",
+			"CALL DOLT_COMMIT('-am', 'key change on feature');",
+			"CALL DOLT_MERGE('schema', '-m', 'merge schema into feature');",
+			"CALL DOLT_MERGE('schema2', '-m', 'merge schema2 into feature');",
+			"INSERT INTO t VALUES (3, 3);",
+			"CALL DOLT_COMMIT('-am', 'row on feature');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_merge_bases('main', 'feature');",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "CALL DOLT_MERGE('main', '-m', 'merge main into feature');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY a;",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+			},
+		},
+	},
 	// The merge refuses the cases below with an error rather than merging them.
 	{
 		Name: "same pk change on both sides: ancestor rows collide under the new key",
