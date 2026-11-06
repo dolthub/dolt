@@ -185,11 +185,20 @@ func (s *prollyWriteSession) FlushTable(ctx *sql.Context, tblName doltdb.TableNa
 		}
 		s.workingSet = s.workingSet.WithWorkingRoot(flushed)
 	}
-	err = s.setter(ctx, s.dbName, flushed)
+	err = s.publish(ctx)
 	if err != nil {
 		return nil, err
 	}
 	return flushed, nil
+}
+
+// publish hands this write session's root to the session. A write session can start ahead of the session, as a
+// table rewrite's does, and its root reaches the session only through here.
+func (s *prollyWriteSession) publish(ctx *sql.Context) error {
+	if s.targetStaging {
+		return s.setter(ctx, s.dbName, s.workingSet.StagedRoot())
+	}
+	return s.setter(ctx, s.dbName, s.workingSet.WorkingRoot())
 }
 
 // flushAllTables is the inner implementation for Flush that does not acquire any locks
