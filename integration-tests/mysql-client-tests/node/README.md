@@ -28,5 +28,5 @@ sh run-tests.sh workbench.js
 The tests in `workbenchTests` were written to enforce the stability of the SQL workbench
 on [Hosted](https://hosted.doltdb.com/). The workbench uses many Dolt system tables,
 functions, and procedures, and any changes to these interfaces can break the workbench.
-@tbantle22 will be tagged in any GitHub PR that updates those files to ensure appropriate
+@eric-richardson1 will be tagged in any GitHub PR that updates those files to ensure appropriate
 workbench updates are made for Dolt changes that break these queries.

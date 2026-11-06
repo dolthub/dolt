@@ -94,7 +94,9 @@ jobs:
       - name: Setup Dolt Config
         uses: ./.github/actions/setup-dolt-config
       - name: Install system dependencies
-        run: sudo apt-get install --no-install-recommends -y expect pcre2-utils openssh-server parallel
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y expect pcre2-utils openssh-server parallel
       - name: Cache Hadoop
         id: cache_hadoop
         uses: actions/cache@v5
