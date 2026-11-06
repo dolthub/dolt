@@ -37,9 +37,9 @@ func NewWriteSession(dbName string, owner dsess.WorkingSetOwner, aiTracker *dses
 	}
 }
 
-// NewDetachedWriteSession returns a WriteSession with its own copy of |ws|, for writes that don't go through a branch
-// state's write session, such as a table rewrite or a temporary table. Each flush updates the copy and passes its root
-// to |setter|.
+// NewDetachedWriteSession returns a WriteSession with its own copy of |ws|, for writes that don't go to a branch state,
+// such as a temporary table's. Each flush updates the copy and passes its root to |setter|. A write session that
+// starts ahead of a branch state uses DoltSession.ForkWorkingSet instead.
 func NewDetachedWriteSession(dbName string, ws *doltdb.WorkingSet, aiTracker *dsess.AutoIncrementTracker, setter dsess.SessionRootSetter, opts editor.Options) dsess.WriteSession {
 	owner := &detachedOwner{dbName: dbName, ws: ws, setter: setter, targetStaging: opts.TargetStaging}
 	return NewWriteSession(dbName, owner, aiTracker, opts)

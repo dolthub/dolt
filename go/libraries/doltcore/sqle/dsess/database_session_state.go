@@ -190,6 +190,38 @@ func (o branchWorkingSetOwner) SetFlushedWorkingSet(ctx *sql.Context, ws *doltdb
 	return o.sess.setFlushedWorkingSet(ctx, o.bs, ws)
 }
 
+// forkedWorkingSetOwner is the WorkingSetOwner returned by DoltSession.ForkWorkingSet.
+type forkedWorkingSetOwner struct {
+	sess          *DoltSession
+	bs            *branchState
+	ws            *doltdb.WorkingSet
+	targetStaging bool
+}
+
+var _ WorkingSetOwner = (*forkedWorkingSetOwner)(nil)
+
+func (o *forkedWorkingSetOwner) WorkingSet() *doltdb.WorkingSet {
+	return o.ws
+}
+
+// SetFlushedWorkingSet implements WorkingSetOwner. It refuses to flush into a branch state that has been dropped,
+// which would lose the writes. Panics when dynamic asserts are enabled.
+func (o *forkedWorkingSetOwner) SetFlushedWorkingSet(ctx *sql.Context, ws *doltdb.WorkingSet) error {
+	o.ws = ws
+	if !o.sess.isCurrentBranchState(o.bs) {
+		err := fmt.Errorf("%w: %s", ErrBranchStateDropped, o.bs.RevisionDbName())
+		dynassert.Assert(false, "%s", err.Error())
+		return err
+	}
+	if o.targetStaging {
+		return o.sess.setStagingRootOf(ctx, o.bs, ws.StagedRoot())
+	}
+	return o.sess.setWorkingRootOf(ctx, o.bs, ws.WorkingRoot())
+}
+
+// ErrBranchStateDropped is returned when a write session flushes into a branch state that has been dropped.
+var ErrBranchStateDropped = errors.New("cannot flush into dropped session state")
+
 // RevisionDbName returns the revision-qualified database name for this branch state
 func (bs *branchState) RevisionDbName() string {
 	return doltdb.RevisionDbName(bs.dbState.dbName, bs.head)

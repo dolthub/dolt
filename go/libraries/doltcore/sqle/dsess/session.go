@@ -1475,7 +1475,10 @@ func (d *DoltSession) SetWorkingRoot(ctx *sql.Context, dbName string, newRoot do
 	if err != nil {
 		return err
 	}
+	return d.setWorkingRootOf(ctx, branchState, newRoot)
+}
 
+func (d *DoltSession) setWorkingRootOf(ctx *sql.Context, branchState *branchState, newRoot doltdb.RootValue) error {
 	if branchState.WorkingSet() == nil {
 		return doltdb.ErrOperationNotSupportedInDetachedHead
 	}
@@ -1489,7 +1492,7 @@ func (d *DoltSession) SetWorkingRoot(ctx *sql.Context, dbName string, newRoot do
 	if branchState.readOnly {
 		return fmt.Errorf("cannot set root on read-only session")
 	}
-	return d.SetWorkingSet(ctx, dbName, existingWorkingSet.WithWorkingRoot(newRoot))
+	return d.setWorkingSetOf(ctx, branchState, existingWorkingSet.WithWorkingRoot(newRoot))
 }
 
 // SetStagingRoot sets the staging root for the session's current database. This is useful when editing the staged
@@ -1499,7 +1502,10 @@ func (d *DoltSession) SetStagingRoot(ctx *sql.Context, dbName string, newRoot do
 	if err != nil {
 		return err
 	}
+	return d.setStagingRootOf(ctx, branchState, newRoot)
+}
 
+func (d *DoltSession) setStagingRootOf(ctx *sql.Context, branchState *branchState, newRoot doltdb.RootValue) error {
 	existingWorkingSet := branchState.WorkingSet()
 	if existingWorkingSet == nil {
 		return doltdb.ErrOperationNotSupportedInDetachedHead
@@ -1511,7 +1517,7 @@ func (d *DoltSession) SetStagingRoot(ctx *sql.Context, dbName string, newRoot do
 	if branchState.readOnly {
 		return fmt.Errorf("cannot set root on read-only session")
 	}
-	return d.SetWorkingSet(ctx, dbName, existingWorkingSet.WithStagedRoot(newRoot))
+	return d.setWorkingSetOf(ctx, branchState, existingWorkingSet.WithStagedRoot(newRoot))
 }
 
 // SetRoots sets new roots for the session for the database named. Typically, clients should only set the working root,
@@ -1569,20 +1575,43 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 	if err != nil {
 		return err
 	}
+	return d.setWorkingSetOf(ctx, branchState, ws)
+}
+
+func (d *DoltSession) setWorkingSetOf(ctx *sql.Context, branchState *branchState, ws *doltdb.WorkingSet) error {
 	if ws.Ref() != branchState.WorkingSet().Ref() {
 		return fmt.Errorf("must switch working sets with SwitchWorkingSet")
 	}
-	if err = branchState.replaceWorkingSet(ctx, ws); err != nil {
+	if err := branchState.replaceWorkingSet(ctx, ws); err != nil {
 		return err
 	}
 
-	err = d.setDbSessionVars(ctx, branchState, true)
-	if err != nil {
+	if err := d.setDbSessionVars(ctx, branchState, true); err != nil {
 		return err
 	}
 
 	branchState.dirty = true
 	return nil
+}
+
+// ForkWorkingSet returns the WorkingSetOwner for a write session that starts from |ws|, a working set ahead of the
+// branch state for |dbName|, such as a table rewrite's. Each flush keeps the fork's working set and puts its working
+// root, or its staged root under |targetStaging|, into that branch state, as SetWorkingRoot and SetStagingRoot do.
+func (d *DoltSession) ForkWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.WorkingSet, targetStaging bool) (WorkingSetOwner, error) {
+	branchState, _, err := d.lookupDbState(ctx, dbName)
+	if err != nil {
+		return nil, err
+	}
+	return &forkedWorkingSetOwner{sess: d, bs: branchState, ws: ws, targetStaging: targetStaging}, nil
+}
+
+// isCurrentBranchState reports whether |bs| is still this session's state for its branch, rather than one dropped
+// by the end of a transaction or the removal of its database or branch.
+func (d *DoltSession) isCurrentBranchState(bs *branchState) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	dbState, ok := d.dbStates[strings.ToLower(bs.dbState.dbName)]
+	return ok && dbState == bs.dbState && dbState.heads[strings.ToLower(bs.head)] == bs
 }
 
 // setFlushedWorkingSet sets |bs|'s working set to |ws|, which its own write session flushed table writers into, so

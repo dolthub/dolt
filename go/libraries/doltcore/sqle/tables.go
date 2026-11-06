@@ -1838,7 +1838,12 @@ func (t *AlterableDoltTable) RewriteInserter(
 		return nil, fmt.Errorf("cannot rebuild index on a headless branch")
 	}
 
-	writeSession := writer.NewDetachedWriteSession(t.db.RevisionQualifiedName(), newWs, ait, sess.SetWorkingRoot, dbState.WriteSession().GetOptions())
+	opts := dbState.WriteSession().GetOptions()
+	owner, err := sess.ForkWorkingSet(ctx, t.db.RevisionQualifiedName(), newWs, opts.TargetStaging)
+	if err != nil {
+		return nil, err
+	}
+	writeSession := writer.NewWriteSession(t.db.RevisionQualifiedName(), owner, ait, opts)
 	ed, err := writeSession.GetTableWriter(ctx, t.TableName())
 	if err != nil {
 		return nil, err
@@ -1884,7 +1889,12 @@ func fullTextRewriteEditor(
 	// We need our own write session for the rewrite operation. The connection's session must continue to return rows of
 	// the table as it existed before the rewrite operation began until it completes, at which point we update the
 	// session with the rewritten table.
-	writeSession := writer.NewDetachedWriteSession(t.db.RevisionQualifiedName(), newWs, ait, sess.SetWorkingRoot, dbState.WriteSession().GetOptions())
+	opts := dbState.WriteSession().GetOptions()
+	owner, err := sess.ForkWorkingSet(ctx, t.db.RevisionQualifiedName(), newWs, opts.TargetStaging)
+	if err != nil {
+		return nil, err
+	}
+	writeSession := writer.NewWriteSession(t.db.RevisionQualifiedName(), owner, ait, opts)
 	parentEditor, err := writeSession.GetTableWriter(ctx, t.TableName())
 	if err != nil {
 		return nil, err
