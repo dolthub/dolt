@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -52,6 +53,11 @@ type prollyDiffIter struct {
 	from   prolly.Map
 	to     prolly.Map
 	ranges []prolly.Range
+
+	// fromUnpaired holds the from rows that a primary key change left unpaired.
+	fromUnpaired diff.KeyedRows
+	// toUnpaired holds the to rows that a primary key change left unpaired.
+	toUnpaired diff.KeyedRows
 
 	keyless bool
 }
@@ -116,6 +122,16 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, tar
 		}
 	}
 
+	// [prolly.DiffMaps] pairs rows by key bytes, so both sides need one key.
+	fromAligned, toAligned, err := diff.AlignPrimaryKeys(ctx, diff.KeyedRows{Rows: from, Sch: fsch}, diff.KeyedRows{Rows: to, Sch: tsch})
+	if err != nil {
+		return prollyDiffIter{}, err
+	}
+	from, fsch, to, tsch = fromAligned.Rows, fromAligned.Sch, toAligned.Rows, toAligned.Sch
+	if err = warnUnpaired(ctx, fromAligned, toAligned, dp); err != nil {
+		return prollyDiffIter{}, err
+	}
+
 	var nodeStore tree.NodeStore
 	if dp.to != nil {
 		nodeStore = dp.to.NodeStore()
@@ -147,6 +163,8 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, tar
 		keyless:       keyless,
 		fromCm:        fromCm,
 		toCm:          toCm,
+		fromUnpaired:  fromAligned,
+		toUnpaired:    toAligned,
 		ranges:        ranges,
 		rows:          make(chan sql.Row, 64),
 		errChan:       make(chan error),
@@ -197,6 +215,9 @@ func (itr prollyDiffIter) Close(ctx *sql.Context) error {
 	return nil
 }
 
+// queueRows sends the diff of from and to within ranges, then the unpaired
+// rows, to the rows channel, and closes it. It sends the first error to
+// errChan instead.
 func (itr prollyDiffIter) queueRows(ctx context.Context) {
 	// TODO: Determine whether or not the schema has changed. If it has, then all rows should count as modifications in the diff.
 	cb := func(ctx context.Context, d tree.Diff) error {
@@ -231,6 +252,7 @@ func (itr prollyDiffIter) queueRows(ctx context.Context) {
 			return
 		}
 	}
+	isEveryRowPassed := itr.ranges == nil
 	for _, rng := range itr.ranges {
 		var err error
 		// if the filter can match all NILs, then we need to return every added/removed diff
@@ -243,6 +265,7 @@ func (itr prollyDiffIter) queueRows(ctx context.Context) {
 			return
 		}
 		if matches {
+			isEveryRowPassed = true
 			err = prolly.DiffMaps(ctx, itr.from, itr.to, false, cb)
 		} else {
 			err = prolly.RangeDiffMaps(ctx, itr.from, itr.to, rng, cb)
@@ -255,8 +278,62 @@ func (itr prollyDiffIter) queueRows(ctx context.Context) {
 			return
 		}
 	}
+	if err := itr.queueUnpaired(ctx, cb, isEveryRowPassed); err != nil {
+		select {
+		case <-ctx.Done():
+		case itr.errChan <- err:
+		}
+		return
+	}
 	// we need to drain itr.rows before returning io.EOF
 	close(itr.rows)
+}
+
+// queueUnpaired passes |cb| the rows that [diff.AlignPrimaryKeys] kept apart,
+// as removed rows of the from side and added rows of the to side.
+//
+// It passes every row when |isEveryRowPassed|, as queueRows did for the
+// paired rows, and otherwise only those within ranges.
+func (itr prollyDiffIter) queueUnpaired(ctx context.Context, cb tree.DiffFn, isEveryRowPassed bool) error {
+	queue := func(d tree.Diff) error {
+		if isEveryRowPassed {
+			return cb(ctx, d)
+		}
+		for _, rng := range itr.ranges {
+			matchesKey, err := rng.Matches(ctx, val.Tuple(d.Key))
+			if err != nil {
+				return err
+			}
+			if matchesKey {
+				return cb(ctx, d)
+			}
+		}
+		return nil
+	}
+	err := itr.fromUnpaired.IterUnpaired(ctx, func(k, v val.Tuple) error {
+		return queue(tree.Diff{Type: tree.RemovedDiff, Key: tree.Item(k), From: tree.Item(v)})
+	})
+	if err != nil {
+		return err
+	}
+	return itr.toUnpaired.IterUnpaired(ctx, func(k, v val.Tuple) error {
+		return queue(tree.Diff{Type: tree.AddedDiff, Key: tree.Item(k), To: tree.Item(v)})
+	})
+}
+
+// warnUnpaired warns when |from| or |to| has unpaired rows in |dp|.
+//
+// A diff shows those rows as removed or added rather than modified, which the
+// warning explains.
+func warnUnpaired(ctx *sql.Context, from, to diff.KeyedRows, dp DiffPartition) error {
+	fromN, toN, err := diff.CountUnpaired(from, to)
+	if err != nil {
+		return err
+	}
+	if fromN+toN > 0 {
+		ctx.Warn(PrimaryKeyChangeWarningCode, unpairedRowsWarning, dp.fromName, dp.toName)
+	}
+	return nil
 }
 
 // todo(andy): copy string fields

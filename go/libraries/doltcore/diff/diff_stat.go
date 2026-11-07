@@ -28,7 +28,13 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+// ErrPrimaryKeySetChanged is wrapped by errors for diffs whose rows cannot be
+// paired across a primary key change.
 var ErrPrimaryKeySetChanged = errors.New("primary key set changed")
+
+// errPrimaryKeyTypeChanged is wrapped by errors for diffs whose rows cannot be
+// paired because a primary key column changed type.
+var errPrimaryKeyTypeChanged = errors.New("primary key column type changed")
 
 type DiffStatProgress struct {
 	Adds, Removes, Changes, CellChanges, NewRowSize, OldRowSize, NewCellSize, OldCellSize uint64
@@ -79,8 +85,19 @@ func StatForTableDelta(ctx context.Context, ch chan DiffStatProgress, td TableDe
 		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
 	}
 
-	if schema.ComparePrimaryKeys(fromSch, toSch) == schema.PrimaryKeysDiffer {
-		return fmt.Errorf("failed to compute diff stat for table %s: %w", td.CurName(), ErrPrimaryKeySetChanged)
+	fromRows, toRows, err := td.GetRowData(ctx)
+	if err != nil {
+		return err
+	}
+
+	if td.HasGainedOrLostPrimaryKey() {
+		// No key pairs a keyed row with a keyless one, so like dolt_diff, the
+		// stat counts every row of one side removed and of the other added.
+		err = diffProllyTrees(ctx, ch, schema.IsKeyless(fromSch), fromRows, nil, fromSch, schema.EmptySchema)
+		if err != nil {
+			return err
+		}
+		return diffProllyTrees(ctx, ch, schema.IsKeyless(toSch), nil, toRows, schema.EmptySchema, toSch)
 	}
 
 	keyless, err := td.IsKeyless(ctx)
@@ -88,12 +105,41 @@ func StatForTableDelta(ctx context.Context, ch chan DiffStatProgress, td TableDe
 		return err
 	}
 
-	fromRows, toRows, err := td.GetRowData(ctx)
-	if err != nil {
-		return err
+	if needsAlignment(fromSch, toSch) {
+		from, to, err := alignIndexes(ctx, fromRows, toRows, fromSch, toSch)
+		if err != nil {
+			return fmt.Errorf("failed to compute diff stat for table %s: %w", td.CurName(), err)
+		}
+		if err = statUnpaired(ch, from, to); err != nil {
+			return err
+		}
+		fromRows, toRows = durable.IndexFromProllyMap(from.Rows), durable.IndexFromProllyMap(to.Rows)
+		fromSch, toSch = from.Sch, to.Sch
 	}
 
 	return diffProllyTrees(ctx, ch, keyless, fromRows, toRows, fromSch, toSch)
+}
+
+// statUnpaired sends |ch| the unpaired rows of |from| and |to| as removed and
+// added rows.
+//
+// diffProllyTrees sees only the aligned maps, which leave those rows out.
+func statUnpaired(ch chan DiffStatProgress, from, to KeyedRows) error {
+	fromN, toN, err := CountUnpaired(from, to)
+	if err != nil || fromN+toN == 0 {
+		return err
+	}
+	fromCells := uint64(from.Sch.GetAllCols().Size())
+	toCells := uint64(to.Sch.GetAllCols().Size())
+	ch <- DiffStatProgress{
+		Removes:     uint64(fromN),
+		Adds:        uint64(toN),
+		OldRowSize:  uint64(fromN),
+		NewRowSize:  uint64(toN),
+		OldCellSize: uint64(fromN) * fromCells,
+		NewCellSize: uint64(toN) * toCells,
+	}
+	return nil
 }
 
 func diffProllyTrees(ctx context.Context, ch chan DiffStatProgress, keyless bool, from, to durable.Index, fromSch, toSch schema.Schema) error {

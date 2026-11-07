@@ -28,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 )
 
 const diffSummaryDefaultRowCount = 10
@@ -312,7 +311,7 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 			return NewDiffSummaryTableFunctionRowIter([]*diff.TableDeltaSummary{}), nil
 		}
 
-		summ, err := getSummaryForDelta(ctx, delta, sqledb, fromDetails, toDetails, true)
+		summ, err := summaryForDelta(ctx, delta)
 		if err != nil {
 			return nil, err
 		}
@@ -335,7 +334,7 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 			continue
 		}
 
-		summ, err := getSummaryForDelta(ctx, delta, sqledb, fromDetails, toDetails, false)
+		summ, err := summaryForDelta(ctx, delta)
 		if err != nil {
 			return nil, err
 		}
@@ -347,7 +346,13 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 	return NewDiffSummaryTableFunctionRowIter(diffSummaries), nil
 }
 
-func getSummaryForDelta(ctx *sql.Context, delta diff.TableDelta, sqledb dsess.SqlDatabase, fromDetails, toDetails *refDetails, shouldErrorOnPKChange bool) (*diff.TableDeltaSummary, error) {
+// summaryForDelta returns the summary of |delta|, or nil when it has no
+// observable change.
+//
+// A table whose primary key changed is summarized with its rows paired by
+// [diff.AlignPrimaryKeys]. A table that gained or lost its primary key pairs
+// no rows, so, as in dolt_diff, its data changed whenever it has rows.
+func summaryForDelta(ctx *sql.Context, delta diff.TableDelta) (*diff.TableDeltaSummary, error) {
 	if delta.FromTable == nil && delta.ToTable == nil && delta.FromRootObject == nil && delta.ToRootObject == nil {
 		if !strings.HasPrefix(delta.FromName.Name, diff.DBPrefix) && !strings.HasPrefix(delta.ToName.Name, diff.DBPrefix) {
 			return nil, nil
@@ -357,15 +362,6 @@ func getSummaryForDelta(ctx *sql.Context, delta diff.TableDelta, sqledb dsess.Sq
 			return nil, err
 		}
 		return summ, nil
-	}
-
-	if schema.ComparePrimaryKeys(delta.FromSch, delta.ToSch) == schema.PrimaryKeysDiffer {
-		if shouldErrorOnPKChange {
-			return nil, fmt.Errorf("failed to compute diff summary for table %s: %w", delta.CurName(), diff.ErrPrimaryKeySetChanged)
-		}
-
-		ctx.Warn(dtables.PrimaryKeyChangeWarningCode, dtables.PrimaryKeyChangeWarning, fromDetails.hashStr, toDetails.hashStr)
-		return nil, nil
 	}
 
 	// A table whose only change is column tags has no observable change.
@@ -379,7 +375,7 @@ func getSummaryForDelta(ctx *sql.Context, delta diff.TableDelta, sqledb dsess.Sq
 
 	summ, err := delta.GetSummary(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to compute diff summary for table %s: %w", delta.CurName(), err)
 	}
 
 	return summ, nil
