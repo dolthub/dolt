@@ -57,7 +57,7 @@ func (s *prollyWriteSession) GetWorkingSet() *doltdb.WorkingSet {
 	return s.workingSet
 }
 
-func (s *prollyWriteSession) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+func (s *prollyWriteSession) VisitGCRoots(ctx context.Context, roots func(hash.Hash)) error {
 	for _, writer := range s.tables {
 		err := writer.VisitGCRoots(ctx, roots)
 		if err != nil {
