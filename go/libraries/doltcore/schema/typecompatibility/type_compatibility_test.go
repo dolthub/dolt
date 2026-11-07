@@ -37,6 +37,11 @@ type typeChangeCompatibilityTest struct {
 	invalidateSecondaryIndexes bool
 }
 
+// Datetime test data
+var dt0 = typeinfo.CreateDatetimeTypeFromSqlType(gmstypes.MustCreateDatetimeType(sqltypes.Datetime, 0))
+var dt6 = typeinfo.CreateDatetimeTypeFromSqlType(gmstypes.MustCreateDatetimeType(sqltypes.Datetime, 6))
+var ts6 = typeinfo.CreateDatetimeTypeFromSqlType(gmstypes.MustCreateDatetimeType(sqltypes.Timestamp, 6))
+
 // Enum test data
 var abcEnum = typeinfo.CreateEnumTypeFromSqlEnumType(gmstypes.MustCreateEnumType([]string{"a", "b", "c"}, sql.Collation_Default))
 var abcdEnum = typeinfo.CreateEnumTypeFromSqlEnumType(gmstypes.MustCreateEnumType([]string{"a", "b", "c", "d"}, sql.Collation_Default))
@@ -94,6 +99,21 @@ func TestDoltIsTypeChangeCompatible(t *testing.T) {
 			name:       "int family: large to small type changes are incompatible",
 			from:       typeinfo.Int64Type,
 			to:         typeinfo.Int16Type,
+			compatible: false,
+		}, {
+			name:       "widening datetime fractional seconds is compatible",
+			from:       dt0,
+			to:         dt6,
+			compatible: true,
+		}, {
+			name:       "narrowing datetime fractional seconds is incompatible",
+			from:       dt6,
+			to:         dt0,
+			compatible: false,
+		}, {
+			name:       "datetime to timestamp is incompatible",
+			from:       dt0,
+			to:         ts6,
 			compatible: false,
 		}, {
 			name:       "additive enum changes are compatible",

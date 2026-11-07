@@ -180,7 +180,7 @@ func SchemaMerge(
 		TableName: tblName,
 	}
 
-	if schema.SchemasAreEqual(ancSch, ourSch) && schema.SchemasAreEqual(ancSch, theirSch) {
+	if schemasEqualForMerge(ancSch, ourSch) && schemasEqualForMerge(ancSch, theirSch) {
 		// All schemas are identical, so no merge is needed.
 		return ourSch, sc, mergeInfo, diffInfo, nil
 	}
@@ -463,14 +463,14 @@ func mergeColumns(ctx *sql.Context, tblName string, format *storetypes.NomsBinFo
 		case ours != nil && theirs != nil:
 			// otherwise, we have two valid columns and we need to figure out which one to use
 			if anc != nil {
-				oursChanged := !anc.Equals(*ours)
-				theirsChanged := !anc.Equals(*theirs)
+				oursChanged := !columnsEqual(*anc, *ours)
+				theirsChanged := !columnsEqual(*anc, *theirs)
 				if oursChanged && theirsChanged {
 					diffInfo.LeftSchemaChange = true
 					diffInfo.RightSchemaChange = true
 					// If both columns changed in the same way, the modifications converge, so accept the column.
 					// If not, don't report a conflict, since this case is already handled in checkForColumnConflicts.
-					if ours.Equals(*theirs) {
+					if columnsEqual(*ours, *theirs) {
 						mergedColumns = append(mergedColumns, *theirs)
 					} else {
 						diffInfo.LeftAndRightSchemasDiffer = true
@@ -528,7 +528,7 @@ func mergeColumns(ctx *sql.Context, tblName string, format *storetypes.NomsBinFo
 				diffInfo.RightSchemaChange = true
 				// If both columns changed in the same way, the modifications converge, so accept the column.
 				// If not, don't report a conflict, since this case is already handled in checkForColumnConflicts.
-				if ours.Equals(*theirs) {
+				if columnsEqual(*ours, *theirs) {
 					mergedColumns = append(mergedColumns, *ours)
 				} else {
 					diffInfo.LeftAndRightSchemasDiffer = true
@@ -544,6 +544,46 @@ func mergeColumns(ctx *sql.Context, tblName string, format *storetypes.NomsBinFo
 	}
 
 	return schema.NewColCollection(mergedColumns...), nil, mergeInfo, diffInfo, nil
+}
+
+// columnsEqual returns whether |a| and |b| are the same column for the purposes of a merge. schema.Column.Equals does
+// not look at the fractional-seconds precision of a type, the column's ON UPDATE expression, AUTO_INCREMENT or COMMENT,
+// so a change to any of those on one side would not be seen as a change and would be dropped from the merged schema.
+func columnsEqual(a, b schema.Column) bool {
+	return a.Equals(b) && columnAttributesEqual(a, b)
+}
+
+// columnAttributesEqual compares the column attributes that schema.Column.Equals ignores.
+func columnAttributesEqual(a, b schema.Column) bool {
+	return a.OnUpdate == b.OnUpdate &&
+		a.AutoIncrement == b.AutoIncrement &&
+		a.Comment == b.Comment &&
+		sqlTypeString(a) == sqlTypeString(b)
+}
+
+// schemasEqualForMerge is schema.SchemasAreEqual, but it also compares the attributes that columnsEqual checks.
+func schemasEqualForMerge(a, b schema.Schema) bool {
+	if !schema.SchemasAreEqual(a, b) {
+		return false
+	}
+	if a == nil || b == nil {
+		return true
+	}
+	// SchemasAreEqual has already established that both schemas have the same columns in the same order.
+	acols, bcols := a.GetAllCols().GetColumns(), b.GetAllCols().GetColumns()
+	for i := range acols {
+		if !columnAttributesEqual(acols[i], bcols[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func sqlTypeString(c schema.Column) string {
+	if c.TypeInfo == nil || c.TypeInfo.ToSqlType() == nil {
+		return ""
+	}
+	return c.TypeInfo.ToSqlType().String()
 }
 
 // checkForColumnConflicts iterates over |mergedColumns|, checks for duplicate column names or column tags, and returns
@@ -590,7 +630,7 @@ func checkSchemaConflicts(columnMappings columnMappings) ([]ColConflict, error) 
 		if ours != nil {
 			// If the column is identical on both sides, no need to check any more conflict cases,
 			// just move on to the next column
-			if theirs != nil && theirs.Equals(*ours) {
+			if theirs != nil && columnsEqual(*theirs, *ours) {
 				continue
 			}
 
@@ -608,7 +648,7 @@ func checkSchemaConflicts(columnMappings columnMappings) ([]ColConflict, error) 
 			case theirs != nil && anc != nil:
 				// Column exists on their side and in ancestor
 				// If the column differs from the ancestor on both sides, then we have a conflict
-				if !anc.Equals(*ours) && !anc.Equals(*theirs) {
+				if !columnsEqual(*anc, *ours) && !columnsEqual(*anc, *theirs) {
 					conflicts = append(conflicts, ColConflict{
 						Kind:   TagCollision,
 						Ours:   *ours,

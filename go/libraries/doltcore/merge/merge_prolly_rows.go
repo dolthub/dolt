@@ -1722,7 +1722,7 @@ func resolveDefaults(ctx *sql.Context, tableName string, mergedSchema schema.Sch
 			return false, nil
 		}
 
-		if col.Default != "" || col.Generated != "" || col.OnUpdate != "" {
+		if col.Default != "" || col.Generated != "" {
 			expr, err := expranalysis.ResolveDefaultExpression(ctx, tableName, mergedSchema, col)
 			if err != nil {
 				return true, err
@@ -1982,7 +1982,7 @@ func remapTupleWithColumnDefaults(
 			// If the column is a new column, then look up any default or generated value in a second pass, after the
 			// non-default and non-generated fields have been established. Virtual columns have been excluded, so any
 			// generated column is stored.
-			if col.Default != "" || col.Generated != "" || col.OnUpdate != "" {
+			if col.Default != "" || col.Generated != "" {
 				secondPass = append(secondPass, to)
 			}
 		} else {
