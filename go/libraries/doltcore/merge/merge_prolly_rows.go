@@ -1127,6 +1127,18 @@ func (uv uniqValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) (
 		return uv.clearArtifact(ctx, diff.Key, diff.Base)
 	}
 
+	// For a row modified on the right, this branch's index still holds the row's old (base) entry. Remove it before
+	// looking for collisions so that a unique value that moved away from this row doesn't collide with itself or
+	// with another row that is taking the value over.
+	if diff.Op == tree.DiffOpRightModify {
+		for _, idx := range uv.indexes {
+			err := idx.removeRow(ctx, diff.Key, diff.Base)
+			if err != nil {
+				return violations, err
+			}
+		}
+	}
+
 	if uv.tm.recordViolations {
 		for _, idx := range uv.indexes {
 			err = idx.findCollisions(ctx, diff.Key, value, func(k, v val.Tuple) error {
