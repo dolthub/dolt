@@ -257,18 +257,49 @@ func CheckAccessForBranch(ctx context.Context, database, branch string, flags Pe
 	if controller == nil {
 		return ErrMissingController.New()
 	}
+	database = getDatabaseNameOnly(database)
+	rebasedBranch, err := RebasedBranch(branchAwareSession, database, branch)
+	if err != nil {
+		return err
+	}
+
 	controller.Access.RWMutex.RLock()
 	defer controller.Access.RWMutex.RUnlock()
 
 	user := branchAwareSession.GetUser()
 	host := branchAwareSession.GetHost()
-	database = getDatabaseNameOnly(database)
-	// Get the permissions for the branch, user, and host combination
-	_, perms := controller.Access.Match(database, branch, user, host)
-	if perms&flags == flags {
-		return nil
+	for _, b := range []string{branch, rebasedBranch} {
+		if b == "" {
+			continue
+		}
+		// Get the permissions for the branch, user, and host combination
+		_, perms := controller.Access.Match(database, b, user, host)
+		if perms&flags != flags {
+			return ErrIncorrectPermissions.New(user, host, b)
+		}
 	}
-	return ErrIncorrectPermissions.New(user, host, branch)
+	return nil
+}
+
+// RebasedBranch returns the branch being rebased when |branch| of |database| is the working branch of an active
+// rebase, and an empty string otherwise. The working branch replaces the rebased branch when the rebase finishes, so
+// an access check on the working branch must also pass on the rebased branch.
+func RebasedBranch(branchAwareSession Context, database, branch string) (string, error) {
+	if rac, ok := branchAwareSession.(rebaseAwareContext); ok {
+		return rac.GetRebasedBranch(database, branch)
+	}
+	return "", nil
+}
+
+// rebaseAwareContext is implemented by a Context that can report the branch being rebased on a rebase working branch.
+type rebaseAwareContext interface {
+	GetRebasedBranch(database, branch string) (string, error)
+}
+
+// rebaseAwareConvertible is implemented by a ContextConvertible that can report the branch being rebased on a rebase
+// working branch.
+type rebaseAwareConvertible interface {
+	GetRebasedBranch(ctx *sql.Context, database, branch string) (string, error)
 }
 
 // CanCreateBranch returns whether the given context can create a branch with the given name. In general, SQL statements
@@ -313,19 +344,29 @@ func CanDeleteBranch(ctx context.Context, branchName string) error {
 	if controller == nil {
 		return ErrMissingController.New()
 	}
+	database := getDatabaseNameOnly(branchAwareSession.GetCurrentDatabase())
+	rebasedBranch, err := RebasedBranch(branchAwareSession, database, branchName)
+	if err != nil {
+		return err
+	}
+
 	controller.Access.RWMutex.RLock()
 	defer controller.Access.RWMutex.RUnlock()
 
 	user := branchAwareSession.GetUser()
 	host := branchAwareSession.GetHost()
-	database := getDatabaseNameOnly(branchAwareSession.GetCurrentDatabase())
-	// Get the permissions for the branch, user, and host combination
-	_, perms := controller.Access.Match(database, branchName, user, host)
-	// If the user has the write or admin flags, then we allow access
-	if (perms&Permissions_Write == Permissions_Write) || (perms&Permissions_Admin == Permissions_Admin) {
-		return nil
+	for _, b := range []string{branchName, rebasedBranch} {
+		if b == "" {
+			continue
+		}
+		// Get the permissions for the branch, user, and host combination
+		_, perms := controller.Access.Match(database, b, user, host)
+		// If the user has the write or admin flags, then we allow access
+		if (perms&Permissions_Write != Permissions_Write) && (perms&Permissions_Admin != Permissions_Admin) {
+			return ErrCannotDeleteBranch.New(user, host, branchName)
+		}
 	}
-	return ErrCannotDeleteBranch.New(user, host, branchName)
+	return nil
 }
 
 // AddAdminForContext adds an entry in the access table for the user represented by the given context. If the
@@ -396,6 +437,13 @@ var _ Context = (*convertedContext)(nil)
 
 func (cc *convertedContext) GetBranch() (string, error) {
 	return cc.convertible.GetBranch(cc.ctx)
+}
+
+func (cc *convertedContext) GetRebasedBranch(database, branch string) (string, error) {
+	if rac, ok := cc.convertible.(rebaseAwareConvertible); ok {
+		return rac.GetRebasedBranch(cc.ctx, database, branch)
+	}
+	return "", nil
 }
 
 func (cc *convertedContext) GetCurrentDatabase() string {

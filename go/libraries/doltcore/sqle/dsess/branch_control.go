@@ -39,26 +39,35 @@ func CheckAccessForDb(ctx context.Context, db SqlDatabase, flags branch_control.
 		return branch_control.ErrMissingController.New()
 	}
 
-	controller.Access.RWMutex.RLock()
-	defer controller.Access.RWMutex.RUnlock()
-
-	user := branchAwareSession.GetUser()
-	host := branchAwareSession.GetHost()
-
 	if db.RevisionType() != RevisionTypeBranch {
 		// not a branch db, no check necessary
 		return nil
 	}
 
 	dbName, branch := doltdb.SplitRevisionDbName(db.RevisionQualifiedName())
-
-	// Get the permissions for the branch, user, and host combination
-	_, perms := controller.Access.Match(dbName, branch, user, host)
-	// If either the flags match or the user is an admin for this branch, then we allow access
-	if (perms&flags == flags) || (perms&branch_control.Permissions_Admin == branch_control.Permissions_Admin) {
-		return nil
+	rebasedBranch, err := branch_control.RebasedBranch(branchAwareSession, dbName, branch)
+	if err != nil {
+		return err
 	}
-	return branch_control.ErrIncorrectPermissions.New(user, host, branch)
+
+	controller.Access.RWMutex.RLock()
+	defer controller.Access.RWMutex.RUnlock()
+
+	user := branchAwareSession.GetUser()
+	host := branchAwareSession.GetHost()
+
+	for _, b := range []string{branch, rebasedBranch} {
+		if b == "" {
+			continue
+		}
+		// Get the permissions for the branch, user, and host combination
+		_, perms := controller.Access.Match(dbName, b, user, host)
+		// If either the flags match or the user is an admin for this branch, then we allow access
+		if (perms&flags != flags) && (perms&branch_control.Permissions_Admin != branch_control.Permissions_Admin) {
+			return branch_control.ErrIncorrectPermissions.New(user, host, b)
+		}
+	}
+	return nil
 }
 
 // CheckAccessOrMergeActive returns nil when the caller has Permissions_Write

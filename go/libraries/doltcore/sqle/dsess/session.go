@@ -2081,6 +2081,24 @@ func (d *DoltSession) GetBranch(ctx *sql.Context) (string, error) {
 	return "", nil
 }
 
+// GetRebasedBranch lets branch control checks on a rebase working branch also apply to the branch being rebased. It
+// returns the branch being rebased when |branch| of |database| is the working branch of an active rebase, and an empty
+// string otherwise.
+func (d *DoltSession) GetRebasedBranch(ctx *sql.Context, database, branch string) (string, error) {
+	if !strings.HasPrefix(branch, doltdb.RebaseWorkingBranchPrefix) {
+		return "", nil
+	}
+	bs, ok, err := d.LookupDbState(ctx, doltdb.RevisionDbName(database, branch))
+	if err != nil || !ok {
+		return "", err
+	}
+	ws := bs.WorkingSet()
+	if ws == nil || !ws.RebaseActive() {
+		return "", nil
+	}
+	return ws.RebaseState().Branch(), nil
+}
+
 // GetUser implements the interface branch_control.Context.
 func (d *DoltSession) GetUser() string {
 	if d.DoltgresPrincipalProvider != nil {
