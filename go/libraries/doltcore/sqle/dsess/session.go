@@ -311,10 +311,11 @@ func GetTableResolver(ctx *sql.Context, dbName string) (doltdb.TableResolver, er
 // the interface returned by the public method.
 func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchState, bool, error) {
 	baseName, rev := doltdb.SplitRevisionDbName(strings.ToLower(dbName))
+
+	// The heads map and checkedOutRevSpec are written under d.mu by other callers (and possibly from another
+	// session's goroutine), so they must be read under the same lock.
 	d.mu.Lock()
 	dbState, dbStateFound := d.dbStates[baseName]
-	d.mu.Unlock()
-
 	if dbStateFound {
 		// If we got an unqualified name, use the current working set head
 		if rev == "" {
@@ -323,12 +324,14 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 
 		branchState, ok := dbState.heads[strings.ToLower(rev)]
 		if ok {
+			d.mu.Unlock()
 			if dbState.Err != nil {
 				return nil, false, dbState.Err
 			}
 			return branchState, ok, nil
 		}
 	}
+	d.mu.Unlock()
 
 	database, ok, err := d.provider.SessionDatabase(ctx, doltdb.RevisionDbName(baseName, rev))
 	if err != nil {
@@ -345,13 +348,15 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 
 	d.mu.Lock()
 	dbState, dbStateFound = d.dbStates[baseName]
-	d.mu.Unlock()
 	if !dbStateFound {
+		d.mu.Unlock()
 		// should be impossible
 		return nil, false, sql.ErrDatabaseNotFound.New(dbName)
 	}
+	branchState, ok := dbState.heads[strings.ToLower(database.Revision())]
+	d.mu.Unlock()
 
-	return dbState.heads[strings.ToLower(database.Revision())], true, nil
+	return branchState, ok, nil
 }
 
 // LookupDbState returns the session state for the database named. Unqualified database names, e.g. `mydb` get resolved
@@ -407,7 +412,9 @@ func (d *DoltSession) RemoveBranchState(ctx *sql.Context, dbName string, branchN
 		return err
 	}
 
+	d.mu.Lock()
 	checkedOutState.dbState.checkedOutRevSpec = defaultHead
+	d.mu.Unlock()
 
 	// also clear out any db-level caches for this db
 	d.dbCache.Clear()

@@ -18,6 +18,7 @@ import (
 	"context"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -579,6 +580,42 @@ func TestGetPersistedValue(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestLookupDbStateConcurrentBranchStateWrites runs lookupDbState against one session while its branch states are
+// added and removed under the session lock, as happens when another session inspects it during dolt_branch('-d').
+// Run with -race: reading the heads map without the lock is reported as a data race (or crashes with
+// "concurrent map read and map write").
+func TestLookupDbStateConcurrentBranchStateWrites(t *testing.T) {
+	sess := DefaultSession(emptyDatabaseProvider(), nil)
+	dbState := newEmptyDatabaseSessionState()
+	dbState.dbName = "db1"
+	dbState.NewEmptyBranchState("main", RevisionTypeBranch)
+	dbState.checkedOutRevSpec = "main"
+	sess.dbStates["db1"] = dbState
+
+	ctx := sql.NewEmptyContext()
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 2000; i++ {
+			bs, ok, err := sess.lookupDbState(ctx, "db1")
+			assert.NoError(t, err)
+			assert.True(t, ok)
+			assert.NotNil(t, bs)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 2000; i++ {
+			sess.mu.Lock()
+			dbState.NewEmptyBranchState("feature", RevisionTypeBranch)
+			delete(dbState.heads, "feature")
+			sess.mu.Unlock()
+		}
+	}()
+	wg.Wait()
 }
 
 func emptyDatabaseProvider() DoltDatabaseProvider {
