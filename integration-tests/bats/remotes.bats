@@ -1,15 +1,17 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
+load $BATS_TEST_DIRNAME/helper/remotesrv-common.bash
 
 remotesrv_pid=
 setup() {
     skiponwindows "tests are flaky on Windows"
+    setup_remotesrv_ports
     setup_common
     cd $BATS_TMPDIR
     mkdir remotes-$$
     mkdir remotes-$$/empty
     echo remotesrv log available here $BATS_TMPDIR/remotes-$$/remotesrv.log
-    remotesrv --http-port 1234 --dir ./remotes-$$ &> ./remotes-$$/remotesrv.log 3>&- &
+    remotesrv --http-port "$REMOTESRV_HTTP_PORT" --grpc-port "$REMOTESRV_GRPC_PORT" --dir ./remotes-$$ &> ./remotes-$$/remotesrv.log 3>&- &
     remotesrv_pid=$!
     cd dolt-repo-$$
     mkdir "dolt-repo-clones"
@@ -132,7 +134,7 @@ teardown() {
 
     cd repo1
     dolt init
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt sql -q "CREATE TABLE test (pk INT)"
     dolt add .
     dolt commit -am "main commit"
@@ -142,7 +144,7 @@ teardown() {
     [[ ! "$output" =~ "remotes/test-remote/test-branch" ]] || false
 
     cd ..
-    dolt clone --remote=test-remote http://localhost:50051/test-org/test-repo repo2
+    dolt clone --remote=test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo repo2
     run dolt branch -a
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "test-branch" ]] || false
@@ -208,7 +210,7 @@ SQL
 }
 
 @test "remotes: add a remote using dolt remote" {
-    run dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    run dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt remote -v
@@ -220,7 +222,7 @@ SQL
 }
 
 @test "remotes: remove a remote" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     run dolt remote remove test-remote
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
@@ -233,7 +235,7 @@ SQL
 }
 
 @test "remotes: clone a remote" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
@@ -249,9 +251,9 @@ SQL
     dolt commit -m "test commit"
     dolt push test-remote main
     cd "dolt-repo-clones"
-    run dolt clone http://localhost:50051/test-org/test-repo
+    run dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "cloning http://localhost:50051/test-org/test-repo" ]] || false
+    [[ "$output" =~ "cloning http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo" ]] || false
     cd test-repo
     run dolt log
     [ "$status" -eq 0 ]
@@ -284,7 +286,7 @@ SQL
 }
 
 @test "remotes: clone a complicated remote" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt sql -q "CREATE TABLE test (pk int primary key)"
     dolt sql -q "INSERT INTO test VALUES (1), (2), (3)"
     dolt add test
@@ -297,7 +299,7 @@ SQL
     ## Cloning from a remote which has tags and it's own remotes
     ## https://github.com/dolthub/dolt/issues/7043
     cd "dolt-repo-clones"
-    dolt clone http://localhost:50051/test-org/test-repo clone-1
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo clone-1
     cd clone-1
 
     # Assert that all the branches and tags are present
@@ -311,11 +313,11 @@ SQL
 
     # Make a local branch, and backup to a different remote
     dolt checkout -b clone-1-branch HEAD
-    dolt backup add mybackup http://localhost:50051/alternate-org/backup
+    dolt backup add mybackup http://localhost:$REMOTESRV_GRPC_PORT/alternate-org/backup
     dolt backup sync mybackup
 
     cd ..
-    dolt clone http://localhost:50051/alternate-org/backup clone-2
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/alternate-org/backup clone-2
     cd clone-2
 
     # Assert that the backup creates remote branches which are correct.
@@ -332,7 +334,7 @@ SQL
 
 @test "remotes: read tables test" {
     # create table t1 and commit
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE t1 (
   pk BIGINT NOT NULL,
@@ -367,7 +369,7 @@ SQL
     cd "dolt-repo-clones"
 
     # Create a read latest tables and verify we have all the tables
-    dolt read-tables http://localhost:50051/test-org/test-repo main
+    dolt read-tables http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo main
     cd test-repo
     run dolt ls
     [ "$status" -eq 0 ]
@@ -377,7 +379,7 @@ SQL
     cd ..
 
     # Read specific table from latest with a specified directory
-    dolt read-tables --dir clone_t1_t2 http://localhost:50051/test-org/test-repo main t1 t2
+    dolt read-tables --dir clone_t1_t2 http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo main t1 t2
     cd clone_t1_t2
     run dolt ls
     [ "$status" -eq 0 ]
@@ -387,7 +389,7 @@ SQL
     cd ..
 
     # Read tables from parent of parent of the tip of main. Should only have table t1
-    dolt read-tables --dir clone_t1 http://localhost:50051/test-org/test-repo main~2
+    dolt read-tables --dir clone_t1 http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo main~2
     cd clone_t1
     run dolt ls
     [ "$status" -eq 0 ]
@@ -398,7 +400,7 @@ SQL
 }
 
 @test "remotes: read-tables cleans up after a failure" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt sql -q "CREATE TABLE t1 (pk BIGINT NOT NULL PRIMARY KEY);"
     dolt add t1
     dolt commit -m "added t1"
@@ -407,13 +409,13 @@ SQL
 
     # A read-tables that fails partway must take its directory with it. Left behind, the in-progress marker
     # inside it blocks every later use of that name.
-    run dolt read-tables http://localhost:50051/test-org/test-repo main nosuchtable
+    run dolt read-tables http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo main nosuchtable
     [ "$status" -eq 1 ]
     [[ "$output" =~ "No table named 'nosuchtable'" ]] || false
     [ ! -d "test-repo" ]
 
     # The retry must not be blocked by the remains of the failed attempt.
-    run dolt read-tables http://localhost:50051/test-org/test-repo main t1
+    run dolt read-tables http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo main t1
     [ "$status" -eq 0 ]
     cd test-repo
     run dolt ls
@@ -422,7 +424,7 @@ SQL
 }
 
 @test "remotes: clone a remote with docs" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     echo "license-text" > LICENSE.md
     dolt docs upload LICENSE.md LICENSE.md
     echo "readme-text" > README.md
@@ -431,9 +433,9 @@ SQL
     dolt commit -m "test doc commit"
     dolt push test-remote main
     cd "dolt-repo-clones"
-    run dolt clone http://localhost:50051/test-org/test-repo
+    run dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "cloning http://localhost:50051/test-org/test-repo" ]] || false
+    [[ "$output" =~ "cloning http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo" ]] || false
     cd test-repo
     run dolt log
     [ "$status" -eq 0 ]
@@ -457,23 +459,23 @@ SQL
 }
 
 @test "remotes: clone an empty remote" {
-    run dolt clone http://localhost:50051/test-org/empty
+    run dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/empty
     [ "$status" -eq 1 ]
     [[ "$output" =~ "clone failed" ]] || false
     [[ "$output" =~ "remote at that url contains no Dolt data" ]] || false
 }
 
 @test "remotes: clone a non-existent remote" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd "dolt-repo-clones"
-    run dolt clone http://localhost:50051/foo/bar
+    run dolt clone http://localhost:$REMOTESRV_GRPC_PORT/foo/bar
     [ "$status" -eq 1 ]
     [[ "$output" =~ "clone failed" ]] || false
     [[ "$output" =~ "remote at that url contains no Dolt data" ]] || false
 }
 
 @test "remotes: clone a different branch than main" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt checkout -b test-branch
     dolt sql <<SQL
 CREATE TABLE test (
@@ -490,9 +492,9 @@ SQL
     dolt commit -m "test commit"
     dolt push test-remote test-branch
     cd "dolt-repo-clones"
-    run dolt clone -b test-branch http://localhost:50051/test-org/test-repo
+    run dolt clone -b test-branch http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "cloning http://localhost:50051/test-org/test-repo" ]] || false
+    [[ "$output" =~ "cloning http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo" ]] || false
     cd test-repo
     run dolt branch
     [ "$status" -eq 0 ]
@@ -504,7 +506,7 @@ SQL
 }
 
 @test "remotes: call a clone's remote something other than origin" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
@@ -520,9 +522,9 @@ SQL
     dolt commit -m "test commit"
     dolt push test-remote main
     cd "dolt-repo-clones"
-    run dolt clone --remote test-remote http://localhost:50051/test-org/test-repo
+    run dolt clone --remote test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "cloning http://localhost:50051/test-org/test-repo" ]] || false
+    [[ "$output" =~ "cloning http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo" ]] || false
     cd test-repo
     run dolt log
     [ "$status" -eq 0 ]
@@ -534,7 +536,7 @@ SQL
 }
 
 @test "remotes: dolt fetch" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt push test-remote main
     run dolt fetch test-remote
     [ "$status" -eq 0 ]
@@ -555,7 +557,7 @@ SQL
 
 @test "remotes: fetch output" {
     # create main remote branch
-    dolt remote add origin http://localhost:50051/test-org/test-repo
+    dolt remote add origin http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt sql -q 'create table test (id int primary key);'
     dolt add .
     dolt commit -m 'create test table.'
@@ -577,7 +579,7 @@ SQL
 
     # create first clone
     cd dolt-repo-clones
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd test-repo
     dolt status
     run dolt status
@@ -589,7 +591,7 @@ SQL
 
     # create second clone
     cd "dolt-repo-clones"
-    dolt clone http://localhost:50051/test-org/test-repo test-repo2
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo test-repo2
     cd test-repo2
     dolt status
     run dolt status
@@ -642,7 +644,7 @@ SQL
     dolt docs upload README.md README.md
     dolt add .
     dolt commit -m "initial doc commit"
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt push test-remote main
     run dolt fetch test-remote
     [ "$status" -eq 0 ]
@@ -656,7 +658,7 @@ SQL
 
     # Clone the initial docs/repo into dolt-repo-clones/test-repo
     cd "dolt-repo-clones"
-    run dolt clone http://localhost:50051/test-org/test-repo
+    run dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd test-repo
     dolt docs print LICENSE.md > LICENSE.md
     dolt docs print README.md > README.md
@@ -695,11 +697,11 @@ SQL
 }
 
 @test "remotes: dolt merge with origin/main syntax." {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt push test-remote main
     dolt fetch test-remote
     cd "dolt-repo-clones"
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd ..
     dolt sql <<SQL
 CREATE TABLE test (
@@ -733,10 +735,10 @@ SQL
 }
 
 @test "remotes: dolt fetch and merge with remotes/origin/main syntax" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt push test-remote main
     cd "dolt-repo-clones"
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd ..
     dolt sql <<SQL
 CREATE TABLE test (
@@ -764,10 +766,10 @@ SQL
 }
 
 @test "remotes: generate a merge with no conflict with a remote branch" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt push test-remote main
     cd "dolt-repo-clones"
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd ..
     dolt sql <<SQL
 CREATE TABLE test (
@@ -809,7 +811,7 @@ SQL
 }
 
 @test "remotes: merge with divergent head" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt push test-remote main
     dolt sql <<SQL
 CREATE TABLE test (
@@ -827,7 +829,7 @@ SQL
     dolt push test-remote main
 
     cd "dolt-repo-clones"
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd ..
 
     dolt commit --amend -m 'new message'
@@ -846,7 +848,7 @@ SQL
 }
 
 @test "remotes: generate a merge with a conflict with a remote branch" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
@@ -862,7 +864,7 @@ SQL
     dolt commit -m "created table"
     dolt push --set-upstream test-remote main
     cd "dolt-repo-clones"
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd ..
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt add test
@@ -886,7 +888,7 @@ SQL
 }
 
 @test "remotes: clone sets your current branch appropriately" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
@@ -905,7 +907,7 @@ SQL
     dolt push test-remote aaa
     dolt push test-remote zzz
     cd "dolt-repo-clones"
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd test-repo
     dolt branch
 
@@ -918,7 +920,7 @@ SQL
     cd ../..
     dolt push test-remote main
     cd "dolt-repo-clones"
-    dolt clone http://localhost:50051/test-org/test-repo test-repo2
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo test-repo2
     cd test-repo2
 
     # main pushed so it should be the current branch.
@@ -928,11 +930,11 @@ SQL
 }
 
 @test "remotes: force fetch from main" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt push --set-upstream test-remote main
 
     cd "dolt-repo-clones"
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd ..
 
     dolt sql <<SQL
@@ -973,7 +975,7 @@ SQL
 }
 
 create_main_remote_branch() {
-    dolt remote add origin http://localhost:50051/test-org/test-repo
+    dolt remote add origin http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt sql -q 'create table test (id int primary key);'
     dolt add .
     dolt commit -m 'create test table.'
@@ -1000,7 +1002,7 @@ create_remote_branch() {
 }
 
 create_five_remote_branches_main_only() {
-  dolt remote add origin http://localhost:50051/test-org/test-repo
+  dolt remote add origin http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
   create_remote_branch "zzz"
   create_remote_branch "dev"
   create_remote_branch "prod"
@@ -1009,7 +1011,7 @@ create_five_remote_branches_main_only() {
 }
 
 create_five_remote_branches_master_only() {
-  dolt remote add origin http://localhost:50051/test-org/test-repo
+  dolt remote add origin http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
   create_remote_branch "111"
   create_remote_branch "dev"
   create_remote_branch "master"
@@ -1018,7 +1020,7 @@ create_five_remote_branches_master_only() {
 }
 
 create_five_remote_branches_no_main_no_master() {
-  dolt remote add origin http://localhost:50051/test-org/test-repo
+  dolt remote add origin http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
   create_remote_branch "123"
   create_remote_branch "dev"
   create_remote_branch "456"
@@ -1027,7 +1029,7 @@ create_five_remote_branches_no_main_no_master() {
 }
 
 create_five_remote_branches_main_and_master() {
-  dolt remote add origin http://localhost:50051/test-org/test-repo
+  dolt remote add origin http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
   create_remote_branch "master"
   create_remote_branch "dev"
   create_remote_branch "456"
@@ -1038,7 +1040,7 @@ create_five_remote_branches_main_and_master() {
 @test "remotes: clone checks out main, if found" {
     create_five_remote_branches_main_only
     cd dolt-repo-clones
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd test-repo
     dolt status
     run dolt status
@@ -1050,7 +1052,7 @@ create_five_remote_branches_main_and_master() {
 @test "remotes: clone checks out master, if main not found" {
     create_five_remote_branches_master_only
     cd dolt-repo-clones
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd test-repo
     dolt status
     run dolt status
@@ -1062,7 +1064,7 @@ create_five_remote_branches_main_and_master() {
 @test "remotes: clone checks out main, if both main and master found" {
     create_five_remote_branches_main_and_master
     cd dolt-repo-clones
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd test-repo
     dolt status
     run dolt status
@@ -1074,7 +1076,7 @@ create_five_remote_branches_main_and_master() {
 @test "remotes: clone checks out first lexicographical branch if neither main nor master found" {
     create_five_remote_branches_no_main_no_master
     cd dolt-repo-clones
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd test-repo
     dolt status
     run dolt status
@@ -1086,7 +1088,7 @@ create_five_remote_branches_main_and_master() {
 @test "remotes: clone creates remotes refs for all remote branches" {
     create_three_remote_branches
     cd dolt-repo-clones
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd test-repo
     run dolt branch -a
     [ "$status" -eq 0 ]
@@ -1101,7 +1103,7 @@ create_five_remote_branches_main_and_master() {
 @test "remotes: clone --single-branch does not create remote refs for all remote branches" {
     create_three_remote_branches
     cd dolt-repo-clones
-    dolt clone --single-branch http://localhost:50051/test-org/test-repo
+    dolt clone --single-branch http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd test-repo
     run dolt branch -a
     [ "$status" -eq 0 ]
@@ -1116,7 +1118,7 @@ create_five_remote_branches_main_and_master() {
 @test "remotes: clone --branch specifies which branch to clone" {
     create_three_remote_branches
     cd dolt-repo-clones
-    dolt clone --branch branch-one http://localhost:50051/test-org/test-repo
+    dolt clone --branch branch-one http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd test-repo
     run dolt branch -a
     [ "$status" -eq 0 ]
@@ -1131,7 +1133,7 @@ create_five_remote_branches_main_and_master() {
 @test "remotes: clone --single-branch --branch does not create all remote refs" {
     create_three_remote_branches
     cd dolt-repo-clones
-    dolt clone --branch branch-one --single-branch http://localhost:50051/test-org/test-repo
+    dolt clone --branch branch-one --single-branch http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd test-repo
     run dolt branch -a
     [ "$status" -eq 0 ]
@@ -1147,7 +1149,7 @@ create_five_remote_branches_main_and_master() {
     create_main_remote_branch
 
     cd dolt-repo-clones
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd test-repo
     dolt branch -a
     run dolt branch -a
@@ -1172,7 +1174,7 @@ setup_ref_test() {
     create_main_remote_branch
 
     cd dolt-repo-clones
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd test-repo
 }
 
@@ -1353,7 +1355,7 @@ setup_ref_test() {
 
 @test "remotes: checkout with -f flag without conflict" {
     # create main remote branch
-    dolt remote add origin http://localhost:50051/test-org/test-repo
+    dolt remote add origin http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt sql -q 'create table test (id int primary key);'
     dolt sql -q 'insert into test (id) values (8);'
     dolt add .
@@ -1387,7 +1389,7 @@ setup_ref_test() {
 
 @test "remotes: checkout with -f flag with conflict" {
     # create main remote branch
-    dolt remote add origin http://localhost:50051/test-org/test-repo
+    dolt remote add origin http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt sql -q 'create table test (id int primary key);'
     dolt sql -q 'insert into test (id) values (8);'
     dolt add .
@@ -1424,10 +1426,10 @@ setup_ref_test() {
 }
 
 @test "remotes: clone sets default upstream for main" {
-    dolt remote add origin http://localhost:50051/test-org/test-repo
+    dolt remote add origin http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt push origin main
     cd dolt-repo-clones
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd test-repo
     dolt push
 }
@@ -1482,14 +1484,14 @@ setup_ref_test() {
     cd repo1
     dolt init
     run dolt sql <<SQL
-CALL dolt_remote('add', 'origin', 'http://localhost:50051/test-org/test-repo');
+CALL dolt_remote('add', 'origin', 'http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo');
 CALL dolt_push('origin', 'main');
 SQL
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "must provide a GRPCDialProvider param through GRPCDialProviderParam" ]] || false
 
     cd ..
-    dolt clone http://localhost:50051/test-org/test-repo repo2
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo repo2
 
     cd repo2
     run dolt branch -va
@@ -1827,7 +1829,7 @@ SQL
 
     # Set up a test repo in the remote server
     cd repo2
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt sql -q "CREATE TABLE test_table (pk INT)"
     dolt add .
     dolt commit -am "main commit"
@@ -1835,7 +1837,7 @@ SQL
     cd ..
 
     # Test cloning from a server remote
-    run dolt sql -q "call dolt_clone('http://localhost:50051/test-org/test-repo');"
+    run dolt sql -q "call dolt_clone('http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo');"
     [ "$status" -eq 0 ]
     run dolt sql -q "use \`test-repo\`; show tables;"
     [ "$status" -eq 0 ]
@@ -1945,15 +1947,15 @@ SQL
 }
 
 @test "remotes: add remote with invalid name fails" {
-  run dolt remote add "remote with space" http://localhost:50051/test-org/test-repo
+  run dolt remote add "remote with space" http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
   [ "$status" -eq 1 ]
   [[ "$output" =~ "remote name invalid" ]] || false
 
-  run dolt remote add "remote/slash" http://localhost:50051/test-org/test-repo
+  run dolt remote add "remote/slash" http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
   [ "$status" -eq 1 ]
   [[ "$output" =~ "remote name invalid" ]] || false
 
-  run dolt remote add "remote@special" http://localhost:50051/test-org/test-repo
+  run dolt remote add "remote@special" http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
   [ "$status" -eq 1 ]
   [[ "$output" =~ "remote name invalid" ]] || false
 }
