@@ -8824,6 +8824,67 @@ var DoltSystemVariables = []queries.ScriptTest{
 // Temporary tables are not supported in GMS, eventually should move those tests there.
 var DoltTempTableScripts = []queries.ScriptTest{
 	{
+		Name: "temporary table index and check alterations survive later writes",
+		SetUpScript: []string{
+			"create temporary table t1 (id int primary key, v int, unique key u (v))",
+			"create temporary table t2 (id int primary key, v int, key k (v))",
+			"create temporary table t3 (id int primary key, v int)",
+			"create temporary table t4 (id int primary key, v int)",
+			"alter table t4 add constraint c check (v > 0)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table t1 drop index u",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "insert into t1 values (1, 1), (2, 1)",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "alter table t2 rename index k to k2",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "insert into t2 values (1, 1)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query: "show create table t2",
+				Expected: []sql.Row{{"t2", "CREATE TEMPORARY TABLE `t2` (\n" +
+					"  `id` int NOT NULL,\n" +
+					"  `v` int,\n" +
+					"  PRIMARY KEY (`id`),\n" +
+					"  KEY `k2` (`v`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:    "alter table t3 add constraint c check (v > 0)",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "insert into t3 values (1, 1)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:       "insert into t3 values (2, -1)",
+				ExpectedErr: sql.ErrCheckConstraintViolated,
+			},
+			{
+				Query:    "alter table t4 drop check c",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "insert into t4 values (1, -1)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "insert into t4 values (2, -2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+		},
+	},
+	{
 		Name: "temporary and non-temporary table name collisions",
 		SetUpScript: []string{
 			"create table t1 (id varchar(100))",
