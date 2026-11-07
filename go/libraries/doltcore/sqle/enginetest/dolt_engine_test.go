@@ -1607,6 +1607,16 @@ func TestDoltMerge(t *testing.T) {
 	RunDoltMergeTests(t, h)
 }
 
+func TestDoltMergeSharedEmptyBase(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltMergeSharedEmptyBaseTests(t, h)
+}
+
+func TestDoltMergeUnrelatedHistories(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltMergeUnrelatedHistoriesTests(t, h)
+}
+
 func TestDoltMergeMultipleBases(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunDoltMergeMultipleBasesTests(t, h)
