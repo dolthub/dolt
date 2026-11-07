@@ -36,7 +36,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
@@ -146,13 +145,17 @@ func (p *PatchTableFunction) PartitionRows(ctx *sql.Context, partition sql.Parti
 
 	// If tableNameExpr defined, return a single table patch result
 	if p.tableNameExpr != nil {
-		delta := findMatchingDelta(tableDeltas, tableName)
+		resolvedName, err := resolveDeltaTableName(ctx, fromRefDetails.root, toRefDetails.root, tableName)
+		if err != nil {
+			return nil, err
+		}
+		delta := findMatchingDelta(tableDeltas, resolvedName)
 		if delta.FromTable == nil && delta.ToTable == nil {
-			_, _, fromTblExists, err := resolve.Table(ctx, fromRefDetails.root, tableName)
+			_, _, fromTblExists, err := doltdb.GetTableInsensitive(ctx, fromRefDetails.root, resolvedName)
 			if err != nil {
 				return nil, err
 			}
-			_, _, toTblExists, err := resolve.Table(ctx, toRefDetails.root, tableName)
+			_, _, toTblExists, err := doltdb.GetTableInsensitive(ctx, toRefDetails.root, resolvedName)
 			if err != nil {
 				return nil, err
 			}
