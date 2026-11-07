@@ -288,6 +288,7 @@ type keylessSecondaryLookupGen struct {
 	pri        prolly.Map
 	sec        prolly.Map
 	pkMap      val.OrdinalMapping
+	nullSafe   []bool
 }
 
 func (c *keylessSecondaryLookupGen) InputKeyDesc() *val.TupleDesc {
@@ -311,6 +312,12 @@ func (c *keylessSecondaryLookupGen) NodeStore() tree.NodeStore {
 }
 
 func (c *keylessSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (prolly.MapIter, error) {
+	for i := 0; i < c.prefixDesc.Count(); i++ {
+		if k.FieldIsNull(i) && !c.nullSafe[i] {
+			return prolly.EmptyPointLookup, nil
+		}
+	}
+
 	var err error
 	if c.prefixDesc.Count() == c.sec.KeyDesc().Count() {
 		// key range optimization only works if full key
