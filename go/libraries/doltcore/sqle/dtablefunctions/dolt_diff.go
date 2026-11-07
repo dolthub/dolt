@@ -806,7 +806,15 @@ func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, to
 		return fmt.Errorf("unexpected database type: %T", dtf.database)
 	}
 
-	delta, err := dtf.cacheTableDelta(ctx, fromCommitVal, toCommitVal, dotCommitVal, tableName, sqledb)
+	fromRefDetails, toRefDetails, err := loadDetailsForRefs(ctx, fromCommitVal, toCommitVal, dotCommitVal, sqledb)
+	if err != nil {
+		return err
+	}
+	resolvedName, err := resolveDeltaTableName(ctx, fromRefDetails.root, toRefDetails.root, tableName)
+	if err != nil {
+		return err
+	}
+	delta, err := dtf.cacheTableDelta(ctx, fromRefDetails, toRefDetails, resolvedName)
 	if err != nil {
 		return err
 	}
@@ -862,7 +870,7 @@ func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, to
 	}
 
 	if rootVal != nil {
-		overriddenTable, _, ok, err := doltdb.GetTableInsensitive(ctx, rootVal, doltdb.TableName{Name: tableName})
+		overriddenTable, _, ok, err := doltdb.GetTableInsensitive(ctx, rootVal, resolvedName)
 		if err != nil {
 			return fmt.Errorf("unable to find table '%s' at overridden schema root: %s", tableName, err.Error())
 		}
@@ -917,12 +925,7 @@ func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, to
 
 // cacheTableDelta caches and returns an appropriate table delta for the table name given, taking renames into
 // consideration. Returns a sql.ErrTableNotFound if the given table name cannot be found in either revision.
-func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, fromCommitVal, toCommitVal, dotCommitVal interface{}, tableName string, db dsess.SqlDatabase) (diff.TableDelta, error) {
-	fromRefDetails, toRefDetails, err := loadDetailsForRefs(ctx, fromCommitVal, toCommitVal, dotCommitVal, db)
-	if err != nil {
-		return diff.TableDelta{}, err
-	}
-
+func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, fromRefDetails, toRefDetails *refDetails, tableName doltdb.TableName) (diff.TableDelta, error) {
 	// TODO: it would be nice to limit this to just the table under consideration, not all tables with a diff
 	deltas, err := diff.GetTableDeltas(ctx, fromRefDetails.root, toRefDetails.root)
 	if err != nil {
@@ -932,30 +935,26 @@ func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, fromCommitVal, t
 	dtf.fromRefDetails = fromRefDetails
 	dtf.toRefDetails = toRefDetails
 
-	resolvedName, err := resolveDeltaTableName(ctx, fromRefDetails.root, toRefDetails.root, tableName)
-	if err != nil {
-		return diff.TableDelta{}, err
-	}
-	delta := findMatchingDelta(deltas, resolvedName)
+	delta := findMatchingDelta(deltas, tableName)
 
 	// We only get a delta if there's a diff. When there isn't one, construct a delta here with table and schema info
 	if delta.FromTable == nil && delta.ToTable == nil {
-		fromTable, fromTableName, fromTableExists, err := doltdb.GetTableInsensitive(ctx, fromRefDetails.root, resolvedName)
+		fromTable, fromTableName, fromTableExists, err := doltdb.GetTableInsensitive(ctx, fromRefDetails.root, tableName)
 		if err != nil {
 			return diff.TableDelta{}, err
 		}
 
-		toTable, toTableName, toTableExists, err := doltdb.GetTableInsensitive(ctx, toRefDetails.root, resolvedName)
+		toTable, toTableName, toTableExists, err := doltdb.GetTableInsensitive(ctx, toRefDetails.root, tableName)
 		if err != nil {
 			return diff.TableDelta{}, err
 		}
 
 		if !fromTableExists && !toTableExists {
-			return diff.TableDelta{}, sql.ErrTableNotFound.New(tableName)
+			return diff.TableDelta{}, sql.ErrTableNotFound.New(tableName.String())
 		}
 
-		delta.FromName = doltdb.TableName{Name: fromTableName, Schema: resolvedName.Schema}
-		delta.ToName = doltdb.TableName{Name: toTableName, Schema: resolvedName.Schema}
+		delta.FromName = doltdb.TableName{Name: fromTableName, Schema: tableName.Schema}
+		delta.ToName = doltdb.TableName{Name: toTableName, Schema: tableName.Schema}
 		delta.FromTable = fromTable
 		delta.ToTable = toTable
 
