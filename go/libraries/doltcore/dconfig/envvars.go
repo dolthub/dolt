@@ -21,6 +21,7 @@ const (
 	EnvOpenAiKey                     = "OPENAI_API_KEY"
 	EnvOrcaRouterKey                 = "ORCAROUTER_API_KEY"
 	EnvDoltRemotePassword            = "DOLT_REMOTE_PASSWORD"
+	EnvDoltRemoteUser                = "DOLT_REMOTE_USER"
 	EnvEditor                        = "EDITOR"
 	EnvSqlDebugLogVerbose            = "DOLT_SQL_DEBUG_LOG_VERBOSE"
 	EnvSqlDebugLog                   = "DOLT_SQL_DEBUG_LOG"
