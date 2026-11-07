@@ -213,7 +213,7 @@ func TestGCCopierCleansUpAfterFinishError(t *testing.T) {
 	ctx := context.Background()
 
 	persister := newFSTablePersister(t.TempDir(), &UnlimitedQuotaProvider{}, false)
-	gcc, err := newGarbageCollectionCopier(chunks.NoArchive, persister.(tableFilePersister))
+	gcc, err := newGarbageCollectionCopier(chunks.NoArchive, persister.(tableFilePersister), plainCodec{})
 	require.NoError(t, err)
 
 	// Writing the same chunk twice makes Finish fail with

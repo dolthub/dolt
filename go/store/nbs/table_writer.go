@@ -44,6 +44,10 @@ type tableWriter struct {
 	pos                   uint64
 	totalCompressedData   uint64
 	totalUncompressedData uint64
+	recordsEnd            uint64
+	sealer                recordSealer
+	scratch               []byte
+	sealErr               error
 }
 
 type snappyEncoder interface {
@@ -92,6 +96,9 @@ func (tw *tableWriter) addChunk(h hash.Hash, data []byte) bool {
 	if len(data) == 0 {
 		panic("NBS blocks cannot be zero length")
 	}
+	if tw.sealer != nil {
+		return tw.addSealedChunk(h, data)
+	}
 
 	// Compress data straight into tw.buff
 	compressed := tw.snapper.Encode(tw.buff[tw.pos:], data)
@@ -126,6 +133,10 @@ func (tw *tableWriter) addChunk(h hash.Hash, data []byte) bool {
 // finish completed table, writing the index and footer. Returns the total length of the table file and the hash used
 // to identify the table.
 func (tw *tableWriter) finish() (tableFileLength uint64, blockAddr hash.Hash, err error) {
+	if tw.sealer != nil {
+		return tw.finishSealed()
+	}
+	tw.recordsEnd = tw.pos
 	err = tw.writeIndex()
 
 	if err != nil {

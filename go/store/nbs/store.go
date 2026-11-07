@@ -157,6 +157,11 @@ type NomsBlockStore struct {
 	// instead of loading the database.
 	loadThunk func(ctx context.Context, loadIt bool)
 	loadErr   error
+
+	// codec seals and opens the records of the store's files, once settled from its format.
+	codec    storeCodec
+	newCodec codecFactory
+	oldGen   *NomsBlockStore
 }
 
 func (nbs *NomsBlockStore) PersistGhostHashes(ctx context.Context, refs hash.HashSet) error {
@@ -460,6 +465,17 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 	if err != nil {
 		return manifestContents{}, false, err
 	}
+	commit, err := nbs.codec.checkAdded(nbs, sources)
+	if err != nil {
+		return manifestContents{}, false, err
+	}
+	// The files are committed once they are in the manifest, even if the rebase that follows fails.
+	installed := false
+	defer func() {
+		if installed {
+			err = errors.Join(err, commit())
+		}
+	}()
 
 	var updatedContents manifestContents
 	for {
@@ -469,8 +485,12 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 		} else if !ok {
 			contents = manifestContents{nbfVers: nbs.upstream.nbfVers}
 		}
+		if err = nbs.checkManifestCodec(ok, contents); err != nil {
+			return manifestContents{}, false, err
+		}
 
 		if gcGen != nil && *gcGen != contents.gcGen {
+			installed = false
 			return manifestContents{}, true, nil
 		}
 
@@ -506,6 +526,7 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 		}
 
 		if !hasWork {
+			installed = true
 			// Even though our specs are already in the manifest, our
 			// in-memory table set may not include them (e.g. if the NBS
 			// was initialized before the manifest was populated by a
@@ -557,6 +578,7 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 			break
 		}
 	}
+	installed = true
 
 	// Rebase to the updated manifest contents. If a concurrent
 	// conjoin in another process deleted files between our manifest
@@ -571,6 +593,9 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 				ok, latest, ferr := nbs.manifest.ParseIfExists(ctx, nbs.stats, nil)
 				if ferr != nil {
 					return manifestContents{}, false, ferr
+				}
+				if err = nbs.checkManifestCodec(ok, latest); err != nil {
+					return manifestContents{}, false, err
 				}
 				if ok {
 					rebaseContents = latest
@@ -687,38 +712,38 @@ func OverwriteStoreManifest(ctx context.Context, store *NomsBlockStore, root has
 	return nil
 }
 
-func NewAWSStore(ctx context.Context, nbfVerStr string, table, ns, bucket string, s3 S3APIV2, ddb DynamoDBAPIV2, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
+func NewAWSStore(ctx context.Context, nbfVerStr string, table, ns, bucket string, s3 S3APIV2, ddb DynamoDBAPIV2, memTableSize uint64, q MemoryQuotaProvider, opts ...StoreOption) (*NomsBlockStore, error) {
 	readRateLimiter := make(chan struct{}, 32)
 	p := &awsTablePersister{
-		s3,
-		q,
-		readRateLimiter,
-		bucket,
-		ns,
-		awsLimits{defaultS3PartSize, minS3PartSize, maxS3PartSize},
+		s3:     s3,
+		q:      q,
+		rl:     readRateLimiter,
+		bucket: bucket,
+		ns:     ns,
+		limits: awsLimits{defaultS3PartSize, minS3PartSize, maxS3PartSize},
 	}
 	mm := manifest(newDynamoManifest(table, ns, ddb))
-	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize)
+	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize, opts...)
 }
 
 // NewGCSStore returns an nbs implementation backed by a GCSBlobstore
-func NewGCSStore(ctx context.Context, nbfVerStr string, bucketName, path string, gcs *storage.Client, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
+func NewGCSStore(ctx context.Context, nbfVerStr string, bucketName, path string, gcs *storage.Client, memTableSize uint64, q MemoryQuotaProvider, opts ...StoreOption) (*NomsBlockStore, error) {
 	bs := blobstore.NewGCSBlobstore(gcs, bucketName, path)
-	return NewBSStore(ctx, nbfVerStr, bs, memTableSize, q)
+	return NewBSStore(ctx, nbfVerStr, bs, memTableSize, q, opts...)
 }
 
 // NewGCSStore returns an nbs implementation backed by a GCSBlobstore
-func NewOCISStore(ctx context.Context, nbfVerStr string, bucketName, path string, provider common.ConfigurationProvider, client objectstorage.ObjectStorageClient, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
+func NewOCISStore(ctx context.Context, nbfVerStr string, bucketName, path string, provider common.ConfigurationProvider, client objectstorage.ObjectStorageClient, memTableSize uint64, q MemoryQuotaProvider, opts ...StoreOption) (*NomsBlockStore, error) {
 	bs, err := blobstore.NewOCIBlobstore(ctx, provider, client, bucketName, path)
 	if err != nil {
 		return nil, err
 	}
 
-	return NewNoConjoinBSStore(ctx, nbfVerStr, bs, memTableSize, q)
+	return NewNoConjoinBSStore(ctx, nbfVerStr, bs, memTableSize, q, opts...)
 }
 
 // NewGitStore returns an nbs implementation backed by a GitBlobstore.
-func NewGitStore(ctx context.Context, nbfVerStr string, gitDir string, ref string, opts blobstore.GitBlobstoreOptions, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
+func NewGitStore(ctx context.Context, nbfVerStr string, gitDir string, ref string, opts blobstore.GitBlobstoreOptions, memTableSize uint64, q MemoryQuotaProvider, storeOpts ...StoreOption) (*NomsBlockStore, error) {
 	// A Git remote may reject large blobs. To keep git-backed remotes broadly usable by default, enable
 	// chunked-object writes with a conservative max part size unless the caller explicitly overrides it.
 	if opts.MaxPartSize == 0 {
@@ -731,13 +756,13 @@ func NewGitStore(ctx context.Context, nbfVerStr string, gitDir string, ref strin
 	}
 
 	mm := manifest(blobstoreManifest{bs})
-	p := &singleBlobBSPersister{bs, q, s3BlockSize}
-	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize)
+	p := &singleBlobBSPersister{bs: bs, q: q, blockSize: s3BlockSize}
+	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize, storeOpts...)
 }
 
 // NewNoConjoinGitStore returns an nbs implementation backed by a GitBlobstore, but disables conjoin.
 // This can be useful for deployments where conjoin's table rewrite cost is undesirable.
-func NewNoConjoinGitStore(ctx context.Context, nbfVerStr string, gitDir string, ref string, opts blobstore.GitBlobstoreOptions, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
+func NewNoConjoinGitStore(ctx context.Context, nbfVerStr string, gitDir string, ref string, opts blobstore.GitBlobstoreOptions, memTableSize uint64, q MemoryQuotaProvider, storeOpts ...StoreOption) (*NomsBlockStore, error) {
 	if opts.MaxPartSize == 0 {
 		opts.MaxPartSize = defaultGitBlobstoreMaxPartSize
 	}
@@ -748,31 +773,31 @@ func NewNoConjoinGitStore(ctx context.Context, nbfVerStr string, gitDir string, 
 	}
 
 	mm := manifest(blobstoreManifest{bs})
-	p := &noConjoinBlobstorePersister{bs, q, s3BlockSize}
-	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, noopConjoiner{}, memTableSize)
+	p := &noConjoinBlobstorePersister{bs: bs, q: q, blockSize: s3BlockSize}
+	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, noopConjoiner{}, memTableSize, storeOpts...)
 }
 
 // NewBSStore returns an nbs implementation backed by a Blobstore
-func NewBSStore(ctx context.Context, nbfVerStr string, bs blobstore.Blobstore, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
+func NewBSStore(ctx context.Context, nbfVerStr string, bs blobstore.Blobstore, memTableSize uint64, q MemoryQuotaProvider, opts ...StoreOption) (*NomsBlockStore, error) {
 	mm := manifest(blobstoreManifest{bs})
 
-	p := &blobstorePersister{bs, q, s3BlockSize}
-	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize)
+	p := &blobstorePersister{bs: bs, q: q, blockSize: s3BlockSize}
+	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize, opts...)
 }
 
 // NewNoConjoinBSStore returns a nbs implementation backed by a Blobstore
-func NewNoConjoinBSStore(ctx context.Context, nbfVerStr string, bs blobstore.Blobstore, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
+func NewNoConjoinBSStore(ctx context.Context, nbfVerStr string, bs blobstore.Blobstore, memTableSize uint64, q MemoryQuotaProvider, opts ...StoreOption) (*NomsBlockStore, error) {
 	mm := manifest(blobstoreManifest{bs})
 
-	p := &noConjoinBlobstorePersister{bs, q, s3BlockSize}
-	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, noopConjoiner{}, memTableSize)
+	p := &noConjoinBlobstorePersister{bs: bs, q: q, blockSize: s3BlockSize}
+	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, noopConjoiner{}, memTableSize, opts...)
 }
 
-func NewLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSize uint64, q MemoryQuotaProvider, mmapArchiveIndexes bool) (*NomsBlockStore, error) {
-	return newLocalStore(ctx, nbfVerStr, dir, memTableSize, defaultMaxTables, q, mmapArchiveIndexes)
+func NewLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSize uint64, q MemoryQuotaProvider, mmapArchiveIndexes bool, opts ...StoreOption) (*NomsBlockStore, error) {
+	return newLocalStore(ctx, nbfVerStr, dir, memTableSize, defaultMaxTables, q, mmapArchiveIndexes, opts...)
 }
 
-func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSize uint64, maxTables int, q MemoryQuotaProvider, mmapArchiveIndexes bool) (*NomsBlockStore, error) {
+func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSize uint64, maxTables int, q MemoryQuotaProvider, mmapArchiveIndexes bool, opts ...StoreOption) (*NomsBlockStore, error) {
 	if err := checkDir(dir); err != nil {
 		return nil, err
 	}
@@ -790,11 +815,11 @@ func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 	p := newFSTablePersister(dir, q, mmapArchiveIndexes)
 	c := conjoinStrategy(inlineConjoiner{maxTables})
 
-	return newNomsBlockStore(ctx, nbfVerStr, m, p, q, c, memTableSize)
+	return newNomsBlockStore(ctx, nbfVerStr, m, p, q, c, memTableSize, opts...)
 }
 
-func NewLocalJournalingStore(ctx context.Context, nbfVers, dir string, q MemoryQuotaProvider, mmapArchiveIndexes bool, warningsCb func(error)) (*NomsBlockStore, error) {
-	return NewLocalJournalingStoreWithOptions(ctx, nbfVers, dir, q, mmapArchiveIndexes, warningsCb, JournalingStoreOptions{})
+func NewLocalJournalingStore(ctx context.Context, nbfVers, dir string, q MemoryQuotaProvider, mmapArchiveIndexes bool, warningsCb func(error), storeOpts ...StoreOption) (*NomsBlockStore, error) {
+	return NewLocalJournalingStoreWithOptions(ctx, nbfVers, dir, q, mmapArchiveIndexes, warningsCb, JournalingStoreOptions{}, storeOpts...)
 }
 
 // JournalingStoreOptions controls behavior of local journaling store creation.
@@ -810,7 +835,7 @@ type JournalingStoreOptions struct {
 	SkipLockFileTimeout bool
 }
 
-func NewLocalJournalingStoreWithOptions(ctx context.Context, nbfVers, dir string, q MemoryQuotaProvider, mmapArchiveIndexes bool, warningsCb func(error), opts JournalingStoreOptions) (*NomsBlockStore, error) {
+func NewLocalJournalingStoreWithOptions(ctx context.Context, nbfVers, dir string, q MemoryQuotaProvider, mmapArchiveIndexes bool, warningsCb func(error), opts JournalingStoreOptions, storeOpts ...StoreOption) (*NomsBlockStore, error) {
 	if err := checkDir(dir); err != nil {
 		return nil, err
 	}
@@ -834,6 +859,14 @@ func NewLocalJournalingStoreWithOptions(ctx context.Context, nbfVers, dir string
 	}
 	nbs.staticAccessMode = staticAccessMode
 	nbs.staticVersion = constants.FormatDoltString
+	nbs.applyOptions(storeOpts)
+	if nbfVers, err = nbs.settleJournalCodec(dir, nbfVers); err != nil {
+		if lock != nil {
+			lock.Unlock()
+			lock.Close()
+		}
+		return nil, err
+	}
 	nbs.loadThunk = func(ctx context.Context, loadIt bool) {
 		if loadIt == false {
 			if lock != nil {
@@ -852,6 +885,7 @@ func NewLocalJournalingStoreWithOptions(ctx context.Context, nbfVers, dir string
 			return
 		}
 		p := newFSTablePersister(dir, q, mmapArchiveIndexes).(*fsTablePersister)
+		p.setCodec(nbs.codec)
 
 		// The NomsBlockStore is not constructed yet, so bootstrapping errors should fail store
 		// creation rather than crash the process. Callers configure crash behavior afterwards
@@ -918,7 +952,7 @@ func newEmptyNomsBlockStore(memTableSize uint64) (*NomsBlockStore, error) {
 	return nbs, nil
 }
 
-func newNomsBlockStore(ctx context.Context, nbfVerStr string, m manifest, p tablePersister, q MemoryQuotaProvider, c conjoinStrategy, memTableSize uint64) (*NomsBlockStore, error) {
+func newNomsBlockStore(ctx context.Context, nbfVerStr string, m manifest, p tablePersister, q MemoryQuotaProvider, c conjoinStrategy, memTableSize uint64, opts ...StoreOption) (*NomsBlockStore, error) {
 	nbs, err := newEmptyNomsBlockStore(memTableSize)
 	if err != nil {
 		return nil, err
@@ -929,11 +963,13 @@ func newNomsBlockStore(ctx context.Context, nbfVerStr string, m manifest, p tabl
 	nbs.conjoiner = c
 	nbs.tables = newTableSet(p, q)
 	nbs.upstream = manifestContents{nbfVers: nbfVerStr}
+	nbs.applyOptions(opts)
 
 	t1 := time.Now()
 	defer nbs.stats.OpenLatency.SampleTimeSince(t1)
 
 	if err = nbs.rebase(ctx); err != nil {
+		_ = m.Close()
 		return nil, err
 	}
 
@@ -1051,6 +1087,9 @@ func (nbs *NomsBlockStore) addPendingRefsToHasCache() {
 
 func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, getAddrs chunks.InsertAddrsCurry, checker refCheck) (bool, error) {
 	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	if err := nbs.codec.checkAccess(); err != nil {
 		return false, err
 	}
 	nbs.mu.Lock()
@@ -1569,6 +1608,9 @@ func (nbs *NomsBlockStore) rebase(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		if err = nbs.checkManifestCodec(exists, contents); err != nil {
+			return err
+		}
 		if !exists {
 			return nil
 		}
@@ -1659,6 +1701,9 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 	}
 
 	handleOptimisticLockFailure := func(upstream manifestContents) error {
+		if err := nbs.checkManifestCodec(true, upstream); err != nil {
+			return err
+		}
 		newTables, err := nbs.tables.rebase(ctx, upstream.specs, nil, nbs.stats)
 		if err != nil {
 			return err
@@ -1929,6 +1974,8 @@ func newTableFile(cs chunkSource, info tableSpec, behavior dherrors.FatalBehavio
 		sfx = ArchiveFileSuffix
 		dataSpan := a.aRdr.footer.dataSpan()
 		dataOffset = dataSpan.length
+	} else {
+		dataOffset = encryptedRecordsEnd(cs)
 	}
 
 	return tableFile{
@@ -2022,7 +2069,8 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileName string, 
 	}
 	defer r.Close()
 
-	if splitOffset == 0 && !strings.HasSuffix(fileName, ArchiveFileSuffix) {
+	// An encrypted table's records do not end at an offset its size gives.
+	if splitOffset == 0 && !strings.HasSuffix(fileName, ArchiveFileSuffix) && !nbs.codec.encrypted() {
 		splitOffset = tableTailOffset(sz, uint32(numChunks))
 	}
 
@@ -2167,7 +2215,7 @@ func (nbs *NomsBlockStore) addTableFilesToManifest(ctx context.Context, fileIdTo
 		// We should make these ref checks more efficient and
 		// more performant as well, so that incremental
 		// backups are more credible for example.
-		if !sources.root.IsEmpty() {
+		if !sources.root.IsEmpty() && nbs.codec.checkAccess() == nil {
 			refCheck := getRefCheck(nbs, genRefCheck, sources.sources)
 			err = refCheckAllSources(ctx, getAddrs, refCheck, sources.sources, nbs.stats)
 			if err != nil {
@@ -2207,6 +2255,18 @@ type openChunkSourcesResult struct {
 }
 
 func (nbs *NomsBlockStore) openChunkSourcesForManifestUpdateAndRebase(ctx context.Context, files map[hash.Hash]uint32, existing chunkSourceSet) (openChunkSourcesResult, error) {
+	res, err := nbs.openChunkSourcesForManifestUpdate(ctx, files, existing)
+	if err != nil {
+		return openChunkSourcesResult{}, err
+	}
+	if err = nbs.codec.checkOpened(ctx, nbs, res.sources, res.root); err != nil {
+		res.sources.close()
+		return openChunkSourcesResult{}, err
+	}
+	return res, nil
+}
+
+func (nbs *NomsBlockStore) openChunkSourcesForManifestUpdate(ctx context.Context, files map[hash.Hash]uint32, existing chunkSourceSet) (openChunkSourcesResult, error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	if nbs.closed {
@@ -2216,7 +2276,7 @@ func (nbs *NomsBlockStore) openChunkSourcesForManifestUpdateAndRebase(ctx contex
 	// push, a pull, a manual AddTableFiles. We run the more expensive deep
 	// validation here, before we add them to the store and take a dependency
 	// on them.
-	sources, err := nbs.tables.openForAdd(ctx, files, existing, openOpts{deepValidate: true}, nbs.stats)
+	sources, err := nbs.tables.openForAdd(ctx, files, existing, openOpts{deepValidate: true, adding: true}, nbs.stats)
 	if err != nil {
 		return openChunkSourcesResult{}, err
 	}
@@ -2528,12 +2588,16 @@ func markAndSweepChunks(ctx context.Context, nbs *NomsBlockStore, src Compressed
 		destNBS = nbs
 	}
 
+	if err := checkGCCodecs(nbs.codec, destNBS.codec); err != nil {
+		return nil, err
+	}
+
 	tfp, ok := destNBS.persister.(tableFilePersister)
 	if !ok {
 		return nil, fmt.Errorf("NBS does not support copying garbage collection")
 	}
 
-	gcc, err := newGarbageCollectionCopier(gcConfig.ArchiveLevel, tfp)
+	gcc, err := newGarbageCollectionCopier(gcConfig.ArchiveLevel, tfp, destNBS.codec)
 	if err != nil {
 		return nil, err
 	}

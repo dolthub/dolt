@@ -83,6 +83,7 @@ type memTable struct {
 	getChildAddrs []chunks.InsertAddrsCb
 	maxData       uint64
 	totalData     uint64 // size of uncompressed data in chunks
+	codec         storeCodec
 }
 
 func newMemTable(memTableSize uint64) *memTable {
@@ -222,6 +223,11 @@ func (mt *memTable) write(haver chunkReader, keeper keeperF, stats *Stats) (name
 	// todo: memory quota
 	buff := make([]byte, maxSize)
 	tw := newTableWriter(buff, mt.snapper)
+	if mt.codec != nil {
+		if tw.sealer, err = mt.codec.newTableSealer(); err != nil {
+			return hash.Hash{}, nil, 0, 0, gcBehavior_Continue, err
+		}
+	}
 
 	if haver != nil {
 		sort.Sort(hasRecordByPrefix(mt.order)) // hasMany() requires addresses to be sorted.
@@ -248,7 +254,7 @@ func (mt *memTable) write(haver chunkReader, keeper keeperF, stats *Stats) (name
 		return hash.Hash{}, nil, 0, 0, gcBehavior_Continue, err
 	}
 
-	splitOffset = tableSize - (indexSize(chunkCount) + footerSize)
+	splitOffset = tw.recordsEnd
 
 	if chunkCount > 0 {
 		stats.BytesPerPersist.Sample(uint64(tableSize))
@@ -257,7 +263,7 @@ func (mt *memTable) write(haver chunkReader, keeper keeperF, stats *Stats) (name
 		stats.ChunksPerPersist.Sample(uint64(chunkCount))
 	}
 
-	return name, buff[:tableSize], splitOffset, chunkCount, gcBehavior_Continue, nil
+	return name, tw.buff[:tableSize], splitOffset, chunkCount, gcBehavior_Continue, nil
 }
 
 func (mt *memTable) close() error {

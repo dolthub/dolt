@@ -60,7 +60,7 @@ func TestPlanCompaction(t *testing.T) {
 		sources = append(sources, src)
 	}
 
-	plan, err := planRangeCopyConjoin(ctx, sources, q, &Stats{})
+	plan, err := planRangeCopyConjoin(ctx, sources, q, plainCodec{}, &Stats{})
 	require.NoError(t, err)
 	defer plan.closer()
 
@@ -111,7 +111,7 @@ func TestPlanRangeCopyConjoin(t *testing.T) {
 					}
 					srcs := makeTestSrcs(t, []uint32{1024, 1024, 1024, 1024}, persister, tc.mode)
 					beforesize = q.Usage()
-					plan, err := planRangeCopyConjoin(ctx, srcs, q, &Stats{})
+					plan, err := planRangeCopyConjoin(ctx, srcs, q, plainCodec{}, &Stats{})
 					require.NoError(t, err)
 					t.Cleanup(plan.closer)
 					successsize = q.Usage()
@@ -130,7 +130,7 @@ func TestPlanRangeCopyConjoin(t *testing.T) {
 								q:         q,
 							}
 							srcs := makeTestSrcs(t, []uint32{1024, 1024, 1024, 1024}, persister, tc.mode)
-							_, err := planRangeCopyConjoin(ctx, srcs, q, &Stats{})
+							_, err := planRangeCopyConjoin(ctx, srcs, q, plainCodec{}, &Stats{})
 							require.Error(t, err)
 							require.Equal(t, beforesize, q.Usage())
 						})

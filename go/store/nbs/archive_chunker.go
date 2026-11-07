@@ -31,6 +31,8 @@ type DecompBundle struct {
 	cDict         *gozstd.CDict
 	rawDictionary *[]byte
 	contentKey    hash.Hash
+	// sealed is the stored span of a dictionary from an encrypted archive, so writers can copy it as it is.
+	sealed any
 }
 
 // NewDecompBundle creates a new DecompBundle from a zStd compressed dictionary. The input should be the same

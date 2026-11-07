@@ -19,7 +19,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"hash/crc32"
 	"io"
 	"os"
 	"path/filepath"
@@ -104,6 +103,7 @@ func openJournalWriter(ctx context.Context, path string) (wr *journalWriter, exi
 		buf:     nil,
 		journal: newJournalFile(f),
 		path:    path,
+		codec:   plainJournal{},
 	}, true, nil
 }
 
@@ -128,6 +128,7 @@ func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, e
 		buf:     nil,
 		journal: newJournalFile(f),
 		path:    path,
+		codec:   plainJournal{},
 	}, nil
 }
 
@@ -159,6 +160,7 @@ type journalWriter struct {
 	lock        sync.RWMutex
 	batchCrc    uint32
 	currentRoot hash.Hash
+	codec       journalCodec
 	// readers counts reads of the journal file made without |lock|. They
 	// register under |lock|, and Close waits for them before closing the file.
 	readers sync.WaitGroup
@@ -201,8 +203,16 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, canWrite bool, re
 	// at minimum the non-indexed portion will include a root hash record.
 	// Index lookups are added to the ongoing batch to re-synchronize.
 	wr.off, err = processJournalRecords(ctx, wr.path, wr.journal.f, canWrite, wr.indexed, func(o int64, r journalRec) error {
-		switch r.kind {
-		case chunkJournalRecKind:
+		if err := wr.codec.replay(ctx, o, r); err != nil {
+			return err
+		}
+		switch {
+		case r.kind == keyJournalRecKind:
+			if canWrite {
+				return wr.indexKey(r.payload)
+			}
+
+		case isChunkRecKind(r.kind):
 			rng := Range{
 				Offset: uint64(o) + uint64(r.payloadOffset()),
 				Length: uint32(len(r.payload)),
@@ -212,14 +222,12 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, canWrite bool, re
 
 			// re-index this lookup, unless we're read-only and must not write
 			if canWrite {
-				a := toAddr16(r.address)
-				if err := writeIndexLookup(wr.indexWriter, lookup{a: a, r: rng}); err != nil {
+				if err := wr.indexLookup(lookup{a: toAddr16(r.address), r: rng}); err != nil {
 					return err
 				}
-				wr.batchCrc = crc32.Update(wr.batchCrc, crcTable, a[:])
 			}
 
-		case rootHashJournalRecKind:
+		case isRootHashRecKind(r.kind):
 			lastOffset = o
 			last = r.address
 			if !reflogDisabled && reflogRingBuffer != nil {
@@ -366,6 +374,9 @@ func (wr *journalWriter) readJournalIndex(ctx context.Context, canWrite bool) er
 					return fmt.Errorf("invalid index lookup length %d", l.r.Length)
 				}
 			}
+			if err := wr.codec.checkBatch(ectx, m, batch); err != nil {
+				return err
+			}
 
 			// |r.end| is expected to point to a root hash record in |wr.journal|
 			// containing a hash equal to |r.lastRoot|, validate this here
@@ -435,6 +446,7 @@ func (wr *journalWriter) corruptIndexRecovery(canWrite bool) error {
 	// reset bootstrapping state
 	wr.off, wr.indexed, wr.uncmpSz = 0, 0, 0
 	wr.ranges = newRangeIndex()
+	wr.codec.reset()
 	return nil
 }
 
@@ -456,39 +468,55 @@ func (wr *journalWriter) hasAddr(h hash.Hash) (ok bool) {
 	return
 }
 
-// getCompressedChunk reads the CompressedChunks with addr |h|.
-func (wr *journalWriter) getCompressedChunk(h hash.Hash) (CompressedChunk, error) {
+// getChunker reads the chunk with addr |h|. The codec opens it after the lock is released, since opening it may
+// call a key provider.
+func (wr *journalWriter) getChunker(h hash.Hash) (ToChunker, error) {
+	payload, err := wr.getPayload(h)
+	if err != nil || payload == nil {
+		return CompressedChunk{}, err
+	}
+	return wr.codec.chunker(h, payload)
+}
+
+// getPayload reads the record payload of the chunk with addr |h|, or nil if the journal does not have it.
+func (wr *journalWriter) getPayload(h hash.Hash) ([]byte, error) {
 	wr.lock.RLock()
 	defer wr.lock.RUnlock()
 	r, ok := wr.ranges.get(h)
 	if !ok {
-		return CompressedChunk{}, nil
+		return nil, nil
 	}
-	buf := make([]byte, r.Length)
-	if _, err := wr.readAt(buf, int64(r.Offset)); err != nil {
-		return CompressedChunk{}, err
-	}
-	return NewCompressedChunk(hash.Hash(h), buf)
+	return wr.readPayload(r)
 }
 
-// getCompressedChunk reads the CompressedChunks with addr |h|.
-func (wr *journalWriter) getCompressedChunkAtRange(r Range, h hash.Hash) (CompressedChunk, error) {
-	buf := make([]byte, r.Length)
-	if _, err := wr.readAt(buf, int64(r.Offset)); err != nil {
-		return CompressedChunk{}, err
+// chunkData returns the data of chunk |h| from its record's payload.
+func (wr *journalWriter) chunkData(h hash.Hash, payload []byte) ([]byte, error) {
+	if _, ok := wr.codec.(plainJournal); ok {
+		// The concrete type keeps the plaintext chunk off the heap.
+		cc, err := NewCompressedChunk(h, payload)
+		if err != nil {
+			return nil, err
+		}
+		chk, err := cc.ToChunk()
+		return chk.Data(), err
 	}
-	return NewCompressedChunk(hash.Hash(h), buf)
+	c, err := wr.codec.chunker(h, payload)
+	if err != nil {
+		return nil, err
+	}
+	chk, err := c.ToChunk()
+	return chk.Data(), err
 }
 
-// readCompressedChunkAt reads the chunk at |r| directly from |f|. |r| must be
+// readPayloadAt reads the chunk record payload at |r| directly from |f|. |r| must be
 // below the flushed offset of the journal, and the caller must hold a
 // |readers| pin so that |f| stays open.
-func readCompressedChunkAt(f *os.File, r Range, h hash.Hash) (CompressedChunk, error) {
+func readPayloadAt(f *os.File, r Range) ([]byte, error) {
 	buf := make([]byte, r.Length)
 	if _, err := f.ReadAt(buf, int64(r.Offset)); err != nil {
-		return CompressedChunk{}, err
+		return nil, err
 	}
-	return NewCompressedChunk(h, buf)
+	return buf, nil
 }
 
 // getRange returns a Range for the chunk with addr |h|.
@@ -501,6 +529,12 @@ func (wr *journalWriter) getRange(ctx context.Context, behavior dherrors.FatalBe
 	wr.lock.RLock()
 	defer wr.lock.RUnlock()
 	rng, ok = wr.ranges.get(h)
+	if ok {
+		var key []byte
+		if rng, key, err = wr.codec.locate(h, rng, wr); err == nil && key != nil {
+			locatedKeysFrom(ctx).note(h, rng, RangeKeys{Key: key})
+		}
+	}
 	return
 }
 
@@ -508,24 +542,29 @@ func (wr *journalWriter) getRange(ctx context.Context, behavior dherrors.FatalBe
 func (wr *journalWriter) writeCompressedChunk(ctx context.Context, behavior dherrors.FatalBehavior, cc CompressedChunk) error {
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
-	recordLen, payloadOff := chunkRecordSize(cc)
+	rec, err := wr.codec.sealChunk(ctx, cc)
+	if err != nil {
+		return err
+	}
+	if err = wr.writeKeyRecord(ctx, behavior, rec.key); err != nil {
+		return err
+	}
+	recordLen, payloadOff := journalRecordSize(len(rec.payload))
 	rng := Range{
 		Offset: uint64(wr.offset()) + uint64(payloadOff),
-		Length: uint32(len(cc.FullCompressedChunk)),
+		Length: uint32(len(rec.payload)),
 	}
 	buf, err := wr.getBytes(ctx, behavior, int(recordLen))
 	if err != nil {
 		return err
 	}
 	wr.unsyncd += uint64(recordLen)
-	_ = writeChunkRecord(buf, cc)
+	_ = writeJournalRecord(buf, rec.kind, cc.H, rec.payload)
 	wr.ranges.put(cc.H, rng)
 
-	a := toAddr16(cc.H)
-	if err := writeIndexLookup(wr.indexWriter, lookup{a: a, r: rng}); err != nil {
+	if err := wr.indexLookup(lookup{a: toAddr16(cc.H), r: rng}); err != nil {
 		return err
 	}
-	wr.batchCrc = crc32.Update(wr.batchCrc, crcTable, a[:])
 
 	// To fulfill our durability guarantees, we technically only need to
 	// file.Sync() the journal when we commit a new root chunk. However,
@@ -565,12 +604,22 @@ func (wr *journalWriter) size() int64 {
 func (wr *journalWriter) commitRootHashUnlocked(ctx context.Context, behavior dherrors.FatalBehavior, root hash.Hash) error {
 	defer trace.StartRegion(ctx, "commit-root").End()
 
-	buf, err := wr.getBytes(ctx, behavior, rootHashRecordSize())
+	ts := journalRecordTimestampGenerator()
+	rec, err := wr.codec.sealRoot(ctx, root, ts)
+	if err != nil {
+		return err
+	} else if len(rec.payload) > encJournalRecOverhead {
+		return fmt.Errorf("root hash record payload of %d bytes is too large", len(rec.payload))
+	}
+	if err = wr.writeKeyRecord(ctx, behavior, rec.key); err != nil {
+		return err
+	}
+	buf, err := wr.getBytes(ctx, behavior, rootRecordSize(len(rec.payload)))
 	if err != nil {
 		return err
 	}
 	wr.currentRoot = root
-	n := writeRootHashRecord(buf, root)
+	n := writeRootRecord(buf, rec.kind, ts, root, rec.payload)
 	if err = wr.flush(ctx, behavior); err != nil {
 		return err
 	}
@@ -598,6 +647,15 @@ func (wr *journalWriter) commitRootHashUnlocked(ctx context.Context, behavior dh
 // bootstrapping by reducing the amount of the journal that must be processed.
 func (wr *journalWriter) flushIndexRecord(ctx context.Context, root hash.Hash, end int64) (err error) {
 	defer trace.StartRegion(ctx, "flushIndexRecord").End()
+	auth, ok, err := wr.codec.sealBatch(lookupMeta{batchStart: wr.indexed, batchEnd: end, checkSum: wr.batchCrc, latestHash: root})
+	if err != nil || !ok {
+		return err
+	}
+	if auth != nil {
+		if err := writeIndexBytes(wr.indexWriter, indexRecAuth, auth); err != nil {
+			return err
+		}
+	}
 	if err := writeJournalIndexMeta(wr.indexWriter, root, wr.indexed, end, wr.batchCrc); err != nil {
 		return err
 	}

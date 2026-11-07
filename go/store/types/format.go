@@ -33,7 +33,7 @@ var formatTag_DOLT = &formatTag{}
 var Format_DOLT = &NomsBinFormat{formatTag_DOLT}
 
 func GetFormatForVersionString(s string) (*NomsBinFormat, error) {
-	if s == constants.FormatDoltString {
+	if constants.IsDoltFormatString(s) {
 		return Format_DOLT, nil
 	} else {
 		return nil, errors.New("unsupported ChunkStore version " + s)

@@ -71,6 +71,7 @@ type awsTablePersister struct {
 	bucket string
 	ns     string
 	limits awsLimits
+	persisterCodec
 }
 
 var _ tablePersister = awsTablePersister{}
@@ -83,6 +84,7 @@ type awsLimits struct {
 // Open takes the named object, and returns a chunkSource for it. This function works for both table files and archive
 // files. If the table file doesn't exist, but |name| + ".darc" does, then an archive chunk source is returned instead.
 func (s3p awsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, opts openOpts, stats *Stats) (chunkSource, error) {
+	opts = s3p.withCodec(opts)
 	cs, err := newAWSTableFileChunkSource(
 		ctx,
 		&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns},
@@ -95,6 +97,8 @@ func (s3p awsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCoun
 	)
 	if err == nil {
 		return cs, nil
+	} else if errors.As(err, &refusedFileError{}) {
+		return nil, err
 	}
 
 	return newAWSArchiveChunkSource(
@@ -146,7 +150,7 @@ func (s3p awsTablePersister) key(k string) string {
 }
 
 func (s3p awsTablePersister) Persist(ctx context.Context, behavior dherrors.FatalBehavior, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
-	name, data, _, chunkCount, gcb, err := mt.write(haver, keeper, stats)
+	name, data, _, chunkCount, gcb, err := s3p.writeMemTable(mt, haver, keeper, stats)
 	if err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	}
@@ -165,7 +169,7 @@ func (s3p awsTablePersister) Persist(ctx context.Context, behavior dherrors.Fata
 	}
 
 	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns}, name.String()}
-	src, err := newReaderFromIndexData(ctx, s3p.q, data, name, tra, s3BlockSize)
+	src, err := newReaderFromIndexData(ctx, s3p.q, data, name, tra, s3BlockSize, s3p.withCodec(openOpts{}))
 	if err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	}
@@ -241,7 +245,7 @@ func (s partsByPartNum) Swap(i, j int) {
 }
 
 func (s3p awsTablePersister) ConjoinAll(ctx context.Context, behavior dherrors.FatalBehavior, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
-	plan, err := planRangeCopyConjoin(ctx, sources, s3p.q, stats)
+	plan, err := planRangeCopyConjoin(ctx, sources, s3p.q, s3p.codecOrPlain(), stats)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -261,11 +265,11 @@ func (s3p awsTablePersister) ConjoinAll(ctx context.Context, behavior dherrors.F
 
 	rdr := &s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns}
 	if plan.suffix == ArchiveFileSuffix {
-		cs, err := newAWSArchiveChunkSource(ctx, rdr, s3p.limits, plan.name.String()+plan.suffix, plan.chunkCount, s3p.q, openOpts{deepValidate: true}, stats)
+		cs, err := newAWSArchiveChunkSource(ctx, rdr, s3p.limits, plan.name.String()+plan.suffix, plan.chunkCount, s3p.q, s3p.withCodec(openOpts{deepValidate: true}), stats)
 		return cs, func() {}, err
 	} else {
 		tra := &s3TableReaderAt{rdr, plan.name.String()}
-		cs, err := newReaderFromIndexData(ctx, s3p.q, plan.mergedIndex, plan.name, tra, s3BlockSize)
+		cs, err := newReaderFromIndexData(ctx, s3p.q, plan.mergedIndex, plan.name, tra, s3BlockSize, s3p.withCodec(openOpts{}))
 		return cs, func() {}, err
 	}
 }

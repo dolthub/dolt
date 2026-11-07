@@ -86,6 +86,7 @@ type CmpChunkTableWriter struct {
 	prefixes              prefixIndexSlice
 	chunkDataLength       uint64
 	totalUncompressedData uint64
+	sealer                recordSealer
 }
 
 var _ GenericTableWriter = (*CmpChunkTableWriter)(nil)
@@ -132,10 +133,16 @@ func (tw *CmpChunkTableWriter) AddChunk(tc ToChunker) (uint32, error) {
 	if tc.IsEmpty() {
 		panic("NBS blocks cannot be zero length")
 	}
+	if tw.sealer != nil {
+		return tw.addSealed(tc)
+	}
 
 	c, ok := tc.(CompressedChunk)
 	if !ok {
-		if arc, ok := tc.(*ArchiveToChunker); ok {
+		// A sealed chunk must never be opened into a plaintext file.
+		if _, ok := tc.(SealedChunk); ok {
+			return 0, fmt.Errorf("%w: encrypted chunk %s added to a plaintext table file", ErrEncryptionMismatch, tc.Hash().String())
+		} else if arc, ok := tc.(*ArchiveToChunker); ok {
 			// Decompress, and recompress since we can only write snappy compressed objects to this store.
 			chk, err := arc.ToChunk()
 			if err != nil {
@@ -197,6 +204,9 @@ func (tw *CmpChunkTableWriter) Finish() (uint32, string, error) {
 	var h []byte
 	h = blockHash.Sum(h)
 	blockAddr := hash.New(h[:hash.ByteLen])
+	if tw.sealer != nil {
+		blockAddr = randomTableName()
+	}
 
 	tw.blockAddr = &blockAddr
 
@@ -345,6 +355,9 @@ func (tw *CmpChunkTableWriter) writeIndex() (gohash.Hash, error) {
 }
 
 func (tw *CmpChunkTableWriter) writeFooter() error {
+	if tw.sealer != nil {
+		return tw.writeEncryptedTail()
+	}
 	// chunk count
 	err := binary.Write(tw.sink, binary.BigEndian, uint32(len(tw.prefixes)))
 

@@ -34,19 +34,45 @@ type gcCopier struct {
 	tfp    tableFilePersister
 }
 
-func newTableWriterFromArchiveLevel(archiveLevel chunks.GCArchiveLevel) (GenericTableWriter, error) {
+// newTableWriterFromArchiveLevel returns a writer that seals its records under |codec| if it is not nil.
+func newTableWriterFromArchiveLevel(archiveLevel chunks.GCArchiveLevel, codec storeCodec) (GenericTableWriter, error) {
+	// The sealer comes first so that a failure to make it leaves no writer behind.
 	switch archiveLevel {
 	case chunks.SimpleArchive:
-		return NewArchiveStreamWriter("")
+		var sealer spanSealer
+		if codec != nil {
+			var err error
+			if sealer, err = codec.newSpanSealer(true); err != nil {
+				return nil, err
+			}
+		}
+		w, err := NewArchiveStreamWriter("")
+		if err != nil {
+			return nil, err
+		}
+		w.writer.sealer = sealer
+		return w, nil
 	case chunks.NoArchive:
-		return NewCmpChunkTableWriter("")
+		var sealer recordSealer
+		if codec != nil {
+			var err error
+			if sealer, err = codec.newTableSealer(); err != nil {
+				return nil, err
+			}
+		}
+		w, err := NewCmpChunkTableWriter("")
+		if err != nil {
+			return nil, err
+		}
+		w.sealer = sealer
+		return w, nil
 	default:
 		return nil, fmt.Errorf("invalid archive level: %d", archiveLevel)
 	}
 }
 
-func newGarbageCollectionCopier(archiveLevel chunks.GCArchiveLevel, tfp tableFilePersister) (*gcCopier, error) {
-	writer, err := newTableWriterFromArchiveLevel(archiveLevel)
+func newGarbageCollectionCopier(archiveLevel chunks.GCArchiveLevel, tfp tableFilePersister, codec storeCodec) (*gcCopier, error) {
+	writer, err := newTableWriterFromArchiveLevel(archiveLevel, codec)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +238,7 @@ type rotatingGCCopier struct {
 }
 
 func newRotatingGCCopier(archiveLevel chunks.GCArchiveLevel, tfp tableFilePersister, dest *NomsBlockStore, fileSizeLimit uint64, incrementalUpdateManifest bool) (*rotatingGCCopier, error) {
-	writer, err := newTableWriterFromArchiveLevel(archiveLevel)
+	writer, err := newTableWriterFromArchiveLevel(archiveLevel, dest.codec)
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +321,7 @@ func (gcc *rotatingGCCopier) rotate(ctx context.Context) error {
 		return gcc.finalizeChildWriter(ctx, previousCopier)
 	})
 
-	writer, err := newTableWriterFromArchiveLevel(gcc.archiveLevel)
+	writer, err := newTableWriterFromArchiveLevel(gcc.archiveLevel, gcc.dest.codec)
 	if err != nil {
 		return err
 	}
