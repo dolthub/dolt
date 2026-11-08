@@ -1116,7 +1116,7 @@ func (t *WritableDoltTable) Updater(ctx *sql.Context) sql.RowUpdater {
 		// through its own check. Honor that marker so a merge-permission
 		// caller is not rejected here. The marker is keyed by (db, branch,
 		// table), so a marker for a different table will not match.
-		dbName, branch := doltdb.SplitRevisionDbName(t.db.RevisionQualifiedName())
+		dbName, branch := t.db.AliasedName(), t.db.Revision()
 		if !dsess.ConflictsBypassFor(ctx, dbName, branch, t.TableName()) {
 			return sqlutil.NewStaticErrorEditor(err)
 		}

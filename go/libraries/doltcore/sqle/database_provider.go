@@ -2047,7 +2047,7 @@ func initialStateForBranchDb(ctx *sql.Context, srcDb dsess.SqlDatabase) (dsess.I
 }
 
 func revisionDbForTag(ctx context.Context, srcDb Database, revSpec string, requestedName string) (ReadOnlyDatabase, error) {
-	baseName, _ := doltdb.SplitRevisionDbName(srcDb.Name())
+	baseName := srcDb.AliasedName()
 	return ReadOnlyDatabase{Database: Database{
 		baseName:      baseName,
 		requestedName: requestedName,
@@ -2091,7 +2091,7 @@ func initialStateForTagDb(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.In
 }
 
 func revisionDbForCommit(ctx context.Context, srcDb Database, revSpec string, requestedName string) (ReadOnlyDatabase, error) {
-	baseName, _ := doltdb.SplitRevisionDbName(srcDb.Name())
+	baseName := srcDb.AliasedName()
 	return ReadOnlyDatabase{Database: Database{
 		baseName:      baseName,
 		requestedName: requestedName,
