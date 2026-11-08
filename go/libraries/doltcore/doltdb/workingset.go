@@ -52,6 +52,10 @@ const (
 	StopOnEmptyCommit
 )
 
+// RebaseWorkingBranchPrefix is prepended to the name of the branch being rebased to name the temporary branch that a
+// rebase runs on. The temporary branch's working set holds the RebaseState and the rebase plan.
+const RebaseWorkingBranchPrefix = "dolt_rebase_"
+
 // RebaseState tracks the state of an in-progress rebase action. It records the name of the branch being rebased, the
 // commit onto which the new commits will be rebased, and the root value of the previous working set, which is used if
 // the rebase is aborted and the working set needs to be restored to its previous state.
