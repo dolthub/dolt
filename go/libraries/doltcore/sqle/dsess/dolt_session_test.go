@@ -17,7 +17,6 @@ package dsess
 import (
 	"context"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -149,7 +148,7 @@ func TestDoltgresSemanticTransactionLifecycle(t *testing.T) {
 	for _, name := range []string{"one", "two"} {
 		state := newEmptyDatabaseSessionState()
 		state.dbName = name
-		sess.dbStates[name] = state
+		sess.dbStates[doltdb.NewDbKey(name)] = state
 		sess.currentBranches().add(state, "main", RevisionTypeBranch).dirty = true
 	}
 	// An invalid transaction must not emit a successful commit notification.
@@ -220,7 +219,7 @@ func TestCommitTransactionWithoutBatchNotifiesDoltgres(t *testing.T) {
 			if disabled {
 				state := newEmptyDatabaseSessionState()
 				state.dbName = "mydb"
-				sess.dbStates["mydb"] = state
+				sess.dbStates[doltdb.NewDbKey("mydb")] = state
 				sess.currentBranches().add(state, "main", RevisionTypeBranch).dirty = true
 			}
 
@@ -244,16 +243,16 @@ func TestCommitTransactionWithoutBatchNotifiesDoltgres(t *testing.T) {
 
 func TestDoltTransactionRepeatedSavepointNames(t *testing.T) {
 	tx := &DoltTransaction{postgresSavepoints: true}
-	first := map[string]doltdb.RootValue{"first": nil}
-	second := map[string]doltdb.RootValue{"second": nil}
-	firstDirty := map[string]bool{
-		"mydb/main": true,
+	first := map[doltdb.QualifiedDbKey]doltdb.RootValue{doltdb.NewQualifiedDbKey("first/main"): nil}
+	second := map[doltdb.QualifiedDbKey]doltdb.RootValue{doltdb.NewQualifiedDbKey("second/main"): nil}
+	firstDirty := map[doltdb.QualifiedDbKey]bool{
+		doltdb.NewQualifiedDbKey("mydb/main"): true,
 	}
-	secondDirty := map[string]bool{
-		"mydb/other": true,
+	secondDirty := map[doltdb.QualifiedDbKey]bool{
+		doltdb.NewQualifiedDbKey("mydb/other"): true,
 	}
 	tx.CreateSavepoint("same", first, firstDirty)
-	tx.CreateSavepoint("child", map[string]doltdb.RootValue{}, nil)
+	tx.CreateSavepoint("child", map[doltdb.QualifiedDbKey]doltdb.RootValue{}, nil)
 	tx.CreateSavepoint("same", second, secondDirty)
 	assert.Equal(t, second, tx.RollbackToSavepoint("same").roots)
 	assert.Equal(t, secondDirty, tx.RollbackToSavepoint("same").dirtyBranches)
@@ -265,21 +264,21 @@ func TestDoltTransactionRepeatedSavepointNames(t *testing.T) {
 
 func TestDoltTransactionDefaultSavepointSemantics(t *testing.T) {
 	tx := &DoltTransaction{}
-	tx.CreateSavepoint("Same", map[string]doltdb.RootValue{
-		"first": nil,
-	}, map[string]bool{
-		"mydb/main": true,
+	tx.CreateSavepoint("Same", map[doltdb.QualifiedDbKey]doltdb.RootValue{
+		doltdb.NewQualifiedDbKey("first/main"): nil,
+	}, map[doltdb.QualifiedDbKey]bool{
+		doltdb.NewQualifiedDbKey("mydb/main"): true,
 	})
-	tx.CreateSavepoint("same", map[string]doltdb.RootValue{
-		"second": nil,
-	}, map[string]bool{
-		"mydb/other": true,
+	tx.CreateSavepoint("same", map[doltdb.QualifiedDbKey]doltdb.RootValue{
+		doltdb.NewQualifiedDbKey("second/main"): nil,
+	}, map[doltdb.QualifiedDbKey]bool{
+		doltdb.NewQualifiedDbKey("mydb/other"): true,
 	})
-	assert.Equal(t, map[string]doltdb.RootValue{
-		"second": nil,
+	assert.Equal(t, map[doltdb.QualifiedDbKey]doltdb.RootValue{
+		doltdb.NewQualifiedDbKey("second/main"): nil,
 	}, tx.RollbackToSavepoint("SAME").roots)
-	assert.Equal(t, map[string]bool{
-		"mydb/other": true,
+	assert.Equal(t, map[doltdb.QualifiedDbKey]bool{
+		doltdb.NewQualifiedDbKey("mydb/other"): true,
 	}, tx.RollbackToSavepoint("SAME").dirtyBranches)
 	assert.True(t, tx.ClearSavepoint("Same"))
 	assert.Nil(t, tx.RollbackToSavepoint("same"))
@@ -287,11 +286,11 @@ func TestDoltTransactionDefaultSavepointSemantics(t *testing.T) {
 
 func TestDirtyBranches(t *testing.T) {
 	addBranchState := func(sess *DoltSession, dbName, head string, dirty bool) {
-		dbState, ok := sess.dbStates[strings.ToLower(dbName)]
+		dbState, ok := sess.dbStates[doltdb.NewDbKey(dbName)]
 		if !ok {
 			dbState = newEmptyDatabaseSessionState()
 			dbState.dbName = dbName
-			sess.dbStates[strings.ToLower(dbName)] = dbState
+			sess.dbStates[doltdb.NewDbKey(dbName)] = dbState
 		}
 		sess.currentBranches().add(dbState, head, RevisionTypeBranch).dirty = dirty
 	}

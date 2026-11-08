@@ -18,6 +18,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -41,7 +42,7 @@ func TestDropBranchStateWithOpenWriters(t *testing.T) {
 		dbState := newEmptyDatabaseSessionState()
 		dbState.dbName = "db"
 		dbState.checkedOutRevSpec = "main"
-		sess.dbStates["db"] = dbState
+		sess.dbStates[doltdb.NewDbKey("db")] = dbState
 		bs := sess.currentBranches().add(dbState, "main", RevisionTypeBranch)
 		bs.writeSession = &openWritersWriteSession{open: open}
 		return sess, sql.NewContext(context.Background(), sql.WithSession(sess)), bs
@@ -90,7 +91,7 @@ func TestDropBranchStateWithOpenWriters(t *testing.T) {
 		require.PanicsWithValue(t, "cannot drop session state with open table writers: db/renamed", func() {
 			_ = sess.RenameBranchState(ctx, "db", "main", "renamed")
 		})
-		renamed, ok := sess.currentBranches().get("db", "renamed")
+		renamed, ok := sess.currentBranches().get(doltdb.NewQualifiedDbKey("db/renamed"))
 		require.True(t, ok)
 		assert.Same(t, bs, renamed)
 		assert.True(t, sess.isCurrentBranchState(bs))
@@ -107,7 +108,7 @@ func TestDropBranchStateWithOpenWriters(t *testing.T) {
 	t.Run("SetTransaction ending a DoltTransaction", func(t *testing.T) {
 		sess, ctx, _ := newSession(false)
 		ctx.SetTransaction(&DoltTransaction{branches: newBranchStates()})
-		bs := sess.currentBranches().add(sess.dbStates["db"], "main", RevisionTypeBranch)
+		bs := sess.currentBranches().add(sess.dbStates[doltdb.NewDbKey("db")], "main", RevisionTypeBranch)
 		bs.writeSession = &openWritersWriteSession{open: true}
 		require.PanicsWithValue(t, "cannot drop session state with open table writers: db/main", func() {
 			ctx.SetTransaction(nil)
@@ -139,7 +140,7 @@ func TestBranchStatesBelongToTransaction(t *testing.T) {
 	ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
 	dbState := newEmptyDatabaseSessionState()
 	dbState.dbName = "db"
-	sess.dbStates["db"] = dbState
+	sess.dbStates[doltdb.NewDbKey("db")] = dbState
 
 	noTx := sess.currentBranches().add(dbState, "main", RevisionTypeBranch)
 	tx := &DoltTransaction{branches: newBranchStates()}
