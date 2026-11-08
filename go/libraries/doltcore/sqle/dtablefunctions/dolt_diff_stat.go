@@ -23,6 +23,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"golang.org/x/sync/errgroup"
 
@@ -162,7 +163,7 @@ func (ds *DiffStatTableFunction) WithChildren(ctx *sql.Context, children ...sql.
 
 // CheckAuth implements the interface sql.AuthorizationCheckerNode.
 func (ds *DiffStatTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
-	baseDB, _ := doltdb.SplitRevisionDbName(ds.database.Name())
+	baseDB := plan.CheckPrivilegeNameForDatabase(ds.database)
 	if ds.tableNameExpr != nil {
 		if !types.IsText(ds.tableNameExpr.Type(ctx)) {
 			return ExpressionIsDeferred(ctx, ds.tableNameExpr)
