@@ -309,7 +309,7 @@ func (ar *archiveReader) openSpans(ctx context.Context, opts openOpts, stats *St
 	if _, err = io.ReadFull(section, ar.keyBlock); err != nil {
 		return err
 	}
-	ar.spans, err = codec.openArchive(ar, opts.adding)
+	ar.spans, err = codec.openArchive(ar.keyBlock, f.byteSpanCount, opts.adding)
 	if err == nil && ar.spans == nil {
 		err = errors.New("runtime error: no opener for an encrypted archive")
 	}

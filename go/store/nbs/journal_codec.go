@@ -73,7 +73,8 @@ type sealedRecord struct {
 // lock for every call but chunker and locate, which may run concurrently under its read lock or without it. Slices
 // passed to the codec are valid only during the call.
 type journalCodec interface {
-	// replay checks a record read from |wr|'s journal, which it may index when |canWrite|.
+	// replay checks a record read from |wr|'s journal, which it may index when |canWrite|. |wr| is nil when the
+	// journal is read without a writer.
 	replay(ctx context.Context, wr *journalWriter, canWrite bool, off int64, r journalRec) error
 	// checkBatch checks an index batch whose checksum matched.
 	checkBatch(ctx context.Context, m lookupMeta, batch []lookup) error
@@ -86,8 +87,8 @@ type journalCodec interface {
 	sealBatch(wr *journalWriter, m lookupMeta) (bool, error)
 	// chunker returns chunk |h| from its record's payload.
 	chunker(h hash.Hash, payload []byte) (ToChunker, error)
-	// locate returns the range of chunk |h|'s record payload |r| that a remote client reads, and notes its key if
-	// |ctx| collects them.
+	// locate returns the range of chunk |h|'s record payload |r| that a remote client reads, and notes its key for
+	// that range if |ctx| collects them.
 	locate(ctx context.Context, h hash.Hash, r Range, rd journalReaderAt) (Range, error)
 	// reset forgets what replay learned, before the journal is replayed from its start.
 	reset()
@@ -138,6 +139,15 @@ func (plainJournal) locate(_ context.Context, _ hash.Hash, r Range, _ journalRea
 
 func (plainJournal) reset() {}
 
+// indexKey adds a key record holding |key| to the open index batch.
+func (wr *journalWriter) indexKey(key []byte) error {
+	if err := writeIndexBytes(wr.indexWriter, indexRecKey, key); err != nil {
+		return err
+	}
+	wr.batchCrc = crc32.Update(wr.batchCrc, crcTable, key)
+	return nil
+}
+
 func (wr *journalWriter) indexLookup(l lookup) error {
 	if err := writeIndexLookup(wr.indexWriter, l); err != nil {
 		return err
@@ -161,7 +171,7 @@ func readIndexBytes(r *bufio.Reader) ([]byte, error) {
 	return b, nil
 }
 
-// writeIndexBytes writes a journal index record of |tag| holding |b|, for codecs that add records to index batches.
+// writeIndexBytes writes a journal index record of |tag| holding |b|.
 func writeIndexBytes(w *bufio.Writer, tag byte, b []byte) error {
 	if len(b) > math.MaxUint16 {
 		return fmt.Errorf("journal index record of %d bytes is too large", len(b))

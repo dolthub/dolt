@@ -158,7 +158,7 @@ func TestToyCodecGC(t *testing.T) {
 				all := fillToyStore(t, st, 3, maxSamples+10)
 				require.NoError(t, gcToyStore(t, st, all, level))
 				requireStoreHas(t, st, all)
-				// A second GC copies the records the first one sealed.
+				// A second GC copies what the first one wrote.
 				fillToyStore(t, st, 1, 5)
 				require.NoError(t, gcToyStore(t, st, all, level))
 				requireStoreHas(t, st, all)
