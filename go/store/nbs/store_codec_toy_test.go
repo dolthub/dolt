@@ -339,15 +339,23 @@ func (tc *toyChunk) CompressedSize() uint32 {
 
 func (tc *toyChunk) sealed() {}
 
-// toyJournal seals journal records with the toy key, and authenticates each index batch.
+// toyJournal seals journal records with the toy key, which it introduces with a key record, and authenticates each
+// index batch.
 type toyJournal struct {
-	codec   *toyCodec
-	lookups uint32
-	resets  int
+	codec    *toyCodec
+	lookups  uint32
+	resets   int
+	wroteKey bool
 }
 
 func (j *toyJournal) replay(_ context.Context, _ *journalWriter, _ bool, off int64, r journalRec) error {
 	switch r.kind {
+	case keyJournalRecKind:
+		if !bytes.Equal(r.payload, toyKeyBlock) {
+			return fmt.Errorf("bad toy key record at %d", off)
+		}
+		j.wroteKey = true
+		return nil
 	case encChunkJournalRecKind:
 		c, err := j.chunker(r.address, r.payload)
 		if err == nil {
@@ -374,16 +382,34 @@ func (j *toyJournal) batchAuth(m lookupMeta, lookups uint32) []byte {
 	return binary.BigEndian.AppendUint32(toyTag(toyKindRoot, m.latestHash, b), lookups)
 }
 
-func (j *toyJournal) sealChunk(_ context.Context, _ *journalWriter, _ dherrors.FatalBehavior, cc CompressedChunk) (sealedRecord, error) {
+// writeKey introduces the toy key to |wr|'s journal before the first record sealed with it.
+func (j *toyJournal) writeKey(ctx context.Context, wr *journalWriter, behavior dherrors.FatalBehavior) error {
 	if j.codec.keyless {
-		return sealedRecord{}, errToyKeyless
+		return errToyKeyless
+	}
+	if j.wroteKey {
+		return nil
+	}
+	n, _ := journalRecordSize(len(toyKeyBlock))
+	buf, err := wr.getBytes(ctx, behavior, int(n))
+	if err != nil {
+		return err
+	}
+	writeJournalRecord(buf, keyJournalRecKind, hash.Hash{}, toyKeyBlock)
+	j.wroteKey = true
+	return nil
+}
+
+func (j *toyJournal) sealChunk(ctx context.Context, wr *journalWriter, behavior dherrors.FatalBehavior, cc CompressedChunk) (sealedRecord, error) {
+	if err := j.writeKey(ctx, wr, behavior); err != nil {
+		return sealedRecord{}, err
 	}
 	return sealedRecord{kind: encChunkJournalRecKind, payload: toySeal(nil, toyKindChunk, cc.H, cc.CompressedData)}, nil
 }
 
-func (j *toyJournal) sealRoot(_ context.Context, _ *journalWriter, _ dherrors.FatalBehavior, root hash.Hash, _ uint64) (sealedRecord, error) {
-	if j.codec.keyless {
-		return sealedRecord{}, errToyKeyless
+func (j *toyJournal) sealRoot(ctx context.Context, wr *journalWriter, behavior dherrors.FatalBehavior, root hash.Hash, _ uint64) (sealedRecord, error) {
+	if err := j.writeKey(ctx, wr, behavior); err != nil {
+		return sealedRecord{}, err
 	}
 	return sealedRecord{kind: encRootHashJournalRecKind, payload: toySeal(nil, toyKindRoot, root, nil)}, nil
 }

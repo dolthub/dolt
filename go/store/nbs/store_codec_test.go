@@ -394,7 +394,7 @@ func TestToyCodecJournal(t *testing.T) {
 	requireNoPlaintext(t, journal, cs)
 	first, err := readJournalRecord(journal)
 	require.NoError(t, err)
-	require.Equal(t, encChunkJournalRecKind, first.kind)
+	require.Equal(t, keyJournalRecKind, first.kind)
 
 	st, err = open(withToy(c))
 	require.NoError(t, err)

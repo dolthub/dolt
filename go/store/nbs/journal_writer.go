@@ -232,6 +232,9 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, canWrite bool, re
 				})
 			}
 
+		case r.kind == keyJournalRecKind:
+			// Only the codec reads key records.
+
 		default:
 			return fmt.Errorf("unknown journal record kind (%d)", r.kind)
 		}
