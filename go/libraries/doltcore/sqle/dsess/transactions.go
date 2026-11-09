@@ -84,6 +84,9 @@ func (d DisabledTransaction) IsReadOnly() bool {
 }
 
 type DoltTransaction struct {
+	// branches holds the branch states loaded in this transaction. They're dropped when it stops being its session's
+	// transaction (see DoltSession.SetTransaction). Guarded by the session's mutex.
+	branches           *branchStates
 	dbStartPoints      map[string]dbRoot
 	savepoints         []savepoint
 	postgresSavepoints bool
@@ -124,6 +127,7 @@ func NewDoltTransaction(
 	}
 
 	return &DoltTransaction{
+		branches:        newBranchStates(),
 		dbStartPoints:   startPoints,
 		tCharacteristic: tCharacteristic,
 	}, nil

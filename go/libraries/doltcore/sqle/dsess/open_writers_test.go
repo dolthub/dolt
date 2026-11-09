@@ -42,7 +42,7 @@ func TestDropBranchStateWithOpenWriters(t *testing.T) {
 		dbState.dbName = "db"
 		dbState.checkedOutRevSpec = "main"
 		sess.dbStates["db"] = dbState
-		bs := sess.branches.add(dbState, "main", RevisionTypeBranch)
+		bs := sess.currentBranches().add(dbState, "main", RevisionTypeBranch)
 		bs.writeSession = &openWritersWriteSession{open: open}
 		return sess, sql.NewContext(context.Background(), sql.WithSession(sess)), bs
 	}
@@ -76,7 +76,7 @@ func TestDropBranchStateWithOpenWriters(t *testing.T) {
 			_ = sess.RemoveDbState(ctx, "db")
 		})
 		assert.NotContains(t, sess.dbStates, "db")
-		assert.Empty(t, sess.branches.all())
+		assert.Empty(t, sess.currentBranches().all())
 	})
 	t.Run("RemoveBranchState", func(t *testing.T) {
 		sess, ctx, bs := newSession(true)
@@ -90,7 +90,7 @@ func TestDropBranchStateWithOpenWriters(t *testing.T) {
 		require.PanicsWithValue(t, "cannot drop session state with open table writers: db/renamed", func() {
 			_ = sess.RenameBranchState(ctx, "db", "main", "renamed")
 		})
-		renamed, ok := sess.branches.get("db", "renamed")
+		renamed, ok := sess.currentBranches().get("db", "renamed")
 		require.True(t, ok)
 		assert.Same(t, bs, renamed)
 		assert.True(t, sess.isCurrentBranchState(bs))
@@ -99,8 +99,25 @@ func TestDropBranchStateWithOpenWriters(t *testing.T) {
 	t.Run("no open writers", func(t *testing.T) {
 		sess, ctx, bs := newSession(false)
 		require.NoError(t, sess.Rollback(ctx, DisabledTransaction{}))
-		assert.Empty(t, sess.branches.all())
+		assert.Empty(t, sess.currentBranches().all())
 		assert.False(t, sess.isCurrentBranchState(bs))
+	})
+
+	// Changing the session's transaction drops the old branch states however the change happens.
+	t.Run("SetTransaction ending a DoltTransaction", func(t *testing.T) {
+		sess, ctx, _ := newSession(false)
+		ctx.SetTransaction(&DoltTransaction{branches: newBranchStates()})
+		bs := sess.currentBranches().add(sess.dbStates["db"], "main", RevisionTypeBranch)
+		bs.writeSession = &openWritersWriteSession{open: true}
+		require.PanicsWithValue(t, "cannot drop session state with open table writers: db/main", func() {
+			ctx.SetTransaction(nil)
+		})
+	})
+	t.Run("SetTransaction starting a DoltTransaction", func(t *testing.T) {
+		_, ctx, _ := newSession(true)
+		require.PanicsWithValue(t, "cannot drop session state with open table writers: db/main", func() {
+			ctx.SetTransaction(&DoltTransaction{branches: newBranchStates()})
+		})
 	})
 
 	// Another session's writers can't be inspected safely, so dropping a database's state from another session
@@ -111,6 +128,35 @@ func TestDropBranchStateWithOpenWriters(t *testing.T) {
 		otherCtx := sql.NewContext(context.Background(), sql.WithSession(other))
 		require.NoError(t, sess.RemoveDbState(otherCtx, "db"))
 		assert.NotContains(t, sess.dbStates, "db")
-		assert.Empty(t, sess.branches.all())
+		assert.Empty(t, sess.currentBranches().all())
 	})
+}
+
+// TestBranchStatesBelongToTransaction checks that a DoltTransaction's branch states last only while it's the session's
+// transaction, and that the ones loaded outside a DoltTransaction don't outlive the start of one.
+func TestBranchStatesBelongToTransaction(t *testing.T) {
+	sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, newTransactionTestVariables())
+	ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
+	dbState := newEmptyDatabaseSessionState()
+	dbState.dbName = "db"
+	sess.dbStates["db"] = dbState
+
+	noTx := sess.currentBranches().add(dbState, "main", RevisionTypeBranch)
+	tx := &DoltTransaction{branches: newBranchStates()}
+	ctx.SetTransaction(tx)
+	assert.False(t, sess.isCurrentBranchState(noTx), "branch state loaded outside the transaction is still current")
+
+	inTx := sess.currentBranches().add(dbState, "main", RevisionTypeBranch)
+	ctx.SetTransaction(tx)
+	assert.True(t, sess.isCurrentBranchState(inTx), "setting the same transaction dropped its branch states")
+
+	ctx.SetTransaction(nil)
+	assert.False(t, sess.isCurrentBranchState(inTx), "ended transaction's branch state is still current")
+	assert.Empty(t, sess.currentBranches().all())
+
+	// Branch states loaded with transactions disabled last across statements.
+	ctx.SetTransaction(DisabledTransaction{})
+	disabled := sess.currentBranches().add(dbState, "main", RevisionTypeBranch)
+	ctx.SetTransaction(DisabledTransaction{})
+	assert.True(t, sess.isCurrentBranchState(disabled))
 }

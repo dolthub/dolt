@@ -68,9 +68,13 @@ type DoltSession struct {
 	branchController      *branch_control.Controller
 	dbCache               *DatabaseCache
 	dbStates              map[string]*DatabaseSessionState
-	branches              *branchStates
 	tempTables            map[string]map[string]sql.Table
 	gcSafepointController *gcctx.GCSafepointController
+
+	// noTxBranches holds the branch states loaded while the session's transaction isn't a DoltTransaction: between
+	// transactions, after one ends partway through a statement, and when transactions are disabled. A DoltTransaction
+	// holds its own. Reset when a DoltTransaction becomes the session's transaction.
+	noTxBranches *branchStates
 
 	writeSessProv WriteSessFunc
 
@@ -179,7 +183,7 @@ func DefaultSessionWithVariables(pro DoltDatabaseProvider, sessFunc WriteSessFun
 		username:         "",
 		email:            "",
 		dbStates:         make(map[string]*DatabaseSessionState),
-		branches:         newBranchStates(),
+		noTxBranches:     newBranchStates(),
 		dbCache:          newDatabaseCache(),
 		provider:         pro,
 		tempTables:       make(map[string]map[string]sql.Table),
@@ -256,7 +260,7 @@ func NewDoltSession(
 		username:              username,
 		email:                 email,
 		dbStates:              make(map[string]*DatabaseSessionState),
-		branches:              newBranchStates(),
+		noTxBranches:          newBranchStates(),
 		dbCache:               newDatabaseCache(),
 		provider:              pro,
 		tempTables:            make(map[string]map[string]sql.Table),
@@ -323,7 +327,7 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 		if rev == "" {
 			rev = dbState.checkedOutRevSpec
 		}
-		branchState, ok = d.branches.get(baseName, rev)
+		branchState, ok = d.currentBranches().get(baseName, rev)
 	}
 	d.mu.Unlock()
 
@@ -349,7 +353,7 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 
 	d.mu.Lock()
 	_, dbStateFound = d.dbStates[baseName]
-	branchState, _ = d.branches.get(baseName, database.Revision())
+	branchState, _ = d.currentBranches().get(baseName, database.Revision())
 	d.mu.Unlock()
 	if !dbStateFound {
 		// should be impossible
@@ -382,7 +386,7 @@ func (d *DoltSession) RemoveDbState(ctx *sql.Context, dbName string) error {
 	defer d.mu.Unlock()
 	key := strings.ToLower(dbName)
 	delete(d.dbStates, key)
-	heads := d.branches.removeDb(key)
+	heads := d.currentBranches().removeDb(key)
 	// also clear out any db-level caches for this db
 	d.dbCache.Clear()
 
@@ -411,7 +415,7 @@ func (d *DoltSession) RemoveBranchState(ctx *sql.Context, dbName string, branchN
 	}
 
 	d.mu.Lock()
-	bs, hadState := d.branches.remove(baseName, branchName)
+	bs, hadState := d.currentBranches().remove(baseName, branchName)
 	d.mu.Unlock()
 	// The branch is gone either way, so its state is dropped even if this fails.
 	var writersErr error
@@ -450,13 +454,13 @@ func (d *DoltSession) RenameBranchState(ctx *sql.Context, dbName string, oldBran
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	branch, ok := d.branches.remove(baseName, oldBranchName)
+	branch, ok := d.currentBranches().remove(baseName, oldBranchName)
 	if !ok {
 		// nothing to rename
 		return nil
 	}
 	branch.head = strings.ToLower(newBranchName)
-	d.branches.put(branch)
+	d.currentBranches().put(branch)
 
 	// also clear out any db-level caches for this db
 	d.dbCache.Clear()
@@ -507,8 +511,8 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 		return DisabledTransaction{}, nil
 	}
 
-	// New transaction, clear all session state
-	if err := d.clear(); err != nil {
+	// The new transaction replaces the current branch states, so it can't start while any has open table writers.
+	if err := d.checkNoOpenWriters(); err != nil {
 		return nil, err
 	}
 
@@ -553,10 +557,7 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 
 	// The engine sets the transaction after this call as well, but since we begin accessing data below, we need to set
 	// this now to avoid seeding the session state with stale data in some cases. The duplication is harmless since the
-	// code below cannot error. Additionally we clear any state that was cached by replication updates in the block above.
-	if err := d.clear(); err != nil {
-		return nil, err
-	}
+	// code below cannot error. Setting it drops any branch states loaded by the replication updates in the block above.
 	ctx.SetTransaction(tx)
 	d.notifyDoltgresTransactionStarted()
 
@@ -589,17 +590,38 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	return tx, nil
 }
 
-// clear drops this session's branch states by replacing its branchStates. It drops nothing if any branch state has
-// open table writers.
-func (d *DoltSession) clear() error {
+// currentBranches returns the branch states that lookups resolve to: the session's DoltTransaction's, or
+// noTxBranches if its transaction isn't one. Callers hold d.mu.
+func (d *DoltSession) currentBranches() *branchStates {
+	if tx, ok := d.GetTransaction().(*DoltTransaction); ok {
+		return tx.branches
+	}
+	return d.noTxBranches
+}
+
+// checkNoOpenWriters returns an error if any current branch state has open table writers.
+func (d *DoltSession) checkNoOpenWriters() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	return d.currentBranches().checkNoOpenWriters()
+}
 
-	if err := d.branches.checkNoOpenWriters(); err != nil {
-		return err
+// SetTransaction implements sql.Session. A DoltTransaction's branch states are dropped when it stops being the
+// session's transaction, and the session's own are dropped when a DoltTransaction starts being it. Neither may have
+// open table writers then. The change happens either way, so a violation can only panic under dynamic asserts.
+func (d *DoltSession) SetTransaction(tx sql.Transaction) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	prevTx, prevOk := d.Session.GetTransaction().(*DoltTransaction)
+	nextTx, nextOk := tx.(*DoltTransaction)
+	if prevOk && prevTx != nextTx {
+		_ = prevTx.branches.checkNoOpenWriters()
 	}
-	d.branches = newBranchStates()
-	return nil
+	if nextOk && nextTx != prevTx {
+		_ = d.noTxBranches.checkNoOpenWriters()
+		d.noTxBranches = newBranchStates()
+	}
+	d.Session.SetTransaction(tx)
 }
 
 // CommitTransaction commits the in-progress transaction. Depending on session settings, this may write only a new
@@ -758,33 +780,14 @@ func (d *DoltSession) commitBranchStates(
 		}
 	}
 
-	workingSets, commits, err := dtx.commitHeads(ctx, changes)
+	_, commits, err := dtx.commitHeads(ctx, changes)
 	if err != nil {
 		return nil, err
 	}
 
-	// Refresh cached state before returning: stored procedures can continue using it before the next
-	// transaction starts. In particular, staged changes must be compared against the newly committed HEAD.
-	for i, state := range states {
-		if commits[i] != nil {
-			headRoot, err := commits[i].GetRootValue(ctx)
-			if err != nil {
-				return nil, err
-			}
-
-			state.headCommit = commits[i]
-			state.headRoot = headRoot
-		}
-
-		if err := state.replaceWorkingSet(ctx, workingSets[i]); err != nil {
-			return nil, err
-		}
-
-		state.dirty = false
-	}
-
-	// The engine clears transactions for COMMIT, but other callers (including stored procedures) must
-	// clear them themselves so the next statement starts a new transaction.
+	// The engine clears transactions for COMMIT, but other callers (including stored procedures) must clear them
+	// themselves so the next statement starts a new transaction. This drops |states|, so lookups until then load
+	// from the database, which now has these commits.
 	ctx.SetTransaction(nil)
 	d.notifyDoltgresTransactionCommitted()
 	return commits, nil
@@ -829,7 +832,7 @@ func (d *DoltSession) dirtyWorkingSets() []*branchState {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	var dirtyStates []*branchState
-	for _, branchState := range d.branches.all() {
+	for _, branchState := range d.currentBranches().all() {
 		if branchState.dirty {
 			dirtyStates = append(dirtyStates, branchState)
 		}
@@ -848,7 +851,7 @@ func (d *DoltSession) DirtyDatabases() []string {
 	defer d.mu.Unlock()
 	var dbNames []string
 	for _, dbState := range d.dbStates {
-		for _, branchState := range d.branches.forDb(dbState.dbName) {
+		for _, branchState := range d.currentBranches().forDb(dbState.dbName) {
 			if branchState.dirty {
 				dbNames = append(dbNames, dbState.dbName)
 				break
@@ -870,7 +873,7 @@ func (d *DoltSession) DirtyBranches() []DirtyBranch {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	var dirty []DirtyBranch
-	for _, branchState := range d.branches.all() {
+	for _, branchState := range d.currentBranches().all() {
 		if branchState.dirty {
 			dirty = append(dirty, DirtyBranch{DbName: branchState.dbState.dbName, Branch: branchState.head})
 		}
@@ -883,7 +886,7 @@ func (d *DoltSession) DirtyBranches() []DirtyBranch {
 func (d *DoltSession) IsBranchDirty(dbName, branch string) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	branchState, ok := d.branches.get(dbName, branch)
+	branchState, ok := d.currentBranches().get(dbName, branch)
 	return ok && branchState.dirty
 }
 
@@ -893,7 +896,7 @@ func (d *DoltSession) IsBranchDirty(dbName, branch string) bool {
 func (d *DoltSession) IsWritingDatabase(dbName string) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	for _, branchState := range d.branches.forDb(dbName) {
+	for _, branchState := range d.currentBranches().forDb(dbName) {
 		if branchState.dirty || (branchState.writeSession != nil && branchState.writeSession.HasOpenTableWriters()) {
 			return true
 		}
@@ -1079,8 +1082,18 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, dbName string, branchSt
 // Rollback rolls the given transaction back
 func (d *DoltSession) Rollback(ctx *sql.Context, tx sql.Transaction) error {
 	d.notifyDoltgresTransactionRolledBack()
-	// Nothing to do here, we just throw away all our work and let a new transaction begin next statement
-	return d.clear()
+	// Drop the branch states and let a new transaction begin next statement.
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	states := &d.noTxBranches
+	if dtx, ok := tx.(*DoltTransaction); ok {
+		states = &dtx.branches
+	}
+	if err := (*states).checkNoOpenWriters(); err != nil {
+		return err
+	}
+	*states = newBranchStates()
+	return nil
 }
 
 // VisitGCRoots invokes the provided keep function for every root in this session for the database named.
@@ -1096,7 +1109,7 @@ func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func
 
 	d.mu.Lock()
 	dbState, dbStateFound := d.dbStates[dbName]
-	heads := d.branches.forDb(dbName)
+	heads := d.currentBranches().forDb(dbName)
 	d.mu.Unlock()
 
 	if dbStateFound {
@@ -1242,7 +1255,7 @@ func (d *DoltSession) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, save
 	// A physical database can have several branch states in this session.
 	dirtyBranches := make(map[string]bool)
 	d.mu.Lock()
-	for _, branch := range d.branches.all() {
+	for _, branch := range d.currentBranches().all() {
 		if ws := branch.WorkingSet(); ws != nil {
 			roots[strings.ToLower(branch.RevisionDbName())] = ws.WorkingRoot()
 			dirtyBranches[strings.ToLower(branch.RevisionDbName())] = branch.dirty
@@ -1595,7 +1608,7 @@ func (d *DoltSession) ForkWorkingSet(ctx *sql.Context, dbName string, ws *doltdb
 func (d *DoltSession) isCurrentBranchState(bs *branchState) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.branches.contains(bs)
+	return d.currentBranches().contains(bs)
 }
 
 // setFlushedWorkingSet sets |bs|'s working set to |ws|, which its own write session flushed table writers into, so
@@ -1816,12 +1829,12 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	// TODO: this no longer gets called at session creation time, so the error handling below never occurs when a
 	//  database is deleted out from under a running server
 	adapter := NewSessionStateAdapter(d, db.Name(), dbState.Remotes, dbState.Branches, dbState.Backups)
-	if existing, ok := d.branches.get(baseName, db.Revision()); ok {
+	if existing, ok := d.currentBranches().get(baseName, db.Revision()); ok {
 		if err := existing.checkNoOpenWriters(); err != nil {
 			return err
 		}
 	}
-	branchState := d.branches.add(sessionState, db.Revision(), db.RevisionType())
+	branchState := d.currentBranches().add(sessionState, db.Revision(), db.RevisionType())
 	branchState.readOnly = dbState.ReadOnly
 	branchState.dbData = dbState.DbData
 	branchState.dbData.Rsr = adapter
