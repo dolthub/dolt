@@ -565,24 +565,33 @@ or check the docs for questions about usage.`)
 		}
 	}
 
-	ctx, stop := context.WithCancel(ctx)
-	res := doltCommand.Exec(ctx, "dolt", cfg.remainingArgs, dEnv, cliCtx)
+	execCtx, stop := context.WithCancel(ctx)
+	res := doltCommand.Exec(execCtx, "dolt", cfg.remainingArgs, dEnv, cliCtx)
 	if cliCtx != nil {
 		cliCtx.Close()
 	}
 	stop()
 
-	if err = dbfactory.CloseAllLocalDatabases(); err != nil {
-		cli.PrintErrln(err)
-		if res == 0 {
-			res = 1
-		}
-	}
-
+	// The summary reads the store, so print it before closing.
 	if csMetrics && dEnv.DoltDB(ctx) != nil {
 		metricsSummary := dEnv.DoltDB(ctx).CSMetricsSummary()
 		cli.Println("Command took", time.Since(start).Seconds())
 		cli.PrintErrln(metricsSummary)
+	}
+
+	// mrEnv closes only the sub-envs it opened; dEnv is ours to close.
+	var closeErrs []error
+	if mrEnv != nil {
+		closeErrs = append(closeErrs, mrEnv.Close(ctx))
+	}
+	closeErrs = append(closeErrs, dEnv.Close())
+	// Backstop for stores opened outside an env until the singleton cache is removed.
+	closeErrs = append(closeErrs, dbfactory.CloseAllLocalDatabases())
+	if err = errors.Join(closeErrs...); err != nil {
+		cli.PrintErrln(err)
+		if res == 0 {
+			res = 1
+		}
 	}
 
 	return res
