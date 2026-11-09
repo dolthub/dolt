@@ -54,7 +54,3 @@ func (c *Controller) standbyConn(remote string) grpc.ClientConnInterface {
 	}
 	return nil
 }
-
-func (p grpcDialProvider) Unwrap() dbfactory.GRPCDialProvider {
-	return p.orig
-}
