@@ -1,9 +1,11 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
+load $BATS_TEST_DIRNAME/helper/remotesrv-common.bash
 
 remotesrv_pid=
 setup() {
     skiponwindows "tests are flaky on Windows"
+    setup_remotesrv_ports
     setup_common
     cd $BATS_TMPDIR
     mkdir remotes-$$
@@ -30,7 +32,7 @@ teardown() {
 # to suppress it. This used to live in setup(), but to let paired
 # @tests flip feature advertisement via DOLT_REMOTESAPI_DISABLED_FEATURES
 # we spawn remotesrv per-test instead. Every @test in this file that
-# hits http://localhost:50051 must call setup_remotesrv at its top.
+# hits http://localhost:$REMOTESRV_GRPC_PORT must call setup_remotesrv at its top.
 setup_remotesrv() {
     local disabled_features="$1"
     if [ -n "$disabled_features" ]; then
@@ -42,7 +44,7 @@ setup_remotesrv() {
     # path resolves the same way it did under the old setup(), then
     # return to the caller's cwd.
     pushd "$BATS_TMPDIR" > /dev/null
-    remotesrv --http-port 1234 --dir ./remotes-$$ &> ./remotes-$$/remotesrv.log 3>&- &
+    remotesrv --http-port "$REMOTESRV_HTTP_PORT" --grpc-port "$REMOTESRV_GRPC_PORT" --dir ./remotes-$$ &> ./remotes-$$/remotesrv.log 3>&- &
     remotesrv_pid=$!
     popd > /dev/null
 }
@@ -140,7 +142,7 @@ setup_remotesrv() {
 
 @test "remotes-push-pull: push and pull an unknown remote" {
     setup_remotesrv ""
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     run dolt push poop main
     [ "$status" -eq 1 ]
     [[ "$output" =~ "remote 'poop' not found" ]] || false
@@ -151,7 +153,7 @@ setup_remotesrv() {
 
 @test "remotes-push-pull: push with only one argument" {
     setup_remotesrv ""
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     run dolt push test-remote
     [ "$status" -eq 1 ]
     [[ "$output" =~ "fatal: The current branch main has no upstream branch." ]] || false
@@ -164,7 +166,7 @@ setup_remotesrv() {
 @test "remotes-push-pull: push without set-upstream works with autoSetUpRemote set to true" {
     setup_remotesrv ""
     dolt config --local --add push.autoSetUpRemote true
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     run dolt push test-remote main
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Uploading" ]] || false
@@ -176,7 +178,7 @@ setup_remotesrv() {
 
 _do_push_and_pull_main_branch_from_remote_scenario() {
     setup_remotesrv "$1"
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     run dolt push --set-upstream test-remote main
     [ "$status" -eq 0 ]
     [ -d "$BATS_TMPDIR/remotes-$$/test-org/test-repo" ]
@@ -195,7 +197,7 @@ _do_push_and_pull_main_branch_from_remote_scenario() {
 
 @test "remotes-push-pull: push and pull non-main branch from remote" {
     setup_remotesrv ""
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt checkout -b test-branch
     run dolt push --set-upstream test-remote test-branch
     [ "$status" -eq 0 ]
@@ -206,7 +208,7 @@ _do_push_and_pull_main_branch_from_remote_scenario() {
 
 _do_pull_with_explicit_remote_and_branch_scenario() {
     setup_remotesrv "$1"
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt checkout -b test-branch
     dolt sql -q "create table t1(c0 varchar(100));"
     dolt add .
@@ -255,7 +257,7 @@ _do_pull_with_explicit_remote_and_branch_scenario() {
 
 @test "remotes-push-pull: push and pull from non-main branch and use --set-upstream" {
     setup_remotesrv ""
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt checkout -b test-branch
     run dolt push --set-upstream test-remote test-branch
     [ "$status" -eq 0 ]
@@ -269,7 +271,7 @@ _do_pull_with_explicit_remote_and_branch_scenario() {
 
 @test "remotes-push-pull: push output" {
     setup_remotesrv ""
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt checkout -b test-branch
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt add .
@@ -281,7 +283,7 @@ _do_pull_with_explicit_remote_and_branch_scenario() {
 
 @test "remotes-push-pull: push and pull with docs from remote" {
     setup_remotesrv ""
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     echo "license-text" > LICENSE.md
     dolt docs upload LICENSE.md LICENSE.md
     echo "readme-text" > README.md
@@ -290,7 +292,7 @@ _do_pull_with_explicit_remote_and_branch_scenario() {
     dolt commit -m "test doc commit"
     dolt push test-remote main
     cd "dolt-repo-clones"
-    run dolt clone http://localhost:50051/test-org/test-repo
+    run dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     [ "$status" -eq 0 ]
 
     cd test-repo
@@ -319,7 +321,7 @@ _do_pull_with_explicit_remote_and_branch_scenario() {
 
 @test "remotes-push-pull: push and pull tags to/from remote" {
     setup_remotesrv ""
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (pk int PRIMARY KEY);
 INSERT INTO  test VALUES (1),(2),(3);
@@ -327,7 +329,7 @@ SQL
     dolt add . && dolt commit -m "added table test"
     dolt push test-remote main
     cd "dolt-repo-clones"
-    run dolt clone http://localhost:50051/test-org/test-repo
+    run dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     [ "$status" -eq 0 ]
 
     cd ../
@@ -344,7 +346,7 @@ SQL
 
 @test "remotes-push-pull: tags are fetched when pulling" {
     setup_remotesrv ""
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (pk int PRIMARY KEY);
 INSERT INTO  test VALUES (1),(2),(3);
@@ -352,7 +354,7 @@ SQL
     dolt add . && dolt commit -m "added table test"
     dolt push test-remote main
     cd "dolt-repo-clones"
-    run dolt clone http://localhost:50051/test-org/test-repo
+    run dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     [ "$status" -eq 0 ]
 
      cd ../
@@ -378,10 +380,10 @@ SQL
 
 @test "remotes-push-pull: try to push a remote that is behind tip" {
     setup_remotesrv ""
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt push test-remote main
     cd dolt-repo-clones
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd ..
     dolt sql <<SQL
 CREATE TABLE test (
@@ -406,7 +408,7 @@ SQL
 
 @test "remotes-push-pull: dolt_pull() with divergent head" {
     setup_remotesrv ""
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt push test-remote main
     dolt sql <<SQL
 CREATE TABLE test (
@@ -424,7 +426,7 @@ SQL
     dolt push test-remote main
 
     cd "dolt-repo-clones"
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd ..
 
     dolt commit --amend -m 'new message'
@@ -444,7 +446,7 @@ SQL
 
 @test "remotes-push-pull: dolt pull onto a dirty working set fails" {
     setup_remotesrv ""
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
@@ -460,7 +462,7 @@ SQL
     dolt commit -m "created table"
     dolt push test-remote main
     cd "dolt-repo-clones"
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd ..
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt add test
@@ -475,11 +477,11 @@ SQL
 
 @test "remotes-push-pull: force push to main" {
     setup_remotesrv ""
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt push test-remote main
 
     cd "dolt-repo-clones"
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd ..
 
     dolt sql <<SQL
@@ -543,7 +545,7 @@ SQL
 
 @test "remotes-push-pull: push not specifying a branch throws error on default remote" {
     setup_remotesrv ""
-    dolt remote add origin http://localhost:50051/test-org/test-repo
+    dolt remote add origin http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     run dolt remote -v
     [[ "$output" =~  origin ]] || false
     run dolt push origin
@@ -553,8 +555,8 @@ SQL
 
 @test "remotes-push-pull: push not specifying a branch create new remote branch without setting upstream on non-default remote" {
     setup_remotesrv ""
-    dolt remote add origin http://localhost:50051/test-org/test-repo
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add origin http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     run dolt remote -v
     [[ "$output" =~  origin ]] || false
     [[ "$output" =~  test-remote ]] || false
@@ -568,8 +570,8 @@ SQL
 
 @test "remotes-push-pull: push not specifying a branch creates new remote branch and sets upstream on non-default remote when -u is used" {
     setup_remotesrv ""
-    dolt remote add origin http://localhost:50051/test-org/test-repo
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add origin http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     run dolt remote -v
     [[ "$output" =~  origin ]] || false
     [[ "$output" =~  test-remote ]] || false
@@ -591,7 +593,7 @@ SQL
 
 @test "remotes-push-pull: push --all with no remote or refspec specified" {
     setup_remotesrv ""
-    dolt remote add origin http://localhost:50051/test-org/test-repo
+    dolt remote add origin http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     run dolt remote -v
     [[ "$output" =~  origin ]] || false
 
@@ -748,13 +750,13 @@ SQL
 
 @test "remotes-push-pull: push set upstream succeeds even if up to date" {
     setup_remotesrv ""
-    dolt remote add origin http://localhost:50051/test-org/test-repo
+    dolt remote add origin http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt push origin main
     dolt checkout -b feature
     dolt push --set-upstream origin feature
 
     cd dolt-repo-clones
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd test-repo
     dolt checkout -b feature
     run dolt push
@@ -833,11 +835,11 @@ SQL
 
 @test "remotes-push-pull: validate that a config is needed for a pull." {
     setup_remotesrv ""
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     dolt push test-remote main
     dolt fetch test-remote
     cd "dolt-repo-clones"
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd ..
     dolt sql <<SQL
 CREATE TABLE test (
