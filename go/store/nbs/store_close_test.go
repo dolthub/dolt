@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
@@ -134,6 +135,43 @@ func TestNBSCloseTwiceAfterConjoin(t *testing.T) {
 	}
 	waitForConjoin(st)
 	requireCloseTwice(t, st)
+}
+
+// A second Close must not return while the first is still waiting for a
+// conjoin, because the first has not yet released the store's files.
+func TestNBSCloseTwiceDuringConjoin(t *testing.T) {
+	st, _, _ := makeTestLocalStore(t, defaultMaxTables)
+	// Simulate an in-flight conjoin, so the first Close parks on conjoinOpCond.
+	st.conjoinOp = &conjoinOperation{}
+	finishConjoin := func() {
+		st.mu.Lock()
+		st.conjoinOp = nil
+		st.conjoinOpCond.Broadcast()
+		st.mu.Unlock()
+	}
+	first := make(chan error, 1)
+	go func() { first <- st.Close() }()
+	defer func() {
+		finishConjoin()
+		require.NoError(t, <-first)
+	}()
+
+	require.Eventually(t, func() bool {
+		st.mu.Lock()
+		defer st.mu.Unlock()
+		return st.closed
+	}, time.Second, time.Millisecond)
+
+	second := make(chan error, 1)
+	go func() { second <- st.Close() }()
+	select {
+	case err := <-second:
+		t.Fatalf("second Close returned before the first finished: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	finishConjoin()
+	require.NoError(t, <-second)
 }
 
 func TestJournalingStoreCloseTwice(t *testing.T) {

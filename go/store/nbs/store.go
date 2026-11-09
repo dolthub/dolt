@@ -146,7 +146,11 @@ type NomsBlockStore struct {
 
 	fatalBehavior dherrors.FatalBehavior
 
-	closed bool
+	// Held for all of Close, so a Close returns only once the store is
+	// fully closed. Separate from |mu|, which Close releases while it
+	// waits for a conjoin.
+	closeMu sync.Mutex
+	closed  bool
 
 	staticAccessMode chunks.ExclusiveAccessMode
 	staticVersion    string
@@ -1781,15 +1785,17 @@ func (nbs *NomsBlockStore) AccessMode() chunks.ExclusiveAccessMode {
 	return nbs.persister.AccessMode()
 }
 
-// Close releases the store's resources. Calls after the first are no-ops.
+// Close releases the store's resources. Later calls wait for the first
+// to finish, then return nil.
 func (nbs *NomsBlockStore) Close() error {
+	nbs.closeMu.Lock()
+	defer nbs.closeMu.Unlock()
 	if nbs.loadThunk != nil {
 		loaded := true
 		nbs.loadOnce.Do(func() {
 			nbs.loadThunk(context.Background(), false)
 			loaded = false
-			// An unloaded store has no persister to close, so mark it
-			// closed before any other Close can get past the Once.
+			// An unloaded store has no persister to close.
 			nbs.mu.Lock()
 			nbs.closed = true
 			nbs.mu.Unlock()
