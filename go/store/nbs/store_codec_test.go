@@ -148,7 +148,7 @@ func TestToyCodecTableFile(t *testing.T) {
 	})
 }
 
-func TestToyCodecCopiesSealedRecords(t *testing.T) {
+func TestToyCodecCopiesSealedChunks(t *testing.T) {
 	c := newToyCodec()
 	cs := toyChunks(16)
 	data, _ := writeToyTable(t, c, cs)

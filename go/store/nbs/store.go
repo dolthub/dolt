@@ -162,7 +162,8 @@ type NomsBlockStore struct {
 	codec       storeCodec
 	codecFormat string
 	newCodec    codecFactory
-	oldGen      *NomsBlockStore
+	// oldGen is the old generation of a store that has one.
+	oldGen *NomsBlockStore
 }
 
 func (nbs *NomsBlockStore) PersistGhostHashes(ctx context.Context, refs hash.HashSet) error {
@@ -2216,6 +2217,7 @@ func (nbs *NomsBlockStore) addTableFilesToManifest(ctx context.Context, fileIdTo
 		// We should make these ref checks more efficient and
 		// more performant as well, so that incremental
 		// backups are more credible for example.
+		// A store that cannot open records cannot read their refs either.
 		if !sources.root.IsEmpty() && nbs.codec.checkAccess() == nil {
 			refCheck := getRefCheck(nbs, genRefCheck, sources.sources)
 			err = refCheckAllSources(ctx, getAddrs, refCheck, sources.sources, nbs.stats)
