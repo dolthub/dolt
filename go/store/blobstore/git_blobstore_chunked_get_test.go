@@ -16,6 +16,7 @@ package blobstore
 
 import (
 	"context"
+	"io"
 	"os/exec"
 	"testing"
 
@@ -112,4 +113,53 @@ func TestGitBlobstore_Get_ChunkedTree_InvalidPartsError(t *testing.T) {
 	_, _, err = GetBytes(ctx, bs, "chunked", AllRange)
 	require.Error(t, err)
 	require.False(t, IsNotFoundError(err))
+}
+
+func TestGitBlobstore_PinBlob_ReadsAfterKeyIsRemoved(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found on PATH")
+	}
+
+	ctx := context.Background()
+	remoteRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/remote.git")
+	require.NoError(t, err)
+	_, err = remoteRepo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
+		"inline":       []byte("abcdefgh"),
+		"chunked/0001": []byte("abc"),
+		"chunked/0002": []byte("defgh"),
+	}, "seed")
+	require.NoError(t, err)
+
+	localRepo, err := gitrepo.InitBare(ctx, t.TempDir()+"/local.git")
+	require.NoError(t, err)
+	localRunner, err := git.NewRunner(localRepo.GitDir)
+	require.NoError(t, err)
+	_, err = localRunner.Run(ctx, git.RunOptions{}, "remote", "add", "origin", remoteRepo.GitDir)
+	require.NoError(t, err)
+	bs, err := NewGitBlobstore(localRepo.GitDir, DoltDataRef)
+	require.NoError(t, err)
+
+	require.NoError(t, bs.syncForRead(ctx))
+	_, err = bs.PinBlob("missing")
+	require.True(t, IsNotFoundError(err))
+
+	for _, key := range []string{"inline", "chunked"} {
+		pinned, err := bs.PinBlob(key)
+		require.NoError(t, err)
+
+		// A manifest update removes a pruned key from the cache this way.
+		bs.cacheMu.Lock()
+		delete(bs.cacheObjects, key)
+		delete(bs.cacheChildren, key)
+		bs.cacheMu.Unlock()
+		_, _, _, err = bs.Get(ctx, key, AllRange)
+		require.True(t, IsNotFoundError(err))
+
+		rc, err := pinned(ctx)
+		require.NoError(t, err)
+		got, err := io.ReadAll(rc)
+		require.NoError(t, err)
+		require.NoError(t, rc.Close())
+		require.Equal(t, "abcdefgh", string(got), key)
+	}
 }

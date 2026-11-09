@@ -39,6 +39,7 @@ import (
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 const (
@@ -50,6 +51,9 @@ const (
 	// GitRemoteCacheDirName is the conventional directory, under a Dolt repository's
 	// `.dolt/`, that the Dolt CLI uses for git remote caches.
 	GitRemoteCacheDirName = "git-remote-cache"
+	// GitRemoteSpoolDirName is the directory under the git cache root for the local
+	// table file copies of the git remotes under that root.
+	GitRemoteSpoolDirName = "spools"
 	GitRefParam           = "git_ref"
 	GitRemoteNameParam    = "git_remote_name"
 	defaultGitRef         = "refs/dolt/data"
@@ -112,6 +116,12 @@ var (
 	gitRemoteCacheMu sync.Mutex
 	gitRemoteCache   = map[string]gitRemoteCacheEntry{}
 )
+
+// GitRemoteSpoolDirForRepo returns the spool directory of the git remotes of the Dolt
+// repository at |repoRoot|, the directory that holds its `.dolt` directory.
+func GitRemoteSpoolDirForRepo(repoRoot string) string {
+	return filepath.Join(repoRoot, DoltDir, GitRemoteCacheDirName, GitRemoteSpoolDirName)
+}
 
 func TeardownGitRemotes(ctx context.Context) {
 	gitRemoteCacheMu.Lock()
@@ -252,9 +262,13 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	bsOpts.RemoteName = remoteName
 	bsOpts.InfoBranch = blobstore.DefaultInfoBranch
 	bsOpts.SyncForReadTTL = gitBlobstoreSyncForReadTTLOverride
-	nbsCS, err := nbs.NewGitStore(ctx, nbf.VersionString(), cacheRepo, ref, bsOpts, memlimit.MemtableSize(), q)
+	bsOpts.SpoolDir, err = tempfiles.NewLockedDir(filepath.Join(filepath.Dir(hashDir), GitRemoteSpoolDirName))
 	if err != nil {
 		return nil, nil, nil, err
+	}
+	nbsCS, err := nbs.NewGitStore(ctx, nbf.VersionString(), cacheRepo, ref, bsOpts, memlimit.MemtableSize(), q)
+	if err != nil {
+		return nil, nil, nil, errors.Join(err, bsOpts.SpoolDir.Close())
 	}
 
 	cs := gitSharedChunkStore{NomsBlockStore: nbsCS}
