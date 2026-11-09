@@ -16,6 +16,7 @@ package writer
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/dolthub/go-mysql-server/errguard"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -24,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/utils/dynassert"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -78,7 +80,8 @@ type prollyWriteSession struct {
 	// materializing them into the owner's working set when each statement completes. The owner must call
 	// MaterializePending before reading its working set.
 	deferMaterialization bool
-	// materializing is true while MaterializePending is running
+	// materializing is true while pending edits are being materialized. Nothing they call may read the owner's
+	// working set through a materializing read, which would materialize them again; see materializePending.
 	materializing bool
 }
 
@@ -168,9 +171,6 @@ func (s *prollyWriteSession) SetDeferMaterialization(deferMaterialization bool) 
 
 // HasPendingEdits implements WriteSession
 func (s *prollyWriteSession) HasPendingEdits() bool {
-	if s.materializing {
-		return false
-	}
 	for _, tblWriter := range s.tables {
 		if tblWriter.pending {
 			return true
@@ -193,7 +193,7 @@ func (s *prollyWriteSession) PendingTables() []doltdb.TableName {
 // PendingRows implements WriteSession
 func (s *prollyWriteSession) PendingRows(ctx *sql.Context, tblName doltdb.TableName) (*index.PendingRows, bool, error) {
 	tblWriter, ok := s.tables[tblName]
-	if !ok || !tblWriter.pending || s.materializing {
+	if !ok || !tblWriter.pending {
 		return nil, false, nil
 	}
 	rows, err := tblWriter.pendingRows(ctx)
@@ -207,12 +207,16 @@ func (s *prollyWriteSession) MaterializePending(ctx *sql.Context) error {
 }
 
 func (s *prollyWriteSession) materializePending(ctx *sql.Context) error {
+	if s.materializing {
+		// Something called while materializing read the working set, and would see it without these edits.
+		err := fmt.Errorf("pending edits to %s were read while being materialized", s.dbName)
+		dynassert.Assert(false, "%s", err.Error())
+		return err
+	}
 	pending := make(map[doltdb.TableName]*prollyTableWriter)
-	if !s.materializing {
-		for tblName, tblWriter := range s.tables {
-			if tblWriter.pending {
-				pending[tblName] = tblWriter
-			}
+	for tblName, tblWriter := range s.tables {
+		if tblWriter.pending {
+			pending[tblName] = tblWriter
 		}
 	}
 	if len(pending) == 0 {
