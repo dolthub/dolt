@@ -14,12 +14,21 @@
 
 package constants
 
-import "slices"
+import (
+	"slices"
+	"strings"
+)
 
-// EncryptedFormatString is the format string of an encrypted database, which only Dolt Enterprise reads.
-const EncryptedFormatString = "__ENCRYPTED__DOLT__"
+// EncryptedFormatPrefix begins the format string of every encrypted database. Each implementation of encryption names
+// its own format under it, and a store refuses a manifest in another format. Dolt opens none of them.
+const EncryptedFormatPrefix = "__ENCRYPTED__"
 
-// doltFormatAliases are other format strings of the Dolt storage format. Dolt Enterprise adds EncryptedFormatString.
+// IsEncryptedFormatString reports whether |s| names an encrypted format.
+func IsEncryptedFormatString(s string) bool {
+	return strings.HasPrefix(s, EncryptedFormatPrefix)
+}
+
+// doltFormatAliases are other format strings of the Dolt storage format. Dolt Enterprise adds its encrypted format.
 var doltFormatAliases []string
 
 // IsDoltFormatString reports whether |s| names the Dolt storage format.

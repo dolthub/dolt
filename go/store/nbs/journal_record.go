@@ -67,7 +67,8 @@ func (r journalRec) payloadOffset() uint32 {
 // uncompressedPayloadSize returns the uncompressed size of the payload.
 func (r journalRec) uncompressedPayloadSize() (sz uint64) {
 	if r.kind == encChunkJournalRecKind {
-		return uint64(max(len(r.payload)-encJournalRecOverhead, 0))
+		// Only the size of a sealed payload is known.
+		return uint64(len(r.payload))
 	}
 	// |r.payload| is snappy-encoded and starts with
 	// the uvarint-encoded uncompressed data size
@@ -627,8 +628,8 @@ ReadBatchGoto:
 }
 
 func peekRootHashAt(journal io.ReaderAt, offset int64) (root hash.Hash, err error) {
-	expSz := rootRecordSize(encJournalRecOverhead)
-	buf := make([]byte, expSz) // assumes len(rec) is at most the size of an encrypted root hash record
+	expSz := rootRecordSize(maxRootRecordPayload)
+	buf := make([]byte, expSz) // assumes len(rec) is at most the size of a root hash record with the largest payload
 	n, err := journal.ReadAt(buf, offset)
 	if errors.Is(err, io.EOF) {
 		err = nil // EOF is expected for last record
@@ -642,11 +643,11 @@ func peekRootHashAt(journal io.ReaderAt, offset int64) (root hash.Hash, err erro
 }
 
 // rootHashFromBuffer extracts the root hash from a root hash journal record stored at the start of |buf|, which is at
-// most the size of an encrypted root hash record. The CRC is checked before parsing. |offset|
+// most the size of a root hash record with the largest payload. The CRC is checked before parsing. |offset|
 // is only used for error reporting, so it should be relative to the start of the journal file.
 func rootHashFromBuffer(buf []byte, offset int64) (root hash.Hash, err error) {
 	sz := readUint32(buf)
-	if sz > uint32(rootRecordSize(encJournalRecOverhead)) {
+	if sz > uint32(rootRecordSize(maxRootRecordPayload)) {
 		err = fmt.Errorf("invalid root hash record size at %d", offset)
 		return
 	}

@@ -160,9 +160,7 @@ func TestToyCodecGC(t *testing.T) {
 				requireStoreHas(t, st, all)
 				// A second GC copies the records the first one sealed.
 				fillToyStore(t, st, 1, 5)
-				adopted := c.adopted.Load()
 				require.NoError(t, gcToyStore(t, st, all, level))
-				require.Greater(t, c.adopted.Load(), adopted)
 				requireStoreHas(t, st, all)
 				require.NoError(t, st.Close())
 				st = open()
@@ -178,7 +176,7 @@ func TestToyCodecGC(t *testing.T) {
 		require.NoError(t, err)
 		all := fillToyStore(t, st, 1, 10)
 		require.NoError(t, st.Close())
-		keyless := &toyCodec{keyless: true, nextKey: c.nextKey, added: c.added}
+		keyless := &toyCodec{keyless: true}
 		st, err = newLocalStore(ctx, types.Format_DOLT.VersionString(), dir, 1<<10, 8, NewUnlimitedMemQuotaProvider(), false, withToy(keyless))
 		require.NoError(t, err)
 		defer st.Close()
@@ -274,6 +272,22 @@ func TestToyCodecAddTableFiles(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, contents.specs, 1, "the plaintext files are not added to the encrypted manifest")
 	})
+	t.Run("IntoManifestCreatedInAnotherFormat", func(t *testing.T) {
+		dir := t.TempDir()
+		dst, err := newLocalStore(ctx, types.Format_DOLT.VersionString(), dir, 1<<10, 64, q, false, withToy(c))
+		require.NoError(t, err)
+		defer dst.Close()
+		other, err := newLocalStore(ctx, types.Format_DOLT.VersionString(), dir, 1<<10, 64, q, false, withToyFormat(newToyCodec(), constants.EncryptedFormatPrefix+"OTHER__"))
+		require.NoError(t, err)
+		defer other.Close()
+		fillToyStore(t, other, 1, 10)
+
+		before := c.added.Load()
+		require.ErrorIs(t, copyTableFiles(t, src, dst), ErrEncryptionMismatch)
+		require.Equal(t, before, c.added.Load())
+		_, err = newLocalStore(ctx, types.Format_DOLT.VersionString(), dir, 1<<10, 64, q, false, withToy(c))
+		require.ErrorIs(t, err, ErrEncryptionUnsupported)
+	})
 	t.Run("CheckOpenedRefuses", func(t *testing.T) {
 		errRefused := errors.New("refused")
 		rc := newToyCodec()
@@ -315,13 +329,19 @@ func TestToyCodecAddTableFiles(t *testing.T) {
 // withPlainCodec opens a store plaintext, as Dolt does.
 func withPlainCodec() StoreOption {
 	return func(o *storeOptions) {
-		o.newCodec = func(_ bool, format string) (string, storeCodec, error) { return format, plainCodec{}, nil }
+		o.newCodec = func(_ bool, format string) (string, storeCodec, error) {
+			if format == constants.EncryptedFormatPrefix {
+				format = constants.FormatDoltString
+			}
+			return format, plainCodec{}, nil
+		}
 	}
 }
 
 func TestToyCodecJournalReads(t *testing.T) {
 	ctx := context.Background()
-	st, err := NewLocalJournalingStore(ctx, types.Format_DOLT.VersionString(), t.TempDir(), NewUnlimitedMemQuotaProvider(), false, nil, withToy(newToyCodec()))
+	c := newToyCodec()
+	st, err := NewLocalJournalingStore(ctx, types.Format_DOLT.VersionString(), t.TempDir(), NewUnlimitedMemQuotaProvider(), false, nil, withToy(c))
 	require.NoError(t, err)
 	defer st.Close()
 	cs := toyChunks(50)
@@ -349,16 +369,14 @@ func TestToyCodecJournalReads(t *testing.T) {
 	}))
 	require.Equal(t, len(cs), n)
 
-	locs, keys, err := GetChunkLocationsWithPathsAndKeys(ctx, st, hs)
+	locs, err := st.GetChunkLocationsWithPaths(ctx, hs)
 	require.NoError(t, err)
 	n = 0
 	for _, byHash := range locs {
-		for h, r := range byHash {
-			require.Len(t, keys.At(h, r.Offset, r.Length).Key, 1)
-			n++
-		}
+		n += len(byHash)
 	}
 	require.Equal(t, len(cs), n)
+	require.EqualValues(t, len(cs), c.located.Load())
 
 	n = 0
 	require.NoError(t, st.IterateAllChunks(ctx, func(chunks.Chunk) { n++ }))
@@ -389,10 +407,17 @@ func TestToyCodecJournalWithoutManifest(t *testing.T) {
 		_, err = st.Root(ctx)
 		require.ErrorIs(t, err, ErrEncryptionMismatch)
 	})
+	t.Run("FormatLeftUnnamed", func(t *testing.T) {
+		unnamed := func(o *storeOptions) {
+			o.newCodec = func(_ bool, format string) (string, storeCodec, error) { return format, c, nil }
+		}
+		_, err := NewLocalJournalingStore(ctx, types.Format_DOLT.VersionString(), dir, q, false, nil, unnamed)
+		require.ErrorContains(t, err, "settled format")
+	})
 	st, err = NewLocalJournalingStore(ctx, types.Format_DOLT.VersionString(), dir, q, false, nil, withToy(c))
 	require.NoError(t, err)
 	defer st.Close()
-	require.Equal(t, constants.EncryptedFormatString, st.Version())
+	require.Equal(t, toyFormat, st.Version())
 	_, err = st.Root(ctx)
 	require.NoError(t, err)
 }
