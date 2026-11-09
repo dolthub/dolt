@@ -288,6 +288,34 @@ func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiv
 	return ar, nil
 }
 
+// openSpans reads an encrypted archive's key block and opener, failing if the archive does not match its store.
+func (ar *archiveReader) openSpans(ctx context.Context, opts openOpts, stats *Stats) error {
+	f := ar.footer
+	codec, err := opts.fileCodec(f.encrypted())
+	if err != nil {
+		return err
+	}
+	if f.encrypted() != codec.encrypted() {
+		return fmt.Errorf("%w: archive %s", ErrEncryptionMismatch, f.hash.String())
+	} else if !f.encrypted() {
+		return nil
+	}
+	n := f.keyBlockLen()
+	if n > maxKeyBlockLen {
+		return fmt.Errorf("%w: invalid key block length %d", ErrCorruptArchiveIndex, n)
+	}
+	ar.keyBlock = make([]byte, n)
+	section := newSectionReader(ctx, ar.reader, int64(f.fileSize-f.actualFooterSize()), int64(n), stats)
+	if _, err = io.ReadFull(section, ar.keyBlock); err != nil {
+		return err
+	}
+	ar.spans, err = codec.openArchive(ar, opts.adding)
+	if err == nil && ar.spans == nil {
+		err = errors.New("runtime error: no opener for an encrypted archive")
+	}
+	return err
+}
+
 // deepValidate makes a full pass over the archive's index, checking what the
 // read path assumes of it but does not verify. An archive has no checksum over
 // its index, so this is as far as we can go short of decompressing every chunk.
@@ -701,6 +729,37 @@ func (ar *archiveReader) toChunker(h hash.Hash, dict *DecompBundle, data []byte)
 	}
 
 	return &ArchiveToChunker{dict, data, h}, nil
+}
+
+// openDict returns the dictionary stored in span |id|.
+func (ar *archiveReader) openDict(ctx context.Context, id uint32, stored []byte) (*DecompBundle, error) {
+	if ar.spans == nil {
+		return NewDecompBundle(stored)
+	}
+	return ar.spans.openDict(ctx, id, stored)
+}
+
+// chunkData returns the data of chunk |rc| from its stored data span.
+func (ar *archiveReader) chunkData(ctx context.Context, rc resolvedChunk, dict *DecompBundle, stored []byte) ([]byte, error) {
+	if ar.spans == nil {
+		return ar.decompress(rc.h, dict, stored)
+	}
+	return ar.spans.chunkData(ctx, rc, dict, stored)
+}
+
+// chunker returns chunk |rc| as stored, for writers that copy it.
+func (ar *archiveReader) chunker(ctx context.Context, rc resolvedChunk, dict *DecompBundle, stored []byte) (ToChunker, error) {
+	if ar.spans == nil {
+		return ar.toChunker(rc.h, dict, stored)
+	}
+	return ar.spans.toChunker(ctx, rc, dict, stored)
+}
+
+func (ar *archiveReader) locateKeys(ctx context.Context, resolved []resolvedChunk) error {
+	if ar.spans == nil {
+		return nil
+	}
+	return ar.spans.locate(ctx, ar, resolved)
 }
 
 func (ar *archiveReader) count() uint32 {

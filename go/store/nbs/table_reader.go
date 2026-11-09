@@ -103,6 +103,15 @@ func (cmp CompressedChunk) ToChunk() (chunks.Chunk, error) {
 	return chunks.NewChunkWithHash(cmp.H, data), nil
 }
 
+func (cmp CompressedChunk) verifyData(data []byte) error {
+	if cmp.verify {
+		if actual := hash.Of(data); actual != cmp.H {
+			return fmt.Errorf("%w: chunk %s decodes to data with hash %s", ErrInvalidTableFile, cmp.H.String(), actual.String())
+		}
+	}
+	return nil
+}
+
 func ChunkToCompressedChunk(chunk chunks.Chunk) CompressedChunk {
 	compressed := snappy.Encode(nil, chunk.Data())
 	length := len(compressed)
@@ -210,6 +219,73 @@ func newTableReader(ctx context.Context, index tableIndex, r tableReaderAt, bloc
 		prefixesCnt:     cnt,
 		prefixesCleanup: cleanup,
 	}, nil
+}
+
+// newTableReaderFor is newTableReader for a table whose records |opts|'s codec opens.
+func newTableReaderFor(ctx context.Context, index tableIndex, r tableReaderAt, blockSize uint64, opts openOpts) (tableReader, error) {
+	opener, err := tableOpener(index, opts)
+	if err != nil {
+		return tableReader{}, refusedFileError{err}
+	}
+	tr, err := newTableReader(ctx, index, r, blockSize)
+	tr.opener = opener
+	return tr, err
+}
+
+// refusedFileError is an error from a store's codec refusing a file that exists.
+type refusedFileError struct {
+	error
+}
+
+func (e refusedFileError) Unwrap() error {
+	return e.error
+}
+
+func tableOpener(index tableIndex, opts openOpts) (recordOpener, error) {
+	ti, ok := index.(onHeapTableIndex)
+	encrypted := ok && ti.encrypted()
+	codec, err := opts.fileCodec(encrypted)
+	if err != nil {
+		return nil, err
+	}
+	if encrypted != codec.encrypted() {
+		return nil, ErrEncryptionMismatch
+	} else if !encrypted {
+		return nil, nil
+	}
+	opener, err := codec.openTable(ti, opts.adding)
+	if err == nil && opener == nil {
+		err = errors.New("runtime error: no opener for an encrypted table file")
+	}
+	return opener, err
+}
+
+func (tr tableReader) chunkFromRecord(ctx context.Context, h hash.Hash, offset uint64, record []byte) (CompressedChunk, error) {
+	if tr.opener == nil {
+		return NewCompressedChunk(h, record)
+	}
+	cc, err := tr.opener.open(ctx, offset, h, record)
+	if err != nil {
+		return CompressedChunk{}, fmt.Errorf("chunk %s: %w", h.String(), err)
+	}
+	return cc, nil
+}
+
+// extractChunkFromRead leaves it to the opener of an encrypted table whether to open the record.
+func (tr tableReader) extractChunkFromRead(ctx context.Context, rb readBatch, buff []byte, i int) (ToChunker, error) {
+	if tr.opener == nil {
+		return rb.ExtractChunkFromRead(buff, i)
+	}
+	rec := rb[i]
+	start := rec.offset - rb.Start()
+	return tr.opener.chunker(ctx, rec.offset, *rec.a, buff[start:start+uint64(rec.length)])
+}
+
+func (tr tableReader) locateKeys(ctx context.Context, ranges map[hash.Hash]Range) error {
+	if tr.opener == nil {
+		return nil
+	}
+	return tr.opener.locate(ctx, ranges)
 }
 
 // Scan across (logically) two ordered slices of address prefixes.

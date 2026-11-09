@@ -189,7 +189,7 @@ func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remot
 
 	numHashes := len(hashes)
 
-	locations, located, err := locateChunks(ctx, cs, hashes)
+	locations, keysOf, err := storeFormats.locate(ctx, cs, hashes)
 	if err != nil {
 		logger.WithError(err).Error("error getting chunk locations for hashes")
 		return nil, err
@@ -230,7 +230,7 @@ func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remot
 		}).Trace("generated sealed url")
 
 		getRange := &remotesapi.HttpGetRange{Url: url.String(), Ranges: ranges}
-		addRangeKeys(getRange, located)
+		addRangeKeys(getRange, keysOf)
 		locs = append(locs, &remotesapi.DownloadLoc{Location: &remotesapi.DownloadLoc_HttpGetRange{HttpGetRange: getRange}})
 	}
 
@@ -302,7 +302,7 @@ func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStore
 			return err
 		}
 		numHashes += len(hashes)
-		locations, located, err := locateChunks(stream.Context(), cs, hashes)
+		locations, keysOf, err := storeFormats.locate(stream.Context(), cs, hashes)
 		if err != nil {
 			logger.WithError(err).Error("error getting chunk locations for hashes")
 			return err
@@ -342,7 +342,7 @@ func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStore
 			}).Trace("generated sealed url")
 
 			getRange := &remotesapi.HttpGetRange{Url: url.String(), Ranges: ranges}
-			addRangeKeys(getRange, located)
+			addRangeKeys(getRange, keysOf)
 			locs = append(locs, &remotesapi.DownloadLoc{Location: &remotesapi.DownloadLoc_HttpGetRange{HttpGetRange: getRange}})
 		}
 
@@ -437,7 +437,7 @@ func (rs *RemoteChunkStore) StreamChunkLocations(stream remotesapi.ChunkStoreSer
 		// GetChunkLocationsWithPaths deletes found hashes from
 		// |hashes|; the remainder is exactly the set the server
 		// could not find.
-		locations, located, err := locateChunks(stream.Context(), cs, hashes)
+		locations, keysOf, err := storeFormats.locate(stream.Context(), cs, hashes)
 		if err != nil {
 			logger.WithError(err).Error("error getting chunk locations for hashes")
 			return err
@@ -479,7 +479,7 @@ func (rs *RemoteChunkStore) StreamChunkLocations(stream remotesapi.ChunkStoreSer
 			}
 
 			for h, r := range hashToRange {
-				keys := located.At(h, r.Offset, r.Length)
+				key, dictKey := keysOf(h, r.Offset, r.Length)
 				chunkLocs = append(chunkLocs, &remotesapi.StreamChunkLocationsResponse_ChunkLocation{
 					TableFileId:      id,
 					RequestIndex:     uint32(hashToIndex[h]),
@@ -487,8 +487,8 @@ func (rs *RemoteChunkStore) StreamChunkLocations(stream remotesapi.ChunkStoreSer
 					Length:           r.Length,
 					DictionaryOffset: r.DictOffset,
 					DictionaryLength: r.DictLength,
-					KeyId:            streamKeys.ref(keys.Key),
-					DictionaryKeyId:  streamKeys.ref(keys.DictKey),
+					KeyId:            streamKeys.ref(key),
+					DictionaryKeyId:  streamKeys.ref(dictKey),
 				})
 				numLocations++
 			}

@@ -46,25 +46,15 @@ func toyKey(h hash.Hash) []byte {
 	return []byte{'k', h[0] % 3}
 }
 
-type toyKeys struct{}
-
-func (toyKeys) At(h hash.Hash, _ uint64, _ uint32) nbs.RangeKeys {
-	return nbs.RangeKeys{Key: toyKey(h)}
-}
-
 // withToyKeys makes every located record carry its toyKey.
 func withToyKeys(t *testing.T) {
-	prev := locateChunks
-	t.Cleanup(func() { locateChunks = prev })
-	locateChunks = func(ctx context.Context, cs RemoteSrvStore, hashes hash.HashSet) (map[string]map[hash.Hash]nbs.Range, locatedKeys, error) {
-		locs, err := cs.GetChunkLocationsWithPaths(ctx, hashes)
-		return locs, toyKeys{}, err
-	}
+	withStoreFormats(t, toyFormats{keyed: true})
 }
 
 type toyFormats struct {
 	required remotesapi.ClientCapability
 	refused  error
+	keyed    bool
 }
 
 func (f toyFormats) refuseClient(_ string, caps []remotesapi.ClientCapability) error {
@@ -79,6 +69,14 @@ func (f toyFormats) refusal(err error) error {
 		return status.Error(codes.FailedPrecondition, "refused")
 	}
 	return nil
+}
+
+func (f toyFormats) locate(ctx context.Context, cs RemoteSrvStore, hashes hash.HashSet) (map[string]map[hash.Hash]nbs.Range, recordKeys, error) {
+	locs, err := cs.GetChunkLocationsWithPaths(ctx, hashes)
+	if !f.keyed {
+		return locs, noKeys, err
+	}
+	return locs, func(h hash.Hash, _ uint64, _ uint32) ([]byte, []byte) { return toyKey(h), nil }, err
 }
 
 func withStoreFormats(t *testing.T, f serverFormats) {
@@ -202,7 +200,6 @@ func TestLocatedKeysReachTheClient(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			withToyKeys(t)
-			withStoreFormats(t, plainFormats{})
 			ctx := context.Background()
 			r := startTestRemote(t, 64, tc.disabled...)
 
@@ -227,7 +224,6 @@ func TestLocatedKeysReachTheClient(t *testing.T) {
 
 func TestLocatedKeysAreNumbered(t *testing.T) {
 	withToyKeys(t)
-	withStoreFormats(t, plainFormats{})
 	ctx := context.Background()
 	r := startTestRemote(t, 32)
 
@@ -290,20 +286,22 @@ func TestLocatedKeysAreNumbered(t *testing.T) {
 	require.NoError(t, stream.CloseSend())
 }
 
-type keysByOffset map[uint64]nbs.RangeKeys
-
-func (k keysByOffset) At(_ hash.Hash, offset uint64, _ uint32) nbs.RangeKeys {
-	return k[offset]
-}
-
 func TestAddRangeKeys(t *testing.T) {
 	h := hash.Of([]byte("chunk"))
 	hgr := &remotesapi.HttpGetRange{Ranges: []*remotesapi.RangeChunk{{Hash: h[:], Offset: 0}, {Hash: h[:], Offset: 10}, {Hash: h[:], Offset: 20}}}
-	addRangeKeys(hgr, keysByOffset{})
+	addRangeKeys(hgr, noKeys)
 	assert.Empty(t, hgr.Keys)
 	assert.Zero(t, hgr.Ranges[0].KeyIndex)
 
-	addRangeKeys(hgr, keysByOffset{0: {Key: []byte("a")}, 10: {Key: []byte("b"), DictKey: []byte("a")}})
+	addRangeKeys(hgr, func(_ hash.Hash, offset uint64, _ uint32) ([]byte, []byte) {
+		switch offset {
+		case 0:
+			return []byte("a"), nil
+		case 10:
+			return []byte("b"), []byte("a")
+		}
+		return nil, nil
+	})
 	assert.Equal(t, [][]byte{[]byte("a"), []byte("b")}, hgr.Keys)
 	assert.Equal(t, []uint32{1, 2, 0}, []uint32{hgr.Ranges[0].KeyIndex, hgr.Ranges[1].KeyIndex, hgr.Ranges[2].KeyIndex})
 	assert.Equal(t, []uint32{0, 1, 0}, []uint32{hgr.Ranges[0].DictionaryKeyIndex, hgr.Ranges[1].DictionaryKeyIndex, hgr.Ranges[2].DictionaryKeyIndex})
@@ -311,8 +309,7 @@ func TestAddRangeKeys(t *testing.T) {
 
 func TestClientCapabilityRefusal(t *testing.T) {
 	need := remotesapi.ClientCapability_CLIENT_CAPABILITY_ENCRYPTION
-	withToyKeys(t)
-	withStoreFormats(t, toyFormats{required: need})
+	withStoreFormats(t, toyFormats{required: need, keyed: true})
 	ctx := context.Background()
 	r := startTestRemote(t, 4)
 
@@ -420,11 +417,6 @@ func TestKeyNumbering(t *testing.T) {
 
 // A plaintext store's locations carry no keys, so what goes over the wire is unchanged.
 func TestPlaintextLocationsHaveNoKeys(t *testing.T) {
-	prev := locateChunks
-	t.Cleanup(func() { locateChunks = prev })
-	locateChunks = func(ctx context.Context, cs RemoteSrvStore, hashes hash.HashSet) (map[string]map[hash.Hash]nbs.Range, locatedKeys, error) {
-		return nbs.GetChunkLocationsWithPathsAndKeys(ctx, cs, hashes)
-	}
 	withStoreFormats(t, plainFormats{})
 	ctx := context.Background()
 	r := startTestRemote(t, 16)

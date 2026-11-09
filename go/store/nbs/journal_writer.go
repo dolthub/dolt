@@ -203,15 +203,10 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, canWrite bool, re
 	// at minimum the non-indexed portion will include a root hash record.
 	// Index lookups are added to the ongoing batch to re-synchronize.
 	wr.off, err = processJournalRecords(ctx, wr.path, wr.journal.f, canWrite, wr.indexed, func(o int64, r journalRec) error {
-		if err := wr.codec.replay(ctx, o, r); err != nil {
+		if err := wr.codec.replay(ctx, wr, canWrite, o, r); err != nil {
 			return err
 		}
 		switch {
-		case r.kind == keyJournalRecKind:
-			if canWrite {
-				return wr.indexKey(r.payload)
-			}
-
 		case isChunkRecKind(r.kind):
 			rng := Range{
 				Offset: uint64(o) + uint64(r.payloadOffset()),
@@ -236,6 +231,9 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, canWrite bool, re
 					timestamp: r.timestamp,
 				})
 			}
+
+		case r.kind == keyJournalRecKind:
+			// Only the codec reads key records.
 
 		default:
 			return fmt.Errorf("unknown journal record kind (%d)", r.kind)
@@ -530,10 +528,7 @@ func (wr *journalWriter) getRange(ctx context.Context, behavior dherrors.FatalBe
 	defer wr.lock.RUnlock()
 	rng, ok = wr.ranges.get(h)
 	if ok {
-		var key []byte
-		if rng, key, err = wr.codec.locate(h, rng, wr); err == nil && key != nil {
-			locatedKeysFrom(ctx).note(h, rng, RangeKeys{Key: key})
-		}
+		rng, err = wr.codec.locate(ctx, h, rng, wr)
 	}
 	return
 }
@@ -542,11 +537,8 @@ func (wr *journalWriter) getRange(ctx context.Context, behavior dherrors.FatalBe
 func (wr *journalWriter) writeCompressedChunk(ctx context.Context, behavior dherrors.FatalBehavior, cc CompressedChunk) error {
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
-	rec, err := wr.codec.sealChunk(ctx, cc)
+	rec, err := wr.codec.sealChunk(ctx, wr, behavior, cc)
 	if err != nil {
-		return err
-	}
-	if err = wr.writeKeyRecord(ctx, behavior, rec.key); err != nil {
 		return err
 	}
 	recordLen, payloadOff := journalRecordSize(len(rec.payload))
@@ -605,14 +597,11 @@ func (wr *journalWriter) commitRootHashUnlocked(ctx context.Context, behavior dh
 	defer trace.StartRegion(ctx, "commit-root").End()
 
 	ts := journalRecordTimestampGenerator()
-	rec, err := wr.codec.sealRoot(ctx, root, ts)
+	rec, err := wr.codec.sealRoot(ctx, wr, behavior, root, ts)
 	if err != nil {
 		return err
-	} else if len(rec.payload) > encJournalRecOverhead {
+	} else if len(rec.payload) > maxRootRecordPayload {
 		return fmt.Errorf("root hash record payload of %d bytes is too large", len(rec.payload))
-	}
-	if err = wr.writeKeyRecord(ctx, behavior, rec.key); err != nil {
-		return err
 	}
 	buf, err := wr.getBytes(ctx, behavior, rootRecordSize(len(rec.payload)))
 	if err != nil {
@@ -647,14 +636,9 @@ func (wr *journalWriter) commitRootHashUnlocked(ctx context.Context, behavior dh
 // bootstrapping by reducing the amount of the journal that must be processed.
 func (wr *journalWriter) flushIndexRecord(ctx context.Context, root hash.Hash, end int64) (err error) {
 	defer trace.StartRegion(ctx, "flushIndexRecord").End()
-	auth, ok, err := wr.codec.sealBatch(lookupMeta{batchStart: wr.indexed, batchEnd: end, checkSum: wr.batchCrc, latestHash: root})
+	ok, err := wr.codec.sealBatch(wr, lookupMeta{batchStart: wr.indexed, batchEnd: end, checkSum: wr.batchCrc, latestHash: root})
 	if err != nil || !ok {
 		return err
-	}
-	if auth != nil {
-		if err := writeIndexBytes(wr.indexWriter, indexRecAuth, auth); err != nil {
-			return err
-		}
 	}
 	if err := writeJournalIndexMeta(wr.indexWriter, root, wr.indexed, end, wr.batchCrc); err != nil {
 		return err

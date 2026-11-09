@@ -27,6 +27,7 @@ import (
 	"errors"
 	"fmt"
 	gohash "hash"
+	"slices"
 	"sort"
 
 	"github.com/golang/snappy"
@@ -150,6 +151,52 @@ func (tw *tableWriter) finish() (tableFileLength uint64, blockAddr hash.Hash, er
 	h = tw.blockHash.Sum(h) // Appends hash to h
 	copy(blockAddr[:], h)
 	return
+}
+
+// addSealedChunk adds chunk |h|'s |data| as a record sealed by |tw.sealer|.
+func (tw *tableWriter) addSealedChunk(h hash.Hash, data []byte) bool {
+	if tw.sealErr != nil {
+		return false
+	}
+	tw.scratch = tw.snapper.Encode(tw.scratch[:cap(tw.scratch)], data)
+	ordinal := uint32(len(tw.prefixes))
+	out, err := tw.sealer.seal(tw.buff[:tw.pos], ordinal, h, tw.scratch)
+	if err != nil {
+		tw.sealErr = err
+		return false
+	}
+	n := uint64(len(out)) - tw.pos
+	tw.buff = out[:cap(out)]
+	tw.pos += n
+	tw.totalCompressedData += n
+	tw.totalUncompressedData += uint64(len(data))
+	tw.prefixes = append(tw.prefixes, prefixIndexRec{h, ordinal, uint32(n)})
+	return true
+}
+
+// finishSealed writes the index, key block and footer of an encrypted table.
+func (tw *tableWriter) finishSealed() (uint64, hash.Hash, error) {
+	if tw.sealErr != nil {
+		return 0, hash.Hash{}, tw.sealErr
+	}
+	kb, err := tw.sealer.keyBlock()
+	if err != nil {
+		return 0, hash.Hash{}, err
+	}
+	tail, err := encryptedTail(kb)
+	if err != nil {
+		return 0, hash.Hash{}, err
+	}
+	count := uint32(len(tw.prefixes))
+	tw.buff = slices.Grow(tw.buff[:tw.pos], int(indexSize(count))+len(tail)+footerSize)
+	tw.buff = tw.buff[:cap(tw.buff)]
+	tw.recordsEnd = tw.pos
+	if err = tw.writeIndex(); err != nil {
+		return 0, hash.Hash{}, err
+	}
+	tw.pos += uint64(copy(tw.buff[tw.pos:], tail))
+	tw.pos += writeEncryptedFooter(tw.buff[tw.pos:], count, tw.totalUncompressedData)
+	return tw.pos, randomTableName(), nil
 }
 
 type prefixIndexRec struct {

@@ -31,7 +31,7 @@ type DecompBundle struct {
 	cDict         *gozstd.CDict
 	rawDictionary *[]byte
 	contentKey    hash.Hash
-	// sealed is the stored span of a dictionary from an encrypted archive, so writers can copy it as it is.
+	// sealed is what an encrypted archive's codec keeps with a dictionary it opened.
 	sealed any
 }
 
