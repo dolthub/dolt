@@ -30,6 +30,16 @@ type serverFormats interface {
 	refuseClient(nbfVersion string, caps []remotesapi.ClientCapability) error
 	// refusal returns the error to send a client for files a store refused to add with |err|, or nil to send |err|.
 	refusal(err error) error
+	// locate returns the locations of |hashes| in |cs|, and the keys of their records.
+	locate(ctx context.Context, cs RemoteSrvStore, hashes hash.HashSet) (map[string]map[hash.Hash]nbs.Range, recordKeys, error)
+}
+
+// recordKeys returns the keys of the record of chunk |h| located at |offset| and |length| and of its dictionary,
+// which plaintext records lack.
+type recordKeys func(h hash.Hash, offset uint64, length uint32) (key, dictKey []byte)
+
+func noKeys(hash.Hash, uint64, uint32) ([]byte, []byte) {
+	return nil, nil
 }
 
 type plainFormats struct{}
@@ -40,6 +50,11 @@ func (plainFormats) refuseClient(string, []remotesapi.ClientCapability) error {
 
 func (plainFormats) refusal(error) error {
 	return nil
+}
+
+func (plainFormats) locate(ctx context.Context, cs RemoteSrvStore, hashes hash.HashSet) (map[string]map[hash.Hash]nbs.Range, recordKeys, error) {
+	locs, err := cs.GetChunkLocationsWithPaths(ctx, hashes)
+	return locs, noKeys, err
 }
 
 // checkClientCapability refuses to locate the records of |cs| for a client that cannot read them.
@@ -58,16 +73,6 @@ func WithRepoFormat(ctx context.Context, f *remotesapi.ClientRepoFormat) context
 func RequestedRepoFormat(ctx context.Context) (*remotesapi.ClientRepoFormat, bool) {
 	f, ok := ctx.Value(repoFormatKey{}).(*remotesapi.ClientRepoFormat)
 	return f, ok && f != nil
-}
-
-// locatedKeys returns the keys of located records; see nbs.LocatedKeys.
-type locatedKeys interface {
-	At(h hash.Hash, offset uint64, length uint32) nbs.RangeKeys
-}
-
-// locateChunks locates |hashes| in |cs| with the keys of their records. Tests replace it.
-var locateChunks = func(ctx context.Context, cs RemoteSrvStore, hashes hash.HashSet) (map[string]map[hash.Hash]nbs.Range, locatedKeys, error) {
-	return nbs.GetChunkLocationsWithPathsAndKeys(ctx, cs, hashes)
 }
 
 // keyNumbering numbers the record keys of one HttpGetRange or StreamChunkLocations stream from one, in order of
@@ -104,11 +109,11 @@ func (kn *keyNumbering) dataKeys() []*remotesapi.StreamChunkLocationsResponse_Da
 	return ret
 }
 
-func addRangeKeys(hgr *remotesapi.HttpGetRange, located locatedKeys) {
+func addRangeKeys(hgr *remotesapi.HttpGetRange, keysOf recordKeys) {
 	var kn keyNumbering
 	for _, rc := range hgr.Ranges {
-		k := located.At(hash.New(rc.Hash), rc.Offset, rc.Length)
-		rc.KeyIndex, rc.DictionaryKeyIndex = kn.ref(k.Key), kn.ref(k.DictKey)
+		key, dictKey := keysOf(hash.New(rc.Hash), rc.Offset, rc.Length)
+		rc.KeyIndex, rc.DictionaryKeyIndex = kn.ref(key), kn.ref(dictKey)
 	}
 	hgr.Keys = kn.added
 }
