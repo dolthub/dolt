@@ -250,7 +250,11 @@ func createWriteableSystemTable(ctx *sql.Context, tblName doltdb.TableName, tblS
 			return nil, nil, err
 		}
 	} else {
-		if dbState.WorkingSet() == nil {
+		workingSet, err := dbState.WorkingSet(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		if workingSet == nil {
 			return nil, nil, doltdb.ErrOperationNotSupportedInDetachedHead
 		}
 

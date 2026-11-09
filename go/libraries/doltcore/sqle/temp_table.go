@@ -84,7 +84,10 @@ func NewTempTable(
 		return nil, fmt.Errorf("database %s not found in session", db)
 	}
 
-	ws := dbState.WorkingSet()
+	ws, err := dbState.WorkingSet(ctx)
+	if err != nil {
+		return nil, err
+	}
 	if ws == nil {
 		return nil, doltdb.ErrOperationNotSupportedInDetachedHead
 	}
@@ -180,7 +183,10 @@ func setTempTableRoot(t *TempTable) func(ctx *sql.Context, dbName string, newRoo
 			return fmt.Errorf("database %s not found in session", t.dbName)
 		}
 
-		ws := dbState.WorkingSet()
+		ws, err := dbState.WorkingSet(ctx)
+		if err != nil {
+			return err
+		}
 		if ws == nil {
 			return doltdb.ErrOperationNotSupportedInDetachedHead
 		}

@@ -23,6 +23,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
@@ -95,8 +96,9 @@ func newEmptyDatabaseSessionState() *DatabaseSessionState {
 // SessionState is the public interface for dealing with session state outside this package. Session-state is always
 // branch-specific.
 type SessionState interface {
-	WorkingSet() *doltdb.WorkingSet
-	WorkingRoot() doltdb.RootValue
+	// WorkingSet returns the working set, or nil for a detached head.
+	WorkingSet(ctx *sql.Context) (*doltdb.WorkingSet, error)
+	WorkingRoot(ctx *sql.Context) (doltdb.RootValue, error)
 	WriteSession() WriteSession
 	EditOpts() editor.Options
 	SessionCache() *SessionCache
@@ -115,7 +117,7 @@ type branchState struct {
 	// case headRoot must be set.
 	headCommit *doltdb.Commit
 	// workingSet is the working set for this database. May be nil for databases tied to a detached root value, in which
-	// case headCommit must be set
+	// case headCommit must be set. Read it through WorkingSet; only code that sets it, and GC, reads the field.
 	workingSet *doltdb.WorkingSet
 	// head is the name of the branch head for this state
 	head string
@@ -201,7 +203,7 @@ func (o *forkedWorkingSetOwner) SetFlushedWorkingSet(ctx *sql.Context, ws *doltd
 	var err error
 	if !o.sess.isCurrentBranchState(o.bs) {
 		err = fmt.Errorf("%w: %s", ErrBranchStateDropped, o.bs.RevisionDbName())
-	} else if !rootsEqual(o.target(o.bs.roots()), o.base) {
+	} else if !rootsEqual(o.target(o.bs.storedRoots()), o.base) {
 		err = fmt.Errorf("%w: %s", ErrBranchStateChanged, o.bs.RevisionDbName())
 	}
 	if err != nil {
@@ -234,14 +236,59 @@ func (bs *branchState) RevisionDbName() string {
 	return doltdb.RevisionDbName(bs.dbState.dbName, bs.head)
 }
 
-func (bs *branchState) WorkingRoot() doltdb.RootValue {
-	return bs.roots().Working
-}
-
 var _ SessionState = (*branchState)(nil)
 
-func (bs *branchState) WorkingSet() *doltdb.WorkingSet {
-	return bs.workingSet
+// WorkingSet returns this branch state's working set, or nil for a detached head. Everything that reads the working
+// set's roots, or derives a new working set from it, goes through WorkingSet, WorkingRoot or roots.
+func (bs *branchState) WorkingSet(ctx *sql.Context) (*doltdb.WorkingSet, error) {
+	return bs.workingSet, nil
+}
+
+func (bs *branchState) WorkingRoot(ctx *sql.Context) (doltdb.RootValue, error) {
+	roots, err := bs.roots(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return roots.Working, nil
+}
+
+// roots returns this branch state's roots. A detached head's working and staged roots are its head root.
+func (bs *branchState) roots(ctx *sql.Context) (doltdb.Roots, error) {
+	ws, err := bs.WorkingSet(ctx)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+	return bs.rootsOf(ws), nil
+}
+
+// storedRoots returns the roots of this branch state's working set as last set, without going through WorkingSet. Only
+// the code that sets the working set, and code that reports what's set (GC roots, session variables), uses it.
+func (bs *branchState) storedRoots() doltdb.Roots {
+	return bs.rootsOf(bs.workingSet)
+}
+
+func (bs *branchState) rootsOf(ws *doltdb.WorkingSet) doltdb.Roots {
+	if ws == nil {
+		return doltdb.Roots{
+			Head:    bs.headRoot,
+			Working: bs.headRoot,
+			Staged:  bs.headRoot,
+		}
+	}
+	return doltdb.Roots{
+		Head:    bs.headRoot,
+		Working: ws.WorkingRoot(),
+		Staged:  ws.StagedRoot(),
+	}
+}
+
+// workingSetRef returns the ref of this branch state's working set, and false for a detached head. Edits to tables don't
+// change it, so it doesn't go through WorkingSet.
+func (bs *branchState) workingSetRef() (ref.WorkingSetRef, bool) {
+	if bs.workingSet == nil {
+		return ref.WorkingSetRef{}, false
+	}
+	return bs.workingSet.Ref(), true
 }
 
 func (bs *branchState) WriteSession() WriteSession {
@@ -257,19 +304,4 @@ func (bs branchState) EditOpts() editor.Options {
 		return editor.Options{}
 	}
 	return bs.WriteSession().GetOptions()
-}
-
-func (bs *branchState) roots() doltdb.Roots {
-	if bs.WorkingSet() == nil {
-		return doltdb.Roots{
-			Head:    bs.headRoot,
-			Working: bs.headRoot,
-			Staged:  bs.headRoot,
-		}
-	}
-	return doltdb.Roots{
-		Head:    bs.headRoot,
-		Working: bs.WorkingSet().WorkingRoot(),
-		Staged:  bs.WorkingSet().StagedRoot(),
-	}
 }

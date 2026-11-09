@@ -44,7 +44,8 @@ func TestForkedWorkingSet(t *testing.T) {
 	state, ok, err := sess.LookupDbState(sqlCtx, "dolt")
 	require.NoError(t, err)
 	require.True(t, ok)
-	ws := state.WorkingSet()
+	ws, err := state.WorkingSet(sqlCtx)
+	require.NoError(t, err)
 
 	sch := schema.MustSchemaFromCols(schema.NewColCollection(schema.NewColumn("pk", 1, types.IntKind, true)))
 	withTable := func(root doltdb.RootValue, name string) doltdb.RootValue {
@@ -70,7 +71,8 @@ func TestForkedWorkingSet(t *testing.T) {
 	assert.True(t, hasTable("t2"), "the second flush didn't reach the branch state")
 
 	// A flush would revert a change made to the branch state since, so it's refused.
-	ws = state.WorkingSet()
+	ws, err = state.WorkingSet(sqlCtx)
+	require.NoError(t, err)
 	owner, err = sess.ForkWorkingSet(sqlCtx, "dolt", ws, false)
 	require.NoError(t, err)
 	require.NoError(t, sess.SetWorkingRoot(sqlCtx, "dolt", withTable(ws.WorkingRoot(), "v")))
@@ -81,7 +83,8 @@ func TestForkedWorkingSet(t *testing.T) {
 	assert.False(t, hasTable("u"), "the refused flush reached the branch state")
 
 	// Rolling back drops the branch state, so a flush through the fork would be lost.
-	ws = state.WorkingSet()
+	ws, err = state.WorkingSet(sqlCtx)
+	require.NoError(t, err)
 	owner, err = sess.ForkWorkingSet(sqlCtx, "dolt", ws, false)
 	require.NoError(t, err)
 	require.NoError(t, sess.Rollback(sqlCtx, sqlCtx.GetTransaction()))

@@ -765,7 +765,10 @@ func (d *DoltSession) commitBranchStates(
 
 	changes := make([]workingSetAndHead, len(states))
 	for i, state := range states {
-		ws := state.WorkingSet()
+		ws, err := state.WorkingSet(ctx)
+		if err != nil {
+			return nil, err
+		}
 		var commit *doltdb.PendingCommit
 		if pending != nil {
 			commit = pending[i]
@@ -985,9 +988,11 @@ func (d *DoltSession) DoltCommitMulti(
 
 // PendingCommitAllStaged returns a pending commit with all tables staged. Returns nil if there are no changes to stage.
 func (d *DoltSession) PendingCommitAllStaged(ctx *sql.Context, dbName string, branchState *branchState, props actions.CommitStagedProps) (*doltdb.PendingCommit, error) {
-	roots := branchState.roots()
+	roots, err := branchState.roots(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-	var err error
 	roots, err = actions.StageAllTables(ctx, roots, true)
 	if err != nil {
 		return nil, err
@@ -1021,13 +1026,17 @@ func (d *DoltSession) NewPendingCommit(
 func (d *DoltSession) newPendingCommit(ctx *sql.Context, dbName string, branchState *branchState, roots doltdb.Roots, props actions.CommitStagedProps) (*doltdb.PendingCommit, error) {
 	headCommit := branchState.headCommit
 
-	if branchState.WorkingSet() == nil {
+	ws, err := branchState.WorkingSet(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if ws == nil {
 		return nil, doltdb.ErrOperationNotSupportedInDetachedHead
 	}
 
 	var mergeParentCommits []*doltdb.Commit
-	if branchState.WorkingSet().MergeCommitParents() {
-		mergeParentCommits = []*doltdb.Commit{branchState.WorkingSet().MergeState().Commit()}
+	if ws.MergeCommitParents() {
+		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
 	} else if props.Amend {
 		numParentsHeadForAmend := headCommit.NumParents()
 
@@ -1068,7 +1077,7 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, dbName string, branchSt
 	if err != nil {
 		return nil, err
 	}
-	pendingCommit, err := actions.GetCommitStaged(ctx, tableResolver, roots, branchState.WorkingSet(), mergeParentCommits, amendedCommit, branchState.dbData.Ddb, props)
+	pendingCommit, err := actions.GetCommitStaged(ctx, tableResolver, roots, ws, mergeParentCommits, amendedCommit, branchState.dbData.Ddb, props)
 	if err != nil {
 		// Special case for nothing staged, which is not an error
 		if _, ok := err.(actions.NothingStaged); !ok {
@@ -1246,8 +1255,12 @@ func (d *DoltSession) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, save
 			if !ok {
 				return fmt.Errorf("session state for database %s not found", db.Name())
 			}
-			if branchState.WorkingSet() != nil {
-				roots[strings.ToLower(branchState.RevisionDbName())] = branchState.WorkingSet().WorkingRoot()
+			ws, err := branchState.WorkingSet(ctx)
+			if err != nil {
+				return err
+			}
+			if ws != nil {
+				roots[strings.ToLower(branchState.RevisionDbName())] = ws.WorkingRoot()
 			}
 		}
 	}
@@ -1255,13 +1268,18 @@ func (d *DoltSession) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, save
 	// A physical database can have several branch states in this session.
 	dirtyBranches := make(map[string]bool)
 	d.mu.Lock()
-	for _, branch := range d.currentBranches().all() {
-		if ws := branch.WorkingSet(); ws != nil {
+	branches := d.currentBranches().all()
+	d.mu.Unlock()
+	for _, branch := range branches {
+		ws, err := branch.WorkingSet(ctx)
+		if err != nil {
+			return err
+		}
+		if ws != nil {
 			roots[strings.ToLower(branch.RevisionDbName())] = ws.WorkingRoot()
 			dirtyBranches[strings.ToLower(branch.RevisionDbName())] = branch.dirty
 		}
 	}
-	d.mu.Unlock()
 
 	dtx.CreateSavepoint(savepointName, roots, dirtyBranches)
 	if lifecycle, ok := d.DoltgresSessObj.(DoltgresTransactionLifecycle); ok {
@@ -1303,7 +1321,8 @@ func (d *DoltSession) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, 
 		if !ok {
 			return fmt.Errorf("database %s unknown to transaction", baseName)
 		}
-		ws, err := start.db.ResolveWorkingSetAtRoot(ctx, branch.WorkingSet().Ref(), start.rootHash)
+		wsRef, _ := branch.workingSetRef()
+		ws, err := start.db.ResolveWorkingSetAtRoot(ctx, wsRef, start.rootHash)
 		if err != nil {
 			return err
 		}
@@ -1384,8 +1403,11 @@ func (d *DoltSession) GetRoots(ctx *sql.Context, dbName string) (doltdb.Roots, b
 	if !ok {
 		return doltdb.Roots{}, false
 	}
-
-	return branchState.roots(), true
+	roots, err := branchState.roots(ctx)
+	if err != nil {
+		return doltdb.Roots{}, false
+	}
+	return roots, true
 }
 
 // GetBranchActivityTracker returns the branch activity tracker for this session
@@ -1473,15 +1495,16 @@ func (d *DoltSession) SetWorkingRoot(ctx *sql.Context, dbName string, newRoot do
 }
 
 func (d *DoltSession) setWorkingRootOf(ctx *sql.Context, branchState *branchState, newRoot doltdb.RootValue) error {
-	if branchState.WorkingSet() == nil {
+	existingWorkingSet, err := branchState.WorkingSet(ctx)
+	if err != nil {
+		return err
+	}
+	if existingWorkingSet == nil {
 		return doltdb.ErrOperationNotSupportedInDetachedHead
 	}
-
-	if rootsEqual(branchState.roots().Working, newRoot) {
+	if rootsEqual(existingWorkingSet.WorkingRoot(), newRoot) {
 		return nil
 	}
-
-	existingWorkingSet := branchState.WorkingSet()
 
 	if branchState.readOnly {
 		return fmt.Errorf("cannot set root on read-only session")
@@ -1500,11 +1523,14 @@ func (d *DoltSession) SetStagingRoot(ctx *sql.Context, dbName string, newRoot do
 }
 
 func (d *DoltSession) setStagingRootOf(ctx *sql.Context, branchState *branchState, newRoot doltdb.RootValue) error {
-	existingWorkingSet := branchState.WorkingSet()
+	existingWorkingSet, err := branchState.WorkingSet(ctx)
+	if err != nil {
+		return err
+	}
 	if existingWorkingSet == nil {
 		return doltdb.ErrOperationNotSupportedInDetachedHead
 	}
-	if rootsEqual(branchState.roots().Staged, newRoot) {
+	if rootsEqual(existingWorkingSet.StagedRoot(), newRoot) {
 		return nil
 	}
 
@@ -1523,11 +1549,15 @@ func (d *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roo
 		return err
 	}
 
-	if sessionState.WorkingSet() == nil {
+	ws, err := sessionState.WorkingSet(ctx)
+	if err != nil {
+		return err
+	}
+	if ws == nil {
 		return doltdb.ErrOperationNotSupportedInDetachedHead
 	}
 
-	workingSet := sessionState.WorkingSet().WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged)
+	workingSet := ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged)
 	return d.SetWorkingSet(ctx, dbName, workingSet)
 }
 
@@ -1573,7 +1603,11 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 }
 
 func (d *DoltSession) setWorkingSetOf(ctx *sql.Context, branchState *branchState, ws *doltdb.WorkingSet) error {
-	if ws.Ref() != branchState.WorkingSet().Ref() {
+	cur, ok := branchState.workingSetRef()
+	if !ok {
+		return doltdb.ErrOperationNotSupportedInDetachedHead
+	}
+	if ws.Ref() != cur {
 		return fmt.Errorf("must switch working sets with SwitchWorkingSet")
 	}
 	if err := branchState.replaceWorkingSet(ctx, ws); err != nil {
@@ -1598,8 +1632,12 @@ func (d *DoltSession) ForkWorkingSet(ctx *sql.Context, dbName string, ws *doltdb
 	if err != nil {
 		return nil, err
 	}
+	roots, err := branchState.roots(ctx)
+	if err != nil {
+		return nil, err
+	}
 	o := &forkedWorkingSetOwner{sess: d, bs: branchState, ws: ws, targetStaging: targetStaging}
-	o.base = o.target(branchState.roots())
+	o.base = o.target(roots)
 	return o, nil
 }
 
@@ -1680,10 +1718,14 @@ func (d *DoltSession) WorkingSet(ctx *sql.Context, dbName string) (*doltdb.Worki
 	if err != nil {
 		return nil, err
 	}
-	if sessionState.WorkingSet() == nil {
+	ws, err := sessionState.WorkingSet(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if ws == nil {
 		return nil, doltdb.ErrOperationNotSupportedInDetachedHead
 	}
-	return sessionState.WorkingSet(), nil
+	return ws, nil
 }
 
 // GetHeadCommit returns the parent commit of the current session.
@@ -1980,8 +2022,8 @@ func (d *DoltSession) setDbSessionVars(ctx *sql.Context, state *branchState, for
 
 	// Different DBs have different requirements for what state is set, so we are maximally permissive on what's expected
 	// in the state object here
-	if state.WorkingSet() != nil {
-		headRef, err := state.WorkingSet().Ref().ToHeadRef()
+	if wsRef, ok := state.workingSetRef(); ok {
+		headRef, err := wsRef.ToHeadRef()
 		if err != nil {
 			return err
 		}
@@ -1992,7 +2034,8 @@ func (d *DoltSession) setDbSessionVars(ctx *sql.Context, state *branchState, for
 		}
 	}
 
-	roots := state.roots()
+	// Every caller has just loaded or set |state|'s working set, so what's stored is current.
+	roots := state.storedRoots()
 
 	if roots.Working != nil {
 		h, err := roots.Working.HashOf()
@@ -2144,17 +2187,19 @@ func (d *DoltSession) GetBranch(ctx *sql.Context) (string, error) {
 		return "", nil
 	}
 
-	bs, _, err := d.LookupDbState(ctx, currentDb)
+	bs, _, err := d.lookupDbState(ctx, currentDb)
 	if err != nil {
 		return "", err
 	}
 
-	if bs != nil && bs.WorkingSet() != nil {
-		branchRef, err := bs.WorkingSet().Ref().ToHeadRef()
-		if err != nil {
-			return "", err
+	if bs != nil {
+		if wsRef, ok := bs.workingSetRef(); ok {
+			branchRef, err := wsRef.ToHeadRef()
+			if err != nil {
+				return "", err
+			}
+			return branchRef.GetPath(), nil
 		}
-		return branchRef.GetPath(), nil
 	}
 	// A nil working set probably means that we're not on a branch (like we may be on a commit), so we return an empty string
 	return "", nil
@@ -2171,7 +2216,10 @@ func (d *DoltSession) GetRebasedBranch(ctx *sql.Context, database, branch string
 	if err != nil || !ok {
 		return "", err
 	}
-	ws := bs.WorkingSet()
+	ws, err := bs.WorkingSet(ctx)
+	if err != nil {
+		return "", err
+	}
 	if ws == nil || !ws.RebaseActive() {
 		return "", nil
 	}

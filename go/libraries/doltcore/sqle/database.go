@@ -1862,7 +1862,7 @@ func (db Database) GetRoot(ctx *sql.Context) (doltdb.RootValue, error) {
 		return nil, fmt.Errorf("no root value found in session")
 	}
 
-	return dbState.WorkingRoot(), nil
+	return dbState.WorkingRoot(ctx)
 }
 
 // GetWorkingSet gets the current working set for the database.
@@ -1880,10 +1880,14 @@ func (db Database) GetWorkingSet(ctx *sql.Context) (*doltdb.WorkingSet, error) {
 	if !ok {
 		return nil, fmt.Errorf("no root value found in session")
 	}
-	if dbState.WorkingSet() == nil {
+	ws, err := dbState.WorkingSet(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if ws == nil {
 		return nil, doltdb.ErrOperationNotSupportedInDetachedHead
 	}
-	return dbState.WorkingSet(), nil
+	return ws, nil
 }
 
 // SetRoot should typically be called on the Session, which is where this state lives. But it's available here as a

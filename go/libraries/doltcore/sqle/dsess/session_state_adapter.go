@@ -58,7 +58,7 @@ func (s SessionStateAdapter) GetRoots(ctx *sql.Context) (doltdb.Roots, error) {
 		return doltdb.Roots{}, err
 	}
 
-	return state.roots(), nil
+	return state.roots(ctx)
 }
 
 func (s SessionStateAdapter) CWBHeadRef(ctx *sql.Context) (ref.DoltRef, error) {
