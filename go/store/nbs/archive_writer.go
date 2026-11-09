@@ -429,6 +429,45 @@ func (aw *archiveWriter) writeFooter() error {
 	return nil
 }
 
+// writeSpan writes |b|, sealed if the archive is encrypted, as a span holding |ref|.
+func (aw *archiveWriter) writeSpan(ref spanRef, b []byte) (uint32, error) {
+	if aw.sealer != nil {
+		var err error
+		if b, err = aw.sealer.seal(uint32(len(aw.stagedBytes)), ref, b); err != nil {
+			return 0, err
+		}
+	}
+	return aw.writeByteSpan(b)
+}
+
+// writeKeyBlock writes an encrypted archive's key block before its footer.
+func (aw *archiveWriter) writeKeyBlock() error {
+	if aw.sealer == nil {
+		return nil
+	}
+	kb, err := aw.sealer.keyBlock()
+	if err != nil {
+		return err
+	}
+	if len(kb) > maxKeyBlockLen {
+		return fmt.Errorf("%w: key block of %d bytes", ErrCorruptArchiveIndex, len(kb))
+	}
+	written, err := aw.output.Write(kb)
+	if err != nil {
+		return err
+	}
+	aw.bytesWritten += uint64(written)
+	aw.keyBlockLen = uint32(written)
+	return nil
+}
+
+func (aw *archiveWriter) formatVersion() byte {
+	if aw.sealer != nil {
+		return archiveVersionEncrypted
+	}
+	return archiveFormatVersionMax
+}
+
 // writeEmptyCheckSums writes 3 empty sha512 checksum of all zeros to the archive output. This is a hold over from previous
 // versions of the archive format that had checksums for data, index, and metadata. It's easier to keep the data empty
 // data in the index than implement a new format version. We've never used these checksums for anything.
@@ -527,8 +566,6 @@ type ArchiveStreamWriter struct {
 	snappyQueue *[]CompressedChunk
 	snappyDict  *DecompBundle
 	chunkCount  int32
-	// sealedDicts maps the stored spans of copied sealed dictionaries, by hash, to their span ids.
-	sealedDicts map[hash.Hash]uint32
 }
 
 // NewArchiveStreamWriter returns a writer that builds an archive table file
@@ -616,7 +653,7 @@ func (asw *ArchiveStreamWriter) AddChunk(chunker ToChunker) (uint32, error) {
 		if asw.writer.sealer == nil {
 			return 0, fmt.Errorf("%w: encrypted chunk %s added to a plaintext archive", ErrEncryptionMismatch, chunker.Hash().String())
 		}
-		return asw.addSealed(sc)
+		return asw.writer.sealer.add(asw, sc)
 	}
 	return 0, fmt.Errorf("Unknown chunk type: %T", chunker)
 }
@@ -868,8 +905,10 @@ func planArchiveConjoin(ctx context.Context, sources []sourceWithSize, q MemoryQ
 	}
 	defer writer.Close()
 	aw := newArchiveWriterWithSink(writer)
-	if aw.sealer, err = conjoinSpanSealer(codec, orderedSrcs.sws); err != nil {
+	if kb, encrypted, err := conjoinedKeyBlock(codec, orderedSrcs.sws); err != nil {
 		return compactionPlan{}, err
+	} else if encrypted {
+		aw.sealer = conjoinedKeys(kb)
 	}
 
 	numByteSpans := 0
@@ -1064,4 +1103,19 @@ func planArchiveConjoin(ctx context.Context, sources []sourceWithSize, q MemoryQ
 			q.ReleaseQuotaBytes(idxSize)
 		},
 	}, nil
+}
+
+// conjoinedKeys is the sealer of a conjoined archive, whose sources' spans are copied as they are stored.
+type conjoinedKeys []byte
+
+func (k conjoinedKeys) seal(uint32, spanRef, []byte) ([]byte, error) {
+	return nil, errors.New("runtime error: conjoined archive spans are copied, not sealed")
+}
+
+func (k conjoinedKeys) add(*ArchiveStreamWriter, SealedChunk) (uint32, error) {
+	return 0, errors.New("runtime error: conjoined archive spans are copied, not added")
+}
+
+func (k conjoinedKeys) keyBlock() ([]byte, error) {
+	return k, nil
 }

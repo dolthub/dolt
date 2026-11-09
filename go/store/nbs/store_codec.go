@@ -58,56 +58,41 @@ type storeCodec interface {
 	checkAccess() error
 	// newTableSealer returns the sealer of a new table file, or nil to write it plain.
 	newTableSealer() (recordSealer, error)
-	// openTable returns the opener of an encrypted table file's records.
-	openTable(f fileKeys) (recordOpener, error)
+	// openTable returns the opener of encrypted table |ti|'s records. |adding| is set for a file being added to the
+	// store from elsewhere.
+	openTable(ti onHeapTableIndex, adding bool) (recordOpener, error)
 	// newSpanSealer returns the sealer of a new archive, or nil to write it plain. With |recompress|, it compresses
 	// sealed snappy chunks with dictionaries, as garbage collection does, rather than copying them.
 	newSpanSealer(recompress bool) (spanSealer, error)
-	// openArchive returns the opener of an encrypted archive's spans.
-	openArchive(f fileKeys) (archiveSpans, error)
+	// openArchive returns the opener of encrypted archive |ar|'s spans, once |ar| has read its key block.
+	openArchive(ar *archiveReader, adding bool) (archiveSpans, error)
+	// conjoinKeyBlock returns the key block of a file holding the records of encrypted |sources| in order.
+	conjoinKeyBlock(sources []sourceWithSize) ([]byte, error)
 	// newJournalCodec returns the codec of a chunk journal writer.
 	newJournalCodec() journalCodec
-	// mergeKeyBlocks returns the key block of a file holding the records of |parts| in order.
-	mergeKeyBlocks(parts []keyBlockPart) ([]byte, error)
 	// checkOpened vets files being added to the store, without its lock.
 	checkOpened(ctx context.Context, nbs *NomsBlockStore, added chunkSourceSet, root hash.Hash) error
 	// checkAdded vets files being added under the store's lock; |commit| runs once they are in its manifest.
 	checkAdded(nbs *NomsBlockStore, added chunkSourceSet) (commit func() error, err error)
 }
 
-// fileKeys are an encrypted file's key block and the positions of its records.
-type fileKeys struct {
-	keyBlock []byte
-	count    uint32
-	position func(ordinal uint32) uint64
-	// adding is set for a file being added to the store from elsewhere.
-	adding bool
-}
-
-// keyBlockPart is the key block of |count| records starting at |start| in a conjoined file.
-type keyBlockPart struct {
-	keyBlock []byte
-	start    uint32
-	count    uint32
-}
-
-// recordSealer seals the records of a new file.
+// recordSealer seals the records of a new table file.
 type recordSealer interface {
 	// seal appends to |dst| the record sealing |payload|, chunk |h|'s data as the file's |ordinal|th record.
 	seal(dst []byte, ordinal uint32, h hash.Hash, payload []byte) ([]byte, error)
-	// adopt takes the key of |sc|, the file's |ordinal|th record, if its record can be copied as it is.
-	adopt(ordinal uint32, sc SealedChunk) bool
+	// add writes |tc|, which may be a SealedChunk, as |tw|'s next record and returns the record's length.
+	add(tw *CmpChunkTableWriter, tc ToChunker) (uint32, error)
 	keyBlock() ([]byte, error)
 }
 
-// recordOpener opens the records of an encrypted file by position.
+// recordOpener opens the records of an encrypted table file by position.
 type recordOpener interface {
-	// open returns the payload of chunk |h|'s |sealed| record, in a buffer the caller owns.
-	open(ctx context.Context, pos uint64, h hash.Hash, sealed []byte) ([]byte, error)
-	// sealedChunk returns chunk |h| with its record still sealed, for writers that copy it.
-	sealedChunk(ctx context.Context, pos uint64, h hash.Hash, sealed []byte) (SealedChunk, error)
-	// storedKey returns the key that sealed the record at |pos| as stored, for remote clients.
-	storedKey(pos uint64) ([]byte, error)
+	// open returns chunk |h| from its |sealed| record at |pos|.
+	open(ctx context.Context, pos uint64, h hash.Hash, sealed []byte) (CompressedChunk, error)
+	// chunker returns chunk |h| from its |sealed| record at |pos|, for writers that may copy the record as it is.
+	chunker(ctx context.Context, pos uint64, h hash.Hash, sealed []byte) (ToChunker, error)
+	// locate notes the keys of the records at |ranges| for remote clients, if |ctx| collects them.
+	locate(ctx context.Context, ranges map[hash.Hash]Range) error
 }
 
 // spanRef is what an archive span holds: a dictionary, chunk |h|'s data compressed with dictionary span |dict|, or
@@ -122,9 +107,8 @@ type spanRef struct {
 type spanSealer interface {
 	// seal returns the bytes to store for span |ordinal|, which holds |ref|.
 	seal(ordinal uint32, ref spanRef, b []byte) ([]byte, error)
-	// adopt takes the keys of |sc|'s stored spans if they can be copied as they are: its data as span |ordinal|, and
-	// unless |dictCopied|, its dictionary as the span before.
-	adopt(ordinal uint32, sc SealedChunk, dictCopied bool) bool
+	// add writes |sc| to |asw|.
+	add(asw *ArchiveStreamWriter, sc SealedChunk) (uint32, error)
 	keyBlock() ([]byte, error)
 }
 
@@ -135,17 +119,15 @@ type archiveSpans interface {
 	// chunkData returns chunk |rc|'s data, checked against its address.
 	chunkData(ctx context.Context, rc resolvedChunk, dict *DecompBundle, stored []byte) ([]byte, error)
 	toChunker(ctx context.Context, rc resolvedChunk, dict *DecompBundle, stored []byte) (ToChunker, error)
-	// storedKey returns the key that sealed span |pos| + 1 as stored, for remote clients.
-	storedKey(pos uint64) ([]byte, error)
+	// locate notes the keys of |ar|'s |resolved| chunks for remote clients, if |ctx| collects them.
+	locate(ctx context.Context, ar *archiveReader, resolved []resolvedChunk) error
 }
 
-// SealedChunk is a chunk read from an encrypted file with its record still sealed. ToChunk opens it, without
-// modifying the sealed record.
+// SealedChunk is a chunk read from an encrypted file with its record still sealed. Writers of plaintext files refuse
+// it, and sealers of encrypted files may copy its record.
 type SealedChunk interface {
 	ToChunker
-	sealedRecord() []byte
-	// sealedDict returns the stored span of the dictionary a zstd chunk was compressed with, or nil.
-	sealedDict() []byte
+	sealed()
 }
 
 type plainCodec struct{}
@@ -162,7 +144,7 @@ func (plainCodec) newTableSealer() (recordSealer, error) {
 	return nil, nil
 }
 
-func (plainCodec) openTable(fileKeys) (recordOpener, error) {
+func (plainCodec) openTable(onHeapTableIndex, bool) (recordOpener, error) {
 	return nil, ErrEncryptionMismatch
 }
 
@@ -170,7 +152,7 @@ func (plainCodec) newSpanSealer(bool) (spanSealer, error) {
 	return nil, nil
 }
 
-func (plainCodec) openArchive(fileKeys) (archiveSpans, error) {
+func (plainCodec) openArchive(*archiveReader, bool) (archiveSpans, error) {
 	return nil, ErrEncryptionMismatch
 }
 
@@ -178,7 +160,7 @@ func (plainCodec) newJournalCodec() journalCodec {
 	return plainJournal{}
 }
 
-func (plainCodec) mergeKeyBlocks([]keyBlockPart) ([]byte, error) {
+func (plainCodec) conjoinKeyBlock([]sourceWithSize) ([]byte, error) {
 	return nil, ErrEncryptionMismatch
 }
 

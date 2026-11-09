@@ -32,13 +32,13 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-// An encrypted journal uses only these record kinds, and introduces each key before any record sealed with it:
+// An encrypted journal uses only these record kinds, whose payloads only its codec reads:
 //
 //	key record:        | kind | addr (zero) | payload: key |
 //	chunk record:      | kind | addr | payload: sealed chunk |
 //	root hash record:  | kind | timestamp | addr | payload: authentication |
 //
-// journal.idx mirrors the key records, and may end each batch with an authentication record.
+// journal.idx may hold key and authentication records in each batch.
 const (
 	keyJournalRecKind         journalRecKind = 0x80
 	encChunkJournalRecKind    journalRecKind = 0x81
@@ -47,8 +47,8 @@ const (
 	indexRecKey  byte = 0x80
 	indexRecAuth byte = 0x81
 
-	// encJournalRecOverhead is what sealing adds to a payload: a key id, a nonce and a tag.
-	encJournalRecOverhead = 16 + 12 + 16
+	// maxRootRecordPayload bounds the payload of a root hash record, which only an encrypted journal's have.
+	maxRootRecordPayload = 64
 )
 
 func isEncryptedRecKind(k journalRecKind) bool {
@@ -63,40 +63,39 @@ func isRootHashRecKind(k journalRecKind) bool {
 	return k == rootHashJournalRecKind || k == encRootHashJournalRecKind
 }
 
-// sealedRecord is a record as a journalCodec seals it, to be written after a record introducing |key| if it is set.
+// sealedRecord is a record as a journalCodec seals it.
 type sealedRecord struct {
 	kind    journalRecKind
 	payload []byte
-	key     []byte
 }
 
 // journalCodec seals what a chunk journal writes, and checks and opens what it reads. The journal writer holds its
 // lock for every call but chunker and locate, which may run concurrently under its read lock or without it. Slices
 // passed to the codec are valid only during the call.
 type journalCodec interface {
-	// replay checks a record read from the journal.
-	replay(ctx context.Context, off int64, r journalRec) error
+	// replay checks a record read from |wr|'s journal, which it may index when |canWrite|.
+	replay(ctx context.Context, wr *journalWriter, canWrite bool, off int64, r journalRec) error
 	// checkBatch checks an index batch whose checksum matched.
 	checkBatch(ctx context.Context, m lookupMeta, batch []lookup) error
-	sealChunk(ctx context.Context, cc CompressedChunk) (sealedRecord, error)
-	sealRoot(ctx context.Context, root hash.Hash, timestamp uint64) (sealedRecord, error)
-	// indexedLookup and indexedKey see each lookup and durable key added to the open index batch.
+	// sealChunk and sealRoot return the record to write to |wr|, after any record they write before it.
+	sealChunk(ctx context.Context, wr *journalWriter, behavior dherrors.FatalBehavior, cc CompressedChunk) (sealedRecord, error)
+	sealRoot(ctx context.Context, wr *journalWriter, behavior dherrors.FatalBehavior, root hash.Hash, timestamp uint64) (sealedRecord, error)
+	// indexedLookup sees each lookup added to the open index batch.
 	indexedLookup(l lookup)
-	indexedKey(key []byte)
-	// sealBatch returns the authentication record of index batch |m|, or false to extend the batch instead.
-	sealBatch(m lookupMeta) (auth []byte, ok bool, err error)
+	// sealBatch ends index batch |m| in |wr|'s index with any record it needs, or returns false to extend the batch.
+	sealBatch(wr *journalWriter, m lookupMeta) (bool, error)
 	// chunker returns chunk |h| from its record's payload.
 	chunker(h hash.Hash, payload []byte) (ToChunker, error)
-	// locate returns the range of chunk |h|'s record payload |r| that a remote client reads, and the stored key that
-	// sealed it.
-	locate(h hash.Hash, r Range, rd journalReaderAt) (Range, []byte, error)
+	// locate returns the range of chunk |h|'s record payload |r| that a remote client reads, and notes its key if
+	// |ctx| collects them.
+	locate(ctx context.Context, h hash.Hash, r Range, rd journalReaderAt) (Range, error)
 	// reset forgets what replay learned, before the journal is replayed from its start.
 	reset()
 }
 
 type plainJournal struct{}
 
-func (plainJournal) replay(_ context.Context, off int64, r journalRec) error {
+func (plainJournal) replay(_ context.Context, _ *journalWriter, _ bool, off int64, r journalRec) error {
 	if isEncryptedRecKind(r.kind) {
 		return fmt.Errorf("%w: encrypted journal record kind %d at offset %d", ErrEncryptionMismatch, r.kind, off)
 	}
@@ -110,20 +109,18 @@ func (plainJournal) checkBatch(_ context.Context, m lookupMeta, _ []lookup) erro
 	return nil
 }
 
-func (plainJournal) sealChunk(_ context.Context, cc CompressedChunk) (sealedRecord, error) {
+func (plainJournal) sealChunk(_ context.Context, _ *journalWriter, _ dherrors.FatalBehavior, cc CompressedChunk) (sealedRecord, error) {
 	return sealedRecord{kind: chunkJournalRecKind, payload: cc.FullCompressedChunk}, nil
 }
 
-func (plainJournal) sealRoot(context.Context, hash.Hash, uint64) (sealedRecord, error) {
+func (plainJournal) sealRoot(context.Context, *journalWriter, dherrors.FatalBehavior, hash.Hash, uint64) (sealedRecord, error) {
 	return sealedRecord{kind: rootHashJournalRecKind}, nil
 }
 
 func (plainJournal) indexedLookup(lookup) {}
 
-func (plainJournal) indexedKey([]byte) {}
-
-func (plainJournal) sealBatch(lookupMeta) ([]byte, bool, error) {
-	return nil, true, nil
+func (plainJournal) sealBatch(*journalWriter, lookupMeta) (bool, error) {
+	return true, nil
 }
 
 func (plainJournal) chunker(h hash.Hash, payload []byte) (ToChunker, error) {
@@ -135,34 +132,11 @@ type journalReaderAt interface {
 	readAt(p []byte, off int64) (int, error)
 }
 
-func (plainJournal) locate(_ hash.Hash, r Range, _ journalReaderAt) (Range, []byte, error) {
-	return r, nil, nil
+func (plainJournal) locate(_ context.Context, _ hash.Hash, r Range, _ journalReaderAt) (Range, error) {
+	return r, nil
 }
 
 func (plainJournal) reset() {}
-
-// writeKeyRecord introduces |key| to the journal and syncs it, so it is durable before any record sealed with it.
-func (wr *journalWriter) writeKeyRecord(ctx context.Context, behavior dherrors.FatalBehavior, key []byte) error {
-	if key == nil {
-		return nil
-	}
-	if len(key) > math.MaxUint16 {
-		return fmt.Errorf("journal key of %d bytes is too large", len(key))
-	}
-	recordLen, _ := journalRecordSize(len(key))
-	buf, err := wr.getBytes(ctx, behavior, int(recordLen))
-	if err != nil {
-		return err
-	}
-	_ = writeJournalRecord(buf, keyJournalRecKind, hash.Hash{}, key)
-	if err = wr.flush(ctx, behavior); err != nil {
-		return err
-	}
-	if err = wr.journal.syncData(); err != nil {
-		return dherrors.Fatalf(behavior, "%w: error syncing journal", err)
-	}
-	return wr.indexKey(key)
-}
 
 func (wr *journalWriter) indexLookup(l lookup) error {
 	if err := writeIndexLookup(wr.indexWriter, l); err != nil {
@@ -172,15 +146,6 @@ func (wr *journalWriter) indexLookup(l lookup) error {
 	a := l.a
 	wr.batchCrc = crc32.Update(wr.batchCrc, crcTable, a[:])
 	wr.codec.indexedLookup(l)
-	return nil
-}
-
-func (wr *journalWriter) indexKey(key []byte) error {
-	if err := writeIndexBytes(wr.indexWriter, indexRecKey, key); err != nil {
-		return err
-	}
-	wr.batchCrc = crc32.Update(wr.batchCrc, crcTable, key)
-	wr.codec.indexedKey(key)
 	return nil
 }
 
@@ -196,6 +161,7 @@ func readIndexBytes(r *bufio.Reader) ([]byte, error) {
 	return b, nil
 }
 
+// writeIndexBytes writes a journal index record of |tag| holding |b|, for codecs that add records to index batches.
 func writeIndexBytes(w *bufio.Writer, tag byte, b []byte) error {
 	if len(b) > math.MaxUint16 {
 		return fmt.Errorf("journal index record of %d bytes is too large", len(b))
@@ -246,7 +212,7 @@ func visitJournalRecords(ctx context.Context, r io.Reader, off int64, codec jour
 		if warningErr != nil {
 			return warningErr
 		}
-		if err := codec.replay(ctx, off, rec); err != nil {
+		if err := codec.replay(ctx, nil, false, off, rec); err != nil {
 			return err
 		}
 		if !isChunkRecKind(rec.kind) {

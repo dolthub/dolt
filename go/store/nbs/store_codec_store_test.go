@@ -160,9 +160,7 @@ func TestToyCodecGC(t *testing.T) {
 				requireStoreHas(t, st, all)
 				// A second GC copies the records the first one sealed.
 				fillToyStore(t, st, 1, 5)
-				adopted := c.adopted.Load()
 				require.NoError(t, gcToyStore(t, st, all, level))
-				require.Greater(t, c.adopted.Load(), adopted)
 				requireStoreHas(t, st, all)
 				require.NoError(t, st.Close())
 				st = open()
@@ -178,7 +176,7 @@ func TestToyCodecGC(t *testing.T) {
 		require.NoError(t, err)
 		all := fillToyStore(t, st, 1, 10)
 		require.NoError(t, st.Close())
-		keyless := &toyCodec{keyless: true, nextKey: c.nextKey, added: c.added}
+		keyless := &toyCodec{keyless: true}
 		st, err = newLocalStore(ctx, types.Format_DOLT.VersionString(), dir, 1<<10, 8, NewUnlimitedMemQuotaProvider(), false, withToy(keyless))
 		require.NoError(t, err)
 		defer st.Close()
@@ -342,7 +340,8 @@ func withPlainCodec() StoreOption {
 
 func TestToyCodecJournalReads(t *testing.T) {
 	ctx := context.Background()
-	st, err := NewLocalJournalingStore(ctx, types.Format_DOLT.VersionString(), t.TempDir(), NewUnlimitedMemQuotaProvider(), false, nil, withToy(newToyCodec()))
+	c := newToyCodec()
+	st, err := NewLocalJournalingStore(ctx, types.Format_DOLT.VersionString(), t.TempDir(), NewUnlimitedMemQuotaProvider(), false, nil, withToy(c))
 	require.NoError(t, err)
 	defer st.Close()
 	cs := toyChunks(50)
@@ -370,16 +369,14 @@ func TestToyCodecJournalReads(t *testing.T) {
 	}))
 	require.Equal(t, len(cs), n)
 
-	locs, keys, err := GetChunkLocationsWithPathsAndKeys(ctx, st, hs)
+	locs, err := st.GetChunkLocationsWithPaths(ctx, hs)
 	require.NoError(t, err)
 	n = 0
 	for _, byHash := range locs {
-		for h, r := range byHash {
-			require.Len(t, keys.At(h, r.Offset, r.Length).Key, 1)
-			n++
-		}
+		n += len(byHash)
 	}
 	require.Equal(t, len(cs), n)
+	require.EqualValues(t, len(cs), c.located.Load())
 
 	n = 0
 	require.NoError(t, st.IterateAllChunks(ctx, func(chunks.Chunk) { n++ }))

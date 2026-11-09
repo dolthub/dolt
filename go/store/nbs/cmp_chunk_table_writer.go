@@ -134,7 +134,7 @@ func (tw *CmpChunkTableWriter) AddChunk(tc ToChunker) (uint32, error) {
 		panic("NBS blocks cannot be zero length")
 	}
 	if tw.sealer != nil {
-		return tw.addSealed(tc)
+		return tw.sealer.add(tw, tc)
 	}
 
 	c, ok := tc.(CompressedChunk)
@@ -160,8 +160,13 @@ func (tw *CmpChunkTableWriter) AddChunk(tc ToChunker) (uint32, error) {
 		return 0, err
 	}
 
-	fullLen := uint32(len(c.FullCompressedChunk))
-	_, err = tw.sink.Write(c.FullCompressedChunk)
+	return tw.writeRecord(c.H, c.FullCompressedChunk, uncmpLen)
+}
+
+// writeRecord writes |record|, which holds chunk |h| of |uncmpLen| bytes, and returns its length.
+func (tw *CmpChunkTableWriter) writeRecord(h hash.Hash, record []byte, uncmpLen int) (uint32, error) {
+	fullLen := uint32(len(record))
+	_, err := tw.sink.Write(record)
 
 	if err != nil {
 		return 0, err
@@ -171,7 +176,7 @@ func (tw *CmpChunkTableWriter) AddChunk(tc ToChunker) (uint32, error) {
 
 	// Stored in insertion order
 	tw.prefixes = append(tw.prefixes, prefixIndexRec{
-		c.H,
+		h,
 		uint32(len(tw.prefixes)),
 		fullLen,
 	})
@@ -380,4 +385,20 @@ func (tw *CmpChunkTableWriter) writeFooter() error {
 	}
 
 	return nil
+}
+
+// writeEncryptedTail writes the key block and footer of an encrypted table.
+func (tw *CmpChunkTableWriter) writeEncryptedTail() error {
+	kb, err := tw.sealer.keyBlock()
+	if err != nil {
+		return err
+	}
+	tail, err := encryptedTail(kb)
+	if err != nil {
+		return err
+	}
+	footer := make([]byte, footerSize)
+	writeEncryptedFooter(footer, uint32(len(tw.prefixes)), tw.totalUncompressedData)
+	_, err = tw.sink.Write(append(tail, footer...))
+	return err
 }
