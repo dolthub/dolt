@@ -148,8 +148,9 @@ func TestDoltgresSemanticTransactionLifecycle(t *testing.T) {
 	}
 	for _, name := range []string{"one", "two"} {
 		state := newEmptyDatabaseSessionState()
-		state.NewEmptyBranchState("main", RevisionTypeBranch).dirty = true
+		state.dbName = name
 		sess.dbStates[name] = state
+		sess.branches.add(state, "main", RevisionTypeBranch).dirty = true
 	}
 	// An invalid transaction must not emit a successful commit notification.
 	assert.EqualError(t, sess.CommitTransaction(ctx, nil), "expected a DoltTransaction")
@@ -218,8 +219,9 @@ func TestCommitTransactionWithoutBatchNotifiesDoltgres(t *testing.T) {
 			assert.NoError(t, sess.SetSessionVariable(ctx, TransactionsDisabledSysVar, disabled))
 			if disabled {
 				state := newEmptyDatabaseSessionState()
-				state.NewEmptyBranchState("main", RevisionTypeBranch).dirty = true
+				state.dbName = "mydb"
 				sess.dbStates["mydb"] = state
+				sess.branches.add(state, "main", RevisionTypeBranch).dirty = true
 			}
 
 			tx := DisabledTransaction{}
@@ -291,7 +293,7 @@ func TestDirtyBranches(t *testing.T) {
 			dbState.dbName = dbName
 			sess.dbStates[strings.ToLower(dbName)] = dbState
 		}
-		dbState.NewEmptyBranchState(head, RevisionTypeBranch).dirty = dirty
+		sess.branches.add(dbState, head, RevisionTypeBranch).dirty = dirty
 	}
 
 	t.Run("no branch states", func(t *testing.T) {

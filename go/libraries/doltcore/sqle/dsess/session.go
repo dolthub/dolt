@@ -68,6 +68,7 @@ type DoltSession struct {
 	branchController      *branch_control.Controller
 	dbCache               *DatabaseCache
 	dbStates              map[string]*DatabaseSessionState
+	branches              *branchStates
 	tempTables            map[string]map[string]sql.Table
 	gcSafepointController *gcctx.GCSafepointController
 
@@ -178,6 +179,7 @@ func DefaultSessionWithVariables(pro DoltDatabaseProvider, sessFunc WriteSessFun
 		username:         "",
 		email:            "",
 		dbStates:         make(map[string]*DatabaseSessionState),
+		branches:         newBranchStates(),
 		dbCache:          newDatabaseCache(),
 		provider:         pro,
 		tempTables:       make(map[string]map[string]sql.Table),
@@ -254,6 +256,7 @@ func NewDoltSession(
 		username:              username,
 		email:                 email,
 		dbStates:              make(map[string]*DatabaseSessionState),
+		branches:              newBranchStates(),
 		dbCache:               newDatabaseCache(),
 		provider:              pro,
 		tempTables:            make(map[string]map[string]sql.Table),
@@ -313,21 +316,22 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 	baseName, rev := doltdb.SplitRevisionDbName(strings.ToLower(dbName))
 	d.mu.Lock()
 	dbState, dbStateFound := d.dbStates[baseName]
-	d.mu.Unlock()
-
+	var branchState *branchState
+	var ok bool
 	if dbStateFound {
 		// If we got an unqualified name, use the current working set head
 		if rev == "" {
 			rev = dbState.checkedOutRevSpec
 		}
+		branchState, ok = d.branches.get(baseName, rev)
+	}
+	d.mu.Unlock()
 
-		branchState, ok := dbState.heads[strings.ToLower(rev)]
-		if ok {
-			if dbState.Err != nil {
-				return nil, false, dbState.Err
-			}
-			return branchState, ok, nil
+	if ok {
+		if dbState.Err != nil {
+			return nil, false, dbState.Err
 		}
+		return branchState, true, nil
 	}
 
 	database, ok, err := d.provider.SessionDatabase(ctx, doltdb.RevisionDbName(baseName, rev))
@@ -344,14 +348,15 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 	}
 
 	d.mu.Lock()
-	dbState, dbStateFound = d.dbStates[baseName]
+	_, dbStateFound = d.dbStates[baseName]
+	branchState, _ = d.branches.get(baseName, database.Revision())
 	d.mu.Unlock()
 	if !dbStateFound {
 		// should be impossible
 		return nil, false, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	return dbState.heads[strings.ToLower(database.Revision())], true, nil
+	return branchState, true, nil
 }
 
 // LookupDbState returns the session state for the database named. Unqualified database names, e.g. `mydb` get resolved
@@ -376,15 +381,15 @@ func (d *DoltSession) RemoveDbState(ctx *sql.Context, dbName string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	key := strings.ToLower(dbName)
-	dbState, ok := d.dbStates[key]
 	delete(d.dbStates, key)
+	heads := d.branches.removeDb(key)
 	// also clear out any db-level caches for this db
 	d.dbCache.Clear()
 
 	// The database is gone either way, so its state is dropped even if this fails. Another session's writers belong
 	// to its own goroutine and can't be inspected from here.
-	if ok && ctx != nil && ctx.Session == d {
-		for _, bs := range dbState.heads {
+	if ctx != nil && ctx.Session == d {
+		for _, bs := range heads {
 			if err := bs.checkNoOpenWriters(); err != nil {
 				return err
 			}
@@ -406,8 +411,7 @@ func (d *DoltSession) RemoveBranchState(ctx *sql.Context, dbName string, branchN
 	}
 
 	d.mu.Lock()
-	bs, hadState := checkedOutState.dbState.heads[strings.ToLower(branchName)]
-	delete(checkedOutState.dbState.heads, strings.ToLower(branchName))
+	bs, hadState := d.branches.remove(baseName, branchName)
 	d.mu.Unlock()
 	// The branch is gone either way, so its state is dropped even if this fails.
 	var writersErr error
@@ -436,7 +440,7 @@ func (d *DoltSession) RemoveBranchState(ctx *sql.Context, dbName string, branchN
 func (d *DoltSession) RenameBranchState(ctx *sql.Context, dbName string, oldBranchName, newBranchName string) error {
 	baseName, _ := doltdb.SplitRevisionDbName(dbName)
 
-	checkedOutState, ok, err := d.lookupDbState(ctx, baseName)
+	_, ok, err := d.lookupDbState(ctx, baseName)
 	if err != nil {
 		return err
 	}
@@ -446,16 +450,13 @@ func (d *DoltSession) RenameBranchState(ctx *sql.Context, dbName string, oldBran
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	branch, ok := checkedOutState.dbState.heads[strings.ToLower(oldBranchName)]
-
+	branch, ok := d.branches.remove(baseName, oldBranchName)
 	if !ok {
 		// nothing to rename
 		return nil
 	}
-
-	delete(checkedOutState.dbState.heads, strings.ToLower(oldBranchName))
 	branch.head = strings.ToLower(newBranchName)
-	checkedOutState.dbState.heads[strings.ToLower(newBranchName)] = branch
+	d.branches.put(branch)
 
 	// also clear out any db-level caches for this db
 	d.dbCache.Clear()
@@ -588,23 +589,16 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 	return tx, nil
 }
 
-// clear clears all DB state for this session. It drops nothing if any branch state has open table writers.
+// clear drops this session's branch states by replacing its branchStates. It drops nothing if any branch state has
+// open table writers.
 func (d *DoltSession) clear() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	for _, dbState := range d.dbStates {
-		for _, bs := range dbState.heads {
-			if err := bs.checkNoOpenWriters(); err != nil {
-				return err
-			}
-		}
+	if err := d.branches.checkNoOpenWriters(); err != nil {
+		return err
 	}
-	for _, dbState := range d.dbStates {
-		for head := range dbState.heads {
-			delete(dbState.heads, head)
-		}
-	}
+	d.branches = newBranchStates()
 	return nil
 }
 
@@ -835,11 +829,9 @@ func (d *DoltSession) dirtyWorkingSets() []*branchState {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	var dirtyStates []*branchState
-	for _, state := range d.dbStates {
-		for _, branchState := range state.heads {
-			if branchState.dirty {
-				dirtyStates = append(dirtyStates, branchState)
-			}
+	for _, branchState := range d.branches.all() {
+		if branchState.dirty {
+			dirtyStates = append(dirtyStates, branchState)
 		}
 	}
 
@@ -856,7 +848,7 @@ func (d *DoltSession) DirtyDatabases() []string {
 	defer d.mu.Unlock()
 	var dbNames []string
 	for _, dbState := range d.dbStates {
-		for _, branchState := range dbState.heads {
+		for _, branchState := range d.branches.forDb(dbState.dbName) {
 			if branchState.dirty {
 				dbNames = append(dbNames, dbState.dbName)
 				break
@@ -878,11 +870,9 @@ func (d *DoltSession) DirtyBranches() []DirtyBranch {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	var dirty []DirtyBranch
-	for _, dbState := range d.dbStates {
-		for _, branchState := range dbState.heads {
-			if branchState.dirty {
-				dirty = append(dirty, DirtyBranch{DbName: dbState.dbName, Branch: branchState.head})
-			}
+	for _, branchState := range d.branches.all() {
+		if branchState.dirty {
+			dirty = append(dirty, DirtyBranch{DbName: branchState.dbState.dbName, Branch: branchState.head})
 		}
 	}
 	return dirty
@@ -893,11 +883,7 @@ func (d *DoltSession) DirtyBranches() []DirtyBranch {
 func (d *DoltSession) IsBranchDirty(dbName, branch string) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	dbState, ok := d.dbStates[strings.ToLower(dbName)]
-	if !ok {
-		return false
-	}
-	branchState, ok := dbState.heads[strings.ToLower(branch)]
+	branchState, ok := d.branches.get(dbName, branch)
 	return ok && branchState.dirty
 }
 
@@ -907,11 +893,7 @@ func (d *DoltSession) IsBranchDirty(dbName, branch string) bool {
 func (d *DoltSession) IsWritingDatabase(dbName string) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	dbState, ok := d.dbStates[strings.ToLower(dbName)]
-	if !ok {
-		return false
-	}
-	for _, branchState := range dbState.heads {
+	for _, branchState := range d.branches.forDb(dbName) {
 		if branchState.dirty || (branchState.writeSession != nil && branchState.writeSession.HasOpenTableWriters()) {
 			return true
 		}
@@ -1114,10 +1096,11 @@ func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func
 
 	d.mu.Lock()
 	dbState, dbStateFound := d.dbStates[dbName]
+	heads := d.branches.forDb(dbName)
 	d.mu.Unlock()
 
 	if dbStateFound {
-		for _, head := range dbState.heads {
+		for _, head := range heads {
 			if head.headRoot != nil {
 				h, err := head.headRoot.HashOf()
 				if err != nil {
@@ -1259,12 +1242,10 @@ func (d *DoltSession) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, save
 	// A physical database can have several branch states in this session.
 	dirtyBranches := make(map[string]bool)
 	d.mu.Lock()
-	for _, dbState := range d.dbStates {
-		for _, branch := range dbState.heads {
-			if ws := branch.WorkingSet(); ws != nil {
-				roots[strings.ToLower(branch.RevisionDbName())] = ws.WorkingRoot()
-				dirtyBranches[strings.ToLower(branch.RevisionDbName())] = branch.dirty
-			}
+	for _, branch := range d.branches.all() {
+		if ws := branch.WorkingSet(); ws != nil {
+			roots[strings.ToLower(branch.RevisionDbName())] = ws.WorkingRoot()
+			dirtyBranches[strings.ToLower(branch.RevisionDbName())] = branch.dirty
 		}
 	}
 	d.mu.Unlock()
@@ -1614,8 +1595,7 @@ func (d *DoltSession) ForkWorkingSet(ctx *sql.Context, dbName string, ws *doltdb
 func (d *DoltSession) isCurrentBranchState(bs *branchState) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	dbState, ok := d.dbStates[strings.ToLower(bs.dbState.dbName)]
-	return ok && dbState == bs.dbState && dbState.heads[strings.ToLower(bs.head)] == bs
+	return d.branches.contains(bs)
 }
 
 // setFlushedWorkingSet sets |bs|'s working set to |ws|, which its own write session flushed table writers into, so
@@ -1836,12 +1816,12 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	// TODO: this no longer gets called at session creation time, so the error handling below never occurs when a
 	//  database is deleted out from under a running server
 	adapter := NewSessionStateAdapter(d, db.Name(), dbState.Remotes, dbState.Branches, dbState.Backups)
-	if existing, ok := sessionState.heads[strings.ToLower(db.Revision())]; ok {
+	if existing, ok := d.branches.get(baseName, db.Revision()); ok {
 		if err := existing.checkNoOpenWriters(); err != nil {
 			return err
 		}
 	}
-	branchState := sessionState.NewEmptyBranchState(db.Revision(), db.RevisionType())
+	branchState := d.branches.add(sessionState, db.Revision(), db.RevisionType())
 	branchState.readOnly = dbState.ReadOnly
 	branchState.dbData = dbState.DbData
 	branchState.dbData.Rsr = adapter

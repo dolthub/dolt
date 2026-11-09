@@ -60,7 +60,8 @@ type SessionDatabase interface {
 	InitialDBState(ctx *sql.Context) (InitialDbState, error)
 }
 
-// DatabaseSessionState is the set of all information for a given database in this session.
+// DatabaseSessionState is the state of a database that lasts for the whole session. The branch states loaded in the
+// current transaction are in the session's branchStates.
 type DatabaseSessionState struct {
 	// globalState is the global state of this session (shared by all sessions for a particular db)
 	globalState globalstate.GlobalState
@@ -68,8 +69,6 @@ type DatabaseSessionState struct {
 	// DatabaseSessionState is invalid. LookupDbState returning a
 	// DatabaseSessionState with Err != nil will return that err.
 	Err error
-	// heads records the in-memory DB state for every branch head accessed by the session
-	heads map[string]*branchState
 	// headCache records the session-caches for every branch head accessed by the session
 	// This is managed separately from the branch states themselves because it persists across transactions (which is
 	// safe because it's keyed by immutable hashes)
@@ -89,7 +88,6 @@ type DatabaseSessionState struct {
 
 func newEmptyDatabaseSessionState() *DatabaseSessionState {
 	return &DatabaseSessionState{
-		heads:     make(map[string]*branchState),
 		headCache: make(map[string]*SessionCache),
 	}
 }
@@ -111,7 +109,7 @@ type branchState struct {
 	// HeadRoot is the root value for databases without a headCommit. Nil for databases with a headCommit.
 	headRoot     doltdb.RootValue
 	writeSession WriteSession
-	// dbState is the parent database state for this branch head state
+	// dbState is the session-wide state of this branch state's database
 	dbState *DatabaseSessionState
 	// headCommit is the head commit for this database. May be nil for databases tied to a detached root value, in which
 	// case headRoot must be set.
@@ -127,25 +125,6 @@ type branchState struct {
 	readOnly bool
 	// dirty is true if this branch state has uncommitted changes
 	dirty bool
-}
-
-// NewEmptyBranchState creates a new branch state for the given head name with the head provided, adds it to the db
-// state, and returns it. The state returned is empty except for its identifiers and must be filled in by the caller.
-func (dbState *DatabaseSessionState) NewEmptyBranchState(head string, revisionType RevisionType) *branchState {
-	b := &branchState{
-		dbState:      dbState,
-		head:         head,
-		revisionType: revisionType,
-	}
-
-	lowerHead := strings.ToLower(head)
-	dbState.heads[lowerHead] = b
-	_, ok := dbState.headCache[lowerHead]
-	if !ok {
-		dbState.headCache[lowerHead] = newSessionCache()
-	}
-
-	return b
 }
 
 // ErrOpenTableWriters is returned when a branch state would be dropped while its write session has open table writers.

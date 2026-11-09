@@ -42,7 +42,7 @@ func TestDropBranchStateWithOpenWriters(t *testing.T) {
 		dbState.dbName = "db"
 		dbState.checkedOutRevSpec = "main"
 		sess.dbStates["db"] = dbState
-		bs := dbState.NewEmptyBranchState("main", RevisionTypeBranch)
+		bs := sess.branches.add(dbState, "main", RevisionTypeBranch)
 		bs.writeSession = &openWritersWriteSession{open: open}
 		return sess, sql.NewContext(context.Background(), sql.WithSession(sess)), bs
 	}
@@ -65,7 +65,7 @@ func TestDropBranchStateWithOpenWriters(t *testing.T) {
 			require.PanicsWithValue(t, "cannot drop session state with open table writers: db/main", func() {
 				_ = d.drop(sess, ctx)
 			})
-			assert.Same(t, bs, sess.dbStates["db"].heads["main"], "branch state was dropped")
+			assert.True(t, sess.isCurrentBranchState(bs), "branch state was dropped")
 		})
 	}
 
@@ -76,26 +76,31 @@ func TestDropBranchStateWithOpenWriters(t *testing.T) {
 			_ = sess.RemoveDbState(ctx, "db")
 		})
 		assert.NotContains(t, sess.dbStates, "db")
+		assert.Empty(t, sess.branches.all())
 	})
 	t.Run("RemoveBranchState", func(t *testing.T) {
-		sess, ctx, _ := newSession(true)
+		sess, ctx, bs := newSession(true)
 		require.PanicsWithValue(t, "cannot drop session state with open table writers: db/main", func() {
 			_ = sess.RemoveBranchState(ctx, "db", "main")
 		})
-		assert.NotContains(t, sess.dbStates["db"].heads, "main")
+		assert.False(t, sess.isCurrentBranchState(bs))
 	})
 	t.Run("RenameBranchState", func(t *testing.T) {
 		sess, ctx, bs := newSession(true)
 		require.PanicsWithValue(t, "cannot drop session state with open table writers: db/renamed", func() {
 			_ = sess.RenameBranchState(ctx, "db", "main", "renamed")
 		})
-		assert.Same(t, bs, sess.dbStates["db"].heads["renamed"])
+		renamed, ok := sess.branches.get("db", "renamed")
+		require.True(t, ok)
+		assert.Same(t, bs, renamed)
+		assert.True(t, sess.isCurrentBranchState(bs))
 	})
 
 	t.Run("no open writers", func(t *testing.T) {
-		sess, ctx, _ := newSession(false)
+		sess, ctx, bs := newSession(false)
 		require.NoError(t, sess.Rollback(ctx, DisabledTransaction{}))
-		assert.Empty(t, sess.dbStates["db"].heads)
+		assert.Empty(t, sess.branches.all())
+		assert.False(t, sess.isCurrentBranchState(bs))
 	})
 
 	// Another session's writers can't be inspected safely, so dropping a database's state from another session
@@ -106,5 +111,6 @@ func TestDropBranchStateWithOpenWriters(t *testing.T) {
 		otherCtx := sql.NewContext(context.Background(), sql.WithSession(other))
 		require.NoError(t, sess.RemoveDbState(otherCtx, "db"))
 		assert.NotContains(t, sess.dbStates, "db")
+		assert.Empty(t, sess.branches.all())
 	})
 }
