@@ -16,7 +16,6 @@ package merge
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -31,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 var ErrRekeyedAncestorCollision = errorkinds.NewKind("error: cannot merge table %s: both sides changed its primary key, and two rows of the common ancestor have the same new primary key")
@@ -241,18 +241,11 @@ func RekeyTable(ctx *sql.Context, name doltdb.TableName, tbl *doltdb.Table, sch,
 		return nil, false, nil
 	}
 	newRows, unpaired, err := rk.RekeyMap(ctx, oldRows)
-	switch {
-	case errors.Is(err, durable.ErrRekeyNullKey):
-		return nil, false, ErrRekeyedAncestorNullKey.New(name)
-	case err != nil:
+	if err != nil {
 		return nil, false, err
 	}
-	// A merge needs one ancestor row for each key, so rows that share a key
-	// cannot be left unpaired as a diff leaves them.
-	if n, err := unpaired.Count(); err != nil {
+	if err = unpairedRowsError(ctx, name, rk, unpaired); err != nil {
 		return nil, false, err
-	} else if n > 0 {
-		return nil, false, ErrRekeyedAncestorCollision.New(name)
 	}
 
 	indexes, err := durable.NewIndexSet(ctx, vrw, ns)
@@ -282,6 +275,31 @@ func RekeyTable(ctx *sql.Context, name doltdb.TableName, tbl *doltdb.Table, sch,
 		return nil, false, err
 	}
 	return rekeyed, true, nil
+}
+
+// unpairedRowsError returns the error for the rows of table |name| that |rk|
+// kept apart in |unpaired|, or nil when there are none. It reports a NULL in
+// the new primary key before a shared key.
+//
+// A merge needs one ancestor row for each key, so it refuses the rows that a
+// diff shows as removed or added.
+func unpairedRowsError(ctx context.Context, name doltdb.TableName, rk *durable.RowRekeyer, unpaired prolly.Map) error {
+	n, err := unpaired.Count()
+	if err != nil || n == 0 {
+		return err
+	}
+	hasNullKey := false
+	err = durable.IterRows(ctx, unpaired, func(k, v val.Tuple) error {
+		hasNullKey = hasNullKey || rk.HasNullKey(k, v)
+		return nil
+	})
+	switch {
+	case err != nil:
+		return err
+	case hasNullKey:
+		return ErrRekeyedAncestorNullKey.New(name)
+	}
+	return ErrRekeyedAncestorCollision.New(name)
 }
 
 func tableHasArtifacts(ctx context.Context, tbl *doltdb.Table) (bool, error) {

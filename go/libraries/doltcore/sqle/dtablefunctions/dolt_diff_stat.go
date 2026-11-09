@@ -461,24 +461,25 @@ func getDiffStat(ctx *sql.Context, td diff.TableDelta) (diff.DiffStatProgress, b
 		return diff.DiffStatProgress{}, false, false, err
 	}
 
-	isAddedAndDeletedOnly, err := hasOnlyAddedAndDeletedRows(ctx, td)
+	keyless, err := isKeylessStat(ctx, td)
 	if err != nil {
-		return diff.DiffStatProgress{}, false, false, err
+		return diff.DiffStatProgress{}, false, keyless, err
 	}
 
 	if (acc.Adds+acc.Removes+acc.Changes) == 0 && (acc.OldCellSize-acc.NewCellSize) == 0 {
-		return diff.DiffStatProgress{}, false, isAddedAndDeletedOnly, nil
+		return diff.DiffStatProgress{}, false, keyless, nil
 	}
 
-	return acc, true, isAddedAndDeletedOnly, nil
+	return acc, true, keyless, nil
 }
 
-// hasOnlyAddedAndDeletedRows reports whether the stat of |td| counts only
-// added and deleted rows.
+// isKeylessStat reports whether the stat of |td| takes the keyless form, which
+// getRowFromDiffStat reports as rows added and deleted alone.
 //
-// Keyless rows pair only by content hash, so a changed row is a deleted row
-// and an added one. No rows pair across a gain or loss of the primary key.
-func hasOnlyAddedAndDeletedRows(ctx *sql.Context, td diff.TableDelta) (bool, error) {
+// Keyless tables take it, and so do tables that gained or lost their primary
+// key, whose rows StatForTableDelta counts as deleted and added like keyless
+// rows.
+func isKeylessStat(ctx *sql.Context, td diff.TableDelta) (bool, error) {
 	if td.HasGainedOrLostPrimaryKey() {
 		return true, nil
 	}

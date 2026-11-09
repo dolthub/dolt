@@ -16,7 +16,6 @@ package diff
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 
@@ -625,17 +624,15 @@ func (td TableDelta) HasDataChanged(ctx context.Context) (bool, error) {
 //
 // HasDataChanged uses it when the hashes differ only because the key changed.
 //
-// A row with a NULL in the new primary key cannot exist unchanged on the side
-// keyed by it, so it is a data change.
+// An unpaired row cannot exist unchanged on the other side, so it is a data
+// change.
 func (td TableDelta) hasAlignedDataChanged(ctx context.Context) (bool, error) {
 	fromRows, toRows, err := td.GetRowData(ctx)
 	if err != nil {
 		return false, err
 	}
 	from, to, err := alignIndexes(ctx, fromRows, toRows, td.FromSch, td.ToSch)
-	if errors.Is(err, durable.ErrRekeyNullKey) {
-		return true, nil
-	} else if err != nil {
+	if err != nil {
 		return false, err
 	}
 	fromN, toN, err := CountUnpaired(from, to)

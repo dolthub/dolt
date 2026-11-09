@@ -26,10 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// ErrRekeyNullKey reports a row whose new primary key would hold a NULL,
-// which a primary key cannot.
-var ErrRekeyNullKey = errors.New("a row has a NULL in the new primary key")
-
 // RowRekeyer rebuilds tuples stored with one schema under the primary key of
 // another, by copying their fields. It is not safe for concurrent use.
 //
@@ -84,20 +80,18 @@ func NewRowRekeyer(ns tree.NodeStore, sch, newSch schema.Schema) (*RowRekeyer, b
 	}, true
 }
 
-// Rekey returns the tuple pair |k|, |v| rebuilt under the new primary key. It
-// returns ErrRekeyNullKey when the new key would hold a NULL.
+// Rekey returns the tuple pair |k|, |v| rebuilt under the new primary key.
+//
+// The new key holds a NULL where HasNullKey reports one. Such a key fits no
+// map, so RekeyMap keeps its row apart, but a diff can still show it.
 func (r *RowRekeyer) Rekey(ctx context.Context, k, v val.Tuple) (val.Tuple, val.Tuple, error) {
 	for i, src := range r.keySrc {
-		keyField := src.field(k, v)
-		if keyField == nil {
-			return nil, nil, ErrRekeyNullKey
-		}
-		r.kb.PutRaw(i, keyField)
+		r.kb.PutRaw(i, src.field(k, v))
 	}
 	for i, src := range r.valSrc {
 		r.vb.PutRaw(i, src.field(k, v))
 	}
-	nk, err := r.kb.Build(ctx, r.ns.Pool())
+	nk, err := r.kb.BuildPermissive(ctx, r.ns.Pool())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -108,25 +102,36 @@ func (r *RowRekeyer) Rekey(ctx context.Context, k, v val.Tuple) (val.Tuple, val.
 	return nk, nv, nil
 }
 
+// HasNullKey reports whether the new primary key of |k|, |v| would hold a
+// NULL, which no primary key can.
+func (r *RowRekeyer) HasNullKey(k, v val.Tuple) bool {
+	return slices.ContainsFunc(r.keySrc, func(src fieldSource) bool {
+		return src.field(k, v) == nil
+	})
+}
+
 // RekeyMap returns |rows| keyed by the new primary key, and apart, as stored
-// in |rows|, the rows that share a new key with another.
+// in |rows|, the rows it cannot key.
 //
-// A key holds one row, so rows that share one have no place in the first map.
-// Callers decide what they mean: a diff shows them unpaired, and a merge
-// refuses them.
+// A key holds one row and no NULL, so rows that share a new key with another
+// or would hold a NULL in it have no place in the first map. Callers decide
+// what they mean: a diff shows them unpaired, and a merge refuses them.
 func (r *RowRekeyer) RekeyMap(ctx context.Context, rows prolly.Map) (prolly.Map, prolly.Map, error) {
 	emptyNew, err := prolly.NewMapFromTuples(ctx, r.ns, r.newKD, r.newVD)
 	if err != nil {
 		return prolly.Map{}, prolly.Map{}, err
 	}
-	unpaired, err := prolly.NewMapFromTuples(ctx, r.ns, r.oldKD, r.oldVD)
+	emptyOld, err := prolly.NewMapFromTuples(ctx, r.ns, r.oldKD, r.oldVD)
 	if err != nil {
 		return prolly.Map{}, prolly.Map{}, err
 	}
 
-	mut := emptyNew.Mutate()
+	mut, unpaired := emptyNew.Mutate(), emptyOld.Mutate()
 	var shared *prolly.MutableMap
 	err = IterRows(ctx, rows, func(k, v val.Tuple) error {
+		if r.HasNullKey(k, v) {
+			return unpaired.Put(ctx, k, v)
+		}
 		nk, nv, err := r.Rekey(ctx, k, v)
 		if err != nil {
 			return err
@@ -149,8 +154,7 @@ func (r *RowRekeyer) RekeyMap(ctx context.Context, rows prolly.Map) (prolly.Map,
 		return prolly.Map{}, prolly.Map{}, err
 	}
 	if shared != nil {
-		unpaired, err = r.splitSharedKeys(ctx, rows, mut, shared, unpaired)
-		if err != nil {
+		if err = r.splitSharedKeys(ctx, rows, mut, shared, unpaired); err != nil {
 			return prolly.Map{}, prolly.Map{}, err
 		}
 	}
@@ -158,21 +162,27 @@ func (r *RowRekeyer) RekeyMap(ctx context.Context, rows prolly.Map) (prolly.Map,
 	if err != nil {
 		return prolly.Map{}, prolly.Map{}, err
 	}
-	return rekeyed, unpaired, nil
+	unpairedRows, err := unpaired.Map(ctx)
+	if err != nil {
+		return prolly.Map{}, prolly.Map{}, err
+	}
+	return rekeyed, unpairedRows, nil
 }
 
 // splitSharedKeys moves the rows whose new key is in |shared| out of |mut| and
-// into |unpaired|, which it returns.
+// into |unpaired|.
 //
 // It rekeys |rows| a second time because |mut| holds the first row of each
 // such key and |shared| only the later ones.
-func (r *RowRekeyer) splitSharedKeys(ctx context.Context, rows prolly.Map, mut, shared *prolly.MutableMap, unpaired prolly.Map) (prolly.Map, error) {
+func (r *RowRekeyer) splitSharedKeys(ctx context.Context, rows prolly.Map, mut, shared, unpaired *prolly.MutableMap) error {
 	sharedKeys, err := shared.Map(ctx)
 	if err != nil {
-		return prolly.Map{}, err
+		return err
 	}
-	unpairedMut := unpaired.Mutate()
-	err = IterRows(ctx, rows, func(k, v val.Tuple) error {
+	return IterRows(ctx, rows, func(k, v val.Tuple) error {
+		if r.HasNullKey(k, v) {
+			return nil
+		}
 		nk, _, err := r.Rekey(ctx, k, v)
 		if err != nil {
 			return err
@@ -187,12 +197,8 @@ func (r *RowRekeyer) splitSharedKeys(ctx context.Context, rows prolly.Map, mut, 
 		if err = mut.Delete(ctx, nk); err != nil {
 			return err
 		}
-		return unpairedMut.Put(ctx, k, v)
+		return unpaired.Put(ctx, k, v)
 	})
-	if err != nil {
-		return prolly.Map{}, err
-	}
-	return unpairedMut.Map(ctx)
 }
 
 // IterRows calls |cb| with each key and value of |rows|, stopping at the first

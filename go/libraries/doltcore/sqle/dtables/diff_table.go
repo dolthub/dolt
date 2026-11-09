@@ -78,7 +78,7 @@ var PrimaryKeyChangeWarning = "cannot render full diff between commits %s and %s
 // key change are shown as removed or added rather than modified.
 //
 // It gives no count, since the query's filters may show only some of them.
-const unpairedRowsWarning = "some rows share a primary key across the primary key change between commits %s and %s, so they are shown as removed or added rather than modified"
+const unpairedRowsWarning = "some rows have a duplicate or NULL primary key across the primary key change between commits %s and %s, so they are shown as removed or added rather than modified"
 
 const PrimaryKeyChangeWarningCode int = 1105 // Since this is our own custom warning we'll use 1105, the code for an unknown error
 
