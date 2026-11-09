@@ -96,9 +96,13 @@ func newEmptyDatabaseSessionState() *DatabaseSessionState {
 // SessionState is the public interface for dealing with session state outside this package. Session-state is always
 // branch-specific.
 type SessionState interface {
-	// WorkingSet returns the working set, or nil for a detached head.
+	// WorkingSet returns the working set, or nil for a detached head, with any pending edits materialized into it.
 	WorkingSet(ctx *sql.Context) (*doltdb.WorkingSet, error)
 	WorkingRoot(ctx *sql.Context) (doltdb.RootValue, error)
+	// UnmaterializedWorkingRoot returns the working root without materializing pending edits. Its tables and schemas
+	// are current, but the rows of a table with pending edits are not; read those through the WriteSession's
+	// PendingRows. Only reads that resolve tables and schemas use it.
+	UnmaterializedWorkingRoot() doltdb.RootValue
 	WriteSession() WriteSession
 	EditOpts() editor.Options
 	SessionCache() *SessionCache
@@ -117,7 +121,8 @@ type branchState struct {
 	// case headRoot must be set.
 	headCommit *doltdb.Commit
 	// workingSet is the working set for this database. May be nil for databases tied to a detached root value, in which
-	// case headCommit must be set. Read it through WorkingSet; only code that sets it, and GC, reads the field.
+	// case headCommit must be set. It doesn't include the write session's pending edits. Read it through WorkingSet,
+	// which materializes them; only code that sets it, and GC, reads the field.
 	workingSet *doltdb.WorkingSet
 	// head is the name of the branch head for this state
 	head string
@@ -200,10 +205,17 @@ func (o *forkedWorkingSetOwner) WorkingSet() *doltdb.WorkingSet {
 // dynamic asserts are enabled.
 func (o *forkedWorkingSetOwner) SetFlushedWorkingSet(ctx *sql.Context, ws *doltdb.WorkingSet) error {
 	o.ws = ws
-	var err error
 	if !o.sess.isCurrentBranchState(o.bs) {
-		err = fmt.Errorf("%w: %s", ErrBranchStateDropped, o.bs.RevisionDbName())
-	} else if !rootsEqual(o.target(o.bs.storedRoots()), o.base) {
+		err := fmt.Errorf("%w: %s", ErrBranchStateDropped, o.bs.RevisionDbName())
+		dynassert.Assert(false, "%s", err.Error())
+		return err
+	}
+	// Edits the branch state's write session left pending since the fork count as a change.
+	roots, err := o.bs.roots(ctx)
+	if err != nil {
+		return err
+	}
+	if !rootsEqual(o.target(roots), o.base) {
 		err = fmt.Errorf("%w: %s", ErrBranchStateChanged, o.bs.RevisionDbName())
 	}
 	if err != nil {
@@ -238,10 +250,27 @@ func (bs *branchState) RevisionDbName() string {
 
 var _ SessionState = (*branchState)(nil)
 
-// WorkingSet returns this branch state's working set, or nil for a detached head. Everything that reads the working
-// set's roots, or derives a new working set from it, goes through WorkingSet, WorkingRoot or roots.
+// WorkingSet returns this branch state's working set, or nil for a detached head, with its write session's pending
+// edits materialized into it. Everything that reads the working set's roots, or derives a new working set from it,
+// goes through WorkingSet, WorkingRoot or roots.
 func (bs *branchState) WorkingSet(ctx *sql.Context) (*doltdb.WorkingSet, error) {
+	if err := bs.materializePending(ctx); err != nil {
+		return nil, err
+	}
 	return bs.workingSet, nil
+}
+
+// materializePending materializes the edits pending in this branch state's write session into its working set.
+func (bs *branchState) materializePending(ctx *sql.Context) error {
+	if bs.writeSession == nil || bs.workingSet == nil || !bs.writeSession.HasPendingEdits() {
+		return nil
+	}
+	return bs.writeSession.MaterializePending(ctx)
+}
+
+// UnmaterializedWorkingRoot implements SessionState.
+func (bs *branchState) UnmaterializedWorkingRoot() doltdb.RootValue {
+	return bs.storedRoots().Working
 }
 
 func (bs *branchState) WorkingRoot(ctx *sql.Context) (doltdb.RootValue, error) {

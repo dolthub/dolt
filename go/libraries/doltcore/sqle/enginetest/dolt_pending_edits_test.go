@@ -114,3 +114,56 @@ func TestDeferMaterializationRequiresAutocommitOff(t *testing.T) {
 	enginetest.RunQueryWithContext(t, e, h, ctx, "insert into t values (4)")
 	require.False(t, hasPendingEdits())
 }
+
+// pendingEditsReadingStatements read or write rows without deriving a new working set. None should materialize the
+// edits pending before it.
+var pendingEditsReadingStatements = []string{
+	"select * from t",
+	"select * from t where x = 1",
+	"select * from t where y = 1",
+	"select count(*) from t",
+	"select * from t join o on t.x = o.id",
+	"select * from t where x in (select id from o)",
+	"insert into t values (3, 3)",
+	"update t set y = 2 where x = 1",
+	"delete from t where x = 2",
+	"insert into o values (5) on duplicate key update id = 5",
+	"show tables",
+	"describe t",
+	"show indexes from t",
+}
+
+// TestReadsLeaveEditsPending asserts that statements that only read or write rows leave the edits of earlier
+// statements pending.
+func TestReadsLeaveEditsPending(t *testing.T) {
+	for _, q := range pendingEditsReadingStatements {
+		t.Run(q, func(t *testing.T) {
+			h := newDoltHarness(t)
+			defer h.Close()
+			e := mustNewEngine(t, h)
+			defer e.Close()
+			ctx := enginetest.NewContext(h)
+
+			hasPendingEdits := func() bool {
+				state, ok, err := dsess.DSessFromSess(ctx.Session).LookupDbState(ctx, "mydb")
+				require.NoError(t, err)
+				require.True(t, ok)
+				return state.WriteSession().HasPendingEdits()
+			}
+
+			for _, setup := range []string{
+				"create table t (x int primary key, y int, index (y))",
+				"create table o (id int primary key)",
+				"insert into o values (1)",
+				"call dolt_commit('-Am', 'init')",
+				"set autocommit = 0",
+				"insert into t values (1, 1), (2, 2)",
+			} {
+				enginetest.RunQueryWithContext(t, e, h, ctx, setup)
+			}
+			require.True(t, hasPendingEdits())
+			enginetest.RunQueryWithContext(t, e, h, ctx, q)
+			require.True(t, hasPendingEdits())
+		})
+	}
+}
