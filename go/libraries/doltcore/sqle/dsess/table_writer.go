@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/val"
@@ -52,6 +53,26 @@ type WriteSession interface {
 
 	// HasOpenTableWriters returns whether any TableWriter this session has handed out hasn't been closed since.
 	HasOpenTableWriters() bool
+
+	// SetDeferMaterialization controls whether the edits of completed statements are materialized into the working
+	// set as each statement completes. When deferred, edits accumulate in the session's TableWriters until
+	// MaterializePending is called, and the session's owner must do so before reading the working set.
+	SetDeferMaterialization(deferMaterialization bool)
+
+	// HasPendingEdits returns true if edits from completed statements have not been materialized into the working set.
+	HasPendingEdits() bool
+
+	// PendingTables returns the names of tables with edits that have not been materialized into the working set.
+	PendingTables() []doltdb.TableName
+
+	// PendingRows returns views of the rows of |tblName| that include its pending edits. It returns false if the
+	// table has no pending edits, and nil views if it has pending edits that can't be read without materializing
+	// them.
+	PendingRows(ctx *sql.Context, tblName doltdb.TableName) (*index.PendingRows, bool, error)
+
+	// MaterializePending materializes all pending edits into its owner's working set. The edits of a statement in
+	// progress are not included.
+	MaterializePending(ctx *sql.Context) error
 
 	WriteSessionFlusher
 }

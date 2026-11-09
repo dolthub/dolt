@@ -315,7 +315,9 @@ func GetTableResolver(ctx *sql.Context, dbName string) (doltdb.TableResolver, er
 }
 
 // lookupDbState is the private version of LookupDbState, returning a struct that has more information available than
-// the interface returned by the public method.
+// the interface returned by the public method. The returned state's WriteSession may hold edits that have not been
+// materialized into its working set. Callers that read the rows of the working set, or derive a new working set from
+// it, must materialize them first with materializePending.
 func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchState, bool, error) {
 	baseName, rev := doltdb.SplitRevisionDbName(strings.ToLower(dbName))
 	d.mu.Lock()
@@ -361,6 +363,38 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 	}
 
 	return branchState, true, nil
+}
+
+// materializePending materializes any edits pending in |bs|'s WriteSession into its working set.
+func (d *DoltSession) materializePending(ctx *sql.Context, bs *branchState) error {
+	if bs.writeSession == nil || bs.workingSet == nil || !bs.writeSession.HasPendingEdits() {
+		return nil
+	}
+	return bs.writeSession.MaterializePending(ctx)
+}
+
+// MaterializePending materializes any edits pending in the write session of the database named into its working set.
+// Callers that read the rows of the working set, or derive a new working set from it, must call this first.
+func (d *DoltSession) MaterializePending(ctx *sql.Context, dbName string) error {
+	bs, ok, err := d.lookupDbState(ctx, dbName)
+	if err != nil || !ok {
+		return err
+	}
+	return d.materializePending(ctx, bs)
+}
+
+// materializeAllPending materializes the pending edits of every branch state in this session.
+func (d *DoltSession) materializeAllPending(ctx *sql.Context) error {
+	d.mu.Lock()
+	states := d.currentBranches().all()
+	d.mu.Unlock()
+
+	for _, bs := range states {
+		if err := d.materializePending(ctx, bs); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // LookupDbState returns the session state for the database named. Unqualified database names, e.g. `mydb` get resolved
@@ -632,6 +666,9 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) er
 	if ctx.IsSubStatement() {
 		return sql.ErrCommitNotAllowedInSubStatement.New()
 	}
+	if err := d.materializeAllPending(ctx); err != nil {
+		return err
+	}
 	dirties := d.dirtyWorkingSets()
 
 	if TransactionsDisabled(ctx) || len(dirties) == 0 {
@@ -836,7 +873,7 @@ func (d *DoltSession) dirtyWorkingSets() []*branchState {
 	defer d.mu.Unlock()
 	var dirtyStates []*branchState
 	for _, branchState := range d.currentBranches().all() {
-		if branchState.dirty {
+		if branchState.isDirty() {
 			dirtyStates = append(dirtyStates, branchState)
 		}
 	}
@@ -855,7 +892,7 @@ func (d *DoltSession) DirtyDatabases() []string {
 	var dbNames []string
 	for _, dbState := range d.dbStates {
 		for _, branchState := range d.currentBranches().forDb(dbState.dbName) {
-			if branchState.dirty {
+			if branchState.isDirty() {
 				dbNames = append(dbNames, dbState.dbName)
 				break
 			}
@@ -877,7 +914,7 @@ func (d *DoltSession) DirtyBranches() []DirtyBranch {
 	defer d.mu.Unlock()
 	var dirty []DirtyBranch
 	for _, branchState := range d.currentBranches().all() {
-		if branchState.dirty {
+		if branchState.isDirty() {
 			dirty = append(dirty, DirtyBranch{DbName: branchState.dbState.dbName, Branch: branchState.head})
 		}
 	}
@@ -890,7 +927,7 @@ func (d *DoltSession) IsBranchDirty(dbName, branch string) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	branchState, ok := d.currentBranches().get(dbName, branch)
-	return ok && branchState.dirty
+	return ok && branchState.isDirty()
 }
 
 // IsWritingDatabase reports whether the current transaction has uncommitted changes to, or has a table writer open on,
@@ -900,7 +937,7 @@ func (d *DoltSession) IsWritingDatabase(dbName string) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	for _, branchState := range d.currentBranches().forDb(dbName) {
-		if branchState.dirty || (branchState.writeSession != nil && branchState.writeSession.HasOpenTableWriters()) {
+		if branchState.isDirty() || (branchState.writeSession != nil && branchState.writeSession.HasOpenTableWriters()) {
 			return true
 		}
 	}
@@ -920,6 +957,9 @@ func (d *DoltSession) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.T
 	}
 	if !ok {
 		return sql.ErrDatabaseNotFound.New(dbName)
+	}
+	if err = d.materializePending(ctx, state); err != nil {
+		return err
 	}
 
 	for _, dirty := range d.dirtyWorkingSets() {
@@ -979,6 +1019,9 @@ func (d *DoltSession) DoltCommitMulti(
 		}
 		if !ok {
 			return nil, sql.ErrDatabaseNotFound.New(dbName)
+		}
+		if err = d.materializePending(ctx, state); err != nil {
+			return nil, err
 		}
 		states[i] = state
 	}
@@ -1161,6 +1204,18 @@ func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func
 						panic("gc safepoint establishment found inconsistent state; process could not guarantee it would be able to keep a chunk if we continue")
 					}
 				}
+				// Edits pending materialization only exist in the write session's table writers.
+				if head.writeSession.HasPendingEdits() {
+					err = head.writeSession.VisitGCRoots(ctx, func(h hash.Hash) bool {
+						if keep(h) {
+							panic("gc safepoint establishment found inconsistent state; process could not guarantee it would be able to keep a chunk if we continue")
+						}
+						return false
+					})
+					if err != nil {
+						return err
+					}
+				}
 			}
 		}
 		if err := d.visitTempTableGCRoots(ctx, dbState, keep); err != nil {
@@ -1241,6 +1296,10 @@ func (d *DoltSession) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, save
 	dtx, ok := tx.(*DoltTransaction)
 	if !ok {
 		return fmt.Errorf("expected a DoltTransaction")
+	}
+
+	if err := d.materializeAllPending(ctx); err != nil {
+		return err
 	}
 
 	roots := make(map[string]doltdb.RootValue)
@@ -1329,12 +1388,15 @@ func (d *DoltSession) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, 
 		restore[name] = ws.WorkingRoot()
 	}
 	for dbName, root := range restore {
-		err := d.SetWorkingRoot(ctx, dbName, root)
+		branch, _, err := d.lookupDbState(ctx, dbName)
 		if err != nil {
 			return err
 		}
-		branch, _, err := d.lookupDbState(ctx, dbName)
-		if err != nil {
+		// Edits made since the savepoint are materialized, so that setting the savepoint's root discards them
+		if err = d.materializePending(ctx, branch); err != nil {
+			return err
+		}
+		if err = d.SetWorkingRoot(ctx, dbName, root); err != nil {
 			return err
 		}
 		branch.dirty = point.dirtyBranches[dbName]
@@ -1394,13 +1456,17 @@ func (d *DoltSession) GetDbData(ctx *sql.Context, dbName string) (env.DbData[*sq
 	return branchState.dbData, true
 }
 
-// GetRoots returns the current roots for a given database associated with the session
+// GetRoots returns the current roots for a given database associated with the session, with any pending edits
+// materialized into the working root.
 func (d *DoltSession) GetRoots(ctx *sql.Context, dbName string) (doltdb.Roots, bool) {
 	branchState, ok, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
 		return doltdb.Roots{}, false
 	}
 	if !ok {
+		return doltdb.Roots{}, false
+	}
+	if err = d.materializePending(ctx, branchState); err != nil {
 		return doltdb.Roots{}, false
 	}
 	roots, err := branchState.roots(ctx)
@@ -1599,6 +1665,10 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 	if err != nil {
 		return err
 	}
+	if branchState.writeSession != nil && branchState.writeSession.HasPendingEdits() {
+		// |ws| was derived from a working set without the pending edits, so setting it would discard them.
+		return fmt.Errorf("cannot set the working set of %s while it has pending edits; materialize them first", dbName)
+	}
 	return d.setWorkingSetOf(ctx, branchState, ws)
 }
 
@@ -1714,8 +1784,11 @@ func (d *DoltSession) SwitchWorkingSet(
 
 func (d *DoltSession) WorkingSet(ctx *sql.Context, dbName string) (*doltdb.WorkingSet, error) {
 	// TODO: need to make sure we use a revision qualified DB name here
-	sessionState, _, err := d.LookupDbState(ctx, dbName)
+	sessionState, _, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
+		return nil, err
+	}
+	if err = d.materializePending(ctx, sessionState); err != nil {
 		return nil, err
 	}
 	ws, err := sessionState.WorkingSet(ctx)
@@ -1759,7 +1832,44 @@ func (d *DoltSession) SetSessionVariable(ctx *sql.Context, key string, value int
 		return d.setForeignKeyChecksSessionVar(ctx, key, value)
 	}
 
+	if strings.EqualFold(key, sql.AutoCommitSessionVar) {
+		return d.setAutocommitSessionVar(ctx, key, value)
+	}
+
 	return d.Session.SetSessionVariable(ctx, key, value)
+}
+
+// setAutocommitSessionVar sets @@autocommit, and defers materialization in the write sessions of this session's
+// branch states only while it is off. Branch states created later pick up the new value in addDB, but those already
+// in this session must be updated here: the engine evaluates SET before deciding whether to commit the statement's
+// transaction, so `SET autocommit = 0` does not end the transaction holding them.
+func (d *DoltSession) setAutocommitSessionVar(ctx *sql.Context, key string, value interface{}) error {
+	if err := d.Session.SetSessionVariable(ctx, key, value); err != nil {
+		return err
+	}
+	if ctx == nil {
+		// The session is being initialized (see doltSessionFactory), so it has no branch states to update yet.
+		return nil
+	}
+	autocommit, err := isSessionAutocommit(ctx)
+	if err != nil {
+		return err
+	}
+	if autocommit {
+		// Edits left pending while deferring must be materialized before the write sessions stop deferring
+		if err = d.materializeAllPending(ctx); err != nil {
+			return err
+		}
+	}
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, bs := range d.currentBranches().all() {
+		if bs.writeSession != nil {
+			bs.writeSession.SetDeferMaterialization(!autocommit)
+		}
+	}
+	return nil
 }
 
 func (d *DoltSession) setHeadRefSessionVar(ctx *sql.Context, db, value string) error {
@@ -1914,6 +2024,14 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 				return err
 			}
 			branchState.writeSession = d.writeSessProv(revisionQualifiedName, branchWorkingSetOwner{d, branchState}, tracker, editOpts)
+			// Materialization is deferred only when @@autocommit is off. With autocommit on, every statement is its
+			// own transaction and is materialized on commit, so deferring buys nothing. Changes to @@autocommit
+			// after this branch state is created are applied in setAutocommitSessionVar.
+			autocommit, err := isSessionAutocommit(ctx)
+			if err != nil {
+				return err
+			}
+			branchState.writeSession.SetDeferMaterialization(!autocommit)
 		}
 	}
 

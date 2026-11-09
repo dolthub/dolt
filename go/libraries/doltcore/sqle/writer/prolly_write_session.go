@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -73,6 +74,12 @@ type prollyWriteSession struct {
 	aiTracker     *dsess.AutoIncrementTracker
 	owner         dsess.WorkingSetOwner
 	targetStaging bool
+	// deferMaterialization leaves the edits of completed statements in their table writers, rather than
+	// materializing them into the owner's working set when each statement completes. The owner must call
+	// MaterializePending before reading its working set.
+	deferMaterialization bool
+	// materializing is true while MaterializePending is running
+	materializing bool
 }
 
 var _ dsess.WriteSession = &prollyWriteSession{}
@@ -154,6 +161,83 @@ func (s *prollyWriteSession) newTableWriter(ctx *sql.Context, tblName doltdb.Tab
 	return tblWriter, nil
 }
 
+// SetDeferMaterialization implements WriteSession
+func (s *prollyWriteSession) SetDeferMaterialization(deferMaterialization bool) {
+	s.deferMaterialization = deferMaterialization
+}
+
+// HasPendingEdits implements WriteSession
+func (s *prollyWriteSession) HasPendingEdits() bool {
+	if s.materializing {
+		return false
+	}
+	for _, tblWriter := range s.tables {
+		if tblWriter.pending {
+			return true
+		}
+	}
+	return false
+}
+
+// PendingTables implements WriteSession
+func (s *prollyWriteSession) PendingTables() []doltdb.TableName {
+	var names []doltdb.TableName
+	for tblName, tblWriter := range s.tables {
+		if tblWriter.pending {
+			names = append(names, tblName)
+		}
+	}
+	return names
+}
+
+// PendingRows implements WriteSession
+func (s *prollyWriteSession) PendingRows(ctx *sql.Context, tblName doltdb.TableName) (*index.PendingRows, bool, error) {
+	tblWriter, ok := s.tables[tblName]
+	if !ok || !tblWriter.pending || s.materializing {
+		return nil, false, nil
+	}
+	rows, err := tblWriter.pendingRows(ctx)
+	return rows, true, err
+}
+
+// MaterializePending implements WriteSession. It flushes the edits of completed statements in pending table writers
+// into the owner's working set. The edits of a statement in progress are left in their table writers.
+func (s *prollyWriteSession) MaterializePending(ctx *sql.Context) error {
+	return s.materializePending(ctx)
+}
+
+func (s *prollyWriteSession) materializePending(ctx *sql.Context) error {
+	pending := make(map[doltdb.TableName]*prollyTableWriter)
+	if !s.materializing {
+		for tblName, tblWriter := range s.tables {
+			if tblWriter.pending {
+				pending[tblName] = tblWriter
+			}
+		}
+	}
+	if len(pending) == 0 {
+		return nil
+	}
+
+	s.materializing = true
+	defer func() {
+		s.materializing = false
+	}()
+	root, tbls, err := s.flushTables(ctx, pending, (*prollyTableWriter).pendingTable)
+	if err != nil {
+		return err
+	}
+	if err = s.owner.SetFlushedWorkingSet(ctx, s.withRoot(root)); err != nil {
+		return err
+	}
+	for tblName, tblWriter := range pending {
+		if err = tblWriter.materialized(ctx, tbls[tblName]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // HasOpenTableWriters implements WriteSession
 func (s *prollyWriteSession) HasOpenTableWriters() bool {
 	for _, tw := range s.tables {
@@ -223,20 +307,34 @@ func (s *prollyWriteSession) publish(ctx *sql.Context) error {
 
 // flushAllTables is the inner implementation for Flush that does not acquire any locks
 func (s *prollyWriteSession) flushAllTables(ctx *sql.Context) (doltdb.RootValue, error) {
+	flushed, _, err := s.flushTables(ctx, s.tables, (*prollyTableWriter).table)
+	// Flush's callers decide where the result goes. The binlog applier writes it straight to the database, and passing
+	// it to a branch state would make that state dirty, so CommitTransaction would refuse a replicated transaction that
+	// spans databases.
+	return flushed, err
+}
+
+// flushTables builds a table from each of |writers| with |build|, concurrently, and puts them into the owner's root.
+// It returns that root, without passing it to the owner, and the tables built.
+func (s *prollyWriteSession) flushTables(
+	ctx *sql.Context,
+	writers map[doltdb.TableName]*prollyTableWriter,
+	build func(*prollyTableWriter, *sql.Context) (*doltdb.Table, error),
+) (doltdb.RootValue, map[doltdb.TableName]*doltdb.Table, error) {
 	type flushedTable struct {
 		tblName doltdb.TableName
 		tbl     *doltdb.Table
 	}
 
 	// Materialize each table concurrently.
-	flushedTables := make([]flushedTable, len(s.tables))
+	flushedTables := make([]flushedTable, len(writers))
 	eg, egCtx := ctx.NewErrgroup()
 	i := 0
-	for tblName, tblWriter := range s.tables {
+	for tblName, tblWriter := range writers {
 		res := &flushedTables[i]
 		i++
 		errguard.Go(eg, func() error {
-			tbl, err := tblWriter.table(egCtx)
+			tbl, err := build(tblWriter, egCtx)
 			if err != nil {
 				return err
 			}
@@ -245,20 +343,18 @@ func (s *prollyWriteSession) flushAllTables(ctx *sql.Context) (doltdb.RootValue,
 		})
 	}
 	if err := eg.Wait(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	flushed := s.root()
+	tbls := make(map[doltdb.TableName]*doltdb.Table, len(writers))
 	for _, ft := range flushedTables {
 		var err error
 		flushed, err = flushed.PutTable(ctx, ft.tblName, ft.tbl)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
+		tbls[ft.tblName] = ft.tbl
 	}
-
-	// Flush's callers decide where the result goes. The binlog applier writes it straight to the database, and passing
-	// it to a branch state would make that state dirty, so CommitTransaction would refuse a replicated transaction that
-	// spans databases.
-	return flushed, nil
+	return flushed, tbls, nil
 }

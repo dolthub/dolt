@@ -267,6 +267,12 @@ func (bs *branchState) storedRoots() doltdb.Roots {
 	return bs.rootsOf(bs.workingSet)
 }
 
+// isDirty returns true if this branch state has uncommitted changes, including edits that have not been
+// materialized into its working set.
+func (bs *branchState) isDirty() bool {
+	return bs.dirty || (bs.writeSession != nil && bs.writeSession.HasPendingEdits())
+}
+
 func (bs *branchState) rootsOf(ws *doltdb.WorkingSet) doltdb.Roots {
 	if ws == nil {
 		return doltdb.Roots{

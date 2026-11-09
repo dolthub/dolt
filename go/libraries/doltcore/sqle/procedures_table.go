@@ -174,6 +174,9 @@ func DoltProceduresGetOrCreateTable(ctx *sql.Context, db Database) (*WritableDol
 
 	if wrapper.backingTable == nil {
 		// We haven't materialized the table yet. Go ahead and do so.
+		if err := materializePending(ctx, db); err != nil {
+			return nil, err
+		}
 		root, err := db.GetRoot(ctx)
 		if err != nil {
 			return nil, err
@@ -253,6 +256,9 @@ func migrateDoltProceduresSchema(ctx *sql.Context, db Database, oldTable *Writab
 		return nil, err
 	}
 
+	if err := materializePending(ctx, db); err != nil {
+		return nil, err
+	}
 	root, err := db.GetRoot(ctx)
 	if err != nil {
 		return nil, err
