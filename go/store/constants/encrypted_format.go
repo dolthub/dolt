@@ -28,7 +28,7 @@ func IsEncryptedFormatString(s string) bool {
 	return strings.HasPrefix(s, EncryptedFormatPrefix)
 }
 
-// doltFormatAliases are other format strings of the Dolt storage format. Dolt Enterprise adds its encrypted format.
+// doltFormatAliases are other format strings of the Dolt storage format, such as encrypted formats.
 var doltFormatAliases []string
 
 // IsDoltFormatString reports whether |s| names the Dolt storage format.

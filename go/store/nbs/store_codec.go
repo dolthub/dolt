@@ -64,8 +64,8 @@ type storeCodec interface {
 	// newSpanSealer returns the sealer of a new archive, or nil to write it plain. With |recompress|, it compresses
 	// sealed snappy chunks with dictionaries, as garbage collection does, rather than copying them.
 	newSpanSealer(recompress bool) (spanSealer, error)
-	// openArchive returns the opener of encrypted archive |ar|'s spans, once |ar| has read its key block.
-	openArchive(ar *archiveReader, adding bool) (archiveSpans, error)
+	// openArchive returns the opener of the |spans| byte spans of an encrypted archive with |keyBlock|.
+	openArchive(keyBlock []byte, spans uint32, adding bool) (archiveSpans, error)
 	// conjoinKeyBlock returns the key block of a file holding the records of encrypted |sources| in order.
 	conjoinKeyBlock(sources []sourceWithSize) ([]byte, error)
 	// newJournalCodec returns the codec of a chunk journal writer.
@@ -152,7 +152,7 @@ func (plainCodec) newSpanSealer(bool) (spanSealer, error) {
 	return nil, nil
 }
 
-func (plainCodec) openArchive(*archiveReader, bool) (archiveSpans, error) {
+func (plainCodec) openArchive([]byte, uint32, bool) (archiveSpans, error) {
 	return nil, ErrEncryptionMismatch
 }
 

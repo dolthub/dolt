@@ -466,16 +466,6 @@ func (wr *journalWriter) hasAddr(h hash.Hash) (ok bool) {
 	return
 }
 
-// getChunker reads the chunk with addr |h|. The codec opens it after the lock is released, since opening it may
-// call a key provider.
-func (wr *journalWriter) getChunker(h hash.Hash) (ToChunker, error) {
-	payload, err := wr.getPayload(h)
-	if err != nil || payload == nil {
-		return CompressedChunk{}, err
-	}
-	return wr.codec.chunker(h, payload)
-}
-
 // getPayload reads the record payload of the chunk with addr |h|, or nil if the journal does not have it.
 func (wr *journalWriter) getPayload(h hash.Hash) ([]byte, error) {
 	wr.lock.RLock()

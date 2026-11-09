@@ -127,25 +127,29 @@ func (c *toyCodec) newTableSealer() (recordSealer, error) {
 	if c.keyless {
 		return nil, errToyKeyless
 	}
-	return toySealer{}, nil
+	return &toySealer{}, nil
 }
 
 func (c *toyCodec) newSpanSealer(bool) (spanSealer, error) {
 	if c.keyless {
 		return nil, errToyKeyless
 	}
-	return toySpanSealer{}, nil
+	return &toySpanSealer{}, nil
 }
 
 func (c *toyCodec) openTable(ti onHeapTableIndex, _ bool) (recordOpener, error) {
 	if err := checkToyKeyBlock(ti.keyBlock()); err != nil {
 		return nil, err
 	}
-	return &toyOpener{codec: c}, nil
+	o := &toyOpener{codec: c, records: make(map[uint64]bool, ti.count)}
+	for i := uint32(0); i < ti.count; i++ {
+		o.records[ti.getIndexEntry(i).Offset()] = true
+	}
+	return o, nil
 }
 
-func (c *toyCodec) openArchive(ar *archiveReader, _ bool) (archiveSpans, error) {
-	if err := checkToyKeyBlock(ar.keyBlock); err != nil {
+func (c *toyCodec) openArchive(keyBlock []byte, _ uint32, _ bool) (archiveSpans, error) {
+	if err := checkToyKeyBlock(keyBlock); err != nil {
 		return nil, err
 	}
 	return &toySpans{codec: c}, nil
@@ -187,14 +191,31 @@ func (c *toyCodec) checkAdded(_ *NomsBlockStore, added chunkSourceSet) (func() e
 	}, nil
 }
 
-type toySealer struct{}
+// toySealer checks that it seals a file's records in order.
+type toySealer struct {
+	next uint32
+}
 
-func (toySealer) seal(dst []byte, _ uint32, h hash.Hash, payload []byte) ([]byte, error) {
+func (s *toySealer) record(ordinal uint32) error {
+	if ordinal != s.next {
+		return fmt.Errorf("toy record %d sealed as record %d", s.next, ordinal)
+	}
+	s.next++
+	return nil
+}
+
+func (s *toySealer) seal(dst []byte, ordinal uint32, h hash.Hash, payload []byte) ([]byte, error) {
+	if err := s.record(ordinal); err != nil {
+		return nil, err
+	}
 	return toySeal(dst, toyKindChunk, h, payload), nil
 }
 
 // add seals |tc| again, where Dolt Enterprise may copy its record as it is.
-func (toySealer) add(tw *CmpChunkTableWriter, tc ToChunker) (uint32, error) {
+func (s *toySealer) add(tw *CmpChunkTableWriter, tc ToChunker) (uint32, error) {
+	if err := s.record(uint32(len(tw.prefixes))); err != nil {
+		return 0, err
+	}
 	chk, err := tc.ToChunk()
 	if err != nil {
 		return 0, err
@@ -203,13 +224,18 @@ func (toySealer) add(tw *CmpChunkTableWriter, tc ToChunker) (uint32, error) {
 	return tw.writeRecord(chk.Hash(), record, len(chk.Data()))
 }
 
-func (toySealer) keyBlock() ([]byte, error) {
+func (s *toySealer) keyBlock() ([]byte, error) {
 	return toyKeyBlock, nil
 }
 
-type toySpanSealer struct{}
+type toySpanSealer struct {
+	toySealer
+}
 
-func (toySpanSealer) seal(_ uint32, ref spanRef, b []byte) ([]byte, error) {
+func (s *toySpanSealer) seal(ordinal uint32, ref spanRef, b []byte) ([]byte, error) {
+	if err := s.record(ordinal); err != nil {
+		return nil, err
+	}
 	switch {
 	case ref.isDict:
 		return toySeal(nil, toyKindDict, hash.Hash{}, b), nil
@@ -220,7 +246,7 @@ func (toySpanSealer) seal(_ uint32, ref spanRef, b []byte) ([]byte, error) {
 	}
 }
 
-func (toySpanSealer) add(asw *ArchiveStreamWriter, sc SealedChunk) (uint32, error) {
+func (s *toySpanSealer) add(asw *ArchiveStreamWriter, sc SealedChunk) (uint32, error) {
 	chk, err := sc.ToChunk()
 	if err != nil {
 		return 0, err
@@ -228,17 +254,25 @@ func (toySpanSealer) add(asw *ArchiveStreamWriter, sc SealedChunk) (uint32, erro
 	return asw.writeCompressedChunk(ChunkToCompressedChunk(chk))
 }
 
-func (toySpanSealer) keyBlock() ([]byte, error) {
-	return toyKeyBlock, nil
-}
-
+// toyOpener checks that it opens records at their positions in the file.
 type toyOpener struct {
-	codec *toyCodec
+	codec   *toyCodec
+	records map[uint64]bool
 }
 
-func (o *toyOpener) open(_ context.Context, _ uint64, h hash.Hash, sealed []byte) (CompressedChunk, error) {
+func (o *toyOpener) at(pos uint64) error {
+	if !o.records[pos] {
+		return fmt.Errorf("no toy record at %d", pos)
+	}
+	return nil
+}
+
+func (o *toyOpener) open(_ context.Context, pos uint64, h hash.Hash, sealed []byte) (CompressedChunk, error) {
 	if o.codec.keyless {
 		return CompressedChunk{}, errToyKeyless
+	}
+	if err := o.at(pos); err != nil {
+		return CompressedChunk{}, err
 	}
 	payload, err := toyOpen(toyKindChunk, h, sealed)
 	if err != nil {
@@ -248,7 +282,10 @@ func (o *toyOpener) open(_ context.Context, _ uint64, h hash.Hash, sealed []byte
 	return CompressedChunk{H: h, FullCompressedChunk: full, CompressedData: full[:len(payload)], verify: true}, nil
 }
 
-func (o *toyOpener) chunker(_ context.Context, _ uint64, h hash.Hash, sealed []byte) (ToChunker, error) {
+func (o *toyOpener) chunker(_ context.Context, pos uint64, h hash.Hash, sealed []byte) (ToChunker, error) {
+	if err := o.at(pos); err != nil {
+		return nil, err
+	}
 	return &toyChunk{codec: o.codec, h: h, record: sealed}, nil
 }
 
@@ -339,8 +376,8 @@ func (tc *toyChunk) CompressedSize() uint32 {
 
 func (tc *toyChunk) sealed() {}
 
-// toyJournal seals journal records with the toy key, which it introduces with a key record, and authenticates each
-// index batch.
+// toyJournal seals journal records with the toy key, which it introduces with a key record that it also indexes, and
+// authenticates each index batch.
 type toyJournal struct {
 	codec    *toyCodec
 	lookups  uint32
@@ -348,13 +385,16 @@ type toyJournal struct {
 	wroteKey bool
 }
 
-func (j *toyJournal) replay(_ context.Context, _ *journalWriter, _ bool, off int64, r journalRec) error {
+func (j *toyJournal) replay(_ context.Context, wr *journalWriter, canWrite bool, off int64, r journalRec) error {
 	switch r.kind {
 	case keyJournalRecKind:
 		if !bytes.Equal(r.payload, toyKeyBlock) {
 			return fmt.Errorf("bad toy key record at %d", off)
 		}
 		j.wroteKey = true
+		if canWrite {
+			return wr.indexKey(r.payload)
+		}
 		return nil
 	case encChunkJournalRecKind:
 		c, err := j.chunker(r.address, r.payload)
@@ -370,6 +410,12 @@ func (j *toyJournal) replay(_ context.Context, _ *journalWriter, _ bool, off int
 }
 
 func (j *toyJournal) checkBatch(_ context.Context, m lookupMeta, batch []lookup) error {
+	for _, k := range m.keys {
+		if !bytes.Equal(k, toyKeyBlock) {
+			return fmt.Errorf("bad toy key record in the index: %x", k)
+		}
+		j.wroteKey = true
+	}
 	if !bytes.Equal(m.auth, j.batchAuth(m, uint32(len(batch)))) {
 		return errToyTag
 	}
@@ -397,7 +443,7 @@ func (j *toyJournal) writeKey(ctx context.Context, wr *journalWriter, behavior d
 	}
 	writeJournalRecord(buf, keyJournalRecKind, hash.Hash{}, toyKeyBlock)
 	j.wroteKey = true
-	return nil
+	return wr.indexKey(toyKeyBlock)
 }
 
 func (j *toyJournal) sealChunk(ctx context.Context, wr *journalWriter, behavior dherrors.FatalBehavior, cc CompressedChunk) (sealedRecord, error) {

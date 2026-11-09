@@ -696,3 +696,12 @@ func TestJournalWriterCloseWithoutWritesLeavesTrailingBytes(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, grown, info.Size())
 }
+
+// getChunker reads the chunk with addr |h|.
+func (wr *journalWriter) getChunker(h hash.Hash) (ToChunker, error) {
+	payload, err := wr.getPayload(h)
+	if err != nil || payload == nil {
+		return CompressedChunk{}, err
+	}
+	return wr.codec.chunker(h, payload)
+}

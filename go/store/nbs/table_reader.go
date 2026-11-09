@@ -60,7 +60,7 @@ type CompressedChunk struct {
 	H hash.Hash
 	// true if the chunk is a ghost chunk.
 	ghost bool
-	// verify is set for a chunk opened from an encrypted record, which has no CRC; ToChunk checks its hash.
+	// verify is set by a recordOpener for a record without a CRC; ToChunk checks its hash.
 	verify bool
 }
 
