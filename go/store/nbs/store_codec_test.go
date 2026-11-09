@@ -29,7 +29,6 @@ import (
 
 	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/chunks"
-	"github.com/dolthub/dolt/go/store/constants"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -51,12 +50,7 @@ func requireNoPlaintext(t *testing.T, data []byte, cs []chunks.Chunk) {
 // withPlainDefault makes stores opened without a StoreOption open only plaintext, as Dolt's do.
 func withPlainDefault(t *testing.T) {
 	prev := newStoreCodec
-	newStoreCodec = func(_ bool, format string) (string, storeCodec, error) {
-		if format == constants.EncryptedFormatString {
-			return "", nil, ErrEncryptionUnsupported
-		}
-		return format, plainCodec{}, nil
-	}
+	newStoreCodec = plainStoreCodec
 	t.Cleanup(func() { newStoreCodec = prev })
 }
 
@@ -351,7 +345,7 @@ func TestToyCodecLocalStore(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, ok)
 	}
-	require.Equal(t, constants.EncryptedFormatString, st.Version())
+	require.Equal(t, toyFormat, st.Version())
 	require.NoError(t, st.Close())
 
 	files, err := os.ReadDir(dir)
@@ -425,7 +419,7 @@ func TestToyCodecJournal(t *testing.T) {
 	ok, err := st.Commit(ctx, cs[0].Hash(), hash.Hash{})
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.Equal(t, constants.EncryptedFormatString, st.Version())
+	require.Equal(t, toyFormat, st.Version())
 	require.NoError(t, st.Close())
 
 	journal, err := os.ReadFile(filepath.Join(dir, chunkJournalName))
@@ -580,9 +574,9 @@ func TestToyCodecAWSStore(t *testing.T) {
 	ctx := context.Background()
 	c := newToyCodec()
 	s3, ddb := makeFakeS3(t), makeFakeDDB(t)
-	ddb.vers = constants.EncryptedFormatString
+	ddb.vers = toyFormat
 	open := func() *NomsBlockStore {
-		st, err := NewAWSStore(ctx, constants.EncryptedFormatString, "table", "db", "bucket", s3, ddb, 1<<10, NewUnlimitedMemQuotaProvider(), withToy(c))
+		st, err := NewAWSStore(ctx, toyFormat, "table", "db", "bucket", s3, ddb, 1<<10, NewUnlimitedMemQuotaProvider(), withToy(c))
 		require.NoError(t, err)
 		// Small parts, so conjoin copies records with UploadPartCopy.
 		st.persister.(*awsTablePersister).limits = awsLimits{partTarget: defaultS3PartSize, partMin: 1 << 10, partMax: 4 << 10}

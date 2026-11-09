@@ -274,6 +274,22 @@ func TestToyCodecAddTableFiles(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, contents.specs, 1, "the plaintext files are not added to the encrypted manifest")
 	})
+	t.Run("IntoManifestCreatedInAnotherFormat", func(t *testing.T) {
+		dir := t.TempDir()
+		dst, err := newLocalStore(ctx, types.Format_DOLT.VersionString(), dir, 1<<10, 64, q, false, withToy(c))
+		require.NoError(t, err)
+		defer dst.Close()
+		other, err := newLocalStore(ctx, types.Format_DOLT.VersionString(), dir, 1<<10, 64, q, false, withToyFormat(newToyCodec(), constants.EncryptedFormatPrefix+"OTHER__"))
+		require.NoError(t, err)
+		defer other.Close()
+		fillToyStore(t, other, 1, 10)
+
+		before := c.added.Load()
+		require.ErrorIs(t, copyTableFiles(t, src, dst), ErrEncryptionMismatch)
+		require.Equal(t, before, c.added.Load())
+		_, err = newLocalStore(ctx, types.Format_DOLT.VersionString(), dir, 1<<10, 64, q, false, withToy(c))
+		require.ErrorIs(t, err, ErrEncryptionUnsupported)
+	})
 	t.Run("CheckOpenedRefuses", func(t *testing.T) {
 		errRefused := errors.New("refused")
 		rc := newToyCodec()
@@ -315,7 +331,12 @@ func TestToyCodecAddTableFiles(t *testing.T) {
 // withPlainCodec opens a store plaintext, as Dolt does.
 func withPlainCodec() StoreOption {
 	return func(o *storeOptions) {
-		o.newCodec = func(_ bool, format string) (string, storeCodec, error) { return format, plainCodec{}, nil }
+		o.newCodec = func(_ bool, format string) (string, storeCodec, error) {
+			if format == constants.EncryptedFormatPrefix {
+				format = constants.FormatDoltString
+			}
+			return format, plainCodec{}, nil
+		}
 	}
 }
 
@@ -389,10 +410,17 @@ func TestToyCodecJournalWithoutManifest(t *testing.T) {
 		_, err = st.Root(ctx)
 		require.ErrorIs(t, err, ErrEncryptionMismatch)
 	})
+	t.Run("FormatLeftUnnamed", func(t *testing.T) {
+		unnamed := func(o *storeOptions) {
+			o.newCodec = func(_ bool, format string) (string, storeCodec, error) { return format, c, nil }
+		}
+		_, err := NewLocalJournalingStore(ctx, types.Format_DOLT.VersionString(), dir, q, false, nil, unnamed)
+		require.ErrorContains(t, err, "settled format")
+	})
 	st, err = NewLocalJournalingStore(ctx, types.Format_DOLT.VersionString(), dir, q, false, nil, withToy(c))
 	require.NoError(t, err)
 	defer st.Close()
-	require.Equal(t, constants.EncryptedFormatString, st.Version())
+	require.Equal(t, toyFormat, st.Version())
 	_, err = st.Root(ctx)
 	require.NoError(t, err)
 }

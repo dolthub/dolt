@@ -24,7 +24,7 @@ import (
 )
 
 var (
-	ErrEncryptionUnsupported = errors.New("encrypted databases require Dolt Enterprise")
+	ErrEncryptionUnsupported = errors.New("unsupported encrypted database format")
 	ErrEncryptionMismatch    = errors.New("storage file encryption does not match the database")
 )
 
@@ -35,13 +35,18 @@ type storeOptions struct {
 	newCodec codecFactory
 }
 
-// codecFactory returns a store's codec and its format: |format| if the store exists, else the one it is created in.
+// codecFactory returns a store's codec and its format: the store's if it exists, else the one it is created in. An
+// existing store's |format| is constants.EncryptedFormatPrefix alone when only the framing of its files shows that it is
+// encrypted, as for a journal written before its manifest; the factory returns its own format for it.
 type codecFactory func(exists bool, format string) (string, storeCodec, error)
 
 // newStoreCodec settles the codec of a store opened without a StoreOption. Dolt Enterprise replaces it.
-var newStoreCodec codecFactory = func(_ bool, format string) (string, storeCodec, error) {
-	if format == constants.EncryptedFormatString {
-		return "", nil, ErrEncryptionUnsupported
+var newStoreCodec codecFactory = plainStoreCodec
+
+// plainStoreCodec opens plaintext stores and refuses encrypted ones.
+func plainStoreCodec(_ bool, format string) (string, storeCodec, error) {
+	if constants.IsEncryptedFormatString(format) {
+		return "", nil, fmt.Errorf("%w %q", ErrEncryptionUnsupported, format)
 	}
 	return format, plainCodec{}, nil
 }
@@ -224,7 +229,7 @@ func (opts openOpts) fileCodec(encrypted bool) (storeCodec, error) {
 	}
 	format := constants.FormatDoltString
 	if encrypted {
-		format = constants.EncryptedFormatString
+		format = constants.EncryptedFormatPrefix
 	}
 	_, codec, err := newStoreCodec(true, format)
 	return codec, err
@@ -250,17 +255,20 @@ func (nbs *NomsBlockStore) settleCodec(exists bool, format string) (string, erro
 	if newCodec == nil {
 		newCodec = newStoreCodec
 	}
-	format, codec, err := newCodec(exists, format)
+	settled, codec, err := newCodec(exists, format)
 	if err != nil {
 		return "", err
+	}
+	if settled == constants.EncryptedFormatPrefix || exists && format != constants.EncryptedFormatPrefix && settled != format {
+		return "", fmt.Errorf("store codec settled format %q as %q", format, settled)
 	}
 	if cs, ok := nbs.persister.(codecSetter); ok {
 		cs.setCodec(codec)
 	} else if codec.encrypted() && nbs.persister != nil {
 		return "", fmt.Errorf("storage backend %T does not support encrypted databases", nbs.persister)
 	}
-	nbs.codec = codec
-	return format, nil
+	nbs.codec, nbs.codecFormat = codec, settled
+	return settled, nil
 }
 
 // settleJournalCodec settles a journaling store's codec before its journal is read, and returns its format.
@@ -292,8 +300,8 @@ func (nbs *NomsBlockStore) applyOptions(opts []StoreOption) {
 // checkManifestCodec settles the store's codec from its first manifest, and refuses a later one that differs.
 func (nbs *NomsBlockStore) checkManifestCodec(exists bool, contents manifestContents) error {
 	if nbs.codec != nil {
-		if exists && (contents.nbfVers == constants.EncryptedFormatString) != nbs.codec.encrypted() {
-			return fmt.Errorf("%w: store opened as %q, manifest is now %q", ErrEncryptionMismatch, nbs.upstream.nbfVers, contents.nbfVers)
+		if exists && contents.nbfVers != nbs.codecFormat && (nbs.codec.encrypted() || constants.IsEncryptedFormatString(contents.nbfVers)) {
+			return fmt.Errorf("%w: store opened as %q, manifest is now %q", ErrEncryptionMismatch, nbs.codecFormat, contents.nbfVers)
 		}
 		return nil
 	}

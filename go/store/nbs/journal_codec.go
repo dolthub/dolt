@@ -303,7 +303,7 @@ func peekJournalVersion(path string) (string, bool, error) {
 	}
 	switch kind := journalRecKind(hdr[journalRecLenSz+journalRecTagSz]); {
 	case isEncryptedRecKind(kind):
-		return constants.EncryptedFormatString, true, nil
+		return constants.EncryptedFormatPrefix, true, nil
 	case kind == chunkJournalRecKind || kind == rootHashJournalRecKind:
 		return constants.FormatDoltString, true, nil
 	}

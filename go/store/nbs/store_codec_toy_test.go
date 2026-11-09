@@ -55,17 +55,25 @@ func newToyCodec() *toyCodec {
 	return &toyCodec{nextKey: new(atomic.Uint32), added: new(atomic.Int32), adopted: new(atomic.Int32)}
 }
 
+// toyFormat is the format string of stores the toy codec encrypts.
+const toyFormat = constants.EncryptedFormatPrefix + "TOY__"
+
 // withToy opens a store under |c|, creating it encrypted.
 func withToy(c *toyCodec) StoreOption {
+	return withToyFormat(c, toyFormat)
+}
+
+// withToyFormat opens a store under |c| in |own| format, and refuses other encrypted formats.
+func withToyFormat(c *toyCodec, own string) StoreOption {
 	return func(o *storeOptions) {
 		o.newCodec = func(exists bool, format string) (string, storeCodec, error) {
-			if !exists {
-				format = constants.EncryptedFormatString
+			switch {
+			case !exists || format == own || format == constants.EncryptedFormatPrefix:
+				return own, c, nil
+			case constants.IsEncryptedFormatString(format):
+				return "", nil, ErrEncryptionUnsupported
 			}
-			if format != constants.EncryptedFormatString {
-				return format, plainCodec{}, nil
-			}
-			return format, c, nil
+			return format, plainCodec{}, nil
 		}
 	}
 }

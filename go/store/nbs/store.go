@@ -158,10 +158,11 @@ type NomsBlockStore struct {
 	loadThunk func(ctx context.Context, loadIt bool)
 	loadErr   error
 
-	// codec seals and opens the records of the store's files, once settled from its format.
-	codec    storeCodec
-	newCodec codecFactory
-	oldGen   *NomsBlockStore
+	// codec seals and opens the records of the store's files once settled; codecFormat is the format it settled as.
+	codec       storeCodec
+	codecFormat string
+	newCodec    codecFactory
+	oldGen      *NomsBlockStore
 }
 
 func (nbs *NomsBlockStore) PersistGhostHashes(ctx context.Context, refs hash.HashSet) error {
