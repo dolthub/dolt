@@ -1817,44 +1817,7 @@ func (d *DoltSession) SetSessionVariable(ctx *sql.Context, key string, value int
 		return d.setForeignKeyChecksSessionVar(ctx, key, value)
 	}
 
-	if strings.EqualFold(key, sql.AutoCommitSessionVar) {
-		return d.setAutocommitSessionVar(ctx, key, value)
-	}
-
 	return d.Session.SetSessionVariable(ctx, key, value)
-}
-
-// setAutocommitSessionVar sets @@autocommit, and defers materialization in the write sessions of this session's
-// branch states only while it is off. Branch states created later pick up the new value in addDB, but those already
-// in this session must be updated here: the engine evaluates SET before deciding whether to commit the statement's
-// transaction, so `SET autocommit = 0` does not end the transaction holding them.
-func (d *DoltSession) setAutocommitSessionVar(ctx *sql.Context, key string, value interface{}) error {
-	if err := d.Session.SetSessionVariable(ctx, key, value); err != nil {
-		return err
-	}
-	if ctx == nil {
-		// The session is being initialized (see doltSessionFactory), so it has no branch states to update yet.
-		return nil
-	}
-	autocommit, err := isSessionAutocommit(ctx)
-	if err != nil {
-		return err
-	}
-	if autocommit {
-		// Edits left pending while deferring must be materialized before the write sessions stop deferring
-		if err = d.materializeAllPending(ctx); err != nil {
-			return err
-		}
-	}
-
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	for _, bs := range d.currentBranches().all() {
-		if bs.writeSession != nil {
-			bs.writeSession.SetDeferMaterialization(!autocommit)
-		}
-	}
-	return nil
 }
 
 func (d *DoltSession) setHeadRefSessionVar(ctx *sql.Context, db, value string) error {
@@ -2009,14 +1972,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 				return err
 			}
 			branchState.writeSession = d.writeSessProv(revisionQualifiedName, branchWorkingSetOwner{d, branchState}, tracker, editOpts)
-			// Materialization is deferred only when @@autocommit is off. With autocommit on, every statement is its
-			// own transaction and is materialized on commit, so deferring buys nothing. Changes to @@autocommit
-			// after this branch state is created are applied in setAutocommitSessionVar.
-			autocommit, err := isSessionAutocommit(ctx)
-			if err != nil {
-				return err
-			}
-			branchState.writeSession.SetDeferMaterialization(!autocommit)
+			branchState.writeSession.SetDeferMaterialization(true)
 		}
 	}
 

@@ -77,9 +77,9 @@ func TestPendingEditsSurviveDerivedRoots(t *testing.T) {
 	}
 }
 
-// TestDeferMaterializationRequiresAutocommitOff asserts that the edits of completed statements are left pending only
-// when @@autocommit is off, and are materialized when the transaction commits.
-func TestDeferMaterializationRequiresAutocommitOff(t *testing.T) {
+// TestPendingEditsMaterializeOnCommit asserts that the edits of completed statements stay pending for the rest of
+// their transaction, whether it's explicit or @@autocommit is off, and are materialized when it commits.
+func TestPendingEditsMaterializeOnCommit(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
 	e := mustNewEngine(t, h)
@@ -95,23 +95,21 @@ func TestDeferMaterializationRequiresAutocommitOff(t *testing.T) {
 
 	enginetest.RunQueryWithContext(t, e, h, ctx, "create table t (x int primary key)")
 
-	// With autocommit on, an explicit transaction does not defer materialization
 	enginetest.RunQueryWithContext(t, e, h, ctx, "start transaction")
 	enginetest.RunQueryWithContext(t, e, h, ctx, "insert into t values (1)")
-	require.False(t, hasPendingEdits())
+	require.True(t, hasPendingEdits())
 	enginetest.RunQueryWithContext(t, e, h, ctx, "commit")
+	require.False(t, hasPendingEdits())
 
-	// With autocommit off, edits are pending until the transaction commits
 	enginetest.RunQueryWithContext(t, e, h, ctx, "set autocommit = 0")
 	enginetest.RunQueryWithContext(t, e, h, ctx, "insert into t values (2)")
 	require.True(t, hasPendingEdits())
 	enginetest.RunQueryWithContext(t, e, h, ctx, "commit")
 	require.False(t, hasPendingEdits())
 
-	// Turning autocommit back on stops deferring
+	// With autocommit on, each statement's transaction commits when it completes
 	enginetest.RunQueryWithContext(t, e, h, ctx, "set autocommit = 1")
 	enginetest.RunQueryWithContext(t, e, h, ctx, "insert into t values (3)")
-	enginetest.RunQueryWithContext(t, e, h, ctx, "insert into t values (4)")
 	require.False(t, hasPendingEdits())
 }
 
