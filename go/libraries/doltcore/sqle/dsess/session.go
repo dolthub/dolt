@@ -1168,13 +1168,10 @@ func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func
 	return nil
 }
 
-// visitTempTableGCRoots keeps the roots of the temporary tables stored in |dbState|'s database.
+// visitTempTableGCRoots keeps the roots of the temporary tables stored in |dbState|'s database. They outlive the
+// session's branch states, so it doesn't look for the database's DoltDB there.
 func (d *DoltSession) visitTempTableGCRoots(ctx context.Context, dbState *DatabaseSessionState, keep func(hash.Hash) bool) error {
-	var ddb *doltdb.DoltDB
-	for _, head := range dbState.heads {
-		ddb = head.dbData.Ddb
-		break
-	}
+	ddb := dbState.ddb
 	for _, tables := range d.tempTables {
 		for _, tbl := range tables {
 			rooted, ok := tbl.(GCRootedTable)
@@ -1729,6 +1726,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		}
 
 		sessionState.dbName = baseName
+		sessionState.ddb = dbState.DbData.Ddb
 
 		baseDb, ok := d.provider.BaseDatabase(ctx, baseName)
 		if !ok {
