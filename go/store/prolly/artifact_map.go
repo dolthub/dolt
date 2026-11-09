@@ -352,7 +352,7 @@ type ArtifactFlusher struct{}
 var _ MutableMapFlusher[Map, tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc]] = ArtifactFlusher{}
 
 func (f ArtifactFlusher) GetDefaultSerializer(ctx context.Context, mut *MutableMap) message.Serializer {
-	return message.NewMergeArtifactSerializer(mut.keyDesc, mut.NodeStore().Pool())
+	return message.NewMergeArtifactSerializer(mut.keyDesc, mut.valDesc, mut.NodeStore().Pool())
 }
 
 func (f ArtifactFlusher) ApplyMutationsWithSerializer(ctx context.Context, serializer message.Serializer, mut *MutableMap) (tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc], error) {
