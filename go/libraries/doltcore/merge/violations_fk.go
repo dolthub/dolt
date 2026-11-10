@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -69,8 +70,20 @@ func RegisterForeignKeyViolations(
 	if err != nil {
 		return err
 	}
+	changes, err := newFkTableChanges(ctx, newRoot, baseRoot)
+	if err != nil {
+		return err
+	}
 	for _, foreignKey := range fkColl.AllKeys() {
 		if !foreignKey.IsResolved() || (tables.Size() != 0 && !tables.Contains(foreignKey.TableName)) {
+			continue
+		}
+
+		// Every violation found below comes from a row that differs between |baseRoot| and |newRoot|: a row added to
+		// or modified in the child table, or a row removed from or modified in the parent table. A foreign key whose
+		// child and parent tables are both the same in the two roots has no such row, so it cannot have a violation
+		// and is skipped before its tables are loaded.
+		if !changes.mayDiffer(foreignKey.TableName) && !changes.mayDiffer(foreignKey.ReferencedTableName) {
 			continue
 		}
 
@@ -147,6 +160,94 @@ func RegisterForeignKeyViolations(
 		}
 	}
 	return nil
+}
+
+// fkTableChanges records which tables differ between the two roots given to RegisterForeignKeyViolations, so that
+// foreign keys over unchanged tables can be skipped without loading any table.
+type fkTableChanges struct {
+	// newTables holds the hash of every table in the new root, keyed by its exact name.
+	newTables map[doltdb.TableName]hash.Hash
+	// changedNames holds the name, without schema, of every table that was added, dropped or modified between the
+	// two roots.
+	changedNames []string
+	// redirectsChanged is set when dolt_nonlocal_tables differs between the two roots.
+	redirectsChanged bool
+}
+
+// newFkTableChanges compares the tables of |newRoot| and |baseRoot| by hash. A table hash covers the schema, the row
+// data and every index of the table, so two tables with the same hash have the same rows in every index.
+func newFkTableChanges(ctx context.Context, newRoot, baseRoot doltdb.RootValue) (*fkTableChanges, error) {
+	newTables, err := tableHashes(ctx, newRoot)
+	if err != nil {
+		return nil, err
+	}
+	baseTables, err := tableHashes(ctx, baseRoot)
+	if err != nil {
+		return nil, err
+	}
+	changes := &fkTableChanges{newTables: newTables}
+	for name := range diffTableHashes(baseTables, newTables) {
+		changes.changedNames = append(changes.changedNames, name.Name)
+	}
+
+	// The table resolver redirects a table name to another branch when dolt_nonlocal_tables has an entry for it, so a
+	// change to that table can change what any name resolves to. It is looked up directly, in both places it can live,
+	// because it is not in a schema that GetAllTableNames is certain to list.
+	nonlocalTables := doltdb.GetNonlocalTablesTableName()
+	for _, name := range []doltdb.TableName{{Name: nonlocalTables}, {Name: nonlocalTables, Schema: doltdb.DoltNamespace}} {
+		newHash, _, err := newRoot.GetTableHash(ctx, name)
+		if err != nil {
+			return nil, err
+		}
+		baseHash, _, err := baseRoot.GetTableHash(ctx, name)
+		if err != nil {
+			return nil, err
+		}
+		if newHash != baseHash {
+			changes.redirectsChanged = true
+		}
+	}
+	return changes, nil
+}
+
+// mayDiffer returns false only if |name| is certain to resolve to the same table, with the same contents, in both
+// roots. That is the case when the new root has a table of exactly this name and no table that a resolver could match
+// to the name differs between the roots. Resolvers match names case-insensitively and may search several schemas, so
+// every changed table with a matching name counts, whatever its schema. A name that is not a table of the new root is
+// reported as changed, which leaves it to the resolver and to the errors it returns for a missing table.
+func (c *fkTableChanges) mayDiffer(name doltdb.TableName) bool {
+	if c.redirectsChanged {
+		return true
+	}
+	if _, ok := c.newTables[name]; !ok {
+		return true
+	}
+	lowerName := strings.ToLower(name.Name)
+	for _, changedName := range c.changedNames {
+		if strings.EqualFold(changedName, name.Name) || strings.ToLower(changedName) == lowerName {
+			return true
+		}
+	}
+	return false
+}
+
+// tableHashes returns the hash of every table in |root|, keyed by table name.
+func tableHashes(ctx context.Context, root doltdb.RootValue) (map[doltdb.TableName]hash.Hash, error) {
+	names, err := root.GetAllTableNames(ctx, false)
+	if err != nil {
+		return nil, err
+	}
+	hashes := make(map[doltdb.TableName]hash.Hash, len(names))
+	for _, name := range names {
+		h, ok, err := root.GetTableHash(ctx, name)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			hashes[name] = h
+		}
+	}
+	return hashes, nil
 }
 
 // AddForeignKeyViolations adds foreign key constraint violations to each table.
