@@ -59,19 +59,3 @@ func (plainStores) reusable(context.Context, chunks.ChunkStore, map[string]inter
 func ReusableStore(ctx context.Context, cs chunks.ChunkStore, params map[string]interface{}) bool {
 	return storeOptions.reusable(ctx, cs, params)
 }
-
-// DialerAs returns the first of |d| and the dialers it wraps, through their Unwrap methods, that is a T.
-func DialerAs[T any](d GRPCDialProvider) (T, bool) {
-	for d != nil {
-		if t, ok := d.(T); ok {
-			return t, true
-		}
-		u, ok := d.(interface{ Unwrap() GRPCDialProvider })
-		if !ok {
-			break
-		}
-		d = u.Unwrap()
-	}
-	var zero T
-	return zero, false
-}

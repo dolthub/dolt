@@ -55,7 +55,7 @@ func (cache *LocalCSCache) Get(ctx context.Context, repopath, nbfVerStr string) 
 
 	id := filepath.FromSlash(repopath)
 
-	if cs, ok := cache.dbs[id]; ok && !cache.evictUnwrittenInOtherFormat(ctx, id, cs, nbfVerStr) {
+	if cs, ok := cache.dbs[id]; ok {
 		return cs, nil
 	}
 
@@ -96,29 +96,6 @@ func (cache *LocalCSCache) Get(ctx context.Context, repopath, nbfVerStr string) 
 	cache.dbs[id] = newCS
 
 	return newCS, nil
-}
-
-// evictUnwrittenInOtherFormat closes and forgets the store at |id| if it is empty and a client creating it asked
-// for another format.
-func (cache *LocalCSCache) evictUnwrittenInOtherFormat(ctx context.Context, id string, cs remotesrv.RemoteSrvStore, nbfVerStr string) bool {
-	if _, ok := remotesrv.RequestedRepoFormat(ctx); !ok || cs.Version() == nbfVerStr {
-		return false
-	}
-	empty := true
-	err := cache.fs.Iter(id, false, func(path string, _ int64, _ bool) bool {
-		// Opening a store creates its manifest lock file.
-		if filepath.Base(path) == "LOCK" {
-			return false
-		}
-		empty = false
-		return true
-	})
-	if err != nil || !empty {
-		return false
-	}
-	delete(cache.dbs, id)
-	_ = cs.Close()
-	return true
 }
 
 type SingletonCSCache struct {

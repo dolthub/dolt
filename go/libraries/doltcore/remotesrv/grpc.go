@@ -189,7 +189,8 @@ func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remot
 
 	numHashes := len(hashes)
 
-	locations, keysOf, err := storeFormats.locate(ctx, cs, hashes)
+	locator := storeFormats.locator()
+	locations, err := locator.locate(ctx, cs, hashes)
 	if err != nil {
 		logger.WithError(err).Error("error getting chunk locations for hashes")
 		return nil, err
@@ -230,7 +231,7 @@ func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remot
 		}).Trace("generated sealed url")
 
 		getRange := &remotesapi.HttpGetRange{Url: url.String(), Ranges: ranges}
-		addRangeKeys(getRange, keysOf)
+		locator.setRangeKeys(getRange)
 		locs = append(locs, &remotesapi.DownloadLoc{Location: &remotesapi.DownloadLoc_HttpGetRange{HttpGetRange: getRange}})
 	}
 
@@ -302,7 +303,8 @@ func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStore
 			return err
 		}
 		numHashes += len(hashes)
-		locations, keysOf, err := storeFormats.locate(stream.Context(), cs, hashes)
+		locator := storeFormats.locator()
+		locations, err := locator.locate(stream.Context(), cs, hashes)
 		if err != nil {
 			logger.WithError(err).Error("error getting chunk locations for hashes")
 			return err
@@ -342,7 +344,7 @@ func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStore
 			}).Trace("generated sealed url")
 
 			getRange := &remotesapi.HttpGetRange{Url: url.String(), Ranges: ranges}
-			addRangeKeys(getRange, keysOf)
+			locator.setRangeKeys(getRange)
 			locs = append(locs, &remotesapi.DownloadLoc{Location: &remotesapi.DownloadLoc_HttpGetRange{HttpGetRange: getRange}})
 		}
 
@@ -383,7 +385,7 @@ func (rs *RemoteChunkStore) StreamChunkLocations(stream remotesapi.ChunkStoreSer
 	// TableFileRecord overwrite semantics to make that transparent.
 	tfByPath := make(map[string]uint32)
 	var nextTFID uint32
-	var streamKeys keyNumbering
+	locator := storeFormats.locator()
 
 	for {
 		req, err := stream.Recv()
@@ -437,7 +439,7 @@ func (rs *RemoteChunkStore) StreamChunkLocations(stream remotesapi.ChunkStoreSer
 		// GetChunkLocationsWithPaths deletes found hashes from
 		// |hashes|; the remainder is exactly the set the server
 		// could not find.
-		locations, keysOf, err := storeFormats.locate(stream.Context(), cs, hashes)
+		locations, err := locator.locate(stream.Context(), cs, hashes)
 		if err != nil {
 			logger.WithError(err).Error("error getting chunk locations for hashes")
 			return err
@@ -479,17 +481,16 @@ func (rs *RemoteChunkStore) StreamChunkLocations(stream remotesapi.ChunkStoreSer
 			}
 
 			for h, r := range hashToRange {
-				key, dictKey := keysOf(h, r.Offset, r.Length)
-				chunkLocs = append(chunkLocs, &remotesapi.StreamChunkLocationsResponse_ChunkLocation{
+				loc := &remotesapi.StreamChunkLocationsResponse_ChunkLocation{
 					TableFileId:      id,
 					RequestIndex:     uint32(hashToIndex[h]),
 					Offset:           r.Offset,
 					Length:           r.Length,
 					DictionaryOffset: r.DictOffset,
 					DictionaryLength: r.DictLength,
-					KeyId:            streamKeys.ref(key),
-					DictionaryKeyId:  streamKeys.ref(dictKey),
-				})
+				}
+				locator.setLocationKeys(loc, h)
+				chunkLocs = append(chunkLocs, loc)
 				numLocations++
 			}
 		}
@@ -507,7 +508,7 @@ func (rs *RemoteChunkStore) StreamChunkLocations(stream remotesapi.ChunkStoreSer
 			TableFiles:     tableFiles,
 			Locations:      chunkLocs,
 			MissingIndexes: missing,
-			Keys:           streamKeys.dataKeys(),
+			Keys:           locator.newKeys(),
 		}); err != nil {
 			return err
 		}
