@@ -492,8 +492,15 @@ func ConfigureServices(
 			}
 
 			if logBin == 1 {
-				if err := binlogreplication.CheckDatabases(sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.DbProvider); err != nil {
-					return err
+				provider := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.DbProvider
+				if u, ok := provider.(sqle.DoltProviderUnwrapper); ok {
+					provider = u.UnderlyingDoltProvider()
+				}
+				doltProvider, _ := provider.(*sqle.DoltDatabaseProvider)
+				if doltProvider != nil {
+					if err := binlogreplication.CheckDatabases(doltProvider); err != nil {
+						return err
+					}
 				}
 				logrus.Infof("Enabling binary logging for branch %s", logBinBranch)
 				binlogProducer, err := binlogreplication.NewBinlogProducer(sqlCtx, cfg.DoltEnv.FS)
@@ -510,11 +517,8 @@ func ConfigureServices(
 				doltBinlogPrimaryController.BinlogProducer(binlogProducer)
 
 				// Register binlog hooks for database creation/deletion
-				provider := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.DbProvider
-				if u, ok := provider.(sqle.DoltProviderUnwrapper); ok {
-					provider = u.UnderlyingDoltProvider()
-				}
-				if doltProvider, ok := provider.(*sqle.DoltDatabaseProvider); ok {
+				if doltProvider != nil {
+					doltProvider.InitDatabaseHooks = append([]sqle.InitDatabaseHook{binlogreplication.CheckDatabaseHook}, doltProvider.InitDatabaseHooks...)
 					doltProvider.AddInitDatabaseHook(binlogreplication.NewBinlogInitDatabaseHook(nil, doltdb.DatabaseUpdateListeners))
 					doltProvider.AddDropDatabaseHook(binlogreplication.NewBinlogDropDatabaseHook(nil, doltdb.DatabaseUpdateListeners))
 				}

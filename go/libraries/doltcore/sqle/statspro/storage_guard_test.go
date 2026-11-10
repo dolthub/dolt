@@ -78,7 +78,7 @@ func TestStorageGuardKeepsStatsInMemory(t *testing.T) {
 
 	sc.noteDB(ctx, prev.ddb)
 	_, ok = sc.kv.(*prollyStats)
-	assert.True(t, ok, "a stats database that passes the check is kept")
+	assert.True(t, ok, "a stats database is kept while no database needs guarding")
 
 	g.mu.Lock()
 	g.noting, g.refuse = true, true
@@ -103,4 +103,6 @@ func TestStorageGuardRefusesStoredStats(t *testing.T) {
 	_, isMem := sc.kv.(*memStats)
 	assert.True(t, isMem)
 	assert.True(t, sc.memOnly)
+	sc.SetMemOnly(false)
+	assert.True(t, sc.memOnly, "statistics stay in memory once guarded storage failed to open")
 }

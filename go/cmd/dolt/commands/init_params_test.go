@@ -16,15 +16,10 @@ package commands
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 func TestInitParamFlags(t *testing.T) {
@@ -39,32 +34,11 @@ func TestInitParamFlags(t *testing.T) {
 	defer dEnv.Close()
 	result := InitCmd{}.Exec(ctx, "dolt init", []string{"-name", "Bill Billerson", "-email", "bigbillieb@fake.horse", "--toy"}, dEnv, nil)
 	require.Equal(t, 0, result)
-	assert.Equal(t, "1", dEnv.DBLoadParams["toy_init"], "the database is created with the flag's params")
+	assert.Equal(t, "1", dEnv.DBLoadParams["toy_init"], "the database loads with the flag's params")
 
 	dEnv = createUninitializedEnv()
 	defer dEnv.Close()
 	result = InitCmd{}.Exec(ctx, "dolt init", []string{"-name", "Bill Billerson", "-email", "bigbillieb@fake.horse"}, dEnv, nil)
 	require.Equal(t, 0, result)
 	assert.NotContains(t, dEnv.DBLoadParams, "toy_init")
-}
-
-func TestBareDBCacheOpensInRequestedFormat(t *testing.T) {
-	ctx := context.Background()
-	dir := filepath.Join(t.TempDir(), "bare")
-	require.NoError(t, os.MkdirAll(dir, os.ModePerm))
-
-	cache := &bareDBCache{path: dir}
-	entries, err := os.ReadDir(dir)
-	require.NoError(t, err)
-	assert.Empty(t, entries, "the repository opens on first use")
-
-	const toy = "__TOY__"
-	cs, err := cache.Get(ctx, "", toy)
-	require.NoError(t, err)
-	defer cs.Close()
-	assert.Equal(t, toy, cs.Version())
-	again, err := cache.Get(ctx, "", types.Format_DOLT.VersionString())
-	require.NoError(t, err)
-	assert.Same(t, cs, again)
-	var _ remotesrv.DBCache = cache
 }

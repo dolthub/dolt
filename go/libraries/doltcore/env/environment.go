@@ -102,7 +102,8 @@ type DoltEnv struct {
 	DBLoadParams map[string]interface{}
 
 	UserPassConfig *creds.DoltCredsForPass
-	ParentConfig   config.ReadableConfig
+	// ParentConfig is the config an environment created by another, such as a SQL server's new database, inherits.
+	ParentConfig config.ReadableConfig
 }
 
 func NewDoltEnv(version string, config *DoltCliConfig, repoState *RepoState, doltDB *doltdb.DoltDB, fs filesys.Filesys) *DoltEnv {

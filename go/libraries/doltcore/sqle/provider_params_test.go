@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
@@ -55,8 +56,14 @@ func TestProviderCreateDatabaseWithParams(t *testing.T) {
 	cfg, _ := dEnv.Config.GetConfig(env.GlobalConfig)
 	sqlCtx := NewTestSQLCtxWithProvider(ctx, pro, cfg, nil, nil)
 
-	require.NoError(t, pro.CreateDatabaseWithParams(sqlCtx, "with_params", map[string]string{"unused": "1"}))
+	var loadParams map[string]interface{}
+	pro.AddInitDatabaseHook(func(_ *sql.Context, _ *DoltDatabaseProvider, _ string, denv *env.DoltEnv, _ dsess.SqlDatabase) error {
+		loadParams = denv.DBLoadParams
+		return nil
+	})
+	require.NoError(t, pro.CreateDatabaseWithParams(sqlCtx, "with_params", map[string]string{"toy": "1"}))
 	assert.True(t, pro.HasDatabase(sqlCtx, "with_params"))
+	assert.Equal(t, "1", loadParams["toy"], "the database loads with its params")
 }
 
 func TestRemoteDialerWithGitCacheRootUnwraps(t *testing.T) {

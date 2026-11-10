@@ -256,7 +256,7 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 	}
 	// Close the source backup database after restore to release its file descriptors; see the equivalent
 	// comment in syncRemote. Note that remoteDb is only the source being read from — the restored
-	// database (lookupDbName) is a separate database created via [dsess.DoltSessionProvider.CreateDatabase]
+	// database (lookupDbName) is a separate database created via [dsess.CreateDatabaseWithParams]
 	// and follows the normal caching path.
 	defer remoteDb.Close()
 	params, err := restoreParams(ctx, dsess.Provider(), remoteDb)
@@ -309,8 +309,8 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 	return err
 }
 
-// restoreParams returns the params that |p| creates a database to restore |backup| into with, before anything is
-// dropped to make room for it.
+// restoreParams returns the params of the database that |p| creates to restore |backup| into. It fails, before
+// anything is dropped to make room for that database, if |p| cannot create it.
 func restoreParams(ctx *sql.Context, p dsess.DoltDatabaseProvider, backup *doltdb.DoltDB) (map[string]string, error) {
 	params, err := env.RestoreParams(ctx, backup)
 	if err == nil {

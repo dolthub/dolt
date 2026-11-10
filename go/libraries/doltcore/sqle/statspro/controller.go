@@ -120,7 +120,7 @@ type StatsController struct {
 	quiescedAwake chan struct{}
 	guard         storageGuard
 	guarded       bool
-	// guardMemOnly is set when the guard could not open guarded stats storage, which SetMemOnly(false) keeps.
+	// guardMemOnly keeps statistics in memory, whatever SetMemOnly sets, once guarded stats storage failed to open.
 	guardMemOnly bool
 }
 
@@ -546,11 +546,8 @@ func (sc *StatsController) rotateStorage(ctx context.Context) error {
 // stats directory, and picks a new database from dbFs to host the stats backing
 // store. The stats controller owns the lifecycle of these DoltDB instances (they
 // always bypass the singleton cache), so it is safe to close and rm unconditionally.
-func (sc *StatsController) lockedRotateStorage(ctx context.Context) error {
-	if sc.memOnly {
-		return nil
-	}
-
+// lockedStatsToMemory closes the stats database and removes it, keeping its statistics in memory.
+func (sc *StatsController) lockedStatsToMemory() (*memStats, error) {
 	sc.kv.Close()
 	var mem *memStats
 	switch kv := sc.kv.(type) {
@@ -561,13 +558,22 @@ func (sc *StatsController) lockedRotateStorage(ctx context.Context) error {
 	default:
 		mem = NewMemStats()
 	}
-	// Serve stats from memory until the new store opens, so a failed rotation doesn't leave the closed store in use.
 	sc.kv = mem
-
 	if sc.statsBackingDb != nil {
-		if err := sc.rm(sc.statsBackingDb); err != nil {
-			return err
-		}
+		return mem, sc.rm(sc.statsBackingDb)
+	}
+	return mem, nil
+}
+
+func (sc *StatsController) lockedRotateStorage(ctx context.Context) error {
+	if sc.memOnly {
+		return nil
+	}
+
+	// Serve stats from memory until the new store opens, so a failed rotation doesn't leave the closed store in use.
+	mem, err := sc.lockedStatsToMemory()
+	if err != nil {
+		return err
 	}
 
 	if len(sc.dbFs) == 0 {

@@ -24,8 +24,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
-// storageGuard decides which stats databases may hold statistics, which hold the row values of the databases they
-// describe. Once it guards them, statistics stay in memory when no stats database passes its check.
+// storageGuard decides which stats databases may hold statistics. Once it guards them, statistics stay in memory when
+// no stats database passes its check.
 type storageGuard interface {
 	// note is called with each database whose statistics are collected, and returns true if stats databases must be
 	// guarded because of |ddb|.
@@ -77,16 +77,14 @@ func (sc *StatsController) lockedNoteDB(ctx context.Context, ddb *doltdb.DoltDB)
 	if !ok || sc.guard.check(p.ddb) == nil {
 		return
 	}
-	if !sc.memOnly {
-		_ = sc.lockedRotateStorage(ctx)
-		return
+	var err error
+	if sc.memOnly {
+		_, err = sc.lockedStatsToMemory()
+		sc.statsBackingDb = nil
+	} else {
+		err = sc.lockedRotateStorage(ctx)
 	}
-	p.Close()
-	sc.kv = p.mem
-	if sc.statsBackingDb != nil {
-		if err := sc.rm(sc.statsBackingDb); err != nil {
-			sc.descError("removing statistics", err)
-		}
+	if err != nil {
+		sc.descError("moving statistics out of a guarded stats database", err)
 	}
-	sc.statsBackingDb = nil
 }

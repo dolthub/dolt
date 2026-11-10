@@ -18,7 +18,9 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 // checkDatabase returns an error if database |name| may not be binary logged. Dolt Enterprise replaces it.
@@ -26,21 +28,18 @@ var checkDatabase = func(name string, ddb *doltdb.DoltDB) error {
 	return nil
 }
 
-// CheckDatabases returns an error if a database of |provider| may not be binary logged.
-func CheckDatabases(provider sql.DatabaseProvider) error {
-	var p *sqle.DoltDatabaseProvider
-	switch pro := provider.(type) {
-	case *sqle.DoltDatabaseProvider:
-		p = pro
-	case sqle.DoltProviderUnwrapper:
-		p = pro.UnderlyingDoltProvider()
-	default:
-		return nil
-	}
+// CheckDatabases returns an error if a database of |p| may not be binary logged.
+func CheckDatabases(p *sqle.DoltDatabaseProvider) error {
 	for _, db := range p.DoltDatabases() {
 		if err := checkDatabase(db.Name(), db.DbData().Ddb); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// CheckDatabaseHook refuses to create a database that may not be binary logged. It must run before the other init
+// hooks, so that a refused database leaves nothing behind.
+func CheckDatabaseHook(ctx *sql.Context, _ *sqle.DoltDatabaseProvider, name string, denv *env.DoltEnv, _ dsess.SqlDatabase) error {
+	return checkDatabase(name, denv.DoltDB(ctx))
 }
