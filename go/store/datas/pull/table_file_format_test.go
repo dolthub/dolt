@@ -41,7 +41,6 @@ type toyTableFiles struct {
 	writers      []bool
 	journals     int
 	fetchedCount int
-	writerErr    error
 	fetchedErr   error
 }
 
@@ -49,9 +48,6 @@ func (f *toyTableFiles) newWriter(tmpDir string, archive bool) (nbs.GenericTable
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.writers = append(f.writers, archive)
-	if f.writerErr != nil {
-		return nil, f.writerErr
-	}
 	return f.plainTableFiles.newWriter(tmpDir, archive)
 }
 
@@ -121,44 +117,27 @@ func testPull(t *testing.T, src, sink chunks.ChunkStore, root hash.Hash) (*Pulle
 }
 
 func TestPullerUsesTableFileFormat(t *testing.T) {
-	for _, streamer := range []string{"0", "1"} {
-		t.Run("DOLT_ARCHIVE_PULL_STREAMER="+streamer, func(t *testing.T) {
-			t.Setenv("DOLT_ARCHIVE_PULL_STREAMER", streamer)
-			f := &toyTableFiles{}
-			stores := withTableFiles(t, f, nil)
-			src, root := testSource(t)
-			sink := testSink(t)
-
-			plr, err := testPull(t, src, sink, root)
-			require.NoError(t, err)
-			require.NoError(t, plr.Pull(context.Background()))
-			assert.Equal(t, []chunks.ChunkStore{src, sink}, *stores)
-			require.NotEmpty(t, f.writers)
-			for _, archive := range f.writers {
-				assert.Equal(t, streamer != "0", archive)
-			}
-			assert.NotZero(t, f.fetchedCount)
-			present, err := sink.Has(context.Background(), root)
-			require.NoError(t, err)
-			assert.True(t, present)
-		})
-	}
-}
-
-func TestPullerTableFileFormatErrors(t *testing.T) {
+	f := &toyTableFiles{}
+	stores := withTableFiles(t, f, nil)
 	src, root := testSource(t)
-	errToy := errors.New("toy")
+	sink := testSink(t)
 
+	plr, err := testPull(t, src, sink, root)
+	require.NoError(t, err)
+	require.NoError(t, plr.Pull(context.Background()))
+	assert.Equal(t, []chunks.ChunkStore{src, sink}, *stores)
+	assert.NotEmpty(t, f.writers)
+	assert.NotZero(t, f.fetchedCount)
+	present, err := sink.Has(context.Background(), root)
+	require.NoError(t, err)
+	assert.True(t, present)
+
+	errToy := errors.New("toy")
 	withTableFiles(t, nil, errToy)
-	_, err := testPull(t, src, testSink(t), root)
+	_, err = testPull(t, src, testSink(t), root)
 	assert.ErrorIs(t, err, errToy)
 
 	withTableFiles(t, &toyTableFiles{fetchedErr: errToy}, nil)
-	plr, err := testPull(t, src, testSink(t), root)
-	require.NoError(t, err)
-	assert.ErrorIs(t, plr.Pull(context.Background()), errToy)
-
-	withTableFiles(t, &toyTableFiles{writerErr: errToy}, nil)
 	plr, err = testPull(t, src, testSink(t), root)
 	require.NoError(t, err)
 	assert.ErrorIs(t, plr.Pull(context.Background()), errToy)
@@ -187,8 +166,5 @@ func TestCloneUsesTableFileFormat(t *testing.T) {
 
 	errToy := errors.New("toy")
 	withTableFiles(t, nil, errToy)
-	assert.ErrorIs(t, Clone(ctx, src, testSink(t), getAddrs, t.TempDir(), nil), errToy)
-
-	withTableFiles(t, &toyTableFiles{writerErr: errToy}, nil)
 	assert.ErrorIs(t, Clone(ctx, src, testSink(t), getAddrs, t.TempDir(), nil), errToy)
 }

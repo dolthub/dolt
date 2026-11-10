@@ -30,16 +30,21 @@ type serverFormats interface {
 	refuseClient(nbfVersion string, caps []remotesapi.ClientCapability) error
 	// refusal returns the error to send a client for files a store refused to add with |err|, or nil to send |err|.
 	refusal(err error) error
-	// locate returns the locations of |hashes| in |cs|, and the keys of their records.
-	locate(ctx context.Context, cs RemoteSrvStore, hashes hash.HashSet) (map[string]map[hash.Hash]nbs.Range, recordKeys, error)
+	// locator returns the chunkLocator of one download request or stream.
+	locator() chunkLocator
 }
 
-// recordKeys returns the keys of the record of chunk |h| located at |offset| and |length| and of its dictionary,
-// which plaintext records lack.
-type recordKeys func(h hash.Hash, offset uint64, length uint32) (key, dictKey []byte)
-
-func noKeys(hash.Hash, uint64, uint32) ([]byte, []byte) {
-	return nil, nil
+// chunkLocator locates chunks and sets the keys of their records, which plaintext records lack, in the messages that
+// carry their locations.
+type chunkLocator interface {
+	// locate returns the locations of |hashes| in |cs|, deleting those it finds from |hashes|.
+	locate(ctx context.Context, cs RemoteSrvStore, hashes hash.HashSet) (map[string]map[hash.Hash]nbs.Range, error)
+	// setRangeKeys sets the keys of the ranges of |hgr|, which were located by the last call to locate.
+	setRangeKeys(hgr *remotesapi.HttpGetRange)
+	// setLocationKeys sets the keys of |loc|, the location of chunk |h| found by the last call to locate.
+	setLocationKeys(loc *remotesapi.StreamChunkLocationsResponse_ChunkLocation, h hash.Hash)
+	// newKeys returns the keys that setLocationKeys referenced for the first time since its last call.
+	newKeys() []*remotesapi.StreamChunkLocationsResponse_DataKey
 }
 
 type plainFormats struct{}
@@ -52,9 +57,23 @@ func (plainFormats) refusal(error) error {
 	return nil
 }
 
-func (plainFormats) locate(ctx context.Context, cs RemoteSrvStore, hashes hash.HashSet) (map[string]map[hash.Hash]nbs.Range, recordKeys, error) {
-	locs, err := cs.GetChunkLocationsWithPaths(ctx, hashes)
-	return locs, noKeys, err
+func (plainFormats) locator() chunkLocator {
+	return plainLocator{}
+}
+
+type plainLocator struct{}
+
+func (plainLocator) locate(ctx context.Context, cs RemoteSrvStore, hashes hash.HashSet) (map[string]map[hash.Hash]nbs.Range, error) {
+	return cs.GetChunkLocationsWithPaths(ctx, hashes)
+}
+
+func (plainLocator) setRangeKeys(*remotesapi.HttpGetRange) {}
+
+func (plainLocator) setLocationKeys(*remotesapi.StreamChunkLocationsResponse_ChunkLocation, hash.Hash) {
+}
+
+func (plainLocator) newKeys() []*remotesapi.StreamChunkLocationsResponse_DataKey {
+	return nil
 }
 
 // checkClientCapability refuses to locate the records of |cs| for a client that cannot read them.
@@ -73,47 +92,4 @@ func WithRepoFormat(ctx context.Context, f *remotesapi.ClientRepoFormat) context
 func RequestedRepoFormat(ctx context.Context) (*remotesapi.ClientRepoFormat, bool) {
 	f, ok := ctx.Value(repoFormatKey{}).(*remotesapi.ClientRepoFormat)
 	return f, ok && f != nil
-}
-
-// keyNumbering numbers the record keys of one HttpGetRange or StreamChunkLocations stream from one, in order of
-// first use.
-type keyNumbering struct {
-	ids   map[string]uint32
-	added [][]byte
-}
-
-func (kn *keyNumbering) ref(key []byte) uint32 {
-	if key == nil {
-		return 0
-	}
-	if id, ok := kn.ids[string(key)]; ok {
-		return id
-	}
-	if kn.ids == nil {
-		kn.ids = make(map[string]uint32)
-	}
-	kn.added = append(kn.added, key)
-	id := uint32(len(kn.ids) + 1)
-	kn.ids[string(key)] = id
-	return id
-}
-
-// dataKeys returns the keys numbered since its last call.
-func (kn *keyNumbering) dataKeys() []*remotesapi.StreamChunkLocationsResponse_DataKey {
-	var ret []*remotesapi.StreamChunkLocationsResponse_DataKey
-	first := len(kn.ids) - len(kn.added) + 1
-	for i, k := range kn.added {
-		ret = append(ret, &remotesapi.StreamChunkLocationsResponse_DataKey{KeyId: uint32(first + i), WrappedKey: k})
-	}
-	kn.added = nil
-	return ret
-}
-
-func addRangeKeys(hgr *remotesapi.HttpGetRange, keysOf recordKeys) {
-	var kn keyNumbering
-	for _, rc := range hgr.Ranges {
-		key, dictKey := keysOf(hash.New(rc.Hash), rc.Offset, rc.Length)
-		rc.KeyIndex, rc.DictionaryKeyIndex = kn.ref(key), kn.ref(dictKey)
-	}
-	hgr.Keys = kn.added
 }

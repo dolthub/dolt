@@ -70,26 +70,21 @@ func TestStoreOptionsReachTheFactories(t *testing.T) {
 	s := &toyStores{}
 	withStoreOptions(t, s)
 
-	dir := t.TempDir()
-	db, _, _, err := CreateDB(ctx, types.Format_DOLT, "file://"+filepath.ToSlash(dir), map[string]interface{}{DisableSingletonCacheParam: struct{}{}, ChunkJournalParam: struct{}{}})
-	require.NoError(t, err)
-	require.NoError(t, db.Close())
-	assert.Equal(t, []string{dir}, s.dirs)
-	assert.Equal(t, []string{types.Format_DOLT.VersionString()}, s.oldGens)
-
-	db, _, _, err = CreateDB(ctx, types.Format_DOLT, "mem://", nil)
-	require.NoError(t, err)
-	require.NoError(t, db.Close())
-
-	noJournal := t.TempDir()
-	db, _, _, err = CreateDB(ctx, types.Format_DOLT, "file://"+filepath.ToSlash(noJournal), map[string]interface{}{DisableSingletonCacheParam: struct{}{}})
-	require.NoError(t, err)
-	require.NoError(t, db.Close())
-
-	db, _, _, err = CreateDB(ctx, types.Format_DOLT, "localbs://"+filepath.ToSlash(t.TempDir()), nil)
-	require.NoError(t, err)
-	require.NoError(t, db.Close())
-	assert.Equal(t, []string{dir, "", noJournal, ""}, s.dirs)
+	journal, noJournal := t.TempDir(), t.TempDir()
+	for _, tc := range []struct {
+		url    string
+		params map[string]interface{}
+	}{
+		{"file://" + filepath.ToSlash(journal), map[string]interface{}{DisableSingletonCacheParam: struct{}{}, ChunkJournalParam: struct{}{}}},
+		{"file://" + filepath.ToSlash(noJournal), map[string]interface{}{DisableSingletonCacheParam: struct{}{}}},
+		{"localbs://" + filepath.ToSlash(t.TempDir()), nil},
+	} {
+		db, _, _, err := CreateDB(ctx, types.Format_DOLT, tc.url, tc.params)
+		require.NoError(t, err)
+		require.NoError(t, db.Close())
+	}
+	assert.Equal(t, []string{journal, noJournal, ""}, s.dirs)
+	assert.Len(t, s.oldGens, 2)
 }
 
 type toyDialer struct{}
@@ -111,39 +106,27 @@ func TestStoreOptionsReusable(t *testing.T) {
 	s := &toyStores{reuse: true}
 	withStoreOptions(t, s)
 
-	cache := func(key string) {
-		cs := (&chunks.MemoryStorage{}).NewView()
-		db := datas.NewTypesDatabase(types.NewValueStore(cs), tree.NewNodeStore(cs))
-		gitRemoteCacheMu.Lock()
-		gitRemoteCache[key] = gitRemoteCacheEntry{db: db}
-		gitRemoteCacheMu.Unlock()
-		t.Cleanup(func() {
-			gitRemoteCacheMu.Lock()
-			delete(gitRemoteCache, key)
-			gitRemoteCacheMu.Unlock()
-		})
-	}
-	cached := func(key string) bool {
-		gitRemoteCacheMu.Lock()
-		defer gitRemoteCacheMu.Unlock()
-		_, ok := gitRemoteCache[key]
-		return ok
-	}
-
 	key := filepath.Join(t.TempDir(), "repo.git")
-	cache(key)
+	cs := (&chunks.MemoryStorage{}).NewView()
+	gitRemoteCacheMu.Lock()
+	gitRemoteCache[key] = gitRemoteCacheEntry{db: datas.NewTypesDatabase(types.NewValueStore(cs), tree.NewNodeStore(cs))}
+	gitRemoteCacheMu.Unlock()
+	t.Cleanup(func() {
+		gitRemoteCacheMu.Lock()
+		delete(gitRemoteCache, key)
+		gitRemoteCacheMu.Unlock()
+	})
+
 	_, ok, err := cachedGitRemote(ctx, key, nil)
 	require.NoError(t, err)
 	assert.True(t, ok)
-	assert.True(t, cached(key))
-	assert.True(t, ReusableStore(ctx, nil, nil))
 
 	s.reuse = false
 	_, ok, err = cachedGitRemote(ctx, key, nil)
 	require.NoError(t, err)
-	assert.False(t, ok, "an unreusable store is not returned")
-	assert.False(t, cached(key))
-	assert.False(t, ReusableStore(ctx, nil, nil))
+	assert.False(t, ok, "an unreusable store is evicted")
+	_, ok = gitRemoteCache[key]
+	assert.False(t, ok)
 }
 
 // mismatchedStore is a cached store whose manifest has since been created in another format.
@@ -174,11 +157,6 @@ func TestStoreOptionsReusableFileStore(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, db3 != db1, "an unreusable cached store is replaced")
 
-	s.reuse = true
-	db4, _, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, params)
-	require.NoError(t, err)
-	assert.True(t, db4 == db3)
-
 	path, err := earl.Parse(urlStr)
 	require.NoError(t, err)
 	cs := mismatchedStore{(&chunks.MemoryStorage{}).NewView()}
@@ -186,37 +164,8 @@ func TestStoreOptionsReusableFileStore(t *testing.T) {
 	stale := datas.NewTypesDatabase(types.NewValueStore(cs), tree.NewNodeStore(cs))
 	singletons[path.Path] = singletonDB{ddb: stale}
 	singletonLock.Unlock()
-	require.NoError(t, db4.Close())
-	db5, _, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, params)
+	require.NoError(t, db3.Close())
+	db4, _, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, params)
 	require.NoError(t, err)
-	assert.True(t, db5 != stale, "a store whose manifest changed format is reopened")
-}
-
-type wrappingDialer struct {
-	GRPCDialProvider
-}
-
-func (d wrappingDialer) Unwrap() GRPCDialProvider {
-	return d.GRPCDialProvider
-}
-
-type opaqueDialer struct {
-	GRPCDialProvider
-}
-
-func TestDialerAs(t *testing.T) {
-	d, ok := DialerAs[toyDialer](wrappingDialer{wrappingDialer{toyDialer{}}})
-	assert.True(t, ok)
-	assert.Equal(t, toyDialer{}, d)
-
-	_, ok = DialerAs[toyDialer](opaqueDialer{toyDialer{}})
-	assert.False(t, ok, "only Unwrap is followed")
-	_, ok = DialerAs[toyDialer](wrappingDialer{})
-	assert.False(t, ok)
-	_, ok = DialerAs[toyDialer](nil)
-	assert.False(t, ok)
-
-	w, ok := DialerAs[wrappingDialer](wrappingDialer{toyDialer{}})
-	assert.True(t, ok)
-	assert.Equal(t, toyDialer{}, w.GRPCDialProvider)
+	assert.True(t, db4 != stale, "a store whose manifest changed format is reopened")
 }

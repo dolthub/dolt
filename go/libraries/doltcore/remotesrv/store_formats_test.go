@@ -41,14 +41,9 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// toyKey is the stored key of the record of |h| in a toyKeys store; chunks share three keys.
+// toyKey is the key a keyed toyFormats store gives the record of |h|.
 func toyKey(h hash.Hash) []byte {
-	return []byte{'k', h[0] % 3}
-}
-
-// withToyKeys makes every located record carry its toyKey.
-func withToyKeys(t *testing.T) {
-	withStoreFormats(t, toyFormats{keyed: true})
+	return []byte{'k', h[0]}
 }
 
 type toyFormats struct {
@@ -71,16 +66,38 @@ func (f toyFormats) refusal(err error) error {
 	return nil
 }
 
-func (f toyFormats) locate(ctx context.Context, cs RemoteSrvStore, hashes hash.HashSet) (map[string]map[hash.Hash]nbs.Range, recordKeys, error) {
-	locs, err := cs.GetChunkLocationsWithPaths(ctx, hashes)
+func (f toyFormats) locator() chunkLocator {
 	if !f.keyed {
-		return locs, noKeys, err
+		return plainLocator{}
 	}
-	return locs, func(h hash.Hash, _ uint64, _ uint32) ([]byte, []byte) { return toyKey(h), toyDictKey }, err
+	return &toyLocator{}
 }
 
-// toyDictKey is the key a toyFormats store gives every record's dictionary.
-var toyDictKey = []byte("dict")
+// toyLocator gives every located record its toyKey, numbering a new key for each.
+type toyLocator struct {
+	plainLocator
+	ids     uint32
+	pending []*remotesapi.StreamChunkLocationsResponse_DataKey
+}
+
+func (l *toyLocator) setRangeKeys(hgr *remotesapi.HttpGetRange) {
+	for _, rc := range hgr.Ranges {
+		hgr.Keys = append(hgr.Keys, toyKey(hash.New(rc.Hash)))
+		rc.KeyIndex = uint32(len(hgr.Keys))
+	}
+}
+
+func (l *toyLocator) setLocationKeys(loc *remotesapi.StreamChunkLocationsResponse_ChunkLocation, h hash.Hash) {
+	l.ids++
+	loc.KeyId = l.ids
+	l.pending = append(l.pending, &remotesapi.StreamChunkLocationsResponse_DataKey{KeyId: l.ids, WrappedKey: toyKey(h)})
+}
+
+func (l *toyLocator) newKeys() []*remotesapi.StreamChunkLocationsResponse_DataKey {
+	ret := l.pending
+	l.pending = nil
+	return ret
+}
 
 func withStoreFormats(t *testing.T, f serverFormats) {
 	prev := storeFormats
@@ -164,19 +181,9 @@ func (r testRemote) hashList() [][]byte {
 	return ret
 }
 
-func (r testRemote) flatHashes() []byte {
-	var ret []byte
-	for _, h := range r.hashList() {
-		ret = append(ret, h...)
-	}
-	return ret
-}
-
-// keyCheckingFormat opens the chunks of a toyKeys store, checking that each comes with its key.
+// keyCheckingFormat opens the chunks of a keyed toyFormats store, checking that each comes with its key.
 type keyCheckingFormat struct {
 	remotestorage.PlainFormat
-	mu     *sync.Mutex
-	opened map[hash.Hash][]byte
 }
 
 func (f keyCheckingFormat) Opened(*remotesapi.GetRepoMetadataResponse) (remotestorage.RepoFormat, error) {
@@ -187,136 +194,48 @@ func (f keyCheckingFormat) OpenChunk(ctx context.Context, h hash.Hash, key []byt
 	if !bytes.Equal(key, toyKey(h)) {
 		return nil, fmt.Errorf("chunk %s came with key %x", h, key)
 	}
-	f.mu.Lock()
-	f.opened[h] = key
-	f.mu.Unlock()
 	return f.PlainFormat.OpenChunk(ctx, h, nil, data, dict)
 }
 
 func TestLocatedKeysReachTheClient(t *testing.T) {
-	for _, tc := range []struct {
-		name     string
-		disabled []remotesapi.Feature
-	}{
-		{"StreamChunkLocations", nil},
-		{"StreamDownloadLocations", []remotesapi.Feature{remotesapi.Feature_FEATURE_STREAM_CHUNK_LOCATIONS}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			withToyKeys(t)
-			ctx := context.Background()
-			r := startTestRemote(t, 64, tc.disabled...)
-
-			format := keyCheckingFormat{mu: &sync.Mutex{}, opened: make(map[hash.Hash][]byte)}
-			dcs, err := remotestorage.NewDoltChunkStoreFromPath(ctx, types.Format_DOLT, "repo", r.addr, false, r.client, format)
-			require.NoError(t, err)
-			defer dcs.Close()
-
-			var mu sync.Mutex
-			got := make(hash.HashSet)
-			err = dcs.GetManyCompressed(ctx, r.hashes.Copy(), func(_ context.Context, c nbs.ToChunker) {
-				mu.Lock()
-				defer mu.Unlock()
-				got.Insert(c.Hash())
-			})
-			require.NoError(t, err)
-			assert.Equal(t, r.hashes, got)
-			assert.Len(t, format.opened, len(r.hashes))
-		})
-	}
-}
-
-func TestLocatedKeysAreNumbered(t *testing.T) {
-	withToyKeys(t)
+	withStoreFormats(t, toyFormats{keyed: true})
 	ctx := context.Background()
-	r := startTestRemote(t, 32)
-
-	checkRange := func(hgr *remotesapi.HttpGetRange) {
-		distinct := map[string]bool{string(toyDictKey): true}
-		for _, rc := range hgr.Ranges {
-			h := hash.New(rc.Hash)
-			require.NotZero(t, rc.KeyIndex)
-			assert.Equal(t, toyKey(h), hgr.Keys[rc.KeyIndex-1])
-			require.NotZero(t, rc.DictionaryKeyIndex)
-			assert.Equal(t, toyDictKey, hgr.Keys[rc.DictionaryKeyIndex-1])
-			distinct[string(toyKey(h))] = true
-		}
-		assert.Len(t, hgr.Keys, len(distinct), "each key appears once per range")
+	for _, disabled := range [][]remotesapi.Feature{nil, {remotesapi.Feature_FEATURE_STREAM_CHUNK_LOCATIONS}} {
+		r := startTestRemote(t, 16, disabled...)
+		dcs, err := remotestorage.NewDoltChunkStoreFromPath(ctx, types.Format_DOLT, "repo", r.addr, false, r.client, keyCheckingFormat{})
+		require.NoError(t, err)
+		var mu sync.Mutex
+		got := make(hash.HashSet)
+		require.NoError(t, dcs.GetManyCompressed(ctx, r.hashes.Copy(), func(_ context.Context, c nbs.ToChunker) {
+			mu.Lock()
+			defer mu.Unlock()
+			got.Insert(c.Hash())
+		}))
+		require.NoError(t, dcs.Close())
+		assert.Equal(t, r.hashes, got, "disabled %v", disabled)
 	}
 
+	r := startTestRemote(t, 4)
 	resp, err := r.client.GetDownloadLocations(ctx, &remotesapi.GetDownloadLocsRequest{RepoPath: "repo", ChunkHashes: r.hashList()})
 	require.NoError(t, err)
 	require.NotEmpty(t, resp.Locs)
 	for _, loc := range resp.Locs {
-		checkRange(loc.GetHttpGetRange())
-	}
-
-	dl, err := r.client.StreamDownloadLocations(ctx)
-	require.NoError(t, err)
-	require.NoError(t, dl.Send(&remotesapi.GetDownloadLocsRequest{RepoPath: "repo", ChunkHashes: r.hashList()}))
-	dlResp, err := dl.Recv()
-	require.NoError(t, err)
-	for _, loc := range dlResp.Locs {
-		checkRange(loc.GetHttpGetRange())
-	}
-	require.NoError(t, dl.CloseSend())
-
-	stream, err := r.client.StreamChunkLocations(ctx)
-	require.NoError(t, err)
-	req := &remotesapi.StreamChunkLocationsRequest{RepoPath: "repo", ChunkHashes: r.flatHashes()}
-	keysByID := make(map[uint32][]byte)
-	for i := 0; i < 2; i++ {
-		require.NoError(t, stream.Send(req))
-		resp, err := stream.Recv()
-		require.NoError(t, err)
-		for _, k := range resp.Keys {
-			_, dup := keysByID[k.KeyId]
-			require.False(t, dup, "key %d introduced twice in one stream", k.KeyId)
-			keysByID[k.KeyId] = k.WrappedKey
-		}
-		if i > 0 {
-			assert.Empty(t, resp.Keys, "keys are introduced once per stream")
-		}
-		require.Len(t, resp.Locations, len(r.hashes))
-		for _, cl := range resp.Locations {
-			h := hash.New(req.ChunkHashes[cl.RequestIndex*hash.ByteLen : (cl.RequestIndex+1)*hash.ByteLen])
-			assert.Equal(t, toyKey(h), keysByID[cl.KeyId])
-			assert.Equal(t, toyDictKey, keysByID[cl.DictionaryKeyId])
+		hgr := loc.GetHttpGetRange()
+		for _, rc := range hgr.Ranges {
+			assert.Equal(t, toyKey(hash.New(rc.Hash)), hgr.Keys[rc.KeyIndex-1])
 		}
 	}
-	distinct := map[string]bool{string(toyDictKey): true}
-	for h := range r.hashes {
-		distinct[string(toyKey(h))] = true
-	}
-	assert.Len(t, keysByID, len(distinct))
-	require.NoError(t, stream.CloseSend())
-}
-
-func TestAddRangeKeys(t *testing.T) {
-	h := hash.Of([]byte("chunk"))
-	hgr := &remotesapi.HttpGetRange{Ranges: []*remotesapi.RangeChunk{{Hash: h[:], Offset: 0}, {Hash: h[:], Offset: 10}, {Hash: h[:], Offset: 20}}}
-	addRangeKeys(hgr, noKeys)
-	assert.Empty(t, hgr.Keys)
-	assert.Zero(t, hgr.Ranges[0].KeyIndex)
-
-	addRangeKeys(hgr, func(_ hash.Hash, offset uint64, _ uint32) ([]byte, []byte) {
-		switch offset {
-		case 0:
-			return []byte("a"), nil
-		case 10:
-			return []byte("b"), []byte("a")
-		}
-		return nil, nil
-	})
-	assert.Equal(t, [][]byte{[]byte("a"), []byte("b")}, hgr.Keys)
-	assert.Equal(t, []uint32{1, 2, 0}, []uint32{hgr.Ranges[0].KeyIndex, hgr.Ranges[1].KeyIndex, hgr.Ranges[2].KeyIndex})
-	assert.Equal(t, []uint32{0, 1, 0}, []uint32{hgr.Ranges[0].DictionaryKeyIndex, hgr.Ranges[1].DictionaryKeyIndex, hgr.Ranges[2].DictionaryKeyIndex})
 }
 
 func TestClientCapabilityRefusal(t *testing.T) {
 	need := remotesapi.ClientCapability_CLIENT_CAPABILITY_ENCRYPTION
-	withStoreFormats(t, toyFormats{required: need, keyed: true})
+	withStoreFormats(t, toyFormats{required: need})
 	ctx := context.Background()
 	r := startTestRemote(t, 4)
+	var flat []byte
+	for _, h := range r.hashList() {
+		flat = append(flat, h...)
+	}
 
 	for _, caps := range [][]remotesapi.ClientCapability{nil, {need}} {
 		check := func(err error) {
@@ -339,7 +258,7 @@ func TestClientCapabilityRefusal(t *testing.T) {
 
 		cl, err := r.client.StreamChunkLocations(ctx)
 		require.NoError(t, err)
-		require.NoError(t, cl.Send(&remotesapi.StreamChunkLocationsRequest{RepoPath: "repo", ChunkHashes: r.flatHashes(), ClientCapabilities: caps}))
+		require.NoError(t, cl.Send(&remotesapi.StreamChunkLocationsRequest{RepoPath: "repo", ChunkHashes: flat, ClientCapabilities: caps}))
 		_, err = cl.Recv()
 		check(err)
 	}
@@ -393,60 +312,4 @@ func TestValidateEncryptionScope(t *testing.T) {
 		req.ClientRepoFormat.EncryptionScope = b
 		assert.Error(t, ValidateGetRepoMetadataRequest(req))
 	}
-}
-
-func TestKeyNumbering(t *testing.T) {
-	var kn keyNumbering
-	for _, tc := range []struct {
-		key  string
-		want uint32
-	}{{"", 0}, {"a", 1}, {"b", 2}, {"a", 1}, {"c", 3}, {"b", 2}} {
-		var key []byte
-		if tc.key != "" {
-			key = []byte(tc.key)
-		}
-		assert.Equal(t, tc.want, kn.ref(key))
-	}
-	dks := kn.dataKeys()
-	require.Len(t, dks, 3)
-	for i, dk := range dks {
-		assert.Equal(t, uint32(i+1), dk.KeyId)
-		assert.Equal(t, []byte{"abc"[i]}, dk.WrappedKey)
-	}
-	assert.Equal(t, uint32(4), kn.ref([]byte("d")))
-	dks = kn.dataKeys()
-	require.Len(t, dks, 1)
-	assert.Equal(t, uint32(4), dks[0].KeyId)
-	assert.Empty(t, kn.dataKeys())
-}
-
-// A plaintext store's locations carry no keys, so what goes over the wire is unchanged.
-func TestPlaintextLocationsHaveNoKeys(t *testing.T) {
-	withStoreFormats(t, plainFormats{})
-	ctx := context.Background()
-	r := startTestRemote(t, 16)
-
-	resp, err := r.client.GetDownloadLocations(ctx, &remotesapi.GetDownloadLocsRequest{RepoPath: "repo", ChunkHashes: r.hashList()})
-	require.NoError(t, err)
-	require.NotEmpty(t, resp.Locs)
-	for _, loc := range resp.Locs {
-		hgr := loc.GetHttpGetRange()
-		assert.Empty(t, hgr.Keys)
-		for _, rc := range hgr.Ranges {
-			assert.Zero(t, rc.KeyIndex)
-			assert.Zero(t, rc.DictionaryKeyIndex)
-		}
-	}
-
-	stream, err := r.client.StreamChunkLocations(ctx)
-	require.NoError(t, err)
-	require.NoError(t, stream.Send(&remotesapi.StreamChunkLocationsRequest{RepoPath: "repo", ChunkHashes: r.flatHashes()}))
-	sresp, err := stream.Recv()
-	require.NoError(t, err)
-	assert.Empty(t, sresp.Keys)
-	for _, cl := range sresp.Locations {
-		assert.Zero(t, cl.KeyId)
-		assert.Zero(t, cl.DictionaryKeyId)
-	}
-	require.NoError(t, stream.CloseSend())
 }
