@@ -431,9 +431,9 @@ type prollyKeylessIndexIter struct {
 	columnIdMap []sql.ColumnId
 }
 
-var _ sql.RowIter = &prollyKeylessIndexIter{}
+var _ sql.ValueRowWriter = &prollyKeylessIndexIter{}
 
-func newProllyKeylessIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, pkSch sql.PrimaryKeySchema, projections []uint64, clustered, secondary prolly.MapReader, reverse bool, columnIds sql.ColSet) (prollyKeylessIndexIter, error) {
+func newProllyKeylessIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, pkSch sql.PrimaryKeySchema, projections []uint64, clustered, secondary prolly.MapReader, reverse bool, columnIds sql.ColSet) (*prollyKeylessIndexIter, error) {
 	var indexIter prolly.MapIter
 	var err error
 	if reverse {

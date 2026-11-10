@@ -758,7 +758,7 @@ func (t *DoltTable) PartitionValueRowWriter(ctx *sql.Context, partition sql.Part
 			projCols = t.sch.GetAllCols().Tags
 		}
 		kd, vd := p.rows.Descriptors()
-		return index.NewProllyRowIterForSchema(t.sch, iter, kd, vd, projCols, p.rows.NodeStore()), nil
+		return index.NewProllyRowIterForSchema(t.sch, iter, kd, vd, projCols, p.rows.NodeStore(), columnIds), nil
 	}
 
 	table, err := t.DoltTable(ctx)
