@@ -1223,6 +1223,31 @@ var SchemaChangeTestsConstraints = []MergeScriptTest{
 		},
 	},
 	{
+		// A foreign key whose parent table doesn't exist yet is unresolved, and a merge must not drop it as invalid.
+		Name: "foreign key to a missing table, other foreign keys changed on one side",
+		AncSetUpScript: []string{
+			"set foreign_key_checks = 0;",
+			"create table parent (pk int primary key);",
+			"create table child (pk int primary key, a int, b int, constraint fk_missing foreign key (a) references missing(pk));",
+		},
+		RightSetUpScript: []string{
+			"alter table child add constraint fk_b foreign key (b) references parent(pk);",
+		},
+		LeftSetUpScript: []string{
+			"insert into child values (2, 2, null);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "show create table child;",
+				Expected: []sql.Row{{"child", "CREATE TABLE `child` (\n  `pk` int NOT NULL,\n  `a` int,\n  `b` int,\n  PRIMARY KEY (`pk`),\n  KEY `fk_b` (`b`),\n  KEY `fk_missing` (`a`),\n  CONSTRAINT `fk_b` FOREIGN KEY (`b`) REFERENCES `parent` (`pk`),\n  CONSTRAINT `fk_missing` FOREIGN KEY (`a`) REFERENCES `missing` (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+	{
 		Name: "adding a unique key, with unique key violation",
 		AncSetUpScript: []string{
 			"create table t (pk int, col1 int);",

@@ -1087,8 +1087,13 @@ func pruneInvalidForeignKeys(ctx *sql.Context, tableResolver doltdb.TableResolve
 
 	isValid := func(fk doltdb.ForeignKey) (bool, error) {
 		parentSch, ok, err := getTableSchema(fk.ReferencedTableName)
-		if err != nil || !ok {
+		if err != nil {
 			return false, err
+		}
+		// An unresolved foreign key may reference a table that doesn't exist yet, so only a resolved one is invalid
+		// without its parent.
+		if !ok && fk.IsResolved() {
+			return false, nil
 		}
 		for _, tag := range fk.ReferencedTableColumns {
 			if _, ok := parentSch.GetAllCols().GetByTag(tag); !ok {
