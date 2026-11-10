@@ -84,6 +84,9 @@ type RootValue interface {
 	// GetForeignKeyCollection returns the ForeignKeyCollection for this root. As collections are meant to be modified
 	// in-place, each returned collection may freely be altered without affecting future returned collections from this root.
 	GetForeignKeyCollection(ctx context.Context) (*ForeignKeyCollection, error)
+	// GetForeignKeyCollectionHash returns the address of this root's stored ForeignKeyCollection, which is equal for
+	// two roots whose collections are equal, or the empty hash if this root has never stored one.
+	GetForeignKeyCollectionHash(ctx context.Context) (hash.Hash, error)
 	// GetTable will retrieve a table by its case-sensitive name.
 	GetTable(ctx context.Context, tName TableName) (*Table, bool, error)
 	// GetTableHash returns the hash of the given case-sensitive table name.
@@ -1180,6 +1183,11 @@ func (root *rootValue) GetForeignKeyCollection(ctx context.Context) (*ForeignKey
 		}
 	}
 	return root.fkc.Copy(), nil
+}
+
+// GetForeignKeyCollectionHash implements RootValue.
+func (root *rootValue) GetForeignKeyCollectionHash(ctx context.Context) (hash.Hash, error) {
+	return root.st.GetForeignKeysAddr(), nil
 }
 
 // PutForeignKeyCollection returns a new root with the given foreign key collection.

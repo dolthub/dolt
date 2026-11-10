@@ -116,3 +116,99 @@ func TestPruneInvalidForeignKeysResolvesEachTableOnce(t *testing.T) {
 		missingChildName:  1,
 	}, resolver.resolved)
 }
+
+// TestForeignKeysMerge verifies the merged foreign keys when one side, the other side, or both sides changed them, and
+// that invalid foreign keys are pruned in each case.
+func TestForeignKeysMerge(t *testing.T) {
+	ctx := sql.NewEmptyContext()
+	ddb := dtestutils.CreateTestEnv().DoltDB(ctx)
+	vrw := ddb.ValueReadWriter()
+	ns := ddb.NodeStore()
+
+	const parentPkTag uint64 = 1
+	parentName := doltdb.TableName{Name: "parent"}
+	childName := doltdb.TableName{Name: "child"}
+
+	newCol := func(name string, tag uint64, pk bool) schema.Column {
+		col, err := schema.NewColumnWithTypeInfo(name, tag, typeinfo.Int32Type, pk, "", false, "")
+		require.NoError(t, err)
+		return col
+	}
+	root, err := doltdb.EmptyRootValue(ctx, vrw, ns)
+	require.NoError(t, err)
+	parent, err := doltdb.NewEmptyTable(ctx, vrw, ns, schema.MustSchemaFromCols(schema.NewColCollection(newCol("pk", parentPkTag, true))))
+	require.NoError(t, err)
+	root, err = root.PutTable(ctx, parentName, parent)
+	require.NoError(t, err)
+	childSch := schema.MustSchemaFromCols(schema.NewColCollection(newCol("pk", 2, true), newCol("c3", 3, false), newCol("c4", 4, false), newCol("c5", 5, false)))
+	child, err := doltdb.NewEmptyTable(ctx, vrw, ns, childSch)
+	require.NoError(t, err)
+	root, err = root.PutTable(ctx, childName, child)
+	require.NoError(t, err)
+
+	newFk := func(name string, tag uint64, refTable doltdb.TableName) doltdb.ForeignKey {
+		return doltdb.ForeignKey{
+			Name:                   name,
+			TableName:              childName,
+			TableColumns:           []uint64{tag},
+			ReferencedTableName:    refTable,
+			ReferencedTableColumns: []uint64{parentPkTag},
+		}
+	}
+	fk1 := newFk("fk1", 3, parentName)
+	fk2 := newFk("fk2", 4, parentName)
+	fk3 := newFk("fk3", 5, parentName)
+	invalid := newFk("fk_invalid", 3, doltdb.TableName{Name: "missing_parent"})
+	withKeys := func(fks ...doltdb.ForeignKey) doltdb.RootValue {
+		fkc, err := doltdb.NewForeignKeyCollection(fks...)
+		require.NoError(t, err)
+		r, err := root.PutForeignKeyCollection(ctx, fkc)
+		require.NoError(t, err)
+		return r
+	}
+	anc := withKeys(fk1)
+
+	tests := []struct {
+		name     string
+		ours     doltdb.RootValue
+		theirs   doltdb.RootValue
+		expected []string
+	}{
+		{
+			name:     "only ours changed",
+			ours:     withKeys(fk1, fk2, invalid),
+			theirs:   anc,
+			expected: []string{"fk1", "fk2"},
+		},
+		{
+			name:     "only theirs changed",
+			ours:     anc,
+			theirs:   withKeys(fk1, fk2, invalid),
+			expected: []string{"fk1", "fk2"},
+		},
+		{
+			name:     "both changed the same way",
+			ours:     withKeys(fk1, fk2, invalid),
+			theirs:   withKeys(fk1, fk2, invalid),
+			expected: []string{"fk1", "fk2"},
+		},
+		{
+			name:     "both changed",
+			ours:     withKeys(fk1, fk2),
+			theirs:   withKeys(fk3),
+			expected: []string{"fk2", "fk3"},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			merged, conflicts, err := ForeignKeysMerge(ctx, doltdb.SimpleTableResolver{}, root, test.ours, test.theirs, anc)
+			require.NoError(t, err)
+			require.Empty(t, conflicts)
+			var names []string
+			for _, fk := range merged.AllKeys() {
+				names = append(names, fk.Name)
+			}
+			require.Equal(t, test.expected, names)
+		})
+	}
+}
