@@ -997,6 +997,33 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 	mergeScript("merge bases that create the same table with different schemas: merge feature into main",
 		append(sameTableCreatedTwiceSetup(), "CALL DOLT_CHECKOUT('main');"), "feature", true,
 		check{"SELECT * FROM t ORDER BY id;", []sql.Row{{1, 10}, {2, 20}}}),
+	// main and feature agree on t's schema, but each adds row 3 with a different c. The virtual merge base has no t,
+	// so row 3 conflicts with no base row.
+	mergeScript("merge bases that create the same table with different schemas, tips adding a row differently: merge main into feature",
+		append(sameTableCreatedTwiceSetup(),
+			"CALL DOLT_CHECKOUT('main');",
+			"INSERT INTO t VALUES (3, 30);",
+			"CALL DOLT_COMMIT('-am', 'main2');",
+			"CALL DOLT_CHECKOUT('feature');",
+			"INSERT INTO t VALUES (3, 31);",
+			"CALL DOLT_COMMIT('-am', 'feature2');",
+			"SET @@autocommit = 0;"),
+		"main", false,
+		check{"SELECT base_id, base_c, our_id, our_c, their_id, their_c FROM dolt_conflicts_t;", []sql.Row{{nil, nil, 3, 31, 3, 30}}}),
+	// feature adds column d to t, so main and feature disagree on t's schema. As in a merge of two branches that create
+	// t differently, the merge fails.
+	{
+		Name: "merge bases that create the same table with different schemas, tips disagreeing on the schema: merge main into feature",
+		SetUpScript: append(sameTableCreatedTwiceSetup(),
+			"ALTER TABLE t ADD COLUMN d INT;",
+			"CALL DOLT_COMMIT('-am', 'feature2');"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CALL DOLT_MERGE('main', '-m', 'merge main');",
+				ExpectedErrStr: "table with same name 't' added in 2 commits can't be merged",
+			},
+		},
+	},
 	mergeScript("long-running schema branch: merge main into feature",
 		append(longRunningSchemaBranchSetup(false), "CALL DOLT_CHECKOUT('feature');"),
 		"main", true,
