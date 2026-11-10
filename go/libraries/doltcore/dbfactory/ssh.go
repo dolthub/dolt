@@ -160,7 +160,7 @@ func (SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 
 	// Create chunk store backed by the remote gRPC service.
 	client := remotesapi.NewChunkStoreServiceClient(grpcConn)
-	cs, err := remotestorage.NewDoltChunkStoreFromPath(procCtx, nbf, urlObj.Path, path, false, client)
+	cs, err := newRemoteChunkStore(procCtx, nbf, urlObj.Path, path, false, client, params)
 	if err != nil {
 		conn.CloseWithErr(err)
 		return nil, nil, nil, sshRemoteError(stderrDone, &stderrBuf, path, "failed to create chunk store", err)

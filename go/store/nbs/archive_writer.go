@@ -81,6 +81,7 @@ type archiveWriter struct {
 	metadataLen     uint32
 	nameCheckSum    hash.Hash
 	fullMD5         md5Sum
+	spans           spanSealer
 }
 
 /*
@@ -371,6 +372,9 @@ func (aw *archiveWriter) writeFooter() error {
 	if aw.workflowStage != stageFooter {
 		return fmt.Errorf("Runtime error: writeFooter called out of order")
 	}
+	if err := aw.writeKeyBlock(); err != nil {
+		return err
+	}
 
 	// Write out the index length
 	err := aw.writeUint64(aw.indexLen)
@@ -402,7 +406,7 @@ func (aw *archiveWriter) writeFooter() error {
 	}
 
 	// Write out the format version
-	_, err = aw.output.Write([]byte{archiveFormatVersionMax})
+	_, err = aw.output.Write([]byte{aw.formatVersion()})
 	if err != nil {
 		return err
 	}
@@ -428,6 +432,7 @@ func (aw *archiveWriter) writeFooter() error {
 // data in the index than implement a new format version. We've never used these checksums for anything.
 func (aw *archiveWriter) writeEmptyCheckSums() error {
 	var zeros [(3 * sha512.Size)]byte
+	aw.putKeyBlockLen(zeros[:])
 	written, err := aw.output.Write(zeros[:])
 	if err != nil {
 		return err
@@ -552,7 +557,7 @@ func (asw *ArchiveStreamWriter) Finish() (uint32, string, error) {
 	if asw.snappyQueue != nil {
 		// There may be snappy chunks queued up because we didn't get enough to build a dictionary.
 		for _, cc := range *asw.snappyQueue {
-			dataId, err := asw.writer.writeByteSpan(cc.FullCompressedChunk)
+			dataId, err := asw.writeSnappyData(cc)
 			if err != nil {
 				return 0, "", err
 			}
@@ -595,6 +600,9 @@ func (asw *ArchiveStreamWriter) ChunkDataLength() (uint64, error) {
 }
 
 func (asw *ArchiveStreamWriter) AddChunk(chunker ToChunker) (uint32, error) {
+	if id, ok, err := addCodedChunk(asw, chunker); ok || err != nil {
+		return id, err
+	}
 	if cc, ok := chunker.(CompressedChunk); ok {
 		return asw.writeCompressedChunk(cc)
 	}
@@ -657,7 +665,7 @@ func (asw *ArchiveStreamWriter) writeArchiveToChunker(chunker *ArchiveToChunker)
 		compressedDict := gozstd.Compress(nil, *dict.rawDictionary)
 
 		// New dictionary. Write it out, and add id to the map.
-		dictId, err = asw.writer.writeByteSpan(compressedDict)
+		dictId, err = asw.writeDict(compressedDict)
 		if err != nil {
 			return 0, err
 		}
@@ -665,7 +673,7 @@ func (asw *ArchiveStreamWriter) writeArchiveToChunker(chunker *ArchiveToChunker)
 		asw.dictMap[dictHash] = dictId
 	}
 
-	dataId, err := asw.writer.writeByteSpan(chunker.chunkData)
+	dataId, err := asw.writeZStdData(chunker.Hash(), dictId, chunker.chunkData)
 	if err != nil {
 		return bytesWritten, err
 	}
@@ -707,7 +715,7 @@ func (asw *ArchiveStreamWriter) writeCompressedChunk(chunker CompressedChunk) (b
 		}
 
 		// New dictionary. Write it out, and add id to the map.
-		dictId, err := asw.writer.writeByteSpan(compressedDict)
+		dictId, err := asw.writeDict(compressedDict)
 		if err != nil {
 			return 0, err
 		}
@@ -752,7 +760,7 @@ func (asw *ArchiveStreamWriter) convertSnappyAndStage(cc CompressedChunk) (uint3
 
 	compressedData := gozstd.CompressDict(nil, chk.Data(), asw.snappyDict.cDict)
 
-	dataId, err := asw.writer.writeByteSpan(compressedData)
+	dataId, err := asw.writeZStdData(h, dictId, compressedData)
 	if err != nil {
 		return 0, err
 	}
@@ -851,6 +859,9 @@ func planArchiveConjoin(ctx context.Context, sources []sourceWithSize, q MemoryQ
 	}
 	defer writer.Close()
 	aw := newArchiveWriterWithSink(writer)
+	if aw.spans, err = conjoinSpanSealer(orderedSrcs.sws); err != nil {
+		return compactionPlan{}, err
+	}
 
 	numByteSpans := 0
 	numChunks := 0

@@ -157,6 +157,9 @@ type NomsBlockStore struct {
 	// instead of loading the database.
 	loadThunk func(ctx context.Context, loadIt bool)
 	loadErr   error
+	codec     storeCodec
+	// oldGen is the old generation of a new generation store.
+	oldGen *NomsBlockStore
 }
 
 func (nbs *NomsBlockStore) PersistGhostHashes(ctx context.Context, refs hash.HashSet) error {
@@ -460,6 +463,11 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 	if err != nil {
 		return manifestContents{}, false, err
 	}
+	done, err := nbs.codec.checkAdded(nbs, sources)
+	if err != nil {
+		return manifestContents{}, false, err
+	}
+	defer done(&err, &gcGenDifferent)
 
 	var updatedContents manifestContents
 	for {
@@ -835,6 +843,9 @@ func NewLocalJournalingStoreWithOptions(ctx context.Context, nbfVers, dir string
 	nbs.staticAccessMode = staticAccessMode
 	nbs.staticVersion = constants.FormatDoltString
 	nbs.applyOptions(storeOpts)
+	if nbfVers, err = nbs.codec.openJournal(nbs, dir, nbfVers, lock); err != nil {
+		return nil, err
+	}
 	nbs.loadThunk = func(ctx context.Context, loadIt bool) {
 		if loadIt == false {
 			if lock != nil {
@@ -853,6 +864,7 @@ func NewLocalJournalingStoreWithOptions(ctx context.Context, nbfVers, dir string
 			return
 		}
 		p := newFSTablePersister(dir, q, mmapArchiveIndexes).(*fsTablePersister)
+		p.setCodec(nbs.codec)
 
 		// The NomsBlockStore is not constructed yet, so bootstrapping errors should fail store
 		// creation rather than crash the process. Callers configure crash behavior afterwards
@@ -913,6 +925,7 @@ func newEmptyNomsBlockStore(memTableSize uint64) (*NomsBlockStore, error) {
 		hasCache:   hasCache,
 		stats:      NewStats(),
 		logger:     logrus.StandardLogger().WithField("pkg", "store.noms"),
+		codec:      newStoreCodec(),
 	}
 	nbs.gcCond = sync.NewCond(&nbs.mu)
 	nbs.conjoinOpCond = sync.NewCond(&nbs.mu)
@@ -1053,6 +1066,9 @@ func (nbs *NomsBlockStore) addPendingRefsToHasCache() {
 
 func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, getAddrs chunks.InsertAddrsCurry, checker refCheck) (bool, error) {
 	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	if err := nbs.codec.checkWrite(nbs); err != nil {
 		return false, err
 	}
 	nbs.mu.Lock()
@@ -1571,6 +1587,9 @@ func (nbs *NomsBlockStore) rebase(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		if err = nbs.codec.checkManifest(nbs, exists, contents); err != nil {
+			return err
+		}
 		if !exists {
 			return nil
 		}
@@ -1661,6 +1680,9 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 	}
 
 	handleOptimisticLockFailure := func(upstream manifestContents) error {
+		if err := nbs.codec.checkManifest(nbs, true, upstream); err != nil {
+			return err
+		}
 		newTables, err := nbs.tables.rebase(ctx, upstream.specs, nil, nbs.stats)
 		if err != nil {
 			return err
@@ -1932,6 +1954,7 @@ func newTableFile(cs chunkSource, info tableSpec, behavior dherrors.FatalBehavio
 		dataSpan := a.aRdr.footer.dataSpan()
 		dataOffset = dataSpan.length
 	}
+	dataOffset = tableDataEnd(cs, dataOffset)
 
 	return tableFile{
 		info: info,
@@ -2024,7 +2047,7 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileName string, 
 	}
 	defer r.Close()
 
-	if splitOffset == 0 && !strings.HasSuffix(fileName, ArchiveFileSuffix) {
+	if splitOffset == 0 && !strings.HasSuffix(fileName, ArchiveFileSuffix) && nbs.codec.plainTables() {
 		splitOffset = tableTailOffset(sz, uint32(numChunks))
 	}
 
@@ -2169,7 +2192,7 @@ func (nbs *NomsBlockStore) addTableFilesToManifest(ctx context.Context, fileIdTo
 		// We should make these ref checks more efficient and
 		// more performant as well, so that incremental
 		// backups are more credible for example.
-		if !sources.root.IsEmpty() {
+		if !sources.root.IsEmpty() && nbs.codec.readsRecords() {
 			refCheck := getRefCheck(nbs, genRefCheck, sources.sources)
 			err = refCheckAllSources(ctx, getAddrs, refCheck, sources.sources, nbs.stats)
 			if err != nil {
@@ -2209,6 +2232,10 @@ type openChunkSourcesResult struct {
 }
 
 func (nbs *NomsBlockStore) openChunkSourcesForManifestUpdateAndRebase(ctx context.Context, files map[hash.Hash]uint32, existing chunkSourceSet) (openChunkSourcesResult, error) {
+	return nbs.codec.openAdded(ctx, nbs, files, existing)
+}
+
+func (nbs *NomsBlockStore) openChunkSourcesForManifestUpdate(ctx context.Context, files map[hash.Hash]uint32, existing chunkSourceSet) (openChunkSourcesResult, error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	if nbs.closed {
@@ -2218,7 +2245,7 @@ func (nbs *NomsBlockStore) openChunkSourcesForManifestUpdateAndRebase(ctx contex
 	// push, a pull, a manual AddTableFiles. We run the more expensive deep
 	// validation here, before we add them to the store and take a dependency
 	// on them.
-	sources, err := nbs.tables.openForAdd(ctx, files, existing, openOpts{deepValidate: true}, nbs.stats)
+	sources, err := nbs.tables.openForAdd(ctx, files, existing, addedOpts(openOpts{deepValidate: true}), nbs.stats)
 	if err != nil {
 		return openChunkSourcesResult{}, err
 	}
@@ -2529,13 +2556,16 @@ func markAndSweepChunks(ctx context.Context, nbs *NomsBlockStore, src Compressed
 	} else {
 		destNBS = nbs
 	}
+	if err := nbs.codec.checkGC(nbs, destNBS); err != nil {
+		return nil, err
+	}
 
 	tfp, ok := destNBS.persister.(tableFilePersister)
 	if !ok {
 		return nil, fmt.Errorf("NBS does not support copying garbage collection")
 	}
 
-	gcc, err := newGarbageCollectionCopier(gcConfig.ArchiveLevel, tfp)
+	gcc, err := newGarbageCollectionCopier(gcConfig.ArchiveLevel, tfp, destNBS.codec)
 	if err != nil {
 		return nil, err
 	}

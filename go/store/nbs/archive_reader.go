@@ -51,6 +51,7 @@ type archiveReader struct {
 	indexReader archiveIndexReader // Memory-mapped or fallback index reader
 	dictCache   *lru.TwoQueueCache[uint32, *DecompBundle]
 	footer      archiveFooter
+	codec       archiveCodec
 }
 
 type suffix [hash.SuffixLen]byte
@@ -77,7 +78,7 @@ func (f *archiveFooter) actualFooterSize() uint64 {
 		// Version 1 and 2 archives have a smaller footer.
 		return archiveFooterSize - 4
 	}
-	return archiveFooterSize
+	return archiveFooterSize + archiveFooterExtra(f)
 }
 
 // dataSpan returns the span of the data section of the archive. This is used during conjoin.
@@ -161,7 +162,7 @@ func newArchiveMetadata(ctx context.Context, reader tableReaderAt, name hash.Has
 	// The caller closes |reader|.
 	defer aRdr.indexReader.Close()
 
-	if aRdr.footer.formatVersion > archiveFormatVersionMax {
+	if aRdr.footer.formatVersion > archiveFormatVersionMax && !codedArchiveVersion(aRdr.footer.formatVersion) {
 		return nil, ErrInvalidFormatVersion
 	}
 
@@ -273,6 +274,10 @@ func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiv
 		indexReader: indexRdr,
 		footer:      footer,
 		dictCache:   dictCache,
+	}
+	if ar.codec, err = openArchiveCodec(ctx, reader, footer, opts, stats); err != nil {
+		_ = indexRdr.Close()
+		return archiveReader{}, err
 	}
 
 	if opts.deepValidate {
@@ -535,6 +540,7 @@ func (ar *archiveReader) clone() (archiveReader, error) {
 		indexReader: indexReader,
 		footer:      ar.footer,
 		dictCache:   ar.dictCache, // cache is thread safe.
+		codec:       ar.codec,
 	}, nil
 }
 
@@ -571,7 +577,7 @@ func buildArchiveFooter(name hash.Hash, fileSize uint64, buf []byte) (f archiveF
 		return
 	}
 	// Verify Format Version. 1,2,3 supported.
-	if f.formatVersion > archiveFormatVersionMax {
+	if f.formatVersion > archiveFormatVersionMax && !codedArchiveVersion(f.formatVersion) {
 		err = ErrInvalidFormatVersion
 		return
 	}
@@ -639,6 +645,9 @@ func (ar *archiveReader) get(ctx context.Context, hash hash.Hash, stats *Stats) 
 }
 
 func (ar *archiveReader) decompress(h hash.Hash, dict *DecompBundle, data []byte) ([]byte, error) {
+	if ar.codec != nil {
+		return ar.codec.decompress(h, dict, data)
+	}
 	if dict == nil {
 		if ar.footer.formatVersion < archiveVersionSnappySupport {
 			return nil, errors.New("runtime error: unable to get archived chunk. dictionary is nil")
@@ -660,6 +669,9 @@ func (ar *archiveReader) decompress(h hash.Hash, dict *DecompBundle, data []byte
 // getAsToChunker returns the chunk which is has not been decompressed. Similar to get, but with a different return type.
 // If the hash is not found, a ToChunker instance with IsEmpty() == true is returned (no error)
 func (ar *archiveReader) getAsToChunker(ctx context.Context, h hash.Hash, stats *Stats) (ToChunker, error) {
+	if ar.codec != nil {
+		return ar.codec.chunker(ctx, ar, h, stats)
+	}
 	dict, data, err := ar.getRaw(ctx, h, stats)
 	if err != nil {
 		return nil, err
@@ -724,6 +736,9 @@ func (ar *archiveReader) getRaw(ctx context.Context, hash hash.Hash, stats *Stat
 	if err = ar.checkChunkRef(rc); err != nil {
 		return nil, nil, err
 	}
+	if ar.codec != nil {
+		return ar.codec.getRaw(ctx, ar, rc, stats)
+	}
 
 	return ar.getRawByRef(ctx, rc.dictId, rc.dataId, stats)
 }
@@ -785,7 +800,7 @@ func (ar *archiveReader) loadDict(ctx context.Context, dictId uint32, stats *Sta
 		return nil, err
 	}
 
-	dict, err := NewDecompBundle(dictBytes)
+	dict, err := ar.openDict(ctx, dictId, dictBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -832,6 +847,9 @@ func (r *bridgeReaderAt) ReadAt(p []byte, off int64) (n int, err error) {
 func (ar *archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error, stats *Stats) error {
 	if err := ar.checkByteSpans(); err != nil {
 		return err
+	}
+	if ar.codec != nil {
+		return ar.codec.iterate(ctx, ar, cb, stats)
 	}
 	// Build reverse indexes for dictionary and data ByteSpans
 	// dictReverseIndex: Dictionary ByteSpan ID -> struct{} - indicates that we expect that span to be a dictionary.
@@ -936,6 +954,10 @@ func (ar *archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) erro
 }
 
 func (ar *archiveReader) tolerantIterate(ctx context.Context, cb func(chunks.Chunk), errCb func(error), stats *Stats) {
+	if ar.codec != nil {
+		ar.codec.tolerantIterate(ctx, ar, cb, errCb, stats)
+		return
+	}
 	dictReverseIndex := make(map[uint32]struct{})
 	dataReverseIndex := make(map[uint32]uint32)
 

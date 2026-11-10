@@ -64,6 +64,7 @@ func NewGenerationalCS(oldGen, newGen *NomsBlockStore, ghostGen *GhostBlockStore
 
 	oldGen.AppendLoggerFields(logrus.Fields{"generation": "old"})
 	newGen.AppendLoggerFields(logrus.Fields{"generation": "new"})
+	newGen.oldGen = oldGen
 
 	return &GenerationalNBS{
 		oldGen:   oldGen,

@@ -67,6 +67,9 @@ func (r journalRec) payloadOffset() uint32 {
 
 // uncompressedPayloadSize returns the uncompressed size of the payload.
 func (r journalRec) uncompressedPayloadSize() (sz uint64) {
+	if r.kind != chunkJournalRecKind {
+		return codedPayloadSize(r)
+	}
 	// |r.payload| is snappy-encoded and starts with
 	// the uvarint-encoded uncompressed data size
 	sz, _ = binary.Uvarint(r.payload)
@@ -560,7 +563,7 @@ ReadBatchGoto:
 						// found the second record! => possible data loss
 						return true, nil
 					}
-					if record.kind == rootHashJournalRecKind {
+					if isRootHashRecKind(record.kind) {
 						// found the first root hash record
 						firstRootFound = true
 					}
@@ -598,8 +601,8 @@ ReadBatchGoto:
 }
 
 func peekRootHashAt(journal io.ReaderAt, offset int64) (root hash.Hash, err error) {
-	expSz := rootHashRecordSize()
-	buf := make([]byte, expSz) // assumes len(rec) is exactly rootHashRecordSize
+	expSz := maxRootHashRecordSize()
+	buf := make([]byte, expSz) // assumes len(rec) is at most maxRootHashRecordSize
 	n, err := journal.ReadAt(buf, offset)
 	if errors.Is(err, io.EOF) {
 		err = nil // EOF is expected for last record
@@ -617,7 +620,7 @@ func peekRootHashAt(journal io.ReaderAt, offset int64) (root hash.Hash, err erro
 // is only used for error reporting, so it should be relative to the start of the journal file.
 func rootHashFromBuffer(buf []byte, offset int64) (root hash.Hash, err error) {
 	sz := readUint32(buf)
-	if sz > uint32(rootHashRecordSize()) {
+	if sz > uint32(maxRootHashRecordSize()) {
 		err = fmt.Errorf("invalid root hash record size at %d", offset)
 		return
 	}
@@ -630,7 +633,7 @@ func rootHashFromBuffer(buf []byte, offset int64) (root hash.Hash, err error) {
 	var rec journalRec
 	if rec, err = readJournalRecord(buf); err != nil {
 		return
-	} else if rec.kind != rootHashJournalRecKind {
+	} else if !isRootHashRecKind(rec.kind) {
 		err = fmt.Errorf("expected root hash record, got kind: %d", rec.kind)
 		return
 	}

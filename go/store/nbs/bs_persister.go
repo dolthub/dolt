@@ -38,6 +38,7 @@ type blobstorePersister struct {
 	bs        blobstore.Blobstore
 	q         MemoryQuotaProvider
 	blockSize uint64
+	persisterCodec
 }
 
 var _ tablePersister = &blobstorePersister{}
@@ -46,7 +47,7 @@ var _ tableFilePersister = &blobstorePersister{}
 // Persist makes the contents of mt durable. Chunks already present in
 // |haver| may be dropped in the process.
 func (bsp *blobstorePersister) Persist(ctx context.Context, behavior dherrors.FatalBehavior, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
-	address, data, splitOffset, chunkCount, gcb, err := mt.write(haver, keeper, stats)
+	address, data, splitOffset, chunkCount, gcb, err := bsp.writeMemTable(mt, haver, keeper, stats)
 	if err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	}
@@ -84,6 +85,7 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, behavior dherrors.Fa
 	}
 
 	src, err := newPersistedBSTableChunkSource(ctx, bsp.bs, bsp.q, data, address, bsp.blockSize)
+	src, err = bsp.openWritten(src, err)
 	if err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	}
@@ -153,9 +155,9 @@ func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, behavior dherrors
 
 	var cs chunkSource
 	if plan.suffix == ArchiveFileSuffix {
-		cs, err = newBSArchiveChunkSource(ctx, bsp.bs, plan.name, bsp.q, openOpts{deepValidate: true}, stats)
+		cs, err = newBSArchiveChunkSource(ctx, bsp.bs, plan.name, bsp.q, bsp.openOpts(openOpts{deepValidate: true}), stats)
 	} else {
-		cs, err = newBSTableChunkSource(ctx, bsp.bs, plan.name, plan.chunkCount, bsp.q, openOpts{deepValidate: true}, stats)
+		cs, err = newBSTableChunkSource(ctx, bsp.bs, plan.name, plan.chunkCount, bsp.q, bsp.openOpts(openOpts{deepValidate: true}), stats)
 	}
 
 	return cs, func() {}, err
@@ -185,6 +187,7 @@ func (bsp *blobstorePersister) getRecordsSubObject(ctx context.Context, cs chunk
 func (bsp *blobstorePersister) hotCreateTableRecords(ctx context.Context, cs chunkSource) error {
 	cnt := cs.count()
 	off := tableTailOffset(cs.currentSize(), cnt)
+	off = tableDataEnd(cs, off)
 	l := int64(off)
 	rng := blobstore.NewBlobRange(0, l)
 
@@ -224,6 +227,7 @@ func (bsp *blobstorePersister) hotCreateArchiveRecords(ctx context.Context, cs c
 
 // Open a table named |name|, containing |chunkCount| chunks.
 func (bsp *blobstorePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, opts openOpts, stats *Stats) (chunkSource, error) {
+	opts = bsp.openOpts(opts)
 	cs, err := newBSTableChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, opts, stats)
 	if err == nil {
 		return cs, nil
@@ -438,6 +442,9 @@ func newBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore, name has
 	tr, err := newTableReader(ctx, index, rdr, s3BlockSize)
 	if err != nil {
 		_ = index.Close()
+		return nil, err
+	}
+	if tr, err = openTableCodec(tr, opts); err != nil {
 		return nil, err
 	}
 	return &chunkSourceAdapter{tr, name}, nil

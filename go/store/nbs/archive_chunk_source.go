@@ -156,6 +156,9 @@ func (acs *archiveChunkSource) getMany(ctx context.Context, eg *errgroup.Group, 
 		if err != nil {
 			return err
 		}
+		if data, err = acs.aRdr.openData(ctx, rc, dict, data); err != nil {
+			return err
+		}
 		raw, err := acs.aRdr.decompress(rc.h, dict, data)
 		if err != nil {
 			return err
@@ -398,7 +401,7 @@ func (acs *archiveChunkSource) clone() (chunkSource, error) {
 	}, nil
 }
 
-func (acs *archiveChunkSource) getRecordRanges(_ context.Context, _ dherrors.FatalBehavior, records []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error) {
+func (acs *archiveChunkSource) getRecordRanges(ctx context.Context, _ dherrors.FatalBehavior, records []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error) {
 	resolved, _, gcb, err := acs.resolve(records, keeper)
 	if err != nil || gcb != gcBehavior_Continue {
 		return nil, gcb, err
@@ -416,6 +419,9 @@ func (acs *archiveChunkSource) getRecordRanges(_ context.Context, _ dherrors.Fat
 			DictLength: uint32(dictSpan.length),
 		}
 	}
+	if err = acs.aRdr.locateSpans(ctx, resolved); err != nil {
+		return nil, gcBehavior_Continue, err
+	}
 	return result, gcBehavior_Continue, nil
 }
 
@@ -431,6 +437,9 @@ func (acs *archiveChunkSource) getManyCompressed(
 		dict, err := acs.aRdr.dictFor(ctx, rc, stats)
 		if err != nil {
 			return err
+		}
+		if acs.aRdr.codec != nil {
+			return acs.aRdr.codec.found(ctx, &acs.aRdr, rc, dict, data, found)
 		}
 		toChk, err := acs.aRdr.toChunker(rc.h, dict, data)
 		if err != nil {

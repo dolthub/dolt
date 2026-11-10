@@ -140,7 +140,7 @@ func (fact S3Factory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, ur
 	// The S3 blobstore has no server-side compose operation, so use the
 	// no-conjoin store: table files are written whole and never concatenated
 	// through the blobstore.
-	s3Store, err := nbs.NewNoConjoinBSStore(ctx, nbf.VersionString(), bs, memlimit.MemtableSize(), q)
+	s3Store, err := nbs.NewNoConjoinBSStore(ctx, nbf.VersionString(), bs, memlimit.MemtableSize(), q, storeOptions(nbf, "", params)...)
 	if err != nil {
 		return nil, nil, nil, err
 	}

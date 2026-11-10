@@ -179,6 +179,9 @@ func nomsFileTableReader(ctx context.Context, path string, h hash.Hash, chunkCou
 		fra.Close()
 		return nil, err
 	}
+	if tr, err = openTableCodec(tr, opts); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
 	return &fileTableReader{
 		tableReader: tr,
 		h:           h,

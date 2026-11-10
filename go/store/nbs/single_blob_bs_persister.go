@@ -32,13 +32,14 @@ type singleBlobBSPersister struct {
 	bs        blobstore.Blobstore
 	q         MemoryQuotaProvider
 	blockSize uint64
+	persisterCodec
 }
 
 var _ tablePersister = &singleBlobBSPersister{}
 var _ tableFilePersister = &singleBlobBSPersister{}
 
 func (bsp *singleBlobBSPersister) Persist(ctx context.Context, behavior dherrors.FatalBehavior, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
-	address, data, _, chunkCount, gcb, err := mt.write(haver, keeper, stats)
+	address, data, _, chunkCount, gcb, err := bsp.writeMemTable(mt, haver, keeper, stats)
 	if err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	} else if gcb != gcBehavior_Continue {
@@ -54,6 +55,7 @@ func (bsp *singleBlobBSPersister) Persist(ctx context.Context, behavior dherrors
 	}
 
 	src, err := newPersistedBSTableChunkSource(ctx, bsp.bs, bsp.q, data, address, bsp.blockSize)
+	src, err = bsp.openWritten(src, err)
 	if err != nil {
 		return nil, gcBehavior_Continue, err
 	}
@@ -105,15 +107,16 @@ func (bsp *singleBlobBSPersister) ConjoinAll(ctx context.Context, behavior dherr
 
 	var cs chunkSource
 	if plan.suffix == ArchiveFileSuffix {
-		cs, err = newBSArchiveChunkSource(ctx, bsp.bs, plan.name, bsp.q, openOpts{deepValidate: true}, stats)
+		cs, err = newBSArchiveChunkSource(ctx, bsp.bs, plan.name, bsp.q, bsp.openOpts(openOpts{deepValidate: true}), stats)
 	} else {
-		cs, err = newBSTableChunkSource(ctx, bsp.bs, plan.name, plan.chunkCount, bsp.q, openOpts{deepValidate: true}, stats)
+		cs, err = newBSTableChunkSource(ctx, bsp.bs, plan.name, plan.chunkCount, bsp.q, bsp.openOpts(openOpts{deepValidate: true}), stats)
 	}
 
 	return cs, func() {}, err
 }
 
 func (bsp *singleBlobBSPersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, opts openOpts, stats *Stats) (chunkSource, error) {
+	opts = bsp.openOpts(opts)
 	cs, err := newBSTableChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, opts, stats)
 	if err == nil {
 		return cs, nil

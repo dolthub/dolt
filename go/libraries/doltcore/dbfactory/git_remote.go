@@ -214,6 +214,9 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 		return nil, nil, nil, err
 	}
 
+	if err := evictCachedGitRemote(ctx, cacheRepo, params); err != nil {
+		return nil, nil, nil, err
+	}
 	gitRemoteCacheMu.Lock()
 	if entry, ok := gitRemoteCache[cacheRepo]; ok {
 		gitRemoteCacheMu.Unlock()
@@ -266,7 +269,7 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	nbsCS, err := nbs.NewGitStore(ctx, nbf.VersionString(), cacheRepo, ref, bsOpts, memlimit.MemtableSize(), q)
+	nbsCS, err := nbs.NewGitStore(ctx, nbf.VersionString(), cacheRepo, ref, bsOpts, memlimit.MemtableSize(), q, storeOptions(nbf, "", params)...)
 	if err != nil {
 		return nil, nil, nil, errors.Join(err, bsOpts.SpoolDir.Close())
 	}

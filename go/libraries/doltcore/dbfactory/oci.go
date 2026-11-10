@@ -55,7 +55,7 @@ func (fact OCIFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, u
 
 	q := nbs.NewUnlimitedMemQuotaProvider()
 
-	ociStore, err := nbs.NewNoConjoinBSStore(ctx, nbf.VersionString(), bs, memlimit.MemtableSize(), q)
+	ociStore, err := nbs.NewNoConjoinBSStore(ctx, nbf.VersionString(), bs, memlimit.MemtableSize(), q, storeOptions(nbf, "", params)...)
 	if err != nil {
 		return nil, nil, nil, err
 	}

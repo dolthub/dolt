@@ -52,6 +52,9 @@ func newAWSTableFileChunkSource(ctx context.Context, s3 *s3ObjectReader, al awsL
 		_ = index.Close()
 		return &chunkSourceAdapter{}, err
 	}
+	if tr, err = openTableCodec(tr, opts); err != nil {
+		return &chunkSourceAdapter{}, err
+	}
 	return &chunkSourceAdapter{tr, name}, nil
 }
 

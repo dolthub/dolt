@@ -217,14 +217,14 @@ func JournalInspect(journalPath string, seeRoots, seeChunks, crcScan, snapScan b
 					offset += 1
 					continue
 				}
-				if rec.kind == chunkJournalRecKind {
+				if isChunkRecKind(rec.kind) {
 					numChunks += 1
 					if firstHealthy {
 						logrus.Infof("First Chunk Record Found %s (%d bytes)", rec.address.String(), len(recordBuf))
 					} else if seeChunks {
 						logrus.Infof("Chunk Record Found %s (%d bytes)", rec.address.String(), len(recordBuf))
 					}
-				} else if rec.kind == rootHashJournalRecKind {
+				} else if isRootHashRecKind(rec.kind) {
 					if lastRootTs.IsZero() {
 						lastRootTs = rec.timestamp
 					}
@@ -731,10 +731,10 @@ func filterJournalCore(journalData []byte, output io.Writer, filterRoots, filter
 					totalRecords++
 					// Check if this record should be filtered out
 					shouldFilter := false
-					if rec.kind == rootHashJournalRecKind && filterRootSet.Has(rec.address) {
+					if isRootHashRecKind(rec.kind) && filterRootSet.Has(rec.address) {
 						logrus.Infof("Filtering out root record with hash: %s", rec.address.String())
 						shouldFilter = true
-					} else if rec.kind == chunkJournalRecKind && filterChunkSet.Has(rec.address) {
+					} else if isChunkRecKind(rec.kind) && filterChunkSet.Has(rec.address) {
 						logrus.Infof("Filtering out chunk record with hash: %s", rec.address.String())
 						shouldFilter = true
 					}

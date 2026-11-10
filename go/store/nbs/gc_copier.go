@@ -45,8 +45,8 @@ func newTableWriterFromArchiveLevel(archiveLevel chunks.GCArchiveLevel) (Generic
 	}
 }
 
-func newGarbageCollectionCopier(archiveLevel chunks.GCArchiveLevel, tfp tableFilePersister) (*gcCopier, error) {
-	writer, err := newTableWriterFromArchiveLevel(archiveLevel)
+func newGarbageCollectionCopier(archiveLevel chunks.GCArchiveLevel, tfp tableFilePersister, codec storeCodec) (*gcCopier, error) {
+	writer, err := codec.newGCWriter(archiveLevel)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +212,7 @@ type rotatingGCCopier struct {
 }
 
 func newRotatingGCCopier(archiveLevel chunks.GCArchiveLevel, tfp tableFilePersister, dest *NomsBlockStore, fileSizeLimit uint64, incrementalUpdateManifest bool) (*rotatingGCCopier, error) {
-	writer, err := newTableWriterFromArchiveLevel(archiveLevel)
+	writer, err := dest.codec.newGCWriter(archiveLevel)
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +295,7 @@ func (gcc *rotatingGCCopier) rotate(ctx context.Context) error {
 		return gcc.finalizeChildWriter(ctx, previousCopier)
 	})
 
-	writer, err := newTableWriterFromArchiveLevel(gcc.archiveLevel)
+	writer, err := gcc.dest.codec.newGCWriter(gcc.archiveLevel)
 	if err != nil {
 		return err
 	}

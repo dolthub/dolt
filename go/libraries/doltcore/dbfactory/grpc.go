@@ -128,7 +128,7 @@ func (fact DoltRemoteFactory) newChunkStore(ctx context.Context, nbf *types.Noms
 	}
 
 	csClient := remotesapi.NewChunkStoreServiceClient(conn)
-	cs, err := remotestorage.NewDoltChunkStoreFromPath(ctx, nbf, urlObj.Path, urlObj.Host, wsValidate, csClient)
+	cs, err := newRemoteChunkStore(ctx, nbf, urlObj.Path, urlObj.Host, wsValidate, csClient, params)
 	if err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("could not access dolt url '%s': %w", urlObj.String(), err)

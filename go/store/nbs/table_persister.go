@@ -59,6 +59,7 @@ type openOpts struct {
 	// their index, so they scan it instead. See
 	// [archiveReader.deepValidate].
 	deepValidate bool
+	openCodec
 }
 
 // tablePersister allows interaction with persistent storage. It provides
@@ -208,7 +209,7 @@ func planRangeCopyConjoin(ctx context.Context, sources chunkSources, q MemoryQuo
 
 // calcChunkRangeSize computes the size of the chunk records for a table file.
 func calcChunkRangeSize(index tableIndex) uint64 {
-	return index.tableFileSize() - indexSize(index.chunkCount()) - footerSize
+	return index.tableFileSize() - indexSize(index.chunkCount()) - footerSize - tableIndexExtra(index)
 }
 
 func planTableConjoin(ctx context.Context, sources []sourceWithSize, q MemoryQuotaProvider, stats *Stats) (plan compactionPlan, err error) {
@@ -222,6 +223,10 @@ func planTableConjoin(ctx context.Context, sources []sourceWithSize, q MemoryQuo
 	// place largest chunk sources at the beginning of the conjoin
 	plan.sources = chunkSourcesByDescendingDataSize{sws: sources}
 	sort.Sort(plan.sources)
+	tail, err := conjoinedTableTail(plan.sources.sws)
+	if err != nil {
+		return compactionPlan{}, err
+	}
 
 	var totalUncompressedData uint64
 	for _, s := range sources {
@@ -242,7 +247,7 @@ func planTableConjoin(ctx context.Context, sources []sourceWithSize, q MemoryQuo
 
 	lengthsPos := lengthsOffset(plan.chunkCount)
 	suffixesPos := suffixesOffset(plan.chunkCount)
-	sz := int(indexSize(plan.chunkCount) + footerSize)
+	sz := int(indexSize(plan.chunkCount) + footerSize + uint64(len(tail)))
 	plan.mergedIndex, err = q.AcquireQuotaByteSlice(ctx, sz)
 	if err != nil {
 		return compactionPlan{}, err
@@ -339,6 +344,7 @@ func planTableConjoin(ctx context.Context, sources []sourceWithSize, q MemoryQuo
 	suffixesStart := uint64(plan.chunkCount) * (prefixTupleSize + lengthSize)
 	suffixBytes := plan.mergedIndex[suffixesStart : suffixesStart+uint64(plan.chunkCount)*hash.SuffixLen]
 	plan.name = nameFromSuffixes(suffixBytes)
+	finishConjoinedTable(&plan, tail)
 	plan.closer = func() {
 		q.ReleaseQuotaBytes(acquiredBytes)
 	}

@@ -32,6 +32,7 @@ type noConjoinBlobstorePersister struct {
 	bs        blobstore.Blobstore
 	q         MemoryQuotaProvider
 	blockSize uint64
+	persisterCodec
 }
 
 var _ tablePersister = &noConjoinBlobstorePersister{}
@@ -40,7 +41,7 @@ var _ tableFilePersister = &noConjoinBlobstorePersister{}
 // Persist makes the contents of mt durable. Chunks already present in
 // |haver| may be dropped in the process.
 func (bsp *noConjoinBlobstorePersister) Persist(ctx context.Context, behavior dherrors.FatalBehavior, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
-	address, data, _, chunkCount, gcb, err := mt.write(haver, keeper, stats)
+	address, data, _, chunkCount, gcb, err := bsp.writeMemTable(mt, haver, keeper, stats)
 	if err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	} else if gcb != gcBehavior_Continue {
@@ -60,6 +61,7 @@ func (bsp *noConjoinBlobstorePersister) Persist(ctx context.Context, behavior dh
 	}
 
 	src, err := newPersistedBSTableChunkSource(ctx, bsp.bs, bsp.q, data, address, bsp.blockSize)
+	src, err = bsp.openWritten(src, err)
 	if err != nil {
 		return nil, gcBehavior_Continue, err
 	}
@@ -73,6 +75,7 @@ func (bsp *noConjoinBlobstorePersister) ConjoinAll(ctx context.Context, behavior
 
 // Open a table named |name|, containing |chunkCount| chunks.
 func (bsp *noConjoinBlobstorePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, opts openOpts, stats *Stats) (chunkSource, error) {
+	opts = bsp.openOpts(opts)
 	cs, err := newBSTableChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, opts, stats)
 	if err == nil {
 		return cs, nil

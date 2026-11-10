@@ -121,7 +121,8 @@ func (s journalChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.
 
 	var remaining bool
 	var fileReqs []journalRecord
-	var buffered []CompressedChunk
+	var buffered []ToChunker
+	var codec journalCodec
 	f, gcb, err := func() (*os.File, gcBehavior, error) {
 		s.journal.lock.RLock()
 		defer s.journal.lock.RUnlock()
@@ -151,7 +152,7 @@ func (s journalChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.
 			reqs[i].found = true
 		}
 		for _, rec := range bufReqs {
-			cc, err := s.journal.getCompressedChunkAtRange(rec.r, *reqs[rec.idx].a)
+			cc, err := s.journal.chunkerAtRange(rec.r, *reqs[rec.idx].a)
 			if err != nil {
 				return nil, gcBehavior_Continue, err
 			} else if cc.IsEmpty() {
@@ -159,6 +160,7 @@ func (s journalChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.
 			}
 			buffered = append(buffered, cc)
 		}
+		codec = s.journal.codec
 		s.journal.readers.Add(len(fileReqs))
 		return s.journal.journal.f, gcBehavior_Continue, nil
 	}()
@@ -188,7 +190,7 @@ func (s journalChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			cc, err := readCompressedChunkAt(f, rec.r, *reqs[rec.idx].a)
+			cc, err := readChunkerAt(codec, f, rec.r, *reqs[rec.idx].a)
 			if err != nil {
 				return err
 			} else if cc.IsEmpty() {
