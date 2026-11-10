@@ -34,6 +34,7 @@ func NewInitDatabaseHook(sc *StatsController) sqle.InitDatabaseHook {
 			sc.mu.Lock()
 			sc.getUserHomeDir = denv.GetUserHomeDir
 			sc.dbLoadParams = dEnvLoadParams(denv)
+			sc.guard.useEnv(denv)
 			sc.mu.Unlock()
 		}
 		sqlDb, ok := db.(sqle.Database)

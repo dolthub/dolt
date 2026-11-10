@@ -333,7 +333,7 @@ func (c *Controller) applyCommitHooks(ctx context.Context, name string, denv *en
 			}
 		}
 		commitHook := newCommitHook(c.lgr, r.Name(), remote.Url, name, c.role, func(ctx context.Context) (*doltdb.DoltDB, error) {
-			return remote.GetRemoteDBWithoutCaching(ctx, types.Format_DOLT, dialprovider)
+			return openStandbyDB(c, ctx, r.Name(), remote, types.Format_DOLT, denv.DoltDB(ctx), dialprovider)
 		}, denv.DoltDB(ctx), ttfdir)
 		denv.DoltDB(ctx).PrependCommitHooks(ctx, commitHook)
 		hooks = append(hooks, commitHook)
@@ -872,6 +872,7 @@ func (c *Controller) HookBranchControlPersistence(controller *branch_control.Con
 }
 
 func (c *Controller) RegisterGrpcServices(ctxFactory func(context.Context) (*sql.Context, error), srv *grpc.Server) {
+	registerGrpcServices(srv)
 	replicationapi.RegisterReplicationServiceServer(srv, &replicationServiceServer{
 		ctxFactory:           ctxFactory,
 		authPersistence:      c.replicaAuthPersister,
@@ -1401,7 +1402,7 @@ func (c *Controller) replicationServiceClients(ctx context.Context) ([]*replicat
 		if c.tlsCfg != nil {
 			httpScheme = "https://"
 		}
-		client := replicationapi.NewReplicationServiceClient(cc)
+		client := newReplicationServiceClient(cc)
 		ret = append(ret, &replicationServiceClient{
 			remote:  r.Name(),
 			httpUrl: httpScheme + hostPort,

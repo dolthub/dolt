@@ -128,7 +128,11 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	progress := make(chan FsckProgressMessage, 32)
 	var report FsckReport
 
-	params := make(map[string]interface{})
+	params, err := env.WithStorageLoadParams(dEnv, make(map[string]interface{}))
+	if err != nil {
+		cli.PrintErrln("Could not load database settings:", err.Error())
+		return 1
+	}
 	params[dbfactory.ChunkJournalParam] = struct{}{}
 	dbFact := dbfactory.FileFactory{}
 	ddb, _, _, err := dbFact.CreateDbNoCache(ctx, types.Format_DOLT, u, params, func(vErr error) {

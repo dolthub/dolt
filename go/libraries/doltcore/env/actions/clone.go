@@ -95,6 +95,11 @@ func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, di
 // EnvForCloneOf is [EnvForClone] for a clone of |src|. Each of |configure| runs on the new DoltEnv before its database
 // is created.
 func EnvForCloneOf(ctx context.Context, src *doltdb.DoltDB, r env.Remote, dir string, fs filesys.Filesys, version string, homeProvider env.HomeDirProvider, configure ...func(*env.DoltEnv)) (*env.DoltEnv, error) {
+	params, err := cloneLoadParams(ctx, src)
+	if err != nil {
+		return nil, err
+	}
+	configure = append(configure, func(dEnv *env.DoltEnv) { dEnv.AddDBLoadParams(params) })
 	return envForClone(ctx, src.Format(), r, dir, fs, version, homeProvider, configure...)
 }
 

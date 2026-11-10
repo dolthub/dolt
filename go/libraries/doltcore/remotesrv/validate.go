@@ -95,7 +95,7 @@ func ValidateGetRepoMetadataRequest(req *remotesapi.GetRepoMetadataRequest) erro
 	if req.ClientRepoFormat.NbsVersion != "4" && req.ClientRepoFormat.NbsVersion != "5" {
 		return fmt.Errorf("unsupported value for client_repo_format.nbs_version: %v; expected \"4\" or \"5\"", req.ClientRepoFormat.NbsVersion)
 	}
-	return nil
+	return checkClientRepoFormat(req.ClientRepoFormat)
 }
 
 func ValidateHasChunksRequest(req *remotesapi.HasChunksRequest) error {

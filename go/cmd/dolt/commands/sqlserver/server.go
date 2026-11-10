@@ -492,6 +492,9 @@ func ConfigureServices(
 			}
 
 			if logBin == 1 {
+				if err := binlogreplication.CheckLoggable(sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.DbProvider); err != nil {
+					return err
+				}
 				logrus.Infof("Enabling binary logging for branch %s", logBinBranch)
 				binlogProducer, err := binlogreplication.NewBinlogProducer(sqlCtx, cfg.DoltEnv.FS)
 				if err != nil {

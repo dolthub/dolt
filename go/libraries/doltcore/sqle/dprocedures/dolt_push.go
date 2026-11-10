@@ -91,7 +91,7 @@ func doDoltPush(ctx *sql.Context, args []string) (int, string, error) {
 		remote = &rmt
 	}
 
-	remoteDB, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb.ValueReadWriter().Format(), *remote)
+	remoteDB, err := openPushRemote(ctx, sess.Provider(), dbData.Ddb, *remote)
 	if err != nil {
 		return cmdFailure, "", actions.HandleInitRemoteStorageClientErr(remote.Name, remote.Url, err)
 	}

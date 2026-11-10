@@ -398,7 +398,7 @@ type rpcTestHarness struct {
 	finalErr error
 }
 
-func startRPCThread(t *testing.T) *rpcTestHarness {
+func startRPCThread(t *testing.T, format ...repoFormat) *rpcTestHarness {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	stream := newFakeStream(ctx)
@@ -417,7 +417,7 @@ func startRPCThread(t *testing.T) *rpcTestHarness {
 	getRepoId := func() (*remotesapi.RepoId, string) { return repoId, "tok" }
 	go func() {
 		defer close(h.done)
-		h.finalErr = fetcherRPCChunkLocationsThread(ctx, h.reqCh, h.resCh, client, func(string) {}, h.missingCh, "host", getRepoId, "repoPath")
+		h.finalErr = fetcherRPCChunkLocationsThread(ctx, h.reqCh, h.resCh, client, func(string) {}, h.missingCh, "host", getRepoId, "repoPath", append(format, storedFormat{})[0])
 	}()
 
 	// Backstop: make sure the RPC goroutine is torn down no matter

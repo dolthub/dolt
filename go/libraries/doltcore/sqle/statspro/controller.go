@@ -117,6 +117,7 @@ type StatsController struct {
 	// against the quiescedAwake channel which it installed at
 	// the beginning of that run.
 	quiescedAwake chan struct{}
+	guard         storageGuard
 }
 
 type rootStats struct {
@@ -157,6 +158,7 @@ func NewStatsController(logger *logrus.Logger, bgThreads *sql.BackgroundThreads,
 		kv:             NewMemStats(),
 		getUserHomeDir: dEnvHomeDir(dEnv),
 		dbLoadParams:   dEnvLoadParams(dEnv),
+		guard:          newStorageGuard(dEnv),
 		bgThreads:      bgThreads,
 		genCnt:         atomic.Uint64{},
 	}
@@ -183,7 +185,7 @@ func (sc *StatsController) SetBackgroundThreads(bgThreads *sql.BackgroundThreads
 func (sc *StatsController) SetMemOnly(v bool) {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
-	sc.memOnly = v
+	sc.memOnly = v || sc.guard.memOnly()
 }
 
 func (sc *StatsController) SetEnableGc(v bool) {
@@ -230,8 +232,9 @@ func (sc *StatsController) AddFs(ctx *sql.Context, db dsess.SqlDatabase, fs file
 
 	firstDb := len(sc.dbFs) == 0
 	sc.dbFs[db.AliasedName()] = fs
+	sc.guard.lockedNoteDB(ctx, sc, db.DbData().Ddb)
 	if rotateOk && firstDb {
-		return sc.lockedRotateStorage(ctx)
+		return sc.guard.lockedRotateStorage(ctx, sc)
 	}
 	return nil
 }
@@ -322,6 +325,7 @@ func (sc *StatsController) AnalyzeTable(ctx *sql.Context, table sql.Table, dbNam
 	if !ok {
 		return fmt.Errorf("cannot analyze table %s: not a Dolt table", table.Name())
 	}
+	sc.guard.noteDB(ctx, sc, sqlDb.DbData().Ddb)
 
 	newStats := newRootStats()
 
@@ -422,7 +426,7 @@ func (sc *StatsController) DropDbStats(ctx *sql.Context, sch, dbName string, flu
 			defer sc.mu.Lock()
 			sc.Restart(ctx)
 		}()
-		if err := sc.lockedRotateStorage(ctx); err != nil {
+		if err := sc.guard.lockedRotateStorage(ctx, sc); err != nil {
 			return err
 		}
 	}
@@ -514,7 +518,7 @@ func (sc *StatsController) rotateStorage(ctx context.Context) error {
 	defer sql.SessionCommandEnd(sqlCtx.Session)
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
-	return sc.lockedRotateStorage(sqlCtx)
+	return sc.guard.lockedRotateStorage(sqlCtx, sc)
 }
 
 // lockedRotateStorage closes the current prolly stats DoltDB, removes its on-disk
@@ -616,6 +620,7 @@ func (sc *StatsController) initStorage(ctx context.Context, fs filesys.Filesys) 
 		dbLoadParams = make(map[string]interface{})
 	}
 	dbLoadParams[dbfactory.DisableSingletonCacheParam] = struct{}{}
+	sc.guard.storageParams(dbLoadParams)
 
 	var dEnv *env.DoltEnv
 	exists, isDir := statsFs.Exists("")
@@ -644,6 +649,9 @@ func (sc *StatsController) initStorage(ctx context.Context, fs filesys.Filesys) 
 	}
 
 	statsDdb := dEnv.DbData(ctx).Ddb
+	if err := sc.guard.checkStorage(statsDdb); err != nil {
+		return nil, err
+	}
 	m, err := statsDdb.GetStatistics(ctx)
 	if err == nil {
 		// use preexisting map

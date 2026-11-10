@@ -259,6 +259,10 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 	// database (lookupDbName) is a separate database created via [dsess.DoltSessionProvider.CreateDatabase]
 	// and follows the normal caching path.
 	defer remoteDb.Close()
+	create, err := newRestoreCreator(ctx, dsess.Provider(), remoteDb)
+	if err != nil {
+		return err
+	}
 
 	lookupDbName := apr.Arg(2)
 	hasLookupDb := dsess.Provider().HasDatabase(ctx, lookupDbName)
@@ -299,7 +303,7 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 		}
 	}
 
-	err = dsess.Provider().CreateDatabase(ctx, lookupDbName)
+	err = create(ctx, lookupDbName)
 	if err != nil {
 		return err
 	}
@@ -336,7 +340,7 @@ func syncRemote(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.
 	// We primarily use this to initialize the directory for file URLs without a directory.
 	_ = dbfactory.PrepareDB(ctx, dbData.Ddb.Format(), remote.Url, params)
 
-	destDb, err := dsess.Provider().GetRemoteDB(ctx, dbData.Ddb.Format(), remote)
+	destDb, err := openPushRemote(ctx, dsess.Provider(), dbData.Ddb, remote)
 	if err != nil {
 		return err
 	}

@@ -129,7 +129,7 @@ func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore, recorder nbs.Stat
 			})
 		})
 		eg.Go(func() error {
-			return fetcherRPCChunkLocationsThread(ctx, locsReqCh, downloadLocCh, dcs.csClient, storeRepoToken, ret.resCh, dcs.host, dcs.getRepoId, dcs.repoPath)
+			return fetcherRPCChunkLocationsThread(ctx, locsReqCh, downloadLocCh, dcs.csClient, storeRepoToken, ret.resCh, dcs.host, dcs.getRepoId, dcs.repoPath, dcs.format)
 		})
 	} else {
 		locsReqCh := make(chan *remotesapi.GetDownloadLocsRequest)
@@ -144,10 +144,10 @@ func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore, recorder nbs.Stat
 		})
 	}
 	eg.Go(func() error {
-		return fetcherDownloadRangesThread(ctx, downloadLocCh, fetchReqCh, locDoneCh)
+		return fetcherDownloadRangesThread(ctx, downloadLocCh, fetchReqCh, locDoneCh, dcs.format)
 	})
 	eg.Go(func() error {
-		return fetcherDownloadURLThreads(ctx, fetchReqCh, locDoneCh, ret.resCh, dcs.csClient, ret.stats, dcs.httpFetcher, dcs.params, dcs.logf)
+		return fetcherDownloadURLThreads(ctx, fetchReqCh, locDoneCh, ret.resCh, dcs.csClient, ret.stats, dcs.httpFetcher, dcs.params, dcs.logf, dcs.format)
 	})
 
 	return ret
@@ -368,7 +368,7 @@ func fetcherRPCDownloadLocsThread(ctx context.Context, reqCh chan *remotesapi.Ge
 // assignment and re-introduces any id it reuses with a fresh
 // TableFileRecord, which we overwrite into |tfByID| before resolving
 // any ChunkLocation that references it. See the proto file.
-func fetcherRPCChunkLocationsThread(ctx context.Context, reqCh chan *remotesapi.StreamChunkLocationsRequest, resCh chan []*remotesapi.DownloadLoc, client remotesapi.ChunkStoreServiceClient, storeRepoToken func(string), missingChunkCh chan nbs.ToChunker, host string, getRepoId func() (*remotesapi.RepoId, string), repoPath string) error {
+func fetcherRPCChunkLocationsThread(ctx context.Context, reqCh chan *remotesapi.StreamChunkLocationsRequest, resCh chan []*remotesapi.DownloadLoc, client remotesapi.ChunkStoreServiceClient, storeRepoToken func(string), missingChunkCh chan nbs.ToChunker, host string, getRepoId func() (*remotesapi.RepoId, string), repoPath string, format repoFormat) error {
 	stream, err := reliable.MakeCall(
 		ctx,
 		reliable.CallOptions[*remotesapi.StreamChunkLocationsRequest, *remotesapi.StreamChunkLocationsResponse]{
@@ -386,6 +386,7 @@ func fetcherRPCChunkLocationsThread(ctx context.Context, reqCh chan *remotesapi.
 	}
 
 	tfByID := make(map[uint32]*tableFileRec)
+	keysByID := make(map[uint32][]byte)
 
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.Go(func() error {
@@ -448,6 +449,9 @@ func fetcherRPCChunkLocationsThread(ctx context.Context, reqCh chan *remotesapi.
 
 			locs, err := translateChunkLocations(req, resp.Locations, tfByID, getRepoId, repoPath)
 			if err != nil {
+				return NewRpcError(err, "StreamChunkLocations", host, req)
+			}
+			if err := format.addLocationKeys(locs, req, resp, tfByID, keysByID); err != nil {
 				return NewRpcError(err, "StreamChunkLocations", host, req)
 			}
 
@@ -627,6 +631,7 @@ func toGetRange(rs []*ranges.GetRange) *GetRange {
 			Length:     r.Length,
 			DictOffset: r.DictOffset,
 			DictLength: r.DictLength,
+			Key:        r.Key,
 		})
 	}
 	return ret
@@ -640,7 +645,7 @@ const (
 )
 
 // Reads off |locCh| and assembles DownloadLocs into download ranges.
-func fetcherDownloadRangesThread(ctx context.Context, locCh chan []*remotesapi.DownloadLoc, fetchReqCh chan fetchReq, doneCh chan struct{}) error {
+func fetcherDownloadRangesThread(ctx context.Context, locCh chan []*remotesapi.DownloadLoc, fetchReqCh chan fetchReq, doneCh chan struct{}, format repoFormat) error {
 	downloads := newDownloads()
 	for {
 		hasWork := downloads.dictRanges.Len() > 0 || downloads.chunkRanges.Len() > 0
@@ -663,6 +668,9 @@ func fetcherDownloadRangesThread(ctx context.Context, locCh chan []*remotesapi.D
 			} else {
 				for _, loc := range req {
 					downloads.Add(loc)
+					if err := format.addRangeKeys(downloads, loc); err != nil {
+						return err
+					}
 				}
 			}
 		case req := <-reqCh:
@@ -759,13 +767,13 @@ func (cc *ConcurrencyControl) Run(ctx context.Context, done <-chan struct{}, ss 
 	}
 }
 
-func fetcherDownloadURLThreads(ctx context.Context, fetchReqCh chan fetchReq, doneCh chan struct{}, chunkCh chan nbs.ToChunker, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, fetcher HTTPFetcher, params NetworkRequestParams, logf func(string, ...interface{})) error {
+func fetcherDownloadURLThreads(ctx context.Context, fetchReqCh chan fetchReq, doneCh chan struct{}, chunkCh chan nbs.ToChunker, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, fetcher HTTPFetcher, params NetworkRequestParams, logf func(string, ...interface{}), format repoFormat) error {
 	eg, ctx := errgroup.WithContext(ctx)
 	cc := &ConcurrencyControl{
 		MaxConcurrency: params.MaximumConcurrentDownloads,
 	}
 	f := func(ctx context.Context, shutdownCh <-chan struct{}) error {
-		return fetcherDownloadURLThread(ctx, fetchReqCh, shutdownCh, chunkCh, client, stats, cc, fetcher, params, logf)
+		return fetcherDownloadURLThread(ctx, fetchReqCh, shutdownCh, chunkCh, client, stats, cc, fetcher, params, logf, format)
 	}
 	threads := pool.NewDynamic(ctx, f, params.StartingConcurrentDownloads)
 	eg.Go(func() error {
@@ -830,7 +838,7 @@ func setDictionaryCallback(dictCache *dictionaryCache, path string) func(context
 	}
 }
 
-func fetcherDownloadURLThread(ctx context.Context, fetchReqCh chan fetchReq, doneCh <-chan struct{}, chunkCh chan nbs.ToChunker, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, health reliable.HealthRecorder, fetcher HTTPFetcher, params NetworkRequestParams, logf func(string, ...interface{})) error {
+func fetcherDownloadURLThread(ctx context.Context, fetchReqCh chan fetchReq, doneCh <-chan struct{}, chunkCh chan nbs.ToChunker, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, health reliable.HealthRecorder, fetcher HTTPFetcher, params NetworkRequestParams, logf func(string, ...interface{}), format repoFormat) error {
 	respCh := make(chan fetchResp, 1)
 	for {
 		select {
@@ -849,6 +857,7 @@ func fetcherDownloadURLThread(ctx context.Context, fetchReqCh chan fetchReq, don
 				} else {
 					cb = setDictionaryCallback(fetchResp.dictCache, fetchResp.path)
 				}
+				cb = format.wrap(cb, fetchResp, chunkCh)
 				f := fetchResp.get.GetDownloadFunc(ctx, stats, health, fetcher, params, logf, cb, func(ctx context.Context, lastError error, resourcePath string) (string, error) {
 					return fetchResp.refresh(ctx, lastError, client)
 				})

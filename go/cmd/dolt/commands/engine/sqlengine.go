@@ -45,7 +45,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/kvexec"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -289,7 +288,7 @@ func NewSqlEngine(
 
 	// Load in privileges from file, if it exists
 	var persister cluster.AuthDbPersister
-	persister = mysql_file_handler.NewPersister(config.PrivFilePath, config.DoltCfgDirPath)
+	persister = newPrivilegePersister(mrEnv.Config(), config.PrivFilePath, config.DoltCfgDirPath)
 
 	persister = config.ClusterController.HookMySQLDbPersister(persister, engine.Analyzer.Catalog.MySQLDb)
 	data, err := persister.LoadData(ctx)
@@ -299,7 +298,7 @@ func NewSqlEngine(
 
 	// Load the branch control permissions, if they exist
 	var bcController *branch_control.Controller
-	if bcController, err = branch_control.LoadData(ctx, config.BranchCtrlFilePath, config.DoltCfgDirPath); err != nil {
+	if bcController, err = loadBranchControl(ctx, mrEnv.Config(), config.BranchCtrlFilePath, config.DoltCfgDirPath); err != nil {
 		return nil, err
 	}
 	config.ClusterController.HookBranchControlPersistence(bcController, mrEnv.FileSystem())

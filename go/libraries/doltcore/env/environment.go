@@ -268,6 +268,10 @@ func LoadDoltDB(ctx context.Context, dEnv *DoltEnv) {
 		if mmapArchiveIndexes {
 			params = map[string]interface{}{dbfactory.MMapArchiveIndexesParam: struct{}{}}
 		}
+		if params, err = WithStorageLoadParams(dEnv, params); err != nil {
+			dEnv.DBLoadError = err
+			return
+		}
 
 		// Merge any environment-level DB load params.
 		if len(dEnv.DBLoadParams) > 0 {

@@ -167,6 +167,7 @@ func (sc *StatsController) Init(ctx context.Context, pro dsess.DoltDatabaseProvi
 	sql.SessionCommandBegin(sqlCtx.Session)
 	defer sql.SessionCommandEnd(sqlCtx.Session)
 
+	sc.guard.noteDBs(ctx, sc, dbs)
 	for i, db := range dbs {
 		if db, ok := db.(sqle.Database); ok { // exclude read replica dbs
 			fs, err := sc.pro.FileSystemForDatabase(db.AliasedName())
@@ -200,7 +201,7 @@ func (sc *StatsController) Init(ctx context.Context, pro dsess.DoltDatabaseProvi
 			}
 
 			// otherwise wipe and create new stats dir
-			if err := sc.lockedRotateStorage(sqlCtx); err != nil {
+			if err := sc.guard.lockedRotateStorage(sqlCtx, sc); err != nil {
 				return err
 			}
 		}

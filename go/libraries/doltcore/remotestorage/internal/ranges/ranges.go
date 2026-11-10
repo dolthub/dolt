@@ -42,6 +42,7 @@ type GetRange struct {
 	DictOffset uint64
 	DictLength uint32
 	Region     *Region
+	Key        any
 }
 
 // A |Region| represents a continuous range of bytes within in a Url.
