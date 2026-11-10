@@ -620,6 +620,65 @@ func TestLookupDbStateConcurrentBranchStateWrites(t *testing.T) {
 	wg.Wait()
 }
 
+// TestRemoveBranchStateConcurrentLookup exercises the default-head write made by
+// branch removal while another session inspects the current branch. Run with -race.
+func TestRemoveBranchStateConcurrentLookup(t *testing.T) {
+	sess := DefaultSession(branchRemovalTestProvider{}, nil)
+	dbState := newEmptyDatabaseSessionState()
+	dbState.dbName = "db1"
+	dbState.checkedOutRevSpec = "main"
+	sess.dbStates["db1"] = dbState
+	sess.currentBranches().add(dbState, "main", RevisionTypeBranch)
+
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
+		<-start
+		for i := 0; i < 2000; i++ {
+			bs, ok, err := sess.lookupDbState(ctx, "db1")
+			assert.NoError(t, err)
+			assert.True(t, ok)
+			assert.NotNil(t, bs)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
+		<-start
+		for i := 0; i < 2000; i++ {
+			sess.mu.Lock()
+			sess.currentBranches().add(dbState, "feature", RevisionTypeBranch)
+			sess.mu.Unlock()
+			assert.NoError(t, sess.RemoveBranchState(ctx, "db1", "feature"))
+		}
+	}()
+	close(start)
+	wg.Wait()
+}
+
+type branchRemovalTestProvider struct {
+	emptyRevisionDatabaseProvider
+}
+
+func (branchRemovalTestProvider) BaseDatabase(*sql.Context, string) (SqlDatabase, bool) {
+	return branchRemovalTestDatabase{}, true
+}
+
+type branchRemovalTestDatabase struct {
+	SqlDatabase
+}
+
+func (branchRemovalTestDatabase) DbData() env.DbData[*sql.Context] {
+	return env.DbData[*sql.Context]{}
+}
+
+func (branchRemovalTestDatabase) Revision() string {
+	return "main"
+}
+
 func emptyDatabaseProvider() DoltDatabaseProvider {
 	return emptyRevisionDatabaseProvider{}
 }

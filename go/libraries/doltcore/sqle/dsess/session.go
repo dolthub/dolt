@@ -346,14 +346,14 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 
 	d.mu.Lock()
 	_, dbStateFound = d.dbStates[baseName]
-	branchState, ok = d.currentBranches().get(baseName, database.Revision())
+	branchState, _ = d.currentBranches().get(baseName, database.Revision())
 	d.mu.Unlock()
 	if !dbStateFound {
 		// should be impossible
 		return nil, false, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	return branchState, ok, nil
+	return branchState, true, nil
 }
 
 // MaterializePending materializes any edits pending in the write session of the database named into its working set.
