@@ -248,7 +248,12 @@ func buildVirtualMergeBase(ctx *sql.Context, x, y *doltdb.Commit) (*doltdb.Commi
 	ctx = ctx.WithQuery(ctx.Query())
 	ctx.SetQueryTime(date)
 
-	result, err := MergeRoots(ctx, doltdb.SimpleTableResolver{}, xRoot, yRoot, baseRoot, y, ancestor, editor.Options{}, MergeOpts{KeepSchemaConflicts: true, SkipFullTextRebuild: true, KeepTablesAddedTwice: true})
+	mo := MergeOpts{
+		KeepSchemaConflicts:  true,
+		SkipFullTextRebuild:  true,
+		KeepTablesAddedTwice: true,
+	}
+	result, err := MergeRoots(ctx, doltdb.SimpleTableResolver{}, xRoot, yRoot, baseRoot, y, ancestor, editor.Options{}, mo)
 	if err != nil {
 		return nil, nil, err
 	}
