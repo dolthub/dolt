@@ -232,15 +232,19 @@ func (lm *logManager) initializePurgedGtids(ctx *sql.Context) error {
 
 // findLogFileForPosition searches through the available binlog files on disk for the first log file that
 // contains GTIDs that are NOT present in |executedGtids|. This is determined by reading the first GTID event
-// from each log file and selecting the previous file when the first GTID not in |executedGtids| is found. If
-// the first GTID event in all available logs files is in |executedGtids|, then the current log file is returned.
+// from each log file. When the first GTID not in |executedGtids| is found, the most recent earlier file whose
+// first GTID is in |executedGtids| is selected, since the tail of that file may still hold unexecuted GTIDs.
+// Files without any GTID events (e.g. a log file freshly rotated on server restart) are skipped, so they never
+// hide the tail of an earlier file. If the first GTID event in all available log files is in |executedGtids|,
+// then the last file with a GTID event is returned, or the current log file if no file has a GTID event.
 func (lm *logManager) findLogFileForPosition(executedGtids mysql.GTIDSet) (string, error) {
 	files, err := lm.logFilesOnDiskForBranch(BinlogBranch)
 	if err != nil {
 		return "", err
 	}
 
-	for i, f := range files {
+	lastFileWithExecutedGtid := ""
+	for _, f := range files {
 		binlogFilePath := filepath.Join(lm.binlogDirectory, f)
 		file, err := openBinlogFileForReading(binlogFilePath)
 		if err != nil {
@@ -265,22 +269,27 @@ func (lm *logManager) findLogFileForPosition(executedGtids mysql.GTIDSet) (strin
 			// If the first GTID in this file is contained in the set of GTIDs that the replica
 			// has already executed, then move on to check the next file.
 			if executedGtids.ContainsGTID(gtid) {
+				lastFileWithExecutedGtid = binlogFilePath
 				continue
 			}
 
-			// If we found an unexecuted GTID in the first binlog file, return the first file,
-			// otherwise return the previous file
-			if i == 0 {
+			// If no earlier file starts with an executed GTID, return this file, otherwise
+			// return the most recent earlier file that does, so its tail is replayed.
+			if lastFileWithExecutedGtid == "" {
 				return binlogFilePath, nil
-			} else {
-				return filepath.Join(lm.binlogDirectory, files[i-1]), nil
 			}
+			return lastFileWithExecutedGtid, nil
 		}
 	}
 
-	// If we don't find any GTIDs that are missing from |executedGtids|, then return the current
-	// log file so the streamer can reply events from it, potentially finding GTIDs later in the
-	// file that need to be sent to the connected replica, or waiting for new events to be written.
+	// If we don't find any GTIDs that are missing from |executedGtids|, then return the last file
+	// with a GTID event so the streamer can replay events from it, potentially finding GTIDs later
+	// in the file that need to be sent to the connected replica, before following its Rotate event
+	// to newer files. If no file has a GTID event, return the current log file and wait for new
+	// events to be written.
+	if lastFileWithExecutedGtid != "" {
+		return lastFileWithExecutedGtid, nil
+	}
 	return lm.currentBinlogFilepath(), nil
 }
 

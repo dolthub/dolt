@@ -24,7 +24,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -36,7 +35,7 @@ const indexLookupBufSize = 8
 type prollyIndexIter struct {
 	idx       DoltIndex
 	indexIter prolly.MapIter
-	primary   prolly.Map
+	primary   prolly.MapReader
 
 	// pkMap transforms indexRows index keys
 	// into primary index keys
@@ -64,23 +63,14 @@ func newProllyIndexIter(
 	rng prolly.Range,
 	pkSch sql.PrimaryKeySchema,
 	projections []uint64,
-	dprimary, dsecondary durable.Index,
+	primary, secondary prolly.MapReader,
 	columnIds sql.ColSet,
 ) (prollyIndexIter, error) {
-	secondary, err := durable.ProllyMapFromIndex(dsecondary)
-	if err != nil {
-		return prollyIndexIter{}, err
-	}
-
 	indexIter, err := secondary.IterRange(ctx, rng)
 	if err != nil {
 		return prollyIndexIter{}, err
 	}
 
-	primary, err := durable.ProllyMapFromIndex(dprimary)
-	if err != nil {
-		return prollyIndexIter{}, err
-	}
 	kd, _ := primary.Descriptors()
 	pkBld := val.NewTupleBuilder(kd, primary.NodeStore())
 	pkMap := OrdinalMappingFromIndex(idx)
@@ -251,13 +241,9 @@ func newProllyCoveringIndexIter(
 	rng prolly.Range,
 	pkSch sql.PrimaryKeySchema,
 	projections []uint64,
-	indexdata durable.Index,
+	secondary prolly.MapReader,
 	columnIds sql.ColSet,
 ) (prollyCoveringIndexIter, error) {
-	secondary, err := durable.ProllyMapFromIndex(indexdata)
-	if err != nil {
-		return prollyCoveringIndexIter{}, err
-	}
 	indexIter, err := secondary.IterRange(ctx, rng)
 	if err != nil {
 		return prollyCoveringIndexIter{}, err
@@ -414,7 +400,7 @@ func primaryIndexMapping(idx DoltIndex, projections []uint64) (keyProj, valProj,
 type prollyKeylessIndexIter struct {
 	idx       DoltIndex
 	indexIter prolly.MapIter
-	clustered prolly.Map
+	clustered prolly.MapReader
 
 	// clusteredMap transforms secondary index keys
 	// into clustered index keys
@@ -447,21 +433,9 @@ type prollyKeylessIndexIter struct {
 
 var _ sql.RowIter = &prollyKeylessIndexIter{}
 
-func newProllyKeylessIndexIter(
-	ctx *sql.Context,
-	idx DoltIndex,
-	rng prolly.Range,
-	pkSch sql.PrimaryKeySchema,
-	projections []uint64,
-	rows, dsecondary durable.Index,
-	reverse bool,
-	columnIds sql.ColSet,
-) (*prollyKeylessIndexIter, error) {
-	secondary, err := durable.ProllyMapFromIndex(dsecondary)
-	if err != nil {
-		return nil, err
-	}
+func newProllyKeylessIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, pkSch sql.PrimaryKeySchema, projections []uint64, clustered, secondary prolly.MapReader, reverse bool, columnIds sql.ColSet) (prollyKeylessIndexIter, error) {
 	var indexIter prolly.MapIter
+	var err error
 	if reverse {
 		indexIter, err = secondary.IterRangeReverse(ctx, rng)
 	} else {
@@ -471,10 +445,6 @@ func newProllyKeylessIndexIter(
 		return nil, err
 	}
 
-	clustered, err := durable.ProllyMapFromIndex(rows)
-	if err != nil {
-		return nil, err
-	}
 	keyDesc, valDesc := clustered.Descriptors()
 	indexMap := OrdinalMappingFromIndex(idx)
 	keyBld := val.NewTupleBuilder(keyDesc, clustered.NodeStore())

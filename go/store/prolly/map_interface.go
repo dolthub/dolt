@@ -55,5 +55,7 @@ type MutableMapInterface interface {
 	HasEdits() bool
 	IterRange(ctx context.Context, rng Range) (MapIter, error)
 	MapInterface(ctx context.Context) (MapInterface, error)
+	HasUncheckpointedEdits() bool
+	CheckpointMapInterface(ctx context.Context) (MapInterface, error)
 	VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error
 }

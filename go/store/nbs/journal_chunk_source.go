@@ -225,7 +225,7 @@ func (s journalChunkSource) reader(ctx context.Context, behavior dherrors.FatalB
 
 func (s journalChunkSource) getRecordRanges(ctx context.Context, behavior dherrors.FatalBehavior, requests []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error) {
 	ranges := make(map[hash.Hash]Range, len(requests))
-	for _, req := range requests {
+	for i, req := range requests {
 		if req.found {
 			continue
 		}
@@ -239,7 +239,7 @@ func (s journalChunkSource) getRecordRanges(ctx context.Context, behavior dherro
 		if keeper != nil && keeper(h) {
 			return nil, gcBehavior_Block, nil
 		}
-		req.found = true // update |requests|
+		requests[i].found = true // update |requests|
 		ranges[h] = rng
 	}
 	return ranges, gcBehavior_Continue, nil

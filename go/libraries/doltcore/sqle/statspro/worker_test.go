@@ -33,6 +33,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/gcctx"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -122,6 +123,34 @@ func TestAnalyze(t *testing.T) {
 	require.Equal(t, 1, len(sc.Stats.stats))
 	for _, tableStats := range sc.Stats.stats {
 		require.Equal(t, 3, len(tableStats))
+	}
+}
+
+// TestAnalyzeRevisionQualifiedTable verifies that ANALYZE TABLE on a revision-qualified table updates the statistics
+// of that revision rather than those of the session's current branch.
+func TestAnalyzeRevisionQualifiedTable(t *testing.T) {
+	for _, name := range []string{"mydb/feature", "mydb@feature", "mydb/feat/x", "mydb@feat/x"} {
+		t.Run(name, func(t *testing.T) {
+			threads := sql.NewBackgroundThreads()
+			defer threads.Shutdown()
+			ctx, sqlEng, sc := defaultSetup(t, threads, true, false)
+
+			_, branch := doltdb.SplitRevisionDbName(name)
+			require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_commit('-Am', 'setup')"))
+			require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_branch('"+branch+"')"))
+			require.NoError(t, executeQuery(ctx, sqlEng, "insert into `mydb/"+branch+"`.xy values (1000, 1000)"))
+			rows, err := executeQueryResults(ctx, sqlEng, "select count(*) from `mydb/"+branch+"`.xy")
+			require.NoError(t, err)
+			branchRowCnt := uint64(rows[0][0].(int64))
+
+			require.NoError(t, executeQuery(ctx, sqlEng, "analyze table `"+name+"`.xy"))
+
+			sc.mu.Lock()
+			branchStats := sc.Stats.stats[tableIndexesKey{"mydb", branch, "xy", ""}]
+			sc.mu.Unlock()
+			require.NotEmpty(t, branchStats)
+			require.Equal(t, branchRowCnt, branchStats[0].RowCnt)
+		})
 	}
 }
 
@@ -634,6 +663,23 @@ func TestRotateBackingDb(t *testing.T) {
 	require.Equal(t, 5, sc.kv.Len())
 	require.Equal(t, 1, len(sc.Stats.stats))
 
+}
+
+func TestFailedRotateStorage(t *testing.T) {
+	threads := sql.NewBackgroundThreads()
+	defer threads.Shutdown()
+	ctx, _, sc := defaultSetup(t, threads, false, false)
+
+	prev, ok := sc.kv.(*prollyStats)
+	require.True(t, ok)
+
+	// Without a home directory provider, creating the new stats database fails.
+	sc.getUserHomeDir = nil
+	require.Error(t, sc.rotateStorage(ctx))
+
+	// The rotation closed |prev|, which must not be left in place to be used or closed again.
+	require.Same(t, prev.mem, sc.kv)
+	require.Equal(t, 4, sc.kv.Len())
 }
 
 func TestPanic(t *testing.T) {

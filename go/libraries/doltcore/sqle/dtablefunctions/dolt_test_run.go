@@ -25,6 +25,7 @@ import (
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
@@ -140,7 +141,7 @@ func (trtf *TestsRunTableFunction) WithChildren(ctx *sql.Context, node ...sql.No
 
 // CheckAuth implements the interface sql.AuthorizationCheckerNode
 func (trtf *TestsRunTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
-	baseDB, _ := doltdb.SplitRevisionDbName(trtf.database.Name())
+	baseDB := plan.CheckPrivilegeNameForDatabase(trtf.database)
 	subject := sql.PrivilegeCheckSubject{Database: baseDB}
 	return opChecker.UserHasPrivileges(ctx, sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))
 }

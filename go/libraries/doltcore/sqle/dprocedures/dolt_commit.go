@@ -89,7 +89,7 @@ func doDoltCommitAll(ctx *sql.Context, args ...string) ([]sql.Row, error) {
 	if currentDB == "" {
 		return nil, fmt.Errorf("cannot dolt_commit_all with no database selected")
 	}
-	baseDB, _ := doltdb.SplitRevisionDbName(currentDB)
+	baseDB, branch := doltdb.SplitRevisionDbName(currentDB)
 	var dbNames []string
 	for _, dirty := range dSess.DirtyBranches() {
 		if !strings.EqualFold(dirty.DbName, baseDB) {
@@ -98,14 +98,17 @@ func doDoltCommitAll(ctx *sql.Context, args ...string) ([]sql.Row, error) {
 		dbNames = append(dbNames, dirty.DbName+"/"+dirty.Branch)
 	}
 	if len(dbNames) == 0 {
-		branch, ok, err := dSess.CurrentHead(ctx, currentDB)
-		if err != nil {
-			return nil, err
+		if branch == "" {
+			var ok bool
+			branch, ok, err = dSess.CurrentHead(ctx, baseDB)
+			if err != nil {
+				return nil, err
+			}
+			if !ok {
+				return nil, doltdb.ErrOperationNotSupportedInDetachedHead
+			}
 		}
-		if !ok {
-			return nil, doltdb.ErrOperationNotSupportedInDetachedHead
-		}
-		dbNames = append(dbNames, baseDB+"/"+branch)
+		dbNames = append(dbNames, doltdb.RevisionDbName(baseDB, branch))
 	}
 	sort.Strings(dbNames)
 	pending := make([]*doltdb.PendingCommit, len(dbNames))

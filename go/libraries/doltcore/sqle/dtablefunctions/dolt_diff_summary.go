@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -150,7 +151,7 @@ func (ds *DiffSummaryTableFunction) WithChildren(ctx *sql.Context, children ...s
 
 // CheckAuth implements the interface sql.AuthorizationCheckerNode.
 func (ds *DiffSummaryTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
-	baseDB, _ := doltdb.SplitRevisionDbName(ds.database.Name())
+	baseDB := plan.CheckPrivilegeNameForDatabase(ds.database)
 	if ds.tableNameExpr != nil {
 		if !types.IsText(ds.tableNameExpr.Type(ctx)) {
 			return ExpressionIsDeferred(ctx, ds.tableNameExpr)
@@ -298,7 +299,11 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 
 	// If tableNameExpr defined, return a single table diff summary result
 	if ds.tableNameExpr != nil {
-		delta := findMatchingDelta(deltas, tableName)
+		resolvedName, err := resolveDeltaTableName(ctx, fromDetails.root, toDetails.root, tableName)
+		if err != nil {
+			return nil, err
+		}
+		delta := findMatchingDelta(deltas, resolvedName)
 
 		ignore, err := ignorePatterns.ShouldIgnoreDelta(delta.IsAdd(), delta.IsDrop(), delta.ToName, delta.FromName)
 		if err != nil {
