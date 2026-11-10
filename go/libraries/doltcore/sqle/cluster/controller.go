@@ -333,7 +333,7 @@ func (c *Controller) applyCommitHooks(ctx context.Context, name string, denv *en
 			}
 		}
 		commitHook := newCommitHook(c.lgr, r.Name(), remote.Url, name, c.role, func(ctx context.Context) (*doltdb.DoltDB, error) {
-			return c.openStandbyDB(ctx, r.Name(), remote, types.Format_DOLT, denv.DoltDB(ctx), dialprovider)
+			return remote.GetRemoteDBWithoutCaching(ctx, types.Format_DOLT, dialprovider)
 		}, denv.DoltDB(ctx), ttfdir)
 		denv.DoltDB(ctx).PrependCommitHooks(ctx, commitHook)
 		hooks = append(hooks, commitHook)
@@ -872,9 +872,6 @@ func (c *Controller) HookBranchControlPersistence(controller *branch_control.Con
 }
 
 func (c *Controller) RegisterGrpcServices(ctxFactory func(context.Context) (*sql.Context, error), srv *grpc.Server) {
-	for _, register := range grpcServices {
-		register(srv)
-	}
 	replicationapi.RegisterReplicationServiceServer(srv, &replicationServiceServer{
 		ctxFactory:           ctxFactory,
 		authPersistence:      c.replicaAuthPersister,
@@ -1361,7 +1358,6 @@ type replicationServiceClient struct {
 	client replicationapi.ReplicationServiceClient
 	closer func() error
 	remote string
-	conn   grpc.ClientConnInterface
 	// httpUrl is the Dolt remote URL (e.g. http://53.78.2.1:3832) matching this
 	// client's endpoint. It is derived from the same remote URL as the gRPC dial
 	// target, so it stays correct regardless of the grpc target's scheme/format.
@@ -1411,7 +1407,6 @@ func (c *Controller) replicationServiceClients(ctx context.Context) ([]*replicat
 			httpUrl: httpScheme + hostPort,
 			client:  client,
 			closer:  cc.Close,
-			conn:    cc,
 		})
 	}
 	return ret, nil

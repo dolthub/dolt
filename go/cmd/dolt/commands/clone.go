@@ -56,10 +56,6 @@ type remoteDialerWithGitCacheRoot struct {
 	root string
 }
 
-func (d remoteDialerWithGitCacheRoot) Unwrap() dbfactory.GRPCDialProvider {
-	return d.GRPCDialProvider
-}
-
 func (d remoteDialerWithGitCacheRoot) GitCacheRoot() (string, bool) {
 	if strings.TrimSpace(d.root) == "" {
 		return "", false

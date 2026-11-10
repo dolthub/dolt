@@ -117,10 +117,6 @@ type StatsController struct {
 	// against the quiescedAwake channel which it installed at
 	// the beginning of that run.
 	quiescedAwake chan struct{}
-	guard         storageGuard
-	guarded       bool
-	// guardMemOnly keeps statistics in memory, whatever SetMemOnly sets, once guarded stats storage failed to open.
-	guardMemOnly bool
 }
 
 type rootStats struct {
@@ -161,7 +157,6 @@ func NewStatsController(logger *logrus.Logger, bgThreads *sql.BackgroundThreads,
 		kv:             NewMemStats(),
 		getUserHomeDir: dEnvHomeDir(dEnv),
 		dbLoadParams:   dEnvLoadParams(dEnv),
-		guard:          newStorageGuard(dEnv),
 		bgThreads:      bgThreads,
 		genCnt:         atomic.Uint64{},
 	}
@@ -188,7 +183,7 @@ func (sc *StatsController) SetBackgroundThreads(bgThreads *sql.BackgroundThreads
 func (sc *StatsController) SetMemOnly(v bool) {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
-	sc.memOnly = v || sc.guardMemOnly
+	sc.memOnly = v
 }
 
 func (sc *StatsController) SetEnableGc(v bool) {
@@ -235,7 +230,6 @@ func (sc *StatsController) AddFs(ctx *sql.Context, db dsess.SqlDatabase, fs file
 
 	firstDb := len(sc.dbFs) == 0
 	sc.dbFs[db.AliasedName()] = fs
-	sc.lockedNoteDB(ctx, db.DbData().Ddb)
 	if rotateOk && firstDb {
 		return sc.lockedRotateStorage(ctx)
 	}
@@ -328,7 +322,6 @@ func (sc *StatsController) AnalyzeTable(ctx *sql.Context, table sql.Table, dbNam
 	if !ok {
 		return fmt.Errorf("cannot analyze table %s: not a Dolt table", table.Name())
 	}
-	sc.noteDB(ctx, sqlDb.DbData().Ddb)
 
 	newStats := newRootStats()
 
@@ -528,8 +521,11 @@ func (sc *StatsController) rotateStorage(ctx context.Context) error {
 // stats directory, and picks a new database from dbFs to host the stats backing
 // store. The stats controller owns the lifecycle of these DoltDB instances (they
 // always bypass the singleton cache), so it is safe to close and rm unconditionally.
-// lockedStatsToMemory closes the stats database and removes it, keeping its statistics in memory.
-func (sc *StatsController) lockedStatsToMemory() (*memStats, error) {
+func (sc *StatsController) lockedRotateStorage(ctx context.Context) error {
+	if sc.memOnly {
+		return nil
+	}
+
 	sc.kv.Close()
 	var mem *memStats
 	switch kv := sc.kv.(type) {
@@ -540,22 +536,13 @@ func (sc *StatsController) lockedStatsToMemory() (*memStats, error) {
 	default:
 		mem = NewMemStats()
 	}
-	sc.kv = mem
-	if sc.statsBackingDb != nil {
-		return mem, sc.rm(sc.statsBackingDb)
-	}
-	return mem, nil
-}
-
-func (sc *StatsController) lockedRotateStorage(ctx context.Context) error {
-	if sc.memOnly {
-		return nil
-	}
-
 	// Serve stats from memory until the new store opens, so a failed rotation doesn't leave the closed store in use.
-	mem, err := sc.lockedStatsToMemory()
-	if err != nil {
-		return err
+	sc.kv = mem
+
+	if sc.statsBackingDb != nil {
+		if err := sc.rm(sc.statsBackingDb); err != nil {
+			return err
+		}
 	}
 
 	if len(sc.dbFs) == 0 {
@@ -577,12 +564,6 @@ func (sc *StatsController) lockedRotateStorage(ctx context.Context) error {
 	}
 
 	newKv, err := sc.initStorage(ctx, newStorageTarget)
-	if err != nil && sc.guarded {
-		sc.descError("opening a guarded stats database; keeping statistics in memory", err)
-		sc.memOnly, sc.guardMemOnly = true, true
-		sc.statsBackingDb = nil
-		return nil
-	}
 	if err != nil {
 		return err
 	}
@@ -635,7 +616,6 @@ func (sc *StatsController) initStorage(ctx context.Context, fs filesys.Filesys) 
 		dbLoadParams = make(map[string]interface{})
 	}
 	dbLoadParams[dbfactory.DisableSingletonCacheParam] = struct{}{}
-	sc.guard.params(dbLoadParams, sc.guarded)
 
 	var dEnv *env.DoltEnv
 	exists, isDir := statsFs.Exists("")
@@ -664,12 +644,6 @@ func (sc *StatsController) initStorage(ctx context.Context, fs filesys.Filesys) 
 	}
 
 	statsDdb := dEnv.DbData(ctx).Ddb
-	if sc.guarded {
-		if err := sc.guard.check(statsDdb); err != nil {
-			statsDdb.Close()
-			return nil, err
-		}
-	}
 	m, err := statsDdb.GetStatistics(ctx)
 	if err == nil {
 		// use preexisting map

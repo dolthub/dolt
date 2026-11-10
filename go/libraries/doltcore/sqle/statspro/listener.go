@@ -167,7 +167,6 @@ func (sc *StatsController) Init(ctx context.Context, pro dsess.DoltDatabaseProvi
 	sql.SessionCommandBegin(sqlCtx.Session)
 	defer sql.SessionCommandEnd(sqlCtx.Session)
 
-	sc.noteDBs(ctx, dbs)
 	for i, db := range dbs {
 		if db, ok := db.(sqle.Database); ok { // exclude read replica dbs
 			fs, err := sc.pro.FileSystemForDatabase(db.AliasedName())

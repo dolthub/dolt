@@ -289,7 +289,7 @@ func NewSqlEngine(
 
 	// Load in privileges from file, if it exists
 	var persister cluster.AuthDbPersister
-	persister = mysql_file_handler.NewPersister(config.PrivFilePath, config.DoltCfgDirPath, env.FileSealer(mrEnv.Config(), "privileges"))
+	persister = mysql_file_handler.NewPersister(config.PrivFilePath, config.DoltCfgDirPath)
 
 	persister = config.ClusterController.HookMySQLDbPersister(persister, engine.Analyzer.Catalog.MySQLDb)
 	data, err := persister.LoadData(ctx)
@@ -299,7 +299,7 @@ func NewSqlEngine(
 
 	// Load the branch control permissions, if they exist
 	var bcController *branch_control.Controller
-	if bcController, err = branch_control.LoadData(ctx, config.BranchCtrlFilePath, config.DoltCfgDirPath, env.FileSealer(mrEnv.Config(), "branch_control")); err != nil {
+	if bcController, err = branch_control.LoadData(ctx, config.BranchCtrlFilePath, config.DoltCfgDirPath); err != nil {
 		return nil, err
 	}
 	config.ClusterController.HookBranchControlPersistence(bcController, mrEnv.FileSystem())

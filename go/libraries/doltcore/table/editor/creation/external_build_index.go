@@ -75,11 +75,6 @@ func BuildProllyIndexExternal(ctx *sql.Context, vrw types.ValueReadWriter, ns tr
 		return cmp < 0
 	}, tempfiles.MovableTempFileProvider)
 	defer sorter.Close()
-	sealer, err := spillSealer(vrw)
-	if err != nil {
-		return nil, err
-	}
-	sorter.SetSpillSealer(sealer)
 
 	for {
 		k, v, err := iter.Next(ctx)

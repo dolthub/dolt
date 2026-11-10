@@ -19,8 +19,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
-	"github.com/dolthub/dolt/go/libraries/utils/file"
 )
 
 // storage configures the storage of the databases that environments open and create. Dolt Enterprise replaces it.
@@ -40,8 +38,6 @@ type storageConfig interface {
 	restoreParams(ctx context.Context, src *doltdb.DoltDB) (map[string]string, error)
 	// createParamsFor returns the params that create database |name| for the remotesapi request of |ctx|.
 	createParamsFor(ctx context.Context, name string) (map[string]string, error)
-	// fileSealer returns the sealer of the |kind| files of databases that |cfg| configures.
-	fileSealer(cfg config.ReadableConfig, kind string) file.Sealer
 }
 
 type plainStorage struct{}
@@ -68,10 +64,6 @@ func (plainStorage) restoreParams(context.Context, *doltdb.DoltDB) (map[string]s
 
 func (plainStorage) createParamsFor(context.Context, string) (map[string]string, error) {
 	return nil, nil
-}
-
-func (plainStorage) fileSealer(config.ReadableConfig, string) file.Sealer {
-	return file.PlainSealer{}
 }
 
 // StorageLoadParams returns new params with only what the storage of |dEnv|'s database needs to open it.
@@ -124,9 +116,4 @@ func RemoteDialerFor(local *doltdb.DoltDB, dialer dbfactory.GRPCDialProvider) db
 // CreateParamsForClient returns the params that create database |name| for the remotesapi request of |ctx|.
 func CreateParamsForClient(ctx context.Context, name string) (map[string]string, error) {
 	return storage.createParamsFor(ctx, name)
-}
-
-// FileSealer returns the sealer of the |kind| files, such as privileges, of databases that |cfg| configures.
-func FileSealer(cfg config.ReadableConfig, kind string) file.Sealer {
-	return storage.fileSealer(cfg, kind)
 }

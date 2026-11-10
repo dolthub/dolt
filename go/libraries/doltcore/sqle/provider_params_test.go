@@ -22,30 +22,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
-
-func TestProviderParentConfig(t *testing.T) {
-	dEnv := dtestutils.CreateTestEnv()
-	defer dEnv.Close()
-	pro, err := NewDoltDatabaseProvider("main", dEnv.FS, sql.EngineOverrides{})
-	require.NoError(t, err)
-	parent := config.NewMapConfig(map[string]string{"k": "v"})
-	pro.SetParentConfig(parent)
-
-	nested := &env.DoltEnv{}
-	pro.applyDBLoadParamsToEnv(nested)
-	assert.Same(t, parent, nested.ParentConfig)
-
-	own := config.NewMapConfig(nil)
-	nested = &env.DoltEnv{ParentConfig: own}
-	pro.applyDBLoadParamsToEnv(nested)
-	assert.Same(t, own, nested.ParentConfig)
-}
 
 func TestProviderCreateDatabaseWithParams(t *testing.T) {
 	ctx := context.Background()
@@ -53,22 +34,18 @@ func TestProviderCreateDatabaseWithParams(t *testing.T) {
 	defer dEnv.Close()
 	pro, err := NewDoltDatabaseProvider("main", dEnv.FS, sql.EngineOverrides{})
 	require.NoError(t, err)
+	parent := config.NewMapConfig(map[string]string{"k": "v"})
+	pro.SetParentConfig(parent)
 	cfg, _ := dEnv.Config.GetConfig(env.GlobalConfig)
 	sqlCtx := NewTestSQLCtxWithProvider(ctx, pro, cfg, nil, nil)
 
-	var loadParams map[string]interface{}
+	var created *env.DoltEnv
 	pro.AddInitDatabaseHook(func(_ *sql.Context, _ *DoltDatabaseProvider, _ string, denv *env.DoltEnv, _ dsess.SqlDatabase) error {
-		loadParams = denv.DBLoadParams
+		created = denv
 		return nil
 	})
 	require.NoError(t, pro.CreateDatabaseWithParams(sqlCtx, "with_params", map[string]string{"toy": "1"}))
-	assert.True(t, pro.HasDatabase(sqlCtx, "with_params"))
-	assert.Equal(t, "1", loadParams["toy"], "the database loads with its params")
-}
-
-func TestRemoteDialerWithGitCacheRootUnwraps(t *testing.T) {
-	orig := env.GRPCDialProvider{}
-	d, ok := dbfactory.DialerAs[env.GRPCDialProvider](remoteDialerWithGitCacheRoot{GRPCDialProvider: orig, root: "/root"})
-	assert.True(t, ok)
-	assert.Equal(t, orig, d)
+	require.NotNil(t, created)
+	assert.Equal(t, "1", created.DBLoadParams["toy"], "the database loads with its params")
+	assert.Same(t, parent, created.ParentConfig)
 }

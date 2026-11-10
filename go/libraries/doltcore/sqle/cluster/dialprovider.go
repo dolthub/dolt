@@ -66,7 +66,3 @@ func (p grpcDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (dbfacto
 
 	return cfg, nil
 }
-
-func (p grpcDialProvider) Unwrap() dbfactory.GRPCDialProvider {
-	return p.orig
-}

@@ -28,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// basicProvider has only the methods of DoltDatabaseProvider.
 type basicProvider struct {
 	DoltDatabaseProvider
 	calls []string
@@ -44,7 +43,6 @@ func (p *basicProvider) CreateDatabase(*sql.Context, string) error {
 	return nil
 }
 
-// paramsProvider also opens remotes for databases and creates databases with params.
 type paramsProvider struct {
 	basicProvider
 }
@@ -76,7 +74,6 @@ func TestProviderParamsHelpers(t *testing.T) {
 	full := &paramsProvider{}
 	_, err = GetRemoteDBFor(ctx, full, local, env.NoRemote)
 	require.NoError(t, err)
-	require.NoError(t, CreateDatabaseWithParams(ctx, full, "db", nil))
 	require.NoError(t, CreateDatabaseWithParams(ctx, full, "db", params))
-	assert.Equal(t, []string{"GetRemoteDBFor", "CreateDatabase", "CreateDatabaseWithParams"}, full.calls)
+	assert.Equal(t, []string{"GetRemoteDBFor", "CreateDatabaseWithParams"}, full.calls)
 }
