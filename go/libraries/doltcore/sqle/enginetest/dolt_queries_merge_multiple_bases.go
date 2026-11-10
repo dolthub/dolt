@@ -1018,7 +1018,8 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 		"feature", true,
 		check{"SELECT * FROM t ORDER BY id;", []sql.Row{{1, 10}, {2, 20}}}),
 	// https://github.com/dolthub/dolt/issues/12421, and then main and feature, which agree on t's schema, each add row 3
-	// with a different c. The virtual merge base has no t, so row 3 conflicts with no base row.
+	// with a different c. The virtual merge base has t with the columns ct and sc share, id, and no row 3, so row 3
+	// conflicts with no base row.
 	mergeScript("merge bases that create the same table with different schemas, tips adding a row differently: merge main into feature",
 		append(sameTableCreatedTwiceSetup(),
 			"CALL DOLT_CHECKOUT('main');",
@@ -1029,21 +1030,16 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 			"CALL DOLT_COMMIT('-am', 'feature2');",
 			"SET @@autocommit = 0;"),
 		"main", false,
-		check{"SELECT base_id, base_c, our_id, our_c, their_id, their_c FROM dolt_conflicts_t;", []sql.Row{{nil, nil, 3, 31, 3, 30}}}),
-	// https://github.com/dolthub/dolt/issues/12421, and then feature adds column d to t, so main and feature disagree on
-	// t's schema. As in a merge of two branches that create t differently, the merge fails.
-	{
-		Name: "merge bases that create the same table with different schemas, tips disagreeing on the schema: merge main into feature",
-		SetUpScript: append(sameTableCreatedTwiceSetup(),
+		check{"SELECT base_id, our_id, our_c, their_id, their_c FROM dolt_conflicts_t;", []sql.Row{{nil, 3, 31, 3, 30}}}),
+	// https://github.com/dolthub/dolt/issues/12421, and then feature adds column d to t. The virtual merge base has t
+	// with the columns ct and sc share, id, so main and feature both add c and feature adds d. git conflicts on t's
+	// schema instead, because it keeps a schema as one file.
+	mergeScript("merge bases that create the same table with different schemas, tips disagreeing on the schema: merge main into feature",
+		append(sameTableCreatedTwiceSetup(),
 			"ALTER TABLE t ADD COLUMN d INT;",
 			"CALL DOLT_COMMIT('-am', 'feature2');"),
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:          "CALL DOLT_MERGE('main', '-m', 'merge main');",
-				ExpectedErrStr: "table with same name 't' added in 2 commits can't be merged",
-			},
-		},
-	},
+		"main", true,
+		check{"SELECT * FROM t ORDER BY id;", []sql.Row{{1, 10, nil}, {2, 20, nil}, {100, nil, nil}}}),
 	mergeScript("long-running schema branch: merge main into feature",
 		append(longRunningSchemaBranchSetup(false), "CALL DOLT_CHECKOUT('feature');"),
 		"main", true,
