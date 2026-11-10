@@ -28,14 +28,17 @@ import (
 
 func TestWorkingSetSchemaConflictRoundTrip(t *testing.T) {
 	for _, test := range []struct {
-		name   string
-		tables []TableName
+		name    string
+		tables  []TableName
+		deleted string
 	}{
-		{"empty", []TableName{}},
-		{"default schema", []TableName{{Name: "t"}, {Name: "u"}}},
-		{"named schema", []TableName{{Name: "t", Schema: "s1"}}},
-		{"same name in multiple schemas", []TableName{{Name: "t", Schema: "s2"}, {Name: "t"}, {Name: "t", Schema: "s1"}, {Name: "u", Schema: "s1"}}},
-		{"dots in names", []TableName{{Name: "s1.t"}, {Name: "t", Schema: "s1"}, {Name: "t.u", Schema: "s.2"}}},
+		{"empty", []TableName{}, ""},
+		{"default schema", []TableName{{Name: "t"}, {Name: "u"}}, ""},
+		{"named schema", []TableName{{Name: "t", Schema: "s1"}}, ""},
+		{"same name in multiple schemas", []TableName{{Name: "t", Schema: "s2"}, {Name: "t"}, {Name: "t", Schema: "s1"}, {Name: "u", Schema: "s1"}}, ""},
+		{"dots in names", []TableName{{Name: "s1.t"}, {Name: "t", Schema: "s1"}, {Name: "t.u", Schema: "s.2"}}, ""},
+		{"deleted on ours", []TableName{{Name: "t", Schema: "s1"}}, "ours"},
+		{"deleted on theirs", []TableName{{Name: "t", Schema: "s1"}}, "theirs"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			ddb, ctx, head := newMemDoltDBWithDefaultBranch(t, "main")
@@ -47,6 +50,14 @@ func TestWorkingSetSchemaConflictRoundTrip(t *testing.T) {
 			}
 			theirs := ours
 			type tablePair struct{ ours, theirs hash.Hash }
+			tableHash := func(table *Table) hash.Hash {
+				if table == nil {
+					return hash.Hash{}
+				}
+				h, err := table.HashOf()
+				require.NoError(t, err)
+				return h
+			}
 			want := make(map[TableName]tablePair)
 			for i, name := range test.tables {
 				ourSchema := schema.MustSchemaFromCols(schema.NewColCollection(schema.NewColumn("id", uint64(i), types.IntKind, true)))
@@ -55,15 +66,19 @@ func TestWorkingSetSchemaConflictRoundTrip(t *testing.T) {
 				require.NoError(t, err)
 				theirTable, err := NewEmptyTable(ctx, ddb.vrw, ddb.ns, theirSchema)
 				require.NoError(t, err)
-				ours, err = ours.PutTable(ctx, name, ourTable)
-				require.NoError(t, err)
-				theirs, err = theirs.PutTable(ctx, name, theirTable)
-				require.NoError(t, err)
-				ourHash, err := ourTable.HashOf()
-				require.NoError(t, err)
-				theirHash, err := theirTable.HashOf()
-				require.NoError(t, err)
-				want[name] = tablePair{ourHash, theirHash}
+				if test.deleted == "ours" {
+					ourTable = nil
+				} else {
+					ours, err = ours.PutTable(ctx, name, ourTable)
+					require.NoError(t, err)
+				}
+				if test.deleted == "theirs" {
+					theirTable = nil
+				} else {
+					theirs, err = theirs.PutTable(ctx, name, theirTable)
+					require.NoError(t, err)
+				}
+				want[name] = tablePair{tableHash(ourTable), tableHash(theirTable)}
 			}
 
 			meta, err := datas.NewCommitMeta("Test", "test@example.com", "source")
@@ -90,13 +105,7 @@ func TestWorkingSetSchemaConflictRoundTrip(t *testing.T) {
 				var seen []TableName
 				err = ws.MergeState().IterSchemaConflicts(ctx, ddb, func(name TableName, conflict SchemaConflict) error {
 					seen = append(seen, name)
-					require.NotNil(t, conflict.toTbl, "schema conflict destination table is missing")
-					require.NotNil(t, conflict.fromTbl, "schema conflict source table is missing")
-					ourHash, err := conflict.toTbl.HashOf()
-					require.NoError(t, err)
-					theirHash, err := conflict.fromTbl.HashOf()
-					require.NoError(t, err)
-					require.Equal(t, want[name], tablePair{ourHash, theirHash}, "schema conflict table pair changed after publication")
+					require.Equal(t, want[name], tablePair{tableHash(conflict.toTbl), tableHash(conflict.fromTbl)}, "schema conflict table pair changed after publication")
 					return nil
 				})
 				require.NoError(t, err)
