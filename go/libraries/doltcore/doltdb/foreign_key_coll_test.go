@@ -157,10 +157,10 @@ func TestForeignKeyCollectionNameIndex(t *testing.T) {
 	fk, ok = lookup(fkc, "FK_ς", child)
 	assert.True(t, ok)
 	assert.Equal(t, sigma, fk)
-	// Without a schema, a key of the same name on any table matches.
-	_, ok = lookup(fkc, "fk_a", TableName{Name: "unrelated"})
-	assert.True(t, ok)
+	// With a schema, the key must be declared on the given table, and without one it must be declared without a schema.
 	_, ok = lookup(fkc, "fk_a", TableName{Name: "unrelated", Schema: "public"})
+	assert.False(t, ok)
+	_, ok = lookup(fkc, "fk_a", TableName{Name: "child"})
 	assert.False(t, ok)
 
 	err = fkc.AddKeys(newKey("FK_Σ", child, 4))
@@ -176,13 +176,22 @@ func TestForeignKeyCollectionNameIndex(t *testing.T) {
 	assert.True(t, ok, "removing a key from a copy must not remove it from the original")
 
 	assert.NoError(t, copied.RemoveTables(context.Background(), other))
-	_, ok = lookup(copied, "fk_a", TableName{Name: "unrelated"})
+	_, ok = lookup(copied, "fk_a", other)
 	assert.False(t, ok)
 	assert.NoError(t, copied.AddKeys(newKey("fk_a", other, 5)))
 
+	// Without a schema, as in Dolt, a foreign key name is unique across all tables.
+	noSchema := newKey("fk_b", TableName{Name: "child"}, 6)
+	assert.NoError(t, fkc.AddKeys(noSchema))
+	fk, ok = lookup(fkc, "FK_B", TableName{Name: "unrelated"})
+	assert.True(t, ok)
+	assert.Equal(t, noSchema, fk)
+	err = fkc.AddKeys(newKey("FK_B", TableName{Name: "other"}, 7))
+	assert.True(t, sql.ErrForeignKeyDuplicateName.Is(err), "unexpected error: %v", err)
+
 	loaded, err := deserializeFlatbufferForeignKeys(serializeFlatbufferForeignKeys(fkc))
 	assert.NoError(t, err)
-	for _, expected := range []ForeignKey{onChild, onOther, sigma} {
+	for _, expected := range []ForeignKey{onChild, onOther, sigma, noSchema} {
 		fk, ok = lookup(loaded, expected.Name, expected.TableName)
 		assert.True(t, ok)
 		assert.Equal(t, expected, fk)

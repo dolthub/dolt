@@ -37,8 +37,24 @@ import (
 type ForeignKeyCollection struct {
 	// foreignKeys holds every foreign key, keyed by the string form of its hash.
 	foreignKeys map[string]ForeignKey
-	// hashesByName indexes the keys of |foreignKeys| by the case-folded name of their foreign key.
-	hashesByName map[string]map[string]struct{}
+	// hashesByName maps the nameKey of every foreign key to its key in |foreignKeys|.
+	hashesByName map[foreignKeyNameKey]string
+}
+
+// foreignKeyNameKey identifies a foreign key by its case-folded name. A foreign key name is unique within its table's
+// schema in Dolt, which leaves the schema empty, and unique within its table in Doltgres, which always sets it.
+type foreignKeyNameKey struct {
+	name  string
+	table TableName
+}
+
+// nameKey returns the foreignKeyNameKey for a foreign key with the given name declared on the given table.
+func nameKey(foreignKeyName string, tableName TableName) foreignKeyNameKey {
+	key := foreignKeyNameKey{name: foldString(foreignKeyName)}
+	if tableName.Schema != "" {
+		key.table = tableName.FoldCase()
+	}
+	return key
 }
 
 type ForeignKeyReferentialAction byte
@@ -323,7 +339,7 @@ func NewForeignKeyCollection(keys ...ForeignKey) (*ForeignKeyCollection, error) 
 func newForeignKeyCollection(size int) *ForeignKeyCollection {
 	return &ForeignKeyCollection{
 		foreignKeys:  make(map[string]ForeignKey, size),
-		hashesByName: make(map[string]map[string]struct{}, size),
+		hashesByName: make(map[foreignKeyNameKey]string, size),
 	}
 }
 
@@ -358,13 +374,7 @@ func (fkc *ForeignKeyCollection) addKey(key ForeignKey) error {
 // put stores |key| under |hashKey| and indexes it by name.
 func (fkc *ForeignKeyCollection) put(hashKey string, key ForeignKey) {
 	fkc.foreignKeys[hashKey] = key
-	name := foldString(key.Name)
-	hashes, ok := fkc.hashesByName[name]
-	if !ok {
-		hashes = make(map[string]struct{})
-		fkc.hashesByName[name] = hashes
-	}
-	hashes[hashKey] = struct{}{}
+	fkc.hashesByName[nameKey(key.Name, key.TableName)] = hashKey
 }
 
 // remove deletes the foreign key stored under |hashKey|, if there is one.
@@ -374,9 +384,8 @@ func (fkc *ForeignKeyCollection) remove(hashKey string) {
 		return
 	}
 	delete(fkc.foreignKeys, hashKey)
-	name := foldString(key.Name)
-	delete(fkc.hashesByName[name], hashKey)
-	if len(fkc.hashesByName[name]) == 0 {
+	name := nameKey(key.Name, key.TableName)
+	if fkc.hashesByName[name] == hashKey {
 		delete(fkc.hashesByName, name)
 	}
 }
@@ -416,28 +425,18 @@ func (fkc *ForeignKeyCollection) Count() int {
 	return len(fkc.foreignKeys)
 }
 
-// GetByNameCaseInsensitive returns a ForeignKey with a matching case-insensitive name, and whether a match exists.
+// GetByNameCaseInsensitive returns a ForeignKey with a matching case-insensitive name, and whether a match exists. If
+// |tableName| has a schema, the foreign key must be declared on a matching table, otherwise it must be declared on a
+// table without a schema.
 func (fkc *ForeignKeyCollection) GetByNameCaseInsensitive(foreignKeyName string, tableName TableName) (ForeignKey, bool) {
 	if foreignKeyName == "" {
 		return ForeignKey{}, false
 	}
-	hashKey, ok := fkc.hashKeyByName(foreignKeyName, tableName)
+	hashKey, ok := fkc.hashesByName[nameKey(foreignKeyName, tableName)]
 	if !ok {
 		return ForeignKey{}, false
 	}
 	return fkc.foreignKeys[hashKey], true
-}
-
-// hashKeyByName returns the key in |foreignKeys| of a foreign key with a matching case-insensitive name, and whether a
-// match exists. If |tableName| has a schema, the foreign key must also be declared on a matching table.
-func (fkc *ForeignKeyCollection) hashKeyByName(foreignKeyName string, tableName TableName) (string, bool) {
-	for hashKey := range fkc.hashesByName[foldString(foreignKeyName)] {
-		// schema name is empty for Dolt but not in Doltgres. (schema name must be populated for Doltgres)
-		if tableName.Schema == "" || fkc.foreignKeys[hashKey].TableName.EqualFold(tableName) {
-			return hashKey, true
-		}
-	}
-	return "", false
 }
 
 type FkIndexUpdate struct {
@@ -700,7 +699,7 @@ func (fkc *ForeignKeyCollection) RemoveKeys(fks ...ForeignKey) {
 // RemoveKeyByName removes a foreign key from the collection. It does not remove the associated indexes from their
 // respective tables. Returns true if the key was successfully removed.
 func (fkc *ForeignKeyCollection) RemoveKeyByName(foreignKeyName string, tableName TableName) bool {
-	hashKey, ok := fkc.hashKeyByName(foreignKeyName, tableName)
+	hashKey, ok := fkc.hashesByName[nameKey(foreignKeyName, tableName)]
 	if !ok {
 		return false
 	}
