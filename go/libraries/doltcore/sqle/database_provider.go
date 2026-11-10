@@ -43,7 +43,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/keymutex"
@@ -100,7 +99,6 @@ type DoltDatabaseProvider struct {
 	InitDatabaseHooks []InitDatabaseHook
 	gitRemotes        map[string]*doltdb.DoltDB
 	gitRemotesMu      *sync.Mutex
-	parentConfig      config.ReadableConfig
 }
 
 // ProviderFactory creates a sql.DatabaseProvider for use as the engine's analyzer catalog
@@ -270,12 +268,6 @@ func (p *DoltDatabaseProvider) SetRemoteDialer(provider dbfactory.GRPCDialProvid
 	p.remoteDialer = provider
 }
 
-// SetParentConfig sets the config of the server or directory that loaded this provider, which it gives the
-// environments of the databases it creates.
-func (p *DoltDatabaseProvider) SetParentConfig(cfg config.ReadableConfig) {
-	p.parentConfig = cfg
-}
-
 // SetDBLoadParams sets optional DB load params for newly created / registered databases. The provided map is cloned.
 func (p *DoltDatabaseProvider) SetDBLoadParams(params map[string]interface{}) {
 	p.mu.Lock()
@@ -290,9 +282,6 @@ func (p *DoltDatabaseProvider) SetDBLoadParams(params map[string]interface{}) {
 func (p *DoltDatabaseProvider) applyDBLoadParamsToEnv(dEnv *env.DoltEnv) {
 	if dEnv == nil {
 		return
-	}
-	if dEnv.ParentConfig == nil {
-		dEnv.ParentConfig = p.parentConfig
 	}
 	if len(p.dbLoadParams) == 0 {
 		return
@@ -809,7 +798,12 @@ func (p *DoltDatabaseProvider) createDatabase(ctx *sql.Context, name string, col
 	// Use LoadWithoutDB so we can apply db-load params before any DB is opened.
 	newEnv = env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, newFs, p.dbFactoryUrl, "TODO")
 	p.applyDBLoadParamsToEnv(newEnv)
-	newEnv.AddDBLoadParams(loadParams)
+	if len(loadParams) > 0 {
+		if newEnv.DBLoadParams == nil {
+			newEnv.DBLoadParams = make(map[string]interface{}, len(loadParams))
+		}
+		maps.Copy(newEnv.DBLoadParams, loadParams)
+	}
 
 	newDbStorageFormat := types.Format_DOLT
 	err = newEnv.InitRepo(ctx, newDbStorageFormat, sess.Username(), sess.Email(), p.defaultBranch)

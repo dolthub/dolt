@@ -141,7 +141,7 @@ func TestEnvForCloneOfConfiguresBeforeCreating(t *testing.T) {
 
 	dEnv, err := EnvForCloneOf(ctx, src, env.NoRemote, "cloned", fs, "test", hdp, func(dEnv *env.DoltEnv) error {
 		require.False(t, dEnv.HasDoltDataDir(), "configure must run before the database is created")
-		dEnv.AddDBLoadParams(map[string]interface{}{"configured": true})
+		dEnv.DBLoadParams = map[string]interface{}{"configured": true}
 		return nil
 	})
 	require.NoError(t, err)
