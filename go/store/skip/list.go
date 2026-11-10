@@ -132,6 +132,12 @@ func (l *List) Count() int {
 	return int(l.count)
 }
 
+// NodeCount returns the number of nodes in the list. Unlike Count, it includes entries superseded by a later Put of
+// the same key, so it grows with every Put.
+func (l *List) NodeCount() int {
+	return len(l.nodes) - 1 // exclude the sentinel
+}
+
 // Has returns true if |key| is a member of the list.
 func (l *List) Has(ctx context.Context, key []byte) (ok bool, err error) {
 	_, ok, err = l.Get(ctx, key)

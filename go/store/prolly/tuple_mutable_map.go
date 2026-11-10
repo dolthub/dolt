@@ -152,15 +152,24 @@ func (mut *GenericMutableMap[M, T]) Put(ctx context.Context, key, value val.Tupl
 	if err := mut.tuples.Put(ctx, key, value); err != nil {
 		return err
 	}
-	if mut.tuples.Edits.Count() > mut.maxPending {
-		return mut.flushPending(ctx)
-	}
-	return nil
+	return mut.flushIfFull(ctx)
 }
 
 // Delete deletes the pair keyed by |key| from the MutableMap.
 func (mut *GenericMutableMap[M, T]) Delete(ctx context.Context, key val.Tuple) error {
-	return mut.tuples.Delete(ctx, key)
+	if err := mut.tuples.Delete(ctx, key); err != nil {
+		return err
+	}
+	return mut.flushIfFull(ctx)
+}
+
+// flushIfFull flushes our edits once they hold more than |maxPending| entries. Superseded entries stay in memory until a
+// flush, so they count too.
+func (mut *GenericMutableMap[M, T]) flushIfFull(ctx context.Context) error {
+	if mut.tuples.Edits.NodeCount() > mut.maxPending {
+		return mut.flushPending(ctx)
+	}
+	return nil
 }
 
 // Get fetches the Tuple pair keyed by |key|, if it exists, and passes it to |cb|.
