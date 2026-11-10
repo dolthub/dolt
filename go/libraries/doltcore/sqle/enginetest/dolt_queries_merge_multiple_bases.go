@@ -91,17 +91,19 @@ func schemaBranchSetup(extraSeedCommits int, schemaFirst bool) []string {
 //	 \-- st -- sc                            schema
 //	mt1 = merge(ct, st), mt2 = merge(mt1, sc), ft1 = merge(ct, st), ft2 = merge(ft1, sc)
 //
-// ct and st create t(id); sc adds c. main1 and feature1 add rows 1 and 2.
+// ct and st each create t(id) with row 100; sc adds c. main1 and feature1 add rows 1 and 2.
 func sameTableCreatedTwiceSetup() []string {
 	return []string{
 		"CREATE TABLE other (id INT PRIMARY KEY);",
 		"CALL DOLT_COMMIT('-Am', 'c0');",
 		"CALL DOLT_BRANCH('schema');",
 		"CREATE TABLE t (id INT PRIMARY KEY);",
+		"INSERT INTO t VALUES (100);",
 		"CALL DOLT_COMMIT('-Am', 'ct');",
 		"CALL DOLT_BRANCH('feature');",
 		"CALL DOLT_CHECKOUT('schema');",
 		"CREATE TABLE t (id INT PRIMARY KEY);",
+		"INSERT INTO t VALUES (100);",
 		"CALL DOLT_COMMIT('-Am', 'st');",
 		"ALTER TABLE t ADD COLUMN c INT;",
 		"CALL DOLT_COMMIT('-am', 'sc');",
@@ -994,9 +996,26 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 	// their virtual merge base conflicts on t's schema. main and feature agree on it, so they merge cleanly.
 	mergeScript("merge bases that create the same table with different schemas: merge main into feature",
 		sameTableCreatedTwiceSetup(), "main", true,
-		check{"SELECT * FROM t ORDER BY id;", []sql.Row{{1, 10}, {2, 20}}}),
+		check{"SELECT * FROM t ORDER BY id;", []sql.Row{{1, 10}, {2, 20}, {100, nil}}}),
 	mergeScript("merge bases that create the same table with different schemas: merge feature into main",
 		append(sameTableCreatedTwiceSetup(), "CALL DOLT_CHECKOUT('main');"), "feature", true,
+		check{"SELECT * FROM t ORDER BY id;", []sql.Row{{1, 10}, {2, 20}, {100, nil}}}),
+	// https://github.com/dolthub/dolt/issues/12421, and then main deletes row 100, which both merge bases have. feature
+	// leaves it unchanged, so the merge deletes it.
+	mergeScript("merge bases that create the same table with different schemas, one tip deleting a row they share: merge main into feature",
+		append(sameTableCreatedTwiceSetup(),
+			"CALL DOLT_CHECKOUT('main');",
+			"DELETE FROM t WHERE id = 100;",
+			"CALL DOLT_COMMIT('-am', 'main2');",
+			"CALL DOLT_CHECKOUT('feature');"),
+		"main", true,
+		check{"SELECT * FROM t ORDER BY id;", []sql.Row{{1, 10}, {2, 20}}}),
+	mergeScript("merge bases that create the same table with different schemas, one tip deleting a row they share: merge feature into main",
+		append(sameTableCreatedTwiceSetup(),
+			"CALL DOLT_CHECKOUT('main');",
+			"DELETE FROM t WHERE id = 100;",
+			"CALL DOLT_COMMIT('-am', 'main2');"),
+		"feature", true,
 		check{"SELECT * FROM t ORDER BY id;", []sql.Row{{1, 10}, {2, 20}}}),
 	// https://github.com/dolthub/dolt/issues/12421, and then main and feature, which agree on t's schema, each add row 3
 	// with a different c. The virtual merge base has no t, so row 3 conflicts with no base row.
