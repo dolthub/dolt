@@ -435,6 +435,127 @@ END`,
 			},
 		},
 	},
+	backupRestoreOverWriterScript("dolt_backup restore --force from a trigger on the database it restores over",
+		"trigger_backup",
+		"call dolt_backup('restore', '"+fileUrl("trigger_backup")+"', 'mydb', '--force')"),
+	backupRestoreOverWriterScript("dolt_backup restore --force from a procedure that a trigger on the restored database calls",
+		"trigger_proc_backup",
+		"call restore_mydb()",
+		"create procedure restore_mydb() call dolt_backup('restore', '"+fileUrl("trigger_proc_backup")+"', 'mydb', '--force')"),
+	{
+		Name: "dolt_backup restore --force over the current database",
+		SetUpScript: []string{
+			"create table t (a int primary key);",
+			"insert into t values (1);",
+			"call dolt_commit('-Am', 'init');",
+			fmt.Sprintf("call dolt_backup('add', 'bak', '%s');", fileUrl("force_current_backup")),
+			"call dolt_backup('sync', 'bak');",
+			"insert into t values (2);",
+			"call dolt_commit('-am', 'after backup');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// The missing backup is found before the database is dropped.
+				Query:          fmt.Sprintf("call dolt_backup('restore', '%s', 'mydb', '--force');", fileUrl("force_current_backup_missing")),
+				ExpectedErrStr: fmt.Sprintf("no backup found at '%s'", fileUrl("force_current_backup_missing")),
+			},
+			{
+				Query:    "select * from t order by a;",
+				Expected: []sql.Row{{1}, {2}},
+			},
+			{
+				Query:            "set autocommit = 0;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "insert into t values (3);",
+				Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
+			},
+			{
+				Query:          fmt.Sprintf("call dolt_backup('restore', '%s', 'mydb', '--force');", fileUrl("force_current_backup")),
+				ExpectedErrStr: "cannot restore over database 'mydb' while the current transaction is writing to it",
+			},
+			{
+				Query:            "rollback;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    fmt.Sprintf("call dolt_backup('restore', '%s', 'mydb', '--force');", fileUrl("force_current_backup")),
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:            "commit;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from t order by a;",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+}
+
+// backupRestoreOverWriterScript returns a script in which an INSERT on mydb.t fires a trigger that runs |restore|, a
+// forced restore of a backup of mydb over mydb, with autocommit on and off. |setup| runs before the trigger is created.
+func backupRestoreOverWriterScript(name, backup, restore string, setup ...string) queries.ScriptTest {
+	restoreErr := "cannot restore over database 'mydb' while the current transaction is writing to it"
+	return queries.ScriptTest{
+		Name: name,
+		SetUpScript: append(append([]string{
+			"create table t (a int primary key);",
+			"create table t2 (a int primary key);",
+			"insert into t values (1);",
+			"call dolt_commit('-Am', 'init');",
+			fmt.Sprintf("call dolt_backup('add', 'bak', '%s');", fileUrl(backup)),
+			"call dolt_backup('sync', 'bak');",
+			"insert into t values (2);",
+			"call dolt_commit('-am', 'after backup');",
+		}, setup...),
+			`create trigger trg after insert on t for each row
+begin
+	insert into t2 values (new.a);
+	`+restore+`;
+end`,
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "insert into t values (4);",
+				ExpectedErrStr: restoreErr,
+			},
+			{
+				Query:    "select * from t order by a;",
+				Expected: []sql.Row{{1}, {2}},
+			},
+			{
+				Query:    "select * from t2;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "set autocommit = 0;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:          "insert into t values (4);",
+				ExpectedErrStr: restoreErr,
+			},
+			{
+				Query:            "commit;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from t order by a;",
+				Expected: []sql.Row{{1}, {2}},
+			},
+			{
+				Query:    "select * from t2;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select message from dolt_log order by commit_order desc limit 1;",
+				Expected: []sql.Row{{"after backup"}},
+			},
+		},
+	}
 }
 
 var DoltProcedureTests = []queries.ScriptTest{

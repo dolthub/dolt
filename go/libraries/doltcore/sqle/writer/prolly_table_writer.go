@@ -50,13 +50,17 @@ type prollyTableWriter struct {
 	tblName   doltdb.TableName
 	sch       schema.Schema
 	sqlSch    sql.Schema
-	writeSess dsess.WriteSession
+	writeSess *prollyWriteSession
 
 	aiCol      schema.Column
 	aiTracker  *dsess.AutoIncrementTracker
 	aiAlterVal uint64
 	aiAltered  bool // True when an ALTER TABLE affects the auto increment value
 	aiSet      bool // True when an INSERT/UPDATE affects the auto increment value
+
+	// edited is true when rows may have changed since the last Reset. Until then the writer holds exactly |tbl|,
+	// which is already in the write session's root, so Close has nothing to materialize.
+	edited bool
 
 	errEncountered error
 
@@ -160,6 +164,7 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, schS
 
 // Insert implements TableWriter.
 func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error) {
+	w.edited = true
 	if err = w.primary.ValidateKeyViolations(ctx, sqlRow); err != nil {
 		return err
 	}
@@ -267,6 +272,7 @@ func sameColumnNames(left, right []string) bool {
 
 // Update implements TableWriter.
 func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) (err error) {
+	w.edited = true
 	for _, wr := range w.secondary {
 		if err := wr.Update(ctx, oldRow, newRow); err != nil {
 			if uke, ok := err.(secondaryUniqueKeyError); ok {
@@ -304,6 +310,7 @@ func (w *prollyTableWriter) UpdateChangesUniqueKey(oldRow sql.Row, newRow sql.Ro
 
 // Delete implements TableWriter.
 func (w *prollyTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) (err error) {
+	w.edited = true
 	for _, wr := range w.secondary {
 		if err := wr.Delete(ctx, sqlRow); err != nil {
 			return err
@@ -408,6 +415,9 @@ func (w *prollyTableWriter) Close(ctx *sql.Context) error {
 	if w.errEncountered != nil {
 		return w.errEncountered
 	}
+	if !w.edited {
+		return w.writeSess.publish(ctx)
+	}
 	return w.flush(ctx)
 }
 
@@ -461,6 +471,7 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, tbl *doltdb.Table) error {
 	w.secondary = newSecondaries
 	w.aiCol = schState.AutoIncCol
 	w.virtualExpressions = schState.VirtualExpressions
+	w.edited = false
 
 	return nil
 }

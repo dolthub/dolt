@@ -79,6 +79,9 @@ type DatabaseSessionState struct {
 	checkedOutRevSpec string
 	// tmpFileDir is the directory to use for temporary files for this database
 	tmpFileDir string
+	// ddb is the provider's DoltDB for this database, shared by every session and revision. Dropping the database
+	// removes this state from every session, so it can't outlive the DoltDB.
+	ddb *doltdb.DoltDB
 }
 
 func newEmptyDatabaseSessionState() *DatabaseSessionState {

@@ -836,4 +836,47 @@ var DoltCommitAllTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt_commit_all with no dirty branches uses the revision database's branch",
+		SetUpScript: []string{
+			"create table t (pk int primary key, v int)",
+			"call dolt_commit('-Am', 'setup')",
+			"call dolt_branch('b1')",
+			"call dolt_branch('b2')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "use `mydb/b1`",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "call dolt_commit_all('--allow-empty', '-m', 'empty b1')",
+				Expected: []sql.Row{
+					{"b1", doltCommit},
+				},
+			},
+			{
+				Query:            "use `mydb@b2`",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "call dolt_commit_all('--allow-empty', '-m', 'empty b2')",
+				Expected: []sql.Row{
+					{"b2", doltCommit},
+				},
+			},
+			{
+				Query:    "select message from `mydb/b1`.dolt_log limit 1",
+				Expected: []sql.Row{{"empty b1"}},
+			},
+			{
+				Query:    "select message from `mydb/b2`.dolt_log limit 1",
+				Expected: []sql.Row{{"empty b2"}},
+			},
+			{
+				Query:    "select message from `mydb/main`.dolt_log limit 1",
+				Expected: []sql.Row{{"setup"}},
+			},
+		},
+	},
 }
