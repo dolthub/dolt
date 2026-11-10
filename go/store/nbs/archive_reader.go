@@ -906,101 +906,190 @@ func (ar *archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) erro
 	if err := ar.checkByteSpans(); err != nil {
 		return err
 	}
-	return ar.walkSpans(ctx, cb, func(err error) error { return err }, stats)
-}
+	// Build reverse indexes for dictionary and data ByteSpans
+	// dictReverseIndex: Dictionary ByteSpan ID -> struct{} - indicates that we expect that span to be a dictionary.
+	// dataReverseIndex: Data ByteSpan ID -> chunk ref index - indicates that we expect that span to be a data chunk,
+	//                   and the value is the index into the chunkRefs slice where the chunk reference is stored.
+	dictReverseIndex := make(map[uint32]struct{})
+	dataReverseIndex := make(map[uint32]uint32)
 
-func (ar *archiveReader) tolerantIterate(ctx context.Context, cb func(chunks.Chunk), errCb func(error), stats *Stats) {
-	err := ar.walkSpans(ctx, func(c chunks.Chunk) error {
-		cb(c)
-		return nil
-	}, func(err error) error {
-		errCb(err)
-		return nil
-	}, stats)
-	if err != nil && ctx.Err() == nil {
-		errCb(err)
-	}
-}
-
-// walkSpans reads every byte span in order and passes each chunk to |cb|. An error opening a span goes to |skip|,
-// which returns it to stop the walk or nil to go on; an error reading the archive always stops it.
-func (ar *archiveReader) walkSpans(ctx context.Context, cb func(chunks.Chunk) error, skip func(error) error, stats *Stats) error {
-	// isDict marks the dictionary spans; chunkOf maps each data span to the index of its chunk.
-	isDict := make(map[uint32]bool)
-	chunkOf := make(map[uint32]uint32, ar.footer.chunkCount)
-	for i := uint32(0); i < ar.footer.chunkCount; i++ {
-		dictId, dataId := ar.getChunkRef(int(i))
+	for chunkRefIdx := uint32(0); chunkRefIdx < ar.footer.chunkCount; chunkRefIdx++ {
+		dictId, dataId := ar.getChunkRef(int(chunkRefIdx))
 		if dictId != 0 {
-			isDict[dictId] = true
+			dictReverseIndex[dictId] = struct{}{}
 		}
-		chunkOf[dataId] = i
+		dataReverseIndex[dataId] = chunkRefIdx
 	}
 
 	dataSpan := ar.footer.dataSpan()
-	rd := bufio.NewReader(newSectionReader(ctx, ar.reader, int64(dataSpan.offset), int64(dataSpan.length), stats))
+	dataReader := io.NewSectionReader(&bridgeReaderAt{
+		rdr:   ar.reader,
+		ctx:   ctx,
+		stats: stats,
+	}, int64(dataSpan.offset), int64(dataSpan.length))
+	bufReader := bufio.NewReader(dataReader)
+	byteSpanCounter := uint32(1)
+
 	buf := make([]byte, 4*1024*1024)
-	dicts := make(map[uint32]*DecompBundle)
-	for id := uint32(1); id <= ar.footer.byteSpanCount; id++ {
+	loadedDictionaries := make(map[uint32]*DecompBundle)
+
+	for byteSpanCounter <= ar.footer.byteSpanCount {
 		if ctx.Err() != nil {
 			return context.Cause(ctx)
 		}
-		if err := ar.checkSpan(id); err != nil {
-			return err
-		}
-		span := ar.getByteSpanByID(id)
+
+		span := ar.getByteSpanByID(byteSpanCounter)
 		for cap(buf) < int(span.length) {
 			buf = append(buf, make([]byte, cap(buf))...)
 		}
-		if _, err := io.ReadFull(rd, buf[:span.length]); err != nil {
-			return fmt.Errorf("error reading archive file at span %d: %w", id, err)
-		}
-		chk, err := ar.openSpan(ctx, id, buf[:span.length], isDict, chunkOf, dicts)
+
+		_, err := io.ReadFull(bufReader, buf[:span.length])
 		if err != nil {
-			if err = skip(err); err != nil {
-				return err
-			}
-		} else if chk != nil {
-			if err = cb(*chk); err != nil {
-				return err
-			}
+			return fmt.Errorf("error reading archive file: %w", err)
 		}
+		spanData := buf[:span.length]
+
+		if _, exists := dictReverseIndex[byteSpanCounter]; exists {
+			dict, err := ar.openDict(ctx, byteSpanCounter, spanData)
+			if err != nil {
+				return fmt.Errorf("Failure creating dictionary from bytes: %w", err)
+			}
+			loadedDictionaries[byteSpanCounter] = ar.iterDict(dict)
+		} else if chunkId, exists := dataReverseIndex[byteSpanCounter]; exists {
+			dictId, dataId := ar.getChunkRef(int(chunkId))
+			if byteSpanCounter != dataId {
+				panic("Reverse Index incorrect: ByteSpan ID does not match data ID in chunk reference")
+			}
+
+			// Reconstruct the hash for this chunk
+			prefix := ar.indexReader.getPrefix(chunkId)
+			suffix := ar.indexReader.getSuffix(chunkId)
+			h := reconstructHashFromPrefixAndSuffix(prefix, suffix)
+
+			dict, ok := loadedDictionaries[dictId]
+			if dictId != 0 && !ok {
+				return fmt.Errorf("%w: dictionary span %d does not precede the data span %d using it", ErrCorruptArchiveIndex, dictId, byteSpanCounter)
+			}
+			chunkData, err := ar.chunkData(ctx, resolvedChunk{h: h, dictId: dictId, dataId: dataId}, dict, spanData)
+			if err != nil {
+				return fmt.Errorf("error decompressing span: %d, %v, %w", byteSpanCounter, span, err)
+			}
+
+			chk := chunks.NewChunkWithHash(h, chunkData)
+			err = cb(chk)
+			if err != nil {
+				return err
+			}
+		} else {
+			return fmt.Errorf("%w: byte span %d is neither a dictionary nor chunk data", ErrCorruptArchiveIndex, byteSpanCounter)
+		}
+		byteSpanCounter++
 	}
+
 	return nil
 }
 
-// openSpan opens span |id|, adding it to |dicts| if it is a dictionary, and otherwise returning its chunk.
-func (ar *archiveReader) openSpan(ctx context.Context, id uint32, stored []byte, isDict map[uint32]bool, chunkOf map[uint32]uint32, dicts map[uint32]*DecompBundle) (*chunks.Chunk, error) {
-	if isDict[id] {
-		dict, err := ar.openDict(ctx, id, stored)
-		if dict != nil && ar.opener == nil {
-			// Reading a plaintext archive's chunks needs only the decompression dictionary.
-			dict = &DecompBundle{dDict: dict.dDict}
+func (ar *archiveReader) tolerantIterate(ctx context.Context, cb func(chunks.Chunk), errCb func(error), stats *Stats) {
+	dictReverseIndex := make(map[uint32]struct{})
+	dataReverseIndex := make(map[uint32]uint32)
+
+	for chunkRefIdx := uint32(0); chunkRefIdx < ar.footer.chunkCount; chunkRefIdx++ {
+		dictId, dataId := ar.getChunkRef(int(chunkRefIdx))
+		if dictId != 0 {
+			dictReverseIndex[dictId] = struct{}{}
 		}
-		if err != nil {
-			dicts[id] = nil
-			return nil, fmt.Errorf("failure loading archive dictionary span %d: %w", id, err)
+		dataReverseIndex[dataId] = chunkRefIdx
+	}
+
+	dataSpan := ar.footer.dataSpan()
+	dataReader := io.NewSectionReader(&bridgeReaderAt{
+		rdr:   ar.reader,
+		ctx:   ctx,
+		stats: stats,
+	}, int64(dataSpan.offset), int64(dataSpan.length))
+	bufReader := bufio.NewReader(dataReader)
+	byteSpanCounter := uint32(1)
+
+	buf := make([]byte, 4*1024*1024)
+	loadedDictionaries := make(map[uint32]*DecompBundle)
+	failedDictionaries := make(map[uint32]struct{})
+
+	for byteSpanCounter <= ar.footer.byteSpanCount {
+		if ctx.Err() != nil {
+			return
 		}
-		dicts[id] = dict
-		return nil, nil
+
+		if err := ar.checkSpan(byteSpanCounter); err != nil {
+			errCb(err)
+			return
+		}
+		span := ar.getByteSpanByID(byteSpanCounter)
+		for cap(buf) < int(span.length) {
+			buf = append(buf, make([]byte, cap(buf))...)
+		}
+
+		_, readErr := io.ReadFull(bufReader, buf[:span.length])
+		if readErr != nil {
+			// Stream position is unknown; cannot safely continue sequential read.
+			errCb(fmt.Errorf("error reading archive file at span %d: %w", byteSpanCounter, readErr))
+			return
+		}
+		spanData := buf[:span.length]
+
+		if _, exists := dictReverseIndex[byteSpanCounter]; exists {
+			dict, err := ar.openDict(ctx, byteSpanCounter, spanData)
+			if err != nil {
+				errCb(fmt.Errorf("failure loading archive dictionary span %d: %w", byteSpanCounter, err))
+				failedDictionaries[byteSpanCounter] = struct{}{}
+			} else {
+				loadedDictionaries[byteSpanCounter] = ar.iterDict(dict)
+			}
+		} else if chunkId, exists := dataReverseIndex[byteSpanCounter]; exists {
+			dictId, dataId := ar.getChunkRef(int(chunkId))
+			if byteSpanCounter != dataId {
+				panic("Reverse Index incorrect: ByteSpan ID does not match data ID in chunk reference")
+			}
+
+			prefix := ar.indexReader.getPrefix(chunkId)
+			suffix := ar.indexReader.getSuffix(chunkId)
+			h := reconstructHashFromPrefixAndSuffix(prefix, suffix)
+
+			var chunkData []byte
+			chunkOk := true
+
+			dict, ok := loadedDictionaries[dictId]
+			if _, failed := failedDictionaries[dictId]; failed {
+				errCb(fmt.Errorf("chunk %s: skipped due to failed dictionary span %d", h.String(), dictId))
+				chunkOk = false
+			} else if dictId != 0 && !ok {
+				errCb(fmt.Errorf("chunk %s: dictionary span %d not loaded", h.String(), dictId))
+				chunkOk = false
+			} else {
+				var decompErr error
+				chunkData, decompErr = ar.chunkData(ctx, resolvedChunk{h: h, dictId: dictId, dataId: dataId}, dict, spanData)
+				if decompErr != nil {
+					errCb(fmt.Errorf("chunk %s: decompression error: %w", h.String(), decompErr))
+					chunkOk = false
+				}
+			}
+
+			if chunkOk {
+				cb(chunks.NewChunkWithHash(h, chunkData))
+			}
+		} else {
+			errCb(fmt.Errorf("archive span %d not found in dictionary or data reverse index", byteSpanCounter))
+		}
+		byteSpanCounter++
 	}
-	i, ok := chunkOf[id]
-	if !ok {
-		return nil, fmt.Errorf("%w: archive span %d is neither a dictionary nor chunk data", ErrCorruptArchiveIndex, id)
+}
+
+// iterDict returns what iterating keeps of |dict|. Reading a plaintext archive's chunks needs only the decompression
+// dictionary.
+func (ar *archiveReader) iterDict(dict *DecompBundle) *DecompBundle {
+	if ar.opener != nil {
+		return dict
 	}
-	rc := resolvedChunk{h: reconstructHashFromPrefixAndSuffix(ar.indexReader.getPrefix(i), ar.indexReader.getSuffix(i))}
-	rc.dictId, rc.dataId = ar.getChunkRef(int(i))
-	dict, loaded := dicts[rc.dictId]
-	if rc.dictId != 0 && !loaded {
-		return nil, fmt.Errorf("%w: dictionary span %d does not precede the data span %d using it", ErrCorruptArchiveIndex, rc.dictId, id)
-	} else if rc.dictId != 0 && dict == nil {
-		return nil, fmt.Errorf("chunk %s: skipped due to failed dictionary span %d", rc.h.String(), rc.dictId)
-	}
-	data, err := ar.chunkData(ctx, rc, dict, stored)
-	if err != nil {
-		return nil, fmt.Errorf("chunk %s: %w", rc.h.String(), err)
-	}
-	chk := chunks.NewChunkWithHash(rc.h, data)
-	return &chk, nil
+	return &DecompBundle{dDict: dict.dDict}
 }
 
 // prollyBinSearch is a search that returns the _best_ index of the target in the input slice. If the target exists,

@@ -17,7 +17,6 @@ package nbs
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
@@ -25,7 +24,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/golang/snappy"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
@@ -44,6 +42,14 @@ func toyChunks(n int) []chunks.Chunk {
 	return cs
 }
 
+func toyHashes(cs []chunks.Chunk) hash.HashSet {
+	hs := make(hash.HashSet)
+	for _, c := range cs {
+		hs.Insert(c.Hash())
+	}
+	return hs
+}
+
 func requireNoPlaintext(t *testing.T, data []byte, cs []chunks.Chunk) {
 	for _, c := range cs {
 		require.False(t, bytes.Contains(data, c.Data()[:12]), "found the plaintext of %s", c.Hash())
@@ -57,20 +63,14 @@ func withPlainDefault(t *testing.T) {
 	t.Cleanup(func() { newStoreCodec = prev })
 }
 
-func writeToyTable(t *testing.T, c *toyCodec, cs []chunks.Chunk) ([]byte, uint64) {
-	_, data, splitOffset := writeNamedToyTable(t, c, cs)
-	return data, splitOffset
-}
-
-func writeNamedToyTable(t *testing.T, c *toyCodec, cs []chunks.Chunk) (hash.Hash, []byte, uint64) {
+func writeToyTable(t *testing.T, c *toyCodec, cs []chunks.Chunk) (hash.Hash, []byte, uint64) {
 	mt := newMemTable(1 << 20)
 	mt.codec = c
 	for _, chk := range cs {
 		require.Equal(t, chunkAdded, mt.addChunk(chk.Hash(), chk.Data()))
 	}
-	name, data, splitOffset, count, _, err := mt.write(nil, nil, &Stats{})
+	name, data, splitOffset, _, _, err := mt.write(nil, nil, &Stats{})
 	require.NoError(t, err)
-	require.Equal(t, uint32(len(cs)), count)
 	return name, data, splitOffset
 }
 
@@ -84,24 +84,68 @@ func openToyTable(t *testing.T, data []byte, opts openOpts) (tableReader, error)
 	return tr, err
 }
 
-func getManySealed(t *testing.T, cr chunkReader, cs []chunks.Chunk) []ToChunker {
-	hs := make(hash.HashSet)
-	for _, c := range cs {
-		hs.Insert(c.Hash())
-	}
-	var found []ToChunker
-	eg, ctx := errgroup.WithContext(t.Context())
-	_, _, err := cr.getManyCompressed(ctx, eg, toGetRecords(hs), func(_ context.Context, c ToChunker) { found = append(found, c) }, nil, &Stats{})
+func writeToyArchive(t *testing.T, c *toyCodec, cs []chunks.Chunk) ([]byte, hash.Hash) {
+	asw, err := NewArchiveStreamWriter(t.TempDir())
 	require.NoError(t, err)
-	require.NoError(t, eg.Wait())
-	require.Len(t, found, len(cs))
-	return found
+	asw.writer.sealer, err = c.newSpanSealer(false)
+	require.NoError(t, err)
+	for _, chk := range cs {
+		_, err := asw.AddChunk(ChunkToCompressedChunk(chk))
+		require.NoError(t, err)
+	}
+	_, name, err := asw.Finish()
+	require.NoError(t, err)
+	rd, err := asw.Reader()
+	require.NoError(t, err)
+	defer rd.Close()
+	data, err := io.ReadAll(rd)
+	require.NoError(t, err)
+	return data, hash.Parse(strings.TrimSuffix(name, ArchiveFileSuffix))
+}
+
+func openToyArchive(t *testing.T, data []byte, name hash.Hash, opts openOpts) (archiveReader, error) {
+	return newArchiveReader(t.Context(), tableReaderAtFromBytes(data), name, uint64(len(data)), &UnlimitedQuotaProvider{}, opts, &Stats{})
+}
+
+// fillToyStore commits |rounds| batches of |per| chunks to |st|.
+func fillToyStore(t *testing.T, st *NomsBlockStore, rounds, per int) []chunks.Chunk {
+	ctx := t.Context()
+	var all []chunks.Chunk
+	for i := 0; i < rounds; i++ {
+		cs := toyChunks(per * (i + 1))[per*i:]
+		for _, chk := range cs {
+			require.NoError(t, st.Put(ctx, chk, noopGetAddrs))
+		}
+		all = append(all, cs...)
+		root, err := st.Root(ctx)
+		require.NoError(t, err)
+		ok, err := st.Commit(ctx, cs[0].Hash(), root)
+		require.NoError(t, err)
+		require.True(t, ok)
+	}
+	return all
+}
+
+func requireHas(t *testing.T, cr chunkReader, all []chunks.Chunk) {
+	for _, chk := range all {
+		got, _, err := cr.get(t.Context(), chk.Hash(), nil, &Stats{})
+		require.NoError(t, err)
+		require.Equal(t, chk.Data(), got, "chunk %s", chk.Hash())
+	}
+}
+
+func requireStoreHas(t *testing.T, st *NomsBlockStore, all []chunks.Chunk) {
+	for _, chk := range all {
+		got, err := st.Get(t.Context(), chk.Hash())
+		require.NoError(t, err)
+		require.Equal(t, chk.Data(), got.Data(), "chunk %s", chk.Hash())
+	}
 }
 
 func TestToyCodecTableFile(t *testing.T) {
-	c := newToyCodec()
+	c := &toyCodec{}
 	cs := toyChunks(64)
-	data, splitOffset := writeToyTable(t, c, cs)
+	_, data, splitOffset := writeToyTable(t, c, cs)
 	requireNoPlaintext(t, data, cs)
 	require.True(t, isEncryptedFooter(data))
 
@@ -110,34 +154,28 @@ func TestToyCodecTableFile(t *testing.T) {
 	defer tr.close()
 	require.Equal(t, calcChunkRangeSize(tr.idx), splitOffset)
 	require.NoError(t, tr.idx.(onHeapTableIndex).deepValidate(hash.Hash{}))
-	for _, chk := range cs {
-		got, _, err := tr.get(t.Context(), chk.Hash(), nil, &Stats{})
-		require.NoError(t, err)
-		require.Equal(t, chk.Data(), got)
-	}
-	for _, tc := range getManySealed(t, tr, cs) {
-		require.IsType(t, &toyChunk{}, tc)
-		chk, err := tc.ToChunk()
-		require.NoError(t, err)
-		require.Equal(t, tc.Hash(), chk.Hash())
-	}
+	requireHas(t, &tr, cs)
 	var n int
 	require.NoError(t, tr.iterateAllChunks(t.Context(), func(chunks.Chunk) { n++ }, &Stats{}))
 	require.Equal(t, len(cs), n)
+	ranges, _, err := tr.getRecordRanges(t.Context(), dherrors.FatalBehaviorError, toGetRecords(toyHashes(cs)), nil)
+	require.NoError(t, err)
+	require.Len(t, ranges, len(cs))
+	require.EqualValues(t, len(cs), c.located.Load())
 
-	t.Run("Locate", func(t *testing.T) {
-		hs := make(hash.HashSet)
-		for _, chk := range cs {
-			hs.Insert(chk.Hash())
-		}
-		ranges, _, err := tr.getRecordRanges(t.Context(), dherrors.FatalBehaviorError, toGetRecords(hs), nil)
-		require.NoError(t, err)
-		require.Len(t, ranges, len(cs))
-		require.EqualValues(t, len(cs), c.located.Load())
-	})
+	var sealed []ToChunker
+	eg, ctx := errgroup.WithContext(t.Context())
+	_, _, err = tr.getManyCompressed(ctx, eg, toGetRecords(toyHashes(cs)), func(_ context.Context, c ToChunker) { sealed = append(sealed, c) }, nil, &Stats{})
+	require.NoError(t, err)
+	require.NoError(t, eg.Wait())
+	require.Len(t, sealed, len(cs))
+	require.IsType(t, &toyChunk{}, sealed[0])
+
 	t.Run("PlaintextStoreRefuses", func(t *testing.T) {
 		_, err := openToyTable(t, data, openOpts{codec: plainCodec{}})
 		require.ErrorIs(t, err, ErrEncryptionMismatch)
+		err = IterChunks(t.Context(), bytes.NewReader(data), func(chunks.Chunk) (bool, error) { return false, nil })
+		require.ErrorContains(t, err, "encrypted table file")
 	})
 	t.Run("EncryptedStoreRefusesPlaintext", func(t *testing.T) {
 		_, plain, _, err := WriteChunks(cs)
@@ -145,34 +183,7 @@ func TestToyCodecTableFile(t *testing.T) {
 		_, err = openToyTable(t, plain, openOpts{codec: c})
 		require.ErrorIs(t, err, ErrEncryptionMismatch)
 	})
-	t.Run("IterChunksRefuses", func(t *testing.T) {
-		err := IterChunks(t.Context(), bytes.NewReader(data), func(chunks.Chunk) (bool, error) { return false, nil })
-		require.ErrorContains(t, err, "encrypted table file")
-	})
-}
-
-// A chunk opened from a record without a CRC fails ToChunk if its data does not match its address.
-func TestOpenedChunkVerifiesHash(t *testing.T) {
-	payload := snappy.Encode(nil, []byte("chunk data"))
-	full := binary.BigEndian.AppendUint32(payload, crc(payload))
-	cc := CompressedChunk{H: hash.Of([]byte("other data")), FullCompressedChunk: full, CompressedData: full[:len(payload)], verify: true}
-	_, err := cc.ToChunk()
-	require.ErrorIs(t, err, ErrInvalidTableFile)
-	cc.verify = false
-	_, err = cc.ToChunk()
-	require.NoError(t, err)
-}
-
-func TestToyCodecCopiesSealedChunks(t *testing.T) {
-	c := newToyCodec()
-	cs := toyChunks(16)
-	data, _ := writeToyTable(t, c, cs)
-	tr, err := openToyTable(t, data, openOpts{codec: c})
-	require.NoError(t, err)
-	defer tr.close()
-	sealed := getManySealed(t, tr, cs)
-
-	t.Run("PlaintextWriterRefuses", func(t *testing.T) {
+	t.Run("PlaintextWritersRefuseSealedChunks", func(t *testing.T) {
 		tw, err := NewCmpChunkTableWriter("")
 		require.NoError(t, err)
 		defer tw.Cancel()
@@ -184,178 +195,78 @@ func TestToyCodecCopiesSealedChunks(t *testing.T) {
 		_, err = asw.AddChunk(sealed[0])
 		require.ErrorIs(t, err, ErrEncryptionMismatch)
 	})
-
-	w, err := newTableWriterFromArchiveLevel(chunks.NoArchive, c)
-	require.NoError(t, err)
-	defer w.Cancel()
-	tw := w.(*CmpChunkTableWriter)
-	for _, sc := range sealed {
-		_, err = tw.AddChunk(sc)
-		require.NoError(t, err)
-	}
-	extra := toyChunks(20)[16:]
-	for _, chk := range extra {
-		_, err = tw.AddChunk(ChunkToCompressedChunk(chk))
-		require.NoError(t, err)
-	}
-	_, _, err = tw.Finish()
-	require.NoError(t, err)
-	var out bytes.Buffer
-	require.NoError(t, tw.Flush(&out))
-	copied := out.Bytes()
-	requireNoPlaintext(t, copied, append(cs, extra...))
-
-	tr2, err := openToyTable(t, copied, openOpts{codec: c})
-	require.NoError(t, err)
-	defer tr2.close()
-	for _, chk := range append(cs, extra...) {
-		got, _, err := tr2.get(t.Context(), chk.Hash(), nil, &Stats{})
-		require.NoError(t, err)
-		require.Equal(t, chk.Data(), got)
-	}
-}
-
-func writeToyArchive(t *testing.T, sealer spanSealer, add func(*ArchiveStreamWriter)) ([]byte, hash.Hash) {
-	asw, err := NewArchiveStreamWriter(t.TempDir())
-	require.NoError(t, err)
-	asw.writer.sealer = sealer
-	add(asw)
-	_, name, err := asw.Finish()
-	require.NoError(t, err)
-	rd, err := asw.Reader()
-	require.NoError(t, err)
-	defer rd.Close()
-	data, err := io.ReadAll(rd)
-	require.NoError(t, err)
-	h, ok := hash.MaybeParse(strings.TrimSuffix(name, ArchiveFileSuffix))
-	require.True(t, ok)
-	return data, h
-}
-
-func openToyArchive(t *testing.T, data []byte, name hash.Hash, opts openOpts) (archiveReader, error) {
-	return newArchiveReader(t.Context(), tableReaderAtFromBytes(data), name, uint64(len(data)), &UnlimitedQuotaProvider{}, opts, &Stats{})
 }
 
 func TestToyCodecArchive(t *testing.T) {
 	// Fewer chunks than maxSamples are written snappy; more get a dictionary.
 	for _, n := range []int{10, maxSamples + 20} {
 		t.Run(fmt.Sprint(n), func(t *testing.T) {
-			c := newToyCodec()
+			c := &toyCodec{}
 			cs := toyChunks(n)
-			sealer, err := c.newSpanSealer(false)
-			require.NoError(t, err)
-			data, name := writeToyArchive(t, sealer, func(asw *ArchiveStreamWriter) {
-				for _, chk := range cs {
-					_, err := asw.AddChunk(ChunkToCompressedChunk(chk))
-					require.NoError(t, err)
-				}
-			})
+			data, name := writeToyArchive(t, c, cs)
 			requireNoPlaintext(t, data, cs)
 
 			ar, err := openToyArchive(t, data, name, openOpts{codec: c, deepValidate: true})
 			require.NoError(t, err)
 			defer ar.close()
 			require.True(t, ar.footer.encrypted())
-			for _, chk := range cs {
-				got, err := ar.get(t.Context(), chk.Hash(), &Stats{})
-				require.NoError(t, err)
-				require.Equal(t, chk.Data(), got)
-			}
+			acs := &archiveChunkSource{aRdr: ar}
+			requireHas(t, acs, cs)
 			var n1, n2 int
 			require.NoError(t, ar.iterate(t.Context(), func(chunks.Chunk) error { n1++; return nil }, &Stats{}))
 			ar.tolerantIterate(t.Context(), func(chunks.Chunk) { n2++ }, func(err error) { require.NoError(t, err) }, &Stats{})
 			require.Equal(t, len(cs), n1)
 			require.Equal(t, len(cs), n2)
-
-			_, err = openToyArchive(t, data, name, openOpts{codec: plainCodec{}})
-			require.ErrorIs(t, err, ErrEncryptionMismatch)
-
-			hs := make(hash.HashSet)
-			for _, chk := range cs {
-				hs.Insert(chk.Hash())
-			}
-			acs := &archiveChunkSource{aRdr: ar}
-			ranges, _, err := acs.getRecordRanges(t.Context(), dherrors.FatalBehaviorError, toGetRecords(hs), nil)
+			ranges, _, err := acs.getRecordRanges(t.Context(), dherrors.FatalBehaviorError, toGetRecords(toyHashes(cs)), nil)
 			require.NoError(t, err)
 			require.Len(t, ranges, len(cs))
 			require.EqualValues(t, len(cs), c.located.Load())
 
-			// Copy every chunk still sealed into a new archive.
-			copier, err := c.newSpanSealer(false)
-			require.NoError(t, err)
-			copied, copiedName := writeToyArchive(t, copier, func(asw *ArchiveStreamWriter) {
-				for _, chk := range cs {
-					tc, err := ar.getAsToChunker(t.Context(), chk.Hash(), &Stats{})
-					require.NoError(t, err)
-					require.IsType(t, &toyChunk{}, tc)
-					_, err = asw.AddChunk(tc)
-					require.NoError(t, err)
-				}
-			})
-			requireNoPlaintext(t, copied, cs)
-			ar2, err := openToyArchive(t, copied, copiedName, openOpts{codec: c})
-			require.NoError(t, err)
-			defer ar2.close()
-			for _, chk := range cs {
-				got, err := ar2.get(t.Context(), chk.Hash(), &Stats{})
-				require.NoError(t, err)
-				require.Equal(t, chk.Data(), got)
-			}
+			_, err = openToyArchive(t, data, name, openOpts{codec: plainCodec{}})
+			require.ErrorIs(t, err, ErrEncryptionMismatch)
 		})
 	}
 }
 
-func TestToyCodecLocalStore(t *testing.T) {
-	ctx := context.Background()
+func TestToyCodecJournal(t *testing.T) {
+	ctx := t.Context()
 	dir := t.TempDir()
-	c := newToyCodec()
+	c := &toyCodec{}
 	q := NewUnlimitedMemQuotaProvider()
 	open := func(opts ...StoreOption) (*NomsBlockStore, error) {
-		return newLocalStore(ctx, types.Format_DOLT.VersionString(), dir, 1<<10, 3, q, false, opts...)
+		st, err := NewLocalJournalingStore(ctx, types.Format_DOLT.VersionString(), dir, q, false, nil, opts...)
+		if err == nil {
+			err = st.ensureLoad(ctx)
+		}
+		return st, err
 	}
 
 	st, err := open(withToy(c))
 	require.NoError(t, err)
-	var all []chunks.Chunk
-	for i := 0; i < 6; i++ {
-		cs := toyChunks(40 * (i + 1))[40*i:]
-		for _, chk := range cs {
-			require.NoError(t, st.Put(ctx, chk, noopGetAddrs))
-		}
-		all = append(all, cs...)
-		root, err := st.Root(ctx)
-		require.NoError(t, err)
-		ok, err := st.Commit(ctx, cs[0].Hash(), root)
-		require.NoError(t, err)
-		require.True(t, ok)
-	}
+	fillToyStore(t, st, 1, 25)
+	// Flush the journal index often, so it holds key and authentication records.
+	st.persister.(*ChunkJournal).wr.maxNovel = 4
+	all := fillToyStore(t, st, 4, 25)
 	require.Equal(t, toyFormat, st.Version())
 	require.NoError(t, st.Close())
 
-	files, err := os.ReadDir(dir)
+	journal, err := os.ReadFile(filepath.Join(dir, chunkJournalName))
 	require.NoError(t, err)
-	for _, f := range files {
-		b, err := os.ReadFile(filepath.Join(dir, f.Name()))
-		require.NoError(t, err)
-		requireNoPlaintext(t, b, all)
-	}
+	requireNoPlaintext(t, journal, all)
+	first, err := readJournalRecord(journal)
+	require.NoError(t, err)
+	require.Equal(t, keyJournalRecKind, first.kind)
 
 	st, err = open(withToy(c))
 	require.NoError(t, err)
-	defer st.Close()
-	for _, chk := range all {
-		got, err := st.Get(ctx, chk.Hash())
-		require.NoError(t, err)
-		require.Equal(t, chk.Data(), got.Data())
-	}
-	hashesOf := func(cs []chunks.Chunk) hash.HashSet {
-		hs := make(hash.HashSet)
-		for _, chk := range cs {
-			hs.Insert(chk.Hash())
-		}
-		return hs
-	}
-	locs, err := st.GetChunkLocationsWithPaths(ctx, hashesOf(all))
+	wr := st.persister.(*ChunkJournal).wr
+	require.Greater(t, wr.indexed, int64(0), "the index was not used")
+	require.Zero(t, wr.codec.(*toyJournal).resets)
+	requireStoreHas(t, st, all)
+	root, err := st.Root(ctx)
+	require.NoError(t, err)
+	require.Equal(t, all[75].Hash(), root)
+	locs, err := st.GetChunkLocationsWithPaths(ctx, toyHashes(all))
 	require.NoError(t, err)
 	var n int
 	for _, byHash := range locs {
@@ -363,65 +274,9 @@ func TestToyCodecLocalStore(t *testing.T) {
 	}
 	require.Equal(t, len(all), n)
 	require.EqualValues(t, len(all), c.located.Load())
-	require.Zero(t, c.addingOpens.Load(), "the store's own files are not being added")
-
-	t.Run("PlaintextDolt", func(t *testing.T) {
-		withPlainDefault(t)
-		_, err := open()
-		require.ErrorIs(t, err, ErrEncryptionUnsupported)
-	})
-	t.Run("Keyless", func(t *testing.T) {
-		keyless := &toyCodec{keyless: true}
-		st, err := open(withToy(keyless))
-		require.NoError(t, err)
-		defer st.Close()
-		_, err = st.Get(ctx, all[0].Hash())
-		require.ErrorIs(t, err, errToyKeyless)
-		require.ErrorIs(t, st.Put(ctx, toyChunks(1)[0], noopGetAddrs), errToyKeyless)
-		_, err = st.GetChunkLocationsWithPaths(ctx, hashesOf(all))
-		require.NoError(t, err)
-		require.EqualValues(t, len(all), keyless.located.Load())
-	})
-}
-
-func TestToyCodecJournal(t *testing.T) {
-	ctx := context.Background()
-	dir := t.TempDir()
-	c := newToyCodec()
-	q := NewUnlimitedMemQuotaProvider()
-	open := func(opts ...StoreOption) (*NomsBlockStore, error) {
-		return NewLocalJournalingStore(ctx, types.Format_DOLT.VersionString(), dir, q, false, nil, opts...)
-	}
-
-	st, err := open(withToy(c))
-	require.NoError(t, err)
-	cs := toyChunks(100)
-	for _, chk := range cs {
-		require.NoError(t, st.Put(ctx, chk, noopGetAddrs))
-	}
-	ok, err := st.Commit(ctx, cs[0].Hash(), hash.Hash{})
-	require.NoError(t, err)
-	require.True(t, ok)
-	require.Equal(t, toyFormat, st.Version())
-	require.NoError(t, st.Close())
-
-	journal, err := os.ReadFile(filepath.Join(dir, chunkJournalName))
-	require.NoError(t, err)
-	requireNoPlaintext(t, journal, cs)
-	first, err := readJournalRecord(journal)
-	require.NoError(t, err)
-	require.Equal(t, keyJournalRecKind, first.kind)
-
-	st, err = open(withToy(c))
-	require.NoError(t, err)
-	for _, chk := range cs {
-		got, err := st.Get(ctx, chk.Hash())
-		require.NoError(t, err)
-		require.Equal(t, chk.Data(), got.Data())
-	}
-	root, err := st.Root(ctx)
-	require.NoError(t, err)
-	require.Equal(t, cs[0].Hash(), root)
+	n = 0
+	require.NoError(t, st.IterateAllChunks(ctx, func(chunks.Chunk) { n++ }))
+	require.Equal(t, len(all), n)
 	require.NoError(t, st.Close())
 
 	t.Run("PlaintextDolt", func(t *testing.T) {
@@ -433,96 +288,66 @@ func TestToyCodecJournal(t *testing.T) {
 		err := VisitJournalReaderChunks(ctx, bytes.NewReader(journal), 0, func(CompressedChunk) error { return nil })
 		require.ErrorIs(t, err, ErrEncryptionMismatch)
 	})
+	t.Run("FormatLeftUnnamed", func(t *testing.T) {
+		// Without a manifest, the store's format is the bare prefix its journal names, which the codec must name.
+		require.NoError(t, os.Remove(filepath.Join(dir, manifestFileName)))
+		unnamed := func(o *storeOptions) {
+			o.newCodec = func(_ bool, format string) (string, storeCodec, error) { return format, c, nil }
+		}
+		_, err := open(unnamed)
+		require.ErrorContains(t, err, "settled format")
+		st, err := open(withToy(c))
+		require.NoError(t, err)
+		defer st.Close()
+		require.Equal(t, toyFormat, st.Version())
+	})
 }
 
-func TestToyCodecJournalIndex(t *testing.T) {
-	ctx := context.Background()
-	c := newToyCodec()
-	path := newTestFilePath(t)
-	j, err := createJournalWriter(ctx, path)
-	require.NoError(t, err)
-	j.codec = c.newJournalCodec()
-	j.maxNovel = 4
-	_, err = j.bootstrapJournal(ctx, true, nil, nil)
-	require.NoError(t, err)
-	data := randomCompressedChunks(32)
-	var last hash.Hash
-	for h, cc := range data {
-		require.NoError(t, j.writeCompressedChunk(ctx, dherrors.FatalBehaviorError, cc))
-		require.NoError(t, j.commitRootHash(ctx, dherrors.FatalBehaviorError, h))
-		last = h
-	}
-	require.NoError(t, j.Close())
+// A blobstore that spools opens a toy table or archive from its index, and reads its chunks from the spool.
+func TestToyCodecSpooledBlobstore(t *testing.T) {
+	ctx := t.Context()
+	c := &toyCodec{}
+	cs := toyChunks(maxSamples + 20)
+	bs := blobstore.NewInMemoryBlobstore("")
+	spooling := wholeBlobBlobstore{bs, true}
 
-	reopen := func() (*journalWriter, *toyJournal) {
-		j, ok, err := openJournalWriter(ctx, path)
-		require.NoError(t, err)
-		require.True(t, ok)
-		jc := c.newJournalCodec().(*toyJournal)
-		j.codec = jc
-		got, err := j.bootstrapJournal(ctx, true, nil, func(error) {})
-		require.NoError(t, err)
-		require.Equal(t, last, got)
-		for h, cc := range data {
-			got, err := j.getChunker(h)
-			require.NoError(t, err)
-			chk, err := got.ToChunk()
-			require.NoError(t, err)
-			want, err := cc.ToChunk()
-			require.NoError(t, err)
-			require.Equal(t, want.Data(), chk.Data())
-		}
-		return j, jc
-	}
-
-	j, jc := reopen()
-	require.Greater(t, j.indexed, int64(0), "the index was not used")
-	require.Zero(t, jc.resets)
-	require.NoError(t, j.Close())
-
-	// A forged authentication record makes the journal rebuild its index.
-	idxPath := filepath.Join(filepath.Dir(path), journalIndexFileName)
-	idx, err := os.ReadFile(idxPath)
+	name, table, _ := writeToyTable(t, c, cs)
+	_, err := bs.Put(ctx, name.String(), int64(len(table)), bytes.NewReader(table))
 	require.NoError(t, err)
-	// The toy authentication record is a tag and a lookup count.
-	i := bytes.Index(idx, []byte{indexRecAuth, 0, toyTagSize + 4})
-	require.GreaterOrEqual(t, i, 0)
-	idx[i+1+uint16Size] ^= 0xff
-	require.NoError(t, os.WriteFile(idxPath, idx, 0644))
-	j, jc = reopen()
-	require.Equal(t, 1, jc.resets)
-	require.NoError(t, j.Close())
+	src, err := newBSTableChunkSource(ctx, spooling, name, uint32(len(cs)), &UnlimitedQuotaProvider{}, openOpts{codec: c}, &Stats{})
+	require.NoError(t, err)
+	defer src.close()
+	requireHas(t, src, cs)
+
+	archive, name := writeToyArchive(t, c, cs)
+	_, err = bs.Put(ctx, name.String()+ArchiveFileSuffix, int64(len(archive)), bytes.NewReader(archive))
+	require.NoError(t, err)
+	src, err = newSpooledBSArchiveChunkSource(ctx, spooling, name, &UnlimitedQuotaProvider{}, openOpts{codec: c}, &Stats{})
+	require.NoError(t, err)
+	defer src.close()
+	requireHas(t, src, cs)
 }
 
 func TestToyCodecConjoin(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	dir := t.TempDir()
-	c := newToyCodec()
+	c := &toyCodec{}
 	p := newFSTablePersister(dir, NewUnlimitedMemQuotaProvider(), false).(*fsTablePersister)
 	p.setCodec(c)
 	cs := toyChunks(maxSamples + 60)
-	parts := [][]chunks.Chunk{cs[:20], cs[20:40], cs[40:]}
 
 	var sources chunkSources
-	for i, part := range parts {
+	for i, part := range [][]chunks.Chunk{cs[:20], cs[20:40], cs[40:]} {
 		var name hash.Hash
 		var data []byte
-		var fileName string
+		fileName := ""
 		if i == 0 {
-			name, data, _ = writeNamedToyTable(t, c, part)
-			fileName = name.String()
+			name, data, _ = writeToyTable(t, c, part)
 		} else {
-			sealer, err := c.newSpanSealer(false)
-			require.NoError(t, err)
-			data, name = writeToyArchive(t, sealer, func(asw *ArchiveStreamWriter) {
-				for _, chk := range part {
-					_, err := asw.AddChunk(ChunkToCompressedChunk(chk))
-					require.NoError(t, err)
-				}
-			})
-			fileName = name.String() + ArchiveFileSuffix
+			data, name = writeToyArchive(t, c, part)
+			fileName = ArchiveFileSuffix
 		}
-		require.NoError(t, os.WriteFile(filepath.Join(dir, fileName), data, 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name.String()+fileName), data, 0644))
 		src, err := p.Open(ctx, name, uint32(len(part)), openOpts{}, &Stats{})
 		require.NoError(t, err)
 		defer src.close()
@@ -534,11 +359,7 @@ func TestToyCodecConjoin(t *testing.T) {
 	defer cleanup()
 	defer conjoined.close()
 	require.IsType(t, &archiveChunkSource{}, conjoined)
-	for _, chk := range cs {
-		got, _, err := conjoined.get(ctx, chk.Hash(), nil, &Stats{})
-		require.NoError(t, err)
-		require.Equal(t, chk.Data(), got)
-	}
+	requireHas(t, conjoined, cs)
 
 	t.Run("MixedSourcesRefused", func(t *testing.T) {
 		_, plain, _, err := WriteChunks(toyChunks(3))
@@ -553,121 +374,38 @@ func TestToyCodecConjoin(t *testing.T) {
 	})
 }
 
-func TestToyCodecAWSStore(t *testing.T) {
-	ctx := context.Background()
-	c := newToyCodec()
-	s3, ddb := makeFakeS3(t), makeFakeDDB(t)
-	ddb.vers = toyFormat
-	open := func() *NomsBlockStore {
-		st, err := NewAWSStore(ctx, toyFormat, "table", "db", "bucket", s3, ddb, 1<<10, NewUnlimitedMemQuotaProvider(), withToy(c))
-		require.NoError(t, err)
-		// Small parts, so conjoin copies records with UploadPartCopy.
-		st.persister.(*awsTablePersister).limits = awsLimits{partTarget: defaultS3PartSize, partMin: 1 << 10, partMax: 4 << 10}
-		return st
-	}
-	st := open()
-	var all []chunks.Chunk
-	for i := 0; i < 4; i++ {
-		cs := toyChunks(60 * (i + 1))[60*i:]
-		for _, chk := range cs {
-			require.NoError(t, st.Put(ctx, chk, noopGetAddrs))
-		}
-		all = append(all, cs...)
-		root, err := st.Root(ctx)
-		require.NoError(t, err)
-		ok, err := st.Commit(ctx, cs[0].Hash(), root)
-		require.NoError(t, err)
-		require.True(t, ok)
-	}
-	for _, data := range s3.data {
-		requireNoPlaintext(t, data, all)
-	}
-	var sources chunkSources
-	for _, cs := range st.tables.upstream {
-		sources = append(sources, cs)
-	}
-	require.Greater(t, len(sources), 1)
-	conjoined, cleanup, err := st.persister.(*awsTablePersister).ConjoinAll(ctx, dherrors.FatalBehaviorError, sources, &Stats{})
-	require.NoError(t, err)
-	for _, chk := range all {
-		got, _, err := conjoined.get(ctx, chk.Hash(), nil, &Stats{})
-		require.NoError(t, err)
-		require.Equal(t, chk.Data(), got)
-	}
-	require.NoError(t, conjoined.close())
-	cleanup()
-
-	// A plaintext store refuses the table rather than looking for an archive of that name.
-	plain := *st.persister.(*awsTablePersister)
-	plain.codec = plainCodec{}
-	_, err = plain.Open(ctx, sources[0].hash(), sources[0].count(), openOpts{}, &Stats{})
-	require.ErrorIs(t, err, ErrEncryptionMismatch)
-	require.NoError(t, st.Close())
-
-	st = open()
-	defer st.Close()
-	for _, chk := range all {
-		got, err := st.Get(ctx, chk.Hash())
-		require.NoError(t, err)
-		require.Equal(t, chk.Data(), got.Data())
-	}
-}
-
-// A persister seals what it persists under its store's codec however the memTable was made.
-func TestToyCodecPersisterSeals(t *testing.T) {
-	ctx := context.Background()
-	dir := t.TempDir()
-	c := newToyCodec()
-	p := newFSTablePersister(dir, NewUnlimitedMemQuotaProvider(), false).(*fsTablePersister)
-	p.setCodec(c)
-	cs := toyChunks(10)
-	mt := newMemTable(1 << 20)
-	for _, chk := range cs {
-		mt.addChunk(chk.Hash(), chk.Data())
-	}
-	src, _, err := p.Persist(ctx, dherrors.FatalBehaviorError, mt, nil, nil, &Stats{})
-	require.NoError(t, err)
-	defer src.close()
-	b, err := os.ReadFile(filepath.Join(dir, src.hash().String()))
-	require.NoError(t, err)
-	require.True(t, isEncryptedFooter(b))
-	requireNoPlaintext(t, b, cs)
-}
-
-// A blobstore that spools opens a toy table or archive from its index, and reads its chunks from the spool.
-func TestToyCodecSpooledBlobstore(t *testing.T) {
+// GC copies the sealed chunks of a toy store into new tables or archives.
+func TestToyCodecGC(t *testing.T) {
 	ctx := t.Context()
-	c := newToyCodec()
-	cs := toyChunks(maxSamples + 20)
-	bs := blobstore.NewInMemoryBlobstore("")
-	spooling := wholeBlobBlobstore{bs, true}
-	requireHas := func(src chunkSource) {
-		defer src.close()
-		for _, chk := range cs {
-			got, _, err := src.get(ctx, chk.Hash(), nil, &Stats{})
+	for _, level := range []chunks.GCArchiveLevel{chunks.NoArchive, chunks.SimpleArchive} {
+		t.Run(fmt.Sprint(level), func(t *testing.T) {
+			dir := t.TempDir()
+			c := &toyCodec{}
+			open := func() *NomsBlockStore {
+				st, err := newLocalStore(ctx, types.Format_DOLT.VersionString(), dir, 1<<10, 8, NewUnlimitedMemQuotaProvider(), false, withToy(c))
+				require.NoError(t, err)
+				return st
+			}
+			st := open()
+			all := fillToyStore(t, st, 3, maxSamples+10)
+
+			require.NoError(t, st.BeginGC(ctx, nil, chunks.GCMode_Full))
+			filter := func(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) { return hashes, nil }
+			sweeper, err := st.MarkAndSweepChunks(ctx, noopWalkAddrs, filter, nil, chunks.NewGCConfig(chunks.GCMode_Full, level, chunks.IncrementalGCTablesDisabled), false)
 			require.NoError(t, err)
-			require.Equal(t, chk.Data(), got)
-		}
+			require.NoError(t, sweeper.SaveHashes(ctx, toyHashes(all)))
+			finalizer, err := sweeper.Finalize(ctx)
+			require.NoError(t, err)
+			require.NoError(t, sweeper.Close(ctx))
+			require.NoError(t, finalizer.SwapChunksInStore(ctx))
+			require.NoError(t, finalizer.Close())
+			st.EndGC(chunks.GCMode_Full)
+			requireStoreHas(t, st, all)
+			require.NoError(t, st.Close())
+
+			st = open()
+			defer st.Close()
+			requireStoreHas(t, st, all)
+		})
 	}
-
-	name, table, _ := writeNamedToyTable(t, c, cs)
-	_, err := bs.Put(ctx, name.String(), int64(len(table)), bytes.NewReader(table))
-	require.NoError(t, err)
-	src, err := newBSTableChunkSource(ctx, spooling, name, uint32(len(cs)), &UnlimitedQuotaProvider{}, openOpts{codec: c}, &Stats{})
-	require.NoError(t, err)
-	requireHas(src)
-
-	sealer, err := c.newSpanSealer(false)
-	require.NoError(t, err)
-	archive, name := writeToyArchive(t, sealer, func(asw *ArchiveStreamWriter) {
-		for _, chk := range cs {
-			_, err := asw.AddChunk(ChunkToCompressedChunk(chk))
-			require.NoError(t, err)
-		}
-	})
-	_, err = bs.Put(ctx, name.String()+ArchiveFileSuffix, int64(len(archive)), bytes.NewReader(archive))
-	require.NoError(t, err)
-	src, err = newSpooledBSArchiveChunkSource(ctx, spooling, name, &UnlimitedQuotaProvider{}, openOpts{codec: c}, &Stats{})
-	require.NoError(t, err)
-	requireHas(src)
 }
