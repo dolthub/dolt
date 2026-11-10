@@ -82,6 +82,42 @@ func schemaBranchSetup(extraSeedCommits int, schemaFirst bool) []string {
 		"CALL DOLT_MERGE('schema', '-m', 'f');")
 }
 
+// sameTableCreatedTwiceSetup builds the history from https://github.com/dolthub/dolt/issues/12421. main and schema each
+// create table t, identically, and schema then adds column c to it. main and feature merge schema~1 and then schema, so
+// they have two merge bases, ct and sc, which have t with different schemas, while c0 has no t:
+//
+//	c0 -- ct -- mt1 -- mt2 -- main1          main
+//	 |     \-- ft1 -- ft2 -- feature1        feature
+//	 \-- st -- sc                            schema
+//	mt1 = merge(ct, st), mt2 = merge(mt1, sc), ft1 = merge(ct, st), ft2 = merge(ft1, sc)
+//
+// ct and st create t(id); sc adds c. main1 and feature1 add rows 1 and 2.
+func sameTableCreatedTwiceSetup() []string {
+	return []string{
+		"CREATE TABLE other (id INT PRIMARY KEY);",
+		"CALL DOLT_COMMIT('-Am', 'c0');",
+		"CALL DOLT_BRANCH('schema');",
+		"CREATE TABLE t (id INT PRIMARY KEY);",
+		"CALL DOLT_COMMIT('-Am', 'ct');",
+		"CALL DOLT_BRANCH('feature');",
+		"CALL DOLT_CHECKOUT('schema');",
+		"CREATE TABLE t (id INT PRIMARY KEY);",
+		"CALL DOLT_COMMIT('-Am', 'st');",
+		"ALTER TABLE t ADD COLUMN c INT;",
+		"CALL DOLT_COMMIT('-am', 'sc');",
+		"CALL DOLT_CHECKOUT('main');",
+		"CALL DOLT_MERGE('schema~1', '-m', 'mt1');",
+		"CALL DOLT_MERGE('schema', '-m', 'mt2');",
+		"INSERT INTO t VALUES (1, 10);",
+		"CALL DOLT_COMMIT('-am', 'main1');",
+		"CALL DOLT_CHECKOUT('feature');",
+		"CALL DOLT_MERGE('schema~1', '-m', 'ft1');",
+		"CALL DOLT_MERGE('schema', '-m', 'ft2');",
+		"INSERT INTO t VALUES (2, 20);",
+		"CALL DOLT_COMMIT('-am', 'feature1');",
+	}
+}
+
 // longRunningSchemaBranchSetup builds six cycles of the schema branch pattern, with feature merging main once after
 // cycle 3:
 //
@@ -815,6 +851,8 @@ var MergeMultipleBasesAbortScripts = []queries.ScriptTest{
 // MergeMultipleBasesPreviewScripts preview merges against a virtual merge base, and check that the merges find the
 // same conflicts.
 var MergeMultipleBasesPreviewScripts = []queries.ScriptTest{
+	previewParityScript("preview: merge bases that create the same table with different schemas",
+		sameTableCreatedTwiceSetup(), "feature", "main", "t", "", nil, nil),
 	// x2 resolves the conflict back to c1's value. That is still a change from the conflicted merge bases, as in git,
 	// so row 1 conflicts instead of taking y2's value.
 	previewParityScript("preview: conflicting merge bases, one side resolved to the old value: merge y into x",
@@ -951,6 +989,14 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 		"main", true,
 		check{"SELECT * FROM t ORDER BY id;", []sql.Row{{1, "edited on main", nil, nil}, {3, "seed", nil, nil}, {4, "seed", nil, nil},
 			{50, "feature", nil, nil}}}),
+	// The merge bases ct and sc both add t, with different schemas, so their virtual merge base conflicts on t's
+	// schema. main and feature agree on it, so they merge cleanly.
+	mergeScript("merge bases that create the same table with different schemas: merge main into feature",
+		sameTableCreatedTwiceSetup(), "main", true,
+		check{"SELECT * FROM t ORDER BY id;", []sql.Row{{1, 10}, {2, 20}}}),
+	mergeScript("merge bases that create the same table with different schemas: merge feature into main",
+		append(sameTableCreatedTwiceSetup(), "CALL DOLT_CHECKOUT('main');"), "feature", true,
+		check{"SELECT * FROM t ORDER BY id;", []sql.Row{{1, 10}, {2, 20}}}),
 	mergeScript("long-running schema branch: merge main into feature",
 		append(longRunningSchemaBranchSetup(false), "CALL DOLT_CHECKOUT('feature');"),
 		"main", true,
