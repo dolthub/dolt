@@ -43,6 +43,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/keymutex"
@@ -99,6 +100,7 @@ type DoltDatabaseProvider struct {
 	InitDatabaseHooks []InitDatabaseHook
 	gitRemotes        map[string]*doltdb.DoltDB
 	gitRemotesMu      *sync.Mutex
+	parentConfig      config.ReadableConfig
 }
 
 // ProviderFactory creates a sql.DatabaseProvider for use as the engine's analyzer catalog
@@ -268,6 +270,11 @@ func (p *DoltDatabaseProvider) SetRemoteDialer(provider dbfactory.GRPCDialProvid
 	p.remoteDialer = provider
 }
 
+// SetParentConfig sets the config that the databases this provider loads and creates fall back to.
+func (p *DoltDatabaseProvider) SetParentConfig(cfg config.ReadableConfig) {
+	p.parentConfig = cfg
+}
+
 // SetDBLoadParams sets optional DB load params for newly created / registered databases. The provided map is cloned.
 func (p *DoltDatabaseProvider) SetDBLoadParams(params map[string]interface{}) {
 	p.mu.Lock()
@@ -282,6 +289,9 @@ func (p *DoltDatabaseProvider) SetDBLoadParams(params map[string]interface{}) {
 func (p *DoltDatabaseProvider) applyDBLoadParamsToEnv(dEnv *env.DoltEnv) {
 	if dEnv == nil {
 		return
+	}
+	if dEnv.ParentConfig == nil {
+		dEnv.ParentConfig = p.parentConfig
 	}
 	if len(p.dbLoadParams) == 0 {
 		return

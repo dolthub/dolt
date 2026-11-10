@@ -103,6 +103,9 @@ type DoltEnv struct {
 	DBLoadParams map[string]interface{}
 
 	UserPassConfig *creds.DoltCredsForPass
+	// ParentConfig is the config of the server or directory that loaded this environment, which its own config
+	// falls back to.
+	ParentConfig config.ReadableConfig
 }
 
 // AddDBLoadParams adds |params| to the params this environment's DoltDB loads with.

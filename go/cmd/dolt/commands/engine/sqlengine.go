@@ -240,6 +240,7 @@ func NewSqlEngine(
 	}
 
 	pro.SetRemoteDialer(mrEnv.RemoteDialProvider())
+	pro.SetParentConfig(mrEnv.Config())
 	if len(config.DBLoadParams) > 0 {
 		pro.SetDBLoadParams(config.DBLoadParams)
 	}
