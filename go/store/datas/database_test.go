@@ -242,62 +242,71 @@ func (u interleavedDatasetUpdate) build(ctx context.Context, db valueBuilder) (w
 
 func (suite *DatabaseSuite) TestCommitDatasetsHeadChangesDuringBuild() {
 	for _, mode := range []string{
+		"new",
 		"ordinary",
 		"force",
 		"amend",
 	} {
-		suite.Run(mode, func() {
-			ctx := context.Background()
-			ds, err := suite.db.GetDataset(ctx, "refs/heads/"+mode)
-			suite.Require().NoError(err)
-			ds, err = CommitValue(ctx, suite.db, ds, types.String("initial"))
-			suite.Require().NoError(err)
-			expected, _ := ds.MaybeHeadAddr()
-			root, err := suite.db.WriteValue(ctx, types.String("working root"))
-			suite.Require().NoError(err)
-			opts := CommitOptions{
-				Meta: &CommitMeta{},
-			}
-			switch mode {
-			case "force":
-				opts.Force = true
-			case "amend":
-				opts.AmendedCommit = expected
-			}
-			var concurrentRoot hash.Hash
-			updates := []DatasetUpdate{
-				WorkingSetUpdate{
-					WorkingSetDS: "workingSets/heads/other-" + mode,
-					WorkingSet: WorkingSetSpec{
-						Meta:        &WorkingSetMeta{},
-						WorkingRoot: root,
-						StagedRoot:  root,
+		for _, lock := range []string{"omitted", "explicit"} {
+			suite.Run(mode+"/"+lock, func() {
+				ctx := context.Background()
+				ds, err := suite.db.GetDataset(ctx, "refs/heads/"+mode+"-"+lock)
+				suite.Require().NoError(err)
+				if mode != "new" {
+					ds, err = CommitValue(ctx, suite.db, ds, types.String("initial"))
+					suite.Require().NoError(err)
+				}
+				expected, _ := ds.MaybeHeadAddr()
+				root, err := suite.db.WriteValue(ctx, types.String("working root"))
+				suite.Require().NoError(err)
+				opts := CommitOptions{
+					Meta: &CommitMeta{},
+				}
+				switch mode {
+				case "force":
+					opts.Force = true
+				case "amend":
+					opts.AmendedCommit = expected
+				}
+				var expectedHead hash.Hash
+				if lock == "explicit" {
+					expectedHead = expected
+				}
+				var concurrentRoot hash.Hash
+				updates := []DatasetUpdate{
+					WorkingSetUpdate{
+						WorkingSetDS: "workingSets/heads/other-" + mode + "-" + lock,
+						WorkingSet: WorkingSetSpec{
+							Meta:        &WorkingSetMeta{},
+							WorkingRoot: root,
+							StagedRoot:  root,
+						},
 					},
-				},
-				interleavedDatasetUpdate{
-					DatasetUpdate: CommitUpdate{
-						CommitDS:     ds,
-						ExpectedHead: expected,
-						RootVal:      types.String("batch"),
-						CommitOpts:   opts,
+					interleavedDatasetUpdate{
+						DatasetUpdate: CommitUpdate{
+							CommitDS:     ds,
+							ExpectedHead: expectedHead,
+							RootVal:      types.String("batch"),
+							CommitOpts:   opts,
+						},
+						afterBuild: func() {
+							_, err := CommitValue(ctx, suite.db, ds, types.String("concurrent"))
+							suite.Require().NoError(err)
+							concurrentRoot, err = suite.db.rt.Root(ctx)
+							suite.Require().NoError(err)
+						},
 					},
-					afterBuild: func() {
-						_, err := CommitValue(ctx, suite.db, ds, types.String("concurrent"))
-						suite.Require().NoError(err)
-						concurrentRoot, err = suite.db.rt.Root(ctx)
-						suite.Require().NoError(err)
-					},
-				},
-			}
-			_, err = suite.db.CommitDatasets(ctx, updates)
-			suite.ErrorIs(err, ErrMergeNeeded)
-			actual, err := suite.db.rt.Root(ctx)
-			suite.Require().NoError(err)
-			suite.Equal(concurrentRoot, actual)
-			ws, err := suite.db.GetDataset(ctx, "workingSets/heads/other-"+mode)
-			suite.Require().NoError(err)
-			suite.False(ws.HasHead())
-		})
+				}
+				_, err = suite.db.CommitDatasets(ctx, updates)
+				suite.ErrorIs(err, ErrMergeNeeded)
+				actual, err := suite.db.rt.Root(ctx)
+				suite.Require().NoError(err)
+				suite.Equal(concurrentRoot, actual)
+				ws, err := suite.db.GetDataset(ctx, "workingSets/heads/other-"+mode+"-"+lock)
+				suite.Require().NoError(err)
+				suite.False(ws.HasHead())
+			})
+		}
 	}
 }
 
@@ -322,77 +331,87 @@ func (suite *DatabaseSuite) TestCommitDatasetsRechecksPreconditionsOnRetry() {
 		"refs/heads/main",
 		"refs/heads/unrelated",
 	} {
-		suite.Run(changedID, func() {
-			ctx := context.Background()
-			storage := &chunks.TestStorage{}
-			writer := NewDatabase(storage.NewViewWithDefaultFormat()).(*database)
-			defer writer.Close()
-			head, err := writer.GetDataset(ctx, "refs/heads/main")
-			suite.Require().NoError(err)
-			head, err = CommitValue(ctx, writer, head, types.String("initial"))
-			suite.Require().NoError(err)
-			expectedHead, _ := head.MaybeHeadAddr()
-			store := &commitInterleavingStore{
-				ChunkStore: storage.NewViewWithDefaultFormat(),
-			}
-			publisher := NewDatabase(store).(*database)
-			defer publisher.Close()
-			other, err := writer.GetDataset(ctx, changedID)
-			suite.Require().NoError(err)
-			var concurrentRoot hash.Hash
-			store.beforeCommit = func() {
-				_, err := CommitValue(ctx, writer, other, types.String("concurrent"))
+		for _, lock := range []string{"new", "omitted", "explicit"} {
+			suite.Run(changedID+"/"+lock, func() {
+				ctx := context.Background()
+				storage := &chunks.TestStorage{}
+				writer := NewDatabase(storage.NewViewWithDefaultFormat()).(*database)
+				defer writer.Close()
+				head, err := writer.GetDataset(ctx, "refs/heads/main")
 				suite.Require().NoError(err)
-				concurrentRoot, err = writer.rt.Root(ctx)
+				if lock != "new" {
+					head, err = CommitValue(ctx, writer, head, types.String("initial"))
+					suite.Require().NoError(err)
+				}
+				var expectedHead hash.Hash
+				if lock == "explicit" {
+					expectedHead, _ = head.MaybeHeadAddr()
+				}
+				store := &commitInterleavingStore{
+					ChunkStore: storage.NewViewWithDefaultFormat(),
+				}
+				publisher := NewDatabase(store).(*database)
+				defer publisher.Close()
+				other, err := writer.GetDataset(ctx, changedID)
 				suite.Require().NoError(err)
-			}
-			root, err := publisher.WriteValue(ctx, types.String("working"))
-			suite.Require().NoError(err)
-			builds := 0
-			updates := []DatasetUpdate{
-				WorkingSetUpdate{
-					WorkingSetDS: "workingSets/heads/main",
-					WorkingSet: WorkingSetSpec{
-						Meta:        &WorkingSetMeta{},
-						WorkingRoot: root,
-						StagedRoot:  root,
-					},
-				},
-				interleavedDatasetUpdate{
-					DatasetUpdate: CommitUpdate{
-						CommitDS:     head,
-						ExpectedHead: expectedHead,
-						RootVal:      types.String("batch"),
-						CommitOpts: CommitOptions{
-							Meta: &CommitMeta{},
+				var concurrentRoot hash.Hash
+				store.beforeCommit = func() {
+					_, err := CommitValue(ctx, writer, other, types.String("concurrent"))
+					suite.Require().NoError(err)
+					concurrentRoot, err = writer.rt.Root(ctx)
+					suite.Require().NoError(err)
+				}
+				root, err := publisher.WriteValue(ctx, types.String("working"))
+				suite.Require().NoError(err)
+				builds := 0
+				updates := []DatasetUpdate{
+					WorkingSetUpdate{
+						WorkingSetDS: "workingSets/heads/main",
+						WorkingSet: WorkingSetSpec{
+							Meta:        &WorkingSetMeta{},
+							WorkingRoot: root,
+							StagedRoot:  root,
 						},
 					},
-					afterBuild: func() {
-						builds++
+					interleavedDatasetUpdate{
+						DatasetUpdate: CommitUpdate{
+							CommitDS:     head,
+							ExpectedHead: expectedHead,
+							RootVal:      types.String("batch"),
+							CommitOpts: CommitOptions{
+								Meta: &CommitMeta{},
+							},
+						},
+						afterBuild: func() {
+							builds++
+						},
 					},
-				},
-			}
-			_, err = publisher.CommitDatasets(ctx, updates)
-			if changedID == head.ID() {
-				suite.ErrorIs(err, ErrMergeNeeded)
-				actual, err := publisher.rt.Root(ctx)
-				suite.Require().NoError(err)
-				suite.Equal(concurrentRoot, actual)
-				ws, err := publisher.GetDataset(ctx, "workingSets/heads/main")
-				suite.Require().NoError(err)
-				suite.False(ws.HasHead())
-			} else {
-				suite.Require().NoError(err)
-				published, err := publisher.GetDataset(ctx, head.ID())
-				suite.Require().NoError(err)
-				suite.True(mustHeadValue(published).Equals(types.String("batch")))
-				concurrent, err := publisher.GetDataset(ctx, changedID)
-				suite.Require().NoError(err)
-				suite.True(mustHeadValue(concurrent).Equals(types.String("concurrent")))
-			}
-			suite.Equal(1, builds, "root retries must reuse the built value")
-			suite.Nil(store.beforeCommit, "the concurrent write must have run")
-		})
+				}
+				updated, err := publisher.CommitDatasets(ctx, updates)
+				if changedID == head.ID() {
+					suite.ErrorIs(err, ErrMergeNeeded)
+					actual, err := publisher.rt.Root(ctx)
+					suite.Require().NoError(err)
+					suite.Equal(concurrentRoot, actual)
+					ws, err := publisher.GetDataset(ctx, "workingSets/heads/main")
+					suite.Require().NoError(err)
+					suite.False(ws.HasHead())
+				} else {
+					suite.Require().NoError(err)
+					suite.Require().Len(updated, 2)
+					suite.True(updated[0].HasHead())
+					suite.Equal("workingSets/heads/main", updated[0].ID())
+					published, err := publisher.GetDataset(ctx, head.ID())
+					suite.Require().NoError(err)
+					suite.True(mustHeadValue(published).Equals(types.String("batch")))
+					concurrent, err := publisher.GetDataset(ctx, changedID)
+					suite.Require().NoError(err)
+					suite.True(mustHeadValue(concurrent).Equals(types.String("concurrent")))
+				}
+				suite.Equal(1, builds, "root retries must reuse the built value")
+				suite.Nil(store.beforeCommit, "the concurrent write must have run")
+			})
+		}
 	}
 }
 
