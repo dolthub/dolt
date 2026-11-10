@@ -80,10 +80,10 @@ func TestForeignKeyEqualDefs(t *testing.T) {
 	}
 }
 
-// TestDeclaredKeysByTable verifies that the grouping returned by DeclaredKeysByTable gives, for every table name, the
-// same foreign keys in the same order as the declaredFk result of KeysForTable.
-func TestDeclaredKeysByTable(t *testing.T) {
-	declaringTables := []TableName{
+// TestKeysForTable verifies that KeysForTable matches tables case-insensitively, exactly as TableName.EqualFold does,
+// and stays correct as keys are removed and the collection is copied.
+func TestKeysForTable(t *testing.T) {
+	tables := []TableName{
 		{Name: "child"},
 		{Name: "CHILD"},
 		{Name: "Child", Schema: "public"},
@@ -98,14 +98,17 @@ func TestDeclaredKeysByTable(t *testing.T) {
 	}
 	fkc, err := NewForeignKeyCollection()
 	assert.NoError(t, err)
-	for i, tableName := range declaringTables {
+	var added []ForeignKey
+	for i, tableName := range tables {
 		// Two keys per table, added in descending name order, so the ordering of the result is exercised too.
 		for _, prefix := range []string{"b", "a"} {
 			fk := newForeignKey()
 			fk.Name = fmt.Sprintf("%s_fk_%d", prefix, i)
 			fk.TableName = tableName
 			fk.TableColumns = []uint64{uint64(100*i) + uint64(prefix[0])}
+			fk.ReferencedTableName = tables[(i+1)%len(tables)]
 			assert.NoError(t, fkc.AddKeys(fk))
+			added = append(added, fk)
 		}
 	}
 
@@ -115,14 +118,33 @@ func TestDeclaredKeysByTable(t *testing.T) {
 		{Name: "OTHER"},
 		{Name: "Σ"},
 		{Name: "I"},
-		{Name: "parent"},
 		{Name: "missing"},
-	}, declaringTables...)
-	byTable := fkc.DeclaredKeysByTable()
-	for _, tableName := range lookups {
-		expected, _ := fkc.KeysForTable(tableName)
-		assert.Equal(t, expected, byTable.KeysForTable(tableName), "table %q in schema %q", tableName.Name, tableName.Schema)
+	}, tables...)
+	requireMatchesScan := func(fkc *ForeignKeyCollection) {
+		for _, tableName := range lookups {
+			var expectedDeclared, expectedReferenced []ForeignKey
+			for _, fk := range fkc.AllKeys() {
+				if fk.TableName.EqualFold(tableName) {
+					expectedDeclared = append(expectedDeclared, fk)
+				}
+				if fk.ReferencedTableName.EqualFold(tableName) {
+					expectedReferenced = append(expectedReferenced, fk)
+				}
+			}
+			declared, referenced := fkc.KeysForTable(tableName)
+			assert.Equal(t, expectedDeclared, declared, "table %q in schema %q", tableName.Name, tableName.Schema)
+			assert.Equal(t, expectedReferenced, referenced, "table %q in schema %q", tableName.Name, tableName.Schema)
+		}
 	}
+	requireMatchesScan(fkc)
+
+	copied := fkc.Copy()
+	copied.RemoveKeys(added[0], added[5])
+	assert.True(t, copied.RemoveKeyByName(added[8].Name, added[8].TableName))
+	requireMatchesScan(copied)
+	requireMatchesScan(fkc)
+	assert.Equal(t, len(added), fkc.Count())
+	assert.Equal(t, len(added)-3, copied.Count())
 }
 
 // TestForeignKeyCollectionNameIndex verifies that name lookups stay correct as keys are added, removed, copied and

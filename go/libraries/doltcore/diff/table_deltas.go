@@ -147,21 +147,19 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot doltdb.RootValue) (del
 	toVRW := toRoot.VRW()
 	toNS := toRoot.NodeStore()
 
-	// A root has one foreign key collection for all of its tables, and GetForeignKeyCollection returns a copy of it on
-	// every call. Read it once per root and group the keys by table once, so that the cost of this function does not
-	// grow with the number of tables times the number of foreign keys.
-	fromFks, err := declaredFksByTable(ctx, fromRoot)
+	// GetForeignKeyCollection returns a copy of the collection on every call, so read it once per root.
+	fromFkc, err := fromRoot.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, err
 	}
-	toFks, err := declaredFksByTable(ctx, toRoot)
+	toFkc, err := toRoot.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	fromDeltas := make([]TableDelta, 0)
 	err = fromRoot.IterTables(ctx, func(name doltdb.TableName, tbl *doltdb.Table, sch schema.Schema) (stop bool, err error) {
-		fks := fromFks.KeysForTable(name)
+		fks, _ := fromFkc.KeysForTable(name)
 		parentSchs, err := getFkParentSchs(ctx, fromRoot, fks...)
 		if err != nil {
 			return false, err
@@ -201,7 +199,7 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot doltdb.RootValue) (del
 
 	toDeltas := make([]TableDelta, 0)
 	err = toRoot.IterTables(ctx, func(name doltdb.TableName, tbl *doltdb.Table, sch schema.Schema) (stop bool, err error) {
-		fks := toFks.KeysForTable(name)
+		fks, _ := toFkc.KeysForTable(name)
 		parentSchs, err := getFkParentSchs(ctx, toRoot, fks...)
 		if err != nil {
 			return false, err
@@ -273,15 +271,6 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot doltdb.RootValue) (del
 	})
 
 	return deltas, nil
-}
-
-// declaredFksByTable returns the foreign keys of |root| grouped by the table that declares them.
-func declaredFksByTable(ctx context.Context, root doltdb.RootValue) (doltdb.ForeignKeysByTable, error) {
-	fkc, err := root.GetForeignKeyCollection(ctx)
-	if err != nil {
-		return doltdb.ForeignKeysByTable{}, err
-	}
-	return fkc.DeclaredKeysByTable(), nil
 }
 
 func getFkParentSchs(ctx context.Context, root doltdb.RootValue, fks ...doltdb.ForeignKey) (map[doltdb.TableName]schema.Schema, error) {

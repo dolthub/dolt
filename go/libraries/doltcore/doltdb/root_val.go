@@ -22,6 +22,7 @@ import (
 	"iter"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/cespare/xxhash/v2"
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
@@ -809,6 +810,21 @@ func (tn TableName) EqualFold(o TableName) bool {
 // a map key.
 func (tn TableName) FoldCase() TableName {
 	return TableName{Name: foldString(tn.Name), Schema: foldString(tn.Schema)}
+}
+
+// foldString maps every rune of |s| to the smallest rune that it folds to under simple Unicode case folding, which is
+// the equivalence strings.EqualFold tests. strings.ToLower is not a substitute: it keeps apart some runes that fold
+// together (for example the two lower case forms of sigma), and merges some that do not.
+func foldString(s string) string {
+	return strings.Map(func(r rune) rune {
+		folded := r
+		for c := unicode.SimpleFold(r); c != r; c = unicode.SimpleFold(c) {
+			if c < folded {
+				folded = c
+			}
+		}
+		return folded
+	}, s)
 }
 
 // The ForeignKey struct used to include referenced table names as strings and

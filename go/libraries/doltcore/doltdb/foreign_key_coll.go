@@ -21,9 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strings"
 	"sync"
-	"unicode"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -39,6 +37,10 @@ type ForeignKeyCollection struct {
 	foreignKeys map[string]ForeignKey
 	// hashesByName maps the nameKey of every foreign key to its key in |foreignKeys|.
 	hashesByName map[foreignKeyNameKey]string
+	// hashesByTable and hashesByReferencedTable index the keys of |foreignKeys| by the case-folded name of the table
+	// that declares each foreign key and of the table it references.
+	hashesByTable           map[TableName]map[string]struct{}
+	hashesByReferencedTable map[TableName]map[string]struct{}
 }
 
 // foreignKeyNameKey identifies a foreign key by its case-folded name. A foreign key name is unique within its table's
@@ -338,8 +340,10 @@ func NewForeignKeyCollection(keys ...ForeignKey) (*ForeignKeyCollection, error) 
 
 func newForeignKeyCollection(size int) *ForeignKeyCollection {
 	return &ForeignKeyCollection{
-		foreignKeys:  make(map[string]ForeignKey, size),
-		hashesByName: make(map[foreignKeyNameKey]string, size),
+		foreignKeys:             make(map[string]ForeignKey, size),
+		hashesByName:            make(map[foreignKeyNameKey]string, size),
+		hashesByTable:           make(map[TableName]map[string]struct{}),
+		hashesByReferencedTable: make(map[TableName]map[string]struct{}),
 	}
 }
 
@@ -371,10 +375,12 @@ func (fkc *ForeignKeyCollection) addKey(key ForeignKey) error {
 	return nil
 }
 
-// put stores |key| under |hashKey| and indexes it by name.
+// put stores |key| under |hashKey| and indexes it by name and by table.
 func (fkc *ForeignKeyCollection) put(hashKey string, key ForeignKey) {
 	fkc.foreignKeys[hashKey] = key
 	fkc.hashesByName[nameKey(key.Name, key.TableName)] = hashKey
+	addToTableIndex(fkc.hashesByTable, key.TableName, hashKey)
+	addToTableIndex(fkc.hashesByReferencedTable, key.ReferencedTableName, hashKey)
 }
 
 // remove deletes the foreign key stored under |hashKey|, if there is one.
@@ -387,6 +393,26 @@ func (fkc *ForeignKeyCollection) remove(hashKey string) {
 	name := nameKey(key.Name, key.TableName)
 	if fkc.hashesByName[name] == hashKey {
 		delete(fkc.hashesByName, name)
+	}
+	removeFromTableIndex(fkc.hashesByTable, key.TableName, hashKey)
+	removeFromTableIndex(fkc.hashesByReferencedTable, key.ReferencedTableName, hashKey)
+}
+
+func addToTableIndex(index map[TableName]map[string]struct{}, tableName TableName, hashKey string) {
+	table := tableName.FoldCase()
+	hashKeys, ok := index[table]
+	if !ok {
+		hashKeys = make(map[string]struct{})
+		index[table] = hashKeys
+	}
+	hashKeys[hashKey] = struct{}{}
+}
+
+func removeFromTableIndex(index map[TableName]map[string]struct{}, tableName TableName, hashKey string) {
+	table := tableName.FoldCase()
+	delete(index[table], hashKey)
+	if len(index[table]) == 0 {
+		delete(index, table)
 	}
 }
 
@@ -620,65 +646,20 @@ func (fkc *ForeignKeyCollection) Iter(cb func(fk ForeignKey) (stop bool, err err
 // all foreign keys in which this table is the referenced table. If the table contains a self-referential foreign key,
 // it will be present in both declaresFk and referencedByFk. Each array is sorted by name ascending.
 func (fkc *ForeignKeyCollection) KeysForTable(tableName TableName) (declaredFk, referencedByFk []ForeignKey) {
-	for _, foreignKey := range fkc.foreignKeys {
-		if foreignKey.TableName.EqualFold(tableName) {
-			declaredFk = append(declaredFk, foreignKey)
-		}
-		if foreignKey.ReferencedTableName.EqualFold(tableName) {
-			referencedByFk = append(referencedByFk, foreignKey)
-		}
+	table := tableName.FoldCase()
+	return fkc.sortedKeys(fkc.hashesByTable[table]), fkc.sortedKeys(fkc.hashesByReferencedTable[table])
+}
+
+// sortedKeys returns the foreign keys stored under |hashKeys|, sorted by name ascending.
+func (fkc *ForeignKeyCollection) sortedKeys(hashKeys map[string]struct{}) []ForeignKey {
+	var fks []ForeignKey
+	for hashKey := range hashKeys {
+		fks = append(fks, fkc.foreignKeys[hashKey])
 	}
-	sort.Slice(declaredFk, func(i, j int) bool {
-		return declaredFk[i].Name < declaredFk[j].Name
+	sort.Slice(fks, func(i, j int) bool {
+		return fks[i].Name < fks[j].Name
 	})
-	sort.Slice(referencedByFk, func(i, j int) bool {
-		return referencedByFk[i].Name < referencedByFk[j].Name
-	})
-	return
-}
-
-// ForeignKeysByTable holds the foreign keys of a ForeignKeyCollection grouped by the table that declares them. It
-// answers the declaredFk half of KeysForTable for many tables without walking the whole collection once per table.
-type ForeignKeysByTable struct {
-	declared map[TableName][]ForeignKey
-}
-
-// DeclaredKeysByTable groups the foreign keys in this collection by the table that declares them. The grouping is a
-// snapshot, later changes to the collection are not reflected in it.
-func (fkc *ForeignKeyCollection) DeclaredKeysByTable() ForeignKeysByTable {
-	declared := make(map[TableName][]ForeignKey)
-	for _, foreignKey := range fkc.foreignKeys {
-		name := foreignKey.TableName.FoldCase()
-		declared[name] = append(declared[name], foreignKey)
-	}
-	for _, fks := range declared {
-		sort.Slice(fks, func(i, j int) bool {
-			return fks[i].Name < fks[j].Name
-		})
-	}
-	return ForeignKeysByTable{declared: declared}
-}
-
-// KeysForTable returns the foreign keys that the given table declares, sorted by name ascending. This is the declaredFk
-// result of ForeignKeyCollection.KeysForTable, including its case-insensitive match on the table name. The returned
-// slice belongs to the grouping and must not be appended to.
-func (t ForeignKeysByTable) KeysForTable(tableName TableName) []ForeignKey {
-	return t.declared[tableName.FoldCase()]
-}
-
-// foldString maps every rune of |s| to the smallest rune that it folds to under simple Unicode case folding, which is
-// the equivalence strings.EqualFold tests. strings.ToLower is not a substitute: it keeps apart some runes that fold
-// together (for example the two lower case forms of sigma), and merges some that do not.
-func foldString(s string) string {
-	return strings.Map(func(r rune) rune {
-		folded := r
-		for c := unicode.SimpleFold(r); c != r; c = unicode.SimpleFold(c) {
-			if c < folded {
-				folded = c
-			}
-		}
-		return folded
-	}, s)
+	return fks
 }
 
 // RemoveKeys removes any Foreign Keys with matching column set from the collection.
