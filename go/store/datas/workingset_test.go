@@ -24,6 +24,64 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+func TestWorkingSetMergeStateTableSchemas(t *testing.T) {
+	working := hash.Of([]byte("working"))
+	preMerge := hash.Of([]byte("pre-merge working"))
+	from := hash.Of([]byte("from"))
+	preMergeHead := hash.Of([]byte("pre-merge head"))
+	names := []string{"s1.t", "t", "t"}
+	for _, test := range []struct {
+		name    string
+		schemas []string
+		want    []string
+	}{
+		{"legacy names", nil, nil},
+		{"default schemas", []string{"", "", ""}, nil},
+		{"named schemas", []string{"", "s1", "s2"}, []string{"", "s1", "s2"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			mergeState := &MergeState{
+				preMergeWorkingAddr: &preMerge, fromCommitAddr: &from, preMergeHeadCommitAddr: &preMergeHead,
+				fromCommitSpec: "source", unmergableTables: names, unmergableTableSchemas: test.schemas,
+				isRevert: true, pendingRevertHashes: []string{"next"},
+			}
+			msg := workingset_flatbuffer(working, &working, mergeState, nil, nil)
+			head, err := newSerialWorkingSetHead(msg, hash.Of(msg))
+			require.NoError(t, err)
+			stored, err := head.msg.TryMergeState(nil)
+			require.NoError(t, err)
+			require.Equal(t, len(test.want), stored.UnmergableTableSchemasLength())
+			if test.want == nil {
+				// Default-schema writes retain the original eight-field format,
+				// so older readers can still read them.
+				require.LessOrEqual(t, int(stored.Table().NumFields()), 8)
+			}
+			decoded, err := head.HeadWorkingSet()
+			require.NoError(t, err)
+			expected := *mergeState
+			expected.unmergableTableSchemas = test.want
+			require.Equal(t, &expected, decoded.MergeState)
+			require.Equal(t, test.want, decoded.MergeState.UnmergableTableSchemas())
+		})
+	}
+
+	for _, schemas := range [][]string{{"s1"}, {"s1", "", "s2", "extra"}} {
+		t.Run("mismatched schema count", func(t *testing.T) {
+			_, err := NewMergeState(types.Ref{}, nil, "source", names, schemas, false, false, nil, nil)
+			require.ErrorContains(t, err, "table schemas for 3 unmergable tables")
+			mergeState := &MergeState{
+				preMergeWorkingAddr: &preMerge, fromCommitAddr: &from,
+				unmergableTables: names, unmergableTableSchemas: schemas,
+			}
+			msg := workingset_flatbuffer(working, &working, mergeState, nil, nil)
+			head, err := newSerialWorkingSetHead(msg, hash.Of(msg))
+			require.NoError(t, err)
+			_, err = head.HeadWorkingSet()
+			require.ErrorContains(t, err, "table schemas for 3 unmergable tables")
+		})
+	}
+}
+
 func TestWorkingSetWalkAddrs(t *testing.T) {
 	working := hash.Of([]byte("working"))
 	staged := hash.Of([]byte("staged"))
