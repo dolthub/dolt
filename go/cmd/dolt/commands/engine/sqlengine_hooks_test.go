@@ -30,18 +30,18 @@ func TestSqlEngineHooksAreReached(t *testing.T) {
 	mrEnv, cfg, _ := lifecycleEngineEnvironment(t, ctx, t.TempDir(), t.TempDir())
 	savedPersister, savedBranchControl := newPrivilegePersister, loadBranchControl
 	t.Cleanup(func() { newPrivilegePersister, loadBranchControl = savedPersister, savedBranchControl })
-	var configs []config.ReadableConfig
+	configs := make(map[string]config.ReadableConfig)
 	newPrivilegePersister = func(c config.ReadableConfig, privFilePath, doltCfgDirPath string) *mysql_file_handler.Persister {
-		configs = append(configs, c)
+		configs["privileges"] = c
 		return savedPersister(c, privFilePath, doltCfgDirPath)
 	}
 	loadBranchControl = func(ctx context.Context, c config.ReadableConfig, branchCtrlFilePath, doltCfgDirPath string) (*branch_control.Controller, error) {
-		configs = append(configs, c)
+		configs["branch control"] = c
 		return savedBranchControl(ctx, c, branchCtrlFilePath, doltCfgDirPath)
 	}
 
 	se, err := NewSqlEngine(ctx, mrEnv, cfg)
 	require.NoError(t, err)
 	defer func() { require.NoError(t, se.Close()) }()
-	require.Equal(t, []config.ReadableConfig{mrEnv.Config(), mrEnv.Config()}, configs)
+	require.Equal(t, map[string]config.ReadableConfig{"privileges": mrEnv.Config(), "branch control": mrEnv.Config()}, configs)
 }

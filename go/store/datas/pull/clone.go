@@ -35,7 +35,7 @@ var ErrNoData = errors.New("no data")
 var ErrCloneUnsupported = errors.New("clone unsupported")
 
 func Clone(ctx context.Context, srcCS, sinkCS chunks.ChunkStore, getAddrs chunks.InsertAddrsCurry, tempTableDir string, eventCh chan<- TableFileEvent) error {
-	copier, err := newJournalCopier(srcCS, sinkCS)
+	copier, err := newJournalCopier(ctx, srcCS, sinkCS)
 	if err != nil {
 		return err
 	}
@@ -351,12 +351,12 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chun
 }
 
 func convertJournalToTableFile(ctx context.Context, readCloser io.ReadCloser, off int64, tmpDir string, copier journalCopier) (*nbs.ArchiveStreamWriter, string, error) {
-	writer, err := copier.newWriter(tmpDir)
+	writer, err := copier.newWriter(ctx, tmpDir)
 	if err != nil {
 		return nil, "", err
 	}
-	err = copier.visit(ctx, readCloser, off, func(cb nbs.ToChunker) error {
-		_, err := writer.AddChunk(cb)
+	err = copier.visit(ctx, readCloser, off, func(chunk nbs.ToChunker) error {
+		_, err := writer.AddChunk(chunk)
 		return err
 	})
 	if err != nil {

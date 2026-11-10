@@ -378,8 +378,8 @@ type Range struct {
 	Length     uint32
 	DictOffset uint64
 	DictLength uint32
-	// Key is what the repository's format opens the range with, if anything.
-	Key any
+	// key is the key that the repository's format opens the range with, if it takes one.
+	key *[]byte
 }
 
 func ResourcePath(urlS string) string {
@@ -962,7 +962,7 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context, hashToChunk map[has
 
 	// structuring so this can be done as multiple files in the future.
 	{
-		name, data, splitOffset, err := dcs.format.writeChunks(chnks)
+		name, data, splitOffset, err := dcs.format.writeChunks(ctx, chnks)
 
 		if err != nil {
 			return map[hash.Hash]int{}, err

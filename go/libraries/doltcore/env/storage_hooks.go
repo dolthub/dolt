@@ -14,8 +14,8 @@
 
 package env
 
-// WithStorageLoadParams adds to |params|, which may be nil, what opening the database of |dEnv| takes beyond them,
+// StorageLoadParams adds to |params|, which may be nil, what opening the database of |dEnv| takes beyond them,
 // and returns them. Dolt adds nothing.
-var WithStorageLoadParams = func(dEnv *DoltEnv, params map[string]interface{}) (map[string]interface{}, error) {
+var StorageLoadParams = func(dEnv *DoltEnv, params map[string]interface{}) (map[string]interface{}, error) {
 	return params, nil
 }

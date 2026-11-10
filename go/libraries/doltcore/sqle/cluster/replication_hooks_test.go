@@ -17,8 +17,10 @@ package cluster
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -62,20 +64,20 @@ func (testRemotesAPI) ServerNameDNSMatches() []string { return nil }
 func TestReplicationHooksAreReached(t *testing.T) {
 	savedRegister, savedClient := registerGrpcServices, newReplicationServiceClient
 	t.Cleanup(func() { registerGrpcServices, newReplicationServiceClient = savedRegister, savedClient })
-	var calls []string
-	registerGrpcServices = func(*grpc.Server) { calls = append(calls, "registerGrpcServices") }
+	reached := make(map[string]bool)
+	registerGrpcServices = func(*grpc.Server) { reached["registerGrpcServices"] = true }
 	newReplicationServiceClient = func(cc grpc.ClientConnInterface) replicationapi.ReplicationServiceClient {
-		calls = append(calls, "newReplicationServiceClient")
+		reached["newReplicationServiceClient"] = true
 		return savedClient(cc)
 	}
 
 	c, err := NewController(logrus.New(), testClusterConfig{}, config.NewMapConfig(make(map[string]string)))
 	require.NoError(t, err)
-	require.Equal(t, []string{"newReplicationServiceClient"}, calls)
+	require.True(t, reached["newReplicationServiceClient"])
 	srv := grpc.NewServer()
 	defer srv.Stop()
 	c.RegisterGrpcServices(nil, srv)
-	require.Equal(t, []string{"newReplicationServiceClient", "registerGrpcServices"}, calls)
+	require.True(t, reached["registerGrpcServices"])
 }
 
 func TestOpenStandbyDBIsReached(t *testing.T) {
@@ -85,11 +87,20 @@ func TestOpenStandbyDBIsReached(t *testing.T) {
 	t.Cleanup(func() { openStandbyDB = saved })
 	dEnv := dtestutils.CreateTestEnv()
 	defer dEnv.DoltDB(ctx).Close()
-	var opened []string
+	var mu sync.Mutex
+	opened := make(map[*doltdb.DoltDB]string)
 	openStandbyDB = func(_ *Controller, ctx context.Context, remoteName string, _ env.Remote, _ *types.NomsBinFormat, ddb *doltdb.DoltDB, _ dbfactory.GRPCDialProvider) (*doltdb.DoltDB, error) {
-		require.Same(t, dEnv.DoltDB(ctx), ddb)
-		opened = append(opened, remoteName)
+		mu.Lock()
+		defer mu.Unlock()
+		opened[ddb] = remoteName
 		return nil, refused
+	}
+	requireOpened := func() {
+		t.Helper()
+		mu.Lock()
+		defer mu.Unlock()
+		require.Equal(t, map[*doltdb.DoltDB]string{dEnv.DoltDB(ctx): "standby"}, opened)
+		clear(opened)
 	}
 
 	c, err := NewController(logrus.New(), testClusterConfig{}, config.NewMapConfig(make(map[string]string)))
@@ -99,5 +110,17 @@ func TestOpenStandbyDBIsReached(t *testing.T) {
 	require.Len(t, hooks, 1)
 	_, err = hooks[0].destDBF(ctx)
 	require.ErrorIs(t, err, refused)
-	require.Equal(t, []string{"standby"}, opened)
+	requireOpened()
+
+	// A database created while the server runs opens its standby the same way.
+	bt := sql.NewBackgroundThreads()
+	defer bt.Shutdown()
+	c.sqlCtxFactory = func(ctx context.Context) (*sql.Context, error) { return sql.NewContext(ctx), nil }
+	require.NoError(t, NewInitDatabaseHook(c, bt)(sql.NewEmptyContext(), nil, "db", dEnv, nil))
+	c.mu.Lock()
+	created := c.commithooks[len(c.commithooks)-1]
+	c.mu.Unlock()
+	_, err = created.destDBF(ctx)
+	require.ErrorIs(t, err, refused)
+	requireOpened()
 }

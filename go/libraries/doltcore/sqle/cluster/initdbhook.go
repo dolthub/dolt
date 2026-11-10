@@ -64,7 +64,7 @@ func NewInitDatabaseHook(controller *Controller, bt *sql.BackgroundThreads) sqle
 			}
 
 			remoteDBs = append(remoteDBs, func(ctx context.Context) (*doltdb.DoltDB, error) {
-				return er.GetRemoteDBWithoutCaching(ctx, types.Format_DOLT, dialprovider)
+				return openStandbyDB(controller, ctx, r.Name(), er, types.Format_DOLT, denv.DoltDB(ctx), dialprovider)
 			})
 			remoteUrls = append(remoteUrls, remoteUrl)
 		}

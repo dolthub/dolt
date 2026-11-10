@@ -33,11 +33,12 @@ type storageGuard interface {
 	noteDBs(ctx context.Context, sc *StatsController, dbs []sql.Database)
 	noteDB(ctx context.Context, sc *StatsController, ddb *doltdb.DoltDB)
 	lockedNoteDB(ctx context.Context, sc *StatsController, ddb *doltdb.DoltDB)
-	// lockedRotateStorage replaces the stats database of |sc|, which holds sc.mu.
+	// lockedRotateStorage replaces the stats database of |sc|. Callers hold sc.mu, except Init, which runs before the
+	// controller's worker starts.
 	lockedRotateStorage(ctx context.Context, sc *StatsController) error
-	// storageParams sets the params that open a stats database.
+	// storageParams sets the params that open a stats database. checkStorage refuses stats database |ddb|, and
+	// closes it if it does. Both run with or without sc.mu held.
 	storageParams(params map[string]interface{})
-	// checkStorage refuses stats database |ddb|, and closes it if it does.
 	checkStorage(ddb *doltdb.DoltDB) error
 }
 

@@ -14,9 +14,19 @@
 
 package binlogreplication
 
-import "github.com/dolthub/go-mysql-server/sql"
+import (
+	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+)
 
 // CheckLoggable refuses to enable binary logging if a database of |provider| may not be logged. Dolt logs any.
 var CheckLoggable = func(provider sql.DatabaseProvider) error {
+	return nil
+}
+
+// checkLoggableDatabase refuses to create database |name|, stored in |ddb|, while binary logging is enabled if it may
+// not be logged. Dolt logs any.
+var checkLoggableDatabase = func(name string, ddb *doltdb.DoltDB) error {
 	return nil
 }

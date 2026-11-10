@@ -31,22 +31,24 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func TestEvictCachedGitRemoteIsReached(t *testing.T) {
+func TestEvictProviderGitRemoteIsReached(t *testing.T) {
 	p, err := NewDoltDatabaseProvider(env.DefaultInitBranch, filesys.EmptyInMemFS(""), sql.EngineOverrides{})
 	require.NoError(t, err)
 	p.SetRemoteDialer(env.NewGRPCDialProvider())
-	saved := evictCachedGitRemote
-	t.Cleanup(func() { evictCachedGitRemote = saved })
+	saved := evictProviderGitRemote
+	t.Cleanup(func() { evictProviderGitRemote = saved })
+	refused := errors.New("refused")
 	var keys []string
-	evictCachedGitRemote = func(got *DoltDatabaseProvider, _ context.Context, key string, _ map[string]interface{}) {
+	evictProviderGitRemote = func(got *DoltDatabaseProvider, _ context.Context, key string, _ map[string]interface{}) error {
 		require.Same(t, p, got)
 		keys = append(keys, key)
+		return refused
 	}
 
 	dir := t.TempDir()
 	r := env.NewRemote("origin", "git+file://"+filepath.ToSlash(filepath.Join(dir, "missing.git")), map[string]string{dbfactory.GitCacheRootParam: dir})
 	_, err = p.GetRemoteDB(context.Background(), types.Format_DOLT, r)
-	require.Error(t, err)
+	require.ErrorIs(t, err, refused)
 	require.Len(t, keys, 1)
 }
 

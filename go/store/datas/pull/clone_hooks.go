@@ -23,20 +23,20 @@ import (
 )
 
 // newJournalCopier returns what copies the journal of |src| into an archive for |sink| when cloning.
-var newJournalCopier = func(src, sink chunks.ChunkStore) (journalCopier, error) {
+var newJournalCopier = func(ctx context.Context, src, sink chunks.ChunkStore) (journalCopier, error) {
 	return archiveJournalCopier{}, nil
 }
 
 type journalCopier interface {
 	// newWriter returns the writer of the archive.
-	newWriter(tmpDir string) (*nbs.ArchiveStreamWriter, error)
+	newWriter(ctx context.Context, tmpDir string) (*nbs.ArchiveStreamWriter, error)
 	// visit passes each chunk of the journal records in |r|, which start at offset |off|, to |cb|.
 	visit(ctx context.Context, r io.Reader, off int64, cb func(nbs.ToChunker) error) error
 }
 
 type archiveJournalCopier struct{}
 
-func (archiveJournalCopier) newWriter(tmpDir string) (*nbs.ArchiveStreamWriter, error) {
+func (archiveJournalCopier) newWriter(_ context.Context, tmpDir string) (*nbs.ArchiveStreamWriter, error) {
 	return nbs.NewArchiveStreamWriter(tmpDir)
 }
 

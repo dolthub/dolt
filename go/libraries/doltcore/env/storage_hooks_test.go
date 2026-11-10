@@ -22,12 +22,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestWithStorageLoadParamsIsReached(t *testing.T) {
+func TestStorageLoadParamsIsReached(t *testing.T) {
 	refused := errors.New("refused")
-	saved := WithStorageLoadParams
-	t.Cleanup(func() { WithStorageLoadParams = saved })
+	saved := StorageLoadParams
+	t.Cleanup(func() { StorageLoadParams = saved })
 	var got *DoltEnv
-	WithStorageLoadParams = func(dEnv *DoltEnv, params map[string]interface{}) (map[string]interface{}, error) {
+	StorageLoadParams = func(dEnv *DoltEnv, params map[string]interface{}) (map[string]interface{}, error) {
 		got = dEnv
 		return nil, refused
 	}
