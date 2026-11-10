@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -649,8 +650,8 @@ func (dp DiffPartition) GetRowIter(ctx *sql.Context) (sql.RowIter, error) {
 
 // isDiffablePartition checks if the commit pair for this partition is "diffable".
 //
-// simpleDiff is returned when [diff.CanAlignPrimaryKeys] can pair the rows of
-// both sides by one primary key. fuzzyDiff is returned when the keys can still
+// simpleDiff is returned when [diff.AlignedSchema] can key the rows of both
+// sides by one primary key. fuzzyDiff is returned when the keys can still
 // be mapped by [schema.MapSchemaBasedOnTagAndName]. Neither is returned when
 // the partition cannot be diffed.
 func (dp *DiffPartition) isDiffablePartition(ctx *sql.Context) (simpleDiff bool, fuzzyDiff bool, err error) {
@@ -676,8 +677,14 @@ func (dp *DiffPartition) isDiffablePartition(ctx *sql.Context) (simpleDiff bool,
 		return false, false, err
 	}
 
-	easyDiff := diff.CanAlignPrimaryKeys(fromSch, toSch)
-	if easyDiff {
+	if schema.ComparePrimaryKeys(fromSch, toSch) != schema.PrimaryKeysDiffer {
+		return true, false, nil
+	}
+	// The rows of both sides pair when one side is rekeyed to the other's key,
+	// or when the key columns keep their tags, since rows convert by tag.
+	newSch, _, err := diff.AlignedSchema(fromSch, toSch)
+	isSameKeyTags := slices.Equal(fromSch.GetPKCols().Tags, toSch.GetPKCols().Tags)
+	if err == nil && (newSch != nil || isSameKeyTags) {
 		return true, false, nil
 	}
 

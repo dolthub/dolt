@@ -128,8 +128,10 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, tar
 		return prollyDiffIter{}, err
 	}
 	from, fsch, to, tsch = fromAligned.Rows, fromAligned.Sch, toAligned.Rows, toAligned.Sch
-	if err = warnUnpaired(ctx, fromAligned, toAligned, dp); err != nil {
-		return prollyDiffIter{}, err
+	// A diff shows unpaired rows as removed or added rather than modified,
+	// which the warning explains.
+	if fromN, toN := diff.CountUnpaired(fromAligned, toAligned); fromN+toN > 0 {
+		ctx.Warn(PrimaryKeyChangeWarningCode, unpairedRowsWarning, dp.fromName, dp.toName)
 	}
 
 	var nodeStore tree.NodeStore
@@ -319,21 +321,6 @@ func (itr prollyDiffIter) queueUnpaired(ctx context.Context, cb tree.DiffFn, isE
 	return itr.toUnpaired.IterUnpaired(ctx, func(k, v val.Tuple) error {
 		return queue(tree.Diff{Type: tree.AddedDiff, Key: tree.Item(k), To: tree.Item(v)})
 	})
-}
-
-// warnUnpaired warns when |from| or |to| has unpaired rows in |dp|.
-//
-// A diff shows those rows as removed or added rather than modified, which the
-// warning explains.
-func warnUnpaired(ctx *sql.Context, from, to diff.KeyedRows, dp DiffPartition) error {
-	fromN, toN, err := diff.CountUnpaired(from, to)
-	if err != nil {
-		return err
-	}
-	if fromN+toN > 0 {
-		ctx.Warn(PrimaryKeyChangeWarningCode, unpairedRowsWarning, dp.fromName, dp.toName)
-	}
-	return nil
 }
 
 // todo(andy): copy string fields

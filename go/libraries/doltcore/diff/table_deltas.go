@@ -16,6 +16,7 @@ package diff
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 
@@ -601,45 +602,21 @@ func (td TableDelta) HasDataChanged(ctx context.Context) (bool, error) {
 		return !isEmpty, nil
 	}
 
-	fromRowDataHash, err := td.FromTable.GetRowDataHash(ctx)
-	if err != nil {
-		return false, err
-	}
-	toRowDataHash, err := td.ToTable.GetRowDataHash(ctx)
-	if err != nil {
-		return false, err
-	}
-	if fromRowDataHash.Equal(toRowDataHash) {
-		return false, nil
-	}
-	if !needsAlignment(td.FromSch, td.ToSch) || !CanAlignPrimaryKeys(td.FromSch, td.ToSch) {
-		return true, nil
-	}
-	// The hashes also differ when only the primary key changed.
-	return td.hasAlignedDataChanged(ctx)
-}
-
-// hasAlignedDataChanged reports whether the rows of td differ once both sides
-// share one primary key. Prolly maps with the same rows have the same hash.
-//
-// HasDataChanged uses it when the hashes differ only because the key changed.
-//
-// An unpaired row cannot exist unchanged on the other side, so it is a data
-// change.
-func (td TableDelta) hasAlignedDataChanged(ctx context.Context) (bool, error) {
+	// A primary key change alone changes the row hash, so the rows are compared
+	// keyed by one primary key. Prolly maps with the same rows have the same
+	// hash, and an unpaired row cannot exist unchanged on the other side.
 	fromRows, toRows, err := td.GetRowData(ctx)
 	if err != nil {
 		return false, err
 	}
 	from, to, err := alignIndexes(ctx, fromRows, toRows, td.FromSch, td.ToSch)
-	if err != nil {
+	if errors.Is(err, ErrPrimaryKeySetChanged) || errors.Is(err, errPrimaryKeyTypeChanged) {
+		return true, nil
+	} else if err != nil {
 		return false, err
 	}
-	fromN, toN, err := CountUnpaired(from, to)
-	if err != nil || fromN+toN > 0 {
-		return fromN+toN > 0, err
-	}
-	return from.Rows.HashOf() != to.Rows.HashOf(), nil
+	fromN, toN := CountUnpaired(from, to)
+	return fromN+toN > 0 || from.Rows.HashOf() != to.Rows.HashOf(), nil
 }
 
 // HasGainedOrLostPrimaryKey reports whether the table is keyed on one side of

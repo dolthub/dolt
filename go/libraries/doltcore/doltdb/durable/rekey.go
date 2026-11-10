@@ -51,7 +51,7 @@ type RowRekeyer struct {
 func NewRowRekeyer(ns tree.NodeStore, sch, newSch schema.Schema) (*RowRekeyer, bool) {
 	oldKD, oldVD := sch.GetMapDescriptors(ns)
 	newKD, newVD := newSch.GetMapDescriptors(ns)
-	oldPK, oldVals := sch.GetPKCols(), storedCols(sch.GetNonPKCols())
+	oldPK, oldVals := sch.GetPKCols(), sch.GetNonPKCols()
 	keySrc, ok := fieldSources(oldPK, oldVals, oldKD, oldVD, newSch.GetPKCols().GetColumns(), newKD)
 	if !ok {
 		return nil, false
@@ -82,8 +82,8 @@ func NewRowRekeyer(ns tree.NodeStore, sch, newSch schema.Schema) (*RowRekeyer, b
 
 // Rekey returns the tuple pair |k|, |v| rebuilt under the new primary key.
 //
-// The new key holds a NULL where HasNullKey reports one. Such a key fits no
-// map, so RekeyMap keeps its row apart, but a diff can still show it.
+// A NULL that HasNullKey reports stays NULL in the new key. No map keyed by
+// it can hold that key, but the row can still be read under the new key.
 func (r *RowRekeyer) Rekey(ctx context.Context, k, v val.Tuple) (val.Tuple, val.Tuple, error) {
 	for i, src := range r.keySrc {
 		r.kb.PutRaw(i, src.field(k, v))
@@ -111,25 +111,27 @@ func (r *RowRekeyer) HasNullKey(k, v val.Tuple) bool {
 }
 
 // RekeyMap returns |rows| keyed by the new primary key, and apart, as stored
-// in |rows|, the rows it cannot key.
+// in |rows|, the rows that the new key cannot hold. It also reports whether
+// any of those rows has a NULL in the new key.
 //
-// A key holds one row and no NULL, so rows that share a new key with another
-// or would hold a NULL in it have no place in the first map. Callers decide
-// what they mean: a diff shows them unpaired, and a merge refuses them.
-func (r *RowRekeyer) RekeyMap(ctx context.Context, rows prolly.Map) (prolly.Map, prolly.Map, error) {
+// A primary key holds one row and no NULL, so rows that share a new key or
+// have a NULL in it stay out of the rekeyed map. hasNullKey tells the two
+// kinds apart without another pass over the rows.
+func (r *RowRekeyer) RekeyMap(ctx context.Context, rows prolly.Map) (rekeyed, unpairedRows prolly.Map, hasNullKey bool, err error) {
 	emptyNew, err := prolly.NewMapFromTuples(ctx, r.ns, r.newKD, r.newVD)
 	if err != nil {
-		return prolly.Map{}, prolly.Map{}, err
+		return prolly.Map{}, prolly.Map{}, false, err
 	}
 	emptyOld, err := prolly.NewMapFromTuples(ctx, r.ns, r.oldKD, r.oldVD)
 	if err != nil {
-		return prolly.Map{}, prolly.Map{}, err
+		return prolly.Map{}, prolly.Map{}, false, err
 	}
 
 	mut, unpaired := emptyNew.Mutate(), emptyOld.Mutate()
 	var shared *prolly.MutableMap
 	err = IterRows(ctx, rows, func(k, v val.Tuple) error {
 		if r.HasNullKey(k, v) {
+			hasNullKey = true
 			return unpaired.Put(ctx, k, v)
 		}
 		nk, nv, err := r.Rekey(ctx, k, v)
@@ -151,22 +153,20 @@ func (r *RowRekeyer) RekeyMap(ctx context.Context, rows prolly.Map) (prolly.Map,
 		return mut.Put(ctx, nk, nv)
 	})
 	if err != nil {
-		return prolly.Map{}, prolly.Map{}, err
+		return prolly.Map{}, prolly.Map{}, false, err
 	}
 	if shared != nil {
 		if err = r.splitSharedKeys(ctx, rows, mut, shared, unpaired); err != nil {
-			return prolly.Map{}, prolly.Map{}, err
+			return prolly.Map{}, prolly.Map{}, false, err
 		}
 	}
-	rekeyed, err := mut.Map(ctx)
-	if err != nil {
-		return prolly.Map{}, prolly.Map{}, err
+	if rekeyed, err = mut.Map(ctx); err != nil {
+		return prolly.Map{}, prolly.Map{}, false, err
 	}
-	unpairedRows, err := unpaired.Map(ctx)
-	if err != nil {
-		return prolly.Map{}, prolly.Map{}, err
+	if unpairedRows, err = unpaired.Map(ctx); err != nil {
+		return prolly.Map{}, prolly.Map{}, false, err
 	}
-	return rekeyed, unpairedRows, nil
+	return rekeyed, unpairedRows, hasNullKey, nil
 }
 
 // splitSharedKeys moves the rows whose new key is in |shared| out of |mut| and
@@ -180,9 +180,6 @@ func (r *RowRekeyer) splitSharedKeys(ctx context.Context, rows prolly.Map, mut, 
 		return err
 	}
 	return IterRows(ctx, rows, func(k, v val.Tuple) error {
-		if r.HasNullKey(k, v) {
-			return nil
-		}
 		nk, _, err := r.Rekey(ctx, k, v)
 		if err != nil {
 			return err
@@ -241,19 +238,17 @@ func (s fieldSource) field(k, v val.Tuple) []byte {
 // |dest| needs.
 //
 // The old key stores |oldPK| as |oldKD| describes, and the old value stores
-// |oldVals| as |oldVD| describes.
-func fieldSources(oldPK *schema.ColCollection, oldVals []schema.Column, oldKD, oldVD *val.TupleDesc, cols []schema.Column, dest *val.TupleDesc) ([]fieldSource, bool) {
+// the stored columns of |oldVals| as |oldVD| describes.
+func fieldSources(oldPK, oldVals *schema.ColCollection, oldKD, oldVD *val.TupleDesc, cols []schema.Column, dest *val.TupleDesc) ([]fieldSource, bool) {
 	srcs := make([]fieldSource, len(cols))
 	for i, col := range cols {
 		var src fieldSource
 		if j, ok := oldPK.TagToIdx[col.Tag]; ok {
 			src = fieldSource{desc: oldKD, idx: j, fromKey: true}
-		} else {
-			j := slices.IndexFunc(oldVals, func(c schema.Column) bool { return c.Tag == col.Tag })
-			if j < 0 {
-				return nil, false
-			}
+		} else if j, ok := oldVals.StoredIndexByTag(col.Tag); ok {
 			src = fieldSource{desc: oldVD, idx: j}
+		} else {
+			return nil, false
 		}
 		if src.desc.Types[src.idx].Enc != dest.Types[i].Enc {
 			return nil, false
@@ -266,11 +261,9 @@ func fieldSources(oldPK *schema.ColCollection, oldVals []schema.Column, oldKD, o
 // storedCols returns the columns of |cc| that tuples store. Virtual columns
 // are computed on read, so tuples do not hold them.
 func storedCols(cc *schema.ColCollection) []schema.Column {
-	var cols []schema.Column
-	for _, col := range cc.GetColumns() {
-		if !col.Virtual {
-			cols = append(cols, col)
-		}
+	cols := make([]schema.Column, cc.StoredSize())
+	for i := range cols {
+		cols[i] = cc.GetByStoredIndex(i)
 	}
 	return cols
 }

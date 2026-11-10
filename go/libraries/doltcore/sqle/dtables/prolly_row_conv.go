@@ -78,24 +78,30 @@ func NewProllyRowConverter(ctx *sql.Context, inSch, outSch schema.Schema, warnFn
 }
 
 // rowPlacements returns where each key and value column of |inSch| goes in
-// |outSch|'s rows, or -1. Key columns match as keyPlacement describes, and
-// value columns match by name.
+// the rows of |outSch|, or -1 when it has no place there.
+//
+// Key columns match by tag, or else by case-insensitive name and the same SQL
+// type, since a key value of another type has other key bytes. Value columns
+// match by name.
 //
 // Either kind may match a column in or out of the primary key of |outSch|,
-// since rekeying a diff side to the other side's key moves columns into or
-// out of its key.
+// since rekeying one side of a diff moves columns into or out of its key.
 func rowPlacements(inSch, outSch schema.Schema) (val.OrdinalMapping, val.OrdinalMapping, error) {
-	keyCols := inSch.GetPKCols().GetColumns()
-	if len(keyCols) == 0 && inSch.GetNonPKCols().Size() == 0 {
+	if inSch.GetAllCols().Size() == 0 {
 		// The table is added or dropped on this side of the diff.
 		return val.OrdinalMapping{}, val.OrdinalMapping{}, nil
 	}
 	outCols := outSch.GetAllCols()
+	keyCols := inSch.GetPKCols().GetColumns()
 	keyProj := make(val.OrdinalMapping, len(keyCols))
 	for i, col := range keyCols {
-		j, ok := keyPlacement(col, outCols)
+		j, ok := outCols.TagToIdx[col.Tag]
 		if !ok {
-			return nil, nil, fmt.Errorf("could not map primary key column %s", col.Name)
+			out, isNamed := outCols.GetByNameCaseInsensitive(col.Name)
+			if !isNamed || !out.TypeInfo.ToSqlType().Equals(col.TypeInfo.ToSqlType()) {
+				return nil, nil, fmt.Errorf("could not map primary key column %s", col.Name)
+			}
+			j = outCols.TagToIdx[out.Tag]
 		}
 		keyProj[i] = j
 	}
@@ -111,23 +117,6 @@ func rowPlacements(inSch, outSch schema.Schema) (val.OrdinalMapping, val.Ordinal
 		valProj[i] = outCols.TagToIdx[out.Tag]
 	}
 	return keyProj, valProj, nil
-}
-
-// keyPlacement returns the index in |outCols| of the key column |col|, or
-// false when none matches. It matches by tag, or else by case-insensitive
-// name and the same SQL type.
-//
-// A key value of another type has other key bytes, so a name alone is not a
-// match.
-func keyPlacement(col schema.Column, outCols *schema.ColCollection) (int, bool) {
-	if j, ok := outCols.TagToIdx[col.Tag]; ok {
-		return j, true
-	}
-	out, ok := outCols.GetByNameCaseInsensitive(col.Name)
-	if !ok || !out.TypeInfo.ToSqlType().Equals(col.TypeInfo.ToSqlType()) {
-		return -1, false
-	}
-	return outCols.TagToIdx[out.Tag], true
 }
 
 // targetTypes returns the types to convert |inCols| values to in |outSch|,

@@ -105,14 +105,12 @@ func StatForTableDelta(ctx context.Context, ch chan DiffStatProgress, td TableDe
 		return err
 	}
 
-	if needsAlignment(fromSch, toSch) {
+	if fromRows != nil && toRows != nil {
 		from, to, err := alignIndexes(ctx, fromRows, toRows, fromSch, toSch)
 		if err != nil {
 			return fmt.Errorf("failed to compute diff stat for table %s: %w", td.CurName(), err)
 		}
-		if err = statUnpaired(ch, from, to); err != nil {
-			return err
-		}
+		statUnpaired(ch, from, to)
 		fromRows, toRows = durable.IndexFromProllyMap(from.Rows), durable.IndexFromProllyMap(to.Rows)
 		fromSch, toSch = from.Sch, to.Sch
 	}
@@ -120,14 +118,14 @@ func StatForTableDelta(ctx context.Context, ch chan DiffStatProgress, td TableDe
 	return diffProllyTrees(ctx, ch, keyless, fromRows, toRows, fromSch, toSch)
 }
 
-// statUnpaired sends |ch| the unpaired rows of |from| and |to| as removed and
-// added rows.
+// statUnpaired sends |ch| the rows left out of the Rows of |from| and |to| as
+// removed and added rows.
 //
-// diffProllyTrees sees only the aligned maps, which leave those rows out.
-func statUnpaired(ch chan DiffStatProgress, from, to KeyedRows) error {
-	fromN, toN, err := CountUnpaired(from, to)
-	if err != nil || fromN+toN == 0 {
-		return err
+// The maps that the stat walks lack those rows, so they are counted apart.
+func statUnpaired(ch chan DiffStatProgress, from, to KeyedRows) {
+	fromN, toN := CountUnpaired(from, to)
+	if fromN+toN == 0 {
+		return
 	}
 	fromCells := uint64(from.Sch.GetAllCols().Size())
 	toCells := uint64(to.Sch.GetAllCols().Size())
@@ -139,7 +137,6 @@ func statUnpaired(ch chan DiffStatProgress, from, to KeyedRows) error {
 		OldCellSize: uint64(fromN) * fromCells,
 		NewCellSize: uint64(toN) * toCells,
 	}
-	return nil
 }
 
 func diffProllyTrees(ctx context.Context, ch chan DiffStatProgress, keyless bool, from, to durable.Index, fromSch, toSch schema.Schema) error {
