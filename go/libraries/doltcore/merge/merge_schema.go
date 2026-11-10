@@ -1024,13 +1024,34 @@ func fkCollSetDifference(
 // pruneInvalidForeignKeys removes from a ForeignKeyCollection any ForeignKey whose parent/child table/columns have been removed.
 func pruneInvalidForeignKeys(ctx *sql.Context, tableResolver doltdb.TableResolver, fkColl *doltdb.ForeignKeyCollection, mergedRoot doltdb.RootValue) (pruned *doltdb.ForeignKeyCollection, err error) {
 	pruned, _ = doltdb.NewForeignKeyCollection()
-	err = fkColl.Iter(func(fk doltdb.ForeignKey) (stop bool, err error) {
-		parentTbl, ok, err := tableResolver.ResolveTable(ctx, mergedRoot, fk.ReferencedTableName)
-		if err != nil || !ok {
-			return false, err
+
+	// Every foreign key needs the schemas of its parent and its child, and many foreign keys share a table. Each table
+	// of |mergedRoot| is resolved once, as in doltdb.ValidateForeignKeysOnSchemas. A table that does not exist is
+	// remembered with a nil schema.
+	schemas := make(map[doltdb.TableName]schema.Schema)
+	getTableSchema := func(tableName doltdb.TableName) (schema.Schema, bool, error) {
+		if sch, ok := schemas[tableName]; ok {
+			return sch, sch != nil, nil
 		}
-		parentSch, err := parentTbl.GetSchema(ctx)
+		tbl, ok, err := tableResolver.ResolveTable(ctx, mergedRoot, tableName)
 		if err != nil {
+			return nil, false, err
+		}
+		if !ok {
+			schemas[tableName] = nil
+			return nil, false, nil
+		}
+		sch, err := tbl.GetSchema(ctx)
+		if err != nil {
+			return nil, false, err
+		}
+		schemas[tableName] = sch
+		return sch, true, nil
+	}
+
+	err = fkColl.Iter(func(fk doltdb.ForeignKey) (stop bool, err error) {
+		parentSch, ok, err := getTableSchema(fk.ReferencedTableName)
+		if err != nil || !ok {
 			return false, err
 		}
 		for _, tag := range fk.ReferencedTableColumns {
@@ -1039,12 +1060,8 @@ func pruneInvalidForeignKeys(ctx *sql.Context, tableResolver doltdb.TableResolve
 			}
 		}
 
-		childTbl, ok, err := tableResolver.ResolveTable(ctx, mergedRoot, fk.TableName)
+		childSch, ok, err := getTableSchema(fk.TableName)
 		if err != nil || !ok {
-			return false, err
-		}
-		childSch, err := childTbl.GetSchema(ctx)
-		if err != nil {
 			return false, err
 		}
 		for _, tag := range fk.TableColumns {
