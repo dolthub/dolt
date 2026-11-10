@@ -116,10 +116,12 @@ var commandsWithoutCurrentDirWrites = []cli.Command{
 // commands that specifically skip the env.MultiEnvForDirectory loading step. These commands work in a context where
 // we expect the database to fail loading, but we need to get through to the Exec call anyway. The dEnv created with LoadWithoutDB
 // will be passed to these commands, so we can determine where the data root is, but commands will need to load the database
-// on terms that make sense for their purpose.
+// on terms that make sense for their purpose. sql-server builds its own env.MultiRepoEnv, and building one here as well
+// would open each of its databases twice.
 var commandsSkippingDBLoad = []cli.Command{
 	commands.FsckCmd{},
 	commands.InitCmd{},
+	sqlserver.SqlServerCmd{VersionStr: doltversion.Version},
 }
 
 // commands that use stdio directly and must not have it redirected.
@@ -223,6 +225,18 @@ const featureVersionFlag = "--feature-version"
 func main() {
 	dynassert.InitDyanmicAsserts()
 	os.Exit(runMain())
+}
+
+// cleanGitRemoteSpools removes the git remote spool files which dead processes left in
+// |mrEnv|'s databases. A failure does not concern the command being run, which may not use
+// a git remote at all, and the next process to start tries again.
+func cleanGitRemoteSpools(mrEnv *env.MultiRepoEnv) {
+	_ = mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (bool, error) {
+		if root, ok := dEnv.GitCacheRoot(); ok {
+			_ = tempfiles.CleanDir(dbfactory.GitRemoteSpoolDirForRepo(root))
+		}
+		return false, nil
+	})
 }
 
 // runMain executes the Dolt CLI process and returns the exit code.
@@ -508,6 +522,7 @@ func runMain() int {
 			cli.PrintErrln("failed to load database names:", err.Error())
 			return 1
 		}
+		cleanGitRemoteSpools(mrEnv)
 	}
 
 	var cliCtx cli.CliContext = nil
@@ -661,6 +676,13 @@ If you're interested in running this command against a remote host, hit us up on
 		}
 	}
 
+	// Commands which skip the DB load don't use a Queryist.
+	if mrEnv == nil {
+		return func(context.Context, ...cli.LateBindQueryistOption) (res cli.LateBindQueryistResult, err error) {
+			return res, fmt.Errorf("The %s command cannot run queries.", subcommandName)
+		}, nil
+	}
+
 	var dbName string
 
 	if hasUseDb {
@@ -691,7 +713,6 @@ If you're interested in running this command against a remote host, hit us up on
 	commandsNotRequiringRepo := map[string]bool{
 		"init":                         true,
 		"sql":                          true,
-		"sql-server":                   true,
 		"sql-client":                   true,
 		commands.DoltBackupCommandName: true,
 	}

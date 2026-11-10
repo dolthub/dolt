@@ -298,7 +298,11 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 
 	// If tableNameExpr defined, return a single table diff summary result
 	if ds.tableNameExpr != nil {
-		delta := findMatchingDelta(deltas, tableName)
+		resolvedName, err := resolveDeltaTableName(ctx, fromDetails.root, toDetails.root, tableName)
+		if err != nil {
+			return nil, err
+		}
+		delta := findMatchingDelta(deltas, resolvedName)
 
 		ignore, err := ignorePatterns.ShouldIgnoreDelta(delta.IsAdd(), delta.IsDrop(), delta.ToName, delta.FromName)
 		if err != nil {

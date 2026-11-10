@@ -96,7 +96,7 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, behavior dherrors.Fa
 func newPersistedBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore, q MemoryQuotaProvider, data []byte, name hash.Hash, blockSize uint64, opts openOpts) (chunkSource, error) {
 	var rdr tableReaderAt = &bsTableReaderAt{key: name.String(), bs: bs}
 	if shouldSpool(bs) {
-		spooled, err := spoolTableReaderAt(bytes.NewReader(data))
+		spooled, err := newPersistedSpoolingTableReaderAt(bs, name.String(), data)
 		if err != nil {
 			return nil, err
 		}
@@ -408,10 +408,7 @@ func newBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore, name h
 }
 
 func newBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, opts openOpts, stats *Stats) (cs chunkSource, err error) {
-	if shouldSpool(bs) {
-		return newSpooledBSTableChunkSource(ctx, bs, name, chunkCount, q, opts, stats)
-	}
-
+	var fileSz uint64
 	index, err := loadTableIndex(ctx, stats, name, chunkCount, q, opts, func(p []byte) (uint64, error) {
 		rc, sz, _, err := bs.Get(ctx, name.String(), blobstore.NewBlobRange(-int64(len(p)), 0))
 		if err != nil {
@@ -424,6 +421,7 @@ func newBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore, name has
 			return 0, err
 		}
 
+		fileSz = sz
 		return sz, nil
 	})
 	if err != nil {
@@ -434,7 +432,15 @@ func newBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore, name has
 		return nil, errors.New("unexpected chunk count")
 	}
 
-	tr, err := newTableReaderFor(ctx, index, &bsTableReaderAt{key: name.String(), bs: bs}, s3BlockSize, opts)
+	var rdr tableReaderAt = &bsTableReaderAt{key: name.String(), bs: bs}
+	if shouldSpool(bs) {
+		rdr, err = newPinnedSpoolingTableReaderAt(bs, name.String(), int64(fileSz))
+		if err != nil {
+			_ = index.Close()
+			return nil, err
+		}
+	}
+	tr, err := newTableReaderFor(ctx, index, rdr, s3BlockSize, opts)
 	if err != nil {
 		_ = index.Close()
 		return nil, err

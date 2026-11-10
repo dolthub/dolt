@@ -866,6 +866,24 @@ func (d *DoltSession) IsBranchDirty(dbName, branch string) bool {
 	return ok && branchState.dirty
 }
 
+// IsWritingDatabase reports whether the current transaction has uncommitted changes to, or has opened a table writer
+// on, any branch of |dbName|. A table writer may belong to a statement that is still running. |dbName| must be a base
+// name, not revision-qualified.
+func (d *DoltSession) IsWritingDatabase(dbName string) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	dbState, ok := d.dbStates[strings.ToLower(dbName)]
+	if !ok {
+		return false
+	}
+	for _, branchState := range dbState.heads {
+		if branchState.dirty || (branchState.writeSession != nil && branchState.writeSession.HasTableWriters()) {
+			return true
+		}
+	}
+	return false
+}
+
 // CommitWorkingSet commits the named working set without creating a new dolt commit.
 // Only the named working set may have pending changes, or ErrDirtyWorkingSets is returned.
 //
@@ -1150,13 +1168,10 @@ func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func
 	return nil
 }
 
-// visitTempTableGCRoots keeps the roots of the temporary tables stored in |dbState|'s database.
+// visitTempTableGCRoots keeps the roots of the temporary tables stored in |dbState|'s database. They outlive the
+// session's branch states, so it doesn't look for the database's DoltDB there.
 func (d *DoltSession) visitTempTableGCRoots(ctx context.Context, dbState *DatabaseSessionState, keep func(hash.Hash) bool) error {
-	var ddb *doltdb.DoltDB
-	for _, head := range dbState.heads {
-		ddb = head.dbData.Ddb
-		break
-	}
+	ddb := dbState.ddb
 	for _, tables := range d.tempTables {
 		for _, tbl := range tables {
 			rooted, ok := tbl.(GCRootedTable)
@@ -1711,6 +1726,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		}
 
 		sessionState.dbName = baseName
+		sessionState.ddb = dbState.DbData.Ddb
 
 		baseDb, ok := d.provider.BaseDatabase(ctx, baseName)
 		if !ok {
@@ -2061,6 +2077,24 @@ func (d *DoltSession) GetBranch(ctx *sql.Context) (string, error) {
 	}
 	// A nil working set probably means that we're not on a branch (like we may be on a commit), so we return an empty string
 	return "", nil
+}
+
+// GetRebasedBranch lets branch control checks on a rebase working branch also apply to the branch being rebased. It
+// returns the branch being rebased when |branch| of |database| is the working branch of an active rebase, and an empty
+// string otherwise.
+func (d *DoltSession) GetRebasedBranch(ctx *sql.Context, database, branch string) (string, error) {
+	if !strings.HasPrefix(branch, doltdb.RebaseWorkingBranchPrefix) {
+		return "", nil
+	}
+	bs, ok, err := d.LookupDbState(ctx, doltdb.RevisionDbName(database, branch))
+	if err != nil || !ok {
+		return "", err
+	}
+	ws := bs.WorkingSet()
+	if ws == nil || !ws.RebaseActive() {
+		return "", nil
+	}
+	return ws.RebaseState().Branch(), nil
 }
 
 // GetUser implements the interface branch_control.Context.

@@ -30,6 +30,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
+	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -631,4 +632,42 @@ func TestToyCodecPersisterSeals(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, isEncryptedFooter(b))
 	requireNoPlaintext(t, b, cs)
+}
+
+// A blobstore that spools opens a toy table or archive from its index, and reads its chunks from the spool.
+func TestToyCodecSpooledBlobstore(t *testing.T) {
+	ctx := t.Context()
+	c := newToyCodec()
+	cs := toyChunks(maxSamples + 20)
+	bs := blobstore.NewInMemoryBlobstore("")
+	spooling := wholeBlobBlobstore{bs, true}
+	requireHas := func(src chunkSource) {
+		defer src.close()
+		for _, chk := range cs {
+			got, _, err := src.get(ctx, chk.Hash(), nil, &Stats{})
+			require.NoError(t, err)
+			require.Equal(t, chk.Data(), got)
+		}
+	}
+
+	name, table, _ := writeNamedToyTable(t, c, cs)
+	_, err := bs.Put(ctx, name.String(), int64(len(table)), bytes.NewReader(table))
+	require.NoError(t, err)
+	src, err := newBSTableChunkSource(ctx, spooling, name, uint32(len(cs)), &UnlimitedQuotaProvider{}, openOpts{codec: c}, &Stats{})
+	require.NoError(t, err)
+	requireHas(src)
+
+	sealer, err := c.newSpanSealer(false)
+	require.NoError(t, err)
+	archive, name := writeToyArchive(t, sealer, func(asw *ArchiveStreamWriter) {
+		for _, chk := range cs {
+			_, err := asw.AddChunk(ChunkToCompressedChunk(chk))
+			require.NoError(t, err)
+		}
+	})
+	_, err = bs.Put(ctx, name.String()+ArchiveFileSuffix, int64(len(archive)), bytes.NewReader(archive))
+	require.NoError(t, err)
+	src, err = newSpooledBSArchiveChunkSource(ctx, spooling, name, &UnlimitedQuotaProvider{}, openOpts{codec: c}, &Stats{})
+	require.NoError(t, err)
+	requireHas(src)
 }
