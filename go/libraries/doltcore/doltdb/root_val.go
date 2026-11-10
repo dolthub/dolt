@@ -805,6 +805,12 @@ func (tn TableName) EqualFold(o TableName) bool {
 	return strings.EqualFold(tn.Name, o.Name) && strings.EqualFold(tn.Schema, o.Schema)
 }
 
+// FoldCase returns a table name that is equal for exactly those table names that EqualFold treats as equal, for use as
+// a map key.
+func (tn TableName) FoldCase() TableName {
+	return TableName{Name: foldString(tn.Name), Schema: foldString(tn.Schema)}
+}
+
 // The ForeignKey struct used to include referenced table names as strings and
 // now includes them as TableName structs. LD_1 format repositories serialized
 // the ForeignKey struct directly to a noms struct with the string fields. So
@@ -1149,10 +1155,7 @@ func (root *rootValue) GetForeignKeyCollection(ctx context.Context) (*ForeignKey
 			return nil, err
 		}
 		if !ok {
-			fkc := &ForeignKeyCollection{
-				foreignKeys: map[string]ForeignKey{},
-			}
-			return fkc, nil
+			return newForeignKeyCollection(0), nil
 		}
 
 		root.fkc, err = DeserializeForeignKeys(ctx, root.vrw.Format(), fkMap)

@@ -19,7 +19,6 @@ import (
 	"fmt"
 
 	fb "github.com/dolthub/flatbuffers/v23/go"
-	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -49,10 +48,7 @@ func deserializeFlatbufferForeignKeys(msg types.SerialMessage) (*ForeignKeyColle
 	if err != nil {
 		return nil, err
 	}
-	collection := &ForeignKeyCollection{
-		foreignKeys: make(map[string]ForeignKey, c.ForeignKeysLength()),
-	}
-	names := newForeignKeyNames(c.ForeignKeysLength())
+	collection := newForeignKeyCollection(c.ForeignKeysLength())
 
 	var fk serial.ForeignKey
 	for i := 0; i < c.ForeignKeysLength(); i++ {
@@ -97,7 +93,8 @@ func deserializeFlatbufferForeignKeys(msg types.SerialMessage) (*ForeignKeyColle
 			return nil, fmt.Errorf("could not decode table name: %s", string(fk.ParentTableName()))
 		}
 
-		key := ForeignKey{
+		// A stored collection was validated when it was written, so its keys are not checked for duplicate names again.
+		err := collection.addKey(ForeignKey{
 			Name:                   string(fk.Name()),
 			TableName:              tableName,
 			TableIndex:             string(fk.ChildTableIndex()),
@@ -113,18 +110,10 @@ func deserializeFlatbufferForeignKeys(msg types.SerialMessage) (*ForeignKeyColle
 			},
 			IsNotValid: fk.IsNotValid(),
 			MatchType:  ForeignKeyMatchType(fk.MatchType()),
-		}
-		// This is AddKeys with its duplicate name check answered by |names|. AddKeys compares the new key with every
-		// key already in the collection, which makes loading a collection quadratic in the number of foreign keys, and
-		// a collection is loaded for every new root value.
-		if names.contains(key) {
-			return nil, sql.ErrForeignKeyDuplicateName.New(key.Name)
-		}
-		err = collection.addKeyWithUniqueName(key)
+		})
 		if err != nil {
 			return nil, err
 		}
-		names.add(key)
 	}
 	return collection, nil
 }

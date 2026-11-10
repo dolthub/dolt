@@ -35,7 +35,10 @@ import (
 
 // ForeignKeyCollection represents the collection of foreign keys for a root value.
 type ForeignKeyCollection struct {
+	// foreignKeys holds every foreign key, keyed by the string form of its hash.
 	foreignKeys map[string]ForeignKey
+	// hashesByName indexes the keys of |foreignKeys| by the case-folded name of their foreign key.
+	hashesByName map[string]map[string]struct{}
 }
 
 type ForeignKeyReferentialAction byte
@@ -307,9 +310,7 @@ func (fk ForeignKey) ValidateTableSchema(sch schema.Schema) error {
 }
 
 func NewForeignKeyCollection(keys ...ForeignKey) (*ForeignKeyCollection, error) {
-	fkc := &ForeignKeyCollection{
-		foreignKeys: make(map[string]ForeignKey),
-	}
+	fkc := newForeignKeyCollection(len(keys))
 	for _, k := range keys {
 		err := fkc.AddKeys(k)
 		if err != nil {
@@ -319,6 +320,13 @@ func NewForeignKeyCollection(keys ...ForeignKey) (*ForeignKeyCollection, error) 
 	return fkc, nil
 }
 
+func newForeignKeyCollection(size int) *ForeignKeyCollection {
+	return &ForeignKeyCollection{
+		foreignKeys:  make(map[string]ForeignKey, size),
+		hashesByName: make(map[string]map[string]struct{}, size),
+	}
+}
+
 // AddKeys adds the given foreign key to the collection. Checks that the given name is unique in the collection, and that
 // both column counts are equal. All other validation should occur before being added to the collection.
 func (fkc *ForeignKeyCollection) AddKeys(fks ...ForeignKey) error {
@@ -326,16 +334,15 @@ func (fkc *ForeignKeyCollection) AddKeys(fks ...ForeignKey) error {
 		if _, ok := fkc.GetByNameCaseInsensitive(key.Name, key.TableName); ok {
 			return sql.ErrForeignKeyDuplicateName.New(key.Name)
 		}
-		if err := fkc.addKeyWithUniqueName(key); err != nil {
+		if err := fkc.addKey(key); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// addKeyWithUniqueName adds the given foreign key to the collection. The caller has already checked that the name of
-// the key is not in use.
-func (fkc *ForeignKeyCollection) addKeyWithUniqueName(key ForeignKey) error {
+// addKey adds the given foreign key to the collection without checking that its name is unique.
+func (fkc *ForeignKeyCollection) addKey(key ForeignKey) error {
 	if len(key.TableColumns) != len(key.ReferencedTableColumns) {
 		return fmt.Errorf("foreign keys must have the same number of columns declared and referenced")
 	}
@@ -344,48 +351,34 @@ func (fkc *ForeignKeyCollection) addKeyWithUniqueName(key ForeignKey) error {
 	if err != nil {
 		return err
 	}
-	fkc.foreignKeys[fkHash.String()] = key
+	fkc.put(fkHash.String(), key)
 	return nil
 }
 
-// foreignKeyNames answers the duplicate name check that AddKeys makes with GetByNameCaseInsensitive, for a collection
-// that is built up key by key, without walking the collection for every key.
-type foreignKeyNames struct {
-	// names holds the folded name of every key.
-	names map[string]struct{}
-	// qualified holds the folded name, table name and schema name of every key.
-	qualified map[[3]string]struct{}
-}
-
-func newForeignKeyNames(size int) *foreignKeyNames {
-	return &foreignKeyNames{
-		names:     make(map[string]struct{}, size),
-		qualified: make(map[[3]string]struct{}, size),
+// put stores |key| under |hashKey| and indexes it by name.
+func (fkc *ForeignKeyCollection) put(hashKey string, key ForeignKey) {
+	fkc.foreignKeys[hashKey] = key
+	name := foldString(key.Name)
+	hashes, ok := fkc.hashesByName[name]
+	if !ok {
+		hashes = make(map[string]struct{})
+		fkc.hashesByName[name] = hashes
 	}
+	hashes[hashKey] = struct{}{}
 }
 
-// contains returns what GetByNameCaseInsensitive(key.Name, key.TableName) reports for a collection holding the keys
-// that were passed to add: a key on a table with a schema name collides with a key of the same name on the same table,
-// a key on a table without one collides with any key of the same name.
-func (n *foreignKeyNames) contains(key ForeignKey) bool {
-	if key.Name == "" {
-		return false
+// remove deletes the foreign key stored under |hashKey|, if there is one.
+func (fkc *ForeignKeyCollection) remove(hashKey string) {
+	key, ok := fkc.foreignKeys[hashKey]
+	if !ok {
+		return
 	}
-	if key.TableName.Schema != "" {
-		_, ok := n.qualified[n.qualify(key)]
-		return ok
+	delete(fkc.foreignKeys, hashKey)
+	name := foldString(key.Name)
+	delete(fkc.hashesByName[name], hashKey)
+	if len(fkc.hashesByName[name]) == 0 {
+		delete(fkc.hashesByName, name)
 	}
-	_, ok := n.names[foldString(key.Name)]
-	return ok
-}
-
-func (n *foreignKeyNames) add(key ForeignKey) {
-	n.names[foldString(key.Name)] = struct{}{}
-	n.qualified[n.qualify(key)] = struct{}{}
-}
-
-func (n *foreignKeyNames) qualify(key ForeignKey) [3]string {
-	return [3]string{foldString(key.Name), foldString(key.TableName.Name), foldString(key.TableName.Schema)}
 }
 
 // AllKeys returns a slice, sorted by name ascending, containing all of the foreign keys in this collection.
@@ -428,19 +421,23 @@ func (fkc *ForeignKeyCollection) GetByNameCaseInsensitive(foreignKeyName string,
 	if foreignKeyName == "" {
 		return ForeignKey{}, false
 	}
-	for _, fk := range fkc.foreignKeys {
-		if tableName.Schema != "" {
-			// schema name is empty for Dolt but not in Doltgres. (schema name must be populated for Doltgres)
-			if strings.EqualFold(fk.Name, foreignKeyName) && strings.EqualFold(fk.TableName.Name, tableName.Name) && strings.EqualFold(fk.TableName.Schema, tableName.Schema) {
-				return fk, true
-			}
-		} else {
-			if strings.EqualFold(fk.Name, foreignKeyName) {
-				return fk, true
-			}
+	hashKey, ok := fkc.hashKeyByName(foreignKeyName, tableName)
+	if !ok {
+		return ForeignKey{}, false
+	}
+	return fkc.foreignKeys[hashKey], true
+}
+
+// hashKeyByName returns the key in |foreignKeys| of a foreign key with a matching case-insensitive name, and whether a
+// match exists. If |tableName| has a schema, the foreign key must also be declared on a matching table.
+func (fkc *ForeignKeyCollection) hashKeyByName(foreignKeyName string, tableName TableName) (string, bool) {
+	for hashKey := range fkc.hashesByName[foldString(foreignKeyName)] {
+		// schema name is empty for Dolt but not in Doltgres. (schema name must be populated for Doltgres)
+		if tableName.Schema == "" || fkc.foreignKeys[hashKey].TableName.EqualFold(tableName) {
+			return hashKey, true
 		}
 	}
-	return ForeignKey{}, false
+	return "", false
 }
 
 type FkIndexUpdate struct {
@@ -652,7 +649,7 @@ type ForeignKeysByTable struct {
 func (fkc *ForeignKeyCollection) DeclaredKeysByTable() ForeignKeysByTable {
 	declared := make(map[TableName][]ForeignKey)
 	for _, foreignKey := range fkc.foreignKeys {
-		name := foldTableName(foreignKey.TableName)
+		name := foreignKey.TableName.FoldCase()
 		declared[name] = append(declared[name], foreignKey)
 	}
 	for _, fks := range declared {
@@ -667,12 +664,7 @@ func (fkc *ForeignKeyCollection) DeclaredKeysByTable() ForeignKeysByTable {
 // result of ForeignKeyCollection.KeysForTable, including its case-insensitive match on the table name. The returned
 // slice belongs to the grouping and must not be appended to.
 func (t ForeignKeysByTable) KeysForTable(tableName TableName) []ForeignKey {
-	return t.declared[foldTableName(tableName)]
-}
-
-// foldTableName returns a map key that is equal for exactly those table names that TableName.EqualFold treats as equal.
-func foldTableName(tn TableName) TableName {
-	return TableName{Name: foldString(tn.Name), Schema: foldString(tn.Schema)}
+	return t.declared[tableName.FoldCase()]
 }
 
 // foldString maps every rune of |s| to the smallest rune that it folds to under simple Unicode case folding, which is
@@ -701,32 +693,18 @@ func (fkc *ForeignKeyCollection) RemoveKeys(fks ...ForeignKey) {
 		}
 	}
 	for _, k := range drops.AsSlice() {
-		delete(fkc.foreignKeys, k)
+		fkc.remove(k)
 	}
 }
 
 // RemoveKeyByName removes a foreign key from the collection. It does not remove the associated indexes from their
 // respective tables. Returns true if the key was successfully removed.
 func (fkc *ForeignKeyCollection) RemoveKeyByName(foreignKeyName string, tableName TableName) bool {
-	var key string
-	for k, fk := range fkc.foreignKeys {
-		if tableName.Schema != "" {
-			// schema name is empty for Dolt but not in Doltgres. (schema name must be populated for Doltgres)
-			if strings.EqualFold(fk.Name, foreignKeyName) && strings.EqualFold(fk.TableName.Name, tableName.Name) && strings.EqualFold(fk.TableName.Schema, tableName.Schema) {
-				key = k
-				break
-			}
-		} else {
-			if strings.EqualFold(fk.Name, foreignKeyName) {
-				key = k
-				break
-			}
-		}
-	}
-	if key == "" {
+	hashKey, ok := fkc.hashKeyByName(foreignKeyName, tableName)
+	if !ok {
 		return false
 	}
-	delete(fkc.foreignKeys, key)
+	fkc.remove(hashKey)
 	return true
 }
 
@@ -745,7 +723,7 @@ func (fkc *ForeignKeyCollection) RemoveTables(ctx context.Context, tables ...Tab
 			if err != nil {
 				return err
 			}
-			delete(fkc.foreignKeys, fkHash.String())
+			fkc.remove(fkHash.String())
 		}
 	}
 	return nil
@@ -768,7 +746,7 @@ func (fkc *ForeignKeyCollection) RemoveAndUnresolveTables(ctx context.Context, r
 			if err != nil {
 				return err
 			}
-			delete(fkc.foreignKeys, fkHash.String())
+			fkc.remove(fkHash.String())
 
 			fk.UnresolvedFKDetails.TableColumns = make([]string, len(fk.TableColumns))
 			fk.UnresolvedFKDetails.ReferencedTableColumns = make([]string, len(fk.ReferencedTableColumns))
@@ -824,14 +802,14 @@ func (fkc *ForeignKeyCollection) RemoveAndUnresolveTables(ctx context.Context, r
 			if err != nil {
 				return err
 			}
-			fkc.foreignKeys[fkHash.String()] = fk
+			fkc.put(fkHash.String(), fk)
 		}
 		if dropChild {
 			fkHash, err := fk.HashOf()
 			if err != nil {
 				return err
 			}
-			delete(fkc.foreignKeys, fkHash.String())
+			fkc.remove(fkHash.String())
 		}
 	}
 	return nil
@@ -902,9 +880,9 @@ func (fkc *ForeignKeyCollection) ColumnHasFkRelationship(tag uint64) (ForeignKey
 // Copy returns an exact copy of the calling collection. As collections are meant to be modified in-place, this ensures
 // that the original collection is not affected by any operations applied to the copied collection.
 func (fkc *ForeignKeyCollection) Copy() *ForeignKeyCollection {
-	copiedForeignKeys := make(map[string]ForeignKey)
+	copied := newForeignKeyCollection(len(fkc.foreignKeys))
 	for hashOf, key := range fkc.foreignKeys {
-		copiedForeignKeys[hashOf] = key
+		copied.put(hashOf, key)
 	}
-	return &ForeignKeyCollection{copiedForeignKeys}
+	return copied
 }

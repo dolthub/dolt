@@ -15,6 +15,7 @@
 package doltdb
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -124,73 +125,68 @@ func TestDeclaredKeysByTable(t *testing.T) {
 	}
 }
 
-// TestForeignKeyNames verifies that foreignKeyNames reports a duplicate name for exactly the keys for which
-// GetByNameCaseInsensitive finds a key in the collection.
-func TestForeignKeyNames(t *testing.T) {
-	keys := []struct {
-		name  string
-		table TableName
-	}{
-		{"fk", TableName{Name: "child"}},
-		{"FK", TableName{Name: "other"}},
-		{"fk", TableName{Name: "child", Schema: "public"}},
-		{"Fk", TableName{Name: "CHILD", Schema: "PUBLIC"}},
-		{"fk", TableName{Name: "child", Schema: "other"}},
-		{"fk", TableName{Name: "other", Schema: "public"}},
-		{"fk2", TableName{Name: "child", Schema: "public"}},
-		{"FK2", TableName{Name: "child"}},
-		{"fk3", TableName{Name: "child"}},
-		{"Fk3", TableName{Name: "child", Schema: "public"}},
-		{"", TableName{Name: "child"}},
-		{"", TableName{Name: "child", Schema: "public"}},
-		// The two lower case forms of sigma fold together.
-		{"fk_σ", TableName{Name: "child"}},
-		{"fk_ς", TableName{Name: "child"}},
-	}
-	fkc, err := NewForeignKeyCollection()
-	assert.NoError(t, err)
-	names := newForeignKeyNames(len(keys))
-	for i, k := range keys {
+// TestForeignKeyCollectionNameIndex verifies that name lookups stay correct as keys are added, removed, copied and
+// loaded from storage.
+func TestForeignKeyCollectionNameIndex(t *testing.T) {
+	newKey := func(name string, table TableName, tag uint64) ForeignKey {
 		fk := newForeignKey()
-		fk.Name = k.name
-		fk.TableName = k.table
-		fk.TableColumns = []uint64{uint64(i)}
-
-		_, expected := fkc.GetByNameCaseInsensitive(fk.Name, fk.TableName)
-		assert.Equal(t, expected, names.contains(fk), "key %d: %q on table %q in schema %q", i, k.name, k.table.Name, k.table.Schema)
-
-		// Every key goes into the collection, also the ones AddKeys would reject, so that later keys are compared
-		// with all earlier ones.
-		assert.NoError(t, fkc.addKeyWithUniqueName(fk))
-		names.add(fk)
+		fk.Name = name
+		fk.TableName = table
+		fk.TableColumns = []uint64{tag}
+		return fk
 	}
-}
+	child := TableName{Name: "child", Schema: "public"}
+	other := TableName{Name: "other", Schema: "public"}
+	onChild := newKey("fk_a", child, 1)
+	onOther := newKey("FK_A", other, 2)
+	sigma := newKey("fk_σ", child, 3)
 
-// TestDeserializeForeignKeysRejectsDuplicateNames verifies that loading a stored collection still fails when two of
-// its keys have the same name.
-func TestDeserializeForeignKeysRejectsDuplicateNames(t *testing.T) {
-	first := newForeignKey()
-	second := newForeignKey()
-	second.Name = "FK1"
-	second.TableColumns = []uint64{3}
-
-	fkc, err := NewForeignKeyCollection()
+	fkc, err := NewForeignKeyCollection(onChild, onOther, sigma)
 	assert.NoError(t, err)
-	for _, fk := range []ForeignKey{first, second} {
-		fkHash, err := fk.HashOf()
-		assert.NoError(t, err)
-		fkc.foreignKeys[fkHash.String()] = fk
-	}
 
-	_, err = deserializeFlatbufferForeignKeys(serializeFlatbufferForeignKeys(fkc))
+	lookup := func(fkc *ForeignKeyCollection, name string, table TableName) (ForeignKey, bool) {
+		return fkc.GetByNameCaseInsensitive(name, table)
+	}
+	fk, ok := lookup(fkc, "Fk_A", TableName{Name: "CHILD", Schema: "PUBLIC"})
+	assert.True(t, ok)
+	assert.Equal(t, onChild, fk)
+	fk, ok = lookup(fkc, "fk_a", other)
+	assert.True(t, ok)
+	assert.Equal(t, onOther, fk)
+	// The two lower case forms of sigma fold together.
+	fk, ok = lookup(fkc, "FK_ς", child)
+	assert.True(t, ok)
+	assert.Equal(t, sigma, fk)
+	// Without a schema, a key of the same name on any table matches.
+	_, ok = lookup(fkc, "fk_a", TableName{Name: "unrelated"})
+	assert.True(t, ok)
+	_, ok = lookup(fkc, "fk_a", TableName{Name: "unrelated", Schema: "public"})
+	assert.False(t, ok)
+
+	err = fkc.AddKeys(newKey("FK_Σ", child, 4))
 	assert.True(t, sql.ErrForeignKeyDuplicateName.Is(err), "unexpected error: %v", err)
 
-	// Without the second key the collection loads and holds the first one.
-	fkc, err = NewForeignKeyCollection(first)
-	assert.NoError(t, err)
+	copied := fkc.Copy()
+	assert.True(t, copied.RemoveKeyByName("fk_A", child))
+	_, ok = lookup(copied, "fk_a", child)
+	assert.False(t, ok)
+	_, ok = lookup(copied, "fk_a", other)
+	assert.True(t, ok)
+	_, ok = lookup(fkc, "fk_a", child)
+	assert.True(t, ok, "removing a key from a copy must not remove it from the original")
+
+	assert.NoError(t, copied.RemoveTables(context.Background(), other))
+	_, ok = lookup(copied, "fk_a", TableName{Name: "unrelated"})
+	assert.False(t, ok)
+	assert.NoError(t, copied.AddKeys(newKey("fk_a", other, 5)))
+
 	loaded, err := deserializeFlatbufferForeignKeys(serializeFlatbufferForeignKeys(fkc))
 	assert.NoError(t, err)
-	assert.Equal(t, []ForeignKey{first}, loaded.AllKeys())
+	for _, expected := range []ForeignKey{onChild, onOther, sigma} {
+		fk, ok = lookup(loaded, expected.Name, expected.TableName)
+		assert.True(t, ok)
+		assert.Equal(t, expected, fk)
+	}
 }
 
 // BenchmarkDeserializeForeignKeys loads a collection of 400 foreign keys, which every new root value does on its
