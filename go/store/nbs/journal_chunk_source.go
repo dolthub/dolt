@@ -122,7 +122,6 @@ func (s journalChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.
 	var remaining bool
 	var fileReqs []journalRecord
 	var buffered []ToChunker
-	var codec journalCodec
 	f, gcb, err := func() (*os.File, gcBehavior, error) {
 		s.journal.lock.RLock()
 		defer s.journal.lock.RUnlock()
@@ -160,7 +159,6 @@ func (s journalChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.
 			}
 			buffered = append(buffered, cc)
 		}
-		codec = s.journal.codec
 		s.journal.readers.Add(len(fileReqs))
 		return s.journal.journal.f, gcBehavior_Continue, nil
 	}()
@@ -180,6 +178,7 @@ func (s journalChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.
 		})
 	}
 
+	codec := s.journal.codec
 	// sort chunks by journal locality
 	sort.Slice(fileReqs, func(i, j int) bool {
 		return fileReqs[i].r.Offset < fileReqs[j].r.Offset

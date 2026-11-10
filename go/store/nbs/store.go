@@ -158,8 +158,6 @@ type NomsBlockStore struct {
 	loadThunk func(ctx context.Context, loadIt bool)
 	loadErr   error
 	codec     storeCodec
-	// oldGen is the old generation of a new generation store.
-	oldGen *NomsBlockStore
 }
 
 func (nbs *NomsBlockStore) PersistGhostHashes(ctx context.Context, refs hash.HashSet) error {
@@ -843,7 +841,11 @@ func NewLocalJournalingStoreWithOptions(ctx context.Context, nbfVers, dir string
 	nbs.staticAccessMode = staticAccessMode
 	nbs.staticVersion = constants.FormatDoltString
 	nbs.applyOptions(storeOpts)
-	if nbfVers, err = nbs.codec.openJournal(nbs, dir, nbfVers, lock); err != nil {
+	if nbfVers, err = nbs.codec.journalFormat(nbs, dir, nbfVers); err != nil {
+		if lock != nil {
+			lock.Unlock()
+			lock.Close()
+		}
 		return nil, err
 	}
 	nbs.loadThunk = func(ctx context.Context, loadIt bool) {
@@ -944,6 +946,7 @@ func newNomsBlockStore(ctx context.Context, nbfVerStr string, m manifest, p tabl
 	nbs.tables = newTableSet(p, q)
 	nbs.upstream = manifestContents{nbfVers: nbfVerStr}
 	nbs.applyOptions(storeOpts)
+	setPersisterCodec(p, nbs.codec)
 
 	t1 := time.Now()
 	defer nbs.stats.OpenLatency.SampleTimeSince(t1)
@@ -2565,7 +2568,7 @@ func markAndSweepChunks(ctx context.Context, nbs *NomsBlockStore, src Compressed
 		return nil, fmt.Errorf("NBS does not support copying garbage collection")
 	}
 
-	gcc, err := newGarbageCollectionCopier(gcConfig.ArchiveLevel, tfp, destNBS.codec)
+	gcc, err := newGarbageCollectionCopier(ctx, gcConfig.ArchiveLevel, tfp, destNBS)
 	if err != nil {
 		return nil, err
 	}
@@ -2573,7 +2576,7 @@ func markAndSweepChunks(ctx context.Context, nbs *NomsBlockStore, src Compressed
 	// If incremental garbage collection is enabled (IncrementalFileSize > 0),
 	// we will write leaf chunks to a different chunk file which is periodically finalized and replaced
 	// with a new writer.
-	incrementalGcc, err := newRotatingGCCopier(gcConfig.ArchiveLevel, tfp, destNBS, gcConfig.IncrementalFileSize, incrementalUpdateManifest)
+	incrementalGcc, err := newRotatingGCCopier(ctx, gcConfig.ArchiveLevel, tfp, destNBS, gcConfig.IncrementalFileSize, incrementalUpdateManifest)
 	if err != nil {
 		cErr := gcc.cancel(ctx)
 		return nil, errors.Join(err, cErr)

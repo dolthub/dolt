@@ -20,8 +20,9 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-// A recordCodec reads the records of a table file that a codec wrote. A table without one stores them as they are.
-type recordCodec interface {
+// A tableCodec reads the records of a table file that a codec wrote. A table reader shares it with its clones, and
+// calls it from concurrent reads.
+type tableCodec interface {
 	// chunkFromRecord returns chunk |h| from its |record| at |offset|.
 	chunkFromRecord(ctx context.Context, tr tableReader, h hash.Hash, offset uint64, record []byte) (CompressedChunk, error)
 	// chunkerFromRead returns the |i|th chunk of |rb|, read into |buff|, as it is stored, for writers that copy it.

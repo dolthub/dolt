@@ -859,7 +859,7 @@ func planArchiveConjoin(ctx context.Context, sources []sourceWithSize, q MemoryQ
 	}
 	defer writer.Close()
 	aw := newArchiveWriterWithSink(writer)
-	if aw.spans, err = conjoinSpanSealer(orderedSrcs.sws); err != nil {
+	if aw.spans, err = conjoinSpanSealer(ctx, orderedSrcs.sws); err != nil {
 		return compactionPlan{}, err
 	}
 

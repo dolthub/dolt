@@ -45,8 +45,8 @@ func newTableWriterFromArchiveLevel(archiveLevel chunks.GCArchiveLevel) (Generic
 	}
 }
 
-func newGarbageCollectionCopier(archiveLevel chunks.GCArchiveLevel, tfp tableFilePersister, codec storeCodec) (*gcCopier, error) {
-	writer, err := codec.newGCWriter(archiveLevel)
+func newGarbageCollectionCopier(ctx context.Context, archiveLevel chunks.GCArchiveLevel, tfp tableFilePersister, dest *NomsBlockStore) (*gcCopier, error) {
+	writer, err := dest.codec.newGCWriter(ctx, archiveLevel)
 	if err != nil {
 		return nil, err
 	}
@@ -211,8 +211,8 @@ type rotatingGCCopier struct {
 	incrementalUpdateManifest bool
 }
 
-func newRotatingGCCopier(archiveLevel chunks.GCArchiveLevel, tfp tableFilePersister, dest *NomsBlockStore, fileSizeLimit uint64, incrementalUpdateManifest bool) (*rotatingGCCopier, error) {
-	writer, err := dest.codec.newGCWriter(archiveLevel)
+func newRotatingGCCopier(ctx context.Context, archiveLevel chunks.GCArchiveLevel, tfp tableFilePersister, dest *NomsBlockStore, fileSizeLimit uint64, incrementalUpdateManifest bool) (*rotatingGCCopier, error) {
+	writer, err := dest.codec.newGCWriter(ctx, archiveLevel)
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +295,7 @@ func (gcc *rotatingGCCopier) rotate(ctx context.Context) error {
 		return gcc.finalizeChildWriter(ctx, previousCopier)
 	})
 
-	writer, err := gcc.dest.codec.newGCWriter(gcc.archiveLevel)
+	writer, err := gcc.dest.codec.newGCWriter(ctx, gcc.archiveLevel)
 	if err != nil {
 		return err
 	}

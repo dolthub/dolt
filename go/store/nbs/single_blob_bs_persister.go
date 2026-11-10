@@ -39,7 +39,7 @@ var _ tablePersister = &singleBlobBSPersister{}
 var _ tableFilePersister = &singleBlobBSPersister{}
 
 func (bsp *singleBlobBSPersister) Persist(ctx context.Context, behavior dherrors.FatalBehavior, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
-	address, data, _, chunkCount, gcb, err := bsp.writeMemTable(mt, haver, keeper, stats)
+	address, data, _, chunkCount, gcb, err := bsp.writeMemTable(ctx, mt, haver, keeper, stats)
 	if err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	} else if gcb != gcBehavior_Continue {

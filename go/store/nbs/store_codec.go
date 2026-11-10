@@ -17,37 +17,36 @@ package nbs
 import (
 	"context"
 
-	filelocks "github.com/dolthub/file-locks"
-
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // A storeCodec decides how a NomsBlockStore writes and opens its files, and checks the manifests and files it meets.
 // Dolt's plainCodec stores records as they are and checks nothing. Builds that transform records, such as by encrypting
-// them, replace newStoreCodec or install a codec with a StoreOption.
+// them, replace newStoreCodec or install a codec with a StoreOption. The per-file codecs that such a build installs
+// (tableCodec, archiveCodec, spanSealer and journalCodec) are nil for files stored as they are.
 type storeCodec interface {
-	// openJournal returns the format of a journaling store in |dir| before it reads its journal, and releases the
-	// store's manifest |lock| if it fails.
-	openJournal(nbs *NomsBlockStore, dir, format string, lock *filelocks.Lock) (string, error)
+	// journalFormat settles the format of a journaling store in |dir| before its journal is read, and returns it.
+	journalFormat(nbs *NomsBlockStore, dir, format string) (string, error)
 	// checkManifest checks each manifest the store reads. |exists| is false while the store has none.
 	checkManifest(nbs *NomsBlockStore, exists bool, contents manifestContents) error
 	// checkWrite checks that the store may take new chunks.
 	checkWrite(nbs *NomsBlockStore) error
 	// openAdded opens files being added to the store, as nbs.openChunkSourcesForManifestUpdate does.
 	openAdded(ctx context.Context, nbs *NomsBlockStore, files map[hash.Hash]uint32, existing chunkSourceSet) (openChunkSourcesResult, error)
-	// checkAdded checks, under the store's lock, files being added to its manifest. |done| is called once they are.
+	// checkAdded checks, under the store's lock, files being added to its manifest. The store defers |done| over the
+	// rest of the update, so it runs however the update ends and may replace the error the update returns.
 	checkAdded(nbs *NomsBlockStore, added chunkSourceSet) (done func(err *error, gcGenDifferent *bool), err error)
 	// checkGC checks that garbage collection may copy |src|'s chunks into |dest|.
 	checkGC(src, dest *NomsBlockStore) error
 	// newGCWriter returns a writer of the files that garbage collection copies chunks into.
-	newGCWriter(level chunks.GCArchiveLevel) (GenericTableWriter, error)
+	newGCWriter(ctx context.Context, level chunks.GCArchiveLevel) (GenericTableWriter, error)
 	// readsRecords reports whether the store can read its records, which checking the refs of added files needs.
 	readsRecords() bool
 	// plainTables reports whether the store's table files end with a plain index and footer.
 	plainTables() bool
 	// writeMemTable writes |mt| as a table file, as memTable.write does.
-	writeMemTable(mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (name hash.Hash, data []byte, splitOffset uint64, count uint32, gcb gcBehavior, err error)
+	writeMemTable(ctx context.Context, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (name hash.Hash, data []byte, splitOffset uint64, count uint32, gcb gcBehavior, err error)
 	// openWritten sets up the reading of the table file a persister just wrote.
 	openWritten(cs chunkSource) (chunkSource, error)
 	// newJournalCodec returns the codec of the store's journal, or nil to write and read it as it is.
@@ -59,9 +58,10 @@ var newStoreCodec = func() storeCodec {
 	return plainCodec{}
 }
 
-// tableDataEnd returns where the records of the table file or archive |cs| end, given where its index starts.
-var tableDataEnd = func(cs chunkSource, indexStart uint64) uint64 {
-	return indexStart
+// tableDataEnd returns the split offset of the table file or archive |cs|, where its records end, given |splitOffset|,
+// the split offset of a plain file. A |splitOffset| of 0 for a table file leaves its reader to find it from the footer.
+var tableDataEnd = func(cs chunkSource, splitOffset uint64) uint64 {
+	return splitOffset
 }
 
 // refusesFile reports whether |err| is a codec's refusal to open a file, which a persister returns rather than trying
@@ -74,7 +74,7 @@ type plainCodec struct{}
 
 var _ storeCodec = plainCodec{}
 
-func (plainCodec) openJournal(_ *NomsBlockStore, _, format string, _ *filelocks.Lock) (string, error) {
+func (plainCodec) journalFormat(_ *NomsBlockStore, _, format string) (string, error) {
 	return format, nil
 }
 
@@ -98,7 +98,7 @@ func (plainCodec) checkGC(_, _ *NomsBlockStore) error {
 	return nil
 }
 
-func (plainCodec) newGCWriter(level chunks.GCArchiveLevel) (GenericTableWriter, error) {
+func (plainCodec) newGCWriter(_ context.Context, level chunks.GCArchiveLevel) (GenericTableWriter, error) {
 	return newTableWriterFromArchiveLevel(level)
 }
 
@@ -110,7 +110,7 @@ func (plainCodec) plainTables() bool {
 	return true
 }
 
-func (plainCodec) writeMemTable(mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (hash.Hash, []byte, uint64, uint32, gcBehavior, error) {
+func (plainCodec) writeMemTable(_ context.Context, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (hash.Hash, []byte, uint64, uint32, gcBehavior, error) {
 	return mt.write(haver, keeper, stats)
 }
 
@@ -122,8 +122,8 @@ func (plainCodec) newJournalCodec() journalCodec {
 	return nil
 }
 
-// persisterCodec is the codec a persister writes and opens table files with, which its store sets. Until then, the
-// persister writes and opens them as they are.
+// persisterCodec is the codec a persister writes and opens table files with, which its store sets when it is created.
+// A persister outside a store writes and opens them as they are.
 type persisterCodec struct {
 	codec storeCodec
 }
@@ -132,16 +132,23 @@ func (p *persisterCodec) setCodec(c storeCodec) {
 	p.codec = c
 }
 
+// setPersisterCodec gives persister |p| its store's codec |c|, if |p| takes one.
+func setPersisterCodec(p tablePersister, c storeCodec) {
+	if pc, ok := p.(interface{ setCodec(storeCodec) }); ok {
+		pc.setCodec(c)
+	}
+}
+
 func (p persisterCodec) openOpts(opts openOpts) openOpts {
 	opts.codec = p.codec
 	return opts
 }
 
-func (p persisterCodec) writeMemTable(mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (hash.Hash, []byte, uint64, uint32, gcBehavior, error) {
+func (p persisterCodec) writeMemTable(ctx context.Context, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (hash.Hash, []byte, uint64, uint32, gcBehavior, error) {
 	if p.codec == nil {
 		return mt.write(haver, keeper, stats)
 	}
-	return p.codec.writeMemTable(mt, haver, keeper, stats)
+	return p.codec.writeMemTable(ctx, mt, haver, keeper, stats)
 }
 
 func (p persisterCodec) openWritten(cs chunkSource, err error) (chunkSource, error) {
@@ -158,9 +165,9 @@ func (p persisterCodec) newJournalCodec() journalCodec {
 	return p.codec.newJournalCodec()
 }
 
-// openCodec is the codec of the store a table file or archive is opened for, nil outside a store, and whether the
-// file is being added to that store.
-type openCodec struct {
+// codecOpts are the open options that codecs read: the codec of the store a table file or archive is opened for,
+// which its persister sets, nil outside a store, and whether the file is being added to that store.
+type codecOpts struct {
 	codec  storeCodec
 	adding bool
 }

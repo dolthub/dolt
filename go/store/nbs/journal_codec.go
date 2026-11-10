@@ -22,14 +22,15 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-// A journalCodec writes and reads the records of a journal in place of its plain chunk and root hash records. A
-// journal without one writes and reads them as they are. A writer calls it under its lock unless noted.
+// A journalCodec writes and reads the records of a journal in place of its plain chunk and root hash records. A writer
+// calls it with its lock held, except as noted.
 type journalCodec interface {
 	// replay is called with each record bootstrapping reads, before the writer indexes it. It returns |skip| for a
 	// record the writer does not index.
 	replay(ctx context.Context, wr *journalWriter, canWrite bool, off int64, r journalRec) (skip bool, err error)
-	// checkBatch checks a batch of lookups read from the journal's index.
-	checkBatch(ctx context.Context, wr *journalWriter, m lookupMeta, batch []lookup) error
+	// checkBatch checks a batch of lookups read from the journal's index. It runs on its own goroutine while the writer
+	// indexes the batches.
+	checkBatch(ctx context.Context, m lookupMeta, batch []lookup) error
 	// reset forgets what bootstrapping replayed, when the index is rebuilt.
 	reset()
 	// openChunk returns chunk |h|, or an empty chunk if the journal lacks it. It takes the writer's read lock itself.
@@ -72,7 +73,7 @@ func (wr *journalWriter) checkIndexBatch(ctx context.Context, m lookupMeta, batc
 	if wr.codec == nil {
 		return nil
 	}
-	return wr.codec.checkBatch(ctx, wr, m, batch)
+	return wr.codec.checkBatch(ctx, m, batch)
 }
 
 func (wr *journalWriter) chunkerAtRange(r Range, h hash.Hash) (ToChunker, error) {

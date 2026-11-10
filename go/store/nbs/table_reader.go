@@ -184,7 +184,7 @@ type tableReader struct {
 	prefixes        []uint64
 	prefixesCnt     *int32
 	prefixesCleanup func()
-	codec           recordCodec
+	codec           tableCodec
 }
 
 // newTableReader parses a valid nbs table byte stream and returns a reader. buff must end with an NBS index

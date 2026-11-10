@@ -21,8 +21,8 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-// An archiveCodec reads the byte spans of an archive that a spanSealer wrote. An archive without one stores them as
-// they are.
+// An archiveCodec reads the byte spans of an archive that a spanSealer wrote. An archive reader shares it with its
+// clones, and calls it from concurrent reads.
 type archiveCodec interface {
 	// openDict returns the dictionary stored in span |id|.
 	openDict(ctx context.Context, ar *archiveReader, id uint32, stored []byte) (*DecompBundle, error)
@@ -38,6 +38,7 @@ type archiveCodec interface {
 	found(ctx context.Context, ar *archiveReader, rc resolvedChunk, dict *DecompBundle, stored []byte, found func(context.Context, ToChunker)) error
 	// locateSpans is called with the chunks whose ranges a remote client is sent.
 	locateSpans(ctx context.Context, ar *archiveReader, resolved []resolvedChunk) error
+	// iterate and tolerantIterate do the work of archiveReader's methods of the same names.
 	iterate(ctx context.Context, ar *archiveReader, cb func(chunks.Chunk) error, stats *Stats) error
 	tolerantIterate(ctx context.Context, ar *archiveReader, cb func(chunks.Chunk), errCb func(error), stats *Stats)
 }
@@ -76,7 +77,7 @@ var addCodedChunk = func(asw *ArchiveStreamWriter, c ToChunker) (id uint32, ok b
 }
 
 // conjoinSpanSealer returns the sealer of the archive conjoining |sources|, or nil.
-var conjoinSpanSealer = func(sources []sourceWithSize) (spanSealer, error) {
+var conjoinSpanSealer = func(ctx context.Context, sources []sourceWithSize) (spanSealer, error) {
 	return nil, nil
 }
 

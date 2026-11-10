@@ -148,7 +148,7 @@ func (s3p awsTablePersister) key(k string) string {
 }
 
 func (s3p awsTablePersister) Persist(ctx context.Context, behavior dherrors.FatalBehavior, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
-	name, data, _, chunkCount, gcb, err := s3p.writeMemTable(mt, haver, keeper, stats)
+	name, data, _, chunkCount, gcb, err := s3p.writeMemTable(ctx, mt, haver, keeper, stats)
 	if err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	}

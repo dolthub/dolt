@@ -15,6 +15,7 @@
 package nbs
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -26,7 +27,6 @@ import (
 	"sync"
 	"testing"
 
-	filelocks "github.com/dolthub/file-locks"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
@@ -70,8 +70,7 @@ func hookVar[T any](t *testing.T, v *T, f T) {
 	t.Cleanup(func() { *v = orig })
 }
 
-// recordingCodec is the plain codec, recording the hooks a store reaches. Like a codec that transforms records, it
-// gives its persister to the store when it checks the store's first manifest.
+// recordingCodec is the plain codec, recording the hooks a store reaches.
 type recordingCodec struct {
 	plainCodec
 	reached
@@ -81,41 +80,28 @@ func withCodec(c storeCodec) StoreOption {
 	return func(o *storeOptions) { o.codec = c }
 }
 
-func (c *recordingCodec) checkManifest(nbs *NomsBlockStore, _ bool, _ manifestContents) error {
-	if p, ok := nbs.persister.(interface{ setCodec(storeCodec) }); ok {
-		p.setCodec(c)
-	}
+func (c *recordingCodec) checkManifest(*NomsBlockStore, bool, manifestContents) error {
 	return c.hit("checkManifest")
 }
-
-func (c *recordingCodec) openJournal(nbs *NomsBlockStore, dir, format string, lock *filelocks.Lock) (string, error) {
-	c.hit("openJournal")
-	return c.plainCodec.openJournal(nbs, dir, format, lock)
+func (c *recordingCodec) journalFormat(_ *NomsBlockStore, _, format string) (string, error) {
+	return format, c.hit("journalFormat")
 }
+func (c *recordingCodec) readsRecords() bool { return c.hit("readsRecords") == nil }
+func (c *recordingCodec) plainTables() bool  { return c.hit("plainTables") == nil }
 
 func (c *recordingCodec) openAdded(ctx context.Context, nbs *NomsBlockStore, files map[hash.Hash]uint32, existing chunkSourceSet) (openChunkSourcesResult, error) {
 	c.hit("openAdded")
 	return c.plainCodec.openAdded(ctx, nbs, files, existing)
 }
 
-func (c *recordingCodec) newGCWriter(level chunks.GCArchiveLevel) (GenericTableWriter, error) {
+func (c *recordingCodec) newGCWriter(ctx context.Context, level chunks.GCArchiveLevel) (GenericTableWriter, error) {
 	c.hit("newGCWriter")
-	return c.plainCodec.newGCWriter(level)
+	return c.plainCodec.newGCWriter(ctx, level)
 }
 
-func (c *recordingCodec) writeMemTable(mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (hash.Hash, []byte, uint64, uint32, gcBehavior, error) {
+func (c *recordingCodec) writeMemTable(_ context.Context, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (hash.Hash, []byte, uint64, uint32, gcBehavior, error) {
 	c.hit("writeMemTable")
 	return mt.write(haver, keeper, stats)
-}
-
-func (c *recordingCodec) readsRecords() bool {
-	c.hit("readsRecords")
-	return true
-}
-
-func (c *recordingCodec) plainTables() bool {
-	c.hit("plainTables")
-	return true
 }
 
 func (c *recordingCodec) newJournalCodec() journalCodec {
@@ -168,19 +154,38 @@ func TestStoreCodecHooks(t *testing.T) {
 	c.require(t, "checkManifest", "checkWrite", "writeMemTable", "plainTables", "openAdded", "checkAdded",
 		"checkAdded.done", "readsRecords", "checkGC", "newGCWriter")
 
-	c = &recordingCodec{}
-	bst, err := NewBSStore(ctx, nbf, blobstore.NewInMemoryBlobstore(""), defaultMemTableSize, q, withCodec(c))
+	// A store gets its codec from newStoreCodec without an option, and gives it to its persister.
+	bc := &recordingCodec{}
+	hookVar(t, &newStoreCodec, func() storeCodec { return bc })
+	bst, err := NewBSStore(ctx, nbf, blobstore.NewInMemoryBlobstore(""), defaultMemTableSize, q)
 	require.NoError(t, err)
 	defer bst.Close()
 	putAndCommit(t, bst)
-	c.require(t, "writeMemTable", "openWritten")
+	bc.require(t, "writeMemTable", "openWritten")
 
 	c = &recordingCodec{}
-	jst, err := NewLocalJournalingStoreWithOptions(ctx, nbf, t.TempDir(), q, false, nil, JournalingStoreOptions{}, withCodec(c))
+	dir := t.TempDir()
+	jst, err := NewLocalJournalingStoreWithOptions(ctx, nbf, dir, q, false, nil, JournalingStoreOptions{}, withCodec(c))
 	require.NoError(t, err)
-	defer jst.Close()
 	putAndCommit(t, jst)
-	c.require(t, "openJournal", "newJournalCodec")
+	require.NoError(t, jst.Close())
+	c.require(t, "journalFormat", "newJournalCodec")
+
+	// A store whose codec refuses its format releases its lock.
+	opts := JournalingStoreOptions{SkipLockFileTimeout: true, FailOnLockTimeout: true}
+	_, err = NewLocalJournalingStoreWithOptions(ctx, nbf, dir, q, false, nil, opts, withCodec(refusingCodec{}))
+	require.ErrorIs(t, err, errHook)
+	jst, err = NewLocalJournalingStoreWithOptions(ctx, nbf, dir, q, false, nil, opts)
+	require.NoError(t, err)
+	require.NoError(t, jst.Close())
+}
+
+type refusingCodec struct {
+	plainCodec
+}
+
+func (refusingCodec) journalFormat(*NomsBlockStore, string, string) (string, error) {
+	return "", errHook
 }
 
 // hookJournal fails the journal operations that read and write chunks with errHook, and records the rest.
@@ -195,7 +200,7 @@ func (j *hookJournal) rootRecord(_ context.Context, _ *journalWriter, _ dherrors
 func (j *hookJournal) replay(context.Context, *journalWriter, bool, int64, journalRec) (bool, error) {
 	return false, j.hit("replay")
 }
-func (j *hookJournal) checkBatch(context.Context, *journalWriter, lookupMeta, []lookup) error {
+func (j *hookJournal) checkBatch(context.Context, lookupMeta, []lookup) error {
 	return j.hit("checkBatch")
 }
 func (j *hookJournal) flushBatch(*journalWriter, hash.Hash, int64) (bool, error) {
@@ -209,6 +214,7 @@ func (j *hookJournal) openChunkAtRange(*journalWriter, Range, hash.Hash) (Compre
 	return CompressedChunk{}, errHook
 }
 func (j *hookJournal) chunkerAtRange(*journalWriter, Range, hash.Hash) (ToChunker, error) {
+	j.hit("chunkerAtRange")
 	return nil, errHook
 }
 func (j *hookJournal) chunker(hash.Hash, []byte) (ToChunker, error) { return nil, errHook }
@@ -253,12 +259,21 @@ func TestJournalCodecHooks(t *testing.T) {
 	require.ErrorIs(t, err, errHook)
 	_, _, err = j.getRange(ctx, behavior, last)
 	require.ErrorIs(t, err, errHook)
-	require.ErrorIs(t, j.writeCompressedChunk(ctx, behavior, ChunkToCompressedChunk(chunks.NewChunk([]byte("novel")))), errHook)
-	eg, ectx := errgroup.WithContext(ctx)
-	recs := []getRecord{{a: &last, prefix: last.Prefix()}}
-	_, _, err = journalChunkSource{journal: j}.getManyCompressed(ectx, eg, recs, func(context.Context, ToChunker) {}, nil, &Stats{})
-	require.NoError(t, err)
-	require.ErrorIs(t, eg.Wait(), errHook)
+	novel := ChunkToCompressedChunk(chunks.NewChunk([]byte("novel")))
+	require.ErrorIs(t, j.writeCompressedChunk(ctx, behavior, novel), errHook)
+	getMany := func(h hash.Hash) error {
+		eg, ectx := errgroup.WithContext(ctx)
+		recs := []getRecord{{a: &h, prefix: h.Prefix()}}
+		_, _, err := journalChunkSource{journal: j}.getManyCompressed(ectx, eg, recs, func(context.Context, ToChunker) {}, nil, &Stats{})
+		return errors.Join(err, eg.Wait())
+	}
+	require.ErrorIs(t, getMany(last), errHook)
+	// A chunk still in the writer's buffer is read under the lock.
+	j.codec = nil
+	require.NoError(t, j.writeCompressedChunk(ctx, behavior, novel))
+	j.codec = hj
+	require.ErrorIs(t, getMany(novel.H), errHook)
+	hj.require(t, "chunkerAtRange")
 	require.NoError(t, j.Close())
 
 	// Recovering a corrupt index resets the codec.
@@ -271,6 +286,64 @@ func TestJournalCodecHooks(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, j.Close())
 	hj.require(t, "reset")
+}
+
+// recode gives journal record |rec| kind |kind|.
+func recode(rec []byte, kind journalRecKind) []byte {
+	rec[journalRecLenSz+journalRecTagSz] = byte(kind)
+	n := len(rec) - journalRecChecksumSz
+	writeUint32(rec[n:], crc(rec[:n]))
+	return rec
+}
+
+func TestJournalRecordKindHooks(t *testing.T) {
+	ctx := context.Background()
+	const codedChunk, codedRoot, pad = journalRecKind(0x80), journalRecKind(0x81), 8
+	var r reached
+	hookVar(t, &isChunkRecKind, func(k journalRecKind) bool { return k == chunkJournalRecKind || k == codedChunk })
+	hookVar(t, &isRootHashRecKind, func(k journalRecKind) bool { return k == rootHashJournalRecKind || k == codedRoot })
+	hookVar(t, &maxRootHashRecordSize, func() int { return rootHashRecordSize() + journalRecTagSz + pad })
+	hookVar(t, &codedPayloadSize, func(rec journalRec) uint64 {
+		r.hit("codedPayloadSize")
+		return uint64(len(rec.payload))
+	})
+
+	cc := ChunkToCompressedChunk(chunks.NewChunk([]byte("coded")))
+	sz, _ := chunkRecordSize(cc)
+	chunkRec := make([]byte, sz)
+	writeChunkRecord(chunkRec, cc)
+	recode(chunkRec, codedChunk)
+	// A coded root record is longer than a plain one.
+	root := hash.Of([]byte("root"))
+	rootRec := make([]byte, rootHashRecordSize())
+	writeRootHashRecord(rootRec, root)
+	rootRec = append(rootRec[:len(rootRec)-journalRecChecksumSz], byte(payloadJournalRecTag))
+	rootRec = append(rootRec, make([]byte, pad+journalRecChecksumSz)...)
+	writeUint32(rootRec, uint32(len(rootRec)))
+	recode(rootRec, codedRoot)
+	require.Equal(t, maxRootHashRecordSize(), len(rootRec))
+
+	path := newTestFilePath(t)
+	require.NoError(t, os.WriteFile(path, append(append([]byte{}, chunkRec...), rootRec...), 0644))
+	j, ok, err := openJournalWriter(ctx, path)
+	require.NoError(t, err)
+	require.True(t, ok)
+	defer j.Close()
+	last, err := j.bootstrapJournal(ctx, false, nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, root, last)
+	require.True(t, j.hasAddr(cc.H))
+	r.require(t, "codedPayloadSize")
+
+	f, err := os.Open(path)
+	require.NoError(t, err)
+	defer f.Close()
+	peeked, err := peekRootHashAt(f, int64(len(chunkRec)))
+	require.NoError(t, err)
+	require.Equal(t, root, peeked)
+	loss, err := possibleDataLossCheck(bufio.NewReader(bytes.NewReader(append(append([]byte{}, rootRec...), chunkRec...))))
+	require.NoError(t, err)
+	require.True(t, loss)
 }
 
 // hookArchive fails the archive operations that read chunks with errHook, and records the rest.
@@ -403,10 +476,17 @@ func TestArchiveCodecHooks(t *testing.T) {
 	require.NoError(t, spooled.close())
 	ar, err := newArchiveReader(ctx, tableReaderAtAdapter{bytes.NewReader(data)}, name, uint64(len(data)), q, openOpts{}, &Stats{})
 	require.NoError(t, err)
+	_, err = newArchiveMetadata(ctx, tableReaderAtAdapter{bytes.NewReader(data)}, name, uint64(len(data)), q, &Stats{})
+	require.NoError(t, err)
 	r.require(t, "codedArchiveVersion", "addCodedChunk", "openArchiveCodec")
 
 	_, err = ar.get(ctx, hashes[0], &Stats{})
 	require.ErrorIs(t, err, errHook)
+	cl, err := ar.clone()
+	require.NoError(t, err)
+	_, err = cl.get(ctx, hashes[0], &Stats{})
+	require.ErrorIs(t, err, errHook)
+	require.NoError(t, cl.close())
 	_, err = ar.getAsToChunker(ctx, hashes[0], &Stats{})
 	require.ErrorIs(t, err, errHook)
 	require.ErrorIs(t, ar.iterate(ctx, func(chunks.Chunk) error { return nil }, &Stats{}), errHook)
@@ -435,7 +515,7 @@ func TestArchiveCodecHooks(t *testing.T) {
 	require.ErrorIs(t, errors.Join(err, eg.Wait()), errHook)
 	r.require(t, "openData")
 
-	hookVar(t, &conjoinSpanSealer, func([]sourceWithSize) (spanSealer, error) { return nil, errHook })
+	hookVar(t, &conjoinSpanSealer, func(context.Context, []sourceWithSize) (spanSealer, error) { return nil, errHook })
 	a, _ := createTestArchive(t, 2, [][]byte{[]byte("third")}, "{}")
 	b, _ := createTestArchive(t, 3, [][]byte{[]byte("fourth")}, "{}")
 	var sources []sourceWithSize
@@ -463,10 +543,15 @@ func TestTableCodecHooks(t *testing.T) {
 	ctx := context.Background()
 	q := NewUnlimitedMemQuotaProvider()
 	var r reached
+	refuse := false
 	hookVar(t, &openTableCodec, func(tr tableReader, _ openOpts) (tableReader, error) {
+		if refuse {
+			return tableReader{}, errors.Join(tr.close(), errHook)
+		}
 		tr.codec = hookRecords{}
 		return tr, r.hit("openTableCodec")
 	})
+	hookVar(t, &refusesFile, func(err error) bool { return errors.Is(err, errHook) })
 	hookVar(t, &tableIndexExtra, func(tableIndex) uint64 {
 		r.hit("tableIndexExtra")
 		return 0
@@ -496,6 +581,16 @@ func TestTableCodecHooks(t *testing.T) {
 	recs := func() []getRecord { return []getRecord{{a: &h, prefix: h.Prefix()}} }
 	_, _, err := cs.get(ctx, h, nil, &Stats{})
 	require.ErrorIs(t, err, errHook)
+	cl, err := cs.clone()
+	require.NoError(t, err)
+	_, _, err = cl.get(ctx, h, nil, &Stats{})
+	require.ErrorIs(t, err, errHook)
+	require.NoError(t, cl.close())
+	require.ErrorIs(t, cs.iterateAllChunks(ctx, func(chunks.Chunk) {}, &Stats{}), errHook)
+	var iterErr error
+	cs.tolerantIterateAllChunks(ctx, func(chunks.Chunk) {}, func(err error) { iterErr = err }, &Stats{})
+	require.ErrorIs(t, iterErr, errHook)
+	require.ErrorIs(t, cs.(*chunkSourceAdapter).extract(ctx, make(chan extractRecord, 1)), errHook)
 	_, _, err = cs.getRecordRanges(ctx, dherrors.FatalBehaviorError, recs(), nil)
 	require.ErrorIs(t, err, errHook)
 	eg, ectx := errgroup.WithContext(ctx)
@@ -508,4 +603,31 @@ func TestTableCodecHooks(t *testing.T) {
 	require.NoError(t, err)
 	plan.closer()
 	r.require(t, "openTableCodec", "tableIndexExtra", "tableDataEnd", "conjoinedTableTail", "finishConjoinedTable")
+
+	// Table files open with their codec from a directory and from S3 too.
+	data, name, err := buildTable([][]byte{[]byte("first")})
+	require.NoError(t, err)
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, name.String()), data, 0644))
+	fcs, err := newFSTablePersister(dir, q, false).Open(ctx, name, 1, openOpts{}, &Stats{})
+	require.NoError(t, err)
+	defer fcs.close()
+	_, _, err = fcs.get(ctx, h, nil, &Stats{})
+	require.ErrorIs(t, err, errHook)
+
+	mt := newMemTable(defaultMemTableSize)
+	mt.addChunk(h, []byte("first"))
+	s3p := awsTablePersister{s3: makeFakeS3(t), bucket: "bucket", limits: awsLimits{partTarget: 1 << 20 * 64}, q: q}
+	src, _, err := s3p.Persist(ctx, dherrors.FatalBehaviorError, mt, nil, nil, &Stats{})
+	require.NoError(t, err)
+	require.NoError(t, src.close())
+	scs, err := s3p.Open(ctx, src.hash(), 1, openOpts{}, &Stats{})
+	require.NoError(t, err)
+	defer scs.close()
+	_, _, err = scs.get(ctx, h, nil, &Stats{})
+	require.ErrorIs(t, err, errHook)
+	// A file that its codec refuses is not tried as an archive.
+	refuse = true
+	_, err = s3p.Open(ctx, src.hash(), 1, openOpts{}, &Stats{})
+	require.ErrorIs(t, err, errHook)
 }

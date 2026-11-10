@@ -59,7 +59,7 @@ type openOpts struct {
 	// their index, so they scan it instead. See
 	// [archiveReader.deepValidate].
 	deepValidate bool
-	openCodec
+	codecOpts
 }
 
 // tablePersister allows interaction with persistent storage. It provides
