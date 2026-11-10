@@ -160,7 +160,7 @@ func calculateViolations(ctx *sql.Context, dbName string, workingRoot, comparing
 }
 
 // parseTablesToCheck returns a set of table names to check for constraint violations. If no tables are specified, then
-// all tables in the root are returned.
+// all tables in the root are returned, or all tables on the search path when it is in use.
 func parseTablesToCheck(ctx *sql.Context, workingRoot doltdb.RootValue, apr *argparser.ArgParseResults) (*doltdb.TableNameSet, error) {
 	tableSet := doltdb.NewTableNameSet(nil)
 	for _, val := range apr.Args {
@@ -178,12 +178,19 @@ func parseTablesToCheck(ctx *sql.Context, workingRoot doltdb.RootValue, apr *arg
 
 	// If no tables were explicitly specified, then check all tables
 	if tableSet.Size() == 0 {
-		// TODO: schema search path
-		names, err := workingRoot.GetTableNames(ctx, doltdb.DefaultSchemaName, true)
-		if err != nil {
-			return nil, err
+		if resolve.UseSearchPath {
+			names, err := resolve.TablesOnSearchPath(ctx, workingRoot)
+			if err != nil {
+				return nil, err
+			}
+			tableSet.Add(names...)
+		} else {
+			names, err := workingRoot.GetTableNames(ctx, doltdb.DefaultSchemaName, true)
+			if err != nil {
+				return nil, err
+			}
+			tableSet.Add(doltdb.ToTableNames(names, doltdb.DefaultSchemaName)...)
 		}
-		tableSet.Add(doltdb.ToTableNames(names, doltdb.DefaultSchemaName)...)
 	}
 
 	return tableSet, nil

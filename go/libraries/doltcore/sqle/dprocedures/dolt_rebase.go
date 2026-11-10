@@ -335,7 +335,7 @@ func startRebase(ctx *sql.Context, upstreamPoint string, commitBecomesEmptyHandl
 
 	// rebaseWorkingBranch is the name of the temporary branch used when performing a rebase. In Git, a rebase
 	// happens with a detached HEAD, but Dolt doesn't support that, we use a temporary branch.
-	rebaseWorkingBranch := "dolt_rebase_" + rebaseBranch
+	rebaseWorkingBranch := doltdb.RebaseWorkingBranchPrefix + rebaseBranch
 	var rsc doltdb.ReplicationStatusController
 	err = actions.CreateBranchWithStartPt(ctx, dbData, rebaseWorkingBranch, upstreamPoint, false, &rsc)
 	if err != nil {
@@ -779,7 +779,7 @@ func continueRebase(ctx *sql.Context) rebaseResult {
 	}
 
 	rebaseBranch := rebaseBranchWorkingSet.RebaseState().Branch()
-	rebaseWorkingBranch := "dolt_rebase_" + rebaseBranch
+	rebaseWorkingBranch := doltdb.RebaseWorkingBranchPrefix + rebaseBranch
 
 	// Check that the branch being rebased hasn't been updated since the rebase started
 	err = validateRebaseBranchHasntChanged(ctx, rebaseBranch, rebaseBranchWorkingSet.RebaseState())

@@ -16,10 +16,9 @@ package writer
 
 import (
 	"context"
-	"sync"
 
+	"github.com/dolthub/go-mysql-server/errguard"
 	"github.com/dolthub/go-mysql-server/sql"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -155,6 +154,11 @@ func (s *prollyWriteSession) SetOptions(opts editor.Options) {
 	return
 }
 
+// HasTableWriters implements WriteSession
+func (s *prollyWriteSession) HasTableWriters() bool {
+	return len(s.tables) > 0
+}
+
 // Flush implements WriteSessionFlusher
 func (s *prollyWriteSession) Flush(ctx *sql.Context) (*doltdb.WorkingSet, error) {
 	_, err := s.flushAllTables(ctx)
@@ -181,11 +185,20 @@ func (s *prollyWriteSession) FlushTable(ctx *sql.Context, tblName doltdb.TableNa
 		}
 		s.workingSet = s.workingSet.WithWorkingRoot(flushed)
 	}
-	err = s.setter(ctx, s.dbName, flushed)
+	err = s.publish(ctx)
 	if err != nil {
 		return nil, err
 	}
 	return flushed, nil
+}
+
+// publish hands this write session's root to the session. A write session can start ahead of the session, as a
+// table rewrite's does, and its root reaches the session only through here.
+func (s *prollyWriteSession) publish(ctx *sql.Context) error {
+	if s.targetStaging {
+		return s.setter(ctx, s.dbName, s.workingSet.StagedRoot())
+	}
+	return s.setter(ctx, s.dbName, s.workingSet.WorkingRoot())
 }
 
 // flushAllTables is the inner implementation for Flush that does not acquire any locks
@@ -193,23 +206,26 @@ func (s *prollyWriteSession) flushAllTables(ctx *sql.Context) (doltdb.RootValue,
 	type flushedTable struct {
 		tblName doltdb.TableName
 		tbl     *doltdb.Table
-		err     error
 	}
 
-	// Flush each table and send results to the flushedTables channel
-	flushedTables := make(chan flushedTable, 10)
-	wg := sync.WaitGroup{}
-	wg.Add(len(s.tables))
+	// Materialize each table concurrently.
+	flushedTables := make([]flushedTable, len(s.tables))
+	eg, egCtx := ctx.NewErrgroup()
+	i := 0
 	for tblName, tblWriter := range s.tables {
-		go func() {
-			defer wg.Done()
-			tbl, err := tblWriter.table(ctx)
-			flushedTables <- flushedTable{
-				tblName: tblName,
-				tbl:     tbl,
-				err:     err,
+		res := &flushedTables[i]
+		i++
+		errguard.Go(eg, func() error {
+			tbl, err := tblWriter.table(egCtx)
+			if err != nil {
+				return err
 			}
-		}()
+			*res = flushedTable{tblName: tblName, tbl: tbl}
+			return nil
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		return nil, err
 	}
 
 	var flushed doltdb.RootValue
@@ -218,31 +234,12 @@ func (s *prollyWriteSession) flushAllTables(ctx *sql.Context) (doltdb.RootValue,
 	} else {
 		flushed = s.workingSet.WorkingRoot()
 	}
-
-	// Drain from the flushedTables channel and update RootValue with updated table
-	eg := errgroup.Group{}
-	eg.Go(func() error {
+	for _, ft := range flushedTables {
 		var err error
-		for flushedTbl := range flushedTables {
-			if flushedTbl.err != nil {
-				return flushedTbl.err
-			}
-			flushed, err = flushed.PutTable(ctx, flushedTbl.tblName, flushedTbl.tbl)
-			if err != nil {
-				return err
-			}
+		flushed, err = flushed.PutTable(ctx, ft.tblName, ft.tbl)
+		if err != nil {
+			return nil, err
 		}
-		return nil
-	})
-
-	// Wait for all tables to materialize before closing the flushedTables channel
-	// Additionally, we must start the drain goroutine before blocking
-	wg.Wait()
-	close(flushedTables)
-
-	// Wait for all flushed tables to be put onto the working set
-	if err := eg.Wait(); err != nil {
-		return nil, err
 	}
 
 	if s.targetStaging {

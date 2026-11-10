@@ -270,6 +270,21 @@ func doltBackupRestore(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess 
 		return fmt.Errorf("database '%s' already exists, use '--%s' to overwrite", lookupDbName, cli.ForceFlag)
 	}
 
+	// Don't drop a database this transaction is writing to. A running statement, such as one whose trigger called this,
+	// would flush its writes into the restored database.
+	if hasLookupDb && dsess.IsWritingDatabase(lookupDbName) {
+		return fmt.Errorf("cannot restore over database '%s' while the current transaction is writing to it", lookupDbName)
+	}
+
+	// Check the source before dropping anything, so that a missing backup doesn't leave an empty database behind.
+	remoteRoot, err := remoteDb.NomsRoot(ctx)
+	if err != nil {
+		return err
+	}
+	if remoteRoot.IsEmpty() {
+		return fmt.Errorf("no backup found at '%s'", remoteUrl)
+	}
+
 	if hasLookupDb {
 		err = dsess.Provider().DropDatabase(ctx, lookupDbName)
 		if err != nil {
