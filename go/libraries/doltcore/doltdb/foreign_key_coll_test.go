@@ -148,6 +148,13 @@ func TestKeysForTable(t *testing.T) {
 	requireMatchesScan(fkc)
 	assert.Equal(t, len(added), fkc.Count())
 	assert.Equal(t, len(added)-3, copied.Count())
+
+	// The indexes of |fkc| were built by the lookups above, and must be kept up to date as keys are removed and added.
+	assert.True(t, fkc.RemoveKeyByName(added[3].Name, added[3].TableName))
+	readded := added[3]
+	readded.ReferencedTableName = tables[0]
+	assert.NoError(t, fkc.AddKeys(readded))
+	requireMatchesScan(fkc)
 }
 
 // TestForeignKeyCollectionNameIndex verifies that name lookups stay correct as keys are added, removed, copied and
@@ -277,6 +284,27 @@ func TestGetMatchingKey(t *testing.T) {
 // BenchmarkDeserializeForeignKeys loads a collection of 400 foreign keys, which every new root value does on its
 // first use of the collection.
 func BenchmarkDeserializeForeignKeys(b *testing.B) {
+	msg := serializeFlatbufferForeignKeys(benchmarkForeignKeyCollection(b))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := deserializeFlatbufferForeignKeys(msg); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkCopyForeignKeys copies a collection of 400 foreign keys, which every call to
+// RootValue.GetForeignKeyCollection does.
+func BenchmarkCopyForeignKeys(b *testing.B) {
+	fkc := benchmarkForeignKeyCollection(b)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		fkc.Copy()
+	}
+}
+
+// benchmarkForeignKeyCollection returns a collection of 400 foreign keys declared on 200 tables.
+func benchmarkForeignKeyCollection(b *testing.B) *ForeignKeyCollection {
 	fkc, err := NewForeignKeyCollection()
 	if err != nil {
 		b.Fatal(err)
@@ -290,13 +318,7 @@ func BenchmarkDeserializeForeignKeys(b *testing.B) {
 			b.Fatal(err)
 		}
 	}
-	msg := serializeFlatbufferForeignKeys(fkc)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if _, err = deserializeFlatbufferForeignKeys(msg); err != nil {
-			b.Fatal(err)
-		}
-	}
+	return fkc
 }
 
 // newForeignKey returns a pre-defined foreign key with no action for testing.

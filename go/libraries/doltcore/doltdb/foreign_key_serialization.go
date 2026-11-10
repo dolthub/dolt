@@ -48,7 +48,7 @@ func deserializeFlatbufferForeignKeys(msg types.SerialMessage) (*ForeignKeyColle
 	if err != nil {
 		return nil, err
 	}
-	collection := newForeignKeyCollection(c.ForeignKeysLength())
+	collection := newForeignKeyCollection()
 
 	var fk serial.ForeignKey
 	for i := 0; i < c.ForeignKeysLength(); i++ {

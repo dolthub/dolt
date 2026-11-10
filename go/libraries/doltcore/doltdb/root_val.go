@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/cespare/xxhash/v2"
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
@@ -815,19 +816,32 @@ func (tn TableName) FoldCase() TableName {
 	return TableName{Name: foldString(tn.Name), Schema: foldString(tn.Schema)}
 }
 
-// foldString maps every rune of |s| to the smallest rune that it folds to under simple Unicode case folding, which is
-// the equivalence strings.EqualFold tests. strings.ToLower is not a substitute: it keeps apart some runes that fold
-// together (for example the two lower case forms of sigma), and merges some that do not.
+// foldString maps every rune of |s| to one representative of the runes it folds to under simple Unicode case folding,
+// which is the equivalence strings.EqualFold tests. strings.ToLower is not a substitute: it keeps apart some runes that
+// fold together (for example the two lower case forms of sigma), and merges some that do not.
 func foldString(s string) string {
-	return strings.Map(func(r rune) rune {
-		folded := r
-		for c := unicode.SimpleFold(r); c != r; c = unicode.SimpleFold(c) {
-			if c < folded {
-				folded = c
-			}
+	// Most names are lower case ASCII, which is its own representative.
+	for i := 0; i < len(s); i++ {
+		if c := s[i]; c >= utf8.RuneSelf || ('A' <= c && c <= 'Z') {
+			return strings.Map(foldRune, s)
 		}
-		return folded
-	}, s)
+	}
+	return s
+}
+
+// foldRune returns the representative of the runes that |r| folds to: the lower case ASCII letter if they include one,
+// otherwise the smallest of them.
+func foldRune(r rune) rune {
+	folded := r
+	for c := unicode.SimpleFold(r); c != r; c = unicode.SimpleFold(c) {
+		if c < folded {
+			folded = c
+		}
+	}
+	if 'A' <= folded && folded <= 'Z' {
+		return folded + 'a' - 'A'
+	}
+	return folded
 }
 
 // The ForeignKey struct used to include referenced table names as strings and
@@ -1174,7 +1188,7 @@ func (root *rootValue) GetForeignKeyCollection(ctx context.Context) (*ForeignKey
 			return nil, err
 		}
 		if !ok {
-			return newForeignKeyCollection(0), nil
+			return newForeignKeyCollection(), nil
 		}
 
 		root.fkc, err = DeserializeForeignKeys(ctx, root.vrw.Format(), fkMap)
