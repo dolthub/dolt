@@ -51,8 +51,8 @@ type archiveReader struct {
 	indexReader archiveIndexReader // Memory-mapped or fallback index reader
 	dictCache   *lru.TwoQueueCache[uint32, *DecompBundle]
 	footer      archiveFooter
-	// spans opens an encrypted archive's spans, whose key block is |keyBlock|; nil for a plaintext archive.
-	spans    archiveSpans
+	// opener opens an encrypted archive's spans, whose key block is |keyBlock|; nil for a plaintext archive.
+	opener   spanOpener
 	keyBlock []byte
 }
 
@@ -309,8 +309,8 @@ func (ar *archiveReader) openSpans(ctx context.Context, opts openOpts, stats *St
 	if _, err = io.ReadFull(section, ar.keyBlock); err != nil {
 		return err
 	}
-	ar.spans, err = codec.openArchive(ar.keyBlock, f.byteSpanCount, opts.adding)
-	if err == nil && ar.spans == nil {
+	ar.opener, err = codec.openArchive(ar.keyBlock, f.byteSpanCount, opts.adding)
+	if err == nil && ar.opener == nil {
 		err = errors.New("runtime error: no opener for an encrypted archive")
 	}
 	return err
@@ -566,7 +566,7 @@ func (ar *archiveReader) clone() (archiveReader, error) {
 		indexReader: indexReader,
 		footer:      ar.footer,
 		dictCache:   ar.dictCache, // cache is thread safe.
-		spans:       ar.spans,
+		opener:      ar.opener,
 		keyBlock:    ar.keyBlock,
 	}, nil
 }
@@ -733,33 +733,33 @@ func (ar *archiveReader) toChunker(h hash.Hash, dict *DecompBundle, data []byte)
 
 // openDict returns the dictionary stored in span |id|.
 func (ar *archiveReader) openDict(ctx context.Context, id uint32, stored []byte) (*DecompBundle, error) {
-	if ar.spans == nil {
+	if ar.opener == nil {
 		return NewDecompBundle(stored)
 	}
-	return ar.spans.openDict(ctx, id, stored)
+	return ar.opener.openDict(ctx, id, stored)
 }
 
 // chunkData returns the data of chunk |rc| from its stored data span.
 func (ar *archiveReader) chunkData(ctx context.Context, rc resolvedChunk, dict *DecompBundle, stored []byte) ([]byte, error) {
-	if ar.spans == nil {
+	if ar.opener == nil {
 		return ar.decompress(rc.h, dict, stored)
 	}
-	return ar.spans.chunkData(ctx, rc, dict, stored)
+	return ar.opener.chunkData(ctx, rc, dict, stored)
 }
 
 // chunker returns chunk |rc| as stored, for writers that copy it.
 func (ar *archiveReader) chunker(ctx context.Context, rc resolvedChunk, dict *DecompBundle, stored []byte) (ToChunker, error) {
-	if ar.spans == nil {
+	if ar.opener == nil {
 		return ar.toChunker(rc.h, dict, stored)
 	}
-	return ar.spans.toChunker(ctx, rc, dict, stored)
+	return ar.opener.chunker(ctx, rc, dict, stored)
 }
 
-func (ar *archiveReader) locateKeys(ctx context.Context, resolved []resolvedChunk) error {
-	if ar.spans == nil {
+func (ar *archiveReader) locateKeys(ctx context.Context, resolved []resolvedChunk, ranges map[hash.Hash]Range) error {
+	if ar.opener == nil {
 		return nil
 	}
-	return ar.spans.locate(ctx, ar, resolved)
+	return ar.opener.locate(ctx, resolved, ranges)
 }
 
 func (ar *archiveReader) count() uint32 {
@@ -972,7 +972,7 @@ func (ar *archiveReader) walkSpans(ctx context.Context, cb func(chunks.Chunk) er
 func (ar *archiveReader) openSpan(ctx context.Context, id uint32, stored []byte, isDict map[uint32]bool, chunkOf map[uint32]uint32, dicts map[uint32]*DecompBundle) (*chunks.Chunk, error) {
 	if isDict[id] {
 		dict, err := ar.openDict(ctx, id, stored)
-		if dict != nil && ar.spans == nil {
+		if dict != nil && ar.opener == nil {
 			// Reading a plaintext archive's chunks needs only the decompression dictionary.
 			dict = &DecompBundle{dDict: dict.dDict}
 		}

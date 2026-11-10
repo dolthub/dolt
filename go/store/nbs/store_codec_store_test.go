@@ -157,6 +157,7 @@ func TestToyCodecGC(t *testing.T) {
 				st := open()
 				all := fillToyStore(t, st, 3, maxSamples+10)
 				require.NoError(t, gcToyStore(t, st, all, level))
+				require.Equal(t, level == chunks.SimpleArchive, c.recompressing.Load() > 0, "GC to archives recompresses")
 				requireStoreHas(t, st, all)
 				// A second GC copies what the first one wrote.
 				fillToyStore(t, st, 1, 5)
@@ -222,9 +223,10 @@ func TestToyCodecAddTableFiles(t *testing.T) {
 			}
 			require.NoError(t, err)
 			defer dst.Close()
-			before := c.added.Load()
+			before, adding := c.added.Load(), c.addingOpens.Load()
 			require.NoError(t, copyTableFiles(t, src, dst))
 			require.Equal(t, before+1, c.added.Load(), "the add commits once")
+			require.Greater(t, c.addingOpens.Load(), adding, "added files open as being added")
 			requireStoreHas(t, dst, all)
 			if kind == "blobstore" {
 				// Conjoin needs the records of the copied tables, found from their indexes.
@@ -341,9 +343,9 @@ func withPlainCodec() StoreOption {
 func TestToyCodecJournalReads(t *testing.T) {
 	ctx := context.Background()
 	c := newToyCodec()
-	st, err := NewLocalJournalingStore(ctx, types.Format_DOLT.VersionString(), t.TempDir(), NewUnlimitedMemQuotaProvider(), false, nil, withToy(c))
+	dir := t.TempDir()
+	st, err := NewLocalJournalingStore(ctx, types.Format_DOLT.VersionString(), dir, NewUnlimitedMemQuotaProvider(), false, nil, withToy(c))
 	require.NoError(t, err)
-	defer st.Close()
 	cs := toyChunks(50)
 	for _, chk := range cs {
 		require.NoError(t, st.Put(ctx, chk, noopGetAddrs))
@@ -378,6 +380,11 @@ func TestToyCodecJournalReads(t *testing.T) {
 	require.Equal(t, len(cs), n)
 	require.EqualValues(t, len(cs), c.located.Load())
 
+	// Iterating a reopened store reads chunk records through the index's partial addresses.
+	require.NoError(t, st.Close())
+	st, err = NewLocalJournalingStore(ctx, types.Format_DOLT.VersionString(), dir, NewUnlimitedMemQuotaProvider(), false, nil, withToy(c))
+	require.NoError(t, err)
+	defer st.Close()
 	n = 0
 	require.NoError(t, st.IterateAllChunks(ctx, func(chunks.Chunk) { n++ }))
 	require.Equal(t, len(cs), n)
