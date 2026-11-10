@@ -1135,7 +1135,6 @@ func (p *DoltDatabaseProvider) envForClone(
 	if err != nil {
 		return nil, nil, errors.Join(err, srcDB.Close())
 	}
-	p.applyDBLoadParamsToEnv(dEnv)
 
 	return srcDB, dEnv, nil
 }
