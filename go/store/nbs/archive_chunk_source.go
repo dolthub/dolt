@@ -398,7 +398,7 @@ func (acs *archiveChunkSource) clone() (chunkSource, error) {
 	}, nil
 }
 
-func (acs *archiveChunkSource) getRecordRanges(_ context.Context, _ dherrors.FatalBehavior, records []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error) {
+func (acs *archiveChunkSource) getRecordRanges(ctx context.Context, _ dherrors.FatalBehavior, records []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error) {
 	resolved, _, gcb, err := acs.resolve(records, keeper)
 	if err != nil || gcb != gcBehavior_Continue {
 		return nil, gcb, err

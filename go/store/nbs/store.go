@@ -702,19 +702,19 @@ func NewAWSStore(ctx context.Context, nbfVerStr string, table, ns, bucket string
 }
 
 // NewGCSStore returns an nbs implementation backed by a GCSBlobstore
-func NewGCSStore(ctx context.Context, nbfVerStr string, bucketName, path string, gcs *storage.Client, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
+func NewGCSStore(ctx context.Context, nbfVerStr string, bucketName, path string, gcs *storage.Client, memTableSize uint64, q MemoryQuotaProvider, storeOpts ...StoreOption) (*NomsBlockStore, error) {
 	bs := blobstore.NewGCSBlobstore(gcs, bucketName, path)
-	return NewBSStore(ctx, nbfVerStr, bs, memTableSize, q)
+	return NewBSStore(ctx, nbfVerStr, bs, memTableSize, q, storeOpts...)
 }
 
 // NewGCSStore returns an nbs implementation backed by a GCSBlobstore
-func NewOCISStore(ctx context.Context, nbfVerStr string, bucketName, path string, provider common.ConfigurationProvider, client objectstorage.ObjectStorageClient, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
+func NewOCISStore(ctx context.Context, nbfVerStr string, bucketName, path string, provider common.ConfigurationProvider, client objectstorage.ObjectStorageClient, memTableSize uint64, q MemoryQuotaProvider, storeOpts ...StoreOption) (*NomsBlockStore, error) {
 	bs, err := blobstore.NewOCIBlobstore(ctx, provider, client, bucketName, path)
 	if err != nil {
 		return nil, err
 	}
 
-	return NewNoConjoinBSStore(ctx, nbfVerStr, bs, memTableSize, q)
+	return NewNoConjoinBSStore(ctx, nbfVerStr, bs, memTableSize, q, storeOpts...)
 }
 
 // NewGitStore returns an nbs implementation backed by a GitBlobstore.
@@ -737,7 +737,7 @@ func NewGitStore(ctx context.Context, nbfVerStr string, gitDir string, ref strin
 
 // NewNoConjoinGitStore returns an nbs implementation backed by a GitBlobstore, but disables conjoin.
 // This can be useful for deployments where conjoin's table rewrite cost is undesirable.
-func NewNoConjoinGitStore(ctx context.Context, nbfVerStr string, gitDir string, ref string, opts blobstore.GitBlobstoreOptions, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
+func NewNoConjoinGitStore(ctx context.Context, nbfVerStr string, gitDir string, ref string, opts blobstore.GitBlobstoreOptions, memTableSize uint64, q MemoryQuotaProvider, storeOpts ...StoreOption) (*NomsBlockStore, error) {
 	if opts.MaxPartSize == 0 {
 		opts.MaxPartSize = defaultGitBlobstoreMaxPartSize
 	}
@@ -749,7 +749,7 @@ func NewNoConjoinGitStore(ctx context.Context, nbfVerStr string, gitDir string, 
 
 	mm := manifest(blobstoreManifest{bs})
 	p := &noConjoinBlobstorePersister{bs: bs, q: q, blockSize: s3BlockSize}
-	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, noopConjoiner{}, memTableSize)
+	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, noopConjoiner{}, memTableSize, storeOpts...)
 }
 
 // NewBSStore returns an nbs implementation backed by a Blobstore
@@ -793,8 +793,8 @@ func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 	return newNomsBlockStore(ctx, nbfVerStr, m, p, q, c, memTableSize, storeOpts...)
 }
 
-func NewLocalJournalingStore(ctx context.Context, nbfVers, dir string, q MemoryQuotaProvider, mmapArchiveIndexes bool, warningsCb func(error)) (*NomsBlockStore, error) {
-	return NewLocalJournalingStoreWithOptions(ctx, nbfVers, dir, q, mmapArchiveIndexes, warningsCb, JournalingStoreOptions{})
+func NewLocalJournalingStore(ctx context.Context, nbfVers, dir string, q MemoryQuotaProvider, mmapArchiveIndexes bool, warningsCb func(error), storeOpts ...StoreOption) (*NomsBlockStore, error) {
+	return NewLocalJournalingStoreWithOptions(ctx, nbfVers, dir, q, mmapArchiveIndexes, warningsCb, JournalingStoreOptions{}, storeOpts...)
 }
 
 // JournalingStoreOptions controls behavior of local journaling store creation.

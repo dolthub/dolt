@@ -14,11 +14,14 @@
 
 package nbs
 
-// StoreOption configures a NomsBlockStore as it is created, before it reads its manifest.
-type StoreOption func(*NomsBlockStore)
+// StoreOption configures a NomsBlockStore as it is created.
+type StoreOption func(*storeOptions)
+
+type storeOptions struct{}
 
 func (nbs *NomsBlockStore) applyOptions(opts []StoreOption) {
+	var o storeOptions
 	for _, opt := range opts {
-		opt(nbs)
+		opt(&o)
 	}
 }

@@ -111,7 +111,7 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 	// Ignore SIGPIPE to prevent broken pipe crashes during SSH disconnect.
 	signal.Ignore(syscall.SIGPIPE)
 
-	cs, serverFS, err := resolveDatabaseChunkStore(ctx, dEnv)
+	dbCache, serverFS, err := resolveDatabaseChunkStore(ctx, dEnv)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -127,8 +127,6 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return HandleVErrAndExitCode(errhand.BuildDError("failed to create SMUX session").AddCause(err).Build(), usage)
 	}
 	defer session.Close()
-
-	dbCache := &singletonDBCache{cs: cs}
 
 	logger := logrus.New()
 	logger.SetOutput(os.Stderr)
@@ -190,7 +188,7 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 }
 
 // resolveDatabaseChunkStore inspects the environment loaded from --data-dir and
-// returns the RemoteSrvStore to serve and the filesystem root to use for HTTP
+// returns the cache of the store to serve and the filesystem root to use for HTTP
 // file serving.
 //
 // Two on-disk formats are supported:
@@ -209,7 +207,7 @@ func (cmd TransferCmd) Exec(ctx context.Context, commandStr string, args []strin
 //     as root this yields "<dirName>", so HTTP paths are "<dirName>/<hash>". If
 //     the root equalled cs.Path() the prefix would be "." and the file handler
 //     would return HTTP 400 because it requires at least one "/" in the path.
-func resolveDatabaseChunkStore(ctx context.Context, dEnv *env.DoltEnv) (remotesrv.RemoteSrvStore, filesys.Filesys, error) {
+func resolveDatabaseChunkStore(ctx context.Context, dEnv *env.DoltEnv) (remotesrv.DBCache, filesys.Filesys, error) {
 	ddb := dEnv.DoltDB(ctx)
 	if ddb != nil && dEnv.DBLoadError == nil {
 		// Normal dolt repository.
@@ -219,7 +217,7 @@ func resolveDatabaseChunkStore(ctx context.Context, dEnv *env.DoltEnv) (remotesr
 		if !ok {
 			return nil, nil, fmt.Errorf("chunk store does not implement RemoteSrvStore")
 		}
-		return rss, dEnv.FS, nil
+		return &singletonDBCache{cs: rss}, dEnv.FS, nil
 	}
 
 	if !errors.Is(dEnv.DBLoadError, doltdb.ErrMissingDoltDataDir) {
@@ -243,7 +241,7 @@ func resolveDatabaseChunkStore(ctx context.Context, dEnv *env.DoltEnv) (remotesr
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to set up file server root at %s: %w", parentPath, err)
 	}
-	return cs, serverFS, nil
+	return &singletonDBCache{cs: cs}, serverFS, nil
 }
 
 // transferHost is the virtual hostname used for HTTP requests routed through
