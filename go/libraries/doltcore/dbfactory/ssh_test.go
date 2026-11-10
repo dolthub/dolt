@@ -18,10 +18,13 @@ import (
 	"bytes"
 	"fmt"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 )
 
 func TestBuildTransferCommand(t *testing.T) {
@@ -328,6 +331,29 @@ func TestSSHURLParsing(t *testing.T) {
 			assert.Equal(t, tt.wantPort, port, "port")
 			assert.Equal(t, tt.wantPath, path, "path")
 			assert.Equal(t, tt.wantUser, user, "user")
+		})
+	}
+}
+
+func TestSSHRepoPath(t *testing.T) {
+	tests := []struct {
+		url  string
+		want string
+	}{
+		{"ssh://myhost/data/repo", "/data/repo"},
+		{"ssh://myhost/data/repo/", "/data/repo"},
+		{"ssh://myhost/data/work/../repo", "/data/repo"},
+		{"ssh://myhost/data/./repo", "/data/repo"},
+		{"ssh://myhost/../repo", "/repo"},
+		{"ssh://myhost/data/repo/.dolt", "/data/repo/.dolt"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.url, func(t *testing.T) {
+			u, err := url.Parse(tt.url)
+			require.NoError(t, err)
+			got := sshRepoPath(u)
+			assert.Equal(t, tt.want, got)
+			assert.NoError(t, remotesrv.ValidateRepoPath(strings.Trim(got, "/")))
 		})
 	}
 }
