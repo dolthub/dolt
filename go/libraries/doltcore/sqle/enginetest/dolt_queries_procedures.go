@@ -560,6 +560,56 @@ end`,
 
 var DoltProcedureTests = []queries.ScriptTest{
 	{
+		// https://github.com/dolthub/dolt/issues/12356
+		Name: "CALL in an explicit transaction keeps the transaction's earlier writes",
+		SetUpScript: []string{
+			"create table t (id int primary key);",
+			"insert into t values (1), (2);",
+			"create procedure p() select 1;",
+			"create procedure p_commit() begin insert into t values (10); call dolt_commit('-Am', 'in proc'); end;",
+			"call dolt_commit('-Am', 'init');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "start transaction;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "delete from t where id = 1;",
+				Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
+			},
+			{
+				Query:    "call p();",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "select count(*) from t;",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "insert into t values (3);",
+				Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
+			},
+			{
+				// dolt_commit in the procedure commits the caller's transaction, including the writes before the CALL.
+				Query:            "call p_commit();",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select message from dolt_log limit 1;",
+				Expected: []sql.Row{{"in proc"}},
+			},
+			{
+				Query:    "select id from t as of 'HEAD' order by id;",
+				Expected: []sql.Row{{2}, {3}, {10}},
+			},
+			{
+				Query:    "select count(*) from dolt_status;",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
 		Name: "dolt_commit in a loop",
 		SetUpScript: []string{
 			"create table t(a int primary key auto_increment, b int);",
@@ -757,12 +807,17 @@ end
 		},
 	},
 	{
+		// As with COMMIT in MySQL, a trigger can't call dolt_branch, which ends the transaction. This used to lose the
+		// trigger's writes (#7737).
 		Name: "dolt_branch in trigger",
 		SetUpScript: []string{
 			"create table t(a int primary key auto_increment, b int);",
 			"create table t2(a int primary key auto_increment, b int);",
 			"call dolt_commit('-Am', 'new table');",
-			`create trigger branch_trigger after insert on t for each row
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: `create trigger branch_trigger after insert on t for each row
 begin
   declare i int default 1;
 	commits: loop
@@ -787,34 +842,11 @@ begin
 	end loop commits;
 end
 `,
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query: "insert into t values (1, 1);",
-				Expected: []sql.Row{
-					{gmstypes.OkResult{RowsAffected: 1, InsertID: 1}},
-				},
+				ExpectedErr: sql.ErrCommitNotAllowedInSubStatement,
 			},
 			{
-				Query: "select name from dolt_branches order by 1",
-				Expected: []sql.Row{
-					{"branch1"},
-					{"branch2"},
-					{"branch3"},
-					{"branch4"},
-					{"main"},
-				},
-			},
-			{
-				// For some reason, calling stored procedures disables inserts
-				Skip:  true,
-				Query: "select * from t2 order by 1",
-				Expected: []sql.Row{
-					{1, 1},
-					{2, 2},
-					{3, 3},
-					{4, 4},
-				},
+				Query:    "select name from dolt_branches order by 1",
+				Expected: []sql.Row{{"main"}},
 			},
 		},
 	},

@@ -63,17 +63,26 @@ func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, r prolly.Range, pkSc
 		projections = idx.Schema().GetAllCols().Tags
 	}
 
+	primary, err := durableState.primaryMap()
+	if err != nil {
+		return nil, err
+	}
+	secondary, err := durableState.secondaryMap()
+	if err != nil {
+		return nil, err
+	}
+
 	if sql.IsKeyless(pkSch.Schema) {
 		// in order to resolve row cardinality, keyless indexes must always perform
 		// an indirect lookup through the clustered index.
-		return newProllyKeylessIndexIter(ctx, idx, r, pkSch, projections, durableState.Primary, durableState.Secondary, reverse)
+		return newProllyKeylessIndexIter(ctx, idx, r, pkSch, projections, primary, secondary, reverse)
 	}
 
 	covers := idx.coversColumnsByTag(durableState, projections)
 	if covers {
-		return newProllyCoveringIndexIter(ctx, idx, r, pkSch, projections, durableState.Secondary)
+		return newProllyCoveringIndexIter(ctx, idx, r, pkSch, projections, secondary)
 	}
-	return newProllyIndexIter(ctx, idx, r, pkSch, projections, durableState.Primary, durableState.Secondary)
+	return newProllyIndexIter(ctx, idx, r, pkSch, projections, primary, secondary)
 }
 
 func NewRangePartitionIter(ctx *sql.Context, t DoltTableable, lookup sql.IndexLookup) (sql.PartitionIter, error) {
@@ -196,6 +205,9 @@ func GetDurableIndex(ctx *sql.Context,
 	if err != nil {
 		return nil, err
 	}
+	if s.pending != nil {
+		return nil, fmt.Errorf("index %s has edits that have not been materialized", di.ID())
+	}
 	return s.Secondary, nil
 }
 
@@ -283,20 +295,26 @@ func NewIndexReaderBuilder(
 		projections: projections,
 	}
 
-	secondaryIndex := durable.MapFromIndex(s.Secondary)
-	base.ns = secondaryIndex.NodeStore()
-	base.secKd, base.secVd = secondaryIndex.Descriptors()
-	base.prefDesc = base.secKd.PrefixDesc(len(di.columns))
+	if s.pending != nil {
+		base.sec = s.pending.secondary
+		base.ns = base.sec.NodeStore()
+		base.secKd, base.secVd = base.sec.Descriptors()
+	} else {
+		secondaryIndex := durable.MapFromIndex(s.Secondary)
+		base.ns = secondaryIndex.NodeStore()
+		base.secKd, base.secVd = secondaryIndex.Descriptors()
 
-	switch si := secondaryIndex.(type) {
-	case prolly.Map:
-		base.sec = si
-	case prolly.ProximityMap:
-		base.proximitySecondary = si
-		base.isProximity = true
-	default:
-		return nil, fmt.Errorf("unknown index type %v", secondaryIndex)
+		switch si := secondaryIndex.(type) {
+		case prolly.Map:
+			base.sec = si
+		case prolly.ProximityMap:
+			base.proximitySecondary = si
+			base.isProximity = true
+		default:
+			return nil, fmt.Errorf("unknown index type %v", secondaryIndex)
+		}
 	}
+	base.prefDesc = base.secKd.PrefixDesc(len(di.columns))
 
 	switch {
 	case sql.IsKeyless(pkSch.Schema):
@@ -342,7 +360,7 @@ func newNonCoveringLookupBuilder(s *durableIndexState, b *baseIndexImplBuilder) 
 			"primary index passed, but only secondary indexes are supported")
 	}
 
-	primary, err := durable.ProllyMapFromIndex(s.Primary)
+	primary, err := s.primaryMap()
 	if err != nil {
 		return nil, err
 	}
@@ -374,7 +392,7 @@ type baseIndexImplBuilder struct {
 	secKd              *val.TupleDesc
 	secVd              *val.TupleDesc
 	prefDesc           *val.TupleDesc
-	sec                prolly.Map
+	sec                prolly.MapReader
 	sch                sql.PrimaryKeySchema
 	projections        []uint64
 	proximitySecondary prolly.ProximityMap
@@ -531,10 +549,10 @@ func (i *sequenceRangeIter) Next(ctx context.Context) (val.Tuple, val.Tuple, err
 }
 
 type secIterGen struct {
-	m prolly.Map
+	m prolly.MapReader
 }
 
-func NewSecondaryIterGen(m prolly.Map) IndexRangeIterable {
+func NewSecondaryIterGen(m prolly.MapReader) IndexRangeIterable {
 	return secIterGen{m: m}
 }
 
@@ -614,7 +632,7 @@ func (ib *coveringIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullS
 type nonCoveringIndexImplBuilder struct {
 	*baseIndexImplBuilder
 
-	pri   prolly.Map
+	pri   prolly.MapReader
 	pkBld *val.TupleBuilder
 
 	pkMap, keyMap, valMap, ordMap val.OrdinalMapping
@@ -623,7 +641,7 @@ type nonCoveringIndexImplBuilder struct {
 type nonCoveringMapIter struct {
 	indexIter prolly.MapIter
 	pkBld     *val.TupleBuilder
-	primary   prolly.Map
+	primary   prolly.MapReader
 	pkMap     val.OrdinalMapping
 }
 
@@ -742,9 +760,7 @@ func (ib *keylessIndexImplBuilder) OutputSchema() schema.Schema {
 
 // NewRangeMapIter implements IndexScanBuilder
 func (ib *keylessIndexImplBuilder) NewRangeMapIter(ctx context.Context, r prolly.Range, reverse bool) (prolly.MapIter, error) {
-	rows := ib.s.Primary
-	dsecondary := ib.s.Secondary
-	secondary, err := durable.ProllyMapFromIndex(dsecondary)
+	secondary, err := ib.s.secondaryMap()
 	if err != nil {
 		return nil, err
 	}
@@ -752,7 +768,7 @@ func (ib *keylessIndexImplBuilder) NewRangeMapIter(ctx context.Context, r prolly
 	if err != nil {
 		return nil, err
 	}
-	clustered, err := durable.ProllyMapFromIndex(rows)
+	clustered, err := ib.s.primaryMap()
 	if err != nil {
 		return nil, err
 	}
@@ -775,18 +791,26 @@ func (ib *keylessIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part sq
 	case pointPartition:
 		prollyRange = p.r
 	}
-	return newProllyKeylessIndexIter(ctx, ib.idx, prollyRange, ib.sch, ib.projections, ib.s.Primary, ib.s.Secondary, reverse)
+	primary, err := ib.s.primaryMap()
+	if err != nil {
+		return nil, err
+	}
+	secondary, err := ib.s.secondaryMap()
+	if err != nil {
+		return nil, err
+	}
+	return newProllyKeylessIndexIter(ctx, ib.idx, prollyRange, ib.sch, ib.projections, primary, secondary, reverse)
 }
 
 func (ib *keylessIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSafe []bool) (SecondaryLookupIterGen, error) {
-	pri, err := durable.ProllyMapFromIndex(ib.s.Primary)
+	pri, err := ib.s.primaryMap()
 	if err != nil {
 		return nil, err
 	}
 	pkDesc, _ := pri.Descriptors()
 	pkBld := val.NewTupleBuilder(pkDesc, pri.NodeStore())
 
-	secondary, err := durable.ProllyMapFromIndex(ib.s.Secondary)
+	secondary, err := ib.s.secondaryMap()
 	if err != nil {
 		return nil, err
 	}
