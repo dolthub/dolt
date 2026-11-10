@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"unicode"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -589,6 +590,55 @@ func (fkc *ForeignKeyCollection) KeysForTable(tableName TableName) (declaredFk, 
 		return referencedByFk[i].Name < referencedByFk[j].Name
 	})
 	return
+}
+
+// ForeignKeysByTable holds the foreign keys of a ForeignKeyCollection grouped by the table that declares them. It
+// answers the declaredFk half of KeysForTable for many tables without walking the whole collection once per table.
+type ForeignKeysByTable struct {
+	declared map[TableName][]ForeignKey
+}
+
+// DeclaredKeysByTable groups the foreign keys in this collection by the table that declares them. The grouping is a
+// snapshot, later changes to the collection are not reflected in it.
+func (fkc *ForeignKeyCollection) DeclaredKeysByTable() ForeignKeysByTable {
+	declared := make(map[TableName][]ForeignKey)
+	for _, foreignKey := range fkc.foreignKeys {
+		name := foldTableName(foreignKey.TableName)
+		declared[name] = append(declared[name], foreignKey)
+	}
+	for _, fks := range declared {
+		sort.Slice(fks, func(i, j int) bool {
+			return fks[i].Name < fks[j].Name
+		})
+	}
+	return ForeignKeysByTable{declared: declared}
+}
+
+// KeysForTable returns the foreign keys that the given table declares, sorted by name ascending. This is the declaredFk
+// result of ForeignKeyCollection.KeysForTable, including its case-insensitive match on the table name. The returned
+// slice belongs to the grouping and must not be appended to.
+func (t ForeignKeysByTable) KeysForTable(tableName TableName) []ForeignKey {
+	return t.declared[foldTableName(tableName)]
+}
+
+// foldTableName returns a map key that is equal for exactly those table names that TableName.EqualFold treats as equal.
+func foldTableName(tn TableName) TableName {
+	return TableName{Name: foldString(tn.Name), Schema: foldString(tn.Schema)}
+}
+
+// foldString maps every rune of |s| to the smallest rune that it folds to under simple Unicode case folding, which is
+// the equivalence strings.EqualFold tests. strings.ToLower is not a substitute: it keeps apart some runes that fold
+// together (for example the two lower case forms of sigma), and merges some that do not.
+func foldString(s string) string {
+	return strings.Map(func(r rune) rune {
+		folded := r
+		for c := unicode.SimpleFold(r); c != r; c = unicode.SimpleFold(c) {
+			if c < folded {
+				folded = c
+			}
+		}
+		return folded
+	}, s)
 }
 
 // RemoveKeys removes any Foreign Keys with matching column set from the collection.

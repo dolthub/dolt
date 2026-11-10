@@ -15,6 +15,7 @@
 package doltdb
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -74,6 +75,51 @@ func TestForeignKeyEqualDefs(t *testing.T) {
 			assert.Equal(t, test.want, fk.EqualDefs(other))
 			assert.Equal(t, test.want, other.EqualDefs(fk))
 		})
+	}
+}
+
+// TestDeclaredKeysByTable verifies that the grouping returned by DeclaredKeysByTable gives, for every table name, the
+// same foreign keys in the same order as the declaredFk result of KeysForTable.
+func TestDeclaredKeysByTable(t *testing.T) {
+	declaringTables := []TableName{
+		{Name: "child"},
+		{Name: "CHILD"},
+		{Name: "Child", Schema: "public"},
+		{Name: "child", Schema: "PUBLIC"},
+		{Name: "other"},
+		// The two lower case forms of sigma fold together, although strings.ToLower keeps them apart.
+		{Name: "σ"},
+		{Name: "ς"},
+		// The dotted capital I lowers to "i" but does not fold to it.
+		{Name: "İ"},
+		{Name: "i"},
+	}
+	fkc, err := NewForeignKeyCollection()
+	assert.NoError(t, err)
+	for i, tableName := range declaringTables {
+		// Two keys per table, added in descending name order, so the ordering of the result is exercised too.
+		for _, prefix := range []string{"b", "a"} {
+			fk := newForeignKey()
+			fk.Name = fmt.Sprintf("%s_fk_%d", prefix, i)
+			fk.TableName = tableName
+			fk.TableColumns = []uint64{uint64(100*i) + uint64(prefix[0])}
+			assert.NoError(t, fkc.AddKeys(fk))
+		}
+	}
+
+	lookups := append([]TableName{
+		{Name: "cHiLd"},
+		{Name: "child", Schema: "Public"},
+		{Name: "OTHER"},
+		{Name: "Σ"},
+		{Name: "I"},
+		{Name: "parent"},
+		{Name: "missing"},
+	}, declaringTables...)
+	byTable := fkc.DeclaredKeysByTable()
+	for _, tableName := range lookups {
+		expected, _ := fkc.KeysForTable(tableName)
+		assert.Equal(t, expected, byTable.KeysForTable(tableName), "table %q in schema %q", tableName.Name, tableName.Schema)
 	}
 }
 
