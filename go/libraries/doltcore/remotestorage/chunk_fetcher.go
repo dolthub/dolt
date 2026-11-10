@@ -575,11 +575,8 @@ func (rk *rangeKeys) list() [][]byte {
 	return rk.keys
 }
 
-// rangeKey returns the key of |hgr| with RangeChunk key index |i|, or nil for zero.
+// rangeKey returns the key of |hgr| with nonzero RangeChunk key index |i|.
 func rangeKey(hgr *remotesapi.HttpGetRange, i uint32) (*[]byte, error) {
-	if i == 0 {
-		return nil, nil
-	}
 	if int(i) > len(hgr.Keys) {
 		return nil, fmt.Errorf("server referenced record key %d of %d", i, len(hgr.Keys))
 	}

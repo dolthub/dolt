@@ -265,12 +265,12 @@ func (fact FileFactory) CreateDbNoCache(ctx context.Context, nbf *types.NomsBinF
 
 	oldGenSt, err := nbs.NewLocalStore(ctx, newGenSt.Version(), oldgenPath, memlimit.MemtableSize(), q, mmapArchiveIndexes, storeOptions.oldGen(newGenSt)...)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, errors.Join(err, newGenSt.Close())
 	}
 
 	ghostGen, err := nbs.NewGhostBlockStore(path)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, errors.Join(err, oldGenSt.Close(), newGenSt.Close())
 	}
 
 	st := nbs.NewGenerationalCS(oldGenSt, newGenSt, ghostGen)

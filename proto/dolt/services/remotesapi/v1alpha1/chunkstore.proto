@@ -20,8 +20,8 @@ import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1;remotesapi";
 
-// Fields and enum values numbered from 1000 describe encrypted repositories. Number other new fields and values below
-// 1000.
+// Fields and enum values added to existing messages and enums for encrypted repositories are numbered from 1000. Number
+// other new fields and values below 1000.
 
 service ChunkStoreService {
   rpc GetRepoMetadata(GetRepoMetadataRequest) returns (GetRepoMetadataResponse);

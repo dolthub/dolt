@@ -76,8 +76,11 @@ func (f toyFormats) locate(ctx context.Context, cs RemoteSrvStore, hashes hash.H
 	if !f.keyed {
 		return locs, noKeys, err
 	}
-	return locs, func(h hash.Hash, _ uint64, _ uint32) ([]byte, []byte) { return toyKey(h), nil }, err
+	return locs, func(h hash.Hash, _ uint64, _ uint32) ([]byte, []byte) { return toyKey(h), toyDictKey }, err
 }
+
+// toyDictKey is the key a toyFormats store gives every record's dictionary.
+var toyDictKey = []byte("dict")
 
 func withStoreFormats(t *testing.T, f serverFormats) {
 	prev := storeFormats
@@ -228,11 +231,13 @@ func TestLocatedKeysAreNumbered(t *testing.T) {
 	r := startTestRemote(t, 32)
 
 	checkRange := func(hgr *remotesapi.HttpGetRange) {
-		distinct := make(map[string]bool)
+		distinct := map[string]bool{string(toyDictKey): true}
 		for _, rc := range hgr.Ranges {
 			h := hash.New(rc.Hash)
 			require.NotZero(t, rc.KeyIndex)
 			assert.Equal(t, toyKey(h), hgr.Keys[rc.KeyIndex-1])
+			require.NotZero(t, rc.DictionaryKeyIndex)
+			assert.Equal(t, toyDictKey, hgr.Keys[rc.DictionaryKeyIndex-1])
 			distinct[string(toyKey(h))] = true
 		}
 		assert.Len(t, hgr.Keys, len(distinct), "each key appears once per range")
@@ -275,10 +280,10 @@ func TestLocatedKeysAreNumbered(t *testing.T) {
 		for _, cl := range resp.Locations {
 			h := hash.New(req.ChunkHashes[cl.RequestIndex*hash.ByteLen : (cl.RequestIndex+1)*hash.ByteLen])
 			assert.Equal(t, toyKey(h), keysByID[cl.KeyId])
-			assert.Zero(t, cl.DictionaryKeyId)
+			assert.Equal(t, toyDictKey, keysByID[cl.DictionaryKeyId])
 		}
 	}
-	distinct := make(map[string]bool)
+	distinct := map[string]bool{string(toyDictKey): true}
 	for h := range r.hashes {
 		distinct[string(toyKey(h))] = true
 	}

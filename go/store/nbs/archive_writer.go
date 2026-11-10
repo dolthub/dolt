@@ -470,7 +470,8 @@ func (aw *archiveWriter) formatVersion() byte {
 
 // writeEmptyCheckSums writes 3 empty sha512 checksum of all zeros to the archive output. This is a hold over from previous
 // versions of the archive format that had checksums for data, index, and metadata. It's easier to keep the data empty
-// data in the index than implement a new format version. We've never used these checksums for anything.
+// data in the index than implement a new format version. We've never used these checksums for anything, except that
+// an encrypted archive keeps its key block length in the first 4 bytes.
 func (aw *archiveWriter) writeEmptyCheckSums() error {
 	var zeros [(3 * sha512.Size)]byte
 	// An encrypted archive keeps its key block length in the data checksum.

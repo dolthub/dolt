@@ -63,12 +63,3 @@ func (cfg *PullTableFileWriterConfig) tableFiles() tableFileFormat {
 	}
 	return cfg.format
 }
-
-// tableFileFormatFor is newTableFileFormat, which returns no format for a plain copy.
-func tableFileFormatFor(src, sink chunks.ChunkStore) (tableFileFormat, error) {
-	f, err := newTableFileFormat(src, sink)
-	if f == nil && err == nil {
-		f = plainTableFiles{}
-	}
-	return f, err
-}

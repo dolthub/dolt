@@ -52,7 +52,7 @@ func (s *toyStores) oldGen(newGen *nbs.NomsBlockStore) []nbs.StoreOption {
 }
 
 func (s *toyStores) remote(map[string]interface{}) (remotestorage.RepoFormat, error) {
-	return nil, s.remoteErr
+	return remotestorage.PlainFormat{}, s.remoteErr
 }
 
 func (s *toyStores) reusable(context.Context, chunks.ChunkStore, map[string]interface{}) bool {
@@ -80,7 +80,16 @@ func TestStoreOptionsReachTheFactories(t *testing.T) {
 	db, _, _, err = CreateDB(ctx, types.Format_DOLT, "mem://", nil)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
-	assert.Equal(t, []string{dir, ""}, s.dirs)
+
+	noJournal := t.TempDir()
+	db, _, _, err = CreateDB(ctx, types.Format_DOLT, "file://"+filepath.ToSlash(noJournal), map[string]interface{}{DisableSingletonCacheParam: struct{}{}})
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	db, _, _, err = CreateDB(ctx, types.Format_DOLT, "localbs://"+filepath.ToSlash(t.TempDir()), nil)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+	assert.Equal(t, []string{dir, "", noJournal, ""}, s.dirs)
 }
 
 type toyDialer struct{}

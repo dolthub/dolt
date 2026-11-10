@@ -792,12 +792,9 @@ func (dcs *DoltChunkStore) Rebase(ctx context.Context) error {
 
 func (dcs *DoltChunkStore) refreshRepoMetadata(ctx context.Context) error {
 	mdReq := &remotesapi.GetRepoMetadataRequest{
-		RepoId:   dcs.repoId,
-		RepoPath: dcs.repoPath,
-		ClientRepoFormat: dcs.format.ClientFormat(&remotesapi.ClientRepoFormat{
-			NbfVersion: dcs.nbf.VersionString(),
-			NbsVersion: nbs.StorageVersion,
-		}),
+		RepoId:           dcs.repoId,
+		RepoPath:         dcs.repoPath,
+		ClientRepoFormat: dcs.clientRepoFormat(),
 	}
 	metadata, err := dcs.csClient.GetRepoMetadata(ctx, mdReq)
 	if err != nil {
@@ -882,15 +879,12 @@ func (dcs *DoltChunkStore) Commit(ctx context.Context, current, last hash.Hash) 
 
 	id, _ := dcs.getRepoId()
 	req := &remotesapi.CommitRequest{
-		RepoId:         id,
-		RepoPath:       dcs.repoPath,
-		Current:        current[:],
-		Last:           last[:],
-		ChunkTableInfo: chnkTblInfo,
-		ClientRepoFormat: dcs.format.ClientFormat(&remotesapi.ClientRepoFormat{
-			NbfVersion: dcs.nbf.VersionString(),
-			NbsVersion: nbs.StorageVersion,
-		}),
+		RepoId:           id,
+		RepoPath:         dcs.repoPath,
+		Current:          current[:],
+		Last:             last[:],
+		ChunkTableInfo:   chnkTblInfo,
+		ClientRepoFormat: dcs.clientRepoFormat(),
 	}
 	dcs.repoToken.Store("")
 	resp, err = dcs.csClient.Commit(ctx, req)
@@ -1141,14 +1135,11 @@ func (dcs *DoltChunkStore) AddTableFilesToManifest(ctx context.Context, fileIdTo
 	id, token := dcs.getRepoId()
 	dcs.logf("Adding Table files to repo: %s -\n%s", dcs.repoPath, debugStr)
 	atReq := &remotesapi.AddTableFilesRequest{
-		RepoId:         id,
-		RepoToken:      token,
-		RepoPath:       dcs.repoPath,
-		ChunkTableInfo: chnkTblInfo,
-		ClientRepoFormat: dcs.format.ClientFormat(&remotesapi.ClientRepoFormat{
-			NbfVersion: dcs.nbf.VersionString(),
-			NbsVersion: nbs.StorageVersion,
-		}),
+		RepoId:           id,
+		RepoToken:        token,
+		RepoPath:         dcs.repoPath,
+		ChunkTableInfo:   chnkTblInfo,
+		ClientRepoFormat: dcs.clientRepoFormat(),
 	}
 
 	atResp, err := dcs.csClient.AddTableFiles(ctx, atReq)
@@ -1309,4 +1300,12 @@ func (drtf DoltRemoteTableFile) Open(ctx context.Context) (io.ReadCloser, uint64
 	}
 
 	return resp.Body, uint64(resp.ContentLength), nil
+}
+
+// clientRepoFormat is the format the store sends with its requests.
+func (dcs *DoltChunkStore) clientRepoFormat() *remotesapi.ClientRepoFormat {
+	return dcs.format.ClientFormat(&remotesapi.ClientRepoFormat{
+		NbfVersion: dcs.nbf.VersionString(),
+		NbsVersion: nbs.StorageVersion,
+	})
 }

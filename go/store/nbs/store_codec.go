@@ -62,10 +62,10 @@ type storeCodec interface {
 	// store from elsewhere.
 	openTable(ti onHeapTableIndex, adding bool) (recordOpener, error)
 	// newSpanSealer returns the sealer of a new archive, or nil to write it plain. With |recompress|, it compresses
-	// sealed snappy chunks with dictionaries, as garbage collection does, rather than copying them.
+	// sealed snappy chunks with dictionaries rather than copying them.
 	newSpanSealer(recompress bool) (spanSealer, error)
 	// openArchive returns the opener of the |spans| byte spans of an encrypted archive with |keyBlock|.
-	openArchive(keyBlock []byte, spans uint32, adding bool) (archiveSpans, error)
+	openArchive(keyBlock []byte, spans uint32, adding bool) (spanOpener, error)
 	// conjoinKeyBlock returns the key block of a file holding the records of encrypted |sources| in order.
 	conjoinKeyBlock(sources []sourceWithSize) ([]byte, error)
 	// newJournalCodec returns the codec of a chunk journal writer.
@@ -105,22 +105,23 @@ type spanRef struct {
 
 // spanSealer seals the spans of a new archive.
 type spanSealer interface {
-	// seal returns the bytes to store for span |ordinal|, which holds |ref|.
+	// seal returns the bytes to store for the span whose id is |ordinal| + 1, which holds |ref|.
 	seal(ordinal uint32, ref spanRef, b []byte) ([]byte, error)
 	// add writes |sc| to |asw|.
 	add(asw *ArchiveStreamWriter, sc SealedChunk) (uint32, error)
 	keyBlock() ([]byte, error)
 }
 
-// archiveSpans opens the spans of an encrypted archive. Clones of its reader share it.
-type archiveSpans interface {
+// spanOpener opens the spans of an encrypted archive by span id. Clones of its reader share it.
+type spanOpener interface {
 	// openDict opens dictionary span |id|. |stored| is only valid during the call.
 	openDict(ctx context.Context, id uint32, stored []byte) (*DecompBundle, error)
 	// chunkData returns chunk |rc|'s data, checked against its address.
 	chunkData(ctx context.Context, rc resolvedChunk, dict *DecompBundle, stored []byte) ([]byte, error)
-	toChunker(ctx context.Context, rc resolvedChunk, dict *DecompBundle, stored []byte) (ToChunker, error)
-	// locate notes the keys of |ar|'s |resolved| chunks for remote clients, if |ctx| collects them.
-	locate(ctx context.Context, ar *archiveReader, resolved []resolvedChunk) error
+	// chunker returns chunk |rc|, for writers that may copy its spans as they are.
+	chunker(ctx context.Context, rc resolvedChunk, dict *DecompBundle, stored []byte) (ToChunker, error)
+	// locate notes the keys of the |resolved| chunks at |ranges| for remote clients, if |ctx| collects them.
+	locate(ctx context.Context, resolved []resolvedChunk, ranges map[hash.Hash]Range) error
 }
 
 // SealedChunk is a chunk read from an encrypted file with its record still sealed. Writers of plaintext files refuse
@@ -152,7 +153,7 @@ func (plainCodec) newSpanSealer(bool) (spanSealer, error) {
 	return nil, nil
 }
 
-func (plainCodec) openArchive([]byte, uint32, bool) (archiveSpans, error) {
+func (plainCodec) openArchive([]byte, uint32, bool) (spanOpener, error) {
 	return nil, ErrEncryptionMismatch
 }
 
