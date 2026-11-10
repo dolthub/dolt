@@ -326,17 +326,66 @@ func (fkc *ForeignKeyCollection) AddKeys(fks ...ForeignKey) error {
 		if _, ok := fkc.GetByNameCaseInsensitive(key.Name, key.TableName); ok {
 			return sql.ErrForeignKeyDuplicateName.New(key.Name)
 		}
-		if len(key.TableColumns) != len(key.ReferencedTableColumns) {
-			return fmt.Errorf("foreign keys must have the same number of columns declared and referenced")
-		}
-
-		fkHash, err := key.HashOf()
-		if err != nil {
+		if err := fkc.addKeyWithUniqueName(key); err != nil {
 			return err
 		}
-		fkc.foreignKeys[fkHash.String()] = key
 	}
 	return nil
+}
+
+// addKeyWithUniqueName adds the given foreign key to the collection. The caller has already checked that the name of
+// the key is not in use.
+func (fkc *ForeignKeyCollection) addKeyWithUniqueName(key ForeignKey) error {
+	if len(key.TableColumns) != len(key.ReferencedTableColumns) {
+		return fmt.Errorf("foreign keys must have the same number of columns declared and referenced")
+	}
+
+	fkHash, err := key.HashOf()
+	if err != nil {
+		return err
+	}
+	fkc.foreignKeys[fkHash.String()] = key
+	return nil
+}
+
+// foreignKeyNames answers the duplicate name check that AddKeys makes with GetByNameCaseInsensitive, for a collection
+// that is built up key by key, without walking the collection for every key.
+type foreignKeyNames struct {
+	// names holds the folded name of every key.
+	names map[string]struct{}
+	// qualified holds the folded name, table name and schema name of every key.
+	qualified map[[3]string]struct{}
+}
+
+func newForeignKeyNames(size int) *foreignKeyNames {
+	return &foreignKeyNames{
+		names:     make(map[string]struct{}, size),
+		qualified: make(map[[3]string]struct{}, size),
+	}
+}
+
+// contains returns what GetByNameCaseInsensitive(key.Name, key.TableName) reports for a collection holding the keys
+// that were passed to add: a key on a table with a schema name collides with a key of the same name on the same table,
+// a key on a table without one collides with any key of the same name.
+func (n *foreignKeyNames) contains(key ForeignKey) bool {
+	if key.Name == "" {
+		return false
+	}
+	if key.TableName.Schema != "" {
+		_, ok := n.qualified[n.qualify(key)]
+		return ok
+	}
+	_, ok := n.names[foldString(key.Name)]
+	return ok
+}
+
+func (n *foreignKeyNames) add(key ForeignKey) {
+	n.names[foldString(key.Name)] = struct{}{}
+	n.qualified[n.qualify(key)] = struct{}{}
+}
+
+func (n *foreignKeyNames) qualify(key ForeignKey) [3]string {
+	return [3]string{foldString(key.Name), foldString(key.TableName.Name), foldString(key.TableName.Schema)}
 }
 
 // AllKeys returns a slice, sorted by name ascending, containing all of the foreign keys in this collection.

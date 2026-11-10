@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -120,6 +121,100 @@ func TestDeclaredKeysByTable(t *testing.T) {
 	for _, tableName := range lookups {
 		expected, _ := fkc.KeysForTable(tableName)
 		assert.Equal(t, expected, byTable.KeysForTable(tableName), "table %q in schema %q", tableName.Name, tableName.Schema)
+	}
+}
+
+// TestForeignKeyNames verifies that foreignKeyNames reports a duplicate name for exactly the keys for which
+// GetByNameCaseInsensitive finds a key in the collection.
+func TestForeignKeyNames(t *testing.T) {
+	keys := []struct {
+		name  string
+		table TableName
+	}{
+		{"fk", TableName{Name: "child"}},
+		{"FK", TableName{Name: "other"}},
+		{"fk", TableName{Name: "child", Schema: "public"}},
+		{"Fk", TableName{Name: "CHILD", Schema: "PUBLIC"}},
+		{"fk", TableName{Name: "child", Schema: "other"}},
+		{"fk", TableName{Name: "other", Schema: "public"}},
+		{"fk2", TableName{Name: "child", Schema: "public"}},
+		{"FK2", TableName{Name: "child"}},
+		{"fk3", TableName{Name: "child"}},
+		{"Fk3", TableName{Name: "child", Schema: "public"}},
+		{"", TableName{Name: "child"}},
+		{"", TableName{Name: "child", Schema: "public"}},
+		// The two lower case forms of sigma fold together.
+		{"fk_σ", TableName{Name: "child"}},
+		{"fk_ς", TableName{Name: "child"}},
+	}
+	fkc, err := NewForeignKeyCollection()
+	assert.NoError(t, err)
+	names := newForeignKeyNames(len(keys))
+	for i, k := range keys {
+		fk := newForeignKey()
+		fk.Name = k.name
+		fk.TableName = k.table
+		fk.TableColumns = []uint64{uint64(i)}
+
+		_, expected := fkc.GetByNameCaseInsensitive(fk.Name, fk.TableName)
+		assert.Equal(t, expected, names.contains(fk), "key %d: %q on table %q in schema %q", i, k.name, k.table.Name, k.table.Schema)
+
+		// Every key goes into the collection, also the ones AddKeys would reject, so that later keys are compared
+		// with all earlier ones.
+		assert.NoError(t, fkc.addKeyWithUniqueName(fk))
+		names.add(fk)
+	}
+}
+
+// TestDeserializeForeignKeysRejectsDuplicateNames verifies that loading a stored collection still fails when two of
+// its keys have the same name.
+func TestDeserializeForeignKeysRejectsDuplicateNames(t *testing.T) {
+	first := newForeignKey()
+	second := newForeignKey()
+	second.Name = "FK1"
+	second.TableColumns = []uint64{3}
+
+	fkc, err := NewForeignKeyCollection()
+	assert.NoError(t, err)
+	for _, fk := range []ForeignKey{first, second} {
+		fkHash, err := fk.HashOf()
+		assert.NoError(t, err)
+		fkc.foreignKeys[fkHash.String()] = fk
+	}
+
+	_, err = deserializeFlatbufferForeignKeys(serializeFlatbufferForeignKeys(fkc))
+	assert.True(t, sql.ErrForeignKeyDuplicateName.Is(err), "unexpected error: %v", err)
+
+	// Without the second key the collection loads and holds the first one.
+	fkc, err = NewForeignKeyCollection(first)
+	assert.NoError(t, err)
+	loaded, err := deserializeFlatbufferForeignKeys(serializeFlatbufferForeignKeys(fkc))
+	assert.NoError(t, err)
+	assert.Equal(t, []ForeignKey{first}, loaded.AllKeys())
+}
+
+// BenchmarkDeserializeForeignKeys loads a collection of 400 foreign keys, which every new root value does on its
+// first use of the collection.
+func BenchmarkDeserializeForeignKeys(b *testing.B) {
+	fkc, err := NewForeignKeyCollection()
+	if err != nil {
+		b.Fatal(err)
+	}
+	for i := 0; i < 400; i++ {
+		fk := newForeignKey()
+		fk.Name = fmt.Sprintf("fk_%04d", i)
+		fk.TableName = TableName{Name: fmt.Sprintf("t%04d", i%200), Schema: "public"}
+		fk.TableColumns = []uint64{uint64(i)}
+		if err = fkc.AddKeys(fk); err != nil {
+			b.Fatal(err)
+		}
+	}
+	msg := serializeFlatbufferForeignKeys(fkc)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err = deserializeFlatbufferForeignKeys(msg); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
