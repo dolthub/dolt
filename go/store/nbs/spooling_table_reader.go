@@ -279,6 +279,10 @@ func newSpooledBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore,
 	}
 
 	index := footer.totalIndexSpan()
+	if archiveFooterExtra(&footer) > 0 {
+		// What an archive keeps before its footer is read with its index.
+		index.length = footer.fileSize - archiveFooterSize - index.offset
+	}
 	var indexBytes []byte
 	if index.length > 0 {
 		indexBytes, _, err = readBlobRange(ctx, bs, key, blobstore.NewBlobRange(int64(index.offset), int64(index.length)), index.length)
