@@ -264,12 +264,40 @@ func SchemaMerge(
 
 // ForeignKeysMerge performs a three-way merge of (ourRoot, theirRoot, ancRoot) and using mergeRoot to validate FKs.
 func ForeignKeysMerge(ctx *sql.Context, tableResolver doltdb.TableResolver, mergedRoot, ourRoot, theirRoot, ancRoot doltdb.RootValue) (*doltdb.ForeignKeyCollection, []FKConflict, error) {
-	oneSide, ok, err := foreignKeysChangedOnOneSide(ctx, ourRoot, theirRoot, ancRoot)
+	ourHash, err := ourRoot.GetForeignKeyCollectionHash(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	if ok {
-		pruned, err := pruneInvalidForeignKeys(ctx, tableResolver, oneSide, mergedRoot)
+	theirHash, err := theirRoot.GetForeignKeyCollectionHash(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	ancHash, err := ancRoot.GetForeignKeyCollectionHash(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// When both sides have the same foreign keys, those are the merged foreign keys, unchanged.
+	if ourHash == theirHash {
+		ours, err := ourRoot.GetForeignKeyCollection(ctx)
+		return ours, nil, err
+	}
+
+	// When only one side changed its foreign keys since the ancestor, the merged foreign keys are that side's, and no
+	// foreign keys need to be compared.
+	var changedSide doltdb.RootValue
+	switch {
+	case theirHash == ancHash:
+		changedSide = ourRoot
+	case ourHash == ancHash:
+		changedSide = theirRoot
+	}
+	if changedSide != nil {
+		changed, err := changedSide.GetForeignKeyCollection(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		pruned, err := pruneInvalidForeignKeys(ctx, tableResolver, changed, mergedRoot)
 		return pruned, nil, err
 	}
 
@@ -1092,35 +1120,6 @@ func pruneInvalidForeignKeys(ctx *sql.Context, tableResolver doltdb.TableResolve
 	}
 
 	return fkColl, nil
-}
-
-// foreignKeysChangedOnOneSide returns the merged foreign key collection, and true, when at most one of |ourRoot| and
-// |theirRoot| changed its foreign keys since |ancRoot|. The merged collection is then that of the side that changed
-// them, and no foreign key needs to be compared.
-func foreignKeysChangedOnOneSide(ctx *sql.Context, ourRoot, theirRoot, ancRoot doltdb.RootValue) (*doltdb.ForeignKeyCollection, bool, error) {
-	ourHash, err := ourRoot.GetForeignKeyCollectionHash(ctx)
-	if err != nil {
-		return nil, false, err
-	}
-	theirHash, err := theirRoot.GetForeignKeyCollectionHash(ctx)
-	if err != nil {
-		return nil, false, err
-	}
-	ancHash, err := ancRoot.GetForeignKeyCollectionHash(ctx)
-	if err != nil {
-		return nil, false, err
-	}
-
-	switch {
-	case theirHash == ancHash || theirHash == ourHash:
-		fkc, err := ourRoot.GetForeignKeyCollection(ctx)
-		return fkc, err == nil, err
-	case ourHash == ancHash:
-		fkc, err := theirRoot.GetForeignKeyCollection(ctx)
-		return fkc, err == nil, err
-	default:
-		return nil, false, nil
-	}
 }
 
 // checksInCommon finds all the common checks between ourChks, theirChks, and ancChks, and detects varying conflicts

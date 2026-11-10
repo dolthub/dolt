@@ -117,8 +117,8 @@ func TestPruneInvalidForeignKeysResolvesEachTableOnce(t *testing.T) {
 	}, resolver.resolved)
 }
 
-// TestForeignKeysMerge verifies the merged foreign keys when one side, the other side, or both sides changed them, and
-// that invalid foreign keys are pruned in each case.
+// TestForeignKeysMerge verifies the merged foreign keys when neither side, one side, or both sides changed them, and that
+// invalid foreign keys are pruned unless both sides have the same foreign keys.
 func TestForeignKeysMerge(t *testing.T) {
 	ctx := sql.NewEmptyContext()
 	ddb := dtestutils.CreateTestEnv().DoltDB(ctx)
@@ -187,10 +187,17 @@ func TestForeignKeysMerge(t *testing.T) {
 			expected: []string{"fk1", "fk2"},
 		},
 		{
+			// Foreign keys that are the same on both sides are left as they are, even if they are invalid.
+			name:     "neither changed",
+			ours:     withKeys(fk1, invalid),
+			theirs:   withKeys(fk1, invalid),
+			expected: []string{"fk1", "fk_invalid"},
+		},
+		{
 			name:     "both changed the same way",
 			ours:     withKeys(fk1, fk2, invalid),
 			theirs:   withKeys(fk1, fk2, invalid),
-			expected: []string{"fk1", "fk2"},
+			expected: []string{"fk1", "fk2", "fk_invalid"},
 		},
 		{
 			name:     "both changed",
