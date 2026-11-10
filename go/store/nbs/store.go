@@ -687,18 +687,18 @@ func OverwriteStoreManifest(ctx context.Context, store *NomsBlockStore, root has
 	return nil
 }
 
-func NewAWSStore(ctx context.Context, nbfVerStr string, table, ns, bucket string, s3 S3APIV2, ddb DynamoDBAPIV2, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
+func NewAWSStore(ctx context.Context, nbfVerStr string, table, ns, bucket string, s3 S3APIV2, ddb DynamoDBAPIV2, memTableSize uint64, q MemoryQuotaProvider, storeOpts ...StoreOption) (*NomsBlockStore, error) {
 	readRateLimiter := make(chan struct{}, 32)
 	p := &awsTablePersister{
-		s3,
-		q,
-		readRateLimiter,
-		bucket,
-		ns,
-		awsLimits{defaultS3PartSize, minS3PartSize, maxS3PartSize},
+		s3:     s3,
+		q:      q,
+		rl:     readRateLimiter,
+		bucket: bucket,
+		ns:     ns,
+		limits: awsLimits{defaultS3PartSize, minS3PartSize, maxS3PartSize},
 	}
 	mm := manifest(newDynamoManifest(table, ns, ddb))
-	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize)
+	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize, storeOpts...)
 }
 
 // NewGCSStore returns an nbs implementation backed by a GCSBlobstore
@@ -718,7 +718,7 @@ func NewOCISStore(ctx context.Context, nbfVerStr string, bucketName, path string
 }
 
 // NewGitStore returns an nbs implementation backed by a GitBlobstore.
-func NewGitStore(ctx context.Context, nbfVerStr string, gitDir string, ref string, opts blobstore.GitBlobstoreOptions, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
+func NewGitStore(ctx context.Context, nbfVerStr string, gitDir string, ref string, opts blobstore.GitBlobstoreOptions, memTableSize uint64, q MemoryQuotaProvider, storeOpts ...StoreOption) (*NomsBlockStore, error) {
 	// A Git remote may reject large blobs. To keep git-backed remotes broadly usable by default, enable
 	// chunked-object writes with a conservative max part size unless the caller explicitly overrides it.
 	if opts.MaxPartSize == 0 {
@@ -731,8 +731,8 @@ func NewGitStore(ctx context.Context, nbfVerStr string, gitDir string, ref strin
 	}
 
 	mm := manifest(blobstoreManifest{bs})
-	p := &singleBlobBSPersister{bs, q, s3BlockSize}
-	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize)
+	p := &singleBlobBSPersister{bs: bs, q: q, blockSize: s3BlockSize}
+	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize, storeOpts...)
 }
 
 // NewNoConjoinGitStore returns an nbs implementation backed by a GitBlobstore, but disables conjoin.
@@ -748,31 +748,31 @@ func NewNoConjoinGitStore(ctx context.Context, nbfVerStr string, gitDir string, 
 	}
 
 	mm := manifest(blobstoreManifest{bs})
-	p := &noConjoinBlobstorePersister{bs, q, s3BlockSize}
+	p := &noConjoinBlobstorePersister{bs: bs, q: q, blockSize: s3BlockSize}
 	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, noopConjoiner{}, memTableSize)
 }
 
 // NewBSStore returns an nbs implementation backed by a Blobstore
-func NewBSStore(ctx context.Context, nbfVerStr string, bs blobstore.Blobstore, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
+func NewBSStore(ctx context.Context, nbfVerStr string, bs blobstore.Blobstore, memTableSize uint64, q MemoryQuotaProvider, storeOpts ...StoreOption) (*NomsBlockStore, error) {
 	mm := manifest(blobstoreManifest{bs})
 
-	p := &blobstorePersister{bs, q, s3BlockSize}
-	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize)
+	p := &blobstorePersister{bs: bs, q: q, blockSize: s3BlockSize}
+	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize, storeOpts...)
 }
 
 // NewNoConjoinBSStore returns a nbs implementation backed by a Blobstore
-func NewNoConjoinBSStore(ctx context.Context, nbfVerStr string, bs blobstore.Blobstore, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
+func NewNoConjoinBSStore(ctx context.Context, nbfVerStr string, bs blobstore.Blobstore, memTableSize uint64, q MemoryQuotaProvider, storeOpts ...StoreOption) (*NomsBlockStore, error) {
 	mm := manifest(blobstoreManifest{bs})
 
-	p := &noConjoinBlobstorePersister{bs, q, s3BlockSize}
-	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, noopConjoiner{}, memTableSize)
+	p := &noConjoinBlobstorePersister{bs: bs, q: q, blockSize: s3BlockSize}
+	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, noopConjoiner{}, memTableSize, storeOpts...)
 }
 
-func NewLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSize uint64, q MemoryQuotaProvider, mmapArchiveIndexes bool) (*NomsBlockStore, error) {
-	return newLocalStore(ctx, nbfVerStr, dir, memTableSize, defaultMaxTables, q, mmapArchiveIndexes)
+func NewLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSize uint64, q MemoryQuotaProvider, mmapArchiveIndexes bool, storeOpts ...StoreOption) (*NomsBlockStore, error) {
+	return newLocalStore(ctx, nbfVerStr, dir, memTableSize, defaultMaxTables, q, mmapArchiveIndexes, storeOpts...)
 }
 
-func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSize uint64, maxTables int, q MemoryQuotaProvider, mmapArchiveIndexes bool) (*NomsBlockStore, error) {
+func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSize uint64, maxTables int, q MemoryQuotaProvider, mmapArchiveIndexes bool, storeOpts ...StoreOption) (*NomsBlockStore, error) {
 	if err := checkDir(dir); err != nil {
 		return nil, err
 	}
@@ -790,7 +790,7 @@ func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 	p := newFSTablePersister(dir, q, mmapArchiveIndexes)
 	c := conjoinStrategy(inlineConjoiner{maxTables})
 
-	return newNomsBlockStore(ctx, nbfVerStr, m, p, q, c, memTableSize)
+	return newNomsBlockStore(ctx, nbfVerStr, m, p, q, c, memTableSize, storeOpts...)
 }
 
 func NewLocalJournalingStore(ctx context.Context, nbfVers, dir string, q MemoryQuotaProvider, mmapArchiveIndexes bool, warningsCb func(error)) (*NomsBlockStore, error) {
@@ -810,7 +810,7 @@ type JournalingStoreOptions struct {
 	SkipLockFileTimeout bool
 }
 
-func NewLocalJournalingStoreWithOptions(ctx context.Context, nbfVers, dir string, q MemoryQuotaProvider, mmapArchiveIndexes bool, warningsCb func(error), opts JournalingStoreOptions) (*NomsBlockStore, error) {
+func NewLocalJournalingStoreWithOptions(ctx context.Context, nbfVers, dir string, q MemoryQuotaProvider, mmapArchiveIndexes bool, warningsCb func(error), opts JournalingStoreOptions, storeOpts ...StoreOption) (*NomsBlockStore, error) {
 	if err := checkDir(dir); err != nil {
 		return nil, err
 	}
@@ -834,6 +834,7 @@ func NewLocalJournalingStoreWithOptions(ctx context.Context, nbfVers, dir string
 	}
 	nbs.staticAccessMode = staticAccessMode
 	nbs.staticVersion = constants.FormatDoltString
+	nbs.applyOptions(storeOpts)
 	nbs.loadThunk = func(ctx context.Context, loadIt bool) {
 		if loadIt == false {
 			if lock != nil {
@@ -918,7 +919,7 @@ func newEmptyNomsBlockStore(memTableSize uint64) (*NomsBlockStore, error) {
 	return nbs, nil
 }
 
-func newNomsBlockStore(ctx context.Context, nbfVerStr string, m manifest, p tablePersister, q MemoryQuotaProvider, c conjoinStrategy, memTableSize uint64) (*NomsBlockStore, error) {
+func newNomsBlockStore(ctx context.Context, nbfVerStr string, m manifest, p tablePersister, q MemoryQuotaProvider, c conjoinStrategy, memTableSize uint64, storeOpts ...StoreOption) (*NomsBlockStore, error) {
 	nbs, err := newEmptyNomsBlockStore(memTableSize)
 	if err != nil {
 		return nil, err
@@ -929,6 +930,7 @@ func newNomsBlockStore(ctx context.Context, nbfVerStr string, m manifest, p tabl
 	nbs.conjoiner = c
 	nbs.tables = newTableSet(p, q)
 	nbs.upstream = manifestContents{nbfVers: nbfVerStr}
+	nbs.applyOptions(storeOpts)
 
 	t1 := time.Now()
 	defer nbs.stats.OpenLatency.SampleTimeSince(t1)
