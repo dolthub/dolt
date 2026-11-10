@@ -44,7 +44,7 @@ func CheckAccessForDb(ctx context.Context, db SqlDatabase, flags branch_control.
 		return nil
 	}
 
-	dbName, branch := doltdb.SplitRevisionDbName(db.RevisionQualifiedName())
+	dbName, branch := db.AliasedName(), db.Revision()
 	rebasedBranch, err := branch_control.RebasedBranch(branchAwareSession, dbName, branch)
 	if err != nil {
 		return err
