@@ -92,11 +92,11 @@ func addEncryptedTailSize(rd io.ReadSeeker, idxSz int64) (int64, error) {
 // rereadEncryptedTail replaces |buf|, a plain-sized tail, with an encrypted table's whole tail read by |load|.
 func rereadEncryptedTail(ctx context.Context, q MemoryQuotaProvider, buf []byte, tailSz int, fileSz uint64, load func([]byte) (uint64, error)) ([]byte, int, error) {
 	extra, err := parseEncryptedExtra(buf[:tailSz])
-	if err != nil || extra == 0 {
-		if err != nil {
-			q.ReleaseQuotaBytes(len(buf))
-		}
+	if err != nil {
+		q.ReleaseQuotaBytes(len(buf))
 		return buf, tailSz, err
+	} else if extra == 0 {
+		return buf, tailSz, nil
 	}
 	full := uint64(tailSz) + extra
 	q.ReleaseQuotaBytes(len(buf))

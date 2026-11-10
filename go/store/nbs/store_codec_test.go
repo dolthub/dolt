@@ -17,6 +17,7 @@ package nbs
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
@@ -24,6 +25,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/golang/snappy"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
@@ -146,6 +148,18 @@ func TestToyCodecTableFile(t *testing.T) {
 		err := IterChunks(t.Context(), bytes.NewReader(data), func(chunks.Chunk) (bool, error) { return false, nil })
 		require.ErrorContains(t, err, "encrypted table file")
 	})
+}
+
+// A chunk opened from a record without a CRC fails ToChunk if its data does not match its address.
+func TestOpenedChunkVerifiesHash(t *testing.T) {
+	payload := snappy.Encode(nil, []byte("chunk data"))
+	full := binary.BigEndian.AppendUint32(payload, crc(payload))
+	cc := CompressedChunk{H: hash.Of([]byte("other data")), FullCompressedChunk: full, CompressedData: full[:len(payload)], verify: true}
+	_, err := cc.ToChunk()
+	require.ErrorIs(t, err, ErrInvalidTableFile)
+	cc.verify = false
+	_, err = cc.ToChunk()
+	require.NoError(t, err)
 }
 
 func TestToyCodecCopiesSealedChunks(t *testing.T) {
@@ -348,6 +362,7 @@ func TestToyCodecLocalStore(t *testing.T) {
 	}
 	require.Equal(t, len(all), n)
 	require.EqualValues(t, len(all), c.located.Load())
+	require.Zero(t, c.addingOpens.Load(), "the store's own files are not being added")
 
 	t.Run("PlaintextDolt", func(t *testing.T) {
 		withPlainDefault(t)
@@ -468,8 +483,8 @@ func TestToyCodecJournalIndex(t *testing.T) {
 	idxPath := filepath.Join(filepath.Dir(path), journalIndexFileName)
 	idx, err := os.ReadFile(idxPath)
 	require.NoError(t, err)
-	// The toy authentication record is 8 bytes.
-	i := bytes.Index(idx, []byte{indexRecAuth, 0, 8})
+	// The toy authentication record is a tag and a lookup count.
+	i := bytes.Index(idx, []byte{indexRecAuth, 0, toyTagSize + 4})
 	require.GreaterOrEqual(t, i, 0)
 	idx[i+1+uint16Size] ^= 0xff
 	require.NoError(t, os.WriteFile(idxPath, idx, 0644))

@@ -70,11 +70,12 @@ type sealedRecord struct {
 }
 
 // journalCodec seals what a chunk journal writes, and checks and opens what it reads. The journal writer holds its
-// lock for every call but chunker and locate, which may run concurrently under its read lock or without it. Slices
-// passed to the codec are valid only during the call.
+// lock for every call but chunker, which runs under its read lock or without it, and locate, which runs under its
+// read lock. chunker owns the payload it is passed; other slices are valid only during the call.
 type journalCodec interface {
-	// replay checks a record read from |wr|'s journal, which it may index when |canWrite|. |wr| is nil when the
-	// journal is read without a writer.
+	// replay checks a record read from |wr|'s journal, which it may index when |canWrite|. |wr| is nil, and no lock is
+	// held, when the journal is read without a writer. A key record may be replayed, and reach checkBatch, more than
+	// once.
 	replay(ctx context.Context, wr *journalWriter, canWrite bool, off int64, r journalRec) error
 	// checkBatch checks an index batch whose checksum matched.
 	checkBatch(ctx context.Context, m lookupMeta, batch []lookup) error

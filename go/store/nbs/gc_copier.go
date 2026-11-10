@@ -34,17 +34,14 @@ type gcCopier struct {
 	tfp    tableFilePersister
 }
 
-// newTableWriterFromArchiveLevel returns a writer that seals its records under |codec| if it is not nil.
+// newTableWriterFromArchiveLevel returns a writer that seals its records under |codec|.
 func newTableWriterFromArchiveLevel(archiveLevel chunks.GCArchiveLevel, codec storeCodec) (GenericTableWriter, error) {
 	// The sealer comes first so that a failure to make it leaves no writer behind.
 	switch archiveLevel {
 	case chunks.SimpleArchive:
-		var sealer spanSealer
-		if codec != nil {
-			var err error
-			if sealer, err = codec.newSpanSealer(true); err != nil {
-				return nil, err
-			}
+		sealer, err := codec.newSpanSealer(true)
+		if err != nil {
+			return nil, err
 		}
 		w, err := NewArchiveStreamWriter("")
 		if err != nil {
@@ -53,12 +50,9 @@ func newTableWriterFromArchiveLevel(archiveLevel chunks.GCArchiveLevel, codec st
 		w.writer.sealer = sealer
 		return w, nil
 	case chunks.NoArchive:
-		var sealer recordSealer
-		if codec != nil {
-			var err error
-			if sealer, err = codec.newTableSealer(); err != nil {
-				return nil, err
-			}
+		sealer, err := codec.newTableSealer()
+		if err != nil {
+			return nil, err
 		}
 		w, err := NewCmpChunkTableWriter("")
 		if err != nil {

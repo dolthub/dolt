@@ -40,6 +40,9 @@ type toyCodec struct {
 	// added counts the commits of files added to the store, and located the records it located for remote clients.
 	added   atomic.Int32
 	located atomic.Int32
+	// addingOpens counts the files it opened as being added, and recompressing the archive sealers that recompress.
+	addingOpens   atomic.Int32
+	recompressing atomic.Int32
 	// refuseOpened, if set, is the error checkOpened refuses files with.
 	refuseOpened error
 }
@@ -83,12 +86,25 @@ const (
 	toyKindRoot  = 'r'
 )
 
-// toyKeyBlock is the key block of every toy file.
-var toyKeyBlock = []byte("TOY")
+// toyKeyBlock is the key block of a toy file of |count| records, or of a toy journal's key record.
+func toyKeyBlock(count uint32) []byte {
+	return binary.BigEndian.AppendUint32([]byte("TOY"), count)
+}
+
+func checkToyKeyBlock(kb []byte, count uint32) error {
+	if !bytes.Equal(kb, toyKeyBlock(count)) {
+		return fmt.Errorf("toy key block %x is not for %d records", kb, count)
+	}
+	return nil
+}
+
+// toyTagSize makes a sealed record larger than its payload, as sealing does.
+const toyTagSize = 16
 
 func toyTag(kind byte, h hash.Hash, plain []byte) []byte {
 	crc := crc32.Update(crc32.ChecksumIEEE([]byte{kind}), crc32.IEEETable, h[:])
-	return binary.BigEndian.AppendUint32(nil, crc32.Update(crc, crc32.IEEETable, plain)^0x5a5a5a5a)
+	tag := binary.BigEndian.AppendUint32(nil, crc32.Update(crc, crc32.IEEETable, plain)^0x5a5a5a5a)
+	return append(tag, h[:toyTagSize-4]...)
 }
 
 func toySeal(dst []byte, kind byte, h hash.Hash, plain []byte) []byte {
@@ -99,10 +115,10 @@ func toySeal(dst []byte, kind byte, h hash.Hash, plain []byte) []byte {
 }
 
 func toyOpen(kind byte, h hash.Hash, sealed []byte) ([]byte, error) {
-	if len(sealed) < 4 {
+	if len(sealed) < toyTagSize {
 		return nil, errToyTag
 	}
-	plain := make([]byte, len(sealed)-4, len(sealed))
+	plain := make([]byte, len(sealed)-toyTagSize, len(sealed))
 	for i := range plain {
 		plain[i] = sealed[i] ^ toyKey
 	}
@@ -130,17 +146,21 @@ func (c *toyCodec) newTableSealer() (recordSealer, error) {
 	return &toySealer{}, nil
 }
 
-func (c *toyCodec) newSpanSealer(bool) (spanSealer, error) {
+func (c *toyCodec) newSpanSealer(recompress bool) (spanSealer, error) {
 	if c.keyless {
 		return nil, errToyKeyless
+	}
+	if recompress {
+		c.recompressing.Add(1)
 	}
 	return &toySpanSealer{}, nil
 }
 
-func (c *toyCodec) openTable(ti onHeapTableIndex, _ bool) (recordOpener, error) {
-	if err := checkToyKeyBlock(ti.keyBlock()); err != nil {
+func (c *toyCodec) openTable(ti onHeapTableIndex, adding bool) (recordOpener, error) {
+	if err := checkToyKeyBlock(ti.keyBlock(), ti.count); err != nil {
 		return nil, err
 	}
+	c.notedOpen(adding)
 	o := &toyOpener{codec: c, records: make(map[uint64]bool, ti.count)}
 	for i := uint32(0); i < ti.count; i++ {
 		o.records[ti.getIndexEntry(i).Offset()] = true
@@ -148,22 +168,42 @@ func (c *toyCodec) openTable(ti onHeapTableIndex, _ bool) (recordOpener, error) 
 	return o, nil
 }
 
-func (c *toyCodec) openArchive(keyBlock []byte, _ uint32, _ bool) (archiveSpans, error) {
-	if err := checkToyKeyBlock(keyBlock); err != nil {
+func (c *toyCodec) openArchive(keyBlock []byte, spans uint32, adding bool) (spanOpener, error) {
+	if err := checkToyKeyBlock(keyBlock, spans); err != nil {
 		return nil, err
 	}
-	return &toySpans{codec: c}, nil
+	c.notedOpen(adding)
+	return &toySpans{codec: c, spans: spans}, nil
 }
 
-func checkToyKeyBlock(kb []byte) error {
-	if !bytes.Equal(kb, toyKeyBlock) {
-		return fmt.Errorf("bad toy key block %x", kb)
+func (c *toyCodec) notedOpen(adding bool) {
+	if adding {
+		c.addingOpens.Add(1)
 	}
-	return nil
 }
 
-func (c *toyCodec) conjoinKeyBlock([]sourceWithSize) ([]byte, error) {
-	return toyKeyBlock, nil
+// conjoinKeyBlock covers the records of every source.
+func (c *toyCodec) conjoinKeyBlock(sources []sourceWithSize) ([]byte, error) {
+	var count uint32
+	for _, sws := range sources {
+		var kb []byte
+		var n uint32
+		if acs, ok := sws.source.(*archiveChunkSource); ok {
+			kb, n = acs.aRdr.keyBlock, acs.aRdr.footer.byteSpanCount
+		} else {
+			idx, err := sws.source.index()
+			if err != nil {
+				return nil, err
+			}
+			ti := idx.(onHeapTableIndex)
+			kb, n = ti.keyBlock(), ti.count
+		}
+		if err := checkToyKeyBlock(kb, n); err != nil {
+			return nil, err
+		}
+		count += n
+	}
+	return toyKeyBlock(count), nil
 }
 
 func (c *toyCodec) newJournalCodec() journalCodec {
@@ -225,7 +265,7 @@ func (s *toySealer) add(tw *CmpChunkTableWriter, tc ToChunker) (uint32, error) {
 }
 
 func (s *toySealer) keyBlock() ([]byte, error) {
-	return toyKeyBlock, nil
+	return toyKeyBlock(s.next), nil
 }
 
 type toySpanSealer struct {
@@ -294,13 +334,25 @@ func (o *toyOpener) locate(_ context.Context, ranges map[hash.Hash]Range) error 
 	return nil
 }
 
+// toySpans checks that it opens spans by their ids.
 type toySpans struct {
 	codec *toyCodec
+	spans uint32
 }
 
-func (s *toySpans) openDict(_ context.Context, _ uint32, stored []byte) (*DecompBundle, error) {
+func (s *toySpans) span(id uint32) error {
+	if id == 0 || id > s.spans {
+		return fmt.Errorf("no toy span %d of %d", id, s.spans)
+	}
+	return nil
+}
+
+func (s *toySpans) openDict(_ context.Context, id uint32, stored []byte) (*DecompBundle, error) {
 	if s.codec.keyless {
 		return nil, errToyKeyless
+	}
+	if err := s.span(id); err != nil {
+		return nil, err
 	}
 	raw, err := toyOpen(toyKindDict, hash.Hash{}, stored)
 	if err != nil {
@@ -310,7 +362,7 @@ func (s *toySpans) openDict(_ context.Context, _ uint32, stored []byte) (*Decomp
 }
 
 func (s *toySpans) chunkData(ctx context.Context, rc resolvedChunk, dict *DecompBundle, stored []byte) ([]byte, error) {
-	c, err := s.toChunker(ctx, rc, dict, stored)
+	c, err := s.chunker(ctx, rc, dict, stored)
 	if err != nil {
 		return nil, err
 	}
@@ -318,11 +370,22 @@ func (s *toySpans) chunkData(ctx context.Context, rc resolvedChunk, dict *Decomp
 	return chk.Data(), err
 }
 
-func (s *toySpans) toChunker(_ context.Context, rc resolvedChunk, dict *DecompBundle, stored []byte) (ToChunker, error) {
+func (s *toySpans) chunker(_ context.Context, rc resolvedChunk, dict *DecompBundle, stored []byte) (ToChunker, error) {
+	if err := s.span(rc.dataId); err != nil {
+		return nil, err
+	}
+	if (rc.dictId == 0) != (dict == nil) || rc.dictId >= rc.dataId {
+		return nil, fmt.Errorf("toy span %d has dictionary span %d", rc.dataId, rc.dictId)
+	}
 	return &toyChunk{codec: s.codec, h: rc.h, record: stored, dict: dict}, nil
 }
 
-func (s *toySpans) locate(_ context.Context, _ *archiveReader, resolved []resolvedChunk) error {
+func (s *toySpans) locate(_ context.Context, resolved []resolvedChunk, ranges map[hash.Hash]Range) error {
+	for _, rc := range resolved {
+		if _, ok := ranges[rc.h]; !ok {
+			return fmt.Errorf("toy chunk %s was not located", rc.h.String())
+		}
+	}
 	s.codec.located.Add(int32(len(resolved)))
 	return nil
 }
@@ -388,8 +451,8 @@ type toyJournal struct {
 func (j *toyJournal) replay(_ context.Context, wr *journalWriter, canWrite bool, off int64, r journalRec) error {
 	switch r.kind {
 	case keyJournalRecKind:
-		if !bytes.Equal(r.payload, toyKeyBlock) {
-			return fmt.Errorf("bad toy key record at %d", off)
+		if err := checkToyKeyBlock(r.payload, 0); err != nil {
+			return fmt.Errorf("toy key record at %d: %w", off, err)
 		}
 		j.wroteKey = true
 		if canWrite {
@@ -403,7 +466,10 @@ func (j *toyJournal) replay(_ context.Context, wr *journalWriter, canWrite bool,
 		}
 		return err
 	case encRootHashJournalRecKind:
-		_, err := toyOpen(toyKindRoot, r.address, r.payload)
+		ts, err := toyOpen(toyKindRoot, r.address, r.payload)
+		if err == nil && (len(ts) != 8 || binary.BigEndian.Uint64(ts) != uint64(r.timestamp.Unix())) {
+			err = fmt.Errorf("toy root record at %d has the wrong timestamp", off)
+		}
 		return err
 	}
 	return fmt.Errorf("%w: journal record kind %d at %d", ErrEncryptionMismatch, r.kind, off)
@@ -411,8 +477,8 @@ func (j *toyJournal) replay(_ context.Context, wr *journalWriter, canWrite bool,
 
 func (j *toyJournal) checkBatch(_ context.Context, m lookupMeta, batch []lookup) error {
 	for _, k := range m.keys {
-		if !bytes.Equal(k, toyKeyBlock) {
-			return fmt.Errorf("bad toy key record in the index: %x", k)
+		if err := checkToyKeyBlock(k, 0); err != nil {
+			return fmt.Errorf("toy key record in the index: %w", err)
 		}
 		j.wroteKey = true
 	}
@@ -436,14 +502,15 @@ func (j *toyJournal) writeKey(ctx context.Context, wr *journalWriter, behavior d
 	if j.wroteKey {
 		return nil
 	}
-	n, _ := journalRecordSize(len(toyKeyBlock))
+	key := toyKeyBlock(0)
+	n, _ := journalRecordSize(len(key))
 	buf, err := wr.getBytes(ctx, behavior, int(n))
 	if err != nil {
 		return err
 	}
-	writeJournalRecord(buf, keyJournalRecKind, hash.Hash{}, toyKeyBlock)
+	writeJournalRecord(buf, keyJournalRecKind, hash.Hash{}, key)
 	j.wroteKey = true
-	return wr.indexKey(toyKeyBlock)
+	return wr.indexKey(key)
 }
 
 func (j *toyJournal) sealChunk(ctx context.Context, wr *journalWriter, behavior dherrors.FatalBehavior, cc CompressedChunk) (sealedRecord, error) {
@@ -453,11 +520,12 @@ func (j *toyJournal) sealChunk(ctx context.Context, wr *journalWriter, behavior 
 	return sealedRecord{kind: encChunkJournalRecKind, payload: toySeal(nil, toyKindChunk, cc.H, cc.CompressedData)}, nil
 }
 
-func (j *toyJournal) sealRoot(ctx context.Context, wr *journalWriter, behavior dherrors.FatalBehavior, root hash.Hash, _ uint64) (sealedRecord, error) {
+func (j *toyJournal) sealRoot(ctx context.Context, wr *journalWriter, behavior dherrors.FatalBehavior, root hash.Hash, timestamp uint64) (sealedRecord, error) {
 	if err := j.writeKey(ctx, wr, behavior); err != nil {
 		return sealedRecord{}, err
 	}
-	return sealedRecord{kind: encRootHashJournalRecKind, payload: toySeal(nil, toyKindRoot, root, nil)}, nil
+	ts := binary.BigEndian.AppendUint64(nil, timestamp)
+	return sealedRecord{kind: encRootHashJournalRecKind, payload: toySeal(nil, toyKindRoot, root, ts)}, nil
 }
 
 func (j *toyJournal) indexedLookup(lookup) {

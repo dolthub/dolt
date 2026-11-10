@@ -416,7 +416,7 @@ func (acs *archiveChunkSource) getRecordRanges(ctx context.Context, _ dherrors.F
 			DictLength: uint32(dictSpan.length),
 		}
 	}
-	if err = acs.aRdr.locateKeys(ctx, resolved); err != nil {
+	if err = acs.aRdr.locateKeys(ctx, resolved, result); err != nil {
 		return nil, gcBehavior_Continue, err
 	}
 	return result, gcBehavior_Continue, nil
