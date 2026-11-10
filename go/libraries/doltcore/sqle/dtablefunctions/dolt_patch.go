@@ -24,6 +24,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
@@ -308,7 +309,7 @@ func (p *PatchTableFunction) WithChildren(ctx *sql.Context, children ...sql.Node
 
 // CheckAuth implements the interface sql.AuthorizationCheckerNode.
 func (p *PatchTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
-	baseDB, _ := doltdb.SplitRevisionDbName(p.database.Name())
+	baseDB := plan.CheckPrivilegeNameForDatabase(p.database)
 	if p.tableNameExpr != nil {
 		if !sqltypes.IsText(p.tableNameExpr.Type(ctx)) {
 			return ExpressionIsDeferred(ctx, p.tableNameExpr)

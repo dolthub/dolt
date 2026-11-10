@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -128,7 +129,7 @@ func (pm *PreviewMergeConflictsSummaryTableFunction) WithChildren(ctx *sql.Conte
 
 // CheckAuth implements the interface sql.AuthorizationCheckerNode.
 func (pm *PreviewMergeConflictsSummaryTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
-	baseDB, _ := doltdb.SplitRevisionDbName(pm.database.Name())
+	baseDB := plan.CheckPrivilegeNameForDatabase(pm.database)
 	tblNames, err := pm.database.GetTableNames(ctx)
 	if err != nil {
 		return false
