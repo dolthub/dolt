@@ -851,6 +851,7 @@ var MergeMultipleBasesAbortScripts = []queries.ScriptTest{
 // MergeMultipleBasesPreviewScripts preview merges against a virtual merge base, and check that the merges find the
 // same conflicts.
 var MergeMultipleBasesPreviewScripts = []queries.ScriptTest{
+	// https://github.com/dolthub/dolt/issues/12421: previewing the merge builds the same virtual merge base.
 	previewParityScript("preview: merge bases that create the same table with different schemas",
 		sameTableCreatedTwiceSetup(), "feature", "main", "t", "", nil, nil),
 	// x2 resolves the conflict back to c1's value. That is still a change from the conflicted merge bases, as in git,
@@ -989,16 +990,16 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 		"main", true,
 		check{"SELECT * FROM t ORDER BY id;", []sql.Row{{1, "edited on main", nil, nil}, {3, "seed", nil, nil}, {4, "seed", nil, nil},
 			{50, "feature", nil, nil}}}),
-	// The merge bases ct and sc both add t, with different schemas, so their virtual merge base conflicts on t's
-	// schema. main and feature agree on it, so they merge cleanly.
+	// https://github.com/dolthub/dolt/issues/12421: the merge bases ct and sc both add t, with different schemas, so
+	// their virtual merge base conflicts on t's schema. main and feature agree on it, so they merge cleanly.
 	mergeScript("merge bases that create the same table with different schemas: merge main into feature",
 		sameTableCreatedTwiceSetup(), "main", true,
 		check{"SELECT * FROM t ORDER BY id;", []sql.Row{{1, 10}, {2, 20}}}),
 	mergeScript("merge bases that create the same table with different schemas: merge feature into main",
 		append(sameTableCreatedTwiceSetup(), "CALL DOLT_CHECKOUT('main');"), "feature", true,
 		check{"SELECT * FROM t ORDER BY id;", []sql.Row{{1, 10}, {2, 20}}}),
-	// main and feature agree on t's schema, but each adds row 3 with a different c. The virtual merge base has no t,
-	// so row 3 conflicts with no base row.
+	// https://github.com/dolthub/dolt/issues/12421, and then main and feature, which agree on t's schema, each add row 3
+	// with a different c. The virtual merge base has no t, so row 3 conflicts with no base row.
 	mergeScript("merge bases that create the same table with different schemas, tips adding a row differently: merge main into feature",
 		append(sameTableCreatedTwiceSetup(),
 			"CALL DOLT_CHECKOUT('main');",
@@ -1010,8 +1011,8 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 			"SET @@autocommit = 0;"),
 		"main", false,
 		check{"SELECT base_id, base_c, our_id, our_c, their_id, their_c FROM dolt_conflicts_t;", []sql.Row{{nil, nil, 3, 31, 3, 30}}}),
-	// feature adds column d to t, so main and feature disagree on t's schema. As in a merge of two branches that create
-	// t differently, the merge fails.
+	// https://github.com/dolthub/dolt/issues/12421, and then feature adds column d to t, so main and feature disagree on
+	// t's schema. As in a merge of two branches that create t differently, the merge fails.
 	{
 		Name: "merge bases that create the same table with different schemas, tips disagreeing on the schema: merge main into feature",
 		SetUpScript: append(sameTableCreatedTwiceSetup(),
