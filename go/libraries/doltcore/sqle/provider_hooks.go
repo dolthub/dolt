@@ -14,8 +14,27 @@
 
 package sqle
 
-import "context"
+import (
+	"context"
+
+	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/types"
+)
 
 // evictCachedGitRemote closes and forgets the git remote that |p| caches under |key| if it cannot serve a database
 // opened with |params|. Every cached git remote can serve any database in Dolt.
 var evictCachedGitRemote = func(p *DoltDatabaseProvider, ctx context.Context, key string, params map[string]interface{}) {}
+
+// openPushOnWriteRemote opens remote |r|, which the commits of |dEnv|'s database are pushed to as they are written.
+var openPushOnWriteRemote = func(ctx context.Context, r env.Remote, dEnv *env.DoltEnv) (*doltdb.DoltDB, error) {
+	return r.GetRemoteDB(ctx, types.Format_DOLT, dEnv)
+}
+
+// createClientDatabase creates database |name| that a remotes API client asked for with |ctx|.
+var createClientDatabase = func(ctx context.Context, sqlCtx *sql.Context, p dsess.DoltDatabaseProvider, name string) error {
+	return p.CreateDatabase(sqlCtx, name)
+}

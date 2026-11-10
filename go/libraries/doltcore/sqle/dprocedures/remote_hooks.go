@@ -27,6 +27,11 @@ var openPushRemote = func(ctx *sql.Context, p dsess.DoltDatabaseProvider, local 
 	return p.GetRemoteDB(ctx, local.Format(), r)
 }
 
+// openFetchRemote opens remote |r|, which |local| fetches or pulls from.
+var openFetchRemote = func(ctx *sql.Context, p dsess.DoltDatabaseProvider, local *doltdb.DoltDB, r env.Remote) (*doltdb.DoltDB, error) {
+	return p.GetRemoteDB(ctx, local.Format(), r)
+}
+
 // newRestoreCreator returns what creates the database that |backup| is restored into.
 var newRestoreCreator = func(ctx *sql.Context, p dsess.DoltDatabaseProvider, backup *doltdb.DoltDB) (func(*sql.Context, string) error, error) {
 	return p.CreateDatabase, nil

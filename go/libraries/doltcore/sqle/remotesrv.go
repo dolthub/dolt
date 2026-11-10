@@ -47,7 +47,7 @@ func (s remotesrvStore) Get(ctx context.Context, path, _ string) (remotesrv.Remo
 	db, err := sess.Provider().Database(sqlCtx, path)
 	if err != nil {
 		if s.createDBs && sql.ErrDatabaseNotFound.Is(err) {
-			err = sess.Provider().CreateDatabase(sqlCtx, path)
+			err = createClientDatabase(ctx, sqlCtx, sess.Provider(), path)
 			if err != nil {
 				return nil, err
 			}

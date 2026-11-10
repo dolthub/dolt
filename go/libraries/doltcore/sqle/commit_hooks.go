@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 type PushOnWriteHook struct {
@@ -407,7 +406,7 @@ func getDestinationDb(ctx context.Context, dEnv *env.DoltEnv, remoteName string)
 		return nil, fmt.Errorf("%w: '%s'", env.ErrRemoteNotFound, remoteName)
 	}
 
-	destDb, err := rem.GetRemoteDB(ctx, types.Format_DOLT, dEnv)
+	destDb, err := openPushOnWriteRemote(ctx, rem, dEnv)
 	if err != nil {
 		return nil, err
 	}

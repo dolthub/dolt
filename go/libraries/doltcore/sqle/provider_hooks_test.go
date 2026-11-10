@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 
@@ -23,6 +24,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
@@ -45,4 +48,24 @@ func TestEvictCachedGitRemoteIsReached(t *testing.T) {
 	_, err = p.GetRemoteDB(context.Background(), types.Format_DOLT, r)
 	require.Error(t, err)
 	require.Len(t, keys, 1)
+}
+
+func TestOpenPushOnWriteRemoteIsReached(t *testing.T) {
+	ctx := context.Background()
+	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.DoltDB(ctx).Close()
+	require.NoError(t, dEnv.AddRemote(env.NewRemote("origin", "file://"+filepath.ToSlash(t.TempDir()), nil)))
+	refused := errors.New("refused")
+	saved := openPushOnWriteRemote
+	t.Cleanup(func() { openPushOnWriteRemote = saved })
+	var opened []string
+	openPushOnWriteRemote = func(_ context.Context, r env.Remote, got *env.DoltEnv) (*doltdb.DoltDB, error) {
+		require.Same(t, dEnv, got)
+		opened = append(opened, r.Name)
+		return nil, refused
+	}
+
+	_, err := getDestinationDb(ctx, dEnv, "origin")
+	require.ErrorIs(t, err, refused)
+	require.Equal(t, []string{"origin"}, opened)
 }

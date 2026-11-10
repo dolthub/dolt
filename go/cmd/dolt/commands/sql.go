@@ -746,6 +746,7 @@ func buildBatchSqlErr(stmtStartLine int, query string, err error) error {
 func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResultFormat, cliCtx cli.CliContext, binaryAsHex bool) error {
 	_ = iohelp.WriteLine(cli.CliOut, welcomeMsg)
 	historyFile := filepath.Join(".sqlhistory") // history file written to working dir
+	historyFile = shellHistoryFile(sqlCtx, cliCtx, historyFile)
 
 	initialPrompt, initialMultilinePrompt := postCommandUpdate(sqlCtx, qryist)
 
