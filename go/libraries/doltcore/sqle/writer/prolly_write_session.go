@@ -109,7 +109,7 @@ func (s *prollyWriteSession) withRoot(root doltdb.RootValue) *doltdb.WorkingSet 
 	return s.owner.WorkingSet().WithWorkingRoot(root)
 }
 
-func (s *prollyWriteSession) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+func (s *prollyWriteSession) VisitGCRoots(ctx context.Context, roots func(hash.Hash)) error {
 	for _, writer := range s.tables {
 		err := writer.VisitGCRoots(ctx, roots)
 		if err != nil {

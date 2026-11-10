@@ -99,7 +99,7 @@ type indexWriter interface {
 	Discard(ctx context.Context) error
 	HasEdits(ctx context.Context) bool
 	IterRange(ctx context.Context, rng prolly.Range) (prolly.MapIter, error)
-	VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error
+	VisitGCRoots(ctx context.Context, roots func(hash.Hash)) error
 }
 
 type primaryIndexErrBuilder interface {
@@ -254,7 +254,7 @@ func (m prollyIndexWriter) Commit(ctx context.Context) error {
 	return m.mut.Checkpoint(ctx)
 }
 
-func (m prollyIndexWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+func (m prollyIndexWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash)) error {
 	return m.mut.VisitGCRoots(ctx, roots)
 }
 
@@ -449,7 +449,7 @@ func (m prollySecondaryIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.R
 	return m.keyBld.Build(ctx, sharePool)
 }
 
-func (m prollySecondaryIndexWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+func (m prollySecondaryIndexWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash)) error {
 	return m.mut.VisitGCRoots(ctx, roots)
 }
 

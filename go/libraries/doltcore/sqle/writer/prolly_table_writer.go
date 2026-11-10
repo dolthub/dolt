@@ -451,7 +451,7 @@ func (w *prollyTableWriter) deferMaterialization() bool {
 	return w.writeSess.deferMaterialization
 }
 
-func (w *prollyTableWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+func (w *prollyTableWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash)) error {
 	err := w.primary.VisitGCRoots(ctx, roots)
 	if err != nil {
 		return err

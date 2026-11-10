@@ -46,7 +46,7 @@ type WriteSession interface {
 
 	// VisitGCRoots is used to ensure that a write session's GC roots are retained
 	// in the case that a GC needs to proceed before the write session is flushed.
-	VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error
+	VisitGCRoots(ctx context.Context, roots func(hash.Hash)) error
 
 	// GetOptions returns the editor.Options for this session.
 	GetOptions() editor.Options
