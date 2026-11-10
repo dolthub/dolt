@@ -95,6 +95,9 @@ type Result struct {
 	// FullTextRebuilds are the tables whose Full-Text pseudo-index tables the merge did not rebuild because of
 	// MergeOpts.SkipFullTextRebuild.
 	FullTextRebuilds []doltdb.TableName
+	// AncestorRoot is the ancestor the merge merged against: the ancestor passed to MergeRoots, with the tables whose
+	// primary key both sides changed the same way rekeyed to that key.
+	AncestorRoot doltdb.RootValue
 }
 
 func (r Result) HasSchemaConflicts() bool {
@@ -230,10 +233,12 @@ func MergeRoots(
 	// Merge tables one at a time. This is done based on name. With table names from ourRoot being merged first,
 	// renaming a table will return delete/modify conflict error consistently.
 	// TODO: merge based on a more durable table identity that persists across renames
-	merger, err := NewMerger(ourRoot, theirRoot, ancRoot, theirs, ancestor, ourRoot.VRW(), ourRoot.NodeStore())
+	merger, err := NewMerger(ctx, ourRoot, theirRoot, ancRoot, theirs, ancestor, ourRoot.VRW(), ourRoot.NodeStore())
 	if err != nil {
 		return nil, err
 	}
+	// The foreign key checks diff the merged root against the ancestor, so they need its rekeyed tables too.
+	ancRoot = merger.anc
 
 	destSchemaNames, err := getDatabaseSchemaNames(ctx, ourRoot)
 	if err != nil {
@@ -386,6 +391,7 @@ func MergeRoots(
 		SchemaConflicts:  schConflicts,
 		Stats:            tblToStats,
 		FullTextRebuilds: fullTextRebuilds,
+		AncestorRoot:     ancRoot,
 	}, nil
 }
 

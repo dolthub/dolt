@@ -36,7 +36,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
@@ -312,33 +311,16 @@ func (sc *StatsController) GetTableStats(ctx *sql.Context, sch, db string, table
 	return ret, nil
 }
 
+// AnalyzeTable implements sql.StatsProvider. |dbName| is the session's current database, not necessarily the database
+// of |table|, so the database and revision are taken from |table| itself.
 func (sc *StatsController) AnalyzeTable(ctx *sql.Context, table sql.Table, dbName string) (err error) {
-	dSess := dsess.DSessFromSess(ctx.Session)
-
-	var branch string
-	if strings.Contains(dbName, "/") {
-		parts := strings.Split(dbName, "/")
-		if len(parts) == 2 {
-			dbName = parts[0]
-			branch = parts[1]
-		}
+	dsTable, ok := table.(sql.DatabaseSchemaTable)
+	if !ok {
+		return fmt.Errorf("cannot analyze table %s: not a Dolt table", table.Name())
 	}
-	if branch == "" {
-		var err error
-		branch, err = dSess.GetBranch(ctx)
-		if err != nil {
-			return err
-		}
-
-		if branch == "" {
-			branch = env.DefaultInitBranch
-		}
-	}
-
-	db, err := sc.pro.Database(ctx, dbName)
-	sqlDb, err := sqle.RevisionDbForBranch(ctx, db.(dsess.SqlDatabase), branch, branch+"/"+dbName)
-	if err != nil {
-		return err
+	sqlDb, ok := dsTable.DatabaseSchema().(dsess.SqlDatabase)
+	if !ok {
+		return fmt.Errorf("cannot analyze table %s: not a Dolt table", table.Name())
 	}
 
 	newStats := newRootStats()
@@ -545,13 +527,6 @@ func (sc *StatsController) lockedRotateStorage(ctx context.Context) error {
 	}
 
 	sc.kv.Close()
-
-	if sc.statsBackingDb != nil {
-		if err := sc.rm(sc.statsBackingDb); err != nil {
-			return err
-		}
-	}
-
 	var mem *memStats
 	switch kv := sc.kv.(type) {
 	case *prollyStats:
@@ -561,9 +536,16 @@ func (sc *StatsController) lockedRotateStorage(ctx context.Context) error {
 	default:
 		mem = NewMemStats()
 	}
+	// Serve stats from memory until the new store opens, so a failed rotation doesn't leave the closed store in use.
+	sc.kv = mem
+
+	if sc.statsBackingDb != nil {
+		if err := sc.rm(sc.statsBackingDb); err != nil {
+			return err
+		}
+	}
 
 	if len(sc.dbFs) == 0 {
-		sc.kv = mem
 		sc.statsBackingDb = nil
 		return nil
 	}

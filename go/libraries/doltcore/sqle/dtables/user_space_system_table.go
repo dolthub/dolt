@@ -238,47 +238,48 @@ func createWriteableSystemTable(ctx *sql.Context, tblName doltdb.TableName, tblS
 		return nil, nil, err
 	}
 
-	if !found {
+	ws := dbState.WriteSession()
+	if ws == nil {
+		return nil, nil, fmt.Errorf("could not create %s table, database does not allow writing", tblName)
+	}
+
+	var tableWriter dsess.TableWriter
+	if found {
+		tableWriter, err = ws.GetTableWriter(ctx, tblName)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		workingSet, err := dbState.WorkingSet(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		if workingSet == nil {
+			return nil, nil, doltdb.ErrOperationNotSupportedInDetachedHead
+		}
+
 		sch := sql.NewPrimaryKeySchema(tblSchema)
 		doltSch, err := sqlutil.ToDoltSchema(ctx, roots.Working, tblName, sch, roots.Head, sql.Collation_Default)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		// underlying table doesn't exist. Record this, then create the table.
+		// The table doesn't exist yet. The writer adds it to the working set when it flushes, so a write that fails
+		// doesn't leave an empty table behind.
 		newRootValue, err := doltdb.CreateEmptyTable(ctx, roots.Working, tblName, doltSch)
-
 		if err != nil {
 			return nil, nil, err
 		}
-
-		if dbState.WorkingSet() == nil {
-			return nil, nil, doltdb.ErrOperationNotSupportedInDetachedHead
-		}
-
-		// We use WriteSession.SetWorkingSet instead of DoltSession.SetWorkingRoot because we want to avoid modifying the root
-		// until the end of the transaction, but we still want the WriteSession to be able to find the newly
-		// created table.
-		if ws := dbState.WriteSession(); ws != nil {
-			err = ws.SetWorkingSet(ctx, dbState.WorkingSet().WithWorkingRoot(newRootValue))
-			if err != nil {
-				return nil, nil, err
-			}
-		} else {
-			return nil, nil, fmt.Errorf("could not create %s table, database does not allow writing", tblName)
-		}
-	}
-
-	var tableWriter dsess.TableWriter
-	if ws := dbState.WriteSession(); ws != nil {
-		tableWriter, err = ws.GetTableWriter(ctx, tblName)
+		tbl, _, err := newRootValue.GetTable(ctx, tblName)
 		if err != nil {
 			return nil, nil, err
 		}
-		tableWriter.StatementBegin(ctx)
-	} else {
-		return nil, nil, fmt.Errorf("could not create %s table, database does not allow writing", tblName)
+		tableWriter, err = ws.GetTableWriterForNewTable(ctx, tblName, tbl)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
+	tableWriter.StatementBegin(ctx)
 
 	return &prevHash, tableWriter, nil
 }

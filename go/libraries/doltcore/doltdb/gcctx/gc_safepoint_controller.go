@@ -41,14 +41,14 @@ type GCSafepointController struct {
 // will be called if a GC needs to establish a safepoint while the
 // session is alive. The method is responsible for passing every live
 // in-memory chunk address related to the given |db| to the provided
-// |roots| callback. If it cannot do this for some reason, it should
-// return an error, but in that case the GC will fail.
+// |roots| callback, which cannot fail. If it cannot do this for some
+// reason, it should return an error, but in that case the GC will fail.
 // |VisitGCRoots| is called while the session is outside a command, or
 // while a GC initiated by that session has made it visitable through
 // Waiter. If there is an outstanding visit when SessionCommandBegin is
 // called, the new command blocks until the visit completes.
 type GCRootsProvider interface {
-	VisitGCRoots(ctx context.Context, db string, roots func(hash.Hash) bool) error
+	VisitGCRoots(ctx context.Context, db string, roots func(hash.Hash)) error
 }
 
 type GCSafepointSessionState struct {

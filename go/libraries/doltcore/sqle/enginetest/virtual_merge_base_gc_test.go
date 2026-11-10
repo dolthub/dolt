@@ -160,7 +160,7 @@ func checkRebuiltAfterGC(t *testing.T, history dtu.CrissCross, query string, exp
 		mergeBases = append(mergeBases, hash.Parse(row[0].(string)))
 	}
 	assert.ElementsMatch(t, mergeBases, meta.MergeBases)
-	cached, err := doltdb.LoadConflictBaseRoot(merging, vrw, ns, meta)
+	cached, err := doltdb.LoadConflictBaseRoot(merging, vrw, ns, meta, hash.Hash{})
 	require.NoError(t, err)
 	cachedHash, err := cached.HashOf()
 	require.NoError(t, err)
@@ -174,7 +174,7 @@ func checkRebuiltAfterGC(t *testing.T, history dtu.CrissCross, query string, exp
 		require.NoError(t, err)
 		require.NotNil(t, source, "garbage collection keeps the merge bases")
 	}
-	_, err = doltdb.LoadConflictBaseRoot(merging, vrw, ns, prolly.ConflictMetadata{BaseRootIsh: meta.BaseRootIsh})
+	_, err = doltdb.LoadConflictBaseRoot(merging, vrw, ns, prolly.ConflictMetadata{BaseRootIsh: meta.BaseRootIsh}, hash.Hash{})
 	assert.Error(t, err, "conflict metadata without merge bases cannot rebuild a collected virtual merge base")
 
 	after := enginetest.NewSession(h)
@@ -182,7 +182,7 @@ func checkRebuiltAfterGC(t *testing.T, history dtu.CrissCross, query string, exp
 	run(after, "SET @@dolt_dont_merge_json = 1;")
 	run(after, "SET time_zone = '-07:00';")
 	assert.Equal(t, before, run(after, query))
-	rebuilt, err := doltdb.LoadConflictBaseRoot(after, vrw, ns, meta)
+	rebuilt, err := doltdb.LoadConflictBaseRoot(after, vrw, ns, meta, hash.Hash{})
 	require.NoError(t, err)
 	rebuiltHash, err := rebuilt.HashOf()
 	require.NoError(t, err)

@@ -965,7 +965,7 @@ func TestBlobs(t *testing.T) {
 				vars := sqle.NewEngineVariables()
 				h.WithEngineVariables(vars)
 				ctx := sql.NewContextWithVariables(context.Background(), vars)
-				require.NoError(t, vars.System.(sql.ContextAwareSystemVariableRegistry).AssignValuesWithContext(ctx, map[string]interface{}{"secure_file_priv": dir}))
+				require.NoError(t, vars.System.AssignValues(ctx, map[string]interface{}{"secure_file_priv": dir}))
 				if prepared {
 					enginetest.TestScriptPrepared(t, h, script)
 				} else {
@@ -1615,6 +1615,16 @@ func TestDoltMergeMultipleBases(t *testing.T) {
 func TestDoltMergeMultipleBasesPrepared(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunDoltMergeMultipleBasesPreparedTests(t, h)
+}
+
+func TestDoltMergeSamePrimaryKeyChange(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltMergeSamePrimaryKeyChangeTests(t, h)
+}
+
+func TestDoltMergeSamePrimaryKeyChangePrepared(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltMergeSamePrimaryKeyChangePreparedTests(t, h)
 }
 
 func TestDoltMergeBasesTableFunction(t *testing.T) {

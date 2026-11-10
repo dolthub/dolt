@@ -269,6 +269,7 @@ func newTableFileMetadata(path string, chunkCount uint32) (*TableFileMetadata, e
 	if err != nil {
 		return nil, err
 	}
+	defer fra.Close()
 
 	idxSz := int64(indexSize(chunkCount) + footerSize)
 	indexOffset := fra.sz - idxSz

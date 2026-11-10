@@ -43,6 +43,15 @@ func TestMutableMapCheckpoints(t *testing.T) {
 			t.Run("revert post-flush", func(t *testing.T) {
 				testRevertAfterFlush(t, s)
 			})
+			t.Run("revert post-flush without checkpointed edits", func(t *testing.T) {
+				testRevertAfterFlushWithoutCheckpointedEdits(t, s)
+			})
+			t.Run("revert twice post-flush", func(t *testing.T) {
+				testRevertTwiceAfterFlush(t, s)
+			})
+			t.Run("checkpoint map", func(t *testing.T) {
+				testCheckpointMap(t, s)
+			})
 		})
 	}
 }
@@ -145,7 +154,7 @@ func testRevertAfterFlush(t *testing.T, scale int) {
 		// flush post-checkpoint edits halfway through
 		// this creates a stashed tree in |mut|
 		if i == len(post)/2 {
-			err = mut.flushPending(ctx, false)
+			err = mut.flushPending(ctx)
 			require.NoError(t, err)
 		}
 	}
@@ -167,5 +176,141 @@ func testRevertAfterFlush(t *testing.T, scale int) {
 		ok, err := mut.Has(ctx, ed[0])
 		require.NoError(t, err)
 		assert.False(t, ok)
+	}
+}
+
+// testRevertAfterFlushWithoutCheckpointedEdits reverts writes that were flushed when no checkpointed writes were
+// pending, either because none were ever made or because they were flushed before the checkpoint was taken.
+func testRevertAfterFlushWithoutCheckpointedEdits(t *testing.T, scale int) {
+	ctx := context.Background()
+	for _, flushBeforeCheckpoint := range []bool{false, true} {
+		m := ascendingIntMapWithStep(t, scale, 2)
+		mut := m.Mutate()
+
+		edits := ascendingTuplesWithStepAndStart(scale/5, 2, 1)
+		pre, post := edits[:scale/10], edits[scale/10:]
+		if !flushBeforeCheckpoint {
+			pre, post = nil, edits
+		}
+
+		for _, ed := range pre {
+			require.NoError(t, mut.Put(ctx, ed[0], ed[1]))
+		}
+		require.NoError(t, mut.flushPending(ctx))
+		require.NoError(t, mut.Checkpoint(ctx))
+		assert.False(t, mut.HasUncheckpointedEdits())
+
+		for i, ed := range post {
+			require.NoError(t, mut.Put(ctx, ed[0], ed[1]))
+			if i == len(post)/2 {
+				require.NoError(t, mut.flushPending(ctx))
+			}
+		}
+		assert.Equal(t, len(post) > 0, mut.HasUncheckpointedEdits())
+
+		mut.Revert(ctx)
+		assert.False(t, mut.HasUncheckpointedEdits())
+
+		for _, ed := range pre {
+			ok, err := mut.Has(ctx, ed[0])
+			require.NoError(t, err)
+			assert.True(t, ok)
+		}
+		for _, ed := range post {
+			ok, err := mut.Has(ctx, ed[0])
+			require.NoError(t, err)
+			assert.False(t, ok)
+		}
+	}
+}
+
+// testRevertTwiceAfterFlush reverts to a stashed checkpoint, then makes and reverts more writes.
+func testRevertTwiceAfterFlush(t *testing.T, scale int) {
+	ctx := context.Background()
+	m := ascendingIntMapWithStep(t, scale, 2)
+	mut := m.Mutate()
+
+	edits := ascendingTuplesWithStepAndStart(scale/5, 2, 1)
+	pre, post := edits[:scale/10], edits[scale/10:]
+
+	for _, ed := range pre {
+		require.NoError(t, mut.Put(ctx, ed[0], ed[1]))
+	}
+	require.NoError(t, mut.Checkpoint(ctx))
+
+	for _, ed := range post {
+		require.NoError(t, mut.Put(ctx, ed[0], ed[1]))
+	}
+	require.NoError(t, mut.flushPending(ctx))
+	mut.Revert(ctx)
+
+	for _, ed := range post {
+		require.NoError(t, mut.Put(ctx, ed[0], ed[1]))
+	}
+	mut.Revert(ctx)
+
+	for _, ed := range pre {
+		ok, err := mut.Has(ctx, ed[0])
+		require.NoError(t, err)
+		assert.True(t, ok)
+	}
+	for _, ed := range post {
+		ok, err := mut.Has(ctx, ed[0])
+		require.NoError(t, err)
+		assert.False(t, ok)
+	}
+}
+
+// testCheckpointMap materializes a map at its checkpoint, with uncheckpointed writes both pending and flushed.
+func testCheckpointMap(t *testing.T, scale int) {
+	ctx := context.Background()
+	for _, flush := range []bool{false, true} {
+		m := ascendingIntMapWithStep(t, scale, 2)
+		mut := m.Mutate()
+
+		edits := ascendingTuplesWithStepAndStart(scale/5, 2, 1)
+		pre, post := edits[:scale/10], edits[scale/10:]
+
+		for _, ed := range pre {
+			require.NoError(t, mut.Put(ctx, ed[0], ed[1]))
+		}
+		require.NoError(t, mut.Checkpoint(ctx))
+		assert.False(t, mut.HasUncheckpointedEdits())
+
+		for _, ed := range post {
+			require.NoError(t, mut.Put(ctx, ed[0], ed[1]))
+		}
+		if flush {
+			require.NoError(t, mut.flushPending(ctx))
+		}
+		assert.True(t, mut.HasUncheckpointedEdits())
+
+		cp, err := mut.CheckpointMap(ctx)
+		require.NoError(t, err)
+		cnt, err := cp.Count()
+		require.NoError(t, err)
+		assert.Equal(t, scale+len(pre), cnt)
+		for _, ed := range pre {
+			ok, err := cp.Has(ctx, ed[0])
+			require.NoError(t, err)
+			assert.True(t, ok)
+		}
+		for _, ed := range post {
+			ok, err := cp.Has(ctx, ed[0])
+			require.NoError(t, err)
+			assert.False(t, ok)
+		}
+
+		// |mut| is unchanged
+		for _, ed := range edits {
+			ok, err := mut.Has(ctx, ed[0])
+			require.NoError(t, err)
+			assert.True(t, ok)
+		}
+		all, err := mut.Map(ctx)
+		require.NoError(t, err)
+		cnt, err = all.Count()
+		require.NoError(t, err)
+		assert.Equal(t, scale+len(edits), cnt)
 	}
 }

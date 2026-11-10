@@ -797,7 +797,7 @@ func deliverChunkCallback(chunkCh chan nbs.ToChunker, path string, dictCache *di
 		var cc nbs.ToChunker
 		if rang.DictLength != 0 {
 			payload, _ := dictCache.getOrCreate(path, rang.DictOffset, rang.DictLength)
-			bundle, err := payload.Get()
+			bundle, err := payload.Get(ctx)
 			if err != nil {
 				return err
 			}
@@ -822,10 +822,6 @@ func deliverChunkCallback(chunkCh chan nbs.ToChunker, path string, dictCache *di
 func setDictionaryCallback(dictCache *dictionaryCache, path string) func(context.Context, []byte, *Range) error {
 	return func(ctx context.Context, bs []byte, rang *Range) error {
 		bundle, err := nbs.NewDecompBundle(bs)
-		if err != nil {
-			return err
-		}
-
 		payload, _ := dictCache.getOrCreate(path, rang.Offset, rang.Length)
 		payload.Set(bundle, err)
 		// XXX: For now, we fail here on any error, instead of when we try to use the dictionary...
@@ -892,9 +888,13 @@ type DictionaryPayload struct {
 	err  error
 }
 
-func (p *DictionaryPayload) Get() (*nbs.DecompBundle, error) {
-	<-p.done
-	return p.res, p.err
+func (p *DictionaryPayload) Get(ctx context.Context) (*nbs.DecompBundle, error) {
+	select {
+	case <-p.done:
+		return p.res, p.err
+	case <-ctx.Done():
+		return nil, context.Cause(ctx)
+	}
 }
 
 func (p *DictionaryPayload) Set(res *nbs.DecompBundle, err error) {

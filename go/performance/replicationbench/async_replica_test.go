@@ -65,7 +65,6 @@ func benchmarkAsyncPush(b *testing.B, test serverTest) {
 
 	// setup
 	dEnv, cfg = getAsyncEnvAndConfig(ctx, b)
-	dsess.InitPersistedSystemVars(dEnv)
 	executeServerQueries(ctx, b, dEnv, cfg, test.setup)
 
 	// bench

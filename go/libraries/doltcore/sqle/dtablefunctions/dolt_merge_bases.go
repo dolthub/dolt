@@ -15,10 +15,12 @@
 package dtablefunctions
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -73,7 +75,7 @@ func (m *MergeBasesTableFunction) Resolved() bool {
 // CheckAuth implements the sql.AuthorizationCheckerNode interface. Like dolt_log, it reveals commit history, so it
 // requires SELECT on every table.
 func (m *MergeBasesTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
-	baseDB, _ := doltdb.SplitRevisionDbName(m.db.Name())
+	baseDB := plan.CheckPrivilegeNameForDatabase(m.db)
 	tblNames, err := m.db.GetTableNames(ctx)
 	if err != nil {
 		return false
@@ -172,7 +174,9 @@ func (m *MergeBasesTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Ro
 		return nil, err
 	}
 	bases, err := merge.MergeBases(ctx, left, right)
-	if err != nil {
+	if errors.Is(err, doltdb.ErrNoCommonAncestor) {
+		return sql.RowsToRowIter(), nil
+	} else if err != nil {
 		return nil, err
 	}
 

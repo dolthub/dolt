@@ -47,12 +47,25 @@ func (k prollyKeylessWriter) Map(ctx context.Context) (prolly.MapInterface, erro
 	return k.mut.Map(ctx)
 }
 
+func (k prollyKeylessWriter) CheckpointMap(ctx context.Context) (prolly.MapInterface, error) {
+	return k.mut.CheckpointMap(ctx)
+}
+
+func (k prollyKeylessWriter) HasUncommittedEdits() bool {
+	return k.mut.HasUncheckpointedEdits()
+}
+
+func (k prollyKeylessWriter) CheckpointView(ctx context.Context) (prolly.MapView, bool, error) {
+	v, err := prolly.CheckpointView(ctx, k.mut)
+	return v, err == nil, err
+}
+
 // ValidateKeyViolations returns nil for keyless writers, because there are no keys, so violations are possible
 func (k prollyKeylessWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error {
 	return nil
 }
 
-func (k prollyKeylessWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+func (k prollyKeylessWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash)) error {
 	return k.mut.VisitGCRoots(ctx, roots)
 }
 
@@ -236,7 +249,23 @@ func (writer prollyKeylessSecondaryWriter) Map(ctx context.Context) (prolly.MapI
 	return writer.mut.Map(ctx)
 }
 
-func (writer prollyKeylessSecondaryWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+// CheckpointMap implements the interface indexWriter.
+func (writer prollyKeylessSecondaryWriter) CheckpointMap(ctx context.Context) (prolly.MapInterface, error) {
+	return writer.mut.CheckpointMap(ctx)
+}
+
+// HasUncommittedEdits implements the interface indexWriter.
+func (writer prollyKeylessSecondaryWriter) HasUncommittedEdits() bool {
+	return writer.mut.HasUncheckpointedEdits()
+}
+
+// CheckpointView implements the interface indexWriter.
+func (writer prollyKeylessSecondaryWriter) CheckpointView(ctx context.Context) (prolly.MapView, bool, error) {
+	v, err := prolly.CheckpointView(ctx, writer.mut)
+	return v, err == nil, err
+}
+
+func (writer prollyKeylessSecondaryWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash)) error {
 	return writer.mut.VisitGCRoots(ctx, roots)
 }
 

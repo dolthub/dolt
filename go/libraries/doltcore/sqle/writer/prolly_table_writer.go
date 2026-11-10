@@ -16,8 +16,10 @@ package writer
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"strings"
+	"sync/atomic"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -35,6 +37,9 @@ import (
 // todo(andy): get from NodeStore
 var sharePool = pool.NewBuffPool()
 
+// lastCheckpoint numbers the checkpoints of every prollyTableWriter, so that each identifies a unique set of edits.
+var lastCheckpoint atomic.Uint64
+
 // AutoIncrementGetter is implemented by editors that support AUTO_INCREMENT to return the next value that will be
 // inserted.
 type AutoIncrementGetter interface {
@@ -50,7 +55,7 @@ type prollyTableWriter struct {
 	tblName   doltdb.TableName
 	sch       schema.Schema
 	sqlSch    sql.Schema
-	writeSess dsess.WriteSession
+	writeSess *prollyWriteSession
 
 	aiCol      schema.Column
 	aiTracker  *dsess.AutoIncrementTracker
@@ -58,7 +63,22 @@ type prollyTableWriter struct {
 	aiAltered  bool // True when an ALTER TABLE affects the auto increment value
 	aiSet      bool // True when an INSERT/UPDATE affects the auto increment value
 
+	// edited is true when rows may have changed since the last Reset. Until then the writer holds exactly |tbl|,
+	// which is already in the write session's root, so Close has nothing to materialize.
+	edited bool
+
 	errEncountered error
+	// pending is true when edits from completed statements have not been materialized into the write session's
+	// working set. See prollyWriteSession.deferMaterialization.
+	pending bool
+	// checkpoint identifies the edits of completed statements, and changes whenever they do.
+	checkpoint uint64
+	// view caches views of the index writers as of |checkpoint|. See pendingRows.
+	view *index.PendingRows
+
+	// open is set when GetTableWriter hands out this writer and cleared by Close. Writers are shared per table, so any
+	// holder's Close clears it.
+	open bool
 
 	virtualExpressions []sql.Expression
 }
@@ -160,6 +180,7 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, schS
 
 // Insert implements TableWriter.
 func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error) {
+	w.edited = true
 	if err = w.primary.ValidateKeyViolations(ctx, sqlRow); err != nil {
 		return err
 	}
@@ -267,6 +288,7 @@ func sameColumnNames(left, right []string) bool {
 
 // Update implements TableWriter.
 func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) (err error) {
+	w.edited = true
 	for _, wr := range w.secondary {
 		if err := wr.Update(ctx, oldRow, newRow); err != nil {
 			if uke, ok := err.(secondaryUniqueKeyError); ok {
@@ -304,6 +326,7 @@ func (w *prollyTableWriter) UpdateChangesUniqueKey(oldRow sql.Row, newRow sql.Ro
 
 // Delete implements TableWriter.
 func (w *prollyTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) (err error) {
+	w.edited = true
 	for _, wr := range w.secondary {
 		if err := wr.Delete(ctx, sqlRow); err != nil {
 			return err
@@ -340,6 +363,11 @@ func (w *prollyTableWriter) DiscardChanges(ctx *sql.Context, errorEncountered er
 
 // StatementComplete implements TableWriter.
 func (w *prollyTableWriter) StatementComplete(ctx *sql.Context) error {
+	if w.hasUncommittedEdits() {
+		w.newCheckpoint()
+		// When materialization is deferred, the edits of completed statements are pending until it happens
+		w.pending = w.pending || w.deferMaterialization()
+	}
 	err := w.primary.Commit(ctx)
 	for _, secondary := range w.secondary {
 		sErr := secondary.Commit(ctx)
@@ -404,14 +432,26 @@ func (w *prollyTableWriter) AcquireAutoIncrementLock(ctx *sql.Context) (func(), 
 
 // Close implements Closer
 func (w *prollyTableWriter) Close(ctx *sql.Context) error {
+	w.open = false
 	// We discard data changes in DiscardChanges, but this doesn't include schema changes, which we don't want to flushAllTables
 	if w.errEncountered != nil {
 		return w.errEncountered
 	}
+	if w.deferMaterialization() {
+		// Leave the statement's edits in our index writers, pending materialization into the working set.
+		return w.StatementComplete(ctx)
+	}
+	if !w.edited {
+		return w.writeSess.publish(ctx)
+	}
 	return w.flush(ctx)
 }
 
-func (w *prollyTableWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+func (w *prollyTableWriter) deferMaterialization() bool {
+	return w.writeSess.deferMaterialization
+}
+
+func (w *prollyTableWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash)) error {
 	err := w.primary.VisitGCRoots(ctx, roots)
 	if err != nil {
 		return err
@@ -422,7 +462,61 @@ func (w *prollyTableWriter) VisitGCRoots(ctx context.Context, roots func(hash.Ha
 			return err
 		}
 	}
+	if w.view != nil {
+		w.view.Primary.VisitGCRoots(roots)
+		for _, v := range w.view.Secondary {
+			v.VisitGCRoots(roots)
+		}
+	}
 	return nil
+}
+
+func (w *prollyTableWriter) hasUncommittedEdits() bool {
+	if w.primary.HasUncommittedEdits() {
+		return true
+	}
+	for _, secondary := range w.secondary {
+		if secondary.HasUncommittedEdits() {
+			return true
+		}
+	}
+	return false
+}
+
+// newCheckpoint is called whenever the edits of completed statements change.
+func (w *prollyTableWriter) newCheckpoint() {
+	w.checkpoint = lastCheckpoint.Add(1)
+	w.view = nil
+}
+
+// pendingRows returns views of this writer's indexes that include the edits of completed statements, but not those
+// of a statement in progress. It returns nil if any of its indexes can't provide a view.
+func (w *prollyTableWriter) pendingRows(ctx *sql.Context) (*index.PendingRows, error) {
+	if w.view != nil {
+		return w.view, nil
+	}
+
+	secondary := make(map[string]prolly.MapView, len(w.secondary))
+	for name, idx := range w.secondary {
+		v, ok, err := idx.CheckpointView(ctx)
+		if err != nil || !ok {
+			return nil, err
+		}
+		secondary[name] = v
+	}
+	primary, ok, err := w.primary.CheckpointView(ctx)
+	if err != nil || !ok {
+		return nil, err
+	}
+
+	var key [8]byte
+	binary.BigEndian.PutUint64(key[:], w.checkpoint)
+	w.view = &index.PendingRows{
+		Key:       doltdb.DataCacheKey{Hash: hash.Of(key[:])},
+		Primary:   primary,
+		Secondary: secondary,
+	}
+	return w.view, nil
 }
 
 // Reset puts the writer into a fresh state, updating the schema and index writers according to the newly given table.
@@ -455,20 +549,50 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, tbl *doltdb.Table) error {
 	}
 
 	w.tbl = tbl
+	w.pending = false
+	w.newCheckpoint()
 	w.sch = schState.DoltSchema
 	w.sqlSch = schState.PkSchema.Schema
 	w.primary = newPrimary
 	w.secondary = newSecondaries
 	w.aiCol = schState.AutoIncCol
 	w.virtualExpressions = schState.VirtualExpressions
+	w.edited = false
 
 	return nil
 }
 
 // table materializes all changes to the primary key, secondary keys, and auto increments to a new doltdb.Table
 func (w *prollyTableWriter) table(ctx *sql.Context) (tbl *doltdb.Table, err error) {
+	return w.tableFromMaps(ctx, indexWriter.Map)
+}
+
+// pendingTable returns a doltdb.Table containing all edits from completed statements, excluding the edits of any
+// statement in progress. It doesn't modify the writer, so it may run concurrently with other writers' flushes. Once
+// the returned table is in the working set, the caller must call materialized.
+func (w *prollyTableWriter) pendingTable(ctx *sql.Context) (*doltdb.Table, error) {
+	if w.hasUncommittedEdits() {
+		return w.tableFromMaps(ctx, indexWriter.CheckpointMap)
+	}
+	return w.table(ctx)
+}
+
+// materialized records that |tbl|, returned by pendingTable, is in the working set. If no statement is in progress,
+// the writer is reset to |tbl|. Otherwise our index writers still hold every edit, so our views remain valid and the
+// next materialization rebuilds all of them on top of |tbl|.
+func (w *prollyTableWriter) materialized(ctx *sql.Context, tbl *doltdb.Table) error {
+	if w.hasUncommittedEdits() {
+		w.tbl = tbl
+		w.pending = false
+		return nil
+	}
+	return w.Reset(ctx, tbl)
+}
+
+// tableFromMaps builds a doltdb.Table from the maps that |getMap| returns for each index writer.
+func (w *prollyTableWriter) tableFromMaps(ctx *sql.Context, getMap func(indexWriter, context.Context) (prolly.MapInterface, error)) (tbl *doltdb.Table, err error) {
 	// flush primary row storage
-	priMap, err := w.primary.Map(ctx)
+	priMap, err := getMap(w.primary, ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -485,7 +609,7 @@ func (w *prollyTableWriter) table(ctx *sql.Context) (tbl *doltdb.Table, err erro
 
 	for _, secIdxWriter := range w.secondary {
 		var secMap prolly.MapInterface
-		secMap, err = secIdxWriter.Map(ctx)
+		secMap, err = getMap(secIdxWriter, ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -504,7 +628,7 @@ func (w *prollyTableWriter) table(ctx *sql.Context) (tbl *doltdb.Table, err erro
 
 	if w.aiCol.AutoIncrement {
 		if w.aiAltered {
-			tbl, err = w.aiTracker.Set(ctx, w.tblName, tbl, w.writeSess.GetWorkingSet().Ref(), doltdb.AutoIncrementState(w.aiAlterVal))
+			tbl, err = w.aiTracker.Set(ctx, w.tblName, tbl, w.writeSess.owner.WorkingSet().Ref(), doltdb.AutoIncrementState(w.aiAlterVal))
 			if err != nil {
 				return nil, err
 			}
@@ -524,6 +648,12 @@ func (w *prollyTableWriter) table(ctx *sql.Context) (tbl *doltdb.Table, err erro
 }
 
 func (w *prollyTableWriter) flush(ctx *sql.Context) error {
+	if w.deferMaterialization() {
+		// Materialize this table along with any other pending tables, so that the root we set in the session
+		// contains every completed edit.
+		w.pending = true
+		return w.writeSess.materializePending(ctx)
+	}
 	tbl, err := w.table(ctx)
 	if err != nil {
 		return err

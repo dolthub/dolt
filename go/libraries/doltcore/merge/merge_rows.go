@@ -196,13 +196,22 @@ type RootMerger struct {
 	ns  tree.NodeStore
 }
 
-// NewMerger creates a new merger utility object.
+// NewMerger creates a new merger utility object. Tables of |anc| whose primary key was changed the same way in |left|
+// and |right| are rekeyed to that primary key.
 func NewMerger(
+	ctx *sql.Context,
 	left, right, anc doltdb.RootValue,
 	rightSrc, ancestorSrc doltdb.Rootish,
 	vrw types.ValueReadWriter,
 	ns tree.NodeStore,
 ) (*RootMerger, error) {
+	tblNames, err := doltdb.UnionTableNames(ctx, left, right)
+	if err != nil {
+		return nil, err
+	}
+	if anc, ancestorSrc, err = rekeyAncestor(ctx, left, right, anc, ancestorSrc, tblNames); err != nil {
+		return nil, err
+	}
 	return &RootMerger{
 		left:     left,
 		right:    right,
@@ -212,6 +221,11 @@ func NewMerger(
 		vrw:      vrw,
 		ns:       ns,
 	}, nil
+}
+
+// Ancestor returns the Rootish that conflicts of this merge take their base from.
+func (rm *RootMerger) Ancestor() doltdb.Rootish {
+	return rm.ancSrc
 }
 
 // MergedResult returns either the merged table or merged root object. Both fields will never be set simultaneously.
