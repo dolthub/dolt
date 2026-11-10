@@ -270,7 +270,8 @@ func (p *DoltDatabaseProvider) SetRemoteDialer(provider dbfactory.GRPCDialProvid
 	p.remoteDialer = provider
 }
 
-// SetParentConfig sets the config that the databases this provider loads and creates fall back to.
+// SetParentConfig sets the config of the server or directory that loaded this provider, which it gives the
+// environments of the databases it creates.
 func (p *DoltDatabaseProvider) SetParentConfig(cfg config.ReadableConfig) {
 	p.parentConfig = cfg
 }
@@ -300,7 +301,12 @@ func (p *DoltDatabaseProvider) applyDBLoadParamsToEnv(dEnv *env.DoltEnv) {
 		dEnv.DBLoadParams = maps.Clone(p.dbLoadParams)
 		return
 	}
-	maps.Copy(dEnv.DBLoadParams, p.dbLoadParams)
+	// Params already on the environment, such as those a database was created with, take precedence.
+	for k, v := range p.dbLoadParams {
+		if _, ok := dEnv.DBLoadParams[k]; !ok {
+			dEnv.DBLoadParams[k] = v
+		}
+	}
 }
 
 // AddInitDatabaseHook adds an InitDatabaseHook to this provider. The hook will be invoked
@@ -1132,7 +1138,10 @@ func (p *DoltDatabaseProvider) envForClone(
 		return nil, nil, err
 	}
 
-	dEnv, err := actions.EnvForCloneOf(ctx, srcDB, r, dbName, p.fs, "VERSION", env.GetCurrentUserHomeDir, p.applyDBLoadParamsToEnv)
+	dEnv, err := actions.EnvForCloneOf(ctx, srcDB, r, dbName, p.fs, "VERSION", env.GetCurrentUserHomeDir, func(dEnv *env.DoltEnv) error {
+		p.applyDBLoadParamsToEnv(dEnv)
+		return nil
+	})
 	if err != nil {
 		return nil, nil, errors.Join(err, srcDB.Close())
 	}

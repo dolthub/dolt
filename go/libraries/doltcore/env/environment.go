@@ -103,13 +103,15 @@ type DoltEnv struct {
 	DBLoadParams map[string]interface{}
 
 	UserPassConfig *creds.DoltCredsForPass
-	// ParentConfig is the config of the server or directory that loaded this environment, which its own config
-	// falls back to.
+	// ParentConfig is the config of the server or directory that loaded this environment.
 	ParentConfig config.ReadableConfig
 }
 
 // AddDBLoadParams adds |params| to the params this environment's DoltDB loads with.
 func (dEnv *DoltEnv) AddDBLoadParams(params map[string]interface{}) {
+	if len(params) == 0 {
+		return
+	}
 	if dEnv.DBLoadParams == nil {
 		dEnv.DBLoadParams = make(map[string]interface{}, len(params))
 	}

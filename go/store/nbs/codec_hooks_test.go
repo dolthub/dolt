@@ -78,7 +78,7 @@ type recordingCodec struct {
 }
 
 func withCodec(c storeCodec) StoreOption {
-	return func(nbs *NomsBlockStore) { nbs.codec = c }
+	return func(o *storeOptions) { o.codec = c }
 }
 
 func (c *recordingCodec) checkManifest(nbs *NomsBlockStore, _ bool, _ manifestContents) error {

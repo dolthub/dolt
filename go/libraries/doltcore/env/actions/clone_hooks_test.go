@@ -16,6 +16,7 @@ package actions
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -42,12 +43,22 @@ func TestCloneLoadParamsReachTheClone(t *testing.T) {
 	fs, err := filesys.LocalFilesysWithWorkingDir(t.TempDir())
 	require.NoError(t, err)
 	var configured map[string]interface{}
-	dEnv, err := EnvForCloneOf(ctx, src, env.NoRemote, "cloned", fs, "test", func() (string, error) { return fs.TempDir(), nil }, func(dEnv *env.DoltEnv) {
+	dEnv, err := EnvForCloneOf(ctx, src, env.NoRemote, "cloned", fs, "test", func() (string, error) { return fs.TempDir(), nil }, func(dEnv *env.DoltEnv) error {
 		configured = dEnv.DBLoadParams
+		return nil
 	})
 	require.NoError(t, err)
 	defer dEnv.Close()
 	require.Same(t, src, got)
 	require.Nil(t, configured)
 	require.Equal(t, "1", dEnv.DBLoadParams["cloned"])
+
+	errParams := errors.New("no params")
+	cloneLoadParams = func(context.Context, *doltdb.DoltDB) (map[string]interface{}, error) {
+		return nil, errParams
+	}
+	_, err = EnvForCloneOf(ctx, src, env.NoRemote, "failed", fs, "test", func() (string, error) { return fs.TempDir(), nil })
+	require.ErrorIs(t, err, errParams)
+	exists, _ := fs.Exists("failed")
+	require.False(t, exists)
 }
