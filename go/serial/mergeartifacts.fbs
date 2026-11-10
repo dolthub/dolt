@@ -42,6 +42,11 @@ table MergeArtifacts {
   tree_count:uint64;
   // prolly tree level, 0 for leaf nodes
   tree_level:uint8;
+
+  // offsets for each chunk address in |value_items|, such as the base of a conflict
+  // that only the conflict references. A node without any value address omits this
+  // field, so that clients that predate it can still read the node.
+  value_address_offsets:[uint16];
 }
 
 // KEEP THIS IN SYNC WITH fileidentifiers.go

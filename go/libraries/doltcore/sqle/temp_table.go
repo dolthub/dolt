@@ -84,7 +84,10 @@ func NewTempTable(
 		return nil, fmt.Errorf("database %s not found in session", db)
 	}
 
-	ws := dbState.WorkingSet()
+	ws, err := dbState.WorkingSet(ctx)
+	if err != nil {
+		return nil, err
+	}
 	if ws == nil {
 		return nil, doltdb.ErrOperationNotSupportedInDetachedHead
 	}
@@ -151,7 +154,7 @@ func NewTempTable(
 		opts:      opts,
 	}
 
-	tempTable.writeSession = writer.NewWriteSession(db, newWs, ait, setTempTableRoot(tempTable), opts)
+	tempTable.writeSession = writer.NewDetachedWriteSession(db, newWs, ait, setTempTableRoot(tempTable), opts)
 	tempTable.ed, err = tempTable.writeSession.GetTableWriter(ctx, doltdb.TableName{Name: name})
 	if err != nil {
 		return nil, err
@@ -180,7 +183,10 @@ func setTempTableRoot(t *TempTable) func(ctx *sql.Context, dbName string, newRoo
 			return fmt.Errorf("database %s not found in session", t.dbName)
 		}
 
-		ws := dbState.WorkingSet()
+		ws, err := dbState.WorkingSet(ctx)
+		if err != nil {
+			return err
+		}
 		if ws == nil {
 			return doltdb.ErrOperationNotSupportedInDetachedHead
 		}
@@ -191,7 +197,7 @@ func setTempTableRoot(t *TempTable) func(ctx *sql.Context, dbName string, newRoo
 			return err
 		}
 
-		writeSession := writer.NewWriteSession(t.dbName, newWs, ait, setTempTableRoot(t), t.opts)
+		writeSession := writer.NewDetachedWriteSession(t.dbName, newWs, ait, setTempTableRoot(t), t.opts)
 		ed, err := writeSession.GetTableWriter(ctx, doltdb.TableName{Name: t.tableName})
 		if err != nil {
 			return err
@@ -208,7 +214,7 @@ func (t *TempTable) GCRoots(ctx context.Context, ddb *doltdb.DoltDB) ([]hash.Has
 	if ddb != t.ddb {
 		return nil, nil
 	}
-	rootHash, err := t.ddb.WriteGCRootValue(ctx, t.writeSession.GetWorkingSet().WorkingRoot())
+	rootHash, err := t.ddb.RootValueGCHash(ctx, t.writeSession.GetWorkingSet().WorkingRoot())
 	if err != nil {
 		return nil, err
 	}
@@ -329,8 +335,11 @@ func (t *TempTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) error {
 		return err
 	}
 
-	t.table = ret.NewTable
-	return nil
+	t.table, t.sch = ret.NewTable, ret.Sch
+	// Publish the indexed table to the write session so its editor uses the new
+	// schema and doesn't replace it with the pre-index schema on the next write.
+	_, err = t.writeSession.FlushTable(ctx, doltdb.TableName{Name: t.tableName}, t.table)
+	return err
 }
 
 func (t *TempTable) DropIndex(ctx *sql.Context, indexName string) error {

@@ -166,6 +166,9 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	defer singletonLock.Unlock()
 
 	if s, ok := singletons[urlObj.Path]; ok {
+		if os.Getenv(dconfig.EnvTestPanicOnSingletonHit) != "" {
+			panic(fmt.Sprintf("singleton cache hit opening %s", urlObj.Path))
+		}
 		// Callers to CreateDB are expecting to see the database as newly
 		// opened with any novelty present. This is potentially a little
 		// sketchy for any concurrent accessors, but this whole mechanism

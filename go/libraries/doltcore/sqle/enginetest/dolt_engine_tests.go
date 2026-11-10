@@ -118,7 +118,7 @@ func testAutoIncrementTrackerWithLockMode(t *testing.T, harness DoltEnginetestHa
 		vars := sqle.NewEngineVariables()
 		localHarness.WithEngineVariables(vars)
 		ctx := sql.NewContextWithVariables(context.Background(), vars)
-		err := vars.System.(sql.ContextAwareSystemVariableRegistry).AssignValuesWithContext(ctx, map[string]interface{}{"innodb_autoinc_lock_mode": lockMode})
+		err := vars.System.AssignValues(ctx, map[string]interface{}{"innodb_autoinc_lock_mode": lockMode})
 		require.NoError(t, err)
 	} else {
 		t.Skip("harness does not expose engine variables")
@@ -2578,5 +2578,27 @@ func RunDoltCommitVerificationScripts(t *testing.T, harness DoltEnginetestHarnes
 
 		enginetest.TestScript(t, harness, script)
 		harness.Close()
+	}
+}
+
+func RunDoltMergeSamePrimaryKeyChangeTests(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range MergeSamePrimaryKeyChangeScripts {
+		func() {
+			h := h.NewHarness(t)
+			defer h.Close()
+			h.Setup(setup.MydbData)
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func RunDoltMergeSamePrimaryKeyChangePreparedTests(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range MergeSamePrimaryKeyChangeScripts {
+		func() {
+			h := h.NewHarness(t)
+			defer h.Close()
+			h.Setup(setup.MydbData)
+			enginetest.TestScriptPrepared(t, h, script)
+		}()
 	}
 }

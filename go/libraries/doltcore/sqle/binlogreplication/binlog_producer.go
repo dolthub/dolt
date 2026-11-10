@@ -31,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -242,7 +241,7 @@ func (b *binlogProducer) initializeGtidPosition(ctx *sql.Context, fs filesys.Fil
 	b.gtidSequence = int64(i + 1)
 
 	logrus.Tracef("setting @@gtid_executed to %s", b.gtidPosition.GTIDSet.String())
-	return sqle.AssignSystemVariables(ctx, map[string]any{
+	return ctx.SystemVariables().AssignValues(ctx, map[string]any{
 		"gtid_executed": b.gtidPosition.GTIDSet.String()})
 }
 
@@ -272,7 +271,7 @@ func (b *binlogProducer) createGtidEvent(ctx *sql.Context) (mysql.BinlogEvent, e
 		return nil, fmt.Errorf("unable to store GTID executed metadata to disk: %s", err.Error())
 	}
 
-	err = sqle.AssignSystemVariables(ctx, map[string]any{
+	err = ctx.SystemVariables().AssignValues(ctx, map[string]any{
 		"gtid_executed": b.gtidPosition.GTIDSet.String()})
 	if err != nil {
 		return nil, err

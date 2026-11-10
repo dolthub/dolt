@@ -24,6 +24,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
@@ -36,7 +37,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
@@ -146,13 +146,17 @@ func (p *PatchTableFunction) PartitionRows(ctx *sql.Context, partition sql.Parti
 
 	// If tableNameExpr defined, return a single table patch result
 	if p.tableNameExpr != nil {
-		delta := findMatchingDelta(tableDeltas, tableName)
+		resolvedName, err := resolveDeltaTableName(ctx, fromRefDetails.root, toRefDetails.root, tableName)
+		if err != nil {
+			return nil, err
+		}
+		delta := findMatchingDelta(tableDeltas, resolvedName)
 		if delta.FromTable == nil && delta.ToTable == nil {
-			_, _, fromTblExists, err := resolve.Table(ctx, fromRefDetails.root, tableName)
+			_, _, fromTblExists, err := doltdb.GetTableInsensitive(ctx, fromRefDetails.root, resolvedName)
 			if err != nil {
 				return nil, err
 			}
-			_, _, toTblExists, err := resolve.Table(ctx, toRefDetails.root, tableName)
+			_, _, toTblExists, err := doltdb.GetTableInsensitive(ctx, toRefDetails.root, resolvedName)
 			if err != nil {
 				return nil, err
 			}
@@ -305,7 +309,7 @@ func (p *PatchTableFunction) WithChildren(ctx *sql.Context, children ...sql.Node
 
 // CheckAuth implements the interface sql.AuthorizationCheckerNode.
 func (p *PatchTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
-	baseDB, _ := doltdb.SplitRevisionDbName(p.database.Name())
+	baseDB := plan.CheckPrivilegeNameForDatabase(p.database)
 	if p.tableNameExpr != nil {
 		if !sqltypes.IsText(p.tableNameExpr.Type(ctx)) {
 			return ExpressionIsDeferred(ctx, p.tableNameExpr)

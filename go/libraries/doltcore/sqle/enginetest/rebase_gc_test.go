@@ -172,7 +172,7 @@ func TestRebaseConflictStateSurvivesGC(t *testing.T) {
 	kept, err := ws.MergeState().PreMergeHeadCommit().HashOf()
 	require.NoError(t, err)
 	assert.Equal(t, preMergeHead, kept)
-	roots, err := ddb.WorkingSetHashes(rebasing, ws)
+	roots, err := ddb.WorkingSetGCHashes(rebasing, ws)
 	require.NoError(t, err)
 	assert.Contains(t, roots, preMergeHead, "an in-memory working set must keep it too")
 

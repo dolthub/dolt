@@ -66,6 +66,9 @@ var _ ToChunker = CompressedChunk{}
 
 // NewCompressedChunk creates a CompressedChunk
 func NewCompressedChunk(h hash.Hash, buff []byte) (CompressedChunk, error) {
+	if len(buff) < checksumSize {
+		return CompressedChunk{}, errors.New("compressed chunk is too short")
+	}
 	dataLen := uint64(len(buff)) - checksumSize
 
 	chksum := binary.BigEndian.Uint32(buff[dataLen:])

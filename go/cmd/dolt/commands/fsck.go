@@ -922,7 +922,11 @@ func (ts *treeScanner) validateTree(
 			continue
 		}
 
-		if serialMsg, ok := value.(types.SerialMessage); ok {
+		if _, ok := value.(types.GhostValue); ok {
+			// A tree can reference commits, e.g. the rebase plan's commit_hash column, and walking a commit's parent
+			// closure can end at a commit a shallow clone deliberately does not have.
+			continue
+		} else if serialMsg, ok := value.(types.SerialMessage); ok {
 			err := serialMsg.WalkAddrs(ts.vs.Format(), func(addr hash.Hash) error {
 				if ts.visited.Has(addr) {
 					// Already visited; skip.
