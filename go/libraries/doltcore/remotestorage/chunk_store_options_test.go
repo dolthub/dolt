@@ -16,12 +16,13 @@ package remotestorage
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -30,32 +31,36 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+// clientFormatOfFake is what the fake format's clientFormat returns, so a request shows that it was reached.
+var clientFormatOfFake = &remotesapi.ClientRepoFormat{NbfVersion: types.Format_DOLT.VersionString(), NbsVersion: nbs.StorageVersion}
+
 type recordingFormat struct {
-	mu    *sync.Mutex
-	calls *[]string
+	mu      *sync.Mutex
+	reached map[string]bool
+	key     *[]byte
 }
 
 func newRecordingFormat() recordingFormat {
-	return recordingFormat{mu: new(sync.Mutex), calls: new([]string)}
+	return recordingFormat{mu: new(sync.Mutex), reached: make(map[string]bool), key: &[]byte{1}}
 }
 
 func (f recordingFormat) record(call string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	*f.calls = append(*f.calls, call)
+	f.reached[call] = true
 }
 
-func (f recordingFormat) took() []string {
+func (f recordingFormat) requireReached(t *testing.T, calls ...string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	ret := *f.calls
-	*f.calls = nil
-	return ret
+	for _, c := range calls {
+		require.True(t, f.reached[c], c)
+	}
 }
 
-func (f recordingFormat) clientFormat(cf *remotesapi.ClientRepoFormat) *remotesapi.ClientRepoFormat {
+func (f recordingFormat) clientFormat(*remotesapi.ClientRepoFormat) *remotesapi.ClientRepoFormat {
 	f.record("clientFormat")
-	return cf
+	return clientFormatOfFake
 }
 
 func (f recordingFormat) opened(*remotesapi.GetRepoMetadataResponse) (repoFormat, error) {
@@ -63,19 +68,24 @@ func (f recordingFormat) opened(*remotesapi.GetRepoMetadataResponse) (repoFormat
 	return f, nil
 }
 
-func (f recordingFormat) writeChunks(chnks []chunks.Chunk) (string, []byte, uint64, error) {
+func (f recordingFormat) writeChunks(ctx context.Context, chnks []chunks.Chunk) (string, []byte, uint64, error) {
 	f.record("writeChunks")
-	return storedFormat{}.writeChunks(chnks)
+	return plainFormat{}.writeChunks(ctx, chnks)
 }
 
-func (f recordingFormat) addLocationKeys([]*remotesapi.DownloadLoc, *remotesapi.StreamChunkLocationsRequest, *remotesapi.StreamChunkLocationsResponse, map[uint32]*tableFileRec, map[uint32][]byte) error {
-	f.record("addLocationKeys")
-	return nil
+func (f recordingFormat) newStreamKeys() streamKeys {
+	return func([]*remotesapi.DownloadLoc, *remotesapi.StreamChunkLocationsRequest, *remotesapi.StreamChunkLocationsResponse, map[uint32]*tableFileRec) error {
+		f.record("streamKeys")
+		return nil
+	}
 }
 
-func (f recordingFormat) addRangeKeys(downloads, *remotesapi.DownloadLoc) error {
-	f.record("addRangeKeys")
-	return nil
+func (f recordingFormat) rangeKeys(hgr *remotesapi.HttpGetRange) ([]rangeKeys, error) {
+	keys := make([]rangeKeys, len(hgr.Ranges))
+	for i := range keys {
+		keys[i].key = f.key
+	}
+	return keys, nil
 }
 
 func (f recordingFormat) wrap(cb func(context.Context, []byte, *Range) error, _ fetchResp, _ chan nbs.ToChunker) func(context.Context, []byte, *Range) error {
@@ -83,13 +93,13 @@ func (f recordingFormat) wrap(cb func(context.Context, []byte, *Range) error, _ 
 	return cb
 }
 
-var errNoUploads = errors.New("no uploads")
-
 type metadataClient struct {
 	remotesapi.ChunkStoreServiceClient
+	formats map[string]*remotesapi.ClientRepoFormat
 }
 
-func (metadataClient) GetRepoMetadata(context.Context, *remotesapi.GetRepoMetadataRequest, ...grpc.CallOption) (*remotesapi.GetRepoMetadataResponse, error) {
+func (c metadataClient) GetRepoMetadata(_ context.Context, req *remotesapi.GetRepoMetadataRequest, _ ...grpc.CallOption) (*remotesapi.GetRepoMetadataResponse, error) {
+	c.formats["GetRepoMetadata"] = req.ClientRepoFormat
 	return &remotesapi.GetRepoMetadataResponse{NbfVersion: types.Format_DOLT.VersionString(), NbsVersion: nbs.StorageVersion}, nil
 }
 
@@ -98,30 +108,45 @@ func (metadataClient) Root(context.Context, *remotesapi.RootRequest, ...grpc.Cal
 }
 
 func (metadataClient) GetUploadLocations(context.Context, *remotesapi.GetUploadLocsRequest, ...grpc.CallOption) (*remotesapi.GetUploadLocsResponse, error) {
-	return nil, errNoUploads
+	return nil, status.Error(codes.FailedPrecondition, "no uploads")
+}
+
+func (c metadataClient) Commit(_ context.Context, req *remotesapi.CommitRequest, _ ...grpc.CallOption) (*remotesapi.CommitResponse, error) {
+	c.formats["Commit"] = req.ClientRepoFormat
+	return &remotesapi.CommitResponse{Success: true}, nil
+}
+
+func (c metadataClient) AddTableFiles(_ context.Context, req *remotesapi.AddTableFilesRequest, _ ...grpc.CallOption) (*remotesapi.AddTableFilesResponse, error) {
+	c.formats["AddTableFiles"] = req.ClientRepoFormat
+	return &remotesapi.AddTableFilesResponse{Success: true}, nil
 }
 
 func TestRepoFormatIsReached(t *testing.T) {
 	ctx := context.Background()
 	f := newRecordingFormat()
-	dcs, err := NewDoltChunkStoreFromPath(ctx, types.Format_DOLT, "org/repo", "host", false, metadataClient{}, func(o *chunkStoreOptions) {
+	client := metadataClient{formats: make(map[string]*remotesapi.ClientRepoFormat)}
+	dcs, err := NewDoltChunkStoreFromPath(ctx, types.Format_DOLT, "org/repo", "host", false, client, func(o *chunkStoreOptions) {
 		o.format = f
 	})
 	require.NoError(t, err)
-	require.Equal(t, []string{"clientFormat", "opened"}, f.took())
-
-	require.NoError(t, dcs.refreshRepoMetadata(ctx))
-	require.Equal(t, []string{"clientFormat", "opened"}, f.took())
+	f.requireReached(t, "opened")
 
 	c := chunks.NewChunk([]byte("upload"))
 	_, err = dcs.uploadChunks(ctx, map[hash.Hash]nbs.CompressedChunk{c.Hash(): nbs.ChunkToCompressedChunk(c)})
 	require.Error(t, err)
-	require.Equal(t, []string{"writeChunks"}, f.took())
+	f.requireReached(t, "writeChunks")
+
+	_, err = dcs.Commit(ctx, hash.Hash{}, hash.Hash{})
+	require.NoError(t, err)
+	require.NoError(t, dcs.AddTableFilesToManifest(ctx, map[string]int{c.Hash().String(): 1}, nil))
+	for _, rpc := range []string{"GetRepoMetadata", "Commit", "AddTableFiles"} {
+		require.Same(t, clientFormatOfFake, client.formats[rpc], rpc)
+	}
 }
 
 func TestRepoFormatIsReachedByFetches(t *testing.T) {
 	f := newRecordingFormat()
-	h := startRPCThread(t, f)
+	h := startFormatRPCThread(t, f)
 	h.reqCh <- &remotesapi.StreamChunkLocationsRequest{ChunkHashes: buildFlatHashBuf(1)}
 	<-h.stream.sentCh
 	h.stream.recvCh <- fakeStreamResult{resp: &remotesapi.StreamChunkLocationsResponse{
@@ -129,7 +154,7 @@ func TestRepoFormatIsReachedByFetches(t *testing.T) {
 		Locations:  []*chunkLoc{{TableFileId: 1, RequestIndex: 0, Offset: 0, Length: 10}},
 	}}
 	locs := recvLocs(t, h.resCh)
-	require.Equal(t, []string{"addLocationKeys"}, f.took())
+	f.requireReached(t, "streamKeys")
 
 	ctx := context.Background()
 	locCh := make(chan []*remotesapi.DownloadLoc, 1)
@@ -141,9 +166,10 @@ func TestRepoFormatIsReachedByFetches(t *testing.T) {
 	go func() { errCh <- fetcherDownloadRangesThread(ctx, locCh, fetchReqCh, doneCh, f) }()
 	req := fetchReq{respCh: make(chan fetchResp, 1)}
 	fetchReqCh <- req
-	<-req.respCh
+	resp := <-req.respCh
 	require.NoError(t, <-errCh)
-	require.Equal(t, []string{"addRangeKeys"}, f.took())
+	require.Len(t, resp.get.Ranges, 1)
+	require.Same(t, f.key, resp.get.Ranges[0].key)
 
 	urlReqCh := make(chan fetchReq)
 	urlDoneCh := make(chan struct{})
@@ -153,5 +179,5 @@ func TestRepoFormatIsReachedByFetches(t *testing.T) {
 		close(urlDoneCh)
 	}()
 	require.NoError(t, fetcherDownloadURLThread(ctx, urlReqCh, urlDoneCh, nil, nil, nil, nil, nil, defaultRequestParams, func(string, ...interface{}) {}, f))
-	require.Equal(t, []string{"wrap"}, f.took())
+	f.requireReached(t, "wrap")
 }

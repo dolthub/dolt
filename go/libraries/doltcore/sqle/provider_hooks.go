@@ -25,9 +25,11 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// evictCachedGitRemote closes and forgets the git remote that |p| caches under |key| if it cannot serve a database
+// evictProviderGitRemote closes and forgets the git remote that |p| caches under |key| if it cannot serve a database
 // opened with |params|. Every cached git remote can serve any database in Dolt.
-var evictCachedGitRemote = func(p *DoltDatabaseProvider, ctx context.Context, key string, params map[string]interface{}) {}
+var evictProviderGitRemote = func(p *DoltDatabaseProvider, ctx context.Context, key string, params map[string]interface{}) error {
+	return nil
+}
 
 // openPushOnWriteRemote opens remote |r|, which the commits of |dEnv|'s database are pushed to as they are written.
 var openPushOnWriteRemote = func(ctx context.Context, r env.Remote, dEnv *env.DoltEnv) (*doltdb.DoltDB, error) {

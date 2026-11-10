@@ -20,9 +20,11 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
@@ -83,7 +85,12 @@ func TestStorageGuardIsReached(t *testing.T) {
 	ctx, sqlEng, _ := defaultSetupDetail(t, threads, false, false, true)
 	require.NoError(t, executeQuery(ctx, sqlEng, "analyze table xy"))
 
-	for _, call := range []string{"memOnly", "noteDBs", "noteDB", "lockedNoteDB", "lockedRotateStorage", "storageParams", "checkStorage"} {
+	sc := NewStatsController(logrus.StandardLogger(), threads, nil)
+	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.DoltDB(ctx).Close()
+	require.NoError(t, NewInitDatabaseHook(sc)(ctx, nil, "db", dEnv, nil))
+
+	for _, call := range []string{"useEnv", "memOnly", "noteDBs", "noteDB", "lockedNoteDB", "lockedRotateStorage", "storageParams", "checkStorage"} {
 		require.True(t, g.calls[call], call)
 	}
 }

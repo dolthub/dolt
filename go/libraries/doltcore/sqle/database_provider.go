@@ -654,7 +654,9 @@ func (p *DoltDatabaseProvider) getRemoteDB(ctx context.Context, format *types.No
 			return nil, err
 		}
 
-		evictCachedGitRemote(p, ctx, key, params)
+		if err := evictProviderGitRemote(p, ctx, key, params); err != nil {
+			return nil, err
+		}
 		p.gitRemotesMu.Lock()
 		cached, ok := p.gitRemotes[key]
 		p.gitRemotesMu.Unlock()

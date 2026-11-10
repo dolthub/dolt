@@ -386,7 +386,7 @@ func fetcherRPCChunkLocationsThread(ctx context.Context, reqCh chan *remotesapi.
 	}
 
 	tfByID := make(map[uint32]*tableFileRec)
-	keysByID := make(map[uint32][]byte)
+	addKeys := format.newStreamKeys()
 
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.Go(func() error {
@@ -451,7 +451,7 @@ func fetcherRPCChunkLocationsThread(ctx context.Context, reqCh chan *remotesapi.
 			if err != nil {
 				return NewRpcError(err, "StreamChunkLocations", host, req)
 			}
-			if err := format.addLocationKeys(locs, req, resp, tfByID, keysByID); err != nil {
+			if err := addKeys(locs, req, resp, tfByID); err != nil {
 				return NewRpcError(err, "StreamChunkLocations", host, req)
 			}
 
@@ -600,8 +600,12 @@ func newDownloads() downloads {
 	}
 }
 
-func (d downloads) Add(resp *remotesapi.DownloadLoc) {
+func (d downloads) Add(resp *remotesapi.DownloadLoc, format repoFormat) error {
 	hgr := resp.Location.(*remotesapi.DownloadLoc_HttpGetRange).HttpGetRange
+	keys, err := format.rangeKeys(hgr)
+	if err != nil {
+		return err
+	}
 	path := ResourcePath(hgr.Url)
 	if v, ok := d.refreshes[path]; ok {
 		v.Add(resp)
@@ -610,15 +614,20 @@ func (d downloads) Add(resp *remotesapi.DownloadLoc) {
 		refresh.Add(resp)
 		d.refreshes[path] = refresh
 	}
-	for _, r := range hgr.Ranges {
+	for i, r := range hgr.Ranges {
+		var k rangeKeys
+		if keys != nil {
+			k = keys[i]
+		}
 		if r.DictionaryLength != 0 {
 			_, has := d.dictCache.getOrCreate(path, r.DictionaryOffset, r.DictionaryLength)
 			if !has {
-				d.dictRanges.Insert(hgr.Url, nil, r.DictionaryOffset, r.DictionaryLength, 0, 0)
+				d.dictRanges.Insert(hgr.Url, nil, r.DictionaryOffset, r.DictionaryLength, 0, 0).Key = k.dict
 			}
 		}
-		d.chunkRanges.Insert(hgr.Url, r.Hash[:], r.Offset, r.Length, r.DictionaryOffset, r.DictionaryLength)
+		d.chunkRanges.Insert(hgr.Url, r.Hash[:], r.Offset, r.Length, r.DictionaryOffset, r.DictionaryLength).Key = k.key
 	}
+	return nil
 }
 
 func toGetRange(rs []*ranges.GetRange) *GetRange {
@@ -631,7 +640,7 @@ func toGetRange(rs []*ranges.GetRange) *GetRange {
 			Length:     r.Length,
 			DictOffset: r.DictOffset,
 			DictLength: r.DictLength,
-			Key:        r.Key,
+			key:        r.Key,
 		})
 	}
 	return ret
@@ -667,8 +676,7 @@ func fetcherDownloadRangesThread(ctx context.Context, locCh chan []*remotesapi.D
 				locCh = nil
 			} else {
 				for _, loc := range req {
-					downloads.Add(loc)
-					if err := format.addRangeKeys(downloads, loc); err != nil {
+					if err := downloads.Add(loc, format); err != nil {
 						return err
 					}
 				}

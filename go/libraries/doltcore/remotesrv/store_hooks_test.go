@@ -34,42 +34,36 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-type hookCalls []string
+type reachedHooks map[string]bool
 
-type recordingLocator struct{ calls *hookCalls }
+type recordingLocator struct{ reached reachedHooks }
 
 func (l recordingLocator) locate(ctx context.Context, cs RemoteSrvStore, hashes hash.HashSet) (map[string]map[hash.Hash]nbs.Range, error) {
-	*l.calls = append(*l.calls, "locate")
+	l.reached["locate"] = true
 	return cs.GetChunkLocationsWithPaths(ctx, hashes)
 }
 
 func (l recordingLocator) addRangeKeys(*remotesapi.HttpGetRange) error {
-	*l.calls = append(*l.calls, "addRangeKeys")
+	l.reached["addRangeKeys"] = true
 	return nil
 }
 
 func (l recordingLocator) addLocationKeys(*remotesapi.StreamChunkLocationsResponse, []byte) error {
-	*l.calls = append(*l.calls, "addLocationKeys")
+	l.reached["addLocationKeys"] = true
 	return nil
 }
 
-type storeCache struct{ cs RemoteSrvStore }
-
-func (c storeCache) Get(context.Context, string, string) (RemoteSrvStore, error) {
-	return c.cs, nil
-}
-
-type chunkLocationsStream struct {
+type fakeServerStream[Req, Resp any] struct {
 	grpc.ServerStream
-	reqs []*remotesapi.StreamChunkLocationsRequest
-	sent []*remotesapi.StreamChunkLocationsResponse
+	reqs []*Req
+	sent []*Resp
 }
 
-func (s *chunkLocationsStream) Context() context.Context {
+func (s *fakeServerStream[Req, Resp]) Context() context.Context {
 	return context.Background()
 }
 
-func (s *chunkLocationsStream) Recv() (*remotesapi.StreamChunkLocationsRequest, error) {
+func (s *fakeServerStream[Req, Resp]) Recv() (*Req, error) {
 	if len(s.reqs) == 0 {
 		return nil, io.EOF
 	}
@@ -78,40 +72,43 @@ func (s *chunkLocationsStream) Recv() (*remotesapi.StreamChunkLocationsRequest, 
 	return req, nil
 }
 
-func (s *chunkLocationsStream) Send(resp *remotesapi.StreamChunkLocationsResponse) error {
+func (s *fakeServerStream[Req, Resp]) Send(resp *Resp) error {
 	s.sent = append(s.sent, resp)
 	return nil
 }
 
 func TestStoreHooksAreReached(t *testing.T) {
 	ctx := context.Background()
-	var calls hookCalls
+	reached := make(reachedHooks)
+	requireReached := func(hooks ...string) {
+		t.Helper()
+		for _, h := range hooks {
+			require.True(t, reached[h], h)
+		}
+		clear(reached)
+	}
 	refused := errors.New("refused")
-	saved := []any{checkClient, checkClientRepoFormat, withClientRepoFormat, addRefusal, newChunkLocator}
+	savedClient, savedFormat, savedWith, savedRefusal, savedLocator := checkClient, checkClientRepoFormat, withClientRepoFormat, addRefusal, newChunkLocator
 	t.Cleanup(func() {
-		checkClient = saved[0].(func(RemoteSrvStore, []remotesapi.ClientCapability) error)
-		checkClientRepoFormat = saved[1].(func(*remotesapi.ClientRepoFormat) error)
-		withClientRepoFormat = saved[2].(func(context.Context, *remotesapi.ClientRepoFormat) context.Context)
-		addRefusal = saved[3].(func(error) error)
-		newChunkLocator = saved[4].(func() chunkLocator)
+		checkClient, checkClientRepoFormat, withClientRepoFormat, addRefusal, newChunkLocator = savedClient, savedFormat, savedWith, savedRefusal, savedLocator
 	})
 	checkClient = func(RemoteSrvStore, []remotesapi.ClientCapability) error {
-		calls = append(calls, "checkClient")
+		reached["checkClient"] = true
 		return nil
 	}
 	checkClientRepoFormat = func(*remotesapi.ClientRepoFormat) error {
-		calls = append(calls, "checkClientRepoFormat")
+		reached["checkClientRepoFormat"] = true
 		return nil
 	}
 	withClientRepoFormat = func(ctx context.Context, _ *remotesapi.ClientRepoFormat) context.Context {
-		calls = append(calls, "withClientRepoFormat")
+		reached["withClientRepoFormat"] = true
 		return ctx
 	}
 	addRefusal = func(error) error {
-		calls = append(calls, "addRefusal")
+		reached["addRefusal"] = true
 		return refused
 	}
-	newChunkLocator = func() chunkLocator { return recordingLocator{&calls} }
+	newChunkLocator = func() chunkLocator { return recordingLocator{reached} }
 
 	dir := filepath.Join(t.TempDir(), "repo")
 	require.NoError(t, os.Mkdir(dir, 0755))
@@ -126,32 +123,38 @@ func TestStoreHooksAreReached(t *testing.T) {
 	require.NoError(t, err)
 	fs, err := filesys.LocalFilesysWithWorkingDir(filepath.Dir(dir))
 	require.NoError(t, err)
-	rs := NewHttpFSBackedChunkStore(logrus.NewEntry(logrus.New()), "localhost", storeCache{cs}, fs, "http", 0, identitySealer{}, nil)
+	rs := NewHttpFSBackedChunkStore(logrus.NewEntry(logrus.New()), "localhost", singleStoreDBCache{cs}, fs, "http", 0, identitySealer{}, nil)
 	h := c.Hash()
 
 	_, err = rs.GetRepoMetadata(ctx, &remotesapi.GetRepoMetadataRequest{RepoPath: "repo", ClientRepoFormat: &remotesapi.ClientRepoFormat{NbfVersion: types.Format_DOLT.VersionString(), NbsVersion: nbs.StorageVersion}})
 	require.NoError(t, err)
-	require.Equal(t, hookCalls{"checkClientRepoFormat", "withClientRepoFormat"}, calls)
+	requireReached("checkClientRepoFormat", "withClientRepoFormat")
 
-	calls = nil
 	_, err = rs.GetDownloadLocations(ctx, &remotesapi.GetDownloadLocsRequest{RepoPath: "repo", ChunkHashes: [][]byte{h[:]}})
 	require.NoError(t, err)
-	require.Equal(t, hookCalls{"checkClient", "locate", "addRangeKeys"}, calls)
+	requireReached("checkClient", "locate", "addRangeKeys")
 
-	calls = nil
-	stream := &chunkLocationsStream{reqs: []*remotesapi.StreamChunkLocationsRequest{{RepoPath: "repo", ChunkHashes: h[:]}}}
-	require.NoError(t, rs.StreamChunkLocations(stream))
-	require.Len(t, stream.sent, 1)
-	require.Equal(t, hookCalls{"checkClient", "locate", "addLocationKeys"}, calls)
+	downloads := &fakeServerStream[remotesapi.GetDownloadLocsRequest, remotesapi.GetDownloadLocsResponse]{reqs: []*remotesapi.GetDownloadLocsRequest{{RepoPath: "repo", ChunkHashes: [][]byte{h[:]}}}}
+	require.NoError(t, rs.StreamDownloadLocations(downloads))
+	require.Len(t, downloads.sent, 1)
+	requireReached("checkClient", "locate", "addRangeKeys")
 
-	calls = nil
+	locations := &fakeServerStream[remotesapi.StreamChunkLocationsRequest, remotesapi.StreamChunkLocationsResponse]{reqs: []*remotesapi.StreamChunkLocationsRequest{{RepoPath: "repo", ChunkHashes: h[:]}}}
+	require.NoError(t, rs.StreamChunkLocations(locations))
+	require.Len(t, locations.sent, 1)
+	requireReached("checkClient", "locate", "addLocationKeys")
+
 	_, err = rs.ListTableFiles(ctx, &remotesapi.ListTableFilesRequest{RepoPath: "repo"})
 	require.NoError(t, err)
-	require.Equal(t, hookCalls{"checkClient"}, calls)
+	requireReached("checkClient")
 
-	calls = nil
 	missing := hash.Of([]byte("missing"))
-	_, err = rs.AddTableFiles(ctx, &remotesapi.AddTableFilesRequest{RepoPath: "repo", ChunkTableInfo: []*remotesapi.ChunkTableInfo{{Hash: missing[:], ChunkCount: 1}}})
+	tableInfo := []*remotesapi.ChunkTableInfo{{Hash: missing[:], ChunkCount: 1}}
+	_, err = rs.AddTableFiles(ctx, &remotesapi.AddTableFilesRequest{RepoPath: "repo", ChunkTableInfo: tableInfo})
 	require.ErrorIs(t, err, refused)
-	require.Equal(t, hookCalls{"addRefusal"}, calls)
+	requireReached("addRefusal")
+
+	_, err = rs.Commit(ctx, &remotesapi.CommitRequest{RepoPath: "repo", Current: h[:], Last: h[:], ChunkTableInfo: tableInfo})
+	require.ErrorIs(t, err, refused)
+	requireReached("addRefusal")
 }

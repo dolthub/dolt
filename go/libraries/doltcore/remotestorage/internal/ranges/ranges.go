@@ -38,11 +38,12 @@ type GetRange struct {
 	Url        string
 	Hash       []byte
 	Offset     uint64
-	Length     uint32
 	DictOffset uint64
+	Length     uint32
 	DictLength uint32
 	Region     *Region
-	Key        any
+	// Key is the key that opens the range's record, if it takes one.
+	Key *[]byte
 }
 
 // A |Region| represents a continuous range of bytes within in a Url.
@@ -155,7 +156,8 @@ func (t *Tree) Len() int {
 	return t.t.Len()
 }
 
-func (t *Tree) Insert(url string, hash []byte, offset uint64, length uint32, dictOffset uint64, dictLength uint32) {
+// Insert adds a range to the tree and returns its entry.
+func (t *Tree) Insert(url string, hash []byte, offset uint64, length uint32, dictOffset uint64, dictLength uint32) *GetRange {
 	ins := &GetRange{
 		Url:        t.intern(url),
 		Hash:       hash,
@@ -240,6 +242,7 @@ func (t *Tree) Insert(url string, hash []byte, offset uint64, length uint32, dic
 		}
 		heap.Push(t.regions, ins.Region)
 	}
+	return ins
 }
 
 // Returns all the |*GetRange| entries in the tree that are encompassed by the

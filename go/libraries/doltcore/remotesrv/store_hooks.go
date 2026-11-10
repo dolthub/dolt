@@ -50,7 +50,7 @@ var newChunkLocator = func() chunkLocator {
 
 // chunkLocator locates the records of chunks, and adds the keys that opening them takes, which Dolt's records lack.
 type chunkLocator interface {
-	// locate returns the locations of |hashes| in |cs|.
+	// locate returns the locations of |hashes| in |cs|, deleting from |hashes| those it finds.
 	locate(ctx context.Context, cs RemoteSrvStore, hashes hash.HashSet) (map[string]map[hash.Hash]nbs.Range, error)
 	// addRangeKeys adds to |hgr| the keys of the records it locates, which the last locate found.
 	addRangeKeys(hgr *remotesapi.HttpGetRange) error

@@ -29,16 +29,16 @@ import (
 
 type recordingJournalCopier struct {
 	archiveJournalCopier
-	calls *[]string
+	reached map[string]bool
 }
 
-func (c recordingJournalCopier) newWriter(tmpDir string) (*nbs.ArchiveStreamWriter, error) {
-	*c.calls = append(*c.calls, "newWriter")
-	return c.archiveJournalCopier.newWriter(tmpDir)
+func (c recordingJournalCopier) newWriter(ctx context.Context, tmpDir string) (*nbs.ArchiveStreamWriter, error) {
+	c.reached["newWriter"] = true
+	return c.archiveJournalCopier.newWriter(ctx, tmpDir)
 }
 
 func (c recordingJournalCopier) visit(ctx context.Context, r io.Reader, off int64, cb func(nbs.ToChunker) error) error {
-	*c.calls = append(*c.calls, "visit")
+	c.reached["visit"] = true
 	return c.archiveJournalCopier.visit(ctx, r, off, cb)
 }
 
@@ -61,16 +61,17 @@ func TestJournalCopierIsReached(t *testing.T) {
 
 	saved := newJournalCopier
 	t.Cleanup(func() { newJournalCopier = saved })
-	var calls []string
+	reached := make(map[string]bool)
 	var stores []chunks.ChunkStore
-	newJournalCopier = func(src, sink chunks.ChunkStore) (journalCopier, error) {
+	newJournalCopier = func(_ context.Context, src, sink chunks.ChunkStore) (journalCopier, error) {
 		stores = append(stores, src, sink)
-		return recordingJournalCopier{calls: &calls}, nil
+		return recordingJournalCopier{reached: reached}, nil
 	}
 
 	require.NoError(t, Clone(ctx, src, sink, noAddrs, t.TempDir(), nil))
 	require.Equal(t, []chunks.ChunkStore{src, sink}, stores)
-	require.Equal(t, []string{"newWriter", "visit"}, calls)
+	require.True(t, reached["newWriter"])
+	require.True(t, reached["visit"])
 	has, err := sink.Has(ctx, c.Hash())
 	require.NoError(t, err)
 	require.True(t, has)
