@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 	"sync"
@@ -97,10 +98,13 @@ func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, di
 func EnvForCloneOf(ctx context.Context, src *doltdb.DoltDB, r env.Remote, dir string, fs filesys.Filesys, version string, homeProvider env.HomeDirProvider, configure ...func(*env.DoltEnv) error) (*env.DoltEnv, error) {
 	configure = append(configure, func(dEnv *env.DoltEnv) error {
 		params, err := cloneLoadParams(ctx, src)
-		if err != nil {
+		if err != nil || len(params) == 0 {
 			return err
 		}
-		dEnv.AddDBLoadParams(params)
+		if dEnv.DBLoadParams == nil {
+			dEnv.DBLoadParams = make(map[string]interface{}, len(params))
+		}
+		maps.Copy(dEnv.DBLoadParams, params)
 		return nil
 	})
 	return envForClone(ctx, src.Format(), r, dir, fs, version, homeProvider, configure...)
