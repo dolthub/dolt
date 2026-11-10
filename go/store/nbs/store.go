@@ -831,10 +831,6 @@ func NewLocalJournalingStoreWithOptions(ctx context.Context, nbfVers, dir string
 	}
 
 	nbs, err := newEmptyNomsBlockStore(defaultMemTableSize)
-	if err == nil {
-		nbs.applyOptions(storeOpts)
-		nbfVers, err = nbs.journalFormat(dir, nbfVers)
-	}
 	if err != nil {
 		if lock != nil {
 			lock.Unlock()
@@ -844,6 +840,14 @@ func NewLocalJournalingStoreWithOptions(ctx context.Context, nbfVers, dir string
 	}
 	nbs.staticAccessMode = staticAccessMode
 	nbs.staticVersion = constants.FormatDoltString
+	nbs.applyOptions(storeOpts)
+	if nbfVers, err = nbs.journalFormat(dir, nbfVers); err != nil {
+		if lock != nil {
+			lock.Unlock()
+			lock.Close()
+		}
+		return nil, err
+	}
 	nbs.loadThunk = func(ctx context.Context, loadIt bool) {
 		if loadIt == false {
 			if lock != nil {
