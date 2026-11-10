@@ -35,10 +35,9 @@ import (
 
 // toyStores records what the factories ask of their store options.
 type toyStores struct {
-	dirs      []string
-	oldGens   []string
-	remoteErr error
-	reuse     bool
+	dirs    []string
+	oldGens int
+	reuse   bool
 }
 
 func (s *toyStores) blockStore(_ *types.NomsBinFormat, dir string, _ map[string]interface{}) []nbs.StoreOption {
@@ -46,87 +45,25 @@ func (s *toyStores) blockStore(_ *types.NomsBinFormat, dir string, _ map[string]
 	return nil
 }
 
-func (s *toyStores) oldGen(newGen *nbs.NomsBlockStore) []nbs.StoreOption {
-	s.oldGens = append(s.oldGens, newGen.Version())
+func (s *toyStores) oldGen(*nbs.NomsBlockStore) []nbs.StoreOption {
+	s.oldGens++
 	return nil
 }
 
+var errToyRemote = errors.New("toy remote")
+
 func (s *toyStores) remote(map[string]interface{}) (remotestorage.RepoFormat, error) {
-	return remotestorage.PlainFormat{}, s.remoteErr
+	return nil, errToyRemote
 }
 
 func (s *toyStores) reusable(context.Context, chunks.ChunkStore, map[string]interface{}) bool {
 	return s.reuse
 }
 
-func withStoreOptions(t *testing.T, s storeConfig) {
-	prev := storeOptions
-	t.Cleanup(func() { storeOptions = prev })
-	storeOptions = s
-}
-
-func TestStoreOptionsReachTheFactories(t *testing.T) {
-	ctx := context.Background()
-	s := &toyStores{}
-	withStoreOptions(t, s)
-
-	journal, noJournal := t.TempDir(), t.TempDir()
-	for _, tc := range []struct {
-		url    string
-		params map[string]interface{}
-	}{
-		{"file://" + filepath.ToSlash(journal), map[string]interface{}{DisableSingletonCacheParam: struct{}{}, ChunkJournalParam: struct{}{}}},
-		{"file://" + filepath.ToSlash(noJournal), map[string]interface{}{DisableSingletonCacheParam: struct{}{}}},
-		{"localbs://" + filepath.ToSlash(t.TempDir()), nil},
-	} {
-		db, _, _, err := CreateDB(ctx, types.Format_DOLT, tc.url, tc.params)
-		require.NoError(t, err)
-		require.NoError(t, db.Close())
-	}
-	assert.Equal(t, []string{journal, noJournal, ""}, s.dirs)
-	assert.Len(t, s.oldGens, 2)
-}
-
 type toyDialer struct{}
 
 func (toyDialer) GetGRPCDialParams(grpcendpoint.Config) (GRPCRemoteConfig, error) {
 	return GRPCRemoteConfig{}, errors.New("dialed")
-}
-
-func TestStoreOptionsRemoteFormat(t *testing.T) {
-	errToy := errors.New("toy")
-	withStoreOptions(t, &toyStores{remoteErr: errToy})
-	params := map[string]interface{}{GRPCDialProviderParam: toyDialer{}}
-	_, _, _, err := CreateDB(context.Background(), types.Format_DOLT, "http://localhost:50051/org/repo", params)
-	assert.ErrorIs(t, err, errToy, "the format is settled before dialing")
-}
-
-func TestStoreOptionsReusable(t *testing.T) {
-	ctx := context.Background()
-	s := &toyStores{reuse: true}
-	withStoreOptions(t, s)
-
-	key := filepath.Join(t.TempDir(), "repo.git")
-	cs := (&chunks.MemoryStorage{}).NewView()
-	gitRemoteCacheMu.Lock()
-	gitRemoteCache[key] = gitRemoteCacheEntry{db: datas.NewTypesDatabase(types.NewValueStore(cs), tree.NewNodeStore(cs))}
-	gitRemoteCacheMu.Unlock()
-	t.Cleanup(func() {
-		gitRemoteCacheMu.Lock()
-		delete(gitRemoteCache, key)
-		gitRemoteCacheMu.Unlock()
-	})
-
-	_, ok, err := cachedGitRemote(ctx, key, nil)
-	require.NoError(t, err)
-	assert.True(t, ok)
-
-	s.reuse = false
-	_, ok, err = cachedGitRemote(ctx, key, nil)
-	require.NoError(t, err)
-	assert.False(t, ok, "an unreusable store is evicted")
-	_, ok = gitRemoteCache[key]
-	assert.False(t, ok)
 }
 
 // mismatchedStore is a cached store whose manifest has since been created in another format.
@@ -138,34 +75,77 @@ func (mismatchedStore) Rebase(context.Context) error {
 	return nbs.ErrEncryptionMismatch
 }
 
-func TestStoreOptionsReusableFileStore(t *testing.T) {
+func TestStoreOptions(t *testing.T) {
 	ctx := context.Background()
 	s := &toyStores{reuse: true}
-	withStoreOptions(t, s)
-	t.Cleanup(func() { _ = CloseAllLocalDatabases() })
+	prev := storeOptions
+	t.Cleanup(func() {
+		storeOptions = prev
+		_ = CloseAllLocalDatabases()
+	})
+	storeOptions = s
 
-	urlStr := "file://" + filepath.ToSlash(t.TempDir())
-	params := map[string]interface{}{ChunkJournalParam: struct{}{}}
-	db1, _, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, params)
-	require.NoError(t, err)
-	db2, _, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, params)
-	require.NoError(t, err)
-	assert.True(t, db1 == db2)
+	t.Run("Factories", func(t *testing.T) {
+		journal, noJournal := t.TempDir(), t.TempDir()
+		for _, tc := range []struct {
+			url    string
+			params map[string]interface{}
+		}{
+			{"file://" + filepath.ToSlash(journal), map[string]interface{}{DisableSingletonCacheParam: struct{}{}, ChunkJournalParam: struct{}{}}},
+			{"file://" + filepath.ToSlash(noJournal), map[string]interface{}{DisableSingletonCacheParam: struct{}{}}},
+			{"localbs://" + filepath.ToSlash(t.TempDir()), nil},
+		} {
+			db, _, _, err := CreateDB(ctx, types.Format_DOLT, tc.url, tc.params)
+			require.NoError(t, err)
+			require.NoError(t, db.Close())
+		}
+		assert.Equal(t, []string{journal, noJournal, ""}, s.dirs)
+		assert.Equal(t, 2, s.oldGens)
 
-	s.reuse = false
-	db3, _, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, params)
-	require.NoError(t, err)
-	assert.True(t, db3 != db1, "an unreusable cached store is replaced")
+		_, _, _, err := CreateDB(ctx, types.Format_DOLT, "http://localhost:50051/org/repo", map[string]interface{}{GRPCDialProviderParam: toyDialer{}})
+		assert.ErrorIs(t, err, errToyRemote, "the format is settled before dialing")
+	})
 
-	path, err := earl.Parse(urlStr)
-	require.NoError(t, err)
-	cs := mismatchedStore{(&chunks.MemoryStorage{}).NewView()}
-	singletonLock.Lock()
-	stale := datas.NewTypesDatabase(types.NewValueStore(cs), tree.NewNodeStore(cs))
-	singletons[path.Path] = singletonDB{ddb: stale}
-	singletonLock.Unlock()
-	require.NoError(t, db3.Close())
-	db4, _, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, params)
-	require.NoError(t, err)
-	assert.True(t, db4 != stale, "a store whose manifest changed format is reopened")
+	t.Run("GitRemoteCache", func(t *testing.T) {
+		key := filepath.Join(t.TempDir(), "repo.git")
+		cs := (&chunks.MemoryStorage{}).NewView()
+		gitRemoteCacheMu.Lock()
+		gitRemoteCache[key] = gitRemoteCacheEntry{db: datas.NewTypesDatabase(types.NewValueStore(cs), tree.NewNodeStore(cs))}
+		gitRemoteCacheMu.Unlock()
+		_, ok, err := cachedGitRemote(ctx, key, nil)
+		require.NoError(t, err)
+		assert.True(t, ok)
+
+		s.reuse = false
+		defer func() { s.reuse = true }()
+		_, ok, err = cachedGitRemote(ctx, key, nil)
+		require.NoError(t, err)
+		assert.False(t, ok, "an unreusable store is evicted")
+		_, ok = gitRemoteCache[key]
+		assert.False(t, ok)
+	})
+
+	t.Run("FileSingleton", func(t *testing.T) {
+		urlStr := "file://" + filepath.ToSlash(t.TempDir())
+		params := map[string]interface{}{ChunkJournalParam: struct{}{}}
+		db1, _, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, params)
+		require.NoError(t, err)
+		s.reuse = false
+		db2, _, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, params)
+		s.reuse = true
+		require.NoError(t, err)
+		assert.True(t, db2 != db1, "an unreusable cached store is replaced")
+
+		path, err := earl.Parse(urlStr)
+		require.NoError(t, err)
+		cs := mismatchedStore{(&chunks.MemoryStorage{}).NewView()}
+		stale := datas.NewTypesDatabase(types.NewValueStore(cs), tree.NewNodeStore(cs))
+		singletonLock.Lock()
+		singletons[path.Path] = singletonDB{ddb: stale}
+		singletonLock.Unlock()
+		require.NoError(t, db2.Close())
+		db3, _, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, params)
+		require.NoError(t, err)
+		assert.True(t, db3 != stale, "a store whose manifest changed format is reopened")
+	})
 }

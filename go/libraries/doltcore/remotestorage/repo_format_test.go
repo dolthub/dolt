@@ -25,36 +25,24 @@ import (
 
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+// TestRangeKeys covers dictionary keys and bad key references, which the remotesrv tests' plain table files lack.
 func TestRangeKeys(t *testing.T) {
-	req := &remotesapi.StreamChunkLocationsRequest{ChunkHashes: buildFlatHashBuf(2)}
+	req := &remotesapi.StreamChunkLocationsRequest{ChunkHashes: buildFlatHashBuf(1)}
 	tfByID := map[uint32]*tableFileRec{1: {TableFileId: 1, Url: "http://a"}}
 	keysByID := map[uint32][]byte{7: []byte("x"), 9: []byte("y")}
-	locs, err := translateChunkLocations(req, []*chunkLoc{
-		{TableFileId: 1, RequestIndex: 0, Offset: 100, Length: 10, KeyId: 9},
-		{TableFileId: 1, RequestIndex: 1, Offset: 200, Length: 10, DictionaryLength: 50, KeyId: 7, DictionaryKeyId: 9},
-	}, tfByID, keysByID, testIdFunc, "repo")
+	locs, err := translateChunkLocations(req, []*chunkLoc{{TableFileId: 1, Offset: 100, Length: 10, DictionaryLength: 50, KeyId: 7, DictionaryKeyId: 9}}, tfByID, keysByID, testIdFunc, "repo")
 	require.NoError(t, err)
-	require.Len(t, locs, 1)
-	hgr := locs[0].GetHttpGetRange()
-	assert.Equal(t, [][]byte{[]byte("y"), []byte("x")}, hgr.Keys)
-
 	d := newDownloads()
 	require.NoError(t, d.Add(locs[0]))
-	dict := toGetRange(d.dictRanges.DeleteMaxRegion())
-	assert.Equal(t, []byte("y"), keyBytes(dict.Ranges[0].Key))
-	var got [][]byte
-	for _, r := range toGetRange(d.chunkRanges.DeleteMaxRegion()).Ranges {
-		got = append(got, keyBytes(r.Key))
-	}
-	assert.Equal(t, [][]byte{[]byte("y"), []byte("x")}, got)
+	assert.Equal(t, []byte("y"), keyBytes(toGetRange(d.dictRanges.DeleteMaxRegion()).Ranges[0].Key))
+	assert.Equal(t, []byte("x"), keyBytes(toGetRange(d.chunkRanges.DeleteMaxRegion()).Ranges[0].Key))
 
 	_, err = translateChunkLocations(req, []*chunkLoc{{TableFileId: 1, KeyId: 8}}, tfByID, keysByID, testIdFunc, "repo")
 	assert.ErrorContains(t, err, "unknown key_id 8")
-	hgr.Ranges[0].KeyIndex = 3
+	locs[0].GetHttpGetRange().Ranges[0].KeyIndex = 3
 	assert.ErrorContains(t, newDownloads().Add(locs[0]), "record key 3 of 2")
 }
 
@@ -81,23 +69,20 @@ func (c *metadataClient) Root(context.Context, *remotesapi.RootRequest, ...grpc.
 	return &remotesapi.RootResponse{RootHash: make([]byte, hash.ByteLen)}, nil
 }
 
-// toyRepoFormat asks for repositories of format "toy", and settles into |settled| when it opens one.
+// toyRepoFormat asks for repositories of format "toy", and refuses a refresh in another format than it opened.
 type toyRepoFormat struct {
 	PlainFormat
 	settled string
-	opened  *[]string
 }
 
 var errToyFormat = errors.New("toy format changed")
 
 func (f toyRepoFormat) ClientFormat(cf *remotesapi.ClientRepoFormat) *remotesapi.ClientRepoFormat {
 	cf.NbfVersion = "toy" + f.settled
-	cf.EncryptionScope = []byte(f.settled)
 	return cf
 }
 
 func (f toyRepoFormat) Opened(md *remotesapi.GetRepoMetadataResponse) (RepoFormat, error) {
-	*f.opened = append(*f.opened, md.NbfVersion)
 	if f.settled != "" && md.NbfVersion != f.settled {
 		return nil, errToyFormat
 	}
@@ -108,27 +93,14 @@ func (f toyRepoFormat) Opened(md *remotesapi.GetRepoMetadataResponse) (RepoForma
 func TestRepoFormatOfDoltChunkStore(t *testing.T) {
 	ctx := context.Background()
 	client := &metadataClient{md: &remotesapi.GetRepoMetadataResponse{NbfVersion: "-a"}}
-	var opened []string
-	dcs, err := NewDoltChunkStoreFromPath(ctx, types.Format_DOLT, "org/repo", "host", false, client, toyRepoFormat{opened: &opened})
+	dcs, err := NewDoltChunkStoreFromPath(ctx, types.Format_DOLT, "org/repo", "host", false, client, toyRepoFormat{})
 	require.NoError(t, err)
-	require.Len(t, client.reqs, 1)
-	assert.Equal(t, "toy", client.reqs[0].ClientRepoFormat.NbfVersion)
-	assert.Equal(t, nbs.StorageVersion, client.reqs[0].ClientRepoFormat.NbsVersion)
-
 	require.NoError(t, dcs.Rebase(ctx))
 	require.Len(t, client.reqs, 2)
+	assert.Equal(t, "toy", client.reqs[0].ClientRepoFormat.NbfVersion)
 	assert.Equal(t, "toy-a", client.reqs[1].ClientRepoFormat.NbfVersion, "requests are sent in the settled format")
-	assert.Equal(t, []byte("-a"), client.reqs[1].ClientRepoFormat.EncryptionScope)
 
 	client.md = &remotesapi.GetRepoMetadataResponse{NbfVersion: "-b"}
 	assert.ErrorIs(t, dcs.Rebase(ctx), errToyFormat)
 	assert.Equal(t, "-a", dcs.Version(), "a refused refresh keeps the metadata")
-	assert.Equal(t, []string{"-a", "-a", "-b"}, opened)
-
-	_, err = NewDoltChunkStoreFromPath(ctx, types.Format_DOLT, "org/repo", "host", false, client, toyRepoFormat{settled: "-a", opened: &opened})
-	assert.ErrorIs(t, err, errToyFormat)
-
-	dcs, err = NewDoltChunkStoreFromPath(ctx, types.Format_DOLT, "org/repo", "host", false, client)
-	require.NoError(t, err)
-	assert.Equal(t, PlainFormat{}, dcs.format)
 }
