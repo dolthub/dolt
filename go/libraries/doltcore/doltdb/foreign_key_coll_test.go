@@ -21,6 +21,9 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 func BenchmarkForeignKeyHashOf(b *testing.B) {
@@ -179,11 +182,11 @@ func TestForeignKeyCollectionNameIndex(t *testing.T) {
 	fk, ok = lookup(fkc, "FK_ς", child)
 	assert.True(t, ok)
 	assert.Equal(t, sigma, fk)
-	// With a schema, the key must be declared on the given table, and without one it must be declared without a schema.
+	// With a schema, the key must be declared on the given table. Without one, a key on any table matches.
 	_, ok = lookup(fkc, "fk_a", TableName{Name: "unrelated", Schema: "public"})
 	assert.False(t, ok)
-	_, ok = lookup(fkc, "fk_a", TableName{Name: "child"})
-	assert.False(t, ok)
+	_, ok = lookup(fkc, "fk_a", TableName{Name: "unrelated"})
+	assert.True(t, ok)
 
 	err = fkc.AddKeys(newKey("FK_Σ", child, 4))
 	assert.True(t, sql.ErrForeignKeyDuplicateName.Is(err), "unexpected error: %v", err)
@@ -218,6 +221,57 @@ func TestForeignKeyCollectionNameIndex(t *testing.T) {
 		assert.True(t, ok)
 		assert.Equal(t, expected, fk)
 	}
+}
+
+// TestGetMatchingKey verifies that GetMatchingKey matches resolved keys by column tags, also across a table rename, and
+// unresolved keys by table and column names.
+func TestGetMatchingKey(t *testing.T) {
+	resolved := newForeignKey()
+	unresolved := ForeignKey{
+		Name:                "fk_unresolved",
+		TableName:           TableName{Name: "child"},
+		ReferencedTableName: TableName{Name: "parent"},
+		UnresolvedFKDetails: UnresolvedFKDetails{
+			TableColumns:           []string{"c3"},
+			ReferencedTableColumns: []string{"p4"},
+		},
+	}
+	fkc, err := NewForeignKeyCollection(resolved, unresolved)
+	assert.NoError(t, err)
+
+	renamed := resolved
+	renamed.TableName = TableName{Name: "renamed_child"}
+	fk, ok := fkc.GetMatchingKey(renamed, nil, false)
+	assert.True(t, ok)
+	assert.Equal(t, resolved, fk)
+
+	otherTags := resolved
+	otherTags.TableColumns = []uint64{5}
+	_, ok = fkc.GetMatchingKey(otherTags, nil, false)
+	assert.False(t, ok)
+
+	sameUnresolved := unresolved
+	sameUnresolved.Name = "other_name"
+	fk, ok = fkc.GetMatchingKey(sameUnresolved, nil, false)
+	assert.True(t, ok)
+	assert.Equal(t, unresolved, fk)
+
+	otherTable := unresolved
+	otherTable.TableName = TableName{Name: "other"}
+	_, ok = fkc.GetMatchingKey(otherTable, nil, false)
+	assert.False(t, ok)
+
+	// A resolved key matches an unresolved one when the schemas map its column names to the same tags.
+	schemas := map[TableName]schema.Schema{
+		{Name: "child"}:  schema.MustSchemaFromCols(schema.NewColCollection(schema.NewColumn("c3", 3, types.IntKind, true))),
+		{Name: "parent"}: schema.MustSchemaFromCols(schema.NewColCollection(schema.NewColumn("p4", 4, types.IntKind, true))),
+	}
+	resolvedVersion := unresolved
+	resolvedVersion.TableColumns = []uint64{3}
+	resolvedVersion.ReferencedTableColumns = []uint64{4}
+	fk, ok = fkc.GetMatchingKey(resolvedVersion, schemas, false)
+	assert.True(t, ok)
+	assert.Equal(t, unresolved, fk)
 }
 
 // BenchmarkDeserializeForeignKeys loads a collection of 400 foreign keys, which every new root value does on its
