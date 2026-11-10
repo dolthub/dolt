@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -102,6 +103,14 @@ type DoltEnv struct {
 	DBLoadParams map[string]interface{}
 
 	UserPassConfig *creds.DoltCredsForPass
+}
+
+// AddDBLoadParams adds |params| to the params this environment's DoltDB loads with.
+func (dEnv *DoltEnv) AddDBLoadParams(params map[string]interface{}) {
+	if dEnv.DBLoadParams == nil {
+		dEnv.DBLoadParams = make(map[string]interface{}, len(params))
+	}
+	maps.Copy(dEnv.DBLoadParams, params)
 }
 
 func NewDoltEnv(version string, config *DoltCliConfig, repoState *RepoState, doltDB *doltdb.DoltDB, fs filesys.Filesys) *DoltEnv {
