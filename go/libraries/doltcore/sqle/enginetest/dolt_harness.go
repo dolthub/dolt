@@ -197,9 +197,9 @@ var defaultSkippedQueries = []string{
 
 // Setup sets the setup scripts for this DoltHarness's engine
 func (d *DoltHarness) Setup(setupData ...[]setup.SetupScript) {
-	d.closeProvider()
+	// The current provider stays open until the next newProvider or Close, since
+	// callers may keep using an engine they already built.
 	d.engine = nil
-	d.provider = nil
 	d.setupData = nil
 	for i := range setupData {
 		d.setupData = append(d.setupData, setupData[i]...)
