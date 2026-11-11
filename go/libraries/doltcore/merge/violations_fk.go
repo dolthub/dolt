@@ -69,13 +69,18 @@ func RegisterForeignKeyViolations(
 	if err != nil {
 		return err
 	}
-	changes, err := newFkTableChanges(ctx, newRoot, baseRoot)
-	if err != nil {
-		return err
-	}
+	// Built on first use, so that a root without foreign keys to check doesn't compare any tables.
+	var changes *fkTableChanges
 	for _, foreignKey := range fkColl.AllKeys() {
 		if !foreignKey.IsResolved() || (tables.Size() != 0 && !tables.Contains(foreignKey.TableName)) {
 			continue
+		}
+
+		if changes == nil {
+			changes, err = newFkTableChanges(ctx, newRoot, baseRoot)
+			if err != nil {
+				return err
+			}
 		}
 
 		// Every violation found below comes from a row that differs between |baseRoot| and |newRoot|: a row added to
