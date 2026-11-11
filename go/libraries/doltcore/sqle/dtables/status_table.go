@@ -272,24 +272,15 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 
 	// Filter out ignored tables from the results.
 	// Unstaged new tables that match ignore patterns get filtered.
-	ignorePatterns, err := getIgnorePatterns(ctx, st.rootsProvider)
+	ignoredTables, err := ignoredNewTables(ctx, st.rootsProvider, unstagedTables, false)
 	if err != nil {
 		return nil, err
 	}
 
-	unstagedTableNames := buildUnstagedTableNameSet(unstagedTables)
-
 	filteredRows := make([]statusTableRow, 0, len(rows))
 	for _, row := range rows {
-		if row.isStaged == byte(0) && row.status == newTableStatus && unstagedTableNames[row.tableName] {
-			tblNameObj := doltdb.TableName{Name: row.tableName}
-			result, err := ignorePatterns.IsTableNameIgnored(tblNameObj)
-			if err != nil {
-				return nil, err
-			}
-			if result == doltdb.Ignore {
-				continue
-			}
+		if row.isStaged == byte(0) && row.status == newTableStatus && ignoredTables[row.tableName] {
+			continue
 		}
 		filteredRows = append(filteredRows, row)
 	}
