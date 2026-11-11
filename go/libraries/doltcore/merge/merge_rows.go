@@ -64,6 +64,9 @@ type MergeOpts struct {
 	// SkipFullTextRebuild leaves the Full-Text pseudo-index tables of merged tables as the merge left them, for a
 	// caller that brings them up to date itself.
 	SkipFullTextRebuild bool
+	// KeepTablesAddedTwice records a table that both sides added with different schemas as a schema conflict, rather
+	// than failing the merge. A virtual merge base sets it.
+	KeepTablesAddedTwice bool
 }
 
 // RowMergeInput describes one three-way row decision offered to a policy.

@@ -41,6 +41,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/dynassert"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -397,6 +398,21 @@ func (d *DoltSession) LookupDbState(ctx *sql.Context, dbName string) (SessionSta
 	return s, true, nil
 }
 
+// droppedSinceSnapshot returns true if |err| is from reading |ddb| after a concurrent DROP DATABASE closed it. The
+// provider stops listing a database before closing it, so a transaction's snapshot of the provider's databases can
+// contain one which is closed. That shouldn't fail statements which don't use it.
+func (d *DoltSession) droppedSinceSnapshot(ddb *doltdb.DoltDB, err error) bool {
+	if !errors.Is(err, chunks.ErrStoreClosed) {
+		return false
+	}
+	for _, db := range d.provider.DoltDatabases() {
+		if db.DbData().Ddb == ddb {
+			return false
+		}
+	}
+	return true
+}
+
 // RemoveDbState invalidates any cached db state in this session, for example, if a database is dropped.
 func (d *DoltSession) RemoveDbState(ctx *sql.Context, dbName string) error {
 	d.mu.Lock()
@@ -544,6 +560,9 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 			rrd, ok := db.(RemoteReadReplicaDatabase)
 			if ok && rrd.ValidReplicaState(ctx) {
 				err := rrd.PullFromRemote(ctx)
+				if d.droppedSinceSnapshot(ddb, err) {
+					continue
+				}
 				if err != nil && !IgnoreReplicationErrorsWithRegistry(ctx.SystemVariables()) {
 					return nil, fmt.Errorf("replication error: %w", err)
 				} else if err != nil {
@@ -555,6 +574,9 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 			//  up on each transaction start
 			if _, v, ok := ctx.SystemVariables().GetGlobal(ReadReplicaRemote); ok && v != "" {
 				err := ddb.Rebase(ctx)
+				if d.droppedSinceSnapshot(ddb, err) {
+					continue
+				}
 				if err != nil && !IgnoreReplicationErrorsWithRegistry(ctx.SystemVariables()) {
 					return nil, err
 				} else if err != nil {
@@ -566,7 +588,7 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 		}
 	}
 
-	tx, err := NewDoltTransaction(ctx, txDbs, tCharacteristic)
+	tx, err := newDoltTransaction(ctx, txDbs, tCharacteristic, d.droppedSinceSnapshot)
 	if err != nil {
 		return nil, err
 	}

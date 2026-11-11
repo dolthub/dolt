@@ -94,9 +94,10 @@ func (mr *MultiRepoTestSetup) homeProv() (string, error) {
 	return mr.Home, nil
 }
 
+// Close closes each database's env, which owns the DoltDB recorded in DoltDBs.
 func (mr *MultiRepoTestSetup) Close() {
-	for _, db := range mr.DoltDBs {
-		err := db.Close()
+	for _, dEnv := range mr.envs {
+		err := dEnv.Close()
 		if err != nil {
 			mr.Errhand(err)
 		}
@@ -133,15 +134,8 @@ func (mr *MultiRepoTestSetup) NewDB(dbName string) {
 		mr.Errhand("Failed to initialize environment:" + err.Error())
 	}
 
-	ddb, err := doltdb.LoadDoltDB(ctx, types.Format_DOLT, doltdb.LocalDirDoltDB, filesys.LocalFS)
-	if err != nil {
-		mr.Errhand("Failed to initialize environment:" + err.Error())
-	}
-
-	dEnv = env.Load(context.Background(), mr.homeProv, filesys.LocalFS, doltdb.LocalDirDoltDB, "test")
-
 	mr.envs[dbName] = dEnv
-	mr.DoltDBs[dbName] = ddb
+	mr.DoltDBs[dbName] = dEnv.DoltDB(ctx)
 	mr.DbNames = append(mr.DbNames, dbName)
 	mr.DbPaths[dbName] = repo
 }
@@ -192,10 +186,11 @@ func (mr *MultiRepoTestSetup) CloneDB(fromRemote, dbName string) {
 	cloneDir := filepath.Join(mr.Root, dbName)
 
 	r := mr.GetRemote(fromRemote)
-	srcDB, err := r.GetRemoteDB(ctx, types.Format_DOLT, mr.envs[dbName])
+	srcDB, err := r.GetRemoteDBWithoutCaching(ctx, types.Format_DOLT, mr.envs[dbName])
 	if err != nil {
 		mr.Errhand(err)
 	}
+	defer srcDB.Close()
 
 	dEnv := env.LoadWithoutDB(context.Background(), mr.homeProv, filesys.LocalFS, doltdb.LocalDirDoltDB, "test")
 	dEnv, err = actions.EnvForClone(ctx, srcDB.Format(), r, cloneDir, dEnv.FS, dEnv.Version, mr.homeProv)
@@ -355,10 +350,11 @@ func (mr *MultiRepoTestSetup) PushToRemote(dbName, remoteName, branchName string
 		mr.Errhand(fmt.Sprintf("Failed to push remote: %s", err.Error()))
 	}
 
-	remoteDB, err := remote.GetRemoteDB(ctx, dEnv.DoltDB(ctx).ValueReadWriter().Format(), mr.envs[dbName])
+	remoteDB, err := remote.GetRemoteDBWithoutCaching(ctx, dEnv.DoltDB(ctx).ValueReadWriter().Format(), mr.envs[dbName])
 	if err != nil {
 		mr.Errhand(actions.HandleInitRemoteStorageClientErr(remote.Name, remote.Url, err))
 	}
+	defer remoteDB.Close()
 
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {

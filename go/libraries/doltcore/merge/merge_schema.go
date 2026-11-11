@@ -54,13 +54,14 @@ type SchemaConflict struct {
 	IdxConflicts         []IdxConflict
 	ChkConflicts         []ChkConflict
 	ModifyDeleteConflict bool
+	AddedTwiceConflict   bool
 }
 
 var _ error = SchemaConflict{}
 
 func (sc SchemaConflict) Count() int {
 	count := len(sc.ColConflicts) + len(sc.IdxConflicts) + len(sc.ChkConflicts)
-	if sc.ModifyDeleteConflict {
+	if sc.ModifyDeleteConflict || sc.AddedTwiceConflict {
 		return count + 1
 	}
 	return count
@@ -98,6 +99,9 @@ func (sc SchemaConflict) messages() (mm []string) {
 	}
 	if sc.ModifyDeleteConflict {
 		mm = append(mm, "table was modified in one branch and deleted in the other")
+	}
+	if sc.AddedTwiceConflict {
+		mm = append(mm, "table was added in both branches with different schemas")
 	}
 	return
 }
