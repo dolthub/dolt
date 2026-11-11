@@ -268,7 +268,7 @@ func ConflictBaseSchema(baseSch, theirSch schema.Schema) (schema.Schema, error) 
 		schema.ComparePrimaryKeys(theirSch, baseSch) == schema.PrimaryKeysSameTags {
 		return baseSch, nil
 	}
-	rekeyed, ok, err := schema.RekeyedSchema(baseSch, theirSch)
+	rekeyed, ok, err := schema.Rekeyed(baseSch, theirSch)
 	if err != nil || !ok {
 		return baseSch, err
 	}

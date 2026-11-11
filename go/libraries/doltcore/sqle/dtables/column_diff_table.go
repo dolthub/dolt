@@ -442,6 +442,10 @@ func (itr *doltColDiffCommitHistoryRowItr) calculateTableChanges(ctx context.Con
 	if err != nil {
 		return nil, err
 	}
+	err = setDeltaCommitHeights(deltas, commit, parent)
+	if err != nil {
+		return nil, err
+	}
 
 	tableChanges := make([]tableColChange, 0)
 	for i := 0; i < len(deltas); i++ {
@@ -536,7 +540,7 @@ func calculateColDelta(ctx *sql.Context, ddb *doltdb.DoltDB, delta *diff.TableDe
 
 	now := time.Now() // accurate commit time returned elsewhere
 	// TODO: schema name?
-	dp := NewDiffPartition(delta.ToTable, delta.FromTable, delta.ToName.Name, delta.FromName.Name, (*dtypes.Timestamp)(&now), (*dtypes.Timestamp)(&now), delta.ToSch, delta.FromSch, nil)
+	dp := NewDiffPartition(delta.ToTable, delta.FromTable, delta.ToName.Name, delta.FromName.Name, (*dtypes.Timestamp)(&now), (*dtypes.Timestamp)(&now), delta.ToSch, delta.FromSch, nil, nil, delta.ToHeight, delta.FromHeight)
 	ri := NewDiffPartitionRowIter(dp, ddb)
 
 	var resultColNames []string

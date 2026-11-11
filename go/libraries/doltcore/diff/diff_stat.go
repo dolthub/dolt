@@ -28,10 +28,22 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+// ErrPrimaryKeySetChanged is wrapped by errors for a changed primary key set.
 var ErrPrimaryKeySetChanged = errors.New("primary key set changed")
+
+// errPrimaryKeyTypeChanged is wrapped by errors for a retyped key column.
+var errPrimaryKeyTypeChanged = errors.New("primary key column type changed")
+
+// IsPrimaryKeyUnalignable reports whether |err| wraps a sentinel for a diff
+// whose rows cannot be paired.
+func IsPrimaryKeyUnalignable(err error) bool {
+	return errors.Is(err, ErrPrimaryKeySetChanged) || errors.Is(err, errPrimaryKeyTypeChanged)
+}
 
 type DiffStatProgress struct {
 	Adds, Removes, Changes, CellChanges, NewRowSize, OldRowSize, NewCellSize, OldCellSize uint64
+	// Unpaired counts the Adds and Removes left unpaired by a key change.
+	Unpaired uint64
 }
 
 type prollyReporter func(ctx context.Context, vMapping val.OrdinalMapping, fromD, toD *val.TupleDesc, change tree.Diff, ch chan<- DiffStatProgress) error
@@ -79,8 +91,19 @@ func StatForTableDelta(ctx context.Context, ch chan DiffStatProgress, td TableDe
 		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
 	}
 
-	if schema.ComparePrimaryKeys(fromSch, toSch) == schema.PrimaryKeysDiffer {
-		return fmt.Errorf("failed to compute diff stat for table %s: %w", td.CurName(), ErrPrimaryKeySetChanged)
+	fromRows, toRows, err := td.GetRowData(ctx)
+	if err != nil {
+		return err
+	}
+
+	if td.HasGainedOrLostPrimaryKey() {
+		// No key pairs a keyed row with a keyless one, so like dolt_diff, the
+		// stat counts every row of one side removed and of the other added.
+		err = diffProllyTrees(ctx, ch, schema.IsKeyless(fromSch), fromRows, nil, fromSch, schema.EmptySchema)
+		if err != nil {
+			return err
+		}
+		return diffProllyTrees(ctx, ch, schema.IsKeyless(toSch), nil, toRows, schema.EmptySchema, toSch)
 	}
 
 	keyless, err := td.IsKeyless(ctx)
@@ -88,12 +111,39 @@ func StatForTableDelta(ctx context.Context, ch chan DiffStatProgress, td TableDe
 		return err
 	}
 
-	fromRows, toRows, err := td.GetRowData(ctx)
-	if err != nil {
-		return err
+	if fromRows != nil && toRows != nil {
+		from, to, err := td.alignIndexes(ctx, fromRows, toRows, fromSch, toSch)
+		if err != nil {
+			return fmt.Errorf("failed to compute diff stat for table %s: %w", td.CurName(), err)
+		}
+		statUnpaired(ch, from, to)
+		fromRows, toRows = durable.IndexFromProllyMap(from.Rows), durable.IndexFromProllyMap(to.Rows)
+		fromSch, toSch = from.Sch, to.Sch
 	}
 
 	return diffProllyTrees(ctx, ch, keyless, fromRows, toRows, fromSch, toSch)
+}
+
+// statUnpaired sends the rows of |from| and |to| that have no pair as removes
+// and adds on |ch|.
+//
+// diffProllyTrees walks maps that omit these rows, so they are counted here.
+func statUnpaired(ch chan DiffStatProgress, from, to KeyedRows) {
+	fromN, toN := CountUnpaired(from, to)
+	if fromN+toN == 0 {
+		return
+	}
+	fromCells := uint64(from.Sch.GetAllCols().Size())
+	toCells := uint64(to.Sch.GetAllCols().Size())
+	ch <- DiffStatProgress{
+		Removes:     uint64(fromN),
+		Adds:        uint64(toN),
+		Unpaired:    uint64(fromN + toN),
+		OldRowSize:  uint64(fromN),
+		NewRowSize:  uint64(toN),
+		OldCellSize: uint64(fromN) * fromCells,
+		NewCellSize: uint64(toN) * toCells,
+	}
 }
 
 func diffProllyTrees(ctx context.Context, ch chan DiffStatProgress, keyless bool, from, to durable.Index, fromSch, toSch schema.Schema) error {
@@ -152,8 +202,16 @@ func diffProllyTrees(ctx context.Context, ch chan DiffStatProgress, keyless bool
 
 	// TODO: Use `vMapping` to determine whether columns have been added or removed. If so, then all rows should
 	// count as modifications in the diff.
-	considerAllRowsModified := false
+	var moved MovedMembers
+	if from != nil && to != nil {
+		moved = NewMovedMembers(t.NodeStore(), fromSch, toSch)
+	}
+	considerAllRowsModified := moved.HasMoved()
 	err = prolly.DiffMaps(ctx, f, t, considerAllRowsModified, func(ctx context.Context, diff tree.Diff) error {
+		isUnchanged, err := moved.IsUnchanged(ctx, diff)
+		if err != nil || isUnchanged {
+			return err
+		}
 		return rpr(ctx, vMapping, fVD, tVD, diff, ch)
 	})
 	if err != nil && err != io.EOF {

@@ -285,11 +285,11 @@ func (ds *SchemaDiffTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.R
 		return nil, err
 	}
 
-	fromRoot, _, _, err := sess.ResolveRootForRef(ctx, dbName, fromCommitStr)
+	fromRoot, _, _, _, err := sess.ResolveRootForRef(ctx, dbName, fromCommitStr)
 	if err != nil {
 		return nil, err
 	}
-	toRoot, _, _, err := sess.ResolveRootForRef(ctx, dbName, toCommitStr)
+	toRoot, _, _, _, err := sess.ResolveRootForRef(ctx, dbName, toCommitStr)
 	if err != nil {
 		return nil, err
 	}

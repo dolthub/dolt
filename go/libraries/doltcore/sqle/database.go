@@ -1504,12 +1504,15 @@ func resolveAsOfTime(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, asO
 	return nil, nil, nil
 }
 
+// resolveAsOfCommitRef returns the commit and root value for |commitRef|.
+//
+// The working and staged refs use |head| as their commit.
 func resolveAsOfCommitRef(ctx *sql.Context, db Database, head ref.DoltRef, commitRef string) (*doltdb.Commit, doltdb.RootValue, error) {
 	ddb := db.ddb
 
 	if commitRef == doltdb.Working || commitRef == doltdb.Staged {
 		sess := dsess.DSessFromSess(ctx.Session)
-		root, _, _, err := sess.ResolveRootForRef(ctx, ctx.GetCurrentDatabase(), commitRef)
+		root, _, _, _, err := sess.ResolveRootForRef(ctx, ctx.GetCurrentDatabase(), commitRef)
 		if err != nil {
 			return nil, nil, err
 		}

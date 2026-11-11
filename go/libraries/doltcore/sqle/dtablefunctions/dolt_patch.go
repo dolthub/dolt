@@ -140,6 +140,7 @@ func (p *PatchTableFunction) PartitionRows(ctx *sql.Context, partition sql.Parti
 		return nil, err
 	}
 
+	dtables.SetDeltaHeights(tableDeltas, toRefDetails.height, fromRefDetails.height)
 	sort.Slice(tableDeltas, func(i, j int) bool {
 		return tableDeltas[i].ToName.Less(tableDeltas[j].ToName)
 	})
@@ -639,7 +640,7 @@ func getDiffQuery(ctx *sql.Context, dbData env.DbData[*sql.Context], td diff.Tab
 	columnsWithDiff := getColumnNamesWithDiff(td.FromSch, td.ToSch)
 	diffQuerySqlSch, projections := getDiffQuerySqlSchemaAndProjections(diffPKSch.Schema, columnsWithDiff)
 
-	dp := dtables.NewDiffPartition(td.ToTable, td.FromTable, toRefDetails.hashStr, fromRefDetails.hashStr, toRefDetails.commitTime, fromRefDetails.commitTime, td.ToSch, td.FromSch, nil)
+	dp := dtables.NewDiffPartition(td.ToTable, td.FromTable, toRefDetails.hashStr, fromRefDetails.hashStr, toRefDetails.commitTime, fromRefDetails.commitTime, td.ToSch, td.FromSch, nil, nil, toRefDetails.height, fromRefDetails.height)
 	ri := dtables.NewDiffPartitionRowIter(dp, dbData.Ddb)
 
 	return diffQuerySqlSch, projections, ri, nil

@@ -15,10 +15,10 @@
 package dtablefunctions
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"math"
+	"slices"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -290,7 +290,9 @@ func (ds *DiffStatTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 	if err != nil {
 		return nil, err
 	}
+	dtables.SetDeltaHeights(deltas, toRefDetails.height, fromRefDetails.height)
 
+	var diffStats []diffStatNode
 	// If tableNameExpr defined, return a single table diff stat result
 	if ds.tableNameExpr != nil {
 		resolvedName, err := resolveDeltaTableName(ctx, fromRefDetails.root, toRefDetails.root, tableName)
@@ -308,33 +310,33 @@ func (ds *DiffStatTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 		if err != nil {
 			return nil, err
 		}
-		if !hasDiff {
-			return NewDiffStatTableFunctionRowIter([]diffStatNode{}), nil
-		}
-		return NewDiffStatTableFunctionRowIter([]diffStatNode{diffStat}), nil
-	}
-
-	var diffStats []diffStatNode
-	for _, delta := range deltas {
-		tblName := delta.ToName
-		if tblName.Name == "" {
-			tblName = delta.FromName
-		}
-		diffStat, hasDiff, err := getDiffStatNodeFromDelta(ctx, delta, fromRefDetails.root, toRefDetails.root, tblName)
-		if err != nil {
-			if errors.Is(err, diff.ErrPrimaryKeySetChanged) {
-				ctx.Warn(dtables.PrimaryKeyChangeWarningCode, "stat for table %s cannot be determined. Primary key set changed.", tblName)
-				// Report an empty diff for tables that have primary key set changes
-				diffStats = append(diffStats, diffStatNode{tblName: tblName})
-				continue
-			}
-			return nil, err
-		}
 		if hasDiff {
 			diffStats = append(diffStats, diffStat)
 		}
+	} else {
+		for _, delta := range deltas {
+			tblName := delta.ToName
+			if tblName.Name == "" {
+				tblName = delta.FromName
+			}
+			diffStat, hasDiff, err := getDiffStatNodeFromDelta(ctx, delta, fromRefDetails.root, toRefDetails.root, tblName)
+			if diff.IsPrimaryKeyUnalignable(err) {
+				// Other tables still get their stats, so only this table is skipped.
+				ctx.Warn(dtables.PrimaryKeyChangeWarningCode, "cannot compute diff stat for table %s: %s", tblName.Name, err.Error())
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+			if hasDiff {
+				diffStats = append(diffStats, diffStat)
+			}
+		}
 	}
-
+	// The warning names no table, so it is given once for all tables.
+	if slices.ContainsFunc(diffStats, func(n diffStatNode) bool { return n.diffStat.Unpaired > 0 }) {
+		ctx.Warn(dtables.PrimaryKeyChangeWarningCode, dtables.UnpairedRowsWarning, fromRefDetails.refStr, toRefDetails.refStr)
+	}
 	return NewDiffStatTableFunctionRowIter(diffStats), nil
 }
 
@@ -465,6 +467,7 @@ func getDiffStat(ctx *sql.Context, td diff.TableDelta) (diff.DiffStatProgress, b
 				acc.OldRowSize += p.OldRowSize
 				acc.NewCellSize += p.NewCellSize
 				acc.OldCellSize += p.OldCellSize
+				acc.Unpaired += p.Unpaired
 				count++
 			case <-ctx2.Done():
 				return ctx2.Err()
@@ -476,9 +479,13 @@ func getDiffStat(ctx *sql.Context, td diff.TableDelta) (diff.DiffStatProgress, b
 		return diff.DiffStatProgress{}, false, false, err
 	}
 
-	keyless, err := td.IsKeyless(ctx)
-	if err != nil {
-		return diff.DiffStatProgress{}, false, keyless, err
+	// A table that gained or lost its primary key is counted as keyless.
+	keyless := td.HasGainedOrLostPrimaryKey()
+	if !keyless {
+		var err error
+		if keyless, err = td.IsKeyless(ctx); err != nil {
+			return diff.DiffStatProgress{}, false, keyless, err
+		}
 	}
 
 	if (acc.Adds+acc.Removes+acc.Changes) == 0 && (acc.OldCellSize-acc.NewCellSize) == 0 {

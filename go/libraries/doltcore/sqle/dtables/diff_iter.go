@@ -17,10 +17,12 @@ package dtables
 import (
 	"context"
 	"io"
+	"slices"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -52,6 +54,20 @@ type prollyDiffIter struct {
 	from   prolly.Map
 	to     prolly.Map
 	ranges []prolly.Range
+
+	// fromUnpaired holds the from rows that a primary key change left unpaired.
+	fromUnpaired diff.KeyedRows
+	// toUnpaired holds the to rows that a primary key change left unpaired.
+	toUnpaired diff.KeyedRows
+	// movedMembers holds the reordered columns, whose rows change bytes but
+	// not values.
+	movedMembers diff.MovedMembers
+	// fromUnpairedConverter converts the rows of fromUnpaired, which keep the
+	// schema the from side had before rekeying.
+	fromUnpairedConverter ProllyRowConverter
+	// toUnpairedConverter converts the rows of toUnpaired, which keep the
+	// schema the to side had before rekeying.
+	toUnpairedConverter ProllyRowConverter
 
 	keyless bool
 }
@@ -116,6 +132,21 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, tar
 		}
 	}
 
+	if schema.ComparePrimaryKeys(fsch, tsch) == schema.PrimaryKeysRetagged {
+		ctx.Warn(PrimaryKeyChangeWarningCode, retaggedKeyWarning, dp.fromName, dp.toName)
+	}
+	// [prolly.DiffMaps] pairs rows by key bytes, so both sides need one key.
+	fromAligned, toAligned, err := diff.AlignPrimaryKeys(ctx, diff.KeyedRows{Rows: from, Sch: fsch, Height: dp.fromHeight}, diff.KeyedRows{Rows: to, Sch: tsch, Height: dp.toHeight})
+	if err != nil {
+		return prollyDiffIter{}, err
+	}
+	from, fsch, to, tsch = fromAligned.Rows, fromAligned.Sch, toAligned.Rows, toAligned.Sch
+	// The ranges narrow only rows keyed by the key of dp.rangesSch. Rows
+	// keyed otherwise are diffed in full, and the filter above the scan
+	// selects them.
+	if dp.rangesSch == nil || !slices.Equal(tsch.GetPKCols().Tags, dp.rangesSch.GetPKCols().Tags) {
+		ranges = nil
+	}
 	var nodeStore tree.NodeStore
 	if dp.to != nil {
 		nodeStore = dp.to.NodeStore()
@@ -133,6 +164,35 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, tar
 		return prollyDiffIter{}, err
 	}
 
+	// Rows whose members moved can change while their bytes do not, so they
+	// are diffed in full. A range diff compares bytes, so the filter above the
+	// scan selects them instead.
+	movedMembers := diff.NewMovedMembers(nodeStore, fsch, tsch)
+	if movedMembers.HasMoved() {
+		ranges = nil
+	}
+
+	// A diff shows unpaired rows as removed or added rather than modified,
+	// which the warning explains. They convert from the schema they are
+	// stored with, so a value the new key cannot hold still shows.
+	var fromUnpairedConverter, toUnpairedConverter ProllyRowConverter
+	fromN, toN := diff.CountUnpaired(fromAligned, toAligned)
+	if fromN+toN > 0 {
+		ctx.Warn(PrimaryKeyChangeWarningCode, UnpairedRowsWarning, dp.fromName, dp.toName)
+	}
+	if fromN > 0 {
+		fromUnpairedConverter, err = NewProllyRowConverter(ctx, fromAligned.UnpairedSch(), targetFromSchema, ctx.Warn, nodeStore)
+		if err != nil {
+			return prollyDiffIter{}, err
+		}
+	}
+	if toN > 0 {
+		toUnpairedConverter, err = NewProllyRowConverter(ctx, toAligned.UnpairedSch(), targetToSchema, ctx.Warn, nodeStore)
+		if err != nil {
+			return prollyDiffIter{}, err
+		}
+	}
+
 	keyless := schema.IsKeyless(targetFromSchema) && schema.IsKeyless(targetToSchema)
 	child, cancel := context.WithCancel(ctx)
 	iter := prollyDiffIter{
@@ -147,10 +207,16 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, tar
 		keyless:       keyless,
 		fromCm:        fromCm,
 		toCm:          toCm,
+		fromUnpaired:  fromAligned,
+		toUnpaired:    toAligned,
 		ranges:        ranges,
 		rows:          make(chan sql.Row, 64),
 		errChan:       make(chan error),
 		cancel:        cancel,
+
+		movedMembers:          movedMembers,
+		fromUnpairedConverter: fromUnpairedConverter,
+		toUnpairedConverter:   toUnpairedConverter,
 	}
 
 	go func() {
@@ -197,66 +263,116 @@ func (itr prollyDiffIter) Close(ctx *sql.Context) error {
 	return nil
 }
 
+// queueRows sends the rows of diffRows to the rows channel, and closes it. It
+// sends the first error to errChan instead.
 func (itr prollyDiffIter) queueRows(ctx context.Context) {
-	// TODO: Determine whether or not the schema has changed. If it has, then all rows should count as modifications in the diff.
-	cb := func(ctx context.Context, d tree.Diff) error {
-		dItr, err := itr.makeDiffRowItr(ctx, d)
-		if err != nil {
-			return err
+	if err := itr.diffRows(ctx); err != nil {
+		select {
+		case <-ctx.Done():
+		case itr.errChan <- err:
 		}
-		for {
-			r, err := dItr.Next(ctx)
-			if err == io.EOF {
-				return nil
-			}
-			if err != nil {
-				return err
-			}
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case itr.rows <- r:
-				continue
-			}
-		}
-	}
-	if itr.ranges == nil {
-		considerAllRowsModified := false
-		err := prolly.DiffMaps(ctx, itr.from, itr.to, considerAllRowsModified, cb)
-		if err != nil && err != io.EOF {
-			select {
-			case <-ctx.Done():
-			case itr.errChan <- err:
-			}
-			return
-		}
-	}
-	for _, rng := range itr.ranges {
-		var err error
-		// if the filter can match all NILs, then we need to return every added/removed diff
-		matches, mErr := rng.Matches(ctx, val.EmptyTuple)
-		if mErr != nil {
-			select {
-			case <-ctx.Done():
-			case itr.errChan <- mErr:
-			}
-			return
-		}
-		if matches {
-			err = prolly.DiffMaps(ctx, itr.from, itr.to, false, cb)
-		} else {
-			err = prolly.RangeDiffMaps(ctx, itr.from, itr.to, rng, cb)
-		}
-		if err != nil && err != io.EOF {
-			select {
-			case <-ctx.Done():
-			case itr.errChan <- err:
-			}
-			return
-		}
+		return
 	}
 	// we need to drain itr.rows before returning io.EOF
 	close(itr.rows)
+}
+
+// diffRows queues the diff of from and to within ranges, then the unpaired
+// rows, and returns the first error.
+func (itr prollyDiffIter) diffRows(ctx context.Context) error {
+	// TODO: Determine whether or not the schema has changed. If it has, then all rows should count as modifications in the diff.
+	if itr.ranges == nil {
+		considerAllRowsModified := itr.movedMembers.HasMoved()
+		err := prolly.DiffMaps(ctx, itr.from, itr.to, considerAllRowsModified, itr.queueDiff)
+		if err != nil && err != io.EOF {
+			return err
+		}
+	}
+	isEveryRowPassed := itr.ranges == nil
+	for _, rng := range itr.ranges {
+		// if the filter can match all NILs, then we need to return every added/removed diff
+		matches, err := rng.Matches(ctx, val.EmptyTuple)
+		if err != nil {
+			return err
+		}
+		if matches {
+			isEveryRowPassed = true
+			err = prolly.DiffMaps(ctx, itr.from, itr.to, false, itr.queueDiff)
+		} else {
+			err = prolly.RangeDiffMaps(ctx, itr.from, itr.to, rng, itr.queueDiff)
+		}
+		if err != nil && err != io.EOF {
+			return err
+		}
+	}
+	return itr.queueUnpaired(ctx, isEveryRowPassed)
+}
+
+// queueDiff sends the diff table rows of |d| to the rows channel.
+//
+// It sends nothing for a modified row whose values did not change.
+func (itr prollyDiffIter) queueDiff(ctx context.Context, d tree.Diff) error {
+	isUnchanged, err := itr.movedMembers.IsUnchanged(ctx, d)
+	if err != nil || isUnchanged {
+		return err
+	}
+	dItr, err := itr.makeDiffRowItr(ctx, d)
+	if err != nil {
+		return err
+	}
+	for {
+		r, err := dItr.Next(ctx)
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case itr.rows <- r:
+		}
+	}
+}
+
+// queueUnpaired sends the rows that [diff.AlignPrimaryKeys] kept apart, as
+// removed rows of the from side and added rows of the to side.
+//
+// It sends every row when |isEveryRowPassed|, and otherwise only rows whose
+// key is within ranges. The rows convert from the schema they are stored with,
+// not the rekeyed one.
+func (itr prollyDiffIter) queueUnpaired(ctx context.Context, isEveryRowPassed bool) error {
+	unpaired := itr
+	unpaired.fromConverter, unpaired.toConverter = itr.fromUnpairedConverter, itr.toUnpairedConverter
+	queue := func(side diff.KeyedRows, d tree.Diff, k, v val.Tuple) error {
+		if isEveryRowPassed {
+			return unpaired.queueDiff(ctx, d)
+		}
+		key, err := side.UnpairedKey(ctx, k, v)
+		if err != nil {
+			return err
+		}
+		for _, rng := range itr.ranges {
+			matchesKey, err := rng.Matches(ctx, key)
+			if err != nil {
+				return err
+			}
+			if matchesKey {
+				return unpaired.queueDiff(ctx, d)
+			}
+		}
+		return nil
+	}
+	err := itr.fromUnpaired.IterUnpaired(ctx, func(k, v val.Tuple) error {
+		return queue(itr.fromUnpaired, tree.Diff{Type: tree.RemovedDiff, Key: tree.Item(k), From: tree.Item(v)}, k, v)
+	})
+	if err != nil {
+		return err
+	}
+	return itr.toUnpaired.IterUnpaired(ctx, func(k, v val.Tuple) error {
+		return queue(itr.toUnpaired, tree.Diff{Type: tree.AddedDiff, Key: tree.Item(k), To: tree.Item(v)}, k, v)
+	})
 }
 
 // todo(andy): copy string fields

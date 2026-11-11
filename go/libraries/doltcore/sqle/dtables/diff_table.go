@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -73,6 +74,20 @@ type DiffTable struct {
 }
 
 var PrimaryKeyChangeWarning = "cannot render full diff between commits %s and %s due to primary key set change"
+
+// UnpairedRowsWarning is the format of the warning for rows with a duplicate
+// or NULL primary key after a key change, which are reported as removed and
+// added. Diffs that report such rows share this format.
+//
+// It takes the two commits and gives no count, since filters may show only
+// some rows.
+const UnpairedRowsWarning = "some rows have a duplicate or NULL primary key across the primary key change between commits %s and %s, so they are reported as removed and added rather than modified, even where they exist on both sides"
+
+// retaggedKeyWarning is the format of the warning that rows pair by the
+// names of their primary key columns, which have new tags.
+//
+// It takes the commits whose key columns were retagged.
+const retaggedKeyWarning = "rows between commits %s and %s pair by primary key column name, since the key columns have new tags"
 
 const PrimaryKeyChangeWarningCode int = 1105 // Since this is our own custom warning we'll use 1105, the code for an unknown error
 
@@ -441,6 +456,9 @@ func (dt *DiffTable) reverseIterForChild(ctx *sql.Context, parent hash.Hash) (*d
 	}
 }
 
+// tableInfoForCommit returns the table named |tableName| at |cm|, with the
+// commit's date and height. It returns an empty TblInfoAtCommit when the table
+// is absent.
 func tableInfoForCommit(ctx *sql.Context, tableName doltdb.TableName, cm *doltdb.Commit, hs hash.Hash) (TblInfoAtCommit, error) {
 	r, err := cm.GetRootValue(ctx)
 	if err != nil {
@@ -466,7 +484,11 @@ func tableInfoForCommit(ctx *sql.Context, tableName doltdb.TableName, cm *doltdb
 	}
 
 	ts := types.Timestamp(meta.Committer.Date.Time())
-	return NewTblInfoAtCommit(hs.String(), &ts, tbl, tblHash), nil
+	height, err := cm.Height()
+	if err != nil {
+		return TblInfoAtCommit{}, err
+	}
+	return newTblInfoAtCommit(hs.String(), &ts, &height, tbl, tblHash), nil
 }
 
 // toCommitLookupPartitions creates a diff partition iterator for a set of
@@ -587,14 +609,17 @@ func (dt *DiffTable) PreciseMatch() bool {
 
 type TblInfoAtCommit struct {
 	date    *types.Timestamp
+	height  *uint64
 	tbl     *doltdb.Table
 	name    string
 	tblHash hash.Hash
 }
 
-func NewTblInfoAtCommit(name string, date *types.Timestamp, tbl *doltdb.Table, tblHash hash.Hash) TblInfoAtCommit {
+// newTblInfoAtCommit returns the table |tbl| named |name| at a commit, with the
+// commit's |date| and |height|.
+func newTblInfoAtCommit(name string, date *types.Timestamp, height *uint64, tbl *doltdb.Table, tblHash hash.Hash) TblInfoAtCommit {
 	return TblInfoAtCommit{
-		name: name, date: date, tbl: tbl, tblHash: tblHash,
+		name: name, date: date, height: height, tbl: tbl, tblHash: tblHash,
 	}
 }
 
@@ -616,19 +641,33 @@ type DiffPartition struct {
 	toSch   schema.Schema
 	fromSch schema.Schema
 	ranges  []prolly.Range
+	// rangesSch is the schema whose primary key orders ranges. It is nil
+	// when ranges is nil.
+	rangesSch schema.Schema
+	// toHeight is the height of the to commit, or nil for the working set.
+	toHeight *uint64
+	// fromHeight is the height of the from commit, or nil for the working set.
+	fromHeight *uint64
 }
 
-func NewDiffPartition(to, from *doltdb.Table, toName, fromName string, toDate, fromDate *types.Timestamp, toSch, fromSch schema.Schema, ranges []prolly.Range) *DiffPartition {
+// NewDiffPartition returns a partition that diffs |to| against |from|. Its
+// |ranges| narrow the diff to rows keyed by the primary key of |rangesSch|,
+// and are nil to diff every row. |toHeight| and |fromHeight| are the heights
+// of the commits, nil for the working set.
+func NewDiffPartition(to, from *doltdb.Table, toName, fromName string, toDate, fromDate *types.Timestamp, toSch, fromSch schema.Schema, ranges []prolly.Range, rangesSch schema.Schema, toHeight, fromHeight *uint64) *DiffPartition {
 	return &DiffPartition{
-		to:       to,
-		from:     from,
-		toName:   toName,
-		fromName: fromName,
-		toDate:   toDate,
-		fromDate: fromDate,
-		toSch:    toSch,
-		fromSch:  fromSch,
-		ranges:   ranges,
+		to:         to,
+		from:       from,
+		toName:     toName,
+		fromName:   fromName,
+		toDate:     toDate,
+		fromDate:   fromDate,
+		toSch:      toSch,
+		fromSch:    fromSch,
+		ranges:     ranges,
+		rangesSch:  rangesSch,
+		toHeight:   toHeight,
+		fromHeight: fromHeight,
 	}
 }
 
@@ -641,10 +680,34 @@ func (dp DiffPartition) GetRowIter(ctx *sql.Context) (sql.RowIter, error) {
 	return newProllyDiffIter(ctx, dp, dp.fromSch, dp.toSch, dp.ranges)
 }
 
-// isDiffablePartition checks if the commit pair for this partition is "diffable".
+// SetDeltaHeights sets the to and from heights of |deltas| to |toHeight| and
+// |fromHeight|.
+func SetDeltaHeights(deltas []diff.TableDelta, toHeight, fromHeight *uint64) {
+	for i := range deltas {
+		deltas[i].ToHeight = toHeight
+		deltas[i].FromHeight = fromHeight
+	}
+}
+
+// setDeltaCommitHeights sets the heights of |deltas| from the commits |toCm|
+// and |fromCm|. It returns an error when a commit height cannot be read.
+func setDeltaCommitHeights(deltas []diff.TableDelta, toCm, fromCm *doltdb.Commit) error {
+	toHeight, err := toCm.Height()
+	if err != nil {
+		return err
+	}
+	fromHeight, err := fromCm.Height()
+	if err != nil {
+		return err
+	}
+	SetDeltaHeights(deltas, &toHeight, &fromHeight)
+	return nil
+}
+
+// isDiffablePartition reports whether the partition can be diffed, and how.
 //
-// simpleDiff is returned when [schema.ComparePrimaryKeys] does not return
-// [schema.PrimaryKeysDiffer]. fuzzyDiff is returned when the keys can still be
+// simpleDiff is returned when [diff.AlignedSchema] can key the rows of both
+// sides by one primary key. fuzzyDiff is returned when the keys can still be
 // mapped by [schema.MapSchemaBasedOnTagAndName]. Neither is returned when the
 // partition cannot be diffed.
 func (dp *DiffPartition) isDiffablePartition(ctx *sql.Context) (simpleDiff bool, fuzzyDiff bool, err error) {
@@ -670,8 +733,14 @@ func (dp *DiffPartition) isDiffablePartition(ctx *sql.Context) (simpleDiff bool,
 		return false, false, err
 	}
 
-	easyDiff := schema.ComparePrimaryKeys(fromSch, toSch) != schema.PrimaryKeysDiffer
-	if easyDiff {
+	if schema.ComparePrimaryKeys(fromSch, toSch) != schema.PrimaryKeysDiffer {
+		return true, false, nil
+	}
+	// The rows of both sides pair when one side is rekeyed to the other's key,
+	// or when the key columns keep their tags, since rows convert by tag.
+	newSch, _, err := diff.AlignedSchema(fromSch, toSch, dp.fromHeight, dp.toHeight)
+	isSameKeyTags := slices.Equal(fromSch.GetPKCols().Tags, toSch.GetPKCols().Tags)
+	if err == nil && (newSch != nil || isSameKeyTags) {
 		return true, false, nil
 	}
 
@@ -743,18 +812,26 @@ func (dps *DiffPartitions) processCommit(ctx *sql.Context, cmHash hash.Hash, cm 
 
 	ts := types.Timestamp(meta.Committer.Date.Time())
 
+	height, err := cm.Height()
+	if err != nil {
+		return nil, err
+	}
+
 	var nextPartition *DiffPartition
 	if tblHash != toInfoForCommit.tblHash {
 		partition := DiffPartition{
-			to:       toInfoForCommit.tbl,
-			from:     tbl,
-			toName:   toInfoForCommit.name,
-			fromName: cmHashStr,
-			toDate:   toInfoForCommit.date,
-			fromDate: &ts,
-			fromSch:  dps.fromSch,
-			toSch:    dps.toSch,
-			ranges:   dps.ranges,
+			to:         toInfoForCommit.tbl,
+			from:       tbl,
+			toName:     toInfoForCommit.name,
+			fromName:   cmHashStr,
+			toDate:     toInfoForCommit.date,
+			fromDate:   &ts,
+			fromSch:    dps.fromSch,
+			toSch:      dps.toSch,
+			ranges:     dps.ranges,
+			rangesSch:  dps.toSch,
+			toHeight:   toInfoForCommit.height,
+			fromHeight: &height,
 		}
 		selected, err := dps.selectFunc(ctx, partition)
 
@@ -767,7 +844,7 @@ func (dps *DiffPartitions) processCommit(ctx *sql.Context, cmHash hash.Hash, cm 
 		}
 	}
 
-	newInfo := TblInfoAtCommit{name: cmHashStr, date: &ts, tbl: tbl, tblHash: tblHash}
+	newInfo := TblInfoAtCommit{name: cmHashStr, date: &ts, height: &height, tbl: tbl, tblHash: tblHash}
 	parentHashes, err := cm.ParentHashes(ctx)
 
 	if err != nil {

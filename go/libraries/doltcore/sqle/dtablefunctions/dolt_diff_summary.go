@@ -17,6 +17,7 @@ package dtablefunctions
 import (
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 	"strings"
 
@@ -282,6 +283,7 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 	if err != nil {
 		return nil, err
 	}
+	dtables.SetDeltaHeights(deltas, toDetails.height, fromDetails.height)
 
 	sort.Slice(deltas, func(i, j int) bool {
 		return deltas[i].ToName.Less(deltas[j].ToName)
@@ -313,7 +315,7 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 			return NewDiffSummaryTableFunctionRowIter([]*diff.TableDeltaSummary{}), nil
 		}
 
-		summ, err := getSummaryForDelta(ctx, delta, sqledb, fromDetails, toDetails, true)
+		summ, err := summaryForDelta(ctx, delta)
 		if err != nil {
 			return nil, err
 		}
@@ -322,6 +324,7 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 		if summ != nil {
 			summs = []*diff.TableDeltaSummary{summ}
 		}
+		warnUnpaired(ctx, summs, fromDetails, toDetails)
 
 		return NewDiffSummaryTableFunctionRowIter(summs), nil
 	}
@@ -336,7 +339,7 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 			continue
 		}
 
-		summ, err := getSummaryForDelta(ctx, delta, sqledb, fromDetails, toDetails, false)
+		summ, err := summaryForDelta(ctx, delta)
 		if err != nil {
 			return nil, err
 		}
@@ -344,11 +347,25 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 			diffSummaries = append(diffSummaries, summ)
 		}
 	}
+	warnUnpaired(ctx, diffSummaries, fromDetails, toDetails)
 
 	return NewDiffSummaryTableFunctionRowIter(diffSummaries), nil
 }
 
-func getSummaryForDelta(ctx *sql.Context, delta diff.TableDelta, sqledb dsess.SqlDatabase, fromDetails, toDetails *refDetails, shouldErrorOnPKChange bool) (*diff.TableDeltaSummary, error) {
+// warnUnpaired warns once when any of |summs| has rows that a primary key
+// change left unpaired, using [dtables.UnpairedRowsWarning].
+//
+// The warning names no table, so it covers all of |summs| at once.
+func warnUnpaired(ctx *sql.Context, summs []*diff.TableDeltaSummary, from, to *refDetails) {
+	if slices.ContainsFunc(summs, func(s *diff.TableDeltaSummary) bool { return s.HasUnpairedRows }) {
+		ctx.Warn(dtables.PrimaryKeyChangeWarningCode, dtables.UnpairedRowsWarning, from.refStr, to.refStr)
+	}
+}
+
+// summaryForDelta returns the summary of |delta|, or nil when it has no
+// observable change. Errors come from delta.GetSummary or
+// delta.HasChangesIgnoringColumnTags.
+func summaryForDelta(ctx *sql.Context, delta diff.TableDelta) (*diff.TableDeltaSummary, error) {
 	if delta.FromTable == nil && delta.ToTable == nil && delta.FromRootObject == nil && delta.ToRootObject == nil {
 		if !strings.HasPrefix(delta.FromName.Name, diff.DBPrefix) && !strings.HasPrefix(delta.ToName.Name, diff.DBPrefix) {
 			return nil, nil
@@ -358,15 +375,6 @@ func getSummaryForDelta(ctx *sql.Context, delta diff.TableDelta, sqledb dsess.Sq
 			return nil, err
 		}
 		return summ, nil
-	}
-
-	if schema.ComparePrimaryKeys(delta.FromSch, delta.ToSch) == schema.PrimaryKeysDiffer {
-		if shouldErrorOnPKChange {
-			return nil, fmt.Errorf("failed to compute diff summary for table %s: %w", delta.CurName(), diff.ErrPrimaryKeySetChanged)
-		}
-
-		ctx.Warn(dtables.PrimaryKeyChangeWarningCode, dtables.PrimaryKeyChangeWarning, fromDetails.hashStr, toDetails.hashStr)
-		return nil, nil
 	}
 
 	// A table whose only change is column tags has no observable change.
@@ -380,7 +388,7 @@ func getSummaryForDelta(ctx *sql.Context, delta diff.TableDelta, sqledb dsess.Sq
 
 	summ, err := delta.GetSummary(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to compute diff summary for table %s: %w", delta.CurName(), err)
 	}
 
 	return summ, nil

@@ -347,7 +347,7 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 		dtf.toRefDetails.refStr, dtf.fromRefDetails.refStr,
 		dtf.toRefDetails.commitTime, dtf.fromRefDetails.commitTime,
 		toSchema, fromSchema,
-		nil)
+		nil, nil, dtf.toRefDetails.height, dtf.fromRefDetails.height)
 
 	return dtables.NewDiffPartitionRowIter(dp, ddb), nil
 }
@@ -395,8 +395,10 @@ func findMatchingDelta(deltas []diff.TableDelta, tableName doltdb.TableName) dif
 type refDetails struct {
 	root       doltdb.RootValue
 	commitTime *types.Timestamp
-	refStr     string
-	hashStr    string
+	// height is the commit height, or nil for the working set.
+	height  *uint64
+	refStr  string
+	hashStr string
 }
 
 // loadDetailsForRef loads the root, hash, and timestamp for the specified from
@@ -410,17 +412,17 @@ func loadDetailsForRefs(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db
 	sess := dsess.DSessFromSess(ctx.Session)
 	dbName := db.Name()
 
-	fromRoot, fromCommitTime, fromHashStr, err := sess.ResolveRootForRef(ctx, dbName, fromCommitStr)
+	fromRoot, fromCommitTime, fromHeight, fromHashStr, err := sess.ResolveRootForRef(ctx, dbName, fromCommitStr)
 	if err != nil {
 		return nil, nil, err
 	}
-	fromDetails := &refDetails{root: fromRoot, refStr: fromCommitStr, hashStr: fromHashStr, commitTime: fromCommitTime}
+	fromDetails := &refDetails{root: fromRoot, refStr: fromCommitStr, hashStr: fromHashStr, commitTime: fromCommitTime, height: fromHeight}
 
-	toRoot, toCommitTime, toHashStr, err := sess.ResolveRootForRef(ctx, dbName, toCommitStr)
+	toRoot, toCommitTime, toHeight, toHashStr, err := sess.ResolveRootForRef(ctx, dbName, toCommitStr)
 	if err != nil {
 		return nil, nil, err
 	}
-	toDetails := &refDetails{root: toRoot, refStr: toCommitStr, hashStr: toHashStr, commitTime: toCommitTime}
+	toDetails := &refDetails{root: toRoot, refStr: toCommitStr, hashStr: toHashStr, commitTime: toCommitTime, height: toHeight}
 
 	return fromDetails, toDetails, nil
 }
@@ -749,12 +751,17 @@ func (dtf *DiffTableFunction) lookupPrimaryIndexPartition(ctx *sql.Context, look
 	}
 
 	toSchema, fromSchema := dtf.getSchemas()
+	// The ranges are keyed by the schema of the side the lookup indexes.
+	rangesSch := fromSchema
+	if lookup.Index.ID() == index.ToDiffIndexId {
+		rangesSch = toSchema
+	}
 	partition := dtables.NewDiffPartition(
 		dtf.tableDelta.ToTable, dtf.tableDelta.FromTable,
 		dtf.toRefDetails.refStr, dtf.fromRefDetails.refStr,
 		dtf.toRefDetails.commitTime, dtf.fromRefDetails.commitTime,
 		toSchema, fromSchema,
-		prollyRanges)
+		prollyRanges, rangesSch, dtf.toRefDetails.height, dtf.fromRefDetails.height)
 	return dtables.NewSliceOfPartitionsItr([]sql.Partition{partition}), nil
 }
 
@@ -935,6 +942,8 @@ func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, fromRefDetails, 
 
 	dtf.fromRefDetails = fromRefDetails
 	dtf.toRefDetails = toRefDetails
+
+	dtables.SetDeltaHeights(deltas, toRefDetails.height, fromRefDetails.height)
 
 	delta := findMatchingDelta(deltas, tableName)
 

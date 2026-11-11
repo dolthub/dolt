@@ -16,8 +16,6 @@ package merge
 
 import (
 	"context"
-	"errors"
-	"io"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -32,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/dolt/go/store/val"
 )
 
 var ErrRekeyedAncestorCollision = errorkinds.NewKind("error: cannot merge table %s: both sides changed its primary key, and two rows of the common ancestor have the same new primary key")
@@ -285,7 +282,7 @@ func needsRekeyedAncestor(ourSch, theirSch, ancSch schema.Schema) bool {
 // rows, keyed and indexed by the columns of |target|'s primary key. It returns false when |sch| lacks one of those
 // columns, or holds it with another type or encoding.
 func RekeyTable(ctx *sql.Context, name doltdb.TableName, tbl *doltdb.Table, sch, target schema.Schema) (*doltdb.Table, bool, error) {
-	newSch, ok, err := schema.RekeyedSchema(sch, target)
+	newSch, ok, err := schema.Rekeyed(sch, target)
 	if err != nil || !ok {
 		return nil, false, err
 	}
@@ -294,17 +291,6 @@ func RekeyTable(ctx *sql.Context, name doltdb.TableName, tbl *doltdb.Table, sch,
 	}
 
 	vrw, ns := tbl.ValueReadWriter(), tbl.NodeStore()
-	oldKD, oldVD := sch.GetMapDescriptors(ns)
-	newKD, newVD := newSch.GetMapDescriptors(ns)
-	keySrc, ok := fieldSources(sch, newSch.GetPKCols().GetColumns(), oldKD, oldVD, newKD)
-	if !ok {
-		return nil, false, nil
-	}
-	valSrc, ok := fieldSources(sch, storedCols(newSch.GetNonPKCols()), oldKD, oldVD, newVD)
-	if !ok {
-		return nil, false, nil
-	}
-
 	rd, err := tbl.GetRowData(ctx)
 	if err != nil {
 		return nil, false, err
@@ -313,59 +299,23 @@ func RekeyTable(ctx *sql.Context, name doltdb.TableName, tbl *doltdb.Table, sch,
 	if err != nil {
 		return nil, false, err
 	}
-	empty, err := durable.NewEmptyPrimaryIndex(ctx, vrw, ns, newSch)
+	rk, ok := durable.NewRowRekeyer(ns, sch, newSch)
+	if !ok {
+		return nil, false, nil
+	}
+	newRows, unpaired, hasNullKey, err := rk.RekeyMap(ctx, oldRows)
 	if err != nil {
 		return nil, false, err
 	}
-	emptyRows, err := durable.ProllyMapFromIndex(empty)
-	if err != nil {
-		return nil, false, err
+	// A merge needs one ancestor row for each key, so it cannot use an
+	// ancestor with rows that the new key cannot hold.
+	if hasNullKey {
+		return nil, false, ErrRekeyedAncestorNullKey.New(name)
 	}
-	mut := emptyRows.Mutate()
-
-	pool := oldRows.Pool()
-	kb, vb := val.NewTupleBuilder(newKD, ns), val.NewTupleBuilder(newVD, ns)
-	iter, err := oldRows.IterAll(ctx)
-	if err != nil {
+	if n, err := unpaired.Count(); err != nil {
 		return nil, false, err
-	}
-	for {
-		k, v, err := iter.Next(ctx)
-		if errors.Is(err, io.EOF) {
-			break
-		} else if err != nil {
-			return nil, false, err
-		}
-		for i, src := range keySrc {
-			field := src.get(k, v)
-			if field == nil {
-				return nil, false, ErrRekeyedAncestorNullKey.New(name)
-			}
-			kb.PutRaw(i, field)
-		}
-		for i, src := range valSrc {
-			vb.PutRaw(i, src.get(k, v))
-		}
-		nk, err := kb.Build(ctx, pool)
-		if err != nil {
-			return nil, false, err
-		}
-		nv, err := vb.Build(ctx, pool)
-		if err != nil {
-			return nil, false, err
-		}
-		if dup, err := mut.Has(ctx, nk); err != nil {
-			return nil, false, err
-		} else if dup {
-			return nil, false, ErrRekeyedAncestorCollision.New(name)
-		}
-		if err = mut.Put(ctx, nk, nv); err != nil {
-			return nil, false, err
-		}
-	}
-	newRows, err := mut.Map(ctx)
-	if err != nil {
-		return nil, false, err
+	} else if n > 0 {
+		return nil, false, ErrRekeyedAncestorCollision.New(name)
 	}
 
 	indexes, err := durable.NewIndexSet(ctx, vrw, ns)
@@ -395,59 +345,6 @@ func RekeyTable(ctx *sql.Context, name doltdb.TableName, tbl *doltdb.Table, sch,
 		return nil, false, err
 	}
 	return rekeyed, true, nil
-}
-
-// fieldSource is where a field of a rekeyed tuple comes from: a field of the old key or of the old value.
-type fieldSource struct {
-	fromKey bool
-	idx     int
-	desc    *val.TupleDesc
-}
-
-func (s fieldSource) get(k, v val.Tuple) []byte {
-	if s.fromKey {
-		return s.desc.GetField(s.idx, k)
-	}
-	return s.desc.GetField(s.idx, v)
-}
-
-// fieldSources returns, for each column of |cols|, the field of |sch|'s tuples that holds it. It returns false when a
-// column is stored with a different encoding than |dest| needs.
-func fieldSources(sch schema.Schema, cols []schema.Column, oldKD, oldVD, dest *val.TupleDesc) ([]fieldSource, bool) {
-	oldVals := storedCols(sch.GetNonPKCols())
-	srcs := make([]fieldSource, len(cols))
-	for i, col := range cols {
-		var src fieldSource
-		if j, ok := sch.GetPKCols().TagToIdx[col.Tag]; ok {
-			src = fieldSource{fromKey: true, idx: j, desc: oldKD}
-		} else {
-			j := -1
-			for n, c := range oldVals {
-				if c.Tag == col.Tag {
-					j = n
-				}
-			}
-			if j < 0 {
-				return nil, false
-			}
-			src = fieldSource{idx: j, desc: oldVD}
-		}
-		if src.desc.Types[src.idx].Enc != dest.Types[i].Enc {
-			return nil, false
-		}
-		srcs[i] = src
-	}
-	return srcs, true
-}
-
-func storedCols(cc *schema.ColCollection) []schema.Column {
-	var cols []schema.Column
-	for _, col := range cc.GetColumns() {
-		if !col.Virtual {
-			cols = append(cols, col)
-		}
-	}
-	return cols
 }
 
 func tableHasArtifacts(ctx context.Context, tbl *doltdb.Table) (bool, error) {

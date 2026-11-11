@@ -278,9 +278,9 @@ const (
 	// PrimaryKeysSameTags means every key column has the same tag.
 	PrimaryKeysSameTags
 
-	// primaryKeysRetagged means every key column has the same SQL type and the
-	// same tag or name, and some tags differ.
-	primaryKeysRetagged
+	// PrimaryKeysRetagged means every key column has the same SQL type and the
+	// same tag or name, and some tags differ, so rows pair by name.
+	PrimaryKeysRetagged
 )
 
 // ComparePrimaryKeys reports how the primary keys of |fromSchema| and
@@ -329,12 +329,17 @@ func ComparePrimaryKeys(fromSchema, toSchema Schema) PrimaryKeyComparisonType {
 			return PrimaryKeysDiffer
 		}
 		// MapSchemaBasedOnTagAndName matches target columns by tag first. A target
-		// column holding fromCol's tag under another name would get its values.
-		if tagCol, ok := toPrimaryKeyCols.GetByTag(fromCol.Tag); ok &&
+		// column of either kind holding fromCol's tag under another name would get
+		// its values.
+		if tagCol, ok := toSchema.GetAllCols().GetByTag(fromCol.Tag); ok &&
 			strings.ToLower(tagCol.Name) != strings.ToLower(fromCol.Name) {
 			return PrimaryKeysDiffer
 		}
-		comparison = primaryKeysRetagged
+		if tagCol, ok := fromSchema.GetAllCols().GetByTag(toCol.Tag); ok &&
+			strings.ToLower(tagCol.Name) != strings.ToLower(toCol.Name) {
+			return PrimaryKeysDiffer
+		}
+		comparison = PrimaryKeysRetagged
 	}
 
 	return comparison
