@@ -1372,11 +1372,8 @@ func (p *DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string
 // invalidateDbStateInAllSessions removes the db state for this database from every session. This is necessary when a
 // database is dropped, so that other sessions don't use stale db state.
 func (p *DoltDatabaseProvider) invalidateDbStateInAllSessions(ctx *sql.Context, name string) error {
-	// Remove the db state from the current session
-	err := dsess.DSessFromSess(ctx.Session).RemoveDbState(ctx, name)
-	if err != nil {
-		return err
-	}
+	// Remove the db state from the current session. Other sessions still need theirs removed if this fails.
+	retErr := dsess.DSessFromSess(ctx.Session).RemoveDbState(ctx, name)
 
 	// If we have a running server, remove it from other sessions as well
 	runningServer := sqlserver.GetRunningServer()
@@ -1397,11 +1394,11 @@ func (p *DoltDatabaseProvider) invalidateDbStateInAllSessions(ctx *sql.Context, 
 			return false, nil
 		})
 		if err != nil {
-			return err
+			retErr = errors.Join(retErr, err)
 		}
 	}
 
-	return nil
+	return retErr
 }
 
 func (p *DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revisionQualifiedName string, requestedName string) (dsess.SqlDatabase, bool, error) {
@@ -2047,7 +2044,7 @@ func initialStateForBranchDb(ctx *sql.Context, srcDb dsess.SqlDatabase) (dsess.I
 }
 
 func revisionDbForTag(ctx context.Context, srcDb Database, revSpec string, requestedName string) (ReadOnlyDatabase, error) {
-	baseName, _ := doltdb.SplitRevisionDbName(srcDb.Name())
+	baseName := srcDb.AliasedName()
 	return ReadOnlyDatabase{Database: Database{
 		baseName:      baseName,
 		requestedName: requestedName,
@@ -2091,7 +2088,7 @@ func initialStateForTagDb(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.In
 }
 
 func revisionDbForCommit(ctx context.Context, srcDb Database, revSpec string, requestedName string) (ReadOnlyDatabase, error) {
-	baseName, _ := doltdb.SplitRevisionDbName(srcDb.Name())
+	baseName := srcDb.AliasedName()
 	return ReadOnlyDatabase{Database: Database{
 		baseName:      baseName,
 		requestedName: requestedName,

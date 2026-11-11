@@ -659,12 +659,13 @@ func (a *SequenceTracker[RelationType, StateType, ValueType]) validateBounds(ctx
 		return true // fail-open for infrastructure errors
 	}
 
-	ws, err := sess.WorkingSet(ctx, a.dbName)
-	if err != nil {
+	// Only the table's schema is read, so pending edits aren't materialized. Set runs while they're being materialized.
+	state, ok, err := sess.LookupDbState(ctx, a.dbName)
+	if err != nil || !ok {
 		return true
 	}
 
-	table, _, ok, err := a.relationSource.GetRelation(ctx, ws.WorkingRoot(), relationName)
+	table, _, ok, err := a.relationSource.GetRelation(ctx, state.UnmaterializedWorkingRoot(), relationName)
 	if err != nil || !ok {
 		return true
 	}

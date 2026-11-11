@@ -62,20 +62,13 @@ type Node struct {
 type AddressCb func(ctx context.Context, addr hash.Hash) error
 
 func WalkAddresses(ctx context.Context, nd *Node, ns NodeStore, cb AddressCb) error {
-	return walkAddresses(ctx, nd, func(ctx context.Context, addr hash.Hash) error {
-		if err := cb(ctx, addr); err != nil {
-			return err
-		}
-
-		if nd.IsLeaf() {
-			return nil
-		}
-
-		child, err := ns.Read(ctx, addr)
-		if err != nil {
-			return err
-		}
-
+	if err := walkAddresses(ctx, nd, cb); err != nil {
+		return err
+	}
+	if nd.IsLeaf() {
+		return nil
+	}
+	return walkChildNodes(ctx, nd, ns, func(ctx context.Context, child *Node) error {
 		return WalkAddresses(ctx, child, ns, cb)
 	})
 }
@@ -94,14 +87,24 @@ func WalkNodes(ctx context.Context, nd *Node, ns NodeStore, cb NodeCb) error {
 	if nd.IsLeaf() {
 		return nil
 	}
+	return walkChildNodes(ctx, nd, ns, func(ctx context.Context, child *Node) error {
+		return WalkNodes(ctx, child, ns, cb)
+	})
+}
 
-	return walkAddresses(ctx, nd, func(ctx context.Context, addr hash.Hash) error {
-		child, err := ns.Read(ctx, addr)
+// walkChildNodes reads each child of the internal node |nd| and calls |cb| on it.
+// Addresses embedded in the keys of |nd|, such as commit addresses, are not children.
+func walkChildNodes(ctx context.Context, nd *Node, ns NodeStore, cb NodeCb) error {
+	for i := 0; i < nd.Count(); i++ {
+		child, err := ns.Read(ctx, nd.getAddress(i))
 		if err != nil {
 			return err
 		}
-		return WalkNodes(ctx, child, ns, cb)
-	})
+		if err := cb(ctx, child); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // walkOpaqueNodes runs a callback function on every node found in the DFS of |nd|

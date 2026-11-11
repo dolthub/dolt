@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/val"
@@ -32,21 +33,46 @@ type WriteSession interface {
 	// GetTableWriter creates a TableWriter and adds it to the WriteSession.
 	GetTableWriter(ctx *sql.Context, table doltdb.TableName) (TableWriter, error)
 
-	// GetWorkingSet returns the session's current working set.
+	// GetTableWriterForNewTable is GetTableWriter for |tbl|, a table that isn't in the owner's working set yet. The
+	// table is added to it when the writer flushes.
+	GetTableWriterForNewTable(ctx *sql.Context, table doltdb.TableName, tbl *doltdb.Table) (TableWriter, error)
+
+	// GetWorkingSet returns its owner's current working set.
 	GetWorkingSet() *doltdb.WorkingSet
 
-	// SetWorkingSet modifies the state of the WriteSession. The WorkingSetRef of |ws| must match the existing Ref.
-	SetWorkingSet(ctx *sql.Context, ws *doltdb.WorkingSet) error
+	// ResetTableWriters rebuilds this session's table writers from its owner's working set, discarding their unflushed
+	// edits. The owner calls it when its working set is replaced other than through this session's own flushes.
+	ResetTableWriters(ctx *sql.Context) error
 
 	// VisitGCRoots is used to ensure that a write session's GC roots are retained
 	// in the case that a GC needs to proceed before the write session is flushed.
-	VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error
+	VisitGCRoots(ctx context.Context, roots func(hash.Hash)) error
 
 	// GetOptions returns the editor.Options for this session.
 	GetOptions() editor.Options
 
-	// SetOptions sets the editor.Options for this session.
-	SetOptions(opts editor.Options)
+	// HasOpenTableWriters returns whether any TableWriter this session has handed out hasn't been closed since.
+	HasOpenTableWriters() bool
+
+	// SetDeferMaterialization controls whether the edits of completed statements are materialized into the working
+	// set as each statement completes. When deferred, edits accumulate in the session's TableWriters until
+	// MaterializePending is called, and the session's owner must do so before reading the working set.
+	SetDeferMaterialization(deferMaterialization bool)
+
+	// HasPendingEdits returns true if edits from completed statements have not been materialized into the working set.
+	HasPendingEdits() bool
+
+	// PendingTables returns the names of tables with edits that have not been materialized into the working set.
+	PendingTables() []doltdb.TableName
+
+	// PendingRows returns views of the rows of |tblName| that include its pending edits. It returns false if the
+	// table has no pending edits, and nil views if it has pending edits that can't be read without materializing
+	// them.
+	PendingRows(ctx *sql.Context, tblName doltdb.TableName) (*index.PendingRows, bool, error)
+
+	// MaterializePending materializes all pending edits into its owner's working set. The edits of a statement in
+	// progress are not included.
+	MaterializePending(ctx *sql.Context) error
 
 	WriteSessionFlusher
 }
@@ -59,6 +85,15 @@ type TableWriter interface {
 
 // SessionRootSetter sets the root value for the session.
 type SessionRootSetter func(ctx *sql.Context, dbName string, root doltdb.RootValue) error
+
+// WorkingSetOwner holds the working set that a WriteSession reads its tables from and flushes them into.
+type WorkingSetOwner interface {
+	// WorkingSet returns the owner's current working set.
+	WorkingSet() *doltdb.WorkingSet
+	// SetFlushedWorkingSet replaces the owner's working set with |ws|, which its WriteSession built by flushing table
+	// writers into the current one.
+	SetFlushedWorkingSet(ctx *sql.Context, ws *doltdb.WorkingSet) error
+}
 
 // WriteSessionFlusher is responsible for flushing any pending edits to the session
 type WriteSessionFlusher interface {

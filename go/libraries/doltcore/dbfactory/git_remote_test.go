@@ -27,7 +27,9 @@ import (
 	"testing"
 	"time"
 
+	filelocks "github.com/dolthub/file-locks"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -173,6 +175,12 @@ func TestGitRemoteFactory_GitFile_CachesUnderRepoDoltDirAndCanWrite(t *testing.T
 	cs := vs.ChunkStore()
 
 	commitOneChunk(t, ctx, cs)
+
+	// The table just written is spooled under the cache root.
+	spools, err := filepath.Glob(filepath.Join(cacheBase, GitRemoteSpoolDirName, "*", "nbs-spool-*"))
+	require.NoError(t, err)
+	require.Len(t, spools, 1)
+
 	require.NoError(t, db.Close())
 
 	// Remote should now have refs/dolt/data.
@@ -352,6 +360,52 @@ func TestEnsureGitRemoteURL_IdempotentRemoteAlreadyExists(t *testing.T) {
 	got, err := exec.CommandContext(ctx, "git", "--git-dir", gitDir, "remote", "get-url", remoteName).CombinedOutput()
 	require.NoError(t, err, "git remote get-url failed: %s", string(got))
 	require.Equal(t, remoteURL, strings.TrimSpace(string(got)))
+}
+
+func TestGitRemoteStores_GiveUpSpoolDirOnClose(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found on PATH")
+	}
+
+	ctx := context.Background()
+	remoteRepo, err := gitrepo.InitBare(ctx, filepath.Join(shortTempDir(t), "remote.git"))
+	require.NoError(t, err)
+	_, err = remoteRepo.SetRefToTree(ctx, "refs/heads/main", map[string][]byte{"README": []byte("seed\n")}, "seed")
+	require.NoError(t, err)
+
+	root := shortTempDir(t)
+	cacheBase := filepath.Join(root, DoltDir, GitRemoteCacheDirName)
+	spoolDir := filepath.Join(cacheBase, GitRemoteSpoolDirName)
+	urlStr := "git+file://" + filepath.ToSlash(remoteRepo.GitDir)
+	params := map[string]interface{}{GitCacheRootParam: cacheBase}
+
+	// Callers racing to open the remote end up sharing a store, and the rest are closed.
+	var eg errgroup.Group
+	for i := 0; i < 4; i++ {
+		eg.Go(func() error {
+			_, _, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, params)
+			return err
+		})
+	}
+	require.NoError(t, eg.Wait())
+	lockFiles, err := filepath.Glob(filepath.Join(spoolDir, "*.lock"))
+	require.NoError(t, err)
+	require.Len(t, lockFiles, 1, "only the store in use holds a spool directory")
+
+	_, vrw, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, params)
+	require.NoError(t, err)
+	commitOneChunk(t, ctx, vrw.(*types.ValueStore).ChunkStore())
+
+	lock, err := filelocks.New(lockFiles[0])
+	require.NoError(t, err)
+	require.ErrorIs(t, lock.TryLock(), filelocks.ErrLocked, "a store with spools holds its lock")
+	require.NoError(t, lock.Close())
+
+	// The blobstore closes before the store's tables do, so its spools are still open then.
+	require.NoError(t, CloseGitRemotesUnderRoot(root))
+	entries, err := os.ReadDir(spoolDir)
+	require.NoError(t, err)
+	require.Empty(t, entries, "closing the root's stores gives up the spool directory")
 }
 
 func TestCloseGitRemotesUnderRoot(t *testing.T) {

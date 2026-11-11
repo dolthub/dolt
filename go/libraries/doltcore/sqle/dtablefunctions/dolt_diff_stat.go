@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"golang.org/x/sync/errgroup"
 
@@ -160,7 +161,7 @@ func (ds *DiffStatTableFunction) WithChildren(ctx *sql.Context, children ...sql.
 
 // CheckAuth implements the interface sql.AuthorizationCheckerNode.
 func (ds *DiffStatTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
-	baseDB, _ := doltdb.SplitRevisionDbName(ds.database.Name())
+	baseDB := plan.CheckPrivilegeNameForDatabase(ds.database)
 	if ds.tableNameExpr != nil {
 		if !types.IsText(ds.tableNameExpr.Type(ctx)) {
 			return ExpressionIsDeferred(ctx, ds.tableNameExpr)
@@ -290,12 +291,18 @@ func (ds *DiffStatTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 
 	// If tableNameExpr defined, return a single table diff stat result
 	if ds.tableNameExpr != nil {
-		delta := findMatchingDelta(deltas, tableName)
-		schemaName := delta.FromName.Schema
-		if schemaName == "" {
-			schemaName = delta.ToName.Schema
+		resolvedName, err := resolveDeltaTableName(ctx, fromRefDetails.root, toRefDetails.root, tableName)
+		if err != nil {
+			return nil, err
 		}
-		diffStat, hasDiff, err := getDiffStatNodeFromDelta(ctx, delta, fromRefDetails.root, toRefDetails.root, doltdb.TableName{Name: tableName, Schema: schemaName})
+		delta := findMatchingDelta(deltas, resolvedName)
+		if resolvedName.Schema == "" {
+			resolvedName.Schema = delta.FromName.Schema
+		}
+		if resolvedName.Schema == "" {
+			resolvedName.Schema = delta.ToName.Schema
+		}
+		diffStat, hasDiff, err := getDiffStatNodeFromDelta(ctx, delta, fromRefDetails.root, toRefDetails.root, resolvedName)
 		if err != nil {
 			return nil, err
 		}

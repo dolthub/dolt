@@ -178,7 +178,7 @@ func (m *fakeS3) UploadPartCopy(ctx context.Context, input *s3.UploadPartCopyInp
 
 	unescaped, err := url.QueryUnescape(*input.CopySource)
 	m.assert.NoError(err)
-	slash := strings.LastIndex(unescaped, "/")
+	slash := strings.Index(unescaped, "/")
 	m.assert.NotEqual(-1, slash, "Malformed CopySource %s", unescaped)
 	src := unescaped[slash+1:]
 
