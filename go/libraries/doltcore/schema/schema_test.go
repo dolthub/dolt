@@ -384,13 +384,13 @@ func TestComparePrimaryKeysOutcomes(t *testing.T) {
 			Name:       "retagged_same_name_and_type",
 			From:       newSchema(primaryKey("pk", 1, types.IntKind)),
 			To:         newSchema(primaryKey("pk", 2, types.IntKind)),
-			Comparison: primaryKeysRetagged,
+			Comparison: PrimaryKeysRetagged,
 		},
 		{
 			Name:       "multi_column_retagged_later_column",
 			From:       newSchema(primaryKey("a", 1, types.IntKind), primaryKey("b", 2, types.StringKind)),
 			To:         newSchema(primaryKey("a", 1, types.IntKind), primaryKey("b", 3, types.StringKind)),
-			Comparison: primaryKeysRetagged,
+			Comparison: PrimaryKeysRetagged,
 		},
 		{
 			Name:       "multi_column_different_later_name",

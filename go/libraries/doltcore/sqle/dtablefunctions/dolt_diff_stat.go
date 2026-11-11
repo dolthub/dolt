@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"slices"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -30,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 )
 
 const diffStatDefaultRowCount = 10
@@ -288,7 +290,9 @@ func (ds *DiffStatTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 	if err != nil {
 		return nil, err
 	}
+	dtables.SetDeltaHeights(deltas, toRefDetails.height, fromRefDetails.height)
 
+	var diffStats []diffStatNode
 	// If tableNameExpr defined, return a single table diff stat result
 	if ds.tableNameExpr != nil {
 		resolvedName, err := resolveDeltaTableName(ctx, fromRefDetails.root, toRefDetails.root, tableName)
@@ -306,27 +310,33 @@ func (ds *DiffStatTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 		if err != nil {
 			return nil, err
 		}
-		if !hasDiff {
-			return NewDiffStatTableFunctionRowIter([]diffStatNode{}), nil
-		}
-		return NewDiffStatTableFunctionRowIter([]diffStatNode{diffStat}), nil
-	}
-
-	var diffStats []diffStatNode
-	for _, delta := range deltas {
-		tblName := delta.ToName
-		if tblName.Name == "" {
-			tblName = delta.FromName
-		}
-		diffStat, hasDiff, err := getDiffStatNodeFromDelta(ctx, delta, fromRefDetails.root, toRefDetails.root, tblName)
-		if err != nil {
-			return nil, err
-		}
 		if hasDiff {
 			diffStats = append(diffStats, diffStat)
 		}
+	} else {
+		for _, delta := range deltas {
+			tblName := delta.ToName
+			if tblName.Name == "" {
+				tblName = delta.FromName
+			}
+			diffStat, hasDiff, err := getDiffStatNodeFromDelta(ctx, delta, fromRefDetails.root, toRefDetails.root, tblName)
+			if diff.IsPrimaryKeyUnalignable(err) {
+				// Other tables still get their stats, so only this table is skipped.
+				ctx.Warn(dtables.PrimaryKeyChangeWarningCode, "cannot compute diff stat for table %s: %s", tblName.Name, err.Error())
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+			if hasDiff {
+				diffStats = append(diffStats, diffStat)
+			}
+		}
 	}
-
+	// The warning names no table, so it is given once for all tables.
+	if slices.ContainsFunc(diffStats, func(n diffStatNode) bool { return n.diffStat.Unpaired > 0 }) {
+		ctx.Warn(dtables.PrimaryKeyChangeWarningCode, dtables.UnpairedRowsWarning, fromRefDetails.refStr, toRefDetails.refStr)
+	}
 	return NewDiffStatTableFunctionRowIter(diffStats), nil
 }
 
@@ -457,6 +467,7 @@ func getDiffStat(ctx *sql.Context, td diff.TableDelta) (diff.DiffStatProgress, b
 				acc.OldRowSize += p.OldRowSize
 				acc.NewCellSize += p.NewCellSize
 				acc.OldCellSize += p.OldCellSize
+				acc.Unpaired += p.Unpaired
 				count++
 			case <-ctx2.Done():
 				return ctx2.Err()
@@ -468,9 +479,13 @@ func getDiffStat(ctx *sql.Context, td diff.TableDelta) (diff.DiffStatProgress, b
 		return diff.DiffStatProgress{}, false, false, err
 	}
 
-	keyless, err := isKeylessStat(ctx, td)
-	if err != nil {
-		return diff.DiffStatProgress{}, false, keyless, err
+	// A table that gained or lost its primary key is counted as keyless.
+	keyless := td.HasGainedOrLostPrimaryKey()
+	if !keyless {
+		var err error
+		if keyless, err = td.IsKeyless(ctx); err != nil {
+			return diff.DiffStatProgress{}, false, keyless, err
+		}
 	}
 
 	if (acc.Adds+acc.Removes+acc.Changes) == 0 && (acc.OldCellSize-acc.NewCellSize) == 0 {
@@ -478,19 +493,6 @@ func getDiffStat(ctx *sql.Context, td diff.TableDelta) (diff.DiffStatProgress, b
 	}
 
 	return acc, true, keyless, nil
-}
-
-// isKeylessStat reports whether the stat of |td| takes the keyless form, which
-// getRowFromDiffStat reports as rows added and deleted alone.
-//
-// Keyless tables take it, and so do tables that gained or lost their primary
-// key, whose rows StatForTableDelta counts as deleted and added like keyless
-// rows.
-func isKeylessStat(ctx *sql.Context, td diff.TableDelta) (bool, error) {
-	if td.HasGainedOrLostPrimaryKey() {
-		return true, nil
-	}
-	return td.IsKeyless(ctx)
 }
 
 //------------------------------------

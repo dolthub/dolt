@@ -1441,20 +1441,21 @@ func (d *DoltSession) GetBranchActivityTracker() *doltdb.BranchActivityTracker {
 	return d.branchActivityTracker
 }
 
-// ResolveRootForRef returns the root value for the ref given, which refers to either a commit spec or is one of the
-// special identifiers |WORKING| or |STAGED|
-// Returns the root value associated with the identifier given, its commit time and its hash string. The hash string
-// for special identifiers |WORKING| or |STAGED| would be itself, 'WORKING' or 'STAGED', respectively.
-func (d *DoltSession) ResolveRootForRef(ctx *sql.Context, dbName, refStr string) (doltdb.RootValue, *types.Timestamp, string, error) {
+// ResolveRootForRef returns the root value for |refStr|, which is a commit spec
+// or one of the special identifiers |WORKING| or |STAGED|.
+//
+// It also returns the commit time, height, and hash. For |WORKING| and
+// |STAGED|, the hash is the identifier itself and the height is nil.
+func (d *DoltSession) ResolveRootForRef(ctx *sql.Context, dbName, refStr string) (doltdb.RootValue, *types.Timestamp, *uint64, string, error) {
 	if refStr == doltdb.Working || refStr == doltdb.Staged {
 		// TODO: get from working set / staged update time
 		now := types.Timestamp(time.Now())
 		// TODO: no current database
 		roots, _ := d.GetRoots(ctx, ctx.GetCurrentDatabase())
 		if refStr == doltdb.Working {
-			return roots.Working, &now, refStr, nil
+			return roots.Working, &now, nil, refStr, nil
 		} else if refStr == doltdb.Staged {
-			return roots.Staged, &now, refStr, nil
+			return roots.Staged, &now, nil, refStr, nil
 		}
 	}
 
@@ -1462,49 +1463,54 @@ func (d *DoltSession) ResolveRootForRef(ctx *sql.Context, dbName, refStr string)
 	var commitTime *types.Timestamp
 	cs, err := doltdb.NewCommitSpec(refStr)
 	if err != nil {
-		return nil, nil, "", err
+		return nil, nil, nil, "", err
 	}
 
 	dbData, ok := d.GetDbData(ctx, dbName)
 	if !ok {
-		return nil, nil, "", sql.ErrDatabaseNotFound.New(dbName)
+		return nil, nil, nil, "", sql.ErrDatabaseNotFound.New(dbName)
 	}
 
 	headRef, err := d.CWBHeadRef(ctx, dbName)
 	if err == doltdb.ErrOperationNotSupportedInDetachedHead {
 		// leave head ref nil, we may not need it (commit hash)
 	} else if err != nil {
-		return nil, nil, "", err
+		return nil, nil, nil, "", err
 	}
 
 	optCmt, err := dbData.Ddb.Resolve(ctx, cs, headRef)
 	if err != nil {
-		return nil, nil, "", err
+		return nil, nil, nil, "", err
 	}
 	cm, ok := optCmt.ToCommit()
 	if !ok {
-		return nil, nil, "", doltdb.ErrGhostCommitRuntimeFailure
+		return nil, nil, nil, "", doltdb.ErrGhostCommitRuntimeFailure
 	}
 
 	root, err = cm.GetRootValue(ctx)
 	if err != nil {
-		return nil, nil, "", err
+		return nil, nil, nil, "", err
 	}
 
 	meta, err := cm.GetCommitMeta(ctx)
 	if err != nil {
-		return nil, nil, "", err
+		return nil, nil, nil, "", err
 	}
 
 	t := meta.Committer.Date.Time()
 	commitTime = (*types.Timestamp)(&t)
 
-	commitHash, err := cm.HashOf()
+	height, err := cm.Height()
 	if err != nil {
-		return nil, nil, "", err
+		return nil, nil, nil, "", err
 	}
 
-	return root, commitTime, commitHash.String(), nil
+	commitHash, err := cm.HashOf()
+	if err != nil {
+		return nil, nil, nil, "", err
+	}
+
+	return root, commitTime, &height, commitHash.String(), nil
 }
 
 // SetWorkingRoot sets a new root value for the session for the database named. This is the primary mechanism by which data

@@ -17,6 +17,7 @@ package dtablefunctions
 import (
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 	"strings"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 )
 
 const diffSummaryDefaultRowCount = 10
@@ -281,6 +283,7 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 	if err != nil {
 		return nil, err
 	}
+	dtables.SetDeltaHeights(deltas, toDetails.height, fromDetails.height)
 
 	sort.Slice(deltas, func(i, j int) bool {
 		return deltas[i].ToName.Less(deltas[j].ToName)
@@ -321,6 +324,7 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 		if summ != nil {
 			summs = []*diff.TableDeltaSummary{summ}
 		}
+		warnUnpaired(ctx, summs, fromDetails, toDetails)
 
 		return NewDiffSummaryTableFunctionRowIter(summs), nil
 	}
@@ -343,16 +347,24 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 			diffSummaries = append(diffSummaries, summ)
 		}
 	}
+	warnUnpaired(ctx, diffSummaries, fromDetails, toDetails)
 
 	return NewDiffSummaryTableFunctionRowIter(diffSummaries), nil
 }
 
-// summaryForDelta returns the summary of |delta|, or nil when it has no
-// observable change.
+// warnUnpaired warns once when any of |summs| has rows that a primary key
+// change left unpaired, using [dtables.UnpairedRowsWarning].
 //
-// A table whose primary key changed is summarized with its rows paired by
-// [diff.AlignPrimaryKeys]. A table that gained or lost its primary key pairs
-// no rows, so, as in dolt_diff, its data changed whenever it has rows.
+// The warning names no table, so it covers all of |summs| at once.
+func warnUnpaired(ctx *sql.Context, summs []*diff.TableDeltaSummary, from, to *refDetails) {
+	if slices.ContainsFunc(summs, func(s *diff.TableDeltaSummary) bool { return s.HasUnpairedRows }) {
+		ctx.Warn(dtables.PrimaryKeyChangeWarningCode, dtables.UnpairedRowsWarning, from.refStr, to.refStr)
+	}
+}
+
+// summaryForDelta returns the summary of |delta|, or nil when it has no
+// observable change. Errors come from delta.GetSummary or
+// delta.HasChangesIgnoringColumnTags.
 func summaryForDelta(ctx *sql.Context, delta diff.TableDelta) (*diff.TableDeltaSummary, error) {
 	if delta.FromTable == nil && delta.ToTable == nil && delta.FromRootObject == nil && delta.ToRootObject == nil {
 		if !strings.HasPrefix(delta.FromName.Name, diff.DBPrefix) && !strings.HasPrefix(delta.ToName.Name, diff.DBPrefix) {

@@ -16,7 +16,9 @@ package diff
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -28,52 +30,67 @@ import (
 // KeyedRows is one side of a diff: the rows of a table and the schema whose
 // primary key orders them.
 //
-// A primary key holds one row and no NULL, so rekeying leaves out the rows
-// whose new key is shared or NULL. KeyedRows keeps them so that a diff can
-// still report them.
+// Rekeying leaves out the rows whose new key is shared or NULL. They are kept
+// as unpaired rows, so a diff can still report them.
 type KeyedRows struct {
 	Rows prolly.Map
 	Sch  schema.Schema
+	// Height is the commit height of Rows, or nil for the working set.
+	Height *uint64
 
 	// unpaired holds the rows left out of Rows, as stored before rekeying.
 	unpaired prolly.Map
+	// unpairedSch is the schema that the rows of unpaired read with.
+	unpairedSch schema.Schema
 	// unpairedCount is the number of rows in unpaired.
 	unpairedCount int
 	// rekeyer rekeys the rows of unpaired. It is nil when Rows was not rekeyed.
 	rekeyer *durable.RowRekeyer
 }
 
-// CountUnpaired returns how many rows of |from| and of |to| are left out of
-// their Rows.
+// CountUnpaired returns the number of unpaired rows of |from| and |to|.
 func CountUnpaired(from, to KeyedRows) (int, int) {
 	return from.unpairedCount, to.unpairedCount
 }
 
-// IterUnpaired calls |cb| with each row left out of Rows, rekeyed like Rows.
+// UnpairedSch returns the schema that the unpaired rows read with, or nil
+// when Rows was not rekeyed.
+func (r KeyedRows) UnpairedSch() schema.Schema {
+	return r.unpairedSch
+}
+
+// IterUnpaired calls |cb| with each unpaired row, as stored. It calls nothing
+// when Rows was not rekeyed.
 //
-// Rekeying gives those rows the layout of Rows, so they read with Sch. A row
-// whose new key is NULL keeps the NULL in its key.
+// The rows read with UnpairedSch, so each value keeps its original type.
 func (r KeyedRows) IterUnpaired(ctx context.Context, cb func(k, v val.Tuple) error) error {
 	if r.rekeyer == nil {
 		return nil
 	}
-	return durable.IterRows(ctx, r.unpaired, func(k, v val.Tuple) error {
-		nk, nv, err := r.rekeyer.Rekey(ctx, k, v)
-		if err != nil {
-			return err
-		}
-		return cb(nk, nv)
-	})
+	return durable.IterRows(ctx, r.unpaired, cb)
 }
 
-// AlignPrimaryKeys returns |from| and |to| keyed by the primary key that
-// AlignedSchema chooses, rekeying at most one side.
+// UnpairedKey returns the key under Sch of the unpaired row |k| and |v|, which
+// a range over Rows can match. A NULL in the key stays NULL.
+func (r KeyedRows) UnpairedKey(ctx context.Context, k, v val.Tuple) (val.Tuple, error) {
+	return r.rekeyer.Key(ctx, k, v)
+}
+
+// AlignPrimaryKeys returns |from| and |to| keyed by one primary key, rekeying
+// at most one side.
 //
-// [prolly.DiffMaps] pairs rows by key bytes, so the sides of a diff across a
-// primary key change pair only once they share a key. The rekeyed side leaves
-// out the rows that the key cannot hold, as KeyedRows describes.
+// [prolly.DiffMaps] pairs rows by key bytes, so rows pair once the sides share
+// a key. The rekeyed side leaves out rows the key cannot hold.
+//
+// The sides are returned unchanged when their columns map by tag or name but
+// no key aligns, which makes the diff fuzzy.
 func AlignPrimaryKeys(ctx context.Context, from, to KeyedRows) (KeyedRows, KeyedRows, error) {
-	newSch, isFromRekeyed, err := AlignedSchema(from.Sch, to.Sch)
+	newSch, isFromRekeyed, err := AlignedSchema(from.Sch, to.Sch, from.Height, to.Height)
+	if errors.Is(err, ErrPrimaryKeySetChanged) {
+		if _, _, mapErr := schema.MapSchemaBasedOnTagAndName(from.Sch, to.Sch); mapErr == nil {
+			return from, to, nil
+		}
+	}
 	if err != nil || newSch == nil {
 		return from, to, err
 	}
@@ -85,40 +102,57 @@ func AlignPrimaryKeys(ctx context.Context, from, to KeyedRows) (KeyedRows, Keyed
 	return from, to, err
 }
 
-// AlignedSchema returns the schema that one side of a diff from |fromSch| to
-// |toSch| takes to share the other side's primary key. It also reports whether
-// that side is the from side, and returns a nil schema when the sides already
-// store the same key.
+// AlignedSchema returns the schema that one side of a diff takes to share the
+// other side's primary key. It returns a nil schema when the sides store the
+// same key, or when either side is keyless or empty.
 //
-// It prefers the key of |toSch|, the key the table has after the change, when
-// the from side stores every column of it. Only the schemas decide, so a
-// primary key change always keys rows the same way.
+// The bool reports whether the from side is the one rekeyed. The older side
+// is rekeyed to the newer side's key when it stores every column of that key.
+// Otherwise the newer side is rekeyed to the older key. The heights order the
+// sides, so a diff and its reverse choose the same key.
 //
-// It returns an error when neither side stores the other's key. The error
-// wraps ErrPrimaryKeySetChanged unless a key column changed type.
-func AlignedSchema(fromSch, toSch schema.Schema) (schema.Schema, bool, error) {
+// It returns an error wrapping ErrPrimaryKeySetChanged when neither side
+// stores the other's key, or one that names a key column whose type changed.
+// IsPrimaryKeyUnalignable reports both.
+func AlignedSchema(fromSch, toSch schema.Schema, fromHeight, toHeight *uint64) (schema.Schema, bool, error) {
 	if fromSch == nil || toSch == nil || schema.IsKeyless(fromSch) || schema.IsKeyless(toSch) {
 		return nil, false, nil
 	}
-	if schema.ComparePrimaryKeys(fromSch, toSch) != schema.PrimaryKeysDiffer || isSameStoredKey(fromSch, toSch) {
+	// An empty schema is the missing side of an added or dropped table.
+	isEmpty := fromSch.GetAllCols().Size() == 0 || toSch.GetAllCols().Size() == 0
+	if isEmpty || isSameStoredKey(fromSch, toSch) {
 		return nil, false, nil
 	}
-	if newSch, ok, err := schema.RekeyedSchema(fromSch, toSch); err != nil || ok {
-		return newSch, true, err
+	olderSch, newerSch := fromSch, toSch
+	isOlderFrom := heightOrder(fromHeight) <= heightOrder(toHeight)
+	if !isOlderFrom {
+		olderSch, newerSch = toSch, fromSch
 	}
-	if newSch, ok, err := schema.RekeyedSchema(toSch, fromSch); err != nil || ok {
-		return newSch, false, err
+	if newSch, ok, err := schema.Rekeyed(olderSch, newerSch); err != nil || ok {
+		return newSch, isOlderFrom, err
+	}
+	if newSch, ok, err := schema.Rekeyed(newerSch, olderSch); err != nil || ok {
+		return newSch, !isOlderFrom, err
 	}
 	return nil, false, unalignableError(fromSch, toSch)
 }
 
+// heightOrder returns the order of commit height |h|. A nil height is the
+// working set, which is newer than any commit.
+func heightOrder(h *uint64) uint64 {
+	if h == nil {
+		return math.MaxUint64
+	}
+	return *h
+}
+
 // isSameStoredKey reports whether the primary keys of |fromSch| and |toSch|
-// hold the same columns with the same encodings. Columns match by tag or
-// name, in order.
+// store the same bytes, column by column.
 //
-// Such keys store the same bytes even across a type change such as
-// VARCHAR(20) to VARCHAR(30), which [schema.ComparePrimaryKeys] reports as a
-// different key.
+// Columns match by tag, or by name when neither tag appears on the other
+// side, as when a table is dropped and recreated. A type change such as
+// VARCHAR(20) to VARCHAR(30) keeps the bytes. A change that moves ENUM or SET
+// members does not, since those bytes encode member positions.
 func isSameStoredKey(fromSch, toSch schema.Schema) bool {
 	fromCols, toCols := fromSch.GetPKCols().GetColumns(), toSch.GetPKCols().GetColumns()
 	if len(fromCols) != len(toCols) {
@@ -126,17 +160,22 @@ func isSameStoredKey(fromSch, toSch schema.Schema) bool {
 	}
 	for i, from := range fromCols {
 		to := toCols[i]
-		isSameCol := from.Tag == to.Tag || strings.EqualFold(from.Name, to.Name)
-		if !isSameCol || from.TypeInfo.Encoding() != to.TypeInfo.Encoding() {
+		_, fromHasToTag := fromSch.GetAllCols().GetByTag(to.Tag)
+		_, toHasFromTag := toSch.GetAllCols().GetByTag(from.Tag)
+		isSameName := strings.EqualFold(from.Name, to.Name) && !fromHasToTag && !toHasFromTag
+		isSameCol := from.Tag == to.Tag || isSameName
+		members, isMember := from.MapMembers(to)
+		isMoved := isMember && !members.IsIdentity()
+		if !isSameCol || from.TypeInfo.Encoding() != to.TypeInfo.Encoding() || isMoved {
 			return false
 		}
 	}
 	return true
 }
 
-// rekeyBy returns |side| rekeyed to |newSch|, which holds the primary key of
-// |other|. It returns an error when |side| stores a column of that key with
-// another encoding.
+// rekeyBy returns |side| rekeyed to |newSch|, which holds the key of |other|.
+//
+// It returns an error when |side| stores a key column with another encoding.
 func rekeyBy(ctx context.Context, side KeyedRows, newSch, other schema.Schema) (KeyedRows, error) {
 	rk, ok := durable.NewRowRekeyer(side.Rows.NodeStore(), side.Sch, newSch)
 	if !ok {
@@ -150,11 +189,20 @@ func rekeyBy(ctx context.Context, side KeyedRows, newSch, other schema.Schema) (
 	if err != nil {
 		return KeyedRows{}, err
 	}
-	return KeyedRows{Rows: rows, Sch: newSch, unpaired: unpaired, unpairedCount: n, rekeyer: rk}, nil
+	return KeyedRows{
+		Rows:          rows,
+		Sch:           newSch,
+		Height:        side.Height,
+		unpaired:      unpaired,
+		unpairedSch:   side.Sch,
+		unpairedCount: n,
+		rekeyer:       rk,
+	}, nil
 }
 
-// alignIndexes is AlignPrimaryKeys for rows held as durable indexes.
-func alignIndexes(ctx context.Context, from, to durable.Index, fromSch, toSch schema.Schema) (KeyedRows, KeyedRows, error) {
+// alignIndexes aligns the rows of the durable indexes |from| and |to|, which
+// are keyed by |fromSch| and |toSch|, as AlignPrimaryKeys does.
+func (td TableDelta) alignIndexes(ctx context.Context, from, to durable.Index, fromSch, toSch schema.Schema) (KeyedRows, KeyedRows, error) {
 	fromRows, err := durable.ProllyMapFromIndex(from)
 	if err != nil {
 		return KeyedRows{}, KeyedRows{}, err
@@ -163,13 +211,16 @@ func alignIndexes(ctx context.Context, from, to durable.Index, fromSch, toSch sc
 	if err != nil {
 		return KeyedRows{}, KeyedRows{}, err
 	}
-	return AlignPrimaryKeys(ctx, KeyedRows{Rows: fromRows, Sch: fromSch}, KeyedRows{Rows: toRows, Sch: toSch})
+	return AlignPrimaryKeys(ctx,
+		KeyedRows{Rows: fromRows, Sch: fromSch, Height: td.FromHeight},
+		KeyedRows{Rows: toRows, Sch: toSch, Height: td.ToHeight},
+	)
 }
 
-// unalignableError returns the error for a diff whose sides cannot take each
-// other's primary key.
+// unalignableError returns the error for a diff whose sides share no primary
+// key.
 //
-// It names a retyped key column when there is one, since that is the likeliest
+// It names a retyped key column when one exists, since that is the likeliest
 // cause.
 func unalignableError(fromSch, toSch schema.Schema) error {
 	if from, to, ok := retypedKeyColumn(fromSch, toSch); ok {
@@ -180,8 +231,9 @@ func unalignableError(fromSch, toSch schema.Schema) error {
 		ErrPrimaryKeySetChanged, primaryKeyString(fromSch), primaryKeyString(toSch))
 }
 
-// retypedKeyColumn returns both versions of a primary key column of |toSch|
-// whose type differs in |fromSch|. Columns match by tag, or else by name.
+// retypedKeyColumn returns the |fromSch| and |toSch| versions of the first
+// primary key column of |toSch| with a changed type, and whether one exists.
+// Columns match by tag, or else by name.
 func retypedKeyColumn(fromSch, toSch schema.Schema) (schema.Column, schema.Column, bool) {
 	fromCols := fromSch.GetAllCols()
 	for _, to := range toSch.GetPKCols().GetColumns() {

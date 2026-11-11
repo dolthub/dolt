@@ -18,7 +18,8 @@ import (
 	"context"
 	"errors"
 	"io"
-	"slices"
+
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -26,10 +27,9 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// RowRekeyer rebuilds tuples stored with one schema under the primary key of
-// another, by copying their fields. It is not safe for concurrent use.
-//
-// Merges and diffs use it to compare a table across a primary key change.
+// RowRekeyer rebuilds tuples of one schema under the primary key of another,
+// by copying their fields, so merges and diffs can compare rows across a
+// primary key change. It is not safe for concurrent use.
 type RowRekeyer struct {
 	ns     tree.NodeStore
 	keySrc []fieldSource
@@ -45,9 +45,11 @@ type RowRekeyer struct {
 	isUnique bool
 }
 
-// NewRowRekeyer returns a RowRekeyer from |sch| to |newSch|, a schema that
-// [schema.RekeyedSchema] built from |sch|, writing to |ns|. It returns false
-// when |sch| lacks a column of |newSch| or stores it with another encoding.
+// NewRowRekeyer returns a RowRekeyer that rebuilds tuples of |sch| under the
+// key of |newSch|, which [schema.Rekeyed] derives from |sch|.
+//
+// It returns false when |sch| lacks a column of |newSch| or stores it with
+// another encoding.
 func NewRowRekeyer(ns tree.NodeStore, sch, newSch schema.Schema) (*RowRekeyer, bool) {
 	oldKD, oldVD := sch.GetMapDescriptors(ns)
 	newKD, newVD := newSch.GetMapDescriptors(ns)
@@ -56,7 +58,7 @@ func NewRowRekeyer(ns tree.NodeStore, sch, newSch schema.Schema) (*RowRekeyer, b
 	if !ok {
 		return nil, false
 	}
-	valSrc, ok := fieldSources(oldPK, oldVals, oldKD, oldVD, storedCols(newSch.GetNonPKCols()), newVD)
+	valSrc, ok := fieldSources(oldPK, oldVals, oldKD, oldVD, newSch.GetNonPKCols().GetStoredColumns(), newVD)
 	if !ok {
 		return nil, false
 	}
@@ -80,20 +82,14 @@ func NewRowRekeyer(ns tree.NodeStore, sch, newSch schema.Schema) (*RowRekeyer, b
 	}, true
 }
 
-// Rekey returns the tuple pair |k|, |v| rebuilt under the new primary key.
-//
-// A NULL that HasNullKey reports stays NULL in the new key. No map keyed by
-// it can hold that key, but the row can still be read under the new key.
+// Rekey returns |k| and |v| rebuilt under the new primary key.
 func (r *RowRekeyer) Rekey(ctx context.Context, k, v val.Tuple) (val.Tuple, val.Tuple, error) {
-	for i, src := range r.keySrc {
-		r.kb.PutRaw(i, src.field(k, v))
+	nk, err := r.Key(ctx, k, v)
+	if err != nil {
+		return nil, nil, err
 	}
 	for i, src := range r.valSrc {
 		r.vb.PutRaw(i, src.field(k, v))
-	}
-	nk, err := r.kb.BuildPermissive(ctx, r.ns.Pool())
-	if err != nil {
-		return nil, nil, err
 	}
 	nv, err := r.vb.Build(ctx, r.ns.Pool())
 	if err != nil {
@@ -102,21 +98,49 @@ func (r *RowRekeyer) Rekey(ctx context.Context, k, v val.Tuple) (val.Tuple, val.
 	return nk, nv, nil
 }
 
-// HasNullKey reports whether the new primary key of |k|, |v| would hold a
-// NULL, which no primary key can.
-func (r *RowRekeyer) HasNullKey(k, v val.Tuple) bool {
-	return slices.ContainsFunc(r.keySrc, func(src fieldSource) bool {
-		return src.field(k, v) == nil
-	})
+// Key returns the new primary key of |k| and |v|, without the new value.
+//
+// A NULL in the new key stays NULL, and so does an ENUM or SET with a member
+// the new key lacks. A map cannot key a row by such a NULL, but the row can
+// still be read.
+func (r *RowRekeyer) Key(ctx context.Context, k, v val.Tuple) (val.Tuple, error) {
+	for i, src := range r.keySrc {
+		if src.members == nil {
+			r.kb.PutRaw(i, src.field(k, v))
+			continue
+		}
+		stored, ok, err := src.remapped(ctx, r.ns, k, v)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			r.kb.PutRaw(i, nil)
+			continue
+		}
+		if err = tree.PutField(ctx, r.ns, r.kb, i, stored); err != nil {
+			return nil, err
+		}
+	}
+	return r.kb.BuildPermissive(ctx, r.ns.Pool())
 }
 
-// RekeyMap returns |rows| keyed by the new primary key, and apart, as stored
-// in |rows|, the rows that the new key cannot hold. It also reports whether
-// any of those rows has a NULL in the new key.
+// hasNullField reports whether the rekeyed key |nk| holds a NULL, which no
+// primary key can.
+func (r *RowRekeyer) hasNullField(nk val.Tuple) bool {
+	for i := 0; i < r.newKD.Count(); i++ {
+		if nk.FieldIsNull(i) {
+			return true
+		}
+	}
+	return false
+}
+
+// RekeyMap returns the rows of |rows| keyed by the new primary key, and the
+// unpaired rows.
 //
-// A primary key holds one row and no NULL, so rows that share a new key or
-// have a NULL in it stay out of the rekeyed map. hasNullKey tells the two
-// kinds apart without another pass over the rows.
+// A primary key holds one row and no NULL. Rows with a NULL in the new key are
+// unpaired, and so is every row whose new key is shared. hasNullKey reports
+// whether any row has a NULL in the new key.
 func (r *RowRekeyer) RekeyMap(ctx context.Context, rows prolly.Map) (rekeyed, unpairedRows prolly.Map, hasNullKey bool, err error) {
 	emptyNew, err := prolly.NewMapFromTuples(ctx, r.ns, r.newKD, r.newVD)
 	if err != nil {
@@ -130,13 +154,13 @@ func (r *RowRekeyer) RekeyMap(ctx context.Context, rows prolly.Map) (rekeyed, un
 	mut, unpaired := emptyNew.Mutate(), emptyOld.Mutate()
 	var shared *prolly.MutableMap
 	err = IterRows(ctx, rows, func(k, v val.Tuple) error {
-		if r.HasNullKey(k, v) {
-			hasNullKey = true
-			return unpaired.Put(ctx, k, v)
-		}
 		nk, nv, err := r.Rekey(ctx, k, v)
 		if err != nil {
 			return err
+		}
+		if r.hasNullField(nk) {
+			hasNullKey = true
+			return unpaired.Put(ctx, k, v)
 		}
 		if !r.isUnique {
 			isShared, err := mut.Has(ctx, nk)
@@ -163,24 +187,22 @@ func (r *RowRekeyer) RekeyMap(ctx context.Context, rows prolly.Map) (rekeyed, un
 	if rekeyed, err = mut.Map(ctx); err != nil {
 		return prolly.Map{}, prolly.Map{}, false, err
 	}
-	if unpairedRows, err = unpaired.Map(ctx); err != nil {
-		return prolly.Map{}, prolly.Map{}, false, err
-	}
-	return rekeyed, unpairedRows, hasNullKey, nil
+	unpairedRows, err = unpaired.Map(ctx)
+	return rekeyed, unpairedRows, hasNullKey, err
 }
 
-// splitSharedKeys moves the rows whose new key is in |shared| out of |mut| and
-// into |unpaired|.
+// splitSharedKeys moves every row whose new key is in |shared| from |mut| to
+// |unpaired|.
 //
-// It rekeys |rows| a second time because |mut| holds the first row of each
-// such key and |shared| only the later ones.
+// It rekeys |rows| again, since |mut| keeps the first row of each shared key
+// and |shared| holds the rest.
 func (r *RowRekeyer) splitSharedKeys(ctx context.Context, rows prolly.Map, mut, shared, unpaired *prolly.MutableMap) error {
 	sharedKeys, err := shared.Map(ctx)
 	if err != nil {
 		return err
 	}
 	return IterRows(ctx, rows, func(k, v val.Tuple) error {
-		nk, _, err := r.Rekey(ctx, k, v)
+		nk, err := r.Key(ctx, k, v)
 		if err != nil {
 			return err
 		}
@@ -198,8 +220,8 @@ func (r *RowRekeyer) splitSharedKeys(ctx context.Context, rows prolly.Map, mut, 
 	})
 }
 
-// IterRows calls |cb| with each key and value of |rows|, stopping at the first
-// error.
+// IterRows calls |cb| for each key and value of |rows|. It returns the first
+// error from |cb| or from the iterator.
 func IterRows(ctx context.Context, rows prolly.Map, cb func(k, v val.Tuple) error) error {
 	iter, err := rows.IterAll(ctx)
 	if err != nil {
@@ -223,9 +245,12 @@ type fieldSource struct {
 	desc    *val.TupleDesc
 	idx     int
 	fromKey bool
+	// members remaps the old field to the new field when its ENUM or SET
+	// members moved. It is nil otherwise.
+	members sql.MemberMap
 }
 
-// field returns the field that s locates in |k| or |v|.
+// field returns the raw field that |s| locates in |k| or |v|.
 func (s fieldSource) field(k, v val.Tuple) []byte {
 	if s.fromKey {
 		return s.desc.GetField(s.idx, k)
@@ -233,37 +258,50 @@ func (s fieldSource) field(k, v val.Tuple) []byte {
 	return s.desc.GetField(s.idx, v)
 }
 
-// fieldSources locates each column of |cols| in the old key or value. It
-// returns false when a column is missing or its encoding differs from the one
-// |dest| needs.
+// remapped returns the ENUM or SET field that |s| locates, with its members
+// stored as in the new type.
 //
-// The old key stores |oldPK| as |oldKD| describes, and the old value stores
-// the stored columns of |oldVals| as |oldVD| describes.
+// It returns false when the field is NULL or holds a member the new type
+// lacks.
+func (s fieldSource) remapped(ctx context.Context, ns tree.NodeStore, k, v val.Tuple) (interface{}, bool, error) {
+	tup := v
+	if s.fromKey {
+		tup = k
+	}
+	stored, err := tree.GetField(ctx, s.desc, s.idx, tup, ns)
+	if err != nil || stored == nil {
+		return nil, false, err
+	}
+	remapped, ok := s.members.Remap(stored)
+	return remapped, ok, nil
+}
+
+// fieldSources returns the field of the old key or value that holds each
+// column of |cols|, read with |oldKD| or |oldVD|.
+//
+// It returns false when a column is in neither |oldPK| nor |oldVals|, or when
+// its encoding differs from |dest|.
 func fieldSources(oldPK, oldVals *schema.ColCollection, oldKD, oldVD *val.TupleDesc, cols []schema.Column, dest *val.TupleDesc) ([]fieldSource, bool) {
 	srcs := make([]fieldSource, len(cols))
 	for i, col := range cols {
 		var src fieldSource
+		var oldCol schema.Column
 		if j, ok := oldPK.TagToIdx[col.Tag]; ok {
 			src = fieldSource{desc: oldKD, idx: j, fromKey: true}
+			oldCol = oldPK.GetByIndex(j)
 		} else if j, ok := oldVals.StoredIndexByTag(col.Tag); ok {
 			src = fieldSource{desc: oldVD, idx: j}
+			oldCol = oldVals.GetByStoredIndex(j)
 		} else {
 			return nil, false
 		}
 		if src.desc.Types[src.idx].Enc != dest.Types[i].Enc {
 			return nil, false
 		}
+		if members, ok := oldCol.MapMembers(col); ok && !members.IsIdentity() {
+			src.members = members
+		}
 		srcs[i] = src
 	}
 	return srcs, true
-}
-
-// storedCols returns the columns of |cc| that tuples store. Virtual columns
-// are computed on read, so tuples do not hold them.
-func storedCols(cc *schema.ColCollection) []schema.Column {
-	cols := make([]schema.Column, cc.StoredSize())
-	for i := range cols {
-		cols[i] = cc.GetByStoredIndex(i)
-	}
-	return cols
 }

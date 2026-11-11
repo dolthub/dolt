@@ -54,7 +54,8 @@ func dropAndRecreateScript(keyType string) []string {
 // to (b, a).
 //
 // Since b = 10 - a, the new leading key column b differs from the old key a in
-// every row but (5, 5). Rows pair by their (b, a) values.
+// every row but (5, 5). Rows pair by the new (b, a) key, where old rows use
+// the stored values.
 func reorderedPrimaryKeyScript() []string {
 	return []string{
 		"CREATE TABLE t (a INT NOT NULL, b INT NOT NULL, v INT, PRIMARY KEY (a));",
@@ -949,6 +950,102 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 				Query: `SELECT diff_type, from_a, from_b, from_v, to_a, to_b, to_v FROM dolt_diff_t
 					WHERE from_commit = @editedBeforeKeyChange AND to_commit = @keyChanged;`,
 				Expected: []sql.Row{},
+			},
+			{
+				Query: `SELECT diff_type, from_a, from_b, from_v, to_a, to_b, to_v FROM dolt_diff_t
+					WHERE from_commit = @keyChanged AND to_commit = @editedAfterKeyChange ORDER BY COALESCE(to_a, from_a);`,
+				Expected: []sql.Row{{"modified", 1, 9, 10, 1, 9, 11}, {"removed", 3, 7, 30, nil, nil, nil}, {"added", nil, nil, nil, 4, 6, 40}},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/12013
+		Name: "filtering dolt_diff_t on a new key column returns all rows",
+		SetUpScript: []string{
+			"CREATE TABLE t (a INT PRIMARY KEY, v INT);",
+			"INSERT INTO t VALUES (1, 10), (2, 20);",
+			"CALL DOLT_COMMIT('-Am', 'key (a)');",
+			"ALTER TABLE t ADD c INT NOT NULL DEFAULT 0;",
+			"ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY (c, a);",
+			"UPDATE t SET v = 11 WHERE a = 1;",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'key (c, a)');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT diff_type, from_a, from_v, to_a, to_v, to_c FROM dolt_diff_t WHERE to_commit = @Commit2 ORDER BY to_a;",
+				Expected: []sql.Row{{"modified", 1, 10, 1, 11, 0}, {"modified", 2, 20, 2, 20, 0}},
+			},
+			{
+				Query:    "SELECT diff_type, from_a, from_v, to_a, to_v, to_c FROM dolt_diff_t WHERE to_commit = @Commit2 AND to_c = 0 ORDER BY to_a;",
+				Expected: []sql.Row{{"modified", 1, 10, 1, 11, 0}, {"modified", 2, 20, 2, 20, 0}},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/12013
+		Name: "reordering enum primary key values keeps diff history by label",
+		SetUpScript: []string{
+			"CREATE TABLE t (e ENUM('a', 'b', 'c') PRIMARY KEY, v INT);",
+			"INSERT INTO t VALUES ('a', 1), ('b', 2);",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-Am', 'base');",
+			"ALTER TABLE t MODIFY e ENUM('c', 'b', 'a') NOT NULL;",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'reorder enum');",
+			"INSERT INTO t VALUES ('c', 3);",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 'insert c');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT diff_type, from_e, from_v, to_e, to_v FROM dolt_diff_t WHERE to_commit = @Commit2;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT diff_type, from_e, from_v, to_e, to_v FROM dolt_commit_diff_t WHERE from_commit = @Commit1 AND to_commit = @Commit2;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT diff_type, from_e, from_v, to_e, to_v FROM dolt_commit_diff_t WHERE from_commit = @Commit1 AND to_commit = @Commit3;",
+				Expected: []sql.Row{{"added", nil, nil, "c", 3}},
+			},
+			{
+				Query:    "SELECT diff_type, from_e, from_v, to_e, to_v FROM dolt_diff_t WHERE to_commit = @Commit3 AND to_e = 'c';",
+				Expected: []sql.Row{{"added", nil, nil, "c", 3}},
+			},
+			{
+				Query:    "SELECT diff_type, from_e, from_v, to_e, to_v FROM dolt_diff_t WHERE to_commit = @Commit3 AND to_e = 'a';",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/12013
+		Name: "table drop and recreate with reordered enum primary key keeps diff history by label",
+		SetUpScript: []string{
+			"CREATE TABLE t1 (id ENUM('a', 'b') PRIMARY KEY, name VARCHAR(10));",
+			"INSERT INTO t1 VALUES ('a', 'dolt');",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-Am', 'create_table');",
+			"UPDATE t1 SET name = 'doltgres' WHERE id = 'a';",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-Am', 'update_value');",
+			"CREATE TABLE temp__t1 (id ENUM('b', 'a') PRIMARY KEY, name VARCHAR(10));",
+			"INSERT INTO temp__t1 VALUES ('a', 'dolt');",
+			"DROP TABLE t1;",
+			"RENAME TABLE temp__t1 TO t1;",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-Am', 'drop and recreate');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_diff_t1;",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "SELECT from_id, to_id, from_name, to_name, diff_type FROM dolt_diff_t1 WHERE to_commit = @Commit3;",
+				Expected: []sql.Row{{"a", "a", "doltgres", "dolt", "modified"}},
 			},
 		},
 	},
@@ -2178,6 +2275,10 @@ on a.to_pk = b.to_pk;`,
 				Query:    "SELECT diff_type, from_a, from_b, from_v, to_a, to_b, to_v FROM dolt_diff(@editedBeforeKeyChange, @keyChanged, 't');",
 				Expected: []sql.Row{},
 			},
+			{
+				Query:    "SELECT diff_type, from_a, from_b, from_v, to_a, to_b, to_v FROM dolt_diff(@rowsInserted, @editedAfterKeyChange, 't') WHERE to_b = 8;",
+				Expected: []sql.Row{{"modified", 2, 8, 20, 2, 8, 21}},
+			},
 		},
 	},
 	{
@@ -2201,6 +2302,11 @@ on a.to_pk = b.to_pk;`,
 				ExpectedWarningMessageSubstring: "some rows have a duplicate or NULL primary key across the primary key change",
 				Expected:                        []sql.Row{{"added", nil, nil, 1, 10, 0}, {"added", nil, nil, 1, 11, 1}, {"modified", 2, 20, 2, 21, 0}, {"removed", 1, 10, nil, nil, nil}},
 			},
+			{
+				// c exists only on the to side.
+				Query:    "SELECT diff_type, from_pk, from_v, to_pk, to_v, to_c FROM dolt_diff('HEAD~1', 'HEAD', 't') WHERE to_c = 1;",
+				Expected: []sql.Row{{"added", nil, nil, 1, 11, 1}},
+			},
 		},
 	},
 	{
@@ -2223,12 +2329,23 @@ on a.to_pk = b.to_pk;`,
 				Expected:                        []sql.Row{{"added", nil, nil, 1}, {"modified", 2, 30, 2}, {"removed", 1, 10, nil}, {"removed", 1, 20, nil}},
 			},
 			{
-				Query:    "SELECT rows_unmodified, rows_added, rows_deleted, rows_modified, old_row_count, new_row_count FROM dolt_diff_stat('HEAD~1', 'HEAD', 't');",
-				Expected: []sql.Row{{0, 1, 2, 1, 3, 2}},
+				// b is a key column only on the from side.
+				Query:    "SELECT diff_type, from_a, from_b, to_a FROM dolt_diff('HEAD~1', 'HEAD', 't') WHERE from_b = 20;",
+				Expected: []sql.Row{{"removed", 1, 20, nil}},
 			},
 			{
-				Query:    "SELECT data_change, schema_change FROM dolt_diff_summary('HEAD~1', 'HEAD', 't');",
-				Expected: []sql.Row{{true, true}},
+				Query:                           "SELECT rows_unmodified, rows_added, rows_deleted, rows_modified, old_row_count, new_row_count FROM dolt_diff_stat('HEAD~1', 'HEAD', 't');",
+				ExpectedWarning:                 dtables.PrimaryKeyChangeWarningCode,
+				ExpectedWarningsCount:           1,
+				ExpectedWarningMessageSubstring: "some rows have a duplicate or NULL primary key across the primary key change",
+				Expected:                        []sql.Row{{0, 1, 2, 1, 3, 2}},
+			},
+			{
+				Query:                           "SELECT data_change, schema_change FROM dolt_diff_summary('HEAD~1', 'HEAD', 't');",
+				ExpectedWarning:                 dtables.PrimaryKeyChangeWarningCode,
+				ExpectedWarningsCount:           1,
+				ExpectedWarningMessageSubstring: "some rows have a duplicate or NULL primary key across the primary key change",
+				Expected:                        []sql.Row{{true, true}},
 			},
 		},
 	},
@@ -2333,6 +2450,16 @@ on a.to_pk = b.to_pk;`,
 				Expected: []sql.Row{{"added", nil, nil, 1, "new@example.com"}, {"modified", 3, "kept@example.com", 30, "kept@example.com"}, {"removed", 1, "old@example.com", nil, nil}},
 			},
 			{
+				Query:    "SELECT diff_type, from_id, from_email, to_id, to_email FROM dolt_diff('main~1', 'main', 't') WHERE to_email = 'kept@example.com';",
+				Expected: []sql.Row{{"modified", 3, "kept@example.com", 30, "kept@example.com"}},
+			},
+			{
+				// Rows 1 and 2 share old@example.com, so both are deleted and row 1
+				// is added under its new email.
+				Query:    "SELECT rows_unmodified, rows_added, rows_deleted, rows_modified FROM dolt_diff_stat('shared~1', 'shared', 't');",
+				Expected: []sql.Row{{0, 1, 2, 1}},
+			},
+			{
 				// Rows 1 and 2 share the new key, so they are unpaired, while
 				// row 3 still pairs by its unshared email.
 				Query:                           "SELECT diff_type, from_id, from_email, to_id, to_email FROM dolt_diff('shared~1', 'shared', 't') ORDER BY diff_type, from_id;",
@@ -2340,6 +2467,308 @@ on a.to_pk = b.to_pk;`,
 				ExpectedWarningsCount:           1,
 				ExpectedWarningMessageSubstring: "some rows have a duplicate or NULL primary key across the primary key change",
 				Expected:                        []sql.Row{{"added", nil, nil, 1, "new@example.com"}, {"modified", 3, "kept@example.com", 30, "kept@example.com"}, {"removed", 1, "old@example.com", nil, nil}, {"removed", 2, "old@example.com", nil, nil}},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/12013
+		Name: "filtering dolt_diff on a new key column returns all rows",
+		SetUpScript: []string{
+			"CREATE TABLE t (a INT PRIMARY KEY, v INT);",
+			"INSERT INTO t VALUES (1, 10), (2, 20);",
+			"CALL DOLT_COMMIT('-Am', 'key (a)');",
+			"ALTER TABLE t ADD c INT NOT NULL DEFAULT 0;",
+			"ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY (c, a);",
+			"UPDATE t SET v = 11 WHERE a = 1;",
+			"CALL DOLT_COMMIT('-am', 'key (c, a)');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// Adding c makes every row differ in shape, so row 2 is modified too.
+				Query:    "SELECT diff_type, from_a, from_v, to_a, to_v, to_c FROM dolt_diff('HEAD~1', 'HEAD', 't') ORDER BY to_a;",
+				Expected: []sql.Row{{"modified", 1, 10, 1, 11, 0}, {"modified", 2, 20, 2, 20, 0}},
+			},
+			{
+				Query:    "SELECT diff_type, from_a, from_v, to_a, to_v, to_c FROM dolt_diff('HEAD~1', 'HEAD', 't') WHERE to_c = 0 ORDER BY to_a;",
+				Expected: []sql.Row{{"modified", 1, 10, 1, 11, 0}, {"modified", 2, 20, 2, 20, 0}},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/12013
+		Name: "swapping column names keeps each historical value under the name it had",
+		SetUpScript: []string{
+			"CREATE TABLE t (a INT PRIMARY KEY, b INT);",
+			"INSERT INTO t VALUES (1, 10);",
+			"CALL DOLT_COMMIT('-Am', 'key (a)');",
+			"ALTER TABLE t RENAME COLUMN a TO x;",
+			"ALTER TABLE t RENAME COLUMN b TO a;",
+			"ALTER TABLE t RENAME COLUMN x TO b;",
+			"UPDATE t SET a = 11 WHERE b = 1;",
+			"INSERT INTO t (a, b) VALUES (20, 2);",
+			"CALL DOLT_COMMIT('-am', 'swap names');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT diff_type, from_a, from_b, to_a, to_b FROM dolt_diff('HEAD~1', 'HEAD', 't') ORDER BY COALESCE(to_b, from_b);",
+				Expected: []sql.Row{{"modified", 1, 10, 11, 1}, {"added", nil, nil, 20, 2}},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/12013
+		Name: "swapping column names and moving the key keeps each historical value",
+		SetUpScript: []string{
+			"CREATE TABLE t (a INT PRIMARY KEY, b INT);",
+			"INSERT INTO t VALUES (1, 10);",
+			"CALL DOLT_COMMIT('-Am', 'key (a)');",
+			"ALTER TABLE t RENAME COLUMN a TO x;",
+			"ALTER TABLE t RENAME COLUMN b TO a;",
+			"ALTER TABLE t RENAME COLUMN x TO b;",
+			"ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY (a);",
+			"UPDATE t SET b = 2 WHERE a = 10;",
+			"CALL DOLT_COMMIT('-am', 'swap names and key');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT diff_type, from_a, from_b, to_a, to_b FROM dolt_diff('HEAD~1', 'HEAD', 't') ORDER BY COALESCE(to_a, from_a);",
+				Expected: []sql.Row{{"modified", 1, 10, 10, 2}},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/12013
+		Name: "reordering enum values keeps each row's label and reports no change",
+		SetUpScript: []string{
+			"CREATE TABLE t (e ENUM('a', 'b') PRIMARY KEY, v INT);",
+			"INSERT INTO t VALUES ('a', 1), ('b', 2);",
+			"CALL DOLT_COMMIT('-Am', 'base');",
+			"ALTER TABLE t MODIFY e ENUM('b', 'a') NOT NULL;",
+			"CALL DOLT_COMMIT('-am', 'reorder enum');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT diff_type, from_e, from_v, to_e, to_v FROM dolt_diff('HEAD~1', 'HEAD', 't') ORDER BY COALESCE(to_v, from_v);",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/12013
+		Name: "reordering enum and set values of non-key columns changes no rows",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk INT PRIMARY KEY, e ENUM('a', 'b'), s SET('a', 'b'));",
+			"INSERT INTO t VALUES (1, 'a', 'a'), (2, 'b', 'a,b'), (3, NULL, NULL);",
+			"CALL DOLT_COMMIT('-Am', 'base');",
+			"ALTER TABLE t MODIFY e ENUM('b', 'a'), MODIFY s SET('b', 'a');",
+			"CALL DOLT_COMMIT('-am', 'reorder enum and set');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT diff_type, to_pk FROM dolt_diff('HEAD~1', 'HEAD', 't');",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT data_change, schema_change FROM dolt_diff_summary('HEAD~1', 'HEAD', 't');",
+				Expected: []sql.Row{{false, true}},
+			},
+			{
+				// dolt_diff_stat leaves out a table whose rows did not change.
+				Query:    "SELECT rows_unmodified, rows_added, rows_deleted, rows_modified FROM dolt_diff_stat('HEAD~1', 'HEAD', 't');",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/12013
+		Name: "removing an enum label from a non-key column reports the edited row with both labels",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk INT PRIMARY KEY, e ENUM('a', 'b'));",
+			"INSERT INTO t VALUES (1, 'a'), (2, 'b');",
+			"CALL DOLT_COMMIT('-Am', 'base');",
+			"UPDATE t SET e = 'b' WHERE pk = 1;",
+			"ALTER TABLE t MODIFY e ENUM('b');",
+			"CALL DOLT_COMMIT('-am', 'remove label a');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT diff_type, from_pk, from_e, to_pk, to_e FROM dolt_diff('HEAD~1', 'HEAD', 't');",
+				Expected: []sql.Row{{"modified", 1, "a", 1, "b"}},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/12013
+		Name: "reordering enum values of a non-key column reports only the edited row",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk INT PRIMARY KEY, e ENUM('a', 'b'));",
+			"INSERT INTO t VALUES (1, 'a'), (2, 'b');",
+			"CALL DOLT_COMMIT('-Am', 'base');",
+			"ALTER TABLE t MODIFY e ENUM('b', 'a');",
+			"UPDATE t SET e = 'b' WHERE pk = 1;",
+			"CALL DOLT_COMMIT('-am', 'reorder enum and edit row 1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT diff_type, from_pk, from_e, to_pk, to_e FROM dolt_diff('HEAD~1', 'HEAD', 't');",
+				Expected: []sql.Row{{"modified", 1, "a", 1, "b"}},
+			},
+			{
+				Query:    "SELECT data_change, schema_change FROM dolt_diff_summary('HEAD~1', 'HEAD', 't');",
+				Expected: []sql.Row{{true, true}},
+			},
+			{
+				Query:    "SELECT rows_unmodified, rows_added, rows_deleted, rows_modified FROM dolt_diff_stat('HEAD~1', 'HEAD', 't');",
+				Expected: []sql.Row{{1, 0, 0, 1}},
+			},
+			{
+				// The row of pk 1 stores the same index on both sides, so only a
+				// full diff finds it. WHERE must not narrow the diff to bytes.
+				Query:    "SELECT diff_type, to_pk, to_e FROM dolt_diff('HEAD~1', 'HEAD', 't') WHERE to_pk = 1;",
+				Expected: []sql.Row{{"modified", 1, "b"}},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/12013
+		Name: "changing the primary key of a table with a virtual column pairs rows by the new key",
+		SetUpScript: []string{
+			"CREATE TABLE t (id INT PRIMARY KEY, a INT, b INT AS (a * 2) VIRTUAL, code INT NOT NULL);",
+			"INSERT INTO t (id, a, code) VALUES (1, 5, 10), (2, 7, 20);",
+			"CALL DOLT_COMMIT('-Am', 'key (id)');",
+			"ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY (code);",
+			"UPDATE t SET a = 8 WHERE id = 2;",
+			"CALL DOLT_COMMIT('-am', 'key (code)');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT diff_type, from_id, from_a, from_code, to_id, to_a, to_code FROM dolt_diff('HEAD~1', 'HEAD', 't');",
+				Expected: []sql.Row{{"modified", 2, 7, 20, 2, 8, 20}},
+			},
+			{
+				Query:    "SELECT rows_unmodified, rows_added, rows_deleted, rows_modified FROM dolt_diff_stat('HEAD~1', 'HEAD', 't');",
+				Expected: []sql.Row{{1, 0, 0, 1}},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/12013
+		Name: "reordering the primary key columns reports only the edited row",
+		SetUpScript: []string{
+			"CREATE TABLE t (a INT, b INT, v INT, PRIMARY KEY (a, b));",
+			"INSERT INTO t VALUES (1, 2, 10), (3, 4, 30);",
+			"CALL DOLT_COMMIT('-Am', 'key (a, b)');",
+			"ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY (b, a);",
+			"UPDATE t SET v = 11 WHERE a = 1;",
+			"CALL DOLT_COMMIT('-am', 'key (b, a)');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT diff_type, from_a, from_b, from_v, to_a, to_b, to_v FROM dolt_diff('HEAD~1', 'HEAD', 't');",
+				Expected: []sql.Row{{"modified", 1, 2, 10, 1, 2, 11}},
+			},
+			{
+				Query:    "SELECT diff_type, from_a, from_b, from_v, to_a, to_b, to_v FROM dolt_diff('HEAD', 'HEAD~1', 't');",
+				Expected: []sql.Row{{"modified", 1, 2, 11, 1, 2, 10}},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/12013
+		Name: "reverse diff reports the mirror of the forward diff across a key change",
+		SetUpScript: []string{
+			"CREATE TABLE t (a INT PRIMARY KEY, b INT);",
+			"INSERT INTO t VALUES (1, 10), (2, 20);",
+			"CALL DOLT_COMMIT('-Am', 'key (a)');",
+			"ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY (b, a);",
+			"UPDATE t SET b = 11 WHERE a = 1;",
+			"CALL DOLT_COMMIT('-am', 'key (b, a), b of row 1 changed');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT diff_type, from_a, from_b, to_a, to_b FROM dolt_diff('HEAD~1', 'HEAD', 't') ORDER BY diff_type;",
+				Expected: []sql.Row{{"added", nil, nil, 1, 11}, {"removed", 1, 10, nil, nil}},
+			},
+			{
+				Query:    "SELECT diff_type, from_a, from_b, to_a, to_b FROM dolt_diff('HEAD', 'HEAD~1', 't') ORDER BY diff_type;",
+				Expected: []sql.Row{{"added", nil, nil, 1, 10}, {"removed", 1, 11, nil, nil}},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/12013
+		Name: "retagging a primary key column pairs rows by its name and warns",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk INT PRIMARY KEY, v INT);",
+			"INSERT INTO t VALUES (1, 10);",
+			"CALL DOLT_COMMIT('-Am', 'base');",
+			"CALL dolt_update_column_tag('t', 'pk', '9001');",
+			"UPDATE t SET v = 11 WHERE pk = 1;",
+			"CALL DOLT_COMMIT('-am', 'retagged key');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:                           "SELECT diff_type, from_pk, from_v, to_pk, to_v FROM dolt_diff('HEAD~1', 'HEAD', 't');",
+				ExpectedWarning:                 dtables.PrimaryKeyChangeWarningCode,
+				ExpectedWarningsCount:           1,
+				ExpectedWarningMessageSubstring: "pair by primary key column name",
+				Expected:                        []sql.Row{{"modified", 1, 10, 1, 11}},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/12013
+		Name: "removing an enum label leaves its row unpaired with its label",
+		SetUpScript: []string{
+			"CREATE TABLE t (e ENUM('a', 'b') PRIMARY KEY, v INT);",
+			"INSERT INTO t VALUES ('a', 1), ('b', 2);",
+			"CALL DOLT_COMMIT('-Am', 'base');",
+			"DELETE FROM t WHERE e = 'a';",
+			"ALTER TABLE t MODIFY e ENUM('b') NOT NULL;",
+			"CALL DOLT_COMMIT('-am', 'remove label a');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// The new key has no label 'a', so the row stays unpaired. It
+				// reads with the schema it is stored with, which keeps 'a'.
+				Query:    "SELECT diff_type, from_e, from_v, to_e, to_v FROM dolt_diff('HEAD~1', 'HEAD', 't') ORDER BY COALESCE(to_v, from_v);",
+				Expected: []sql.Row{{"removed", "a", 1, nil, nil}},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/12013
+		Name: "reordering set values pairs rows by label",
+		SetUpScript: []string{
+			"CREATE TABLE t (s SET('a', 'b') PRIMARY KEY, v INT);",
+			"INSERT INTO t VALUES ('a', 1), ('b', 2);",
+			"CALL DOLT_COMMIT('-Am', 'base');",
+			"ALTER TABLE t MODIFY s SET('b', 'a') NOT NULL;",
+			"UPDATE t SET v = 5 WHERE s = 'a';",
+			"CALL DOLT_COMMIT('-am', 'reorder set and edit a');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT diff_type, from_s, from_v, to_s, to_v FROM dolt_diff('HEAD~1', 'HEAD', 't') ORDER BY COALESCE(to_v, from_v);",
+				Expected: []sql.Row{{"modified", "a", 1, "a", 5}},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/12013
+		Name: "reordering enum values and editing a row pairs it by label",
+		SetUpScript: []string{
+			"CREATE TABLE t (e ENUM('a', 'b') PRIMARY KEY, v INT);",
+			"INSERT INTO t VALUES ('a', 1), ('b', 2);",
+			"CALL DOLT_COMMIT('-Am', 'base');",
+			"ALTER TABLE t MODIFY e ENUM('b', 'a') NOT NULL;",
+			"UPDATE t SET v = 5 WHERE e = 'a';",
+			"CALL DOLT_COMMIT('-am', 'reorder enum and edit a');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT diff_type, from_e, from_v, to_e, to_v FROM dolt_diff('HEAD~1', 'HEAD', 't') ORDER BY COALESCE(to_v, from_v);",
+				Expected: []sql.Row{{"modified", "a", 1, "a", 5}},
 			},
 		},
 	},
@@ -3103,7 +3532,7 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 	},
 	{
 		// https://github.com/dolthub/dolt/issues/12013
-		Name: "replacing the primary key with a new column returns an error",
+		Name: "dolt_diff_stat skips a table whose primary key was replaced",
 		SetUpScript: []string{
 			"CREATE TABLE t (a INT PRIMARY KEY, x INT);",
 			"INSERT INTO t VALUES (1, 10);",
@@ -3115,8 +3544,69 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "SELECT * FROM dolt_diff_stat('HEAD~', 'HEAD');",
+				Query:                           "SELECT * FROM dolt_diff_stat('HEAD~', 'HEAD');",
+				ExpectedWarning:                 dtables.PrimaryKeyChangeWarningCode,
+				ExpectedWarningsCount:           1,
+				ExpectedWarningMessageSubstring: "cannot compute diff stat for table t",
+				Expected:                        []sql.Row{{"t2", 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 1}},
+			},
+			{
+				Query:          "SELECT * FROM dolt_diff_stat('HEAD~', 'HEAD', 't');",
 				ExpectedErrStr: "failed to compute diff stat for table t: primary key set changed from (a) to (c), and neither side has every column of the other's primary key with the same type",
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/12013
+		Name: "dolt_diff_stat skips a table whose key column changed to BIGINT",
+		SetUpScript: []string{
+			"CREATE TABLE t (a INT PRIMARY KEY, x INT);",
+			"INSERT INTO t VALUES (1, 10);",
+			"CREATE TABLE t2 (pk INT PRIMARY KEY);",
+			"CALL DOLT_COMMIT('-Am', 'key (a)');",
+			"ALTER TABLE t MODIFY a BIGINT;",
+			"INSERT INTO t2 VALUES (1);",
+			"CALL DOLT_COMMIT('-am', 'a is bigint');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:                           "SELECT * FROM dolt_diff_stat('HEAD~', 'HEAD');",
+				ExpectedWarning:                 dtables.PrimaryKeyChangeWarningCode,
+				ExpectedWarningsCount:           1,
+				ExpectedWarningMessageSubstring: "cannot compute diff stat for table t",
+				Expected:                        []sql.Row{{"t2", 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 1}},
+			},
+			{
+				Query:          "SELECT * FROM dolt_diff_stat('HEAD~', 'HEAD', 't');",
+				ExpectedErrStr: "failed to compute diff stat for table t: primary key column type changed: column a is int on the from side and bigint on the to side, so rows cannot be paired across the change",
+			},
+			{
+				// The rows cannot be compared, so the summary counts them as
+				// changed rather than failing.
+				Query:    "SELECT * FROM dolt_diff_summary('HEAD~', 'HEAD') ORDER BY to_table_name;",
+				Expected: []sql.Row{{"t", "t", "modified", true, true}, {"t2", "t2", "modified", true, false}},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/12013
+		Name: "adding a primary key to a keyless table counts every row as deleted and added",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk INT NOT NULL, v INT);",
+			"INSERT INTO t VALUES (1, 10), (2, 20);",
+			"CALL DOLT_COMMIT('-Am', 'keyless');",
+			"ALTER TABLE t ADD PRIMARY KEY (pk);",
+			"CALL DOLT_COMMIT('-am', 'key (pk)');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// A keyless side has no row counts, as when a table loses its key.
+				Query:    "SELECT rows_unmodified, rows_added, rows_deleted, rows_modified, old_row_count, new_row_count FROM dolt_diff_stat('HEAD~1', 'HEAD', 't');",
+				Expected: []sql.Row{{nil, 2, 2, nil, nil, nil}},
+			},
+			{
+				Query:    "SELECT * FROM dolt_diff_summary('HEAD~1', 'HEAD', 't');",
+				Expected: []sql.Row{{"t", "t", "modified", true, true}},
 			},
 		},
 	},
@@ -3957,8 +4447,26 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT * FROM dolt_diff_summary('HEAD~1', 'HEAD');",
+				Query:                           "SELECT * FROM dolt_diff_summary('HEAD~1', 'HEAD');",
+				ExpectedWarning:                 dtables.PrimaryKeyChangeWarningCode,
+				ExpectedWarningsCount:           1,
+				ExpectedWarningMessageSubstring: "some rows have a duplicate or NULL primary key across the primary key change",
+				Expected:                        []sql.Row{{"t", "t", "modified", true, true}},
+			},
+			{
+				Query:    "SELECT * FROM dolt_diff_summary('HEAD~1', 'HEAD', 't');",
 				Expected: []sql.Row{{"t", "t", "modified", true, true}},
+			},
+			{
+				Query:    "SELECT rows_unmodified, rows_added, rows_deleted, rows_modified FROM dolt_diff_stat('HEAD~1', 'HEAD', 't');",
+				Expected: []sql.Row{{1, 1, 1, 0}},
+			},
+			{
+				Query:                           "SELECT table_name, rows_added, rows_deleted FROM dolt_diff_stat('HEAD~1', 'HEAD');",
+				ExpectedWarning:                 dtables.PrimaryKeyChangeWarningCode,
+				ExpectedWarningsCount:           1,
+				ExpectedWarningMessageSubstring: "some rows have a duplicate or NULL primary key across the primary key change",
+				Expected:                        []sql.Row{{"t", 1, 1}},
 			},
 			{
 				// Row 2 pairs by b = 20 and is unchanged.
@@ -6383,8 +6891,27 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 			"insert into t values (7, 8);",
 			"set @Commit4 = '';",
 			"CALL DOLT_COMMIT_HASH_OUT(@Commit4, '-am', 'adding more data');",
+
+			"update t set pk = 10 where c1 = 2;",
+			"set @Commit5 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit5, '-am', 'updating a non-key column');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
+			{
+				// https://github.com/dolthub/dolt/issues/12013
+				// pk is no longer a key column, so the row is modified in place.
+				Query:    "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM dolt_commit_diff_t WHERE from_commit=@Commit4 AND to_commit=@Commit5;",
+				Expected: []sql.Row{{10, 2, 1, 2, "modified"}},
+			},
+			{
+				// https://github.com/dolthub/dolt/issues/12013
+				// A keyed table and a keyless table share no key to pair rows by.
+				Query:                           "SELECT * FROM dolt_commit_diff_t WHERE from_commit=@Commit1 AND to_commit=@Commit2;",
+				ExpectedWarning:                 1105,
+				ExpectedWarningsCount:           1,
+				ExpectedWarningMessageSubstring: "cannot render full diff between commits",
+				SkipResultsCheck:                true,
+			},
 			{
 				// https://github.com/dolthub/dolt/issues/12013
 				// Rows pair by the new key (c1), which the old rows also hold.
@@ -6464,6 +6991,31 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 					{2, "two", interface{}(nil), interface{}(nil)},
 					{2, "two", interface{}(nil), interface{}(nil)},
 				},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/12013
+		Name: "filtering dolt_commit_diff_t on a new key column returns all rows",
+		SetUpScript: []string{
+			"CREATE TABLE t (a INT PRIMARY KEY, v INT);",
+			"INSERT INTO t VALUES (1, 10), (2, 20);",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-Am', 'key (a)');",
+			"ALTER TABLE t ADD c INT NOT NULL DEFAULT 0;",
+			"ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY (c, a);",
+			"UPDATE t SET v = 11 WHERE a = 1;",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'key (c, a)');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT diff_type, from_a, from_v, to_a, to_v, to_c FROM dolt_commit_diff_t WHERE to_commit = @Commit2 AND from_commit = @Commit1 ORDER BY to_a;",
+				Expected: []sql.Row{{"modified", 1, 10, 1, 11, 0}, {"modified", 2, 20, 2, 20, 0}},
+			},
+			{
+				Query:    "SELECT diff_type, from_a, from_v, to_a, to_v, to_c FROM dolt_commit_diff_t WHERE to_commit = @Commit2 AND from_commit = @Commit1 AND to_c = 0 ORDER BY to_a;",
+				Expected: []sql.Row{{"modified", 1, 10, 1, 11, 0}, {"modified", 2, 20, 2, 20, 0}},
 			},
 		},
 	},
