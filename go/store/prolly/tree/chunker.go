@@ -102,7 +102,7 @@ func (tc *chunker[S]) processPrefix(ctx context.Context) (err error) {
 		_, err = tc.append(ctx,
 			tc.cur.CurrentKey(),
 			tc.cur.currentValue(),
-			sz)
+			sz) // TODO: the children here are known to be valid, so we can avoid checking them in tableset.append()
 
 		// todo(andy): seek to correct chunk
 		//  currently when inserting tuples between chunks

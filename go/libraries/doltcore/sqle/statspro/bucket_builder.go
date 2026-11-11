@@ -39,7 +39,7 @@ func firstRowForIndex(ctx *sql.Context, idxLen int, prollyMap prolly.Map, keyBui
 		return nil, nil
 	}
 
-	buffPool := prollyMap.NodeStore().Pool()
+	buffPool := prollyMap.NodeStore().Pool() // TODO: this is not a real pool
 
 	// first row is ordinal 0
 	firstIter, err := prollyMap.IterOrdinalRange(ctx, 0, 1)

@@ -9,8 +9,8 @@ USER="root"
 PASS=""
 
 PPROF=0
-SIZE1=10
-SIZE2=10000
+TIME=20
+TBL_SIZE=10000
 SYSBENCH_TEST="default"
 
 # parse options
@@ -23,14 +23,8 @@ do
       shift
       ;;
     # specify table size
-    --t1-size)
-      SIZE1="$2"
-      shift
-      shift
-      ;;
-    # specify table size
-    --t2-size)
-      SIZE2="$2"
+    --tbl-size)
+      TBL_SIZE="$2"
       shift
       shift
       ;;
@@ -87,14 +81,13 @@ sleep 1
   --db-driver="mysql" \
   --mysql-db="sbtest" \
   --mysql-host="127.0.0.1" \
-  --mysql-port=3366 \
-  --mysql-user="root" \
-  --mysql-password="" \
-  --time=120 \
+  --mysql-port="$PORT" \
+  --mysql-user="$USER" \
+  --mysql-password="$PASS" \
+  --time="$TIME" \
+  --tbl-size="$TBL_SIZE" \
   --report_interval=1 \
   --threads=1 \
-  --t1-size="$SIZE1" \
-  --t2-size="$SIZE2" \
   prepare
 
 # restart server to isolate bench run
@@ -116,14 +109,13 @@ echo "benchmark $SYSBENCH_TEST starting at $WORKING_DIR"
   --db-driver="mysql" \
   --mysql-db="sbtest" \
   --mysql-host="127.0.0.1" \
-  --mysql-port=3366 \
-  --mysql-user="root" \
-  --mysql-password="" \
-  --time=120 \
+  --mysql-port="$PORT" \
+  --mysql-user="$USER" \
+  --mysql-password="$PASS" \
+  --time="$TIME" \
+  --tbl-size="$TBL_SIZE" \
   --report_interval=1 \
   --threads=1 \
-  --t1-size="$SIZE1" \
-  --t2-size="$SIZE2" \
   run
 
 echo "custom benchmark $SYSBENCH_TEST complete at $WORKING_DIR"

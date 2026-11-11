@@ -37,7 +37,6 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/dustin/go-humanize"
-	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/oracle/oci-go-sdk/v65/common"
 	"github.com/oracle/oci-go-sdk/v65/objectstorage"
 	"github.com/sirupsen/logrus"
@@ -113,7 +112,7 @@ type NomsBlockStore struct {
 	// Guarded by |mu|. Notified on gcInProgress and gcOutstandingReads changes.
 	// Used to implement |waitForGC|.
 	gcCond   *sync.Cond
-	hasCache *lru.TwoQueueCache[hash.Hash, struct{}]
+	hasCache hash.HashSet
 	logger   *logrus.Entry
 
 	// keeperFunc is set when |gcInProgress| and appends to the GC sweep queue
@@ -937,10 +936,11 @@ func newEmptyNomsBlockStore(memTableSize uint64) (*NomsBlockStore, error) {
 	if memTableSize == 0 {
 		memTableSize = defaultMemTableSize
 	}
-	hasCache, err := lru.New2Q[hash.Hash, struct{}](hasCacheSize)
-	if err != nil {
-		return nil, err
-	}
+	//hasCache, err := lru.New2Q[hash.Hash, struct{}](hasCacheSize)
+	//if err != nil {
+	//	return nil, err
+	//}
+	hasCache := hash.HashSet{}
 	nbs := &NomsBlockStore{
 		memtableSz: memTableSize,
 		hasCache:   hasCache,
@@ -1079,7 +1079,7 @@ func (nbs *NomsBlockStore) handlePossibleDanglingRefError(err error) {
 func (nbs *NomsBlockStore) addPendingRefsToHasCache() {
 	for _, e := range nbs.memtable.pendingRefs {
 		if e.has {
-			nbs.hasCache.Add(*e.a, struct{}{})
+			nbs.hasCache.Insert(*e.a)
 		}
 	}
 }
@@ -1143,7 +1143,7 @@ type refCheck func(reqs []hasRecord) (hash.HashSet, error)
 
 func (nbs *NomsBlockStore) errorIfDangling(root hash.Hash, checker refCheck) error {
 	if !root.IsEmpty() {
-		if _, ok := nbs.hasCache.Get(root); !ok {
+		if ok := nbs.hasCache.Has(root); !ok {
 			var hr [1]hasRecord
 			hr[0].a = &root
 			hr[0].prefix = root.Prefix()
@@ -1153,7 +1153,7 @@ func (nbs *NomsBlockStore) errorIfDangling(root hash.Hash, checker refCheck) err
 			} else if absent.Size() > 0 {
 				return fmt.Errorf("%w: found dangling references to %s", ErrDanglingRef, absent.String())
 			}
-			nbs.hasCache.Add(root, struct{}{})
+			nbs.hasCache.Insert(root)
 		}
 	}
 	return nil
@@ -2946,7 +2946,7 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec, mo
 	// chunks can actually be removed from the block store. Other times when
 	// we update the table set, we are appending new table files to it, or
 	// replacing table files in it with a file into which they were conjoined.
-	nbs.hasCache.Purge()
+	nbs.hasCache.Empty()
 
 	// replace nbs.tables.upstream with gc compacted tables
 	ts, err := nbs.tables.rebase(ctx, upstream.specs, opened, nbs.stats)
