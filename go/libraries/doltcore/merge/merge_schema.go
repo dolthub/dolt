@@ -54,13 +54,14 @@ type SchemaConflict struct {
 	IdxConflicts         []IdxConflict
 	ChkConflicts         []ChkConflict
 	ModifyDeleteConflict bool
+	AddedTwiceConflict   bool
 }
 
 var _ error = SchemaConflict{}
 
 func (sc SchemaConflict) Count() int {
 	count := len(sc.ColConflicts) + len(sc.IdxConflicts) + len(sc.ChkConflicts)
-	if sc.ModifyDeleteConflict {
+	if sc.ModifyDeleteConflict || sc.AddedTwiceConflict {
 		return count + 1
 	}
 	return count
@@ -98,6 +99,9 @@ func (sc SchemaConflict) messages() (mm []string) {
 	}
 	if sc.ModifyDeleteConflict {
 		mm = append(mm, "table was modified in one branch and deleted in the other")
+	}
+	if sc.AddedTwiceConflict {
+		mm = append(mm, "table was added in both branches with different schemas")
 	}
 	return
 }
@@ -264,6 +268,43 @@ func SchemaMerge(
 
 // ForeignKeysMerge performs a three-way merge of (ourRoot, theirRoot, ancRoot) and using mergeRoot to validate FKs.
 func ForeignKeysMerge(ctx *sql.Context, tableResolver doltdb.TableResolver, mergedRoot, ourRoot, theirRoot, ancRoot doltdb.RootValue) (*doltdb.ForeignKeyCollection, []FKConflict, error) {
+	ourHash, err := ourRoot.GetForeignKeyCollectionHash(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	theirHash, err := theirRoot.GetForeignKeyCollectionHash(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	ancHash, err := ancRoot.GetForeignKeyCollectionHash(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// When both sides have the same foreign keys, those are the merged foreign keys, unchanged.
+	if ourHash == theirHash {
+		ours, err := ourRoot.GetForeignKeyCollection(ctx)
+		return ours, nil, err
+	}
+
+	// When only one side changed its foreign keys since the ancestor, the merged foreign keys are that side's, and no
+	// foreign keys need to be compared.
+	var changedSide doltdb.RootValue
+	switch {
+	case theirHash == ancHash:
+		changedSide = ourRoot
+	case ourHash == ancHash:
+		changedSide = theirRoot
+	}
+	if changedSide != nil {
+		changed, err := changedSide.GetForeignKeyCollection(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		pruned, err := pruneInvalidForeignKeys(ctx, tableResolver, changed, mergedRoot)
+		return pruned, nil, err
+	}
+
 	ours, err := ourRoot.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -1021,17 +1062,42 @@ func fkCollSetDifference(
 	return d, nil
 }
 
-// pruneInvalidForeignKeys removes from a ForeignKeyCollection any ForeignKey whose parent/child table/columns have been removed.
-func pruneInvalidForeignKeys(ctx *sql.Context, tableResolver doltdb.TableResolver, fkColl *doltdb.ForeignKeyCollection, mergedRoot doltdb.RootValue) (pruned *doltdb.ForeignKeyCollection, err error) {
-	pruned, _ = doltdb.NewForeignKeyCollection()
-	err = fkColl.Iter(func(fk doltdb.ForeignKey) (stop bool, err error) {
-		parentTbl, ok, err := tableResolver.ResolveTable(ctx, mergedRoot, fk.ReferencedTableName)
-		if err != nil || !ok {
-			return false, err
+// pruneInvalidForeignKeys removes from a ForeignKeyCollection any ForeignKey whose parent/child table/columns have been
+// removed. The collection is modified in place and returned.
+func pruneInvalidForeignKeys(ctx *sql.Context, tableResolver doltdb.TableResolver, fkColl *doltdb.ForeignKeyCollection, mergedRoot doltdb.RootValue) (*doltdb.ForeignKeyCollection, error) {
+	// Every foreign key needs the schemas of its parent and its child, and many foreign keys share a table. Each table
+	// of |mergedRoot| is resolved once, as in doltdb.ValidateForeignKeysOnSchemas. A table that does not exist is
+	// remembered with a nil schema.
+	schemas := make(map[doltdb.TableName]schema.Schema)
+	getTableSchema := func(tableName doltdb.TableName) (schema.Schema, bool, error) {
+		if sch, ok := schemas[tableName]; ok {
+			return sch, sch != nil, nil
 		}
-		parentSch, err := parentTbl.GetSchema(ctx)
+		tbl, ok, err := tableResolver.ResolveTable(ctx, mergedRoot, tableName)
+		if err != nil {
+			return nil, false, err
+		}
+		if !ok {
+			schemas[tableName] = nil
+			return nil, false, nil
+		}
+		sch, err := tbl.GetSchema(ctx)
+		if err != nil {
+			return nil, false, err
+		}
+		schemas[tableName] = sch
+		return sch, true, nil
+	}
+
+	isValid := func(fk doltdb.ForeignKey) (bool, error) {
+		parentSch, ok, err := getTableSchema(fk.ReferencedTableName)
 		if err != nil {
 			return false, err
+		}
+		// An unresolved foreign key may reference a table that doesn't exist yet, so only a resolved one is invalid
+		// without its parent.
+		if !ok && fk.IsResolved() {
+			return false, nil
 		}
 		for _, tag := range fk.ReferencedTableColumns {
 			if _, ok := parentSch.GetAllCols().GetByTag(tag); !ok {
@@ -1039,12 +1105,8 @@ func pruneInvalidForeignKeys(ctx *sql.Context, tableResolver doltdb.TableResolve
 			}
 		}
 
-		childTbl, ok, err := tableResolver.ResolveTable(ctx, mergedRoot, fk.TableName)
+		childSch, ok, err := getTableSchema(fk.TableName)
 		if err != nil || !ok {
-			return false, err
-		}
-		childSch, err := childTbl.GetSchema(ctx)
-		if err != nil {
 			return false, err
 		}
 		for _, tag := range fk.TableColumns {
@@ -1052,16 +1114,21 @@ func pruneInvalidForeignKeys(ctx *sql.Context, tableResolver doltdb.TableResolve
 				return false, nil
 			}
 		}
+		return true, nil
+	}
 
-		err = pruned.AddKeys(fk)
+	err := fkColl.Iter(func(fk doltdb.ForeignKey) (stop bool, err error) {
+		valid, err := isValid(fk)
+		if err == nil && !valid {
+			fkColl.RemoveKeyByName(fk.Name, fk.TableName)
+		}
 		return false, err
 	})
-
 	if err != nil {
 		return nil, err
 	}
 
-	return pruned, nil
+	return fkColl, nil
 }
 
 // checksInCommon finds all the common checks between ourChks, theirChks, and ancChks, and detects varying conflicts

@@ -324,7 +324,7 @@ func restrictLoadFileToWorkingDirectory(ctx *sql.Context) error {
 	if err != nil {
 		wd = "/dev/null"
 	}
-	return dsqle.AssignSystemVariables(ctx, map[string]any{"secure_file_priv": wd})
+	return ctx.SystemVariables().AssignValues(ctx, map[string]any{"secure_file_priv": wd})
 }
 
 // handleLegacyArguments is a temporary function to parse args, and print a error and explanation when the old form is provided.

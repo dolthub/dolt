@@ -80,7 +80,7 @@ func GetValidate(ctx context.Context) func() {
 	return ctx.Value(safepointControllerkey).(*ctxState).Validate
 }
 
-func (*ctxState) VisitGCRoots(context.Context, string, func(hash.Hash) bool) error {
+func (*ctxState) VisitGCRoots(context.Context, string, func(hash.Hash)) error {
 	return nil
 }
 

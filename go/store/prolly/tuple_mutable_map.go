@@ -68,7 +68,7 @@ func (mut *GenericMutableMap[M, T]) Map(ctx context.Context) (M, error) {
 // VisitGCRoots passes every chunk address reachable from the pending state of
 // this map to |roots|: the roots of its static trees and any out-of-band values
 // referenced by its in-memory edits. It does not write to the NodeStore.
-func (mut *GenericMutableMap[M, T]) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+func (mut *GenericMutableMap[M, T]) VisitGCRoots(ctx context.Context, roots func(hash.Hash)) error {
 	visitMutableTreeGCRoots(mut.tuples, mut.keyDesc, mut.valDesc, roots)
 	if mut.stash != nil {
 		visitMutableTreeGCRoots(*mut.stash, mut.keyDesc, mut.valDesc, roots)
@@ -76,7 +76,7 @@ func (mut *GenericMutableMap[M, T]) VisitGCRoots(ctx context.Context, roots func
 	return nil
 }
 
-func visitMutableTreeGCRoots[T tree.MapInterface[val.Tuple, val.Tuple, *val.TupleDesc]](tuples tree.MutableMap[val.Tuple, val.Tuple, *val.TupleDesc, T], kd, vd *val.TupleDesc, roots func(hash.Hash) bool) {
+func visitMutableTreeGCRoots[T tree.MapInterface[val.Tuple, val.Tuple, *val.TupleDesc]](tuples tree.MutableMap[val.Tuple, val.Tuple, *val.TupleDesc, T], kd, vd *val.TupleDesc, roots func(hash.Hash)) {
 	roots(tuples.Static.GetRoot().HashOf())
 	for it := tuples.Edits.IterAtStart(); ; it.Advance() {
 		k, v := it.Current()
@@ -92,7 +92,7 @@ func visitMutableTreeGCRoots[T tree.MapInterface[val.Tuple, val.Tuple, *val.Tupl
 
 // visitTupleAddresses passes the chunk addresses stored within |tup| to |cb|, matching the addresses that would be
 // recorded for |tup| when it is serialized into a tree node.
-func visitTupleAddresses(tup val.Tuple, td *val.TupleDesc, cb func(hash.Hash) bool) {
+func visitTupleAddresses(tup val.Tuple, td *val.TupleDesc, cb func(hash.Hash)) {
 	val.IterAddressFields(td, func(i int, _ val.Type) {
 		addr := tup.GetField(i)
 		if len(addr) > 0 && !hash.New(addr).IsEmpty() {

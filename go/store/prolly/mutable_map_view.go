@@ -130,7 +130,7 @@ func (v MapView) EstimateCount() (int, error) {
 }
 
 // VisitGCRoots passes every chunk address reachable from the MapView to |roots|.
-func (v MapView) VisitGCRoots(roots func(hash.Hash) bool) {
+func (v MapView) VisitGCRoots(roots func(hash.Hash)) {
 	visitMutableTreeGCRoots(v.mut.tuples, v.mut.keyDesc, v.mut.valDesc, roots)
 }
 

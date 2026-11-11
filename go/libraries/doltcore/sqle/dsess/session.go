@@ -41,6 +41,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/dynassert"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -94,14 +95,6 @@ func (s *DoltSession) GetSessionVariable(ctx *sql.Context, name string) (interfa
 		}
 	}
 	return s.Session.GetSessionVariable(ctx, name)
-}
-
-// EngineVariables exposes the bundle retained by the underlying GMS session.
-func (d *DoltSession) EngineVariables() *sql.EngineVariables {
-	if owner, ok := d.Session.(sql.EngineVariablesProvider); ok {
-		return owner.EngineVariables()
-	}
-	return nil
 }
 
 // DoltgresSessionLifecycle is implemented by Doltgres session state that needs
@@ -405,6 +398,21 @@ func (d *DoltSession) LookupDbState(ctx *sql.Context, dbName string) (SessionSta
 	return s, true, nil
 }
 
+// droppedSinceSnapshot returns true if |err| is from reading |ddb| after a concurrent DROP DATABASE closed it. The
+// provider stops listing a database before closing it, so a transaction's snapshot of the provider's databases can
+// contain one which is closed. That shouldn't fail statements which don't use it.
+func (d *DoltSession) droppedSinceSnapshot(ddb *doltdb.DoltDB, err error) bool {
+	if !errors.Is(err, chunks.ErrStoreClosed) {
+		return false
+	}
+	for _, db := range d.provider.DoltDatabases() {
+		if db.DbData().Ddb == ddb {
+			return false
+		}
+	}
+	return true
+}
+
 // RemoveDbState invalidates any cached db state in this session, for example, if a database is dropped.
 func (d *DoltSession) RemoveDbState(ctx *sql.Context, dbName string) error {
 	d.mu.Lock()
@@ -552,6 +560,9 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 			rrd, ok := db.(RemoteReadReplicaDatabase)
 			if ok && rrd.ValidReplicaState(ctx) {
 				err := rrd.PullFromRemote(ctx)
+				if d.droppedSinceSnapshot(ddb, err) {
+					continue
+				}
 				if err != nil && !IgnoreReplicationErrorsWithRegistry(ctx.SystemVariables()) {
 					return nil, fmt.Errorf("replication error: %w", err)
 				} else if err != nil {
@@ -563,6 +574,9 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 			//  up on each transaction start
 			if _, v, ok := ctx.SystemVariables().GetGlobal(ReadReplicaRemote); ok && v != "" {
 				err := ddb.Rebase(ctx)
+				if d.droppedSinceSnapshot(ddb, err) {
+					continue
+				}
 				if err != nil && !IgnoreReplicationErrorsWithRegistry(ctx.SystemVariables()) {
 					return nil, err
 				} else if err != nil {
@@ -574,7 +588,7 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 		}
 	}
 
-	tx, err := NewDoltTransaction(ctx, txDbs, tCharacteristic)
+	tx, err := newDoltTransaction(ctx, txDbs, tCharacteristic, d.droppedSinceSnapshot)
 	if err != nil {
 		return nil, err
 	}
@@ -1146,7 +1160,7 @@ func (d *DoltSession) Rollback(ctx *sql.Context, tx sql.Transaction) error {
 // 2) If there is an active transaction, the initial root for that transaction and any roots for any savepoints of that transaction.
 // 3) Working set roots in any writeSession.
 // 4) The roots of any temporary tables in the database.
-func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func(hash.Hash) bool) error {
+func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func(hash.Hash)) error {
 	dbName = strings.ToLower(dbName)
 	dbName, _ = doltdb.SplitRevisionDbName(dbName)
 
@@ -1162,26 +1176,20 @@ func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func
 				if err != nil {
 					return err
 				}
-				if keep(h) {
-					panic("gc safepoint establishment found inconsistent state; process could not guarantee it would be able to keep a chunk if we continue")
-				}
+				keep(h)
 			} else if head.headCommit != nil {
 				h, err := head.headCommit.HashOf()
 				if err != nil {
 					return err
 				}
-				if keep(h) {
-					panic("gc safepoint establishment found inconsistent state; process could not guarantee it would be able to keep a chunk if we continue")
-				}
+				keep(h)
 			} else if head.workingSet != nil {
 				hashes, err := head.dbData.Ddb.WorkingSetGCHashes(ctx, head.workingSet)
 				if err != nil {
 					return err
 				}
 				for _, h := range hashes {
-					if keep(h) {
-						panic("gc safepoint establishment found inconsistent state; process could not guarantee it would be able to keep a chunk if we continue")
-					}
+					keep(h)
 				}
 			}
 			// The working set can hold changes beyond the head commit.
@@ -1191,18 +1199,11 @@ func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func
 					return err
 				}
 				for _, h := range hashes {
-					if keep(h) {
-						panic("gc safepoint establishment found inconsistent state; process could not guarantee it would be able to keep a chunk if we continue")
-					}
+					keep(h)
 				}
 				// Edits pending materialization only exist in the write session's table writers.
 				if head.writeSession.HasPendingEdits() {
-					err = head.writeSession.VisitGCRoots(ctx, func(h hash.Hash) bool {
-						if keep(h) {
-							panic("gc safepoint establishment found inconsistent state; process could not guarantee it would be able to keep a chunk if we continue")
-						}
-						return false
-					})
+					err = head.writeSession.VisitGCRoots(ctx, keep)
 					if err != nil {
 						return err
 					}
@@ -1226,8 +1227,8 @@ func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func
 	}
 
 	h, has := dtx.GetInitialRoot(dbName)
-	if has && keep(h) {
-		panic("gc safepoint establishment found inconsistent state; process could not guarantee it could would be able to keep a chunk if we continue")
+	if has {
+		keep(h)
 	}
 	for _, savepoint := range dtx.savepoints {
 		for name, rv := range savepoint.roots {
@@ -1244,9 +1245,7 @@ func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func
 			if err != nil {
 				return err
 			}
-			if keep(h) {
-				panic("gc safepoint establishment found inconsistent state; process could not guarantee it could would be able to keep a chunk if we continue")
-			}
+			keep(h)
 		}
 	}
 
@@ -1255,7 +1254,7 @@ func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func
 
 // visitTempTableGCRoots keeps the roots of the temporary tables stored in |dbState|'s database. They outlive the
 // session's branch states, so it doesn't look for the database's DoltDB there.
-func (d *DoltSession) visitTempTableGCRoots(ctx context.Context, dbState *DatabaseSessionState, keep func(hash.Hash) bool) error {
+func (d *DoltSession) visitTempTableGCRoots(ctx context.Context, dbState *DatabaseSessionState, keep func(hash.Hash)) error {
 	ddb := dbState.ddb
 	for _, tables := range d.tempTables {
 		for _, tbl := range tables {
@@ -1268,9 +1267,7 @@ func (d *DoltSession) visitTempTableGCRoots(ctx context.Context, dbState *Databa
 				return err
 			}
 			for _, h := range hashes {
-				if keep(h) {
-					panic("gc safepoint establishment found inconsistent state; process could not guarantee it would be able to keep a chunk if we continue")
-				}
+				keep(h)
 			}
 		}
 	}

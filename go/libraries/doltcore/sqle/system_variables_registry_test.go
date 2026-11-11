@@ -98,11 +98,11 @@ func TestDynamicHookReadsItsRegistry(t *testing.T) {
 	hook, _, err := NewDynamicPushOnWriteHookWithRegistry(context.Background(), "", dEnv, &buffer.Buffer{}, a.System)
 	require.NoError(t, err)
 	ctxB := sql.NewContextWithVariables(context.Background(), b)
-	require.NoError(t, b.System.(sql.ContextAwareSystemVariableRegistry).AssignValuesWithContext(ctxB, map[string]interface{}{dsess.ReplicateToRemote: "missing"}))
+	require.NoError(t, b.System.AssignValues(ctxB, map[string]interface{}{dsess.ReplicateToRemote: "missing"}))
 	_, err = hook.Execute(context.Background(), datas.Dataset{}, nil)
 	require.NoError(t, err)
 	ctxA := sql.NewContextWithVariables(context.Background(), a)
-	require.NoError(t, a.System.(sql.ContextAwareSystemVariableRegistry).AssignValuesWithContext(ctxA, map[string]interface{}{dsess.ReplicateToRemote: "missing"}))
+	require.NoError(t, a.System.AssignValues(ctxA, map[string]interface{}{dsess.ReplicateToRemote: "missing"}))
 	_, err = hook.Execute(context.Background(), datas.Dataset{}, nil)
 	require.Error(t, err)
 }

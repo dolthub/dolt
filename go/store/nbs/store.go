@@ -146,7 +146,11 @@ type NomsBlockStore struct {
 
 	fatalBehavior dherrors.FatalBehavior
 
-	closed bool
+	// Held for all of Close, so a Close returns only once the store is
+	// fully closed. Separate from |mu|, which Close releases while it
+	// waits for a conjoin.
+	closeMu sync.Mutex
+	closed  bool
 
 	staticAccessMode chunks.ExclusiveAccessMode
 	staticVersion    string
@@ -188,9 +192,21 @@ func (nbs *NomsBlockStore) ensureLoad(ctx context.Context) error {
 	return nbs.loadErr
 }
 
+func (nbs *NomsBlockStore) checkNotClosed() error {
+	nbs.mu.RLock()
+	defer nbs.mu.RUnlock()
+	if nbs.closed {
+		return chunks.ErrStoreClosed
+	}
+	return nil
+}
+
 // IterateRoots iterates over the in-memory roots tracked by the ChunkJournal, if there is one.
 func (nbs *NomsBlockStore) IterateRoots(ctx context.Context, f func(root string, timestamp *time.Time) error) error {
 	if err := nbs.ensureLoad(ctx); err != nil {
+		return err
+	}
+	if err := nbs.checkNotClosed(); err != nil {
 		return err
 	}
 	cj := nbs.chunkJournal()
@@ -214,6 +230,9 @@ func (nbs *NomsBlockStore) ChunkJournalSize(ctx context.Context) (int64, bool, e
 	}
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
+	if nbs.closed {
+		return 0, false, chunks.ErrStoreClosed
+	}
 	if cj := nbs.chunkJournal(); cj != nil {
 		return cj.Size(), true, nil
 	}
@@ -281,7 +300,7 @@ func (nbs *NomsBlockStore) getChunkLocations(ctx context.Context, hashes hash.Ha
 		}
 		if nbs.closed {
 			nbs.mu.Unlock()
-			return nil, errors.New("*NomsBlockStore is closed")
+			return nil, chunks.ErrStoreClosed
 		}
 		keeper, endRead, cycle := nbs.beginRead()
 		behavior := nbs.fatalBehavior
@@ -453,7 +472,7 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	if nbs.closed {
-		return manifestContents{}, false, errors.New("*NomsBlockStore is closed")
+		return manifestContents{}, false, chunks.ErrStoreClosed
 	}
 
 	err = nbs.startConjoinIfRequired(ctx)
@@ -1150,7 +1169,7 @@ func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 		}
 		if nbs.closed {
 			nbs.mu.Unlock()
-			return chunks.EmptyChunk, errors.New("*NomsBlockStore is closed")
+			return chunks.EmptyChunk, chunks.ErrStoreClosed
 		}
 		if nbs.memtable != nil {
 			data, gcb, err := nbs.memtable.get(ctx, h, nbs.keeperFunc, nbs.stats)
@@ -1258,7 +1277,7 @@ func (nbs *NomsBlockStore) getManyWithFunc(
 		}
 		if nbs.closed {
 			nbs.mu.Unlock()
-			return errors.New("*NomsBlockStore is closed")
+			return chunks.ErrStoreClosed
 		}
 		if nbs.memtable != nil {
 			// Read with |nbs.mu| held, so there is no unlocked read
@@ -1332,15 +1351,21 @@ func (nbs *NomsBlockStore) Count(ctx context.Context) (uint32, error) {
 	if err := nbs.ensureLoad(ctx); err != nil {
 		return 0, err
 	}
-	count, tables := func() (count uint32, tables chunkReader) {
+	count, tables, err := func() (count uint32, tables chunkReader, err error) {
 		nbs.mu.RLock()
 		defer nbs.mu.RUnlock()
+		if nbs.closed {
+			return 0, nil, chunks.ErrStoreClosed
+		}
 		if nbs.memtable != nil {
 			count = nbs.memtable.count()
 		}
 
-		return count, nbs.tables
+		return count, nbs.tables, nil
 	}()
+	if err != nil {
+		return 0, err
+	}
 
 	return count + tables.count(), nil
 }
@@ -1371,7 +1396,7 @@ func (nbs *NomsBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 		}
 		if nbs.closed {
 			nbs.mu.Unlock()
-			return false, errors.New("*NomsBlockStore is closed")
+			return false, chunks.ErrStoreClosed
 		}
 		if nbs.memtable != nil {
 			has, gcb, err := nbs.memtable.has(h, nbs.keeperFunc)
@@ -1446,7 +1471,7 @@ func (nbs *NomsBlockStore) hasManyDep(ctx context.Context, hashes hash.HashSet, 
 		}
 		if nbs.closed {
 			nbs.mu.Unlock()
-			return nil, errors.New("*NomsBlockStore is closed")
+			return nil, chunks.ErrStoreClosed
 		}
 		if nbs.memtable != nil {
 			// Read with |nbs.mu| held, so there is no unlocked read
@@ -1559,6 +1584,9 @@ func (nbs *NomsBlockStore) Rebase(ctx context.Context) error {
 	valctx.ValidateContext(ctx)
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
+	if nbs.closed {
+		return chunks.ErrStoreClosed
+	}
 	return nbs.rebase(ctx)
 }
 
@@ -1597,6 +1625,9 @@ func (nbs *NomsBlockStore) Root(ctx context.Context) (hash.Hash, error) {
 	valctx.ValidateContext(ctx)
 	nbs.mu.RLock()
 	defer nbs.mu.RUnlock()
+	if nbs.closed {
+		return hash.Hash{}, chunks.ErrStoreClosed
+	}
 	return nbs.upstream.root, nil
 }
 
@@ -1781,12 +1812,20 @@ func (nbs *NomsBlockStore) AccessMode() chunks.ExclusiveAccessMode {
 	return nbs.persister.AccessMode()
 }
 
+// Close releases the store's resources. Later calls wait for the first
+// to finish, then return nil.
 func (nbs *NomsBlockStore) Close() error {
+	nbs.closeMu.Lock()
+	defer nbs.closeMu.Unlock()
 	if nbs.loadThunk != nil {
 		loaded := true
 		nbs.loadOnce.Do(func() {
 			nbs.loadThunk(context.Background(), false)
 			loaded = false
+			// An unloaded store has no persister to close.
+			nbs.mu.Lock()
+			nbs.closed = true
+			nbs.mu.Unlock()
 		})
 		if !loaded || nbs.loadErr != nil {
 			return nil
@@ -1794,6 +1833,9 @@ func (nbs *NomsBlockStore) Close() error {
 	}
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
+	if nbs.closed {
+		return nil
+	}
 	nbs.closed = true
 	for nbs.conjoinOp != nil {
 		nbs.conjoinOpCond.Wait()
@@ -1875,6 +1917,9 @@ func (nbs *NomsBlockStore) Sources(ctx context.Context) (chunks.TableFileSources
 	valctx.ValidateContext(ctx)
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
+	if nbs.closed {
+		return chunks.TableFileSources{}, chunks.ErrStoreClosed
+	}
 
 	// This is our local view. Callers are responsible for Rebase() if they need it.
 	contents := nbs.upstream
@@ -1951,6 +1996,9 @@ func (nbs *NomsBlockStore) Size(ctx context.Context) (uint64, error) {
 	}
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
+	if nbs.closed {
+		return 0, chunks.ErrStoreClosed
+	}
 
 	size := uint64(0)
 	for _, cs := range nbs.tables.upstream {
@@ -2210,7 +2258,7 @@ func (nbs *NomsBlockStore) openChunkSourcesForManifestUpdateAndRebase(ctx contex
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	if nbs.closed {
-		return openChunkSourcesResult{}, errors.New("*NomsBlockStore is closed")
+		return openChunkSourcesResult{}, chunks.ErrStoreClosed
 	}
 	// These files are being admitted into the store from outside it --- a
 	// push, a pull, a manual AddTableFiles. We run the more expensive deep
@@ -2765,6 +2813,9 @@ func (nbs *NomsBlockStore) IterateAllChunks(ctx context.Context, cb func(chunk c
 	if err := nbs.ensureLoad(ctx); err != nil {
 		return err
 	}
+	if err := nbs.checkNotClosed(); err != nil {
+		return err
+	}
 	for _, v := range nbs.tables.novel {
 		err := v.iterateAllChunks(ctx, cb, nbs.stats)
 		if err != nil {
@@ -2790,6 +2841,9 @@ func (nbs *NomsBlockStore) TolerantIterateAllChunks(ctx context.Context, cb func
 	if err := nbs.ensureLoad(ctx); err != nil {
 		return err
 	}
+	if err := nbs.checkNotClosed(); err != nil {
+		return err
+	}
 	for _, v := range nbs.tables.novel {
 		fileName := v.hash().String() + v.suffix()
 		v.tolerantIterateAllChunks(ctx, cb, func(err error) { errCb(fileName, err) }, nbs.stats)
@@ -2811,7 +2865,7 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec, mo
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	if nbs.closed {
-		return errors.New("*NomsBlockStore is closed")
+		return chunks.ErrStoreClosed
 	}
 
 	// Pre-open chunk sources for the new specs before updating the

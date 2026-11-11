@@ -441,7 +441,7 @@ func applySystemVariables(ctx *sql.Context, cfg SystemVariables) error {
 	if cfg == nil {
 		return nil
 	}
-	return sqle.AssignSystemVariables(ctx, cfg)
+	return ctx.SystemVariables().AssignValues(ctx, cfg)
 }
 
 // InitStats initializes stats threads. We separate construction
