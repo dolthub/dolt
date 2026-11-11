@@ -3053,6 +3053,10 @@ func (t *AlterableDoltTable) DropForeignKey(ctx *sql.Context, fkName string, tab
 	if err != nil {
 		return err
 	}
+	// The engine doesn't always supply a schema name. A foreign key is declared in the schema of its table, so use that.
+	if schemaName == "" {
+		schemaName = t.db.Schema()
+	}
 	if !fkc.RemoveKeyByName(fkName, doltdb.TableName{Name: tableName, Schema: schemaName}) {
 		return sql.ErrForeignKeyNotFound.New(fkName, t.tableName)
 	}

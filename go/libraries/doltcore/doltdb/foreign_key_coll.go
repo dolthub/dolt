@@ -20,12 +20,11 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"maps"
 	"sort"
-	"strings"
 	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 
@@ -34,7 +33,51 @@ import (
 
 // ForeignKeyCollection represents the collection of foreign keys for a root value.
 type ForeignKeyCollection struct {
-	foreignKeys map[string]ForeignKey
+	// foreignKeys holds every foreign key, keyed by the case-folded name of the table that declares it and then by the
+	// case-folded name of the foreign key.
+	foreignKeys map[TableName]map[string]ForeignKey
+	// indexes is built on first use, since most collections are loaded or copied and then only read by name or by
+	// declaring table, which |foreignKeys| answers directly. Once built, it is kept up to date.
+	indexes *foreignKeyIndexes
+}
+
+// foreignKeyIndexes indexes the keys of a ForeignKeyCollection for KeysForTable and GetMatchingKey.
+type foreignKeyIndexes struct {
+	// referencedBy indexes the foreign keys by the case-folded name of the table they reference.
+	referencedBy map[TableName]map[foreignKeyID]struct{}
+	// byChildTag indexes the resolved foreign keys by the tag of their first declared column, and unresolved holds the
+	// unresolved foreign keys. GetMatchingKey matches keys by column rather than by table name, since a table may be
+	// renamed between the collections it compares.
+	byChildTag map[uint64]map[foreignKeyID]struct{}
+	unresolved map[foreignKeyID]struct{}
+}
+
+func (idx *foreignKeyIndexes) add(id foreignKeyID, key ForeignKey) {
+	addToIndex(idx.referencedBy, key.ReferencedTableName.FoldCase(), id)
+	if key.IsResolved() {
+		addToIndex(idx.byChildTag, key.TableColumns[0], id)
+	} else {
+		idx.unresolved[id] = struct{}{}
+	}
+}
+
+func (idx *foreignKeyIndexes) remove(id foreignKeyID, key ForeignKey) {
+	removeFromIndex(idx.referencedBy, key.ReferencedTableName.FoldCase(), id)
+	if key.IsResolved() {
+		removeFromIndex(idx.byChildTag, key.TableColumns[0], id)
+	} else {
+		delete(idx.unresolved, id)
+	}
+}
+
+// foreignKeyID identifies a foreign key by the case-folded names of the table that declares it and of the key itself.
+type foreignKeyID struct {
+	table TableName
+	name  string
+}
+
+func idOf(fk ForeignKey) foreignKeyID {
+	return foreignKeyID{table: fk.TableName.FoldCase(), name: foldString(fk.Name)}
 }
 
 type ForeignKeyReferentialAction byte
@@ -306,9 +349,7 @@ func (fk ForeignKey) ValidateTableSchema(sch schema.Schema) error {
 }
 
 func NewForeignKeyCollection(keys ...ForeignKey) (*ForeignKeyCollection, error) {
-	fkc := &ForeignKeyCollection{
-		foreignKeys: make(map[string]ForeignKey),
-	}
+	fkc := newForeignKeyCollection()
 	for _, k := range keys {
 		err := fkc.AddKeys(k)
 		if err != nil {
@@ -318,6 +359,30 @@ func NewForeignKeyCollection(keys ...ForeignKey) (*ForeignKeyCollection, error) 
 	return fkc, nil
 }
 
+func newForeignKeyCollection() *ForeignKeyCollection {
+	return &ForeignKeyCollection{
+		foreignKeys: make(map[TableName]map[string]ForeignKey),
+	}
+}
+
+// getIndexes returns the indexes of this collection, building them if this is their first use.
+func (fkc *ForeignKeyCollection) getIndexes() *foreignKeyIndexes {
+	if fkc.indexes == nil {
+		idx := &foreignKeyIndexes{
+			referencedBy: make(map[TableName]map[foreignKeyID]struct{}),
+			byChildTag:   make(map[uint64]map[foreignKeyID]struct{}),
+			unresolved:   make(map[foreignKeyID]struct{}),
+		}
+		for table, byName := range fkc.foreignKeys {
+			for name, key := range byName {
+				idx.add(foreignKeyID{table: table, name: name}, key)
+			}
+		}
+		fkc.indexes = idx
+	}
+	return fkc.indexes
+}
+
 // AddKeys adds the given foreign key to the collection. Checks that the given name is unique in the collection, and that
 // both column counts are equal. All other validation should occur before being added to the collection.
 func (fkc *ForeignKeyCollection) AddKeys(fks ...ForeignKey) error {
@@ -325,30 +390,114 @@ func (fkc *ForeignKeyCollection) AddKeys(fks ...ForeignKey) error {
 		if _, ok := fkc.GetByNameCaseInsensitive(key.Name, key.TableName); ok {
 			return sql.ErrForeignKeyDuplicateName.New(key.Name)
 		}
-		if len(key.TableColumns) != len(key.ReferencedTableColumns) {
-			return fmt.Errorf("foreign keys must have the same number of columns declared and referenced")
-		}
-
-		fkHash, err := key.HashOf()
-		if err != nil {
+		if err := fkc.addKey(key); err != nil {
 			return err
 		}
-		fkc.foreignKeys[fkHash.String()] = key
 	}
 	return nil
 }
 
-// AllKeys returns a slice, sorted by name ascending, containing all of the foreign keys in this collection.
-func (fkc *ForeignKeyCollection) AllKeys() []ForeignKey {
-	fks := make([]ForeignKey, len(fkc.foreignKeys))
-	i := 0
-	for _, fk := range fkc.foreignKeys {
-		fks[i] = fk
-		i++
+// addKey adds the given foreign key to the collection without checking that its name is unique among all the keys
+// that GetByNameCaseInsensitive would match. A key of the same name declared on the same table is still an error,
+// since one of the two would otherwise be lost.
+func (fkc *ForeignKeyCollection) addKey(key ForeignKey) error {
+	if len(key.TableColumns) != len(key.ReferencedTableColumns) {
+		return fmt.Errorf("foreign keys must have the same number of columns declared and referenced")
 	}
+	id := idOf(key)
+	if _, ok := fkc.get(id); ok {
+		return sql.ErrForeignKeyDuplicateName.New(key.Name)
+	}
+
+	fkc.put(id, key)
+	return nil
+}
+
+func (fkc *ForeignKeyCollection) get(id foreignKeyID) (ForeignKey, bool) {
+	fk, ok := fkc.foreignKeys[id.table][id.name]
+	return fk, ok
+}
+
+// put stores |key| under |id|, which must be idOf(key), replacing any key with the same foreignKeyID.
+func (fkc *ForeignKeyCollection) put(id foreignKeyID, key ForeignKey) {
+	fkc.remove(id)
+
+	byName, ok := fkc.foreignKeys[id.table]
+	if !ok {
+		byName = make(map[string]ForeignKey)
+		fkc.foreignKeys[id.table] = byName
+	}
+	byName[id.name] = key
+
+	if fkc.indexes != nil {
+		fkc.indexes.add(id, key)
+	}
+}
+
+// remove deletes the foreign key with the given foreignKeyID, if there is one.
+func (fkc *ForeignKeyCollection) remove(id foreignKeyID) {
+	key, ok := fkc.get(id)
+	if !ok {
+		return
+	}
+
+	delete(fkc.foreignKeys[id.table], id.name)
+	if len(fkc.foreignKeys[id.table]) == 0 {
+		delete(fkc.foreignKeys, id.table)
+	}
+
+	if fkc.indexes != nil {
+		fkc.indexes.remove(id, key)
+	}
+}
+
+func addToIndex[K comparable](index map[K]map[foreignKeyID]struct{}, k K, id foreignKeyID) {
+	ids, ok := index[k]
+	if !ok {
+		ids = make(map[foreignKeyID]struct{})
+		index[k] = ids
+	}
+	ids[id] = struct{}{}
+}
+
+func removeFromIndex[K comparable](index map[K]map[foreignKeyID]struct{}, k K, id foreignKeyID) {
+	delete(index[k], id)
+	if len(index[k]) == 0 {
+		delete(index, k)
+	}
+}
+
+// keysFor returns the foreign keys with the given foreignKeyIDs, in no particular order.
+func (fkc *ForeignKeyCollection) keysFor(ids map[foreignKeyID]struct{}) []ForeignKey {
+	var fks []ForeignKey
+	for id := range ids {
+		fk, _ := fkc.get(id)
+		fks = append(fks, fk)
+	}
+	return fks
+}
+
+// unsortedKeys returns all of the foreign keys in this collection, in no particular order.
+func (fkc *ForeignKeyCollection) unsortedKeys() []ForeignKey {
+	fks := make([]ForeignKey, 0, fkc.Count())
+	for _, byName := range fkc.foreignKeys {
+		for _, fk := range byName {
+			fks = append(fks, fk)
+		}
+	}
+	return fks
+}
+
+func sortByName(fks []ForeignKey) {
 	sort.Slice(fks, func(i, j int) bool {
 		return fks[i].Name < fks[j].Name
 	})
+}
+
+// AllKeys returns a slice, sorted by name ascending, containing all of the foreign keys in this collection.
+func (fkc *ForeignKeyCollection) AllKeys() []ForeignKey {
+	fks := fkc.unsortedKeys()
+	sortByName(fks)
 	return fks
 }
 
@@ -370,24 +519,30 @@ func (fkc *ForeignKeyCollection) HashOf(ctx context.Context, vrw types.ValueRead
 
 // Count returns the number of indexes in this collection.
 func (fkc *ForeignKeyCollection) Count() int {
-	return len(fkc.foreignKeys)
+	count := 0
+	for _, byName := range fkc.foreignKeys {
+		count += len(byName)
+	}
+	return count
 }
 
-// GetByNameCaseInsensitive returns a ForeignKey with a matching case-insensitive name, and whether a match exists.
+// GetByNameCaseInsensitive returns a ForeignKey with a matching case-insensitive name, and whether a match exists. If
+// |tableName| has a schema, the foreign key must be declared on a matching table, otherwise it may be declared on any
+// table.
 func (fkc *ForeignKeyCollection) GetByNameCaseInsensitive(foreignKeyName string, tableName TableName) (ForeignKey, bool) {
 	if foreignKeyName == "" {
 		return ForeignKey{}, false
 	}
-	for _, fk := range fkc.foreignKeys {
-		if tableName.Schema != "" {
-			// schema name is empty for Dolt but not in Doltgres. (schema name must be populated for Doltgres)
-			if strings.EqualFold(fk.Name, foreignKeyName) && strings.EqualFold(fk.TableName.Name, tableName.Name) && strings.EqualFold(fk.TableName.Schema, tableName.Schema) {
-				return fk, true
-			}
-		} else {
-			if strings.EqualFold(fk.Name, foreignKeyName) {
-				return fk, true
-			}
+	name := foldString(foreignKeyName)
+	if tableName.Schema != "" {
+		// schema name is empty for Dolt but not in Doltgres. (schema name must be populated for Doltgres)
+		fk, ok := fkc.foreignKeys[tableName.FoldCase()][name]
+		return fk, ok
+	}
+	// Dolt foreign key names are unique across all tables, so look in every table.
+	for _, byName := range fkc.foreignKeys {
+		if fk, ok := byName[name]; ok {
+			return fk, true
 		}
 	}
 	return ForeignKey{}, false
@@ -431,7 +586,7 @@ func (fkc *ForeignKeyCollection) GetByTags(childTags, parentTags []uint64) (Fore
 		return ForeignKey{}, false
 	}
 OuterLoop:
-	for _, fk := range fkc.foreignKeys {
+	for _, fk := range fkc.unsortedKeys() {
 		if len(fk.ReferencedTableColumns) != len(parentTags) {
 			continue
 		}
@@ -478,8 +633,9 @@ OuterLoop:
 func (fkc *ForeignKeyCollection) GetMatchingKey(fk ForeignKey, allSchemas map[TableName]schema.Schema, matchUnresolvedKeyToResolvedKey bool) (ForeignKey, bool) {
 	if !fk.IsResolved() {
 		// The given foreign key is unresolved, so we only look for matches on unresolved keys
+		// Only keys declared on the same table can match.
 	OuterLoopUnresolved:
-		for _, existingFk := range fkc.foreignKeys {
+		for _, existingFk := range fkc.foreignKeys[fk.TableName.FoldCase()] {
 			// For unresolved keys, the table name is important (column tags are globally unique, column names are not)
 			if (!matchUnresolvedKeyToResolvedKey && existingFk.IsResolved()) ||
 				fk.TableName != existingFk.TableName ||
@@ -502,9 +658,12 @@ func (fkc *ForeignKeyCollection) GetMatchingKey(fk ForeignKey, allSchemas map[Ta
 		}
 		return ForeignKey{}, false
 	}
-	// The given foreign key is resolved, so we may match both resolved and unresolved keys
+	// The given foreign key is resolved, so we may match both resolved and unresolved keys. A resolved key can only
+	// match if it has the same first column tag.
+	idx := fkc.getIndexes()
+	candidates := append(fkc.keysFor(idx.byChildTag[fk.TableColumns[0]]), fkc.keysFor(idx.unresolved)...)
 OuterLoopResolved:
-	for _, existingFk := range fkc.foreignKeys {
+	for _, existingFk := range candidates {
 		if existingFk.IsResolved() {
 			// When both are resolved, we do a standard tag comparison
 			if len(fk.TableColumns) != len(existingFk.TableColumns) ||
@@ -557,7 +716,7 @@ OuterLoopResolved:
 }
 
 func (fkc *ForeignKeyCollection) Iter(cb func(fk ForeignKey) (stop bool, err error)) error {
-	for _, fk := range fkc.foreignKeys {
+	for _, fk := range fkc.unsortedKeys() {
 		stop, err := cb(fk)
 		if err != nil {
 			return err
@@ -574,60 +733,36 @@ func (fkc *ForeignKeyCollection) Iter(cb func(fk ForeignKey) (stop bool, err err
 // all foreign keys in which this table is the referenced table. If the table contains a self-referential foreign key,
 // it will be present in both declaresFk and referencedByFk. Each array is sorted by name ascending.
 func (fkc *ForeignKeyCollection) KeysForTable(tableName TableName) (declaredFk, referencedByFk []ForeignKey) {
-	for _, foreignKey := range fkc.foreignKeys {
-		if foreignKey.TableName.EqualFold(tableName) {
-			declaredFk = append(declaredFk, foreignKey)
-		}
-		if foreignKey.ReferencedTableName.EqualFold(tableName) {
-			referencedByFk = append(referencedByFk, foreignKey)
-		}
+	table := tableName.FoldCase()
+	for _, fk := range fkc.foreignKeys[table] {
+		declaredFk = append(declaredFk, fk)
 	}
-	sort.Slice(declaredFk, func(i, j int) bool {
-		return declaredFk[i].Name < declaredFk[j].Name
-	})
-	sort.Slice(referencedByFk, func(i, j int) bool {
-		return referencedByFk[i].Name < referencedByFk[j].Name
-	})
-	return
+	referencedByFk = fkc.keysFor(fkc.getIndexes().referencedBy[table])
+	sortByName(declaredFk)
+	sortByName(referencedByFk)
+	return declaredFk, referencedByFk
 }
 
 // RemoveKeys removes any Foreign Keys with matching column set from the collection.
 func (fkc *ForeignKeyCollection) RemoveKeys(fks ...ForeignKey) {
-	drops := set.NewStrSet(nil)
-	for _, outgoing := range fks {
-		for k, existing := range fkc.foreignKeys {
+	for _, existing := range fkc.unsortedKeys() {
+		for _, outgoing := range fks {
 			if outgoing.EqualDefs(existing) {
-				drops.Add(k)
+				fkc.remove(idOf(existing))
+				break
 			}
 		}
-	}
-	for _, k := range drops.AsSlice() {
-		delete(fkc.foreignKeys, k)
 	}
 }
 
 // RemoveKeyByName removes a foreign key from the collection. It does not remove the associated indexes from their
 // respective tables. Returns true if the key was successfully removed.
 func (fkc *ForeignKeyCollection) RemoveKeyByName(foreignKeyName string, tableName TableName) bool {
-	var key string
-	for k, fk := range fkc.foreignKeys {
-		if tableName.Schema != "" {
-			// schema name is empty for Dolt but not in Doltgres. (schema name must be populated for Doltgres)
-			if strings.EqualFold(fk.Name, foreignKeyName) && strings.EqualFold(fk.TableName.Name, tableName.Name) && strings.EqualFold(fk.TableName.Schema, tableName.Schema) {
-				key = k
-				break
-			}
-		} else {
-			if strings.EqualFold(fk.Name, foreignKeyName) {
-				key = k
-				break
-			}
-		}
-	}
-	if key == "" {
+	fk, ok := fkc.GetByNameCaseInsensitive(foreignKeyName, tableName)
+	if !ok {
 		return false
 	}
-	delete(fkc.foreignKeys, key)
+	fkc.remove(idOf(fk))
 	return true
 }
 
@@ -635,18 +770,14 @@ func (fkc *ForeignKeyCollection) RemoveKeyByName(foreignKeyName string, tableNam
 // tables to be removed are in a single call, as splitting tables into different calls may result in unintended errors.
 func (fkc *ForeignKeyCollection) RemoveTables(ctx context.Context, tables ...TableName) error {
 	outgoing := NewTableNameSet(tables)
-	for _, fk := range fkc.foreignKeys {
+	for _, fk := range fkc.unsortedKeys() {
 		dropChild := outgoing.Contains(fk.TableName)
 		dropParent := outgoing.Contains(fk.ReferencedTableName)
 		if dropParent && !dropChild {
 			return fmt.Errorf("unable to remove `%s` since it is referenced from table `%s`", fk.ReferencedTableName, fk.TableName)
 		}
 		if dropChild {
-			fkHash, err := fk.HashOf()
-			if err != nil {
-				return err
-			}
-			delete(fkc.foreignKeys, fkHash.String())
+			fkc.remove(idOf(fk))
 		}
 	}
 	return nil
@@ -657,19 +788,13 @@ func (fkc *ForeignKeyCollection) RemoveTables(ctx context.Context, tables ...Tab
 // in a single call, as splitting tables into different calls may result in unintended errors.
 func (fkc *ForeignKeyCollection) RemoveAndUnresolveTables(ctx context.Context, root RootValue, tables ...TableName) error {
 	outgoing := NewTableNameSet(tables)
-	for _, fk := range fkc.foreignKeys {
+	for _, fk := range fkc.unsortedKeys() {
 		dropChild := outgoing.Contains(fk.TableName)
 		dropParent := outgoing.Contains(fk.ReferencedTableName)
 		if dropParent && !dropChild {
 			if !fk.IsResolved() {
 				continue
 			}
-
-			fkHash, err := fk.HashOf()
-			if err != nil {
-				return err
-			}
-			delete(fkc.foreignKeys, fkHash.String())
 
 			fk.UnresolvedFKDetails.TableColumns = make([]string, len(fk.TableColumns))
 			fk.UnresolvedFKDetails.ReferencedTableColumns = make([]string, len(fk.ReferencedTableColumns))
@@ -721,18 +846,10 @@ func (fkc *ForeignKeyCollection) RemoveAndUnresolveTables(ctx context.Context, r
 			fk.TableIndex = ""
 			fk.ReferencedTableIndex = ""
 
-			fkHash, err = fk.HashOf()
-			if err != nil {
-				return err
-			}
-			fkc.foreignKeys[fkHash.String()] = fk
+			fkc.put(idOf(fk), fk)
 		}
 		if dropChild {
-			fkHash, err := fk.HashOf()
-			if err != nil {
-				return err
-			}
-			delete(fkc.foreignKeys, fkHash.String())
+			fkc.remove(idOf(fk))
 		}
 	}
 	return nil
@@ -741,7 +858,7 @@ func (fkc *ForeignKeyCollection) RemoveAndUnresolveTables(ctx context.Context, r
 // Tables returns the set of all tables that either declare a foreign key or are referenced by a foreign key.
 func (fkc *ForeignKeyCollection) Tables() map[TableName]struct{} {
 	tables := make(map[TableName]struct{})
-	for _, fk := range fkc.foreignKeys {
+	for _, fk := range fkc.unsortedKeys() {
 		tables[fk.TableName] = struct{}{}
 		tables[fk.ReferencedTableName] = struct{}{}
 	}
@@ -803,9 +920,11 @@ func (fkc *ForeignKeyCollection) ColumnHasFkRelationship(tag uint64) (ForeignKey
 // Copy returns an exact copy of the calling collection. As collections are meant to be modified in-place, this ensures
 // that the original collection is not affected by any operations applied to the copied collection.
 func (fkc *ForeignKeyCollection) Copy() *ForeignKeyCollection {
-	copiedForeignKeys := make(map[string]ForeignKey)
-	for hashOf, key := range fkc.foreignKeys {
-		copiedForeignKeys[hashOf] = key
+	copied := &ForeignKeyCollection{
+		foreignKeys: make(map[TableName]map[string]ForeignKey, len(fkc.foreignKeys)),
 	}
-	return &ForeignKeyCollection{copiedForeignKeys}
+	for table, byName := range fkc.foreignKeys {
+		copied.foreignKeys[table] = maps.Clone(byName)
+	}
+	return copied
 }

@@ -48,9 +48,7 @@ func deserializeFlatbufferForeignKeys(msg types.SerialMessage) (*ForeignKeyColle
 	if err != nil {
 		return nil, err
 	}
-	collection := &ForeignKeyCollection{
-		foreignKeys: make(map[string]ForeignKey, c.ForeignKeysLength()),
-	}
+	collection := newForeignKeyCollection()
 
 	var fk serial.ForeignKey
 	for i := 0; i < c.ForeignKeysLength(); i++ {
@@ -95,7 +93,8 @@ func deserializeFlatbufferForeignKeys(msg types.SerialMessage) (*ForeignKeyColle
 			return nil, fmt.Errorf("could not decode table name: %s", string(fk.ParentTableName()))
 		}
 
-		err := collection.AddKeys(ForeignKey{
+		// A stored collection was validated when it was written, so its keys are not checked for duplicate names again.
+		err := collection.addKey(ForeignKey{
 			Name:                   string(fk.Name()),
 			TableName:              tableName,
 			TableIndex:             string(fk.ChildTableIndex()),
