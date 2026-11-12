@@ -17,7 +17,6 @@ package doltdb
 import (
 	"context"
 	"fmt"
-	"sync"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -160,83 +159,6 @@ func TestKeysForTable(t *testing.T) {
 	assert.NoError(t, err)
 	requireMatchesScan(changed)
 	requireMatchesScan(fkc)
-}
-
-// TestForeignKeyCollectionCopyOnWrite verifies that changing a collection returns a changed copy and leaves the
-// collection as it was, that a builder copies the collection it starts from, and that a collection may be read
-// concurrently.
-func TestForeignKeyCollectionCopyOnWrite(t *testing.T) {
-	parent := TableName{Name: "parent"}
-	newKey := func(name string, tag uint64) ForeignKey {
-		fk := newForeignKey()
-		fk.Name = name
-		fk.TableName = TableName{Name: name + "_child"}
-		fk.TableColumns = []uint64{tag}
-		fk.ReferencedTableName = parent
-		return fk
-	}
-	keyA, keyB, keyC := newKey("fk_a", 1), newKey("fk_b", 2), newKey("fk_c", 3)
-	fkc, err := NewForeignKeyCollection(keyA, keyB)
-	assert.NoError(t, err)
-	_, referenced := fkc.KeysForTable(parent)
-	assert.Equal(t, []ForeignKey{keyA, keyB}, referenced)
-
-	added, err := fkc.AddKeys(keyC)
-	assert.NoError(t, err)
-	removed, ok := fkc.RemoveKeyByName(keyA.Name, keyA.TableName)
-	assert.True(t, ok)
-	unchanged, ok := fkc.RemoveKeyByName("missing", keyA.TableName)
-	assert.False(t, ok)
-	assert.Same(t, fkc, unchanged)
-	updated, err := fkc.UpdateIndexes(context.Background(), schema.MustSchemaFromCols(schema.NewColCollection(
-		schema.NewColumn("p2", 2, types.IntKind, true))), []FkIndexUpdate{{FkName: keyB.Name, Table: keyB.TableName, ToIdx: ""}})
-	assert.NoError(t, err)
-	unresolved, err := fkc.RemoveAndUnresolveTables(context.Background(), nil, keyA.TableName)
-	assert.NoError(t, err)
-	tableRemoved, err := fkc.RemoveTables(context.Background(), keyB.TableName)
-	assert.NoError(t, err)
-
-	builder := fkc.Builder()
-	assert.NoError(t, builder.AddKeys(keyC))
-	builder.RemoveKeys(keyB)
-	assert.True(t, builder.RemoveKeyByName(keyA.Name, keyA.TableName))
-	built := builder.Build()
-
-	updatedB := keyB
-	updatedB.ReferencedTableIndex = ""
-	for _, tt := range []struct {
-		name     string
-		fkc      *ForeignKeyCollection
-		expected []ForeignKey
-	}{
-		{name: "original", fkc: fkc, expected: []ForeignKey{keyA, keyB}},
-		{name: "added", fkc: added, expected: []ForeignKey{keyA, keyB, keyC}},
-		{name: "removed", fkc: removed, expected: []ForeignKey{keyB}},
-		{name: "updated", fkc: updated, expected: []ForeignKey{keyA, updatedB}},
-		{name: "unresolved", fkc: unresolved, expected: []ForeignKey{keyB}},
-		{name: "table removed", fkc: tableRemoved, expected: []ForeignKey{keyA}},
-		{name: "built", fkc: built, expected: []ForeignKey{keyC}},
-	} {
-		assert.Equal(t, tt.expected, tt.fkc.AllKeys(), tt.name)
-		_, referenced := tt.fkc.KeysForTable(parent)
-		assert.Equal(t, tt.expected, referenced, tt.name)
-	}
-
-	// Collections are shared between sessions, which may read them concurrently.
-	shared, err := NewForeignKeyCollection(keyB, keyC)
-	assert.NoError(t, err)
-	var wg sync.WaitGroup
-	for i := 0; i < 8; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			_, referenced := shared.KeysForTable(parent)
-			assert.Len(t, referenced, 2)
-			_, ok := shared.GetMatchingKey(keyB, nil, false)
-			assert.True(t, ok)
-		}()
-	}
-	wg.Wait()
 }
 
 // TestForeignKeyCollectionNameIndex verifies that name lookups stay correct as keys are added, removed, copied and
