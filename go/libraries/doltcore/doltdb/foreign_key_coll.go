@@ -35,7 +35,8 @@ import (
 // ForeignKeyCollection represents the collection of foreign keys for a root value. A collection is never changed once
 // it has been built: each method that changes it returns a changed copy instead, leaving the collection it was called
 // on as it was. A collection may therefore be shared freely, including between sessions, which read it concurrently.
-// The foreign keys that a collection returns share nothing with it, and may be modified freely.
+// The foreign keys that a collection returns share their column slices with it, so those must not be modified in
+// place, though they may be replaced.
 type ForeignKeyCollection struct {
 	// foreignKeys holds every foreign key, keyed by the case-folded name of the table that declares it and then by the
 	// case-folded name of the foreign key.
@@ -231,15 +232,6 @@ func (fk ForeignKey) DeepEquals(other ForeignKey) bool {
 		fk.ReferencedTableIndex == other.ReferencedTableIndex
 }
 
-// DeepCopy returns a copy of this foreign key that shares no slices with it.
-func (fk ForeignKey) DeepCopy() ForeignKey {
-	fk.TableColumns = slices.Clone(fk.TableColumns)
-	fk.ReferencedTableColumns = slices.Clone(fk.ReferencedTableColumns)
-	fk.UnresolvedFKDetails.TableColumns = slices.Clone(fk.UnresolvedFKDetails.TableColumns)
-	fk.UnresolvedFKDetails.ReferencedTableColumns = slices.Clone(fk.UnresolvedFKDetails.ReferencedTableColumns)
-	return fk
-}
-
 var fkBufPool = sync.Pool{
 	New: func() interface{} {
 		return make([]byte, 0, 1024)
@@ -423,7 +415,7 @@ func (b *ForeignKeyCollectionBuilder) RemoveKeys(fks ...ForeignKey) {
 // RemoveKeyByName removes the foreign key with the given name, as ForeignKeyCollection.RemoveKeyByName does, and
 // returns whether there was such a key.
 func (b *ForeignKeyCollectionBuilder) RemoveKeyByName(foreignKeyName string, tableName TableName) bool {
-	fk, ok := b.fkc.getByNameCaseInsensitive(foreignKeyName, tableName)
+	fk, ok := b.fkc.GetByNameCaseInsensitive(foreignKeyName, tableName)
 	if ok {
 		b.fkc.remove(idOf(fk))
 	}
@@ -433,8 +425,7 @@ func (b *ForeignKeyCollectionBuilder) RemoveKeyByName(foreignKeyName string, tab
 // GetByNameCaseInsensitive returns the foreign key with the given name in the collection being built, as
 // ForeignKeyCollection.GetByNameCaseInsensitive does.
 func (b *ForeignKeyCollectionBuilder) GetByNameCaseInsensitive(foreignKeyName string, tableName TableName) (ForeignKey, bool) {
-	fk, ok := b.fkc.getByNameCaseInsensitive(foreignKeyName, tableName)
-	return fk.DeepCopy(), ok
+	return b.fkc.GetByNameCaseInsensitive(foreignKeyName, tableName)
 }
 
 // Build returns the built collection. The builder must not be used afterward.
@@ -462,10 +453,10 @@ func (fkc *ForeignKeyCollection) AddKeys(fks ...ForeignKey) (*ForeignKeyCollecti
 // addKeys adds the given foreign keys to this collection in place, as AddKeys does to a copy.
 func (fkc *ForeignKeyCollection) addKeys(fks ...ForeignKey) error {
 	for _, key := range fks {
-		if _, ok := fkc.getByNameCaseInsensitive(key.Name, key.TableName); ok {
+		if _, ok := fkc.GetByNameCaseInsensitive(key.Name, key.TableName); ok {
 			return sql.ErrForeignKeyDuplicateName.New(key.Name)
 		}
-		if err := fkc.addKey(key.DeepCopy()); err != nil {
+		if err := fkc.addKey(key); err != nil {
 			return err
 		}
 	}
@@ -549,21 +540,8 @@ func sortByName(fks []ForeignKey) {
 	})
 }
 
-// deepCopyAll returns deep copies of the given foreign keys, for returning to callers.
-func deepCopyAll(fks []ForeignKey) []ForeignKey {
-	for i := range fks {
-		fks[i] = fks[i].DeepCopy()
-	}
-	return fks
-}
-
 // AllKeys returns a slice, sorted by name ascending, containing all of the foreign keys in this collection.
 func (fkc *ForeignKeyCollection) AllKeys() []ForeignKey {
-	return deepCopyAll(fkc.sortedKeys())
-}
-
-// sortedKeys returns all of the foreign keys in this collection, sorted by name ascending, without copying them.
-func (fkc *ForeignKeyCollection) sortedKeys() []ForeignKey {
 	fks := fkc.unsortedKeys()
 	sortByName(fks)
 	return fks
@@ -571,7 +549,7 @@ func (fkc *ForeignKeyCollection) sortedKeys() []ForeignKey {
 
 // Contains returns whether the given foreign key name already exists for this collection.
 func (fkc *ForeignKeyCollection) Contains(foreignKeyName string, tableName TableName) bool {
-	_, ok := fkc.getByNameCaseInsensitive(foreignKeyName, tableName)
+	_, ok := fkc.GetByNameCaseInsensitive(foreignKeyName, tableName)
 	return ok
 }
 
@@ -598,12 +576,6 @@ func (fkc *ForeignKeyCollection) Count() int {
 // |tableName| has a schema, the foreign key must be declared on a matching table, otherwise it may be declared on any
 // table.
 func (fkc *ForeignKeyCollection) GetByNameCaseInsensitive(foreignKeyName string, tableName TableName) (ForeignKey, bool) {
-	fk, ok := fkc.getByNameCaseInsensitive(foreignKeyName, tableName)
-	return fk.DeepCopy(), ok
-}
-
-// getByNameCaseInsensitive is GetByNameCaseInsensitive without copying the key it returns.
-func (fkc *ForeignKeyCollection) getByNameCaseInsensitive(foreignKeyName string, tableName TableName) (ForeignKey, bool) {
 	if foreignKeyName == "" {
 		return ForeignKey{}, false
 	}
@@ -635,7 +607,7 @@ type FkIndexUpdate struct {
 func (fkc *ForeignKeyCollection) UpdateIndexes(ctx context.Context, tableSchema schema.Schema, updates []FkIndexUpdate) (*ForeignKeyCollection, error) {
 	updated := fkc.clone()
 	for _, u := range updates {
-		fk, ok := updated.getByNameCaseInsensitive(u.FkName, u.Table)
+		fk, ok := updated.GetByNameCaseInsensitive(u.FkName, u.Table)
 		if !ok {
 			return nil, errors.New("foreign key not found")
 		}
@@ -680,7 +652,7 @@ OuterLoop:
 				continue OuterLoop
 			}
 		}
-		return fk.DeepCopy(), true
+		return fk, true
 	}
 	return ForeignKey{}, false
 }
@@ -730,7 +702,7 @@ func (fkc *ForeignKeyCollection) GetMatchingKey(fk ForeignKey, allSchemas map[Ta
 					continue OuterLoopUnresolved
 				}
 			}
-			return existingFk.DeepCopy(), true
+			return existingFk, true
 		}
 		return ForeignKey{}, false
 	}
@@ -756,7 +728,7 @@ OuterLoopResolved:
 					continue OuterLoopResolved
 				}
 			}
-			return existingFk.DeepCopy(), true
+			return existingFk, true
 		} else {
 			// Since the existing key is unresolved, we reference the schema map to get tags we can use
 			if len(fk.TableColumns) != len(existingFk.UnresolvedFKDetails.TableColumns) ||
@@ -785,7 +757,7 @@ OuterLoopResolved:
 					continue OuterLoopResolved
 				}
 			}
-			return existingFk.DeepCopy(), true
+			return existingFk, true
 		}
 	}
 	return ForeignKey{}, false
@@ -793,7 +765,7 @@ OuterLoopResolved:
 
 func (fkc *ForeignKeyCollection) Iter(cb func(fk ForeignKey) (stop bool, err error)) error {
 	for _, fk := range fkc.unsortedKeys() {
-		stop, err := cb(fk.DeepCopy())
+		stop, err := cb(fk)
 		if err != nil {
 			return err
 		}
@@ -816,7 +788,7 @@ func (fkc *ForeignKeyCollection) KeysForTable(tableName TableName) (declaredFk, 
 	referencedByFk = fkc.keysFor(fkc.getIndexes().referencedBy[table])
 	sortByName(declaredFk)
 	sortByName(referencedByFk)
-	return deepCopyAll(declaredFk), deepCopyAll(referencedByFk)
+	return declaredFk, referencedByFk
 }
 
 // RemoveKeys returns a copy of this collection without any foreign keys with a matching column set.
@@ -842,7 +814,7 @@ func (fkc *ForeignKeyCollection) removeKeys(fks ...ForeignKey) {
 // such a key. If there wasn't, it returns this collection. It does not remove the associated indexes from their
 // respective tables.
 func (fkc *ForeignKeyCollection) RemoveKeyByName(foreignKeyName string, tableName TableName) (*ForeignKeyCollection, bool) {
-	fk, ok := fkc.getByNameCaseInsensitive(foreignKeyName, tableName)
+	fk, ok := fkc.GetByNameCaseInsensitive(foreignKeyName, tableName)
 	if !ok {
 		return fkc, false
 	}
@@ -1012,9 +984,9 @@ func (refOp ForeignKeyReferentialAction) ReducedString() string {
 
 // ColumnHasFkRelationship returns a foreign key that uses this tag. Returns n
 func (fkc *ForeignKeyCollection) ColumnHasFkRelationship(tag uint64) (ForeignKey, bool) {
-	for _, key := range fkc.sortedKeys() {
+	for _, key := range fkc.AllKeys() {
 		if slices.Contains(key.TableColumns, tag) || slices.Contains(key.ReferencedTableColumns, tag) {
-			return key.DeepCopy(), true
+			return key, true
 		}
 	}
 

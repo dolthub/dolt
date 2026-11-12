@@ -163,8 +163,8 @@ func TestKeysForTable(t *testing.T) {
 }
 
 // TestForeignKeyCollectionCopyOnWrite verifies that changing a collection returns a changed copy and leaves the
-// collection as it was, that the keys a collection is given or returns share nothing with it, that a builder copies the
-// collection it starts from, and that a collection may be read concurrently.
+// collection as it was, that a builder copies the collection it starts from, and that a collection may be read
+// concurrently.
 func TestForeignKeyCollectionCopyOnWrite(t *testing.T) {
 	parent := TableName{Name: "parent"}
 	newKey := func(name string, tag uint64) ForeignKey {
@@ -221,23 +221,6 @@ func TestForeignKeyCollectionCopyOnWrite(t *testing.T) {
 		_, referenced := tt.fkc.KeysForTable(parent)
 		assert.Equal(t, tt.expected, referenced, tt.name)
 	}
-
-	// Changing the keys that were added, or that a collection returns, must not change the collection.
-	keyA.TableColumns[0] = 100
-	fk, ok := fkc.GetByNameCaseInsensitive(keyB.Name, keyB.TableName)
-	assert.True(t, ok)
-	fk.TableColumns[0] = 100
-	for _, fk := range fkc.AllKeys() {
-		fk.ReferencedTableColumns[0] = 100
-	}
-	_, referenced = fkc.KeysForTable(parent)
-	for _, fk := range referenced {
-		fk.ReferencedTableColumns[0] = 100
-	}
-	fk, ok = fkc.GetMatchingKey(newKey("fk_a", 1), nil, false)
-	assert.True(t, ok)
-	fk.TableColumns[0] = 100
-	assert.Equal(t, []ForeignKey{newKey("fk_a", 1), newKey("fk_b", 2)}, fkc.AllKeys())
 
 	// Collections are shared between sessions, which may read them concurrently.
 	shared, err := NewForeignKeyCollection(keyB, keyC)
