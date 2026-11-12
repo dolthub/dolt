@@ -1210,6 +1210,7 @@ func (uv uniqValidator) insertArtifact(ctx context.Context, key, value val.Tuple
 
 type uniqIndex struct {
 	def              schema.Index
+	sch              schema.Schema
 	secondary        *prolly.MutableMap
 	clustered        *prolly.MutableMap
 	prefixDesc       *val.TupleDesc
@@ -1217,6 +1218,9 @@ type uniqIndex struct {
 	meta             UniqCVMeta
 	secondaryBld     index.SecondaryKeyBuilder
 	clusteredBld     index.ClusteredKeyBuilder
+	// predicate is the predicate of a partial index, resolved against |sch|. Rows that don't satisfy it are not in
+	// the index and can't collide with other rows.
+	predicate sql.Expression
 }
 
 func newUniqIndex(ctx *sql.Context, sch schema.Schema, tableName string, def schema.Index, clustered, secondary prolly.Map) (uniqIndex, error) {
@@ -1235,8 +1239,14 @@ func newUniqIndex(ctx *sql.Context, sch schema.Schema, tableName string, def sch
 
 	clusteredBld := index.NewClusteredKeyBuilder(def, sch, clustered.KeyDesc(), p, clustered.NodeStore())
 
+	predicate, err := expranalysis.ResolveIndexPredicate(ctx, tableName, sch, def)
+	if err != nil {
+		return uniqIndex{}, err
+	}
+
 	return uniqIndex{
 		def:              def,
+		sch:              sch,
 		secondary:        secondary.Mutate(),
 		clustered:        clustered.Mutate(),
 		clusteredKeyDesc: clustered.KeyDesc(),
@@ -1244,12 +1254,23 @@ func newUniqIndex(ctx *sql.Context, sch schema.Schema, tableName string, def sch
 		prefixDesc:       prefixDesc,
 		secondaryBld:     secondaryBld,
 		clusteredBld:     clusteredBld,
+		predicate:        predicate,
 	}, nil
 }
 
 type collisionFn func(key, value val.Tuple) error
 
+// matchesPredicate returns whether the row |key|, |value| belongs in this index.
+func (idx uniqIndex) matchesPredicate(ctx *sql.Context, key, value val.Tuple) (bool, error) {
+	return index.TupleMatchesPredicate(ctx, idx.predicate, key, value, idx.sch, idx.secondary.NodeStore())
+}
+
 func (idx uniqIndex) insertRow(ctx *sql.Context, key, value val.Tuple) error {
+	matches, err := idx.matchesPredicate(ctx, key, value)
+	if err != nil || !matches {
+		return err
+	}
+
 	secondaryIndexKey, err := idx.secondaryBld.SecondaryKeyFromRow(ctx, key, value)
 	if err != nil {
 		return err
@@ -1281,6 +1302,11 @@ func (idx uniqIndex) removeRow(ctx *sql.Context, key, value val.Tuple) error {
 // included in the unique constraint. For any matching row, the specified callback, |cb|, is invoked with the key
 // and value for the primary index, representing the conflicting row identified from the unique index.
 func (idx uniqIndex) findCollisions(ctx *sql.Context, key, value val.Tuple, cb collisionFn) error {
+	matches, err := idx.matchesPredicate(ctx, key, value)
+	if err != nil || !matches {
+		return err
+	}
+
 	indexKey, err := idx.secondaryBld.SecondaryKeyFromRow(ctx, key, value)
 	if err != nil {
 		return err

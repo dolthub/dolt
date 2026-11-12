@@ -127,12 +127,11 @@ func newWriterSchema(ctx *sql.Context, t *doltdb.Table, tableName doltdb.TableNa
 			PrefixLengths:   def.PrefixLengths(),
 			KeyVirtualExprs: keyVirtualExprs,
 		}
-		if predStr := def.Predicate(); predStr != "" {
-			predExpr, err := expranalysis.ResolveExpression(ctx, tableName, predStr)
-			if err != nil {
-				return nil, fmt.Errorf("failed to compile partial index predicate for %s: %w", def.Name(), err)
-			}
-			idxState.Predicate = predExpr
+		// Resolve the predicate against the schema being written, which may not be the schema of the table the session
+		// sees, e.g. while ALTER TABLE rewrites the table.
+		idxState.Predicate, err = expranalysis.ResolveIndexPredicate(ctx, tableName.Name, schState.DoltSchema, def)
+		if err != nil {
+			return nil, err
 		}
 		schState.SecIndexes = append(schState.SecIndexes, idxState)
 	}

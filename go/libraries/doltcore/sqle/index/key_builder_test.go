@@ -15,11 +15,16 @@
 package index
 
 import (
+	"fmt"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expranalysis"
+	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -159,6 +164,94 @@ func TestGetIndexKeyMapping(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tt.Split, b.split)
 			require.Equal(t, tt.Mapping, b.mapping)
+		})
+	}
+}
+
+func TestTupleMatchesPredicate(t *testing.T) {
+	ctx := sql.NewEmptyContext()
+	ns := tree.NewTestNodeStore()
+	bp := pool.NewBuffPool()
+
+	withExtra := schema.MustSchemaFromCols(schema.NewColCollection(
+		schema.NewColumn("id", 0, types.IntKind, true),
+		schema.NewColumn("extra", 1, types.IntKind, false),
+		schema.NewColumn("p", 2, types.IntKind, false),
+		schema.NewColumn("slot", 3, types.IntKind, false),
+	))
+	withoutExtra := schema.MustSchemaFromCols(schema.NewColCollection(
+		schema.NewColumn("id", 0, types.IntKind, true),
+		schema.NewColumn("p", 2, types.IntKind, false),
+		schema.NewColumn("slot", 3, types.IntKind, false),
+	))
+
+	// buildRow returns the key and value tuples of a row of |sch| whose columns after the primary key are |vals|.
+	buildRow := func(t *testing.T, sch schema.Schema, id int64, vals ...*int64) (val.Tuple, val.Tuple) {
+		kb := val.NewTupleBuilder(sch.GetKeyDescriptor(ns), ns)
+		kb.PutInt64(0, id)
+		key, err := kb.Build(ctx, bp)
+		require.NoError(t, err)
+
+		vb := val.NewTupleBuilder(sch.GetValueDescriptor(ns), ns)
+		for i, v := range vals {
+			if v != nil {
+				vb.PutInt64(i, *v)
+			}
+		}
+		value, err := vb.Build(ctx, bp)
+		require.NoError(t, err)
+		return key, value
+	}
+	i := func(v int64) *int64 { return &v }
+
+	for _, sch := range []schema.Schema{withExtra, withoutExtra} {
+		idx, err := sch.Indexes().AddIndexByColNames("t_partial", []string{"p"}, nil, schema.IndexProperties{
+			IsUnique:      true,
+			IsUserDefined: true,
+			Predicate:     "t.slot > 5",
+		})
+		require.NoError(t, err)
+
+		predicate, err := expranalysis.ResolveIndexPredicate(ctx, "t", sch, idx)
+		require.NoError(t, err)
+		require.NotNil(t, predicate)
+
+		hasExtra := sch.GetAllCols().Size() == 4
+		rowVals := func(p, slot *int64) []*int64 {
+			if hasExtra {
+				return []*int64{i(0), p, slot}
+			}
+			return []*int64{p, slot}
+		}
+
+		tests := []struct {
+			name    string
+			slot    *int64
+			matches bool
+		}{
+			{name: "satisfies predicate", slot: i(6), matches: true},
+			{name: "fails predicate", slot: i(5), matches: false},
+			{name: "predicate is NULL", slot: nil, matches: false},
+		}
+		for _, test := range tests {
+			t.Run(fmt.Sprintf("%d columns, %s", sch.GetAllCols().Size(), test.name), func(t *testing.T) {
+				key, value := buildRow(t, sch, 1, rowVals(i(1), test.slot)...)
+				matches, err := TupleMatchesPredicate(ctx, predicate, key, value, sch, ns)
+				require.NoError(t, err)
+				require.Equal(t, test.matches, matches)
+
+				matches, err = TupleMatchesPredicate(ctx, nil, key, value, sch, ns)
+				require.NoError(t, err)
+				require.True(t, matches)
+			})
+		}
+
+		t.Run(fmt.Sprintf("%d columns, full index", sch.GetAllCols().Size()), func(t *testing.T) {
+			full, err := sch.Indexes().AddIndexByColNames("t_full", []string{"p"}, nil, schema.IndexProperties{IsUserDefined: true})
+			require.NoError(t, err)
+			predicate, err := expranalysis.ResolveIndexPredicate(ctx, "t", sch, full)
+			require.NoError(t, err)
+			require.Nil(t, predicate)
 		})
 	}
 }

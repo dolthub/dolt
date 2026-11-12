@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -377,8 +378,7 @@ func (m prollySecondaryIndexWriter) matchesPredicate(ctx context.Context, sqlRow
 	if !ok {
 		return false, fmt.Errorf("expected *sql.Context for partial index predicate evaluation")
 	}
-	result, err := m.predicate.Eval(sqlCtx, sqlRow)
-	return result.(bool), err
+	return index.MatchesPredicate(sqlCtx, m.predicate, sqlRow)
 }
 
 var _ indexWriter = prollySecondaryIndexWriter{}
