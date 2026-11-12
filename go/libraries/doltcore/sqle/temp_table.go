@@ -297,7 +297,12 @@ func (t *TempTable) DataCacheKey(ctx *sql.Context) (doltdb.DataCacheKey, bool, e
 
 func (t *TempTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	t.lookup = lookup
-	return t.Partitions(ctx)
+	rows, err := t.table.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// PartitionValueRowWriter scans the entire lookup, so it must run only once.
+	return index.SinglePartitionIterFromNomsMap(rows), nil
 }
 
 func (t *TempTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {

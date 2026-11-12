@@ -8824,6 +8824,29 @@ var DoltSystemVariables = []queries.ScriptTest{
 // Temporary tables are not supported in GMS, eventually should move those tests there.
 var DoltTempTableScripts = []queries.ScriptTest{
 	{
+		Name:    "temporary table secondary index scans do not duplicate rows",
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"CREATE TEMPORARY TABLE t (id INT PRIMARY KEY, v INT)",
+			"INSERT INTO t WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 10000) SELECT i, i FROM n",
+			"ALTER TABLE t ADD INDEX iv (v)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM t",
+				Expected: []sql.Row{{10000}},
+			},
+			{
+				Query:    "SELECT COUNT(*), COUNT(DISTINCT id) FROM t FORCE INDEX (iv) WHERE v >= 0",
+				Expected: []sql.Row{{10000, 10000}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM t FORCE INDEX (iv) WHERE v BETWEEN 100 AND 200 OR v BETWEEN 900 AND 1000",
+				Expected: []sql.Row{{202}},
+			},
+		},
+	},
+	{
 		Name: "temporary and non-temporary table name collisions",
 		SetUpScript: []string{
 			"create table t1 (id varchar(100))",
