@@ -463,9 +463,15 @@ func (w *prollyTableWriter) VisitGCRoots(ctx context.Context, roots func(hash.Ha
 		}
 	}
 	if w.view != nil {
-		w.view.Primary.VisitGCRoots(roots)
+		err = w.view.Primary.VisitGCRoots(ctx, roots)
+		if err != nil {
+			return err
+		}
 		for _, v := range w.view.Secondary {
-			v.VisitGCRoots(roots)
+			err = v.VisitGCRoots(ctx, roots)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
