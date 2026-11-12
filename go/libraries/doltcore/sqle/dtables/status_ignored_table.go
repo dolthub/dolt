@@ -128,33 +128,18 @@ func newStatusIgnoredItr(ctx *sql.Context, st *StatusIgnoredTable) (*StatusIgnor
 		return nil, err
 	}
 
-	// Get ignore patterns for checking if unstaged tables are ignored
-	ignorePatterns, err := getIgnorePatterns(ctx, st.rootsProvider)
+	// A table matched by conflicting patterns is reported as not ignored.
+	ignoredTables, err := ignoredNewTables(ctx, st.rootsProvider, unstagedTables, true)
 	if err != nil {
 		return nil, err
 	}
 
-	// Build a set of unstaged table names for quick lookup
-	unstagedTableNames := buildUnstagedTableNameSet(unstagedTables)
-
 	// Convert status rows to status_ignored rows, adding the ignored column
 	rows := make([]statusIgnoredTableRow, len(statusRows))
 	for i, row := range statusRows {
-		ignored := false
-		// Only check ignore patterns for unstaged NEW tables (same as Git behavior).
-		// Tables that are modified, deleted, or renamed are already tracked,
-		// so ignore patterns don't apply to them.
-		if row.isStaged == byte(0) && row.status == newTableStatus && unstagedTableNames[row.tableName] {
-			tblNameObj := doltdb.TableName{Name: row.tableName}
-			result, err := ignorePatterns.IsTableNameIgnored(tblNameObj)
-			// If a table name has conflicting ignore rules, don't ignore it.
-			if err != nil && doltdb.AsDoltIgnoreInConflict(err) == nil {
-				return nil, err
-			}
-			if result == doltdb.Ignore {
-				ignored = true
-			}
-		}
+		// Only unstaged NEW tables can be ignored (same as Git behavior). Tables that are
+		// modified, deleted, or renamed are already tracked, so ignore patterns don't apply.
+		ignored := row.isStaged == byte(0) && row.status == newTableStatus && ignoredTables[row.tableName]
 		rows[i] = statusIgnoredTableRow{
 			tableName: row.tableName,
 			isStaged:  row.isStaged,
@@ -166,27 +151,44 @@ func newStatusIgnoredItr(ctx *sql.Context, st *StatusIgnoredTable) (*StatusIgnor
 	return &StatusIgnoredItr{rows: rows}, nil
 }
 
-// getIgnorePatterns fetches the ignore patterns from the roots provider.
-func getIgnorePatterns(ctx *sql.Context, rp env.RootsProvider[*sql.Context]) (doltdb.IgnorePatterns, error) {
+// ignoredNewTables returns the names, as shown in the status tables, of the unstaged new tables
+// that dolt_ignore ignores. Each table is matched against the patterns of its own schema, by its
+// name without the schema, so schema-qualified tables (as in Doltgres) match the same patterns as
+// tables without a schema. A table matched by conflicting patterns is an error unless
+// |allowConflicts| is set, in which case it is not ignored.
+func ignoredNewTables(ctx *sql.Context, rp env.RootsProvider[*sql.Context], unstagedTables []diff.TableDelta, allowConflicts bool) (map[string]bool, error) {
+	var names []doltdb.TableName
+	for _, td := range unstagedTables {
+		if td.IsAdd() {
+			names = append(names, td.ToName)
+		}
+	}
+	ignored := make(map[string]bool)
+	if len(names) == 0 {
+		return ignored, nil
+	}
 	roots, err := rp.GetRoots(ctx)
 	if err != nil {
 		return nil, err
 	}
-	schemas := []string{doltdb.DefaultSchemaName}
-	ignorePatternMap, err := doltdb.GetIgnoredTablePatterns(ctx, roots, schemas)
+	patterns, err := doltdb.GetIgnoredTablePatterns(ctx, roots, doltdb.GetUniqueSchemaNamesFromTableNames(names))
 	if err != nil {
 		return nil, err
 	}
-	return ignorePatternMap[doltdb.DefaultSchemaName], nil
-}
-
-// buildUnstagedTableNameSet builds a set of unstaged table names for quick lookup.
-func buildUnstagedTableNameSet(unstagedTables []diff.TableDelta) map[string]bool {
-	result := make(map[string]bool, len(unstagedTables))
-	for _, td := range unstagedTables {
-		result[td.CurName()] = true
+	for _, name := range names {
+		schemaPatterns := patterns[name.Schema]
+		result, err := schemaPatterns.IsTableNameIgnored(name)
+		if err != nil {
+			if allowConflicts && doltdb.AsDoltIgnoreInConflict(err) != nil {
+				continue
+			}
+			return nil, err
+		}
+		if result == doltdb.Ignore {
+			ignored[name.String()] = true
+		}
 	}
-	return result
+	return ignored, nil
 }
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
