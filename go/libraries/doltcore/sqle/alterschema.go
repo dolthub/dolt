@@ -320,21 +320,22 @@ func modifyPkOrdinals(oldSch, newSch schema.Schema) ([]int, error) {
 	return newPkOrdinals, nil
 }
 
-// rebindForeignKeyIndexes updates the foreign keys involving `tableName` whose backing index is no longer in `newSch`
-// (due to a dropped column) to use another index over the columns, creating one on the declaring side when a suitable
-// one does not exist. Returns `true` when any foreign key was changed.
-func rebindForeignKeyIndexes(tableName doltdb.TableName, newSch schema.Schema, fkc *doltdb.ForeignKeyCollection) (bool, error) {
+// rebindForeignKeyIndexes returns a copy of `fkc` in which the foreign keys involving `tableName` whose backing index
+// is no longer in `newSch` (due to a dropped column) use another index over the columns, creating one on the declaring
+// side when a suitable one does not exist. Also returns `true` when any foreign key was changed.
+func rebindForeignKeyIndexes(tableName doltdb.TableName, newSch schema.Schema, fkc *doltdb.ForeignKeyCollection) (*doltdb.ForeignKeyCollection, bool, error) {
 	changed := false
+	rebuilt := fkc.Builder()
 	for _, fk := range fkc.AllKeys() {
 		rebound := fk
 		if fk.TableName.EqualFold(tableName) && fk.TableIndex != "" && !newSch.Indexes().Contains(fk.TableIndex) {
 			idx, ok, err := indexForForeignKeyColumns(newSch, fk.TableColumns)
 			if err != nil {
-				return false, err
+				return nil, false, err
 			}
 			if !ok {
 				if idx, err = newSch.Indexes().AddIndexByColTags(fk.Name, fk.TableColumns, nil, schema.IndexProperties{}); err != nil {
-					return false, err
+					return nil, false, err
 				}
 			}
 			rebound.TableIndex = idx.Name()
@@ -342,22 +343,22 @@ func rebindForeignKeyIndexes(tableName doltdb.TableName, newSch schema.Schema, f
 		if fk.ReferencedTableName.EqualFold(tableName) && fk.ReferencedTableIndex != "" && !newSch.Indexes().Contains(fk.ReferencedTableIndex) {
 			idx, ok, err := indexForForeignKeyColumns(newSch, fk.ReferencedTableColumns)
 			if err != nil {
-				return false, err
+				return nil, false, err
 			}
 			if !ok {
-				return false, sql.ErrCantDropIndex.New(fk.ReferencedTableIndex, fk.Name)
+				return nil, false, sql.ErrCantDropIndex.New(fk.ReferencedTableIndex, fk.Name)
 			}
 			rebound.ReferencedTableIndex = idx.Name()
 		}
 		if rebound.TableIndex != fk.TableIndex || rebound.ReferencedTableIndex != fk.ReferencedTableIndex {
-			fkc.RemoveKeys(fk)
-			if err := fkc.AddKeys(rebound); err != nil {
-				return false, err
+			rebuilt.RemoveKeys(fk)
+			if err := rebuilt.AddKeys(rebound); err != nil {
+				return nil, false, err
 			}
 			changed = true
 		}
 	}
-	return changed, nil
+	return rebuilt.Build(), changed, nil
 }
 
 // indexForForeignKeyColumns returns an index of `sch` whose leading columns are the columns with the given tags.

@@ -83,18 +83,12 @@ type RootValue interface {
 	GetDatabaseSchemas(ctx context.Context) ([]schema.DatabaseSchema, error)
 	// GetFeatureVersion returns the feature version of this root, if one is written
 	GetFeatureVersion(ctx context.Context) (ver FeatureVersion, ok bool, err error)
-	// GetForeignKeyCollection returns the ForeignKeyCollection for this root. As collections are meant to be modified
-	// in-place, each returned collection may freely be altered without affecting future returned collections from this root.
+	// GetForeignKeyCollection returns the ForeignKeyCollection for this root. Collections are never changed in place, so
+	// every caller is returned the same collection, and changing it returns a changed copy that doesn't affect this root.
 	GetForeignKeyCollection(ctx context.Context) (*ForeignKeyCollection, error)
 	// GetForeignKeyCollectionHash returns the address of this root's stored ForeignKeyCollection, which is equal for
 	// two roots whose collections are equal, or the empty hash if this root has never stored one.
 	GetForeignKeyCollectionHash(ctx context.Context) (hash.Hash, error)
-	// GetForeignKeysForTable returns the foreign keys that the given table declares, and those that reference it, as
-	// ForeignKeyCollection.KeysForTable does. Unlike GetForeignKeyCollection, it does not copy this root's collection,
-	// so its cost depends on the number of keys returned rather than on the number of keys in this root. The returned
-	// slices belong to the caller, but the keys in them share their column slices with this root, and must not be
-	// modified in place.
-	GetForeignKeysForTable(ctx context.Context, tName TableName) (declared, referencedBy []ForeignKey, err error)
 	// GetTable will retrieve a table by its case-sensitive name.
 	GetTable(ctx context.Context, tName TableName) (*Table, bool, error)
 	// GetTableHash returns the hash of the given case-sensitive table name.
@@ -1179,9 +1173,9 @@ func (root *rootValue) RemoveTables(ctx context.Context, skipFKHandling bool, al
 	}
 
 	if allowDroppingFKReferenced {
-		err = fkc.RemoveAndUnresolveTables(ctx, root, tables...)
+		fkc, err = fkc.RemoveAndUnresolveTables(ctx, root, tables...)
 	} else {
-		err = fkc.RemoveTables(ctx, tables...)
+		fkc, err = fkc.RemoveTables(ctx, tables...)
 	}
 
 	if err != nil {
@@ -1191,31 +1185,8 @@ func (root *rootValue) RemoveTables(ctx context.Context, skipFKHandling bool, al
 	return newRoot.PutForeignKeyCollection(ctx, fkc)
 }
 
-// GetForeignKeyCollection returns the ForeignKeyCollection for this root. As collections are meant to be modified
-// in-place, each returned collection may freely be altered without affecting future returned collections from this root.
+// GetForeignKeyCollection implements RootValue. The collection is loaded on first use, and shared by every caller.
 func (root *rootValue) GetForeignKeyCollection(ctx context.Context) (*ForeignKeyCollection, error) {
-	fkc, err := root.loadForeignKeyCollection(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return fkc.Copy(), nil
-}
-
-// GetForeignKeysForTable implements RootValue.
-func (root *rootValue) GetForeignKeysForTable(ctx context.Context, tName TableName) (declared, referencedBy []ForeignKey, err error) {
-	fkc, err := root.loadForeignKeyCollection(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	declared, referencedBy = fkc.KeysForTable(tName)
-	return declared, referencedBy, nil
-}
-
-// loadForeignKeyCollection returns this root's ForeignKeyCollection, loading it on first use. The collection is shared
-// by every caller, and must not be modified.
-func (root *rootValue) loadForeignKeyCollection(ctx context.Context) (*ForeignKeyCollection, error) {
 	root.fkcLock.Lock()
 	defer root.fkcLock.Unlock()
 
@@ -1307,7 +1278,9 @@ func ValidateForeignKeysOnSchemas(ctx *sql.Context, tableResolver TableResolver,
 				return nil, err
 			}
 		} else {
-			if !fkCollection.RemoveKeyByName(foreignKey.Name, foreignKey.TableName) {
+			var removed bool
+			fkCollection, removed = fkCollection.RemoveKeyByName(foreignKey.Name, foreignKey.TableName)
+			if !removed {
 				return nil, fmt.Errorf("`%s` does not exist as a foreign key", foreignKey.Name)
 			}
 		}

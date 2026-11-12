@@ -28,11 +28,12 @@ import (
 // |databaseName|. The RootValue |root| is used to load the referenced tables, and the schema of the referenced table is
 // specified in |tableSchema| and used to convert FK metadata into ForeignKeyConstraint instances.
 func GetReferencedForeignKeys(ctx *sql.Context, root doltdb.RootValue, databaseName string, tableName doltdb.TableName, tableSchema schema.Schema) ([]sql.ForeignKeyConstraint, error) {
-	_, referencedByFk, err := root.GetForeignKeysForTable(ctx, tableName)
+	fkc, err := root.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, err
 	}
 
+	_, referencedByFk := fkc.KeysForTable(tableName)
 	toReturn := make([]sql.ForeignKeyConstraint, len(referencedByFk))
 
 	for i, fk := range referencedByFk {

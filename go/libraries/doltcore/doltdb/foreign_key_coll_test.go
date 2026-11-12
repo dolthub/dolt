@@ -17,6 +17,7 @@ package doltdb
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -110,7 +111,8 @@ func TestKeysForTable(t *testing.T) {
 			fk.TableName = tableName
 			fk.TableColumns = []uint64{uint64(100*i) + uint64(prefix[0])}
 			fk.ReferencedTableName = tables[(i+1)%len(tables)]
-			assert.NoError(t, fkc.AddKeys(fk))
+			fkc, err = fkc.AddKeys(fk)
+			assert.NoError(t, err)
 			added = append(added, fk)
 		}
 	}
@@ -141,20 +143,117 @@ func TestKeysForTable(t *testing.T) {
 	}
 	requireMatchesScan(fkc)
 
-	copied := fkc.Copy()
-	copied.RemoveKeys(added[0], added[5])
-	assert.True(t, copied.RemoveKeyByName(added[8].Name, added[8].TableName))
-	requireMatchesScan(copied)
+	// The indexes of |fkc| were built by the lookups above, and must not be shared with the copies that changes return.
+	removed := fkc.RemoveKeys(added[0], added[5])
+	removed, ok := removed.RemoveKeyByName(added[8].Name, added[8].TableName)
+	assert.True(t, ok)
+	requireMatchesScan(removed)
 	requireMatchesScan(fkc)
 	assert.Equal(t, len(added), fkc.Count())
-	assert.Equal(t, len(added)-3, copied.Count())
+	assert.Equal(t, len(added)-3, removed.Count())
 
-	// The indexes of |fkc| were built by the lookups above, and must be kept up to date as keys are removed and added.
-	assert.True(t, fkc.RemoveKeyByName(added[3].Name, added[3].TableName))
 	readded := added[3]
 	readded.ReferencedTableName = tables[0]
-	assert.NoError(t, fkc.AddKeys(readded))
+	changed, ok := fkc.RemoveKeyByName(added[3].Name, added[3].TableName)
+	assert.True(t, ok)
+	changed, err = changed.AddKeys(readded)
+	assert.NoError(t, err)
+	requireMatchesScan(changed)
 	requireMatchesScan(fkc)
+}
+
+// TestForeignKeyCollectionCopyOnWrite verifies that changing a collection returns a changed copy and leaves the
+// collection as it was, that the keys a collection is given or returns share nothing with it, that a builder copies the
+// collection it starts from, and that a collection may be read concurrently.
+func TestForeignKeyCollectionCopyOnWrite(t *testing.T) {
+	parent := TableName{Name: "parent"}
+	newKey := func(name string, tag uint64) ForeignKey {
+		fk := newForeignKey()
+		fk.Name = name
+		fk.TableName = TableName{Name: name + "_child"}
+		fk.TableColumns = []uint64{tag}
+		fk.ReferencedTableName = parent
+		return fk
+	}
+	keyA, keyB, keyC := newKey("fk_a", 1), newKey("fk_b", 2), newKey("fk_c", 3)
+	fkc, err := NewForeignKeyCollection(keyA, keyB)
+	assert.NoError(t, err)
+	_, referenced := fkc.KeysForTable(parent)
+	assert.Equal(t, []ForeignKey{keyA, keyB}, referenced)
+
+	added, err := fkc.AddKeys(keyC)
+	assert.NoError(t, err)
+	removed, ok := fkc.RemoveKeyByName(keyA.Name, keyA.TableName)
+	assert.True(t, ok)
+	unchanged, ok := fkc.RemoveKeyByName("missing", keyA.TableName)
+	assert.False(t, ok)
+	assert.Same(t, fkc, unchanged)
+	updated, err := fkc.UpdateIndexes(context.Background(), schema.MustSchemaFromCols(schema.NewColCollection(
+		schema.NewColumn("p2", 2, types.IntKind, true))), []FkIndexUpdate{{FkName: keyB.Name, Table: keyB.TableName, ToIdx: ""}})
+	assert.NoError(t, err)
+	unresolved, err := fkc.RemoveAndUnresolveTables(context.Background(), nil, keyA.TableName)
+	assert.NoError(t, err)
+	tableRemoved, err := fkc.RemoveTables(context.Background(), keyB.TableName)
+	assert.NoError(t, err)
+
+	builder := fkc.Builder()
+	assert.NoError(t, builder.AddKeys(keyC))
+	builder.RemoveKeys(keyB)
+	assert.True(t, builder.RemoveKeyByName(keyA.Name, keyA.TableName))
+	built := builder.Build()
+
+	updatedB := keyB
+	updatedB.ReferencedTableIndex = ""
+	for _, tt := range []struct {
+		name     string
+		fkc      *ForeignKeyCollection
+		expected []ForeignKey
+	}{
+		{name: "original", fkc: fkc, expected: []ForeignKey{keyA, keyB}},
+		{name: "added", fkc: added, expected: []ForeignKey{keyA, keyB, keyC}},
+		{name: "removed", fkc: removed, expected: []ForeignKey{keyB}},
+		{name: "updated", fkc: updated, expected: []ForeignKey{keyA, updatedB}},
+		{name: "unresolved", fkc: unresolved, expected: []ForeignKey{keyB}},
+		{name: "table removed", fkc: tableRemoved, expected: []ForeignKey{keyA}},
+		{name: "built", fkc: built, expected: []ForeignKey{keyC}},
+	} {
+		assert.Equal(t, tt.expected, tt.fkc.AllKeys(), tt.name)
+		_, referenced := tt.fkc.KeysForTable(parent)
+		assert.Equal(t, tt.expected, referenced, tt.name)
+	}
+
+	// Changing the keys that were added, or that a collection returns, must not change the collection.
+	keyA.TableColumns[0] = 100
+	fk, ok := fkc.GetByNameCaseInsensitive(keyB.Name, keyB.TableName)
+	assert.True(t, ok)
+	fk.TableColumns[0] = 100
+	for _, fk := range fkc.AllKeys() {
+		fk.ReferencedTableColumns[0] = 100
+	}
+	_, referenced = fkc.KeysForTable(parent)
+	for _, fk := range referenced {
+		fk.ReferencedTableColumns[0] = 100
+	}
+	fk, ok = fkc.GetMatchingKey(newKey("fk_a", 1), nil, false)
+	assert.True(t, ok)
+	fk.TableColumns[0] = 100
+	assert.Equal(t, []ForeignKey{newKey("fk_a", 1), newKey("fk_b", 2)}, fkc.AllKeys())
+
+	// Collections are shared between sessions, which may read them concurrently.
+	shared, err := NewForeignKeyCollection(keyB, keyC)
+	assert.NoError(t, err)
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, referenced := shared.KeysForTable(parent)
+			assert.Len(t, referenced, 2)
+			_, ok := shared.GetMatchingKey(keyB, nil, false)
+			assert.True(t, ok)
+		}()
+	}
+	wg.Wait()
 }
 
 // TestForeignKeyCollectionNameIndex verifies that name lookups stay correct as keys are added, removed, copied and
@@ -195,30 +294,33 @@ func TestForeignKeyCollectionNameIndex(t *testing.T) {
 	_, ok = lookup(fkc, "fk_a", TableName{Name: "unrelated"})
 	assert.True(t, ok)
 
-	err = fkc.AddKeys(newKey("FK_Σ", child, 4))
+	_, err = fkc.AddKeys(newKey("FK_Σ", child, 4))
 	assert.True(t, sql.ErrForeignKeyDuplicateName.Is(err), "unexpected error: %v", err)
 
-	copied := fkc.Copy()
-	assert.True(t, copied.RemoveKeyByName("fk_A", child))
-	_, ok = lookup(copied, "fk_a", child)
+	removed, ok := fkc.RemoveKeyByName("fk_A", child)
+	assert.True(t, ok)
+	_, ok = lookup(removed, "fk_a", child)
 	assert.False(t, ok)
-	_, ok = lookup(copied, "fk_a", other)
+	_, ok = lookup(removed, "fk_a", other)
 	assert.True(t, ok)
 	_, ok = lookup(fkc, "fk_a", child)
 	assert.True(t, ok, "removing a key from a copy must not remove it from the original")
 
-	assert.NoError(t, copied.RemoveTables(context.Background(), other))
-	_, ok = lookup(copied, "fk_a", other)
+	removed, err = removed.RemoveTables(context.Background(), other)
+	assert.NoError(t, err)
+	_, ok = lookup(removed, "fk_a", other)
 	assert.False(t, ok)
-	assert.NoError(t, copied.AddKeys(newKey("fk_a", other, 5)))
+	_, err = removed.AddKeys(newKey("fk_a", other, 5))
+	assert.NoError(t, err)
 
 	// Without a schema, as in Dolt, a foreign key name is unique across all tables.
 	noSchema := newKey("fk_b", TableName{Name: "child"}, 6)
-	assert.NoError(t, fkc.AddKeys(noSchema))
+	fkc, err = fkc.AddKeys(noSchema)
+	assert.NoError(t, err)
 	fk, ok = lookup(fkc, "FK_B", TableName{Name: "unrelated"})
 	assert.True(t, ok)
 	assert.Equal(t, noSchema, fk)
-	err = fkc.AddKeys(newKey("FK_B", TableName{Name: "other"}, 7))
+	_, err = fkc.AddKeys(newKey("FK_B", TableName{Name: "other"}, 7))
 	assert.True(t, sql.ErrForeignKeyDuplicateName.Is(err), "unexpected error: %v", err)
 
 	loaded, err := deserializeFlatbufferForeignKeys(serializeFlatbufferForeignKeys(fkc))
@@ -293,16 +395,6 @@ func BenchmarkDeserializeForeignKeys(b *testing.B) {
 	}
 }
 
-// BenchmarkCopyForeignKeys copies a collection of 400 foreign keys, which every call to
-// RootValue.GetForeignKeyCollection does.
-func BenchmarkCopyForeignKeys(b *testing.B) {
-	fkc := benchmarkForeignKeyCollection(b)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		fkc.Copy()
-	}
-}
-
 // benchmarkForeignKeyCollection returns a collection of 400 foreign keys declared on 200 tables.
 func benchmarkForeignKeyCollection(b *testing.B) *ForeignKeyCollection {
 	fkc, err := NewForeignKeyCollection()
@@ -314,7 +406,7 @@ func benchmarkForeignKeyCollection(b *testing.B) *ForeignKeyCollection {
 		fk.Name = fmt.Sprintf("fk_%04d", i)
 		fk.TableName = TableName{Name: fmt.Sprintf("t%04d", i%200), Schema: "public"}
 		fk.TableColumns = []uint64{uint64(i)}
-		if err = fkc.AddKeys(fk); err != nil {
+		if fkc, err = fkc.AddKeys(fk); err != nil {
 			b.Fatal(err)
 		}
 	}
