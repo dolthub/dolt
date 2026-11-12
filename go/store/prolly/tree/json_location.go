@@ -299,15 +299,14 @@ func IsJsonKeyPrefix(path, prefix []byte) bool {
 	return bytes.HasPrefix(path, prefix) && (path[len(prefix)] == beginArrayKey || path[len(prefix)] == beginObjectKey)
 }
 
-func JsonKeysModifySameArray(leftKey, rightKey []byte) bool {
-	i := 0
-	for i < len(leftKey) && i < len(rightKey) && leftKey[i] == rightKey[i] {
-		if leftKey[i] == beginArrayKey {
-			return true
-		}
-		i++
+// JsonArrayPath returns the path of the outermost array containing the key, if any.
+func JsonArrayPath(key []byte) []byte {
+	// Object keys are UTF-8, so the first array separator marks an array index.
+	i := bytes.IndexByte(key, beginArrayKey)
+	if i < 0 {
+		return nil
 	}
-	return false
+	return key[:i]
 }
 
 func jsonPathElementsFromMySQLJsonPath(pathBytes []byte) (jsonLocation, error) {

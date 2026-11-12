@@ -508,22 +508,22 @@ func (i IndexedJsonDocument) trySet(ctx context.Context, path string, val sql.JS
 	if err != nil {
 		return nil, false, err
 	}
-	return i.setWithLocation(ctx, keyPath, val)
+	return i.setWithLocation(ctx, keyPath, val, true)
 }
 
+// SetWithKey applies an encoded diff path without treating index zero as a scalar alias.
 func (i IndexedJsonDocument) SetWithKey(ctx context.Context, key []byte, val sql.JSONWrapper) (IndexedJsonDocument, bool, error) {
-	return i.setWithLocation(ctx, jsonPathFromKey(key), val)
+	return i.setWithLocation(ctx, jsonPathFromKey(key), val, false)
 }
 
-func (i IndexedJsonDocument) setWithLocation(ctx context.Context, keyPath jsonLocation, val sql.JSONWrapper) (IndexedJsonDocument, bool, error) {
+func (i IndexedJsonDocument) setWithLocation(ctx context.Context, keyPath jsonLocation, val sql.JSONWrapper, allowScalarAlias bool) (IndexedJsonDocument, bool, error) {
 	jsonCursor, found, err := newJsonCursor(ctx, i.m.NodeStore, i.m.Root, keyPath, false)
 	if err != nil {
 		return IndexedJsonDocument{}, false, err
 	}
 
-	// The supplied path may be 0-indexing into a scalar, which is the same as referencing the scalar. Remove
-	// the index and try again.
-	for !found && keyPath.size() > jsonCursor.jsonScanner.currentPath.size() {
+	// Paths can index a scalar at zero, which is the same as referencing the scalar.
+	for allowScalarAlias && !found && keyPath.size() > jsonCursor.jsonScanner.currentPath.size() {
 		lastKeyPathElement := keyPath.getLastPathElement()
 		if !lastKeyPathElement.isArrayIndex || lastKeyPathElement.getArrayIndex() != 0 {
 			// The key does not exist in the document.
