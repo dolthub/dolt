@@ -320,7 +320,7 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 		if !name.IsQualified() {
 			name = name.WithRevision(dbState.checkedOutRevSpec)
 		}
-		branchState, ok = d.currentBranches().get(name.Key())
+		branchState, ok = d.currentBranches().get(name)
 	}
 	d.mu.Unlock()
 
@@ -346,7 +346,7 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 
 	d.mu.Lock()
 	_, dbStateFound = d.dbStates[name.DbKey()]
-	branchState, _ = d.currentBranches().get(name.WithRevision(database.Revision()).Key())
+	branchState, _ = d.currentBranches().get(name.WithRevision(database.Revision()))
 	d.mu.Unlock()
 	if !dbStateFound {
 		// should be impossible
@@ -401,9 +401,9 @@ func (d *DoltSession) LookupDbState(ctx *sql.Context, dbName string) (SessionSta
 func (d *DoltSession) RemoveDbState(ctx *sql.Context, dbName string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	key := doltdb.NewDbKey(dbName)
-	delete(d.dbStates, key)
-	heads := d.currentBranches().removeDb(key)
+	name := doltdb.ParseQualifiedDbName(dbName)
+	delete(d.dbStates, name.DbKey())
+	heads := d.currentBranches().removeDb(name)
 	// also clear out any db-level caches for this db
 	d.dbCache.Clear()
 
@@ -432,7 +432,7 @@ func (d *DoltSession) RemoveBranchState(ctx *sql.Context, dbName string, branchN
 	}
 
 	d.mu.Lock()
-	bs, hadState := d.currentBranches().remove(doltdb.NewQualifiedDbName(baseName, branchName).Key())
+	bs, hadState := d.currentBranches().remove(doltdb.NewQualifiedDbName(baseName, branchName))
 	d.mu.Unlock()
 	// The branch is gone either way, so its state is dropped even if this fails.
 	var writersErr error
@@ -471,7 +471,7 @@ func (d *DoltSession) RenameBranchState(ctx *sql.Context, dbName string, oldBran
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	branch, ok := d.currentBranches().remove(doltdb.NewQualifiedDbName(baseName, oldBranchName).Key())
+	branch, ok := d.currentBranches().remove(doltdb.NewQualifiedDbName(baseName, oldBranchName))
 	if !ok {
 		// nothing to rename
 		return nil
@@ -873,8 +873,8 @@ func (d *DoltSession) DirtyDatabases() []string {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	var dbNames []string
-	for key, dbState := range d.dbStates {
-		for _, branchState := range d.currentBranches().forDb(key) {
+	for _, dbState := range d.dbStates {
+		for _, branchState := range d.currentBranches().forDb(doltdb.NewQualifiedDbName(dbState.dbName, "")) {
 			if branchState.isDirty() {
 				dbNames = append(dbNames, dbState.dbName)
 				break
@@ -909,7 +909,7 @@ func (d *DoltSession) DirtyBranches() []DirtyBranch {
 func (d *DoltSession) IsBranchDirty(dbName, branch string) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	branchState, ok := d.currentBranches().get(doltdb.NewQualifiedDbName(dbName, branch).Key())
+	branchState, ok := d.currentBranches().get(doltdb.NewQualifiedDbName(dbName, branch))
 	return ok && branchState.isDirty()
 }
 
@@ -919,7 +919,7 @@ func (d *DoltSession) IsBranchDirty(dbName, branch string) bool {
 func (d *DoltSession) IsWritingDatabase(dbName string) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	for _, branchState := range d.currentBranches().forDb(doltdb.NewDbKey(dbName)) {
+	for _, branchState := range d.currentBranches().forDb(doltdb.ParseQualifiedDbName(dbName)) {
 		if branchState.isDirty() || (branchState.writeSession != nil && branchState.writeSession.HasOpenTableWriters()) {
 			return true
 		}
@@ -1139,11 +1139,12 @@ func (d *DoltSession) Rollback(ctx *sql.Context, tx sql.Transaction) error {
 // 3) Working set roots in any writeSession.
 // 4) The roots of any temporary tables in the database.
 func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func(hash.Hash)) error {
-	dbKey := doltdb.NewDbKey(dbName)
+	name := doltdb.ParseQualifiedDbName(dbName)
+	dbKey := name.DbKey()
 
 	d.mu.Lock()
 	dbState, dbStateFound := d.dbStates[dbKey]
-	heads := d.currentBranches().forDb(dbKey)
+	heads := d.currentBranches().forDb(name)
 	d.mu.Unlock()
 
 	if dbStateFound {
@@ -1819,7 +1820,8 @@ func (d *DoltSession) setForeignKeyChecksSessionVar(ctx *sql.Context, key string
 // addDB adds the database given to this session. This establishes a starting root value for this session, as well as
 // other state tracking metadata.
 func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
-	key := doltdb.NewQualifiedDbName(db.AliasedName(), db.Revision()).Key()
+	name := doltdb.NewQualifiedDbName(db.AliasedName(), db.Revision())
+	key := name.Key()
 	baseName := string(key.Db)
 
 	DefineSystemVariablesForDBInRegistry(d.EngineVariables().System, baseName)
@@ -1849,7 +1851,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	if usingDoltTransaction {
 		nomsRoot, ok := tx.GetInitialRoot(baseName)
 		if ok && sessionStateExists {
-			dbState, dbStateCached = d.dbCache.GetCachedInitialDbState(doltdb.DataCacheKey{Hash: nomsRoot}, key)
+			dbState, dbStateCached = d.dbCache.GetCachedInitialDbState(doltdb.DataCacheKey{Hash: nomsRoot}, name)
 		}
 	}
 
@@ -1893,7 +1895,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	if !dbStateCached && usingDoltTransaction {
 		nomsRoot, ok := tx.GetInitialRoot(baseName)
 		if ok {
-			d.dbCache.CacheInitialDbState(doltdb.DataCacheKey{Hash: nomsRoot}, key, dbState)
+			d.dbCache.CacheInitialDbState(doltdb.DataCacheKey{Hash: nomsRoot}, name, dbState)
 		}
 	}
 
@@ -1902,7 +1904,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	// TODO: this no longer gets called at session creation time, so the error handling below never occurs when a
 	//  database is deleted out from under a running server
 	adapter := NewSessionStateAdapter(d, db.Name(), dbState.Remotes, dbState.Branches, dbState.Backups)
-	if existing, ok := d.currentBranches().get(key); ok {
+	if existing, ok := d.currentBranches().get(name); ok {
 		if err := existing.checkNoOpenWriters(); err != nil {
 			return err
 		}

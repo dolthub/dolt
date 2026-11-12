@@ -499,7 +499,7 @@ func TestRevisionDbCacheMixedCase(t *testing.T) {
 			_, ok, err := pro.SessionDatabase(sqlCtx, name)
 			require.NoError(t, err)
 			require.True(t, ok)
-			_, ok = cache.GetCachedRevisionDb(doltdb.NewQualifiedDbKey(name), name)
+			_, ok = cache.GetCachedRevisionDb(doltdb.ParseQualifiedDbName(name), name)
 			require.True(t, ok)
 		})
 	}

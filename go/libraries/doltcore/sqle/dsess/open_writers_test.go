@@ -92,7 +92,7 @@ func TestDropBranchStateWithOpenWriters(t *testing.T) {
 		require.PanicsWithValue(t, "cannot drop session state with open table writers: db/renamed", func() {
 			_ = sess.RenameBranchState(ctx, "db", "main", "renamed")
 		})
-		renamed, ok := sess.currentBranches().get(doltdb.NewQualifiedDbKey("db/renamed"))
+		renamed, ok := sess.currentBranches().get(doltdb.ParseQualifiedDbName("db/renamed"))
 		require.True(t, ok)
 		assert.Same(t, bs, renamed)
 		assert.True(t, sess.isCurrentBranchState(bs))

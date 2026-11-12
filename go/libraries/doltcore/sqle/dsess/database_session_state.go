@@ -247,8 +247,12 @@ func (bs *branchState) RevisionDbName() string {
 	return doltdb.RevisionDbName(bs.dbState.dbName, bs.head)
 }
 
+func (bs *branchState) name() doltdb.QualifiedDbName {
+	return doltdb.NewQualifiedDbName(bs.dbState.dbName, bs.head)
+}
+
 func (bs *branchState) key() doltdb.QualifiedDbKey {
-	return doltdb.NewQualifiedDbName(bs.dbState.dbName, bs.head).Key()
+	return bs.name().Key()
 }
 
 var _ SessionState = (*branchState)(nil)

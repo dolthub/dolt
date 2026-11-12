@@ -56,34 +56,37 @@ func (s *branchStates) put(bs *branchState) {
 	heads[key.Revision] = bs
 }
 
-func (s *branchStates) get(key doltdb.QualifiedDbKey) (*branchState, bool) {
+func (s *branchStates) get(name doltdb.QualifiedDbName) (*branchState, bool) {
+	key := name.Key()
 	bs, ok := s.byDb[key.Db][key.Revision]
 	return bs, ok
 }
 
 // contains reports whether |bs| is the branch state for its branch here.
 func (s *branchStates) contains(bs *branchState) bool {
-	cur, ok := s.get(bs.key())
+	cur, ok := s.get(bs.name())
 	return ok && cur == bs
 }
 
-func (s *branchStates) remove(key doltdb.QualifiedDbKey) (*branchState, bool) {
+func (s *branchStates) remove(name doltdb.QualifiedDbName) (*branchState, bool) {
+	key := name.Key()
 	heads := s.byDb[key.Db]
 	bs, ok := heads[key.Revision]
 	delete(heads, key.Revision)
 	return bs, ok
 }
 
-// removeDb removes and returns the branch states of database |db|.
-func (s *branchStates) removeDb(db doltdb.DbKey) map[doltdb.RevisionKey]*branchState {
+// removeDb removes and returns the branch states of |name|'s database. Its revision is ignored.
+func (s *branchStates) removeDb(name doltdb.QualifiedDbName) map[doltdb.RevisionKey]*branchState {
+	db := name.DbKey()
 	heads := s.byDb[db]
 	delete(s.byDb, db)
 	return heads
 }
 
-// forDb returns the branch states of database |db|.
-func (s *branchStates) forDb(db doltdb.DbKey) []*branchState {
-	heads := s.byDb[db]
+// forDb returns the branch states of |name|'s database. Its revision is ignored.
+func (s *branchStates) forDb(name doltdb.QualifiedDbName) []*branchState {
+	heads := s.byDb[name.DbKey()]
 	states := make([]*branchState, 0, len(heads))
 	for _, bs := range heads {
 		states = append(states, bs)

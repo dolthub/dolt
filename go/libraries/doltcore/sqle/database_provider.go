@@ -1387,7 +1387,7 @@ func (p *DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, name doltdb
 	rev := name.Revision
 
 	dbCache := dsess.DSessFromSess(ctx.Session).DatabaseCache(ctx)
-	db, ok := dbCache.GetCachedRevisionDb(name.Key(), requestedName)
+	db, ok := dbCache.GetCachedRevisionDb(name, requestedName)
 	if ok {
 		return db, true, nil
 	}
@@ -1654,12 +1654,16 @@ func initialStateForRevisionDb(ctx *sql.Context, db dsess.SqlDatabase) (dsess.In
 	}
 }
 
-// databaseForClone returns a newly cloned database if read replication is enabled and a remote DB exists, or an error
-// otherwise
-func (p *DoltDatabaseProvider) databaseForClone(ctx *sql.Context, dbName string) (dsess.SqlDatabase, error) {
+// databaseForClone returns a newly cloned copy of |name|'s base database if read replication is enabled and a remote
+// DB exists, or an error otherwise
+func (p *DoltDatabaseProvider) databaseForClone(ctx *sql.Context, name doltdb.QualifiedDbName) (dsess.SqlDatabase, error) {
 	if !readReplicationActive(ctx) {
 		return nil, nil
 	}
+
+	// The remote URL and the clone's directory are case-sensitive, so every spelling of the name clones under its
+	// lower-case form.
+	dbName := strings.ToLower(name.Base)
 
 	err := p.attemptCloneReplica(ctx, dbName)
 	if err != nil {
@@ -1673,7 +1677,7 @@ func (p *DoltDatabaseProvider) databaseForClone(ctx *sql.Context, dbName string)
 	tx, ok := ctx.GetTransaction().(*dsess.DoltTransaction)
 	if ok {
 		p.mu.RLock()
-		db := p.databases[doltdb.NewDbKey(dbName)]
+		db := p.databases[name.DbKey()]
 		p.mu.RUnlock()
 		err = tx.AddDb(ctx, db)
 		if err != nil {
@@ -1765,7 +1769,7 @@ func (p *DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (d
 	var err error
 	// If the database doesn't exist and this is a read replica, attempt to clone it from the remote
 	if !ok {
-		db, err = p.databaseForClone(ctx, baseName)
+		db, err = p.databaseForClone(ctx, qualified)
 		if err != nil || db == nil {
 			return nil, false, err
 		}

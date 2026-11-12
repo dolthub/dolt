@@ -398,7 +398,7 @@ func (c *SessionCache) GetCachedTriggers(key doltdb.DataCacheKey, schema string)
 }
 
 // GetCachedRevisionDb returns the cached revision database named, and whether the cache was present
-func (c *DatabaseCache) GetCachedRevisionDb(name doltdb.QualifiedDbKey, requestedName string) (SqlDatabase, bool) {
+func (c *DatabaseCache) GetCachedRevisionDb(name doltdb.QualifiedDbName, requestedName string) (SqlDatabase, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -407,7 +407,7 @@ func (c *DatabaseCache) GetCachedRevisionDb(name doltdb.QualifiedDbKey, requeste
 	}
 
 	db, ok := c.revisionDbs[revisionDbCacheKey{
-		name:          name,
+		name:          name.Key(),
 		requestedName: requestedName,
 	}]
 	return db, ok
@@ -436,7 +436,7 @@ func (c *DatabaseCache) CacheRevisionDb(database SqlDatabase) {
 
 // GetCachedInitialDbState returns the cached initial state for the revision database named, and whether the cache
 // was present
-func (c *DatabaseCache) GetCachedInitialDbState(key doltdb.DataCacheKey, name doltdb.QualifiedDbKey) (InitialDbState, bool) {
+func (c *DatabaseCache) GetCachedInitialDbState(key doltdb.DataCacheKey, name doltdb.QualifiedDbName) (InitialDbState, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -449,12 +449,12 @@ func (c *DatabaseCache) GetCachedInitialDbState(key doltdb.DataCacheKey, name do
 		return InitialDbState{}, false
 	}
 
-	db, ok := dbsForKey[name]
+	db, ok := dbsForKey[name.Key()]
 	return db, ok
 }
 
 // CacheInitialDbState caches the initials state for the revision database named
-func (c *DatabaseCache) CacheInitialDbState(key doltdb.DataCacheKey, name doltdb.QualifiedDbKey, state InitialDbState) {
+func (c *DatabaseCache) CacheInitialDbState(key doltdb.DataCacheKey, name doltdb.QualifiedDbName, state InitialDbState) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -474,7 +474,7 @@ func (c *DatabaseCache) CacheInitialDbState(key doltdb.DataCacheKey, name doltdb
 		c.initialDbStates[key] = dbsForKey
 	}
 
-	dbsForKey[name] = state
+	dbsForKey[name.Key()] = state
 }
 
 // CacheSessionVars updates the session var cache for the given branch state and transaction and returns whether it
