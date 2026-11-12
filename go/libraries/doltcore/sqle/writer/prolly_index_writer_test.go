@@ -18,6 +18,8 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/val"
@@ -59,4 +61,26 @@ func TestIsNoopUpdate(t *testing.T) {
 	require.False(t, isNoopUpdate(sql.Row{[]float32{1}}, sql.Row{[]float32{2}}, keyMap))
 	// Uncomparable values must not panic, and are treated as changed.
 	require.False(t, isNoopUpdate(sql.Row{map[string]int{}}, sql.Row{map[string]int{}}, keyMap))
+}
+
+func TestMatchesPredicate(t *testing.T) {
+	ctx := sql.NewEmptyContext()
+	row := sql.Row{int64(1)}
+	for _, test := range []struct {
+		name      string
+		predicate sql.Expression
+		expected  bool
+	}{
+		{name: "no predicate", predicate: nil, expected: true},
+		{name: "true", predicate: expression.NewLiteral(true, types.Boolean), expected: true},
+		{name: "false", predicate: expression.NewLiteral(false, types.Boolean), expected: false},
+		// flag OR magnitude <= 8 with flag false and magnitude NULL is NULL, not false.
+		{name: "null", predicate: expression.NewLiteral(nil, types.Null), expected: false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			matches, err := prollySecondaryIndexWriter{predicate: test.predicate}.matchesPredicate(ctx, row)
+			require.NoError(t, err)
+			require.Equal(t, test.expected, matches)
+		})
+	}
 }
