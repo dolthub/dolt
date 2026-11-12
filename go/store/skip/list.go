@@ -91,7 +91,8 @@ func (l *List) Checkpoint() {
 	l.checkpoint = l.nextNodeId()
 }
 
-func (l *List) HasCheckpoint() bool {
+// HasCheckpointedEdits returns true if Revert would keep any edits.
+func (l *List) HasCheckpointedEdits() bool {
 	return l.checkpoint > nodeId(1)
 }
 
@@ -115,7 +116,7 @@ func (l *List) Revert(ctx context.Context) error {
 	return nil
 }
 
-// Truncate deletes all entries from the list.
+// Truncate deletes all entries from the list and moves the checkpoint to the start.
 func (l *List) Truncate() {
 	l.nodes = l.nodes[:1]
 	// point sentinel.prev at itself
@@ -129,6 +130,12 @@ func (l *List) Truncate() {
 // Count returns the number of items in the list.
 func (l *List) Count() int {
 	return int(l.count)
+}
+
+// NodeCount returns the number of nodes in the list. Unlike Count, it includes entries superseded by a later Put of
+// the same key, so it grows with every Put.
+func (l *List) NodeCount() int {
+	return len(l.nodes) - 1 // exclude the sentinel
 }
 
 // Has returns true if |key| is a member of the list.

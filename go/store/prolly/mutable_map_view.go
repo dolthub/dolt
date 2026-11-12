@@ -53,12 +53,12 @@ type MapView struct {
 func CheckpointView(ctx context.Context, mut *MutableMap) (MapView, error) {
 	var tuples tree.MutableMap[val.Tuple, val.Tuple, *val.TupleDesc, tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc]]
 	switch {
-	case mut.stash != nil:
-		// |mut| reuses the stash's edits if it reverts, so the view needs its own copy
-		tuples = mut.stash.Copy()
+	case mut.flushedCheckpoint != nil:
+		// |mut| reuses the checkpoint's edits if it reverts, so the view needs its own copy
+		tuples = mut.flushedCheckpoint.Copy()
 	case mut.tuples.Edits.EditedSinceCheckpoint():
-		tuples = mut.tuples.Copy()
-		if err := tuples.Edits.Revert(ctx); err != nil {
+		var err error
+		if tuples, err = mut.checkpointState(ctx); err != nil {
 			return MapView{}, err
 		}
 	default:
