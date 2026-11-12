@@ -157,9 +157,18 @@ func (t *DoltTable) LookupForExpressions(ctx *sql.Context, exprs ...sql.Expressi
 	schCols := t.sch.GetAllCols()
 	for _, c := range lookupCols {
 		col := schCols.LowerNameToCol[c.Col]
-		if !sql.IsConvertibleKeyType(col.TypeInfo.ToSqlType(), c.Lit.Type(ctx)) {
+		colType := col.TypeInfo.ToSqlType()
+		litType := c.Lit.Type(ctx)
+		if !sql.IsConvertibleKeyType(colType, litType) {
 			return sql.IndexLookup{}, nil, nil, false, nil
 		}
+
+		// Extended types can represent the same value differently, and the literal's value is used as the key without
+		// conversion, so leave literals of another type to the costed index scan, which converts them.
+		if _, ok := colType.(sql.ExtendedType); ok && !colType.Equals(litType) {
+			return sql.IndexLookup{}, nil, nil, false, nil
+		}
+
 		idx := schCols.TagToIdx[col.Tag]
 		colset.Add(idx + 1)
 	}
