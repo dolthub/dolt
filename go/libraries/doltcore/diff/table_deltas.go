@@ -147,13 +147,19 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot doltdb.RootValue) (del
 	toVRW := toRoot.VRW()
 	toNS := toRoot.NodeStore()
 
+	// GetForeignKeyCollection returns a copy of the collection on every call, so read it once per root.
+	fromFkc, err := fromRoot.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+	toFkc, err := toRoot.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	fromDeltas := make([]TableDelta, 0)
 	err = fromRoot.IterTables(ctx, func(name doltdb.TableName, tbl *doltdb.Table, sch schema.Schema) (stop bool, err error) {
-		c, err := fromRoot.GetForeignKeyCollection(ctx)
-		if err != nil {
-			return true, err
-		}
-		fks, _ := c.KeysForTable(name)
+		fks, _ := fromFkc.KeysForTable(name)
 		parentSchs, err := getFkParentSchs(ctx, fromRoot, fks...)
 		if err != nil {
 			return false, err
@@ -193,12 +199,7 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot doltdb.RootValue) (del
 
 	toDeltas := make([]TableDelta, 0)
 	err = toRoot.IterTables(ctx, func(name doltdb.TableName, tbl *doltdb.Table, sch schema.Schema) (stop bool, err error) {
-		c, err := toRoot.GetForeignKeyCollection(ctx)
-		if err != nil {
-			return true, err
-		}
-
-		fks, _ := c.KeysForTable(name)
+		fks, _ := toFkc.KeysForTable(name)
 		parentSchs, err := getFkParentSchs(ctx, toRoot, fks...)
 		if err != nil {
 			return false, err

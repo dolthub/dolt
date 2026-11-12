@@ -22,6 +22,8 @@ import (
 	"iter"
 	"sort"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/cespare/xxhash/v2"
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
@@ -83,6 +85,9 @@ type RootValue interface {
 	// GetForeignKeyCollection returns the ForeignKeyCollection for this root. As collections are meant to be modified
 	// in-place, each returned collection may freely be altered without affecting future returned collections from this root.
 	GetForeignKeyCollection(ctx context.Context) (*ForeignKeyCollection, error)
+	// GetForeignKeyCollectionHash returns the address of this root's stored ForeignKeyCollection, which is equal for
+	// two roots whose collections are equal, or the empty hash if this root has never stored one.
+	GetForeignKeyCollectionHash(ctx context.Context) (hash.Hash, error)
 	// GetTable will retrieve a table by its case-sensitive name.
 	GetTable(ctx context.Context, tName TableName) (*Table, bool, error)
 	// GetTableHash returns the hash of the given case-sensitive table name.
@@ -805,6 +810,40 @@ func (tn TableName) EqualFold(o TableName) bool {
 	return strings.EqualFold(tn.Name, o.Name) && strings.EqualFold(tn.Schema, o.Schema)
 }
 
+// FoldCase returns a table name that is equal for exactly those table names that EqualFold treats as equal, for use as
+// a map key.
+func (tn TableName) FoldCase() TableName {
+	return TableName{Name: foldString(tn.Name), Schema: foldString(tn.Schema)}
+}
+
+// foldString maps every rune of |s| to one representative of the runes it folds to under simple Unicode case folding,
+// which is the equivalence strings.EqualFold tests. strings.ToLower is not a substitute: it keeps apart some runes that
+// fold together (for example the two lower case forms of sigma), and merges some that do not.
+func foldString(s string) string {
+	// Most names are lower case ASCII, which is its own representative.
+	for i := 0; i < len(s); i++ {
+		if c := s[i]; c >= utf8.RuneSelf || ('A' <= c && c <= 'Z') {
+			return strings.Map(foldRune, s)
+		}
+	}
+	return s
+}
+
+// foldRune returns the representative of the runes that |r| folds to: the lower case ASCII letter if they include one,
+// otherwise the smallest of them.
+func foldRune(r rune) rune {
+	folded := r
+	for c := unicode.SimpleFold(r); c != r; c = unicode.SimpleFold(c) {
+		if c < folded {
+			folded = c
+		}
+	}
+	if 'A' <= folded && folded <= 'Z' {
+		return folded + 'a' - 'A'
+	}
+	return folded
+}
+
 // The ForeignKey struct used to include referenced table names as strings and
 // now includes them as TableName structs. LD_1 format repositories serialized
 // the ForeignKey struct directly to a noms struct with the string fields. So
@@ -1149,10 +1188,7 @@ func (root *rootValue) GetForeignKeyCollection(ctx context.Context) (*ForeignKey
 			return nil, err
 		}
 		if !ok {
-			fkc := &ForeignKeyCollection{
-				foreignKeys: map[string]ForeignKey{},
-			}
-			return fkc, nil
+			return newForeignKeyCollection(), nil
 		}
 
 		root.fkc, err = DeserializeForeignKeys(ctx, root.vrw.Format(), fkMap)
@@ -1161,6 +1197,11 @@ func (root *rootValue) GetForeignKeyCollection(ctx context.Context) (*ForeignKey
 		}
 	}
 	return root.fkc.Copy(), nil
+}
+
+// GetForeignKeyCollectionHash implements RootValue.
+func (root *rootValue) GetForeignKeyCollectionHash(ctx context.Context) (hash.Hash, error) {
+	return root.st.GetForeignKeysAddr(), nil
 }
 
 // PutForeignKeyCollection returns a new root with the given foreign key collection.

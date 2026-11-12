@@ -23,6 +23,7 @@ import (
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -30,6 +31,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/keymutex"
+	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -584,6 +587,88 @@ func TestGetPersistedValue(t *testing.T) {
 
 func emptyDatabaseProvider() DoltDatabaseProvider {
 	return emptyRevisionDatabaseProvider{}
+}
+
+// closedRootChunkStore fails to read its root, like a store which has been closed.
+type closedRootChunkStore struct {
+	chunks.ChunkStore
+}
+
+func (s closedRootChunkStore) Root(context.Context) (hash.Hash, error) {
+	return hash.Hash{}, chunks.ErrStoreClosed
+}
+
+type snapshotTestDatabase struct {
+	SqlDatabase
+	name string
+	ddb  *doltdb.DoltDB
+}
+
+func (db snapshotTestDatabase) Name() string {
+	return db.name
+}
+
+func (db snapshotTestDatabase) DbData() env.DbData[*sql.Context] {
+	return env.DbData[*sql.Context]{Ddb: db.ddb}
+}
+
+// snapshotDatabaseProvider returns each of |snapshots| in turn from DoltDatabases, and then the
+// last of them forever.
+type snapshotDatabaseProvider struct {
+	emptyRevisionDatabaseProvider
+	snapshots [][]SqlDatabase
+}
+
+func (p *snapshotDatabaseProvider) DoltDatabases() []SqlDatabase {
+	ret := p.snapshots[0]
+	if len(p.snapshots) > 1 {
+		p.snapshots = p.snapshots[1:]
+	}
+	return ret
+}
+
+func TestStartTransactionWithClosedDatabase(t *testing.T) {
+	newDb := func(t *testing.T, name string, cs chunks.ChunkStore) SqlDatabase {
+		ddb, err := doltdb.DoltDBFromCS(cs, name)
+		require.NoError(t, err)
+		return snapshotTestDatabase{name: name, ddb: ddb}
+	}
+	newCS := func() chunks.ChunkStore {
+		return (&chunks.MemoryStorage{}).NewView()
+	}
+	startTransaction := func(t *testing.T, snapshots ...[]SqlDatabase) (sql.Transaction, error) {
+		pro := &snapshotDatabaseProvider{snapshots: snapshots}
+		sess := DefaultSessionWithVariables(pro, nil, newTransactionTestVariables())
+		ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
+		return sess.StartTransaction(ctx, sql.ReadWrite)
+	}
+	requireStartPoints := func(t *testing.T, tx sql.Transaction, expected ...string) {
+		var actual []string
+		for name := range tx.(*DoltTransaction).dbStartPoints {
+			actual = append(actual, name)
+		}
+		require.ElementsMatch(t, expected, actual)
+	}
+
+	t.Run("DroppedSinceSnapshot", func(t *testing.T) {
+		live := newDb(t, "live", newCS())
+		dropped := newDb(t, "dropped", closedRootChunkStore{newCS()})
+		tx, err := startTransaction(t, []SqlDatabase{dropped, live}, []SqlDatabase{live})
+		require.NoError(t, err)
+		requireStartPoints(t, tx, "live")
+	})
+	t.Run("RecreatedSinceSnapshot", func(t *testing.T) {
+		dropped := newDb(t, "db", closedRootChunkStore{newCS()})
+		recreated := newDb(t, "db", newCS())
+		tx, err := startTransaction(t, []SqlDatabase{dropped}, []SqlDatabase{recreated})
+		require.NoError(t, err)
+		requireStartPoints(t, tx)
+	})
+	t.Run("ClosedButNotDropped", func(t *testing.T) {
+		closed := newDb(t, "closed", closedRootChunkStore{newCS()})
+		_, err := startTransaction(t, []SqlDatabase{closed})
+		require.ErrorIs(t, err, chunks.ErrStoreClosed)
+	})
 }
 
 type emptyRevisionDatabaseProvider struct {

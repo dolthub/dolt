@@ -660,13 +660,13 @@ func TestBlobstorePersistersPersistSpooling(t *testing.T) {
 	// Regression coverage for https://github.com/dolthub/dolt/issues/11916.
 	constructors := map[string]func(blobstore.Blobstore) tablePersister{
 		"split": func(bs blobstore.Blobstore) tablePersister {
-			return &blobstorePersister{bs, NewUnlimitedMemQuotaProvider(), s3BlockSize}
+			return &blobstorePersister{bs: bs, q: NewUnlimitedMemQuotaProvider(), blockSize: s3BlockSize}
 		},
 		"single": func(bs blobstore.Blobstore) tablePersister {
-			return &singleBlobBSPersister{bs, NewUnlimitedMemQuotaProvider(), s3BlockSize}
+			return &singleBlobBSPersister{bs: bs, q: NewUnlimitedMemQuotaProvider(), blockSize: s3BlockSize}
 		},
 		"no-conjoin": func(bs blobstore.Blobstore) tablePersister {
-			return &noConjoinBlobstorePersister{bs, NewUnlimitedMemQuotaProvider(), s3BlockSize}
+			return &noConjoinBlobstorePersister{bs: bs, q: NewUnlimitedMemQuotaProvider(), blockSize: s3BlockSize}
 		},
 	}
 	for name, constructor := range constructors {
@@ -734,7 +734,7 @@ func TestSingleBlobBSPersisterConjoinReusesSpools(t *testing.T) {
 		t.Run(fmt.Sprintf("reopen=%v", reopen), func(t *testing.T) {
 			ctx := context.Background()
 			bs := &persistReadCountingBlobstore{wholeBlobBlobstore: wholeBlobBlobstore{blobstore.NewInMemoryBlobstore(""), true}}
-			p := &singleBlobBSPersister{bs, NewUnlimitedMemQuotaProvider(), s3BlockSize}
+			p := &singleBlobBSPersister{bs: bs, q: NewUnlimitedMemQuotaProvider(), blockSize: s3BlockSize}
 			data := [][]byte{[]byte("first table chunk"), []byte("second table chunk")}
 			var sources chunkSources
 			var paths []string

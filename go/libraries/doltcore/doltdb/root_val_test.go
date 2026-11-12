@@ -16,7 +16,10 @@ package doltdb
 
 import (
 	"context"
+	"strings"
 	"testing"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/require"
 
@@ -55,4 +58,24 @@ func TestTableNameUnmarshalNomsRejectsNonString(t *testing.T) {
 	err := name.UnmarshalNoms(context.Background(), types.Format_DOLT, types.Uint(1))
 	require.ErrorContains(t, err, "expected only a string")
 	require.Equal(t, TableName{Name: "original"}, name)
+}
+
+// TestFoldString verifies that foldString maps two strings to the same value exactly when strings.EqualFold treats them
+// as equal: every rune that a rune folds to has the same representative, and that representative is one of them.
+func TestFoldString(t *testing.T) {
+	for r := rune(0); r <= unicode.MaxRune; r++ {
+		if !utf8.ValidRune(r) {
+			continue
+		}
+		folded := foldString(string(r))
+		require.True(t, strings.EqualFold(string(r), folded), "rune %U folds to %q", r, folded)
+		for c := unicode.SimpleFold(r); c != r; c = unicode.SimpleFold(c) {
+			require.Equal(t, folded, foldString(string(c)), "runes %U and %U", r, c)
+		}
+	}
+
+	require.Equal(t, "child_1", foldString("child_1"))
+	require.Equal(t, "child_1", foldString("CHILD_1"))
+	require.Equal(t, foldString("σ"), foldString("ς"))
+	require.NotEqual(t, foldString("İ"), foldString("i"))
 }

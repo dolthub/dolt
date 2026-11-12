@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/test"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -360,6 +361,26 @@ func TestLoadBadLocalFSRepo(t *testing.T) {
 	ddb, err := LoadDoltDB(context.Background(), types.Format_DOLT, LocalDirDoltDB, filesys.LocalFS)
 	assert.Nil(t, ddb, "Should return nil when loading a non-directory data dir file")
 	assert.Error(t, err, "Should see an error here")
+}
+
+func TestResolveCommitRefFailsAfterClose(t *testing.T) {
+	ctx := context.Background()
+	fs, err := filesys.LocalFS.WithWorkingDir(t.TempDir())
+	require.NoError(t, err)
+	require.NoError(t, fs.MkDirs(dbfactory.DoltDataDir))
+	params := map[string]any{dbfactory.DisableSingletonCacheParam: struct{}{}}
+	ddb, err := LoadDoltDBWithParams(ctx, types.Format_DOLT, LocalDirDoltDB, fs, params)
+	require.NoError(t, err)
+	require.NoError(t, ddb.WriteEmptyRepo(ctx, "main", "Bill Billerson", "bigbillieb@fake.horse"))
+
+	// Populate the value caches, which would otherwise serve this after Close.
+	branch := ref.NewBranchRef("main")
+	_, err = ddb.ResolveCommitRef(ctx, branch)
+	require.NoError(t, err)
+
+	require.NoError(t, ddb.Close())
+	_, err = ddb.ResolveCommitRef(ctx, branch)
+	require.ErrorIs(t, err, chunks.ErrStoreClosed)
 }
 
 func TestLDNoms(t *testing.T) {
