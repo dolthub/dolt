@@ -297,12 +297,7 @@ func (t *TempTable) DataCacheKey(ctx *sql.Context) (doltdb.DataCacheKey, bool, e
 
 func (t *TempTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	t.lookup = lookup
-	rows, err := t.table.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-	// PartitionValueRowWriter scans the entire lookup, so it must run only once.
-	return index.SinglePartitionIterFromNomsMap(rows), nil
+	return index.NewRangePartitionIter(ctx, t, lookup)
 }
 
 func (t *TempTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
@@ -311,7 +306,11 @@ func (t *TempTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 
 func (t *TempTable) PartitionValueRowWriter(ctx *sql.Context, partition sql.Partition, columnIds sql.ColSet) (sql.ValueRowWriter, error) {
 	if !t.lookup.IsEmpty() {
-		return index.RowIterForIndexLookup(ctx, t, t.lookup, t.pkSch, nil, columnIds)
+		builder, err := index.NewIndexReaderBuilder(ctx, t, t.lookup.Index.(index.DoltIndex), doltdb.DataCacheKey{}, nil, t.pkSch)
+		if err != nil {
+			return nil, err
+		}
+		return builder.NewPartitionRowIter(ctx, partition, columnIds)
 	} else {
 		return partitionRows(ctx, t.table, nil, partition, columnIds)
 	}
