@@ -2220,26 +2220,19 @@ func generateSchemaMappings(mergedSch, leftSch, rightSch, baseSch schema.Schema)
 	return leftMapping, rightMapping, baseMapping
 }
 
-// findNonPKColumnMappingByName returns the index of the column with the given name in the given schema, or -1 if it
-// doesn't exist.
-func findNonPKColumnMappingByName(sch schema.Schema, name string) int {
-	leftNonPKCols := sch.GetNonPKCols()
-	if leftNonPKCols.Contains(name) {
-		return leftNonPKCols.IndexOf(name)
-	} else {
-		return -1
-	}
-}
-
-// findNonPKColumnMappingByTagOrName returns the index of the column with the given tag in the given schema. If a
-// matching tag is not found, then this function falls back to looking for a matching column by name. If no
-// matching column is found, then this function returns -1.
+// findNonPKColumnMappingByTagOrName finds a stored non-primary-key column by tag,
+// falling back to a case-insensitive name match. It returns -1 if neither matches.
 func findNonPKColumnMappingByTagOrName(sch schema.Schema, col schema.Column) int {
-	if idx, ok := sch.GetNonPKCols().StoredIndexByTag(col.Tag); ok {
+	cols := sch.GetNonPKCols()
+	if idx, ok := cols.StoredIndexByTag(col.Tag); ok {
 		return idx
-	} else {
-		return findNonPKColumnMappingByName(sch, col.Name)
 	}
+	if sameName, ok := cols.GetByNameCaseInsensitive(col.Name); ok {
+		if idx, ok := cols.StoredIndexByTag(sameName.Tag); ok {
+			return idx
+		}
+	}
+	return -1
 }
 
 // TryMerge performs a cell-wise merge given left, right, and base cell value
@@ -2313,7 +2306,7 @@ func (m *valueMerger) processBaseColumn(ctx context.Context, i int, left, right,
 		// This is a conflict if the value on the right changed.
 		// But if the right side only changed its representation (from ALTER COLUMN) and still has the same value,
 		// then this can be resolved.
-		rightType := m.rightSchema.GetNonPKCols().GetByIndex(rightColIdx).TypeInfo.ToSqlType()
+		rightType := m.rightSchema.GetNonPKCols().GetByStoredIndex(rightColIdx).TypeInfo.ToSqlType()
 		baseVal, err := convert(ctx, m.baseVD, rightType, i, base, m.ns)
 		if err != nil {
 			return false, err
@@ -2338,7 +2331,7 @@ func (m *valueMerger) processBaseColumn(ctx context.Context, i int, left, right,
 		// This is a conflict if the value on the left changed.
 		// But if the left side only changed its representation (from ALTER COLUMN) and still has the same value,
 		// then this can be resolved.
-		leftType := m.rightSchema.GetNonPKCols().GetByIndex(leftColIdx).TypeInfo.ToSqlType()
+		leftType := m.leftSchema.GetNonPKCols().GetByStoredIndex(leftColIdx).TypeInfo.ToSqlType()
 		baseVal, err := convert(ctx, m.baseVD, leftType, i, base, m.ns)
 		if err != nil {
 			return false, err
@@ -2385,7 +2378,7 @@ func (m *valueMerger) processBaseColumn(ctx context.Context, i int, left, right,
 	if err != nil {
 		return false, err
 	}
-	sqlType := modifiedSchema.GetNonPKCols().GetByIndex(modifiedColIdx).TypeInfo.ToSqlType()
+	sqlType := modifiedSchema.GetNonPKCols().GetByStoredIndex(modifiedColIdx).TypeInfo.ToSqlType()
 
 	baseVal, err := convert(ctx, m.baseVD, sqlType, i, base, m.ns)
 	if err != nil {
