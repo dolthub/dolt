@@ -313,11 +313,11 @@ func TestCreatingDatabaseReservation(t *testing.T) {
 	t.Run("a deleting database also conflicts case-insensitively", func(t *testing.T) {
 		_, pro := setup(t)
 		pro.mu.Lock()
-		pro.deletingDatabases[formatDbMapKeyName("delDB")] = struct{}{}
+		pro.deletingDatabases[doltdb.NewDbKey("delDB")] = struct{}{}
 		pro.mu.Unlock()
 		t.Cleanup(func() {
 			pro.mu.Lock()
-			delete(pro.deletingDatabases, formatDbMapKeyName("delDB"))
+			delete(pro.deletingDatabases, doltdb.NewDbKey("delDB"))
 			pro.mu.Unlock()
 		})
 
@@ -483,4 +483,24 @@ func TestCloneDatabaseDuplicateNameRejected(t *testing.T) {
 	err := pro.CloneDatabaseFromRemote(sqlCtx, "DOLT", "main", "origin", "file:///nonexistent", -1, nil)
 	require.Error(t, err)
 	assert.True(t, sql.ErrDatabaseExists.Is(err))
+}
+
+// TestRevisionDbCacheMixedCase checks that a revision database resolved by a mixed-case name is found again in the
+// session's cache. The cache once stored lower-cased keys but looked them up with the revision's original case.
+func TestRevisionDbCacheMixedCase(t *testing.T) {
+	_, sqlCtx, pro, dEnv := newProviderEngine(t)
+	ctx := context.Background()
+	ddb := dEnv.DoltDB(ctx)
+	require.NoError(t, ddb.NewBranchAtCommit(ctx, ref.NewBranchRef("Feature"), headCommit(ctx, t, ddb, "main"), nil))
+
+	cache := dsess.DSessFromSess(sqlCtx.Session).DatabaseCache(sqlCtx)
+	for _, name := range []string{"dolt/Feature", "dolt@Feature", "DOLT/feature"} {
+		t.Run(name, func(t *testing.T) {
+			_, ok, err := pro.SessionDatabase(sqlCtx, name)
+			require.NoError(t, err)
+			require.True(t, ok)
+			_, ok = cache.GetCachedRevisionDb(doltdb.ParseQualifiedDbName(name), name)
+			require.True(t, ok)
+		})
+	}
 }

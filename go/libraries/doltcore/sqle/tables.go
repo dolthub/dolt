@@ -846,7 +846,7 @@ type doltTableInterface interface {
 }
 
 func (t *WritableDoltTable) Database() string {
-	return t.db.baseName
+	return t.db.name.Base
 }
 
 func (t *WritableDoltTable) setRoot(ctx *sql.Context, newRoot doltdb.RootValue) error {

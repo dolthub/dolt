@@ -65,8 +65,8 @@ type DoltDatabaseProvider struct {
 	dbLoadParams map[string]interface{}
 
 	// dbLocations maps a database name to its file system root
-	dbLocations            map[string]filesys.Filesys
-	databases              map[string]dsess.SqlDatabase
+	dbLocations            map[doltdb.DbKey]filesys.Filesys
+	databases              map[doltdb.DbKey]dsess.SqlDatabase
 	functions              map[string]sql.Function
 	tableFunctions         map[string]sql.TableFunction
 	externalProcedures     sql.ExternalStoredProcedureRegistry
@@ -78,18 +78,17 @@ type DoltDatabaseProvider struct {
 	// Databases named in deletingDatbases are currently undergoing deletion.
 	// Databases with these names cannot created, but also return ErrNoDatabase
 	// when accessed.
-	deletingDatabases map[string]struct{}
+	deletingDatabases map[doltdb.DbKey]struct{}
 
 	// creatingDatabases reserves names for clones fetching data from a remote.
 	// CloneDatabaseFromRemote drops the provider lock for that network fetch, so
 	// it records the name here to keep concurrent CREATE DATABASE / dolt_clone /
-	// undrop of the same name serialized. Names are normalized with
-	// formatDbMapKeyName, like p.databases (Dolt names are case-insensitive).
+	// undrop of the same name serialized.
 	//
 	// Unlike deletingDatabases, this does not gate enumeration: enumeration only
 	// ever reads the in-memory p.databases map at runtime, so an in-progress
 	// clone's on-disk directory is simply invisible until it registers.
-	creatingDatabases map[string]struct{}
+	creatingDatabases map[doltdb.DbKey]struct{}
 
 	txLocks keymutex.Keymutex
 
@@ -181,10 +180,10 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 			"incorrect number of databases (%d) and database locations (%d) specified", len(databases), len(locations))
 	}
 
-	dbs := make(map[string]dsess.SqlDatabase, len(databases))
-	dbLocations := make(map[string]filesys.Filesys, len(locations))
+	dbs := make(map[doltdb.DbKey]dsess.SqlDatabase, len(databases))
+	dbLocations := make(map[doltdb.DbKey]filesys.Filesys, len(locations))
 	for i, db := range databases {
-		key := formatDbMapKeyName(db.Name())
+		key := doltdb.NewDbKey(db.Name())
 		if existing, exists := dbs[key]; exists {
 			env.WarnDuplicateDatabase(db.Name(), existing.Name(), "")
 			continue
@@ -221,8 +220,8 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 	return &DoltDatabaseProvider{
 		dbLocations:            dbLocations,
 		databases:              dbs,
-		deletingDatabases:      make(map[string]struct{}),
-		creatingDatabases:      make(map[string]struct{}),
+		deletingDatabases:      make(map[doltdb.DbKey]struct{}),
+		creatingDatabases:      make(map[doltdb.DbKey]struct{}),
 		functions:              funcs,
 		tableFunctions:         tableFuncs,
 		externalProcedures:     externalProcedures,
@@ -390,9 +389,7 @@ func (p *DoltDatabaseProvider) FileSystemForDatabase(dbname string) (filesys.Fil
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	baseName, _ := doltdb.SplitRevisionDbName(dbname)
-
-	dbLocation, ok := p.dbLocations[strings.ToLower(baseName)]
+	dbLocation, ok := p.dbLocations[doltdb.NewDbKey(dbname)]
 	if !ok {
 		return nil, sql.ErrDatabaseNotFound.New(dbname)
 	}
@@ -516,7 +513,7 @@ func (p *DoltDatabaseProvider) rlockAwaitingEmptyDeletingDatabases() {
 }
 
 func (p *DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database) {
-	_, revision := doltdb.SplitRevisionDbName(ctx.GetCurrentDatabase())
+	currentDb := doltdb.ParseQualifiedDbName(ctx.GetCurrentDatabase())
 	showBranches, err := dsess.GetBooleanSystemVar(ctx, dsess.ShowBranchDatabases)
 	if err != nil {
 		ctx.GetLogger().Warn(err)
@@ -528,7 +525,7 @@ func (p *DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Databas
 		all = append(all, db)
 
 		if showBranches && db.Name() != clusterdb.DoltClusterDbName {
-			revisionDbs, err := p.allRevisionDbs(ctx, db, formatDbMapKeyName(ctx.GetCurrentDatabase()))
+			revisionDbs, err := p.allRevisionDbs(ctx, db, currentDb)
 			if err != nil {
 				// TODO: this interface is wrong, needs to return errors
 				ctx.GetLogger().Warnf("error fetching revision databases: %s", err.Error())
@@ -540,8 +537,8 @@ func (p *DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Databas
 	p.mu.RUnlock()
 
 	// If there's a revision database in use, include it in the list (but don't double-count).
-	if revision != "" && !showBranches {
-		rdb, ok, err := p.databaseForRevision(ctx, formatDbMapKeyName(ctx.GetCurrentDatabase()), ctx.GetCurrentDatabase())
+	if currentDb.IsQualified() && !showBranches {
+		rdb, ok, err := p.databaseForRevision(ctx, currentDb, ctx.GetCurrentDatabase())
 		if err != nil {
 			// TODO: this interface is wrong, needs to return errors
 			ctx.GetLogger().Warnf("error fetching revision databases: %s", err.Error())
@@ -577,7 +574,7 @@ func (p *DoltDatabaseProvider) DoltDatabases() []dsess.SqlDatabase {
 }
 
 // allRevisionDbs returns all revision dbs for the database given
-func (p *DoltDatabaseProvider) allRevisionDbs(ctx *sql.Context, db dsess.SqlDatabase, currentDB string) ([]sql.Database, error) {
+func (p *DoltDatabaseProvider) allRevisionDbs(ctx *sql.Context, db dsess.SqlDatabase, currentDB doltdb.QualifiedDbName) ([]sql.Database, error) {
 	branches, err := db.DbData().Ddb.GetBranches(ctx)
 	if err != nil {
 		return nil, err
@@ -585,14 +582,13 @@ func (p *DoltDatabaseProvider) allRevisionDbs(ctx *sql.Context, db dsess.SqlData
 
 	revDbs := make([]sql.Database, 0, len(branches))
 	for _, branch := range branches {
-		revisionQualifiedName := fmt.Sprintf("%s/%s", db.Name(), branch.GetPath())
-		requestedName := revisionQualifiedName
-		// If the current DB matches, it means we're either using `@` or `/` delimited revision database name. So, we
-		// replace the revisionQualifiedName with the [ctx.GetCurrentDatabase] result to maintain the exact delimiter.
-		if revisionQualifiedName == currentDB {
+		revName := doltdb.NewQualifiedDbName(db.Name(), branch.GetPath())
+		requestedName := revName.String()
+		// For the current database, keep the user's spelling (`@` or `/` delimiter).
+		if revName.Key() == currentDB.Key() {
 			requestedName = ctx.GetCurrentDatabase()
 		}
-		revDb, ok, err := p.databaseForRevision(ctx, revisionQualifiedName, requestedName)
+		revDb, ok, err := p.databaseForRevision(ctx, revName, requestedName)
 		if err != nil {
 			return nil, err
 		}
@@ -614,10 +610,8 @@ func (p *DoltDatabaseProvider) getRemoteDB(ctx context.Context, format *types.No
 	// `<repoRoot>/.dolt/...` instead of a user-global cache dir.
 	dialer := remoteDialer
 	if sqlCtx, ok := ctx.(*sql.Context); ok {
-		baseName, _ := doltdb.SplitRevisionDbName(sqlCtx.GetCurrentDatabase())
-		dbKey := strings.ToLower(baseName)
 		p.mu.RLock()
-		dbLoc, ok := p.dbLocations[dbKey]
+		dbLoc, ok := p.dbLocations[doltdb.NewDbKey(sqlCtx.GetCurrentDatabase())]
 		p.mu.RUnlock()
 		if ok && dbLoc != nil {
 			if root, err := dbLoc.Abs("."); err == nil && strings.TrimSpace(root) != "" {
@@ -1048,13 +1042,12 @@ func (p *DoltDatabaseProvider) CloneDatabaseFromRemote(
 // checkDatabaseNameAvailableLocked verifies that |name| is free for a new
 // database, returning an error if it is already taken by a live, deleting, or
 // creating database and nil if it is available. It must be called with p.mu
-// held. Names are normalized with formatDbMapKeyName because Dolt database names
-// are case-insensitive.
+// held.
 //
 // When |checkDisk| is true the on-disk directory is also checked; creation paths
 // pass true, while undrop (which restores from the stash) passes false.
 func (p *DoltDatabaseProvider) checkDatabaseNameAvailableLocked(name string, checkDisk bool) error {
-	key := formatDbMapKeyName(name)
+	key := doltdb.NewDbKey(name)
 	if _, ok := p.databases[key]; ok {
 		return sql.ErrDatabaseExists.New(name)
 	}
@@ -1092,7 +1085,7 @@ func (p *DoltDatabaseProvider) reserveCreatingDatabase(dbName string) error {
 		return err
 	}
 
-	p.creatingDatabases[formatDbMapKeyName(dbName)] = struct{}{}
+	p.creatingDatabases[doltdb.NewDbKey(dbName)] = struct{}{}
 	return nil
 }
 
@@ -1101,7 +1094,7 @@ func (p *DoltDatabaseProvider) reserveCreatingDatabase(dbName string) error {
 func (p *DoltDatabaseProvider) releaseCreatingDatabase(dbName string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	delete(p.creatingDatabases, formatDbMapKeyName(dbName))
+	delete(p.creatingDatabases, doltdb.NewDbKey(dbName))
 }
 
 // envForClone opens the remote database named by |remoteName| and |remoteUrl| and creates the DoltEnv the clone
@@ -1189,16 +1182,15 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 	}
 
 	var db dsess.SqlDatabase
-	var derivativeDbs []dsess.SqlDatabase
 	var dbLoc filesys.Filesys
-	var dbKey, dropDbLoc string
+	var dbKey doltdb.DbKey
+	var dropDbLoc string
 	var closeDoltDBs bool
 	err := func() error {
 		p.mu.Lock()
 		defer p.mu.Unlock()
 
-		// get the case-sensitive name for case-sensitive file systems
-		dbKey = formatDbMapKeyName(name)
+		dbKey = doltdb.NewDbKey(name)
 		db = p.databases[dbKey]
 
 		// get location of database that's being dropped
@@ -1216,15 +1208,6 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 		dropDbLoc, err = dbLoc.Abs("")
 		if err != nil {
 			return err
-		}
-		// We not only have to delete tracking metadata for this database, but also for any derivative
-		// ones we've stored as a result of USE or connection strings
-		derivativeNamePrefix := strings.ToLower(dbKey + doltdb.DbRevisionDelimiter)
-		for dbName := range p.databases {
-			if strings.HasPrefix(strings.ToLower(dbName), derivativeNamePrefix) {
-				derivativeDbs = append(derivativeDbs, p.databases[dbName])
-				delete(p.databases, dbName)
-			}
 		}
 		delete(p.databases, dbKey)
 		p.deletingDatabases[dbKey] = struct{}{}
@@ -1264,11 +1247,7 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 		dropHook(ctx, name)
 	}
 
-	// Close the database and any derivative databases.
 	db.Close()
-	for _, ddb := range derivativeDbs {
-		ddb.Close()
-	}
 
 	// In embedded / nocache mode, the underlying DoltDBs are not tracked by the singleton cache, so
 	// the provider is responsible for closing them to release filesystem locks.
@@ -1381,7 +1360,7 @@ func (p *DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string
 		return err
 	}
 
-	key := formatDbMapKeyName(db.Name())
+	key := doltdb.NewDbKey(db.Name())
 	if _, exists := p.databases[key]; exists {
 		return sql.ErrDatabaseExists.New(name)
 	}
@@ -1422,20 +1401,20 @@ func (p *DoltDatabaseProvider) invalidateDbStateInAllSessions(ctx *sql.Context, 
 	return retErr
 }
 
-func (p *DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revisionQualifiedName string, requestedName string) (dsess.SqlDatabase, bool, error) {
-	baseName, rev := doltdb.SplitRevisionDbName(revisionQualifiedName)
-	if rev == "" {
+func (p *DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, name doltdb.QualifiedDbName, requestedName string) (dsess.SqlDatabase, bool, error) {
+	if !name.IsQualified() {
 		return nil, false, nil
 	}
+	rev := name.Revision
 
 	dbCache := dsess.DSessFromSess(ctx.Session).DatabaseCache(ctx)
-	db, ok := dbCache.GetCachedRevisionDb(revisionQualifiedName, requestedName)
+	db, ok := dbCache.GetCachedRevisionDb(name, requestedName)
 	if ok {
 		return db, true, nil
 	}
 
 	p.mu.RLock()
-	srcDb, ok := p.databases[formatDbMapKeyName(baseName)]
+	srcDb, ok := p.databases[name.DbKey()]
 	p.mu.RUnlock()
 	if !ok {
 		return nil, false, nil
@@ -1462,7 +1441,7 @@ func (p *DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revisionQua
 		db, err := RevisionDbForBranch(ctx, srcDb, resolvedRevSpec, requestedName)
 		// preserve original user case in the case of not found
 		if sql.ErrDatabaseNotFound.Is(err) {
-			return nil, false, sql.ErrDatabaseNotFound.New(revisionQualifiedName)
+			return nil, false, sql.ErrDatabaseNotFound.New(name.String())
 		} else if err != nil {
 			return nil, false, err
 		}
@@ -1511,7 +1490,7 @@ func (p *DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revisionQua
 	case dsess.RevisionTypeNone:
 		// Returning an error with the fully qualified db name here is our only opportunity to do so in some cases (such
 		// as when a branch is deleted by another client)
-		return nil, false, sql.ErrDatabaseNotFound.New(revisionQualifiedName)
+		return nil, false, sql.ErrDatabaseNotFound.New(name.String())
 	default:
 		return nil, false, fmt.Errorf("unrecognized revision type for revision spec %s", rev)
 	}
@@ -1696,20 +1675,16 @@ func initialStateForRevisionDb(ctx *sql.Context, db dsess.SqlDatabase) (dsess.In
 	}
 }
 
-// databaseForClone returns a newly cloned database if read replication is enabled and a remote DB exists, or an error
-// otherwise
-func (p *DoltDatabaseProvider) databaseForClone(ctx *sql.Context, revDB string) (dsess.SqlDatabase, error) {
+// databaseForClone returns a newly cloned copy of |name|'s base database if read replication is enabled and a remote
+// DB exists, or an error otherwise
+func (p *DoltDatabaseProvider) databaseForClone(ctx *sql.Context, name doltdb.QualifiedDbName) (dsess.SqlDatabase, error) {
 	if !readReplicationActive(ctx) {
 		return nil, nil
 	}
 
-	var dbName string
-	if strings.Contains(revDB, doltdb.DbRevisionDelimiter) {
-		parts := strings.SplitN(revDB, doltdb.DbRevisionDelimiter, 2)
-		dbName = parts[0]
-	} else {
-		dbName = revDB
-	}
+	// The remote URL and the clone's directory are case-sensitive, so every spelling of the name clones under its
+	// lower-case form.
+	dbName := strings.ToLower(name.Base)
 
 	err := p.attemptCloneReplica(ctx, dbName)
 	if err != nil {
@@ -1722,7 +1697,9 @@ func (p *DoltDatabaseProvider) databaseForClone(ctx *sql.Context, revDB string) 
 	//  DB is first referenced
 	tx, ok := ctx.GetTransaction().(*dsess.DoltTransaction)
 	if ok {
-		db := p.databases[dbName]
+		p.mu.RLock()
+		db := p.databases[name.DbKey()]
+		p.mu.RUnlock()
 		err = tx.AddDb(ctx, db)
 		if err != nil {
 			return nil, err
@@ -1730,7 +1707,7 @@ func (p *DoltDatabaseProvider) databaseForClone(ctx *sql.Context, revDB string) 
 	}
 
 	// now that the database has been cloned, retry the Database call
-	database, err := p.Database(ctx, revDB)
+	database, err := p.Database(ctx, dbName)
 	return database.(dsess.SqlDatabase), err
 }
 
@@ -1792,11 +1769,8 @@ func resolveAncestorSpec(ctx *sql.Context, revSpec string, ddb *doltdb.DoltDB) (
 // BaseDatabase returns the base database for the specified database name. Meant for informational purposes when
 // managing the session initialization only. Use SessionDatabase for normal database retrieval.
 func (p *DoltDatabaseProvider) BaseDatabase(ctx *sql.Context, name string) (dsess.SqlDatabase, bool) {
-	baseName, _ := doltdb.SplitRevisionDbName(name)
-
-	var ok bool
 	p.mu.RLock()
-	db, ok := p.databases[strings.ToLower(baseName)]
+	db, ok := p.databases[doltdb.NewDbKey(name)]
 	p.mu.RUnlock()
 
 	return db, ok
@@ -1804,17 +1778,19 @@ func (p *DoltDatabaseProvider) BaseDatabase(ctx *sql.Context, name string) (dses
 
 // SessionDatabase implements dsess.SessionDatabaseProvider
 func (p *DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (dsess.SqlDatabase, bool, error) {
-	baseName, revision := doltdb.SplitRevisionDbName(strings.ToLower(name))
+	qualified := doltdb.ParseQualifiedDbName(name)
+	key := qualified.DbKey()
+	baseName := string(key)
 
 	p.mu.RLock()
-	db, ok := p.databases[baseName]
+	db, ok := p.databases[key]
 	standby := *p.isStandby
 	p.mu.RUnlock()
 
 	var err error
 	// If the database doesn't exist and this is a read replica, attempt to clone it from the remote
 	if !ok {
-		db, err = p.databaseForClone(ctx, baseName)
+		db, err = p.databaseForClone(ctx, qualified)
 		if err != nil || db == nil {
 			return nil, false, err
 		}
@@ -1827,10 +1803,9 @@ func (p *DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (d
 
 	// Convert to a revision database before returning. If we got a non-qualified name, convert it to a qualified name
 	// using the session's current head
-	revisionQualifiedName := formatDbMapKeyName(name)
 	usingDefaultBranch := false
 	head := ""
-	if revision == "" {
+	if !qualified.IsQualified() {
 		head, ok, err = dsess.DSessFromSess(ctx.Session).CurrentHead(ctx, baseName)
 		if err != nil {
 			return nil, false, err
@@ -1846,10 +1821,10 @@ func (p *DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (d
 			}
 		}
 
-		revisionQualifiedName = baseName + doltdb.DbRevisionDelimiter + head
+		qualified = qualified.WithRevision(head)
 	}
 
-	db, ok, err = p.databaseForRevision(ctx, revisionQualifiedName, name)
+	db, ok, err = p.databaseForRevision(ctx, qualified, name)
 	if err != nil {
 		if sql.ErrDatabaseNotFound.Is(err) && usingDefaultBranch {
 			// We can return a better error message here in some cases
@@ -2065,16 +2040,13 @@ func initialStateForBranchDb(ctx *sql.Context, srcDb dsess.SqlDatabase) (dsess.I
 }
 
 func revisionDbForTag(ctx context.Context, srcDb Database, revSpec string, requestedName string) (ReadOnlyDatabase, error) {
-	baseName := srcDb.AliasedName()
 	return ReadOnlyDatabase{Database: Database{
-		baseName:      baseName,
+		name:          srcDb.name.WithRevision(revSpec),
 		requestedName: requestedName,
 		ddb:           srcDb.DbData().Ddb,
 		rsw:           srcDb.DbData().Rsw,
 		rsr:           srcDb.DbData().Rsr,
 		editOpts:      srcDb.editOpts,
-		revision:      revSpec,
-		revName:       baseName + doltdb.DbRevisionDelimiter + revSpec,
 		revType:       dsess.RevisionTypeTag,
 	}}, nil
 }
@@ -2109,16 +2081,13 @@ func initialStateForTagDb(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.In
 }
 
 func revisionDbForCommit(ctx context.Context, srcDb Database, revSpec string, requestedName string) (ReadOnlyDatabase, error) {
-	baseName := srcDb.AliasedName()
 	return ReadOnlyDatabase{Database: Database{
-		baseName:      baseName,
+		name:          srcDb.name.WithRevision(revSpec),
 		requestedName: requestedName,
 		ddb:           srcDb.DbData().Ddb,
 		rsw:           srcDb.DbData().Rsw,
 		rsr:           srcDb.DbData().Rsr,
 		editOpts:      srcDb.editOpts,
-		revision:      revSpec,
-		revName:       baseName + doltdb.DbRevisionDelimiter + revSpec,
 		revType:       dsess.RevisionTypeCommit,
 	}}, nil
 }
@@ -2172,15 +2141,4 @@ type staticRepoState struct {
 
 func (s staticRepoState) CWBHeadRef(*sql.Context) (ref.DoltRef, error) {
 	return s.branch, nil
-}
-
-// formatDbMapKeyName returns formatted string of database name and/or branch name. Database name is case-insensitive,
-// so it's stored in lower case name. Branch name is case-sensitive, so not changed.
-// TODO: branch names should be case-insensitive too
-func formatDbMapKeyName(name string) string {
-	dbName, rev := doltdb.SplitRevisionDbName(name)
-	if rev == "" {
-		return strings.ToLower(dbName)
-	}
-	return strings.ToLower(dbName) + doltdb.DbRevisionDelimiter + rev
 }

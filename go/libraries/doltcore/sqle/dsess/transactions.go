@@ -87,7 +87,7 @@ type DoltTransaction struct {
 	// branches holds the branch states loaded in this transaction. They're dropped when it stops being its session's
 	// transaction (see DoltSession.SetTransaction). Guarded by the session's mutex.
 	branches           *branchStates
-	dbStartPoints      map[string]dbRoot
+	dbStartPoints      map[doltdb.DbKey]dbRoot
 	savepoints         []savepoint
 	postgresSavepoints bool
 	tCharacteristic    sql.TransactionCharacteristic
@@ -100,9 +100,9 @@ type dbRoot struct {
 }
 
 type savepoint struct {
-	roots         map[string]doltdb.RootValue
+	roots         map[doltdb.QualifiedDbKey]doltdb.RootValue
 	name          string
-	dirtyBranches map[string]bool
+	dirtyBranches map[doltdb.QualifiedDbKey]bool
 }
 
 func NewDoltTransaction(
@@ -122,7 +122,7 @@ func newDoltTransaction(
 	skipOnError func(ddb *doltdb.DoltDB, err error) bool,
 ) (*DoltTransaction, error) {
 
-	startPoints := make(map[string]dbRoot)
+	startPoints := make(map[doltdb.DbKey]dbRoot)
 	for _, db := range dbs {
 		nomsRoot, err := db.DbData().Ddb.NomsRoot(ctx)
 		if err != nil {
@@ -132,9 +132,9 @@ func newDoltTransaction(
 			return nil, err
 		}
 
-		baseName, _ := doltdb.SplitRevisionDbName(db.Name())
-		startPoints[strings.ToLower(baseName)] = dbRoot{
-			dbName:   baseName,
+		name := doltdb.ParseQualifiedDbName(db.Name())
+		startPoints[name.DbKey()] = dbRoot{
+			dbName:   name.Base,
 			rootHash: nomsRoot,
 			db:       db.DbData().Ddb,
 		}
@@ -158,9 +158,9 @@ func (tx *DoltTransaction) AddDb(ctx *sql.Context, db SqlDatabase) error {
 		return err
 	}
 
-	baseName, _ := doltdb.SplitRevisionDbName(db.Name())
-	tx.dbStartPoints[strings.ToLower(baseName)] = dbRoot{
-		dbName:   baseName,
+	name := doltdb.ParseQualifiedDbName(db.Name())
+	tx.dbStartPoints[name.DbKey()] = dbRoot{
+		dbName:   name.Base,
 		rootHash: nomsRoot,
 		db:       db.DbData().Ddb,
 	}
@@ -180,8 +180,7 @@ func (tx *DoltTransaction) IsReadOnly() bool {
 // GetInitialRoot returns the noms root hash for the db named, established when the transaction began. The dbName here
 // is always the base name of the database, not the revision qualified one.
 func (tx *DoltTransaction) GetInitialRoot(dbName string) (hash.Hash, bool) {
-	dbName, _ = doltdb.SplitRevisionDbName(dbName)
-	startPoint, ok := tx.dbStartPoints[strings.ToLower(dbName)]
+	startPoint, ok := tx.dbStartPoints[doltdb.NewDbKey(dbName)]
 	return startPoint.rootHash, ok
 }
 
@@ -370,7 +369,7 @@ func (tx *DoltTransaction) commitHeads(
 	lockIDs := make([]string, len(changes))
 
 	var startPoint dbRoot
-	var baseDbName string
+	var baseDbKey doltdb.DbKey
 	for i, change := range changes {
 		state, ok, err := sess.lookupDbState(ctx, change.dbName)
 		if err != nil {
@@ -379,14 +378,14 @@ func (tx *DoltTransaction) commitHeads(
 		if !ok {
 			return nil, nil, sql.ErrDatabaseNotFound.New(change.dbName)
 		}
-		normalizedName := strings.ToLower(state.dbState.dbName)
+		dbKey := doltdb.NewDbKey(state.dbState.dbName)
 
-		if i > 0 && normalizedName != baseDbName {
+		if i > 0 && dbKey != baseDbKey {
 			return nil, nil, ErrMultipleDatabases
 		}
 
-		baseDbName = normalizedName
-		startPoint, ok = tx.dbStartPoints[baseDbName]
+		baseDbKey = dbKey
+		startPoint, ok = tx.dbStartPoints[baseDbKey]
 		if !ok {
 			return nil, nil, fmt.Errorf("database %s unknown to transaction", change.dbName)
 		}
@@ -396,7 +395,7 @@ func (tx *DoltTransaction) commitHeads(
 			return nil, nil, err
 		}
 
-		lockIDs[i] = baseDbName + "\u0000" + change.workingSet.Ref().String()
+		lockIDs[i] = string(baseDbKey) + "\u0000" + change.workingSet.Ref().String()
 	}
 
 	name, email, _, _, err := ResolveNameEmail(ctx, DoltCommitterName, DoltCommitterEmail)
@@ -852,7 +851,7 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 // CreateSavepoint creates a new savepoint with the name and roots given. In
 // PostgreSQL mode a repeated name shadows the older savepoint until release;
 // the default MySQL mode replaces it.
-func (tx *DoltTransaction) CreateSavepoint(name string, roots map[string]doltdb.RootValue, dirtyBranches map[string]bool) {
+func (tx *DoltTransaction) CreateSavepoint(name string, roots map[doltdb.QualifiedDbKey]doltdb.RootValue, dirtyBranches map[doltdb.QualifiedDbKey]bool) {
 	if !tx.postgresSavepoints {
 		if existing := tx.findSavepoint(name); existing >= 0 {
 			tx.savepoints = append(tx.savepoints[:existing], tx.savepoints[existing+1:]...)
