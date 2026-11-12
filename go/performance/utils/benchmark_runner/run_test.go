@@ -173,6 +173,7 @@ func TestDoltgresPostgresSysbenchRunner(t *testing.T) {
 				ServerExec:    postgresExec,
 				InitExec:      postgresInitExec,
 				ServerUser:    "root",
+				ServerArgs:    []string{"-c", "unix_socket_directories="},
 			},
 			&doltgresServerConfigImpl{
 				Id:             "test-doltgres",
