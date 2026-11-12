@@ -3329,6 +3329,72 @@ var SchemaChangeTestsForJsonConflicts = []MergeScriptTest{
 		},
 	},
 	{
+		Name: "json merge applies complete array changes",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE TABLE t (pk INT PRIMARY KEY, j JSON);",
+			`INSERT INTO t VALUES (1, '{"b": []}'), (2, '{"b": [1, 2, 3]}'),
+				(3, '{"b": {"nested": [[1, 2, 3], [4]]}}'), (4, '{"b": [1, 2, 3]}'),
+				(6, '{"b": [], "c": [1, 2, 3]}');`,
+			`INSERT INTO t VALUES (5, CONCAT('{"b": [', REPEAT('"abcdefghijklmnop",', 4000), '1,2,3]}'));`,
+		},
+		LeftSetUpScript: []string{
+			"UPDATE t SET j = JSON_SET(j, '$.a', 1);",
+			"UPDATE t SET j = JSON_SET(j, '$.b', JSON_ARRAY(1)) WHERE pk = 4;",
+			"UPDATE t SET j = JSON_SET(j, '$.c', JSON_ARRAY()) WHERE pk = 6;",
+		},
+		RightSetUpScript: []string{
+			`UPDATE t SET j = '{"b": [2]}' WHERE pk = 1;`,
+			`UPDATE t SET j = '{"b": []}' WHERE pk = 2;`,
+			`UPDATE t SET j = '{"b": {"nested": [[2]]}}' WHERE pk = 3;`,
+			`UPDATE t SET j = '{"b": [1], "c": 2}' WHERE pk = 4;`,
+			"UPDATE t SET j = JSON_REMOVE(j, '$.b[4002]', '$.b[4001]', '$.b[4000]') WHERE pk = 5;",
+			"UPDATE t SET j = JSON_SET(j, '$.b', JSON_ARRAY(2, 3)) WHERE pk = 6;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query: "SELECT j FROM t WHERE pk <> 5 ORDER BY pk;",
+				Expected: []sql.Row{
+					{`{"a": 1, "b": [2]}`},
+					{`{"a": 1, "b": []}`},
+					{`{"a": 1, "b": {"nested": [[2]]}}`},
+					{`{"a": 1, "b": [1], "c": 2}`},
+					{`{"a": 1, "b": [2, 3], "c": []}`},
+				},
+			},
+			{
+				Query: `SELECT JSON_EXTRACT(j, '$.a'),
+					JSON_EXTRACT(j, '$.b') = CAST(CONCAT('[', REPEAT('"abcdefghijklmnop",', 3999), '"abcdefghijklmnop"]') AS JSON)
+					FROM t WHERE pk = 5;`,
+				Expected: []sql.Row{{"1", true}},
+			},
+		},
+	},
+	{
+		Name: "json merge conflicts when only one of two array edits adds a tail",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE TABLE t (pk INT PRIMARY KEY, j JSON);",
+			`INSERT INTO t VALUES (1, '{"b": [1]}');`,
+		},
+		LeftSetUpScript: []string{
+			`UPDATE t SET j = '{"b": [2]}';`,
+		},
+		RightSetUpScript: []string{
+			`UPDATE t SET j = '{"b": [2, 3]}';`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_merge('right');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+		},
+	},
+	{
 		Name: "json merge fails with @@dolt_dont_merge_json",
 		AncSetUpScript: []string{
 			"set autocommit = 0;",

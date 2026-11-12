@@ -28,6 +28,7 @@ import (
 type ThreeWayJsonDiffer struct {
 	leftDiffer, rightDiffer           tree.JsonDiffer
 	leftCurrentDiff, rightCurrentDiff *tree.JsonDiff
+	lastMatchedArrayPath              []byte
 	leftIsDone, rightIsDone           bool
 	ns                                tree.NodeStore
 }
@@ -48,25 +49,39 @@ func (differ *ThreeWayJsonDiffer) Next(ctx context.Context) (ThreeWayJsonDiff, e
 			return ThreeWayJsonDiff{}, err
 		}
 
-		if differ.rightIsDone {
-			// We don't care if there are remaining left diffs because they don't affect the merge.
-			return ThreeWayJsonDiff{}, io.EOF
+		var leftKey, rightKey []byte
+		if differ.leftCurrentDiff != nil {
+			leftKey = differ.leftCurrentDiff.Key
+		}
+		if differ.rightCurrentDiff != nil {
+			rightKey = differ.rightCurrentDiff.Key
+		}
+		leftArray, rightArray := tree.JsonArrayPath(leftKey), tree.JsonArrayPath(rightKey)
+
+		// A shared element change can be followed by another change on only one side.
+		// Check for that conflict even when the other diff stream has ended.
+		if len(differ.lastMatchedArrayPath) > 0 {
+			leftStillInMatchedArray := bytes.Equal(leftArray, differ.lastMatchedArrayPath)
+			rightStillInMatchedArray := bytes.Equal(rightArray, differ.lastMatchedArrayPath)
+			if leftStillInMatchedArray != rightStillInMatchedArray {
+				return ThreeWayJsonDiff{Op: tree.DiffOpDivergentModifyConflict}, nil
+			}
+			if !leftStillInMatchedArray {
+				differ.lastMatchedArrayPath = differ.lastMatchedArrayPath[:0]
+			}
 		}
 
+		if differ.rightIsDone {
+			return ThreeWayJsonDiff{}, io.EOF
+		}
 		if differ.leftIsDone {
 			return differ.processRightSideOnlyDiff(), nil
 		}
 
-		// !differ.rightIsDone && !differ.leftIsDone
-		leftDiff := differ.leftCurrentDiff
-		rightDiff := differ.rightCurrentDiff
-		leftKey := leftDiff.Key
-		rightKey := rightDiff.Key
-
 		cmp := bytes.Compare(leftKey, rightKey)
 		// If both sides modify the same array to different values, we currently consider that to be a conflict.
 		// This may be relaxed in the future.
-		if cmp != 0 && tree.JsonKeysModifySameArray(leftKey, rightKey) {
+		if cmp != 0 && leftArray != nil && bytes.Equal(leftArray, rightArray) {
 			result := ThreeWayJsonDiff{
 				Op: tree.DiffOpDivergentModifyConflict,
 			}
@@ -98,25 +113,28 @@ func (differ *ThreeWayJsonDiffer) Next(ctx context.Context) (ThreeWayJsonDiff, e
 			differ.leftCurrentDiff = nil
 			continue
 		} else {
-			// cmp == 0; Both diffs are on the same key
-			if differ.leftCurrentDiff.From == nil {
-				// Key did not exist at base, so both sides are inserts.
-				// Check that they're inserting the same value.
-				valueCmp, err := types.CompareJSON(ctx, differ.leftCurrentDiff.To, differ.rightCurrentDiff.To)
-				if err != nil {
-					return ThreeWayJsonDiff{}, err
-				}
-				if valueCmp == 0 {
-					return differ.processMergedDiff(tree.DiffOpConvergentAdd, differ.leftCurrentDiff.To), nil
-				} else {
-					return differ.processMergedDiff(tree.DiffOpDivergentModifyConflict, nil), nil
-				}
-			}
+			// Both diffs are on the same key. Copy the array path because the
+			// element diff may borrow its key from the differ's working buffer.
+			differ.lastMatchedArrayPath = append(differ.lastMatchedArrayPath[:0], leftArray...)
 			if differ.leftCurrentDiff.To == nil && differ.rightCurrentDiff.To == nil {
 				return differ.processMergedDiff(tree.DiffOpConvergentDelete, nil), nil
 			}
 			if differ.leftCurrentDiff.To == nil || differ.rightCurrentDiff.To == nil {
 				return differ.processMergedDiff(tree.DiffOpDivergentDeleteConflict, nil), nil
+			}
+			valueCmp, err := types.CompareJSON(ctx, differ.leftCurrentDiff.To, differ.rightCurrentDiff.To)
+			if err != nil {
+				return ThreeWayJsonDiff{}, err
+			}
+			if valueCmp == 0 {
+				op := tree.DiffOpConvergentModify
+				if differ.leftCurrentDiff.From == nil {
+					op = tree.DiffOpConvergentAdd
+				}
+				return differ.processMergedDiff(op, differ.leftCurrentDiff.To), nil
+			}
+			if differ.leftCurrentDiff.From == nil {
+				return differ.processMergedDiff(tree.DiffOpDivergentModifyConflict, nil), nil
 			}
 			// If the key existed at base, we can do a recursive three-way merge to resolve
 			// changes to the values.

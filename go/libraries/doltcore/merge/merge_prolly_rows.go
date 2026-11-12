@@ -2842,28 +2842,45 @@ func MergeJSON(ctx context.Context, ns tree.NodeStore, baseJson, leftJson, right
 		merged = tree.NewIndexedJsonDocument(root, ns)
 	}
 
+	var arrayDeletes [][]byte
 	for {
-		threeWayDiff, err := threeWayDiffer.Next(ctx)
-		if err == io.EOF {
-			return merged, false, nil
+		threeWayDiff, nextErr := threeWayDiffer.Next(ctx)
+		if nextErr != nil && nextErr != io.EOF {
+			return types.JSONDocument{}, true, nextErr
 		}
-		if err != nil {
-			return types.JSONDocument{}, true, err
+
+		// Element diffs are ordered by increasing index. Remove each run in reverse
+		// so that deleting an element does not shift the indices still to be removed.
+		if threeWayDiff.Op == tree.DiffOpRightDelete && tree.JsonArrayPath(threeWayDiff.Key) != nil {
+			arrayDeletes = append(arrayDeletes, bytes.Clone(threeWayDiff.Key))
+			continue
+		}
+		for i := len(arrayDeletes) - 1; i >= 0; i-- {
+			merged, _, err = merged.RemoveWithKey(ctx, arrayDeletes[i])
+			if err != nil {
+				return types.JSONDocument{}, true, err
+			}
+		}
+		clear(arrayDeletes)
+		arrayDeletes = arrayDeletes[:0]
+		if nextErr == io.EOF {
+			return merged, false, nil
 		}
 
 		switch threeWayDiff.Op {
-		case tree.DiffOpRightAdd, tree.DiffOpConvergentAdd, tree.DiffOpRightModify, tree.DiffOpConvergentModify, tree.DiffOpDivergentModifyResolved:
+		case tree.DiffOpRightAdd, tree.DiffOpRightModify, tree.DiffOpDivergentModifyResolved:
 			merged, _, err = merged.SetWithKey(ctx, threeWayDiff.Key, threeWayDiff.Right)
 			if err != nil {
 				return types.JSONDocument{}, true, err
 			}
-		case tree.DiffOpRightDelete, tree.DiffOpConvergentDelete:
+		case tree.DiffOpRightDelete:
 			merged, _, err = merged.RemoveWithKey(ctx, threeWayDiff.Key)
 			if err != nil {
 				return types.JSONDocument{}, true, err
 			}
-		case tree.DiffOpLeftAdd, tree.DiffOpLeftModify, tree.DiffOpLeftDelete:
-			// these changes already exist on the left, so do nothing.
+		case tree.DiffOpLeftAdd, tree.DiffOpLeftModify, tree.DiffOpLeftDelete,
+			tree.DiffOpConvergentAdd, tree.DiffOpConvergentModify, tree.DiffOpConvergentDelete:
+			// These changes already exist on the left.
 		case tree.DiffOpDivergentModifyConflict, tree.DiffOpDivergentDeleteConflict:
 			return types.JSONDocument{}, true, nil
 		default:
