@@ -177,7 +177,7 @@ func (b SecondaryKeyBuilder) SecondaryKeyFromRow(ctx *sql.Context, k, v val.Tupl
 // BuildRow returns a sql.Row for the given key/value tuple pair
 func BuildRow(ctx *sql.Context, key, value val.Tuple, sch schema.Schema, ns tree.NodeStore) (sql.Row, error) {
 	prollyIter := prolly.NewPointLookup(key, value)
-	rowIter := NewProllyRowIterForSchema(sch, prollyIter, sch.GetKeyDescriptor(ns), sch.GetValueDescriptor(ns), sch.GetAllCols().Tags, ns)
+	rowIter := NewProllyRowIterForSchema(sch, prollyIter, sch.GetKeyDescriptor(ns), sch.GetValueDescriptor(ns), sch.GetAllCols().Tags, ns, sql.ColSet{})
 	return rowIter.Next(ctx)
 }
 

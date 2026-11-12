@@ -16,6 +16,7 @@ package actions
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 
@@ -127,4 +128,42 @@ func TestEnvForCloneCleansUpAfterFailure(t *testing.T) {
 	clonedFs, err := fs.WithWorkingDir("cloned")
 	require.NoError(t, err)
 	require.False(t, dbfactory.IsDatabaseInProgress(clonedFs), "a failed EnvForClone must not leave its marker behind")
+}
+
+func TestEnvForCloneOfConfiguresBeforeCreating(t *testing.T) {
+	ctx := context.Background()
+	fs, err := filesys.LocalFilesysWithWorkingDir(t.TempDir())
+	require.NoError(t, err)
+	hdp := func() (string, error) { return fs.TempDir(), nil }
+	src, err := doltdb.LoadDoltDB(ctx, types.Format_DOLT, doltdb.InMemDoltDB, filesys.LocalFS)
+	require.NoError(t, err)
+	defer src.Close()
+
+	dEnv, err := EnvForCloneOf(ctx, src, env.NoRemote, "cloned", fs, "test", hdp, func(dEnv *env.DoltEnv) error {
+		require.False(t, dEnv.HasDoltDataDir(), "configure must run before the database is created")
+		dEnv.DBLoadParams = map[string]interface{}{"configured": true}
+		return nil
+	})
+	require.NoError(t, err)
+	defer dEnv.Close()
+	require.True(t, dEnv.HasDoltDataDir())
+	require.Equal(t, true, dEnv.DBLoadParams["configured"])
+}
+
+func TestEnvForCloneOfCleansUpAfterConfigureFails(t *testing.T) {
+	ctx := context.Background()
+	fs, err := filesys.LocalFilesysWithWorkingDir(t.TempDir())
+	require.NoError(t, err)
+	hdp := func() (string, error) { return fs.TempDir(), nil }
+	src, err := doltdb.LoadDoltDB(ctx, types.Format_DOLT, doltdb.InMemDoltDB, filesys.LocalFS)
+	require.NoError(t, err)
+	defer src.Close()
+
+	errConfigure := errors.New("configure failed")
+	_, err = EnvForCloneOf(ctx, src, env.NoRemote, "cloned", fs, "test", hdp, func(*env.DoltEnv) error {
+		return errConfigure
+	})
+	require.ErrorIs(t, err, errConfigure)
+	exists, _ := fs.Exists("cloned")
+	require.False(t, exists, "a failed configure must not leave the clone's directory behind")
 }

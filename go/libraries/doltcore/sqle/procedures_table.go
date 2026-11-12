@@ -343,7 +343,7 @@ func DoltProceduresGetAll(ctx *sql.Context, db Database, procedureName string) (
 		return nil, err
 	}
 
-	iter, err := index.RowIterForIndexLookup(ctx, tbl.DoltTable, lookup, tbl.sqlSch, nil)
+	iter, err := index.RowIterForIndexLookup(ctx, tbl.DoltTable, lookup, tbl.sqlSch, nil, sql.ColSet{})
 	if err != nil {
 		return nil, err
 	}
@@ -478,7 +478,7 @@ func DoltProceduresGetDetails(ctx *sql.Context, tbl *WritableDoltTable, name str
 		return sql.StoredProcedureDetails{}, false, err
 	}
 
-	rowIter, err := index.RowIterForIndexLookup(ctx, tbl.DoltTable, indexLookup, tbl.sqlSch, nil)
+	rowIter, err := index.RowIterForIndexLookup(ctx, tbl.DoltTable, indexLookup, tbl.sqlSch, nil, sql.ColSet{})
 	if err != nil {
 		return sql.StoredProcedureDetails{}, false, err
 	}

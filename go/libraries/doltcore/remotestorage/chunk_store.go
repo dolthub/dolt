@@ -152,6 +152,7 @@ func NewDoltChunkStoreFromPath(
 	path, host string,
 	wsval bool,
 	csClient remotesapi.ChunkStoreServiceClient,
+	opts ...ChunkStoreOption,
 ) (*DoltChunkStore, error) {
 	var repoId *remotesapi.RepoId
 
