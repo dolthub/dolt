@@ -45,8 +45,9 @@ type SessionCache struct {
 	// tableMaps is keyed by a digest of the table list of table names
 	tableMaps map[uint64]map[string]string
 
-	// TODO: cache views/triggers by schema fragment hash
-	views    map[doltdb.DataCacheKey]map[TableCacheKey]sql.ViewDefinition
+	// views is keyed by dolt_schemas table hash and schema, then by lower-case view name
+	views map[TableSchemaKey]map[string]sql.ViewDefinition
+	// TODO: cache triggers by schema fragment hash
 	triggers map[TableSchemaKey][]sql.TriggerDefinition
 
 	// writers are keyed by table schema hash
@@ -298,13 +299,13 @@ func (c *SessionCache) CacheTableNameMap(key uint64, tables map[string]string) {
 	c.tableMaps[key] = tables
 }
 
-// CacheViews caches all views in a database for the cache key given
+// CacheViews caches all views in |schema| of a database for the cache key given
 func (c *SessionCache) CacheViews(key doltdb.DataCacheKey, views []sql.ViewDefinition, schema string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if c.views == nil {
-		c.views = make(map[doltdb.DataCacheKey]map[TableCacheKey]sql.ViewDefinition)
+		c.views = make(map[TableSchemaKey]map[string]sql.ViewDefinition)
 	}
 	if len(c.views) > maxCachedKeys {
 		for k := range c.views {
@@ -312,50 +313,25 @@ func (c *SessionCache) CacheViews(key doltdb.DataCacheKey, views []sql.ViewDefin
 		}
 	}
 
-	viewsForKey, ok := c.views[key]
-	if !ok {
-		viewsForKey = make(map[TableCacheKey]sql.ViewDefinition)
-		c.views[key] = viewsForKey
-	}
-
+	viewsForKey := make(map[string]sql.ViewDefinition, len(views))
 	for i := range views {
-		viewName := TableCacheKey{
-			Name:   strings.ToLower(views[i].Name),
-			Schema: strings.ToLower(schema),
-		}
-		viewsForKey[viewName] = views[i]
+		viewsForKey[strings.ToLower(views[i].Name)] = views[i]
 	}
+	c.views[TableSchemaKey{key: key, schema: strings.ToLower(schema)}] = viewsForKey
 }
 
-// ViewsCached returns whether this cache has been initialized with the set of views yet
-func (c *SessionCache) ViewsCached(key doltdb.DataCacheKey) bool {
+// GetCachedViewDefinition returns the cached view named in |schema|, whether it was found, and whether the views of
+// |schema| are cached for |key|. When they are cached, a view that isn't found doesn't exist.
+func (c *SessionCache) GetCachedViewDefinition(key doltdb.DataCacheKey, schema, viewName string) (view sql.ViewDefinition, found, cached bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	if c.views == nil {
-		return false
+	viewsForKey, cached := c.views[TableSchemaKey{key: key, schema: strings.ToLower(schema)}]
+	if !cached {
+		return sql.ViewDefinition{}, false, false
 	}
-
-	_, ok := c.views[key]
-	return ok
-}
-
-// GetCachedViewDefinition returns the cached view named, and whether the cache was present
-func (c *SessionCache) GetCachedViewDefinition(key doltdb.DataCacheKey, viewName TableCacheKey) (sql.ViewDefinition, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	if c.views == nil {
-		return sql.ViewDefinition{}, false
-	}
-
-	viewsForKey, ok := c.views[key]
-	if !ok {
-		return sql.ViewDefinition{}, false
-	}
-
-	table, ok := viewsForKey[viewName.ToLower()]
-	return table, ok
+	view, found = viewsForKey[strings.ToLower(viewName)]
+	return view, found, true
 }
 
 type TableSchemaKey struct {
