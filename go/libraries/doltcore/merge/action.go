@@ -38,21 +38,22 @@ const (
 )
 
 type MergeSpec struct {
-	HeadH           hash.Hash
-	MergeH          hash.Hash
-	HeadC           *doltdb.Commit
-	MergeC          *doltdb.Commit
-	MergeCSpecStr   string
-	StompedTblNames []doltdb.TableName
-	WorkingDiffs    map[doltdb.TableName]hash.Hash
-	Squash          bool
-	FFMode          FastForwardMode
-	NoCommit        bool
-	NoEdit          bool
-	Force           bool
-	Email           string
-	Name            string
-	Date            *datas.CommitDate
+	HeadH                   hash.Hash
+	MergeH                  hash.Hash
+	HeadC                   *doltdb.Commit
+	MergeC                  *doltdb.Commit
+	MergeCSpecStr           string
+	StompedTblNames         []doltdb.TableName
+	WorkingDiffs            map[doltdb.TableName]hash.Hash
+	Squash                  bool
+	FFMode                  FastForwardMode
+	NoCommit                bool
+	NoEdit                  bool
+	Force                   bool
+	Email                   string
+	Name                    string
+	Date                    *datas.CommitDate
+	AllowUnrelatedHistories bool
 }
 
 type MergeSpecOpt func(*MergeSpec)
@@ -84,6 +85,12 @@ func WithForce(force bool) MergeSpecOpt {
 func WithSquash(squash bool) MergeSpecOpt {
 	return func(ms *MergeSpec) {
 		ms.Squash = squash
+	}
+}
+
+func WithAllowUnrelatedHistories(allow bool) MergeSpecOpt {
+	return func(ms *MergeSpec) {
+		ms.AllowUnrelatedHistories = allow
 	}
 }
 

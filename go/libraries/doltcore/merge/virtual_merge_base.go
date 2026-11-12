@@ -122,10 +122,17 @@ func ResolveMergeBaseRootish(ctx *sql.Context, left, right *doltdb.Commit) (dolt
 }
 
 // resolveMergeBase returns the merge base of |left| and |right|, the best common ancestors it was built from, and the
-// cells where those ancestors conflicted.
+// cells where those ancestors conflicted. Histories that share no commit merge against emptyVirtualMergeBase.
 func resolveMergeBase(ctx *sql.Context, left, right *doltdb.Commit) (*doltdb.Commit, []*doltdb.Commit, conflictedCells, error) {
 	optCmts, err := doltdb.GetCommitAncestors(ctx, left, right)
-	if err != nil {
+	if errors.Is(err, doltdb.ErrNoCommonAncestor) {
+		leftRoot, err := left.GetRootValue(ctx)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		base, err := emptyVirtualMergeBase(ctx, leftRoot.VRW(), leftRoot.NodeStore())
+		return base, nil, nil, err
+	} else if err != nil {
 		return nil, nil, nil, err
 	}
 	bases := make([]*doltdb.Commit, len(optCmts))
@@ -162,7 +169,10 @@ func mergeMergeBases(ctx *sql.Context, bases []*doltdb.Commit) (*doltdb.Commit, 
 	return virtualBase, conflicted, nil
 }
 
-func rebuildVirtualMergeBase(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, mergeBases []hash.Hash) (doltdb.RootValue, error) {
+func rebuildVirtualMergeBase(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, mergeBases []hash.Hash) (*doltdb.Commit, error) {
+	if len(mergeBases) == 0 {
+		return emptyVirtualMergeBase(ctx, vrw, ns)
+	}
 	bases := make([]*doltdb.Commit, len(mergeBases))
 	for i, addr := range mergeBases {
 		dc, err := datas.LoadCommitAddr(ctx, vrw, addr)
@@ -182,10 +192,23 @@ func rebuildVirtualMergeBase(ctx context.Context, vrw types.ValueReadWriter, ns 
 		sqlCtx = sql.NewContext(ctx)
 	}
 	virtualBase, _, err := mergeMergeBases(sqlCtx, bases)
+	return virtualBase, err
+}
+
+// emptyVirtualMergeBase returns the virtual merge base of histories with no common ancestor: a parentless commit of an
+// empty root, as git merges unrelated histories against an empty tree. Its date is fixed, so it is the same commit
+// every time.
+func emptyVirtualMergeBase(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore) (*doltdb.Commit, error) {
+	root, err := doltdb.EmptyRootValue(ctx, vrw, ns)
 	if err != nil {
 		return nil, err
 	}
-	return virtualBase.GetRootValue(ctx)
+	ident := datas.CommitIdent{Name: virtualMergeBaseName, Email: virtualMergeBaseEmail, Date: datas.CommitDateAt(time.Unix(0, 0).UTC())}
+	meta, err := datas.NewCommitMetaWithAuthorCommitter(ident, ident, virtualMergeBaseDescription)
+	if err != nil {
+		return nil, err
+	}
+	return doltdb.NewDanglingCommit(ctx, root, nil, meta)
 }
 
 // mergeIntoVirtualBase merges |x| and |y| into a dangling commit, and returns the cells where they conflicted. Cells

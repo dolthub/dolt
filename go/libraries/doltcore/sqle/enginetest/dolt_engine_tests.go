@@ -1054,6 +1054,28 @@ func RunDoltMergeTests(t *testing.T, h DoltEnginetestHarness) {
 	}
 }
 
+func RunDoltMergeSharedEmptyBaseTests(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range SharedEmptyBaseMergeScripts() {
+		func() {
+			h := h.NewHarness(t)
+			defer h.Close()
+			h.Setup(setup.MydbData)
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func RunDoltMergeUnrelatedHistoriesTests(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range UnrelatedHistoriesMergeScripts() {
+		func() {
+			h := h.NewHarness(t)
+			defer h.Close()
+			h.Setup(setup.MydbData)
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
 func RunDoltMergeMultipleBasesTests(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range AllMergeMultipleBasesScripts() {
 		func() {

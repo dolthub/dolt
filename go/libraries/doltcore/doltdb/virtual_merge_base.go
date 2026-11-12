@@ -26,27 +26,36 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// RebuildVirtualMergeBase returns the root of the virtual merge base built from |mergeBases|. It is set by the merge
-// package, which this package cannot import.
-var RebuildVirtualMergeBase func(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, mergeBases []hash.Hash) (RootValue, error)
+// RebuildVirtualMergeBase returns the virtual merge base built from |mergeBases|. It is set by the merge package,
+// which this package cannot import.
+var RebuildVirtualMergeBase func(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, mergeBases []hash.Hash) (*Commit, error)
 
 // RebuildRekeyedMergeBase returns the root of the rekeyed merge base of a conflict with |meta| from |theirRootIsh|.
 // It is set by the merge package, which this package cannot import.
 var RebuildRekeyedMergeBase func(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, meta prolly.ConflictMetadata, theirRootIsh hash.Hash) (RootValue, error)
 
 // LoadConflictBaseRoot returns the root holding the base values of a conflict with |meta| from |theirRootIsh|. A
-// virtual or rekeyed merge base that has been garbage collected is rebuilt from what |meta| records.
+// virtual or rekeyed merge base that has been garbage collected is rebuilt from what |meta| records. Histories with
+// no common ancestor merge against the virtual merge base of no merge bases, which is rebuilt when |meta| names it.
 func LoadConflictBaseRoot(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, meta prolly.ConflictMetadata, theirRootIsh hash.Hash) (RootValue, error) {
-	if len(meta.MergeBases) > 0 || !meta.RekeyedFrom.IsEmpty() {
-		v, err := vrw.ReadValue(ctx, meta.BaseRootIsh)
+	v, err := vrw.ReadValue(ctx, meta.BaseRootIsh)
+	if err != nil {
+		return nil, err
+	}
+	if v == nil {
+		if !meta.RekeyedFrom.IsEmpty() {
+			return RebuildRekeyedMergeBase(ctx, vrw, ns, meta, theirRootIsh)
+		}
+		rebuilt, err := RebuildVirtualMergeBase(ctx, vrw, ns, meta.MergeBases)
 		if err != nil {
 			return nil, err
 		}
-		if v == nil {
-			if !meta.RekeyedFrom.IsEmpty() {
-				return RebuildRekeyedMergeBase(ctx, vrw, ns, meta, theirRootIsh)
-			}
-			return RebuildVirtualMergeBase(ctx, vrw, ns, meta.MergeBases)
+		rebuiltAddr, err := rebuilt.HashOf()
+		if err != nil {
+			return nil, err
+		}
+		if len(meta.MergeBases) > 0 || rebuiltAddr == meta.BaseRootIsh {
+			return rebuilt.GetRootValue(ctx)
 		}
 	}
 	return LoadRootValueFromRootIshAddr(ctx, vrw, ns, meta.BaseRootIsh)

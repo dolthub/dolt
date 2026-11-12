@@ -55,6 +55,8 @@ const MergeProcFFIndex = 1
 
 var ErrUncommittedChanges = goerrors.NewKind("cannot merge with uncommitted changes")
 
+var ErrUnrelatedHistories = goerrors.NewKind("refusing to merge unrelated histories")
+
 var doltMergeSchema = []*sql.Column{
 	{
 		Name:     "hash",
@@ -245,6 +247,12 @@ func performMerge(
 	}
 
 	canFF, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC)
+	if errors.Is(err, doltdb.ErrNoCommonAncestor) {
+		if !spec.AllowUnrelatedHistories {
+			return ws, "", noConflictsOrViolations, threeWayMerge, "", ErrUnrelatedHistories.New()
+		}
+		canFF, err = false, nil
+	}
 	if err != nil {
 		switch err {
 		case doltdb.ErrIsAhead, doltdb.ErrUpToDate:
@@ -579,6 +587,7 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 		merge.WithForce(apr.Contains(cli.ForceFlag)),
 		merge.WithNoCommit(apr.Contains(cli.NoCommitFlag)),
 		merge.WithNoEdit(apr.Contains(cli.NoEditFlag)),
+		merge.WithAllowUnrelatedHistories(apr.Contains(cli.AllowUnrelatedHistoriesFlag)),
 	)
 }
 
