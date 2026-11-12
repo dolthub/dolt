@@ -378,7 +378,13 @@ func (m prollySecondaryIndexWriter) matchesPredicate(ctx context.Context, sqlRow
 		return false, fmt.Errorf("expected *sql.Context for partial index predicate evaluation")
 	}
 	result, err := m.predicate.Eval(sqlCtx, sqlRow)
-	return result.(bool), err
+	if err != nil {
+		return false, err
+	}
+	// A predicate that evaluates to NULL (unknown) does not match: the row is left out of the
+	// index, as PostgreSQL does for partial indexes.
+	matches, _ := result.(bool)
+	return matches, nil
 }
 
 var _ indexWriter = prollySecondaryIndexWriter{}
