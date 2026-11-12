@@ -642,10 +642,10 @@ func TestStartTransactionWithClosedDatabase(t *testing.T) {
 		ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
 		return sess.StartTransaction(ctx, sql.ReadWrite)
 	}
-	requireStartPoints := func(t *testing.T, tx sql.Transaction, expected ...string) {
-		var actual []string
-		for name := range tx.(*DoltTransaction).dbStartPoints {
-			actual = append(actual, name)
+	requireStartPoints := func(t *testing.T, tx sql.Transaction, expected ...doltdb.DbKey) {
+		var actual []doltdb.DbKey
+		for key := range tx.(*DoltTransaction).dbStartPoints {
+			actual = append(actual, key)
 		}
 		require.ElementsMatch(t, expected, actual)
 	}
