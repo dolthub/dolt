@@ -22,6 +22,7 @@ import (
 	"iter"
 	"sort"
 	"strings"
+	"sync"
 	"unicode"
 	"unicode/utf8"
 
@@ -88,6 +89,12 @@ type RootValue interface {
 	// GetForeignKeyCollectionHash returns the address of this root's stored ForeignKeyCollection, which is equal for
 	// two roots whose collections are equal, or the empty hash if this root has never stored one.
 	GetForeignKeyCollectionHash(ctx context.Context) (hash.Hash, error)
+	// GetForeignKeysForTable returns the foreign keys that the given table declares, and those that reference it, as
+	// ForeignKeyCollection.KeysForTable does. Unlike GetForeignKeyCollection, it does not copy this root's collection,
+	// so its cost depends on the number of keys returned rather than on the number of keys in this root. The returned
+	// slices belong to the caller, but the keys in them share their column slices with this root, and must not be
+	// modified in place.
+	GetForeignKeysForTable(ctx context.Context, tName TableName) (declared, referencedBy []ForeignKey, err error)
 	// GetTable will retrieve a table by its case-sensitive name.
 	GetTable(ctx context.Context, tName TableName) (*Table, bool, error)
 	// GetTableHash returns the hash of the given case-sensitive table name.
@@ -143,6 +150,7 @@ type rootValue struct {
 	ns       tree.NodeStore
 	st       rootValueStorage
 	fkc      *ForeignKeyCollection // cache the first load
+	fkcLock  sync.Mutex            // guards fkc, which may be loaded from multiple sessions sharing this root
 	rootHash hash.Hash             // cache the first load
 	// tablesHash is a digest of the table names
 	tablesHash uint64
@@ -770,7 +778,11 @@ func (root *rootValue) IterTables(ctx context.Context, cb func(name TableName, t
 }
 
 func (root *rootValue) withStorage(st rootValueStorage) *rootValue {
-	return &rootValue{root.vrw, root.ns, st, nil, hash.Hash{}, 0, nil}
+	return &rootValue{
+		vrw: root.vrw,
+		ns:  root.ns,
+		st:  st,
+	}
 }
 
 func (root *rootValue) NomsValue() types.Value {
@@ -1182,21 +1194,48 @@ func (root *rootValue) RemoveTables(ctx context.Context, skipFKHandling bool, al
 // GetForeignKeyCollection returns the ForeignKeyCollection for this root. As collections are meant to be modified
 // in-place, each returned collection may freely be altered without affecting future returned collections from this root.
 func (root *rootValue) GetForeignKeyCollection(ctx context.Context) (*ForeignKeyCollection, error) {
+	fkc, err := root.loadForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return fkc.Copy(), nil
+}
+
+// GetForeignKeysForTable implements RootValue.
+func (root *rootValue) GetForeignKeysForTable(ctx context.Context, tName TableName) (declared, referencedBy []ForeignKey, err error) {
+	fkc, err := root.loadForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	declared, referencedBy = fkc.KeysForTable(tName)
+	return declared, referencedBy, nil
+}
+
+// loadForeignKeyCollection returns this root's ForeignKeyCollection, loading it on first use. The collection is shared
+// by every caller, and must not be modified.
+func (root *rootValue) loadForeignKeyCollection(ctx context.Context) (*ForeignKeyCollection, error) {
+	root.fkcLock.Lock()
+	defer root.fkcLock.Unlock()
+
 	if root.fkc == nil {
 		fkMap, ok, err := root.st.GetForeignKeys(ctx, root.vrw)
 		if err != nil {
 			return nil, err
 		}
-		if !ok {
-			return newForeignKeyCollection(), nil
-		}
 
-		root.fkc, err = DeserializeForeignKeys(ctx, root.vrw.Format(), fkMap)
-		if err != nil {
-			return nil, err
+		if !ok {
+			root.fkc = newForeignKeyCollection()
+		} else {
+			root.fkc, err = DeserializeForeignKeys(ctx, root.vrw.Format(), fkMap)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
-	return root.fkc.Copy(), nil
+
+	return root.fkc, nil
 }
 
 // GetForeignKeyCollectionHash implements RootValue.

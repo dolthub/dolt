@@ -1395,12 +1395,11 @@ func (t *DoltTable) GetDeclaredForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyCo
 		return nil, err
 	}
 
-	fkc, err := root.GetForeignKeyCollection(ctx)
+	declaredFks, _, err := root.GetForeignKeysForTable(ctx, t.TableName())
 	if err != nil {
 		return nil, err
 	}
 
-	declaredFks, _ := fkc.KeysForTable(t.TableName())
 	toReturn := make([]sql.ForeignKeyConstraint, len(declaredFks))
 
 	for i, fk := range declaredFks {

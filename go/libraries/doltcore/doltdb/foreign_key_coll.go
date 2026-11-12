@@ -39,6 +39,8 @@ type ForeignKeyCollection struct {
 	// indexes is built on first use, since most collections are loaded or copied and then only read by name or by
 	// declaring table, which |foreignKeys| answers directly. Once built, it is kept up to date.
 	indexes *foreignKeyIndexes
+	// indexesLock guards building |indexes|, since a root value's collection may be read by several sessions at once.
+	indexesLock sync.Mutex
 }
 
 // foreignKeyIndexes indexes the keys of a ForeignKeyCollection for KeysForTable and GetMatchingKey.
@@ -367,6 +369,9 @@ func newForeignKeyCollection() *ForeignKeyCollection {
 
 // getIndexes returns the indexes of this collection, building them if this is their first use.
 func (fkc *ForeignKeyCollection) getIndexes() *foreignKeyIndexes {
+	fkc.indexesLock.Lock()
+	defer fkc.indexesLock.Unlock()
+
 	if fkc.indexes == nil {
 		idx := &foreignKeyIndexes{
 			referencedBy: make(map[TableName]map[foreignKeyID]struct{}),

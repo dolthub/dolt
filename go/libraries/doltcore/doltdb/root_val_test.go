@@ -16,13 +16,16 @@ package doltdb
 
 import (
 	"context"
+	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -51,6 +54,87 @@ func TestForeignKeyLegacyTableNames(t *testing.T) {
 	decoded, err := deserializeFlatbufferForeignKeys(serializeFlatbufferForeignKeys(collection))
 	require.NoError(t, err)
 	require.Equal(t, []ForeignKey{fk}, decoded.AllKeys())
+}
+
+// TestGetForeignKeysForTable verifies that GetForeignKeysForTable matches KeysForTable on a copy of the root's
+// collection, is unaffected by changes to such copies, is safe for concurrent use, and doesn't cost more as the root
+// gains foreign keys on unrelated tables.
+func TestGetForeignKeysForTable(t *testing.T) {
+	ctx := context.Background()
+	ddb, err := LoadDoltDB(ctx, types.Format_DOLT, InMemDoltDB, filesys.LocalFS)
+	require.NoError(t, err)
+	defer ddb.Close()
+
+	empty, err := EmptyRootValue(ctx, ddb.ValueReadWriter(), ddb.NodeStore())
+	require.NoError(t, err)
+	declared, referencedBy, err := empty.GetForeignKeysForTable(ctx, TableName{Name: "parent"})
+	require.NoError(t, err)
+	require.Empty(t, declared)
+	require.Empty(t, referencedBy)
+
+	// 400 tables each declare a key referencing |parent|, which declares a key of its own.
+	parent := TableName{Name: "parent"}
+	fkc, err := NewForeignKeyCollection()
+	require.NoError(t, err)
+	for i := 0; i < 400; i++ {
+		fk := newForeignKey()
+		fk.Name = fmt.Sprintf("fk_%04d", i)
+		fk.TableName = TableName{Name: fmt.Sprintf("child_%04d", i)}
+		fk.TableColumns = []uint64{uint64(i)}
+		fk.ReferencedTableName = parent
+		require.NoError(t, fkc.AddKeys(fk))
+	}
+	parentFk := newForeignKey()
+	parentFk.Name = "parent_fk"
+	parentFk.TableName = parent
+	parentFk.ReferencedTableName = TableName{Name: "grandparent"}
+	require.NoError(t, fkc.AddKeys(parentFk))
+	root, err := empty.PutForeignKeyCollection(ctx, fkc)
+	require.NoError(t, err)
+
+	lookups := []TableName{parent, {Name: "PARENT"}, {Name: "child_0007"}, {Name: "grandparent"}, {Name: "missing"}}
+	requireMatchesCollection := func(root RootValue) {
+		copied, err := root.GetForeignKeyCollection(ctx)
+		require.NoError(t, err)
+		for _, tableName := range lookups {
+			expectedDeclared, expectedReferencedBy := copied.KeysForTable(tableName)
+			declared, referencedBy, err := root.GetForeignKeysForTable(ctx, tableName)
+			require.NoError(t, err)
+			require.Equal(t, expectedDeclared, declared, "table %s", tableName)
+			require.Equal(t, expectedReferencedBy, referencedBy, "table %s", tableName)
+		}
+	}
+
+	// Sessions sharing a root may load its collection, and look keys up in it, concurrently.
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, referencedBy, err := root.GetForeignKeysForTable(ctx, parent)
+			require.NoError(t, err)
+			require.Len(t, referencedBy, 400)
+		}()
+	}
+	wg.Wait()
+	requireMatchesCollection(root)
+
+	// Changing a collection returned by GetForeignKeyCollection must not change the keys this root returns.
+	copied, err := root.GetForeignKeyCollection(ctx)
+	require.NoError(t, err)
+	require.NoError(t, copied.RemoveTables(ctx, TableName{Name: "child_0007"}))
+	declared, _, err = root.GetForeignKeysForTable(ctx, TableName{Name: "child_0007"})
+	require.NoError(t, err)
+	require.Len(t, declared, 1)
+	requireMatchesCollection(root)
+
+	// Planning a write to a table looks up the keys of every table that references it, so a lookup must not cost more
+	// as the root gains keys on other tables. Copying this root's collection alone takes hundreds of allocations.
+	allocs := testing.AllocsPerRun(10, func() {
+		_, _, err := root.GetForeignKeysForTable(ctx, TableName{Name: "child_0007"})
+		require.NoError(t, err)
+	})
+	require.LessOrEqual(t, allocs, 10.0)
 }
 
 func TestTableNameUnmarshalNomsRejectsNonString(t *testing.T) {
