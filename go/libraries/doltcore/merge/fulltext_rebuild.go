@@ -254,7 +254,7 @@ func rebuildFullTextIndexesForTable(ctx *sql.Context, tableToRebuild rebuildable
 		ftEditor.StatementBegin(ctx)
 		defer ftEditor.StatementComplete(ctx)
 
-		rowIter, err := createRowIterForTable(ctx, tableToRebuild.Table, tableToRebuild.Schema)
+		rowIter, err := createRowIterForTable(ctx, tableToRebuild.Table, tableToRebuild.Schema, sql.ColSet{})
 		if err != nil {
 			return err
 		}
@@ -291,7 +291,7 @@ func rebuildFullTextIndexesForTable(ctx *sql.Context, tableToRebuild rebuildable
 }
 
 // createRowIterForTable creates a sql.RowIter for the given table.
-func createRowIterForTable(ctx *sql.Context, t *doltdb.Table, sch schema.Schema) (sql.RowIter, error) {
+func createRowIterForTable(ctx *sql.Context, t *doltdb.Table, sch schema.Schema, columnIds sql.ColSet) (sql.RowIter, error) {
 	rowData, err := t.GetRowData(ctx)
 	if err != nil {
 		return nil, err
@@ -310,7 +310,7 @@ func createRowIterForTable(ctx *sql.Context, t *doltdb.Table, sch schema.Schema)
 		return nil, err
 	}
 
-	return index.NewProllyRowIterForMap(sch, rows, iter, nil), nil
+	return index.NewProllyRowIterForMap(sch, rows, iter, nil, columnIds), nil
 }
 
 // purgeFulltextTableData purges all Full-Text tables with the names given. Ignores any tables that are not Full-Text.
