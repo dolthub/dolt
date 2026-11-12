@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expranalysis"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 )
 
@@ -190,7 +191,11 @@ func StaleIndexes(ctx *sql.Context, root doltdb.RootValue) ([]string, error) {
 			if err != nil {
 				return nil, err
 			}
-			built, err := creation.BuildProllyIndexExternal(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, name, index, rows, nil, nil)
+			predicate, err := expranalysis.ResolveIndexPredicate(ctx, name, sch, index)
+			if err != nil {
+				return nil, err
+			}
+			built, err := creation.BuildProllyIndexExternal(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, name, index, rows, nil, predicate)
 			if err != nil {
 				return nil, err
 			}
