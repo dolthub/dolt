@@ -16,21 +16,15 @@ package index
 
 import (
 	"context"
-	"io"
 	"slices"
-	"sync"
 
-	"github.com/dolthub/go-mysql-server/errguard"
 	"github.com/dolthub/go-mysql-server/sql"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
-
-const indexLookupBufSize = 8
 
 type prollyIndexIter struct {
 	idx       DoltIndex
@@ -407,12 +401,6 @@ type prollyKeylessIndexIter struct {
 	clusteredMap val.OrdinalMapping
 	clusteredBld *val.TupleBuilder
 
-	eg        *errgroup.Group
-	queueFunc func()
-	// cancel stops this iterator's producer without canceling the caller's context.
-	cancel  context.CancelFunc
-	rowChan chan sql.Row
-
 	valueDesc *val.TupleDesc
 
 	// valueMap transforms tuples from the
@@ -424,13 +412,16 @@ type prollyKeylessIndexIter struct {
 	// virtual columns, which have an output ordinal but no stored value.
 	projections []uint64
 
+	// card is the number of duplicate rows remaining for the current
+	// clustered entry, and curr holds that entry's decoded row.
 	card uint64
-	curr sql.ValueRow
+	curr sql.Row
 
 	columnIds   sql.ColSet
 	columnIdMap []sql.ColumnId
 }
 
+var _ sql.RowIter = &prollyKeylessIndexIter{}
 var _ sql.ValueRowWriter = &prollyKeylessIndexIter{}
 
 func newProllyKeylessIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, pkSch sql.PrimaryKeySchema, projections []uint64, clustered, secondary prolly.MapReader, reverse bool, columnIds sql.ColSet) (*prollyKeylessIndexIter, error) {
@@ -450,20 +441,14 @@ func newProllyKeylessIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range
 	keyBld := val.NewTupleBuilder(keyDesc, clustered.NodeStore())
 	sch := idx.Schema()
 	_, vm, om := projectionMappings(sch, projections)
+	columnIdMap := columnIdMapping(sch, projections, columnIds)
 
-	workerCtx, cancel := context.WithCancel(ctx)
-	eg, c := errgroup.WithContext(workerCtx)
-
-	columnIdMap := columnIdMapping(idx.Schema(), projections, columnIds)
-	iter := prollyKeylessIndexIter{
+	return &prollyKeylessIndexIter{
 		idx:          idx,
 		indexIter:    indexIter,
 		clustered:    clustered,
 		clusteredMap: indexMap,
 		clusteredBld: keyBld,
-		eg:           eg,
-		cancel:       cancel,
-		rowChan:      make(chan sql.Row, indexLookupBufSize),
 		valueMap:     vm,
 		ordMap:       om,
 		valueDesc:    valDesc,
@@ -471,58 +456,74 @@ func newProllyKeylessIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range
 		projections:  projections,
 		columnIds:    columnIds,
 		columnIdMap:  columnIdMap,
-	}
-
-	// TODO: DO NOT SUBMIT. Consider removing the channel approach entirely.
-	// We do this because we only want to create the goroutine if we're not using this as a ValueRowWriter
-	iter.queueFunc = sync.OnceFunc(func() {
-		errguard.Go(eg, func() error {
-			return iter.queueRows(c)
-		})
-	})
-
-	return &iter, nil
+	}, nil
 }
 
-// Next returns the next row from the iterator.
-func (p prollyKeylessIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
+// Next returns the next row from the iterator. Duplicate rows for a single
+// clustered entry are each returned as a distinct sql.Row.
+func (p *prollyKeylessIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
+	if p.card == 0 {
+		if err := p.nextTuple(ctx); err != nil {
+			return nil, err
+		}
+	}
+	p.card--
+	return p.curr, nil
+}
 
-	p.queueFunc()
-	r, ok := <-p.rowChan
-	if ok {
-		return r, nil
+// nextTuple advances the secondary index and decodes the next clustered
+// entry into p.curr and p.card.
+func (p *prollyKeylessIndexIter) nextTuple(ctx *sql.Context) error {
+	value, err := p.nextClusteredValue(ctx)
+	if err != nil {
+		return err
 	}
 
-	if err := p.eg.Wait(); err != nil {
+	p.card = val.ReadKeylessCardinality(value)
+	p.curr = make(sql.Row, len(p.projections))
+
+	for i, idx := range p.valueMap {
+		outputIdx := p.ordMap[i]
+		p.curr[outputIdx], err = tree.GetField(ctx, p.valueDesc, idx, value, p.clustered.NodeStore())
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// nextClusteredValue advances the secondary index and returns the value tuple
+// of the clustered row it points to.
+func (p *prollyKeylessIndexIter) nextClusteredValue(ctx *sql.Context) (val.Tuple, error) {
+	idxKey, _, err := p.indexIter.Next(ctx)
+	if err != nil {
 		return nil, err
 	}
 
-	return nil, io.EOF
+	for to := range p.clusteredMap {
+		from := p.clusteredMap.MapOrdinal(to)
+		p.clusteredBld.PutRaw(to, idxKey.GetField(from))
+	}
+	pk, err := p.clusteredBld.Build(ctx, sharePool)
+	if err != nil {
+		return nil, err
+	}
+
+	var value val.Tuple
+	err = p.clustered.Get(ctx, pk, func(k, v val.Tuple) error {
+		value = v
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return value, nil
 }
 
 // WriteNextValueRow implements the sql.ValueRowWriter interface.
 func (p *prollyKeylessIndexIter) WriteNextValueRow(ctx *sql.Context, row sql.ValueRow) error {
 	if p.card == 0 {
-
-		idxKey, _, err := p.indexIter.Next(ctx)
-		if err != nil {
-			return err
-		}
-
-		for to := range p.clusteredMap {
-			from := p.clusteredMap.MapOrdinal(to)
-			p.clusteredBld.PutRaw(to, idxKey.GetField(from))
-		}
-		pk, err := p.clusteredBld.Build(ctx, sharePool)
-		if err != nil {
-			return err
-		}
-
-		var value val.Tuple
-		err = p.clustered.Get(ctx, pk, func(k, v val.Tuple) error {
-			value = v
-			return nil
-		})
+		value, err := p.nextClusteredValue(ctx)
 		if err != nil {
 			return err
 		}
@@ -530,8 +531,8 @@ func (p *prollyKeylessIndexIter) WriteNextValueRow(ctx *sql.Context, row sql.Val
 		p.card = val.ReadKeylessCardinality(value)
 
 		for i, idx := range p.valueMap {
-			outputIdx := p.columnIdMap[p.ordMap[i]]
-			row[outputIdx], err = tree.GetFieldValue(ctx, p.valueDesc, idx, value, p.clustered.NodeStore())
+			columnId := p.columnIdMap[p.ordMap[i]]
+			row[columnId], err = tree.GetFieldValue(ctx, p.valueDesc, idx, value, p.clustered.NodeStore())
 			if err != nil {
 				return err
 			}
@@ -539,11 +540,10 @@ func (p *prollyKeylessIndexIter) WriteNextValueRow(ctx *sql.Context, row sql.Val
 	}
 	p.card--
 	return nil
-
 }
 
 // IsValueRowWriter implements the sql.ValueRowWriter interface.
-func (p prollyKeylessIndexIter) IsValueRowWriter(ctx *sql.Context) bool {
+func (p *prollyKeylessIndexIter) IsValueRowWriter(ctx *sql.Context) bool {
 	if p.columnIds.Empty() {
 		return false
 	}
@@ -555,75 +555,10 @@ func (p prollyKeylessIndexIter) IsValueRowWriter(ctx *sql.Context) bool {
 	return true
 }
 
-func (p prollyKeylessIndexIter) Columns() sql.ColSet {
+func (p *prollyKeylessIndexIter) Columns() sql.ColSet {
 	return p.columnIds
 }
 
-func (p prollyKeylessIndexIter) queueRows(ctx context.Context) error {
-	defer close(p.rowChan)
-
-	for {
-		idxKey, _, err := p.indexIter.Next(ctx)
-		if err != nil {
-			return err
-		}
-
-		for to := range p.clusteredMap {
-			from := p.clusteredMap.MapOrdinal(to)
-			p.clusteredBld.PutRaw(to, idxKey.GetField(from))
-		}
-		pk, err := p.clusteredBld.Build(ctx, sharePool)
-		if err != nil {
-			return err
-		}
-
-		var value val.Tuple
-		err = p.clustered.Get(ctx, pk, func(k, v val.Tuple) error {
-			value = v
-			return nil
-		})
-		if err != nil {
-			return err
-		}
-
-		rows, err := p.keylessRowsFromValueTuple(ctx, p.clustered.NodeStore(), value)
-		if err != nil {
-			return err
-		}
-
-		for i := range rows {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case p.rowChan <- rows[i]:
-			}
-		}
-	}
-}
-
-func (p prollyKeylessIndexIter) keylessRowsFromValueTuple(ctx context.Context, ns tree.NodeStore, value val.Tuple) (rows []sql.Row, err error) {
-	card := val.ReadKeylessCardinality(value)
-	rows = make([]sql.Row, card)
-	rows[0] = make(sql.Row, len(p.projections))
-
-	for i, idx := range p.valueMap {
-		columnId := p.ordMap[i]
-		rows[0][columnId], err = tree.GetField(ctx, p.valueDesc, idx, value, ns)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// duplicate row |card| times
-	for i := 1; i < len(rows); i++ {
-		rows[i] = rows[0].Copy()
-	}
-	return
-}
-
-// Close stops and joins the keyless index row producer before returning.
-func (p prollyKeylessIndexIter) Close(*sql.Context) error {
-	p.cancel()
-	_ = p.eg.Wait()
+func (p *prollyKeylessIndexIter) Close(*sql.Context) error {
 	return nil
 }
