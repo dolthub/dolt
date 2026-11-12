@@ -181,6 +181,34 @@ func BuildRow(ctx *sql.Context, key, value val.Tuple, sch schema.Schema, ns tree
 	return rowIter.Next(ctx)
 }
 
+// MatchesPredicate returns whether |row| satisfies |predicate|, the predicate of a partial index. As in a WHERE clause,
+// a predicate that evaluates to NULL is not satisfied. Every row satisfies a nil |predicate|.
+func MatchesPredicate(ctx *sql.Context, predicate sql.Expression, row sql.Row) (bool, error) {
+	if predicate == nil {
+		return true, nil
+	}
+
+	res, err := sql.EvaluateCondition(ctx, predicate, row)
+	if err != nil {
+		return false, err
+	}
+	return sql.IsTrue(res), nil
+}
+
+// TupleMatchesPredicate is MatchesPredicate for the row stored as |key| and |value| in a table with schema |sch|.
+// |predicate| must be resolved against |sch|.
+func TupleMatchesPredicate(ctx *sql.Context, predicate sql.Expression, key, value val.Tuple, sch schema.Schema, ns tree.NodeStore) (bool, error) {
+	if predicate == nil {
+		return true, nil
+	}
+
+	row, err := BuildRow(ctx, key, value, sch, ns)
+	if err != nil {
+		return false, err
+	}
+	return MatchesPredicate(ctx, predicate, row)
+}
+
 // canCopyRawBytes returns true if the bytes for |idxField| can
 // be copied directly. This is a faster way to populate an index
 // but requires that no data transformation is needed. For example,

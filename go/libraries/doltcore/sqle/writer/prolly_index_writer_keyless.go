@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -299,11 +300,11 @@ func (writer prollyKeylessSecondaryWriter) validateUniqueKeyViolation(ctx contex
 		}
 	}
 	if writer.predicate != nil {
-		matches, err := writer.predicate.Eval(ctx.(*sql.Context), sqlRow)
+		matches, err := index.MatchesPredicate(ctx.(*sql.Context), writer.predicate, sqlRow)
 		if err != nil {
 			return err
 		}
-		if !matches.(bool) {
+		if !matches {
 			writer.prefixBld.Recycle()
 			return nil
 		}
@@ -340,6 +341,17 @@ func (writer prollyKeylessSecondaryWriter) trimKeyPart(to int, keyPart interface
 
 // Insert implements the interface indexWriter. Unique index key fields must be prepared by validation.
 func (writer prollyKeylessSecondaryWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
+	if writer.predicate != nil {
+		matches, err := index.MatchesPredicate(ctx.(*sql.Context), writer.predicate, sqlRow)
+		if err != nil {
+			return err
+		}
+		if !matches {
+			writer.keyBld.Recycle()
+			return nil
+		}
+	}
+
 	if !writer.unique {
 		for to := range writer.keyMap {
 			v, err := writer.keyPartFromRow(ctx, to, sqlRow)
