@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"testing"
 
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -290,6 +291,33 @@ func TestJsonSerialization_VitessRoundTrip(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, test.expected, sql)
 			}
+		})
+	}
+}
+
+// TestJsonSerialization_IntegerValues verifies integer tags and precision through the Vitess decoder.
+func TestJsonSerialization_IntegerValues(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		value any
+		tag   byte
+		want  string
+	}{
+		{"signed", int64(42), jsonTypeInt64, "'42'"},
+		{"minimum signed", int64(math.MinInt64), jsonTypeInt64, "'-9223372036854775808'"},
+		{"maximum signed", int64(math.MaxInt64), jsonTypeInt64, "'9223372036854775807'"},
+		{"unsigned", uint64(42), jsonTypeUint64, "'42'"},
+		{"maximum unsigned", uint64(math.MaxUint64), jsonTypeUint64, "'18446744073709551615'"},
+		{"nested", map[string]any{"values": []any{int64(math.MinInt64), uint64(math.MaxUint64), float64(42)}},
+			jsonTypeSmallObject, "JSON_OBJECT('values',JSON_ARRAY(-9223372036854775808,18446744073709551615,4.2E+01))"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			encoded, err := encodeJsonDoc(context.Background(), gmstypes.JSONDocument{Val: tt.value})
+			require.NoError(t, err)
+			require.Equal(t, tt.tag, encoded[0])
+			decoded, err := mysql.ConvertBinaryJSONToSQL(encoded)
+			require.NoError(t, err)
+			require.Equal(t, tt.want, decoded)
 		})
 	}
 }
