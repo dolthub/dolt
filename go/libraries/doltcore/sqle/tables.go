@@ -155,20 +155,20 @@ func (t *DoltTable) LookupForExpressions(ctx *sql.Context, exprs ...sql.Expressi
 
 	colset := sets.NewFastIntSet()
 	schCols := t.sch.GetAllCols()
-	for _, c := range lookupCols {
+	keys := make([]interface{}, len(lookupCols))
+	for i, c := range lookupCols {
 		col := schCols.LowerNameToCol[c.Col]
 		colType := col.TypeInfo.ToSqlType()
-		litType := c.Lit.Type(ctx)
-		if !sql.IsConvertibleKeyType(colType, litType) {
+		if !sql.IsConvertibleKeyType(colType, c.Lit.Type(ctx)) {
 			return sql.IndexLookup{}, nil, nil, false, nil
 		}
 
-		// Extended types can represent the same value differently, and the literal's value is used as the key without
-		// conversion, so leave literals of another type to the costed index scan, which converts them.
-		if _, ok := colType.(sql.ExtendedType); ok && !colType.Equals(litType) {
+		key, ok, err := strictLookupKey(ctx, colType, c.Lit)
+		if err != nil || !ok {
 			return sql.IndexLookup{}, nil, nil, false, nil
 		}
 
+		keys[i] = key
 		idx := schCols.TagToIdx[col.Tag]
 		colset.Add(idx + 1)
 	}
@@ -194,7 +194,7 @@ func (t *DoltTable) LookupForExpressions(ctx *sql.Context, exprs ...sql.Expressi
 		// (1) assign lookup columns to range expressions in the appropriate order for the given lookup.
 		// (2) aggregate the unused expressions into the return filter.
 		rb := sql.NewEqualityIndexBuilder(lookup.Idx)
-		for _, c2 := range lookupCols {
+		for keyIdx, c2 := range lookupCols {
 			matchIdx := -1
 			for i, ord := range lookup.Ordinals {
 				// the ordinals redirection accounts for index
@@ -207,7 +207,7 @@ func (t *DoltTable) LookupForExpressions(ctx *sql.Context, exprs ...sql.Expressi
 				}
 			}
 			if matchIdx != -1 {
-				if err = rb.AddEquality(ctx, matchIdx, c2.Lit.Value()); err != nil {
+				if err = rb.AddEquality(ctx, matchIdx, keys[keyIdx]); err != nil {
 					return sql.IndexLookup{}, nil, nil, false, nil
 				}
 				continue
@@ -229,6 +229,46 @@ func (t *DoltTable) LookupForExpressions(ctx *sql.Context, exprs ...sql.Expressi
 
 	return sql.IndexLookup{}, nil, nil, false, nil
 
+}
+
+// strictLookupKey returns the value of |lit| as a key of a column of type |colType|. Extended types can represent the
+// same value differently, so a literal of another extended type is converted to the column's type. Returns false when
+// the literal has no exact equivalent in the column's type, such as 1.5 for an integer column, in which case the strict
+// lookup must not be used.
+func strictLookupKey(ctx *sql.Context, colType sql.Type, lit *expression.Literal) (interface{}, bool, error) {
+	key := lit.Value()
+	colEt, ok := colType.(sql.ExtendedType)
+	if !ok || key == nil {
+		return key, true, nil
+	}
+
+	litType := lit.Type(ctx)
+	if colType.Equals(litType) {
+		return key, true, nil
+	}
+
+	litEt, ok := litType.(sql.ExtendedType)
+	if !ok {
+		return nil, false, nil
+	}
+
+	converted, inRange, err := colEt.ConvertToType(ctx, litEt, key, 'a')
+	if err != nil || inRange != sql.InRange {
+		return nil, false, err
+	}
+
+	// Assignment casts can round, so the key is only used when it converts back to the literal's value.
+	restored, inRange, err := litEt.ConvertToType(ctx, colEt, converted, 'a')
+	if err != nil || inRange != sql.InRange {
+		return nil, false, err
+	}
+
+	cmp, err := litEt.Compare(ctx, key, restored)
+	if err != nil || cmp != 0 {
+		return nil, false, err
+	}
+
+	return converted, true, nil
 }
 
 func NewDoltTable(ctx *sql.Context, name string, sch schema.Schema, tbl *doltdb.Table, db dsess.SqlDatabase, opts editor.Options) (*DoltTable, error) {
