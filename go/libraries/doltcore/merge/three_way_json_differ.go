@@ -15,7 +15,6 @@
 package merge
 
 import (
-	"bytes"
 	"context"
 	"io"
 
@@ -61,8 +60,14 @@ func (differ *ThreeWayJsonDiffer) Next(ctx context.Context) (ThreeWayJsonDiff, e
 		// A shared element change can be followed by another change on only one side.
 		// Check for that conflict even when the other diff stream has ended.
 		if len(differ.lastMatchedArrayPath) > 0 {
-			leftStillInMatchedArray := bytes.Equal(leftArray, differ.lastMatchedArrayPath)
-			rightStillInMatchedArray := bytes.Equal(rightArray, differ.lastMatchedArrayPath)
+			leftStillInMatchedArray, err := tree.EqualJsonDiffKeys(leftArray, differ.lastMatchedArrayPath)
+			if err != nil {
+				return ThreeWayJsonDiff{}, err
+			}
+			rightStillInMatchedArray, err := tree.EqualJsonDiffKeys(rightArray, differ.lastMatchedArrayPath)
+			if err != nil {
+				return ThreeWayJsonDiff{}, err
+			}
 			if leftStillInMatchedArray != rightStillInMatchedArray {
 				return ThreeWayJsonDiff{Op: tree.DiffOpDivergentModifyConflict}, nil
 			}
@@ -78,78 +83,74 @@ func (differ *ThreeWayJsonDiffer) Next(ctx context.Context) (ThreeWayJsonDiff, e
 			return differ.processRightSideOnlyDiff(), nil
 		}
 
-		cmp := bytes.Compare(leftKey, rightKey)
-		// If both sides modify the same array to different values, we currently consider that to be a conflict.
-		// This may be relaxed in the future.
-		if cmp != 0 && leftArray != nil && bytes.Equal(leftArray, rightArray) {
-			result := ThreeWayJsonDiff{
-				Op: tree.DiffOpDivergentModifyConflict,
-			}
-			return result, nil
+		cmp, err := tree.CompareJsonDiffKeys(leftKey, rightKey)
+		if err != nil {
+			return ThreeWayJsonDiff{}, err
 		}
-		if cmp > 0 {
-			if tree.IsJsonKeyPrefix(leftKey, rightKey) {
-				// The right diff must be replacing or deleting an object,
-				// and the left diff makes changes to that object.
-				result := ThreeWayJsonDiff{
-					Op: tree.DiffOpDivergentModifyConflict,
-				}
-				differ.leftCurrentDiff = nil
-				return result, nil
+		if cmp != 0 {
+			sameArray, err := tree.EqualJsonDiffKeys(leftArray, rightArray)
+			if err != nil {
+				return ThreeWayJsonDiff{}, err
 			}
-			// key only changed on right
-			return differ.processRightSideOnlyDiff(), nil
-		} else if cmp < 0 {
-			if tree.IsJsonKeyPrefix(rightKey, leftKey) {
-				// The right diff must be replacing or deleting an object,
-				// and the left diff makes changes to that object.
-				result := ThreeWayJsonDiff{
-					Op: tree.DiffOpDivergentModifyConflict,
-				}
-				differ.rightCurrentDiff = nil
-				return result, nil
+			if leftArray != nil && sameArray {
+				return ThreeWayJsonDiff{Op: tree.DiffOpDivergentModifyConflict}, nil
 			}
-			// left side was modified. We don't need to do anything with this diff.
+			// Check for a replacement or removal that overlaps a descendant edit.
+			earlier, later := leftKey, rightKey
+			if cmp > 0 {
+				earlier, later = rightKey, leftKey
+			}
+			overlap, err := tree.IsJsonKeyPrefix(later, earlier)
+			if err != nil {
+				return ThreeWayJsonDiff{}, err
+			}
+			if overlap {
+				return ThreeWayJsonDiff{Op: tree.DiffOpDivergentModifyConflict}, nil
+			}
+			if cmp > 0 {
+				return differ.processRightSideOnlyDiff(), nil
+			}
+			// A left-only edit is already in the document.
 			differ.leftCurrentDiff = nil
 			continue
-		} else {
-			// Both diffs are on the same key. Copy the array path because the
-			// element diff may borrow its key from the differ's working buffer.
-			differ.lastMatchedArrayPath = append(differ.lastMatchedArrayPath[:0], leftArray...)
-			if differ.leftCurrentDiff.To == nil && differ.rightCurrentDiff.To == nil {
-				return differ.processMergedDiff(tree.DiffOpConvergentDelete, nil), nil
-			}
-			if differ.leftCurrentDiff.To == nil || differ.rightCurrentDiff.To == nil {
-				return differ.processMergedDiff(tree.DiffOpDivergentDeleteConflict, nil), nil
-			}
-			valueCmp, err := types.CompareJSON(ctx, differ.leftCurrentDiff.To, differ.rightCurrentDiff.To)
-			if err != nil {
-				return ThreeWayJsonDiff{}, err
-			}
-			if valueCmp == 0 {
-				op := tree.DiffOpConvergentModify
-				if differ.leftCurrentDiff.From == nil {
-					op = tree.DiffOpConvergentAdd
-				}
-				return differ.processMergedDiff(op, differ.leftCurrentDiff.To), nil
-			}
+		}
+
+		// Both diffs are on the same key. Copy the array path because the
+		// element diff may borrow its key from the differ's working buffer.
+		differ.lastMatchedArrayPath = append(differ.lastMatchedArrayPath[:0], leftArray...)
+		if differ.leftCurrentDiff.To == nil && differ.rightCurrentDiff.To == nil {
+			return differ.processMergedDiff(tree.DiffOpConvergentDelete, nil), nil
+		}
+		if differ.leftCurrentDiff.To == nil || differ.rightCurrentDiff.To == nil {
+			return differ.processMergedDiff(tree.DiffOpDivergentDeleteConflict, nil), nil
+		}
+		valueCmp, err := types.CompareJSON(ctx, differ.leftCurrentDiff.To, differ.rightCurrentDiff.To)
+		if err != nil {
+			return ThreeWayJsonDiff{}, err
+		}
+		if valueCmp == 0 {
+			op := tree.DiffOpConvergentModify
 			if differ.leftCurrentDiff.From == nil {
-				return differ.processMergedDiff(tree.DiffOpDivergentModifyConflict, nil), nil
+				op = tree.DiffOpConvergentAdd
 			}
-			// If the key existed at base, we can do a recursive three-way merge to resolve
-			// changes to the values.
-			// This shouldn't be necessary: if its an object on all three branches, the original diff is recursive.
-			mergedValue, conflict, err := MergeJSON(ctx, differ.ns, differ.leftCurrentDiff.From,
-				differ.leftCurrentDiff.To,
-				differ.rightCurrentDiff.To)
-			if err != nil {
-				return ThreeWayJsonDiff{}, err
-			}
-			if conflict {
-				return differ.processMergedDiff(tree.DiffOpDivergentModifyConflict, nil), nil
-			} else {
-				return differ.processMergedDiff(tree.DiffOpDivergentModifyResolved, mergedValue), nil
-			}
+			return differ.processMergedDiff(op, differ.leftCurrentDiff.To), nil
+		}
+		if differ.leftCurrentDiff.From == nil {
+			return differ.processMergedDiff(tree.DiffOpDivergentModifyConflict, nil), nil
+		}
+		// If the key existed at base, we can do a recursive three-way merge to resolve
+		// changes to the values.
+		// This shouldn't be necessary: if its an object on all three branches, the original diff is recursive.
+		mergedValue, conflict, err := MergeJSON(ctx, differ.ns, differ.leftCurrentDiff.From,
+			differ.leftCurrentDiff.To,
+			differ.rightCurrentDiff.To)
+		if err != nil {
+			return ThreeWayJsonDiff{}, err
+		}
+		if conflict {
+			return differ.processMergedDiff(tree.DiffOpDivergentModifyConflict, nil), nil
+		} else {
+			return differ.processMergedDiff(tree.DiffOpDivergentModifyResolved, mergedValue), nil
 		}
 	}
 }

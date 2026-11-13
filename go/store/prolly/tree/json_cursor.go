@@ -70,9 +70,6 @@ func newJsonCursorAtStartOfChunk(ctx context.Context, ns NodeStore, root *Node, 
 	if err != nil {
 		return nil, err
 	}
-	if ordering.err != nil {
-		return nil, err
-	}
 	return newJsonCursorFromCursor(ctx, cur)
 }
 
@@ -164,6 +161,12 @@ func (j *JsonCursor) isKeyInChunk(path jsonLocation) (bool, error) {
 // the cursor advances to the end of the previous value, prior to the object key. This allows the key to be removed along
 // with the value.
 func (j *JsonCursor) AdvanceToLocation(ctx context.Context, path jsonLocation, forRemoval bool) (found bool, err error) {
+	return j.advanceToLocation(ctx, path, forRemoval, false)
+}
+
+// advanceToLocation can treat the end of a leaf as the start of its next
+// array value when the first value shares the offset of the opening bracket.
+func (j *JsonCursor) advanceToLocation(ctx context.Context, path jsonLocation, forRemoval, allowEntryAtBoundary bool) (found bool, err error) {
 	isInChunk, err := j.isKeyInChunk(path)
 	if err != nil {
 		return false, err
@@ -173,9 +176,6 @@ func (j *JsonCursor) AdvanceToLocation(ctx context.Context, path jsonLocation, f
 		ordering := jsonLocationOrdering{}
 		err := Seek(ctx, j.cur.parent, path.key, &ordering)
 		if err != nil {
-			return false, err
-		}
-		if ordering.err != nil {
 			return false, err
 		}
 		j.cur.nd, err = fetchChild(ctx, j.cur.nrw, j.cur.parent.currentRef())
@@ -195,9 +195,24 @@ func (j *JsonCursor) AdvanceToLocation(ctx context.Context, path jsonLocation, f
 		return false, err
 	}
 	for cmp < 0 {
+		if allowEntryAtBoundary && j.jsonScanner.atEndOfChunk() &&
+			j.jsonScanner.currentPath.getScannerState() == arrayInitialElement && j.cur.parent != nil {
+			// The first array element can start at the same byte as the
+			// opening bracket's end. The index records that transition.
+			boundary := j.cur.parent.CurrentKey()
+			if len(boundary) > 0 && boundary[0] == path.key[0] {
+				found, err := EqualJsonDiffKeys(path.key, boundary)
+				if found || err != nil {
+					return found, err
+				}
+			}
+		}
 		previousScanner = j.jsonScanner.Clone()
 		err := j.jsonScanner.AdvanceToNextLocation()
 		if err == io.EOF {
+			if allowEntryAtBoundary {
+				return false, jsonParseError
+			}
 			// We reached the end of the document without finding the path. This shouldn't be possible, because
 			// there is no path greater than the end-of-document path, which is always the last key.
 			panic("Reached the end of the JSON document while advancing. This should not be possible. Is the document corrupt?")
