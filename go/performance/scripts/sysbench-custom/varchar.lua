@@ -11,7 +11,7 @@ function rand_str()
         local idx = math.random(1, #chars)
         result[i] = chars:sub(idx, idx)
     end
-    return table.concat(result)
+    return "'" .. table.concat(result) .. "'"
 end
 
 function prepare()
@@ -39,17 +39,17 @@ CREATE TABLE tbl (
     con:bulk_insert_init("INSERT INTO tbl VALUES")
     for i = 1, sysbench.opt.table_size do
         row_values = "(" ..
-        i .. "," ..                         -- id
-        "'" .. rand_str() .. "'" .. "," ..  -- c0
-        "'" .. rand_str() .. "'" .. "," ..  -- c1
-        "'" .. rand_str() .. "'" .. "," ..  -- c2
-        "'" .. rand_str() .. "'" .. "," ..  -- c3
-        "'" .. rand_str() .. "'" .. "," ..  -- c4
-        "'" .. rand_str() .. "'" .. "," ..  -- c5
-        "'" .. rand_str() .. "'" .. "," ..  -- c6
-        "'" .. rand_str() .. "'" .. "," ..  -- c7
-        "'" .. rand_str() .. "'" .. "," ..  -- c8
-        "'" .. rand_str() .. "'" ..         -- c9
+        i .. "," ..           -- id
+        rand_str() .. "," ..  -- c0
+        rand_str() .. "," ..  -- c1
+        rand_str() .. "," ..  -- c2
+        rand_str() .. "," ..  -- c3
+        rand_str() .. "," ..  -- c4
+        rand_str() .. "," ..  -- c5
+        rand_str() .. "," ..  -- c6
+        rand_str() .. "," ..  -- c7
+        rand_str() .. "," ..  -- c8
+        rand_str() ..         -- c9
         ")"
         con:bulk_insert_next(row_values)
     end
