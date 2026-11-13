@@ -37,8 +37,20 @@ func TestMain(m *testing.M) {
 	if os.Getenv(gitWithoutNoWriteFetchHeadEnv) != "" {
 		os.Exit(runGitWithoutNoWriteFetchHead(os.Args[1:]))
 	}
+	if os.Getenv(warnSizeEnv) != "" {
+		os.Args = []string{os.Args[0], "warnsize"}
+	}
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
+		case "warnsize":
+			// Stands in for a git that warns on stderr and still succeeds.
+			_, _ = os.Stderr.WriteString("error: packfile objects/pack/pack-abc.pack index unavailable\n")
+			_, _ = os.Stdout.WriteString("321\n")
+			os.Exit(0)
+		case "warnfail":
+			_, _ = os.Stdout.WriteString("out\n")
+			_, _ = os.Stderr.WriteString("fatal: boom\n")
+			os.Exit(3)
 		case "stdoutfail":
 			_, _ = os.Stdout.WriteString("abc")
 			os.Exit(3)
@@ -1280,6 +1292,10 @@ func TestGitAPIImpl_FetchRef_FallsBackOnGitWithoutNoWriteFetchHead(t *testing.T)
 	}
 	requireTrackingRef(t, ctx, api, remoteHead)
 }
+
+// warnSizeEnv makes the test act as a git that warns on stderr, prints a size on
+// stdout and succeeds, whatever its arguments.
+const warnSizeEnv = "DOLT_TEST_GIT_WARN_SIZE"
 
 // gitWithoutNoWriteFetchHeadEnv makes the test act as git without the flag.
 const gitWithoutNoWriteFetchHeadEnv = "DOLT_TEST_GIT_WITHOUT_NO_WRITE_FETCH_HEAD"

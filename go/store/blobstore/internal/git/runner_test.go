@@ -76,3 +76,75 @@ func TestRunner_WaitDelayBoundsAbandonedPipe(t *testing.T) {
 	}
 	readHelperPid(t, pidFile)
 }
+
+// A warning git prints to stderr while succeeding must not reach callers that
+// parse stdout. https://github.com/dolthub/dolt/issues/12488
+func TestRunner_RunReturnsOnlyStdoutOnSuccess(t *testing.T) {
+	t.Parallel()
+
+	out, err := helperCommandRunner(t).Run(context.Background(), RunOptions{}, "warnsize")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != "321\n" {
+		t.Fatalf("got %q, want only stdout", out)
+	}
+}
+
+func TestRunner_RunFailureCarriesStdoutAndStderr(t *testing.T) {
+	t.Parallel()
+
+	out, err := helperCommandRunner(t).Run(context.Background(), RunOptions{}, "warnfail")
+	var cerr *CmdError
+	if !errors.As(err, &cerr) {
+		t.Fatalf("expected a CmdError, got %v", err)
+	}
+	for _, want := range []string{"out\n", "fatal: boom\n"} {
+		if !strings.Contains(string(out), want) || !strings.Contains(string(cerr.Output), want) {
+			t.Fatalf("output %q / error output %q missing %q", out, cerr.Output, want)
+		}
+	}
+}
+
+// BlobSize against a git that warns on stderr and then prints the size.
+func TestGitAPIImpl_BlobSize_IgnoresStderrWarning(t *testing.T) {
+	t.Parallel()
+
+	r := helperCommandRunner(t).WithExtraEnv(warnSizeEnv + "=1")
+	n, err := NewGitAPIImpl(r).BlobSize(context.Background(), OID(strings.Repeat("a", 40)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 321 {
+		t.Fatalf("got size %d, want 321", n)
+	}
+}
+
+// Fetch must not start git's automatic maintenance, which detaches and can delete
+// packs while the fetched objects are being read.
+func TestGitAPIImpl_FetchRef_DoesNotStartAutoMaintenance(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	_, localRunner, _, remoteHead := newFetchableRepos(t, ctx)
+	trace := filepath.Join(t.TempDir(), "trace")
+	api := NewGitAPIImpl(localRunner.WithExtraEnv("GIT_TRACE2_EVENT=" + trace))
+
+	if err := api.FetchRef(ctx, "origin", "refs/dolt/data", "refs/dolt/remotes/origin/data"); err != nil {
+		t.Fatal(err)
+	}
+	requireTrackingRef(t, ctx, api, remoteHead)
+
+	b, err := os.ReadFile(trace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `"fetch"`) {
+		t.Fatalf("trace does not record the fetch:\n%s", b)
+	}
+	for _, sub := range []string{`"maintenance"`, `"gc"`} {
+		if strings.Contains(string(b), sub) {
+			t.Fatalf("fetch started %s:\n%s", sub, b)
+		}
+	}
+}

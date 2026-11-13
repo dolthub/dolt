@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/utils/gitauth"
@@ -129,8 +130,11 @@ func (r *Runner) buildCmd(ctx context.Context, opts RunOptions, args []string) *
 	return cmd
 }
 
-// Run executes "git <args...>" with GIT_DIR set and returns captured combined output
-// when Stdout/Stderr are not supplied.
+// Run executes "git <args...>" with GIT_DIR set. When Stdout/Stderr are not supplied
+// it returns git's stdout alone on success, so that a warning git prints to stderr
+// while succeeding cannot corrupt output that callers parse. On failure it returns
+// stdout and stderr combined, in the order written, which is also what the error
+// carries.
 func (r *Runner) Run(ctx context.Context, opts RunOptions, args ...string) ([]byte, error) {
 	cmd := r.buildCmd(ctx, opts, args)
 
@@ -138,11 +142,12 @@ func (r *Runner) Run(ctx context.Context, opts RunOptions, args ...string) ([]by
 		cmd.Stdin = opts.Stdin
 	}
 
-	// Capture combined output unless caller provided destinations.
-	var buf bytes.Buffer
+	// Capture output unless caller provided destinations.
+	var stdout bytes.Buffer
+	var combined lockedBuffer
 	if opts.Stdout == nil && opts.Stderr == nil {
-		cmd.Stdout = &buf
-		cmd.Stderr = &buf
+		cmd.Stdout = io.MultiWriter(&stdout, &combined)
+		cmd.Stderr = &combined
 	} else {
 		if opts.Stdout != nil {
 			cmd.Stdout = opts.Stdout
@@ -156,10 +161,10 @@ func (r *Runner) Run(ctx context.Context, opts RunOptions, args ...string) ([]by
 	}
 
 	err := cmd.Run()
-	out := buf.Bytes()
 	if err == nil {
-		return out, nil
+		return stdout.Bytes(), nil
 	}
+	out := combined.Bytes()
 
 	exitCode := 0
 	var ee *exec.ExitError
@@ -174,6 +179,25 @@ func (r *Runner) Run(ctx context.Context, opts RunOptions, args ...string) ([]by
 		Cause:    err,
 	}
 	return out, gitauth.NormalizeError(ctx, cerr, out)
+}
+
+// lockedBuffer is a bytes.Buffer that is safe for the concurrent writes os/exec makes
+// when a command's stdout and stderr are distinct writers.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) Bytes() []byte {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Bytes()
 }
 
 // Start starts "git <args...>" and returns a ReadCloser for stdout.
