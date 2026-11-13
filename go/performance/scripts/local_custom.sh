@@ -9,8 +9,8 @@ USER="root"
 PASS=""
 
 PPROF=0
-SIZE1=10
-SIZE2=10000
+TIME=20
+TABLE_SIZE=10000
 SYSBENCH_TEST="default"
 
 # parse options
@@ -22,18 +22,13 @@ do
       PPROF=1
       shift
       ;;
+
     # specify table size
-    --t1-size)
-      SIZE1="$2"
-      shift
+    --table-size)
+      TABLE_SIZE="$2"
       shift
       ;;
-    # specify table size
-    --t2-size)
-      SIZE2="$2"
-      shift
-      shift
-      ;;
+
     # specify sysbench benchmark
     *) SYSBENCH_TEST="$1"
       shift
@@ -41,8 +36,12 @@ do
     esac
 done
 
-# TODO: assume sysbench-custom always exists
+
 # collect custom sysbench scripts
+if [ ! -d "./sysbench-custom" ]; then
+  echo "directory './sysbench-custom' is missing"
+  exit
+fi
 cp ./sysbench-custom/*.lua "$WORKING_DIR"
 
 # grab testing SSL pems
@@ -79,23 +78,23 @@ cleanup() {
 trap cleanup EXIT
 
 # setup benchmark
-echo "setting up custom benchmarks at $WORKING_DIR"
+echo "benchmark $SYSBENCH_TEST starting at $WORKING_DIR"
 
 sleep 1
-
-./custom.lua \
+sysbench \
   --db-driver="mysql" \
   --mysql-db="sbtest" \
   --mysql-host="127.0.0.1" \
-  --mysql-port=3366 \
-  --mysql-user="root" \
-  --mysql-password="" \
-  --time=120 \
-  --report_interval=1 \
-  --threads=1 \
-  --t1-size="$SIZE1" \
-  --t2-size="$SIZE2" \
-  prepare
+  --mysql-port="$PORT" \
+  --mysql-user="$USER" \
+  --mysql-password="$PASS" \
+  --db-ps-mode=disable \
+  --time="$TIME" \
+  --table-size="$TABLE_SIZE" \
+  --percentile=95 \
+  --rand-type=uniform \
+  --rand-seed=1 \
+  "$SYSBENCH_TEST" prepare
 
 # restart server to isolate bench run
 kill -15 "$SERVER_PID"
@@ -112,21 +111,22 @@ sleep 1
 # run benchmark
 echo "benchmark $SYSBENCH_TEST starting at $WORKING_DIR"
 
-./custom.lua \
+sysbench \
   --db-driver="mysql" \
   --mysql-db="sbtest" \
   --mysql-host="127.0.0.1" \
-  --mysql-port=3366 \
-  --mysql-user="root" \
-  --mysql-password="" \
-  --time=120 \
-  --report_interval=1 \
-  --threads=1 \
-  --t1-size="$SIZE1" \
-  --t2-size="$SIZE2" \
-  run
+  --mysql-port="$PORT" \
+  --mysql-user="$USER" \
+  --mysql-password="$PASS" \
+  --db-ps-mode=disable \
+  --time="$TIME" \
+  --table-size="$TABLE_SIZE" \
+  --percentile=95 \
+  --rand-type=uniform \
+  --rand-seed=1 \
+  "$SYSBENCH_TEST" run
 
-echo "custom benchmark $SYSBENCH_TEST complete at $WORKING_DIR"
+echo "benchmark $SYSBENCH_TEST complete at $WORKING_DIR"
 if [ "$PPROF" -eq 1 ]; then
   # parse run.log to output the profile location
   head -n1 "$WORKING_DIR/run.log" | cut -d ":" -f 4
