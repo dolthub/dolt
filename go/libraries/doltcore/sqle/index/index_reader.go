@@ -828,5 +828,6 @@ func (ib *keylessIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSa
 		pkMap:      OrdinalMappingFromIndex(ib.idx),
 		pkBld:      pkBld,
 		prefixDesc: secondary.KeyDesc().PrefixDesc(cnt),
+		nullSafe:   nullSafe,
 	}, nil
 }
