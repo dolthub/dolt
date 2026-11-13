@@ -662,7 +662,8 @@ const (
 //
 // The justification for this behavior is that we want to protect the working
 // set from constraint violations with the above settings.
-// TODO: should this validate staged as well?
+//
+// Conflicts are checked in both the working and staged roots; constraint violations only in the working root.
 func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, workingSet *doltdb.WorkingSet, isFf ffMerge) error {
 	forceTransactionCommit, err := ctx.GetSessionVariable(ctx, ForceTransactionCommit)
 	if err != nil {
@@ -683,6 +684,14 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 	hasDataConflicts, err := doltdb.HasConflicts(ctx, workingRoot)
 	if err != nil {
 		return err
+	}
+	if !hasDataConflicts {
+		// A transaction merge can also leave conflicts in the staged root (e.g. when another session reset the branch
+		// head mid-transaction), so check it as well.
+		hasDataConflicts, err = doltdb.HasConflicts(ctx, workingSet.StagedRoot())
+		if err != nil {
+			return err
+		}
 	}
 	hasConstraintViolations, err := doltdb.HasConstraintViolations(ctx, workingRoot)
 	if err != nil {

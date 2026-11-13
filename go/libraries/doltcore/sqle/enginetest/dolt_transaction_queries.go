@@ -2216,6 +2216,37 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 
 var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 	{
+		Name: "dolt_commit rejects a conflict created by a reset in another session",
+		SetUpScript: []string{
+			"CREATE TABLE t (k INT PRIMARY KEY, x INT)",
+			"CALL DOLT_COMMIT('-Am', 'a')",
+			"INSERT INTO t VALUES (1, 1)",
+			"CALL DOLT_COMMIT('-am', 'b')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "/* client a */ CALL DOLT_RESET('--soft', 'HEAD~1')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ UPDATE t SET x = 5 WHERE k = 1",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:          "/* client b */ CALL DOLT_COMMIT('-am', 'c')",
+				ExpectedErrStr: dsess.ErrUnresolvedConflictsAutoCommit.Error(),
+			},
+			{
+				Query:    "/* client a */ SELECT count(*) FROM dolt_conflicts",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
 		Name: "committed conflicts are seen by other sessions",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
