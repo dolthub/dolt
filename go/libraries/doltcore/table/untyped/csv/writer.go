@@ -176,9 +176,12 @@ func (csvw *CSVWriter) processRowWithSqlSchema(ctx *sql.Context, r sql.Row) ([]*
 // Close should flush all writes, release resources being held
 func (csvw *CSVWriter) Close(ctx context.Context) error {
 	if csvw.wr != nil {
-		_ = csvw.wr.Flush()
+		errFl := csvw.wr.Flush()
 		errCl := csvw.closer.Close()
 		csvw.wr = nil
+		if errFl != nil {
+			return errFl
+		}
 		return errCl
 	} else {
 		return errors.New("Already closed.")
