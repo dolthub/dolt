@@ -408,7 +408,7 @@ func interfaceValueAsSqlString(ctx *sql.Context, ti typeinfo.TypeInfo, value int
 		}
 		// Fall back to the pre-computed string representation from SqlColToStr.
 		return quoteAndEscapeString(str), nil
-	case querypb.Type_JSON, querypb.Type_ENUM, querypb.Type_SET, querypb.Type_BLOB:
+	case querypb.Type_JSON, querypb.Type_ENUM, querypb.Type_SET, querypb.Type_BLOB, querypb.Type_GEOMETRY:
 		return quoteAndEscapeString(str), nil
 	case querypb.Type_VARCHAR, querypb.Type_CHAR:
 		s, ok := value.(string)
@@ -416,8 +416,6 @@ func interfaceValueAsSqlString(ctx *sql.Context, ti typeinfo.TypeInfo, value int
 			return "", fmt.Errorf("expected string, got %T", value)
 		}
 		return quoteAndEscapeString(s), nil
-	case querypb.Type_GEOMETRY:
-		return singleQuote + str + singleQuote, nil
 	default:
 		return str, nil
 	}
