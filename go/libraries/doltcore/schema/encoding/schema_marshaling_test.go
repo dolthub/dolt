@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
@@ -214,6 +215,54 @@ func TestVectorIndexMarshalling(t *testing.T) {
 			require.Equal(t, schema.VectorProperties{DistanceType: test.expected}, idx.VectorProperties())
 			if test.distanceType == test.expected {
 				assert.True(t, schema.SchemasAreEqual(sch, unmarshalled))
+			}
+		})
+	}
+}
+
+func TestUniqueIndexNullsNotDistinctMarshalling(t *testing.T) {
+	ctx := context.Background()
+	nbf := types.Format_DOLT
+	vrw := getTestVRW(nbf)
+	for _, nullsNotDistinct := range []bool{false, true} {
+		t.Run(strconv.FormatBool(nullsNotDistinct), func(t *testing.T) {
+			pkTi, err := typeinfo.FromSqlType(gmstypes.Int64)
+			require.NoError(t, err)
+			pkCol, err := schema.NewColumnWithTypeInfo("pk", 1, pkTi, true, "", false, "", schema.NotNullConstraint{})
+			require.NoError(t, err)
+			aCol, err := schema.NewColumnWithTypeInfo("a", 2, pkTi, false, "", false, "")
+			require.NoError(t, err)
+			sch, err := schema.SchemaFromCols(schema.NewColCollection(pkCol, aCol))
+			require.NoError(t, err)
+			_, err = sch.Indexes().AddIndexByColTags("a_key", []uint64{2}, nil, schema.IndexProperties{
+				IsUnique:         true,
+				IsUserDefined:    true,
+				NullsNotDistinct: nullsNotDistinct,
+			})
+			require.NoError(t, err)
+
+			v, err := MarshalSchema(ctx, vrw, sch)
+			require.NoError(t, err)
+			unmarshalled, err := UnmarshalSchema(ctx, nbf, v)
+			require.NoError(t, err)
+
+			idx := unmarshalled.Indexes().GetByName("a_key")
+			require.NotNil(t, idx)
+			require.True(t, idx.IsUnique())
+			require.Equal(t, nullsNotDistinct, idx.NullsNotDistinct())
+			assert.True(t, schema.SchemasAreEqual(sch, unmarshalled))
+
+			// The field is only written when set, so that older clients can still read indexes that don't use it.
+			s, err := serial.TryGetRootAsTableSchema(v.(types.SerialMessage), serial.MessagePrefixSz)
+			require.NoError(t, err)
+			var serialIdx serial.Index
+			ok, err := s.TrySecondaryIndexes(&serialIdx, 0)
+			require.NoError(t, err)
+			require.True(t, ok)
+			if nullsNotDistinct {
+				assert.Equal(t, serial.IndexNumFields, int(serialIdx.Table().NumFields()))
+			} else {
+				assert.Less(t, int(serialIdx.Table().NumFields()), serial.IndexNumFields)
 			}
 		})
 	}

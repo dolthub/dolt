@@ -326,14 +326,15 @@ func (t *TempTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) error {
 	}
 
 	ret, err := creation.CreateIndex(ctx, t.table, t.Name(), idx.Name, cols, allocatePrefixLengths(idx.Columns), schema.IndexProperties{
-		IsUnique:      idx.Constraint == sql.IndexConstraint_Unique,
-		IsSpatial:     idx.Constraint == sql.IndexConstraint_Spatial,
-		IsFullText:    false,
-		IsVector:      false,
-		IsUserDefined: true,
-		Comment:       idx.Comment,
-		ColumnOrders:  idx.ColumnOrders(),
-		OpClasses:     idx.OpClasses(),
+		IsUnique:         idx.Constraint == sql.IndexConstraint_Unique,
+		IsSpatial:        idx.Constraint == sql.IndexConstraint_Spatial,
+		IsFullText:       false,
+		IsVector:         false,
+		IsUserDefined:    true,
+		Comment:          idx.Comment,
+		ColumnOrders:     idx.ColumnOrders(),
+		OpClasses:        idx.OpClasses(),
+		NullsNotDistinct: idx.NullsNotDistinct,
 	}, t.opts, nil)
 	if err != nil {
 		return err

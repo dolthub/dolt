@@ -116,18 +116,19 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, schSta
 
 		// mapping from secondary index key to primary key
 		writers[defName] = prollySecondaryIndexWriter{
-			name:          defName,
-			mut:           idxMap.MutateInterface(),
-			unique:        def.IsUnique,
-			prefixLengths: def.PrefixLengths,
-			idxCols:       def.Count,
-			keyMap:        def.KeyMapping,
-			keyBld:        val.NewTupleBuilder(keyDesc, idxMap.NodeStore()).WithMaxRowSize(targetRowSize),
-			pkMap:         def.PkMapping,
-			pkBld:         val.NewTupleBuilder(schState.PkKeyDesc, idxMap.NodeStore()).WithMaxRowSize(targetRowSize),
-			key:           make(sql.Row, keyDesc.Count()),
-			predicate:     def.Predicate,
-			virtualExprs:  def.KeyVirtualExprs,
+			name:             defName,
+			mut:              idxMap.MutateInterface(),
+			unique:           def.IsUnique,
+			nullsNotDistinct: def.NullsNotDistinct,
+			prefixLengths:    def.PrefixLengths,
+			idxCols:          def.Count,
+			keyMap:           def.KeyMapping,
+			keyBld:           val.NewTupleBuilder(keyDesc, idxMap.NodeStore()).WithMaxRowSize(targetRowSize),
+			pkMap:            def.PkMapping,
+			pkBld:            val.NewTupleBuilder(schState.PkKeyDesc, idxMap.NodeStore()).WithMaxRowSize(targetRowSize),
+			key:              make(sql.Row, keyDesc.Count()),
+			predicate:        def.Predicate,
+			virtualExprs:     def.KeyVirtualExprs,
 		}
 	}
 
@@ -160,18 +161,19 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, schS
 
 		targetRowSize := schState.DoltSchema.GetTargetRowSize()
 		writers[defName] = prollyKeylessSecondaryWriter{
-			name:          defName,
-			mut:           m.Mutate(),
-			primary:       primary,
-			unique:        def.IsUnique,
-			spatial:       def.IsSpatial,
-			predicate:     def.Predicate,
-			prefixLengths: def.PrefixLengths,
-			keyBld:        val.NewTupleBuilder(keyDesc, m.NodeStore()).WithMaxRowSize(targetRowSize),
-			prefixBld:     val.NewTupleBuilder(keyDesc.PrefixDesc(def.Count), m.NodeStore()).WithMaxRowSize(targetRowSize),
-			hashBld:       val.NewTupleBuilder(val.NewTupleDescriptor(val.Type{Enc: val.Hash128Enc}), m.NodeStore()),
-			keyMap:        def.KeyMapping,
-			virtualExprs:  def.KeyVirtualExprs,
+			name:             defName,
+			mut:              m.Mutate(),
+			primary:          primary,
+			unique:           def.IsUnique,
+			nullsNotDistinct: def.NullsNotDistinct,
+			spatial:          def.IsSpatial,
+			predicate:        def.Predicate,
+			prefixLengths:    def.PrefixLengths,
+			keyBld:           val.NewTupleBuilder(keyDesc, m.NodeStore()).WithMaxRowSize(targetRowSize),
+			prefixBld:        val.NewTupleBuilder(keyDesc.PrefixDesc(def.Count), m.NodeStore()).WithMaxRowSize(targetRowSize),
+			hashBld:          val.NewTupleBuilder(val.NewTupleDescriptor(val.Type{Enc: val.Hash128Enc}), m.NodeStore()),
+			keyMap:           def.KeyMapping,
+			virtualExprs:     def.KeyVirtualExprs,
 		}
 	}
 

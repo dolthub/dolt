@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
@@ -573,6 +574,121 @@ func TestDescendingIndexesScripts(t *testing.T) {
 	h := newDoltServerTestHarness(t).WithConfigureStats(true)
 	defer h.Close()
 	enginetest.TestDescendingIndexesScripts(t, h)
+}
+
+// TestUniqueIndexNullsNotDistinct tests unique indexes that treat NULLs as equal to each other. No MySQL syntax defines
+// one, so each step that should define one has the nulls_not_distinct index option added to its parsed statement.
+func TestUniqueIndexNullsNotDistinct(t *testing.T) {
+	type step struct {
+		query string
+		// nnd adds the nulls_not_distinct option to every index the statement defines
+		nnd         bool
+		expected    []sql.Row
+		expectedErr string
+	}
+
+	const dupErr = "duplicate unique key"
+	steps := []step{
+		{query: "create table t (pk int primary key, a int, b int, unique key ab (a, b))", nnd: true},
+		{query: "insert into t values (1, 1, null), (2, null, null), (3, 1, 1)"},
+		{query: "insert into t values (4, 1, null)", expectedErr: dupErr},
+		{query: "insert into t values (4, null, null)", expectedErr: dupErr},
+		{query: "update t set a = 1 where pk = 2", expectedErr: dupErr},
+		{query: "insert into t values (4, null, 1), (5, 1, 2)"},
+		{query: "insert into t values (6, null, null) on duplicate key update b = 7"},
+		{
+			query:    "select * from t order by pk",
+			expected: []sql.Row{{1, 1, nil}, {2, nil, 7}, {3, 1, 1}, {4, nil, 1}, {5, 1, 2}},
+		},
+		{query: "update t set b = null where pk = 2"},
+
+		// the option survives commits and checkouts
+		{query: "call dolt_commit('-Am', 'nulls not distinct')"},
+		{query: "call dolt_checkout('-b', 'other')", expected: []sql.Row{{0, "Switched to branch 'other'"}}},
+		{query: "insert into t values (7, null, null)", expectedErr: dupErr},
+		{query: "insert into t values (7, 2, null)"},
+		{query: "call dolt_commit('-am', 'insert on other')"},
+		{query: "call dolt_checkout('main')", expected: []sql.Row{{0, "Switched to branch 'main'"}}},
+		{query: "insert into t values (8, 2, null)"},
+		{query: "call dolt_commit('-am', 'insert on main')"},
+
+		// building the index over existing rows fails when their NULLs collide
+		{query: "create table t2 (pk int primary key, a int, b int)"},
+		{query: "insert into t2 values (1, 1, null), (2, 1, null)"},
+		{query: "create unique index ab on t2 (a, b)", nnd: true, expectedErr: dupErr},
+		{query: "alter table t2 add unique index ab (a, b)", nnd: true, expectedErr: dupErr},
+		{query: "alter table t2 add unique index ab (a, b)"},
+		{query: "insert into t2 values (3, 1, null)"},
+
+		// keyless tables
+		{query: "create table k (a int, b int, unique key ab (a, b))", nnd: true},
+		{query: "insert into k values (1, null), (null, null), (1, 1)"},
+		{query: "insert into k values (1, null)", expectedErr: dupErr},
+		{query: "insert into k values (null, null)", expectedErr: dupErr},
+		{query: "update k set a = null where b = 1"},
+		{query: "update k set b = null where b = 1", expectedErr: dupErr},
+		{query: "select * from k order by a, b", expected: []sql.Row{{nil, nil}, {nil, 1}, {1, nil}}},
+
+		// merges and dolt_verify_constraints find rows whose NULLs collide
+		{query: "set @@autocommit = 0"},
+		{query: "call dolt_merge('other')", expected: []sql.Row{{"", 0, 1, "conflicts found"}}},
+		{
+			query:    "select pk, a, b from dolt_constraint_violations_t where violation_type = 'unique index' order by pk",
+			expected: []sql.Row{{7, 2, nil}, {8, 2, nil}},
+		},
+		{query: "delete from dolt_constraint_violations_t", expected: []sql.Row{{gmstypes.NewOkResult(2)}}},
+		{query: "call dolt_verify_constraints()", expected: []sql.Row{{1}}},
+		{
+			query:    "select pk, a, b from dolt_constraint_violations_t where violation_type = 'unique index' order by pk",
+			expected: []sql.Row{{7, 2, nil}, {8, 2, nil}},
+		},
+	}
+
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	engine, err := harness.NewEngine(t)
+	require.NoError(t, err)
+	defer engine.Close()
+
+	ctx := harness.NewContext()
+	ctx.SetCurrentDatabase("mydb")
+	nullsNotDistinct := &sqlparser.IndexOption{Name: sql.NullsNotDistinctOptionName}
+	for _, step := range steps {
+		parsed, _, err := sql.DefaultMySQLParser.ParseOneWithOptions(ctx, step.query, sql.LoadSqlMode(ctx).ParserOptions())
+		require.NoError(t, err, step.query)
+
+		if step.nnd {
+			switch parsed := parsed.(type) {
+			case *sqlparser.DDL:
+				for _, idx := range parsed.TableSpec.Indexes {
+					idx.Options = append(idx.Options, nullsNotDistinct)
+				}
+			case *sqlparser.AlterTable:
+				for _, ddl := range parsed.Statements {
+					ddl.IndexSpec.Options = append(ddl.IndexSpec.Options, nullsNotDistinct)
+				}
+			default:
+				t.Fatalf("unexpected statement type %T", parsed)
+			}
+		}
+
+		_, iter, _, err := engine.QueryWithBindings(ctx, step.query, parsed, nil, nil)
+		var rows []sql.Row
+		if err == nil {
+			rows, err = sql.RowIterToRows(ctx, iter)
+		}
+
+		if step.expectedErr != "" {
+			require.ErrorContains(t, err, step.expectedErr, step.query)
+			continue
+		}
+
+		require.NoError(t, err, step.query)
+		if step.expected != nil {
+			// compare the printed rows, since integer columns come back with their own widths
+			require.Equal(t, fmt.Sprint(step.expected), fmt.Sprint(rows), step.query)
+		}
+	}
 }
 
 func TestEnumsAndSetsScripts(t *testing.T) {
