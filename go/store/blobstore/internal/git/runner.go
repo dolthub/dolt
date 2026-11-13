@@ -129,8 +129,10 @@ func (r *Runner) buildCmd(ctx context.Context, opts RunOptions, args []string) *
 	return cmd
 }
 
-// Run executes "git <args...>" with GIT_DIR set and returns captured combined output
-// when Stdout/Stderr are not supplied.
+// Run executes "git <args...>" with GIT_DIR set. When Stdout/Stderr are not supplied
+// it returns git's stdout alone on success, so that a warning git prints to stderr
+// while succeeding cannot corrupt output that callers parse. On failure it returns
+// stdout followed by stderr, which is also what the error carries.
 func (r *Runner) Run(ctx context.Context, opts RunOptions, args ...string) ([]byte, error) {
 	cmd := r.buildCmd(ctx, opts, args)
 
@@ -138,11 +140,11 @@ func (r *Runner) Run(ctx context.Context, opts RunOptions, args ...string) ([]by
 		cmd.Stdin = opts.Stdin
 	}
 
-	// Capture combined output unless caller provided destinations.
-	var buf bytes.Buffer
+	// Capture output unless caller provided destinations.
+	var stdout, stderr bytes.Buffer
 	if opts.Stdout == nil && opts.Stderr == nil {
-		cmd.Stdout = &buf
-		cmd.Stderr = &buf
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
 	} else {
 		if opts.Stdout != nil {
 			cmd.Stdout = opts.Stdout
@@ -156,10 +158,10 @@ func (r *Runner) Run(ctx context.Context, opts RunOptions, args ...string) ([]by
 	}
 
 	err := cmd.Run()
-	out := buf.Bytes()
 	if err == nil {
-		return out, nil
+		return stdout.Bytes(), nil
 	}
+	out := append(stdout.Bytes(), stderr.Bytes()...)
 
 	exitCode := 0
 	var ee *exec.ExitError

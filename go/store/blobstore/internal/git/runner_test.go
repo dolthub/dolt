@@ -76,3 +76,35 @@ func TestRunner_WaitDelayBoundsAbandonedPipe(t *testing.T) {
 	}
 	readHelperPid(t, pidFile)
 }
+
+// A warning git prints to stderr while succeeding must not reach callers that
+// parse stdout.
+func TestRunner_RunReturnsOnlyStdoutOnSuccess(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/12488
+	t.Parallel()
+
+	out, err := helperCommandRunner(t).Run(context.Background(), RunOptions{}, "warnsize")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != "321\n" {
+		t.Fatalf("got %q, want only stdout", out)
+	}
+}
+
+// Splitting stdout from stderr for the success case must not cost a failure
+// either stream: error matching reads both from the CmdError.
+func TestRunner_RunFailureCarriesStdoutThenStderr(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/12488
+	t.Parallel()
+
+	out, err := helperCommandRunner(t).Run(context.Background(), RunOptions{}, "warnfail")
+	var cerr *CmdError
+	if !errors.As(err, &cerr) {
+		t.Fatalf("expected a CmdError, got %v", err)
+	}
+	const want = "out\nfatal: boom\n"
+	if string(out) != want || string(cerr.Output) != want {
+		t.Fatalf("output %q / error output %q, want %q", out, cerr.Output, want)
+	}
+}
