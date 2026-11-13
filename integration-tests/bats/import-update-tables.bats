@@ -1681,3 +1681,27 @@ EOF
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = "SSD 1TB 2.5" ]
 }
+
+@test "import-update-tables: import migrates a legacy file manifest" {
+    # Opening a journaled store rewrites the manifest, so only a store without a journal reaches this migration.
+    export DOLT_DISABLE_CHUNK_JOURNAL=1
+    mkdir legacy && cd legacy
+    dolt init
+    dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, v int);"
+    dolt commit -Am "create t"
+
+    # A v4 manifest is a v5 manifest without the GC generation field.
+    sed -i.bak -E 's/^5:([^:]*):([^:]*):([^:]*):[^:]*/4:\1:\2:\3/' .dolt/noms/manifest
+    [[ "$(cat .dolt/noms/manifest)" =~ ^4: ]] || false
+    printf 'pk,v\n1,10\n2,20\n' > data.csv
+
+    # The tripwire catches the migration reopening a store that is still open.
+    run env DOLT_TEST_PANIC_ON_SINGLETON_HIT=1 dolt table import -u t data.csv
+    [ "$status" -eq 0 ]
+    [[ "$(cat .dolt/noms/manifest)" =~ ^5: ]] || false
+
+    run dolt sql -r csv -q "SELECT pk, v FROM t ORDER BY pk"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "1,10" ]
+    [ "${lines[2]}" = "2,20" ]
+}
