@@ -711,7 +711,18 @@ func (db *database) CommitDatasets(
 		pending[i] = built
 	}
 
-	currentDatasets, err := db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
+	// Materialize results before publishing. Once the root swap succeeds, a read
+	// failure must not turn the committed batch into an error for the caller.
+	updatedDatasets := make([]Dataset, len(atomicCommit))
+	for i, built := range pending {
+		head, err := db.readHead(ctx, built.NewHead)
+		if err != nil {
+			return nil, err
+		}
+		updatedDatasets[i] = Dataset{head, db, atomicCommit[i].DatasetID()}
+	}
+
+	_, err := db.update(ctx, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
 		ae := am.Editor()
 
 		for _, built := range pending {
@@ -745,16 +756,6 @@ func (db *database) CommitDatasets(
 
 	if err != nil {
 		return nil, err
-	}
-
-	updatedDatasets := make([]Dataset, len(atomicCommit))
-	dsMap := DatasetsMap(refmapDatasetsMap{currentDatasets})
-	for i := range atomicCommit {
-		updatedDS, err := db.datasetFromMap(ctx, atomicCommit[i].DatasetID(), dsMap)
-		if err != nil {
-			return nil, err
-		}
-		updatedDatasets[i] = updatedDS
 	}
 
 	return updatedDatasets, nil

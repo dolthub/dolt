@@ -16,6 +16,7 @@ package doltdb
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -318,6 +319,111 @@ func TestCommitHeadUpdatesOnlyLoadsWorkingSetsForListeners(t *testing.T) {
 				require.Zero(t, db.snapshots)
 				require.Zero(t, store.reads, "neither before nor after working sets should be loaded")
 			}
+		})
+	}
+}
+
+// publishedHeadReadErrorStore leaves root values readable for listeners while
+// failing reads of the newly published dataset heads.
+type publishedHeadReadErrorStore struct {
+	chunks.ChunkStore
+	afterCommit func()
+	heads       hash.HashSet
+	commits     int
+}
+
+func (s *publishedHeadReadErrorStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, error) {
+	if s.heads.Has(h) {
+		return chunks.EmptyChunk, errors.New("published head read failed")
+	}
+	return s.ChunkStore.Get(ctx, h)
+}
+
+func (s *publishedHeadReadErrorStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
+	ok, err := s.ChunkStore.Commit(ctx, current, last)
+	if ok && err == nil && s.afterCommit != nil {
+		s.commits++
+		s.afterCommit()
+	}
+	return ok, err
+}
+
+func TestCommitHeadUpdatesDeliversPublishedSnapshots(t *testing.T) {
+	for _, order := range []string{"working set first", "branch first"} {
+		t.Run(order, func(t *testing.T) {
+			ctx := sql.NewContext(context.Background())
+			storage := &chunks.TestStorage{}
+			store := &publishedHeadReadErrorStore{ChunkStore: storage.NewViewWithDefaultFormat()}
+			ddb, err := DoltDBFromCS(store, "test")
+			require.NoError(t, err)
+			defer ddb.Close()
+			require.NoError(t, ddb.WriteEmptyRepo(ctx, "main", "name", "email"))
+			commit := resolveCommitSpecStr(ctx, t, ddb, "main")
+			previousHead, err := commit.HashOf()
+			require.NoError(t, err)
+			root, err := commit.GetRootValue(ctx)
+			require.NoError(t, err)
+			ws := EmptyWorkingSet(ref.NewWorkingSetRef("heads/main")).WithWorkingRoot(root).WithStagedRoot(root)
+			require.NoError(t, ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, hash.Hash{}, TodoWorkingSetMeta(), nil))
+			ws, err = ddb.ResolveWorkingSet(ctx, ws.Ref())
+			require.NoError(t, err)
+			previousWS, err := ws.HashOf()
+			require.NoError(t, err)
+			changedRoot, err := root.SetCollation(ctx, schema.Collation_utf8mb4_bin)
+			require.NoError(t, err)
+			beforeHash, err := root.HashOf()
+			require.NoError(t, err)
+			afterHash, err := changedRoot.HashOf()
+			require.NoError(t, err)
+			require.NotEqual(t, beforeHash, afterHash)
+
+			hook := &batchCommitHook{}
+			ddb.PrependCommitHooks(ctx, hook)
+			listeners := DatabaseUpdateListeners
+			t.Cleanup(func() { DatabaseUpdateListeners = listeners })
+			called := 0
+			DatabaseUpdateListeners = []DatabaseUpdateListener{workingRootListener{func(branch string, before, after RootValue) {
+				called++
+				require.Equal(t, "main", branch)
+				h, err := before.HashOf()
+				require.NoError(t, err)
+				require.Equal(t, beforeHash, h)
+				h, err = after.HashOf()
+				require.NoError(t, err)
+				require.Equal(t, afterHash, h)
+			}}}
+			ids := []string{ws.Ref().String(), ref.NewBranchRef("main").String()}
+			updates := []HeadUpdate{
+				WorkingSetUpdate{WorkingSet: ws.WithWorkingRoot(changedRoot).WithStagedRoot(changedRoot), PrevHash: previousWS, Meta: TodoWorkingSetMeta()},
+				BranchHeadUpdate{HeadRef: ref.NewBranchRef("main"), Root: changedRoot, ExpectedHead: previousHead, CommitOptions: datas.CommitOptions{Meta: &datas.CommitMeta{}}},
+			}
+			if order == "branch first" {
+				updates[0], updates[1] = updates[1], updates[0]
+				ids[0], ids[1] = ids[1], ids[0]
+			}
+			var published []hash.Hash
+			store.afterCommit = func() {
+				reader := datas.NewDatabase(storage.NewViewWithDefaultFormat())
+				defer reader.Close()
+				store.heads = hash.NewHashSet()
+				for _, id := range ids {
+					ds, err := reader.GetDataset(ctx, id)
+					require.NoError(t, err)
+					h, ok := ds.MaybeHeadAddr()
+					require.True(t, ok)
+					published = append(published, h)
+					store.heads.Insert(h)
+				}
+				ddb.vrw.PurgeCaches()
+			}
+			var rsc ReplicationStatusController
+			heads, commitErr := ddb.CommitHeadUpdates(ctx, updates, &rsc)
+			require.Equal(t, 1, store.commits)
+			require.NoError(t, commitErr, "acknowledged publication must deliver hooks and listeners")
+			require.Equal(t, published, heads)
+			require.Equal(t, ids, hook.datasets)
+			require.Len(t, rsc.Wait, len(ids))
+			require.Equal(t, 1, called, "the working root listener must run before return")
 		})
 	}
 }
