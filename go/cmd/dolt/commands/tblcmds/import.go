@@ -495,10 +495,14 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	var verr errhand.VerboseError
 
-	dEnv, err := commands.MaybeMigrateEnv(ctx, dEnv)
+	migratedEnv, err := commands.MaybeMigrateEnv(ctx, dEnv)
 	if err != nil {
 		verr = errhand.BuildDError("could not load manifest for gc").AddCause(err).Build()
 		return commands.HandleVErrAndExitCode(verr, usage)
+	}
+	if migratedEnv != dEnv {
+		defer migratedEnv.Close()
+		dEnv = migratedEnv
 	}
 
 	verr = validateImportArgs(apr)

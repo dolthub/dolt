@@ -22,6 +22,7 @@ import (
 	"iter"
 	"sort"
 	"strings"
+	"sync"
 	"unicode"
 	"unicode/utf8"
 
@@ -82,8 +83,8 @@ type RootValue interface {
 	GetDatabaseSchemas(ctx context.Context) ([]schema.DatabaseSchema, error)
 	// GetFeatureVersion returns the feature version of this root, if one is written
 	GetFeatureVersion(ctx context.Context) (ver FeatureVersion, ok bool, err error)
-	// GetForeignKeyCollection returns the ForeignKeyCollection for this root. As collections are meant to be modified
-	// in-place, each returned collection may freely be altered without affecting future returned collections from this root.
+	// GetForeignKeyCollection returns the ForeignKeyCollection for this root. Collections are never changed in place, so
+	// every caller is returned the same collection, and changing it returns a changed copy that doesn't affect this root.
 	GetForeignKeyCollection(ctx context.Context) (*ForeignKeyCollection, error)
 	// GetForeignKeyCollectionHash returns the address of this root's stored ForeignKeyCollection, which is equal for
 	// two roots whose collections are equal, or the empty hash if this root has never stored one.
@@ -143,6 +144,7 @@ type rootValue struct {
 	ns       tree.NodeStore
 	st       rootValueStorage
 	fkc      *ForeignKeyCollection // cache the first load
+	fkcLock  sync.Mutex            // guards fkc, which may be loaded from multiple sessions sharing this root
 	rootHash hash.Hash             // cache the first load
 	// tablesHash is a digest of the table names
 	tablesHash uint64
@@ -770,7 +772,11 @@ func (root *rootValue) IterTables(ctx context.Context, cb func(name TableName, t
 }
 
 func (root *rootValue) withStorage(st rootValueStorage) *rootValue {
-	return &rootValue{root.vrw, root.ns, st, nil, hash.Hash{}, 0, nil}
+	return &rootValue{
+		vrw: root.vrw,
+		ns:  root.ns,
+		st:  st,
+	}
 }
 
 func (root *rootValue) NomsValue() types.Value {
@@ -1167,9 +1173,9 @@ func (root *rootValue) RemoveTables(ctx context.Context, skipFKHandling bool, al
 	}
 
 	if allowDroppingFKReferenced {
-		err = fkc.RemoveAndUnresolveTables(ctx, root, tables...)
+		fkc, err = fkc.RemoveAndUnresolveTables(ctx, root, tables...)
 	} else {
-		err = fkc.RemoveTables(ctx, tables...)
+		fkc, err = fkc.RemoveTables(ctx, tables...)
 	}
 
 	if err != nil {
@@ -1179,24 +1185,28 @@ func (root *rootValue) RemoveTables(ctx context.Context, skipFKHandling bool, al
 	return newRoot.PutForeignKeyCollection(ctx, fkc)
 }
 
-// GetForeignKeyCollection returns the ForeignKeyCollection for this root. As collections are meant to be modified
-// in-place, each returned collection may freely be altered without affecting future returned collections from this root.
+// GetForeignKeyCollection implements RootValue. The collection is loaded on first use, and shared by every caller.
 func (root *rootValue) GetForeignKeyCollection(ctx context.Context) (*ForeignKeyCollection, error) {
+	root.fkcLock.Lock()
+	defer root.fkcLock.Unlock()
+
 	if root.fkc == nil {
 		fkMap, ok, err := root.st.GetForeignKeys(ctx, root.vrw)
 		if err != nil {
 			return nil, err
 		}
-		if !ok {
-			return newForeignKeyCollection(), nil
-		}
 
-		root.fkc, err = DeserializeForeignKeys(ctx, root.vrw.Format(), fkMap)
-		if err != nil {
-			return nil, err
+		if !ok {
+			root.fkc = newForeignKeyCollection()
+		} else {
+			root.fkc, err = DeserializeForeignKeys(ctx, root.vrw.Format(), fkMap)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
-	return root.fkc.Copy(), nil
+
+	return root.fkc, nil
 }
 
 // GetForeignKeyCollectionHash implements RootValue.
@@ -1268,7 +1278,9 @@ func ValidateForeignKeysOnSchemas(ctx *sql.Context, tableResolver TableResolver,
 				return nil, err
 			}
 		} else {
-			if !fkCollection.RemoveKeyByName(foreignKey.Name, foreignKey.TableName) {
+			var removed bool
+			fkCollection, removed = fkCollection.RemoveKeyByName(foreignKey.Name, foreignKey.TableName)
+			if !removed {
 				return nil, fmt.Errorf("`%s` does not exist as a foreign key", foreignKey.Name)
 			}
 		}

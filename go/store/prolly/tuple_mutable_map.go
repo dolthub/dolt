@@ -66,18 +66,29 @@ func (mut *GenericMutableMap[M, T]) Map(ctx context.Context) (M, error) {
 }
 
 // VisitGCRoots passes every chunk address reachable from the pending state of
-// this map to |roots|: the roots of its static trees and any out-of-band values
-// referenced by its in-memory edits. It does not write to the NodeStore.
+// this map to |roots|: the addresses referenced by the roots of its static
+// trees and any out-of-band values referenced by its in-memory edits. It does
+// not write to the NodeStore.
 func (mut *GenericMutableMap[M, T]) VisitGCRoots(ctx context.Context, roots func(hash.Hash)) error {
-	visitMutableTreeGCRoots(mut.tuples, mut.keyDesc, mut.valDesc, roots)
+	if err := visitMutableTreeGCRoots(ctx, mut.tuples, mut.keyDesc, mut.valDesc, roots); err != nil {
+		return err
+	}
 	if mut.stash != nil {
-		visitMutableTreeGCRoots(*mut.stash, mut.keyDesc, mut.valDesc, roots)
+		return visitMutableTreeGCRoots(ctx, *mut.stash, mut.keyDesc, mut.valDesc, roots)
 	}
 	return nil
 }
 
-func visitMutableTreeGCRoots[T tree.MapInterface[val.Tuple, val.Tuple, *val.TupleDesc]](tuples tree.MutableMap[val.Tuple, val.Tuple, *val.TupleDesc, T], kd, vd *val.TupleDesc, roots func(hash.Hash)) {
-	roots(tuples.Static.GetRoot().HashOf())
+func visitMutableTreeGCRoots[T tree.MapInterface[val.Tuple, val.Tuple, *val.TupleDesc]](ctx context.Context, tuples tree.MutableMap[val.Tuple, val.Tuple, *val.TupleDesc, T], kd, vd *val.TupleDesc, roots func(hash.Hash)) error {
+	// Visit what the root references rather than the root: the root node is in memory, and needn't be a chunk in the
+	// store. A table's primary index root, for one, is stored inline in the table's chunk.
+	err := tree.WalkNodeAddresses(ctx, tuples.Static.GetRoot(), func(_ context.Context, addr hash.Hash) error {
+		roots(addr)
+		return nil
+	})
+	if err != nil {
+		return err
+	}
 	for it := tuples.Edits.IterAtStart(); ; it.Advance() {
 		k, v := it.Current()
 		if k == nil {
@@ -88,6 +99,7 @@ func visitMutableTreeGCRoots[T tree.MapInterface[val.Tuple, val.Tuple, *val.Tupl
 			visitTupleAddresses(val.Tuple(v), vd, roots)
 		}
 	}
+	return nil
 }
 
 // visitTupleAddresses passes the chunk addresses stored within |tup| to |cb|, matching the addresses that would be

@@ -23,9 +23,13 @@ package datas
 
 import (
 	"context"
+	"errors"
+	"runtime"
 	"testing"
+	"testing/synctest"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -183,6 +187,174 @@ func (suite *DatabaseSuite) TestCommitDatasetsAtomic() {
 	after, err = suite.db.rt.Root(ctx)
 	suite.Require().NoError(err)
 	suite.Equal(before, after)
+}
+
+// gcCommitBarrier pauses publication after the batch's chunks have been written,
+// so GC can enter finalization before ValueStore.Commit tries to enter.
+type gcCommitBarrier struct {
+	rootTracker
+	ready   chan hash.Hash
+	proceed chan struct{}
+}
+
+func (b gcCommitBarrier) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
+	b.ready <- current
+	<-b.proceed
+	return b.rootTracker.Commit(ctx, current, last)
+}
+
+type pausedGCSafepoint struct {
+	vs      *types.ValueStore
+	ready   chan struct{}
+	proceed chan struct{}
+}
+
+func (p pausedGCSafepoint) BeginGC(context.Context, func(hash.Hash) bool) error {
+	p.vs.PurgeCaches()
+	return nil
+}
+
+func (p pausedGCSafepoint) EstablishPreFinalizeSafepoint(context.Context) error { return nil }
+
+func (p pausedGCSafepoint) EstablishPostFinalizeSafepoint(context.Context) error {
+	close(p.ready)
+	<-p.proceed
+	return nil
+}
+
+func (p pausedGCSafepoint) CancelSafepoint() {}
+
+// gcWaitContext models preemption after Err reads nil but before the caller
+// registers its condition-variable wait. All other context methods are unchanged.
+type gcWaitContext struct {
+	context.Context
+	beforeErrReturn func()
+}
+
+func (c *gcWaitContext) Err() error {
+	err := c.Context.Err()
+	if c.beforeErrReturn != nil {
+		f := c.beforeErrReturn
+		c.beforeErrReturn = nil
+		f()
+	}
+	return err
+}
+
+func TestCommitDatasetsGCCancellation(t *testing.T) {
+	for _, schedule := range []string{"already_cancelled", "before_wait", "registered_waiter", "uncancelled"} {
+		t.Run(schedule, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				bg := context.Background()
+				storage := &chunks.MemoryStorage{}
+				db := NewDatabase(storage.NewView()).(*database)
+				defer db.Close()
+				var updates []DatasetUpdate
+				for _, name := range []string{"refs/heads/a", "refs/heads/b"} {
+					ds, err := db.GetDataset(bg, name)
+					require.NoError(t, err)
+					ds, err = CommitValue(bg, db, ds, types.String("initial"))
+					require.NoError(t, err)
+					head, _ := ds.MaybeHeadAddr()
+					updates = append(updates, CommitUpdate{
+						CommitDS: ds, ExpectedHead: head, RootVal: types.String("next"),
+						CommitOpts: CommitOptions{Meta: &CommitMeta{}},
+					})
+				}
+				before, err := db.rt.Root(bg)
+				require.NoError(t, err)
+				barrier := gcCommitBarrier{db.rt, make(chan hash.Hash), make(chan struct{})}
+				db.rt = barrier
+				cctx, cancel := context.WithCancel(bg)
+				defer cancel()
+				ctx := &gcWaitContext{Context: cctx}
+				type result struct {
+					datasets []Dataset
+					err      error
+				}
+				done := make(chan result, 1)
+				go func() {
+					datasets, err := db.CommitDatasets(ctx, updates)
+					done <- result{datasets, err}
+				}()
+				pendingRoot := <-barrier.ready
+				pause := pausedGCSafepoint{db.ValueStore, make(chan struct{}), make(chan struct{})}
+				gcDone := make(chan error, 1)
+				go func() {
+					gcDone <- db.GC(bg, chunks.GCConfig{Mode: chunks.GCMode_Full},
+						hash.HashSet{}, hash.NewHashSet(pendingRoot), pause)
+				}()
+				<-pause.ready
+
+				switch schedule {
+				case "already_cancelled":
+					cancel()
+					close(barrier.proceed)
+				case "before_wait":
+					checked, resume := make(chan struct{}), make(chan struct{})
+					ctx.beforeErrReturn = func() { close(checked); <-resume }
+					close(barrier.proceed)
+					<-checked
+					cancel()
+					// Give the notifier a chance to broadcast while Err is paused.
+					// Wait below observes quiescence after Err has returned.
+					for i := 0; i < 64; i++ {
+						runtime.Gosched()
+					}
+					close(resume)
+				default:
+					close(barrier.proceed)
+					synctest.Wait()
+					select {
+					case <-done:
+						t.Fatal("batch returned before GC finalization was released")
+					default:
+					}
+					if schedule == "registered_waiter" {
+						cancel()
+					}
+				}
+				synctest.Wait()
+				var got result
+				returned := false
+				select {
+				case got = <-done:
+					returned = true
+				default:
+				}
+				if schedule != "uncancelled" && !returned {
+					t.Error("cancelled batch did not return while GC was paused")
+				}
+				after, err := db.Root(bg)
+				require.NoError(t, err)
+				if after != before {
+					t.Error("batch changed the root while GC was paused")
+				}
+				close(pause.proceed)
+				require.NoError(t, <-gcDone)
+				if !returned {
+					got = <-done
+				}
+				if schedule == "uncancelled" {
+					require.NoError(t, got.err)
+					require.Len(t, got.datasets, len(updates))
+				} else if !errors.Is(got.err, context.Canceled) || len(got.datasets) != 0 {
+					t.Errorf("cancelled batch returned %d datasets and error %v", len(got.datasets), got.err)
+				}
+				for _, update := range updates {
+					ds, err := db.GetDataset(bg, update.DatasetID())
+					require.NoError(t, err)
+					want := types.String("initial")
+					if schedule == "uncancelled" {
+						want = types.String("next")
+					}
+					if !mustHeadValue(ds).Equals(want) {
+						t.Errorf("batch left an unexpected head for %s", ds.ID())
+					}
+				}
+			})
+		})
+	}
 }
 
 func (suite *DatabaseSuite) TestCommitDatasetsStandaloneBranchWorkingSetPrecondition() {

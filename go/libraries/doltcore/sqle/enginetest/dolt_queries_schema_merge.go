@@ -115,6 +115,41 @@ var SchemaChangeTestsBasicCases = []MergeScriptTest{
 		},
 	},
 	{
+		Name: "dropping a column and deleting a row on different branches",
+		AncSetUpScript: []string{
+			"create table t (pk int primary key, a int, b varchar(10));",
+			"insert into t values (1, 1, 'x'), (2, 2, 'y');",
+			"create table t_virtual (pk int primary key, a varchar(10), v int as (pk + 1) virtual, b varchar(10));",
+			"insert into t_virtual (pk, a, b) values (1, 'first', 'x'), (2, 'second', 'y');",
+		},
+		LeftSetUpScript: []string{
+			"alter table t drop column a;",
+			"alter table t_virtual drop column a;",
+		},
+		RightSetUpScript: []string{
+			"delete from t where pk = 1;",
+			"delete from t_virtual where pk = 1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select * from dolt_preview_merge_conflicts_summary('main', 'right');",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{2, "y"}},
+			},
+			{
+				Query:    "select * from t_virtual;",
+				Expected: []sql.Row{{2, 3, "y"}},
+			},
+		},
+	},
+	{
 		Name: "renaming a column",
 		AncSetUpScript: []string{
 			"CREATE table t (pk int primary key, col1 int, col2 varchar(100));",
@@ -520,8 +555,8 @@ var SchemaChangeTestsBasicCases = []MergeScriptTest{
 		// TODO: Need another test with a different type for the same column name, and verify it's an error?
 		Name: "dropping and adding a column with the same name",
 		AncSetUpScript: []string{
-			"create table t (pk int primary key, col1 int, col2 varchar(100));",
-			"insert into t values (1, 10, '100'), (2, 20, '200');",
+			"create table t (pk int primary key, v int as (pk + 1) virtual, col1 int, col2 varchar(100));",
+			"insert into t (pk, col1, col2) values (1, 10, '100'), (2, 20, '200');",
 			"alter table t add index idx1 (col1, pk);",
 			"alter table t add index idx2 (col2, pk);",
 			"alter table t add index idx3 (col2, col1);",
@@ -529,10 +564,10 @@ var SchemaChangeTestsBasicCases = []MergeScriptTest{
 		RightSetUpScript: []string{
 			"alter table t drop column col1;",
 			"alter table t add column col1 int;",
-			"insert into t values (3, '300', 30), (4, '400', 40);",
+			"insert into t (pk, col1, col2) values (3, 30, '300'), (4, 40, '400');",
 		},
 		LeftSetUpScript: []string{
-			"insert into t values (5, 50, '500'), (6, 60, '600');",
+			"insert into t (pk, col1, col2) values (5, 50, '500'), (6, 60, '600');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
