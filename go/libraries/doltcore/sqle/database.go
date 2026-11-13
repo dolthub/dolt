@@ -80,11 +80,9 @@ type Database struct {
 	rsw           env.RepoStateWriter
 	gs            dsess.GlobalStateImpl
 	ddb           *doltdb.DoltDB
-	baseName      string
+	name          doltdb.QualifiedDbName
 	requestedName string
 	schemaName    string
-	revision      string
-	revName       string
 	editOpts      editor.Options
 	revType       dsess.RevisionType
 }
@@ -140,7 +138,7 @@ func (r ReadOnlyDatabase) IsReadOnly() bool {
 }
 
 func (r ReadOnlyDatabase) InitialDBState(ctx *sql.Context) (dsess.InitialDbState, error) {
-	return initialDBState(ctx, r, r.revision)
+	return initialDBState(ctx, r, r.name.Revision)
 }
 
 func (r ReadOnlyDatabase) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
@@ -159,8 +157,7 @@ func (db Database) GetTableResolver() doltdb.TableResolver {
 
 func (db Database) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
 	db.rsr, db.rsw = branchSpec.RepoState, branchSpec.RepoState
-	db.revision = branchSpec.Branch
-	db.revName = db.baseName + doltdb.DbRevisionDelimiter + branchSpec.Branch
+	db.name = db.name.WithRevision(branchSpec.Branch)
 	db.revType = dsess.RevisionTypeBranch
 	db.requestedName = requestedName
 
@@ -182,7 +179,7 @@ func (db Database) Close() {
 
 // Revision implements dsess.RevisionDatabase
 func (db Database) Revision() string {
-	return db.revision
+	return db.name.Revision
 }
 
 func (db Database) Versioned() bool {
@@ -217,8 +214,7 @@ func NewDatabase(ctx context.Context, name string, dbData env.DbData[context.Con
 	}
 
 	return Database{
-		baseName:      name,
-		revName:       name,
+		name:          doltdb.NewQualifiedDbName(name, ""),
 		requestedName: name,
 		ddb:           dbData.Ddb,
 		rsr:           forwardCtxDbData{dbData.Rsr},
@@ -251,7 +247,7 @@ func initialDBState(ctx *sql.Context, db dsess.SqlDatabase, branch string) (dses
 }
 
 func (db Database) InitialDBState(ctx *sql.Context) (dsess.InitialDbState, error) {
-	return initialDBState(ctx, db, db.revision)
+	return initialDBState(ctx, db, db.name.Revision)
 }
 
 // Name returns the name of this database, set at creation time.
@@ -267,13 +263,13 @@ func (db Database) Schema() string {
 // AliasedName is what allows databases named e.g. `mydb/b1` to work with the grant and info schema tables that expect
 // a base (no revision qualifier) db name
 func (db Database) AliasedName() string {
-	return db.baseName
+	return db.name.Base
 }
 
 // RevisionQualifiedName returns the name of this database including its revision qualifier, if any. This method should
 // be used whenever accessing internal state of a database and its tables.
 func (db Database) RevisionQualifiedName() string {
-	return db.revName
+	return db.name.String()
 }
 
 func (db Database) RequestedName() string {
@@ -1194,7 +1190,7 @@ func (db Database) getNonlocalTableEntry(ctx *sql.Context, root doltdb.RootValue
 			}
 
 			if nonlocalTableEntry.Ref == "" {
-				nonlocalTableEntry.Ref = db.revision
+				nonlocalTableEntry.Ref = db.name.Revision
 			}
 			return nonlocalTableEntry, true, nil
 		}
@@ -1269,7 +1265,7 @@ func (db Database) getNonlocalTableNames(ctx *sql.Context, root doltdb.RootValue
 
 		nonlocalTableEntry = doltdb.GetNonlocalTablesRef(ctx, valueDesc, valueTuple)
 		if nonlocalTableEntry.Ref == "" {
-			nonlocalTableEntry.Ref = db.revision
+			nonlocalTableEntry.Ref = db.name.Revision
 		}
 
 		referencedRoot, err := db.getRootForNonlocalRef(ctx, nonlocalTableEntry.Ref)
@@ -2146,7 +2142,7 @@ func (db Database) checkNonlocalTableName(ctx *sql.Context, tableName string) er
 	if !matched {
 		return nil
 	}
-	if entry.Ref == db.revision &&
+	if entry.Ref == db.name.Revision &&
 		strings.EqualFold(entry.NewTableName, tableName) {
 		return nil
 	}
@@ -2614,11 +2610,8 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 		return sql.ViewDefinition{}, false, err
 	}
 
-	if dbState.SessionCache().ViewsCached(key) {
-		view, ok := dbState.SessionCache().GetCachedViewDefinition(key, dsess.TableCacheKey{Name: viewName, Schema: db.schemaName})
-		if ok {
-			return view, ok, nil
-		}
+	if view, found, cached := dbState.SessionCache().GetCachedViewDefinition(key, db.schemaName, viewName); cached {
+		return view, found, nil
 	}
 
 	tbl, _, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
@@ -2641,7 +2634,6 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 		return sql.ViewDefinition{}, false, err
 	}
 
-	// TODO: only cache views from a single schema here
 	dbState.SessionCache().CacheViews(key, views, db.schemaName)
 
 	return viewDef, found, nil
@@ -2717,7 +2709,7 @@ func (db Database) CreateView(ctx *sql.Context, name string, selectStatement, cr
 // dolt database. Returns sql.ErrNonExistingView if the view did not
 // exist.
 func (db Database) DropView(ctx *sql.Context, name string) error {
-	err := sql.ErrViewDoesNotExist.New(db.baseName, name)
+	err := sql.ErrViewDoesNotExist.New(db.name.Base, name)
 	return db.dropFragFromSchemasTable(ctx, "view", name, err)
 }
 
@@ -2922,7 +2914,7 @@ func (db Database) createEventDefinitionFromFragment(ctx *sql.Context, frag sche
 	defer engine.Close()
 	b := planbuilder.New(ctx, engine.Analyzer.Catalog, engine.EventScheduler)
 	b.SetParserOptions(sql.NewSqlModeFromString(frag.sqlMode).ParserOptions())
-	parsed, _, _, _, err := b.Parse(updateEventStatusTemporarilyForNonDefaultBranch(db.revision, frag.fragment), nil, false)
+	parsed, _, _, _, err := b.Parse(updateEventStatusTemporarilyForNonDefaultBranch(db.name.Revision, frag.fragment), nil, false)
 	if err != nil {
 		return nil, err
 	}
@@ -2952,8 +2944,8 @@ func (db Database) SaveEvent(ctx *sql.Context, event sql.EventDefinition) (bool,
 	// events only run from a single branch. We check this by looking at the database's
 	// revision and ensuring it either matches DefaultInitBranch or is empty.
 	// TODO: need better way to determine the default branch; currently it checks only 'main'
-	if (db.revision != env.DefaultInitBranch && db.revision != "") && event.Status == sql.EventStatus_Enable.String() {
-		ctx.GetLogger().Debugf("disabling event %s (db.revision == %s)", event.Name, db.revision)
+	if (db.name.Revision != env.DefaultInitBranch && db.name.Revision != "") && event.Status == sql.EventStatus_Enable.String() {
+		ctx.GetLogger().Debugf("disabling event %s (revision == %s)", event.Name, db.name.Revision)
 		event.Status = sql.EventStatus_Disable.String()
 		ctx.Session.Warn(&sql.Warning{
 			Level:   "Warning",

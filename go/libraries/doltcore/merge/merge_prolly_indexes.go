@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expranalysis"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -150,6 +151,11 @@ func buildIndex(
 	theirRootIsh doltdb.Rootish,
 	tblName string,
 ) (durable.Index, error) {
+	predicate, err := expranalysis.ResolveIndexPredicate(ctx, tblName, postMergeSchema, index)
+	if err != nil {
+		return nil, err
+	}
+
 	if index.IsUnique() {
 		meta, err := makeUniqViolMeta(postMergeSchema, index)
 		if err != nil {
@@ -165,7 +171,7 @@ func buildIndex(
 
 		pkMapping := schema.PrimaryIndexOrdinalToSecondaryIndexOrdinal(index)
 
-		mergedMap, err := creation.BuildUniqueProllyIndex(ctx, vrw, ns, postMergeSchema, tblName, index, m, func(ctx context.Context, existingKey, newKey val.Tuple) (err error) {
+		mergedMap, err := creation.BuildUniqueProllyIndex(ctx, vrw, ns, postMergeSchema, tblName, index, m, predicate, func(ctx context.Context, existingKey, newKey val.Tuple) (err error) {
 			eK, err := getPKFromSecondaryKey(ctx, kb, p, pkMapping, existingKey)
 			if err != nil {
 				return err
@@ -190,7 +196,7 @@ func buildIndex(
 		return mergedMap, nil
 	}
 
-	mergedIndex, err := creation.BuildSecondaryProllyIndex(ctx, vrw, ns, postMergeSchema, tblName, index, m, nil)
+	mergedIndex, err := creation.BuildSecondaryProllyIndex(ctx, vrw, ns, postMergeSchema, tblName, index, m, predicate)
 	if err != nil {
 		return nil, err
 	}

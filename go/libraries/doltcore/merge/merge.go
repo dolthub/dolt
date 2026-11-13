@@ -269,6 +269,10 @@ func MergeRoots(
 			}
 			schConflicts = append(schConflicts, conflict)
 			continue
+		} else if ErrSameTblAddedTwice.Is(err) && mergeOpts.KeepTablesAddedTwice {
+			tblToStats[tblName] = &MergeStats{Operation: TableModified, SchemaConflicts: 1}
+			schConflicts = append(schConflicts, SchemaConflict{TableName: tblName, AddedTwiceConflict: true})
+			continue
 		} else if err != nil {
 			return nil, err
 		}

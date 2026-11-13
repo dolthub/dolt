@@ -744,6 +744,10 @@ func (t *DoltTable) PrimaryKeySchema(ctx *sql.Context) sql.PrimaryKeySchema {
 
 // PartitionRows returns the table rows for the partition given
 func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
+	return t.PartitionValueRowWriter(ctx, partition, sql.ColSet{})
+}
+
+func (t *DoltTable) PartitionValueRowWriter(ctx *sql.Context, partition sql.Partition, columnIds sql.ColSet) (sql.ValueRowWriter, error) {
 	if p, ok := partition.(pendingTablePartition); ok {
 		iter, err := p.rows.IterAll(ctx)
 		if err != nil {
@@ -754,7 +758,7 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 			projCols = t.sch.GetAllCols().Tags
 		}
 		kd, vd := p.rows.Descriptors()
-		return index.NewProllyRowIterForSchema(t.sch, iter, kd, vd, projCols, p.rows.NodeStore()), nil
+		return index.NewProllyRowIterForSchema(t.sch, iter, kd, vd, projCols, p.rows.NodeStore(), columnIds), nil
 	}
 
 	table, err := t.DoltTable(ctx)
@@ -777,7 +781,7 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 		}
 	}
 
-	originalRowIter, err := partitionRows(ctx, table, projCols, partition)
+	originalRowIter, err := partitionRows(ctx, table, projCols, partition, columnIds)
 	if err != nil {
 		return originalRowIter, err
 	}
@@ -789,12 +793,12 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 	}
 }
 
-func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []uint64, partition sql.Partition) (sql.RowIter, error) {
+func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []uint64, partition sql.Partition, columnIds sql.ColSet) (sql.ValueRowWriter, error) {
 	switch typedPartition := partition.(type) {
 	case doltTablePartition:
-		return newRowIterator(ctx, t, projCols, typedPartition)
+		return newRowIterator(ctx, t, projCols, typedPartition, columnIds)
 	case index.SinglePartition:
-		return newRowIterator(ctx, t, projCols, doltTablePartition{rowData: typedPartition.RowData, end: NoUpperBound})
+		return newRowIterator(ctx, t, projCols, doltTablePartition{rowData: typedPartition.RowData, end: NoUpperBound}, columnIds)
 	}
 
 	return nil, errors.New("unsupported partition type")
@@ -842,7 +846,7 @@ type doltTableInterface interface {
 }
 
 func (t *WritableDoltTable) Database() string {
-	return t.db.baseName
+	return t.db.name.Base
 }
 
 func (t *WritableDoltTable) setRoot(ctx *sql.Context, newRoot doltdb.RootValue) error {
@@ -2526,7 +2530,7 @@ func (t *AlterableDoltTable) getFirstAutoIncrementValue(
 
 	// Note that we aren't calling the public PartitionRows, because it always gets the table data from the session
 	// root, which hasn't been updated yet
-	rowIter, err := partitionRows(ctx, table, t.projectedCols, index.SinglePartition{RowData: rowData})
+	rowIter, err := partitionRows(ctx, table, t.projectedCols, index.SinglePartition{RowData: rowData}, sql.ColSet{})
 	if err != nil {
 		return 0, err
 	}
@@ -3052,6 +3056,10 @@ func (t *AlterableDoltTable) DropForeignKey(ctx *sql.Context, fkName string, tab
 	fkc, err := root.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return err
+	}
+	// The engine doesn't always supply a schema name. A foreign key is declared in the schema of its table, so use that.
+	if schemaName == "" {
+		schemaName = t.db.Schema()
 	}
 	if !fkc.RemoveKeyByName(fkName, doltdb.TableName{Name: tableName, Schema: schemaName}) {
 		return sql.ErrForeignKeyNotFound.New(fkName, t.tableName)

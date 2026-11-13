@@ -23,6 +23,9 @@ import (
 
 var ErrMissingChunk = errors.New("missing chunk")
 
+// ErrStoreClosed is returned by a ChunkStore which is used after it has been closed.
+var ErrStoreClosed = errors.New("*NomsBlockStore is closed")
+
 // MissingObjectError implements the error interface and holds dynamic data regarding which object was missing.
 type MissingChunkError struct {
 	h hash.Hash

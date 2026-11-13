@@ -89,6 +89,16 @@ func AbortIncompleteClone(dEnv *env.DoltEnv, dirExisted bool) error {
 // [AbortIncompleteClone] if the clone fails. A failure inside EnvForClone itself is cleaned up before it
 // returns.
 func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, dir string, fs filesys.Filesys, version string, homeProvider env.HomeDirProvider) (_ *env.DoltEnv, err error) {
+	return envForClone(ctx, nbf, r, dir, fs, version, homeProvider)
+}
+
+// EnvForCloneOf is [EnvForClone] for a clone of |src|. Each of |configure| runs on the new DoltEnv before its database
+// is created; an error from one fails the clone.
+func EnvForCloneOf(ctx context.Context, src *doltdb.DoltDB, r env.Remote, dir string, fs filesys.Filesys, version string, homeProvider env.HomeDirProvider, configure ...func(*env.DoltEnv) error) (*env.DoltEnv, error) {
+	return envForClone(ctx, src.Format(), r, dir, fs, version, homeProvider, configure...)
+}
+
+func envForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, dir string, fs filesys.Filesys, version string, homeProvider env.HomeDirProvider, configure ...func(*env.DoltEnv) error) (_ *env.DoltEnv, err error) {
 	canCreate, err := env.CanCreateDatabaseAtPath(fs, dir)
 	if !canCreate {
 		if errors.Is(err, env.ErrCannotCreateDoltDirAlreadyExists) {
@@ -140,6 +150,11 @@ func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, di
 	}
 
 	dEnv = env.LoadWithoutDB(ctx, homeProvider, newFs, doltdb.LocalDirDoltDB, version)
+	for _, f := range configure {
+		if err = f(dEnv); err != nil {
+			return nil, err
+		}
+	}
 	err = dEnv.InitRepoWithNoData(ctx, nbf)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init repo: %w", err)

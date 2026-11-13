@@ -225,7 +225,7 @@ func computeProllyTreePatches(
 	}
 
 	// validator shares an artifact editor with conflict merge
-	uniq, err := newUniqValidator(ctx, finalSch, tm, valueMerger, artEditor)
+	uniq, err := newUniqValidator(ctx, finalSch, tm, valueMerger, pri, artEditor)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1020,9 +1020,14 @@ type uniqValidator struct {
 	indexes     []uniqIndex
 	valueMerger *valueMerger
 	tm          *TableMerger
+	// pri maps rows to the merged schema as they are written to the merged primary index, so that the unique indexes
+	// are checked against the rows the merge produces.
+	pri *primaryMerger
+	// leftRows are the rows of the left side of the merge, whose entries the unique indexes start with.
+	leftRows prolly.Map
 }
 
-func newUniqValidator(ctx *sql.Context, sch schema.Schema, tm *TableMerger, vm *valueMerger, edits *prolly.ArtifactsEditor) (uniqValidator, error) {
+func newUniqValidator(ctx *sql.Context, sch schema.Schema, tm *TableMerger, vm *valueMerger, pri *primaryMerger, edits *prolly.ArtifactsEditor) (uniqValidator, error) {
 	srcHash, err := tm.rightSrc.HashOf()
 	if err != nil {
 		return uniqValidator{}, err
@@ -1034,6 +1039,7 @@ func newUniqValidator(ctx *sql.Context, sch schema.Schema, tm *TableMerger, vm *
 		edits:       edits,
 		valueMerger: vm,
 		tm:          tm,
+		pri:         pri,
 	}
 
 	rows, err := tm.leftTbl.GetRowData(ctx)
@@ -1044,6 +1050,7 @@ func newUniqValidator(ctx *sql.Context, sch schema.Schema, tm *TableMerger, vm *
 	if err != nil {
 		return uniqValidator{}, err
 	}
+	uv.leftRows = clustered
 
 	indexes, err := tm.leftTbl.GetIndexSet(ctx)
 	if err != nil {
@@ -1084,21 +1091,26 @@ func newUniqValidator(ctx *sql.Context, sch schema.Schema, tm *TableMerger, vm *
 // of violations recorded along with any error encountered is returned. Processing |diff| may resolve existing unique
 // constraint violations, in which case the violations returned may be a negative number.
 func (uv uniqValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) (violations int, err error) {
-	var value val.Tuple
+	// |value| is the row as the merge writes it, and |prevValue| is the row it replaces in the unique indexes, if any.
+	var value, prevValue val.Tuple
 	switch diff.Op {
 	case tree.DiffOpRightAdd, tree.DiffOpRightModify:
-		value = diff.Right
-		// Don't remap the value to the merged schema if the table is keyless or if the mapping is an identity mapping.
-		if !uv.valueMerger.keyless && !uv.valueMerger.rightMapping.IsIdentityMapping() {
-			modifiedValue := remapTuple(value, uv.tm.rightSch.GetValueDescriptor(uv.valueMerger.ns), uv.valueMerger.rightMapping)
-			value = val.NewTuple(uv.valueMerger.syncPool, modifiedValue...)
+		// The right side's row is mapped to the merged schema as the primary index merge maps it, so that columns the
+		// right side lacks take their defaults, which may decide whether the row is in a partial index.
+		value, err = uv.rightValue(ctx, diff.Key, diff.Right)
+		if err != nil {
+			return 0, err
+		}
+		if diff.Op == tree.DiffOpRightModify {
+			prevValue, err = uv.leftRow(ctx, diff.Key)
+			if err != nil {
+				return 0, err
+			}
 		}
 	case tree.DiffOpLeftAdd, tree.DiffOpLeftModify:
-		value = diff.Left
-		// Don't remap the value to the merged schema if the table is keyless or if the mapping is an identity mapping.
-		if !uv.valueMerger.keyless && !uv.valueMerger.leftMapping.IsIdentityMapping() {
-			modifiedValue := remapTuple(value, uv.tm.leftSch.GetValueDescriptor(uv.valueMerger.ns), uv.valueMerger.leftMapping)
-			value = val.NewTuple(uv.valueMerger.syncPool, modifiedValue...)
+		value, err = uv.leftValue(ctx, diff.Key, diff.Left)
+		if err != nil {
+			return 0, err
 		}
 	case tree.DiffOpRightDelete:
 		// If we see a row deletion event from the right side, we grab the original/base value so that we can update our
@@ -1106,8 +1118,23 @@ func (uv uniqValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) (
 		value = diff.Base
 	case tree.DiffOpDivergentModifyResolved:
 		value = diff.Merged
+		prevValue, err = uv.leftRow(ctx, diff.Key)
+		if err != nil {
+			return 0, err
+		}
 	default:
 		return
+	}
+
+	// A modified row leaves its previous entries in the unique indexes, which no later row may collide with, e.g. when
+	// the row moves out of a partial index and another row then takes its place.
+	if prevValue != nil {
+		for _, idx := range uv.indexes {
+			err = idx.removeRow(ctx, diff.Key, prevValue)
+			if err != nil {
+				return 0, err
+			}
+		}
 	}
 
 	// For a row deletion... we need to remove any unique constraint violations that were previously recorded for
@@ -1155,6 +1182,37 @@ func (uv uniqValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) (
 	}
 
 	return violations, err
+}
+
+// rightValue returns the right side's row |key|, |value| mapped to the merged schema. Rows that violate NOT NULL
+// constraints are mapped too, since the null validator reports them after the unique indexes are checked.
+func (uv uniqValidator) rightValue(ctx *sql.Context, key, value val.Tuple) (val.Tuple, error) {
+	if uv.valueMerger.keyless {
+		return value, nil
+	}
+	return uv.pri.rightValue(ctx, key, value, uv.tm.rightSch, true)
+}
+
+// leftValue returns the left side's row |key|, |value| mapped to the merged schema, as rightValue does.
+func (uv uniqValidator) leftValue(ctx *sql.Context, key, value val.Tuple) (val.Tuple, error) {
+	if uv.valueMerger.keyless {
+		return value, nil
+	}
+	return uv.pri.leftValue(ctx, key, value, uv.tm.leftSch, true)
+}
+
+// leftRow returns the left side's row for |key|, mapped to the merged schema, or nil if the left side has no such
+// row.
+func (uv uniqValidator) leftRow(ctx *sql.Context, key val.Tuple) (val.Tuple, error) {
+	var value val.Tuple
+	err := uv.leftRows.Get(ctx, key, func(_, v val.Tuple) error {
+		value = v
+		return nil
+	})
+	if err != nil || value == nil {
+		return nil, err
+	}
+	return uv.leftValue(ctx, key, value)
 }
 
 // deleteArtifact deletes all unique constraint violation artifacts for the row identified by |key| and returns whether
@@ -1210,6 +1268,7 @@ func (uv uniqValidator) insertArtifact(ctx context.Context, key, value val.Tuple
 
 type uniqIndex struct {
 	def              schema.Index
+	sch              schema.Schema
 	secondary        *prolly.MutableMap
 	clustered        *prolly.MutableMap
 	prefixDesc       *val.TupleDesc
@@ -1217,6 +1276,9 @@ type uniqIndex struct {
 	meta             UniqCVMeta
 	secondaryBld     index.SecondaryKeyBuilder
 	clusteredBld     index.ClusteredKeyBuilder
+	// predicate is the predicate of a partial index, resolved against |sch|. Rows that don't satisfy it are not in
+	// the index and can't collide with other rows.
+	predicate sql.Expression
 }
 
 func newUniqIndex(ctx *sql.Context, sch schema.Schema, tableName string, def schema.Index, clustered, secondary prolly.Map) (uniqIndex, error) {
@@ -1235,8 +1297,14 @@ func newUniqIndex(ctx *sql.Context, sch schema.Schema, tableName string, def sch
 
 	clusteredBld := index.NewClusteredKeyBuilder(def, sch, clustered.KeyDesc(), p, clustered.NodeStore())
 
+	predicate, err := expranalysis.ResolveIndexPredicate(ctx, tableName, sch, def)
+	if err != nil {
+		return uniqIndex{}, err
+	}
+
 	return uniqIndex{
 		def:              def,
+		sch:              sch,
 		secondary:        secondary.Mutate(),
 		clustered:        clustered.Mutate(),
 		clusteredKeyDesc: clustered.KeyDesc(),
@@ -1244,12 +1312,23 @@ func newUniqIndex(ctx *sql.Context, sch schema.Schema, tableName string, def sch
 		prefixDesc:       prefixDesc,
 		secondaryBld:     secondaryBld,
 		clusteredBld:     clusteredBld,
+		predicate:        predicate,
 	}, nil
 }
 
 type collisionFn func(key, value val.Tuple) error
 
+// matchesPredicate returns whether the row |key|, |value| belongs in this index.
+func (idx uniqIndex) matchesPredicate(ctx *sql.Context, key, value val.Tuple) (bool, error) {
+	return index.TupleMatchesPredicate(ctx, idx.predicate, key, value, idx.sch, idx.secondary.NodeStore())
+}
+
 func (idx uniqIndex) insertRow(ctx *sql.Context, key, value val.Tuple) error {
+	matches, err := idx.matchesPredicate(ctx, key, value)
+	if err != nil || !matches {
+		return err
+	}
+
 	secondaryIndexKey, err := idx.secondaryBld.SecondaryKeyFromRow(ctx, key, value)
 	if err != nil {
 		return err
@@ -1281,6 +1360,11 @@ func (idx uniqIndex) removeRow(ctx *sql.Context, key, value val.Tuple) error {
 // included in the unique constraint. For any matching row, the specified callback, |cb|, is invoked with the key
 // and value for the primary index, representing the conflicting row identified from the unique index.
 func (idx uniqIndex) findCollisions(ctx *sql.Context, key, value val.Tuple, cb collisionFn) error {
+	matches, err := idx.matchesPredicate(ctx, key, value)
+	if err != nil || !matches {
+		return err
+	}
+
 	indexKey, err := idx.secondaryBld.SecondaryKeyFromRow(ctx, key, value)
 	if err != nil {
 		return err
@@ -1591,6 +1675,8 @@ type primaryMerger struct {
 	finalSch    schema.Schema
 	mergeInfo   MergeInfo
 	defaults    []sql.Expression
+	// rightDefaults are the default expressions for rows from the right side of the merge, resolved on first use.
+	rightDefaults *[]sql.Expression
 }
 
 func newPrimaryMerger(patchBuffer tree.PatchBuffer, tableMerger *TableMerger, valueMerger *valueMerger, finalSch schema.Schema, mergeInfo MergeInfo, defaults []sql.Expression) (*primaryMerger, error) {
@@ -1615,37 +1701,9 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 			return fmt.Errorf("no source schema specified to map right-side changes to merged schema")
 		}
 
-		newTupleValue := diff.Right
-		if schema.IsKeyless(sourceSch) {
-			if m.valueMerger.rightMapping.IsIdentityMapping() == false {
-				return fmt.Errorf("cannot merge keyless tables with reordered columns")
-			}
-		} else {
-			// Remapping when there's no schema change is harmless, but slow.
-			if m.mergeInfo.RightNeedsRewrite {
-				defaults, err := resolveDefaults(ctx, m.tableMerger.name.Name, m.finalSch, m.tableMerger.rightSch)
-				if err != nil {
-					return err
-				}
-
-				tempTupleValue, err := remapTupleWithColumnDefaults(
-					ctx,
-					diff.Key,
-					diff.Right,
-					sourceSch.GetValueDescriptor(m.valueMerger.ns),
-					m.valueMerger.rightMapping,
-					m.tableMerger,
-					m.tableMerger.rightSch,
-					m.finalSch,
-					defaults,
-					m.valueMerger.syncPool,
-					true,
-				)
-				if err != nil {
-					return err
-				}
-				newTupleValue = tempTupleValue
-			}
+		newTupleValue, err := m.rightValue(ctx, diff.Key, diff.Right, sourceSch, false)
+		if err != nil {
+			return err
 		}
 		return m.patchBuffer.SendKV(ctx, tree.Item(diff.Key), tree.Item(newTupleValue))
 	case tree.DiffOpRightDelete:
@@ -1668,23 +1726,81 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 		if diff.Left == nil {
 			return m.patchBuffer.SendKV(ctx, tree.Item(diff.Key), nil)
 		}
-		newTupleValue := diff.Left
-		if schema.IsKeyless(sourceSch) {
-			if m.valueMerger.leftMapping.IsIdentityMapping() == false {
-				return fmt.Errorf("cannot merge keyless tables with reordered columns")
-			}
-		} else {
-			tempTupleValue, err := remapTupleWithColumnDefaults(ctx, diff.Key, newTupleValue, sourceSch.GetValueDescriptor(m.valueMerger.ns),
-				m.valueMerger.leftMapping, m.tableMerger, m.tableMerger.leftSch, m.finalSch, m.defaults, m.valueMerger.syncPool, false)
-			if err != nil {
-				return err
-			}
-			newTupleValue = tempTupleValue
+		newTupleValue, err := m.leftValue(ctx, diff.Key, diff.Left, sourceSch, false)
+		if err != nil {
+			return err
 		}
 		return m.patchBuffer.SendKV(ctx, tree.Item(diff.Key), tree.Item(newTupleValue))
 	default:
 		return fmt.Errorf("unexpected diffOp for editing primary index: %s", diff.Op)
 	}
+}
+
+// rightValue returns the row |value| from the right side of the merge, whose schema is |sourceSch|, as it is written
+// to the merged primary index: mapped to the merged schema, with defaults for the columns the right side lacks. If
+// |permissive| is true, the row may lack values for columns that aren't nullable, which the null validator reports.
+func (m *primaryMerger) rightValue(ctx *sql.Context, key, value val.Tuple, sourceSch schema.Schema, permissive bool) (val.Tuple, error) {
+	if schema.IsKeyless(sourceSch) {
+		if !m.valueMerger.rightMapping.IsIdentityMapping() {
+			return nil, fmt.Errorf("cannot merge keyless tables with reordered columns")
+		}
+		return value, nil
+	}
+
+	// Remapping when there's no schema change is harmless, but slow.
+	if !m.mergeInfo.RightNeedsRewrite {
+		return value, nil
+	}
+
+	if m.rightDefaults == nil {
+		defaults, err := resolveDefaults(ctx, m.tableMerger.name.Name, m.finalSch, m.tableMerger.rightSch)
+		if err != nil {
+			return nil, err
+		}
+		m.rightDefaults = &defaults
+	}
+
+	remap := remapTupleWithColumnDefaults
+	if permissive {
+		remap = remapTupleWithColumnDefaultsPermissive
+	}
+	return remap(
+		ctx,
+		key,
+		value,
+		sourceSch.GetValueDescriptor(m.valueMerger.ns),
+		m.valueMerger.rightMapping,
+		m.tableMerger,
+		m.tableMerger.rightSch,
+		m.finalSch,
+		*m.rightDefaults,
+		m.valueMerger.syncPool,
+		true,
+	)
+}
+
+// leftValue returns the row |value| from the left side of the merge, whose schema is |sourceSch|, as it is written to
+// the merged primary index: mapped to the merged schema, with defaults for the columns the left side lacks. If
+// |permissive| is true, the row may lack values for columns that aren't nullable, which the null validator reports.
+func (m *primaryMerger) leftValue(ctx *sql.Context, key, value val.Tuple, sourceSch schema.Schema, permissive bool) (val.Tuple, error) {
+	if schema.IsKeyless(sourceSch) {
+		if !m.valueMerger.leftMapping.IsIdentityMapping() {
+			return nil, fmt.Errorf("cannot merge keyless tables with reordered columns")
+		}
+		return value, nil
+	}
+
+	// Remapping when there's no schema change is harmless, but slow.
+	if !m.mergeInfo.LeftNeedsRewrite {
+		return value, nil
+	}
+
+	remap := remapTupleWithColumnDefaults
+	if permissive {
+		remap = remapTupleWithColumnDefaultsPermissive
+	}
+	return remap(ctx, key, value, sourceSch.GetValueDescriptor(m.valueMerger.ns),
+		m.valueMerger.leftMapping, m.tableMerger, m.tableMerger.leftSch, m.finalSch, m.defaults, m.valueMerger.syncPool, false)
 }
 
 // withGeneratedColumns returns |merged| with its stored generated columns computed again, because a merge may have
@@ -1973,6 +2089,47 @@ func remapTupleWithColumnDefaults(
 	pool pool.BuffPool,
 	rightSide bool,
 ) (val.Tuple, error) {
+	tb, err := remapTupleWithColumnDefaultsToBuilder(ctx, keyTuple, valueTuple, valDesc, mapping, tm, rowSch, mergedSch, defaultExprs, rightSide)
+	if err != nil {
+		return nil, err
+	}
+	return tb.Build(ctx, pool)
+}
+
+// remapTupleWithColumnDefaultsPermissive is remapTupleWithColumnDefaults, but it doesn't require the columns of
+// |mergedSch| that aren't nullable to have values, so that it can map rows that violate NOT NULL constraints.
+func remapTupleWithColumnDefaultsPermissive(
+	ctx *sql.Context,
+	keyTuple, valueTuple val.Tuple,
+	valDesc *val.TupleDesc,
+	mapping val.OrdinalMapping,
+	tm *TableMerger,
+	rowSch schema.Schema,
+	mergedSch schema.Schema,
+	defaultExprs []sql.Expression,
+	pool pool.BuffPool,
+	rightSide bool,
+) (val.Tuple, error) {
+	tb, err := remapTupleWithColumnDefaultsToBuilder(ctx, keyTuple, valueTuple, valDesc, mapping, tm, rowSch, mergedSch, defaultExprs, rightSide)
+	if err != nil {
+		return nil, err
+	}
+	return tb.BuildPermissive(ctx, pool)
+}
+
+// remapTupleWithColumnDefaultsToBuilder returns a TupleBuilder with the fields of the tuple remapTupleWithColumnDefaults
+// returns.
+func remapTupleWithColumnDefaultsToBuilder(
+	ctx *sql.Context,
+	keyTuple, valueTuple val.Tuple,
+	valDesc *val.TupleDesc,
+	mapping val.OrdinalMapping,
+	tm *TableMerger,
+	rowSch schema.Schema,
+	mergedSch schema.Schema,
+	defaultExprs []sql.Expression,
+	rightSide bool,
+) (*val.TupleBuilder, error) {
 	tb := val.NewTupleBuilder(mergedSch.GetValueDescriptor(tm.ns), tm.ns)
 
 	var secondPass []int
@@ -2028,7 +2185,7 @@ func remapTupleWithColumnDefaults(
 		}
 	}
 
-	return tb.Build(ctx, pool)
+	return tb, nil
 }
 
 // ComputeStoredGeneratedColumns sets the stored generated columns of |row|, a row of table |tableName| with schema
@@ -2220,26 +2377,19 @@ func generateSchemaMappings(mergedSch, leftSch, rightSch, baseSch schema.Schema)
 	return leftMapping, rightMapping, baseMapping
 }
 
-// findNonPKColumnMappingByName returns the index of the column with the given name in the given schema, or -1 if it
-// doesn't exist.
-func findNonPKColumnMappingByName(sch schema.Schema, name string) int {
-	leftNonPKCols := sch.GetNonPKCols()
-	if leftNonPKCols.Contains(name) {
-		return leftNonPKCols.IndexOf(name)
-	} else {
-		return -1
-	}
-}
-
-// findNonPKColumnMappingByTagOrName returns the index of the column with the given tag in the given schema. If a
-// matching tag is not found, then this function falls back to looking for a matching column by name. If no
-// matching column is found, then this function returns -1.
+// findNonPKColumnMappingByTagOrName finds a stored non-primary-key column by tag,
+// falling back to a case-insensitive name match. It returns -1 if neither matches.
 func findNonPKColumnMappingByTagOrName(sch schema.Schema, col schema.Column) int {
-	if idx, ok := sch.GetNonPKCols().StoredIndexByTag(col.Tag); ok {
+	cols := sch.GetNonPKCols()
+	if idx, ok := cols.StoredIndexByTag(col.Tag); ok {
 		return idx
-	} else {
-		return findNonPKColumnMappingByName(sch, col.Name)
 	}
+	if sameName, ok := cols.GetByNameCaseInsensitive(col.Name); ok {
+		if idx, ok := cols.StoredIndexByTag(sameName.Tag); ok {
+			return idx
+		}
+	}
+	return -1
 }
 
 // TryMerge performs a cell-wise merge given left, right, and base cell value
@@ -2313,7 +2463,7 @@ func (m *valueMerger) processBaseColumn(ctx context.Context, i int, left, right,
 		// This is a conflict if the value on the right changed.
 		// But if the right side only changed its representation (from ALTER COLUMN) and still has the same value,
 		// then this can be resolved.
-		rightType := m.rightSchema.GetNonPKCols().GetByIndex(rightColIdx).TypeInfo.ToSqlType()
+		rightType := m.rightSchema.GetNonPKCols().GetByStoredIndex(rightColIdx).TypeInfo.ToSqlType()
 		baseVal, err := convert(ctx, m.baseVD, rightType, i, base, m.ns)
 		if err != nil {
 			return false, err
@@ -2338,7 +2488,7 @@ func (m *valueMerger) processBaseColumn(ctx context.Context, i int, left, right,
 		// This is a conflict if the value on the left changed.
 		// But if the left side only changed its representation (from ALTER COLUMN) and still has the same value,
 		// then this can be resolved.
-		leftType := m.rightSchema.GetNonPKCols().GetByIndex(leftColIdx).TypeInfo.ToSqlType()
+		leftType := m.leftSchema.GetNonPKCols().GetByStoredIndex(leftColIdx).TypeInfo.ToSqlType()
 		baseVal, err := convert(ctx, m.baseVD, leftType, i, base, m.ns)
 		if err != nil {
 			return false, err
@@ -2385,7 +2535,7 @@ func (m *valueMerger) processBaseColumn(ctx context.Context, i int, left, right,
 	if err != nil {
 		return false, err
 	}
-	sqlType := modifiedSchema.GetNonPKCols().GetByIndex(modifiedColIdx).TypeInfo.ToSqlType()
+	sqlType := modifiedSchema.GetNonPKCols().GetByStoredIndex(modifiedColIdx).TypeInfo.ToSqlType()
 
 	baseVal, err := convert(ctx, m.baseVD, sqlType, i, base, m.ns)
 	if err != nil {
