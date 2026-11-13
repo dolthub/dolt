@@ -24,6 +24,7 @@ package datas
 import (
 	"context"
 	"errors"
+	"fmt"
 	"runtime"
 	"testing"
 	"testing/synctest"
@@ -565,6 +566,110 @@ func (suite *DatabaseSuite) TestCommitDatasetsRechecksPreconditionsOnRetry() {
 			suite.Equal(1, builds, "root retries must reuse the built value")
 			suite.Nil(store.beforeCommit, "the concurrent write must have run")
 		})
+	}
+}
+
+// resultReadErrorStore fails reads only after the underlying store acknowledges
+// publication. Purging the value cache makes result materialization use Get.
+type resultReadErrorStore struct {
+	chunks.ChunkStore
+	afterCommit func()
+	readErr     error
+	commits     int
+}
+
+func (s *resultReadErrorStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, error) {
+	if s.readErr != nil {
+		return chunks.EmptyChunk, s.readErr
+	}
+	return s.ChunkStore.Get(ctx, h)
+}
+
+func (s *resultReadErrorStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
+	ok, err := s.ChunkStore.Commit(ctx, current, last)
+	if ok && err == nil && s.afterCommit != nil {
+		s.commits++
+		s.afterCommit()
+	}
+	return ok, err
+}
+
+func TestCommitDatasetsResultReadFailure(t *testing.T) {
+	for _, kind := range []string{"commit", "prebuilt", "working set"} {
+		for _, existing := range []bool{false, true} {
+			for _, cold := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/existing=%t/cold=%t", kind, existing, cold), func(t *testing.T) {
+					ctx := context.Background()
+					storage := &chunks.TestStorage{}
+					store := &resultReadErrorStore{ChunkStore: storage.NewViewWithDefaultFormat()}
+					db := NewDatabase(store).(*database)
+					defer db.Close()
+					build := func(ds Dataset, value string) DatasetUpdate {
+						opts := CommitOptions{Meta: &CommitMeta{Description: value}}
+						expected, _ := ds.MaybeHeadAddr()
+						switch kind {
+						case "commit":
+							return CommitUpdate{CommitDS: ds, ExpectedHead: expected, RootVal: types.String(value), CommitOpts: opts}
+						case "prebuilt":
+							commit, err := db.BuildNewCommit(ctx, ds, types.String(value), opts)
+							require.NoError(t, err)
+							return PrebuiltCommitUpdate{CommitDS: ds, Commit: commit}
+						default:
+							root, err := db.WriteValue(ctx, types.String(value))
+							require.NoError(t, err)
+							return WorkingSetUpdate{WorkingSetDS: ds.ID(), PrevWsHash: expected, WorkingSet: WorkingSetSpec{
+								Meta: &WorkingSetMeta{Description: value}, WorkingRoot: root, StagedRoot: root,
+							}}
+						}
+					}
+					var updates []DatasetUpdate
+					// Deliberately use non-lexical order and distinct contents.
+					for _, name := range []string{"z", "a"} {
+						prefix := "refs/heads/"
+						if kind == "working set" {
+							prefix = "workingSets/heads/"
+						}
+						ds, err := db.GetDataset(ctx, prefix+name)
+						require.NoError(t, err)
+						if existing {
+							initial, err := db.CommitDatasets(ctx, []DatasetUpdate{build(ds, "initial "+name)})
+							require.NoError(t, err)
+							ds = initial[0]
+						}
+						updates = append(updates, build(ds, "new "+name))
+					}
+					before, err := store.Root(ctx)
+					require.NoError(t, err)
+					store.afterCommit = func() {
+						if cold {
+							db.PurgeCaches()
+						}
+						store.readErr = errors.New("chunk read failed after publication")
+					}
+					results, commitErr := db.CommitDatasets(ctx, updates)
+					require.Equal(t, 1, store.commits)
+					// A separate view must observe the persisted heads, not the writer's cache.
+					reader := NewDatabase(storage.NewViewWithDefaultFormat())
+					defer reader.Close()
+					after, err := ChunkStoreFromDatabase(reader).Root(ctx)
+					require.NoError(t, err)
+					require.NotEqual(t, before, after)
+					published := make([]Dataset, len(updates))
+					for i, update := range updates {
+						published[i], err = reader.GetDataset(ctx, update.DatasetID())
+						require.NoError(t, err)
+						require.True(t, published[i].HasHead())
+					}
+					require.NoError(t, commitErr, "acknowledged publication must return its snapshots")
+					require.Len(t, results, len(updates))
+					for i, ds := range results {
+						require.Equal(t, updates[i].DatasetID(), ds.ID())
+						require.Same(t, db, ds.Database())
+						require.Equal(t, published[i].head, ds.head)
+					}
+				})
+			}
+		}
 	}
 }
 
