@@ -39,9 +39,6 @@ func NewIndexedJsonDiffer(ctx context.Context, from, to IndexedJsonDocument) (*I
 	if err != nil {
 		return nil, err
 	}
-	if ordering.err != nil {
-		return nil, err
-	}
 	// We want to diff the prolly tree as if it was an address map pointing to the individual blob fragments, rather
 	// than diffing the blob fragments themselves. We can accomplish this by just replacing the cursors in the differ
 	// with their parents.

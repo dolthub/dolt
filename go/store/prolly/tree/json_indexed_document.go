@@ -394,7 +394,7 @@ func (i IndexedJsonDocument) insertIntoCursor(ctx context.Context, keyPath jsonL
 
 	// If the value is a newly inserted key, write the key.
 	if !keyLastPathElement.isArrayIndex {
-		jsonChunker.appendJsonToBuffer([]byte(fmt.Sprintf(`"%s":`, escapeKey(keyLastPathElement.key))))
+		jsonChunker.appendJsonToBuffer(append(appendQuotedJsonKey(nil, keyLastPathElement.key), ':'))
 	}
 
 	// Manually set the chunker's path and offset to the start of the value we're about to insert.
@@ -441,10 +441,6 @@ func (i IndexedJsonDocument) tryRemove(ctx context.Context, path string) (types.
 	return i.removeWithLocation(ctx, keyPath)
 }
 
-func (i IndexedJsonDocument) RemoveWithKey(ctx context.Context, key []byte) (IndexedJsonDocument, bool, error) {
-	return i.removeWithLocation(ctx, jsonPathFromKey(key))
-}
-
 func (i IndexedJsonDocument) removeWithLocation(ctx context.Context, keyPath jsonLocation) (IndexedJsonDocument, bool, error) {
 	jsonCursor, found, err := newJsonCursor(ctx, i.m.NodeStore, i.m.Root, keyPath, true)
 	if err != nil {
@@ -461,22 +457,11 @@ func (i IndexedJsonDocument) removeWithLocation(ctx context.Context, keyPath jso
 		return IndexedJsonDocument{}, false, err
 	}
 
-	startofRemovedLocation := jsonCursor.GetCurrentPath()
-	startofRemovedLocation = startofRemovedLocation.Clone()
-	isInitialElement := startofRemovedLocation.getScannerState().isInitialElement()
-
 	// Advance the cursor to the end of the value being removed.
 	keyPath.setScannerState(endOfValue)
 	_, err = jsonCursor.AdvanceToLocation(ctx, keyPath, false)
 	if err != nil {
 		return IndexedJsonDocument{}, false, err
-	}
-
-	// If removing the first element of an object/array, skip past the comma, and set the chunker as if it's
-	// at the start of the object/array.
-	if isInitialElement && jsonCursor.jsonScanner.current() == ',' {
-		jsonCursor.jsonScanner.valueOffset++
-		jsonChunker.jScanner.currentPath = startofRemovedLocation
 	}
 
 	newRoot, err := jsonChunker.Done(ctx)
@@ -508,22 +493,17 @@ func (i IndexedJsonDocument) trySet(ctx context.Context, path string, val sql.JS
 	if err != nil {
 		return nil, false, err
 	}
-	return i.setWithLocation(ctx, keyPath, val, true)
+	return i.setWithLocation(ctx, keyPath, val)
 }
 
-// SetWithKey applies an encoded diff path without treating index zero as a scalar alias.
-func (i IndexedJsonDocument) SetWithKey(ctx context.Context, key []byte, val sql.JSONWrapper) (IndexedJsonDocument, bool, error) {
-	return i.setWithLocation(ctx, jsonPathFromKey(key), val, false)
-}
-
-func (i IndexedJsonDocument) setWithLocation(ctx context.Context, keyPath jsonLocation, val sql.JSONWrapper, allowScalarAlias bool) (IndexedJsonDocument, bool, error) {
+func (i IndexedJsonDocument) setWithLocation(ctx context.Context, keyPath jsonLocation, val sql.JSONWrapper) (IndexedJsonDocument, bool, error) {
 	jsonCursor, found, err := newJsonCursor(ctx, i.m.NodeStore, i.m.Root, keyPath, false)
 	if err != nil {
 		return IndexedJsonDocument{}, false, err
 	}
 
-	// Paths can index a scalar at zero, which is the same as referencing the scalar.
-	for allowScalarAlias && !found && keyPath.size() > jsonCursor.jsonScanner.currentPath.size() {
+	// SQL paths can index a scalar at zero, which is the same as referencing the scalar.
+	for !found && keyPath.size() > jsonCursor.jsonScanner.currentPath.size() {
 		lastKeyPathElement := keyPath.getLastPathElement()
 		if !lastKeyPathElement.isArrayIndex || lastKeyPathElement.getArrayIndex() != 0 {
 			// The key does not exist in the document.

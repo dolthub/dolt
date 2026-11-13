@@ -123,6 +123,63 @@ func TestIndexedJsonDocument_ValidateChunks(t *testing.T) {
 	}
 }
 
+// TestOrderedEditorBoundarySplices verifies that ordered edits at leaf boundaries
+// produce the same tree as serializing the expected document from scratch.
+func TestOrderedEditorBoundarySplices(t *testing.T) {
+	ctx := sql.NewEmptyContext()
+	ns := NewTestNodeStore()
+	original := createLargeDocumentForTesting(t, ctx, ns)
+	originalBytes, err := original.GetBytes(ctx)
+	require.NoError(t, err)
+
+	const firstPath = "$[0].string"
+	first := jsonLocationFromMySqlPath(t, firstPath, startOfValue)
+	value := types.JSONDocument{Val: "replacement"}
+	for _, boundary := range largeDocumentChunkBoundaries {
+		t.Run(jsonPathTypeNames[boundary.pathType], func(t *testing.T) {
+			path := jsonLocationFromMySqlPath(t, boundary.path, startOfValue)
+			editor := NewJsonMergeEditor(original)
+			require.NoError(t, editor.Apply(ctx, JsonDiff{Key: first.key, To: value, Type: ModifiedDiff}))
+			require.NoError(t, editor.Apply(ctx, JsonDiff{Key: path.key, To: value, Type: ModifiedDiff}))
+			got, err := editor.Done(ctx)
+			require.NoError(t, err)
+
+			originalValue, err := types.NewLazyJSONDocument(originalBytes).ToInterface(ctx)
+			require.NoError(t, err)
+			inline := types.JSONDocument{Val: originalValue}
+			want, changed, err := inline.Set(ctx, firstPath, value)
+			require.NoError(t, err)
+			require.True(t, changed)
+			want, changed, err = want.Set(ctx, boundary.path, value)
+			require.NoError(t, err)
+			require.True(t, changed)
+			wantRoot, err := SerializeJsonToAddr(ctx, ns, want)
+			require.NoError(t, err)
+			require.Equal(t, wantRoot.HashOf(), got.m.Root.HashOf())
+		})
+	}
+}
+
+// TestOrderedEditorPreservesLegacyKeySpelling verifies edits against stored escaped keys.
+func TestOrderedEditorPreservesLegacyKeySpelling(t *testing.T) {
+	ctx := sql.NewEmptyContext()
+	ns := NewTestNodeStore()
+	value := types.NewLazyJSONDocument([]byte(`{"\u000a":1,"\u003c":{"x":2},"Z":0}`))
+	root, err := SerializeJsonToAddr(ctx, ns, value)
+	require.NoError(t, err)
+	document := NewIndexedJsonDocument(root, ns)
+	left := jsonLocationKey{byte(startOfValue)}.appendObjectKeyString("\n")
+	right := jsonLocationKey{byte(startOfValue)}.appendObjectKeyString("<").appendObjectKeyString("x")
+	editor := NewJsonMergeEditor(document)
+	require.NoError(t, editor.Apply(ctx, JsonDiff{Key: left, Type: ModifiedDiff, To: types.JSONDocument{Val: 3}}))
+	require.NoError(t, editor.Apply(ctx, JsonDiff{Key: right, Type: ModifiedDiff, To: types.JSONDocument{Val: 4}}))
+	result, err := editor.Done(ctx)
+	require.NoError(t, err)
+	got, err := result.GetBytes(ctx)
+	require.NoError(t, err)
+	require.Equal(t, `{"\u000a":3,"\u003c":{"x":4},"Z":0}`, string(got))
+}
+
 func TestIndexedJsonDocument_Insert(t *testing.T) {
 	ctx := sql.NewEmptyContext()
 	ns := NewTestNodeStore()
@@ -258,6 +315,26 @@ func TestIndexedJsonDocument_Extract(t *testing.T) {
 
 	testCases := jsontests.JsonExtractTestCases(t, convertToIndexedJsonDocument)
 	jsontests.RunJsonTests(t, testCases)
+
+	t.Run("formatted object key paths", func(t *testing.T) {
+		values := types.JsonObject{
+			"": 1, "*": 2, "**": 3, "a.b": 4, "a\nb": 5, "a\\b": 6,
+			"a\\\"": 7, "a\\n": 8, "\u2028": 9, "padding": strings.Repeat("x", 40000),
+		}
+		document := newIndexedJsonDocumentFromValue(t, ctx, ns, values)
+		delete(values, "padding")
+		for key, expected := range values {
+			t.Run(fmt.Sprintf("%q", key), func(t *testing.T) {
+				path := MySqlJsonPathFromKey(jsonLocationKey{byte(startOfValue)}.appendObjectKeyString(key))
+				value, err := document.Lookup(ctx, path)
+				require.NoError(t, err)
+				require.NotNil(t, value)
+				cmp, err := types.CompareJSON(ctx, value, types.JSONDocument{Val: expected})
+				require.NoError(t, err)
+				require.Zero(t, cmp, "path %s", path)
+			})
+		}
+	})
 }
 
 func TestIndexedJsonDocument_Replace(t *testing.T) {

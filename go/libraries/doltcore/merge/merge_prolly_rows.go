@@ -2842,42 +2842,26 @@ func MergeJSON(ctx context.Context, ns tree.NodeStore, baseJson, leftJson, right
 		merged = tree.NewIndexedJsonDocument(root, ns)
 	}
 
-	var arrayDeletes [][]byte
+	editor := tree.NewJsonMergeEditor(merged)
 	for {
-		threeWayDiff, nextErr := threeWayDiffer.Next(ctx)
-		if nextErr != nil && nextErr != io.EOF {
-			return types.JSONDocument{}, true, nextErr
+		threeWayDiff, err := threeWayDiffer.Next(ctx)
+		if err == io.EOF {
+			result, err := editor.Done(ctx)
+			return result, err != nil, err
 		}
-
-		// Element diffs are ordered by increasing index. Remove each run in reverse
-		// so that deleting an element does not shift the indices still to be removed.
-		if threeWayDiff.Op == tree.DiffOpRightDelete && tree.JsonArrayPath(threeWayDiff.Key) != nil {
-			arrayDeletes = append(arrayDeletes, bytes.Clone(threeWayDiff.Key))
-			continue
-		}
-		for i := len(arrayDeletes) - 1; i >= 0; i-- {
-			merged, _, err = merged.RemoveWithKey(ctx, arrayDeletes[i])
-			if err != nil {
-				return types.JSONDocument{}, true, err
-			}
-		}
-		clear(arrayDeletes)
-		arrayDeletes = arrayDeletes[:0]
-		if nextErr == io.EOF {
-			return merged, false, nil
+		if err != nil {
+			return types.JSONDocument{}, true, err
 		}
 
 		switch threeWayDiff.Op {
-		case tree.DiffOpRightAdd, tree.DiffOpRightModify, tree.DiffOpDivergentModifyResolved:
-			merged, _, err = merged.SetWithKey(ctx, threeWayDiff.Key, threeWayDiff.Right)
-			if err != nil {
-				return types.JSONDocument{}, true, err
-			}
+		case tree.DiffOpRightAdd:
+			err = editor.Apply(ctx, tree.JsonDiff{Key: threeWayDiff.Key, Type: tree.AddedDiff, To: threeWayDiff.Right})
+		case tree.DiffOpRightModify:
+			err = editor.Apply(ctx, tree.JsonDiff{Key: threeWayDiff.Key, Type: tree.ModifiedDiff, To: threeWayDiff.Right})
 		case tree.DiffOpRightDelete:
-			merged, _, err = merged.RemoveWithKey(ctx, threeWayDiff.Key)
-			if err != nil {
-				return types.JSONDocument{}, true, err
-			}
+			err = editor.Apply(ctx, tree.JsonDiff{Key: threeWayDiff.Key, Type: tree.RemovedDiff})
+		case tree.DiffOpDivergentModifyResolved:
+			err = editor.Apply(ctx, tree.JsonDiff{Key: threeWayDiff.Key, Type: tree.ModifiedDiff, To: threeWayDiff.Merged})
 		case tree.DiffOpLeftAdd, tree.DiffOpLeftModify, tree.DiffOpLeftDelete,
 			tree.DiffOpConvergentAdd, tree.DiffOpConvergentModify, tree.DiffOpConvergentDelete:
 			// These changes already exist on the left.
@@ -2885,6 +2869,9 @@ func MergeJSON(ctx context.Context, ns tree.NodeStore, baseJson, leftJson, right
 			return types.JSONDocument{}, true, nil
 		default:
 			panic("unreachable")
+		}
+		if err != nil {
+			return types.JSONDocument{}, true, err
 		}
 	}
 }
