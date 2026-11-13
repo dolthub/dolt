@@ -90,6 +90,7 @@ sysbench \
   --mysql-password="$PASS" \
   --db-ps-mode=disable \
   --time="$TIME" \
+  --report_interval=10 \
   --table-size="$TABLE_SIZE" \
   --percentile=95 \
   --rand-type=uniform \
@@ -120,6 +121,7 @@ sysbench \
   --mysql-password="$PASS" \
   --db-ps-mode=disable \
   --time="$TIME" \
+  --report_interval=10 \
   --table-size="$TABLE_SIZE" \
   --percentile=95 \
   --rand-type=uniform \
