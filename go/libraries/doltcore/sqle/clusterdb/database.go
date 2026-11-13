@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -173,6 +174,11 @@ func (db database) WithBranchRevision(requestedName string, branchSpec dsess.Ses
 }
 
 func (db database) DoltDatabases() []*doltdb.DoltDB {
+	return nil
+}
+
+// BranchLock implements dsess.SqlDatabase. This database has no branches.
+func (db database) BranchLock() *sync.RWMutex {
 	return nil
 }
 

@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -97,6 +98,11 @@ func (db *UserSpaceDatabase) InitialDBState(ctx *sql.Context) (dsess.InitialDbSt
 		},
 		Remotes: concurrentmap.New[string, env.Remote](),
 	}, nil
+}
+
+// BranchLock implements dsess.SqlDatabase. This database has no branches.
+func (db *UserSpaceDatabase) BranchLock() *sync.RWMutex {
+	return nil
 }
 
 func (db *UserSpaceDatabase) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
