@@ -192,6 +192,42 @@ func TestDynamicPushOnWriteHookClosesDestinations(t *testing.T) {
 	}
 }
 
+// TestDynamicPushOnWriteHookConfigChangeOpensOnce checks that a config change opens one destination, not one per
+// commit, and that a failed open leaves the previous config in place.
+func TestDynamicPushOnWriteHookConfigChangeOpensOnce(t *testing.T) {
+	ctx := context.Background()
+	home := t.TempDir()
+	fs, err := filesys.LocalFS.WithWorkingDir(t.TempDir())
+	require.NoError(t, err)
+	dEnv := env.LoadWithoutDB(ctx, func() (string, error) { return home, nil }, fs, doltdb.LocalDirDoltDB, "test")
+	require.NoError(t, dEnv.InitRepo(ctx, types.Format_DOLT, "test", "test@example.com", env.DefaultInitBranch))
+	defer dEnv.Close()
+	require.NoError(t, dEnv.AddRemote(env.NewRemote("first", "file://"+t.TempDir(), nil)))
+
+	vars := NewEngineVariables().System
+	sqlCtx := sql.NewEmptyContext()
+	require.NoError(t, vars.SetGlobal(sqlCtx, dsess.ReplicateToRemote, "first"))
+	hook, _, err := NewDynamicPushOnWriteHookWithRegistry(ctx, "", dEnv, &buffer.Buffer{}, vars)
+	require.NoError(t, err)
+	ddb := dEnv.DoltDB(ctx)
+	ddb.PrependCommitHooks(ctx, hook)
+	ds, err := doltdb.ExposeDatabaseFromDoltDB(ddb).GetDataset(ctx, ref.NewBranchRef(env.DefaultInitBranch).String())
+	require.NoError(t, err)
+
+	require.NoError(t, vars.SetGlobal(sqlCtx, dsess.AsyncReplication, dsess.SysVarTrue))
+	for range 3 {
+		_, err = hook.Execute(ctx, ds, ddb)
+		require.NoError(t, err)
+	}
+	require.Len(t, hook.opened, 2)
+
+	require.NoError(t, vars.SetGlobal(sqlCtx, dsess.ReplicateToRemote, "missing"))
+	_, err = hook.Execute(ctx, ds, ddb)
+	require.ErrorIs(t, err, env.ErrRemoteNotFound)
+	require.Equal(t, "first", hook.remote)
+	require.Len(t, hook.opened, 2)
+}
+
 // TestReadReplicaDatabaseCloseClosesRemote checks that a read replica closes the remote it pulls from.
 func TestReadReplicaDatabaseCloseClosesRemote(t *testing.T) {
 	ctx := context.Background()

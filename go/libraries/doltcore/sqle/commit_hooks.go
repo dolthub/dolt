@@ -474,12 +474,13 @@ func (m *DynamicPushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, 
 			return nil, nil
 		}
 
-		m.remote = remoteName
-
-		destDb, err := getDestinationDb(ctx, m.dEnv, m.remote)
+		destDb, err := getDestinationDb(ctx, m.dEnv, remoteName)
 		if err != nil {
 			return nil, err
 		}
+		// Record the new config only once it took effect, so the next commit does not reopen the destination.
+		m.remote = remoteName
+		m.async = async
 		m.opened = append(m.opened, destDb)
 
 		m.syncHook.destDb = destDb
