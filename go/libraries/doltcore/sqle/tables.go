@@ -1886,7 +1886,8 @@ func (t *AlterableDoltTable) RewriteInserter(
 		if err != nil {
 			return nil, err
 		}
-		fkcChanged, err := rebindForeignKeyIndexes(t.TableName(), newSch, fkc)
+		var fkcChanged bool
+		fkc, fkcChanged, err = rebindForeignKeyIndexes(t.TableName(), newSch, fkc)
 		if err != nil {
 			return nil, err
 		}
@@ -2388,7 +2389,7 @@ func (t *AlterableDoltTable) adjustForeignKeysForDroppedPk(ctx *sql.Context, tbl
 		return nil, err
 	}
 
-	err = fkc.UpdateIndexes(ctx, t.sch, fkcUpdates)
+	fkc, err = fkc.UpdateIndexes(ctx, t.sch, fkcUpdates)
 	if err != nil {
 		return nil, err
 	}
@@ -2782,6 +2783,7 @@ func (t *AlterableDoltTable) updateForeignKeyIndexNames(ctx *sql.Context, root d
 	if err != nil {
 		return nil, err
 	}
+	renamed := fkc.Builder()
 	for _, fk := range fkc.AllKeys() {
 		usesTableIndex := t.TableName() == fk.TableName && strings.EqualFold(fk.TableIndex, oldIndexName)
 		usesReferencedTableIndex := t.TableName() == fk.ReferencedTableName && strings.EqualFold(fk.ReferencedTableIndex, oldIndexName)
@@ -2795,13 +2797,13 @@ func (t *AlterableDoltTable) updateForeignKeyIndexNames(ctx *sql.Context, root d
 		if usesReferencedTableIndex {
 			newFk.ReferencedTableIndex = newIndexName
 		}
-		fkc.RemoveKeys(fk)
-		err = fkc.AddKeys(newFk)
+		renamed.RemoveKeys(fk)
+		err = renamed.AddKeys(newFk)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return root.PutForeignKeyCollection(ctx, fkc)
+	return root.PutForeignKeyCollection(ctx, renamed.Build())
 }
 
 // createForeignKey creates a doltdb.ForeignKey from a sql.ForeignKeyConstraint
@@ -3028,7 +3030,7 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 		return err
 	}
 
-	err = fkc.AddKeys(doltFk)
+	fkc, err = fkc.AddKeys(doltFk)
 	if err != nil {
 		return err
 	}
@@ -3061,7 +3063,8 @@ func (t *AlterableDoltTable) DropForeignKey(ctx *sql.Context, fkName string, tab
 	if schemaName == "" {
 		schemaName = t.db.Schema()
 	}
-	if !fkc.RemoveKeyByName(fkName, doltdb.TableName{Name: tableName, Schema: schemaName}) {
+	fkc, removed := fkc.RemoveKeyByName(fkName, doltdb.TableName{Name: tableName, Schema: schemaName})
+	if !removed {
 		return sql.ErrForeignKeyNotFound.New(fkName, t.tableName)
 	}
 	newRoot, err := root.PutForeignKeyCollection(ctx, fkc)
@@ -3110,7 +3113,7 @@ func (t *WritableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, sq
 	if !ok {
 		return sql.ErrForeignKeyNotFound.New(fkName, t.tableName)
 	}
-	fkc.RemoveKeyByName(doltFk.Name, currentTblName)
+	fkc, _ = fkc.RemoveKeyByName(doltFk.Name, currentTblName)
 	doltFk.Name = sqlFk.Name
 	doltFk.TableName = tblName
 	doltFk.ReferencedTableName = doltdb.TableName{Name: sqlFk.ParentTable, Schema: schemaName}
@@ -3133,7 +3136,7 @@ func (t *WritableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, sq
 	doltFk.IsNotValid = sqlFk.IsNotValid
 	doltFk.MatchType = doltdb.ForeignKeyMatchType(sqlFk.MatchType)
 
-	err = fkc.AddKeys(doltFk)
+	fkc, err = fkc.AddKeys(doltFk)
 	if err != nil {
 		return err
 	}
@@ -3228,6 +3231,7 @@ func (t *AlterableDoltTable) dropIndex(ctx *sql.Context, indexName string) (*dol
 	if err != nil {
 		return nil, nil, err
 	}
+	rebound := fkc.Builder()
 	for _, fk := range fkc.AllKeys() {
 		if fk.ReferencedTableIndex != oldIdx.Name() {
 			continue
@@ -3249,13 +3253,13 @@ func (t *AlterableDoltTable) dropIndex(ctx *sql.Context, indexName string) (*dol
 			// if a replacement index wasn't found; it matched on primary key, so use empty string
 			newFk.ReferencedTableIndex = ""
 		}
-		fkc.RemoveKeys(fk)
-		err = fkc.AddKeys(newFk)
+		rebound.RemoveKeys(fk)
+		err = rebound.AddKeys(newFk)
 		if err != nil {
 			return nil, nil, err
 		}
 	}
-	root, err = root.PutForeignKeyCollection(ctx, fkc)
+	root, err = root.PutForeignKeyCollection(ctx, rebound.Build())
 	if err != nil {
 		return nil, nil, err
 	}

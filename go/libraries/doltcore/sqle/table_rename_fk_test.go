@@ -58,8 +58,8 @@ CREATE TABLE child (id BIGINT PRIMARY KEY, CONSTRAINT fk1 FOREIGN KEY (id) REFER
 	scopedFk := origFk
 	scopedFk.TableName = doltdb.TableName{Name: "child", Schema: "public"}
 	scopedFk.ReferencedTableName = doltdb.TableName{Name: "parent", Schema: "public"}
-	fkc.RemoveKeys(origFk)
-	require.NoError(t, fkc.AddKeys(scopedFk))
+	fkc, err = fkc.RemoveKeys(origFk).AddKeys(scopedFk)
+	require.NoError(t, err)
 
 	newRoot, err := root.PutForeignKeyCollection(ctx, fkc)
 	require.NoError(t, err)
