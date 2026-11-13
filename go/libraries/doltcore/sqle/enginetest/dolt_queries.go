@@ -8824,6 +8824,42 @@ var DoltSystemVariables = []queries.ScriptTest{
 // Temporary tables are not supported in GMS, eventually should move those tests there.
 var DoltTempTableScripts = []queries.ScriptTest{
 	{
+		Name: "temporary table failed inserts are atomic",
+		SetUpScript: []string{
+			"CREATE TEMPORARY TABLE t (id INT PRIMARY KEY)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "INSERT INTO t VALUES (1), (2), (1)",
+				ExpectedErr: sql.ErrPrimaryKeyViolation,
+			},
+			{
+				Query:    "SELECT * FROM t",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "INSERT INTO t VALUES (1), (2)",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:       "INSERT INTO t VALUES (3), (1)",
+				ExpectedErr: sql.ErrPrimaryKeyViolation,
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY id",
+				Expected: []sql.Row{{1}, {2}},
+			},
+			{
+				Query:    "INSERT INTO t VALUES (3)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY id",
+				Expected: []sql.Row{{1}, {2}, {3}},
+			},
+		},
+	},
+	{
 		Name: "temporary and non-temporary table name collisions",
 		SetUpScript: []string{
 			"create table t1 (id varchar(100))",
@@ -8956,7 +8992,7 @@ var DoltTempTableScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{"abc", 1}},
 			},
 			{
-				Query:       "INSERT INTO inline_indexes VALUES ('other', 1)",
+				Query:       "INSERT INTO inline_indexes VALUES ('new', 3), ('other', 1)",
 				ExpectedErr: sql.ErrUniqueKeyViolation,
 			},
 			{
