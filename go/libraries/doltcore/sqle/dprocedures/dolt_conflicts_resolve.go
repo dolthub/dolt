@@ -147,6 +147,11 @@ func resolveProllyConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName doltdb.
 			return nil, err
 		}
 
+		// Both branches deleted a keyless row, or the row was deleted after the merge.
+		if len(ourRow) == 0 && len(theirRow) == 0 {
+			continue
+		}
+
 		// update row data
 		if len(theirRow) == 0 {
 			err = mutMap.Delete(ctx, cnfArt.Key)
