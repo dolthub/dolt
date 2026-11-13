@@ -42,6 +42,7 @@ sysbench \
   --db-ps-mode=disable \
   --rand-type=uniform \
   --time="$TIME" \
+  --report_interval=10 \
   --table-size="$TABLE_SIZE" \
   --percentile=95 \
   --rand-type=uniform \
@@ -57,6 +58,7 @@ sysbench \
   --db-ps-mode=disable \
   --rand-type=uniform \
   --time="$TIME" \
+  --report_interval=10 \
   --table-size="$TABLE_SIZE" \
   --percentile=95 \
   --rand-type=uniform \
@@ -75,6 +77,7 @@ sysbench \
   --db-ps-mode=disable \
   --rand-type=uniform \
   --time="$TIME" \
+  --report_interval=10 \
   --table-size="$TABLE_SIZE" \
   --percentile=95 \
   --rand-type=uniform \
