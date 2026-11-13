@@ -21,6 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -63,4 +64,12 @@ func TestDumboRootValueIsTreatedAsRootValue(t *testing.T) {
 	names, err := loaded.GetTableNames(ctx, DefaultSchemaName, true)
 	require.NoError(t, err)
 	require.Empty(t, names)
+
+	edited, err := loaded.CreateDatabaseSchema(ctx, schema.DatabaseSchema{Name: "s1"})
+	require.NoError(t, err)
+	require.Equal(t, serial.DumboRootValueFileID, serial.GetFileID(edited.NomsValue().(types.SerialMessage)))
+
+	editedRTVL, err := root.CreateDatabaseSchema(ctx, schema.DatabaseSchema{Name: "s1"})
+	require.NoError(t, err)
+	require.Equal(t, serial.RootValueFileID, serial.GetFileID(editedRTVL.NomsValue().(types.SerialMessage)))
 }

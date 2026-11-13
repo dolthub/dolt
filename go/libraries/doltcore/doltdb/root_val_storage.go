@@ -263,7 +263,11 @@ func (r fbRvStorage) serializeRootValue(addressMapBytes []byte, dbSchemas []sche
 		serial.RootValueAddSchemas(builder, schemasOff)
 	}
 
-	bs := serial.FinishMessage(builder, serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
+	fileID := serial.RootValueFileID
+	if serial.GetFileID(r.srv.Table().Bytes) == serial.DumboRootValueFileID {
+		fileID = serial.DumboRootValueFileID
+	}
+	bs := serial.FinishMessage(builder, serial.RootValueEnd(builder), []byte(fileID))
 	msg, err := serial.TryGetRootAsRootValue(bs, serial.MessagePrefixSz)
 	if err != nil {
 		return nil, err
