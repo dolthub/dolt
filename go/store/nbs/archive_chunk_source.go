@@ -160,7 +160,7 @@ func (acs *archiveChunkSource) getMany(ctx context.Context, eg *errgroup.Group, 
 		if err != nil {
 			return err
 		}
-		chunk := chunks.NewChunk(raw)
+		chunk := chunks.NewChunkWithHash(rc.h, raw)
 		found(ctx, &chunk)
 		return nil
 	})
