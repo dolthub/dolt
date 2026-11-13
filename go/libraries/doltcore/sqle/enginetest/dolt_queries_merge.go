@@ -76,6 +76,35 @@ func twoBranchSetup(seed, onMain, onOther []string) []string {
 
 var MergeScripts = []queries.ScriptTest{
 	{
+		// other swaps a between rows 1 and 2 while main adds an unrelated row. Each row moves the value the other one
+		// gave up, so there is no violation.
+		Name:    "merge where a unique value moves between rows has no violation",
+		Dialect: "mysql",
+		SetUpScript: twoBranchSetup(
+			[]string{
+				"CREATE TABLE t (pk INT PRIMARY KEY, a INT UNIQUE);",
+				"INSERT INTO t VALUES (1, 1), (2, 2);",
+			},
+			[]string{
+				"INSERT INTO t VALUES (3, 5);",
+			},
+			[]string{
+				"UPDATE t SET a = 3 WHERE pk = 1;",
+				"UPDATE t SET a = 1 WHERE pk = 2;",
+			},
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY pk;",
+				Expected: []sql.Row{{1, 3}, {2, 1}, {3, 5}},
+			},
+		},
+	},
+	{
 		// main sets row 1's a to 4 and other sets its b to 6, each valid. Merged, g = a + b is 10, which duplicates row
 		// 2's g in the unique index on it, so the merge records a violation.
 		Name:    "merge whose generated value violates a unique key only once computed",
