@@ -87,9 +87,8 @@ func (w WorkingSetUpdate) build(ctx context.Context, db valueBuilder) (writtenDa
 	}, nil
 }
 
-// CommitUpdate updates a branch head. It uses two locks: the branch head value that was used to prepare the
-// commit provided, as well as the working set value that was included in that commit. Both must be current for the
-// commit to succeed.
+// CommitUpdate updates a branch head. The dataset snapshot used to build the commit must remain current until
+// publication. A caller can additionally lock the head used to prepare the commit and an associated working set.
 type CommitUpdate struct {
 	// CommitDS is the Dataset to update with a new commit.
 	CommitDS Dataset
@@ -142,7 +141,14 @@ func (c CommitUpdate) build(ctx context.Context, db valueBuilder) (writtenDatase
 		})
 	}
 
-	if !c.ExpectedHead.IsEmpty() {
+	headHash, _ := c.CommitDS.MaybeHeadAddr()
+	preconditions = append(preconditions, datasetCommitPrecondition{
+		DatasetID:    c.DatasetID(),
+		ExpectedHead: headHash,
+		OnFailure:    ErrMergeNeeded,
+	})
+
+	if !c.ExpectedHead.IsEmpty() && c.ExpectedHead != headHash {
 		preconditions = append(preconditions, datasetCommitPrecondition{
 			DatasetID:    c.DatasetID(),
 			ExpectedHead: c.ExpectedHead,
