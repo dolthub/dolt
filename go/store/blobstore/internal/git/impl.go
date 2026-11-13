@@ -394,10 +394,10 @@ func (a *GitAPIImpl) FetchRef(ctx context.Context, remote string, srcRef string,
 	// can cause directory/file conflicts that make git exit 1 even when our
 	// specific refspec succeeds.
 	// --no-write-fetch-head: dolt reads only the tracking ref, not FETCH_HEAD.
+	unsupported := a.noWriteFetchHeadUnsupported.Load()
 	// maintenance.auto / gc.auto: fetch otherwise ends by starting git's automatic
 	// maintenance, which detaches and can repack and delete packs after the fetch
 	// has returned, while we are reading the objects it fetched.
-	unsupported := a.noWriteFetchHeadUnsupported.Load()
 	args := []string{"-c", "maintenance.auto=false", "-c", "gc.auto=0", "fetch", "--no-tags"}
 	if !unsupported {
 		args = append(args, "--no-write-fetch-head")

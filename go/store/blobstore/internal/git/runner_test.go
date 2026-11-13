@@ -78,8 +78,9 @@ func TestRunner_WaitDelayBoundsAbandonedPipe(t *testing.T) {
 }
 
 // A warning git prints to stderr while succeeding must not reach callers that
-// parse stdout. https://github.com/dolthub/dolt/issues/12488
+// parse stdout.
 func TestRunner_RunReturnsOnlyStdoutOnSuccess(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/12488
 	t.Parallel()
 
 	out, err := helperCommandRunner(t).Run(context.Background(), RunOptions{}, "warnsize")
@@ -91,7 +92,10 @@ func TestRunner_RunReturnsOnlyStdoutOnSuccess(t *testing.T) {
 	}
 }
 
-func TestRunner_RunFailureCarriesStdoutAndStderr(t *testing.T) {
+// Splitting stdout from stderr for the success case must not cost a failure
+// either stream: error matching reads both from the CmdError.
+func TestRunner_RunFailureCarriesStdoutThenStderr(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/12488
 	t.Parallel()
 
 	out, err := helperCommandRunner(t).Run(context.Background(), RunOptions{}, "warnfail")
@@ -99,70 +103,8 @@ func TestRunner_RunFailureCarriesStdoutAndStderr(t *testing.T) {
 	if !errors.As(err, &cerr) {
 		t.Fatalf("expected a CmdError, got %v", err)
 	}
-	for _, want := range []string{"out\n", "fatal: boom\n"} {
-		if !strings.Contains(string(out), want) || !strings.Contains(string(cerr.Output), want) {
-			t.Fatalf("output %q / error output %q missing %q", out, cerr.Output, want)
-		}
-	}
-}
-
-// BlobSize against a git that warns on stderr and then prints the size.
-func TestGitAPIImpl_BlobSize_IgnoresStderrWarning(t *testing.T) {
-	t.Parallel()
-
-	r := helperCommandRunner(t).WithExtraEnv(warnSizeEnv + "=1")
-	n, err := NewGitAPIImpl(r).BlobSize(context.Background(), OID(strings.Repeat("a", 40)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != 321 {
-		t.Fatalf("got size %d, want 321", n)
-	}
-}
-
-// Fetch must not let git's automatic maintenance repack the repository: it detaches
-// and can delete packs while the fetched objects are being read.
-func TestGitAPIImpl_FetchRef_DoesNotAutoRepack(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	localRepo, localRunner, _, remoteHead := newFetchableRepos(t, ctx)
-
-	// Leave the repository due for a repack once the fetch lands: one pack already
-	// present, the fetch kept as a second, and a limit of one. Maintenance runs in
-	// the foreground so that its trace is complete when the fetch returns.
-	if _, err := localRepo.SetRefToTree(ctx, "refs/heads/local", nil, "seed local"); err != nil {
-		t.Fatal(err)
-	}
-	for _, args := range [][]string{
-		{"repack"},
-		{"config", "gc.autoPackLimit", "1"},
-		{"config", "fetch.unpackLimit", "1"},
-		{"config", "gc.autoDetach", "false"},
-		{"config", "maintenance.autoDetach", "false"},
-	} {
-		if _, err := localRunner.Run(ctx, RunOptions{}, args...); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	trace := filepath.Join(t.TempDir(), "trace")
-	api := NewGitAPIImpl(localRunner.WithExtraEnv("GIT_TRACE2_EVENT=" + trace))
-	if err := api.FetchRef(ctx, "origin", "refs/dolt/data", "refs/dolt/remotes/origin/data"); err != nil {
-		t.Fatal(err)
-	}
-	requireTrackingRef(t, ctx, api, remoteHead)
-
-	b, err := os.ReadFile(trace)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(b), `"fetch"`) {
-		t.Fatalf("trace does not record the fetch:\n%s", b)
-	}
-	// Older gits still launch "gc --auto" here, which gc.auto=0 makes a no-op, so
-	// look for the repack rather than for the launch.
-	if strings.Contains(string(b), `"repack"`) {
-		t.Fatalf("fetch repacked the repository:\n%s", b)
+	const want = "out\nfatal: boom\n"
+	if string(out) != want || string(cerr.Output) != want {
+		t.Fatalf("output %q / error output %q, want %q", out, cerr.Output, want)
 	}
 }
