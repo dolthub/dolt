@@ -427,7 +427,24 @@ func (rcv *MergeState) PendingCommitHashesLength() int {
 	return 0
 }
 
-const MergeStateNumFields = 8
+func (rcv *MergeState) UnmergableTableSchemas(j int) []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(20))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.ByteVector(a + flatbuffers.UOffsetT(j*4))
+	}
+	return nil
+}
+
+func (rcv *MergeState) UnmergableTableSchemasLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(20))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+const MergeStateNumFields = 9
 
 func MergeStateStart(builder *flatbuffers.Builder) {
 	builder.StartObject(MergeStateNumFields)
@@ -469,6 +486,12 @@ func MergeStateAddPendingCommitHashes(builder *flatbuffers.Builder, pendingCommi
 	builder.PrependUOffsetTSlot(7, flatbuffers.UOffsetT(pendingCommitHashes), 0)
 }
 func MergeStateStartPendingCommitHashesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(4, numElems, 4)
+}
+func MergeStateAddUnmergableTableSchemas(builder *flatbuffers.Builder, unmergableTableSchemas flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(8, flatbuffers.UOffsetT(unmergableTableSchemas), 0)
+}
+func MergeStateStartUnmergableTableSchemasVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
 }
 func MergeStateEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {

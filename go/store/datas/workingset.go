@@ -16,6 +16,7 @@ package datas
 
 import (
 	"context"
+	"fmt"
 
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 
@@ -96,6 +97,13 @@ func workingset_flatbuffer(working hash.Hash, staged *hash.Hash, mergeState *Mer
 		fromaddroff := builder.CreateByteVector((*mergeState.fromCommitAddr)[:])
 		fromspecoff := builder.CreateString(mergeState.fromCommitSpec)
 		unmergableoff := SerializeStringVector(builder, mergeState.unmergableTables)
+		var unmergableSchemasOff flatbuffers.UOffsetT
+		for _, schema := range mergeState.unmergableTableSchemas {
+			if schema != "" {
+				unmergableSchemasOff = SerializeStringVector(builder, mergeState.unmergableTableSchemas)
+				break
+			}
+		}
 		var headCommitAddrOff flatbuffers.UOffsetT
 		if mergeState.preMergeHeadCommitAddr != nil {
 			headCommitAddrOff = builder.CreateByteVector((*mergeState.preMergeHeadCommitAddr)[:])
@@ -109,6 +117,9 @@ func workingset_flatbuffer(working hash.Hash, staged *hash.Hash, mergeState *Mer
 		serial.MergeStateAddFromCommitAddr(builder, fromaddroff)
 		serial.MergeStateAddFromCommitSpecStr(builder, fromspecoff)
 		serial.MergeStateAddUnmergableTables(builder, unmergableoff)
+		if unmergableSchemasOff != 0 {
+			serial.MergeStateAddUnmergableTableSchemas(builder, unmergableSchemasOff)
+		}
 		serial.MergeStateAddIsCherryPick(builder, mergeState.isCherryPick)
 		serial.MergeStateAddIsRevert(builder, mergeState.isRevert)
 		if headCommitAddrOff != 0 {
@@ -164,24 +175,31 @@ func workingset_flatbuffer(working hash.Hash, staged *hash.Hash, mergeState *Mer
 	return serial.FinishMessage(builder, serial.WorkingSetEnd(builder), []byte(serial.WorkingSetFileID))
 }
 
+// NewMergeState creates merge metadata. unmergableTableSchemas must be empty
+// (all tables are in the default schema) or have one schema per unmergable table.
 func NewMergeState(
 	preMergeWorking types.Ref,
 	commit *Commit,
 	commitSpecStr string,
 	unmergableTables []string,
+	unmergableTableSchemas []string,
 	isCherryPick bool,
 	isRevert bool,
 	headCommit *Commit,
 	pendingRevertHashes []string,
 ) (*MergeState, error) {
+	if len(unmergableTableSchemas) != 0 && len(unmergableTableSchemas) != len(unmergableTables) {
+		return nil, fmt.Errorf("merge state has %d table schemas for %d unmergable tables", len(unmergableTableSchemas), len(unmergableTables))
+	}
 	ms := &MergeState{
-		preMergeWorkingAddr: new(hash.Hash),
-		fromCommitAddr:      new(hash.Hash),
-		fromCommitSpec:      commitSpecStr,
-		unmergableTables:    unmergableTables,
-		isCherryPick:        isCherryPick,
-		isRevert:            isRevert,
-		pendingRevertHashes: pendingRevertHashes,
+		preMergeWorkingAddr:    new(hash.Hash),
+		fromCommitAddr:         new(hash.Hash),
+		fromCommitSpec:         commitSpecStr,
+		unmergableTables:       unmergableTables,
+		unmergableTableSchemas: unmergableTableSchemas,
+		isCherryPick:           isCherryPick,
+		isRevert:               isRevert,
+		pendingRevertHashes:    pendingRevertHashes,
 	}
 	*ms.preMergeWorkingAddr = preMergeWorking.TargetHash()
 	*ms.fromCommitAddr = commit.Addr()

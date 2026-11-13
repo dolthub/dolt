@@ -217,6 +217,7 @@ type MergeState struct {
 	fromCommitAddr         *hash.Hash // the commit hash for the source of the merge
 	fromCommitSpec         string     // the commit string for the source of the merge
 	unmergableTables       []string   // slice of tables that can't be merged
+	unmergableTableSchemas []string   // corresponding schema names, absent for legacy working sets
 	isCherryPick           bool       // true if this merge is a chery pick
 	isRevert               bool       // true if this merge is a revert
 	pendingRevertHashes    []string   // remaining commit hashes to process after resolving a conflict
@@ -244,6 +245,12 @@ func (ms *MergeState) IsRevert() (bool, error) {
 
 func (ms *MergeState) UnmergableTables() ([]string, error) {
 	return ms.unmergableTables, nil
+}
+
+// UnmergableTableSchemas returns the schema names for UnmergableTables.
+// An empty slice means that all tables belong to the default schema.
+func (ms *MergeState) UnmergableTableSchemas() []string {
+	return ms.unmergableTableSchemas
 }
 
 func (ms *MergeState) PreMergeHeadCommit(ctx context.Context, vr types.ValueReader) (*Commit, error) {
@@ -364,6 +371,15 @@ func (h serialWorkingSetHead) HeadWorkingSet() (*WorkingSetHead, error) {
 		ret.MergeState.unmergableTables = make([]string, mergeState.UnmergableTablesLength())
 		for i := range ret.MergeState.unmergableTables {
 			ret.MergeState.unmergableTables[i] = string(mergeState.UnmergableTables(i))
+		}
+		if n := mergeState.UnmergableTableSchemasLength(); n > 0 {
+			if n != len(ret.MergeState.unmergableTables) {
+				return nil, fmt.Errorf("merge state has %d table schemas for %d unmergable tables", n, len(ret.MergeState.unmergableTables))
+			}
+			ret.MergeState.unmergableTableSchemas = make([]string, n)
+			for i := range ret.MergeState.unmergableTableSchemas {
+				ret.MergeState.unmergableTableSchemas[i] = string(mergeState.UnmergableTableSchemas(i))
+			}
 		}
 		ret.MergeState.isCherryPick = mergeState.IsCherryPick()
 		ret.MergeState.isRevert = mergeState.IsRevert()
