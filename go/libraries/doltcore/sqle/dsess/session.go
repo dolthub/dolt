@@ -1734,16 +1734,25 @@ func (d *DoltSession) SwitchWorkingSet(
 		return err
 	}
 
-	d.mu.Lock()
-
 	baseName, _ := doltdb.SplitRevisionDbName(dbName)
+	d.mu.Lock()
 	dbState, ok := d.dbStates[doltdb.NewDbKey(baseName)]
+	d.mu.Unlock()
 	if !ok {
-		d.mu.Unlock()
 		return sql.ErrDatabaseNotFound.New(dbName)
 	}
-	dbState.checkedOutRevSpec = headRef.GetPath()
 
+	// A delete without --force fails once this session is on the branch, so it only has to exist while we switch.
+	if dbState.branchLock != nil {
+		dbState.branchLock.RLock()
+		defer dbState.branchLock.RUnlock()
+	}
+	if err := checkBranchExists(ctx, dbState.ddb, headRef); err != nil {
+		return err
+	}
+
+	d.mu.Lock()
+	dbState.checkedOutRevSpec = headRef.GetPath()
 	d.mu.Unlock()
 
 	// bootstrap the db state as necessary
@@ -1895,6 +1904,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) (*branchState, err
 
 		sessionState.dbName = baseName
 		sessionState.ddb = dbState.DbData.Ddb
+		sessionState.branchLock = db.BranchLock()
 
 		baseDb, ok := d.provider.BaseDatabase(ctx, baseName)
 		if !ok {
@@ -2059,6 +2069,78 @@ func (d *DoltSession) SetCurrentDatabase(dbName string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.Session.SetCurrentDatabase(dbName)
+}
+
+// UseDatabase implements sql.Session. A session using a branch's revision database uses the branch, so as in
+// SwitchWorkingSet, the branch only has to exist while this session switches to it.
+func (d *DoltSession) UseDatabase(ctx *sql.Context, db sql.Database) error {
+	sdb, ok := db.(SqlDatabase)
+	if !ok || !doltdb.ParseQualifiedDbName(db.Name()).IsQualified() || sdb.RevisionType() != RevisionTypeBranch {
+		return d.Session.UseDatabase(ctx, db)
+	}
+	branchLock := sdb.BranchLock()
+	if branchLock == nil {
+		return d.Session.UseDatabase(ctx, db)
+	}
+
+	branchLock.RLock()
+	defer branchLock.RUnlock()
+	if err := checkBranchExists(ctx, sdb.DbData().Ddb, ref.NewBranchRef(sdb.Revision())); err != nil {
+		if errors.Is(err, doltdb.ErrBranchNotFound) {
+			return sql.ErrDatabaseNotFound.New(db.Name())
+		}
+		return err
+	}
+	// The caller sets the current database too, but other sessions must see it before the branch lock is released.
+	d.SetCurrentDatabase(db.Name())
+	return d.Session.UseDatabase(ctx, db)
+}
+
+// checkBranchExists returns doltdb.ErrBranchNotFound if |branch| doesn't exist in |ddb|.
+func checkBranchExists(ctx *sql.Context, ddb *doltdb.DoltDB, branch ref.DoltRef) error {
+	if ddb == nil {
+		return nil
+	}
+	exists, err := ddb.HasRef(ctx, branch)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return doltdb.ErrBranchNotFound
+	}
+	return nil
+}
+
+// UsesBranch reports whether this session uses branch |branch| of the database |baseName|, for callers in other
+// sessions: whether it has the branch checked out there, or its current database is the branch's revision database.
+// Like ActiveHead, it reads only state guarded by d.mu and never loads anything into this session.
+func (d *DoltSession) UsesBranch(ctx *sql.Context, baseName, branch string) (bool, error) {
+	key := doltdb.NewDbKey(baseName)
+	d.mu.Lock()
+	current := doltdb.ParseQualifiedDbName(d.Session.GetCurrentDatabase())
+	onRevision := current.DbKey() == key && current.IsQualified() && strings.EqualFold(current.Revision, branch)
+	dbState, loaded := d.dbStates[key]
+	var checkedOut string
+	if loaded {
+		checkedOut = dbState.checkedOutRevSpec
+	}
+	d.mu.Unlock()
+
+	if onRevision {
+		return true, nil
+	}
+	if loaded {
+		return strings.EqualFold(checkedOut, branch), nil
+	}
+	if current.DbKey() != key || current.IsQualified() {
+		return false, nil
+	}
+	// This session hasn't loaded |baseName| yet, so it will start on the default head.
+	head, _, err := d.ActiveHead(ctx, baseName)
+	if err != nil {
+		return false, err
+	}
+	return strings.EqualFold(head, branch), nil
 }
 
 // ActiveHead returns the head this session is on in the database |baseName|, for callers in other sessions. That's the

@@ -21,6 +21,7 @@ import (
 	"io"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cockroachdb/apd/v3"
@@ -85,6 +86,9 @@ type Database struct {
 	schemaName    string
 	editOpts      editor.Options
 	revType       dsess.RevisionType
+	// branchLock is shared by every copy of this database, which includes its branch revisions. See
+	// dsess.SqlDatabase.BranchLock.
+	branchLock *sync.RWMutex
 }
 
 var _ dsess.SqlDatabase = Database{}
@@ -177,6 +181,11 @@ func (db Database) Close() {
 	db.gs.Close()
 }
 
+// BranchLock implements dsess.SqlDatabase
+func (db Database) BranchLock() *sync.RWMutex {
+	return db.branchLock
+}
+
 // Revision implements dsess.RevisionDatabase
 func (db Database) Revision() string {
 	return db.name.Revision
@@ -221,6 +230,7 @@ func NewDatabase(ctx context.Context, name string, dbData env.DbData[context.Con
 		rsw:           dbData.Rsw,
 		gs:            globalState,
 		editOpts:      editOpts,
+		branchLock:    &sync.RWMutex{},
 	}, nil
 }
 
