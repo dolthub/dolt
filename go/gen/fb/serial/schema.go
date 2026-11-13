@@ -882,7 +882,19 @@ func (rcv *Index) OpClassesLength() int {
 	return 0
 }
 
-const IndexNumFields = 18
+func (rcv *Index) NullsNotDistinct() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(40))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *Index) MutateNullsNotDistinct(n bool) bool {
+	return rcv._tab.MutateBoolSlot(40, n)
+}
+
+const IndexNumFields = 19
 
 func IndexStart(builder *flatbuffers.Builder) {
 	builder.StartObject(IndexNumFields)
@@ -961,6 +973,9 @@ func IndexAddOpClasses(builder *flatbuffers.Builder, opClasses flatbuffers.UOffs
 }
 func IndexStartOpClassesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
+}
+func IndexAddNullsNotDistinct(builder *flatbuffers.Builder, nullsNotDistinct bool) {
+	builder.PrependBoolSlot(18, nullsNotDistinct, false)
 }
 func IndexEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

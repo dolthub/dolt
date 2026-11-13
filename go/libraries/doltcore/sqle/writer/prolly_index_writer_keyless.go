@@ -213,8 +213,10 @@ type prollyKeylessSecondaryWriter struct {
 	prefixLengths []uint16
 	keyMap        val.OrdinalMapping
 	unique        bool
-	spatial       bool
-	predicate     sql.Expression
+	// nullsNotDistinct is set for unique indexes that treat NULLs as equal to each other.
+	nullsNotDistinct bool
+	spatial          bool
+	predicate        sql.Expression
 	// virtualExprs is parallel to keyMap; non-nil entries are generating expressions for virtual
 	// (unstored) generated columns that appear in this index's key.
 	virtualExprs []sql.Expression
@@ -379,10 +381,8 @@ func (writer prollyKeylessSecondaryWriter) Insert(ctx context.Context, sqlRow sq
 }
 
 func (writer prollyKeylessSecondaryWriter) checkForUniqueKeyError(ctx context.Context, prefixKey val.Tuple, sqlRow sql.Row) error {
-	for i := 0; i < writer.prefixBld.Desc.Count(); i++ {
-		if writer.prefixBld.Desc.IsNull(i, prefixKey) {
-			return nil
-		}
+	if !writer.nullsNotDistinct && writer.prefixBld.Desc.HasNulls(prefixKey) {
+		return nil
 	}
 
 	rng, err := prolly.PrefixRange(ctx, prefixKey, writer.prefixBld.Desc)

@@ -2223,6 +2223,7 @@ func modifyIndexesForTableRewrite(ctx *sql.Context, oldSch schema.Schema, oldCol
 				Comment:            index.Comment(),
 				ColumnOrders:       index.ColumnOrders(),
 				OpClasses:          index.OpClasses(),
+				NullsNotDistinct:   index.NullsNotDistinct(),
 				FullTextProperties: index.FullTextProperties(),
 				VectorProperties:   index.VectorProperties(),
 			})
@@ -2728,15 +2729,16 @@ func (t *AlterableDoltTable) createIndex(ctx *sql.Context, idx sql.IndexDef, key
 	}
 
 	idxProperties := schema.IndexProperties{
-		IsUnique:      idx.Constraint == sql.IndexConstraint_Unique,
-		IsSpatial:     idx.Constraint == sql.IndexConstraint_Spatial,
-		IsFullText:    idx.Constraint == sql.IndexConstraint_Fulltext,
-		IsVector:      idx.Constraint == sql.IndexConstraint_Vector,
-		IsUserDefined: true,
-		Comment:       idx.Comment,
-		Predicate:     predicateStr,
-		ColumnOrders:  idx.ColumnOrders(),
-		OpClasses:     idx.OpClasses(),
+		IsUnique:         idx.Constraint == sql.IndexConstraint_Unique,
+		IsSpatial:        idx.Constraint == sql.IndexConstraint_Spatial,
+		IsFullText:       idx.Constraint == sql.IndexConstraint_Fulltext,
+		IsVector:         idx.Constraint == sql.IndexConstraint_Vector,
+		IsUserDefined:    true,
+		Comment:          idx.Comment,
+		Predicate:        predicateStr,
+		ColumnOrders:     idx.ColumnOrders(),
+		OpClasses:        idx.OpClasses(),
+		NullsNotDistinct: idx.NullsNotDistinct,
 		FullTextProperties: schema.FullTextProperties{
 			ConfigTable:      tableNames.Config,
 			PositionTable:    tableNames.Position,

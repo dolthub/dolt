@@ -1370,8 +1370,8 @@ func (idx uniqIndex) findCollisions(ctx *sql.Context, key, value val.Tuple, cb c
 		return err
 	}
 
-	if idx.prefixDesc.HasNulls(indexKey) {
-		return nil // NULLs cannot cause unique violations
+	if !idx.def.NullsNotDistinct() && idx.prefixDesc.HasNulls(indexKey) {
+		return nil // NULLs cannot cause unique violations, unless the index treats them as equal
 	}
 
 	// This code uses the secondary index to iterate over all rows (key/value pairs) that have the same prefix.

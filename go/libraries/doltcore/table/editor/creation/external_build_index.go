@@ -97,7 +97,8 @@ func BuildProllyIndexExternal(ctx *sql.Context, vrw types.ValueReadWriter, ns tr
 			return nil, err
 		}
 
-		if uniqCb != nil && prefixDesc.HasNulls(idxKey) {
+		// NULLs can't collide in a unique index unless it treats them as equal
+		if uniqCb != nil && !idx.NullsNotDistinct() && prefixDesc.HasNulls(idxKey) {
 			continue
 		}
 
