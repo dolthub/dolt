@@ -14,6 +14,12 @@ SYSBENCH_TEST="default"
 while test $# -gt 0
 do
   case "$1" in
+    # specify benchmark duration
+    --time)
+      TIME="$2"
+      shift
+      ;;
+
     # specify table size
     --table-size)
       TABLE_SIZE="$2"

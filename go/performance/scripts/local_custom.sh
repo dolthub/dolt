@@ -23,6 +23,12 @@ do
       shift
       ;;
 
+    # specify benchmark duration
+    --time)
+      TIME="$2"
+      shift
+      ;;
+
     # specify table size
     --table-size)
       TABLE_SIZE="$2"
