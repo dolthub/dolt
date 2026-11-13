@@ -116,91 +116,35 @@ func TestSchemaOverridesWithAdaptiveEncoding(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	//t.Skip()
+	t.Skip()
 	var scripts = []queries.ScriptTest{
-
 		{
-			Skip: true,
-			Name: "recursive procedure",
+			Name: "foreign key violation, parent row deleted, child keyless",
 			SetUpScript: []string{
-				`
-create procedure recursive_proc(in counter int)
-begin
-  set counter := counter + 1;
-  if counter > 3 then
-    select concat('ended with value: ', counter) as result;
-  else
-    call recursive_proc(counter);
-  end if;
-end;`,
+				"create table parent (pk int primary key, a int);",
+				"create index idx_a on parent(pk, a);",
+				"create table child (fk1 int, fk2 int, foreign key (fk1, fk2) references parent(pk, a));",
+				"insert into parent values (10, 1), (20, 2);",
+				"insert into child values (10, 1), (20, 2);",
+				"call dolt_commit('-Am', 'setup');",
+				"call dolt_branch('other');",
+				"delete from child where fk2 = 1;",
+				"delete from parent where pk = 10;",
+				"call dolt_commit('-am', 'delete parent and child rows');",
+				"call dolt_checkout('other');",
+				"insert into child values (10, 1);",
+				"call dolt_commit('-am', 'insert child row');",
+				"set dolt_force_transaction_commit = on;",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query: "call recursive_proc(1);",
-					Expected: []sql.Row{
-						{"ended with value: 4"},
-					},
-				},
-			},
-		},
-		{
-			Skip: true,
-			Name: "stored procedure branching issue",
-			SetUpScript: []string{
-				"CALL DOLT_COMMIT('-A', '--allow-empty', '-m', 'Install minimal temporary checkout repro');",
-				`
-CREATE PROCEDURE DOLT_REPRO_TEMP_CHECKOUT_MINIMAL(IN p_data_version_id VARCHAR(32))
-BEGIN
-    DECLARE v_ref VARCHAR(255);
-    DECLARE v_temp_ref VARCHAR(255);
-    DECLARE v_tag_commit VARCHAR(64);
-    DECLARE v_long_lived_exists INT DEFAULT 0;
-    DECLARE v_tag_exists INT DEFAULT 0;
-
-    SET v_ref = CONCAT('main/', p_data_version_id);
-    SET v_temp_ref = CONCAT(v_ref, '__temp_', REPLACE(UUID(), '-', ''));
-
-    CALL DOLT_CHECKOUT('main');
-    SELECT COUNT(*) INTO v_tag_exists FROM dolt_tags WHERE tag_name = v_ref;
-    IF v_tag_exists = 0 THEN
-        CALL DOLT_TAG(v_ref, 'HEAD');
-    END IF;
-    SET v_tag_commit = HASHOF(v_ref);
-
-    CALL DOLT_BRANCH('-f', v_temp_ref, v_tag_commit);
-    CALL DOLT_CHECKOUT(v_temp_ref);
-
-    SELECT COUNT(*) INTO v_long_lived_exists FROM dolt_branches WHERE name = v_ref;
-    IF v_long_lived_exists = 0 THEN
-        CALL DOLT_BRANCH('-f', v_ref, v_tag_commit);
-    END IF;
-    CALL DOLT_TAG('-d', v_ref);
-    CALL DOLT_CHECKOUT(v_ref);
-    CALL DOLT_TAG(v_ref, 'HEAD');
-    CALL DOLT_CHECKOUT('main');
-    CALL DOLT_BRANCH('-D', v_temp_ref);
-
-    SELECT 'REPRO_OK' AS RESULT_STATUS;
-END;
-`,
-			},
-			Assertions: []queries.ScriptTestAssertion{
-				{
-					Query: "CALL DOLT_REPRO_TEMP_CHECKOUT_MINIMAL('pm5284_min_a');",
-					Expected: []sql.Row{
-						{"REPRO_OK"},
-					},
+					Query:            "call dolt_merge('main')",
+					SkipResultsCheck: true,
 				},
 				{
-					Query: "CALL DOLT_REPRO_TEMP_CHECKOUT_MINIMAL('pm5284_min_a');",
+					Query: "select violation_type, fk2 from dolt_constraint_violations_child",
 					Expected: []sql.Row{
-						{"REPRO_OK"},
-					},
-				},
-				{
-					Query: "CALL DOLT_REPRO_TEMP_CHECKOUT_MINIMAL('pm5284_min_a');",
-					Expected: []sql.Row{
-						{"REPRO_OK"},
+						{"foreign key", 1},
 					},
 				},
 			},

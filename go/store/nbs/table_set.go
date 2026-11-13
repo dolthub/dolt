@@ -313,7 +313,7 @@ func (ts *tableSet) Size() int {
 func (ts *tableSet) append(ctx context.Context, fatalBehavior dherrors.FatalBehavior, mt *memTable, checker refCheck, keeper keeperF, hasCache hash.HashSet, stats *Stats) (*tableSet, gcBehavior, error) {
 	addrs := hash.NewHashSet()
 	for _, getAddrs := range mt.getChildAddrs {
-		getAddrs(ctx, addrs, func(h hash.Hash) bool { return hasCache.Has(h) })
+		getAddrs(ctx, addrs, hasCache.Has)
 	}
 	mt.addChildRefs(addrs)
 

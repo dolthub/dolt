@@ -936,10 +936,6 @@ func newEmptyNomsBlockStore(memTableSize uint64) (*NomsBlockStore, error) {
 	if memTableSize == 0 {
 		memTableSize = defaultMemTableSize
 	}
-	//hasCache, err := lru.New2Q[hash.Hash, struct{}](hasCacheSize)
-	//if err != nil {
-	//	return nil, err
-	//}
 	hasCache := hash.HashSet{}
 	nbs := &NomsBlockStore{
 		memtableSz: memTableSize,
