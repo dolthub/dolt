@@ -41,6 +41,8 @@ const StashListFileID = "SLST"
 const StashFileID = "STSH"
 const StatisticFileID = "STAT"
 const DoltgresRootValueFileID = "DGRV"
+// DumboRootValueFileID tags a RootValue written by DumboDB. The message layout is identical to RootValueFileID.
+const DumboRootValueFileID = "DMRV"
 const TupleFileID = "TUPL"
 const VectorIndexNodeFileID = "IVFF"
 

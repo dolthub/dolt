@@ -227,7 +227,7 @@ func decodeRootNomsValue(ctx context.Context, vrw types.ValueReadWriter, ns tree
 func isRootValue(nbf *types.NomsBinFormat, val types.Value) bool {
 	if sm, ok := val.(types.SerialMessage); ok {
 		fileID := serial.GetFileID(sm)
-		return fileID == serial.RootValueFileID || fileID == serial.DoltgresRootValueFileID
+		return fileID == serial.RootValueFileID || fileID == serial.DoltgresRootValueFileID || fileID == serial.DumboRootValueFileID
 	}
 	return false
 }
