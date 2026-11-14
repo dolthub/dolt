@@ -168,18 +168,13 @@ func countActiveSessions(ctx *sql.Context) (map[string]int, error) {
 			return false, fmt.Errorf("expected DoltSession, got %T", session)
 		}
 
-		sessionDbName := sess.Session.GetCurrentDatabase()
-		baseName, revision := doltdb.SplitRevisionDbName(sessionDbName)
-		if baseName != baseDbName {
+		revision, ok, err := sess.ActiveHead(ctx, baseDbName)
+		if err != nil {
+			return false, err
+		}
+		if !ok {
 			// Different database, skip
 			return false, nil
-		}
-		if revision == "" {
-			activeBranchRef, err := sess.CWBHeadRef(ctx, sessionDbName)
-			if err != nil {
-				return false, err
-			}
-			revision = activeBranchRef.GetPath()
 		}
 
 		sessionCounts[revision]++

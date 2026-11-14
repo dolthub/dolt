@@ -309,7 +309,9 @@ func GetTableResolver(ctx *sql.Context, dbName string) (doltdb.TableResolver, er
 }
 
 // lookupDbState is the private version of LookupDbState, returning a struct that has more information available than
-// the interface returned by the public method.
+// the interface returned by the public method. Only this session's own goroutine may call it: a miss loads the database
+// into this session's current transaction, and the returned branch state is unsynchronized. Other sessions use
+// ActiveHead.
 func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchState, bool, error) {
 	name := doltdb.ParseQualifiedDbName(dbName)
 	d.mu.Lock()
@@ -341,19 +343,10 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 	}
 
 	// Add the initial state to the session for future reuse
-	if err := d.addDB(ctx, database); err != nil {
+	branchState, err = d.addDB(ctx, database)
+	if err != nil {
 		return nil, false, err
 	}
-
-	d.mu.Lock()
-	_, dbStateFound = d.dbStates[name.DbKey()]
-	branchState, _ = d.currentBranches().get(name.WithRevision(database.Revision()))
-	d.mu.Unlock()
-	if !dbStateFound {
-		// should be impossible
-		return nil, false, sql.ErrDatabaseNotFound.New(dbName)
-	}
-
 	return branchState, true, nil
 }
 
@@ -466,7 +459,9 @@ func (d *DoltSession) RemoveBranchState(ctx *sql.Context, dbName string, branchN
 		return err
 	}
 
+	d.mu.Lock()
 	checkedOutState.dbState.checkedOutRevSpec = defaultHead
+	d.mu.Unlock()
 
 	// also clear out any db-level caches for this db
 	d.dbCache.Clear()
@@ -1840,8 +1835,8 @@ func (d *DoltSession) setForeignKeyChecksSessionVar(ctx *sql.Context, key string
 }
 
 // addDB adds the database given to this session. This establishes a starting root value for this session, as well as
-// other state tracking metadata.
-func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
+// other state tracking metadata. Returns the branch state it adds.
+func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) (*branchState, error) {
 	name := doltdb.NewQualifiedDbName(db.AliasedName(), db.Revision())
 	key := name.Key()
 	baseName := string(key.Db)
@@ -1858,7 +1853,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	if usingDoltTransaction && db.DbData().Ddb != nil {
 		if _, ok := tx.GetInitialRoot(baseName); !ok {
 			if err := tx.AddDb(ctx, db); err != nil {
-				return err
+				return nil, err
 			}
 		}
 	}
@@ -1881,7 +1876,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		var err error
 		dbState, err = db.InitialDBState(ctx)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -1893,9 +1888,9 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		sessionState.tmpFileDir, err = dbState.DbData.Rsw.TempTableFilesDir()
 		if err != nil {
 			if errors.Is(err, env.ErrDoltRepositoryNotFound) {
-				return env.ErrFailedToAccessDB.New(dbState.Db.Name())
+				return nil, env.ErrFailedToAccessDB.New(dbState.Db.Name())
 			}
-			return err
+			return nil, err
 		}
 
 		sessionState.dbName = baseName
@@ -1903,14 +1898,14 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 
 		baseDb, ok := d.provider.BaseDatabase(ctx, baseName)
 		if !ok {
-			return fmt.Errorf("unable to find database %s, this is a bug", baseName)
+			return nil, fmt.Errorf("unable to find database %s, this is a bug", baseName)
 		}
 
 		// The checkedOutRevSpec should be the checked out branch of the database if available, or the revision
 		// string otherwise
 		sessionState.checkedOutRevSpec, err = DefaultHead(ctx, baseName, baseDb)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -1928,7 +1923,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	adapter := NewSessionStateAdapter(d, db.Name(), dbState.Remotes, dbState.Branches, dbState.Backups)
 	if existing, ok := d.currentBranches().get(name); ok {
 		if err := existing.checkNoOpenWriters(); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	branchState := d.currentBranches().add(sessionState, db.Revision(), db.RevisionType())
@@ -1949,7 +1944,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		// if the database is a branch revision database.
 		if dbState.WorkingSet == nil {
 			if err := initializeBranchWorkingSet(ctx, db, &dbState); err != nil {
-				return err
+				return nil, err
 			}
 		}
 
@@ -1960,13 +1955,13 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 			//  that's hard to express with the current types
 			stateProvider, ok := db.(globalstate.GlobalStateProvider)
 			if !ok {
-				return fmt.Errorf("database does not contain global state store")
+				return nil, fmt.Errorf("database does not contain global state store")
 			}
 			sessionState.globalState = stateProvider.GetGlobalState()
 
 			tracker, err := GetAutoIncrementTracker(ctx, sessionState.globalState)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			branchState.writeSession = d.writeSessProv(key.String(), branchWorkingSetOwner{d, branchState}, tracker, editOpts)
 			branchState.writeSession.SetDeferMaterialization(true)
@@ -1977,7 +1972,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	if dbState.HeadCommit != nil {
 		headRoot, err := dbState.HeadCommit.GetRootValue(ctx)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		branchState.headRoot = headRoot
 	} else if dbState.HeadRoot != nil {
@@ -1985,7 +1980,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	}
 
 	branchState.headCommit = dbState.HeadCommit
-	return nil
+	return branchState, nil
 }
 
 func (d *DoltSession) DatabaseCache(ctx *sql.Context) *DatabaseCache {
@@ -2051,14 +2046,58 @@ func (d *DoltSession) CurrentHead(ctx *sql.Context, dbName string) (string, bool
 	}
 
 	d.mu.Lock()
-	dbState, ok := d.dbStates[name.DbKey()]
-	d.mu.Unlock()
-
-	if ok {
+	defer d.mu.Unlock()
+	if dbState, ok := d.dbStates[name.DbKey()]; ok {
 		return dbState.checkedOutRevSpec, true, nil
 	}
-
 	return "", false, nil
+}
+
+// SetCurrentDatabase implements sql.Session. It holds d.mu so that ActiveHead can read the current database from
+// another session.
+func (d *DoltSession) SetCurrentDatabase(dbName string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.Session.SetCurrentDatabase(dbName)
+}
+
+// ActiveHead returns the head this session is on in the database |baseName|, for callers in other sessions. That's the
+// revision of its current database if it's a revision of |baseName|, or the head it has checked out in |baseName| if
+// its current database is |baseName| itself. Returns false if its current database is some other one. Unlike the
+// lookups this session uses itself, it reads only state guarded by d.mu and never loads anything into this session.
+func (d *DoltSession) ActiveHead(ctx *sql.Context, baseName string) (string, bool, error) {
+	key := doltdb.NewDbKey(baseName)
+	d.mu.Lock()
+	current := doltdb.ParseQualifiedDbName(d.Session.GetCurrentDatabase())
+	var head string
+	var checkedOut bool
+	if current.DbKey() == key {
+		head = current.Revision
+		if head == "" {
+			if dbState, ok := d.dbStates[key]; ok {
+				head, checkedOut = dbState.checkedOutRevSpec, true
+			}
+		}
+	}
+	d.mu.Unlock()
+
+	if current.DbKey() != key {
+		return "", false, nil
+	}
+	if current.IsQualified() || checkedOut {
+		return head, true, nil
+	}
+
+	// This session hasn't loaded |baseName| yet, so it will start on the default head.
+	db, ok := d.provider.BaseDatabase(ctx, baseName)
+	if !ok {
+		return "", false, sql.ErrDatabaseNotFound.New(baseName)
+	}
+	head, err := DefaultHead(ctx, baseName, db)
+	if err != nil {
+		return "", false, err
+	}
+	return head, true, nil
 }
 
 func (d *DoltSession) Username() string {
