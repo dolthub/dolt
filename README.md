@@ -336,7 +336,7 @@ Dolt supports foreign keys, secondary indexes, triggers, check constraints, and 
 
 ## Make a Dolt commit
 
-It's time to use your first Dolt feature. We're going to make a Dolt [commit](https://dolthub.com/docs/concepts/dolt/commits). A Dolt commit allows you to time travel and see lineage. Make a Dolt commit whenever you want to restore or compare to this point in time.
+It's time to use your first Dolt feature. We're going to make a Dolt commit. A Dolt commit allows you to time travel and see lineage. Make a Dolt commit whenever you want to restore or compare to this point in time.
 
 Dolt exposes version control functionality through a Git-style interface. On the command line, Dolt commands map exactly to their Git equivalent with the targets being tables instead of files. In SQL, Dolt exposes version control read operations as [system tables](https://dolthub.com/docs/sql-reference/version-control/dolt-system-tables) and version control write operations as [stored procedures](https://dolthub.com/docs/sql-reference/version-control/dolt-sql-procedures). 
 
