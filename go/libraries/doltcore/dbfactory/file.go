@@ -254,23 +254,23 @@ func (fact FileFactory) CreateDbNoCache(ctx context.Context, nbf *types.NomsBinF
 	err = validateDir(oldgenPath)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			return nil, nil, nil, err
+			return nil, nil, nil, errors.Join(err, newGenSt.Close())
 		}
 
 		err = os.Mkdir(oldgenPath, os.ModePerm)
 		if err != nil && !errors.Is(err, os.ErrExist) {
-			return nil, nil, nil, err
+			return nil, nil, nil, errors.Join(err, newGenSt.Close())
 		}
 	}
 
 	oldGenSt, err := nbs.NewLocalStore(ctx, newGenSt.Version(), oldgenPath, memlimit.MemtableSize(), q, mmapArchiveIndexes)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, errors.Join(err, newGenSt.Close())
 	}
 
 	ghostGen, err := nbs.NewGhostBlockStore(path)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, errors.Join(err, oldGenSt.Close(), newGenSt.Close())
 	}
 
 	st := nbs.NewGenerationalCS(oldGenSt, newGenSt, ghostGen)
