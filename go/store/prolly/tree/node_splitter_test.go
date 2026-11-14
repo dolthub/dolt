@@ -181,3 +181,42 @@ func roundLog2(sz uint32) (lg uint32) {
 	}
 	return
 }
+
+// alwaysSplitter ends a node after every item, which the chunker turns into
+// a binary tree, the shape long keys produce.
+type alwaysSplitter struct {
+	nodeSplitter
+}
+
+func (alwaysSplitter) CrossedBoundary() bool { return true }
+
+func TestChunkerTreeTooTall(t *testing.T) {
+	defer func(f splitterFactory) { defaultSplitterFactory = f }(defaultSplitterFactory)
+	defaultSplitterFactory = func(level uint8) nodeSplitter {
+		return alwaysSplitter{newKeySplitter(level)}
+	}
+
+	ctx := context.Background()
+	ns := NewTestNodeStore()
+	chkr, err := newEmptyChunker(ctx, ns, message.NewProllyMapSerializer(keyDesc, valDesc, ns.Pool()))
+	require.NoError(t, err)
+
+	kb := val.NewTupleBuilder(keyDesc, ns)
+	vb := val.NewTupleBuilder(valDesc, ns)
+	// A binary tree of 2^15 leaves needs a 16th level, one past levelSalt.
+	const count = 1 << 15
+	for i := 0; i < count; i++ {
+		kb.PutInt64(0, int64(i))
+		k, err := kb.Build(ctx, ns.Pool())
+		require.NoError(t, err)
+		vb.PutInt64(0, int64(i))
+		v, err := vb.Build(ctx, ns.Pool())
+		require.NoError(t, err)
+		if err = chkr.AddPair(ctx, Item(k), Item(v)); err != nil {
+			require.ErrorIs(t, err, ErrTreeTooTall)
+			return
+		}
+	}
+	_, err = chkr.Done(ctx)
+	require.ErrorIs(t, err, ErrTreeTooTall)
+}
