@@ -23,8 +23,6 @@ package tree
 
 import (
 	"context"
-	"errors"
-	"fmt"
 
 	"github.com/dolthub/dolt/go/store/hash"
 
@@ -59,15 +57,9 @@ func newEmptyChunker[S message.Serializer](ctx context.Context, ns NodeStore, se
 	return newChunker(ctx, nil, 0, ns, serializer)
 }
 
-var ErrTreeTooTall = errors.New("tree would be taller than the maximum height")
-
 func newChunker[S message.Serializer](ctx context.Context, cur *cursor, level int, ns NodeStore, serializer S) (*chunker[S], error) {
 	// |cur| will be nil if this is a new Node, implying this is a new tree, or the tree has grown in height relative
 	// to its original chunked form.
-
-	if level >= len(levelSalt) {
-		return nil, fmt.Errorf("%w of %d levels", ErrTreeTooTall, len(levelSalt))
-	}
 
 	splitter := defaultSplitterFactory(uint8(level % 256))
 	builder := newNodeBuilder(serializer, level)
