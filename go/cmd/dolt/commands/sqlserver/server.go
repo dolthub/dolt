@@ -220,6 +220,10 @@ func ConfigureServices(
 				return false, nil
 			})
 		},
+		// Registered before every service that uses |mrEnv|, so it stops after them.
+		StopF: func(_ svcs.RunState) error {
+			return mrEnv.Close(context.Background())
+		},
 	}
 	controller.Register(InitMultiEnv)
 
