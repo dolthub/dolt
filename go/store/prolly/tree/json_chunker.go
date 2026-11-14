@@ -217,9 +217,10 @@ func (j *JsonChunker) processBuffer(ctx context.Context) (err error) {
 	return nil
 }
 
+var jsonChunkSalt = saltFromLevel(1)
+
 // crossesBoundary calculates whether a JSON segment, ending at a specific jsonLocation
 func crossesBoundary(key jsonLocationKey, buf []byte) bool {
-	salt := levelSalt[0]
 	thisSize := uint32(len(buf))
 
 	if thisSize < minChunkSize {
@@ -229,6 +230,6 @@ func crossesBoundary(key jsonLocationKey, buf []byte) bool {
 		return true
 	}
 
-	h := xxHash32(key, salt)
+	h := xxHash32(key, jsonChunkSalt)
 	return weibullCheck(thisSize, thisSize, h)
 }

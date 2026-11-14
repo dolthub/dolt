@@ -36,24 +36,6 @@ const (
 	maxChunkSize = 1 << 14
 )
 
-var levelSalt = [...]uint64{
-	saltFromLevel(1),
-	saltFromLevel(2),
-	saltFromLevel(3),
-	saltFromLevel(4),
-	saltFromLevel(5),
-	saltFromLevel(6),
-	saltFromLevel(7),
-	saltFromLevel(8),
-	saltFromLevel(9),
-	saltFromLevel(10),
-	saltFromLevel(11),
-	saltFromLevel(12),
-	saltFromLevel(13),
-	saltFromLevel(14),
-	saltFromLevel(15),
-}
-
 // splitterFactory makes a nodeSplitter.
 type splitterFactory func(level uint8) nodeSplitter
 
@@ -179,10 +161,9 @@ type keySplitter struct {
 }
 
 func newKeySplitter(level uint8) nodeSplitter {
-	if int(level) < len(levelSalt) {
-		return &keySplitter{salt: levelSalt[level]}
+	return &keySplitter{
+		salt: saltFromLevel(level + 1),
 	}
-	return &keySplitter{salt: saltFromLevel(level)}
 }
 
 var _ splitterFactory = newKeySplitter
@@ -264,6 +245,8 @@ func xxHash32(b []byte, salt uint64) uint32 {
 	return uint32(xxh3.HashSeed(b, salt))
 }
 
+var proximityLevelSalt = saltFromLevel(2)
+
 func saltFromLevel(level uint8) (salt uint64) {
 	full := sha512.Sum512([]byte{level})
 	return binary.LittleEndian.Uint64(full[:8])
@@ -272,6 +255,6 @@ func saltFromLevel(level uint8) (salt uint64) {
 // DeterministicHashLevel takes a key and counts the number of leading zeros in the key's hash.
 // This is used for computing the level that a key appears in, in a ProximityMap
 func DeterministicHashLevel(leadingZerosPerLevel uint8, key Item) uint8 {
-	h := xxHash32(key, levelSalt[1])
+	h := xxHash32(key, proximityLevelSalt)
 	return uint8(bits.LeadingZeros32(h)) / leadingZerosPerLevel
 }
