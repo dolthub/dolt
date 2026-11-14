@@ -111,6 +111,7 @@ func (a *Assist) Exec(ctx context.Context, commandStr string, args []string, dEn
 	if err != nil {
 		return 1
 	}
+	defer sqlEng.Close()
 
 	sqlCtx, err := sqlEng.NewLocalContext(ctx)
 	if err != nil {

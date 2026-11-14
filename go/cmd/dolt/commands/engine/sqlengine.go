@@ -65,6 +65,7 @@ type SqlEngine struct {
 	clusterController     *cluster.Controller
 	branchActivityTracker *doltdb.BranchActivityTracker
 	rebasedDbs            map[string]dsess.SqlDatabase
+	ownedMrEnv            *env.MultiRepoEnv // built by NewSqlEngineForEnv; closed after the provider
 }
 
 type sessionFactory func(mysqlSess *sql.BaseSession, pro sql.DatabaseProvider) (*dsess.DoltSession, error)
@@ -587,6 +588,9 @@ func (se *SqlEngine) Close() error {
 	for _, db := range se.rebasedDbs {
 		db.Close()
 	}
+	if se.ownedMrEnv != nil {
+		err = errors.Join(err, se.ownedMrEnv.Close(context.Background()))
+	}
 	return err
 }
 
@@ -819,11 +823,12 @@ func NewSqlEngineForEnv(ctx context.Context, dEnv *env.DoltEnv, options ...Confi
 		config,
 	)
 	if err != nil {
-		return nil, "", err
+		return nil, "", errors.Join(err, mrEnv.Close(ctx))
 	}
+	engine.ownedMrEnv = mrEnv
 
 	if err := engine.InitStats(ctx); err != nil {
-		return nil, "", err
+		return nil, "", errors.Join(err, engine.Close())
 	}
 
 	return engine, mrEnv.GetFirstDatabase(), err

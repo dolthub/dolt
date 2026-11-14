@@ -19,9 +19,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"testing/synctest"
+	"time"
 
+	filelocks "github.com/dolthub/file-locks"
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/memory"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -118,6 +121,46 @@ func TestNewSqlEngineForEnvLoadsPersistedDefaults(t *testing.T) {
 	require.Same(t, se.GetUnderlyingEngine().Variables(), sqlCtx.EngineVariables())
 	require.NoError(t, se.Close())
 	require.ErrorContains(t, stats.Restart(sqlCtx), "StatsController is closed")
+}
+
+// TestNewSqlEngineForEnvCloseClosesSubDatabases checks that closing an engine from NewSqlEngineForEnv closes the
+// databases it found under the caller's env, and leaves the caller's env open.
+func TestNewSqlEngineForEnvCloseClosesSubDatabases(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows due to differing file locking semantics")
+	}
+	ctx := context.Background()
+	root, home := t.TempDir(), t.TempDir()
+	hdp := func() (string, error) { return home, nil }
+	initEnv := func(path string) *env.DoltEnv {
+		fs, err := filesys.LocalFS.WithWorkingDir(path)
+		require.NoError(t, err)
+		dEnv := env.LoadWithoutDB(ctx, hdp, fs, doltdb.LocalDirDoltDB, "test")
+		require.NoError(t, dEnv.InitRepo(ctx, types.Format_DOLT, "test", "test@example.com", env.DefaultInitBranch))
+		return dEnv
+	}
+	rootEnv := initEnv(root)
+	defer func() { require.NoError(t, rootEnv.Close()) }()
+	subPath := filepath.Join(root, "sub_db")
+	require.NoError(t, os.Mkdir(subPath, os.ModePerm))
+	require.NoError(t, initEnv(subPath).Close())
+
+	se, _, err := NewSqlEngineForEnv(ctx, rootEnv)
+	require.NoError(t, err)
+	sqlCtx, err := se.NewDefaultContext(ctx)
+	require.NoError(t, err)
+	lifecycleQuery(t, se, sqlCtx, "SELECT COUNT(*) FROM sub_db.dolt_log")
+	sql.SessionEnd(sqlCtx.Session)
+	require.NoError(t, se.Close())
+
+	lck, err := filelocks.New(filepath.Join(subPath, ".dolt", "noms", "LOCK"))
+	require.NoError(t, err)
+	require.NoError(t, lck.LockWithTimeout(25*time.Millisecond), "expected sub_db's lock to be free after engine close")
+	require.NoError(t, lck.Unlock())
+	require.NoError(t, lck.Close())
+
+	_, err = rootEnv.WorkingRoot(ctx)
+	require.NoError(t, err)
 }
 
 func TestSqlEngineCapturesBundleFromReusableConfig(t *testing.T) {
