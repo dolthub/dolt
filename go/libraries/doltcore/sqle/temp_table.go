@@ -479,17 +479,17 @@ func (t *TempTable) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 }
 
 func (t *TempTable) StatementBegin(ctx *sql.Context) {
-	return
+	t.ed.StatementBegin(ctx)
 }
 
 func (t *TempTable) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
 	t.lookup = sql.IndexLookup{}
-	return nil
+	return t.ed.DiscardChanges(ctx, errorEncountered)
 }
 
 func (t *TempTable) StatementComplete(ctx *sql.Context) error {
 	t.lookup = sql.IndexLookup{}
-	return nil
+	return t.ed.StatementComplete(ctx)
 }
 
 func (t *TempTable) Close(ctx *sql.Context) error {
