@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -139,7 +140,12 @@ func renameBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argpar
 	}
 	force := apr.Contains(cli.ForceFlag)
 
+	// Without --force, no other session may switch onto the old branch between checking it's unused and renaming it.
+	// The lock is released before this session switches to the new branch, which takes it too.
+	unlockBranches := func() {}
 	if !force {
+		unlockBranches = sync.OnceFunc(lockBranches(ctx, sess, dbName))
+		defer unlockBranches()
 		err := validateBranchNotActiveInAnySession(ctx, oldBranchName)
 		if err != nil {
 			return err
@@ -170,6 +176,7 @@ func renameBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argpar
 	activeSessionBranch := headRef.GetPath()
 
 	err = actions.RenameBranch(ctx, dbData, oldBranchName, newBranchName, force, rsc)
+	unlockBranches()
 	if err != nil {
 		if existsErr := actions.BranchExistsError(err); existsErr != nil {
 			return existsErr
@@ -260,31 +267,33 @@ func deleteBranches(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argp
 		}
 
 		force := apr.Contains(cli.DeleteForceFlag) || apr.Contains(cli.ForceFlag)
-		if !force {
-			err = validateBranchNotActiveInAnySession(ctx, branchName)
-			if err != nil {
-				return err
+		err = func() error {
+			// Without --force, no other session may switch onto the branch between checking it's unused and deleting it.
+			if !force {
+				defer lockBranches(ctx, sess, dbName)()
+				err := validateBranchNotActiveInAnySession(ctx, branchName)
+				if err != nil {
+					return err
+				}
 			}
-		}
 
-		// If we deleted the branch this client is connected to, change the current branch to the default
-		// TODO: this would be nice to do for every other session (or maybe invalidate sessions on this branch)
-		if strings.EqualFold(currBranch, branchName) {
-			ctx.SetCurrentDatabase(currBase)
-		}
+			// If we deleted the branch this client is connected to, change the current branch to the default
+			// TODO: this would be nice to do for every other session (or maybe invalidate sessions on this branch)
+			if strings.EqualFold(currBranch, branchName) {
+				ctx.SetCurrentDatabase(currBase)
+			}
 
-		if headOnCLI == branchName && sqlserver.RunningInServerMode() && !shouldAllowDefaultBranchDeletion(ctx) {
-			return fmt.Errorf("unable to delete branch '%s', because it is the default branch for "+
-				"database '%s'; this can by changed on the command line, by stopping the sql-server, "+
-				"running `dolt checkout <another_branch> and restarting the sql-server", branchName, dbName)
-		}
+			if headOnCLI == branchName && sqlserver.RunningInServerMode() && !shouldAllowDefaultBranchDeletion(ctx) {
+				return fmt.Errorf("unable to delete branch '%s', because it is the default branch for "+
+					"database '%s'; this can by changed on the command line, by stopping the sql-server, "+
+					"running `dolt checkout <another_branch> and restarting the sql-server", branchName, dbName)
+			}
 
-		remote := apr.Contains(cli.RemoteParam)
-
-		err = actions.DeleteBranch(ctx, dbData, branchName, actions.DeleteOptions{
-			Force:  force,
-			Remote: remote,
-		}, rsc)
+			return actions.DeleteBranch(ctx, dbData, branchName, actions.DeleteOptions{
+				Force:  force,
+				Remote: apr.Contains(cli.RemoteParam),
+			}, rsc)
+		}()
 		if err != nil {
 			return err
 		}
@@ -306,6 +315,18 @@ func deleteBranches(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argp
 	return nil
 }
 
+// lockBranches locks the branches of the database named exclusively, and returns the function to unlock them. See
+// dsess.SqlDatabase.BranchLock.
+func lockBranches(ctx *sql.Context, sess *dsess.DoltSession, dbName string) func() {
+	db, ok := sess.Provider().BaseDatabase(ctx, dbName)
+	if !ok || db.BranchLock() == nil {
+		return func() {}
+	}
+	branchLock := db.BranchLock()
+	branchLock.Lock()
+	return branchLock.Unlock
+}
+
 // shouldAllowDefaultBranchDeletion returns true if the default branch deletion check should be
 // bypassed for testing. This should only ever be true for tests that need to invalidate a databases
 // default branch to test recovery from a bad state. We determine if the check should be bypassed by
@@ -315,8 +336,9 @@ func shouldAllowDefaultBranchDeletion(ctx *sql.Context) bool {
 	return userVar != nil
 }
 
-// validateBranchNotActiveInAnySession returns an error if the specified branch is currently
-// selected as the active branch for any active server sessions.
+// validateBranchNotActiveInAnySession returns an error if any other server session uses the specified branch: has it
+// checked out, or has its revision database as its current database. Callers hold the database's branch lock, so that
+// stays true until they've deleted or renamed the branch.
 func validateBranchNotActiveInAnySession(ctx *sql.Context, branchName string) error {
 	currentDbName := ctx.GetCurrentDatabase()
 	currentDbName, _ = doltdb.SplitRevisionDbName(currentDbName)
@@ -344,13 +366,13 @@ func validateBranchNotActiveInAnySession(ctx *sql.Context, branchName string) er
 			return false, fmt.Errorf("unexpected session type: %T", session)
 		}
 
-		activeHead, ok, err := sess.ActiveHead(ctx, currentDbName)
-		if err != nil || !ok {
-			// A session that's on another database, or whose head we can't resolve, isn't using this branch
+		usesBranch, err := sess.UsesBranch(ctx, currentDbName, branchName)
+		if err != nil {
+			// A session whose head we can't resolve isn't using this branch
 			return false, nil
 		}
 
-		if strings.EqualFold(activeHead, branchName) {
+		if usesBranch {
 			return false, fmt.Errorf("unsafe to delete or rename branches in use in other sessions; " +
 				"use --force to force the change")
 		}

@@ -17,6 +17,7 @@ package dsess
 import (
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -84,6 +85,8 @@ type DatabaseSessionState struct {
 	// ddb is the provider's DoltDB for this database, shared by every session and revision. Dropping the database
 	// removes this state from every session, so it can't outlive the DoltDB.
 	ddb *doltdb.DoltDB
+	// branchLock is the database's branch lock, or nil if it has no branches. See SqlDatabase.BranchLock.
+	branchLock *sync.RWMutex
 }
 
 func newEmptyDatabaseSessionState() *DatabaseSessionState {

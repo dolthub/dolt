@@ -16,6 +16,7 @@ package dsess
 
 import (
 	"context"
+	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -151,6 +152,14 @@ type SqlDatabase interface {
 	Schema() string
 
 	GetTableResolver() doltdb.TableResolver
+
+	// BranchLock returns this database's branch lock, shared by all of its revisions, or nil if it has no branches. It
+	// makes deleting or renaming a branch atomic with sessions switching onto it. A delete or rename holds it
+	// exclusively from checking that no other session uses the branch until the ref is gone. A session switching onto
+	// a branch holds it shared from checking that the branch exists until it's on it. Which sessions use a branch is
+	// read from the sessions themselves, so this doesn't depend on session lifecycle hooks. Take it before any
+	// session's lock.
+	BranchLock() *sync.RWMutex
 
 	// Clean up any global resources associated with the
 	// SqlDatabase itself.  For DoltDatabases, this notably does
