@@ -190,7 +190,7 @@ type alwaysSplitter struct {
 
 func (alwaysSplitter) CrossedBoundary() bool { return true }
 
-func TestChunkerTreeTooTall(t *testing.T) {
+func TestChunkerTallTree(t *testing.T) {
 	defer func(f splitterFactory) { defaultSplitterFactory = f }(defaultSplitterFactory)
 	defaultSplitterFactory = func(level uint8) nodeSplitter {
 		return alwaysSplitter{newKeySplitter(level)}
@@ -203,8 +203,9 @@ func TestChunkerTreeTooTall(t *testing.T) {
 
 	kb := val.NewTupleBuilder(keyDesc, ns)
 	vb := val.NewTupleBuilder(valDesc, ns)
-	// A binary tree of 2^15 leaves needs a 16th level, one past levelSalt.
+	// A binary tree of 2^15 leaves needs 16 levels.
 	const count = 1 << 15
+	items := make([][2]Item, count)
 	for i := 0; i < count; i++ {
 		kb.PutInt64(0, int64(i))
 		k, err := kb.Build(ctx, ns.Pool())
@@ -212,11 +213,11 @@ func TestChunkerTreeTooTall(t *testing.T) {
 		vb.PutInt64(0, int64(i))
 		v, err := vb.Build(ctx, ns.Pool())
 		require.NoError(t, err)
-		if err = chkr.AddPair(ctx, Item(k), Item(v)); err != nil {
-			require.ErrorIs(t, err, ErrTreeTooTall)
-			return
-		}
+		items[i] = [2]Item{Item(k), Item(v)}
+		require.NoError(t, chkr.AddPair(ctx, Item(k), Item(v)))
 	}
-	_, err = chkr.Done(ctx)
-	require.ErrorIs(t, err, ErrTreeTooTall)
+	root, err := chkr.Done(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 15, root.Level())
+	validateTreeItems(t, ns, root, items)
 }
