@@ -142,6 +142,13 @@ func (h *commithook) replicate(ctx context.Context) {
 	defer h.logger().Tracef("cluster/commithook: background thread: replicate: shutdown.")
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	// Only this thread uses |h.destDB|, so it closes it on the way out.
+	defer func() {
+		if h.destDB != nil {
+			_ = h.destDB.Close()
+			h.destDB = nil
+		}
+	}()
 	shouldHeartbeat := false
 	for !h.shutdown.Load() {
 		lgr := h.logger()
