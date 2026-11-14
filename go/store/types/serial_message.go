@@ -162,7 +162,7 @@ func (sm SerialMessage) HumanReadableStringAtIndentationLevel(level int) string 
 
 		printWithIndendationLevel(level, ret, "}")
 		return ret.String()
-	case serial.RootValueFileID:
+	case serial.RootValueFileID, serial.DumboRootValueFileID:
 		msg, _ := serial.TryGetRootAsRootValue(sm, serial.MessagePrefixSz)
 		ret := &strings.Builder{}
 		printWithIndendationLevel(level, ret, "{\n")
@@ -678,7 +678,7 @@ func (sm SerialMessage) WalkAddrs(nbf *NomsBinFormat, cb func(addr hash.Hash) er
 				return err
 			}
 		}
-	case serial.RootValueFileID:
+	case serial.RootValueFileID, serial.DumboRootValueFileID:
 		var msg serial.RootValue
 		err := serial.InitRootValueRoot(&msg, sm, serial.MessagePrefixSz)
 		if err != nil {
