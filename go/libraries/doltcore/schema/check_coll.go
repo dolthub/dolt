@@ -15,20 +15,22 @@
 package schema
 
 import (
-	"fmt"
 	"strings"
+
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type Check interface {
 	Name() string
 	Expression() string
 	Enforced() bool
+	IsNotValid() bool
 }
 
 // CheckCollection is the set of `check` constraints on a table's schema
 type CheckCollection interface {
 	// AddCheck adds a check to this collection and returns it
-	AddCheck(name, expression string, enforce bool) (Check, error)
+	AddCheck(name, expression string, enforce, isNotValid bool) (Check, error)
 	// DropCheck removes the check with the name given
 	DropCheck(name string) error
 	// AllChecks returns all the checks in the collection
@@ -45,6 +47,7 @@ type check struct {
 	name       string
 	expression string
 	enforced   bool
+	isNotValid bool
 }
 
 func (c check) Name() string {
@@ -59,15 +62,19 @@ func (c check) Enforced() bool {
 	return c.enforced
 }
 
+func (c check) IsNotValid() bool {
+	return c.isNotValid
+}
+
 type checkCollection struct {
 	checks []check
 }
 
-func (c *checkCollection) AddCheck(name, expression string, enforce bool) (Check, error) {
+func (c *checkCollection) AddCheck(name, expression string, enforce, isNotValid bool) (Check, error) {
 	for _, chk := range c.checks {
 		if strings.EqualFold(name, chk.name) {
 			// Engine is supposed to enforce this for us, but just in case
-			return nil, fmt.Errorf("name %s in use", name)
+			return nil, sql.ErrDuplicateCheckName.New(name)
 		}
 	}
 
@@ -75,6 +82,7 @@ func (c *checkCollection) AddCheck(name, expression string, enforce bool) (Check
 		name:       name,
 		expression: expression,
 		enforced:   enforce,
+		isNotValid: isNotValid,
 	}
 	c.checks = append(c.checks, newCheck)
 
@@ -111,7 +119,8 @@ func (c *checkCollection) Equals(other CheckCollection) bool {
 		b := o.checks[i]
 		if a.name != b.name ||
 			a.expression != b.expression ||
-			a.enforced != b.enforced {
+			a.enforced != b.enforced ||
+			a.isNotValid != b.isNotValid {
 			return false
 		}
 	}
@@ -129,11 +138,12 @@ func NewCheckCollection() CheckCollection {
 	}
 }
 
-func NewCheck(name, expression string, enforced bool) check {
+func NewCheck(name, expression string, enforced bool, isNotValid bool) check {
 	return check{
 		name:       name,
 		expression: expression,
 		enforced:   enforced,
+		isNotValid: isNotValid,
 	}
 }
 
@@ -141,7 +151,7 @@ func (c *checkCollection) Copy() CheckCollection {
 	newC := *c
 	newC.checks = make([]check, len(c.checks))
 	for i, check := range c.checks {
-		newC.checks[i] = NewCheck(check.name, check.expression, check.enforced)
+		newC.checks[i] = NewCheck(check.name, check.expression, check.enforced, check.isNotValid)
 	}
 	return &newC
 }

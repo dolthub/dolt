@@ -33,7 +33,11 @@ type timeType struct {
 
 var _ TypeInfo = (*timeType)(nil)
 
-var TimeType = &timeType{sqlTimeType: gmstypes.Time}
+var TimeType = &timeType{sqlTimeType: gmstypes.TimeMaxPrecision}
+
+func CreateTimeTypeFromSqlType(typ gmstypes.TimeType) *timeType {
+	return &timeType{sqlTimeType: typ}
+}
 
 // Equals implements TypeInfo interface.
 func (ti *timeType) Equals(other TypeInfo) bool {

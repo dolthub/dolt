@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -71,6 +72,11 @@ const (
 	//
 	// Intended for embedded-driver usage so higher layers can implement their own retry/backoff policy.
 	FailOnJournalLockTimeoutParam = "fail_on_journal_lock_timeout"
+
+	// Immediatly proceed with opening the database or failing the open (based on FailOnJournalLockTimeoutParam) as
+	// soon as a non-blocking file lock call indicates that the LOCK is unavailable. Do not spend a short timeout
+	// waiting for it to become available.
+	SkipJournalLockTimeoutParam = "skip_journal_lock_timeout"
 )
 
 // DoltDataDir is the directory where noms files will be stored
@@ -100,6 +106,12 @@ func CloseAllLocalDatabases() (err error) {
 	}
 	singletons = make(map[string]singletonDB)
 	return
+}
+
+// SingletonCacheKeyForDatabaseDir returns the key the singleton cache uses for the local database rooted at
+// |dbDir|, which must be an absolute path to the database directory (the one holding .dolt).
+func SingletonCacheKeyForDatabaseDir(dbDir string) string {
+	return filepath.ToSlash(filepath.Join(dbDir, DoltDataDir))
 }
 
 func DeleteFromSingletonCache(path string, closeIt bool) error {
@@ -155,7 +167,23 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	defer singletonLock.Unlock()
 
 	if s, ok := singletons[urlObj.Path]; ok {
-		return s.ddb, s.vrw, s.ns, nil
+		// Callers to CreateDB are expecting to see the database as newly
+		// opened with any novelty present. This is potentially a little
+		// sketchy for any concurrent accessors, but this whole mechanism
+		// has already made callers reliquinish any notion that they are
+		// the sole owners of the Database they opened.
+		err := datas.ChunkStoreFromDatabase(s.ddb).Rebase(ctx)
+		if err == nil {
+			if os.Getenv(dconfig.EnvTestPanicOnSingletonHit) != "" {
+				panic(fmt.Sprintf("singleton cache hit opening %s", urlObj.Path))
+			}
+			return s.ddb, s.vrw, s.ns, nil
+		}
+		if !errors.Is(err, chunks.ErrStoreClosed) {
+			return nil, nil, nil, err
+		}
+		// A holder closed this store, so open a new one in its place.
+		delete(singletons, urlObj.Path)
 	}
 
 	ddb, vrw, ns, err := fact.CreateDbNoCache(ctx, nbf, urlObj, params, nbs.JournalParserLoggingWarningsCb)
@@ -208,6 +236,9 @@ func (fact FileFactory) CreateDbNoCache(ctx context.Context, nbf *types.NomsBinF
 		if params != nil {
 			if _, ok := params[FailOnJournalLockTimeoutParam]; ok {
 				opts.FailOnLockTimeout = true
+			}
+			if _, ok := params[SkipJournalLockTimeoutParam]; ok {
+				opts.SkipLockFileTimeout = true
 			}
 		}
 		newGenSt, err = nbs.NewLocalJournalingStoreWithOptions(ctx, nbf.VersionString(), path, q, mmapArchiveIndexes, recCb, opts)

@@ -18,7 +18,7 @@ do
     case "$1" in
 
         # benchmark with new NomsBinFmt
-        --new-nbf) export DOLT_DEFAULT_BIN_FORMAT="__DOLT__"
+        --new-nbf) true # ignored, used to control NomsBinFormat
             ;;
 
         --no-exchange) export SINGLE_THREAD_FEATURE_FLAG=true
@@ -124,7 +124,6 @@ echo "benchmark $SYSBENCH_TEST starting at $WORKING_DIR"
   --scale=1 \
   --trx_level="RR" run
 
-unset DOLT_DEFAULT_BIN_FORMAT
 unset SINGLE_THREAD_FEATURE_FLAG
 unset GOMAXPROCS
 

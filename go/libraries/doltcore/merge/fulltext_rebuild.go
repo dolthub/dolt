@@ -35,13 +35,15 @@ type rebuildableFulltextTable struct {
 	Schema schema.Schema
 }
 
-// rebuildFullTextIndexes scans the mergedRoot and rebuilds all of the pseudo-index tables that were modified by both
-// roots (ours and theirs), or had parents that were modified by both roots.
-func rebuildFullTextIndexes(ctx *sql.Context, mergedRoot, ourRoot, theirRoot doltdb.RootValue, visitedTables map[string]struct{}) (doltdb.RootValue, error) {
+// rebuildFullTextIndexes scans the mergedRoot and, with |rebuild|, rebuilds all of the pseudo-index tables that were
+// modified by both roots (ours and theirs), or had parents that were modified by both roots. Without |rebuild|, it
+// returns the parent tables it would have rebuilt. It removes orphaned pseudo-index tables either way.
+func rebuildFullTextIndexes(ctx *sql.Context, mergedRoot, ourRoot, theirRoot doltdb.RootValue, visitedTables map[string]struct{}, rebuild bool) (doltdb.RootValue, []doltdb.TableName, error) {
+	var skipped []doltdb.TableName
 	// Grab a list of all tables on the root
 	allTableNames, err := mergedRoot.GetTableNames(ctx, doltdb.DefaultSchemaName, false)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Contains all of the tables for which we need to rebuild full-text indexes.
@@ -83,14 +85,14 @@ func rebuildFullTextIndexes(ctx *sql.Context, mergedRoot, ourRoot, theirRoot dol
 
 		tbl, ok, err := mergedRoot.GetTable(ctx, doltdb.TableName{Name: tblName})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if !ok {
-			return nil, fmt.Errorf("attempted to load `%s` during Full-Text merge but it could not be found", tblName)
+			return nil, nil, fmt.Errorf("attempted to load `%s` during Full-Text merge but it could not be found", tblName)
 		}
 		sch, err := tbl.GetSchema(ctx)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if !sch.Indexes().ContainsFullTextIndex() {
 			continue
@@ -99,9 +101,11 @@ func rebuildFullTextIndexes(ctx *sql.Context, mergedRoot, ourRoot, theirRoot dol
 		// Also adds items to |doNotDeleteTables|.
 		needsRebuild, err := tableNeedsFullTextIndexRebuild(ctx, tblName, tbl, sch, mergedRoot, ourRoot, theirRoot, visitedTables, doNotDeleteTables)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		if needsRebuild {
+		if needsRebuild && !rebuild {
+			skipped = append(skipped, doltdb.TableName{Name: tblName})
+		} else if needsRebuild {
 			tablesToRebuild = append(tablesToRebuild, rebuildableFulltextTable{
 				Name:   tblName,
 				Table:  tbl,
@@ -115,7 +119,7 @@ func rebuildFullTextIndexes(ctx *sql.Context, mergedRoot, ourRoot, theirRoot dol
 	for _, tableToRebuild := range tablesToRebuild {
 		mergedRoot, err = rebuildFullTextIndexesForTable(ctx, tableToRebuild, mergedRoot)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
@@ -127,11 +131,11 @@ func rebuildFullTextIndexes(ctx *sql.Context, mergedRoot, ourRoot, theirRoot dol
 		// TODO: schema name
 		mergedRoot, err = mergedRoot.RemoveTables(ctx, true, true, doltdb.TableName{Name: tblName})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
-	return mergedRoot, nil
+	return mergedRoot, skipped, nil
 }
 
 func tableNeedsFullTextIndexRebuild(ctx *sql.Context, tblName string, tbl *doltdb.Table, sch schema.Schema,
@@ -140,6 +144,8 @@ func tableNeedsFullTextIndexRebuild(ctx *sql.Context, tblName string, tbl *doltd
 	// Even if the parent table was not visited, we still need to check every pseudo-index table due to potential
 	// name overlapping between roots. This also applies to checking whether both ours and theirs have changes.
 	_, wasVisited := visitedTables[tblName]
+
+	// The parent table must have changed relative to both roots for a rebuild to be necessary.
 	oursChanged, err := tableChangedFromRoot(ctx, tblName, tbl, ourRoot)
 	if err != nil {
 		return false, err
@@ -148,30 +154,26 @@ func tableNeedsFullTextIndexRebuild(ctx *sql.Context, tblName string, tbl *doltd
 	if err != nil {
 		return false, err
 	}
+
+	// ftDiverged is true when any pseudo-index table differs between ourRoot and theirRoot. If the
+	// pseudo-tables are identical in both roots, the three-way merge already produced correct
+	// pseudo-tables — any parent-table change was to non-indexed columns (e.g. NULL-body inserts)
+	// and no rebuild is needed. When pseudo-tables diverge (different content, or one side renamed
+	// the table so the merged schema's names don't exist in the other root), the three-way merge
+	// of pseudo-tables may be incomplete and we must rebuild from the merged parent table.
+	var ftDiverged bool
 	for _, idx := range sch.Indexes().AllIndexes() {
 		if !idx.IsFullText() {
 			continue
 		}
 		props := idx.FullTextProperties()
 		for _, ftTable := range props.TableNameSlice() {
-			// Add all of the pseudo-index tables to the non-deletion set
 			doNotDeleteTables[ftTable] = struct{}{}
-
-			// Check if the pseudo-index table was visited
 			if !wasVisited {
 				_, wasVisited = visitedTables[ftTable]
 			}
-
-			// Check if the pseudo-index table changed in both our root and their root
-			if !oursChanged {
-				oursChanged, err = tableChangedBetweenRoots(ctx, tblName, ourRoot, mergedRoot)
-				if err != nil {
-					return false, err
-				}
-			}
-
-			if !theirsChanged {
-				theirsChanged, err = tableChangedBetweenRoots(ctx, tblName, theirRoot, mergedRoot)
+			if !ftDiverged {
+				ftDiverged, err = tableChangedBetweenRoots(ctx, ftTable, ourRoot, theirRoot)
 				if err != nil {
 					return false, err
 				}
@@ -179,8 +181,7 @@ func tableNeedsFullTextIndexRebuild(ctx *sql.Context, tblName string, tbl *doltd
 		}
 	}
 
-	// If least one table was visited and something was different in all three roots, we rebuild all the indexes.
-	return wasVisited && oursChanged && theirsChanged, nil
+	return wasVisited && oursChanged && theirsChanged && ftDiverged, nil
 }
 
 func rebuildFullTextIndexesForTable(ctx *sql.Context, tableToRebuild rebuildableFulltextTable, mergedRoot doltdb.RootValue) (doltdb.RootValue, error) {
@@ -253,7 +254,7 @@ func rebuildFullTextIndexesForTable(ctx *sql.Context, tableToRebuild rebuildable
 		ftEditor.StatementBegin(ctx)
 		defer ftEditor.StatementComplete(ctx)
 
-		rowIter, err := createRowIterForTable(ctx, tableToRebuild.Table, tableToRebuild.Schema)
+		rowIter, err := createRowIterForTable(ctx, tableToRebuild.Table, tableToRebuild.Schema, sql.ColSet{})
 		if err != nil {
 			return err
 		}
@@ -290,7 +291,7 @@ func rebuildFullTextIndexesForTable(ctx *sql.Context, tableToRebuild rebuildable
 }
 
 // createRowIterForTable creates a sql.RowIter for the given table.
-func createRowIterForTable(ctx *sql.Context, t *doltdb.Table, sch schema.Schema) (sql.RowIter, error) {
+func createRowIterForTable(ctx *sql.Context, t *doltdb.Table, sch schema.Schema, columnIds sql.ColSet) (sql.RowIter, error) {
 	rowData, err := t.GetRowData(ctx)
 	if err != nil {
 		return nil, err
@@ -309,7 +310,7 @@ func createRowIterForTable(ctx *sql.Context, t *doltdb.Table, sch schema.Schema)
 		return nil, err
 	}
 
-	return index.NewProllyRowIterForMap(sch, rows, iter, nil), nil
+	return index.NewProllyRowIterForMap(sch, rows, iter, nil, columnIds), nil
 }
 
 // purgeFulltextTableData purges all Full-Text tables with the names given. Ignores any tables that are not Full-Text.

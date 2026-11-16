@@ -19,11 +19,90 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/dolthub/dolt/go/store/testutils/gitrepo"
 )
+
+// TestMain allows the test binary to impersonate deterministic helper commands
+// in place of git for the cmdReadCloser tests.
+func TestMain(m *testing.M) {
+	// See https://abhinavg.net/2022/05/15/hijack-testmain/
+	if os.Getenv(gitWithoutNoWriteFetchHeadEnv) != "" {
+		os.Exit(runGitWithoutNoWriteFetchHead(os.Args[1:]))
+	}
+	if os.Getenv(warnSizeEnv) != "" {
+		os.Args = []string{os.Args[0], "warnsize"}
+	}
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "warnsize":
+			// Stands in for a git that warns on stderr and still succeeds.
+			_, _ = os.Stderr.WriteString("error: packfile objects/pack/pack-abc.pack index unavailable\n")
+			_, _ = os.Stdout.WriteString("321\n")
+			os.Exit(0)
+		case "warnfail":
+			_, _ = os.Stdout.WriteString("out\n")
+			_, _ = os.Stderr.WriteString("fatal: boom\n")
+			os.Exit(3)
+		case "stdoutfail":
+			_, _ = os.Stdout.WriteString("abc")
+			os.Exit(3)
+		case "yes":
+			// Dies of SIGPIPE on Unix once the pipe closes. Windows has no signals,
+			// so exit nonzero by hand when the write fails.
+			for {
+				if _, err := os.Stdout.WriteString("y\n"); err != nil {
+					os.Exit(3)
+				}
+			}
+		case "holdpipe":
+			// Stands in for git's transport: records its pid, then holds the pipes it
+			// inherited for a minute. It never writes to them, so nothing about the
+			// read end being closed can end it early.
+			if err := os.WriteFile(os.Args[2], []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
+				os.Exit(1)
+			}
+			time.Sleep(time.Minute)
+			os.Exit(0)
+		case "orphanexit", "orphanwait":
+			// Stands in for git: spawns a "transport" holding our pipes, then either
+			// exits and orphans it, or stays alive to be cancelled.
+			exe, err := os.Executable()
+			if err != nil {
+				os.Exit(1)
+			}
+			child := exec.Command(exe, "holdpipe", os.Args[2])
+			child.Stdout = os.Stdout
+			child.Stderr = os.Stderr
+			if err := child.Start(); err != nil {
+				os.Exit(1)
+			}
+			if os.Args[1] == "orphanwait" {
+				time.Sleep(time.Minute)
+			}
+			os.Exit(0)
+		}
+	}
+	os.Exit(m.Run())
+}
+
+// helperCommandRunner returns a Runner that re-executes this test binary, so the
+// helper commands in TestMain can act as the child process.
+func helperCommandRunner(t *testing.T) *Runner {
+	t.Helper()
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return NewRunnerWithGitPath(t.TempDir(), exe)
+}
 
 func testAuthor() *Identity {
 	return &Identity{Name: "gitapi test", Email: "gitapi@test.invalid"}
@@ -989,5 +1068,324 @@ func TestGitAPIImpl_PushRefWithLease_CreatesWhenMissing(t *testing.T) {
 	}
 	if got != l1 {
 		t.Fatalf("remote ref mismatch after bootstrap push: got %q, want %q", got, l1)
+	}
+}
+
+func TestGitAPIImpl_BlobSizes(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	_, _, api := newTestRepo(t, ctx)
+
+	blobs := [][]byte{
+		[]byte("one"),
+		[]byte("two two"),
+		bytes.Repeat([]byte("x"), 1234),
+	}
+	oids := make([]OID, len(blobs))
+	for i, b := range blobs {
+		oid, err := api.HashObject(ctx, bytes.NewReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		oids[i] = oid
+	}
+
+	sizes, err := api.BlobSizes(ctx, oids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sizes) != len(blobs) {
+		t.Fatalf("expected %d sizes, got %d", len(blobs), len(sizes))
+	}
+	for i, b := range blobs {
+		if sizes[i] != int64(len(b)) {
+			t.Errorf("size[%d]: got %d, want %d", i, sizes[i], len(b))
+		}
+	}
+
+	got, err := api.BlobSizes(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != nil {
+		t.Fatalf("expected nil for empty input, got %v", got)
+	}
+}
+
+func TestGitAPIImpl_BlobSizes_MissingOID(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	_, _, api := newTestRepo(t, ctx)
+
+	present, err := api.HashObject(ctx, bytes.NewReader([]byte("present")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	missing := OID("2222222222222222222222222222222222222222")
+
+	_, err = api.BlobSizes(ctx, []OID{present, missing})
+	if err == nil {
+		t.Fatal("expected an error for a missing oid, got nil")
+	}
+	if !strings.Contains(err.Error(), "missing") {
+		t.Fatalf("error %q does not mention the missing object", err)
+	}
+}
+
+func TestParseBatchHeaderSize(t *testing.T) {
+	t.Parallel()
+
+	oid := OID("1111111111111111111111111111111111111111")
+	other := "2222222222222222222222222222222222222222"
+	cases := []struct {
+		name            string
+		header          string
+		want            int64
+		wantErrContains string // "" means expect success
+	}{
+		{"valid", oid.String() + " blob 5\n", 5, ""},
+		{"missing", oid.String() + " missing\n", 0, "missing"},
+		{"ambiguous", oid.String() + " ambiguous\n", 0, "ambiguous"},
+		{"desync", other + " blob 5\n", 0, "does not match"},
+		{"unparseable", oid.String() + " blob notanumber\n", 0, "parse size"},
+		{"empty", "\n", 0, "unexpected header"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := parseBatchHeaderSize(tc.header, oid)
+			if tc.wantErrContains == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got != tc.want {
+					t.Fatalf("size: got %d, want %d", got, tc.want)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("expected an error containing %q, got nil", tc.wantErrContains)
+			}
+			if !strings.Contains(err.Error(), tc.wantErrContains) {
+				t.Fatalf("error %q does not contain %q", err, tc.wantErrContains)
+			}
+		})
+	}
+}
+
+func TestCmdReadCloser_EarlyCloseSwallowsWaitError(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	r := helperCommandRunner(t)
+
+	// A writer that never exits is still writing whenever we close, regardless of pipe buffer sizes.
+	rc, cmd, err := r.Start(ctx, RunOptions{}, "yes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.ReadFull(rc, make([]byte, 16)); err != nil {
+		t.Fatal(err)
+	}
+	if err := rc.Close(); err != nil {
+		t.Fatalf("early Close must swallow the broken-pipe exit, got: %v", err)
+	}
+	if cmd.ProcessState == nil {
+		t.Fatal("Close must reap the child process (no zombie)")
+	}
+}
+
+func TestCmdReadCloser_DrainedNonZeroExitSurfaces(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	r := helperCommandRunner(t)
+
+	rc, _, err := r.Start(ctx, RunOptions{}, "stdoutfail")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := io.ReadAll(rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "abc" {
+		t.Fatalf("stdout: got %q, want %q", got, "abc")
+	}
+
+	err = rc.Close()
+	if err == nil {
+		t.Fatal("a non-zero exit after a full drain must surface, got nil")
+	}
+	var ce *CmdError
+	if !errors.As(err, &ce) {
+		t.Fatalf("expected a *CmdError in the chain, got %T: %v", err, err)
+	}
+	if ce.ExitCode != 3 {
+		t.Fatalf("exit code: got %d, want 3", ce.ExitCode)
+	}
+}
+
+func TestGitAPIImpl_FetchRef_SucceedsWithUnopenableFetchHead(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11904
+	t.Parallel()
+
+	ctx := context.Background()
+	localRepo, _, localAPI, remoteHead := newFetchableRepos(t, ctx)
+	if err := os.Mkdir(filepath.Join(localRepo.GitDir, "FETCH_HEAD"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := localAPI.FetchRef(ctx, "origin", "refs/dolt/data", "refs/dolt/remotes/origin/data"); err != nil {
+		t.Fatalf("FetchRef failed on an unopenable FETCH_HEAD it does not need: %v", err)
+	}
+	requireTrackingRef(t, ctx, localAPI, remoteHead)
+}
+
+func newFetchableRepos(t *testing.T, ctx context.Context) (localRepo *gitrepo.Repo, localRunner *Runner, localAPI GitAPI, remoteHead OID) {
+	t.Helper()
+
+	remoteRepo, _, _ := newTestRepo(t, ctx)
+	c1, err := remoteRepo.SetRefToTree(ctx, "refs/dolt/data", nil, "seed remote")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	localRepo, localRunner, localAPI = newTestRepo(t, ctx)
+	if _, err := localRunner.Run(ctx, RunOptions{}, "remote", "add", "origin", remoteRepo.GitDir); err != nil {
+		t.Fatal(err)
+	}
+	return localRepo, localRunner, localAPI, OID(c1)
+}
+
+func requireTrackingRef(t *testing.T, ctx context.Context, api GitAPI, want OID) {
+	t.Helper()
+
+	got, ok, err := api.TryResolveRefCommit(ctx, "refs/dolt/remotes/origin/data")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || got != want {
+		t.Fatalf("tracking ref: got %q (found %v), want %q", got, ok, want)
+	}
+}
+
+func TestGitAPIImpl_FetchRef_FallsBackOnGitWithoutNoWriteFetchHead(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11904
+	t.Parallel()
+
+	ctx := context.Background()
+	localRepo, _, _, remoteHead := newFetchableRepos(t, ctx)
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := NewRunnerWithGitPath(localRepo.GitDir, exe)
+	r.extraEnv = []string{gitWithoutNoWriteFetchHeadEnv + "=1"}
+	api := NewGitAPIImpl(r)
+
+	for i := 0; i < 2; i++ {
+		if err := api.FetchRef(ctx, "origin", "refs/dolt/data", "refs/dolt/remotes/origin/data"); err != nil {
+			t.Fatalf("FetchRef %d with git lacking --no-write-fetch-head: %v", i+1, err)
+		}
+	}
+	requireTrackingRef(t, ctx, api, remoteHead)
+}
+
+// warnSizeEnv makes the test act as a git that warns on stderr, prints a size on
+// stdout and succeeds, whatever its arguments.
+const warnSizeEnv = "DOLT_TEST_GIT_WARN_SIZE"
+
+// gitWithoutNoWriteFetchHeadEnv makes the test act as git without the flag.
+const gitWithoutNoWriteFetchHeadEnv = "DOLT_TEST_GIT_WITHOUT_NO_WRITE_FETCH_HEAD"
+
+// runGitWithoutNoWriteFetchHead acts as git without the flag. It rejects
+// --no-write-fetch-head and runs real git for other arguments.
+func runGitWithoutNoWriteFetchHead(args []string) int {
+	for _, a := range args {
+		if a == "--no-write-fetch-head" {
+			if _, err := os.Stderr.WriteString("error: unknown option `no-write-fetch-head'\n"); err != nil {
+				return 1
+			}
+			return gitUsageExitCode
+		}
+	}
+	gitPath, err := exec.LookPath("git")
+	if err != nil {
+		return 1
+	}
+	cmd := exec.Command(gitPath, args...)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	if err := cmd.Run(); err != nil {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			return ee.ExitCode()
+		}
+		return 1
+	}
+	return 0
+}
+
+// BlobSize against a git that warns on stderr and then prints the size.
+func TestGitAPIImpl_BlobSize_IgnoresStderrWarning(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/12488
+	t.Parallel()
+
+	r := helperCommandRunner(t).WithExtraEnv(warnSizeEnv + "=1")
+	n, err := NewGitAPIImpl(r).BlobSize(context.Background(), OID(strings.Repeat("a", 40)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 321 {
+		t.Fatalf("got size %d, want 321", n)
+	}
+}
+
+// Fetch must not let git's automatic maintenance repack the repository: it detaches
+// and can delete packs while the fetched objects are being read.
+func TestGitAPIImpl_FetchRef_DoesNotAutoRepack(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/12488
+	t.Parallel()
+
+	ctx := context.Background()
+	localRepo, localRunner, _, remoteHead := newFetchableRepos(t, ctx)
+
+	// Leave the repository due for a repack once the fetch lands: one pack already
+	// present, the fetch kept as a second, and a limit of one. Maintenance runs in
+	// the foreground so that its trace is complete when the fetch returns.
+	if _, err := localRepo.SetRefToTree(ctx, "refs/heads/local", nil, "seed local"); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"repack"},
+		{"config", "gc.autoPackLimit", "1"},
+		{"config", "fetch.unpackLimit", "1"},
+		{"config", "gc.autoDetach", "false"},
+		{"config", "maintenance.autoDetach", "false"},
+	} {
+		if _, err := localRunner.Run(ctx, RunOptions{}, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	trace := filepath.Join(t.TempDir(), "trace")
+	api := NewGitAPIImpl(localRunner.WithExtraEnv("GIT_TRACE2_EVENT=" + trace))
+	if err := api.FetchRef(ctx, "origin", "refs/dolt/data", "refs/dolt/remotes/origin/data"); err != nil {
+		t.Fatal(err)
+	}
+	requireTrackingRef(t, ctx, api, remoteHead)
+
+	b, err := os.ReadFile(trace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `"fetch"`) {
+		t.Fatalf("trace does not record the fetch:\n%s", b)
+	}
+	// Older gits still launch "gc --auto" here, which gc.auto=0 makes a no-op, so
+	// look for the repack rather than for the launch.
+	if strings.Contains(string(b), `"repack"`) {
+		t.Fatalf("fetch repacked the repository:\n%s", b)
 	}
 }

@@ -9,10 +9,19 @@ TEST_NAME="dolt-tzdata"
 TEST_IMAGE="$TEST_NAME:bookworm-slim"
 
 setup_file() {
+    skip_if_remote
+
+    # Docker isn't available on GitHub's macOS runners
+    if [ "$IS_MAC" = true ]; then
+        command -v docker >/dev/null 2>&1 || skip "docker not found on PATH (expected on macOS runners)"
+    fi
+
     WORKSPACE_ROOT=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
     export WORKSPACE_ROOT
 
-    docker build -f "$BATS_TEST_DIRNAME/tzdataDockerfile" -t "$TEST_IMAGE" "$WORKSPACE_ROOT"
+    if ! docker image inspect "$TEST_IMAGE" >/dev/null 2>&1; then
+        docker build -f "$BATS_TEST_DIRNAME/tzdataDockerfile" -t "$TEST_IMAGE" "$WORKSPACE_ROOT"
+    fi
 }
 
 # The 'c' prefixes avoid conflicts with binaries on the local bats runner machine. The normal binaries are still
@@ -39,13 +48,14 @@ setup() {
 rm -rf $DOLT_REPOSITORY
 mkdir -p $DOLT_REPOSITORY
 cd $DOLT_REPOSITORY
-dolt config --global --add user.email 'bats@email.fake'
-dolt config --global --add user.name 'Bats Tests'
-dolt init"
+dolt init --name 'Bats Tests' --email 'bats@email.fake'"
 }
 
 teardown() {
-    docker rm -f "$TEST_CONTAINER" >/dev/null 2>&1
+    command -v docker >/dev/null 2>&1 || return 0
+    if [ -n "$TEST_CONTAINER" ]; then
+        docker rm -f "$TEST_CONTAINER" >/dev/null 2>&1
+    fi
 }
 
 # bats test_tags=no_lambda

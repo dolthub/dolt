@@ -25,7 +25,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -89,17 +88,16 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 
 	logger = logger.WithField("unsealed_url", req.URL.String())
 
-	path := strings.TrimLeft(req.URL.Path, "/")
+	path := strings.TrimPrefix(req.URL.Path, "/")
+	if err := ValidateRepoPath(path); err != nil {
+		logger.WithError(err).Warn("bad request with invalid URL path")
+		respWr.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
 	statusCode := http.StatusMethodNotAllowed
 	switch req.Method {
 	case http.MethodGet:
-		path = filepath.Clean(path)
-		if strings.HasPrefix(path, "../") || strings.Contains(path, "/../") || strings.HasSuffix(path, "/..") {
-			logger.Warn("bad request with .. in URL path")
-			respWr.WriteHeader(http.StatusBadRequest)
-			return
-		}
 		i := strings.LastIndex(path, "/")
 		if i == -1 {
 			logger.Warn("bad request with -1 LastIndex of '/' for path")
@@ -287,11 +285,22 @@ type uploadreader struct {
 	checksum     gohash.Hash
 }
 
+// Read verifies the body against the table file details as it reads it. A
+// mismatch is returned in place of io.EOF, so that the table file writer
+// reading it fails before the file lands.
 func (u *uploadreader) Read(p []byte) (n int, err error) {
 	n, err = u.r.Read(p)
 	if err == nil || err == io.EOF {
 		u.totalread += n
 		u.checksum.Write(p[:n])
+	}
+	if u.expectedread != 0 && uint64(u.totalread) > u.expectedread {
+		return n, errBodyLengthTFDMismatch
+	}
+	if err == io.EOF {
+		if verr := u.verify(); verr != nil {
+			return n, verr
+		}
 	}
 	return n, err
 }
@@ -299,11 +308,7 @@ func (u *uploadreader) Read(p []byte) (n int, err error) {
 var errBodyLengthTFDMismatch = errors.New("body upload length did not match table file details")
 var errBodyHashTFDMismatch = errors.New("body upload hash did not match table file details")
 
-func (u *uploadreader) Close() error {
-	cerr := u.r.Close()
-	if cerr != nil {
-		return cerr
-	}
+func (u *uploadreader) verify() error {
 	if u.expectedread != 0 && u.expectedread != uint64(u.totalread) {
 		return errBodyLengthTFDMismatch
 	}
@@ -314,6 +319,10 @@ func (u *uploadreader) Close() error {
 	return nil
 }
 
+func (u *uploadreader) Close() error {
+	return u.r.Close()
+}
+
 func writeTableFile(ctx context.Context, logger *logrus.Entry, dbCache DBCache, path, fileId string, splitOffset uint64, numChunks int, contentHash []byte, contentLength uint64, body io.ReadCloser) (*logrus.Entry, int, error) {
 	if !validateFileName(fileId) {
 		logger = logger.WithField("status", http.StatusBadRequest)
@@ -321,7 +330,7 @@ func writeTableFile(ctx context.Context, logger *logrus.Entry, dbCache DBCache, 
 		return logger, http.StatusBadRequest, fmt.Errorf("%s is not a valid hash", fileId)
 	}
 
-	cs, err := dbCache.Get(ctx, path, types.Format_Default.VersionString())
+	cs, err := dbCache.Get(ctx, path, types.Format_DOLT.VersionString())
 	if err != nil {
 		logger = logger.WithField("status", http.StatusInternalServerError)
 		logger.WithError(err).Error("failed to get repository")
@@ -441,6 +450,8 @@ func getFileReaderAt(path string, offset int64, length int64) (io.ReadCloser, in
 // ExtractBasicAuthCreds extracts the username and password from the incoming request. It returns RequestCredentials
 // populated with necessary information to authenticate the request. nil and an error will be returned if any error
 // occurs.
+//
+// A request without an authorization header is treated as credentialed as root with an empty password.
 func ExtractBasicAuthCreds(ctx context.Context) (*RequestCredentials, error) {
 	if md, ok := metadata.FromIncomingContext(ctx); !ok {
 		return nil, errors.New("no metadata in context")
@@ -458,13 +469,17 @@ func ExtractBasicAuthCreds(ctx context.Context) (*RequestCredentials, error) {
 				return nil, fmt.Errorf("bad request: authorization header did not start with 'Basic '")
 			}
 			authTrim := strings.TrimPrefix(auth, "Basic ")
-			uDec, err := base64.URLEncoding.DecodeString(authTrim)
+			uDec, err := base64.StdEncoding.DecodeString(authTrim)
 			if err != nil {
 				return nil, fmt.Errorf("incoming request authorization header failed to decode: %v", err)
 			}
-			userPass := strings.Split(string(uDec), ":")
-			username = userPass[0]
-			password = userPass[1]
+			// Cut, not Split: a password is allowed to contain ':', and a payload with no ':' at all
+			// is malformed rather than a username with an empty password.
+			var found bool
+			username, password, found = strings.Cut(string(uDec), ":")
+			if !found {
+				return nil, errors.New("bad request: authorization header was not of the form 'username:password'")
+			}
 		}
 		addr, ok := peer.FromContext(ctx)
 		if !ok {

@@ -36,7 +36,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
@@ -67,7 +66,7 @@ func (k tableIndexesKey) String() string {
 
 type StatsController struct {
 	logger         *logrus.Logger
-	pro            *sqle.DoltDatabaseProvider
+	pro            dsess.DoltDatabaseProvider
 	bgThreads      *sql.BackgroundThreads
 	statsBackingDb filesys.Filesys
 
@@ -294,8 +293,8 @@ func (sc *StatsController) descError(d string, err error) {
 	sc.logger.Debug(b.String())
 }
 
-func (sc *StatsController) GetTableStats(ctx *sql.Context, db string, table sql.Table) ([]sql.Statistic, error) {
-	key, err := sc.statsKey(ctx, db, table.Name())
+func (sc *StatsController) GetTableStats(ctx *sql.Context, sch, db string, table sql.Table) ([]sql.Statistic, error) {
+	key, err := sc.statsKey(ctx, sch, db, table.Name())
 	if err != nil {
 		return nil, err
 	}
@@ -312,33 +311,16 @@ func (sc *StatsController) GetTableStats(ctx *sql.Context, db string, table sql.
 	return ret, nil
 }
 
+// AnalyzeTable implements sql.StatsProvider. |dbName| is the session's current database, not necessarily the database
+// of |table|, so the database and revision are taken from |table| itself.
 func (sc *StatsController) AnalyzeTable(ctx *sql.Context, table sql.Table, dbName string) (err error) {
-	dSess := dsess.DSessFromSess(ctx.Session)
-
-	var branch string
-	if strings.Contains(dbName, "/") {
-		parts := strings.Split(dbName, "/")
-		if len(parts) == 2 {
-			dbName = parts[0]
-			branch = parts[1]
-		}
+	dsTable, ok := table.(sql.DatabaseSchemaTable)
+	if !ok {
+		return fmt.Errorf("cannot analyze table %s: not a Dolt table", table.Name())
 	}
-	if branch == "" {
-		var err error
-		branch, err = dSess.GetBranch(ctx)
-		if err != nil {
-			return err
-		}
-
-		if branch == "" {
-			branch = env.DefaultInitBranch
-		}
-	}
-
-	db, err := sc.pro.Database(ctx, dbName)
-	sqlDb, err := sqle.RevisionDbForBranch(ctx, db.(dsess.SqlDatabase), branch, branch+"/"+dbName)
-	if err != nil {
-		return err
+	sqlDb, ok := dsTable.DatabaseSchema().(dsess.SqlDatabase)
+	if !ok {
+		return fmt.Errorf("cannot analyze table %s: not a Dolt table", table.Name())
 	}
 
 	newStats := newRootStats()
@@ -368,7 +350,8 @@ func (sc *StatsController) SetStats(ctx *sql.Context, s sql.Statistic) error {
 	if !ok {
 		return fmt.Errorf("expected *stats.Statistics, found %T", s)
 	}
-	key, err := sc.statsKey(ctx, ss.Qualifier().Db(), ss.Qualifier().Table())
+	qual := ss.Qualifier()
+	key, err := sc.statsKey(ctx, qual.Schema(), qual.Db(), qual.Table())
 	if err != nil {
 		return err
 	}
@@ -388,7 +371,7 @@ func (sc *StatsController) SetStats(ctx *sql.Context, s sql.Statistic) error {
 func (sc *StatsController) GetStats(ctx *sql.Context, qual sql.StatQualifier, cols []string) (sql.Statistic, bool) {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
-	key, err := sc.statsKey(ctx, qual.Database, qual.Table())
+	key, err := sc.statsKey(ctx, qual.Schema(), qual.Db(), qual.Table())
 	if err != nil {
 		return nil, false
 	}
@@ -416,7 +399,7 @@ func (sc *StatsController) GetTableDoltStats(ctx *sql.Context, branch, db, schem
 }
 
 func (sc *StatsController) DropStats(ctx *sql.Context, qual sql.StatQualifier, cols []string) error {
-	key, err := sc.statsKey(ctx, qual.Database, qual.Table())
+	key, err := sc.statsKey(ctx, qual.Schema(), qual.Db(), qual.Table())
 	if err != nil {
 		return err
 	}
@@ -426,7 +409,7 @@ func (sc *StatsController) DropStats(ctx *sql.Context, qual sql.StatQualifier, c
 	return nil
 }
 
-func (sc *StatsController) DropDbStats(ctx *sql.Context, dbName string, flush bool) error {
+func (sc *StatsController) DropDbStats(ctx *sql.Context, sch, dbName string, flush bool) error {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
@@ -445,7 +428,7 @@ func (sc *StatsController) DropDbStats(ctx *sql.Context, dbName string, flush bo
 	}
 
 	var deleteKeys []tableIndexesKey
-	for k, _ := range sc.Stats.stats {
+	for k := range sc.Stats.stats {
 		if strings.EqualFold(dbName, k.db) {
 			deleteKeys = append(deleteKeys, k)
 		}
@@ -456,22 +439,30 @@ func (sc *StatsController) DropDbStats(ctx *sql.Context, dbName string, flush bo
 	return nil
 }
 
-func (sc *StatsController) statsKey(ctx *sql.Context, dbName, table string) (tableIndexesKey, error) {
-	dSess := dsess.DSessFromSess(ctx.Session)
-	branch, err := dSess.GetBranch(ctx)
-	if err != nil {
-		return tableIndexesKey{}, err
+func (sc *StatsController) statsKey(ctx *sql.Context, schema, dbName, table string) (tableIndexesKey, error) {
+	// Collection keys statistics by base database name and branch separately.
+	// An explicit revision takes precedence over the session's current branch.
+	dbName, branch := doltdb.SplitRevisionDbName(dbName)
+	if branch == "" {
+		dSess := dsess.DSessFromSess(ctx.Session)
+		var err error
+		branch, err = dSess.GetBranch(ctx)
+		if err != nil {
+			return tableIndexesKey{}, err
+		}
 	}
+
 	key := tableIndexesKey{
 		db:     strings.ToLower(dbName),
 		branch: strings.ToLower(branch),
 		table:  strings.ToLower(table),
+		schema: strings.ToLower(schema),
 	}
 	return key, nil
 }
 
-func (sc *StatsController) RowCount(ctx *sql.Context, dbName string, table sql.Table) (uint64, error) {
-	key, err := sc.statsKey(ctx, dbName, table.Name())
+func (sc *StatsController) RowCount(ctx *sql.Context, schema, dbName string, table sql.Table) (uint64, error) {
+	key, err := sc.statsKey(ctx, schema, dbName, table.Name())
 	if err != nil {
 		return 0, err
 	}
@@ -485,8 +476,8 @@ func (sc *StatsController) RowCount(ctx *sql.Context, dbName string, table sql.T
 	return 0, nil
 }
 
-func (sc *StatsController) DataLength(ctx *sql.Context, dbName string, table sql.Table) (uint64, error) {
-	key, err := sc.statsKey(ctx, dbName, table.Name())
+func (sc *StatsController) DataLength(ctx *sql.Context, schema, dbName string, table sql.Table) (uint64, error) {
+	key, err := sc.statsKey(ctx, schema, dbName, table.Name())
 	if err != nil {
 		return 0, err
 	}
@@ -536,13 +527,6 @@ func (sc *StatsController) lockedRotateStorage(ctx context.Context) error {
 	}
 
 	sc.kv.Close()
-
-	if sc.statsBackingDb != nil {
-		if err := sc.rm(sc.statsBackingDb); err != nil {
-			return err
-		}
-	}
-
 	var mem *memStats
 	switch kv := sc.kv.(type) {
 	case *prollyStats:
@@ -552,9 +536,16 @@ func (sc *StatsController) lockedRotateStorage(ctx context.Context) error {
 	default:
 		mem = NewMemStats()
 	}
+	// Serve stats from memory until the new store opens, so a failed rotation doesn't leave the closed store in use.
+	sc.kv = mem
+
+	if sc.statsBackingDb != nil {
+		if err := sc.rm(sc.statsBackingDb); err != nil {
+			return err
+		}
+	}
 
 	if len(sc.dbFs) == 0 {
-		sc.kv = mem
 		sc.statsBackingDb = nil
 		return nil
 	}
@@ -637,7 +628,7 @@ func (sc *StatsController) initStorage(ctx context.Context, fs filesys.Filesys) 
 		// Use LoadWithoutDB so DB load params can be applied before any DB is opened.
 		dEnv = env.LoadWithoutDB(ctx, sc.getUserHomeDir, statsFs, urlPath, doltversion.Version)
 		dEnv.DBLoadParams = dbLoadParams
-		err = dEnv.InitRepo(ctx, types.Format_Default, "stats", "stats@stats.com", env.DefaultInitBranch)
+		err = dEnv.InitRepo(ctx, types.Format_DOLT, "stats", "stats@stats.com", env.DefaultInitBranch)
 		if err != nil {
 			return nil, err
 		}

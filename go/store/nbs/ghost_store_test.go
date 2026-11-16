@@ -83,4 +83,16 @@ func TestGhostBlockStore(t *testing.T) {
 		require.True(t, got[0].IsGhost())
 		require.Equal(t, ghost, got[0].Hash())
 	})
+	t.Run("HasGhosts", func(t *testing.T) {
+		require.True(t, bs.HasGhosts())
+		empty, err := NewGhostBlockStore(t.TempDir())
+		require.NoError(t, err)
+		require.False(t, empty.HasGhosts())
+	})
+}
+
+func TestGhostBlockStoreHasGhostsNil(t *testing.T) {
+	// GenerationalNBS may hold a nil ghost store, so HasGhosts must not panic.
+	var bs *GhostBlockStore
+	require.False(t, bs.HasGhosts())
 }

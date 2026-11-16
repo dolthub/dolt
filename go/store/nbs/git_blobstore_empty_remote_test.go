@@ -49,7 +49,7 @@ func TestNBS_GitBlobstore_EmptyRemote_OpenReturnsEmptyManifest(t *testing.T) {
 	require.NoError(t, err)
 	defer store.Close()
 
-	exists, _, _, err := store.manifestMgr.Fetch(ctx, store.stats)
+	exists, _, err := store.manifest.ParseIfExists(ctx, store.stats, nil)
 	require.NoError(t, err)
 	require.False(t, exists)
 }
@@ -101,7 +101,7 @@ func TestNBS_GitBlobstore_EmptyRemote_FirstManifestUpdateBootstrapsRef(t *testin
 	require.NoError(t, err)
 	defer store.Close()
 
-	exists, contents, _, err := store.manifestMgr.Fetch(ctx, store.stats)
+	exists, contents, err := store.manifest.ParseIfExists(ctx, store.stats, nil)
 	require.NoError(t, err)
 	require.True(t, exists)
 	require.Equal(t, want.root, contents.root)
@@ -147,8 +147,8 @@ func TestNBS_NewGitStore_DefaultsMaxPartSizeTo50MB(t *testing.T) {
 	_, err = gbs.Put(ctx, "k", int64(50*1024*1024+1), bytes.NewReader([]byte("hi")))
 	require.NoError(t, err)
 
-	// Non-manifest Put is deferred; flush via CheckAndPut("manifest").
-	_, err = gbs.CheckAndPut(ctx, "", "manifest", 3, bytes.NewReader([]byte("xxx\n")))
+	// Non-manifest Put is deferred; flush via CheckAndPutManifest.
+	_, err = gbs.CheckAndPutManifest(ctx, "", []byte("xxx\n"))
 	require.NoError(t, err)
 
 	// On the remote, key "k" should be represented as a tree containing part "0001".

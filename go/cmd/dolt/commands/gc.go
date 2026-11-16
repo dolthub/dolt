@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
@@ -26,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/nbs"
 	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
@@ -37,7 +37,7 @@ var gcDocs = cli.CommandDocumentationContent{
 	LongDesc: `Searches the repository for data that is no longer referenced and no longer needed.
 
 Dolt GC is generational. When a GC is run, everything reachable from any commit on any branch
-is put into the old generation. Data which is only reachable from uncommited branch HEADs is kept in
+is put into the old generation. Data which is only reachable from uncommitted branch HEADs is kept in
 the new generation. By default, Dolt GC will only visit data in the new generation, and so will never
 collect data from deleted branches which has previously made its way to the old generation from being
 copied during a prior garbage collection.
@@ -160,8 +160,14 @@ func (cmd GarbageCollectionCmd) constructDoltGCQuery(apr *argparser.ArgParseResu
 	return dbr.InterpolateForDialect(query, params, dialect.MySQL)
 }
 
+// MaybeMigrateEnv migrates a legacy file manifest. If it does, it closes |dEnv| and returns a newly loaded env,
+// which the caller must close. Otherwise it returns |dEnv|.
 func MaybeMigrateEnv(ctx context.Context, dEnv *env.DoltEnv) (*env.DoltEnv, error) {
-	migrated, err := nbs.MaybeMigrateFileManifest(ctx, dbfactory.DoltDataDir)
+	dataDir, err := dEnv.FS.Abs(dbfactory.DoltDataDir)
+	if err != nil {
+		return nil, err
+	}
+	migrated, err := nbs.MaybeMigrateFileManifest(ctx, dataDir)
 	if err != nil {
 		return nil, err
 	}
@@ -169,17 +175,13 @@ func MaybeMigrateEnv(ctx context.Context, dEnv *env.DoltEnv) (*env.DoltEnv, erro
 		return dEnv, nil
 	}
 
-	// reload env with new manifest
-	tmp := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, dEnv.Version)
-
-	if tmp.CfgLoadErr != nil {
-		return nil, tmp.CfgLoadErr
+	// The open store read the old manifest, so close it before reloading.
+	if err := dEnv.Close(); err != nil {
+		return nil, err
 	}
-	if tmp.RSLoadErr != nil {
-		return nil, tmp.RSLoadErr
-	}
-	if tmp.DBLoadError != nil {
-		return nil, tmp.DBLoadError
+	tmp := env.Load(ctx, env.GetCurrentUserHomeDir, dEnv.FS, doltdb.LocalDirDoltDB, dEnv.Version)
+	if err := errors.Join(tmp.CfgLoadErr, tmp.RSLoadErr, tmp.DBLoadError); err != nil {
+		return nil, errors.Join(err, tmp.Close())
 	}
 
 	return tmp, nil

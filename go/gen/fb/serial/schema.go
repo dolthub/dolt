@@ -25,18 +25,27 @@ import (
 type DistanceType byte
 
 const (
-	DistanceTypeNull       DistanceType = 0
-	DistanceTypeL2_Squared DistanceType = 1
+	DistanceTypeNull         DistanceType = 0
+	DistanceTypeL2_Squared   DistanceType = 1
+	DistanceTypeCosine       DistanceType = 2
+	DistanceTypeInnerProduct DistanceType = 3
+	DistanceTypeL1           DistanceType = 4
 )
 
 var EnumNamesDistanceType = map[DistanceType]string{
-	DistanceTypeNull:       "Null",
-	DistanceTypeL2_Squared: "L2_Squared",
+	DistanceTypeNull:         "Null",
+	DistanceTypeL2_Squared:   "L2_Squared",
+	DistanceTypeCosine:       "Cosine",
+	DistanceTypeInnerProduct: "InnerProduct",
+	DistanceTypeL1:           "L1",
 }
 
 var EnumValuesDistanceType = map[string]DistanceType{
-	"Null":       DistanceTypeNull,
-	"L2_Squared": DistanceTypeL2_Squared,
+	"Null":         DistanceTypeNull,
+	"L2_Squared":   DistanceTypeL2_Squared,
+	"Cosine":       DistanceTypeCosine,
+	"InnerProduct": DistanceTypeInnerProduct,
+	"L1":           DistanceTypeL1,
 }
 
 func (v DistanceType) String() string {
@@ -465,7 +474,19 @@ func (rcv *Column) MutateAdaptiveEncodingBreakingChange(n bool) bool {
 	return rcv._tab.MutateBoolSlot(36, n)
 }
 
-const ColumnNumFields = 17
+func (rcv *Column) UsesCommitAddrEncoding() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(38))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *Column) MutateUsesCommitAddrEncoding(n bool) bool {
+	return rcv._tab.MutateBoolSlot(38, n)
+}
+
+const ColumnNumFields = 18
 
 func ColumnStart(builder *flatbuffers.Builder) {
 	builder.StartObject(ColumnNumFields)
@@ -520,6 +541,9 @@ func ColumnAddHiddenSystem(builder *flatbuffers.Builder, hiddenSystem bool) {
 }
 func ColumnAddAdaptiveEncodingBreakingChange(builder *flatbuffers.Builder, adaptiveEncodingBreakingChange bool) {
 	builder.PrependBoolSlot(16, adaptiveEncodingBreakingChange, false)
+}
+func ColumnAddUsesCommitAddrEncoding(builder *flatbuffers.Builder, usesCommitAddrEncoding bool) {
+	builder.PrependBoolSlot(17, usesCommitAddrEncoding, false)
 }
 func ColumnEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
@@ -781,7 +805,96 @@ func (rcv *Index) TryVectorInfo(obj *VectorInfo) (*VectorInfo, error) {
 	return nil, nil
 }
 
-const IndexNumFields = 14
+func (rcv *Index) Predicate() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(32))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+func (rcv *Index) Descending(j int) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(34))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.GetBool(a + flatbuffers.UOffsetT(j*1))
+	}
+	return false
+}
+
+func (rcv *Index) DescendingLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(34))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func (rcv *Index) MutateDescending(j int, n bool) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(34))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.MutateBool(a+flatbuffers.UOffsetT(j*1), n)
+	}
+	return false
+}
+
+func (rcv *Index) NullsLast(j int) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(36))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.GetBool(a + flatbuffers.UOffsetT(j*1))
+	}
+	return false
+}
+
+func (rcv *Index) NullsLastLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(36))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func (rcv *Index) MutateNullsLast(j int, n bool) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(36))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.MutateBool(a+flatbuffers.UOffsetT(j*1), n)
+	}
+	return false
+}
+
+func (rcv *Index) OpClasses(j int) []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(38))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.ByteVector(a + flatbuffers.UOffsetT(j*4))
+	}
+	return nil
+}
+
+func (rcv *Index) OpClassesLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(38))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func (rcv *Index) NullsNotDistinct() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(40))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *Index) MutateNullsNotDistinct(n bool) bool {
+	return rcv._tab.MutateBoolSlot(40, n)
+}
+
+const IndexNumFields = 19
 
 func IndexStart(builder *flatbuffers.Builder) {
 	builder.StartObject(IndexNumFields)
@@ -839,6 +952,30 @@ func IndexAddVectorKey(builder *flatbuffers.Builder, vectorKey bool) {
 }
 func IndexAddVectorInfo(builder *flatbuffers.Builder, vectorInfo flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(13, flatbuffers.UOffsetT(vectorInfo), 0)
+}
+func IndexAddPredicate(builder *flatbuffers.Builder, predicate flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(14, flatbuffers.UOffsetT(predicate), 0)
+}
+func IndexAddDescending(builder *flatbuffers.Builder, descending flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(15, flatbuffers.UOffsetT(descending), 0)
+}
+func IndexStartDescendingVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(1, numElems, 1)
+}
+func IndexAddNullsLast(builder *flatbuffers.Builder, nullsLast flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(16, flatbuffers.UOffsetT(nullsLast), 0)
+}
+func IndexStartNullsLastVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(1, numElems, 1)
+}
+func IndexAddOpClasses(builder *flatbuffers.Builder, opClasses flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(17, flatbuffers.UOffsetT(opClasses), 0)
+}
+func IndexStartOpClassesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(4, numElems, 4)
+}
+func IndexAddNullsNotDistinct(builder *flatbuffers.Builder, nullsNotDistinct bool) {
+	builder.PrependBoolSlot(18, nullsNotDistinct, false)
 }
 func IndexEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
@@ -1114,7 +1251,19 @@ func (rcv *CheckConstraint) MutateEnforced(n bool) bool {
 	return rcv._tab.MutateBoolSlot(8, n)
 }
 
-const CheckConstraintNumFields = 3
+func (rcv *CheckConstraint) IsNotValid() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *CheckConstraint) MutateIsNotValid(n bool) bool {
+	return rcv._tab.MutateBoolSlot(10, n)
+}
+
+const CheckConstraintNumFields = 4
 
 func CheckConstraintStart(builder *flatbuffers.Builder) {
 	builder.StartObject(CheckConstraintNumFields)
@@ -1127,6 +1276,9 @@ func CheckConstraintAddExpression(builder *flatbuffers.Builder, expression flatb
 }
 func CheckConstraintAddEnforced(builder *flatbuffers.Builder, enforced bool) {
 	builder.PrependBoolSlot(2, enforced, false)
+}
+func CheckConstraintAddIsNotValid(builder *flatbuffers.Builder, isNotValid bool) {
+	builder.PrependBoolSlot(3, isNotValid, false)
 }
 func CheckConstraintEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

@@ -17,7 +17,6 @@ package val
 import (
 	"context"
 	"database/sql/driver"
-	"encoding/json"
 	"fmt"
 	"unsafe"
 
@@ -33,8 +32,23 @@ const BytePeekLength = 128
 // The only implementation is tree.NodeStore, but ValueStore can be used without depending on the tree package.
 // This is useful for type handlers.
 type ValueStore interface {
+	// ReadBytes reads the bytes associated with the given content hash
 	ReadBytes(ctx context.Context, h hash.Hash) ([]byte, error)
+	// WriteBytes writes the given bytes and returns the content hash
 	WriteBytes(ctx context.Context, val []byte) (hash.Hash, error)
+	// CompareAdaptive compares two adaptive values.
+	CompareAdaptive(ctx context.Context, l AdaptiveValue, r AdaptiveValue, encoding Encoding) (int, error)
+	// CompareAdaptiveCollatedStrings compares two adaptive string values with the given collation.
+	CompareAdaptiveCollatedStrings(ctx context.Context, l, r AdaptiveValue, collation sql.CollationID) (int, error)
+}
+
+// PriorBytesWriter is implemented by ValueStores that can write bytes replacing
+// a prior value, reusing the parts of it that are unchanged.
+//
+// Dolt does not call this or TupleBuilder.ReplaceAdaptiveBytesFromInline;
+// DumboDB (github.com/dolthub/dumbodb) does. Do not remove them as unused.
+type PriorBytesWriter interface {
+	WriteBytesReusing(ctx context.Context, val []byte, prior hash.Hash) (hash.Hash, error)
 }
 
 // ImmutableValue represents a content-addressed value stored in a ValueStore.
@@ -67,21 +81,16 @@ func (t *ImmutableValue) GetBytes(ctx context.Context) ([]byte, error) {
 // TextStorage is a sql.AnyWrapper to wrap large string values stored out of band.
 type TextStorage struct {
 	ImmutableValue
-	// ctx is a context that can be used in driver.Value
-	// Storing a context in a struct is bad practice, so this field should not be used for any other purpose.
-	ctx           context.Context
 	maxByteLength int64
 }
 
 var _ sql.StringWrapper = &TextStorage{}
-var _ driver.Valuer = &TextStorage{}
 
 // NewTextStorage creates a new TextStorage with the given content address and ValueStore.
-func NewTextStorage(ctx context.Context, addr hash.Hash, vs ValueStore) *TextStorage {
+func NewTextStorage(addr hash.Hash, vs ValueStore) *TextStorage {
 	return &TextStorage{
 		ImmutableValue: NewImmutableValue(addr, vs),
 		maxByteLength:  types.LongText.MaxByteLength(),
-		ctx:            ctx,
 	}
 }
 
@@ -134,9 +143,15 @@ func (t *TextStorage) Hash() interface{} {
 	return t.Addr
 }
 
+// SameContentAddress implements contentAddressComparer for text storage.
+func (t *TextStorage) SameContentAddress(other interface{}) bool {
+	otherText, ok := other.(*TextStorage)
+	return ok && t != nil && otherText != nil && !t.Addr.IsEmpty() && t.Addr == otherText.Addr
+}
+
 // Value implements driver.Valuer for interoperability with other go libraries
-func (t *TextStorage) Value() (driver.Value, error) {
-	buf, err := t.GetBytes(t.ctx)
+func (t *TextStorage) ValueContext(ctx context.Context) (driver.Value, error) {
+	buf, err := t.GetBytes(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -146,21 +161,16 @@ func (t *TextStorage) Value() (driver.Value, error) {
 // ByteArray is a sql.AnyWrapper to wrap large byte array values stored out of band.
 type ByteArray struct {
 	ImmutableValue
-	// ctx is a context that can be used in driver.Value
-	// Storing a context in a struct is bad practice, so this field should not be used for any other purpose.
-	ctx           context.Context
 	maxByteLength int64
 }
 
 var _ sql.BytesWrapper = &ByteArray{}
-var _ driver.Valuer = &ByteArray{}
 
 // NewByteArray creates a new ByteArray with the given content address and ValueStore.
-func NewByteArray(ctx context.Context, addr hash.Hash, vs ValueStore) *ByteArray {
+func NewByteArray(addr hash.Hash, vs ValueStore) *ByteArray {
 	return &ByteArray{
 		ImmutableValue: NewImmutableValue(addr, vs),
 		maxByteLength:  types.LongBlob.MaxByteLength(),
-		ctx:            ctx,
 	}
 }
 
@@ -220,6 +230,12 @@ func (b *ByteArray) Hash() interface{} {
 	return b.Addr
 }
 
+// SameContentAddress implements contentAddressComparer for binary storage.
+func (b *ByteArray) SameContentAddress(other interface{}) bool {
+	otherBytes, ok := other.(*ByteArray)
+	return ok && b != nil && otherBytes != nil && !b.Addr.IsEmpty() && b.Addr == otherBytes.Addr
+}
+
 // WithMaxByteLength returns a copy of ByteArray with the given max byte length.
 func (b *ByteArray) WithMaxByteLength(maxByteLength int64) *ByteArray {
 	return &ByteArray{
@@ -228,9 +244,8 @@ func (b *ByteArray) WithMaxByteLength(maxByteLength int64) *ByteArray {
 	}
 }
 
-// Value implements driver.Valuer for interoperability with other go libraries
-func (b *ByteArray) Value() (driver.Value, error) {
-	return b.GetBytes(b.ctx)
+func (b *ByteArray) ValueContext(ctx context.Context) (driver.Value, error) {
+	return b.GetBytes(ctx)
 }
 
 // GeometryStorage is a sql.AnyWrapper for geometry values.
@@ -296,6 +311,13 @@ func (g *GeometryStorage) Hash() interface{} {
 	return g.outOfBand.Addr
 }
 
+// SameContentAddress implements contentAddressComparer for geometry storage.
+func (g *GeometryStorage) SameContentAddress(other interface{}) bool {
+	otherGeometry, ok := other.(*GeometryStorage)
+	return ok && g != nil && otherGeometry != nil && !g.outOfBand.Addr.IsEmpty() &&
+		g.outOfBand.Addr == otherGeometry.outOfBand.Addr
+}
+
 // Addr returns the content address for out-of-band storage. Only valid when IsExactLength returns false.
 func (g *GeometryStorage) Addr() hash.Hash {
 	return g.outOfBand.Addr
@@ -341,7 +363,7 @@ func (j *JsonAdaptiveStorage) ToInterface(ctx context.Context) (interface{}, err
 		return nil, err
 	}
 	var val interface{}
-	if err = json.Unmarshal(buf, &val); err != nil {
+	if err = types.JsonUnmarshal(buf, &val); err != nil {
 		return nil, err
 	}
 	return val, nil
@@ -382,6 +404,13 @@ func (j *JsonAdaptiveStorage) Compare(ctx context.Context, other interface{}) (c
 // Hash implements sql.AnyWrapper by returning the content address for out-of-band storage, or nil for inline storage.
 func (j *JsonAdaptiveStorage) Hash() interface{} {
 	return j.outOfBand.Addr
+}
+
+// SameContentAddress implements contentAddressComparer for JSON storage.
+func (j *JsonAdaptiveStorage) SameContentAddress(other interface{}) bool {
+	otherJSON, ok := other.(*JsonAdaptiveStorage)
+	return ok && j != nil && otherJSON != nil && !j.outOfBand.Addr.IsEmpty() &&
+		j.outOfBand.Addr == otherJSON.outOfBand.Addr
 }
 
 // Unwrap implements sql.JSONWrapper by loading the bytes and returning them.

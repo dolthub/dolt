@@ -13,7 +13,7 @@ spawn dolt add --patch
 # colors                             1       1          1
 # coordinates                        1       1          1
 # names                              1       1          1
-set header {.*Table\s+Added\s+/\s+Modified\s+/\s+Removed\s+=+\s+=+\s+=+\s+=+\s+colors\s+1\s+1\s+1\s+coordinates\s+1\s+1\s+1\s+names\s+1\s+1\s+1.*}
+set header {.*Table\s+Added\s+/\s+Modified\s+/\s+Removed\s+=+\s+=+\s+=+\s+=+\s+colors\s+1\s+1\s+1\s+coordinates\s+1\s+1\s+1\s+names\s+1\s+1\s+1}
 
 expect_with_defaults_2 $header                                      {Stage this row \[y,n,q,a,d,s,\?\]\? } { send "y\r"; }
 expect_with_defaults_2 {| - | 2  | Green | 0   | 255   | 0    |}    {Stage this row \[y,n,q,a,d,s,\?\]\? } { send "n\r"; }
@@ -26,7 +26,7 @@ expect_with_defaults_2 {| - | 2  | 3.3 | 4.4 |}                     {Stage this 
 # colors                             0       0          1
 # coordinates                        1       1          1
 # names                              1       1          1
-set header {.*Table\s+Added\s+/\s+Modified\s+/\s+Removed\s+=+\s+=+\s+=+\s+=+\s+colors\s+0\s+0\s+1\s+coordinates\s+1\s+1\s+1\s+names\s+1\s+1\s+1.*}
+set header {.*Table\s+Added\s+/\s+Modified\s+/\s+Removed\s+=+\s+=+\s+=+\s+=+\s+colors\s+0\s+0\s+1\s+coordinates\s+1\s+1\s+1\s+names\s+1\s+1\s+1}
 
 expect_with_defaults_2 $header                                      {Stage this row \[y,n,q,a,d,s,\?\]\? } { send "y\r"; }
 expect_with_defaults_2 {| - | 2  | 3.3 | 4.4 |}                     {Stage this row \[y,n,q,a,d,s,\?\]\? } { send "n\r"; }
@@ -38,7 +38,7 @@ expect_with_defaults_2 {| \+ | 4  | 42.24 | 23.32 |}                {Stage this 
 # =====                              =====   ========   =======
 # coordinates                        1       0          1
 # names                              1       1          1
-set header {.*Table\s+Added\s+/\s+Modified\s+/\s+Removed\s+=+\s+=+\s+=+\s+=+\s+coordinates\s+1\s+0\s+1\s+names\s+1\s+1\s+1.*}
+set header {.*Table\s+Added\s+/\s+Modified\s+/\s+Removed\s+=+\s+=+\s+=+\s+=+\s+coordinates\s+1\s+0\s+1\s+names\s+1\s+1\s+1}
 
 expect_with_defaults_2 $header                                      {Stage this row \[y,n,q,a,d,s,\?\]\? } { send "y\r"; }
 expect_with_defaults_2 {| \+ | 4  | 42.24 | 23.32 |}                {Stage this row \[y,n,q,a,d,s,\?\]\? } { send "n\r"; }
@@ -50,7 +50,7 @@ expect_with_defaults_2 {| - | 2  | sami |}                          {Stage this 
 # =====                              =====   ========   =======
 # coordinates                        1       0          0
 # names                              1       0          1
-set header {.*Table\s+Added\s+/\s+Modified\s+/\s+Removed\s+=+\s+=+\s+=+\s+=+\s+coordinates\s+1\s+0\s+0\s+names\s+1\s+0\s+1.*}
+set header {.*Table\s+Added\s+/\s+Modified\s+/\s+Removed\s+=+\s+=+\s+=+\s+=+\s+coordinates\s+1\s+0\s+0\s+names\s+1\s+0\s+1}
 
 expect_with_defaults_2 $header                                      {Stage this row \[y,n,q,a,d,s,\?\]\? } { send "y\r"; }
 expect_with_defaults_2 {| - | 2  | sami |}                          {Stage this row \[y,n,q,a,d,s,\?\]\? } { send "n\r"; }

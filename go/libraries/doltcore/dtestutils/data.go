@@ -48,7 +48,7 @@ func Schema() (schema.Schema, error) {
 		return nil, err
 	}
 
-	_, err = sch.Checks().AddCheck("test-check", "age < 123", true)
+	_, err = sch.Checks().AddCheck("test-check", "age < 123", true, false)
 	if err != nil {
 		return nil, err
 	}

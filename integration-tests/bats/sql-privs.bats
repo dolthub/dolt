@@ -347,7 +347,28 @@ teardown() {
 
     run start_sql_server inner_db
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "multiple .doltcfg directories detected" ]] || false
+    [[ "$output" =~ "multiple .doltcfg directories detected: ".*"inner_db/.doltcfg' and '".*"test_db/.doltcfg'" ]] || false
+    [[ "$output" =~ "specify which directory to use with --doltcfg-dir or remove the redundant directory" ]] || false
+
+    cd ..
+}
+
+@test "sql-privs: dolt sql multiple doltcfg directories causes error" {
+    # see https://github.com/dolthub/dolt/issues/10688
+    rm -rf test_db
+    mkdir test_db
+    cd test_db
+
+    mkdir .doltcfg
+
+    mkdir inner_db
+    cd inner_db
+    mkdir .doltcfg
+
+    run dolt sql -q "show databases;"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "multiple .doltcfg directories detected: ".*"inner_db/.doltcfg' and '".*"test_db/.doltcfg'" ]] || false
+    [[ "$output" =~ "specify which directory to use with --doltcfg-dir or remove the redundant directory" ]] || false
 
     cd ..
 }

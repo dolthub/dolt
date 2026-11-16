@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 
 	"golang.org/x/sync/errgroup"
@@ -82,12 +83,29 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, behavior dherrors.Fa
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	}
 
-	rdr := &bsTableReaderAt{key: name, bs: bsp.bs}
-	src, err := newReaderFromIndexData(ctx, bsp.q, data, address, rdr, bsp.blockSize)
+	src, err := newPersistedBSTableChunkSource(ctx, bsp.bs, bsp.q, data, address, bsp.blockSize)
 	if err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	}
 	return src, gcBehavior_Continue, nil
+}
+
+// newPersistedBSTableChunkSource uses the table bytes already available at persist
+// time to spool stores with expensive ranged reads, avoiding a blob readback.
+func newPersistedBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore, q MemoryQuotaProvider, data []byte, name hash.Hash, blockSize uint64) (chunkSource, error) {
+	var rdr tableReaderAt = &bsTableReaderAt{key: name.String(), bs: bs}
+	if shouldSpool(bs) {
+		spooled, err := newPersistedSpoolingTableReaderAt(bs, name.String(), data)
+		if err != nil {
+			return nil, err
+		}
+		rdr = spooled
+	}
+	src, err := newReaderFromIndexData(ctx, q, data, name, rdr, blockSize)
+	if err != nil {
+		return nil, errors.Join(err, rdr.Close())
+	}
+	return src, nil
 }
 
 // ConjoinAll implements tablePersister.
@@ -135,9 +153,9 @@ func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, behavior dherrors
 
 	var cs chunkSource
 	if plan.suffix == ArchiveFileSuffix {
-		cs, err = newBSArchiveChunkSource(ctx, bsp.bs, plan.name, bsp.q, stats)
+		cs, err = newBSArchiveChunkSource(ctx, bsp.bs, plan.name, bsp.q, openOpts{deepValidate: true}, stats)
 	} else {
-		cs, err = newBSTableChunkSource(ctx, bsp.bs, plan.name, plan.chunkCount, bsp.q, stats)
+		cs, err = newBSTableChunkSource(ctx, bsp.bs, plan.name, plan.chunkCount, bsp.q, openOpts{deepValidate: true}, stats)
 	}
 
 	return cs, func() {}, err
@@ -205,14 +223,14 @@ func (bsp *blobstorePersister) hotCreateArchiveRecords(ctx context.Context, cs c
 }
 
 // Open a table named |name|, containing |chunkCount| chunks.
-func (bsp *blobstorePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
-	cs, err := newBSTableChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, stats)
+func (bsp *blobstorePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, opts openOpts, stats *Stats) (chunkSource, error) {
+	cs, err := newBSTableChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, opts, stats)
 	if err == nil {
 		return cs, nil
 	}
 
 	if blobstore.IsNotFoundError(err) {
-		source, err := newBSArchiveChunkSource(ctx, bsp.bs, name, bsp.q, stats)
+		source, err := newBSArchiveChunkSource(ctx, bsp.bs, name, bsp.q, opts, stats)
 		if err != nil {
 			return nil, err
 		}
@@ -242,6 +260,10 @@ func (bsp *blobstorePersister) Close() error {
 		return c.Close()
 	}
 	return nil
+}
+
+func (bsp *blobstorePersister) Teardown(ctx context.Context) error {
+	return bsp.bs.Teardown(ctx)
 }
 
 func (bsp *blobstorePersister) AccessMode() chunks.ExclusiveAccessMode {
@@ -350,12 +372,22 @@ func (bsTRA *bsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off
 	return totalRead, nil
 }
 
-func newBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
+func newBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, q MemoryQuotaProvider, opts openOpts, stats *Stats) (cs chunkSource, err error) {
+	if shouldSpool(bs) {
+		return newSpooledBSArchiveChunkSource(ctx, bs, name, q, opts, stats)
+	}
+
 	rc, sz, _, err := bs.Get(ctx, name.String()+ArchiveFileSuffix, blobstore.NewBlobRange(-int64(archiveFooterSize), 0))
 	if err != nil {
 		return nil, err
 	}
 	defer rc.Close()
+
+	// Spans in the archive are addressed relative to the end of the file.
+	// If we don't have a real size, we can't compute the right range reads.
+	if sz == 0 {
+		return nil, fmt.Errorf("%s%s: blobstore did not report the size of the archive", name.String(), ArchiveFileSuffix)
+	}
 
 	footer := make([]byte, archiveFooterSize)
 	_, err = io.ReadFull(rc, footer)
@@ -363,27 +395,29 @@ func newBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore, name h
 		return nil, err
 	}
 
-	aRdr, err := newArchiveReaderFromFooter(ctx, &bsTableReaderAt{key: name.String() + ArchiveFileSuffix, bs: bs}, name, sz, footer, q, stats)
+	aRdr, err := newArchiveReaderFromFooter(ctx, &bsTableReaderAt{key: name.String() + ArchiveFileSuffix, bs: bs}, name, sz, footer, q, opts, stats)
 	if err != nil {
 		return emptyChunkSource{}, err
 	}
-	return &archiveChunkSource{aRdr: aRdr, refs: noopRefCounter{}}, nil
+	return &archiveChunkSource{aRdr: aRdr, refs: noopRefCounter{}, blockSize: s3BlockSize}, nil
 }
 
-func newBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
-	index, err := loadTableIndex(ctx, stats, chunkCount, q, func(p []byte) error {
-		rc, _, _, err := bs.Get(ctx, name.String(), blobstore.NewBlobRange(-int64(len(p)), 0))
+func newBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, opts openOpts, stats *Stats) (cs chunkSource, err error) {
+	var fileSz uint64
+	index, err := loadTableIndex(ctx, stats, name, chunkCount, q, opts, func(p []byte) (uint64, error) {
+		rc, sz, _, err := bs.Get(ctx, name.String(), blobstore.NewBlobRange(-int64(len(p)), 0))
 		if err != nil {
-			return err
+			return 0, err
 		}
 		defer rc.Close()
 
 		_, err = io.ReadFull(rc, p)
 		if err != nil {
-			return err
+			return 0, err
 		}
 
-		return nil
+		fileSz = sz
+		return sz, nil
 	})
 	if err != nil {
 		return nil, err
@@ -393,7 +427,15 @@ func newBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore, name has
 		return nil, errors.New("unexpected chunk count")
 	}
 
-	tr, err := newTableReader(ctx, index, &bsTableReaderAt{key: name.String(), bs: bs}, s3BlockSize)
+	var rdr tableReaderAt = &bsTableReaderAt{key: name.String(), bs: bs}
+	if shouldSpool(bs) {
+		rdr, err = newPinnedSpoolingTableReaderAt(bs, name.String(), int64(fileSz))
+		if err != nil {
+			_ = index.Close()
+			return nil, err
+		}
+	}
+	tr, err := newTableReader(ctx, index, rdr, s3BlockSize)
 	if err != nil {
 		_ = index.Close()
 		return nil, err

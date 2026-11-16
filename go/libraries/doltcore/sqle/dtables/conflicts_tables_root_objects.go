@@ -20,7 +20,9 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 )
 
 // NewConflictRootObjectTable returns a new conflicts table for root objects.
@@ -87,6 +89,9 @@ func (ct ConflictRootObjectTable) PartitionRows(ctx *sql.Context, part sql.Parti
 
 // Deleter implements the interface sql.DeletableTable.
 func (ct ConflictRootObjectTable) Deleter(ctx *sql.Context) sql.RowDeleter {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return sqlutil.NewStaticErrorEditor(err)
+	}
 	return &conflictRootObjectDeleter{
 		ct:        ct,
 		deletions: nil,
@@ -95,6 +100,9 @@ func (ct ConflictRootObjectTable) Deleter(ctx *sql.Context) sql.RowDeleter {
 
 // Updater implements the interface sql.UpdatableTable.
 func (ct ConflictRootObjectTable) Updater(ctx *sql.Context) sql.RowUpdater {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return sqlutil.NewStaticErrorEditor(err)
+	}
 	return &conflictRootObjectUpdater{
 		ct:         ct,
 		oldUpdates: nil,

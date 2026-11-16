@@ -21,20 +21,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04]
-        adaptive_encoding: ["false", "true"]
+        os: [ ubuntu-22.04 ]
     steps:
-    - uses: actions/checkout@v6
-    - name: Set up Go toolchain
-      uses: ./.github/actions/setup-go-toolchain
-    - name: Test Binlog
-      working-directory: ./go
-      run: |
-        # Test binlog packages
-        go test -vet=off -timeout 60m ./libraries/doltcore/sqle/binlogreplication/...
-      env:
-        MATRIX_OS: ${{ matrix.os }}
-        DOLT_USE_ADAPTIVE_ENCODING: ${{ matrix.adaptive_encoding }}
+      - name: Check deferred CI
+        uses: $/.github/actions/check-deferred-ci
+        with:
+          timezone: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
+      - uses: actions/checkout@v6
+      - name: Set up Go toolchain
+        uses: ./.github/actions/setup-go-toolchain
+      - name: Test Binlog
+        working-directory: ./go
+        run: |
+          # Test binlog packages
+          go test -vet=off -timeout 60m ./libraries/doltcore/sqle/binlogreplication/...
+        env:
+          MATRIX_OS: ${{ matrix.os }}
   binlog-race-test:
     name: Binlog tests - race
     defaults:
@@ -44,19 +46,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04]
-        # TODO: bin log doesn't yet handle adapative encoding
-#        adaptive_encoding: ["false", "true"]
-        adaptive_encoding: ["false"]
+        os: [ ubuntu-22.04 ]
     steps:
-    - uses: actions/checkout@v6
-    - name: Set up Go toolchain
-      uses: ./.github/actions/setup-go-toolchain
-    - name: Test Binlog with Race
-      working-directory: ./go
-      run: |
-        # Test binlog packages with race detector
-        go test -vet=off -timeout 60m -race ./libraries/doltcore/sqle/binlogreplication/...
-      env:
-        MATRIX_OS: ${{ matrix.os }}
-        DOLT_USE_ADAPTIVE_ENCODING: ${{ matrix.adaptive_encoding }}
+      - name: Check deferred CI
+        uses: $/.github/actions/check-deferred-ci
+        with:
+          timezone: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
+      - uses: actions/checkout@v6
+      - name: Set up Go toolchain
+        uses: ./.github/actions/setup-go-toolchain
+      - name: Test Binlog with Race
+        working-directory: ./go
+        run: |
+          # Test binlog packages with race detector
+          go test -vet=off -timeout 60m -race ./libraries/doltcore/sqle/binlogreplication/...
+        env:
+          MATRIX_OS: ${{ matrix.os }}

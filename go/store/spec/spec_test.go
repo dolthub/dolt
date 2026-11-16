@@ -114,7 +114,7 @@ func TestMemHashPathSpec(t *testing.T) {
 
 	s := types.String("hello")
 
-	spec, err := ForPath("mem::#" + mustHash(s.Hash(types.Format_Default)).String())
+	spec, err := ForPath("mem::#" + mustHash(s.Hash(types.Format_DOLT)).String())
 	assert.NoError(err)
 	defer spec.Close()
 
@@ -169,7 +169,7 @@ func TestNBSDatabaseSpec(t *testing.T) {
 		store1 := filepath.Join(tmpDir, "store1")
 		os.Mkdir(store1, 0777)
 		func() {
-			cs, err := nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), store1, 8*(1<<20), nbs.NewUnlimitedMemQuotaProvider(), false)
+			cs, err := nbs.NewLocalStore(context.Background(), types.Format_DOLT.VersionString(), store1, 8*(1<<20), nbs.NewUnlimitedMemQuotaProvider(), false)
 			assert.NoError(err)
 			vrw := types.NewValueStore(cs)
 			db := datas.NewTypesDatabase(vrw, tree.NewNodeStore(cs))

@@ -966,7 +966,7 @@ SQL
     run dolt sql -q "show index from keyless" -r csv
     [ $status -eq 0 ]
     [[ "${lines[0]}" = "Table,Non_unique,Key_name,Seq_in_index,Column_name,Collation,Cardinality,Sub_part,Packed,Null,Index_type,Comment,Index_comment,Visible,Expression" ]] || false
-    [[ "${lines[1]}" = "keyless,1,idx,1,c1,,0,,,YES,BTREE,\"\",\"\",YES," ]] || false
+    [[ "${lines[1]}" = "keyless,1,idx,1,c1,A,0,,,YES,BTREE,\"\",\"\",YES," ]] || false
 
     run dolt sql -q "select * from keyless where c1 > 0 order by c0" -r csv
     [ $status -eq 0 ]

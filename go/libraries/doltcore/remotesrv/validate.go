@@ -16,11 +16,28 @@ package remotesrv
 
 import (
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
+
+// ValidateRepoPath checks the slash-separated path used to locate a repository.
+// Rejecting dot components rather than cleaning them also protects callers that
+// use the original path after validation.
+func ValidateRepoPath(repoPath string) error {
+	if repoPath == "" || filepath.IsAbs(repoPath) || filepath.VolumeName(repoPath) != "" || strings.Contains(repoPath, "\\") {
+		return fmt.Errorf("invalid repo path %q", repoPath)
+	}
+	for _, component := range strings.Split(repoPath, "/") {
+		if component == "" || component == "." || component == ".." {
+			return fmt.Errorf("invalid repo path %q", repoPath)
+		}
+	}
+	return nil
+}
 
 func validateRepoRequest(req repoRequest) error {
 	if req.GetRepoPath() == "" && req.GetRepoId() == nil {
@@ -30,6 +47,9 @@ func validateRepoRequest(req repoRequest) error {
 		if id.Org == "" || id.RepoName == "" {
 			return fmt.Errorf("expected repo_id.org and repo_id.repo_name, missing at least one")
 		}
+	}
+	if err := ValidateRepoPath(getRepoPath(req)); err != nil {
+		return err
 	}
 	return nil
 }
@@ -105,6 +125,14 @@ func ValidateStreamChunkLocationsRequest(req *remotesapi.StreamChunkLocationsReq
 func ValidateGetUploadLocsRequest(req *remotesapi.GetUploadLocsRequest) error {
 	if err := validateRepoRequest(req); err != nil {
 		return err
+	}
+	for i, details := range req.TableFileDetails {
+		if details == nil {
+			return fmt.Errorf("expected table_file_details[%d] to be non-nil", i)
+		}
+		if err := validateHash(fmt.Sprintf("table_file_details[%d].id", i), details.Id); err != nil {
+			return err
+		}
 	}
 	return validateHashes("table_file_hashes", req.TableFileHashes)
 }

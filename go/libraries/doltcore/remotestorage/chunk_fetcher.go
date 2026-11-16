@@ -91,7 +91,10 @@ const (
 	reliableCallDeliverRespTimeout = 15 * time.Second
 )
 
-func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore) *ChunkFetcher {
+// NewChunkFetcher creates a ChunkFetcher for |dcs|. If |recorder| is non-nil,
+// it receives per-download statistics in addition to the process-global stats
+// recorder configured via StatsFactory.
+func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore, recorder nbs.StatsRecorder) *ChunkFetcher {
 	eg, ctx := errgroup.WithContext(ctx)
 	ret := &ChunkFetcher{
 		eg:    eg,
@@ -101,7 +104,7 @@ func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore) *ChunkFetcher {
 		resCh:   make(chan nbs.ToChunker),
 
 		abortCh: make(chan struct{}),
-		stats:   StatsFactory(),
+		stats:   teeStatsRecorder(StatsFactory(), recorder),
 	}
 
 	downloadLocCh := make(chan []*remotesapi.DownloadLoc)
@@ -144,7 +147,7 @@ func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore) *ChunkFetcher {
 		return fetcherDownloadRangesThread(ctx, downloadLocCh, fetchReqCh, locDoneCh)
 	})
 	eg.Go(func() error {
-		return fetcherDownloadURLThreads(ctx, fetchReqCh, locDoneCh, ret.resCh, dcs.csClient, ret.stats, dcs.httpFetcher, dcs.params)
+		return fetcherDownloadURLThreads(ctx, fetchReqCh, locDoneCh, ret.resCh, dcs.csClient, ret.stats, dcs.httpFetcher, dcs.params, dcs.logf)
 	})
 
 	return ret
@@ -756,13 +759,13 @@ func (cc *ConcurrencyControl) Run(ctx context.Context, done <-chan struct{}, ss 
 	}
 }
 
-func fetcherDownloadURLThreads(ctx context.Context, fetchReqCh chan fetchReq, doneCh chan struct{}, chunkCh chan nbs.ToChunker, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, fetcher HTTPFetcher, params NetworkRequestParams) error {
+func fetcherDownloadURLThreads(ctx context.Context, fetchReqCh chan fetchReq, doneCh chan struct{}, chunkCh chan nbs.ToChunker, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, fetcher HTTPFetcher, params NetworkRequestParams, logf func(string, ...interface{})) error {
 	eg, ctx := errgroup.WithContext(ctx)
 	cc := &ConcurrencyControl{
 		MaxConcurrency: params.MaximumConcurrentDownloads,
 	}
 	f := func(ctx context.Context, shutdownCh <-chan struct{}) error {
-		return fetcherDownloadURLThread(ctx, fetchReqCh, shutdownCh, chunkCh, client, stats, cc, fetcher, params)
+		return fetcherDownloadURLThread(ctx, fetchReqCh, shutdownCh, chunkCh, client, stats, cc, fetcher, params, logf)
 	}
 	threads := pool.NewDynamic(ctx, f, params.StartingConcurrentDownloads)
 	eg.Go(func() error {
@@ -794,7 +797,7 @@ func deliverChunkCallback(chunkCh chan nbs.ToChunker, path string, dictCache *di
 		var cc nbs.ToChunker
 		if rang.DictLength != 0 {
 			payload, _ := dictCache.getOrCreate(path, rang.DictOffset, rang.DictLength)
-			bundle, err := payload.Get()
+			bundle, err := payload.Get(ctx)
 			if err != nil {
 				return err
 			}
@@ -819,10 +822,6 @@ func deliverChunkCallback(chunkCh chan nbs.ToChunker, path string, dictCache *di
 func setDictionaryCallback(dictCache *dictionaryCache, path string) func(context.Context, []byte, *Range) error {
 	return func(ctx context.Context, bs []byte, rang *Range) error {
 		bundle, err := nbs.NewDecompBundle(bs)
-		if err != nil {
-			return err
-		}
-
 		payload, _ := dictCache.getOrCreate(path, rang.Offset, rang.Length)
 		payload.Set(bundle, err)
 		// XXX: For now, we fail here on any error, instead of when we try to use the dictionary...
@@ -831,7 +830,7 @@ func setDictionaryCallback(dictCache *dictionaryCache, path string) func(context
 	}
 }
 
-func fetcherDownloadURLThread(ctx context.Context, fetchReqCh chan fetchReq, doneCh <-chan struct{}, chunkCh chan nbs.ToChunker, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, health reliable.HealthRecorder, fetcher HTTPFetcher, params NetworkRequestParams) error {
+func fetcherDownloadURLThread(ctx context.Context, fetchReqCh chan fetchReq, doneCh <-chan struct{}, chunkCh chan nbs.ToChunker, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, health reliable.HealthRecorder, fetcher HTTPFetcher, params NetworkRequestParams, logf func(string, ...interface{})) error {
 	respCh := make(chan fetchResp, 1)
 	for {
 		select {
@@ -850,7 +849,7 @@ func fetcherDownloadURLThread(ctx context.Context, fetchReqCh chan fetchReq, don
 				} else {
 					cb = setDictionaryCallback(fetchResp.dictCache, fetchResp.path)
 				}
-				f := fetchResp.get.GetDownloadFunc(ctx, stats, health, fetcher, params, cb, func(ctx context.Context, lastError error, resourcePath string) (string, error) {
+				f := fetchResp.get.GetDownloadFunc(ctx, stats, health, fetcher, params, logf, cb, func(ctx context.Context, lastError error, resourcePath string) (string, error) {
 					return fetchResp.refresh(ctx, lastError, client)
 				})
 				err := f()
@@ -889,9 +888,13 @@ type DictionaryPayload struct {
 	err  error
 }
 
-func (p *DictionaryPayload) Get() (*nbs.DecompBundle, error) {
-	<-p.done
-	return p.res, p.err
+func (p *DictionaryPayload) Get(ctx context.Context) (*nbs.DecompBundle, error) {
+	select {
+	case <-p.done:
+		return p.res, p.err
+	case <-ctx.Done():
+		return nil, context.Cause(ctx)
+	}
 }
 
 func (p *DictionaryPayload) Set(res *nbs.DecompBundle, err error) {

@@ -181,7 +181,7 @@ func rebaseRefs(ctx context.Context, dbData env.DbData[context.Context], applyUn
 		switch dRef := r.(type) {
 		case ref.BranchRef:
 			newHead := newHeads[i]
-			err = ddb.NewBranchAtCommit(ctx, dRef, newHead, nil)
+			err = ddb.NewBranchAtCommitAllowCaseConflict(ctx, dRef, newHead, nil)
 			if err != nil {
 				return err
 			}

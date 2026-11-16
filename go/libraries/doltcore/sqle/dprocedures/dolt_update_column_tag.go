@@ -21,6 +21,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -29,6 +30,9 @@ import (
 // doltUpdateColumnTag updates the tag for a specified column, leaving the change in the working set to later be
 // committed.
 func doltUpdateColumnTag(ctx *sql.Context, args ...string) (sql.RowIter, error) {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return nil, err
+	}
 	tableName, columnName, tag, err := parseUpdateColumnTagArgs(args...)
 	if err != nil {
 		return nil, err

@@ -59,14 +59,8 @@ func (s *nomsRootTestSuite) TestBasic() {
 	dbSpecStr := spec.CreateDatabaseSpecString("nbs", s.DBDir)
 	db := ds.Database()
 
-	var goldenHello, goldenGoodbye string
-	switch types.Format_Default {
-	case types.Format_DOLT:
-		goldenHello = "sf173aaa57qjoakme0iufkg4c17beoqe\n"
-		goldenGoodbye = "gjcehnn4v0sbtt1hste082hfv1kg0hqv\n"
-	default:
-		s.Fail("no golden values exist for NBF %s", types.Format_Default.VersionString())
-	}
+	goldenHello := "sf173aaa57qjoakme0iufkg4c17beoqe\n"
+	goldenGoodbye := "gjcehnn4v0sbtt1hste082hfv1kg0hqv\n"
 
 	ds, _ = db.Commit(context.Background(), ds, types.String("hello!"), datas.CommitOptions{Meta: meta})
 	c1, _ := s.MustRun(main, []string{"root", dbSpecStr})

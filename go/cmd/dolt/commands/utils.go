@@ -44,7 +44,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
+	configpkg "github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -129,6 +129,13 @@ func NewArgFreeCliContext(ctx context.Context, dEnv *env.DoltEnv, cwd filesys.Fi
 // BuildSqlEngineQueryist Utility function to build a local SQLEngine for use interacting with data on disk using
 // SQL queries. ctx, cwdFS, mrEnv, and apr must all be non-nil.
 func BuildSqlEngineQueryist(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.MultiRepoEnv, creds *cli.UserPassword, apr *argparser.ArgParseResults) (cli.LateBindQueryist, errhand.VerboseError) {
+	return BuildSqlEngineQueryistForEnv(ctx, cwdFS, mrEnv, nil, creds, apr)
+}
+
+// BuildSqlEngineQueryistForEnv is BuildSqlEngineQueryist with each binding's
+// persisted globals loaded from |rootEnv|. See sqle.NewEngineVariablesForEnv
+// for a nil |rootEnv|.
+func BuildSqlEngineQueryistForEnv(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.MultiRepoEnv, rootEnv *env.DoltEnv, creds *cli.UserPassword, apr *argparser.ArgParseResults) (cli.LateBindQueryist, errhand.VerboseError) {
 	if ctx == nil || cwdFS == nil || mrEnv == nil || creds == nil || apr == nil {
 		return nil, errhand.VerboseErrorFromError(fmt.Errorf("Invariant violated. Nil argument provided to BuildSqlEngineQueryist"))
 	}
@@ -162,9 +169,9 @@ func BuildSqlEngineQueryist(ctx context.Context, cwdFS filesys.Filesys, mrEnv *e
 		dataDirCfgExists, isDir := cwdFS.Exists(dataDirCfg)
 		currDirExists := dataDirCfgExists && isDir
 
-		// Error if both CWD/../.doltfcfg and dataDir/.doltcfg exist because it's unclear which to use.
+		// Error if both CWD/../.doltcfg and dataDir/.doltcfg exist because it's unclear which to use.
 		if currDirExists && parentDirExists {
-			p1, err := cwdFS.Abs(cfgDirPath)
+			p1, err := cwdFS.Abs(dataDirCfg)
 			if err != nil {
 				return nil, errhand.VerboseErrorFromError(err)
 			}
@@ -223,7 +230,7 @@ func BuildSqlEngineQueryist(ctx context.Context, cwdFS filesys.Filesys, mrEnv *e
 		database = dbName + "/" + useBranch
 	}
 
-	binder, err := newLateBindingEngine(cfgDirPath, privsFp, branchControlFilePath, creds, database, mrEnv)
+	binder, err := newLateBindingEngine(cfgDirPath, privsFp, branchControlFilePath, creds, database, mrEnv, rootEnv)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
 	}
@@ -238,9 +245,10 @@ func newLateBindingEngine(
 	creds *cli.UserPassword,
 	database string,
 	mrEnv *env.MultiRepoEnv,
+	rootEnv *env.DoltEnv,
 ) (cli.LateBindQueryist, error) {
 
-	config := &engine.SqlEngineConfig{
+	baseConfig := &engine.SqlEngineConfig{
 		DoltCfgDirPath:     cfgDirPath,
 		PrivFilePath:       privsFp,
 		BranchCtrlFilePath: branchControlFilePath,
@@ -249,12 +257,17 @@ func newLateBindingEngine(
 		ServerHost:         "localhost",
 		Autocommit:         true,
 	}
-
 	var lateBinder cli.LateBindQueryist = func(ctx context.Context, opts ...cli.LateBindQueryistOption) (res cli.LateBindQueryistResult, err error) {
+		config := *baseConfig
 		// We've deferred loading the database as long as we can.
 		// If we're binding the Queryist, that means that engine is actually
 		// going to be used.
 		mrEnv.ReloadDBs(ctx)
+		vars, varsErr := sqle.NewEngineVariablesForEnv(mrEnv, rootEnv)
+		if varsErr != nil {
+			cli.Printf("error: failed to load persisted global variables: %s\n", varsErr.Error())
+		}
+		config.EngineVariables = vars
 
 		queryistConfig := &cli.LateBindQueryistConfig{}
 		for _, opt := range opts {
@@ -273,7 +286,7 @@ func newLateBindingEngine(
 		se, err := engine.NewSqlEngine(
 			ctx,
 			mrEnv,
-			config,
+			&config,
 		)
 		if err != nil {
 			return res, err
@@ -301,7 +314,8 @@ func newLateBindingEngine(
 
 			authResponse := buildAuthResponse(salt, config.ServerPass)
 
-			err := passwordValidate(rawDb, salt, dbUser, authResponse)
+			// This engine runs in-process for the CLI, so the client really is local.
+			err := passwordValidate(rawDb, salt, dbUser, authResponse, config.ServerHost)
 			if err != nil {
 				se.Close()
 				return res, err
@@ -470,11 +484,17 @@ func getTimestampColAsUint64(col interface{}) (uint64, error) {
 	}
 }
 
-// passwordValidate validates the password for the given user. This is a helper function around ValidateHash. Returns
-// nil if the user is authenticated, an error otherwise.
-func passwordValidate(rawDb *mysql_db.MySQLDb, salt []byte, user string, authResponse []byte) error {
-	// The port is meaningless here. It's going to be stripped in the ValidateHash function
-	addr, _ := net.ResolveTCPAddr("tcp", "localhost:3306")
+// passwordValidate validates the password for the given user, connecting from |host|. This is a helper function
+// around ValidateHash. Returns nil if the user is authenticated, an error otherwise.
+//
+// Accounts are scoped to the host pattern they are created for, so |host| must be the host of the client these
+// credentials came from.
+func passwordValidate(rawDb *mysql_db.MySQLDb, salt []byte, user string, authResponse []byte, host string) error {
+	// The port is meaningless here. It's going to be stripped in the ValidateHash function.
+	addr, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(host, "0"))
+	if err != nil {
+		return fmt.Errorf("unable to resolve host %s for user %s: %w", host, user, err)
+	}
 
 	authenticated, err := rawDb.ValidateHash(salt, user, authResponse, addr)
 	if err != nil {
@@ -521,14 +541,15 @@ func buildAuthResponse(salt []byte, password string) []byte {
 	return shaPwd
 }
 
-func ValidatePasswordWithAuthResponse(rawDb *mysql_db.MySQLDb, user, password string) error {
+// ValidatePasswordWithAuthResponse validates |password| for |user| as a client connecting from |host|.
+func ValidatePasswordWithAuthResponse(rawDb *mysql_db.MySQLDb, user, password, host string) error {
 	salt, err := mysql.NewSalt()
 	if err != nil {
 		return err
 	}
 
 	authResponse := buildAuthResponse(salt, password)
-	return passwordValidate(rawDb, salt, user, authResponse)
+	return passwordValidate(rawDb, salt, user, authResponse, host)
 }
 
 // GetDoltStatus retrieves the status of the current working set of changes in the working set, and returns two
@@ -1034,7 +1055,7 @@ func execEditor(initialMsg string, suffix string, cliCtx cli.CliContext) (edited
 		backupEd = ed
 	}
 	// try getting Dolt config core.editor
-	editorStr := cliCtx.Config().GetStringOrDefault(config.DoltEditor, backupEd)
+	editorStr := cliCtx.Config().GetStringOrDefault(configpkg.DoltEditor, backupEd)
 
 	cli.ExecuteWithStdioRestored(func() {
 		editedMsg, err = editor.OpenTempEditor(editorStr, initialMsg, suffix)

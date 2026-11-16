@@ -62,7 +62,7 @@ var _ doltdb.DatabaseUpdateListener = (*binlogProducer)(nil)
 // returned binlogProducer as a DatabaseUpdateListener before it will start receiving database updates and start
 // producing binlog events.
 func NewBinlogProducer(ctx *sql.Context, fs filesys.Filesys) (*binlogProducer, error) {
-	binlogFormat := createBinlogFormat()
+	binlogFormat := createBinlogFormat(ctx)
 	binlogEventMeta, err := createBinlogEventMetadata(ctx)
 	if err != nil {
 		return nil, err
@@ -74,7 +74,7 @@ func NewBinlogProducer(ctx *sql.Context, fs filesys.Filesys) (*binlogProducer, e
 		mu:              &sync.Mutex{},
 	}
 
-	if err = b.initializeGtidPosition(fs); err != nil {
+	if err = b.initializeGtidPosition(ctx, fs); err != nil {
 		return nil, err
 	}
 
@@ -189,7 +189,7 @@ func (b *binlogProducer) DatabaseDropped(ctx *sql.Context, databaseName string) 
 // in this binlogStreamerManager instance. If the gtidPosition has already been loaded
 // from disk and initialized, this method simply returns. If any problems were encountered
 // loading the GTID position from disk, or parsing its value, an error is returned.
-func (b *binlogProducer) initializeGtidPosition(fs filesys.Filesys) error {
+func (b *binlogProducer) initializeGtidPosition(ctx *sql.Context, fs filesys.Filesys) error {
 	if b.gtidPosition != nil {
 		return nil
 	}
@@ -241,7 +241,7 @@ func (b *binlogProducer) initializeGtidPosition(fs filesys.Filesys) error {
 	b.gtidSequence = int64(i + 1)
 
 	logrus.Tracef("setting @@gtid_executed to %s", b.gtidPosition.GTIDSet.String())
-	return sql.SystemVariables.AssignValues(map[string]any{
+	return ctx.SystemVariables().AssignValues(ctx, map[string]any{
 		"gtid_executed": b.gtidPosition.GTIDSet.String()})
 }
 
@@ -271,7 +271,7 @@ func (b *binlogProducer) createGtidEvent(ctx *sql.Context) (mysql.BinlogEvent, e
 		return nil, fmt.Errorf("unable to store GTID executed metadata to disk: %s", err.Error())
 	}
 
-	err = sql.SystemVariables.AssignValues(map[string]any{
+	err = ctx.SystemVariables().AssignValues(ctx, map[string]any{
 		"gtid_executed": b.gtidPosition.GTIDSet.String()})
 	if err != nil {
 		return nil, err
@@ -422,7 +422,16 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 			}
 		}
 
-		columns := sch.GetAllCols().GetColumns()
+		resolved, err := resolveBinlogSchema(ctx, tableName.Name, sch)
+		if err != nil {
+			return nil, err
+		}
+		toSerializer := newBinlogRowSerializer(sch, sch, resolved)
+		fromSerializer := toSerializer
+		if !schema.SchemasAreEqual(fromSch, sch) {
+			fromSerializer = newBinlogRowSerializer(fromSch, sch, resolved)
+		}
+		nonSystemHiddenCols := sch.GetAllCols().GetNonSystemHiddenCols()
 		tableId := tablesToId[tableName.Name]
 
 		var tableRowsToWrite []mysql.Row
@@ -442,8 +451,7 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 			case tree.AddedDiff:
 				// For inserted rows, there's no existing row to be identified, so
 				// we don't need to use the from schema.
-				data, nullBitmap, err := serializeRowToBinlogBytes(ctx,
-					sch, sch, diff.Key, diff.To, tableDelta.ToTable.NodeStore())
+				data, nullBitmap, err := toSerializer.serialize(ctx, diff.Key, diff.To, tableDelta.ToTable.NodeStore())
 				if err != nil {
 					return err
 				}
@@ -457,8 +465,7 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 			case tree.ModifiedDiff:
 				// For an updated row, we don't need to use the "from" schema for the
 				// new values being updated.
-				data, nullColumns, err := serializeRowToBinlogBytes(ctx,
-					sch, sch, diff.Key, diff.To, tableDelta.ToTable.NodeStore())
+				data, nullColumns, err := toSerializer.serialize(ctx, diff.Key, diff.To, tableDelta.ToTable.NodeStore())
 				if err != nil {
 					return err
 				}
@@ -468,8 +475,7 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 				// we need the "from" schema to properly extract the values from the tuple, in
 				// case there have been any schema/type changes, and we need the "to" schema so
 				// that we can assemble and serialize the row information to the current schema.
-				identify, nullIdentifyColumns, err := serializeRowToBinlogBytes(ctx,
-					fromSch, sch, diff.Key, diff.From, tableDelta.FromTable.NodeStore())
+				identify, nullIdentifyColumns, err := fromSerializer.serialize(ctx, diff.Key, diff.From, tableDelta.FromTable.NodeStore())
 				if err != nil {
 					return err
 				}
@@ -488,8 +494,7 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 				// occurred in the transaction we're recording, we must use the "from" schema to
 				// correctly extract the values from the "from" diff, but also use the "to" schema to
 				// assemble and encode the values to the current schema.
-				identifyData, nullBitmap, err := serializeRowToBinlogBytes(ctx,
-					fromSch, sch, diff.Key, diff.From, tableDelta.FromTable.NodeStore())
+				identifyData, nullBitmap, err := fromSerializer.serialize(ctx, diff.Key, diff.From, tableDelta.FromTable.NodeStore())
 				if err != nil {
 					return err
 				}
@@ -512,11 +517,10 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 
 		if tableRowsToWrite != nil {
 			rows := mysql.Rows{
-				DataColumns: mysql.NewServerBitmap(len(columns)),
+				DataColumns: mysql.NewServerBitmap(len(nonSystemHiddenCols)),
 				Rows:        tableRowsToWrite,
 			}
-			// All columns are included
-			for i := 0; i < len(columns); i++ {
+			for i := range nonSystemHiddenCols {
 				rows.DataColumns.Set(i, true)
 			}
 			events = append(events, b.newWriteRowsEvent(tableId, rows))
@@ -524,11 +528,10 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 
 		if tableRowsToDelete != nil {
 			rows := mysql.Rows{
-				IdentifyColumns: mysql.NewServerBitmap(len(columns)),
+				IdentifyColumns: mysql.NewServerBitmap(len(nonSystemHiddenCols)),
 				Rows:            tableRowsToDelete,
 			}
-			// All identity columns are included
-			for i := 0; i < len(columns); i++ {
+			for i := range nonSystemHiddenCols {
 				rows.IdentifyColumns.Set(i, true)
 			}
 			events = append(events, b.newDeleteRowsEvent(tableId, rows))
@@ -536,15 +539,12 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 
 		if tableRowsToUpdate != nil {
 			rows := mysql.Rows{
-				DataColumns:     mysql.NewServerBitmap(len(columns)),
-				IdentifyColumns: mysql.NewServerBitmap(len(columns)),
+				DataColumns:     mysql.NewServerBitmap(len(nonSystemHiddenCols)),
+				IdentifyColumns: mysql.NewServerBitmap(len(nonSystemHiddenCols)),
 				Rows:            tableRowsToUpdate,
 			}
-			// All columns are included for data and identify fields
-			for i := 0; i < len(columns); i++ {
+			for i := range nonSystemHiddenCols {
 				rows.DataColumns.Set(i, true)
-			}
-			for i := 0; i < len(columns); i++ {
 				rows.IdentifyColumns.Set(i, true)
 			}
 			events = append(events, b.newUpdateRowsEvent(tableId, rows))
@@ -718,10 +718,11 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 		return nil, err
 	}
 
-	columns := sch.GetAllCols().GetColumns()
-	types := make([]byte, len(columns))
-	metadata := make([]uint16, len(columns))
-	canBeNullMap := mysql.NewServerBitmap(len(columns))
+	// Include all non-system-hidden columns, matching the full row images.
+	nonSystemHiddenCols := sch.GetAllCols().GetNonSystemHiddenCols()
+	types := make([]byte, len(nonSystemHiddenCols))
+	metadata := make([]uint16, len(nonSystemHiddenCols))
+	canBeNullMap := mysql.NewServerBitmap(len(nonSystemHiddenCols))
 
 	var columnNames []string
 	var columnCollationIds []uint64
@@ -729,11 +730,11 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 	var setValues [][]string
 	var enumAndSetCollationIds []uint64
 	if includeOptionalMetadata {
-		columnNames = make([]string, len(columns))
-		columnCollationIds = make([]uint64, len(columns))
+		columnNames = make([]string, len(nonSystemHiddenCols))
+		columnCollationIds = make([]uint64, len(nonSystemHiddenCols))
 	}
 
-	for i, col := range columns {
+	for i, col := range nonSystemHiddenCols {
 		if includeOptionalMetadata {
 			columnNames[i] = col.Name
 			columnCollationIds[i] = uint64(schema.Collation_Unspecified)
@@ -787,10 +788,10 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 
 // createBinlogFormat returns a new BinlogFormat that describes the format of this binlog stream, which will always
 // be a MySQL 5.6+ compatible binlog format.
-func createBinlogFormat() *mysql.BinlogFormat {
+func createBinlogFormat(ctx *sql.Context) *mysql.BinlogFormat {
 	binlogFormat := mysql.NewMySQL56BinlogFormat()
 
-	_, value, ok := sql.SystemVariables.GetGlobal("binlog_checksum")
+	_, value, ok := ctx.SystemVariables().GetGlobal("binlog_checksum")
 	if !ok {
 		panic("unable to read binlog_checksum system variable")
 	}

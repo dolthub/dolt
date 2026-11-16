@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -465,13 +466,8 @@ func (aw *archiveWriter) flushToFile(fullPath string) error {
 		return fmt.Errorf("Runtime error: flushToFile called out of order")
 	}
 
-	if bs, ok := aw.output.backingSink.(*BufferedFileByteSink); ok {
-		err := bs.finish()
-		if err != nil {
-			return err
-		}
-	}
-
+	// No need to shut the sink down here: FlushToFile below does that itself,
+	// forwarding through the hashing sinks to the backing sink.
 	aw.finalPath = fullPath
 	err := aw.output.FlushToFile(fullPath)
 	if err != nil {
@@ -516,7 +512,7 @@ func (aw *archiveWriter) getChunkDataLength() (uint64, error) {
 
 type ArchiveStreamWriter struct {
 	writer  *archiveWriter
-	dictMap map[*DecompBundle]uint32
+	dictMap map[hash.Hash]uint32
 	// snappyQueue is a queue of CompressedChunk that have been written, but not flushed to the archive.
 	// These are kept in memory until we have enough to create a compression dictionary for them (and subsequent
 	// snappy chunks). When this value is nil, the snappyDict must be set (they are exclusive)
@@ -525,6 +521,8 @@ type ArchiveStreamWriter struct {
 	chunkCount  int32
 }
 
+// NewArchiveStreamWriter returns a writer that builds an archive table file
+// backed by a temporary file in |tmpDir|.
 func NewArchiveStreamWriter(tmpDir string) (*ArchiveStreamWriter, error) {
 	writer, err := newArchiveWriter(tmpDir)
 	if err != nil {
@@ -535,7 +533,7 @@ func NewArchiveStreamWriter(tmpDir string) (*ArchiveStreamWriter, error) {
 
 	return &ArchiveStreamWriter{
 		writer:      writer,
-		dictMap:     map[*DecompBundle]uint32{},
+		dictMap:     map[hash.Hash]uint32{},
 		chunkCount:  0,
 		snappyQueue: &sq,
 		snappyDict:  nil,
@@ -614,23 +612,28 @@ func (asw *ArchiveStreamWriter) GetMD5() []byte {
 	return asw.writer.fullMD5[:]
 }
 
+// Cancel the inprogress write and remove the temp file backing it.
+//
+// The temp file is always removed, even if shutting down the sink fails. The
+// sink records the first error its background writer saw and returns it from
+// every subsequent call, so bailing out early here would leak the temp file
+// forever once any write had failed --- exactly when we can least afford it.
 func (asw *ArchiveStreamWriter) Cancel() error {
-	rdr, err := asw.writer.output.Reader()
-	if err != nil {
-		return err
-	}
-	err = rdr.Close()
-	if err != nil {
-		return err
-	}
-	return asw.Remove()
+	return errors.Join(asw.writer.output.finish(), asw.Remove())
 }
 
+// Remove deletes the temp file backing this writer. It is not an error to call
+// Remove after the temp file has already been renamed away by FlushToFile, or
+// to call it more than once.
 func (asw *ArchiveStreamWriter) Remove() error {
 	if asw.writer.path == "" {
 		return nil
 	}
-	return os.Remove(asw.writer.path)
+	err := os.Remove(asw.writer.path)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	return nil
 }
 
 // FlushToFile writes the archive to disk. The input is the directory where the file should be written, the file name
@@ -639,13 +642,16 @@ func (asw *ArchiveStreamWriter) FlushToFile(fullPath string) error {
 	return asw.writer.flushToFile(fullPath)
 }
 
+// writeArchiveToChunker writes a chunk from an existing archive, reusing
+// previously written dictionaries to avoid storing them twice.
 func (asw *ArchiveStreamWriter) writeArchiveToChunker(chunker *ArchiveToChunker) (uint32, error) {
 	dict := chunker.dict
 
 	bytesWritten := uint32(0)
 
 	var err error
-	dictId, ok := asw.dictMap[dict]
+	dictHash := dict.contentKey
+	dictId, ok := asw.dictMap[dictHash]
 	if !ok {
 		// compress the raw bytes of the dictionary before persisting it.
 		compressedDict := gozstd.Compress(nil, *dict.rawDictionary)
@@ -656,7 +662,7 @@ func (asw *ArchiveStreamWriter) writeArchiveToChunker(chunker *ArchiveToChunker)
 			return 0, err
 		}
 		bytesWritten += uint32(len(compressedDict))
-		asw.dictMap[dict] = dictId
+		asw.dictMap[dictHash] = dictId
 	}
 
 	dataId, err := asw.writer.writeByteSpan(chunker.chunkData)
@@ -668,6 +674,8 @@ func (asw *ArchiveStreamWriter) writeArchiveToChunker(chunker *ArchiveToChunker)
 	return bytesWritten, asw.writer.stageZStdChunk(chunker.Hash(), dictId, dataId)
 }
 
+// writeCompressedChunk converts a snappy-compressed chunk to zstd and stages
+// it, batching chunks until a shared dictionary can be built.
 func (asw *ArchiveStreamWriter) writeCompressedChunk(chunker CompressedChunk) (bytesWritten uint32, err error) {
 	if asw.snappyQueue != nil {
 		// We have a queue of compressed chunks that we are waiting to flush.
@@ -703,7 +711,7 @@ func (asw *ArchiveStreamWriter) writeCompressedChunk(chunker CompressedChunk) (b
 		if err != nil {
 			return 0, err
 		}
-		asw.dictMap[asw.snappyDict] = dictId
+		asw.dictMap[asw.snappyDict.contentKey] = dictId
 
 		// Now stage all the
 		for _, cc := range *asw.snappyQueue {
@@ -731,7 +739,7 @@ func (asw *ArchiveStreamWriter) writeCompressedChunk(chunker CompressedChunk) (b
 // It returns the number of bytes written and an error if any occurred during the process. This method
 // assumes that the snappyDict is already created and available in the ArchiveStreamWriter.
 func (asw *ArchiveStreamWriter) convertSnappyAndStage(cc CompressedChunk) (uint32, error) {
-	dictId, ok := asw.dictMap[asw.snappyDict]
+	dictId, ok := asw.dictMap[asw.snappyDict.contentKey]
 	if !ok {
 		return 0, errors.New("runtime error: snappyDict not found in dictMap")
 	}

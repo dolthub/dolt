@@ -20,10 +20,11 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 // NewConflictsTable returns a new ConflictsTable instance
-func NewConflictsTable(ctx *sql.Context, tblName doltdb.TableName, srcTable sql.Table, root doltdb.RootValue, rs RootSetter) (sql.Table, error) {
+func NewConflictsTable(ctx *sql.Context, tblName doltdb.TableName, db dsess.SqlDatabase, srcTable sql.Table, root doltdb.RootValue, rs RootSetter) (sql.Table, error) {
 	var tbl *doltdb.Table
 	var err error
 	tbl, tblName, err = getTableInsensitiveOrError(ctx, root, tblName)
@@ -35,5 +36,5 @@ func NewConflictsTable(ctx *sql.Context, tblName doltdb.TableName, srcTable sql.
 	if !ok {
 		return nil, fmt.Errorf("%s can not have conflicts because it is not updateable", tblName)
 	}
-	return newProllyConflictsTable(ctx, tbl, upd, tblName, root, rs)
+	return newProllyConflictsTable(ctx, tbl, db, upd, tblName, root, rs)
 }

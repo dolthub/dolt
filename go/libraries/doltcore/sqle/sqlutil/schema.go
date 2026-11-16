@@ -20,6 +20,7 @@ import (
 
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 
@@ -52,12 +53,27 @@ func ParseCreateTableStatement(ctx *sql.Context, root doltdb.RootValue, engine *
 		for _, c := range idx.Columns {
 			prefixes = append(prefixes, uint16(c.Length))
 		}
+		var predicateStr string
+		if idx.Predicate != nil {
+			predicateStr = idx.Predicate.String()
+		}
 		props := schema.IndexProperties{
-			IsUnique:   idx.IsUnique(),
-			IsSpatial:  idx.IsSpatial(),
-			IsFullText: idx.IsFullText(),
-			IsVector:   idx.IsVector(),
-			Comment:    idx.Comment,
+			IsUnique:         idx.IsUnique(),
+			IsSpatial:        idx.IsSpatial(),
+			IsFullText:       idx.IsFullText(),
+			IsVector:         idx.IsVector(),
+			Comment:          idx.Comment,
+			Predicate:        predicateStr,
+			ColumnOrders:     idx.ColumnOrders(),
+			OpClasses:        idx.OpClasses(),
+			NullsNotDistinct: idx.NullsNotDistinct,
+		}
+		if idx.IsVector() {
+			distanceType := idx.VectorProperties.DistanceType
+			if distanceType == nil {
+				distanceType = vector.DistanceL2Squared{}
+			}
+			props.VectorProperties = schema.VectorProperties{DistanceType: distanceType}
 		}
 		name := getIndexName(idx)
 		_, err = sch.Indexes().AddIndexByColNames(name, idx.ColumnNames(), prefixes, props)
@@ -69,7 +85,7 @@ func ParseCreateTableStatement(ctx *sql.Context, root doltdb.RootValue, engine *
 	// foreign keys are stored on the *doltdb.Table object, ignore them here
 	for _, chk := range create.Checks() {
 		name := getCheckConstraintName(ctx, chk)
-		_, err = sch.Checks().AddCheck(name, chk.Expr.String(), chk.Enforced)
+		_, err = sch.Checks().AddCheck(name, chk.Expr.String(), chk.Enforced, false)
 		if err != nil {
 			return "", nil, err
 		}

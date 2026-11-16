@@ -52,7 +52,7 @@ type covStrictSecondaryLookupGen struct {
 	iter       *strictLookupIter
 	index      *doltIndex
 	prefixDesc *val.TupleDesc
-	m          prolly.Map
+	m          prolly.MapReader
 }
 
 var _ SecondaryLookupIterGen = (*covStrictSecondaryLookupGen)(nil)
@@ -98,8 +98,8 @@ type nonCovStrictSecondaryLookupGen struct {
 	sch        schema.Schema
 	pkBld      *val.TupleBuilder
 	prefixDesc *val.TupleDesc
-	pri        prolly.Map
-	sec        prolly.Map
+	pri        prolly.MapReader
+	sec        prolly.MapReader
 	pkMap      val.OrdinalMapping
 }
 
@@ -154,7 +154,7 @@ func (c *nonCovStrictSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (
 }
 
 type covLaxSecondaryLookupGen struct {
-	m          prolly.Map
+	m          prolly.MapReader
 	index      *doltIndex
 	prefixDesc *val.TupleDesc
 	nullSafe   []bool
@@ -199,7 +199,10 @@ func (c *covLaxSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (prolly
 			return c.m.IterKeyRange(ctx, start, stop)
 		}
 	}
-	rng := prolly.PrefixRange(ctx, k, c.prefixDesc)
+	rng, err := prolly.PrefixRange(ctx, k, c.prefixDesc)
+	if err != nil {
+		return nil, err
+	}
 
 	iter, err := c.m.IterRange(ctx, rng)
 	if err != nil {
@@ -210,8 +213,8 @@ func (c *covLaxSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (prolly
 }
 
 type nonCovLaxSecondaryLookupGen struct {
-	pri        prolly.Map
-	sec        prolly.Map
+	pri        prolly.MapReader
+	sec        prolly.MapReader
 	sch        schema.Schema
 	pkMap      val.OrdinalMapping
 	pkBld      *val.TupleBuilder
@@ -266,7 +269,10 @@ func (c *nonCovLaxSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (pro
 			return &nonCoveringMapIter{indexIter: secIter, primary: c.pri, pkMap: c.pkMap, pkBld: c.pkBld}, nil
 		}
 	}
-	rng := prolly.PrefixRange(ctx, k, c.prefixDesc)
+	rng, err := prolly.PrefixRange(ctx, k, c.prefixDesc)
+	if err != nil {
+		return nil, err
+	}
 	secIter, err := c.sec.IterRange(ctx, rng)
 	if err != nil {
 		return nil, err
@@ -279,8 +285,8 @@ type keylessSecondaryLookupGen struct {
 	sch        schema.Schema
 	pkBld      *val.TupleBuilder
 	prefixDesc *val.TupleDesc
-	pri        prolly.Map
-	sec        prolly.Map
+	pri        prolly.MapReader
+	sec        prolly.MapReader
 	pkMap      val.OrdinalMapping
 }
 
@@ -322,7 +328,10 @@ func (c *keylessSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (proll
 			return &keylessLookupIter{pri: c.pri, secIter: secIter, pkMap: c.pkMap, pkBld: c.pkBld, prefixDesc: c.prefixDesc}, nil
 		}
 	}
-	rng := prolly.PrefixRange(ctx, k, c.prefixDesc)
+	rng, err := prolly.PrefixRange(ctx, k, c.prefixDesc)
+	if err != nil {
+		return nil, err
+	}
 	secIter, err := c.sec.IterRange(ctx, rng)
 	if err != nil {
 		return nil, err
@@ -334,7 +343,7 @@ func (c *keylessSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (proll
 type keylessLookupIter struct {
 	pkBld      *val.TupleBuilder
 	prefixDesc *val.TupleDesc
-	pri        prolly.Map
+	pri        prolly.MapReader
 	secIter    prolly.MapIter
 	pkMap      val.OrdinalMapping
 	k          val.Tuple

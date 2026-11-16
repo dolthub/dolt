@@ -16,6 +16,7 @@ package pull
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"strings"
@@ -115,7 +116,23 @@ func (w *PullTableFileWriter) Run(ctx context.Context) error {
 	eg.Go(func() error {
 		return w.addChunkThread(egCtx)
 	})
-	return eg.Wait()
+	err := eg.Wait()
+	// If we are shutting down early, the upload threads stop reading from
+	// newWriterCh and any finished table files still buffered there are
+	// unreachable from anywhere else. Delete their temp files. Every sender and
+	// receiver is done by the time Wait returns, so a non-blocking drain sees
+	// everything that is left, whether or not the channel was closed.
+	for {
+		select {
+		case wr, ok := <-w.newWriterCh:
+			if !ok {
+				return err
+			}
+			_ = wr.Cancel()
+		default:
+			return err
+		}
+	}
 }
 
 func (w *PullTableFileWriter) GetStats() PullTableFileWriterStats {
@@ -227,11 +244,9 @@ func (w *PullTableFileWriter) addChunkThread(ctx context.Context) (err error) {
 	defer func() {
 		if curWr != nil {
 			// Cleanup dangling writer, whose contents will never be used.
-			_, _, _ = curWr.Finish()
-			rd, _ := curWr.Reader()
-			if rd != nil {
-				rd.Close()
-			}
+			// Cancel shuts down the writer and deletes its temp file; without
+			// it the file survives for the life of the process.
+			_ = curWr.Cancel()
 		}
 	}()
 
@@ -325,14 +340,16 @@ func (w *PullTableFileWriter) uploadThread(ctx context.Context, reqCh chan nbs.G
 				return nil
 			}
 
+			// Once we have taken a writer off reqCh we are the only owner of
+			// it, so every path out of here has to remove its temp file.
 			_, id, err := wr.Finish()
 			if err != nil {
-				return err
+				return errors.Join(err, wr.Cancel())
 			}
 
 			chunkData, err := wr.ChunkDataLength()
 			if err != nil {
-				return err
+				return errors.Join(err, wr.Cancel())
 			}
 
 			ttf := tempTblFile{
@@ -346,7 +363,7 @@ func (w *PullTableFileWriter) uploadThread(ctx context.Context, reqCh chan nbs.G
 			ttf.pending, err = w.uploadTempTableFile(ctx, ttf)
 
 			// Always remove the file...
-			wr.Remove()
+			_ = wr.Cancel()
 
 			if err != nil {
 				return err

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	gohash "hash"
 	"io"
+	"io/fs"
 	"os"
 	"sort"
 
@@ -242,23 +243,27 @@ func (tw *CmpChunkTableWriter) Reader() (io.ReadCloser, error) {
 	return tw.sink.Reader()
 }
 
+// Remove deletes the temp file backing this writer. It is not an error to call
+// Remove after the temp file has already been renamed away by FlushToFile, or
+// to call it more than once.
 func (tw *CmpChunkTableWriter) Remove() error {
-	return os.Remove(tw.path)
+	err := os.Remove(tw.path)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	return nil
 }
 
 // Cancel the inprogress write and attempt to cleanup any
 // resources associated with it. It is an error to call
 // Flush{,ToFile} or Reader after canceling the writer.
+//
+// The temp file is always removed, even if shutting down the sink fails. The
+// sink records the first error its background writer saw and returns it from
+// every subsequent call, so bailing out early here would leak the temp file
+// forever once any write had failed --- exactly when we can least afford it.
 func (tw *CmpChunkTableWriter) Cancel() error {
-	closer, err := tw.sink.Reader()
-	if err != nil {
-		return err
-	}
-	err = closer.Close()
-	if err != nil {
-		return err
-	}
-	return tw.Remove()
+	return errors.Join(tw.sink.finish(), tw.Remove())
 }
 
 func containsDuplicates(prefixes prefixIndexSlice) bool {

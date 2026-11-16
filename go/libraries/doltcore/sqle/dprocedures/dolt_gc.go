@@ -45,16 +45,16 @@ func init() {
 		DoltGCFeatureFlag = false
 	}
 	if choice := os.Getenv(dconfig.EnvGCSafepointControllerChoice); choice != "" {
-		if choice == "session_aware" {
-			UseSessionAwareSafepointController = true
-		} else if choice != "kill_connections" {
-			panic("Invalid value for " + dconfig.EnvGCSafepointControllerChoice + ". must be session_aware or kill_connections")
+		if choice == "kill_connections" {
+			UseSessionAwareSafepointController = false
+		} else if choice != "session_aware" {
+			panic("Invalid value for " + dconfig.EnvGCSafepointControllerChoice + ": " + choice + ". Must be session_aware or kill_connections")
 		}
 	}
 }
 
 var DoltGCFeatureFlag = true
-var UseSessionAwareSafepointController = false
+var UseSessionAwareSafepointController = true
 
 // doltGC is the stored procedure to run online garbage collection on a database.
 func doltGC(ctx *sql.Context, args ...string) (sql.RowIter, error) {
@@ -96,14 +96,14 @@ func (sc killConnectionsSafepointController) EstablishPreFinalizeSafepoint(ctx c
 	return nil
 }
 
-func checkEpochSame(origEpoch int) error {
+func checkEpochSame(ctx *sql.Context, origEpoch int) error {
 	// Here we need to sanity check role and epoch.
 	if origEpoch != -1 {
-		if _, role, ok := sql.SystemVariables.GetGlobal(dsess.DoltClusterRoleVariable); ok {
+		if _, role, ok := ctx.SystemVariables().GetGlobal(dsess.DoltClusterRoleVariable); ok {
 			if role.(string) != "primary" {
 				return fmt.Errorf("dolt_gc failed: when we began we were a primary in a cluster, but now our role is %s", role.(string))
 			}
-			_, epoch, ok := sql.SystemVariables.GetGlobal(dsess.DoltClusterRoleEpochVariable)
+			_, epoch, ok := ctx.SystemVariables().GetGlobal(dsess.DoltClusterRoleEpochVariable)
 			if !ok {
 				return fmt.Errorf("dolt_gc failed: when we began we were a primary in a cluster, but we can no longer read the cluster role epoch.")
 			}
@@ -118,7 +118,7 @@ func checkEpochSame(origEpoch int) error {
 }
 
 func (sc killConnectionsSafepointController) EstablishPostFinalizeSafepoint(ctx context.Context) error {
-	err := checkEpochSame(sc.origEpoch)
+	err := checkEpochSame(sc.callCtx, sc.origEpoch)
 	if err != nil {
 		return err
 	}
@@ -158,8 +158,10 @@ func (sc killConnectionsSafepointController) EstablishPostFinalizeSafepoint(ctx 
 	if err != nil {
 		return fmt.Errorf("%w: still saw these connections in the process list: %v", err, unkilled)
 	}
+	doltSession := dsess.DSessFromSess(sc.callCtx.Session)
+	doltSession.NotifyTransactionEnd()
 	sc.callCtx.Session.SetTransaction(nil)
-	dsess.DSessFromSess(sc.callCtx.Session).SetValidateErr(ErrServerPerformedGC)
+	doltSession.SetValidateErr(ErrServerPerformedGC)
 	return nil
 }
 
@@ -177,7 +179,12 @@ type sessionAwareSafepointController struct {
 }
 
 func (sc *sessionAwareSafepointController) visit(ctx context.Context, sess gcctx.GCRootsProvider) error {
-	return sess.VisitGCRoots(ctx, sc.dbname, sc.keeper)
+	return sess.VisitGCRoots(ctx, sc.dbname, func(h hash.Hash) {
+		// Every visit completes before the GC finalizes, so the keeper must accept |h|.
+		if sc.keeper(h) {
+			panic("gc safepoint visit could not keep a chunk; the safepoint was not established before finalize")
+		}
+	})
 }
 
 func (sc *sessionAwareSafepointController) BeginGC(ctx context.Context, keeper func(hash.Hash) bool) error {
@@ -187,6 +194,8 @@ func (sc *sessionAwareSafepointController) BeginGC(ctx context.Context, keeper f
 	if err != nil {
 		return err
 	}
+	// The GC does not change callSession's roots after this point. Waiter
+	// lets other concurrent GCs visit it until Wait (or cancellation) returns.
 	sc.waiter = sc.controller.Waiter(ctx, sc.callSession, sc.visit)
 	return nil
 }
@@ -316,12 +325,12 @@ func RunDoltGC(ctx *sql.Context, ddb *doltdb.DoltDB, gcConfig chunks.GCConfig, d
 		// with killConnections safepoints should be safe now,
 		// but we retain this legacy behavior for now.
 		origepoch := -1
-		if _, role, ok := sql.SystemVariables.GetGlobal(dsess.DoltClusterRoleVariable); ok {
+		if _, role, ok := ctx.SystemVariables().GetGlobal(dsess.DoltClusterRoleVariable); ok {
 			// TODO: magic constant...
 			if role.(string) != "primary" {
 				return fmt.Errorf("cannot run a full dolt_gc() while cluster replication is enabled and role is %s; must be the primary", role.(string))
 			}
-			_, epoch, ok := sql.SystemVariables.GetGlobal(dsess.DoltClusterRoleEpochVariable)
+			_, epoch, ok := ctx.SystemVariables().GetGlobal(dsess.DoltClusterRoleEpochVariable)
 			if !ok {
 				return fmt.Errorf("internal error: cannot run a full dolt_gc(); cluster replication is enabled but could not read %s", dsess.DoltClusterRoleEpochVariable)
 			}

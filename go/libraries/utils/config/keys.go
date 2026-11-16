@@ -15,23 +15,26 @@
 package config
 
 var ConfigOptions = map[string]struct{}{
-	UserEmailKey:          {},
-	UserNameKey:           {},
-	UserCreds:             {},
-	DoltEditor:            {},
-	InitBranchName:        {},
-	RemotesApiHostKey:     {},
-	RemotesApiHostPortKey: {},
-	AddCredsUrlKey:        {},
-	DoltLabInsecureKey:    {},
-	MetricsDisabled:       {},
-	MetricsHost:           {},
-	MetricsPort:           {},
-	MetricsInsecure:       {},
-	PushAutoSetupRemote:   {},
-	ProfileKey:            {},
-	VersionCheckDisabled:  {},
-	MmapArchiveIndexes:    {},
+	UserEmailKey:               {},
+	UserNameKey:                {},
+	UserCreds:                  {},
+	DoltEditor:                 {},
+	InitBranchName:             {},
+	RemotesApiHostKey:          {},
+	RemotesApiHostPortKey:      {},
+	RemotesApiCredentialHelper: {},
+	AddCredsUrlKey:             {},
+	DoltLabInsecureKey:         {},
+	MetricsDisabled:            {},
+	MetricsHost:                {},
+	MetricsPort:                {},
+	MetricsInsecure:            {},
+	PushAutoSetupRemote:        {},
+	ProfileKey:                 {},
+	VersionCheckDisabled:       {},
+	MmapArchiveIndexes:         {},
+	GitRemoteMaxHistoryCommits: {},
+	GitRemoteResetOnPrune:      {},
 }
 
 const UserEmailKey = "user.email"
@@ -47,6 +50,8 @@ const InitBranchName = "init.defaultbranch"
 const RemotesApiHostKey = "remotes.default_host"
 
 const RemotesApiHostPortKey = "remotes.default_port"
+
+const RemotesApiCredentialHelper = "remotesapi.credential_helper"
 
 const AddCredsUrlKey = "creds.add_url"
 
@@ -71,3 +76,6 @@ const SignCommitsKey = "commit.gpgsign"
 const GPGSigningKeyKey = "user.signingkey"
 
 const MmapArchiveIndexes = "mmap_archive_indexes"
+
+const GitRemoteMaxHistoryCommits = "git-remote.max-history-commits"
+const GitRemoteResetOnPrune = "git-remote.reset-history-on-prune"

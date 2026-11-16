@@ -17,10 +17,10 @@ package enginetest
 import (
 	"regexp"
 
-	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/go-mysql-server/testutils"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -28,7 +28,7 @@ import (
 // commitHashValidator validates commit hash format (32 character hex)
 type commitHashValidator struct{}
 
-var _ enginetest.CustomValueValidator = &commitHashValidator{}
+var _ testutils.CustomValueValidator = &commitHashValidator{}
 
 func (chv *commitHashValidator) Validate(val interface{}) (bool, error) {
 	h, ok := val.(string)
@@ -43,7 +43,7 @@ func (chv *commitHashValidator) Validate(val interface{}) (bool, error) {
 // successfulRebaseMessageValidator validates successful rebase message format
 type successfulRebaseMessageValidator struct{}
 
-var _ enginetest.CustomValueValidator = &successfulRebaseMessageValidator{}
+var _ testutils.CustomValueValidator = &successfulRebaseMessageValidator{}
 var successfulRebaseRegex = regexp.MustCompile(`^Successfully rebased.*`)
 
 func (srmv *successfulRebaseMessageValidator) Validate(val interface{}) (bool, error) {

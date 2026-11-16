@@ -53,7 +53,14 @@ func QuoteComment(s string) string {
 	return `'` + strings.ReplaceAll(s, `'`, `\'`) + `'`
 }
 
-// InsertStatementPrefix returns the first part of an SQL insert query for a given table
+// InsertStatementPrefix returns the first part of an INSERT statement
+// for |tableName|, up to and including VALUES:
+//
+//	INSERT INTO `t` (`id`,`a`) VALUES
+//
+// Generated columns are skipped here while building the column list.
+// The caller appends one tuple of values per row, along with the
+// closing semicolon. See SqlRowAsTupleString.
 func InsertStatementPrefix(ctx *sql.Context, tableName string, tableSch schema.Schema) (string, error) {
 	var b strings.Builder
 
@@ -63,6 +70,9 @@ func InsertStatementPrefix(ctx *sql.Context, tableName string, tableSch schema.S
 
 	seenOne := false
 	err := tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		if col.IsGenerated() {
+			return false, nil
+		}
 		if seenOne {
 			b.WriteRune(',')
 		}
@@ -165,18 +175,34 @@ func SqlRowAsInsertStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch 
 	return b.String(), nil
 }
 
-// SqlRowAsTupleString converts a sql row into it's tuple string representation for SQL insert statements.
+// SqlRowAsTupleString converts |r| into its tuple string
+// representation for INSERT statements, for example (1,'x',NULL).
+//
+// Values for generated columns are left out so that the tuple matches
+// the column list from InsertStatementPrefix.
+//
+// |r| must hold one value per column of |tableSch|, in schema order.
+// A row of any other width is an error because its values would be
+// written against the wrong columns.
 func SqlRowAsTupleString(ctx *sql.Context, r sql.Row, tableSch schema.Schema) (string, error) {
 	var b strings.Builder
 	var err error
 
+	cols := tableSch.GetAllCols()
+	if len(r) != cols.Size() {
+		return "", fmt.Errorf("expected %d values for table schema, got %d", cols.Size(), len(r))
+	}
+
 	b.WriteString("(")
 	seenOne := false
 	for i, val := range r {
+		col := cols.GetByIndex(i)
+		if col.IsGenerated() {
+			continue
+		}
 		if seenOne {
 			b.WriteRune(',')
 		}
-		col := tableSch.GetAllCols().GetByIndex(i)
 		str := "NULL"
 		if val != nil {
 			str, err = interfaceValueAsSqlString(ctx, col.TypeInfo, val)
@@ -255,6 +281,14 @@ func SqlRowAsDeleteStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch 
 	return b.String(), nil
 }
 
+// SqlRowAsUpdateStmt generates an UPDATE statement setting the
+// columns of |r| named by |colsToUpdate|.
+//
+// Generated columns are skipped. If no columns remain to update,
+// an empty string is returned.
+//
+// The row to change is keyed by the primary key columns of
+// |tableSch|, using their values from |r|.
 func SqlRowAsUpdateStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch schema.Schema, colsToUpdate *set.StrSet) (string, error) {
 	var b strings.Builder
 	b.WriteString("UPDATE ")
@@ -266,7 +300,7 @@ func SqlRowAsUpdateStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch 
 	i := 0
 	seenOne := false
 	err := tableSch.GetAllCols().Iter(func(_ uint64, col schema.Column) (stop bool, err error) {
-		if colsToUpdate.Contains(col.Name) {
+		if colsToUpdate.Contains(col.Name) && !col.IsGenerated() {
 			if seenOne {
 				b.WriteRune(',')
 			}
@@ -286,6 +320,10 @@ func SqlRowAsUpdateStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch 
 
 	if err != nil {
 		return "", err
+	}
+
+	if !seenOne {
+		return "", nil
 	}
 
 	b.WriteString(" WHERE ")
@@ -365,10 +403,11 @@ func interfaceValueAsSqlString(ctx *sql.Context, ti typeinfo.TypeInfo, value int
 		if err != nil {
 			return "", err
 		}
-		if !ok {
-			return "", fmt.Errorf("expected string, got %T", value)
+		if ok {
+			return quoteAndEscapeString(value), nil
 		}
-		return quoteAndEscapeString(value), nil
+		// Fall back to the pre-computed string representation from SqlColToStr.
+		return quoteAndEscapeString(str), nil
 	case querypb.Type_JSON, querypb.Type_ENUM, querypb.Type_SET, querypb.Type_BLOB:
 		return quoteAndEscapeString(str), nil
 	case querypb.Type_VARCHAR, querypb.Type_CHAR:

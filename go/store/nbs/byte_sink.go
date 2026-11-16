@@ -48,7 +48,10 @@ func flushSinkToFile(sink ByteSink, path string) (err error) {
 	}()
 
 	err = sink.Flush(f)
-	return err
+	if err != nil {
+		return err
+	}
+	return f.Sync()
 }
 
 // A ByteSink is an interface for writing bytes which can later be flushed to a writer
@@ -207,7 +210,7 @@ func (sink *BlockBufferByteSink) Close() error {
 // BufferedFileByteSink is a ByteSink implementation that buffers some amount of data before it passes it
 // to a background writing thread to be flushed to a file.
 type BufferedFileByteSink struct {
-	wr           io.WriteCloser
+	wr           *os.File
 	writeCh      chan []byte
 	ae           *atomicerr.AtomicError
 	wg           *sync.WaitGroup
@@ -227,7 +230,7 @@ func NewBufferedFileByteSink(tempDir string, blockSize, chBufferSize int) (*Buff
 
 	sink := &BufferedFileByteSink{
 		blockSize:    blockSize,
-		currentBlock: make([]byte, blockSize),
+		currentBlock: make([]byte, 0, blockSize),
 		writeCh:      make(chan []byte, chBufferSize),
 		ae:           atomicerr.New(),
 		wg:           &sync.WaitGroup{},
@@ -251,20 +254,20 @@ func (sink *BufferedFileByteSink) Write(src []byte) (int, error) {
 
 	if remaining >= srcLen {
 		sink.currentBlock = append(sink.currentBlock, src...)
-
 		if remaining == srcLen {
 			sink.writeCh <- sink.currentBlock
 			sink.currentBlock = nil
 		}
 	} else {
-		if remaining > 0 {
-			sink.currentBlock = append(sink.currentBlock, src[:remaining]...)
+		// Fill and hand off the current block.
+		sink.currentBlock = append(sink.currentBlock, src[:remaining]...)
+		if len(sink.currentBlock) > 0 {
 			sink.writeCh <- sink.currentBlock
 		}
-
-		newBlock := make([]byte, 0, sink.blockSize)
-		newBlock = append(newBlock, src[remaining:]...)
-		sink.currentBlock = newBlock
+		// Size the next block to hold all of |rest|, even if that needs more
+		// than |blockSize|.
+		rest := src[remaining:]
+		sink.currentBlock = append(make([]byte, 0, max(sink.blockSize, len(rest))), rest...)
 	}
 
 	sink.pos += uint64(srcLen)
@@ -282,9 +285,25 @@ func (sink *BufferedFileByteSink) backgroundWrite() {
 		sink.ae.SetIfError(err)
 	}
 
+	// FlushToFile may rename this file into place as a table file, so it
+	// must be durable first.
+	if err == nil {
+		err = sink.wr.Sync()
+		sink.ae.SetIfError(err)
+	}
+
 	err = sink.wr.Close()
 	sink.ae.SetIfError(err)
 }
+
+// finisher is implemented by ByteSinks which own a background writer that must
+// be shut down before their output can be used or discarded.
+type finisher interface {
+	finish() error
+}
+
+var _ finisher = (*BufferedFileByteSink)(nil)
+var _ finisher = (*HashingByteSink)(nil)
 
 func (sink *BufferedFileByteSink) finish() error {
 	// |finish()| is not thread-safe. We just use writeCh == nil as a
@@ -397,6 +416,15 @@ func (sink *HashingByteSink) FlushToFile(path string) error {
 
 func (sink *HashingByteSink) Reader() (io.ReadCloser, error) {
 	return sink.backingSink.Reader()
+}
+
+// finish shuts down the backing sink if it has anything to shut down. It is a
+// no-op for the purely in-memory sinks.
+func (sink *HashingByteSink) finish() error {
+	if f, ok := sink.backingSink.(finisher); ok {
+		return f.finish()
+	}
+	return nil
 }
 
 // Execute the hasher.Sum() function and return the result

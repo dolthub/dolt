@@ -280,6 +280,8 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root doltdb.Root
 	if err != nil {
 		return nil, err
 	}
+	// Closing the database stops its sequence tracker's background reads of the store.
+	defer eng.Close()
 
 	scanner := NewStreamScanner(strings.NewReader(query))
 	if err != nil {
@@ -334,11 +336,16 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root doltdb.Root
 // The SQL engine returned has transactions disabled. This is to prevent transactions starts from overwriting the root
 // we set manually with the one at the working set of the HEAD being rebased.
 // Some functionality will not work on this kind of engine, e.g. many DOLT_ functions.
-func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue) (*sql.Context, *engine.SqlEngine, error) {
+func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue) (_ *sql.Context, _ *engine.SqlEngine, err error) {
 	db, err := dsqle.NewDatabase(ctx, filterDbName, dEnv.DbData(ctx), editor.Options{})
 	if err != nil {
 		return nil, nil, err
 	}
+	defer func() {
+		if err != nil {
+			db.Close()
+		}
+	}()
 
 	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.FS, dEnv)
 	if err != nil {
@@ -351,7 +358,8 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootVal
 		return nil, nil, err
 	}
 
-	sess := dsess.DefaultSession(pro, writer.NewWriteSession)
+	vars := dsqle.NewEngineVariables()
+	sess := dsess.DefaultSessionWithVariables(pro, writer.NewWriteSession, vars)
 
 	sqlCtx := sql.NewContext(ctx, sql.WithSession(sess))
 	err = sqlCtx.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, false)
@@ -373,7 +381,7 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootVal
 
 	sqlCtx.SetCurrentDatabase(filterDbName)
 
-	se := engine.NewRebasedSqlEngine(sqle.New(azr, &sqle.Config{IsReadOnly: false}), map[string]dsess.SqlDatabase{filterDbName: db})
+	se := engine.NewRebasedSqlEngine(sqle.New(azr, &sqle.Config{IsReadOnly: false, EngineVariables: vars}), map[string]dsess.SqlDatabase{filterDbName: db})
 
 	return sqlCtx, se, nil
 }

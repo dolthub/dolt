@@ -17,6 +17,8 @@ package dsess
 import (
 	"context"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
@@ -37,24 +39,76 @@ func CheckAccessForDb(ctx context.Context, db SqlDatabase, flags branch_control.
 		return branch_control.ErrMissingController.New()
 	}
 
+	if db.RevisionType() != RevisionTypeBranch {
+		// not a branch db, no check necessary
+		return nil
+	}
+
+	dbName, branch := db.AliasedName(), db.Revision()
+	rebasedBranch, err := branch_control.RebasedBranch(branchAwareSession, dbName, branch)
+	if err != nil {
+		return err
+	}
+
 	controller.Access.RWMutex.RLock()
 	defer controller.Access.RWMutex.RUnlock()
 
 	user := branchAwareSession.GetUser()
 	host := branchAwareSession.GetHost()
 
-	if db.RevisionType() != RevisionTypeBranch {
-		// not a branch db, no check necessary
+	for _, b := range []string{branch, rebasedBranch} {
+		if b == "" {
+			continue
+		}
+		// Get the permissions for the branch, user, and host combination
+		_, perms := controller.Access.Match(dbName, b, user, host)
+		// If either the flags match or the user is an admin for this branch, then we allow access
+		if (perms&flags != flags) && (perms&branch_control.Permissions_Admin != branch_control.Permissions_Admin) {
+			return branch_control.ErrIncorrectPermissions.New(user, host, b)
+		}
+	}
+	return nil
+}
+
+// CheckAccessOrMergeActive returns nil when the caller has Permissions_Write
+// on the current branch, or has Permissions_Merge AND the working set has an
+// active merge AND the working root contains data conflicts. Otherwise it
+// returns the access-denied error from the more specific check.
+//
+// Used by procedures (e.g., DOLT_CONFLICTS_RESOLVE) that should be reachable
+// by merge-permission callers only when there is actually a merge with data
+// conflicts to resolve. Mirrors the rule used by conflicts-table writes.
+func CheckAccessOrMergeActive(ctx *sql.Context) error {
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err == nil {
 		return nil
 	}
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Merge); err != nil {
+		return err
+	}
+	dbName := ctx.GetCurrentDatabase()
+	ws, err := DSessFromSess(ctx.Session).WorkingSet(ctx, dbName)
+	if err != nil {
+		return err
+	}
+	if !ws.MergeActive() {
+		return mergePermDenied(ctx)
+	}
+	hasConflicts, err := doltdb.HasConflicts(ctx, ws.WorkingRoot())
+	if err != nil {
+		return err
+	}
+	if !hasConflicts {
+		return mergePermDenied(ctx)
+	}
+	return nil
+}
 
-	dbName, branch := doltdb.SplitRevisionDbName(db.RevisionQualifiedName())
-
-	// Get the permissions for the branch, user, and host combination
-	_, perms := controller.Access.Match(dbName, branch, user, host)
-	// If either the flags match or the user is an admin for this branch, then we allow access
-	if (perms&flags == flags) || (perms&branch_control.Permissions_Admin == branch_control.Permissions_Admin) {
-		return nil
+func mergePermDenied(ctx *sql.Context) error {
+	bas := branch_control.GetBranchAwareSession(ctx)
+	var user, host, branch string
+	if bas != nil {
+		user, host = bas.GetUser(), bas.GetHost()
+		branch, _ = bas.GetBranch()
 	}
 	return branch_control.ErrIncorrectPermissions.New(user, host, branch)
 }

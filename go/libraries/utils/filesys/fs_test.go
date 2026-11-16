@@ -356,3 +356,18 @@ func validate(expectedDirs, expectedFiles, actualDirs, actualFiles []string, fsN
 		t.Error("fs:", fsName, "Expected files does not match actual files.", "\n\tactual  :", actualFiles, "\n\texpected:", expectedFiles)
 	}
 }
+
+func TestDeleteFileDurably(t *testing.T) {
+	fs, err := LocalFilesysWithWorkingDir(t.TempDir())
+	require.NoError(t, err)
+
+	require.NoError(t, fs.WriteFile("marker", nil, 0o644))
+	exists, _ := fs.Exists("marker")
+	require.True(t, exists)
+
+	require.NoError(t, fs.DeleteFileDurably("marker"))
+	exists, _ = fs.Exists("marker")
+	require.False(t, exists, "marker should be deleted")
+
+	require.ErrorIs(t, fs.DeleteFileDurably("marker"), os.ErrNotExist)
+}

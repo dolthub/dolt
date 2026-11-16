@@ -38,6 +38,7 @@ var binlogDirectory = filepath.Join(".dolt", "binlog")
 // rotating the log files, listing the available log files, purging old log files, and keeping track of what GTIDs
 // are available in the log files.
 type logManager struct {
+	variables             sql.SystemVariableRegistry
 	fs                    filesys.Filesys
 	availableGtids        mysql.GTIDSet
 	mu                    *sync.Mutex
@@ -53,13 +54,14 @@ type logManager struct {
 // underneath the specified |fs| filesystem. This method also initializes the binlog logging system, including
 // rotating to a new log file and purging expired log files.
 func NewLogManager(ctx *sql.Context, fs filesys.Filesys) (*logManager, error) {
-	binlogFormat := createBinlogFormat()
+	binlogFormat := createBinlogFormat(ctx)
 	binlogEventMeta, err := createBinlogEventMetadata(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	lm := &logManager{
+		variables:       ctx.SystemVariables(),
 		mu:              &sync.Mutex{},
 		fs:              fs,
 		binlogFormat:    *binlogFormat,
@@ -112,7 +114,7 @@ func NewLogManager(ctx *sql.Context, fs filesys.Filesys) (*logManager, error) {
 func (lm *logManager) initializeAvailableGtids() (err error) {
 	// Initialize availableGtids from @@gtid_executed – we start by assuming we have all executed GTIDs available
 	// in the logs, and then adjust availableGtids based on which GTIDs we detect have been purged.
-	_, gtidExecutedValue, ok := sql.SystemVariables.GetGlobal("gtid_executed")
+	_, gtidExecutedValue, ok := lm.variables.GetGlobal("gtid_executed")
 	if !ok {
 		return fmt.Errorf("unable to find system variable @@gtid_executed")
 	}
@@ -124,7 +126,7 @@ func (lm *logManager) initializeAvailableGtids() (err error) {
 		return err
 	}
 
-	_, gtidPurgedValue, ok := sql.SystemVariables.GetGlobal("gtid_purged")
+	_, gtidPurgedValue, ok := lm.variables.GetGlobal("gtid_purged")
 	if !ok {
 		return fmt.Errorf("unable to find system variable @@gtid_purged")
 	}
@@ -149,7 +151,7 @@ func (lm *logManager) initializeAvailableGtids() (err error) {
 // adding a Rotate event to the previous log has NOT occurred yet (otherwise adding the Rotate event would update the
 // log file's last modified time and would not be purged).
 func (lm *logManager) purgeExpiredLogFiles(ctx *sql.Context) error {
-	expireLogsSeconds, err := lookupBinlogExpireLogsSeconds(ctx)
+	expireLogsSeconds, err := lm.lookupBinlogExpireLogsSeconds(ctx)
 	if expireLogsSeconds == 0 {
 		// If @@binlog_expire_logs_seconds is set to 0, then binlog files are never automatically expired
 		return nil
@@ -212,7 +214,7 @@ func (lm *logManager) initializePurgedGtids(ctx *sql.Context) error {
 		if sequenceNumber > 1 {
 			gtidPurged := fmt.Sprintf("%s:%d", gtid.SourceServer(), sequenceNumber-1)
 			logrus.Debugf("setting gtid_purged to: %s", gtidPurged)
-			return sql.SystemVariables.SetGlobal(ctx, "gtid_purged", gtidPurged)
+			return lm.variables.SetGlobal(ctx, "gtid_purged", gtidPurged)
 		} else {
 			return nil
 		}
@@ -220,25 +222,29 @@ func (lm *logManager) initializePurgedGtids(ctx *sql.Context) error {
 
 	// If there are no GTID events in any of the files, then all GTIDs have been purged, so
 	// initialize @@gtid_purged with the value of @@gtid_executed.
-	_, gtidExecutedValue, ok := sql.SystemVariables.GetGlobal("gtid_executed")
+	_, gtidExecutedValue, ok := lm.variables.GetGlobal("gtid_executed")
 	if !ok {
 		return fmt.Errorf("unable to find system variable @@gtid_executed")
 	}
 	logrus.Debugf("no available GTIDs found in logs, setting gtid_purged to: %s", gtidExecutedValue)
-	return sql.SystemVariables.SetGlobal(ctx, "gtid_purged", gtidExecutedValue)
+	return lm.variables.SetGlobal(ctx, "gtid_purged", gtidExecutedValue)
 }
 
 // findLogFileForPosition searches through the available binlog files on disk for the first log file that
 // contains GTIDs that are NOT present in |executedGtids|. This is determined by reading the first GTID event
-// from each log file and selecting the previous file when the first GTID not in |executedGtids| is found. If
-// the first GTID event in all available logs files is in |executedGtids|, then the current log file is returned.
+// from each log file. When the first GTID not in |executedGtids| is found, the most recent earlier file whose
+// first GTID is in |executedGtids| is selected, since the tail of that file may still hold unexecuted GTIDs.
+// Files without any GTID events (e.g. a log file freshly rotated on server restart) are skipped, so they never
+// hide the tail of an earlier file. If the first GTID event in all available log files is in |executedGtids|,
+// then the last file with a GTID event is returned, or the current log file if no file has a GTID event.
 func (lm *logManager) findLogFileForPosition(executedGtids mysql.GTIDSet) (string, error) {
 	files, err := lm.logFilesOnDiskForBranch(BinlogBranch)
 	if err != nil {
 		return "", err
 	}
 
-	for i, f := range files {
+	lastFileWithExecutedGtid := ""
+	for _, f := range files {
 		binlogFilePath := filepath.Join(lm.binlogDirectory, f)
 		file, err := openBinlogFileForReading(binlogFilePath)
 		if err != nil {
@@ -263,22 +269,27 @@ func (lm *logManager) findLogFileForPosition(executedGtids mysql.GTIDSet) (strin
 			// If the first GTID in this file is contained in the set of GTIDs that the replica
 			// has already executed, then move on to check the next file.
 			if executedGtids.ContainsGTID(gtid) {
+				lastFileWithExecutedGtid = binlogFilePath
 				continue
 			}
 
-			// If we found an unexecuted GTID in the first binlog file, return the first file,
-			// otherwise return the previous file
-			if i == 0 {
+			// If no earlier file starts with an executed GTID, return this file, otherwise
+			// return the most recent earlier file that does, so its tail is replayed.
+			if lastFileWithExecutedGtid == "" {
 				return binlogFilePath, nil
-			} else {
-				return filepath.Join(lm.binlogDirectory, files[i-1]), nil
 			}
+			return lastFileWithExecutedGtid, nil
 		}
 	}
 
-	// If we don't find any GTIDs that are missing from |executedGtids|, then return the current
-	// log file so the streamer can reply events from it, potentially finding GTIDs later in the
-	// file that need to be sent to the connected replica, or waiting for new events to be written.
+	// If we don't find any GTIDs that are missing from |executedGtids|, then return the last file
+	// with a GTID event so the streamer can replay events from it, potentially finding GTIDs later
+	// in the file that need to be sent to the connected replica, before following its Rotate event
+	// to newer files. If no file has a GTID event, return the current log file and wait for new
+	// events to be written.
+	if lastFileWithExecutedGtid != "" {
+		return lastFileWithExecutedGtid, nil
+	}
 	return lm.currentBinlogFilepath(), nil
 }
 
@@ -490,7 +501,7 @@ func (lm *logManager) initializeCurrentLogFile(ctx *sql.Context, binlogFormat my
 	// TODO: Instead of using the @@gtid_executed system variable, logManager could keep track of which GTIDs
 	//       it has seen logged and use that as the source of truth for the Previous GTIDs event. This would
 	//       eliminate a race condition.
-	_, rawValue, ok := sql.SystemVariables.GetGlobal("gtid_executed")
+	_, rawValue, ok := lm.variables.GetGlobal("gtid_executed")
 	if !ok {
 		panic("unable to find @@gtid_executed system variable")
 	}
@@ -519,7 +530,7 @@ func (lm *logManager) WriteEvents(ctx *sql.Context, binlogEvents ...mysql.Binlog
 // writeEventsHelper writes |binlogEvents| to the current binlog file. This function is NOT synchronized, and is only
 // intended to be used from code inside logManager that needs to be called transitively from the WriteEvents method.
 func (lm *logManager) writeEventsHelper(ctx *sql.Context, binlogEvents ...mysql.BinlogEvent) error {
-	maxBinlogSize, err := lookupMaxBinlogSize(ctx)
+	maxBinlogSize, err := lm.lookupMaxBinlogSize(ctx)
 	if err != nil {
 		return err
 	}
@@ -598,8 +609,8 @@ func (lm *logManager) currentBinlogFilepath() string {
 
 // lookupMaxBinlogSize looks up the value of the @@max_binlog_size system variable and returns it, along with any
 // errors encountered while looking it up.
-func lookupMaxBinlogSize(ctx *sql.Context) (int, error) {
-	_, value, ok := sql.SystemVariables.GetGlobal("max_binlog_size")
+func (lm *logManager) lookupMaxBinlogSize(ctx *sql.Context) (int, error) {
+	_, value, ok := lm.variables.GetGlobal("max_binlog_size")
 	if !ok {
 		return 0, fmt.Errorf("system variable @@max_binlog_size not found")
 	}
@@ -613,8 +624,8 @@ func lookupMaxBinlogSize(ctx *sql.Context) (int, error) {
 
 // lookupBinlogExpireLogsSeconds looks up the value of the @@binlog_expire_logs_seconds system variable and returns
 // it, along with any errors encountered while looking it up.
-func lookupBinlogExpireLogsSeconds(ctx *sql.Context) (int, error) {
-	_, value, ok := sql.SystemVariables.GetGlobal("binlog_expire_logs_seconds")
+func (lm *logManager) lookupBinlogExpireLogsSeconds(ctx *sql.Context) (int, error) {
+	_, value, ok := lm.variables.GetGlobal("binlog_expire_logs_seconds")
 	if !ok {
 		return -1, fmt.Errorf("unable to find system variable @@binlog_expire_logs_seconds")
 	}

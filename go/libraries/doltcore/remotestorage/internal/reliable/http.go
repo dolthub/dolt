@@ -79,6 +79,10 @@ type StreamingRangeRequest struct {
 	BackOffFact        BackOffFactory
 	Throughput         MinimumThroughputCheck
 	RespHeadersTimeout time.Duration
+	// Logf, if non-nil, is called to log each download failure: every
+	// transient failure that will be retried, and any terminal failure that
+	// aborts the request. It must be safe for concurrent use.
+	Logf func(string, ...interface{})
 }
 
 // |StreamingRangeDownload| makes an immediate GET request to the URL returned
@@ -249,8 +253,16 @@ func StreamingRangeDownload(ctx context.Context, req StreamingRangeRequest) Stre
 			}
 		}
 		start := time.Now()
-		err := backoff.Retry(op, req.BackOffFact(ctx))
+		notify := func(err error, d time.Duration) {
+			if req.Logf != nil {
+				req.Logf("reliable: retrying range download bytes=%d-%d after failed attempt %d (backoff %s): %v", offset, rangeEnd, retry, d, err)
+			}
+		}
+		err := backoff.RetryNotify(op, req.BackOffFact(ctx), notify)
 		if err != nil {
+			if req.Logf != nil {
+				req.Logf("reliable: range download bytes=%d-%d failed permanently after %d attempt(s): %v", req.Offset, rangeEnd, retry, err)
+			}
 			w.CloseWithError(err)
 		} else {
 			req.Stats.RecordDownloadComplete(retry, req.Length, time.Since(start))

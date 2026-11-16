@@ -164,7 +164,7 @@ func GRPCEmitterForConfig(pro EmitterConfigProvider, opts ...events.GrpcEmitterO
 		return nil, nil, err
 	}
 
-	conn, err := grpc.Dial(cfg.Endpoint, cfg.DialOptions...)
+	conn, err := grpc.NewClient("dns:///"+cfg.Endpoint, cfg.DialOptions...)
 	if err != nil {
 		return nil, nil, err
 	}

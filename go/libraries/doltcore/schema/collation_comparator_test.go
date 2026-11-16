@@ -20,6 +20,8 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 func TestCompareCollatedStrings(t *testing.T) {
@@ -58,7 +60,7 @@ func TestCompareCollatedStrings(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("%s vs %s", tt.left, tt.right), func(t *testing.T) {
-			cmp := compareCollatedStrings(sql.Collation_utf8mb4_0900_ai_ci, tt.left, tt.right)
+			cmp := val.CompareCollatedStrings(sql.Collation_utf8mb4_0900_ai_ci, tt.left, tt.right)
 			require.Equal(t, tt.exp, cmp)
 		})
 	}

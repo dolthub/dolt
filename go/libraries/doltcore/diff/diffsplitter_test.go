@@ -269,6 +269,18 @@ func TestDiffSplitter(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "case-only text change is marked modified",
+			diffQuerySch: sql.Schema{
+				strCol("from_a"), strCol("to_a"), strCol("diff_type"),
+			},
+			tableSch:      sql.Schema{strCol("a")},
+			diffQueryRows: []sql.Row{{"a", "A", "modified"}},
+			expectedRows: []splitRow{{
+				old: RowDiff{Row: sql.Row{"a"}, RowDiff: ModifiedOld, ColDiffs: []ChangeType{ModifiedOld}},
+				new: RowDiff{Row: sql.Row{"A"}, RowDiff: ModifiedNew, ColDiffs: []ChangeType{ModifiedNew}},
+			}},
+		},
 	}
 
 	for _, tc := range testcases {

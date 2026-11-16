@@ -27,8 +27,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"sync"
-	"time"
 
 	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/d"
@@ -52,12 +50,47 @@ type manifest interface {
 	// the store, the root root hash.Hash of the store, and a tableSpec
 	// describing every table that comprises the store.
 	// If the manifest doesn't exist, |exists| is set to false and the other
-	// return values are undefined. The |readHook| parameter allows race
-	// condition testing. If it is non-nil, it will be invoked while the
-	// implementation is guaranteeing exclusive access to the manifest.
+	// return values are undefined.
+	//
+	// A read reflects a consistent manifest, but not necessarily the current
+	// one: implementations do not exclude writers for the read path. The
+	// returned contents may be stale by the time the caller acts on them.
 	ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (exists bool, contents manifestContents, err error)
 
+	// Close releases any resources held by the manifest, such as a file
+	// lock. It is called by NomsBlockStore.Close. Implementations that hold
+	// no such resources may make this a no-op.
+	Close() error
+
 	manifestUpdater
+	manifestGCGenUpdater
+}
+
+// manifestLocker is an optional interface implemented by manifests whose
+// exclusive update region can be entered on its own, rather than only as part
+// of an update.
+//
+// It exists so that a grace prune can delete table files with no manifest
+// update in flight. See [GracePruner].
+type manifestLocker interface {
+	// LockManifest takes whatever exclusive access this manifest's Update
+	// takes and reads the manifest as it exists at that moment. Until the
+	// returned lock is released, no other lock-respecting process can publish
+	// a manifest update, so the caller may act on the contents it is handed.
+	//
+	// Callers must release. Manifest updates elsewhere give up after
+	// lockFileTimeout and surface an error to their caller, so holding the
+	// lock for long breaks concurrent writers.
+	LockManifest(ctx context.Context) (lockedManifest, error)
+}
+
+// lockedManifest is a manifest's contents as of the moment its update lock was
+// taken, together with the means to release that lock.
+type lockedManifest struct {
+	exists   bool
+	contents manifestContents
+	// unlock releases the lock. It is never nil.
+	unlock func() error
 }
 
 type manifestUpdater interface {
@@ -207,234 +240,6 @@ func toSpecSet(specs []tableSpec) (ss map[hash.Hash]struct{}) {
 		ss[ts.name] = struct{}{}
 	}
 	return ss
-}
-
-func (mc manifestContents) size() (size uint64) {
-	size += uint64(len(mc.nbfVers)) + hash.ByteLen + hash.ByteLen
-	for _, sp := range mc.specs {
-		size += uint64(len(sp.name)) + uint32Size // for sp.chunkCount
-	}
-	return
-}
-
-func newManifestLocks() *manifestLocks {
-	return &manifestLocks{map[string]struct{}{}, map[string]struct{}{}, sync.NewCond(&sync.Mutex{})}
-}
-
-type manifestLocks struct {
-	updating map[string]struct{}
-	fetching map[string]struct{}
-	cond     *sync.Cond
-}
-
-func (ml *manifestLocks) lockForFetch(db string) {
-	lockByName(db, ml.cond, ml.fetching)
-}
-
-func (ml *manifestLocks) unlockForFetch(db string) error {
-	return unlockByName(db, ml.cond, ml.fetching)
-}
-
-func (ml *manifestLocks) lockForUpdate(db string) {
-	lockByName(db, ml.cond, ml.updating)
-}
-
-func (ml *manifestLocks) unlockForUpdate(db string) error {
-	return unlockByName(db, ml.cond, ml.updating)
-}
-
-func lockByName(db string, c *sync.Cond, locks map[string]struct{}) {
-	c.L.Lock()
-	defer c.L.Unlock()
-
-	for {
-		if _, inProgress := locks[db]; !inProgress {
-			locks[db] = struct{}{}
-			break
-		}
-		c.Wait()
-	}
-}
-
-func unlockByName(db string, c *sync.Cond, locks map[string]struct{}) error {
-	c.L.Lock()
-	defer c.L.Unlock()
-
-	if _, ok := locks[db]; !ok {
-		return errors.New("unlock failed")
-	}
-
-	delete(locks, db)
-
-	c.Broadcast()
-
-	return nil
-}
-
-type manifestManager struct {
-	m     manifest
-	cache *manifestCache
-	locks *manifestLocks
-}
-
-func (mm manifestManager) lockOutFetch() {
-	mm.locks.lockForFetch(mm.Name())
-}
-
-func (mm manifestManager) allowFetch() error {
-	return mm.locks.unlockForFetch(mm.Name())
-}
-
-func (mm manifestManager) LockForUpdate() {
-	mm.locks.lockForUpdate(mm.Name())
-}
-
-func (mm manifestManager) UnlockForUpdate() error {
-	return mm.locks.unlockForUpdate(mm.Name())
-}
-
-func (mm manifestManager) updateWillFail(lastLock hash.Hash) (cached manifestContents, doomed bool) {
-	if upstream, _, hit := mm.cache.Get(mm.Name()); hit {
-		if lastLock != upstream.lock {
-			doomed, cached = true, upstream
-		}
-	}
-	return
-}
-
-func (mm manifestManager) Fetch(ctx context.Context, stats *Stats) (exists bool, contents manifestContents, t time.Time, err error) {
-	entryTime := time.Now()
-
-	mm.lockOutFetch()
-	defer func() {
-		afErr := mm.allowFetch()
-
-		if err == nil {
-			err = afErr
-		}
-	}()
-
-	f := func() (bool, manifestContents, time.Time, error) {
-		cached, t, hit := mm.cache.Get(mm.Name())
-
-		if hit && t.After(entryTime) {
-			// Cache contains a manifest which is newer than entry time.
-			return true, cached, t, nil
-		}
-
-		t = time.Now()
-
-		exists, contents, err := mm.m.ParseIfExists(ctx, stats, nil)
-
-		if err != nil {
-			return false, manifestContents{}, t, err
-		}
-
-		err = mm.cache.Put(mm.Name(), contents, t)
-
-		if err != nil {
-			return false, manifestContents{}, t, err
-		}
-
-		return exists, contents, t, nil
-	}
-
-	exists, contents, t, err = f()
-	return
-}
-
-// Update attempts to write a new manifest.
-// Callers MUST protect uses of Update with Lock/UnlockForUpdate.
-// Update does not call Lock/UnlockForUpdate() on its own because it is
-// intended to be used in a larger critical section along with updateWillFail.
-func (mm manifestManager) Update(ctx context.Context, behavior dherrors.FatalBehavior, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (contents manifestContents, err error) {
-	if upstream, _, hit := mm.cache.Get(mm.Name()); hit {
-		if lastLock != upstream.lock {
-			return upstream, nil
-		}
-	}
-	t := time.Now()
-
-	mm.lockOutFetch()
-	defer func() {
-		afErr := mm.allowFetch()
-
-		if err == nil {
-			err = afErr
-		}
-	}()
-
-	f := func() (manifestContents, error) {
-		contents, err := mm.m.Update(ctx, behavior, lastLock, newContents, stats, writeHook)
-
-		if err != nil {
-			return contents, err
-		}
-
-		err = mm.cache.Put(mm.Name(), contents, t)
-
-		if err != nil {
-			return manifestContents{}, err
-		}
-
-		return contents, nil
-	}
-
-	contents, err = f()
-	return
-}
-
-// UpdateGCGen will update the manifest with a new garbage collection generation.
-// Callers MUST protect uses of UpdateGCGen with Lock/UnlockForUpdate.
-func (mm manifestManager) UpdateGCGen(ctx context.Context, behavior dherrors.FatalBehavior, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (contents manifestContents, err error) {
-	updater, ok := mm.m.(manifestGCGenUpdater)
-	if !ok {
-		return manifestContents{}, errors.New("manifest does not support updating gc gen")
-	}
-
-	if upstream, _, hit := mm.cache.Get(mm.Name()); hit {
-		if lastLock != upstream.lock {
-			return manifestContents{}, errors.New("manifest was modified during garbage collection")
-		}
-	}
-	t := time.Now()
-
-	mm.lockOutFetch()
-	defer func() {
-		afErr := mm.allowFetch()
-
-		if err == nil {
-			err = afErr
-		}
-	}()
-
-	f := func() (manifestContents, error) {
-		contents, err := updater.UpdateGCGen(ctx, behavior, lastLock, newContents, stats, writeHook)
-
-		if err != nil {
-			return contents, err
-		}
-
-		err = mm.cache.Put(mm.Name(), contents, t)
-
-		if err != nil {
-			return manifestContents{}, err
-		}
-
-		return contents, nil
-	}
-
-	contents, err = f()
-	return
-}
-
-func (mm manifestManager) Close() error {
-	mm.cache.Delete(mm.Name())
-	return nil
-}
-
-func (mm manifestManager) Name() string {
-	return mm.m.Name()
 }
 
 // TableSpecInfo is an interface for retrieving data from a tableSpec outside of this package

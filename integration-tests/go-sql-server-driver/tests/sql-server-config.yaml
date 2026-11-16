@@ -28,7 +28,7 @@ tests:
       args: ["-l", "trace", "-P", '{{get_port "repo1"}}']
       dynamic_port: repo1
       log_matches:
-      - "warning: persisted system variable unknown was not loaded since its definition does not exist."
+      - "persisted system variable unknown was not loaded since its definition does not exist."
   connections:
   - on: repo1
 - name: invalid persisted global variable value throws warning on server startup, but does not crash
@@ -81,16 +81,11 @@ tests:
         columns: ["@@GLOBAL.dolt_replicate_heads"]
         rows: [["main"]]
     - query: "select @@SESSION.dolt_replicate_heads"
-      result:
-        columns: ["@@SESSION.dolt_replicate_heads"]
-        # XXX: Is this OK? The session variable does not see the new global value; only new connections see it.
-        rows: [[""]]
+      error_match: "Variable 'dolt_replicate_heads' is a GLOBAL variable"
   - on: repo1
     queries:
     - query: "select @@SESSION.dolt_replicate_heads"
-      result:
-        columns: ["@@SESSION.dolt_replicate_heads"]
-        rows: [["main"]]
+      error_match: "Variable 'dolt_replicate_heads' is a GLOBAL variable"
     - query: "select @@dolt_replicate_heads"
       result:
         columns: ["@@dolt_replicate_heads"]
@@ -110,16 +105,11 @@ tests:
         columns: ["@@GLOBAL.dolt_replicate_all_heads"]
         rows: [["1"]]
     - query: "select @@SESSION.dolt_replicate_all_heads"
-      result:
-        columns: ["@@SESSION.dolt_replicate_all_heads"]
-        # XXX: Is this OK? The session variable does not see the new global value; only new connections see it.
-        rows: [["0"]]
+      error_match: "Variable 'dolt_replicate_all_heads' is a GLOBAL variable"
   - on: repo1
     queries:
     - query: "select @@SESSION.dolt_replicate_all_heads"
-      result:
-        columns: ["@@SESSION.dolt_replicate_all_heads"]
-        rows: [["1"]]
+      error_match: "Variable 'dolt_replicate_all_heads' is a GLOBAL variable"
     - query: "select @@dolt_replicate_all_heads"
       result:
         columns: ["@@dolt_replicate_all_heads"]

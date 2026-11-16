@@ -1025,3 +1025,30 @@ SQL
     [ "$status" -ne 0 ]
     [[ "$output" =~ "duplicate primary key given: [9223372036854775807]" ]] || false
 }
+
+@test "auto_increment: dolt_reset --hard restores a sequence lowered by TRUNCATE" {
+    # TRUNCATE drops the table from the tracker and re-derives its sequence from the other
+    # branches in scope, which can leave the tracker below the branch it truncated on. A
+    # hard reset makes those rows live again, so it has to raise the tracker back over them
+    # or the next insert collides with a row it just restored.
+    run dolt sql <<SQL
+CREATE TABLE t (pk int PRIMARY KEY AUTO_INCREMENT, c0 int);
+INSERT INTO t (c0) VALUES (1),(2),(3);
+CALL DOLT_COMMIT('-Am','c1');
+CALL DOLT_CHECKOUT('-b','other');
+CALL DOLT_CHECKOUT('main');
+INSERT INTO t (c0) VALUES (4),(5),(6),(7),(8),(9),(10);
+CALL DOLT_COMMIT('-Am','c2');
+TRUNCATE t;
+CALL DOLT_RESET('--hard');
+INSERT INTO t (c0) VALUES (100);
+SQL
+    [ "$status" -eq 0 ] || false
+    [[ ! "$output" =~ "duplicate primary key" ]] || false
+
+    run dolt sql -q "SELECT pk FROM t ORDER BY pk;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "1" ]] || false
+    [[ "${lines[11]}" =~ "11" ]] || false
+    [ "${#lines[@]}" -eq 12 ]
+}

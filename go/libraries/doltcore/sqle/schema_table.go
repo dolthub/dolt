@@ -112,9 +112,13 @@ func (st *SchemaTable) PreciseMatch() bool {
 	return true
 }
 
-// Updater implements sql.UpdatableTable. The SchemaTable is only every modified by using it's wrapped backing table.
+// Updater implements sql.UpdatableTable. Internal schema modifications go
+// through the wrapped backing table directly (see UnWrap); the dolt_schemas
+// table is not directly modifiable via SQL. A direct UPDATE dolt_schemas
+// reaches here and must return a clean error rather than panicking (which
+// an unprivileged user could otherwise trigger).
 func (st *SchemaTable) Updater(ctx *sql.Context) sql.RowUpdater {
-	panic("Runtime error: SchemaTable.Updater() should never be called")
+	return sqlutil.NewStaticErrorEditor(fmt.Errorf("the %s table cannot be modified directly", doltdb.SchemasTableName))
 }
 
 func (st *SchemaTable) UnWrap() *WritableDoltTable {
@@ -448,7 +452,7 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 				sqlModeString = s
 			}
 		} else {
-			defaultSqlMode, err := loadDefaultSqlMode()
+			defaultSqlMode, err := loadDefaultSqlMode(ctx)
 			if err != nil {
 				return nil, err
 			}
@@ -501,8 +505,8 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 
 // loadDefaultSqlMode loads the default value for the @@SQL_MODE system variable and returns it, along
 // with any unexpected errors encountered while reading the default value.
-func loadDefaultSqlMode() (string, error) {
-	global, _, ok := sql.SystemVariables.GetGlobal("SQL_MODE")
+func loadDefaultSqlMode(ctx *sql.Context) (string, error) {
+	global, _, ok := ctx.SystemVariables().GetGlobal("SQL_MODE")
 	if !ok {
 		return "", fmt.Errorf("unable to load default @@SQL_MODE")
 	}

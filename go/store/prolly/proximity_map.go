@@ -173,6 +173,21 @@ func getConvertToVectorFunction(keyDesc *val.TupleDesc, ns tree.NodeStore) (tree
 			}
 			return sql.ConvertToVector(ctx, vec)
 		}, nil
+	case val.ExtendedEnc, val.ExtendedAdaptiveEnc:
+		handler := keyDesc.Handlers[0]
+		return func(ctx context.Context, bytes []byte) ([]float32, error) {
+			v, err := handler.DeserializeValue(ctx, keyDesc.GetField(0, bytes))
+			if err != nil {
+				return nil, err
+			}
+			if wrapper, ok := v.(*val.ExtendedValueWrapper); ok {
+				v, err = wrapper.UnwrapAny(ctx)
+				if err != nil {
+					return nil, err
+				}
+			}
+			return sql.ConvertToVector(ctx, v)
+		}, nil
 	default:
 		return nil, fmt.Errorf("unexpected encoding for vector index: %v", keyDesc.Types[0].Enc)
 	}
@@ -531,7 +546,10 @@ func (b *ProximityMapBuilder) createInitialPathMaps(ctx context.Context, maxLeve
 // getNextPathSegmentCandidates takes a list of keys, representing a path into the ProximityMap from the root.
 // It returns an iter over all possible keys that could be the next path segment.
 func (b *ProximityMapBuilder) getNextPathSegmentCandidates(ctx context.Context, pathMap *MutableMap, prefixTupleDesc *val.TupleDesc, prefixTuple val.Tuple) (MapIter, error) {
-	prefixRange := PrefixRange(ctx, prefixTuple, prefixTupleDesc)
+	prefixRange, err := PrefixRange(ctx, prefixTuple, prefixTupleDesc)
+	if err != nil {
+		return nil, err
+	}
 	return pathMap.IterRange(ctx, prefixRange)
 }
 

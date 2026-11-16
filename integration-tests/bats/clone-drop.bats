@@ -29,3 +29,24 @@ teardown() {
   start_sql_server
   dolt sql -q 'call dolt_clone("file://../pushed", "cloned"); drop database cloned;'
 }
+
+@test "clone-drop: in-progress marker lifecycle on clone" {
+  # See https://github.com/dolthub/dolt/issues/11206
+  mkdir repo
+  cd repo
+  dolt init
+  dolt remote add pushed 'file://../pushed'
+  dolt push pushed main:main
+
+  dolt sql -q 'call dolt_clone("file://../pushed", "cloned");'
+  [ ! -f cloned/.dolt_safe_to_ignore ]
+
+  dolt clone file://../pushed cli_cloned
+  [ ! -f cli_cloned/.dolt_safe_to_ignore ]
+
+  mkdir stuck
+  touch stuck/.dolt_safe_to_ignore
+  run dolt sql -q 'call dolt_clone("file://../pushed", "stuck");'
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "incomplete database directory" ]] || false
+}

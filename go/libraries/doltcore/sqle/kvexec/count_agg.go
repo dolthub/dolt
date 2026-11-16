@@ -45,6 +45,10 @@ func newCountAggregationKvIter(ctx *sql.Context, srcIter prolly.MapIter, sch sch
 			idx, _ = sch.GetPKCols().StoredIndexByTag(col.Tag)
 		} else {
 			idx, _ = sch.GetNonPKCols().StoredIndexByTag(col.Tag)
+			if schema.IsKeyless(sch) {
+				// Keyless value tuples store cardinality before the table fields.
+				idx++
+			}
 		}
 	default:
 		return nil, false, nil

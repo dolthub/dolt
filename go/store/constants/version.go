@@ -22,22 +22,7 @@
 // Package constants collects common constants used in Noms, such as the Noms data format version.
 package constants
 
-import (
-	"os"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
-)
-
-func init() {
-	nbfVerStr := os.Getenv(dconfig.EnvDefaultBinFormat)
-	if nbfVerStr != "" {
-		FormatDefaultString = nbfVerStr
-	}
-}
-
 // See //go/store/types/format.go for corresponding formats.
-
-const FormatLD1String = "__LD_1__"
 const FormatDoltString = "__DOLT__"
 
 var FormatDefaultString = FormatDoltString

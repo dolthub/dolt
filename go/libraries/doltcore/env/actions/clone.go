@@ -25,6 +25,7 @@ import (
 	"github.com/dustin/go-humanize"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -39,6 +40,7 @@ import (
 )
 
 var ErrRepositoryExists = errors.New("data repository already exists")
+var ErrIncompleteRepository = errors.New("incomplete database directory from an interrupted create already exists")
 var ErrFailedToCreateDirectory = errors.New("unable to create directories")
 var ErrFailedToAccessDir = errors.New("unable to access directories")
 var ErrFailedToCreateRepoStateWithRemote = errors.New("unable to create repo state with remote")
@@ -54,26 +56,105 @@ var ErrUserNotFound = errors.New("could not determine user name. run dolt config
 var ErrEmailNotFound = errors.New("could not determine email. run dolt config --global --add user.email")
 var ErrCloneFailed = errors.New("clone failed")
 
+// AbortIncompleteClone removes the on-disk state left behind by a clone that never finished: the DoltDB opened
+// for it, the Dolt data written so far, and the in-progress marker [EnvForClone] wrote. When |dirExisted| is
+// true the user's own pre-existing directory is kept and only the Dolt state written into it is removed;
+// otherwise the clone directory itself is removed. Every failure path after EnvForClone must call this, because
+// a marker left behind makes the directory unusable until someone deletes it by hand.
+func AbortIncompleteClone(dEnv *env.DoltEnv, dirExisted bool) error {
+	if dEnv == nil {
+		return nil
+	}
+
+	errs := []error{env.CloseIncompleteDatabase(dEnv)}
+	if dirExisted {
+		if err := dEnv.FS.Delete(dbfactory.DoltDir, true /* force / recursive */); err != nil {
+			errs = append(errs, fmt.Errorf("unable to clean up incomplete clone: %w", err))
+		}
+		if err := dbfactory.ClearDatabaseInProgress(dEnv.FS); err != nil {
+			errs = append(errs, fmt.Errorf("unable to clean up incomplete clone: %w", err))
+		}
+	} else {
+		if err := dEnv.FS.Delete(".", true /* force / recursive */); err != nil {
+			errs = append(errs, fmt.Errorf("unable to clean up incomplete clone directory: %w", err))
+		}
+	}
+
+	return errors.Join(errs...)
+}
+
 // EnvForClone creates a new DoltEnv and configures it with repo state from the specified remote. The returned DoltEnv is ready for content to be cloned into it. The directory used for the new DoltEnv is determined by resolving the specified dir against the specified Filesys.
-func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, dir string, fs filesys.Filesys, version string, homeProvider env.HomeDirProvider) (*env.DoltEnv, error) {
+// The directory at |dir| is marked in progress before any state is written, so callers must clear the marker
+// with [dbfactory.ClearDatabaseInProgress] once the clone content is complete, or remove the state with
+// [AbortIncompleteClone] if the clone fails. A failure inside EnvForClone itself is cleaned up before it
+// returns.
+func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, dir string, fs filesys.Filesys, version string, homeProvider env.HomeDirProvider) (_ *env.DoltEnv, err error) {
+	return envForClone(ctx, nbf, r, dir, fs, version, homeProvider)
+}
+
+// EnvForCloneOf is [EnvForClone] for a clone of |src|. Each of |configure| runs on the new DoltEnv before its database
+// is created; an error from one fails the clone.
+func EnvForCloneOf(ctx context.Context, src *doltdb.DoltDB, r env.Remote, dir string, fs filesys.Filesys, version string, homeProvider env.HomeDirProvider, configure ...func(*env.DoltEnv) error) (*env.DoltEnv, error) {
+	return envForClone(ctx, src.Format(), r, dir, fs, version, homeProvider, configure...)
+}
+
+func envForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, dir string, fs filesys.Filesys, version string, homeProvider env.HomeDirProvider, configure ...func(*env.DoltEnv) error) (_ *env.DoltEnv, err error) {
 	canCreate, err := env.CanCreateDatabaseAtPath(fs, dir)
 	if !canCreate {
 		if errors.Is(err, env.ErrCannotCreateDoltDirAlreadyExists) {
+			// A directory left behind by an interrupted clone is not a usable repository, so report it
+			// plainly instead of claiming a repository exists.
+			if subFs, ferr := fs.WithWorkingDir(dir); ferr == nil && env.IsIncompleteDatabaseDir(subFs) {
+				return nil, fmt.Errorf("%w: %s; remove the directory and try again", ErrIncompleteRepository, dir)
+			}
 			return nil, fmt.Errorf("%w: %s", ErrRepositoryExists, dir)
 		}
 	}
+
+	dirExisted, _ := fs.Exists(dir)
 
 	err = fs.MkDirs(dir)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s; %s", ErrFailedToCreateDirectory, dir, err.Error())
 	}
 
+	var dEnv *env.DoltEnv
+	defer func() {
+		// Nothing we started here may outlive this call: the marker written below turns an abandoned directory
+		// into one that no later create or clone can use.
+		if err == nil {
+			return
+		}
+		if dEnv != nil {
+			err = errors.Join(err, AbortIncompleteClone(dEnv, dirExisted))
+		} else if !dirExisted {
+			// The remote was opened before this call and a git remote caches its repository under |dir|, so
+			// close what it left there before the directory goes away.
+			if abs, aerr := fs.Abs(dir); aerr == nil {
+				err = errors.Join(err, dbfactory.CloseGitRemotesUnderRoot(abs))
+			}
+			if derr := fs.Delete(dir, true /* force / recursive */); derr != nil {
+				err = errors.Join(err, fmt.Errorf("unable to clean up incomplete clone directory '%s': %w", dir, derr))
+			}
+		}
+	}()
+
 	newFs, err := fs.WithWorkingDir(dir)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s; %s", ErrFailedToAccessDir, dir, err.Error())
 	}
 
-	dEnv := env.LoadWithoutDB(ctx, homeProvider, newFs, doltdb.LocalDirDoltDB, version)
+	err = dbfactory.MarkDatabaseInProgress(newFs)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s; %s", ErrFailedToAccessDir, dir, err.Error())
+	}
+
+	dEnv = env.LoadWithoutDB(ctx, homeProvider, newFs, doltdb.LocalDirDoltDB, version)
+	for _, f := range configure {
+		if err = f(dEnv); err != nil {
+			return nil, err
+		}
+	}
 	err = dEnv.InitRepoWithNoData(ctx, nbf)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init repo: %w", err)
@@ -141,8 +222,13 @@ func clonePrint(eventCh <-chan pull.TableFileEvent) {
 			s := currStats[fileId]
 			bps := float64(s.Read) / s.Elapsed.Seconds()
 			rate := humanize.Bytes(uint64(bps)) + "/s"
-			p.Printf("Downloading file: %s (%s chunks) - %.2f%% downloaded, %s\n",
-				fileId, strhelp.CommaIfy(int64((*tableFiles[fileId]).NumChunks())), s.Percent*100, rate)
+			// A negative Percent means the total is unavailable; the transfer rate is still valid.
+			progress := "size unknown"
+			if s.Percent >= 0 {
+				progress = fmt.Sprintf("%.2f%% downloaded", s.Percent*100)
+			}
+			p.Printf("Downloading file: %s (%s chunks) - %s, %s\n",
+				fileId, strhelp.CommaIfy(int64((*tableFiles[fileId]).NumChunks())), progress, rate)
 		}
 		p.Display()
 	}
@@ -381,7 +467,7 @@ func InitEmptyClonedRepo(ctx context.Context, dEnv *env.DoltEnv) error {
 		return ErrEmailNotFound
 	}
 
-	err := dEnv.InitDBWithTime(ctx, types.Format_Default, name, email, initBranch, datas.CommitNow())
+	err := dEnv.InitDBWithTime(ctx, types.Format_DOLT, name, email, initBranch, datas.CommitNow())
 	if err != nil {
 		return fmt.Errorf("failed to init repo: %w", err)
 	}

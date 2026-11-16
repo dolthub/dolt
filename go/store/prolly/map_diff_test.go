@@ -165,7 +165,9 @@ func testDeleteDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numDeletes int
 
 	deletes := tups[:numDeletes]
 	sort.Slice(deletes, func(i, j int) bool {
-		return from.keyDesc.Compare(ctx, deletes[i][0], deletes[j][0]) < 0
+		cmp, err := from.keyDesc.Compare(ctx, deletes[i][0], deletes[j][0])
+		require.NoError(t, err)
+		return cmp < 0
 	})
 	to := makeMapWithDeletes(t, from, deletes...)
 
@@ -207,7 +209,9 @@ func testUpdateDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numUpdates int
 
 	sub := tups[:numUpdates]
 	sort.Slice(sub, func(i, j int) bool {
-		return from.keyDesc.Compare(ctx, sub[i][0], sub[j][0]) < 0
+		cmp, err := from.keyDesc.Compare(ctx, sub[i][0], sub[j][0])
+		require.NoError(t, err)
+		return cmp < 0
 	})
 
 	kd, vd := from.Descriptors()
@@ -329,7 +333,11 @@ func makeUpdatesToTuples(kd, vd *val.TupleDesc, tuples ...[2]val.Tuple) (updates
 	}
 
 	sort.Slice(updates, func(i, j int) bool {
-		return kd.Compare(ctx, updates[i][0], updates[j][0]) < 0
+		cmp, err := kd.Compare(ctx, updates[i][0], updates[j][0])
+		if err != nil {
+			panic(err)
+		}
+		return cmp < 0
 	})
 
 	return

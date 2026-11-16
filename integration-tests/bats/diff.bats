@@ -1,5 +1,6 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
+load $BATS_TEST_DIRNAME/helper/criss-cross.bash
 
 setup() {
     setup_common
@@ -489,6 +490,21 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "+ | 1" ]] || false
     [[ ! "$output" =~ "- | 2" ]] || false
+
+    # https://github.com/dolthub/dolt/issues/5414
+    # --reverse must not be parsed as a value attached to the -r option.
+    # This exercises the reported short-option / long-flag collision using
+    # existing diff options; --diff-mode does not currently have a -m alias.
+    run dolt diff --reverse --merge-base main branch1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "- | 1" ]] || false
+    [[ ! "$output" =~ "+ | 2" ]] || false
+    reverse_merge_base="$output"
+
+    run dolt diff -r tabular --reverse --merge-base main branch1
+    [ "$status" -eq 0 ]
+    [ "$output" = "$reverse_merge_base" ]
+
 }
 
 @test "diff: data and schema changes" {
@@ -1186,6 +1202,17 @@ SQL
     [[ "$output" =~ "pv1" ]] || false
     [[ "$output" =~ "cv1" ]] || false
     [[ "$output" =~ "Primary key sets differ between revisions for table 'a', skipping data diff" ]] || false
+
+    # https://github.com/dolthub/dolt/issues/6124
+    run dolt sql -r csv <<'SQL'
+CREATE TABLE changed_pk(pk INT PRIMARY KEY); CALL dolt_commit('-Am','create'); ALTER TABLE changed_pk MODIFY COLUMN pk VARCHAR(10); CALL dolt_commit('-am','alter'); ALTER TABLE changed_pk ADD COLUMN col1 VARCHAR(20); CALL dolt_commit('-am','column');
+SQL
+    [ "$status" -eq 0 ]
+    run dolt diff HEAD HEAD~2
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'Primary key sets differ' ]] || false
+    [[ "$output" =~ '-  `col1` varchar(20)' ]] || false
+    [[ "$output" =~ '+  `pk` int NOT NULL' ]] || false
 }
 
 @test "diff: sql update queries only show changed columns" {
@@ -1782,10 +1809,10 @@ SQL
     [ "${lines[0]}" = "+------------+-----------+-------------+---------------+" ]
     [ "${lines[1]}" = "| Table name | Diff type | Data change | Schema change |" ]
     [ "${lines[2]}" = "+------------+-----------+-------------+---------------+" ]
-    [ "${lines[3]}" = "| t1         | dropped   | false       | true          |" ]
-    [ "${lines[4]}" = "| t2         | modified  | false       | true          |" ]
-    [ "${lines[5]}" = "| t3         | modified  | true        | false         |" ]
-    [ "${lines[6]}" = "| t4         | added     | false       | true          |" ]
+    [[ "${lines[3]}" =~ ^\|[[:space:]]+t1[[:space:]]+\|[[:space:]]+dropped[[:space:]]+\|[[:space:]]+0[[:space:]]+\|[[:space:]]+1[[:space:]]+\|$ ]] || false
+    [[ "${lines[4]}" =~ ^\|[[:space:]]+t2[[:space:]]+\|[[:space:]]+modified[[:space:]]+\|[[:space:]]+0[[:space:]]+\|[[:space:]]+1[[:space:]]+\|$ ]] || false
+    [[ "${lines[5]}" =~ ^\|[[:space:]]+t3[[:space:]]+\|[[:space:]]+modified[[:space:]]+\|[[:space:]]+1[[:space:]]+\|[[:space:]]+0[[:space:]]+\|$ ]] || false
+    [[ "${lines[6]}" =~ ^\|[[:space:]]+t4[[:space:]]+\|[[:space:]]+added[[:space:]]+\|[[:space:]]+0[[:space:]]+\|[[:space:]]+1[[:space:]]+\|$ ]] || false
     [ "${lines[7]}" = "+------------+-----------+-------------+---------------+" ]
 
     run dolt diff --name-only
@@ -2478,44 +2505,39 @@ EOF
     dolt commit -am "cm2"
 
     dolt branch start
-    dolt checkout -b widen
     dolt sql -q "alter table t modify column val2 varchar(20)"
     dolt add .
     dolt commit -am "widen"
     run dolt diff -r sql old
     [ $status -eq 0 ]
     [[ "$output" =~ 'UPDATE `t` SET `val2`='"'2'"' WHERE `pk`=1;' ]] || false
-    dolt checkout start
 
-    dolt checkout -b narrow
+    dolt reset --hard start
     dolt sql -q "alter table t modify column val2 varchar(5)"
     dolt add .
     dolt commit -am "narrow"
     run dolt diff -r sql old
     [ $status -eq 1 ]
     [[ "$output" =~ "Incompatible schema change, skipping data diff for table 't'" ]] || false
-    dolt checkout start
 
-    dolt checkout -b typechange
+    dolt reset --hard start
     dolt sql -q "alter table t modify column val2 text"
     dolt add .
     dolt commit -am "typechange"
     run dolt diff -r sql old
     [ $status -eq 1 ]
     [[ "$output" =~ "Incompatible schema change, skipping data diff for table 't'" ]] || false
-    dolt checkout start
 
-    dolt checkout -b rename
+    dolt reset --hard start
     dolt sql -q "alter table t rename column val2 to val3"
     dolt add .
     dolt commit -am "rename"
     run dolt diff -r sql old
     [ $status -eq 0 ]
     [[ "$output" =~ 'UPDATE `t` SET `val3`='"'2'"' WHERE `pk`=1;' ]] || false
-    dolt checkout start
 
-    dolt checkout -b add
     # A naive data diff would not know to emit the update statement.
+    dolt reset --hard start
     dolt sql -q "alter table t add column val3 varchar(10) default '3'"
     dolt sql -q "update t set val3 = NULL"
     dolt add .
@@ -2523,16 +2545,52 @@ EOF
     run dolt diff -r sql old
     [ $status -eq 1 ]
     [[ "$output" =~ "Incompatible schema change, skipping data diff for table 't'" ]] || false
-    dolt checkout start
 
     # Dropping a column that isn't the last column leads to tuples that can't be diffed.
-    dolt checkout -b drop
+    dolt reset --hard start
     dolt sql -q "alter table t drop column val1"
     dolt add .
     dolt commit -am "drop"
     run dolt diff -r sql old
     [ $status -eq 1 ]
     [[ "$output" =~ "Incompatible schema change, skipping data diff for table 't'" ]] || false
-    dolt checkout start
 
+}
+
+@test "diff: A...B with several merge bases uses the newest and warns" {
+    criss_cross
+
+    # Like git diff branchA...branchB, diff branchB against baseB, which has row 20.
+    run dolt diff branchA...branchB
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "warning: branchA...branchB: multiple merge bases, using $BASE_B" ]
+    [[ "$output" =~ "| + | 10 |" ]] || false
+    [[ ! "$output" =~ "| + | 20 |" ]] || false
+}
+
+@test "diff: ...B diffs B against the merge base of HEAD and B" {
+    criss_cross
+
+    # Like git diff ...branchB, the omitted side is HEAD, which is branchA.
+    run dolt diff ...branchB
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "warning: HEAD...branchB: multiple merge bases, using $BASE_B" ]
+    [[ "$output" =~ "| + | 10 |" ]] || false
+}
+
+@test "diff: A...B with one merge base does not warn" {
+    criss_cross
+
+    run dolt diff main...branchA
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "warning" ]] || false
+}
+
+@test "diff: --merge-base with several merge bases fails" {
+    criss_cross
+
+    # Like git diff --merge-base branchA branchB.
+    run dolt diff --merge-base branchA branchB
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "multiple merge bases found" ]] || false
 }

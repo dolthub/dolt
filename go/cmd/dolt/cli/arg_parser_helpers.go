@@ -17,10 +17,13 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
@@ -168,6 +171,13 @@ func CreateResetArgParser() *argparser.ArgParser {
 	return ap
 }
 
+func CreateSquashHistoryArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParserWithMaxArgs("squash-history", 0)
+	ap.SupportsString(MessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message for the squashed commit.")
+	ap.SupportsString(FirstParam, "f", "commit", "The oldest commit to include in the squash. Everything from {{.LessThan}}commit{{.GreaterThan}} through HEAD is collapsed into a single commit. Defaults to the initial commit's child.")
+	return ap
+}
+
 func CreateRemoteArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs("remote")
 	ap.SupportsString("ref", "", "ref", "Git ref to use as the Dolt data ref for git remotes (default: refs/dolt/data).")
@@ -259,6 +269,7 @@ func CreateBranchArgParser() *argparser.ArgParser {
 	ap := createTracklessBranchArgParser()
 	ap.SupportsFlag(TrackFlag, "t", "Set up upstream configuration for a branch. Uses current branch as default")
 	ap.SupportsString(SetUpstreamToFlag, "u", "", "Set upstream configuration for a branch.")
+	ap.SupportsFlag(OrphanFlag, "", "Create a branch whose single commit has no parents and holds the contents of {{.LessThan}}start-point{{.GreaterThan}}.")
 
 	return ap
 }
@@ -285,7 +296,41 @@ func CreateBackupArgParser() *argparser.ArgParser {
 	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, dbfactory.AWSCredTypes))
 	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file")
 	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use")
+	ap.SupportsString(PruneWithGracePeriod, "", "duration", "Only valid with {{.EmphasisLeft}}sync{{.EmphasisRight}} and {{.EmphasisLeft}}sync-url{{.EmphasisRight}} against a {{.EmphasisLeft}}file://{{.EmphasisRight}} backup. Before syncing, delete table files in the destination that no manifest references and that are older than {{.LessThan}}duration{{.GreaterThan}} (e.g. 1h, 30m). Nothing is deleted if any file in the destination has been modified more recently than {{.LessThan}}duration{{.GreaterThan}}, so the duration must be shorter than the interval between syncs for a prune to ever run.")
 	return ap
+}
+
+// BackupPruneMinGracePeriod is the smallest grace period `dolt backup
+// sync --prune-with-grace-period` accepts.
+//
+// A prune decides that a destination is idle by comparing file
+// mtimes, and on NFS an attribute cache can report an mtime stale by
+// up to acregmax (60s by default). The grace period also has to cover
+// the tail of a sync in which a writer has landed its last table file
+// and is loading its index, running ref checks and committing the
+// manifest, all without touching the directory again.
+const BackupPruneMinGracePeriod = 10 * time.Minute
+
+// ParseBackupPruneGracePeriod parses the value of --prune-with-grace-period
+// and enforces [BackupPruneMinGracePeriod].
+func ParseBackupPruneGracePeriod(s string) (time.Duration, error) {
+	grace, err := time.ParseDuration(s)
+	if err != nil {
+		return 0, fmt.Errorf("invalid value for --%s: %w", PruneWithGracePeriod, err)
+	}
+
+	min := BackupPruneMinGracePeriod
+	if override := os.Getenv(dconfig.EnvBackupPruneMinGrace); override != "" {
+		min, err = time.ParseDuration(override)
+		if err != nil {
+			return 0, fmt.Errorf("invalid value for %s: %w", dconfig.EnvBackupPruneMinGrace, err)
+		}
+	}
+
+	if grace < min {
+		return 0, fmt.Errorf("--%s must be at least %s, got %s", PruneWithGracePeriod, min, grace)
+	}
+	return grace, nil
 }
 
 func CreateVerifyConstraintsArgParser(name string) *argparser.ArgParser {
@@ -413,6 +458,7 @@ func CreateGlobalArgParser(name string) *argparser.ArgParser {
 	ap.SupportsString("port", "", "port", "Defines the port to connect to.")
 	ap.SupportsFlag("no-tls", "", "Disables TLS for the connection to remote databases.")
 	ap.SupportsString("data-dir", "", "data-dir", "Defines a data directory whose subdirectories should all be dolt data repositories accessible as independent databases. Defaults to the current directory.")
+	ap.SupportsRepeatableString("directory", "C", "dir", "Run the command as if executed in the directory provided. When repeated, each relative path is resolved from the preceding directory. Matches git -C behaviour.")
 	ap.SupportsString("doltcfg-dir", "", "doltcfg-dir", "Defines a directory that contains configuration files for dolt. Defaults to `$data-dir/.doltcfg`. Will only be created if there is a change to configuration settings.")
 	ap.SupportsString("privilege-file", "", "privilege-file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will only be created if there is a change to privileges.")
 	ap.SupportsString("branch-control-file", "", "branch-control-file", "Path to a file to load and store branch control permissions. Defaults to `$doltcfg-dir/branch_control.db`. Will only be created if there is a change to branch control permissions.")

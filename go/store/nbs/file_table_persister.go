@@ -35,12 +35,27 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
+
+var loadingTableFilesDisabled bool
+
+func init() {
+	if os.Getenv(dconfig.EnvAssertNoTableFilesRead) != "" {
+		loadingTableFilesDisabled = true
+	}
+}
+
+func PanicIfLoadingTableFilesDisabled() {
+	if loadingTableFilesDisabled {
+		panic("tried to load a table file or journal file but loading table files is disabled")
+	}
+}
 
 const tempTablePrefix = "nbs_table_"
 
@@ -144,11 +159,12 @@ func (ftplc *fsTablePersisterRefCounter) addRef() {
 	ftplc.ftp.addProtected(ftplc.name)
 }
 
-func (ftp *fsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
+func (ftp *fsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, opts openOpts, stats *Stats) (chunkSource, error) {
+	PanicIfLoadingTableFilesDisabled()
 	ftp.pruneMu.RLock()
 	defer ftp.pruneMu.RUnlock()
 	rc := fsTablePersisterRefCounter{ftp, name}
-	cs, err := newFileTableReader(ctx, ftp.dir, name, chunkCount, ftp.q, ftp.mmapArchiveIndexes, &rc, stats)
+	cs, err := newFileTableReader(ctx, ftp.dir, name, chunkCount, ftp.q, ftp.mmapArchiveIndexes, &rc, opts, stats)
 	if err != nil {
 		return nil, err
 	}
@@ -156,6 +172,12 @@ func (ftp *fsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCoun
 	return cs, nil
 }
 
+// Exists reports whether a table file named |name| is already present, and if
+// so returns a handle protecting it from pruning instead of writing it again.
+//
+// Currently, these handles are only effective for stores that do not
+// experience multi-process concurrency. So this method must not be used on
+// the backup or push path to a file:// store.
 func (ftp *fsTablePersister) Exists(ctx context.Context, name string, chunkCount uint32, stats *Stats) (bool, io.Closer, error) {
 	ftp.pruneMu.RLock()
 	defer ftp.pruneMu.RUnlock()
@@ -234,6 +256,17 @@ func (ftp *fsTablePersister) TryMoveCmpChunkTableWriter(ctx context.Context, fil
 // renames it to its final name, and adds it to the pending set. The returned
 // handle must be closed after the file has been Open'd or is no longer needed.
 // The pruneMu read lock is held for the entire operation.
+//
+// A file that already exists under the final name is never replaced: it may be
+// live, open and mmapped, and its replacement is not known to open. Instead the
+// temp file is discarded and the existing file is touched, so that it reads as
+// freshly landed to pruneUnreferencedWithGrace.
+//
+// If writeFn fails, or the temp file cannot be closed or renamed, the inflight
+// temp file is removed before returning the error. This matters for callers
+// like ConjoinAll, where an I/O error reading a source under FatalBehaviorError
+// would otherwise leave the partially written conjoined table/archive file
+// behind until the next PruneTableFiles.
 func (ftp *fsTablePersister) writeAndProtect(finalName string, writeFn func(temp *os.File) error) (*pendingHandle, error) {
 	addr, ok := fileNameToAddr(finalName)
 	if !ok {
@@ -247,16 +280,28 @@ func (ftp *fsTablePersister) writeAndProtect(finalName string, writeFn func(temp
 	if err != nil {
 		return nil, err
 	}
+	tempName := temp.Name()
 
 	if err = writeFn(temp); err != nil {
 		_ = temp.Close()
+		_ = file.Remove(tempName)
 		return nil, err
 	}
 	if err = temp.Close(); err != nil {
+		_ = file.Remove(tempName)
 		return nil, err
 	}
-	if err = file.Rename(temp.Name(), filepath.Join(ftp.dir, finalName)); err != nil {
-		return nil, err
+	finalPath := filepath.Join(ftp.dir, finalName)
+	if err = file.RenameNoReplace(tempName, finalPath); err != nil {
+		_ = file.Remove(tempName)
+		if !errors.Is(err, fs.ErrExist) {
+			return nil, err
+		}
+		// pruneMu keeps the existing file from being pruned out from
+		// under us until it is protected below.
+		if err = file.Touch(finalPath); err != nil {
+			return nil, err
+		}
 	}
 	return ftp.addPending(addr), nil
 }
@@ -277,7 +322,9 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, behavior dherrors
 	}
 	defer ph.Close()
 
-	return ftp.Open(ctx, name, chunkCount, stats)
+	// Run the more expensive deepValidate validation on the newly
+	// written table file. We're about to take a dependency on it.
+	return ftp.Open(ctx, name, chunkCount, openOpts{deepValidate: true}, stats)
 }
 
 func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, behavior dherrors.FatalBehavior, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
@@ -327,7 +374,7 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, behavior dherrors.F
 	}
 	defer ph.Close()
 
-	cs, err := ftp.Open(ctx, plan.name, plan.chunkCount, stats)
+	cs, err := ftp.Open(ctx, plan.name, plan.chunkCount, openOpts{deepValidate: true}, stats)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -342,6 +389,32 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, behavior dherrors.F
 			file.Remove(filepath.Join(ftp.dir, h.String()+s.suffix()))
 		}
 	}, nil
+}
+
+// pruneUnreferencedWithGrace reclaims table files in ftp.dir that neither the
+// destination's manifest nor this process reference, subject to the
+// directory-wide quiescence check in pruneDirWithGrace. |lock| supplies the
+// manifest's contribution to the keep set. ftp adds its own |protected| set to
+// the set of things to keep.
+func (ftp *fsTablePersister) pruneUnreferencedWithGrace(ctx context.Context, grace time.Duration, lock lockKeepers) (PruneStats, error) {
+	ftp.pruneMu.Lock()
+	defer ftp.pruneMu.Unlock()
+
+	lockAndProtect := func(ctx context.Context) (hash.HashSet, func() error, error) {
+		keep, release, err := lock(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		// ftp.protected can be read without ftp.mu since we hold ftp.pruneMu
+		// exclusively.
+		for h, n := range ftp.protected {
+			if n > 0 {
+				keep.Insert(h)
+			}
+		}
+		return keep, release, nil
+	}
+	return pruneDirWithGrace(ctx, ftp.dir, grace, lockAndProtect)
 }
 
 func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context) error {
@@ -374,7 +447,6 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context) error {
 		filePath := path.Join(ftp.dir, name)
 
 		if strings.HasPrefix(name, tempTablePrefix) {
-			// Write lock guarantees no temp files are in flight.
 			if err := file.Remove(filePath); err != nil && !errors.Is(err, fs.ErrNotExist) {
 				errs = append(errs, fmt.Errorf("error removing temp file %s: %w", filePath, err))
 			}
@@ -399,6 +471,10 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context) error {
 }
 
 func (ftp *fsTablePersister) Close() error {
+	return nil
+}
+
+func (ftp *fsTablePersister) Teardown(ctx context.Context) error {
 	return nil
 }
 

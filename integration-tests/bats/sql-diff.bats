@@ -971,3 +971,36 @@ SQL
   ! [[ "$output" =~ "ignore_table" ]] || false
 
 }
+
+@test "sql-diff: stored generated columns omitted from INSERT and UPDATE" {
+  # See https://github.com/dolthub/dolt/issues/11445
+  dolt sql <<SQL
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  a INT,
+  g INT GENERATED ALWAYS AS (a + 1) STORED
+);
+SQL
+  dolt add -A
+  dolt commit -m "create table with stored generated column"
+  dolt sql -q "INSERT INTO t (id, a) VALUES (1, 10)"
+  dolt add -A
+  dolt commit -m "seed row"
+  dolt sql -q "UPDATE t SET a=99 WHERE id=1"
+  dolt sql -q "INSERT INTO t (id, a) VALUES (2, 20)"
+
+  run dolt diff -r sql
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "UPDATE \`t\` SET \`a\`=99 WHERE \`id\`=1;" ]] || false
+  [[ "$output" =~ "INSERT INTO \`t\` (\`id\`,\`a\`) VALUES (2,20);" ]] || false
+  ! [[ "$output" =~ "\`g\`" ]] || false
+
+  dolt diff -r sql > query
+  dolt reset --hard
+  run dolt sql < query
+  [ "$status" -eq 0 ]
+  run dolt sql -r csv -q "SELECT id, a, g FROM t ORDER BY id"
+  [ "$status" -eq 0 ]
+  [[ "${lines[1]}" = "1,99,100" ]] || false
+  [[ "${lines[2]}" = "2,20,21" ]] || false
+}

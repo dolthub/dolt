@@ -68,7 +68,7 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 		return EmptyReadReplica, fmt.Errorf("%w: '%s'", env.ErrRemoteNotFound, remoteName)
 	}
 
-	srcDB, err := remote.GetRemoteDB(ctx, types.Format_Default, dEnv)
+	srcDB, err := remote.GetRemoteDB(ctx, types.Format_DOLT, dEnv)
 	if err != nil {
 		return EmptyReadReplica, err
 	}
@@ -89,8 +89,7 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 
 func (rrd ReadReplicaDatabase) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
 	rrd.rsr, rrd.rsw = branchSpec.RepoState, branchSpec.RepoState
-	rrd.revision = branchSpec.Branch
-	rrd.revName = rrd.baseName + doltdb.DbRevisionDelimiter + branchSpec.Branch
+	rrd.name = rrd.name.WithRevision(branchSpec.Branch)
 	rrd.revType = dsess.RevisionTypeBranch
 	rrd.requestedName = requestedName
 
@@ -106,7 +105,7 @@ func (rrd ReadReplicaDatabase) ValidReplicaState(ctx *sql.Context) bool {
 // This seems like a pointless override from the embedded Database implementation, but it's necessary to pass the
 // correct pointer type to the session initializer.
 func (rrd ReadReplicaDatabase) InitialDBState(ctx *sql.Context) (dsess.InitialDbState, error) {
-	return initialDBState(ctx, rrd, rrd.revision)
+	return initialDBState(ctx, rrd, rrd.name.Revision)
 }
 
 func (rrd ReadReplicaDatabase) DoltDatabases() []*doltdb.DoltDB {
@@ -116,18 +115,18 @@ func (rrd ReadReplicaDatabase) DoltDatabases() []*doltdb.DoltDB {
 func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 	ctx.GetLogger().Tracef("pulling from remote %s for database %s", rrd.remote.Name, rrd.Name())
 
-	_, headsArg, ok := sql.SystemVariables.GetGlobal(dsess.ReplicateHeads)
+	_, headsArg, ok := ctx.SystemVariables().GetGlobal(dsess.ReplicateHeads)
 	if !ok {
 		return sql.ErrUnknownSystemVariable.New(dsess.ReplicateHeads)
 	}
 
-	_, allHeads, ok := sql.SystemVariables.GetGlobal(dsess.ReplicateAllHeads)
+	_, allHeads, ok := ctx.SystemVariables().GetGlobal(dsess.ReplicateAllHeads)
 	if !ok {
 		return sql.ErrUnknownSystemVariable.New(dsess.ReplicateAllHeads)
 	}
 
 	behavior := pullBehaviorFastForward
-	if ReadReplicaForcePull() {
+	if ReadReplicaForcePullWithRegistry(ctx.SystemVariables()) {
 		behavior = pullBehaviorForcePull
 	}
 
@@ -252,7 +251,7 @@ func (rrd ReadReplicaDatabase) CreateLocalBranchFromRemote(ctx *sql.Context, bra
 		}
 
 		// create refs/heads/branch dataset
-		err = rrd.ddb.NewBranchAtCommit(ctx, branchRef, cm, nil)
+		err = rrd.ddb.NewBranchAtCommitAllowCaseConflict(ctx, branchRef, cm, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -423,7 +422,7 @@ func (rrd ReadReplicaDatabase) createNewBranchFromRemote(ctx *sql.Context, remot
 		return doltdb.ErrGhostCommitEncountered // NM4 - TEST.
 	}
 
-	err = rrd.ddb.NewBranchAtCommit(ctx, remoteRef.Ref, cm, nil)
+	err = rrd.ddb.NewBranchAtCommitAllowCaseConflict(ctx, remoteRef.Ref, cm, nil)
 	return rrd.ddb.SetHead(ctx, trackingRef, remoteRef.Hash)
 }
 

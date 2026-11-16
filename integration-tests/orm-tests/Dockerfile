@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM golang:1.26.2-alpine AS golang_cgo
+FROM golang:1.27.3-alpine AS golang_cgo
 ENV CGO_ENABLED=1
 ENV GO_LDFLAGS="-linkmode external -extldflags '-static'"
 RUN apk add --no-cache build-base
@@ -49,7 +49,8 @@ RUN pip3 install mysql-connector-python PyMySQL sqlalchemy
 ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64/
 
 # install the current latest maven version, `v3.9.11`, because apt installed one does not work with jdk 17
-ADD https://archive.apache.org/dist/maven/maven-3/3.9.11/binaries/apache-maven-3.9.11-bin.tar.gz apache-maven-3.9.11-bin.tar.gz
+# mirrored in our own bucket; archive.apache.org is unreliable from CI
+ADD --checksum=sha256:4b7195b6a4f5c81af4c0212677a32ee8143643401bc6e1e8412e6b06ea82beac https://dolthub-tools.s3.us-west-2.amazonaws.com/apache-maven-3.9.11-bin.tar.gz apache-maven-3.9.11-bin.tar.gz
 RUN tar zxvf apache-maven-3.9.11-bin.tar.gz && \
     cp -r apache-maven-3.9.11 /opt && \
     rm -rf apache-maven-3.9.11 apache-maven-3.9.11-bin.tar.gz

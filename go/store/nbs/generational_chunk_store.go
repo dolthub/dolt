@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -47,12 +48,12 @@ var ErrGhostChunkRequested = errors.New("requested chunk which is expected to be
 
 func (gcs *GenerationalNBS) PersistGhostHashes(ctx context.Context, refs hash.HashSet) error {
 	if gcs.ghostGen == nil {
-		return gcs.ghostGen.PersistGhostHashes(ctx, refs)
+		return fmt.Errorf("runtime error. ghostGen is nil but an attempt to persist ghost hashes was made")
 	}
-	return fmt.Errorf("runtime error. ghostGen is nil but an attempt to persist ghost hashes was made")
+	return gcs.ghostGen.PersistGhostHashes(ctx, refs)
 }
 
-func (gcs *GenerationalNBS) GhostGen() chunks.ChunkStore {
+func (gcs *GenerationalNBS) GhostGen() chunks.GhostChunkStore {
 	return gcs.ghostGen
 }
 
@@ -85,15 +86,21 @@ func (gcs *GenerationalNBS) OldGen() chunks.ChunkStoreGarbageCollector {
 }
 
 // Get the Chunk for the value of the hash in the store. If the hash is absent from the store EmptyChunk is returned.
+//
+// We read new gen and then old gen. A GC publishes promoted chunks
+// into the old gen before it drops them from the new gen. Reading new
+// gen first guarantees that if we miss the chunk in new gen, it has
+// definitely already been published to old gen by the time we check
+// it.
 func (gcs *GenerationalNBS) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, error) {
-	c, err := gcs.oldGen.Get(ctx, h)
+	c, err := gcs.newGen.Get(ctx, h)
 
 	if err != nil {
 		return chunks.EmptyChunk, err
 	}
 
 	if c.IsEmpty() {
-		c, err = gcs.newGen.Get(ctx, h)
+		c, err = gcs.oldGen.Get(ctx, h)
 	}
 	if err != nil {
 		return chunks.EmptyChunk, err
@@ -111,10 +118,12 @@ func (gcs *GenerationalNBS) Get(ctx context.Context, h hash.Hash) (chunks.Chunk,
 
 // GetMany gets the Chunks with |hashes| from the store. On return, |foundChunks| will have been fully sent all chunks
 // which have been found. Any non-present chunks will silently be ignored.
+//
+// The generations are read new-then-old; see |Get| for why the order matters.
 func (gcs *GenerationalNBS) GetMany(ctx context.Context, hashes hash.HashSet, found func(context.Context, *chunks.Chunk)) error {
 	mu := &sync.Mutex{}
 	notFound := hashes.Copy()
-	err := gcs.oldGen.GetMany(ctx, hashes, func(ctx context.Context, chunk *chunks.Chunk) {
+	err := gcs.newGen.GetMany(ctx, hashes, func(ctx context.Context, chunk *chunks.Chunk) {
 		func() {
 			mu.Lock()
 			defer mu.Unlock()
@@ -132,7 +141,7 @@ func (gcs *GenerationalNBS) GetMany(ctx context.Context, hashes hash.HashSet, fo
 
 	hashes = notFound
 	notFound = hashes.Copy()
-	err = gcs.newGen.GetMany(ctx, hashes, func(ctx context.Context, chunk *chunks.Chunk) {
+	err = gcs.oldGen.GetMany(ctx, hashes, func(ctx context.Context, chunk *chunks.Chunk) {
 		func() {
 			mu.Lock()
 			defer mu.Unlock()
@@ -162,22 +171,23 @@ func (gcs *GenerationalNBS) GetManyCompressed(ctx context.Context, hashes hash.H
 
 func (gcs *GenerationalNBS) getManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, ToChunker), gcDepMode gcDependencyMode) error {
 	var mu sync.Mutex
-	notInOldGen := hashes.Copy()
-	err := gcs.oldGen.getManyCompressed(ctx, hashes, func(ctx context.Context, chunk ToChunker) {
+	// The generations are read new-then-old; see |Get| for why the order matters.
+	notInNewGen := hashes.Copy()
+	err := gcs.newGen.getManyCompressed(ctx, hashes, func(ctx context.Context, chunk ToChunker) {
 		mu.Lock()
-		delete(notInOldGen, chunk.Hash())
+		delete(notInNewGen, chunk.Hash())
 		mu.Unlock()
 		found(ctx, chunk)
 	}, gcDepMode)
 	if err != nil {
 		return err
 	}
-	if len(notInOldGen) == 0 {
+	if len(notInNewGen) == 0 {
 		return nil
 	}
 
-	notFound := notInOldGen.Copy()
-	err = gcs.newGen.getManyCompressed(ctx, notInOldGen, func(ctx context.Context, chunk ToChunker) {
+	notFound := notInNewGen.Copy()
+	err = gcs.oldGen.getManyCompressed(ctx, notInNewGen, func(ctx context.Context, chunk ToChunker) {
 		mu.Lock()
 		delete(notFound, chunk.Hash())
 		mu.Unlock()
@@ -198,13 +208,15 @@ func (gcs *GenerationalNBS) getManyCompressed(ctx context.Context, hashes hash.H
 }
 
 // Has returns true iff the value at the address |h| is contained in the store
+//
+// The generations are read new-then-old; see |Get| for why the order matters.
 func (gcs *GenerationalNBS) Has(ctx context.Context, h hash.Hash) (bool, error) {
-	has, err := gcs.oldGen.Has(ctx, h)
+	has, err := gcs.newGen.Has(ctx, h)
 	if err != nil || has {
 		return has, err
 	}
 
-	has, err = gcs.newGen.Has(ctx, h)
+	has, err = gcs.oldGen.Has(ctx, h)
 	if err != nil || has {
 		return has, err
 	}
@@ -233,8 +245,11 @@ func (gcs *GenerationalNBS) HasMany(ctx context.Context, hashes hash.HashSet) (h
 	if err != nil {
 		return nil, err
 	}
-	if len(absent) == 0 || gcs.ghostGen == nil {
-		return nil, err
+	if len(absent) == 0 {
+		return nil, nil
+	}
+	if gcs.ghostGen == nil {
+		return absent, nil
 	}
 
 	return gcs.ghostGen.HasMany(ctx, absent)
@@ -349,6 +364,15 @@ func (gcs *GenerationalNBS) Close() error {
 	return nErr
 }
 
+func (gcs *GenerationalNBS) Teardown(ctx context.Context) error {
+	oErr := gcs.oldGen.Teardown(ctx)
+	nErr := gcs.newGen.Teardown(ctx)
+	if oErr != nil {
+		return oErr
+	}
+	return nErr
+}
+
 func (gcs *GenerationalNBS) copyToOldGen(ctx context.Context, hashes hash.HashSet) error {
 	notInOldGen, err := gcs.oldGen.HasMany(ctx, hashes)
 
@@ -397,7 +421,10 @@ func (gcs *GenerationalNBS) Sources(ctx context.Context) (chunks.TableFileSource
 	ret.Root = newgensources.Root
 	ret.TableFiles = append([]chunks.TableFile{}, newgensources.TableFiles...)
 	ret.AppendixTableFiles = append([]chunks.TableFile{}, newgensources.AppendixTableFiles...)
-	prefix := gcs.RelativeOldGenPath()
+	prefix, err := gcs.RelativeOldGenPath(ctx)
+	if err != nil {
+		return chunks.TableFileSources{}, err
+	}
 	for _, tf := range oldgensources.TableFiles {
 		ret.TableFiles = append(ret.TableFiles, prefixedTableFile{tf, prefix})
 	}
@@ -445,9 +472,26 @@ func (gcs *GenerationalNBS) PruneTableFiles(ctx context.Context) error {
 	return gcs.newGen.pruneTableFiles(ctx)
 }
 
+// PruneUnreferencedWithGrace implements [GracePruner] over both generations.
+// Each directory is judged against its own manifest and its own quiescence,
+// so one busy generation does not veto the other.
+func (gcs *GenerationalNBS) PruneUnreferencedWithGrace(ctx context.Context, grace time.Duration) (PruneStats, error) {
+	var stats PruneStats
+
+	newGenStats, err := gcs.newGen.PruneUnreferencedWithGrace(ctx, grace)
+	stats.add(newGenStats)
+	if err != nil {
+		return stats, err
+	}
+
+	oldGenStats, err := gcs.oldGen.PruneUnreferencedWithGrace(ctx, grace)
+	stats.add(oldGenStats)
+	return stats, err
+}
+
 // SupportedOperations returns a description of the support TableFile operations. Some stores only support reading table files, not writing.
-func (gcs *GenerationalNBS) SupportedOperations() chunks.TableFileStoreOps {
-	return gcs.newGen.SupportedOperations()
+func (gcs *GenerationalNBS) SupportedOperations(ctx context.Context) (chunks.TableFileStoreOps, error) {
+	return gcs.newGen.SupportedOperations(ctx)
 }
 
 func (gcs *GenerationalNBS) GetChunkLocationsWithPaths(ctx context.Context, hashes hash.HashSet) (map[string]map[hash.Hash]Range, error) {
@@ -456,7 +500,10 @@ func (gcs *GenerationalNBS) GetChunkLocationsWithPaths(ctx context.Context, hash
 		return nil, err
 	}
 	if len(hashes) > 0 {
-		prefix := gcs.RelativeOldGenPath()
+		prefix, err := gcs.RelativeOldGenPath(ctx)
+		if err != nil {
+			return nil, err
+		}
 		toadd, err := gcs.oldGen.GetChunkLocationsWithPaths(ctx, hashes)
 		if err != nil {
 			return nil, err
@@ -485,19 +532,25 @@ func (gcs *GenerationalNBS) GetChunkLocations(ctx context.Context, hashes hash.H
 	return res, nil
 }
 
-func (gcs *GenerationalNBS) RelativeOldGenPath() string {
-	newgenpath, ngpok := gcs.newGen.Path()
-	oldgenpath, ogpok := gcs.oldGen.Path()
+func (gcs *GenerationalNBS) RelativeOldGenPath(ctx context.Context) (string, error) {
+	newgenpath, ngpok, err := gcs.newGen.Path(ctx)
+	if err != nil {
+		return "", err
+	}
+	oldgenpath, ogpok, err := gcs.oldGen.Path(ctx)
+	if err != nil {
+		return "", err
+	}
 	if ngpok && ogpok {
 		if p, err := filepath.Rel(newgenpath, oldgenpath); err == nil {
-			return p
+			return p, nil
 		}
 	}
-	return "oldgen"
+	return "oldgen", nil
 }
 
-func (gcs *GenerationalNBS) Path() (string, bool) {
-	return gcs.newGen.Path()
+func (gcs *GenerationalNBS) Path(ctx context.Context) (string, bool, error) {
+	return gcs.newGen.Path(ctx)
 }
 
 func (gcs *GenerationalNBS) UpdateManifest(ctx context.Context, updates map[hash.Hash]uint32) (mi ManifestInfo, err error) {
@@ -510,8 +563,8 @@ func (gcs *GenerationalNBS) OldGenGCFilter() chunks.HasManyFunc {
 	}
 }
 
-func (gcs *GenerationalNBS) BeginGC(keeper func(hash.Hash) bool, mode chunks.GCMode) error {
-	err := gcs.newGen.BeginGC(keeper, mode)
+func (gcs *GenerationalNBS) BeginGC(ctx context.Context, keeper func(hash.Hash) bool, mode chunks.GCMode) error {
+	err := gcs.newGen.BeginGC(ctx, keeper, mode)
 	if err != nil {
 		return err
 	}
@@ -521,7 +574,7 @@ func (gcs *GenerationalNBS) BeginGC(keeper func(hash.Hash) bool, mode chunks.GCM
 	// going away. In Full mode, we want to take read dependencies
 	// from the OldGen as well.
 	if mode == chunks.GCMode_Full {
-		err = gcs.oldGen.BeginGC(keeper, mode)
+		err = gcs.oldGen.BeginGC(ctx, keeper, mode)
 		if err != nil {
 			gcs.newGen.EndGC(mode)
 			return err
@@ -553,20 +606,27 @@ func (gcs *GenerationalNBS) IterateAllChunks(ctx context.Context, cb func(chunk 
 	return nil
 }
 
-func (gcs *GenerationalNBS) TolerantIterateAllChunks(ctx context.Context, cb func(chunks.Chunk), errCb func(sourceFile string, err error)) {
-	gcs.newGen.TolerantIterateAllChunks(ctx, cb, errCb)
-	if ctx.Err() != nil {
-		return
+func (gcs *GenerationalNBS) TolerantIterateAllChunks(ctx context.Context, cb func(chunks.Chunk), errCb func(sourceFile string, err error)) error {
+	err := gcs.newGen.TolerantIterateAllChunks(ctx, cb, errCb)
+	if err != nil {
+		return err
 	}
-	gcs.oldGen.TolerantIterateAllChunks(ctx, cb, errCb)
+	if ctx.Err() != nil {
+		return nil
+	}
+	err = gcs.oldGen.TolerantIterateAllChunks(ctx, cb, errCb)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-func (gcs *GenerationalNBS) Count() (uint32, error) {
-	newGenCnt, err := gcs.newGen.Count()
+func (gcs *GenerationalNBS) Count(ctx context.Context) (uint32, error) {
+	newGenCnt, err := gcs.newGen.Count(ctx)
 	if err != nil {
 		return 0, err
 	}
-	oldGenCnt, err := gcs.oldGen.Count()
+	oldGenCnt, err := gcs.oldGen.Count(ctx)
 	if err != nil {
 		return 0, err
 	}

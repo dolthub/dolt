@@ -2,6 +2,9 @@
 
 set timeout 5
 set env(NO_COLOR) 1
+# less reads keypresses from /dev/tty directly, racing with characters this script types
+# ahead into the pty for the next command and dropping them.
+set env(DOLT_PAGER) "cat"
 
 source  "$env(BATS_CWD)/helper/common_expect_functions.tcl"
 

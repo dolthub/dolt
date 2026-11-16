@@ -233,22 +233,35 @@ func (fs *localFS) MkDirs(path string) error {
 
 // DeleteFile will delete a file at the given path
 func (fs *localFS) DeleteFile(path string) error {
-	var err error
-	path, err = fs.Abs(path)
-
+	abs, err := fs.Abs(path)
 	if err != nil {
 		return err
 	}
 
-	if exists, isDir := fs.Exists(path); exists && !isDir {
-		if isDir {
-			return ErrIsDir
-		}
+	return fs.deleteFile(abs)
+}
 
-		return file.Remove(path)
+// deleteFile removes the file at |abs|, which must already be an absolute path. It returns os.ErrNotExist when
+// no file is there to remove, including when |abs| names a directory.
+func (fs *localFS) deleteFile(abs string) error {
+	if exists, isDir := fs.Exists(abs); exists && !isDir {
+		return file.Remove(abs)
 	}
 
 	return os.ErrNotExist
+}
+
+// DeleteFileDurably deletes a file and then syncs the parent directory to disk so the deletion survives a
+// system crash or power loss.
+func (fs *localFS) DeleteFileDurably(path string) error {
+	abs, err := fs.Abs(path)
+	if err != nil {
+		return err
+	}
+	if err := fs.deleteFile(abs); err != nil {
+		return err
+	}
+	return file.SyncDirectoryHandle(filepath.Dir(abs))
 }
 
 // Delete will delete an empty directory, or a file.  If trying delete a directory that is not empty you can set force to

@@ -17,8 +17,6 @@ package blobstore
 import (
 	"bytes"
 	"context"
-	"errors"
-	"io"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -50,23 +48,17 @@ func TestGitBlobstore_CheckAndPut_ChunkedRoundTrip_CreateOnly(t *testing.T) {
 	require.NoError(t, err)
 
 	want := []byte("abcdefghij") // 10 bytes -> chunked tree
-	ver, err := bs.CheckAndPut(ctx, "", "big", int64(len(want)), bytes.NewReader(want))
+	ver, err := bs.CheckAndPutManifest(ctx, "", want)
 	require.NoError(t, err)
 	require.NotEmpty(t, ver)
 
-	got, ver2, err := GetBytes(ctx, bs, "big", AllRange)
+	got, ver2, err := GetBytes(ctx, bs, ManifestKey, AllRange)
 	require.NoError(t, err)
 	require.Equal(t, ver, ver2)
 	require.Equal(t, want, got)
 }
 
-type chunkedFailReader struct{}
-
-func (chunkedFailReader) Read(_ []byte) (int, error) {
-	return 0, errors.New("read should not be called")
-}
-
-func TestGitBlobstore_CheckAndPut_MismatchDoesNotConsumeReader_WithChunkingEnabled(t *testing.T) {
+func TestGitBlobstore_CheckAndPutManifest_MismatchWithChunkingEnabled(t *testing.T) {
 	requireGitOnPath(t)
 
 	ctx := context.Background()
@@ -94,7 +86,7 @@ func TestGitBlobstore_CheckAndPut_MismatchDoesNotConsumeReader_WithChunkingEnabl
 	})
 	require.NoError(t, err)
 
-	_, err = bs.CheckAndPut(ctx, "definitely-wrong", "y", 1, io.Reader(chunkedFailReader{}))
+	_, err = bs.CheckAndPutManifest(ctx, "definitely-wrong", []byte("y"))
 	require.Error(t, err)
 	require.True(t, IsCheckAndPutError(err))
 }

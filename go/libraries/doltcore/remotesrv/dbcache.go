@@ -30,7 +30,7 @@ type RemoteSrvStore interface {
 	chunks.ChunkStore
 	chunks.TableFileStore
 
-	Path() (string, bool)
+	Path(ctx context.Context) (string, bool, error)
 	GetChunkLocationsWithPaths(ctx context.Context, hashes hash.HashSet) (map[string]map[hash.Hash]nbs.Range, error)
 }
 

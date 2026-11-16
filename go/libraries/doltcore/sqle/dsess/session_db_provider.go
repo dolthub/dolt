@@ -80,11 +80,16 @@ type DoltDatabaseProvider interface {
 	// of the requested database. If the requested database isn't found, a database not found error
 	// is returned.
 	FileSystemForDatabase(dbname string) (filesys.Filesys, error)
-	// GetRemoteDB returns the remote database for given env.Remote object using the local database's vrw, and
-	// withCaching defines whether the remoteDB gets cached or not.
-	// This function replaces env.Remote's GetRemoteDB method during SQL session to access dialer in order
-	// to get remote database associated to the env.Remote object.
-	GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r env.Remote, withCaching bool) (*doltdb.DoltDB, error)
+	// GetRemoteDB returns the remote database for the given env.Remote object using
+	// the local database's vrw. This function replaces env.Remote's GetRemoteDB
+	// method during SQL session to access dialer in order to get remote database
+	// associated to the env.Remote object.
+	//
+	// Callers are responsible for calling Close() exactly once on the returned
+	// *doltdb.DoltDB when they are done with it. Close() releases transport-level
+	// resources (e.g. SSH subprocesses, gRPC connections, file descriptors); not
+	// calling it, or calling it more than once, may leak resources or panic.
+	GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r env.Remote) (*doltdb.DoltDB, error)
 	// CloneDatabaseFromRemote clones the database from the specified remoteURL as a new database in this provider.
 	// dbName is the name for the new database, branch is an optional parameter indicating which branch to clone
 	// (otherwise all branches are cloned), remoteName is the name for the remote created in the new database, and

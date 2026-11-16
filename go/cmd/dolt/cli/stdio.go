@@ -23,6 +23,7 @@ import (
 	"sync/atomic"
 
 	"github.com/fatih/color"
+	"github.com/mattn/go-isatty"
 	"github.com/vbauerster/mpb/v8/cwriter"
 
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
@@ -33,6 +34,8 @@ var CliOut = colorOutput
 var CliErr = color.Error
 
 var outputClosed uint64
+
+var outputIsTerminal bool
 
 var InStream io.ReadCloser = os.Stdin
 var OutStream io.WriteCloser = os.Stdout
@@ -52,6 +55,8 @@ func SetIOStreams(inStream io.ReadCloser, outStream io.WriteCloser) {
 
 func InitIO() (restoreIO func()) {
 	stdOut, stdErr := os.Stdout, os.Stderr
+
+	outputIsTerminal = fdIsTerminal(CliErr, stdErr)
 
 	f, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
 
@@ -137,6 +142,14 @@ func PrintErrf(format string, a ...interface{}) {
 	fmt.Fprintf(CliErr, format, a...)
 }
 
+func fdIsTerminal(w io.Writer, fallback *os.File) bool {
+	f, ok := w.(*os.File)
+	if !ok {
+		f = fallback
+	}
+	return isatty.IsTerminal(f.Fd()) || isatty.IsCygwinTerminal(f.Fd())
+}
+
 // DeleteAndPrint prints a new message and deletes the old one given the
 // previous messages length. It returns the length of the printed message that
 // should be passed as prevMsgLen on the next call of DeleteAndPrint.
@@ -145,6 +158,11 @@ func PrintErrf(format string, a ...interface{}) {
 func DeleteAndPrint(prevMsgLen int, msg string) int {
 	if outputIsClosed() {
 		return 0
+	}
+
+	if !outputIsTerminal {
+		PrintErr(msg)
+		return len(msg)
 	}
 
 	msgLen := len(msg)

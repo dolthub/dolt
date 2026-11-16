@@ -52,6 +52,10 @@ const (
 	StopOnEmptyCommit
 )
 
+// RebaseWorkingBranchPrefix is prepended to the name of the branch being rebased to name the temporary branch that a
+// rebase runs on. The temporary branch's working set holds the RebaseState and the rebase plan.
+const RebaseWorkingBranchPrefix = "dolt_rebase_"
+
 // RebaseState tracks the state of an in-progress rebase action. It records the name of the branch being rebased, the
 // commit onto which the new commits will be rebased, and the root value of the previous working set, which is used if
 // the rebase is aborted and the working set needs to be restored to its previous state.
@@ -198,6 +202,19 @@ func (m MergeState) IsCherryPick() bool {
 // create a single-parent commit rather than a two-parent merge commit.
 func (m MergeState) IsRevert() bool {
 	return m.isRevert
+}
+
+// OperationName returns the user facing name of the operation this merge state belongs to, one of "merge",
+// "cherry-pick", or "revert".
+func (m MergeState) OperationName() string {
+	switch {
+	case m.isCherryPick:
+		return "cherry-pick"
+	case m.isRevert:
+		return "revert"
+	default:
+		return "merge"
+	}
 }
 
 func (m MergeState) PreMergeWorkingRoot() RootValue {
@@ -671,6 +688,13 @@ func (ws *WorkingSet) HashOf() (hash.Hash, error) {
 	return *ws.addr, nil
 }
 
+// WithRef returns a copy of this working set belonging to the given ref.
+func (ws *WorkingSet) WithRef(wsRef ref.WorkingSetRef) *WorkingSet {
+	updated := *ws
+	updated.Name = wsRef.GetPath()
+	return &updated
+}
+
 // Ref returns a WorkingSetRef for this WorkingSet.
 func (ws *WorkingSet) Ref() ref.WorkingSetRef {
 	return ref.NewWorkingSetRef(ws.Name)
@@ -678,18 +702,22 @@ func (ws *WorkingSet) Ref() ref.WorkingSetRef {
 
 // writeValues write the values in this working set to the database and returns a datas.WorkingSetSpec with the
 // new values in it.
-func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB, meta *datas.WorkingSetMeta) (spec *datas.WorkingSetSpec, err error) {
+//
+// If |skipIfPresent| is true, root values that are already present in the
+// database are not rewritten. This is only safe when the caller does not rely
+// on these writes being observed by an in-progress GC; see DoltDB.doWriteRootValue.
+func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB, meta *datas.WorkingSetMeta, skipIfPresent bool) (spec *datas.WorkingSetSpec, err error) {
 	if ws.stagedRoot == nil || ws.workingRoot == nil {
 		return nil, fmt.Errorf("StagedRoot and workingRoot must be set. This is a bug.")
 	}
 
-	r, workingRoot, err := db.writeRootValue(ctx, ws.workingRoot)
+	r, workingRoot, err := db.doWriteRootValue(ctx, ws.workingRoot, skipIfPresent)
 	if err != nil {
 		return nil, err
 	}
 	ws.workingRoot = r
 
-	r, stagedRoot, err := db.writeRootValue(ctx, ws.stagedRoot)
+	r, stagedRoot, err := db.doWriteRootValue(ctx, ws.stagedRoot, skipIfPresent)
 	if err != nil {
 		return nil, err
 	}
@@ -697,7 +725,7 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB, meta *datas.W
 
 	var mergeState *datas.MergeState
 	if ws.mergeState != nil {
-		r, preMergeWorking, err := db.writeRootValue(ctx, ws.mergeState.preMergeWorking)
+		r, preMergeWorking, err := db.doWriteRootValue(ctx, ws.mergeState.preMergeWorking, skipIfPresent)
 		if err != nil {
 			return nil, err
 		}
@@ -733,7 +761,7 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB, meta *datas.W
 
 	var rebaseState *datas.RebaseState
 	if ws.rebaseState != nil {
-		r, preRebaseWorking, err := db.writeRootValue(ctx, ws.rebaseState.preRebaseWorking)
+		r, preRebaseWorking, err := db.doWriteRootValue(ctx, ws.rebaseState.preRebaseWorking, skipIfPresent)
 		if err != nil {
 			return nil, err
 		}

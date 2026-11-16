@@ -16,71 +16,87 @@ package val
 
 import (
 	"context"
+
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // ExtendedTupleComparator is a comparator that properly handles extended types.
 type ExtendedTupleComparator struct {
 	innerCmp TupleComparator
 	handlers []TupleTypeHandler
+	vs       ValueStore
 }
 
 // TODO: compare performance of rolling this logic into the DefaultTupleComparator (nil check or generic handlers that call compare)
 var _ TupleComparator = &ExtendedTupleComparator{}
 
 // Compare implements the TupleComparator interface.
-func (c *ExtendedTupleComparator) Compare(ctx context.Context, left, right Tuple, desc *TupleDesc) (cmp int) {
+func (c *ExtendedTupleComparator) Compare(ctx context.Context, left, right Tuple, desc *TupleDesc) (cmp int, err error) {
 	fast := desc.GetFixedAccess()
 	off := len(fast)
 	var start, stop ByteSize
 	for i := 0; i < off; i++ {
 		stop = fast[i]
-		cmp = c.CompareValues(ctx, i, left[start:stop], right[start:stop], desc.Types[i])
+		cmp, err = c.CompareValues(ctx, i, left[start:stop], right[start:stop], desc.Types[i])
+		if err != nil {
+			return 0, err
+		}
 		if cmp != 0 {
-			return cmp
+			return cmp, nil
 		}
 		start = stop
 	}
 
 	for i, typ := range desc.Types[off:] {
 		j := i + off
-		cmp = c.CompareValues(ctx, j, left.GetField(j), right.GetField(j), typ)
+		cmp, err = c.CompareValues(ctx, j, left.GetField(j), right.GetField(j), typ)
+		if err != nil {
+			return 0, err
+		}
 		if cmp != 0 {
-			return cmp
+			return cmp, nil
 		}
 	}
 	return
 }
 
 // CompareValues implements the TupleComparator interface.
-func (c *ExtendedTupleComparator) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) int {
+func (c *ExtendedTupleComparator) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) (int, error) {
 	switch typ.Enc {
 	case ExtendedEnc, ExtendedAddrEnc, ExtendedAdaptiveEnc:
-		cmp, err := c.handlers[index].SerializedCompare(ctx, left, right)
-		if err != nil {
-			panic(err)
-		}
-		return cmp
+		return c.handlers[index].SerializedCompare(ctx, left, right)
 	default:
-		return compare(typ, left, right)
+		return compare(ctx, typ, left, right, c.vs)
 	}
 }
 
 // Prefix implements the TupleComparator interface.
 func (c *ExtendedTupleComparator) Prefix(n int) TupleComparator {
-	return &ExtendedTupleComparator{c.innerCmp.Prefix(n), c.handlers[:n]}
+	return &ExtendedTupleComparator{innerCmp: c.innerCmp.Prefix(n), handlers: c.handlers[:n], vs: c.vs}
 }
 
 // Suffix implements the TupleComparator interface.
 func (c *ExtendedTupleComparator) Suffix(n int) TupleComparator {
-	return &ExtendedTupleComparator{c.innerCmp.Suffix(n), c.handlers[n:]}
+	return &ExtendedTupleComparator{innerCmp: c.innerCmp.Suffix(n), handlers: c.handlers[n:], vs: c.vs}
 }
 
 // Validated implements the TupleComparator interface.
 func (c *ExtendedTupleComparator) Validated(types []Type) TupleComparator {
-	// If our inner comparator is an ExtendedTupleComparator, then we should use its inner comparator to reduce redundancy.
+	// An ordered inner comparator stays outermost so that it also orders the fields compared through handlers.
+	if ordered, ok := c.innerCmp.(*OrderedTupleComparator); ok {
+		return (&OrderedTupleComparator{
+			innerCmp: &ExtendedTupleComparator{innerCmp: ordered.innerCmp, handlers: c.handlers, vs: c.vs},
+			orders:   ordered.orders,
+		}).Validated(types)
+	}
+	// If our inner comparator is an ExtendedTupleComparator, then we should use its inner comparator to reduce redundancy, as well as its ValueStore if set.
 	var innerCmp TupleComparator
+	vs := c.vs
 	if extendedInner, ok := c.innerCmp.(*ExtendedTupleComparator); ok {
 		innerCmp = extendedInner.innerCmp.Validated(types)
+		if vs == nil {
+			vs = extendedInner.vs
+		}
 	} else {
 		innerCmp = c.innerCmp.Validated(types)
 	}
@@ -103,5 +119,19 @@ func (c *ExtendedTupleComparator) Validated(types []Type) TupleComparator {
 	if !hasHandler {
 		return innerCmp
 	}
-	return &ExtendedTupleComparator{innerCmp, c.handlers}
+	return &ExtendedTupleComparator{innerCmp: innerCmp, handlers: c.handlers, vs: vs}
+}
+
+// Order implements the TupleComparator interface.
+func (c *ExtendedTupleComparator) Order(i int) sql.IndexColumnOrder {
+	return c.innerCmp.Order(i)
+}
+
+// WithValueStore implements the TupleComparator interface.
+func (c *ExtendedTupleComparator) WithValueStore(vs ValueStore) TupleComparator {
+	return &ExtendedTupleComparator{
+		innerCmp: c.innerCmp.WithValueStore(vs),
+		handlers: c.handlers,
+		vs:       vs,
+	}
 }

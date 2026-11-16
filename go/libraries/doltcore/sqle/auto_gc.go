@@ -46,24 +46,34 @@ func (noneGCScheduler) WaitForNextRun(context.Context) error {
 	return nil
 }
 
+// TODO: CPU Threshold should not be used to determine whether or not AutoGC should run
+// DEFAULT_LOAD_THRESHOLD is the minimum CPU Load to prevent AutoGC from running.
+const DEFAULT_LOAD_THRESHOLD = 0.5
+
+// DEFAULT_SKIPPED_THRESHOLD is the number of times AutoGC can be skipped before it just runs.
+const DEFAULT_SKIPPED_THRESHOLD = 30
+
 // loadAvgGCScheduler delays GC until the system load average drops
 // below a per-CPU threshold. Each call to WaitForNextRun checks the
 // current load and backs off in a loop until conditions are favorable.
 type loadAvgGCScheduler struct {
 	fs            procfs.FS
-	loadThreshold float64
+	loadThreshold float64 // TODO: make this configurable?
+	skippedCount  uint8
 }
 
 func (s *loadAvgGCScheduler) WaitForNextRun(ctx context.Context) error {
 	for {
 		loadAvg, err := s.fs.LoadAvg()
-		if err != nil || loadAvg.Load1 <= s.loadThreshold {
+		if err != nil || s.skippedCount >= DEFAULT_SKIPPED_THRESHOLD || loadAvg.Load1 <= s.loadThreshold {
+			s.skippedCount = 0
 			return nil
 		}
 		select {
 		case <-ctx.Done():
 			return context.Cause(ctx)
 		case <-time.After(1 * time.Minute):
+			s.skippedCount++
 		}
 	}
 }
@@ -109,12 +119,9 @@ func NewGCScheduler(gcSchStr string) GCScheduler {
 		return noneGCScheduler{}
 	default:
 		if fs, err := procfs.NewDefaultFS(); err == nil {
-			var stat procfs.Stat
-			if stat, err = fs.Stat(); err == nil {
-				return &loadAvgGCScheduler{
-					fs:            fs,
-					loadThreshold: 10 / float64(len(stat.CPU)),
-				}
+			return &loadAvgGCScheduler{
+				fs:            fs,
+				loadThreshold: DEFAULT_LOAD_THRESHOLD,
 			}
 		}
 		return noneGCScheduler{}

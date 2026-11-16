@@ -72,6 +72,14 @@ teardown() {
 @test "sql-pull: dolt_pull default custom remote" {
     cd repo2
     dolt remote remove origin
+
+    # https://github.com/dolthub/dolt/issues/11529
+    run dolt sql -q "call dolt_pull()"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "There is no tracking information for the current branch" ]] || false
+
+    dolt fetch test-remote
+    dolt branch --set-upstream-to test-remote/main
     dolt sql -q "call dolt_pull()"
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
@@ -1152,7 +1160,9 @@ SQL
     # Write a tracking entry that has a remote but no merge ref, equivalent to running
     # git config branch.main.remote origin without a corresponding merge line.
     # The JSON "head" key is absent, so the Merge field has no ref when the file is loaded.
-    sed -i 's/"branches": {}/"branches": {"main": {"remote": "origin"}}/' .dolt/repo_state.json
+    # -i.bak (with a suffix glued to -i) is the syntax both GNU sed and BSD/macOS sed accept.
+    sed -i.bak 's/"branches": {}/"branches": {"main": {"remote": "origin"}}/' .dolt/repo_state.json
+    rm -f .dolt/repo_state.json.bak
 
     run dolt sql -q "call dolt_pull('origin')"
     [ "$status" -eq 1 ]

@@ -16,6 +16,10 @@ package writer
 
 import (
 	"context"
+	"encoding/binary"
+	"fmt"
+	"strings"
+	"sync/atomic"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -23,15 +27,18 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
 // todo(andy): get from NodeStore
 var sharePool = pool.NewBuffPool()
+
+// lastCheckpoint numbers the checkpoints of every prollyTableWriter, so that each identifies a unique set of edits.
+var lastCheckpoint atomic.Uint64
 
 // AutoIncrementGetter is implemented by editors that support AUTO_INCREMENT to return the next value that will be
 // inserted.
@@ -40,24 +47,46 @@ type AutoIncrementGetter interface {
 }
 
 type prollyTableWriter struct {
-	sch                    schema.Schema
-	errEncountered         error
-	primary                indexWriter
-	flusher                dsess.WriteSessionFlusher
-	aiTracker              globalstate.AutoIncrementTracker
-	nextAutoIncrementValue map[string]uint64
-	tbl                    *doltdb.Table
-	secondary              map[string]indexWriter
-	setter                 dsess.SessionRootSetter
-	tableName              doltdb.TableName
-	dbName                 string
-	aiCol                  schema.Column
-	sqlSch                 sql.Schema
-	setAutoIncrement       bool
-	targetStaging          bool
+	tbl       *doltdb.Table
+	primary   indexWriter
+	secondary map[string]indexWriter
+
+	dbName    string
+	tblName   doltdb.TableName
+	sch       schema.Schema
+	sqlSch    sql.Schema
+	writeSess *prollyWriteSession
+
+	aiCol      schema.Column
+	aiTracker  *dsess.AutoIncrementTracker
+	aiAlterVal uint64
+	aiAltered  bool // True when an ALTER TABLE affects the auto increment value
+	aiSet      bool // True when an INSERT/UPDATE affects the auto increment value
+
+	// edited is true when rows may have changed since the last Reset. Until then the writer holds exactly |tbl|,
+	// which is already in the write session's root, so Close has nothing to materialize.
+	edited bool
+
+	errEncountered error
+	// pending is true when edits from completed statements have not been materialized into the write session's
+	// working set. See prollyWriteSession.deferMaterialization.
+	pending bool
+	// checkpoint identifies the edits of completed statements, and changes whenever they do.
+	checkpoint uint64
+	// view caches views of the index writers as of |checkpoint|. See pendingRows.
+	view *index.PendingRows
+
+	// open is set when GetTableWriter hands out this writer and cleared by Close. Writers are shared per table, so any
+	// holder's Close clears it.
+	open bool
+
+	virtualExpressions []sql.Expression
 }
 
 var _ dsess.TableWriter = &prollyTableWriter{}
+var _ sql.UniqueKeyConflictCheckingRowInserter = &prollyTableWriter{}
+
+var _ UniqueKeyChangeReporter = &prollyTableWriter{}
 var _ AutoIncrementGetter = &prollyTableWriter{}
 
 func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, schState *dsess.WriterState) (map[string]indexWriter, error) {
@@ -87,16 +116,19 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, schSta
 
 		// mapping from secondary index key to primary key
 		writers[defName] = prollySecondaryIndexWriter{
-			name:          defName,
-			mut:           idxMap.MutateInterface(),
-			unique:        def.IsUnique,
-			prefixLengths: def.PrefixLengths,
-			idxCols:       def.Count,
-			keyMap:        def.KeyMapping,
-			keyBld:        val.NewTupleBuilder(keyDesc, idxMap.NodeStore()).WithMaxRowSize(targetRowSize),
-			pkMap:         def.PkMapping,
-			pkBld:         val.NewTupleBuilder(schState.PkKeyDesc, idxMap.NodeStore()).WithMaxRowSize(targetRowSize),
-			key:           make(sql.Row, keyDesc.Count()),
+			name:             defName,
+			mut:              idxMap.MutateInterface(),
+			unique:           def.IsUnique,
+			nullsNotDistinct: def.NullsNotDistinct,
+			prefixLengths:    def.PrefixLengths,
+			idxCols:          def.Count,
+			keyMap:           def.KeyMapping,
+			keyBld:           val.NewTupleBuilder(keyDesc, idxMap.NodeStore()).WithMaxRowSize(targetRowSize),
+			pkMap:            def.PkMapping,
+			pkBld:            val.NewTupleBuilder(schState.PkKeyDesc, idxMap.NodeStore()).WithMaxRowSize(targetRowSize),
+			key:              make(sql.Row, keyDesc.Count()),
+			predicate:        def.Predicate,
+			virtualExprs:     def.KeyVirtualExprs,
 		}
 	}
 
@@ -129,16 +161,19 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, schS
 
 		targetRowSize := schState.DoltSchema.GetTargetRowSize()
 		writers[defName] = prollyKeylessSecondaryWriter{
-			name:          defName,
-			mut:           m.Mutate(),
-			primary:       primary,
-			unique:        def.IsUnique,
-			spatial:       def.IsSpatial,
-			prefixLengths: def.PrefixLengths,
-			keyBld:        val.NewTupleBuilder(keyDesc, m.NodeStore()).WithMaxRowSize(targetRowSize),
-			prefixBld:     val.NewTupleBuilder(keyDesc.PrefixDesc(def.Count), m.NodeStore()).WithMaxRowSize(targetRowSize),
-			hashBld:       val.NewTupleBuilder(val.NewTupleDescriptor(val.Type{Enc: val.Hash128Enc}), m.NodeStore()),
-			keyMap:        def.KeyMapping,
+			name:             defName,
+			mut:              m.Mutate(),
+			primary:          primary,
+			unique:           def.IsUnique,
+			nullsNotDistinct: def.NullsNotDistinct,
+			spatial:          def.IsSpatial,
+			predicate:        def.Predicate,
+			prefixLengths:    def.PrefixLengths,
+			keyBld:           val.NewTupleBuilder(keyDesc, m.NodeStore()).WithMaxRowSize(targetRowSize),
+			prefixBld:        val.NewTupleBuilder(keyDesc.PrefixDesc(def.Count), m.NodeStore()).WithMaxRowSize(targetRowSize),
+			hashBld:          val.NewTupleBuilder(val.NewTupleDescriptor(val.Type{Enc: val.Hash128Enc}), m.NodeStore()),
+			keyMap:           def.KeyMapping,
+			virtualExprs:     def.KeyVirtualExprs,
 		}
 	}
 
@@ -147,6 +182,7 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, schS
 
 // Insert implements TableWriter.
 func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error) {
+	w.edited = true
 	if err = w.primary.ValidateKeyViolations(ctx, sqlRow); err != nil {
 		return err
 	}
@@ -155,6 +191,7 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 			if uke, ok := err.(secondaryUniqueKeyError); ok {
 				return w.primary.(primaryIndexErrBuilder).errForSecondaryUniqueKeyError(ctx, uke)
 			}
+			return err
 		}
 	}
 	for _, wr := range w.secondary {
@@ -169,42 +206,91 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 		return err
 	}
 
-	w.setAutoIncrement = true
-
 	// TODO: need schema name in ai tracker
-	w.aiTracker.Next(ctx, w.tableName.Name, sqlRow)
+	w.aiSet = true
+
 	return nil
 }
 
-// Delete implements TableWriter.
-func (w *prollyTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) (err error) {
-	for _, wr := range w.secondary {
-		if err := wr.Delete(ctx, sqlRow); err != nil {
-			return err
+// HasUniqueKeyConflict implements sql.UniqueKeyConflictCheckingRowInserter.
+func (w *prollyTableWriter) HasUniqueKeyConflict(ctx *sql.Context, sqlRow sql.Row, columns []string) (bool, error) {
+	pkColumns := w.sch.GetPKCols().GetColumns()
+	pkNames := make([]string, len(pkColumns))
+	for idx, column := range pkColumns {
+		pkNames[idx] = column.Name
+	}
+	if len(columns) == 0 || sameColumnNames(columns, pkNames) {
+		conflict, err := isUniqueKeyConflict(w.primary.ValidateKeyViolations(ctx, sqlRow))
+		if err != nil || conflict || len(columns) > 0 {
+			return conflict, err
 		}
 	}
-	if err := w.primary.Delete(ctx, sqlRow); err != nil {
-		return err
+
+	for _, index := range w.sch.Indexes().AllIndexes() {
+		if !index.IsUnique() || (len(columns) > 0 && (index.Predicate() != "" || !sameColumnNames(columns, index.ColumnNames()))) {
+			continue
+		}
+		indexWriter, ok := w.secondary[index.Name()]
+		if !ok {
+			return false, fmt.Errorf("unique index writer %q not found", index.Name())
+		}
+		if keylessWriter, ok := indexWriter.(prollyKeylessSecondaryWriter); ok {
+			conflict, err := isUniqueKeyConflict(keylessWriter.validateUniqueKeyViolation(ctx, sqlRow))
+			if err != nil || conflict || len(columns) > 0 {
+				return conflict, err
+			}
+			continue
+		}
+		conflict, err := isUniqueKeyConflict(indexWriter.ValidateKeyViolations(ctx, sqlRow))
+		if err != nil || conflict || len(columns) > 0 {
+			return conflict, err
+		}
 	}
-	return nil
+	if len(columns) == 0 {
+		return false, nil
+	}
+	return false, fmt.Errorf("unique key conflict target does not match a unique key")
 }
 
-func (w *prollyTableWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
-	err := w.primary.VisitGCRoots(ctx, roots)
-	if err != nil {
-		return err
+// isUniqueKeyConflict converts supported duplicate-key errors into a conflict result.
+func isUniqueKeyConflict(err error) (bool, error) {
+	if err == nil {
+		return false, nil
 	}
-	for _, writer := range w.secondary {
-		err = writer.VisitGCRoots(ctx, roots)
-		if err != nil {
-			return err
+	if sql.ErrPrimaryKeyViolation.Is(err) || sql.ErrUniqueKeyViolation.Is(err) {
+		return true, nil
+	}
+	if _, ok := err.(secondaryUniqueKeyError); ok {
+		return true, nil
+	}
+	return false, err
+}
+
+// sameColumnNames reports whether two column-name slices contain the same names regardless of order or case.
+func sameColumnNames(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	matched := make([]bool, len(right))
+	for _, leftName := range left {
+		found := false
+		for idx, rightName := range right {
+			if !matched[idx] && strings.EqualFold(leftName, rightName) {
+				matched[idx] = true
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
 		}
 	}
-	return nil
+	return true
 }
 
 // Update implements TableWriter.
 func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) (err error) {
+	w.edited = true
 	for _, wr := range w.secondary {
 		if err := wr.Update(ctx, oldRow, newRow); err != nil {
 			if uke, ok := err.(secondaryUniqueKeyError); ok {
@@ -217,38 +303,39 @@ func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.
 		return err
 	}
 
-	w.setAutoIncrement = true
+	w.aiSet = true
 	return nil
 }
 
-// GetNextAutoIncrementValue implements TableWriter.
-func (w *prollyTableWriter) GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error) {
-	return w.aiTracker.Next(ctx, w.tableName.Name, insertVal)
+// UniqueKeyChangeReporter is a writer that reports whether an update frees or takes a unique key.
+type UniqueKeyChangeReporter interface {
+	// UpdateChangesUniqueKey reports whether updating |oldRow| to |newRow| frees or takes a key in a unique index,
+	// erring toward reporting a change. The primary key is not considered, and a unique partial index always
+	// reports a change since any change can move a row in or out of it.
+	UpdateChangesUniqueKey(oldRow sql.Row, newRow sql.Row) bool
 }
 
-// SetAutoIncrementValue implements AutoIncrementSetter.
-func (w *prollyTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) error {
-	seq, err := w.aiTracker.CoerceAutoIncrementValue(ctx, val)
-	if err != nil {
-		return err
+// UpdateChangesUniqueKey implements UniqueKeyChangeReporter for the whole table by asking each secondary index.
+func (w *prollyTableWriter) UpdateChangesUniqueKey(oldRow sql.Row, newRow sql.Row) bool {
+	for _, wr := range w.secondary {
+		r, ok := wr.(UniqueKeyChangeReporter)
+		if !ok || r.UpdateChangesUniqueKey(oldRow, newRow) {
+			return true
+		}
 	}
-
-	w.nextAutoIncrementValue = make(map[string]uint64)
-	w.nextAutoIncrementValue[w.tableName.Name] = seq
-
-	// The work above is persisted in flush
-	return w.flush(ctx)
+	return false
 }
 
-func (w *prollyTableWriter) AcquireAutoIncrementLock(ctx *sql.Context) (func(), error) {
-	return w.aiTracker.AcquireTableLock(ctx, w.tableName.Name)
-}
-
-// Close implements Closer
-func (w *prollyTableWriter) Close(ctx *sql.Context) error {
-	// We discard data changes in DiscardChanges, but this doesn't include schema changes, which we don't want to flush
-	if w.errEncountered == nil {
-		return w.flush(ctx)
+// Delete implements TableWriter.
+func (w *prollyTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) (err error) {
+	w.edited = true
+	for _, wr := range w.secondary {
+		if err := wr.Delete(ctx, sqlRow); err != nil {
+			return err
+		}
+	}
+	if err := w.primary.Delete(ctx, sqlRow); err != nil {
+		return err
 	}
 	return nil
 }
@@ -278,6 +365,11 @@ func (w *prollyTableWriter) DiscardChanges(ctx *sql.Context, errorEncountered er
 
 // StatementComplete implements TableWriter.
 func (w *prollyTableWriter) StatementComplete(ctx *sql.Context) error {
+	if w.hasUncommittedEdits() {
+		w.newCheckpoint()
+		// When materialization is deferred, the edits of completed statements are pending until it happens
+		w.pending = w.pending || w.deferMaterialization()
+	}
 	err := w.primary.Commit(ctx)
 	for _, secondary := range w.secondary {
 		sErr := secondary.Commit(ctx)
@@ -288,21 +380,7 @@ func (w *prollyTableWriter) StatementComplete(ctx *sql.Context) error {
 	return err
 }
 
-// GetIndexes implements sql.IndexAddressableTable.
-func (w *prollyTableWriter) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-	indexes := ctx.GetIndexRegistry().IndexesByTable(w.dbName, w.tableName.Name)
-	ret := make([]sql.Index, len(indexes))
-	for i := range indexes {
-		ret[i] = indexes[i]
-	}
-	return ret, nil
-}
-
-func (w *prollyTableWriter) PreciseMatch() bool {
-	return true
-}
-
-// IndexedAccess implements sql.IndexAddressableTable.
+// IndexedAccess implements sql.IndexAddressable.
 func (w *prollyTableWriter) IndexedAccess(_ *sql.Context, i sql.IndexLookup) sql.IndexedTable {
 	idx := index.DoltIndexFromSqlIndex(i.Index)
 	return &prollyFkIndexer{
@@ -311,17 +389,154 @@ func (w *prollyTableWriter) IndexedAccess(_ *sql.Context, i sql.IndexLookup) sql
 	}
 }
 
+// GetIndexes implements sql.IndexAddressable.
+func (w *prollyTableWriter) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	indexes := ctx.GetIndexRegistry().IndexesByTable(w.dbName, w.tblName.Name)
+	ret := make([]sql.Index, len(indexes))
+	for i := range indexes {
+		ret[i] = indexes[i]
+	}
+	return ret, nil
+}
+
+// PreciseMatch implements sql.IndexAddressable.
+func (w *prollyTableWriter) PreciseMatch() bool {
+	return true
+}
+
+// GetNextAutoIncrementValue implements TableWriter.
+func (w *prollyTableWriter) GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error) {
+	v, err := w.aiTracker.Next(ctx, w.tblName, insertVal)
+	if err != nil {
+		return 0, err
+	}
+	return v, nil
+}
+
+// SetAutoIncrementValue implements AutoIncrementSetter.
+func (w *prollyTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) error {
+	seq, err := doltdb.CoerceAutoIncrementValue(ctx, val)
+	if err != nil {
+		return err
+	}
+
+	w.aiAlterVal = seq
+	w.aiAltered = true
+
+	// The work above is persisted in flushAllTables
+	return w.flush(ctx)
+}
+
+// AcquireAutoIncrementLock implements AutoIncrementSetter.
+func (w *prollyTableWriter) AcquireAutoIncrementLock(ctx *sql.Context) (func(), error) {
+	return w.aiTracker.AcquireLock(ctx, w.tblName)
+}
+
+// Close implements Closer
+func (w *prollyTableWriter) Close(ctx *sql.Context) error {
+	w.open = false
+	// We discard data changes in DiscardChanges, but this doesn't include schema changes, which we don't want to flushAllTables
+	if w.errEncountered != nil {
+		return w.errEncountered
+	}
+	if w.deferMaterialization() {
+		// Leave the statement's edits in our index writers, pending materialization into the working set.
+		return w.StatementComplete(ctx)
+	}
+	if !w.edited {
+		return w.writeSess.publish(ctx)
+	}
+	return w.flush(ctx)
+}
+
+func (w *prollyTableWriter) deferMaterialization() bool {
+	return w.writeSess.deferMaterialization
+}
+
+func (w *prollyTableWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash)) error {
+	err := w.primary.VisitGCRoots(ctx, roots)
+	if err != nil {
+		return err
+	}
+	for _, writer := range w.secondary {
+		err = writer.VisitGCRoots(ctx, roots)
+		if err != nil {
+			return err
+		}
+	}
+	if w.view != nil {
+		err = w.view.Primary.VisitGCRoots(ctx, roots)
+		if err != nil {
+			return err
+		}
+		for _, v := range w.view.Secondary {
+			err = v.VisitGCRoots(ctx, roots)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (w *prollyTableWriter) hasUncommittedEdits() bool {
+	if w.primary.HasUncommittedEdits() {
+		return true
+	}
+	for _, secondary := range w.secondary {
+		if secondary.HasUncommittedEdits() {
+			return true
+		}
+	}
+	return false
+}
+
+// newCheckpoint is called whenever the edits of completed statements change.
+func (w *prollyTableWriter) newCheckpoint() {
+	w.checkpoint = lastCheckpoint.Add(1)
+	w.view = nil
+}
+
+// pendingRows returns views of this writer's indexes that include the edits of completed statements, but not those
+// of a statement in progress. It returns nil if any of its indexes can't provide a view.
+func (w *prollyTableWriter) pendingRows(ctx *sql.Context) (*index.PendingRows, error) {
+	if w.view != nil {
+		return w.view, nil
+	}
+
+	secondary := make(map[string]prolly.MapView, len(w.secondary))
+	for name, idx := range w.secondary {
+		v, ok, err := idx.CheckpointView(ctx)
+		if err != nil || !ok {
+			return nil, err
+		}
+		secondary[name] = v
+	}
+	primary, ok, err := w.primary.CheckpointView(ctx)
+	if err != nil || !ok {
+		return nil, err
+	}
+
+	var key [8]byte
+	binary.BigEndian.PutUint64(key[:], w.checkpoint)
+	w.view = &index.PendingRows{
+		Key:       doltdb.DataCacheKey{Hash: hash.Of(key[:])},
+		Primary:   primary,
+		Secondary: secondary,
+	}
+	return w.view, nil
+}
+
 // Reset puts the writer into a fresh state, updating the schema and index writers according to the newly given table.
-func (w *prollyTableWriter) Reset(ctx *sql.Context, sess *prollyWriteSession, tbl *doltdb.Table, sch schema.Schema) error {
-	schState, err := writerSchema(ctx, tbl, w.tableName.Name, w.dbName)
+func (w *prollyTableWriter) Reset(ctx *sql.Context, tbl *doltdb.Table) error {
+	schState, err := writerSchema(ctx, tbl, w.tblName, w.dbName)
 	if err != nil {
 		return err
 	}
 
 	var newPrimary indexWriter
-
 	var newSecondaries map[string]indexWriter
-	if schema.IsKeyless(sch) {
+	if schema.IsKeyless(schState.DoltSchema) {
 		newPrimary, err = getPrimaryKeylessProllyWriter(ctx, tbl, schState)
 		if err != nil {
 			return err
@@ -342,64 +557,118 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, sess *prollyWriteSession, tb
 	}
 
 	w.tbl = tbl
-	w.sch = sch
+	w.pending = false
+	w.newCheckpoint()
+	w.sch = schState.DoltSchema
 	w.sqlSch = schState.PkSchema.Schema
 	w.primary = newPrimary
 	w.secondary = newSecondaries
 	w.aiCol = schState.AutoIncCol
-	w.flusher = sess
+	w.virtualExpressions = schState.VirtualExpressions
+	w.edited = false
 
 	return nil
 }
 
-func (w *prollyTableWriter) table(ctx context.Context) (t *doltdb.Table, err error) {
+// table materializes all changes to the primary key, secondary keys, and auto increments to a new doltdb.Table
+func (w *prollyTableWriter) table(ctx *sql.Context) (tbl *doltdb.Table, err error) {
+	return w.tableFromMaps(ctx, indexWriter.Map)
+}
+
+// pendingTable returns a doltdb.Table containing all edits from completed statements, excluding the edits of any
+// statement in progress. It doesn't modify the writer, so it may run concurrently with other writers' flushes. Once
+// the returned table is in the working set, the caller must call materialized.
+func (w *prollyTableWriter) pendingTable(ctx *sql.Context) (*doltdb.Table, error) {
+	if w.hasUncommittedEdits() {
+		return w.tableFromMaps(ctx, indexWriter.CheckpointMap)
+	}
+	return w.table(ctx)
+}
+
+// materialized records that |tbl|, returned by pendingTable, is in the working set. If no statement is in progress,
+// the writer is reset to |tbl|. Otherwise our index writers still hold every edit, so our views remain valid and the
+// next materialization rebuilds all of them on top of |tbl|.
+func (w *prollyTableWriter) materialized(ctx *sql.Context, tbl *doltdb.Table) error {
+	if w.hasUncommittedEdits() {
+		w.tbl = tbl
+		w.pending = false
+		return nil
+	}
+	return w.Reset(ctx, tbl)
+}
+
+// tableFromMaps builds a doltdb.Table from the maps that |getMap| returns for each index writer.
+func (w *prollyTableWriter) tableFromMaps(ctx *sql.Context, getMap func(indexWriter, context.Context) (prolly.MapInterface, error)) (tbl *doltdb.Table, err error) {
 	// flush primary row storage
-	pm, err := w.primary.Map(ctx)
+	priMap, err := getMap(w.primary, ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	t, err = w.tbl.UpdateRows(ctx, durable.IndexFromMapInterface(pm))
+	tbl, err = w.tbl.UpdateRows(ctx, durable.IndexFromMapInterface(priMap))
 	if err != nil {
 		return nil, err
 	}
 
 	// flush secondary index storage
-	s, err := t.GetIndexSet(ctx)
+	idxSet, err := tbl.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, wrSecondary := range w.secondary {
-		sm, err := wrSecondary.Map(ctx)
+	for _, secIdxWriter := range w.secondary {
+		var secMap prolly.MapInterface
+		secMap, err = getMap(secIdxWriter, ctx)
 		if err != nil {
 			return nil, err
 		}
-		idx := durable.IndexFromMapInterface(sm)
 
-		s, err = s.PutIndex(ctx, wrSecondary.Name(), idx)
+		idx := durable.IndexFromMapInterface(secMap)
+		idxSet, err = idxSet.PutIndex(ctx, secIdxWriter.Name(), idx)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	t, err = t.SetIndexSet(ctx, s)
+	tbl, err = tbl.SetIndexSet(ctx, idxSet)
 	if err != nil {
 		return nil, err
 	}
 
-	return t, nil
+	if w.aiCol.AutoIncrement {
+		if w.aiAltered {
+			tbl, err = w.aiTracker.Set(ctx, w.tblName, tbl, w.writeSess.owner.WorkingSet().Ref(), doltdb.AutoIncrementState(w.aiAlterVal))
+			if err != nil {
+				return nil, err
+			}
+		} else if w.aiSet {
+			aiVal, err := w.aiTracker.Current(ctx, w.tblName)
+			if err != nil {
+				return nil, err
+			}
+			tbl, err = tbl.SetAutoIncrementValue(ctx, aiVal)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return tbl, nil
 }
 
 func (w *prollyTableWriter) flush(ctx *sql.Context) error {
-	ws, err := w.flusher.FlushWithAutoIncrementOverrides(ctx, w.setAutoIncrement, w.nextAutoIncrementValue)
+	if w.deferMaterialization() {
+		// Materialize this table along with any other pending tables, so that the root we set in the session
+		// contains every completed edit.
+		w.pending = true
+		return w.writeSess.materializePending(ctx)
+	}
+	tbl, err := w.table(ctx)
 	if err != nil {
 		return err
 	}
-
-	if w.targetStaging {
-		return w.setter(ctx, w.dbName, ws.StagedRoot())
-	} else {
-		return w.setter(ctx, w.dbName, ws.WorkingRoot())
+	_, err = w.writeSess.FlushTable(ctx, w.tblName, tbl)
+	if err != nil {
+		return err
 	}
+	return w.Reset(ctx, tbl)
 }

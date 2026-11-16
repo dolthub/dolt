@@ -116,6 +116,7 @@ func (we WriterEmitter) LogEventsRequest(ctx context.Context, req *eventsapi.Log
 // GrpcEmitter sends events to a GRPC service implementing the eventsapi
 type GrpcEmitter struct {
 	client      eventsapi.ClientEventsServiceClient
+	target      string
 	application eventsapi.AppID
 }
 
@@ -134,6 +135,7 @@ func NewGrpcEmitter(conn *grpc.ClientConn, opts ...GrpcEmitterOption) *GrpcEmitt
 	client := eventsapi.NewClientEventsServiceClient(conn)
 	g := &GrpcEmitter{
 		client:      client,
+		target:      conn.Target(),
 		application: Application,
 	}
 	for _, opt := range opts {
@@ -174,7 +176,12 @@ func (em *GrpcEmitter) LogEventsRequest(ctx context.Context, req *eventsapi.LogE
 // SendLogEventsRequest sends a request using the grpc client
 func (em *GrpcEmitter) sendLogEventsRequest(ctx context.Context, req *eventsapi.LogEventsRequest) error {
 	_, err := em.client.LogEvents(ctx, req)
-	return err
+	if err != nil {
+		// Include the dial target in the error. The dns resolver reports failures
+		// as "produced zero addresses" without the hostname, so surface it here.
+		return fmt.Errorf("error sending events to %s: %w", em.target, err)
+	}
+	return nil
 }
 
 // FileEmitter saves event requests to files

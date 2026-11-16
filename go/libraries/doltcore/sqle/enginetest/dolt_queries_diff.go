@@ -26,7 +26,54 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 )
 
+// dropAndRecreateScript returns a script that drops and recreates
+// t1 in one commit with a primary key of type |keyType|.
+func dropAndRecreateScript(keyType string) []string {
+	return []string{
+		fmt.Sprintf("create table t1 (id %s primary key, name varchar(10));", keyType),
+		"insert into t1 values (1, 'dolt');",
+		"set @Commit1 = '';",
+		"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-Am', 'create_table');",
+
+		"update t1 set name = 'doltgres' where id = 1;",
+		"set @Commit2 = '';",
+		"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-Am', 'update_value');",
+
+		fmt.Sprintf("create table temp__t1 (id %s primary key, name varchar(10));", keyType),
+		"insert into temp__t1 values (1, 'dolt');",
+		"drop table t1;",
+		"rename table temp__t1 to t1;",
+		"set @Commit3 = '';",
+		"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-Am', 'drop and recreate');",
+	}
+}
+
 var DiffSystemTableScriptTests = []queries.ScriptTest{
+	{
+		// See https://github.com/dolthub/dolt/issues/11159
+		Name: "dolt_diff_ table to_commit and from_commit indexes are non-unique",
+		SetUpScript: []string{
+			"create table foo (id int primary key, v int);",
+			"insert into foo values (1,1),(2,1),(3,1),(4,1);",
+			"call dolt_commit('-Am', 'seed');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_diff_foo;",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				// The harness skips assertions containing "show indexes from", so this uses the singular synonym.
+				Query: "SHOW INDEX FROM dolt_diff_foo;",
+				Expected: []sql.Row{
+					{"dolt_diff_foo", 0, "to_pks", 1, "to_id", "A", int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
+					{"dolt_diff_foo", 0, "from_pks", 1, "from_id", "A", int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
+					{"dolt_diff_foo", 1, "to_commit", 1, "to_commit", "A", int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
+					{"dolt_diff_foo", 1, "from_commit", 1, "from_commit", "A", int64(0), nil, nil, "YES", "BTREE", "", "", "YES", nil},
+				},
+			},
+		},
+	},
 	{
 		Name: "base case: added rows",
 		SetUpScript: []string{
@@ -793,6 +840,81 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	// https://github.com/dolthub/dolt/issues/12067
+	{
+		Name:        "table drop and recreate with identical primary key keeps per-commit diff history",
+		SetUpScript: dropAndRecreateScript("int"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_diff_t1;",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "SELECT to_id, to_name, from_id, from_name, diff_type FROM dolt_diff_t1 WHERE to_commit=@Commit3;",
+				Expected: []sql.Row{{1, "dolt", 1, "doltgres", "modified"}},
+			},
+			{
+				Query:    "SELECT to_id, to_name, from_id, from_name, diff_type FROM dolt_diff_t1 WHERE to_commit=@Commit2;",
+				Expected: []sql.Row{{1, "doltgres", 1, "dolt", "modified"}},
+			},
+			{
+				Query:    "SELECT to_id, to_name, from_id, from_name, diff_type FROM dolt_diff_t1 WHERE to_commit=@Commit1;",
+				Expected: []sql.Row{{1, "dolt", nil, nil, "added"}},
+			},
+		},
+	},
+	{
+		Name:        "table drop and recreate with identical decimal primary key keeps per-commit diff history",
+		SetUpScript: dropAndRecreateScript("decimal(10,2)"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_diff_t1;",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "SELECT to_name, from_name, diff_type FROM dolt_diff_t1 WHERE to_commit=@Commit3;",
+				Expected: []sql.Row{{"dolt", "doltgres", "modified"}},
+			},
+		},
+	},
+	{
+		Name:        "table drop and recreate with identical enum primary key keeps per-commit diff history",
+		SetUpScript: dropAndRecreateScript("enum('a','b')"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_diff_t1;",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "SELECT to_name, from_name, diff_type FROM dolt_diff_t1 WHERE to_commit=@Commit3;",
+				Expected: []sql.Row{{"dolt", "doltgres", "modified"}},
+			},
+		},
+	},
+	{
+		Name: "crossed primary key tags warn in diff instead of diffing",
+		SetUpScript: []string{
+			"create table t1 (a int, b int, primary key (a, b));",
+			"CALL dolt_update_column_tag('t1', 'a', '9001');",
+			"CALL dolt_update_column_tag('t1', 'b', '9002');",
+			"insert into t1 values (1, 2);",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-Am', 'create_table');",
+			"CALL dolt_update_column_tag('t1', 'b', '9003');",
+			"CALL dolt_update_column_tag('t1', 'a', '9002');",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-Am', 'cross tags');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:                           "SELECT COUNT(*) FROM dolt_diff_t1;",
+				ExpectedWarning:                 dtables.PrimaryKeyChangeWarningCode,
+				ExpectedWarningsCount:           1,
+				ExpectedWarningMessageSubstring: "due to primary key set change",
+				Expected:                        []sql.Row{{0}},
+			},
+		},
+	},
 }
 
 var Dolt1DiffSystemTableScripts = []queries.ScriptTest{
@@ -1106,6 +1228,116 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
+		// See https://github.com/dolthub/dolt/issues/11187
+		Name: "dolt_diff: column reference commit arguments are rejected with a clear error",
+		SetUpScript: []string{
+			"CREATE TABLE airspaces (id INT PRIMARY KEY, name VARCHAR(20));",
+			"INSERT INTO airspaces VALUES (1, 'a');",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-m', 'init');",
+			"CALL DOLT_BRANCH('branch-x');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "SELECT branch.name, (SELECT COUNT(*) FROM DOLT_DIFF(branch.name, 'branch-x', 'airspaces')) FROM dolt_branches branch;",
+				ExpectedErr: dtablefunctions.ErrInvalidNonLiteralArgument,
+			},
+			{
+				Query:       "SELECT branch.name, (SELECT COUNT(*) FROM DOLT_DIFF(CONCAT(branch.name, '...branch-x'), 'airspaces')) FROM dolt_branches branch;",
+				ExpectedErr: dtablefunctions.ErrInvalidNonLiteralArgument,
+			},
+			{
+				Query:       "SELECT branch.name, (SELECT COUNT(*) FROM DOLT_DIFF('main', 'branch-x', branch.name)) FROM dolt_branches branch;",
+				ExpectedErr: dtablefunctions.ErrInvalidNonLiteralArgument,
+			},
+			{
+				Query: "SELECT COUNT(*) FROM DOLT_DIFF('main', 'branch-x', 'airspaces');",
+				Expected: []sql.Row{
+					{0},
+				},
+			},
+		},
+	},
+	{
+		// See https://github.com/dolthub/dolt/issues/11187
+		Name: "dolt_diff: per branch diffs run as one literal statement per branch",
+		SetUpScript: []string{
+			"CREATE TABLE airspaces (id INT PRIMARY KEY, name VARCHAR(20));",
+			"INSERT INTO airspaces VALUES (1, 'a'), (2, 'b'), (3, 'c'), (4, 'd');",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-m', 'init');",
+
+			"CALL DOLT_BRANCH('branch-x');",
+			"CALL DOLT_BRANCH('branch-y');",
+
+			"CALL DOLT_CHECKOUT('branch-x');",
+			"UPDATE airspaces SET name = 'x1' WHERE id = 1;",
+			"UPDATE airspaces SET name = 'x2' WHERE id = 2;",
+			"CALL DOLT_COMMIT('-am', 'x edits');",
+
+			"CALL DOLT_CHECKOUT('branch-y');",
+			"UPDATE airspaces SET name = 'y2' WHERE id = 2;",
+			"UPDATE airspaces SET name = 'y3' WHERE id = 3;",
+			"CALL DOLT_COMMIT('-am', 'y edits');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"CALL DOLT_CHECKOUT('-b', 'widened');",
+			"ALTER TABLE airspaces ADD COLUMN altitude INT;",
+			"UPDATE airspaces SET name = 'w2', altitude = 100 WHERE id = 2;",
+			"CALL DOLT_COMMIT('-am', 'widen and edit');",
+
+			"CALL DOLT_CHECKOUT('main');",
+
+			`CREATE PROCEDURE airspace_warnings(IN base VARCHAR(64))
+BEGIN
+  DECLARE done INT DEFAULT FALSE;
+  DECLARE b VARCHAR(64);
+  DECLARE cur CURSOR FOR SELECT name FROM dolt_branches WHERE name != base;
+  DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+  DROP TEMPORARY TABLE IF EXISTS warning_counts;
+  CREATE TEMPORARY TABLE warning_counts (branch VARCHAR(64), warning_count INT);
+  OPEN cur;
+  read_loop: LOOP
+    FETCH cur INTO b;
+    IF done THEN LEAVE read_loop; END IF;
+    SET @q = CONCAT(
+      'INSERT INTO warning_counts SELECT ?, COUNT(*) FROM (',
+      'SELECT COALESCE(to_id, from_id) AS id FROM DOLT_DIFF(', QUOTE(CONCAT(b, '...', base)), ', ''airspaces'') ',
+      'INTERSECT ',
+      'SELECT COALESCE(to_id, from_id) FROM DOLT_DIFF(', QUOTE(CONCAT(base, '...', b)), ', ''airspaces'')',
+      ') co');
+    SET @b = b;
+    PREPARE s FROM @q;
+    EXECUTE s USING @b;
+    DEALLOCATE PREPARE s;
+  END LOOP;
+  CLOSE cur;
+  SELECT * FROM warning_counts ORDER BY branch;
+END`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "CALL airspace_warnings('branch-x');",
+				// branch-y and widened each modified a row that branch-x also modified. The
+				// widened branch has a different column set, which each per branch statement
+				// handles because its literal arguments plan with that exact pair's schemas.
+				Expected: []sql.Row{
+					{"branch-y", 1},
+					{"main", 0},
+					{"widened", 1},
+				},
+			},
+			{
+				Query: "SELECT * FROM warning_counts ORDER BY branch;",
+				Expected: []sql.Row{
+					{"branch-y", 1},
+					{"main", 0},
+					{"widened", 1},
+				},
+			},
+		},
+	},
+	{
 		Name: "basic case",
 		SetUpScript: []string{
 			"set @Commit0 = HashOf('HEAD');",
@@ -1169,6 +1401,23 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
+				// Use index when to_pk is specified.
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type  from dolt_diff(@Commit1, @Commit4, 't') where to_pk = 2;",
+				Expected: []sql.Row{
+					{2, "two", "three", nil, nil, nil, "added"},
+				},
+				ExpectedIndexes: []string{"commits_to"},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type  from dolt_diff(@Commit1, @Commit4, 't') where from_pk IS NULL;",
+				Expected: []sql.Row{
+					{1, "uno", "dos", nil, nil, nil, "added"},
+					{2, "two", "three", nil, nil, nil, "added"},
+					{3, "three", "four", nil, nil, nil, "added"},
+				},
+				ExpectedIndexes: []string{"commits_from"},
+			},
+			{
 				// Reverse the to/from commits to see the diff from the other direction
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type  from dolt_diff(@Commit4, @Commit1, 'T');",
 				Expected: []sql.Row{
@@ -1176,6 +1425,23 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 					{nil, nil, nil, 2, "two", "three", "removed"},
 					{nil, nil, nil, 3, "three", "four", "removed"},
 				},
+			},
+			{
+				// Use index when from_pk is specified.
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type  from dolt_diff(@Commit4, @Commit1, 'T') where from_pk = 2;",
+				Expected: []sql.Row{
+					{nil, nil, nil, 2, "two", "three", "removed"},
+				},
+				ExpectedIndexes: []string{"commits_from"},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type  from dolt_diff(@Commit4, @Commit1, 'T') where to_pk IS NULL;",
+				Expected: []sql.Row{
+					{nil, nil, nil, 1, "uno", "dos", "removed"},
+					{nil, nil, nil, 2, "two", "three", "removed"},
+					{nil, nil, nil, 3, "three", "four", "removed"},
+				},
+				ExpectedIndexes: []string{"commits_to"},
 			},
 			{
 				Query: `
@@ -2549,6 +2815,17 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 			},
 		},
 	},
+	// https://github.com/dolthub/dolt/issues/12067
+	{
+		Name:        "table drop and recreate with identical primary key reports modified row in diff stat",
+		SetUpScript: dropAndRecreateScript("int"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT rows_modified, cells_modified, old_row_count, new_row_count FROM dolt_diff_stat(@Commit2, @Commit3, 't1');",
+				Expected: []sql.Row{{1, 1, 1, 1}},
+			},
+		},
+	},
 }
 
 var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
@@ -3321,6 +3598,17 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{"t", "t", "modified", false, true},
 				},
+			},
+		},
+	},
+	// https://github.com/dolthub/dolt/issues/12067
+	{
+		Name:        "table drop and recreate with identical primary key reports modified data in diff summary",
+		SetUpScript: dropAndRecreateScript("int"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT diff_type, data_change FROM dolt_diff_summary(@Commit2, @Commit3, 't1');",
+				Expected: []sql.Row{{"modified", true}},
 			},
 		},
 	},
@@ -4131,6 +4419,17 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 				Query: "SELECT DISTINCT table_name FROM dolt_patch('HEAD~2', 'HEAD~1', 'the_table');",
 				// the_table was committed before the ignore pattern existed, so it must appear.
 				Expected: []sql.Row{{"the_table"}},
+			},
+		},
+	},
+	// https://github.com/dolthub/dolt/issues/12067
+	{
+		Name:        "table drop and recreate with identical primary key generates an UPDATE in diff patch",
+		SetUpScript: dropAndRecreateScript("int"),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch(@Commit2, @Commit3, 't1');",
+				Expected: []sql.Row{{1, "t1", "data", "UPDATE `t1` SET `name`='dolt' WHERE `id`=1;"}},
 			},
 		},
 	},
@@ -5287,12 +5586,12 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "base case: insert, update, delete",
 		SetUpScript: []string{
-			"set @Commit0 = HASHOF('HEAD');",
 			"create table t (pk int primary key, c1 int, c2 int);",
 			"call dolt_add('.')",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit0, '-am', 'creating table t');",
 			"insert into t values (1, 2, 3), (4, 5, 6);",
 			"set @Commit1 = '';",
-			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'populating table t');",
 
 			"update t set c2=0 where pk=1",
 			"set @Commit2 = '';",
@@ -5373,6 +5672,20 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{4, 5, 6, nil, nil, nil, "added"},
 				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_commit_DIFF_t WHERE TO_COMMIT=@Commit1 and FROM_COMMIT=@Commit0 AND to_pk = 1;",
+				Expected: []sql.Row{
+					{1, 2, 3, nil, nil, nil, "added"},
+				},
+				ExpectedIndexes: []string{"commits_to"},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_commit_DIFF_t WHERE TO_COMMIT=@Commit0 and FROM_COMMIT=@Commit1 AND from_pk = 1;",
+				Expected: []sql.Row{
+					{nil, nil, nil, 1, 2, 3, "removed"},
+				},
+				ExpectedIndexes: []string{"commits_from"},
 			},
 		},
 	},
@@ -6809,6 +7122,25 @@ left join dolt_commit_diff_xy cd
 			},
 		},
 	},
+	{
+		name: "indexes work when table doesn't exist on one branch",
+		setup: []string{
+			"call dolt_checkout('-b', 'mod')",
+			"create table newTable(id int)",
+			"call dolt_add('newTable')",
+			"call dolt_commit('-am', 'added new table')",
+		},
+		queries: []systabQuery{
+			{
+				query: "select count(*) from dolt_diff('main', 'mod', 'newTable') where to_commit='def'",
+				exp:   []sql.Row{{0}},
+			},
+			{
+				query: "select count(*) from dolt_diff('mod', 'main', 'newTable') where to_commit='def'",
+				exp:   []sql.Row{{0}},
+			},
+		},
+	},
 }
 
 var QueryDiffTableScriptTests = []queries.ScriptTest{
@@ -7019,6 +7351,130 @@ var QueryDiffTableScriptTests = []queries.ScriptTest{
 				Query: "SELECT to_table_name, diff_type FROM dolt_diff_summary('HEAD~2', 'HEAD~1');",
 				// the_table was committed before the ignore pattern existed, so it must appear.
 				Expected: []sql.Row{{"the_table", "added"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_query_diff in read-only transaction",
+		SetUpScript: []string{
+			"create table t (i int primary key, j int);",
+			"insert into t values (1, 1), (2, 2);",
+			"create table tt (i int primary key, j int);",
+			"insert into tt values (1, 1), (2, 3);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "START TRANSACTION READ ONLY;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "SELECT * FROM dolt_query_diff('SELECT * FROM t', 'SELECT * FROM tt');",
+				Expected: []sql.Row{
+					{1, 1, nil, nil, "deleted"},
+					{2, 2, nil, nil, "deleted"},
+					{nil, nil, 1, 1, "added"},
+					{nil, nil, 2, 3, "added"},
+				},
+			},
+			{
+				Query:    "COMMIT;",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/12262
+		Name: "case-only text changes under case-insensitive collation and decimal NULL transitions are modified",
+		SetUpScript: []string{
+			`CREATE TABLE t (
+				id INT PRIMARY KEY,
+				s VARCHAR(20) COLLATE utf8mb4_0900_ai_ci,
+				x TEXT,
+				n DECIMAL(5,2)
+			);`,
+			`INSERT INTO t VALUES
+				(1, 'a', REPEAT('a', 2048), NULL),
+				(2, 'same', NULL, 1.5),
+				(3, 'same', 'same', NULL),
+				(4, 'same', REPEAT('a', 2048), NULL),
+				(5, 'same', NULL, NULL);`,
+			"CALL dolt_commit('-Am', 'c1');",
+			"UPDATE t SET s = 'A', n = 2 WHERE id = 1;",
+			"UPDATE t SET n = NULL WHERE id = 2;",
+			"UPDATE t SET n = 1.5 WHERE id = 3;",
+			"UPDATE t SET x = CONCAT('A', SUBSTRING(x, 2)) WHERE id = 4;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: `SELECT to_id, diff_type FROM dolt_query_diff(
+					'SELECT id, s FROM t AS OF HEAD WHERE id = 1',
+					'SELECT id, s FROM t WHERE id = 1');`,
+				Expected: []sql.Row{{1, "modified"}},
+			},
+			{
+				Query: `SELECT to_id, diff_type FROM dolt_query_diff(
+					'SELECT id, s, x, n FROM t AS OF HEAD',
+					'SELECT id, s, x, n FROM t');`,
+				Expected: []sql.Row{{1, "modified"}, {2, "modified"}, {3, "modified"}, {4, "modified"}},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/12262
+		Name: "rows with equal decimal, json, out-of-band text, varbinary, binary, and blob values are not reported as modified",
+		SetUpScript: []string{
+			`CREATE TABLE t (
+				id INT PRIMARY KEY,
+				n INT,
+				d DECIMAL(5,2),
+				j JSON,
+				s TEXT,
+				v VARBINARY(5),
+				b BINARY(5),
+				x BLOB
+			);`,
+			`INSERT INTO t VALUES
+				(1, 1, 1.5, '{"a": 1}', REPEAT('a', 2048), 'a', 'a', 'a'),
+				(2, 2, 2.5, '{"a": 2}', REPEAT('b', 2048), 'b', 'b', 'b');`,
+			"CALL dolt_commit('-Am', 'c1');",
+			"UPDATE t SET n = 5 WHERE id = 2;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: `SELECT to_id, diff_type FROM dolt_query_diff(
+					'SELECT id, n, d FROM t AS OF HEAD', 'SELECT id, n, d FROM t');`,
+				Expected: []sql.Row{{2, "modified"}},
+			},
+			{
+				Query: `SELECT to_id, diff_type FROM dolt_query_diff(
+					'SELECT id, n, j FROM t AS OF HEAD', 'SELECT id, n, j FROM t');`,
+				Expected: []sql.Row{{2, "modified"}},
+			},
+			{
+				Query: `SELECT to_id, diff_type FROM dolt_query_diff(
+					'SELECT id, n, s FROM t AS OF HEAD', 'SELECT id, n, s FROM t');`,
+				Expected: []sql.Row{{2, "modified"}},
+			},
+			{
+				Query: `SELECT to_id, diff_type FROM dolt_query_diff(
+					'SELECT id, n, v FROM t AS OF HEAD', 'SELECT id, n, v FROM t');`,
+				Expected: []sql.Row{{2, "modified"}},
+			},
+			{
+				Query: `SELECT to_id, diff_type FROM dolt_query_diff(
+					'SELECT id, n, b FROM t AS OF HEAD', 'SELECT id, n, b FROM t');`,
+				Expected: []sql.Row{{2, "modified"}},
+			},
+			{
+				Query: `SELECT to_id, diff_type FROM dolt_query_diff(
+					'SELECT id, n, x FROM t AS OF HEAD', 'SELECT id, n, x FROM t');`,
+				Expected: []sql.Row{{2, "modified"}},
+			},
+			{
+				Query: `SELECT * FROM dolt_query_diff(
+					'SELECT SUM(d) AS total FROM t AS OF HEAD',
+					'SELECT SUM(d) AS total FROM t');`,
+				Expected: []sql.Row{},
 			},
 		},
 	},

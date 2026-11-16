@@ -22,10 +22,10 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
@@ -172,7 +172,7 @@ func (ds *SchemaDiffTableFunction) WithChildren(ctx *sql.Context, children ...sq
 
 // CheckAuth implements the interface sql.AuthorizationCheckerNode.
 func (ds *SchemaDiffTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
-	baseDB, _ := doltdb.SplitRevisionDbName(ds.Database().Name())
+	baseDB := plan.CheckPrivilegeNameForDatabase(ds.Database())
 	if ds.tableNameExpr != nil {
 		_, _, _, tableName, err := ds.evaluateArguments()
 		if err != nil {
@@ -317,14 +317,14 @@ func (ds *SchemaDiffTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.R
 		var fromCreate, toCreate string
 
 		if delta.FromTable != nil {
-			fromCreate, err = sqlfmt.GenerateCreateTableStatement(ctx, delta.FromName.Name, delta.FromSch, delta.FromFks, delta.FromFksParentSch)
+			fromCreate, err = sqlfmt.GenerateCreateTableStatement(ctx, delta.FromName.Name, delta.FromSch, delta.FromFks, delta.FromFksParentSch, false)
 			if err != nil {
 				return nil, err
 			}
 		}
 
 		if delta.ToTable != nil {
-			toCreate, err = sqlfmt.GenerateCreateTableStatement(ctx, delta.ToName.Name, delta.ToSch, delta.ToFks, delta.ToFksParentSch)
+			toCreate, err = sqlfmt.GenerateCreateTableStatement(ctx, delta.ToName.Name, delta.ToSch, delta.ToFks, delta.ToFksParentSch, false)
 			if err != nil {
 				return nil, err
 			}

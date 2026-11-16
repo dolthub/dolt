@@ -18,8 +18,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/cockroachdb/apd/v3"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/shopspring/decimal"
 )
 
 type jsonTypeCategory int
@@ -46,7 +46,7 @@ func getTypeCategoryOfValue(val interface{}) (jsonTypeCategory, error) {
 		return jsonTypeBoolean, nil
 	case string:
 		return jsonTypeString, nil
-	case decimal.Decimal, int8, int16, int32, int64, uint8, uint16, uint32, uint64, float32, float64:
+	case *apd.Decimal, int8, int16, int32, int64, uint8, uint16, uint32, uint64, float32, float64:
 		return jsonTypeNumber, nil
 	}
 	return 0, fmt.Errorf("expected json value, got %v", val)

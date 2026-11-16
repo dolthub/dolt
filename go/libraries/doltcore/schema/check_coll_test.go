@@ -22,8 +22,8 @@ import (
 
 func TestCopy(t *testing.T) {
 	var original = &checkCollection{
-		checks: []check{{"check1", "expr1", true},
-			{"check2", "expr2", false}},
+		checks: []check{{"check1", "expr1", true, false},
+			{"check2", "expr2", false, false}},
 	}
 	var copy = original.Copy()
 

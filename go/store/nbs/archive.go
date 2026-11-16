@@ -79,6 +79,12 @@ Footer:
      to calculate was thrown out to support archive conjoins, and leaving the 192 bytes in the foorer allows us to avoid
      a format bump.
 
+File Name:
+   The ID, or name, of an archive is the truncated Sha512 (first 20 bytes) of the bytes which passed through the
+   archiveWriter. For an archive built chunk by chunk that is the whole file. For one built by conjoining archives the
+   data sections are copied from the sources without passing through the writer, so it is the Index, Metadata and
+   Footer only. An archive name is not a checksum of the archive's contents.
+
 Index:
    The Index is a concatenation of 4 sections, all of which are stored in raw form on disk.
    +-----------+------------+-----------------+----------+
@@ -134,7 +140,6 @@ Index:
 
      - Each Hash Suffix is the last 12 bytes of a Chunk in this Table.
      - Hash Suffix M must correspond to Prefix M and Chunk Record M
-     - The ID, or name, of the artifact is calculated using the truncated Sha512 (first 20 bytes) of the Suffix data.
 
 Metadata:
    The Metadata section is intended to be used for additional information about the Archive. This may include the version
@@ -241,6 +246,10 @@ type archiveOrigin struct {
 	// table-file-to-archive conversions. When zero, the field is omitted from metadata.
 	ConversionTime time.Time
 }
+
+// ErrCorruptArchiveIndex is returned when an archive's footer or index does not
+// describe a well formed archive.
+var ErrCorruptArchiveIndex = errors.New("corrupt archive index")
 
 var ErrInvalidChunkRange = errors.New("invalid chunk range")
 var ErrInvalidDictionaryRange = errors.New("invalid dictionary range")

@@ -55,7 +55,7 @@ func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv) ([]dsess.SqlDataba
 func newDatabase(ctx context.Context, name string, dEnv *env.DoltEnv) (sqle.Database, error) {
 	dbdata := dEnv.DbData(ctx)
 	if !dEnv.Valid() {
-		return sqle.Database{}, fmt.Errorf("failed to load database %q: %w", name, errors.Join(dEnv.CfgLoadErr, dEnv.DBLoadError))
+		return sqle.Database{}, fmt.Errorf("failed to load database %q: %w", name, errors.Join(dEnv.CfgLoadErr, dEnv.RSLoadErr, dEnv.DBLoadError))
 	}
 	return sqle.NewDatabase(ctx, name, dbdata, editor.Options{})
 }

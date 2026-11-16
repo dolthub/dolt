@@ -86,3 +86,44 @@ func TestParseAuthor(t *testing.T) {
 		})
 	}
 }
+
+func TestParseBackupPruneGracePeriod(t *testing.T) {
+	tests := []struct {
+		name     string
+		graceStr string
+		minEnv   string
+		expected time.Duration
+		expErr   bool
+	}{
+		{name: "hours", graceStr: "1h", expected: time.Hour},
+		{name: "at the floor", graceStr: "10m", expected: 10 * time.Minute},
+		{name: "compound", graceStr: "2h30m", expected: 2*time.Hour + 30*time.Minute},
+		{name: "below the floor", graceStr: "5m", expErr: true},
+		{name: "zero", graceStr: "0", expErr: true},
+		{name: "negative", graceStr: "-1h", expErr: true},
+		{name: "not a duration", graceStr: "an hour", expErr: true},
+		{name: "bare number", graceStr: "3600", expErr: true},
+		{name: "empty", graceStr: "", expErr: true},
+		// Tests lower the floor so they do not have to wait it out.
+		{name: "floor lowered by env", graceStr: "1s", minEnv: "1s", expected: time.Second},
+		{name: "still below a lowered floor", graceStr: "500ms", minEnv: "1s", expErr: true},
+		{name: "unparseable env floor", graceStr: "1h", minEnv: "soon", expErr: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if test.minEnv != "" {
+				t.Setenv(dconfig.EnvBackupPruneMinGrace, test.minEnv)
+			}
+
+			grace, err := ParseBackupPruneGracePeriod(test.graceStr)
+
+			if test.expErr {
+				assert.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, test.expected, grace)
+			}
+		})
+	}
+}

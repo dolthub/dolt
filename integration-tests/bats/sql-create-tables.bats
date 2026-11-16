@@ -791,3 +791,15 @@ SQL
     [[ "$output" =~ "2,2" ]] || false
 
 }
+
+@test "sql-create-tables: ALTER TABLE ... COMMENT on a table with a primary key" {
+    # See https://github.com/dolthub/dolt/issues/11164
+    dolt sql -q "CREATE TABLE t(id INT NOT NULL, PRIMARY KEY (id));"
+
+    run dolt sql -q "ALTER TABLE t COMMENT='c';"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SHOW CREATE TABLE t;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "COMMENT='c'" ]] || false
+}

@@ -177,17 +177,10 @@ func TestGetMissing(t *testing.T) {
 	}
 }
 
-// CheckAndPutBytes is a utility method calls bs.CheckAndPut by wrapping the supplied []byte
-// in an io.Reader
-func CheckAndPutBytes(ctx context.Context, bs Blobstore, expectedVersion, key string, data []byte) (string, error) {
-	reader := bytes.NewReader(data)
-	return bs.CheckAndPut(ctx, expectedVersion, key, int64(len(data)), reader)
-}
-
 func testCheckAndPutError(t *testing.T, bs Blobstore) {
 	testData := randBytes(32)
 	badVersion := "bad" //has to be valid hex
-	_, err := CheckAndPutBytes(context.Background(), bs, badVersion, key, testData)
+	_, err := bs.CheckAndPutManifest(context.Background(), badVersion, testData)
 
 	if err == nil {
 		t.Errorf("Key should be missing.")
@@ -201,7 +194,7 @@ func testCheckAndPutError(t *testing.T, bs Blobstore) {
 
 	if !ok {
 		t.Errorf("Error is not of the expected type")
-	} else if cpe.Key != key || cpe.ExpectedVersion != badVersion {
+	} else if cpe.Key != ManifestKey || cpe.ExpectedVersion != badVersion {
 		t.Errorf("CheckAndPutError does not have expected values - %s", cpe.Error())
 	}
 }
@@ -215,19 +208,19 @@ func TestCheckAndPutError(t *testing.T) {
 }
 
 func testCheckAndPut(t *testing.T, bs Blobstore) {
-	ver, err := CheckAndPutBytes(context.Background(), bs, "", key, randBytes(32))
+	ver, err := bs.CheckAndPutManifest(context.Background(), "", randBytes(32))
 
 	if err != nil {
 		t.Errorf("Failed CheckAndPut.")
 	}
 
-	newVer, err := CheckAndPutBytes(context.Background(), bs, ver, key, randBytes(32))
+	newVer, err := bs.CheckAndPutManifest(context.Background(), ver, randBytes(32))
 
 	if err != nil {
 		t.Errorf("Failed CheckAndPut.")
 	}
 
-	_, err = CheckAndPutBytes(context.Background(), bs, newVer, key, randBytes(32))
+	_, err = bs.CheckAndPutManifest(context.Background(), newVer, randBytes(32))
 
 	if err != nil {
 		t.Errorf("Failed CheckAndPut.")
@@ -242,7 +235,8 @@ func TestCheckAndPut(t *testing.T) {
 	}
 }
 
-func readModifyWrite(bs Blobstore, key string, iterations int, doneChan chan int) {
+func readModifyWrite(bs Blobstore, iterations int, doneChan chan int) {
+	key := ManifestKey
 	concurrentWrites := 0
 	for updates, failures := 0, 0; updates < iterations; {
 		if failures >= rmwRetries {
@@ -262,7 +256,7 @@ func readModifyWrite(bs Blobstore, key string, iterations int, doneChan chan int
 		copy(newData, data)
 		newData[dataSize] = byte(dataSize)
 
-		_, err = CheckAndPutBytes(context.Background(), bs, ver, key, newData)
+		_, err = bs.CheckAndPutManifest(context.Background(), ver, newData)
 		if err == nil {
 			updates++
 			failures = 0
@@ -277,10 +271,11 @@ func readModifyWrite(bs Blobstore, key string, iterations int, doneChan chan int
 	doneChan <- concurrentWrites
 }
 
-func testConcurrentCheckAndPuts(t *testing.T, bsTest BlobstoreTest, key string) {
+func testConcurrentCheckAndPuts(t *testing.T, bsTest BlobstoreTest) {
+	key := ManifestKey
 	doneChan := make(chan int)
 	for n := 0; n < bsTest.rmwConcurrency; n++ {
-		go readModifyWrite(bsTest.bs, key, bsTest.rmwIterations, doneChan)
+		go readModifyWrite(bsTest.bs, bsTest.rmwIterations, doneChan)
 	}
 
 	totalConcurrentWrites := 0
@@ -326,7 +321,7 @@ func TestConcurrentCheckAndPuts(t *testing.T) {
 			if bsTest.rmwIterations*bsTest.rmwConcurrency > 255 {
 				panic("Test expects less than 255 total updates or it won't work as is.")
 			}
-			testConcurrentCheckAndPuts(t, bsTest, uuid.New().String())
+			testConcurrentCheckAndPuts(t, bsTest)
 		})
 	}
 }
@@ -396,6 +391,45 @@ func TestGetRange(t *testing.T) {
 
 			// test the range beginning 2048 bytes from the end of size 512 which will be shorts 1024 from the end til 768 from the end
 			testGetRange(t, bsTest.bs, NewBlobRange(-2*1024, 512), rangeData(maxValue-1024, maxValue-768))
+		})
+	}
+}
+
+// TestGetReportsWholeBlobSize pins the size return of Get: it is the size of
+// the whole blob, never the length of the range that was read. An
+// implementation which only learns the size from a Content-Range it may not
+// get is allowed to report 0 for a ranged read, but never a wrong number.
+func TestGetReportsWholeBlobSize(t *testing.T) {
+	const size = 4096
+	testData := randBytes(size)
+
+	for _, bsTest := range newBlobStoreTests() {
+		t.Run(bsTest.bsType, func(t *testing.T) {
+			ctx := context.Background()
+			_, err := PutBytes(ctx, bsTest.bs, key, testData)
+			require.NoError(t, err)
+
+			rc, sz, _, err := bsTest.bs.Get(ctx, key, AllRange)
+			require.NoError(t, err)
+			require.NoError(t, rc.Close())
+			require.Equal(t, uint64(size), sz, "a whole-blob read always knows the size")
+
+			ranges := []BlobRange{
+				NewBlobRange(0, 128),
+				NewBlobRange(1024, 128),
+				NewBlobRange(-128, 0),
+				NewBlobRange(-256, 128),
+			}
+			for _, br := range ranges {
+				t.Run(br.asHttpRangeHeader(), func(t *testing.T) {
+					rc, sz, _, err := bsTest.bs.Get(ctx, key, br)
+					require.NoError(t, err)
+					require.NoError(t, rc.Close())
+					if sz != 0 {
+						assert.Equal(t, uint64(size), sz)
+					}
+				})
+			}
 		})
 	}
 }

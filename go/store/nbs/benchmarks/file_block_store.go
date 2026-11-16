@@ -76,6 +76,10 @@ func (fb fileBlockStore) Close() error {
 	return nil
 }
 
+func (fb fileBlockStore) Teardown(ctx context.Context) error {
+	return nil
+}
+
 func (fb fileBlockStore) Rebase(ctx context.Context) error {
 	return nil
 }

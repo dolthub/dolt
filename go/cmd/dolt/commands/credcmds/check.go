@@ -154,7 +154,7 @@ func checkCredAndPrintSuccess(ctx context.Context, dEnv *env.DoltEnv, dc creds.D
 	if err != nil {
 		return errhand.BuildDError("error: unable to build server endpoint options.").AddCause(err).Build()
 	}
-	conn, err := grpc.Dial(cfg.Endpoint, cfg.DialOptions...)
+	conn, err := grpc.NewClient("dns:///"+cfg.Endpoint, cfg.DialOptions...)
 	if err != nil {
 		return errhand.BuildDError("error: unable to connect to server with credentials.").AddCause(err).Build()
 	}
@@ -169,7 +169,7 @@ func checkCredAndPrintSuccess(ctx context.Context, dEnv *env.DoltEnv, dc creds.D
 	var whoAmI *remotesapi.WhoAmIResponse
 	whoAmI, err = grpcClient.WhoAmI(ctx, &remotesapi.WhoAmIRequest{})
 	if err != nil {
-		return errhand.BuildDError("error: calling doltremoteapi with credentials.").AddCause(err).Build()
+		return errhand.BuildDError("error: calling doltremoteapi at %s with credentials.", endpoint).AddCause(err).Build()
 	}
 
 	cli.Printf("\nSuccess.\n")

@@ -19,6 +19,7 @@ const (
 	EnvUser                          = "DOLT_CLI_USER"
 	EnvSilenceUserReqForTesting      = "DOLT_SILENCE_USER_REQ_FOR_TESTING"
 	EnvOpenAiKey                     = "OPENAI_API_KEY"
+	EnvOrcaRouterKey                 = "ORCAROUTER_API_KEY"
 	EnvDoltRemotePassword            = "DOLT_REMOTE_PASSWORD"
 	EnvEditor                        = "EDITOR"
 	EnvSqlDebugLogVerbose            = "DOLT_SQL_DEBUG_LOG_VERBOSE"
@@ -27,7 +28,6 @@ const (
 	EnvDoltRootPath                  = "DOLT_ROOT_PATH"
 	EnvRemoteVersionDownloadStats    = "DOLT_REMOTE_VERBOSE_DOWNLOAD_STATS"
 	EnvPushLog                       = "PUSH_LOG"
-	EnvDefaultBinFormat              = "DOLT_DEFAULT_BIN_FORMAT"
 	EnvTestForceOpenEditor           = "DOLT_TEST_FORCE_OPEN_EDITOR"
 	EnvDisableChunkJournal           = "DOLT_DISABLE_CHUNK_JOURNAL"
 	EnvDisableReflog                 = "DOLT_DISABLE_REFLOG"
@@ -51,11 +51,29 @@ const (
 	EnvDoltRootPassword              = "DOLT_ROOT_PASSWORD"
 	EnvDoltGCScheduler               = "DOLT_GC_SCHEDULER"
 
+	// EnvDisableVersionChecks disables out-of-date version check.
+	EnvDisableVersionChecks = "DOLT_DISABLE_VERSION_CHECKS"
+
 	// If set, must be "kill_connections" or "session_aware"
 	// Will go away after session_aware is made default-and-only.
 	EnvGCSafepointControllerChoice = "DOLT_GC_SAFEPOINT_CONTROLLER_CHOICE"
 
+	// Used for tests. Lowers the floor on `dolt backup sync
+	// --prune-with-grace-period` so a test does not have to wait out the
+	// production minimum. Not for production use: the floor exists to absorb
+	// NFS attribute caching and modest clock skew.
+	EnvBackupPruneMinGrace = "DOLT_BACKUP_PRUNE_MIN_GRACE"
+
 	// Used for tests. If set, Dolt will error if it would rebuild a table's row data.
 	EnvAssertNoTableRewrite         = "DOLT_TEST_ASSERT_NO_TABLE_REWRITE"
 	EnvAssertNoInMemoryArchiveIndex = "DOLT_TEST_ASSERT_NO_IN_MEMORY_ARCHIVE_INDEX"
+
+	// Used for tests. Make Dolt fail if it loads table file data
+	// from disk, such as bootstraping the journal file or loading
+	// a table file with tableFilePersister.Open.
+	EnvAssertNoTableFilesRead = "DOLT_TEST_ASSERT_NO_TABLE_FILES_READ"
+
+	// Used for tests. Make Dolt panic if opening a local database
+	// hits the singleton cache, since that path is already open.
+	EnvTestPanicOnSingletonHit = "DOLT_TEST_PANIC_ON_SINGLETON_HIT"
 )

@@ -31,10 +31,11 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/dolthub/fslock"
+	filelocks "github.com/dolthub/file-locks"
 	"github.com/google/uuid"
 
 	git "github.com/dolthub/dolt/go/store/blobstore/internal/git"
+	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 const gitblobstorePartNameWidth = 4 // "0001"
@@ -62,7 +63,7 @@ type putPlan struct {
 }
 
 // pendingWrite holds a deferred non-manifest write that will be flushed
-// in a single commit+push when CheckAndPut("manifest") is called.
+// in a single commit+push when CheckAndPutManifest is called.
 type pendingWrite struct {
 	key  string
 	plan putPlan
@@ -279,6 +280,10 @@ type GitBlobstore struct {
 	api               git.GitAPI
 	remoteName        string
 	remoteTrackingRef string
+	// anchorVersion is the persistent negotiation ref observed before this
+	// instance fetches. Teardown uses CAS so an older session cannot overwrite
+	// an anchor published by another session. Protected by writeMu after open.
+	anchorVersion git.OID
 	// writeMu serializes operations that mutate shared git refs and/or perform
 	// remote-managed write workflows (commit + push + cache update).
 	writeMu sync.Mutex
@@ -286,7 +291,7 @@ type GitBlobstore struct {
 	// checks this flag instead of competing with an in-progress push.
 	writeInProgress atomic.Bool
 	// pendingMu guards pendingWrites, which may be appended to by non-manifest Put/Concatenate
-	// while being flushed by CheckAndPut("manifest").
+	// while being flushed by CheckAndPutManifest.
 	pendingMu sync.Mutex
 	// identity, when non-nil, is used as the author/committer identity for new commits.
 	// When nil, we prefer whatever identity git derives from env/config, falling back
@@ -297,10 +302,12 @@ type GitBlobstore struct {
 	// by this blobstore should exceed maxPartSize bytes.
 	//
 	// A zero value means "disabled" (store values inline as a single git blob).
-	maxPartSize uint64
+	maxPartSize       uint64
+	maxHistoryCommits int
+	resetOnPrune      bool
 
 	// pendingWrites accumulates non-manifest writes that will be flushed in a single
-	// commit+push when CheckAndPut("manifest") is called. This avoids per-key
+	// commit+push when CheckAndPutManifest is called. This avoids per-key
 	// fetch/commit/push cycles for content-addressed (immutable) table file blobs.
 	// Guarded by gbs.pendingMu.
 	pendingWrites []pendingWrite
@@ -309,6 +316,21 @@ type GitBlobstore struct {
 	// buildCommitForKeyWrite call. After a successful push, these are evicted
 	// from the in-memory cache. Protected by writeMu.
 	pendingCacheEvictions []string
+
+	// syncMu guards the read-path fetch fields below.
+	syncMu sync.Mutex
+	// inFlightSync is the read-path fetch currently running, which readers
+	// arriving during it wait on instead of starting their own. Nil when none
+	// is running, so the zero value of GitBlobstore needs no initialization.
+	inFlightSync *inFlightSync
+	// drainingSync is a fetch that every waiter gave up on, now canceled. Its
+	// git process may still be exiting, so the next fetch waits for it rather
+	// than run a second one against the same remote-tracking ref.
+	drainingSync *inFlightSync
+	// syncsDisabled is non-zero while no read-path fetch may start: the store is
+	// closed, or a Teardown holds the repository. Reads are answered from
+	// whatever the cache already holds.
+	syncsDisabled int
 
 	// cacheMu guards all cache fields below.
 	cacheMu sync.RWMutex
@@ -332,6 +354,9 @@ type GitBlobstore struct {
 	// for a visible info branch pushed after each successful data write. The branch
 	// contains a single DOLT_REMOTE.md file with remote metadata. Empty means disabled.
 	infoBranch string
+
+	// spoolDir holds local copies of this store's blobs.
+	spoolDir *tempfiles.LockedDir
 }
 
 var _ Blobstore = (*GitBlobstore)(nil)
@@ -374,6 +399,12 @@ func NewGitBlobstoreWithIdentity(gitDir, ref string, identity *git.Identity) (*G
 
 // GitBlobstoreOptions configures optional behaviors of GitBlobstore.
 type GitBlobstoreOptions struct {
+	// MaxHistoryCommits limits reachable Git commits. Nil defaults to 64;
+	// zero means unlimited. Negative values are invalid.
+	MaxHistoryCommits *int
+	// ResetHistoryOnPrune creates a parentless commit when obsolete tables
+	// are removed. Nil defaults to true. False retains parents up to the limit.
+	ResetHistoryOnPrune *bool
 	// Identity, when non-nil, forces the author/committer identity for commits created by write paths.
 	Identity *git.Identity
 	// MaxPartSize enables chunked-object writes when non-zero.
@@ -386,6 +417,12 @@ type GitBlobstoreOptions struct {
 	// DOLT_REMOTE.md file after each successful data push. The value is the short
 	// branch name (e.g. "__dolt_remote_info__"). Overridden by DOLT_REMOTE_INFO_BRANCH env var.
 	InfoBranch string
+	// SyncForReadTTL overrides the read-side fetch dedup window. Zero means
+	// use defaultSyncForReadTTL.
+	SyncForReadTTL time.Duration
+	// SpoolDir holds local copies of this store's blobs. Opening a table file through a
+	// store with no SpoolDir fails.
+	SpoolDir *tempfiles.LockedDir
 }
 
 // NewGitBlobstoreWithOptions creates a GitBlobstore rooted at |gitDir| and |ref|.
@@ -396,6 +433,17 @@ type GitBlobstoreOptions struct {
 const defaultSyncForReadTTL = 1 * time.Second
 
 func NewGitBlobstoreWithOptions(gitDir, ref string, opts GitBlobstoreOptions) (*GitBlobstore, error) {
+	maxHistoryCommits := maxParentedCommits
+	if opts.MaxHistoryCommits != nil {
+		maxHistoryCommits = *opts.MaxHistoryCommits
+		if maxHistoryCommits < 0 {
+			return nil, fmt.Errorf("gitblobstore: max history commits must be non-negative")
+		}
+	}
+	resetHistoryOnPrune := true
+	if opts.ResetHistoryOnPrune != nil {
+		resetHistoryOnPrune = *opts.ResetHistoryOnPrune
+	}
 	r, err := git.NewRunner(gitDir)
 	if err != nil {
 		return nil, err
@@ -409,23 +457,37 @@ func NewGitBlobstoreWithOptions(gitDir, ref string, opts GitBlobstoreOptions) (*
 	instanceID := uuid.NewString()
 	remoteTrackingRef := RemoteTrackingRef(remoteName, remoteRef, instanceID)
 	localRef := OwnedLocalRef(remoteName, remoteRef, instanceID)
+	api := git.NewGitAPIImpl(r)
+	anchorVersion, _, err := api.TryResolveRefCommit(context.Background(), RemoteTrackingRef(remoteName, remoteRef, "last"))
+	if err != nil {
+		return nil, err
+	}
 
 	infoBranch := ResolveInfoBranch(opts.InfoBranch)
+
+	syncForReadTTL := opts.SyncForReadTTL
+	if syncForReadTTL == 0 {
+		syncForReadTTL = defaultSyncForReadTTL
+	}
 
 	return &GitBlobstore{
 		gitDir:            gitDir,
 		remoteRef:         remoteRef,
 		localRef:          localRef,
 		runner:            r,
-		api:               git.NewGitAPIImpl(r),
+		api:               api,
 		remoteName:        remoteName,
 		remoteTrackingRef: remoteTrackingRef,
+		anchorVersion:     anchorVersion,
 		identity:          opts.Identity,
 		maxPartSize:       opts.MaxPartSize,
+		maxHistoryCommits: maxHistoryCommits,
+		resetOnPrune:      resetHistoryOnPrune,
 		cacheObjects:      make(map[string]cachedGitObject),
 		cacheChildren:     make(map[string][]git.TreeEntry),
-		syncForReadTTL:    defaultSyncForReadTTL,
+		syncForReadTTL:    syncForReadTTL,
 		infoBranch:        infoBranch,
+		spoolDir:          opts.SpoolDir,
 	}, nil
 }
 
@@ -550,12 +612,12 @@ func (gbs *GitBlobstore) mergeCacheFromHead(ctx context.Context, head git.OID) e
 		return fmt.Errorf("gitblobstore: cannot merge cache for empty head")
 	}
 
-	gbs.cacheMu.RLock()
-	if gbs.cacheHead == head {
-		gbs.cacheMu.RUnlock()
+	// An unchanged head still means the cache is up to date as of now. Say so,
+	// or the dedup window never renews against a quiet remote and every
+	// cache-missing read fetches again.
+	if gbs.markSyncedIfHeadUnchanged(head) {
 		return nil
 	}
-	gbs.cacheMu.RUnlock()
 
 	entries, err := gbs.api.ListTreeRecursive(ctx, head)
 	if err != nil {
@@ -566,6 +628,7 @@ func (gbs *GitBlobstore) mergeCacheFromHead(ctx context.Context, head git.OID) e
 
 	// Double-check under write lock for concurrent callers.
 	if gbs.cacheHead == head {
+		gbs.lastSyncedAt = time.Now()
 		gbs.cacheMu.Unlock()
 		return nil
 	}
@@ -610,6 +673,37 @@ func (gbs *GitBlobstore) mergeCacheFromHead(ctx context.Context, head git.OID) e
 	return nil
 }
 
+// markSyncedIfHeadUnchanged refreshes the sync timestamp if the cache was
+// already merged from |head|, and reports whether it was.
+func (gbs *GitBlobstore) markSyncedIfHeadUnchanged(head git.OID) bool {
+	gbs.cacheMu.Lock()
+	defer gbs.cacheMu.Unlock()
+	if gbs.cacheHead != head {
+		return false
+	}
+	gbs.lastSyncedAt = time.Now()
+	return true
+}
+
+// syncedWithinTTL reports whether a sync completed recently enough that another
+// one would not tell us anything new.
+func (gbs *GitBlobstore) syncedWithinTTL() bool {
+	ttl := gbs.syncForReadTTL
+	if ttl <= 0 {
+		return false
+	}
+	gbs.cacheMu.RLock()
+	defer gbs.cacheMu.RUnlock()
+	return !gbs.lastSyncedAt.IsZero() && time.Since(gbs.lastSyncedAt) < ttl
+}
+
+// hasSyncedHead reports whether the cache has ever been merged from a commit.
+func (gbs *GitBlobstore) hasSyncedHead() bool {
+	gbs.cacheMu.RLock()
+	defer gbs.cacheMu.RUnlock()
+	return gbs.cacheHead != ""
+}
+
 func (gbs *GitBlobstore) Path() string {
 	return fmt.Sprintf("%s@%s", gbs.gitDir, gbs.remoteRef)
 }
@@ -640,10 +734,14 @@ func (gbs *GitBlobstore) CleanupOwnedLocalRef(ctx context.Context) error {
 	return err
 }
 
-// Close best-effort deletes this instance's UUID-owned refs and
-// periodically runs git gc to repack the cache repository.
-func (gbs *GitBlobstore) Close() error {
-	ctx := context.Background()
+// Teardown preserves one persistent fetch-negotiation anchor, deletes this
+// instance's UUID-owned refs, and periodically repacks the cache repository.
+func (gbs *GitBlobstore) Teardown(ctx context.Context) error {
+	// The gc below repacks the object store a fetch writes into, and the ref
+	// deletions remove the remote-tracking ref it writes, so no read-path fetch
+	// may be in flight for the rest of this call.
+	gbs.quiesceSyncs(errGitStoreTornDown)
+	defer gbs.resumeSyncs()
 
 	// Best-effort periodic GC to repack the cache repo. Runs outside the
 	// write lock so a slow gc cannot serialize other writers. maybeRunGC
@@ -652,6 +750,27 @@ func (gbs *GitBlobstore) Close() error {
 
 	gbs.writeMu.Lock()
 	defer gbs.writeMu.Unlock()
+
+	// cacheHead includes successful pushes as well as fetches; the tracking ref
+	// alone can still point at the head from before our last push.
+	gbs.cacheMu.RLock()
+	head := gbs.cacheHead
+	gbs.cacheMu.RUnlock()
+	var anchorErr error
+	if head != "" {
+		anchor := RemoteTrackingRef(gbs.remoteName, gbs.remoteRef, "last")
+		if err := gbs.api.UpdateRefCAS(ctx, anchor, head, gbs.anchorVersion, "gitblobstore: retain fetch anchor"); err != nil {
+			current, ok, resolveErr := gbs.api.TryResolveRefCommit(ctx, anchor)
+			// If another session changed the anchor, leave that anchor untouched
+			// and ignore the CAS failure. Otherwise report the failure, but still
+			// clean up our private refs since teardown may never be retried.
+			if resolveErr != nil || !ok || current == gbs.anchorVersion {
+				anchorErr = errors.Join(err, resolveErr)
+			}
+		} else {
+			gbs.anchorVersion = head
+		}
+	}
 
 	deleteIfExists := func(ref string) error {
 		if ref == "" {
@@ -669,9 +788,21 @@ func (gbs *GitBlobstore) Close() error {
 	}
 
 	return errors.Join(
+		anchorErr,
 		deleteIfExists(gbs.localRef),
 		deleteIfExists(gbs.remoteTrackingRef),
 	)
+}
+
+func (gbs *GitBlobstore) Close() error {
+	// Deliberately not paired with a resumeSyncs: a closed store never fetches
+	// again, and answers reads from what it has already cached. The exception
+	// is a table with no spool yet, which can no longer make one.
+	gbs.quiesceSyncs(errGitStoreClosed)
+	if gbs.spoolDir != nil {
+		return gbs.spoolDir.Close()
+	}
+	return nil
 }
 
 const gcInterval = 24 * time.Hour
@@ -695,7 +826,11 @@ func (gbs *GitBlobstore) maybeRunGC() {
 	}
 
 	lockPath := filepath.Join(gbs.gitDir, ".dolt-gc.lock")
-	lck := fslock.New(lockPath)
+	lck, err := filelocks.New(lockPath)
+	if err != nil {
+		return // can't open the lock directory, skip
+	}
+	defer lck.Close()
 	if err := lck.LockWithTimeout(0); err != nil {
 		return // another process holds the lock, skip
 	}
@@ -714,6 +849,17 @@ func (gbs *GitBlobstore) maybeRunGC() {
 	_ = os.WriteFile(markerPath, nil, 0644)
 }
 
+// errGitSyncAbandoned cancels a read-path fetch that every waiting reader has
+// given up on.
+var errGitSyncAbandoned = errors.New("gitblobstore: read fetch abandoned, no readers waiting")
+
+// errGitStoreClosed cancels a read-path fetch when the store is closed under it.
+var errGitStoreClosed = errors.New("gitblobstore: store closed")
+
+// errGitStoreTornDown cancels a read-path fetch when the store is torn down
+// under it.
+var errGitStoreTornDown = errors.New("gitblobstore: store torn down")
+
 func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
 	if err := gbs.validateRemoteManaged(); err != nil {
 		return err
@@ -722,13 +868,8 @@ func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
 	// Dedup guard: skip the fetch if we synced recently. The write path
 	// (fetchAlignAndMergeForWrite) always does its own unconditional fetch,
 	// so this only affects read-path callers (Get/Exists).
-	if ttl := gbs.syncForReadTTL; ttl > 0 {
-		gbs.cacheMu.RLock()
-		sinceLast := time.Since(gbs.lastSyncedAt)
-		gbs.cacheMu.RUnlock()
-		if sinceLast < ttl {
-			return nil
-		}
+	if gbs.syncedWithinTTL() {
+		return nil
 	}
 
 	// Concurrent fetches contend with an in-progress push on slow remotes.
@@ -736,6 +877,167 @@ func (gbs *GitBlobstore) syncForRead(ctx context.Context) error {
 		return nil
 	}
 
+	// Dedup concurrent readers.
+	sync, ok, err := gbs.beginSync(ctx)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		// Fetching is off for now: the store is closed or being torn down.
+		// Reads can still be sserved from the cache.
+		return nil
+	}
+	defer gbs.doneWaiting(sync)
+
+	select {
+	case <-sync.done:
+		return sync.err
+	case <-ctx.Done():
+		return context.Cause(ctx)
+	}
+}
+
+// inFlightSync is a read-path fetch that readers wait on together.
+//
+// It runs on a context of its own rather than on the context of the waiter which
+// spawned it. No single reader's deadline decides the fate of the fetch for the
+// rest. It is canceled once no reader is waiting for it any more.
+type inFlightSync struct {
+	done chan struct{}
+	// err is the result of the fetch, written before |done| is closed.
+	err error
+	// cancel cancels the fetch's own context.
+	cancel context.CancelCauseFunc
+	// waiters is the count of waiting readers readers on this result.
+	// Guarded by GitBlobstore.syncMu.
+	waiters int
+}
+
+// beginSync registers the caller as a waiter on a read-path fetch, starting one
+// if none is running. It returns the fetch to wait on. It reports ok=false when
+// no fetch may run at all, which leaves the caller to answer from the cache.
+func (gbs *GitBlobstore) beginSync(ctx context.Context) (sync *inFlightSync, ok bool, err error) {
+	for {
+		gbs.syncMu.Lock()
+		if gbs.syncsDisabled > 0 {
+			gbs.syncMu.Unlock()
+			return nil, false, nil
+		}
+		if gbs.inFlightSync != nil {
+			// A fetch is already running. We add ourself as a waiter.
+			sync = gbs.inFlightSync
+			sync.waiters++
+			gbs.syncMu.Unlock()
+			return sync, true, nil
+		}
+		draining := gbs.drainingSync
+		if draining == nil {
+			// No fetch currently running and nothing to drain.
+			// Start a new sync and return that as what we block on.
+			sync = gbs.startSyncLocked()
+			gbs.syncMu.Unlock()
+			return sync, true, nil
+		}
+		gbs.syncMu.Unlock()
+
+		// An abandoned fetch is still winding down.
+		// Block on that canceled sync finishing before we start a new sync.
+		select {
+		case <-draining.done:
+		case <-ctx.Done():
+			return nil, false, context.Cause(ctx)
+		}
+	}
+}
+
+// startSyncLocked starts a fetch whose sole waiter is the caller. Called with
+// syncMu held.
+func (gbs *GitBlobstore) startSyncLocked() *inFlightSync {
+	ctx, cancel := context.WithCancelCause(context.Background())
+	sync := &inFlightSync{
+		done:    make(chan struct{}),
+		cancel:  cancel,
+		waiters: 1,
+	}
+	gbs.inFlightSync = sync
+	// The fetch gets a goroutine of its own because it outlives the reader that
+	// started it whenever another reader is still waiting on it.
+	go func() {
+		defer cancel(nil)
+		defer gbs.finishSync(sync)
+		sync.err = gbs.fetchAndMergeForRead(ctx)
+	}()
+	return sync
+}
+
+// finishSync publishes the result of a finished fetch to its waiters and retires
+// it, which lets the next fetch start.
+func (gbs *GitBlobstore) finishSync(sync *inFlightSync) {
+	gbs.syncMu.Lock()
+	if gbs.inFlightSync == sync {
+		gbs.inFlightSync = nil
+	}
+	if gbs.drainingSync == sync {
+		gbs.drainingSync = nil
+	}
+	gbs.syncMu.Unlock()
+	close(sync.done)
+}
+
+// doneWaiting takes the caller out of |sync|'s waiters and cancels the fetch if
+// it was still inflight when the last waiter was removed.
+//
+// Cancellation is asynchronous: waiting for the git process to die is not
+// work a canceled waiter needs to do. GitBlobstore tracks the draining fetch
+// in |drainingSync| and whoever wants the next fetch has to wait for it before
+// starting their own.
+func (gbs *GitBlobstore) doneWaiting(sync *inFlightSync) {
+	gbs.syncMu.Lock()
+	sync.waiters--
+	abandoned := sync.waiters == 0 && gbs.inFlightSync == sync
+	if abandoned {
+		gbs.inFlightSync = nil
+		gbs.drainingSync = sync
+	}
+	gbs.syncMu.Unlock()
+
+	if abandoned {
+		sync.cancel(errGitSyncAbandoned)
+	}
+}
+
+// quiesceSyncs keeps new read-path fetches from starting and waits out any fetch
+// already running. Readers still waiting on a canceled fetch will get |cause|.
+// Pair every call with resumeSyncs, except from Close.
+func (gbs *GitBlobstore) quiesceSyncs(cause error) {
+	gbs.syncMu.Lock()
+	gbs.syncsDisabled++
+	sync, draining := gbs.inFlightSync, gbs.drainingSync
+	if sync != nil {
+		gbs.inFlightSync = nil
+		gbs.drainingSync = sync
+	}
+	gbs.syncMu.Unlock()
+
+	if sync != nil {
+		sync.cancel(cause)
+		<-sync.done
+	}
+	if draining != nil {
+		<-draining.done
+	}
+}
+
+// resumeSyncs undoes one quiesceSyncs, letting read-path fetches start again.
+func (gbs *GitBlobstore) resumeSyncs() {
+	gbs.syncMu.Lock()
+	gbs.syncsDisabled--
+	gbs.syncMu.Unlock()
+}
+
+// fetchAndMergeForRead fetches the remote ref and brings the cache up to date
+// with it. Only syncForRead may call it: it is what keeps one running at a time.
+func (gbs *GitBlobstore) fetchAndMergeForRead(ctx context.Context) error {
 	// Fetch remote ref into our remote-tracking ref.
 	err := gbs.api.FetchRef(ctx, gbs.remoteName, gbs.remoteRef, gbs.remoteTrackingRef)
 	if err != nil {
@@ -988,6 +1290,9 @@ func (gbs *GitBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 		if _, ok := gbs.cacheGetObject(key); ok {
 			return true, nil
 		}
+		if gbs.syncedAbsent(key) {
+			return false, nil
+		}
 	}
 
 	if err := gbs.syncForRead(ctx); err != nil {
@@ -996,6 +1301,21 @@ func (gbs *GitBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 	_, ok := gbs.cacheGetObject(key)
 	return ok, nil
 }
+
+// RangeReadsWholeBlob reports that a ranged Get streams the whole blob, because git
+// cat-file has no server-side range and must read from byte zero.
+func (gbs *GitBlobstore) RangeReadsWholeBlob() bool {
+	return true
+}
+
+var _ interface{ RangeReadsWholeBlob() bool } = (*GitBlobstore)(nil)
+
+// SpoolDir returns the directory holding local copies of this store's blobs.
+func (gbs *GitBlobstore) SpoolDir() *tempfiles.LockedDir {
+	return gbs.spoolDir
+}
+
+var _ interface{ SpoolDir() *tempfiles.LockedDir } = (*GitBlobstore)(nil)
 
 func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {
 	key, err := normalizeGitTreePath(key)
@@ -1010,12 +1330,73 @@ func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.
 		if _, ok := gbs.cacheGetObject(key); ok {
 			return gbs.getFromCache(ctx, key, br)
 		}
+		if gbs.syncedAbsent(key) {
+			return nil, 0, "", NotFound{Key: key}
+		}
 	}
 
 	if err := gbs.syncForRead(ctx); err != nil {
 		return nil, 0, "", err
 	}
 	return gbs.getFromCache(ctx, key, br)
+}
+
+// PinBlob returns a function which reads the whole of |key| as it is now. It keeps working
+// after a manifest update removes |key|, because it reads the git objects directly and they
+// outlive the key. Only a git gc which finds them unreachable can remove them.
+func (gbs *GitBlobstore) PinBlob(key string) (func(context.Context) (io.ReadCloser, error), error) {
+	key, err := normalizeGitTreePath(key)
+	if err != nil {
+		return nil, err
+	}
+	obj, ok := gbs.cacheGetObject(key)
+	if !ok {
+		return nil, NotFound{Key: key}
+	}
+	switch obj.typ {
+	case git.ObjectTypeBlob:
+		return func(ctx context.Context) (io.ReadCloser, error) {
+			return gbs.api.BlobReader(ctx, obj.oid)
+		}, nil
+
+	case git.ObjectTypeTree:
+		entries, ok := gbs.cacheListChildren(key)
+		if !ok {
+			return nil, NotFound{Key: key}
+		}
+		return func(ctx context.Context) (io.ReadCloser, error) {
+			rc, _, err := gbs.openChunkedEntriesRange(ctx, entries, AllRange)
+			return rc, err
+		}, nil
+
+	default:
+		return nil, fmt.Errorf("gitblobstore: unsupported object type %q for key %q", obj.typ, key)
+	}
+}
+
+// syncedAbsent reports that |key| does not exist, on the authority of the cache
+// alone, so the caller can skip fetching to find that out.
+//
+// The cache holds the complete recursive listing of the commit it was merged
+// from, plus this blobstore's own pending writes, so a key missing from it does
+// not exist as of that commit. Answering from the cache puts an absent key on
+// the same footing as a present one, which is already served as of that commit
+// rather than re-checked against the remote.
+//
+// A non-manifest key is content-addressed, so the only thing a fetch could add
+// is a key another writer has since pushed. Callers reach such a key by way of
+// the manifest naming it, and the manifest always fetches because it is never
+// served from the cache, so the sync that delivers a new manifest also delivers
+// the keys it names.
+func (gbs *GitBlobstore) syncedAbsent(key string) bool {
+	if key == gitblobstoreManifestKey {
+		return false
+	}
+	if !gbs.hasSyncedHead() {
+		return false
+	}
+	_, ok := gbs.cacheGetObject(key)
+	return !ok
 }
 
 func (gbs *GitBlobstore) getFromCache(ctx context.Context, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {
@@ -1052,6 +1433,10 @@ func (gbs *GitBlobstore) openChunkedTreeRange(ctx context.Context, key string, b
 	if !ok {
 		return nil, 0, NotFound{Key: key}
 	}
+	return gbs.openChunkedEntriesRange(ctx, entries, br)
+}
+
+func (gbs *GitBlobstore) openChunkedEntriesRange(ctx context.Context, entries []git.TreeEntry, br BlobRange) (io.ReadCloser, uint64, error) {
 	parts, totalSize, err := gbs.validateAndSizeChunkedParts(ctx, entries)
 	if err != nil {
 		return nil, 0, err
@@ -1087,6 +1472,7 @@ func (gbs *GitBlobstore) validateAndSizeChunkedParts(ctx context.Context, entrie
 	}
 
 	parts := make([]chunkPartRef, 0, len(entries))
+	oids := make([]git.OID, len(entries))
 	var total uint64
 	for i, e := range entries {
 		if e.Type != git.ObjectTypeBlob {
@@ -1106,11 +1492,20 @@ func (gbs *GitBlobstore) validateAndSizeChunkedParts(ctx context.Context, entrie
 		if want := fmt.Sprintf("%0*d", gitblobstorePartNameWidth, n); want != e.Name {
 			return nil, 0, fmt.Errorf("gitblobstore: invalid part name %q (expected %q)", e.Name, want)
 		}
+		oids[i] = e.OID
+	}
 
-		sz, err := gbs.api.BlobSize(ctx, e.OID)
-		if err != nil {
-			return nil, 0, err
-		}
+	// Size every part in one cat-file process rather than one per part.
+	sizes, err := gbs.api.BlobSizes(ctx, oids)
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(sizes) != len(oids) {
+		return nil, 0, fmt.Errorf("gitblobstore: expected %d part sizes, got %d", len(oids), len(sizes))
+	}
+
+	for i, e := range entries {
+		sz := sizes[i]
 		if sz < 0 {
 			return nil, 0, fmt.Errorf("gitblobstore: invalid part size %d for %q", sz, e.Name)
 		}
@@ -1130,7 +1525,7 @@ func (gbs *GitBlobstore) Put(ctx context.Context, key string, totalSize int64, r
 	}
 
 	// For non-manifest keys, skip remote sync entirely: check cache, hash locally,
-	// and defer the write to be flushed in the next CheckAndPut("manifest").
+	// and defer the write to be flushed in the next CheckAndPutManifest.
 	if key != gitblobstoreManifestKey {
 		if obj, ok := gbs.cacheGetObject(key); ok {
 			return obj.oid.String(), nil
@@ -1334,17 +1729,11 @@ func (gbs *GitBlobstore) buildCommitForKeyWrite(ctx context.Context, parent git.
 	}
 
 	// Use parent commit when available so git push can compute incremental deltas
-	// instead of enumerating the full tree. After maxParentedCommits in the
-	// existing chain, create a parentless commit to sever history so git gc can
-	// prune old objects. Also force an orphan commit when entries were pruned so
-	// the old bloated tree becomes immediately unreachable from the new tip.
-	var parentPtr *git.OID
-	if hasParent && parent != "" && prunedEntries == 0 {
-		depth, err := gbs.api.RevListCount(ctx, parent, maxParentedCommits+1)
-		if err == nil && depth < maxParentedCommits {
-			p := parent
-			parentPtr = &p
-		}
+	// instead of enumerating the full tree. Sever history at the configured
+	// limit, or on pruning when enabled, so git gc can reclaim obsolete objects.
+	parentPtr, err := gbs.historyParent(ctx, parent, hasParent, prunedEntries)
+	if err != nil {
+		return "", err
 	}
 	commitOID, err := gbs.api.CommitTree(ctx, treeOID, parentPtr, msg, gbs.identity)
 	if err != nil && gbs.identity == nil && isMissingGitIdentityErr(err) {
@@ -1354,6 +1743,32 @@ func (gbs *GitBlobstore) buildCommitForKeyWrite(ctx context.Context, parent git.
 		return "", err
 	}
 	return commitOID, nil
+}
+
+// historyParent decides whether the next commit retains the existing history.
+func (gbs *GitBlobstore) historyParent(ctx context.Context, parent git.OID, hasParent bool, prunedEntries int) (*git.OID, error) {
+	if !hasParent {
+		return nil, nil
+	}
+	if parent == "" {
+		return nil, nil
+	}
+	if gbs.resetOnPrune {
+		if prunedEntries > 0 {
+			return nil, nil
+		}
+	}
+	if gbs.maxHistoryCommits == 0 {
+		return &parent, nil
+	}
+	depth, err := gbs.api.RevListCount(ctx, parent, gbs.maxHistoryCommits)
+	if err != nil {
+		return nil, fmt.Errorf("gitblobstore: counting history commits: %w", err)
+	}
+	if depth >= gbs.maxHistoryCommits {
+		return nil, nil
+	}
+	return &parent, nil
 }
 
 func (gbs *GitBlobstore) removeKeyConflictsFromIndex(ctx context.Context, parent git.OID, indexFile string, key string, newIsChunked bool) error {
@@ -1393,46 +1808,57 @@ func (gbs *GitBlobstore) removeKeyConflictsFromIndex(ctx context.Context, parent
 	}
 }
 
-func (gbs *GitBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader) (string, error) {
-	key, err := normalizeGitTreePath(key)
+func (gbs *GitBlobstore) CheckAndPutManifest(ctx context.Context, expectedVersion string, contents []byte) (string, error) {
+	key, err := normalizeGitTreePath(gitblobstoreManifestKey)
 	if err != nil {
 		return "", err
 	}
 
 	msg := fmt.Sprintf("gitblobstore: checkandput %s", key)
 
-	// For the manifest key, flush all pending writes in a single commit+push.
-	if key == gitblobstoreManifestKey {
-		// Buffer manifest content so we can parse table names for pruning
-		// and still pass the data to HashObject via a bytes.Reader.
-		manifestData, err := io.ReadAll(reader)
-		if err != nil {
-			return "", fmt.Errorf("gitblobstore: reading manifest content: %w", err)
+	// Writing the manifest flushes all pending writes in a single commit+push.
+	names := parseManifestTableNames(contents)
+	var allowedNames map[string]bool
+	if names != nil {
+		allowedNames = make(map[string]bool, len(names))
+		for _, n := range names {
+			allowedNames[n] = true
 		}
-		names := parseManifestTableNames(manifestData)
-		var allowedNames map[string]bool
-		if names != nil {
-			allowedNames = make(map[string]bool, len(names))
-			for _, n := range names {
-				allowedNames[n] = true
-			}
-		}
-		bufferedReader := bytes.NewReader(manifestData)
-
-		gbs.pendingMu.Lock()
-		pending := gbs.pendingWrites
-		gbs.pendingWrites = nil
-		gbs.pendingMu.Unlock()
-		ver, err := gbs.checkAndPutWithRemoteSync(ctx, expectedVersion, key, int64(len(manifestData)), bufferedReader, msg, pending, allowedNames)
-		if err != nil && len(pending) > 0 {
-			gbs.pendingMu.Lock()
-			gbs.pendingWrites = append(pending, gbs.pendingWrites...)
-			gbs.pendingMu.Unlock()
-		}
-		return ver, err
 	}
 
-	return gbs.checkAndPutWithRemoteSync(ctx, expectedVersion, key, totalSize, reader, msg, nil, nil)
+	gbs.pendingMu.Lock()
+	pending := gbs.pendingWrites
+	gbs.pendingWrites = nil
+	gbs.pendingMu.Unlock()
+
+	// Only flush pending writes this manifest references; committing an
+	// unreferenced entry lets a later flush prune it while still live.
+	// Flush everything if names can't be parsed.
+	toFlush := pending
+	var deferred []pendingWrite
+	if allowedNames != nil {
+		toFlush = nil
+		for _, pw := range pending {
+			if isPathReferencedByManifest(pw.key, allowedNames) {
+				toFlush = append(toFlush, pw)
+			} else {
+				deferred = append(deferred, pw)
+			}
+		}
+	}
+
+	ver, err := gbs.checkAndPutWithRemoteSync(ctx, expectedVersion, key, int64(len(contents)), bytes.NewReader(contents), msg, toFlush, allowedNames)
+
+	// On failure, re-queue everything we drained; on success, keep the
+	// deferred (unreferenced) writes pending.
+	gbs.pendingMu.Lock()
+	if err != nil {
+		gbs.pendingWrites = append(pending, gbs.pendingWrites...)
+	} else if len(deferred) > 0 {
+		gbs.pendingWrites = append(deferred, gbs.pendingWrites...)
+	}
+	gbs.pendingMu.Unlock()
+	return ver, err
 }
 
 func (gbs *GitBlobstore) currentKeyVersion(ctx context.Context, commit git.OID, haveCommit bool, key string) (string, error) {

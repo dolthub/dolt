@@ -414,6 +414,40 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 		}
 	})
 
+	t.Run("WithNamespace", func(t *testing.T) {
+		assert := assert.New(t)
+		s3svc := makeFakeS3(t)
+		s3p := newPersister(s3svc)
+		s3p.ns = "a-namespace-here"
+
+		// Each table's chunk data is over minPartSize, so the conjoin copies it.
+		var sources chunkSources
+		medChunks := make([][]byte, 2)
+		for i := range medChunks {
+			medChunks[i] = make([]byte, minPartSize+1)
+			rand.Read(medChunks[i])
+			mt := newMemTable(uint64(2 * maxPartSize))
+			mt.addChunk(computeAddr(medChunks[i]), medChunks[i])
+			cs, _, err := s3p.Persist(context.Background(), dherrors.FatalBehaviorError, mt, nil, nil, &Stats{})
+			require.NoError(t, err)
+			sources = append(sources, cs)
+		}
+
+		src, _, err := s3p.ConjoinAll(context.Background(), dherrors.FatalBehaviorError, sources, &Stats{})
+		require.NoError(t, err)
+		defer src.close()
+		for _, s := range sources {
+			s.close()
+		}
+
+		if assert.True(src.count() > 0) {
+			if r, err := s3svc.readerForTableWithNamespace(ctx, s3p.ns, src.hash()); assert.NotNil(r) && assert.NoError(err) {
+				assertChunksInReader(medChunks, r, assert)
+				r.close()
+			}
+		}
+	})
+
 	t.Run("Mix", func(t *testing.T) {
 		assert := assert.New(t)
 		s3svc := makeFakeS3(t)

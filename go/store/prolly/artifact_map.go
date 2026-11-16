@@ -88,7 +88,7 @@ var _ MapInterface = (*ArtifactMap)(nil)
 // NewArtifactMap creates an artifact map based on |srcKeyDesc| which is the key descriptor for
 // the corresponding row map.
 func NewArtifactMap(node *tree.Node, ns tree.NodeStore, srcKeyDesc *val.TupleDesc) ArtifactMap {
-	keyDesc, valDesc := mergeArtifactsDescriptorsFromSource(srcKeyDesc)
+	keyDesc, valDesc := mergeArtifactsDescriptorsFromSource(srcKeyDesc, ns)
 	tuples := tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc]{
 		Root:      node,
 		NodeStore: ns,
@@ -105,8 +105,8 @@ func NewArtifactMap(node *tree.Node, ns tree.NodeStore, srcKeyDesc *val.TupleDes
 // NewArtifactMapFromTuples creates an artifact map based on |srcKeyDesc| which is the key descriptor for
 // the corresponding row map and inserts the given |tups|. |tups| must be a key followed by a value.
 func NewArtifactMapFromTuples(ctx context.Context, ns tree.NodeStore, srcKeyDesc *val.TupleDesc, tups ...val.Tuple) (ArtifactMap, error) {
-	kd, vd := mergeArtifactsDescriptorsFromSource(srcKeyDesc)
-	serializer := message.NewMergeArtifactSerializer(kd, ns.Pool())
+	kd, vd := mergeArtifactsDescriptorsFromSource(srcKeyDesc, ns)
+	serializer := message.NewMergeArtifactSerializer(kd, vd, ns.Pool())
 
 	ch, err := tree.NewEmptyChunker(ctx, ns, serializer)
 	if err != nil {
@@ -190,7 +190,7 @@ func (m ArtifactMap) Editor() *ArtifactsEditor {
 			keyDesc:    m.keyDesc,
 			valDesc:    m.valDesc,
 			maxPending: artifactMapPendingBufferSize,
-			flusher:    ProllyFlusher{},
+			flusher:    ArtifactFlusher{},
 		},
 		artKB: val.NewTupleBuilder(artKD, m.NodeStore()),
 		artVB: val.NewTupleBuilder(artVD, m.NodeStore()),
@@ -329,7 +329,7 @@ func (m ArtifactMap) iterAllOfTypes(ctx context.Context, artTypes ...ArtifactTyp
 }
 
 func MergeArtifactMaps(ctx context.Context, left, right, base ArtifactMap, cb tree.CollisionFn) (ArtifactMap, error) {
-	serializer := message.NewMergeArtifactSerializer(base.keyDesc, left.tuples.NodeStore.Pool())
+	serializer := message.NewMergeArtifactSerializer(base.keyDesc, base.valDesc, left.tuples.NodeStore.Pool())
 	// TODO: MergeArtifactMaps does not properly detect merge conflicts when one side adds a NULL to the end of its tuple.
 	// To fix this, accurate values of `leftSchemaChanged` and `rightSchemaChanged` must be computed.
 	// However, currently we do not expect the value of ArtifactMap.valDesc to be different across branches.
@@ -342,6 +342,32 @@ func MergeArtifactMaps(ctx context.Context, left, right, base ArtifactMap, cb tr
 		tuples:  tuples,
 		keyDesc: base.keyDesc,
 		valDesc: base.valDesc,
+	}, nil
+}
+
+// ArtifactFlusher is the MutableMapFlusher for an ArtifactMap. Every node it writes, including
+// those written when pending edits spill before the final Flush, is a MergeArtifacts message.
+type ArtifactFlusher struct{}
+
+var _ MutableMapFlusher[Map, tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc]] = ArtifactFlusher{}
+
+func (f ArtifactFlusher) GetDefaultSerializer(ctx context.Context, mut *MutableMap) message.Serializer {
+	return message.NewMergeArtifactSerializer(mut.keyDesc, mut.valDesc, mut.NodeStore().Pool())
+}
+
+func (f ArtifactFlusher) ApplyMutationsWithSerializer(ctx context.Context, serializer message.Serializer, mut *MutableMap) (tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc], error) {
+	return ProllyFlusher{}.ApplyMutationsWithSerializer(ctx, serializer, mut)
+}
+
+func (f ArtifactFlusher) Map(ctx context.Context, mut *MutableMap) (Map, error) {
+	tuples, err := f.ApplyMutationsWithSerializer(ctx, f.GetDefaultSerializer(ctx, mut), mut)
+	if err != nil {
+		return Map{}, err
+	}
+	return Map{
+		tuples:  tuples,
+		keyDesc: mut.keyDesc,
+		valDesc: mut.valDesc,
 	}, nil
 }
 
@@ -379,13 +405,29 @@ func (wr *ArtifactsEditor) Add(ctx context.Context, srcKey val.Tuple, srcRootish
 	if err != nil {
 		return err
 	}
+	return wr.putArtifact(ctx, key, meta, hash.Hash{})
+}
 
+// AddConflict adds a conflict for |srcKey| from |srcRootish| with |meta|. A non-empty |baseAddr| is stored as the
+// address of the conflict's base, which keeps a base that nothing else references from being garbage collected.
+func (wr *ArtifactsEditor) AddConflict(ctx context.Context, srcKey val.Tuple, srcRootish hash.Hash, meta []byte, baseAddr hash.Hash) error {
+	key, err := wr.BuildArtifactKey(ctx, srcKey, srcRootish, ArtifactTypeConflict, nil)
+	if err != nil {
+		return err
+	}
+	return wr.putArtifact(ctx, key, meta, baseAddr)
+}
+
+// putArtifact puts the artifact at |key| with |meta|, and with |baseAddr| when it is not empty.
+func (wr *ArtifactsEditor) putArtifact(ctx context.Context, key val.Tuple, meta []byte, baseAddr hash.Hash) error {
 	wr.artVB.PutJSON(0, meta)
+	if !baseAddr.IsEmpty() {
+		wr.artVB.PutCommitAddr(1, baseAddr)
+	}
 	value, err := wr.artVB.Build(ctx, wr.pool)
 	if err != nil {
 		return err
 	}
-
 	return wr.mut.Put(ctx, key, value)
 }
 
@@ -394,7 +436,11 @@ func (wr *ArtifactsEditor) Add(ctx context.Context, srcKey val.Tuple, srcRootish
 // has the same |meta.Value| but a different |meta.VInfo|, a new artifact is added (distinct key via
 // violation-info hash) instead of replacing. Same value and same |meta.VInfo| causes replace.
 func (wr *ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKey val.Tuple, srcRootish hash.Hash, artType ArtifactType, meta ConstraintViolationMeta) error {
-	itr, err := wr.mut.IterRange(ctx, PrefixRange(ctx, srcKey, wr.srcKeyDesc))
+	rng, err := PrefixRange(ctx, srcKey, wr.srcKeyDesc)
+	if err != nil {
+		return err
+	}
+	itr, err := wr.mut.IterRange(ctx, rng)
 	if err != nil {
 		return err
 	}
@@ -469,7 +515,11 @@ func ConstraintViolationInfoHash(violationInfo []byte) []byte {
 // DeleteConstraintViolationsForRow deletes every constraint-violation artifact for the row |srcKey| with type
 // |artType|. It returns the number of artifacts deleted. Used when resolving all violations for a row.
 func (wr *ArtifactsEditor) DeleteConstraintViolationsForRow(ctx context.Context, srcKey val.Tuple, artType ArtifactType) (int, error) {
-	itr, err := wr.mut.IterRange(ctx, PrefixRange(ctx, srcKey, wr.srcKeyDesc))
+	rng, err := PrefixRange(ctx, srcKey, wr.srcKeyDesc)
+	if err != nil {
+		return 0, err
+	}
+	itr, err := wr.mut.IterRange(ctx, rng)
 	if err != nil {
 		return 0, err
 	}
@@ -511,7 +561,7 @@ func (wr *ArtifactsEditor) Has(ctx context.Context, key val.Tuple) (bool, error)
 }
 
 func (wr *ArtifactsEditor) Flush(ctx context.Context) (ArtifactMap, error) {
-	s := message.NewMergeArtifactSerializer(wr.artKB.Desc, wr.NodeStore().Pool())
+	s := message.NewMergeArtifactSerializer(wr.artKB.Desc, wr.artVB.Desc, wr.NodeStore().Pool())
 
 	m, err := wr.mut.flushWithSerializer(ctx, s)
 	if err != nil {
@@ -565,6 +615,14 @@ type ConflictArtifact struct {
 type ConflictMetadata struct {
 	// BaseRootIsh is the target hash of the working set holding the base value for the conflict.
 	BaseRootIsh hash.Hash `json:"bc"`
+	// MergeBases are set when BaseRootIsh is a virtual merge base built from several merge bases. The virtual merge
+	// base is not referenced by any ref, so it can be rebuilt from these after garbage collection.
+	MergeBases []hash.Hash `json:"mb,omitempty"`
+	// RekeyedFrom is set when BaseRootIsh is a rekeyed merge base: the merge base, with MergeBases when it is a
+	// virtual merge base, that was rekeyed to the primary key both sides of the merge changed a table to. The
+	// conflict's value holds the address of BaseRootIsh, but a client that predates that address does not keep it
+	// during garbage collection, so the rekeyed merge base can be rebuilt from this.
+	RekeyedFrom hash.Hash `json:"rk,omitzero"`
 }
 
 // ConstraintViolationMeta is the json metadata for foreign key constraint violations
@@ -680,7 +738,7 @@ type Artifact struct {
 	ArtType ArtifactType
 }
 
-func mergeArtifactsDescriptorsFromSource(srcKd *val.TupleDesc) (kd, vd *val.TupleDesc) {
+func mergeArtifactsDescriptorsFromSource(srcKd *val.TupleDesc, vs val.ValueStore) (kd, vd *val.TupleDesc) {
 	// Artifact key is: source PK, commit hash, artifact type, then a fixed-size violation-info hash so multiple
 	// violations of the same type for the same row can coexist.
 	keyTypes := srcKd.Types
@@ -694,13 +752,15 @@ func mergeArtifactsDescriptorsFromSource(srcKd *val.TupleDesc) (kd, vd *val.Tupl
 	// violation-info hash: violationInfoHashSize bytes derived from violation info (for distinct keys per row)
 	keyTypes = append(keyTypes, val.Type{Enc: val.ByteStringEnc, Nullable: false})
 
-	// json blob data
-	valTypes := []val.Type{{Enc: val.JSONEnc, Nullable: false}}
+	// json blob data, then the address of the base of a conflict when nothing else keeps the base reachable. The
+	// address is NULL otherwise, and artifacts written by older clients lack it.
+	valTypes := []val.Type{{Enc: val.JSONEnc, Nullable: false}, {Enc: val.CommitAddrEnc, Nullable: true}}
 
 	handlers := make([]val.TupleTypeHandler, len(keyTypes))
 	copy(handlers, srcKd.Handlers)
 
-	return val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Handlers: handlers}, keyTypes...), val.NewTupleDescriptor(valTypes...)
+	return val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Handlers: handlers, ValueStore: vs}, keyTypes...),
+		val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{ValueStore: vs}, valTypes...)
 }
 
 func ArtifactDebugFormat(ctx context.Context, m ArtifactMap) (string, error) {

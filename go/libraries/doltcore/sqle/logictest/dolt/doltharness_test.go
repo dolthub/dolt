@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -33,7 +34,7 @@ func createTestEnvWithFS(fs filesys.Filesys, workingDir string) *env.DoltEnv {
 	const name = "test mcgibbins"
 	const email = "bigfakeytester@fake.horse"
 	dEnv := env.LoadWithoutDB(context.Background(), testHomeDirFunc, fs, doltdb.InMemDoltDB, "test")
-	err := dEnv.InitRepo(context.Background(), types.Format_Default, name, email, env.DefaultInitBranch)
+	err := dEnv.InitRepo(context.Background(), types.Format_DOLT, name, email, env.DefaultInitBranch)
 	if err != nil {
 		panic("Failed to initialize environment")
 	}
@@ -108,7 +109,10 @@ func TestDoltHarness(t *testing.T) {
 		t.Run(fmt.Sprintf("dolt harness runner %d", i), func(t *testing.T) {
 			h := &DoltHarness{}
 			err := innerInit(h, dEnv)
-			assert.Equal(t, nil, err)
+			require.NoError(t, err)
+			require.Same(t, h.engine.Variables(), h.sess.EngineVariables())
+			_, _, registered := h.engine.Variables().System.GetGlobal("dolt_show_branch_databases")
+			require.True(t, registered)
 			defer h.Close()
 
 			// setup repo with statements

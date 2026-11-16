@@ -19,30 +19,16 @@ import (
 	"math"
 	"sort"
 
-	"github.com/shopspring/decimal"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// OpenStopRange defines a half-open Range of Tuples [start, stop).
-func OpenStopRange(ctx context.Context, start, stop val.Tuple, desc *val.TupleDesc) Range {
-	return openStopRange(ctx, start, stop, desc)
-}
-
-// GreaterOrEqualRange defines a Range of Tuples greater than or equal to |start|.
-func GreaterOrEqualRange(start val.Tuple, desc *val.TupleDesc) Range {
-	return greaterOrEqualRange(start, desc)
-}
-
-// LesserRange defines a Range of Tuples less than |stop|.
-func LesserRange(stop val.Tuple, desc *val.TupleDesc) Range {
-	return lesserRange(stop, desc)
-}
-
 // PrefixRange constructs a Range for Tuples with a prefix of |prefix|.
-func PrefixRange(ctx context.Context, prefix val.Tuple, desc *val.TupleDesc) Range {
+func PrefixRange(ctx context.Context, prefix val.Tuple, desc *val.TupleDesc) (Range, error) {
 	return closedRange(ctx, prefix, prefix, desc)
 }
 
@@ -75,8 +61,6 @@ type RangeField struct {
 	Lo, Hi Bound
 	// BoundsAreEqual is |true| when |Lo.Value| == |Hi.Value|
 	BoundsAreEqual bool
-	// TargetIsUnique is |true| when the associated index is unique
-	TargetIsUnique bool
 }
 
 type Bound struct {
@@ -87,21 +71,24 @@ type Bound struct {
 
 // aboveStart is used to find the start of the
 // physical partition defined by a Range.
-func (r Range) aboveStart(ctx context.Context, t val.Tuple) bool {
+func (r Range) aboveStart(ctx context.Context, t val.Tuple) (bool, error) {
 	order := r.Desc.Comparator()
 	for i := range r.Fields {
 		bound := r.Fields[i].Lo
 		if !bound.Binding {
-			return true
+			return true, nil
 		}
 
 		field := r.Desc.GetField(i, t)
 		typ := r.Desc.Types[i]
 
-		cmp := order.CompareValues(ctx, i, field, bound.Value, typ)
+		cmp, err := order.CompareValues(ctx, i, field, bound.Value, typ)
+		if err != nil {
+			return false, err
+		}
 		if cmp < 0 {
 			// |field| is outside Range
-			return false
+			return false, nil
 		}
 
 		if r.Fields[i].BoundsAreEqual && cmp == 0 {
@@ -112,28 +99,31 @@ func (r Range) aboveStart(ctx context.Context, t val.Tuple) bool {
 			continue
 		}
 
-		return cmp > 0 || bound.Inclusive
+		return cmp > 0 || bound.Inclusive, nil
 	}
-	return true
+	return true, nil
 }
 
 // belowStop is used to find the end of the
 // physical partition defined by a Range.
-func (r Range) belowStop(ctx context.Context, t val.Tuple) bool {
+func (r Range) belowStop(ctx context.Context, t val.Tuple) (bool, error) {
 	order := r.Desc.Comparator()
 	for i := range r.Fields {
 		bound := r.Fields[i].Hi
 		if !bound.Binding {
-			return true
+			return true, nil
 		}
 
 		field := r.Desc.GetField(i, t)
 		typ := r.Desc.Types[i]
 
-		cmp := order.CompareValues(ctx, i, field, bound.Value, typ)
+		cmp, err := order.CompareValues(ctx, i, field, bound.Value, typ)
+		if err != nil {
+			return false, err
+		}
 		if cmp > 0 {
 			// |field| is outside Range
-			return false
+			return false, nil
 		}
 
 		if r.Fields[i].BoundsAreEqual && cmp == 0 {
@@ -144,14 +134,56 @@ func (r Range) belowStop(ctx context.Context, t val.Tuple) bool {
 			continue
 		}
 
-		return cmp < 0 || bound.Inclusive
+		return cmp < 0 || bound.Inclusive, nil
 	}
-	return true
+	return true, nil
+}
+
+// SortRangesByStart orders `ranges` by the physical position of their lower bounds, so that scanning them in
+// sequence returns tuples in map order. An unbound field starts before every bound one, and an inclusive bound
+// before an exclusive bound on the same value.
+func SortRangesByStart(ctx context.Context, ranges []Range) error {
+	var err error
+	sort.SliceStable(ranges, func(i, j int) bool {
+		cmp, cmpErr := compareRangeStarts(ctx, ranges[i], ranges[j])
+		if cmpErr != nil {
+			err = cmpErr
+		}
+		return cmp < 0
+	})
+	return err
+}
+
+// compareRangeStarts compares the lower bounds of `a` and `b` field by field.
+func compareRangeStarts(ctx context.Context, a, b Range) (int, error) {
+	order := a.Desc.Comparator()
+	for i := range a.Fields {
+		lo, other := a.Fields[i].Lo, b.Fields[i].Lo
+		if !lo.Binding || !other.Binding {
+			if lo.Binding == other.Binding {
+				return 0, nil
+			} else if !lo.Binding {
+				return -1, nil
+			}
+			return 1, nil
+		}
+		cmp, err := order.CompareValues(ctx, i, lo.Value, other.Value, a.Desc.Types[i])
+		if err != nil || cmp != 0 {
+			return cmp, err
+		}
+		if lo.Inclusive != other.Inclusive {
+			if lo.Inclusive {
+				return -1, nil
+			}
+			return 1, nil
+		}
+	}
+	return 0, nil
 }
 
 // Matches returns true if all the filter predicates
 // for Range |r| are true for Tuple |t|.
-func (r Range) Matches(ctx context.Context, t val.Tuple) bool {
+func (r Range) Matches(ctx context.Context, t val.Tuple) (bool, error) {
 	order := r.Desc.Comparator()
 	for i := range r.Fields {
 		field := r.Desc.GetField(i, t)
@@ -159,29 +191,39 @@ func (r Range) Matches(ctx context.Context, t val.Tuple) bool {
 
 		if r.Fields[i].BoundsAreEqual {
 			v := r.Fields[i].Lo.Value
-			if order.CompareValues(ctx, i, field, v, typ) == 0 {
+			cmp, err := order.CompareValues(ctx, i, field, v, typ)
+			if err != nil {
+				return false, err
+			}
+			if cmp == 0 {
 				continue
 			}
-			return false
+			return false, nil
 		}
 
 		lo := r.Fields[i].Lo
 		if lo.Binding {
-			cmp := order.CompareValues(ctx, i, field, lo.Value, typ)
+			cmp, err := order.CompareValues(ctx, i, field, lo.Value, typ)
+			if err != nil {
+				return false, err
+			}
 			if cmp < 0 || (cmp == 0 && !lo.Inclusive) {
-				return false
+				return false, nil
 			}
 		}
 
 		hi := r.Fields[i].Hi
 		if hi.Binding {
-			cmp := order.CompareValues(ctx, i, field, hi.Value, typ)
+			cmp, err := order.CompareValues(ctx, i, field, hi.Value, typ)
+			if err != nil {
+				return false, err
+			}
 			if cmp > 0 || (cmp == 0 && !hi.Inclusive) {
-				return false
+				return false, nil
 			}
 		}
 	}
-	return true
+	return true, nil
 }
 
 func (r Range) IsStrictKeyLookup(desc *val.TupleDesc) bool {
@@ -225,12 +267,21 @@ func (r Range) KeyRangeLookup(ctx context.Context, pool pool.BuffPool, ns tree.N
 		// ex: range scan
 		return nil, false, nil
 	}
+	order := r.Desc.Comparator()
+	if order.Order(n).Descending {
+		// the incremented key precedes the start key
+		return nil, false, nil
+	}
 
-	for _, typ := range r.Desc.Types[n+1:] {
+	for i, typ := range r.Desc.Types[n+1:] {
 		if !typ.Nullable {
 			// this is checked separately because fulltext descriptors
 			// do not match field lengths sometimes
 			// todo: why?
+			return nil, false, nil
+		}
+		if order.Order(n + 1 + i).NullsLast {
+			// the start key's NULL fields follow every matching key
 			return nil, false, nil
 		}
 	}
@@ -335,15 +386,24 @@ func IncrementTuple(ctx context.Context, start val.Tuple, n int, desc *val.Tuple
 		if !ok {
 			return nil, false, nil
 		}
-		tb.PutDecimal(n, v.Add(decimal.New(1, 0)))
+		_, err := sql.DecimalCtx.Add(v, v, types.DecimalFromInt64(1))
+		if err != nil {
+			return nil, false, err
+		}
+		tb.PutDecimal(n, v)
 	default:
 		return nil, false, nil
 	}
-	stop, err := tb.Build(ctx, pool)
+	// A NULL prefix field is valid here. Build would reject it.
+	stop, err := tb.BuildPermissive(ctx, pool)
 	if err != nil {
 		return nil, false, err
 	}
-	if desc.Compare(ctx, start, stop) >= 0 {
+	cmp, err := desc.Compare(ctx, start, stop)
+	if err != nil {
+		return nil, false, err
+	}
+	if cmp >= 0 {
 		// If cmp == 0, we lost precision serializing.
 		// If cmp > 0, we overflowed and |stop| < |start|.
 		// |stop| has to be strictly greater than |start|
@@ -354,31 +414,47 @@ func IncrementTuple(ctx context.Context, start val.Tuple, n int, desc *val.Tuple
 }
 
 func rangeStartSearchFn(rng Range) tree.SearchFn {
-	return func(ctx context.Context, nd *tree.Node) int {
-		// todo(andy): inline sort.Search()
-		return sort.Search(nd.Count(), func(i int) (in bool) {
+	return func(ctx context.Context, nd *tree.Node) (int, error) {
+		var searchErr error
+		idx := sort.Search(nd.Count(), func(i int) (in bool) {
+			if searchErr != nil {
+				return false
+			}
 			// if |tup| ∈ |rng|, set |in| to true
 			tup := val.Tuple(nd.GetKey(i))
-			in = rng.aboveStart(ctx, tup)
-			return
+			in, err := rng.aboveStart(ctx, tup)
+			if err != nil {
+				searchErr = err
+				return false
+			}
+			return in
 		})
+		return idx, searchErr
 	}
 }
 
 func rangeStopSearchFn(rng Range) tree.SearchFn {
-	return func(ctx context.Context, nd *tree.Node) (idx int) {
-		// todo(andy): inline sort.Search()
-		return sort.Search(nd.Count(), func(i int) (out bool) {
+	return func(ctx context.Context, nd *tree.Node) (idx int, err error) {
+		var searchErr error
+		idx = sort.Search(nd.Count(), func(i int) (out bool) {
+			if searchErr != nil {
+				return false
+			}
 			// if |tup| ∈ |rng|, set |out| to false
 			tup := val.Tuple(nd.GetKey(i))
-			out = !rng.belowStop(ctx, tup)
-			return
+			below, err := rng.belowStop(ctx, tup)
+			if err != nil {
+				searchErr = err
+				return false
+			}
+			return !below
 		})
+		return idx, searchErr
 	}
 }
 
 // closedRange defines an inclusive Range of Tuples from [start, stop].
-func closedRange(ctx context.Context, start, stop val.Tuple, desc *val.TupleDesc) (rng Range) {
+func closedRange(ctx context.Context, start, stop val.Tuple, desc *val.TupleDesc) (rng Range, err error) {
 	rng = Range{
 		Fields: make([]RangeField, len(desc.Types)),
 		Desc:   desc,
@@ -387,7 +463,11 @@ func closedRange(ctx context.Context, start, stop val.Tuple, desc *val.TupleDesc
 	for i := range rng.Fields {
 		lo := desc.GetField(i, start)
 		hi := desc.GetField(i, stop)
-		isEq := order.CompareValues(ctx, i, lo, hi, desc.Types[i]) == 0
+		cmp, err := order.CompareValues(ctx, i, lo, hi, desc.Types[i])
+		if err != nil {
+			return Range{}, err
+		}
+		isEq := cmp == 0
 		rng.Fields[i] = RangeField{
 			Lo:             Bound{Binding: true, Inclusive: true, Value: lo},
 			Hi:             Bound{Binding: true, Inclusive: true, Value: hi},
@@ -398,17 +478,23 @@ func closedRange(ctx context.Context, start, stop val.Tuple, desc *val.TupleDesc
 }
 
 // OpenStartRange defines a half-open Range of Tuples (start, stop].
-func openStartRange(ctx context.Context, start, stop val.Tuple, desc *val.TupleDesc) (rng Range) {
-	rng = closedRange(ctx, start, stop, desc)
+func openStartRange(ctx context.Context, start, stop val.Tuple, desc *val.TupleDesc) (rng Range, err error) {
+	rng, err = closedRange(ctx, start, stop, desc)
+	if err != nil {
+		return Range{}, err
+	}
 	last := len(rng.Fields) - 1
 	rng.Fields[last].Lo.Inclusive = false
 	rng.Fields[last].BoundsAreEqual = false
-	return rng
+	return rng, nil
 }
 
 // OpenStopRange defines a half-open Range of Tuples [start, stop).
-func openStopRange(ctx context.Context, start, stop val.Tuple, desc *val.TupleDesc) (rng Range) {
-	rng = closedRange(ctx, start, stop, desc)
+func openStopRange(ctx context.Context, start, stop val.Tuple, desc *val.TupleDesc) (rng Range, err error) {
+	rng, err = closedRange(ctx, start, stop, desc)
+	if err != nil {
+		return Range{}, err
+	}
 	last := len(rng.Fields) - 1
 	rng.Fields[last].Hi.Inclusive = false
 	rng.Fields[last].BoundsAreEqual = false
@@ -416,8 +502,11 @@ func openStopRange(ctx context.Context, start, stop val.Tuple, desc *val.TupleDe
 }
 
 // OpenRange defines a non-inclusive Range of Tuples from (start, stop).
-func openRange(ctx context.Context, start, stop val.Tuple, desc *val.TupleDesc) (rng Range) {
-	rng = closedRange(ctx, start, stop, desc)
+func openRange(ctx context.Context, start, stop val.Tuple, desc *val.TupleDesc) (rng Range, err error) {
+	rng, err = closedRange(ctx, start, stop, desc)
+	if err != nil {
+		return Range{}, err
+	}
 	last := len(rng.Fields) - 1
 	rng.Fields[last].Lo.Inclusive = false
 	rng.Fields[last].Hi.Inclusive = false

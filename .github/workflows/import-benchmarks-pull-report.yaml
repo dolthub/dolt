@@ -12,6 +12,10 @@ jobs:
     outputs:
       valid: ${{ steps.set_valid.outputs.valid }}
     steps:
+      - name: Check deferred CI
+        uses: $/.github/actions/check-deferred-ci
+        with:
+          timezone: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
       - uses: actions/checkout@v6
       - name: Validate Commentor
         id: set_valid
@@ -21,12 +25,16 @@ jobs:
 
   check-comments:
     runs-on: ubuntu-22.04
-    needs: validate-commentor
+    needs: [ validate-commentor ]
     if: ${{ needs.validate-commentor.outputs.valid == 'true' }}
     outputs:
       benchmark: ${{ steps.set_benchmark.outputs.benchmark }}
       comment-body: ${{ steps.set_body.outputs.body }}
     steps:
+      - name: Check deferred CI
+        uses: $/.github/actions/check-deferred-ci
+        with:
+          timezone: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
       - name: Check for Deploy Trigger
         uses: dolthub/pull-request-comment-trigger@v2
         id: check
@@ -36,17 +44,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Set Benchmark
-        if: ${{ steps.check.outputs.triggered == 'true' }}
+        if: steps.check.outputs.triggered == 'true'
         id: set_benchmark
         run: |
           echo "benchmark=true" >> $GITHUB_OUTPUT
 
   performance:
     runs-on: ubuntu-22.04
-    needs: [validate-commentor, check-comments]
+    needs: [ validate-commentor, check-comments ]
     if: ${{ needs.check-comments.outputs.benchmark == 'true' }}
     name: Trigger Benchmark Import Workflow
     steps:
+      - name: Check deferred CI
+        uses: $/.github/actions/check-deferred-ci
+        with:
+          timezone: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
       - uses: dolthub/pull-request-comment-branch@v3
         id: comment-branch
         with:

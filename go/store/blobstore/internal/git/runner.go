@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/dolthub/dolt/go/libraries/utils/gitauth"
 )
@@ -38,6 +39,8 @@ type Runner struct {
 	gitDir  string
 	// extraEnv is appended to os.Environ() for every command.
 	extraEnv []string
+	// waitDelay is gitauth.CmdWaitDelay in production; tests shorten it.
+	waitDelay time.Duration
 }
 
 // NewRunner creates a Runner using the git binary on PATH.
@@ -52,8 +55,9 @@ func NewRunner(gitDir string) (*Runner, error) {
 // NewRunnerWithGitPath creates a Runner using an explicit git binary path.
 func NewRunnerWithGitPath(gitDir, gitPath string) *Runner {
 	return &Runner{
-		gitPath: gitPath,
-		gitDir:  gitDir,
+		gitPath:   gitPath,
+		gitDir:    gitDir,
+		waitDelay: gitauth.CmdWaitDelay,
 	}
 }
 
@@ -120,11 +124,15 @@ func (r *Runner) buildCmd(ctx context.Context, opts RunOptions, args []string) *
 	}
 	cmd.Env = r.env(opts)
 	gitauth.CmdSetsid(cmd)
+	gitauth.CmdKillGroupOnCancel(cmd)
+	cmd.WaitDelay = r.waitDelay
 	return cmd
 }
 
-// Run executes "git <args...>" with GIT_DIR set and returns captured combined output
-// when Stdout/Stderr are not supplied.
+// Run executes "git <args...>" with GIT_DIR set. When Stdout/Stderr are not supplied
+// it returns git's stdout alone on success, so that a warning git prints to stderr
+// while succeeding cannot corrupt output that callers parse. On failure it returns
+// stdout followed by stderr, which is also what the error carries.
 func (r *Runner) Run(ctx context.Context, opts RunOptions, args ...string) ([]byte, error) {
 	cmd := r.buildCmd(ctx, opts, args)
 
@@ -132,11 +140,11 @@ func (r *Runner) Run(ctx context.Context, opts RunOptions, args ...string) ([]by
 		cmd.Stdin = opts.Stdin
 	}
 
-	// Capture combined output unless caller provided destinations.
-	var buf bytes.Buffer
+	// Capture output unless caller provided destinations.
+	var stdout, stderr bytes.Buffer
 	if opts.Stdout == nil && opts.Stderr == nil {
-		cmd.Stdout = &buf
-		cmd.Stderr = &buf
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
 	} else {
 		if opts.Stdout != nil {
 			cmd.Stdout = opts.Stdout
@@ -150,10 +158,10 @@ func (r *Runner) Run(ctx context.Context, opts RunOptions, args ...string) ([]by
 	}
 
 	err := cmd.Run()
-	out := buf.Bytes()
 	if err == nil {
-		return out, nil
+		return stdout.Bytes(), nil
 	}
+	out := append(stdout.Bytes(), stderr.Bytes()...)
 
 	exitCode := 0
 	var ee *exec.ExitError
@@ -167,7 +175,7 @@ func (r *Runner) Run(ctx context.Context, opts RunOptions, args ...string) ([]by
 		Output:   out,
 		Cause:    err,
 	}
-	return out, gitauth.NormalizeError(cerr, out)
+	return out, gitauth.NormalizeError(ctx, cerr, out)
 }
 
 // Start starts "git <args...>" and returns a ReadCloser for stdout.
@@ -198,6 +206,7 @@ func (r *Runner) Start(ctx context.Context, opts RunOptions, args ...string) (io
 
 	// Wrap stdout so that Close also waits to avoid zombies if callers bail early.
 	rc := &cmdReadCloser{
+		ctx:    ctx,
 		r:      stdout,
 		cmd:    cmd,
 		stderr: &stderr,
@@ -208,19 +217,35 @@ func (r *Runner) Start(ctx context.Context, opts RunOptions, args ...string) (io
 }
 
 type cmdReadCloser struct {
-	r      io.ReadCloser
-	cmd    *exec.Cmd
-	stderr *bytes.Buffer
-	args   []string
-	dir    string
+	// ctx is the context the command was started with, so Close can tell a
+	// cancellation from a git failure.
+	ctx     context.Context
+	r       io.ReadCloser
+	cmd     *exec.Cmd
+	stderr  *bytes.Buffer
+	args    []string
+	dir     string
+	drained bool // set once Read reaches io.EOF, so stdout was fully consumed
 }
 
-func (c *cmdReadCloser) Read(p []byte) (int, error) { return c.r.Read(p) }
+func (c *cmdReadCloser) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	if errors.Is(err, io.EOF) {
+		c.drained = true
+	}
+	return n, err
+}
 
 func (c *cmdReadCloser) Close() error {
 	_ = c.r.Close()
 	err := c.cmd.Wait()
 	if err == nil {
+		return nil
+	}
+	// A close before stdout was drained kills the still writing child with a closed
+	// pipe, which is expected. Checking our own drained flag is portable, while the
+	// child's exit text names the broken pipe signal only on Unix.
+	if !c.drained {
 		return nil
 	}
 	exitCode := 0
@@ -235,7 +260,7 @@ func (c *cmdReadCloser) Close() error {
 		Output:   c.stderr.Bytes(),
 		Cause:    err,
 	}
-	return gitauth.NormalizeError(cerr, cerr.Output)
+	return gitauth.NormalizeError(c.ctx, cerr, cerr.Output)
 }
 
 func (r *Runner) env(opts RunOptions) []string {

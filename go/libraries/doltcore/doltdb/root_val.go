@@ -19,8 +19,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"iter"
 	"sort"
 	"strings"
+	"sync"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/cespare/xxhash/v2"
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
@@ -79,9 +83,12 @@ type RootValue interface {
 	GetDatabaseSchemas(ctx context.Context) ([]schema.DatabaseSchema, error)
 	// GetFeatureVersion returns the feature version of this root, if one is written
 	GetFeatureVersion(ctx context.Context) (ver FeatureVersion, ok bool, err error)
-	// GetForeignKeyCollection returns the ForeignKeyCollection for this root. As collections are meant to be modified
-	// in-place, each returned collection may freely be altered without affecting future returned collections from this root.
+	// GetForeignKeyCollection returns the ForeignKeyCollection for this root. Collections are never changed in place, so
+	// every caller is returned the same collection, and changing it returns a changed copy that doesn't affect this root.
 	GetForeignKeyCollection(ctx context.Context) (*ForeignKeyCollection, error)
+	// GetForeignKeyCollectionHash returns the address of this root's stored ForeignKeyCollection, which is equal for
+	// two roots whose collections are equal, or the empty hash if this root has never stored one.
+	GetForeignKeyCollectionHash(ctx context.Context) (hash.Hash, error)
 	// GetTable will retrieve a table by its case-sensitive name.
 	GetTable(ctx context.Context, tName TableName) (*Table, bool, error)
 	// GetTableHash returns the hash of the given case-sensitive table name.
@@ -137,6 +144,7 @@ type rootValue struct {
 	ns       tree.NodeStore
 	st       rootValueStorage
 	fkc      *ForeignKeyCollection // cache the first load
+	fkcLock  sync.Mutex            // guards fkc, which may be loaded from multiple sessions sharing this root
 	rootHash hash.Hash             // cache the first load
 	// tablesHash is a digest of the table names
 	tablesHash uint64
@@ -226,7 +234,7 @@ func decodeRootNomsValue(ctx context.Context, vrw types.ValueReadWriter, ns tree
 func isRootValue(nbf *types.NomsBinFormat, val types.Value) bool {
 	if sm, ok := val.(types.SerialMessage); ok {
 		fileID := serial.GetFileID(sm)
-		return fileID == serial.RootValueFileID || fileID == serial.DoltgresRootValueFileID
+		return fileID == serial.RootValueFileID || fileID == serial.DoltgresRootValueFileID || fileID == serial.DumboRootValueFileID
 	}
 	return false
 }
@@ -764,7 +772,11 @@ func (root *rootValue) IterTables(ctx context.Context, cb func(name TableName, t
 }
 
 func (root *rootValue) withStorage(st rootValueStorage) *rootValue {
-	return &rootValue{root.vrw, root.ns, st, nil, hash.Hash{}, 0, nil}
+	return &rootValue{
+		vrw: root.vrw,
+		ns:  root.ns,
+		st:  st,
+	}
 }
 
 func (root *rootValue) NomsValue() types.Value {
@@ -804,6 +816,40 @@ func (tn TableName) EqualFold(o TableName) bool {
 	return strings.EqualFold(tn.Name, o.Name) && strings.EqualFold(tn.Schema, o.Schema)
 }
 
+// FoldCase returns a table name that is equal for exactly those table names that EqualFold treats as equal, for use as
+// a map key.
+func (tn TableName) FoldCase() TableName {
+	return TableName{Name: foldString(tn.Name), Schema: foldString(tn.Schema)}
+}
+
+// foldString maps every rune of |s| to one representative of the runes it folds to under simple Unicode case folding,
+// which is the equivalence strings.EqualFold tests. strings.ToLower is not a substitute: it keeps apart some runes that
+// fold together (for example the two lower case forms of sigma), and merges some that do not.
+func foldString(s string) string {
+	// Most names are lower case ASCII, which is its own representative.
+	for i := 0; i < len(s); i++ {
+		if c := s[i]; c >= utf8.RuneSelf || ('A' <= c && c <= 'Z') {
+			return strings.Map(foldRune, s)
+		}
+	}
+	return s
+}
+
+// foldRune returns the representative of the runes that |r| folds to: the lower case ASCII letter if they include one,
+// otherwise the smallest of them.
+func foldRune(r rune) rune {
+	folded := r
+	for c := unicode.SimpleFold(r); c != r; c = unicode.SimpleFold(c) {
+		if c < folded {
+			folded = c
+		}
+	}
+	if 'A' <= folded && folded <= 'Z' {
+		return folded + 'a' - 'A'
+	}
+	return folded
+}
+
 // The ForeignKey struct used to include referenced table names as strings and
 // now includes them as TableName structs. LD_1 format repositories serialized
 // the ForeignKey struct directly to a noms struct with the string fields. So
@@ -812,7 +858,7 @@ func (tn TableName) MarshalNoms(vrw types.ValueReadWriter) (val types.Value, err
 	return types.String(tn.Name), nil
 }
 
-func (tn TableName) UnmarshalNoms(ctx context.Context, nbf *types.NomsBinFormat, v types.Value) error {
+func (tn *TableName) UnmarshalNoms(ctx context.Context, nbf *types.NomsBinFormat, v types.Value) error {
 	str, ok := v.(types.String)
 	if !ok {
 		return fmt.Errorf("could not unmarshal %v to doltdb.TableName; expected only a string.", v)
@@ -1127,9 +1173,9 @@ func (root *rootValue) RemoveTables(ctx context.Context, skipFKHandling bool, al
 	}
 
 	if allowDroppingFKReferenced {
-		err = fkc.RemoveAndUnresolveTables(ctx, root, tables...)
+		fkc, err = fkc.RemoveAndUnresolveTables(ctx, root, tables...)
 	} else {
-		err = fkc.RemoveTables(ctx, tables...)
+		fkc, err = fkc.RemoveTables(ctx, tables...)
 	}
 
 	if err != nil {
@@ -1139,27 +1185,33 @@ func (root *rootValue) RemoveTables(ctx context.Context, skipFKHandling bool, al
 	return newRoot.PutForeignKeyCollection(ctx, fkc)
 }
 
-// GetForeignKeyCollection returns the ForeignKeyCollection for this root. As collections are meant to be modified
-// in-place, each returned collection may freely be altered without affecting future returned collections from this root.
+// GetForeignKeyCollection implements RootValue. The collection is loaded on first use, and shared by every caller.
 func (root *rootValue) GetForeignKeyCollection(ctx context.Context) (*ForeignKeyCollection, error) {
+	root.fkcLock.Lock()
+	defer root.fkcLock.Unlock()
+
 	if root.fkc == nil {
 		fkMap, ok, err := root.st.GetForeignKeys(ctx, root.vrw)
 		if err != nil {
 			return nil, err
 		}
-		if !ok {
-			fkc := &ForeignKeyCollection{
-				foreignKeys: map[string]ForeignKey{},
-			}
-			return fkc, nil
-		}
 
-		root.fkc, err = DeserializeForeignKeys(ctx, root.vrw.Format(), fkMap)
-		if err != nil {
-			return nil, err
+		if !ok {
+			root.fkc = newForeignKeyCollection()
+		} else {
+			root.fkc, err = DeserializeForeignKeys(ctx, root.vrw.Format(), fkMap)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
-	return root.fkc.Copy(), nil
+
+	return root.fkc, nil
+}
+
+// GetForeignKeyCollectionHash implements RootValue.
+func (root *rootValue) GetForeignKeyCollectionHash(ctx context.Context) (hash.Hash, error) {
+	return root.st.GetForeignKeysAddr(), nil
 }
 
 // PutForeignKeyCollection returns a new root with the given foreign key collection.
@@ -1226,7 +1278,9 @@ func ValidateForeignKeysOnSchemas(ctx *sql.Context, tableResolver TableResolver,
 				return nil, err
 			}
 		} else {
-			if !fkCollection.RemoveKeyByName(foreignKey.Name, foreignKey.TableName) {
+			var removed bool
+			fkCollection, removed = fkCollection.RemoveKeyByName(foreignKey.Name, foreignKey.TableName)
+			if !removed {
 				return nil, fmt.Errorf("`%s` does not exist as a foreign key", foreignKey.Name)
 			}
 		}
@@ -1418,3 +1472,33 @@ func ResolveDatabaseSchema(ctx *sql.Context, root RootValue, schemaName string) 
 
 	return "", false, nil
 }
+
+// A RelationSource maps table names to relations (which may be tables or root objects) at a supplied RootValue.
+type RelationSource[RelationType any] interface {
+	// GetRelation gets a relation at a specific RootValue
+	GetRelation(ctx context.Context, root RootValue, tName TableName) (relation RelationType, correctName string, found bool, err error)
+	// IterRelations returns an iterator over every relation in the specific RootValue
+	IterRelations(ctx context.Context, root RootValue) iter.Seq2[TableName, RelationType]
+}
+
+// TableSource maps names to tables at a supplied RootValue
+type TableSource struct{}
+
+// GetRelation implements RelationSource
+func (s TableSource) GetRelation(ctx context.Context, root RootValue, tName TableName) (relation *Table, foundName string, found bool, err error) {
+	return GetTableInsensitive(ctx, root, tName)
+}
+
+// IterRelations implements RelationSource
+func (s TableSource) IterRelations(ctx context.Context, root RootValue) iter.Seq2[TableName, *Table] {
+	return func(yield func(TableName, *Table) bool) {
+		_ = root.IterTables(ctx, func(name TableName, table *Table, sch schema.Schema) (stop bool, err error) {
+			if !yield(name, table) {
+				return true, nil
+			}
+			return false, nil
+		})
+	}
+}
+
+var _ RelationSource[*Table] = (*TableSource)(nil)

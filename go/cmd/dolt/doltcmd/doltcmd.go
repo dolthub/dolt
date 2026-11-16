@@ -87,7 +87,6 @@ var doltSubCommands = []cli.Command{
 	commands.QueryDiff{},
 	commands.ReflogCmd{},
 	commands.RebaseCmd{},
-	commands.ArchiveCmd{},
 	ci.Commands,
 	commands.DebugCmd{},
 	commands.RmCmd{},

@@ -15,6 +15,7 @@
 package blobstore
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -22,7 +23,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/dolthub/fslock"
+	filelocks "github.com/dolthub/file-locks"
 	"github.com/google/uuid"
 
 	"github.com/dolthub/dolt/go/libraries/utils/file"
@@ -77,6 +78,10 @@ func NewLocalBlobstore(dir string) *LocalBlobstore {
 
 func (bs *LocalBlobstore) Path() string {
 	return bs.RootDir
+}
+
+func (bs *LocalBlobstore) Teardown(ctx context.Context) error {
+	return nil
 }
 
 // Get retrieves an io.reader for the portion of a blob specified by br along with
@@ -165,20 +170,21 @@ func (bs *LocalBlobstore) Put(ctx context.Context, key string, totalSize int64, 
 	return info.ModTime().String(), nil
 }
 
-func fLock(lockFilePath string) (*fslock.Lock, error) {
-	lck := fslock.New(lockFilePath)
-	err := lck.Lock()
-
+func fLock(lockFilePath string) (*filelocks.Lock, error) {
+	lck, err := filelocks.New(lockFilePath)
 	if err != nil {
+		return nil, err
+	}
+	if err := lck.Lock(); err != nil {
+		_ = lck.Close()
 		return nil, err
 	}
 
 	return lck, nil
 }
 
-// CheckAndPut will check the current version of a blob against an expectedVersion, and if the
-// versions match it will update the data and version associated with the key
-func (bs *LocalBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader) (string, error) {
+func (bs *LocalBlobstore) CheckAndPutManifest(ctx context.Context, expectedVersion string, contents []byte) (string, error) {
+	key := ManifestKey
 	path := filepath.Join(bs.RootDir, key) + bsExt
 	lockFilePath := path + lockExt
 	lck, err := fLock(lockFilePath)
@@ -187,7 +193,11 @@ func (bs *LocalBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key 
 		return "", errors.New("Could not acquire lock of " + lockFilePath)
 	}
 
-	defer lck.Unlock()
+	// Unlock releases the lock; Close releases the lock's directory handle.
+	defer func() {
+		_ = lck.Unlock()
+		_ = lck.Close()
+	}()
 
 	rc, _, ver, err := bs.Get(ctx, key, BlobRange{})
 
@@ -203,7 +213,7 @@ func (bs *LocalBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key 
 		return "", CheckAndPutError{key, expectedVersion, ver}
 	}
 
-	return bs.Put(ctx, key, totalSize, reader)
+	return bs.Put(ctx, key, int64(len(contents)), bytes.NewReader(contents))
 }
 
 // Exists returns true if a blob exists for the given key, and false if it does not.

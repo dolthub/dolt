@@ -72,22 +72,12 @@ type Database interface {
 	// if necessary before any update is performed.
 	BuildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (*Commit, error)
 
-	// Commit updates the Commit that ds.ID() in this database points at. All
-	// Values that have been written to this Database are guaranteed to be
-	// persistent after Commit() returns successfully.
-	//
-	// The new Commit struct is constructed using v, opts.ParentsList, and
-	// opts.Meta. If opts.ParentsList is empty then the head value from
-	// |ds| is used as the parent. If opts.Meta is the zero value the
-	// Commit struct as an empty Meta struct.
-	//
-	// If the update cannot be performed because the existing dataset head
-	// is not a common ancestor of the constructed commit struct, returns
-	// an 'ErrMergeNeeded' error.
+	// Commit writes the value given to the dataset given. Currently only used to initialize new datasets.
+	// For writes to existing datasets, CommitDatasets or SetHead is more appropriate.
 	Commit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (Dataset, error)
 
-	// WriteCommit has the same behavior as Commit but accepts an already-constructed Commit
-	// instead of constructing one from a Value and CommitOptions
+	// WriteCommit writes the value given to the dataset given. Currently only used to initialize new datasets.
+	// For writes to existing datasets, CommitDatasets or SetHead is more appropriate.
 	WriteCommit(ctx context.Context, ds Dataset, commit *Commit) (Dataset, error)
 
 	// Tag stores an immutable reference to a Commit. It takes a Hash to
@@ -119,12 +109,9 @@ type Database interface {
 	// upon return as well.
 	UpdateWorkingSet(ctx context.Context, ds Dataset, workingSet WorkingSetSpec, prevHash hash.Hash) (Dataset, error)
 
-	// CommitWithWorkingSet combines Commit and UpdateWorkingSet, combining the parameters of both. It uses the
-	// pessimistic lock that UpdateWorkingSet does, asserting that the hash |prevWsHash| given is still the current one
-	// before attempting to write a new value. And it does the normal optimistic locking that Commit does, assuming the
-	// pessimistic locking passes. After this method runs, the two datasets given in |commitDS and |workingSetDS| are both
-	// updated in the new root, or neither of them are.
-	CommitWithWorkingSet(ctx context.Context, commitDS, workingSetDS Dataset, val types.Value, workingSetSpec WorkingSetSpec, prevWsHash hash.Hash, opts CommitOptions) (Dataset, Dataset, error)
+	// CommitDatasets atomically updates every dataset given, or leaves all heads unchanged on failure.
+	// Results are returned in the same order as updates.
+	CommitDatasets(ctx context.Context, updates []DatasetUpdate) ([]Dataset, error)
 
 	// Delete removes the Dataset named ds.ID() from the map at the root of
 	// the Database. If the Dataset is already not present in the map,
@@ -147,7 +134,7 @@ type Database interface {
 	// error will be non-nil.
 	// The workingSetPath is the path to the working set that should be used for updating the working set. If one
 	// is not provided, no working set update will be performed.
-	SetHead(ctx context.Context, ds Dataset, newHeadAddr hash.Hash, workingSetPath string) (Dataset, error)
+	SetHead(ctx context.Context, ds Dataset, newHeadAddr hash.Hash, workingSetPath string, preconditions ...Precondition) (Dataset, error)
 
 	// FastForward sets the head of |ds| to the commit at |newHeadAddr| if it is a descendant of
 	// the current head. If the update cannot be performed, for example because another writer has
@@ -201,13 +188,16 @@ type GarbageCollector interface {
 
 // CanUsePuller returns true if a datas.Puller can be used to pull data from one Database into another.  Not all
 // Databases support this yet.
-func CanUsePuller(db Database) bool {
+func CanUsePuller(ctx context.Context, db Database) (bool, error) {
 	cs := db.chunkStore()
 	if tfs, ok := cs.(chunks.TableFileStore); ok {
-		ops := tfs.SupportedOperations()
-		return ops.CanRead && ops.CanWrite
+		ops, err := tfs.SupportedOperations(ctx)
+		if err != nil {
+			return false, err
+		}
+		return ops.CanRead && ops.CanWrite, nil
 	}
-	return false
+	return false, nil
 }
 
 func GetCSStatSummaryForDB(db Database) string {

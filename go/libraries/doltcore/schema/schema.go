@@ -268,42 +268,76 @@ func GetSharedCols(schema Schema, cmpNames []string, cmpKinds []types.NomsKind) 
 	return shared
 }
 
-// ArePrimaryKeySetsDiffable checks if two schemas are diffable. Assumes the
-// passed in schema are from the same table between commits. If __DOLT__, then
-// it also checks if the underlying SQL types of the columns are equal.
-func ArePrimaryKeySetsDiffable(fromSch, toSch Schema) bool {
-	if fromSch == nil && toSch == nil {
-		return false
-		// Empty case
-	} else if fromSch == nil || fromSch.GetAllCols().Size() == 0 ||
-		toSch == nil || toSch.GetAllCols().Size() == 0 {
-		return true
+// PrimaryKeyComparisonType is the result of ComparePrimaryKeys.
+type PrimaryKeyComparisonType int
+
+const (
+	// PrimaryKeysDiffer means rows cannot be matched by key.
+	PrimaryKeysDiffer PrimaryKeyComparisonType = iota
+
+	// PrimaryKeysSameTags means every key column has the same tag.
+	PrimaryKeysSameTags
+
+	// primaryKeysRetagged means every key column has the same SQL type and the
+	// same tag or name, and some tags differ.
+	primaryKeysRetagged
+)
+
+// ComparePrimaryKeys reports how the primary keys of |fromSchema| and
+// |toSchema| compare.
+//
+// Diffs match rows unless the result is PrimaryKeysDiffer. Merges require
+// PrimaryKeysSameTags, because they match rows by column tag.
+//
+// Two keyless schemas return PrimaryKeysSameTags, since neither has key columns
+// that can differ. A keyed schema against a keyless one returns
+// PrimaryKeysDiffer, and [diff.Stat] rejects that pairing. Nil inputs are
+// handled by [diff.StatForTableDelta].
+func ComparePrimaryKeys(fromSchema, toSchema Schema) PrimaryKeyComparisonType {
+	if fromSchema == nil && toSchema == nil {
+		return PrimaryKeysDiffer
+	}
+	if fromSchema == nil || fromSchema.GetAllCols().Size() == 0 ||
+		toSchema == nil || toSchema.GetAllCols().Size() == 0 {
+		return PrimaryKeysSameTags
 	}
 
-	// Keyless case for comparing
-	if IsKeyless(fromSch) && IsKeyless(toSch) {
-		return true
+	fromPrimaryKeyCols := fromSchema.GetPKCols()
+	toPrimaryKeyCols := toSchema.GetPKCols()
+
+	// No key columns on either side, so no tags can differ.
+	if fromPrimaryKeyCols.Size() == 0 && toPrimaryKeyCols.Size() == 0 {
+		return PrimaryKeysSameTags
 	}
 
-	cc1 := fromSch.GetPKCols()
-	cc2 := toSch.GetPKCols()
-
-	if cc1.Size() != cc2.Size() {
-		return false
+	if fromPrimaryKeyCols.Size() != toPrimaryKeyCols.Size() {
+		return PrimaryKeysDiffer
 	}
 
-	for i := 0; i < cc1.Size(); i++ {
-		c1 := cc1.GetByIndex(i)
-		c2 := cc2.GetByIndex(i)
-		if (c1.Tag != c2.Tag) || (c1.IsPartOfPK != c2.IsPartOfPK) {
-			return false
+	comparison := PrimaryKeysSameTags
+	for i := 0; i < fromPrimaryKeyCols.Size(); i++ {
+		// Pointers avoid copying the large Column struct on each iteration.
+		fromCol := &fromPrimaryKeyCols.cols[i]
+		toCol := &toPrimaryKeyCols.cols[i]
+		if !fromCol.TypeInfo.ToSqlType().Equals(toCol.TypeInfo.ToSqlType()) {
+			return PrimaryKeysDiffer
 		}
-		if !c1.TypeInfo.ToSqlType().Equals(c2.TypeInfo.ToSqlType()) {
-			return false
+		if fromCol.Tag == toCol.Tag {
+			continue
 		}
+		if strings.ToLower(fromCol.Name) != strings.ToLower(toCol.Name) {
+			return PrimaryKeysDiffer
+		}
+		// MapSchemaBasedOnTagAndName matches target columns by tag first. A target
+		// column holding fromCol's tag under another name would get its values.
+		if tagCol, ok := toPrimaryKeyCols.GetByTag(fromCol.Tag); ok &&
+			strings.ToLower(tagCol.Name) != strings.ToLower(fromCol.Name) {
+			return PrimaryKeysDiffer
+		}
+		comparison = primaryKeysRetagged
 	}
 
-	return true
+	return comparison
 }
 
 // MapSchemaBasedOnTagAndName can be used to map column values from one schema
@@ -329,7 +363,7 @@ func MapSchemaBasedOnTagAndName(inSch, outSch Schema) (val.OrdinalMapping, val.O
 		if !ok {
 			foundCol, ok = outSch.GetPKCols().GetByNameCaseInsensitive(col.Name)
 			if ok {
-				ok = foundCol.TypeInfo.ToSqlType() == col.TypeInfo.ToSqlType()
+				ok = foundCol.TypeInfo.ToSqlType().Equals(col.TypeInfo.ToSqlType())
 			}
 		}
 

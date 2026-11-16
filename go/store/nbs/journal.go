@@ -24,7 +24,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dolthub/fslock"
+	filelocks "github.com/dolthub/file-locks"
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
@@ -72,11 +72,15 @@ type ChunkJournal struct {
 
 var _ tablePersister = &ChunkJournal{}
 var _ tableFilePersister = &ChunkJournal{}
-var _ manifest = &ChunkJournal{}
 var _ manifestGCGenUpdater = &ChunkJournal{}
 var _ io.Closer = &ChunkJournal{}
+var _ manifest = journalManifestWrapper{}
 
-func newChunkJournal(ctx context.Context, nbfVers, dir string, m *journalManifest, p *fsTablePersister, warningsCb func(error)) (*ChunkJournal, error) {
+// |behavior| controls how fatal errors encountered during bootstrapping are handled; the
+// NomsBlockStore is not yet constructed at this point, so callers pass FatalBehaviorError to
+// fail store creation rather than crash the process.
+func newChunkJournal(ctx context.Context, nbfVers, dir string, m *journalManifest, p *fsTablePersister, behavior dherrors.FatalBehavior, warningsCb func(error)) (*ChunkJournal, error) {
+	PanicIfLoadingTableFilesDisabled()
 	path, err := filepath.Abs(filepath.Join(dir, chunkJournalName))
 	if err != nil {
 		return nil, err
@@ -92,7 +96,7 @@ func newChunkJournal(ctx context.Context, nbfVers, dir string, m *journalManifes
 	} else if ok {
 		// only bootstrap journalWriter if the journal file exists,
 		// otherwise we wait to open in case we're cloning
-		if err = j.bootstrapJournalWriter(ctx, warningsCb); err != nil {
+		if err = j.bootstrapJournalWriter(ctx, behavior, warningsCb); err != nil {
 			return nil, err
 		}
 	}
@@ -143,9 +147,12 @@ func reflogBufferSize() int {
 // As we process journal records, we keep track of the latest root hash record we see
 // and update the manifest file with the last root hash we saw.
 //
+// |behavior| controls how fatal errors encountered while writing to the journal or manifest are
+// handled (returned as an error vs. crashing the process); see dherrors.FatalBehavior.
+//
 // |warningsCb| is a callback function invoked if a recoverable parse error is encountered. Usually used
 // for printing an error message to the user, but also used for fsck to report the error and exit with an error.
-func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context, warningsCb func(error)) (err error) {
+func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context, behavior dherrors.FatalBehavior, warningsCb func(error)) (err error) {
 	var ok bool
 	ok, err = fileExists(j.path)
 	if err != nil {
@@ -154,11 +161,26 @@ func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context, warningsCb fu
 
 	canCreate := !j.backing.readOnly()
 
+	// If we fail the bootstrap, rollback to an uninitialized state
+	// so that future accesses can try again.
+	var created bool
+	defer func() {
+		if err == nil {
+			return
+		}
+		err = errors.Join(err, j.abortBootstrap(ctx, created))
+	}()
+
 	if canCreate && !ok { // create new journal file
-		j.wr, err = createJournalWriter(ctx, j.path)
-		if err != nil {
+		// Creating a journal is bounded work and its best to succeed if
+		// we can once we start. Detach from the caller's context so its
+		// cancelation doesn't cause us to fail half way through.
+		ctx := context.WithoutCancel(ctx)
+
+		if err = j.createProtectedJournalWriter(ctx); err != nil {
 			return err
 		}
+		created = true
 
 		_, err = j.wr.bootstrapJournal(ctx, canCreate, j.reflogRingBuffer, warningsCb)
 		if err != nil {
@@ -172,9 +194,7 @@ func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context, warningsCb fu
 		}
 		if ok {
 			// write the current root hash to the journal file
-			// FatalBehaviorError here reflects the fact that we should fail the create, not
-			// crash the entire process, assuming this database is not already opened for write.
-			if err = j.wr.commitRootHash(ctx, dherrors.FatalBehaviorError, contents.root); err != nil {
+			if err = j.wr.commitRootHash(ctx, behavior, contents.root); err != nil {
 				return
 			}
 			j.contents = contents
@@ -182,7 +202,7 @@ func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context, warningsCb fu
 		return
 	}
 
-	j.wr, ok, err = openJournalWriter(ctx, j.path)
+	ok, err = j.openProtectedJournalWriter(ctx)
 	if err != nil {
 		return err
 	} else if !ok {
@@ -195,12 +215,68 @@ func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context, warningsCb fu
 		return err
 	}
 
-	mc, err := trueUpBackingManifest(ctx, dherrors.FatalBehaviorError, root, j.backing)
+	if root.IsEmpty() {
+		// The journal file exists but contains no root hash record. This can
+		// happen if the process crashed after the journal file was created but
+		// before its first root hash record was committed. In this case the
+		// journal is not yet a source of truth for the root hash, so we fall
+		// back to the root hash recorded in the manifest rather than truing-up
+		// the manifest to the empty root.
+		var contents manifestContents
+		ok, contents, err = j.backing.ParseIfExists(ctx, &Stats{}, nil)
+		if err != nil {
+			return err
+		}
+		if ok {
+			if canCreate {
+				// commit the manifest root to the journal so that it becomes a
+				// valid source of truth for subsequent bootstraps.
+				if err = j.wr.commitRootHash(ctx, behavior, contents.root); err != nil {
+					return err
+				}
+			}
+			j.contents = contents
+		}
+		return
+	}
+
+	mc, err := trueUpBackingManifest(ctx, behavior, root, j.backing)
 	if err != nil {
 		return err
 	}
 	j.contents = mc
 	return
+}
+
+// createProtectedJournalWriter creates the journal file and registers it in the
+// persister's protected set.
+func (j *ChunkJournal) createProtectedJournalWriter(ctx context.Context) error {
+	j.persister.pruneMu.RLock()
+	defer j.persister.pruneMu.RUnlock()
+	wr, err := createJournalWriter(ctx, j.path)
+	if err != nil {
+		return err
+	}
+	j.wr = wr
+	j.persister.addProtected(journalAddr)
+	return nil
+}
+
+// openProtectedJournalWriter opens the existing journal file and registers it in
+// the persister's protected set. It returns false if the journal file does not
+// exist.
+func (j *ChunkJournal) openProtectedJournalWriter(ctx context.Context) (bool, error) {
+	j.persister.pruneMu.RLock()
+	defer j.persister.pruneMu.RUnlock()
+	wr, ok, err := openJournalWriter(ctx, j.path)
+	if err != nil {
+		return false, err
+	} else if !ok {
+		return false, nil
+	}
+	j.wr = wr
+	j.persister.addProtected(journalAddr)
+	return true, nil
 }
 
 // the journal file is the source of truth for the root hash, true-up persisted manifest
@@ -263,7 +339,7 @@ func (j *ChunkJournal) IterateRoots(f func(root string, timestamp *time.Time) er
 func (j *ChunkJournal) Persist(ctx context.Context, behavior dherrors.FatalBehavior, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
 	if j.backing.readOnly() {
 		return nil, gcBehavior_Continue, errReadOnlyManifest
-	} else if err := j.maybeInit(ctx, JournalParserLoggingWarningsCb); err != nil {
+	} else if err := j.maybeInit(ctx, behavior, JournalParserLoggingWarningsCb); err != nil {
 		return nil, gcBehavior_Continue, err
 	}
 
@@ -299,14 +375,16 @@ func (j *ChunkJournal) ConjoinAll(ctx context.Context, behavior dherrors.FatalBe
 }
 
 // Open implements tablePersister.
-func (j *ChunkJournal) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
+func (j *ChunkJournal) Open(ctx context.Context, name hash.Hash, chunkCount uint32, opts openOpts, stats *Stats) (chunkSource, error) {
 	if name == journalAddr {
-		if err := j.maybeInit(ctx, JournalParserLoggingWarningsCb); err != nil {
+		// Open is a tablePersister method with no FatalBehavior parameter; if it has to
+		// bootstrap the journal, fail with an error rather than crashing the process.
+		if err := j.maybeInit(ctx, dherrors.FatalBehaviorError, JournalParserLoggingWarningsCb); err != nil {
 			return nil, err
 		}
 		return journalChunkSource{journal: j.wr}, nil
 	}
-	return j.persister.Open(ctx, name, chunkCount, stats)
+	return j.persister.Open(ctx, name, chunkCount, opts, stats)
 }
 
 // Exists implements tablePersister.
@@ -318,13 +396,6 @@ func (j *ChunkJournal) Exists(ctx context.Context, name string, chunkCount uint3
 func (j *ChunkJournal) PruneTableFiles(ctx context.Context) error {
 	if j.backing.readOnly() {
 		return errReadOnlyManifest
-	}
-	// If the journal is active, protect its file from pruning by adding
-	// it to pending for the duration of the prune. When the journal is
-	// inactive (j.wr == nil), the file should be prunable.
-	if j.wr != nil {
-		ph := j.persister.addPending(journalAddr)
-		defer ph.Close()
 	}
 	return j.persister.PruneTableFiles(ctx)
 }
@@ -450,12 +521,42 @@ func (j *ChunkJournal) flushToBackingManifest(ctx context.Context, behavior dher
 	return nil
 }
 
-func (j *ChunkJournal) dropJournalWriter(ctx context.Context) error {
-	curr := j.wr
+// abortBootstrap returns the ChunkJournal to its uninitialized state
+// after a failed bootstrapJournalWriter. A later call will be
+// responsible for boostraping. |created| says whether the failed call
+// made the journal file, in which case we should delete it as part of
+// cleanup.
+func (j *ChunkJournal) abortBootstrap(ctx context.Context, created bool) error {
 	if j.wr == nil {
 		return nil
 	}
+	if created {
+		return j.dropJournalWriter(ctx)
+	}
+
+	curr := j.wr
 	j.wr = nil
+	// A retry replays the journal from the beginning, so drop the roots this
+	// attempt collected rather than recording them twice.
+	if !reflogDisabled {
+		j.reflogRingBuffer.Truncate()
+	}
+	j.persister.pruneMu.RLock()
+	defer j.persister.pruneMu.RUnlock()
+	defer j.persister.removeProtected(journalAddr)
+	return curr.Close()
+}
+
+func (j *ChunkJournal) dropJournalWriter(ctx context.Context) error {
+	curr := j.wr
+	if curr == nil {
+		return nil
+	}
+	j.wr = nil
+	// Dropping the journal also removes it from the persister's protected set.
+	j.persister.pruneMu.RLock()
+	defer j.persister.pruneMu.RUnlock()
+	defer j.persister.removeProtected(journalAddr)
 	if err := curr.Close(); err != nil {
 		return err
 	}
@@ -477,19 +578,35 @@ func (j *ChunkJournal) ParseIfExists(ctx context.Context, stats *Stats, readHook
 	return
 }
 
-func (j *ChunkJournal) maybeInit(ctx context.Context, warningsCb func(error)) (err error) {
+func (j *ChunkJournal) maybeInit(ctx context.Context, behavior dherrors.FatalBehavior, warningsCb func(error)) (err error) {
 	if j.wr == nil {
-		err = j.bootstrapJournalWriter(ctx, warningsCb)
+		err = j.bootstrapJournalWriter(ctx, behavior, warningsCb)
 	}
 	return
 }
 
-// Close implements io.Closer
+// Close implements io.Closer. It closes the journal writer and flushes the
+// latest root to the backing manifest. It does not release the backing
+// manifest's file lock; that is done by journalManifestWrapper.Close, which a
+// NomsBlockStore invokes through the manifest interface. When a ChunkJournal is
+// constructed and closed directly (e.g. in tests), callers must also close
+// |j.backing| to release the lock.
 func (j *ChunkJournal) Close() (err error) {
 	if j.wr != nil {
 		err = j.wr.Close()
-		// flush the latest root to the backing manifest
-		if !j.backing.readOnly() {
+		// Flush the latest root to the backing manifest.
+		//
+		// If j.contents is empty --- its lock is the zero
+		// value --- then there is nothing to flush; there is
+		// no root and there are no other table files. This
+		// happens if we bootstrapped the journal in a store
+		// with no manifest but then never successfully landed
+		// a root update before we got to this Close call. In
+		// that case, it's fine to write no manifest at
+		// all. Attempting to write a manifest with no root
+		// value and no referenced table files (or a 0 chunk
+		// vvvv file) is not clearly better behavior.
+		if !j.backing.readOnly() && !j.contents.lock.IsEmpty() {
 			// Let caller implement FatalBehavior.
 			cerr := j.flushToBackingManifest(context.Background(), dherrors.FatalBehaviorError, j.contents, &Stats{})
 			if err == nil {
@@ -497,12 +614,49 @@ func (j *ChunkJournal) Close() (err error) {
 			}
 		}
 	}
-	// close the journal manifest to release the file lock
-	if cerr := j.backing.Close(); err == nil {
-		err = cerr // keep first error
-	}
-
 	return err
+}
+
+func (j *ChunkJournal) Teardown(ctx context.Context) error {
+	return nil
+}
+
+// journalManifestWrapper adapts a *ChunkJournal to the manifest interface so a
+// NomsBlockStore can hold the journal as its manifest separately from holding
+// it as its tablePersister. The journal writer is closed and the latest root is
+// flushed to the backing manifest through the tablePersister path
+// (ChunkJournal.Close); this wrapper's Close releases the backing manifest,
+// which holds the exclusive database file lock.
+type journalManifestWrapper struct {
+	journal *ChunkJournal
+}
+
+// Name implements manifest.
+func (w journalManifestWrapper) Name() string {
+	return w.journal.Name()
+}
+
+// ParseIfExists implements manifest.
+func (w journalManifestWrapper) ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (bool, manifestContents, error) {
+	return w.journal.ParseIfExists(ctx, stats, readHook)
+}
+
+// Update implements manifest.
+func (w journalManifestWrapper) Update(ctx context.Context, behavior dherrors.FatalBehavior, lastLock hash.Hash, next manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
+	return w.journal.Update(ctx, behavior, lastLock, next, stats, writeHook)
+}
+
+// UpdateGCGen implements manifest.
+func (w journalManifestWrapper) UpdateGCGen(ctx context.Context, behavior dherrors.FatalBehavior, lastLock hash.Hash, next manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
+	return w.journal.UpdateGCGen(ctx, behavior, lastLock, next, stats, writeHook)
+}
+
+// Close implements manifest. It releases the backing manifest, which holds the
+// exclusive database file lock for a journaling store. Closing the journal
+// writer and flushing the latest root happen in ChunkJournal.Close, via the
+// tablePersister path.
+func (w journalManifestWrapper) Close() error {
+	return w.journal.backing.Close()
 }
 
 func (j *ChunkJournal) AccessMode() chunks.ExclusiveAccessMode {
@@ -538,30 +692,46 @@ func (c journalConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees []t
 	return c.child.chooseConjoinees(pruned)
 }
 
+func newJournalLock(dir string, timeout time.Duration, failOnTimeout bool) (*filelocks.Lock, chunks.ExclusiveAccessMode, error) {
+	lock, err := filelocks.New(filepath.Join(dir, lockFileName))
+	if err != nil {
+		return nil, chunks.ExclusiveAccessMode_ReadOnly, err
+	}
+	// try to take the file lock. if we fail, make the manifest read-only.
+	// if we succeed, hold the file lock until we close the journalManifest
+	if timeout == 0 {
+		err = lock.TryLock()
+		if errors.Is(err, filelocks.ErrLocked) {
+			err = filelocks.ErrTimeout
+		}
+	} else {
+		err = lock.LockWithTimeout(timeout)
+	}
+	if errors.Is(err, filelocks.ErrTimeout) {
+		// We didn't acquire the lock; close the *Lock instance and
+		// either fail or fall back to read-only mode.
+		_ = lock.Close()
+		lock = nil
+		if failOnTimeout {
+			return nil, chunks.ExclusiveAccessMode_ReadOnly, ErrDatabaseLocked
+		}
+		return nil, chunks.ExclusiveAccessMode_ReadOnly, nil
+	} else if err != nil {
+		_ = lock.Close()
+		return nil, chunks.ExclusiveAccessMode_ReadOnly, err
+	}
+	return lock, chunks.ExclusiveAccessMode_Exclusive, nil
+}
+
 // newJournalManifest makes a new file manifest.
 // When failOnTimeout is true, callers want a hard error instead of falling back to read-only mode.
 // (The behavior change is implemented separately; this is the plumbing flag.)
-func newJournalManifest(ctx context.Context, dir string, failOnTimeout bool) (m *journalManifest, err error) {
-	lock := fslock.New(filepath.Join(dir, lockFileName))
-	// try to take the file lock. if we fail, make the manifest read-only.
-	// if we succeed, hold the file lock until we close the journalManifest
-	err = lock.LockWithTimeout(lockFileTimeout)
-	if errors.Is(err, fslock.ErrTimeout) {
-		if failOnTimeout {
-			return nil, ErrDatabaseLocked
-		}
-		lock, err = nil, nil // read only
-	} else if err != nil {
-		return nil, err
-	}
+func newJournalManifest(ctx context.Context, dir string, lock *filelocks.Lock) (m *journalManifest, err error) {
 	m = &journalManifest{dir: dir, lock: lock}
 
 	var f *os.File
 	f, err = openIfExists(filepath.Join(dir, manifestFileName))
 	if err != nil {
-		if lock != nil {
-			_ = lock.Unlock()
-		}
 		return nil, err
 	} else if f == nil {
 		return m, nil
@@ -570,31 +740,21 @@ func newJournalManifest(ctx context.Context, dir string, failOnTimeout bool) (m 
 		if cerr := f.Close(); err == nil {
 			err = cerr // keep first error
 		}
-		if err != nil {
-			if lock != nil {
-				_ = lock.Unlock()
-			}
-		}
 	}()
 
 	var ok bool
 	ok, _, err = m.ParseIfExists(ctx, &Stats{}, nil)
 	if err != nil {
-		if lock != nil {
-			_ = lock.Unlock()
-		}
 		return nil, err
 	} else if !ok {
-		if lock != nil {
-			_ = lock.Unlock()
-		}
-		return nil, ErrUnreadableManifest
+		err = ErrUnreadableManifest
+		return nil, err
 	}
 	return
 }
 
 type journalManifest struct {
-	lock *fslock.Lock
+	lock *filelocks.Lock
 	dir  string
 }
 
@@ -669,6 +829,9 @@ func updateGCGenManifestCheck(upstream, contents manifestContents) error {
 func (jm *journalManifest) Close() (err error) {
 	if jm.lock != nil {
 		err = jm.lock.Unlock()
+		if cerr := jm.lock.Close(); err == nil {
+			err = cerr // keep first error
+		}
 		jm.lock = nil
 	}
 	return

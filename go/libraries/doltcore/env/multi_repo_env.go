@@ -29,9 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/nbs"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // EnvNameAndPath is a simple tuple of the name of an environment and the path to where it is on disk
@@ -91,6 +89,11 @@ func GetMultiEnvStorageMetadata(ctx context.Context, dataDirFS filesys.Filesys) 
 		if err != nil {
 			return false
 		}
+
+		if dbfactory.IsDatabaseInProgress(newFs) {
+			return false
+		}
+
 		path, err = newFs.Abs("")
 		if err != nil {
 			return false
@@ -188,19 +191,31 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 	envSet := map[string]*DoltEnv{}
 	var openedEnvs []*DoltEnv
 
+	seenDbNames := make(map[string]string)
+
 	// Anything that looks like it has a dolt database belongs here.
-	if dEnv.HasDoltDataDir() {
+	if dEnv.HasDoltDataDir() && dbfactory.IsDatabaseInProgress(dEnv.FS) {
+		path, _ := dEnv.FS.Abs("")
+		logrus.WithField("path", path).Warn("skipping in-progress database directory")
+	} else if dEnv.HasDoltDataDir() {
 		LoadDoltDB(ctx, dEnv)
 		dbErr := dEnv.DBLoadError
 		if dbErr != nil {
 			if errors.Is(dbErr, nbs.ErrJournalDataLoss) {
 				logrus.Errorf("failed to load database %s with error: %s", dbName, dbErr.Error())
-				logrus.Errorf("please run 'dolt fsck' to assess the damage and attempt repairs")
 			} else if !errors.Is(dbErr, doltdb.ErrMissingDoltDataDir) {
 				logrus.Warnf("failed to load database with error: %s", dbErr.Error())
 			}
 		}
+		if skipLockTimeout, err := dEnv.IsAccessModeReadOnly(ctx); err == nil && skipLockTimeout {
+			if dbLoadParams == nil {
+				dbLoadParams = map[string]any{dbfactory.SkipJournalLockTimeoutParam: true}
+			} else {
+				dbLoadParams[dbfactory.SkipJournalLockTimeoutParam] = true
+			}
+		}
 		envSet[dbName] = dEnv
+		seenDbNames[strings.ToLower(dbName)] = dbName
 		openedEnvs = append(openedEnvs, dEnv)
 	}
 
@@ -221,6 +236,11 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 			return false
 		}
 
+		if dbfactory.IsDatabaseInProgress(newFs) {
+			logrus.WithField("path", path).Warn("skipping in-progress database directory")
+			return false
+		}
+
 		// TODO: get rid of version altogether
 		subVersion := ""
 		if dEnv != nil {
@@ -232,12 +252,24 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 			newEnv.DBLoadParams = maps.Clone(dbLoadParams)
 		}
 		if newEnv.Valid() {
-			envSet[dbfactory.DirToDBName(dir)] = newEnv
+			subDbName := dbfactory.DirToDBName(dir)
+			subDbNameLower := strings.ToLower(subDbName)
+			if existing, exists := seenDbNames[subDbNameLower]; exists {
+				WarnDuplicateDatabase(subDbName, existing, path)
+				return false
+			}
+			seenDbNames[subDbNameLower] = subDbName
+			envSet[subDbName] = newEnv
 			openedEnvs = append(openedEnvs, newEnv)
 		} else {
-			cfgErr := newEnv.CfgLoadErr
-			if cfgErr != nil {
+			if cfgErr := newEnv.CfgLoadErr; cfgErr != nil {
 				logrus.Warnf("failed to load database configuration at %s with error: %s", path, cfgErr.Error())
+			}
+			// Warn only when the directory looks like a database that failed to
+			// finish initializing, not an unrelated directory that happens to sit
+			// in the data directory.
+			if rsErr := newEnv.RSLoadErr; rsErr != nil && newEnv.HasDoltDataDir() {
+				logrus.WithError(rsErr).WithField("path", path).Warn("skipping incomplete database directory")
 			}
 		}
 		return false
@@ -269,9 +301,16 @@ func multiEnvForConfigDirectoryEnv(ctx context.Context, config config.ReadWriteC
 }
 
 func (mrEnv *MultiRepoEnv) ReloadDBs(ctx context.Context) {
+	anyIsReadOnly := false
 	for _, namedEnv := range mrEnv.envs {
 		dEnv := namedEnv.env
-
+		if anyIsReadOnly {
+			if dEnv.DBLoadParams == nil {
+				dEnv.DBLoadParams = map[string]any{dbfactory.SkipJournalLockTimeoutParam: true}
+			} else {
+				dEnv.DBLoadParams[dbfactory.SkipJournalLockTimeoutParam] = true
+			}
+		}
 		if dEnv.doltDB == nil {
 			LoadDoltDB(ctx, dEnv)
 		}
@@ -285,13 +324,18 @@ func (mrEnv *MultiRepoEnv) ReloadDBs(ctx context.Context) {
 					logrus.Warnf("failed to load database at %s with error: %s", dEnv.urlStr, dbErr.Error())
 				}
 			}
-			cfgErr := dEnv.CfgLoadErr
-			if cfgErr != nil {
+			if cfgErr := dEnv.CfgLoadErr; cfgErr != nil {
 				logrus.Warnf("failed to load database configuration at %s with error: %s", dEnv.urlStr, cfgErr.Error())
+			}
+			if rsErr := dEnv.RSLoadErr; rsErr != nil {
+				logrus.WithError(rsErr).WithField("database", dEnv.urlStr).Warn("failed to load repo state for database")
+			}
+		} else if !anyIsReadOnly {
+			if isReadOnly, err := dEnv.IsAccessModeReadOnly(ctx); err == nil && isReadOnly {
+				anyIsReadOnly = true
 			}
 		}
 	}
-	mrEnv.envs = enforceSingleFormat(ctx, mrEnv.envs)
 }
 
 func (mrEnv *MultiRepoEnv) FileSystem() filesys.Filesys {
@@ -369,6 +413,20 @@ func (mrEnv *MultiRepoEnv) GetFirstDatabase() string {
 	return currentDb
 }
 
+// WarnDuplicateDatabase emits a structured warning when a duplicate
+// database is detected and skipped.
+func WarnDuplicateDatabase(name, existing, path string) {
+	entry := logrus.WithFields(logrus.Fields{
+		"database":          name,
+		"existing_database": existing,
+	})
+	if path != "" {
+		entry.WithField("path", path).Warn("skipping duplicate database directory")
+		return
+	}
+	entry.Warn("skipping duplicate database")
+}
+
 func getRepoRootDir(path, pathSeparator string) string {
 	if pathSeparator != "/" {
 		path = strings.ReplaceAll(path, pathSeparator, "/")
@@ -387,7 +445,9 @@ func getRepoRootDir(path, pathSeparator string) string {
 		return ""
 	}
 
-	if tokens[len(tokens)-1] == dbfactory.DataDir && tokens[len(tokens)-2] == dbfactory.DoltDir {
+	// Strip trailing .dolt/noms directory tokens to locate the repository
+	// root folder name.
+	if len(tokens) >= 2 && tokens[len(tokens)-1] == dbfactory.DataDir && tokens[len(tokens)-2] == dbfactory.DoltDir {
 		tokens = tokens[:len(tokens)-2]
 	}
 
@@ -403,42 +463,4 @@ func getRepoRootDir(path, pathSeparator string) string {
 	}
 
 	return name
-}
-
-// enforceSingleFormat enforces that constraint that all databases in
-// a multi-database environment have the same NomsBinFormat.
-// Databases are removed from the MultiRepoEnv to ensure this is true.
-func enforceSingleFormat(ctx context.Context, envSet []NamedEnv) []NamedEnv {
-	formats := set.NewEmptyStrSet()
-	for _, namedEnv := range envSet {
-		dEnv := namedEnv.env
-		formats.Add(dEnv.DoltDB(ctx).Format().VersionString())
-	}
-
-	var nbf string
-	// if present, prefer types.Format_Default
-	if ok := formats.Contains(types.Format_Default.VersionString()); ok {
-		nbf = types.Format_Default.VersionString()
-	} else {
-		// otherwise, pick an arbitrary format
-		for _, namedEnv := range envSet {
-			dEnv := namedEnv.env
-			nbf = dEnv.DoltDB(ctx).Format().VersionString()
-			break
-		}
-	}
-
-	prunedEnvs := make([]NamedEnv, 0, len(envSet))
-	template := "incompatible format for database '%s'; expected '%s', found '%s'"
-	for _, namedEnv := range envSet {
-		name := namedEnv.name
-		dEnv := namedEnv.env
-		found := dEnv.DoltDB(ctx).Format().VersionString()
-		if found != nbf {
-			logrus.Infof(template, name, nbf, found)
-		} else {
-			prunedEnvs = append(prunedEnvs, namedEnv)
-		}
-	}
-	return prunedEnvs
 }

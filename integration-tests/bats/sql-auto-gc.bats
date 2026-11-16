@@ -3,6 +3,14 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
   setup_common
+
+  # Disable the auto-GC load-average throttling. By default, auto-GC backs off
+  # for up to 30 minutes when the system load average is high (see
+  # loadAvgGCScheduler in go/libraries/doltcore/sqle/auto_gc.go). On a busy CI
+  # host that backoff can prevent the expected GC from firing within the test,
+  # making this test flaky. "NONE" selects a scheduler that always runs GC
+  # immediately.
+  export DOLT_GC_SCHEDULER=NONE
 }
 
 teardown() {

@@ -23,11 +23,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cockroachdb/apd/v3"
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/dolthub/vitess/go/vt/proto/query"
-	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -394,7 +394,7 @@ func (d decimalSerializer) serialize(ctx context.Context, typ sql.Type, value in
 		return nil, err
 	}
 
-	decimalValue, ok := convertedValue.(decimal.Decimal)
+	decimalValue, ok := convertedValue.(*apd.Decimal)
 	if !ok {
 		return nil, fmt.Errorf("unsupported type %T", convertedValue)
 	}
@@ -430,15 +430,20 @@ func (d decimalSerializer) serialize(ctx context.Context, typ sql.Type, value in
 		numFractionalDigitUint32s*4 + digitsToBytes[numLeftoverFractionalDigits]
 
 	// Ensure the exponent is negative
-	if decimalValue.Exponent() > 0 {
+	if decimalValue.Exponent > 0 {
 		return nil, fmt.Errorf(
 			"unexpected positive exponent: %d for decimalValue: %s",
-			decimalValue.Exponent(), decimalValue.String())
+			decimalValue.Exponent, decimalValue.String())
 	}
 
 	// Load the value into a fully padded (to precision and scale) string format,
 	// so that we can process the digit groups for the binary encoding.
-	absStringVal := decimalValue.Abs().StringFixed(int32(scale))
+	absDecimalVal := new(apd.Decimal)
+	absDecimalVal, err = sql.DecimalRound(absDecimalVal.Abs(decimalValue), int32(scale))
+	if err != nil {
+		return nil, err
+	}
+	absStringVal := absDecimalVal.Text('f')
 	stringIntegerVal := absStringVal
 	stringFractionalVal := ""
 	if scale > 0 {
@@ -498,7 +503,7 @@ func (d decimalSerializer) serialize(ctx context.Context, typ sql.Type, value in
 	// We always xor the first bit in the first byte to indicate a positive value. If the value is
 	// negative, we xor every bit with 0xff to invert the value.
 	buffer[0] ^= 0x80
-	if decimalValue.IsNegative() {
+	if decimalValue.Negative {
 		for i := range buffer {
 			buffer[i] ^= 0xff
 		}
@@ -526,17 +531,17 @@ func (t timeSerializer) deserialize(ctx context.Context, typ sql.Type, descripto
 	if !notNull {
 		return nil, nil
 	}
-	return time.UnixMicro(durationInMicroseconds), nil
+	return gmstypes.Timespan(durationInMicroseconds), nil
 }
 
 func (t timeSerializer) serialize(ctx context.Context, typ sql.Type, value interface{}, ns tree.NodeStore) (data []byte, err error) {
-	// NOTE: We don't use typ.Convert here, like we do in the other serializers,
-	//       because it does additional conversion logic that we don't want to undo.
-	timeValue, ok := value.(time.Time)
+	// Stored and generated TIME values use the SQL engine's duration type.
+	// Keeping microseconds directly preserves negative and >24-hour values.
+	timeValue, ok := value.(gmstypes.Timespan)
 	if !ok {
-		return nil, fmt.Errorf("1 - expected time.Time, but got %T", value)
+		return nil, fmt.Errorf("expected types.Timespan, but got %T", value)
 	}
-	durationInMicroseconds := timeValue.UnixMicro()
+	durationInMicroseconds := int64(timeValue)
 
 	negative := false
 	if durationInMicroseconds < 0 {

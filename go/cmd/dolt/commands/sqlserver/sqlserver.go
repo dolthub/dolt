@@ -22,7 +22,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 	"github.com/sirupsen/logrus"
 
@@ -30,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/svcs"
@@ -150,7 +150,7 @@ SUPPORTED CONFIG FILE FIELDS:
 
 {{.EmphasisLeft}}user_session_vars{{.EmphasisRight}}: A map of user name to a map of session variables to set on connection for each session.
 
-{{.EmphasisLeft}}cluster{{.EmphasisRight}}: Settings related to running this server in a replicated cluster. For information on setting these values, see https://docs.dolthub.com/sql-reference/server/replication
+{{.EmphasisLeft}}cluster{{.EmphasisRight}}: Settings related to running this server in a replicated cluster. For information on setting these values, see https://dolthub.com/docs/sql-reference/server/replication
 
 If a config file is not provided many of these settings may be configured on the command line.`,
 	Synopsis: []string{
@@ -343,10 +343,7 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 		return err
 	}
 
-	err = servercfg.ApplySystemVariables(nil, serverConfig, sql.SystemVariables)
-	if err != nil {
-		return err
-	}
+	engineVars := sqle.NewEngineVariables()
 
 	cli.Printf("Starting server with Config %v\n", servercfg.ConfigInfo(serverConfig))
 
@@ -364,6 +361,7 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 	skipRootUserInitialization := apr.Contains(skipRootUserInitialization)
 
 	startError, closeError := Serve(ctx, &Config{
+		EngineVariables:  engineVars,
 		Version:          versionStr,
 		ServerConfig:     serverConfig,
 		Controller:       controller,
@@ -568,7 +566,7 @@ func setupDoltConfig(dEnv *env.DoltEnv, cwd filesys.Filesys, apr *argparser.ArgP
 
 		// Error if both current and parent exist
 		if currDirExists && parentDirExists {
-			p1, err := dEnv.FS.Abs(cfgDirPath)
+			p1, err := dEnv.FS.Abs(currDirCfg)
 			if err != nil {
 				return err
 			}
@@ -663,6 +661,6 @@ func generateYamlConfig(serverConfig servercfg.ServerConfig) string {
 	return `# Dolt SQL server configuration
 #
 # Uncomment and edit lines as necessary to modify your configuration.
-# Full documentation: https://docs.dolthub.com/sql-reference/server/configuration
+# Full documentation: https://dolthub.com/docs/sql-reference/server/configuration
 #` + "\n\n" + yamlConfig.VerboseString()
 }

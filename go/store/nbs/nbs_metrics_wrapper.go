@@ -18,6 +18,7 @@ import (
 	"context"
 	"io"
 	"sync/atomic"
+	"time"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -62,12 +63,12 @@ func (nbsMW *NBSMetricWrapper) AddTableFilesToManifest(ctx context.Context, file
 }
 
 // Forwards SupportedOperations to wrapped block store.
-func (nbsMW *NBSMetricWrapper) SupportedOperations() chunks.TableFileStoreOps {
-	return nbsMW.nbs.SupportedOperations()
+func (nbsMW *NBSMetricWrapper) SupportedOperations(ctx context.Context) (chunks.TableFileStoreOps, error) {
+	return nbsMW.nbs.SupportedOperations(ctx)
 }
 
-func (nbsMW *NBSMetricWrapper) BeginGC(keeper func(hash.Hash) bool, mode chunks.GCMode) error {
-	return nbsMW.nbs.BeginGC(keeper, mode)
+func (nbsMW *NBSMetricWrapper) BeginGC(ctx context.Context, keeper func(hash.Hash) bool, mode chunks.GCMode) error {
+	return nbsMW.nbs.BeginGC(ctx, keeper, mode)
 }
 
 func (nbsMW *NBSMetricWrapper) EndGC(mode chunks.GCMode) {
@@ -78,8 +79,8 @@ func (nbsMW *NBSMetricWrapper) MarkAndSweepChunks(ctx context.Context, getAddrs 
 	return nbsMW.nbs.MarkAndSweepChunks(ctx, getAddrs, filter, dest, gcConfig, incrementalUpdateManifest)
 }
 
-func (nbsMW *NBSMetricWrapper) Count() (uint32, error) {
-	return nbsMW.nbs.Count()
+func (nbsMW *NBSMetricWrapper) Count(ctx context.Context) (uint32, error) {
+	return nbsMW.nbs.Count(ctx)
 }
 
 func (nbsMW *NBSMetricWrapper) IterateAllChunks(ctx context.Context, cb func(chunk chunks.Chunk)) error {
@@ -89,6 +90,11 @@ func (nbsMW *NBSMetricWrapper) IterateAllChunks(ctx context.Context, cb func(chu
 // PruneTableFiles deletes old table files that are no longer referenced in the manifest.
 func (nbsMW *NBSMetricWrapper) PruneTableFiles(ctx context.Context) error {
 	return nbsMW.nbs.PruneTableFiles(ctx)
+}
+
+// PruneUnreferencedWithGrace implements [GracePruner].
+func (nbsMW *NBSMetricWrapper) PruneUnreferencedWithGrace(ctx context.Context, grace time.Duration) (PruneStats, error) {
+	return nbsMW.nbs.PruneUnreferencedWithGrace(ctx, grace)
 }
 
 // GetManyCompressed gets the compressed Chunks with |hashes| from the store. On return,

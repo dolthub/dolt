@@ -691,3 +691,28 @@ MOCK
     [ "$status" -eq 0 ]
     [[ "$output" =~ "hello" ]] || false
 }
+
+@test "ssh-transfer: push to and clone from a path containing .." {
+    mkdir "repo_dotdot_src"
+    cd "repo_dotdot_src"
+    dolt init
+    dolt sql -q "CREATE TABLE t (id INT PRIMARY KEY, v TEXT);"
+    dolt sql -q "INSERT INTO t VALUES (1, 'hello');"
+    dolt add .
+    dolt commit -m "initial"
+
+    mkdir "$BATS_TEST_TMPDIR/dotdot_target"
+    dolt remote add bare "ssh://localhost$BATS_TEST_TMPDIR/repo_dotdot_src/../dotdot_target"
+    run dolt push bare main
+    [ "$status" -eq 0 ]
+    [ -f "$BATS_TEST_TMPDIR/dotdot_target/manifest" ] || false
+
+    cd "$BATS_TEST_TMPDIR"
+    run dolt clone "ssh://localhost$BATS_TEST_TMPDIR/repo_dotdot_src/../dotdot_target" dotdot_clone
+    [ "$status" -eq 0 ]
+
+    cd "dotdot_clone"
+    run dolt sql -r csv -q "SELECT v FROM t WHERE id=1;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "hello" ]] || false
+}

@@ -91,7 +91,7 @@ jobs:
         run: go run -mod=readonly ./utils/genminver_validation/ $FILE
         env:
           FILE: ${{ format('{0}/go/libraries/doltcore/servercfg/testdata/minver_validation.txt', github.workspace) }}
-      - uses: EndBug/add-and-commit@v9.1.4
+      - uses: EndBug/add-and-commit@645ecc0dd0a57f4d86d26c0aa5fc42c0a856fbca # v11.0.0
         with:
           message: ${{ format('[ga-bump-release] Update Dolt version to {0} and release v{0}', needs.format-version.outputs.version) }}
           add: ${{ format('["{0}/go/cmd/dolt/doltversion/version.go", "{0}/go/libraries/doltcore/servercfg/yaml_config.go", "{0}/go/libraries/doltcore/servercfg/testdata/minver_validation.txt"]', github.workspace) }}
@@ -102,9 +102,9 @@ jobs:
         run: |
           latest=$(git rev-parse HEAD)
           echo "commitish=$latest" >> $GITHUB_OUTPUT
-          GO_BUILD_VERSION=1.26.2 go/utils/publishrelease/buildpgobinaries.sh
+          GO_BUILD_VERSION=1.27.3 go/utils/publishrelease/buildpgobinaries.sh
         env:
-          GO_BUILD_VERSION: "1.26.2"
+          GO_BUILD_VERSION: "1.27.3"
           PROFILE: ${{ format('{0}/dolt-cpu-profile.pprof', github.workspace) }}
       - name: Create Release
         id: create_release

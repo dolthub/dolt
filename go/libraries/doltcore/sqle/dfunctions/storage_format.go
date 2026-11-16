@@ -57,11 +57,7 @@ func (*StorageFormat) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 }
 
 func GetStorageFormatDisplayString(format *types.NomsBinFormat) string {
-	if types.IsFormat_DOLT(format) {
-		return fmt.Sprintf("NEW ( %s )", format.VersionString())
-	} else {
-		return fmt.Sprintf("OLD ( %s )", format.VersionString())
-	}
+	return fmt.Sprintf("NEW ( %s )", format.VersionString())
 }
 
 // IsNullable implements the Expression interface.

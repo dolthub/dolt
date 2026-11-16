@@ -636,3 +636,70 @@ SQL
 
 
 
+
+# Builds a criss-cross whose merge bases, x1 and y1, conflict on row 1's a, resolved differently on each branch:
+#
+#     c1 -- x1 -- x2    x
+#       \-- y1 -- y2    y
+#     x2 = merge(x1, y1), y2 = merge(y1, x1)
+#
+# Merging y into x conflicts on row 1 against a virtual merge base, a commit no ref points to.
+setup_conflicting_merge_bases() {
+    dolt sql -q "CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(100), b VARCHAR(100)); INSERT INTO t VALUES (1, 'seed', 'seed'), (2, 'seed', 'seed');"
+    dolt add -A && dolt commit -m "c1"
+    dolt branch x
+    dolt branch y
+    dolt checkout x
+    dolt sql -q "UPDATE t SET a = 'x';"
+    dolt commit -am "x1"
+    dolt checkout y
+    dolt sql -q "UPDATE t SET a = 'y' WHERE id = 1; UPDATE t SET b = 'y' WHERE id = 2;"
+    dolt commit -am "y1"
+    dolt branch y1
+    run dolt merge x -m "y2"
+    dolt conflicts resolve --ours t
+    dolt sql -q "UPDATE t SET a = 'y wins' WHERE id = 1;"
+    dolt add -A && dolt commit -m "y2"
+    dolt checkout x
+    run dolt merge y1 -m "x2"
+    dolt conflicts resolve --ours t
+    dolt sql -q "UPDATE t SET a = 'x wins' WHERE id = 1;"
+    dolt add -A && dolt commit -m "x2"
+}
+
+@test "garbage_collection: conflicts against a collected virtual merge base can be read and resolved" {
+    setup_conflicting_merge_bases
+
+    run dolt merge y -m "merge y into x"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "CONFLICT" ]] || false
+    run dolt sql -q "SELECT base_a, our_a, their_a FROM dolt_conflicts_t;" -r csv
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "seed,x wins,y wins" ]
+
+    dolt gc
+
+    run dolt sql -q "SELECT base_a, our_a, their_a FROM dolt_conflicts_t;" -r csv
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "seed,x wins,y wins" ]
+
+    dolt conflicts resolve --theirs t
+    dolt commit -am "resolve merge of y"
+    run dolt sql -q "SELECT * FROM t ORDER BY id;" -r csv
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "1,y wins,seed" ]
+    [ "${lines[2]}" = "2,x,y" ]
+}
+
+@test "garbage_collection: committed conflicts against a collected virtual merge base can be read" {
+    setup_conflicting_merge_bases
+
+    run dolt merge y -m "merge y into x"
+    [ "$status" -ne 0 ]
+    dolt commit --force -am "commit with conflicts"
+    dolt gc
+
+    run dolt sql -q "SELECT base_a, our_a, their_a FROM dolt_conflicts_t;" -r csv
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "seed,x wins,y wins" ]
+}

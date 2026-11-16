@@ -18,19 +18,19 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"math"
 	"time"
 
+	"github.com/cockroachdb/apd/v3"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	querypb "github.com/dolthub/vitess/go/vt/proto/query"
 	"github.com/mohae/uvarint"
-	"github.com/shopspring/decimal"
 
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/val"
@@ -91,7 +91,7 @@ func GetField(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple, ns N
 		buf, ok = td.GetJSON(i, tup)
 		if ok {
 			var doc types.JSONDocument
-			err = json.Unmarshal(buf, &doc.Val)
+			err = types.JsonUnmarshal(buf, &doc.Val)
 			v = doc
 		}
 	// GeometryEnc is no longer written by new columns, but could be used by older databases
@@ -125,15 +125,7 @@ func GetField(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple, ns N
 	case val.JsonAdaptiveEnc:
 		v, ok, err = td.GetJsonAdaptiveValue(ctx, i, ns, tup)
 		if ok {
-			switch val := v.(type) {
-			case *val.JsonAdaptiveStorage:
-				v, err = NewJSONDoc(val.Addr(), ns).ToIndexedJSONDocument(ctx)
-			case []byte:
-				val = unescapeHTMLCodepoints(val)
-				return types.NewLazyJSONDocument(val), nil
-			default:
-				err = fmt.Errorf("unexpected type for JsonAdaptiveEnc: %T", val)
-			}
+			return OpenJsonAdaptiveValue(ctx, v, ns)
 		}
 	case val.Hash128Enc:
 		v, ok = td.GetHash128(i, tup)
@@ -141,7 +133,7 @@ func GetField(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple, ns N
 		var h hash.Hash
 		h, ok = td.GetBytesAddr(i, tup)
 		if ok {
-			v = val.NewByteArray(ctx, h, ns)
+			v = val.NewByteArray(h, ns)
 		}
 	case val.JSONAddrEnc:
 		var h hash.Hash
@@ -153,14 +145,18 @@ func GetField(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple, ns N
 		var h hash.Hash
 		h, ok = td.GetStringAddr(i, tup)
 		if ok {
-			v = val.NewTextStorage(ctx, h, ns)
+			v = val.NewTextStorage(h, ns)
 		}
 	case val.BytesAdaptiveEnc:
 		v, ok, err = td.GetBytesAdaptiveValue(ctx, i, ns, tup)
 	case val.StringAdaptiveEnc:
 		v, ok, err = td.GetStringAdaptiveValue(ctx, i, ns, tup)
 	case val.CommitAddrEnc:
-		v, ok = td.GetCommitAddr(i, tup)
+		var h hash.Hash
+		h, ok = td.GetCommitAddr(i, tup)
+		if ok {
+			v = h.String()
+		}
 	case val.CellEnc:
 		v, ok = td.GetCell(i, tup)
 	case val.ExtendedEnc:
@@ -188,6 +184,19 @@ func GetField(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple, ns N
 		return nil, err
 	}
 	return v, err
+}
+
+// OpenJsonAdaptiveValue returns a sql.JSONWrapper for the given value from a JsonAdaptiveEnc column
+func OpenJsonAdaptiveValue(ctx context.Context, v interface{}, ns NodeStore) (sql.JSONWrapper, error) {
+	switch val := v.(type) {
+	case *val.JsonAdaptiveStorage:
+		return NewJSONDoc(val.Addr(), ns).ToIndexedJSONDocument(ctx)
+	case []byte:
+		val = unescapeHTMLCodepoints(val)
+		return types.NewLazyJSONDocument(val), nil
+	default:
+		return nil, fmt.Errorf("unexpected type for JsonAdaptiveEnc: %T", val)
+	}
 }
 
 // GetFieldValue reads the value from the ith field of the Tuple as a sql.Value
@@ -298,7 +307,14 @@ func GetFieldValue(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple,
 		v.Val = td.GetField(i, tup)
 		return v, nil
 
-	case val.Hash128Enc, val.CommitAddrEnc, val.CellEnc:
+	case val.CommitAddrEnc:
+		v.Typ = querypb.Type_VARCHAR
+		if h, ok := td.GetCommitAddr(i, tup); ok {
+			v.Val = []byte(h.String())
+		}
+		return v, nil
+
+	case val.Hash128Enc, val.CellEnc:
 		v.Typ = querypb.Type_BLOB
 		v.Val = td.GetField(i, tup)
 		return v, nil
@@ -329,7 +345,7 @@ func GetFieldValue(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple,
 		if !ok {
 			return v, nil
 		}
-		v.WrappedVal = val.NewByteArray(ctx, h, ns)
+		v.WrappedVal = val.NewByteArray(h, ns)
 		return v, nil
 
 	case val.JSONAddrEnc:
@@ -371,7 +387,7 @@ func GetFieldValue(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple,
 		// out-of-band
 		_, lengthBytes := uvarint.Uvarint(b)
 		h := hash.New(b[lengthBytes:])
-		v.WrappedVal = val.NewByteArray(ctx, h, ns)
+		v.WrappedVal = val.NewByteArray(h, ns)
 		return v, err
 
 	case val.GeomAdaptiveEnc:
@@ -441,7 +457,7 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 	case val.Bit64Enc:
 		tb.PutBit(i, uint64(convUint(v)))
 	case val.DecimalEnc:
-		tb.PutDecimal(i, v.(decimal.Decimal))
+		tb.PutDecimal(i, v.(*apd.Decimal))
 	case val.YearEnc:
 		tb.PutYear(i, v.(int16))
 	case val.DateEnc:
@@ -537,7 +553,11 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 		}
 		tb.PutStringAddr(i, h)
 	case val.CommitAddrEnc:
-		tb.PutCommitAddr(i, v.(hash.Hash))
+		h, err := commitAddrFromField(ctx, ns, v)
+		if err != nil {
+			return err
+		}
+		tb.PutCommitAddr(i, h)
 	case val.CellEnc:
 		if _, ok := v.([]byte); ok {
 			var err error
@@ -808,10 +828,70 @@ func SerializeBytesToAddr(ctx context.Context, ns NodeStore, r io.Reader, dataSi
 	return node, addr, nil
 }
 
+// SerializeBytesToAddrReusing is SerializeBytesToAddr for a blob replacing the
+// blob at |prior|: leaves whose bytes are unchanged are reused, not rewritten.
+func SerializeBytesToAddrReusing(ctx context.Context, ns NodeStore, data []byte, prior hash.Hash) (hash.Hash, error) {
+	leaves, err := blobLeaves(ctx, ns, prior)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	bb := ns.BlobBuilder()
+	defer ns.PutBlobBuilder(bb)
+	bb.Init(len(data))
+	bb.prior = leaves
+	_, addr, err := bb.Chunk(ctx, bytes.NewReader(data))
+	return addr, err
+}
+
+func blobLeaves(ctx context.Context, ns NodeStore, root hash.Hash) ([]priorLeaf, error) {
+	nd, err := ns.Read(ctx, root)
+	if err != nil {
+		return nil, err
+	}
+	var leaves []priorLeaf
+	err = WalkNodes(ctx, nd, ns, func(ctx context.Context, n *Node) error {
+		if n.IsLeaf() {
+			leaves = append(leaves, priorLeaf{data: n.GetValue(0), addr: n.HashOf()})
+		}
+		return nil
+	})
+	return leaves, err
+}
+
 func convJson(ctx context.Context, v interface{}) (res sql.JSONWrapper, err error) {
 	v, _, err = types.JSON.Convert(ctx, v)
 	if err != nil {
 		return nil, err
 	}
 	return v.(sql.JSONWrapper), nil
+}
+
+// commitAddrFromField returns the address for the value of a commit address field. Values written as strings come from
+// SQL, and must be checked here: a chunk that addresses a missing chunk is rejected when the store commits, which
+// discards the memtable it shares with every other session.
+func commitAddrFromField(ctx context.Context, ns NodeStore, v interface{}) (hash.Hash, error) {
+	s, ok := v.(string)
+	if !ok {
+		h, ok := v.(hash.Hash)
+		if !ok {
+			return hash.Hash{}, fmt.Errorf("expected string or hash.Hash, got %T", v)
+		}
+		return h, nil
+	}
+	h, ok := hash.MaybeParse(s)
+	if !ok {
+		return hash.Hash{}, fmt.Errorf("invalid commit hash: %s", s)
+	}
+	fileID, err := ns.ChunkFileID(ctx, h)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	switch fileID {
+	case serial.CommitFileID:
+		return h, nil
+	case "":
+		return hash.Hash{}, fmt.Errorf("unable to resolve commit hash %s: target commit not found", s)
+	default:
+		return hash.Hash{}, fmt.Errorf("unable to resolve commit hash %s: not a commit", s)
+	}
 }

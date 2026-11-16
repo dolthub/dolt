@@ -22,6 +22,9 @@ import (
 	"strings"
 )
 
+// ManifestKey is the key of the one blob a Blobstore must support check-and-set on.
+const ManifestKey = "manifest"
+
 // Blobstore is an interface for storing and retrieving blobs of data by key
 type Blobstore interface {
 	// Path returns this blobstore's path.
@@ -31,6 +34,11 @@ type Blobstore interface {
 	Exists(ctx context.Context, key string) (ok bool, err error)
 
 	// Get returns a byte range of from the blob keyed by |key|, and the latest store version.
+	//
+	// |size| is the size of the whole blob, or 0 when the implementation cannot
+	// determine it. Implementations may return 0 on a range request if they
+	// cannot learn the underlying blob's blob's size from the Content-Range
+	// header. Callers must treat a return of 0 "unknown" rather than as a size.
 	Get(ctx context.Context, key string, br BlobRange) (rc io.ReadCloser, size uint64, version string, err error)
 
 	// Put stores a blob from |reader| keyed by |key|, returning the latest store version.
@@ -41,11 +49,17 @@ type Blobstore interface {
 	// CheckAndPut.
 	Put(ctx context.Context, key string, totalSize int64, reader io.Reader) (version string, err error)
 
-	// CheckAndPut updates the blob keyed by |key| using a check-and-set on |expectedVersion|.
-	CheckAndPut(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader) (version string, err error)
+	// CheckAndPutManifest updates the manifest using a check-and-set on
+	// |expectedVersion|, empty when the manifest is not expected to exist yet.
+	// |contents| is taken whole because several implementations need a
+	// rewindable view of it.
+	CheckAndPutManifest(ctx context.Context, expectedVersion string, contents []byte) (version string, err error)
 
 	// Concatenate creates a new blob named |key| by concatenating |sources|.
 	Concatenate(ctx context.Context, key string, sources []string) (version string, err error)
+
+	// Teardown releases resources held by the blobstore.
+	Teardown(ctx context.Context) error
 }
 
 // GetBytes is a utility method calls bs.Get and handles reading the data from the returned

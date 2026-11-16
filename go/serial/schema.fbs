@@ -18,8 +18,11 @@ include "collation.fbs";
 namespace serial;
 
 enum DistanceType : uint8 {
-  Null       = 0,
-  L2_Squared = 1,
+  Null          = 0,
+  L2_Squared    = 1,
+  Cosine        = 2,
+  InnerProduct  = 3,
+  L1            = 4,
 }
 
 table TableSchema {
@@ -84,6 +87,10 @@ table Column {
   // data loss could occur during garbage collection or pull operations. This field forces clients from that release 
   // range to upgrade before reading schemas with adaptive encoded columns.
   adaptive_encoding_breaking_change:bool;
+
+  // a marker value only written when the column stores commit addresses, which will force older clients to upgrade
+  // before reading this data.
+  uses_commit_addr_encoding:bool;
 }
 
 table Index {
@@ -129,6 +136,22 @@ table Index {
   // these fields should be set for vector indexes and otherwise omitted, for backwards compatibility
   vector_key:bool;
   vector_info:VectorInfo;
+
+  // WHERE clause expression string for partial indexes (empty for full indexes)
+  predicate:string;
+
+  // per-column sort order, parallel to index_columns.
+  // omitted when every column is ascending with NULLs first.
+  descending:[bool];
+  nulls_last:[bool];
+
+  // per-column operator class, parallel to index_columns.
+  // omitted when no column has one.
+  op_classes:[string];
+
+  // whether NULLs compare equal to each other for unique enforcement.
+  // omitted for the default, where NULLs are distinct.
+  nulls_not_distinct:bool;
 }
 
 table FulltextInfo {
@@ -150,6 +173,7 @@ table CheckConstraint {
     name:string;
     expression:string;
     enforced:bool;
+    is_not_valid:bool;
 }
 
 // KEEP THIS IN SYNC WITH fileidentifiers.go

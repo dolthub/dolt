@@ -21,11 +21,13 @@ import (
 
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 const CommitVerificationFailedPrefix = "commit verification failed:"
@@ -54,8 +56,8 @@ const (
 // getCommitRunTestGroups returns the test groups to run for commit operations
 // Returns empty slice if no tests should be run, ["*"] if all tests should be run,
 // or specific group names if only those groups should be run
-func getCommitRunTestGroups() []string {
-	_, val, ok := sql.SystemVariables.GetGlobal(DoltCommitVerificationGroups)
+func getCommitRunTestGroups(ctx *sql.Context) []string {
+	_, val, ok := ctx.SystemVariables().GetGlobal(DoltCommitVerificationGroups)
 	if !ok {
 		return nil
 	}
@@ -73,13 +75,15 @@ func getCommitRunTestGroups() []string {
 	return nil
 }
 
-// GetCommitStaged returns a new pending commit with the roots and commit properties given.
+// GetCommitStaged returns a new pending commit with the roots and commit properties given. When props.Amend is
+// set, |amendedCommit| must be the address of the commit being amended.
 func GetCommitStaged(
 	ctx *sql.Context,
 	tableResolver doltdb.TableResolver,
 	roots doltdb.Roots,
 	ws *doltdb.WorkingSet,
 	mergeParents []*doltdb.Commit,
+	amendedCommit hash.Hash,
 	db *doltdb.DoltDB,
 	props CommitStagedProps,
 ) (*doltdb.PendingCommit, error) {
@@ -173,7 +177,7 @@ func GetCommitStaged(
 	}
 
 	if !props.SkipVerification {
-		testGroups := getCommitRunTestGroups()
+		testGroups := getCommitRunTestGroups(ctx)
 		if len(testGroups) > 0 {
 			err := runCommitVerification(ctx, testGroups)
 			if err != nil {
@@ -187,7 +191,7 @@ func GetCommitStaged(
 		return nil, err
 	}
 
-	return db.NewPendingCommit(ctx, roots, mergeParents, props.Amend, commitMeta)
+	return db.NewPendingCommit(ctx, roots, mergeParents, amendedCommit, commitMeta)
 }
 
 // runCommitVerification runs the commit verification tests for the given test groups.
@@ -205,7 +209,12 @@ func runCommitVerification(ctx *sql.Context, testGroups []string) error {
 	}
 
 	provider := session.GenericProvider()
-	engine := gms.NewDefault(provider)
+	vars := ctx.EngineVariables()
+	if vars == nil {
+		return fmt.Errorf("commit verification requires an engine variable owner")
+	}
+	engine := gms.New(analyzer.NewDefault(provider), &gms.Config{EngineVariables: vars})
+	defer engine.Close()
 
 	return runTestsUsingDtablefunctions(ctx, engine, testGroups)
 }

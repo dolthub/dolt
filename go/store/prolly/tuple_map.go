@@ -65,7 +65,7 @@ type TupleIter interface {
 }
 
 func NewMapFromTupleIter(ctx context.Context, ns tree.NodeStore, keyDesc, valDesc *val.TupleDesc, iter TupleIter) (Map, error) {
-	serializer := message.NewProllyMapSerializer(valDesc, ns.Pool())
+	serializer := message.NewProllyMapSerializer(keyDesc, valDesc, ns.Pool())
 	ch, err := tree.NewEmptyChunker(ctx, ns, serializer)
 	if err != nil {
 		return Map{}, err
@@ -95,7 +95,7 @@ func NewMapFromTupleIter(ctx context.Context, ns tree.NodeStore, keyDesc, valDes
 
 func MutateMapWithTupleIter(ctx context.Context, m Map, iter TupleIter) (Map, error) {
 	fn := tree.ApplyMutations[val.Tuple, *val.TupleDesc, message.ProllyMapSerializer]
-	s := message.NewProllyMapSerializer(m.valDesc, m.tuples.NodeStore.Pool())
+	s := message.NewProllyMapSerializer(m.keyDesc, m.valDesc, m.tuples.NodeStore.Pool())
 
 	root, err := fn(ctx, m.tuples.NodeStore, m.tuples.Root, m.keyDesc, s, mutationIter{iter: iter})
 	if err != nil {
@@ -160,16 +160,21 @@ func makeDiffCallBack(from, to Map, innerCb tree.DiffFn) tree.DiffFn {
 	return func(ctx context.Context, diff tree.Diff) error {
 		// Skip diffs produced by non-canonical tuples. A canonical-tuple is a
 		// tuple where any null suffixes have been trimmed.
-		if diff.Type == tree.ModifiedDiff &&
-			from.valDesc.Compare(ctx, val.Tuple(diff.From), val.Tuple(diff.To)) == 0 {
-			return nil
+		if diff.Type == tree.ModifiedDiff {
+			cmp, err := from.valDesc.Compare(ctx, val.Tuple(diff.From), val.Tuple(diff.To))
+			if err != nil {
+				return err
+			}
+			if cmp == 0 {
+				return nil
+			}
 		}
 		return innerCb(ctx, diff)
 	}
 }
 
 func MergeMaps(ctx context.Context, left, right, base Map, cb tree.CollisionFn) (Map, tree.MergeStats, error) {
-	serializer := message.NewProllyMapSerializer(left.valDesc, base.NodeStore().Pool())
+	serializer := message.NewProllyMapSerializer(left.keyDesc, left.valDesc, base.NodeStore().Pool())
 	// TODO: MergeMaps does not properly detect merge conflicts when one side adds a NULL to the end of its tuple.
 	// However, since `MergeMaps` is not currently called, fixing this is not a priority.
 	tuples, stats, err := tree.MergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer)
@@ -369,7 +374,7 @@ func (m Map) Pool() pool.BuffPool {
 	return m.tuples.NodeStore.Pool()
 }
 
-func (m Map) CompareItems(ctx context.Context, left, right tree.Item) int {
+func (m Map) CompareItems(ctx context.Context, left, right tree.Item) (int, error) {
 	return m.keyDesc.Compare(ctx, val.Tuple(left), val.Tuple(right))
 }
 

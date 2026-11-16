@@ -19,6 +19,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"reflect"
+	"slices"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -26,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -83,6 +86,12 @@ func getPrimaryKeylessProllyWriter(ctx context.Context, t *doltdb.Table, schStat
 type indexWriter interface {
 	Name() string
 	Map(ctx context.Context) (prolly.MapInterface, error)
+	// CheckpointMap materializes the index as of the last Commit, excluding uncommitted writes.
+	CheckpointMap(ctx context.Context) (prolly.MapInterface, error)
+	// HasUncommittedEdits returns true if writes have been made since the last Commit.
+	HasUncommittedEdits() bool
+	// CheckpointView returns a view of the index as of the last Commit, or false if the index can't provide one.
+	CheckpointView(ctx context.Context) (prolly.MapView, bool, error)
 	ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error
 	Insert(ctx context.Context, sqlRow sql.Row) error
 	Delete(ctx context.Context, sqlRow sql.Row) error
@@ -91,7 +100,7 @@ type indexWriter interface {
 	Discard(ctx context.Context) error
 	HasEdits(ctx context.Context) bool
 	IterRange(ctx context.Context, rng prolly.Range) (prolly.MapIter, error)
-	VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error
+	VisitGCRoots(ctx context.Context, roots func(hash.Hash)) error
 }
 
 type primaryIndexErrBuilder interface {
@@ -121,6 +130,19 @@ func (m prollyIndexWriter) Name() string {
 
 func (m prollyIndexWriter) Map(ctx context.Context) (prolly.MapInterface, error) {
 	return m.mut.Map(ctx)
+}
+
+func (m prollyIndexWriter) CheckpointMap(ctx context.Context) (prolly.MapInterface, error) {
+	return m.mut.CheckpointMap(ctx)
+}
+
+func (m prollyIndexWriter) HasUncommittedEdits() bool {
+	return m.mut.HasUncheckpointedEdits()
+}
+
+func (m prollyIndexWriter) CheckpointView(ctx context.Context) (prolly.MapView, bool, error) {
+	v, err := prolly.CheckpointView(ctx, m.mut)
+	return v, err == nil, err
 }
 
 func (m prollyIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.Row) (val.Tuple, error) {
@@ -233,7 +255,7 @@ func (m prollyIndexWriter) Commit(ctx context.Context) error {
 	return m.mut.Checkpoint(ctx)
 }
 
-func (m prollyIndexWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+func (m prollyIndexWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash)) error {
 	return m.mut.VisitGCRoots(ctx, roots)
 }
 
@@ -257,21 +279,21 @@ func (m prollyIndexWriter) errForSecondaryUniqueKeyError(ctx context.Context, er
 // uniqueKeyError builds a sql.UniqueKeyError. It fetches the existing row using
 // |key| and passes it as the |existing| row.
 func (m prollyIndexWriter) uniqueKeyError(ctx context.Context, keyStr string, key val.Tuple, isPk bool) error {
-	existing := make(sql.Row, len(m.keyMap)+len(m.valMap))
+	existing := make(sql.Row, mappedRowSize(m.keyMap, m.valMap))
 
 	_ = m.mut.Get(ctx, key, func(key, value val.Tuple) (err error) {
 		kd := m.keyBld.Desc
-		for from := range m.keyMap {
-			to := m.keyMap.MapOrdinal(from)
-			if existing[to], err = tree.GetField(ctx, kd, from, key, m.mut.NodeStore()); err != nil {
+		for tupleOrdinal := range m.keyMap {
+			rowOrdinal := m.keyMap.MapOrdinal(tupleOrdinal)
+			if existing[rowOrdinal], err = tree.GetField(ctx, kd, tupleOrdinal, key, m.mut.NodeStore()); err != nil {
 				return err
 			}
 		}
 
 		vd := m.valBld.Desc
-		for from := range m.valMap {
-			to := m.valMap.MapOrdinal(from)
-			if existing[to], err = tree.GetField(ctx, vd, from, value, m.mut.NodeStore()); err != nil {
+		for tupleOrdinal := range m.valMap {
+			rowOrdinal := m.valMap.MapOrdinal(tupleOrdinal)
+			if existing[rowOrdinal], err = tree.GetField(ctx, vd, tupleOrdinal, value, m.mut.NodeStore()); err != nil {
 				return err
 			}
 		}
@@ -279,6 +301,25 @@ func (m prollyIndexWriter) uniqueKeyError(ctx context.Context, keyStr string, ke
 	})
 
 	return sql.NewUniqueKeyErr(keyStr, isPk, existing)
+}
+
+// mappedRowSize returns the minimum SQL row length required to address every mapped SQL row
+// ordinal across the supplied tuple-to-row mappings. Mapping values may be sparse when the SQL
+// row contains system-hidden virtual columns, so len(mapping) only counts tuple fields and is not
+// sufficient to size the destination row.
+func mappedRowSize(mappings ...val.OrdinalMapping) int {
+	var maxRowOrdinal int
+	var found bool
+	for _, mapping := range mappings {
+		for tupleOrdinal := range mapping {
+			maxRowOrdinal = max(maxRowOrdinal, mapping.MapOrdinal(tupleOrdinal))
+			found = true
+		}
+	}
+	if !found {
+		return 0
+	}
+	return maxRowOrdinal + 1
 }
 
 type prollySecondaryIndexWriter struct {
@@ -302,9 +343,48 @@ type prollySecondaryIndexWriter struct {
 	// number of indexed cols
 	idxCols int
 	unique  bool
+	// nullsNotDistinct is set for unique indexes that treat NULLs as equal to each other.
+	nullsNotDistinct bool
+	// predicate is set for partial indexes; rows not matching are excluded.
+	predicate sql.Expression
+	// virtualExprs is parallel to keyMap; non-nil entries are generating expressions for virtual
+	// (unstored) generated columns that appear in this index's key. Nil overall if the index has
+	// no virtual key parts (the common/fast-path case).
+	virtualExprs []sql.Expression
+}
+
+// keyPartFromRow returns the value for key part |to|, given |sqlRow|. For most columns this is
+// simply sqlRow[from]. For virtual generated columns, the value is computed by evaluating the
+// generating expression against |sqlRow|.
+func (m prollySecondaryIndexWriter) keyPartFromRow(ctx context.Context, to int, sqlRow sql.Row) (interface{}, error) {
+	if m.virtualExprs != nil {
+		if expr := m.virtualExprs[to]; expr != nil {
+			sqlCtx, ok := ctx.(*sql.Context)
+			if !ok {
+				return nil, fmt.Errorf("expected *sql.Context for virtual column expression evaluation")
+			}
+			return expr.Eval(sqlCtx, sqlRow)
+		}
+	}
+	from := m.keyMap.MapOrdinal(to)
+	return sqlRow[from], nil
+}
+
+// matchesPredicate returns true if the row satisfies this index's predicate (or if the index has no predicate).
+// Rows that do not match must be skipped for all index write operations.
+func (m prollySecondaryIndexWriter) matchesPredicate(ctx context.Context, sqlRow sql.Row) (bool, error) {
+	if m.predicate == nil {
+		return true, nil
+	}
+	sqlCtx, ok := ctx.(*sql.Context)
+	if !ok {
+		return false, fmt.Errorf("expected *sql.Context for partial index predicate evaluation")
+	}
+	return index.MatchesPredicate(sqlCtx, m.predicate, sqlRow)
 }
 
 var _ indexWriter = prollySecondaryIndexWriter{}
+var _ UniqueKeyChangeReporter = prollySecondaryIndexWriter{}
 
 func (m prollySecondaryIndexWriter) Name() string {
 	return m.name
@@ -314,7 +394,32 @@ func (m prollySecondaryIndexWriter) Map(ctx context.Context) (prolly.MapInterfac
 	return m.mut.MapInterface(ctx)
 }
 
+func (m prollySecondaryIndexWriter) CheckpointMap(ctx context.Context) (prolly.MapInterface, error) {
+	return m.mut.CheckpointMapInterface(ctx)
+}
+
+func (m prollySecondaryIndexWriter) HasUncommittedEdits() bool {
+	return m.mut.HasUncheckpointedEdits()
+}
+
+func (m prollySecondaryIndexWriter) CheckpointView(ctx context.Context) (prolly.MapView, bool, error) {
+	mut, ok := m.mut.(*prolly.MutableMap)
+	if !ok {
+		// proximity indexes are read from materialized maps
+		return prolly.MapView{}, false, nil
+	}
+	v, err := prolly.CheckpointView(ctx, mut)
+	return v, err == nil, err
+}
+
 func (m prollySecondaryIndexWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error {
+	matches, err := m.matchesPredicate(ctx, sqlRow)
+	if err != nil {
+		return err
+	}
+	if !matches {
+		return nil
+	}
 	if m.unique {
 		if err := m.checkForUniqueKeyErr(ctx, sqlRow); err != nil {
 			return err
@@ -334,8 +439,11 @@ func (m prollySecondaryIndexWriter) trimKeyPart(ctx context.Context, to int, key
 
 func (m prollySecondaryIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.Row) (val.Tuple, error) {
 	for to := range m.keyMap {
-		from := m.keyMap.MapOrdinal(to)
-		keyPart, _ := m.trimKeyPart(ctx, to, sqlRow[from])
+		v, err := m.keyPartFromRow(ctx, to, sqlRow)
+		if err != nil {
+			return nil, err
+		}
+		keyPart, _ := m.trimKeyPart(ctx, to, v)
 		if err := tree.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, keyPart); err != nil {
 			return nil, err
 		}
@@ -343,11 +451,18 @@ func (m prollySecondaryIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.R
 	return m.keyBld.Build(ctx, sharePool)
 }
 
-func (m prollySecondaryIndexWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+func (m prollySecondaryIndexWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash)) error {
 	return m.mut.VisitGCRoots(ctx, roots)
 }
 
 func (m prollySecondaryIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
+	matches, err := m.matchesPredicate(ctx, sqlRow)
+	if err != nil {
+		return err
+	}
+	if !matches {
+		return nil
+	}
 	k, err := m.keyFromRow(ctx, sqlRow)
 	if err != nil {
 		return err
@@ -358,14 +473,17 @@ func (m prollySecondaryIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) 
 func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, sqlRow sql.Row) error {
 	ns := m.mut.NodeStore()
 	for to := range m.keyMap[:m.idxCols] {
-		from := m.keyMap.MapOrdinal(to)
-		if sqlRow[from] == nil {
+		v, err := m.keyPartFromRow(ctx, to, sqlRow)
+		if err != nil {
+			return err
+		}
+		if v == nil && !m.nullsNotDistinct {
 			// NULL is incomparable and cannot
 			// trigger a UNIQUE KEY violation
 			m.keyBld.Recycle()
 			return nil
 		}
-		keyPart, _ := m.trimKeyPart(ctx, to, sqlRow[from])
+		keyPart, _ := m.trimKeyPart(ctx, to, v)
 		if err := tree.PutField(ctx, ns, m.keyBld, to, keyPart); err != nil {
 			return err
 		}
@@ -374,7 +492,10 @@ func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, sq
 	// build a val.Tuple containing only fields for the unique column prefix
 	key := m.keyBld.BuildPrefix(ns.Pool(), m.idxCols)
 	desc := m.keyBld.Desc.PrefixDesc(m.idxCols)
-	rng := prolly.PrefixRange(ctx, key, desc)
+	rng, err := prolly.PrefixRange(ctx, key, desc)
+	if err != nil {
+		return err
+	}
 	iter, err := m.mut.IterRange(ctx, rng)
 	if err != nil {
 		return err
@@ -399,8 +520,11 @@ func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, sq
 	}
 
 	for to := range m.keyMap[:m.idxCols] {
-		from := m.keyMap.MapOrdinal(to)
-		m.key[to], _ = m.trimKeyPart(ctx, to, sqlRow[from])
+		v, err := m.keyPartFromRow(ctx, to, sqlRow)
+		if err != nil {
+			return err
+		}
+		m.key[to], _ = m.trimKeyPart(ctx, to, v)
 	}
 	return secondaryUniqueKeyError{
 		keyStr:      FormatKeyForUniqKeyErr(ctx, key, desc, m.key),
@@ -409,6 +533,13 @@ func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, sq
 }
 
 func (m prollySecondaryIndexWriter) Delete(ctx context.Context, sqlRow sql.Row) error {
+	matches, err := m.matchesPredicate(ctx, sqlRow)
+	if err != nil {
+		return err
+	}
+	if !matches {
+		return nil
+	}
 	k, err := m.keyFromRow(ctx, sqlRow)
 	if err != nil {
 		return err
@@ -426,6 +557,18 @@ func isNoopUpdate(oldRow, newRow sql.Row, keyMap val.OrdinalMapping) bool {
 			if !ok || !bytes.Equal(oldBytes, newBytes) {
 				return false
 			}
+		} else if oldFloats, ok := oldVal.([]float32); ok {
+			newFloats, ok := newVal.([]float32)
+			if !ok || !slices.Equal(oldFloats, newFloats) {
+				return false
+			}
+		} else if oldVal == nil || newVal == nil {
+			if oldVal != newVal {
+				return false
+			}
+		} else if !reflect.ValueOf(oldVal).Comparable() || !reflect.ValueOf(newVal).Comparable() {
+			// Other uncomparable values are treated as changed.
+			return false
 		} else if oldVal != newVal {
 			return false
 		}
@@ -434,31 +577,59 @@ func isNoopUpdate(oldRow, newRow sql.Row, keyMap val.OrdinalMapping) bool {
 }
 
 func (m prollySecondaryIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sql.Row) error {
-	// If no indexed columns are modified, no need to delete and update
-	if isNoopUpdate(oldRow, newRow, m.keyMap) {
-		return nil
+	oldMatches, err := m.matchesPredicate(ctx, oldRow)
+	if err != nil {
+		return err
 	}
-
-	oldKey, err := m.keyFromRow(ctx, oldRow)
+	newMatches, err := m.matchesPredicate(ctx, newRow)
 	if err != nil {
 		return err
 	}
 
-	if err := m.mut.Delete(ctx, oldKey); err != nil {
-		return err
+	if !oldMatches && !newMatches {
+		return nil
 	}
 
-	if m.unique {
-		if err := m.checkForUniqueKeyErr(ctx, newRow); err != nil {
+	// If no indexed columns are modified and predicate status hasn't changed, no need to update.
+	// isNoopUpdate compares the row's raw slots directly, which isn't safe for a virtual key part:
+	// a stale/unpopulated slot could look identical between oldRow and newRow even though the real
+	// underlying columns (and so the virtual column's computed value) changed.
+	if oldMatches && newMatches && m.virtualExprs == nil && isNoopUpdate(oldRow, newRow, m.keyMap) {
+		return nil
+	}
+
+	if oldMatches {
+		oldKey, err := m.keyFromRow(ctx, oldRow)
+		if err != nil {
+			return err
+		}
+		if err := m.mut.Delete(ctx, oldKey); err != nil {
 			return err
 		}
 	}
 
-	newKey, err := m.keyFromRow(ctx, newRow)
-	if err != nil {
-		return err
+	if newMatches {
+		if m.unique {
+			if err := m.checkForUniqueKeyErr(ctx, newRow); err != nil {
+				return err
+			}
+		}
+		newKey, err := m.keyFromRow(ctx, newRow)
+		if err != nil {
+			return err
+		}
+		return m.mut.Put(ctx, newKey, val.EmptyTuple)
 	}
-	return m.mut.Put(ctx, newKey, val.EmptyTuple)
+
+	return nil
+}
+
+// UpdateChangesUniqueKey implements UniqueKeyChangeReporter for this index.
+func (m prollySecondaryIndexWriter) UpdateChangesUniqueKey(oldRow sql.Row, newRow sql.Row) bool {
+	if m.virtualExprs != nil {
+		return m.unique
+	}
+	return m.unique && (m.predicate != nil || !isNoopUpdate(oldRow, newRow, m.keyMap[:m.idxCols]))
 }
 
 func (m prollySecondaryIndexWriter) Commit(ctx context.Context) error {

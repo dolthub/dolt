@@ -143,8 +143,11 @@ func (rs *RemoteChunkStore) HasChunks(ctx context.Context, req *remotesapi.HasCh
 	return resp, nil
 }
 
-func (rs *RemoteChunkStore) getRelativeStorePath(cs RemoteSrvStore) (string, error) {
-	cspath, ok := cs.Path()
+func (rs *RemoteChunkStore) getRelativeStorePath(ctx context.Context, cs RemoteSrvStore) (string, error) {
+	cspath, ok, err := cs.Path(ctx)
+	if err != nil {
+		return "", err
+	}
 	if !ok {
 		return "", status.Error(codes.Internal, "chunkstore misconfigured; cannot generate HTTP paths")
 	}
@@ -175,7 +178,7 @@ func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remot
 
 	hashes, _ := remotestorage.ParseByteSlices(req.ChunkHashes)
 
-	prefix, err := rs.getRelativeStorePath(cs)
+	prefix, err := rs.getRelativeStorePath(ctx, cs)
 	if err != nil {
 		logger.WithError(err).Error("error getting file store path for chunk store")
 		return nil, err
@@ -280,7 +283,7 @@ func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStore
 			if err != nil {
 				return err
 			}
-			prefix, err = rs.getRelativeStorePath(cs)
+			prefix, err = rs.getRelativeStorePath(stream.Context(), cs)
 			if err != nil {
 				logger.WithError(err).Error("error getting file store path for chunk store")
 				return err
@@ -396,7 +399,7 @@ func (rs *RemoteChunkStore) StreamChunkLocations(stream remotesapi.ChunkStoreSer
 			if err != nil {
 				return err
 			}
-			prefix, err = rs.getRelativeStorePath(cs)
+			prefix, err = rs.getRelativeStorePath(stream.Context(), cs)
 			if err != nil {
 				logger.WithError(err).Error("error getting file store path for chunk store")
 				return err
@@ -765,13 +768,13 @@ func (rs *RemoteChunkStore) ListTableFiles(ctx context.Context, req *remotesapi.
 
 	md, _ := metadata.FromIncomingContext(ctx)
 
-	tableFileInfo, err := getTableFileInfo(logger, md, rs, tables, req, cs)
+	tableFileInfo, err := getTableFileInfo(ctx, logger, md, rs, tables, req, cs)
 	if err != nil {
 		logger.WithError(err).Error("error getting table file info")
 		return nil, err
 	}
 
-	appendixTableFileInfo, err := getTableFileInfo(logger, md, rs, appendixTables, req, cs)
+	appendixTableFileInfo, err := getTableFileInfo(ctx, logger, md, rs, appendixTables, req, cs)
 	if err != nil {
 		logger.WithError(err).Error("error getting appendix table file info")
 		return nil, err
@@ -792,6 +795,7 @@ func (rs *RemoteChunkStore) ListTableFiles(ctx context.Context, req *remotesapi.
 }
 
 func getTableFileInfo(
+	ctx context.Context,
 	logger *logrus.Entry,
 	md metadata.MD,
 	rs *RemoteChunkStore,
@@ -799,7 +803,7 @@ func getTableFileInfo(
 	req *remotesapi.ListTableFilesRequest,
 	cs RemoteSrvStore,
 ) ([]*remotesapi.TableFileInfo, error) {
-	prefix, err := rs.getRelativeStorePath(cs)
+	prefix, err := rs.getRelativeStorePath(ctx, cs)
 	if err != nil {
 		return nil, err
 	}
@@ -875,7 +879,7 @@ func (rs *RemoteChunkStore) getAddrs(version string) chunks.InsertAddrsCurry {
 }
 
 func (rs *RemoteChunkStore) getStore(ctx context.Context, logger *logrus.Entry, repoPath string) (RemoteSrvStore, error) {
-	return rs.getOrCreateStore(ctx, logger, repoPath, types.Format_Default.VersionString())
+	return rs.getOrCreateStore(ctx, logger, repoPath, types.Format_DOLT.VersionString())
 }
 
 func (rs *RemoteChunkStore) getOrCreateStore(ctx context.Context, logger *logrus.Entry, repoPath, nbfVerStr string) (RemoteSrvStore, error) {

@@ -73,6 +73,28 @@ strip_ansi() {
   printf "%s\n" "$1" | sed 's/\x1b\[[0-9;]*m//g'
 }
 
+# assert_no_panic_shape(<output>) fails the test if the captured |output| contains
+# panic markers that bats's `[ "$status" -eq 0 ]` check missed.
+assert_no_panic_shape() {
+  local out="$1"
+  if [[ "$out" =~ "invalid hash length" ]]; then
+    echo "panic shape leaked into output: 'invalid hash length' -- adaptive encoding misread legacy raw-hash field" >&2
+    echo "output: $out" >&2
+    return 1
+  fi
+  if [[ "$out" =~ "panic recovered" ]]; then
+    echo "panic shape leaked into output: 'panic recovered' -- errguard caught a panic" >&2
+    echo "output: $out" >&2
+    return 1
+  fi
+  if [[ "$out" =~ "runtime error" ]]; then
+    echo "panic shape leaked into output: 'runtime error' -- recovered runtime panic" >&2
+    echo "output: $out" >&2
+    return 1
+  fi
+  return 0
+}
+
 extract_commit_hash() {
   printf "%s\n" "$1" | sed 's/\x1b\[[0-9;]*m//g' | grep -m1 '^commit ' | awk '{print $2}'
 }

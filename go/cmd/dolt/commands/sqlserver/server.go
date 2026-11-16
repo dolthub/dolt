@@ -46,6 +46,7 @@ import (
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/gcctx"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
@@ -80,13 +81,31 @@ var ErrCouldNotLockDatabase = goerrors.NewKind("database \"%s\" is locked by ano
 
 type Config struct {
 	ServerConfig            servercfg.ServerConfig
+	EngineVariables         *sql.EngineVariables
 	DoltEnv                 *env.DoltEnv
 	SkipRootUserInit        bool
 	Version                 string
 	Controller              *svcs.Controller
 	ProtocolListenerFactory server.ProtocolListenerFunc
 	MCP                     *MCPConfig
+
+	// ProviderFactory controls how the DatabaseProvider is instantiated
+	ProviderFactory sqle.ProviderFactory
+
+	// EngineInitializer, if non-nil, is invoked once the SqlEngine has been
+	// created, before the server begins accepting connections.
+	EngineInitializer EngineInitializer
 }
+
+// EngineInitializer performs one-time initialization of a SqlEngine during
+// server startup, after the engine is constructed but before the server
+// accepts any connections. Returning an error aborts server startup.
+type EngineInitializer interface {
+	InitializeEngine(ctx context.Context, engine *engine.SqlEngine) error
+}
+
+// ErrNilEngineVariables is the startup error of a server configured without an engine variable bundle.
+var ErrNilEngineVariables = errors.New("sqlserver: Config.EngineVariables is required")
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
 func Serve(
@@ -97,7 +116,6 @@ func Serve(
 	if cfg.Controller == nil {
 		cfg.Controller = svcs.NewController()
 	}
-
 	ConfigureServices(cfg)
 
 	go cfg.Controller.Start(ctx)
@@ -112,12 +130,22 @@ func ConfigureServices(
 	cfg *Config,
 ) {
 	controller := cfg.Controller
+	if cfg.EngineVariables == nil {
+		controller.Register(&svcs.AnonService{InitF: func(context.Context) error {
+			return ErrNilEngineVariables
+		}})
+		return
+	}
+	vars := cfg.EngineVariables.System
 	ValidateConfigStep := &svcs.AnonService{
 		InitF: func(context.Context) error {
 			return servercfg.ValidateConfig(cfg.ServerConfig)
 		},
 	}
 	controller.Register(ValidateConfigStep)
+	controller.Register(&svcs.AnonService{InitF: func(ctx context.Context) error {
+		return servercfg.ApplySystemVariables(sql.NewContextWithVariables(ctx, cfg.EngineVariables), cfg.ServerConfig, vars)
+	}})
 
 	lgr := logrus.StandardLogger()
 	lgr.SetOutput(cli.CliErr)
@@ -137,7 +165,7 @@ func ConfigureServices(
 				return fmt.Errorf("unknown log format: %s", cfg.ServerConfig.LogFormat())
 			}
 
-			sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
+			vars.AddSystemVariables([]sql.SystemVariable{
 				&sql.MysqlSystemVariable{
 					Name:              dsess.DoltLogLevel,
 					Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Global),
@@ -184,13 +212,26 @@ func ConfigureServices(
 	InitMultiEnv := &svcs.AnonService{
 		InitF: func(ctx context.Context) (err error) {
 			mrEnv, err = env.MultiEnvForDirectory(ctx, fs, cfg.DoltEnv)
-			return err
+			if err != nil {
+				return err
+			}
+			return mrEnv.Iter(func(name string, _ *env.DoltEnv) (bool, error) {
+				dsess.DefineSystemVariablesForDBInRegistry(vars, name)
+				return false, nil
+			})
 		},
 	}
 	controller.Register(InitMultiEnv)
 
+	// The server's sessions, including the ones the engine creates, all share this controller.
+	gcSafepointController := gcctx.NewGCSafepointController()
+
 	AssertNoDatabasesInAccessModeReadOnly := &svcs.AnonService{
 		InitF: func(ctx context.Context) (err error) {
+			ctx = gcctx.WithGCSafepointController(ctx, gcSafepointController)
+			defer gcctx.SessionEnd(ctx)
+			gcctx.SessionCommandBegin(ctx)
+			defer gcctx.SessionCommandEnd(ctx)
 			return mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
 				readOnly, err := dEnv.IsAccessModeReadOnly(ctx)
 				if err != nil {
@@ -205,18 +246,7 @@ func ConfigureServices(
 	}
 	controller.Register(AssertNoDatabasesInAccessModeReadOnly)
 
-	var localCreds *LocalCreds
-	InitServerLocalCreds := &svcs.AnonService{
-		InitF: func(context.Context) (err error) {
-			localCreds, err = persistServerLocalCreds(cfg.ServerConfig.Port(), cfg.DoltEnv)
-			return err
-		},
-		StopF: func(_ svcs.RunState) error {
-			RemoveLocalCreds(cfg.DoltEnv.FS)
-			return nil
-		},
-	}
-	controller.Register(InitServerLocalCreds)
+	localCreds := NewLocalCreds(cfg.ServerConfig.Port())
 
 	// Persist any system variables that have a non-deterministic default value (i.e. @@server_uuid)
 	// We only do this on sql-server startup initially since we want to keep the persisted server_uuid
@@ -227,9 +257,14 @@ func ConfigureServices(
 	// prevent races and to prevent different components seeing different configured variables.
 	PersistNondeterministicSystemVarDefaults := &svcs.AnonService{
 		InitF: func(ctx context.Context) error {
-			err := dsess.PersistSystemVarDefaults(cfg.DoltEnv)
+			err := dsess.PersistSystemVarDefaultsWithRegistry(vars, cfg.DoltEnv)
 			if err != nil {
 				logrus.Errorf("unable to persist system variable defaults: %v", err)
+			}
+			err = dsess.InitPersistedSystemVarsWithRegistry(vars, cfg.DoltEnv)
+			if err != nil {
+				cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
+				logrus.Errorf("unable to init persisted system variables: %v", err)
 			}
 			// Always return nil, because we don't want an invalid config value to prevent
 			// the server from starting up.
@@ -250,7 +285,7 @@ func ConfigureServices(
 	var serverConf server.Config
 	LoadServerConfig := &svcs.AnonService{
 		InitF: func(context.Context) (err error) {
-			serverConf, err = getConfigFromServerConfig(cfg.ServerConfig, cfg.ProtocolListenerFactory)
+			serverConf, err = getConfigFromServerConfigWithVariables(cfg.ServerConfig, cfg.ProtocolListenerFactory, cfg.EngineVariables)
 			return err
 		},
 	}
@@ -273,10 +308,13 @@ func ConfigureServices(
 				BranchActivityTracking:     cfg.ServerConfig.BranchActivityTracking(),
 				JwksConfig:                 cfg.ServerConfig.JwksConfig(),
 				SystemVariables:            cfg.ServerConfig.SystemVars(),
+				EngineVariables:            cfg.EngineVariables,
 				ClusterController:          clusterController,
 				BinlogReplicaController:    binlogreplication.DoltBinlogReplicaController,
 				SkipRootUserInitialization: cfg.SkipRootUserInit,
 				EngineOverrides:            cfg.ServerConfig.Overrides(),
+				ProviderFactory:            cfg.ProviderFactory,
+				GCSafepointController:      gcSafepointController,
 			}
 			return nil
 		},
@@ -342,8 +380,8 @@ func ConfigureServices(
 		InitF: func(ctx context.Context) (err error) {
 			if _, err := mrEnv.Config().GetString(env.SqlServerGlobalsPrefix + "." + dsess.DoltStatsPaused); err != nil {
 				// unless otherwise specified, run stats writer alongside server
-				sqlCtx := sql.NewEmptyContext()
-				sql.SystemVariables.SetGlobal(sqlCtx, dsess.DoltStatsPaused, 0)
+				sqlCtx := sql.NewContextWithVariables(ctx, cfg.EngineVariables)
+				vars.SetGlobal(sqlCtx, dsess.DoltStatsPaused, 0)
 			}
 			sqlEngine, err = engine.NewSqlEngine(
 				ctx,
@@ -360,12 +398,12 @@ func ConfigureServices(
 				return nil
 			}
 
-			sqlCtx := sql.NewEmptyContext()
+			sqlCtx := sql.NewContextWithVariables(ctx, cfg.EngineVariables)
 			readOnlyValue := int8(0)
 			if config.IsReadOnly {
 				readOnlyValue = int8(1)
 			}
-			return sql.SystemVariables.SetGlobal(sqlCtx, "read_only", readOnlyValue)
+			return vars.SetGlobal(sqlCtx, "read_only", readOnlyValue)
 		},
 		StopF: func(_ svcs.RunState) error {
 			sqlEngine.Close()
@@ -373,6 +411,18 @@ func ConfigureServices(
 		},
 	}
 	controller.Register(InitSqlEngine)
+
+	// Run any application-provided engine initialization immediately after the
+	// engine itself is initialized. This runs during the controller's Init
+	// phase, so it completes before the server's accept loop starts running.
+	if cfg.EngineInitializer != nil {
+		RunEngineInitializer := &svcs.AnonService{
+			InitF: func(ctx context.Context) error {
+				return cfg.EngineInitializer.InitializeEngine(ctx, sqlEngine)
+			},
+		}
+		controller.Register(RunEngineInitializer)
+	}
 
 	// Closing the connections on shutdown attempts to prevent
 	// them from creating new work after we cancel their running
@@ -403,14 +453,14 @@ func ConfigureServices(
 
 	InitBinlogging := &svcs.AnonService{
 		InitF: func(ctx context.Context) error {
-			sqlCtx := sql.NewContext(ctx)
+			sqlCtx := sqlEngine.GetUnderlyingEngine().NewContext(ctx)
 			primaryController := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.BinlogPrimaryController
 			doltBinlogPrimaryController, ok := primaryController.(*binlogreplication.DoltBinlogPrimaryController)
 			if !ok {
 				return fmt.Errorf("unexpected type of binlog controller: %T", primaryController)
 			}
 
-			_, logBinValue, ok := sql.SystemVariables.GetGlobal("log_bin")
+			_, logBinValue, ok := vars.GetGlobal("log_bin")
 			if !ok {
 				return fmt.Errorf("unable to load @@log_bin system variable")
 			}
@@ -419,7 +469,7 @@ func ConfigureServices(
 				return fmt.Errorf("unexpected type for @@log_bin system variable: %T", logBinValue)
 			}
 
-			_, logBinBranchValue, ok := sql.SystemVariables.GetGlobal("log_bin_branch")
+			_, logBinBranchValue, ok := vars.GetGlobal("log_bin_branch")
 			if !ok {
 				return fmt.Errorf("unable to load @@log_bin_branch system variable")
 			}
@@ -893,6 +943,16 @@ func ConfigureServices(
 		},
 	}
 	controller.Register(InitSQLServer)
+	InitServerLocalCreds := &svcs.AnonService{
+		InitF: func(context.Context) (err error) {
+			return WriteLocalCreds(cfg.DoltEnv.FS, localCreds)
+		},
+		StopF: func(_ svcs.RunState) error {
+			RemoveLocalCreds(cfg.DoltEnv.FS)
+			return nil
+		},
+	}
+	controller.Register(InitServerLocalCreds)
 
 	// Automatically restart binlog replication if replication was enabled when the server was last shut down
 	AutoStartBinlogReplica := &svcs.AnonService{
@@ -1051,15 +1111,6 @@ func (h *heartbeatService) Run(ctx context.Context) {
 
 var _ svcs.Service = &heartbeatService{}
 
-func persistServerLocalCreds(port int, dEnv *env.DoltEnv) (*LocalCreds, error) {
-	creds := NewLocalCreds(port)
-	err := WriteLocalCreds(dEnv.FS, creds)
-	if err != nil {
-		return nil, err
-	}
-	return creds, err
-}
-
 // remotesapiAuth facilitates the implementation remotesrv.AccessControl for the remotesapi server.
 type remotesapiAuth struct {
 	// ctxFactory is a function that returns a new sql.Context. This will create a new context every time it is called,
@@ -1080,17 +1131,19 @@ func (r *remotesapiAuth) ApiAuthenticate(ctx context.Context) (context.Context, 
 		return nil, err
 	}
 
-	err = commands.ValidatePasswordWithAuthResponse(r.rawDb, creds.Username, creds.Password)
-	if err != nil {
-		return nil, fmt.Errorf("API Authentication Failure: %v", err)
-	}
-
 	address := creds.Address
 	if strings.Index(address, ":") > 0 {
 		address, _, err = net.SplitHostPort(creds.Address)
 		if err != nil {
 			return nil, fmt.Errorf("Invalid Host string for authentication: %s", creds.Address)
 		}
+	}
+
+	// Validate against the account for the address the request came from, not a fixed one. The account this
+	// resolves to is the same one ApiAuthorize goes on to check privileges for.
+	err = commands.ValidatePasswordWithAuthResponse(r.rawDb, creds.Username, creds.Password, address)
+	if err != nil {
+		return nil, fmt.Errorf("API Authentication Failure: %v", err)
 	}
 
 	sqlCtx, err := r.ctxFactory(ctx)
@@ -1176,7 +1229,7 @@ func newSessionBuilder(se *engine.SqlEngine, config servercfg.ServerConfig) serv
 	}
 
 	return func(ctx context.Context, conn *mysql.Conn, addr string) (sql.Session, error) {
-		baseSession, err := sql.BaseSessionFromConnection(ctx, conn, addr)
+		baseSession, err := sql.BaseSessionFromConnectionWithVariables(ctx, conn, addr, se.GetUnderlyingEngine().Variables())
 		if err != nil {
 			return nil, err
 		}
@@ -1205,7 +1258,7 @@ func newSessionBuilder(se *engine.SqlEngine, config servercfg.ServerConfig) serv
 }
 
 // getConfigFromServerConfig processes ServerConfig and returns server.Config for sql-server.
-func getConfigFromServerConfig(serverConfig servercfg.ServerConfig, plf server.ProtocolListenerFunc) (server.Config, error) {
+func getConfigFromServerConfigWithVariables(serverConfig servercfg.ServerConfig, plf server.ProtocolListenerFunc, vars *sql.EngineVariables) (server.Config, error) {
 	serverConf, err := handleProtocolAndAddress(serverConfig)
 	if err != nil {
 		return server.Config{}, err
@@ -1221,13 +1274,15 @@ func getConfigFromServerConfig(serverConfig servercfg.ServerConfig, plf server.P
 		return server.Config{}, err
 	}
 
-	serverConf, err = serverConf.NewConfig()
+	serverConf, err = serverConf.NewConfigWithVariables(vars)
 	if err != nil {
 		return server.Config{}, err
 	}
 
-	// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
-	// to the value of mysql that we support.
+	// An explicitly configured version takes precedence over the registry default.
+	if versionString, hasVersionString := serverConfig.SystemVars()["version"]; hasVersionString {
+		serverConf.Version = fmt.Sprint(versionString)
+	}
 	serverConf.ConnReadTimeout = readTimeout
 	serverConf.ConnWriteTimeout = writeTimeout
 	serverConf.MaxConnections = serverConfig.MaxConnections()

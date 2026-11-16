@@ -275,6 +275,17 @@ EOF
     [[ $output =~ "dev" ]] || false
 }
 
+@test "sql-server: persist sql_mode across server restart" {
+    cd repo1
+    start_sql_server
+    dolt sql -q "SET PERSIST sql_mode = 'NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES';"
+    stop_sql_server
+    start_sql_server
+    run dolt --use-db repo1 sql -q "SELECT @@GLOBAL.sql_mode;" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" =~ "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION" ]] || false
+}
+
 @test "sql-server: user session variables from config" {
   cd repo1
   echo "
@@ -2241,19 +2252,19 @@ EOF
 
     run dolt sql -q "SELECT name,dirty FROM dolt_branches"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "br1  | false" ]] || false
-    [[ "$output" =~ "br2  | true " ]] || false
-    [[ "$output" =~ "br3  | true" ]] || false
-    [[ "$output" =~ "main | false" ]] || false
+    [[ "$output" =~ br1[[:space:]]+\|[[:space:]]+0[[:space:]]+\| ]] || false
+    [[ "$output" =~ br2[[:space:]]+\|[[:space:]]+1[[:space:]]+\| ]] || false
+    [[ "$output" =~ br3[[:space:]]+\|[[:space:]]+1[[:space:]]+\| ]] || false
+    [[ "$output" =~ main[[:space:]]+\|[[:space:]]+0[[:space:]]+\| ]] || false
 
     # Verify that the dolt_branches table show the same output, regardless of the checked out branch.
     dolt checkout br1
     run dolt sql -q "SELECT name,dirty FROM dolt_branches"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "br1  | false" ]] || false
-    [[ "$output" =~ "br2  | true " ]] || false
-    [[ "$output" =~ "br3  | true" ]] || false
-    [[ "$output" =~ "main | false" ]] || false
+    [[ "$output" =~ br1[[:space:]]+\|[[:space:]]+0[[:space:]]+\| ]] || false
+    [[ "$output" =~ br2[[:space:]]+\|[[:space:]]+1[[:space:]]+\| ]] || false
+    [[ "$output" =~ br3[[:space:]]+\|[[:space:]]+1[[:space:]]+\| ]] || false
+    [[ "$output" =~ main[[:space:]]+\|[[:space:]]+0[[:space:]]+\| ]] || false
 }
 
 @test "sql-server: warning log on forced __dolt_local_user__ drop after restart" {
@@ -2349,4 +2360,44 @@ EOF
 
   start_sql_server > server_log.txt 2>&1 && sleep 0.5
   grep -F "permission denied" server_log.txt
+}
+
+@test "sql-server: chunk journal write buffer and range index memory overhead per open database is bounded" {
+    # https://github.com/dolthub/dolt/issues/12179
+    start_multi_db_server repo1
+
+    create_database() {
+      local name="$1"
+      dolt sql -q "CREATE DATABASE $name;
+USE $name;
+CREATE TABLE t1 (id int primary key, v longtext);
+CREATE TABLE t2 (id int primary key, v longtext);
+INSERT INTO t1 VALUES (1, repeat('$name-a', 2500)), (2, repeat('$name-b', 2500));
+INSERT INTO t2 VALUES (1, repeat('$name-a', 2500)), (2, repeat('$name-b', 2500));
+CALL DOLT_COMMIT('-Am', 'initial');
+CALL DOLT_BRANCH('feature');
+UPDATE t1 SET v = repeat('$name-c', 2500) WHERE id = 1;
+CALL DOLT_COMMIT('-Am', 'update');"
+    }
+
+    # Initialize the first database to establish a post-warmup baseline.
+    create_database db_init
+    mem_start=$(get_memory_kb $SERVER_PID)
+
+    num_dbs=5
+    for i in $(seq 1 $num_dbs); do
+      create_database "db_$i"
+    done
+
+    mem_end=$(get_memory_kb $SERVER_PID)
+    stop_sql_server 1
+
+    [ -n "$mem_start" ]
+    [ -n "$mem_end" ]
+
+    growth_rate=$(( (mem_end - mem_start) / num_dbs ))
+
+    # Without lazy allocation, each database retains a 5MB journalWriterBuffSize.
+    journal_writer_buff_size_kb=$(( 5 * 1024 ))
+    [ "$growth_rate" -lt "$journal_writer_buff_size_kb" ]
 }

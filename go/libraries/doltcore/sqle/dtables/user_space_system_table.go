@@ -19,6 +19,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
@@ -207,6 +208,13 @@ func (bstw backedSystemTableWriter) Close(ctx *sql.Context) error {
 // CreateWriteableSystemTable is a helper function that creates a writeable system table (dolt_ignore, dolt_docs...) if it does not exist
 // Then returns the hash of the previous working root, and a TableWriter.
 func createWriteableSystemTable(ctx *sql.Context, tblName doltdb.TableName, tblSchema sql.Schema) (*hash.Hash, dsess.TableWriter, error) {
+	// Writes to user-space system tables (dolt_docs, dolt_ignore,
+	// dolt_query_catalog, dolt_nonlocal_tables, dolt_tests) modify the
+	// current branch's working set, so the same Permissions_Write gate that
+	// covers regular table writes applies.
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return nil, nil, err
+	}
 	dbName := ctx.GetCurrentDatabase()
 	dSess := dsess.DSessFromSess(ctx.Session)
 
@@ -230,47 +238,48 @@ func createWriteableSystemTable(ctx *sql.Context, tblName doltdb.TableName, tblS
 		return nil, nil, err
 	}
 
-	if !found {
+	ws := dbState.WriteSession()
+	if ws == nil {
+		return nil, nil, fmt.Errorf("could not create %s table, database does not allow writing", tblName)
+	}
+
+	var tableWriter dsess.TableWriter
+	if found {
+		tableWriter, err = ws.GetTableWriter(ctx, tblName)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		workingSet, err := dbState.WorkingSet(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		if workingSet == nil {
+			return nil, nil, doltdb.ErrOperationNotSupportedInDetachedHead
+		}
+
 		sch := sql.NewPrimaryKeySchema(tblSchema)
 		doltSch, err := sqlutil.ToDoltSchema(ctx, roots.Working, tblName, sch, roots.Head, sql.Collation_Default)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		// underlying table doesn't exist. Record this, then create the table.
+		// The table doesn't exist yet. The writer adds it to the working set when it flushes, so a write that fails
+		// doesn't leave an empty table behind.
 		newRootValue, err := doltdb.CreateEmptyTable(ctx, roots.Working, tblName, doltSch)
-
 		if err != nil {
 			return nil, nil, err
 		}
-
-		if dbState.WorkingSet() == nil {
-			return nil, nil, doltdb.ErrOperationNotSupportedInDetachedHead
-		}
-
-		// We use WriteSession.SetWorkingSet instead of DoltSession.SetWorkingRoot because we want to avoid modifying the root
-		// until the end of the transaction, but we still want the WriteSession to be able to find the newly
-		// created table.
-		if ws := dbState.WriteSession(); ws != nil {
-			err = ws.SetWorkingSet(ctx, dbState.WorkingSet().WithWorkingRoot(newRootValue))
-			if err != nil {
-				return nil, nil, err
-			}
-		} else {
-			return nil, nil, fmt.Errorf("could not create %s table, database does not allow writing", tblName)
-		}
-	}
-
-	var tableWriter dsess.TableWriter
-	if ws := dbState.WriteSession(); ws != nil {
-		tableWriter, err = ws.GetTableWriter(ctx, tblName, dbName, dSess.SetWorkingRoot, false)
+		tbl, _, err := newRootValue.GetTable(ctx, tblName)
 		if err != nil {
 			return nil, nil, err
 		}
-		tableWriter.StatementBegin(ctx)
-	} else {
-		return nil, nil, fmt.Errorf("could not create %s table, database does not allow writing", tblName)
+		tableWriter, err = ws.GetTableWriterForNewTable(ctx, tblName, tbl)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
+	tableWriter.StatementBegin(ctx)
 
 	return &prevHash, tableWriter, nil
 }

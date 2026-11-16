@@ -58,7 +58,7 @@ func (s SessionStateAdapter) GetRoots(ctx *sql.Context) (doltdb.Roots, error) {
 		return doltdb.Roots{}, err
 	}
 
-	return state.roots(), nil
+	return state.roots(ctx)
 }
 
 func (s SessionStateAdapter) CWBHeadRef(ctx *sql.Context) (ref.DoltRef, error) {
@@ -180,7 +180,6 @@ func (s SessionStateAdapter) RemoveRemote(_ context.Context, name string) error 
 	if !ok {
 		return env.ErrRemoteNotFound
 	}
-	s.remotes.Delete(remote.Name)
 
 	fs, err := s.session.Provider().FileSystemForDatabase(s.dbName)
 	if err != nil {
@@ -197,8 +196,14 @@ func (s SessionStateAdapter) RemoveRemote(_ context.Context, name string) error 
 		// sanity check
 		return env.ErrRemoteNotFound
 	}
-	repoState.Remotes.Delete(name)
-	return repoState.Save(fs)
+	repoState.RemoveRemote(remote)
+	if err := repoState.Save(fs); err != nil {
+		return err
+	}
+
+	s.remotes.Delete(remote.Name)
+	env.UnsetRemoteUpstream(s.branches, remote.Name)
+	return nil
 }
 
 func (s SessionStateAdapter) RemoveBackup(_ context.Context, name string) error {
@@ -225,7 +230,16 @@ func (s SessionStateAdapter) RemoveBackup(_ context.Context, name string) error 
 }
 
 func (s SessionStateAdapter) TempTableFilesDir() (string, error) {
-	branchState, _, err := s.session.lookupDbState(sql.NewContext(context.Background()), s.dbName)
+	// The directory is session-wide, so don't load a branch state for it.
+	s.session.mu.Lock()
+	dbState, ok := s.session.dbStates[doltdb.NewDbKey(s.dbName)]
+	s.session.mu.Unlock()
+	if ok {
+		return dbState.tmpFileDir, nil
+	}
+
+	ctx := sql.NewContextWithVariables(context.Background(), s.session.EngineVariables(), sql.WithSession(s.session))
+	branchState, _, err := s.session.lookupDbState(ctx, s.dbName)
 	if err != nil {
 		return "", err
 	}

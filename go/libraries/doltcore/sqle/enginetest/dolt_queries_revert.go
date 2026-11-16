@@ -225,6 +225,87 @@ var RevertScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "dolt_revert() --abort rejects other dirty working sets before resetting HEAD",
+		SetUpScript: []string{
+			"set autocommit=0",
+			"create table test (pk int primary key, c0 int)",
+			"insert into test values (1,1),(2,2)",
+			"call dolt_commit('-Am', 'seed table')",
+			"insert into test values (3,3)",
+			"call dolt_commit('-am', 'insert 3,3')",
+			"update test set c0=42 where pk=2",
+			"call dolt_commit('-am', 'first change')",
+			"update test set c0=23 where pk=2",
+			"call dolt_commit('-am', 'second change')",
+			"call dolt_branch('other')",
+			"call dolt_revert('HEAD~2', 'HEAD~1')",
+			"set dolt_allow_commit_conflicts=1",
+			"commit",
+			"insert into `mydb/other`.test values (4,4)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_revert('--abort')",
+				ExpectedErrStr: "Cannot commit changes on more than one branch / database",
+			},
+			{
+				Query: "select message from dolt_log limit 1",
+				Expected: []sql.Row{
+					{"Revert \"insert 3,3\""},
+				},
+			},
+			{
+				Query: "select `table` from dolt_conflicts",
+				Expected: []sql.Row{
+					{"test"},
+				},
+			},
+			{
+				Query: "select * from `mydb/other`.test where pk=4",
+				Expected: []sql.Row{
+					{4, 4},
+				},
+			},
+			{
+				Query:            "rollback",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "update test set c0=99 where pk=1",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "call dolt_revert('--abort')",
+				Expected: []sql.Row{
+					{"", 0, 0, 0},
+				},
+			},
+			{
+				Query: "select message from dolt_log limit 1",
+				Expected: []sql.Row{
+					{"second change"},
+				},
+			},
+			{
+				Query: "select * from test order by pk",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 23},
+					{3, 3},
+				},
+			},
+			{
+				Query:    "select * from dolt_conflicts",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from `mydb/other`.test where pk=4",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+
+	{
 		Name: "dolt_revert() --continue: successful conflict resolution workflow",
 		SetUpScript: []string{
 			"create table test (pk int primary key, c0 int)",
@@ -509,7 +590,66 @@ var RevertScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "dolt_revert() fails with untracked tables",
+		Name: "dolt_revert() proceeds when dirty table is disjoint from revert target",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c0 int);",
+			"create table meta (pk int primary key, note varchar(100));",
+			"call dolt_commit('-Am', 'seed schema');",
+			"insert into t values (1, 1), (2, 2);",
+			"call dolt_commit('-am', 'add rows to t');",
+			"insert into meta values (1, 'side');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_revert('HEAD');",
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
+			},
+			{
+				Query:    "select pk, c0 from t order by pk;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select pk, note from meta;",
+				Expected: []sql.Row{{1, "side"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_revert() refuses when revert target table is dirty",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c0 int);",
+			"call dolt_commit('-Am', 'seed schema');",
+			"insert into t values (1, 1);",
+			"call dolt_commit('-am', 'add row to t');",
+			"insert into t values (99, 99);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_revert('HEAD');",
+				ExpectedErrStr: "error: Your local changes would be overwritten by revert.\nhint: Please commit your changes before you revert.",
+			},
+		},
+	},
+	{
+		Name: "dolt_revert() refuses when a disjoint table has staged changes",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c0 int);",
+			"create table meta (pk int primary key, note varchar(100));",
+			"call dolt_commit('-Am', 'seed schema');",
+			"insert into t values (1, 1);",
+			"call dolt_commit('-am', 'add row to t');",
+			"insert into meta values (1, 'side');",
+			"call dolt_add('meta');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_revert('HEAD');",
+				ExpectedErrStr: "error: Your local changes would be overwritten by revert.\nhint: Please commit your changes before you revert.",
+			},
+		},
+	},
+	{
+		Name: "dolt_revert() proceeds with untracked tables disjoint from revert target",
 		SetUpScript: []string{
 			"create table test (pk int primary key, c0 int)",
 			"insert into test values (1,1),(2,2),(3,3)",
@@ -521,8 +661,16 @@ var RevertScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "call dolt_revert('HEAD')",
-				ExpectedErrStr: "error: Your local changes would be overwritten by revert.\nhint: Please commit your changes before you revert.",
+				Query:    "call dolt_revert('HEAD')",
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
+			},
+			{
+				Query:    "select pk, c0 from test where pk = 2",
+				Expected: []sql.Row{{2, 2}},
+			},
+			{
+				Query:    "select pk from dont_track",
+				Expected: []sql.Row{{1}},
 			},
 		},
 	},

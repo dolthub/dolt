@@ -15,7 +15,6 @@
 package blobstore
 
 import (
-	"bytes"
 	"context"
 	"testing"
 
@@ -68,7 +67,7 @@ func TestGitBlobstore_Prune_RemovesUnreferencedEntries(t *testing.T) {
 
 	// Write a new manifest that only references tableA — tableB and tableC should be pruned.
 	newManifest := []byte("5:__DOLT__:lock2:root2:gc2:tableA:10")
-	_, err = bs.CheckAndPut(ctx, ver, "manifest", int64(len(newManifest)), bytes.NewReader(newManifest))
+	_, err = bs.CheckAndPutManifest(ctx, ver, newManifest)
 	require.NoError(t, err)
 
 	// Inspect the remote tree — it should only contain "manifest" and "tableA".
@@ -127,7 +126,7 @@ func TestGitBlobstore_Prune_CreatesOrphanCommit(t *testing.T) {
 
 	// Write manifest that drops dead1 — this should trigger pruning + orphan commit.
 	newManifest := []byte("5:__DOLT__:lock2:root2:gc2:tableA:10")
-	_, err = bs.CheckAndPut(ctx, ver, "manifest", int64(len(newManifest)), bytes.NewReader(newManifest))
+	_, err = bs.CheckAndPutManifest(ctx, ver, newManifest)
 	require.NoError(t, err)
 
 	remoteHead, err := remoteAPI.ResolveRefCommit(ctx, DoltDataRef)
@@ -176,7 +175,7 @@ func TestGitBlobstore_Prune_NoPruneWhenAllReferenced(t *testing.T) {
 
 	// Update manifest but keep referencing the same table — no pruning should happen.
 	newManifest := []byte("5:__DOLT__:lock2:root2:gc2:tableA:10")
-	_, err = bs.CheckAndPut(ctx, ver, "manifest", int64(len(newManifest)), bytes.NewReader(newManifest))
+	_, err = bs.CheckAndPutManifest(ctx, ver, newManifest)
 	require.NoError(t, err)
 
 	remoteHead, err := remoteAPI.ResolveRefCommit(ctx, DoltDataRef)
@@ -233,7 +232,7 @@ func TestGitBlobstore_Prune_ChunkedAndSuffixedEntries(t *testing.T) {
 
 	// Manifest only references "keepme".
 	newManifest := []byte("5:__DOLT__:lock2:root2:gc2:keepme:10")
-	_, err = bs.CheckAndPut(ctx, ver, "manifest", int64(len(newManifest)), bytes.NewReader(newManifest))
+	_, err = bs.CheckAndPutManifest(ctx, ver, newManifest)
 	require.NoError(t, err)
 
 	remoteHead, err := remoteAPI.ResolveRefCommit(ctx, DoltDataRef)

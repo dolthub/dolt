@@ -80,6 +80,30 @@ func TestUnknownJournalRecordTag(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestTruncatedJournalRecordField(t *testing.T) {
+	tests := []struct {
+		name   string
+		fields []byte
+	}{
+		{name: "kind", fields: []byte{byte(kindJournalRecTag)}},
+		{name: "address", fields: append([]byte{byte(addrJournalRecTag)}, make([]byte, journalRecAddrSz-1)...)},
+		{name: "timestamp", fields: append([]byte{byte(timestampJournalRecTag)}, make([]byte, journalRecTimestampSz-1)...)},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// The checksum is valid, but the last field runs into it.
+			buf := make([]byte, journalRecLenSz+len(test.fields)+journalRecChecksumSz)
+			writeUint32(buf, uint32(len(buf)))
+			copy(buf[journalRecLenSz:], test.fields)
+			writeUint32(buf[len(buf)-journalRecChecksumSz:], crc(buf[:len(buf)-journalRecChecksumSz]))
+			require.NoError(t, validateJournalRecord(buf))
+
+			_, err := readJournalRecord(buf)
+			require.Error(t, err)
+		})
+	}
+}
+
 func TestProcessJournalRecords(t *testing.T) {
 	const cnt = 1024
 	ctx := context.Background()
@@ -116,7 +140,7 @@ func TestProcessJournalRecords(t *testing.T) {
 	}
 
 	var recoverErr error
-	n, err := processJournalRecords(ctx, bytes.NewReader(journal), true, 0, check, func(e error) { recoverErr = e })
+	n, err := processJournalRecords(ctx, "", bytes.NewReader(journal), true, 0, check, func(e error) { recoverErr = e })
 	assert.Equal(t, cnt, i)
 	assert.Equal(t, int(off), int(n))
 	require.NoError(t, err)
@@ -125,7 +149,7 @@ func TestProcessJournalRecords(t *testing.T) {
 	// write a bogus record to the end and verify that we don't get an error
 	i, sum = 0, 0
 	writeCorruptJournalRecord(journal[off:])
-	n, err = processJournalRecords(ctx, bytes.NewReader(journal), true, 0, check, func(e error) { recoverErr = e })
+	n, err = processJournalRecords(ctx, "", bytes.NewReader(journal), true, 0, check, func(e error) { recoverErr = e })
 	require.NoError(t, err)
 	assert.Equal(t, cnt, i)
 	assert.Equal(t, int(off), int(n))
@@ -227,7 +251,7 @@ func TestJournalForDataLoss(t *testing.T) {
 			}
 
 			var recoverErr error
-			_, err := processJournalRecords(ctx, bytes.NewReader(journal[:off]), true, 0, check, func(e error) { recoverErr = e })
+			_, err := processJournalRecords(ctx, "", bytes.NewReader(journal[:off]), true, 0, check, func(e error) { recoverErr = e })
 
 			if td.lossExpected {
 				require.Error(t, err)
@@ -269,7 +293,7 @@ func TestJournalTruncated(t *testing.T) {
 	off += writeRootHashRecord(journal[off:], r.address)
 	for i := range 16 {
 		var recoverErr error
-		_, err := processJournalRecords(t.Context(), bytes.NewReader(journal[:int(off)-i]), true, 0, func(int64, journalRec) error { return nil }, func(e error) { recoverErr = e })
+		_, err := processJournalRecords(t.Context(), "", bytes.NewReader(journal[:int(off)-i]), true, 0, func(int64, journalRec) error { return nil }, func(e error) { recoverErr = e })
 		require.NoError(t, err, "err should be nil, iteration %d", i)
 		require.NoError(t, recoverErr, "recoverErr should be nil, iteration %d", i)
 	}
@@ -285,7 +309,7 @@ func TestJournalTruncated(t *testing.T) {
 			off += writeChunkRecord(journal[off:], mustCompressedChunk(r))
 		}
 	}
-	_, err := processJournalRecords(t.Context(), bytes.NewReader(journal[:off]), true, 0, func(int64, journalRec) error { return nil }, nil)
+	_, err := processJournalRecords(t.Context(), "", bytes.NewReader(journal[:off]), true, 0, func(int64, journalRec) error { return nil }, nil)
 	require.Error(t, err)
 }
 
@@ -334,7 +358,7 @@ func TestJournalForDataLossOnBoundary(t *testing.T) {
 		// no confidence in the rest of the test.
 		ctx := context.Background()
 		var recoverErr error
-		bytesRead, err := processJournalRecords(ctx, bytes.NewReader(journalBuf[:]), true, 0, check, func(e error) { recoverErr = e })
+		bytesRead, err := processJournalRecords(ctx, "", bytes.NewReader(journalBuf[:]), true, 0, check, func(e error) { recoverErr = e })
 		require.NoError(t, err)
 		require.Equal(t, off, uint32(bytesRead))
 		require.Error(t, recoverErr) // We do expect a warning here, but no data loss.
@@ -358,7 +382,7 @@ func TestJournalForDataLossOnBoundary(t *testing.T) {
 				// Copy lost data into journal buffer at the test offset.
 				copy(journalBuf[startPoint:startPoint+uint32(len(lostData))], lostData)
 
-				_, err := processJournalRecords(ctx, bytes.NewReader(journalBuf[:]), true, 0, check, func(e error) { recoverErr = e })
+				_, err := processJournalRecords(ctx, "", bytes.NewReader(journalBuf[:]), true, 0, check, func(e error) { recoverErr = e })
 				require.Error(t, err)
 				require.True(t, errors.Is(err, ErrJournalDataLoss))
 				require.Error(t, recoverErr)
@@ -502,7 +526,7 @@ func processJournalAndCollectRecords(t *testing.T, journalData []byte) []testRec
 		t.FailNow()
 	}
 
-	_, err := processJournalRecords(ctx, bytes.NewReader(journalData), true, 0, func(offset int64, rec journalRec) error {
+	_, err := processJournalRecords(ctx, "", bytes.NewReader(journalData), true, 0, func(offset int64, rec journalRec) error {
 		records = append(records, testRecord{hash: rec.address, kind: rec.kind})
 		return nil
 	}, warnCb)

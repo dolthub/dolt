@@ -17,6 +17,8 @@
 package gitauth
 
 import (
+	"errors"
+	"os"
 	"os/exec"
 	"syscall"
 )
@@ -25,4 +27,19 @@ import (
 // SSH needs /dev/tty to prompt for credentials; without one it exits with an auth error.
 func CmdSetsid(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+}
+
+// killProcessGroup SIGKILLs the group |cmd| leads. CmdSetsid made the child a
+// group leader, so its pid is also the group id.
+func killProcessGroup(cmd *exec.Cmd) error {
+	if cmd.Process == nil {
+		return os.ErrProcessDone
+	}
+	err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	if errors.Is(err, syscall.ESRCH) {
+		// Report an empty group the way Process.Kill does, so exec does not treat a
+		// finished command as a failed cancellation.
+		return os.ErrProcessDone
+	}
+	return err
 }

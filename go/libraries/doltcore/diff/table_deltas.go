@@ -147,13 +147,19 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot doltdb.RootValue) (del
 	toVRW := toRoot.VRW()
 	toNS := toRoot.NodeStore()
 
+	// GetForeignKeyCollection returns a copy of the collection on every call, so read it once per root.
+	fromFkc, err := fromRoot.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+	toFkc, err := toRoot.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	fromDeltas := make([]TableDelta, 0)
 	err = fromRoot.IterTables(ctx, func(name doltdb.TableName, tbl *doltdb.Table, sch schema.Schema) (stop bool, err error) {
-		c, err := fromRoot.GetForeignKeyCollection(ctx)
-		if err != nil {
-			return true, err
-		}
-		fks, _ := c.KeysForTable(name)
+		fks, _ := fromFkc.KeysForTable(name)
 		parentSchs, err := getFkParentSchs(ctx, fromRoot, fks...)
 		if err != nil {
 			return false, err
@@ -193,12 +199,7 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot doltdb.RootValue) (del
 
 	toDeltas := make([]TableDelta, 0)
 	err = toRoot.IterTables(ctx, func(name doltdb.TableName, tbl *doltdb.Table, sch schema.Schema) (stop bool, err error) {
-		c, err := toRoot.GetForeignKeyCollection(ctx)
-		if err != nil {
-			return true, err
-		}
-
-		fks, _ := c.KeysForTable(name)
+		fks, _ := toFkc.KeysForTable(name)
 		parentSchs, err := getFkParentSchs(ctx, toRoot, fks...)
 		if err != nil {
 			return false, err
@@ -470,17 +471,11 @@ func (td TableDelta) HasSchemaChanged(ctx context.Context) (bool, error) {
 		return true, nil
 	}
 
-	fromAutoInc, err := td.FromTable.GetAutoIncrementValue(ctx)
+	aiChanged, err := td.hasAutoIncrementChanged(ctx)
 	if err != nil {
 		return false, err
 	}
-
-	toAutoInc, err := td.ToTable.GetAutoIncrementValue(ctx)
-	if err != nil {
-		return false, err
-	}
-
-	if fromAutoInc != toAutoInc {
+	if aiChanged {
 		return true, nil
 	}
 
@@ -495,6 +490,18 @@ func (td TableDelta) HasSchemaChanged(ctx context.Context) (bool, error) {
 	}
 
 	return !fromSchemaHash.Equal(toSchemaHash), nil
+}
+
+func (td TableDelta) hasAutoIncrementChanged(ctx context.Context) (bool, error) {
+	fromAutoInc, err := td.FromTable.GetAutoIncrementValue(ctx)
+	if err != nil {
+		return false, err
+	}
+	toAutoInc, err := td.ToTable.GetAutoIncrementValue(ctx)
+	if err != nil {
+		return false, err
+	}
+	return fromAutoInc != toAutoInc, nil
 }
 
 func (td TableDelta) HasChangesIgnoringColumnTags(ctx context.Context) (bool, error) {
@@ -523,6 +530,14 @@ func (td TableDelta) HasChangesIgnoringColumnTags(ctx context.Context) (bool, er
 			return false, err
 		}
 		if !fromRowDataHash.Equal(toRowDataHash) {
+			return true, nil
+		}
+
+		aiChanged, err := td.hasAutoIncrementChanged(ctx)
+		if err != nil {
+			return false, err
+		}
+		if aiChanged {
 			return true, nil
 		}
 
@@ -594,7 +609,7 @@ func (td TableDelta) HasDataChanged(ctx context.Context) (bool, error) {
 }
 
 func (td TableDelta) HasPrimaryKeySetChanged() bool {
-	return !schema.ArePrimaryKeySetsDiffable(td.FromSch, td.ToSch)
+	return schema.ComparePrimaryKeys(td.FromSch, td.ToSch) != schema.PrimaryKeysSameTags
 }
 
 func (td TableDelta) HasChanges() (bool, error) {

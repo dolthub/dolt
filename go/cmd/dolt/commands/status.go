@@ -134,7 +134,9 @@ func createPrintData(queryist cli.Queryist, sqlCtx *sql.Context, showIgnoredTabl
 		branchName = brName
 	} else if useDb, hasUseDb := cliCtx.GlobalArgs().GetValue(UseDbFlag); hasUseDb {
 		_, branchName = doltdb.SplitRevisionDbName(useDb)
-	} else {
+	}
+
+	if branchName == "" {
 		var err error
 		branchName, err = getActiveBranchName(sqlCtx, queryist)
 		if err != nil {

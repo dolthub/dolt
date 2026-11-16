@@ -1,5 +1,6 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
+load $BATS_TEST_DIRNAME/helper/criss-cross.bash
 
 setup() {
     setup_common
@@ -1108,4 +1109,15 @@ export NO_COLOR=1
     [[ "$output" =~ "A table for br1" ]] || false
     ! [[ "$output" =~ "Initialize data repository" ]] || false
     ! [[ "$output" =~ "commit 1 br2" ]] || false
+}
+
+@test "log: A...B with several merge bases leaves out every merge base" {
+    criss_cross
+
+    # Like git log branchA...branchB, list only the commits that one of branchA and branchB has and the other does not.
+    run dolt log --oneline branchA...branchB
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "mergeA" ]] || false
+    [[ "$output" =~ "mergeB" ]] || false
 }

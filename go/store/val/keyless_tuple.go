@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/binary"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/zeebo/xxh3"
 
 	"github.com/dolthub/dolt/go/store/pool"
@@ -75,18 +76,20 @@ var KeylessCardType = Type{
 	Nullable: false,
 }
 
-type keylessCompare struct{}
+type keylessCompare struct {
+	vs ValueStore
+}
 
 var _ TupleComparator = &keylessCompare{}
 
 // Compare implements TupleComparator
-func (k *keylessCompare) Compare(ctx context.Context, left, right Tuple, desc *TupleDesc) int {
-	return bytes.Compare(left, right)
+func (k *keylessCompare) Compare(ctx context.Context, left, right Tuple, desc *TupleDesc) (int, error) {
+	return bytes.Compare(left, right), nil
 }
 
 // CompareValues implements TupleComparator
-func (k *keylessCompare) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) int {
-	return compare(typ, left, right)
+func (k *keylessCompare) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) (int, error) {
+	return compare(ctx, typ, left, right, k.vs)
 }
 
 // Prefix implements TupleComparator
@@ -101,4 +104,14 @@ func (k *keylessCompare) Suffix(n int) TupleComparator {
 
 func (k *keylessCompare) Validated(types []Type) TupleComparator {
 	return k
+}
+
+// WithValueStore implements TupleComparator
+func (k *keylessCompare) WithValueStore(vs ValueStore) TupleComparator {
+	return &keylessCompare{vs: vs}
+}
+
+// Order implements TupleComparator
+func (k *keylessCompare) Order(i int) sql.IndexColumnOrder {
+	return sql.IndexColumnOrder{}
 }

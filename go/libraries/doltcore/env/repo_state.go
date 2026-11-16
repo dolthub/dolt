@@ -54,7 +54,7 @@ type RepoStateReadWriter[C doltdb.Context] interface {
 
 // RemoteDbProvider is an interface for getting a database from a remote
 type RemoteDbProvider interface {
-	GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r Remote, withCaching bool) (*doltdb.DoltDB, error)
+	GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r Remote) (*doltdb.DoltDB, error)
 }
 type DbData[C doltdb.Context] struct {
 	Ddb *doltdb.DoltDB
@@ -232,6 +232,22 @@ func (rs *RepoState) AddRemote(r Remote) {
 
 func (rs *RepoState) RemoveRemote(r Remote) {
 	rs.Remotes.Delete(r.Name)
+	UnsetRemoteUpstream(rs.Branches, r.Name)
+}
+
+// UnsetRemoteUpstream removes branch tracking configuration for |remoteName|.
+//
+// Any branch in |branches| tracking |remoteName| is deleted from the map.
+// If |branches| is nil, UnsetRemoteUpstream does nothing.
+func UnsetRemoteUpstream(branches *concurrentmap.Map[string, BranchConfig], remoteName string) {
+	if branches == nil {
+		return
+	}
+	for name, cfg := range branches.Snapshot() {
+		if cfg.Remote == remoteName {
+			branches.Delete(name)
+		}
+	}
 }
 
 func (rs *RepoState) AddBackup(r Remote) {

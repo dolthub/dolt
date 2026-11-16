@@ -10,6 +10,20 @@ teardown() {
     teardown_common
 }
 
+setup_nonlocal_transaction_tables() {
+  dolt sql <<SQL
+  CREATE TABLE aliased_table (pk INT PRIMARY KEY, v INT);
+  INSERT INTO aliased_table VALUES (1, 10), (2, 20);
+  CALL DOLT_COMMIT('-Am', 'set up main');
+  CALL DOLT_CHECKOUT('-b', 'other');
+  CREATE TABLE local_table (pk INT PRIMARY KEY, v INT);
+  INSERT INTO local_table VALUES (1, 100), (2, 200);
+  INSERT INTO dolt_nonlocal_tables(table_name, target_ref, ref_table, options) VALUES
+      ('nonlocal_table', 'main', 'aliased_table', 'immediate');
+  CALL DOLT_COMMIT('-Am', 'set up other');
+SQL
+}
+
 @test "nonlocal: branch name reflects the working set of the referenced branch" {
   dolt checkout -b other
   dolt sql <<SQL
@@ -190,7 +204,7 @@ SQL
   [[ "$output" =~ "table not found" ]] || false
 }
 
-@test "nonlocal: a transaction that tries to update multiple branches fails as expected" {
+@test "nonlocal: a transaction commits inserts to local and nonlocal branches" {
   run dolt sql <<SQL
   CREATE TABLE aliased_table (pk char(8) PRIMARY KEY);
   CALL DOLT_CHECKOUT('-b', 'other');
@@ -202,8 +216,108 @@ SQL
   INSERT INTO nonlocal_table VALUES ("eesekkgo");
   COMMIT;
 SQL
-  [ "$status" -eq 1 ]
-  [[ "$output" =~ "Cannot commit changes on more than one branch / database" ]] || false
+  [ "$status" -eq 0 ]
+
+  # Read in new sessions to verify both working sets were persisted.
+  run dolt --branch other sql -r csv -q 'SELECT * FROM local_table;'
+  [ "$status" -eq 0 ]
+  [ "$output" = $'pk\namzmapqt' ]
+
+  run dolt --branch other sql -r csv -q 'SELECT * FROM nonlocal_table;'
+  [ "$status" -eq 0 ]
+  [ "$output" = $'pk\neesekkgo' ]
+
+  run dolt --branch main sql -r csv -q 'SELECT * FROM aliased_table;'
+  [ "$status" -eq 0 ]
+  [ "$output" = $'pk\neesekkgo' ]
+}
+
+@test "nonlocal: a transaction commits updates and deletes to local and nonlocal branches" {
+  setup_nonlocal_transaction_tables
+
+  run dolt --branch other sql <<SQL
+  START TRANSACTION;
+  UPDATE local_table SET v = v + 1 WHERE pk = 1;
+  UPDATE nonlocal_table SET v = v + 5 WHERE pk = 1;
+  DELETE FROM local_table WHERE pk = 2;
+  DELETE FROM nonlocal_table WHERE pk = 2;
+  COMMIT;
+SQL
+  [ "$status" -eq 0 ]
+
+  run dolt --branch other sql -r csv -q 'SELECT * FROM local_table ORDER BY pk;'
+  [ "$status" -eq 0 ]
+  [ "$output" = $'pk,v\n1,101' ]
+
+  run dolt --branch other sql -r csv -q 'SELECT * FROM nonlocal_table ORDER BY pk;'
+  [ "$status" -eq 0 ]
+  [ "$output" = $'pk,v\n1,15' ]
+
+  run dolt --branch main sql -r csv -q 'SELECT * FROM aliased_table ORDER BY pk;'
+  [ "$status" -eq 0 ]
+  [ "$output" = $'pk,v\n1,15' ]
+
+  # The alias must not update the same-named table on the local branch.
+  run dolt --branch other sql -r csv -q 'SELECT * FROM aliased_table ORDER BY pk;'
+  [ "$status" -eq 0 ]
+  [ "$output" = $'pk,v\n1,10\n2,20' ]
+}
+
+@test "nonlocal: savepoint rollback preserves earlier changes on both branches" {
+  setup_nonlocal_transaction_tables
+
+  run dolt --branch other sql <<SQL
+  START TRANSACTION;
+  UPDATE local_table SET v = 101 WHERE pk = 1;
+  UPDATE nonlocal_table SET v = 11 WHERE pk = 1;
+  SAVEPOINT both_branches;
+  DELETE FROM local_table WHERE pk = 1;
+  DELETE FROM nonlocal_table WHERE pk = 1;
+  INSERT INTO local_table VALUES (3, 300);
+  INSERT INTO nonlocal_table VALUES (3, 30);
+  ROLLBACK TO SAVEPOINT both_branches;
+  COMMIT;
+SQL
+  [ "$status" -eq 0 ]
+
+  run dolt --branch other sql -r csv -q 'SELECT * FROM local_table ORDER BY pk;'
+  [ "$status" -eq 0 ]
+  [ "$output" = $'pk,v\n1,101\n2,200' ]
+
+  run dolt --branch main sql -r csv -q 'SELECT * FROM aliased_table ORDER BY pk;'
+  [ "$status" -eq 0 ]
+  [ "$output" = $'pk,v\n1,11\n2,20' ]
+}
+
+@test "nonlocal: dolt_commit_all commits local and nonlocal branch heads" {
+  setup_nonlocal_transaction_tables
+
+  run dolt --branch other sql <<SQL
+  START TRANSACTION;
+  UPDATE local_table SET v = 101 WHERE pk = 1;
+  UPDATE nonlocal_table SET v = 11 WHERE pk = 1;
+  CALL DOLT_COMMIT_ALL('-am', 'update both branches');
+SQL
+  [ "$status" -eq 0 ]
+
+  # Verify the branch HEADs, not just their working sets.
+  run dolt --branch other sql -r csv -q "SELECT * FROM local_table AS OF 'HEAD' ORDER BY pk;"
+  [ "$status" -eq 0 ]
+  [ "$output" = $'pk,v\n1,101\n2,200' ]
+
+  run dolt --branch main sql -r csv -q "SELECT * FROM aliased_table AS OF 'HEAD' ORDER BY pk;"
+  [ "$status" -eq 0 ]
+  [ "$output" = $'pk,v\n1,11\n2,20' ]
+
+  for branch in main other; do
+    run dolt --branch "$branch" sql -r csv -q 'SELECT message FROM dolt_log LIMIT 1;'
+    [ "$status" -eq 0 ]
+    [ "$output" = $'message\nupdate both branches' ]
+
+    run dolt --branch "$branch" sql -r csv -q 'SELECT COUNT(*) AS dirty_tables FROM dolt_status;'
+    [ "$status" -eq 0 ]
+    [ "$output" = $'dirty_tables\n0' ]
+  done
 }
 
 @test "nonlocal: test foreign keys" {

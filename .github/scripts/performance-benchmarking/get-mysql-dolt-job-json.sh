@@ -1,19 +1,19 @@
-#!/bin/sh
+#!/bin/bash
 
 set -e
 
 if [ "$#" -lt 12 ]; then
-    echo  "Usage: ./get-job-json.sh <jobname> <fromServer> <fromVersion> <toServer> <toVersion> <timeprefix> <actorprefix> <format> <issueNumber> <initBigRepo> <nomsBinFormat> <sysbenchTestTime> <withTpcc>"
+    echo  "Usage: ./get-job-json.sh <jobName> <fromServer> <fromVersion> <toServer> <toVersion> <timePrefix> <actorPrefix> <format> <issueNumber> <initBigRepo> <nomsBinFormat> <sysbenchTestTime> <withTpcc>"
     exit 1
 fi
 
-jobname="$1"
+jobName="$1"
 fromServer="$2"
 fromVersion="$3"
 toServer="$4"
 toVersion="$5"
-timeprefix="$6"
-actorprefix="$7"
+timePrefix="$6"
+actorPrefix="$7"
 format="$8"
 issueNumber="$9"
 initBigRepo="${10}"
@@ -44,26 +44,233 @@ if [ -n "$TO_PROFILE_KEY" ]; then
   toProfileKey="\"--to-profile-key=$TO_PROFILE_KEY\","
 fi
 
-readTests="('oltp_read_only', 'oltp_point_select', 'select_random_points', 'select_random_ranges', 'covering_index_scan', 'index_scan', 'table_scan', 'groupby_scan', 'index_join_scan', 'types_table_scan', 'index_join')"
-medianLatencyMultiplierReadsQuery="select f.test_name as read_tests, f.server_name, f.server_version, avg(f.latency_percentile) as from_latency_median, t.server_name, t.server_version, avg(t.latency_percentile) as to_latency_median, ROUND(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision) as multiplier from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name in $readTests group by f.test_name;"
-meanMultiplierReadsQuery="select round(avg(multipliers), $precision) as reads_mean_multiplier from (select (round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)) as multipliers from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name in $readTests group by f.test_name)"
+readTests="(
+'oltp_read_only',
+'oltp_point_select',
+'select_random_points',
+'select_random_ranges',
+'covering_index_scan',
+'index_scan',
+'table_scan',
+'groupby_scan',
+'index_join_scan',
+'types_table_scan',
+'index_join'
+)"
 
-writeTests="('oltp_read_write', 'oltp_update_index', 'oltp_update_non_index', 'oltp_insert', 'oltp_write_only', 'oltp_delete_insert', 'types_delete_insert')"
-medianLatencyMultiplierWritesQuery="select f.test_name as write_tests, f.server_name, f.server_version, avg(f.latency_percentile) as from_latency_median, t.server_name, t.server_version, avg(t.latency_percentile) as to_latency_median, ROUND(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision) as multiplier from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name in $writeTests group by f.test_name;"
-meanMultiplierWritesQuery="select round(avg(multipliers), $precision) as writes_mean_multiplier from (select (round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)) as multipliers from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name in $writeTests group by f.test_name)"
+medianLatencyMultiplierReadsQuery="with
+result(test_name, from_server, from_version, from_latency, to_server, to_version, to_latency) as (
+  select
+    f.test_name,
+    f.server_name,
+    f.server_version,
+    avg(f.latency_percentile),
+    t.server_name,
+    t.server_version,
+    avg(t.latency_percentile)
+  from
+    from_results as f join to_results as t
+    on
+      f.test_name = t.test_name
+  where
+    f.test_name in $readTests
+  group by
+    f.test_name
+)
+select
+  test_name as read_tests,
+  from_server,
+  from_version,
+  from_latency,
+  to_server,
+  to_version,
+  to_latency,
+  round(to_latency / (from_latency + .000001), $precision) as multiplier
+from
+  result;"
 
-meanMultiplierOverallQuery="select round(avg(multipliers), $precision) as overall_mean_multiplier from (select (round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)) as multipliers from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name != 'bulk_insert' group by f.test_name)"
+meanMultiplierReadsQuery="with
+result(multiplier) as (
+  select
+    round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)
+  from
+    from_results as f join to_results as t
+    on
+      f.test_name = t.test_name
+  where
+    f.test_name in $readTests
+  group by
+    f.test_name
+)
+select
+  round(avg(multiplier), $precision) as reads_mean_multiplier
+from
+  result;"
 
-tpccLatencyQuery="select f.test_name as tpcc_latency, f.server_name, f.server_version, avg(f.latency_percentile) as from_latency_p95, t.server_name, t.server_version, avg(t.latency_percentile) as to_latency_p95, ROUND(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision) as multiplier from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name LIKE '$tpccRegex' group by f.test_name;"
-tpccTpsQuery="select f.test_name as tpcc_tps, f.server_name, f.server_version, avg(f.sql_transactions_per_second) as from_tps, t.test_name as test_name, t.server_name, t.server_version, avg(t.sql_transactions_per_second) as to_tps, ROUND(avg(f.sql_transactions_per_second) / (avg(t.sql_transactions_per_second) + .000001), $precision) as multiplier from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name LIKE 'tpcc%' group by f.test_name;"
-tpccTpsMultiplierQuery="select ROUND(avg(f.sql_transactions_per_second) / (avg(t.sql_transactions_per_second) + .000001), $precision) as tpcc_tps_multiplier from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name like 'tpcc%' group by f.test_name"
+writeTests="(
+'oltp_read_write',
+'oltp_update_index',
+'oltp_update_non_index',
+'oltp_insert',
+'oltp_write_only',
+'oltp_delete_insert',
+'types_delete_insert'
+)"
+
+medianLatencyMultiplierWritesQuery="with
+result(test_name, from_server, from_version, from_latency, to_server, to_version, to_latency) as (
+  select
+    f.test_name,
+    f.server_name,
+    f.server_version,
+    avg(f.latency_percentile),
+    t.server_name,
+    t.server_version,
+    avg(t.latency_percentile)
+  from
+    from_results as f join to_results as t
+    on
+      f.test_name = t.test_name
+  where
+    f.test_name in $writeTests
+  group by
+    f.test_name
+)
+select
+  test_name as write_tests,
+  from_server,
+  from_version,
+  from_latency,
+  to_server,
+  to_version,
+  to_latency,
+  round(to_latency / (from_latency + .000001), $precision) as multiplier
+from
+  result;"
+
+meanMultiplierWritesQuery="with
+result(multiplier) as (
+  select
+    round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)
+  from
+    from_results as f join to_results as t
+    on
+      f.test_name = t.test_name
+  where
+    f.test_name in $writeTests
+  group by
+    f.test_name
+)
+select
+  round(avg(multiplier), $precision) as writes_mean_multiplier
+from
+  result;"
+
+meanMultiplierOverallQuery="with
+result(multiplier) as (
+  select
+    round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)
+  from
+    from_results as f join to_results as t
+    on
+      f.test_name = t.test_name
+  where
+    f.test_name != 'bulk_insert'
+  group by
+    f.test_name
+)
+select
+  round(avg(multiplier), $precision) as overall_mean_multiplier
+from
+  result;"
+
+tpccLatencyQuery="with
+result(test_name, from_latency, to_latency) as (
+  select
+    f.test_name,
+    avg(f.latency_percentile),
+    avg(t.latency_percentile)
+  from
+    from_results as f join to_results as t on f.test_name = t.test_name
+  where
+    f.test_name LIKE '$tpccRegex'
+  group by
+    f.test_name
+)
+select
+  test_name as tpcc_latency,
+  from_latency as from_latency_p95,
+  to_latency as to_latency_p95,
+  round(to_latency / (from_latency + .000001), $precision) as multiplier
+from
+  result;"
+
+tpccTpsQuery="with
+result(test_name, from_server_name, from_server_version, from_tps, to_server_name, to_server_version, to_tps) as (
+  select
+    f.test_name,
+    f.server_name,
+    f.server_version,
+    avg(f.sql_transactions_per_second),
+    t.server_name,
+    t.server_version,
+    avg(t.sql_transactions_per_second)
+  from
+    from_results as f join to_results as t
+    on
+      f.test_name = t.test_name
+    where
+      f.test_name LIKE '$tpccRegex'
+  group by
+    f.test_name
+)
+select
+  test_name,
+  from_server_name,
+  from_server_version,
+  from_tps,
+  to_server_name,
+  to_server_version,
+  to_tps,
+  round(from_tps / (to_tps + .000001), $precision) as percent_change
+from
+  result;"
+
+tpccTpsMultiplierQuery="with
+result(from_tps, to_tps) as (
+  select
+    avg(f.sql_transactions_per_second),
+    avg(t.sql_transactions_per_second)
+  from
+    from_results as f join to_results as t
+    on
+      f.test_name = t.test_name
+  where
+    f.test_name like '$tpccRegex'
+  group by
+    f.test_name
+)
+select
+  round(from_tps / (to_tps + .000001), $precision) as tpcc_tps_multiplier
+from
+  result;"
+
+# Replace new lines with spaces, so it is valid JSON later
+medianLatencyMultiplierReadsQuery=${medianLatencyMultiplierReadsQuery//$'\n'/ }
+meanMultiplierReadsQuery=${meanMultiplierReadsQuery//$'\n'/ }
+medianLatencyMultiplierWritesQuery=${medianLatencyMultiplierWritesQuery//$'\n'/ }
+meanMultiplierWritesQuery=${meanMultiplierWritesQuery//$'\n'/ }
+meanMultiplierOverallQuery=${meanMultiplierOverallQuery//$'\n'/ }
+tpccLatencyQuery=${tpccLatencyQuery//$'\n'/ }
+tpccTpsQuery=${tpccTpsQuery//$'\n'/ }
+tpccTpsMultiplierQuery=${tpccTpsMultiplierQuery//$'\n'/ }
 
 echo '
 {
   "apiVersion": "batch/v1",
   "kind": "Job",
   "metadata": {
-    "name": "'$jobname'",
+    "name": "'$jobName'",
     "namespace": "performance-benchmarking"
   },
   "spec": {
@@ -111,8 +318,8 @@ echo '
               '"$toProfileKey"'
               "--bucket=performance-benchmarking-github-actions-results",
               "--region=us-west-2",
-              "--results-dir='$timeprefix'",
-              "--results-prefix='$actorprefix'",
+              "--results-dir='$timePrefix'",
+              "--results-prefix='$actorPrefix'",
               '"$sysbenchTestTime"'
               '"$withTpcc"'
               '"$initBigRepo"'

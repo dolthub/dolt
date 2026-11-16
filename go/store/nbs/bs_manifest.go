@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	manifestFile = "manifest"
+	manifestFile = blobstore.ManifestKey
 )
 
 type blobstoreManifest struct {
@@ -34,6 +34,12 @@ type blobstoreManifest struct {
 
 func (bsm blobstoreManifest) Name() string {
 	return bsm.bs.Path()
+}
+
+// Close implements manifest. The blobstore is owned by the caller, so there is
+// nothing for the manifest to release.
+func (bsm blobstoreManifest) Close() error {
+	return nil
 }
 
 func manifestVersionAndContents(ctx context.Context, bs blobstore.Blobstore) (string, manifestContents, error) {
@@ -112,7 +118,7 @@ func updateBSWithChecker(ctx context.Context, behavior dherrors.FatalBehavior, b
 			return manifestContents{}, err
 		}
 
-		_, err = bs.CheckAndPut(ctx, ver, manifestFile, int64(buffer.Len()), buffer)
+		_, err = bs.CheckAndPutManifest(ctx, ver, buffer.Bytes())
 		if err != nil {
 			if !blobstore.IsCheckAndPutError(err) {
 				return manifestContents{}, err

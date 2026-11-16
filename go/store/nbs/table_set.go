@@ -377,7 +377,7 @@ func (ts *tableSet) flatten(ctx context.Context) (*tableSet, error) {
 	return flattened, nil
 }
 
-func (ts *tableSet) insertIntoChunkSourceSet(ctx context.Context, css chunkSourceSet, specToRead tableSpec, existing chunkSourceSet, stats *Stats) error {
+func (ts *tableSet) insertIntoChunkSourceSet(ctx context.Context, css chunkSourceSet, specToRead tableSpec, existing chunkSourceSet, opts openOpts, stats *Stats) error {
 	fileHash := specToRead.name
 	if css[fileHash] != nil {
 		return nil
@@ -405,7 +405,7 @@ func (ts *tableSet) insertIntoChunkSourceSet(ctx context.Context, css chunkSourc
 		return nil
 	}
 
-	cs, err := ts.p.Open(ctx, fileHash, specToRead.chunkCount, stats)
+	cs, err := ts.p.Open(ctx, fileHash, specToRead.chunkCount, opts, stats)
 	if err != nil {
 		return err
 	}
@@ -421,7 +421,10 @@ func (ts *tableSet) insertIntoChunkSourceSet(ctx context.Context, css chunkSourc
 // For any files which appear in |novel| or |upstream|, this function
 // will return clones of the chunk sources, instead of opening them
 // anew.
-func (ts *tableSet) openForAdd(ctx context.Context, files map[hash.Hash]uint32, existing chunkSourceSet, stats *Stats) (chunkSourceSet, error) {
+//
+// |opts| applies to the files this actually opens. A clone of an
+// already-open source is whatever it was opened as.
+func (ts *tableSet) openForAdd(ctx context.Context, files map[hash.Hash]uint32, existing chunkSourceSet, opts openOpts, stats *Stats) (chunkSourceSet, error) {
 	ret := make(chunkSourceSet)
 	cleanup := func() {
 		for _, source := range ret {
@@ -466,7 +469,7 @@ func (ts *tableSet) openForAdd(ctx context.Context, files map[hash.Hash]uint32, 
 			continue
 		}
 		eg.Go(func() error {
-			cs, err := ts.p.Open(ctx, fileId, chunkCount, stats)
+			cs, err := ts.p.Open(ctx, fileId, chunkCount, opts, stats)
 			if err != nil {
 				return err
 			}
@@ -480,6 +483,38 @@ func (ts *tableSet) openForAdd(ctx context.Context, files map[hash.Hash]uint32, 
 	if err != nil {
 		cleanup()
 		return nil, err
+	}
+	return ret, nil
+}
+
+// cloneOpenSources returns clones of the chunkSources which |ts| already has
+// open for |specs|. Specs which |ts| does not have open are absent from the
+// result, leaving the caller to open them itself. The caller owns closing
+// every source in the returned set.
+//
+// A clone shares the open file handle and the parsed index with |ts| instead
+// of reading and parsing the index again. For a persister backed by a
+// blobstore that cannot serve cheap ranged reads, opening a table file
+// downloads the whole file to a local spool, so cloning avoids the transfer
+// entirely.
+func (ts *tableSet) cloneOpenSources(specs []tableSpec) (chunkSourceSet, error) {
+	ret := make(chunkSourceSet, len(specs))
+	for _, spec := range specs {
+		if _, ok := ret[spec.name]; ok {
+			continue
+		}
+		src, ok := ts.upstream[spec.name]
+		if !ok {
+			if src, ok = ts.novel[spec.name]; !ok {
+				continue
+			}
+		}
+		cloned, err := src.clone()
+		if err != nil {
+			ret.close()
+			return nil, err
+		}
+		ret[spec.name] = cloned
 	}
 	return ret, nil
 }
@@ -535,7 +570,7 @@ func (ts *tableSet) rebase(ctx context.Context, specs []tableSpec, srcs chunkSou
 			} else if existing, ok := srcs[spec.name]; ok {
 				cs, err = existing.clone()
 			} else {
-				cs, err = ts.p.Open(ctx, spec.name, spec.chunkCount, stats)
+				cs, err = ts.p.Open(ctx, spec.name, spec.chunkCount, openOpts{}, stats)
 			}
 			if err != nil {
 				return err

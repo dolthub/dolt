@@ -123,11 +123,43 @@ func (f *archiveFooter) metadataSpan() byteSpan {
 	return byteSpan{offset: f.fileSize - f.actualFooterSize() - uint64(f.metadataSize), length: uint64(f.metadataSize)}
 }
 
+// archiveIndexSize returns the size in bytes of the index of an archive holding
+// |chunkCount| chunks across |byteSpanCount| byte spans. Every entry in the four
+// sections of the index is fixed width.
+func archiveIndexSize(byteSpanCount, chunkCount uint32) uint64 {
+	return uint64(byteSpanCount)*uint64Size + // SpanIndex
+		uint64(chunkCount)*uint64Size + // Prefix Map
+		uint64(chunkCount)*2*uint32Size + // ChunkReferences
+		uint64(chunkCount)*hash.SuffixLen // Suffixes
+}
+
+// validate checks the footer's arithmetic against the size of the file it came
+// out of. The spans above are computed by subtracting these numbers from the
+// file size, so numbers which do not add up underflow into offsets near the top
+// of the uint64 range.
+//
+// O(1), and runs on every archive open.
+func (f *archiveFooter) validate() error {
+	if want := archiveIndexSize(f.byteSpanCount, f.chunkCount); want != f.indexSize {
+		return fmt.Errorf("%w: %d chunks in %d byte spans need a %d byte index, but the footer says the index is %d bytes",
+			ErrCorruptArchiveIndex, f.chunkCount, f.byteSpanCount, want, f.indexSize)
+	}
+	// The data section is what is left over, so this is what keeps dataSpan
+	// from underflowing.
+	if tail := f.actualFooterSize() + uint64(f.metadataSize) + f.indexSize; tail > f.fileSize {
+		return fmt.Errorf("%w: index, metadata and footer come to %d bytes, which does not fit in a %d byte file",
+			ErrCorruptArchiveIndex, tail, f.fileSize)
+	}
+	return nil
+}
+
 func newArchiveMetadata(ctx context.Context, reader tableReaderAt, name hash.Hash, fileSize uint64, q MemoryQuotaProvider, stats *Stats) (*ArchiveMetadata, error) {
-	aRdr, err := newArchiveReader(ctx, reader, name, fileSize, q, stats)
+	aRdr, err := newArchiveReader(ctx, reader, name, fileSize, q, openOpts{}, stats)
 	if err != nil {
 		return nil, err
 	}
+	// The caller closes |reader|.
+	defer aRdr.indexReader.Close()
 
 	if aRdr.footer.formatVersion > archiveFormatVersionMax {
 		return nil, ErrInvalidFormatVersion
@@ -190,7 +222,7 @@ func newArchiveMetadata(ctx context.Context, reader tableReaderAt, name hash.Has
 	}, nil
 }
 
-func newArchiveReaderFromFooter(ctx context.Context, reader tableReaderAt, name hash.Hash, fileSz uint64, footer []byte, q MemoryQuotaProvider, stats *Stats) (archiveReader, error) {
+func newArchiveReaderFromFooter(ctx context.Context, reader tableReaderAt, name hash.Hash, fileSz uint64, footer []byte, q MemoryQuotaProvider, opts openOpts, stats *Stats) (archiveReader, error) {
 	if uint64(len(footer)) != archiveFooterSize {
 		return archiveReader{}, errors.New("runtime error: invalid footer.")
 	}
@@ -200,19 +232,19 @@ func newArchiveReaderFromFooter(ctx context.Context, reader tableReaderAt, name 
 		return archiveReader{}, err
 	}
 
-	return buildArchiveReader(ctx, reader, ftr, q, stats)
+	return buildArchiveReader(ctx, reader, ftr, q, opts, stats)
 }
 
-func newArchiveReader(ctx context.Context, reader tableReaderAt, name hash.Hash, fileSize uint64, q MemoryQuotaProvider, stats *Stats) (archiveReader, error) {
+func newArchiveReader(ctx context.Context, reader tableReaderAt, name hash.Hash, fileSize uint64, q MemoryQuotaProvider, opts openOpts, stats *Stats) (archiveReader, error) {
 	footer, err := loadFooter(ctx, reader, name, fileSize, stats)
 	if err != nil {
 		return archiveReader{}, fmt.Errorf("Failed to loadFooter: %w", err)
 	}
 
-	return buildArchiveReader(ctx, reader, footer, q, stats)
+	return buildArchiveReader(ctx, reader, footer, q, opts, stats)
 }
 
-func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiveFooter, q MemoryQuotaProvider, stats *Stats) (archiveReader, error) {
+func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiveFooter, q MemoryQuotaProvider, opts openOpts, stats *Stats) (archiveReader, error) {
 	dictCache, err := lru.New2Q[uint32, *DecompBundle](256)
 	if err != nil {
 		return archiveReader{}, err
@@ -236,12 +268,116 @@ func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiv
 		}
 	}
 
-	return archiveReader{
+	ar := archiveReader{
 		reader:      reader,
 		indexReader: indexRdr,
 		footer:      footer,
 		dictCache:   dictCache,
-	}, nil
+	}
+
+	if opts.deepValidate {
+		if err = ar.deepValidate(); err != nil {
+			_ = indexRdr.Close()
+			return archiveReader{}, err
+		}
+	}
+
+	return ar, nil
+}
+
+// deepValidate makes a full pass over the archive's index, checking what the
+// read path assumes of it but does not verify. An archive has no checksum over
+// its index, so this is as far as we can go short of decompressing every chunk.
+//
+// O(chunkCount + byteSpanCount), and reads the whole index, which for a memory
+// mapped index faults all of it in. Only runs when an Open asks for it with
+// [openOpts.deepValidate].
+func (ar archiveReader) deepValidate() error {
+	if err := ar.checkByteSpans(); err != nil {
+		return err
+	}
+	if err := ar.checkPrefixes(); err != nil {
+		return err
+	}
+	return ar.checkChunkRefs()
+}
+
+// checkByteSpans walks the SpanIndex, whose entries are the end offset of each
+// byte span. Byte spans are never empty and tile the data section, so the end
+// offsets strictly increase and the last one is the length of the data section.
+// The read path subtracts one entry from the next for a span's length, which an
+// entry that does not advance underflows.
+func (ar archiveReader) checkByteSpans() error {
+	var prev uint64
+	for i := uint32(1); i <= ar.footer.byteSpanCount; i++ {
+		end := ar.indexReader.getSpanIndex(i)
+		if end <= prev {
+			return fmt.Errorf("%w: byte span %d of %d ends at %d, which does not follow %d",
+				ErrCorruptArchiveIndex, i, ar.footer.byteSpanCount, end, prev)
+		}
+		prev = end
+	}
+	if data := ar.footer.dataSpan(); prev != data.length {
+		return fmt.Errorf("%w: %d byte spans cover %d bytes, but the data section is %d bytes",
+			ErrCorruptArchiveIndex, ar.footer.byteSpanCount, prev, data.length)
+	}
+	return nil
+}
+
+// checkPrefixes checks that the Prefix Map is sorted, which is what makes the
+// search in [archiveReader.findIndex] correct. Distinct chunks can share a
+// prefix, which findIndex scans forward over.
+func (ar archiveReader) checkPrefixes() error {
+	var prev uint64
+	for i := uint32(0); i < ar.footer.chunkCount; i++ {
+		prefix := ar.indexReader.getPrefix(i)
+		if prefix < prev {
+			return fmt.Errorf("%w: prefix %d of %d is out of order: %016x follows %016x",
+				ErrCorruptArchiveIndex, i, ar.footer.chunkCount, prefix, prev)
+		}
+		prev = prefix
+	}
+	return nil
+}
+
+// checkChunkRefs checks that every chunk names byte spans which exist. An id
+// past the end of the SpanIndex reads as 0 in getByteSpanByID, which underflows
+// into an enormous length.
+func (ar archiveReader) checkChunkRefs() error {
+	for i := uint32(0); i < ar.footer.chunkCount; i++ {
+		dict, data := ar.indexReader.getChunkRef(i)
+		// A chunk's data is never the null byte span, but its dictionary
+		// is whenever the chunk does not have one.
+		if data == 0 || data > ar.footer.byteSpanCount {
+			return fmt.Errorf("%w: chunk %d of %d names data byte span %d, of %d",
+				ErrCorruptArchiveIndex, i, ar.footer.chunkCount, data, ar.footer.byteSpanCount)
+		}
+		if dict > ar.footer.byteSpanCount {
+			return fmt.Errorf("%w: chunk %d of %d names dictionary byte span %d, of %d",
+				ErrCorruptArchiveIndex, i, ar.footer.chunkCount, dict, ar.footer.byteSpanCount)
+		}
+	}
+	return nil
+}
+
+// checkChunkRef keeps a damaged index from causing empty or enormous reads.
+func (ar *archiveReader) checkChunkRef(rc resolvedChunk) error {
+	if err := ar.checkSpan(rc.dataId); err != nil || rc.dictId == 0 {
+		return err
+	}
+	return ar.checkSpan(rc.dictId)
+}
+
+func (ar *archiveReader) checkSpan(id uint32) error {
+	if id == 0 || id > ar.footer.byteSpanCount {
+		return fmt.Errorf("%w: byte span %d of %d", ErrCorruptArchiveIndex, id, ar.footer.byteSpanCount)
+	}
+	span := ar.getByteSpanByID(id)
+	end := span.offset + span.length
+	if span.length == 0 || end < span.offset || end > ar.footer.dataSpan().length {
+		return fmt.Errorf("%w: byte span %d at %d of length %d is outside the data section", ErrCorruptArchiveIndex, id, span.offset, span.length)
+	}
+	return nil
 }
 
 // newInMemoryArchiveIndexReader implements the original index loading logic for non-file readers
@@ -467,11 +603,12 @@ func buildArchiveFooter(name hash.Hash, fileSize uint64, buf []byte) (f archiveF
 
 	f.hash = name
 
+	err = f.validate()
 	return
 }
 
-// search returns the index of the hash in the archive. If the hash is not found, -1 is returned.
-func (ar *archiveReader) search(hash hash.Hash) int {
+// findIndex returns the index of the hash in the archive. If the hash is not found, -1 is returned.
+func (ar *archiveReader) findIndex(hash hash.Hash) int {
 	prefix := hash.Prefix()
 	possibleMatch := ar.indexReader.searchPrefix(prefix)
 	targetSfx := hash.Suffix()
@@ -489,7 +626,7 @@ func (ar *archiveReader) search(hash hash.Hash) int {
 }
 
 func (ar *archiveReader) has(hash hash.Hash) bool {
-	return ar.search(hash) >= 0
+	return ar.findIndex(hash) >= 0
 }
 
 // get returns the decompressed data for the given hash. If the hash is not found, nil is returned (not an error)
@@ -498,29 +635,26 @@ func (ar *archiveReader) get(ctx context.Context, hash hash.Hash, stats *Stats) 
 	if err != nil || data == nil {
 		return nil, err
 	}
+	return ar.decompress(hash, dict, data)
+}
 
+func (ar *archiveReader) decompress(h hash.Hash, dict *DecompBundle, data []byte) ([]byte, error) {
 	if dict == nil {
-		if ar.footer.formatVersion >= archiveVersionSnappySupport {
-			// Snappy compression format. The data is compressed with a checksum at the end.
-			cc, err := NewCompressedChunk(hash, data)
-			if err != nil {
-				return nil, err
-			}
-			chk, err := cc.ToChunk()
-			if err != nil {
-				return nil, err
-			}
-			return chk.Data(), nil
+		if ar.footer.formatVersion < archiveVersionSnappySupport {
+			return nil, errors.New("runtime error: unable to get archived chunk. dictionary is nil")
 		}
-		return nil, errors.New("runtime error: unable to get archived chunk. dictionary is nil")
+		// Snappy compression format. The data is compressed with a checksum at the end.
+		cc, err := NewCompressedChunk(h, data)
+		if err != nil {
+			return nil, err
+		}
+		chk, err := cc.ToChunk()
+		if err != nil {
+			return nil, err
+		}
+		return chk.Data(), nil
 	}
-
-	var result []byte
-	result, err = gozstd.DecompressDict(nil, data, dict.dDict)
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
+	return gozstd.DecompressDict(nil, data, dict.dDict)
 }
 
 // getAsToChunker returns the chunk which is has not been decompressed. Similar to get, but with a different return type.
@@ -535,15 +669,21 @@ func (ar *archiveReader) getAsToChunker(ctx context.Context, h hash.Hash, stats 
 		return CompressedChunk{}, nil
 	}
 
+	return ar.toChunker(h, dict, data)
+}
+
+// toChunker wraps still-compressed chunk bytes in the ToChunker matching the
+// archive's compression format.
+func (ar *archiveReader) toChunker(h hash.Hash, dict *DecompBundle, data []byte) (ToChunker, error) {
 	if dict == nil {
-		if ar.footer.formatVersion >= archiveVersionSnappySupport {
-			cc, err := NewCompressedChunk(h, data)
-			if err != nil {
-				return nil, err
-			}
-			return cc, nil
+		if ar.footer.formatVersion < archiveVersionSnappySupport {
+			return nil, errors.New("runtime error: unable to get archived chunk. dictionary is nil")
 		}
-		return nil, errors.New("runtime error: unable to get archived chunk. dictionary is nil")
+		cc, err := NewCompressedChunk(h, data)
+		if err != nil {
+			return nil, err
+		}
+		return cc, nil
 	}
 
 	return &ArchiveToChunker{dict, data, h}, nil
@@ -554,11 +694,8 @@ func (ar *archiveReader) count() uint32 {
 }
 
 func (ar *archiveReader) close() error {
-	err := ar.indexReader.Close()
-	if err != nil {
-		return err
-	}
-	return ar.reader.Close()
+	// Join the errors so the reader still closes and releases its file when the index close fails.
+	return errors.Join(ar.indexReader.Close(), ar.reader.Close())
 }
 
 // readByteSpan reads the byte span from the archive. This allocates a new byte slice and returns it to the caller.
@@ -580,36 +717,81 @@ func (ar *archiveReader) readByteSpan(ctx context.Context, bs byteSpan, stats *S
 //   - Snappy compression when no dictionary is returned. The data has a checksum 32 bit checksum at the end. This
 //     format matches the noms format.
 func (ar *archiveReader) getRaw(ctx context.Context, hash hash.Hash, stats *Stats) (dict *DecompBundle, data []byte, err error) {
-	idx := ar.search(hash)
-	if idx < 0 {
+	rc, ok := ar.resolveChunk(hash)
+	if !ok {
 		return nil, nil, nil
+	}
+	if err = ar.checkChunkRef(rc); err != nil {
+		return nil, nil, err
+	}
+
+	return ar.getRawByRef(ctx, rc.dictId, rc.dataId, stats)
+}
+
+// resolvedChunk is a chunk which has been located in the archive index but not yet
+// read. Separating the index lookup from the read lets many reads be issued
+// concurrently while the caller still learns synchronously which chunks are here.
+type resolvedChunk struct {
+	h      hash.Hash
+	dictId uint32
+	dataId uint32
+}
+
+// resolveChunk finds |h| in the index, reporting false when this archive does not hold it.
+func (ar *archiveReader) resolveChunk(h hash.Hash) (resolvedChunk, bool) {
+	idx := ar.findIndex(h)
+	if idx < 0 {
+		return resolvedChunk{}, false
 	}
 
 	dictId, dataId := ar.getChunkRef(idx)
-	if dictId != 0 {
-		if cached, cacheHit := ar.dictCache.Get(dictId); cacheHit {
-			dict = cached
-		} else {
-			byteSpan := ar.getByteSpanByID(dictId)
-			dictBytes, err := ar.readByteSpan(ctx, byteSpan, stats)
-			if err != nil {
-				return nil, nil, err
-			}
-			dict, err = NewDecompBundle(dictBytes)
-			if err != nil {
-				return nil, nil, err
-			}
+	return resolvedChunk{h: h, dictId: dictId, dataId: dataId}, true
+}
 
-			ar.dictCache.Add(dictId, dict)
+// getRawByRef is getRaw for a chunk whose index entry has already been read.
+func (ar *archiveReader) getRawByRef(ctx context.Context, dictId, dataId uint32, stats *Stats) (dict *DecompBundle, data []byte, err error) {
+	if dictId != 0 {
+		dict, err = ar.loadDict(ctx, dictId, stats)
+		if err != nil {
+			return nil, nil, err
 		}
 	}
 
-	byteSpan := ar.getByteSpanByID(dataId)
-	data, err = ar.readByteSpan(ctx, byteSpan, stats)
+	data, err = ar.readByteSpan(ctx, ar.getByteSpanByID(dataId), stats)
 	if err != nil {
 		return nil, nil, err
 	}
-	return
+	return dict, data, nil
+}
+
+// dictFor returns the dictionary |rc| needs, or nil when the chunk carries no
+// dictionary. After loadDicts has run this is a cache hit; it falls back to a read
+// if the entry was evicted in between.
+func (ar *archiveReader) dictFor(ctx context.Context, rc resolvedChunk, stats *Stats) (*DecompBundle, error) {
+	if rc.dictId == 0 {
+		return nil, nil
+	}
+	return ar.loadDict(ctx, rc.dictId, stats)
+}
+
+// loadDict returns the dictionary for |dictId|, reading and caching it on a miss.
+func (ar *archiveReader) loadDict(ctx context.Context, dictId uint32, stats *Stats) (*DecompBundle, error) {
+	if cached, cacheHit := ar.dictCache.Get(dictId); cacheHit {
+		return cached, nil
+	}
+
+	dictBytes, err := ar.readByteSpan(ctx, ar.getByteSpanByID(dictId), stats)
+	if err != nil {
+		return nil, err
+	}
+
+	dict, err := NewDecompBundle(dictBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	ar.dictCache.Add(dictId, dict)
+	return dict, nil
 }
 
 // getChunkRef returns the dictionary and data references for the chunk at the given index. Assumes good input!
@@ -648,6 +830,9 @@ func (r *bridgeReaderAt) ReadAt(p []byte, off int64) (n int, err error) {
 }
 
 func (ar *archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error, stats *Stats) error {
+	if err := ar.checkByteSpans(); err != nil {
+		return err
+	}
 	// Build reverse indexes for dictionary and data ByteSpans
 	// dictReverseIndex: Dictionary ByteSpan ID -> struct{} - indicates that we expect that span to be a dictionary.
 	// dataReverseIndex: Data ByteSpan ID -> chunk ref index - indicates that we expect that span to be a data chunk,
@@ -727,7 +912,7 @@ func (ar *archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) erro
 			} else {
 				dict, ok := loadedDictionaries[dictId]
 				if !ok {
-					panic("Reverse Index incomplete: Dictionary ID not found in loaded dictionaries")
+					return fmt.Errorf("%w: dictionary span %d does not precede the data span %d using it", ErrCorruptArchiveIndex, dictId, byteSpanCounter)
 				}
 
 				chunkData, err = gozstd.DecompressDict(nil, spanData, dict)
@@ -742,7 +927,7 @@ func (ar *archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) erro
 				return err
 			}
 		} else {
-			panic("Reverse Index incomplete: ByteSpan ID not found in either dictionary or data reverse index")
+			return fmt.Errorf("%w: byte span %d is neither a dictionary nor chunk data", ErrCorruptArchiveIndex, byteSpanCounter)
 		}
 		byteSpanCounter++
 	}
@@ -780,6 +965,10 @@ func (ar *archiveReader) tolerantIterate(ctx context.Context, cb func(chunks.Chu
 			return
 		}
 
+		if err := ar.checkSpan(byteSpanCounter); err != nil {
+			errCb(err)
+			return
+		}
 		span := ar.getByteSpanByID(byteSpanCounter)
 		for cap(buf) < int(span.length) {
 			buf = append(buf, make([]byte, cap(buf))...)

@@ -170,7 +170,7 @@ SQL
     [[ "$output" =~ "test1" ]] || false
 
    run dolt sql -q "SELECT * from dolt_merge_status"
-   [[ "$output" =~ "true" ]] || false
+   [[ "$output" =~ \|[[:space:]]+1[[:space:]]+\| ]] || false
    [[ "$output" =~ "merge_branch" ]] || false
    [[ "$output" =~ "refs/heads/main" ]] || false
 
@@ -204,7 +204,7 @@ SQL
     dolt merge --abort
 
     run dolt sql -q "SELECT * from dolt_merge_status"
-    [[ "$output" =~ "false" ]] || false
+    [[ "$output" =~ \|[[:space:]]+0[[:space:]]+\| ]] || false
 
     # per Git, working set changes to test2 should remain
     dolt sql -q "SELECT * FROM test2" -r csv
@@ -238,7 +238,7 @@ SQL
     [[ "${lines[1]}" =~ "nothing to commit, working tree clean" ]] || false
 
     run dolt sql -q "SELECT * from dolt_merge_status"
-    [[ "$output" =~ "false" ]] || false
+    [[ "$output" =~ \|[[:space:]]+0[[:space:]]+\| ]] || false
 }
 
 @test "merge: squash merge" {
@@ -298,7 +298,7 @@ SQL
     [[ "$output" =~ "| 0 " ]] || false
 
     run dolt sql -q "SELECT * from dolt_merge_status"
-    [[ "$output" =~ "false" ]] || false
+    [[ "$output" =~ \|[[:space:]]+0[[:space:]]+\| ]] || false
 }
 
 @test "merge: dolt commit fails on table with conflict" {
@@ -324,7 +324,7 @@ SQL
     [[ "$output" =~ "test1" ]] || false
 
     run dolt sql -q "SELECT * from dolt_merge_status"
-    [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ \|[[:space:]]+1[[:space:]]+\| ]] || false
     [[ "$output" =~ "merge_branch" ]] || false
     [[ "$output" =~ "refs/heads/main" ]] || false
 
@@ -1053,24 +1053,6 @@ SQL
 
     # commit it so we can merge again
     dolt commit -afm "committing merge conflicts"
-
-    skip_nbf_dolt "behavior in new format diverges"
-
-    # Merge should fail due to conflict and previous conflict and violation state should be retained
-    run dolt merge other2
-    [[ "$output" =~ "existing unresolved conflicts would be overridden by new conflicts produced by merge" ]] || false
-
-    run dolt sql -r csv -q "SELECT * FROM parent;"
-    [[ "${lines[1]}" = "1,2" ]] || false
-
-    run dolt sql -r csv -q "SELECT * from child;"
-    [[ "${lines[1]}" = "1,2" ]] || false
-
-    run dolt sql -r csv -q "SELECT base_col1, base_pk, our_col1, our_pk, their_col1, their_pk from dolt_conflicts_parent;"
-    [[ "${lines[1]}" = "1,1,2,1,3,1" ]] || false
-
-    run dolt sql -r csv -q "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;"
-    [[ "${lines[1]}" = "foreign key,1,2" ]] || false
 }
 
 @test "merge: violated check constraint" {

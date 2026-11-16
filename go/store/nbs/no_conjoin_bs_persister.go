@@ -59,8 +59,7 @@ func (bsp *noConjoinBlobstorePersister) Persist(ctx context.Context, behavior dh
 		return nil, gcBehavior_Continue, err
 	}
 
-	rdr := &bsTableReaderAt{key: name, bs: bsp.bs}
-	src, err := newReaderFromIndexData(ctx, bsp.q, data, address, rdr, bsp.blockSize)
+	src, err := newPersistedBSTableChunkSource(ctx, bsp.bs, bsp.q, data, address, bsp.blockSize)
 	if err != nil {
 		return nil, gcBehavior_Continue, err
 	}
@@ -73,8 +72,24 @@ func (bsp *noConjoinBlobstorePersister) ConjoinAll(ctx context.Context, behavior
 }
 
 // Open a table named |name|, containing |chunkCount| chunks.
-func (bsp *noConjoinBlobstorePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
-	return newBSTableChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, stats)
+func (bsp *noConjoinBlobstorePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, opts openOpts, stats *Stats) (chunkSource, error) {
+	cs, err := newBSTableChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, opts, stats)
+	if err == nil {
+		return cs, nil
+	}
+
+	// The table may exist in archive format (<name>.darc), e.g. when table
+	// files written by a local archive-enabled store are copied to this
+	// blobstore during a push. Mirror blobstorePersister.Open's fallback.
+	if blobstore.IsNotFoundError(err) {
+		source, err := newBSArchiveChunkSource(ctx, bsp.bs, name, bsp.q, opts, stats)
+		if err != nil {
+			return nil, err
+		}
+		return source, nil
+	}
+
+	return nil, err
 }
 
 func (bsp *noConjoinBlobstorePersister) Exists(ctx context.Context, name string, chunkCount uint32, stats *Stats) (bool, io.Closer, error) {
@@ -97,6 +112,10 @@ func (bsp *noConjoinBlobstorePersister) Close() error {
 		return c.Close()
 	}
 	return nil
+}
+
+func (bsp *noConjoinBlobstorePersister) Teardown(ctx context.Context) error {
+	return bsp.bs.Teardown(ctx)
 }
 
 func (bsp *noConjoinBlobstorePersister) AccessMode() chunks.ExclusiveAccessMode {

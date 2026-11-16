@@ -45,6 +45,19 @@ type SizeCache struct {
 	totalSize uint64
 	maxSize   uint64
 	mu        sync.Mutex
+
+	// Incremented by every Purge; see Key.
+	purges uint64
+}
+
+// A Key ties a Put to the Get which looked the key up, including a Get
+// which missed. Put drops the value if the cache was purged in between,
+// so a caller which went to its backing store before a Purge cannot
+// reinstate a value that Purge was meant to remove. The zero Key is
+// inert.
+type Key struct {
+	key    interface{}
+	purges uint64
 }
 
 type ExpireCallback func(key interface{})
@@ -79,27 +92,38 @@ func (c *SizeCache) entry(key interface{}) (sizeCacheEntry, bool) {
 	return entry, true
 }
 
-// Get checks the searches the cache for an entry. If it exists, it moves it's
-// lru entry to the back of the queue and returns (value, true). Otherwise, it
-// returns (nil, false).
-func (c *SizeCache) Get(key interface{}) (interface{}, bool) {
+// Get searches the cache for an entry. If it exists, it moves its lru
+// entry to the back of the queue and returns (value, key, true).
+// Otherwise, it returns (nil, key, false).
+func (c *SizeCache) Get(key interface{}) (interface{}, Key, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	k := Key{key: key, purges: c.purges}
 	if entry, ok := c.entry(key); ok {
-		return entry.value, true
+		return entry.value, k, true
 	}
-	return nil, false
+	return nil, k, false
 }
 
-// Add will add this element to the cache at the back of the queue as long it's
-// size does not exceed maxSize. If the addition of this entry causes the size of
-// the cache to exceed maxSize, the necessary entries at the front of the queue
-// will be deleted in order to keep the total cache size below maxSize.
-func (c *SizeCache) Add(key interface{}, size uint64, value interface{}) {
+// Put will add |value| to the cache at the back of the queue under the
+// key |k| was obtained for, as long as its size does not exceed maxSize.
+// If the addition of this entry causes the size of the cache to exceed
+// maxSize, the necessary entries at the front of the queue will be
+// deleted in order to keep the total cache size below maxSize.
+//
+// It is a no-op if the cache has been purged since |k| was obtained, or
+// if |k| is the zero Key. Dropping the value then is equivalent to the
+// whole Put having been sequenced before the Purge.
+func (c *SizeCache) Put(k Key, size uint64, value interface{}) {
 	if size <= c.maxSize {
 		c.mu.Lock()
 		defer c.mu.Unlock()
+
+		if k.key == nil || c.purges != k.purges {
+			return
+		}
+		key := k.key
 
 		if _, ok := c.entry(key); ok {
 			// this value is already in the cache; just return
@@ -147,6 +171,7 @@ func (c *SizeCache) Purge() {
 	clear(c.cache)
 	c.totalSize = 0
 	c.lru = list.List{}
+	c.purges += 1
 }
 
 func (c *SizeCache) Size() uint64 {

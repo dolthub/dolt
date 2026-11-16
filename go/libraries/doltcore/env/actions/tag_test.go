@@ -57,7 +57,7 @@ func TestVisitResolvedTag(t *testing.T) {
 	ctx := context.Background()
 
 	// Initialize repo
-	err := dEnv.InitRepo(ctx, types.Format_Default, "test user", "test@test.com", "main")
+	err := dEnv.InitRepo(ctx, types.Format_DOLT, "test user", "test@test.com", "main")
 	require.NoError(t, err)
 
 	// Create a tag
@@ -84,12 +84,39 @@ func TestVisitResolvedTag(t *testing.T) {
 	require.Equal(t, doltdb.ErrTagNotFound, err)
 }
 
+func TestCreateRefAlreadyExistsErrors(t *testing.T) {
+	// See https://github.com/dolthub/dolt/issues/11434
+	t.Run("tag", func(t *testing.T) {
+		dEnv, _ := createTestEnv()
+		ctx := context.Background()
+
+		require.NoError(t, dEnv.InitRepo(ctx, types.Format_DOLT, "test user", "test@test.com", "main"))
+		require.NoError(t, CreateTag(ctx, dEnv, "test-tag", "main", TagProps{}))
+
+		err := CreateTag(ctx, dEnv, "test-tag", "main", TagProps{})
+		require.True(t, ErrTagExists.Is(err))
+		require.EqualError(t, err, "fatal: A tag named 'test-tag' already exists.")
+	})
+
+	t.Run("workspace", func(t *testing.T) {
+		dEnv, _ := createTestEnv()
+		ctx := context.Background()
+
+		require.NoError(t, dEnv.InitRepo(ctx, types.Format_DOLT, "test user", "test@test.com", "main"))
+		require.NoError(t, CreateWorkspace(ctx, dEnv, "test-workspace", "main"))
+
+		err := CreateWorkspace(ctx, dEnv, "test-workspace", "main")
+		require.True(t, ErrWorkspaceExists.Is(err))
+		require.EqualError(t, err, "fatal: A workspace named 'test-workspace' already exists.")
+	})
+}
+
 func TestIterResolvedTagsPaginated(t *testing.T) {
 	dEnv, _ := createTestEnv()
 	ctx := context.Background()
 
 	// Initialize repo
-	err := dEnv.InitRepo(ctx, types.Format_Default, "test user", "test@test.com", "main")
+	err := dEnv.InitRepo(ctx, types.Format_DOLT, "test user", "test@test.com", "main")
 	require.NoError(t, err)
 
 	expectedTagNames := make([]string, DefaultPageSize*2)

@@ -68,6 +68,10 @@ func (bs *AzureBlobstore) Path() string {
 	return path.Join(bs.containerName, bs.prefix)
 }
 
+func (bs *AzureBlobstore) Teardown(ctx context.Context) error {
+	return nil
+}
+
 // absKey returns the absolute key for a blob (prefix + key)
 func (bs *AzureBlobstore) absKey(key string) string {
 	return path.Join(bs.prefix, key)
@@ -111,6 +115,10 @@ func errOrNotFound(err error, containerName, absKey string) error {
 func (bs *AzureBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {
 	absKey := bs.absKey(key)
 
+	// blobSize is set when we have already had to ask for the blob's size,
+	// which is a better answer than anything on the download response.
+	var blobSize uint64
+
 	var downloadOptions *blob.DownloadStreamOptions
 	if !br.isAllRange() {
 		if br.offset >= 0 {
@@ -132,6 +140,8 @@ func (bs *AzureBlobstore) Get(ctx context.Context, key string, br BlobRange) (io
 				return nil, 0, "", fmt.Errorf("blob properties missing ContentLength for blob %s", absKey)
 			}
 
+			blobSize = uint64(*contentLength)
+
 			// Convert negative range to a positive offset/length based on the blob size.
 			pr := br.positiveRange(*contentLength)
 			downloadOptions = &blob.DownloadStreamOptions{
@@ -151,18 +161,15 @@ func (bs *AzureBlobstore) Get(ctx context.Context, key string, br BlobRange) (io
 	// Get the ETag as the version
 	version := etagToString(resp.GetETag())
 
-	// Get the total size of the blob
-	var size uint64
-	if resp.GetContentLength() != nil {
-		size = uint64(*resp.GetContentLength())
+	// The whole blob's size. For a ranged request only the Content-Range
+	// carries it; ContentLength is the length of the range, so it is only a
+	// usable fallback when the whole blob was requested.
+	size := blobSize
+	if size == 0 && resp.GetContentRange() != nil {
+		size = parseContentRangeSize(*resp.GetContentRange())
 	}
-
-	// If this is a range request, try to get the full size from Content-Range header
-	if !br.isAllRange() && resp.GetContentRange() != nil {
-		fullSize := parseContentRangeSize(*resp.GetContentRange())
-		if fullSize > 0 {
-			size = fullSize
-		}
+	if size == 0 && br.isAllRange() && resp.GetContentLength() != nil {
+		size = uint64(*resp.GetContentLength())
 	}
 
 	return resp.GetBody(), size, version, nil
@@ -269,18 +276,13 @@ func blobHasChanged(expectedVersion string, err error) bool {
 	return expectedVersion != "" && (strings.Contains(errMsg, "ConditionNotMet") || strings.Contains(errMsg, "412"))
 }
 
-// CheckAndPut updates the blob keyed by |key| using a check-and-set on |expectedVersion|
-func (bs *AzureBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader) (string, error) {
+func (bs *AzureBlobstore) CheckAndPutManifest(ctx context.Context, expectedVersion string, contents []byte) (string, error) {
+	key := ManifestKey
 	absKey := bs.absKey(key)
-
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		return "", err
-	}
 
 	uploadOptions := buildCheckAndPutOptions(expectedVersion)
 
-	resp, err := bs.azClient.UploadBuffer(ctx, bs.containerName, absKey, data, uploadOptions)
+	resp, err := bs.azClient.UploadBuffer(ctx, bs.containerName, absKey, contents, uploadOptions)
 	if err != nil {
 		if blobExistsWhenShouldnt(expectedVersion, err) || blobHasChanged(expectedVersion, err) {
 			// Get the current version to return in the error

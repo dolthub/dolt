@@ -82,7 +82,7 @@ func mustProllyMapFromTuples(t *testing.T, kd, vd *val.TupleDesc, tuples [][2]va
 	ctx := sql.NewEmptyContext()
 	ns := tree.NewTestNodeStore()
 
-	serializer := message.NewProllyMapSerializer(vd, ns.Pool())
+	serializer := message.NewProllyMapSerializer(kd, vd, ns.Pool())
 	chunker, err := tree.NewEmptyChunker(ctx, ns, serializer)
 	require.NoError(t, err)
 

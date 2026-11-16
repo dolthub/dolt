@@ -102,13 +102,9 @@ func (sct *SchemaConflictsTable) PartitionRows(ctx *sql.Context, part sql.Partit
 		return nil, errors.New("unexpected partition for schema conflicts table")
 	}
 
-	optCmt, err := doltdb.GetCommitAncestor(ctx, p.head, p.state.Commit())
+	base, err := merge.ResolveMergeBase(ctx, p.head, p.state.Commit())
 	if err != nil {
 		return nil, err
-	}
-	base, ok := optCmt.ToCommit()
-	if !ok {
-		return nil, doltdb.ErrGhostCommitEncountered
 	}
 
 	baseRoot, err := base.GetRootValue(ctx)
@@ -238,11 +234,11 @@ func newSchemaConflict(ctx *sql.Context, table doltdb.TableName, baseRoot doltdb
 }
 
 func getCreateTableStatement(ctx *sql.Context, table string, sch schema.Schema, fks []doltdb.ForeignKey, parents map[doltdb.TableName]schema.Schema) (string, error) {
-	return sqlfmt.GenerateCreateTableStatement(ctx, table, sch, fks, parents)
+	return sqlfmt.GenerateCreateTableStatement(ctx, table, sch, fks, parents, false)
 }
 
 func getSchemaConflictDescription(ctx *sql.Context, table doltdb.TableName, base, ours, theirs schema.Schema) (string, error) {
-	_, conflict, _, _, err := merge.SchemaMerge(ctx, noms.Format_Default, ours, theirs, base, table)
+	_, conflict, _, _, err := merge.SchemaMerge(ctx, noms.Format_DOLT, ours, theirs, base, table)
 	if err != nil {
 		return "", err
 	}

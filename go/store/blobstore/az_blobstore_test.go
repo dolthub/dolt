@@ -532,7 +532,8 @@ func TestAzureBlobstore_Get(t *testing.T) {
 		rc, size, version, err := bs.Get(ctx, "mykey", NewBlobRange(-3, 0))
 		require.NoError(t, err)
 		defer rc.Close()
-		assert.Equal(t, uint64(3), size)
+		// Matches size returned from GetProperties.
+		assert.Equal(t, uint64(100), size)
 		assert.Equal(t, "test-etag", version)
 
 		data, err := io.ReadAll(rc)
@@ -557,7 +558,7 @@ func TestAzureBlobstore_Get(t *testing.T) {
 
 // Tests for CheckAndPut
 
-func TestAzureBlobstore_CheckAndPut(t *testing.T) {
+func TestAzureBlobstore_CheckAndPutManifest(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("create_new_blob", func(t *testing.T) {
@@ -571,7 +572,7 @@ func TestAzureBlobstore_CheckAndPut(t *testing.T) {
 		}
 
 		bs := newAzureBlobstoreWithClient(mockClient, "container", "prefix")
-		version, err := bs.CheckAndPut(ctx, "", "mykey", 9, bytes.NewReader([]byte("test data")))
+		version, err := bs.CheckAndPutManifest(ctx, "", []byte("test data"))
 		require.NoError(t, err)
 		assert.Equal(t, "new-etag", version)
 	})
@@ -586,7 +587,7 @@ func TestAzureBlobstore_CheckAndPut(t *testing.T) {
 		}
 
 		bs := newAzureBlobstoreWithClient(mockClient, "container", "prefix")
-		version, err := bs.CheckAndPut(ctx, "old-etag", "mykey", 9, bytes.NewReader([]byte("test data")))
+		version, err := bs.CheckAndPutManifest(ctx, "old-etag", []byte("test data"))
 		require.NoError(t, err)
 		assert.Equal(t, "new-etag", version)
 	})
@@ -604,14 +605,14 @@ func TestAzureBlobstore_CheckAndPut(t *testing.T) {
 		}
 
 		bs := newAzureBlobstoreWithClient(mockClient, "container", "prefix")
-		version, err := bs.CheckAndPut(ctx, "", "mykey", 9, bytes.NewReader([]byte("test data")))
+		version, err := bs.CheckAndPutManifest(ctx, "", []byte("test data"))
 		require.Error(t, err)
 		assert.Empty(t, version)
 		assert.True(t, IsCheckAndPutError(err))
 
 		cpe, ok := err.(CheckAndPutError)
 		require.True(t, ok)
-		assert.Equal(t, "mykey", cpe.Key)
+		assert.Equal(t, ManifestKey, cpe.Key)
 		assert.Equal(t, "", cpe.ExpectedVersion)
 		assert.Equal(t, "existing-etag", cpe.ActualVersion)
 	})
@@ -629,14 +630,14 @@ func TestAzureBlobstore_CheckAndPut(t *testing.T) {
 		}
 
 		bs := newAzureBlobstoreWithClient(mockClient, "container", "prefix")
-		version, err := bs.CheckAndPut(ctx, "old-etag", "mykey", 9, bytes.NewReader([]byte("test data")))
+		version, err := bs.CheckAndPutManifest(ctx, "old-etag", []byte("test data"))
 		require.Error(t, err)
 		assert.Empty(t, version)
 		assert.True(t, IsCheckAndPutError(err))
 
 		cpe, ok := err.(CheckAndPutError)
 		require.True(t, ok)
-		assert.Equal(t, "mykey", cpe.Key)
+		assert.Equal(t, ManifestKey, cpe.Key)
 		assert.Equal(t, "old-etag", cpe.ExpectedVersion)
 		assert.Equal(t, "current-etag", cpe.ActualVersion)
 	})

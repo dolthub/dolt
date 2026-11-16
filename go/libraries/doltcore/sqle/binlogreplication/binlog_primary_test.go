@@ -15,6 +15,7 @@
 package binlogreplication
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -22,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dolthub/vitess/go/mysql"
 	"github.com/stretchr/testify/require"
 )
 
@@ -193,6 +195,87 @@ func TestBinlogPrimary(t *testing.T) {
 		{"binlog-main.000001", "2377", "", "", uuid + ":1-3"}})
 }
 
+// TestBinlogPrimary_GTIDResumeFlags checks Debezium-style requests whose flags are
+// zero even though they include a binary GTID checkpoint.
+// https://github.com/dolthub/dolt/issues/12241
+func TestBinlogPrimary_GTIDResumeFlags(t *testing.T) {
+	for _, flags := range []uint16{0, mysql.BinlogThroughGTID} {
+		t.Run(fmt.Sprintf("flags_%d", flags), func(t *testing.T) {
+			h := newHarness(t)
+			h.startSqlServersWithDoltSystemVars(doltReplicationPrimarySystemVars)
+			h.setupForDoltToMySqlReplication()
+
+			h.primaryDatabase.MustExec("CREATE DATABASE cdc_probe")
+			h.primaryDatabase.MustExec("CREATE TABLE cdc_probe.contact (id INT PRIMARY KEY, image_url VARCHAR(100))")
+			h.primaryDatabase.MustExec("ALTER TABLE cdc_probe.contact RENAME COLUMN image_url TO image")
+			h.primaryDatabase.MustExec("INSERT INTO cdc_probe.contact VALUES (1, 'existing')")
+
+			var executed string
+			require.NoError(t, h.primaryDatabase.Get(&executed, "SELECT @@GLOBAL.gtid_executed"))
+			checkpoint, err := mysql.ParseMysql56GTIDSet(executed)
+			require.NoError(t, err)
+			require.NotEmpty(t, checkpoint.String())
+
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			stream, err := mysql.Connect(ctx, &mysql.ConnParams{
+				Host: "127.0.0.1", Port: h.doltPort, Uname: "admin",
+			})
+			require.NoError(t, err)
+			defer stream.Close()
+
+			// Send flags explicitly: SendBinlogDumpCommand sets BinlogThroughGTID
+			// automatically and would hide a regression in handling flags=0.
+			require.NoError(t, stream.WriteComBinlogDumpGTID(43, "", 4, flags,
+				checkpoint.(mysql.Mysql56GTIDSet).SIDBlock()))
+			h.primaryDatabase.MustExec("INSERT INTO cdc_probe.contact VALUES (2, 'new')")
+			require.NoError(t, stream.Conn.SetReadDeadline(time.Now().Add(10*time.Second)))
+
+			format := mysql.NewMySQL56BinlogFormat()
+			tableMaps := make(map[uint64]*mysql.TableMap)
+			var transaction mysql.GTID
+			sawNewRow := false
+			for {
+				event, err := stream.ReadBinlogEvent()
+				require.NoError(t, err, "waiting for the new transaction with flags=%d", flags)
+				if event.IsFormatDescription() {
+					format, err = event.Format()
+					require.NoError(t, err)
+					continue
+				}
+				event, _, err = event.StripChecksum(format)
+				require.NoError(t, err)
+				switch {
+				case event.IsGTID():
+					transaction, _, err = event.GTID(format)
+					require.NoError(t, err)
+					require.False(t, checkpoint.ContainsGTID(transaction),
+						"flags=%d replayed %s despite checkpoint %s", flags, transaction, executed)
+				case event.IsTableMap():
+					tableMaps[event.TableID(format)], err = event.TableMap(format)
+					require.NoError(t, err)
+				case event.IsWriteRows():
+					require.NotNil(t, transaction, "row arrived without a new GTID")
+					tableMap := tableMaps[event.TableID(format)]
+					require.NotNil(t, tableMap)
+					require.Equal(t, "cdc_probe", tableMap.Database)
+					require.Equal(t, "contact", tableMap.Name)
+					rows, err := event.Rows(format, tableMap)
+					require.NoError(t, err)
+					require.Len(t, rows.Rows, 1)
+					values, err := rows.StringValuesForTests(tableMap, 0)
+					require.NoError(t, err)
+					require.Equal(t, []string{"2", "new"}, values)
+					sawNewRow = true
+				case event.IsXID():
+					require.True(t, sawNewRow, "new transaction committed without its row event")
+					return
+				}
+			}
+		})
+	}
+}
+
 // TestBinlogPrimary_textTypes tests serialization for empty, NULL, and non-empty TEXT
 // and BLOB fields.
 // https://github.com/dolthub/dolt/issues/10601
@@ -341,6 +424,92 @@ func TestBinlogPrimary_addingAndDroppingColumns(t *testing.T) {
 	})
 }
 
+// TestBinlogPrimary_FunctionalIndex tests that inserting a row into a keyless table with a functional/expression
+// index does not panic when binlog replication is active.
+// https://github.com/dolthub/dolt/issues/11475
+func TestBinlogPrimary_FunctionalIndex(t *testing.T) {
+	h := newHarness(t)
+	h.startSqlServersWithDoltSystemVars(doltReplicationPrimarySystemVars)
+	h.setupForDoltToMySqlReplication()
+	h.startReplicationAndCreateTestDb(h.doltPort)
+
+	h.primaryDatabase.MustExec("CREATE TABLE t (id INT);")
+	h.primaryDatabase.MustExec("CREATE INDEX idx_ifzero ON t ((IF(id = 0, 1, 0)));")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("show tables;", [][]any{{"t"}})
+
+	// The hidden column Dolt creates internally to back the functional index must NOT be replicated to the
+	// real MySQL replica as a normal, visible column; MySQL creates its own equivalent hidden column
+	// automatically as a side effect of the index DDL.
+	h.requireReplicaResults(
+		"select column_name from information_schema.columns where table_schema=database() and table_name='t';",
+		[][]any{{"id"}})
+
+	h.primaryDatabase.MustExec("INSERT INTO t VALUES (0);")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("select * from t;", [][]any{{"0"}})
+}
+
+// TestBinlogPrimary_FunctionalIndexWithPrimaryKey tests that inserting, updating, and deleting rows in a table
+// with a primary key and a functional/expression index correctly replicates.
+// https://github.com/dolthub/dolt/issues/11475
+func TestBinlogPrimary_FunctionalIndexWithPrimaryKey(t *testing.T) {
+	h := newHarness(t)
+	h.startSqlServersWithDoltSystemVars(doltReplicationPrimarySystemVars)
+	h.setupForDoltToMySqlReplication()
+	h.startReplicationAndCreateTestDb(h.doltPort)
+
+	h.primaryDatabase.MustExec("CREATE TABLE t (pk INT PRIMARY KEY, id INT);")
+	h.primaryDatabase.MustExec("CREATE INDEX idx_ifzero ON t ((IF(id = 0, 1, 0)));")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("show tables;", [][]any{{"t"}})
+
+	// The hidden column Dolt creates internally to back the functional index must NOT be replicated to the
+	// real MySQL replica as a normal, visible column; MySQL creates its own equivalent hidden column
+	// automatically as a side effect of the index DDL.
+	h.requireReplicaResults(
+		"select column_name from information_schema.columns where table_schema=database() and table_name='t' order by ordinal_position;",
+		[][]any{{"pk"}, {"id"}})
+
+	h.primaryDatabase.MustExec("INSERT INTO t VALUES (1, 0);")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("select * from t;", [][]any{{"1", "0"}})
+
+	h.primaryDatabase.MustExec("UPDATE t SET id = 1 WHERE pk = 1;")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("select * from t;", [][]any{{"1", "1"}})
+
+	h.primaryDatabase.MustExec("DELETE FROM t WHERE pk = 1;")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("select * from t;", [][]any{})
+}
+
+// TestBinlogPrimary_VirtualColumn tests that inserting, updating, and deleting rows
+// in a table with a user-declared VIRTUAL generated column, interspersed between two stored
+// columns, correctly replicates from a Dolt primary to a real MySQL replica.
+func TestBinlogPrimary_VirtualColumn(t *testing.T) {
+	h := newHarness(t)
+	h.startSqlServersWithDoltSystemVars(doltReplicationPrimarySystemVars)
+	h.setupForDoltToMySqlReplication()
+	h.startReplicationAndCreateTestDb(h.doltPort)
+
+	h.primaryDatabase.MustExec("CREATE TABLE t (pk INT PRIMARY KEY, a VARCHAR(20), g INT GENERATED ALWAYS AS (LENGTH(a)) VIRTUAL, z VARCHAR(20));")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("show tables;", [][]any{{"t"}})
+
+	h.primaryDatabase.MustExec("INSERT INTO t (pk, a, z) VALUES (1, 'x', 'end');")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("select pk, a, g, z from t;", [][]any{{"1", "x", "1", "end"}})
+
+	h.primaryDatabase.MustExec("UPDATE t SET a = 'xxx', z = 'end2' WHERE pk = 1;")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("select pk, a, g, z from t;", [][]any{{"1", "xxx", "3", "end2"}})
+
+	h.primaryDatabase.MustExec("DELETE FROM t WHERE pk = 1;")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("select pk, a, g, z from t;", [][]any{})
+}
+
 // TestBinlogPrimary_Rotation tests how a Dolt primary server handles rotating the binary log file when the
 // size threshold is reached.
 func TestBinlogPrimary_Rotation(t *testing.T) {
@@ -348,6 +517,19 @@ func TestBinlogPrimary_Rotation(t *testing.T) {
 	h.startSqlServersWithDoltSystemVars(doltReplicationPrimarySystemVars)
 	h.setupForDoltToMySqlReplication()
 	h.startReplicationAndCreateTestDb(h.doltPort)
+
+	// Keep a second real replication stream active through rotation. Removing it
+	// must leave the MySQL replica's stream usable.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	secondReplica, err := mysql.Connect(ctx, &mysql.ConnParams{Host: "127.0.0.1", Port: h.doltPort, Uname: "admin"})
+	require.NoError(t, err)
+	defer secondReplica.Close()
+	require.NoError(t, secondReplica.SendBinlogDumpCommand(43, mysql.Position{GTIDSet: mysql.Mysql56GTIDSet{}}))
+	require.NoError(t, secondReplica.Conn.SetReadDeadline(time.Now().Add(30*time.Second)))
+	firstEvent, err := secondReplica.ReadBinlogEvent()
+	require.NoError(t, err)
+	require.True(t, firstEvent.IsRotate())
 
 	// Change the binlog rotation threshold on the primary to 10KB (instead of the default 1GB)
 	h.primaryDatabase.MustExec("SET @@GLOBAL.max_binlog_size = 10240;")
@@ -371,6 +553,37 @@ func TestBinlogPrimary_Rotation(t *testing.T) {
 		{"binlog-main.000002", "10481", "No"},
 		{"binlog-main.000003", "1027", "No"},
 	})
+
+	// Confirm that the second stream reached the latest transaction, then
+	// disconnect it while the primary and the first replica remain running.
+	require.NoError(t, secondReplica.Conn.SetReadDeadline(time.Now().Add(30*time.Second)))
+	format := mysql.NewMySQL56BinlogFormat()
+	for {
+		event, err := secondReplica.ReadBinlogEvent()
+		require.NoError(t, err)
+		if !event.IsGTID() {
+			continue
+		}
+		gtid, _, err := event.GTID(format)
+		require.NoError(t, err)
+		if gtid.String() == uuid+":102" {
+			break
+		}
+	}
+	secondReplica.Close()
+	for i := 100; i < 110; i++ {
+		h.primaryDatabase.MustExec(fmt.Sprintf("insert into t values (%d);", i))
+	}
+	require.Eventually(t, func() bool {
+		var connections int
+		err := h.primaryDatabase.Get(&connections, fmt.Sprintf(
+			"SELECT COUNT(*) FROM information_schema.processlist WHERE id = %d", secondReplica.ConnectionID))
+		return err == nil && connections == 0
+	}, 30*time.Second, 10*time.Millisecond, "disconnected replica must leave the primary's process list")
+	// Write again after removal has completed to prove the remaining stream is usable.
+	h.primaryDatabase.MustExec("insert into t values (110);")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("SELECT MAX(n) FROM t;", [][]any{{"110"}})
 }
 
 // TestBinlogPrimary_AutoPurging tests that the primary server correctly purges binary log files older than

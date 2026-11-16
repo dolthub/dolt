@@ -16,25 +16,31 @@ package dsess
 
 import (
 	"context"
-	"sync"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate/sequences"
 )
 
-func NewGlobalStateStoreForDb(ctx context.Context, dbName string, db *doltdb.DoltDB) (GlobalStateImpl, error) {
+// TrackerKey is a type used as a key into the GlobalStateImpl's map of SequenceTrackers
+type TrackerKey[TrackerType globalstate.SequenceTrackerBase] struct{}
+
+func NewSequenceTracker[
+	RelationType sequences.SequencedRelation[RelationType, ValueType, StateType],
+	StateType sequences.SequenceState[StateType, ValueType],
+	ValueType comparable,
+](ctx context.Context, dbName string, db *doltdb.DoltDB, relationSource doltdb.RelationSource[RelationType]) (*SequenceTracker[RelationType, StateType, ValueType], error) {
 	branches, err := db.GetBranches(ctx)
 	if err != nil {
-		return GlobalStateImpl{}, err
+		return nil, err
 	}
 
 	remotes, err := db.GetRemoteRefs(ctx)
 	if err != nil {
-		return GlobalStateImpl{}, err
+		return nil, err
 	}
 
 	rootRefs := make([]ref.DoltRef, 0, len(branches)+len(remotes))
@@ -85,31 +91,59 @@ func NewGlobalStateStoreForDb(ctx context.Context, dbName string, db *doltdb.Dol
 
 	err = eg.Wait()
 	if err != nil {
-		return GlobalStateImpl{}, err
+		return nil, err
 	}
 
-	tracker, err := NewAutoIncrementTracker(ctx, dbName, roots...)
+	return NewSequenceTrackerFromRoots(ctx, dbName, relationSource, roots...)
+}
+
+func NewGlobalStateStoreForDb(ctx context.Context, dbName string, db *doltdb.DoltDB) (GlobalStateImpl, error) {
+	autoIncrementTracker, err := NewSequenceTracker(ctx, dbName, db, doltdb.TableSource{})
 	if err != nil {
 		return GlobalStateImpl{}, err
 	}
-
 	return GlobalStateImpl{
-		aiTracker: tracker,
-		mu:        &sync.Mutex{},
+		sequenceTrackers: map[interface{}]globalstate.SequenceTrackerBase{autoIncrementTrackerKey: autoIncrementTracker},
 	}, nil
 }
 
 type GlobalStateImpl struct {
-	aiTracker *AutoIncrementTracker
-	mu        *sync.Mutex
+	sequenceTrackers map[interface{}]globalstate.SequenceTrackerBase
 }
 
 var _ globalstate.GlobalState = GlobalStateImpl{}
 
-func (g GlobalStateImpl) AutoIncrementTracker(ctx *sql.Context) (globalstate.AutoIncrementTracker, error) {
-	return g.aiTracker, nil
+func (g GlobalStateImpl) GetSequenceTracker(ctx context.Context, key interface{}) (globalstate.SequenceTrackerBase, error) {
+	return g.sequenceTrackers[key], nil
+}
+
+func (g GlobalStateImpl) AddSequenceTracker(ctx context.Context, key interface{}, tracker globalstate.SequenceTrackerBase) error {
+	g.sequenceTrackers[key] = tracker
+	return nil
 }
 
 func (g GlobalStateImpl) Close() {
-	g.aiTracker.Close()
+	for _, tracker := range g.sequenceTrackers {
+		tracker.Close()
+	}
+}
+
+func (g GlobalStateImpl) MergeRoots(ctx context.Context, roots ...doltdb.Rootish) error {
+	for _, tracker := range g.sequenceTrackers {
+		err := tracker.MergeRoots(ctx, roots...)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// GetSequenceTracker returns a SequenceTracker held by the globalstate.GlobalState, keyed by the provided key.
+// This function performs the necessary cast so that the caller doesn't have to cast the result.
+func GetSequenceTracker[T globalstate.SequenceTrackerBase](ctx context.Context, gs globalstate.GlobalState, key TrackerKey[T]) (result T, err error) {
+	aiti, err := gs.GetSequenceTracker(ctx, key)
+	if err != nil {
+		return result, err
+	}
+	return aiti.(T), nil
 }

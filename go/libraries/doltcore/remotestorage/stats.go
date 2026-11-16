@@ -25,6 +25,7 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
+	"github.com/dolthub/dolt/go/store/nbs"
 )
 
 var StatsFactory func() StatsRecorder = NullStatsRecorderFactory
@@ -54,6 +55,44 @@ type StatsRecorder interface {
 	RecordDownloadAttemptStart(retry int, offset, size uint64)
 	RecordDownloadComplete(retry int, size uint64, d time.Duration)
 	WriteSummaryTo(io.Writer) error
+}
+
+// teeStatsRecorder returns a StatsRecorder that forwards every record callback
+// to |primary| (the process-global recorder, which also backs WriteSummaryTo)
+// and, when non-nil, to |extra| (a per-operation recorder threaded in by the
+// caller, e.g. the puller's push-log stats). When |extra| is nil, |primary| is
+// returned directly to avoid any per-callback overhead.
+func teeStatsRecorder(primary StatsRecorder, extra nbs.StatsRecorder) StatsRecorder {
+	if extra == nil {
+		return primary
+	}
+	return teeRecorder{primary: primary, extra: extra}
+}
+
+type teeRecorder struct {
+	primary StatsRecorder
+	extra   nbs.StatsRecorder
+}
+
+var _ StatsRecorder = teeRecorder{}
+
+func (t teeRecorder) RecordTimeToFirstByte(retry int, size uint64, d time.Duration) {
+	t.primary.RecordTimeToFirstByte(retry, size, d)
+	t.extra.RecordTimeToFirstByte(retry, size, d)
+}
+
+func (t teeRecorder) RecordDownloadAttemptStart(retry int, offset, size uint64) {
+	t.primary.RecordDownloadAttemptStart(retry, offset, size)
+	t.extra.RecordDownloadAttemptStart(retry, offset, size)
+}
+
+func (t teeRecorder) RecordDownloadComplete(retry int, size uint64, d time.Duration) {
+	t.primary.RecordDownloadComplete(retry, size, d)
+	t.extra.RecordDownloadComplete(retry, size, d)
+}
+
+func (t teeRecorder) WriteSummaryTo(w io.Writer) error {
+	return t.primary.WriteSummaryTo(w)
 }
 
 var _ StatsRecorder = NullStatsRecorder{}

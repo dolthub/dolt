@@ -13,7 +13,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: https://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
@@ -41,7 +41,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:{{get_port "server1_cluster"}}/{database}
+            remote_url_template: https://127.0.0.1:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
@@ -80,7 +80,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: https://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
@@ -108,7 +108,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:{{get_port "server1_cluster"}}/{database}
+            remote_url_template: https://127.0.0.1:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
@@ -147,7 +147,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: https://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
@@ -176,7 +176,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:{{get_port "server1_cluster"}}/{database}
+            remote_url_template: https://127.0.0.1:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
@@ -215,7 +215,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: https://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
@@ -244,7 +244,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:{{get_port "server1_cluster"}}/{database}
+            remote_url_template: https://127.0.0.1:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
@@ -283,7 +283,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: https://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
@@ -311,7 +311,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:{{get_port "server1_cluster"}}/{database}
+            remote_url_template: https://127.0.0.1:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
@@ -390,7 +390,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:{{get_port "server2_cluster"}}/{database}
+            remote_url_template: https://127.0.0.1:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
@@ -420,7 +420,7 @@ tests:
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:{{get_port "server1_cluster"}}/{database}
+            remote_url_template: https://127.0.0.1:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:

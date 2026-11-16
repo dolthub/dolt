@@ -91,20 +91,7 @@ func (a *HasAncestor) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		}
 	}
 
-	headHash, err := headCommit.HashOf()
-	if err != nil {
-		return nil, fmt.Errorf("error during has_ancestor check: %s", err.Error())
-	}
-
 	ancHash, err := ancCommit.HashOf()
-	if err != nil {
-		return nil, fmt.Errorf("error during has_ancestor check: %s", err.Error())
-	}
-	if headHash == ancHash {
-		return true, nil
-	}
-
-	cc, err := headCommit.GetCommitClosure(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error during has_ancestor check: %s", err.Error())
 	}
@@ -112,8 +99,11 @@ func (a *HasAncestor) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error during has_ancestor check: %s", err.Error())
 	}
-
-	isAncestor, err := cc.ContainsKey(ctx, ancHash, ancHeight)
+	ancestry, err := headCommit.GetAncestry(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error during has_ancestor check: %s", err.Error())
+	}
+	isAncestor, err := ancestry.Contains(ctx, ancHash, ancHeight)
 	if err != nil {
 		return nil, fmt.Errorf("error during has_ancestor check: %s", err.Error())
 	}

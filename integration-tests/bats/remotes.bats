@@ -266,6 +266,23 @@ SQL
     [[ ! "$output" =~ "README.md" ]] || false
 }
 
+@test "remotes: clone a freshly initialized checkout after garbage collection" {
+    # https://github.com/dolthub/dolt/issues/5325
+    mkdir repo_one
+    cd repo_one
+    dolt init
+    dolt gc
+    cd ..
+
+    run dolt clone file://./repo_one/.dolt/noms repo_two
+    [ "$status" -eq 0 ]
+    cd repo_two
+    run dolt log -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Initialize data repository" ]] || false
+    cd ..
+}
+
 @test "remotes: clone a complicated remote" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql -q "CREATE TABLE test (pk int primary key)"
@@ -378,6 +395,30 @@ SQL
     [[ ! "$output" =~ "t2" ]] || false
     [[ ! "$output" =~ "t3" ]] || false
     cd ..
+}
+
+@test "remotes: read-tables cleans up after a failure" {
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt sql -q "CREATE TABLE t1 (pk BIGINT NOT NULL PRIMARY KEY);"
+    dolt add t1
+    dolt commit -m "added t1"
+    dolt push test-remote main
+    cd "dolt-repo-clones"
+
+    # A read-tables that fails partway must take its directory with it. Left behind, the in-progress marker
+    # inside it blocks every later use of that name.
+    run dolt read-tables http://localhost:50051/test-org/test-repo main nosuchtable
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "No table named 'nosuchtable'" ]] || false
+    [ ! -d "test-repo" ]
+
+    # The retry must not be blocked by the remains of the failed attempt.
+    run dolt read-tables http://localhost:50051/test-org/test-repo main t1
+    [ "$status" -eq 0 ]
+    cd test-repo
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "t1" ]] || false
 }
 
 @test "remotes: clone a remote with docs" {

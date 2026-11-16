@@ -575,7 +575,8 @@ func materializeMap(t *testing.T, mut *MutableMap) Map {
 		if nextMutation.Key == nil {
 			break
 		}
-		cmp := mut.keyDesc.Compare(ctx, val.Tuple(prevMutation.Key), val.Tuple(nextMutation.Key))
+		cmp, err := mut.keyDesc.Compare(ctx, val.Tuple(prevMutation.Key), val.Tuple(nextMutation.Key))
+		require.NoError(t, err)
 		assert.True(t, cmp < 0)
 		prevMutation = nextMutation
 	}

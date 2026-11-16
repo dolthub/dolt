@@ -15,6 +15,10 @@
 package editor
 
 import (
+	"errors"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -68,5 +72,28 @@ func TestOpenCommitEditor(t *testing.T) {
 		if val != test.expected {
 			t.Error(val, "!=", test.expected)
 		}
+	}
+}
+
+func TestOpenTempEditorFile(t *testing.T) {
+	if osutil.IsWindows {
+		t.Skip("Invalid test on Windows as /bin/sh does not exist")
+	}
+	// The editor copies the temp file, keeping its mode, and writes the temp file's path into it.
+	cp := filepath.Join(t.TempDir(), "copy")
+	val, err := OpenTempEditor(`/bin/sh -c 'cp -p "$1" "$0"; printf "%s" "$1" > "$1"' `+cp, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	info, err := os.Stat(cp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0600 {
+		t.Error(info.Mode().Perm(), "!=", os.FileMode(0600))
+	}
+	if _, err := os.Stat(val); !errors.Is(err, fs.ErrNotExist) {
+		t.Error("temp file", val, "was not removed:", err)
 	}
 }

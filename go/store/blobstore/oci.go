@@ -77,6 +77,10 @@ func (bs *OCIBlobstore) Path() string {
 	return path.Join(bs.bucketName, bs.prefix)
 }
 
+func (bs *OCIBlobstore) Teardown(ctx context.Context) error {
+	return nil
+}
+
 // Exists returns true if a blob exists for the given key, and false if it does not.
 // For InMemoryBlobstore instances error should never be returned (though other
 // implementations of this interface can)
@@ -124,16 +128,14 @@ func (bs *OCIBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.R
 		return nil, 0, "", err
 	}
 
+	// The whole object's size. For a ranged request only the Content-Range
+	// carries it; ContentLength is the length of the range, so it is only a
+	// usable fallback when the whole object was requested.
 	var size uint64
-	// Try to get total size from Content-Range header first (for range requests)
 	if res.RawResponse != nil && res.RawResponse.Header != nil {
-		contentRange := res.RawResponse.Header.Get("Content-Range")
-		if contentRange != "" {
-			size = parseContentRangeSize(contentRange)
-		}
+		size = parseContentRangeSize(res.RawResponse.Header.Get("Content-Range"))
 	}
-	// Fall back to Content-Length if no Content-Range (full object request)
-	if size == 0 && res.ContentLength != nil {
+	if size == 0 && br.isAllRange() && res.ContentLength != nil {
 		size = uint64(*res.ContentLength)
 	}
 
@@ -151,10 +153,8 @@ func (bs *OCIBlobstore) Put(ctx context.Context, key string, totalSize int64, re
 	return bs.upload(ctx, "", key, totalSize, reader)
 }
 
-// CheckAndPut will check the current version of a blob against an expectedVersion, and if the
-// versions match it will update the data and version associated with the key
-func (bs *OCIBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader) (string, error) {
-	return bs.upload(ctx, expectedVersion, key, totalSize, reader)
+func (bs *OCIBlobstore) CheckAndPutManifest(ctx context.Context, expectedVersion string, contents []byte) (string, error) {
+	return bs.upload(ctx, expectedVersion, ManifestKey, int64(len(contents)), bytes.NewReader(contents))
 }
 
 // At the time of this implementation, Oracle Cloud does not provide a way to create composite objects

@@ -20,21 +20,6 @@ teardown() {
     teardown_common
 }
 
-# For reasons unknown, lambda fails on this test about 10% of the time. It seems to be something having to do with
-# the IO subsystem of lambda. The output of the `dolt archive` command is truncated occasionally. Doesn't ever happen
-# on regular hosts.
-# bats test_tags=no_lambda
-@test "archive: too few chunks" {
-  dolt sql -q "$(update_statement)"
-  dolt gc --archive-level 0
-
-  run dolt archive
-  [ "$status" -eq 0 ]
-
-  lines="$(echo "$output" | grep -ci 'Not enough chunks to build archive.*skipping')"
-  [ "$lines" -eq "2" ]
-}
-
 @test "archive: single archive oldgen" {
   dolt sql -q "$(mutations_and_gc_statement 1)"
 
@@ -64,36 +49,6 @@ teardown() {
   dolt sql -q "$(update_statement)"
 }
 
-@test "archive: multi archive newgen then revert" {
-  # Getting multiple table files in `newgen` is a little gross.
-  dolt sql -q "$(mutations_and_gc_statement 0)"
-  mkdir remote
-  dolt remote add origin file://remote
-  dolt push origin main
-
-  dolt clone file://remote cloned
-  cd cloned
-  dolt archive --purge
-  files=$(find . -name "*darc" | wc -l | sed 's/[ \t]//g')
-  [ "$files" -eq "1" ]
-
-  cd ..
-  dolt sql -q "$(mutations_and_gc_statement 0)"
-  dolt push origin main
-
-  cd cloned
-  dolt fetch
-  dolt archive --purge
-  files=$(find . -name "*darc" | wc -l | sed 's/[ \t]//g')
-  [ "$files" -eq "2" ]
-
-  dolt archive --revert
-  files=$(find . -name "*darc" | wc -l | sed 's/[ \t]//g')
-  [ "$files" -eq "0" ]
-
-  dolt fsck
-}
-
 @test "archive: multiple archives" {
   dolt sql -q "$(mutations_and_gc_statement 1)"
   dolt sql -q "$(mutations_and_gc_statement 1)"
@@ -106,50 +61,6 @@ teardown() {
   commits=$(dolt log --stat --oneline | wc -l | sed 's/[ \t]//g')
   [ "$commits" -eq "186" ]
 }
-
-@test "archive: archive multiple times" {
-  dolt sql -q "$(mutations_and_gc_statement 0)"
-  dolt archive
-
-  dolt sql -q "$(mutations_and_gc_statement 0)"
-  dolt archive
-
-  files=$(find . -name "*darc" | wc -l | sed 's/[ \t]//g')
-  [ "$files" -eq "2" ]
-}
-
-@test "archive: archive --revert (fast)" {
-  dolt sql -q "$(mutations_and_gc_statement 0)"
-  dolt archive
-  dolt archive --revert
-
-  # dolt log --stat will load every single chunk. 66 manually verified.
-  commits=$(dolt log --stat --oneline | wc -l | sed 's/[ \t]//g')
-  [ "$commits" -eq "66" ]
-}
-
-@test "archive: archive --revert (rebuild)" {
-  dolt sql -q "$(mutations_and_gc_statement 0)"
-  dolt archive
-  dolt archive --revert
-
-  # dolt log --stat will load every single chunk. 66 manually verified.
-  commits=$(dolt log --stat --oneline | wc -l | sed 's/[ \t]//g')
-  [ "$commits" -eq "66" ]
-}
-
-@test "archive: archive --purge" {
-  dolt sql -q "$(mutations_and_gc_statement 0)"
-
-  # find impl differences by platform makes this a pain.
-  tablefile=$(find .dolt/noms/oldgen -type f -print | awk -F/ 'length($NF) == 32 && $NF ~ /^[a-v0-9]{32}$/')
-
-  [ -e "$tablefile" ] # extreme paranoia. make sure it exists before.
-  dolt archive --purge
-  # Ensure the table file is gone.
-  [ ! -e "$tablefile" ]
-}
-
 
 @test "archive: can clone archived repository" {
     mkdir -p remote/.dolt
@@ -248,14 +159,13 @@ teardown() {
     cd repo1
     dolt fetch
 
-    ## update the remote repo directly. Need to run the archive command when the server is stopped.
+    ## update the remote repo directly. Need to gc into archives when the server is stopped.
     ## This will result in archived files on the remote, which we will need to read chunks from when we fetch.
     cd ../../remote
     kill $remotesrv_pid
     wait $remotesrv_pid || :
     remotesrv_pid=""
     dolt sql -q "$(mutations_and_gc_statement)"
-    dolt archive
 
     remotesrv --http-port $port --grpc-port $port --repo-mode &
     remotesrv_pid=$!

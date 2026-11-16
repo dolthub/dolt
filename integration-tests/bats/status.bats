@@ -619,3 +619,64 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "On branch main" ]] || false
 }
+
+# Regression test for https://github.com/dolthub/dolt/issues/11137
+# `dolt --use-db=<db> status` (no @branch revision suffix) should resolve
+# the current branch from the server rather than failing with
+# "could not find current branch commit".
+@test "status: --use-db without branch revision resolves active branch" {
+    dolt sql -q "create table t (a int primary key, b int);"
+    dolt add .
+    dolt commit -m "init"
+    dolt sql -q "insert into t values (1, 2);"
+
+    dbname="dolt-repo-$$"
+
+    run dolt --use-db="$dbname" status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch main" ]] || false
+    [[ "$output" =~ "modified:" ]] || false
+    [[ "$output" =~ "t" ]] || false
+
+    run dolt --use-db="$dbname/main" status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch main" ]] || false
+    [[ "$output" =~ "modified:" ]] || false
+
+    dolt branch other
+    run dolt --use-db="$dbname/other" status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch other" ]] || false
+}
+
+@test "status: ALTER TABLE AUTO_INCREMENT value change shows table as modified" {
+    # See https://github.com/dolthub/dolt/issues/11145
+    dolt sql <<SQL
+CREATE TABLE ainc (id int NOT NULL AUTO_INCREMENT, PRIMARY KEY (id));
+INSERT INTO ainc VALUES ();
+SQL
+    dolt add -A && dolt commit -m "create ainc"
+
+    dolt sql -q "ALTER TABLE ainc AUTO_INCREMENT = 100"
+
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "AUTO_INCREMENT=100" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ "modified:         ainc" ]] || false
+    ! [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    dolt add ainc
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ "modified:         ainc" ]] || false
+
+    dolt commit -m "bump auto_increment"
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}

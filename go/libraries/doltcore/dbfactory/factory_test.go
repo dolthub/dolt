@@ -27,7 +27,7 @@ import (
 
 func TestCreateMemDB(t *testing.T) {
 	ctx := context.Background()
-	db, vrw, ns, err := CreateDB(ctx, types.Format_Default, "mem://", nil)
+	db, vrw, ns, err := CreateDB(ctx, types.Format_DOLT, "mem://", nil)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, db)

@@ -1,6 +1,11 @@
 source "${BASH_SOURCE[0]%/*}/windows-compat.bash"
 source "${BASH_SOURCE[0]%/*}/local-remote.bash"
 
+if [ -z "${IS_MAC+x}" ]; then
+    IS_MAC=false
+    [ "$(uname)" = "Darwin" ] && IS_MAC=true
+fi
+
 if [ -z "$BATS_TMPDIR" ]; then
     export BATS_TMPDIR=$HOME/batstmp/
     mkdir $BATS_TMPDIR
@@ -8,6 +13,13 @@ fi
 
 export DOLT_CONTEXT_VALIDATION_ENABLED=true
 export DOLT_ENABLE_DYNAMIC_ASSERTS=true
+
+# Every dolt command that isn't init/config/send-metrics spawns a detached, untracked
+# `dolt send-metrics` child process on exit to flush usage events (see flushEventsDir in
+# cmd/dolt/dolt.go). That process can still be reading/writing/locking files under the
+# global config dir after the parent dolt command (or a killed sql-server) has exited,
+# racing with a test's teardown removing that same directory. Disable it for bats runs.
+export DOLT_DISABLE_EVENT_FLUSH=true
 
 nativebatsdir() { echo `nativepath $BATS_TEST_DIRNAME/$1`; }
 batshelper() { echo `nativebatsdir helper/$1`; }
@@ -98,13 +110,6 @@ assert_feature_version() {
     fi
 }
 
-skip_nbf_dolt() {
-  if [ ! "$DOLT_DEFAULT_BIN_FORMAT" = "__LD_1__" ]
-  then
-    skip "skipping test for nomsBinFormat __DOLT__"
-  fi
-}
-
 setup_common() {
     setup_no_dolt_init
     dolt init
@@ -146,6 +151,43 @@ parquet() {
     out=$(hadoop jar "$PARQUET_RUNTIME_JAR" org.apache.parquet.cli.Main "$@")
     echo "$out"
   fi
+}
+
+wait_for_file() {
+  local file="$1"
+  local retries="${2:-40}"
+  local interval="${3:-0.1}"
+
+  for ((i=0; i<retries; i++)); do
+    if [ -f "$file" ]; then
+      return 0
+    fi
+    sleep "$interval"
+  done
+
+  echo "Timed out waiting for file: $file"
+  return 1
+}
+
+# get_memory_kb(<PID>) returns the resident memory or working set size in KB
+# for the specified process PID.
+#
+# Arguments:
+#   $1 - process PID
+# Outputs:
+#   STDOUT - process memory in KB
+get_memory_kb() {
+    pid="$1"
+
+    if [ "$IS_WINDOWS" == true ]; then
+        winpid="$pid"
+        if [ -f "/proc/$pid/winpid" ]; then
+            winpid=$(cat "/proc/$pid/winpid")
+        fi
+        tasklist //FI "PID eq $winpid" //FO CSV //NH | awk -F'","' '{print $5}' | tr -d '", K\r'
+    else
+        ps -o rss= -p "$pid" | tr -d ' '
+    fi
 }
 
 nativevar DOLT_ROOT_PATH $BATS_TMPDIR/config-$$ /p

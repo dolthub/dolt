@@ -19,13 +19,14 @@ import (
 	"context"
 	"encoding/binary"
 	"math"
-	"math/big"
 	"math/bits"
 	"time"
+	"unicode/utf8"
 	"unsafe"
 
+	"github.com/cockroachdb/apd/v3"
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -126,6 +127,17 @@ func IsAdaptiveEncoding(enc Encoding) bool {
 		ExtendedAdaptiveEnc,
 		GeomAdaptiveEnc,
 		JsonAdaptiveEnc:
+		return true
+	default:
+		return false
+	}
+}
+
+func IsExtendedEncoding(enc Encoding) bool {
+	switch enc {
+	case ExtendedEnc,
+		ExtendedAdaptiveEnc,
+		ExtendedAddrEnc:
 		return true
 	default:
 		return false
@@ -401,14 +413,16 @@ func writeFloat32(buf []byte, val float32) {
 	binary.LittleEndian.PutUint32(buf, math.Float32bits(val))
 }
 
+// compareFloat32 orders NaN after every other value and equal to itself, so that a NaN can be found by a lookup.
 func compareFloat32(l, r float32) int {
 	if l == r {
 		return 0
 	} else if l < r {
 		return -1
-	} else {
+	} else if l > r {
 		return 1
 	}
+	return compareNaN(l != l, r != r)
 }
 
 func readFloat64(val []byte) float64 {
@@ -421,14 +435,26 @@ func writeFloat64(buf []byte, val float64) {
 	binary.LittleEndian.PutUint64(buf, math.Float64bits(val))
 }
 
+// compareFloat64 orders NaN after every other value and equal to itself, so that a NaN can be found by a lookup.
 func compareFloat64(l, r float64) int {
 	if l == r {
 		return 0
 	} else if l < r {
 		return -1
-	} else {
+	} else if l > r {
 		return 1
 	}
+	return compareNaN(math.IsNaN(l), math.IsNaN(r))
+}
+
+// compareNaN compares two floats of which at least one is NaN.
+func compareNaN(lNaN, rNaN bool) int {
+	if lNaN && rNaN {
+		return 0
+	} else if lNaN {
+		return 1
+	}
+	return -1
 }
 
 func readBit64(val []byte) uint64 {
@@ -443,30 +469,65 @@ func compareBit64(l, r uint64) int {
 	return compareUint64(l, r)
 }
 
-func readDecimal(val []byte) decimal.Decimal {
+func readDecimal(val []byte) *apd.Decimal {
+	if len(val) == int(int32Size) {
+		v := readInt32(val)
+		if v == int32(types.DecimalNaN) {
+			return &apd.Decimal{Form: apd.NaN}
+		} else if v == int32(types.DecimalPosInf) {
+			return &apd.Decimal{Form: apd.Infinite}
+		} else if v == int32(types.DecimalNegInf) {
+			return &apd.Decimal{Form: apd.Infinite, Negative: true}
+		}
+		panic("unable to read decimal value")
+	}
 	e := readInt32(val[:int32Size])
 	s := readInt8(val[int32Size : int32Size+int8Size])
-	b := big.NewInt(0).SetBytes(val[int32Size+int8Size:])
+	d := new(apd.Decimal)
+	d.Coeff.SetBytes(val[int32Size+int8Size:])
+	d.Exponent = e
 	if s < 0 {
-		b = b.Neg(b)
+		d.Negative = true
 	}
-	return decimal.NewFromBigInt(b, e)
+	return d
 }
 
-func writeDecimal(buf []byte, val decimal.Decimal) {
+func writeDecimal(buf []byte, val *apd.Decimal) {
 	expectSize(buf, sizeOfDecimal(val))
-	writeInt32(buf[:int32Size], val.Exponent())
-	b := val.Coefficient()
-	writeInt8(buf[int32Size:int32Size+int8Size], int8(b.Sign()))
-	b.FillBytes(buf[int32Size+int8Size:])
+	if val.Form == apd.NaN {
+		writeInt32(buf[:int32Size], types.DecimalNaN)
+	} else if val.Form == apd.Infinite {
+		if val.Negative {
+			writeInt32(buf[:int32Size], types.DecimalNegInf)
+		} else {
+			writeInt32(buf[:int32Size], types.DecimalPosInf)
+		}
+	} else {
+		writeInt32(buf[:int32Size], val.Exponent)
+		writeInt8(buf[int32Size:int32Size+int8Size], int8(val.Sign()))
+		val.Coeff.FillBytes(buf[int32Size+int8Size:])
+	}
 }
 
-func sizeOfDecimal(val decimal.Decimal) ByteSize {
-	bsz := len(val.Coefficient().Bits()) * (bits.UintSize / 8)
+func sizeOfDecimal(val *apd.Decimal) ByteSize {
+	if val.Form == apd.NaN || val.Form == apd.Infinite {
+		return int32Size
+	}
+	bsz := len(val.Coeff.MathBigInt().Bits()) * (bits.UintSize / 8)
 	return int32Size + int8Size + ByteSize(bsz)
 }
 
-func compareDecimal(l, r decimal.Decimal) int {
+func compareDecimal(l, r *apd.Decimal) int {
+	if (l.Form == apd.NaN && r.Form == apd.NaN) ||
+		(l.Form == apd.Infinite && r.Form == apd.Infinite && l.Negative == r.Negative) {
+		return 0
+	}
+	if l.Form == apd.NaN {
+		return 1
+	}
+	if r.Form == apd.NaN {
+		return -1
+	}
 	return l.Cmp(r)
 }
 
@@ -655,8 +716,68 @@ func compareAddr(l, r hash.Hash) int {
 	return l.Compare(r)
 }
 
-func compareAdaptiveValue(l, r AdaptiveValue) int {
-	return bytes.Compare(l, r)
+// CompareCollatedStrings compares two UTF-8 byte slices using the given collation.
+func CompareCollatedStrings(collation sql.CollationID, left, right []byte) int {
+	i := 0
+	for i < len(left) && i < len(right) {
+		if left[i] != right[i] {
+			break
+		}
+		i++
+	}
+	if i >= len(left) || i >= len(right) {
+		if len(left) < len(right) {
+			return -1
+		} else if len(left) > len(right) {
+			return 1
+		} else {
+			return 0
+		}
+	}
+
+	li := i
+	for ; li > 0 && !utf8.RuneStart(left[li]); li-- {
+	}
+	left = left[li:]
+
+	ri := i
+	for ; ri > 0 && !utf8.RuneStart(right[ri]); ri-- {
+	}
+	right = right[ri:]
+
+	getRuneWeight := collation.Sorter()
+	for len(left) > 0 && len(right) > 0 {
+		leftRune, leftRead := utf8.DecodeRune(left)
+		rightRune, rightRead := utf8.DecodeRune(right)
+		if leftRead == utf8.RuneError || rightRead == utf8.RuneError {
+			if leftRead == utf8.RuneError && rightRead != utf8.RuneError {
+				return 1
+			} else if leftRead != utf8.RuneError && rightRead == utf8.RuneError {
+				return -1
+			} else {
+				return 0
+			}
+		}
+		if leftRune != rightRune {
+			leftWeight := getRuneWeight(leftRune)
+			rightWeight := getRuneWeight(rightRune)
+			if leftWeight < rightWeight {
+				return -1
+			} else if leftWeight > rightWeight {
+				return 1
+			}
+		}
+		left = left[leftRead:]
+		right = right[rightRead:]
+	}
+
+	if len(left) < len(right) {
+		return -1
+	} else if len(left) > len(right) {
+		return 1
+	} else {
+		return 0
+	}
 }
 
 func writeRaw(buf, val []byte) {

@@ -36,11 +36,13 @@ type rangeIter[K, V ~[]byte] interface {
 var _ rangeIter[val.Tuple, val.Tuple] = &tree.OrderedTreeIter[val.Tuple, val.Tuple]{}
 var _ rangeIter[val.Tuple, val.Tuple] = &memRangeIter{}
 
-// mutableMapIter iterates over a Range of Tuples.
+// mutableMapIter iterates over a Range of Tuples, merging the pending edits in |memory| with the tuples in |prolly|.
+// If |reverse| is true, both iterate in descending order.
 type mutableMapIter[K, V ~[]byte, O tree.Ordering[K]] struct {
-	memory rangeIter[K, V]
-	prolly *tree.OrderedTreeIter[K, V]
-	order  O
+	memory  rangeIter[K, V]
+	prolly  rangeIter[K, V]
+	order   O
+	reverse bool
 }
 
 // Next returns the next pair of Tuples in the Range, or io.EOF if the iter is done.
@@ -54,7 +56,10 @@ func (it mutableMapIter[K, V, O]) Next(ctx context.Context) (key K, value V, err
 			return nil, nil, io.EOF
 		}
 
-		cmp := it.compareKeys(ctx, pk, mk)
+		cmp, err := it.compareKeys(ctx, pk, mk)
+		if err != nil {
+			return nil, nil, err
+		}
 		switch {
 		case cmp < 0:
 			key, value = pk, pv
@@ -87,39 +92,61 @@ func (it mutableMapIter[K, V, O]) Next(ctx context.Context) (key K, value V, err
 	}
 }
 
-func (it mutableMapIter[K, V, O]) compareKeys(ctx context.Context, memKey, proKey K) int {
+func (it mutableMapIter[K, V, O]) compareKeys(ctx context.Context, memKey, proKey K) (int, error) {
 	if memKey == nil {
-		return 1
+		return 1, nil
 	}
 	if proKey == nil {
-		return -1
+		return -1, nil
 	}
-	return it.order.Compare(ctx, memKey, proKey)
+	cmp, err := it.order.Compare(ctx, memKey, proKey)
+	if it.reverse {
+		cmp = -cmp
+	}
+	return cmp, err
 }
 
-func memIterFromRange(ctx context.Context, list *skip.List, rng Range) *memRangeIter {
+func memIterFromRange(ctx context.Context, list *skip.List, rng Range) (*memRangeIter, error) {
 	// use the lower bound of |rng| to construct a skip.ListIter
-	iter := list.GetIterFromSeekFn(skipSearchFromRange(ctx, rng))
+	iter, err := list.GetIterFromSeekFn(skipSearchFromRange(ctx, rng))
+	if err != nil {
+		return nil, err
+	}
 
 	// enforce range start
 	var key val.Tuple
 	for {
 		key, _ = iter.Current()
-		if key == nil || rng.aboveStart(ctx, key) {
+		if key == nil {
+			break
+		}
+		above, err := rng.aboveStart(ctx, key)
+		if err != nil {
+			return nil, err
+		}
+		if above {
 			break // |i| inside |rng|
 		}
 		iter.Advance()
 	}
 
 	// enforce range end
-	if key == nil || !rng.belowStop(ctx, key) {
+	if key != nil {
+		below, err := rng.belowStop(ctx, key)
+		if err != nil {
+			return nil, err
+		}
+		if !below {
+			iter = nil
+		}
+	} else {
 		iter = nil
 	}
 
 	return &memRangeIter{
 		iter: iter,
 		rng:  rng,
-	}
+	}, nil
 }
 
 // skipSearchFromRange is a skip.SeekFn used to initialize
@@ -127,11 +154,15 @@ func memIterFromRange(ctx context.Context, list *skip.List, rng Range) *memRange
 // returns true if the iter being initialized is not yet
 // within the bounds of Range |rng|.
 func skipSearchFromRange(ctx context.Context, rng Range) skip.SeekFn {
-	return func(nodeKey []byte) bool {
+	return func(nodeKey []byte) (bool, error) {
 		if nodeKey == nil {
-			return false
+			return false, nil
 		}
-		return !rng.aboveStart(ctx, nodeKey)
+		above, err := rng.aboveStart(ctx, nodeKey)
+		if err != nil {
+			return false, err
+		}
+		return !above, nil
 	}
 }
 
@@ -160,8 +191,16 @@ func (it *memRangeIter) Iterate(ctx context.Context) (err error) {
 		it.iter.Advance()
 
 		k, _ := it.Current()
-		if k == nil || !it.rng.belowStop(ctx, k) {
+		if k == nil {
 			it.iter = nil // range exhausted
+		} else {
+			below, err := it.rng.belowStop(ctx, k)
+			if err != nil {
+				return err
+			}
+			if !below {
+				it.iter = nil // range exhausted
+			}
 		}
 
 		return
@@ -181,9 +220,158 @@ func (f filteredIter) Next(ctx context.Context) (k, v val.Tuple, err error) {
 		if err != nil {
 			return nil, nil, err
 		}
-		if !f.rng.Matches(ctx, k) {
+		matches, mErr := f.rng.Matches(ctx, k)
+		if mErr != nil {
+			return nil, nil, mErr
+		}
+		if !matches {
 			continue
 		}
 		return
 	}
+}
+
+func memIterFromRangeReverse(ctx context.Context, list *skip.List, rng Range) (*memReverseRangeIter, error) {
+	// seek to the first key at or beyond the end of |rng|
+	iter, err := list.GetIterFromSeekFn(func(nodeKey []byte) (bool, error) {
+		if nodeKey == nil {
+			return false, nil
+		}
+		return rng.belowStop(ctx, nodeKey)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// enforce range end
+	var key val.Tuple
+	for {
+		key, _ = iter.Current()
+		if key == nil {
+			break
+		}
+		below, err := rng.belowStop(ctx, key)
+		if err != nil {
+			return nil, err
+		}
+		if below {
+			break // |iter| inside |rng|
+		}
+		iter.Retreat()
+	}
+
+	// enforce range start
+	if key != nil {
+		above, err := rng.aboveStart(ctx, key)
+		if err != nil {
+			return nil, err
+		}
+		if !above {
+			iter = nil
+		}
+	} else {
+		iter = nil
+	}
+
+	return &memReverseRangeIter{iter: iter, rng: rng}, nil
+}
+
+// memReverseRangeIter iterates backwards over the edits of a skip.List within a Range.
+type memReverseRangeIter struct {
+	iter *skip.ListIter
+	rng  Range
+}
+
+// Current returns the iter's current Tuple pair, or nil Tuples if the iter has exhausted its range.
+func (it *memReverseRangeIter) Current() (key, value val.Tuple) {
+	if it.iter != nil {
+		key, value = it.iter.Current()
+	}
+	return
+}
+
+// Iterate moves the iter backwards inside its range.
+func (it *memReverseRangeIter) Iterate(ctx context.Context) error {
+	it.iter.Retreat()
+	k, _ := it.Current()
+	if k == nil {
+		it.iter = nil // range exhausted
+		return nil
+	}
+	above, err := it.rng.aboveStart(ctx, k)
+	if err != nil {
+		return err
+	}
+	if !above {
+		it.iter = nil // range exhausted
+	}
+	return nil
+}
+
+func memIterFromKeyRange(ctx context.Context, list *skip.List, order *val.TupleDesc, start, stop val.Tuple) (*memKeyRangeIter, error) {
+	var iter *skip.ListIter
+	var err error
+	if start == nil {
+		iter = list.IterAtStart()
+	} else {
+		if iter, err = list.GetIterAt(ctx, start); err != nil {
+			return nil, err
+		}
+		// GetIterAt retreats to the last key when |start| is greater than every key
+		if k, _ := iter.Current(); k != nil {
+			cmp, err := order.Compare(ctx, k, start)
+			if err != nil {
+				return nil, err
+			}
+			if cmp < 0 {
+				iter.Advance()
+			}
+		}
+	}
+	it := &memKeyRangeIter{iter: iter, order: order, stop: stop}
+	if err = it.checkStop(ctx); err != nil {
+		return nil, err
+	}
+	return it, nil
+}
+
+// memKeyRangeIter iterates over the edits of a skip.List in the physical key range from its start, inclusive, to
+// |stop|, exclusive.
+type memKeyRangeIter struct {
+	iter  *skip.ListIter
+	order *val.TupleDesc
+	stop  val.Tuple
+}
+
+// Current returns the iter's current Tuple pair, or nil Tuples if the iter has exhausted its range.
+func (it *memKeyRangeIter) Current() (key, value val.Tuple) {
+	if it.iter != nil {
+		key, value = it.iter.Current()
+	}
+	return
+}
+
+// Iterate progresses the iter inside its range.
+func (it *memKeyRangeIter) Iterate(ctx context.Context) error {
+	it.iter.Advance()
+	return it.checkStop(ctx)
+}
+
+func (it *memKeyRangeIter) checkStop(ctx context.Context) error {
+	k, _ := it.Current()
+	if k == nil {
+		it.iter = nil
+		return nil
+	}
+	if it.stop == nil {
+		return nil
+	}
+	cmp, err := it.order.Compare(ctx, k, it.stop)
+	if err != nil {
+		return err
+	}
+	if cmp >= 0 {
+		it.iter = nil
+	}
+	return nil
 }

@@ -16,10 +16,12 @@ package tree
 
 import (
 	"context"
+	"io"
 	"math"
 	"math/rand"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -206,5 +208,197 @@ func TestSamples(t *testing.T) {
 		assert.Equal(t, test.sum, test.data.sum())
 		assert.Equal(t, test.mean, test.data.mean())
 		assert.Equal(t, test.std, test.data.stdDev())
+	}
+}
+
+func TestCompareCollatedChunkDiffer(t *testing.T) {
+	ctx := context.Background()
+	utf8Default := sql.Collation_utf8mb4_0900_ai_ci
+
+	// Build the same input two different ways: as a single chunk vs. broken into
+	// tiny chunks that split UTF-8 runes across chunk boundaries. The comparator
+	// must produce the same result either way.
+	splitInto := func(s string, size int) [][]byte {
+		out := make([][]byte, 0)
+		b := []byte(s)
+		for len(b) > 0 {
+			n := size
+			if n > len(b) {
+				n = len(b)
+			}
+			out = append(out, b[:n:n])
+			b = b[n:]
+		}
+		return out
+	}
+
+	cases := []struct {
+		name      string
+		l, r      string
+		collation sql.CollationID
+		want      int
+	}{
+		{
+			name:      "case-insensitive equal",
+			l:         "Hello, world!",
+			r:         "HELLO, WORLD!",
+			collation: utf8Default,
+			want:      0,
+		},
+		{
+			name:      "case-insensitive differs",
+			l:         "Hello, world!",
+			r:         "Hello, zorld!",
+			collation: utf8Default,
+			want:      -1,
+		},
+		{
+			name:      "prefix is less",
+			l:         "abc",
+			r:         "abcd",
+			collation: utf8Default,
+			want:      -1,
+		},
+		{
+			name:      "binary collation, lowercase greater",
+			l:         "ABC",
+			r:         "abc",
+			collation: sql.Collation_utf8mb4_bin,
+			want:      -1,
+		},
+		{
+			name:      "multi-byte runes equal across boundaries",
+			l:         "café résumé naïve",
+			r:         "café résumé naïve",
+			collation: utf8Default,
+			want:      0,
+		},
+		{
+			name:      "multi-byte runes differ deep in stream",
+			l:         "café résumé naïve",
+			r:         "café résumé naïvf",
+			collation: utf8Default,
+			want:      -1,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			for _, chunk := range []int{1, 2, 3, 7, 128} {
+				d := &fakeChunkDiffer{
+					lChunks: splitInto(c.l, chunk),
+					rChunks: splitInto(c.r, chunk),
+				}
+				got, err := compareCollatedChunkDiffer(ctx, d, c.collation)
+				require.NoError(t, err, "chunk size %d", chunk)
+				assert.Equal(t, c.want, got, "chunk size %d", chunk)
+			}
+		})
+	}
+}
+
+// fakeChunkDiffer yields fixed lists of (left, right) byte chunks for testing the differ-based
+// comparison helpers. It records the number of Next calls so tests can verify the loop stops
+// early once the result is known. When the two chunk lists have different lengths the trailing
+// side is yielded as (chunk, nil) or (nil, chunk) until exhausted, then Next returns io.EOF.
+type fakeChunkDiffer struct {
+	lChunks, rChunks [][]byte
+	li, ri           int
+	calls            int
+}
+
+func (d *fakeChunkDiffer) Next(_ context.Context) ([]byte, []byte, error) {
+	d.calls++
+	var l, r []byte
+	if d.li < len(d.lChunks) {
+		l = d.lChunks[d.li]
+		d.li++
+	}
+	if d.ri < len(d.rChunks) {
+		r = d.rChunks[d.ri]
+		d.ri++
+	}
+	if l == nil && r == nil {
+		return nil, nil, io.EOF
+	}
+	return l, r, nil
+}
+
+// writeRecordingNodeStore records the hash of every Node written through it.
+type writeRecordingNodeStore struct {
+	NodeStore
+	written hash.HashSet
+}
+
+func (ns writeRecordingNodeStore) Write(ctx context.Context, nd *Node) (hash.Hash, error) {
+	h, err := ns.NodeStore.Write(ctx, nd)
+	if err == nil {
+		ns.written.Insert(h)
+	}
+	return h, err
+}
+
+// TestWalkNodesSkipsKeyAddresses checks that WalkNodes and WalkAddresses only
+// descend into the child refs of internal nodes, not into addresses embedded
+// in their keys.
+func TestWalkNodesSkipsKeyAddresses(t *testing.T) {
+	ctx := context.Background()
+	ns := writeRecordingNodeStore{NodeStore: NewTestNodeStore(), written: hash.NewHashSet()}
+
+	kd := val.NewTupleDescriptor(
+		val.Type{Enc: val.Int64Enc},
+		val.Type{Enc: val.CommitAddrEnc},
+	)
+	vd := val.NewTupleDescriptor(val.Type{Enc: val.Int64Enc, Nullable: true})
+	// |missing| is not present in the store.
+	missing := hash.Of([]byte("x"))
+
+	chkr, err := newEmptyChunker(ctx, ns, message.NewProllyMapSerializer(kd, vd, ns.Pool()))
+	require.NoError(t, err)
+	kb := val.NewTupleBuilder(kd, ns)
+	vb := val.NewTupleBuilder(vd, ns)
+	for i := 0; i < 20_000; i++ {
+		kb.PutInt64(0, int64(i))
+		kb.PutCommitAddr(1, missing)
+		k, err := kb.Build(ctx, sharedPool)
+		require.NoError(t, err)
+		vb.PutInt64(0, int64(i))
+		v, err := vb.Build(ctx, sharedPool)
+		require.NoError(t, err)
+		require.NoError(t, chkr.AddPair(ctx, Item(k), Item(v)))
+	}
+	root, err := chkr.Done(ctx)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, root.Level(), 2)
+
+	// The root's message yields its key-embedded addresses alongside its child refs.
+	msgAddrs := 0
+	require.NoError(t, walkAddresses(ctx, root, func(context.Context, hash.Hash) error {
+		msgAddrs++
+		return nil
+	}))
+	require.Greater(t, msgAddrs, root.Count())
+
+	visited := hash.NewHashSet()
+	require.NoError(t, WalkNodes(ctx, root, ns, func(_ context.Context, nd *Node) error {
+		require.False(t, visited.Has(nd.HashOf()))
+		visited.Insert(nd.HashOf())
+		return nil
+	}))
+	assert.Equal(t, ns.written.Size(), visited.Size())
+	for h := range ns.written {
+		assert.True(t, visited.Has(h))
+	}
+
+	addrs := hash.NewHashSet()
+	require.NoError(t, WalkAddresses(ctx, root, ns, func(_ context.Context, addr hash.Hash) error {
+		addrs.Insert(addr)
+		return nil
+	}))
+	assert.True(t, addrs.Has(missing))
+	for h := range visited {
+		if h != root.HashOf() {
+			assert.True(t, addrs.Has(h))
+		}
 	}
 }

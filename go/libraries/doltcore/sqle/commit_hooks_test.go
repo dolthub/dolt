@@ -61,7 +61,7 @@ func TestPushOnWriteHook(t *testing.T) {
 		t.Fatal("Failed to create noms directory")
 	}
 
-	destDB, _ := doltdb.LoadDoltDB(context.Background(), types.Format_Default, doltdb.LocalDirDoltDB, filesys.LocalFS)
+	destDB, _ := doltdb.LoadDoltDB(context.Background(), types.Format_DOLT, doltdb.LocalDirDoltDB, filesys.LocalFS)
 
 	// source repo
 	testDir, err = test.ChangeToTestDir("TestReplicationSource")
@@ -77,7 +77,7 @@ func TestPushOnWriteHook(t *testing.T) {
 		t.Fatal("Failed to create noms directory")
 	}
 
-	ddb, _ := doltdb.LoadDoltDB(context.Background(), types.Format_Default, doltdb.LocalDirDoltDB, filesys.LocalFS)
+	ddb, _ := doltdb.LoadDoltDB(context.Background(), types.Format_DOLT, doltdb.LocalDirDoltDB, filesys.LocalFS)
 	err = ddb.WriteEmptyRepo(context.Background(), "main", committerName, committerEmail)
 
 	if err != nil {
@@ -190,7 +190,7 @@ func TestAsyncPushOnWrite(t *testing.T) {
 		t.Fatal("Failed to create noms directory")
 	}
 
-	destDB, _ := doltdb.LoadDoltDB(context.Background(), types.Format_Default, doltdb.LocalDirDoltDB, filesys.LocalFS)
+	destDB, _ := doltdb.LoadDoltDB(context.Background(), types.Format_DOLT, doltdb.LocalDirDoltDB, filesys.LocalFS)
 
 	// source repo
 	testDir, err = test.ChangeToTestDir("TestReplicationSource")
@@ -206,7 +206,7 @@ func TestAsyncPushOnWrite(t *testing.T) {
 		t.Fatal("Failed to create noms directory")
 	}
 
-	ddb, _ := doltdb.LoadDoltDB(context.Background(), types.Format_Default, doltdb.LocalDirDoltDB, filesys.LocalFS)
+	ddb, _ := doltdb.LoadDoltDB(context.Background(), types.Format_DOLT, doltdb.LocalDirDoltDB, filesys.LocalFS)
 	err = ddb.WriteEmptyRepo(context.Background(), "main", committerName, committerEmail)
 
 	if err != nil {

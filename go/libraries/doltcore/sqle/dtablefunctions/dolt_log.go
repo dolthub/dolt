@@ -15,18 +15,19 @@
 package dtablefunctions
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
-	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
@@ -300,7 +301,7 @@ func (ltf *LogTableFunction) WithChildren(_ *sql.Context, children ...sql.Node) 
 
 // CheckAuth implements the interface sql.AuthorizationCheckerNode.
 func (ltf *LogTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
-	baseDB, _ := doltdb.SplitRevisionDbName(ltf.database.Name())
+	baseDB := plan.CheckPrivilegeNameForDatabase(ltf.database)
 	tblNames, err := ltf.database.GetTableNames(ctx)
 	if err != nil {
 		return false
@@ -488,11 +489,11 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 
 	dbName := sess.Session.GetCurrentDatabase()
 	headRef, err := sess.CWBHeadRef(ctx, dbName)
-	if err == doltdb.ErrOperationNotSupportedInDetachedHead {
-		// In detached HEAD state, we can still resolve commits without a branch ref
+	if err != nil {
+		if !errors.Is(err, doltdb.ErrOperationNotSupportedInDetachedHead) {
+			return nil, err
+		}
 		headRef = nil
-	} else if err != nil {
-		return nil, err
 	}
 
 	for _, revisionStr := range revisionValStrs {
@@ -533,27 +534,18 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 	}
 
 	if threeDot {
-		mergeBase, err := merge.MergeBase(ctx, commits[0], commits[1])
+		// Like git log A...B, exclude every merge base, so that no commit reachable from both sides is listed.
+		mergeBases, err := doltdb.GetCommitAncestors(ctx, commits[0], commits[1])
 		if err != nil {
 			return nil, err
 		}
-
-		mergeCs, err := doltdb.NewCommitSpec(mergeBase.String())
-		if err != nil {
-			return nil, err
+		for _, optCmt := range mergeBases {
+			mergeCommit, ok := optCmt.ToCommit()
+			if !ok {
+				return nil, doltdb.ErrGhostCommitEncountered
+			}
+			notCommits = append(notCommits, mergeCommit)
 		}
-
-		// Use merge base as excluding commit
-		optCmt, err := sqledb.DbData().Ddb.Resolve(ctx, mergeCs, nil)
-		if err != nil {
-			return nil, err
-		}
-		mergeCommit, ok := optCmt.ToCommit()
-		if !ok {
-			return nil, doltdb.ErrGhostCommitEncountered
-		}
-
-		notCommits = append(notCommits, mergeCommit)
 
 		return ltf.NewDotDotLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, commits, notCommits, matchFunc, cHashToRefs, ltf.tableNames, dtables.LogRowOptions{ShowParents: args.showParents, ShowSignature: args.showSignature})
 	}

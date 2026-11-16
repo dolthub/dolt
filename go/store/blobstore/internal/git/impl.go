@@ -15,6 +15,7 @@
 package git
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -22,6 +23,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"sync/atomic"
 )
 
 // GitAPIImpl implements GitAPI using the git CLI plumbing commands, via Runner.
@@ -29,6 +31,8 @@ import (
 // without requiring a working tree checkout.
 type GitAPIImpl struct {
 	r *Runner
+	// noWriteFetchHeadUnsupported indicates whether git lacks the flag.
+	noWriteFetchHeadUnsupported atomic.Bool
 }
 
 var _ GitAPI = (*GitAPIImpl)(nil)
@@ -196,6 +200,57 @@ func (a *GitAPIImpl) BlobReader(ctx context.Context, oid OID) (io.ReadCloser, er
 	return rc, err
 }
 
+func (a *GitAPIImpl) BlobSizes(ctx context.Context, oids []OID) ([]int64, error) {
+	if len(oids) == 0 {
+		return nil, nil
+	}
+	// git cat-file --batch-check emits one header line per input OID, in order.
+	var in bytes.Buffer
+	for _, oid := range oids {
+		fmt.Fprintln(&in, oid)
+	}
+	rc, _, err := a.r.Start(ctx, RunOptions{Stdin: &in}, "cat-file", "--batch-check=%(objectname) %(objecttype) %(objectsize)")
+	if err != nil {
+		return nil, err
+	}
+	br := bufio.NewReader(rc)
+	sizes := make([]int64, len(oids))
+	for i := range oids {
+		line, err := br.ReadString('\n')
+		if err != nil {
+			return nil, errors.Join(rc.Close(), fmt.Errorf("git cat-file --batch-check: reading size for %s: %w", oids[i], err))
+		}
+		sizes[i], err = parseBatchHeaderSize(line, oids[i])
+		if err != nil {
+			return nil, errors.Join(rc.Close(), err)
+		}
+	}
+	if err := rc.Close(); err != nil {
+		return nil, err
+	}
+	return sizes, nil
+}
+
+// parseBatchHeaderSize parses the size from |header|, a git cat-file --batch or --batch-check
+// line for |oid| of the form "<oid> <type> <size>". A missing or ambiguous object is an error.
+func parseBatchHeaderSize(header string, oid OID) (int64, error) {
+	fields := strings.Fields(header)
+	if len(fields) > 0 && fields[0] != oid.String() {
+		return 0, fmt.Errorf("git cat-file: response for %q does not match requested %s", fields[0], oid)
+	}
+	if len(fields) == 2 {
+		return 0, fmt.Errorf("git cat-file: object %s %s", oid, fields[1])
+	}
+	if len(fields) != 3 {
+		return 0, fmt.Errorf("git cat-file: unexpected header %q for %s", strings.TrimSpace(header), oid)
+	}
+	size, err := strconv.ParseInt(fields[2], 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("git cat-file: parse size %q for %s: %w", fields[2], oid, err)
+	}
+	return size, nil
+}
+
 func (a *GitAPIImpl) HashObject(ctx context.Context, contents io.Reader) (OID, error) {
 	out, err := a.r.Run(ctx, RunOptions{Stdin: contents}, "hash-object", "-w", "--stdin")
 	if err != nil {
@@ -338,7 +393,21 @@ func (a *GitAPIImpl) FetchRef(ctx context.Context, remote string, srcRef string,
 	// fetch refspecs. Without this, stale tracking refs from default refspecs
 	// can cause directory/file conflicts that make git exit 1 even when our
 	// specific refspec succeeds.
-	_, err := a.r.Run(ctx, RunOptions{}, "fetch", "--no-tags", "--refmap=", remote, refspec)
+	// --no-write-fetch-head: dolt reads only the tracking ref, not FETCH_HEAD.
+	unsupported := a.noWriteFetchHeadUnsupported.Load()
+	// maintenance.auto / gc.auto: fetch otherwise ends by starting git's automatic
+	// maintenance, which detaches and can repack and delete packs after the fetch
+	// has returned, while we are reading the objects it fetched.
+	args := []string{"-c", "maintenance.auto=false", "-c", "gc.auto=0", "fetch", "--no-tags"}
+	if !unsupported {
+		args = append(args, "--no-write-fetch-head")
+	}
+	args = append(args, "--refmap=", remote, refspec)
+	_, err := a.r.Run(ctx, RunOptions{}, args...)
+	if err != nil && !unsupported && isUnknownOptionErr(err, "no-write-fetch-head") {
+		a.noWriteFetchHeadUnsupported.Store(true)
+		return a.FetchRef(ctx, remote, srcRef, dstRef)
+	}
 	if err != nil && isRemoteRefNotFoundErr(err) {
 		return &RefNotFoundError{Ref: srcRef}
 	}
@@ -392,6 +461,18 @@ func isRefNotFoundErr(err error) bool {
 	return strings.Contains(msg, "needed a single revision") ||
 		strings.Contains(msg, "unknown revision") ||
 		strings.Contains(msg, "not a valid object name")
+}
+
+// gitUsageExitCode is the status git exits with after a usage error.
+const gitUsageExitCode = 129
+
+// isUnknownOptionErr reports whether git says |option| is unknown.
+func isUnknownOptionErr(err error, option string) bool {
+	var ce *CmdError
+	if !errors.As(err, &ce) || ce.ExitCode != gitUsageExitCode {
+		return false
+	}
+	return strings.Contains(string(ce.Output), "unknown option `"+option+"'")
 }
 
 func isRemoteRefNotFoundErr(err error) bool {

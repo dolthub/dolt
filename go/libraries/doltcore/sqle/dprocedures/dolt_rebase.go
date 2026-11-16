@@ -21,9 +21,11 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/vitess/go/sqltypes"
 	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/cherry_pick"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -34,6 +36,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 var doltRebaseProcedureSchema = []*sql.Column{
@@ -61,6 +64,9 @@ var RebaseActionEnumType = types.MustCreateEnumType([]string{
 // This is used by Doltgres to update the dolt_rebase schema using Doltgres types.
 var GetDoltRebaseSystemTableSchema = getDoltRebaseSystemTableSchema
 
+// RebaseCommitHashColumn is the column of the dolt_rebase system table that names the commit of a plan step.
+const RebaseCommitHashColumn = "commit_hash"
+
 func getDoltRebaseSystemTableSchema() sql.Schema {
 	return []*sql.Column{
 		{
@@ -75,8 +81,8 @@ func getDoltRebaseSystemTableSchema() sql.Schema {
 			Nullable: false,
 		},
 		{
-			Name:     "commit_hash",
-			Type:     types.Text,
+			Name:     RebaseCommitHashColumn,
+			Type:     types.MustCreateString(sqltypes.VarChar, hash.StringLen, sql.Collation_Default),
 			Nullable: false,
 		},
 		{
@@ -188,6 +194,9 @@ func doltRebase(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 func doDoltRebase(ctx *sql.Context, args []string) (int, string, error) {
 	if ctx.GetCurrentDatabase() == "" {
 		return 1, "", sql.ErrNoDatabaseSelected.New()
+	}
+	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
+		return 1, "", err
 	}
 
 	apr, err := cli.CreateRebaseArgParser().Parse(args)
@@ -316,9 +325,17 @@ func startRebase(ctx *sql.Context, upstreamPoint string, commitBecomesEmptyHandl
 		return doltdb.ErrGhostCommitEncountered
 	}
 
+	// The rebase plan never includes root commits, so rebasing onto an unrelated history would silently drop the
+	// contents of this branch's root.
+	if _, err = doltdb.GetCommitAncestor(ctx, startCommit, upstreamCommit); errors.Is(err, doltdb.ErrNoCommonAncestor) {
+		return fmt.Errorf("cannot rebase branch '%s' onto '%s': %w", rebaseBranch, upstreamPoint, err)
+	} else if err != nil {
+		return err
+	}
+
 	// rebaseWorkingBranch is the name of the temporary branch used when performing a rebase. In Git, a rebase
 	// happens with a detached HEAD, but Dolt doesn't support that, we use a temporary branch.
-	rebaseWorkingBranch := "dolt_rebase_" + rebaseBranch
+	rebaseWorkingBranch := doltdb.RebaseWorkingBranchPrefix + rebaseBranch
 	var rsc doltdb.ReplicationStatusController
 	err = actions.CreateBranchWithStartPt(ctx, dbData, rebaseWorkingBranch, upstreamPoint, false, &rsc)
 	if err != nil {
@@ -492,7 +509,7 @@ func abortRebase(ctx *sql.Context) error {
 	err = actions.DeleteBranch(ctx, dbData, headRef.GetPath(), actions.DeleteOptions{
 		Force:                      true,
 		AllowDeletingCurrentBranch: true,
-	}, doltSession.Provider(), &rsc)
+	}, &rsc)
 	if err != nil {
 		return err
 	}
@@ -762,7 +779,7 @@ func continueRebase(ctx *sql.Context) rebaseResult {
 	}
 
 	rebaseBranch := rebaseBranchWorkingSet.RebaseState().Branch()
-	rebaseWorkingBranch := "dolt_rebase_" + rebaseBranch
+	rebaseWorkingBranch := doltdb.RebaseWorkingBranchPrefix + rebaseBranch
 
 	// Check that the branch being rebased hasn't been updated since the rebase started
 	err = validateRebaseBranchHasntChanged(ctx, rebaseBranch, rebaseBranchWorkingSet.RebaseState())
@@ -788,7 +805,7 @@ func continueRebase(ctx *sql.Context) rebaseResult {
 	//       the branch head, but BEFORE doltdb.NewBranchAtCommit retrieves the working set for the
 	//       branch and updates the working root and staged root for the working set. We may be able
 	//       to fix this race condition by changing doltdb.NewBranchAtCommit to use
-	//       database.CommitWithWorkingSet, since it updates a branch head and working set atomically.
+	//       database.CommitDatasets, since it updates branch heads and working sets atomically.
 	err = copyABranch(ctx, dbData, rebaseWorkingBranch, rebaseBranch, true, false, nil)
 	if err != nil {
 		return newRebaseError(err)
@@ -835,7 +852,7 @@ func continueRebase(ctx *sql.Context) rebaseResult {
 
 	err = actions.DeleteBranch(ctx, dbData, rebaseWorkingBranch, actions.DeleteOptions{
 		Force: true,
-	}, doltSession.Provider(), nil)
+	}, nil)
 	if err != nil {
 		return newRebaseError(err)
 	}

@@ -16,6 +16,7 @@ package argparser
 
 import (
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -27,9 +28,10 @@ const (
 )
 
 type ArgParseResults struct {
-	options map[string]string
-	Args    []string
-	parser  *ArgParser
+	options         map[string]string
+	repeatedOptions map[string][]string
+	Args            []string
+	parser          *ArgParser
 
 	PositionalArgsSeparatorIndex int
 }
@@ -37,7 +39,7 @@ type ArgParseResults struct {
 // Equals res and other are only considered equal if the order and contents of their arguments
 // are the same.
 func (res *ArgParseResults) Equals(other *ArgParseResults) bool {
-	if len(res.Args) != len(other.Args) || len(res.options) != len(other.options) {
+	if len(res.Args) != len(other.Args) || len(res.options) != len(other.options) || len(res.repeatedOptions) != len(other.repeatedOptions) {
 		return false
 	}
 
@@ -52,13 +54,19 @@ func (res *ArgParseResults) Equals(other *ArgParseResults) bool {
 			return false
 		}
 	}
+	for k, vals := range res.repeatedOptions {
+		otherVals, ok := other.repeatedOptions[k]
+		if !ok || !slices.Equal(vals, otherVals) {
+			return false
+		}
+	}
 
 	return true
 }
 
 // NewEmptyResults creates a new ArgParseResults object with no arguments or options. Mostly useful for testing.
 func NewEmptyResults() *ArgParseResults {
-	return &ArgParseResults{options: make(map[string]string), Args: make([]string, 0)}
+	return &ArgParseResults{options: make(map[string]string), repeatedOptions: make(map[string][]string), Args: make([]string, 0)}
 }
 
 func (res *ArgParseResults) Contains(name string) bool {
@@ -111,6 +119,9 @@ func (res *ArgParseResults) GetValue(name string) (string, bool) {
 }
 
 func (res *ArgParseResults) GetValueList(name string) ([]string, bool) {
+	if vals, ok := res.repeatedOptions[name]; ok {
+		return slices.Clone(vals), true
+	}
 	val, ok := res.options[name]
 	if !ok {
 		return nil, false
@@ -144,7 +155,14 @@ func (res *ArgParseResults) DropValue(name string) *ArgParseResults {
 		}
 	}
 
-	return &ArgParseResults{newNamedArgs, res.Args, res.parser, NO_POSITIONAL_ARGS}
+	newRepeatedOptions := make(map[string][]string, len(res.repeatedOptions))
+	for flag, vals := range res.repeatedOptions {
+		if flag != name {
+			newRepeatedOptions[flag] = vals
+		}
+	}
+
+	return &ArgParseResults{newNamedArgs, newRepeatedOptions, res.Args, res.parser, NO_POSITIONAL_ARGS}
 }
 
 // SetArgument inserts or replaces an argument. A new ArgParseResults object is returned with the new
@@ -157,21 +175,29 @@ func (res *ArgParseResults) SetArgument(name, val string) (*ArgParseResults, err
 		newNamedArgs[flag] = origVal
 	}
 
-	found := false
+	var matchedOption *Option
 	// Verify that the options is supported - using the long name
 	for _, opt := range res.parser.Supported {
 		if opt.Name == name {
-			found = true
+			matchedOption = opt
 			break
 		}
 	}
 
-	if !found {
+	if matchedOption == nil {
 		return nil, UnknownArgumentParam{name: name}
 	}
 	newNamedArgs[name] = val
 
-	return &ArgParseResults{newNamedArgs, res.Args, res.parser, res.PositionalArgsSeparatorIndex}, nil
+	newRepeatedOptions := make(map[string][]string, len(res.repeatedOptions))
+	for flag, vals := range res.repeatedOptions {
+		newRepeatedOptions[flag] = vals
+	}
+	if matchedOption.OptType == OptionalRepeatableValue {
+		newRepeatedOptions[name] = []string{val}
+	}
+
+	return &ArgParseResults{newNamedArgs, newRepeatedOptions, res.Args, res.parser, res.PositionalArgsSeparatorIndex}, nil
 }
 
 func (res *ArgParseResults) MustGetValue(name string) string {

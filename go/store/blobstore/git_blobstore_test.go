@@ -288,7 +288,7 @@ func TestGitBlobstore_CleanupOwnedLocalRef_DeletesRef(t *testing.T) {
 	require.Equal(t, bs.localRef, rnf.Ref)
 }
 
-func TestGitBlobstore_Close_DeletesOwnedLocalAndTrackingRefs(t *testing.T) {
+func TestGitBlobstore_Teardown_DeletesOwnedLocalAndTrackingRefs(t *testing.T) {
 	requireGitOnPath(t)
 
 	ctx := context.Background()
@@ -311,7 +311,7 @@ func TestGitBlobstore_Close_DeletesOwnedLocalAndTrackingRefs(t *testing.T) {
 	require.NoError(t, err)
 
 	// Read sync no longer creates/aligns the local ref. Seed it so we can
-	// validate Close deletes it when present.
+	// validate Teardown deletes it when present.
 	_, err = localRepo.SetRefToTree(ctx, bs.localRef, map[string][]byte{
 		"manifest": []byte("seed localRef\n"),
 	}, "seed localRef")
@@ -319,7 +319,7 @@ func TestGitBlobstore_Close_DeletesOwnedLocalAndTrackingRefs(t *testing.T) {
 	_, err = localAPI.ResolveRefCommit(ctx, bs.localRef)
 	require.NoError(t, err)
 
-	require.NoError(t, bs.Close())
+	require.NoError(t, bs.Teardown(ctx))
 
 	_, err = localAPI.ResolveRefCommit(ctx, bs.localRef)
 	var rnf *git.RefNotFoundError
@@ -361,8 +361,8 @@ func TestGitBlobstore_RemoteManaged_PutPushesToRemote(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, ver)
 
-	// Non-manifest Put is deferred; flush via CheckAndPut("manifest").
-	_, err = bs.CheckAndPut(ctx, "", "manifest", 3, bytes.NewReader([]byte("xxx\n")))
+	// Non-manifest Put is deferred; flush via CheckAndPutManifest.
+	_, err = bs.CheckAndPutManifest(ctx, "", []byte("xxx\n"))
 	require.NoError(t, err)
 
 	remoteRunner, err := git.NewRunner(remoteRepo.GitDir)
@@ -398,8 +398,8 @@ func TestGitBlobstore_RemoteManaged_PutBootstrapsEmptyRemote(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, ver)
 
-	// Non-manifest Put is deferred; flush via CheckAndPut("manifest").
-	_, err = bs.CheckAndPut(ctx, "", "manifest", 3, bytes.NewReader([]byte("xxx\n")))
+	// Non-manifest Put is deferred; flush via CheckAndPutManifest.
+	_, err = bs.CheckAndPutManifest(ctx, "", []byte("xxx\n"))
 	require.NoError(t, err)
 
 	// Remote should now have refs/dolt/data and contain the key.
@@ -483,7 +483,7 @@ func TestGitBlobstore_RemoteManaged_PutRetriesOnLeaseFailure(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, ver)
 
-	_, err = bs.CheckAndPut(ctx, "", "manifest", 3, bytes.NewReader([]byte("xxx\n")))
+	_, err = bs.CheckAndPutManifest(ctx, "", []byte("xxx\n"))
 	require.NoError(t, err)
 
 	remoteHead, err := remoteAPI.ResolveRefCommit(ctx, DoltDataRef)
@@ -550,7 +550,7 @@ func TestGitBlobstore_RemoteManaged_ManifestReadsDoNotBlockDuringPush(t *testing
 			writeErr <- err
 			return
 		}
-		_, err = bs.CheckAndPut(ctx, ver, "manifest", int64(len("next\n")), bytes.NewReader([]byte("next\n")))
+		_, err = bs.CheckAndPutManifest(ctx, ver, []byte("next\n"))
 		writeErr <- err
 	}()
 
@@ -651,7 +651,7 @@ func TestGitBlobstore_RemoteManaged_CheckAndPut_RemoteHeadTruth(t *testing.T) {
 
 	// Remote is truth: CheckAndPut validates against remoteHead and applies changes on top of it.
 	newBytes := []byte("replayed\n")
-	ver, err := bs.CheckAndPut(ctx, remoteManifestOID.String(), "manifest", int64(len(newBytes)), bytes.NewReader(newBytes))
+	ver, err := bs.CheckAndPutManifest(ctx, remoteManifestOID.String(), newBytes)
 	require.NoError(t, err)
 	require.NotEmpty(t, ver)
 
@@ -715,7 +715,7 @@ func TestGitBlobstore_RemoteManaged_CheckAndPut_ExpectedMatchesLocalButNotRemote
 	require.NoError(t, err)
 
 	// Expected version matches local, but remote is truth, so this should fail.
-	_, err = bs.CheckAndPut(ctx, localManifestOID.String(), "manifest", int64(len("new\n")), bytes.NewReader([]byte("new\n")))
+	_, err = bs.CheckAndPutManifest(ctx, localManifestOID.String(), []byte("new\n"))
 	var capErr CheckAndPutError
 	require.ErrorAs(t, err, &capErr)
 	require.Equal(t, "manifest", capErr.Key)
@@ -765,8 +765,8 @@ func TestGitBlobstore_RemoteManaged_PutOverwritesDivergedLocalRef_NoMergeCommit(
 	_, err = PutBytes(ctx, bs, "k", []byte("from local\n"))
 	require.NoError(t, err)
 
-	// Non-manifest Put is deferred; flush via CheckAndPut("manifest").
-	_, err = bs.CheckAndPut(ctx, "", "manifest", 3, bytes.NewReader([]byte("xxx\n")))
+	// Non-manifest Put is deferred; flush via CheckAndPutManifest.
+	_, err = bs.CheckAndPutManifest(ctx, "", []byte("xxx\n"))
 	require.NoError(t, err)
 
 	remoteHeadAfter, err := remoteAPI.ResolveRefCommit(ctx, DoltDataRef)
@@ -971,8 +971,8 @@ func TestGitBlobstore_Concatenate_ChunkedResult(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, ver)
 
-	// Non-manifest writes are deferred; flush via CheckAndPut("manifest").
-	_, err = bs.CheckAndPut(ctx, "", "manifest", 3, bytes.NewReader([]byte("xxx\n")))
+	// Non-manifest writes are deferred; flush via CheckAndPutManifest.
+	_, err = bs.CheckAndPutManifest(ctx, "", []byte("xxx\n"))
 	require.NoError(t, err)
 
 	// Verify the resulting key is stored as a chunked tree on the remote.
@@ -1171,24 +1171,24 @@ func TestGitBlobstore_CheckAndPut_CreateOnly(t *testing.T) {
 	require.NoError(t, err)
 
 	want := []byte("created\n")
-	ver, err := bs.CheckAndPut(ctx, "", "k", int64(len(want)), bytes.NewReader(want))
+	ver, err := bs.CheckAndPutManifest(ctx, "", want)
 	require.NoError(t, err)
 	require.NotEmpty(t, ver)
 
-	got, ver2, err := GetBytes(ctx, bs, "k", AllRange)
+	got, ver2, err := GetBytes(ctx, bs, ManifestKey, AllRange)
 	require.NoError(t, err)
 	require.Equal(t, ver, ver2)
 	require.Equal(t, want, got)
 }
 
-func TestGitBlobstore_CheckAndPut_MismatchDoesNotRead(t *testing.T) {
+func TestGitBlobstore_CheckAndPutManifest_Mismatch(t *testing.T) {
 	requireGitOnPath(t)
 
 	ctx := context.Background()
 	remoteRepo, localRepo, _ := newRemoteAndLocalRepos(t, ctx)
 
 	commit, err := remoteRepo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
-		"k": []byte("base\n"),
+		ManifestKey: []byte("base\n"),
 	}, "seed")
 	require.NoError(t, err)
 
@@ -1198,14 +1198,12 @@ func TestGitBlobstore_CheckAndPut_MismatchDoesNotRead(t *testing.T) {
 	runner, err := git.NewRunner(remoteRepo.GitDir)
 	require.NoError(t, err)
 	api := git.NewGitAPIImpl(runner)
-	keyOID, _, err := api.ResolvePathObject(ctx, git.OID(commit), "k")
+	keyOID, _, err := api.ResolvePathObject(ctx, git.OID(commit), ManifestKey)
 	require.NoError(t, err)
 
-	r := &failReader{}
-	_, err = bs.CheckAndPut(ctx, keyOID.String()+"-wrong", "k", 1, r)
+	_, err = bs.CheckAndPutManifest(ctx, keyOID.String()+"-wrong", []byte("nope\n"))
 	require.Error(t, err)
 	require.True(t, IsCheckAndPutError(err))
-	require.False(t, r.called.Load(), "expected reader not to be consumed on version mismatch")
 }
 
 func TestGitBlobstore_CheckAndPut_UpdateSuccess(t *testing.T) {
@@ -1215,8 +1213,8 @@ func TestGitBlobstore_CheckAndPut_UpdateSuccess(t *testing.T) {
 	remoteRepo, localRepo, _ := newRemoteAndLocalRepos(t, ctx)
 
 	commit, err := remoteRepo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
-		"k":    []byte("base\n"),
-		"keep": []byte("keep\n"),
+		ManifestKey: []byte("base\n"),
+		"keep":      []byte("keep\n"),
 	}, "seed")
 	require.NoError(t, err)
 
@@ -1226,16 +1224,16 @@ func TestGitBlobstore_CheckAndPut_UpdateSuccess(t *testing.T) {
 	runner, err := git.NewRunner(remoteRepo.GitDir)
 	require.NoError(t, err)
 	api := git.NewGitAPIImpl(runner)
-	keyOID, _, err := api.ResolvePathObject(ctx, git.OID(commit), "k")
+	keyOID, _, err := api.ResolvePathObject(ctx, git.OID(commit), ManifestKey)
 	require.NoError(t, err)
 
 	want := []byte("updated\n")
-	ver2, err := bs.CheckAndPut(ctx, keyOID.String(), "k", int64(len(want)), bytes.NewReader(want))
+	ver2, err := bs.CheckAndPutManifest(ctx, keyOID.String(), want)
 	require.NoError(t, err)
 	require.NotEmpty(t, ver2)
 	require.NotEqual(t, keyOID.String(), ver2)
 
-	got, ver3, err := GetBytes(ctx, bs, "k", AllRange)
+	got, ver3, err := GetBytes(ctx, bs, ManifestKey, AllRange)
 	require.NoError(t, err)
 	require.Equal(t, ver2, ver3)
 	require.Equal(t, want, got)
@@ -1243,4 +1241,32 @@ func TestGitBlobstore_CheckAndPut_UpdateSuccess(t *testing.T) {
 	got, _, err = GetBytes(ctx, bs, "keep", AllRange)
 	require.NoError(t, err)
 	require.Equal(t, []byte("keep\n"), got)
+}
+
+func TestGitBlobstore_WriteSucceedsWithUnopenableFetchHead(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11904
+	requireGitOnPath(t)
+
+	ctx := context.Background()
+	remoteRepo, localRepo, _ := newRemoteAndLocalRepos(t, ctx)
+	_, err := remoteRepo.SetRefToTree(ctx, DoltDataRef, map[string][]byte{
+		"manifest": []byte("v0\n"),
+	}, "seed remote")
+	require.NoError(t, err)
+	require.NoError(t, os.Mkdir(filepath.Join(localRepo.GitDir, "FETCH_HEAD"), 0o755))
+
+	bs, err := NewGitBlobstoreWithOptions(localRepo.GitDir, DoltDataRef, GitBlobstoreOptions{
+		RemoteName: "origin",
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, bs.Close()) })
+
+	_, version, err := GetBytes(ctx, bs, "manifest", AllRange)
+	require.NoError(t, err)
+	_, err = bs.Put(ctx, "table1", 5, bytes.NewReader([]byte("data\n")))
+	require.NoError(t, err)
+	_, err = bs.CheckAndPutManifest(ctx, version, []byte("v1\n"))
+	require.NoError(t, err)
+
+	requireRemoteManifest(t, ctx, remoteRepo, "v1\n")
 }

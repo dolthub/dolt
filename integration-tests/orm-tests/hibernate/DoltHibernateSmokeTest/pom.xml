@@ -10,20 +10,15 @@
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.release>11</maven.compiler.release>
   </properties>
 
   <dependencies>
     <!-- Hibernate -->
-    <!-- [5.6.14,) fails as it gets the latest version but including beta builds that does not work -->
     <dependency>
-      <groupId>org.hibernate</groupId>
+      <groupId>org.hibernate.orm</groupId>
       <artifactId>hibernate-core</artifactId>
-      <version>5.6.14.Final</version>
-    </dependency>
-    <dependency>
-      <groupId>org.hibernate</groupId>
-      <artifactId>hibernate-entitymanager</artifactId>
-      <version>5.6.14.Final</version>
+      <version>6.6.55.Final</version>
     </dependency>
 
     <!-- MySQL -->
@@ -42,8 +37,7 @@
           <artifactId>maven-compiler-plugin</artifactId>
           <version>3.10.1</version>
           <configuration>
-            <source>1.8</source>
-            <target>1.8</target>
+            <release>${maven.compiler.release}</release>
           </configuration>
         </plugin>
         <plugin>

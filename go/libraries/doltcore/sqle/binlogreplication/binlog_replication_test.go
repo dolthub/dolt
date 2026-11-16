@@ -205,6 +205,59 @@ func TestBinlogReplicationSanityCheck(t *testing.T) {
 	h.requireReplicaResults("select * from db01.tableT", [][]any{{"300"}})
 }
 
+// TestBinlogReplicationFunctionalIndex tests that a MySQL primary with a table containing a functional/expression
+// index correctly replicates inserts, updates, and deletes to a Dolt replica.
+// https://github.com/dolthub/dolt/issues/11475
+func TestBinlogReplicationFunctionalIndex(t *testing.T) {
+	h := newHarness(t)
+	h.startSqlServersWithDoltSystemVars(doltReplicaSystemVars)
+	h.startReplicationAndCreateTestDb(h.mySqlPort)
+
+	h.primaryDatabase.MustExec("create table t (pk int primary key, id int)")
+	h.primaryDatabase.MustExec("create index idx_ifzero on t ((if(id = 0, 1, 0)))")
+	h.waitForReplicaToCatchUp()
+
+	h.primaryDatabase.MustExec("insert into t values (1, 0), (2, 5)")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("select * from db01.t order by pk", [][]any{{"1", "0"}, {"2", "5"}})
+
+	h.primaryDatabase.MustExec("update t set id = 1 where pk = 1")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("select * from db01.t order by pk", [][]any{{"1", "1"}, {"2", "5"}})
+
+	h.primaryDatabase.MustExec("delete from t where pk = 2")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("select * from db01.t order by pk", [][]any{{"1", "1"}})
+}
+
+// TestBinlogReplicationVirtualColumn tests that a MySQL primary with a table containing a VIRTUAL generated column
+// positioned BETWEEN two stored columns correctly replicates inserts to a Dolt replica.
+// https://github.com/dolthub/dolt/issues/11475
+func TestBinlogReplicationVirtualColumn(t *testing.T) {
+	h := newHarness(t)
+	h.startSqlServersWithDoltSystemVars(doltReplicaSystemVars)
+	h.startReplicationAndCreateTestDb(h.mySqlPort)
+
+	h.primaryDatabase.MustExec(
+		"create table t (pk int primary key, a varchar(20), g int generated always as (length(a)), z varchar(20))")
+	h.waitForReplicaToCatchUp()
+
+	h.primaryDatabase.MustExec("insert into t (pk, a, z) values (1, 'x', 'end'), (2, 'yy', 'tail')")
+	h.waitForReplicaToCatchUp()
+	// z holds its own value, so the stored column after the virtual one must not shift.
+	h.requireReplicaResults("select pk, a, g, z from db01.t order by pk",
+		[][]any{{"1", "x", "1", "end"}, {"2", "yy", "2", "tail"}})
+
+	h.primaryDatabase.MustExec("update t set a = 'xxx', z = 'end2' where pk = 1")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("select pk, a, g, z from db01.t order by pk",
+		[][]any{{"1", "xxx", "3", "end2"}, {"2", "yy", "2", "tail"}})
+
+	h.primaryDatabase.MustExec("delete from t where pk = 2")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("select pk, a, g, z from db01.t order by pk", [][]any{{"1", "xxx", "3", "end2"}})
+}
+
 // TestBinlogReplicationWithHundredsOfDatabases asserts that we can efficiently replicate the creation of hundreds of databases.
 func TestBinlogReplicationWithHundredsOfDatabases(t *testing.T) {
 	h := newHarness(t)

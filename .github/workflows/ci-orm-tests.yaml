@@ -19,6 +19,11 @@ jobs:
     timeout-minutes: 30
     name: ORM tests
     steps:
+      - name: Check deferred CI
+        id: ci-admission
+        uses: $/.github/actions/check-deferred-ci
+        with:
+          timezone: ${{ vars.CI_TIMEZONE || 'America/Los_Angeles' }}
       - name: Checkout
         uses: actions/checkout@v6
         with:
@@ -37,14 +42,14 @@ jobs:
       - name: Test ORM integrations
         run: docker run --rm orm-tests:latest
       - name: Configure AWS Credentials
-        if: ${{ failure() && !env.ACT }}
+        if: steps.ci-admission.outputs.run == 'true' && (failure() && !env.ACT)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-2
       - name: Send Email
-        if: ${{ failure() && !env.ACT }}
+        if: steps.ci-admission.outputs.run == 'true' && (failure() && !env.ACT)
         uses: ./.github/actions/ses-email-action
         with:
           template: 'OrmIntegrationFailureTemplate'

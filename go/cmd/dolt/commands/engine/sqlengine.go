@@ -16,6 +16,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -28,8 +29,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
-	"github.com/dolthub/go-mysql-server/sql/rowexec"
-	_ "github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/sirupsen/logrus"
 
@@ -57,11 +56,15 @@ import (
 
 // SqlEngine packages up the context necessary to run sql queries against dsqle.
 type SqlEngine struct {
-	provider       *sqle.DoltDatabaseProvider
-	ContextFactory sql.ContextFactory
-	dsessFactory   sessionFactory
-	engine         *gms.Engine
-	fs             filesys.Filesys
+	provider              *sqle.DoltDatabaseProvider
+	ContextFactory        sql.ContextFactory
+	dsessFactory          sessionFactory
+	engine                *gms.Engine
+	variables             *sql.EngineVariables
+	fs                    filesys.Filesys
+	clusterController     *cluster.Controller
+	branchActivityTracker *doltdb.BranchActivityTracker
+	rebasedDbs            map[string]dsess.SqlDatabase
 }
 
 type sessionFactory func(mysqlSess *sql.BaseSession, pro sql.DatabaseProvider) (*dsess.DoltSession, error)
@@ -84,12 +87,14 @@ type SqlEngineConfig struct {
 	Bulk                       bool
 	JwksConfig                 []servercfg.JwksConfig
 	SystemVariables            SystemVariables
-	ClusterController          *cluster.Controller
-	AutoGCController           *sqle.AutoGCController
-	BinlogReplicaController    binlogreplication.BinlogReplicaController
-	EventSchedulerStatus       eventscheduler.SchedulerStatus
-	BranchActivityTracking     bool
-	EngineOverrides            sql.EngineOverrides
+	// EngineVariables is the engine's variable bundle, initialized before construction. Required.
+	EngineVariables         *sql.EngineVariables
+	ClusterController       *cluster.Controller
+	AutoGCController        *sqle.AutoGCController
+	BinlogReplicaController binlogreplication.BinlogReplicaController
+	EventSchedulerStatus    eventscheduler.SchedulerStatus
+	BranchActivityTracking  bool
+	EngineOverrides         sql.EngineOverrides
 
 	// DBLoadParams are optional parameters passed through to database loading for local file-backed databases.
 	// These are merged into the params map used by doltdb/env load routines.
@@ -97,17 +102,31 @@ type SqlEngineConfig struct {
 	// Intended for embedded-driver use-cases that need to influence dbfactory / storage open behavior.
 	DBLoadParams map[string]interface{}
 
+	// ProviderFactory controls how the DatabaseProvider is created. If nil, sqle.DoltProviderFactory is used.
+	ProviderFactory sqle.ProviderFactory
+
 	FatalBehavior dherrors.FatalBehavior
+
+	// GCSafepointController is shared by engine construction and every session the engine creates. If nil, the
+	// engine creates its own.
+	GCSafepointController *gcctx.GCSafepointController
 }
 
 type SqlEngineConfigOption func(*SqlEngineConfig)
 
-// NewSqlEngine returns a SqlEngine
+// ErrNilEngineVariables is returned when an engine is configured without an engine variable bundle.
+var ErrNilEngineVariables = errors.New("engine: SqlEngineConfig.EngineVariables is required")
+
+// NewSqlEngine returns a SqlEngine. |config.EngineVariables| is required.
 func NewSqlEngine(
 	ctx context.Context,
 	mrEnv *env.MultiRepoEnv,
 	config *SqlEngineConfig,
 ) (*SqlEngine, error) {
+	if config == nil || config.EngineVariables == nil {
+		return nil, ErrNilEngineVariables
+	}
+
 	// Context validation is a testing mode that we run Dolt in
 	// during integration tests. It asserts that `context.Context`
 	// instances which reach the storage layer have gone through
@@ -121,7 +140,13 @@ func NewSqlEngine(
 		valctx.EnableContextValidation()
 	}
 
-	gcSafepointController := gcctx.NewGCSafepointController()
+	var gcSafepointController *gcctx.GCSafepointController
+	if config != nil {
+		gcSafepointController = config.GCSafepointController
+	}
+	if gcSafepointController == nil {
+		gcSafepointController = gcctx.NewGCSafepointController()
+	}
 	ctx = gcctx.WithGCSafepointController(ctx, gcSafepointController)
 
 	defer gcctx.SessionEnd(ctx)
@@ -130,7 +155,7 @@ func NewSqlEngine(
 
 	// Thread DB load params into each environment before any DB is loaded.
 	// (For already-loaded envs, these will not affect the existing instance.)
-	if config != nil && len(config.DBLoadParams) > 0 {
+	if len(config.DBLoadParams) > 0 {
 		_ = mrEnv.Iter(func(_ string, dEnv *env.DoltEnv) (stop bool, err error) {
 			if dEnv.DBLoadParams == nil {
 				dEnv.DBLoadParams = maps.Clone(config.DBLoadParams)
@@ -141,26 +166,35 @@ func NewSqlEngine(
 		})
 	}
 
-	dbs, locations, err := CollectDBs(ctx, mrEnv)
+	// Some database initialization logic depends on system variables, load them before the databases
+	engineVars := config.EngineVariables
+	vars := engineVars.System
+	if err := mrEnv.Iter(func(name string, _ *env.DoltEnv) (bool, error) {
+		dsess.DefineSystemVariablesForDBInRegistry(vars, name)
+		return false, nil
+	}); err != nil {
+		return nil, err
+	}
+	bootstrapCtx := sql.NewContextWithVariables(ctx, engineVars)
+	err := applySystemVariables(bootstrapCtx, config.SystemVariables)
+	if err != nil {
+		return nil, err
+	}
+	dbs, locations, err := CollectDBs(bootstrapCtx, mrEnv)
 	if err != nil {
 		return nil, err
 	}
 
 	bThreads := sql.NewBackgroundThreads()
 	var runAsyncThreads sqle.RunAsyncThreads
-	dbs, runAsyncThreads, err = sqle.ApplyReplicationConfig(ctx, mrEnv, cli.CliOut, dbs...)
+	dbs, runAsyncThreads, err = sqle.ApplyReplicationConfigWithRegistry(bootstrapCtx, mrEnv, cli.CliOut, vars, dbs...)
 	if err != nil {
 		return nil, err
 	}
 
-	config.ClusterController.ManageSystemVariables(sql.SystemVariables)
+	config.ClusterController.ManageSystemVariables(vars)
 
-	err = config.ClusterController.ApplyStandbyReplicationConfig(ctx, mrEnv, dbs...)
-	if err != nil {
-		return nil, err
-	}
-
-	err = applySystemVariables(sql.SystemVariables, config.SystemVariables)
+	err = config.ClusterController.ApplyStandbyReplicationConfig(bootstrapCtx, mrEnv, dbs...)
 	if err != nil {
 		return nil, err
 	}
@@ -181,13 +215,32 @@ func NewSqlEngine(
 		locations = append(locations, nil)
 	}
 
+	factory := config.ProviderFactory
+	if factory == nil {
+		factory = sqle.DoltProviderFactory{}
+	}
+
 	b := env.GetDefaultInitBranch(mrEnv.Config())
-	pro, err := sqle.NewDoltDatabaseProviderWithDatabases(b, mrEnv.FileSystem(), all, locations, config.EngineOverrides)
+	engineProvider, err := factory.NewProvider(bootstrapCtx, b, mrEnv.FileSystem(), all, locations, config.EngineOverrides)
 	if err != nil {
 		return nil, err
 	}
-	pro = pro.WithRemoteDialer(mrEnv.RemoteDialProvider())
-	if config != nil && len(config.DBLoadParams) > 0 {
+
+	// Extract the underlying *DoltDatabaseProvider for Dolt-specific configuration. For the
+	// default DoltProviderFactory the result IS a *DoltDatabaseProvider; custom factories
+	// (e.g. Doltgres) return a wrapper and implement DoltProviderUnwrapper to expose it.
+	var pro *sqle.DoltDatabaseProvider
+	switch p := engineProvider.(type) {
+	case *sqle.DoltDatabaseProvider:
+		pro = p
+	case sqle.DoltProviderUnwrapper:
+		pro = p.UnderlyingDoltProvider()
+	default:
+		return nil, fmt.Errorf("provider %T must be or wrap a *sqle.DoltDatabaseProvider", engineProvider)
+	}
+
+	pro.SetRemoteDialer(mrEnv.RemoteDialProvider())
+	if len(config.DBLoadParams) > 0 {
 		pro.SetDBLoadParams(config.DBLoadParams)
 	}
 
@@ -200,14 +253,19 @@ func NewSqlEngine(
 
 	sqlEngine := &SqlEngine{}
 	// Create the engine
-	engine := gms.New(analyzer.NewBuilder(pro).AddOverrides(config.EngineOverrides).Build(), &gms.Config{
-		IsReadOnly:     config.IsReadOnly,
-		IsServerLocked: config.IsServerLocked,
+	engine := gms.New(analyzer.NewBuilder(engineProvider).AddOverrides(config.EngineOverrides).Build(), &gms.Config{
+		IsReadOnly:      config.IsReadOnly,
+		IsServerLocked:  config.IsServerLocked,
+		EngineVariables: engineVars,
 	}).WithBackgroundThreads(bThreads)
 
-	if err := configureBinlogPrimaryController(engine); err != nil {
-		return nil, err
-	}
+	primaryController := configureBinlogPrimaryController(engine)
+	initialized := false
+	defer func() {
+		if !initialized {
+			primaryController.Close()
+		}
+	}()
 
 	config.ClusterController.SetIsStandbyCallback(func(isStandby bool) {
 		pro.SetIsStandby(isStandby)
@@ -221,13 +279,15 @@ func NewSqlEngine(
 		if readOnly {
 			readOnlyInt = 1
 		}
-		sql.SystemVariables.AssignValues(map[string]interface{}{
+		if err := applySystemVariables(sql.NewContextWithVariables(context.Background(), engineVars), map[string]interface{}{
 			"read_only": readOnlyInt,
-		})
+		}); err != nil {
+			logrus.WithError(err).Warn("could not update read_only system variable")
+		}
 	})
 
 	// Load in privileges from file, if it exists
-	var persister cluster.MySQLDbPersister
+	var persister cluster.AuthDbPersister
 	persister = mysql_file_handler.NewPersister(config.PrivFilePath, config.DoltCfgDirPath)
 
 	persister = config.ClusterController.HookMySQLDbPersister(persister, engine.Analyzer.Catalog.MySQLDb)
@@ -255,22 +315,25 @@ func NewSqlEngine(
 		if err != nil {
 			return nil, err
 		}
-		config.AutoGCController.ApplyCommitHooks(ctx, mrEnv, dbs...)
+		config.AutoGCController.ApplyCommitHooks(bootstrapCtx, mrEnv, dbs...)
 		pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, config.AutoGCController.InitDatabaseHook())
 		pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, config.AutoGCController.DropDatabaseHook())
 		// XXX: We force session aware safepoint controller if auto_gc is on.
 		dprocedures.UseSessionAwareSafepointController = true
-		sql.SystemVariables.AssignValues(map[string]interface{}{
+		err = applySystemVariables(bootstrapCtx, map[string]interface{}{
 			dsess.DoltAutoGCEnabled: int8(1),
 		})
 	} else {
-		sql.SystemVariables.AssignValues(map[string]interface{}{
+		err = applySystemVariables(bootstrapCtx, map[string]interface{}{
 			dsess.DoltAutoGCEnabled: int8(0),
 		})
 	}
+	if err != nil {
+		return nil, err
+	}
 
 	var statsPro sql.StatsProvider
-	_, enabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsEnabled)
+	_, enabled, _ := vars.GetGlobal(dsess.DoltStatsEnabled)
 	if enabled.(int8) == 1 {
 		statsPro = statspro.NewStatsController(logrus.StandardLogger(), bThreads, mrEnv.GetEnv(mrEnv.GetFirstDatabase()))
 	} else {
@@ -280,15 +343,26 @@ func NewSqlEngine(
 	engine.Analyzer.Catalog.StatsProvider = statsPro
 
 	branchActivityTracker := doltdb.NewBranchActivityTracker(ctx, config.BranchActivityTracking)
+	sqlEngine.branchActivityTracker = branchActivityTracker
+	defer func() {
+		if !initialized {
+			branchActivityTracker.Close()
+		}
+	}()
 
-	engine.Analyzer.ExecBuilder = rowexec.NewBuilder(kvexec.Builder{}, engine.Analyzer.Overrides)
+	engine.Analyzer.ExecBuilder = kvexec.NewExecBuilder(engine.Analyzer.Overrides)
 	engine.Analyzer.ExecBuilder.Runner = engine.Analyzer.Runner
 	sessFactory := doltSessionFactory(pro, statsPro, mrEnv.Config(), bcController, gcSafepointController, config.Autocommit, branchActivityTracker)
 	sqlEngine.provider = pro
 	sqlEngine.dsessFactory = sessFactory
-	sqlEngine.ContextFactory = sqlContextFactory
+	sqlEngine.ContextFactory = func(ctx context.Context, opts ...sql.ContextOption) *sql.Context {
+		opts = append([]sql.ContextOption{sql.WithEngineVariables(engineVars)}, opts...)
+		return sqlContextFactory(ctx, opts...)
+	}
 	sqlEngine.engine = engine
+	sqlEngine.variables = engineVars
 	sqlEngine.fs = pro.FileSystem()
+	sqlEngine.clusterController = config.ClusterController
 
 	pro.InstallReplicationInitDatabaseHook(bThreads, sqlEngine.NewDefaultContext)
 	if err = config.ClusterController.RunCommitHooks(bThreads, sqlEngine.NewDefaultContext); err != nil {
@@ -317,23 +391,28 @@ func NewSqlEngine(
 		}
 	}
 
-	err = sql.SystemVariables.SetGlobal(sqlCtx, dsess.DoltCommitOnTransactionCommit, config.DoltTransactionCommit)
+	err = vars.SetGlobal(sqlCtx, dsess.DoltCommitOnTransactionCommit, config.DoltTransactionCommit)
 	if err != nil {
 		return nil, err
 	}
 
 	if engine.EventScheduler == nil {
-		err = configureEventScheduler(config, engine, sqlEngine.ContextFactory, sessFactory, pro)
+		err = configureEventScheduler(config, engine, engineVars, sqlEngine.ContextFactory, sessFactory, pro)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	dblr.DoltBinlogConsumer.SetEngine(engine)
-	engine.Analyzer.Catalog.BinlogConsumer = dblr.DoltBinlogConsumer
+	if config.BinlogReplicaController == nil {
+		engine.Analyzer.Catalog.BinlogConsumer = dblr.NewDoltBinlogConsumer(engine)
+	} else {
+		// The replica controller and BINLOG consumer share an applier.
+		dblr.DoltBinlogConsumer.SetEngine(engine)
+		engine.Analyzer.Catalog.BinlogConsumer = dblr.DoltBinlogConsumer
+	}
 
 	if config.BinlogReplicaController != nil {
-		binLogSession, err := sessFactory(sql.NewBaseSession(), pro)
+		binLogSession, err := sessFactory(sql.NewBaseSessionWithVariables(engineVars), pro)
 		if err != nil {
 			return nil, err
 		}
@@ -344,25 +423,28 @@ func NewSqlEngine(
 		}
 	}
 
+	initialized = true
 	return sqlEngine, nil
 }
 
 // NewRebasedSqlEngine returns a smalled rebased engine primarily used in filterbranch.
+// The engine owns |dbs| and closes them in Close.
 // TODO: migrate to provider
 func NewRebasedSqlEngine(engine *gms.Engine, dbs map[string]dsess.SqlDatabase) *SqlEngine {
 	return &SqlEngine{
-		engine: engine,
+		engine:     engine,
+		rebasedDbs: dbs,
 	}
 }
 
-func applySystemVariables(vars sql.SystemVariableRegistry, cfg SystemVariables) error {
-	if cfg != nil {
-		return vars.AssignValues(cfg)
+func applySystemVariables(ctx *sql.Context, cfg SystemVariables) error {
+	if cfg == nil {
+		return nil
 	}
-	return nil
+	return ctx.SystemVariables().AssignValues(ctx, cfg)
 }
 
-// InitStats initalizes stats threads. We separate construction
+// InitStats initializes stats threads. We separate construction
 // from initialization because the session provider needs the
 // *StatsCoordinator handle (stats and provider are cyclically
 // dependent), but several other initialization steps race on
@@ -372,7 +454,7 @@ func applySystemVariables(vars sql.SystemVariableRegistry, cfg SystemVariables) 
 func (se *SqlEngine) InitStats(ctx context.Context) error {
 	// configuring stats depends on sessionBuilder
 	// sessionBuilder needs ref to statsProv
-	pro := se.GetUnderlyingEngine().Analyzer.Catalog.DbProvider.(*sqle.DoltDatabaseProvider)
+	pro := se.GetUnderlyingEngine().Analyzer.Catalog.DbProvider.(dsess.DoltDatabaseProvider)
 	sqlCtx, err := se.NewLocalContext(ctx)
 	if err != nil {
 		return err
@@ -383,11 +465,13 @@ func (se *SqlEngine) InitStats(ctx context.Context) error {
 	dbs := pro.AllDatabases(sqlCtx)
 	statsPro := se.GetUnderlyingEngine().Analyzer.Catalog.StatsProvider
 	if sc, ok := statsPro.(*statspro.StatsController); ok {
-		_, memOnly, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly)
+		_, memOnly, _ := sqlCtx.SystemVariables().GetGlobal(dsess.DoltStatsMemoryOnly)
 		sc.SetMemOnly(memOnly.(int8) == 1)
 
-		pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, statspro.NewInitDatabaseHook(sc))
-		pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, statspro.NewDropDatabaseHook(sc))
+		if adder, ok := se.GetUnderlyingEngine().Analyzer.Catalog.DbProvider.(sqle.DatabaseHookRegistrar); ok {
+			adder.AddInitDatabaseHook(statspro.NewInitDatabaseHook(sc))
+			adder.AddDropDatabaseHook(statspro.NewDropDatabaseHook(sc))
+		}
 
 		var sqlDbs []sql.Database
 		for _, db := range dbs {
@@ -399,7 +483,7 @@ func (se *SqlEngine) InitStats(ctx context.Context) error {
 			return err
 		}
 
-		if _, paused, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsPaused); paused.(int8) == 0 {
+		if _, paused, _ := sqlCtx.SystemVariables().GetGlobal(dsess.DoltStatsPaused); paused.(int8) == 0 {
 			if err = sc.Restart(sqlCtx); err != nil {
 				return err
 			}
@@ -426,7 +510,7 @@ func (se *SqlEngine) NewContext(ctx context.Context, session sql.Session) (*sql.
 
 // NewDefaultContext returns a new sql.Context with a new default dolt session.
 func (se *SqlEngine) NewDefaultContext(ctx context.Context) (*sql.Context, error) {
-	session, err := se.NewDoltSession(ctx, sql.NewBaseSession())
+	session, err := se.NewDoltSession(ctx, sql.NewBaseSessionWithVariables(se.variables))
 	if err != nil {
 		return nil, err
 	}
@@ -471,16 +555,37 @@ func (se *SqlEngine) FileSystem() filesys.Filesys {
 	return se.fs
 }
 
+// ClusterController returns the cluster replication controller for this
+// engine, or nil when cluster replication is not configured.
+func (se *SqlEngine) ClusterController() *cluster.Controller {
+	return se.clusterController
+}
+
+// Close releases the engine's resources and waits for its background goroutines.
+// It is safe to call more than once.
 func (se *SqlEngine) Close() error {
 	var err error
 	if se.engine != nil {
 		if se.engine.Analyzer.Catalog.BinlogReplicaController != nil {
 			dblr.DoltBinlogReplicaController.Close()
 		}
+		if primary, ok := se.engine.Analyzer.Catalog.BinlogPrimaryController.(*dblr.DoltBinlogPrimaryController); ok {
+			primary.Close()
+		}
 		err = se.engine.Close()
+		if stats, ok := se.engine.Analyzer.Catalog.StatsProvider.(*statspro.StatsController); ok {
+			stats.Close()
+		}
+	}
+	if se.branchActivityTracker != nil {
+		se.branchActivityTracker.Close()
 	}
 	if se.provider != nil {
+		se.provider.Teardown(context.Background())
 		se.provider.Close()
+	}
+	for _, db := range se.rebasedDbs {
+		db.Close()
 	}
 	return err
 }
@@ -501,20 +606,20 @@ func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engin
 // NOTE: By default, binary logging for Dolt is not enabled, which differs from MySQL's @@log_bin default. Dolt's
 // binary logging is initially an opt-in feature, but we may change that after measuring and tuning the
 // performance hit that binary logging adds.
-func configureBinlogPrimaryController(engine *gms.Engine) error {
+func configureBinlogPrimaryController(engine *gms.Engine) *dblr.DoltBinlogPrimaryController {
 	primaryController := dblr.NewDoltBinlogPrimaryController()
 	engine.Analyzer.Catalog.BinlogPrimaryController = primaryController
-	return nil
+	return primaryController
 }
 
-// configureEventScheduler configures the event scheduler with the |engine| for executing events, a |sessFactory|
-// for creating sessions, and a DoltDatabaseProvider, |pro|.
-func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, ctxFactory sql.ContextFactory, sessFactory sessionFactory, pro *sqle.DoltDatabaseProvider) error {
+// configureEventScheduler configures the event scheduler with the |engine| for executing events, its variable bundle
+// |engineVars|, a |sessFactory| for creating sessions, and a DoltDatabaseProvider, |pro|.
+func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, engineVars *sql.EngineVariables, ctxFactory sql.ContextFactory, sessFactory sessionFactory, pro *sqle.DoltDatabaseProvider) error {
 	// getCtxFunc is used to create new session with a new context for event scheduler.
 	// The session's client is set to the event_scheduler superuser so that the event
 	// executor has access to all databases when privileges are enabled.
 	getCtxFunc := func() (*sql.Context, error) {
-		sess, err := sessFactory(sql.NewBaseSession(), pro)
+		sess, err := sessFactory(sql.NewBaseSessionWithVariables(engineVars), pro)
 		if err != nil {
 			return nil, err
 		}
@@ -695,10 +800,14 @@ func NewSqlEngineForEnv(ctx context.Context, dEnv *env.DoltEnv, options ...Confi
 	if err != nil {
 		return nil, "", err
 	}
-
+	vars, err := sqle.NewEngineVariablesForEnv(mrEnv, dEnv)
+	if err != nil {
+		logrus.Warnf("unable to load persisted system variables: %v", err)
+	}
 	config := &SqlEngineConfig{
-		ServerUser: "root",
-		ServerHost: "localhost",
+		ServerUser:      "root",
+		ServerHost:      "localhost",
+		EngineVariables: vars,
 	}
 	for _, opt := range options {
 		opt(config)
