@@ -34,16 +34,24 @@ var ErrPrimaryKeySetChanged = errors.New("primary key set changed")
 // errPrimaryKeyTypeChanged is wrapped by errors for a retyped key column.
 var errPrimaryKeyTypeChanged = errors.New("primary key column type changed")
 
+// errNoSharedPrimaryKey reports that neither side of a diff stores a primary
+// key column of the other, as when the key is replaced by a new column. No
+// row can pair, so a diff reports every row as unpaired.
+var errNoSharedPrimaryKey = errors.New("no primary key column is shared")
+
 // IsPrimaryKeyUnalignable reports whether |err| wraps a sentinel for a diff
 // whose rows cannot be paired.
 func IsPrimaryKeyUnalignable(err error) bool {
-	return errors.Is(err, ErrPrimaryKeySetChanged) || errors.Is(err, errPrimaryKeyTypeChanged)
+	return errors.Is(err, ErrPrimaryKeySetChanged) || errors.Is(err, errPrimaryKeyTypeChanged) || errors.Is(err, errNoSharedPrimaryKey)
 }
 
 type DiffStatProgress struct {
 	Adds, Removes, Changes, CellChanges, NewRowSize, OldRowSize, NewCellSize, OldCellSize uint64
 	// Unpaired counts the Adds and Removes left unpaired by a key change.
 	Unpaired uint64
+	// IsKeyUnshared reports that no row can pair across the change, as when the
+	// sides share no primary key column or one side is keyless.
+	IsKeyUnshared bool
 }
 
 type prollyReporter func(ctx context.Context, vMapping val.OrdinalMapping, fromD, toD *val.TupleDesc, change tree.Diff, ch chan<- DiffStatProgress) error
@@ -96,9 +104,10 @@ func StatForTableDelta(ctx context.Context, ch chan DiffStatProgress, td TableDe
 		return err
 	}
 
-	if td.HasGainedOrLostPrimaryKey() {
+	if td.FromTable != nil && td.ToTable != nil && schema.IsKeyless(fromSch) != schema.IsKeyless(toSch) {
 		// No key pairs a keyed row with a keyless one, so like dolt_diff, the
 		// stat counts every row of one side removed and of the other added.
+		ch <- DiffStatProgress{IsKeyUnshared: true}
 		err = diffProllyTrees(ctx, ch, schema.IsKeyless(fromSch), fromRows, nil, fromSch, schema.EmptySchema)
 		if err != nil {
 			return err
@@ -112,11 +121,14 @@ func StatForTableDelta(ctx context.Context, ch chan DiffStatProgress, td TableDe
 	}
 
 	if fromRows != nil && toRows != nil {
-		from, to, err := td.alignIndexes(ctx, fromRows, toRows, fromSch, toSch)
+		from, to, err := alignIndexes(ctx, fromRows, toRows, fromSch, toSch)
 		if err != nil {
 			return fmt.Errorf("failed to compute diff stat for table %s: %w", td.CurName(), err)
 		}
 		statUnpaired(ch, from, to)
+		if from.IsKeyUnshared {
+			return nil
+		}
 		fromRows, toRows = durable.IndexFromProllyMap(from.Rows), durable.IndexFromProllyMap(to.Rows)
 		fromSch, toSch = from.Sch, to.Sch
 	}
@@ -129,23 +141,27 @@ func StatForTableDelta(ctx context.Context, ch chan DiffStatProgress, td TableDe
 //
 // diffProllyTrees walks maps that omit these rows, so they are counted here.
 func statUnpaired(ch chan DiffStatProgress, from, to KeyedRows) {
-	fromN, toN := CountUnpaired(from, to)
+	fromN, toN := from.UnpairedCount, to.UnpairedCount
 	if fromN+toN == 0 {
 		return
 	}
 	fromCells := uint64(from.Sch.GetAllCols().Size())
 	toCells := uint64(to.Sch.GetAllCols().Size())
 	ch <- DiffStatProgress{
-		Removes:     uint64(fromN),
-		Adds:        uint64(toN),
-		Unpaired:    uint64(fromN + toN),
-		OldRowSize:  uint64(fromN),
-		NewRowSize:  uint64(toN),
-		OldCellSize: uint64(fromN) * fromCells,
-		NewCellSize: uint64(toN) * toCells,
+		Removes:       uint64(fromN),
+		Adds:          uint64(toN),
+		Unpaired:      uint64(fromN + toN),
+		IsKeyUnshared: from.IsKeyUnshared,
+		OldRowSize:    uint64(fromN),
+		NewRowSize:    uint64(toN),
+		OldCellSize:   uint64(fromN) * fromCells,
+		NewCellSize:   uint64(toN) * toCells,
 	}
 }
 
+// diffProllyTrees sends the stat of the changes between |from| and |to| on
+// |ch|. It maps columns by tag and name, and |keyless| selects the diff for
+// tables without a primary key. A nil index stands for a side with no rows.
 func diffProllyTrees(ctx context.Context, ch chan DiffStatProgress, keyless bool, from, to durable.Index, fromSch, toSch schema.Schema) error {
 	_, vMapping, err := schema.MapSchemaBasedOnTagAndName(fromSch, toSch)
 	if err != nil {

@@ -472,10 +472,6 @@ func (itr *doltDiffCommitHistoryRowItr) calculateTableChanges(ctx context.Contex
 	if err != nil {
 		return nil, err
 	}
-	err = setDeltaCommitHeights(deltas, commit, parent)
-	if err != nil {
-		return nil, err
-	}
 
 	tableChanges := make([]diff.TableDeltaSummary, len(deltas))
 	for i := 0; i < len(deltas); i++ {

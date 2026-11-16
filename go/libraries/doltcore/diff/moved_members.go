@@ -27,8 +27,8 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// MovedMembers finds rows that a diff reports as modified only because their
-// ENUM or SET members are stored at other positions.
+// MovedMembers holds the ENUM and SET members whose positions changed between
+// the two sides of a diff.
 //
 // ALTER TABLE rewrites the stored values of a column whose members are
 // reordered, so the bytes of each row change while its values do not.
@@ -81,9 +81,9 @@ func NewMovedMembers(ns tree.NodeStore, fromSch, toSch schema.Schema) MovedMembe
 	return MovedMembers{ns: ns, fromVD: fromVD, toVD: toVD, fields: fields}
 }
 
-// HasMoved reports whether any members moved. Equal bytes then no longer mean
-// equal values, so [prolly.DiffMaps] must consider every row modified, and
-// each row must pass IsUnchanged.
+// HasMoved reports whether any members moved. When one has, equal bytes do not
+// imply equal values, so [prolly.DiffMaps] must consider every row modified,
+// and each row must pass IsUnchanged.
 func (m MovedMembers) HasMoved() bool {
 	return len(m.fields) > 0
 }

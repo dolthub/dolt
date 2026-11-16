@@ -26,7 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// ProllyRowConverter converts key and value val.Tuples from |inSchema| to
+// ProllyRowConverter converts key and value [val.Tuples] from |inSchema| to
 // |outSchema|. Columns match by tag or name, as rowPlacements describes,
 // whether or not they are in the primary key. The output is a [sql.Row].
 type ProllyRowConverter struct {
@@ -38,12 +38,15 @@ type ProllyRowConverter struct {
 	valDesc          *val.TupleDesc
 	keyProj          val.OrdinalMapping
 	valProj          val.OrdinalMapping
-	pkTargetTypes    []sql.Type
-	nonPkTargetTypes []sql.Type
-	// pkInTypes holds the input key column types, for ENUM and SET values.
-	pkInTypes []sql.Type
-	// nonPkInTypes holds the input value column types, for ENUM and SET values.
-	nonPkInTypes []sql.Type
+	pkConversions    []fieldConversion
+	nonPkConversions []fieldConversion
+}
+
+// fieldConversion is the type change of one column between the input and
+// output schemas. Both are nil when the column keeps its type or has no place
+// in the output.
+type fieldConversion struct {
+	from, to sql.Type
 }
 
 // NewProllyRowConverter returns a ProllyRowConverter of |inSch| rows into
@@ -56,16 +59,13 @@ func NewProllyRowConverter(ctx *sql.Context, inSch, outSch schema.Schema, warnFn
 		return ProllyRowConverter{}, err
 	}
 
-	pkTargetTypes := targetTypes(inSch.GetPKCols(), outSch, keyProj)
-	nonPkTargetTypes := targetTypes(inSch.GetNonPKCols(), outSch, valProj)
-	pkInTypes := columnTypes(inSch.GetPKCols())
-	nonPkInTypes := columnTypes(inSch.GetNonPKCols())
+	pkConversions := conversions(inSch.GetPKCols(), outSch, keyProj)
+	nonPkConversions := conversions(inSch.GetNonPKCols(), outSch, valProj)
 
 	if len(valProj) != 0 && schema.IsKeyless(inSch) {
 		// Adjust for cardinality
 		valProj = append(val.OrdinalMapping{-1}, valProj...)
-		nonPkTargetTypes = append([]sql.Type{nil}, nonPkTargetTypes...)
-		nonPkInTypes = append([]sql.Type{nil}, nonPkInTypes...)
+		nonPkConversions = append([]fieldConversion{{}}, nonPkConversions...)
 	}
 
 	kd, vd := inSch.GetMapDescriptors(ns)
@@ -76,10 +76,8 @@ func NewProllyRowConverter(ctx *sql.Context, inSch, outSch schema.Schema, warnFn
 		valProj:          valProj,
 		keyDesc:          kd,
 		valDesc:          vd,
-		pkTargetTypes:    pkTargetTypes,
-		nonPkTargetTypes: nonPkTargetTypes,
-		pkInTypes:        pkInTypes,
-		nonPkInTypes:     nonPkInTypes,
+		pkConversions:    pkConversions,
+		nonPkConversions: nonPkConversions,
 		warnFn:           warnFn,
 		ns:               ns,
 	}, nil
@@ -107,12 +105,17 @@ func rowPlacements(inSch, outSch schema.Schema) (val.OrdinalMapping, val.Ordinal
 		j, ok := outCols.TagToIdx[col.Tag]
 		if !ok {
 			out, isNamed := outCols.GetByNameCaseInsensitive(col.Name)
-			isSameType := isNamed && out.TypeInfo.ToSqlType().Equals(col.TypeInfo.ToSqlType())
-			_, isMember := col.MapMembers(out)
-			if !isNamed || !isSameType && !isMember {
-				return nil, nil, fmt.Errorf("could not map primary key column %s", col.Name)
+			if !isNamed {
+				// The column is not in |outSch|, so it has no place there.
+				j = -1
+			} else {
+				// MapMembers reads the type of |out|, so it runs only when found.
+				_, isMember := col.MapMembers(out)
+				if !out.TypeInfo.ToSqlType().Equals(col.TypeInfo.ToSqlType()) && !isMember {
+					return nil, nil, fmt.Errorf("could not map primary key column %s", col.Name)
+				}
+				j = outCols.TagToIdx[out.Tag]
 			}
-			j = outCols.TagToIdx[out.Tag]
 		}
 		keyProj[i] = j
 	}
@@ -130,11 +133,10 @@ func rowPlacements(inSch, outSch schema.Schema) (val.OrdinalMapping, val.Ordinal
 	return keyProj, valProj, nil
 }
 
-// targetTypes returns the types to convert |inCols| values to in |outSch|,
-// where |proj| places them. A type is nil when its column is not placed or
-// already has that type.
-func targetTypes(inCols *schema.ColCollection, outSch schema.Schema, proj val.OrdinalMapping) []sql.Type {
-	types := make([]sql.Type, len(proj))
+// conversions returns the type change of each |inCols| column in |outSch|,
+// where |proj| places them.
+func conversions(inCols *schema.ColCollection, outSch schema.Schema, proj val.OrdinalMapping) []fieldConversion {
+	convs := make([]fieldConversion, len(proj))
 	for i, j := range proj {
 		if j == -1 {
 			continue
@@ -142,27 +144,27 @@ func targetTypes(inCols *schema.ColCollection, outSch schema.Schema, proj val.Or
 		inColType := inCols.GetByIndex(i).TypeInfo.ToSqlType()
 		outColType := outSch.GetAllCols().GetByIndex(j).TypeInfo.ToSqlType()
 		if !inColType.Equals(outColType) {
-			types[i] = outColType
+			convs[i] = fieldConversion{from: inColType, to: outColType}
 		}
 	}
-	return types
+	return convs
 }
 
 // PutConverted converts the |key| and |value| val.Tuple from |inSchema| to |outSchema|
 // and places the converted row in |dstRow|.
 func (c ProllyRowConverter) PutConverted(ctx context.Context, key, value val.Tuple, dstRow sql.Row) error {
-	err := c.putFields(ctx, key, c.keyProj, c.keyDesc, c.pkTargetTypes, c.pkInTypes, dstRow, true)
+	err := c.putFields(ctx, key, c.keyProj, c.keyDesc, c.pkConversions, dstRow, true)
 	if err != nil {
 		return err
 	}
 
-	return c.putFields(ctx, value, c.valProj, c.valDesc, c.nonPkTargetTypes, c.nonPkInTypes, dstRow, false)
+	return c.putFields(ctx, value, c.valProj, c.valDesc, c.nonPkConversions, dstRow, false)
 }
 
-// putFields converts the fields of |tup| to their target types and places them
+// putFields converts the fields of |tup| as |conversions| says and places them
 // in |dstRow|, at the positions that |proj| gives. ENUM and SET fields convert
 // by label.
-func (c ProllyRowConverter) putFields(ctx context.Context, tup val.Tuple, proj val.OrdinalMapping, desc *val.TupleDesc, targetTypes, inTypes []sql.Type, dstRow sql.Row, isPk bool) error {
+func (c ProllyRowConverter) putFields(ctx context.Context, tup val.Tuple, proj val.OrdinalMapping, desc *val.TupleDesc, conversions []fieldConversion, dstRow sql.Row, isPk bool) error {
 	virtualOffset := 0
 	for i, j := range proj {
 		if j == -1 {
@@ -181,8 +183,8 @@ func (c ProllyRowConverter) putFields(ctx context.Context, tup val.Tuple, proj v
 		if err != nil {
 			return err
 		}
-		if t := targetTypes[i]; t != nil {
-			f, err = labelOf(inTypes[i], f)
+		if t := conversions[i].to; t != nil {
+			f, err = labelOf(conversions[i].from, f)
 			if err != nil {
 				return err
 			}
@@ -204,16 +206,6 @@ func (c ProllyRowConverter) putFields(ctx context.Context, tup val.Tuple, proj v
 		}
 	}
 	return nil
-}
-
-// columnTypes returns the SQL type of each column of |cc|.
-func columnTypes(cc *schema.ColCollection) []sql.Type {
-	cols := cc.GetColumns()
-	types := make([]sql.Type, len(cols))
-	for i, col := range cols {
-		types[i] = col.TypeInfo.ToSqlType()
-	}
-	return types
 }
 
 // labelOf returns the label of the ENUM or SET value |f| of type |inType|, and

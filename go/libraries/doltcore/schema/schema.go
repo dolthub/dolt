@@ -291,8 +291,7 @@ const (
 //
 // Two keyless schemas return PrimaryKeysSameTags, since neither has key columns
 // that can differ. A keyed schema against a keyless one returns
-// PrimaryKeysDiffer, and [diff.Stat] rejects that pairing. Nil inputs are
-// handled by [diff.StatForTableDelta].
+// PrimaryKeysDiffer.
 func ComparePrimaryKeys(fromSchema, toSchema Schema) PrimaryKeyComparisonType {
 	if fromSchema == nil && toSchema == nil {
 		return PrimaryKeysDiffer

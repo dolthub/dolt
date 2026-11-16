@@ -35,7 +35,7 @@ func Rekeyed(sch, target Schema) (Schema, bool, error) {
 	keyTags := make([]uint64, targetPK.Size())
 	targetCols := make(map[uint64]Column, targetPK.Size())
 	for i, tc := range targetPK.GetColumns() {
-		col, ok := keyColumn(sch, target, tc)
+		col, ok := MatchingColumn(sch, target, tc)
 		if !ok || col.Virtual || !rekeyableType(col, tc) {
 			return nil, false, nil
 		}
@@ -71,10 +71,10 @@ func Rekeyed(sch, target Schema) (Schema, bool, error) {
 	return newSch, true, nil
 }
 
-// keyColumn returns the column of |sch| that holds the key column |tc| of
+// MatchingColumn returns the column of |sch| that holds the column |tc| of
 // |target|. Columns match by tag, or by name when neither tag appears on the
 // other side, as when a table is dropped and recreated.
-func keyColumn(sch, target Schema, tc Column) (Column, bool) {
+func MatchingColumn(sch, target Schema, tc Column) (Column, bool) {
 	if col, ok := sch.GetAllCols().GetByTag(tc.Tag); ok {
 		return col, true
 	}
@@ -90,8 +90,9 @@ func keyColumn(sch, target Schema, tc Column) (Column, bool) {
 
 // rekeyableType reports whether the key column |from| can be rekeyed to |to|.
 //
-// The types are equal, or both are [sql.MemberType] types with the same
-// encoding, such as two ENUMs. Rekeying maps their members by name.
+// The types are equal, or both store member positions with the same encoding,
+// such as two ENUMs, in which case Column.MapMembers maps their members by
+// name.
 func rekeyableType(from, to Column) bool {
 	if from.TypeInfo.ToSqlType().Equals(to.TypeInfo.ToSqlType()) {
 		return true

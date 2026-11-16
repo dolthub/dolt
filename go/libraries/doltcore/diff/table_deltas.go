@@ -78,11 +78,6 @@ type TableDelta struct {
 	ToFks            []doltdb.ForeignKey
 	ToFksParentSch   map[doltdb.TableName]schema.Schema
 	FromFksParentSch map[doltdb.TableName]schema.Schema
-	// FromHeight is the commit height of the from side, or nil for the working
-	// set.
-	FromHeight *uint64
-	// ToHeight is the commit height of the to side, or nil for the working set.
-	ToHeight *uint64
 }
 
 type TableDeltaSummary struct {
@@ -93,9 +88,12 @@ type TableDeltaSummary struct {
 	FromTableName doltdb.TableName
 	ToTableName   doltdb.TableName
 	AlterStmts    []string
-	// HasUnpairedRows reports whether a primary key change left rows unpaired,
+	// HasUnpaired reports whether a primary key change left rows unpaired,
 	// so that a diff reports them as removed and added.
-	HasUnpairedRows bool
+	HasUnpaired bool
+	// IsKeyUnshared reports that the primary key changed to columns the old
+	// key does not share, so every row is unpaired.
+	IsKeyUnshared bool
 }
 
 // IsAdd returns true if the table was added between the fromRoot and toRoot.
@@ -585,62 +583,8 @@ func (td TableDelta) HasChangesIgnoringColumnTags(ctx context.Context) (bool, er
 // across a key change count as changed. Rows whose ENUM or SET members only
 // moved are not changed either.
 func (td TableDelta) HasDataChanged(ctx context.Context) (bool, error) {
-	isChanged, _, err := td.dataChange(ctx)
+	isChanged, _, _, err := td.dataChange(ctx)
 	return isChanged, err
-}
-
-// dataChange returns the result of HasDataChanged, and whether a primary key
-// change left rows unpaired.
-func (td TableDelta) dataChange(ctx context.Context) (isChanged, hasUnpaired bool, err error) {
-	// Database collation change is not a data change
-	if td.FromTable == nil && td.ToTable == nil && td.FromRootObject == nil && td.ToRootObject == nil {
-		return false, false, nil
-	}
-
-	if td.FromRootObject != nil || td.ToRootObject != nil {
-		isChanged, err = td.HasHashChanged()
-		return isChanged, false, err
-	}
-
-	if td.IsAdd() {
-		isEmpty, err := isTableDataEmpty(ctx, td.ToTable)
-		return !isEmpty, false, err
-	}
-	if td.IsDrop() {
-		isEmpty, err := isTableDataEmpty(ctx, td.FromTable)
-		return !isEmpty, false, err
-	}
-
-	// A primary key change alone changes the row hash, so the rows are compared
-	// keyed by one primary key. Prolly maps with the same rows have the same
-	// hash, and an unpaired row cannot exist unchanged on the other side.
-	fromRows, toRows, err := td.GetRowData(ctx)
-	if err != nil {
-		return false, false, err
-	}
-	from, to, err := td.alignIndexes(ctx, fromRows, toRows, td.FromSch, td.ToSch)
-	if IsPrimaryKeyUnalignable(err) {
-		return true, false, nil
-	} else if err != nil {
-		return false, false, err
-	}
-	if fromN, toN := CountUnpaired(from, to); fromN+toN > 0 {
-		return true, true, nil
-	}
-	isChanged, err = NewMovedMembers(to.Rows.NodeStore(), from.Sch, to.Sch).HasChange(ctx, from.Rows, to.Rows)
-	return isChanged, false, err
-}
-
-// HasGainedOrLostPrimaryKey reports whether td is keyed on one side and
-// keyless on the other. Added and dropped tables return false.
-//
-// Rows cannot be paired across such a change, and IsKeyless returns an error
-// for it.
-func (td TableDelta) HasGainedOrLostPrimaryKey() bool {
-	if td.FromTable == nil || td.ToTable == nil {
-		return false
-	}
-	return schema.IsKeyless(td.FromSch) != schema.IsKeyless(td.ToSch)
 }
 
 func (td TableDelta) HasPrimaryKeySetChanged() bool {
@@ -743,7 +687,7 @@ func isTableDataEmpty(ctx context.Context, table *doltdb.Table) (bool, error) {
 
 // GetSummary returns a summary of the table delta.
 func (td TableDelta) GetSummary(ctx context.Context) (*TableDeltaSummary, error) {
-	dataChange, hasUnpaired, err := td.dataChange(ctx)
+	dataChange, hasUnpaired, isKeyUnshared, err := td.dataChange(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -773,13 +717,14 @@ func (td TableDelta) GetSummary(ctx context.Context) (*TableDeltaSummary, error)
 	// Renaming a table is always a schema change, and also a data change if the table data differs
 	if td.IsRename() {
 		return &TableDeltaSummary{
-			TableName:       td.ToName,
-			FromTableName:   td.FromName,
-			ToTableName:     td.ToName,
-			DataChange:      dataChange,
-			SchemaChange:    true,
-			DiffType:        DiffTypeRenamed,
-			HasUnpairedRows: hasUnpaired,
+			TableName:     td.ToName,
+			FromTableName: td.FromName,
+			ToTableName:   td.ToName,
+			DataChange:    dataChange,
+			SchemaChange:  true,
+			DiffType:      DiffTypeRenamed,
+			HasUnpaired:   hasUnpaired,
+			IsKeyUnshared: isKeyUnshared,
 		}, nil
 	}
 
@@ -789,14 +734,58 @@ func (td TableDelta) GetSummary(ctx context.Context) (*TableDeltaSummary, error)
 	}
 
 	return &TableDeltaSummary{
-		TableName:       td.FromName,
-		FromTableName:   td.FromName,
-		ToTableName:     td.ToName,
-		DataChange:      dataChange,
-		SchemaChange:    schemaChange,
-		DiffType:        DiffTypeModified,
-		HasUnpairedRows: hasUnpaired,
+		TableName:     td.FromName,
+		FromTableName: td.FromName,
+		ToTableName:   td.ToName,
+		DataChange:    dataChange,
+		SchemaChange:  schemaChange,
+		DiffType:      DiffTypeModified,
+		HasUnpaired:   hasUnpaired,
+		IsKeyUnshared: isKeyUnshared,
 	}, nil
+}
+
+// dataChange returns the result of HasDataChanged, whether a primary key
+// change left rows unpaired, and whether the sides share no primary key
+// column.
+func (td TableDelta) dataChange(ctx context.Context) (isChanged, hasUnpaired, isKeyUnshared bool, err error) {
+	// Database collation change is not a data change
+	if td.FromTable == nil && td.ToTable == nil && td.FromRootObject == nil && td.ToRootObject == nil {
+		return false, false, false, nil
+	}
+
+	if td.FromRootObject != nil || td.ToRootObject != nil {
+		isChanged, err = td.HasHashChanged()
+		return isChanged, false, false, err
+	}
+
+	if td.IsAdd() {
+		isEmpty, err := isTableDataEmpty(ctx, td.ToTable)
+		return !isEmpty, false, false, err
+	}
+	if td.IsDrop() {
+		isEmpty, err := isTableDataEmpty(ctx, td.FromTable)
+		return !isEmpty, false, false, err
+	}
+
+	// A primary key change alone changes the row hash, so the rows are compared
+	// keyed by one primary key. Prolly maps with the same rows have the same
+	// hash, and an unpaired row cannot exist unchanged on the other side.
+	fromRows, toRows, err := td.GetRowData(ctx)
+	if err != nil {
+		return false, false, false, err
+	}
+	from, to, err := alignIndexes(ctx, fromRows, toRows, td.FromSch, td.ToSch)
+	if IsPrimaryKeyUnalignable(err) {
+		return true, false, false, nil
+	} else if err != nil {
+		return false, false, false, err
+	}
+	if from.UnpairedCount+to.UnpairedCount > 0 {
+		return true, true, from.IsKeyUnshared, nil
+	}
+	isChanged, err = NewMovedMembers(to.Rows.NodeStore(), from.Sch, to.Sch).HasChange(ctx, from.Rows, to.Rows)
+	return isChanged, false, false, err
 }
 
 // GetRowData returns the table's row data at the fromRoot and toRoot, or an empty map if the table did not exist.

@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"slices"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -290,9 +289,9 @@ func (ds *DiffStatTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 	if err != nil {
 		return nil, err
 	}
-	dtables.SetDeltaHeights(deltas, toRefDetails.height, fromRefDetails.height)
 
 	var diffStats []diffStatNode
+	var hasUnpaired, isKeyUnshared bool
 	// If tableNameExpr defined, return a single table diff stat result
 	if ds.tableNameExpr != nil {
 		resolvedName, err := resolveDeltaTableName(ctx, fromRefDetails.root, toRefDetails.root, tableName)
@@ -312,31 +311,34 @@ func (ds *DiffStatTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 		}
 		if hasDiff {
 			diffStats = append(diffStats, diffStat)
+			hasUnpaired = hasUnpaired || (diffStat.diffStat.Unpaired > 0 && !diffStat.diffStat.IsKeyUnshared)
+			isKeyUnshared = isKeyUnshared || diffStat.diffStat.IsKeyUnshared
 		}
-	} else {
-		for _, delta := range deltas {
-			tblName := delta.ToName
-			if tblName.Name == "" {
-				tblName = delta.FromName
-			}
-			diffStat, hasDiff, err := getDiffStatNodeFromDelta(ctx, delta, fromRefDetails.root, toRefDetails.root, tblName)
-			if diff.IsPrimaryKeyUnalignable(err) {
-				// Other tables still get their stats, so only this table is skipped.
-				ctx.Warn(dtables.PrimaryKeyChangeWarningCode, "cannot compute diff stat for table %s: %s", tblName.Name, err.Error())
-				continue
-			}
-			if err != nil {
-				return nil, err
-			}
-			if hasDiff {
-				diffStats = append(diffStats, diffStat)
-			}
+		dtables.WarnUnpaired(ctx, hasUnpaired, isKeyUnshared, fromRefDetails.refStr, toRefDetails.refStr)
+		return NewDiffStatTableFunctionRowIter(diffStats), nil
+	}
+
+	for _, delta := range deltas {
+		tblName := delta.ToName
+		if tblName.Name == "" {
+			tblName = delta.FromName
+		}
+		diffStat, hasDiff, err := getDiffStatNodeFromDelta(ctx, delta, fromRefDetails.root, toRefDetails.root, tblName)
+		if diff.IsPrimaryKeyUnalignable(err) {
+			// Other tables still get their stats, so only this table is skipped.
+			ctx.Warn(dtables.PrimaryKeyChangeWarningCode, "cannot compute diff stat for table %s: %s", tblName.Name, err.Error())
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if hasDiff {
+			diffStats = append(diffStats, diffStat)
+			hasUnpaired = hasUnpaired || (diffStat.diffStat.Unpaired > 0 && !diffStat.diffStat.IsKeyUnshared)
+			isKeyUnshared = isKeyUnshared || diffStat.diffStat.IsKeyUnshared
 		}
 	}
-	// The warning names no table, so it is given once for all tables.
-	if slices.ContainsFunc(diffStats, func(n diffStatNode) bool { return n.diffStat.Unpaired > 0 }) {
-		ctx.Warn(dtables.PrimaryKeyChangeWarningCode, dtables.UnpairedRowsWarning, fromRefDetails.refStr, toRefDetails.refStr)
-	}
+	dtables.WarnUnpaired(ctx, hasUnpaired, isKeyUnshared, fromRefDetails.refStr, toRefDetails.refStr)
 	return NewDiffStatTableFunctionRowIter(diffStats), nil
 }
 
@@ -468,6 +470,7 @@ func getDiffStat(ctx *sql.Context, td diff.TableDelta) (diff.DiffStatProgress, b
 				acc.NewCellSize += p.NewCellSize
 				acc.OldCellSize += p.OldCellSize
 				acc.Unpaired += p.Unpaired
+				acc.IsKeyUnshared = acc.IsKeyUnshared || p.IsKeyUnshared
 				count++
 			case <-ctx2.Done():
 				return ctx2.Err()
@@ -480,7 +483,7 @@ func getDiffStat(ctx *sql.Context, td diff.TableDelta) (diff.DiffStatProgress, b
 	}
 
 	// A table that gained or lost its primary key is counted as keyless.
-	keyless := td.HasGainedOrLostPrimaryKey()
+	keyless := td.FromTable != nil && td.ToTable != nil && schema.IsKeyless(td.FromSch) != schema.IsKeyless(td.ToSch)
 	if !keyless {
 		var err error
 		if keyless, err = td.IsKeyless(ctx); err != nil {

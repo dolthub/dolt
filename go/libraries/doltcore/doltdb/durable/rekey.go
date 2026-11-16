@@ -27,8 +27,8 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// RowRekeyer rebuilds tuples of one schema under the primary key of another,
-// by copying their fields, so merges and diffs can compare rows across a
+// RowRekeyer rebuilds tuples of one schema under the primary key of another.
+// It copies their fields, so merges and diffs can compare rows across a
 // primary key change. It is not safe for concurrent use.
 type RowRekeyer struct {
 	ns     tree.NodeStore
@@ -124,17 +124,6 @@ func (r *RowRekeyer) Key(ctx context.Context, k, v val.Tuple) (val.Tuple, error)
 	return r.kb.BuildPermissive(ctx, r.ns.Pool())
 }
 
-// hasNullField reports whether the rekeyed key |nk| holds a NULL, which no
-// primary key can.
-func (r *RowRekeyer) hasNullField(nk val.Tuple) bool {
-	for i := 0; i < r.newKD.Count(); i++ {
-		if nk.FieldIsNull(i) {
-			return true
-		}
-	}
-	return false
-}
-
 // RekeyMap returns the rows of |rows| keyed by the new primary key, and the
 // unpaired rows.
 //
@@ -194,8 +183,8 @@ func (r *RowRekeyer) RekeyMap(ctx context.Context, rows prolly.Map) (rekeyed, un
 // splitSharedKeys moves every row whose new key is in |shared| from |mut| to
 // |unpaired|.
 //
-// It rekeys |rows| again, since |mut| keeps the first row of each shared key
-// and |shared| holds the rest.
+// It rekeys |rows| again, since |mut| keeps the first row of each duplicated
+// key and |shared| holds the rest.
 func (r *RowRekeyer) splitSharedKeys(ctx context.Context, rows prolly.Map, mut, shared, unpaired *prolly.MutableMap) error {
 	sharedKeys, err := shared.Map(ctx)
 	if err != nil {
@@ -218,6 +207,17 @@ func (r *RowRekeyer) splitSharedKeys(ctx context.Context, rows prolly.Map, mut, 
 		}
 		return unpaired.Put(ctx, k, v)
 	})
+}
+
+// hasNullField reports whether the rekeyed key |nk| holds a NULL, which no
+// primary key can.
+func (r *RowRekeyer) hasNullField(nk val.Tuple) bool {
+	for i := 0; i < r.newKD.Count(); i++ {
+		if nk.FieldIsNull(i) {
+			return true
+		}
+	}
+	return false
 }
 
 // IterRows calls |cb| for each key and value of |rows|. It returns the first

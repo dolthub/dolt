@@ -156,8 +156,11 @@ func (dt *CommitDiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, erro
 	return nil, fmt.Errorf("error querying table %s: %w", dt.Name(), ErrExactlyOneToCommit)
 }
 
-// LookupPartitions returns the partitions of the commit diffs selected by
-// |lookup|.
+// LookupPartitions returns a partition that diffs the table between the
+// commits named by the to_commit and from_commit ranges of |lookup|. The
+// partition is limited to the key ranges that remain. A commit pair with no
+// simple or fuzzy diff yields no partitions and a warning, since its rows
+// cannot be paired.
 func (dt *CommitDiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	ranges, ok := lookup.Ranges.(sql.MySQLRangeCollection)
 	if !ok {
@@ -195,12 +198,12 @@ func (dt *CommitDiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLo
 		return nil, fmt.Errorf("from_commit must be string, found %T", fromCommit)
 	}
 
-	toRoot, toHash, toDate, toHeight, err := dt.rootValForHash(ctx, dt.toCommit)
+	toRoot, toHash, toDate, err := dt.rootValForHash(ctx, dt.toCommit)
 	if err != nil {
 		return nil, err
 	}
 
-	fromRoot, fromHash, fromDate, fromHeight, err := dt.rootValForHash(ctx, dt.fromCommit)
+	fromRoot, fromHash, fromDate, err := dt.rootValForHash(ctx, dt.fromCommit)
 	if err != nil {
 		return nil, err
 	}
@@ -222,18 +225,16 @@ func (dt *CommitDiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLo
 	}
 
 	dp := DiffPartition{
-		to:         toTable,
-		from:       fromTable,
-		toName:     toHash,
-		fromName:   fromHash,
-		toDate:     toDate,
-		fromDate:   fromDate,
-		toSch:      dt.targetSchema,
-		fromSch:    dt.targetSchema,
-		ranges:     prollyRanges,
-		rangesSch:  dt.targetSchema,
-		toHeight:   toHeight,
-		fromHeight: fromHeight,
+		to:       toTable,
+		from:     fromTable,
+		toName:   toHash,
+		fromName: fromHash,
+		toDate:   toDate,
+		fromDate: fromDate,
+		toSch:    dt.targetSchema,
+		fromSch:  dt.targetSchema,
+		ranges:   prollyRanges,
+		rangeSch: dt.targetSchema,
 	}
 
 	isDiffable, _, err := dp.isDiffablePartition(ctx)
@@ -280,12 +281,9 @@ func (itr *SliceOfPartitionsItr) Close(*sql.Context) error {
 	return nil
 }
 
-// rootValForHash returns the root for |hashStr|, with its commit time and
-// height. Both are nil for the working and staged roots.
-func (dt *CommitDiffTable) rootValForHash(ctx *sql.Context, hashStr string) (doltdb.RootValue, string, *types.Timestamp, *uint64, error) {
+func (dt *CommitDiffTable) rootValForHash(ctx *sql.Context, hashStr string) (doltdb.RootValue, string, *types.Timestamp, error) {
 	var root doltdb.RootValue
 	var commitTime *types.Timestamp
-	var height *uint64
 	if strings.EqualFold(hashStr, doltdb.Working) {
 		root = dt.workingRoot
 	} else if strings.EqualFold(hashStr, doltdb.Staged) {
@@ -293,41 +291,35 @@ func (dt *CommitDiffTable) rootValForHash(ctx *sql.Context, hashStr string) (dol
 	} else {
 		cs, err := doltdb.NewCommitSpec(hashStr)
 		if err != nil {
-			return nil, "", nil, nil, err
+			return nil, "", nil, err
 		}
 
 		optCmt, err := dt.ddb.Resolve(ctx, cs, dt.headRef)
 		if err != nil {
-			return nil, "", nil, nil, err
+			return nil, "", nil, err
 		}
 		cm, ok := optCmt.ToCommit()
 		if !ok {
-			return nil, "", nil, nil, doltdb.ErrGhostCommitEncountered
+			return nil, "", nil, doltdb.ErrGhostCommitEncountered
 		}
 
 		root, err = cm.GetRootValue(ctx)
 
 		if err != nil {
-			return nil, "", nil, nil, err
+			return nil, "", nil, err
 		}
 
 		meta, err := cm.GetCommitMeta(ctx)
 
 		if err != nil {
-			return nil, "", nil, nil, err
+			return nil, "", nil, err
 		}
 
 		t := meta.Committer.Date.Time()
 		commitTime = (*types.Timestamp)(&t)
-
-		h, err := cm.Height()
-		if err != nil {
-			return nil, "", nil, nil, err
-		}
-		height = &h
 	}
 
-	return root, hashStr, commitTime, height, nil
+	return root, hashStr, commitTime, nil
 }
 
 func (dt *CommitDiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {

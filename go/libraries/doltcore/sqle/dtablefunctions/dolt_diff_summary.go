@@ -17,7 +17,6 @@ package dtablefunctions
 import (
 	"fmt"
 	"io"
-	"slices"
 	"sort"
 	"strings"
 
@@ -283,7 +282,6 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 	if err != nil {
 		return nil, err
 	}
-	dtables.SetDeltaHeights(deltas, toDetails.height, fromDetails.height)
 
 	sort.Slice(deltas, func(i, j int) bool {
 		return deltas[i].ToName.Less(deltas[j].ToName)
@@ -299,37 +297,17 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 		}
 	}
 
-	// If tableNameExpr defined, return a single table diff summary result
+	// If tableNameExpr defined, only that table's summary is computed
 	if ds.tableNameExpr != nil {
 		resolvedName, err := resolveDeltaTableName(ctx, fromDetails.root, toDetails.root, tableName)
 		if err != nil {
 			return nil, err
 		}
-		delta := findMatchingDelta(deltas, resolvedName)
-
-		ignore, err := ignorePatterns.ShouldIgnoreDelta(delta.IsAdd(), delta.IsDrop(), delta.ToName, delta.FromName)
-		if err != nil {
-			return nil, err
-		}
-		if ignore {
-			return NewDiffSummaryTableFunctionRowIter([]*diff.TableDeltaSummary{}), nil
-		}
-
-		summ, err := summaryForDelta(ctx, delta)
-		if err != nil {
-			return nil, err
-		}
-
-		summs := []*diff.TableDeltaSummary{}
-		if summ != nil {
-			summs = []*diff.TableDeltaSummary{summ}
-		}
-		warnUnpaired(ctx, summs, fromDetails, toDetails)
-
-		return NewDiffSummaryTableFunctionRowIter(summs), nil
+		deltas = []diff.TableDelta{findMatchingDelta(deltas, resolvedName)}
 	}
 
 	var diffSummaries []*diff.TableDeltaSummary
+	var hasUnpaired, isKeyUnshared bool
 	for _, delta := range deltas {
 		ignore, err := ignorePatterns.ShouldIgnoreDelta(delta.IsAdd(), delta.IsDrop(), delta.ToName, delta.FromName)
 		if err != nil {
@@ -345,26 +323,17 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 		}
 		if summ != nil {
 			diffSummaries = append(diffSummaries, summ)
+			hasUnpaired = hasUnpaired || (summ.HasUnpaired && !summ.IsKeyUnshared)
+			isKeyUnshared = isKeyUnshared || summ.IsKeyUnshared
 		}
 	}
-	warnUnpaired(ctx, diffSummaries, fromDetails, toDetails)
+	dtables.WarnUnpaired(ctx, hasUnpaired, isKeyUnshared, fromDetails.refStr, toDetails.refStr)
 
 	return NewDiffSummaryTableFunctionRowIter(diffSummaries), nil
 }
 
-// warnUnpaired warns once when any of |summs| has rows that a primary key
-// change left unpaired, using [dtables.UnpairedRowsWarning].
-//
-// The warning names no table, so it covers all of |summs| at once.
-func warnUnpaired(ctx *sql.Context, summs []*diff.TableDeltaSummary, from, to *refDetails) {
-	if slices.ContainsFunc(summs, func(s *diff.TableDeltaSummary) bool { return s.HasUnpairedRows }) {
-		ctx.Warn(dtables.PrimaryKeyChangeWarningCode, dtables.UnpairedRowsWarning, from.refStr, to.refStr)
-	}
-}
-
 // summaryForDelta returns the summary of |delta|, or nil when it has no
-// observable change. Errors come from delta.GetSummary or
-// delta.HasChangesIgnoringColumnTags.
+// observable change.
 func summaryForDelta(ctx *sql.Context, delta diff.TableDelta) (*diff.TableDeltaSummary, error) {
 	if delta.FromTable == nil && delta.ToTable == nil && delta.FromRootObject == nil && delta.ToRootObject == nil {
 		if !strings.HasPrefix(delta.FromName.Name, diff.DBPrefix) && !strings.HasPrefix(delta.ToName.Name, diff.DBPrefix) {
