@@ -254,7 +254,7 @@ func BuildUniqueProllyIndex(
 			return nil, err
 		}
 
-		if prefixDesc.HasNulls(idxKey) {
+		if !idx.NullsNotDistinct() && prefixDesc.HasNulls(idxKey) {
 			continue
 		}
 

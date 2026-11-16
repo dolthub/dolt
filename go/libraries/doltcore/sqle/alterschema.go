@@ -256,6 +256,7 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 				Predicate:          index.Predicate(),
 				ColumnOrders:       index.ColumnOrders(),
 				OpClasses:          index.OpClasses(),
+				NullsNotDistinct:   index.NullsNotDistinct(),
 				FullTextProperties: index.FullTextProperties(),
 				VectorProperties:   index.VectorProperties(),
 			})

@@ -115,17 +115,18 @@ func newWriterSchema(ctx *sql.Context, t *doltdb.Table, tableName doltdb.TableNa
 		}
 
 		idxState := dsess.IndexState{
-			KeyMapping:      keyMap,
-			ValMapping:      valMap,
-			PkMapping:       pkMap,
-			Name:            def.Name(),
-			Schema:          def.Schema(),
-			Count:           def.Count(),
-			IsFullText:      def.IsFullText(),
-			IsUnique:        def.IsUnique(),
-			IsSpatial:       def.IsSpatial(),
-			PrefixLengths:   def.PrefixLengths(),
-			KeyVirtualExprs: keyVirtualExprs,
+			KeyMapping:       keyMap,
+			ValMapping:       valMap,
+			PkMapping:        pkMap,
+			Name:             def.Name(),
+			Schema:           def.Schema(),
+			Count:            def.Count(),
+			IsFullText:       def.IsFullText(),
+			IsUnique:         def.IsUnique(),
+			NullsNotDistinct: def.NullsNotDistinct(),
+			IsSpatial:        def.IsSpatial(),
+			PrefixLengths:    def.PrefixLengths(),
+			KeyVirtualExprs:  keyVirtualExprs,
 		}
 		// Resolve the predicate against the schema being written, which may not be the schema of the table the session
 		// sees, e.g. while ALTER TABLE rewrites the table.

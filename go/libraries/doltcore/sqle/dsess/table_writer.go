@@ -131,8 +131,10 @@ type IndexState struct {
 	Count         int
 	IsFullText    bool
 	IsUnique      bool
-	IsSpatial     bool
-	Predicate     sql.Expression
+	// NullsNotDistinct is whether a unique index treats NULLs as equal to each other.
+	NullsNotDistinct bool
+	IsSpatial        bool
+	Predicate        sql.Expression
 	// KeyVirtualExprs is parallel to KeyMapping. A non-nil entry at position i is the resolved
 	// generating expression for a virtual generated column that is key part i of this index.
 	KeyVirtualExprs []sql.Expression
