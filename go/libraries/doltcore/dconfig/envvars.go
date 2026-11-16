@@ -51,6 +51,9 @@ const (
 	EnvDoltRootPassword              = "DOLT_ROOT_PASSWORD"
 	EnvDoltGCScheduler               = "DOLT_GC_SCHEDULER"
 
+	// EnvDisableVersionChecks disables out-of-date version check.
+	EnvDisableVersionChecks = "DOLT_DISABLE_VERSION_CHECKS"
+
 	// If set, must be "kill_connections" or "session_aware"
 	// Will go away after session_aware is made default-and-only.
 	EnvGCSafepointControllerChoice = "DOLT_GC_SAFEPOINT_CONTROLLER_CHOICE"

@@ -24,6 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -47,6 +48,30 @@ func TestFileFactory_CreateDB_SingletonCacheAndBypass(t *testing.T) {
 		require.NoError(t, err)
 
 		require.True(t, db1 == db2, "expected singleton cache to return same DB instance")
+	})
+
+	t.Run("closed cache entry is replaced", func(t *testing.T) {
+		root := t.TempDir()
+		nomsDir := filepath.Join(root, "noms")
+		require.NoError(t, os.MkdirAll(nomsDir, 0o755))
+
+		urlStr := earl.FileUrlFromPath(filepath.ToSlash(nomsDir), os.PathSeparator)
+		params := map[string]interface{}{ChunkJournalParam: struct{}{}}
+
+		db1, _, _, err := CreateDB(ctx, nbf, urlStr, params)
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = CloseAllLocalDatabases() })
+		require.NoError(t, db1.Close())
+
+		db2, _, _, err := CreateDB(ctx, nbf, urlStr, params)
+		require.NoError(t, err)
+		require.True(t, db1 != db2, "expected a closed store to be replaced")
+		_, err = datas.ChunkStoreFromDatabase(db2).Root(ctx)
+		require.NoError(t, err)
+
+		db3, _, _, err := CreateDB(ctx, nbf, urlStr, params)
+		require.NoError(t, err)
+		require.True(t, db2 == db3, "expected the replacement to be cached")
 	})
 
 	t.Run("DisableSingletonCacheParam bypasses singleton cache", func(t *testing.T) {
@@ -103,6 +128,19 @@ func TestFileFactory_CreateDB_PanicOnSingletonHit(t *testing.T) {
 		hit, _, _, err := CreateDB(ctx, nbf, urlStr, params)
 		require.NoError(t, err)
 		require.True(t, db == hit)
+	})
+
+	t.Run("replacing a closed entry does not panic", func(t *testing.T) {
+		t.Setenv(dconfig.EnvTestPanicOnSingletonHit, "1")
+		urlStr := nomsURL(t)
+
+		db, _, _, err := CreateDB(ctx, nbf, urlStr, params)
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = CloseAllLocalDatabases() })
+		require.NoError(t, db.Close())
+
+		_, _, _, err = CreateDB(ctx, nbf, urlStr, params)
+		require.NoError(t, err)
 	})
 
 	t.Run("DisableSingletonCacheParam does not panic", func(t *testing.T) {

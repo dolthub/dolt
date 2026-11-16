@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -166,18 +167,23 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	defer singletonLock.Unlock()
 
 	if s, ok := singletons[urlObj.Path]; ok {
-		if os.Getenv(dconfig.EnvTestPanicOnSingletonHit) != "" {
-			panic(fmt.Sprintf("singleton cache hit opening %s", urlObj.Path))
-		}
 		// Callers to CreateDB are expecting to see the database as newly
 		// opened with any novelty present. This is potentially a little
 		// sketchy for any concurrent accessors, but this whole mechanism
 		// has already made callers reliquinish any notion that they are
 		// the sole owners of the Database they opened.
-		if err := datas.ChunkStoreFromDatabase(s.ddb).Rebase(ctx); err != nil {
+		err := datas.ChunkStoreFromDatabase(s.ddb).Rebase(ctx)
+		if err == nil {
+			if os.Getenv(dconfig.EnvTestPanicOnSingletonHit) != "" {
+				panic(fmt.Sprintf("singleton cache hit opening %s", urlObj.Path))
+			}
+			return s.ddb, s.vrw, s.ns, nil
+		}
+		if !errors.Is(err, chunks.ErrStoreClosed) {
 			return nil, nil, nil, err
 		}
-		return s.ddb, s.vrw, s.ns, nil
+		// A holder closed this store, so open a new one in its place.
+		delete(singletons, urlObj.Path)
 	}
 
 	ddb, vrw, ns, err := fact.CreateDbNoCache(ctx, nbf, urlObj, params, nbs.JournalParserLoggingWarningsCb)

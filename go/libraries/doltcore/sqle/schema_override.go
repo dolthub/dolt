@@ -243,7 +243,7 @@ func convertWithTruncation(ctx *sql.Context, value any, typ typeinfo.TypeInfo) (
 }
 
 // newMappingRowIter returns a RowIter that maps results from |wrappedIter| to the overridden schema on |t|.
-func newMappingRowIter(ctx *sql.Context, t *DoltTable, wrappedIter sql.RowIter) (sql.RowIter, error) {
+func newMappingRowIter(ctx *sql.Context, t *DoltTable, wrappedIter sql.RowIter) (sql.ValueRowWriter, error) {
 	rowConvFunc, err := newRowConverterForDoltTable(ctx, t)
 	if err != nil {
 		return nil, err
@@ -292,6 +292,7 @@ type mappingRowIter struct {
 }
 
 var _ sql.RowIter = (*mappingRowIter)(nil)
+var _ sql.ValueRowWriter = (*mappingRowIter)(nil)
 
 // Next implements the sql.RowIter interface
 func (m *mappingRowIter) Next(ctx *sql.Context) (sql.Row, error) {
@@ -310,4 +311,19 @@ func (m *mappingRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 // Close implements the sql.RowIter interface
 func (m *mappingRowIter) Close(ctx *sql.Context) error {
 	return m.child.Close(ctx)
+}
+
+func (m *mappingRowIter) WriteNextValueRow(ctx *sql.Context, row sql.ValueRow) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m *mappingRowIter) IsValueRowWriter(ctx *sql.Context) bool {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m *mappingRowIter) Columns() sql.ColSet {
+	//TODO implement me
+	panic("implement me")
 }

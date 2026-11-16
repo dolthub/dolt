@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"math/bits"
 	"math/rand"
 	"testing"
 
@@ -145,39 +144,42 @@ func (g gaussianItems) sample(mean, std float64) (s int) {
 	return
 }
 
-type staticItems struct {
-	key, value int
+// alwaysSplitter ends a node after every item, which the chunker turns into
+// a binary tree, the shape long keys produce.
+type alwaysSplitter struct {
+	nodeSplitter
 }
 
-func (s staticItems) Next() (key, value Item) {
-	key = make(Item, s.key)
-	value = make(Item, s.value)
-	rand.Read(key)
-	rand.Read(value)
-	return
-}
+func (alwaysSplitter) CrossedBoundary() bool { return true }
 
-func TestRoundLog2(t *testing.T) {
-	for i := 1; i < 16384; i++ {
-		exp := int(math.Round(math.Log2(float64(i))))
-		act := int(roundLog2(uint32(i)))
-		assert.Equal(t, exp, act)
+func TestChunkerTallTree(t *testing.T) {
+	defer func(f splitterFactory) { defaultSplitterFactory = f }(defaultSplitterFactory)
+	defaultSplitterFactory = func(level uint8) nodeSplitter {
+		return alwaysSplitter{newKeySplitter(level)}
 	}
-}
 
-const (
-	// log2MidPoint is 2^31.5
-	log2MidPoint = 0b10110101000001001111001100110011
-)
+	ctx := context.Background()
+	ns := NewTestNodeStore()
+	chkr, err := newEmptyChunker(ctx, ns, message.NewProllyMapSerializer(keyDesc, valDesc, ns.Pool()))
+	require.NoError(t, err)
 
-// roundLog2 is an optimized version of
-// uint32(math.Round(math.Log2(sz)))
-// note: not currently used in any splitter
-func roundLog2(sz uint32) (lg uint32) {
-	// invariant: |sz| > 1
-	lg = uint32(bits.Len32(sz) - 1)
-	if sz > (log2MidPoint >> (31 - lg)) {
-		lg++
+	kb := val.NewTupleBuilder(keyDesc, ns)
+	vb := val.NewTupleBuilder(valDesc, ns)
+	// A binary tree of 2^15 leaves needs 16 levels.
+	const count = 1 << 15
+	items := make([][2]Item, count)
+	for i := 0; i < count; i++ {
+		kb.PutInt64(0, int64(i))
+		k, err := kb.Build(ctx, ns.Pool())
+		require.NoError(t, err)
+		vb.PutInt64(0, int64(i))
+		v, err := vb.Build(ctx, ns.Pool())
+		require.NoError(t, err)
+		items[i] = [2]Item{Item(k), Item(v)}
+		require.NoError(t, chkr.AddPair(ctx, Item(k), Item(v)))
 	}
-	return
+	root, err := chkr.Done(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 15, root.Level())
+	validateTreeItems(t, ns, root, items)
 }

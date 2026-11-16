@@ -301,10 +301,14 @@ func (t *TempTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (
 }
 
 func (t *TempTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
+	return t.PartitionValueRowWriter(ctx, partition, sql.ColSet{})
+}
+
+func (t *TempTable) PartitionValueRowWriter(ctx *sql.Context, partition sql.Partition, columnIds sql.ColSet) (sql.ValueRowWriter, error) {
 	if !t.lookup.IsEmpty() {
-		return index.RowIterForIndexLookup(ctx, t, t.lookup, t.pkSch, nil)
+		return index.RowIterForIndexLookup(ctx, t, t.lookup, t.pkSch, nil, columnIds)
 	} else {
-		return partitionRows(ctx, t.table, nil, partition)
+		return partitionRows(ctx, t.table, nil, partition, columnIds)
 	}
 }
 
@@ -322,14 +326,15 @@ func (t *TempTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) error {
 	}
 
 	ret, err := creation.CreateIndex(ctx, t.table, t.Name(), idx.Name, cols, allocatePrefixLengths(idx.Columns), schema.IndexProperties{
-		IsUnique:      idx.Constraint == sql.IndexConstraint_Unique,
-		IsSpatial:     idx.Constraint == sql.IndexConstraint_Spatial,
-		IsFullText:    false,
-		IsVector:      false,
-		IsUserDefined: true,
-		Comment:       idx.Comment,
-		ColumnOrders:  idx.ColumnOrders(),
-		OpClasses:     idx.OpClasses(),
+		IsUnique:         idx.Constraint == sql.IndexConstraint_Unique,
+		IsSpatial:        idx.Constraint == sql.IndexConstraint_Spatial,
+		IsFullText:       false,
+		IsVector:         false,
+		IsUserDefined:    true,
+		Comment:          idx.Comment,
+		ColumnOrders:     idx.ColumnOrders(),
+		OpClasses:        idx.OpClasses(),
+		NullsNotDistinct: idx.NullsNotDistinct,
 	}, t.opts, nil)
 	if err != nil {
 		return err

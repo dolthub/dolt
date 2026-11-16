@@ -14,21 +14,19 @@
 
 package dsess
 
-import (
-	"strings"
-)
+import "github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 
 // branchStates holds the branch states a session has loaded in its current transaction. A branch state's working
 // set, head and write session belong to that transaction, so the session replaces its branchStates when a transaction
 // starts or rolls back, rather than emptying it. A branch state is current only while it's in the session's
 // branchStates.
 type branchStates struct {
-	// byDb maps each database's lowercase base name to its branch states, keyed by lowercase head.
-	byDb map[string]map[string]*branchState
+	// byDb maps each database to its branch states.
+	byDb map[doltdb.DbKey]map[doltdb.RevisionKey]*branchState
 }
 
 func newBranchStates() *branchStates {
-	return &branchStates{byDb: make(map[string]map[string]*branchState)}
+	return &branchStates{byDb: make(map[doltdb.DbKey]map[doltdb.RevisionKey]*branchState)}
 }
 
 // add creates an empty branch state for |head| of |dbState|'s database, replacing any it already has, and returns it.
@@ -41,51 +39,54 @@ func (s *branchStates) add(dbState *DatabaseSessionState, head string, revisionT
 	}
 	s.put(bs)
 
-	lowerHead := strings.ToLower(head)
-	if _, ok := dbState.headCache[lowerHead]; !ok {
-		dbState.headCache[lowerHead] = newSessionCache()
+	key := doltdb.NewRevisionKey(head)
+	if _, ok := dbState.headCache[key]; !ok {
+		dbState.headCache[key] = newSessionCache()
 	}
 	return bs
 }
 
 func (s *branchStates) put(bs *branchState) {
-	db := strings.ToLower(bs.dbState.dbName)
-	heads, ok := s.byDb[db]
+	key := bs.key()
+	heads, ok := s.byDb[key.Db]
 	if !ok {
-		heads = make(map[string]*branchState)
-		s.byDb[db] = heads
+		heads = make(map[doltdb.RevisionKey]*branchState)
+		s.byDb[key.Db] = heads
 	}
-	heads[strings.ToLower(bs.head)] = bs
+	heads[key.Revision] = bs
 }
 
-func (s *branchStates) get(db, head string) (*branchState, bool) {
-	bs, ok := s.byDb[strings.ToLower(db)][strings.ToLower(head)]
+func (s *branchStates) get(name doltdb.QualifiedDbName) (*branchState, bool) {
+	key := name.Key()
+	bs, ok := s.byDb[key.Db][key.Revision]
 	return bs, ok
 }
 
 // contains reports whether |bs| is the branch state for its branch here.
 func (s *branchStates) contains(bs *branchState) bool {
-	cur, ok := s.get(bs.dbState.dbName, bs.head)
+	cur, ok := s.get(bs.name())
 	return ok && cur == bs
 }
 
-func (s *branchStates) remove(db, head string) (*branchState, bool) {
-	heads := s.byDb[strings.ToLower(db)]
-	bs, ok := heads[strings.ToLower(head)]
-	delete(heads, strings.ToLower(head))
+func (s *branchStates) remove(name doltdb.QualifiedDbName) (*branchState, bool) {
+	key := name.Key()
+	heads := s.byDb[key.Db]
+	bs, ok := heads[key.Revision]
+	delete(heads, key.Revision)
 	return bs, ok
 }
 
-// removeDb removes and returns the branch states of database |db|, keyed by lowercase head.
-func (s *branchStates) removeDb(db string) map[string]*branchState {
-	heads := s.byDb[strings.ToLower(db)]
-	delete(s.byDb, strings.ToLower(db))
+// removeDb removes and returns the branch states of |name|'s database. Its revision is ignored.
+func (s *branchStates) removeDb(name doltdb.QualifiedDbName) map[doltdb.RevisionKey]*branchState {
+	db := name.DbKey()
+	heads := s.byDb[db]
+	delete(s.byDb, db)
 	return heads
 }
 
-// forDb returns the branch states of database |db|.
-func (s *branchStates) forDb(db string) []*branchState {
-	heads := s.byDb[strings.ToLower(db)]
+// forDb returns the branch states of |name|'s database. Its revision is ignored.
+func (s *branchStates) forDb(name doltdb.QualifiedDbName) []*branchState {
+	heads := s.byDb[name.DbKey()]
 	states := make([]*branchState, 0, len(heads))
 	for _, bs := range heads {
 		states = append(states, bs)

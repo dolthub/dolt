@@ -89,8 +89,7 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 
 func (rrd ReadReplicaDatabase) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
 	rrd.rsr, rrd.rsw = branchSpec.RepoState, branchSpec.RepoState
-	rrd.revision = branchSpec.Branch
-	rrd.revName = rrd.baseName + doltdb.DbRevisionDelimiter + branchSpec.Branch
+	rrd.name = rrd.name.WithRevision(branchSpec.Branch)
 	rrd.revType = dsess.RevisionTypeBranch
 	rrd.requestedName = requestedName
 
@@ -106,7 +105,7 @@ func (rrd ReadReplicaDatabase) ValidReplicaState(ctx *sql.Context) bool {
 // This seems like a pointless override from the embedded Database implementation, but it's necessary to pass the
 // correct pointer type to the session initializer.
 func (rrd ReadReplicaDatabase) InitialDBState(ctx *sql.Context) (dsess.InitialDbState, error) {
-	return initialDBState(ctx, rrd, rrd.revision)
+	return initialDBState(ctx, rrd, rrd.name.Revision)
 }
 
 func (rrd ReadReplicaDatabase) DoltDatabases() []*doltdb.DoltDB {

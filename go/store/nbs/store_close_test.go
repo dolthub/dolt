@@ -246,3 +246,94 @@ func TestNBSReopenAfterCloseTwice(t *testing.T) {
 		require.Equal(t, c, out)
 	}
 }
+
+func TestNBSReadsFailAfterClose(t *testing.T) {
+	ctx := context.Background()
+	requireClosedErr := func(t *testing.T, err error) {
+		require.ErrorIs(t, err, chunks.ErrStoreClosed)
+	}
+	readers := []struct {
+		name string
+		read func(st *NomsBlockStore) error
+	}{
+		{"Root", func(st *NomsBlockStore) error {
+			_, err := st.Root(ctx)
+			return err
+		}},
+		{"Count", func(st *NomsBlockStore) error {
+			_, err := st.Count(ctx)
+			return err
+		}},
+		{"Rebase", func(st *NomsBlockStore) error {
+			return st.Rebase(ctx)
+		}},
+		{"Sources", func(st *NomsBlockStore) error {
+			_, err := st.Sources(ctx)
+			return err
+		}},
+		{"Size", func(st *NomsBlockStore) error {
+			_, err := st.Size(ctx)
+			return err
+		}},
+		{"ChunkJournalSize", func(st *NomsBlockStore) error {
+			_, _, err := st.ChunkJournalSize(ctx)
+			return err
+		}},
+		{"IterateRoots", func(st *NomsBlockStore) error {
+			return st.IterateRoots(ctx, func(string, *time.Time) error { return nil })
+		}},
+		{"IterateAllChunks", func(st *NomsBlockStore) error {
+			return st.IterateAllChunks(ctx, func(chunks.Chunk) {})
+		}},
+		{"TolerantIterateAllChunks", func(st *NomsBlockStore) error {
+			return st.TolerantIterateAllChunks(ctx, func(chunks.Chunk) {}, func(string, error) {})
+		}},
+		{"Get", func(st *NomsBlockStore) error {
+			_, err := st.Get(ctx, hash.Hash{})
+			return err
+		}},
+		{"Has", func(st *NomsBlockStore) error {
+			_, err := st.Has(ctx, hash.Hash{})
+			return err
+		}},
+	}
+	stores := []struct {
+		name string
+		open func(t *testing.T) *NomsBlockStore
+	}{
+		{"NonJournaled", func(t *testing.T) *NomsBlockStore {
+			st, _, _ := makeTestLocalStore(t, defaultMaxTables)
+			commitTestChunks(t, st, 16)
+			return st
+		}},
+		{"Journaled", func(t *testing.T) *NomsBlockStore {
+			st := openTestJournalingStore(t, t.TempDir())
+			commitTestChunks(t, st, 16)
+			return st
+		}},
+		{"NeverLoaded", func(t *testing.T) *NomsBlockStore {
+			return openTestJournalingStore(t, t.TempDir())
+		}},
+	}
+	for _, store := range stores {
+		t.Run(store.name, func(t *testing.T) {
+			st := store.open(t)
+			require.NoError(t, st.Close())
+			for _, reader := range readers {
+				t.Run(reader.name, func(t *testing.T) {
+					requireClosedErr(t, reader.read(st))
+				})
+			}
+		})
+	}
+	t.Run("Generational", func(t *testing.T) {
+		oldGen, _, _ := makeTestLocalStore(t, defaultMaxTables)
+		newGen := openTestJournalingStore(t, t.TempDir())
+		commitTestChunks(t, newGen, 16)
+		gen := NewGenerationalCS(oldGen, newGen, nil)
+		require.NoError(t, gen.Close())
+		_, err := gen.Root(ctx)
+		requireClosedErr(t, err)
+		requireClosedErr(t, gen.Rebase(ctx))
+	})
+}

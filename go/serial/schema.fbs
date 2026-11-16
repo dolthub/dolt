@@ -148,6 +148,10 @@ table Index {
   // per-column operator class, parallel to index_columns.
   // omitted when no column has one.
   op_classes:[string];
+
+  // whether NULLs compare equal to each other for unique enforcement.
+  // omitted for the default, where NULLs are distinct.
+  nulls_not_distinct:bool;
 }
 
 table FulltextInfo {

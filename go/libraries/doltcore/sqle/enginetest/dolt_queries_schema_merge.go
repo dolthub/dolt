@@ -115,6 +115,41 @@ var SchemaChangeTestsBasicCases = []MergeScriptTest{
 		},
 	},
 	{
+		Name: "dropping a column and deleting a row on different branches",
+		AncSetUpScript: []string{
+			"create table t (pk int primary key, a int, b varchar(10));",
+			"insert into t values (1, 1, 'x'), (2, 2, 'y');",
+			"create table t_virtual (pk int primary key, a varchar(10), v int as (pk + 1) virtual, b varchar(10));",
+			"insert into t_virtual (pk, a, b) values (1, 'first', 'x'), (2, 'second', 'y');",
+		},
+		LeftSetUpScript: []string{
+			"alter table t drop column a;",
+			"alter table t_virtual drop column a;",
+		},
+		RightSetUpScript: []string{
+			"delete from t where pk = 1;",
+			"delete from t_virtual where pk = 1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select * from dolt_preview_merge_conflicts_summary('main', 'right');",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{2, "y"}},
+			},
+			{
+				Query:    "select * from t_virtual;",
+				Expected: []sql.Row{{2, 3, "y"}},
+			},
+		},
+	},
+	{
 		Name: "renaming a column",
 		AncSetUpScript: []string{
 			"CREATE table t (pk int primary key, col1 int, col2 varchar(100));",
@@ -520,8 +555,8 @@ var SchemaChangeTestsBasicCases = []MergeScriptTest{
 		// TODO: Need another test with a different type for the same column name, and verify it's an error?
 		Name: "dropping and adding a column with the same name",
 		AncSetUpScript: []string{
-			"create table t (pk int primary key, col1 int, col2 varchar(100));",
-			"insert into t values (1, 10, '100'), (2, 20, '200');",
+			"create table t (pk int primary key, v int as (pk + 1) virtual, col1 int, col2 varchar(100));",
+			"insert into t (pk, col1, col2) values (1, 10, '100'), (2, 20, '200');",
 			"alter table t add index idx1 (col1, pk);",
 			"alter table t add index idx2 (col2, pk);",
 			"alter table t add index idx3 (col2, col1);",
@@ -529,10 +564,10 @@ var SchemaChangeTestsBasicCases = []MergeScriptTest{
 		RightSetUpScript: []string{
 			"alter table t drop column col1;",
 			"alter table t add column col1 int;",
-			"insert into t values (3, '300', 30), (4, '400', 40);",
+			"insert into t (pk, col1, col2) values (3, 30, '300'), (4, 40, '400');",
 		},
 		LeftSetUpScript: []string{
-			"insert into t values (5, 50, '500'), (6, 60, '600');",
+			"insert into t (pk, col1, col2) values (5, 50, '500'), (6, 60, '600');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -1095,6 +1130,155 @@ var SchemaChangeTestsConstraints = []MergeScriptTest{
 			{
 				Query:    "CALL dolt_merge('right');",
 				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+		},
+	},
+	{
+		Name: "both sides add the same foreign key",
+		AncSetUpScript: []string{
+			"create table parent (pk int primary key);",
+			"create table child (pk int primary key, p_fk int);",
+			"insert into parent values (1);",
+		},
+		RightSetUpScript: []string{
+			"alter table child add constraint fk_parent foreign key (p_fk) references parent(pk);",
+			"insert into child values (1, 1);",
+		},
+		LeftSetUpScript: []string{
+			"alter table child add constraint fk_parent foreign key (p_fk) references parent(pk);",
+			"insert into child values (2, 1);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "show create table child;",
+				Expected: []sql.Row{{"child", "CREATE TABLE `child` (\n  `pk` int NOT NULL,\n  `p_fk` int,\n  PRIMARY KEY (`pk`),\n  KEY `fk_parent` (`p_fk`),\n  CONSTRAINT `fk_parent` FOREIGN KEY (`p_fk`) REFERENCES `parent` (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+	{
+		Name: "each side adds a different foreign key",
+		AncSetUpScript: []string{
+			"create table parent (pk int primary key);",
+			"create table child (pk int primary key, a int, b int, c int, constraint fk_c foreign key (c) references parent(pk));",
+			"insert into parent values (1);",
+		},
+		RightSetUpScript: []string{
+			"alter table child add constraint fk_a foreign key (a) references parent(pk);",
+			"alter table child drop constraint fk_c;",
+		},
+		LeftSetUpScript: []string{
+			"alter table child add constraint fk_b foreign key (b) references parent(pk);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "show create table child;",
+				Expected: []sql.Row{{"child", "CREATE TABLE `child` (\n  `pk` int NOT NULL,\n  `a` int,\n  `b` int,\n  `c` int,\n  PRIMARY KEY (`pk`),\n  KEY `fk_a` (`a`),\n  KEY `fk_b` (`b`),\n  KEY `fk_c` (`c`),\n  CONSTRAINT `fk_a` FOREIGN KEY (`a`) REFERENCES `parent` (`pk`),\n  CONSTRAINT `fk_b` FOREIGN KEY (`b`) REFERENCES `parent` (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+	{
+		// The foreign key can't survive the merge, so it is dropped, and its index with the column.
+		Name: "one side adds a foreign key on a column the other side drops",
+		AncSetUpScript: []string{
+			"create table parent (pk int primary key);",
+			"create table child (pk int primary key, a int, b int);",
+		},
+		RightSetUpScript: []string{
+			"alter table child drop column a;",
+		},
+		LeftSetUpScript: []string{
+			"alter table child add constraint fk_a foreign key (a) references parent(pk);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "show create table child;",
+				Expected: []sql.Row{{"child", "CREATE TABLE `child` (\n  `pk` int NOT NULL,\n  `b` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+	{
+		// The foreign key can't survive the merge, so it is dropped, but its index remains.
+		Name: "one side adds a foreign key to a table the other side drops",
+		AncSetUpScript: []string{
+			"create table parent (pk int primary key);",
+			"create table child (pk int primary key, a int);",
+		},
+		RightSetUpScript: []string{
+			"drop table parent;",
+		},
+		LeftSetUpScript: []string{
+			"alter table child add constraint fk_a foreign key (a) references parent(pk);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "show create table child;",
+				Expected: []sql.Row{{"child", "CREATE TABLE `child` (\n  `pk` int NOT NULL,\n  `a` int,\n  PRIMARY KEY (`pk`),\n  KEY `fk_a` (`a`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+	{
+		// A merge that doesn't change foreign keys on either side leaves them as they are, even one whose parent table
+		// doesn't exist.
+		Name: "foreign key to a missing table, unchanged on both sides",
+		AncSetUpScript: []string{
+			"set foreign_key_checks = 0;",
+			"create table child (pk int primary key, a int, constraint fk_missing foreign key (a) references missing(pk));",
+		},
+		RightSetUpScript: []string{
+			"insert into child values (1, 1);",
+		},
+		LeftSetUpScript: []string{
+			"insert into child values (2, 2);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "show create table child;",
+				Expected: []sql.Row{{"child", "CREATE TABLE `child` (\n  `pk` int NOT NULL,\n  `a` int,\n  PRIMARY KEY (`pk`),\n  KEY `fk_missing` (`a`),\n  CONSTRAINT `fk_missing` FOREIGN KEY (`a`) REFERENCES `missing` (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+	{
+		// A foreign key whose parent table doesn't exist yet is unresolved, and a merge must not drop it as invalid.
+		Name: "foreign key to a missing table, other foreign keys changed on one side",
+		AncSetUpScript: []string{
+			"set foreign_key_checks = 0;",
+			"create table parent (pk int primary key);",
+			"create table child (pk int primary key, a int, b int, constraint fk_missing foreign key (a) references missing(pk));",
+		},
+		RightSetUpScript: []string{
+			"alter table child add constraint fk_b foreign key (b) references parent(pk);",
+		},
+		LeftSetUpScript: []string{
+			"insert into child values (2, 2, null);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "show create table child;",
+				Expected: []sql.Row{{"child", "CREATE TABLE `child` (\n  `pk` int NOT NULL,\n  `a` int,\n  `b` int,\n  PRIMARY KEY (`pk`),\n  KEY `fk_b` (`b`),\n  KEY `fk_missing` (`a`),\n  CONSTRAINT `fk_b` FOREIGN KEY (`b`) REFERENCES `parent` (`pk`),\n  CONSTRAINT `fk_missing` FOREIGN KEY (`a`) REFERENCES `missing` (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 		},
 	},

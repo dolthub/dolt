@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -138,7 +137,7 @@ func (cmd ReadTablesCmd) Exec(ctx context.Context, commandStr string, args []str
 
 	dirExisted, _ := dEnv.FS.Exists(dir)
 
-	dEnv, verr = initializeShallowCloneRepo(ctx, dEnv, srcDB.Format(), dir, env.GetDefaultBranch(dEnv, branches), dirExisted)
+	dEnv, verr = initializeShallowCloneRepo(ctx, dEnv, srcDB, dir, env.GetDefaultBranch(dEnv, branches), dirExisted)
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
 	}
@@ -271,9 +270,9 @@ func getRemoteDBAtCommit(ctx context.Context, remoteUrl string, remoteUrlParams 
 	return srcDB, srcRoot, nil
 }
 
-func initializeShallowCloneRepo(ctx context.Context, dEnv *env.DoltEnv, nbf *types.NomsBinFormat, dir, branchName string, dirExisted bool) (_ *env.DoltEnv, verr errhand.VerboseError) {
+func initializeShallowCloneRepo(ctx context.Context, dEnv *env.DoltEnv, srcDB *doltdb.DoltDB, dir, branchName string, dirExisted bool) (_ *env.DoltEnv, verr errhand.VerboseError) {
 	var err error
-	newEnv, err := actions.EnvForClone(ctx, nbf, env.NoRemote, dir, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
+	newEnv, err := actions.EnvForCloneOf(ctx, srcDB, env.NoRemote, dir, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
 
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)

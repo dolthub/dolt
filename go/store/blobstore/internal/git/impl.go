@@ -395,7 +395,10 @@ func (a *GitAPIImpl) FetchRef(ctx context.Context, remote string, srcRef string,
 	// specific refspec succeeds.
 	// --no-write-fetch-head: dolt reads only the tracking ref, not FETCH_HEAD.
 	unsupported := a.noWriteFetchHeadUnsupported.Load()
-	args := []string{"fetch", "--no-tags"}
+	// maintenance.auto / gc.auto: fetch otherwise ends by starting git's automatic
+	// maintenance, which detaches and can repack and delete packs after the fetch
+	// has returned, while we are reading the objects it fetched.
+	args := []string{"-c", "maintenance.auto=false", "-c", "gc.auto=0", "fetch", "--no-tags"}
 	if !unsupported {
 		args = append(args, "--no-write-fetch-head")
 	}

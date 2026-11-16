@@ -312,6 +312,7 @@ func MakeDiffTableSecondaryIndex(ctx context.Context, tableName string, indexTyp
 		prefixLengths:                 idx.PrefixLengths(),
 		columnOrders:                  idx.ColumnOrders(),
 		opClasses:                     idx.OpClasses(),
+		nullsNotDistinct:              idx.NullsNotDistinct(),
 	}, nil
 }
 
@@ -506,6 +507,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		prefixLengths:                 idx.PrefixLengths(),
 		columnOrders:                  idx.ColumnOrders(),
 		opClasses:                     idx.OpClasses(),
+		nullsNotDistinct:              idx.NullsNotDistinct(),
 		fullTextProps:                 idx.FullTextProperties(),
 		vectorProps:                   idx.VectorProperties(),
 	}, nil
@@ -541,6 +543,7 @@ func ConvertFullTextToSql(ctx context.Context, db, tbl string, sch schema.Schema
 		prefixLengths:                 idx.PrefixLengths(),
 		columnOrders:                  idx.ColumnOrders(),
 		opClasses:                     idx.OpClasses(),
+		nullsNotDistinct:              idx.NullsNotDistinct(),
 		fullTextProps:                 idx.FullTextProperties(),
 		vectorProps:                   idx.VectorProperties(),
 	}, nil
@@ -650,11 +653,12 @@ type doltIndex struct {
 	order                         sql.IndexOrder
 	constrainedToLookupExpression bool
 
-	vector   bool
-	isPk     bool
-	unique   bool
-	spatial  bool
-	fulltext bool
+	vector           bool
+	isPk             bool
+	unique           bool
+	nullsNotDistinct bool
+	spatial          bool
+	fulltext         bool
 }
 
 type LookupMeta struct {
@@ -702,6 +706,7 @@ func GetStrictLookups(ctx *sql.Context, schCols *schema.ColCollection, indexes [
 
 var _ DoltIndex = (*doltIndex)(nil)
 var _ sql.ExtendedIndex = (*doltIndex)(nil)
+var _ sql.NullsNotDistinctIndex = (*doltIndex)(nil)
 
 func (di *doltIndex) String() string {
 	return di.dbName + "." + di.tblName + "." + di.id
@@ -1067,6 +1072,11 @@ func (di *doltIndex) PrefixLengths() []uint16 {
 // OpClasses implements sql.OpClassIndex.
 func (di *doltIndex) OpClasses() []string {
 	return di.opClasses
+}
+
+// NullsNotDistinct implements sql.NullsNotDistinctIndex.
+func (di *doltIndex) NullsNotDistinct() bool {
+	return di.nullsNotDistinct
 }
 
 // IndexType implements sql.Index
