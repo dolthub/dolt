@@ -619,7 +619,7 @@ type virtualRowMerger struct {
 
 func newVirtualRowMerger(ctx *sql.Context, name doltdb.TableName, sch schema.Schema, sides virtualMergeSides, ns tree.NodeStore, conversionConflicts bool) (*virtualRowMerger, error) {
 	rm := &virtualRowMerger{
-		vm:                  NewValueMerger(ctx, sch, sides.xSch, sides.ySch, sides.baseSch, sides.x.Pool(), ns),
+		vm:                  NewValueMerger(ctx, sch, sides.xSch, sides.ySch, sides.baseSch, sides.x.Pool(), ns, name.Name),
 		tableName:           name.Name,
 		sch:                 sch,
 		ns:                  ns,

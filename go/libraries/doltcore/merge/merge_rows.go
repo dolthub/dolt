@@ -121,8 +121,7 @@ type TableMerger struct {
 }
 
 func (tm TableMerger) GetNewValueMerger(ctx context.Context, mergeSch schema.Schema, leftRows prolly.Map) *valueMerger {
-	m := NewValueMerger(ctx, mergeSch, tm.leftSch, tm.rightSch, tm.ancSch, leftRows.Pool(), leftRows.NodeStore(), tm.name.Name)
-	return m
+	return NewValueMerger(ctx, mergeSch, tm.leftSch, tm.rightSch, tm.ancSch, leftRows.Pool(), leftRows.NodeStore(), tm.name.Name)
 }
 
 func rowsFromTable(ctx context.Context, tbl *doltdb.Table) (prolly.Map, error) {

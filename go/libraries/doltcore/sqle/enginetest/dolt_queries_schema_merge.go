@@ -78,6 +78,95 @@ var SchemaChangeTestsForDataConflicts = []MergeScriptTest{
 			},
 		},
 	},
+	{
+		Name: "convergent add column with a default, with both sides writing the new column",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 varchar(10));",
+			"INSERT into t values (1, 'a');",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column col2 int default 0;",
+			"update t set col2 = 11 where pk = 1;",
+		},
+		LeftSetUpScript: []string{
+			"alter table t add column col2 int default 0;",
+			"update t set col2 = 7 where pk = 1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select * from dolt_preview_merge_conflicts_summary('main', 'right');",
+				Expected: []sql.Row{{"t", uint64(1), uint64(0)}},
+			},
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "select our_pk, our_col2, their_pk, their_col2 from dolt_conflicts_t;",
+				Expected: []sql.Row{{1, 7, 1, 11}},
+			},
+		},
+	},
+	{
+		// The default only stands in for the base value of rows that existed before the column was added. A row
+		// inserted on both sides has no base, so differing values conflict even when one of them is the default.
+		Name: "convergent add column with a default, with both sides inserting the same row",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 varchar(10));",
+			"INSERT into t values (1, 'a');",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column col2 int default 0;",
+			"insert into t values (2, 'b', 0);",
+		},
+		LeftSetUpScript: []string{
+			"alter table t add column col2 int default 0;",
+			"insert into t values (2, 'b', 22);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select * from dolt_preview_merge_conflicts_summary('main', 'right');",
+				Expected: []sql.Row{{"t", uint64(1), uint64(0)}},
+			},
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "select our_pk, our_col2, their_pk, their_col2 from dolt_conflicts_t;",
+				Expected: []sql.Row{{2, 22, 2, 0}},
+			},
+		},
+	},
+	{
+		// A default that reads other columns is not evaluated for the merge, so a write to the new column on one side
+		// still conflicts with the other side's backfilled value.
+		Name: "convergent add column with a default that references another column",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 int);",
+			"INSERT into t values (1, 10);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column col2 int default (col1 * 2);",
+			"update t set col2 = 11 where pk = 1;",
+		},
+		LeftSetUpScript: []string{
+			"alter table t add column col2 int default (col1 * 2);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "select our_pk, our_col2, their_pk, their_col2 from dolt_conflicts_t;",
+				Expected: []sql.Row{{1, 20, 1, 11}},
+			},
+		},
+	},
 }
 
 var SchemaChangeTestsBasicCases = []MergeScriptTest{
@@ -663,6 +752,91 @@ var SchemaChangeTestsBasicCases = []MergeScriptTest{
 			{
 				Query:    "select * from t;",
 				Expected: []sql.Row{{1, -1000, nil}},
+			},
+		},
+	},
+	{
+		Name: "convergent add column with a default, with one side writing the new column",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 varchar(10));",
+			"INSERT into t values (1, 'a'), (2, 'b');",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column col2 int default 0;",
+			"update t set col2 = 11 where pk = 1;",
+		},
+		LeftSetUpScript: []string{
+			"alter table t add column col2 int default 0;",
+			"insert into t values (3, 'c', 33);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select * from dolt_preview_merge_conflicts_summary('main', 'right');",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "select * from t order by pk;",
+				Expected: []sql.Row{{1, "a", 11}, {2, "b", 0}, {3, "c", 33}},
+			},
+		},
+	},
+	{
+		Name: "convergent add column without a default, with one side writing the new column",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 varchar(10));",
+			"INSERT into t values (1, 'a'), (2, 'b');",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column col2 int;",
+			"update t set col2 = 11 where pk = 1;",
+		},
+		LeftSetUpScript: []string{
+			"alter table t add column col2 int;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select * from dolt_preview_merge_conflicts_summary('main', 'right');",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "select * from t order by pk;",
+				Expected: []sql.Row{{1, "a", 11}, {2, "b", nil}},
+			},
+		},
+	},
+	{
+		Name: "convergent add column with a default, with both sides writing the same value",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 varchar(10));",
+			"INSERT into t values (1, 'a');",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column col2 int default 0;",
+			"update t set col2 = 5 where pk = 1;",
+		},
+		LeftSetUpScript: []string{
+			"alter table t add column col2 int default 0;",
+			"update t set col2 = 5 where pk = 1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "select * from t order by pk;",
+				Expected: []sql.Row{{1, "a", 5}},
 			},
 		},
 	},
