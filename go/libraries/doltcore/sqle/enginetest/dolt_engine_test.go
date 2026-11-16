@@ -1483,8 +1483,7 @@ func TestConcurrentCreateDatabaseIfNotExists(t *testing.T) {
 }
 
 func TestLegacySelectScripts(t *testing.T) {
-	harness := newDoltEnginetestHarness(t)
-	RunLegacySelectScripts(t, harness)
+	forEachEngine(t, RunLegacySelectScripts)
 }
 
 func TestLegacyJoinScripts(t *testing.T) {

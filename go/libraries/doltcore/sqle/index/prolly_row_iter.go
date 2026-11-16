@@ -308,7 +308,12 @@ func (it *prollyKeylessIter) nextTuple(ctx *sql.Context) error {
 	return nil
 }
 
-// WriteNextValueRow implements the sql.ValueRowWriter interface.
+// WriteNextValueRow writes the next keyless row's values into |row|,
+// implementing [sql.ValueRowWriter].
+//
+// Duplicate keyless rows share one storage entry with a cardinality count, so
+// decoded column values are cached and copied into |row| on each call until
+// that count reaches zero.
 func (it *prollyKeylessIter) WriteNextValueRow(ctx *sql.Context, row sql.ValueRow) error {
 	if it.card == 0 {
 		_, value, err := it.iter.Next(ctx)
@@ -316,15 +321,21 @@ func (it *prollyKeylessIter) WriteNextValueRow(ctx *sql.Context, row sql.ValueRo
 			return err
 		}
 
-		it.card = val.ReadKeylessCardinality(value)
-
+		card := val.ReadKeylessCardinality(value)
+		if it.currValRow == nil {
+			it.currValRow = make(sql.ValueRow, len(it.valProj))
+		}
 		for i, idx := range it.valProj {
-			columnId := it.columnIdMap[it.ordProj[i]]
-			row[columnId], err = tree.GetFieldValue(ctx, it.valDesc, idx, value, it.ns)
+			it.currValRow[i], err = tree.GetFieldValue(ctx, it.valDesc, idx, value, it.ns)
 			if err != nil {
 				return err
 			}
 		}
+		it.card = card
+	}
+	for i := range it.valProj {
+		columnId := it.columnIdMap[it.ordProj[i]]
+		row[columnId] = it.currValRow[i]
 	}
 	it.card--
 	return nil

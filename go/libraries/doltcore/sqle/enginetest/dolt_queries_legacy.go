@@ -551,6 +551,78 @@ var LegacySelectScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// https://github.com/dolthub/dolt/issues/12501
+		Name: "duplicate keyless rows with constant projection and not exists",
+		SetUpScript: []string{
+			"CREATE TABLE t0(c0 BOOLEAN, c1 BOOLEAN);",
+			"INSERT INTO t0(c1) VALUES (true), (false), (false);",
+			"INSERT INTO t0(c1, c0) VALUES (NULL, true);",
+			"INSERT INTO t0(c0, c1) VALUES (true, true), (true, true), (true, true);",
+			"ALTER TABLE t0 DROP COLUMN c1;",
+			"CREATE INDEX t0i0 ON t0(c0);",
+			"INSERT INTO t0(c0) VALUES (true), (true), (true), (false), (false), (true), (false);",
+			"CREATE TABLE t1(a BIGINT, b VARCHAR(32));",
+			"CREATE INDEX idx_a ON t1(a);",
+			"INSERT INTO t1 VALUES (1, 'one'), (1, 'one'), (1, 'one'), (2, 'two'), (2, 'two'), (3, 'three'), (NULL, 'nil'), (NULL, 'nil');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: `SELECT t0.c0, NULL
+FROM t0
+WHERE (NOT EXISTS (
+    SELECT 1
+    FROM (
+        SELECT t0.c0 AS col0
+        FROM t0
+        WHERE (CASE false WHEN t0.c0 THEN t0.c0 ELSE t0.c0 END)
+    ) AS sub0
+    WHERE ((false) < ('WH'))
+));`,
+				Expected: []sql.Row{{0, nil}, {0, nil}, {0, nil}, {1, nil}, {1, nil}, {1, nil}, {1, nil}, {1, nil}, {1, nil}, {1, nil}, {1, nil}, {nil, nil}, {nil, nil}, {nil, nil}},
+			},
+			{
+				Query:    "SELECT t0.c0, NULL FROM t0;",
+				Expected: []sql.Row{{0, nil}, {0, nil}, {0, nil}, {1, nil}, {1, nil}, {1, nil}, {1, nil}, {1, nil}, {1, nil}, {1, nil}, {1, nil}, {nil, nil}, {nil, nil}, {nil, nil}},
+			},
+			{
+				Query:    "SELECT 1 FROM t0;",
+				Expected: []sql.Row{{1}, {1}, {1}, {1}, {1}, {1}, {1}, {1}, {1}, {1}, {1}, {1}, {1}, {1}},
+			},
+			{
+				Query:    "SELECT NULL FROM t0;",
+				Expected: []sql.Row{{nil}, {nil}, {nil}, {nil}, {nil}, {nil}, {nil}, {nil}, {nil}, {nil}, {nil}, {nil}, {nil}, {nil}},
+			},
+			{
+				Query:    "SELECT t1.b, t1.a FROM t1;",
+				Expected: []sql.Row{{"nil", nil}, {"nil", nil}, {"one", 1}, {"one", 1}, {"one", 1}, {"two", 2}, {"two", 2}, {"three", 3}},
+			},
+			{
+				Query:    "SELECT t1.b, NULL, t1.a FROM t1;",
+				Expected: []sql.Row{{"nil", nil, nil}, {"nil", nil, nil}, {"one", nil, 1}, {"one", nil, 1}, {"one", nil, 1}, {"two", nil, 2}, {"two", nil, 2}, {"three", nil, 3}},
+			},
+			{
+				Query:           "SELECT t0.c0, NULL FROM t0 WHERE t0.c0 = true;",
+				Expected:        []sql.Row{{1, nil}, {1, nil}, {1, nil}, {1, nil}, {1, nil}, {1, nil}, {1, nil}, {1, nil}},
+				ExpectedIndexes: []string{"t0i0"},
+			},
+			{
+				Query:           "SELECT t1.b, t1.a FROM t1 WHERE t1.a >= 1;",
+				Expected:        []sql.Row{{"one", 1}, {"one", 1}, {"one", 1}, {"two", 2}, {"two", 2}, {"three", 3}},
+				ExpectedIndexes: []string{"idx_a"},
+			},
+			{
+				Query:           "SELECT t1.b FROM t1 WHERE t1.a = 1;",
+				Expected:        []sql.Row{{"one"}, {"one"}, {"one"}},
+				ExpectedIndexes: []string{"idx_a"},
+			},
+			{
+				Query:           "SELECT t1.b, t1.a FROM t1 WHERE t1.a IS NULL;",
+				Expected:        []sql.Row{{"nil", nil}, {"nil", nil}},
+				ExpectedIndexes: []string{"idx_a"},
+			},
+		},
+	},
 }
 
 // LegacyJoinScriptTests are JOIN tests converted from sqle/sqlselect_test.go JoinTests.
