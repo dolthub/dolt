@@ -622,8 +622,14 @@ var MergeSamePrimaryKeyChangeScripts = []queries.ScriptTest{
 			[]string{"UPDATE t SET v = 11 WHERE a = 1;"}),
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "CALL DOLT_MERGE('feature');",
-				ExpectedErrStr: "error: cannot merge because table t has different primary keys in its common ancestor",
+				// Tuples do not store g, so the ancestor rekeys by its stored
+				// columns. https://github.com/dolthub/dolt/issues/12013
+				Query:    "CALL DOLT_MERGE('feature');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY a;",
+				Expected: []sql.Row{{1, 1, 11, 2}, {2, 2, 20, 4}},
 			},
 		},
 	},

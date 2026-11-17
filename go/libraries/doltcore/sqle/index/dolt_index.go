@@ -45,6 +45,8 @@ const (
 	CommitHashIndexId = "commit_hash"
 	ToCommitIndexId   = "to_commit"
 	FromCommitIndexId = "from_commit"
+	// ToDiffIndexId is the ID of the primary index on the to side of a diff.
+	ToDiffIndexId = "commits_to"
 )
 
 type DoltTableable interface {

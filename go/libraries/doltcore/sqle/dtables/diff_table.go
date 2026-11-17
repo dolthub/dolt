@@ -74,7 +74,29 @@ type DiffTable struct {
 
 var PrimaryKeyChangeWarning = "cannot render full diff between commits %s and %s due to primary key set change"
 
+const unpairedRowsWarning = "some rows have a duplicate or NULL primary key across the primary key change between commits %s and %s, so they are reported as removed and added rather than modified"
+
+const unsharedKeyWarning = "the primary key changed between commits %s and %s in a way that no row can pair across, so every row is reported as removed and added"
+
+const retaggedKeyWarning = "rows between commits %s and %s pair by primary key column name, since the key columns have new tags"
+
 const PrimaryKeyChangeWarningCode int = 1105 // Since this is our own custom warning we'll use 1105, the code for an unknown error
+
+// WarnUnpaired warns once for each kind of unpaired rows in the diff between
+// the commits |from| and |to|. |hasUnpaired| reports rows left unpaired by a
+// duplicate or NULL primary key, given with unpairedRowsWarning.
+// |isKeyUnshared| reports that no row can pair across the change, given with
+// unsharedKeyWarning.
+//
+// The warnings name no table, so each covers every table of the diff.
+func WarnUnpaired(ctx *sql.Context, hasUnpaired, isKeyUnshared bool, from, to string) {
+	if hasUnpaired {
+		ctx.Warn(PrimaryKeyChangeWarningCode, unpairedRowsWarning, from, to)
+	}
+	if isKeyUnshared {
+		ctx.Warn(PrimaryKeyChangeWarningCode, unsharedKeyWarning, from, to)
+	}
+}
 
 func getTableInsensitiveOrError(ctx *sql.Context, root doltdb.RootValue, tblName doltdb.TableName) (*doltdb.Table, doltdb.TableName, error) {
 	table, correctedTableName, tableExists, err := doltdb.GetTableInsensitive(ctx, root, tblName)
@@ -616,9 +638,16 @@ type DiffPartition struct {
 	toSch   schema.Schema
 	fromSch schema.Schema
 	ranges  []prolly.Range
+	// rangeSch is the schema whose primary key orders ranges. It is nil
+	// when ranges is nil.
+	rangeSch schema.Schema
 }
 
-func NewDiffPartition(to, from *doltdb.Table, toName, fromName string, toDate, fromDate *types.Timestamp, toSch, fromSch schema.Schema, ranges []prolly.Range) *DiffPartition {
+// NewDiffPartition returns a [sql.Partition] that diffs |to| against |from|.
+// Partitions let the engine read a diff in independent units. The optional
+// |ranges| narrow the diff to rows whose key, encoded under the primary key
+// of |rangeSch|, falls in a range. Nil |ranges| diff every row.
+func NewDiffPartition(to, from *doltdb.Table, toName, fromName string, toDate, fromDate *types.Timestamp, toSch, fromSch schema.Schema, ranges []prolly.Range, rangeSch schema.Schema) *DiffPartition {
 	return &DiffPartition{
 		to:       to,
 		from:     from,
@@ -629,6 +658,7 @@ func NewDiffPartition(to, from *doltdb.Table, toName, fromName string, toDate, f
 		toSch:    toSch,
 		fromSch:  fromSch,
 		ranges:   ranges,
+		rangeSch: rangeSch,
 	}
 }
 
@@ -641,10 +671,10 @@ func (dp DiffPartition) GetRowIter(ctx *sql.Context) (sql.RowIter, error) {
 	return newProllyDiffIter(ctx, dp, dp.fromSch, dp.toSch, dp.ranges)
 }
 
-// isDiffablePartition checks if the commit pair for this partition is "diffable".
+// isDiffablePartition reports whether the partition can be diffed, and how.
 //
-// simpleDiff is returned when [schema.ComparePrimaryKeys] does not return
-// [schema.PrimaryKeysDiffer]. fuzzyDiff is returned when the keys can still be
+// simpleDiff is returned when [diff.AlignedSchema] can key the rows of both
+// sides by one primary key. fuzzyDiff is returned when the keys can still be
 // mapped by [schema.MapSchemaBasedOnTagAndName]. Neither is returned when the
 // partition cannot be diffed.
 func (dp *DiffPartition) isDiffablePartition(ctx *sql.Context) (simpleDiff bool, fuzzyDiff bool, err error) {
@@ -670,16 +700,21 @@ func (dp *DiffPartition) isDiffablePartition(ctx *sql.Context) (simpleDiff bool,
 		return false, false, err
 	}
 
-	easyDiff := schema.ComparePrimaryKeys(fromSch, toSch) != schema.PrimaryKeysDiffer
-	if easyDiff {
+	if schema.ComparePrimaryKeys(fromSch, toSch) != schema.PrimaryKeysDiffer {
+		return true, false, nil
+	}
+	newSch, err := diff.AlignedSchema(fromSch, toSch)
+	if err != nil && !diff.IsPrimaryKeyUnalignable(err) {
+		return false, false, err
+	}
+	// An unalignable key is not a simple diff but may still map fuzzily.
+	if err == nil && newSch != nil {
 		return true, false, nil
 	}
 
-	_, _, err = schema.MapSchemaBasedOnTagAndName(fromSch, toSch)
-	if err == nil {
-		return false, true, nil
-	}
-	return false, false, nil
+	// An unmapped key column stops the traversal with a warning, not an error.
+	_, _, mapErr := schema.MapSchemaBasedOnTagAndName(fromSch, toSch)
+	return false, mapErr == nil, nil
 }
 
 type partitionSelectFunc func(*sql.Context, DiffPartition) (bool, error)
@@ -755,6 +790,7 @@ func (dps *DiffPartitions) processCommit(ctx *sql.Context, cmHash hash.Hash, cm 
 			fromSch:  dps.fromSch,
 			toSch:    dps.toSch,
 			ranges:   dps.ranges,
+			rangeSch: dps.toSch,
 		}
 		selected, err := dps.selectFunc(ctx, partition)
 

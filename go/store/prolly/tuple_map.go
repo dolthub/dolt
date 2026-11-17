@@ -113,7 +113,15 @@ func MutateMapWithTupleIter(ctx context.Context, m Map, iter TupleIter) (Map, er
 	}, nil
 }
 
+// DiffMaps calls |cb| with each row that differs between |from| and |to|.
+//
+// When |considerAllRowsModified| is true, |cb| receives every row of both
+// maps, unfiltered, including rows with equal bytes. Equal bytes can hold
+// different values after a schema change, so the caller compares the values.
 func DiffMaps(ctx context.Context, from, to Map, considerAllRowsModified bool, cb tree.DiffFn) error {
+	if considerAllRowsModified {
+		return tree.DiffOrderedTrees(ctx, from.tuples, to.tuples, considerAllRowsModified, cb)
+	}
 	return tree.DiffOrderedTrees(ctx, from.tuples, to.tuples, considerAllRowsModified, makeDiffCallBack(from, to, cb))
 }
 

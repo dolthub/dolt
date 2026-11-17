@@ -19,6 +19,8 @@ import (
 	"math"
 	"strings"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -174,6 +176,19 @@ func (c Column) IsNullable() bool {
 // instead of testing field.
 func (c Column) IsGenerated() bool {
 	return c.Generated != ""
+}
+
+// MapMembers returns the [sql.MemberMap] from the members of |c| to those of
+// |to|, when both are member types of one kind, such as two ENUMs.
+//
+// Stored values are member positions, so values of |c| need remapping before
+// they compare with or copy into |to|.
+func (c Column) MapMembers(to Column) (sql.MemberMap, bool) {
+	member, ok := c.TypeInfo.ToSqlType().(sql.MemberType)
+	if !ok {
+		return nil, false
+	}
+	return member.MapMembers(to.TypeInfo.ToSqlType())
 }
 
 // Equals tests equality between two columns.

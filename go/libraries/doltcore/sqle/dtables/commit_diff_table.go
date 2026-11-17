@@ -156,6 +156,11 @@ func (dt *CommitDiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, erro
 	return nil, fmt.Errorf("error querying table %s: %w", dt.Name(), ErrExactlyOneToCommit)
 }
 
+// LookupPartitions returns a partition that diffs the table between the
+// commits named by the to_commit and from_commit ranges of |lookup|. The
+// partition is limited to the key ranges that remain. A commit pair with no
+// simple or fuzzy diff yields no partitions and a warning, since its rows
+// cannot be paired.
 func (dt *CommitDiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	ranges, ok := lookup.Ranges.(sql.MySQLRangeCollection)
 	if !ok {
@@ -229,6 +234,7 @@ func (dt *CommitDiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLo
 		toSch:    dt.targetSchema,
 		fromSch:  dt.targetSchema,
 		ranges:   prollyRanges,
+		rangeSch: dt.targetSchema,
 	}
 
 	isDiffable, _, err := dp.isDiffablePartition(ctx)
