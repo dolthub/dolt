@@ -342,6 +342,10 @@ type nodeStoreValidator struct {
 
 var _ NodeStore = &nodeStoreValidator{}
 
+func (v *nodeStoreValidator) ChunkFileID(ctx context.Context, ref hash.Hash) (string, error) {
+	return v.ns.ChunkFileID(ctx, ref)
+}
+
 func (v *nodeStoreValidator) ReadBytes(ctx context.Context, h hash.Hash) (result []byte, err error) {
 	n, err := v.ns.Read(ctx, h)
 	if err != nil {

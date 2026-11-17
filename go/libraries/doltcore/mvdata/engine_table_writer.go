@@ -127,6 +127,24 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 		return err
 	}
 
+	// If there were create table statements, they are automatically committed, so we need to start a new transaction.
+	// It must start before the insert takes its table writers, which belong to the transaction's session state.
+	if s.importOption == CreateOp {
+		_, iter, _, err := s.se.Query(s.sqlCtx, "START TRANSACTION")
+		if err != nil {
+			return err
+		}
+		for {
+			_, err = iter.Next(s.sqlCtx)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	updateStats := func(row sql.Row) {
 		if row == nil {
 			return
@@ -166,23 +184,6 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 			err = rerr
 		}
 	}()
-
-	// If there were create table statements, they are automatically committed, so we need to start a new transaction
-	if s.importOption == CreateOp {
-		_, iter, _, err := s.se.Query(s.sqlCtx, "START TRANSACTION")
-		if err != nil {
-			return err
-		}
-		for {
-			_, err = iter.Next(s.sqlCtx)
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				return err
-			}
-		}
-	}
 
 	line := 1
 	for {

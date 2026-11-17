@@ -310,13 +310,14 @@ var testRows = []testRow{
 func TestMergeCommits(t *testing.T) {
 	ddb, vrw, ns, rightCommitHash, ancCommitHash, root, mergeRoot, ancRoot, expectedRows, expectedArtifacts := setupMergeTest(t)
 	defer ddb.Close()
-	merger, err := NewMerger(root, mergeRoot, ancRoot, rightCommitHash, ancCommitHash, vrw, ns)
+	mergeCtx := newOwnedMergeContext()
+	merger, err := NewMerger(mergeCtx, root, mergeRoot, ancRoot, rightCommitHash, ancCommitHash, vrw, ns)
 	if err != nil {
 		t.Fatal(err)
 	}
 	opts := editor.TestEditorOptions(vrw)
 	// TODO: stats
-	merged, _, err := merger.MergeTable(newOwnedMergeContext(), doltdb.TableName{Name: tableName}, opts, MergeOpts{IsCherryPick: false})
+	merged, _, err := merger.MergeTable(mergeCtx, doltdb.TableName{Name: tableName}, opts, MergeOpts{IsCherryPick: false})
 	if err != nil {
 		t.Fatal(err)
 	}

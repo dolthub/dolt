@@ -361,6 +361,11 @@ func (wr *journalWriter) readJournalIndex(ctx context.Context, canWrite bool) er
 				return fmt.Errorf("index records do not cover contiguous region (%d != %d)", m.batchStart, prev)
 			}
 			prev = m.batchEnd
+			for _, l := range batch {
+				if l.r.Length > journalWriterBuffSize {
+					return fmt.Errorf("invalid index lookup length %d", l.r.Length)
+				}
+			}
 
 			// |r.end| is expected to point to a root hash record in |wr.journal|
 			// containing a hash equal to |r.lastRoot|, validate this here
@@ -605,6 +610,9 @@ func (wr *journalWriter) flushIndexRecord(ctx context.Context, root hash.Hash, e
 
 // readAt reads len(p) bytes from the journal at offset |off|.
 func (wr *journalWriter) readAt(p []byte, off int64) (n int, err error) {
+	if off < 0 {
+		return 0, fmt.Errorf("journal read at negative offset %d", off)
+	}
 	var bp []byte
 	if off < wr.off {
 		// fill some or all of |p| from |wr.file|
@@ -622,6 +630,9 @@ func (wr *journalWriter) readAt(p []byte, off int64) (n int, err error) {
 		// fill all of |p| from |wr.buf|
 		bp = p
 		off -= wr.off
+	}
+	if off > int64(len(wr.buf)-len(bp)) {
+		return n, fmt.Errorf("journal read of %d bytes is past the end of the journal", len(bp))
 	}
 	n += copy(bp, wr.buf[off:])
 	return

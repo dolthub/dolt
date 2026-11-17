@@ -61,13 +61,8 @@ func TestNewEngineVariablesForEnv(t *testing.T) {
 func TestDoltSystemVariablesIndependentRegistries(t *testing.T) {
 	a, b := NewEngineVariables(), NewEngineVariables()
 
-	effective := make(map[string]sql.SystemVariable)
-	for _, list := range [][]sql.SystemVariable{newInlineDoltSystemVariables(), newDoltSystemVariables()} {
-		for _, expected := range list {
-			effective[expected.GetName()] = expected
-		}
-	}
-	for name, expected := range effective {
+	for _, expected := range newDoltSystemVariables() {
+		name := expected.GetName()
 		defA, _, ok := a.System.GetGlobal(name)
 		require.True(t, ok, name)
 		defB, _, ok := b.System.GetGlobal(name)
@@ -103,11 +98,11 @@ func TestDynamicHookReadsItsRegistry(t *testing.T) {
 	hook, _, err := NewDynamicPushOnWriteHookWithRegistry(context.Background(), "", dEnv, &buffer.Buffer{}, a.System)
 	require.NoError(t, err)
 	ctxB := sql.NewContextWithVariables(context.Background(), b)
-	require.NoError(t, b.System.(sql.ContextAwareSystemVariableRegistry).AssignValuesWithContext(ctxB, map[string]interface{}{dsess.ReplicateToRemote: "missing"}))
+	require.NoError(t, b.System.AssignValues(ctxB, map[string]interface{}{dsess.ReplicateToRemote: "missing"}))
 	_, err = hook.Execute(context.Background(), datas.Dataset{}, nil)
 	require.NoError(t, err)
 	ctxA := sql.NewContextWithVariables(context.Background(), a)
-	require.NoError(t, a.System.(sql.ContextAwareSystemVariableRegistry).AssignValuesWithContext(ctxA, map[string]interface{}{dsess.ReplicateToRemote: "missing"}))
+	require.NoError(t, a.System.AssignValues(ctxA, map[string]interface{}{dsess.ReplicateToRemote: "missing"}))
 	_, err = hook.Execute(context.Background(), datas.Dataset{}, nil)
 	require.Error(t, err)
 }

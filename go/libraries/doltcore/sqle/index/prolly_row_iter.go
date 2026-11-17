@@ -33,13 +33,16 @@ type prollyRowIter struct {
 	keyProj []int
 	valProj []int
 	// ordProj is a concatenated list of output ordinals for |keyProj| and |valProj|
-	ordProj []int
-	rowLen  int
+	ordProj     []int
+	rowLen      int
+	columnIds   sql.ColSet
+	columnIdMap []sql.ColumnId
 }
 
 var _ sql.RowIter = prollyRowIter{}
+var _ sql.ValueRowWriter = prollyRowIter{}
 
-func NewProllyRowIterForMap(sch schema.Schema, rows prolly.MapInterface, iter prolly.MapIter, projections []uint64) sql.RowIter {
+func NewProllyRowIterForMap(sch schema.Schema, rows prolly.MapInterface, iter prolly.MapIter, projections []uint64, columnIds sql.ColSet) sql.ValueRowWriter {
 	if projections == nil {
 		projections = sch.GetAllCols().Tags
 	}
@@ -47,7 +50,7 @@ func NewProllyRowIterForMap(sch schema.Schema, rows prolly.MapInterface, iter pr
 	kd, vd := rows.Descriptors()
 	ns := rows.NodeStore()
 
-	return NewProllyRowIterForSchema(sch, iter, kd, vd, projections, ns)
+	return NewProllyRowIterForSchema(sch, iter, kd, vd, projections, ns, columnIds)
 }
 
 func NewProllyRowIterForSchema(
@@ -57,12 +60,13 @@ func NewProllyRowIterForSchema(
 	vd *val.TupleDesc,
 	projections []uint64,
 	ns tree.NodeStore,
-) sql.RowIter {
+	columnIds sql.ColSet,
+) sql.ValueRowWriter {
 	if schema.IsKeyless(sch) {
-		return NewKeylessProllyRowIter(sch, iter, vd, projections, ns)
+		return NewKeylessProllyRowIter(sch, iter, vd, projections, ns, columnIds)
 	}
 
-	return NewKeyedProllyRowIter(sch, iter, kd, vd, projections, ns)
+	return NewKeyedProllyRowIter(sch, iter, kd, vd, projections, ns, columnIds)
 }
 
 func NewKeyedProllyRowIter(
@@ -72,18 +76,21 @@ func NewKeyedProllyRowIter(
 	vd *val.TupleDesc,
 	projections []uint64,
 	ns tree.NodeStore,
-) sql.RowIter {
+	columnIds sql.ColSet,
+) sql.ValueRowWriter {
 	keyProj, valProj, ordProj := projectionMappings(sch, projections)
-
+	columnIdMap := columnIdMapping(sch, projections, columnIds)
 	return prollyRowIter{
-		iter:    iter,
-		keyDesc: kd,
-		valDesc: vd,
-		keyProj: keyProj,
-		valProj: valProj,
-		ordProj: ordProj,
-		rowLen:  len(projections),
-		ns:      ns,
+		iter:        iter,
+		keyDesc:     kd,
+		valDesc:     vd,
+		keyProj:     keyProj,
+		valProj:     valProj,
+		ordProj:     ordProj,
+		rowLen:      len(projections),
+		ns:          ns,
+		columnIds:   columnIds,
+		columnIdMap: columnIdMap,
 	}
 }
 
@@ -93,16 +100,20 @@ func NewKeylessProllyRowIter(
 	vd *val.TupleDesc,
 	projections []uint64,
 	ns tree.NodeStore,
-) sql.RowIter {
+	columnIds sql.ColSet,
+) sql.ValueRowWriter {
 	_, valProj, ordProj := projectionMappings(sch, projections)
+	columnIdMap := columnIdMapping(sch, projections, columnIds)
 
 	return &prollyKeylessIter{
-		iter:    iter,
-		valDesc: vd,
-		valProj: valProj,
-		ordProj: ordProj,
-		rowLen:  len(projections),
-		ns:      ns,
+		iter:        iter,
+		valDesc:     vd,
+		valProj:     valProj,
+		ordProj:     ordProj,
+		rowLen:      len(projections),
+		ns:          ns,
+		columnIds:   columnIds,
+		columnIdMap: columnIdMap,
 	}
 }
 
@@ -191,34 +202,47 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	return row, nil
 }
 
-// NextValueRow implements the sql.ValueRowIter interface.
-func (it prollyRowIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, error) {
+// WriteNextValueRow implements the sql.WriteNextValueRow interface.
+func (it prollyRowIter) WriteNextValueRow(ctx *sql.Context, row sql.ValueRow) error {
 	key, value, err := it.iter.Next(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	row := make(sql.ValueRow, it.rowLen)
 	for i, idx := range it.keyProj {
-		outIdx := it.ordProj[i]
-		row[outIdx], err = tree.GetFieldValue(ctx, it.keyDesc, idx, key, it.ns)
+		columnId := it.columnIdMap[it.ordProj[i]]
+		row[columnId], err = tree.GetFieldValue(ctx, it.keyDesc, idx, key, it.ns)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 
 	for i, idx := range it.valProj {
-		outIdx := it.ordProj[len(it.keyProj)+i]
-		row[outIdx], err = tree.GetFieldValue(ctx, it.valDesc, idx, value, it.ns)
+		columnId := it.columnIdMap[it.ordProj[len(it.keyProj)+i]]
+
+		row[columnId], err = tree.GetFieldValue(ctx, it.valDesc, idx, value, it.ns)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
-	return row, nil
+	return nil
 }
 
-// IsValueRowIter implements the sql.ValueRowIter interface.
-func (it prollyRowIter) IsValueRowIter(ctx *sql.Context) bool {
+func (it prollyRowIter) WithColumns(columns sql.ColSet) sql.ValueRowWriter {
+	result := it
+	result.columnIds = columns
+	return result
+}
+
+func (it prollyRowIter) Columns() sql.ColSet {
+	return it.columnIds
+}
+
+// IsValueRowWriter implements the sql.ValueRowWriter interface.
+func (it prollyRowIter) IsValueRowWriter(ctx *sql.Context) bool {
+	if it.columnIds.Empty() {
+		return false
+	}
 	for _, typ := range it.keyDesc.Types {
 		if typ.Enc == val.ExtendedEnc || typ.Enc == val.ExtendedAddrEnc || typ.Enc == val.ExtendedAdaptiveEnc {
 			return false
@@ -237,19 +261,21 @@ func (it prollyRowIter) Close(ctx *sql.Context) error {
 }
 
 type prollyKeylessIter struct {
-	iter       prolly.MapIter
-	ns         tree.NodeStore
-	valDesc    *val.TupleDesc
-	valProj    []int
-	ordProj    []int
-	curr       sql.Row
-	currValRow sql.ValueRow
-	rowLen     int
-	card       uint64
+	iter        prolly.MapIter
+	ns          tree.NodeStore
+	valDesc     *val.TupleDesc
+	valProj     []int
+	ordProj     []int
+	curr        sql.Row
+	currValRow  sql.ValueRow
+	rowLen      int
+	card        uint64
+	columnIds   sql.ColSet
+	columnIdMap []sql.ColumnId
 }
 
 var _ sql.RowIter = &prollyKeylessIter{}
-var _ sql.ValueRowIter = &prollyKeylessIter{}
+var _ sql.ValueRowWriter = &prollyKeylessIter{}
 
 func (it *prollyKeylessIter) Next(ctx *sql.Context) (sql.Row, error) {
 	if it.card == 0 {
@@ -282,36 +308,43 @@ func (it *prollyKeylessIter) nextTuple(ctx *sql.Context) error {
 	return nil
 }
 
-// NextValueRow implements the sql.ValueRowIter interface.
-func (it *prollyKeylessIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, error) {
+// WriteNextValueRow implements the sql.ValueRowWriter interface.
+func (it *prollyKeylessIter) WriteNextValueRow(ctx *sql.Context, row sql.ValueRow) error {
 	if it.card == 0 {
 		_, value, err := it.iter.Next(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		it.card = val.ReadKeylessCardinality(value)
-		it.currValRow = make(sql.ValueRow, it.rowLen)
+
 		for i, idx := range it.valProj {
-			outputIdx := it.ordProj[i]
-			it.currValRow[outputIdx], err = tree.GetFieldValue(ctx, it.valDesc, idx, value, it.ns)
+			columnId := it.columnIdMap[it.ordProj[i]]
+			row[columnId], err = tree.GetFieldValue(ctx, it.valDesc, idx, value, it.ns)
 			if err != nil {
-				return nil, err
+				return err
 			}
 		}
 	}
 	it.card--
-	return it.currValRow, nil
+	return nil
 }
 
-// IsValueRowIter implements the sql.ValueRowIter interface.
-func (it *prollyKeylessIter) IsValueRowIter(ctx *sql.Context) bool {
+// IsValueRowWriter implements the sql.ValueRowWriter interface.
+func (it *prollyKeylessIter) IsValueRowWriter(ctx *sql.Context) bool {
+	if it.columnIds.Empty() {
+		return false
+	}
 	for _, typ := range it.valDesc.Types {
 		if typ.Enc == val.ExtendedEnc || typ.Enc == val.ExtendedAddrEnc || typ.Enc == val.ExtendedAdaptiveEnc {
 			return false
 		}
 	}
 	return true
+}
+
+func (it *prollyKeylessIter) Columns() sql.ColSet {
+	return it.columnIds
 }
 
 func (it *prollyKeylessIter) Close(ctx *sql.Context) error {

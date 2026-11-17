@@ -7382,4 +7382,100 @@ var QueryDiffTableScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// https://github.com/dolthub/dolt/issues/12262
+		Name: "case-only text changes under case-insensitive collation and decimal NULL transitions are modified",
+		SetUpScript: []string{
+			`CREATE TABLE t (
+				id INT PRIMARY KEY,
+				s VARCHAR(20) COLLATE utf8mb4_0900_ai_ci,
+				x TEXT,
+				n DECIMAL(5,2)
+			);`,
+			`INSERT INTO t VALUES
+				(1, 'a', REPEAT('a', 2048), NULL),
+				(2, 'same', NULL, 1.5),
+				(3, 'same', 'same', NULL),
+				(4, 'same', REPEAT('a', 2048), NULL),
+				(5, 'same', NULL, NULL);`,
+			"CALL dolt_commit('-Am', 'c1');",
+			"UPDATE t SET s = 'A', n = 2 WHERE id = 1;",
+			"UPDATE t SET n = NULL WHERE id = 2;",
+			"UPDATE t SET n = 1.5 WHERE id = 3;",
+			"UPDATE t SET x = CONCAT('A', SUBSTRING(x, 2)) WHERE id = 4;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: `SELECT to_id, diff_type FROM dolt_query_diff(
+					'SELECT id, s FROM t AS OF HEAD WHERE id = 1',
+					'SELECT id, s FROM t WHERE id = 1');`,
+				Expected: []sql.Row{{1, "modified"}},
+			},
+			{
+				Query: `SELECT to_id, diff_type FROM dolt_query_diff(
+					'SELECT id, s, x, n FROM t AS OF HEAD',
+					'SELECT id, s, x, n FROM t');`,
+				Expected: []sql.Row{{1, "modified"}, {2, "modified"}, {3, "modified"}, {4, "modified"}},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/12262
+		Name: "rows with equal decimal, json, out-of-band text, varbinary, binary, and blob values are not reported as modified",
+		SetUpScript: []string{
+			`CREATE TABLE t (
+				id INT PRIMARY KEY,
+				n INT,
+				d DECIMAL(5,2),
+				j JSON,
+				s TEXT,
+				v VARBINARY(5),
+				b BINARY(5),
+				x BLOB
+			);`,
+			`INSERT INTO t VALUES
+				(1, 1, 1.5, '{"a": 1}', REPEAT('a', 2048), 'a', 'a', 'a'),
+				(2, 2, 2.5, '{"a": 2}', REPEAT('b', 2048), 'b', 'b', 'b');`,
+			"CALL dolt_commit('-Am', 'c1');",
+			"UPDATE t SET n = 5 WHERE id = 2;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: `SELECT to_id, diff_type FROM dolt_query_diff(
+					'SELECT id, n, d FROM t AS OF HEAD', 'SELECT id, n, d FROM t');`,
+				Expected: []sql.Row{{2, "modified"}},
+			},
+			{
+				Query: `SELECT to_id, diff_type FROM dolt_query_diff(
+					'SELECT id, n, j FROM t AS OF HEAD', 'SELECT id, n, j FROM t');`,
+				Expected: []sql.Row{{2, "modified"}},
+			},
+			{
+				Query: `SELECT to_id, diff_type FROM dolt_query_diff(
+					'SELECT id, n, s FROM t AS OF HEAD', 'SELECT id, n, s FROM t');`,
+				Expected: []sql.Row{{2, "modified"}},
+			},
+			{
+				Query: `SELECT to_id, diff_type FROM dolt_query_diff(
+					'SELECT id, n, v FROM t AS OF HEAD', 'SELECT id, n, v FROM t');`,
+				Expected: []sql.Row{{2, "modified"}},
+			},
+			{
+				Query: `SELECT to_id, diff_type FROM dolt_query_diff(
+					'SELECT id, n, b FROM t AS OF HEAD', 'SELECT id, n, b FROM t');`,
+				Expected: []sql.Row{{2, "modified"}},
+			},
+			{
+				Query: `SELECT to_id, diff_type FROM dolt_query_diff(
+					'SELECT id, n, x FROM t AS OF HEAD', 'SELECT id, n, x FROM t');`,
+				Expected: []sql.Row{{2, "modified"}},
+			},
+			{
+				Query: `SELECT * FROM dolt_query_diff(
+					'SELECT SUM(d) AS total FROM t AS OF HEAD',
+					'SELECT SUM(d) AS total FROM t');`,
+				Expected: []sql.Row{},
+			},
+		},
+	},
 }

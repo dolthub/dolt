@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -47,12 +48,25 @@ func (k prollyKeylessWriter) Map(ctx context.Context) (prolly.MapInterface, erro
 	return k.mut.Map(ctx)
 }
 
+func (k prollyKeylessWriter) CheckpointMap(ctx context.Context) (prolly.MapInterface, error) {
+	return k.mut.CheckpointMap(ctx)
+}
+
+func (k prollyKeylessWriter) HasUncommittedEdits() bool {
+	return k.mut.HasUncheckpointedEdits()
+}
+
+func (k prollyKeylessWriter) CheckpointView(ctx context.Context) (prolly.MapView, bool, error) {
+	v, err := prolly.CheckpointView(ctx, k.mut)
+	return v, err == nil, err
+}
+
 // ValidateKeyViolations returns nil for keyless writers, because there are no keys, so violations are possible
 func (k prollyKeylessWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error {
 	return nil
 }
 
-func (k prollyKeylessWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+func (k prollyKeylessWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash)) error {
 	return k.mut.VisitGCRoots(ctx, roots)
 }
 
@@ -199,8 +213,10 @@ type prollyKeylessSecondaryWriter struct {
 	prefixLengths []uint16
 	keyMap        val.OrdinalMapping
 	unique        bool
-	spatial       bool
-	predicate     sql.Expression
+	// nullsNotDistinct is set for unique indexes that treat NULLs as equal to each other.
+	nullsNotDistinct bool
+	spatial          bool
+	predicate        sql.Expression
 	// virtualExprs is parallel to keyMap; non-nil entries are generating expressions for virtual
 	// (unstored) generated columns that appear in this index's key.
 	virtualExprs []sql.Expression
@@ -236,33 +252,63 @@ func (writer prollyKeylessSecondaryWriter) Map(ctx context.Context) (prolly.MapI
 	return writer.mut.Map(ctx)
 }
 
-func (writer prollyKeylessSecondaryWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+// CheckpointMap implements the interface indexWriter.
+func (writer prollyKeylessSecondaryWriter) CheckpointMap(ctx context.Context) (prolly.MapInterface, error) {
+	return writer.mut.CheckpointMap(ctx)
+}
+
+// HasUncommittedEdits implements the interface indexWriter.
+func (writer prollyKeylessSecondaryWriter) HasUncommittedEdits() bool {
+	return writer.mut.HasUncheckpointedEdits()
+}
+
+// CheckpointView implements the interface indexWriter.
+func (writer prollyKeylessSecondaryWriter) CheckpointView(ctx context.Context) (prolly.MapView, bool, error) {
+	v, err := prolly.CheckpointView(ctx, writer.mut)
+	return v, err == nil, err
+}
+
+func (writer prollyKeylessSecondaryWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash)) error {
 	return writer.mut.VisitGCRoots(ctx, roots)
 }
 
 // ValidateKeyViolations implements the interface indexWriter.
 func (writer prollyKeylessSecondaryWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error {
+	if writer.unique {
+		return writer.validateUniqueKeyViolation(ctx, sqlRow)
+	}
 	return nil
 }
 
-// validateUniqueKeyViolation checks the mutable unique-index prefix for a conflicting keyless row.
+// validateUniqueKeyViolation checks the unique prefix for a conflicting keyless row.
+// It leaves the computed index key fields in keyBld for Insert to reuse.
 func (writer prollyKeylessSecondaryWriter) validateUniqueKeyViolation(ctx context.Context, sqlRow sql.Row) error {
-	if writer.predicate != nil {
-		matches, err := writer.predicate.Eval(ctx.(*sql.Context), sqlRow)
-		if err != nil {
-			return err
-		}
-		if !matches.(bool) {
-			return nil
-		}
-	}
-	for to := range writer.prefixBld.Desc.Count() {
+	// Conflict checks can leave keyBld unbuilt, so reset before preparing another row.
+	writer.keyBld.Recycle()
+	writer.prefixBld.Recycle()
+	for to := range writer.keyMap {
 		value, err := writer.keyPartFromRow(ctx, to, sqlRow)
 		if err != nil {
 			return err
 		}
-		if err := tree.PutField(ctx, writer.mut.NodeStore(), writer.prefixBld, to, writer.trimKeyPart(to, value)); err != nil {
+		keyPart := writer.trimKeyPart(to, value)
+		if err := tree.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, keyPart); err != nil {
 			return err
+		}
+		if to < writer.prefixBld.Desc.Count() {
+			if err := tree.PutField(ctx, writer.mut.NodeStore(), writer.prefixBld, to, keyPart); err != nil {
+				return err
+			}
+		}
+	}
+	if writer.predicate != nil {
+		matches, err := index.MatchesPredicate(ctx.(*sql.Context), writer.predicate, sqlRow)
+		if err != nil {
+			return err
+		}
+		if !matches {
+			writer.prefixBld.Recycle()
+			return nil
 		}
 	}
 	prefixKey, err := writer.prefixBld.Build(ctx, sharePool)
@@ -295,19 +341,27 @@ func (writer prollyKeylessSecondaryWriter) trimKeyPart(to int, keyPart interface
 	return keyPart
 }
 
-// Insert implements the interface indexWriter.
+// Insert implements the interface indexWriter. Unique index key fields must be prepared by validation.
 func (writer prollyKeylessSecondaryWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
-	for to := range writer.keyMap {
-		v, err := writer.keyPartFromRow(ctx, to, sqlRow)
+	if writer.predicate != nil {
+		matches, err := index.MatchesPredicate(ctx.(*sql.Context), writer.predicate, sqlRow)
 		if err != nil {
 			return err
 		}
-		keyPart := writer.trimKeyPart(to, v)
-		if err := tree.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, keyPart); err != nil {
-			return err
+		if !matches {
+			writer.keyBld.Recycle()
+			return nil
 		}
-		if to < writer.prefixBld.Desc.Count() {
-			if err := tree.PutField(ctx, writer.mut.NodeStore(), writer.prefixBld, to, keyPart); err != nil {
+	}
+
+	if !writer.unique {
+		for to := range writer.keyMap {
+			v, err := writer.keyPartFromRow(ctx, to, sqlRow)
+			if err != nil {
+				return err
+			}
+			keyPart := writer.trimKeyPart(to, v)
+			if err := tree.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, keyPart); err != nil {
 				return err
 			}
 		}
@@ -323,38 +377,12 @@ func (writer prollyKeylessSecondaryWriter) Insert(ctx context.Context, sqlRow sq
 		return err
 	}
 
-	if writer.unique {
-		performUniqueCheck := true
-		if writer.predicate != nil {
-			// do not unique check if predicate result is FALSE.
-			res, err := writer.predicate.Eval(ctx.(*sql.Context), sqlRow)
-			if err != nil {
-				return err
-			}
-			performUniqueCheck = res.(bool)
-		}
-		if performUniqueCheck {
-			prefixKey, err := writer.prefixBld.Build(ctx, sharePool)
-			if err != nil {
-				return err
-			}
-			err = writer.checkForUniqueKeyError(ctx, prefixKey, sqlRow)
-			if err != nil {
-				return err
-			}
-		}
-	} else {
-		writer.prefixBld.Recycle()
-	}
-
 	return writer.mut.Put(ctx, indexKey, val.EmptyTuple)
 }
 
 func (writer prollyKeylessSecondaryWriter) checkForUniqueKeyError(ctx context.Context, prefixKey val.Tuple, sqlRow sql.Row) error {
-	for i := 0; i < writer.prefixBld.Desc.Count(); i++ {
-		if writer.prefixBld.Desc.IsNull(i, prefixKey) {
-			return nil
-		}
+	if !writer.nullsNotDistinct && writer.prefixBld.Desc.HasNulls(prefixKey) {
+		return nil
 	}
 
 	rng, err := prolly.PrefixRange(ctx, prefixKey, writer.prefixBld.Desc)
@@ -391,6 +419,8 @@ func (writer prollyKeylessSecondaryWriter) checkForUniqueKeyError(ctx context.Co
 
 // Delete implements the interface indexWriter.
 func (writer prollyKeylessSecondaryWriter) Delete(ctx context.Context, sqlRow sql.Row) error {
+	// Rejected validation can leave non-NULL fields from a different row.
+	writer.keyBld.Recycle()
 	hashId, cardRow, err := writer.primary.tuplesFromRow(ctx, sqlRow)
 	if err != nil {
 		return err
@@ -433,6 +463,9 @@ func (writer prollyKeylessSecondaryWriter) Delete(ctx context.Context, sqlRow sq
 // Update implements the interface indexWriter.
 func (writer prollyKeylessSecondaryWriter) Update(ctx context.Context, oldRow sql.Row, newRow sql.Row) (err error) {
 	if err = writer.Delete(ctx, oldRow); err != nil {
+		return err
+	}
+	if err = writer.ValidateKeyViolations(ctx, newRow); err != nil {
 		return err
 	}
 	if err = writer.Insert(ctx, newRow); err != nil {

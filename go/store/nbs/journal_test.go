@@ -350,6 +350,10 @@ func TestReadRecordRanges(t *testing.T) {
 
 	ranges, _, err := jcs.getRecordRanges(ctx, dherrors.FatalBehaviorError, gets, nil)
 	require.NoError(t, err)
+	require.Len(t, ranges, len(data))
+	for _, g := range gets {
+		require.True(t, g.found)
+	}
 
 	for h, rng := range ranges {
 		b, _, err := jcs.get(ctx, h, nil, &Stats{})

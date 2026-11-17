@@ -222,7 +222,7 @@ func (t *Table) getProllyConflictSchemas(ctx context.Context, tblName TableName)
 		return nil, nil, nil, err
 	}
 
-	baseRoot, err := LoadConflictBaseRoot(ctx, t.ValueReadWriter(), t.NodeStore(), art.Metadata)
+	baseRoot, err := LoadConflictBaseRoot(ctx, t.ValueReadWriter(), t.NodeStore(), art.Metadata, art.TheirRootIsh)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -257,8 +257,22 @@ func (t *Table) getProllyConflictSchemas(ctx context.Context, tblName TableName)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-
 	return baseSch, ourSch, theirSch, nil
+}
+
+// ConflictBaseSchema returns the schema of the base of the conflicts a merge would have, given the schema |baseSch|
+// of the table in the merge base and their schema |theirSch|. A merge whose sides changed the primary key the same way
+// merges against the base rekeyed to that key, so the base of its conflicts is keyed like |theirSch|.
+func ConflictBaseSchema(baseSch, theirSch schema.Schema) (schema.Schema, error) {
+	if schema.IsKeyless(baseSch) || schema.IsKeyless(theirSch) ||
+		schema.ComparePrimaryKeys(theirSch, baseSch) == schema.PrimaryKeysSameTags {
+		return baseSch, nil
+	}
+	rekeyed, ok, err := schema.RekeyedSchema(baseSch, theirSch)
+	if err != nil || !ok {
+		return baseSch, err
+	}
+	return rekeyed, nil
 }
 
 func tableFromRootIsh(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, h hash.Hash, tblName TableName) (*Table, bool, error) {

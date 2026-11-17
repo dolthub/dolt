@@ -87,7 +87,9 @@ func (d MergeBase) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	}
 
 	mergeBase, err := merge.MergeBase(ctx, left, right)
-	if err != nil {
+	if errors.Is(err, doltdb.ErrNoCommonAncestor) {
+		return nil, nil
+	} else if err != nil {
 		return nil, err
 	}
 

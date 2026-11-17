@@ -87,10 +87,6 @@ func (c *Commit) Addr() hash.Hash {
 }
 
 func NewCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.ValueReadWriter, ns tree.NodeStore, v types.Value, opts CommitOptions) (*Commit, error) {
-	if opts.Parents == nil || len(opts.Parents) == 0 {
-		return nil, errors.New("cannot create commit without parents")
-	}
-
 	return newCommitForValue(ctx, cs, vrw, ns, v, opts)
 }
 

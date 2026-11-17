@@ -341,7 +341,7 @@ func PushToRemoteBranch[C doltdb.Context](ctx C, rsr env.RepoStateReader[C], tem
 	case doltdb.ErrUpToDate, doltdb.ErrIsAhead, ErrCantFF, datas.ErrMergeNeeded, datas.ErrDirtyWorkspace, ErrShallowPushImpossible:
 		return nil, err
 	default:
-		return nil, fmt.Errorf("%w; %s", ErrUnknownPushErr, err.Error())
+		return nil, fmt.Errorf("%w; %w", ErrUnknownPushErr, err)
 	}
 }
 

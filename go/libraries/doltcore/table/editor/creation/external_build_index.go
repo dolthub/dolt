@@ -84,18 +84,12 @@ func BuildProllyIndexExternal(ctx *sql.Context, vrw types.ValueReadWriter, ns tr
 			return nil, err
 		}
 
-		if predicate != nil {
-			sqlRow, err := index.BuildRow(ctx, k, v, sch, ns)
-			if err != nil {
-				return nil, err
-			}
-			result, err := predicate.Eval(ctx, sqlRow)
-			if err != nil {
-				return nil, err
-			}
-			if result == nil || result == false {
-				continue
-			}
+		matches, err := index.TupleMatchesPredicate(ctx, predicate, k, v, sch, ns)
+		if err != nil {
+			return nil, err
+		}
+		if !matches {
+			continue
 		}
 
 		idxKey, err := secondaryBld.SecondaryKeyFromRow(ctx, k, v)
@@ -103,7 +97,8 @@ func BuildProllyIndexExternal(ctx *sql.Context, vrw types.ValueReadWriter, ns tr
 			return nil, err
 		}
 
-		if uniqCb != nil && prefixDesc.HasNulls(idxKey) {
+		// NULLs can't collide in a unique index unless it treats them as equal
+		if uniqCb != nil && !idx.NullsNotDistinct() && prefixDesc.HasNulls(idxKey) {
 			continue
 		}
 

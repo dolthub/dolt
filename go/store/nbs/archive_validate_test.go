@@ -26,7 +26,9 @@ import (
 
 	"github.com/dolthub/gozstd"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -246,6 +248,85 @@ func TestDeepValidateArchive(t *testing.T) {
 
 			_, err = bad.open(t, openOpts{deepValidate: true})
 			require.ErrorIs(t, err, ErrCorruptArchiveIndex)
+		})
+	}
+}
+
+// TestArchiveReadsOfCorruptIndex reads archives whose index only a deep
+// validation rejects at open. Each read reports the corruption as an error
+// instead of panicking on an out of range span.
+func TestArchiveReadsOfCorruptIndex(t *testing.T) {
+	ctx := context.Background()
+	const count = 8
+	ta := buildValidateTestArchive(t, count)
+
+	tests := []struct {
+		name string
+		mut  func(spanIndex, prefixes, chunkRefs, suffixes []byte)
+		// iterateOnly is set when the chunk's own byte spans are in bounds.
+		iterateOnly bool
+	}{
+		{
+			name: "byte span goes backwards",
+			mut: func(spanIndex, _, _, _ []byte) {
+				binary.BigEndian.PutUint64(spanIndex[uint64Size:], 0)
+			},
+		},
+		{
+			name: "chunk names the null byte span for its data",
+			mut: func(_, _, chunkRefs, _ []byte) {
+				binary.BigEndian.PutUint32(chunkRefs[uint32Size:], 0)
+			},
+		},
+		{
+			name: "chunk names a data byte span past the end",
+			mut: func(_, _, chunkRefs, _ []byte) {
+				binary.BigEndian.PutUint32(chunkRefs[uint32Size:], count+2)
+			},
+		},
+		{
+			name: "chunk names a dictionary byte span past the end",
+			mut: func(_, _, chunkRefs, _ []byte) {
+				binary.BigEndian.PutUint32(chunkRefs, count+2)
+			},
+		},
+		{
+			name: "dictionary follows the chunk using it",
+			mut: func(_, _, chunkRefs, _ []byte) {
+				binary.BigEndian.PutUint32(chunkRefs, 3)
+			},
+			iterateOnly: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ar, err := ta.mutateIndex(test.mut).open(t, openOpts{})
+			require.NoError(t, err)
+			defer ar.close()
+
+			err = ar.iterate(ctx, func(chunks.Chunk) error { return nil }, &Stats{})
+			require.ErrorIs(t, err, ErrCorruptArchiveIndex)
+
+			var errs []error
+			ar.tolerantIterate(ctx, func(chunks.Chunk) {}, func(err error) { errs = append(errs, err) }, &Stats{})
+			require.NotEmpty(t, errs)
+
+			if test.iterateOnly {
+				return
+			}
+			h := reconstructHashFromPrefixAndSuffix(ar.indexReader.getPrefix(0), ar.indexReader.getSuffix(0))
+
+			_, err = ar.get(ctx, h, &Stats{})
+			require.ErrorIs(t, err, ErrCorruptArchiveIndex)
+
+			acs := &archiveChunkSource{aRdr: ar, refs: noopRefCounter{}, blockSize: s3BlockSize}
+			reqs := []getRecord{{a: &h, prefix: h.Prefix()}}
+			_, _, err = runGetMany(t, 4, func(ctx context.Context, eg *errgroup.Group) (bool, gcBehavior, error) {
+				return acs.getMany(ctx, eg, reqs, func(context.Context, *chunks.Chunk) {}, nil, &Stats{})
+			})
+			require.ErrorIs(t, err, ErrCorruptArchiveIndex)
+			require.False(t, reqs[0].found)
 		})
 	}
 }

@@ -151,7 +151,7 @@ func (b *Builder) newTupleLookupKvIter(
 	srcSchema schema.Schema,
 	dstIter index.SecondaryLookupIterGen,
 	ita *plan.IndexedTableAccess,
-	srcMap prolly.Map,
+	srcMap prolly.MapReader,
 	srcTags []uint64,
 	dstTags []uint64,
 	srcIter prolly.MapIter,
@@ -397,11 +397,10 @@ func getPhysicalColCount(schemas []schema.Schema, splits []int, projections []ui
 // TODO: This function call is very confusing because it returns so many different variables (many of which are often
 // ignored or nil). Split into two separate functions. The source and destination distinction is also not the most
 // intuitive -- consider using primary and secondary naming conventions.
-func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.MapIter, index.SecondaryLookupIterGen, schema.Schema, []uint64, sql.Expression, error) {
-	var table *doltdb.Table
+func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.MapReader, prolly.MapIter, index.SecondaryLookupIterGen, schema.Schema, []uint64, sql.Expression, error) {
 	var tags []uint64
 	var err error
-	var priMap prolly.Map
+	var priMap prolly.MapReader
 	var srcIter prolly.MapIter
 	var dstIter index.SecondaryLookupIterGen
 	var priSch schema.Schema
@@ -411,50 +410,40 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 	case *plan.Filter:
 		m, mIter, destIter, s, t, _, err := getSourceKv(ctx, n.Child, isSrc)
 		if err != nil {
-			return prolly.Map{}, nil, nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, nil, err
 		}
 		return m, mIter, destIter, s, t, n.Expression, nil
 	case *plan.IndexedTableAccess:
 		if _, ok := plan.FindVirtualColumnTable(n.Table); ok {
-			return prolly.Map{}, nil, nil, nil, nil, nil, fmt.Errorf("virtual tables unsupported in kvexec")
+			return nil, nil, nil, nil, nil, nil, fmt.Errorf("virtual tables unsupported in kvexec")
 		}
 
 		var lb index.IndexScanBuilder
 		switch dt := n.UnderlyingTable().(type) {
 		case *sqle.WritableIndexedDoltTable:
 			tags = dt.ProjectedTags()
-			table, err = dt.DoltTable.DoltTable(ctx)
+			priMap, _, err = dt.DoltTable.RowMap(ctx)
 			if err != nil {
-				return prolly.Map{}, nil, nil, nil, nil, nil, err
+				return nil, nil, nil, nil, nil, nil, err
 			}
 			lb, err = dt.LookupBuilder(ctx)
 			if err != nil {
-				return prolly.Map{}, nil, nil, nil, nil, nil, err
+				return nil, nil, nil, nil, nil, nil, err
 			}
 		case *sqle.IndexedDoltTable:
 			tags = dt.ProjectedTags()
-			table, err = dt.DoltTable.DoltTable(ctx)
+			priMap, _, err = dt.DoltTable.RowMap(ctx)
 			if err != nil {
-				return prolly.Map{}, nil, nil, nil, nil, nil, err
+				return nil, nil, nil, nil, nil, nil, err
 			}
 			lb, err = dt.LookupBuilder(ctx)
 			if err != nil {
-				return prolly.Map{}, nil, nil, nil, nil, nil, err
+				return nil, nil, nil, nil, nil, nil, err
 			}
 		// case *dtables.DiffTable:
 		// TODO: add interface to include system tables
 		default:
-			return prolly.Map{}, nil, nil, nil, nil, nil, nil
-		}
-
-		rowData, err := table.GetRowData(ctx)
-		if err != nil {
-			return prolly.Map{}, nil, nil, nil, nil, nil, err
-		}
-
-		priMap, err = durable.ProllyMapFromIndex(rowData)
-		if err != nil {
-			return prolly.Map{}, nil, nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, nil, nil
 		}
 
 		priSch = lb.OutputSchema()
@@ -462,17 +451,17 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 		if isSrc {
 			l, _, err := n.GetLookup(ctx, nil)
 			if err != nil {
-				return prolly.Map{}, nil, nil, nil, nil, nil, err
+				return nil, nil, nil, nil, nil, nil, err
 			}
 
 			prollyRanges, err := index.ProllyRangesForIndex(ctx, l.Index, l.Ranges)
 			if err != nil {
-				return prolly.Map{}, nil, nil, nil, nil, nil, err
+				return nil, nil, nil, nil, nil, nil, err
 			}
 
 			srcIter, err = index.NewSequenceRangeIter(ctx, lb, prollyRanges, l.IsReverse)
 			if err != nil {
-				return prolly.Map{}, nil, nil, nil, nil, nil, err
+				return nil, nil, nil, nil, nil, nil, err
 			}
 		} else {
 			dstIter, _ = lb.NewSecondaryIter(n.IsStrictLookup(ctx), len(n.Expressions()), n.NullMask())
@@ -482,37 +471,23 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 		switch dt := n.UnderlyingTable().(type) {
 		case *sqle.WritableDoltTable:
 			tags = dt.ProjectedTags()
-			table, err = dt.DoltTable.DoltTable(ctx)
+			priMap, priSch, err = dt.DoltTable.RowMap(ctx)
 		case *sqle.AlterableDoltTable:
 			tags = dt.ProjectedTags()
-			table, err = dt.DoltTable.DoltTable(ctx)
+			priMap, priSch, err = dt.DoltTable.RowMap(ctx)
 		case *sqle.DoltTable:
 			tags = dt.ProjectedTags()
-			table, err = dt.DoltTable(ctx)
+			priMap, priSch, err = dt.RowMap(ctx)
 		default:
-			return prolly.Map{}, nil, nil, nil, nil, nil, nil
+			return nil, nil, nil, nil, nil, nil, nil
 		}
 		if err != nil {
-			return prolly.Map{}, nil, nil, nil, nil, nil, err
-		}
-
-		priSch, err = table.GetSchema(ctx)
-		if err != nil {
-			return prolly.Map{}, nil, nil, nil, nil, nil, err
-		}
-
-		priIndex, err := table.GetRowData(ctx)
-		if err != nil {
-			return prolly.Map{}, nil, nil, nil, nil, nil, err
-		}
-		priMap, err = durable.ProllyMapFromIndex(priIndex)
-		if err != nil {
-			return prolly.Map{}, nil, nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, nil, err
 		}
 
 		srcIter, err = priMap.IterAll(ctx)
 		if err != nil {
-			return prolly.Map{}, nil, nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, nil, err
 		}
 
 		if schema.IsKeyless(priSch) {
@@ -520,17 +495,10 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 		}
 
 	default:
-		return prolly.Map{}, nil, nil, nil, nil, nil, nil
+		return nil, nil, nil, nil, nil, nil, nil
 	}
 	if err != nil {
-		return prolly.Map{}, nil, nil, nil, nil, nil, err
-	}
-
-	if priSch == nil && table != nil {
-		priSch, err = table.GetSchema(ctx)
-		if err != nil {
-			return prolly.Map{}, nil, nil, nil, nil, nil, err
-		}
+		return nil, nil, nil, nil, nil, nil, err
 	}
 
 	return priMap, srcIter, dstIter, priSch, tags, nil, nil
@@ -618,6 +586,11 @@ func getMergeKv(ctx *sql.Context, n sql.Node) (mergeState, error) {
 		// TODO: add interface to include system tables
 		default:
 			return ms, fmt.Errorf("non-standard indexed table not supported")
+		}
+
+		// TODO: read edits that have not been materialized, as lookup joins do
+		if pending, err := doltTable.HasPendingEdits(ctx); err != nil || pending {
+			return ms, fmt.Errorf("tables with pending edits not supported")
 		}
 
 		secIdx, err := index.GetDurableIndex(ctx, doltTable, idx)

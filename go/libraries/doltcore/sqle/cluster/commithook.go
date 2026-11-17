@@ -378,12 +378,22 @@ func (h *commithook) attemptReplicate(ctx context.Context) {
 			h.currentError = new(string)
 			*h.currentError = fmt.Sprintf("failed to commit chunks on destDB: %v", err)
 			lgr.Warnf("cluster/commithook: failed to commit chunks on destDB: %v", err)
+			h.closeDestDBWithLock(destDB)
 			// add some delay if a new head didn't come in while we were pushing.
 			if toPush == h.nextHead {
 				// TODO: We could add some backoff here.
 				h.nextPushAttempt = time.Now().Add(1 * time.Second)
 			}
 		}
+	}
+}
+
+// closeDestDBWithLock closes |destDB| after a failed push so the next attempt reopens the standby's database.
+// The caller must hold h.mu.
+func (h *commithook) closeDestDBWithLock(destDB *doltdb.DoltDB) {
+	if h.destDB == destDB {
+		h.destDB = nil
+		_ = destDB.Close()
 	}
 }
 

@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expranalysis"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
@@ -233,6 +234,12 @@ func buildVirtualMergeBase(ctx *sql.Context, x, y *doltdb.Commit) (*doltdb.Commi
 	if err != nil {
 		return nil, nil, err
 	}
+	if xRoot, err = rekeyToOtherSide(ctx, xRoot, yRoot, baseRoot); err != nil {
+		return nil, nil, err
+	}
+	if yRoot, err = rekeyToOtherSide(ctx, yRoot, xRoot, baseRoot); err != nil {
+		return nil, nil, err
+	}
 	date, err := virtualMergeBaseDate(ctx, x, y)
 	if err != nil {
 		return nil, nil, err
@@ -242,11 +249,18 @@ func buildVirtualMergeBase(ctx *sql.Context, x, y *doltdb.Commit) (*doltdb.Commi
 	ctx = ctx.WithQuery(ctx.Query())
 	ctx.SetQueryTime(date)
 
-	result, err := MergeRoots(ctx, doltdb.SimpleTableResolver{}, xRoot, yRoot, baseRoot, y, ancestor, editor.Options{}, MergeOpts{KeepSchemaConflicts: true, SkipFullTextRebuild: true})
+	mo := MergeOpts{
+		KeepSchemaConflicts:  true,
+		SkipFullTextRebuild:  true,
+		KeepTablesAddedTwice: true,
+	}
+	result, err := MergeRoots(ctx, doltdb.SimpleTableResolver{}, xRoot, yRoot, baseRoot, y, ancestor, editor.Options{}, mo)
 	if err != nil {
 		return nil, nil, err
 	}
-	mergedRoot, rewritten, conflicted, err := resolveVirtualBaseConflicts(ctx, result, xRoot, yRoot, baseRoot, baseConflicts)
+	// The merge keys its conflicts like the ancestor it merged against, which has the tables whose primary key both
+	// merge bases changed rekeyed, so the conflicts read their base from that ancestor.
+	mergedRoot, rewritten, conflicted, err := resolveVirtualBaseConflicts(ctx, result, xRoot, yRoot, result.AncestorRoot, baseConflicts)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -383,12 +397,18 @@ func mergeConflictedRowsByCell(ctx *sql.Context, root, xRoot, yRoot, baseRoot do
 // mergeRowsUnderBaseSchema returns table |name| of |baseRoot|, with the rows of |xRoot| and |yRoot| merged into it cell
 // by cell under its schema, and the conflicted cells. Columns that |baseRoot| lacks are left out. It is for a table
 // whose schema conflicts between |xRoot| and |yRoot|: a merge against the virtual merge base then compares the tips'
-// schemas with the base's, as a merge with that base alone would. It returns a nil table when |baseRoot| lacks the
-// table.
+// schemas with the base's, as a merge with that base alone would. When |baseRoot| lacks the table, because |xRoot| and
+// |yRoot| both added it, the base is an empty table of the columns they share. It returns a nil table when |baseRoot|
+// lacks the table and |xRoot| and |yRoot| do not share it.
 func mergeRowsUnderBaseSchema(ctx *sql.Context, xRoot, yRoot, baseRoot doltdb.RootValue, name doltdb.TableName, baseConflicts map[string]conflictedRow) (*doltdb.Table, map[string]conflictedRow, error) {
 	baseTbl, ok, err := baseRoot.GetTable(ctx, name)
-	if err != nil || !ok {
+	if err != nil {
 		return nil, nil, err
+	}
+	if !ok {
+		if baseTbl, err = sharedColumnsTable(ctx, xRoot, yRoot, name); err != nil || baseTbl == nil {
+			return nil, nil, err
+		}
 	}
 	sch, err := baseTbl.GetSchema(ctx)
 	if err != nil {
@@ -425,6 +445,53 @@ func mergeRowsUnderBaseSchema(ctx *sql.Context, xRoot, yRoot, baseRoot doltdb.Ro
 	}
 	tbl, err := finishVirtualTable(ctx, baseTbl, sch, name, edits)
 	return tbl, rows, err
+}
+
+// sharedColumnsTable returns an empty table |name| of the columns that its tables in |xRoot| and |yRoot| have alike, so
+// that their rows can be merged as if both added them to it. It returns nil when either lacks the table, or when they
+// do not have the same primary key, so their rows cannot be matched.
+func sharedColumnsTable(ctx *sql.Context, xRoot, yRoot doltdb.RootValue, name doltdb.TableName) (*doltdb.Table, error) {
+	xTbl, ok, err := xRoot.GetTable(ctx, name)
+	if err != nil || !ok {
+		return nil, err
+	}
+	yTbl, ok, err := yRoot.GetTable(ctx, name)
+	if err != nil || !ok {
+		return nil, err
+	}
+	xSch, err := xTbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ySch, err := yTbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+	xPKs, yPKs := xSch.GetPKCols().GetColumns(), ySch.GetPKCols().GetColumns()
+	if len(xPKs) != len(yPKs) {
+		return nil, nil
+	}
+	for i := range xPKs {
+		if !xPKs[i].Equals(yPKs[i]) {
+			return nil, nil
+		}
+	}
+	var shared []schema.Column
+	for _, col := range xSch.GetAllCols().GetColumns() {
+		if other, ok := ySch.GetAllCols().GetByTag(col.Tag); ok && col.Equals(other) {
+			shared = append(shared, col)
+		}
+	}
+	cols := schema.NewColCollection(shared...)
+	pkOrdinals := make([]int, len(xPKs))
+	for i, pk := range xPKs {
+		pkOrdinals[i] = cols.TagToIdx[pk.Tag]
+	}
+	sch, err := schema.NewSchema(cols, pkOrdinals, xSch.GetCollation(), nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	return doltdb.NewEmptyTable(ctx, xTbl.ValueReadWriter(), xTbl.NodeStore(), sch)
 }
 
 // virtualMergeSides holds the rows and schemas of a table in the two merge bases of a virtual merge base, x and y, and
@@ -552,7 +619,7 @@ type virtualRowMerger struct {
 
 func newVirtualRowMerger(ctx *sql.Context, name doltdb.TableName, sch schema.Schema, sides virtualMergeSides, ns tree.NodeStore, conversionConflicts bool) (*virtualRowMerger, error) {
 	rm := &virtualRowMerger{
-		vm:                  NewValueMerger(ctx, sch, sides.xSch, sides.ySch, sides.baseSch, sides.x.Pool(), ns),
+		vm:                  NewValueMerger(ctx, sch, sides.xSch, sides.ySch, sides.baseSch, sides.x.Pool(), ns, name.Name),
 		tableName:           name.Name,
 		sch:                 sch,
 		ns:                  ns,
@@ -874,7 +941,11 @@ func updateSecondaryIndex(ctx *sql.Context, tbl *doltdb.Table, indexes durable.I
 		return nil, err
 	}
 	if !ok || index.IsVector() || index.IsFullText() {
-		return creation.BuildProllyIndexExternal(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, name.Name, index, rows, nil, nil)
+		predicate, err := expranalysis.ResolveIndexPredicate(ctx, name.Name, sch, index)
+		if err != nil {
+			return nil, err
+		}
+		return creation.BuildProllyIndexExternal(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, name.Name, index, rows, nil, predicate)
 	}
 	idx, err := indexes.GetIndex(ctx, sch, nil, index.Name())
 	if err != nil {

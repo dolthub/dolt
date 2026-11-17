@@ -965,7 +965,7 @@ func TestBlobs(t *testing.T) {
 				vars := sqle.NewEngineVariables()
 				h.WithEngineVariables(vars)
 				ctx := sql.NewContextWithVariables(context.Background(), vars)
-				require.NoError(t, vars.System.(sql.ContextAwareSystemVariableRegistry).AssignValuesWithContext(ctx, map[string]interface{}{"secure_file_priv": dir}))
+				require.NoError(t, vars.System.AssignValues(ctx, map[string]interface{}{"secure_file_priv": dir}))
 				if prepared {
 					enginetest.TestScriptPrepared(t, h, script)
 				} else {
@@ -1617,6 +1617,16 @@ func TestDoltMergeMultipleBasesPrepared(t *testing.T) {
 	RunDoltMergeMultipleBasesPreparedTests(t, h)
 }
 
+func TestDoltMergeSamePrimaryKeyChange(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltMergeSamePrimaryKeyChangeTests(t, h)
+}
+
+func TestDoltMergeSamePrimaryKeyChangePrepared(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltMergeSamePrimaryKeyChangePreparedTests(t, h)
+}
+
 func TestDoltMergeBasesTableFunction(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunDoltMergeBasesTableFunctionTests(t, h)
@@ -2138,6 +2148,11 @@ func TestStatsHistograms(t *testing.T) {
 func TestStatsStorage(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunStatsStorageTests(t, h)
+}
+
+func TestRevisionStatistics(t *testing.T) {
+	h := newDoltHarness(t)
+	RunRevisionStatisticsTests(t, h)
 }
 
 func TestJoinStats(t *testing.T) {
@@ -2805,13 +2820,14 @@ func TestDriverExecution(t *testing.T) {
 		Address: "localhost",
 	})
 
-	q := "call dolt_backup('add', 'backup1', 'file:///tmp/backup1');"
+	backupURL := "file://" + filepath.ToSlash(t.TempDir())
+	q := fmt.Sprintf("call dolt_backup('add', 'backup1', '%s/backup1');", backupURL)
 	enginetest.TestQueryWithContext(t, ctx, engine, h, q, []sql.Row{{0}}, nil, nil, nil)
 
 	q = "select name from dolt_backups where name = 'backup1'"
 	enginetest.TestQueryWithContext(t, ctx, engine, h, q, []sql.Row{{"backup1"}}, nil, nil, nil)
 
-	q = "call dolt_backup('sync-url', 'file:///tmp/backup_sync_url');"
+	q = fmt.Sprintf("call dolt_backup('sync-url', '%s/backup_sync_url');", backupURL)
 	enginetest.TestQueryWithContext(t, ctx, engine, h, q, []sql.Row{{0}}, nil, nil, nil)
 
 	q = "call dolt_backup('remove', 'backup1');"

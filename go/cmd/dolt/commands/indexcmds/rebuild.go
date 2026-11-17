@@ -23,6 +23,9 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expranalysis"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -96,7 +99,17 @@ func (cmd RebuildCmd) Exec(ctx context.Context, commandStr string, args []string
 	if idxSch == nil {
 		return HandleErr(errhand.BuildDError("the index `%s` does not exist on table `%s`", indexName, tableName).Build(), nil)
 	}
-	indexRowData, err := creation.BuildSecondaryIndex(sql.NewContext(ctx), table, idxSch, tableName, editor.Options{}, nil)
+	// Rebuilding evaluates generated column expressions, which may read system variables.
+	vars := sqle.NewEngineVariables()
+	if err := dsess.InitPersistedSystemVarsWithRegistry(vars.System, dEnv); err != nil {
+		cli.PrintErrln("error: failed to load persisted global variables:", err.Error())
+	}
+	sqlCtx := sql.NewContextWithVariables(ctx, vars)
+	predicate, err := expranalysis.ResolveIndexPredicate(sqlCtx, tableName, sch, idxSch)
+	if err != nil {
+		return HandleErr(errhand.BuildDError("Unable to resolve the predicate of index `%s` on table `%s`.", indexName, tableName).AddCause(err).Build(), nil)
+	}
+	indexRowData, err := creation.BuildSecondaryIndex(sqlCtx, table, idxSch, tableName, editor.Options{}, predicate)
 	if err != nil {
 		return HandleErr(errhand.BuildDError("Unable to rebuild index `%s` on table `%s`.", indexName, tableName).AddCause(err).Build(), nil)
 	}

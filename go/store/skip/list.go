@@ -95,6 +95,12 @@ func (l *List) HasCheckpoint() bool {
 	return l.checkpoint > nodeId(1)
 }
 
+// EditedSinceCheckpoint returns true if any Put has been made since the last
+// checkpoint, i.e. a Revert would discard writes.
+func (l *List) EditedSinceCheckpoint() bool {
+	return l.nextNodeId() > l.checkpoint
+}
+
 // Revert reverts to the last recorded checkpoint.
 func (l *List) Revert(ctx context.Context) error {
 	cp := l.checkpoint
@@ -208,6 +214,11 @@ func (l *List) Put(ctx context.Context, key, val []byte) error {
 		l.count++
 	}
 	return nil
+}
+
+// EmptyCopy returns a new, empty List with the same key order as |l|.
+func (l *List) EmptyCopy() *List {
+	return NewSkipList(l.keyOrder)
 }
 
 func (l *List) Copy() *List {

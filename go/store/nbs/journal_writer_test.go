@@ -17,6 +17,7 @@ package nbs
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -402,6 +403,21 @@ func TestJournalIndexBootstrap(t *testing.T) {
 	}
 }
 
+// The index batch checksum covers only addresses, so reads must reject a corrupt range rather than panic.
+func TestJournalWriterReadCorruptRange(t *testing.T) {
+	j := newTestJournalWriter(t, newTestFilePath(t))
+	for _, cc := range randomCompressedChunks(1) {
+		require.NoError(t, j.writeCompressedChunk(context.Background(), dherrors.FatalBehaviorError, cc))
+		r, _ := j.ranges.get(cc.H)
+		_, err := j.getCompressedChunkAtRange(Range{Offset: r.Offset, Length: 2}, cc.H)
+		require.Error(t, err)
+		_, err = j.getCompressedChunkAtRange(Range{Offset: 1 << 40, Length: r.Length}, cc.H)
+		require.Error(t, err)
+		_, err = j.getCompressedChunkAtRange(Range{Offset: 1 << 63, Length: r.Length}, cc.H)
+		require.Error(t, err)
+	}
+}
+
 // TestJournalIndexCorruptionRecovery verifies that a corrupt journal index does
 // not prevent the database from opening. The journal index (journal.idx) is an
 // optimization that is written without the same atomicity guarantees as the
@@ -500,6 +516,21 @@ func TestJournalIndexCorruptionRecovery(t *testing.T) {
 		info, err := f.Stat()
 		require.NoError(t, err)
 		_, err = f.WriteAt(bytes.Repeat([]byte{0xff}, 32), info.Size()/2)
+		require.NoError(t, err)
+		require.NoError(t, f.Close())
+		validateOpen(t, path, data, last)
+	})
+
+	t.Run("oversized lookup length", func(t *testing.T) {
+		path, data, last := writeIndexedJournal(t, 3)
+		// The batch checksum covers only lookup addresses, so it does not
+		// catch a corrupt length. The length ends the first lookup, which
+		// follows its one byte tag.
+		f, err := os.OpenFile(idxPath(path), os.O_RDWR, 0666)
+		require.NoError(t, err)
+		var length [lengthSize]byte
+		binary.BigEndian.PutUint32(length[:], journalWriterBuffSize+1)
+		_, err = f.WriteAt(length[:], 1+lookupSz-lengthSize)
 		require.NoError(t, err)
 		require.NoError(t, f.Close())
 		validateOpen(t, path, data, last)

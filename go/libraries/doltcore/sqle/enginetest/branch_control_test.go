@@ -379,6 +379,21 @@ var BranchControlBlockTests = []BranchControlBlockTest{
 		ExpectedErr: branch_control.ErrCannotDeleteBranch,
 	},
 	{
+		Name:        "DOLT_BRANCH Force Create",
+		Query:       "CALL DOLT_BRANCH('-f', 'other', 'HEAD');",
+		ExpectedErr: branch_control.ErrCannotDeleteBranch,
+	},
+	{
+		Name:        "DOLT_BRANCH Force Orphan",
+		Query:       "CALL DOLT_BRANCH('--orphan', '-f', 'other');",
+		ExpectedErr: branch_control.ErrCannotDeleteBranch,
+	},
+	{
+		Name:        "DOLT_CHECKOUT Force Create",
+		Query:       "CALL DOLT_CHECKOUT('-B', 'other', 'HEAD');",
+		ExpectedErr: branch_control.ErrCannotDeleteBranch,
+	},
+	{
 		Name:        "DOLT_BRANCH Delete",
 		Query:       "CALL DOLT_BRANCH('-d', 'other');",
 		ExpectedErr: branch_control.ErrCannotDeleteBranch,
@@ -646,6 +661,42 @@ var BranchControlOtherDbBlockTests = []BranchControlBlockTest{
 }
 
 var BranchControlTests = []BranchControlTest{
+	{
+		Name: "Namespace entries block dolt_checkout from creating a branch",
+		SetUpScript: []string{
+			"DELETE FROM dolt_branch_control WHERE user = '%';",
+			"INSERT INTO dolt_branch_control VALUES ('%', '%', 'root', 'localhost', 'admin');",
+			"CREATE USER testuser@localhost;",
+			"GRANT ALL ON *.* TO testuser@localhost;",
+			"INSERT INTO dolt_branch_namespace_control VALUES ('%', 'locked%', 'root', 'localhost');",
+		},
+		Assertions: []BranchControlTestAssertion{
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "CALL DOLT_CHECKOUT('-b', 'lockedbranch');",
+				ExpectedErr: branch_control.ErrCannotCreateBranch,
+			},
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "CALL DOLT_CHECKOUT('-B', 'lockedbranch');",
+				ExpectedErr: branch_control.ErrCannotCreateBranch,
+			},
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "SELECT name FROM dolt_branches WHERE name LIKE 'locked%';",
+				Expected: []sql.Row{},
+			},
+			{
+				User:     "testuser",
+				Host:     "localhost",
+				Query:    "CALL DOLT_CHECKOUT('-b', 'openbranch');",
+				Expected: []sql.Row{{0, "Switched to branch 'openbranch'"}},
+			},
+		},
+	},
 	{
 		Name: "Namespace entries block",
 		SetUpScript: []string{
@@ -1156,6 +1207,115 @@ var BranchControlTests = []BranchControlTest{
 				Host:     "localhost",
 				Query:    "SELECT * FROM dolt_branch_control WHERE user = 'testuser' and branch = 'branch1';",
 				Expected: []sql.Row{{"%", "branch1", "testuser", "%", "write"}},
+			},
+		},
+	},
+	{
+		Name: "Rebase working branch requires permissions on the rebased branch",
+		SetUpScript: []string{
+			"DELETE FROM dolt_branch_control WHERE user = '%';",
+			"INSERT INTO dolt_branch_control VALUES ('%','%','root','%','admin');",
+			"CREATE USER alice@localhost;",
+			"GRANT ALL ON *.* TO alice@localhost;",
+			"CREATE USER bob@localhost;",
+			"GRANT ALL ON *.* TO bob@localhost;",
+			"INSERT INTO dolt_branch_control VALUES ('%','main','alice','%','write');",
+			// bob can write every branch except main.
+			"INSERT INTO dolt_branch_control VALUES ('%','%','bob','%','write');",
+			"INSERT INTO dolt_branch_control VALUES ('%','main','bob','%','read');",
+			"CREATE TABLE t (pk int primary key);",
+			"CALL dolt_commit('-Am', 'base');",
+			"INSERT INTO t VALUES (1);",
+			"CALL dolt_commit('-am', 'c1');",
+			"INSERT INTO t VALUES (2);",
+			"CALL dolt_commit('-am', 'c2');",
+		},
+		Assertions: []BranchControlTestAssertion{
+			{
+				User:  "alice",
+				Host:  "localhost",
+				Query: "CALL dolt_rebase('-i', 'HEAD~2');",
+				Expected: []sql.Row{
+					{0, "interactive rebase started on branch dolt_rebase_main; adjust the rebase plan in the dolt_rebase table, then continue rebasing by calling dolt_rebase('--continue')"},
+				},
+			},
+			{
+				User:     "bob",
+				Host:     "localhost",
+				Query:    "SELECT count(*) FROM dolt_rebase WHERE action = 'pick';",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				User:        "bob",
+				Host:        "localhost",
+				Query:       "UPDATE dolt_rebase SET action = 'drop';",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+			{
+				User:        "bob",
+				Host:        "localhost",
+				Query:       "DELETE FROM dolt_rebase;",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+			{
+				User:        "bob",
+				Host:        "localhost",
+				Query:       "CALL dolt_commit('--allow-empty', '-m', 'bob');",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+			{
+				User:        "bob",
+				Host:        "localhost",
+				Query:       "CALL dolt_rebase('--continue');",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+			{
+				User:        "bob",
+				Host:        "localhost",
+				Query:       "CALL dolt_rebase('--abort');",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+			{
+				User:        "bob",
+				Host:        "localhost",
+				Query:       "CALL dolt_branch('-D', 'dolt_rebase_main');",
+				ExpectedErr: branch_control.ErrCannotDeleteBranch,
+			},
+			{
+				User:        "bob",
+				Host:        "localhost",
+				Query:       "CALL dolt_branch('-f', '-m', 'dolt_rebase_main', 'renamed');",
+				ExpectedErr: branch_control.ErrCannotDeleteBranch,
+			},
+			{
+				User:        "bob",
+				Host:        "localhost",
+				Query:       "CALL dolt_branch('-f', '-c', 'main', 'dolt_rebase_main');",
+				ExpectedErr: branch_control.ErrCannotDeleteBranch,
+			},
+			{
+				User:     "bob",
+				Host:     "localhost",
+				Query:    "SELECT count(*) FROM dolt_rebase WHERE action = 'pick';",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				User:     "alice",
+				Host:     "localhost",
+				Query:    "UPDATE dolt_rebase SET action = 'reword', commit_message = 'c2 reworded' WHERE commit_message = 'c2';",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				User:     "alice",
+				Host:     "localhost",
+				Query:    "CALL dolt_rebase('--continue');",
+				Expected: []sql.Row{{0, "Successfully rebased and updated refs/heads/main"}},
+			},
+			{
+				User:     "alice",
+				Host:     "localhost",
+				Query:    "SELECT message FROM dolt_log LIMIT 2;",
+				Expected: []sql.Row{{"c2 reworded"}, {"c1"}},
 			},
 		},
 	},
@@ -2456,12 +2616,6 @@ type databaseChangeRecordingSession struct {
 func (s *databaseChangeRecordingSession) SetCurrentDatabase(name string) {
 	s.changes = append(s.changes, name)
 	s.Session.SetCurrentDatabase(name)
-}
-
-// EngineVariables forwards the wrapped session's owner, which embedding the
-// sql.Session interface does not promote.
-func (s *databaseChangeRecordingSession) EngineVariables() *sql.EngineVariables {
-	return s.Session.(sql.EngineVariablesProvider).EngineVariables()
 }
 
 func TestDoltCommitAllChecksEveryBranch(t *testing.T) {

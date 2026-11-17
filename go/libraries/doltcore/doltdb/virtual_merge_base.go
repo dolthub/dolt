@@ -30,24 +30,32 @@ import (
 // package, which this package cannot import.
 var RebuildVirtualMergeBase func(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, mergeBases []hash.Hash) (RootValue, error)
 
-// LoadConflictBaseRoot returns the root holding the base values of a conflict. A virtual merge base that has been
-// garbage collected is rebuilt from the merge bases recorded in |meta|.
-func LoadConflictBaseRoot(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, meta prolly.ConflictMetadata) (RootValue, error) {
-	if len(meta.MergeBases) > 0 {
+// RebuildRekeyedMergeBase returns the root of the rekeyed merge base of a conflict with |meta| from |theirRootIsh|.
+// It is set by the merge package, which this package cannot import.
+var RebuildRekeyedMergeBase func(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, meta prolly.ConflictMetadata, theirRootIsh hash.Hash) (RootValue, error)
+
+// LoadConflictBaseRoot returns the root holding the base values of a conflict with |meta| from |theirRootIsh|. A
+// virtual or rekeyed merge base that has been garbage collected is rebuilt from what |meta| records.
+func LoadConflictBaseRoot(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, meta prolly.ConflictMetadata, theirRootIsh hash.Hash) (RootValue, error) {
+	if len(meta.MergeBases) > 0 || !meta.RekeyedFrom.IsEmpty() {
 		v, err := vrw.ReadValue(ctx, meta.BaseRootIsh)
 		if err != nil {
 			return nil, err
 		}
 		if v == nil {
+			if !meta.RekeyedFrom.IsEmpty() {
+				return RebuildRekeyedMergeBase(ctx, vrw, ns, meta, theirRootIsh)
+			}
 			return RebuildVirtualMergeBase(ctx, vrw, ns, meta.MergeBases)
 		}
 	}
 	return LoadRootValueFromRootIshAddr(ctx, vrw, ns, meta.BaseRootIsh)
 }
 
-// NewDanglingCommit writes |root| and a commit of it with |parents| to the parents' store. No ref points to the commit.
+// NewDanglingCommit writes |root| and a commit of it with |parents|, which may be empty, to |root|'s store. No ref
+// points to the commit.
 func NewDanglingCommit(ctx context.Context, root RootValue, parents []*Commit, meta *datas.CommitMeta) (*Commit, error) {
-	vrw, ns := parents[0].vrw, parents[0].ns
+	vrw, ns := root.VRW(), root.NodeStore()
 	store, ok := vrw.(interface{ ChunkStore() chunks.ChunkStore })
 	if !ok {
 		return nil, errors.New("cannot write a dangling commit: value store does not expose its chunk store")

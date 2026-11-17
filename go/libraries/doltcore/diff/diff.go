@@ -18,6 +18,7 @@ import (
 	"context"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
 // ChangeType is an enum that represents the type of change in a diff
@@ -67,4 +68,38 @@ type SchemaDiffWriter interface {
 	WriteSchemaDiff(schemaDiffStatement string) error
 	// Close finalizes the work of this writer.
 	Close() error
+}
+
+// contentAddressComparer is implemented by stored values that can match
+// another value by content address. Callers can check every storage type
+// through this interface instead of a type switch. A false result means the
+// values must be compared by content, since equal values can have different
+// addresses.
+type contentAddressComparer interface {
+	SameContentAddress(other interface{}) bool
+}
+
+// ValuesEqual reports whether |fromValue| and |toValue| match in a diff. Text
+// that unwraps to strings compares exactly, so case-only changes are reported.
+// Stored values with equal content addresses match without being loaded. Other
+// values compare with |typ|.
+func ValuesEqual(ctx *sql.Context, typ sql.Type, fromValue, toValue interface{}) (bool, error) {
+	if stored, ok := fromValue.(contentAddressComparer); ok && stored.SameContentAddress(toValue) {
+		return true, nil
+	}
+	if types.IsTextOnly(typ) && fromValue != nil && toValue != nil {
+		fromText, fromOK, err := sql.Unwrap[string](ctx, fromValue)
+		if err != nil {
+			return false, err
+		}
+		toText, toOK, err := sql.Unwrap[string](ctx, toValue)
+		if err != nil {
+			return false, err
+		}
+		if fromOK && toOK {
+			return fromText == toText, nil
+		}
+	}
+	cmp, err := typ.Compare(ctx, fromValue, toValue)
+	return cmp == 0, err
 }

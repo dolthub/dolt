@@ -72,24 +72,10 @@ func (idt *IndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, er
 }
 
 func (idt *IndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	idt.mu.Lock()
-	defer idt.mu.Unlock()
-	key, canCache, err := idt.DoltTable.DataCacheKey(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if idt.lb == nil || !canCache || idt.lb.Key() != key {
-		idt.lb, err = index.NewIndexReaderBuilder(ctx, idt.DoltTable, idt.idx, key, idt.DoltTable.projectedCols, idt.DoltTable.sqlSch)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return idt.lb.NewPartitionRowIter(ctx, part)
+	return idt.PartitionValueRowWriter(ctx, part, sql.ColSet{})
 }
 
-func (idt *IndexedDoltTable) PartitionRows2(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+func (idt *IndexedDoltTable) PartitionValueRowWriter(ctx *sql.Context, part sql.Partition, columnIds sql.ColSet) (sql.RowIter, error) {
 	idt.mu.Lock()
 	defer idt.mu.Unlock()
 	key, canCache, err := idt.DoltTable.DataCacheKey(ctx)
@@ -103,7 +89,7 @@ func (idt *IndexedDoltTable) PartitionRows2(ctx *sql.Context, part sql.Partition
 		}
 	}
 
-	return idt.lb.NewPartitionRowIter(ctx, part)
+	return idt.lb.NewPartitionRowIter(ctx, part, columnIds)
 }
 
 var _ sql.IndexedTable = (*WritableIndexedDoltTable)(nil)
@@ -170,7 +156,24 @@ func (t *WritableIndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Part
 		}
 	}
 
-	return t.lb.NewPartitionRowIter(ctx, part)
+	return t.lb.NewPartitionRowIter(ctx, part, sql.ColSet{})
+}
+
+func (t *WritableIndexedDoltTable) PartitionValueRowWriter(ctx *sql.Context, part sql.Partition, columnIds sql.ColSet) (sql.ValueRowWriter, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	key, canCache, err := t.DataCacheKey(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if t.lb == nil || !canCache || t.lb.Key() != key {
+		t.lb, err = index.NewIndexReaderBuilder(ctx, t.DoltTable, t.idx, key, t.projectedCols, t.sqlSch)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return t.lb.NewPartitionRowIter(ctx, part, columnIds)
 }
 
 // WithProjections implements sql.ProjectedTable

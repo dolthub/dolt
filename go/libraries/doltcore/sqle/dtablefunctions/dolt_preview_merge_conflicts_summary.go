@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -128,7 +129,7 @@ func (pm *PreviewMergeConflictsSummaryTableFunction) WithChildren(ctx *sql.Conte
 
 // CheckAuth implements the interface sql.AuthorizationCheckerNode.
 func (pm *PreviewMergeConflictsSummaryTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
-	baseDB, _ := doltdb.SplitRevisionDbName(pm.database.Name())
+	baseDB := plan.CheckPrivilegeNameForDatabase(pm.database)
 	tblNames, err := pm.database.GetTableNames(ctx)
 	if err != nil {
 		return false
@@ -343,7 +344,7 @@ func getTablesWithConflicts(ctx *sql.Context, db dsess.SqlDatabase, baseBranch, 
 		return nil, err
 	}
 
-	merger, err := merge.NewMerger(ri.leftRoot, ri.rightRoot, ri.baseRoot, ri.rightRoot, ri.ancCm, ri.leftRoot.VRW(), ri.leftRoot.NodeStore())
+	merger, err := merge.NewMerger(ctx, ri.leftRoot, ri.rightRoot, ri.baseRoot, ri.rightRoot, ri.ancCm, ri.leftRoot.VRW(), ri.leftRoot.NodeStore())
 	if err != nil {
 		return nil, err
 	}

@@ -25,6 +25,7 @@ import (
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
@@ -140,7 +141,7 @@ func (trtf *TestsRunTableFunction) WithChildren(ctx *sql.Context, node ...sql.No
 
 // CheckAuth implements the interface sql.AuthorizationCheckerNode
 func (trtf *TestsRunTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
-	baseDB, _ := doltdb.SplitRevisionDbName(trtf.database.Name())
+	baseDB := plan.CheckPrivilegeNameForDatabase(trtf.database)
 	subject := sql.PrivilegeCheckSubject{Database: baseDB}
 	return opChecker.UserHasPrivileges(ctx, sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))
 }
@@ -185,9 +186,13 @@ func (trtf *TestsRunTableFunction) Name() string {
 
 // RowIter implements the sql.Node interface
 func (trtf *TestsRunTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter, error) {
+	vars := ctx.EngineVariables()
+	if vars == nil {
+		return nil, fmt.Errorf("dolt_test_run requires an engine variable owner")
+	}
 	pro := trtf.catalog.(sql.DatabaseProvider) // checked by WithCatalog
 	runner := *trtf
-	runner.engine = gms.New(analyzer.NewDefault(pro), &gms.Config{EngineVariables: ctx.EngineVariables()})
+	runner.engine = gms.New(analyzer.NewDefault(pro), &gms.Config{EngineVariables: vars})
 	defer runner.engine.Close()
 
 	args := runner.getOptionsString()

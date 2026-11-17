@@ -143,6 +143,12 @@ func (t *TextStorage) Hash() interface{} {
 	return t.Addr
 }
 
+// SameContentAddress implements contentAddressComparer for text storage.
+func (t *TextStorage) SameContentAddress(other interface{}) bool {
+	otherText, ok := other.(*TextStorage)
+	return ok && t != nil && otherText != nil && !t.Addr.IsEmpty() && t.Addr == otherText.Addr
+}
+
 // Value implements driver.Valuer for interoperability with other go libraries
 func (t *TextStorage) ValueContext(ctx context.Context) (driver.Value, error) {
 	buf, err := t.GetBytes(ctx)
@@ -224,6 +230,12 @@ func (b *ByteArray) Hash() interface{} {
 	return b.Addr
 }
 
+// SameContentAddress implements contentAddressComparer for binary storage.
+func (b *ByteArray) SameContentAddress(other interface{}) bool {
+	otherBytes, ok := other.(*ByteArray)
+	return ok && b != nil && otherBytes != nil && !b.Addr.IsEmpty() && b.Addr == otherBytes.Addr
+}
+
 // WithMaxByteLength returns a copy of ByteArray with the given max byte length.
 func (b *ByteArray) WithMaxByteLength(maxByteLength int64) *ByteArray {
 	return &ByteArray{
@@ -297,6 +309,13 @@ func (g *GeometryStorage) Compare(ctx context.Context, other interface{}) (cmp i
 // Hash implements sql.AnyWrapper.
 func (g *GeometryStorage) Hash() interface{} {
 	return g.outOfBand.Addr
+}
+
+// SameContentAddress implements contentAddressComparer for geometry storage.
+func (g *GeometryStorage) SameContentAddress(other interface{}) bool {
+	otherGeometry, ok := other.(*GeometryStorage)
+	return ok && g != nil && otherGeometry != nil && !g.outOfBand.Addr.IsEmpty() &&
+		g.outOfBand.Addr == otherGeometry.outOfBand.Addr
 }
 
 // Addr returns the content address for out-of-band storage. Only valid when IsExactLength returns false.
@@ -385,6 +404,13 @@ func (j *JsonAdaptiveStorage) Compare(ctx context.Context, other interface{}) (c
 // Hash implements sql.AnyWrapper by returning the content address for out-of-band storage, or nil for inline storage.
 func (j *JsonAdaptiveStorage) Hash() interface{} {
 	return j.outOfBand.Addr
+}
+
+// SameContentAddress implements contentAddressComparer for JSON storage.
+func (j *JsonAdaptiveStorage) SameContentAddress(other interface{}) bool {
+	otherJSON, ok := other.(*JsonAdaptiveStorage)
+	return ok && j != nil && otherJSON != nil && !j.outOfBand.Addr.IsEmpty() &&
+		j.outOfBand.Addr == otherJSON.outOfBand.Addr
 }
 
 // Unwrap implements sql.JSONWrapper by loading the bytes and returning them.

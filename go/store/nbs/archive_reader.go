@@ -158,6 +158,8 @@ func newArchiveMetadata(ctx context.Context, reader tableReaderAt, name hash.Has
 	if err != nil {
 		return nil, err
 	}
+	// The caller closes |reader|.
+	defer aRdr.indexReader.Close()
 
 	if aRdr.footer.formatVersion > archiveFormatVersionMax {
 		return nil, ErrInvalidFormatVersion
@@ -354,6 +356,26 @@ func (ar archiveReader) checkChunkRefs() error {
 			return fmt.Errorf("%w: chunk %d of %d names dictionary byte span %d, of %d",
 				ErrCorruptArchiveIndex, i, ar.footer.chunkCount, dict, ar.footer.byteSpanCount)
 		}
+	}
+	return nil
+}
+
+// checkChunkRef keeps a damaged index from causing empty or enormous reads.
+func (ar *archiveReader) checkChunkRef(rc resolvedChunk) error {
+	if err := ar.checkSpan(rc.dataId); err != nil || rc.dictId == 0 {
+		return err
+	}
+	return ar.checkSpan(rc.dictId)
+}
+
+func (ar *archiveReader) checkSpan(id uint32) error {
+	if id == 0 || id > ar.footer.byteSpanCount {
+		return fmt.Errorf("%w: byte span %d of %d", ErrCorruptArchiveIndex, id, ar.footer.byteSpanCount)
+	}
+	span := ar.getByteSpanByID(id)
+	end := span.offset + span.length
+	if span.length == 0 || end < span.offset || end > ar.footer.dataSpan().length {
+		return fmt.Errorf("%w: byte span %d at %d of length %d is outside the data section", ErrCorruptArchiveIndex, id, span.offset, span.length)
 	}
 	return nil
 }
@@ -699,6 +721,9 @@ func (ar *archiveReader) getRaw(ctx context.Context, hash hash.Hash, stats *Stat
 	if !ok {
 		return nil, nil, nil
 	}
+	if err = ar.checkChunkRef(rc); err != nil {
+		return nil, nil, err
+	}
 
 	return ar.getRawByRef(ctx, rc.dictId, rc.dataId, stats)
 }
@@ -805,6 +830,9 @@ func (r *bridgeReaderAt) ReadAt(p []byte, off int64) (n int, err error) {
 }
 
 func (ar *archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error, stats *Stats) error {
+	if err := ar.checkByteSpans(); err != nil {
+		return err
+	}
 	// Build reverse indexes for dictionary and data ByteSpans
 	// dictReverseIndex: Dictionary ByteSpan ID -> struct{} - indicates that we expect that span to be a dictionary.
 	// dataReverseIndex: Data ByteSpan ID -> chunk ref index - indicates that we expect that span to be a data chunk,
@@ -884,7 +912,7 @@ func (ar *archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) erro
 			} else {
 				dict, ok := loadedDictionaries[dictId]
 				if !ok {
-					panic("Reverse Index incomplete: Dictionary ID not found in loaded dictionaries")
+					return fmt.Errorf("%w: dictionary span %d does not precede the data span %d using it", ErrCorruptArchiveIndex, dictId, byteSpanCounter)
 				}
 
 				chunkData, err = gozstd.DecompressDict(nil, spanData, dict)
@@ -899,7 +927,7 @@ func (ar *archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) erro
 				return err
 			}
 		} else {
-			panic("Reverse Index incomplete: ByteSpan ID not found in either dictionary or data reverse index")
+			return fmt.Errorf("%w: byte span %d is neither a dictionary nor chunk data", ErrCorruptArchiveIndex, byteSpanCounter)
 		}
 		byteSpanCounter++
 	}
@@ -937,6 +965,10 @@ func (ar *archiveReader) tolerantIterate(ctx context.Context, cb func(chunks.Chu
 			return
 		}
 
+		if err := ar.checkSpan(byteSpanCounter); err != nil {
+			errCb(err)
+			return
+		}
 		span := ar.getByteSpanByID(byteSpanCounter)
 		for cap(buf) < int(span.length) {
 			buf = append(buf, make([]byte, cap(buf))...)

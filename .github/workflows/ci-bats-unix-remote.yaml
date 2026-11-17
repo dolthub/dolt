@@ -77,7 +77,7 @@ jobs:
         if: env.use_credentials != 'true'
         working-directory: ./.ci_bin
         run: |
-          curl -LO https://downloads.apache.org/hadoop/common/hadoop-3.3.6/hadoop-3.3.6.tar.gz
+          curl -fsSLO https://dolthub-tools.s3.us-west-2.amazonaws.com/hadoop-3.3.6.tar.gz
           tar xvf hadoop-3.3.6.tar.gz
           echo "$(pwd)/hadoop-3.3.6/bin" >> $GITHUB_PATH
       - name: Install parquet-cli
