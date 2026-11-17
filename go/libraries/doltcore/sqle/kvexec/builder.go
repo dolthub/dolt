@@ -115,7 +115,7 @@ func (b *Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, e
 					if lrCmp, llCmp, ok := mergeComparer(ctx, filters[0], leftState, rightState, projections); ok {
 						split := len(leftState.tags)
 						var rowJoiner *prollyToSqlJoiner
-						rowJoiner = newRowJoiner(ctx, []schema.Schema{leftState.priSch, rightState.priSch}, []int{split}, projections, leftState.idxMap.NodeStore())
+						rowJoiner = newRowJoiner(ctx, []schema.Schema{leftState.priSch, rightState.priSch}, []int{split}, projections, []tree.NodeStore{leftState.idxMap.NodeStore(), rightState.idxMap.NodeStore()})
 						if iter, err := newMergeKvIter(leftState, rightState, rowJoiner, lrCmp, llCmp, filters, n.Op.IsLeftOuter(), n.Op.IsExcludeNulls()); err == nil {
 							iter.isReversed = n.IsReversed
 							return iter, nil
@@ -176,7 +176,7 @@ func (b *Builder) newTupleLookupKvIter(
 
 	split := len(srcTags)
 	projections := append(srcTags, dstTags...)
-	rowJoiner := newRowJoiner(ctx, []schema.Schema{srcSchema, dstIter.Schema()}, []int{split}, projections, dstIter.NodeStore())
+	rowJoiner := newRowJoiner(ctx, []schema.Schema{srcSchema, dstIter.Schema()}, []int{split}, projections, []tree.NodeStore{srcMap.NodeStore(), dstIter.NodeStore()})
 	return newLookupKvIter(
 		srcIter,
 		dstIter,
@@ -218,7 +218,6 @@ func simpleLookupExpressions(keyExprs []sql.Expression) bool {
 
 // prollyToSqlJoiner converts a list of KV pairs into a sql.Row
 type prollyToSqlJoiner struct {
-	ns tree.NodeStore
 	// kvSplits are offsets between consecutive kv pairs
 	kvSplits    []int
 	desc        []kvDesc
@@ -227,13 +226,16 @@ type prollyToSqlJoiner struct {
 }
 
 type kvDesc struct {
+	// ns resolves out-of-line values for this source. Sources may come from different databases.
+	ns          tree.NodeStore
 	keyDesc     *val.TupleDesc
 	valDesc     *val.TupleDesc
 	keyMappings []int
 	valMappings []int
 }
 
-func newRowJoiner(ctx *sql.Context, schemas []schema.Schema, splits []int, projections []uint64, ns tree.NodeStore) *prollyToSqlJoiner {
+// newRowJoiner builds a joiner for |schemas|, where |nodeStores| holds the NodeStore for each schema.
+func newRowJoiner(ctx *sql.Context, schemas []schema.Schema, splits []int, projections []uint64, nodeStores []tree.NodeStore) *prollyToSqlJoiner {
 	numPhysicalColumns := getPhysicalColCount(schemas, splits, projections)
 
 	// last kv pair can safely look ahead for its end range
@@ -269,7 +271,9 @@ func newRowJoiner(ctx *sql.Context, schemas []schema.Schema, splits []int, proje
 			if splitIdx > 0 {
 				mappingStartIdx = splits[splitIdx-1] - virtualCnt
 			}
+			ns := nodeStores[splitIdx]
 			tupleDesc = append(tupleDesc, kvDesc{
+				ns:          ns,
 				keyDesc:     sch.GetKeyDescriptor(ns),
 				valDesc:     sch.GetValueDescriptor(ns),
 				keyMappings: allMap[mappingStartIdx:nextKeyIdx],               // prev kv partition -> last key of this partition
@@ -313,7 +317,6 @@ func newRowJoiner(ctx *sql.Context, schemas []schema.Schema, splits []int, proje
 		kvSplits:    kvSplits,
 		desc:        tupleDesc,
 		ordMappings: allMap[numPhysicalColumns:],
-		ns:          ns,
 		outCnt:      len(projections),
 	}
 }
@@ -346,7 +349,7 @@ func (m *prollyToSqlJoiner) buildRowInto(ctx context.Context, row sql.Row, tuple
 		}
 		for j, idx := range desc.keyMappings {
 			outputIdx := m.ordMappings[split+j]
-			row[outputIdx], err = tree.GetField(ctx, desc.keyDesc, idx, tup, m.ns)
+			row[outputIdx], err = tree.GetField(ctx, desc.keyDesc, idx, tup, desc.ns)
 			if err != nil {
 				return err
 			}
@@ -354,7 +357,7 @@ func (m *prollyToSqlJoiner) buildRowInto(ctx context.Context, row sql.Row, tuple
 		tup = tuples[2*i+1]
 		for j, idx := range desc.valMappings {
 			outputIdx := m.ordMappings[split+len(desc.keyMappings)+j]
-			row[outputIdx], err = tree.GetField(ctx, desc.valDesc, idx, tup, m.ns)
+			row[outputIdx], err = tree.GetField(ctx, desc.valDesc, idx, tup, desc.ns)
 			if err != nil {
 				return err
 			}
