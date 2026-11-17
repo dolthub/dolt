@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"unicode"
 	"unicode/utf8"
 
@@ -140,14 +141,17 @@ type RootValue interface {
 
 // rootValue is Dolt's implementation of RootValue.
 type rootValue struct {
-	vrw      types.ValueReadWriter
-	ns       tree.NodeStore
-	st       rootValueStorage
-	fkc      *ForeignKeyCollection // cache the first load
-	fkcLock  sync.Mutex            // guards fkc, which may be loaded from multiple sessions sharing this root
-	rootHash hash.Hash             // cache the first load
-	// tablesHash is a digest of the table names
-	tablesHash uint64
+	vrw     types.ValueReadWriter
+	ns      tree.NodeStore
+	st      rootValueStorage
+	fkc     *ForeignKeyCollection // cache the first load
+	fkcLock sync.Mutex            // guards fkc, which may be loaded from multiple sessions sharing this root
+	// rootHash caches the first HashOf. Root values are shared between
+	// sessions, so it is set atomically.
+	rootHash atomic.Pointer[hash.Hash]
+	// tablesHash is a digest of the table names, set atomically for the
+	// same reason.
+	tablesHash atomic.Uint64
 	// schemaHashes keeps a list of table schema hashes
 	schemaHashes map[TableName]hash.Hash
 }
@@ -297,9 +301,6 @@ func (root *rootValue) GetConflictRootObjects(ctx context.Context) ([]ConflictRo
 }
 
 func (root *rootValue) GetTableSchemaHash(ctx context.Context, tName TableName) (hash.Hash, error) {
-	if root.schemaHashes == nil {
-		root.schemaHashes = make(map[TableName]hash.Hash)
-	}
 	key, ok := root.schemaHashes[tName]
 	if !ok {
 		tab, ok, err := root.GetTable(ctx, tName)
@@ -473,7 +474,7 @@ func GetAllSchemas(ctx context.Context, root RootValue) (map[TableName]schema.Sc
 }
 
 func (root *rootValue) TableListHash() uint64 {
-	return root.tablesHash
+	return root.tablesHash.Load()
 }
 
 func (root *rootValue) GetTableHash(ctx context.Context, tName TableName) (hash.Hash, bool, error) {
@@ -614,7 +615,7 @@ func (root *rootValue) GetTableNames(ctx context.Context, schemaName string, _ b
 		return nil, err
 	}
 
-	root.tablesHash = tablesHash.Sum64()
+	root.tablesHash.Store(tablesHash.Sum64())
 
 	return names, nil
 }
@@ -959,7 +960,7 @@ func (root *rootValue) putTable(ctx context.Context, tName TableName, ref types.
 	}
 
 	var preserveTablesHash bool
-	if root.tablesHash != 0 {
+	if root.tablesHash.Load() != 0 {
 		var err error
 		_, preserveTablesHash, err = root.GetTable(ctx, tName)
 		if err != nil {
@@ -985,7 +986,7 @@ func (root *rootValue) putTable(ctx context.Context, tName TableName, ref types.
 	ret := root.withStorage(newStorage)
 	if preserveTablesHash {
 		// maintain |tablesHash| if we are replacing a table,
-		ret.tablesHash = root.tablesHash
+		ret.tablesHash.Store(root.tablesHash.Load())
 	}
 	if preserveSchHash {
 		// certain updates can safely reuse the previous map
@@ -1114,14 +1115,15 @@ func (root *rootValue) DropDatabaseSchema(ctx context.Context, dbSchema schema.D
 
 // HashOf gets the hash of the root value
 func (root *rootValue) HashOf() (hash.Hash, error) {
-	if root.rootHash.IsEmpty() {
-		var err error
-		root.rootHash, err = root.st.nomsValue().Hash(root.vrw.Format())
-		if err != nil {
-			return hash.Hash{}, nil
-		}
+	if cached := root.rootHash.Load(); cached != nil {
+		return *cached, nil
 	}
-	return root.rootHash, nil
+	h, err := root.st.nomsValue().Hash(root.vrw.Format())
+	if err != nil {
+		return hash.Hash{}, nil
+	}
+	root.rootHash.Store(&h)
+	return h, nil
 }
 
 // RenameTable renames a table by changing its string key in the RootValue's table map. In order to preserve

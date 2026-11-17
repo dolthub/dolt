@@ -17,12 +17,15 @@ package doltdb
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -78,4 +81,40 @@ func TestFoldString(t *testing.T) {
 	require.Equal(t, "child_1", foldString("CHILD_1"))
 	require.Equal(t, foldString("σ"), foldString("ς"))
 	require.NotEqual(t, foldString("İ"), foldString("i"))
+}
+
+// A root value is shared by every session reading the same working set, so the
+// values it caches on first use must be safe to fill in from several goroutines.
+func TestRootValueCachesAreSafeForConcurrentUse(t *testing.T) {
+	ctx := context.Background()
+	ddb, err := LoadDoltDB(ctx, types.Format_DOLT, InMemDoltDB, filesys.LocalFS)
+	require.NoError(t, err)
+	defer ddb.Close()
+
+	root, err := EmptyRootValue(ctx, ddb.ValueReadWriter(), ddb.NodeStore())
+	require.NoError(t, err)
+
+	const goroutines = 8
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			_, err := root.GetTableNames(ctx, DefaultSchemaName, false)
+			assert.NoError(t, err)
+			_ = root.TableListHash()
+			_, err = root.HashOf()
+			assert.NoError(t, err)
+			_, err = root.GetTableSchemaHash(ctx, TableName{Name: "missing", Schema: DefaultSchemaName})
+			assert.NoError(t, err)
+		}()
+	}
+	close(start)
+	wg.Wait()
+
+	want, err := root.HashOf()
+	require.NoError(t, err)
+	require.False(t, want.IsEmpty())
 }
