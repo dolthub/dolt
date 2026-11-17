@@ -538,3 +538,32 @@ teardown_tcp_tarpit() {
     [ "$ELAPSED" -lt 6 ]
 }
 
+@test "no-repo: DOLT_DISABLE_VERSION_CHECKS suppresses out of date warning" {
+    # https://github.com/dolthub/dolt/issues/12479
+    rm -f "$DOLT_ROOT_PATH"/.dolt/version_check.txt
+    with_http_proxy_env "127.0.0.1" "$(definePORT)"
+
+    run env DOLT_DISABLE_VERSION_CHECKS=1 dolt version
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "Warning: unable to query latest released Dolt version" ]] || false
+    [ ! -f "$DOLT_ROOT_PATH/.dolt/version_check.txt" ]
+
+    echo "3.0.0" > $DOLT_ROOT_PATH/.dolt/version_check.txt
+
+    for val in 1 true TRUE t; do
+        run env DOLT_DISABLE_VERSION_CHECKS="$val" dolt version
+        [ "$status" -eq 0 ]
+        [[ ! "$output" =~ "Warning: you are on an old version of Dolt" ]] || false
+    done
+
+    for val in 0 false f invalid; do
+        run env DOLT_DISABLE_VERSION_CHECKS="$val" dolt version
+        [ "$status" -eq 0 ]
+        [[ "$output" =~ "Warning: you are on an old version of Dolt" ]] || false
+    done
+
+    dolt config --global --add versioncheck.disabled true
+    run env DOLT_DISABLE_VERSION_CHECKS=false dolt version
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "Warning: you are on an old version of Dolt" ]] || false
+}

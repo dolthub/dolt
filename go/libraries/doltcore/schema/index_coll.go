@@ -91,6 +91,8 @@ type IndexProperties struct {
 	ColumnOrders []sql.IndexColumnOrder
 	// OpClasses is the operator class of each indexed column, nil when no column has one.
 	OpClasses []string
+	// NullsNotDistinct is whether a unique index treats NULLs as equal to each other.
+	NullsNotDistinct bool
 	FullTextProperties
 	IsVector bool
 	VectorProperties
@@ -231,6 +233,7 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 		prefixLengths:    prefixLengths,
 		columnOrders:     props.ColumnOrders,
 		opClasses:        props.OpClasses,
+		nullsNotDistinct: props.NullsNotDistinct,
 		fullTextProps:    props.FullTextProperties,
 		vectorProperties: props.VectorProperties,
 	}
@@ -256,6 +259,7 @@ func (ixc *indexCollectionImpl) UnsafeAddIndexByColTags(indexName string, tags [
 		prefixLengths:    prefixLengths,
 		columnOrders:     props.ColumnOrders,
 		opClasses:        props.OpClasses,
+		nullsNotDistinct: props.NullsNotDistinct,
 		fullTextProps:    props.FullTextProperties,
 		vectorProperties: props.VectorProperties,
 	}
@@ -446,6 +450,7 @@ func (ixc *indexCollectionImpl) Merge(indexes ...Index) {
 				prefixLengths:    index.PrefixLengths(),
 				columnOrders:     index.ColumnOrders(),
 				opClasses:        index.OpClasses(),
+				nullsNotDistinct: index.NullsNotDistinct(),
 				fullTextProps:    index.FullTextProperties(),
 				vectorProperties: index.VectorProperties(),
 			}

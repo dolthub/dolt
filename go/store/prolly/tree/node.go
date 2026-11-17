@@ -73,6 +73,15 @@ func WalkAddresses(ctx context.Context, nd *Node, ns NodeStore, cb AddressCb) er
 	})
 }
 
+// WalkNodeAddresses calls |cb| on each address |nd| references directly. These are the addresses GC records for
+// |nd|'s chunk, and don't include |nd|'s own address.
+func WalkNodeAddresses(ctx context.Context, nd *Node, cb AddressCb) error {
+	if nd.empty() {
+		return nil
+	}
+	return walkAddresses(ctx, nd, cb)
+}
+
 type NodeCb func(ctx context.Context, nd *Node) error
 
 // WalkNodes runs a callback function on every node found in the DFS of |nd|

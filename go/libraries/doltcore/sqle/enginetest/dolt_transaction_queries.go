@@ -3237,6 +3237,80 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 			},
 		},
 	},
+	{
+		Name: "an update that changes a unique key frees the old key for an insert in the same transaction",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY, col1 int UNIQUE);",
+			"INSERT INTO t VALUES (1, 5);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ START TRANSACTION;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ START TRANSACTION;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ INSERT INTO t VALUES (3, 9);",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ UPDATE t SET col1 = 6 WHERE pk = 1;",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:    "/* client b */ INSERT INTO t VALUES (2, 5);",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ COMMIT;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ COMMIT;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ SELECT * FROM t ORDER BY pk;",
+				Expected: []sql.Row{{1, 6}, {2, 5}, {3, 9}},
+			},
+		},
+	},
+	{
+		Name: "a row inserted on the old schema takes the default of a new column in a unique key",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY, col1 int);",
+			"INSERT INTO t VALUES (1, 5);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client b */ START TRANSACTION;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ INSERT INTO t VALUES (2, 5);",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				// DDL commits implicitly
+				Query:    "/* client a */ ALTER TABLE t ADD COLUMN col2 int DEFAULT 10, ADD UNIQUE KEY u (col1, col2);",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query: "/* client b */ COMMIT;",
+				ExpectedErrStr: dsess.ErrUnresolvedConstraintViolationsCommit.Error() + dsess.ConstraintViolationsListPrefix +
+					"\nType: Unique Key Constraint Violation,\n" +
+					"\tName: u,\n" +
+					"\tColumns: [col1 col2] (2 row(s))",
+			},
+			{
+				Query:    "/* client a */ SELECT * FROM t ORDER BY pk;",
+				Expected: []sql.Row{{1, 5, 10}},
+			},
+		},
+	},
 	//	{
 	//		Name:        "Run GC concurrently with other transactions",
 	//		SetUpScript: gcSetup(),

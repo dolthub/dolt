@@ -16,6 +16,8 @@ package binlogreplication
 
 import (
 	"context"
+	"encoding/binary"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -115,42 +117,76 @@ func TestFindLogFileForPosition(t *testing.T) {
 // the end of the previous file that the replica has not executed must still be streamed,
 // and before any GTID written after the restart.
 func TestBinlogStreamResumesTailBeforeRestartRotation(t *testing.T) {
+	t.Run("no checksum", func(t *testing.T) {
+		testStreamResumesTailBeforeRestartRotation(t, mysql.BinlogChecksumAlgOff)
+	})
+	t.Run("restart enables checksums", func(t *testing.T) {
+		testStreamResumesTailBeforeRestartRotation(t, mysql.BinlogChecksumAlgCRC32)
+	})
+}
+
+// testStreamResumesTailBeforeRestartRotation verifies legacy restart rotation with either stored checksum format.
+func testStreamResumesTailBeforeRestartRotation(t *testing.T, newChecksum byte) {
+	t.Helper()
 	format := mysql.NewMySQL56BinlogFormat()
+	format.ChecksumAlgorithm = mysql.BinlogChecksumAlgOff
+	newFormat := format
+	newFormat.ChecksumAlgorithm = newChecksum
 	meta := mysql.BinlogEventMetadata{ServerID: 42}
 	sid := mysql.SID{1}
 	gtid := func(n int64) mysql.Mysql56GTID { return mysql.Mysql56GTID{Server: sid, Sequence: n} }
 	first, second := "binlog-main.000001", "binlog-main.000002"
-	previous := mysql.Mysql56GTIDSet{}.AddGTID(gtid(1)).AddGTID(gtid(2)).AddGTID(gtid(3))
+	previous := mysql.Mysql56GTIDSet{}.AddGTID(gtid(1)).AddGTID(gtid(2)).AddGTID(gtid(3)).AddGTID(gtid(4))
 	m, dir := newFileBackedStreamerManager(t, format, meta, map[string][]mysql.BinlogEvent{
 		first: {
 			mysql.NewPreviousGtidsEvent(format, meta, mysql.Mysql56GTIDSet{}),
 			mysql.NewMySQLGTIDEvent(format, meta, gtid(1), false),
 			mysql.NewMySQLGTIDEvent(format, meta, gtid(2), false),
 			mysql.NewMySQLGTIDEvent(format, meta, gtid(3), false),
-			mysql.NewRotateEvent(format, meta, 4, second),
+			mysql.NewMySQLGTIDEvent(format, meta, gtid(4), false),
+			mysql.NewRotateEvent(newFormat, meta, 0, second),
 		},
-		// The file created on restart holds only the Previous GTIDs event when the replica connects.
-		second: {mysql.NewPreviousGtidsEvent(format, meta, previous.(mysql.Mysql56GTIDSet))},
 	})
+	// The newly rotated file holds the framing events in the restarted server's checksum format.
+	secondPath := filepath.Join(dir, second)
+	require.NoError(t, os.WriteFile(secondPath, binlogFileMagicNumber, 0644))
+	appendBinlogEvents(t, secondPath, mysql.NewFormatDescriptionEvent(newFormat, meta),
+		mysql.NewPreviousGtidsEvent(newFormat, meta, previous.(mysql.Mysql56GTIDSet)))
 	m.logManager.currentBinlogFileName = second
+	m.logManager.binlogFormat = newFormat
 
-	// The replica executed GTIDs 1-2; GTID 3 is the unexecuted tail of the previous file.
-	executed := mysql.Mysql56GTIDSet{}.AddGTID(gtid(1)).AddGTID(gtid(2))
+	// Give the replica a gap so it needs GTID 3 from the old file but skips GTID 4.
+	// GTID 4 is the last transaction before rotation. The streamer must clear its
+	// skip flag so the ROTATE and the next file's headers reach the replica.
+	executed := mysql.Mysql56GTIDSet{}.AddGTID(gtid(1)).AddGTID(gtid(2)).AddGTID(gtid(4))
 	server, client := binlogStreamTCPPair(t)
 	result := make(chan error, 1)
 	go func() {
-		result <- m.StartStream(sql.NewEmptyContext(), &mysql.Conn{Conn: server}, executed, &format, meta)
+		result <- m.StartStream(sql.NewEmptyContext(), &mysql.Conn{Conn: server}, executed, &newFormat, meta)
 	}()
 
 	// One mysql.Conn for the whole stream keeps its packet sequence numbers in step.
 	replica := &mysql.Conn{Conn: client}
 	require.Equal(t, gtid(3), readNextStreamGTID(t, replica, format))
-	appendBinlogEvents(t, filepath.Join(dir, second), mysql.NewMySQLGTIDEvent(format, meta, gtid(4), false))
-	require.Equal(t, gtid(4), readNextStreamGTID(t, replica, format))
+	event := readStreamBinlogEvent(t, replica)
+	require.True(t, event.IsRotate())
+	payload := event.Bytes()[format.HeaderLength:]
+	require.Greater(t, len(payload), 8)
+	require.Equal(t, uint64(4), binary.LittleEndian.Uint64(payload[:8]))
+	require.Equal(t, second, string(payload[8:]))
+	description := readStreamBinlogEvent(t, replica)
+	require.True(t, description.IsFormatDescription())
+	nextFormat, err := description.Format()
+	require.NoError(t, err)
+	require.Equal(t, newChecksum, nextFormat.ChecksumAlgorithm)
+	require.True(t, readStreamBinlogEvent(t, replica).IsPreviousGTIDs())
+
+	appendBinlogEvents(t, secondPath, mysql.NewMySQLGTIDEvent(newFormat, meta, gtid(5), false))
+	require.Equal(t, gtid(5), readNextStreamGTID(t, replica, nextFormat))
 
 	require.NoError(t, client.SetLinger(0))
 	require.NoError(t, client.Close())
-	appendBinlogEvents(t, filepath.Join(dir, second), mysql.NewQueryEvent(format, meta, mysql.Query{SQL: "SELECT 1"}))
+	appendBinlogEvents(t, secondPath, mysql.NewQueryEvent(newFormat, meta, mysql.Query{SQL: "SELECT 1"}))
 	select {
 	case err := <-result:
 		require.Error(t, err)
@@ -164,15 +200,21 @@ func readNextStreamGTID(t *testing.T, client *mysql.Conn, format mysql.BinlogFor
 	t.Helper()
 	require.NoError(t, client.Conn.SetReadDeadline(time.Now().Add(5*time.Second)))
 	for {
-		packet, err := client.ReadPacket(context.Background())
-		require.NoError(t, err)
-		require.NotEmpty(t, packet)
-		require.Equal(t, byte(0), packet[0], "binlog packet must have an OK prefix")
-		event := mysql.NewMysql56BinlogEvent(packet[1:])
+		event := readStreamBinlogEvent(t, client)
 		if event.IsGTID() {
 			gtid, _, err := event.GTID(format)
 			require.NoError(t, err)
 			return gtid
 		}
 	}
+}
+
+// readStreamBinlogEvent reads a replication packet and checks its OK prefix.
+func readStreamBinlogEvent(t *testing.T, client *mysql.Conn) mysql.BinlogEvent {
+	t.Helper()
+	packet, err := client.ReadPacket(context.Background())
+	require.NoError(t, err)
+	require.NotEmpty(t, packet)
+	require.Equal(t, byte(0), packet[0], "binlog packet must have an OK prefix")
+	return mysql.NewMysql56BinlogEvent(packet[1:])
 }

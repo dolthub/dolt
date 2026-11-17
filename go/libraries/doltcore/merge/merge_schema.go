@@ -367,14 +367,15 @@ func ForeignKeysMerge(ctx *sql.Context, tableResolver doltdb.TableResolver, merg
 		return false, err
 	})
 
+	merged := common.Builder()
 	err = ourNewFKs.Iter(func(ourFK doltdb.ForeignKey) (stop bool, err error) {
 		// The common set of FKs may already have this FK, if it was added on both branches
-		if commonFK, ok := common.GetByNameCaseInsensitive(ourFK.Name, ourFK.TableName); ok && commonFK.EqualDefs(ourFK) {
+		if commonFK, ok := merged.GetByNameCaseInsensitive(ourFK.Name, ourFK.TableName); ok && commonFK.EqualDefs(ourFK) {
 			// Skip this one if it's identical to the one in the common set
 			return false, nil
 		}
 
-		return false, common.AddKeys(ourFK)
+		return false, merged.AddKeys(ourFK)
 	})
 	if err != nil {
 		return nil, nil, err
@@ -382,16 +383,17 @@ func ForeignKeysMerge(ctx *sql.Context, tableResolver doltdb.TableResolver, merg
 
 	err = theirNewFKs.Iter(func(theirFK doltdb.ForeignKey) (stop bool, err error) {
 		// The common set of FKs may already have this FK, if it was added on both branches
-		if commonFK, ok := common.GetByNameCaseInsensitive(theirFK.Name, theirFK.TableName); ok && commonFK.EqualDefs(theirFK) {
+		if commonFK, ok := merged.GetByNameCaseInsensitive(theirFK.Name, theirFK.TableName); ok && commonFK.EqualDefs(theirFK) {
 			// Skip this one if it's identical to the one in the common set
 			return false, nil
 		}
 
-		return false, common.AddKeys(theirFK)
+		return false, merged.AddKeys(theirFK)
 	})
 	if err != nil {
 		return nil, nil, err
 	}
+	common = merged.Build()
 
 	common, err = pruneInvalidForeignKeys(ctx, tableResolver, common, mergedRoot)
 	if err != nil {
@@ -966,7 +968,8 @@ func foreignKeysInCommon(
 	ourFKs, theirFKs, ancFKs *doltdb.ForeignKeyCollection,
 	ancSchs map[doltdb.TableName]schema.Schema,
 ) (common *doltdb.ForeignKeyCollection, conflicts []FKConflict, err error) {
-	common, _ = doltdb.NewForeignKeyCollection()
+	empty, _ := doltdb.NewForeignKeyCollection()
+	builder := empty.Builder()
 	err = ourFKs.Iter(func(ours doltdb.ForeignKey) (stop bool, err error) {
 
 		// Since we aren't using an ancestor root here, pass true for the
@@ -979,7 +982,7 @@ func foreignKeysInCommon(
 		}
 
 		if theirs.EqualDefs(ours) {
-			err = common.AddKeys(ours)
+			err = builder.AddKeys(ours)
 			return false, err
 		}
 
@@ -995,7 +998,7 @@ func foreignKeysInCommon(
 
 		if theirs.EqualDefs(anc) {
 			// FK modified on our branch since the ancestor
-			fk, ok := common.GetByNameCaseInsensitive(ours.Name, ours.TableName)
+			fk, ok := builder.GetByNameCaseInsensitive(ours.Name, ours.TableName)
 			if ok {
 				conflicts = append(conflicts, FKConflict{
 					Kind:   NameCollision,
@@ -1003,14 +1006,14 @@ func foreignKeysInCommon(
 					Theirs: fk,
 				})
 			} else {
-				err = common.AddKeys(ours)
+				err = builder.AddKeys(ours)
 			}
 			return false, err
 		}
 
 		if ours.EqualDefs(anc) {
 			// FK modified on their branch since the ancestor
-			fk, ok := common.GetByNameCaseInsensitive(theirs.Name, theirs.TableName)
+			fk, ok := builder.GetByNameCaseInsensitive(theirs.Name, theirs.TableName)
 			if ok {
 				conflicts = append(conflicts, FKConflict{
 					Kind:   NameCollision,
@@ -1018,7 +1021,7 @@ func foreignKeysInCommon(
 					Theirs: theirs,
 				})
 			} else {
-				err = common.AddKeys(theirs)
+				err = builder.AddKeys(theirs)
 			}
 			return false, err
 		}
@@ -1036,7 +1039,7 @@ func foreignKeysInCommon(
 		return nil, nil, err
 	}
 
-	return common, conflicts, nil
+	return builder.Build(), conflicts, nil
 }
 
 // fkCollSetDifference returns a collection of all foreign keys that are in the given collection but not the ancestor
@@ -1046,11 +1049,12 @@ func fkCollSetDifference(
 	fkColl, ancestorFkColl *doltdb.ForeignKeyCollection,
 	ancSchs map[doltdb.TableName]schema.Schema,
 ) (d *doltdb.ForeignKeyCollection, err error) {
-	d, _ = doltdb.NewForeignKeyCollection()
+	empty, _ := doltdb.NewForeignKeyCollection()
+	builder := empty.Builder()
 	err = fkColl.Iter(func(fk doltdb.ForeignKey) (stop bool, err error) {
 		_, ok := ancestorFkColl.GetMatchingKey(fk, ancSchs, false)
 		if !ok {
-			err = d.AddKeys(fk)
+			err = builder.AddKeys(fk)
 		}
 		return false, err
 	})
@@ -1059,11 +1063,11 @@ func fkCollSetDifference(
 		return nil, err
 	}
 
-	return d, nil
+	return builder.Build(), nil
 }
 
-// pruneInvalidForeignKeys removes from a ForeignKeyCollection any ForeignKey whose parent/child table/columns have been
-// removed. The collection is modified in place and returned.
+// pruneInvalidForeignKeys returns a copy of a ForeignKeyCollection without any ForeignKey whose parent/child
+// table/columns have been removed.
 func pruneInvalidForeignKeys(ctx *sql.Context, tableResolver doltdb.TableResolver, fkColl *doltdb.ForeignKeyCollection, mergedRoot doltdb.RootValue) (*doltdb.ForeignKeyCollection, error) {
 	// Every foreign key needs the schemas of its parent and its child, and many foreign keys share a table. Each table
 	// of |mergedRoot| is resolved once, as in doltdb.ValidateForeignKeysOnSchemas. A table that does not exist is
@@ -1117,10 +1121,11 @@ func pruneInvalidForeignKeys(ctx *sql.Context, tableResolver doltdb.TableResolve
 		return true, nil
 	}
 
+	pruned := fkColl.Builder()
 	err := fkColl.Iter(func(fk doltdb.ForeignKey) (stop bool, err error) {
 		valid, err := isValid(fk)
 		if err == nil && !valid {
-			fkColl.RemoveKeyByName(fk.Name, fk.TableName)
+			pruned.RemoveKeyByName(fk.Name, fk.TableName)
 		}
 		return false, err
 	})
@@ -1128,7 +1133,7 @@ func pruneInvalidForeignKeys(ctx *sql.Context, tableResolver doltdb.TableResolve
 		return nil, err
 	}
 
-	return fkColl, nil
+	return pruned.Build(), nil
 }
 
 // checksInCommon finds all the common checks between ourChks, theirChks, and ancChks, and detects varying conflicts

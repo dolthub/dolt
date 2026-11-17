@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expranalysis"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
@@ -618,7 +619,7 @@ type virtualRowMerger struct {
 
 func newVirtualRowMerger(ctx *sql.Context, name doltdb.TableName, sch schema.Schema, sides virtualMergeSides, ns tree.NodeStore, conversionConflicts bool) (*virtualRowMerger, error) {
 	rm := &virtualRowMerger{
-		vm:                  NewValueMerger(ctx, sch, sides.xSch, sides.ySch, sides.baseSch, sides.x.Pool(), ns),
+		vm:                  NewValueMerger(ctx, sch, sides.xSch, sides.ySch, sides.baseSch, sides.x.Pool(), ns, name.Name),
 		tableName:           name.Name,
 		sch:                 sch,
 		ns:                  ns,
@@ -940,7 +941,11 @@ func updateSecondaryIndex(ctx *sql.Context, tbl *doltdb.Table, indexes durable.I
 		return nil, err
 	}
 	if !ok || index.IsVector() || index.IsFullText() {
-		return creation.BuildProllyIndexExternal(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, name.Name, index, rows, nil, nil)
+		predicate, err := expranalysis.ResolveIndexPredicate(ctx, name.Name, sch, index)
+		if err != nil {
+			return nil, err
+		}
+		return creation.BuildProllyIndexExternal(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, name.Name, index, rows, nil, predicate)
 	}
 	idx, err := indexes.GetIndex(ctx, sch, nil, index.Name())
 	if err != nil {
