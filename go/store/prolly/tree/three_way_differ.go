@@ -212,7 +212,7 @@ func (d *ThreeWayDiffer[K, O]) Next(ctx *sql.Context) (ThreeWayDiff, error) {
 			default:
 			}
 		case dsNewLeft:
-			res = d.newLeftEdit(d.lDiff.Key, d.lDiff.To, d.lDiff.Type)
+			res = d.newLeftEdit(d.lDiff.Key, d.lDiff.From, d.lDiff.To, d.lDiff.Type)
 			d.lDiff, err = d.lIter.Next(ctx)
 			if errors.Is(err, io.EOF) {
 				d.lDone = true
@@ -325,7 +325,7 @@ type ThreeWayDiff struct {
 	Op DiffOp
 }
 
-func (d *ThreeWayDiffer[K, O]) newLeftEdit(key, left Item, typ DiffType) ThreeWayDiff {
+func (d *ThreeWayDiffer[K, O]) newLeftEdit(key, base, left Item, typ DiffType) ThreeWayDiff {
 	var op DiffOp
 	switch typ {
 	case AddedDiff:
@@ -340,6 +340,7 @@ func (d *ThreeWayDiffer[K, O]) newLeftEdit(key, left Item, typ DiffType) ThreeWa
 	return ThreeWayDiff{
 		Op:   op,
 		Key:  val.Tuple(key),
+		Base: val.Tuple(base),
 		Left: val.Tuple(left),
 	}
 }

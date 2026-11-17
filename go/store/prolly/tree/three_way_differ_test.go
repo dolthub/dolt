@@ -29,6 +29,7 @@ import (
 )
 
 type testDiff struct {
+	b  []int
 	l  []int
 	r  []int
 	m  []int
@@ -217,6 +218,22 @@ func TestThreeWayDiffer(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A one-sided modify or delete carries the row it replaced, from either side,
+// so a caller maintaining derived state (a secondary index) can remove what
+// the base row contributed.
+func TestThreeWayDifferOneSidedEditsCarryBase(t *testing.T) {
+	base := [][]int{{1, 10}, {2, 20}, {3, 30}, {4, 40}}
+	left := [][]int{{1, 11}, {3, 30}, {4, 40}}
+	right := [][]int{{1, 10}, {2, 20}, {3, 31}}
+	diffs := runThreeWayDifferWithPolicy(t, base, left, right, nil)
+	require.Equal(t, []testDiff{
+		{op: DiffOpLeftModify, k: 1, b: []int{10}, l: []int{11}},
+		{op: DiffOpLeftDelete, k: 2, b: []int{20}},
+		{op: DiffOpRightModify, k: 3, b: []int{30}, r: []int{31}},
+		{op: DiffOpRightDelete, k: 4, b: []int{40}},
+	}, diffs)
 }
 
 // policyCall records one invocation of a RowMergePolicy under test.
@@ -483,6 +500,7 @@ func formatTestDiff(t *testing.T, d ThreeWayDiff, keyDesc, valDesc *val.TupleDes
 	return testDiff{
 		op: d.Op,
 		k:  int(key),
+		b:  extractTestVal(t, valDesc, d.Base),
 		l:  extractTestVal(t, valDesc, d.Left),
 		r:  extractTestVal(t, valDesc, d.Right),
 		m:  extractTestVal(t, valDesc, d.Merged),
