@@ -2323,9 +2323,20 @@ type valueMerger struct {
 	alwaysMergeJSON                        bool
 	ns                                     tree.NodeStore
 	valueBuilder                           *val.TupleBuilder
+	// tableName is used to resolve the default expressions of columns added on both sides of the merge.
+	tableName string
+	// addedColumnBases caches the result of addedColumnBase for each stored column of the result schema.
+	addedColumnBases map[int]addedColumnBaseValue
 }
 
-func NewValueMerger(ctx context.Context, merged, leftSch, rightSch, baseSch schema.Schema, syncPool pool.BuffPool, ns tree.NodeStore) *valueMerger {
+// addedColumnBaseValue is the value that a column added on both sides of a merge has in every row that existed
+// before it was added. |ok| is false when there is no such value that the merge can rely on.
+type addedColumnBaseValue struct {
+	value interface{}
+	ok    bool
+}
+
+func NewValueMerger(ctx context.Context, merged, leftSch, rightSch, baseSch schema.Schema, syncPool pool.BuffPool, ns tree.NodeStore, tableName string) *valueMerger {
 	leftMapping, rightMapping, baseMapping := generateSchemaMappings(merged, leftSch, rightSch, baseSch)
 
 	baseToLeftMapping, baseToRightMapping, baseToResultMapping := generateSchemaMappings(baseSch, leftSch, rightSch, merged)
@@ -2350,7 +2361,74 @@ func NewValueMerger(ctx context.Context, merged, leftSch, rightSch, baseSch sche
 		keyless:             schema.IsKeyless(merged),
 		ns:                  ns,
 		valueBuilder:        val.NewTupleBuilder(resultVD, ns),
+		tableName:           tableName,
 	}
+}
+
+// addedColumnBase returns the value of result schema stored column |i| in rows that existed before the column was
+// added, when both sides added the column with the same definition. Both sides backfill such rows with the column's
+// default, which therefore serves as the base value of the column in a three-way merge. Returns false when the column
+// was not added identically on both sides, or when its default can't be relied on: a default that reads other columns
+// or isn't deterministic may have produced different values for each row and side, so it can't stand in for the base.
+func (m *valueMerger) addedColumnBase(ctx *sql.Context, i int) (interface{}, bool) {
+	if base, ok := m.addedColumnBases[i]; ok {
+		return base.value, base.ok
+	}
+
+	value, ok := m.resolveAddedColumnBase(ctx, i)
+	if m.addedColumnBases == nil {
+		m.addedColumnBases = make(map[int]addedColumnBaseValue)
+	}
+	m.addedColumnBases[i] = addedColumnBaseValue{
+		value: value,
+		ok:    ok,
+	}
+	return value, ok
+}
+
+// resolveAddedColumnBase computes the result of addedColumnBase.
+func (m *valueMerger) resolveAddedColumnBase(ctx *sql.Context, i int) (interface{}, bool) {
+	if m.tableName == "" || m.baseMapping[i] != -1 || m.leftMapping[i] == -1 || m.rightMapping[i] == -1 {
+		return nil, false
+	}
+
+	leftCol := m.leftSchema.GetNonPKCols().GetByStoredIndex(m.leftMapping[i])
+	rightCol := m.rightSchema.GetNonPKCols().GetByStoredIndex(m.rightMapping[i])
+	if !leftCol.Equals(rightCol) {
+		return nil, false
+	}
+
+	col := m.resultSchema.GetNonPKCols().GetByStoredIndex(i)
+	if col.Default == "" {
+		// Without a default, existing rows are backfilled with NULL
+		return nil, col.IsNullable()
+	}
+
+	expr, err := expranalysis.ResolveDefaultExpression(ctx, m.tableName, m.resultSchema, col)
+	if err != nil || !expr.Resolved() {
+		return nil, false
+	}
+
+	reliable := !transform.InspectExpr(ctx, expr, func(_ *sql.Context, e sql.Expression) bool {
+		if _, ok := e.(*expression.GetField); ok {
+			return true
+		}
+		nd, ok := e.(sql.NonDeterministicExpression)
+		return ok && nd.IsNonDeterministic()
+	})
+	if !reliable {
+		return nil, false
+	}
+
+	value, err := expr.Eval(ctx, nil)
+	if err != nil {
+		return nil, false
+	}
+	value, _, err = col.TypeInfo.ToSqlType().Convert(ctx, value)
+	if err != nil {
+		return nil, false
+	}
+	return value, true
 }
 
 // generateSchemaMappings returns three schema mappings: 1) mapping the |leftSch| to |mergedSch|,
@@ -2611,6 +2689,28 @@ func (m *valueMerger) processColumn(ctx *sql.Context, i int, left, right, base v
 		// generated columns will be updated as part of the merge later on, so choose either value for now
 		if generatedColumn {
 			return leftVal, false, err
+		}
+
+		// If the row existed in the base, but both sides added this column with the same definition, then both sides
+		// backfilled the row with the column's default, which is effectively the column's base value. If only one side
+		// changed it since, then that side's value wins.
+		if base != nil {
+			if baseVal, ok := m.addedColumnBase(ctx, i); ok {
+				leftCmp, err := sqlType.Compare(ctx, leftVal, baseVal)
+				if err != nil {
+					return nil, false, err
+				}
+				rightCmp, err := sqlType.Compare(ctx, rightVal, baseVal)
+				if err != nil {
+					return nil, false, err
+				}
+				if leftCmp == 0 {
+					return rightVal, false, nil
+				}
+				if rightCmp == 0 {
+					return leftVal, false, nil
+				}
+			}
 		}
 
 		// conflicting inserts
