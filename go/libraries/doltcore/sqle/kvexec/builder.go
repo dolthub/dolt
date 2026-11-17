@@ -233,7 +233,6 @@ type kvDesc struct {
 	valMappings []int
 }
 
-// newRowJoiner builds a joiner for |schemas|, where |nodeStores| holds the NodeStore for each schema.
 func newRowJoiner(ctx *sql.Context, schemas []schema.Schema, splits []int, projections []uint64, nodeStores []tree.NodeStore) *prollyToSqlJoiner {
 	numPhysicalColumns := getPhysicalColCount(schemas, splits, projections)
 
