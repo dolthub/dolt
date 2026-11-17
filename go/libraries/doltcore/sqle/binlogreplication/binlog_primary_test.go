@@ -16,9 +16,11 @@ package binlogreplication
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 	"time"
@@ -274,6 +276,151 @@ func TestBinlogPrimary_GTIDResumeFlags(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestBinlogPrimary_TableIDWireSpelling verifies that names differing only in case get distinct IDs.
+func TestBinlogPrimary_TableIDWireSpelling(t *testing.T) {
+	producer := &binlogProducer{
+		tableIDs:    make(map[string]map[string]uint64),
+		lastTableID: 2,
+	}
+	names := []struct{ database, table string }{
+		{database: "Foo-Bar", table: "events"},
+		{database: "foo-bar", table: "events"},
+		{database: "Foo-Bar", table: "Events"},
+	}
+	var ids []uint64
+	for _, name := range names {
+		id, err := producer.tableID(name.database, name.table)
+		require.NoError(t, err)
+		require.NotContains(t, ids, id)
+		ids = append(ids, id)
+
+		repeated, err := producer.tableID(name.database, name.table)
+		require.NoError(t, err)
+		require.Equal(t, id, repeated)
+	}
+}
+
+// TestBinlogPrimary_TableIDs verifies that row transactions carry fresh table maps and that an ID is
+// stable for a table and distinct across tables, including tables with the same name in different databases.
+func TestBinlogPrimary_TableIDs(t *testing.T) {
+	if runtime.GOOS == "windows" || (runtime.GOOS == "darwin" && os.Getenv("CI") == "true") {
+		t.Skip("Skipping binlog replication integration tests on this platform")
+	}
+	testDir := t.TempDir()
+	h := newHarness(t)
+	h.testDir = testDir
+	var err error
+	h.doltPort, h.doltProcess, err = h.startDoltSqlServer(doltReplicationPrimarySystemVars)
+	require.NoError(t, err)
+
+	conn, err := h.replicaDatabase.Connx(context.Background())
+	require.NoError(t, err)
+	defer conn.Close()
+	exec := func(query string) {
+		t.Helper()
+		_, err := conn.ExecContext(context.Background(), query)
+		require.NoError(t, err, query)
+	}
+
+	exec("CREATE DATABASE cdc_probe")
+	exec("CREATE DATABASE cdc_other")
+	exec("CREATE TABLE cdc_probe.included (id INT PRIMARY KEY, a INT, b INT)")
+	exec("CREATE TABLE cdc_probe.excluded (id INT PRIMARY KEY, a INT)")
+	exec("CREATE TABLE cdc_other.included (id INT PRIMARY KEY)")
+
+	var executed string
+	require.NoError(t, conn.GetContext(context.Background(), &executed, "SELECT @@GLOBAL.gtid_executed"))
+	checkpoint, err := mysql.ParseMysql56GTIDSet(executed)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	stream, err := mysql.Connect(ctx, &mysql.ConnParams{Host: "127.0.0.1", Port: h.doltPort, Uname: "admin"})
+	require.NoError(t, err)
+	defer stream.Close()
+	require.NoError(t, stream.SendBinlogDumpCommand(43, mysql.Position{GTIDSet: checkpoint}))
+
+	format := mysql.NewMySQL56BinlogFormat()
+	// Read each row transaction on its own so a valid row event must have a fresh table map in that transaction.
+	readInsert := func(database, table string, wantValues ...string) uint64 {
+		t.Helper()
+		require.NoError(t, stream.Conn.SetReadDeadline(time.Now().Add(10*time.Second)))
+		var tableMap *mysql.TableMap
+		var tableID uint64
+		sawRow := false
+		for {
+			event, err := stream.ReadBinlogEvent()
+			require.NoError(t, err, "waiting for insert into %s.%s", database, table)
+			if event.IsFormatDescription() {
+				format, err = event.Format()
+				require.NoError(t, err)
+				continue
+			}
+			event, _, err = event.StripChecksum(format)
+			require.NoError(t, err)
+
+			switch {
+			case event.IsTableMap():
+				require.Nil(t, tableMap)
+				tableID = event.TableID(format)
+				tableMap, err = event.TableMap(format)
+				require.NoError(t, err)
+				require.Equal(t, database, tableMap.Database)
+				require.Equal(t, table, tableMap.Name)
+				require.Len(t, tableMap.Types, len(wantValues))
+			case event.IsWriteRows():
+				require.NotNil(t, tableMap)
+				require.Equal(t, tableID, event.TableID(format))
+				rows, err := event.Rows(format, tableMap)
+				require.NoError(t, err)
+				require.Len(t, rows.Rows, 1)
+				values, err := rows.StringValuesForTests(tableMap, 0)
+				require.NoError(t, err)
+				require.Equal(t, wantValues, values)
+				sawRow = true
+			case event.IsXID():
+				require.True(t, sawRow, "transaction committed without a row event")
+				return tableID
+			}
+		}
+	}
+
+	exec("INSERT INTO cdc_probe.included VALUES (1, 10, 20)")
+	includedID := readInsert("cdc_probe", "included", "1", "10", "20")
+	exec("INSERT INTO cdc_probe.excluded VALUES (1, 30)")
+	excludedID := readInsert("cdc_probe", "excluded", "1", "30")
+	require.NotEqual(t, includedID, excludedID)
+
+	exec("INSERT INTO cdc_probe.included VALUES (2, 40, 50)")
+	require.Equal(t, includedID, readInsert("cdc_probe", "included", "2", "40", "50"))
+	exec("INSERT INTO cdc_other.included VALUES (1)")
+	sameNameID := readInsert("cdc_other", "included", "1")
+	require.NotContains(t, []uint64{includedID, excludedID}, sameNameID)
+
+	exec("ALTER TABLE cdc_probe.included ADD COLUMN c INT")
+	exec("INSERT INTO cdc_probe.included VALUES (3, 60, 70, 80)")
+	require.Equal(t, includedID, readInsert("cdc_probe", "included", "3", "60", "70", "80"))
+
+	exec("USE cdc_probe")
+	exec("RENAME TABLE included TO renamed")
+	exec("INSERT INTO cdc_probe.renamed VALUES (4, 90, 100, 110)")
+	renamedID := readInsert("cdc_probe", "renamed", "4", "90", "100", "110")
+	require.NotContains(t, []uint64{includedID, excludedID, sameNameID}, renamedID)
+
+	exec("DROP TABLE cdc_probe.renamed")
+	exec("CREATE TABLE cdc_probe.renamed (id INT PRIMARY KEY)")
+	exec("INSERT INTO cdc_probe.renamed VALUES (1)")
+	recreatedID := readInsert("cdc_probe", "renamed", "1")
+	require.NotContains(t, []uint64{includedID, excludedID, sameNameID, renamedID}, recreatedID)
+
+	exec("DROP DATABASE CDC_OTHER")
+	exec("CREATE DATABASE cdc_other")
+	exec("CREATE TABLE cdc_other.included (id INT PRIMARY KEY)")
+	exec("INSERT INTO cdc_other.included VALUES (2)")
+	require.NotContains(t, []uint64{includedID, excludedID, sameNameID, renamedID, recreatedID},
+		readInsert("cdc_other", "included", "2"))
 }
 
 // TestBinlogPrimary_textTypes tests serialization for empty, NULL, and non-empty TEXT
@@ -558,9 +705,26 @@ func TestBinlogPrimary_Rotation(t *testing.T) {
 	// disconnect it while the primary and the first replica remain running.
 	require.NoError(t, secondReplica.Conn.SetReadDeadline(time.Now().Add(30*time.Second)))
 	format := mysql.NewMySQL56BinlogFormat()
+	var rotatedTo []string
+	wantFormatDescription := true
 	for {
 		event, err := secondReplica.ReadBinlogEvent()
 		require.NoError(t, err)
+		if wantFormatDescription {
+			require.True(t, event.IsFormatDescription(), "the new file must start with its format description")
+			format, err = event.Format()
+			require.NoError(t, err)
+			wantFormatDescription = false
+		}
+		if event.IsRotate() {
+			event, _, err = event.StripChecksum(format)
+			require.NoError(t, err)
+			payload := event.Bytes()[format.HeaderLength:]
+			require.Greater(t, len(payload), 8)
+			require.Equal(t, uint64(4), binary.LittleEndian.Uint64(payload[:8]))
+			rotatedTo = append(rotatedTo, string(payload[8:]))
+			wantFormatDescription = true
+		}
 		if !event.IsGTID() {
 			continue
 		}
@@ -570,6 +734,7 @@ func TestBinlogPrimary_Rotation(t *testing.T) {
 			break
 		}
 	}
+	require.Equal(t, []string{"binlog-main.000002", "binlog-main.000003"}, rotatedTo)
 	secondReplica.Close()
 	for i := 100; i < 110; i++ {
 		h.primaryDatabase.MustExec(fmt.Sprintf("insert into t values (%d);", i))
