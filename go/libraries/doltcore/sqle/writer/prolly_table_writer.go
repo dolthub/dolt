@@ -577,21 +577,12 @@ func (w *prollyTableWriter) table(ctx *sql.Context) (tbl *doltdb.Table, err erro
 
 // pendingTable returns a doltdb.Table containing all edits from completed statements, excluding the edits of any
 // statement in progress. It doesn't modify the writer, so it may run concurrently with other writers' flushes. Once
-// the returned table is in the working set, the caller must call materialized.
+// the returned table is in the working set, the caller must set it as the writer's table and clear pending.
 func (w *prollyTableWriter) pendingTable(ctx *sql.Context) (*doltdb.Table, error) {
 	if w.hasUncommittedEdits() {
 		return w.tableFromMaps(ctx, indexWriter.CheckpointMap)
 	}
 	return w.table(ctx)
-}
-
-// materialized records that |tbl|, returned by pendingTable, is in the working set. Our index writers still hold
-// every edit, so our views remain valid and the next materialization rebuilds all of them on top of |tbl|. If no
-// statement is in progress, the caller should then Reset the writer to |tbl|, which must not happen while
-// materializing.
-func (w *prollyTableWriter) materialized(tbl *doltdb.Table) {
-	w.tbl = tbl
-	w.pending = false
 }
 
 // tableFromMaps builds a doltdb.Table from the maps that |getMap| returns for each index writer.

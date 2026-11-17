@@ -254,8 +254,10 @@ func (s *prollyWriteSession) flushPending(ctx *sql.Context, pending map[doltdb.T
 	if err = s.owner.SetFlushedWorkingSet(ctx, s.withRoot(root)); err != nil {
 		return nil, err
 	}
+	// The index writers still hold every edit, so their views remain valid until the writers are reset.
 	for tblName, tblWriter := range pending {
-		tblWriter.materialized(tbls[tblName])
+		tblWriter.tbl = tbls[tblName]
+		tblWriter.pending = false
 	}
 	return tbls, nil
 }
