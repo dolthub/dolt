@@ -226,7 +226,6 @@ type prollyToSqlJoiner struct {
 }
 
 type kvDesc struct {
-	// ns resolves out-of-line values for this source. Sources may come from different databases.
 	ns          tree.NodeStore
 	keyDesc     *val.TupleDesc
 	valDesc     *val.TupleDesc
