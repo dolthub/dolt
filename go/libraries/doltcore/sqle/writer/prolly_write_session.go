@@ -227,8 +227,7 @@ func (s *prollyWriteSession) materializePending(ctx *sql.Context) error {
 	if err != nil {
 		return err
 	}
-	// Resetting a writer resolves its schema, which may read the working set (e.g. to resolve a partial index
-	// predicate), so it must wait until the working set holds every pending edit.
+	// Rebuild idle writers on their flushed tables. This must follow the flush, since rebuilding can read the working set.
 	for tblName, tblWriter := range pending {
 		if tblWriter.hasUncommittedEdits() {
 			continue
