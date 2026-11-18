@@ -208,7 +208,7 @@ _do_write_to_remotesrv_repo_mode_scenario() {
     [[ "$output" =~ "check that user.email in 'dolt config --list' has write perms to DoltHub repo" ]] || false
     [[ "$output" =~ "PermissionDenied" ]] || false
     [[ "$output" =~ "this server only provides read-only access" ]] || false
-    [[ "$output" =~ "localhost:50051" ]] || false
+    [[ "$output" =~ "localhost:$REMOTESRV_GRPC_PORT" ]] || false
 }
 
 _do_grpc_and_http_same_port_scenario() {

@@ -958,7 +958,7 @@ seed_and_start_complex_remote() {
     mkdir clones
     cd clones
 
-    dolt clone --depth 1 http://localhost:50051/test-org/test-repo depth1
+    dolt clone --depth 1 http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo depth1
     cd depth1
 
     run dolt fsck
@@ -973,7 +973,7 @@ seed_and_start_complex_remote() {
     [[ "$output" =~ "No problems found." ]] || false
     cd ..
 
-    dolt clone --depth 3 http://localhost:50051/test-org/test-repo depth3
+    dolt clone --depth 3 http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo depth3
     cd depth3
 
     run dolt fsck
@@ -987,7 +987,7 @@ seed_and_start_complex_remote() {
     mkdir clones
     cd clones
 
-    dolt clone --depth 2 http://localhost:50051/test-org/test-repo
+    dolt clone --depth 2 http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     cd test-repo
 
     dolt sql <<SQL
