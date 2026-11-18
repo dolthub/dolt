@@ -318,14 +318,26 @@ func IsJsonKeyPrefix(path, prefix []byte) (bool, error) {
 	if len(path) > len(prefix) && bytes.HasPrefix(path, prefix) {
 		return path[len(prefix)] == beginArrayKey || path[len(prefix)] == beginObjectKey, nil
 	}
-	if bytes.IndexByte(path, '\\') < 0 && bytes.IndexByte(prefix, '\\') < 0 {
+	if len(path) == 0 || len(prefix) == 0 ||
+		(bytes.IndexByte(path, '\\') < 0 && bytes.IndexByte(prefix, '\\') < 0) {
 		return false, nil
 	}
-	location, ancestor := jsonPathFromKey(path), jsonPathFromKey(prefix)
-	if location.size() <= ancestor.size() {
+	path, prefix = path[1:], prefix[1:]
+	var cmp int
+	var err error
+	// Finish checking depth before returning a comparison error: equal or shorter
+	// paths cannot be strict descendants.
+	for len(path) > 0 && len(prefix) > 0 {
+		var value, ancestor jsonPathElement
+		value, path = nextJsonPathElement(path)
+		ancestor, prefix = nextJsonPathElement(prefix)
+		if cmp == 0 && err == nil {
+			cmp, err = compareJsonPathElement(value, ancestor)
+		}
+	}
+	if len(path) == 0 || len(prefix) > 0 {
 		return false, nil
 	}
-	cmp, err := compareJsonPathElements(location, ancestor)
 	return cmp == 0, err
 }
 
@@ -484,6 +496,21 @@ type jsonPathElement struct {
 	isArrayIndex bool
 }
 
+// nextJsonPathElement borrows the first encoded element and returns the remaining path.
+// Array indices can contain delimiter bytes, so their length comes from the varint header.
+func nextJsonPathElement(path []byte) (jsonPathElement, []byte) {
+	end := 1
+	isArrayIndex := path[0] == beginArrayKey
+	if isArrayIndex {
+		end += varIntLength(path[1])
+	} else {
+		for end < len(path) && path[end] != beginObjectKey && path[end] != beginArrayKey {
+			end++
+		}
+	}
+	return jsonPathElement{key: path[1:end], isArrayIndex: isArrayIndex}, path[end:]
+}
+
 func (e jsonPathElement) getArrayIndex() uint64 {
 	arrayIndex, _ := uvarint.Uvarint(e.key)
 	return arrayIndex
@@ -519,86 +546,94 @@ func (p *jsonLocation) Clone() jsonLocation {
 	}
 }
 
-// compareJsonLocations creates an ordering on locations by determining which one would come first in a normalized JSON
-// document where all keys are sorted lexographically.
+// compareJsonLocations orders locations as they appear in a normalized JSON document.
 func compareJsonLocations(left, right jsonLocation) (int, error) {
-	cmp, err := compareJsonPathElements(left, right)
-	if cmp != 0 || err != nil {
-		return cmp, err
-	}
-	if left.size() < right.size() {
-		// left is a parent of right
-		// there's a special case here: the user may be trying to treat a scalar or object as an array, which causes
-		// it to get implicitly wrapped in an array. In order for the cursor to return the correct location for
-		// reading/modification, for any object b, b[N] must compare less than the initial element location of b.
-		if right.size() == left.size()+1 {
-			if left.getScannerState() == objectInitialElement {
-				rightIsArray := right.getLastPathElement().isArrayIndex
-				if rightIsArray {
-					return 1, nil
-				}
-			}
+	leftDepth, rightDepth := left.size(), right.size()
+	for i := 0; i < min(leftDepth, rightDepth); i++ {
+		if cmp, err := compareJsonPathElement(left.getPathElement(i), right.getPathElement(i)); cmp != 0 || err != nil {
+			return cmp, err
 		}
-		if left.getScannerState() != endOfValue {
+	}
+	if leftDepth < rightDepth {
+		return compareJsonParentToChild(left.getScannerState(), right.getScannerState(), right.getPathElement(leftDepth), rightDepth == leftDepth+1), nil
+	}
+	if leftDepth > rightDepth {
+		return -compareJsonParentToChild(right.getScannerState(), left.getScannerState(), left.getPathElement(rightDepth), leftDepth == rightDepth+1), nil
+	}
+	return compareJsonPathTypes(left.getScannerState(), right.getScannerState())
+}
+
+// compareJsonLocationKeys compares encoded paths without copying keys or constructing offsets.
+func compareJsonLocationKeys(left, right []byte) (int, error) {
+	leftPath, rightPath := left[1:], right[1:]
+	for len(leftPath) > 0 && len(rightPath) > 0 {
+		var l, r jsonPathElement
+		l, leftPath = nextJsonPathElement(leftPath)
+		r, rightPath = nextJsonPathElement(rightPath)
+		if cmp, err := compareJsonPathElement(l, r); cmp != 0 || err != nil {
+			return cmp, err
+		}
+	}
+	if len(rightPath) > 0 {
+		return compareJsonParentToEncodedChild(jsonPathType(left[0]), jsonPathType(right[0]), rightPath), nil
+	}
+	if len(leftPath) > 0 {
+		return -compareJsonParentToEncodedChild(jsonPathType(right[0]), jsonPathType(left[0]), leftPath), nil
+	}
+	return compareJsonPathTypes(jsonPathType(left[0]), jsonPathType(right[0]))
+}
+
+// compareJsonParentToEncodedChild reads child structure only when implicit array wrapping needs it.
+func compareJsonParentToEncodedChild(parent, childState jsonPathType, path []byte) int {
+	var child jsonPathElement
+	var immediate bool
+	if parent == objectInitialElement {
+		var remainder []byte
+		child, remainder = nextJsonPathElement(path)
+		immediate = len(remainder) == 0
+	}
+	return compareJsonParentToChild(parent, childState, child, immediate)
+}
+
+// compareJsonParentToChild places end markers after descendants and supports implicit array wrapping.
+func compareJsonParentToChild(parent, childState jsonPathType, child jsonPathElement, immediate bool) int {
+	switch parent {
+	case endOfValue:
+		return 1
+	case objectInitialElement:
+		// Initial-element markers describe the container, not the final encoded leg.
+		childIsArray := childState == arrayInitialElement || (childState != objectInitialElement && child.isArrayIndex)
+		if childIsArray && immediate {
+			return 1
+		}
+	}
+	return -1
+}
+
+// compareJsonPathElement compares decoded object names or order-preserving array indices.
+func compareJsonPathElement(left, right jsonPathElement) (int, error) {
+	if left.isArrayIndex != right.isArrayIndex {
+		if left.isArrayIndex {
 			return -1, nil
 		}
 		return 1, nil
 	}
-	if left.size() > right.size() {
-		// right is a parent of left
-		// there's a special case here: the user may be trying to treat a scalar or object as an array, which causes
-		// it to get implicitly wrapped in an array. In order for the cursor to return the correct location for
-		// reading/modification, for any object b, b[N] must compare less than the initial element location of b.
-		if left.size() == right.size()+1 {
-			if right.getScannerState() == objectInitialElement {
-				leftIsArray := left.getLastPathElement().isArrayIndex
-				if leftIsArray {
-					return -1, nil
-				}
-			}
-		}
-
-		if right.getScannerState() != endOfValue {
-			return 1, nil
-		}
-		return -1, nil
+	if bytes.Equal(left.key, right.key) {
+		return 0, nil
 	}
-	// left and right have the exact same key elements
-	return compareJsonPathTypes(left.getScannerState(), right.getScannerState())
-
-}
-
-// compareJsonPathElements compares the common depth of two paths by decoded
-// object names and encoded array indices. The tree keeps the original bytes.
-func compareJsonPathElements(left, right jsonLocation) (int, error) {
-	for i := 0; i < min(left.size(), right.size()); i++ {
-		l, r := left.getPathElement(i), right.getPathElement(i)
-		if l.isArrayIndex != r.isArrayIndex {
-			if l.isArrayIndex {
-				return -1, nil
-			}
-			return 1, nil
+	leftKey, rightKey := left.key, right.key
+	if !left.isArrayIndex {
+		var err error
+		leftKey, err = decodeJsonObjectKey(leftKey)
+		if err != nil {
+			return 0, err
 		}
-		if bytes.Equal(l.key, r.key) {
-			continue
-		}
-		leftKey, rightKey := l.key, r.key
-		if !l.isArrayIndex {
-			var err error
-			leftKey, err = decodeJsonObjectKey(leftKey)
-			if err != nil {
-				return 0, err
-			}
-			rightKey, err = decodeJsonObjectKey(rightKey)
-			if err != nil {
-				return 0, err
-			}
-		}
-		if cmp := bytes.Compare(leftKey, rightKey); cmp != 0 {
-			return cmp, nil
+		rightKey, err = decodeJsonObjectKey(rightKey)
+		if err != nil {
+			return 0, err
 		}
 	}
-	return 0, nil
+	return bytes.Compare(leftKey, rightKey), nil
 }
 
 // decodeJsonObjectKey restores the original object name for document ordering.
@@ -618,7 +653,7 @@ func CompareJsonDiffKeys(left, right []byte) (int, error) {
 	if bytes.Equal(left, right) {
 		return 0, nil
 	}
-	return compareJsonLocations(jsonPathFromKey(left), jsonPathFromKey(right))
+	return compareJsonLocationKeys(left, right)
 }
 
 type jsonLocationOrdering struct{}
@@ -634,5 +669,5 @@ func (o *jsonLocationOrdering) Compare(ctx context.Context, left, right jsonLoca
 	} else if len(right) == 0 {
 		return 1, nil
 	}
-	return compareJsonLocations(jsonPathFromKey(left), jsonPathFromKey(right))
+	return compareJsonLocationKeys(left, right)
 }
