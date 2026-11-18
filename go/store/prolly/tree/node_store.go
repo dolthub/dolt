@@ -377,8 +377,8 @@ func compareCollatedChunkDiffer(ctx context.Context, d chunkDiffer, collation sq
 			if len(*buf) == 0 {
 				return 0, false, nil
 			}
-			// Incomplete runes at chunk boundaries are filled by pull above, so a
-			// malformed byte advances one byte and [sql.WeightScanner] weighs it as
+			// Trailing incomplete runes are filled by pull above, so a malformed
+			// byte advances one byte and [sql.WeightScanner] weighs it as
 			// [utf8.RuneError].
 			_, read := utf8.DecodeRune(*buf)
 			scanner := sql.NewWeightScanner(collation, encodings.BytesToString((*buf)[:read]))

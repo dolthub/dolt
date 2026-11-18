@@ -172,7 +172,10 @@ func TestCompareCollatedStrings(t *testing.T) {
 			}
 		}
 	}
+}
 
+func TestCollationTupleComparatorIsChar(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/12342
 	strType := val.Type{Enc: val.StringEnc}
 	tupleCmp := CollationTupleComparator{
 		Collations: []sql.CollationID{sql.Collation_utf8mb4_unicode_ci, sql.Collation_utf8mb4_unicode_ci},
