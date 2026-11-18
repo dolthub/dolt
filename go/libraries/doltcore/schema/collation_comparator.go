@@ -18,14 +18,17 @@ import (
 	"bytes"
 	"context"
 
-	"github.com/dolthub/dolt/go/store/val"
-
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/encodings"
+
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 type CollationTupleComparator struct {
 	Collations []sql.CollationID // CollationIDs are implemented as uint16
-	vs         val.ValueStore
+	// IsChar reports whether each tuple field uses SQL CHAR comparison rules.
+	IsChar []bool
+	vs     val.ValueStore
 }
 
 var _ val.TupleComparator = CollationTupleComparator{}
@@ -37,7 +40,7 @@ func (c CollationTupleComparator) Compare(ctx context.Context, left, right val.T
 	var start, stop val.ByteSize
 	for i := 0; i < off; i++ {
 		stop = fast[i]
-		cmp, err = collationCompare(ctx, desc.Types[i], c.Collations[i], left[start:stop], right[start:stop], c.vs)
+		cmp, err = collationCompare(ctx, desc.Types[i], c.Collations[i], c.IsChar[i], left[start:stop], right[start:stop], c.vs)
 		if err != nil {
 			return 0, err
 		}
@@ -49,7 +52,7 @@ func (c CollationTupleComparator) Compare(ctx context.Context, left, right val.T
 
 	for i, typ := range desc.Types[off:] {
 		j := i + off
-		cmp, err = collationCompare(ctx, typ, c.Collations[j], left.GetField(j), right.GetField(j), c.vs)
+		cmp, err = collationCompare(ctx, typ, c.Collations[j], c.IsChar[j], left.GetField(j), right.GetField(j), c.vs)
 		if err != nil {
 			return 0, err
 		}
@@ -62,26 +65,30 @@ func (c CollationTupleComparator) Compare(ctx context.Context, left, right val.T
 
 // CompareValues implements TupleComparator
 func (c CollationTupleComparator) CompareValues(ctx context.Context, index int, left, right []byte, typ val.Type) (int, error) {
-	return collationCompare(ctx, typ, c.Collations[index], left, right, c.vs)
+	return collationCompare(ctx, typ, c.Collations[index], c.IsChar[index], left, right, c.vs)
 }
 
 // Prefix implements TupleComparator
 func (c CollationTupleComparator) Prefix(n int) val.TupleComparator {
 	newCollations := make([]sql.CollationID, n)
 	copy(newCollations, c.Collations)
-	return CollationTupleComparator{Collations: newCollations, vs: c.vs}
+	newIsChar := make([]bool, n)
+	copy(newIsChar, c.IsChar)
+	return CollationTupleComparator{Collations: newCollations, IsChar: newIsChar, vs: c.vs}
 }
 
 // Suffix implements TupleComparator
 func (c CollationTupleComparator) Suffix(n int) val.TupleComparator {
 	newCollations := make([]sql.CollationID, n)
 	copy(newCollations, c.Collations[len(c.Collations)-n:])
-	return CollationTupleComparator{Collations: newCollations, vs: c.vs}
+	newIsChar := make([]bool, n)
+	copy(newIsChar, c.IsChar[len(c.IsChar)-n:])
+	return CollationTupleComparator{Collations: newCollations, IsChar: newIsChar, vs: c.vs}
 }
 
 // Validated implements TupleComparator
 func (c CollationTupleComparator) Validated(types []val.Type) val.TupleComparator {
-	if len(c.Collations) > len(types) {
+	if len(c.Collations) > len(types) || len(c.IsChar) > len(types) {
 		panic("too many collations compared to type encoding")
 	}
 	i := 0
@@ -90,11 +97,13 @@ func (c CollationTupleComparator) Validated(types []val.Type) val.TupleComparato
 			c.Collations[i] = sql.Collation_Default
 		}
 	}
-	if len(c.Collations) == len(types) {
+	if len(c.Collations) == len(types) && len(c.IsChar) == len(types) {
 		return c
 	}
 	newCollations := make([]sql.CollationID, len(types))
 	copy(newCollations, c.Collations)
+	newIsChar := make([]bool, len(types))
+	copy(newIsChar, c.IsChar)
 	for ; i < len(newCollations); i++ {
 		if isCollatedStringEnc(types[i].Enc) {
 			panic("string type encoding is missing its collation")
@@ -105,7 +114,7 @@ func (c CollationTupleComparator) Validated(types []val.Type) val.TupleComparato
 			newCollations[i] = sql.Collation_Unspecified
 		}
 	}
-	return CollationTupleComparator{Collations: newCollations, vs: c.vs}
+	return CollationTupleComparator{Collations: newCollations, IsChar: newIsChar, vs: c.vs}
 }
 
 func isCollatedStringEnc(enc val.Encoding) bool {
@@ -114,7 +123,7 @@ func isCollatedStringEnc(enc val.Encoding) bool {
 
 // WithValueStore implements TupleComparator
 func (c CollationTupleComparator) WithValueStore(vs val.ValueStore) val.TupleComparator {
-	return CollationTupleComparator{Collations: c.Collations, vs: vs}
+	return CollationTupleComparator{Collations: c.Collations, IsChar: c.IsChar, vs: vs}
 }
 
 // Order implements TupleComparator
@@ -122,7 +131,10 @@ func (c CollationTupleComparator) Order(i int) sql.IndexColumnOrder {
 	return sql.IndexColumnOrder{}
 }
 
-func collationCompare(ctx context.Context, typ val.Type, collation sql.CollationID, left, right []byte, vs val.ValueStore) (int, error) {
+// collationCompare compares tuple field bytes |left| and |right| of |typ| under
+// |collation| using |ctx| and |vs|, trimming trailing spaces when |isChar|
+// holds.
+func collationCompare(ctx context.Context, typ val.Type, collation sql.CollationID, isChar bool, left, right []byte, vs val.ValueStore) (int, error) {
 	// order NULLs first
 	if left == nil || right == nil {
 		if bytes.Equal(left, right) {
@@ -136,7 +148,13 @@ func collationCompare(ctx context.Context, typ val.Type, collation sql.Collation
 
 	switch typ.Enc {
 	case val.StringEnc:
-		return val.CompareCollatedStrings(collation, left[:len(left)-1], right[:len(right)-1]), nil
+		l := left[:len(left)-1]
+		r := right[:len(right)-1]
+		if isChar {
+			l = encodings.StringToBytes(collation.TrimRightSpace(encodings.BytesToString(l)))
+			r = encodings.StringToBytes(collation.TrimRightSpace(encodings.BytesToString(r)))
+		}
+		return val.CompareCollatedStrings(collation, l, r), nil
 	case val.StringAdaptiveEnc:
 		return vs.CompareAdaptiveCollatedStrings(ctx, left, right, collation)
 	default:

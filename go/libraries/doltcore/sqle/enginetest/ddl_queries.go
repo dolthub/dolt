@@ -801,6 +801,10 @@ var AddIndexScripts = []queries.ScriptTest{
 			"INSERT INTO u VALUES ('bob', 'alice');",
 			"CREATE TABLE existing (id INT PRIMARY KEY, uk VARCHAR(64) COLLATE utf8mb4_unicode_ci, doc LONGTEXT COLLATE utf8mb4_unicode_ci);",
 			"INSERT INTO existing VALUES (1, 'bob', CONCAT(REPEAT(_utf8mb4 0xE4BABA, 760), 'bob')), (2, _utf8mb4 0x62E2808B6F62, CONCAT(REPEAT(_utf8mb4 0xE4BABA, 760), _utf8mb4 0x62E2808B6F62));",
+			"CREATE TABLE uc (pk CHAR(10) COLLATE utf8mb4_unicode_ci PRIMARY KEY);",
+			"INSERT INTO uc VALUES ('a');",
+			"CREATE TABLE tc_idx (id INT PRIMARY KEY, c_uca CHAR(10) COLLATE utf8mb4_unicode_ci, c_0900 CHAR(10) COLLATE utf8mb4_0900_ai_ci, KEY (c_uca), KEY (c_0900));",
+			"INSERT INTO tc_idx VALUES (1, _utf8mb4 0x6120E2808B, _utf8mb4 0x6120E2808B), (2, 'a', 'a');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -822,6 +826,22 @@ var AddIndexScripts = []queries.ScriptTest{
 			{
 				Query:       "CREATE UNIQUE INDEX doc_idx ON existing (doc(768));",
 				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+			{
+				Query:       "INSERT INTO uc VALUES (_utf8mb4 0x6120E2808B);",
+				ExpectedErr: sql.ErrPrimaryKeyViolation,
+			},
+			{
+				Query:       "CREATE UNIQUE INDEX c_uca_uniq ON tc_idx (c_uca);",
+				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+			{
+				Query:    "SELECT t1.id, t2.id FROM tc_idx t1 JOIN tc_idx t2 ON t1.c_uca = t2.c_uca WHERE t1.id < t2.id;",
+				Expected: []sql.Row{{1, 2}},
+			},
+			{
+				Query:    "SELECT t1.id, t2.id FROM tc_idx t1 JOIN tc_idx t2 ON t1.c_0900 = t2.c_0900 WHERE t1.id < t2.id;",
+				Expected: []sql.Row{},
 			},
 		},
 	},

@@ -465,6 +465,8 @@ func (si *schemaImpl) GetKeyDescriptor(vs val.ValueStore) *val.TupleDesc {
 	return si.getKeyColumnsDescriptor(vs)
 }
 
+// getKeyColumnsDescriptor builds the key tuple descriptor for the schema using
+// |vs|.
 func (si *schemaImpl) getKeyColumnsDescriptor(vs val.ValueStore) *val.TupleDesc {
 	if IsKeyless(si) {
 		return val.KeylessTupleDesc
@@ -479,6 +481,7 @@ func (si *schemaImpl) getKeyColumnsDescriptor(vs val.ValueStore) *val.TupleDesc 
 	var handlers []val.TupleTypeHandler
 	useCollations := false // We only use collations if a string exists
 	var collations []sql.CollationID
+	var isChar []bool
 	_ = si.GetPKCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
 		sqlType := col.TypeInfo.ToSqlType()
 		queryType := sqlType.Type()
@@ -535,8 +538,10 @@ func (si *schemaImpl) getKeyColumnsDescriptor(vs val.ValueStore) *val.TupleDesc 
 		if isStringType && (queryType == query.Type_CHAR || queryType == query.Type_VARCHAR || queryType == query.Type_TEXT) {
 			useCollations = true
 			collations = append(collations, stringType.Collation())
+			isChar = append(isChar, queryType == query.Type_CHAR)
 		} else {
 			collations = append(collations, sql.Collation_Unspecified)
+			isChar = append(isChar, false)
 		}
 
 		if customEncoding {
@@ -552,7 +557,7 @@ func (si *schemaImpl) getKeyColumnsDescriptor(vs val.ValueStore) *val.TupleDesc 
 		if len(collations) != len(tt) {
 			panic(fmt.Errorf("cannot create tuple descriptor from %d collations and %d types", len(collations), len(tt)))
 		}
-		cmp := CollationTupleComparator{Collations: collations}
+		cmp := CollationTupleComparator{Collations: collations, IsChar: isChar}
 		return val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Comparator: cmp, Handlers: handlers, ValueStore: vs, ColumnOrders: si.keyColumnOrders}, tt...)
 	} else {
 		return val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Handlers: handlers, ValueStore: vs, ColumnOrders: si.keyColumnOrders}, tt...)
@@ -564,10 +569,12 @@ func (si *schemaImpl) GetValueDescriptor(vs val.ValueStore) *val.TupleDesc {
 	var tt []val.Type
 	var handlers []val.TupleTypeHandler
 	var collations []sql.CollationID
+	var isChar []bool
 	if IsKeyless(si) {
 		tt = []val.Type{val.KeylessCardType}
 		handlers = []val.TupleTypeHandler{nil}
 		collations = []sql.CollationID{sql.Collation_Unspecified}
+		isChar = []bool{false}
 	}
 
 	useCollations := false // We only use collations if a string exists
@@ -586,8 +593,10 @@ func (si *schemaImpl) GetValueDescriptor(vs val.ValueStore) *val.TupleDesc {
 		if queryType == query.Type_CHAR || queryType == query.Type_VARCHAR {
 			useCollations = true
 			collations = append(collations, sqlType.(sql.StringType).Collation())
+			isChar = append(isChar, queryType == query.Type_CHAR)
 		} else {
 			collations = append(collations, sql.Collation_Unspecified)
+			isChar = append(isChar, false)
 		}
 
 		if typeHandler, ok := sqlType.(val.TupleTypeHandler); ok {
@@ -611,7 +620,7 @@ func (si *schemaImpl) GetValueDescriptor(vs val.ValueStore) *val.TupleDesc {
 		if len(collations) != len(tt) {
 			panic(fmt.Errorf("cannot create tuple descriptor from %d collations and %d types", len(collations), len(tt)))
 		}
-		cmp := CollationTupleComparator{Collations: collations}
+		cmp := CollationTupleComparator{Collations: collations, IsChar: isChar}
 		return val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Comparator: cmp, Handlers: handlers, ValueStore: vs}, tt...)
 	} else {
 		return val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Handlers: handlers, ValueStore: vs}, tt...)

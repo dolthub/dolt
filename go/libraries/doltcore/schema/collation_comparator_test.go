@@ -172,4 +172,20 @@ func TestCompareCollatedStrings(t *testing.T) {
 			}
 		}
 	}
+
+	strType := val.Type{Enc: val.StringEnc}
+	tupleCmp := CollationTupleComparator{
+		Collations: []sql.CollationID{sql.Collation_utf8mb4_unicode_ci, sql.Collation_utf8mb4_unicode_ci},
+		IsChar:     []bool{false, true},
+	}.Validated([]val.Type{strType, strType, {Enc: val.Int32Enc}})
+	leftNullTerm := []byte("a \u200b\x00")
+	rightNullTerm := []byte("a\x00")
+
+	cmp, err := tupleCmp.Prefix(1).CompareValues(t.Context(), 0, leftNullTerm, rightNullTerm, strType)
+	require.NoError(t, err)
+	require.Equal(t, 1, cmp)
+
+	cmp, err = tupleCmp.Suffix(2).CompareValues(t.Context(), 0, leftNullTerm, rightNullTerm, strType)
+	require.NoError(t, err)
+	require.Zero(t, cmp)
 }

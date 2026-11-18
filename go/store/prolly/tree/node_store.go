@@ -377,9 +377,9 @@ func compareCollatedChunkDiffer(ctx context.Context, d chunkDiffer, collation sq
 			if len(*buf) == 0 {
 				return 0, false, nil
 			}
-			// RuneError should be impossible to return for the above read unless
-			// the UTF-8 bytes are malformed, in which case [sql.WeightScanner]
-			// yields [utf8.RuneError]'s weight.
+			// Incomplete runes at chunk boundaries are filled by pull above, so a
+			// malformed byte advances one byte and [sql.WeightScanner] weighs it as
+			// [utf8.RuneError].
 			_, read := utf8.DecodeRune(*buf)
 			scanner := sql.NewWeightScanner(collation, encodings.BytesToString((*buf)[:read]))
 			*buf = (*buf)[read:]
