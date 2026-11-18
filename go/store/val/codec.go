@@ -26,6 +26,7 @@ import (
 
 	"github.com/cockroachdb/apd/v3"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/encodings"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
@@ -716,67 +717,56 @@ func compareAddr(l, r hash.Hash) int {
 	return l.Compare(r)
 }
 
-// CompareCollatedStrings compares two UTF-8 byte slices using the given collation.
+// CompareCollatedStrings compares two UTF-8 byte slices |left| and |right|
+// using |collation|, skipping zero-weight ignorable characters in UCA
+// collations.
 func CompareCollatedStrings(collation sql.CollationID, left, right []byte) int {
 	i := 0
-	for i < len(left) && i < len(right) {
-		if left[i] != right[i] {
-			break
-		}
+	for i < len(left) && i < len(right) && left[i] == right[i] {
 		i++
 	}
-	if i >= len(left) || i >= len(right) {
-		if len(left) < len(right) {
-			return -1
-		} else if len(left) > len(right) {
-			return 1
-		} else {
+	if i == len(left) && i == len(right) {
+		return 0
+	}
+	if i > 0 && collation != sql.Collation_binary && left[i-1] >= utf8.RuneSelf {
+		rStart := i - 1
+		for rStart > 0 && i-rStart < utf8.UTFMax && !utf8.RuneStart(left[rStart]) {
+			rStart--
+		}
+		if !utf8.FullRune(left[rStart:i]) {
+			i = rStart
+		}
+	}
+
+	leftScanner := sql.NewWeightScanner(collation, encodings.BytesToString(left[i:]))
+	rightScanner := sql.NewWeightScanner(collation, encodings.BytesToString(right[i:]))
+	for {
+		lw, lOk, lErr := leftScanner.Next()
+		rw, rOk, rErr := rightScanner.Next()
+		if lErr != nil || rErr != nil {
+			if lErr != nil && rErr == nil {
+				return 1
+			}
+			if lErr == nil && rErr != nil {
+				return -1
+			}
 			return 0
 		}
-	}
-
-	li := i
-	for ; li > 0 && !utf8.RuneStart(left[li]); li-- {
-	}
-	left = left[li:]
-
-	ri := i
-	for ; ri > 0 && !utf8.RuneStart(right[ri]); ri-- {
-	}
-	right = right[ri:]
-
-	getRuneWeight := collation.Sorter()
-	for len(left) > 0 && len(right) > 0 {
-		leftRune, leftRead := utf8.DecodeRune(left)
-		rightRune, rightRead := utf8.DecodeRune(right)
-		if leftRead == utf8.RuneError || rightRead == utf8.RuneError {
-			if leftRead == utf8.RuneError && rightRead != utf8.RuneError {
-				return 1
-			} else if leftRead != utf8.RuneError && rightRead == utf8.RuneError {
-				return -1
-			} else {
+		if !lOk || !rOk {
+			if !lOk && !rOk {
 				return 0
 			}
-		}
-		if leftRune != rightRune {
-			leftWeight := getRuneWeight(leftRune)
-			rightWeight := getRuneWeight(rightRune)
-			if leftWeight < rightWeight {
+			if !lOk {
 				return -1
-			} else if leftWeight > rightWeight {
-				return 1
 			}
+			return 1
 		}
-		left = left[leftRead:]
-		right = right[rightRead:]
-	}
-
-	if len(left) < len(right) {
-		return -1
-	} else if len(left) > len(right) {
-		return 1
-	} else {
-		return 0
+		if lw < rw {
+			return -1
+		}
+		if lw > rw {
+			return 1
+		}
 	}
 }
 

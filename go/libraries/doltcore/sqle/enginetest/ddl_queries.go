@@ -792,6 +792,35 @@ var AddIndexScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// https://github.com/dolthub/dolt/issues/12342
+		Name:    "duplicate primary and unique keys with UCA ignorable characters",
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"CREATE TABLE u (pk VARCHAR(64) COLLATE utf8mb4_unicode_ci PRIMARY KEY, uk VARCHAR(64) COLLATE utf8mb4_unicode_ci UNIQUE);",
+			"INSERT INTO u VALUES ('bob', 'alice');",
+			"CREATE TABLE kt (id INT, doc LONGTEXT COLLATE utf8mb4_unicode_ci);",
+			"INSERT INTO kt VALUES (1, CONCAT(REPEAT('a', 16384), 'bob')), (2, CONCAT(REPEAT('a', 16384), _utf8mb4 0x62E2808B6F62));",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "INSERT INTO u VALUES (_utf8mb4 0x62E2808B6F62, 'charlie');",
+				ExpectedErr: sql.ErrPrimaryKeyViolation,
+			},
+			{
+				Query:       "INSERT INTO u VALUES ('charlie', _utf8mb4 0x61E2808B6C696365);",
+				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+			{
+				Query:    "SELECT pk, uk FROM u;",
+				Expected: []sql.Row{{"bob", "alice"}},
+			},
+			{
+				Query:    "SELECT COUNT(DISTINCT doc) FROM kt;",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
 }
 
 var AddDropPrimaryKeysScripts = []queries.ScriptTest{

@@ -22,6 +22,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/encodings"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
@@ -342,78 +343,96 @@ func (ns *nodeStore) CompareAdaptiveCollatedStrings(ctx context.Context, l, r va
 	return compareCollatedChunkDiffer(ctx, differ, collation)
 }
 
-// compareCollatedChunkDiffer is the streaming version of CompareCollatedStrings, getting just the diff between two
-// values when comparing them.
+// compareCollatedChunkDiffer compares the differing chunks of |d| under
+// |collation|.
+//
+// It is the streaming version of [val.CompareCollatedStrings], skipping
+// zero-weight ignorable characters in UCA collations.
 func compareCollatedChunkDiffer(ctx context.Context, d chunkDiffer, collation sql.CollationID) (int, error) {
-	getRuneWeight := collation.Sorter()
 	var lBuf, rBuf []byte
-	lDone, rDone := false, false
+	done := false
+	isBinary := collation == sql.Collation_binary
 
 	// TODO: the call to Next() starts at the first differing chunk, then returns every leaf chunk in order from both
 	//  sides thereafter. This is correct, but potentially inefficient in the case where there are sparse byte differences
 	//  that are collation-equivalent spread through two large documents we are sorting. We could more efficiently
 	//  perform the comparison in this case by having Next() and NextDiff() methods for the two traversal cases.
-	pullFrom := func() error {
-		for (!lDone && !utf8.FullRune(lBuf)) || (!rDone && !utf8.FullRune(rBuf)) {
-			lChunk, rChunk, err := d.Next(ctx)
-			if err == io.EOF {
-				lDone = true
-				rDone = true
-				return nil
-			}
-			if err != nil {
-				return err
-			}
-			if len(lChunk) > 0 {
-				lBuf = append(lBuf, lChunk...)
-			}
-			if len(rChunk) > 0 {
-				rBuf = append(rBuf, rChunk...)
-			}
+	pull := func() error {
+		lChunk, rChunk, err := d.Next(ctx)
+		if err == io.EOF {
+			done = true
+			return nil
 		}
+		if err != nil {
+			return err
+		}
+		lBuf = append(lBuf, lChunk...)
+		rBuf = append(rBuf, rChunk...)
 		return nil
 	}
+
+	nextWeight := func(buf *[]byte) (int32, bool, bool, error) {
+		for {
+			for !done && ((isBinary && len(*buf) == 0) || (!isBinary && !utf8.FullRune(*buf))) {
+				if err := pull(); err != nil {
+					return 0, false, false, err
+				}
+			}
+			if len(*buf) == 0 {
+				return 0, false, false, nil
+			}
+			read := 1
+			if !isBinary {
+				_, read = utf8.DecodeRune(*buf)
+			}
+			scanner := sql.NewWeightScanner(collation, encodings.BytesToString((*buf)[:read]))
+			w, ok, scanErr := scanner.Next()
+			*buf = (*buf)[read:]
+			if scanErr != nil {
+				return 0, false, true, nil
+			}
+			if ok {
+				return w, true, false, nil
+			}
+		}
+	}
+
 	for {
-		if err := pullFrom(); err != nil {
+		lw, lOk, lUtf8Err, err := nextWeight(&lBuf)
+		if err != nil {
 			return 0, err
 		}
-		switch {
-		case len(lBuf) == 0 && len(rBuf) == 0:
-			return 0, nil
-		case len(lBuf) == 0:
-			return -1, nil
-		case len(rBuf) == 0:
-			return 1, nil
+		rw, rOk, rUtf8Err, err := nextWeight(&rBuf)
+		if err != nil {
+			return 0, err
 		}
-		lr, lread := utf8.DecodeRune(lBuf)
-		rr, rread := utf8.DecodeRune(rBuf)
 
 		// RuneError should be impossible to return for the above reads unless the UTF8 bytes are malformed or the
 		// buffer is empty. We handle this error here by enforcing an arbitrary order.
-		lErr := lr == utf8.RuneError && lread == 1
-		rErr := rr == utf8.RuneError && rread == 1
-		if lErr || rErr {
-			if lErr && !rErr {
+		if lUtf8Err || rUtf8Err {
+			if lUtf8Err && !rUtf8Err {
 				return 1, nil
 			}
-			if !lErr && rErr {
+			if !lUtf8Err && rUtf8Err {
 				return -1, nil
 			}
 			return 0, nil
 		}
-
-		if lr != rr {
-			lw := getRuneWeight(lr)
-			rw := getRuneWeight(rr)
-			if lw < rw {
+		if !lOk || !rOk {
+			if !lOk && !rOk {
+				return 0, nil
+			}
+			if !lOk {
 				return -1, nil
 			}
-			if lw > rw {
-				return 1, nil
-			}
+			return 1, nil
 		}
-		lBuf = lBuf[lread:]
-		rBuf = rBuf[rread:]
+		if lw < rw {
+			return -1, nil
+		}
+		if lw > rw {
+			return 1, nil
+		}
 	}
 }
 
