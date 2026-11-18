@@ -66,7 +66,7 @@ type DoltSession struct {
 	statsProv   sql.StatsProvider
 	globalsConf config.ReadWriteConfig
 
-	mu                    *sync.Mutex
+	mu                    *sync.RWMutex
 	branchController      *branch_control.Controller
 	dbCache               *DatabaseCache
 	dbStates              map[doltdb.DbKey]*DatabaseSessionState
@@ -183,7 +183,7 @@ func DefaultSessionWithVariables(pro DoltDatabaseProvider, sessFunc WriteSessFun
 		tempTables:       make(map[string]map[string]sql.Table),
 		globalsConf:      config.NewMapConfig(make(map[string]string)),
 		branchController: branch_control.CreateDefaultController(context.TODO()), // Default sessions are fine with the default controller
-		mu:               &sync.Mutex{},
+		mu:               &sync.RWMutex{},
 		fs:               pro.FileSystem(),
 		writeSessProv:    sessFunc,
 	}
@@ -261,7 +261,7 @@ func NewDoltSession(
 		globalsConf:           globals,
 		branchController:      branchController,
 		statsProv:             statsProvider,
-		mu:                    &sync.Mutex{},
+		mu:                    &sync.RWMutex{},
 		fs:                    pro.FileSystem(),
 		writeSessProv:         writeSessProv,
 		gcSafepointController: gcSafepointController,
@@ -312,7 +312,7 @@ func GetTableResolver(ctx *sql.Context, dbName string) (doltdb.TableResolver, er
 // the interface returned by the public method.
 func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchState, bool, error) {
 	name := doltdb.ParseQualifiedDbName(dbName)
-	d.mu.Lock()
+	d.mu.RLock()
 	dbState, dbStateFound := d.dbStates[name.DbKey()]
 	var branchState *branchState
 	var ok bool
@@ -323,7 +323,7 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 		}
 		branchState, ok = d.currentBranches().get(name)
 	}
-	d.mu.Unlock()
+	d.mu.RUnlock()
 
 	if ok {
 		if dbState.Err != nil {
@@ -345,10 +345,10 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 		return nil, false, err
 	}
 
-	d.mu.Lock()
+	d.mu.RLock()
 	_, dbStateFound = d.dbStates[name.DbKey()]
 	branchState, _ = d.currentBranches().get(name.WithRevision(database.Revision()))
-	d.mu.Unlock()
+	d.mu.RUnlock()
 	if !dbStateFound {
 		// should be impossible
 		return nil, false, sql.ErrDatabaseNotFound.New(dbName)
@@ -369,9 +369,9 @@ func (d *DoltSession) MaterializePending(ctx *sql.Context, dbName string) error 
 
 // materializeAllPending materializes the pending edits of every branch state in this session.
 func (d *DoltSession) materializeAllPending(ctx *sql.Context) error {
-	d.mu.Lock()
+	d.mu.RLock()
 	states := d.currentBranches().all()
-	d.mu.Unlock()
+	d.mu.RUnlock()
 
 	for _, bs := range states {
 		if err := bs.materializePending(ctx); err != nil {
@@ -640,8 +640,8 @@ func (d *DoltSession) currentBranches() *branchStates {
 
 // checkNoOpenWriters returns an error if any current branch state has open table writers.
 func (d *DoltSession) checkNoOpenWriters() error {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 	return d.currentBranches().checkNoOpenWriters()
 }
 
@@ -849,9 +849,9 @@ func (d *DoltSession) validateDoltCommit(currDb string, dirtyBranchState *branch
 		return fmt.Errorf("no changes to dolt_commit on database %s", currDbBaseName)
 	}
 
-	d.mu.Lock()
+	d.mu.RLock()
 	dbState, ok := d.dbStates[doltdb.NewDbKey(currDbBaseName)]
-	d.mu.Unlock()
+	d.mu.RUnlock()
 
 	if !ok {
 		return fmt.Errorf("no database state found for %s", currDbBaseName)
@@ -874,8 +874,8 @@ var ErrMultipleDatabases = errors.New("Cannot atomically commit changes to more 
 
 // dirtyWorkingSets returns all dirty working sets for this session
 func (d *DoltSession) dirtyWorkingSets() []*branchState {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 	var dirtyStates []*branchState
 	for _, branchState := range d.currentBranches().all() {
 		if branchState.isDirty() {
@@ -892,8 +892,8 @@ func (d *DoltSession) dirtyWorkingSets() []*branchState {
 // DirtyDatabases returns the names of databases who have outstanding changes in this session and need to be committed
 // in a SQL transaction before they are visible to other sessions.
 func (d *DoltSession) DirtyDatabases() []string {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 	var dbNames []string
 	for _, dbState := range d.dbStates {
 		for _, branchState := range d.currentBranches().forDb(doltdb.NewQualifiedDbName(dbState.dbName, "")) {
@@ -915,8 +915,8 @@ type DirtyBranch struct {
 // DirtyBranches returns every (database, branch) pair with uncommitted changes.
 // Unlike DirtyDatabases it distinguishes branches within a database.
 func (d *DoltSession) DirtyBranches() []DirtyBranch {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 	var dirty []DirtyBranch
 	for _, branchState := range d.currentBranches().all() {
 		if branchState.isDirty() {
@@ -929,8 +929,8 @@ func (d *DoltSession) DirtyBranches() []DirtyBranch {
 // IsBranchDirty reports whether |branch| of |dbName| has uncommitted changes.
 // |dbName| must be a base name, not revision-qualified.
 func (d *DoltSession) IsBranchDirty(dbName, branch string) bool {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 	branchState, ok := d.currentBranches().get(doltdb.NewQualifiedDbName(dbName, branch))
 	return ok && branchState.isDirty()
 }
@@ -939,8 +939,8 @@ func (d *DoltSession) IsBranchDirty(dbName, branch string) bool {
 // any branch of |dbName|. An open table writer belongs to a statement that is still running. |dbName| must be a base
 // name, not revision-qualified.
 func (d *DoltSession) IsWritingDatabase(dbName string) bool {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 	for _, branchState := range d.currentBranches().forDb(doltdb.ParseQualifiedDbName(dbName)) {
 		if branchState.isDirty() || (branchState.writeSession != nil && branchState.writeSession.HasOpenTableWriters()) {
 			return true
@@ -1164,10 +1164,10 @@ func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func
 	name := doltdb.ParseQualifiedDbName(dbName)
 	dbKey := name.DbKey()
 
-	d.mu.Lock()
+	d.mu.RLock()
 	dbState, dbStateFound := d.dbStates[dbKey]
 	heads := d.currentBranches().forDb(name)
-	d.mu.Unlock()
+	d.mu.RUnlock()
 
 	if dbStateFound {
 		for _, head := range heads {
@@ -1313,9 +1313,9 @@ func (d *DoltSession) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, save
 
 	// A physical database can have several branch states in this session.
 	dirtyBranches := make(map[doltdb.QualifiedDbKey]bool)
-	d.mu.Lock()
+	d.mu.RLock()
 	branches := d.currentBranches().all()
-	d.mu.Unlock()
+	d.mu.RUnlock()
 	for _, branch := range branches {
 		ws, err := branch.WorkingSet(ctx)
 		if err != nil {
@@ -1698,8 +1698,8 @@ func (d *DoltSession) ForkWorkingSet(ctx *sql.Context, dbName string, ws *doltdb
 // isCurrentBranchState reports whether |bs| is still this session's state for its branch, rather than one dropped
 // by the end of a transaction or the removal of its database or branch.
 func (d *DoltSession) isCurrentBranchState(bs *branchState) bool {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 	return d.currentBranches().contains(bs)
 }
 
@@ -2050,9 +2050,9 @@ func (d *DoltSession) CurrentHead(ctx *sql.Context, dbName string) (string, bool
 		return "", false, nil
 	}
 
-	d.mu.Lock()
+	d.mu.RLock()
 	dbState, ok := d.dbStates[name.DbKey()]
-	d.mu.Unlock()
+	d.mu.RUnlock()
 
 	if ok {
 		return dbState.checkedOutRevSpec, true, nil
