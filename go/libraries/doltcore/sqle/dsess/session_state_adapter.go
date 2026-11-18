@@ -231,9 +231,9 @@ func (s SessionStateAdapter) RemoveBackup(_ context.Context, name string) error 
 
 func (s SessionStateAdapter) TempTableFilesDir() (string, error) {
 	// The directory is session-wide, so don't load a branch state for it.
-	s.session.mu.Lock()
+	s.session.mu.RLock()
 	dbState, ok := s.session.dbStates[doltdb.NewDbKey(s.dbName)]
-	s.session.mu.Unlock()
+	s.session.mu.RUnlock()
 	if ok {
 		return dbState.tmpFileDir, nil
 	}
