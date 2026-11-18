@@ -721,10 +721,7 @@ func compareAddr(l, r hash.Hash) int {
 // using |collation|, skipping zero-weight ignorable characters in UCA
 // collations.
 func CompareCollatedStrings(collation sql.CollationID, left, right []byte) int {
-	if collation == sql.Collation_binary {
-		return bytes.Compare(left, right)
-	}
-
+	// Binary strings use ByteStringEnc rather than StringEnc.
 	i := 0
 	for i < len(left) && i < len(right) && left[i] == right[i] {
 		i++
