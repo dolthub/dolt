@@ -932,7 +932,7 @@ function new_order_4()
     con:query(([[INSERT INTO orders%d
                     (o_id, o_d_id, o_w_id, o_c_id,  o_entry_d, o_ol_cnt, o_all_local)
                 VALUES (%d,%d,%d,%d,NOW(),%d,%d)]]):
-                format(table_num, o_id, d_id, w_id, c_id, ol_cnt, all_local))
+                format(table_num, d_next_o_id, d_id, w_id, c_id, ol_cnt, all_local))
     con:query("COMMIT")
 end
 
