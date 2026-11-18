@@ -65,7 +65,8 @@ func doDoltTag(ctx *sql.Context, args []string) (int, error) {
 		if err != nil {
 			return 1, err
 		}
-		return 0, nil
+
+		return 0, commitTransaction(ctx, dSess, nil)
 	}
 
 	// create tag
@@ -108,5 +109,5 @@ func doDoltTag(ctx *sql.Context, args []string) (int, error) {
 		return 1, err
 	}
 
-	return 0, nil
+	return 0, commitTransaction(ctx, dSess, nil)
 }
