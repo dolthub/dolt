@@ -121,7 +121,7 @@ type TableMerger struct {
 }
 
 func (tm TableMerger) GetNewValueMerger(ctx context.Context, mergeSch schema.Schema, leftRows prolly.Map) *valueMerger {
-	return NewValueMerger(ctx, mergeSch, tm.leftSch, tm.rightSch, tm.ancSch, leftRows.Pool(), leftRows.NodeStore())
+	return NewValueMerger(ctx, mergeSch, tm.leftSch, tm.rightSch, tm.ancSch, leftRows.Pool(), leftRows.NodeStore(), tm.name.Name)
 }
 
 func rowsFromTable(ctx context.Context, tbl *doltdb.Table) (prolly.Map, error) {
@@ -441,8 +441,8 @@ func (rm *RootMerger) MaybeShortCircuit(ctx context.Context, tm *TableMerger, op
 	}
 
 	// Both made identical changes
-	// For keyless tables, this counts as a conflict
-	if leftExists && rightExists && leftHash == rightHash && !schema.IsKeyless(tm.leftSch) {
+	// For keyless tables, this counts as a conflict, and a row merge policy decides each row of a table
+	if leftExists && rightExists && leftHash == rightHash && !schema.IsKeyless(tm.leftSch) && (opts.RowMergePolicy == nil || areRootObjs) {
 		return tm.leftTbl, tm.leftRootObj, &MergeStats{Operation: TableUnmodified}, nil
 	}
 

@@ -5,6 +5,15 @@ remotesrv_pid=""
 # Track the port number that remotesrv is running on.
 REMOTESRV_PORT=""
 
+# Choose distinct HTTP and gRPC ports for this test before starting remotesrv.
+setup_remotesrv_ports() {
+    REMOTESRV_HTTP_PORT=$(definePORT)
+    REMOTESRV_GRPC_PORT=$(definePORT)
+    while [ "$REMOTESRV_HTTP_PORT" = "$REMOTESRV_GRPC_PORT" ]; do
+        REMOTESRV_GRPC_PORT=$(definePORT)
+    done
+}
+
 # Starts a remotesrv server on the specified port (or a random port if not specified).
 # Usage: start_remotesrv [port]
 start_remotesrv() {

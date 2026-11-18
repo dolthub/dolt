@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expranalysis"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -373,7 +374,12 @@ func RekeyTable(ctx *sql.Context, name doltdb.TableName, tbl *doltdb.Table, sch,
 		return nil, false, err
 	}
 	for _, index := range newSch.Indexes().AllIndexes() {
-		built, err := creation.BuildProllyIndexExternal(ctx, vrw, ns, newSch, name.Name, index, newRows, nil, nil)
+		predicate, err := expranalysis.ResolveIndexPredicate(ctx, name.Name, newSch, index)
+		if err != nil {
+			return nil, false, err
+		}
+
+		built, err := creation.BuildProllyIndexExternal(ctx, vrw, ns, newSch, name.Name, index, newRows, nil, predicate)
 		if err != nil {
 			return nil, false, err
 		}

@@ -223,23 +223,42 @@ func (s *prollyWriteSession) materializePending(ctx *sql.Context) error {
 		return nil
 	}
 
+	tbls, err := s.flushPending(ctx, pending)
+	if err != nil {
+		return err
+	}
+	// Rebuild idle writers on their flushed tables. This must follow the flush, since rebuilding can read the working set.
+	for tblName, tblWriter := range pending {
+		if tblWriter.hasUncommittedEdits() {
+			continue
+		}
+		if err = tblWriter.Reset(ctx, tbls[tblName]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// flushPending puts the tables of the |pending| writers into the owner's working set and marks them as no longer
+// pending. It returns the flushed tables.
+func (s *prollyWriteSession) flushPending(ctx *sql.Context, pending map[doltdb.TableName]*prollyTableWriter) (map[doltdb.TableName]*doltdb.Table, error) {
 	s.materializing = true
 	defer func() {
 		s.materializing = false
 	}()
 	root, tbls, err := s.flushTables(ctx, pending, (*prollyTableWriter).pendingTable)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err = s.owner.SetFlushedWorkingSet(ctx, s.withRoot(root)); err != nil {
-		return err
+		return nil, err
 	}
+	// The index writers still hold every edit, so their views remain valid until the writers are reset.
 	for tblName, tblWriter := range pending {
-		if err = tblWriter.materialized(ctx, tbls[tblName]); err != nil {
-			return err
-		}
+		tblWriter.tbl = tbls[tblName]
+		tblWriter.pending = false
 	}
-	return nil
+	return tbls, nil
 }
 
 // HasOpenTableWriters implements WriteSession

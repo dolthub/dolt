@@ -17,7 +17,6 @@ package dsess
 import (
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -73,7 +72,7 @@ type DatabaseSessionState struct {
 	// headCache records the session-caches for every branch head accessed by the session
 	// This is managed separately from the branch states themselves because it persists across transactions (which is
 	// safe because it's keyed by immutable hashes)
-	headCache map[string]*SessionCache
+	headCache map[doltdb.RevisionKey]*SessionCache
 	// dbName is the name of the database this state applies to. This is always the base name of the database, without
 	// a revision qualifier.
 	dbName string
@@ -89,7 +88,7 @@ type DatabaseSessionState struct {
 
 func newEmptyDatabaseSessionState() *DatabaseSessionState {
 	return &DatabaseSessionState{
-		headCache: make(map[string]*SessionCache),
+		headCache: make(map[doltdb.RevisionKey]*SessionCache),
 	}
 }
 
@@ -248,6 +247,14 @@ func (bs *branchState) RevisionDbName() string {
 	return doltdb.RevisionDbName(bs.dbState.dbName, bs.head)
 }
 
+func (bs *branchState) name() doltdb.QualifiedDbName {
+	return doltdb.NewQualifiedDbName(bs.dbState.dbName, bs.head)
+}
+
+func (bs *branchState) key() doltdb.QualifiedDbKey {
+	return bs.name().Key()
+}
+
 var _ SessionState = (*branchState)(nil)
 
 // WorkingSet returns this branch state's working set, or nil for a detached head, with its write session's pending
@@ -331,7 +338,7 @@ func (bs *branchState) WriteSession() WriteSession {
 }
 
 func (bs *branchState) SessionCache() *SessionCache {
-	return bs.dbState.headCache[strings.ToLower(bs.head)]
+	return bs.dbState.headCache[doltdb.NewRevisionKey(bs.head)]
 }
 
 func (bs branchState) EditOpts() editor.Options {

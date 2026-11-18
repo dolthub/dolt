@@ -4399,6 +4399,39 @@ var DoltBranchScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt_branch refuses names longer than the ref name limit",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_branch(repeat('a', 1024));",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "call dolt_branch(repeat('b', 1025));",
+				ExpectedErrStr: "fatal: '" + strings.Repeat("b", 1025) + "' is an invalid branch name.",
+			},
+			{
+				Query:          "call dolt_branch(repeat('c', 32768));",
+				ExpectedErrStr: "fatal: '" + strings.Repeat("c", 32768) + "' is an invalid branch name.",
+			},
+			{
+				Query:          "call dolt_branch('--orphan', repeat('d', 1025));",
+				ExpectedErrStr: "fatal: '" + strings.Repeat("d", 1025) + "' is an invalid branch name.",
+			},
+			{
+				Query:          "call dolt_branch('-c', 'main', repeat('e', 1025));",
+				ExpectedErrStr: "fatal: '" + strings.Repeat("e", 1025) + "' is not a valid branch name.",
+			},
+			{
+				Query:          "call dolt_branch('-m', repeat('a', 1024), repeat('f', 1025));",
+				ExpectedErrStr: doltdb.ErrInvBranchName.Error(),
+			},
+			{
+				Query:    "select length(name) from dolt_branches order by 1;",
+				Expected: []sql.Row{{4}, {1024}},
+			},
+		},
+	},
 }
 
 var DoltResetTestScripts = []queries.ScriptTest{
@@ -6484,6 +6517,31 @@ var JsonAdaptiveEncodingScriptTests = []queries.ScriptTest{
 }
 
 var DoltTagTestScripts = []queries.ScriptTest{
+	{
+		Name: "dolt-tag: refuses names longer than the ref name limit",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_TAG(repeat('a', 1024), 'HEAD')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "CALL DOLT_TAG(repeat('b', 1025), 'HEAD')",
+				ExpectedErrStr: doltdb.ErrInvTagName.Error(),
+			},
+			{
+				Query:          "CALL DOLT_TAG(repeat('c', 65536), 'HEAD')",
+				ExpectedErrStr: doltdb.ErrInvTagName.Error(),
+			},
+			{
+				Query:          "CALL DOLT_TAG(repeat('d', 65537), 'HEAD')",
+				ExpectedErrStr: doltdb.ErrInvTagName.Error(),
+			},
+			{
+				Query:    "SELECT length(tag_name) FROM dolt_tags",
+				Expected: []sql.Row{{1024}},
+			},
+		},
+	},
 	{
 		Name: "dolt-tag: SQL create tags",
 		SetUpScript: []string{

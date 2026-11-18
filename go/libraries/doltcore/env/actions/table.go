@@ -52,7 +52,7 @@ func MoveTablesBetweenRoots(ctx context.Context, tbls []doltdb.TableName, src, d
 				continue
 			}
 
-			stagedFKs.RemoveKeys(td.FromFks...)
+			stagedFKs = stagedFKs.RemoveKeys(td.FromFks...)
 			tblsToDrop.Add(td.FromName)
 		}
 	}
@@ -96,8 +96,8 @@ func MoveTablesBetweenRoots(ctx context.Context, tbls []doltdb.TableName, src, d
 				}
 			}
 
-			stagedFKs.RemoveKeys(td.FromFks...)
-			err = stagedFKs.AddKeys(td.ToFks...)
+			stagedFKs = stagedFKs.RemoveKeys(td.FromFks...)
+			stagedFKs, err = stagedFKs.AddKeys(td.ToFks...)
 			if err != nil {
 				return nil, err
 			}
