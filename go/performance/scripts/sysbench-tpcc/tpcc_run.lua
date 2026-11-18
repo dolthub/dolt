@@ -891,4 +891,53 @@ function new_order_1()
     con:query("COMMIT")
 end
 
+function new_order_2()
+    -- prep work
+    local table_num = sysbench.rand.uniform(1, sysbench.opt.tables)
+    local w_id = sysbench.rand.uniform(1, sysbench.opt.scale)
+    local d_id = sysbench.rand.uniform(1, DIST_PER_WARE)
+    local c_id = NURand(1023, 1, CUST_PER_DIST)
+
+    local ol_cnt = sysbench.rand.uniform(5, 15);
+    local rbk = sysbench.rand.uniform(1, 100);
+    local itemid = {}
+    local supware = {}
+    local qty = {}
+    local all_local = 1
+
+    for i = 1, ol_cnt
+    do
+        itemid[i] = NURand(8191, 1, MAXITEMS)
+        if ((i == ol_cnt - 1) and (rbk == 1))
+	    then
+            itemid[i] = -1
+        end
+
+        if sysbench.rand.uniform(1, 100) ~= 1
+	    then
+            supware[i] = w_id
+        else
+            supware[i] = other_ware(w_id)
+            all_local = 0
+        end
+        qty[i] = sysbench.rand.uniform(1, 10)
+   end
+
+    con:query("BEGIN")
+--        SELECT d_next_o_id, d_tax INTO :d_next_o_id, :d_tax
+--                FROM district
+--                WHERE d_id = :d_id
+--                AND d_w_id = :w_id
+--                FOR UPDATE
+  local d_next_o_id
+  local d_tax
+  d_next_o_id, d_tax = con:query_row(([[SELECT d_next_o_id, d_tax
+                                          FROM district%d
+                                         WHERE d_w_id = %d
+                                           AND d_id = %d FOR UPDATE]]):
+                                        format(table_num, w_id, d_id))
+
+  con:query("COMMIT")
+end
+
 -- vim:ts=4 ss=4 sw=4 expandtab
