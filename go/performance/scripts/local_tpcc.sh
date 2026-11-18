@@ -88,7 +88,7 @@ sleep 1
   --mysql-port="$PORT" \
   --mysql-user="$USER" \
   --mysql-password="$PASS" \
-  --time=120 \
+  --time=60 \
   --report_interval=10 \
   --threads=1 \
   --tables=1 \
@@ -117,7 +117,7 @@ echo "benchmark $SYSBENCH_TEST starting at $WORKING_DIR"
   --mysql-port="$PORT" \
   --mysql-user="$USER" \
   --mysql-password="$PASS" \
-  --time=120 \
+  --time=60 \
   --report_interval=10 \
   --threads=1 \
   --tables=1 \

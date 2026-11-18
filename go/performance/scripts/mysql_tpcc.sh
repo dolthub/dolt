@@ -3,10 +3,10 @@ set -e
 set -o pipefail
 
 HOST="127.0.0.1"
-PORT=3316
+PORT=3306
 DBNAME="tpcc_test"
 USER="root"
-PASS="toor"
+PASS=""
 
 if [ ! -d "./sysbench-tpcc" ]; then
   git clone https://github.com/Percona-Lab/sysbench-tpcc.git
@@ -21,9 +21,9 @@ pushd sysbench-tpcc
   --mysql-port="$PORT" \
   --mysql-user="$USER" \
   --mysql-password="$PASS" \
-  --time=10 \
-  --report_interval=1 \
-  --threads=2 \
+  --time=60 \
+  --report_interval=10 \
+  --threads=1 \
   --tables=1 \
   --scale=1 \
   --trx_level="RR" \
@@ -37,9 +37,9 @@ pushd sysbench-tpcc
   --mysql-port="$PORT" \
   --mysql-user="$USER" \
   --mysql-password="$PASS" \
-  --time=10 \
-  --report_interval=1 \
-  --threads=2 \
+  --time=60 \
+  --report_interval=10 \
+  --threads=1 \
   --tables=1 \
   --scale=1 \
   --trx_level="RR" \
@@ -52,9 +52,9 @@ pushd sysbench-tpcc
   --mysql-port="$PORT" \
   --mysql-user="$USER" \
   --mysql-password="$PASS" \
-  --time=10 \
-  --report_interval=1 \
-  --threads=2 \
+  --time=60 \
+  --report_interval=10 \
+  --threads=1 \
   --tables=1 \
   --scale=1 \
   --trx_level="RR" \
