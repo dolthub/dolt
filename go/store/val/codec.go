@@ -747,24 +747,15 @@ func CompareCollatedStrings(collation sql.CollationID, left, right []byte) int {
 		if len(left) > 0 && len(right) > 0 {
 			lr, lread := utf8.DecodeRune(left)
 			rr, rread := utf8.DecodeRune(right)
-			if (lr != utf8.RuneError || lread > 1) && lr == rr {
+			if lr == rr {
 				left = left[lread:]
 				right = right[rread:]
 				continue
 			}
 		}
 
-		lw, lOk, lErr := nextCollationWeight(&left, getRuneWeight, skipIgnorable)
-		rw, rOk, rErr := nextCollationWeight(&right, getRuneWeight, skipIgnorable)
-		if lErr != nil || rErr != nil {
-			if lErr != nil && rErr == nil {
-				return 1
-			}
-			if lErr == nil && rErr != nil {
-				return -1
-			}
-			return 0
-		}
+		lw, lOk := nextCollationWeight(&left, getRuneWeight, skipIgnorable)
+		rw, rOk := nextCollationWeight(&right, getRuneWeight, skipIgnorable)
 		if !lOk || !rOk {
 			if !lOk && !rOk {
 				return 0
@@ -785,20 +776,17 @@ func CompareCollatedStrings(collation sql.CollationID, left, right []byte) int {
 
 // nextCollationWeight advances |buf| to the next non-skipped collation weight
 // using |getRuneWeight|, skipping zero weights when |skipIgnorable| is true.
-func nextCollationWeight(buf *[]byte, getRuneWeight sql.CollationSorter, skipIgnorable bool) (int32, bool, error) {
+func nextCollationWeight(buf *[]byte, getRuneWeight sql.CollationSorter, skipIgnorable bool) (int32, bool) {
 	for len(*buf) > 0 {
 		r, read := utf8.DecodeRune(*buf)
 		*buf = (*buf)[read:]
-		if r == utf8.RuneError && read == 1 {
-			return 0, false, sql.ErrCollationMalformedString.New("comparing")
-		}
 		w := getRuneWeight(r)
 		if skipIgnorable && w == encodings.IgnorableWeight {
 			continue
 		}
-		return w, true, nil
+		return w, true
 	}
-	return 0, false, nil
+	return 0, false
 }
 
 func writeRaw(buf, val []byte) {

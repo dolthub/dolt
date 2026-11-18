@@ -382,9 +382,6 @@ func compareCollatedChunkDiffer(ctx context.Context, d chunkDiffer, collation sq
 			}
 			r, read := utf8.DecodeRune(*buf)
 			*buf = (*buf)[read:]
-			if r == utf8.RuneError && read == 1 {
-				return 0, false, sql.ErrCollationMalformedString.New("comparing")
-			}
 			w := getRuneWeight(r)
 			if skipIgnorable && w == encodings.IgnorableWeight {
 				continue
@@ -402,32 +399,20 @@ func compareCollatedChunkDiffer(ctx context.Context, d chunkDiffer, collation sq
 		if len(lBuf) > 0 && len(rBuf) > 0 {
 			lr, lread := utf8.DecodeRune(lBuf)
 			rr, rread := utf8.DecodeRune(rBuf)
-			if (lr != utf8.RuneError || lread > 1) && lr == rr {
+			if lr == rr {
 				lBuf = lBuf[lread:]
 				rBuf = rBuf[rread:]
 				continue
 			}
 		}
 
-		lw, lOk, lErr := nextWeight(&lBuf)
-		if lErr != nil && !sql.ErrCollationMalformedString.Is(lErr) {
-			return 0, lErr
+		lw, lOk, err := nextWeight(&lBuf)
+		if err != nil {
+			return 0, err
 		}
-		rw, rOk, rErr := nextWeight(&rBuf)
-		if rErr != nil && !sql.ErrCollationMalformedString.Is(rErr) {
-			return 0, rErr
-		}
-
-		// RuneError should be impossible to return for the above reads unless the UTF8 bytes are malformed or the
-		// buffer is empty. We handle this error here by enforcing an arbitrary order.
-		if lErr != nil || rErr != nil {
-			if lErr != nil && rErr == nil {
-				return 1, nil
-			}
-			if lErr == nil && rErr != nil {
-				return -1, nil
-			}
-			return 0, nil
+		rw, rOk, err := nextWeight(&rBuf)
+		if err != nil {
+			return 0, err
 		}
 		if !lOk || !rOk {
 			if !lOk && !rOk {
