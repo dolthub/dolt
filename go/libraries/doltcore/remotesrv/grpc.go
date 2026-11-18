@@ -159,7 +159,7 @@ func (rs *RemoteChunkStore) getRelativeStorePath(ctx context.Context, cs RemoteS
 	if err != nil {
 		return "", err
 	}
-	return prefix, nil
+	return filepath.ToSlash(prefix), nil
 }
 
 func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remotesapi.GetDownloadLocsRequest) (*remotesapi.GetDownloadLocsResponse, error) {
@@ -526,9 +526,6 @@ func (rs *RemoteChunkStore) getScheme(md metadata.MD) string {
 func (rs *RemoteChunkStore) getDownloadUrl(md metadata.MD, path string) *url.URL {
 	host := rs.getHost(md)
 	scheme := rs.getScheme(md)
-	path = strings.ReplaceAll(path, `\`, "/")
-	// URL paths must use forward slashes (RFC 3986). On Windows, paths built
-	// from OS-specific helpers such as filepath.Rel contain backslashes.
 	return &url.URL{
 		Scheme: scheme,
 		Host:   host,
