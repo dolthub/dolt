@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/rowjournal"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/keymutex"
 	"github.com/dolthub/dolt/go/store/types"
@@ -122,6 +123,9 @@ type DoltDatabaseProvider interface {
 	// TxLocks returns the per-engine keymutex used to serialize
 	// transaction commits by working-set reference.
 	TxLocks() keymutex.Keymutex
+	// RowJournal returns the per-engine journal of transactions, row locks and row writes, or nil if this provider
+	// doesn't keep one.
+	RowJournal() *rowjournal.Journal
 }
 
 type SessionDatabaseBranchSpec struct {

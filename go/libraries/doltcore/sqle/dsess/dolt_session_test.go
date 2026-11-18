@@ -28,6 +28,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/rowjournal"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/keymutex"
@@ -745,6 +746,10 @@ func (e emptyRevisionDatabaseProvider) RevisionDbState(_ *sql.Context, revDB str
 
 func (e emptyRevisionDatabaseProvider) EngineOverrides() sql.EngineOverrides {
 	return sql.EngineOverrides{}
+}
+
+func (e emptyRevisionDatabaseProvider) RowJournal() *rowjournal.Journal {
+	return nil
 }
 
 func (e emptyRevisionDatabaseProvider) TxLocks() keymutex.Keymutex {

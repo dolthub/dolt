@@ -35,6 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/rowjournal"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expranalysis"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -588,10 +589,24 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 		}
 	}
 
+	// The transaction is registered in the row journal before it reads the databases' roots, and transactions are
+	// marked committed there only after they write theirs. So this transaction's journal snapshot never counts as
+	// committed a transaction whose changes its roots lack.
+	journal := d.rowJournal()
+	var rowTxn *rowjournal.Txn
+	if journal != nil {
+		rowTxn = journal.Begin(d.Session.ID())
+	}
+
 	tx, err := newDoltTransaction(ctx, txDbs, tCharacteristic, d.droppedSinceSnapshot)
 	if err != nil {
+		if rowTxn != nil {
+			journal.Abort(rowTxn)
+		}
+
 		return nil, err
 	}
+	tx.rowTxn = rowTxn
 	_, tx.postgresSavepoints = d.DoltgresSessObj.(DoltgresTransactionLifecycle)
 
 	// The engine sets the transaction after this call as well, but since we begin accessing data below, we need to set
@@ -655,12 +670,24 @@ func (d *DoltSession) SetTransaction(tx sql.Transaction) {
 	nextTx, nextOk := tx.(*DoltTransaction)
 	if prevOk && prevTx != nextTx {
 		_ = prevTx.branches.checkNoOpenWriters()
+		// A transaction that committed was marked as such in the row journal before getting here. Any other way of
+		// ceasing to be the session's transaction abandons it, and this is the one place all of them pass through.
+		prevTx.abortRowTxn(d.rowJournal())
 	}
 	if nextOk && nextTx != prevTx {
 		_ = d.noTxBranches.checkNoOpenWriters()
 		d.noTxBranches = newBranchStates()
 	}
 	d.Session.SetTransaction(tx)
+}
+
+// rowJournal returns the engine's row journal, or nil if there is none.
+func (d *DoltSession) rowJournal() *rowjournal.Journal {
+	if d.provider == nil {
+		return nil
+	}
+
+	return d.provider.RowJournal()
 }
 
 // CommitTransaction commits the in-progress transaction. Depending on session settings, this may write only a new
@@ -681,6 +708,10 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) er
 		// The engine clears transaction state only on COMMIT statements, but other kinds of statements that implicitly
 		// deal with transactions (e.g. merge) need this state clear here, so that they get a new transaction
 		// on the next statement.
+		if dtx, ok := tx.(*DoltTransaction); ok {
+			dtx.commitRowTxn(d.rowJournal())
+		}
+
 		d.notifyDoltgresTransactionCommitted()
 		ctx.SetTransaction(nil)
 		return nil
@@ -829,6 +860,9 @@ func (d *DoltSession) commitBranchStates(
 	if err != nil {
 		return nil, err
 	}
+
+	// The working sets are written, so other transactions can now be told that this one committed.
+	dtx.commitRowTxn(d.rowJournal())
 
 	// The engine clears transactions for COMMIT, but other callers (including stored procedures) must clear them
 	// themselves so the next statement starts a new transaction. This drops |states|, so lookups until then load
@@ -1138,6 +1172,10 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, dbName string, branchSt
 
 // Rollback rolls the given transaction back
 func (d *DoltSession) Rollback(ctx *sql.Context, tx sql.Transaction) error {
+	if dtx, ok := tx.(*DoltTransaction); ok {
+		dtx.abortRowTxn(d.rowJournal())
+	}
+
 	d.notifyDoltgresTransactionRolledBack()
 	// Drop the branch states and let a new transaction begin next statement.
 	d.mu.Lock()
@@ -1328,6 +1366,7 @@ func (d *DoltSession) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, save
 	}
 
 	dtx.CreateSavepoint(savepointName, roots, dirtyBranches)
+	dtx.createRowSavepoint(d.rowJournal())
 	if lifecycle, ok := d.DoltgresSessObj.(DoltgresTransactionLifecycle); ok {
 		lifecycle.DoltgresSavepointCreated(savepointName)
 	}
@@ -1385,6 +1424,9 @@ func (d *DoltSession) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, 
 		}
 		branch.dirty = point.dirtyBranches[key]
 	}
+
+	// The working roots are back to what they were, so the rows changed since the savepoint can be unlocked.
+	dtx.rollbackRowSavepoint(d.rowJournal(), point)
 	if lifecycle, ok := d.DoltgresSessObj.(DoltgresTransactionLifecycle); ok {
 		lifecycle.DoltgresSavepointRolledBack(savepointName)
 	}
@@ -1404,10 +1446,12 @@ func (d *DoltSession) ReleaseSavepoint(ctx *sql.Context, tx sql.Transaction, sav
 		return fmt.Errorf("expected a DoltTransaction")
 	}
 
-	existed := dtx.ClearSavepoint(savepointName)
+	rowLevel, existed := dtx.clearSavepoint(savepointName)
 	if !existed {
 		return sql.ErrSavepointDoesNotExist.New(savepointName)
 	}
+
+	dtx.releaseRowSavepoint(d.rowJournal(), rowLevel)
 	if lifecycle, ok := d.DoltgresSessObj.(DoltgresTransactionLifecycle); ok {
 		lifecycle.DoltgresSavepointReleased(savepointName)
 	}
@@ -2319,6 +2363,11 @@ func (d *DoltSession) CommandEnd() {
 }
 
 func (d *DoltSession) SessionEnd() {
+	// Nothing rolls back the transaction of a session that just goes away, so its row locks are released here.
+	if dtx, ok := d.Session.GetTransaction().(*DoltTransaction); ok {
+		dtx.abortRowTxn(d.rowJournal())
+	}
+
 	if d.gcSafepointController != nil {
 		d.gcSafepointController.SessionEnd(d)
 	}
