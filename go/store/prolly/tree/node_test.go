@@ -297,8 +297,8 @@ func TestCompareCollatedChunkDiffer(t *testing.T) {
 		},
 		{
 			name:      "consecutive ignorable runes across chunk boundaries",
-			l:         "\u200b\u200bbob",
-			r:         "bob",
+			l:         "\u200b\u200béob",
+			r:         "eob",
 			collation: sql.Collation_utf8mb4_unicode_ci,
 			want:      0,
 		},

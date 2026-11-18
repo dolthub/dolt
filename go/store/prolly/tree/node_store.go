@@ -346,9 +346,6 @@ func (ns *nodeStore) CompareAdaptiveCollatedStrings(ctx context.Context, l, r va
 // compareCollatedChunkDiffer is the streaming version of CompareCollatedStrings, getting just the diff between two
 // values when comparing them.
 func compareCollatedChunkDiffer(ctx context.Context, d chunkDiffer, collation sql.CollationID) (int, error) {
-	// Binary adaptive blobs use BytesAdaptiveEnc rather than StringAdaptiveEnc.
-	getRuneWeight := collation.Sorter()
-	skipIgnorable := collation.IsUCA()
 	var lBuf, rBuf []byte
 	done := false
 
@@ -380,13 +377,15 @@ func compareCollatedChunkDiffer(ctx context.Context, d chunkDiffer, collation sq
 			if len(*buf) == 0 {
 				return 0, false, nil
 			}
-			r, read := utf8.DecodeRune(*buf)
+			// RuneError should be impossible to return for the above read unless
+			// the UTF-8 bytes are malformed, in which case [sql.WeightScanner]
+			// yields [utf8.RuneError]'s weight.
+			_, read := utf8.DecodeRune(*buf)
+			scanner := sql.NewWeightScanner(collation, encodings.BytesToString((*buf)[:read]))
 			*buf = (*buf)[read:]
-			w := getRuneWeight(r)
-			if skipIgnorable && w == encodings.IgnorableWeight {
-				continue
+			if w, ok := scanner.Next(); ok {
+				return w, true, nil
 			}
-			return w, true, nil
 		}
 	}
 

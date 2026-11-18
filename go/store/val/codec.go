@@ -718,10 +718,8 @@ func compareAddr(l, r hash.Hash) int {
 }
 
 // CompareCollatedStrings compares two UTF-8 byte slices |left| and |right|
-// using |collation|, skipping zero-weight ignorable characters in UCA
-// collations.
+// using [sql.WeightScanner] for |collation|.
 func CompareCollatedStrings(collation sql.CollationID, left, right []byte) int {
-	// Binary strings use ByteStringEnc rather than StringEnc.
 	i := 0
 	for i < len(left) && i < len(right) && left[i] == right[i] {
 		i++
@@ -738,55 +736,10 @@ func CompareCollatedStrings(collation sql.CollationID, left, right []byte) int {
 			i = rStart
 		}
 	}
-	left = left[i:]
-	right = right[i:]
 
-	getRuneWeight := collation.Sorter()
-	skipIgnorable := collation.IsUCA()
-	for {
-		if len(left) > 0 && len(right) > 0 {
-			lr, lread := utf8.DecodeRune(left)
-			rr, rread := utf8.DecodeRune(right)
-			if lr == rr {
-				left = left[lread:]
-				right = right[rread:]
-				continue
-			}
-		}
-
-		lw, lOk := nextCollationWeight(&left, getRuneWeight, skipIgnorable)
-		rw, rOk := nextCollationWeight(&right, getRuneWeight, skipIgnorable)
-		if !lOk || !rOk {
-			if !lOk && !rOk {
-				return 0
-			}
-			if !lOk {
-				return -1
-			}
-			return 1
-		}
-		if lw < rw {
-			return -1
-		}
-		if lw > rw {
-			return 1
-		}
-	}
-}
-
-// nextCollationWeight advances |buf| to the next non-skipped collation weight
-// using |getRuneWeight|, skipping zero weights when |skipIgnorable| is true.
-func nextCollationWeight(buf *[]byte, getRuneWeight sql.CollationSorter, skipIgnorable bool) (int32, bool) {
-	for len(*buf) > 0 {
-		r, read := utf8.DecodeRune(*buf)
-		*buf = (*buf)[read:]
-		w := getRuneWeight(r)
-		if skipIgnorable && w == encodings.IgnorableWeight {
-			continue
-		}
-		return w, true
-	}
-	return 0, false
+	leftScanner := sql.NewWeightScanner(collation, encodings.BytesToString(left[i:]))
+	rightScanner := sql.NewWeightScanner(collation, encodings.BytesToString(right[i:]))
+	return leftScanner.Compare(&rightScanner)
 }
 
 func writeRaw(buf, val []byte) {
