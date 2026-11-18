@@ -1035,4 +1035,240 @@ function new_order_9()
     con:query("COMMIT")
 end
 
+-- ----------------------------------------------------------------------
+-- Isolated payment statements
+--
+-- Each payment_N runs one of the statements from payment() in its own
+-- transaction, e.g. trx="payment_3". Statements that need values read by an
+-- earlier statement run with the SELECTs that produce those values.
+--
+--   payment_1   UPDATE warehouse (w_ytd)
+--   payment_2   SELECT warehouse
+--   payment_3   UPDATE district (d_ytd)
+--   payment_4   SELECT district
+--   payment_5   SELECT count(c_id) by last name
+--   payment_6   SELECT c_id by last name ORDER BY c_first
+--   payment_7   SELECT customer ... FOR UPDATE
+--   payment_8   SELECT c_data
+--   payment_9   SELECT customer FOR UPDATE, SELECT c_data,
+--               UPDATE customer (balance, ytd, c_data)   -- "BC" credit path
+--   payment_10  SELECT customer FOR UPDATE,
+--               UPDATE customer (balance, ytd)           -- "GC" credit path
+--   payment_11  SELECT warehouse, SELECT district, INSERT history
+--
+-- payment_9 and payment_10 always take their branch, regardless of the
+-- customer's actual c_credit. Every transaction commits.
+-- ----------------------------------------------------------------------
+
+-- 85% of payments are for a customer of the home warehouse/district
+local function payment_customer_ware(w_id, d_id)
+    if sysbench.rand.uniform(1, 100) <= 85 then
+        return w_id, d_id
+    end
+    return other_ware(w_id), sysbench.rand.uniform(1, DIST_PER_WARE)
+end
+
+local function select_warehouse_addr(table_num, w_id)
+    return con:query_row(([[SELECT w_street_1, w_street_2, w_city, w_state, w_zip, w_name
+                              FROM warehouse%d
+                             WHERE w_id = %d]]):format(table_num, w_id))
+end
+
+local function select_district_addr(table_num, w_id, d_id)
+    return con:query_row(([[SELECT d_street_1, d_street_2, d_city, d_state, d_zip, d_name
+                              FROM district%d
+                             WHERE d_w_id = %d
+                               AND d_id = %d]]):format(table_num, w_id, d_id))
+end
+
+-- returns c_balance, c_ytd_payment
+local function select_customer_for_update(table_num, c_w_id, c_d_id, c_id)
+    local c_first, c_middle, c_last, c_street_1, c_street_2, c_city, c_state, c_zip,
+          c_phone, c_credit, c_credit_lim, c_discount, c_balance, c_ytd_payment, c_since =
+        con:query_row(([[SELECT c_first, c_middle, c_last, c_street_1,
+                                c_street_2, c_city, c_state, c_zip, c_phone,
+                                c_credit, c_credit_lim, c_discount, c_balance, c_ytd_payment, c_since
+                           FROM customer%d
+                          WHERE c_w_id = %d
+                            AND c_d_id= %d
+                            AND c_id=%d FOR UPDATE]])
+                        :format(table_num, c_w_id, c_d_id, c_id))
+    return tonumber(c_balance), tonumber(c_ytd_payment)
+end
+
+local function select_c_data(table_num, c_w_id, c_d_id, c_id)
+    return con:query_row(([[SELECT c_data
+                              FROM customer%d
+                             WHERE c_w_id = %d
+                               AND c_d_id=%d
+                               AND c_id= %d]]):
+                            format(table_num, c_w_id, c_d_id, c_id))
+end
+
+function payment_1()
+    local table_num = sysbench.rand.uniform(1, sysbench.opt.tables)
+    local w_id = sysbench.rand.uniform(1, sysbench.opt.scale)
+    local h_amount = sysbench.rand.uniform(1, 5000)
+
+    con:query("BEGIN")
+    con:query(([[UPDATE warehouse%d
+                    SET w_ytd = w_ytd + %d
+                  WHERE w_id = %d]]):format(table_num, h_amount, w_id))
+    con:query("COMMIT")
+end
+
+function payment_2()
+    local table_num = sysbench.rand.uniform(1, sysbench.opt.tables)
+    local w_id = sysbench.rand.uniform(1, sysbench.opt.scale)
+
+    con:query("BEGIN")
+    select_warehouse_addr(table_num, w_id)
+    con:query("COMMIT")
+end
+
+function payment_3()
+    local table_num = sysbench.rand.uniform(1, sysbench.opt.tables)
+    local w_id = sysbench.rand.uniform(1, sysbench.opt.scale)
+    local d_id = sysbench.rand.uniform(1, DIST_PER_WARE)
+    local h_amount = sysbench.rand.uniform(1, 5000)
+
+    con:query("BEGIN")
+    con:query(([[UPDATE district%d
+                    SET d_ytd = d_ytd + %d
+                  WHERE d_w_id = %d
+                    AND d_id= %d]]):format(table_num, h_amount, w_id, d_id))
+    con:query("COMMIT")
+end
+
+function payment_4()
+    local table_num = sysbench.rand.uniform(1, sysbench.opt.tables)
+    local w_id = sysbench.rand.uniform(1, sysbench.opt.scale)
+    local d_id = sysbench.rand.uniform(1, DIST_PER_WARE)
+
+    con:query("BEGIN")
+    select_district_addr(table_num, w_id, d_id)
+    con:query("COMMIT")
+end
+
+function payment_5()
+    local table_num = sysbench.rand.uniform(1, sysbench.opt.tables)
+    local w_id = sysbench.rand.uniform(1, sysbench.opt.scale)
+    local d_id = sysbench.rand.uniform(1, DIST_PER_WARE)
+    local c_w_id, c_d_id = payment_customer_ware(w_id, d_id)
+    local c_last = Lastname(NURand(255, 0, 999))
+
+    con:query("BEGIN")
+    con:query_row(([[SELECT count(c_id) namecnt
+                       FROM customer%d
+                      WHERE c_w_id = %d
+                        AND c_d_id= %d
+                        AND c_last='%s']]):format(table_num, c_w_id, c_d_id, c_last))
+    con:query("COMMIT")
+end
+
+function payment_6()
+    local table_num = sysbench.rand.uniform(1, sysbench.opt.tables)
+    local w_id = sysbench.rand.uniform(1, sysbench.opt.scale)
+    local d_id = sysbench.rand.uniform(1, DIST_PER_WARE)
+    local c_w_id, c_d_id = payment_customer_ware(w_id, d_id)
+    local c_last = Lastname(NURand(255, 0, 999))
+
+    con:query("BEGIN")
+    con:query(([[SELECT c_id
+                   FROM customer%d
+                  WHERE c_w_id = %d AND c_d_id= %d
+                    AND c_last='%s' ORDER BY c_first]]):format(table_num, c_w_id, c_d_id, c_last))
+    con:query("COMMIT")
+end
+
+function payment_7()
+    local table_num = sysbench.rand.uniform(1, sysbench.opt.tables)
+    local w_id = sysbench.rand.uniform(1, sysbench.opt.scale)
+    local d_id = sysbench.rand.uniform(1, DIST_PER_WARE)
+    local c_w_id, c_d_id = payment_customer_ware(w_id, d_id)
+    local c_id = NURand(1023, 1, CUST_PER_DIST)
+
+    con:query("BEGIN")
+    select_customer_for_update(table_num, c_w_id, c_d_id, c_id)
+    con:query("COMMIT")
+end
+
+function payment_8()
+    local table_num = sysbench.rand.uniform(1, sysbench.opt.tables)
+    local w_id = sysbench.rand.uniform(1, sysbench.opt.scale)
+    local d_id = sysbench.rand.uniform(1, DIST_PER_WARE)
+    local c_w_id, c_d_id = payment_customer_ware(w_id, d_id)
+    local c_id = NURand(1023, 1, CUST_PER_DIST)
+
+    con:query("BEGIN")
+    select_c_data(table_num, c_w_id, c_d_id, c_id)
+    con:query("COMMIT")
+end
+
+function payment_9()
+    local table_num = sysbench.rand.uniform(1, sysbench.opt.tables)
+    local w_id = sysbench.rand.uniform(1, sysbench.opt.scale)
+    local d_id = sysbench.rand.uniform(1, DIST_PER_WARE)
+    local c_w_id, c_d_id = payment_customer_ware(w_id, d_id)
+    local c_id = NURand(1023, 1, CUST_PER_DIST)
+    local h_amount = sysbench.rand.uniform(1, 5000)
+
+    con:query("BEGIN")
+    local c_balance, c_ytd_payment = select_customer_for_update(table_num, c_w_id, c_d_id, c_id)
+    c_balance = c_balance - h_amount
+    c_ytd_payment = c_ytd_payment + h_amount
+
+    local c_data = select_c_data(table_num, c_w_id, c_d_id, c_id)
+    local c_new_data = string.sub(string.format("| %4d %2d %4d %2d %4d $%7.2f %12s %24s",
+            c_id, c_d_id, c_w_id, d_id, w_id, h_amount, os.time(), c_data), 1, 500)
+
+    con:query(([[UPDATE customer%d
+                    SET c_balance=%f, c_ytd_payment=%f, c_data='%s'
+                  WHERE c_w_id = %d
+                    AND c_d_id=%d
+                    AND c_id=%d]])
+              :format(table_num, c_balance, c_ytd_payment, c_new_data, c_w_id, c_d_id, c_id))
+    con:query("COMMIT")
+end
+
+function payment_10()
+    local table_num = sysbench.rand.uniform(1, sysbench.opt.tables)
+    local w_id = sysbench.rand.uniform(1, sysbench.opt.scale)
+    local d_id = sysbench.rand.uniform(1, DIST_PER_WARE)
+    local c_w_id, c_d_id = payment_customer_ware(w_id, d_id)
+    local c_id = NURand(1023, 1, CUST_PER_DIST)
+    local h_amount = sysbench.rand.uniform(1, 5000)
+
+    con:query("BEGIN")
+    local c_balance, c_ytd_payment = select_customer_for_update(table_num, c_w_id, c_d_id, c_id)
+    c_balance = c_balance - h_amount
+    c_ytd_payment = c_ytd_payment + h_amount
+
+    con:query(([[UPDATE customer%d
+                    SET c_balance=%f, c_ytd_payment=%f
+                  WHERE c_w_id = %d
+                    AND c_d_id=%d
+                    AND c_id=%d]])
+              :format(table_num, c_balance, c_ytd_payment, c_w_id, c_d_id, c_id))
+    con:query("COMMIT")
+end
+
+function payment_11()
+    local table_num = sysbench.rand.uniform(1, sysbench.opt.tables)
+    local w_id = sysbench.rand.uniform(1, sysbench.opt.scale)
+    local d_id = sysbench.rand.uniform(1, DIST_PER_WARE)
+    local c_w_id, c_d_id = payment_customer_ware(w_id, d_id)
+    local c_id = NURand(1023, 1, CUST_PER_DIST)
+    local h_amount = sysbench.rand.uniform(1, 5000)
+
+    con:query("BEGIN")
+    local _, _, _, _, _, w_name = select_warehouse_addr(table_num, w_id)
+    local _, _, _, _, _, d_name = select_district_addr(table_num, w_id, d_id)
+    con:query(([[INSERT INTO history%d
+                             (h_c_d_id, h_c_w_id, h_c_id, h_d_id,  h_w_id, h_date, h_amount, h_data)
+                      VALUES (%d,%d,%d,%d,%d,NOW(),%d,'%s')]])
+              :format(table_num, c_d_id, c_w_id, c_id, d_id, w_id, h_amount, string.format("%10s %10s   ", w_name, d_name)))
+    con:query("COMMIT")
+end
+
 -- vim:ts=4 ss=4 sw=4 expandtab
