@@ -319,8 +319,7 @@ func (m *mappingRowIter) WriteNextValueRow(ctx *sql.Context, row sql.ValueRow) e
 }
 
 func (m *mappingRowIter) IsValueRowWriter(ctx *sql.Context) bool {
-	//TODO implement me
-	panic("implement me")
+	return false
 }
 
 func (m *mappingRowIter) Columns() sql.ColSet {
