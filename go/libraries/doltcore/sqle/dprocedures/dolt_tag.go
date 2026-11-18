@@ -66,6 +66,8 @@ func doDoltTag(ctx *sql.Context, args []string) (int, error) {
 			return 1, err
 		}
 
+		// Since we've deleted refs since the transaction began, we need to commit this transaction and start a new one,
+		// or else dolt_tags will still show the deleted tags for the rest of this transaction
 		return 0, commitTransaction(ctx, dSess, nil)
 	}
 
@@ -109,5 +111,7 @@ func doDoltTag(ctx *sql.Context, args []string) (int, error) {
 		return 1, err
 	}
 
+	// Since we've created a new ref since the transaction began, we need to commit this transaction and start a new one,
+	// or else dolt_tags won't show the new tag for the rest of this transaction
 	return 0, commitTransaction(ctx, dSess, nil)
 }
