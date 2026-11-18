@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -342,6 +343,8 @@ type prollySecondaryIndexWriter struct {
 	// number of indexed cols
 	idxCols int
 	unique  bool
+	// nullsNotDistinct is set for unique indexes that treat NULLs as equal to each other.
+	nullsNotDistinct bool
 	// predicate is set for partial indexes; rows not matching are excluded.
 	predicate sql.Expression
 	// virtualExprs is parallel to keyMap; non-nil entries are generating expressions for virtual
@@ -377,14 +380,7 @@ func (m prollySecondaryIndexWriter) matchesPredicate(ctx context.Context, sqlRow
 	if !ok {
 		return false, fmt.Errorf("expected *sql.Context for partial index predicate evaluation")
 	}
-	result, err := m.predicate.Eval(sqlCtx, sqlRow)
-	if err != nil {
-		return false, err
-	}
-	// A predicate that evaluates to NULL (unknown) does not match: the row is left out of the
-	// index, as PostgreSQL does for partial indexes.
-	matches, _ := result.(bool)
-	return matches, nil
+	return index.MatchesPredicate(sqlCtx, m.predicate, sqlRow)
 }
 
 var _ indexWriter = prollySecondaryIndexWriter{}
@@ -481,7 +477,7 @@ func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, sq
 		if err != nil {
 			return err
 		}
-		if v == nil {
+		if v == nil && !m.nullsNotDistinct {
 			// NULL is incomparable and cannot
 			// trigger a UNIQUE KEY violation
 			m.keyBld.Recycle()

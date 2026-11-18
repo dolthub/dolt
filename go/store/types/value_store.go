@@ -430,7 +430,11 @@ func (lvs *ValueStore) waitForNotFinalizingGC(ctx context.Context) (func(), erro
 	go func() {
 		select {
 		case <-ctx.Done():
+			// Serialize with the predicate check and wait registration so the
+			// cancellation wakeup cannot be lost before the caller parks.
+			lvs.gcMu.Lock()
 			lvs.gcCond.Broadcast()
+			lvs.gcMu.Unlock()
 		case <-stop:
 		}
 	}()

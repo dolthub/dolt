@@ -2610,11 +2610,8 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 		return sql.ViewDefinition{}, false, err
 	}
 
-	if dbState.SessionCache().ViewsCached(key) {
-		view, ok := dbState.SessionCache().GetCachedViewDefinition(key, dsess.TableCacheKey{Name: viewName, Schema: db.schemaName})
-		if ok {
-			return view, ok, nil
-		}
+	if view, found, cached := dbState.SessionCache().GetCachedViewDefinition(key, db.schemaName, viewName); cached {
+		return view, found, nil
 	}
 
 	tbl, _, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
@@ -2637,7 +2634,6 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 		return sql.ViewDefinition{}, false, err
 	}
 
-	// TODO: only cache views from a single schema here
 	dbState.SessionCache().CacheViews(key, views, db.schemaName)
 
 	return viewDef, found, nil

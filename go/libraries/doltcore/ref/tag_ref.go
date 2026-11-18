@@ -41,7 +41,7 @@ var InvalidTagNameRegex = regexp.MustCompile(strings.Join([]string{
 
 // IsValidTagName validates that tagName passes naming constraints.
 func IsValidTagName(tagName string) bool {
-	return !InvalidTagNameRegex.MatchString(tagName)
+	return len(tagName) <= MaxRefNameLength && !InvalidTagNameRegex.MatchString(tagName)
 }
 
 type TagRef struct {

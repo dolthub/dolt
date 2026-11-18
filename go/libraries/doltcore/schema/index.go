@@ -66,6 +66,8 @@ type Index interface {
 	ColumnOrders() []sql.IndexColumnOrder
 	// OpClasses returns the operator class of each indexed column, or nil when no column has one.
 	OpClasses() []string
+	// NullsNotDistinct returns whether a unique index treats NULLs as equal to each other.
+	NullsNotDistinct() bool
 	// FullTextProperties returns all properties belonging to a Full-Text index.
 	FullTextProperties() FullTextProperties
 	// VectorProperties returns all properties belonging to a vector index.
@@ -147,6 +149,7 @@ type indexImpl struct {
 	prefixLengths    []uint16
 	columnOrders     []sql.IndexColumnOrder
 	opClasses        []string
+	nullsNotDistinct bool
 	fullTextProps    FullTextProperties
 	vectorProperties VectorProperties
 }
@@ -171,6 +174,7 @@ func NewIndex(name string, tags, allTags []uint64, indexColl IndexCollection, pr
 		predicate:        props.Predicate,
 		columnOrders:     props.ColumnOrders,
 		opClasses:        props.OpClasses,
+		nullsNotDistinct: props.NullsNotDistinct,
 		fullTextProps:    props.FullTextProperties,
 		vectorProperties: props.VectorProperties,
 	}
@@ -227,6 +231,7 @@ func (ix *indexImpl) Equals(other Index) bool {
 		compareUint16Slices(ix.PrefixLengths(), other.PrefixLengths()) &&
 		slices.Equal(ix.ColumnOrders(), other.ColumnOrders()) &&
 		slices.Equal(ix.OpClasses(), other.OpClasses()) &&
+		ix.NullsNotDistinct() == other.NullsNotDistinct() &&
 		ix.Comment() == other.Comment() &&
 		ix.Predicate() == other.Predicate() &&
 		ix.Name() == other.Name()
@@ -254,6 +259,7 @@ func (ix *indexImpl) DeepEquals(other Index) bool {
 		compareUint16Slices(ix.PrefixLengths(), other.PrefixLengths()) &&
 		slices.Equal(ix.ColumnOrders(), other.ColumnOrders()) &&
 		slices.Equal(ix.OpClasses(), other.OpClasses()) &&
+		ix.NullsNotDistinct() == other.NullsNotDistinct() &&
 		ix.Comment() == other.Comment() &&
 		ix.Predicate() == other.Predicate() &&
 		ix.Name() == other.Name()
@@ -373,6 +379,11 @@ func (ix *indexImpl) ColumnOrders() []sql.IndexColumnOrder {
 // OpClasses implements Index.
 func (ix *indexImpl) OpClasses() []string {
 	return ix.opClasses
+}
+
+// NullsNotDistinct implements Index.
+func (ix *indexImpl) NullsNotDistinct() bool {
+	return ix.nullsNotDistinct
 }
 
 // FullTextProperties implements Index.

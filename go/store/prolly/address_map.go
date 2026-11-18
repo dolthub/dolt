@@ -17,6 +17,7 @@ package prolly
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -149,15 +150,28 @@ func (c AddressMap) Editor() AddressMapEditor {
 	}
 }
 
+// MaxAddressMapKeyLength is the longest name an AddressMap accepts. Node offsets are 16 bits wide and an
+// internal node must hold at least two keys, so longer keys would panic or wrap when serialized.
+const MaxAddressMapKeyLength = 16 * 1024
+
+var ErrAddressMapKeyTooLong = fmt.Errorf("address map key exceeds %d bytes", MaxAddressMapKeyLength)
+
 type AddressMapEditor struct {
 	addresses tree.MutableMap[stringSlice, address, lexicographic, tree.StaticMap[stringSlice, address, lexicographic]]
 }
 
 func (wr AddressMapEditor) Add(ctx context.Context, name string, addr hash.Hash) error {
-	return wr.addresses.Put(ctx, stringSlice(name), addr[:])
+	return wr.put(ctx, name, addr)
 }
 
 func (wr AddressMapEditor) Update(ctx context.Context, name string, addr hash.Hash) error {
+	return wr.put(ctx, name, addr)
+}
+
+func (wr AddressMapEditor) put(ctx context.Context, name string, addr hash.Hash) error {
+	if len(name) > MaxAddressMapKeyLength {
+		return ErrAddressMapKeyTooLong
+	}
 	return wr.addresses.Put(ctx, stringSlice(name), addr[:])
 }
 

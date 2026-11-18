@@ -110,7 +110,8 @@ func TestKeysForTable(t *testing.T) {
 			fk.TableName = tableName
 			fk.TableColumns = []uint64{uint64(100*i) + uint64(prefix[0])}
 			fk.ReferencedTableName = tables[(i+1)%len(tables)]
-			assert.NoError(t, fkc.AddKeys(fk))
+			fkc, err = fkc.AddKeys(fk)
+			assert.NoError(t, err)
 			added = append(added, fk)
 		}
 	}
@@ -141,19 +142,22 @@ func TestKeysForTable(t *testing.T) {
 	}
 	requireMatchesScan(fkc)
 
-	copied := fkc.Copy()
-	copied.RemoveKeys(added[0], added[5])
-	assert.True(t, copied.RemoveKeyByName(added[8].Name, added[8].TableName))
-	requireMatchesScan(copied)
+	// The indexes of |fkc| were built by the lookups above, and must not be shared with the copies that changes return.
+	removed := fkc.RemoveKeys(added[0], added[5])
+	removed, ok := removed.RemoveKeyByName(added[8].Name, added[8].TableName)
+	assert.True(t, ok)
+	requireMatchesScan(removed)
 	requireMatchesScan(fkc)
 	assert.Equal(t, len(added), fkc.Count())
-	assert.Equal(t, len(added)-3, copied.Count())
+	assert.Equal(t, len(added)-3, removed.Count())
 
-	// The indexes of |fkc| were built by the lookups above, and must be kept up to date as keys are removed and added.
-	assert.True(t, fkc.RemoveKeyByName(added[3].Name, added[3].TableName))
 	readded := added[3]
 	readded.ReferencedTableName = tables[0]
-	assert.NoError(t, fkc.AddKeys(readded))
+	changed, ok := fkc.RemoveKeyByName(added[3].Name, added[3].TableName)
+	assert.True(t, ok)
+	changed, err = changed.AddKeys(readded)
+	assert.NoError(t, err)
+	requireMatchesScan(changed)
 	requireMatchesScan(fkc)
 }
 
@@ -195,30 +199,33 @@ func TestForeignKeyCollectionNameIndex(t *testing.T) {
 	_, ok = lookup(fkc, "fk_a", TableName{Name: "unrelated"})
 	assert.True(t, ok)
 
-	err = fkc.AddKeys(newKey("FK_Σ", child, 4))
+	_, err = fkc.AddKeys(newKey("FK_Σ", child, 4))
 	assert.True(t, sql.ErrForeignKeyDuplicateName.Is(err), "unexpected error: %v", err)
 
-	copied := fkc.Copy()
-	assert.True(t, copied.RemoveKeyByName("fk_A", child))
-	_, ok = lookup(copied, "fk_a", child)
+	removed, ok := fkc.RemoveKeyByName("fk_A", child)
+	assert.True(t, ok)
+	_, ok = lookup(removed, "fk_a", child)
 	assert.False(t, ok)
-	_, ok = lookup(copied, "fk_a", other)
+	_, ok = lookup(removed, "fk_a", other)
 	assert.True(t, ok)
 	_, ok = lookup(fkc, "fk_a", child)
 	assert.True(t, ok, "removing a key from a copy must not remove it from the original")
 
-	assert.NoError(t, copied.RemoveTables(context.Background(), other))
-	_, ok = lookup(copied, "fk_a", other)
+	removed, err = removed.RemoveTables(context.Background(), other)
+	assert.NoError(t, err)
+	_, ok = lookup(removed, "fk_a", other)
 	assert.False(t, ok)
-	assert.NoError(t, copied.AddKeys(newKey("fk_a", other, 5)))
+	_, err = removed.AddKeys(newKey("fk_a", other, 5))
+	assert.NoError(t, err)
 
 	// Without a schema, as in Dolt, a foreign key name is unique across all tables.
 	noSchema := newKey("fk_b", TableName{Name: "child"}, 6)
-	assert.NoError(t, fkc.AddKeys(noSchema))
+	fkc, err = fkc.AddKeys(noSchema)
+	assert.NoError(t, err)
 	fk, ok = lookup(fkc, "FK_B", TableName{Name: "unrelated"})
 	assert.True(t, ok)
 	assert.Equal(t, noSchema, fk)
-	err = fkc.AddKeys(newKey("FK_B", TableName{Name: "other"}, 7))
+	_, err = fkc.AddKeys(newKey("FK_B", TableName{Name: "other"}, 7))
 	assert.True(t, sql.ErrForeignKeyDuplicateName.Is(err), "unexpected error: %v", err)
 
 	loaded, err := deserializeFlatbufferForeignKeys(serializeFlatbufferForeignKeys(fkc))
@@ -293,16 +300,6 @@ func BenchmarkDeserializeForeignKeys(b *testing.B) {
 	}
 }
 
-// BenchmarkCopyForeignKeys copies a collection of 400 foreign keys, which every call to
-// RootValue.GetForeignKeyCollection does.
-func BenchmarkCopyForeignKeys(b *testing.B) {
-	fkc := benchmarkForeignKeyCollection(b)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		fkc.Copy()
-	}
-}
-
 // benchmarkForeignKeyCollection returns a collection of 400 foreign keys declared on 200 tables.
 func benchmarkForeignKeyCollection(b *testing.B) *ForeignKeyCollection {
 	fkc, err := NewForeignKeyCollection()
@@ -314,7 +311,7 @@ func benchmarkForeignKeyCollection(b *testing.B) *ForeignKeyCollection {
 		fk.Name = fmt.Sprintf("fk_%04d", i)
 		fk.TableName = TableName{Name: fmt.Sprintf("t%04d", i%200), Schema: "public"}
 		fk.TableColumns = []uint64{uint64(i)}
-		if err = fkc.AddKeys(fk); err != nil {
+		if fkc, err = fkc.AddKeys(fk); err != nil {
 			b.Fatal(err)
 		}
 	}

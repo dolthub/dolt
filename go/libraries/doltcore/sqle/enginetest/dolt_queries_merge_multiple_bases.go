@@ -1336,12 +1336,12 @@ var MergeMultipleBasesScripts = []queries.ScriptTest{
 		keylessMergeBasesSetup(2, 1, false),
 		"y", false,
 		check{"SELECT base_a, base_cardinality, our_cardinality, their_cardinality FROM dolt_conflicts_t;", []sql.Row{{"r", uint64(1), uint64(2), uint64(1)}}}),
-	// The virtual merge base has no c, so x3 and y3 both added it, and their values of it conflict, as they would
-	// with one merge base without c.
+	// The virtual merge base has no c, so x3 and y3 both added it identically, which backfilled row 1's c with NULL.
+	// Only x3 changed it since, so x3's value wins, as it would with one merge base without c.
 	mergeScript("merge bases with a schema conflict, tips agreeing on the schema and not on a value: merge y into x",
 		schemaConflictingMergeBasesSetup("INT", true),
-		"y", false,
-		check{"SELECT base_id, base_a, our_a, our_c, their_a, their_c FROM dolt_conflicts_t;", []sql.Row{{1, "seed", "seed", 5, "y edit", nil}}}),
+		"y", true,
+		check{"SELECT * FROM t ORDER BY id;", []sql.Row{{1, "y edit", 5}}}),
 	// x3 and y3 disagree on c too, so the merge has the schema conflict a merge with one merge base would have.
 	mergeScript("merge bases with a schema conflict, tips disagreeing on the schema: merge y into x",
 		schemaConflictingMergeBasesSetup("VARCHAR(100)", true),
