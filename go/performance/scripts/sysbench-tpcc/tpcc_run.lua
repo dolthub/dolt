@@ -839,27 +839,45 @@ end
 -- its own transaction so it can be benchmarked on its own, e.g.
 --   trx="new_order_3"
 -- Values that new_order() would read from an earlier statement are generated
--- instead, so no extra queries are issued.
+-- instead, except for the INSERTs: those run with the statements that produce
+-- their values in new_order().
 --
 --   new_order_1  SELECT customer/warehouse
 --   new_order_2  SELECT district ... FOR UPDATE
 --   new_order_3  UPDATE district (d_next_o_id)
---   new_order_4  INSERT orders          (rolled back)
---   new_order_5  INSERT new_orders      (rolled back)
+--   new_order_4  SELECT + UPDATE district, INSERT orders
+--   new_order_5  SELECT + UPDATE district, INSERT new_orders
 --   new_order_6  SELECT item
 --   new_order_7  SELECT stock ... FOR UPDATE
 --   new_order_8  UPDATE stock (s_quantity)
---   new_order_9  INSERT order_line      (rolled back)
+--   new_order_9  SELECT customer/warehouse, SELECT + UPDATE district,
+--                SELECT item, SELECT stock, INSERT order_line
 --
--- The INSERTs are rolled back so the dataset does not grow, keys never
--- collide across runs, and FK constraints (use_fk=1) stay satisfied.
--- The UPDATEs commit values that keep the dataset valid for full TPCC runs.
+-- Every transaction commits. The INSERTs take their o_id from d_next_o_id and
+-- increment it, as new_order() does, so committed keys never collide.
 -- ----------------------------------------------------------------------
 
--- o_id outside the loaded range (1..3000) and outside what new_order() will
--- reach, unique per thread so concurrent threads don't contend on the key
-local function isolated_o_id()
-    return 100000000 + sysbench.tid
+local function select_district(table_num, w_id, d_id)
+    return con:query_row(([[SELECT d_next_o_id, d_tax
+                              FROM district%d
+                             WHERE d_w_id = %d
+                               AND d_id = %d FOR UPDATE]]):
+                            format(table_num, w_id, d_id))
+end
+
+local function next_order_id(table_num, w_id, d_id)
+    local d_next_o_id, d_tax = select_district(table_num, w_id, d_id)
+    con:query(([[UPDATE district%d
+                    SET d_next_o_id = %d
+                  WHERE d_id = %d AND d_w_id= %d]]):format(table_num, d_next_o_id + 1, d_id, w_id))
+    return d_next_o_id, d_tax
+end
+
+local function insert_order(table_num, o_id, d_id, w_id, c_id, ol_cnt, all_local)
+    con:query(([[INSERT INTO orders%d
+                             (o_id, o_d_id, o_w_id, o_c_id,  o_entry_d, o_ol_cnt, o_all_local)
+                      VALUES (%d,%d,%d,%d,NOW(),%d,%d)]]):
+                      format(table_num, o_id, d_id, w_id, c_id, ol_cnt, all_local))
 end
 
 function new_order_1()
@@ -916,26 +934,22 @@ function new_order_4()
     local all_local = sysbench.rand.uniform(1, 100) ~= 1 and 1 or 0
 
     con:query("BEGIN")
-    con:query(([[INSERT INTO orders%d
-                             (o_id, o_d_id, o_w_id, o_c_id,  o_entry_d, o_ol_cnt, o_all_local)
-                      VALUES (%d,%d,%d,%d,NOW(),%d,%d)]]):
-                      format(table_num, isolated_o_id(), d_id, w_id, c_id, ol_cnt, all_local))
-    con:query("ROLLBACK")
+    local d_next_o_id = next_order_id(table_num, w_id, d_id)
+    insert_order(table_num, d_next_o_id, d_id, w_id, c_id, ol_cnt, all_local)
+    con:query("COMMIT")
 end
 
 function new_order_5()
     local table_num = sysbench.rand.uniform(1, sysbench.opt.tables)
     local w_id = sysbench.rand.uniform(1, sysbench.opt.scale)
     local d_id = sysbench.rand.uniform(1, DIST_PER_WARE)
-    -- orders 1..2100 are loaded as delivered, so they exist (satisfying the FK)
-    -- but have no new_orders row
-    local o_id = sysbench.rand.uniform(1, 2100)
 
     con:query("BEGIN")
+    local d_next_o_id = next_order_id(table_num, w_id, d_id)
     con:query(([[INSERT INTO new_orders%d (no_o_id, no_d_id, no_w_id)
                       VALUES (%d,%d,%d)]]):
-                     format(table_num, o_id, d_id, w_id))
-    con:query("ROLLBACK")
+                     format(table_num, d_next_o_id, d_id, w_id))
+    con:query("COMMIT")
 end
 
 function new_order_6()
@@ -984,21 +998,44 @@ function new_order_9()
     local table_num = sysbench.rand.uniform(1, sysbench.opt.tables)
     local w_id = sysbench.rand.uniform(1, sysbench.opt.scale)
     local d_id = sysbench.rand.uniform(1, DIST_PER_WARE)
-    -- reference a loaded order (FK) with an ol_number beyond the max of 15
-    -- so the key never collides
-    local o_id = sysbench.rand.uniform(1, 3000)
-    local ol_number = 16
+    local c_id = NURand(1023, 1, CUST_PER_DIST)
+    local ol_number = 1
     local ol_i_id = NURand(8191, 1, MAXITEMS)
+    local ol_supply_w_id = w_id
+    if sysbench.rand.uniform(1, 100) == 1 then
+        ol_supply_w_id = other_ware(w_id)
+    end
     local ol_quantity = sysbench.rand.uniform(1, 10)
-    local ol_amount = sysbench.rand.uniform_double() * 9999.99
-    local ol_dist_info = sysbench.rand.string(string.rep("@", 24))
 
     con:query("BEGIN")
+
+    local c_discount, c_last, c_credit, w_tax = con:query_row(([[SELECT c_discount, c_last, c_credit, w_tax
+                                                                   FROM customer%d, warehouse%d
+                                                                  WHERE w_id = %d
+                                                                    AND c_w_id = w_id
+                                                                    AND c_d_id = %d
+                                                                    AND c_id = %d]]):
+                                                                 format(table_num, table_num, w_id, d_id, c_id))
+
+    local d_next_o_id, d_tax = next_order_id(table_num, w_id, d_id)
+
+    local i_price = con:query_row(([[SELECT i_price, i_name, i_data
+                                       FROM item%d
+                                      WHERE i_id = %d]]):
+                                     format(table_num, ol_i_id))
+
+    local s_quantity, s_data, ol_dist_info = con:query_row(([[SELECT s_quantity, s_data, s_dist_%s s_dist
+                                                                FROM stock%d
+                                                               WHERE s_i_id = %d AND s_w_id= %d FOR UPDATE]]):
+                                                               format(string.format("%02d", d_id), table_num, ol_i_id, ol_supply_w_id))
+
+    local ol_amount = ol_quantity * tonumber(i_price) * (1 + tonumber(w_tax) + tonumber(d_tax)) * (1 - tonumber(c_discount))
+
     con:query(([[INSERT INTO order_line%d
                              (ol_o_id, ol_d_id, ol_w_id, ol_number, ol_i_id, ol_supply_w_id, ol_quantity, ol_amount, ol_dist_info)
                       VALUES (%d,%d,%d,%d,%d,%d,%d,%d,'%s')]]):
-                      format(table_num, o_id, d_id, w_id, ol_number, ol_i_id, w_id, ol_quantity, ol_amount, ol_dist_info))
-    con:query("ROLLBACK")
+                      format(table_num, d_next_o_id, d_id, w_id, ol_number, ol_i_id, ol_supply_w_id, ol_quantity, ol_amount, ol_dist_info))
+    con:query("COMMIT")
 end
 
 -- vim:ts=4 ss=4 sw=4 expandtab
