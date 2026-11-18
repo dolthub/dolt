@@ -41,6 +41,15 @@ func TestGRPCSchemeSelection(t *testing.T) {
 	assert.Equal(t, scheme, "https")
 }
 
+func TestGetDownloadUrlUsesForwardSlashes(t *testing.T) {
+	rs := &RemoteChunkStore{httpScheme: "http"}
+	md := metadata.New(nil)
+	md.Append(":authority", "hostname.local")
+	url := rs.getDownloadUrl(md, `mydb\.dolt\noms/00000000000000000000000000000000`)
+	assert.Equal(t, "mydb/.dolt/noms/00000000000000000000000000000000", url.Path)
+	assert.Equal(t, "http://hostname.local/mydb/.dolt/noms/00000000000000000000000000000000", url.String())
+}
+
 func TestGetUploadDownloadUrl(t *testing.T) {
 	type testCase struct {
 		storeScheme       string
