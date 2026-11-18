@@ -32,7 +32,14 @@ var InvalidBranchNameRegex = regexp.MustCompile(strings.Join([]string{
 	`\/\/`, `\A\/`, `\/\z`,
 }, "|"))
 
+// MaxRefNameLength is the longest branch or tag name, in bytes, that may be created.
+const MaxRefNameLength = 1024
+
 func IsValidBranchName(s string) bool {
+	if len(s) > MaxRefNameLength {
+		return false
+	}
+
 	if InvalidBranchNameRegex.MatchString(s) {
 		return false
 	}
