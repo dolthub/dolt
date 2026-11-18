@@ -387,15 +387,7 @@ func (i IndexedJsonDocument) insertIntoCursor(ctx context.Context, keyPath jsonL
 		return IndexedJsonDocument{}, false, err
 	}
 
-	// If required, adds a comma before writing the value.
-	if !jsonChunker.jScanner.firstElementOrEndOfEmptyValue() {
-		jsonChunker.appendJsonToBuffer([]byte{','})
-	}
-
-	// If the value is a newly inserted key, write the key.
-	if !keyLastPathElement.isArrayIndex {
-		jsonChunker.appendJsonToBuffer(append(appendQuotedJsonKey(nil, keyLastPathElement.key), ':'))
-	}
+	jsonChunker.appendInsertionPrefix(keyLastPathElement)
 
 	// Manually set the chunker's path and offset to the start of the value we're about to insert.
 	jsonChunker.jScanner.valueOffset = len(jsonChunker.jScanner.jsonBuffer)

@@ -15,6 +15,7 @@
 package tree
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -237,16 +238,24 @@ func (j *JsonCursor) advanceToLocation(ctx context.Context, path jsonLocation, f
 	return true, nil
 }
 
+// advanceCursor resumes at the next leaf using the original input boundary, even
+// when its bytes were copied without scanning. It returns io.EOF at the tree's end.
 func (j *JsonCursor) advanceCursor(ctx context.Context) error {
-	err := j.cur.advance(ctx)
-	if err != nil {
-		return err
+	var boundary []byte
+	if j.cur.parent != nil {
+		boundary = j.cur.parent.CurrentKey()
+	}
+	if err := j.cur.advance(ctx); err != nil {
+		return fmt.Errorf("advance JSON cursor: %w", err)
 	}
 	if !j.cur.Valid() {
-		// We hit the end of the tree. This shouldn't happen.
 		return io.EOF
 	}
-	j.jsonScanner = ScanJsonFromMiddle(j.cur.currentValue(), j.jsonScanner.currentPath)
+	path := j.jsonScanner.currentPath
+	if !bytes.Equal(path.key, boundary) {
+		path = jsonPathFromKey(boundary)
+	}
+	j.jsonScanner = ScanJsonFromMiddle(j.cur.currentValue(), path)
 	return nil
 }
 

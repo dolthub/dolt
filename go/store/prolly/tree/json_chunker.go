@@ -130,11 +130,10 @@ func (j *JsonChunker) Done(ctx context.Context) (*Node, error) {
 			}
 			return j.chunker.Done(ctx)
 		}
-		if err := j.advanceInputChunk(ctx); err != nil {
-			return nil, err
-		}
-		if !j.jCur.cur.Valid() {
+		if err := j.jCur.advanceCursor(ctx); err == io.EOF {
 			break
+		} else if err != nil {
+			return nil, err
 		}
 	}
 	// A multi-leaf input can end exactly at a new output boundary.
@@ -172,7 +171,7 @@ func (j *JsonChunker) copyTo(ctx context.Context, target *JsonCursor) error {
 			j.jScanner = &output
 			break
 		}
-		if err := j.advanceInputChunk(ctx); err != nil {
+		if err := input.advanceCursor(ctx); err != nil {
 			return err
 		}
 	}
@@ -213,20 +212,6 @@ func (j *JsonChunker) atSharedBoundary() bool {
 		bytes.Equal(j.jScanner.currentPath.key, j.jCur.cur.parent.CurrentKey())
 }
 
-// advanceInputChunk moves the source cursor to the start of the next leaf.
-func (j *JsonChunker) advanceInputChunk(ctx context.Context) error {
-	input := j.jCur
-	previousKey := jsonLocationKey(input.cur.parent.CurrentKey())
-	if err := input.cur.advance(ctx); err != nil {
-		return err
-	}
-	if !input.cur.Valid() {
-		return nil
-	}
-	input.jsonScanner = ScanJsonFromMiddleWithKey(input.cur.currentValue(), previousKey)
-	return nil
-}
-
 // createNewLeafChunk writes a new Blob to the nodestore, and updates the parent chunker.
 // Do not call this method directly. It should only get called from within this file.
 func (j *JsonChunker) createNewLeafChunk(ctx context.Context, key, value []byte) error {
@@ -242,6 +227,16 @@ func (j *JsonChunker) createNewLeafChunk(ctx context.Context, key, value []byte)
 	}
 	// Copy the key when adding it to the chunker.
 	return j.chunker.AddPair(ctx, bytes.Clone(key), addr[:])
+}
+
+// appendInsertionPrefix writes the separator and optional object key before a new value.
+func (j *JsonChunker) appendInsertionPrefix(element jsonPathElement) {
+	if !j.jScanner.firstElementOrEndOfEmptyValue() {
+		j.appendJsonToBuffer([]byte{','})
+	}
+	if !element.isArrayIndex {
+		j.appendJsonToBuffer(append(appendQuotedJsonKey(nil, element.key), ':'))
+	}
 }
 
 // appendJsonToBuffer writes JSON to the buffer, which will be checked for chunk boundaries the next time processBuffer is called.

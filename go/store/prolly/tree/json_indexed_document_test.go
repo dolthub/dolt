@@ -17,9 +17,12 @@ package tree
 import (
 	"context"
 	"fmt"
+	"io"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/dolthub/dolt/go/store/hash"
 
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/json"
@@ -121,6 +124,41 @@ func TestIndexedJsonDocument_ValidateChunks(t *testing.T) {
 			require.Equal(t, expectedKey.key, actualKey)
 		})
 	}
+}
+
+// jsonReadEOFStore simulates a truncated storage read while advancing a JSON cursor.
+type jsonReadEOFStore struct{ NodeStore }
+
+// Read implements NodeStore.
+func (jsonReadEOFStore) Read(context.Context, hash.Hash) (*Node, error) {
+	return nil, io.EOF
+}
+
+// TestJsonCursorAdvanceUsesChunkBoundary resumes copied input from its stored path and reports exhaustion.
+func TestJsonCursorAdvanceUsesChunkBoundary(t *testing.T) {
+	ctx := sql.NewEmptyContext()
+	ns := NewTestNodeStore()
+	document := createLargeDocumentForTesting(t, ctx, ns)
+	cursor, err := newJsonCursorAtStartOfChunk(ctx, ns, document.m.Root, nil)
+	require.NoError(t, err)
+	require.NotNil(t, cursor.cur.parent)
+	boundary := jsonLocationKey(cursor.cur.parent.CurrentKey())
+	require.NotEqual(t, boundary, cursor.jsonScanner.currentPath.key)
+	require.NoError(t, cursor.advanceCursor(ctx))
+	require.Equal(t, boundary, cursor.jsonScanner.currentPath.key)
+	require.Zero(t, cursor.jsonScanner.valueOffset)
+
+	cursor.cur.nrw = jsonReadEOFStore{ns}
+	err = cursor.advanceCursor(ctx)
+	require.ErrorIs(t, err, io.EOF)
+	require.NotEqual(t, io.EOF, err)
+
+	document = newIndexedJsonDocumentFromValue(t, ctx, ns, `{"a": 1}`)
+	cursor, err = newJsonCursorAtStartOfChunk(ctx, ns, document.m.Root, nil)
+	require.NoError(t, err)
+	require.Nil(t, cursor.cur.parent)
+	require.ErrorIs(t, cursor.advanceCursor(ctx), io.EOF)
+	require.False(t, cursor.Valid())
 }
 
 // TestOrderedEditorBoundarySplices verifies that ordered edits at leaf boundaries

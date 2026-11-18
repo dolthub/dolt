@@ -84,12 +84,7 @@ func (e *JsonMergeEditor) Apply(ctx context.Context, diff JsonDiff) error {
 	}
 	// A replacement has already copied the original separator and key.
 	if diff.Type == AddedDiff {
-		if !e.writer.jScanner.firstElementOrEndOfEmptyValue() {
-			e.writer.appendJsonToBuffer([]byte{','})
-		}
-		if key := path.getLastPathElement(); !key.isArrayIndex {
-			e.writer.appendJsonToBuffer(append(appendQuotedJsonKey(nil, key.key), ':'))
-		}
+		e.writer.appendInsertionPrefix(path.getLastPathElement())
 	}
 	e.writer.appendJsonToBuffer(value)
 	return e.writer.processBuffer(ctx)
