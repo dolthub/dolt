@@ -57,7 +57,7 @@ func (e *JsonMergeEditor) Apply(ctx context.Context, diff JsonDiff) error {
 	if e.writer == nil {
 		e.writer, err = newJsonChunker(ctx, target, e.input.m.NodeStore)
 	} else {
-		err = e.copyTo(ctx, target)
+		err = e.writer.copyTo(ctx, target)
 	}
 	if err != nil {
 		return err
@@ -115,43 +115,4 @@ func (e *JsonMergeEditor) Done(ctx context.Context) (IndexedJsonDocument, error)
 		return IndexedJsonDocument{}, err
 	}
 	return NewIndexedJsonDocument(root, e.input.m.NodeStore), nil
-}
-
-// copyTo copies unchanged input up to the next edit, reusing complete
-// intervening chunks as soon as both scanners reach a shared boundary.
-func (e *JsonMergeEditor) copyTo(ctx context.Context, target *JsonCursor) error {
-	input := e.writer.jCur
-	for input.cur.compare(target.cur) < 0 {
-		if err := e.writer.copyInputFragment(ctx, len(input.jsonScanner.jsonBuffer)); err != nil {
-			return err
-		}
-		if e.writer.atSharedBoundary() {
-			if err := input.cur.parent.advance(ctx); err != nil {
-				return err
-			}
-			if err := e.writer.chunker.advanceTo(ctx, target.cur.parent); err != nil {
-				return err
-			}
-			previousKey, err := getPreviousKey(ctx, target.cur)
-			if err != nil {
-				return err
-			}
-			input.cur.copy(target.cur)
-			input.jsonScanner = ScanJsonFromMiddleWithKey(target.jsonScanner.jsonBuffer, previousKey)
-			output := ScanJsonFromMiddle(nil, input.jsonScanner.currentPath.Clone())
-			e.writer.jScanner = &output
-			break
-		}
-		if err := e.writer.advanceInputChunk(ctx); err != nil {
-			return err
-		}
-	}
-	if input.cur.compare(target.cur) != 0 || input.jsonScanner.valueOffset > target.jsonScanner.valueOffset {
-		return fmt.Errorf("JSON merge edits are out of input document order")
-	}
-	if err := e.writer.copyInputFragment(ctx, target.jsonScanner.valueOffset); err != nil {
-		return err
-	}
-	input.jsonScanner = target.jsonScanner
-	return nil
 }

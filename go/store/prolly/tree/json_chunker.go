@@ -17,6 +17,7 @@ package tree
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -143,6 +144,46 @@ func (j *JsonChunker) Done(ctx context.Context) (*Node, error) {
 		}
 	}
 	return j.chunker.Done(ctx)
+}
+
+// copyTo copies unchanged input to a target at or after the current input position.
+// Whole leaves are reused only with an empty output buffer and an output path
+// matching the input leaf's ending key, preserving their bytes and location keys.
+func (j *JsonChunker) copyTo(ctx context.Context, target *JsonCursor) error {
+	input := j.jCur
+	for input.cur.compare(target.cur) < 0 {
+		if err := j.copyInputFragment(ctx, len(input.jsonScanner.jsonBuffer)); err != nil {
+			return err
+		}
+		if j.atSharedBoundary() {
+			if err := input.cur.parent.advance(ctx); err != nil {
+				return err
+			}
+			if err := j.chunker.advanceTo(ctx, target.cur.parent); err != nil {
+				return err
+			}
+			previousKey, err := getPreviousKey(ctx, target.cur)
+			if err != nil {
+				return err
+			}
+			input.cur.copy(target.cur)
+			input.jsonScanner = ScanJsonFromMiddleWithKey(target.jsonScanner.jsonBuffer, previousKey)
+			output := ScanJsonFromMiddle(nil, input.jsonScanner.currentPath.Clone())
+			j.jScanner = &output
+			break
+		}
+		if err := j.advanceInputChunk(ctx); err != nil {
+			return err
+		}
+	}
+	if input.cur.compare(target.cur) != 0 || input.jsonScanner.valueOffset > target.jsonScanner.valueOffset {
+		return fmt.Errorf("JSON merge edits are out of input document order")
+	}
+	if err := j.copyInputFragment(ctx, target.jsonScanner.valueOffset); err != nil {
+		return err
+	}
+	input.jsonScanner = target.jsonScanner
+	return nil
 }
 
 // copyInputFragment copies a source fragment, adjusting the separator at the splice
