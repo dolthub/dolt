@@ -3841,6 +3841,45 @@ var BranchIsolationTests = []queries.TransactionTest{
 			},
 		},
 	},
+	{
+		// https://github.com/dolthub/dolt/issues/12553
+		Name: "dolt_tag changes are visible to dolt_tags in the same transaction",
+		SetUpScript: []string{
+			"call dolt_commit('--allow-empty','-m','original')",
+			"call dolt_tag('alpha')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select tag_name from dolt_tags order by tag_name",
+				Expected: []sql.Row{{"alpha"}},
+			},
+			{
+				Query:    "/* client a */ call dolt_tag('beta')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:           "/* client a */ select tag_name from dolt_tags where tag_name = 'beta'",
+				Expected:        []sql.Row{{"beta"}},
+				ExpectedIndexes: []string{"dolt_tags_name_idx"},
+			},
+			{
+				Query:    "/* client a */ call dolt_tag('-d','alpha')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client a */ select tag_name from dolt_tags order by tag_name",
+				Expected: []sql.Row{{"beta"}},
+			},
+			{
+				Query:    "/* client b */ select tag_name from dolt_tags order by tag_name",
+				Expected: []sql.Row{{"beta"}},
+			},
+		},
+	},
 
 	{
 		Name: "dolt_branches name index uses transaction snapshot",
