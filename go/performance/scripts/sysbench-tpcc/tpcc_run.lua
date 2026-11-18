@@ -873,12 +873,6 @@ local function next_order_id(table_num, w_id, d_id)
     return d_next_o_id, d_tax
 end
 
-local function insert_order(table_num, o_id, d_id, w_id, c_id, ol_cnt, all_local)
-    con:query(([[INSERT INTO orders%d
-                             (o_id, o_d_id, o_w_id, o_c_id,  o_entry_d, o_ol_cnt, o_all_local)
-                      VALUES (%d,%d,%d,%d,NOW(),%d,%d)]]):
-                      format(table_num, o_id, d_id, w_id, c_id, ol_cnt, all_local))
-end
 
 function new_order_1()
     local table_num = sysbench.rand.uniform(1, sysbench.opt.tables)
@@ -935,7 +929,10 @@ function new_order_4()
 
     con:query("BEGIN")
     local d_next_o_id = next_order_id(table_num, w_id, d_id)
-    insert_order(table_num, d_next_o_id, d_id, w_id, c_id, ol_cnt, all_local)
+    con:query(([[INSERT INTO orders%d
+                    (o_id, o_d_id, o_w_id, o_c_id,  o_entry_d, o_ol_cnt, o_all_local)
+                VALUES (%d,%d,%d,%d,NOW(),%d,%d)]]):
+                format(table_num, o_id, d_id, w_id, c_id, ol_cnt, all_local))
     con:query("COMMIT")
 end
 
