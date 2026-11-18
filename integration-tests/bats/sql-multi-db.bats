@@ -154,3 +154,26 @@ seed_repos_with_tables_with_use_statements() {
         [[ ! "$output" =~ "inner_tbl" ]] || false
     )
 }
+
+@test "sql-multi-db: kv joins across databases decode out-of-line values from each database" {
+    dolt --data-dir ./ sql -q "
+            USE repo1;
+            CREATE TABLE t1 (id INT PRIMARY KEY, k VARCHAR(32), j JSON);
+            INSERT INTO t1 VALUES (1, 'a', JSON_OBJECT('pad', REPEAT('x', 5000))), (2, 'b', JSON_OBJECT('pad', REPEAT('y', 6000)));
+            USE repo2;
+            CREATE TABLE t2 (id VARCHAR(32) PRIMARY KEY, j JSON);
+            INSERT INTO t2 VALUES ('a', JSON_OBJECT('pad', REPEAT('z', 7000)));
+            CREATE TABLE t3 (id INT PRIMARY KEY, j JSON);
+            INSERT INTO t3 VALUES (1, JSON_OBJECT('pad', REPEAT('q', 7000)));"
+
+    # Each query runs in a fresh process so the out-of-line values are not already cached.
+    run dolt --data-dir ./ sql -r csv -q "SELECT /*+ LOOKUP_JOIN(a,b) JOIN_ORDER(a,b) */ a.id, LENGTH(a.j), LENGTH(b.j) FROM repo1.t1 a LEFT JOIN repo2.t2 b ON b.id = a.k ORDER BY a.id"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,5011,7011" ]] || false
+    [[ "$output" =~ "2,6011," ]] || false
+
+    run dolt --data-dir ./ sql -r csv -q "SELECT /*+ MERGE_JOIN(a,b) JOIN_ORDER(a,b) */ a.id, LENGTH(a.j), LENGTH(b.j) FROM repo1.t1 a LEFT JOIN repo2.t3 b ON b.id = a.id ORDER BY a.id"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,5011,7011" ]] || false
+    [[ "$output" =~ "2,6011," ]] || false
+}

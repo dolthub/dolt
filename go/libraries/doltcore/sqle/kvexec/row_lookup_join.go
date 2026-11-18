@@ -115,7 +115,7 @@ func (b *Builder) newRowLookupKvIter(
 				comparisons:   comparisons,
 				comparisonRow: make(sql.Row, 2),
 			},
-			joiner: newRowJoiner(ctx, []schema.Schema{dstIterGen.Schema()}, nil, dstTags, ns),
+			joiner: newRowJoiner(ctx, []schema.Schema{dstIterGen.Schema()}, nil, dstTags, []tree.NodeStore{ns}),
 		},
 		srcLen:       srcLen,
 		dstIterGen:   dstIterGen,
