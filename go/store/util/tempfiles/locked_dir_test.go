@@ -184,6 +184,22 @@ func TestRetryWhile(t *testing.T) {
 	})
 }
 
+// TestCleanDir_DeletePending keeps a deleted lock open beyond the retry budget,
+// ensuring a concurrent cleanup does not turn that pending deletion into a failure.
+func TestCleanDir_DeletePending(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows keeps deleted files pending while a handle remains open")
+	}
+	parent := t.TempDir()
+	dir, _ := writeLockedDir(t, parent, "pending")
+	contender := otherProcess(t, dir)
+	require.NoError(t, cleanLockedDir(dir+lockedDirLockSuffix))
+	time.Sleep(150 * time.Millisecond)
+	require.NoError(t, cleanLockedDir(dir+lockedDirLockSuffix))
+	require.NoError(t, CleanDir(parent))
+	require.NoError(t, contender.Close())
+}
+
 func TestUnlockDir_PanicsOnError(t *testing.T) {
 	dir := t.TempDir()
 	lock, err := filelocks.New(filepath.Join(dir, "LOCK"))
