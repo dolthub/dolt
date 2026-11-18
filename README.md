@@ -39,7 +39,7 @@ applications. But if you want some ideas, [here's how people are using
 it so far](https://dolthub.com/blog/2024-10-15-dolt-use-cases/).
 
 Dolt powers [Beads](https://github.com/gastownhall/beads) and 
-[Gas Town](https://github.com/steveyegge/gastown). It's the best database 
+[Gas Town](https://github.com/gastownhall/gastown). It's the best database 
 for agent memory, especially as you move up the ladder to multi-agent and 
 multi-machine workflows.
 
