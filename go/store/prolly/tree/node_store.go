@@ -343,15 +343,14 @@ func (ns *nodeStore) CompareAdaptiveCollatedStrings(ctx context.Context, l, r va
 	return compareCollatedChunkDiffer(ctx, differ, collation)
 }
 
-// compareCollatedChunkDiffer compares the differing chunks of |d| under
-// |collation|.
-//
-// It is the streaming version of [val.CompareCollatedStrings], skipping
-// zero-weight ignorable characters in UCA collations.
+// compareCollatedChunkDiffer is the streaming version of CompareCollatedStrings, getting just the diff between two
+// values when comparing them.
 func compareCollatedChunkDiffer(ctx context.Context, d chunkDiffer, collation sql.CollationID) (int, error) {
+	// Binary adaptive blobs use BytesAdaptiveEnc rather than StringAdaptiveEnc.
+	getRuneWeight := collation.Sorter()
+	skipIgnorable := collation.IsUCA()
 	var lBuf, rBuf []byte
 	done := false
-	isBinary := collation == sql.Collation_binary
 
 	// TODO: the call to Next() starts at the first differing chunk, then returns every leaf chunk in order from both
 	//  sides thereafter. This is correct, but potentially inefficient in the case where there are sparse byte differences
@@ -371,49 +370,61 @@ func compareCollatedChunkDiffer(ctx context.Context, d chunkDiffer, collation sq
 		return nil
 	}
 
-	nextWeight := func(buf *[]byte) (int32, bool, bool, error) {
+	nextWeight := func(buf *[]byte) (int32, bool, error) {
 		for {
-			for !done && ((isBinary && len(*buf) == 0) || (!isBinary && !utf8.FullRune(*buf))) {
+			for !done && !utf8.FullRune(*buf) {
 				if err := pull(); err != nil {
-					return 0, false, false, err
+					return 0, false, err
 				}
 			}
 			if len(*buf) == 0 {
-				return 0, false, false, nil
+				return 0, false, nil
 			}
-			read := 1
-			if !isBinary {
-				_, read = utf8.DecodeRune(*buf)
-			}
-			scanner := sql.NewWeightScanner(collation, encodings.BytesToString((*buf)[:read]))
-			w, ok, scanErr := scanner.Next()
+			r, read := utf8.DecodeRune(*buf)
 			*buf = (*buf)[read:]
-			if scanErr != nil {
-				return 0, false, true, nil
+			if r == utf8.RuneError && read == 1 {
+				return 0, false, sql.ErrCollationMalformedString.New("comparing")
 			}
-			if ok {
-				return w, true, false, nil
+			w := getRuneWeight(r)
+			if skipIgnorable && w == encodings.IgnorableWeight {
+				continue
 			}
+			return w, true, nil
 		}
 	}
 
 	for {
-		lw, lOk, lUtf8Err, err := nextWeight(&lBuf)
-		if err != nil {
-			return 0, err
+		for !done && (!utf8.FullRune(lBuf) || !utf8.FullRune(rBuf)) {
+			if err := pull(); err != nil {
+				return 0, err
+			}
 		}
-		rw, rOk, rUtf8Err, err := nextWeight(&rBuf)
-		if err != nil {
-			return 0, err
+		if len(lBuf) > 0 && len(rBuf) > 0 {
+			lr, lread := utf8.DecodeRune(lBuf)
+			rr, rread := utf8.DecodeRune(rBuf)
+			if (lr != utf8.RuneError || lread > 1) && lr == rr {
+				lBuf = lBuf[lread:]
+				rBuf = rBuf[rread:]
+				continue
+			}
+		}
+
+		lw, lOk, lErr := nextWeight(&lBuf)
+		if lErr != nil && !sql.ErrCollationMalformedString.Is(lErr) {
+			return 0, lErr
+		}
+		rw, rOk, rErr := nextWeight(&rBuf)
+		if rErr != nil && !sql.ErrCollationMalformedString.Is(rErr) {
+			return 0, rErr
 		}
 
 		// RuneError should be impossible to return for the above reads unless the UTF8 bytes are malformed or the
 		// buffer is empty. We handle this error here by enforcing an arbitrary order.
-		if lUtf8Err || rUtf8Err {
-			if lUtf8Err && !rUtf8Err {
+		if lErr != nil || rErr != nil {
+			if lErr != nil && rErr == nil {
 				return 1, nil
 			}
-			if !lUtf8Err && rUtf8Err {
+			if lErr == nil && rErr != nil {
 				return -1, nil
 			}
 			return 0, nil

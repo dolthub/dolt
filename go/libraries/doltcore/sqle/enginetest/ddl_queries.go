@@ -794,13 +794,13 @@ var AddIndexScripts = []queries.ScriptTest{
 	},
 	{
 		// https://github.com/dolthub/dolt/issues/12342
-		Name:    "duplicate primary and unique keys with UCA ignorable characters",
+		Name:    "add unique index with UCA ignorable characters",
 		Dialect: "mysql",
 		SetUpScript: []string{
 			"CREATE TABLE u (pk VARCHAR(64) COLLATE utf8mb4_unicode_ci PRIMARY KEY, uk VARCHAR(64) COLLATE utf8mb4_unicode_ci UNIQUE);",
 			"INSERT INTO u VALUES ('bob', 'alice');",
-			"CREATE TABLE kt (id INT, doc LONGTEXT COLLATE utf8mb4_unicode_ci);",
-			"INSERT INTO kt VALUES (1, CONCAT(REPEAT('a', 16384), 'bob')), (2, CONCAT(REPEAT('a', 16384), _utf8mb4 0x62E2808B6F62));",
+			"CREATE TABLE existing (id INT PRIMARY KEY, uk VARCHAR(64) COLLATE utf8mb4_unicode_ci, doc LONGTEXT COLLATE utf8mb4_unicode_ci);",
+			"INSERT INTO existing VALUES (1, 'bob', CONCAT(REPEAT(_utf8mb4 0xE4BABA, 760), 'bob')), (2, _utf8mb4 0x62E2808B6F62, CONCAT(REPEAT(_utf8mb4 0xE4BABA, 760), _utf8mb4 0x62E2808B6F62));",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -816,8 +816,12 @@ var AddIndexScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{"bob", "alice"}},
 			},
 			{
-				Query:    "SELECT COUNT(DISTINCT doc) FROM kt;",
-				Expected: []sql.Row{{1}},
+				Query:       "CREATE UNIQUE INDEX uk_idx ON existing (uk);",
+				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+			{
+				Query:       "CREATE UNIQUE INDEX doc_idx ON existing (doc(768));",
+				ExpectedErr: sql.ErrUniqueKeyViolation,
 			},
 		},
 	},

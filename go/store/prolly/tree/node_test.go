@@ -309,6 +309,13 @@ func TestCompareCollatedChunkDiffer(t *testing.T) {
 			collation: sql.Collation_utf8mb4_general_ci,
 			want:      1,
 		},
+		{
+			name:      "malformed utf8 sorts after valid",
+			l:         "b\xffob",
+			r:         "bob",
+			collation: sql.Collation_utf8mb4_unicode_ci,
+			want:      1,
+		},
 	}
 
 	for _, c := range cases {

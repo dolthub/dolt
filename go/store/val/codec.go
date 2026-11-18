@@ -721,6 +721,10 @@ func compareAddr(l, r hash.Hash) int {
 // using |collation|, skipping zero-weight ignorable characters in UCA
 // collations.
 func CompareCollatedStrings(collation sql.CollationID, left, right []byte) int {
+	if collation == sql.Collation_binary {
+		return bytes.Compare(left, right)
+	}
+
 	i := 0
 	for i < len(left) && i < len(right) && left[i] == right[i] {
 		i++
@@ -728,7 +732,7 @@ func CompareCollatedStrings(collation sql.CollationID, left, right []byte) int {
 	if i == len(left) && i == len(right) {
 		return 0
 	}
-	if i > 0 && collation != sql.Collation_binary && left[i-1] >= utf8.RuneSelf {
+	if i > 0 && left[i-1] >= utf8.RuneSelf {
 		rStart := i - 1
 		for rStart > 0 && i-rStart < utf8.UTFMax && !utf8.RuneStart(left[rStart]) {
 			rStart--
@@ -737,12 +741,24 @@ func CompareCollatedStrings(collation sql.CollationID, left, right []byte) int {
 			i = rStart
 		}
 	}
+	left = left[i:]
+	right = right[i:]
 
-	leftScanner := sql.NewWeightScanner(collation, encodings.BytesToString(left[i:]))
-	rightScanner := sql.NewWeightScanner(collation, encodings.BytesToString(right[i:]))
+	getRuneWeight := collation.Sorter()
+	skipIgnorable := collation.IsUCA()
 	for {
-		lw, lOk, lErr := leftScanner.Next()
-		rw, rOk, rErr := rightScanner.Next()
+		if len(left) > 0 && len(right) > 0 {
+			lr, lread := utf8.DecodeRune(left)
+			rr, rread := utf8.DecodeRune(right)
+			if (lr != utf8.RuneError || lread > 1) && lr == rr {
+				left = left[lread:]
+				right = right[rread:]
+				continue
+			}
+		}
+
+		lw, lOk, lErr := nextCollationWeight(&left, getRuneWeight, skipIgnorable)
+		rw, rOk, rErr := nextCollationWeight(&right, getRuneWeight, skipIgnorable)
 		if lErr != nil || rErr != nil {
 			if lErr != nil && rErr == nil {
 				return 1
@@ -768,6 +784,24 @@ func CompareCollatedStrings(collation sql.CollationID, left, right []byte) int {
 			return 1
 		}
 	}
+}
+
+// nextCollationWeight advances |buf| to the next non-skipped collation weight
+// using |getRuneWeight|, skipping zero weights when |skipIgnorable| is true.
+func nextCollationWeight(buf *[]byte, getRuneWeight sql.CollationSorter, skipIgnorable bool) (int32, bool, error) {
+	for len(*buf) > 0 {
+		r, read := utf8.DecodeRune(*buf)
+		*buf = (*buf)[read:]
+		if r == utf8.RuneError && read == 1 {
+			return 0, false, sql.ErrCollationMalformedString.New("comparing")
+		}
+		w := getRuneWeight(r)
+		if skipIgnorable && w == encodings.IgnorableWeight {
+			continue
+		}
+		return w, true, nil
+	}
+	return 0, false, nil
 }
 
 func writeRaw(buf, val []byte) {
