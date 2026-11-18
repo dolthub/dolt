@@ -29,16 +29,14 @@ type ThreeWayJsonDiffer struct {
 	leftCurrentDiff, rightCurrentDiff *tree.JsonDiff
 	lastMatchedArrayPath              []byte
 	leftIsDone, rightIsDone           bool
-	ns                                tree.NodeStore
 }
 
 type ThreeWayJsonDiff struct {
 	// Op indicates the type of diff
 	Op tree.DiffOp
-	// a partial set of document values are set
-	// depending on the diffOp
-	Key                 []byte
-	Left, Right, Merged sql.JSONWrapper
+	// Key and Right describe edits applied to the left document.
+	Key   []byte
+	Right sql.JSONWrapper
 }
 
 func (differ *ThreeWayJsonDiffer) Next(ctx context.Context) (ThreeWayJsonDiff, error) {
@@ -119,10 +117,10 @@ func (differ *ThreeWayJsonDiffer) Next(ctx context.Context) (ThreeWayJsonDiff, e
 		// element diff may borrow its key from the differ's working buffer.
 		differ.lastMatchedArrayPath = append(differ.lastMatchedArrayPath[:0], leftArray...)
 		if differ.leftCurrentDiff.To == nil && differ.rightCurrentDiff.To == nil {
-			return differ.processMergedDiff(tree.DiffOpConvergentDelete, nil), nil
+			return differ.processMergedDiff(tree.DiffOpConvergentDelete), nil
 		}
 		if differ.leftCurrentDiff.To == nil || differ.rightCurrentDiff.To == nil {
-			return differ.processMergedDiff(tree.DiffOpDivergentDeleteConflict, nil), nil
+			return differ.processMergedDiff(tree.DiffOpDivergentDeleteConflict), nil
 		}
 		valueCmp, err := types.CompareJSON(ctx, differ.leftCurrentDiff.To, differ.rightCurrentDiff.To)
 		if err != nil {
@@ -133,25 +131,11 @@ func (differ *ThreeWayJsonDiffer) Next(ctx context.Context) (ThreeWayJsonDiff, e
 			if differ.leftCurrentDiff.From == nil {
 				op = tree.DiffOpConvergentAdd
 			}
-			return differ.processMergedDiff(op, differ.leftCurrentDiff.To), nil
+			return differ.processMergedDiff(op), nil
 		}
-		if differ.leftCurrentDiff.From == nil {
-			return differ.processMergedDiff(tree.DiffOpDivergentModifyConflict, nil), nil
-		}
-		// If the key existed at base, we can do a recursive three-way merge to resolve
-		// changes to the values.
-		// This shouldn't be necessary: if its an object on all three branches, the original diff is recursive.
-		mergedValue, conflict, err := MergeJSON(ctx, differ.ns, differ.leftCurrentDiff.From,
-			differ.leftCurrentDiff.To,
-			differ.rightCurrentDiff.To)
-		if err != nil {
-			return ThreeWayJsonDiff{}, err
-		}
-		if conflict {
-			return differ.processMergedDiff(tree.DiffOpDivergentModifyConflict, nil), nil
-		} else {
-			return differ.processMergedDiff(tree.DiffOpDivergentModifyResolved, mergedValue), nil
-		}
+		// Both differs descend into common objects, so unequal values at a
+		// matching key cannot be merged.
+		return differ.processMergedDiff(tree.DiffOpDivergentModifyConflict), nil
 	}
 }
 
@@ -211,15 +195,9 @@ func (differ *ThreeWayJsonDiffer) processRightSideOnlyDiff() ThreeWayJsonDiff {
 	}
 }
 
-func (differ *ThreeWayJsonDiffer) processMergedDiff(op tree.DiffOp, merged sql.JSONWrapper) ThreeWayJsonDiff {
-	result := ThreeWayJsonDiff{
-		Op:     op,
-		Key:    differ.leftCurrentDiff.Key,
-		Left:   differ.leftCurrentDiff.To,
-		Right:  differ.rightCurrentDiff.To,
-		Merged: merged,
-	}
+// processMergedDiff consumes matching diffs; their outcome needs no edit payload.
+func (differ *ThreeWayJsonDiffer) processMergedDiff(op tree.DiffOp) ThreeWayJsonDiff {
 	differ.leftCurrentDiff = nil
 	differ.rightCurrentDiff = nil
-	return result
+	return ThreeWayJsonDiff{Op: op}
 }

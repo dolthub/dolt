@@ -2927,7 +2927,6 @@ func MergeJSON(ctx context.Context, ns tree.NodeStore, baseJson, leftJson, right
 	threeWayDiffer := ThreeWayJsonDiffer{
 		leftDiffer:  leftDiffer,
 		rightDiffer: rightDiffer,
-		ns:          ns,
 	}
 
 	// Compute the merged object by applying diffs to the left object as needed.
@@ -2960,8 +2959,6 @@ func MergeJSON(ctx context.Context, ns tree.NodeStore, baseJson, leftJson, right
 			err = editor.Apply(ctx, tree.JsonDiff{Key: threeWayDiff.Key, Type: tree.ModifiedDiff, To: threeWayDiff.Right})
 		case tree.DiffOpRightDelete:
 			err = editor.Apply(ctx, tree.JsonDiff{Key: threeWayDiff.Key, Type: tree.RemovedDiff})
-		case tree.DiffOpDivergentModifyResolved:
-			err = editor.Apply(ctx, tree.JsonDiff{Key: threeWayDiff.Key, Type: tree.ModifiedDiff, To: threeWayDiff.Merged})
 		case tree.DiffOpLeftAdd, tree.DiffOpLeftModify, tree.DiffOpLeftDelete,
 			tree.DiffOpConvergentAdd, tree.DiffOpConvergentModify, tree.DiffOpConvergentDelete:
 			// These changes already exist on the left.
