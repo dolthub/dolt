@@ -117,12 +117,6 @@ var (
 	gitRemoteCache   = map[string]gitRemoteCacheEntry{}
 )
 
-// GitRemoteSpoolDirForRepo returns the spool directory of the git remotes of the Dolt
-// repository at |repoRoot|, the directory that holds its `.dolt` directory.
-func GitRemoteSpoolDirForRepo(repoRoot string) string {
-	return filepath.Join(repoRoot, DoltDir, GitRemoteCacheDirName, GitRemoteSpoolDirName)
-}
-
 func TeardownGitRemotes(ctx context.Context) {
 	gitRemoteCacheMu.Lock()
 	entries := gitRemoteCache
@@ -262,7 +256,12 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	bsOpts.RemoteName = remoteName
 	bsOpts.InfoBranch = blobstore.DefaultInfoBranch
 	bsOpts.SyncForReadTTL = gitBlobstoreSyncForReadTTLOverride
-	bsOpts.SpoolDir, err = tempfiles.NewLockedDir(filepath.Join(filepath.Dir(hashDir), GitRemoteSpoolDirName))
+	// Remove the spools of processes which died holding them before making this one's, so a
+	// process that is killed does not leave them for good. A failure only leaves them for the
+	// next process to try.
+	spoolParent := filepath.Join(filepath.Dir(hashDir), GitRemoteSpoolDirName)
+	_ = tempfiles.CleanDir(spoolParent)
+	bsOpts.SpoolDir, err = tempfiles.NewLockedDir(spoolParent)
 	if err != nil {
 		return nil, nil, nil, err
 	}
