@@ -18,8 +18,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/store/prolly/message"
 )
 
 // TestJsonCursorPredecessorReads checks boundary keys without loading preceding Blob leaves.
