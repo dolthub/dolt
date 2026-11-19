@@ -28,25 +28,21 @@ type JsonCursor struct {
 	jsonScanner JsonScanner
 }
 
-// getPreviousKey computes the key of a cursor's predecessor node. This is important for scanning JSON because that
-// key represents the location within the document where the current node begins, and can be used to compute the location
-// of every value within the node.
+// getPreviousKey returns the boundary before a JSON leaf without reading its predecessor Blob.
+// A parentless leaf or the first leaf in the tree has no preceding boundary.
 func getPreviousKey(ctx context.Context, cur *cursor) ([]byte, error) {
-	cur2 := cur.clone()
-	err := cur2.retreat(ctx)
-	if err != nil {
-		return nil, err
-	}
-	// If we're at the start of the tree, return nil.
-	if !cur2.Valid() {
+	if cur.parent == nil {
 		return nil, nil
 	}
-	key := cur2.CurrentKey()
-	if len(key) == 0 {
-		key = cur2.parent.CurrentKey()
+	previous := cur.parent.clone()
+	if err := previous.retreat(ctx); err != nil {
+		return nil, err
 	}
-	err = errorIfNotSupportedLocation(key)
-	if err != nil {
+	if !previous.Valid() {
+		return nil, nil
+	}
+	key := previous.CurrentKey()
+	if err := errorIfNotSupportedLocation(key); err != nil {
 		return nil, err
 	}
 	return key, nil
@@ -74,17 +70,18 @@ func newJsonCursorAtStartOfChunk(ctx context.Context, ns NodeStore, root *Node, 
 	return newJsonCursorFromCursor(ctx, cur)
 }
 
+// newJsonCursorFromCursor descends to a Blob before initializing its boundary scanner.
 func newJsonCursorFromCursor(ctx context.Context, cur *cursor) (*JsonCursor, error) {
-	previousKey, err := getPreviousKey(ctx, cur)
-	if err != nil {
-		return nil, err
-	}
 	if !cur.isLeaf() {
 		nd, err := fetchChild(ctx, cur.nrw, cur.currentRef())
 		if err != nil {
 			return nil, err
 		}
 		return newJsonCursorFromCursor(ctx, &cursor{nd: nd, parent: cur, nrw: cur.nrw})
+	}
+	previousKey, err := getPreviousKey(ctx, cur)
+	if err != nil {
+		return nil, err
 	}
 	jsonBytes := cur.currentValue()
 	jsonDecoder := ScanJsonFromMiddleWithKey(jsonBytes, previousKey)
