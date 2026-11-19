@@ -929,6 +929,71 @@ var rowLockReadScripts = []rowLockScript{
 	},
 }
 
+// rowLockSchemaScripts cover locking with table definitions that affect how a row's key is made or compared.
+var rowLockSchemaScripts = []rowLockScript{
+	{
+		name: "rows of a table with generated columns are locked by reads and writes alike",
+		setup: []string{
+			"drop table if exists g",
+			"create table g (pk int primary key, a int, v int generated always as (a + 1) virtual, s int generated always as (a * 2) stored, key (v))",
+			"insert into g (pk, a) values (1, 10), (2, 20)",
+		},
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "select * from g where pk = 1 for update", rows: [][]any{{1, 10, 11, 20}}, locks: []string{"g/Update"}},
+			{client: "a", query: "select v, pk from g where v = 21 for update", rows: [][]any{{21, 2}}, locks: []string{"g/Update", "g/Update"}},
+			{client: "b", query: "update g set a = 11 where pk = 1", blocks: true},
+			{client: "a", query: "commit"},
+			{client: "b", unblocks: true},
+			{client: "b", query: "select * from g order by pk for update", rows: [][]any{{1, 11, 12, 22}, {2, 20, 21, 40}}},
+		},
+	},
+	{
+		name: "keys that differ only by case are the same row under a case-insensitive collation",
+		setup: []string{
+			"drop table if exists ci",
+			"create table ci (pk varchar(20) collate utf8mb4_0900_ai_ci primary key, c int)",
+			"insert into ci values ('Alpha', 1), ('beta', 2)",
+		},
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "select * from ci where pk = 'ALPHA' for update", rows: [][]any{{"Alpha", 1}}},
+			{client: "b", query: "select * from ci where pk = 'alpha' for update nowait", err: lockNotAvailableErr},
+			{client: "b", query: "insert into ci values ('BETA', 3)", err: "duplicate primary key"},
+			{client: "a", query: "delete from ci where pk = 'alpha'"},
+			// The key is free in a's view only. In b's the row is still there.
+			{client: "b", query: "insert into ci values ('ALPHA', 4)", err: "duplicate primary key"},
+			{client: "a", query: "commit"},
+		},
+	},
+	{
+		name: "rows with a multi-column key and wide values are locked",
+		setup: []string{
+			"drop table if exists w",
+			"create table w (a int, b varchar(100), t text, j json, primary key (a, b))",
+			"insert into w values (1, 'x', repeat('t', 5000), '{\"k\": 1}'), (1, 'y', 'short', '[1, 2]')",
+		},
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "select a, b, length(t) from w where a = 1 and b = 'x' for update", rows: [][]any{{1, "x", 5000}}, locks: []string{"w/Update"}},
+			{client: "b", query: "update w set t = 'new' where a = 1 and b = 'y'"},
+			{client: "b", query: "update w set t = 'new' where a = 1 and b = 'x'", blocks: true},
+			{client: "a", query: "rollback"},
+			{client: "b", unblocks: true},
+		},
+	},
+}
+
+func TestRowLockSchemas(t *testing.T) {
+	runner := newRowLockRunner(t)
+	for _, script := range rowLockSchemaScripts {
+		runner.run(script)
+	}
+}
+
 var rowLockKeylessReadSetup = []string{
 	"drop table if exists k",
 	"create table k (c1 int, c2 int, key (c1))",
