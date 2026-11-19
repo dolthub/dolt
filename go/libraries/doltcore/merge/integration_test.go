@@ -334,19 +334,28 @@ func runConcurrentTxs(ctx context.Context, eng *engine.SqlEngine, seed int) erro
 			return err
 		}
 		if err := executeQuery(sctx, eng, update); err != nil {
+			// A row that another transaction changed first costs this one its transaction, either when it tries to
+			// change the row or, without row locks, when it commits.
+			if isSerializationFailure(err) {
+				continue
+			}
 			return err
 		}
 		if err := executeQuery(sctx, eng, sum); err != nil {
 			return err
 		}
 		if err := executeQuery(sctx, eng, "COMMIT"); err != nil {
-			// allow serialization errors
-			if !sql.ErrLockDeadlock.Is(err) {
+			if !isSerializationFailure(err) {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+// isSerializationFailure returns whether |err| reports that a transaction lost out to a concurrent one.
+func isSerializationFailure(err error) bool {
+	return sql.ErrLockDeadlock.Is(err) || sql.ErrRowLockDeadlock.Is(err)
 }
 
 func setupConcurrencyTest(t *testing.T, ctx context.Context) (dEnv *env.DoltEnv) {
