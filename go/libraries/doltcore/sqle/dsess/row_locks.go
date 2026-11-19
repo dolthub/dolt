@@ -108,7 +108,9 @@ func (d *DoltSession) lockRewrittenTables(ctx *sql.Context, bs *branchState, new
 			Relation: relation,
 			Target:   rowjournal.TableTarget(),
 			Op:       rowjournal.WriteUpdate,
-			Timeout:  RowLockWaitTimeout(ctx),
+			// The change may have deleted rows or changed their keys, which calls for the strongest lock.
+			KeysChanged: true,
+			Timeout:     RowLockWaitTimeout(ctx),
 		})
 		if err != nil {
 			return RowLockWaitError(err)

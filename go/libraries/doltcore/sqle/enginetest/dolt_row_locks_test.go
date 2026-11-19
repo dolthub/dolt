@@ -997,7 +997,8 @@ var rowLockTableScripts = []rowLockScript{
 		setup: rowLockTableSetup,
 		steps: []rowLockStep{
 			{client: "a", query: "begin"},
-			{client: "a", query: "select pk from t where pk = 1 for update", rows: [][]any{{1}}},
+			// Even the weakest lock on a row keeps the table from being changed as a whole.
+			{client: "a", query: "select pk from t where pk = 1 lock in share mode", rows: [][]any{{1}}},
 			{client: "b", query: "drop table t", blocks: true},
 			// A transaction that has locks in the table isn't made to wait behind the statement that waits for it.
 			{client: "a", query: "select pk from t where pk = 2 for update", rows: [][]any{{2}}},
