@@ -41,7 +41,7 @@ func Rekeyed(sch, target Schema) (Schema, bool, error) {
 	targetCols := make(map[uint64]Column, targetPK.Size())
 	for i, tc := range targetPK.GetColumns() {
 		col, ok := MatchingColumn(sch, target, tc)
-		if !ok || col.Virtual || !rekeyableType(col, tc) {
+		if !ok || col.Virtual || !RekeyableType(col, tc) {
 			return nil, false, nil
 		}
 		keyTags[i] = col.Tag
@@ -94,9 +94,9 @@ func MatchingColumn(sch, target Schema, tc Column) (Column, bool) {
 	return col, true
 }
 
-// rekeyableType reports whether the key column |from| can be rekeyed to |to|
+// RekeyableType reports whether the key column |from| can be rekeyed to |to|
 // by copying its stored bytes.
-func rekeyableType(from, to Column) bool {
+func RekeyableType(from, to Column) bool {
 	if from.TypeInfo.ToSqlType().Equals(to.TypeInfo.ToSqlType()) {
 		return true
 	}

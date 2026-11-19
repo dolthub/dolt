@@ -15,7 +15,6 @@
 package dtablefunctions
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -291,6 +290,8 @@ func (ds *DiffStatTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 		return nil, err
 	}
 
+	var diffStats []diffStatNode
+	var hasUnpaired, noCommonKey bool
 	// If tableNameExpr defined, return a single table diff stat result
 	if ds.tableNameExpr != nil {
 		resolvedName, err := resolveDeltaTableName(ctx, fromRefDetails.root, toRefDetails.root, tableName)
@@ -308,33 +309,37 @@ func (ds *DiffStatTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 		if err != nil {
 			return nil, err
 		}
-		if !hasDiff {
-			return NewDiffStatTableFunctionRowIter([]diffStatNode{}), nil
+		if hasDiff {
+			diffStats = append(diffStats, diffStat)
+			hasUnpaired = hasUnpaired || (diffStat.diffStat.Unpaired > 0 && !diffStat.diffStat.NoCommonKey)
+			noCommonKey = noCommonKey || diffStat.diffStat.NoCommonKey
 		}
-		return NewDiffStatTableFunctionRowIter([]diffStatNode{diffStat}), nil
+		dtables.WarnUnpaired(ctx, hasUnpaired, noCommonKey, fromRefDetails.refStr, toRefDetails.refStr)
+		return NewDiffStatTableFunctionRowIter(diffStats), nil
 	}
 
-	var diffStats []diffStatNode
 	for _, delta := range deltas {
 		tblName := delta.ToName
 		if tblName.Name == "" {
 			tblName = delta.FromName
 		}
 		diffStat, hasDiff, err := getDiffStatNodeFromDelta(ctx, delta, fromRefDetails.root, toRefDetails.root, tblName)
+		if diff.IsPrimaryKeyAlignmentError(err) {
+			// Other tables still get their stats, so only this table is skipped.
+			ctx.Warn(dtables.PrimaryKeyChangeWarningCode, "%s", err.Error())
+			continue
+		}
 		if err != nil {
-			if errors.Is(err, diff.ErrPrimaryKeySetChanged) {
-				ctx.Warn(dtables.PrimaryKeyChangeWarningCode, "stat for table %s cannot be determined. Primary key set changed.", tblName)
-				// Report an empty diff for tables that have primary key set changes
-				diffStats = append(diffStats, diffStatNode{tblName: tblName})
-				continue
-			}
 			return nil, err
 		}
 		if hasDiff {
 			diffStats = append(diffStats, diffStat)
+			hasUnpaired = hasUnpaired || (diffStat.diffStat.Unpaired > 0 && !diffStat.diffStat.NoCommonKey)
+			noCommonKey = noCommonKey || diffStat.diffStat.NoCommonKey
 		}
 	}
 
+	dtables.WarnUnpaired(ctx, hasUnpaired, noCommonKey, fromRefDetails.refStr, toRefDetails.refStr)
 	return NewDiffStatTableFunctionRowIter(diffStats), nil
 }
 
@@ -465,6 +470,8 @@ func getDiffStat(ctx *sql.Context, td diff.TableDelta) (diff.DiffStatProgress, b
 				acc.OldRowSize += p.OldRowSize
 				acc.NewCellSize += p.NewCellSize
 				acc.OldCellSize += p.OldCellSize
+				acc.Unpaired += p.Unpaired
+				acc.NoCommonKey = acc.NoCommonKey || p.NoCommonKey
 				count++
 			case <-ctx2.Done():
 				return ctx2.Err()
@@ -476,12 +483,19 @@ func getDiffStat(ctx *sql.Context, td diff.TableDelta) (diff.DiffStatProgress, b
 		return diff.DiffStatProgress{}, false, false, err
 	}
 
-	keyless, err := td.IsKeyless(ctx)
-	if err != nil {
-		return diff.DiffStatProgress{}, false, keyless, err
+	// A table that gained or lost its primary key is counted as keyless.
+	keyless := td.FromTable != nil && td.ToTable != nil && schema.IsKeyless(td.FromSch) != schema.IsKeyless(td.ToSch)
+	if !keyless {
+		var err error
+		if keyless, err = td.IsKeyless(ctx); err != nil {
+			return diff.DiffStatProgress{}, false, keyless, err
+		}
 	}
 
-	if (acc.Adds+acc.Removes+acc.Changes) == 0 && (acc.OldCellSize-acc.NewCellSize) == 0 {
+	if !acc.NoCommonKey && (acc.Adds+acc.Removes+acc.Changes) == 0 && (acc.OldCellSize-acc.NewCellSize) == 0 {
+		return diff.DiffStatProgress{}, false, keyless, nil
+	}
+	if acc.NoCommonKey && (acc.Adds+acc.Removes) == 0 {
 		return diff.DiffStatProgress{}, false, keyless, nil
 	}
 

@@ -303,30 +303,11 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 		if err != nil {
 			return nil, err
 		}
-		delta := findMatchingDelta(deltas, resolvedName)
-
-		ignore, err := ignorePatterns.ShouldIgnoreDelta(delta.IsAdd(), delta.IsDrop(), delta.ToName, delta.FromName)
-		if err != nil {
-			return nil, err
-		}
-		if ignore {
-			return NewDiffSummaryTableFunctionRowIter([]*diff.TableDeltaSummary{}), nil
-		}
-
-		summ, err := getSummaryForDelta(ctx, delta, sqledb, fromDetails, toDetails, true)
-		if err != nil {
-			return nil, err
-		}
-
-		summs := []*diff.TableDeltaSummary{}
-		if summ != nil {
-			summs = []*diff.TableDeltaSummary{summ}
-		}
-
-		return NewDiffSummaryTableFunctionRowIter(summs), nil
+		deltas = []diff.TableDelta{findMatchingDelta(deltas, resolvedName)}
 	}
 
 	var diffSummaries []*diff.TableDeltaSummary
+	var hasUnpaired, noCommonKey bool
 	for _, delta := range deltas {
 		ignore, err := ignorePatterns.ShouldIgnoreDelta(delta.IsAdd(), delta.IsDrop(), delta.ToName, delta.FromName)
 		if err != nil {
@@ -336,19 +317,24 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 			continue
 		}
 
-		summ, err := getSummaryForDelta(ctx, delta, sqledb, fromDetails, toDetails, false)
+		summ, err := summaryForDelta(ctx, delta)
 		if err != nil {
 			return nil, err
 		}
 		if summ != nil {
 			diffSummaries = append(diffSummaries, summ)
+			hasUnpaired = hasUnpaired || (summ.HasUnpaired && !summ.NoCommonKey)
+			noCommonKey = noCommonKey || summ.NoCommonKey
 		}
 	}
+	dtables.WarnUnpaired(ctx, hasUnpaired, noCommonKey, fromDetails.refStr, toDetails.refStr)
 
 	return NewDiffSummaryTableFunctionRowIter(diffSummaries), nil
 }
 
-func getSummaryForDelta(ctx *sql.Context, delta diff.TableDelta, sqledb dsess.SqlDatabase, fromDetails, toDetails *refDetails, shouldErrorOnPKChange bool) (*diff.TableDeltaSummary, error) {
+// summaryForDelta returns the summary of |delta|, or nil when it has no
+// observable change.
+func summaryForDelta(ctx *sql.Context, delta diff.TableDelta) (*diff.TableDeltaSummary, error) {
 	if delta.FromTable == nil && delta.ToTable == nil && delta.FromRootObject == nil && delta.ToRootObject == nil {
 		if !strings.HasPrefix(delta.FromName.Name, diff.DBPrefix) && !strings.HasPrefix(delta.ToName.Name, diff.DBPrefix) {
 			return nil, nil
@@ -358,15 +344,6 @@ func getSummaryForDelta(ctx *sql.Context, delta diff.TableDelta, sqledb dsess.Sq
 			return nil, err
 		}
 		return summ, nil
-	}
-
-	if schema.ComparePrimaryKeys(delta.FromSch, delta.ToSch) == schema.PrimaryKeysDiffer {
-		if shouldErrorOnPKChange {
-			return nil, fmt.Errorf("failed to compute diff summary for table %s: %w", delta.CurName(), diff.ErrPrimaryKeySetChanged)
-		}
-
-		ctx.Warn(dtables.PrimaryKeyChangeWarningCode, dtables.PrimaryKeyChangeWarning, fromDetails.hashStr, toDetails.hashStr)
-		return nil, nil
 	}
 
 	// A table whose only change is column tags has no observable change.
@@ -380,7 +357,7 @@ func getSummaryForDelta(ctx *sql.Context, delta diff.TableDelta, sqledb dsess.Sq
 
 	summ, err := delta.GetSummary(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to compute diff summary for table %s: %w", delta.CurName(), err)
 	}
 
 	return summ, nil

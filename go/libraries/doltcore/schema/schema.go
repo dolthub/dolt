@@ -328,9 +328,14 @@ func ComparePrimaryKeys(fromSchema, toSchema Schema) PrimaryKeyComparisonType {
 			return PrimaryKeysDiffer
 		}
 		// MapSchemaBasedOnTagAndName matches target columns by tag first. A target
-		// column holding fromCol's tag under another name would get its values.
-		if tagCol, ok := toPrimaryKeyCols.GetByTag(fromCol.Tag); ok &&
+		// column of either kind holding fromCol's tag under another name would get
+		// its values, and vice versa if toCol's tag belongs to another column in fromSchema.
+		if tagCol, ok := toSchema.GetAllCols().GetByTag(fromCol.Tag); ok &&
 			strings.ToLower(tagCol.Name) != strings.ToLower(fromCol.Name) {
+			return PrimaryKeysDiffer
+		}
+		if tagCol, ok := fromSchema.GetAllCols().GetByTag(toCol.Tag); ok &&
+			strings.ToLower(tagCol.Name) != strings.ToLower(toCol.Name) {
 			return PrimaryKeysDiffer
 		}
 		comparison = PrimaryKeysRetagged
