@@ -61,6 +61,17 @@ type TypeInfo interface {
 	fmt.Stringer
 }
 
+// EncodingPreserver is implemented by TypeInfos defined outside this package (e.g. those of doltgres extended types)
+// whose storage encoding may differ from the encoding of an existing column of the same type, such as when the
+// default encoding for a type has changed since the column was created.
+type EncodingPreserver interface {
+	TypeInfo
+	// PreserveEncoding returns this TypeInfo with its storage encoding overridden to that of |oldTI|, the TypeInfo
+	// of the existing column, whenever values stored with that encoding remain valid for this type. Otherwise, the
+	// receiver is returned unchanged.
+	PreserveEncoding(oldTI TypeInfo) TypeInfo
+}
+
 // FromSqlType takes in a sql.Type and returns the most relevant TypeInfo.
 func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 	if gmsExtendedType, ok := sqlType.(sql.ExtendedType); ok {
@@ -228,6 +239,7 @@ func fillInCollationWithDefault(typ sql.Type) (sql.Type, error) {
 // of oldTI whenever both TypeInfos belong to the same adaptive-encoding family. This
 // keeps columns that we don't rewrite during ALTER TABLE statements on the same encoding.
 // We could alternately rewrite the table in the presence of such ALTER TABLE statments.
+// TypeInfos implementing EncodingPreserver decide for themselves which encodings to keep.
 func PreserveAdaptiveEncoding(oldTI, newTI TypeInfo) TypeInfo {
 	if oldTI == nil || newTI == nil {
 		return newTI
@@ -277,6 +289,8 @@ func PreserveAdaptiveEncoding(oldTI, newTI TypeInfo) TypeInfo {
 		if ot, ok := oldTI.(*geometryType); ok {
 			return nt.WithEncoding(ot.Encoding())
 		}
+	case EncodingPreserver:
+		return nt.PreserveEncoding(oldTI)
 	}
 	return newTI
 }
