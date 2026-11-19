@@ -75,6 +75,11 @@ CREATE TABLE test_table (
 );`)
 	require.NoError(t, err)
 
+	// This test is about transactions whose conflicting changes are found when they commit. With row-level locking, a
+	// transaction that changes a row another has changed waits for it and then fails at the statement.
+	_, err = db.ExecContext(ctx, "SET @@GLOBAL.dolt_row_level_locking = 0")
+	require.NoError(t, err)
+
 	_, err = db.ExecContext(ctx, "INSERT INTO test_table (value) VALUES ('initial')")
 	require.NoError(t, err)
 
@@ -161,6 +166,11 @@ func testSQLRacingAmend(t *testing.T) {
 	  id INT AUTO_INCREMENT PRIMARY KEY,
 	  value VARCHAR(20)
 	);`)
+	require.NoError(t, err)
+
+	// This test is about transactions whose conflicting changes are found when they commit. With row-level locking, a
+	// transaction that changes a row another has changed waits for it and then fails at the statement.
+	_, err = db.ExecContext(ctx, "SET @@GLOBAL.dolt_row_level_locking = 0")
 	require.NoError(t, err)
 
 	_, err = db.ExecContext(ctx, "INSERT INTO test_table VALUES (1, 'initial')")
