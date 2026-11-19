@@ -380,63 +380,61 @@ func (ar *archiveReader) checkSpan(id uint32) error {
 	return nil
 }
 
-// newInMemoryArchiveIndexReader implements the original index loading logic for non-file readers
+// newInMemoryArchiveIndexReader implements the original index loading logic for non-file readers. The four index
+// sections are contiguous, so they are fetched with a single read; remote readers pay one round trip per read.
 func newInMemoryArchiveIndexReader(ctx context.Context, reader tableReaderAt, footer archiveFooter, q MemoryQuotaProvider, stats *Stats) (archiveIndexReader, error) {
-	byteOffSpan := footer.indexByteOffsetSpan()
-	secRdr := newSectionReader(ctx, reader, int64(byteOffSpan.offset), int64(byteOffSpan.length), stats)
+	indexSpan := footer.totalIndexSpan()
+	indexBytes := make([]byte, indexSpan.length)
+	_, err := io.ReadFull(newSectionReader(ctx, reader, int64(indexSpan.offset), int64(indexSpan.length), stats), indexBytes)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to read archive index: %w", err)
+	}
+	// footer.validate() guarantees the sections exactly tile the index span.
+	sectionBytes := func(span byteSpan) []byte {
+		start := span.offset - indexSpan.offset
+		return indexBytes[start : start+span.length]
+	}
+
 	byteSpans, err := q.AcquireQuotaUint64Slice(ctx, int(footer.byteSpanCount)+1)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to allocate byteSpans uint64 slice: %w", err)
 	}
 	bytesSoFar := len(byteSpans) * uint64Size
 	byteSpans[0] = 0 // Null byteSpan to simplify logic.
-	err = binary.Read(secRdr, binary.BigEndian, byteSpans[1:])
-	if err != nil {
+	if _, err = binary.Decode(sectionBytes(footer.indexByteOffsetSpan()), binary.BigEndian, byteSpans[1:]); err != nil {
 		q.ReleaseQuotaBytes(bytesSoFar)
-		return nil, fmt.Errorf("Failed to read byte spans: %w", err)
+		return nil, fmt.Errorf("Failed to decode byte spans: %w", err)
 	}
 
-	prefixSpan := footer.indexPrefixSpan()
-	prefixRdr := newSectionReader(ctx, reader, int64(prefixSpan.offset), int64(prefixSpan.length), stats)
 	prefixes, err := q.AcquireQuotaUint64Slice(ctx, int(footer.chunkCount))
 	if err != nil {
 		q.ReleaseQuotaBytes(bytesSoFar)
 		return nil, fmt.Errorf("Failed to allocate prefixes uint32 slice: %w", err)
 	}
 	bytesSoFar += len(prefixes) * uint64Size
-	err = binary.Read(prefixRdr, binary.BigEndian, prefixes[:])
-	if err != nil {
+	if _, err = binary.Decode(sectionBytes(footer.indexPrefixSpan()), binary.BigEndian, prefixes); err != nil {
 		q.ReleaseQuotaBytes(bytesSoFar)
-		return nil, fmt.Errorf("Failed to read prefixes: %w", err)
+		return nil, fmt.Errorf("Failed to decode prefixes: %w", err)
 	}
 
-	chunkRefSpan := footer.indexChunkRefSpan()
-	chunkRdr := newSectionReader(ctx, reader, int64(chunkRefSpan.offset), int64(chunkRefSpan.length), stats)
 	chnks, err := q.AcquireQuotaUint32Slice(ctx, int(footer.chunkCount)*2)
 	if err != nil {
 		q.ReleaseQuotaBytes(bytesSoFar)
 		return nil, fmt.Errorf("Failed to allocate chunks uint32 slice: %w", err)
 	}
 	bytesSoFar += len(chnks) * uint32Size
-	err = binary.Read(chunkRdr, binary.BigEndian, chnks[:])
-	if err != nil {
+	if _, err = binary.Decode(sectionBytes(footer.indexChunkRefSpan()), binary.BigEndian, chnks); err != nil {
 		q.ReleaseQuotaBytes(bytesSoFar)
-		return nil, fmt.Errorf("Failed to read chunk references: %w", err)
+		return nil, fmt.Errorf("Failed to decode chunk references: %w", err)
 	}
 
 	suffixSpan := footer.indexSuffixSpan()
-	sufRdr := newSectionReader(ctx, reader, int64(suffixSpan.offset), int64(suffixSpan.length), stats)
 	suffixes, err := q.AcquireQuotaByteSlice(ctx, int(suffixSpan.length))
 	if err != nil {
 		q.ReleaseQuotaBytes(bytesSoFar)
 		return nil, fmt.Errorf("Failed to allocate suffixes byte slice: %w", err)
 	}
-	bytesSoFar += len(suffixes)
-	_, err = io.ReadFull(sufRdr, suffixes)
-	if err != nil {
-		q.ReleaseQuotaBytes(bytesSoFar)
-		return nil, err
-	}
+	copy(suffixes, sectionBytes(suffixSpan))
 
 	ret := &inMemoryArchiveIndexReader{
 		prefixes:  prefixes,
