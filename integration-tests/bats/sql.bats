@@ -1757,8 +1757,7 @@ SQL
     # switching to a branch that doesn't exist should be an error
     run dolt sql -q "set @@dolt_repo_$$_head_ref = 'does-not-exist';"
     [ "$status" -eq 1 ]
-    # TODO: this error message could be improved
-    [[ "$output" =~ "database not found: dolt_repo_$$/does-not-exist" ]] || false
+    [[ "$output" =~ "branch not found" ]] || false
 }
 
 @test "sql: branch qualified DB name in select" {
