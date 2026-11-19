@@ -90,6 +90,7 @@ var _ dsess.TableWriter = &prollyTableWriter{}
 var _ sql.UniqueKeyConflictCheckingRowInserter = &prollyTableWriter{}
 
 var _ UniqueKeyChangeReporter = &prollyTableWriter{}
+var _ sql.UnchangedRowUpdater = &prollyTableWriter{}
 var _ AutoIncrementGetter = &prollyTableWriter{}
 
 func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, schState *dsess.WriterState) (map[string]indexWriter, error) {
@@ -318,6 +319,13 @@ func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.
 
 	w.aiSet = true
 	return nil
+}
+
+// UpdateUnchanged implements sql.UnchangedRowUpdater. An UPDATE that sets a row to the values it already has locks the
+// row, and counts as a change to it, just as one that changes it does. Other transactions that want the row wait for
+// this one, and those whose snapshots predate this one's commit can't build on the row afterwards.
+func (w *prollyTableWriter) UpdateUnchanged(ctx *sql.Context, sqlRow sql.Row) error {
+	return w.lockRowForUpdate(ctx, sqlRow, sqlRow)
 }
 
 // UniqueKeyChangeReporter is a writer that reports whether an update frees or takes a unique key.

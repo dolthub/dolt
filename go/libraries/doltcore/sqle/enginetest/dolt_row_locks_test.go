@@ -345,6 +345,34 @@ var rowLockWriteScripts = []rowLockScript{
 		},
 	},
 	{
+		name:  "an update that sets a row to the values it has locks the row, and counts as a change to it",
+		setup: rowLockWriteSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "c", query: "begin"},
+			{client: "a", query: "update t set c1 = c1 where pk = 1", locks: []string{"t/NoKeyUpdate"}},
+			{client: "b", query: "select * from t where pk = 1 for update nowait", err: lockNotAvailableErr},
+			{client: "b", query: "update t set c1 = 20 where pk = 1", blocks: true},
+			{client: "a", query: "commit"},
+			{client: "b", unblocks: true, err: concurrentUpdateErr},
+			{client: "c", query: "select * from t where pk = 1 for update", err: concurrentUpdateErr},
+			{client: "a", query: "select * from t where pk = 1", rows: [][]any{{1, 1, 1}}},
+		},
+	},
+	{
+		name:  "keyless: an update that sets a row to the values it has locks the row",
+		setup: rowLockKeylessSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "update k set c2 = c2 where c1 = 2"},
+			{client: "b", query: "delete from k where c1 = 2", blocks: true},
+			{client: "a", query: "rollback"},
+			{client: "b", unblocks: true},
+		},
+	},
+	{
 		name:  "update and delete wait for a delete, and fail when it commits",
 		setup: rowLockWriteSetup,
 		steps: []rowLockStep{
