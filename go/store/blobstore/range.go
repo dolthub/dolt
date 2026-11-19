@@ -21,7 +21,8 @@ import (
 // BlobRange represents a segment of a blob of data.  Offset is the beginning of
 // the range and Length is the size.  If Length is 0 that means all data beyond
 // offset will be read. Lengths cannot be negative.  Negative offsets indicate
-// distance from the end of the end of the blob.
+// distance from the end of the end of the blob. As with an HTTP suffix range, a
+// negative offset reaching back past the start of the blob starts at its start.
 type BlobRange struct {
 	offset int64
 	length int64
@@ -49,7 +50,7 @@ func (br BlobRange) positiveRange(size int64) BlobRange {
 	length := br.length
 
 	if offset < 0 {
-		offset = size + offset
+		offset = max(size+offset, 0)
 	}
 
 	if offset+length > size || length == 0 {

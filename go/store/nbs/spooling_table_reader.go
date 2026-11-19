@@ -222,7 +222,7 @@ func (s *spoolingTableReaderAt) Close() error {
 }
 
 // archiveIndexReaderAt serves the reads of opening an archive from its index, already in
-// memory, so that opening it does not spool it.
+// memory, so that opening it makes no further reads of the blobstore.
 type archiveIndexReaderAt struct {
 	buf []byte
 	off int64
@@ -264,30 +264,9 @@ func readBlobRange(ctx context.Context, bs blobstore.Blobstore, key string, br b
 
 // newSpooledBSArchiveChunkSource opens an archive by reading its footer and index, and
 // spools it when its chunks are first read.
-func newSpooledBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, q MemoryQuotaProvider, opts openOpts, stats *Stats) (chunkSource, error) {
+func newSpooledBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, opts openOpts, stats *Stats) (chunkSource, error) {
 	key := name.String() + ArchiveFileSuffix
-	footerBytes, sz, err := readBlobRange(ctx, bs, key, blobstore.NewBlobRange(-int64(archiveFooterSize), 0), archiveFooterSize)
-	if err != nil {
-		return nil, err
-	}
-	if sz == 0 {
-		return nil, fmt.Errorf("%s: blobstore did not report the size of the archive", key)
-	}
-	footer, err := buildArchiveFooter(name, sz, footerBytes)
-	if err != nil {
-		return nil, err
-	}
-
-	index := footer.totalIndexSpan()
-	var indexBytes []byte
-	if index.length > 0 {
-		indexBytes, _, err = readBlobRange(ctx, bs, key, blobstore.NewBlobRange(int64(index.offset), int64(index.length)), index.length)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	aRdr, err := buildArchiveReader(ctx, &archiveIndexReaderAt{buf: indexBytes, off: int64(index.offset)}, footer, q, opts, stats)
+	aRdr, sz, err := openBSArchiveIndex(ctx, bs, key, name, chunkCount, q, opts, stats)
 	if err != nil {
 		return nil, err
 	}

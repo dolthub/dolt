@@ -391,6 +391,9 @@ func TestGetRange(t *testing.T) {
 
 			// test the range beginning 2048 bytes from the end of size 512 which will be shorts 1024 from the end til 768 from the end
 			testGetRange(t, bsTest.bs, NewBlobRange(-2*1024, 512), rangeData(maxValue-1024, maxValue-768))
+
+			// a suffix longer than the blob reads the whole blob
+			testGetRange(t, bsTest.bs, NewBlobRange(-4*maxValue, 0), rangeData(0, maxValue))
 		})
 	}
 }
@@ -419,6 +422,7 @@ func TestGetReportsWholeBlobSize(t *testing.T) {
 				NewBlobRange(1024, 128),
 				NewBlobRange(-128, 0),
 				NewBlobRange(-256, 128),
+				NewBlobRange(-2*size, 0),
 			}
 			for _, br := range ranges {
 				t.Run(br.asHttpRangeHeader(), func(t *testing.T) {
