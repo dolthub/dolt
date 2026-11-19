@@ -205,3 +205,4 @@ require (
 )
 
 go 1.27.3
+replace github.com/dolthub/go-mysql-server => ../../../../go-mysql-server/zachmu/row-level-locks

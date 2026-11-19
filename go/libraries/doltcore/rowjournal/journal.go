@@ -34,7 +34,8 @@ import (
 	"time"
 )
 
-// DefaultDeadlockTimeout is how long a lock request waits before checking whether it is part of a deadlock.
+// DefaultDeadlockTimeout is how long a lock request waits before checking a second time whether it is part of a
+// deadlock. It checks a first time when it starts waiting.
 const DefaultDeadlockTimeout = time.Second
 
 // Journal is an in-memory journal of transactions, row locks and row writes, shared by every session of a server. It
@@ -53,7 +54,7 @@ type Journal struct {
 	relations map[RelationKey]*relation
 	// nextWaiterSeq numbers waiting lock requests in arrival order.
 	nextWaiterSeq uint64
-	// deadlockTimeout is how long a lock request waits before checking for a deadlock.
+	// deadlockTimeout is how long a lock request waits before checking for a deadlock a second time.
 	deadlockTimeout time.Duration
 	// sink, when set, receives every record appended.
 	sink RecordSink
@@ -69,7 +70,8 @@ func NewJournal() *Journal {
 	}
 }
 
-// SetDeadlockTimeout sets how long a lock request waits before checking whether it is part of a deadlock.
+// SetDeadlockTimeout sets how long a lock request waits before checking a second time whether it is part of a
+// deadlock.
 func (j *Journal) SetDeadlockTimeout(d time.Duration) {
 	j.mu.Lock()
 	defer j.mu.Unlock()

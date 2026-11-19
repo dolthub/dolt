@@ -99,6 +99,11 @@ type DoltTransaction struct {
 	// rowTxn is this transaction's registration in the engine's row journal, which gives it its transaction ID and
 	// holds its row locks. Nil when the engine keeps no row journal.
 	rowTxn *rowjournal.Txn
+	// rowJournal is the journal |rowTxn| is registered in.
+	rowJournal *rowjournal.Journal
+	// rowLocking is whether this transaction locks the rows it changes and the rows it reads with a locking clause.
+	// It is fixed when the transaction starts.
+	rowLocking bool
 }
 
 type dbRoot struct {

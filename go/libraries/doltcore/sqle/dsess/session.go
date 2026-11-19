@@ -607,6 +607,8 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 		return nil, err
 	}
 	tx.rowTxn = rowTxn
+	tx.rowJournal = journal
+	tx.rowLocking = rowTxn != nil && rowLockingEnabled(ctx)
 	_, tx.postgresSavepoints = d.DoltgresSessObj.(DoltgresTransactionLifecycle)
 
 	// The engine sets the transaction after this call as well, but since we begin accessing data below, we need to set
@@ -688,6 +690,17 @@ func (d *DoltSession) rowJournal() *rowjournal.Journal {
 	}
 
 	return d.provider.RowJournal()
+}
+
+// rowLockingEnabled returns whether transactions that start now take row locks.
+func rowLockingEnabled(ctx *sql.Context) bool {
+	_, val, ok := ctx.SystemVariables().GetGlobal(DoltRowLevelLocking)
+	if !ok {
+		return false
+	}
+
+	enabled, _ := val.(int8)
+	return enabled == 1
 }
 
 // CommitTransaction commits the in-progress transaction. Depending on session settings, this may write only a new

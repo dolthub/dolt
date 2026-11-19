@@ -1,0 +1,692 @@
+// Copyright 2026 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package enginetest
+
+import (
+	"fmt"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/dolthub/go-mysql-server/enginetest"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/rowjournal"
+)
+
+// rowLockStep is one step of a rowLockScript: a statement run by one of the script's clients.
+type rowLockStep struct {
+	// client names the session that runs the statement. Sessions are created the first time they are named.
+	client string
+	// query is the statement to run. It is empty for a step that only awaits a statement that blocked earlier.
+	query string
+	// blocks says that the statement must block on a row lock. The script goes on to the next step while the
+	// statement waits, and a later step for the same client with |unblocks| set checks how it turns out.
+	blocks bool
+	// unblocks says that the statement the client is blocked on must now finish. The step's |rows| and |err| are
+	// checked against that statement's outcome.
+	unblocks bool
+	// rows is the expected result, with every value formatted as by fmt.Sprint. Nil means the result isn't checked.
+	rows [][]any
+	// err is a substring of the expected error. Empty means the statement must succeed.
+	err string
+}
+
+// rowLockScript is a test of the interaction of several sessions, in which statements can block on one another.
+type rowLockScript struct {
+	name  string
+	setup []string
+	steps []rowLockStep
+}
+
+// queryResult is how a statement turned out.
+type queryResult struct {
+	rows []sql.Row
+	err  error
+}
+
+// rowLockRunner runs rowLockScripts against one engine.
+type rowLockRunner struct {
+	t       *testing.T
+	harness *DoltHarness
+	engine  enginetest.QueryEngine
+	journal *rowjournal.Journal
+	clients map[string]*rowJournalClient
+	// pending holds, for each client blocked on a statement, the channel that statement's result arrives on.
+	pending map[string]chan queryResult
+}
+
+func newRowLockRunner(t *testing.T) *rowLockRunner {
+	harness := newDoltHarness(t)
+	t.Cleanup(harness.Close)
+	engine, err := harness.NewEngine(t)
+	require.NoError(t, err)
+	t.Cleanup(func() { engine.Close() })
+
+	journal := harness.provider.RowJournal()
+	require.NotNil(t, journal)
+	journal.SetDeadlockTimeout(200 * time.Millisecond)
+
+	return &rowLockRunner{
+		t:       t,
+		harness: harness,
+		engine:  engine,
+		journal: journal,
+		clients: make(map[string]*rowJournalClient),
+		pending: make(map[string]chan queryResult),
+	}
+}
+
+func (r *rowLockRunner) client(name string) *rowJournalClient {
+	c, ok := r.clients[name]
+	if !ok {
+		c = newRowJournalClient(r.t, r.harness, r.engine)
+		r.clients[name] = c
+	}
+
+	return c
+}
+
+// query runs a statement for a client and returns how it turned out.
+func (c *rowJournalClient) query(query string) queryResult {
+	ctx := c.ctx.WithQuery(query)
+	_, iter, _, err := c.engine.Query(ctx, query)
+	if err != nil {
+		return queryResult{err: err}
+	}
+
+	rows, err := sql.RowIterToRows(ctx, iter)
+	return queryResult{rows: rows, err: err}
+}
+
+// waiting returns the number of lock requests waiting in the journal.
+func (r *rowLockRunner) waiting() int {
+	n := 0
+	for _, lock := range r.journal.Locks() {
+		if !lock.Granted {
+			n++
+		}
+	}
+
+	return n
+}
+
+func (r *rowLockRunner) run(script rowLockScript) {
+	r.t.Run(script.name, func(t *testing.T) {
+		// Leave nothing behind for the next script, however this one ends.
+		defer func() {
+			for client, done := range r.pending {
+				delete(r.pending, client)
+				go func() { <-done }()
+			}
+
+			for _, client := range r.clients {
+				client.query("rollback")
+			}
+
+			assert.Empty(t, r.journal.Locks(), "locks left behind")
+			assert.Empty(t, r.journal.ActiveTxns(), "transactions left behind")
+		}()
+
+		setup := r.client("setup")
+		for _, query := range script.setup {
+			res := setup.query(query)
+			require.NoError(t, res.err, "setup: %s", query)
+		}
+
+		for i, step := range script.steps {
+			label := fmt.Sprintf("step %d: /* client %s */ %s", i, step.client, step.query)
+			switch {
+			case step.unblocks:
+				done, ok := r.pending[step.client]
+				require.True(t, ok, "%s: client has no blocked statement", label)
+				delete(r.pending, step.client)
+
+				select {
+				case res := <-done:
+					checkStepResult(t, label, step, res)
+				case <-time.After(10 * time.Second):
+					t.Fatalf("%s: blocked statement did not finish", label)
+				}
+			case step.blocks:
+				_, ok := r.pending[step.client]
+				require.False(t, ok, "%s: client is already blocked", label)
+
+				before := r.waiting()
+				done := make(chan queryResult, 1)
+				client := r.client(step.client)
+				go func() {
+					done <- client.query(step.query)
+				}()
+
+				require.Eventually(t, func() bool {
+					return r.waiting() > before || len(done) > 0
+				}, 10*time.Second, time.Millisecond, "%s: statement neither blocked nor finished", label)
+
+				select {
+				case res := <-done:
+					t.Fatalf("%s: statement finished instead of blocking: rows %v, error %v", label, res.rows, res.err)
+				default:
+				}
+
+				r.pending[step.client] = done
+			default:
+				_, ok := r.pending[step.client]
+				require.False(t, ok, "%s: client is blocked on an earlier statement", label)
+				checkStepResult(t, label, step, r.client(step.client).query(step.query))
+			}
+		}
+
+		require.Empty(t, r.pending, "script ended with blocked statements")
+	})
+}
+
+func checkStepResult(t *testing.T, label string, step rowLockStep, res queryResult) {
+	t.Helper()
+	if step.err != "" {
+		require.Error(t, res.err, label)
+		require.Contains(t, res.err.Error(), step.err, label)
+		return
+	}
+
+	require.NoError(t, res.err, label)
+	if step.rows == nil {
+		return
+	}
+
+	require.Equal(t, formatRows(step.rows), formatSqlRows(res.rows), label)
+}
+
+func formatRows(rows [][]any) []string {
+	formatted := make([]string, len(rows))
+	for i, row := range rows {
+		cells := make([]string, len(row))
+		for j, cell := range row {
+			cells[j] = fmt.Sprint(cell)
+		}
+
+		formatted[i] = strings.Join(cells, ",")
+	}
+
+	return formatted
+}
+
+func formatSqlRows(rows []sql.Row) []string {
+	generic := make([][]any, len(rows))
+	for i, row := range rows {
+		generic[i] = row
+	}
+
+	return formatRows(generic)
+}
+
+const (
+	concurrentUpdateErr = "could not serialize access due to concurrent update"
+	concurrentDeleteErr = "could not serialize access due to concurrent delete"
+	concurrentInsertErr = "could not serialize access due to concurrent insert of the same key"
+)
+
+var rowLockWriteSetup = []string{
+	"drop table if exists t",
+	"create table t (pk int primary key, c1 int, c2 int)",
+	"insert into t values (1, 1, 1), (2, 2, 2), (3, 3, 3)",
+}
+
+var rowLockWriteScripts = []rowLockScript{
+	{
+		name:  "update waits for an update of the same row, and fails when it commits",
+		setup: rowLockWriteSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "update t set c1 = 10 where pk = 1"},
+			{client: "b", query: "update t set c1 = 20 where pk = 1", blocks: true},
+			{client: "a", query: "commit"},
+			{client: "b", unblocks: true, err: concurrentUpdateErr},
+			// The failure cost b its transaction, so it now sees what a committed and can try again.
+			{client: "b", query: "select * from t where pk = 1", rows: [][]any{{1, 10, 1}}},
+			{client: "b", query: "update t set c1 = c1 + 20 where pk = 1"},
+			{client: "b", query: "select * from t where pk = 1", rows: [][]any{{1, 30, 1}}},
+		},
+	},
+	{
+		name:  "update waits for an update of the same row, and proceeds when it rolls back",
+		setup: rowLockWriteSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "update t set c1 = 10 where pk = 1"},
+			{client: "b", query: "update t set c1 = 20 where pk = 1", blocks: true},
+			{client: "a", query: "rollback"},
+			{client: "b", unblocks: true},
+			{client: "b", query: "commit"},
+			{client: "a", query: "select * from t where pk = 1", rows: [][]any{{1, 20, 1}}},
+		},
+	},
+	{
+		name:  "updates of different rows don't wait for each other",
+		setup: rowLockWriteSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "update t set c1 = 10 where pk = 1"},
+			{client: "b", query: "update t set c1 = 20 where pk = 2"},
+			{client: "b", query: "delete from t where pk = 3"},
+			{client: "b", query: "insert into t values (4, 4, 4)"},
+			{client: "a", query: "insert into t values (5, 5, 5)"},
+			{client: "a", query: "commit"},
+			{client: "b", query: "commit"},
+			{client: "a", query: "select * from t order by pk", rows: [][]any{{1, 10, 1}, {2, 20, 2}, {4, 4, 4}, {5, 5, 5}}},
+		},
+	},
+	{
+		name:  "updates of different columns of the same row conflict",
+		setup: rowLockWriteSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "update t set c1 = 10 where pk = 1"},
+			{client: "b", query: "update t set c2 = 20 where pk = 1", blocks: true},
+			{client: "a", query: "commit"},
+			{client: "b", unblocks: true, err: concurrentUpdateErr},
+			{client: "b", query: "select * from t where pk = 1", rows: [][]any{{1, 10, 1}}},
+		},
+	},
+	{
+		name:  "update fails without waiting when the row changed since the transaction began",
+		setup: rowLockWriteSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "a", query: "select * from t where pk = 1", rows: [][]any{{1, 1, 1}}},
+			{client: "b", query: "update t set c1 = 20 where pk = 1"},
+			{client: "b", query: "delete from t where pk = 2"},
+			{client: "a", query: "select * from t where pk = 1", rows: [][]any{{1, 1, 1}}},
+			{client: "a", query: "update t set c1 = 10 where pk = 1", err: concurrentUpdateErr},
+			{client: "a", query: "begin"},
+			{client: "b", query: "update t set c1 = 30 where pk = 3"},
+			{client: "a", query: "delete from t where pk = 3", err: concurrentUpdateErr},
+			{client: "a", query: "select * from t order by pk", rows: [][]any{{1, 20, 1}, {3, 30, 3}}},
+		},
+	},
+	{
+		name:  "update and delete wait for a delete, and fail when it commits",
+		setup: rowLockWriteSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "c", query: "begin"},
+			{client: "a", query: "delete from t where pk = 1"},
+			{client: "b", query: "update t set c1 = 20 where pk = 1", blocks: true},
+			{client: "c", query: "delete from t where pk = 1", blocks: true},
+			{client: "a", query: "commit"},
+			{client: "b", unblocks: true, err: concurrentDeleteErr},
+			{client: "c", unblocks: true, err: concurrentDeleteErr},
+			{client: "b", query: "select * from t order by pk", rows: [][]any{{2, 2, 2}, {3, 3, 3}}},
+		},
+	},
+	{
+		name:  "insert waits for an insert of the same key, and fails when it commits",
+		setup: rowLockWriteSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "insert into t values (10, 1, 1)"},
+			{client: "b", query: "insert into t values (11, 2, 2)"},
+			{client: "b", query: "insert into t values (10, 2, 2)", blocks: true},
+			{client: "a", query: "commit"},
+			{client: "b", unblocks: true, err: concurrentInsertErr},
+			{client: "b", query: "insert into t values (10, 2, 2)", err: "duplicate primary key"},
+			{client: "b", query: "select * from t where pk >= 10", rows: [][]any{{10, 1, 1}}},
+		},
+	},
+	{
+		name:  "insert waits for an insert of the same key, and proceeds when it rolls back",
+		setup: rowLockWriteSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "insert into t values (10, 1, 1)"},
+			{client: "b", query: "insert into t values (10, 2, 2)", blocks: true},
+			{client: "a", query: "rollback"},
+			{client: "b", unblocks: true},
+			{client: "b", query: "commit"},
+			{client: "a", query: "select * from t where pk >= 10", rows: [][]any{{10, 2, 2}}},
+		},
+	},
+	{
+		name:  "changing a primary key locks the old key and the new one",
+		setup: rowLockWriteSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "c", query: "begin"},
+			{client: "a", query: "update t set pk = 10 where pk = 1"},
+			{client: "b", query: "update t set c1 = 20 where pk = 1", blocks: true},
+			{client: "c", query: "insert into t values (10, 3, 3)", blocks: true},
+			{client: "a", query: "commit"},
+			{client: "b", unblocks: true, err: concurrentUpdateErr},
+			{client: "c", unblocks: true, err: concurrentInsertErr},
+			{client: "a", query: "select * from t order by pk", rows: [][]any{{2, 2, 2}, {3, 3, 3}, {10, 1, 1}}},
+		},
+	},
+	{
+		name:  "rolling back to a savepoint releases the locks taken since",
+		setup: rowLockWriteSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "update t set c1 = 10 where pk = 1"},
+			{client: "a", query: "savepoint s"},
+			{client: "a", query: "update t set c1 = 10 where pk = 2"},
+			{client: "b", query: "update t set c1 = 20 where pk = 2", blocks: true},
+			{client: "a", query: "rollback to savepoint s"},
+			{client: "b", unblocks: true},
+			{client: "b", query: "update t set c1 = 20 where pk = 1", blocks: true},
+			{client: "a", query: "commit"},
+			{client: "b", unblocks: true, err: concurrentUpdateErr},
+			{client: "a", query: "select * from t order by pk", rows: [][]any{{1, 10, 1}, {2, 2, 2}, {3, 3, 3}}},
+		},
+	},
+	{
+		name:  "the transaction that closes a cycle of waits is refused",
+		setup: rowLockWriteSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "update t set c1 = 10 where pk = 1"},
+			{client: "b", query: "update t set c1 = 20 where pk = 2"},
+			{client: "a", query: "update t set c1 = 10 where pk = 2", blocks: true},
+			{client: "b", query: "update t set c1 = 20 where pk = 1", err: "deadlock detected"},
+			// The deadlock cost b its transaction and its locks, which lets a go on.
+			{client: "a", unblocks: true},
+			{client: "b", query: "select * from t order by pk", rows: [][]any{{1, 1, 1}, {2, 2, 2}, {3, 3, 3}}},
+			{client: "a", query: "commit"},
+			{client: "b", query: "select * from t order by pk", rows: [][]any{{1, 10, 1}, {2, 10, 2}, {3, 3, 3}}},
+		},
+	},
+	{
+		name:  "a statement waits for a row lock no longer than the lock wait timeout",
+		setup: rowLockWriteSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "set @@innodb_lock_wait_timeout = 1"},
+			{client: "b", query: "begin"},
+			{client: "b", query: "update t set c1 = 20 where pk = 2"},
+			{client: "a", query: "update t set c1 = 10 where pk = 1"},
+			{client: "b", query: "update t set c1 = 20 where pk = 1", err: "lock wait timeout exceeded"},
+			// Only the statement failed. The transaction goes on, with the changes and the locks it already had.
+			{client: "b", query: "select * from t where pk = 2", rows: [][]any{{2, 20, 2}}},
+			{client: "a", query: "commit"},
+			{client: "b", query: "commit"},
+			{client: "a", query: "select * from t order by pk", rows: [][]any{{1, 10, 1}, {2, 20, 2}, {3, 3, 3}}},
+		},
+	},
+	{
+		name:  "rows of the same table on another branch are locked separately",
+		setup: append(append([]string{}, rowLockWriteSetup...), "call dolt_commit('-Am', 'setup')", "call dolt_branch('-f', 'other')"),
+		steps: []rowLockStep{
+			{client: "b", query: "call dolt_checkout('other')"},
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "update t set c1 = 10 where pk = 1"},
+			{client: "b", query: "update t set c1 = 20 where pk = 1"},
+			{client: "a", query: "commit"},
+			{client: "b", query: "commit"},
+			{client: "a", query: "select * from t where pk = 1", rows: [][]any{{1, 10, 1}}},
+			{client: "b", query: "select * from t where pk = 1", rows: [][]any{{1, 20, 1}}},
+			{client: "a", query: "select * from `mydb/other`.t where pk = 1", rows: [][]any{{1, 20, 1}}},
+			// A statement that names the other branch's table locks that branch's row.
+			{client: "b", query: "begin"},
+			{client: "b", query: "update t set c1 = 21 where pk = 1"},
+			{client: "a", query: "update `mydb/other`.t set c1 = 11 where pk = 1", blocks: true},
+			{client: "b", query: "rollback"},
+			{client: "a", unblocks: true},
+			{client: "b", query: "select * from t where pk = 1", rows: [][]any{{1, 11, 1}}},
+			{client: "b", query: "call dolt_checkout('main')"},
+		},
+	},
+}
+
+var rowLockKeylessSetup = []string{
+	"drop table if exists k",
+	"create table k (c1 int, c2 int)",
+	"insert into k values (1, 1), (1, 1), (2, 2), (3, 3)",
+}
+
+// rowLockKeylessWriteScripts cover tables without a primary key, whose rows are identified by their contents. A lock
+// on such a row covers every row with the same contents.
+var rowLockKeylessWriteScripts = []rowLockScript{
+	{
+		name:  "keyless: update waits for an update of the same row, and fails when it commits",
+		setup: rowLockKeylessSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "update k set c2 = 10 where c1 = 2"},
+			{client: "b", query: "update k set c2 = 20 where c1 = 2", blocks: true},
+			{client: "a", query: "commit"},
+			{client: "b", unblocks: true, err: concurrentUpdateErr},
+			{client: "b", query: "update k set c2 = c2 + 20 where c1 = 2"},
+			{client: "a", query: "select * from k order by c1, c2", rows: [][]any{{1, 1}, {1, 1}, {2, 30}, {3, 3}}},
+		},
+	},
+	{
+		name:  "keyless: update waits for an update of the same row, and proceeds when it rolls back",
+		setup: rowLockKeylessSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "update k set c2 = 10 where c1 = 2"},
+			{client: "b", query: "update k set c2 = 20 where c1 = 2", blocks: true},
+			{client: "a", query: "rollback"},
+			{client: "b", unblocks: true},
+			{client: "b", query: "commit"},
+			{client: "a", query: "select * from k order by c1, c2", rows: [][]any{{1, 1}, {1, 1}, {2, 20}, {3, 3}}},
+		},
+	},
+	{
+		name:  "keyless: changes to rows with different contents don't wait for each other",
+		setup: rowLockKeylessSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "update k set c2 = 10 where c1 = 2"},
+			{client: "b", query: "update k set c2 = 20 where c1 = 3"},
+			{client: "a", query: "insert into k values (4, 4)"},
+			{client: "b", query: "insert into k values (5, 5)"},
+			{client: "b", query: "delete from k where c1 = 1"},
+			{client: "a", query: "commit"},
+			{client: "b", query: "commit"},
+			{client: "a", query: "select * from k order by c1, c2", rows: [][]any{{2, 10}, {3, 20}, {4, 4}, {5, 5}}},
+		},
+	},
+	{
+		name:  "keyless: identical rows are locked together",
+		setup: rowLockKeylessSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			// Both rows (1, 1) are one entry in storage, so a change to one locks the other.
+			{client: "a", query: "update k set c2 = 10 where c1 = 1 limit 1"},
+			{client: "b", query: "delete from k where c1 = 1 limit 1", blocks: true},
+			{client: "a", query: "commit"},
+			{client: "b", unblocks: true, err: concurrentUpdateErr},
+			{client: "b", query: "delete from k where c1 = 1 and c2 = 1"},
+			{client: "a", query: "select * from k order by c1, c2", rows: [][]any{{1, 10}, {2, 2}, {3, 3}}},
+		},
+	},
+	{
+		name:  "keyless: delete waits for a delete, and fails when it commits",
+		setup: rowLockKeylessSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "delete from k where c1 = 2"},
+			{client: "b", query: "delete from k where c1 = 2", blocks: true},
+			{client: "a", query: "commit"},
+			{client: "b", unblocks: true, err: concurrentDeleteErr},
+			{client: "b", query: "select * from k order by c1, c2", rows: [][]any{{1, 1}, {1, 1}, {3, 3}}},
+		},
+	},
+	{
+		name:  "keyless: inserts of identical rows are serialized, and none is lost",
+		setup: rowLockKeylessSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "insert into k values (5, 5)"},
+			{client: "b", query: "insert into k values (5, 5)", blocks: true},
+			{client: "a", query: "commit"},
+			{client: "b", unblocks: true, err: concurrentUpdateErr},
+			{client: "b", query: "insert into k values (5, 5)"},
+			{client: "a", query: "select * from k where c1 = 5", rows: [][]any{{5, 5}, {5, 5}}},
+		},
+	},
+	{
+		name:  "keyless: an update that makes a row identical to one being changed waits for it",
+		setup: rowLockKeylessSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "delete from k where c1 = 3"},
+			{client: "b", query: "update k set c1 = 3, c2 = 3 where c1 = 2", blocks: true},
+			{client: "a", query: "rollback"},
+			{client: "b", unblocks: true},
+			{client: "b", query: "commit"},
+			{client: "a", query: "select * from k order by c1, c2", rows: [][]any{{1, 1}, {1, 1}, {3, 3}, {3, 3}}},
+		},
+	},
+}
+
+// rowLockDisabledScripts cover the behavior with dolt_row_level_locking turned off, which is what Dolt did before it
+// had row locks: nothing waits, and changes are reconciled when a transaction commits.
+var rowLockDisabledScripts = []rowLockScript{
+	{
+		name:  "with row locking off, statements don't wait and changes are merged at commit",
+		setup: append(append([]string{}, rowLockWriteSetup...), "set @@global.dolt_row_level_locking = 0"),
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "update t set c1 = 10 where pk = 1"},
+			{client: "b", query: "update t set c2 = 20 where pk = 1"},
+			{client: "a", query: "update t set c1 = 10 where pk = 2"},
+			{client: "b", query: "update t set c1 = 20 where pk = 2"},
+			{client: "a", query: "commit"},
+			{client: "b", query: "commit", err: "this transaction conflicts with a committed transaction from another client"},
+			{client: "b", query: "update t set c2 = 20 where pk = 1"},
+			{client: "a", query: "select * from t order by pk", rows: [][]any{{1, 10, 20}, {2, 10, 2}, {3, 3, 3}}},
+			// The setting takes effect for transactions that start after it changes.
+			{client: "a", query: "begin"},
+			{client: "setup", query: "set @@global.dolt_row_level_locking = 1"},
+			{client: "b", query: "begin"},
+			{client: "c", query: "begin"},
+			{client: "b", query: "update t set c1 = 21 where pk = 1"},
+			{client: "a", query: "update t set c1 = 11 where pk = 1"},
+			{client: "c", query: "update t set c1 = 31 where pk = 1", blocks: true},
+			{client: "b", query: "rollback"},
+			{client: "c", unblocks: true},
+		},
+	},
+}
+
+func TestRowLockWrites(t *testing.T) {
+	runner := newRowLockRunner(t)
+	for _, script := range rowLockWriteScripts {
+		runner.run(script)
+	}
+
+	for _, script := range rowLockKeylessWriteScripts {
+		runner.run(script)
+	}
+
+	for _, script := range rowLockDisabledScripts {
+		runner.run(script)
+	}
+}
+
+// TestRowLockNoLostUpdates has several sessions increment the same counters at once. Every increment that reports
+// success must be reflected in the final values.
+func TestRowLockNoLostUpdates(t *testing.T) {
+	runner := newRowLockRunner(t)
+	runner.journal.SetDeadlockTimeout(5 * time.Millisecond)
+	setup := runner.client("setup")
+	for _, query := range rowLockWriteSetup {
+		require.NoError(t, setup.query(query).err)
+	}
+
+	const workers = 8
+	const increments = 25
+
+	var wg sync.WaitGroup
+	var retries [workers]int
+	for worker := 0; worker < workers; worker++ {
+		client := newRowJournalClient(t, runner.harness, runner.engine)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < increments; i++ {
+				for {
+					// Odd workers use explicit transactions that touch two rows, in opposite orders, to provoke
+					// deadlocks as well as plain conflicts.
+					var err error
+					if worker%2 == 0 {
+						err = client.query("update t set c1 = c1 + 1 where pk = 1").err
+					} else {
+						first, second := 1, 2
+						if worker%4 == 3 {
+							first, second = 2, 1
+						}
+
+						err = client.query("begin").err
+						if err == nil {
+							err = client.query(fmt.Sprintf("update t set c1 = c1 + 1 where pk = %d", first)).err
+						}
+
+						if err == nil {
+							err = client.query(fmt.Sprintf("update t set c1 = c1 + 1 where pk = %d", second)).err
+						}
+
+						if err == nil {
+							err = client.query("commit").err
+						}
+					}
+
+					if err == nil {
+						break
+					}
+
+					if !assert.True(t, sql.ErrLockDeadlock.Is(err) || sql.ErrRowLockDeadlock.Is(err), "unexpected error: %v", err) {
+						return
+					}
+
+					retries[worker]++
+				}
+			}
+		}()
+	}
+
+	wg.Wait()
+	t.Logf("retries per worker: %v", retries)
+
+	res := setup.query("select pk, c1 from t order by pk")
+	require.NoError(t, res.err)
+	// Row 1 starts at 1 and is incremented by every worker. Row 2 starts at 2 and is incremented by the odd workers.
+	require.Equal(t, formatRows([][]any{{1, 1 + workers*increments}, {2, 2 + workers/2*increments}, {3, 3}}), formatSqlRows(res.rows))
+	assert.Empty(t, runner.journal.Locks())
+	assert.Empty(t, runner.journal.ActiveTxns())
+}

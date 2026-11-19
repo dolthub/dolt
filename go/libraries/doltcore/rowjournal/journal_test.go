@@ -588,29 +588,16 @@ func TestDeadlockBetweenTwoTransactions(t *testing.T) {
 	require.Equal(t, LockGranted, h.lock(a, "x", LockUpdate))
 	require.Equal(t, LockGranted, h.lock(b, "y", LockUpdate))
 
+	// The request that would complete the cycle is refused at once. The one already waiting keeps waiting, and
+	// proceeds when the refused transaction gives up its locks.
 	aDone := h.lockBlocked(a, "y", LockUpdate)
-	bDone := make(chan outcome, 1)
-	go func() {
-		res, err := h.j.Lock(context.Background(), b, lockReq(testRel, "x", LockUpdate, WaitBlock))
-		bDone <- outcome{res: res, err: err}
-	}()
+	_, err := h.j.Lock(context.Background(), b, lockReq(testRel, "x", LockUpdate, WaitBlock))
+	require.ErrorIs(t, err, ErrDeadlock)
+	h.requireStillBlocked(aDone)
 
-	// Exactly one of the two is refused. Once it gives up its locks, the other proceeds.
-	select {
-	case o := <-aDone:
-		require.ErrorIs(t, o.err, ErrDeadlock)
-		h.j.Abort(a)
-		assert.Equal(t, outcome{res: LockGranted}, h.await(bDone))
-	case o := <-bDone:
-		require.ErrorIs(t, o.err, ErrDeadlock)
-		h.j.Abort(b)
-		assert.Equal(t, outcome{res: LockGranted}, h.await(aDone))
-	case <-time.After(5 * time.Second):
-		t.Fatal("deadlock was not detected")
-	}
-
-	h.j.Abort(a)
 	h.j.Abort(b)
+	assert.Equal(t, outcome{res: LockGranted}, h.await(aDone))
+	h.j.Abort(a)
 	h.requireEmpty()
 }
 

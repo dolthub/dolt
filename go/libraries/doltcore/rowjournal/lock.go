@@ -203,6 +203,14 @@ func (j *Journal) acquire(
 			deadlockC = timer.C
 		}
 
+		// A cycle of waiting transactions is completed by whichever of them starts waiting last, so checking here
+		// finds a deadlock the moment it forms, and refuses the request that would have formed it. The check is
+		// repeated after the deadlock timeout in case a cycle was ever to form some other way.
+		if j.isDeadlocked(txn) {
+			done()
+			return 0, ErrDeadlock
+		}
+
 		var err error
 		checkDeadlock := false
 
@@ -223,7 +231,6 @@ func (j *Journal) acquire(
 		}
 
 		if err == nil && checkDeadlock {
-			// Each request checks once. A cycle that forms later is found by whichever request joins it last.
 			deadlockC = nil
 			if j.isDeadlocked(txn) {
 				err = ErrDeadlock

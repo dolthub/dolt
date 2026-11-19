@@ -80,6 +80,9 @@ type prollyTableWriter struct {
 	// holder's Close clears it.
 	open bool
 
+	// lockTarget caches how this writer's table is named, and its rows identified, for row locking.
+	lockTarget rowLockTarget
+
 	virtualExpressions []sql.Expression
 }
 
@@ -194,6 +197,12 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 			return err
 		}
 	}
+	// The row is known not to collide with one this transaction can see. Now wait out any other transaction that is
+	// working with the same key.
+	if err = w.lockRowForInsert(ctx, sqlRow); err != nil {
+		return err
+	}
+
 	for _, wr := range w.secondary {
 		if err = wr.Insert(ctx, sqlRow); err != nil {
 			if uke, ok := err.(secondaryUniqueKeyError); ok {
@@ -291,6 +300,10 @@ func sameColumnNames(left, right []string) bool {
 // Update implements TableWriter.
 func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) (err error) {
 	w.edited = true
+	if err = w.lockRowForUpdate(ctx, oldRow, newRow); err != nil {
+		return err
+	}
+
 	for _, wr := range w.secondary {
 		if err := wr.Update(ctx, oldRow, newRow); err != nil {
 			if uke, ok := err.(secondaryUniqueKeyError); ok {
@@ -329,6 +342,10 @@ func (w *prollyTableWriter) UpdateChangesUniqueKey(oldRow sql.Row, newRow sql.Ro
 // Delete implements TableWriter.
 func (w *prollyTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) (err error) {
 	w.edited = true
+	if err = w.lockRowForDelete(ctx, sqlRow); err != nil {
+		return err
+	}
+
 	for _, wr := range w.secondary {
 		if err := wr.Delete(ctx, sqlRow); err != nil {
 			return err
@@ -562,6 +579,7 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, tbl *doltdb.Table) error {
 	w.sch = schState.DoltSchema
 	w.sqlSch = schState.PkSchema.Schema
 	w.primary = newPrimary
+	w.lockTarget = rowLockTarget{}
 	w.secondary = newSecondaries
 	w.aiCol = schState.AutoIncCol
 	w.virtualExpressions = schState.VirtualExpressions
