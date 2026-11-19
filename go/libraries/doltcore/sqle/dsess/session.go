@@ -79,6 +79,9 @@ type DoltSession struct {
 	// holds its own. Reset when a DoltTransaction becomes the session's transaction.
 	noTxBranches *branchStates
 
+	// restoringSavepoint is set while RollbackToSavepoint puts back the working roots a savepoint saved.
+	restoringSavepoint bool
+
 	writeSessProv WriteSessFunc
 
 	email                 string
@@ -874,6 +877,16 @@ func (d *DoltSession) commitBranchStates(
 		return nil, err
 	}
 
+	for i, commit := range commits {
+		if commit == nil || i >= len(states) {
+			continue
+		}
+
+		if newHash, err := commit.HashOf(); err == nil {
+			RecordRefUpdate(ctx, states[i].dbState.dbName, rowjournal.RefAdvance, ref.NewBranchRef(states[i].head), nil, hash.Hash{}, newHash)
+		}
+	}
+
 	// The working sets are written, so other transactions can now be told that this one committed.
 	dtx.commitRowTxn(d.rowJournal())
 
@@ -1425,6 +1438,10 @@ func (d *DoltSession) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, 
 		}
 		restore[key] = ws.WorkingRoot()
 	}
+	// Putting back a root this transaction had before changes no table that it hasn't already locked the changed
+	// rows of, so it takes no locks on the tables as a whole.
+	d.restoringSavepoint = true
+	defer func() { d.restoringSavepoint = false }()
 	for key, root := range restore {
 		dbName := key.String()
 		err := d.SetWorkingRoot(ctx, dbName, root)
@@ -1721,6 +1738,10 @@ func (d *DoltSession) setWorkingSetOf(ctx *sql.Context, branchState *branchState
 		dynassert.Assert(false, "%s", err.Error())
 		return err
 	}
+	if err := d.lockRewrittenTables(ctx, branchState, ws.WorkingRoot()); err != nil {
+		return err
+	}
+
 	if err := branchState.replaceWorkingSet(ctx, ws); err != nil {
 		return err
 	}

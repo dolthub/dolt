@@ -27,12 +27,14 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/rowjournal"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 var (
@@ -176,6 +178,7 @@ func renameBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argpar
 		}
 		return err
 	}
+	dsess.RecordRefUpdate(ctx, dbName, rowjournal.RefRename, ref.NewBranchRef(oldBranchName), ref.NewBranchRef(newBranchName), hash.Hash{}, hash.Hash{})
 	err = branch_control.AddAdminForContext(ctx, newBranchName)
 	if err != nil {
 		return err
@@ -287,6 +290,9 @@ func deleteBranches(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argp
 		}, rsc)
 		if err != nil {
 			return err
+		}
+		if !remote {
+			dsess.RecordRefUpdate(ctx, dbName, rowjournal.RefDelete, ref.NewBranchRef(branchName), nil, hash.Hash{}, hash.Hash{})
 		}
 
 		// If the session has this branch checked out, we need to change that to the default head
@@ -483,6 +489,8 @@ func createNewBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *arg
 	if err != nil {
 		return err
 	}
+	dbName, _ := doltdb.SplitRevisionDbName(ctx.GetCurrentDatabase())
+	dsess.RecordRefUpdate(ctx, dbName, rowjournal.RefCreate, ref.NewBranchRef(branchName), nil, hash.Hash{}, hash.Hash{})
 
 	if setTrackUpstream {
 		// at this point new branch is created

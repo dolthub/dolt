@@ -184,3 +184,77 @@ func TestRowJournalTransactionLifecycle(t *testing.T) {
 		assert.Empty(t, activeTxnIDs(journal))
 	})
 }
+
+// journalRecords collects the records appended to a row journal.
+type journalRecords struct {
+	records []rowjournal.Record
+}
+
+func (r *journalRecords) Append(rec rowjournal.Record) {
+	r.records = append(r.records, rec)
+}
+
+// TestRowJournalVersionControlRecords tests that DDL statements and version control operations are recorded in the
+// row journal.
+func TestRowJournalVersionControlRecords(t *testing.T) {
+	harness := newDoltHarness(t)
+	defer harness.Close()
+	engine, err := harness.NewEngine(t)
+	require.NoError(t, err)
+	defer engine.Close()
+
+	journal := harness.provider.RowJournal()
+	require.NotNil(t, journal)
+	sink := &journalRecords{}
+	journal.SetRecordSink(sink)
+	defer journal.SetRecordSink(nil)
+
+	// described returns what the statement given appended to the journal about refs and schemas.
+	client := newRowJournalClient(t, harness, engine)
+	described := func(query string) []string {
+		sink.records = nil
+		client.run(query)
+
+		var descriptions []string
+		for _, rec := range sink.records {
+			switch rec := rec.(type) {
+			case rowjournal.SchemaChangeRecord:
+				kind := map[rowjournal.SchemaChangeKind]string{
+					rowjournal.SchemaCreateTable: "create",
+					rowjournal.SchemaAlterTable:  "alter",
+					rowjournal.SchemaDropTable:   "drop",
+				}[rec.Kind]
+				require.NotZero(t, rec.Txn)
+				descriptions = append(descriptions, kind+" "+rec.Relation.Branch+" "+rec.Relation.Table.Name)
+			case rowjournal.RefUpdateRecord:
+				kind := map[rowjournal.RefUpdateKind]string{
+					rowjournal.RefCreate:  "create",
+					rowjournal.RefDelete:  "delete",
+					rowjournal.RefRename:  "rename",
+					rowjournal.RefAdvance: "advance",
+				}[rec.Kind]
+				description := kind + " " + rec.Ref
+				if rec.NewRef != "" {
+					description += " " + rec.NewRef
+				}
+
+				if rec.Kind == rowjournal.RefAdvance {
+					require.False(t, rec.NewHash.IsEmpty())
+				}
+
+				descriptions = append(descriptions, description)
+			}
+		}
+
+		return descriptions
+	}
+
+	assert.Equal(t, []string{"create heads/main vc"}, described("create table vc (pk int primary key, c int)"))
+	assert.Empty(t, described("insert into vc values (1, 1)"))
+	assert.Equal(t, []string{"alter heads/main vc"}, described("alter table vc add column d int"))
+	assert.Equal(t, []string{"advance refs/heads/main"}, described("call dolt_commit('-Am', 'vc')"))
+	assert.Equal(t, []string{"create refs/heads/b1"}, described("call dolt_branch('b1')"))
+	assert.Equal(t, []string{"rename refs/heads/b1 refs/heads/b2"}, described("call dolt_branch('-m', 'b1', 'b2')"))
+	assert.Equal(t, []string{"delete refs/heads/b2"}, described("call dolt_branch('-D', 'b2')"))
+	assert.Equal(t, []string{"drop heads/main vc"}, described("drop table vc"))
+}

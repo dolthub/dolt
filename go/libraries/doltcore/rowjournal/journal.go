@@ -27,6 +27,7 @@
 package rowjournal
 
 import (
+	"bytes"
 	"container/heap"
 	"fmt"
 	"sort"
@@ -298,7 +299,15 @@ func (j *Journal) append(rec Record, h hint) {
 		txn.wrote = true
 	case KeyFormatChangeRecord:
 		j.changeKeyFormat(j.relations[r.Relation], h.compare, r.KeyFormat)
-	case RefUpdateRecord, SchemaChangeRecord:
+	case RefUpdateRecord:
+		switch {
+		case r.Branch == "":
+		case r.Kind == RefDelete:
+			j.dropBranch(r.Database, r.Branch)
+		case r.Kind == RefRename && r.NewBranch != "":
+			j.renameBranch(r.Database, r.Branch, r.NewBranch)
+		}
+	case SchemaChangeRecord:
 		// Recorded for the sink only. Nothing in the journal's state depends on these yet.
 	case PruneRecord:
 		j.prune(r.Horizon)
@@ -308,16 +317,21 @@ func (j *Journal) append(rec Record, h hint) {
 }
 
 // relationFor returns the relation for |key|, creating it if it does not exist, with rows identified by keys of the
-// format given. Requires j.mu.
-func (j *Journal) relationFor(key RelationKey, compare KeyCompare, keyFormat hash.Hash) *relation {
+// format given. A request that is for the table as a whole, as |wholeTable| says, carries no keys, and leaves the
+// format of an existing relation's keys alone. Requires j.mu.
+func (j *Journal) relationFor(key RelationKey, compare KeyCompare, keyFormat hash.Hash, wholeTable bool) *relation {
 	rel, ok := j.relations[key]
 	if !ok {
+		if compare == nil {
+			compare = bytes.Compare
+		}
+
 		rel = newRelation(key, compare, keyFormat)
 		j.relations[key] = rel
 		return rel
 	}
 
-	if rel.keyFormat != keyFormat {
+	if rel.keyFormat != keyFormat && !wholeTable {
 		j.append(KeyFormatChangeRecord{Relation: key, KeyFormat: keyFormat}, hint{compare: compare})
 	}
 
@@ -506,6 +520,42 @@ func (j *Journal) releaseLevel(txn *Txn, level uint32) {
 	}
 
 	txn.level = level - 1
+}
+
+// dropBranch discards everything the journal holds for the tables of a branch. Requests waiting for a lock there
+// give up. Requires j.mu.
+func (j *Journal) dropBranch(database, branch string) {
+	for key, rel := range j.relations {
+		if key.Database != database || key.Branch != branch {
+			continue
+		}
+
+		drop := func(e *entry) bool {
+			e.lockers = nil
+			e.writes = nil
+			e.removed = true
+			e.signalWaiters()
+			return true
+		}
+		drop(rel.table)
+		rel.rows.Ascend(drop)
+		delete(j.relations, key)
+	}
+}
+
+// renameBranch moves everything the journal holds for the tables of a branch to the branch's new name, replacing
+// whatever it held under that name. Requires j.mu.
+func (j *Journal) renameBranch(database, branch, newBranch string) {
+	j.dropBranch(database, newBranch)
+	for key, rel := range j.relations {
+		if key.Database != database || key.Branch != branch {
+			continue
+		}
+
+		delete(j.relations, key)
+		rel.key.Branch = newBranch
+		j.relations[rel.key] = rel
+	}
 }
 
 // horizon returns the transaction ID below which every committed transaction is visible to every snapshot that exists

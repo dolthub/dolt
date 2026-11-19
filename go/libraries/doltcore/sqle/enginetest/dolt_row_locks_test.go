@@ -969,6 +969,129 @@ var rowLockKeylessReadScripts = []rowLockScript{
 	},
 }
 
+var rowLockTableSetup = []string{
+	"drop table if exists t",
+	"create table t (pk int primary key, c1 int, c2 int)",
+	"insert into t values (1, 1, 1), (2, 2, 2), (3, 3, 3)",
+	"call dolt_commit('--allow-empty', '-Am', 'table setup')",
+	"call dolt_branch('-f', 'other')",
+}
+
+// rowLockTableScripts cover the statements that change a table without going through its rows one at a time: DDL,
+// and version control operations that replace the working set. They lock the table as a whole.
+var rowLockTableScripts = []rowLockScript{
+	{
+		name:  "altering a table waits for the transactions that hold locks on its rows",
+		setup: rowLockTableSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "a", query: "update t set c1 = 10 where pk = 1"},
+			{client: "b", query: "alter table t add column c3 int", blocks: true},
+			{client: "a", query: "commit"},
+			{client: "b", unblocks: true},
+			{client: "a", query: "select * from t order by pk", rows: [][]any{{1, 10, 1, nil}, {2, 2, 2, nil}, {3, 3, 3, nil}}},
+		},
+	},
+	{
+		name:  "dropping a table waits for a locking read of its rows",
+		setup: rowLockTableSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "a", query: "select pk from t where pk = 1 for update", rows: [][]any{{1}}},
+			{client: "b", query: "drop table t", blocks: true},
+			// A transaction that has locks in the table isn't made to wait behind the statement that waits for it.
+			{client: "a", query: "select pk from t where pk = 2 for update", rows: [][]any{{2}}},
+			// One that has none is, so that a stream of them can't hold the statement up forever.
+			{client: "c", query: "select pk from t where pk = 3 for update", blocks: true},
+			{client: "a", query: "rollback"},
+			{client: "b", unblocks: true},
+			{client: "c", unblocks: true, err: concurrentUpdateErr},
+			{client: "a", query: "show tables like 't'", rows: [][]any{}},
+		},
+	},
+	{
+		name:  "a transaction that began before a table was altered can't lock or change its rows",
+		setup: rowLockTableSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "a", query: "select count(*) from t", rows: [][]any{{3}}},
+			{client: "b", query: "alter table t add column c3 int"},
+			{client: "a", query: "update t set c1 = 10 where pk = 1", err: concurrentUpdateErr},
+			{client: "a", query: "begin"},
+			{client: "b", query: "alter table t drop column c3"},
+			{client: "a", query: "select pk from t where pk = 1 for update", err: concurrentUpdateErr},
+			{client: "a", query: "select * from t where pk = 1 for update", rows: [][]any{{1, 1, 1}}},
+		},
+	},
+	{
+		name:  "a table that is dropped and created again keeps no locks from before",
+		setup: rowLockTableSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "update t set c1 = 10 where pk = 1"},
+			{client: "a", query: "drop table t"},
+			{client: "a", query: "create table t (pk varchar(20) primary key, c1 int)"},
+			{client: "a", query: "insert into t values ('one', 1), ('two', 2)"},
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "select * from t where pk = 'one' for update", rows: [][]any{{"one", 1}}},
+			{client: "b", query: "update t set c1 = 20 where pk = 'two'"},
+			{client: "b", query: "update t set c1 = 10 where pk = 'one'", blocks: true},
+			{client: "a", query: "commit"},
+			{client: "b", unblocks: true},
+		},
+	},
+	{
+		name:  "a merge waits for the transactions that hold locks on rows of the tables it changes",
+		setup: rowLockTableSetup,
+		steps: []rowLockStep{
+			{client: "b", query: "call dolt_checkout('other')"},
+			{client: "b", query: "update t set c1 = 33 where pk = 3"},
+			{client: "b", query: "call dolt_commit('-Am', 'change on other')"},
+			{client: "b", query: "call dolt_checkout('main')"},
+			{client: "a", query: "begin"},
+			{client: "a", query: "update t set c1 = 10 where pk = 1"},
+			{client: "b", query: "call dolt_merge('other')", blocks: true},
+			{client: "a", query: "commit"},
+			{client: "b", unblocks: true},
+			{client: "a", query: "select * from t order by pk", rows: [][]any{{1, 10, 1}, {2, 2, 2}, {3, 33, 3}}},
+		},
+	},
+	{
+		name:  "a reset waits for the transactions that hold locks on rows of the tables it changes",
+		setup: rowLockTableSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "update t set c1 = 10 where pk = 1"},
+			{client: "b", query: "update t set c1 = 20 where pk = 2"},
+			{client: "b", query: "call dolt_reset('--hard')", blocks: true},
+			{client: "a", query: "rollback"},
+			{client: "b", unblocks: true},
+			{client: "a", query: "select * from t order by pk", rows: [][]any{{1, 1, 1}, {2, 2, 2}, {3, 3, 3}}},
+		},
+	},
+	{
+		name:  "rolling back to a savepoint doesn't wait for other transactions' locks on the same table",
+		setup: rowLockTableSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "b", query: "update t set c1 = 20 where pk = 2"},
+			{client: "a", query: "savepoint s"},
+			{client: "a", query: "update t set c1 = 10 where pk = 1"},
+			{client: "a", query: "rollback to savepoint s"},
+			{client: "a", query: "select * from t where pk = 1", rows: [][]any{{1, 1, 1}}},
+		},
+	},
+}
+
+func TestRowLockTables(t *testing.T) {
+	runner := newRowLockRunner(t)
+	for _, script := range rowLockTableScripts {
+		runner.run(script)
+	}
+}
+
 func TestRowLockReads(t *testing.T) {
 	runner := newRowLockRunner(t)
 	for _, script := range rowLockReadScripts {

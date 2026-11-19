@@ -16,6 +16,7 @@ package dsess
 
 import (
 	"errors"
+	"sort"
 	"strings"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowjournal"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // RowLocks takes row locks for one transaction in the engine's row journal.
@@ -70,6 +72,174 @@ func RowLockRelation(database string, workingSet ref.WorkingSetRef, table doltdb
 		Branch:   workingSet.GetPath(),
 		Table:    table.ToLower(),
 	}
+}
+
+// lockRewrittenTables takes, for the transaction of |ctx|, a lock on each table as a whole whose definition or
+// contents differ between the working root of |bs| and |newRoot|, which is about to replace it. Everything that
+// replaces a working root this way changes tables without going through their writers, and so without locking the rows
+// it changes: DDL statements, and version control operations such as merge, reset and checkout. Locking the table as a
+// whole makes such an operation wait for the transactions that hold locks on the table's rows, and makes later
+// statements that touch the table wait for it. The change is also recorded against the table, so that a transaction
+// whose snapshot predates it can't lock or change the table's rows afterwards.
+func (d *DoltSession) lockRewrittenTables(ctx *sql.Context, bs *branchState, newRoot doltdb.RootValue) error {
+	locks, ok := RowLocksForContext(ctx)
+	if !ok || d.restoringSavepoint {
+		return nil
+	}
+
+	workingSet, ok := bs.workingSetRef()
+	if !ok {
+		return nil
+	}
+
+	oldRoot := bs.workingSet.WorkingRoot()
+	if rootsEqual(oldRoot, newRoot) {
+		return nil
+	}
+
+	changes, err := tableChanges(ctx, oldRoot, newRoot)
+	if err != nil {
+		return err
+	}
+
+	for _, change := range changes {
+		relation := RowLockRelation(bs.dbState.dbName, workingSet, change.name)
+		res, err := locks.Journal.Write(ctx, locks.Txn, rowjournal.WriteRequest{
+			Relation: relation,
+			Target:   rowjournal.TableTarget(),
+			Op:       rowjournal.WriteUpdate,
+			Timeout:  RowLockWaitTimeout(ctx),
+		})
+		if err != nil {
+			return RowLockWaitError(err)
+		}
+
+		if err = RowLockConflictError(res); err != nil {
+			return err
+		}
+
+		if change.schemaChanged {
+			locks.Journal.RecordSchemaChange(locks.Txn, rowjournal.SchemaChangeRecord{
+				Relation: relation,
+				Kind:     change.kind,
+			})
+		}
+	}
+
+	return nil
+}
+
+// tableChange describes how a table differs between two roots.
+type tableChange struct {
+	name doltdb.TableName
+	// kind is whether the table was created, dropped, or changed.
+	kind rowjournal.SchemaChangeKind
+	// schemaChanged is whether the table's definition differs, and not only its rows.
+	schemaChanged bool
+}
+
+// tableChanges returns the tables that differ between |oldRoot| and |newRoot|, in order of name.
+func tableChanges(ctx *sql.Context, oldRoot, newRoot doltdb.RootValue) ([]tableChange, error) {
+	oldNames, err := oldRoot.GetAllTableNames(ctx, false)
+	if err != nil {
+		return nil, err
+	}
+
+	newNames, err := newRoot.GetAllTableNames(ctx, false)
+	if err != nil {
+		return nil, err
+	}
+
+	var changes []tableChange
+	inOld := make(map[doltdb.TableName]struct{}, len(oldNames))
+	for _, name := range oldNames {
+		inOld[name] = struct{}{}
+		oldHash, _, err := oldRoot.GetTableHash(ctx, name)
+		if err != nil {
+			return nil, err
+		}
+
+		newHash, ok, err := newRoot.GetTableHash(ctx, name)
+		if err != nil {
+			return nil, err
+		}
+
+		if !ok {
+			changes = append(changes, tableChange{name: name, kind: rowjournal.SchemaDropTable, schemaChanged: true})
+			continue
+		}
+
+		if oldHash == newHash {
+			continue
+		}
+
+		oldSchema, err := oldRoot.GetTableSchemaHash(ctx, name)
+		if err != nil {
+			return nil, err
+		}
+
+		newSchema, err := newRoot.GetTableSchemaHash(ctx, name)
+		if err != nil {
+			return nil, err
+		}
+
+		changes = append(changes, tableChange{name: name, kind: rowjournal.SchemaAlterTable, schemaChanged: oldSchema != newSchema})
+	}
+
+	for _, name := range newNames {
+		if _, ok := inOld[name]; !ok {
+			changes = append(changes, tableChange{name: name, kind: rowjournal.SchemaCreateTable, schemaChanged: true})
+		}
+	}
+
+	sort.Slice(changes, func(i, j int) bool { return changes[i].name.Less(changes[j].name) })
+	return changes, nil
+}
+
+// RecordRefUpdate appends to the engine's row journal a record of a change that a version control operation made to
+// a ref of the database named. |newRef| is the ref's new name for a rename, and nil otherwise. Deleting or renaming
+// a branch does the same to the row locks held on the branch's tables.
+func RecordRefUpdate(ctx *sql.Context, database string, kind rowjournal.RefUpdateKind, updated, newRef ref.DoltRef, oldHash, newHash hash.Hash) {
+	sess, ok := ctx.Session.(*DoltSession)
+	if !ok {
+		return
+	}
+
+	journal := sess.rowJournal()
+	if journal == nil {
+		return
+	}
+
+	rec := rowjournal.RefUpdateRecord{
+		Database: strings.ToLower(database),
+		Kind:     kind,
+		Ref:      updated.String(),
+		Branch:   rowLockBranch(updated),
+		OldHash:  oldHash,
+		NewHash:  newHash,
+	}
+	if newRef != nil {
+		rec.NewRef = newRef.String()
+		rec.NewBranch = rowLockBranch(newRef)
+	}
+
+	var txn *rowjournal.Txn
+	if tx, ok := ctx.GetTransaction().(*DoltTransaction); ok {
+		txn = tx.rowTxn
+	}
+
+	journal.RecordRefUpdate(txn, rec)
+}
+
+// rowLockBranch returns the row journal's name for the tables on a ref, or the empty string for a ref that has no
+// working set, and so no tables that can be locked.
+func rowLockBranch(r ref.DoltRef) string {
+	workingSet, err := ref.WorkingSetRefForHead(r)
+	if err != nil {
+		return ""
+	}
+
+	return workingSet.GetPath()
 }
 
 // RowLockWaitTimeout returns how long a statement run with |ctx| waits for a row lock before giving up, or zero to

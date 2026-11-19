@@ -164,7 +164,9 @@ type RowWriteRecord struct {
 	Value []byte
 }
 
-// RefUpdateRecord records a version control operation's change to a ref. Nothing consumes these records yet.
+// RefUpdateRecord records a version control operation's change to a ref. The journal keeps no state for refs yet, so
+// the only records that change anything are those that delete or rename a branch, which do the same to what the
+// journal holds for the branch's tables.
 type RefUpdateRecord struct {
 	Txn      TxnID
 	Database string
@@ -172,9 +174,13 @@ type RefUpdateRecord struct {
 	// Ref is the full name of the ref, e.g. "refs/heads/main".
 	Ref string
 	// NewRef is the ref's new name, for a rename.
-	NewRef  string
-	OldHash hash.Hash
-	NewHash hash.Hash
+	NewRef string
+	// Branch is the RelationKey.Branch of the tables on the ref, when the ref is a branch.
+	Branch string
+	// NewBranch is the RelationKey.Branch of the tables on NewRef, when that is a branch.
+	NewBranch string
+	OldHash   hash.Hash
+	NewHash   hash.Hash
 }
 
 // SchemaChangeRecord records a DDL statement's change to a table. Nothing consumes these records yet.

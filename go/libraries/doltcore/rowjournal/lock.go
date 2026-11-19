@@ -97,7 +97,7 @@ func (j *Journal) Lock(ctx context.Context, txn *Txn, req LockRequest) (LockResu
 		return 0, ErrTxnNotInProgress
 	}
 
-	e := j.relationFor(req.Relation, req.Compare, req.KeyFormat).entryFor(req.Target, true)
+	e := j.relationFor(req.Relation, req.Compare, req.KeyFormat, req.Target.WholeTable).entryFor(req.Target, true)
 	return j.acquire(ctx, txn, e, req.Mode, req.WaitPolicy, req.Timeout, false)
 }
 
@@ -115,7 +115,7 @@ func (j *Journal) Write(ctx context.Context, txn *Txn, req WriteRequest) (LockRe
 		return 0, ErrTxnNotInProgress
 	}
 
-	e := j.relationFor(req.Relation, req.Compare, req.KeyFormat).entryFor(req.Target, true)
+	e := j.relationFor(req.Relation, req.Compare, req.KeyFormat, req.Target.WholeTable).entryFor(req.Target, true)
 	res, err := j.acquire(ctx, txn, e, req.lockMode(), WaitBlock, req.Timeout, req.Op == WriteInsert)
 	if err != nil || res != LockGranted {
 		return res, err

@@ -908,6 +908,62 @@ func TestKeyFormatChange(t *testing.T) {
 	h.requireEmpty()
 }
 
+func TestBranchDeleteAndRename(t *testing.T) {
+	h := newHarness(t)
+	feature := testRel
+	feature.Branch = "heads/feature"
+	renamed := testRel
+	renamed.Branch = "heads/renamed"
+	tryLock := func(txn *Txn, rel RelationKey, key string) LockResult {
+		res, err := h.j.Lock(context.Background(), txn, lockReq(rel, key, LockUpdate, WaitSkip))
+		require.NoError(t, err)
+		return res
+	}
+
+	holder := h.j.Begin(1)
+	other := h.j.Begin(2)
+	require.Equal(t, LockGranted, tryLock(holder, feature, "k"))
+	require.Equal(t, LockGranted, tryLock(holder, testRel, "k"))
+
+	// Renaming a branch takes the locks on its tables along, and replaces whatever was held under the new name.
+	require.Equal(t, LockGranted, tryLock(other, renamed, "k"))
+	h.j.RecordRefUpdate(nil, RefUpdateRecord{
+		Database:  feature.Database,
+		Kind:      RefRename,
+		Ref:       "refs/heads/feature",
+		NewRef:    "refs/heads/renamed",
+		Branch:    feature.Branch,
+		NewBranch: renamed.Branch,
+	})
+	assert.Equal(t, LockWouldBlock, tryLock(other, renamed, "k"))
+	assert.Equal(t, LockGranted, tryLock(other, feature, "k"))
+	assert.Equal(t, LockWouldBlock, tryLock(other, testRel, "k"))
+
+	// Deleting a branch drops the locks on its tables, and requests waiting for them give up.
+	waiter := h.j.Begin(3)
+	blocked := h.blocked(waiter, func() (LockResult, error) {
+		return h.j.Lock(context.Background(), waiter, lockReq(renamed, "k", LockUpdate, WaitBlock))
+	})
+	h.j.RecordRefUpdate(nil, RefUpdateRecord{
+		Database: renamed.Database,
+		Kind:     RefDelete,
+		Ref:      "refs/heads/renamed",
+		Branch:   renamed.Branch,
+	})
+	assert.ErrorIs(t, h.await(blocked).err, ErrRelationChanged)
+	assert.Equal(t, LockGranted, tryLock(waiter, renamed, "k"))
+
+	// Other branches, and other kinds of ref update, are left alone.
+	h.j.RecordRefUpdate(nil, RefUpdateRecord{Database: testRel.Database, Kind: RefAdvance, Ref: "refs/heads/main", Branch: testRel.Branch})
+	h.j.RecordRefUpdate(nil, RefUpdateRecord{Database: testRel.Database, Kind: RefDelete, Ref: "refs/tags/v1"})
+	assert.Equal(t, LockWouldBlock, tryLock(other, testRel, "k"))
+
+	h.j.Commit(holder)
+	h.j.Commit(other)
+	h.j.Commit(waiter)
+	h.requireEmpty()
+}
+
 // recordingSink collects the records appended to a journal.
 type recordingSink struct {
 	records []Record
