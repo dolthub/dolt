@@ -90,6 +90,7 @@ func diffDoltDoc(ctx context.Context, dEnv *env.DoltEnv, docName string) error {
 	if err != nil {
 		return err
 	}
+	defer eng.Close()
 	sqlCtx, err := eng.NewLocalContext(ctx)
 	if err != nil {
 		return err

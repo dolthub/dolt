@@ -1908,6 +1908,7 @@ func sch(definition string) namedSchema {
 	ns := denv.DoltDB(ctx).NodeStore()
 	root, _ := doltdb.EmptyRootValue(ctx, vrw, ns)
 	eng, dbName, _ := engine.NewSqlEngineForEnv(ctx, denv)
+	defer eng.Close()
 	sqlCtx, _ := eng.NewDefaultContext(ctx)
 	defer sql.SessionEnd(sqlCtx.Session)
 	sql.SessionCommandBegin(sqlCtx.Session)

@@ -220,6 +220,10 @@ func ConfigureServices(
 				return false, nil
 			})
 		},
+		// Registered before every service that uses |mrEnv|, so it stops after them.
+		StopF: func(_ svcs.RunState) error {
+			return mrEnv.Close(context.Background())
+		},
 	}
 	controller.Register(InitMultiEnv)
 
@@ -403,7 +407,11 @@ func ConfigureServices(
 			if config.IsReadOnly {
 				readOnlyValue = int8(1)
 			}
-			return vars.SetGlobal(sqlCtx, "read_only", readOnlyValue)
+			if err := vars.SetGlobal(sqlCtx, "read_only", readOnlyValue); err != nil {
+				// A failed InitF never gets its StopF, so close the engine here.
+				return errors.Join(err, sqlEngine.Close())
+			}
+			return nil
 		},
 		StopF: func(_ svcs.RunState) error {
 			sqlEngine.Close()
