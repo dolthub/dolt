@@ -72,7 +72,7 @@ func TestPendingEditsSurviveDerivedRoots(t *testing.T) {
 			}
 			h := newDoltHarness(t)
 			defer h.Close()
-			enginetest.TestTransactionScript(t, h, script)
+			testTransactionScript(t, h, script)
 		})
 	}
 }

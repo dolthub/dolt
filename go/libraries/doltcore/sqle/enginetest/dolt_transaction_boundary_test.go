@@ -17,7 +17,6 @@ package enginetest
 import (
 	"testing"
 
-	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"gopkg.in/src-d/go-errors.v1"
@@ -342,7 +341,7 @@ func TestTransactionBoundary(t *testing.T) {
 			func() {
 				h := newDoltHarness(t)
 				defer h.Close()
-				enginetest.TestTransactionScript(t, h, script)
+				testTransactionScript(t, h, script)
 			}()
 		}
 	}

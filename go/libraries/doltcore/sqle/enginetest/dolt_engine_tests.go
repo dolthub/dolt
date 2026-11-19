@@ -631,9 +631,9 @@ func RunTransactionTests(t *testing.T, h DoltEnginetestHarness, prepared bool) {
 			h := h.NewHarness(t)
 			defer h.Close()
 			if prepared {
-				enginetest.TestTransactionScriptPrepared(t, h, script)
+				testTransactionScriptPrepared(t, h, script)
 			} else {
-				enginetest.TestTransactionScript(t, h, script)
+				testTransactionScript(t, h, script)
 			}
 		}()
 	}
@@ -642,9 +642,9 @@ func RunTransactionTests(t *testing.T, h DoltEnginetestHarness, prepared bool) {
 			h := h.NewHarness(t)
 			defer h.Close()
 			if prepared {
-				enginetest.TestTransactionScriptPrepared(t, h, script)
+				testTransactionScriptPrepared(t, h, script)
 			} else {
-				enginetest.TestTransactionScript(t, h, script)
+				testTransactionScript(t, h, script)
 			}
 		}()
 	}
@@ -653,9 +653,9 @@ func RunTransactionTests(t *testing.T, h DoltEnginetestHarness, prepared bool) {
 			h := h.NewHarness(t)
 			defer h.Close()
 			if prepared {
-				enginetest.TestTransactionScriptPrepared(t, h, script)
+				testTransactionScriptPrepared(t, h, script)
 			} else {
-				enginetest.TestTransactionScript(t, h, script)
+				testTransactionScript(t, h, script)
 			}
 		}()
 	}
@@ -664,9 +664,9 @@ func RunTransactionTests(t *testing.T, h DoltEnginetestHarness, prepared bool) {
 			h := h.NewHarness(t)
 			defer h.Close()
 			if prepared {
-				enginetest.TestTransactionScriptPrepared(t, h, script)
+				testTransactionScriptPrepared(t, h, script)
 			} else {
-				enginetest.TestTransactionScript(t, h, script)
+				testTransactionScript(t, h, script)
 			}
 		}()
 	}
@@ -675,9 +675,9 @@ func RunTransactionTests(t *testing.T, h DoltEnginetestHarness, prepared bool) {
 			h := h.NewHarness(t)
 			defer h.Close()
 			if prepared {
-				enginetest.TestTransactionScriptPrepared(t, h, script)
+				testTransactionScriptPrepared(t, h, script)
 			} else {
-				enginetest.TestTransactionScript(t, h, script)
+				testTransactionScript(t, h, script)
 			}
 		}()
 	}
@@ -686,9 +686,9 @@ func RunTransactionTests(t *testing.T, h DoltEnginetestHarness, prepared bool) {
 			h := h.NewHarness(t)
 			defer h.Close()
 			if prepared {
-				enginetest.TestTransactionScriptPrepared(t, h, script)
+				testTransactionScriptPrepared(t, h, script)
 			} else {
-				enginetest.TestTransactionScript(t, h, script)
+				testTransactionScript(t, h, script)
 			}
 		}()
 	}
@@ -699,7 +699,7 @@ func RunBranchTransactionTest(t *testing.T, h DoltEnginetestHarness) {
 		func() {
 			h := h.NewHarness(t)
 			defer h.Close()
-			enginetest.TestTransactionScript(t, h, script)
+			testTransactionScript(t, h, script)
 		}()
 	}
 }
@@ -717,7 +717,7 @@ func RunMultiDbTransactionsTest(t *testing.T, h DoltEnginetestHarness) {
 		func() {
 			h := h.NewHarness(t)
 			defer h.Close()
-			enginetest.TestTransactionScript(t, h, script)
+			testTransactionScript(t, h, script)
 		}()
 	}
 }
@@ -1907,9 +1907,9 @@ func RunDoltCommitAllTransactionTests(t *testing.T, harness DoltEnginetestHarnes
 			h := harness.NewHarness(t)
 			defer h.Close()
 			if prepared {
-				enginetest.TestTransactionScriptPrepared(t, h, script)
+				testTransactionScriptPrepared(t, h, script)
 			} else {
-				enginetest.TestTransactionScript(t, h, script)
+				testTransactionScript(t, h, script)
 			}
 		}()
 	}
@@ -1922,9 +1922,9 @@ func RunMultiBranchTransactionTests(t *testing.T, harness DoltEnginetestHarness,
 			h := harness.NewHarness(t)
 			defer h.Close()
 			if prepared {
-				enginetest.TestTransactionScriptPrepared(t, h, script)
+				testTransactionScriptPrepared(t, h, script)
 			} else {
-				enginetest.TestTransactionScript(t, h, script)
+				testTransactionScript(t, h, script)
 			}
 		}()
 	}
@@ -1962,9 +1962,9 @@ func RunMultiBranchCommitTests(t *testing.T, harness DoltEnginetestHarness, prep
 					h := harness.NewHarness(t)
 					defer h.Close()
 					if prepared {
-						enginetest.TestTransactionScriptPrepared(t, h, script)
+						testTransactionScriptPrepared(t, h, script)
 					} else {
-						enginetest.TestTransactionScript(t, h, script)
+						testTransactionScript(t, h, script)
 					}
 				}()
 			}
@@ -2567,7 +2567,7 @@ func RunTransactionTestsWithEngineSetup(t *testing.T, setupEngine func(*gms.Engi
 
 			setupEngine(engine.(*gms.Engine))
 
-			enginetest.TestTransactionScriptWithEngine(t, engine, harness, test, false)
+			testTransactionScriptWithEngine(t, engine, harness, test, false)
 		})
 	}
 }
@@ -2601,4 +2601,34 @@ func RunDoltMergeSamePrimaryKeyChangePreparedTests(t *testing.T, h DoltEnginetes
 			enginetest.TestScriptPrepared(t, h, script)
 		}()
 	}
+}
+
+// testTransactionScript runs a script of statements from several clients, run one after another. Nothing in such a
+// script can wait for a row lock, since the statement that would release the lock comes later in the script. So the
+// script runs with row-level locking turned off, and tests how the changes of transactions that don't wait for each
+// other are reconciled when they commit. The tests in dolt_row_locks_test.go cover transactions that do wait.
+func testTransactionScript(t *testing.T, harness enginetest.Harness, script queries.TransactionTest) bool {
+	return t.Run(script.Name, func(t *testing.T) {
+		harness.Setup(setup.MydbData)
+		e := enginetest.MustNewEngine(t, harness)
+		defer e.Close()
+		testTransactionScriptWithEngine(t, e, harness, script, false)
+	})
+}
+
+// testTransactionScriptPrepared is testTransactionScript with prepared statements.
+func testTransactionScriptPrepared(t *testing.T, harness enginetest.Harness, script queries.TransactionTest) bool {
+	return t.Run(script.Name, func(t *testing.T) {
+		harness.Setup(setup.MydbData)
+		e := enginetest.MustNewEngine(t, harness)
+		defer e.Close()
+		testTransactionScriptWithEngine(t, e, harness, script, true)
+	})
+}
+
+// testTransactionScriptWithEngine is testTransactionScript for an engine that already exists.
+func testTransactionScriptWithEngine(t *testing.T, e enginetest.QueryEngine, harness enginetest.Harness, script queries.TransactionTest, prepared bool) {
+	enginetest.RunQueryWithContext(t, e, harness, nil, "set @@global.dolt_row_level_locking = 0")
+	defer enginetest.RunQueryWithContext(t, e, harness, nil, "set @@global.dolt_row_level_locking = 1")
+	enginetest.TestTransactionScriptWithEngine(t, e, harness, script, prepared)
 }

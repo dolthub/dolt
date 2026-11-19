@@ -39,7 +39,7 @@ func TestDoltTransactionCommitOneClient(t *testing.T) {
 	harness := newDoltHarness(t)
 	defer harness.Close()
 	harness.Setup(setup.MydbData)
-	enginetest.TestTransactionScript(t, harness, queries.TransactionTest{
+	testTransactionScript(t, harness, queries.TransactionTest{
 		Name: "dolt commit on transaction commit one client",
 		SetUpScript: []string{
 			"CREATE TABLE x (y BIGINT PRIMARY KEY, z BIGINT);",
@@ -212,7 +212,7 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 	// Autocommit is disabled, as it's the recommended way to use this feature.
 	harness := newDoltHarness(t)
 	defer harness.Close()
-	enginetest.TestTransactionScript(t, harness, queries.TransactionTest{
+	testTransactionScript(t, harness, queries.TransactionTest{
 		Name: "dolt commit on transaction commit two clients",
 		SetUpScript: []string{
 			"CREATE TABLE x (y BIGINT PRIMARY KEY, z BIGINT);",
@@ -387,7 +387,7 @@ func TestDoltTransactionCommitAutocommit(t *testing.T) {
 	// Not the recommended way to use the feature, but it's permitted.
 	harness := newDoltHarness(t)
 	defer harness.Close()
-	enginetest.TestTransactionScript(t, harness, queries.TransactionTest{
+	testTransactionScript(t, harness, queries.TransactionTest{
 		Name: "dolt commit with autocommit",
 		SetUpScript: []string{
 			"CREATE TABLE x (y BIGINT PRIMARY KEY, z BIGINT);",
@@ -471,7 +471,7 @@ func TestDoltTransactionCommitAutocommit(t *testing.T) {
 func TestDoltTransactionCommitLateFkResolution(t *testing.T) {
 	harness := newDoltHarness(t)
 	defer harness.Close()
-	enginetest.TestTransactionScript(t, harness, queries.TransactionTest{
+	testTransactionScript(t, harness, queries.TransactionTest{
 		Name: "delayed foreign key resolution with transaction commits",
 		SetUpScript: []string{
 			"SET foreign_key_checks=0;",
@@ -560,7 +560,7 @@ func TestDoltTransactionFulltextNullBodyNonFF(t *testing.T) {
 	}
 	bulkInsert := "INSERT INTO emails (id, mailbox_id, html_body) VALUES " + strings.Join(vals, ",")
 
-	enginetest.TestTransactionScript(t, harness, queries.TransactionTest{
+	testTransactionScript(t, harness, queries.TransactionTest{
 		Name: "concurrent null-body inserts into fulltext table do not trigger unnecessary rebuild",
 		SetUpScript: []string{
 			`CREATE TABLE emails (
