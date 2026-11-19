@@ -20,8 +20,10 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowjournal"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/val"
@@ -264,4 +266,48 @@ func (w *prollyTableWriter) writeLockedRow(ctx *sql.Context, locks dsess.RowLock
 	}
 
 	return dsess.RowLockConflictError(res)
+}
+
+// RowLockKeys makes, from the rows of a table, the keys that identify them in the row journal. A reader that locks
+// the rows it returns uses it to make the same keys that the table's writer makes for the rows it changes.
+type RowLockKeys struct {
+	keyer rowLockKeyer
+	// Compare orders the keys.
+	Compare rowjournal.KeyCompare
+	// KeyFormat identifies the format of the keys, which changes with the table's schema.
+	KeyFormat hash.Hash
+}
+
+// NewRowLockKeys returns the RowLockKeys for |tbl|, which is the table named |tblName| in the database |dbName|.
+func NewRowLockKeys(ctx *sql.Context, tbl *doltdb.Table, tblName doltdb.TableName, dbName string) (*RowLockKeys, error) {
+	schState, err := writerSchema(ctx, tbl, tblName, dbName)
+	if err != nil {
+		return nil, err
+	}
+
+	keyFormat, err := tbl.GetSchemaHash(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var keyer rowLockKeyer
+	if schema.IsKeyless(schState.DoltSchema) {
+		keyer, err = getPrimaryKeylessProllyWriter(ctx, tbl, schState)
+	} else {
+		keyer, err = getPrimaryProllyWriter(ctx, tbl, schState)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &RowLockKeys{
+		keyer:     keyer,
+		Compare:   keyer.rowLockCompare(),
+		KeyFormat: keyFormat,
+	}, nil
+}
+
+// Key returns the key that identifies |sqlRow|, a row with every column of the table's schema.
+func (k *RowLockKeys) Key(ctx context.Context, sqlRow sql.Row) (val.Tuple, error) {
+	return k.keyer.rowLockKey(ctx, sqlRow)
 }

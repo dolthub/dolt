@@ -16,6 +16,7 @@ package enginetest
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -45,6 +46,9 @@ type rowLockStep struct {
 	rows [][]any
 	// err is a substring of the expected error. Empty means the statement must succeed.
 	err string
+	// locks, if not nil, is the row locks expected to be held once the step is done, by all transactions together.
+	// Each is written as the table's name, a slash and the lock's mode, and they are compared in sorted order.
+	locks []string
 }
 
 // rowLockScript is a test of the interaction of several sessions, in which statements can block on one another.
@@ -126,6 +130,19 @@ func (r *rowLockRunner) waiting() int {
 	return n
 }
 
+// heldLocks returns the row locks held in the journal, each as its table's name, a slash and its mode, sorted.
+func (r *rowLockRunner) heldLocks() []string {
+	held := []string{}
+	for _, lock := range r.journal.Locks() {
+		if lock.Granted && !lock.Target.WholeTable {
+			held = append(held, lock.Relation.Table.Name+"/"+lock.Mode.String())
+		}
+	}
+
+	sort.Strings(held)
+	return held
+}
+
 func (r *rowLockRunner) run(script rowLockScript) {
 	r.t.Run(script.name, func(t *testing.T) {
 		// Leave nothing behind for the next script, however this one ends.
@@ -146,7 +163,7 @@ func (r *rowLockRunner) run(script rowLockScript) {
 		setup := r.client("setup")
 		for _, query := range script.setup {
 			res := setup.query(query)
-			require.NoError(t, res.err, "setup: %s", query)
+			require.NoError(t, res.err, "setup: %s: %v", query, res.err)
 		}
 
 		for i, step := range script.steps {
@@ -189,6 +206,10 @@ func (r *rowLockRunner) run(script rowLockScript) {
 				_, ok := r.pending[step.client]
 				require.False(t, ok, "%s: client is blocked on an earlier statement", label)
 				checkStepResult(t, label, step, r.client(step.client).query(step.query))
+			}
+
+			if step.locks != nil {
+				require.Equal(t, step.locks, r.heldLocks(), "%s: row locks held", label)
 			}
 		}
 
@@ -438,7 +459,7 @@ var rowLockWriteScripts = []rowLockScript{
 	},
 	{
 		name:  "rows of the same table on another branch are locked separately",
-		setup: append(append([]string{}, rowLockWriteSetup...), "call dolt_commit('-Am', 'setup')", "call dolt_branch('-f', 'other')"),
+		setup: append(append([]string{}, rowLockWriteSetup...), "call dolt_commit('--allow-empty', '-Am', 'setup')", "call dolt_branch('-f', 'other')"),
 		steps: []rowLockStep{
 			{client: "b", query: "call dolt_checkout('other')"},
 			{client: "a", query: "begin"},
@@ -602,6 +623,361 @@ var rowLockDisabledScripts = []rowLockScript{
 			{client: "c", unblocks: true},
 		},
 	},
+}
+
+const lockNotAvailableErr = "could not be acquired immediately and NOWAIT is set"
+
+var rowLockReadSetup = []string{
+	"drop table if exists t",
+	"drop table if exists u",
+	"create table t (pk int primary key, c1 int, c2 int, key (c1))",
+	"insert into t values (1, 10, 100), (2, 20, 200), (3, 30, 300)",
+	"create table u (pk int primary key, t_pk int, key (t_pk))",
+	"insert into u values (11, 1), (12, 2), (13, 3)",
+}
+
+// rowLockReadScripts cover SELECT statements with a locking clause.
+var rowLockReadScripts = []rowLockScript{
+	{
+		name:  "for update makes a write of the row wait, and lets it go on when the reader commits",
+		setup: rowLockReadSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "select * from t where pk = 1 for update", rows: [][]any{{1, 10, 100}}, locks: []string{"t/Update"}},
+			{client: "b", query: "update t set c2 = 0 where pk = 2"},
+			{client: "b", query: "update t set c2 = 0 where pk = 1", blocks: true},
+			{client: "a", query: "commit"},
+			// The reader only locked the row, so nothing b saw of it is out of date.
+			{client: "b", unblocks: true},
+			{client: "b", query: "commit"},
+			{client: "a", query: "select pk, c2 from t order by pk", rows: [][]any{{1, 0}, {2, 0}, {3, 300}}, locks: []string{}},
+		},
+	},
+	{
+		name:  "for update waits for a write of the row, and fails when it commits",
+		setup: rowLockReadSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "update t set c2 = 0 where pk = 1"},
+			{client: "b", query: "select * from t where pk = 1 for update", blocks: true},
+			{client: "a", query: "commit"},
+			{client: "b", unblocks: true, err: concurrentUpdateErr},
+			{client: "b", query: "select * from t where pk = 1 for update", rows: [][]any{{1, 10, 0}}},
+		},
+	},
+	{
+		name:  "for update waits for a write of the row, and proceeds when it rolls back",
+		setup: rowLockReadSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "delete from t where pk = 1"},
+			{client: "b", query: "select * from t where pk = 1 for update", blocks: true},
+			{client: "a", query: "rollback"},
+			{client: "b", unblocks: true, rows: [][]any{{1, 10, 100}}},
+			{client: "a", query: "delete from t where pk = 1", blocks: true},
+			{client: "b", query: "commit"},
+			{client: "a", unblocks: true},
+		},
+	},
+	{
+		name:  "for update fails without waiting when the row changed since the transaction began",
+		setup: rowLockReadSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "a", query: "select * from t where pk = 1", rows: [][]any{{1, 10, 100}}},
+			{client: "b", query: "update t set c2 = 0 where pk = 1"},
+			{client: "b", query: "delete from t where pk = 2"},
+			{client: "a", query: "select * from t where pk = 3 for update", rows: [][]any{{3, 30, 300}}},
+			{client: "a", query: "select * from t where pk = 1 for update", err: concurrentUpdateErr},
+			{client: "a", query: "begin"},
+			{client: "b", query: "delete from t where pk = 3"},
+			{client: "a", query: "select * from t where pk = 3 for update", err: concurrentDeleteErr},
+		},
+	},
+	{
+		name:  "share locks are compatible with each other and conflict with writes and for update",
+		setup: rowLockReadSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "c", query: "begin"},
+			{client: "a", query: "select * from t where pk = 1 lock in share mode", rows: [][]any{{1, 10, 100}}},
+			{client: "b", query: "select * from t where pk = 1 lock in share mode", rows: [][]any{{1, 10, 100}}, locks: []string{"t/Share", "t/Share"}},
+			{client: "c", query: "select * from t where pk = 1 for update", blocks: true},
+			{client: "a", query: "commit"},
+			{client: "b", query: "commit"},
+			{client: "c", unblocks: true, rows: [][]any{{1, 10, 100}}, locks: []string{"t/Update"}},
+			{client: "a", query: "select * from t where pk = 1 lock in share mode", blocks: true},
+			{client: "c", query: "commit"},
+			{client: "a", unblocks: true, rows: [][]any{{1, 10, 100}}},
+		},
+	},
+	{
+		name:  "nowait fails and skip locked leaves out a row that is locked",
+		setup: rowLockReadSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "select * from t where pk = 1 for update", rows: [][]any{{1, 10, 100}}},
+			{client: "b", query: "select * from t where pk = 1 for update nowait", err: lockNotAvailableErr},
+			// Only the statement failed.
+			{client: "b", query: "select * from t where pk = 1 for update skip locked", rows: [][]any{}},
+			{client: "b", query: "select pk from t order by pk limit 1 for update skip locked", rows: [][]any{{2}}},
+			{client: "b", query: "select pk from t order by pk for update skip locked", rows: [][]any{{2}, {3}}},
+			{client: "a", query: "select pk from t order by pk for update skip locked", rows: [][]any{{1}}},
+			{client: "a", query: "select pk from t where pk = 3 for update nowait", err: lockNotAvailableErr},
+			{client: "b", query: "commit"},
+			{client: "a", query: "select pk from t order by pk for update nowait", rows: [][]any{{1}, {2}, {3}}},
+		},
+	},
+	{
+		name:  "nowait and skip locked don't wait for a writer either",
+		setup: rowLockReadSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "update t set c2 = 0 where pk = 2"},
+			{client: "b", query: "select pk from t where pk = 2 for update nowait", err: lockNotAvailableErr},
+			{client: "b", query: "select pk from t order by pk for update skip locked", rows: [][]any{{1}, {3}}},
+		},
+	},
+	{
+		name:  "an indexed lookup locks only the rows it returns",
+		setup: rowLockReadSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "a", query: "select * from t where pk = 1 for update", rows: [][]any{{1, 10, 100}}, locks: []string{"t/Update"}},
+			{client: "a", query: "rollback", locks: []string{}},
+			// A lookup on a secondary index.
+			{client: "a", query: "begin"},
+			{client: "a", query: "select * from t where c1 = 20 for update", rows: [][]any{{2, 20, 200}}, locks: []string{"t/Update"}},
+			{client: "b", query: "update t set c2 = 0 where pk in (1, 3)"},
+			{client: "b", query: "select pk from t where pk = 2 for update nowait", err: lockNotAvailableErr},
+			{client: "a", query: "rollback", locks: []string{}},
+			// A lookup that the secondary index covers.
+			{client: "a", query: "begin"},
+			{client: "a", query: "select c1 from t where c1 = 20 for update", rows: [][]any{{20}}, locks: []string{"t/Update"}},
+			{client: "b", query: "select pk from t where pk = 2 for update nowait", err: lockNotAvailableErr},
+			{client: "a", query: "rollback", locks: []string{}},
+			// A range of a secondary index.
+			{client: "a", query: "begin"},
+			{client: "a", query: "select pk from t where c1 >= 20 order by pk for update", rows: [][]any{{2}, {3}}, locks: []string{"t/Update", "t/Update"}},
+			{client: "a", query: "rollback", locks: []string{}},
+			// A lookup that finds nothing locks nothing.
+			{client: "a", query: "begin"},
+			{client: "a", query: "select pk from t where pk = 99 for update", rows: [][]any{}, locks: []string{}},
+		},
+	},
+	{
+		name:  "a scan locks every row it reads, including those a filter rejects",
+		setup: rowLockReadSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "a", query: "select pk from t where c2 = 200 for update", rows: [][]any{{2}}, locks: []string{"t/Update", "t/Update", "t/Update"}},
+		},
+	},
+	{
+		name:  "only the projected columns are returned",
+		setup: rowLockReadSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "a", query: "select c2 from t where pk = 2 for update", rows: [][]any{{200}}, locks: []string{"t/Update"}},
+			{client: "a", query: "select c2, pk from t where c1 = 30 for update", rows: [][]any{{300, 3}}, locks: []string{"t/Update", "t/Update"}},
+			{client: "a", query: "select c2 + pk from t where pk = 1 for update", rows: [][]any{{101}}, locks: []string{"t/Update", "t/Update", "t/Update"}},
+		},
+	},
+	{
+		name:  "a join locks the rows of every table, or of the tables the clause names",
+		setup: rowLockReadSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{
+				client: "a",
+				query:  "select t.pk, u.pk from t join u on u.t_pk = t.pk where t.pk = 2 and u.pk = 12 for update",
+				rows:   [][]any{{2, 12}},
+				locks:  []string{"t/Update", "u/Update"},
+			},
+			{client: "b", query: "update u set t_pk = 3 where pk = 12", blocks: true},
+			{client: "a", query: "rollback"},
+			{client: "b", unblocks: true, locks: []string{}},
+			{client: "a", query: "begin"},
+			{
+				client: "a",
+				query:  "select t.pk, u.pk from t join u on u.t_pk = t.pk where t.pk = 1 and u.pk = 11 for update of u",
+				rows:   [][]any{{1, 11}},
+				locks:  []string{"u/Update"},
+			},
+			{client: "b", query: "update t set c2 = 0 where pk = 1"},
+			{client: "a", query: "rollback"},
+			{client: "a", query: "begin"},
+			{
+				client: "a",
+				query:  "select x.pk, y.pk from t x join u y on y.t_pk = x.pk where x.pk = 3 and y.pk = 13 for update of x",
+				rows:   [][]any{{3, 13}},
+				locks:  []string{"t/Update"},
+			},
+			{client: "a", query: "select * from t for update of u", err: "table"},
+		},
+	},
+	{
+		name:  "a locking read outside a transaction holds its locks only while it runs",
+		setup: rowLockReadSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "select * from t where pk = 1 for update", rows: [][]any{{1, 10, 100}}, locks: []string{}},
+			{client: "b", query: "begin"},
+			{client: "b", query: "update t set c2 = 0 where pk = 1"},
+			{client: "a", query: "select * from t where pk = 1 for update", blocks: true},
+			{client: "b", query: "rollback"},
+			{client: "a", unblocks: true, rows: [][]any{{1, 10, 100}}, locks: []string{}},
+		},
+	},
+	{
+		name:  "two locking reads that wait for each other are a deadlock",
+		setup: rowLockReadSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "select * from t where pk = 1 for update"},
+			{client: "b", query: "select * from t where pk = 2 for update"},
+			{client: "a", query: "select * from t where pk = 2 for update", blocks: true},
+			{client: "b", query: "select * from t where pk = 1 for update", err: "deadlock detected"},
+			{client: "a", unblocks: true, rows: [][]any{{2, 20, 200}}},
+		},
+	},
+	{
+		name:  "upgrading a share lock while another holds one is a deadlock for the second to try",
+		setup: rowLockReadSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "select * from t where pk = 1 lock in share mode"},
+			{client: "b", query: "select * from t where pk = 1 lock in share mode"},
+			{client: "a", query: "update t set c2 = 0 where pk = 1", blocks: true},
+			{client: "b", query: "update t set c2 = 1 where pk = 1", err: "deadlock detected"},
+			{client: "a", unblocks: true},
+			{client: "a", query: "commit"},
+			{client: "b", query: "select c2 from t where pk = 1", rows: [][]any{{0}}},
+		},
+	},
+	{
+		name:  "rows read as of a commit, or on a branch with no working set, are not locked",
+		setup: append(append([]string{}, rowLockReadSetup...), "call dolt_commit('--allow-empty', '-Am', 'read setup')", "call dolt_tag('v1')"),
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "a", query: "select * from t as of 'HEAD' where pk = 1 for update", rows: [][]any{{1, 10, 100}}, locks: []string{}},
+			{client: "a", query: "select * from `mydb/v1`.t where pk = 1 for update", rows: [][]any{{1, 10, 100}}, locks: []string{}},
+		},
+	},
+	{
+		name:  "rows of another branch's table are locked on that branch",
+		setup: append(append([]string{}, rowLockReadSetup...), "call dolt_commit('--allow-empty', '-Am', 'read setup')", "call dolt_branch('-f', 'other')"),
+		steps: []rowLockStep{
+			{client: "b", query: "call dolt_checkout('other')"},
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "select * from `mydb/other`.t where pk = 1 for update", rows: [][]any{{1, 10, 100}}, locks: []string{"t/Update"}},
+			{client: "b", query: "select * from `mydb/main`.t where pk = 1 for update", rows: [][]any{{1, 10, 100}}},
+			{client: "b", query: "update t set c2 = 0 where pk = 1", blocks: true},
+			{client: "a", query: "rollback"},
+			{client: "b", unblocks: true},
+			{client: "b", query: "rollback"},
+			{client: "b", query: "call dolt_checkout('main')"},
+		},
+	},
+	{
+		name:  "with row locking off, a locking clause does nothing",
+		setup: append(append([]string{}, rowLockReadSetup...), "set @@global.dolt_row_level_locking = 0"),
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "select * from t where pk = 1 for update", rows: [][]any{{1, 10, 100}}, locks: []string{}},
+			{client: "b", query: "select c2 from t where pk = 1 for update nowait", rows: [][]any{{100}}},
+			{client: "b", query: "update t set c2 = 0 where pk = 1"},
+			{client: "setup", query: "set @@global.dolt_row_level_locking = 1"},
+		},
+	},
+}
+
+var rowLockKeylessReadSetup = []string{
+	"drop table if exists k",
+	"create table k (c1 int, c2 int, key (c1))",
+	"insert into k values (1, 1), (1, 1), (2, 2), (3, 3)",
+}
+
+// rowLockKeylessReadScripts cover locking reads of tables without a primary key.
+var rowLockKeylessReadScripts = []rowLockScript{
+	{
+		name:  "keyless: for update makes a write of the row wait",
+		setup: rowLockKeylessReadSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "select * from k where c1 = 2 for update", rows: [][]any{{2, 2}}, locks: []string{"k/Update"}},
+			{client: "b", query: "update k set c2 = 30 where c1 = 3"},
+			{client: "b", query: "update k set c2 = 20 where c1 = 2", blocks: true},
+			{client: "a", query: "update k set c2 = 10 where c1 = 2"},
+			{client: "a", query: "commit"},
+			{client: "b", unblocks: true, err: concurrentUpdateErr},
+			{client: "a", query: "select * from k order by c1, c2", rows: [][]any{{1, 1}, {1, 1}, {2, 10}, {3, 3}}},
+		},
+	},
+	{
+		name:  "keyless: for update waits for a write of the row",
+		setup: rowLockKeylessReadSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "delete from k where c1 = 2"},
+			{client: "b", query: "select * from k where c1 = 2 for update", blocks: true},
+			{client: "a", query: "rollback"},
+			{client: "b", unblocks: true, rows: [][]any{{2, 2}}},
+		},
+	},
+	{
+		name:  "keyless: identical rows are returned individually and locked together",
+		setup: rowLockKeylessReadSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			// One lock stands for both rows, taken once for each row returned.
+			{client: "a", query: "select * from k where c1 = 1 for update", rows: [][]any{{1, 1}, {1, 1}}, locks: []string{"k/Update"}},
+			{client: "b", query: "select * from k where c1 = 1 for update nowait", err: lockNotAvailableErr},
+			{client: "b", query: "select * from k order by c1 for update skip locked", rows: [][]any{{2, 2}, {3, 3}}},
+			// A row identical to the locked ones can't be added while they are locked.
+			{client: "b", query: "insert into k values (1, 1)", blocks: true},
+			{client: "a", query: "commit"},
+			{client: "b", unblocks: true},
+			{client: "b", query: "commit"},
+			{client: "a", query: "select count(*) from k where c1 = 1", rows: [][]any{{3}}},
+		},
+	},
+	{
+		name:  "keyless: a scan locks every row, and share locks are compatible",
+		setup: rowLockKeylessReadSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "select * from k where c2 = 3 lock in share mode", rows: [][]any{{3, 3}}, locks: []string{"k/Share", "k/Share", "k/Share"}},
+			{client: "b", query: "select * from k where c2 = 2 lock in share mode", rows: [][]any{{2, 2}}},
+			{client: "b", query: "delete from k where c1 = 3", blocks: true},
+			{client: "a", query: "commit"},
+			{client: "b", unblocks: true},
+		},
+	},
+}
+
+func TestRowLockReads(t *testing.T) {
+	runner := newRowLockRunner(t)
+	for _, script := range rowLockReadScripts {
+		runner.run(script)
+	}
+
+	for _, script := range rowLockKeylessReadScripts {
+		runner.run(script)
+	}
 }
 
 func TestRowLockWrites(t *testing.T) {

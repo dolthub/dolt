@@ -102,6 +102,8 @@ type DoltTable struct {
 	opts            editor.Options
 	projectedCols   []uint64
 	projectedSchema sql.Schema
+	// rowLock is set for a table that locks the rows it returns, as a SELECT's locking clause asks for.
+	rowLock *rowLockRead
 }
 
 func (t *DoltTable) TableName() doltdb.TableName {
@@ -802,12 +804,12 @@ func (t *DoltTable) PartitionValueRowWriter(ctx *sql.Context, partition sql.Part
 		if err != nil {
 			return nil, err
 		}
-		projCols := t.projectedCols
+		projCols := t.readCols()
 		if projCols == nil {
 			projCols = t.sch.GetAllCols().Tags
 		}
 		kd, vd := p.rows.Descriptors()
-		return index.NewProllyRowIterForSchema(t.sch, iter, kd, vd, projCols, p.rows.NodeStore(), columnIds), nil
+		return t.withRowLocks(ctx, index.NewProllyRowIterForSchema(t.sch, iter, kd, vd, projCols, p.rows.NodeStore(), columnIds))
 	}
 
 	table, err := t.DoltTable(ctx)
@@ -821,7 +823,7 @@ func (t *DoltTable) PartitionValueRowWriter(ctx *sql.Context, partition sql.Part
 	// to pass in the full column projection for the original/data schema so that we get all columns back. Then,
 	// the mappingRowIterator that we apply on top of the original row iterator will take care of mapping the
 	// original row and shrinking it down to the projected columns.
-	projCols := t.projectedCols
+	projCols := t.readCols()
 	if t.overriddenSchema != nil {
 		originalSchemaCols := t.sch.GetAllCols().GetColumns()
 		projCols = make([]uint64, len(originalSchemaCols))
@@ -838,7 +840,7 @@ func (t *DoltTable) PartitionValueRowWriter(ctx *sql.Context, partition sql.Part
 	if t.overriddenSchema != nil {
 		return newMappingRowIter(ctx, t, originalRowIter)
 	} else {
-		return originalRowIter, err
+		return t.withRowLocks(ctx, originalRowIter)
 	}
 }
 

@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression/function/aggregation"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/rowexec"
+	"github.com/dolthub/go-mysql-server/sql/transform"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -77,6 +78,10 @@ func (b *Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, e
 		switch {
 		case n.Op.IsPartial() || len(r) != 0:
 			return nil, nil
+		case locksRows(n):
+			// The operators here read rows straight from storage, where nothing locks them. A table that locks the
+			// rows it returns has to be read through its own iterators.
+			return nil, nil
 		case n.Op.IsLookup():
 			// conditions to use this fast path for lookup joins:
 			// (1) lookup or left lookup join
@@ -125,7 +130,7 @@ func (b *Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, e
 			}
 		}
 	case *plan.GroupBy:
-		if len(n.GroupByExprs) == 0 && len(n.SelectDeps) == 1 {
+		if len(n.GroupByExprs) == 0 && len(n.SelectDeps) == 1 && !locksRows(n) {
 			if cnt, ok := n.SelectDeps[0].(*aggregation.Count); ok {
 				if _, srcIter, _, srcSchema, _, srcFilter, err := getSourceKv(ctx, n.Child, true); err == nil && srcSchema != nil && srcFilter == nil {
 					iter, ok, err := newCountAggregationKvIter(ctx, srcIter, srcSchema, cnt.Child)
@@ -143,6 +148,24 @@ func (b *Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, e
 	}
 
 	return nil, nil
+}
+
+// locksRows returns whether any table read by the plan |n| locks the rows it returns.
+func locksRows(n sql.Node) bool {
+	found := false
+	transform.Inspect(n, func(n sql.Node) bool {
+		tableNode, ok := n.(sql.TableNode)
+		if !ok {
+			return !found
+		}
+
+		if locking, ok := tableNode.UnderlyingTable().(sqle.RowLockingTable); ok && locking.LocksRows() {
+			found = true
+		}
+
+		return !found
+	})
+	return found
 }
 
 // newTupleLookupKvIter returns a KV iter for a join whose left and right side are both prolly indexes

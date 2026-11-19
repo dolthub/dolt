@@ -83,13 +83,18 @@ func (idt *IndexedDoltTable) PartitionValueRowWriter(ctx *sql.Context, part sql.
 		return nil, err
 	}
 	if idt.lb == nil || !canCache || idt.lb.Key() != key {
-		idt.lb, err = index.NewIndexReaderBuilder(ctx, idt.DoltTable, idt.idx, key, idt.DoltTable.projectedCols, idt.DoltTable.sqlSch)
+		idt.lb, err = index.NewIndexReaderBuilder(ctx, idt.DoltTable, idt.idx, key, idt.DoltTable.readCols(), idt.DoltTable.sqlSch)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return idt.lb.NewPartitionRowIter(ctx, part, columnIds)
+	iter, err := idt.lb.NewPartitionRowIter(ctx, part, columnIds)
+	if err != nil {
+		return nil, err
+	}
+
+	return idt.DoltTable.withRowLocks(ctx, iter)
 }
 
 var _ sql.IndexedTable = (*WritableIndexedDoltTable)(nil)
@@ -150,13 +155,18 @@ func (t *WritableIndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Part
 		return nil, err
 	}
 	if t.lb == nil || !canCache || t.lb.Key() != key {
-		t.lb, err = index.NewIndexReaderBuilder(ctx, t.DoltTable, t.idx, key, t.projectedCols, t.sqlSch)
+		t.lb, err = index.NewIndexReaderBuilder(ctx, t.DoltTable, t.idx, key, t.readCols(), t.sqlSch)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return t.lb.NewPartitionRowIter(ctx, part, sql.ColSet{})
+	iter, err := t.lb.NewPartitionRowIter(ctx, part, sql.ColSet{})
+	if err != nil {
+		return nil, err
+	}
+
+	return t.DoltTable.withRowLocks(ctx, iter)
 }
 
 func (t *WritableIndexedDoltTable) PartitionValueRowWriter(ctx *sql.Context, part sql.Partition, columnIds sql.ColSet) (sql.ValueRowWriter, error) {
@@ -167,13 +177,18 @@ func (t *WritableIndexedDoltTable) PartitionValueRowWriter(ctx *sql.Context, par
 		return nil, err
 	}
 	if t.lb == nil || !canCache || t.lb.Key() != key {
-		t.lb, err = index.NewIndexReaderBuilder(ctx, t.DoltTable, t.idx, key, t.projectedCols, t.sqlSch)
+		t.lb, err = index.NewIndexReaderBuilder(ctx, t.DoltTable, t.idx, key, t.readCols(), t.sqlSch)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return t.lb.NewPartitionRowIter(ctx, part, columnIds)
+	iter, err := t.lb.NewPartitionRowIter(ctx, part, columnIds)
+	if err != nil {
+		return nil, err
+	}
+
+	return t.DoltTable.withRowLocks(ctx, iter)
 }
 
 // WithProjections implements sql.ProjectedTable
