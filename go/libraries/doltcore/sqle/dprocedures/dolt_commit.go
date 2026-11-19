@@ -186,8 +186,8 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 	}
 
 	dSess := dsess.DSessFromSess(ctx.Session)
-	if len(dSess.DirtyBranches()) > 1 {
-		return "", false, dsess.ErrDirtyWorkingSets
+	if err := checkDirtyBranchesForCommit(ctx, dSess, ctx.GetCurrentDatabase(), dbName, targetBranch, branchSpecified); err != nil {
+		return "", false, err
 	}
 	pendingCommit, err := prepareCommit(ctx, dbName, apr)
 	if err != nil {
@@ -219,6 +219,46 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 	}
 
 	return h.String(), false, nil
+}
+
+// checkDirtyBranchesForCommit verifies that no branch other than the commit target has uncommitted changes.
+// Committing one branch while the transaction holds writes on another would silently discard those writes when
+// the transaction ends, so the commit is refused with dsess.ErrDirtyWorkingSets instead. |dbName| is the
+// revision-qualified name of the commit target, as passed to prepareCommit; |currentDbName| is the session's
+// current database and |branchFlag| / |branchSpecified| describe the --branch argument, which names the target
+// branch directly when present.
+func checkDirtyBranchesForCommit(ctx *sql.Context, dSess *dsess.DoltSession, currentDbName, dbName, branchFlag string, branchSpecified bool) error {
+	dirty := dSess.DirtyBranches()
+	if len(dirty) == 0 {
+		return nil
+	}
+	targetBase, targetBranch := doltdb.SplitRevisionDbName(dbName)
+	if branchSpecified {
+		// --branch names the target branch directly. The current database may already be revision-qualified,
+		// in which case dbName was built by appending the flag to it and does not split back to the target.
+		targetBase, _ = doltdb.SplitRevisionDbName(currentDbName)
+		targetBranch = branchFlag
+	}
+	if targetBranch == "" {
+		// Unqualified database name: the target is the checked-out branch.
+		var ok bool
+		var err error
+		targetBranch, ok, err = dSess.CurrentHead(ctx, targetBase)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			// Cannot resolve the target branch; leave this to the commit path
+			// instead of rejecting a commit we cannot identify.
+			return nil
+		}
+	}
+	for _, d := range dirty {
+		if !strings.EqualFold(d.DbName, targetBase) || !strings.EqualFold(d.Branch, targetBranch) {
+			return dsess.ErrDirtyWorkingSets
+		}
+	}
+	return nil
 }
 
 // prepareCommit constructs and validates a commit without publishing any branch updates.

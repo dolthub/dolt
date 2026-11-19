@@ -8301,6 +8301,140 @@ var DoltCommitTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// https://github.com/dolthub/dolt/issues/12533
+		Name: "dolt_commit on another branch refuses when the transaction holds writes on the branch it left",
+		SetUpScript: []string{
+			"create table t12533 (id int primary key, v varchar(20));",
+			"insert into t12533 values (1, 'a');",
+			"call dolt_commit('-Am', 'c1');",
+			"call dolt_branch('b12533');",
+			"call dolt_checkout('b12533');",
+			"insert into t12533 values (9, 'pre');",
+			"call dolt_add('.');",
+			"call dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "start transaction;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "insert into t12533 values (3, 'main-txn');",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:            "call dolt_checkout('b12533');",
+				SkipResultsCheck: true,
+			},
+			{
+				// b12533 has staged changes from before the transaction, but the transaction's own
+				// writes are on main. Committing b12533 must not silently discard them.
+				Query:          "call dolt_commit('-m', 'commit b12533');",
+				ExpectedErrStr: "Cannot commit changes on more than one branch / database",
+			},
+			{
+				Query:            "commit;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "call dolt_checkout('main');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select id from t12533 order by id;",
+				Expected: []sql.Row{{1}, {3}},
+			},
+			{
+				Query:    "select count(*) from dolt_status;",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/12533
+		Name: "dolt_commit --allow-empty on another branch refuses when the transaction holds writes elsewhere",
+		SetUpScript: []string{
+			"create table t12533b (id int primary key, v varchar(20));",
+			"insert into t12533b values (1, 'a');",
+			"call dolt_commit('-Am', 'c1');",
+			"call dolt_branch('b12533b');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "start transaction;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "insert into t12533b values (3, 'main-txn');",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:            "call dolt_checkout('b12533b');",
+				SkipResultsCheck: true,
+			},
+			{
+				// b12533b is clean, so without the fix this would create an empty commit on b12533b
+				// and silently discard the transaction's writes on main.
+				Query:          "call dolt_commit('--allow-empty', '-m', 'empty b12533b');",
+				ExpectedErrStr: "Cannot commit changes on more than one branch / database",
+			},
+			{
+				Query:            "commit;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "call dolt_checkout('main');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select id from t12533b order by id;",
+				Expected: []sql.Row{{1}, {3}},
+			},
+			{
+				Query:    "select count(*) from dolt_status;",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/12533
+		Name: "dolt_commit --branch refuses when the transaction holds writes on another branch",
+		SetUpScript: []string{
+			"create table t12533c (id int primary key, v varchar(20));",
+			"insert into t12533c values (1, 'a');",
+			"call dolt_commit('-Am', 'c1');",
+			"call dolt_branch('b12533c');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "start transaction;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "insert into t12533c values (3, 'main-txn');",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				// Commit to b12533c from main via --branch: the transaction's writes are on main,
+				// not on the commit target, so this must be refused the same way.
+				Query:          "call dolt_commit('--branch', 'b12533c', '-m', 'commit b12533c');",
+				ExpectedErrStr: "Cannot commit changes on more than one branch / database",
+			},
+			{
+				Query:            "commit;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select id from t12533c order by id;",
+				Expected: []sql.Row{{1}, {3}},
+			},
+			{
+				Query:    "select count(*) from dolt_status;",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
 }
 
 var DoltIndexPrefixScripts = []queries.ScriptTest{
