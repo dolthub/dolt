@@ -126,7 +126,8 @@ func (dtf *DiffTableFunction) GetIndexes(ctx *sql.Context) ([]sql.Index, error) 
 	// - It's a covering index (virtual columns exempted)
 	// - It exists on both commits and has the same schema
 	if dtf.tableDelta.ToTable != nil && dtf.tableDelta.FromTable != nil &&
-		dtf.tableDelta.ToSch != nil && dtf.tableDelta.FromSch != nil {
+		dtf.tableDelta.ToSch != nil && dtf.tableDelta.FromSch != nil &&
+		diff.IsSameStoredKey(dtf.tableDelta.FromSch, dtf.tableDelta.ToSch) {
 		for _, toIdx := range dtf.tableDelta.ToSch.Indexes().AllIndexes() {
 			fromIdx := dtf.tableDelta.FromSch.Indexes().GetByName(toIdx.Name())
 			if fromIdx == nil {
@@ -347,7 +348,7 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 		dtf.toRefDetails.refStr, dtf.fromRefDetails.refStr,
 		dtf.toRefDetails.commitTime, dtf.fromRefDetails.commitTime,
 		toSchema, fromSchema,
-		nil)
+		nil, nil)
 
 	return dtables.NewDiffPartitionRowIter(dp, ddb), nil
 }
@@ -749,12 +750,16 @@ func (dtf *DiffTableFunction) lookupPrimaryIndexPartition(ctx *sql.Context, look
 	}
 
 	toSchema, fromSchema := dtf.getSchemas()
+	rangeSch := fromSchema
+	if lookup.Index.ID() == index.ToDiffIndexId {
+		rangeSch = toSchema
+	}
 	partition := dtables.NewDiffPartition(
 		dtf.tableDelta.ToTable, dtf.tableDelta.FromTable,
 		dtf.toRefDetails.refStr, dtf.fromRefDetails.refStr,
 		dtf.toRefDetails.commitTime, dtf.fromRefDetails.commitTime,
 		toSchema, fromSchema,
-		prollyRanges)
+		prollyRanges, rangeSch)
 	return dtables.NewSliceOfPartitionsItr([]sql.Partition{partition}), nil
 }
 

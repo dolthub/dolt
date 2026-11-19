@@ -88,6 +88,12 @@ type TableDeltaSummary struct {
 	FromTableName doltdb.TableName
 	ToTableName   doltdb.TableName
 	AlterStmts    []string
+	// HasUnpaired reports whether a primary key change left rows unpaired,
+	// so that a diff reports them as removed and added.
+	HasUnpaired bool
+	// NoCommonKey reports that the primary key changed to columns the other
+	// side does not share (or one side is keyless), so every row is unpaired.
+	NoCommonKey bool
 }
 
 // IsAdd returns true if the table was added between the fromRoot and toRoot.
@@ -572,40 +578,13 @@ func (td TableDelta) HasChangesIgnoringColumnTags(ctx context.Context) (bool, er
 	return !schema.SchemasAreEqual(fromSchema, toSchema), nil
 }
 
+// HasDataChanged reports whether the rows of |td| differ between its sides.
+//
+// A primary key change alone is not a data change. Rows that cannot be paired
+// across a key change count as changed.
 func (td TableDelta) HasDataChanged(ctx context.Context) (bool, error) {
-	// Database collation change is not a data change
-	if td.FromTable == nil && td.ToTable == nil && td.FromRootObject == nil && td.ToRootObject == nil {
-		return false, nil
-	}
-
-	if td.FromRootObject != nil || td.ToRootObject != nil {
-		return td.HasHashChanged()
-	}
-
-	if td.IsAdd() {
-		isEmpty, err := isTableDataEmpty(ctx, td.ToTable)
-		if err != nil {
-			return false, err
-		}
-		return !isEmpty, nil
-	}
-	if td.IsDrop() {
-		isEmpty, err := isTableDataEmpty(ctx, td.FromTable)
-		if err != nil {
-			return false, err
-		}
-		return !isEmpty, nil
-	}
-
-	fromRowDataHash, err := td.FromTable.GetRowDataHash(ctx)
-	if err != nil {
-		return false, err
-	}
-	toRowDataHash, err := td.ToTable.GetRowDataHash(ctx)
-	if err != nil {
-		return false, err
-	}
-	return !fromRowDataHash.Equal(toRowDataHash), nil
+	isChanged, _, _, err := td.dataChange(ctx)
+	return isChanged, err
 }
 
 func (td TableDelta) HasPrimaryKeySetChanged() bool {
@@ -708,7 +687,7 @@ func isTableDataEmpty(ctx context.Context, table *doltdb.Table) (bool, error) {
 
 // GetSummary returns a summary of the table delta.
 func (td TableDelta) GetSummary(ctx context.Context) (*TableDeltaSummary, error) {
-	dataChange, err := td.HasDataChanged(ctx)
+	dataChange, hasUnpaired, noCommonKey, err := td.dataChange(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -744,6 +723,8 @@ func (td TableDelta) GetSummary(ctx context.Context) (*TableDeltaSummary, error)
 			DataChange:    dataChange,
 			SchemaChange:  true,
 			DiffType:      DiffTypeRenamed,
+			HasUnpaired:   hasUnpaired,
+			NoCommonKey:   noCommonKey,
 		}, nil
 	}
 
@@ -759,7 +740,53 @@ func (td TableDelta) GetSummary(ctx context.Context) (*TableDeltaSummary, error)
 		DataChange:    dataChange,
 		SchemaChange:  schemaChange,
 		DiffType:      DiffTypeModified,
+		HasUnpaired:   hasUnpaired,
+		NoCommonKey:   noCommonKey,
 	}, nil
+}
+
+// dataChange reports whether |td| has row changes, unpaired rows, or no
+// common key.
+func (td TableDelta) dataChange(ctx context.Context) (isChanged, hasUnpaired, noCommonKey bool, err error) {
+	// Database collation change is not a data change
+	if td.FromTable == nil && td.ToTable == nil && td.FromRootObject == nil && td.ToRootObject == nil {
+		return false, false, false, nil
+	}
+
+	if td.FromRootObject != nil || td.ToRootObject != nil {
+		isChanged, err = td.HasHashChanged()
+		return isChanged, false, false, err
+	}
+
+	if td.IsAdd() {
+		isEmpty, err := isTableDataEmpty(ctx, td.ToTable)
+		return !isEmpty, false, false, err
+	}
+	if td.IsDrop() {
+		isEmpty, err := isTableDataEmpty(ctx, td.FromTable)
+		return !isEmpty, false, false, err
+	}
+
+	// A primary key change alone changes the row hash, so the rows are compared
+	// keyed by one primary key. Prolly maps with the same rows have the same
+	// hash, and an unpaired row cannot exist unchanged on the other side.
+	fromRows, toRows, err := td.GetRowData(ctx)
+	if err != nil {
+		return false, false, false, err
+	}
+	from, to, err := alignIndexes(ctx, fromRows, toRows, td.FromSch, td.ToSch)
+	if IsPrimaryKeyAlignmentError(err) {
+		return true, false, false, nil
+	} else if err != nil {
+		return false, false, false, err
+	}
+	if from.UnpairedCount+to.UnpairedCount > 0 {
+		return true, true, from.NoCommonKey, nil
+	}
+	if from.NoCommonKey {
+		return false, false, false, nil
+	}
+	return !from.Rows.HashOf().Equal(to.Rows.HashOf()), false, false, nil
 }
 
 // GetRowData returns the table's row data at the fromRoot and toRoot, or an empty map if the table did not exist.

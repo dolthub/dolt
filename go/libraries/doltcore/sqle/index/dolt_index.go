@@ -42,9 +42,12 @@ import (
 )
 
 const (
-	CommitHashIndexId = "commit_hash"
-	ToCommitIndexId   = "to_commit"
-	FromCommitIndexId = "from_commit"
+	CommitHashIndexId  = "commit_hash"
+	ToCommitIndexId    = "to_commit"
+	FromCommitIndexId  = "from_commit"
+	diffCommitIdPrefix = "commits_"
+	// ToDiffIndexId is the ID of the primary index on the to side of a diff.
+	ToDiffIndexId = diffCommitIdPrefix + "to"
 )
 
 type DoltTableable interface {
@@ -226,7 +229,7 @@ func MakeDiffTableIndex(tableName string, prefix string, sch schema.Schema, incl
 	}
 
 	return &doltIndex{
-		id:                            "commits_" + prefix,
+		id:                            diffCommitIdPrefix + prefix,
 		tblName:                       tableName,
 		columns:                       cols,
 		unique:                        true,

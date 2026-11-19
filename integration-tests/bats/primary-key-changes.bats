@@ -369,9 +369,10 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Primary key sets differ between revisions for table 't', skipping data diff" ]] || false
 
+    # The stat pairs rows by the new primary key, and no row changed.
     run dolt diff --stat
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "failed to compute diff stat for table t: primary key set changed" ]] || false
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No data changes" ]] || false
 
     dolt add .
 

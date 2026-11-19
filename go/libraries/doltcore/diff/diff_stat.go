@@ -28,10 +28,13 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-var ErrPrimaryKeySetChanged = errors.New("primary key set changed")
-
 type DiffStatProgress struct {
 	Adds, Removes, Changes, CellChanges, NewRowSize, OldRowSize, NewCellSize, OldCellSize uint64
+	// Unpaired counts the Adds and Removes left unpaired by a key change.
+	Unpaired uint64
+	// NoCommonKey reports that no row can pair across the change, as when the
+	// sides share no common key or one side is keyless.
+	NoCommonKey bool
 }
 
 type prollyReporter func(ctx context.Context, vMapping val.OrdinalMapping, fromD, toD *val.TupleDesc, change tree.Diff, ch chan<- DiffStatProgress) error
@@ -79,8 +82,24 @@ func StatForTableDelta(ctx context.Context, ch chan DiffStatProgress, td TableDe
 		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
 	}
 
-	if schema.ComparePrimaryKeys(fromSch, toSch) == schema.PrimaryKeysDiffer {
-		return fmt.Errorf("failed to compute diff stat for table %s: %w", td.CurName(), ErrPrimaryKeySetChanged)
+	fromRows, toRows, err := td.GetRowData(ctx)
+	if err != nil {
+		return err
+	}
+
+	if td.FromTable != nil && td.ToTable != nil && schema.IsKeyless(fromSch) != schema.IsKeyless(toSch) {
+		// No key pairs a keyed row with a keyless one, so like dolt_diff, the
+		// stat counts every row of one side removed and of the other added.
+		select {
+		case ch <- DiffStatProgress{NoCommonKey: true}:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		err = diffProllyTrees(ctx, ch, schema.IsKeyless(fromSch), fromRows, nil, fromSch, schema.EmptySchema)
+		if err != nil {
+			return err
+		}
+		return diffProllyTrees(ctx, ch, schema.IsKeyless(toSch), nil, toRows, schema.EmptySchema, toSch)
 	}
 
 	keyless, err := td.IsKeyless(ctx)
@@ -88,19 +107,61 @@ func StatForTableDelta(ctx context.Context, ch chan DiffStatProgress, td TableDe
 		return err
 	}
 
-	fromRows, toRows, err := td.GetRowData(ctx)
-	if err != nil {
-		return err
+	if fromRows != nil && toRows != nil {
+		from, to, err := alignIndexes(ctx, fromRows, toRows, fromSch, toSch)
+		if err != nil {
+			return fmt.Errorf("failed to compute diff stat for table %s: %w", td.CurName(), err)
+		}
+		if err := statUnpaired(ctx, ch, from, to); err != nil {
+			return err
+		}
+		if from.NoCommonKey {
+			return nil
+		}
+		fromRows, toRows = durable.IndexFromProllyMap(from.Rows), durable.IndexFromProllyMap(to.Rows)
+		fromSch, toSch = from.Sch, to.Sch
 	}
 
 	return diffProllyTrees(ctx, ch, keyless, fromRows, toRows, fromSch, toSch)
 }
 
+// statUnpaired sends the rows of |from| and |to| that have no pair as removes
+// and adds on |ch|.
+//
+// diffProllyTrees walks maps that omit these rows, so they are counted here.
+func statUnpaired(ctx context.Context, ch chan DiffStatProgress, from, to KeyedRows) error {
+	fromN, toN := from.UnpairedCount, to.UnpairedCount
+	if fromN+toN == 0 {
+		return nil
+	}
+	fromCells := uint64(from.Sch.GetAllCols().Size())
+	toCells := uint64(to.Sch.GetAllCols().Size())
+	select {
+	case ch <- DiffStatProgress{
+		Removes:     uint64(fromN),
+		Adds:        uint64(toN),
+		Unpaired:    uint64(fromN + toN),
+		NoCommonKey: from.NoCommonKey,
+		OldRowSize:  uint64(fromN),
+		NewRowSize:  uint64(toN),
+		OldCellSize: uint64(fromN) * fromCells,
+		NewCellSize: uint64(toN) * toCells,
+	}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// diffProllyTrees sends the stat of the changes between |from| and |to| on
+// |ch|. It maps columns by tag and name, and |keyless| selects the diff for
+// tables without a primary key. A nil index stands for a side with no rows.
 func diffProllyTrees(ctx context.Context, ch chan DiffStatProgress, keyless bool, from, to durable.Index, fromSch, toSch schema.Schema) error {
 	_, vMapping, err := schema.MapSchemaBasedOnTagAndName(fromSch, toSch)
 	if err != nil {
 		return err
 	}
+	vMapping = storedValMapping(fromSch, toSch, vMapping)
 
 	var f, t prolly.Map
 	if from != nil {
@@ -249,4 +310,33 @@ func prollyCountCellDiff(ctx context.Context, mapping val.OrdinalMapping, fromD,
 	// some columns were added
 	changed += newCols
 	return changed, nil
+}
+
+// storedValMapping filters virtual columns out of |vMapping| and remaps
+// target ordinals to stored value-tuple positions.
+func storedValMapping(fromSch, toSch schema.Schema, vMapping val.OrdinalMapping) val.OrdinalMapping {
+	fromNonPK := fromSch.GetNonPKCols().GetColumns()
+	toNonPK := toSch.GetNonPKCols().GetColumns()
+	toStoredIdx := make([]int, len(toNonPK))
+	storedIdx := 0
+	for i, col := range toNonPK {
+		if col.Virtual {
+			toStoredIdx[i] = -1
+		} else {
+			toStoredIdx[i] = storedIdx
+			storedIdx++
+		}
+	}
+	out := make(val.OrdinalMapping, 0, len(vMapping))
+	for i, j := range vMapping {
+		if i < len(fromNonPK) && fromNonPK[i].Virtual {
+			continue
+		}
+		if j >= 0 && j < len(toStoredIdx) {
+			out = append(out, toStoredIdx[j])
+		} else {
+			out = append(out, -1)
+		}
+	}
+	return out
 }

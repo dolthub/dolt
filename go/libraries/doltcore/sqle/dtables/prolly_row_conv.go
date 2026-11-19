@@ -16,6 +16,7 @@ package dtables
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -25,9 +26,9 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// ProllyRowConverter can be used to convert key, value val.Tuple's from |inSchema|
-// to |outSchema|. Columns are matched based on names and primary key
-// membership. The output of the conversion process is a sql.Row.
+// ProllyRowConverter converts key and value [val.Tuple] values from |inSchema|
+// to |outSchema|. Columns match by tag or name, as rowPlacements describes,
+// whether or not they are in the primary key. The output is a [sql.Row].
 type ProllyRowConverter struct {
 	inSchema         schema.Schema
 	outSchema        schema.Schema
@@ -41,44 +42,18 @@ type ProllyRowConverter struct {
 	nonPkTargetTypes []sql.Type
 }
 
+// NewProllyRowConverter returns a ProllyRowConverter that converts |inSch| rows
+// into |outSch| rows.
+//
+// A diff uses it to render each side in its target schema.
 func NewProllyRowConverter(ctx *sql.Context, inSch, outSch schema.Schema, warnFn rowconv.WarnFunction, ns tree.NodeStore) (ProllyRowConverter, error) {
-	keyProj, valProj, err := schema.MapSchemaBasedOnTagAndName(inSch, outSch)
+	keyProj, valProj, err := rowPlacements(inSch, outSch)
 	if err != nil {
 		return ProllyRowConverter{}, err
 	}
 
-	pkTargetTypes := make([]sql.Type, inSch.GetPKCols().Size())
-	nonPkTargetTypes := make([]sql.Type, inSch.GetNonPKCols().Size())
-
-	// Populate pkTargetTypes and nonPkTargetTypes with non-nil sql.Type if we need to do a type conversion
-	for i, j := range keyProj {
-		if j == -1 {
-			continue
-		}
-		inColType := inSch.GetPKCols().GetByIndex(i).TypeInfo.ToSqlType()
-		outColType := outSch.GetPKCols().GetByIndex(j).TypeInfo.ToSqlType()
-		if !inColType.Equals(outColType) {
-			pkTargetTypes[i] = outColType
-		}
-		// translate tuple offset to row placement
-		t := outSch.GetPKCols().GetByIndex(j).Tag
-		keyProj[i] = outSch.GetAllCols().TagToIdx[t]
-	}
-
-	for i, j := range valProj {
-		if j == -1 {
-			continue
-		}
-		inColType := inSch.GetNonPKCols().GetByIndex(i).TypeInfo.ToSqlType()
-		outColType := outSch.GetNonPKCols().GetByIndex(j).TypeInfo.ToSqlType()
-		if !inColType.Equals(outColType) {
-			nonPkTargetTypes[i] = outColType
-		}
-
-		// translate tuple offset to row placement
-		t := outSch.GetNonPKCols().GetByIndex(j).Tag
-		valProj[i] = outSch.GetAllCols().TagToIdx[t]
-	}
+	pkTargetTypes := targetTypes(inSch.GetPKCols(), outSch, keyProj)
+	nonPkTargetTypes := targetTypes(inSch.GetNonPKCols(), outSch, valProj)
 
 	if len(valProj) != 0 && schema.IsKeyless(inSch) {
 		// Adjust for cardinality
@@ -99,6 +74,81 @@ func NewProllyRowConverter(ctx *sql.Context, inSch, outSch schema.Schema, warnFn
 		warnFn:           warnFn,
 		ns:               ns,
 	}, nil
+}
+
+// rowPlacements returns where each key and value column of |inSch| goes in
+// the rows of |outSch|, or -1 when it has no place there.
+//
+// Key columns match by tag, or else by case-insensitive name and SQL type,
+// since a key value of another type has other key bytes. Value columns match
+// by name.
+//
+// Either kind may match a column in or out of the primary key of |outSch|,
+// since rekeying one side of a diff moves columns in or out of its key.
+func rowPlacements(inSch, outSch schema.Schema) (val.OrdinalMapping, val.OrdinalMapping, error) {
+	if inSch.GetAllCols().Size() == 0 {
+		// The table is added or dropped on this side, and |outSch| may be nil.
+		return val.OrdinalMapping{}, val.OrdinalMapping{}, nil
+	}
+	outCols := outSch.GetAllCols()
+	keyCols := inSch.GetPKCols().GetColumns()
+	keyProj := make(val.OrdinalMapping, len(keyCols))
+	for i, col := range keyCols {
+		j, ok := outCols.TagToIdx[col.Tag]
+		if !ok {
+			out, isNamed := outCols.GetByNameCaseInsensitive(col.Name)
+			if !isNamed {
+				// The column is not in |outSch|, so it has no place there.
+				j = -1
+			} else if !out.TypeInfo.ToSqlType().Equals(col.TypeInfo.ToSqlType()) {
+				return nil, nil, fmt.Errorf("could not map primary key column %s", col.Name)
+			} else {
+				j = outCols.TagToIdx[out.Tag]
+			}
+		}
+		keyProj[i] = j
+	}
+
+	claimed := make(map[int]bool, len(keyProj))
+	for _, j := range keyProj {
+		if j != -1 {
+			claimed[j] = true
+		}
+	}
+
+	valCols := inSch.GetNonPKCols().GetColumns()
+	valProj := make(val.OrdinalMapping, len(valCols))
+	for i, col := range valCols {
+		valProj[i] = -1
+		if col.Virtual {
+			continue
+		}
+		if out, ok := outCols.GetByName(col.Name); ok {
+			cand := outCols.TagToIdx[out.Tag]
+			if !claimed[cand] {
+				valProj[i] = cand
+				claimed[cand] = true
+			}
+		}
+	}
+	return keyProj, valProj, nil
+}
+
+// targetTypes returns the target SQL type for each column in |inCols| whose
+// type differs from its destination in |outSch| (at |proj|), or nil otherwise.
+func targetTypes(inCols *schema.ColCollection, outSch schema.Schema, proj val.OrdinalMapping) []sql.Type {
+	types := make([]sql.Type, len(proj))
+	for i, j := range proj {
+		if j == -1 {
+			continue
+		}
+		inColType := inCols.GetByIndex(i).TypeInfo.ToSqlType()
+		outColType := outSch.GetAllCols().GetByIndex(j).TypeInfo.ToSqlType()
+		if !inColType.Equals(outColType) {
+			types[i] = outColType
+		}
+	}
+	return types
 }
 
 // PutConverted converts the |key| and |value| val.Tuple from |inSchema| to |outSchema|
