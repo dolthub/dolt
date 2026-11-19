@@ -2081,9 +2081,9 @@ func normalizeRange(total int64, offset int64, length int64) (start, end int64, 
 	}
 	start = offset
 	if start < 0 {
-		start = total + start
+		start = max(total+start, 0)
 	}
-	if start < 0 || start > total {
+	if start > total {
 		return 0, 0, fmt.Errorf("invalid offset %d for total size %d", offset, total)
 	}
 	if length == 0 {
