@@ -137,6 +137,16 @@ func (cc *ColCollection) GetColumns() []Column {
 	return colsCopy
 }
 
+// GetStoredColumns returns the columns that tuples store, in stored order.
+// Virtual columns are computed on read, so no tuple holds them.
+func (cc *ColCollection) GetStoredColumns() []Column {
+	cols := make([]Column, len(cc.storedIndexes))
+	for i, idx := range cc.storedIndexes {
+		cols[i] = cc.cols[idx]
+	}
+	return cols
+}
+
 // GetColumnNames returns a list of names of the columns.
 func (cc *ColCollection) GetColumnNames() []string {
 	names := make([]string, len(cc.cols))
