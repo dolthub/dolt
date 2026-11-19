@@ -186,3 +186,31 @@ func TestFileFactory_CreateDB_FailOnJournalLockTimeoutParam(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIs(t, err, nbs.ErrDatabaseLocked)
 }
+
+// TestFileFactory_CreateDbNoCache_ReleasesLockOnFailedOpen checks that an open which fails after taking the journal
+// lock releases it.
+func TestFileFactory_CreateDbNoCache_ReleasesLockOnFailedOpen(t *testing.T) {
+	ctx := context.Background()
+	nbf := types.Format_DOLT
+
+	root := t.TempDir()
+	nomsDir := filepath.Join(root, "noms")
+	require.NoError(t, os.MkdirAll(nomsDir, 0o755))
+	// A file where the oldgen directory belongs fails the open after the journaling store is up.
+	oldgen := filepath.Join(nomsDir, "oldgen")
+	require.NoError(t, os.WriteFile(oldgen, nil, 0o644))
+
+	urlStr := earl.FileUrlFromPath(filepath.ToSlash(nomsDir), os.PathSeparator)
+	params := map[string]interface{}{
+		ChunkJournalParam:             struct{}{},
+		DisableSingletonCacheParam:    struct{}{},
+		FailOnJournalLockTimeoutParam: struct{}{},
+	}
+	_, _, _, err := CreateDB(ctx, nbf, urlStr, params)
+	require.Error(t, err)
+
+	require.NoError(t, os.Remove(oldgen))
+	db, _, _, err := CreateDB(ctx, nbf, urlStr, params)
+	require.NoError(t, err, "the failed open must not hold the journal lock")
+	require.NoError(t, db.Close())
+}

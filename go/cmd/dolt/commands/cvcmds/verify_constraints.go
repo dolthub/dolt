@@ -111,6 +111,7 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("Failed to build sql engine.").AddCause(err).Build(), nil)
 	}
+	defer eng.Close()
 	sqlCtx, err := eng.NewLocalContext(ctx)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("Failed to build sql context.").AddCause(err).Build(), nil)

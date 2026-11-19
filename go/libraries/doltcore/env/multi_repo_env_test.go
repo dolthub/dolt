@@ -25,6 +25,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -111,7 +112,14 @@ func initRepoWithRelativePath(t *testing.T, envPath string, hdp HomeDirProvider)
 	err = dEnv.InitRepo(context.Background(), types.Format_DOLT, name, email, DefaultInitBranch)
 	require.NoError(t, err)
 
-	return Load(context.Background(), hdp, fs, urlStr, "test")
+	return dEnv
+}
+
+// initClosedRepo initializes a database that a MultiRepoEnv will open for itself.
+func initClosedRepo(t *testing.T, envPath string, hdp HomeDirProvider) *DoltEnv {
+	dEnv := initRepoWithRelativePath(t, envPath, hdp)
+	require.NoError(t, dEnv.Close())
+	return dEnv
 }
 
 func TestMultiEnvForDirectory(t *testing.T) {
@@ -121,9 +129,11 @@ func TestMultiEnvForDirectory(t *testing.T) {
 	hdp := func() (string, error) { return rootPath, nil }
 	envPath := filepath.Join(rootPath, " test---name _ 123")
 	dEnv := initRepoWithRelativePath(t, envPath, hdp)
+	defer dEnv.Close()
 
 	mrEnv, err := MultiEnvForDirectory(context.Background(), dEnv.FS, dEnv)
 	require.NoError(t, err)
+	defer mrEnv.Close(context.Background())
 	assert.Len(t, mrEnv.envs, 1)
 
 	type envCmp struct {
@@ -156,11 +166,13 @@ func TestMultiEnvForDirectoryWithMultipleRepos(t *testing.T) {
 	hdp := func() (string, error) { return rootPath, nil }
 	envPath := filepath.Join(rootPath, " test---name _ 123")
 	dEnv := initRepoWithRelativePath(t, envPath, hdp)
-	subEnv1 := initRepoWithRelativePath(t, filepath.Join(envPath, "abc"), hdp)
-	subEnv2 := initRepoWithRelativePath(t, filepath.Join(envPath, "def"), hdp)
+	defer dEnv.Close()
+	subEnv1 := initClosedRepo(t, filepath.Join(envPath, "abc"), hdp)
+	subEnv2 := initClosedRepo(t, filepath.Join(envPath, "def"), hdp)
 
 	mrEnv, err := MultiEnvForDirectory(context.Background(), dEnv.FS, dEnv)
 	require.NoError(t, err)
+	defer mrEnv.Close(context.Background())
 	assert.Len(t, mrEnv.envs, 3)
 
 	expected := make(map[string]string)
@@ -183,15 +195,34 @@ func TestMultiRepoEnvClose(t *testing.T) {
 	hdp := func() (string, error) { return rootPath, nil }
 	envPath := filepath.Join(rootPath, "main_db")
 	dEnv := initRepoWithRelativePath(t, envPath, hdp)
-	_ = initRepoWithRelativePath(t, filepath.Join(envPath, "sub_db"), hdp)
+	defer dEnv.Close()
+	subEnv := initClosedRepo(t, filepath.Join(envPath, "sub_db"), hdp)
 
 	ctx := context.Background()
 	mrEnv, err := MultiEnvForDirectory(ctx, dEnv.FS, dEnv)
 	require.NoError(t, err)
 	assert.Len(t, mrEnv.envs, 2)
+	sub := mrEnv.GetEnv("sub_db")
+	require.NotNil(t, sub)
+	require.NotNil(t, sub.DoltDB(ctx))
 
-	err = mrEnv.Close(ctx)
+	require.NoError(t, mrEnv.Close(ctx))
+	require.NoError(t, mrEnv.Close(ctx))
+
+	// The caller's env is left open.
+	_, err = dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
+
+	// The sub-database's env is closed, and its path reopens to a writable store.
+	assert.Nil(t, sub.DoltDB(ctx))
+	reopened := Load(ctx, hdp, subEnv.FS, doltdb.LocalDirDoltDB, "test")
+	defer reopened.Close()
+	require.NoError(t, reopened.DBLoadError)
+	_, err = reopened.WorkingRoot(ctx)
+	require.NoError(t, err)
+	readOnly, err := reopened.IsAccessModeReadOnly(ctx)
+	require.NoError(t, err)
+	assert.False(t, readOnly)
 }
 
 func TestMultiEnvForConfigAndDirectory_EmptyFS(t *testing.T) {
@@ -231,7 +262,7 @@ func TestMultiEnvForDirectorySkipsOrphanedDatabase(t *testing.T) {
 			require.NoError(t, os.WriteFile(filepath.Join(nomsDir, "LOCK"), nil, 0o644))
 		}},
 		{"in-progress marker", func(t *testing.T, mainPath string, hdp HomeDirProvider) {
-			_ = initRepoWithRelativePath(t, filepath.Join(mainPath, "orphan"), hdp)
+			_ = initClosedRepo(t, filepath.Join(mainPath, "orphan"), hdp)
 			require.NoError(t, os.WriteFile(filepath.Join(mainPath, "orphan", ".dolt_safe_to_ignore"), nil, 0o644))
 		}},
 	}
@@ -244,12 +275,14 @@ func TestMultiEnvForDirectorySkipsOrphanedDatabase(t *testing.T) {
 			hdp := func() (string, error) { return rootPath, nil }
 			mainPath := filepath.Join(rootPath, "main_db")
 			dEnv := initRepoWithRelativePath(t, mainPath, hdp)
-			_ = initRepoWithRelativePath(t, filepath.Join(mainPath, "good"), hdp)
+			defer dEnv.Close()
+			_ = initClosedRepo(t, filepath.Join(mainPath, "good"), hdp)
 
 			tc.makeOrphan(t, mainPath, hdp)
 
 			mrEnv, err := MultiEnvForDirectory(context.Background(), dEnv.FS, dEnv)
 			require.NoError(t, err)
+			defer mrEnv.Close(context.Background())
 
 			require.Len(t, mrEnv.envs, 2)
 			for _, namedEnv := range mrEnv.envs {
@@ -262,11 +295,13 @@ func TestMultiEnvForDirectorySkipsOrphanedDatabase(t *testing.T) {
 func TestMultiEnvDuplicateDatabaseName(t *testing.T) {
 	rootPath, hdp, envs := initMultiEnv(t, "TestMultiEnvDuplicateDatabaseName", []string{"main_db"})
 	dEnv := envs["main_db"]
+	defer dEnv.Close()
 
-	_ = initRepoWithRelativePath(t, filepath.Join(rootPath, "main_db", "main_db"), hdp)
+	_ = initClosedRepo(t, filepath.Join(rootPath, "main_db", "main_db"), hdp)
 
 	mrEnv, err := MultiEnvForDirectory(context.Background(), dEnv.FS, dEnv)
 	require.NoError(t, err)
+	defer mrEnv.Close(context.Background())
 
 	assert.Len(t, mrEnv.envs, 1)
 	assert.Equal(t, dEnv, mrEnv.GetEnv("main_db"))
