@@ -985,6 +985,164 @@ func TestBranchDeleteAndRename(t *testing.T) {
 	h.requireEmpty()
 }
 
+func TestRowLocksEscalateToTableLock(t *testing.T) {
+	// rowLocks and tableLocks count the locks held on rows and on tables as a whole.
+	count := func(h *harness) (rowLocks, tableLocks int) {
+		for _, lock := range h.j.Locks() {
+			if !lock.Granted {
+				continue
+			}
+
+			if lock.Target.WholeTable {
+				tableLocks++
+			} else {
+				rowLocks++
+			}
+		}
+
+		return rowLocks, tableLocks
+	}
+
+	t.Run("a transaction that locks many rows of a table ends up with the table", func(t *testing.T) {
+		h := newHarness(t)
+		h.j.SetEscalationThreshold(3)
+		old := h.j.Begin(1)
+		big := h.j.Begin(2)
+		other := h.j.Begin(3)
+
+		require.Equal(t, LockGranted, h.lock(big, "a", LockShare))
+		require.Equal(t, LockGranted, h.write(big, "b", WriteUpdate))
+		rowLocks, tableLocks := count(h)
+		require.Equal(t, 2, rowLocks)
+		require.Equal(t, 0, tableLocks)
+
+		// A request that was waiting for one of the rows goes on waiting, now for the table.
+		waiting := h.writeBlocked(other, writeReq(testRel, "b", WriteUpdate))
+
+		require.Equal(t, LockGranted, h.write(big, "c", WriteUpdate))
+		rowLocks, tableLocks = count(h)
+		assert.Equal(t, 0, rowLocks)
+		assert.Equal(t, 1, tableLocks)
+		assert.Equal(t, 1, h.j.RetainedWrites())
+		h.requireStillBlocked(waiting)
+		assert.Equal(t, []TxnID{big.ID()}, h.j.BlockedBy(other))
+
+		// From here on the transaction's locks and writes in the table that the table's lock covers cost nothing more.
+		for i := 0; i < 20; i++ {
+			require.Equal(t, LockGranted, h.write(big, fmt.Sprintf("more%d", i), WriteUpdate))
+			require.Equal(t, LockGranted, h.lock(big, fmt.Sprintf("read%d", i), LockShare))
+		}
+
+		rowLocks, tableLocks = count(h)
+		assert.Equal(t, 0, rowLocks)
+		assert.Equal(t, 1, tableLocks)
+		assert.Equal(t, 1, h.j.RetainedWrites())
+
+		// The table's lock is as strong as the strongest row lock was, which here still lets others share row keys.
+		outsider := h.j.Begin(4)
+		assert.Equal(t, LockWouldBlock, h.tryLock(outsider, "never-touched", LockShare))
+		assert.Equal(t, LockGranted, h.tryLock(outsider, "never-touched", LockKeyShare))
+		h.j.Abort(outsider)
+
+		// Stronger row locks than the table's lock covers are counted afresh, and strengthen it in their turn.
+		for i := 0; i < 3; i++ {
+			require.Equal(t, LockGranted, h.write(big, fmt.Sprintf("new%d", i), WriteInsert))
+		}
+
+		rowLocks, tableLocks = count(h)
+		assert.Equal(t, 0, rowLocks)
+		assert.Equal(t, 1, tableLocks)
+		assert.Equal(t, 1, h.j.RetainedWrites())
+		outsider = h.j.Begin(4)
+		assert.Equal(t, LockWouldBlock, h.tryLock(outsider, "never-touched", LockKeyShare))
+		h.j.Abort(outsider)
+
+		// Once it commits, a snapshot that predates the commit can't use any row of the table.
+		h.j.Commit(big)
+		assert.Equal(t, outcome{res: LockRowUpdated}, h.await(waiting))
+		assert.Equal(t, LockRowUpdated, h.tryLock(old, "never-touched", LockShare))
+		later := h.j.Begin(5)
+		assert.Equal(t, LockGranted, h.tryLock(later, "b", LockUpdate))
+
+		h.j.Abort(old)
+		h.j.Abort(other)
+		h.j.Commit(later)
+		h.requireEmpty()
+	})
+
+	t.Run("row locks are kept while another transaction works in the table", func(t *testing.T) {
+		h := newHarness(t)
+		h.j.SetEscalationThreshold(3)
+		big := h.j.Begin(1)
+		other := h.j.Begin(2)
+		require.Equal(t, LockGranted, h.lock(other, "z", LockShare))
+
+		for _, key := range []string{"a", "b", "c", "d"} {
+			require.Equal(t, LockGranted, h.lock(big, key, LockUpdate))
+		}
+
+		rowLocks, tableLocks := count(h)
+		assert.Equal(t, 5, rowLocks)
+		assert.Equal(t, 0, tableLocks)
+		assert.Equal(t, LockGranted, h.tryLock(other, "y", LockUpdate))
+
+		// With the table to itself, the transaction's row locks are replaced the next time it has enough of them.
+		h.j.Commit(other)
+		for _, key := range []string{"e", "f"} {
+			require.Equal(t, LockGranted, h.lock(big, key, LockUpdate))
+		}
+
+		rowLocks, tableLocks = count(h)
+		assert.Equal(t, 0, rowLocks)
+		assert.Equal(t, 1, tableLocks)
+
+		// It only locked rows, so it leaves nothing behind for other snapshots to trip on.
+		assert.Equal(t, 0, h.j.RetainedWrites())
+		h.j.Commit(big)
+		h.requireEmpty()
+	})
+
+	t.Run("a row that changed before the table was locked still can't be used", func(t *testing.T) {
+		h := newHarness(t)
+		big := h.j.Begin(1)
+		writer := h.j.Begin(2)
+		require.Equal(t, LockGranted, h.write(writer, "changed", WriteUpdate))
+		require.Equal(t, LockGranted, h.write(writer, "deleted", WriteDelete))
+		h.j.Commit(writer)
+		h.j.SetEscalationThreshold(2)
+
+		require.Equal(t, LockGranted, h.lock(big, "a", LockUpdate))
+		require.Equal(t, LockGranted, h.lock(big, "b", LockUpdate))
+		_, tableLocks := count(h)
+		require.Equal(t, 1, tableLocks)
+
+		assert.Equal(t, LockRowUpdated, h.lock(big, "changed", LockShare))
+		assert.Equal(t, LockRowUpdated, h.write(big, "changed", WriteUpdate))
+		assert.Equal(t, LockRowDeleted, h.write(big, "deleted", WriteDelete))
+		assert.Equal(t, LockKeyExists, h.write(big, "changed", WriteInsert))
+		assert.Equal(t, LockGranted, h.write(big, "deleted", WriteInsert))
+		assert.Equal(t, LockGranted, h.write(big, "c", WriteUpdate))
+
+		h.j.Commit(big)
+		h.requireEmpty()
+	})
+
+	t.Run("escalation can be turned off", func(t *testing.T) {
+		h := newHarness(t)
+		h.j.SetEscalationThreshold(0)
+		txn := h.j.Begin(1)
+		for i := 0; i < 50; i++ {
+			require.Equal(t, LockGranted, h.lock(txn, fmt.Sprintf("k%d", i), LockUpdate))
+		}
+
+		rowLocks, tableLocks := count(h)
+		assert.Equal(t, 50, rowLocks)
+		assert.Equal(t, 0, tableLocks)
+		h.j.Commit(txn)
+		h.requireEmpty()
+	})
+}
+
 // recordingSink collects the records appended to a journal.
 type recordingSink struct {
 	records []Record

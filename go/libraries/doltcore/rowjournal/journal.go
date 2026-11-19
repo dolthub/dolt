@@ -30,12 +30,17 @@ import (
 	"bytes"
 	"container/heap"
 	"fmt"
+	"math"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
+
+// DefaultEscalationThreshold is the number of rows of one table that a transaction can lock before its locks on them
+// are replaced by a lock on the table.
+const DefaultEscalationThreshold = 10000
 
 // DefaultDeadlockTimeout is how long a lock request waits before checking a second time whether it is part of a
 // deadlock. It checks a first time when it starts waiting.
@@ -59,6 +64,9 @@ type Journal struct {
 	nextWaiterSeq uint64
 	// deadlockTimeout is how long a lock request waits before checking for a deadlock a second time.
 	deadlockTimeout time.Duration
+	// escalationThreshold is the number of rows of one table that a transaction can lock before its locks on them
+	// are replaced by a lock on the table. Zero never replaces them.
+	escalationThreshold int
 	// sink, when set, receives every record appended.
 	sink RecordSink
 }
@@ -66,11 +74,21 @@ type Journal struct {
 // NewJournal returns an empty Journal.
 func NewJournal() *Journal {
 	return &Journal{
-		nextTxn:         1,
-		active:          make(map[TxnID]*Txn),
-		relations:       make(map[RelationKey]*relation),
-		deadlockTimeout: DefaultDeadlockTimeout,
+		nextTxn:             1,
+		active:              make(map[TxnID]*Txn),
+		relations:           make(map[RelationKey]*relation),
+		deadlockTimeout:     DefaultDeadlockTimeout,
+		escalationThreshold: DefaultEscalationThreshold,
 	}
+}
+
+// SetEscalationThreshold sets the number of rows of one table that a transaction can lock before its locks on them
+// are replaced by a lock on the table as a whole, which happens only if no other transaction is in the way. Zero
+// keeps every row lock.
+func (j *Journal) SetEscalationThreshold(rows int) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	j.escalationThreshold = rows
 }
 
 // SetDeadlockTimeout sets how long a lock request waits before checking a second time whether it is part of a
@@ -297,6 +315,8 @@ func (j *Journal) append(rec Record, h hint) {
 		})
 		txn.touched[e] = struct{}{}
 		txn.wrote = true
+	case EscalateRecord:
+		j.escalate(txn, j.relations[r.Relation], r.Mode)
 	case KeyFormatChangeRecord:
 		j.changeKeyFormat(j.relations[r.Relation], h.compare, r.KeyFormat)
 	case RefUpdateRecord:
@@ -520,6 +540,99 @@ func (j *Journal) releaseLevel(txn *Txn, level uint32) {
 	}
 
 	txn.level = level - 1
+}
+
+// escalateIfLarge replaces the locks that |txn| holds on rows of |rel| with a lock on the table as a whole, if it holds
+// enough of them and the lock on the table can be had without waiting. Requires j.mu.
+func (j *Journal) escalateIfLarge(txn *Txn, rel *relation) {
+	counts := rel.rowLocks[txn]
+	if j.escalationThreshold <= 0 || counts == nil {
+		return
+	}
+
+	total := 0
+	strongest := LockNone
+	for mode, n := range counts {
+		total += n
+		if n > 0 {
+			strongest = LockMode(mode)
+		}
+	}
+
+	// Trying is not free, so it is done once each time the count passes a multiple of the threshold.
+	if total == 0 || total%j.escalationThreshold != 0 {
+		return
+	}
+
+	if j.isBlocked(txn, rel.table, strongest, math.MaxUint64) {
+		// Another transaction is working in the table. Its rows stay locked one by one.
+		return
+	}
+
+	j.append(EscalateRecord{Txn: txn.id, Relation: rel.key, Mode: strongest}, hint{txn: txn})
+}
+
+// escalate replaces the locks and writes of |txn| on rows of |rel| with a lock, and a write if there were any, on the
+// table as a whole. Requires j.mu.
+func (j *Journal) escalate(txn *Txn, rel *relation, mode LockMode) {
+	// The table's lock belongs to the transaction itself, not to a savepoint: which of the rows it stands for a
+	// rollback to a savepoint would have released is no longer known. It replaces any weaker lock on the table that
+	// an earlier escalation left. It is added before the row locks are removed, so that the relation is never without
+	// anything to keep it in the journal.
+	kept := rel.table.lockers[:0]
+	for _, l := range rel.table.lockers {
+		if l.txn != txn || l.level != 0 || l.mode > mode {
+			kept = append(kept, l)
+		}
+	}
+
+	clear(rel.table.lockers[len(kept):])
+	rel.table.lockers = append(kept, locker{txn: txn, mode: mode})
+	txn.touched[rel.table] = struct{}{}
+
+	wrote := false
+	for e := range txn.touched {
+		if e.rel != rel || e.isTable || e.removed {
+			continue
+		}
+
+		for _, w := range e.writes {
+			if w.txn == txn {
+				wrote = true
+				break
+			}
+		}
+
+		j.removeLockers(e, txn, 0)
+		j.removeWrites(e, txn, 0)
+
+		// Requests waiting for the row wait for the table's lock from here on.
+		e.signalWaiters()
+		j.removeIfEmpty(e)
+		delete(txn.touched, e)
+	}
+
+	if wrote && !hasTableWrite(txn, rel) {
+		j.addTableWrite(txn, rel)
+	}
+}
+
+// addTableWrite records that |txn| changed rows of |rel| without saying which. Requires j.mu.
+func (j *Journal) addTableWrite(txn *Txn, rel *relation) {
+	rel.table.writes = append(rel.table.writes, write{txn: txn, op: WriteUpdate, keysChanged: true})
+	txn.touched[rel.table] = struct{}{}
+	txn.wrote = true
+}
+
+// hasTableWrite returns whether |txn| has recorded a change to rows of |rel| without saying which. Requires j.mu.
+func hasTableWrite(txn *Txn, rel *relation) bool {
+	for _, w := range rel.table.writes {
+		if w.txn == txn {
+			return true
+		}
+	}
+
+	return false
 }
 
 // dropBranch discards everything the journal holds for the tables of a branch. Requests waiting for a lock there

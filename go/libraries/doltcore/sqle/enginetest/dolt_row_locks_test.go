@@ -1121,6 +1121,37 @@ func TestRowLockTables(t *testing.T) {
 	}
 }
 
+// TestRowLockEscalation tests that a transaction that changes a great many rows of a table ends up holding one lock
+// on the table in place of a lock on every row.
+func TestRowLockEscalation(t *testing.T) {
+	runner := newRowLockRunner(t)
+	runner.journal.SetEscalationThreshold(100)
+
+	var values []string
+	for i := 1000; i < 1250; i++ {
+		values = append(values, fmt.Sprintf("(%d, %d, %d)", i, i, i))
+	}
+
+	runner.run(rowLockScript{
+		name:  "a bulk insert is held as one lock on the table",
+		setup: rowLockWriteSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "insert into t values " + strings.Join(values, ", ")},
+			// The 250 rows inserted are covered by the table's lock, and no row is locked on its own account.
+			{client: "a", query: "select count(*) from t", rows: [][]any{{253}}, locks: []string{}},
+			{client: "a", query: "update t set c1 = 0 where pk = 1100", locks: []string{}},
+			// Which makes every row of the table off limits to other transactions, including rows that were there before.
+			{client: "b", query: "update t set c1 = 20 where pk = 2", blocks: true},
+			{client: "a", query: "commit"},
+			{client: "b", unblocks: true, err: concurrentUpdateErr},
+			{client: "b", query: "update t set c1 = 20 where pk = 2"},
+			{client: "b", query: "select count(*), sum(c1) from t where pk >= 1000", rows: [][]any{{250, 280025}}},
+		},
+	})
+}
+
 func TestRowLockReads(t *testing.T) {
 	runner := newRowLockRunner(t)
 	for _, script := range rowLockReadScripts {

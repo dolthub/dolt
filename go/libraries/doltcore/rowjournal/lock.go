@@ -97,8 +97,34 @@ func (j *Journal) Lock(ctx context.Context, txn *Txn, req LockRequest) (LockResu
 		return 0, ErrTxnNotInProgress
 	}
 
-	e := j.relationFor(req.Relation, req.Compare, req.KeyFormat, req.Target.WholeTable).entryFor(req.Target, true)
-	return j.acquire(ctx, txn, e, req.Mode, req.WaitPolicy, req.Timeout, false)
+	rel := j.relationFor(req.Relation, req.Compare, req.KeyFormat, req.Target.WholeTable)
+	if res, ok := coveredByTableLock(txn, rel, req.Target, req.Mode, false); ok {
+		return res, nil
+	}
+
+	e := rel.entryFor(req.Target, true)
+	res, err := j.acquire(ctx, txn, e, req.Mode, req.WaitPolicy, req.Timeout, false)
+	if err == nil && res == LockGranted && !e.isTable {
+		j.escalateIfLarge(txn, rel)
+	}
+
+	return res, err
+}
+
+// coveredByTableLock handles a request by |txn| for a lock of |mode| on a row of a table that it already holds a
+// lock on as a whole, in a mode at least as strong. Such a request needs no lock of its own, and gets no entry in the
+// journal. It still fails if a transaction that |txn| can't see changed the row before the table was locked. The
+// second result is false if the request isn't covered that way. Requires j.mu.
+func coveredByTableLock(txn *Txn, rel *relation, target Target, mode LockMode, forInsert bool) (LockResult, bool) {
+	if target.WholeTable || !rel.table.heldMode(txn).Covers(mode) {
+		return 0, false
+	}
+
+	if e := rel.entryFor(target, false); e != nil {
+		return concurrentChange(txn, e, mode, forInsert), true
+	}
+
+	return concurrentChange(txn, rel.table, mode, forInsert), true
 }
 
 // Write takes the lock that a change to a row requires, waiting for conflicting locks to be released, and then
@@ -115,11 +141,35 @@ func (j *Journal) Write(ctx context.Context, txn *Txn, req WriteRequest) (LockRe
 		return 0, ErrTxnNotInProgress
 	}
 
-	e := j.relationFor(req.Relation, req.Compare, req.KeyFormat, req.Target.WholeTable).entryFor(req.Target, true)
+	rel := j.relationFor(req.Relation, req.Compare, req.KeyFormat, req.Target.WholeTable)
+	if res, ok := coveredByTableLock(txn, rel, req.Target, req.lockMode(), req.Op == WriteInsert); ok {
+		// The write is one of those that the transaction's write to the table as a whole stands for.
+		if res == LockGranted && !hasTableWrite(txn, rel) {
+			j.append(RowWriteRecord{
+				Txn:         txn.id,
+				Level:       txn.level,
+				Relation:    req.Relation,
+				Target:      TableTarget(),
+				Statement:   req.Statement,
+				Op:          WriteUpdate,
+				KeysChanged: true,
+			}, hint{txn: txn, entry: rel.table})
+		}
+
+		return res, nil
+	}
+
+	e := rel.entryFor(req.Target, true)
 	res, err := j.acquire(ctx, txn, e, req.lockMode(), WaitBlock, req.Timeout, req.Op == WriteInsert)
 	if err != nil || res != LockGranted {
 		return res, err
 	}
+
+	defer func() {
+		if !e.isTable {
+			j.escalateIfLarge(txn, rel)
+		}
+	}()
 
 	var successor []byte
 	if req.Successor != nil {

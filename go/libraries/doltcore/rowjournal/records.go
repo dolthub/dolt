@@ -201,6 +201,18 @@ type KeyFormatChangeRecord struct {
 	KeyFormat hash.Hash
 }
 
+// EscalateRecord replaces every lock that a transaction holds on a row of a relation with one lock on the relation's
+// table as a whole, and every write it made to a row with one write to the table. It is appended when a transaction
+// has locked so many rows of a table that keeping track of each would take more memory than the detail is worth.
+// The transaction then holds more than it asked for: other transactions wait for it wherever they touch the table,
+// and those whose snapshots predate its commit can't use any row of the table afterwards.
+type EscalateRecord struct {
+	Txn      TxnID
+	Relation RelationKey
+	// Mode is the mode of the lock on the table, the strongest of the row locks it replaces.
+	Mode LockMode
+}
+
 // PruneRecord discards the writes of every committed transaction with an ID below Horizon. Those transactions are
 // visible to every snapshot that exists or can be taken, so their writes can no longer conflict with anything.
 type PruneRecord struct {
@@ -218,6 +230,7 @@ func (r RowWriteRecord) TxnID() TxnID          { return r.Txn }
 func (r RefUpdateRecord) TxnID() TxnID         { return r.Txn }
 func (r SchemaChangeRecord) TxnID() TxnID      { return r.Txn }
 func (r KeyFormatChangeRecord) TxnID() TxnID   { return 0 }
+func (r EscalateRecord) TxnID() TxnID          { return r.Txn }
 func (r PruneRecord) TxnID() TxnID             { return 0 }
 
 // RecordSink receives every record appended to a Journal, in order. Append is called with the journal's internal lock
