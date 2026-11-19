@@ -51,7 +51,7 @@ type RowRekeyer struct {
 }
 
 // NewRowRekeyer returns a RowRekeyer that rebuilds tuples of |sch| under the
-// key of |newSch|, which [schema.Rekeyed] derives from |sch|.
+// key of |newSch|, which [schema.Rekey] derives from |sch|.
 //
 // It returns false when either schema is keyless, when |sch| lacks a column of
 // |newSch|, or when a column is stored with another encoding.
@@ -115,10 +115,53 @@ func (r *RowRekeyer) Key(ctx context.Context, k, v val.Tuple) (val.Tuple, error)
 // unpaired rows.
 //
 // A primary key holds one row and no NULL. Rows with a NULL in the new key are
-// unpaired, and so is every row whose new key is shared. hasNullKey reports
+// unpaired, and so is every row whose new key is duplicated. hasNullKey reports
 // whether any row has a NULL in the new key.
 func (r *RowRekeyer) RekeyMap(ctx context.Context, rows prolly.Map) (rekeyed, unpairedRows prolly.Map, hasNullKey bool, err error) {
-	return r.rekeyMap(ctx, rows, false)
+	mut, err := r.newTargetMutator(ctx)
+	if err != nil {
+		return prolly.Map{}, prolly.Map{}, false, err
+	}
+	emptyOld, err := prolly.NewMapFromTuples(ctx, r.ns, r.oldKD, r.oldVD)
+	if err != nil {
+		return prolly.Map{}, prolly.Map{}, false, err
+	}
+	unpaired := emptyOld.Mutate()
+
+	var dups *prolly.MutableMap
+	err = IterRows(ctx, rows, func(k, v val.Tuple) error {
+		nk, err := r.Key(ctx, k, v)
+		if err != nil {
+			return err
+		}
+		if r.newKD.HasNulls(nk) {
+			hasNullKey = true
+			return unpaired.Put(ctx, k, v)
+		}
+		if !r.isUnique {
+			dup, err := mut.Has(ctx, nk)
+			if err != nil {
+				return err
+			}
+			if dup {
+				return r.recordDuplicate(ctx, &dups, nk)
+			}
+		}
+		return r.putRow(ctx, mut, nk, k, v)
+	})
+	if err != nil {
+		return prolly.Map{}, prolly.Map{}, false, err
+	}
+	if dups != nil {
+		if err = r.moveDuplicateKeys(ctx, rows, mut, dups, unpaired); err != nil {
+			return prolly.Map{}, prolly.Map{}, false, err
+		}
+	}
+	if rekeyed, err = mut.Map(ctx); err != nil {
+		return prolly.Map{}, prolly.Map{}, false, err
+	}
+	unpairedRows, err = unpaired.Map(ctx)
+	return rekeyed, unpairedRows, hasNullKey, err
 }
 
 // RekeyUniqueMap returns the rows of |rows| keyed by the new primary key.
@@ -126,97 +169,79 @@ func (r *RowRekeyer) RekeyMap(ctx context.Context, rows prolly.Map) (rekeyed, un
 // It stops at the first row with a NULL in the new key (ErrRekeyNullKey) or
 // the first duplicate new key (ErrRekeyDuplicateKey).
 func (r *RowRekeyer) RekeyUniqueMap(ctx context.Context, rows prolly.Map) (prolly.Map, error) {
-	rekeyed, _, _, err := r.rekeyMap(ctx, rows, true)
-	return rekeyed, err
-}
-
-// rekeyMap rebuilds |rows| under the new primary key. When |unique| is true, it
-// returns ErrRekeyNullKey or ErrRekeyDuplicateKey on the first invalid row.
-func (r *RowRekeyer) rekeyMap(ctx context.Context, rows prolly.Map, unique bool) (rekeyed, unpairedRows prolly.Map, hasNullKey bool, err error) {
-	emptyNew, err := prolly.NewMapFromTuples(ctx, r.ns, r.newKD, r.newVD)
+	mut, err := r.newTargetMutator(ctx)
 	if err != nil {
-		return prolly.Map{}, prolly.Map{}, false, err
+		return prolly.Map{}, err
 	}
-	mut := emptyNew.Mutate()
-
-	var unpaired, shared *prolly.MutableMap
-	if !unique {
-		emptyOld, err := prolly.NewMapFromTuples(ctx, r.ns, r.oldKD, r.oldVD)
-		if err != nil {
-			return prolly.Map{}, prolly.Map{}, false, err
-		}
-		unpaired = emptyOld.Mutate()
-	}
-
 	err = IterRows(ctx, rows, func(k, v val.Tuple) error {
 		nk, err := r.Key(ctx, k, v)
 		if err != nil {
 			return err
 		}
 		if r.newKD.HasNulls(nk) {
-			if unique {
-				return ErrRekeyNullKey
-			}
-			hasNullKey = true
-			return unpaired.Put(ctx, k, v)
+			return ErrRekeyNullKey
 		}
 		if !r.isUnique {
-			isShared, err := mut.Has(ctx, nk)
+			dup, err := mut.Has(ctx, nk)
 			if err != nil {
 				return err
 			}
-			if isShared {
-				if unique {
-					return ErrRekeyDuplicateKey
-				}
-				if shared == nil {
-					emptyShared, err := prolly.NewMapFromTuples(ctx, r.ns, r.newKD, val.NewTupleDescriptor())
-					if err != nil {
-						return err
-					}
-					shared = emptyShared.Mutate()
-					return shared.Put(ctx, nk, val.EmptyTuple)
-				}
-				alreadyShared, err := shared.Has(ctx, nk)
-				if err != nil {
-					return err
-				}
-				if alreadyShared {
-					return nil
-				}
-				return shared.Put(ctx, nk, val.EmptyTuple)
+			if dup {
+				return ErrRekeyDuplicateKey
 			}
 		}
-		nv, err := r.value(ctx, k, v)
+		return r.putRow(ctx, mut, nk, k, v)
+	})
+	if err != nil {
+		return prolly.Map{}, err
+	}
+	return mut.Map(ctx)
+}
+
+// newTargetMutator returns an empty mutable map for the destination schema.
+func (r *RowRekeyer) newTargetMutator(ctx context.Context) (*prolly.MutableMap, error) {
+	emptyNew, err := prolly.NewMapFromTuples(ctx, r.ns, r.newKD, r.newVD)
+	if err != nil {
+		return nil, err
+	}
+	return emptyNew.Mutate(), nil
+}
+
+// putRow builds the destination value tuple for |k| and |v| and inserts it into
+// |mut| under |nk|.
+func (r *RowRekeyer) putRow(ctx context.Context, mut *prolly.MutableMap, nk, k, v val.Tuple) error {
+	nv, err := r.value(ctx, k, v)
+	if err != nil {
+		return err
+	}
+	return mut.Put(ctx, nk, nv)
+}
+
+// recordDuplicate adds |nk| to the key-only duplicate set |dups|, creating it
+// on first collision and skipping keys already recorded.
+func (r *RowRekeyer) recordDuplicate(ctx context.Context, dups **prolly.MutableMap, nk val.Tuple) error {
+	if *dups == nil {
+		emptyDups, err := prolly.NewMapFromTuples(ctx, r.ns, r.newKD, val.NewTupleDescriptor())
 		if err != nil {
 			return err
 		}
-		return mut.Put(ctx, nk, nv)
-	})
-	if err != nil {
-		return prolly.Map{}, prolly.Map{}, false, err
+		*dups = emptyDups.Mutate()
+		return (*dups).Put(ctx, nk, val.EmptyTuple)
 	}
-	if shared != nil {
-		if err = r.splitSharedKeys(ctx, rows, mut, shared, unpaired); err != nil {
-			return prolly.Map{}, prolly.Map{}, false, err
-		}
+	exists, err := (*dups).Has(ctx, nk)
+	if err != nil || exists {
+		return err
 	}
-	if rekeyed, err = mut.Map(ctx); err != nil {
-		return prolly.Map{}, prolly.Map{}, false, err
-	}
-	if unpaired != nil {
-		unpairedRows, err = unpaired.Map(ctx)
-	}
-	return rekeyed, unpairedRows, hasNullKey, err
+	return (*dups).Put(ctx, nk, val.EmptyTuple)
 }
 
-// splitSharedKeys moves every row whose new key is in |shared| from |mut| to
+// moveDuplicateKeys moves every row whose new key is in |dups| from |mut| to
 // |unpaired|.
 //
-// It rekeys |rows| again, since |mut| keeps the first row of each duplicated
-// key and |shared| holds the rest.
-func (r *RowRekeyer) splitSharedKeys(ctx context.Context, rows prolly.Map, mut, shared, unpaired *prolly.MutableMap) error {
-	sharedKeys, err := shared.Map(ctx)
+// It rekeys |rows| again, since |mut| keeps the first row of each duplicate key
+// and |dups| holds the colliding keys.
+func (r *RowRekeyer) moveDuplicateKeys(ctx context.Context, rows prolly.Map, mut, dups, unpaired *prolly.MutableMap) error {
+	dupKeys, err := dups.Map(ctx)
 	if err != nil {
 		return err
 	}
@@ -228,12 +253,9 @@ func (r *RowRekeyer) splitSharedKeys(ctx context.Context, rows prolly.Map, mut, 
 		if r.newKD.HasNulls(nk) {
 			return nil
 		}
-		isShared, err := sharedKeys.Has(ctx, nk)
-		if err != nil {
+		isDup, err := dupKeys.Has(ctx, nk)
+		if err != nil || !isDup {
 			return err
-		}
-		if !isShared {
-			return nil
 		}
 		if err = mut.Delete(ctx, nk); err != nil {
 			return err

@@ -19,17 +19,17 @@ import (
 	"github.com/dolthub/vitess/go/sqltypes"
 )
 
-// Rekeyed returns |sch| with the primary key of |target|.
+// Rekey returns |sch| with the primary key of |target|.
 //
 // It returns false when |sch| has a full text, vector or spatial index, or
 // when a key column of |target| is missing from |sch|, is virtual, or has a
-// type that cannot be rekeyed. Key columns match as [ColCollection.MatchingColumn]
-// describes.
+// type that cannot be rekeyed. Key columns match as
+// [ColCollection.MatchingColumn] describes.
 //
 // A column that joins the primary key becomes NOT NULL, as ALTER TABLE ... ADD
 // PRIMARY KEY makes it. A key column takes the type of |target|, so that its
 // stored bytes decode with that type.
-func Rekeyed(sch, target Schema) (Schema, bool, error) {
+func Rekey(sch, target Schema) (Schema, bool, error) {
 	for _, index := range sch.Indexes().AllIndexes() {
 		if index.IsFullText() || index.IsVector() || index.IsSpatial() {
 			return nil, false, nil

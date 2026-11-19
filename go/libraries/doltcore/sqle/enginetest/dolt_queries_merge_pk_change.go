@@ -613,25 +613,6 @@ var MergeSamePrimaryKeyChangeScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "same pk change on both sides: new key column widened varchar",
-		SetUpScript: samePkChangeSetup(
-			"CREATE TABLE t (a INT NOT NULL, b VARCHAR(10) NOT NULL, v INT, PRIMARY KEY (a));",
-			[]string{"INSERT INTO t VALUES (1, 'one', 10), (2, 'two', 20);"},
-			"ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY (b), MODIFY COLUMN b VARCHAR(20) NOT NULL;",
-			nil,
-			[]string{"UPDATE t SET v = 11 WHERE b = 'one';"}),
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "CALL DOLT_MERGE('feature');",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
-			},
-			{
-				Query:    "SELECT * FROM t ORDER BY a;",
-				Expected: []sql.Row{{1, "one", 11}, {2, "two", 20}},
-			},
-		},
-	},
-	{
 		Name: "same pk change on both sides: ancestor has a virtual column",
 		SetUpScript: samePkChangeSetup(
 			"CREATE TABLE t (a INT NOT NULL, b INT NOT NULL, g INT AS (a + b) VIRTUAL, x INT NOT NULL, v INT, PRIMARY KEY (a));",
@@ -665,6 +646,25 @@ var MergeSamePrimaryKeyChangeScripts = []queries.ScriptTest{
 				// them rather than t.
 				Query:          "CALL DOLT_MERGE('feature');",
 				ExpectedErrStr: "error: cannot merge because table dolt_t_fs_0_fts_doc_count has different primary keys in its common ancestor",
+			},
+		},
+	},
+	{
+		Name: "same pk change on both sides: new key column widened varchar",
+		SetUpScript: samePkChangeSetup(
+			"CREATE TABLE t (a INT NOT NULL, b VARCHAR(10) NOT NULL, v INT, PRIMARY KEY (a));",
+			[]string{"INSERT INTO t VALUES (1, 'one', 10), (2, 'two', 20);"},
+			"ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY (b), MODIFY COLUMN b VARCHAR(20) NOT NULL;",
+			nil,
+			[]string{"UPDATE t SET v = 11 WHERE b = 'one';"}),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY a;",
+				Expected: []sql.Row{{1, "one", 11}, {2, "two", 20}},
 			},
 		},
 	},

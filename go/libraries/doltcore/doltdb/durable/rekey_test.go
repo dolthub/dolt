@@ -32,96 +32,98 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func TestRowRekeyer_RekeyMap(t *testing.T) {
+func TestRowRekeyer(t *testing.T) {
 	ctx := context.Background()
-	ns := tree.NewTestNodeStore()
 
-	sch := schema.MustSchemaFromCols(schema.NewColCollection(
-		schema.NewColumn("a", 1, types.IntKind, true, schema.NotNullConstraint{}),
-		schema.NewColumn("b", 2, types.IntKind, false),
-		schema.NewColumn("v", 3, types.IntKind, false),
-	))
-	target := schema.MustSchemaFromCols(schema.NewColCollection(
-		schema.NewColumn("b", 2, types.IntKind, true, schema.NotNullConstraint{}),
-	))
+	t.Run("rekey map", func(t *testing.T) {
+		ns := tree.NewTestNodeStore()
 
-	newSch, ok, err := schema.Rekeyed(sch, target)
-	require.NoError(t, err)
-	require.True(t, ok)
+		sch := schema.MustSchemaFromCols(schema.NewColCollection(
+			schema.NewColumn("a", 1, types.IntKind, true, schema.NotNullConstraint{}),
+			schema.NewColumn("b", 2, types.IntKind, false),
+			schema.NewColumn("v", 3, types.IntKind, false),
+		))
+		target := schema.MustSchemaFromCols(schema.NewColCollection(
+			schema.NewColumn("b", 2, types.IntKind, true, schema.NotNullConstraint{}),
+		))
 
-	newKD, newVD := newSch.GetMapDescriptors(ns)
-	require.False(t, newKD.Types[0].Nullable)
+		newSch, ok, err := schema.Rekey(sch, target)
+		require.NoError(t, err)
+		require.True(t, ok)
 
-	rk, ok := NewRowRekeyer(ns, sch, newSch)
-	require.True(t, ok)
+		newKD, newVD := newSch.GetMapDescriptors(ns)
+		require.False(t, newKD.Types[0].Nullable)
 
-	// Row 1 has unique b=10. Rows 2 and 3 collide on b=20. Row 4 has NULL b.
-	rows := newIntMap(t, ctx, ns, sch,
-		[][]any{{1}, {2}, {3}, {4}},
-		[][]any{{10, 100}, {20, 200}, {20, 300}, {nil, 400}},
-	)
+		rk, ok := NewRowRekeyer(ns, sch, newSch)
+		require.True(t, ok)
 
-	rekeyed, unpaired, hasNullKey, err := rk.RekeyMap(ctx, rows)
-	require.NoError(t, err)
-	require.True(t, hasNullKey)
-	require.Equal(t, [][2][]any{
-		{{10}, {1, 100}},
-	}, collectIntRows(t, ctx, rekeyed, newKD, newVD))
+		// Row 1 has unique b=10. Rows 2 and 3 collide on b=20. Row 4 has NULL b.
+		rows := newIntMap(t, ctx, ns, sch,
+			[][]any{{1}, {2}, {3}, {4}},
+			[][]any{{10, 100}, {20, 200}, {20, 300}, {nil, 400}},
+		)
 
-	oldKD, oldVD := sch.GetMapDescriptors(ns)
-	require.Equal(t, [][2][]any{
-		{{2}, {20, 200}},
-		{{3}, {20, 300}},
-		{{4}, {nil, 400}},
-	}, collectIntRows(t, ctx, unpaired, oldKD, oldVD))
-}
+		rekeyed, unpaired, hasNullKey, err := rk.RekeyMap(ctx, rows)
+		require.NoError(t, err)
+		require.True(t, hasNullKey)
+		require.Equal(t, [][2][]any{
+			{{10}, {1, 100}},
+		}, collectIntRows(t, ctx, rekeyed, newKD, newVD))
 
-func TestRowRekeyer_RecycleOnError(t *testing.T) {
-	prev := typeinfo.UseAdaptiveEncoding
-	typeinfo.UseAdaptiveEncoding = true
-	t.Cleanup(func() { typeinfo.UseAdaptiveEncoding = prev })
+		oldKD, oldVD := sch.GetMapDescriptors(ns)
+		require.Equal(t, [][2][]any{
+			{{2}, {20, 200}},
+			{{3}, {20, 300}},
+			{{4}, {nil, 400}},
+		}, collectIntRows(t, ctx, unpaired, oldKD, oldVD))
+	})
 
-	ctx := context.Background()
-	ns := &failingWriteNodeStore{NodeStore: tree.NewTestNodeStore()}
+	t.Run("recycle on error", func(t *testing.T) {
+		prev := typeinfo.UseAdaptiveEncoding
+		typeinfo.UseAdaptiveEncoding = true
+		t.Cleanup(func() { typeinfo.UseAdaptiveEncoding = prev })
 
-	textTI, err := typeinfo.FromSqlType(gmstypes.Text)
-	require.NoError(t, err)
-	textCol, err := schema.NewColumnWithTypeInfo("txt", 2, textTI, false, "", false, "")
-	require.NoError(t, err)
+		ns := &failingWriteNodeStore{NodeStore: tree.NewTestNodeStore()}
 
-	sch := schema.MustSchemaFromCols(schema.NewColCollection(
-		schema.NewColumn("a", 1, types.IntKind, true, schema.NotNullConstraint{}),
-		textCol,
-	))
-	rk, ok := NewRowRekeyer(ns, sch, sch)
-	require.True(t, ok)
-	rk.vb = rk.vb.WithMaxRowSize(100)
+		textTI, err := typeinfo.FromSqlType(gmstypes.Text)
+		require.NoError(t, err)
+		textCol, err := schema.NewColumnWithTypeInfo("txt", 2, textTI, false, "", false, "")
+		require.NoError(t, err)
 
-	oldKD, oldVD := sch.GetMapDescriptors(ns)
-	kb := val.NewTupleBuilder(oldKD, ns)
-	vb := val.NewTupleBuilder(oldVD, ns).WithMaxRowSize(10000)
+		sch := schema.MustSchemaFromCols(schema.NewColCollection(
+			schema.NewColumn("a", 1, types.IntKind, true, schema.NotNullConstraint{}),
+			textCol,
+		))
+		rk, ok := NewRowRekeyer(ns, sch, sch)
+		require.True(t, ok)
+		rk.vb = rk.vb.WithMaxRowSize(100)
 
-	kb.PutInt64(0, 1)
-	require.NoError(t, vb.PutAdaptiveStringFromInline(ctx, 0, strings.Repeat("x", 200)))
-	k1, err := kb.Build(ctx, ns.Pool())
-	require.NoError(t, err)
-	v1, err := vb.Build(ctx, ns.Pool())
-	require.NoError(t, err)
+		oldKD, oldVD := sch.GetMapDescriptors(ns)
+		kb := val.NewTupleBuilder(oldKD, ns)
+		vb := val.NewTupleBuilder(oldVD, ns).WithMaxRowSize(10000)
 
-	kb.PutInt64(0, 2)
-	k2, err := kb.Build(ctx, ns.Pool())
-	require.NoError(t, err)
-	v2, err := vb.Build(ctx, ns.Pool())
-	require.NoError(t, err)
+		kb.PutInt64(0, 1)
+		require.NoError(t, vb.PutAdaptiveStringFromInline(ctx, 0, strings.Repeat("x", 200)))
+		k1, err := kb.Build(ctx, ns.Pool())
+		require.NoError(t, err)
+		v1, err := vb.Build(ctx, ns.Pool())
+		require.NoError(t, err)
 
-	ns.failWrite = true
-	_, _, err = rk.Rekey(ctx, k1, v1)
-	require.Error(t, err)
+		kb.PutInt64(0, 2)
+		k2, err := kb.Build(ctx, ns.Pool())
+		require.NoError(t, err)
+		v2, err := vb.Build(ctx, ns.Pool())
+		require.NoError(t, err)
 
-	ns.failWrite = false
-	_, nv2, err := rk.Rekey(ctx, k2, v2)
-	require.NoError(t, err)
-	require.True(t, rk.newVD.IsNull(0, nv2))
+		ns.failWrite = true
+		_, _, err = rk.Rekey(ctx, k1, v1)
+		require.Error(t, err)
+
+		ns.failWrite = false
+		_, nv2, err := rk.Rekey(ctx, k2, v2)
+		require.NoError(t, err)
+		require.True(t, rk.newVD.IsNull(0, nv2))
+	})
 }
 
 type failingWriteNodeStore struct {

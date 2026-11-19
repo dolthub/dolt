@@ -284,7 +284,7 @@ func needsRekeyedAncestor(ourSch, theirSch, ancSch schema.Schema) bool {
 // rows, keyed and indexed by the columns of |target|'s primary key. It returns false when |sch| lacks one of those
 // columns, or holds it with an incompatible type or encoding.
 func RekeyTable(ctx *sql.Context, name doltdb.TableName, tbl *doltdb.Table, sch, target schema.Schema) (*doltdb.Table, bool, error) {
-	newSch, ok, err := schema.Rekeyed(sch, target)
+	newSch, ok, err := schema.Rekey(sch, target)
 	if err != nil || !ok {
 		return nil, false, err
 	}
