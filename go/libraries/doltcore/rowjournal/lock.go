@@ -347,12 +347,17 @@ func (j *Journal) eachBlocker(txn *Txn, e *entry, mode LockMode, seq uint64, fn 
 		}
 	}
 
-	// Requests that arrived earlier and conflict with this one go first, so that a stream of compatible lockers
-	// cannot starve a request they all conflict with. A transaction that already holds a lock on the target, or on
-	// the table the target is a row of, is exempt: making it queue behind a request that is waiting for it would
-	// deadlock the two.
+	// Among the requests waiting for a row, those that arrived earlier go first. A request that conflicts with no
+	// lock that is held doesn't wait at all, whatever is waiting: a share lock is granted while other share locks are
+	// held, even if a request that conflicts with all of them has been waiting for them to go. A request for a table
+	// as a whole is different, and does make later requests that conflict with it wait behind it, since it would
+	// otherwise wait as long as any transaction at all was working in the table.
+	//
+	// A transaction that already holds a lock on the target, or on the table the target is a row of, is never made
+	// to queue: doing so behind a request that is waiting for it would deadlock the two.
 	holdsTarget := e.heldMode(txn) != LockNone || rel.table.heldMode(txn) != LockNone
-	if !holdsTarget {
+	isWaiting := seq != math.MaxUint64
+	if !holdsTarget && (isWaiting || e.isTable) {
 		for _, q := range e.waiters {
 			if q.seq < seq && q.txn != txn && q.mode.ConflictsWith(mode) && !fn(q.txn) {
 				return

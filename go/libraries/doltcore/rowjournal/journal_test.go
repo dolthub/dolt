@@ -437,24 +437,45 @@ func TestConcurrentInsertOfSameKey(t *testing.T) {
 func TestWaitersAreServedInOrder(t *testing.T) {
 	h := newHarness(t)
 	holder := h.j.Begin(1)
+	first := h.j.Begin(2)
+	second := h.j.Begin(3)
+
+	require.Equal(t, LockGranted, h.lock(holder, "k", LockUpdate))
+	firstDone := h.lockBlocked(first, "k", LockUpdate)
+	secondDone := h.lockBlocked(second, "k", LockShare)
+	assert.Equal(t, []TxnID{holder.ID()}, h.j.BlockedBy(first))
+	assert.Equal(t, []TxnID{holder.ID(), first.ID()}, h.j.BlockedBy(second))
+
+	// The request that has waited longest gets the lock, and the other goes on waiting, now for it.
+	h.j.Commit(holder)
+	assert.Equal(t, outcome{res: LockGranted}, h.await(firstDone))
+	h.requireStillBlocked(secondDone)
+
+	h.j.Commit(first)
+	assert.Equal(t, outcome{res: LockGranted}, h.await(secondDone))
+	h.j.Commit(second)
+	h.requireEmpty()
+}
+
+func TestCompatibleLockIsGrantedPastWaiters(t *testing.T) {
+	h := newHarness(t)
+	holder := h.j.Begin(1)
 	exclusive := h.j.Begin(2)
 	share := h.j.Begin(3)
 
 	require.Equal(t, LockGranted, h.lock(holder, "k", LockShare))
 	exclusiveDone := h.lockBlocked(exclusive, "k", LockUpdate)
 
-	// A share request is compatible with the holder, but must not jump ahead of the waiting exclusive request.
-	assert.Equal(t, LockWouldBlock, h.tryLock(share, "k", LockShare))
-	shareDone := h.lockBlocked(share, "k", LockShare)
-	assert.Equal(t, []TxnID{exclusive.ID()}, h.j.BlockedBy(share))
+	// A share request conflicts with no lock that is held, so it doesn't wait behind the exclusive request, which
+	// now has it to wait for as well.
+	assert.Equal(t, LockGranted, h.tryLock(share, "k", LockShare))
+	assert.Equal(t, []TxnID{holder.ID(), share.ID()}, h.j.BlockedBy(exclusive))
 
 	h.j.Commit(holder)
-	assert.Equal(t, outcome{res: LockGranted}, h.await(exclusiveDone))
-	h.requireStillBlocked(shareDone)
-
-	h.j.Commit(exclusive)
-	assert.Equal(t, outcome{res: LockGranted}, h.await(shareDone))
+	h.requireStillBlocked(exclusiveDone)
 	h.j.Commit(share)
+	assert.Equal(t, outcome{res: LockGranted}, h.await(exclusiveDone))
+	h.j.Commit(exclusive)
 	h.requireEmpty()
 }
 
