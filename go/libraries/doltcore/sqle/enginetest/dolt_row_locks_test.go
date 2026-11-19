@@ -625,7 +625,7 @@ var rowLockDisabledScripts = []rowLockScript{
 	},
 }
 
-const lockNotAvailableErr = "could not be acquired immediately and NOWAIT is set"
+const lockNotAvailableErr = "could not obtain lock on row in relation"
 
 var rowLockReadSetup = []string{
 	"drop table if exists t",

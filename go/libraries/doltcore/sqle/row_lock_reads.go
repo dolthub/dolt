@@ -95,6 +95,7 @@ func (t *DoltTable) newRowLockingIter(ctx *sql.Context, iter sql.RowIter) (*rowL
 	locking := &rowLockingIter{
 		child:      iter,
 		projection: t.rowLockProjection(),
+		table:      t.tableName,
 	}
 
 	locks, ok := dsess.RowLocksForContext(ctx)
@@ -207,6 +208,8 @@ type rowLockingIter struct {
 	request rowjournal.LockRequest
 	// projection is the positions in the child's rows of the columns to return, or nil to return them all.
 	projection []int
+	// table is the name of the table the rows are read from.
+	table string
 }
 
 var _ sql.RowIter = (*rowLockingIter)(nil)
@@ -259,7 +262,7 @@ func (i *rowLockingIter) lock(ctx *sql.Context, row sql.Row) (bool, error) {
 
 	res, err := i.locks.Journal.Lock(ctx, i.locks.Txn, req)
 	if err != nil {
-		return false, dsess.RowLockWaitError(err)
+		return false, dsess.RowLockWaitError(err, i.table)
 	}
 
 	switch res {

@@ -113,7 +113,7 @@ func (d *DoltSession) lockRewrittenTables(ctx *sql.Context, bs *branchState, new
 			Timeout:     RowLockWaitTimeout(ctx),
 		})
 		if err != nil {
-			return RowLockWaitError(err)
+			return RowLockWaitError(err, change.name.Name)
 		}
 
 		if err = RowLockConflictError(res); err != nil {
@@ -275,16 +275,16 @@ func RowLockConflictError(res rowjournal.LockResult) error {
 	}
 }
 
-// RowLockWaitError translates an error returned by the row journal for an abandoned lock request into the SQL error
-// to report. Other errors, such as a canceled context's, are returned as they are.
-func RowLockWaitError(err error) error {
+// RowLockWaitError translates an error returned by the row journal for an abandoned request for a lock in the table
+// named into the SQL error to report. Other errors, such as a canceled context's, are returned as they are.
+func RowLockWaitError(err error, table string) error {
 	switch {
 	case errors.Is(err, rowjournal.ErrDeadlock):
 		return sql.ErrRowLockDeadlock.New()
 	case errors.Is(err, rowjournal.ErrLockTimeout):
 		return sql.ErrRowLockWaitTimeout.New()
 	case errors.Is(err, rowjournal.ErrLockNotAvailable):
-		return sql.ErrRowLockNotAvailable.New()
+		return sql.ErrRowLockNotAvailable.New(table)
 	case errors.Is(err, rowjournal.ErrRelationChanged):
 		return sql.ErrLockDeadlock.New(err.Error())
 	default:

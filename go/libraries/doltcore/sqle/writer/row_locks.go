@@ -262,7 +262,7 @@ func (w *prollyTableWriter) writeLockedRow(ctx *sql.Context, locks dsess.RowLock
 
 	res, err := locks.Journal.Write(ctx, locks.Txn, req)
 	if err != nil {
-		return dsess.RowLockWaitError(err)
+		return dsess.RowLockWaitError(err, w.tblName.Name)
 	}
 
 	return dsess.RowLockConflictError(res)
