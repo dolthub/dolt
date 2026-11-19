@@ -1802,7 +1802,7 @@ func TestSingleTransactionScript(t *testing.T) {
 
 		h := newDoltHarness(t)
 		defer h.Close()
-		testTransactionScript(t, h, script)
+		enginetest.TestTransactionScript(t, h, script)
 
 		return nil
 	})
