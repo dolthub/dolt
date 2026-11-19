@@ -111,11 +111,12 @@ func TestInMemoryArchiveIndexReaderQuota(t *testing.T) {
 	})
 	t.Run("IO Errors", func(t *testing.T) {
 		// If we have I/O errors while reading the index, all the acquired quota should be released.
+		// The index is a single read; each case cuts it off within a different section.
 		for _, afterBytes := range []int{
-			1024,                                  /* while reading bytes span offsets */
-			(1024+1)*8 + 1024,                     /* while reading prefixes */
-			(1024+1)*8 + 1024*8 + 1024,            /* while reading chunk spans */
-			(1024+1)*8 + 1024*8 + 1024*4*2 + 1024, /* while reading suffixes */
+			1024,                                  /* within bytes span offsets */
+			(1024+1)*8 + 1024,                     /* within prefixes */
+			(1024+1)*8 + 1024*8 + 1024,            /* within chunk spans */
+			(1024+1)*8 + 1024*8 + 1024*4*2 + 1024, /* within suffixes */
 		} {
 			t.Run(strconv.Itoa(afterBytes), func(t *testing.T) {
 				// Build a tableReaderAt for the file we just wrote.
@@ -367,4 +368,56 @@ func TestArchiveReaderLoadDictCaches(t *testing.T) {
 	require.NoError(t, err)
 	require.Same(t, first, second)
 	require.Equal(t, 1, rd.readsOf(dictOff), "a cached dictionary must not be re-read")
+}
+
+type recordedRead struct {
+	off int64
+	len int
+}
+
+type readRecorder struct {
+	tableReaderAt
+	reads []recordedRead
+}
+
+func (r *readRecorder) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (int, error) {
+	r.reads = append(r.reads, recordedRead{off: off, len: len(p)})
+	return r.tableReaderAt.ReadAtWithStats(ctx, p, off, stats)
+}
+
+// Each read against a blobstore is a separate request, so the index must load in one.
+func TestInMemoryArchiveIndexReaderReadsIndexOnce(t *testing.T) {
+	ctx := context.Background()
+	writer := NewFixedBufferByteSink(make([]byte, 1<<16))
+	aw := newArchiveWriterWithSink(writer)
+
+	hashes := make([]hash.Hash, 64)
+	for i := range hashes {
+		_, err := io.ReadFull(rand.Reader, hashes[i][:])
+		require.NoError(t, err)
+		spanID, err := aw.writeByteSpan([]byte{byte(i), 1, 2, 3, 4, 5, 6, 7})
+		require.NoError(t, err)
+		require.NoError(t, aw.stageSnappyChunk(hashes[i], spanID))
+	}
+	require.NoError(t, aw.finalizeByteSpans())
+	require.NoError(t, aw.writeIndex())
+	require.NoError(t, aw.writeMetadata([]byte("")))
+	require.NoError(t, aw.writeFooter())
+
+	archiveBytes := writer.buff[:writer.pos]
+	footer, err := loadFooter(ctx, tableReaderAtFromBytes(archiveBytes), defaultId, uint64(len(archiveBytes)), &Stats{})
+	require.NoError(t, err)
+
+	recorder := &readRecorder{tableReaderAt: tableReaderAtFromBytes(archiveBytes)}
+	idx, err := newInMemoryArchiveIndexReader(ctx, recorder, footer, NewUnlimitedMemQuotaProvider(), &Stats{})
+	require.NoError(t, err)
+	defer idx.Close()
+
+	indexSpan := footer.totalIndexSpan()
+	assert.Equal(t, []recordedRead{{off: int64(indexSpan.offset), len: int(indexSpan.length)}}, recorder.reads)
+
+	ar := archiveReader{indexReader: idx, footer: footer}
+	for _, h := range hashes {
+		assert.True(t, ar.has(h))
+	}
 }
