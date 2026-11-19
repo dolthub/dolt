@@ -23,7 +23,8 @@ import (
 //
 // It returns false when |sch| has a full text, vector or spatial index, or
 // when a key column of |target| is missing from |sch|, is virtual, or has a
-// type that cannot be rekeyed. Key columns match as MatchingColumn describes.
+// type that cannot be rekeyed. Key columns match as [ColCollection.MatchingColumn]
+// describes.
 //
 // A column that joins the primary key becomes NOT NULL, as ALTER TABLE ... ADD
 // PRIMARY KEY makes it. A key column takes the type of |target|, so that its
@@ -40,7 +41,7 @@ func Rekeyed(sch, target Schema) (Schema, bool, error) {
 	keyTags := make([]uint64, targetPK.Size())
 	targetCols := make(map[uint64]Column, targetPK.Size())
 	for i, tc := range targetPK.GetColumns() {
-		col, ok := MatchingColumn(sch, target, tc)
+		col, ok := sch.GetAllCols().MatchingColumn(target.GetAllCols(), tc)
 		if !ok || col.Virtual || !rekeyableType(col, tc) {
 			return nil, false, nil
 		}
@@ -75,23 +76,6 @@ func Rekeyed(sch, target Schema) (Schema, bool, error) {
 		newSch.Indexes().AddIndex(index)
 	}
 	return newSch, true, nil
-}
-
-// MatchingColumn returns the column of |sch| that holds the column |tc| of
-// |target|. Columns match by tag, or by name when neither tag appears on the
-// other side, as when a table is dropped and recreated.
-func MatchingColumn(sch, target Schema, tc Column) (Column, bool) {
-	if col, ok := sch.GetAllCols().GetByTag(tc.Tag); ok {
-		return col, true
-	}
-	col, ok := sch.GetAllCols().GetByNameCaseInsensitive(tc.Name)
-	if !ok {
-		return Column{}, false
-	}
-	if _, ok := target.GetAllCols().GetByTag(col.Tag); ok {
-		return Column{}, false
-	}
-	return col, true
 }
 
 // rekeyableType reports whether the key column |from| can be rekeyed to |to|

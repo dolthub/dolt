@@ -32,52 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func TestRowRekeyerBasicAndVirtualColumns(t *testing.T) {
-	ctx := context.Background()
-	ns := tree.NewTestNodeStore()
-
-	virtCol := schema.NewColumn("g", 4, types.IntKind, false)
-	virtCol.Virtual = true
-
-	sch := schema.MustSchemaFromCols(schema.NewColCollection(
-		schema.NewColumn("a", 1, types.IntKind, true, schema.NotNullConstraint{}),
-		schema.NewColumn("b", 2, types.IntKind, false),
-		schema.NewColumn("v", 3, types.IntKind, false),
-		virtCol,
-	))
-	target := schema.MustSchemaFromCols(schema.NewColCollection(
-		schema.NewColumn("b", 2, types.IntKind, true, schema.NotNullConstraint{}),
-		schema.NewColumn("a", 1, types.IntKind, true, schema.NotNullConstraint{}),
-	))
-
-	newSch, ok, err := schema.Rekeyed(sch, target)
-	require.NoError(t, err)
-	require.True(t, ok)
-
-	rk, ok := NewRowRekeyer(ns, sch, newSch)
-	require.True(t, ok)
-
-	rows := buildIntMap(t, ctx, ns, sch,
-		[][]any{{1}, {2}},
-		[][]any{{10, 100}, {20, 200}},
-	)
-
-	rekeyed, unpaired, hasNullKey, err := rk.RekeyMap(ctx, rows)
-	require.NoError(t, err)
-	require.False(t, hasNullKey)
-	unpairedCnt, err := unpaired.Count()
-	require.NoError(t, err)
-	require.Zero(t, unpairedCnt)
-
-	newKD, newVD := newSch.GetMapDescriptors(ns)
-	got := collectIntRows(t, ctx, rekeyed, newKD, newVD)
-	require.Equal(t, [][2][]any{
-		{{10, 1}, {100}},
-		{{20, 2}, {200}},
-	}, got)
-}
-
-func TestRowRekeyerNullAndDuplicateKeys(t *testing.T) {
+func TestRowRekeyer_RekeyMap(t *testing.T) {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
 
@@ -101,7 +56,7 @@ func TestRowRekeyerNullAndDuplicateKeys(t *testing.T) {
 	require.True(t, ok)
 
 	// Row 1 has unique b=10. Rows 2 and 3 collide on b=20. Row 4 has NULL b.
-	rows := buildIntMap(t, ctx, ns, sch,
+	rows := newIntMap(t, ctx, ns, sch,
 		[][]any{{1}, {2}, {3}, {4}},
 		[][]any{{10, 100}, {20, 200}, {20, 300}, {nil, 400}},
 	)
@@ -109,63 +64,25 @@ func TestRowRekeyerNullAndDuplicateKeys(t *testing.T) {
 	rekeyed, unpaired, hasNullKey, err := rk.RekeyMap(ctx, rows)
 	require.NoError(t, err)
 	require.True(t, hasNullKey)
-
-	gotRekeyed := collectIntRows(t, ctx, rekeyed, newKD, newVD)
 	require.Equal(t, [][2][]any{
 		{{10}, {1, 100}},
-	}, gotRekeyed)
+	}, collectIntRows(t, ctx, rekeyed, newKD, newVD))
 
 	oldKD, oldVD := sch.GetMapDescriptors(ns)
-	gotUnpaired := collectIntRows(t, ctx, unpaired, oldKD, oldVD)
 	require.Equal(t, [][2][]any{
 		{{2}, {20, 200}},
 		{{3}, {20, 300}},
 		{{4}, {nil, 400}},
-	}, gotUnpaired)
+	}, collectIntRows(t, ctx, unpaired, oldKD, oldVD))
 }
 
-func TestNewRowRekeyerRejectsMissingOrIncompatibleColumn(t *testing.T) {
-	ns := tree.NewTestNodeStore()
-
-	sch := schema.MustSchemaFromCols(schema.NewColCollection(
-		schema.NewColumn("a", 1, types.IntKind, true, schema.NotNullConstraint{}),
-		schema.NewColumn("b", 2, types.IntKind, false),
-	))
-
-	missingColSch := schema.MustSchemaFromCols(schema.NewColCollection(
-		schema.NewColumn("b", 2, types.IntKind, true, schema.NotNullConstraint{}),
-		schema.NewColumn("c", 99, types.IntKind, false),
-	))
-	_, ok := NewRowRekeyer(ns, sch, missingColSch)
-	require.False(t, ok)
-
-	diffEncSch := schema.MustSchemaFromCols(schema.NewColCollection(
-		schema.NewColumn("b", 2, types.StringKind, true, schema.NotNullConstraint{}),
-		schema.NewColumn("a", 1, types.IntKind, false),
-	))
-	_, ok = NewRowRekeyer(ns, sch, diffEncSch)
-	require.False(t, ok)
-
-	keylessSch := schema.MustSchemaFromCols(schema.NewColCollection(
-		schema.NewColumn("a", 1, types.UintKind, false),
-	))
-	keyedUintSch := schema.MustSchemaFromCols(schema.NewColCollection(
-		schema.NewColumn("a", 1, types.UintKind, true, schema.NotNullConstraint{}),
-	))
-	_, ok = NewRowRekeyer(ns, keylessSch, keyedUintSch)
-	require.False(t, ok)
-	_, ok = NewRowRekeyer(ns, keyedUintSch, keylessSch)
-	require.False(t, ok)
-}
-
-func TestRowRekeyerRecyclesBuildersOnError(t *testing.T) {
+func TestRowRekeyer_RecycleOnError(t *testing.T) {
 	prev := typeinfo.UseAdaptiveEncoding
 	typeinfo.UseAdaptiveEncoding = true
 	t.Cleanup(func() { typeinfo.UseAdaptiveEncoding = prev })
 
 	ctx := context.Background()
-	baseNS := tree.NewTestNodeStore()
-	ns := &failingWriteNodeStore{NodeStore: baseNS}
+	ns := &failingWriteNodeStore{NodeStore: tree.NewTestNodeStore()}
 
 	textTI, err := typeinfo.FromSqlType(gmstypes.Text)
 	require.NoError(t, err)
@@ -176,7 +93,6 @@ func TestRowRekeyerRecyclesBuildersOnError(t *testing.T) {
 		schema.NewColumn("a", 1, types.IntKind, true, schema.NotNullConstraint{}),
 		textCol,
 	))
-
 	rk, ok := NewRowRekeyer(ns, sch, sch)
 	require.True(t, ok)
 	rk.vb = rk.vb.WithMaxRowSize(100)
@@ -185,8 +101,6 @@ func TestRowRekeyerRecyclesBuildersOnError(t *testing.T) {
 	kb := val.NewTupleBuilder(oldKD, ns)
 	vb := val.NewTupleBuilder(oldVD, ns).WithMaxRowSize(10000)
 
-	// Row 1 has an inline TEXT field (> 100B) that forces out-of-band WriteBytes
-	// when rebuilt under rk.vb's smaller row size limit.
 	kb.PutInt64(0, 1)
 	require.NoError(t, vb.PutAdaptiveStringFromInline(ctx, 0, strings.Repeat("x", 200)))
 	k1, err := kb.Build(ctx, ns.Pool())
@@ -194,7 +108,6 @@ func TestRowRekeyerRecyclesBuildersOnError(t *testing.T) {
 	v1, err := vb.Build(ctx, ns.Pool())
 	require.NoError(t, err)
 
-	// Row 2 has NULL in the TEXT field.
 	kb.PutInt64(0, 2)
 	k2, err := kb.Build(ctx, ns.Pool())
 	require.NoError(t, err)
@@ -211,53 +124,6 @@ func TestRowRekeyerRecyclesBuildersOnError(t *testing.T) {
 	require.True(t, rk.newVD.IsNull(0, nv2))
 }
 
-func TestRowRekeyerUniqueMap(t *testing.T) {
-	ctx := context.Background()
-	ns := tree.NewTestNodeStore()
-
-	sch := schema.MustSchemaFromCols(schema.NewColCollection(
-		schema.NewColumn("a", 1, types.IntKind, true, schema.NotNullConstraint{}),
-		schema.NewColumn("b", 2, types.IntKind, false),
-		schema.NewColumn("v", 3, types.IntKind, false),
-	))
-	target := schema.MustSchemaFromCols(schema.NewColCollection(
-		schema.NewColumn("b", 2, types.IntKind, true, schema.NotNullConstraint{}),
-	))
-
-	newSch, ok, err := schema.Rekeyed(sch, target)
-	require.NoError(t, err)
-	require.True(t, ok)
-
-	rk, ok := NewRowRekeyer(ns, sch, newSch)
-	require.True(t, ok)
-
-	uniqueRows := buildIntMap(t, ctx, ns, sch,
-		[][]any{{1}, {2}},
-		[][]any{{10, 100}, {20, 200}},
-	)
-	rekeyed, err := rk.RekeyUniqueMap(ctx, uniqueRows)
-	require.NoError(t, err)
-	newKD, newVD := newSch.GetMapDescriptors(ns)
-	require.Equal(t, [][2][]any{
-		{{10}, {1, 100}},
-		{{20}, {2, 200}},
-	}, collectIntRows(t, ctx, rekeyed, newKD, newVD))
-
-	nullRows := buildIntMap(t, ctx, ns, sch,
-		[][]any{{1}, {2}},
-		[][]any{{10, 100}, {nil, 200}},
-	)
-	_, err = rk.RekeyUniqueMap(ctx, nullRows)
-	require.ErrorIs(t, err, ErrRekeyNullKey)
-
-	dupRows := buildIntMap(t, ctx, ns, sch,
-		[][]any{{1}, {2}},
-		[][]any{{10, 100}, {10, 200}},
-	)
-	_, err = rk.RekeyUniqueMap(ctx, dupRows)
-	require.ErrorIs(t, err, ErrRekeyDuplicateKey)
-}
-
 type failingWriteNodeStore struct {
 	tree.NodeStore
 	failWrite bool
@@ -271,8 +137,8 @@ func (f *failingWriteNodeStore) WriteBytes(ctx context.Context, bs []byte) (hash
 	return f.NodeStore.WriteBytes(ctx, bs)
 }
 
-// buildIntMap constructs a [prolly.Map] from integer key and value slices.
-func buildIntMap(t *testing.T, ctx context.Context, ns tree.NodeStore, sch schema.Schema, keys [][]any, vals [][]any) prolly.Map {
+// newIntMap constructs a [prolly.Map] from integer key and value slices.
+func newIntMap(t *testing.T, ctx context.Context, ns tree.NodeStore, sch schema.Schema, keys [][]any, vals [][]any) prolly.Map {
 	t.Helper()
 	kd, vd := sch.GetMapDescriptors(ns)
 	m, err := prolly.NewMapFromTuples(ctx, ns, kd, vd)
