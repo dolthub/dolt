@@ -153,7 +153,7 @@ func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, behavior dherrors
 
 	var cs chunkSource
 	if plan.suffix == ArchiveFileSuffix {
-		cs, err = newBSArchiveChunkSource(ctx, bsp.bs, plan.name, bsp.q, openOpts{deepValidate: true}, stats)
+		cs, err = newBSArchiveChunkSource(ctx, bsp.bs, plan.name, plan.chunkCount, bsp.q, openOpts{deepValidate: true}, stats)
 	} else {
 		cs, err = newBSTableChunkSource(ctx, bsp.bs, plan.name, plan.chunkCount, bsp.q, openOpts{deepValidate: true}, stats)
 	}
@@ -230,7 +230,7 @@ func (bsp *blobstorePersister) Open(ctx context.Context, name hash.Hash, chunkCo
 	}
 
 	if blobstore.IsNotFoundError(err) {
-		source, err := newBSArchiveChunkSource(ctx, bsp.bs, name, bsp.q, opts, stats)
+		source, err := newBSArchiveChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, opts, stats)
 		if err != nil {
 			return nil, err
 		}
@@ -372,34 +372,92 @@ func (bsTRA *bsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off
 	return totalRead, nil
 }
 
-func newBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, q MemoryQuotaProvider, opts openOpts, stats *Stats) (cs chunkSource, err error) {
+func newBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, opts openOpts, stats *Stats) (cs chunkSource, err error) {
 	if shouldSpool(bs) {
-		return newSpooledBSArchiveChunkSource(ctx, bs, name, q, opts, stats)
+		return newSpooledBSArchiveChunkSource(ctx, bs, name, chunkCount, q, opts, stats)
 	}
 
-	rc, sz, _, err := bs.Get(ctx, name.String()+ArchiveFileSuffix, blobstore.NewBlobRange(-int64(archiveFooterSize), 0))
+	key := name.String() + ArchiveFileSuffix
+	aRdr, _, err := openBSArchiveIndex(ctx, bs, key, name, chunkCount, q, opts, stats)
 	if err != nil {
-		return nil, err
+		return emptyChunkSource{}, err
 	}
-	defer rc.Close()
+	aRdr.reader = &bsTableReaderAt{key: key, bs: bs}
+	return &archiveChunkSource{aRdr: aRdr, refs: noopRefCounter{}, blockSize: s3BlockSize}, nil
+}
+
+// archiveMetadataAllowance is how much metadata archiveTailEstimate assumes an
+// archive holds. Typical metadata is a short JSON map; an archive with more,
+// such as one listing many conjoined files, costs a second read to open.
+const archiveMetadataAllowance = 1024
+
+// archiveTailEstimate returns how many bytes from the end of an archive of
+// |chunkCount| chunks are expected to hold its footer, metadata and index. It
+// assumes the most byte spans the chunks can need, one per chunk plus one
+// dictionary per chunk, so only metadata can push the index out of range.
+func archiveTailEstimate(chunkCount uint32) uint64 {
+	return archiveFooterSize + archiveMetadataAllowance + archiveIndexSize(2*chunkCount, chunkCount)
+}
+
+// openBSArchiveIndex reads the footer and index of the archive |key| and builds
+// an archiveReader from them, returning it with the archive's size. The
+// archiveReader has no reader for chunk data; the caller must set one.
+//
+// The footer, metadata and index are read with a single ranged read sized by
+// archiveTailEstimate, falling back to a second read for the part of the index
+// it missed.
+func openBSArchiveIndex(ctx context.Context, bs blobstore.Blobstore, key string, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, opts openOpts, stats *Stats) (archiveReader, uint64, error) {
+	want := archiveTailEstimate(chunkCount)
+	rc, sz, _, err := bs.Get(ctx, key, blobstore.NewBlobRange(-int64(want), 0))
+	if err != nil {
+		return archiveReader{}, 0, err
+	}
+	tail, err := io.ReadAll(rc)
+	if err = errors.Join(err, rc.Close()); err != nil {
+		return archiveReader{}, 0, err
+	}
 
 	// Spans in the archive are addressed relative to the end of the file.
 	// If we don't have a real size, we can't compute the right range reads.
 	if sz == 0 {
-		return nil, fmt.Errorf("%s%s: blobstore did not report the size of the archive", name.String(), ArchiveFileSuffix)
+		return archiveReader{}, 0, fmt.Errorf("%s: blobstore did not report the size of the archive", key)
+	}
+	tailLen := uint64(len(tail))
+	if tailLen != min(want, sz) {
+		return archiveReader{}, 0, fmt.Errorf("%s: read %d bytes from the end of a %d byte archive, expected %d", key, tailLen, sz, min(want, sz))
+	}
+	if tailLen < archiveFooterSize {
+		return archiveReader{}, 0, fmt.Errorf("%s: %d byte archive is too small to hold a footer: %w", key, sz, ErrCorruptArchiveIndex)
 	}
 
-	footer := make([]byte, archiveFooterSize)
-	_, err = io.ReadFull(rc, footer)
+	footer, err := buildArchiveFooter(name, sz, tail[tailLen-archiveFooterSize:])
 	if err != nil {
-		return nil, err
+		return archiveReader{}, 0, err
 	}
 
-	aRdr, err := newArchiveReaderFromFooter(ctx, &bsTableReaderAt{key: name.String() + ArchiveFileSuffix, bs: bs}, name, sz, footer, q, opts, stats)
-	if err != nil {
-		return emptyChunkSource{}, err
+	index := footer.totalIndexSpan()
+	indexEnd := index.offset + index.length
+	tailOffset := sz - tailLen
+	var indexBytes []byte
+	switch {
+	case index.offset >= tailOffset:
+		indexBytes = tail[index.offset-tailOffset : indexEnd-tailOffset]
+	case indexEnd <= tailOffset:
+		indexBytes, _, err = readBlobRange(ctx, bs, key, blobstore.NewBlobRange(int64(index.offset), int64(index.length)), index.length)
+	default:
+		missing := tailOffset - index.offset
+		indexBytes, _, err = readBlobRange(ctx, bs, key, blobstore.NewBlobRange(int64(index.offset), int64(missing)), missing)
+		indexBytes = append(indexBytes, tail[:indexEnd-tailOffset]...)
 	}
-	return &archiveChunkSource{aRdr: aRdr, refs: noopRefCounter{}, blockSize: s3BlockSize}, nil
+	if err != nil {
+		return archiveReader{}, 0, err
+	}
+
+	aRdr, err := buildArchiveReader(ctx, &archiveIndexReaderAt{buf: indexBytes, off: int64(index.offset)}, footer, q, opts, stats)
+	if err != nil {
+		return archiveReader{}, 0, err
+	}
+	return aRdr, sz, nil
 }
 
 func newBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, opts openOpts, stats *Stats) (cs chunkSource, err error) {
