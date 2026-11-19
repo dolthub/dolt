@@ -1319,3 +1319,61 @@ func countOf(rows []int, row int) int32 {
 
 	return n
 }
+
+// BenchmarkWrite measures a write to a row that nothing else has locked, including its share of beginning and
+// committing a transaction of a hundred such writes.
+func BenchmarkWrite(b *testing.B) {
+	j := NewJournal()
+	keys := make([][]byte, 100)
+	for i := range keys {
+		keys[i] = []byte(fmt.Sprintf("key-%04d", i))
+	}
+
+	req := WriteRequest{Relation: testRel, Compare: bytes.Compare, Op: WriteUpdate}
+	ctx := context.Background()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; {
+		txn := j.Begin(1)
+		for k := 0; k < len(keys) && i < b.N; k, i = k+1, i+1 {
+			req.Target = RowTarget(keys[k])
+			if res, err := j.Write(ctx, txn, req); err != nil || res != LockGranted {
+				b.Fatal(res, err)
+			}
+		}
+
+		j.Commit(txn)
+	}
+}
+
+// BenchmarkWriteParallel is BenchmarkWrite with every processor writing its own rows of the same table.
+func BenchmarkWriteParallel(b *testing.B) {
+	j := NewJournal()
+	var next atomic.Int64
+	ctx := context.Background()
+	b.ReportAllocs()
+	b.RunParallel(func(pb *testing.PB) {
+		worker := next.Add(1)
+		keys := make([][]byte, 100)
+		for i := range keys {
+			keys[i] = []byte(fmt.Sprintf("key-%d-%04d", worker, i))
+		}
+
+		req := WriteRequest{Relation: testRel, Compare: bytes.Compare, Op: WriteUpdate}
+		for more := true; more; {
+			txn := j.Begin(uint32(worker))
+			for k := 0; k < len(keys); k++ {
+				if more = pb.Next(); !more {
+					break
+				}
+
+				req.Target = RowTarget(keys[k])
+				if res, err := j.Write(ctx, txn, req); err != nil || res != LockGranted {
+					b.Fatal(res, err)
+				}
+			}
+
+			j.Commit(txn)
+		}
+	})
+}
