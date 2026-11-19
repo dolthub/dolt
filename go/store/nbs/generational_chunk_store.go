@@ -543,7 +543,7 @@ func (gcs *GenerationalNBS) RelativeOldGenPath(ctx context.Context) (string, err
 	}
 	if ngpok && ogpok {
 		if p, err := filepath.Rel(newgenpath, oldgenpath); err == nil {
-			return p, nil
+			return filepath.ToSlash(p), nil
 		}
 	}
 	return "oldgen", nil
