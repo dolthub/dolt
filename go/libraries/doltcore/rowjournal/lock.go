@@ -19,6 +19,8 @@ import (
 	"errors"
 	"math"
 	"time"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 var (
@@ -30,6 +32,9 @@ var (
 	// ErrLockNotAvailable is returned to a lock request with the WaitError policy that could not be granted
 	// immediately.
 	ErrLockNotAvailable = errors.New("could not obtain lock on row")
+	// ErrRelationChanged is returned to a lock request for a row that was waiting when the format of its table's row
+	// keys changed.
+	ErrRelationChanged = errors.New("table definition changed while waiting for a row lock")
 	// ErrTxnNotInProgress is returned when a transaction that has committed or aborted is used.
 	ErrTxnNotInProgress = errors.New("transaction is not in progress")
 )
@@ -38,9 +43,12 @@ var (
 type LockRequest struct {
 	Relation RelationKey
 	Target   Target
-	// Compare orders the row keys of the relation. It is used the first time the journal sees the relation.
+	// Compare orders the row keys of the relation.
 	Compare KeyCompare
-	Mode    LockMode
+	// KeyFormat identifies the format of the relation's row keys: two keys can be compared only if they were made
+	// with the same KeyFormat. It changes when the table's schema does.
+	KeyFormat hash.Hash
+	Mode      LockMode
 	// WaitPolicy says what to do if the lock cannot be granted immediately.
 	WaitPolicy WaitPolicy
 	// Timeout bounds how long the request waits. Zero waits indefinitely.
@@ -51,9 +59,11 @@ type LockRequest struct {
 type WriteRequest struct {
 	Relation RelationKey
 	Target   Target
-	// Compare orders the row keys of the relation. It is used the first time the journal sees the relation.
+	// Compare orders the row keys of the relation.
 	Compare KeyCompare
-	Op      WriteOp
+	// KeyFormat identifies the format of the relation's row keys. See LockRequest.
+	KeyFormat hash.Hash
+	Op        WriteOp
 	// KeysChanged is whether an update changes any column of the row's key.
 	KeysChanged bool
 	// Successor is the row's new key when an update changes it.
@@ -87,7 +97,7 @@ func (j *Journal) Lock(ctx context.Context, txn *Txn, req LockRequest) (LockResu
 		return 0, ErrTxnNotInProgress
 	}
 
-	e := j.relationFor(req.Relation, req.Compare, true).entryFor(req.Target, true)
+	e := j.relationFor(req.Relation, req.Compare, req.KeyFormat).entryFor(req.Target, true)
 	return j.acquire(ctx, txn, e, req.Mode, req.WaitPolicy, req.Timeout, false)
 }
 
@@ -105,7 +115,7 @@ func (j *Journal) Write(ctx context.Context, txn *Txn, req WriteRequest) (LockRe
 		return 0, ErrTxnNotInProgress
 	}
 
-	e := j.relationFor(req.Relation, req.Compare, true).entryFor(req.Target, true)
+	e := j.relationFor(req.Relation, req.Compare, req.KeyFormat).entryFor(req.Target, true)
 	res, err := j.acquire(ctx, txn, e, req.lockMode(), WaitBlock, req.Timeout, req.Op == WriteInsert)
 	if err != nil || res != LockGranted {
 		return res, err
@@ -228,6 +238,10 @@ func (j *Journal) acquire(
 
 		if err == nil && txn.status != TxnInProgress {
 			err = ErrTxnNotInProgress
+		}
+
+		if err == nil && e.removed {
+			err = ErrRelationChanged
 		}
 
 		if err == nil && checkDeadlock {

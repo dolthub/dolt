@@ -16,6 +16,8 @@ package rowjournal
 
 import (
 	"github.com/google/btree"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // KeyCompare orders two row keys of the same table. Keys that compare equal are the same row, even when their bytes
@@ -29,6 +31,8 @@ const rowIndexDegree = 32
 type relation struct {
 	key     RelationKey
 	compare KeyCompare
+	// keyFormat identifies the format of the row keys in rows, which |compare| orders.
+	keyFormat hash.Hash
 	// rows holds an entry for every row that is locked, waited on, or has a write that some snapshot may not see.
 	rows *btree.BTreeG[*entry]
 	// table is the entry for locks and writes that target the table as a whole.
@@ -42,18 +46,24 @@ type relation struct {
 	probe entry
 }
 
-func newRelation(key RelationKey, compare KeyCompare) *relation {
+func newRelation(key RelationKey, compare KeyCompare, keyFormat hash.Hash) *relation {
 	rel := &relation{
 		key:      key,
-		compare:  compare,
 		rowLocks: make(map[*Txn]*[numLockModes]int),
 		waiters:  make(map[*waiter]struct{}),
 	}
+	rel.table = &entry{rel: rel, isTable: true}
+	rel.setKeyFormat(compare, keyFormat)
+	return rel
+}
+
+// setKeyFormat gives the relation an empty index of rows whose keys have the format given.
+func (rel *relation) setKeyFormat(compare KeyCompare, keyFormat hash.Hash) {
+	rel.compare = compare
+	rel.keyFormat = keyFormat
 	rel.rows = btree.NewG(rowIndexDegree, func(a, b *entry) bool {
 		return compare(a.key, b.key) < 0
 	})
-	rel.table = &entry{rel: rel, isTable: true}
-	return rel
 }
 
 // entryFor returns the entry for |target|, creating it when |create| is set and it does not exist.

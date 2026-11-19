@@ -186,6 +186,15 @@ type SchemaChangeRecord struct {
 	NewTable doltdb.TableName
 }
 
+// KeyFormatChangeRecord records that the rows of a relation are now identified by keys of a different format, as
+// they are after its table's schema changes or the table is dropped and created again. Keys of the old format can't be
+// compared with keys of the new one, so the locks and writes recorded against rows become locks and writes on the
+// table as a whole, which is the safe way to lose track of which rows they were for.
+type KeyFormatChangeRecord struct {
+	Relation  RelationKey
+	KeyFormat hash.Hash
+}
+
 // PruneRecord discards the writes of every committed transaction with an ID below Horizon. Those transactions are
 // visible to every snapshot that exists or can be taken, so their writes can no longer conflict with anything.
 type PruneRecord struct {
@@ -202,6 +211,7 @@ func (r RowLockRecord) TxnID() TxnID           { return r.Txn }
 func (r RowWriteRecord) TxnID() TxnID          { return r.Txn }
 func (r RefUpdateRecord) TxnID() TxnID         { return r.Txn }
 func (r SchemaChangeRecord) TxnID() TxnID      { return r.Txn }
+func (r KeyFormatChangeRecord) TxnID() TxnID   { return 0 }
 func (r PruneRecord) TxnID() TxnID             { return 0 }
 
 // RecordSink receives every record appended to a Journal, in order. Append is called with the journal's internal lock

@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 var allModes = []LockMode{LockKeyShare, LockShare, LockNoKeyUpdate, LockUpdate}
@@ -838,6 +839,72 @@ func TestKeysAreMatchedWithTheRelationsComparator(t *testing.T) {
 
 	h.j.Abort(a)
 	h.j.Abort(b)
+	h.requireEmpty()
+}
+
+func TestKeyFormatChange(t *testing.T) {
+	h := newHarness(t)
+	oldFormat := hash.Of([]byte("old schema"))
+	newFormat := hash.Of([]byte("new schema"))
+	request := func(key string, mode LockMode, format hash.Hash) LockRequest {
+		req := lockReq(testRel, key, mode, WaitSkip)
+		req.KeyFormat = format
+		if format == newFormat {
+			// Keys of the new format are ordered differently, and comparing one with a key of the old format
+			// would be a bug.
+			req.Compare = func(left, right []byte) int {
+				require.NotContains(t, string(left)+string(right), "old")
+				return -bytes.Compare(left, right)
+			}
+		}
+
+		return req
+	}
+
+	lock := func(txn *Txn, key string, mode LockMode, format hash.Hash) LockResult {
+		res, err := h.j.Lock(context.Background(), txn, request(key, mode, format))
+		require.NoError(t, err)
+		return res
+	}
+
+	holder := h.j.Begin(1)
+	writer := h.j.Begin(2)
+	waiter := h.j.Begin(3)
+	old := h.j.Begin(4)
+
+	require.Equal(t, LockGranted, lock(holder, "old-a", LockShare, oldFormat))
+	wreq := writeReq(testRel, "old-b", WriteUpdate)
+	wreq.KeyFormat = oldFormat
+	res, err := h.j.Write(context.Background(), writer, wreq)
+	require.NoError(t, err)
+	require.Equal(t, LockGranted, res)
+	h.j.Commit(writer)
+
+	blocked := h.blocked(waiter, func() (LockResult, error) {
+		req := request("old-a", LockUpdate, oldFormat)
+		req.WaitPolicy = WaitBlock
+		return h.j.Lock(context.Background(), waiter, req)
+	})
+
+	// The first request with keys of a new format moves everything known about rows to the table as a whole.
+	changer := h.j.Begin(5)
+	assert.Equal(t, LockGranted, lock(changer, "new-a", LockShare, newFormat))
+	assert.ErrorIs(t, h.await(blocked).err, ErrRelationChanged)
+
+	// The share lock that was on a row now covers every row.
+	assert.Equal(t, LockWouldBlock, lock(changer, "new-b", LockUpdate, newFormat))
+	assert.Equal(t, LockGranted, lock(changer, "new-b", LockShare, newFormat))
+
+	// The write that was to a row now counts against every row, for a snapshot that can't see it.
+	assert.Equal(t, LockRowUpdated, lock(old, "new-c", LockShare, newFormat))
+	assert.Equal(t, 1, h.j.RetainedWrites())
+
+	h.j.Commit(holder)
+	assert.Equal(t, LockGranted, lock(changer, "new-b", LockUpdate, newFormat))
+
+	h.j.Abort(waiter)
+	h.j.Abort(old)
+	h.j.Commit(changer)
 	h.requireEmpty()
 }
 

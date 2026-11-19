@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowjournal"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -83,7 +84,9 @@ type rowLockTarget struct {
 	relation   rowjournal.RelationKey
 	keyer      rowLockKeyer
 	compare    rowjournal.KeyCompare
-	valid      bool
+	// keyFormat identifies the format of the keys that |keyer| makes, which changes with the table's schema.
+	keyFormat hash.Hash
+	valid     bool
 }
 
 // rowLocks returns the means to lock rows of this writer's table for the transaction of |ctx|, or false if the
@@ -111,11 +114,17 @@ func (w *prollyTableWriter) rowLocks(ctx *sql.Context) (dsess.RowLocks, bool) {
 			return dsess.RowLocks{}, false
 		}
 
+		keyFormat, err := w.tbl.GetSchemaHash(ctx)
+		if err != nil {
+			return dsess.RowLocks{}, false
+		}
+
 		w.lockTarget = rowLockTarget{
 			workingSet: workingSet,
 			relation:   dsess.RowLockRelation(database, workingSet, w.tblName),
 			keyer:      keyer,
 			compare:    keyer.rowLockCompare(),
+			keyFormat:  keyFormat,
 			valid:      true,
 		}
 	}
@@ -246,6 +255,7 @@ func (w *prollyTableWriter) lockRowForDelete(ctx *sql.Context, sqlRow sql.Row) e
 func (w *prollyTableWriter) writeLockedRow(ctx *sql.Context, locks dsess.RowLocks, req rowjournal.WriteRequest) error {
 	req.Relation = w.lockTarget.relation
 	req.Compare = w.lockTarget.compare
+	req.KeyFormat = w.lockTarget.keyFormat
 	req.Timeout = dsess.RowLockWaitTimeout(ctx)
 
 	res, err := locks.Journal.Write(ctx, locks.Txn, req)

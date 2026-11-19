@@ -113,6 +113,8 @@ func RowLockWaitError(err error) error {
 		return sql.ErrRowLockWaitTimeout.New()
 	case errors.Is(err, rowjournal.ErrLockNotAvailable):
 		return sql.ErrRowLockNotAvailable.New()
+	case errors.Is(err, rowjournal.ErrRelationChanged):
+		return sql.ErrLockDeadlock.New(err.Error())
 	default:
 		return err
 	}

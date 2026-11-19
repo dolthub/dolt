@@ -32,6 +32,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // DefaultDeadlockTimeout is how long a lock request waits before checking a second time whether it is part of a
@@ -231,6 +233,8 @@ func (j *Journal) RecordSchemaChange(txn *Txn, rec SchemaChangeRecord) {
 type hint struct {
 	txn   *Txn
 	entry *entry
+	// compare orders the keys of the relation that the record is about.
+	compare KeyCompare
 }
 
 // append adds a record to the journal: it hands the record to the sink and applies it to the in-memory state. Every
@@ -292,6 +296,8 @@ func (j *Journal) append(rec Record, h hint) {
 		})
 		txn.touched[e] = struct{}{}
 		txn.wrote = true
+	case KeyFormatChangeRecord:
+		j.changeKeyFormat(j.relations[r.Relation], h.compare, r.KeyFormat)
 	case RefUpdateRecord, SchemaChangeRecord:
 		// Recorded for the sink only. Nothing in the journal's state depends on these yet.
 	case PruneRecord:
@@ -301,16 +307,48 @@ func (j *Journal) append(rec Record, h hint) {
 	}
 }
 
-// relationFor returns the relation for |key|, creating it when |create| is set and it does not exist. Requires j.mu.
-func (j *Journal) relationFor(key RelationKey, compare KeyCompare, create bool) *relation {
+// relationFor returns the relation for |key|, creating it if it does not exist, with rows identified by keys of the
+// format given. Requires j.mu.
+func (j *Journal) relationFor(key RelationKey, compare KeyCompare, keyFormat hash.Hash) *relation {
 	rel, ok := j.relations[key]
-	if ok || !create {
+	if !ok {
+		rel = newRelation(key, compare, keyFormat)
+		j.relations[key] = rel
 		return rel
 	}
 
-	rel = newRelation(key, compare)
-	j.relations[key] = rel
+	if rel.keyFormat != keyFormat {
+		j.append(KeyFormatChangeRecord{Relation: key, KeyFormat: keyFormat}, hint{compare: compare})
+	}
+
 	return rel
+}
+
+// changeKeyFormat turns every lock and write on a row of the relation into one on its table as a whole, and leaves
+// the relation with an empty index of rows whose keys have the format given. Requires j.mu.
+func (j *Journal) changeKeyFormat(rel *relation, compare KeyCompare, keyFormat hash.Hash) {
+	rel.rows.Ascend(func(e *entry) bool {
+		for _, l := range e.lockers {
+			rel.table.lockers = append(rel.table.lockers, l)
+			l.txn.touched[rel.table] = struct{}{}
+		}
+
+		for _, w := range e.writes {
+			rel.table.writes = append(rel.table.writes, w)
+			w.txn.touched[rel.table] = struct{}{}
+		}
+
+		e.lockers = nil
+		e.writes = nil
+		e.removed = true
+
+		// Requests waiting for the row find it gone when they wake, and give up.
+		e.signalWaiters()
+		return true
+	})
+
+	clear(rel.rowLocks)
+	rel.setKeyFormat(compare, keyFormat)
 }
 
 // addLocker records a lock on an entry. Requires j.mu.
