@@ -599,6 +599,9 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 		}
 
 		unmergableTableNames := ToTableNames(unmergableTables, DefaultSchemaName)
+		for i, schemaName := range dsws.MergeState.UnmergableTableSchemas() {
+			unmergableTableNames[i].Schema = schemaName
+		}
 
 		var preMergeHeadCommit *Commit
 		if preMergeHeadDCommit, err := dsws.MergeState.PreMergeHeadCommit(ctx, vrw); err != nil {
@@ -752,8 +755,18 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB, meta *datas.W
 			}
 		}
 
-		// TODO: Serialize the full TableName
-		mergeState, err = datas.NewMergeState(preMergeWorking, dCommit, ws.mergeState.commitSpecStr, FlattenTableNames(ws.mergeState.unmergableTables), ws.mergeState.isCherryPick, ws.mergeState.isRevert, headDCommit, ws.mergeState.pendingCommitsToProcess)
+		unmergableTables := make([]string, len(ws.mergeState.unmergableTables))
+		var unmergableSchemas []string
+		for i, name := range ws.mergeState.unmergableTables {
+			unmergableTables[i] = name.Name
+			if name.Schema != "" {
+				if unmergableSchemas == nil {
+					unmergableSchemas = make([]string, len(ws.mergeState.unmergableTables))
+				}
+				unmergableSchemas[i] = name.Schema
+			}
+		}
+		mergeState, err = datas.NewMergeState(preMergeWorking, dCommit, ws.mergeState.commitSpecStr, unmergableTables, unmergableSchemas, ws.mergeState.isCherryPick, ws.mergeState.isRevert, headDCommit, ws.mergeState.pendingCommitsToProcess)
 		if err != nil {
 			return nil, err
 		}
