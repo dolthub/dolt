@@ -15,12 +15,9 @@
 package nbs
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
-
-	"golang.org/x/sync/errgroup"
 
 	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/blobstore"
@@ -40,30 +37,7 @@ var _ tableFilePersister = &noConjoinBlobstorePersister{}
 // Persist makes the contents of mt durable. Chunks already present in
 // |haver| may be dropped in the process.
 func (bsp *noConjoinBlobstorePersister) Persist(ctx context.Context, behavior dherrors.FatalBehavior, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
-	address, data, _, chunkCount, gcb, err := mt.write(haver, keeper, stats)
-	if err != nil {
-		return emptyChunkSource{}, gcBehavior_Continue, err
-	} else if gcb != gcBehavior_Continue {
-		return emptyChunkSource{}, gcb, nil
-	} else if chunkCount == 0 {
-		return emptyChunkSource{}, gcBehavior_Continue, nil
-	}
-	name := address.String()
-
-	eg, ectx := errgroup.WithContext(ctx)
-	eg.Go(func() error {
-		_, err := bsp.bs.Put(ectx, name, int64(len(data)), bytes.NewBuffer(data))
-		return err
-	})
-	if err = eg.Wait(); err != nil {
-		return nil, gcBehavior_Continue, err
-	}
-
-	src, err := newPersistedBSTableChunkSource(ctx, bsp.bs, bsp.q, data, address, bsp.blockSize)
-	if err != nil {
-		return nil, gcBehavior_Continue, err
-	}
-	return src, gcBehavior_Continue, nil
+	return persistBSArchive(ctx, bsp.bs, bsp.q, mt, haver, keeper, stats)
 }
 
 // ConjoinAll implements tablePersister.
@@ -73,23 +47,7 @@ func (bsp *noConjoinBlobstorePersister) ConjoinAll(ctx context.Context, behavior
 
 // Open a table named |name|, containing |chunkCount| chunks.
 func (bsp *noConjoinBlobstorePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, opts openOpts, stats *Stats) (chunkSource, error) {
-	cs, err := newBSTableChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, opts, stats)
-	if err == nil {
-		return cs, nil
-	}
-
-	// The table may exist in archive format (<name>.darc), e.g. when table
-	// files written by a local archive-enabled store are copied to this
-	// blobstore during a push. Mirror blobstorePersister.Open's fallback.
-	if blobstore.IsNotFoundError(err) {
-		source, err := newBSArchiveChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, opts, stats)
-		if err != nil {
-			return nil, err
-		}
-		return source, nil
-	}
-
-	return nil, err
+	return openBSArchiveFirst(ctx, bsp.bs, name, chunkCount, bsp.q, opts, stats)
 }
 
 func (bsp *noConjoinBlobstorePersister) Exists(ctx context.Context, name string, chunkCount uint32, stats *Stats) (bool, io.Closer, error) {

@@ -372,6 +372,50 @@ func (bsTRA *bsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off
 	return totalRead, nil
 }
 
+// persistBSArchive writes the chunks of |mt| that |haver| does not have to |bs|
+// as an archive, and opens it from the bytes written.
+func persistBSArchive(ctx context.Context, bs blobstore.Blobstore, q MemoryQuotaProvider, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
+	name, data, chunkCount, gcb, err := mt.writeArchive(haver, keeper, stats)
+	if err != nil {
+		return emptyChunkSource{}, gcBehavior_Continue, err
+	} else if gcb != gcBehavior_Continue {
+		return emptyChunkSource{}, gcb, nil
+	} else if chunkCount == 0 {
+		return emptyChunkSource{}, gcBehavior_Continue, nil
+	}
+
+	key := name.String() + ArchiveFileSuffix
+	if _, err = bs.Put(ctx, key, int64(len(data)), bytes.NewReader(data)); err != nil {
+		return emptyChunkSource{}, gcBehavior_Continue, err
+	}
+
+	aRdr, err := newArchiveReader(ctx, &archiveIndexReaderAt{buf: data}, name, uint64(len(data)), q, openOpts{}, stats)
+	if err != nil {
+		return emptyChunkSource{}, gcBehavior_Continue, err
+	}
+	blockSize := uint64(s3BlockSize)
+	aRdr.reader = &bsTableReaderAt{key: key, bs: bs}
+	if shouldSpool(bs) {
+		blockSize = fileBlockSize
+		aRdr.reader, err = newPersistedSpoolingTableReaderAt(bs, key, data)
+		if err != nil {
+			return emptyChunkSource{}, gcBehavior_Continue, errors.Join(err, aRdr.close())
+		}
+	}
+	return &archiveChunkSource{aRdr: aRdr, refs: noopRefCounter{}, blockSize: blockSize}, gcBehavior_Continue, nil
+}
+
+// openBSArchiveFirst opens the table file |name| in |bs|, trying the archive
+// format before the table format. Use it only where the persister writes
+// archives, or every open of a table file costs a failed read.
+func openBSArchiveFirst(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, opts openOpts, stats *Stats) (chunkSource, error) {
+	cs, err := newBSArchiveChunkSource(ctx, bs, name, chunkCount, q, opts, stats)
+	if err == nil || !blobstore.IsNotFoundError(err) {
+		return cs, err
+	}
+	return newBSTableChunkSource(ctx, bs, name, chunkCount, q, opts, stats)
+}
+
 func newBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, opts openOpts, stats *Stats) (cs chunkSource, err error) {
 	if shouldSpool(bs) {
 		return newSpooledBSArchiveChunkSource(ctx, bs, name, chunkCount, q, opts, stats)

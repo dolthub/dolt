@@ -404,7 +404,7 @@ func TestNBS_GitStore_ReadsTableConjoinedAway(t *testing.T) {
 	bs := st.persister.(*singleBlobBSPersister).bs
 	require.Eventually(t, func() bool {
 		for _, source := range old.upstream {
-			exists, err := bs.Exists(ctx, source.hash().String())
+			exists, err := bs.Exists(ctx, source.hash().String()+source.suffix())
 			if err != nil || exists {
 				return false
 			}
@@ -423,9 +423,7 @@ func TestNBS_GitStore_ReadsTableConjoinedAway(t *testing.T) {
 	// So can a sequential read of a table which has not been spooled.
 	var streamed int
 	for _, source := range old.upstream {
-		tr, ok := source.(*chunkSourceAdapter)
-		require.True(t, ok)
-		if tr.tableReader.r.(*spoolingTableReaderAt).f.Load() != nil {
+		if spoolingReaderOf(t, source).f.Load() != nil {
 			continue
 		}
 		rc, _, err := source.reader(ctx, dherrors.FatalBehaviorError)
@@ -645,6 +643,23 @@ func TestSpoolingTableReaderAt(t *testing.T) {
 	require.True(t, os.IsNotExist(err), "temp file must be removed once the last reference closes")
 }
 
+// spoolingReaderOf returns the spooling reader under the table or archive |cs|.
+func spoolingReaderOf(t *testing.T, cs chunkSource) *spoolingTableReaderAt {
+	t.Helper()
+	var rdr tableReaderAt
+	switch src := cs.(type) {
+	case *chunkSourceAdapter:
+		rdr = src.r
+	case *archiveChunkSource:
+		rdr = src.aRdr.reader
+	default:
+		require.Failf(t, "unexpected chunk source", "%T", cs)
+	}
+	ra, ok := rdr.(*spoolingTableReaderAt)
+	require.True(t, ok, "%T does not spool", rdr)
+	return ra
+}
+
 // persistReadCountingBlobstore tracks blob reads after Persist returns.
 type persistReadCountingBlobstore struct {
 	wholeBlobBlobstore
@@ -686,8 +701,7 @@ func TestBlobstorePersistersPersistSpooling(t *testing.T) {
 					require.Zero(t, bs.gets, "Persist must not read back the table")
 					var path string
 					if spool {
-						ra, ok := cs.(*chunkSourceAdapter).r.(*spoolingTableReaderAt)
-						require.True(t, ok)
+						ra := spoolingReaderOf(t, cs)
 						path = ra.f.Load().Name()
 					}
 					clone, err := cs.clone()
@@ -754,7 +768,7 @@ func TestSingleBlobBSPersisterConjoinReusesSpools(t *testing.T) {
 					require.NoError(t, err)
 				}
 				sources = append(sources, cs)
-				if f := cs.(*chunkSourceAdapter).r.(*spoolingTableReaderAt).f.Load(); f != nil {
+				if f := spoolingReaderOf(t, cs).f.Load(); f != nil {
 					paths = append(paths, f.Name())
 				}
 				t.Cleanup(func() { require.NoError(t, cs.close()) })
@@ -778,7 +792,7 @@ func TestSingleBlobBSPersisterConjoinReusesSpools(t *testing.T) {
 			}
 			require.Equal(t, want+1, bs.gets, "the first chunk read spools the output, and later ones use its spool")
 			for _, src := range sources {
-				ra := src.(*chunkSourceAdapter).r.(*spoolingTableReaderAt)
+				ra := spoolingReaderOf(t, src)
 				require.Equal(t, int32(1), ra.cnt.Load(), "conjoin closes its readers without closing the source")
 				require.Equal(t, !reopen, ra.f.Load() != nil, "conjoin does not spool its sources")
 			}
