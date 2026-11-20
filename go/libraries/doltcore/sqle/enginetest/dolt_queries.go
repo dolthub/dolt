@@ -9167,4 +9167,72 @@ end;
 			},
 		},
 	},
+	{
+		Name: "index lookups on temporary tables with zero or many ranges",
+		SetUpScript: []string{
+			"create temporary table t (x int primary key, y int, key(y))",
+			"insert into t values (1, 10), (2, 20), (3, 30), (4, 40)",
+			"create temporary table empty_t (x int primary key)",
+			"create temporary table big_t (x int primary key)",
+			"insert into big_t with recursive r(n) as (select 1 union all select n + 1 from r where n < 1000) select n from r",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select x from t where x = 1 and x = 2",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select x from empty_t where x = 1 and x = 2",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select x from t where x > 5 and x < 3",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select x from t where x in (1) and x not in (1)",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select x from t where y = 10 and y = 20",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select x from t where x = 1 or x = 3 order by x",
+				Expected: []sql.Row{{1}, {3}},
+			},
+			{
+				Query:    "select x from t where y = 20 or y = 40 order by x",
+				Expected: []sql.Row{{2}, {4}},
+			},
+			{
+				Query:    "select x from t where x < 2 or x > 3 order by x desc",
+				Expected: []sql.Row{{4}, {1}},
+			},
+			{
+				Query:    "select x from big_t where x = 500",
+				Expected: []sql.Row{{500}},
+			},
+			{
+				Query:    "select x from big_t where x = 500 or x = 7 order by x",
+				Expected: []sql.Row{{7}, {500}},
+			},
+			{
+				Query:    "update t set y = y + 1 where x = 1 and x = 2",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 0, Info: plan.UpdateInfo{Matched: 0, Updated: 0}}}},
+			},
+			{
+				Query:    "delete from t where x = 1 and x = 2",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "delete from t where x = 1 or x = 4",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "select x, y from t order by x",
+				Expected: []sql.Row{{2, 20}, {3, 30}},
+			},
+		},
+	},
 }
