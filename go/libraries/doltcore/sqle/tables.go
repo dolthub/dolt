@@ -2348,7 +2348,7 @@ func preserveSurvivingColumnEncodings(oldSch, newSch schema.Schema) schema.Schem
 		if oldCol.Kind != cols[i].Kind {
 			continue
 		}
-		preserved := typeinfo.PreserveAdaptiveEncoding(oldCol.TypeInfo, cols[i].TypeInfo)
+		preserved := typeinfo.PreserveOldEncoding(oldCol.TypeInfo, cols[i].TypeInfo)
 		if preserved == cols[i].TypeInfo {
 			continue
 		}
@@ -2490,7 +2490,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 	}
 
 	if existingCol.Kind == col.Kind {
-		col.TypeInfo = typeinfo.PreserveAdaptiveEncoding(existingCol.TypeInfo, col.TypeInfo)
+		col.TypeInfo = typeinfo.PreserveOldEncoding(existingCol.TypeInfo, col.TypeInfo)
 	}
 
 	// TODO: move this logic into ShouldRewrite
