@@ -163,6 +163,35 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "Test branch deletion when a client has the branch checked out in a database it isn't using",
+		SetUpScript: []string{
+			"create database other;",
+			"call dolt_branch('branch1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ CALL DOLT_CHECKOUT('branch1');",
+				Expected: []sql.Row{{0, "Switched to branch 'branch1'"}},
+			},
+			{
+				Query:    "/* client a */ use other;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:          "/* client b */ CALL DOLT_BRANCH('-d', 'branch1');",
+				ExpectedErrStr: "Error 1105 (HY000): unsafe to delete or rename branches in use in other sessions; use --force to force the change",
+			},
+			{
+				Query:    "/* client a */ use dolt;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select active_branch();",
+				Expected: []sql.Row{{"branch1"}},
+			},
+		},
+	},
+	{
 		Name: "Test branch renaming when clients are using a branch-qualified database",
 		SetUpScript: []string{
 			"call dolt_branch('branch1');",
