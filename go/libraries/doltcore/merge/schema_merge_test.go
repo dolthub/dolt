@@ -1282,6 +1282,13 @@ var jsonMergeTests = []schemaMergeTest{
 				merged:   singleRow(1, 2, 2, `{}`),
 			},
 			{
+				name:         `divergent modification of key that is a prefix-sibling of an edited object`,
+				ancestor:     singleRow(1, 1, 1, `{"a": {"q": 1}, "ab": 0}`),
+				left:         singleRow(1, 2, 1, `{"a": {"q": 1}, "ab": 1}`),
+				right:        singleRow(1, 1, 2, `{"a": {"q": 2}, "ab": 2}`),
+				dataConflict: true,
+			},
+			{
 				name:         `divergent insertion`,
 				ancestor:     singleRow(1, 1, 1, `{}`),
 				left:         singleRow(1, 2, 1, `{ "key1": "value1" }`),
