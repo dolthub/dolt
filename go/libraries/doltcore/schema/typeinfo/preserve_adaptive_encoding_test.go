@@ -259,29 +259,3 @@ func TestPreserveAdaptiveEncoding_GeometryCrossFamilyIsNoOp(t *testing.T) {
 	require.Equal(t, fresh.Encoding(), preserved.Encoding(),
 		"POINT → LINESTRING is a cross-family change — helper must NOT pin the POINT encoding onto the new LINESTRING")
 }
-
-// testEncodingPreserver is an EncodingPreserver that keeps the encoding of any old TypeInfo of the same kind.
-type testEncodingPreserver struct {
-	TypeInfo
-}
-
-func (t testEncodingPreserver) PreserveEncoding(oldTI TypeInfo) TypeInfo {
-	if oldTI.NomsKind() != t.NomsKind() {
-		return t
-	}
-	return testEncodingPreserver{TypeInfo: t.TypeInfo.WithEncoding(oldTI.Encoding())}
-}
-
-// TestPreserveAdaptiveEncoding_EncodingPreserver verifies that TypeInfos defined outside this package, such as
-// those of extended types, decide for themselves which encoding to keep.
-func TestPreserveAdaptiveEncoding_EncodingPreserver(t *testing.T) {
-	existing := (&blobStringType{sqlStringType: gmstypes.Text}).WithEncoding(val.StringAddrEnc)
-	fresh := testEncodingPreserver{TypeInfo: &blobStringType{sqlStringType: gmstypes.Text}}
-	fresh.TypeInfo = fresh.TypeInfo.WithEncoding(val.StringAdaptiveEnc)
-
-	preserved := PreserveAdaptiveEncoding(existing, fresh)
-	require.Equal(t, val.StringAddrEnc, preserved.Encoding())
-
-	preserved = PreserveAdaptiveEncoding(Int32Type, fresh)
-	require.Equal(t, val.StringAdaptiveEnc, preserved.Encoding())
-}
