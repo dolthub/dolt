@@ -24,6 +24,7 @@ package nbs
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"io"
 	"os"
 	"testing"
@@ -342,4 +343,44 @@ func (crg chunkReaderGroup) close() error {
 		}
 	}
 	return firstErr
+}
+
+func TestMemTableWriteArchive(t *testing.T) {
+	ctx := context.Background()
+	// Incompressible chunks of varied sizes, so each compresses to near
+	// snappy.MaxEncodedLen of its own size and the reused scratch buffer is
+	// written at many lengths.
+	sizes := []int{1, 7, 64, 4096, 1, 65536, 300, 3}
+	mt := newMemTable(1 << 20)
+	var data [][]byte
+	for _, sz := range sizes {
+		c := make([]byte, sz)
+		_, err := io.ReadFull(rand.Reader, c)
+		require.NoError(t, err)
+		require.Equal(t, chunkAdded, mt.addChunk(computeAddr(c), c))
+		data = append(data, c)
+	}
+	// A compressible chunk.
+	compressible := bytes.Repeat([]byte("dolt"), 1024)
+	require.Equal(t, chunkAdded, mt.addChunk(computeAddr(compressible), compressible))
+	data = append(data, compressible)
+
+	// The haver already has the first chunk.
+	had := newMemTable(testMemTableSize)
+	had.addChunk(computeAddr(data[0]), data[0])
+
+	name, archive, chunkCount, gcb, err := mt.writeArchive(had, nil, &Stats{})
+	require.NoError(t, err)
+	require.Equal(t, gcBehavior_Continue, gcb)
+	require.Equal(t, uint32(len(data)-1), chunkCount)
+
+	ar, err := newArchiveReader(ctx, tableReaderAtFromBytes(archive), name, uint64(len(archive)), NewUnlimitedMemQuotaProvider(), openOpts{deepValidate: true}, &Stats{})
+	require.NoError(t, err)
+	defer ar.close()
+	assert.False(t, ar.has(computeAddr(data[0])))
+	for _, c := range data[1:] {
+		got, err := ar.get(ctx, computeAddr(c), &Stats{})
+		require.NoError(t, err)
+		assert.Equal(t, c, got)
+	}
 }

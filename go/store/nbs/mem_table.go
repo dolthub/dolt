@@ -23,10 +23,12 @@ package nbs
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"sort"
 
+	"github.com/golang/snappy"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -278,30 +280,42 @@ func (mt *memTable) writeArchive(haver chunkReader, keeper keeperF, stats *Stats
 		return hash.Hash{}, nil, 0, gcb, err
 	}
 
-	var compressed []CompressedChunk
-	var compressedSize, uncompressedSize uint64
+	// Size the archive from the most snappy can produce, as maxTableSize does,
+	// so each chunk is compressed once into a reused scratch buffer and copied
+	// into the archive, rather than held compressed until the archive is sized.
+	var maxCompressedSize, uncompressedSize uint64
+	var maxChunkEncodedLen int
 	for _, addr := range mt.order {
 		if !addr.has {
-			cc := ChunkToCompressedChunk(chunks.NewChunkWithHash(*addr.a, mt.chunks[*addr.a]))
-			compressed = append(compressed, cc)
-			compressedSize += uint64(len(cc.FullCompressedChunk))
+			encodedLen := snappy.MaxEncodedLen(len(mt.chunks[*addr.a]))
+			maxChunkEncodedLen = max(maxChunkEncodedLen, encodedLen)
+			maxCompressedSize += uint64(encodedLen) + checksumSize
 			uncompressedSize += uint64(len(mt.chunks[*addr.a]))
+			chunkCount++
 		}
 	}
-	chunkCount = uint32(len(compressed))
 	if chunkCount == 0 {
 		return hash.Hash{}, nil, 0, gcBehavior_Continue, nil
 	}
 
-	sinkSize := compressedSize + archiveIndexSize(chunkCount, chunkCount) + archiveMetadataAllowance + archiveFooterSize
+	sinkSize := maxCompressedSize + archiveIndexSize(chunkCount, chunkCount) + archiveMetadataAllowance + archiveFooterSize
 	sink := NewFixedBufferByteSink(make([]byte, sinkSize))
 	aw := newArchiveWriterWithSink(sink)
-	for _, cc := range compressed {
-		spanID, err := aw.writeByteSpan(cc.FullCompressedChunk)
+	scratch := make([]byte, maxChunkEncodedLen+checksumSize)
+	var compressedSize uint64
+	for _, addr := range mt.order {
+		if addr.has {
+			continue
+		}
+		compressed := snappy.Encode(scratch, mt.chunks[*addr.a])
+		span := scratch[:len(compressed)+checksumSize]
+		binary.BigEndian.PutUint32(span[len(compressed):], crc(compressed))
+		compressedSize += uint64(len(compressed))
+		spanID, err := aw.writeByteSpan(span)
 		if err != nil {
 			return hash.Hash{}, nil, 0, gcBehavior_Continue, err
 		}
-		if err = aw.stageSnappyChunk(cc.H, spanID); err != nil {
+		if err = aw.stageSnappyChunk(*addr.a, spanID); err != nil {
 			return hash.Hash{}, nil, 0, gcBehavior_Continue, err
 		}
 	}
