@@ -72,13 +72,7 @@ func (ti *extendedType) Encoding() val.Encoding {
 	if ti.enc != 0 {
 		return ti.enc
 	}
-	return extendedEncoding(ti.sqlExtendedType)
-}
-
-// extendedEncoding returns the extended encoding for the given type, which is able to store values of any extended
-// type with the same serialized width.
-func extendedEncoding(typ sql.ExtendedType) val.Encoding {
-	switch typ.MaxSerializedWidth() {
+	switch ti.sqlExtendedType.MaxSerializedWidth() {
 	case sql.ExtendedTypeSerializedWidth_64K:
 		return val.ExtendedEnc
 	case sql.ExtendedTypeSerializedWidth_Unbounded:

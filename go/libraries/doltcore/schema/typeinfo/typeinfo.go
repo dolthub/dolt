@@ -226,10 +226,10 @@ func fillInCollationWithDefault(typ sql.Type) (sql.Type, error) {
 
 // PreserveOldEncoding returns newTI with its storage encoding overridden to that of oldTI whenever values stored with
 // oldTI's encoding remain valid for newTI. This applies to any type whose encoding can vary for the same type: TEXT,
-// BLOB, JSON and geometry types, which may use either an address or an adaptive encoding, and extended types, which
-// may use the extended encoding rather than their default encoding. This keeps columns that we don't rewrite during
-// ALTER TABLE statements on the same encoding. We could alternately rewrite the table in the presence of such ALTER
-// TABLE statements.
+// BLOB, JSON and geometry types, which may use either an address or an adaptive encoding, and unchanged extended
+// types, which may use the extended encoding rather than their default encoding. This keeps columns that we don't
+// rewrite during ALTER TABLE statements on the same encoding. We could alternately rewrite the table in the presence
+// of such ALTER TABLE statements.
 func PreserveOldEncoding(oldTI, newTI TypeInfo) TypeInfo {
 	if oldTI == nil || newTI == nil {
 		return newTI
@@ -280,15 +280,14 @@ func PreserveOldEncoding(oldTI, newTI TypeInfo) TypeInfo {
 			return nt.WithEncoding(ot.Encoding())
 		}
 	default:
-		// Extended types (e.g. those of doltgres) may store an existing column with the extended encoding, even when
-		// the new type has a different default encoding. Older doltgres releases stored every column this way. Keep
-		// the extended encoding whenever it's also valid for the new type.
+		// Extended types (e.g. those of doltgres) may store values of the same type with different encodings: older
+		// doltgres releases stored every column with the extended encoding. Any change to the type rewrites the
+		// column's values, so only keep the old encoding when the type is unchanged.
 		if oldTI.NomsKind() != types.ExtendedKind || newTI.NomsKind() != types.ExtendedKind {
 			break
 		}
 
-		newType, ok := newTI.ToSqlType().(sql.ExtendedType)
-		if ok && oldTI.Encoding() != newTI.Encoding() && oldTI.Encoding() == extendedEncoding(newType) {
+		if oldTI.Encoding() != newTI.Encoding() && oldTI.ToSqlType().Equals(newTI.ToSqlType()) {
 			return newTI.WithEncoding(oldTI.Encoding())
 		}
 	}
