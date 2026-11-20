@@ -720,6 +720,10 @@ func compareAddr(l, r hash.Hash) int {
 // CompareCollatedStrings compares two UTF-8 byte slices |left| and |right|
 // using [sql.WeightScanner] for |collation|.
 func CompareCollatedStrings(collation sql.CollationID, left, right []byte) int {
+	if collation.IsPadSpace() {
+		left = encodings.StringToBytes(collation.TrimRightSpace(encodings.BytesToString(left)))
+		right = encodings.StringToBytes(collation.TrimRightSpace(encodings.BytesToString(right)))
+	}
 	i := 0
 	for i < len(left) && i < len(right) && left[i] == right[i] {
 		i++

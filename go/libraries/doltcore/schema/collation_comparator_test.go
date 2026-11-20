@@ -134,6 +134,30 @@ func TestCompareCollatedStrings(t *testing.T) {
 			right:     []byte("a\xffb"),
 			exp:       0,
 		},
+		{
+			collation: sql.Collation_utf8mb4_unicode_ci,
+			left:      []byte("a \u200b"),
+			right:     []byte("a"),
+			exp:       0,
+		},
+		{
+			collation: sql.Collation_utf8mb4_unicode_ci,
+			left:      []byte("a "),
+			right:     []byte("a"),
+			exp:       0,
+		},
+		{
+			collation: sql.Collation_utf8mb4_0900_ai_ci,
+			left:      []byte("a \u200b"),
+			right:     []byte("a"),
+			exp:       1,
+		},
+		{
+			collation: sql.Collation_utf8mb4_0900_ai_ci,
+			left:      []byte("a "),
+			right:     []byte("a"),
+			exp:       1,
+		},
 	}
 
 	for _, tt := range tests {
@@ -146,10 +170,10 @@ func TestCompareCollatedStrings(t *testing.T) {
 	}
 
 	orderedSamples := [][]byte{
-		[]byte("\t"),
-		[]byte("\n"),
-		[]byte(" "),
-		[]byte("!"),
+		[]byte("\tx"),
+		[]byte("\nx"),
+		[]byte(" x"),
+		[]byte("!x"),
 		[]byte("0"),
 		[]byte("a"),
 		[]byte("o"),
@@ -172,23 +196,4 @@ func TestCompareCollatedStrings(t *testing.T) {
 			}
 		}
 	}
-}
-
-func TestCollationTupleComparatorIsChar(t *testing.T) {
-	// https://github.com/dolthub/dolt/issues/12342
-	strType := val.Type{Enc: val.StringEnc}
-	tupleCmp := CollationTupleComparator{
-		Collations: []sql.CollationID{sql.Collation_utf8mb4_unicode_ci, sql.Collation_utf8mb4_unicode_ci},
-		IsChar:     []bool{false, true},
-	}.Validated([]val.Type{strType, strType, {Enc: val.Int32Enc}})
-	leftNullTerm := []byte("a \u200b\x00")
-	rightNullTerm := []byte("a\x00")
-
-	cmp, err := tupleCmp.Prefix(1).CompareValues(t.Context(), 0, leftNullTerm, rightNullTerm, strType)
-	require.NoError(t, err)
-	require.Equal(t, 1, cmp)
-
-	cmp, err = tupleCmp.Suffix(2).CompareValues(t.Context(), 0, leftNullTerm, rightNullTerm, strType)
-	require.NoError(t, err)
-	require.Zero(t, cmp)
 }
