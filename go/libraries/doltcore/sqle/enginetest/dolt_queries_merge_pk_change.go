@@ -615,15 +615,20 @@ var MergeSamePrimaryKeyChangeScripts = []queries.ScriptTest{
 	{
 		Name: "same pk change on both sides: ancestor has a virtual column",
 		SetUpScript: samePkChangeSetup(
-			"CREATE TABLE t (a INT NOT NULL, b INT NOT NULL, v INT, g INT AS (a + b) VIRTUAL, PRIMARY KEY (a));",
-			[]string{"INSERT INTO t (a, b, v) VALUES (1, 1, 10), (2, 2, 20);"},
+			"CREATE TABLE t (a INT NOT NULL, b INT NOT NULL, g INT AS (a + b) VIRTUAL, x INT NOT NULL, v INT, PRIMARY KEY (a));",
+			[]string{"INSERT INTO t (a, b, x, v) VALUES (1, 1, 100, 10), (2, 2, 200, 20);"},
 			pkChangeAlter,
-			nil,
-			[]string{"UPDATE t SET v = 11 WHERE a = 1;"}),
+			[]string{"UPDATE t SET x = 101 WHERE a = 1;"},
+			[]string{"UPDATE t SET v = NULL WHERE a = 1;"}),
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "CALL DOLT_MERGE('feature');",
-				ExpectedErrStr: "error: cannot merge because table t has different primary keys in its common ancestor",
+				// Tuples do not store g, so the ancestor rekeys by its stored columns.
+				Query:    "CALL DOLT_MERGE('feature');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY a;",
+				Expected: []sql.Row{{1, 1, 2, 101, nil}, {2, 2, 4, 200, 20}},
 			},
 		},
 	},
@@ -641,6 +646,25 @@ var MergeSamePrimaryKeyChangeScripts = []queries.ScriptTest{
 				// them rather than t.
 				Query:          "CALL DOLT_MERGE('feature');",
 				ExpectedErrStr: "error: cannot merge because table dolt_t_fs_0_fts_doc_count has different primary keys in its common ancestor",
+			},
+		},
+	},
+	{
+		Name: "same pk change on both sides: new key column widened varchar",
+		SetUpScript: samePkChangeSetup(
+			"CREATE TABLE t (a INT NOT NULL, b VARCHAR(10) NOT NULL, v INT, PRIMARY KEY (a));",
+			[]string{"INSERT INTO t VALUES (1, 'one', 10), (2, 'two', 20);"},
+			"ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY (b), MODIFY COLUMN b VARCHAR(20) NOT NULL;",
+			nil,
+			[]string{"UPDATE t SET v = 11 WHERE b = 'one';"}),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY a;",
+				Expected: []sql.Row{{1, "one", 11}, {2, "two", 20}},
 			},
 		},
 	},

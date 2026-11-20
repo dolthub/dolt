@@ -1468,12 +1468,14 @@ func newNullValidator(
 	}, nil
 }
 
+// validateDiff checks |diff| for NOT NULL constraint violations and records any
+// violations as merge artifacts.
 func (nv nullValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) (count int, err error) {
 	switch diff.Op {
 	case tree.DiffOpRightAdd, tree.DiffOpRightModify:
 		var violations []string
 		for to, from := range nv.rightMap {
-			col := nv.final.GetNonPKCols().GetByIndex(to)
+			col := nv.final.GetNonPKCols().GetByStoredIndex(to)
 			if col.IsNullable() {
 				continue
 			}
@@ -1508,7 +1510,7 @@ func (nv nullValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) (
 	case tree.DiffOpLeftAdd, tree.DiffOpLeftModify:
 		var violations []string
 		for to, from := range nv.leftMap {
-			col := nv.final.GetNonPKCols().GetByIndex(to)
+			col := nv.final.GetNonPKCols().GetByStoredIndex(to)
 			if col.IsNullable() {
 				continue
 			}
@@ -1551,7 +1553,7 @@ func (nv nullValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) (
 	case tree.DiffOpDivergentModifyResolved:
 		var violations []string
 		for to, _ := range nv.leftMap {
-			col := nv.final.GetNonPKCols().GetByIndex(to)
+			col := nv.final.GetNonPKCols().GetByStoredIndex(to)
 			if !col.IsNullable() && diff.Merged.FieldIsNull(to) {
 				violations = append(violations, col.Name)
 			}
