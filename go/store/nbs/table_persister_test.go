@@ -22,6 +22,7 @@
 package nbs
 
 import (
+	"math"
 	"strconv"
 	"testing"
 
@@ -122,7 +123,9 @@ func TestPlanRangeCopyConjoin(t *testing.T) {
 				t.Run("Failure", func(t *testing.T) {
 					for i := beforesize + 1024; i < successsize; i += 1024 {
 						t.Run(strconv.Itoa(int(i)), func(t *testing.T) {
-							q := &errorQuota{NewUnlimitedMemQuotaProvider(), int(i)}
+							// Opening the sources briefly holds their raw indexes on top of
+							// |beforesize|, so the limit applies only to the plan.
+							q := &errorQuota{NewUnlimitedMemQuotaProvider(), math.MaxInt}
 							ctx := t.Context()
 							persister := &blobstorePersister{
 								bs:        blobstore.NewInMemoryBlobstore(""),
@@ -130,6 +133,7 @@ func TestPlanRangeCopyConjoin(t *testing.T) {
 								q:         q,
 							}
 							srcs := makeTestSrcs(t, []uint32{1024, 1024, 1024, 1024}, persister, tc.mode)
+							q.after = int(i)
 							_, err := planRangeCopyConjoin(ctx, srcs, q, &Stats{})
 							require.Error(t, err)
 							require.Equal(t, beforesize, q.Usage())

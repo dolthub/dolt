@@ -168,9 +168,12 @@ func newArchiveMetadata(ctx context.Context, reader tableReaderAt, name hash.Has
 	metaSpan := aRdr.footer.metadataSpan()
 	metaRdr := newSectionReader(ctx, reader, int64(metaSpan.offset), int64(metaSpan.length), stats)
 
-	// Read the data into a byte slice
-	metaData := make([]byte, metaSpan.length)
-	_, err = metaRdr.Read(metaData)
+	metaData, err := q.AcquireQuotaByteSlice(ctx, int(metaSpan.length))
+	if err != nil {
+		return nil, err
+	}
+	defer q.ReleaseQuotaBytes(len(metaData))
+	_, err = io.ReadFull(metaRdr, metaData)
 	if err != nil {
 		return nil, err
 	}
@@ -384,10 +387,24 @@ func (ar *archiveReader) checkSpan(id uint32) error {
 // sections are contiguous, so they are fetched with a single read; remote readers pay one round trip per read.
 func newInMemoryArchiveIndexReader(ctx context.Context, reader tableReaderAt, footer archiveFooter, q MemoryQuotaProvider, stats *Stats) (archiveIndexReader, error) {
 	indexSpan := footer.totalIndexSpan()
-	indexBytes := make([]byte, indexSpan.length)
-	_, err := io.ReadFull(newSectionReader(ctx, reader, int64(indexSpan.offset), int64(indexSpan.length), stats), indexBytes)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to read archive index: %w", err)
+	var indexBytes []byte
+	var err error
+	if buffered, ok := reader.(*archiveIndexReaderAt); ok {
+		// The caller owns, and has accounted for, the buffered index.
+		indexBytes, err = buffered.span(indexSpan)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		indexBytes, err = q.AcquireQuotaByteSlice(ctx, int(indexSpan.length))
+		if err != nil {
+			return nil, fmt.Errorf("Failed to allocate archive index buffer: %w", err)
+		}
+		defer q.ReleaseQuotaBytes(len(indexBytes))
+		_, err = io.ReadFull(newSectionReader(ctx, reader, int64(indexSpan.offset), int64(indexSpan.length), stats), indexBytes)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to read archive index: %w", err)
+		}
 	}
 	// footer.validate() guarantees the sections exactly tile the index span.
 	sectionBytes := func(span byteSpan) []byte {

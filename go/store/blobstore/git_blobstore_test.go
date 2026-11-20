@@ -852,6 +852,12 @@ func TestGitBlobstore_BlobRangeSemantics(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, rangeOID.String(), ver)
 	require.Equal(t, rangeData(maxValue-1024, maxValue-768), got)
+
+	// a suffix longer than the blob reads the whole blob
+	got, ver, err = GetBytes(ctx, bs, "range", NewBlobRange(-4*maxValue, 0))
+	require.NoError(t, err)
+	require.Equal(t, rangeOID.String(), ver)
+	require.Equal(t, rangeData(0, maxValue), got)
 }
 
 func TestGitBlobstore_InvalidKeysError(t *testing.T) {
