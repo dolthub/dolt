@@ -314,9 +314,6 @@ type indexedTempTable struct {
 }
 
 func (t *indexedTempTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
-	if lookup.VectorOrderAndLimit.OrderBy != nil {
-		return index.NewVectorPartitionIter(lookup)
-	}
 	return index.NewRangePartitionIter(ctx, t.TempTable, lookup)
 }
 
