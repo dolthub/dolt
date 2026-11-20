@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -160,4 +161,109 @@ func TestOpenBSArchiveErrors(t *testing.T) {
 		_, err := newBSArchiveChunkSource(ctx, bs, name, 8, NewUnlimitedMemQuotaProvider(), openOpts{}, &Stats{})
 		require.True(t, blobstore.IsNotFoundError(err))
 	})
+}
+
+func singleBlobPersisters() map[string]func(blobstore.Blobstore) tablePersister {
+	return map[string]func(blobstore.Blobstore) tablePersister{
+		"single": func(bs blobstore.Blobstore) tablePersister {
+			return &singleBlobBSPersister{bs: bs, q: NewUnlimitedMemQuotaProvider(), blockSize: s3BlockSize}
+		},
+		"no-conjoin": func(bs blobstore.Blobstore) tablePersister {
+			return &noConjoinBlobstorePersister{bs: bs, q: NewUnlimitedMemQuotaProvider(), blockSize: s3BlockSize}
+		},
+	}
+}
+
+func TestSingleBlobPersistersPersistArchivesWhichOpenInOneRead(t *testing.T) {
+	data := [][]byte{[]byte("root value"), []byte("commit")}
+	for name, newPersister := range singleBlobPersisters() {
+		for _, spool := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/spool=%t", name, spool), func(t *testing.T) {
+				ctx := context.Background()
+				bs := &getCountingBlobstore{wholeBlobBlobstore: wholeBlobBlobstore{blobstore.NewInMemoryBlobstore(""), spool}}
+				p := newPersister(bs)
+
+				persisted, err := persistTableData(p, data...)
+				require.NoError(t, err)
+				defer persisted.close()
+				require.Equal(t, ArchiveFileSuffix, persisted.suffix())
+				exists, err := bs.Exists(ctx, persisted.hash().String()+ArchiveFileSuffix)
+				require.NoError(t, err)
+				assert.True(t, exists)
+				exists, err = bs.Exists(ctx, persisted.hash().String())
+				require.NoError(t, err)
+				assert.False(t, exists)
+				for _, c := range data {
+					got, _, err := persisted.get(ctx, computeAddr(c), nil, &Stats{})
+					require.NoError(t, err)
+					assert.Equal(t, c, got)
+				}
+
+				bs.gets = 0
+				opened, err := p.Open(ctx, persisted.hash(), persisted.count(), openOpts{}, &Stats{})
+				require.NoError(t, err)
+				defer opened.close()
+				assert.Equal(t, 1, bs.gets)
+				for _, c := range data {
+					got, _, err := opened.get(ctx, computeAddr(c), nil, &Stats{})
+					require.NoError(t, err)
+					assert.Equal(t, c, got)
+				}
+			})
+		}
+	}
+}
+
+func TestSingleBlobPersistersOpenTableFiles(t *testing.T) {
+	data := [][]byte{[]byte("written"), []byte("by an older client")}
+	for name, newPersister := range singleBlobPersisters() {
+		for _, spool := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/spool=%t", name, spool), func(t *testing.T) {
+				ctx := context.Background()
+				bs := &getCountingBlobstore{wholeBlobBlobstore: wholeBlobBlobstore{blobstore.NewInMemoryBlobstore(""), spool}}
+				mt := newMemTable(testMemTableSize)
+				for _, c := range data {
+					mt.addChunk(computeAddr(c), c)
+				}
+				tableName, table, _, chunkCount, _, err := mt.write(nil, nil, &Stats{})
+				require.NoError(t, err)
+				_, err = bs.Put(ctx, tableName.String(), int64(len(table)), bytes.NewReader(table))
+				require.NoError(t, err)
+
+				opened, err := newPersister(bs).Open(ctx, tableName, chunkCount, openOpts{}, &Stats{})
+				require.NoError(t, err)
+				defer opened.close()
+				assert.Equal(t, "", opened.suffix())
+				assert.Equal(t, 2, bs.gets, "a table file costs a failed archive read first")
+				for _, c := range data {
+					got, _, err := opened.get(ctx, computeAddr(c), nil, &Stats{})
+					require.NoError(t, err)
+					assert.Equal(t, c, got)
+				}
+			})
+		}
+	}
+}
+
+func TestSingleBlobPersistersPersistNothingNew(t *testing.T) {
+	data := [][]byte{[]byte("already"), []byte("there")}
+	for name, newPersister := range singleBlobPersisters() {
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			bs := blobstore.NewInMemoryBlobstore("")
+			p := newPersister(bs)
+			existing, err := persistTableData(p, data...)
+			require.NoError(t, err)
+			defer existing.close()
+
+			mt := newMemTable(testMemTableSize)
+			for _, c := range data {
+				mt.addChunk(computeAddr(c), c)
+			}
+			cs, gcb, err := p.Persist(ctx, dherrors.FatalBehaviorError, mt, existing, nil, &Stats{})
+			require.NoError(t, err)
+			assert.Equal(t, gcBehavior_Continue, gcb)
+			assert.Equal(t, uint32(0), cs.count())
+		})
+	}
 }

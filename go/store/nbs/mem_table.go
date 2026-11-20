@@ -223,17 +223,9 @@ func (mt *memTable) write(haver chunkReader, keeper keeperF, stats *Stats) (name
 	buff := make([]byte, maxSize)
 	tw := newTableWriter(buff, mt.snapper)
 
-	if haver != nil {
-		sort.Sort(hasRecordByPrefix(mt.order)) // hasMany() requires addresses to be sorted.
-		_, gcb, err = haver.hasMany(mt.order, keeper)
-		if err != nil {
-			return hash.Hash{}, nil, 0, 0, gcBehavior_Continue, err
-		}
-		if gcb != gcBehavior_Continue {
-			return hash.Hash{}, nil, 0, 0, gcb, err
-		}
-
-		sort.Sort(hasRecordByOrder(mt.order)) // restore "insertion" order for write
+	gcb, err = mt.markChunksHad(haver, keeper)
+	if err != nil || gcb != gcBehavior_Continue {
+		return hash.Hash{}, nil, 0, 0, gcb, err
 	}
 
 	for _, addr := range mt.order {
@@ -258,6 +250,79 @@ func (mt *memTable) write(haver chunkReader, keeper keeperF, stats *Stats) (name
 	}
 
 	return name, buff[:tableSize], splitOffset, chunkCount, gcBehavior_Continue, nil
+}
+
+// markChunksHad sets |has| on the records of chunks |haver| already has, so
+// that writes skip them.
+func (mt *memTable) markChunksHad(haver chunkReader, keeper keeperF) (gcBehavior, error) {
+	if haver == nil {
+		return gcBehavior_Continue, nil
+	}
+	sort.Sort(hasRecordByPrefix(mt.order)) // hasMany() requires addresses to be sorted.
+	_, gcb, err := haver.hasMany(mt.order, keeper)
+	sort.Sort(hasRecordByOrder(mt.order)) // restore "insertion" order for write
+	if err != nil {
+		return gcBehavior_Continue, err
+	}
+	return gcb, nil
+}
+
+// writeArchive is write, producing an archive of snappy compressed chunks
+// instead of a table file.
+func (mt *memTable) writeArchive(haver chunkReader, keeper keeperF, stats *Stats) (name hash.Hash, data []byte, chunkCount uint32, gcb gcBehavior, err error) {
+	if len(mt.order) == 0 {
+		return hash.Hash{}, nil, 0, gcBehavior_Continue, fmt.Errorf("mem table cannot write with zero chunks")
+	}
+	gcb, err = mt.markChunksHad(haver, keeper)
+	if err != nil || gcb != gcBehavior_Continue {
+		return hash.Hash{}, nil, 0, gcb, err
+	}
+
+	var compressed []CompressedChunk
+	var compressedSize, uncompressedSize uint64
+	for _, addr := range mt.order {
+		if !addr.has {
+			cc := ChunkToCompressedChunk(chunks.NewChunkWithHash(*addr.a, mt.chunks[*addr.a]))
+			compressed = append(compressed, cc)
+			compressedSize += uint64(len(cc.FullCompressedChunk))
+			uncompressedSize += uint64(len(mt.chunks[*addr.a]))
+		}
+	}
+	chunkCount = uint32(len(compressed))
+	if chunkCount == 0 {
+		return hash.Hash{}, nil, 0, gcBehavior_Continue, nil
+	}
+
+	sinkSize := compressedSize + archiveIndexSize(chunkCount, chunkCount) + archiveMetadataAllowance + archiveFooterSize
+	sink := NewFixedBufferByteSink(make([]byte, sinkSize))
+	aw := newArchiveWriterWithSink(sink)
+	for _, cc := range compressed {
+		spanID, err := aw.writeByteSpan(cc.FullCompressedChunk)
+		if err != nil {
+			return hash.Hash{}, nil, 0, gcBehavior_Continue, err
+		}
+		if err = aw.stageSnappyChunk(cc.H, spanID); err != nil {
+			return hash.Hash{}, nil, 0, gcBehavior_Continue, err
+		}
+	}
+	if err = aw.finalizeByteSpans(); err != nil {
+		return hash.Hash{}, nil, 0, gcBehavior_Continue, err
+	}
+	if err = aw.indexFinalize(archiveOrigin{}); err != nil {
+		return hash.Hash{}, nil, 0, gcBehavior_Continue, err
+	}
+	name, err = aw.getName()
+	if err != nil {
+		return hash.Hash{}, nil, 0, gcBehavior_Continue, err
+	}
+	data = sink.buff[:sink.pos]
+
+	stats.BytesPerPersist.Sample(uint64(len(data)))
+	stats.CompressedChunkBytesPerPersist.Sample(compressedSize)
+	stats.UncompressedChunkBytesPerPersist.Sample(uncompressedSize)
+	stats.ChunksPerPersist.Sample(uint64(chunkCount))
+
+	return name, data, chunkCount, gcBehavior_Continue, nil
 }
 
 func (mt *memTable) close() error {
