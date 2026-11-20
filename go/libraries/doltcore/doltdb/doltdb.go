@@ -351,8 +351,10 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitMetaGeneratorAndDefaultBranch(
 	return err
 }
 
+// Close closes the database and the [CloseableCommitHook]s registered on it.
 func (ddb *DoltDB) Close() error {
-	return ddb.db.Close()
+	hooksErr := ddb.db.hooks.close()
+	return errors.Join(ddb.db.Close(), hooksErr)
 }
 
 func (ddb *DoltDB) Teardown(ctx context.Context) error {

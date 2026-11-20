@@ -24,9 +24,11 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -220,4 +222,28 @@ func TestCommitHookCircuitBreakerClosesWhileBusy(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, waitF)
 	require.ErrorIs(t, failWait(clock, waitF, ackBudget), doltdb.ErrReplicationWaitFailed)
+}
+
+// TestCommitHookReplicateClosesDestDB checks that the replicate thread closes the destination it fetched when it
+// exits, as it does when the database is dropped.
+func TestCommitHookReplicateClosesDestDB(t *testing.T) {
+	ctx := context.Background()
+	srcEnv := dtestutils.CreateTestEnv()
+	t.Cleanup(func() { srcEnv.Close() })
+	destDB, err := doltdb.LoadDoltDBWithParams(ctx, types.Format_DOLT, "file://"+t.TempDir(), filesys.LocalFS, map[string]interface{}{
+		dbfactory.DisableSingletonCacheParam: "true",
+	})
+	require.NoError(t, err)
+
+	hook := newCommitHook(logrus.StandardLogger(), "origin", "https://localhost:50051/mydb", "mydb", RolePrimary, func(context.Context) (*doltdb.DoltDB, error) {
+		return destDB, nil
+	}, srcEnv.DoltDB(ctx), t.TempDir())
+	hook.destDB = destDB // as fetched by an earlier push
+	hook.databaseWasDropped()
+	hook.wg.Add(1)
+	hook.replicate(ctx)
+
+	require.Nil(t, hook.destDB)
+	_, err = destDB.GetBranches(ctx)
+	require.ErrorIs(t, err, chunks.ErrStoreClosed)
 }
