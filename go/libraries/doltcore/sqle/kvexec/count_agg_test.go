@@ -47,6 +47,14 @@ func TestCountAgg(t *testing.T) {
 			doRowexec: true,
 		},
 		{
+			name: "accept locking clause",
+			setup: []string{
+				"create table xy (x int primary key, y int, key y_idx(y))",
+			},
+			query:     "select count(y) from xy for update",
+			doRowexec: true,
+		},
+		{
 			name: "reject filter child",
 			setup: []string{
 				"create table xy (x int primary key, y int)",

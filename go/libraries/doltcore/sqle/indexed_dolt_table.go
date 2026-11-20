@@ -47,6 +47,8 @@ func (idt *IndexedDoltTable) Index() index.DoltIndex {
 	return idt.idx
 }
 
+// LookupBuilder returns the builder of this table's index readers, which lock the rows they read if the table locks
+// the rows it returns.
 func (t *IndexedDoltTable) LookupBuilder(ctx *sql.Context) (index.IndexScanBuilder, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -54,10 +56,15 @@ func (t *IndexedDoltTable) LookupBuilder(ctx *sql.Context) (index.IndexScanBuild
 	if err != nil {
 		return nil, err
 	}
-	if t.lb == nil || !canCache || t.lb.Key() != key {
-		return index.NewIndexReaderBuilder(ctx, t.DoltTable, t.idx, key, t.DoltTable.projectedCols, t.DoltTable.sqlSch)
+	lb := t.lb
+	if lb == nil || !canCache || lb.Key() != key {
+		lb, err = index.NewIndexReaderBuilder(ctx, t.DoltTable, t.idx, key, t.DoltTable.projectedCols, t.DoltTable.sqlSch)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return t.lb, nil
+
+	return t.DoltTable.lockingBuilder(ctx, lb)
 }
 
 func (idt *IndexedDoltTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
@@ -83,18 +90,18 @@ func (idt *IndexedDoltTable) PartitionValueRowWriter(ctx *sql.Context, part sql.
 		return nil, err
 	}
 	if idt.lb == nil || !canCache || idt.lb.Key() != key {
-		idt.lb, err = index.NewIndexReaderBuilder(ctx, idt.DoltTable, idt.idx, key, idt.DoltTable.readCols(), idt.DoltTable.sqlSch)
+		idt.lb, err = index.NewIndexReaderBuilder(ctx, idt.DoltTable, idt.idx, key, idt.DoltTable.projectedCols, idt.DoltTable.sqlSch)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	iter, err := idt.lb.NewPartitionRowIter(ctx, part, columnIds)
+	lb, err := idt.DoltTable.lockingBuilder(ctx, idt.lb)
 	if err != nil {
 		return nil, err
 	}
 
-	return idt.DoltTable.withRowLocks(ctx, iter)
+	return lb.NewPartitionRowIter(ctx, part, columnIds)
 }
 
 var _ sql.IndexedTable = (*WritableIndexedDoltTable)(nil)
@@ -123,6 +130,8 @@ func (t *WritableIndexedDoltTable) Index() index.DoltIndex {
 	return t.idx
 }
 
+// LookupBuilder returns the builder of this table's index readers, which lock the rows they read if the table locks
+// the rows it returns.
 func (t *WritableIndexedDoltTable) LookupBuilder(ctx *sql.Context) (index.IndexScanBuilder, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -130,10 +139,15 @@ func (t *WritableIndexedDoltTable) LookupBuilder(ctx *sql.Context) (index.IndexS
 	if err != nil {
 		return nil, err
 	}
-	if t.lb == nil || !canCache || t.lb.Key() != key {
-		return index.NewIndexReaderBuilder(ctx, t.DoltTable, t.idx, key, t.DoltTable.projectedCols, t.DoltTable.sqlSch)
+	lb := t.lb
+	if lb == nil || !canCache || lb.Key() != key {
+		lb, err = index.NewIndexReaderBuilder(ctx, t.DoltTable, t.idx, key, t.DoltTable.projectedCols, t.DoltTable.sqlSch)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return t.lb, nil
+
+	return t.DoltTable.lockingBuilder(ctx, lb)
 }
 
 func (t *WritableIndexedDoltTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
@@ -155,18 +169,18 @@ func (t *WritableIndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Part
 		return nil, err
 	}
 	if t.lb == nil || !canCache || t.lb.Key() != key {
-		t.lb, err = index.NewIndexReaderBuilder(ctx, t.DoltTable, t.idx, key, t.readCols(), t.sqlSch)
+		t.lb, err = index.NewIndexReaderBuilder(ctx, t.DoltTable, t.idx, key, t.projectedCols, t.sqlSch)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	iter, err := t.lb.NewPartitionRowIter(ctx, part, sql.ColSet{})
+	lb, err := t.lockingBuilder(ctx, t.lb)
 	if err != nil {
 		return nil, err
 	}
 
-	return t.DoltTable.withRowLocks(ctx, iter)
+	return lb.NewPartitionRowIter(ctx, part, sql.ColSet{})
 }
 
 func (t *WritableIndexedDoltTable) PartitionValueRowWriter(ctx *sql.Context, part sql.Partition, columnIds sql.ColSet) (sql.ValueRowWriter, error) {
@@ -177,18 +191,18 @@ func (t *WritableIndexedDoltTable) PartitionValueRowWriter(ctx *sql.Context, par
 		return nil, err
 	}
 	if t.lb == nil || !canCache || t.lb.Key() != key {
-		t.lb, err = index.NewIndexReaderBuilder(ctx, t.DoltTable, t.idx, key, t.readCols(), t.sqlSch)
+		t.lb, err = index.NewIndexReaderBuilder(ctx, t.DoltTable, t.idx, key, t.projectedCols, t.sqlSch)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	iter, err := t.lb.NewPartitionRowIter(ctx, part, columnIds)
+	lb, err := t.lockingBuilder(ctx, t.lb)
 	if err != nil {
 		return nil, err
 	}
 
-	return t.DoltTable.withRowLocks(ctx, iter)
+	return lb.NewPartitionRowIter(ctx, part, columnIds)
 }
 
 // WithProjections implements sql.ProjectedTable

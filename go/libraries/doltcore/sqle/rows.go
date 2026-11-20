@@ -25,14 +25,15 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 )
 
-// Returns a new row iterator for the table given
-func newRowIterator(ctx context.Context, tbl *doltdb.Table, projCols []uint64, partition doltTablePartition, columnIds sql.ColSet) (sql.ValueRowWriter, error) {
+// Returns a new row iterator for the table given. Each row is locked with |locker| before it is returned, unless
+// |locker| is nil.
+func newRowIterator(ctx context.Context, tbl *doltdb.Table, projCols []uint64, partition doltTablePartition, columnIds sql.ColSet, locker index.RowLocker) (sql.ValueRowWriter, error) {
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return ProllyRowIterFromPartition(ctx, sch, projCols, partition, columnIds)
+	return ProllyRowIterFromPartition(ctx, sch, projCols, partition, columnIds, locker)
 }
 
 func ProllyRowIterFromPartition(
@@ -41,6 +42,7 @@ func ProllyRowIterFromPartition(
 	projections []uint64,
 	partition doltTablePartition,
 	columnIds sql.ColSet,
+	locker index.RowLocker,
 ) (sql.ValueRowWriter, error) {
 	rows, err := durable.ProllyMapFromIndex(partition.rowData)
 	if err != nil {
@@ -60,6 +62,7 @@ func ProllyRowIterFromPartition(
 		return nil, err
 	}
 
+	iter = index.NewRowLockingMapIter(iter, locker)
 	return index.NewProllyRowIterForMap(sch, rows, iter, projections, columnIds), nil
 }
 
@@ -86,5 +89,5 @@ func SqlTableToRowIter(ctx *sql.Context, table *DoltTable, columns []uint64) (sq
 		rowData: data,
 	}
 
-	return newRowIterator(ctx, t, columns, p, sql.ColSet{})
+	return newRowIterator(ctx, t, columns, p, sql.ColSet{}, nil)
 }

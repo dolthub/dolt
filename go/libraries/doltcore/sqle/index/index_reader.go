@@ -264,6 +264,10 @@ type IndexScanBuilder interface {
 
 	// OutputSchema returns the output KV tuple schema
 	OutputSchema() schema.Schema
+
+	// WithRowLocker returns a builder like this one whose iterators, of every kind, lock each row with |locker|
+	// before returning it. A nil |locker| returns the builder itself.
+	WithRowLocker(locker RowLocker) IndexScanBuilder
 }
 
 type IndexRangeIterable interface {
@@ -398,6 +402,9 @@ type baseIndexImplBuilder struct {
 	proximitySecondary prolly.ProximityMap
 	key                doltdb.DataCacheKey
 	isProximity        bool
+	// rowLocker locks the rows that this builder's iterators return. It is nil for a builder that reads rows
+	// without locking them.
+	rowLocker RowLocker
 }
 
 func (ib *baseIndexImplBuilder) Key() doltdb.DataCacheKey {
@@ -420,6 +427,42 @@ func (ib *baseIndexImplBuilder) NewRangeMapIter(_ context.Context, _ prolly.Rang
 
 func (ib *baseIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSafe []bool) (SecondaryLookupIterGen, error) {
 	panic("cannot call NewSecondaryIter on baseIndexImplBuilder")
+}
+
+// WithRowLocker implements IndexScanBuilder
+func (ib *baseIndexImplBuilder) WithRowLocker(RowLocker) IndexScanBuilder {
+	panic("cannot call WithRowLocker on baseIndexImplBuilder")
+}
+
+// withRowLocker returns a copy of this builder that locks rows with |locker|.
+func (ib *baseIndexImplBuilder) withRowLocker(locker RowLocker) *baseIndexImplBuilder {
+	nb := *ib
+	nb.rowLocker = locker
+	return &nb
+}
+
+// lockIndexRows returns |iter|, which iterates the storage of this builder's index, made to lock the row of each
+// entry it returns. It returns |iter| itself for a builder that doesn't lock rows.
+func (ib *baseIndexImplBuilder) lockIndexRows(iter prolly.MapIter, ns tree.NodeStore) prolly.MapIter {
+	return NewRowLockingIndexIter(iter, ib.rowLocker, ib.idx, ns)
+}
+
+// lockLookupRows returns |gen| made to lock the rows its iterators return, whose keys are those of this builder's
+// index, or of the table's primary index if |primaryKeys| is set. It returns |gen| itself for a builder that doesn't
+// lock rows.
+func (ib *baseIndexImplBuilder) lockLookupRows(gen SecondaryLookupIterGen, primaryKeys bool) SecondaryLookupIterGen {
+	if ib.rowLocker == nil {
+		return gen
+	}
+
+	if primaryKeys {
+		return &rowLockingLookupGen{SecondaryLookupIterGen: gen, iter: &rowLockingMapIter{locker: ib.rowLocker}}
+	}
+
+	return &rowLockingLookupGen{
+		SecondaryLookupIterGen: gen,
+		iter:                   newRowLockingIndexIter(ib.rowLocker, ib.idx, gen.NodeStore()),
+	}
 }
 
 // newPointLookup will create a cursor once, and then use the same cursor for
@@ -448,6 +491,15 @@ func (ib *baseIndexImplBuilder) newPointLookup(ctx *sql.Context, rang prolly.Ran
 }
 
 func (ib *baseIndexImplBuilder) rangeIter(ctx *sql.Context, part sql.Partition) (prolly.MapIter, error) {
+	iter, err := ib.unlockedRangeIter(ctx, part)
+	if err != nil {
+		return nil, err
+	}
+
+	return ib.lockIndexRows(iter, ib.ns), nil
+}
+
+func (ib *baseIndexImplBuilder) unlockedRangeIter(ctx *sql.Context, part sql.Partition) (prolly.MapIter, error) {
 	switch p := part.(type) {
 	case pointPartition:
 		return ib.newPointLookup(ctx, p.r)
@@ -483,7 +535,12 @@ func (ib *baseIndexImplBuilder) proximityIter(ctx *sql.Context, part vectorParti
 	if limitVal == nil {
 		return nil, fmt.Errorf("vector index lookups must have a non-null limit")
 	}
-	return ib.proximitySecondary.GetClosest(ctx, candidateVector, int(limitVal.(int64)))
+	iter, err := ib.proximitySecondary.GetClosest(ctx, candidateVector, int(limitVal.(int64)))
+	if err != nil {
+		return nil, err
+	}
+
+	return ib.lockIndexRows(iter, ib.ns), nil
 }
 
 // coveringIndexImplBuilder constructs row iters for covering lookups,
@@ -574,11 +631,30 @@ func (ib *coveringIndexImplBuilder) NewRangeMapIter(ctx context.Context, r proll
 	if ib.isProximity {
 		return nil, fmt.Errorf("range map iter not allowed for vector index")
 	}
+
+	var iter prolly.MapIter
+	var err error
 	if reverse {
-		return ib.sec.IterRangeReverse(ctx, r)
+		iter, err = ib.sec.IterRangeReverse(ctx, r)
 	} else {
-		return ib.sec.IterRange(ctx, r)
+		iter, err = ib.sec.IterRange(ctx, r)
 	}
+	if err != nil {
+		return nil, err
+	}
+
+	return ib.lockIndexRows(iter, ib.ns), nil
+}
+
+// WithRowLocker implements IndexScanBuilder
+func (ib *coveringIndexImplBuilder) WithRowLocker(locker RowLocker) IndexScanBuilder {
+	if locker == nil {
+		return ib
+	}
+
+	nb := *ib
+	nb.baseIndexImplBuilder = ib.baseIndexImplBuilder.withRowLocker(locker)
+	return &nb
 }
 
 // NewPartitionRowIter implements IndexScanBuilder
@@ -612,21 +688,24 @@ func (ib *coveringIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part s
 
 // NewSecondaryIter implements IndexScanBuilder
 func (ib *coveringIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSafe []bool) (SecondaryLookupIterGen, error) {
+	var gen SecondaryLookupIterGen
 	if strict {
-		return &covStrictSecondaryLookupGen{
+		gen = &covStrictSecondaryLookupGen{
 			iter:       &strictLookupIter{},
 			m:          ib.sec,
 			prefixDesc: ib.secKd.PrefixDesc(cnt),
 			index:      ib.idx,
-		}, nil
+		}
 	} else {
-		return &covLaxSecondaryLookupGen{
+		gen = &covLaxSecondaryLookupGen{
 			m:          ib.sec,
 			prefixDesc: ib.secKd.PrefixDesc(cnt),
 			index:      ib.idx,
 			nullSafe:   nullSafe,
-		}, nil
+		}
 	}
+
+	return ib.lockLookupRows(gen, false), nil
 }
 
 // nonCoveringIndexImplBuilder constructs row iters for non-covering lookups,
@@ -701,11 +780,22 @@ func (ib *nonCoveringIndexImplBuilder) NewRangeMapIter(ctx context.Context, r pr
 	}
 
 	return &nonCoveringMapIter{
-		indexIter: secIter,
+		indexIter: ib.lockIndexRows(secIter, ib.pri.NodeStore()),
 		primary:   ib.pri,
 		pkBld:     ib.pkBld,
 		pkMap:     ib.pkMap,
 	}, nil
+}
+
+// WithRowLocker implements IndexScanBuilder
+func (ib *nonCoveringIndexImplBuilder) WithRowLocker(locker RowLocker) IndexScanBuilder {
+	if locker == nil {
+		return ib
+	}
+
+	nb := *ib
+	nb.baseIndexImplBuilder = ib.baseIndexImplBuilder.withRowLocker(locker)
+	return &nb
 }
 
 // NewPartitionRowIter implements IndexScanBuilder
@@ -738,11 +828,14 @@ func (ib *nonCoveringIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, par
 }
 
 func (ib *nonCoveringIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSafe []bool) (SecondaryLookupIterGen, error) {
+	var gen SecondaryLookupIterGen
 	if strict {
-		return &nonCovStrictSecondaryLookupGen{pri: ib.pri, sec: ib.sec, pkMap: ib.pkMap, pkBld: ib.pkBld, sch: ib.idx.tableSch, prefixDesc: ib.secKd.PrefixDesc(cnt)}, nil
+		gen = &nonCovStrictSecondaryLookupGen{pri: ib.pri, sec: ib.sec, pkMap: ib.pkMap, pkBld: ib.pkBld, sch: ib.idx.tableSch, prefixDesc: ib.secKd.PrefixDesc(cnt)}
 	} else {
-		return &nonCovLaxSecondaryLookupGen{pri: ib.pri, sec: ib.sec, pkMap: ib.pkMap, pkBld: ib.pkBld, sch: ib.idx.tableSch, prefixDesc: ib.secKd.PrefixDesc(cnt), nullSafe: nullSafe}, nil
+		gen = &nonCovLaxSecondaryLookupGen{pri: ib.pri, sec: ib.sec, pkMap: ib.pkMap, pkBld: ib.pkBld, sch: ib.idx.tableSch, prefixDesc: ib.secKd.PrefixDesc(cnt), nullSafe: nullSafe}
 	}
+
+	return ib.lockLookupRows(gen, true), nil
 }
 
 func NewKeylessIndexImplBuilder(pri, sec durable.Index, idx DoltIndex) *keylessIndexImplBuilder {
@@ -782,8 +875,20 @@ func (ib *keylessIndexImplBuilder) NewRangeMapIter(ctx context.Context, r prolly
 	indexMap := OrdinalMappingFromIndex(ib.idx)
 
 	keyBld := val.NewTupleBuilder(keyDesc, clustered.NodeStore())
+	indexIter = ib.lockIndexRows(indexIter, clustered.NodeStore())
 
 	return &keylessLookupIter{pri: clustered, secIter: indexIter, pkMap: indexMap, pkBld: keyBld, prefixDesc: keyDesc}, nil
+}
+
+// WithRowLocker implements IndexScanBuilder
+func (ib *keylessIndexImplBuilder) WithRowLocker(locker RowLocker) IndexScanBuilder {
+	if locker == nil {
+		return ib
+	}
+
+	nb := *ib
+	nb.baseIndexImplBuilder = ib.baseIndexImplBuilder.withRowLocker(locker)
+	return &nb
 }
 
 // NewPartitionRowIter implements IndexScanBuilder
@@ -805,7 +910,13 @@ func (ib *keylessIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part sq
 	if err != nil {
 		return nil, err
 	}
-	return newProllyKeylessIndexIter(ctx, ib.idx, prollyRange, ib.sch, ib.projections, primary, secondary, reverse, columnIds)
+	iter, err := newProllyKeylessIndexIter(ctx, ib.idx, prollyRange, ib.sch, ib.projections, primary, secondary, reverse, columnIds)
+	if err != nil {
+		return nil, err
+	}
+
+	iter.indexIter = ib.lockIndexRows(iter.indexIter, primary.NodeStore())
+	return iter, nil
 }
 
 func (ib *keylessIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSafe []bool) (SecondaryLookupIterGen, error) {
@@ -821,12 +932,14 @@ func (ib *keylessIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSa
 		return nil, err
 	}
 
-	return &keylessSecondaryLookupGen{
+	gen := &keylessSecondaryLookupGen{
 		pri:        pri,
 		sec:        secondary,
 		sch:        ib.idx.tableSch,
 		pkMap:      OrdinalMappingFromIndex(ib.idx),
 		pkBld:      pkBld,
 		prefixDesc: secondary.KeyDesc().PrefixDesc(cnt),
-	}, nil
+	}
+
+	return ib.lockLookupRows(gen, true), nil
 }

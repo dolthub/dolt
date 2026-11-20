@@ -799,17 +799,23 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 }
 
 func (t *DoltTable) PartitionValueRowWriter(ctx *sql.Context, partition sql.Partition, columnIds sql.ColSet) (sql.ValueRowWriter, error) {
+	locker, err := t.RowLocker(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	if p, ok := partition.(pendingTablePartition); ok {
 		iter, err := p.rows.IterAll(ctx)
 		if err != nil {
 			return nil, err
 		}
-		projCols := t.readCols()
+		projCols := t.projectedCols
 		if projCols == nil {
 			projCols = t.sch.GetAllCols().Tags
 		}
 		kd, vd := p.rows.Descriptors()
-		return t.withRowLocks(ctx, index.NewProllyRowIterForSchema(t.sch, iter, kd, vd, projCols, p.rows.NodeStore(), columnIds))
+		iter = index.NewRowLockingMapIter(iter, locker)
+		return index.NewProllyRowIterForSchema(t.sch, iter, kd, vd, projCols, p.rows.NodeStore(), columnIds), nil
 	}
 
 	table, err := t.DoltTable(ctx)
@@ -823,7 +829,7 @@ func (t *DoltTable) PartitionValueRowWriter(ctx *sql.Context, partition sql.Part
 	// to pass in the full column projection for the original/data schema so that we get all columns back. Then,
 	// the mappingRowIterator that we apply on top of the original row iterator will take care of mapping the
 	// original row and shrinking it down to the projected columns.
-	projCols := t.readCols()
+	projCols := t.projectedCols
 	if t.overriddenSchema != nil {
 		originalSchemaCols := t.sch.GetAllCols().GetColumns()
 		projCols = make([]uint64, len(originalSchemaCols))
@@ -832,7 +838,7 @@ func (t *DoltTable) PartitionValueRowWriter(ctx *sql.Context, partition sql.Part
 		}
 	}
 
-	originalRowIter, err := partitionRows(ctx, table, projCols, partition, columnIds)
+	originalRowIter, err := partitionRows(ctx, table, projCols, partition, columnIds, locker)
 	if err != nil {
 		return originalRowIter, err
 	}
@@ -840,16 +846,18 @@ func (t *DoltTable) PartitionValueRowWriter(ctx *sql.Context, partition sql.Part
 	if t.overriddenSchema != nil {
 		return newMappingRowIter(ctx, t, originalRowIter)
 	} else {
-		return t.withRowLocks(ctx, originalRowIter)
+		return originalRowIter, err
 	}
 }
 
-func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []uint64, partition sql.Partition, columnIds sql.ColSet) (sql.ValueRowWriter, error) {
+// partitionRows returns an iterator over the rows of |partition|, a partition of the table |t|. Each row is locked
+// with |locker| before it is returned, unless |locker| is nil.
+func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []uint64, partition sql.Partition, columnIds sql.ColSet, locker index.RowLocker) (sql.ValueRowWriter, error) {
 	switch typedPartition := partition.(type) {
 	case doltTablePartition:
-		return newRowIterator(ctx, t, projCols, typedPartition, columnIds)
+		return newRowIterator(ctx, t, projCols, typedPartition, columnIds, locker)
 	case index.SinglePartition:
-		return newRowIterator(ctx, t, projCols, doltTablePartition{rowData: typedPartition.RowData, end: NoUpperBound}, columnIds)
+		return newRowIterator(ctx, t, projCols, doltTablePartition{rowData: typedPartition.RowData, end: NoUpperBound}, columnIds, locker)
 	}
 
 	return nil, errors.New("unsupported partition type")
@@ -2583,7 +2591,7 @@ func (t *AlterableDoltTable) getFirstAutoIncrementValue(
 
 	// Note that we aren't calling the public PartitionRows, because it always gets the table data from the session
 	// root, which hasn't been updated yet
-	rowIter, err := partitionRows(ctx, table, t.projectedCols, index.SinglePartition{RowData: rowData}, sql.ColSet{})
+	rowIter, err := partitionRows(ctx, table, t.projectedCols, index.SinglePartition{RowData: rowData}, sql.ColSet{}, nil)
 	if err != nil {
 		return 0, err
 	}

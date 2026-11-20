@@ -268,10 +268,10 @@ func (w *prollyTableWriter) writeLockedRow(ctx *sql.Context, locks dsess.RowLock
 	return dsess.RowLockConflictError(res)
 }
 
-// RowLockKeys makes, from the rows of a table, the keys that identify them in the row journal. A reader that locks
-// the rows it returns uses it to make the same keys that the table's writer makes for the rows it changes.
+// RowLockKeys describes the keys that identify a table's rows in the row journal, which are the rows' keys in the
+// table's primary index. A reader that locks the rows it returns uses it to lock them by the same keys, compared the
+// same way, that the table's writer uses for the rows it changes.
 type RowLockKeys struct {
-	keyer rowLockKeyer
 	// Compare orders the keys.
 	Compare rowjournal.KeyCompare
 	// KeyFormat identifies the format of the keys, which changes with the table's schema.
@@ -301,13 +301,7 @@ func NewRowLockKeys(ctx *sql.Context, tbl *doltdb.Table, tblName doltdb.TableNam
 	}
 
 	return &RowLockKeys{
-		keyer:     keyer,
 		Compare:   keyer.rowLockCompare(),
 		KeyFormat: keyFormat,
 	}, nil
-}
-
-// Key returns the key that identifies |sqlRow|, a row with every column of the table's schema.
-func (k *RowLockKeys) Key(ctx context.Context, sqlRow sql.Row) (val.Tuple, error) {
-	return k.keyer.rowLockKey(ctx, sqlRow)
 }

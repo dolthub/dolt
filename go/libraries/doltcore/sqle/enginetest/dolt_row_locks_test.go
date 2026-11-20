@@ -851,6 +851,98 @@ var rowLockReadScripts = []rowLockScript{
 		},
 	},
 	{
+		// These joins and aggregations are run by operators that read tables' storage directly.
+		name:  "a join locks the rows it reads from each table's storage",
+		setup: rowLockReadSetup,
+		steps: []rowLockStep{
+			// A lookup join of two tables' storage: a scan of t, and a lookup in an index of u that doesn't have
+			// all of u's columns.
+			{client: "a", query: "begin"},
+			{
+				client: "a",
+				query:  "select /*+ LOOKUP_JOIN(t,u) JOIN_ORDER(t,u) */ t.c2, u.pk from t join u on u.t_pk = t.pk where t.c2 < 300 order by 1 for update",
+				rows:   [][]any{{100, 11}, {200, 12}},
+				locks:  []string{"t/Update", "t/Update", "t/Update", "u/Update", "u/Update", "u/Update"},
+			},
+			{client: "b", query: "update u set t_pk = 1 where pk = 13", blocks: true},
+			{client: "a", query: "rollback"},
+			{client: "b", unblocks: true, locks: []string{}},
+			{client: "b", query: "update u set t_pk = 3 where pk = 13"},
+			// The lookup is in u's primary index, and only the rows it finds are locked.
+			{client: "a", query: "begin"},
+			{
+				client: "a",
+				query:  "select /*+ LOOKUP_JOIN(t,u) JOIN_ORDER(t,u) */ t.pk, u.t_pk from t join u on u.pk = t.pk + 10 where t.c1 = 20 for update",
+				rows:   [][]any{{2, 2}},
+				locks:  []string{"t/Update", "u/Update"},
+			},
+			{client: "b", query: "select pk from u where pk = 12 for update nowait", err: lockNotAvailableErr},
+			{client: "b", query: "select pk from t where pk = 2 for update nowait", err: lockNotAvailableErr},
+			{client: "b", query: "update u set t_pk = 1 where pk = 11"},
+			{client: "b", query: "update u set t_pk = 1 where pk = 11"},
+			{client: "a", query: "rollback"},
+			// A lookup join whose left side is not a table.
+			{client: "a", query: "begin"},
+			{
+				client: "a",
+				query:  "select /*+ LOOKUP_JOIN(d,u) */ d.pk, u.pk from (select distinct pk from t where pk > 1) d join u on u.t_pk = d.pk order by 1 for update of u",
+				rows:   [][]any{{2, 12}, {3, 13}},
+				locks:  []string{"u/Update", "u/Update"},
+			},
+			{client: "b", query: "update u set t_pk = 1 where pk = 11"},
+			{client: "b", query: "select pk from u where pk = 13 for update nowait", err: lockNotAvailableErr},
+			{client: "a", query: "rollback"},
+			// A merge join.
+			{client: "a", query: "begin"},
+			{
+				client: "a",
+				query:  "select /*+ MERGE_JOIN(t,u) */ t.pk, u.pk from t join u on u.t_pk = t.pk order by 1 for update",
+				rows:   [][]any{{1, 11}, {2, 12}, {3, 13}},
+				locks:  []string{"t/Update", "t/Update", "t/Update", "u/Update", "u/Update", "u/Update"},
+			},
+			{client: "b", query: "update t set c2 = 0 where pk = 3", blocks: true},
+			{client: "a", query: "rollback"},
+			{client: "b", unblocks: true},
+			// A count of a table's rows.
+			{client: "a", query: "begin"},
+			{client: "a", query: "select count(c2) from t for update", rows: [][]any{{3}}, locks: []string{"t/Update", "t/Update", "t/Update"}},
+			{client: "b", query: "update t set c2 = 0 where pk = 1", blocks: true},
+			{client: "a", query: "rollback"},
+			{client: "b", unblocks: true},
+		},
+	},
+	{
+		name:  "a join waits for, fails on, or leaves out the locked rows it reads from a table's storage",
+		setup: rowLockReadSetup,
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{client: "b", query: "begin"},
+			{client: "a", query: "update u set t_pk = 2 where pk = 12"},
+			{
+				client: "b",
+				query:  "select /*+ LOOKUP_JOIN(t,u) JOIN_ORDER(t,u) */ t.pk, u.pk from t join u on u.t_pk = t.pk for update nowait",
+				err:    lockNotAvailableErr,
+			},
+			{
+				client: "b",
+				query:  "select /*+ LOOKUP_JOIN(t,u) JOIN_ORDER(t,u) */ t.pk, u.pk from t join u on u.t_pk = t.pk order by 1 for update skip locked",
+				rows:   [][]any{{1, 11}, {3, 13}},
+			},
+			{
+				client: "b",
+				query:  "select /*+ MERGE_JOIN(t,u) */ t.pk, u.pk from t join u on u.t_pk = t.pk order by 1 for update skip locked",
+				rows:   [][]any{{1, 11}, {3, 13}},
+			},
+			{
+				client: "b",
+				query:  "select /*+ LOOKUP_JOIN(t,u) JOIN_ORDER(t,u) */ t.pk, u.pk from t join u on u.t_pk = t.pk order by 1 for update",
+				blocks: true,
+			},
+			{client: "a", query: "commit"},
+			{client: "b", unblocks: true, err: concurrentUpdateErr},
+		},
+	},
+	{
 		name:  "a locking read outside a transaction holds its locks only while it runs",
 		setup: rowLockReadSetup,
 		steps: []rowLockStep{
@@ -1045,6 +1137,33 @@ var rowLockKeylessReadScripts = []rowLockScript{
 			{client: "b", unblocks: true},
 			{client: "b", query: "commit"},
 			{client: "a", query: "select count(*) from k where c1 = 1", rows: [][]any{{3}}},
+		},
+	},
+	{
+		name:  "keyless: a join locks the rows it reads from each table's storage",
+		setup: append(append([]string{}, rowLockKeylessReadSetup...), rowLockReadSetup...),
+		steps: []rowLockStep{
+			{client: "a", query: "begin"},
+			{
+				client: "a",
+				query:  "select /*+ LOOKUP_JOIN(t,k) JOIN_ORDER(t,k) */ t.pk, k.c2 from t join k on k.c1 = t.pk where t.pk < 3 order by 1 for update",
+				rows:   [][]any{{1, 1}, {1, 1}, {2, 2}},
+				locks:  []string{"k/Update", "k/Update", "t/Update", "t/Update"},
+			},
+			{client: "b", query: "update k set c2 = 30 where c1 = 3"},
+			{client: "b", query: "update k set c2 = 20 where c1 = 2", blocks: true},
+			{client: "a", query: "rollback"},
+			{client: "b", unblocks: true},
+			{client: "a", query: "begin"},
+			{
+				client: "a",
+				query:  "select /*+ LOOKUP_JOIN(k,t) JOIN_ORDER(k,t) */ k.c1, t.c1 from k join t on t.pk = k.c1 where k.c1 = 1 for update",
+				rows:   [][]any{{1, 10}, {1, 10}},
+				locks:  []string{"k/Update", "t/Update"},
+			},
+			{client: "a", query: "rollback"},
+			{client: "a", query: "begin"},
+			{client: "a", query: "select count(c2) from k for update", rows: [][]any{{4}}, locks: []string{"k/Update", "k/Update", "k/Update"}},
 		},
 	},
 	{

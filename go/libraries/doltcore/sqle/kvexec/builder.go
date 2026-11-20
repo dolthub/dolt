@@ -23,7 +23,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression/function/aggregation"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/rowexec"
-	"github.com/dolthub/go-mysql-server/sql/transform"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -78,10 +77,6 @@ func (b *Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, e
 		switch {
 		case n.Op.IsPartial() || len(r) != 0:
 			return nil, nil
-		case locksRows(n):
-			// The operators here read rows straight from storage, where nothing locks them. A table that locks the
-			// rows it returns has to be read through its own iterators.
-			return nil, nil
 		case n.Op.IsLookup():
 			// conditions to use this fast path for lookup joins:
 			// (1) lookup or left lookup join
@@ -130,7 +125,7 @@ func (b *Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, e
 			}
 		}
 	case *plan.GroupBy:
-		if len(n.GroupByExprs) == 0 && len(n.SelectDeps) == 1 && !locksRows(n) {
+		if len(n.GroupByExprs) == 0 && len(n.SelectDeps) == 1 {
 			if cnt, ok := n.SelectDeps[0].(*aggregation.Count); ok {
 				if _, srcIter, _, srcSchema, _, srcFilter, err := getSourceKv(ctx, n.Child, true); err == nil && srcSchema != nil && srcFilter == nil {
 					iter, ok, err := newCountAggregationKvIter(ctx, srcIter, srcSchema, cnt.Child)
@@ -148,24 +143,6 @@ func (b *Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, e
 	}
 
 	return nil, nil
-}
-
-// locksRows returns whether any table read by the plan |n| locks the rows it returns.
-func locksRows(n sql.Node) bool {
-	found := false
-	transform.Inspect(n, func(n sql.Node) bool {
-		tableNode, ok := n.(sql.TableNode)
-		if !ok {
-			return !found
-		}
-
-		if locking, ok := tableNode.UnderlyingTable().(sqle.RowLockingTable); ok && locking.LocksRows() {
-			found = true
-		}
-
-		return !found
-	})
-	return found
 }
 
 // newTupleLookupKvIter returns a KV iter for a join whose left and right side are both prolly indexes
@@ -492,19 +469,20 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.MapReader, pr
 		}
 
 	case *plan.ResolvedTable:
+		var doltTable *sqle.DoltTable
 		switch dt := n.UnderlyingTable().(type) {
 		case *sqle.WritableDoltTable:
-			tags = dt.ProjectedTags()
-			priMap, priSch, err = dt.DoltTable.RowMap(ctx)
+			doltTable = dt.DoltTable
 		case *sqle.AlterableDoltTable:
-			tags = dt.ProjectedTags()
-			priMap, priSch, err = dt.DoltTable.RowMap(ctx)
+			doltTable = dt.DoltTable
 		case *sqle.DoltTable:
-			tags = dt.ProjectedTags()
-			priMap, priSch, err = dt.RowMap(ctx)
+			doltTable = dt
 		default:
 			return nil, nil, nil, nil, nil, nil, nil
 		}
+
+		tags = doltTable.ProjectedTags()
+		priMap, priSch, err = doltTable.RowMap(ctx)
 		if err != nil {
 			return nil, nil, nil, nil, nil, nil, err
 		}
@@ -513,6 +491,15 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.MapReader, pr
 		if err != nil {
 			return nil, nil, nil, nil, nil, nil, err
 		}
+
+		// The index readers of the case above lock the rows of a table that locks the rows it returns. A scan
+		// of the table's rows has to do it here.
+		locker, err := doltTable.RowLocker(ctx)
+		if err != nil {
+			return nil, nil, nil, nil, nil, nil, err
+		}
+
+		srcIter = index.NewRowLockingMapIter(srcIter, locker)
 
 		if schema.IsKeyless(priSch) {
 			srcIter = index.NewKeylessCardedMapIter(srcIter)
@@ -661,6 +648,18 @@ func getMergeKv(ctx *sql.Context, n sql.Node) (mergeState, error) {
 		ms.iter, err = index.NewSequenceRangeIter(ctx, secIterGen, prollyRanges, l.IsReverse)
 		if err != nil {
 			return ms, err
+		}
+
+		// A table that locks the rows it returns locks every row the join reads from it.
+		locker, err := doltTable.RowLocker(ctx)
+		if err != nil {
+			return ms, err
+		}
+
+		if schema.IsKeyless(idx.Schema()) {
+			ms.iter = index.NewRowLockingMapIter(ms.iter, locker)
+		} else {
+			ms.iter = index.NewRowLockingIndexIter(ms.iter, locker, idx, ms.idxMap.NodeStore())
 		}
 
 		covering = idx.ID() == "primary" || schemaIsCovering(ms.idxSch, ms.tags)
