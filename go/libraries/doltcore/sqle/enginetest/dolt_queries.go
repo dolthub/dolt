@@ -9235,4 +9235,36 @@ end;
 			},
 		},
 	},
+	{
+		Name: "temporary table scans after index lookups",
+		SetUpScript: []string{
+			"create temporary table t (x int primary key, y int, key(y))",
+			"insert into t values (1, 10), (2, 20), (3, 30), (4, 40)",
+			"create temporary table tt (id int primary key, v varchar(32))",
+			"insert into tt values (1, md5(1)), (2, md5(2)), (3, md5(3))",
+			"alter table tt add index vidx (v)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select count(distinct id) from tt where v is not null",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "select count(distinct id) from tt where v = md5(id)",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "select x from t where y = 20",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "select x from t where y = x * 10 order by x",
+				Expected: []sql.Row{{1}, {2}, {3}, {4}},
+			},
+			{
+				Query:    "select a.x, b.x from t a join t b on b.y = a.x * 10 where a.x > 2 order by a.x",
+				Expected: []sql.Row{{3, 3}, {4, 4}},
+			},
+		},
+	},
 }
