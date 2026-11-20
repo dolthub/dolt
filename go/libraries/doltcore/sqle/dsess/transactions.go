@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/doltcore/rowjournal"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -95,6 +96,14 @@ type DoltTransaction struct {
 	savepoints         []savepoint
 	postgresSavepoints bool
 	tCharacteristic    sql.TransactionCharacteristic
+	// rowTxn is this transaction's registration in the engine's row journal, which gives it its transaction ID and
+	// holds its row locks. Nil when the engine keeps no row journal.
+	rowTxn *rowjournal.Txn
+	// rowJournal is the journal |rowTxn| is registered in.
+	rowJournal *rowjournal.Journal
+	// rowLocking is whether this transaction locks the rows it changes and the rows it reads with a locking clause.
+	// It is fixed when the transaction starts.
+	rowLocking bool
 }
 
 type dbRoot struct {
@@ -107,6 +116,38 @@ type savepoint struct {
 	roots         map[doltdb.QualifiedDbKey]doltdb.RootValue
 	name          string
 	dirtyBranches map[doltdb.QualifiedDbKey]bool
+	// rowLevel is the savepoint's level in the row journal, or zero if the transaction isn't registered in one.
+	rowLevel uint32
+}
+
+// RowTxn returns this transaction's registration in the engine's row journal, or nil if it has none.
+func (tx *DoltTransaction) RowTxn() *rowjournal.Txn {
+	return tx.rowTxn
+}
+
+// ID returns the transaction's ID, which is higher than that of every transaction started before it on the same
+// engine. It returns zero for a transaction that has none.
+func (tx *DoltTransaction) ID() rowjournal.TxnID {
+	if tx.rowTxn == nil {
+		return 0
+	}
+
+	return tx.rowTxn.ID()
+}
+
+// commitRowTxn marks this transaction as committed in the row journal, releasing its row locks.
+func (tx *DoltTransaction) commitRowTxn(journal *rowjournal.Journal) {
+	if journal != nil && tx.rowTxn != nil {
+		journal.Commit(tx.rowTxn)
+	}
+}
+
+// abortRowTxn marks this transaction as aborted in the row journal, releasing its row locks. It does nothing if the
+// transaction already committed or aborted.
+func (tx *DoltTransaction) abortRowTxn(journal *rowjournal.Journal) {
+	if journal != nil && tx.rowTxn != nil {
+		journal.Abort(tx.rowTxn)
+	}
 }
 
 func NewDoltTransaction(
@@ -864,6 +905,48 @@ func (tx *DoltTransaction) CreateSavepoint(name string, roots map[doltdb.Qualifi
 	tx.savepoints = append(tx.savepoints, savepoint{name: name, roots: roots, dirtyBranches: dirtyBranches})
 }
 
+// createRowSavepoint opens a savepoint in the row journal for the savepoint most recently created.
+func (tx *DoltTransaction) createRowSavepoint(journal *rowjournal.Journal) {
+	if journal == nil || tx.rowTxn == nil || len(tx.savepoints) == 0 {
+		return
+	}
+
+	level, err := journal.SavepointBegin(tx.rowTxn)
+	if err != nil {
+		return
+	}
+
+	tx.savepoints[len(tx.savepoints)-1].rowLevel = level
+}
+
+// rollbackRowSavepoint releases the row locks taken since the savepoint given was created.
+func (tx *DoltTransaction) rollbackRowSavepoint(journal *rowjournal.Journal, point *savepoint) {
+	if journal == nil || tx.rowTxn == nil || point.rowLevel == 0 {
+		return
+	}
+
+	_ = journal.SavepointRollback(tx.rowTxn, point.rowLevel)
+}
+
+// releaseRowSavepoint closes the row journal's savepoint at |rowLevel| if no savepoint created after it remains. The
+// row locks taken since it was created are kept either way.
+func (tx *DoltTransaction) releaseRowSavepoint(journal *rowjournal.Journal, rowLevel uint32) {
+	if journal == nil || tx.rowTxn == nil || rowLevel == 0 {
+		return
+	}
+
+	for _, remaining := range tx.savepoints {
+		if remaining.rowLevel > rowLevel {
+			// Only without nested savepoints can one be released while a later one stays. The journal's levels
+			// nest, so this one stays open there. Rolling back to any remaining savepoint still does the right
+			// thing: it undoes everything at that savepoint's level and above.
+			return
+		}
+	}
+
+	_ = journal.SavepointRelease(tx.rowTxn, rowLevel)
+}
+
 // findSavepoint returns the index of the savepoint with the name given, or -1 if it doesn't exist
 func (tx *DoltTransaction) findSavepoint(name string) int {
 	for i := len(tx.savepoints) - 1; i >= 0; i-- {
@@ -889,16 +972,23 @@ func (tx *DoltTransaction) RollbackToSavepoint(name string) *savepoint {
 // ClearSavepoint releases the named savepoint. In PostgreSQL mode it also
 // releases all savepoints created after it.
 func (tx *DoltTransaction) ClearSavepoint(name string) bool {
+	_, existed := tx.clearSavepoint(name)
+	return existed
+}
+
+// clearSavepoint is ClearSavepoint, and also returns the row journal level of the savepoint released.
+func (tx *DoltTransaction) clearSavepoint(name string) (uint32, bool) {
 	existing := tx.findSavepoint(name)
 	if existing >= 0 {
+		rowLevel := tx.savepoints[existing].rowLevel
 		if tx.postgresSavepoints {
 			tx.savepoints = tx.savepoints[:existing]
 		} else {
 			tx.savepoints = append(tx.savepoints[:existing], tx.savepoints[existing+1:]...)
 		}
-		return true
+		return rowLevel, true
 	}
-	return false
+	return 0, false
 }
 
 // WorkingSetMeta returns the metadata to use for a commit of this transaction.

@@ -159,6 +159,14 @@ func newDoltSystemVariables() []sql.SystemVariable {
 			Type:              types.NewSystemBoolType(dsess.DoltMultiBranchCommit),
 			Default:           int8(0),
 		},
+		&sql.MysqlSystemVariable{ // If true, statements lock the rows they change, and the rows they read with a locking clause such as FOR UPDATE.
+			Name:              dsess.DoltRowLevelLocking,
+			Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Global),
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemBoolType(dsess.DoltRowLevelLocking),
+			Default:           int8(1),
+		},
 		&sql.MysqlSystemVariable{ // If set, use this message for automatic Dolt commits
 			Name:              dsess.DoltCommitOnTransactionCommitMessage,
 			Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Both),

@@ -469,19 +469,20 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.MapReader, pr
 		}
 
 	case *plan.ResolvedTable:
+		var doltTable *sqle.DoltTable
 		switch dt := n.UnderlyingTable().(type) {
 		case *sqle.WritableDoltTable:
-			tags = dt.ProjectedTags()
-			priMap, priSch, err = dt.DoltTable.RowMap(ctx)
+			doltTable = dt.DoltTable
 		case *sqle.AlterableDoltTable:
-			tags = dt.ProjectedTags()
-			priMap, priSch, err = dt.DoltTable.RowMap(ctx)
+			doltTable = dt.DoltTable
 		case *sqle.DoltTable:
-			tags = dt.ProjectedTags()
-			priMap, priSch, err = dt.RowMap(ctx)
+			doltTable = dt
 		default:
 			return nil, nil, nil, nil, nil, nil, nil
 		}
+
+		tags = doltTable.ProjectedTags()
+		priMap, priSch, err = doltTable.RowMap(ctx)
 		if err != nil {
 			return nil, nil, nil, nil, nil, nil, err
 		}
@@ -490,6 +491,15 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.MapReader, pr
 		if err != nil {
 			return nil, nil, nil, nil, nil, nil, err
 		}
+
+		// The index readers of the case above lock the rows of a table that locks the rows it returns. A scan
+		// of the table's rows has to do it here.
+		locker, err := doltTable.RowLocker(ctx)
+		if err != nil {
+			return nil, nil, nil, nil, nil, nil, err
+		}
+
+		srcIter = index.NewRowLockingMapIter(srcIter, locker)
 
 		if schema.IsKeyless(priSch) {
 			srcIter = index.NewKeylessCardedMapIter(srcIter)
@@ -638,6 +648,18 @@ func getMergeKv(ctx *sql.Context, n sql.Node) (mergeState, error) {
 		ms.iter, err = index.NewSequenceRangeIter(ctx, secIterGen, prollyRanges, l.IsReverse)
 		if err != nil {
 			return ms, err
+		}
+
+		// A table that locks the rows it returns locks every row the join reads from it.
+		locker, err := doltTable.RowLocker(ctx)
+		if err != nil {
+			return ms, err
+		}
+
+		if schema.IsKeyless(idx.Schema()) {
+			ms.iter = index.NewRowLockingMapIter(ms.iter, locker)
+		} else {
+			ms.iter = index.NewRowLockingIndexIter(ms.iter, locker, idx, ms.idxMap.NodeStore())
 		}
 
 		covering = idx.ID() == "primary" || schemaIsCovering(ms.idxSch, ms.tags)

@@ -296,6 +296,84 @@ var MultiBranchWorkingSetTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:            "/* client b */ update `mydb/b1`.t set y=111 where pk=1",
+				ExpectedBlocking: true,
+				ExpectedErrStr:   "serialization failure: could not serialize access due to concurrent update, try restarting transaction.",
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "/* client b */ update `mydb/main`.t set y=111 where pk=1",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select * from `mydb/b1`.t order by pk",
+				Expected: []sql.Row{{1, 11, 100}, {2, 20, 200}, {3, 30, 300}},
+			},
+			{
+				Query: "/* client b */ select * from `mydb/main`.t order by pk",
+				Expected: []sql.Row{
+					{1, 11, 111},
+					{2, 20, 200},
+					{3, 30, 300},
+				},
+			},
+			{
+				Query: "/* client b */ select * from `mydb/b1`.t as of 'HEAD' order by pk",
+				Expected: []sql.Row{
+					{1, 10, 100},
+					{2, 20, 200},
+					{3, 30, 300},
+				},
+			},
+			{
+				Query: "/* client b */ select * from `mydb/main`.t as of 'HEAD' order by pk",
+				Expected: []sql.Row{
+					{1, 10, 100},
+					{2, 20, 200},
+					{3, 30, 300},
+				},
+			},
+		},
+	},
+	{
+		// The script above with row-level locking off: no statement waits for another, and conflicting changes
+		// are found when the later transaction commits.
+		Name: "different columns of the same row merge on two branches, row-level locking off",
+		SetUpScript: []string{
+			"set @@global.dolt_row_level_locking = 0",
+			"create table t (pk int primary key, x int, y int)",
+			"insert into t values (1,10,100),(2,20,200),(3,30,300)",
+			"call dolt_commit('-Am', 'setup')",
+			"call dolt_branch('b1')",
+			"call dolt_branch('b2')",
+			"call dolt_branch('b3')",
+			"set autocommit = 0",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ update `mydb/b1`.t set x=11 where pk=1",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ update `mydb/main`.t set x=11 where pk=1",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ update `mydb/b1`.t set y=111 where pk=1",
 				SkipResultsCheck: true,
 			},
 			{
@@ -342,11 +420,134 @@ var MultiBranchWorkingSetTransactionTests = []queries.TransactionTest{
 					{3, 30, 300},
 				},
 			},
+			{
+				Query:            "/* client a */ set @@global.dolt_row_level_locking = 1",
+				SkipResultsCheck: true,
+			},
 		},
 	},
 	{
 		Name: "late branch conflict rolls back the complete batch and permits retry",
 		SetUpScript: []string{
+			"create table t (pk int primary key, x int, y int)",
+			"insert into t values (1,10,100),(2,20,200),(3,30,300)",
+			"call dolt_commit('-Am', 'setup')",
+			"call dolt_branch('b1')",
+			"call dolt_branch('b2')",
+			"call dolt_branch('b3')",
+			"set autocommit = 0",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ insert into `mydb/b1`.t values (4,40,400)",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ insert into `mydb/b2`.t values (4,40,400)",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ update `mydb/main`.t set x=11 where pk=1",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ update `mydb/main`.t set x=12 where pk=1",
+				ExpectedBlocking: true,
+				ExpectedErrStr:   "serialization failure: could not serialize access due to concurrent update, try restarting transaction.",
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "/* client b */ insert into `mydb/b3`.t values (5,50,500)",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "/* client b */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ select * from `mydb/b1`.t order by pk",
+				Expected: []sql.Row{{1, 10, 100}, {2, 20, 200}, {3, 30, 300}, {4, 40, 400}},
+			},
+			{
+				Query:    "/* client b */ select * from `mydb/b2`.t order by pk",
+				Expected: []sql.Row{{1, 10, 100}, {2, 20, 200}, {3, 30, 300}, {4, 40, 400}},
+			},
+			{
+				Query:    "/* client a */ select * from `mydb/main`.t order by pk",
+				Expected: []sql.Row{{1, 11, 100}, {2, 20, 200}, {3, 30, 300}},
+			},
+			{
+				Query:            "/* client a */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:          "/* client a */ insert into `mydb/b1`.t values (4,40,400)",
+				ExpectedErrStr: "duplicate primary key given: [4]",
+			},
+			{
+				Query:            "/* client a */ update `mydb/main`.t set x=13 where pk=1",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "/* client a */ select * from `mydb/b1`.t order by pk",
+				Expected: []sql.Row{
+					{1, 10, 100},
+					{2, 20, 200},
+					{3, 30, 300},
+					{4, 40, 400},
+				},
+			},
+			{
+				Query: "/* client a */ select * from `mydb/main`.t order by pk",
+				Expected: []sql.Row{
+					{1, 13, 100},
+					{2, 20, 200},
+					{3, 30, 300},
+				},
+			},
+			{
+				Query: "/* client a */ select * from `mydb/b1`.t as of 'HEAD' order by pk",
+				Expected: []sql.Row{
+					{1, 10, 100},
+					{2, 20, 200},
+					{3, 30, 300},
+				},
+			},
+			{
+				Query: "/* client a */ select * from `mydb/main`.t as of 'HEAD' order by pk",
+				Expected: []sql.Row{
+					{1, 10, 100},
+					{2, 20, 200},
+					{3, 30, 300},
+				},
+			},
+		},
+	},
+	{
+		// The script above with row-level locking off: no statement waits for another, and conflicting changes
+		// are found when the later transaction commits.
+		Name: "late branch conflict rolls back the complete batch and permits retry, row-level locking off",
+		SetUpScript: []string{
+			"set @@global.dolt_row_level_locking = 0",
 			"create table t (pk int primary key, x int, y int)",
 			"insert into t values (1,10,100),(2,20,200),(3,30,300)",
 			"call dolt_commit('-Am', 'setup')",
@@ -469,11 +670,93 @@ var MultiBranchWorkingSetTransactionTests = []queries.TransactionTest{
 					{3, 30, 300},
 				},
 			},
+			{
+				Query:            "/* client a */ set @@global.dolt_row_level_locking = 1",
+				SkipResultsCheck: true,
+			},
 		},
 	},
 	{
 		Name: "delete update conflict does not publish nonconflicting branches",
 		SetUpScript: []string{
+			"create table t (pk int primary key, x int, y int)",
+			"insert into t values (1,10,100),(2,20,200),(3,30,300)",
+			"call dolt_commit('-Am', 'setup')",
+			"call dolt_branch('b1')",
+			"call dolt_branch('b2')",
+			"call dolt_branch('b3')",
+			"set autocommit = 0",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ delete from `mydb/b1`.t where pk=1",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ insert into `mydb/b2`.t values (4,40,400)",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ update `mydb/b1`.t set x=11 where pk=1",
+				ExpectedBlocking: true,
+				ExpectedErrStr:   "serialization failure: could not serialize access due to concurrent delete, try restarting transaction.",
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "/* client b */ insert into `mydb/b3`.t values (5,50,500)",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "/* client b */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ select * from `mydb/b2`.t order by pk",
+				Expected: []sql.Row{{1, 10, 100}, {2, 20, 200}, {3, 30, 300}, {4, 40, 400}},
+			},
+			{
+				Query:    "/* client a */ select * from `mydb/b1`.t order by pk",
+				Expected: []sql.Row{{2, 20, 200}, {3, 30, 300}},
+			},
+			{
+				Query: "/* client b */ select * from `mydb/b2`.t as of 'HEAD' order by pk",
+				Expected: []sql.Row{
+					{1, 10, 100},
+					{2, 20, 200},
+					{3, 30, 300},
+				},
+			},
+			{
+				Query: "/* client a */ select * from `mydb/b1`.t as of 'HEAD' order by pk",
+				Expected: []sql.Row{
+					{1, 10, 100},
+					{2, 20, 200},
+					{3, 30, 300},
+				},
+			},
+		},
+	},
+	{
+		// The script above with row-level locking off: no statement waits for another, and conflicting changes
+		// are found when the later transaction commits.
+		Name: "delete update conflict does not publish nonconflicting branches, row-level locking off",
+		SetUpScript: []string{
+			"set @@global.dolt_row_level_locking = 0",
 			"create table t (pk int primary key, x int, y int)",
 			"insert into t values (1,10,100),(2,20,200),(3,30,300)",
 			"call dolt_commit('-Am', 'setup')",
@@ -551,11 +834,115 @@ var MultiBranchWorkingSetTransactionTests = []queries.TransactionTest{
 					{3, 30, 300},
 				},
 			},
+			{
+				Query:            "/* client a */ set @@global.dolt_row_level_locking = 1",
+				SkipResultsCheck: true,
+			},
 		},
 	},
 	{
 		Name: "identical edits merge while preserving independent branch writes",
 		SetUpScript: []string{
+			"create table t (pk int primary key, x int, y int)",
+			"insert into t values (1,10,100),(2,20,200),(3,30,300)",
+			"call dolt_commit('-Am', 'setup')",
+			"call dolt_branch('b1')",
+			"call dolt_branch('b2')",
+			"call dolt_branch('b3')",
+			"set autocommit = 0",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ update `mydb/b1`.t set x=11 where pk=1",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ update `mydb/b1`.t set x=11 where pk=1",
+				ExpectedBlocking: true,
+				ExpectedErrStr:   "serialization failure: could not serialize access due to concurrent update, try restarting transaction.",
+			},
+			{
+				Query:            "/* client a */ insert into `mydb/main`.t values (4,40,400)",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "/* client b */ insert into `mydb/b2`.t values (5,50,500)",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "/* client b */ select * from `mydb/b1`.t order by pk",
+				Expected: []sql.Row{
+					{1, 11, 100},
+					{2, 20, 200},
+					{3, 30, 300},
+				},
+			},
+			{
+				Query: "/* client b */ select * from `mydb/main`.t order by pk",
+				Expected: []sql.Row{
+					{1, 10, 100},
+					{2, 20, 200},
+					{3, 30, 300},
+					{4, 40, 400},
+				},
+			},
+			{
+				Query: "/* client b */ select * from `mydb/b2`.t order by pk",
+				Expected: []sql.Row{
+					{1, 10, 100},
+					{2, 20, 200},
+					{3, 30, 300},
+					{5, 50, 500},
+				},
+			},
+			{
+				Query: "/* client b */ select * from `mydb/b1`.t as of 'HEAD' order by pk",
+				Expected: []sql.Row{
+					{1, 10, 100},
+					{2, 20, 200},
+					{3, 30, 300},
+				},
+			},
+			{
+				Query: "/* client b */ select * from `mydb/main`.t as of 'HEAD' order by pk",
+				Expected: []sql.Row{
+					{1, 10, 100},
+					{2, 20, 200},
+					{3, 30, 300},
+				},
+			},
+			{
+				Query: "/* client b */ select * from `mydb/b2`.t as of 'HEAD' order by pk",
+				Expected: []sql.Row{
+					{1, 10, 100},
+					{2, 20, 200},
+					{3, 30, 300},
+				},
+			},
+		},
+	},
+	{
+		// The script above with row-level locking off: no statement waits for another, and conflicting changes
+		// are found when the later transaction commits.
+		Name: "identical edits merge while preserving independent branch writes, row-level locking off",
+		SetUpScript: []string{
+			"set @@global.dolt_row_level_locking = 0",
 			"create table t (pk int primary key, x int, y int)",
 			"insert into t values (1,10,100),(2,20,200),(3,30,300)",
 			"call dolt_commit('-Am', 'setup')",
@@ -646,6 +1033,10 @@ var MultiBranchWorkingSetTransactionTests = []queries.TransactionTest{
 					{2, 20, 200},
 					{3, 30, 300},
 				},
+			},
+			{
+				Query:            "/* client a */ set @@global.dolt_row_level_locking = 1",
+				SkipResultsCheck: true,
 			},
 		},
 	},
@@ -1168,6 +1559,80 @@ var MultiBranchHeadTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:            "/* client b */ update `mydb/b1`.t set y=111 where pk=1",
+				ExpectedBlocking: true,
+				ExpectedErrStr:   "serialization failure: could not serialize access due to concurrent update, try restarting transaction.",
+			},
+			{
+				Query:            "/* client a */ call dolt_commit_all('-am', 'batch')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ update `mydb/main`.t set y=111 where pk=1",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ call dolt_commit_all('-am', 'batch')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ select * from `mydb/b1`.t order by pk",
+				Expected: []sql.Row{{1, 11, 100}, {2, 20, 200}, {3, 30, 300}},
+			},
+			{
+				Query: "/* client b */ select * from `mydb/main`.t order by pk",
+				Expected: []sql.Row{
+					{1, 11, 111},
+					{2, 20, 200},
+					{3, 30, 300},
+				},
+			},
+			{
+				Query:    "/* client b */ select * from `mydb/b1`.t as of 'HEAD' order by pk",
+				Expected: []sql.Row{{1, 11, 100}, {2, 20, 200}, {3, 30, 300}},
+			},
+			{
+				Query: "/* client b */ select * from `mydb/main`.t as of 'HEAD' order by pk",
+				Expected: []sql.Row{
+					{1, 11, 111},
+					{2, 20, 200},
+					{3, 30, 300},
+				},
+			},
+		},
+	},
+	{
+		// The script above with row-level locking off: no statement waits for another, and conflicting changes
+		// are found when the later transaction commits.
+		Name: "different columns of the same row merge on two branches, row-level locking off",
+		SetUpScript: []string{
+			"set @@global.dolt_row_level_locking = 0",
+			"create table t (pk int primary key, x int, y int)",
+			"insert into t values (1,10,100),(2,20,200),(3,30,300)",
+			"call dolt_commit('-Am', 'setup')",
+			"call dolt_branch('b1')",
+			"call dolt_branch('b2')",
+			"call dolt_branch('b3')",
+			"set autocommit = 0",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ update `mydb/b1`.t set x=11 where pk=1",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ update `mydb/main`.t set x=11 where pk=1",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ update `mydb/b1`.t set y=111 where pk=1",
 				SkipResultsCheck: true,
 			},
 			{
@@ -1220,11 +1685,143 @@ var MultiBranchHeadTransactionTests = []queries.TransactionTest{
 					{3, 30, 300},
 				},
 			},
+			{
+				Query:            "/* client a */ set @@global.dolt_row_level_locking = 1",
+				SkipResultsCheck: true,
+			},
 		},
 	},
 	{
 		Name: "late branch conflict rolls back the complete batch and permits retry",
 		SetUpScript: []string{
+			"create table t (pk int primary key, x int, y int)",
+			"insert into t values (1,10,100),(2,20,200),(3,30,300)",
+			"call dolt_commit('-Am', 'setup')",
+			"call dolt_branch('b1')",
+			"call dolt_branch('b2')",
+			"call dolt_branch('b3')",
+			"set autocommit = 0",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ insert into `mydb/b1`.t values (4,40,400)",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ insert into `mydb/b2`.t values (4,40,400)",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ update `mydb/main`.t set x=11 where pk=1",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ update `mydb/main`.t set x=12 where pk=1",
+				ExpectedBlocking: true,
+				ExpectedErrStr:   "serialization failure: could not serialize access due to concurrent update, try restarting transaction.",
+			},
+			{
+				Query:            "/* client a */ call dolt_commit_all('-am', 'batch')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ insert into `mydb/b3`.t values (5,50,500)",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:          "/* client b */ call dolt_commit_all('-am', 'batch')",
+				ExpectedErrStr: "nothing to commit on mydb/main",
+			},
+			{
+				Query:            "/* client b */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ select * from `mydb/b1`.t order by pk",
+				Expected: []sql.Row{{1, 10, 100}, {2, 20, 200}, {3, 30, 300}, {4, 40, 400}},
+			},
+			{
+				Query:    "/* client b */ select * from `mydb/b2`.t order by pk",
+				Expected: []sql.Row{{1, 10, 100}, {2, 20, 200}, {3, 30, 300}, {4, 40, 400}},
+			},
+			{
+				Query:    "/* client a */ select * from `mydb/main`.t order by pk",
+				Expected: []sql.Row{{1, 11, 100}, {2, 20, 200}, {3, 30, 300}},
+			},
+			{
+				Query:    "/* client b */ select * from `mydb/b1`.t as of 'HEAD' order by pk",
+				Expected: []sql.Row{{1, 10, 100}, {2, 20, 200}, {3, 30, 300}, {4, 40, 400}},
+			},
+			{
+				Query:    "/* client b */ select * from `mydb/b2`.t as of 'HEAD' order by pk",
+				Expected: []sql.Row{{1, 10, 100}, {2, 20, 200}, {3, 30, 300}, {4, 40, 400}},
+			},
+			{
+				Query:            "/* client a */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:          "/* client a */ insert into `mydb/b1`.t values (4,40,400)",
+				ExpectedErrStr: "duplicate primary key given: [4]",
+			},
+			{
+				Query:            "/* client a */ update `mydb/main`.t set x=13 where pk=1",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ call dolt_commit_all('-am', 'batch')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "/* client a */ select * from `mydb/b1`.t order by pk",
+				Expected: []sql.Row{
+					{1, 10, 100},
+					{2, 20, 200},
+					{3, 30, 300},
+					{4, 40, 400},
+				},
+			},
+			{
+				Query: "/* client a */ select * from `mydb/main`.t order by pk",
+				Expected: []sql.Row{
+					{1, 13, 100},
+					{2, 20, 200},
+					{3, 30, 300},
+				},
+			},
+			{
+				Query: "/* client a */ select * from `mydb/b1`.t as of 'HEAD' order by pk",
+				Expected: []sql.Row{
+					{1, 10, 100},
+					{2, 20, 200},
+					{3, 30, 300},
+					{4, 40, 400},
+				},
+			},
+			{
+				Query: "/* client a */ select * from `mydb/main`.t as of 'HEAD' order by pk",
+				Expected: []sql.Row{
+					{1, 13, 100},
+					{2, 20, 200},
+					{3, 30, 300},
+				},
+			},
+		},
+	},
+	{
+		// The script above with row-level locking off: no statement waits for another, and conflicting changes
+		// are found when the later transaction commits.
+		Name: "late branch conflict rolls back the complete batch and permits retry, row-level locking off",
+		SetUpScript: []string{
+			"set @@global.dolt_row_level_locking = 0",
 			"create table t (pk int primary key, x int, y int)",
 			"insert into t values (1,10,100),(2,20,200),(3,30,300)",
 			"call dolt_commit('-Am', 'setup')",
@@ -1370,11 +1967,85 @@ var MultiBranchHeadTransactionTests = []queries.TransactionTest{
 					{3, 30, 300},
 				},
 			},
+			{
+				Query:            "/* client a */ set @@global.dolt_row_level_locking = 1",
+				SkipResultsCheck: true,
+			},
 		},
 	},
 	{
 		Name: "delete update conflict does not publish nonconflicting branches",
 		SetUpScript: []string{
+			"create table t (pk int primary key, x int, y int)",
+			"insert into t values (1,10,100),(2,20,200),(3,30,300)",
+			"call dolt_commit('-Am', 'setup')",
+			"call dolt_branch('b1')",
+			"call dolt_branch('b2')",
+			"call dolt_branch('b3')",
+			"set autocommit = 0",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ delete from `mydb/b1`.t where pk=1",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ insert into `mydb/b2`.t values (4,40,400)",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ update `mydb/b1`.t set x=11 where pk=1",
+				ExpectedBlocking: true,
+				ExpectedErrStr:   "serialization failure: could not serialize access due to concurrent delete, try restarting transaction.",
+			},
+			{
+				Query:            "/* client a */ call dolt_commit_all('-am', 'batch')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ insert into `mydb/b3`.t values (5,50,500)",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:          "/* client b */ call dolt_commit_all('-am', 'batch')",
+				ExpectedErrStr: "nothing to commit on mydb/main",
+			},
+			{
+				Query:            "/* client b */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ select * from `mydb/b2`.t order by pk",
+				Expected: []sql.Row{{1, 10, 100}, {2, 20, 200}, {3, 30, 300}, {4, 40, 400}},
+			},
+			{
+				Query:    "/* client a */ select * from `mydb/b1`.t order by pk",
+				Expected: []sql.Row{{2, 20, 200}, {3, 30, 300}},
+			},
+			{
+				Query:    "/* client b */ select * from `mydb/b2`.t as of 'HEAD' order by pk",
+				Expected: []sql.Row{{1, 10, 100}, {2, 20, 200}, {3, 30, 300}, {4, 40, 400}},
+			},
+			{
+				Query:    "/* client a */ select * from `mydb/b1`.t as of 'HEAD' order by pk",
+				Expected: []sql.Row{{2, 20, 200}, {3, 30, 300}},
+			},
+		},
+	},
+	{
+		// The script above with row-level locking off: no statement waits for another, and conflicting changes
+		// are found when the later transaction commits.
+		Name: "delete update conflict does not publish nonconflicting branches, row-level locking off",
+		SetUpScript: []string{
+			"set @@global.dolt_row_level_locking = 0",
 			"create table t (pk int primary key, x int, y int)",
 			"insert into t values (1,10,100),(2,20,200),(3,30,300)",
 			"call dolt_commit('-Am', 'setup')",
@@ -1455,11 +2126,112 @@ var MultiBranchHeadTransactionTests = []queries.TransactionTest{
 					{3, 30, 300},
 				},
 			},
+			{
+				Query:            "/* client a */ set @@global.dolt_row_level_locking = 1",
+				SkipResultsCheck: true,
+			},
 		},
 	},
 	{
 		Name: "identical edits merge while preserving independent branch writes",
 		SetUpScript: []string{
+			"create table t (pk int primary key, x int, y int)",
+			"insert into t values (1,10,100),(2,20,200),(3,30,300)",
+			"call dolt_commit('-Am', 'setup')",
+			"call dolt_branch('b1')",
+			"call dolt_branch('b2')",
+			"call dolt_branch('b3')",
+			"set autocommit = 0",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ update `mydb/b1`.t set x=11 where pk=1",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ update `mydb/b1`.t set x=11 where pk=1",
+				ExpectedBlocking: true,
+				ExpectedErrStr:   "serialization failure: could not serialize access due to concurrent update, try restarting transaction.",
+			},
+			{
+				Query:            "/* client a */ insert into `mydb/main`.t values (4,40,400)",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ call dolt_commit_all('-am', 'batch')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ insert into `mydb/b2`.t values (5,50,500)",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:          "/* client b */ call dolt_commit_all('-am', 'batch')",
+				ExpectedErrStr: "nothing to commit on mydb/main",
+			},
+			{
+				Query: "/* client b */ select * from `mydb/b1`.t order by pk",
+				Expected: []sql.Row{
+					{1, 11, 100},
+					{2, 20, 200},
+					{3, 30, 300},
+				},
+			},
+			{
+				Query: "/* client b */ select * from `mydb/main`.t order by pk",
+				Expected: []sql.Row{
+					{1, 10, 100},
+					{2, 20, 200},
+					{3, 30, 300},
+					{4, 40, 400},
+				},
+			},
+			{
+				Query: "/* client b */ select * from `mydb/b2`.t order by pk",
+				Expected: []sql.Row{
+					{1, 10, 100},
+					{2, 20, 200},
+					{3, 30, 300},
+					{5, 50, 500},
+				},
+			},
+			{
+				Query: "/* client b */ select * from `mydb/b1`.t as of 'HEAD' order by pk",
+				Expected: []sql.Row{
+					{1, 11, 100},
+					{2, 20, 200},
+					{3, 30, 300},
+				},
+			},
+			{
+				Query: "/* client b */ select * from `mydb/main`.t as of 'HEAD' order by pk",
+				Expected: []sql.Row{
+					{1, 10, 100},
+					{2, 20, 200},
+					{3, 30, 300},
+					{4, 40, 400},
+				},
+			},
+			{
+				Query:    "/* client b */ select * from `mydb/b2`.t as of 'HEAD' order by pk",
+				Expected: []sql.Row{{1, 10, 100}, {2, 20, 200}, {3, 30, 300}},
+			},
+		},
+	},
+	{
+		// The script above with row-level locking off: no statement waits for another, and conflicting changes
+		// are found when the later transaction commits.
+		Name: "identical edits merge while preserving independent branch writes, row-level locking off",
+		SetUpScript: []string{
+			"set @@global.dolt_row_level_locking = 0",
 			"create table t (pk int primary key, x int, y int)",
 			"insert into t values (1,10,100),(2,20,200),(3,30,300)",
 			"call dolt_commit('-Am', 'setup')",
@@ -1558,6 +2330,10 @@ var MultiBranchHeadTransactionTests = []queries.TransactionTest{
 					{3, 30, 300},
 					{5, 50, 500},
 				},
+			},
+			{
+				Query:            "/* client a */ set @@global.dolt_row_level_locking = 1",
+				SkipResultsCheck: true,
 			},
 		},
 	},

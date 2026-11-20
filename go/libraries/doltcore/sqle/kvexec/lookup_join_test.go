@@ -93,6 +93,24 @@ func TestLookupJoin(t *testing.T) {
 			doRowexec: true,
 		},
 		{
+			name: "accept lookup join with a locking clause",
+			setup: []string{
+				"create table xy (x int primary key, y int, key y_idx(y))",
+				"create table ab (a int primary key, b int)",
+			},
+			join:      "select  /*+ LOOKUP_JOIN(xy,ab) */ * from xy join ab on y = a for update",
+			doRowexec: true,
+		},
+		{
+			name: "accept keyless lookup join with a locking clause",
+			setup: []string{
+				"create table xy (x int, y int, key x_idx(x) )",
+				"create table ab (a int, b int, key a_idx(a))",
+			},
+			join:      "select  /*+ LOOKUP_JOIN(xy,ab) */ * from xy join ab on x = a lock in share mode",
+			doRowexec: true,
+		},
+		{
 			name: "accept keys of different casing",
 			setup: []string{
 				"create table t1 (abc int primary key, def int)",

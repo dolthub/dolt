@@ -144,6 +144,71 @@ var DoltCommitAllTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:            "/* client b */ update t set v = 20",
+				ExpectedBlocking: true,
+				ExpectedErrStr:   "serialization failure: could not serialize access due to concurrent update, try restarting transaction.",
+			},
+			{
+				Query:            "/* client a */ call dolt_commit_all('-am', 'a')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:          "/* client b */ call dolt_commit('-am', 'b')",
+				ExpectedErrStr: "nothing to commit",
+			},
+			{
+				Query:    "/* client a */ select * from `mydb/b1`.t as of 'HEAD'",
+				Expected: []sql.Row{{1, 0}, {2, 20}},
+			},
+			{
+				Query:    "/* client a */ select * from `mydb/b1`.t",
+				Expected: []sql.Row{{1, 0}, {2, 20}},
+			},
+			{
+				Query:    "/* client a */ select * from `mydb/b2`.t as of 'HEAD'",
+				Expected: []sql.Row{{1, 0}, {2, 20}},
+			},
+			{
+				Query:    "/* client a */ select * from `mydb/b2`.t",
+				Expected: []sql.Row{{1, 0}, {2, 20}},
+			},
+		},
+	},
+	{
+		// The script above with row-level locking off: no statement waits for another, and conflicting changes
+		// are found when the later transaction commits.
+		Name: "conflict in dolt_commit_all leaves all other heads unchanged, row-level locking off",
+		SetUpScript: []string{
+			"set @@global.dolt_row_level_locking = 0",
+			"create table t (pk int primary key, v int)",
+			"insert into t values (1, 0)",
+			"call dolt_commit('-Am', 'setup')",
+			"call dolt_branch('b1')",
+			"call dolt_branch('b2')",
+			"set autocommit = 0",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ insert into `mydb/b1`.t values (2, 20)",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ insert into `mydb/b2`.t values (2, 20)",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ update t set v = 10",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ update t set v = 20",
 				SkipResultsCheck: true,
 			},
 			{
@@ -177,6 +242,10 @@ var DoltCommitAllTransactionTests = []queries.TransactionTest{
 				Expected: []sql.Row{
 					{1, 0},
 				},
+			},
+			{
+				Query:            "/* client a */ set @@global.dolt_row_level_locking = 1",
+				SkipResultsCheck: true,
 			},
 		},
 	},

@@ -102,8 +102,9 @@ var DoltTransactionTests = []queries.TransactionTest{
 				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
-				Query:    "/* client b */ insert into t values (2, 2)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Query:            "/* client b */ insert into t values (2, 2)",
+				ExpectedBlocking: true,
+				ExpectedErrStr:   "serialization failure: could not serialize access due to concurrent insert of the same key, try restarting transaction.",
 			},
 			{
 				Query:    "/* client a */ commit",
@@ -124,8 +125,109 @@ var DoltTransactionTests = []queries.TransactionTest{
 		},
 	},
 	{
+		// The script above with row-level locking off: no statement waits for another, and conflicting changes
+		// are found when the later transaction commits.
+		Name: "duplicate inserts, autocommit off, row-level locking off",
+		SetUpScript: []string{
+			"set @@global.dolt_row_level_locking = 0",
+			"create table t (x int primary key, y int)",
+			"insert into t values (1, 1)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t values (2, 2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ insert into t values (2, 2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{
+				Query:            "/* client a */ set @@global.dolt_row_level_locking = 1",
+				SkipResultsCheck: true,
+			},
+		},
+	},
+	{
 		Name: "conflicting inserts",
 		SetUpScript: []string{
+			"create table t (x int primary key, y int)",
+			"insert into t values (1, 1)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t values (2, 2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:            "/* client b */ insert into t values (2, 3)",
+				ExpectedBlocking: true,
+				ExpectedErrStr:   "serialization failure: could not serialize access due to concurrent insert of the same key, try restarting transaction.",
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{ // client b gets a rollback after failed commit, so gets a new tx
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{
+				Query:          "/* client b */ insert into t values (2, 3)",
+				ExpectedErrStr: "duplicate primary key given: [2]",
+			},
+		},
+	},
+	{
+		// The script above with row-level locking off: no statement waits for another, and conflicting changes
+		// are found when the later transaction commits.
+		Name: "conflicting inserts, row-level locking off",
+		SetUpScript: []string{
+			"set @@global.dolt_row_level_locking = 0",
 			"create table t (x int primary key, y int)",
 			"insert into t values (1, 1)",
 		},
@@ -169,6 +271,10 @@ var DoltTransactionTests = []queries.TransactionTest{
 			{
 				Query:          "/* client b */ insert into t values (2, 3)",
 				ExpectedErrStr: "duplicate primary key given: [2]",
+			},
+			{
+				Query:            "/* client a */ set @@global.dolt_row_level_locking = 1",
+				SkipResultsCheck: true,
 			},
 		},
 	},
@@ -235,6 +341,57 @@ var DoltTransactionTests = []queries.TransactionTest{
 				}}},
 			},
 			{
+				Query:            "/* client b */ update t set y = 2",
+				ExpectedBlocking: true,
+				ExpectedErrStr:   "serialization failure: could not serialize access due to concurrent update, try restarting transaction.",
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{1, 2}, {2, 2}},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 2}, {2, 2}},
+			},
+		},
+	},
+	{
+		// The script above with row-level locking off: no statement waits for another, and conflicting changes
+		// are found when the later transaction commits.
+		Name: "duplicate updates, autocommit off, row-level locking off",
+		SetUpScript: []string{
+			"set @@global.dolt_row_level_locking = 0",
+			"create table t (x int primary key, y int)",
+			"insert into t values (1, 1), (2, 2)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "/* client a */ update t set y = 2",
+				Expected: []sql.Row{{types.OkResult{
+					RowsAffected: uint64(1),
+					Info: plan.UpdateInfo{
+						Matched: 2,
+						Updated: 1,
+					},
+				}}},
+			},
+			{
 				Query: "/* client b */ update t set y = 2",
 				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(1),
@@ -260,11 +417,74 @@ var DoltTransactionTests = []queries.TransactionTest{
 				Query:    "/* client b */ select * from t order by x",
 				Expected: []sql.Row{{1, 2}, {2, 2}},
 			},
+			{
+				Query:            "/* client a */ set @@global.dolt_row_level_locking = 1",
+				SkipResultsCheck: true,
+			},
 		},
 	},
 	{
 		Name: "conflicting updates",
 		SetUpScript: []string{
+			"create table t (x int primary key, y int)",
+			"insert into t values (1, 1), (2, 2)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "/* client a */ update t set y = 3",
+				Expected: []sql.Row{{types.OkResult{
+					RowsAffected: uint64(2),
+					Info: plan.UpdateInfo{
+						Matched: 2,
+						Updated: 2,
+					},
+				}}},
+			},
+			{
+				Query:            "/* client b */ update t set y = 4",
+				ExpectedBlocking: true,
+				ExpectedErrStr:   "serialization failure: could not serialize access due to concurrent update, try restarting transaction.",
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{1, 3}, {2, 3}},
+			},
+			{ // client b got rolled back when its commit failed, so it sees the same values as client a
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 3}, {2, 3}},
+			},
+			{
+				Query:    "/* client b */ rollback",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 3}, {2, 3}},
+			},
+		},
+	},
+	{
+		// The script above with row-level locking off: no statement waits for another, and conflicting changes
+		// are found when the later transaction commits.
+		Name: "conflicting updates, row-level locking off",
+		SetUpScript: []string{
+			"set @@global.dolt_row_level_locking = 0",
 			"create table t (x int primary key, y int)",
 			"insert into t values (1, 1), (2, 2)",
 		},
@@ -320,6 +540,10 @@ var DoltTransactionTests = []queries.TransactionTest{
 			{
 				Query:    "/* client b */ select * from t order by x",
 				Expected: []sql.Row{{1, 3}, {2, 3}},
+			},
+			{
+				Query:            "/* client a */ set @@global.dolt_row_level_locking = 1",
+				SkipResultsCheck: true,
 			},
 		},
 	},
@@ -402,6 +626,57 @@ var DoltTransactionTests = []queries.TransactionTest{
 				}}},
 			},
 			{
+				Query:            "/* client b */ update t set z = 3",
+				ExpectedBlocking: true,
+				ExpectedErrStr:   "serialization failure: could not serialize access due to concurrent update, try restarting transaction.",
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{1, 2, 1}, {2, 2, 2}},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 2, 1}, {2, 2, 2}},
+			},
+		},
+	},
+	{
+		// The script above with row-level locking off: no statement waits for another, and conflicting changes
+		// are found when the later transaction commits.
+		Name: "non overlapping updates (diff cols), row-level locking off",
+		SetUpScript: []string{
+			"set @@global.dolt_row_level_locking = 0",
+			"create table t (x int primary key, y int, z int)",
+			"insert into t values (1, 1, 1), (2, 2, 2)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "/* client a */ update t set y = 2",
+				Expected: []sql.Row{{types.OkResult{
+					RowsAffected: uint64(1),
+					Info: plan.UpdateInfo{
+						Matched: 2,
+						Updated: 1,
+					},
+				}}},
+			},
+			{
 				Query: "/* client b */ update t set z = 3",
 				Expected: []sql.Row{{types.OkResult{
 					RowsAffected: uint64(2),
@@ -426,6 +701,10 @@ var DoltTransactionTests = []queries.TransactionTest{
 			{
 				Query:    "/* client b */ select * from t order by x",
 				Expected: []sql.Row{{1, 2, 3}, {2, 2, 3}},
+			},
+			{
+				Query:            "/* client a */ set @@global.dolt_row_level_locking = 1",
+				SkipResultsCheck: true,
 			},
 		},
 	},
@@ -474,6 +753,51 @@ var DoltTransactionTests = []queries.TransactionTest{
 				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
+				Query:            "/* client b */ delete from t where y = 2",
+				ExpectedBlocking: true,
+				ExpectedErrStr:   "serialization failure: could not serialize access due to concurrent delete, try restarting transaction.",
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}},
+			},
+		},
+	},
+	{
+		// The script above with row-level locking off: no statement waits for another, and conflicting changes
+		// are found when the later transaction commits.
+		Name: "duplicate deletes, autocommit off, row-level locking off",
+		SetUpScript: []string{
+			"set @@global.dolt_row_level_locking = 0",
+			"create table t (x int primary key, y int)",
+			"insert into t values (1, 1), (2, 2)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ delete from t where y = 2",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
 				Query:    "/* client b */ delete from t where y = 2",
 				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
@@ -492,6 +816,10 @@ var DoltTransactionTests = []queries.TransactionTest{
 			{
 				Query:    "/* client b */ select * from t order by x",
 				Expected: []sql.Row{{1, 1}},
+			},
+			{
+				Query:            "/* client a */ set @@global.dolt_row_level_locking = 1",
+				SkipResultsCheck: true,
 			},
 		},
 	},
@@ -562,6 +890,61 @@ var DoltTransactionTests = []queries.TransactionTest{
 				}}},
 			},
 			{
+				Query:            "/* client b */ delete from t where y = 2",
+				ExpectedBlocking: true,
+				ExpectedErrStr:   "serialization failure: could not serialize access due to concurrent update, try restarting transaction.",
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ rollback",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}, {2, 3}},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}, {2, 3}},
+			},
+		},
+	},
+	{
+		// The script above with row-level locking off: no statement waits for another, and conflicting changes
+		// are found when the later transaction commits.
+		Name: "conflicting delete and update, row-level locking off",
+		SetUpScript: []string{
+			"set @@global.dolt_row_level_locking = 0",
+			"create table t (x int primary key, y int)",
+			"insert into t values (1, 1), (2, 2)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "/* client a */ update t set y = 3 where y = 2",
+				Expected: []sql.Row{{types.OkResult{
+					RowsAffected: uint64(1),
+					Info: plan.UpdateInfo{
+						Matched: 1,
+						Updated: 1,
+					},
+				}}},
+			},
+			{
 				Query:    "/* client b */ delete from t where y = 2",
 				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
@@ -585,11 +968,64 @@ var DoltTransactionTests = []queries.TransactionTest{
 				Query:    "/* client b */ select * from t order by x",
 				Expected: []sql.Row{{1, 1}, {2, 3}},
 			},
+			{
+				Query:            "/* client a */ set @@global.dolt_row_level_locking = 1",
+				SkipResultsCheck: true,
+			},
 		},
 	},
 	{
 		Name: "delete in one client, insert into another",
 		SetUpScript: []string{
+			"create table t (x int primary key, y int)",
+			"insert into t values (1, 1), (2, 2)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ delete from t where y = 1",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:            "/* client b */ delete from t",
+				ExpectedBlocking: true,
+				Expected:         []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ insert into t values (1,1)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		// The script above with row-level locking off: no statement waits for another, and conflicting changes
+		// are found when the later transaction commits.
+		Name: "delete in one client, insert into another, row-level locking off",
+		SetUpScript: []string{
+			"set @@global.dolt_row_level_locking = 0",
 			"create table t (x int primary key, y int)",
 			"insert into t values (1, 1), (2, 2)",
 		},
@@ -630,11 +1066,94 @@ var DoltTransactionTests = []queries.TransactionTest{
 				Query:    "/* client b */ select * from t order by x",
 				Expected: []sql.Row{},
 			},
+			{
+				Query:            "/* client a */ set @@global.dolt_row_level_locking = 1",
+				SkipResultsCheck: true,
+			},
 		},
 	},
 	{
 		Name: "multiple client edit session",
 		SetUpScript: []string{
+			"create table t (x int primary key, y int, z int)",
+			"insert into t values (1, 1, 1), (2, 2, 2)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client c */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "/* client a */ update t set y = 3 where y = 2",
+				Expected: []sql.Row{{types.OkResult{
+					RowsAffected: uint64(1),
+					Info: plan.UpdateInfo{
+						Matched: 1,
+						Updated: 1,
+					},
+				}}},
+			},
+			{
+				Query:    "/* client b */ delete from t where y = 1",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:            "/* client c */ update t set z = 4 where y = 2",
+				ExpectedBlocking: true,
+				ExpectedErrStr:   "serialization failure: could not serialize access due to concurrent update, try restarting transaction.",
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{2, 3, 2}},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{2, 3, 2}},
+			},
+			{
+				Query:    "/* client c */ select * from t order by x",
+				Expected: []sql.Row{{2, 3, 2}},
+			},
+			{
+				Query:    "/* client c */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{2, 3, 2}},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{2, 3, 2}},
+			},
+			{
+				Query:    "/* client c */ select * from t order by x",
+				Expected: []sql.Row{{2, 3, 2}},
+			},
+		},
+	},
+	{
+		// The script above with row-level locking off: no statement waits for another, and conflicting changes
+		// are found when the later transaction commits.
+		Name: "multiple client edit session, row-level locking off",
+		SetUpScript: []string{
+			"set @@global.dolt_row_level_locking = 0",
 			"create table t (x int primary key, y int, z int)",
 			"insert into t values (1, 1, 1), (2, 2, 2)",
 		},
@@ -711,11 +1230,65 @@ var DoltTransactionTests = []queries.TransactionTest{
 				Query:    "/* client c */ select * from t order by x",
 				Expected: []sql.Row{{2, 3, 4}},
 			},
+			{
+				Query:            "/* client a */ set @@global.dolt_row_level_locking = 1",
+				SkipResultsCheck: true,
+			},
 		},
 	},
 	{
 		Name: "edits from different clients to table with out of order primary key set",
 		SetUpScript: []string{
+			"create table test (x int, y int, z int, primary key(z, y))",
+			"insert into test values (1, 1, 1), (2, 2, 2)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "/* client a */ update test set y = 3 where y = 2",
+				Expected: []sql.Row{{types.OkResult{
+					RowsAffected: uint64(1),
+					Info: plan.UpdateInfo{
+						Matched: 1,
+						Updated: 1,
+					},
+				}}},
+			},
+			{
+				Query:          "/* client b */ update test set y = 5 where y = 2",
+				ExpectedErrStr: "serialization failure: could not serialize access due to concurrent update, try restarting transaction.",
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from test order by x",
+				Expected: []sql.Row{{1, 1, 1}, {2, 3, 2}},
+			},
+			{
+				Query:    "/* client b */ select * from test order by x",
+				Expected: []sql.Row{{1, 1, 1}, {2, 3, 2}},
+			},
+			{
+				Query:       "/* client b */ insert into test values (4,3,2)",
+				ExpectedErr: sql.ErrPrimaryKeyViolation,
+			},
+		},
+	},
+	{
+		// The script above with row-level locking off: no statement waits for another, and conflicting changes
+		// are found when the later transaction commits.
+		Name: "edits from different clients to table with out of order primary key set, row-level locking off",
+		SetUpScript: []string{
+			"set @@global.dolt_row_level_locking = 0",
 			"create table test (x int, y int, z int, primary key(z, y))",
 			"insert into test values (1, 1, 1), (2, 2, 2)",
 		},
@@ -763,6 +1336,10 @@ var DoltTransactionTests = []queries.TransactionTest{
 			{
 				Query:       "/* client b */ insert into test values (4,3,2)",
 				ExpectedErr: sql.ErrPrimaryKeyViolation,
+			},
+			{
+				Query:            "/* client a */ set @@global.dolt_row_level_locking = 1",
+				SkipResultsCheck: true,
 			},
 		},
 	},
@@ -1646,6 +2223,61 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
+				Query:            "/* client b */ insert into test values (1, 2)",
+				ExpectedBlocking: true,
+				ExpectedErrStr:   "serialization failure: could not serialize access due to concurrent insert of the same key, try restarting transaction.",
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{ // no conflicts, transaction got rolled back
+				Query:    "/* client b */ select count(*) from dolt_conflicts",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client b */ select * from test order by 1",
+				Expected: []sql.Row{{0, 0}, {1, 1}},
+			},
+		},
+	},
+	{
+		// The script above with row-level locking off: no statement waits for another, and conflicting changes
+		// are found when the later transaction commits.
+		Name: "default behavior (rollback on commit conflict), row-level locking off",
+		SetUpScript: []string{
+			"set @@global.dolt_row_level_locking = 0",
+			"CREATE TABLE test (pk int primary key, val int)",
+			"CALL DOLT_ADD('.')",
+			"INSERT INTO test VALUES (0, 0)",
+			"CALL DOLT_COMMIT('-a', '-m', 'initial table');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ set autocommit = off",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ set autocommit = off",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into test values (1, 1)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
 				Query:    "/* client b */ insert into test values (1, 2)",
 				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
@@ -1665,11 +2297,70 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 				Query:    "/* client b */ select * from test order by 1",
 				Expected: []sql.Row{{0, 0}, {1, 1}},
 			},
+			{
+				Query:            "/* client a */ set @@global.dolt_row_level_locking = 1",
+				SkipResultsCheck: true,
+			},
 		},
 	},
 	{
 		Name: "allow commit conflicts on, conflict on transaction commit",
 		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key, val int)",
+			"CALL DOLT_ADD('.')",
+			"INSERT INTO test VALUES (0, 0)",
+			"CALL DOLT_COMMIT('-a', '-m', 'initial table');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ set autocommit = off, dolt_allow_commit_conflicts = on",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ set autocommit = off, dolt_allow_commit_conflicts = on",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into test values (1, 1)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:            "/* client b */ insert into test values (1, 2)",
+				ExpectedBlocking: true,
+				ExpectedErrStr:   "serialization failure: could not serialize access due to concurrent insert of the same key, try restarting transaction.",
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{ // We see the merge value from a's commit here because we were rolled back and a new transaction begun
+				Query:    "/* client b */ select * from test order by 1",
+				Expected: []sql.Row{{0, 0}, {1, 1}},
+			},
+			{ // no conflicts, transaction got rolled back
+				Query:    "/* client b */ select count(*) from dolt_conflicts",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		// The script above with row-level locking off: no statement waits for another, and conflicting changes
+		// are found when the later transaction commits.
+		Name: "allow commit conflicts on, conflict on transaction commit, row-level locking off",
+		SetUpScript: []string{
+			"set @@global.dolt_row_level_locking = 0",
 			"CREATE TABLE test (pk int primary key, val int)",
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
@@ -1716,11 +2407,70 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 				Query:    "/* client b */ select count(*) from dolt_conflicts",
 				Expected: []sql.Row{{0}},
 			},
+			{
+				Query:            "/* client a */ set @@global.dolt_row_level_locking = 1",
+				SkipResultsCheck: true,
+			},
 		},
 	},
 	{
 		Name: "force commit on, conflict on transaction commit (same as dolt_allow_commit_conflicts)",
 		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key, val int)",
+			"CALL DOLT_ADD('.')",
+			"INSERT INTO test VALUES (0, 0)",
+			"CALL DOLT_COMMIT('-a', '-m', 'initial table');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ set autocommit = off, dolt_force_transaction_commit = on",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ set autocommit = off, dolt_force_transaction_commit = on",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into test values (1, 1)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:            "/* client b */ insert into test values (1, 2)",
+				ExpectedBlocking: true,
+				ExpectedErrStr:   "serialization failure: could not serialize access due to concurrent insert of the same key, try restarting transaction.",
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{ // We see the merge value from a's commit here because we were rolled back and a new transaction begun
+				Query:    "/* client b */ select * from test order by 1",
+				Expected: []sql.Row{{0, 0}, {1, 1}},
+			},
+			{ // no conflicts, transaction got rolled back
+				Query:    "/* client b */ select count(*) from dolt_conflicts",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		// The script above with row-level locking off: no statement waits for another, and conflicting changes
+		// are found when the later transaction commits.
+		Name: "force commit on, conflict on transaction commit (same as dolt_allow_commit_conflicts), row-level locking off",
+		SetUpScript: []string{
+			"set @@global.dolt_row_level_locking = 0",
 			"CREATE TABLE test (pk int primary key, val int)",
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
@@ -1766,6 +2516,10 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			{ // no conflicts, transaction got rolled back
 				Query:    "/* client b */ select count(*) from dolt_conflicts",
 				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:            "/* client a */ set @@global.dolt_row_level_locking = 1",
+				SkipResultsCheck: true,
 			},
 		},
 	},
@@ -2124,6 +2878,65 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
 			},
 			{
+				Query:            "/* client b */ UPDATE t SET col1 = 100 where pk = 1;",
+				ExpectedBlocking: true,
+				ExpectedErrStr:   "serialization failure: could not serialize access due to concurrent update, try restarting transaction.",
+			},
+			{
+				Query:    "/* client a */ INSERT into KEYLESS VALUES (1);",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ COMMIT;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ INSERT into KEYLESS VALUES (1), (1);",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "/* client b */ COMMIT;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ SELECT * from t;",
+				Expected: []sql.Row{{1, -100}},
+			},
+			{
+				Query:    "/* client b */ SELECT * from keyless;",
+				Expected: []sql.Row{{1}, {1}, {1}, {1}},
+			},
+			{
+				Query:    "/* client b */ SELECT * from t where col1 = -100;",
+				Expected: []sql.Row{{1, -100}},
+			},
+		},
+	},
+	{
+		// The script above with row-level locking off: no statement waits for another, and conflicting changes
+		// are found when the later transaction commits.
+		Name: "transaction conflicts follows first-write-wins (a commits first), row-level locking off",
+		SetUpScript: []string{
+			"set @@global.dolt_row_level_locking = 0",
+			"CREATE table t (pk int PRIMARY KEY, col1 int, INDEX col1_idx (col1));",
+			"CREATE table keyless (col1 int);",
+			"INSERT INTO t VALUES (1, 1);",
+			"INSERT INTO keyless VALUES (1);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ START TRANSACTION",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ START TRANSACTION",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ UPDATE t SET col1 = -100 where pk = 1;",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
 				Query:    "/* client b */ UPDATE t SET col1 = 100 where pk = 1;",
 				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
 			},
@@ -2155,11 +2968,74 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 				Query:    "/* client b */ SELECT * from t where col1 = -100;",
 				Expected: []sql.Row{{1, -100}},
 			},
+			{
+				Query:            "/* client a */ set @@global.dolt_row_level_locking = 1",
+				SkipResultsCheck: true,
+			},
 		},
 	},
 	{
 		Name: "transaction conflicts follows first-write-wins (b commits first)",
 		SetUpScript: []string{
+			"CREATE table t (pk int PRIMARY KEY, col1 int, INDEX col1_idx (col1));",
+			"CREATE table keyless (col1 int);",
+			"INSERT INTO t VALUES (1, 1);",
+			"INSERT INTO keyless VALUES (1);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ START TRANSACTION",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ START TRANSACTION",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ UPDATE t SET col1 = -100 where pk = 1;",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:            "/* client b */ UPDATE t SET col1 = 100 where pk = 1;",
+				ExpectedBlocking: true,
+				ExpectedErrStr:   "serialization failure: could not serialize access due to concurrent update, try restarting transaction.",
+			},
+			{
+				Query:    "/* client a */ INSERT into KEYLESS VALUES (1);",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ COMMIT;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ INSERT into KEYLESS VALUES (1), (1);",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "/* client b */ COMMIT;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ SELECT * from t;",
+				Expected: []sql.Row{{1, -100}},
+			},
+			{
+				Query:    "/* client b */ SELECT * from keyless;",
+				Expected: []sql.Row{{1}, {1}, {1}, {1}},
+			},
+			{
+				Query:    "/* client b */ SELECT * from t where col1 = 100;",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		// The script above with row-level locking off: no statement waits for another, and conflicting changes
+		// are found when the later transaction commits.
+		Name: "transaction conflicts follows first-write-wins (b commits first), row-level locking off",
+		SetUpScript: []string{
+			"set @@global.dolt_row_level_locking = 0",
 			"CREATE table t (pk int PRIMARY KEY, col1 int, INDEX col1_idx (col1));",
 			"CREATE table keyless (col1 int);",
 			"INSERT INTO t VALUES (1, 1);",
@@ -2209,6 +3085,10 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			{
 				Query:    "/* client b */ SELECT * from t where col1 = 100;",
 				Expected: []sql.Row{{1, 100}},
+			},
+			{
+				Query:            "/* client a */ set @@global.dolt_row_level_locking = 1",
+				SkipResultsCheck: true,
 			},
 		},
 	},
@@ -2856,6 +3736,66 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 				Expected: []sql.Row{{queries.NewUpdateResult(1, 1)}},
 			},
 			{
+				Query:            "/* client b */ call dolt_merge('--no-ff', 'side')",
+				ExpectedBlocking: true,
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ select hashof('HEAD') = hashof('main')",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:            "/* client a */ call dolt_commit('-a', '--amend', '-m', 'stale amend')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ rollback",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "/* client a */ select message from dolt_log limit 1",
+				// The merge commit survives as the branch head
+				Expected: []sql.Row{{"Merge branch 'side' into main"}},
+			},
+			{
+				Query:    "/* client a */ select count(*) from dolt_log where message = 'stale amend'",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "/* client a */ select val from test where pk = 1",
+				Expected: []sql.Row{{"stale change"}},
+			},
+			{
+				Query:    "/* client a */ select val from test where pk = 100",
+				Expected: []sql.Row{{"side work"}},
+			},
+		},
+	},
+	{
+		// The script above with row-level locking off: no statement waits for another, and conflicting changes
+		// are found when the later transaction commits.
+		Name: "amend commit in transaction fails when another client merges into the branch, row-level locking off",
+		SetUpScript: []string{
+			"set @@global.dolt_row_level_locking = 0",
+			"create table test (pk int primary key, val varchar(30))",
+			"call dolt_add('.')",
+			"insert into test values (1, 'initial'), (2, 'second')",
+			"call dolt_commit('-a', '-m', 'initial commit')",
+			"call dolt_checkout('-b', 'side')",
+			"insert into test values (100, 'side work')",
+			"call dolt_commit('-a', '-m', 'side work')",
+			"call dolt_checkout('main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ update test set val = 'stale change' where pk = 1",
+				Expected: []sql.Row{{queries.NewUpdateResult(1, 1)}},
+			},
+			{
 				Query:    "/* client b */ call dolt_merge('--no-ff', 'side')",
 				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
 			},
@@ -2888,6 +3828,10 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			{
 				Query:    "/* client a */ select val from test where pk = 100",
 				Expected: []sql.Row{{"side work"}},
+			},
+			{
+				Query:            "/* client a */ set @@global.dolt_row_level_locking = 1",
+				SkipResultsCheck: true,
 			},
 		},
 	},
@@ -3295,6 +4239,40 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 			},
 			{
 				// DDL commits implicitly
+				Query:            "/* client a */ ALTER TABLE t ADD COLUMN col2 int DEFAULT 10, ADD UNIQUE KEY u (col1, col2);",
+				ExpectedBlocking: true,
+				ExpectedErrStr:   "Committing this transaction resulted in a working set with constraint violations, transaction rolled back. This constraint violation may be the result of a previous merge or the result of transaction sequencing. Constraint violations from a merge can be resolved using the dolt_constraint_violations table before committing the transaction. To allow transactions to be committed with constraint violations from a merge or transaction sequencing set @@dolt_force_transaction_commit=1.\nConstraint violations: \nType: Unique Key Constraint Violation,\n\tName: u,\n\tColumns: [col1 col2] (2 row(s))",
+			},
+			{
+				Query:    "/* client b */ COMMIT;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ SELECT * FROM t ORDER BY pk;",
+				Expected: []sql.Row{{1, 5}, {2, 5}},
+			},
+		},
+	},
+	{
+		// The script above with row-level locking off: no statement waits for another, and conflicting changes
+		// are found when the later transaction commits.
+		Name: "a row inserted on the old schema takes the default of a new column in a unique key, row-level locking off",
+		SetUpScript: []string{
+			"set @@global.dolt_row_level_locking = 0",
+			"CREATE TABLE t (pk int PRIMARY KEY, col1 int);",
+			"INSERT INTO t VALUES (1, 5);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client b */ START TRANSACTION;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ INSERT INTO t VALUES (2, 5);",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				// DDL commits implicitly
 				Query:    "/* client a */ ALTER TABLE t ADD COLUMN col2 int DEFAULT 10, ADD UNIQUE KEY u (col1, col2);",
 				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
@@ -3308,6 +4286,10 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 			{
 				Query:    "/* client a */ SELECT * FROM t ORDER BY pk;",
 				Expected: []sql.Row{{1, 5, 10}},
+			},
+			{
+				Query:            "/* client a */ set @@global.dolt_row_level_locking = 1",
+				SkipResultsCheck: true,
 			},
 		},
 	},
@@ -3542,6 +4524,71 @@ var BranchIsolationTests = []queries.TransactionTest{
 			},
 			{
 				Query:            "/* client b */ update t set v = 20 where pk = 1",
+				ExpectedBlocking: true,
+				ExpectedErrStr:   "serialization failure: could not serialize access due to concurrent update, try restarting transaction.",
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "/* client b */ commit",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ select * from `mydb/b1`.t",
+				Expected: []sql.Row{{1, 0}, {2, 20}},
+			},
+			{
+				Query:    "/* client b */ select * from `mydb/b2`.t",
+				Expected: []sql.Row{{1, 0}, {2, 20}},
+			},
+			{
+				Query:    "/* client a */ select * from t",
+				Expected: []sql.Row{{1, 10}},
+			},
+		},
+	},
+	{
+		// The script above with row-level locking off: no statement waits for another, and conflicting changes
+		// are found when the later transaction commits.
+		Name: "conflict on one branch rolls back every branch, row-level locking off",
+		SetUpScript: []string{
+			"set @@global.dolt_row_level_locking = 0",
+			"create table t (pk int primary key, v int)",
+			"insert into t values (1, 0)",
+			"call dolt_commit('-Am', 'setup')",
+			"call dolt_branch('b1')",
+			"call dolt_branch('b2')",
+			"set autocommit = 0",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ start transaction",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ insert into `mydb/b1`.t values (2, 20)",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ insert into `mydb/b2`.t values (2, 20)",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ update t set v = 10 where pk = 1",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ update t set v = 20 where pk = 1",
 				SkipResultsCheck: true,
 			},
 			{
@@ -3573,6 +4620,10 @@ var BranchIsolationTests = []queries.TransactionTest{
 				Expected: []sql.Row{
 					{1, 20},
 				},
+			},
+			{
+				Query:            "/* client a */ set @@global.dolt_row_level_locking = 1",
+				SkipResultsCheck: true,
 			},
 		},
 	},
@@ -4785,6 +5836,255 @@ var MultiDbSavepointTests = []queries.TransactionTest{
 				Expected: []sql.Row{},
 			},
 			{
+				Query:            "/* client a */ insert into db1.t values (5, 5)",
+				ExpectedBlocking: true,
+				Expected:         []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ insert into db1.t values (7, 7)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ insert into db2.t values (8, 8)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ savepoint spb2",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ insert into db1.t values (9, 9)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ insert into db2.t values (10, 10)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ select * from db1.t order by x",
+				Expected: []sql.Row{{1, 1}, {5, 5}, {7, 7}, {9, 9}},
+			},
+			{
+				Query:    "/* client b */ select * from db2.t order by x",
+				Expected: []sql.Row{{2, 2}, {6, 6}, {8, 8}, {10, 10}},
+			},
+			{
+				Query:    "/* client b */ rollback to spB2",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select * from db1.t order by x",
+				Expected: []sql.Row{{1, 1}, {5, 5}, {7, 7}},
+			},
+			{
+				Query:    "/* client b */ select * from db2.t order by x",
+				Expected: []sql.Row{{2, 2}, {6, 6}, {8, 8}},
+			},
+			{
+				Query:    "/* client b */ rollback to Spb2",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select * from db1.t order by x",
+				Expected: []sql.Row{{1, 1}, {5, 5}, {7, 7}},
+			},
+			{
+				Query:    "/* client b */ select * from db2.t order by x",
+				Expected: []sql.Row{{2, 2}, {6, 6}, {8, 8}},
+			},
+			{
+				Query:    "/* client b */ rollback to SPb1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select * from db1.t order by x",
+				Expected: []sql.Row{{1, 1}, {5, 5}},
+			},
+			{
+				Query:    "/* client b */ select * from db2.t order by x",
+				Expected: []sql.Row{{2, 2}, {6, 6}},
+			},
+			{
+				Query:       "/* client b */ rollback to spb2",
+				ExpectedErr: sql.ErrSavepointDoesNotExist,
+			},
+			{
+				Query:    "/* client b */ rollback to spB1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select * from db1.t order by x",
+				Expected: []sql.Row{{1, 1}, {5, 5}},
+			},
+			{
+				Query:    "/* client b */ select * from db2.t order by x",
+				Expected: []sql.Row{{2, 2}, {6, 6}},
+			},
+			{
+				Query:    "/* client b */ rollback",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into db2.t values (6, 6)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ savepoint spa2",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into db1.t values (7, 7)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ insert into db2.t values (8, 8)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ select * from db1.t order by x",
+				Expected: []sql.Row{{1, 1}, {3, 3}, {5, 5}, {7, 7}},
+			},
+			{
+				Query:    "/* client a */ select * from db2.t order by x",
+				Expected: []sql.Row{{2, 2}, {4, 4}, {6, 6}, {8, 8}},
+			},
+			{
+				Query:    "/* client a */ rollback to SPA2",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from db1.t order by x",
+				Expected: []sql.Row{{1, 1}, {3, 3}, {5, 5}},
+			},
+			{
+				Query:    "/* client a */ select * from db2.t order by x",
+				Expected: []sql.Row{{2, 2}, {4, 4}, {6, 6}},
+			},
+			{
+				Query:    "/* client a */ rollback to sPa2",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from db1.t order by x",
+				Expected: []sql.Row{{1, 1}, {3, 3}, {5, 5}},
+			},
+			{
+				Query:    "/* client a */ select * from db2.t order by x",
+				Expected: []sql.Row{{2, 2}, {4, 4}, {6, 6}},
+			},
+			{
+				Query:    "/* client a */ rollback to spA1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from db1.t order by x",
+				Expected: []sql.Row{{1, 1}, {3, 3}},
+			},
+			{
+				Query:    "/* client a */ select * from db2.t order by x",
+				Expected: []sql.Row{{2, 2}, {4, 4}},
+			},
+			{
+				Query:       "/* client a */ rollback to spa2",
+				ExpectedErr: sql.ErrSavepointDoesNotExist,
+			},
+			{
+				Query:    "/* client a */ rollback to Spa1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from db1.t order by x",
+				Expected: []sql.Row{{1, 1}, {3, 3}},
+			},
+			{
+				Query:    "/* client a */ select * from db2.t order by x",
+				Expected: []sql.Row{{2, 2}, {4, 4}},
+			},
+			{
+				Query:    "/* client a */ rollback",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from db1.t order by x",
+				Expected: []sql.Row{{1, 1}},
+			},
+			{
+				Query:    "/* client a */ select * from db2.t order by x",
+				Expected: []sql.Row{{2, 2}},
+			},
+			{
+				Query:    "/* client b */ select * from db1.t order by x",
+				Expected: []sql.Row{{1, 1}},
+			},
+			{
+				Query:    "/* client b */ select * from db2.t order by x",
+				Expected: []sql.Row{{2, 2}},
+			},
+			{
+				Query:       "/* client a */ rollback to spa1",
+				ExpectedErr: sql.ErrSavepointDoesNotExist,
+			},
+			{
+				Query:       "/* client b */ rollback to spb1",
+				ExpectedErr: sql.ErrSavepointDoesNotExist,
+			},
+		},
+	},
+	{
+		// The script above with row-level locking off: no statement waits for another, and conflicting changes
+		// are found when the later transaction commits.
+		Name: "rollback to savepoint with multiple databases edited, row-level locking off",
+		SetUpScript: []string{
+			"set @@global.dolt_row_level_locking = 0",
+			"create database db1",
+			"create database db2",
+			"create table db1.t (x int primary key, y int)",
+			"insert into db1.t values (1, 1)",
+			"create table db2.t (x int primary key, y int)",
+			"insert into db2.t values (2, 2)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ set autocommit = off",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client b */ set autocommit = off",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into db1.t values (3, 3)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ insert into db2.t values (4, 4)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ insert into db1.t values (5, 5)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ insert into db2.t values (6, 6)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ savepoint spa1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ savepoint spb1",
+				Expected: []sql.Row{},
+			},
+			{
 				Query:    "/* client a */ insert into db1.t values (5, 5)",
 				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
@@ -4975,6 +6275,10 @@ var MultiDbSavepointTests = []queries.TransactionTest{
 			{
 				Query:       "/* client b */ rollback to spb1",
 				ExpectedErr: sql.ErrSavepointDoesNotExist,
+			},
+			{
+				Query:            "/* client a */ set @@global.dolt_row_level_locking = 1",
+				SkipResultsCheck: true,
 			},
 		},
 	},

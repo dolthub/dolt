@@ -308,7 +308,7 @@ func (t *TempTable) PartitionValueRowWriter(ctx *sql.Context, partition sql.Part
 	if !t.lookup.IsEmpty() {
 		return index.RowIterForIndexLookup(ctx, t, t.lookup, t.pkSch, nil, columnIds)
 	} else {
-		return partitionRows(ctx, t.table, nil, partition, columnIds)
+		return partitionRows(ctx, t.table, nil, partition, columnIds, nil)
 	}
 }
 

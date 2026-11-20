@@ -90,6 +90,11 @@ func TestRowLookupJoin(t *testing.T) {
 			doKvex: true,
 		},
 		{
+			name:   "accept right side with a locking clause",
+			query:  "select /*+ LOOKUP_JOIN(d,ab) */ d.x, ab.b from (select distinct x, y from xy) d join ab on ab.a = d.x for update of ab",
+			doKvex: true,
+		},
+		{
 			name:   "accept keyless right side",
 			query:  "select /*+ LOOKUP_JOIN(d,keyless) */ d.x, keyless.v from (select distinct x, y from xy) d join keyless on keyless.k = d.x",
 			doKvex: true,

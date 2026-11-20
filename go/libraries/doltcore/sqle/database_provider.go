@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/rowjournal"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/clusterdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
@@ -96,6 +97,8 @@ type DoltDatabaseProvider struct {
 	createdDBs map[*doltdb.DoltDB]struct{}
 
 	txLocks keymutex.Keymutex
+	// rowJournal records the transactions of every session of this engine, and the rows they lock and write.
+	rowJournal *rowjournal.Journal
 
 	defaultBranch     string
 	dbFactoryUrl      string
@@ -239,6 +242,7 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 		droppedDatabaseManager: newDroppedDatabaseManager(fs),
 		overrides:              overrides,
 		txLocks:                keymutex.NewMapped(),
+		rowJournal:             rowjournal.NewJournal(),
 		gitRemotes:             map[string]*doltdb.DoltDB{},
 		gitRemotesMu:           &sync.Mutex{},
 	}, nil
@@ -1900,6 +1904,11 @@ func (p *DoltDatabaseProvider) EngineOverrides() sql.EngineOverrides {
 
 func (p *DoltDatabaseProvider) TxLocks() keymutex.Keymutex {
 	return p.txLocks
+}
+
+// RowJournal implements dsess.DoltDatabaseProvider.
+func (p *DoltDatabaseProvider) RowJournal() *rowjournal.Journal {
+	return p.rowJournal
 }
 
 // isBranch returns whether a branch with the given name is in scope for the database given

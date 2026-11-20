@@ -80,6 +80,9 @@ type prollyTableWriter struct {
 	// holder's Close clears it.
 	open bool
 
+	// lockTarget caches how this writer's table is named, and its rows identified, for row locking.
+	lockTarget rowLockTarget
+
 	virtualExpressions []sql.Expression
 }
 
@@ -87,6 +90,7 @@ var _ dsess.TableWriter = &prollyTableWriter{}
 var _ sql.UniqueKeyConflictCheckingRowInserter = &prollyTableWriter{}
 
 var _ UniqueKeyChangeReporter = &prollyTableWriter{}
+var _ sql.UnchangedRowUpdateHandler = &prollyTableWriter{}
 var _ AutoIncrementGetter = &prollyTableWriter{}
 
 func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, schState *dsess.WriterState) (map[string]indexWriter, error) {
@@ -194,6 +198,12 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 			return err
 		}
 	}
+	// The row is known not to collide with one this transaction can see. Now wait out any other transaction that is
+	// working with the same key.
+	if err = w.lockRowForInsert(ctx, sqlRow); err != nil {
+		return err
+	}
+
 	for _, wr := range w.secondary {
 		if err = wr.Insert(ctx, sqlRow); err != nil {
 			if uke, ok := err.(secondaryUniqueKeyError); ok {
@@ -291,6 +301,10 @@ func sameColumnNames(left, right []string) bool {
 // Update implements TableWriter.
 func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) (err error) {
 	w.edited = true
+	if err = w.lockRowForUpdate(ctx, oldRow, newRow); err != nil {
+		return err
+	}
+
 	for _, wr := range w.secondary {
 		if err := wr.Update(ctx, oldRow, newRow); err != nil {
 			if uke, ok := err.(secondaryUniqueKeyError); ok {
@@ -305,6 +319,13 @@ func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.
 
 	w.aiSet = true
 	return nil
+}
+
+// UpdateUnchanged implements sql.UnchangedRowUpdateHandler. An UPDATE that sets a row to the values it already has locks the
+// row, and counts as a change to it, just as one that changes it does. Other transactions that want the row wait for
+// this one, and those whose snapshots predate this one's commit can't build on the row afterwards.
+func (w *prollyTableWriter) UpdateUnchanged(ctx *sql.Context, sqlRow sql.Row) error {
+	return w.lockRowForUpdate(ctx, sqlRow, sqlRow)
 }
 
 // UniqueKeyChangeReporter is a writer that reports whether an update frees or takes a unique key.
@@ -329,6 +350,10 @@ func (w *prollyTableWriter) UpdateChangesUniqueKey(oldRow sql.Row, newRow sql.Ro
 // Delete implements TableWriter.
 func (w *prollyTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) (err error) {
 	w.edited = true
+	if err = w.lockRowForDelete(ctx, sqlRow); err != nil {
+		return err
+	}
+
 	for _, wr := range w.secondary {
 		if err := wr.Delete(ctx, sqlRow); err != nil {
 			return err
@@ -562,6 +587,7 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, tbl *doltdb.Table) error {
 	w.sch = schState.DoltSchema
 	w.sqlSch = schState.PkSchema.Schema
 	w.primary = newPrimary
+	w.lockTarget = rowLockTarget{}
 	w.secondary = newSecondaries
 	w.aiCol = schState.AutoIncCol
 	w.virtualExpressions = schState.VirtualExpressions
