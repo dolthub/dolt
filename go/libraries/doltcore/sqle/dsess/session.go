@@ -466,7 +466,9 @@ func (d *DoltSession) RemoveBranchState(ctx *sql.Context, dbName string, branchN
 		return err
 	}
 
+	d.mu.Lock()
 	checkedOutState.dbState.checkedOutRevSpec = defaultHead
+	d.mu.Unlock()
 
 	// also clear out any db-level caches for this db
 	d.dbCache.Clear()
