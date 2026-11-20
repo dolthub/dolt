@@ -18,10 +18,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strconv"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/ratelimit"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
@@ -163,10 +166,27 @@ func newS3Client(ctx context.Context, routing s3Routing) (*s3.Client, error) {
 		return nil, err
 	}
 
-	return s3.NewFromConfig(cfg, func(o *s3.Options) {
+	return s3.NewFromConfig(cfg, withThrottleTolerantRetryer, func(o *s3.Options) {
 		if routing.endpoint != "" {
 			o.BaseEndpoint = aws.String(routing.endpoint)
 		}
 		o.UsePathStyle = routing.pathStyle
 	}), nil
+}
+
+const s3MaxAttempts = 10
+
+// withThrottleTolerantRetryer makes S3 clients back off and retry HTTP 429
+// responses. Proxies in front of S3 can return a bare 429, which the SDK does
+// not treat as throttling. Opening a remote issues bursts of small ranged reads,
+// so the SDK's client-side retry quota is disabled to keep it from running dry
+// during a burst; MaxAttempts still bounds each request.
+func withThrottleTolerantRetryer(o *s3.Options) {
+	o.Retryer = retry.NewStandard(func(so *retry.StandardOptions) {
+		so.MaxAttempts = s3MaxAttempts
+		so.RateLimiter = ratelimit.None
+		so.Retryables = append(so.Retryables, retry.RetryableHTTPStatusCode{
+			Codes: map[int]struct{}{http.StatusTooManyRequests: {}},
+		})
+	})
 }
