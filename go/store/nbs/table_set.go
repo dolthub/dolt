@@ -48,6 +48,10 @@ var ErrDanglingRef = errors.New("dangling ref")
 
 const concurrentCompactions = 5
 
+// maxConcurrentTableOpens bounds the opens issued by rebase, so that opening a
+// cold remote does not burst one round of requests per table file at once.
+const maxConcurrentTableOpens = 64
+
 func newTableSet(p tablePersister, q MemoryQuotaProvider) *tableSet {
 	var cnt int32 = 1
 	return &tableSet{p: p, q: q, rl: make(chan struct{}, concurrentCompactions), cnt: &cnt, closeCh: make(chan struct{})}
@@ -558,6 +562,7 @@ func (ts *tableSet) rebase(ctx context.Context, specs []tableSpec, srcs chunkSou
 	}
 
 	eg, ctx := errgroup.WithContext(ctx)
+	eg.SetLimit(maxConcurrentTableOpens)
 	mu := new(sync.Mutex)
 	upstream := make(chunkSourceSet, len(specs))
 	for _, spec := range specs {
