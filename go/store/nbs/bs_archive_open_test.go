@@ -63,6 +63,53 @@ func (b shortReadBlobstore) Get(ctx context.Context, key string, br blobstore.Bl
 	return io.NopCloser(bytes.NewReader(data[:len(data)-1])), sz, ver, nil
 }
 
+// rangeIgnoringBlobstore answers every Get with the whole blob.
+type rangeIgnoringBlobstore struct {
+	*blobstore.InMemoryBlobstore
+}
+
+func (b rangeIgnoringBlobstore) Get(ctx context.Context, key string, _ blobstore.BlobRange) (io.ReadCloser, uint64, string, error) {
+	return b.InMemoryBlobstore.Get(ctx, key, blobstore.AllRange)
+}
+
+// peakQuotaProvider records the most quota held at once, and the size of each
+// byte slice acquired.
+type peakQuotaProvider struct {
+	UnlimitedQuotaProvider
+	mu         sync.Mutex
+	peak       uint64
+	byteSlices []int
+}
+
+func (q *peakQuotaProvider) notePeak() {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.peak = max(q.peak, q.Usage())
+}
+
+func (q *peakQuotaProvider) AcquireQuotaByteSlice(ctx context.Context, sz int) ([]byte, error) {
+	defer q.notePeak()
+	q.mu.Lock()
+	q.byteSlices = append(q.byteSlices, sz)
+	q.mu.Unlock()
+	return q.UnlimitedQuotaProvider.AcquireQuotaByteSlice(ctx, sz)
+}
+
+func (q *peakQuotaProvider) AcquireQuotaUint32Slice(ctx context.Context, sz int) ([]uint32, error) {
+	defer q.notePeak()
+	return q.UnlimitedQuotaProvider.AcquireQuotaUint32Slice(ctx, sz)
+}
+
+func (q *peakQuotaProvider) AcquireQuotaUint64Slice(ctx context.Context, sz int) ([]uint64, error) {
+	defer q.notePeak()
+	return q.UnlimitedQuotaProvider.AcquireQuotaUint64Slice(ctx, sz)
+}
+
+func (q *peakQuotaProvider) AcquireQuotaBytes(ctx context.Context, sz int) error {
+	defer q.notePeak()
+	return q.UnlimitedQuotaProvider.AcquireQuotaBytes(ctx, sz)
+}
+
 // buildArchiveBytes writes an archive of |chunkCount| snappy chunks, each with
 // |chunkSize| bytes of data, followed by |metadata|.
 func buildArchiveBytes(t *testing.T, chunkCount, chunkSize int, metadata []byte) ([]byte, hash.Hash, []hash.Hash) {
@@ -118,10 +165,16 @@ func TestOpenBSArchiveReadsTailOnce(t *testing.T) {
 					_, err := bs.Put(ctx, name.String()+ArchiveFileSuffix, int64(len(archive)), bytes.NewReader(archive))
 					require.NoError(t, err)
 
-					cs, err := newBSArchiveChunkSource(ctx, bs, name, test.openChunkCount, NewUnlimitedMemQuotaProvider(), openOpts{deepValidate: true}, &Stats{})
+					q := &peakQuotaProvider{}
+					cs, err := newBSArchiveChunkSource(ctx, bs, name, test.openChunkCount, q, openOpts{deepValidate: true}, &Stats{})
 					require.NoError(t, err)
-					defer cs.close()
+					defer func() {
+						require.NoError(t, cs.close())
+						assert.Zero(t, q.Usage(), "closing the archive releases all of its quota")
+					}()
 					assert.Equal(t, test.wantGets, bs.gets)
+					tailLen := min(archiveTailEstimate(test.openChunkCount), uint64(len(archive)))
+					assert.GreaterOrEqual(t, q.peak, q.Usage()+tailLen, "the tail read is held against the quota while the index decodes")
 
 					assert.Equal(t, uint32(chunkCount), cs.count())
 					for _, h := range hashes {
@@ -153,7 +206,20 @@ func TestOpenBSArchiveErrors(t *testing.T) {
 		_, err := bs.Put(ctx, key, int64(len(archive)), bytes.NewReader(archive))
 		require.NoError(t, err)
 		_, err = newBSArchiveChunkSource(ctx, bs, name, 8, NewUnlimitedMemQuotaProvider(), openOpts{}, &Stats{})
-		require.ErrorContains(t, err, "expected")
+		require.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	})
+
+	t.Run("range ignored", func(t *testing.T) {
+		big, bigName, _ := buildArchiveBytes(t, 8, 4096, nil)
+		bigKey := bigName.String() + ArchiveFileSuffix
+		require.Greater(t, uint64(len(big)), archiveTailEstimate(8))
+		bs := rangeIgnoringBlobstore{blobstore.NewInMemoryBlobstore("")}
+		_, err := bs.Put(ctx, bigKey, int64(len(big)), bytes.NewReader(big))
+		require.NoError(t, err)
+		q := NewUnlimitedMemQuotaProvider()
+		_, _, err = openBSArchiveIndex(ctx, bs, bigKey, bigName, 8, q, openOpts{}, &Stats{})
+		require.ErrorContains(t, err, "read more than")
+		assert.Zero(t, q.Usage())
 	})
 
 	t.Run("missing archive", func(t *testing.T) {
@@ -266,4 +332,48 @@ func TestSingleBlobPersistersPersistNothingNew(t *testing.T) {
 			assert.Equal(t, uint32(0), cs.count())
 		})
 	}
+}
+
+// The raw index and metadata read off a remote are held against the quota until
+// they are decoded.
+func TestArchiveReadBuffersUseQuota(t *testing.T) {
+	ctx := context.Background()
+	metadata := []byte(`{"dolt_version":"test"}`)
+	archive, name, hashes := buildArchiveBytes(t, 64, 16, metadata)
+	reader := tableReaderAtFromBytes(archive)
+	footer, err := loadFooter(ctx, reader, name, uint64(len(archive)), &Stats{})
+	require.NoError(t, err)
+
+	t.Run("index", func(t *testing.T) {
+		q := &peakQuotaProvider{}
+		idx, err := newInMemoryArchiveIndexReader(ctx, reader, footer, q, &Stats{})
+		require.NoError(t, err)
+		decoded := q.Usage()
+		assert.GreaterOrEqual(t, q.peak, decoded+footer.indexSize)
+		ar := archiveReader{indexReader: idx, footer: footer}
+		for _, h := range hashes {
+			assert.True(t, ar.has(h))
+		}
+		require.NoError(t, idx.Close())
+		assert.Zero(t, q.Usage())
+	})
+
+	t.Run("buffered index is not copied", func(t *testing.T) {
+		q := &peakQuotaProvider{}
+		indexSpan := footer.totalIndexSpan()
+		buffered := &archiveIndexReaderAt{buf: archive[indexSpan.offset : indexSpan.offset+indexSpan.length], off: int64(indexSpan.offset)}
+		idx, err := newInMemoryArchiveIndexReader(ctx, buffered, footer, q, &Stats{})
+		require.NoError(t, err)
+		assert.Equal(t, q.Usage(), q.peak)
+		require.NoError(t, idx.Close())
+	})
+
+	t.Run("metadata", func(t *testing.T) {
+		q := &peakQuotaProvider{}
+		md, err := newArchiveMetadata(ctx, reader, name, uint64(len(archive)), q, &Stats{})
+		require.NoError(t, err)
+		assert.Equal(t, 64, md.snappyChunkCount)
+		assert.Contains(t, q.byteSlices, len(metadata))
+		assert.Zero(t, q.Usage())
+	})
 }

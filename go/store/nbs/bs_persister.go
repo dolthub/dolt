@@ -443,6 +443,33 @@ func archiveTailEstimate(chunkCount uint32) uint64 {
 	return archiveFooterSize + archiveMetadataAllowance + archiveIndexSize(2*chunkCount, chunkCount)
 }
 
+// readArchiveTail reads the last min(|want|, |sz|) bytes of the |sz| byte
+// archive |key| from |rc| into a buffer acquired from |q|. The caller releases
+// the buffer's quota.
+func readArchiveTail(ctx context.Context, rc io.Reader, key string, want, sz uint64, q MemoryQuotaProvider) ([]byte, error) {
+	// Spans in the archive are addressed relative to the end of the file.
+	// If we don't have a real size, we can't compute the right range reads.
+	if sz == 0 {
+		return nil, fmt.Errorf("%s: blobstore did not report the size of the archive", key)
+	}
+	tail, err := q.AcquireQuotaByteSlice(ctx, int(min(want, sz)))
+	if err != nil {
+		return nil, err
+	}
+	if _, err = io.ReadFull(rc, tail); err != nil {
+		q.ReleaseQuotaBytes(len(tail))
+		return nil, fmt.Errorf("%s: reading the last %d bytes of a %d byte archive: %w", key, len(tail), sz, err)
+	}
+	// A server which ignores the range sends more than asked for, and then
+	// tail holds the start of the archive rather than its end.
+	var extra [1]byte
+	if n, _ := io.ReadFull(rc, extra[:]); n != 0 {
+		q.ReleaseQuotaBytes(len(tail))
+		return nil, fmt.Errorf("%s: read more than the last %d bytes of a %d byte archive", key, len(tail), sz)
+	}
+	return tail, nil
+}
+
 // openBSArchiveIndex reads the footer and index of the archive |key| and builds
 // an archiveReader from them, returning it with the archive's size. The
 // archiveReader has no reader for chunk data; the caller must set one.
@@ -456,20 +483,16 @@ func openBSArchiveIndex(ctx context.Context, bs blobstore.Blobstore, key string,
 	if err != nil {
 		return archiveReader{}, 0, err
 	}
-	tail, err := io.ReadAll(rc)
-	if err = errors.Join(err, rc.Close()); err != nil {
-		return archiveReader{}, 0, err
+	tail, err := readArchiveTail(ctx, rc, key, want, sz, q)
+	closeErr := rc.Close()
+	if err != nil {
+		return archiveReader{}, 0, errors.Join(err, closeErr)
 	}
-
-	// Spans in the archive are addressed relative to the end of the file.
-	// If we don't have a real size, we can't compute the right range reads.
-	if sz == 0 {
-		return archiveReader{}, 0, fmt.Errorf("%s: blobstore did not report the size of the archive", key)
+	defer q.ReleaseQuotaBytes(len(tail))
+	if closeErr != nil {
+		return archiveReader{}, 0, closeErr
 	}
 	tailLen := uint64(len(tail))
-	if tailLen != min(want, sz) {
-		return archiveReader{}, 0, fmt.Errorf("%s: read %d bytes from the end of a %d byte archive, expected %d", key, tailLen, sz, min(want, sz))
-	}
 	if tailLen < archiveFooterSize {
 		return archiveReader{}, 0, fmt.Errorf("%s: %d byte archive is too small to hold a footer: %w", key, sz, ErrCorruptArchiveIndex)
 	}
@@ -483,18 +506,22 @@ func openBSArchiveIndex(ctx context.Context, bs blobstore.Blobstore, key string,
 	indexEnd := index.offset + index.length
 	tailOffset := sz - tailLen
 	var indexBytes []byte
-	switch {
-	case index.offset >= tailOffset:
+	if index.offset >= tailOffset {
 		indexBytes = tail[index.offset-tailOffset : indexEnd-tailOffset]
-	case indexEnd <= tailOffset:
-		indexBytes, _, err = readBlobRange(ctx, bs, key, blobstore.NewBlobRange(int64(index.offset), int64(index.length)), index.length)
-	default:
-		missing := tailOffset - index.offset
-		indexBytes, _, err = readBlobRange(ctx, bs, key, blobstore.NewBlobRange(int64(index.offset), int64(missing)), missing)
-		indexBytes = append(indexBytes, tail[:indexEnd-tailOffset]...)
-	}
-	if err != nil {
-		return archiveReader{}, 0, err
+	} else {
+		indexBytes, err = q.AcquireQuotaByteSlice(ctx, int(index.length))
+		if err != nil {
+			return archiveReader{}, 0, err
+		}
+		defer q.ReleaseQuotaBytes(len(indexBytes))
+		missing := min(indexEnd, tailOffset) - index.offset
+		err = readBlobRangeInto(ctx, bs, key, blobstore.NewBlobRange(int64(index.offset), int64(missing)), indexBytes[:missing])
+		if err != nil {
+			return archiveReader{}, 0, err
+		}
+		if indexEnd > tailOffset {
+			copy(indexBytes[missing:], tail[:indexEnd-tailOffset])
+		}
 	}
 
 	aRdr, err := buildArchiveReader(ctx, &archiveIndexReaderAt{buf: indexBytes, off: int64(index.offset)}, footer, q, opts, stats)

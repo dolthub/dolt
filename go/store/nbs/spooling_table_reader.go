@@ -235,6 +235,15 @@ func (r *archiveIndexReaderAt) ReadAtWithStats(_ context.Context, p []byte, off 
 	return bytes.NewReader(r.buf).ReadAt(p, off-r.off)
 }
 
+// span returns the bytes of |span|, which must lie within the buffered index.
+func (r *archiveIndexReaderAt) span(span byteSpan) ([]byte, error) {
+	start := int64(span.offset) - r.off
+	if start < 0 || start+int64(span.length) > int64(len(r.buf)) {
+		return nil, fmt.Errorf("runtime error: span at %d of %d bytes is outside the buffered archive index at %d of %d bytes", span.offset, span.length, r.off, len(r.buf))
+	}
+	return r.buf[start : start+int64(span.length)], nil
+}
+
 func (r *archiveIndexReaderAt) Reader(context.Context) (io.ReadCloser, error) {
 	return nil, errors.New("runtime error: archiveIndexReaderAt only serves index reads")
 }
@@ -247,19 +256,14 @@ func (r *archiveIndexReaderAt) Close() error {
 	return nil
 }
 
-// readBlobRange reads the |n| bytes of |br| from the blob |key|, and returns them with the
-// size of the whole blob.
-func readBlobRange(ctx context.Context, bs blobstore.Blobstore, key string, br blobstore.BlobRange, n uint64) ([]byte, uint64, error) {
-	rc, sz, _, err := bs.Get(ctx, key, br)
+// readBlobRangeInto fills |p| from the range |br| of the blob |key|.
+func readBlobRangeInto(ctx context.Context, bs blobstore.Blobstore, key string, br blobstore.BlobRange, p []byte) error {
+	rc, _, _, err := bs.Get(ctx, key, br)
 	if err != nil {
-		return nil, 0, err
+		return err
 	}
-	buf := make([]byte, n)
-	_, err = io.ReadFull(rc, buf)
-	if err = errors.Join(err, rc.Close()); err != nil {
-		return nil, 0, err
-	}
-	return buf, sz, nil
+	_, err = io.ReadFull(rc, p)
+	return errors.Join(err, rc.Close())
 }
 
 // newSpooledBSArchiveChunkSource opens an archive by reading its footer and index, and
