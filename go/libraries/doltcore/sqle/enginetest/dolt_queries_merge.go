@@ -76,6 +76,39 @@ func twoBranchSetup(seed, onMain, onOther []string) []string {
 
 var MergeScripts = []queries.ScriptTest{
 	{
+		// Column.Equals ignores fractional-seconds precision, COMMENT, ON UPDATE and AUTO_INCREMENT, so a change to one of
+		// them on the merged branch used to be dropped.
+		Name:    "merge keeps column attribute changes made on the other branch",
+		Dialect: "mysql",
+		SetUpScript: twoBranchSetup(
+			[]string{
+				"CREATE TABLE t (pk INT PRIMARY KEY, e DATETIME, n INT, u DATETIME);",
+			},
+			[]string{
+				"INSERT INTO t VALUES (2, '2021-02-02 11:00:00', 2, NULL);",
+			},
+			[]string{
+				"ALTER TABLE t MODIFY pk INT AUTO_INCREMENT, MODIFY e DATETIME(6), MODIFY n INT COMMENT 'x', MODIFY u DATETIME ON UPDATE CURRENT_TIMESTAMP;",
+				"INSERT INTO t VALUES (1, '2021-02-02 11:00:00.123456', 1, NULL);",
+			},
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query: "SELECT column_name, column_type, extra, column_comment FROM information_schema.columns WHERE table_name = 't' ORDER BY ordinal_position;",
+				Expected: []sql.Row{
+					{"pk", "int", "auto_increment", ""},
+					{"e", "datetime(6)", "", ""},
+					{"n", "int", "", "x"},
+					{"u", "datetime", "on update CURRENT_TIMESTAMP", ""},
+				},
+			},
+		},
+	},
+	{
 		// main sets row 1's a to 4 and other sets its b to 6, each valid. Merged, g = a + b is 10, which duplicates row
 		// 2's g in the unique index on it, so the merge records a violation.
 		Name:    "merge whose generated value violates a unique key only once computed",

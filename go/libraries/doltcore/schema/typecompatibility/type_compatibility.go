@@ -61,6 +61,7 @@ func newDoltTypeCompatibilityChecker() TypeCompatibilityChecker {
 			stringTypeChangeHandler{},
 			enumTypeChangeHandler{},
 			setTypeChangeHandler{},
+			fractionalSecondsTypeChangeHandler{},
 		},
 	}
 }
@@ -275,5 +276,35 @@ func (s setTypeChangeHandler) isCompatible(fromType, toType sql.Type) (res TypeC
 	// The DOLT storage format *always* uses 8 bytes for all set values, so the table data never needs
 	// to be rewritten in this additive case.
 	res.Compatible = true
+	return res
+}
+
+// fractionalSecondsTypeChangeHandler handles type changes that only widen the fractional-seconds precision of a
+// DATETIME, TIMESTAMP or TIME column, e.g. DATETIME to DATETIME(6). The stored values already carry microseconds, so
+// widening needs no rewrite. Narrowing is not handled because it rounds the stored values.
+type fractionalSecondsTypeChangeHandler struct{}
+
+var _ typeChangeHandler = (*fractionalSecondsTypeChangeHandler)(nil)
+
+func fractionalPrecision(t sql.Type) (int, bool) {
+	if tt, ok := t.(interface{ Precision() int }); ok {
+		switch t.Type() {
+		case sqltypes.Datetime, sqltypes.Timestamp, sqltypes.Time:
+			return tt.Precision(), true
+		}
+	}
+	return 0, false
+}
+
+func (f fractionalSecondsTypeChangeHandler) canHandle(fromSqlType, toSqlType sql.Type) bool {
+	_, fromOk := fractionalPrecision(fromSqlType)
+	_, toOk := fractionalPrecision(toSqlType)
+	return fromOk && toOk && fromSqlType.Type() == toSqlType.Type()
+}
+
+func (f fractionalSecondsTypeChangeHandler) isCompatible(fromSqlType, toSqlType sql.Type) (res TypeChangeInfo) {
+	fromPrecision, _ := fractionalPrecision(fromSqlType)
+	toPrecision, _ := fractionalPrecision(toSqlType)
+	res.Compatible = toPrecision >= fromPrecision
 	return res
 }
