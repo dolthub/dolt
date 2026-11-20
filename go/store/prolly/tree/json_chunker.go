@@ -17,6 +17,7 @@ package tree
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -116,49 +117,99 @@ func newJsonChunker(ctx context.Context, jCur *JsonCursor, ns NodeStore) (*JsonC
 func (j *JsonChunker) Done(ctx context.Context) (*Node, error) {
 	var endOfDocumentKey = []byte{byte(endOfValue)}
 
-	if j.jCur == nil {
-		// The remaining buffer becomes the final blob
-		err := j.createNewLeafChunk(ctx, endOfDocumentKey, j.jScanner.jsonBuffer)
-		if err != nil {
+	for j.jCur != nil {
+		if err := j.copyInputFragment(ctx, len(j.jCur.jsonScanner.jsonBuffer)); err != nil {
 			return nil, err
 		}
-		return j.chunker.Done(ctx)
-	}
-	cur := j.jCur.cur
-	cursorDecoder := j.jCur.jsonScanner
-	jsonBytes := cursorDecoder.jsonBuffer[cursorDecoder.valueOffset:]
-	// When inserting into the beginning of an object or array, we need to add an extra comma.
-	// We could track then in the chunker, but it's easier to just check the next part of JSON to determine
-	// whether we need the comma.
-	if j.jScanner.currentPath.getScannerState() == endOfValue && len(jsonBytes) > 0 && jsonBytes[0] != '}' && jsonBytes[0] != ']' && jsonBytes[0] != ',' {
-		j.appendJsonToBuffer([]byte(","))
-	}
-	// Append the rest of the JsonCursor, then continue until we either exhaust the cursor, or we coincide with a boundary from the original tree.
-	for {
-		j.appendJsonToBuffer(jsonBytes)
-		err := j.processBuffer(ctx)
-		if err != nil {
-			return nil, err
+		if j.jCur.cur.parent == nil {
+			break
 		}
-		if len(j.jScanner.jsonBuffer) == 0 {
-			// Advance the cursor so that we don't re-insert the current key when finalizing the chunker.
-			j.jCur.cur.advance(ctx)
-			return j.chunker.Done(ctx)
-		}
-		err = cur.advance(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if !cur.Valid() {
-			// We reached the end of the tree.
-			err := j.createNewLeafChunk(ctx, endOfDocumentKey, j.jScanner.jsonBuffer)
-			if err != nil {
+		if j.atSharedBoundary() {
+			if err := j.jCur.cur.parent.advance(ctx); err != nil {
 				return nil, err
 			}
 			return j.chunker.Done(ctx)
 		}
-		jsonBytes = cur.currentValue()
+		if err := j.jCur.advanceCursor(ctx); err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, err
+		}
 	}
+	// A multi-leaf input can end exactly at a new output boundary.
+	if j.jCur == nil || j.jCur.cur.parent == nil || len(j.jScanner.jsonBuffer) > 0 {
+		if err := j.createNewLeafChunk(ctx, endOfDocumentKey, j.jScanner.jsonBuffer); err != nil {
+			return nil, err
+		}
+	}
+	return j.chunker.Done(ctx)
+}
+
+// copyTo copies unchanged input to a target at or after the current input position.
+// Whole leaves are reused only with an empty output buffer and an output path
+// matching the input leaf's ending key, preserving their bytes and location keys.
+func (j *JsonChunker) copyTo(ctx context.Context, target *JsonCursor) error {
+	input := j.jCur
+	for input.cur.compare(target.cur) < 0 {
+		if err := j.copyInputFragment(ctx, len(input.jsonScanner.jsonBuffer)); err != nil {
+			return err
+		}
+		if j.atSharedBoundary() {
+			if err := input.cur.parent.advance(ctx); err != nil {
+				return err
+			}
+			if err := j.chunker.advanceTo(ctx, target.cur.parent); err != nil {
+				return err
+			}
+			previousKey, err := getPreviousKey(ctx, target.cur)
+			if err != nil {
+				return err
+			}
+			input.cur.copy(target.cur)
+			input.jsonScanner = ScanJsonFromMiddleWithKey(target.jsonScanner.jsonBuffer, previousKey)
+			output := ScanJsonFromMiddle(nil, input.jsonScanner.currentPath.Clone())
+			j.jScanner = &output
+			break
+		}
+		if err := input.advanceCursor(ctx); err != nil {
+			return err
+		}
+	}
+	if input.cur.compare(target.cur) != 0 || input.jsonScanner.valueOffset > target.jsonScanner.valueOffset {
+		return fmt.Errorf("JSON merge edits are out of input document order")
+	}
+	if err := j.copyInputFragment(ctx, target.jsonScanner.valueOffset); err != nil {
+		return err
+	}
+	input.jsonScanner = target.jsonScanner
+	return nil
+}
+
+// copyInputFragment copies a source fragment, adjusting the separator at the splice
+// when the first member of a container was inserted or removed.
+func (j *JsonChunker) copyInputFragment(ctx context.Context, end int) error {
+	input := &j.jCur.jsonScanner
+	start := input.valueOffset
+	if start == end {
+		return nil
+	}
+	fragment := input.jsonBuffer[start:end:end]
+	inputFirst := input.firstElementOrEndOfEmptyValue()
+	outputFirst := j.jScanner.firstElementOrEndOfEmptyValue()
+	if outputFirst && !inputFirst && fragment[0] == ',' {
+		fragment = fragment[1:]
+	} else if inputFirst && !outputFirst && fragment[0] != '}' && fragment[0] != ']' {
+		j.appendJsonToBuffer([]byte{','})
+	}
+	j.appendJsonToBuffer(fragment)
+	return j.processBuffer(ctx)
+}
+
+// atSharedBoundary reports whether the current input leaf can be followed by
+// unchanged leaves whose bytes and location keys remain valid in the output.
+func (j *JsonChunker) atSharedBoundary() bool {
+	return len(j.jScanner.jsonBuffer) == 0 &&
+		bytes.Equal(j.jScanner.currentPath.key, j.jCur.cur.parent.CurrentKey())
 }
 
 // createNewLeafChunk writes a new Blob to the nodestore, and updates the parent chunker.
@@ -176,6 +227,16 @@ func (j *JsonChunker) createNewLeafChunk(ctx context.Context, key, value []byte)
 	}
 	// Copy the key when adding it to the chunker.
 	return j.chunker.AddPair(ctx, bytes.Clone(key), addr[:])
+}
+
+// appendInsertionPrefix writes the separator and optional object key before a new value.
+func (j *JsonChunker) appendInsertionPrefix(element jsonPathElement) {
+	if !j.jScanner.firstElementOrEndOfEmptyValue() {
+		j.appendJsonToBuffer([]byte{','})
+	}
+	if !element.isArrayIndex {
+		j.appendJsonToBuffer(append(appendQuotedJsonKey(nil, element.key), ':'))
+	}
 }
 
 // appendJsonToBuffer writes JSON to the buffer, which will be checked for chunk boundaries the next time processBuffer is called.
