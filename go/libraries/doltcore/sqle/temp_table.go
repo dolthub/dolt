@@ -44,8 +44,6 @@ type TempTable struct {
 	table *doltdb.Table
 	sch   schema.Schema
 
-	lookup sql.IndexLookup
-
 	ddb *doltdb.DoltDB
 	// writeSession owns |ed|.
 	writeSession dsess.WriteSession
@@ -56,7 +54,8 @@ type TempTable struct {
 var _ sql.TemporaryTable = &TempTable{}
 var _ sql.Table = &TempTable{}
 var _ sql.PrimaryKeyTable = &TempTable{}
-var _ sql.IndexedTable = &TempTable{}
+var _ sql.IndexAddressableTable = &TempTable{}
+var _ sql.IndexedTable = &indexedTempTable{}
 var _ sql.IndexAlterableTable = &TempTable{}
 var _ sql.ForeignKeyTable = &TempTable{}
 var _ sql.CheckTable = &TempTable{}
@@ -295,25 +294,43 @@ func (t *TempTable) DataCacheKey(ctx *sql.Context) (doltdb.DataCacheKey, bool, e
 	return doltdb.DataCacheKey{}, false, nil
 }
 
-func (t *TempTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
-	t.lookup = lookup
-	return t.Partitions(ctx)
-}
-
 func (t *TempTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
 	return t.PartitionValueRowWriter(ctx, partition, sql.ColSet{})
 }
 
 func (t *TempTable) PartitionValueRowWriter(ctx *sql.Context, partition sql.Partition, columnIds sql.ColSet) (sql.ValueRowWriter, error) {
-	if !t.lookup.IsEmpty() {
-		return index.RowIterForIndexLookup(ctx, t, t.lookup, t.pkSch, nil, columnIds)
-	} else {
-		return partitionRows(ctx, t.table, nil, partition, columnIds)
-	}
+	return partitionRows(ctx, t.table, nil, partition, columnIds)
 }
 
 func (t *TempTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
-	return t
+	return &indexedTempTable{TempTable: t, idx: lookup.Index.(index.DoltIndex)}
+}
+
+// indexedTempTable reads a TempTable through one of its indexes. It is a separate value from the TempTable so
+// that each indexed access to the table, including several in one query, reads with its own index.
+type indexedTempTable struct {
+	*TempTable
+	idx index.DoltIndex
+}
+
+func (t *indexedTempTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	return index.NewRangePartitionIter(ctx, t.TempTable, lookup)
+}
+
+func (t *indexedTempTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
+	return t.PartitionValueRowWriter(ctx, partition, sql.ColSet{})
+}
+
+func (t *indexedTempTable) PartitionValueRowWriter(ctx *sql.Context, partition sql.Partition, columnIds sql.ColSet) (sql.ValueRowWriter, error) {
+	key, _, err := t.DataCacheKey(ctx)
+	if err != nil {
+		return nil, err
+	}
+	builder, err := index.NewIndexReaderBuilder(ctx, t.TempTable, t.idx, key, nil, t.pkSch)
+	if err != nil {
+		return nil, err
+	}
+	return builder.NewPartitionRowIter(ctx, partition, columnIds)
 }
 
 func (t *TempTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) error {
@@ -484,20 +501,15 @@ func (t *TempTable) StatementBegin(ctx *sql.Context) {
 }
 
 func (t *TempTable) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
-	t.lookup = sql.IndexLookup{}
 	return nil
 }
 
 func (t *TempTable) StatementComplete(ctx *sql.Context) error {
-	t.lookup = sql.IndexLookup{}
 	return nil
 }
 
 func (t *TempTable) Close(ctx *sql.Context) error {
-	err := t.ed.Close(ctx)
-
-	t.lookup = sql.IndexLookup{}
-	return err
+	return t.ed.Close(ctx)
 }
 
 func temporaryDoltSchema(ctx context.Context, pkSch sql.PrimaryKeySchema, tags []uint64, collation sql.CollationID) (sch schema.Schema, err error) {
