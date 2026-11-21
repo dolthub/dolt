@@ -367,25 +367,51 @@ func compareCollatedChunkDiffer(ctx context.Context, d chunkDiffer, collation sq
 		return nil
 	}
 
-	nextWeight := func(buf *[]byte) (int32, bool, error) {
+	padSpace := collation.IsUCA() && collation.IsPadSpace()
+
+	nextWeight := func(buf *[]byte) (int32, rune, bool, error) {
 		for {
 			for !done && !utf8.FullRune(*buf) {
 				if err := pull(); err != nil {
-					return 0, false, err
+					return 0, 0, false, err
 				}
 			}
 			if len(*buf) == 0 {
-				return 0, false, nil
+				return 0, 0, false, nil
 			}
 			// Pass malformed bytes through rather than erroring so stored
 			// values with invalid UTF-8 keep a deterministic, transitive tree
 			// order that matches in-memory comparisons.
-			_, read := utf8.DecodeRune(*buf)
+			r, read := utf8.DecodeRune(*buf)
 			scanner := sql.NewWeightScanner(collation, encodings.BytesToString((*buf)[:read]))
 			*buf = (*buf)[read:]
 			if w, ok := scanner.Next(); ok {
-				return w, true, nil
+				return w, r, true, nil
 			}
+		}
+	}
+
+	// isTrimmableRemainder reports whether every remaining rune in |buf| (and
+	// any unpulled chunks) is a literal space or UCA-ignorable rune. Callers
+	// always return immediately after this check, so consuming |buf| is safe.
+	isTrimmableRemainder := func(buf *[]byte) (bool, error) {
+		for {
+			for !done && !utf8.FullRune(*buf) {
+				if err := pull(); err != nil {
+					return false, err
+				}
+			}
+			if len(*buf) == 0 {
+				return true, nil
+			}
+			r, read := utf8.DecodeRune(*buf)
+			if r != ' ' {
+				scanner := sql.NewWeightScanner(collation, encodings.BytesToString((*buf)[:read]))
+				if _, ok := scanner.Next(); ok {
+					return false, nil
+				}
+			}
+			*buf = (*buf)[read:]
 		}
 	}
 
@@ -405,11 +431,11 @@ func compareCollatedChunkDiffer(ctx context.Context, d chunkDiffer, collation sq
 			}
 		}
 
-		lw, lOk, err := nextWeight(&lBuf)
+		lw, lr, lOk, err := nextWeight(&lBuf)
 		if err != nil {
 			return 0, err
 		}
-		rw, rOk, err := nextWeight(&rBuf)
+		rw, rr, rOk, err := nextWeight(&rBuf)
 		if err != nil {
 			return 0, err
 		}
@@ -418,14 +444,44 @@ func compareCollatedChunkDiffer(ctx context.Context, d chunkDiffer, collation sq
 				return 0, nil
 			}
 			if !lOk {
+				if padSpace && rr == ' ' {
+					trimmable, err := isTrimmableRemainder(&rBuf)
+					if err != nil || trimmable {
+						return 0, err
+					}
+				}
 				return -1, nil
+			}
+			if padSpace && lr == ' ' {
+				trimmable, err := isTrimmableRemainder(&lBuf)
+				if err != nil || trimmable {
+					return 0, err
+				}
 			}
 			return 1, nil
 		}
-		if lw < rw {
-			return -1, nil
-		}
-		if lw > rw {
+		if lw != rw {
+			if padSpace && lr == ' ' {
+				trimmable, err := isTrimmableRemainder(&lBuf)
+				if err != nil {
+					return 0, err
+				}
+				if trimmable {
+					return -1, nil
+				}
+			}
+			if padSpace && rr == ' ' {
+				trimmable, err := isTrimmableRemainder(&rBuf)
+				if err != nil {
+					return 0, err
+				}
+				if trimmable {
+					return 1, nil
+				}
+			}
+			if lw < rw {
+				return -1, nil
+			}
 			return 1, nil
 		}
 	}

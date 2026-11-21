@@ -158,6 +158,30 @@ func TestCompareCollatedStrings(t *testing.T) {
 			right:     []byte("a"),
 			exp:       1,
 		},
+		{
+			collation: sql.Collation_utf8mb4_unicode_ci,
+			left:      []byte("a  "),
+			right:     []byte("a \tx"),
+			exp:       -1,
+		},
+		{
+			collation: sql.Collation_utf8mb4_unicode_ci,
+			left:      []byte("a  x"),
+			right:     []byte("a \tx"),
+			exp:       1,
+		},
+		{
+			collation: sql.Collation_utf8mb4_bin,
+			left:      []byte("a"),
+			right:     []byte("a "),
+			exp:       -1,
+		},
+		{
+			collation: sql.Collation_utf8mb4_general_ci,
+			left:      []byte("a"),
+			right:     []byte("a "),
+			exp:       -1,
+		},
 	}
 
 	for _, tt := range tests {

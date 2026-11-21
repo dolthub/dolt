@@ -604,6 +604,62 @@ func TestCompareAdaptiveTextWithCollation(t *testing.T) {
 			collation: sql.Collation_utf8mb4_0900_ai_ci,
 			want:      -1,
 		},
+		{
+			name:      "UCA 4.0.0: ignorable zero-width space skipped",
+			l:         padding + "b\u200bob",
+			r:         padding + "bob",
+			collation: sql.Collation_utf8mb4_unicode_ci,
+			want:      0,
+		},
+		{
+			name:      "UCA 9.0.0: ignorable zero-width space skipped",
+			l:         padding + "b\u200bob",
+			r:         padding + "bob",
+			collation: sql.Collation_utf8mb4_0900_ai_ci,
+			want:      0,
+		},
+		{
+			name:      "UCA 4.0.0 PAD SPACE: trailing spaces and ignorable equal trimmed",
+			l:         padding + "bob  \u200b",
+			r:         padding + "bob",
+			collation: sql.Collation_utf8mb4_unicode_ci,
+			want:      0,
+		},
+		{
+			name:      "UCA 9.0.0 NO PAD: trailing space before ignorable is significant",
+			l:         padding + "bob \u200b",
+			r:         padding + "bob",
+			collation: sql.Collation_utf8mb4_0900_ai_ci,
+			want:      1,
+		},
+		{
+			name:      "UCA 4.0.0 PAD SPACE: trailing space vs tab matches trim order",
+			l:         padding + "a  ",
+			r:         padding + "a \tx",
+			collation: sql.Collation_utf8mb4_unicode_ci,
+			want:      -1,
+		},
+		{
+			name:      "UCA 4.0.0 PAD SPACE: non-trailing space vs tab keeps space weight",
+			l:         padding + "a  x",
+			r:         padding + "a \tx",
+			collation: sql.Collation_utf8mb4_unicode_ci,
+			want:      1,
+		},
+		{
+			name:      "utf8mb4_bin: trailing space remains distinct",
+			l:         padding + "bob",
+			r:         padding + "bob ",
+			collation: sql.Collation_utf8mb4_bin,
+			want:      -1,
+		},
+		{
+			name:      "utf8mb4_general_ci: trailing space remains distinct",
+			l:         padding + "bob",
+			r:         padding + "bob ",
+			collation: sql.Collation_utf8mb4_general_ci,
+			want:      -1,
+		},
 	}
 
 	for _, c := range cases {
@@ -619,8 +675,38 @@ func TestCompareAdaptiveTextWithCollation(t *testing.T) {
 			got, err := cmp.CompareValues(ctx, 0, lVal, rVal, val.Type{Enc: val.StringAdaptiveEnc})
 			require.NoError(t, err)
 			require.Equal(t, c.want, got)
+
+			gotRev, err := cmp.CompareValues(ctx, 0, rVal, lVal, val.Type{Enc: val.StringAdaptiveEnc})
+			require.NoError(t, err)
+			require.Equal(t, -c.want, gotRev)
+
+			// Verify out-of-band comparison matches in-memory CompareCollatedStrings.
+			require.Equal(t, val.CompareCollatedStrings(c.collation, []byte(c.l), []byte(c.r)), got)
 		})
 	}
+
+	// Verify inline vs out-of-band values pushed over the inline threshold by
+	// trailing spaces and UCA ignorables compare equal and agree with in-memory.
+	t.Run("inline vs out-of-band UCA PAD SPACE boundary", func(t *testing.T) {
+		ns := NewTestNodeStore()
+		inlineStr := strings.Repeat("x", 128)
+		oobStr := inlineStr + "    \u200b"
+
+		inlineVal := val.AdaptiveValue(append([]byte{0}, []byte(inlineStr)...))
+		oobVal := mustNewOutOfBandValue(t, ctx, ns, []byte(oobStr))
+
+		cmp := schema.CollationTupleComparator{
+			Collations: []sql.CollationID{sql.Collation_utf8mb4_unicode_ci},
+		}.WithValueStore(ns).Validated([]val.Type{{Enc: val.StringAdaptiveEnc}})
+
+		got, err := cmp.CompareValues(ctx, 0, inlineVal, oobVal, val.Type{Enc: val.StringAdaptiveEnc})
+		require.NoError(t, err)
+		require.Equal(t, 0, got)
+
+		gotRev, err := cmp.CompareValues(ctx, 0, oobVal, inlineVal, val.Type{Enc: val.StringAdaptiveEnc})
+		require.NoError(t, err)
+		require.Equal(t, 0, gotRev)
+	})
 }
 
 func getBlobValues(msg serial.Message) []byte {

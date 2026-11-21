@@ -21,7 +21,6 @@ import (
 	"math"
 	"math/bits"
 	"time"
-	"unicode/utf8"
 	"unsafe"
 
 	"github.com/cockroachdb/apd/v3"
@@ -720,29 +719,16 @@ func compareAddr(l, r hash.Hash) int {
 // CompareCollatedStrings compares two UTF-8 byte slices |left| and |right|
 // using [sql.WeightScanner] for |collation|.
 func CompareCollatedStrings(collation sql.CollationID, left, right []byte) int {
-	if collation.IsPadSpace() {
-		left = encodings.StringToBytes(collation.TrimRightSpace(encodings.BytesToString(left)))
-		right = encodings.StringToBytes(collation.TrimRightSpace(encodings.BytesToString(right)))
-	}
-	i := 0
-	for i < len(left) && i < len(right) && left[i] == right[i] {
-		i++
-	}
-	if i == len(left) && i == len(right) {
+	ls, rs := encodings.BytesToString(left), encodings.BytesToString(right)
+	if ls == rs {
 		return 0
 	}
-	if i > 0 && left[i-1] >= utf8.RuneSelf {
-		rStart := i - 1
-		for rStart > 0 && i-rStart < utf8.UTFMax && !utf8.RuneStart(left[rStart]) {
-			rStart--
-		}
-		if !utf8.FullRune(left[rStart:i]) {
-			i = rStart
-		}
+	if collation.IsUCA() && collation.IsPadSpace() {
+		ls = collation.TrimRightSpace(ls)
+		rs = collation.TrimRightSpace(rs)
 	}
-
-	leftScanner := sql.NewWeightScanner(collation, encodings.BytesToString(left[i:]))
-	rightScanner := sql.NewWeightScanner(collation, encodings.BytesToString(right[i:]))
+	leftScanner := sql.NewWeightScanner(collation, ls)
+	rightScanner := sql.NewWeightScanner(collation, rs)
 	return leftScanner.Compare(&rightScanner)
 }
 
