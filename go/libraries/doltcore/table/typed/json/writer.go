@@ -17,7 +17,6 @@ package json
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -176,7 +175,7 @@ func (j *RowWriter) jsonDataForSchema(ctx *sql.Context, row sql.Row) ([]byte, er
 			// But it makes marshalling much simpler
 			// Reset val so we don't unmarshall into the old value.
 			val = nil
-			err = json.Unmarshal([]byte(str), &val)
+			err = types.JsonUnmarshal([]byte(str), &val)
 			if err != nil {
 				return false, err
 			}
@@ -235,7 +234,7 @@ func (j *RowWriter) jsonDataForSqlSchema(ctx *sql.Context, row sql.Row) ([]byte,
 			// But it makes marshalling much simpler
 			// Reset val so we don't unmarshall into the old value.
 			val = nil
-			err = json.Unmarshal([]byte(str), &val)
+			err = types.JsonUnmarshal([]byte(str), &val)
 			if err != nil {
 				return nil, err
 			}
