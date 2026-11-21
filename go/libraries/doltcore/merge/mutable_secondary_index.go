@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expranalysis"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -127,12 +128,26 @@ type MutableSecondaryIdx struct {
 	Name                       string
 	mut                        *prolly.MutableMap
 	leftBuilder, mergedBuilder index.SecondaryKeyBuilder
+	// mergedSch is the schema of the rows passed as new values.
+	mergedSch schema.Schema
+	// predicate is the predicate of a partial index, resolved against |mergedSch|. New rows that don't satisfy it
+	// are left out of the index.
+	predicate sql.Expression
 }
 
 // NewMutableSecondaryIdx returns a MutableSecondaryIdx. |m| is the secondary idx data.
 func NewMutableSecondaryIdx(ctx *sql.Context, idx prolly.Map, ourSch, mergedSch schema.Schema, tableName string, def schema.Index) (MutableSecondaryIdx, error) {
 	leftBuilder, err := index.NewSecondaryKeyBuilder(ctx, tableName, ourSch, def, idx.KeyDesc(), idx.Pool(), idx.NodeStore())
+	if err != nil {
+		return MutableSecondaryIdx{}, err
+	}
+
 	mergedBuilder, err := index.NewSecondaryKeyBuilder(ctx, tableName, mergedSch, def, idx.KeyDesc(), idx.Pool(), idx.NodeStore())
+	if err != nil {
+		return MutableSecondaryIdx{}, err
+	}
+
+	predicate, err := expranalysis.ResolveIndexPredicate(ctx, tableName, mergedSch, def)
 	if err != nil {
 		return MutableSecondaryIdx{}, err
 	}
@@ -142,12 +157,22 @@ func NewMutableSecondaryIdx(ctx *sql.Context, idx prolly.Map, ourSch, mergedSch 
 		mut:           idx.Mutate(),
 		leftBuilder:   leftBuilder,
 		mergedBuilder: mergedBuilder,
+		mergedSch:     mergedSch,
+		predicate:     predicate,
 	}, nil
 }
 
 // InsertEntry inserts a secondary index entry given the key and new value
 // of the primary row.
 func (m MutableSecondaryIdx) InsertEntry(ctx *sql.Context, key, newValue val.Tuple) error {
+	matches, err := index.TupleMatchesPredicate(ctx, m.predicate, key, newValue, m.mergedSch, m.mut.NodeStore())
+	if err != nil {
+		return err
+	}
+	if !matches {
+		return nil
+	}
+
 	newKey, err := m.mergedBuilder.SecondaryKeyFromRow(ctx, key, newValue)
 	if err != nil {
 		return err
@@ -164,12 +189,9 @@ func (m MutableSecondaryIdx) InsertEntry(ctx *sql.Context, key, newValue val.Tup
 // UpdateEntry modifies the corresponding secondary index entry given the key
 // and curr/new values of the primary row.
 func (m MutableSecondaryIdx) UpdateEntry(ctx *sql.Context, key, currValue, newValue val.Tuple) error {
+	// The current row of a partial index may not be in the index, but secondary index keys are unique to their
+	// primary row, so deleting its key unconditionally never removes another row's entry.
 	currKey, err := m.leftBuilder.SecondaryKeyFromRow(ctx, key, currValue)
-	if err != nil {
-		return err
-	}
-
-	newKey, err := m.mergedBuilder.SecondaryKeyFromRow(ctx, key, newValue)
 	if err != nil {
 		return err
 	}
@@ -178,7 +200,8 @@ func (m MutableSecondaryIdx) UpdateEntry(ctx *sql.Context, key, currValue, newVa
 	if err != nil {
 		return err
 	}
-	return m.mut.Put(ctx, newKey, val.EmptyTuple)
+
+	return m.InsertEntry(ctx, key, newValue)
 }
 
 // DeleteEntry deletes a secondary index entry given they key and value of the primary row.

@@ -4399,6 +4399,39 @@ var DoltBranchScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt_branch refuses names longer than the ref name limit",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_branch(repeat('a', 1024));",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "call dolt_branch(repeat('b', 1025));",
+				ExpectedErrStr: "fatal: '" + strings.Repeat("b", 1025) + "' is an invalid branch name.",
+			},
+			{
+				Query:          "call dolt_branch(repeat('c', 32768));",
+				ExpectedErrStr: "fatal: '" + strings.Repeat("c", 32768) + "' is an invalid branch name.",
+			},
+			{
+				Query:          "call dolt_branch('--orphan', repeat('d', 1025));",
+				ExpectedErrStr: "fatal: '" + strings.Repeat("d", 1025) + "' is an invalid branch name.",
+			},
+			{
+				Query:          "call dolt_branch('-c', 'main', repeat('e', 1025));",
+				ExpectedErrStr: "fatal: '" + strings.Repeat("e", 1025) + "' is not a valid branch name.",
+			},
+			{
+				Query:          "call dolt_branch('-m', repeat('a', 1024), repeat('f', 1025));",
+				ExpectedErrStr: doltdb.ErrInvBranchName.Error(),
+			},
+			{
+				Query:    "select length(name) from dolt_branches order by 1;",
+				Expected: []sql.Row{{4}, {1024}},
+			},
+		},
+	},
 }
 
 var DoltResetTestScripts = []queries.ScriptTest{
@@ -6484,6 +6517,31 @@ var JsonAdaptiveEncodingScriptTests = []queries.ScriptTest{
 }
 
 var DoltTagTestScripts = []queries.ScriptTest{
+	{
+		Name: "dolt-tag: refuses names longer than the ref name limit",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_TAG(repeat('a', 1024), 'HEAD')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "CALL DOLT_TAG(repeat('b', 1025), 'HEAD')",
+				ExpectedErrStr: doltdb.ErrInvTagName.Error(),
+			},
+			{
+				Query:          "CALL DOLT_TAG(repeat('c', 65536), 'HEAD')",
+				ExpectedErrStr: doltdb.ErrInvTagName.Error(),
+			},
+			{
+				Query:          "CALL DOLT_TAG(repeat('d', 65537), 'HEAD')",
+				ExpectedErrStr: doltdb.ErrInvTagName.Error(),
+			},
+			{
+				Query:    "SELECT length(tag_name) FROM dolt_tags",
+				Expected: []sql.Row{{1024}},
+			},
+		},
+	},
 	{
 		Name: "dolt-tag: SQL create tags",
 		SetUpScript: []string{
@@ -8814,358 +8872,6 @@ var DoltSystemVariables = []queries.ScriptTest{
 					{"dolt_status_ignored"},
 					{"dolt_workspace_test"},
 					{"test"},
-				},
-			},
-		},
-	},
-}
-
-// DoltTempTableScripts tests temporary tables.
-// Temporary tables are not supported in GMS, eventually should move those tests there.
-var DoltTempTableScripts = []queries.ScriptTest{
-	{
-		Name: "temporary table index and check alterations survive later writes",
-		SetUpScript: []string{
-			"create temporary table t1 (id int primary key, v int, unique key u (v))",
-			"create temporary table t2 (id int primary key, v int, key k (v))",
-			"create temporary table t3 (id int primary key, v int)",
-			"create temporary table t4 (id int primary key, v int)",
-			"alter table t4 add constraint c check (v > 0)",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "alter table t1 drop index u",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
-			},
-			{
-				Query:    "insert into t1 values (1, 1), (2, 1)",
-				Expected: []sql.Row{{types.NewOkResult(2)}},
-			},
-			{
-				Query:    "alter table t2 rename index k to k2",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
-			},
-			{
-				Query:    "insert into t2 values (1, 1)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
-			},
-			{
-				Query: "show create table t2",
-				Expected: []sql.Row{{"t2", "CREATE TEMPORARY TABLE `t2` (\n" +
-					"  `id` int NOT NULL,\n" +
-					"  `v` int,\n" +
-					"  PRIMARY KEY (`id`),\n" +
-					"  KEY `k2` (`v`)\n" +
-					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
-			},
-			{
-				Query:    "alter table t3 add constraint c check (v > 0)",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
-			},
-			{
-				Query:    "insert into t3 values (1, 1)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
-			},
-			{
-				Query:       "insert into t3 values (2, -1)",
-				ExpectedErr: sql.ErrCheckConstraintViolated,
-			},
-			{
-				Query:    "alter table t4 drop check c",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "insert into t4 values (1, -1)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
-			},
-			{
-				Query:    "insert into t4 values (2, -2)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
-			},
-		},
-	},
-	{
-		Name: "temporary and non-temporary table name collisions",
-		SetUpScript: []string{
-			"create table t1 (id varchar(100))",
-			"insert into t1 values ('this is a non-temporary table')",
-			"create temporary table t1 (id varchar(100))", // okay to create temporary table with the same name as a non-temporary table
-			"insert into t1 values ('this is a temporary table')",
-			"create temporary table t2 (id int)",
-			"create table t2 (id int)", // okay to create a non-temporary table with the same name as a temporary table
-			"create temporary table t3 (id int)",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				// should show temporary table t1
-				Query:    "select * from t1",
-				Expected: []sql.Row{{"this is a temporary table"}},
-			},
-			{
-				// cannot create a temporary table with the same name as another temporary table
-				Query:       "create temporary table t3 (id int)",
-				ExpectedErr: sql.ErrTableAlreadyExists,
-			},
-			{
-				// should show temporary table
-				Query:    "show create table t1",
-				Expected: []sql.Row{{"t1", "CREATE TEMPORARY TABLE `t1` (\n  `id` varchar(100)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
-			},
-			{
-				// should drop temporary table t1
-				Query:    "drop table t1",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
-			},
-			{
-				// should show non-temporary table that was created before
-				Query:    "show create table t1",
-				Expected: []sql.Row{{"t1", "CREATE TABLE `t1` (\n  `id` varchar(100)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
-			},
-		},
-	},
-	{
-		Name: "temporary table supports auto increment",
-		SetUpScript: []string{
-			"create temporary table t (i int primary key auto_increment)",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query: "show create table t;",
-				Expected: []sql.Row{
-					{"t", "CREATE TEMPORARY TABLE `t` (\n" +
-						"  `i` int NOT NULL AUTO_INCREMENT,\n" +
-						"  PRIMARY KEY (`i`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
-				},
-			},
-			{
-				Query: "insert into t values (), (), ()",
-				Expected: []sql.Row{
-					{types.OkResult{RowsAffected: 3, InsertID: 1}},
-				},
-			},
-			{
-				Query: "show create table t;",
-				Expected: []sql.Row{
-					{"t", "CREATE TEMPORARY TABLE `t` (\n" +
-						"  `i` int NOT NULL AUTO_INCREMENT,\n" +
-						"  PRIMARY KEY (`i`)\n" +
-						") ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
-				},
-			},
-			{
-				Query: "select * from t",
-				Expected: []sql.Row{
-					{1},
-					{2},
-					{3},
-				},
-			},
-			{
-				Query: "insert into t values (100), (1000)",
-				Expected: []sql.Row{
-					{types.OkResult{RowsAffected: 2, InsertID: 100}},
-				},
-			},
-			{
-				Query: "show create table t;",
-				Expected: []sql.Row{
-					{"t", "CREATE TEMPORARY TABLE `t` (\n" +
-						"  `i` int NOT NULL AUTO_INCREMENT,\n" +
-						"  PRIMARY KEY (`i`)\n" +
-						") ENGINE=InnoDB AUTO_INCREMENT=1001 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
-				},
-			},
-			{
-				Query: "insert into t values (), (), ()",
-				Expected: []sql.Row{
-					{types.OkResult{RowsAffected: 3, InsertID: 0x3e9}},
-				},
-			},
-			{
-				Query: "select * from t",
-				Expected: []sql.Row{
-					{1},
-					{2},
-					{3},
-					{100},
-					{1000},
-					{1001},
-					{1002},
-					{1003},
-				},
-			},
-		},
-	},
-	{
-		Name: "temporary table inline indexes",
-		// PostgreSQL does not support inline INDEX/UNIQUE KEY declarations, SHOW CREATE TABLE, or FORCE INDEX.
-		Dialect: "mysql",
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query: "CREATE TEMPORARY TABLE inline_indexes (id VARCHAR(512), n INT, INDEX idx (id(255)), UNIQUE KEY uniq (n))",
-			},
-			{
-				Query: "INSERT INTO inline_indexes VALUES ('abc', 1), ('def', 2)",
-			},
-			{
-				Query:    "SHOW CREATE TABLE inline_indexes",
-				Expected: []sql.Row{{"inline_indexes", "CREATE TEMPORARY TABLE `inline_indexes` (\n  `id` varchar(512),\n  `n` int,\n  KEY `idx` (`id`(255)),\n  UNIQUE KEY `uniq` (`n`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
-			},
-			{
-				Query:    "SELECT id, n FROM inline_indexes FORCE INDEX (idx) WHERE id = 'abc'",
-				Expected: []sql.Row{{"abc", 1}},
-			},
-			{
-				Query:       "INSERT INTO inline_indexes VALUES ('other', 1)",
-				ExpectedErr: sql.ErrUniqueKeyViolation,
-			},
-			{
-				Query:    "SELECT id, n FROM inline_indexes ORDER BY n",
-				Expected: []sql.Row{{"abc", 1}, {"def", 2}},
-			},
-		},
-	},
-	{
-		Name: "temporary table inline index with AS SELECT",
-		// PostgreSQL does not support inline INDEX declarations in CTAS, SHOW CREATE TABLE, or FORCE INDEX.
-		Dialect: "mysql",
-		SetUpScript: []string{
-			"CREATE TABLE source_entries (id VARCHAR(512))",
-			"INSERT INTO source_entries VALUES ('abc'), ('def')",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query: "CREATE TEMPORARY TABLE mat_entries (INDEX mat_entries_id (id(255))) AS SELECT id FROM source_entries",
-			},
-			{
-				Query:    "SHOW CREATE TABLE mat_entries",
-				Expected: []sql.Row{{"mat_entries", "CREATE TEMPORARY TABLE `mat_entries` (\n  `id` varchar(512),\n  KEY `mat_entries_id` (`id`(255))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
-			},
-			{
-				Query:    "SELECT id FROM mat_entries FORCE INDEX (mat_entries_id) WHERE id = 'abc'",
-				Expected: []sql.Row{{"abc"}},
-			},
-			{
-				Query: "CREATE INDEX by_id ON mat_entries (id)",
-			},
-			{
-				Query: "INSERT INTO mat_entries VALUES ('ghi')",
-			},
-			{
-				Query:    "SELECT id FROM mat_entries FORCE INDEX (mat_entries_id) WHERE id = 'ghi'",
-				Expected: []sql.Row{{"ghi"}},
-			},
-			{
-				Query:    "SELECT id FROM mat_entries FORCE INDEX (by_id) WHERE id = 'abc'",
-				Expected: []sql.Row{{"abc"}},
-			},
-			{
-				Query:    "SELECT id FROM mat_entries FORCE INDEX (by_id) WHERE id = 'ghi'",
-				Expected: []sql.Row{{"ghi"}},
-			},
-		},
-	},
-	{
-		Name: "temporary table tag collision",
-		SetUpScript: []string{
-			"CREATE TABLE note(a int, b int, userid int);",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query: "CREATE TEMPORARY TABLE tmp_tbl(a int, b int, c int, d int, e int, f int, g int);",
-				Expected: []sql.Row{
-					{types.NewOkResult(0)},
-				},
-			},
-		},
-	},
-	{
-		Name:    "drop temporary table behavior",
-		Dialect: "mysql",
-		SetUpScript: []string{
-			"create table t (i int);",
-			"create temporary table tmp (i int);",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query: "show create table tmp;",
-				Expected: []sql.Row{
-					{"tmp", "CREATE TEMPORARY TABLE `tmp` (\n" +
-						"  `i` int\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
-				},
-			},
-			{
-				Query: "drop temporary table tmp;",
-				Expected: []sql.Row{
-					{types.NewOkResult(0)},
-				},
-			},
-
-			{
-				Query: "create temporary table t (i int, j int);",
-				Expected: []sql.Row{
-					{types.NewOkResult(0)},
-				},
-			},
-			{
-				Query: "show create table t;",
-				Expected: []sql.Row{
-					{"t", "CREATE TEMPORARY TABLE `t` (\n" +
-						"  `i` int,\n" +
-						"  `j` int\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
-				},
-			},
-			{
-				Query: "drop temporary table t;",
-				Expected: []sql.Row{
-					{types.NewOkResult(0)},
-				},
-			},
-			{
-				Query: "show create table t;",
-				Expected: []sql.Row{
-					{"t", "CREATE TABLE `t` (\n" +
-						"  `i` int\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
-				},
-			},
-			{
-				Query:       "drop temporary table t;",
-				ExpectedErr: sql.ErrUnknownTable,
-			},
-		},
-	},
-	{
-		Name:    "temporary tables in stored procedures",
-		Dialect: "mysql",
-		SetUpScript: []string{
-			`
-create procedure proc()
-begin
-  create temporary table tmp (i int primary key);
-  insert into tmp values (1), (2), (3);
-  select * from tmp;
-end;
-`,
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query: "call proc();",
-				Expected: []sql.Row{
-					{1},
-					{2},
-					{3},
-				},
-			},
-			{
-				Query: "select * from tmp;",
-				Expected: []sql.Row{
-					{1},
-					{2},
-					{3},
 				},
 			},
 		},

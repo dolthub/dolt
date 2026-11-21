@@ -338,7 +338,9 @@ func binlogTestEngine(t *testing.T) (*sql.Context, func(string), func() doltdb.R
 		state, ok, err := ctx.Session.(*dsess.DoltSession).LookupDbState(ctx, "dolt")
 		require.NoError(t, err)
 		require.True(t, ok)
-		return state.WorkingRoot()
+		root, err := state.WorkingRoot(ctx)
+		require.NoError(t, err)
+		return root
 	}
 	return ctx, run, root
 }

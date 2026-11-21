@@ -52,6 +52,23 @@ type DoltTableable interface {
 	DataCacheKey(*sql.Context) (doltdb.DataCacheKey, bool, error)
 }
 
+// PendingRowsTable is implemented by tables whose rows can include edits that have not been materialized into a
+// doltdb.Table.
+type PendingRowsTable interface {
+	// PendingRows returns views of the table's rows that include its pending edits, or nil if it has none, or if
+	// they can't be read without materializing them. In that case, DoltTable materializes them.
+	PendingRows(*sql.Context) (*PendingRows, error)
+}
+
+// PendingRows holds read-only views of a table's indexes, including edits that have not been materialized into a
+// doltdb.Table.
+type PendingRows struct {
+	// Key identifies the edits included in the views, and changes whenever they do.
+	Key       doltdb.DataCacheKey
+	Primary   prolly.MapView
+	Secondary map[string]prolly.MapView
+}
+
 type DoltIndex interface {
 	sql.FilteredIndex
 	sql.OrderedIndex
@@ -293,6 +310,7 @@ func MakeDiffTableSecondaryIndex(ctx context.Context, tableName string, indexTyp
 		prefixLengths:                 idx.PrefixLengths(),
 		columnOrders:                  idx.ColumnOrders(),
 		opClasses:                     idx.OpClasses(),
+		nullsNotDistinct:              idx.NullsNotDistinct(),
 	}, nil
 }
 
@@ -487,6 +505,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		prefixLengths:                 idx.PrefixLengths(),
 		columnOrders:                  idx.ColumnOrders(),
 		opClasses:                     idx.OpClasses(),
+		nullsNotDistinct:              idx.NullsNotDistinct(),
 		fullTextProps:                 idx.FullTextProperties(),
 		vectorProps:                   idx.VectorProperties(),
 	}, nil
@@ -522,6 +541,7 @@ func ConvertFullTextToSql(ctx context.Context, db, tbl string, sch schema.Schema
 		prefixLengths:                 idx.PrefixLengths(),
 		columnOrders:                  idx.ColumnOrders(),
 		opClasses:                     idx.OpClasses(),
+		nullsNotDistinct:              idx.NullsNotDistinct(),
 		fullTextProps:                 idx.FullTextProperties(),
 		vectorProps:                   idx.VectorProperties(),
 	}, nil
@@ -535,6 +555,29 @@ type durableIndexState struct {
 	cachedProjections     atomic.Value
 	coversAllCols         uint32
 	key                   doltdb.DataCacheKey
+	// pending, when set, replaces |Primary| and |Secondary| with views that include edits that have not been
+	// materialized
+	pending *pendingIndexState
+}
+
+type pendingIndexState struct {
+	primary, secondary prolly.MapView
+}
+
+// primaryMap returns the rows of the index's table.
+func (s *durableIndexState) primaryMap() (prolly.MapReader, error) {
+	if s.pending != nil {
+		return s.pending.primary, nil
+	}
+	return durable.ProllyMapFromIndex(s.Primary)
+}
+
+// secondaryMap returns the rows of the index. It returns an error for proximity indexes.
+func (s *durableIndexState) secondaryMap() (prolly.MapReader, error) {
+	if s.pending != nil {
+		return s.pending.secondary, nil
+	}
+	return durable.ProllyMapFromIndex(s.Secondary)
 }
 
 func (s *durableIndexState) coversAllColumns(i *doltIndex) bool {
@@ -608,11 +651,12 @@ type doltIndex struct {
 	order                         sql.IndexOrder
 	constrainedToLookupExpression bool
 
-	vector   bool
-	isPk     bool
-	unique   bool
-	spatial  bool
-	fulltext bool
+	vector           bool
+	isPk             bool
+	unique           bool
+	nullsNotDistinct bool
+	spatial          bool
+	fulltext         bool
 }
 
 type LookupMeta struct {
@@ -660,6 +704,7 @@ func GetStrictLookups(ctx *sql.Context, schCols *schema.ColCollection, indexes [
 
 var _ DoltIndex = (*doltIndex)(nil)
 var _ sql.ExtendedIndex = (*doltIndex)(nil)
+var _ sql.NullsNotDistinctIndex = (*doltIndex)(nil)
 
 func (di *doltIndex) String() string {
 	return di.dbName + "." + di.tblName + "." + di.id
@@ -725,6 +770,28 @@ func (di *doltIndex) getDurableState(ctx *sql.Context, ti DoltTableable) (*durab
 	}
 
 	ret = new(durableIndexState)
+	ret.key = newkey
+
+	if pt, ok := ti.(PendingRowsTable); ok {
+		var rows *PendingRows
+		if rows, err = pt.PendingRows(ctx); err != nil {
+			return nil, err
+		}
+		if rows != nil {
+			secondary, ok := rows.Primary, true
+			if di.ID() != "PRIMARY" {
+				// indexes without a view, such as full-text indexes, are read from the materialized table
+				secondary, ok = rows.Secondary[di.ID()]
+			}
+			if ok {
+				ret.pending = &pendingIndexState{primary: rows.Primary, secondary: secondary}
+				if cancache {
+					di.cache.store(ret)
+				}
+				return ret, nil
+			}
+		}
+	}
 
 	var t *doltdb.Table
 	t, err = ti.DoltTable(ctx)
@@ -747,7 +814,6 @@ func (di *doltIndex) getDurableState(ctx *sql.Context, ti DoltTableable) (*durab
 		}
 	}
 
-	ret.key = newkey
 	ret.Primary = primary
 	ret.Secondary = secondary
 
@@ -1004,6 +1070,11 @@ func (di *doltIndex) PrefixLengths() []uint16 {
 // OpClasses implements sql.OpClassIndex.
 func (di *doltIndex) OpClasses() []string {
 	return di.opClasses
+}
+
+// NullsNotDistinct implements sql.NullsNotDistinctIndex.
+func (di *doltIndex) NullsNotDistinct() bool {
+	return di.nullsNotDistinct
 }
 
 // IndexType implements sql.Index

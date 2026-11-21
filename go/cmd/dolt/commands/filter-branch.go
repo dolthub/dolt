@@ -347,13 +347,8 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootVal
 		}
 	}()
 
-	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.FS, dEnv)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	b := env.GetDefaultInitBranch(dEnv.Config)
-	pro, err := dsqle.NewDoltDatabaseProviderWithDatabase(b, mrEnv.FileSystem(), db, dEnv.FS, sql.EngineOverrides{})
+	pro, err := dsqle.NewDoltDatabaseProviderWithDatabase(b, dEnv.FS, db, dEnv.FS, sql.EngineOverrides{})
 	if err != nil {
 		return nil, nil, err
 	}

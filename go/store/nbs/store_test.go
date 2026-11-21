@@ -360,6 +360,7 @@ func TestNBSCopyGC(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, sweeper.Close(ctx))
 	require.NoError(t, finalizer.SwapChunksInStore(ctx))
+	require.NoError(t, finalizer.Close())
 	st.EndGC(chunks.GCMode_Full)
 
 	for h, c := range keepers {

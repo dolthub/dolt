@@ -1147,11 +1147,18 @@ func (c *Controller) refreshAutoIncrementTrackersForSessionDatabases() error {
 		if err != nil {
 			return fmt.Errorf("cluster/controller: auto-inc refresh: %s: lookup db state: %w", name, err)
 		}
-		if !ok || state.WorkingSet() == nil {
+		if !ok {
 			// Not loaded in session; defer to lazy initialization on first use
 			continue
 		}
-		if err := gsp.GetGlobalState().MergeRoots(sqlCtx, state.WorkingSet()); err != nil {
+		ws, err := state.WorkingSet(sqlCtx)
+		if err != nil {
+			return fmt.Errorf("cluster/controller: auto-inc refresh: %s: working set: %w", name, err)
+		}
+		if ws == nil {
+			continue
+		}
+		if err := gsp.GetGlobalState().MergeRoots(sqlCtx, ws); err != nil {
 			return fmt.Errorf("cluster/controller: auto-inc refresh: %s: merge: %w", name, err)
 		}
 	}

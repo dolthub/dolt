@@ -249,9 +249,13 @@ ALTER EVENT event12345 ENABLE;
 call dolt_commit('-am', 'committing enabled event');
 SQL
 
-    # Verify that the new event starts executing on main after we merge it over
-    sleep 2
-    run dolt sql -q "SELECT (SELECT COUNT(*) FROM totals) > 0;"
+    # Verify that the new event starts executing on main after we merge it over. Poll rather
+    # than sleep a fixed time, since the scheduler can take a few periods to run it.
+    for i in {1..20}; do
+        run dolt sql -q "SELECT (SELECT COUNT(*) FROM totals) > 0;"
+        [[ $output =~ "| 1  " ]] && break
+        sleep 0.5
+    done
     [ $status -eq 0 ]
     [[ $output =~ "| 1  " ]] || false
 }

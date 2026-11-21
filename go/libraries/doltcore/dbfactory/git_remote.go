@@ -39,6 +39,7 @@ import (
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 const (
@@ -50,6 +51,9 @@ const (
 	// GitRemoteCacheDirName is the conventional directory, under a Dolt repository's
 	// `.dolt/`, that the Dolt CLI uses for git remote caches.
 	GitRemoteCacheDirName = "git-remote-cache"
+	// GitRemoteSpoolDirName is the directory under the git cache root for the local
+	// table file copies of the git remotes under that root.
+	GitRemoteSpoolDirName = "spools"
 	GitRefParam           = "git_ref"
 	GitRemoteNameParam    = "git_remote_name"
 	defaultGitRef         = "refs/dolt/data"
@@ -252,9 +256,18 @@ func (fact GitRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFor
 	bsOpts.RemoteName = remoteName
 	bsOpts.InfoBranch = blobstore.DefaultInfoBranch
 	bsOpts.SyncForReadTTL = gitBlobstoreSyncForReadTTLOverride
-	nbsCS, err := nbs.NewGitStore(ctx, nbf.VersionString(), cacheRepo, ref, bsOpts, memlimit.MemtableSize(), q)
+	// Remove the spools of processes which died holding them before making this one's, so a
+	// process that is killed does not leave them for good. A failure only leaves them for the
+	// next process to try.
+	spoolParent := filepath.Join(filepath.Dir(hashDir), GitRemoteSpoolDirName)
+	_ = tempfiles.CleanDir(spoolParent)
+	bsOpts.SpoolDir, err = tempfiles.NewLockedDir(spoolParent)
 	if err != nil {
 		return nil, nil, nil, err
+	}
+	nbsCS, err := nbs.NewGitStore(ctx, nbf.VersionString(), cacheRepo, ref, bsOpts, memlimit.MemtableSize(), q)
+	if err != nil {
+		return nil, nil, nil, errors.Join(err, bsOpts.SpoolDir.Close())
 	}
 
 	cs := gitSharedChunkStore{NomsBlockStore: nbsCS}

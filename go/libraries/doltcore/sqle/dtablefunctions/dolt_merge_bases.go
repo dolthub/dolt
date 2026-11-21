@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -74,7 +75,7 @@ func (m *MergeBasesTableFunction) Resolved() bool {
 // CheckAuth implements the sql.AuthorizationCheckerNode interface. Like dolt_log, it reveals commit history, so it
 // requires SELECT on every table.
 func (m *MergeBasesTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
-	baseDB, _ := doltdb.SplitRevisionDbName(m.db.Name())
+	baseDB := plan.CheckPrivilegeNameForDatabase(m.db)
 	tblNames, err := m.db.GetTableNames(ctx)
 	if err != nil {
 		return false

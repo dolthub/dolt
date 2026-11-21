@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
 
@@ -300,7 +301,7 @@ func (ltf *LogTableFunction) WithChildren(_ *sql.Context, children ...sql.Node) 
 
 // CheckAuth implements the interface sql.AuthorizationCheckerNode.
 func (ltf *LogTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
-	baseDB, _ := doltdb.SplitRevisionDbName(ltf.database.Name())
+	baseDB := plan.CheckPrivilegeNameForDatabase(ltf.database)
 	tblNames, err := ltf.database.GetTableNames(ctx)
 	if err != nil {
 		return false

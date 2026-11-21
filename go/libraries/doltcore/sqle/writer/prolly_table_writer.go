@@ -16,8 +16,10 @@ package writer
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"strings"
+	"sync/atomic"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -34,6 +36,9 @@ import (
 
 // todo(andy): get from NodeStore
 var sharePool = pool.NewBuffPool()
+
+// lastCheckpoint numbers the checkpoints of every prollyTableWriter, so that each identifies a unique set of edits.
+var lastCheckpoint atomic.Uint64
 
 // AutoIncrementGetter is implemented by editors that support AUTO_INCREMENT to return the next value that will be
 // inserted.
@@ -63,6 +68,17 @@ type prollyTableWriter struct {
 	edited bool
 
 	errEncountered error
+	// pending is true when edits from completed statements have not been materialized into the write session's
+	// working set. See prollyWriteSession.deferMaterialization.
+	pending bool
+	// checkpoint identifies the edits of completed statements, and changes whenever they do.
+	checkpoint uint64
+	// view caches views of the index writers as of |checkpoint|. See pendingRows.
+	view *index.PendingRows
+
+	// open is set when GetTableWriter hands out this writer and cleared by Close. Writers are shared per table, so any
+	// holder's Close clears it.
+	open bool
 
 	virtualExpressions []sql.Expression
 }
@@ -100,18 +116,19 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, schSta
 
 		// mapping from secondary index key to primary key
 		writers[defName] = prollySecondaryIndexWriter{
-			name:          defName,
-			mut:           idxMap.MutateInterface(),
-			unique:        def.IsUnique,
-			prefixLengths: def.PrefixLengths,
-			idxCols:       def.Count,
-			keyMap:        def.KeyMapping,
-			keyBld:        val.NewTupleBuilder(keyDesc, idxMap.NodeStore()).WithMaxRowSize(targetRowSize),
-			pkMap:         def.PkMapping,
-			pkBld:         val.NewTupleBuilder(schState.PkKeyDesc, idxMap.NodeStore()).WithMaxRowSize(targetRowSize),
-			key:           make(sql.Row, keyDesc.Count()),
-			predicate:     def.Predicate,
-			virtualExprs:  def.KeyVirtualExprs,
+			name:             defName,
+			mut:              idxMap.MutateInterface(),
+			unique:           def.IsUnique,
+			nullsNotDistinct: def.NullsNotDistinct,
+			prefixLengths:    def.PrefixLengths,
+			idxCols:          def.Count,
+			keyMap:           def.KeyMapping,
+			keyBld:           val.NewTupleBuilder(keyDesc, idxMap.NodeStore()).WithMaxRowSize(targetRowSize),
+			pkMap:            def.PkMapping,
+			pkBld:            val.NewTupleBuilder(schState.PkKeyDesc, idxMap.NodeStore()).WithMaxRowSize(targetRowSize),
+			key:              make(sql.Row, keyDesc.Count()),
+			predicate:        def.Predicate,
+			virtualExprs:     def.KeyVirtualExprs,
 		}
 	}
 
@@ -144,18 +161,19 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, schS
 
 		targetRowSize := schState.DoltSchema.GetTargetRowSize()
 		writers[defName] = prollyKeylessSecondaryWriter{
-			name:          defName,
-			mut:           m.Mutate(),
-			primary:       primary,
-			unique:        def.IsUnique,
-			spatial:       def.IsSpatial,
-			predicate:     def.Predicate,
-			prefixLengths: def.PrefixLengths,
-			keyBld:        val.NewTupleBuilder(keyDesc, m.NodeStore()).WithMaxRowSize(targetRowSize),
-			prefixBld:     val.NewTupleBuilder(keyDesc.PrefixDesc(def.Count), m.NodeStore()).WithMaxRowSize(targetRowSize),
-			hashBld:       val.NewTupleBuilder(val.NewTupleDescriptor(val.Type{Enc: val.Hash128Enc}), m.NodeStore()),
-			keyMap:        def.KeyMapping,
-			virtualExprs:  def.KeyVirtualExprs,
+			name:             defName,
+			mut:              m.Mutate(),
+			primary:          primary,
+			unique:           def.IsUnique,
+			nullsNotDistinct: def.NullsNotDistinct,
+			spatial:          def.IsSpatial,
+			predicate:        def.Predicate,
+			prefixLengths:    def.PrefixLengths,
+			keyBld:           val.NewTupleBuilder(keyDesc, m.NodeStore()).WithMaxRowSize(targetRowSize),
+			prefixBld:        val.NewTupleBuilder(keyDesc.PrefixDesc(def.Count), m.NodeStore()).WithMaxRowSize(targetRowSize),
+			hashBld:          val.NewTupleBuilder(val.NewTupleDescriptor(val.Type{Enc: val.Hash128Enc}), m.NodeStore()),
+			keyMap:           def.KeyMapping,
+			virtualExprs:     def.KeyVirtualExprs,
 		}
 	}
 
@@ -347,6 +365,11 @@ func (w *prollyTableWriter) DiscardChanges(ctx *sql.Context, errorEncountered er
 
 // StatementComplete implements TableWriter.
 func (w *prollyTableWriter) StatementComplete(ctx *sql.Context) error {
+	if w.hasUncommittedEdits() {
+		w.newCheckpoint()
+		// When materialization is deferred, the edits of completed statements are pending until it happens
+		w.pending = w.pending || w.deferMaterialization()
+	}
 	err := w.primary.Commit(ctx)
 	for _, secondary := range w.secondary {
 		sErr := secondary.Commit(ctx)
@@ -411,9 +434,14 @@ func (w *prollyTableWriter) AcquireAutoIncrementLock(ctx *sql.Context) (func(), 
 
 // Close implements Closer
 func (w *prollyTableWriter) Close(ctx *sql.Context) error {
+	w.open = false
 	// We discard data changes in DiscardChanges, but this doesn't include schema changes, which we don't want to flushAllTables
 	if w.errEncountered != nil {
 		return w.errEncountered
+	}
+	if w.deferMaterialization() {
+		// Leave the statement's edits in our index writers, pending materialization into the working set.
+		return w.StatementComplete(ctx)
 	}
 	if !w.edited {
 		return w.writeSess.publish(ctx)
@@ -421,7 +449,11 @@ func (w *prollyTableWriter) Close(ctx *sql.Context) error {
 	return w.flush(ctx)
 }
 
-func (w *prollyTableWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+func (w *prollyTableWriter) deferMaterialization() bool {
+	return w.writeSess.deferMaterialization
+}
+
+func (w *prollyTableWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash)) error {
 	err := w.primary.VisitGCRoots(ctx, roots)
 	if err != nil {
 		return err
@@ -432,7 +464,67 @@ func (w *prollyTableWriter) VisitGCRoots(ctx context.Context, roots func(hash.Ha
 			return err
 		}
 	}
+	if w.view != nil {
+		err = w.view.Primary.VisitGCRoots(ctx, roots)
+		if err != nil {
+			return err
+		}
+		for _, v := range w.view.Secondary {
+			err = v.VisitGCRoots(ctx, roots)
+			if err != nil {
+				return err
+			}
+		}
+	}
 	return nil
+}
+
+func (w *prollyTableWriter) hasUncommittedEdits() bool {
+	if w.primary.HasUncommittedEdits() {
+		return true
+	}
+	for _, secondary := range w.secondary {
+		if secondary.HasUncommittedEdits() {
+			return true
+		}
+	}
+	return false
+}
+
+// newCheckpoint is called whenever the edits of completed statements change.
+func (w *prollyTableWriter) newCheckpoint() {
+	w.checkpoint = lastCheckpoint.Add(1)
+	w.view = nil
+}
+
+// pendingRows returns views of this writer's indexes that include the edits of completed statements, but not those
+// of a statement in progress. It returns nil if any of its indexes can't provide a view.
+func (w *prollyTableWriter) pendingRows(ctx *sql.Context) (*index.PendingRows, error) {
+	if w.view != nil {
+		return w.view, nil
+	}
+
+	secondary := make(map[string]prolly.MapView, len(w.secondary))
+	for name, idx := range w.secondary {
+		v, ok, err := idx.CheckpointView(ctx)
+		if err != nil || !ok {
+			return nil, err
+		}
+		secondary[name] = v
+	}
+	primary, ok, err := w.primary.CheckpointView(ctx)
+	if err != nil || !ok {
+		return nil, err
+	}
+
+	var key [8]byte
+	binary.BigEndian.PutUint64(key[:], w.checkpoint)
+	w.view = &index.PendingRows{
+		Key:       doltdb.DataCacheKey{Hash: hash.Of(key[:])},
+		Primary:   primary,
+		Secondary: secondary,
+	}
+	return w.view, nil
 }
 
 // Reset puts the writer into a fresh state, updating the schema and index writers according to the newly given table.
@@ -465,6 +557,8 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, tbl *doltdb.Table) error {
 	}
 
 	w.tbl = tbl
+	w.pending = false
+	w.newCheckpoint()
 	w.sch = schState.DoltSchema
 	w.sqlSch = schState.PkSchema.Schema
 	w.primary = newPrimary
@@ -478,8 +572,23 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, tbl *doltdb.Table) error {
 
 // table materializes all changes to the primary key, secondary keys, and auto increments to a new doltdb.Table
 func (w *prollyTableWriter) table(ctx *sql.Context) (tbl *doltdb.Table, err error) {
+	return w.tableFromMaps(ctx, indexWriter.Map)
+}
+
+// pendingTable returns a doltdb.Table containing all edits from completed statements, excluding the edits of any
+// statement in progress. It doesn't modify the writer, so it may run concurrently with other writers' flushes. Once
+// the returned table is in the working set, the caller must set it as the writer's table and clear pending.
+func (w *prollyTableWriter) pendingTable(ctx *sql.Context) (*doltdb.Table, error) {
+	if w.hasUncommittedEdits() {
+		return w.tableFromMaps(ctx, indexWriter.CheckpointMap)
+	}
+	return w.table(ctx)
+}
+
+// tableFromMaps builds a doltdb.Table from the maps that |getMap| returns for each index writer.
+func (w *prollyTableWriter) tableFromMaps(ctx *sql.Context, getMap func(indexWriter, context.Context) (prolly.MapInterface, error)) (tbl *doltdb.Table, err error) {
 	// flush primary row storage
-	priMap, err := w.primary.Map(ctx)
+	priMap, err := getMap(w.primary, ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -496,7 +605,7 @@ func (w *prollyTableWriter) table(ctx *sql.Context) (tbl *doltdb.Table, err erro
 
 	for _, secIdxWriter := range w.secondary {
 		var secMap prolly.MapInterface
-		secMap, err = secIdxWriter.Map(ctx)
+		secMap, err = getMap(secIdxWriter, ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -515,7 +624,7 @@ func (w *prollyTableWriter) table(ctx *sql.Context) (tbl *doltdb.Table, err erro
 
 	if w.aiCol.AutoIncrement {
 		if w.aiAltered {
-			tbl, err = w.aiTracker.Set(ctx, w.tblName, tbl, w.writeSess.GetWorkingSet().Ref(), doltdb.AutoIncrementState(w.aiAlterVal))
+			tbl, err = w.aiTracker.Set(ctx, w.tblName, tbl, w.writeSess.owner.WorkingSet().Ref(), doltdb.AutoIncrementState(w.aiAlterVal))
 			if err != nil {
 				return nil, err
 			}
@@ -535,6 +644,12 @@ func (w *prollyTableWriter) table(ctx *sql.Context) (tbl *doltdb.Table, err erro
 }
 
 func (w *prollyTableWriter) flush(ctx *sql.Context) error {
+	if w.deferMaterialization() {
+		// Materialize this table along with any other pending tables, so that the root we set in the session
+		// contains every completed edit.
+		w.pending = true
+		return w.writeSess.materializePending(ctx)
+	}
 	tbl, err := w.table(ctx)
 	if err != nil {
 		return err

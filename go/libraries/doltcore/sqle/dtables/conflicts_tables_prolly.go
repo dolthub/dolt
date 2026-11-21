@@ -567,7 +567,7 @@ func newProllyConflictOurTableUpdater(ctx *sql.Context, ct ProllyConflictsTable)
 	// writer construction. The conflicts-table Updater already admitted the
 	// caller via checkConflictsTableWriteAccess; without this marker the inner
 	// source-table Updater factory would reject a merge-permission caller.
-	dbName, branch := doltdb.SplitRevisionDbName(ct.db.RevisionQualifiedName())
+	dbName, branch := ct.db.AliasedName(), ct.db.Revision()
 	markedCtx := ctx.WithContext(dsess.WithConflictsBypass(ctx.Context, dsess.ConflictsBypassMarker{
 		DbName:  dbName,
 		Branch:  branch,

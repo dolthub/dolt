@@ -123,7 +123,7 @@ INSERT INTO multiexpr VALUES
 			pkSch, err := sqlutil.FromDoltSchema(sqlCtx, "", "multiexpr", idx.Schema())
 			require.NoError(t, err)
 
-			indexIter, err := index.RowIterForIndexLookup(sqlCtx, NoCacheTableable{tbl}, indexLookup, pkSch, nil)
+			indexIter, err := index.RowIterForIndexLookup(sqlCtx, NoCacheTableable{tbl}, indexLookup, pkSch, nil, sql.ColSet{})
 			require.NoError(t, err)
 
 			var readRows []sql.Row

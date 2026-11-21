@@ -119,6 +119,7 @@ func readDoltDoc(ctx context.Context, dEnv *env.DoltEnv, docName, fileName strin
 	if err != nil {
 		return err
 	}
+	defer eng.Close()
 	sqlCtx, err := eng.NewLocalContext(ctx)
 	if err != nil {
 		return err

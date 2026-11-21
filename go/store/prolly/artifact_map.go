@@ -190,7 +190,7 @@ func (m ArtifactMap) Editor() *ArtifactsEditor {
 			keyDesc:    m.keyDesc,
 			valDesc:    m.valDesc,
 			maxPending: artifactMapPendingBufferSize,
-			flusher:    ProllyFlusher{},
+			flusher:    ArtifactFlusher{},
 		},
 		artKB: val.NewTupleBuilder(artKD, m.NodeStore()),
 		artVB: val.NewTupleBuilder(artVD, m.NodeStore()),
@@ -342,6 +342,32 @@ func MergeArtifactMaps(ctx context.Context, left, right, base ArtifactMap, cb tr
 		tuples:  tuples,
 		keyDesc: base.keyDesc,
 		valDesc: base.valDesc,
+	}, nil
+}
+
+// ArtifactFlusher is the MutableMapFlusher for an ArtifactMap. Every node it writes, including
+// those written when pending edits spill before the final Flush, is a MergeArtifacts message.
+type ArtifactFlusher struct{}
+
+var _ MutableMapFlusher[Map, tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc]] = ArtifactFlusher{}
+
+func (f ArtifactFlusher) GetDefaultSerializer(ctx context.Context, mut *MutableMap) message.Serializer {
+	return message.NewMergeArtifactSerializer(mut.keyDesc, mut.valDesc, mut.NodeStore().Pool())
+}
+
+func (f ArtifactFlusher) ApplyMutationsWithSerializer(ctx context.Context, serializer message.Serializer, mut *MutableMap) (tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc], error) {
+	return ProllyFlusher{}.ApplyMutationsWithSerializer(ctx, serializer, mut)
+}
+
+func (f ArtifactFlusher) Map(ctx context.Context, mut *MutableMap) (Map, error) {
+	tuples, err := f.ApplyMutationsWithSerializer(ctx, f.GetDefaultSerializer(ctx, mut), mut)
+	if err != nil {
+		return Map{}, err
+	}
+	return Map{
+		tuples:  tuples,
+		keyDesc: mut.keyDesc,
+		valDesc: mut.valDesc,
 	}, nil
 }
 
