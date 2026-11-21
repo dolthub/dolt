@@ -2363,6 +2363,13 @@ func preserveSurvivingColumnEncodings(oldSch, newSch schema.Schema) schema.Schem
 		if oldCol.Kind != cols[i].Kind {
 			continue
 		}
+
+		// Every value is rewritten, so extended types use the default encoding of their type. Older encodings of
+		// extended types may not be able to represent every value of the type.
+		if cols[i].Kind == types.ExtendedKind {
+			continue
+		}
+
 		preserved := typeinfo.PreserveOldEncoding(oldCol.TypeInfo, cols[i].TypeInfo)
 		if preserved == cols[i].TypeInfo {
 			continue
