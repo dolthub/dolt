@@ -1825,6 +1825,12 @@ func (t *AlterableDoltTable) columnChangeRequiresRewrite(oldColumn *sql.Column, 
 		panic(err) // should be impossible, we check compatibility before this point
 	}
 
+	if extendedTypeChanged(existingCol.TypeInfo, newCol.TypeInfo) {
+		// Values of an extended type are encoded according to their type, so every value must be rewritten when the
+		// type changes.
+		return true
+	}
+
 	if !existingCol.TypeInfo.Equals(newCol.TypeInfo) {
 		if schema.IsColSpatialType(newCol) {
 			// TODO: we need to do this because some spatial type changes require a full table check, but not all.
@@ -1839,6 +1845,15 @@ func (t *AlterableDoltTable) columnChangeRequiresRewrite(oldColumn *sql.Column, 
 	}
 
 	return false
+}
+
+// extendedTypeChanged returns whether either of the given types is an extended type, and the types differ.
+func extendedTypeChanged(oldTI, newTI typeinfo.TypeInfo) bool {
+	if oldTI.NomsKind() != types.ExtendedKind && newTI.NomsKind() != types.ExtendedKind {
+		return false
+	}
+
+	return !oldTI.ToSqlType().Equals(newTI.ToSqlType())
 }
 
 func isColumnDrop(oldSchema sql.PrimaryKeySchema, newSchema sql.PrimaryKeySchema) bool {
@@ -2348,7 +2363,14 @@ func preserveSurvivingColumnEncodings(oldSch, newSch schema.Schema) schema.Schem
 		if oldCol.Kind != cols[i].Kind {
 			continue
 		}
-		preserved := typeinfo.PreserveAdaptiveEncoding(oldCol.TypeInfo, cols[i].TypeInfo)
+
+		// Every value is rewritten, so extended types use the default encoding of their type. Older encodings of
+		// extended types may not be able to represent every value of the type.
+		if cols[i].Kind == types.ExtendedKind {
+			continue
+		}
+
+		preserved := typeinfo.PreserveOldEncoding(oldCol.TypeInfo, cols[i].TypeInfo)
 		if preserved == cols[i].TypeInfo {
 			continue
 		}
@@ -2490,7 +2512,12 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 	}
 
 	if existingCol.Kind == col.Kind {
-		col.TypeInfo = typeinfo.PreserveAdaptiveEncoding(existingCol.TypeInfo, col.TypeInfo)
+		col.TypeInfo = typeinfo.PreserveOldEncoding(existingCol.TypeInfo, col.TypeInfo)
+	}
+
+	if extendedTypeChanged(existingCol.TypeInfo, col.TypeInfo) {
+		return fmt.Errorf("cannot change the type of column %s from %s to %s without rewriting the table",
+			columnName, existingCol.TypeInfo.ToSqlType().String(), col.TypeInfo.ToSqlType().String())
 	}
 
 	// TODO: move this logic into ShouldRewrite
