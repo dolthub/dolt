@@ -246,3 +246,135 @@ func intNullTuple(ints ...*int32) val.Tuple {
 	}
 	return tup
 }
+
+func TestMergeIntersectingRanges(t *testing.T) {
+	ctx := context.Background()
+	intType := val.Type{Enc: val.Int32Enc, Nullable: true}
+	twoCol := val.NewTupleDescriptor(intType, intType)
+	closed := func(lo, hi int32) RangeField {
+		return RangeField{
+			Lo:             Bound{Binding: true, Inclusive: true, Value: intVal(lo)},
+			Hi:             Bound{Binding: true, Inclusive: true, Value: intVal(hi)},
+			BoundsAreEqual: lo == hi,
+		}
+	}
+	open := func(lo, hi int32) RangeField {
+		return RangeField{
+			Lo: Bound{Binding: true, Value: intVal(lo)},
+			Hi: Bound{Binding: true, Value: intVal(hi)},
+		}
+	}
+	atLeast := func(lo int32) RangeField {
+		return RangeField{Lo: Bound{Binding: true, Inclusive: true, Value: intVal(lo)}}
+	}
+	rng := func(fields ...RangeField) Range {
+		return Range{Fields: fields, Desc: twoCol, IsContiguous: true, SkipRangeMatchCallback: true}
+	}
+	spanned := func(fields ...RangeField) Range {
+		return Range{Fields: fields, Desc: twoCol}
+	}
+
+	tests := []struct {
+		name   string
+		ranges []Range
+		merged []Range
+	}{
+		{
+			name:   "disjoint ranges are kept",
+			ranges: []Range{rng(closed(1, 2)), rng(closed(3, 4))},
+			merged: []Range{rng(closed(1, 2)), rng(closed(3, 4))},
+		},
+		{
+			name:   "ranges touching at an exclusive bound are kept",
+			ranges: []Range{rng(closed(1, 2)), rng(open(2, 4))},
+			merged: []Range{rng(closed(1, 2)), rng(open(2, 4))},
+		},
+		{
+			name:   "equal points are merged",
+			ranges: []Range{rng(closed(2, 2)), rng(closed(2, 2))},
+			merged: []Range{spanned(closed(2, 2))},
+		},
+		{
+			name:   "overlapping ranges are merged",
+			ranges: []Range{rng(closed(1, 3)), rng(open(2, 5))},
+			merged: []Range{spanned(RangeField{
+				Lo: Bound{Binding: true, Inclusive: true, Value: intVal(1)},
+				Hi: Bound{Binding: true, Value: intVal(5)},
+			})},
+		},
+		{
+			name:   "unbound range absorbs others",
+			ranges: []Range{rng(closed(1, 3)), rng(atLeast(2))},
+			merged: []Range{spanned(atLeast(1))},
+		},
+		{
+			name:   "a merged range is merged again with ranges it grew into",
+			ranges: []Range{rng(closed(1, 2)), rng(closed(4, 5)), rng(closed(2, 4)), rng(closed(7, 8))},
+			merged: []Range{spanned(closed(1, 5)), rng(closed(7, 8))},
+		},
+		{
+			name:   "unsorted ranges are merged",
+			ranges: []Range{rng(closed(7, 8)), rng(closed(2, 4)), rng(closed(1, 2))},
+			merged: []Range{spanned(closed(1, 4)), rng(closed(7, 8))},
+		},
+		{
+			name:   "a wide range absorbs ranges it holds",
+			ranges: []Range{rng(closed(1, 10)), rng(closed(2, 3)), rng(closed(5, 6)), rng(closed(11, 12))},
+			merged: []Range{spanned(closed(1, 10)), rng(closed(11, 12))},
+		},
+		{
+			name:   "ranges disjoint on a second field are kept",
+			ranges: []Range{rng(closed(1, 1), closed(1, 2)), rng(closed(1, 1), closed(3, 4))},
+			merged: []Range{rng(closed(1, 1), closed(1, 2)), rng(closed(1, 1), closed(3, 4))},
+		},
+		{
+			name:   "ranges overlapping on every field are merged",
+			ranges: []Range{rng(closed(1, 1), closed(1, 3)), rng(closed(1, 1), closed(3, 4))},
+			merged: []Range{spanned(closed(1, 1), closed(1, 4))},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			merged, err := MergeIntersectingRanges(ctx, test.ranges)
+			require.NoError(t, err)
+			assert.Equal(t, test.merged, merged)
+		})
+	}
+}
+
+func TestMergedRangesVisitEachTupleOnce(t *testing.T) {
+	ctx := context.Background()
+	intType := val.Type{Enc: val.Int32Enc, Nullable: true}
+	twoCol := val.NewTupleDescriptor(intType, intType)
+	values := make([]val.Tuple, len(rangeTuples))
+	for i := range values {
+		values[i] = make(val.Tuple, 2)
+	}
+	m := NewMap(tree.NewTupleLeafNode(rangeTuples, values), tree.NewTestNodeStore(), twoCol, &val.TupleDesc{})
+
+	c0Between := func(lo, hi int32) Range {
+		return Range{
+			Fields: []RangeField{{
+				Lo: Bound{Binding: true, Inclusive: true, Value: intVal(lo)},
+				Hi: Bound{Binding: true, Inclusive: true, Value: intVal(hi)},
+			}},
+			Desc: twoCol,
+		}
+	}
+	merged, err := MergeIntersectingRanges(ctx, []Range{c0Between(1, 2), c0Between(2, 3), c0Between(2, 2)})
+	require.NoError(t, err)
+	require.Len(t, merged, 1)
+
+	iter, err := m.IterRange(ctx, merged[0])
+	require.NoError(t, err)
+	var visited []val.Tuple
+	for {
+		k, _, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+		visited = append(visited, k)
+	}
+	assert.Equal(t, rangeTuples[1:10], visited)
+}
