@@ -16,6 +16,7 @@ package tree
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"io"
 	"sync"
@@ -346,145 +347,195 @@ func (ns *nodeStore) CompareAdaptiveCollatedStrings(ctx context.Context, l, r va
 // compareCollatedChunkDiffer is the streaming version of CompareCollatedStrings, getting just the diff between two
 // values when comparing them.
 func compareCollatedChunkDiffer(ctx context.Context, d chunkDiffer, collation sql.CollationID) (int, error) {
-	var lBuf, rBuf []byte
-	done := false
-
 	// TODO: the call to Next() starts at the first differing chunk, then returns every leaf chunk in order from both
 	//  sides thereafter. This is correct, but potentially inefficient in the case where there are sparse byte differences
 	//  that are collation-equivalent spread through two large documents we are sorting. We could more efficiently
 	//  perform the comparison in this case by having Next() and NextDiff() methods for the two traversal cases.
-	pull := func() error {
-		lChunk, rChunk, err := d.Next(ctx)
-		if err == io.EOF {
-			done = true
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		lBuf = append(lBuf, lChunk...)
-		rBuf = append(rBuf, rChunk...)
-		return nil
+	s := collatedChunkStreams{
+		ctx:       ctx,
+		differ:    d,
+		collation: collation,
+		padSpace:  collation.IsUCA() && collation.IsPadSpace(),
 	}
-
-	padSpace := collation.IsUCA() && collation.IsPadSpace()
-
-	nextWeight := func(buf *[]byte) (int32, rune, bool, error) {
-		for {
-			for !done && !utf8.FullRune(*buf) {
-				if err := pull(); err != nil {
-					return 0, 0, false, err
-				}
-			}
-			if len(*buf) == 0 {
-				return 0, 0, false, nil
-			}
-			// Pass malformed bytes through rather than erroring so stored
-			// values with invalid UTF-8 keep a deterministic, transitive tree
-			// order that matches in-memory comparisons.
-			r, read := utf8.DecodeRune(*buf)
-			scanner := sql.NewWeightScanner(collation, encodings.BytesToString((*buf)[:read]))
-			*buf = (*buf)[read:]
-			if w, ok := scanner.Next(); ok {
-				return w, r, true, nil
-			}
-		}
-	}
-
-	// isTrimmableRemainder reports whether every remaining rune in |buf| (and
-	// any unpulled chunks) is a literal space or UCA-ignorable rune. Callers
-	// always return immediately after this check, so consuming |buf| is safe.
-	isTrimmableRemainder := func(buf *[]byte) (bool, error) {
-		for {
-			for !done && !utf8.FullRune(*buf) {
-				if err := pull(); err != nil {
-					return false, err
-				}
-			}
-			if len(*buf) == 0 {
-				return true, nil
-			}
-			r, read := utf8.DecodeRune(*buf)
-			if r != ' ' {
-				scanner := sql.NewWeightScanner(collation, encodings.BytesToString((*buf)[:read]))
-				if _, ok := scanner.Next(); ok {
-					return false, nil
-				}
-			}
-			*buf = (*buf)[read:]
-		}
-	}
-
 	for {
-		for !done && (!utf8.FullRune(lBuf) || !utf8.FullRune(rBuf)) {
-			if err := pull(); err != nil {
-				return 0, err
-			}
+		if err := s.fill(&s.left, 0); err != nil {
+			return 0, err
 		}
-		if len(lBuf) > 0 && len(rBuf) > 0 {
-			lr, lread := utf8.DecodeRune(lBuf)
-			rr, rread := utf8.DecodeRune(rBuf)
+		if err := s.fill(&s.right, 0); err != nil {
+			return 0, err
+		}
+		if len(s.left) > 0 && len(s.right) > 0 {
+			lr, lSize := utf8.DecodeRune(s.left)
+			rr, rSize := utf8.DecodeRune(s.right)
 			if lr == rr {
-				lBuf = lBuf[lread:]
-				rBuf = rBuf[rread:]
+				s.left, s.right = s.left[lSize:], s.right[rSize:]
 				continue
 			}
 		}
+		l, err := s.next(&s.left)
+		if err != nil {
+			return 0, err
+		}
+		r, err := s.next(&s.right)
+		if err != nil {
+			return 0, err
+		}
+		if l.ok && r.ok && l.w == r.w {
+			// Under UCA PAD SPACE, a literal trailing space trims while other
+			// space-weight runes (such as NBSP) do not. Check for logical end
+			// when one side is a space and the other is a distinct rune.
+			if !s.padSpace || l.r == r.r || (l.r != ' ' && r.r != ' ') {
+				continue
+			}
+			lEnded, rEnded, err := s.endedBoth(l, r)
+			if err != nil {
+				return 0, err
+			}
+			if !lEnded && !rEnded {
+				continue
+			}
+			if lEnded {
+				return -1, nil
+			}
+			return 1, nil
+		}
+		return s.order(l, r)
+	}
+}
 
-		lw, lr, lOk, err := nextWeight(&lBuf)
-		if err != nil {
-			return 0, err
+// collatedChunkStreams reads the runes of two chunked values in lockstep.
+type collatedChunkStreams struct {
+	ctx         context.Context
+	differ      chunkDiffer
+	collation   sql.CollationID
+	padSpace    bool
+	left, right []byte
+	eof         bool
+}
+
+// weightedRune holds a decoded rune and its collation weight. Field ok is false
+// at end of input.
+type weightedRune struct {
+	r  rune
+	w  int32
+	ok bool
+}
+
+// next consumes runes from |buf| until one carries a weight.
+func (s *collatedChunkStreams) next(buf *[]byte) (weightedRune, error) {
+	for {
+		if err := s.fill(buf, 0); err != nil {
+			return weightedRune{}, err
 		}
-		rw, rr, rOk, err := nextWeight(&rBuf)
-		if err != nil {
-			return 0, err
+		if len(*buf) == 0 {
+			return weightedRune{}, nil
 		}
-		if !lOk || !rOk {
-			if !lOk && !rOk {
-				return 0, nil
-			}
-			if !lOk {
-				if padSpace && rr == ' ' {
-					trimmable, err := isTrimmableRemainder(&rBuf)
-					if err != nil || trimmable {
-						return 0, err
-					}
-				}
-				return -1, nil
-			}
-			if padSpace && lr == ' ' {
-				trimmable, err := isTrimmableRemainder(&lBuf)
-				if err != nil || trimmable {
-					return 0, err
-				}
-			}
-			return 1, nil
-		}
-		if lw != rw {
-			if padSpace && lr == ' ' {
-				trimmable, err := isTrimmableRemainder(&lBuf)
-				if err != nil {
-					return 0, err
-				}
-				if trimmable {
-					return -1, nil
-				}
-			}
-			if padSpace && rr == ' ' {
-				trimmable, err := isTrimmableRemainder(&rBuf)
-				if err != nil {
-					return 0, err
-				}
-				if trimmable {
-					return 1, nil
-				}
-			}
-			if lw < rw {
-				return -1, nil
-			}
-			return 1, nil
+		// Pass malformed bytes through rather than erroring so stored values
+		// with invalid UTF-8 keep a deterministic, transitive tree order that
+		// matches in-memory comparisons.
+		r, size := utf8.DecodeRune(*buf)
+		w, ok := s.weight((*buf)[:size])
+		*buf = (*buf)[size:]
+		if ok {
+			return weightedRune{r: r, w: w, ok: true}, nil
 		}
 	}
+}
+
+// order decides the comparison at the first differing weight or end of input.
+func (s *collatedChunkStreams) order(l, r weightedRune) (int, error) {
+	lEnded, rEnded, err := s.endedBoth(l, r)
+	if err != nil {
+		return 0, err
+	}
+	switch {
+	case lEnded && rEnded:
+		return 0, nil
+	case lEnded:
+		return -1, nil
+	case rEnded:
+		return 1, nil
+	default:
+		return cmp.Compare(l.w, r.w), nil
+	}
+}
+
+// endedBoth reports whether the left and right values have logically ended.
+func (s *collatedChunkStreams) endedBoth(l, r weightedRune) (bool, bool, error) {
+	lEnded, err := s.ended(&s.left, l)
+	if err != nil {
+		return false, false, err
+	}
+	rEnded, err := s.ended(&s.right, r)
+	if err != nil {
+		return false, false, err
+	}
+	return lEnded, rEnded, nil
+}
+
+// ended reports whether |wr| marks the logical end of its value. Input has
+// ended when exhausted, or under UCA PAD SPACE when |wr| is a literal space
+// followed only by trimmable runes, matching TrimRightSpace in the inline path.
+func (s *collatedChunkStreams) ended(buf *[]byte, wr weightedRune) (bool, error) {
+	if !wr.ok {
+		return true, nil
+	}
+	if !s.padSpace || wr.r != ' ' {
+		return false, nil
+	}
+	return s.trimmableRemainder(buf)
+}
+
+// trimmableRemainder reports whether everything left in |buf|, including
+// unpulled chunks, is spaces or ignorable runes, without consuming |buf|.
+func (s *collatedChunkStreams) trimmableRemainder(buf *[]byte) (bool, error) {
+	for i := 0; ; {
+		if err := s.fill(buf, i); err != nil {
+			return false, err
+		}
+		if i == len(*buf) {
+			return true, nil
+		}
+		r, size := utf8.DecodeRune((*buf)[i:])
+		if r != ' ' {
+			if _, ok := s.weight((*buf)[i : i+size]); ok {
+				return false, nil
+			}
+		}
+		i += size
+	}
+}
+
+// weight returns the weight of the single rune encoded in |b|, or false if
+// the collation ignores it.
+func (s *collatedChunkStreams) weight(b []byte) (int32, bool) {
+	ws := sql.NewWeightScanner(s.collation, encodings.BytesToString(b))
+	return ws.Next()
+}
+
+// fill pulls chunks until |buf| at |offset| starts with a complete rune or EOF.
+func (s *collatedChunkStreams) fill(buf *[]byte, offset int) error {
+	for !s.eof && !utf8.FullRune((*buf)[offset:]) {
+		if err := s.pull(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// pull reads the next differing chunks from the stream into left and right.
+func (s *collatedChunkStreams) pull() error {
+	l, r, err := s.differ.Next(s.ctx)
+	if err == io.EOF {
+		s.eof = true
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	s.left = append(s.left, l...)
+	s.right = append(s.right, r...)
+	return nil
 }
 
 // chunkDiffer is an interface to diff chunk-encoded values in a ValueStore.

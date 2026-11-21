@@ -647,6 +647,13 @@ func TestCompareAdaptiveTextWithCollation(t *testing.T) {
 			want:      1,
 		},
 		{
+			name:      "UCA 4.0.0 PAD SPACE: trailing space vs non-breaking space",
+			l:         padding + "a ",
+			r:         padding + "a\u00a0",
+			collation: sql.Collation_utf8mb4_unicode_ci,
+			want:      -1,
+		},
+		{
 			name:      "utf8mb4_bin: trailing space remains distinct",
 			l:         padding + "bob",
 			r:         padding + "bob ",
@@ -680,14 +687,11 @@ func TestCompareAdaptiveTextWithCollation(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, -c.want, gotRev)
 
-			// Verify out-of-band comparison matches in-memory CompareCollatedStrings.
 			require.Equal(t, val.CompareCollatedStrings(c.collation, []byte(c.l), []byte(c.r)), got)
 		})
 	}
 
-	// Verify inline vs out-of-band values pushed over the inline threshold by
-	// trailing spaces and UCA ignorables compare equal and agree with in-memory.
-	t.Run("inline vs out-of-band UCA PAD SPACE boundary", func(t *testing.T) {
+	t.Run("inline vs out-of-band trailing spaces and ignorable characters", func(t *testing.T) {
 		ns := NewTestNodeStore()
 		inlineStr := strings.Repeat("x", 128)
 		oobStr := inlineStr + "    \u200b"
