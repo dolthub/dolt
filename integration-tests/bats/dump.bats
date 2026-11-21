@@ -16,6 +16,32 @@ teardown() {
     [[ "$output" =~ "No tables to export." ]] || false
 }
 
+@test "dump: SQL type - schema elements in a database without tables" {
+    dolt sql -q "CREATE VIEW view1 AS SELECT 1 AS a"
+    dolt sql -q "CREATE PROCEDURE p1 (in x int) select x from dual"
+    dolt add .
+    dolt commit -m "create a view and a procedure"
+
+    run dolt dump
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f doltdump.sql ]
+
+    rm -rf ./.dolt
+    dolt init
+
+    run dolt sql < doltdump.sql
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "select * from view1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+
+    run dolt sql -q "show create procedure p1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "p1" ]] || false
+}
+
 @test "dump: roundtrip on database with leading space character and hyphen" {
     mkdir ' test-db'
     cd ' test-db'
