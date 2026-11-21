@@ -25,43 +25,199 @@ import (
 )
 
 func TestCompareCollatedStrings(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/12342
 	tests := []struct {
-		name  string
-		left  []byte
-		right []byte
-		exp   int
+		collation sql.CollationID
+		left      []byte
+		right     []byte
+		exp       int
 	}{
 		{
-			left:  []byte("Hello, 人"),
-			right: []byte("Hello, 亻"),
-			exp:   -1,
+			collation: sql.Collation_utf8mb4_0900_ai_ci,
+			left:      []byte("Hello, 人"),
+			right:     []byte("Hello, 亻"),
+			exp:       -1,
 		},
 		{
-			left:  []byte("woÒ"),
-			right: []byte("woÓ"),
-			exp:   0,
+			collation: sql.Collation_utf8mb4_0900_ai_ci,
+			left:      []byte("woÒ"),
+			right:     []byte("woÓ"),
+			exp:       0,
 		},
 		{
-			left:  []byte("\u07FB"),
-			right: []byte("\u07FC"),
-			exp:   -1,
+			collation: sql.Collation_utf8mb4_0900_ai_ci,
+			left:      []byte("\u07FB"),
+			right:     []byte("\u07FC"),
+			exp:       -1,
 		},
 		{
-			left:  []byte("˧"),
-			right: []byte("˦"),
-			exp:   1,
+			collation: sql.Collation_utf8mb4_0900_ai_ci,
+			left:      []byte("˧"),
+			right:     []byte("˦"),
+			exp:       1,
 		},
 		{
-			left:  []byte("ƵƶzƸ"),
-			right: []byte("ƵƶzƷ"),
-			exp:   1,
+			collation: sql.Collation_utf8mb4_0900_ai_ci,
+			left:      []byte("ƵƶzƸ"),
+			right:     []byte("ƵƶzƷ"),
+			exp:       1,
+		},
+		{
+			collation: sql.Collation_utf8mb4_unicode_ci,
+			left:      []byte("b\u200bob"),
+			right:     []byte("bob"),
+			exp:       0,
+		},
+		{
+			collation: sql.Collation_utf8mb4_unicode_ci,
+			left:      []byte("bob"),
+			right:     []byte("bob\u200b"),
+			exp:       0,
+		},
+		{
+			collation: sql.Collation_utf8mb4_unicode_ci,
+			left:      []byte("\u200ba"),
+			right:     []byte("\u200ca"),
+			exp:       0,
+		},
+		{
+			collation: sql.Collation_utf8mb4_unicode_ci,
+			left:      []byte("\u200b"),
+			right:     []byte(""),
+			exp:       0,
+		},
+		{
+			collation: sql.Collation_utf8mb4_0900_as_cs,
+			left:      []byte("b\u200bob"),
+			right:     []byte("bob"),
+			exp:       0,
+		},
+		{
+			collation: sql.Collation_utf8mb4_general_ci,
+			left:      []byte("b\u200bob"),
+			right:     []byte("bob"),
+			exp:       1,
+		},
+		{
+			collation: sql.Collation_utf8mb4_general_ci,
+			left:      []byte("b\x00ob"),
+			right:     []byte("bob"),
+			exp:       -1,
+		},
+		{
+			collation: sql.Collation_utf8mb4_unicode_ci,
+			left:      []byte{0xe2, 0x80},
+			right:     []byte("\u200b"),
+			exp:       1,
+		},
+		{
+			collation: sql.Collation_utf8mb4_unicode_ci,
+			left:      []byte("b\xff\u200bob"),
+			right:     []byte("b\ufffdob"),
+			exp:       0,
+		},
+		{
+			collation: sql.Collation_utf8mb4_unicode_ci,
+			left:      []byte("a\xffz"),
+			right:     []byte("a\xfeb"),
+			exp:       1,
+		},
+		{
+			collation: sql.Collation_utf8mb4_unicode_ci,
+			left:      []byte("a\xffz"),
+			right:     []byte("a\xffb"),
+			exp:       1,
+		},
+		{
+			collation: sql.Collation_utf8mb4_unicode_ci,
+			left:      []byte("a\xfeb"),
+			right:     []byte("a\xffb"),
+			exp:       0,
+		},
+		{
+			collation: sql.Collation_utf8mb4_unicode_ci,
+			left:      []byte("a \u200b"),
+			right:     []byte("a"),
+			exp:       0,
+		},
+		{
+			collation: sql.Collation_utf8mb4_unicode_ci,
+			left:      []byte("a "),
+			right:     []byte("a"),
+			exp:       0,
+		},
+		{
+			collation: sql.Collation_utf8mb4_0900_ai_ci,
+			left:      []byte("a \u200b"),
+			right:     []byte("a"),
+			exp:       1,
+		},
+		{
+			collation: sql.Collation_utf8mb4_0900_ai_ci,
+			left:      []byte("a "),
+			right:     []byte("a"),
+			exp:       1,
+		},
+		{
+			collation: sql.Collation_utf8mb4_unicode_ci,
+			left:      []byte("a  "),
+			right:     []byte("a \tx"),
+			exp:       -1,
+		},
+		{
+			collation: sql.Collation_utf8mb4_unicode_ci,
+			left:      []byte("a  x"),
+			right:     []byte("a \tx"),
+			exp:       1,
+		},
+		{
+			collation: sql.Collation_utf8mb4_bin,
+			left:      []byte("a"),
+			right:     []byte("a "),
+			exp:       -1,
+		},
+		{
+			collation: sql.Collation_utf8mb4_general_ci,
+			left:      []byte("a"),
+			right:     []byte("a "),
+			exp:       -1,
 		},
 	}
 
 	for _, tt := range tests {
-		t.Run(fmt.Sprintf("%s vs %s", tt.left, tt.right), func(t *testing.T) {
-			cmp := val.CompareCollatedStrings(sql.Collation_utf8mb4_0900_ai_ci, tt.left, tt.right)
+		t.Run(fmt.Sprintf("%s:%x vs %x", tt.collation, tt.left, tt.right), func(t *testing.T) {
+			cmp := val.CompareCollatedStrings(tt.collation, tt.left, tt.right)
 			require.Equal(t, tt.exp, cmp)
+			rev := val.CompareCollatedStrings(tt.collation, tt.right, tt.left)
+			require.Equal(t, -tt.exp, rev)
 		})
+	}
+
+	orderedSamples := [][]byte{
+		[]byte("\tx"),
+		[]byte("\nx"),
+		[]byte(" x"),
+		[]byte("!x"),
+		[]byte("0"),
+		[]byte("a"),
+		[]byte("o"),
+		[]byte("z"),
+		[]byte("人"),
+		[]byte("\U00020000"),
+	}
+	for _, coll := range []sql.CollationID{
+		sql.Collation_utf8mb4_unicode_ci,
+		sql.Collation_utf8mb4_unicode_520_ci,
+		sql.Collation_utf8mb4_persian_ci,
+		sql.Collation_utf8mb4_sinhala_ci,
+		sql.Collation_utf8mb4_0900_ai_ci,
+	} {
+		for i := 0; i < len(orderedSamples); i++ {
+			require.Zero(t, val.CompareCollatedStrings(coll, orderedSamples[i], orderedSamples[i]), "%s:%q", coll, orderedSamples[i])
+			for j := i + 1; j < len(orderedSamples); j++ {
+				require.Equal(t, -1, val.CompareCollatedStrings(coll, orderedSamples[i], orderedSamples[j]), "%s:%q < %q", coll, orderedSamples[i], orderedSamples[j])
+				require.Equal(t, 1, val.CompareCollatedStrings(coll, orderedSamples[j], orderedSamples[i]), "%s:%q > %q", coll, orderedSamples[j], orderedSamples[i])
+			}
+		}
 	}
 }

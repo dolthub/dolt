@@ -21,11 +21,11 @@ import (
 	"math"
 	"math/bits"
 	"time"
-	"unicode/utf8"
 	"unsafe"
 
 	"github.com/cockroachdb/apd/v3"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/encodings"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
@@ -716,68 +716,20 @@ func compareAddr(l, r hash.Hash) int {
 	return l.Compare(r)
 }
 
-// CompareCollatedStrings compares two UTF-8 byte slices using the given collation.
+// CompareCollatedStrings compares two UTF-8 byte slices |left| and |right|
+// using [sql.WeightScanner] for |collation|.
 func CompareCollatedStrings(collation sql.CollationID, left, right []byte) int {
-	i := 0
-	for i < len(left) && i < len(right) {
-		if left[i] != right[i] {
-			break
-		}
-		i++
-	}
-	if i >= len(left) || i >= len(right) {
-		if len(left) < len(right) {
-			return -1
-		} else if len(left) > len(right) {
-			return 1
-		} else {
-			return 0
-		}
-	}
-
-	li := i
-	for ; li > 0 && !utf8.RuneStart(left[li]); li-- {
-	}
-	left = left[li:]
-
-	ri := i
-	for ; ri > 0 && !utf8.RuneStart(right[ri]); ri-- {
-	}
-	right = right[ri:]
-
-	getRuneWeight := collation.Sorter()
-	for len(left) > 0 && len(right) > 0 {
-		leftRune, leftRead := utf8.DecodeRune(left)
-		rightRune, rightRead := utf8.DecodeRune(right)
-		if leftRead == utf8.RuneError || rightRead == utf8.RuneError {
-			if leftRead == utf8.RuneError && rightRead != utf8.RuneError {
-				return 1
-			} else if leftRead != utf8.RuneError && rightRead == utf8.RuneError {
-				return -1
-			} else {
-				return 0
-			}
-		}
-		if leftRune != rightRune {
-			leftWeight := getRuneWeight(leftRune)
-			rightWeight := getRuneWeight(rightRune)
-			if leftWeight < rightWeight {
-				return -1
-			} else if leftWeight > rightWeight {
-				return 1
-			}
-		}
-		left = left[leftRead:]
-		right = right[rightRead:]
-	}
-
-	if len(left) < len(right) {
-		return -1
-	} else if len(left) > len(right) {
-		return 1
-	} else {
+	ls, rs := encodings.BytesToString(left), encodings.BytesToString(right)
+	if ls == rs {
 		return 0
 	}
+	if collation.IsUCA() && collation.IsPadSpace() {
+		ls = collation.TrimRightSpace(ls)
+		rs = collation.TrimRightSpace(rs)
+	}
+	leftScanner := sql.NewWeightScanner(collation, ls)
+	rightScanner := sql.NewWeightScanner(collation, rs)
+	return leftScanner.Compare(&rightScanner)
 }
 
 func writeRaw(buf, val []byte) {

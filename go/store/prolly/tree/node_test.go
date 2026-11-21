@@ -212,6 +212,7 @@ func TestSamples(t *testing.T) {
 }
 
 func TestCompareCollatedChunkDiffer(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/12342
 	ctx := context.Background()
 	utf8Default := sql.Collation_utf8mb4_0900_ai_ci
 
@@ -279,6 +280,48 @@ func TestCompareCollatedChunkDiffer(t *testing.T) {
 			r:         "café résumé naïvf",
 			collation: utf8Default,
 			want:      -1,
+		},
+		{
+			name:      "ignorable zero width space interior",
+			l:         "b\u200bob",
+			r:         "bob",
+			collation: sql.Collation_utf8mb4_unicode_ci,
+			want:      0,
+		},
+		{
+			name:      "ignorable zero width space trailing",
+			l:         "bob",
+			r:         "bob\u200b",
+			collation: sql.Collation_utf8mb4_unicode_ci,
+			want:      0,
+		},
+		{
+			name:      "consecutive ignorable runes across chunk boundaries",
+			l:         "\u200b\u200béob",
+			r:         "eob",
+			collation: sql.Collation_utf8mb4_unicode_ci,
+			want:      0,
+		},
+		{
+			name:      "general_ci does not skip zero width space",
+			l:         "b\u200bob",
+			r:         "bob",
+			collation: sql.Collation_utf8mb4_general_ci,
+			want:      1,
+		},
+		{
+			name:      "invalid utf8 byte maps to replacement rune",
+			l:         "b\xff\u200bob",
+			r:         "b\ufffdob",
+			collation: sql.Collation_utf8mb4_unicode_ci,
+			want:      0,
+		},
+		{
+			name:      "invalid utf8 byte ordering is transitive",
+			l:         "a\xffz",
+			r:         "a\xfeb",
+			collation: sql.Collation_utf8mb4_unicode_ci,
+			want:      1,
 		},
 	}
 
