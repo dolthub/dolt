@@ -223,13 +223,29 @@ func (tf *QueryDiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowI
 	if err != nil {
 		return nil, err
 	}
-	if !tf.schema1.Equals(tf.schema2) {
-		// TODO(elianddb): Queries across different tables or
-		// databases fall back to a keyless diff even when their
-		// projected schemas match.
+	if !tf.schema1.Equals(tf.schema2) && !keyedSchemasMatch(tf.schema1, tf.schema2) {
 		return tf.keylessRowIter(ctx, iter1, iter2)
 	}
 	return tf.pkRowIter(ctx, iter1, iter2)
+}
+
+// keyedSchemasMatch reports whether |sch1| and |sch2| project the same
+// columns with the same types and primary key, ignoring which table or
+// database each column comes from. This lets queries over different tables or
+// databases be diffed by primary key.
+func keyedSchemasMatch(sch1, sch2 sql.Schema) bool {
+	if len(sch1) != len(sch2) {
+		return false
+	}
+	hasPk := false
+	for i := range sch1 {
+		c1, c2 := sch1[i], sch2[i]
+		if !strings.EqualFold(c1.Name, c2.Name) || c1.PrimaryKey != c2.PrimaryKey || !c1.Type.Equals(c2.Type) {
+			return false
+		}
+		hasPk = hasPk || c1.PrimaryKey
+	}
+	return hasPk
 }
 
 // keylessRowIter uses the entire row for difference comparison
