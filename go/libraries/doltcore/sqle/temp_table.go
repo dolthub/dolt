@@ -379,8 +379,10 @@ func (t *TempTable) DropIndex(ctx *sql.Context, indexName string) error {
 		return err
 	}
 	t.table = newTable
-
-	return nil
+	// Publish the updated table to the write session so its editor doesn't
+	// replace it with the stale schema on the next write.
+	_, err = t.writeSession.FlushTable(ctx, doltdb.TableName{Name: t.tableName}, t.table)
+	return err
 }
 
 func (t *TempTable) RenameIndex(ctx *sql.Context, fromIndexName string, toIndexName string) error {
@@ -398,8 +400,10 @@ func (t *TempTable) RenameIndex(ctx *sql.Context, fromIndexName string, toIndexN
 		return err
 	}
 	t.table = newTable
-
-	return nil
+	// Publish the updated table to the write session so its editor doesn't
+	// replace it with the stale schema on the next write.
+	_, err = t.writeSession.FlushTable(ctx, doltdb.TableName{Name: t.tableName}, t.table)
+	return err
 }
 
 func (t *TempTable) GetDeclaredForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint, error) {
@@ -470,7 +474,13 @@ func (t *TempTable) CreateCheck(ctx *sql.Context, check *sql.CheckDefinition) er
 		return err
 	}
 	t.table, err = t.table.UpdateSchema(ctx, sch)
-
+	if err != nil {
+		return err
+	}
+	t.sch = sch
+	// Publish the updated table to the write session so its editor doesn't
+	// replace it with the stale schema on the next write.
+	_, err = t.writeSession.FlushTable(ctx, doltdb.TableName{Name: t.tableName}, t.table)
 	return err
 }
 
@@ -480,7 +490,12 @@ func (t *TempTable) DropCheck(ctx *sql.Context, chName string) error {
 		return err
 	}
 	t.table, err = t.table.UpdateSchema(ctx, t.sch)
-
+	if err != nil {
+		return err
+	}
+	// Publish the updated table to the write session so its editor doesn't
+	// replace it with the stale schema on the next write.
+	_, err = t.writeSession.FlushTable(ctx, doltdb.TableName{Name: t.tableName}, t.table)
 	return err
 }
 
