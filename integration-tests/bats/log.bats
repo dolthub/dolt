@@ -1111,6 +1111,24 @@ export NO_COLOR=1
     ! [[ "$output" =~ "commit 1 br2" ]] || false
 }
 
+@test "log: dolt_log('--all') includes remote branches" {
+    mkdir remote
+    dolt remote add origin file://remote
+    dolt commit --allow-empty -m "commit on pushed"
+    dolt branch pushed
+    dolt reset --hard HEAD~1
+    dolt push origin pushed
+    dolt branch -D pushed
+
+    run dolt sql -r csv -q "select message from dolt_log('--all')"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "commit on pushed" ]] || false
+
+    run dolt sql -r csv -q "select message from dolt_log()"
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "commit on pushed" ]] || false
+}
+
 @test "log: A...B with several merge bases leaves out every merge base" {
     criss_cross
 
