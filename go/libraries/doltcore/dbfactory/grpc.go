@@ -19,10 +19,12 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 
 	"google.golang.org/grpc"
 
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -104,6 +106,10 @@ func (fact DoltRemoteFactory) newChunkStore(ctx context.Context, nbf *types.Noms
 	wsValidate := false
 	if userParam := params[GRPCUsernameAuthParam]; userParam != nil {
 		user = userParam.(string)
+		wsValidate = true
+	} else if envUser := os.Getenv(dconfig.EnvDoltRemoteUser); envUser != "" {
+		// No explicit --user: fall back to DOLT_REMOTE_USER, so callers with no flag (such as sql-server) can authenticate.
+		user = envUser
 		wsValidate = true
 	}
 	cfg, err := dp.GetGRPCDialParams(grpcendpoint.Config{
