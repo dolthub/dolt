@@ -425,33 +425,39 @@ func (lvs *ValueStore) waitForNoGC() {
 func (lvs *ValueStore) waitForNotFinalizingGC(ctx context.Context) (func(), error) {
 	lvs.gcMu.Lock()
 	defer lvs.gcMu.Unlock()
-	stop := make(chan struct{})
-	defer close(stop)
-	go func() {
-		select {
-		case <-ctx.Done():
-			// Serialize with the predicate check and wait registration so the
-			// cancellation wakeup cannot be lost before the caller parks.
-			lvs.gcMu.Lock()
-			lvs.gcCond.Broadcast()
-			lvs.gcMu.Unlock()
-		case <-stop:
+	if lvs.gcState == gcState_Finalizing {
+		defer lvs.broadcastOnCancel(ctx)()
+		for lvs.gcState == gcState_Finalizing && ctx.Err() == nil {
+			lvs.gcCond.Wait()
 		}
-	}()
-	for lvs.gcState == gcState_Finalizing && ctx.Err() == nil {
-		lvs.gcCond.Wait()
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	// No waiter's predicate is falsified by gcOut going up, so no broadcast.
 	lvs.gcOut += 1
-	lvs.gcCond.Broadcast()
 	return func() {
 		lvs.gcMu.Lock()
 		defer lvs.gcMu.Unlock()
 		lvs.gcOut -= 1
 		lvs.gcCond.Broadcast()
 	}, nil
+}
+
+// broadcastOnCancel broadcasts |lvs.gcCond| when |ctx| is cancelled, so a
+// wait whose predicate includes |ctx.Err()| wakes up to observe it.
+//
+// The broadcast takes |lvs.gcMu| so that it cannot land between a waiter
+// checking its predicate and its call to Wait, where it would be lost.
+//
+// The returned func ends the watch. It does not wait for a broadcast
+// already in progress, so it is safe to call with |lvs.gcMu| held.
+func (lvs *ValueStore) broadcastOnCancel(ctx context.Context) func() bool {
+	return context.AfterFunc(ctx, func() {
+		lvs.gcMu.Lock()
+		defer lvs.gcMu.Unlock()
+		lvs.gcCond.Broadcast()
+	})
 }
 
 // Call without lvs.gcMu held. Puts the ValueStore into its initial GC state,
