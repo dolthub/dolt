@@ -15,9 +15,11 @@
 package sqlfmt_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -138,6 +140,42 @@ func TestSqlRowAsTupleString(t *testing.T) {
 				return
 			}
 
+			require.NoError(t, err)
+			assert.Equal(t, test.expected, tuple)
+		})
+	}
+}
+
+func TestSqlRowAsTupleStringEscapesGeometry(t *testing.T) {
+	// See https://github.com/dolthub/dolt/issues/12257
+	pointTi, err := typeinfo.FromSqlType(gmstypes.PointType{})
+	require.NoError(t, err)
+	sch := dtestutils.CreateSchema(
+		schema.Column{Name: "id", Tag: 0, Kind: types.IntKind, IsPartOfPK: true, TypeInfo: typeinfo.Int64Type},
+		schema.Column{Name: "p", Tag: 1, Kind: types.GeometryKind, TypeInfo: pointTi},
+	)
+
+	tests := []struct {
+		name     string
+		bits     uint64
+		expected string
+	}{
+		{
+			name:     "single quote byte in a coordinate",
+			bits:     0x4000002700000000,
+			expected: `(1,'\0\0\0\0` + "\x01\x01" + `\0\0\0\0\0\0\0\'\0\0@\0\0\0\0\0\0\0\0')`,
+		},
+		{
+			name:     "backslash byte in a coordinate",
+			bits:     0x4000005C00000000,
+			expected: `(1,'\0\0\0\0` + "\x01\x01" + `\0\0\0\0\0\0\0\\\0\0@\0\0\0\0\0\0\0\0')`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			row := sql.Row{int64(1), gmstypes.Point{X: math.Float64frombits(test.bits)}}
+			tuple, err := sqlfmt.SqlRowAsTupleString(sql.NewEmptyContext(), row, sch)
 			require.NoError(t, err)
 			assert.Equal(t, test.expected, tuple)
 		})
