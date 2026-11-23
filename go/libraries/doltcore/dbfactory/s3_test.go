@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 )
 
@@ -170,7 +171,7 @@ func TestS3ClientRetriesBareTooManyRequests(t *testing.T) {
 		BaseEndpoint: aws.String(server.URL),
 		UsePathStyle: true,
 		Credentials:  credentials.NewStaticCredentialsProvider("key", "secret", ""),
-	}, withThrottleTolerantRetryer, func(o *s3.Options) {
+	}, withRemoteStorageRetryer, func(o *s3.Options) {
 		o.Retryer = retry.AddWithMaxBackoffDelay(o.Retryer, time.Millisecond)
 	})
 
@@ -185,4 +186,44 @@ func TestS3ClientRetriesBareTooManyRequests(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "hello", string(body))
 	assert.Equal(t, int32(throttledAttempts+1), attempts.Load())
+}
+
+func TestS3ClientGivesUpAfterRemoteStorageRetryCount(t *testing.T) {
+	var attempts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer server.Close()
+
+	client := s3.New(s3.Options{
+		Region:       "us-east-1",
+		BaseEndpoint: aws.String(server.URL),
+		UsePathStyle: true,
+		Credentials:  credentials.NewStaticCredentialsProvider("key", "secret", ""),
+	}, withRemoteStorageRetryer, func(o *s3.Options) {
+		o.Retryer = retry.AddWithMaxBackoffDelay(o.Retryer, time.Millisecond)
+	})
+
+	_, err := client.GetObject(context.Background(), &s3.GetObjectInput{
+		Bucket: aws.String("bucket"),
+		Key:    aws.String("key"),
+	})
+	require.Error(t, err)
+	assert.Equal(t, int32(remotestorage.NetworkRetryCount+1), attempts.Load())
+}
+
+func TestRemoteStorageBackoffDelayFollowsNetworkBackOff(t *testing.T) {
+	jitter := remotestorage.NewNetworkBackOff().RandomizationFactor
+	reference := remotestorage.NewNetworkBackOff()
+	reference.RandomizationFactor = 0
+	for attempt := 1; attempt <= 20; attempt++ {
+		expected := reference.NextBackOff()
+		low := time.Duration(float64(expected) * (1 - jitter))
+		high := time.Duration(float64(expected) * (1 + jitter))
+		delay, err := remoteStorageBackoffDelay(attempt, nil)
+		require.NoError(t, err)
+		assert.GreaterOrEqual(t, delay, low, "attempt %d", attempt)
+		assert.LessOrEqual(t, delay, high, "attempt %d", attempt)
+	}
 }

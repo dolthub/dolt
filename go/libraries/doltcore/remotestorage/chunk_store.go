@@ -80,15 +80,11 @@ var _ chunks.LoggingChunkStore = (*DoltChunkStore)(nil)
 var tracer = otel.Tracer("github.com/dolthub/dolt/go/libraries/doltcore/remotestorage")
 
 func uploadBackOff(ctx context.Context, max int) backoff.BackOff {
-	ret := backoff.NewExponentialBackOff()
-	ret.MaxInterval = 5 * time.Second
-	return backoff.WithContext(backoff.WithMaxRetries(ret, uint64(max)), ctx)
+	return backoff.WithContext(backoff.WithMaxRetries(NewNetworkBackOff(), uint64(max)), ctx)
 }
 
 func downloadBackOff(ctx context.Context, max int) backoff.BackOff {
-	ret := backoff.NewExponentialBackOff()
-	ret.MaxInterval = 5 * time.Second
-	return backoff.WithContext(backoff.WithMaxRetries(ret, uint64(max)), ctx)
+	return backoff.WithContext(backoff.WithMaxRetries(NewNetworkBackOff(), uint64(max)), ctx)
 }
 
 type HTTPFetcher interface {
@@ -109,8 +105,8 @@ type NetworkRequestParams struct {
 var defaultRequestParams = NetworkRequestParams{
 	StartingConcurrentDownloads:    64,
 	MaximumConcurrentDownloads:     64,
-	UploadRetryCount:               5,
-	DownloadRetryCount:             5,
+	UploadRetryCount:               NetworkRetryCount,
+	DownloadRetryCount:             NetworkRetryCount,
 	ThroughputMinimumCheckInterval: time.Second,
 	ThroughputMinimumBytesPerCheck: 1024,
 	ThroughputMinimumNumIntervals:  5,
