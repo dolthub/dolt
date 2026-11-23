@@ -267,7 +267,9 @@ func TestCleanDir(t *testing.T) {
 }
 
 // canRetryCleanup returns true if |err| should be retried. This is needed because a Windows cleaner
-// can get ERROR_ACCESS_DENIED opening a lock file another cleaner is removing.
+// can get ERROR_ACCESS_DENIED opening a lock file another cleaner is removing. That is how Windows
+// reports opening a file which is delete-pending, not a permission problem. It is rare and usually
+// clears within the 100ms tryLockFileWhileDeletePending already retries, but CI has seen it outlast that.
 func canRetryCleanup(err error) bool {
 	if runtime.GOOS != "windows" {
 		return false
