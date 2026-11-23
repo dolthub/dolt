@@ -1111,6 +1111,31 @@ export NO_COLOR=1
     ! [[ "$output" =~ "commit 1 br2" ]] || false
 }
 
+@test "log: --all includes remote tracking branches and tags" {
+    mkdir -p remotes/origin
+    dolt remote add origin file://./remotes/origin
+
+    dolt checkout -b pushed
+    dolt commit --allow-empty -m "only on remote"
+    dolt push origin pushed
+    dolt checkout -b tagged main
+    dolt commit --allow-empty -m "only tagged"
+    dolt tag v1
+    dolt checkout main
+    dolt branch -D pushed tagged
+
+    run dolt log --all
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "only on remote" ]] || false
+    [[ "$output" =~ "only tagged" ]] || false
+    [[ "$output" =~ "Initialize data repository" ]] || false
+
+    run dolt sql -r csv -q "select message from dolt_log('--all') order by message"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "only on remote" ]] || false
+    [[ "$output" =~ "only tagged" ]] || false
+}
+
 @test "log: A...B with several merge bases leaves out every merge base" {
     criss_cross
 

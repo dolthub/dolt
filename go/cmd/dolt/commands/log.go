@@ -149,17 +149,6 @@ func collectRevisions(apr *argparser.ArgParseResults, queryist cli.Queryist, sql
 		}
 	}
 
-	if apr.Contains(cli.AllFlag) {
-		branches, err := getBranches(sqlCtx, queryist, false, true)
-		if err != nil {
-			return nil, 0, err
-		}
-
-		for _, branch := range branches {
-			revisions[branch.name] = true
-		}
-	}
-
 	var revisionNames []string
 	for arg, ok := range revisions {
 		if ok {
@@ -168,6 +157,19 @@ func collectRevisions(apr *argparser.ArgParseResults, queryist cli.Queryist, sql
 	}
 
 	return revisionNames, tablesIndex, nil
+}
+
+// appendBranchNames returns a copy of |revisions| followed by every local and remote tracking branch name.
+func appendBranchNames(sqlCtx *sql.Context, queryist cli.Queryist, revisions []string) ([]string, error) {
+	branches, err := getBranches(sqlCtx, queryist, false, true)
+	if err != nil {
+		return nil, err
+	}
+	withBranches := append([]string{}, revisions...)
+	for _, branch := range branches {
+		withBranches = append(withBranches, branch.name)
+	}
+	return withBranches, nil
 }
 
 func collectTables(apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context, selectedBranches []string, startIndex int) ([]string, error) {
@@ -214,8 +216,17 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 		writeToBuffer("?")
 	}
 
+	tableLookupRevisions := params
+	if apr.Contains(cli.AllFlag) {
+		writeToBuffer("'--all'")
+		tableLookupRevisions, err = appendBranchNames(sqlCtx, queryist, params)
+		if err != nil {
+			return "", err
+		}
+	}
+
 	if tablesIndex < len(apr.Args) {
-		tableNames, err := collectTables(apr, queryist, sqlCtx, params, tablesIndex)
+		tableNames, err := collectTables(apr, queryist, sqlCtx, tableLookupRevisions, tablesIndex)
 		if err != nil {
 			return "", err
 		}
