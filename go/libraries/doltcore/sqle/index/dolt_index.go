@@ -1169,6 +1169,19 @@ func pruneEmptyRanges(ctx context.Context, sqlRanges []sql.MySQLRange) (pruned [
 	return pruned, nil
 }
 
+// prefixTrimmed returns whether trimRangeCutValue shortened |value| to |trimmed|. A shortened bound must be inclusive,
+// since index keys equal to it can belong to rows past the original bound.
+func prefixTrimmed(value, trimmed interface{}) bool {
+	switch tv := trimmed.(type) {
+	case string:
+		return len(tv) != len(value.(string))
+	case []byte:
+		return len(tv) != len(value.([]byte))
+	default:
+		return false
+	}
+}
+
 // trimRangeCutValue will trim the key value retrieved, depending on its type and prefix length
 // TODO: this is just the trimKeyPart in the SecondaryIndexWriters, maybe find a different place
 func (di *doltIndex) trimRangeCutValue(to int, keyPart interface{}) interface{} {
@@ -1298,7 +1311,7 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 				bound := expr.LowerBound.TypeAsLowerBound()
 				fields[j].Lo = prolly.Bound{
 					Binding:   true,
-					Inclusive: bound == sql.Closed,
+					Inclusive: bound == sql.Closed || prefixTrimmed(v, nv),
 				}
 			} else {
 				fields[j].Lo = prolly.Bound{}
@@ -1325,16 +1338,9 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 				if err = tree.PutField(ctx, ns, tb, i, nv); err != nil {
 					return nil, err
 				}
-				if vv, ok := v.([]byte); ok {
-					v = string(vv)
-				}
-				if nvv, ok := nv.([]byte); ok {
-					nv = string(nvv)
-				}
-
 				fields[i].Hi = prolly.Bound{
 					Binding:   true,
-					Inclusive: bound == sql.Closed || nv != v,
+					Inclusive: bound == sql.Closed || prefixTrimmed(v, nv),
 				}
 			} else {
 				fields[i].Hi = prolly.Bound{}
@@ -1385,6 +1391,13 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 			Tup:                    tup,
 			SkipRangeMatchCallback: skipRangeMatchCallback,
 			IsContiguous:           isContiguous,
+		}
+	}
+	if len(di.prefixLengths) > 0 && len(pranges) > 1 {
+		// Ranges that GMS made disjoint can share keys once their bounds are cut to the prefix lengths.
+		pranges, err = prolly.MergeIntersectingRanges(ctx, pranges)
+		if err != nil {
+			return nil, err
 		}
 	}
 	// GMS orders ranges by value, which is not the physical order of an index with descending or NULLS LAST columns

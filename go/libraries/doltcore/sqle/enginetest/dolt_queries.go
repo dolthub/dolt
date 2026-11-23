@@ -8485,6 +8485,207 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "prefix index lookups with ranges that share a prefix",
+		SetUpScript: []string{
+			"create table t (id int primary key, s varchar(10), index (s(2)))",
+			"insert into t values (1, 'abc'), (2, 'abd'), (3, 'abe'), (4, 'ab'), (5, 'b'), (6, 'xyz'), (7, null)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select id from t where s = 'abc' or s = 'abd' order by id",
+				Expected: []sql.Row{{1}, {2}},
+			},
+			{
+				Query:    "select count(*) from t where s = 'abc' or s = 'abd'",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "select count(*) from t where s in ('abc', 'abd', 'abe', 'xyz')",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:    "select id from t where s < 'abc' or s > 'abd' order by id",
+				Expected: []sql.Row{{3}, {4}, {5}, {6}},
+			},
+			{
+				Query:    "select id from t where s > 'abc' order by id",
+				Expected: []sql.Row{{2}, {3}, {5}, {6}},
+			},
+			{
+				Query:    "select id from t where s >= 'abd' order by id",
+				Expected: []sql.Row{{2}, {3}, {5}, {6}},
+			},
+			{
+				Query:    "select id from t where s < 'abd' order by id",
+				Expected: []sql.Row{{1}, {4}},
+			},
+			{
+				Query:    "select id from t where s > 'abc' and s < 'abe' order by id",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "select id from t where s between 'abc' and 'abd' or s between 'abe' and 'b' order by id",
+				Expected: []sql.Row{{1}, {2}, {3}, {5}},
+			},
+			{
+				Query:    "select id from t where s = 'abc' or s = 'abd' or s is null order by id",
+				Expected: []sql.Row{{1}, {2}, {7}},
+			},
+			{
+				Query:    "select id from t where s in ('abc', 'abd', 'abe') order by s desc",
+				Expected: []sql.Row{{3}, {2}, {1}},
+			},
+		},
+	},
+	{
+		Name: "prefix index lookups on temporary tables with ranges that share a prefix",
+		SetUpScript: []string{
+			"create temporary table t (id int primary key, s varchar(10), index (s(2)))",
+			"insert into t values (1, 'abc'), (2, 'abd'), (3, 'abe'), (4, 'ab'), (5, 'b'), (6, 'xyz'), (7, null)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select id from t where s = 'abc' or s = 'abd' order by id",
+				Expected: []sql.Row{{1}, {2}},
+			},
+			{
+				Query:    "select count(*) from t where s = 'abc' or s = 'abd'",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "select count(*) from t where s in ('abc', 'abd', 'abe', 'xyz')",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:    "select id from t where s < 'abc' or s > 'abd' order by id",
+				Expected: []sql.Row{{3}, {4}, {5}, {6}},
+			},
+			{
+				Query:    "select id from t where s > 'abc' order by id",
+				Expected: []sql.Row{{2}, {3}, {5}, {6}},
+			},
+			{
+				Query:    "select id from t where s >= 'abd' order by id",
+				Expected: []sql.Row{{2}, {3}, {5}, {6}},
+			},
+			{
+				Query:    "select id from t where s < 'abd' order by id",
+				Expected: []sql.Row{{1}, {4}},
+			},
+			{
+				Query:    "select id from t where s > 'abc' and s < 'abe' order by id",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "select id from t where s between 'abc' and 'abd' or s between 'abe' and 'b' order by id",
+				Expected: []sql.Row{{1}, {2}, {3}, {5}},
+			},
+			{
+				Query:    "select id from t where s = 'abc' or s = 'abd' or s is null order by id",
+				Expected: []sql.Row{{1}, {2}, {7}},
+			},
+			{
+				Query:    "select id from t where s in ('abc', 'abd', 'abe') order by s desc",
+				Expected: []sql.Row{{3}, {2}, {1}},
+			},
+		},
+	},
+	{
+		Name: "case insensitive prefix index lookups with ranges that share a prefix",
+		SetUpScript: []string{
+			"create table t (id int primary key, s varchar(10) collate utf8mb4_0900_ai_ci, index (s(2)))",
+			"insert into t values (1, 'abc'), (2, 'abd'), (3, 'abe'), (4, 'ab'), (5, 'b'), (6, 'xyz'), (7, null)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select id from t where s = 'abc' or s = 'abd' order by id",
+				Expected: []sql.Row{{1}, {2}},
+			},
+			{
+				Query:    "select count(*) from t where s = 'abc' or s = 'abd'",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "select count(*) from t where s in ('abc', 'abd', 'abe', 'xyz')",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:    "select id from t where s < 'abc' or s > 'abd' order by id",
+				Expected: []sql.Row{{3}, {4}, {5}, {6}},
+			},
+			{
+				Query:    "select id from t where s > 'abc' order by id",
+				Expected: []sql.Row{{2}, {3}, {5}, {6}},
+			},
+			{
+				Query:    "select id from t where s >= 'abd' order by id",
+				Expected: []sql.Row{{2}, {3}, {5}, {6}},
+			},
+			{
+				Query:    "select id from t where s < 'abd' order by id",
+				Expected: []sql.Row{{1}, {4}},
+			},
+			{
+				Query:    "select id from t where s > 'abc' and s < 'abe' order by id",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "select id from t where s between 'abc' and 'abd' or s between 'abe' and 'b' order by id",
+				Expected: []sql.Row{{1}, {2}, {3}, {5}},
+			},
+			{
+				Query:    "select id from t where s = 'abc' or s = 'abd' or s is null order by id",
+				Expected: []sql.Row{{1}, {2}, {7}},
+			},
+			{
+				Query:    "select id from t where s in ('abc', 'abd', 'abe') order by s desc",
+				Expected: []sql.Row{{3}, {2}, {1}},
+			},
+		},
+	},
+	{
+		Name: "multi-byte prefix index lookups with ranges that share a prefix",
+		SetUpScript: []string{
+			"create table t (id int primary key, s varchar(10), index (s(1)))",
+			"insert into t values (1, '\u00e9a'), (2, '\u00e9b'), (3, '\u00e8a'), (4, 'e')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select id from t where s = '\u00e9a' or s = '\u00e9b' order by id",
+				Expected: []sql.Row{{1}, {2}},
+			},
+			{
+				Query:    "select id from t where s > '\u00e9a' order by id",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "select id from t where s < '\u00e9a' order by id",
+				Expected: []sql.Row{{3}, {4}},
+			},
+		},
+	},
+	{
+		Name: "multi-column prefix index lookups with ranges that share a prefix",
+		SetUpScript: []string{
+			"create table t (id int primary key, a int, s varchar(10), index (a, s(2)))",
+			"insert into t values (1, 1, 'abc'), (2, 1, 'abd'), (3, 2, 'abc'), (4, 2, 'abd'), (5, 1, 'b')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select id from t where a = 1 and (s = 'abc' or s = 'abd') order by id",
+				Expected: []sql.Row{{1}, {2}},
+			},
+			{
+				Query:    "select id from t where (a = 1 and s = 'abc') or (a = 2 and s = 'abd') order by id",
+				Expected: []sql.Row{{1}, {4}},
+			},
+			{
+				Query:    "select id from t where a in (1, 2) and s > 'abc' order by id",
+				Expected: []sql.Row{{2}, {4}, {5}},
+			},
+		},
+	},
 }
 
 // DoltCallAsOf are tests of using CALL ... AS OF using commits

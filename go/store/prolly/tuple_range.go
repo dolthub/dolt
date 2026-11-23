@@ -154,6 +154,150 @@ func SortRangesByStart(ctx context.Context, ranges []Range) error {
 	return err
 }
 
+// MergeIntersectingRanges replaces each group of ranges that share keys with one range spanning the group, so that
+// scanning the result visits each key at most once. A merged range can hold keys that none of its ranges held, so it
+// checks every key against its bounds, and callers must filter its keys by their original predicates.
+func MergeIntersectingRanges(ctx context.Context, ranges []Range) ([]Range, error) {
+	if len(ranges) < 2 {
+		return ranges, nil
+	}
+	sorted := append([]Range(nil), ranges...)
+	if err := SortRangesByStart(ctx, sorted); err != nil {
+		return nil, err
+	}
+	// Only ranges that overlap on the first field can intersect, so the pairwise merge runs within each such group.
+	merged := make([]Range, 0, len(ranges))
+	groupStart := 0
+	groupHi := sorted[0].Fields[0].Hi
+	for i := 1; i <= len(sorted); i++ {
+		if i < len(sorted) {
+			overlaps, err := boundsOverlap(ctx, sorted[i].Desc, 0, sorted[i].Fields[0].Lo, groupHi)
+			if err != nil {
+				return nil, err
+			}
+			if overlaps {
+				groupHi, err = outerBound(ctx, sorted[i].Desc.Comparator(), 0, sorted[i].Desc.Types[0], groupHi, sorted[i].Fields[0].Hi, 1)
+				if err != nil {
+					return nil, err
+				}
+				continue
+			}
+		}
+		var err error
+		merged, err = mergeIntersectingGroup(ctx, merged, sorted[groupStart:i])
+		if err != nil {
+			return nil, err
+		}
+		if i < len(sorted) {
+			groupStart = i
+			groupHi = sorted[i].Fields[0].Hi
+		}
+	}
+	return merged, nil
+}
+
+// mergeIntersectingGroup appends the merged ranges of |group| to |merged|.
+func mergeIntersectingGroup(ctx context.Context, merged []Range, group []Range) ([]Range, error) {
+	base := len(merged)
+	for _, r := range group {
+		for i := base; i < len(merged); {
+			intersects, err := rangesIntersect(ctx, merged[i], r)
+			if err != nil {
+				return nil, err
+			}
+			if !intersects {
+				i++
+				continue
+			}
+			r, err = spanRanges(ctx, merged[i], r)
+			if err != nil {
+				return nil, err
+			}
+			// |r| grew, so it is checked against every remaining range again.
+			merged = append(merged[:i], merged[i+1:]...)
+			i = base
+		}
+		merged = append(merged, r)
+	}
+	return merged, nil
+}
+
+func rangesIntersect(ctx context.Context, a, b Range) (bool, error) {
+	for i := range a.Fields {
+		aBelowB, err := boundsOverlap(ctx, a.Desc, i, a.Fields[i].Lo, b.Fields[i].Hi)
+		if err != nil || !aBelowB {
+			return false, err
+		}
+		bBelowA, err := boundsOverlap(ctx, a.Desc, i, b.Fields[i].Lo, a.Fields[i].Hi)
+		if err != nil || !bBelowA {
+			return false, err
+		}
+	}
+	return true, nil
+}
+
+// boundsOverlap returns whether some value of field |i| is at or above |lo| and at or below |hi|.
+func boundsOverlap(ctx context.Context, desc *val.TupleDesc, i int, lo, hi Bound) (bool, error) {
+	if !lo.Binding || !hi.Binding {
+		return true, nil
+	}
+	cmp, err := desc.Comparator().CompareValues(ctx, i, lo.Value, hi.Value, desc.Types[i])
+	if err != nil {
+		return false, err
+	}
+	return cmp < 0 || (cmp == 0 && lo.Inclusive && hi.Inclusive), nil
+}
+
+// spanRanges returns the smallest range that holds every key of |a| and |b|.
+func spanRanges(ctx context.Context, a, b Range) (Range, error) {
+	order := a.Desc.Comparator()
+	fields := make([]RangeField, len(a.Fields))
+	for i := range a.Fields {
+		typ := a.Desc.Types[i]
+		var err error
+		fields[i].Lo, err = outerBound(ctx, order, i, typ, a.Fields[i].Lo, b.Fields[i].Lo, -1)
+		if err != nil {
+			return Range{}, err
+		}
+		fields[i].Hi, err = outerBound(ctx, order, i, typ, a.Fields[i].Hi, b.Fields[i].Hi, 1)
+		if err != nil {
+			return Range{}, err
+		}
+		if fields[i].Lo.Binding && fields[i].Hi.Binding {
+			cmp, err := order.CompareValues(ctx, i, fields[i].Lo.Value, fields[i].Hi.Value, typ)
+			if err != nil {
+				return Range{}, err
+			}
+			fields[i].BoundsAreEqual = cmp == 0
+		}
+	}
+	return Range{
+		Fields: fields,
+		Desc:   a.Desc,
+	}, nil
+}
+
+// outerBound returns whichever of |a| and |b| admits more values: the lower one when |direction| is -1, the higher
+// one when it is 1.
+func outerBound(ctx context.Context, order val.TupleComparator, i int, typ val.Type, a, b Bound, direction int) (Bound, error) {
+	if !a.Binding || !b.Binding {
+		return Bound{}, nil
+	}
+	cmp, err := order.CompareValues(ctx, i, a.Value, b.Value, typ)
+	if err != nil {
+		return Bound{}, err
+	}
+	switch {
+	case cmp*direction > 0:
+		return a, nil
+	case cmp*direction < 0:
+		return b, nil
+	default:
+		a.Inclusive = a.Inclusive || b.Inclusive
+		return a, nil
+	}
+}
+
 // compareRangeStarts compares the lower bounds of `a` and `b` field by field.
 func compareRangeStarts(ctx context.Context, a, b Range) (int, error) {
 	order := a.Desc.Comparator()
