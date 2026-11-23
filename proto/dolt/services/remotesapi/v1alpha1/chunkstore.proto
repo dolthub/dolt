@@ -20,20 +20,24 @@ import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1;remotesapi";
 
+// Methods which look up a repository may create it if it does not exist,
+// depending on server configuration. Such methods are marked IDEMPOTENT
+// rather than NO_SIDE_EFFECTS, even when they are otherwise read-only.
 service ChunkStoreService {
-  // Creates the repository if it does not exist.
+  // May create the repository if it does not exist, depending on server
+  // configuration.
   rpc GetRepoMetadata(GetRepoMetadataRequest) returns (GetRepoMetadataResponse) {
     option idempotency_level = IDEMPOTENT;
   }
 
   rpc HasChunks(HasChunksRequest) returns (HasChunksResponse) {
-    option idempotency_level = NO_SIDE_EFFECTS;
+    option idempotency_level = IDEMPOTENT;
   }
 
   // Get the download locations for a list of chunk hashes.
   // Deprecated. Use StreamDownloadLocations.
   rpc GetDownloadLocations(GetDownloadLocsRequest) returns (GetDownloadLocsResponse) {
-    option idempotency_level = NO_SIDE_EFFECTS;
+    option idempotency_level = IDEMPOTENT;
   }
 
   // Get the download locations for a list of chunk hashes. Streaming to
@@ -44,7 +48,7 @@ service ChunkStoreService {
   // table-file metadata across the stream. Kept on the wire
   // indefinitely so old clients continue to work.
   rpc StreamDownloadLocations(stream GetDownloadLocsRequest) returns (stream GetDownloadLocsResponse) {
-    option idempotency_level = NO_SIDE_EFFECTS;
+    option idempotency_level = IDEMPOTENT;
   }
 
   // Get the download locations for a list of chunk hashes. Streaming
@@ -52,32 +56,33 @@ service ChunkStoreService {
   // Preferred over StreamDownloadLocations when the server advertises
   // FEATURE_STREAM_CHUNK_LOCATIONS in GetRepoMetadataResponse.features.
   rpc StreamChunkLocations(stream StreamChunkLocationsRequest) returns (stream StreamChunkLocationsResponse) {
-    option idempotency_level = NO_SIDE_EFFECTS;
+    option idempotency_level = IDEMPOTENT;
   }
 
   // Get upload locations for a list of table file hashes.
   // NOTE: We upload full table files but download individual chunks.
   rpc GetUploadLocations(GetUploadLocsRequest) returns (GetUploadLocsResponse) {
-    option idempotency_level = NO_SIDE_EFFECTS;
+    option idempotency_level = IDEMPOTENT;
   }
 
   rpc Rebase(RebaseRequest) returns (RebaseResponse) {
-    option idempotency_level = NO_SIDE_EFFECTS;
+    option idempotency_level = IDEMPOTENT;
   }
 
   rpc Root(RootRequest) returns (RootResponse) {
-    option idempotency_level = NO_SIDE_EFFECTS;
+    option idempotency_level = IDEMPOTENT;
   }
 
   // A compare-and-swap of the root from last to current. Replaying a
-  // successful Commit reports failure, and can reapply it if the root has
-  // since moved back to last.
+  // successful Commit which changed the root reports failure while the
+  // root is still current, and can reapply it if the root has since moved
+  // back to last. Replaying a Commit where last == current succeeds.
   rpc Commit(CommitRequest) returns (CommitResponse) {
     option idempotency_level = IDEMPOTENCY_UNKNOWN;
   }
 
   rpc ListTableFiles(ListTableFilesRequest) returns (ListTableFilesResponse) {
-    option idempotency_level = NO_SIDE_EFFECTS;
+    option idempotency_level = IDEMPOTENT;
   }
 
   rpc RefreshTableFileUrl(RefreshTableFileUrlRequest) returns (RefreshTableFileUrlResponse) {
