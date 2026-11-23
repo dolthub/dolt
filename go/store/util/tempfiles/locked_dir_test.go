@@ -295,7 +295,7 @@ func TestNewLockedDir_RacingClean(t *testing.T) {
 
 	ctx := t.Context()
 	var cleaners errgroup.Group
-	for range 4 {
+	for range 4 { // parallel cleaners
 		cleaners.Go(func() error {
 			for ctx.Err() == nil {
 				if err := CleanDir(parent); err != nil {
