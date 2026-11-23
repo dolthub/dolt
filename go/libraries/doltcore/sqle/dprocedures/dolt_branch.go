@@ -316,7 +316,7 @@ func shouldAllowDefaultBranchDeletion(ctx *sql.Context) bool {
 }
 
 // validateBranchNotActiveInAnySession returns an error if the specified branch is currently
-// selected as the active branch for any active server sessions.
+// selected as the active branch or has uncommitted changes in another server session.
 func validateBranchNotActiveInAnySession(ctx *sql.Context, branchName string) error {
 	currentDbName := ctx.GetCurrentDatabase()
 	currentDbName, _ = doltdb.SplitRevisionDbName(currentDbName)
@@ -343,6 +343,12 @@ func validateBranchNotActiveInAnySession(ctx *sql.Context, branchName string) er
 		sess, ok := session.(*dsess.DoltSession)
 		if !ok {
 			return false, fmt.Errorf("unexpected session type: %T", session)
+		}
+
+		// Revision-qualified writes can modify a branch without selecting it as the current database.
+		if sess.IsBranchDirty(currentDbName, branchName) {
+			return false, fmt.Errorf("unsafe to delete or rename branches in use in other sessions; " +
+				"use --force to force the change")
 		}
 
 		sessionDbName := sess.Session.GetCurrentDatabase()
