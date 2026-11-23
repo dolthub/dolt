@@ -18,20 +18,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"strconv"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/aws/ratelimit"
-	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
-	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
+	"github.com/dolthub/dolt/go/libraries/utils/netretry"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
@@ -168,36 +164,10 @@ func newS3Client(ctx context.Context, routing s3Routing) (*s3.Client, error) {
 		return nil, err
 	}
 
-	return s3.NewFromConfig(cfg, withRemoteStorageRetryer, func(o *s3.Options) {
+	return s3.NewFromConfig(cfg, netretry.WithS3Retryer, func(o *s3.Options) {
 		if routing.endpoint != "" {
 			o.BaseEndpoint = aws.String(routing.endpoint)
 		}
 		o.UsePathStyle = routing.pathStyle
 	}), nil
-}
-
-// withRemoteStorageRetryer gives S3 clients the retry policy used for DoltHub
-// remotes: the same attempt count and backoff schedule, no client-side retry
-// quota, and HTTP 429 treated as retryable. Proxies in front of S3 can answer a
-// burst of reads with a bare 429, which the SDK does not otherwise retry.
-func withRemoteStorageRetryer(o *s3.Options) {
-	o.Retryer = retry.NewStandard(func(so *retry.StandardOptions) {
-		so.MaxAttempts = remotestorage.NetworkRetryCount + 1
-		so.Backoff = retry.BackoffDelayerFunc(remoteStorageBackoffDelay)
-		so.RateLimiter = ratelimit.None
-		so.Retryables = append(so.Retryables, retry.RetryableHTTPStatusCode{
-			Codes: map[int]struct{}{http.StatusTooManyRequests: {}},
-		})
-	})
-}
-
-// remoteStorageBackoffDelay returns the delay before retry |attempt|, counting
-// from 1, as the remotestorage backoff schedule would produce it.
-func remoteStorageBackoffDelay(attempt int, _ error) (time.Duration, error) {
-	schedule := remotestorage.NewNetworkBackOff()
-	var delay time.Duration
-	for i := 0; i < attempt; i++ {
-		delay = schedule.NextBackOff()
-	}
-	return delay, nil
 }

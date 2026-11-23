@@ -21,7 +21,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/cenkalti/backoff/v4"
 	"google.golang.org/grpc/codes"
@@ -29,18 +28,6 @@ import (
 )
 
 var HttpError = errors.New("http")
-
-// NetworkRetryCount is how many times a failed request to remote storage is
-// retried by default.
-const NetworkRetryCount = 5
-
-// NewNetworkBackOff returns the delay schedule between retries of requests to
-// remote storage.
-func NewNetworkBackOff() *backoff.ExponentialBackOff {
-	ret := backoff.NewExponentialBackOff()
-	ret.MaxInterval = 5 * time.Second
-	return ret
-}
 
 // ProcessHttpResp converts an http.Response, and error into a RetriableCallState
 func processHttpResp(resp *http.Response, err error) error {
