@@ -277,7 +277,7 @@ call dolt_commit('-am', 'add some vals');
     [[ ! "$output" =~ "remotes/origin/new_branch" ]] || false
 
     # No auth fetch
-    run dolt fetch
+    run env -u DOLT_REMOTE_USER dolt fetch
     [[ "$status" != 0 ]] || false
     [[ "$output" =~ "Access denied for user 'root'" ]] || false
 
@@ -300,12 +300,12 @@ call dolt_commit('-am', 'add one val');
 "
 
     # No auth pull
-    run dolt pull
+    run env -u DOLT_REMOTE_USER dolt pull
     [[ "$status" != 0 ]] || false
     [[ "$output" =~ "Access denied for user 'root'" ]] || false
 
-    # With auth pull
-    dolt pull --user $DOLT_REMOTE_USER
+    # With auth pull, user comes from DOLT_REMOTE_USER (no --user flag)
+    dolt pull
 
     run dolt sql -q 'select count(*) from vals;'
     [[ "$output" =~ "11" ]] || false
@@ -432,7 +432,7 @@ call dolt_commit('-am', 'add one val');"
     srv_pid=$!
 
     cd ../../
-    run dolt clone http://localhost:50051/remote repo1
+    run env -u DOLT_REMOTE_USER dolt clone http://localhost:50051/remote repo1
     [[ "$status" != 0 ]] || false
     [[ "$output" =~ "Access denied for user 'root'" ]] || false
 }
@@ -914,4 +914,25 @@ GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'localhost';
     run dolt push origin --user $SQL_USER main:main
     [[ "$status" -ne 0 ]] || false
     [[ "$output" =~ "target has uncommitted changes" ]] || false
+}
+
+@test "sql-server-remotesrv: DOLT_REMOTE_USER is the default remote user, --user wins" {
+    mkdir -p db/remote
+    cd db/remote
+    dolt init
+    dolt --privilege-file=privs.json sql -q "CREATE USER user0 IDENTIFIED BY 'pass0'"
+    dolt sql -q "CREATE USER user0@'%' identified by 'pass0'; GRANT ALL ON *.* to user0@'%';"
+    export DOLT_REMOTE_PASSWORD="pass0"
+
+    dolt sql-server --remotesapi-port 50051 &
+    srv_pid=$!
+
+    cd ../../
+    export DOLT_REMOTE_USER="user0"
+    dolt clone http://localhost:50051/remote repo1
+    rm -rf repo1
+
+    run dolt clone http://localhost:50051/remote repo1 --user doesnt_exist
+    [[ "$status" != 0 ]] || false
+    [[ "$output" =~ "Access denied for user 'doesnt_exist'" ]] || false
 }
