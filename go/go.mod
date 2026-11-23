@@ -30,7 +30,7 @@ require (
 	github.com/dolthub/eventsapi_schema v0.0.0-20261119125135-6b30707d614f
 	github.com/dolthub/file-locks v0.1.2
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.20.1-0.20261123180908-67b5e0fa40a7
+	github.com/dolthub/go-mysql-server v0.20.1-0.20261123202816-44510502588d
 	github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63
 	github.com/dolthub/ishell v0.0.0-20260414231531-5f031e3e9037
 	github.com/dolthub/sqllogictest/go v0.0.0-20240618184124-ca47f9354216
@@ -206,5 +206,3 @@ require (
 )
 
 go 1.27.3
-
-replace github.com/dolthub/go-mysql-server => ../../../../go-mysql-server/zachmu/merge-join-sel-fix
