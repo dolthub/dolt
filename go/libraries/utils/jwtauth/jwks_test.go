@@ -153,3 +153,77 @@ func TestMultiJWKSFetchTimesOut(t *testing.T) {
 		t.Fatal("GetKey blocked on a fetch from an unresponsive peer")
 	}
 }
+
+// A restarted peer publishes a new key and many callers look it up at once,
+// more than fit in a URL's queue of pending refreshes. Every one of them
+// should find the key once the peer serves it.
+func TestMultiJWKSConcurrentGetKeysForNewKey(t *testing.T) {
+	const numLookups = 8
+
+	gate := make(chan struct{})
+	requested := make(chan struct{}, 16)
+	var keys atomic.Pointer[[]byte]
+	var gated atomic.Bool
+	setKeys := func(ks ...jose.JSONWebKey) {
+		bs, err := json.Marshal(jose.JSONWebKeySet{Keys: ks})
+		require.NoError(t, err)
+		keys.Store(&bs)
+	}
+	setKeys()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		holdResponse := gated.Load()
+		select {
+		case requested <- struct{}{}:
+		default:
+		}
+		if holdResponse {
+			<-gate
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(*keys.Load())
+	}))
+	t.Cleanup(srv.Close)
+	release := sync.OnceFunc(func() { close(gate) })
+	t.Cleanup(release)
+
+	jwks := runMultiJWKS(t, []string{srv.URL}, 0)
+	select {
+	case <-requested:
+	case <-time.After(5 * time.Second):
+		t.Fatal("initial fetch did not happen")
+	}
+
+	gated.Store(true)
+	setKeys(newEd25519JWK(t, "new"))
+drain:
+	for {
+		select {
+		case <-requested:
+		default:
+			break drain
+		}
+	}
+
+	// The first lookup starts a fetch, which the server holds open while the
+	// rest pile up behind it.
+	results := []<-chan []jose.JSONWebKey{getKeyAsync(jwks, "new")}
+	select {
+	case <-requested:
+	case <-time.After(5 * time.Second):
+		t.Fatal("GetKey did not trigger a fetch")
+	}
+	for i := 1; i < numLookups; i++ {
+		results = append(results, getKeyAsync(jwks, "new"))
+	}
+	time.Sleep(100 * time.Millisecond)
+	release()
+
+	for i, ch := range results {
+		select {
+		case res := <-ch:
+			assert.Lenf(t, res, 1, "lookup %d", i)
+		case <-time.After(10 * time.Second):
+			t.Fatalf("lookup %d did not return", i)
+		}
+	}
+}
