@@ -520,7 +520,13 @@ func abortRebase(ctx *sql.Context) error {
 		return err
 	}
 
-	return doltSession.SwitchWorkingSet(ctx, ctx.GetCurrentDatabase(), wsRef)
+	err = doltSession.SwitchWorkingSet(ctx, ctx.GetCurrentDatabase(), wsRef)
+	if err != nil {
+		return err
+	}
+
+	// The working branch is gone, so the session must not commit the rebase state it cleared above.
+	return doltSession.RemoveBranchState(ctx, ctx.GetCurrentDatabase(), headRef.GetPath())
 }
 
 func validateActiveRebase(ctx *sql.Context) error {

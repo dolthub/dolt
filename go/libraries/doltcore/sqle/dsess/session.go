@@ -435,7 +435,9 @@ func (d *DoltSession) RemoveDbState(ctx *sql.Context, dbName string) error {
 	return nil
 }
 
-// RemoveBranchState removes the session state for a branch, for example, if a branch is deleted.
+// RemoveBranchState removes the session state for a branch, for example, if a branch is deleted, discarding any
+// uncommitted changes the session made to it. If the session has the branch checked out, it checks out the default
+// head instead.
 func (d *DoltSession) RemoveBranchState(ctx *sql.Context, dbName string, branchName string) error {
 	baseName, _ := doltdb.SplitRevisionDbName(dbName)
 
@@ -456,17 +458,19 @@ func (d *DoltSession) RemoveBranchState(ctx *sql.Context, dbName string, branchN
 		writersErr = bs.checkNoOpenWriters()
 	}
 
-	db, ok := d.provider.BaseDatabase(ctx, baseName)
-	if !ok {
-		return sql.ErrDatabaseNotFound.New(baseName)
-	}
+	if strings.EqualFold(checkedOutState.dbState.checkedOutRevSpec, branchName) {
+		db, ok := d.provider.BaseDatabase(ctx, baseName)
+		if !ok {
+			return sql.ErrDatabaseNotFound.New(baseName)
+		}
 
-	defaultHead, err := DefaultHead(ctx, baseName, db)
-	if err != nil {
-		return err
-	}
+		defaultHead, err := DefaultHead(ctx, baseName, db)
+		if err != nil {
+			return err
+		}
 
-	checkedOutState.dbState.checkedOutRevSpec = defaultHead
+		checkedOutState.dbState.checkedOutRevSpec = defaultHead
+	}
 
 	// also clear out any db-level caches for this db
 	d.dbCache.Clear()

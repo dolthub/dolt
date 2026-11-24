@@ -505,6 +505,10 @@ func (tx *DoltTransaction) commitHeads(
 			}
 		}
 
+		if errors.Is(err, datas.ErrHeadNotFound) {
+			return nil, nil, tx.rollbackAndErr(ctx, deletedBranchError(ctx, startPoint.db, changes))
+		}
+
 		// An optimistic lock failure will be retried with the new current value of the working set.
 		if errors.Is(err, datas.ErrOptimisticLockFailed) || errors.Is(err, datas.ErrMergeNeeded) {
 			continue
@@ -575,6 +579,20 @@ func (tx *DoltTransaction) mergeRoots(
 	}
 
 	return workingSet, nil
+}
+
+// deletedBranchError returns the error for a commit that failed because a branch it changes no longer exists.
+func deletedBranchError(ctx *sql.Context, db *doltdb.DoltDB, changes []workingSetAndHead) error {
+	for _, change := range changes {
+		headRef, err := change.workingSet.Ref().ToHeadRef()
+		if err != nil {
+			continue
+		}
+		if ok, err := db.HasRef(ctx, headRef); err == nil && !ok {
+			return fmt.Errorf("%w: cannot commit changes to deleted branch '%s'", doltdb.ErrBranchNotFound, headRef.GetPath())
+		}
+	}
+	return fmt.Errorf("%w: cannot commit changes to a deleted branch", doltdb.ErrBranchNotFound)
 }
 
 // rollback attempts a transaction rollback
