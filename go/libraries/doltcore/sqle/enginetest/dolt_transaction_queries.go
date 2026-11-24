@@ -2450,6 +2450,102 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 		},
 	},
 	{
+		Name: "dolt_commit after a concurrent soft reset is rejected without a conflict",
+		SetUpScript: []string{
+			"create table t (k int primary key, x int)",
+			"call dolt_commit('-Am', 'a')",
+			"insert into t values (1, 1)",
+			"call dolt_commit('-am', 'b')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "/* client a */ call dolt_reset('--soft', 'HEAD~1')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ insert into t values (2, 2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:          "/* client b */ call dolt_commit('-am', 'c')",
+				ExpectedErrStr: sql.ErrLockDeadlock.New(dsess.ErrRetryTransaction.Error()).Error(),
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ insert into t values (2, 2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:            "/* client b */ call dolt_commit('-am', 'c')",
+				SkipResultsCheck: true,
+			},
+			{
+				// the commit includes the row that the reset took out of HEAD
+				Query:    "/* client a */ select * from t as of 'HEAD' order by k",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{
+				Query:    "/* client a */ select * from dolt_status",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "dolt_commit after a concurrent mixed reset is rejected without a conflict",
+		SetUpScript: []string{
+			"create table t (k int primary key, x int)",
+			"call dolt_commit('-Am', 'a')",
+			"insert into t values (1, 1)",
+			"call dolt_commit('-am', 'b')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "/* client a */ call dolt_reset('HEAD~1')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ insert into t values (2, 2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:          "/* client b */ call dolt_commit('-am', 'c')",
+				ExpectedErrStr: sql.ErrLockDeadlock.New(dsess.ErrRetryTransaction.Error()).Error(),
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ insert into t values (2, 2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:            "/* client b */ call dolt_commit('-am', 'c')",
+				SkipResultsCheck: true,
+			},
+			{
+				// the commit includes the row that the reset took out of HEAD
+				Query:    "/* client a */ select * from t as of 'HEAD' order by k",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{
+				Query:    "/* client a */ select * from dolt_status",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
 		Name: "dolt_commit conflicting with a concurrent unstage is rejected",
 		SetUpScript: []string{
 			"create table t (k int primary key, x int)",
