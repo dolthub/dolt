@@ -483,6 +483,8 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		return nil, err
 	}
 
+	// The session head is the default start point, and --all also walks it, like git log --all walks
+	// HEAD, so a detached head is included even when no ref points to it.
 	var sessionHead *doltdb.Commit
 	if len(revisionValStrs) == 0 || args.allRefs {
 		sessionHead, err = sess.GetHeadCommit(ctx, sqledb.RevisionQualifiedName())
@@ -546,12 +548,12 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 	ddb := sqledb.DbData().Ddb
 
 	if args.allRefs {
-		// Like git log --all, walk from HEAD and every ref that points to a commit.
 		refHeads, err := refHeadCommits(ctx, ddb)
 		if err != nil {
 			return nil, err
 		}
-		// Explicit revisions stay first: the three dot merge base lookup reads commits[0] and commits[1].
+		// Append after the explicit revisions: for A...B, the merge base lookup below reads A and B
+		// from commits[0] and commits[1].
 		commits, err = appendUniqueCommits(commits, append([]*doltdb.Commit{sessionHead}, refHeads...))
 		if err != nil {
 			return nil, err

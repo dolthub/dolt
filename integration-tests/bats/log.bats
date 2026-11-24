@@ -1137,6 +1137,8 @@ export NO_COLOR=1
 }
 
 @test "log: --all with a revision range" {
+    # Like git, --all adds every ref and HEAD as start points, and a range only adds exclusions:
+    # A..B excludes the ancestors of A, and A...B excludes the ancestors of the merge base of A and B.
     dolt commit --allow-empty -m "on main"
     dolt commit --allow-empty -m "on feature"
     dolt branch feature
@@ -1145,11 +1147,13 @@ export NO_COLOR=1
     dolt tag v1
     dolt reset --hard HEAD~1
 
+    # Every ancestor of feature is excluded, which leaves only the tagged commit.
     run dolt log --oneline --all feature..main
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
     [[ "$output" =~ "only tagged" ]] || false
 
+    # The merge base of feature and main is "on main", so only it and its ancestors are excluded.
     run dolt log --oneline --all feature...main
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]

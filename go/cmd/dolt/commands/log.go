@@ -221,15 +221,17 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 	}
 
 	if tablesIndex < len(apr.Args) {
-		tableLookupRevisions := params
+		// Table arguments must exist in a revision being logged. With --all that is any branch, so the
+		// branch names are used only for this check and are not passed to dolt_log.
+		revisionsToSearchForTables := params
 		if apr.Contains(cli.AllFlag) {
-			tableLookupRevisions, err = appendBranchNames(sqlCtx, queryist, params)
+			revisionsToSearchForTables, err = appendBranchNames(sqlCtx, queryist, params)
 			if err != nil {
 				return "", err
 			}
 		}
 
-		tableNames, err := collectTables(apr, queryist, sqlCtx, tableLookupRevisions, tablesIndex)
+		tableNames, err := collectTables(apr, queryist, sqlCtx, revisionsToSearchForTables, tablesIndex)
 		if err != nil {
 			return "", err
 		}
