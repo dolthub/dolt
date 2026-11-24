@@ -242,14 +242,14 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "/* client a */ select name from dolt_branches;",
-				ExpectedErrStr: "Error 1049 (HY000): database not found: dolt/branch1",
+				ExpectedErrStr: "Error 1105 (HY000): branch 'branch1' checked out in this session no longer exists in database 'dolt'; use dolt_checkout() to check out another branch",
 			},
 			{
-				Query:          "/* client a */ CALL DOLT_CHECKOUT('main');",
-				ExpectedErrStr: "Error 1049 (HY000): database not found: dolt/branch1",
+				Query:    "/* client a */ CALL DOLT_CHECKOUT('main');",
+				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
 			},
 			{
-				Query:    "/* client a */ USE dolt/main;",
+				Query:    "/* client a */ USE dolt;",
 				Expected: []sql.Row{},
 			},
 			{
@@ -291,15 +291,14 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "/* client a */ select name from dolt_branches;",
-				ExpectedErrStr: "Error 1049 (HY000): database not found: dolt/branch1",
+				ExpectedErrStr: "Error 1105 (HY000): branch 'branch1' checked out in this session no longer exists in database 'dolt'; use dolt_checkout() to check out another branch",
 			},
 			{
-				// TODO: this could be handled better, not the best experience. Maybe kill the session?
-				Query:          "/* client a */ CALL DOLT_CHECKOUT('main');",
-				ExpectedErrStr: "Error 1049 (HY000): database not found: dolt/branch1",
+				Query:    "/* client a */ CALL DOLT_CHECKOUT('main');",
+				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
 			},
 			{
-				Query:    "/* client a */ USE dolt/main;",
+				Query:    "/* client a */ USE dolt;",
 				Expected: []sql.Row{},
 			},
 			{
