@@ -216,16 +216,19 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 		writeToBuffer("?")
 	}
 
-	tableLookupRevisions := params
 	if apr.Contains(cli.AllFlag) {
 		writeToBuffer("'--all'")
-		tableLookupRevisions, err = appendBranchNames(sqlCtx, queryist, params)
-		if err != nil {
-			return "", err
-		}
 	}
 
 	if tablesIndex < len(apr.Args) {
+		tableLookupRevisions := params
+		if apr.Contains(cli.AllFlag) {
+			tableLookupRevisions, err = appendBranchNames(sqlCtx, queryist, params)
+			if err != nil {
+				return "", err
+			}
+		}
+
 		tableNames, err := collectTables(apr, queryist, sqlCtx, tableLookupRevisions, tablesIndex)
 		if err != nil {
 			return "", err
