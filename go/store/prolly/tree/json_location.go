@@ -17,6 +17,7 @@ package tree
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strconv"
@@ -64,7 +65,16 @@ func (root jsonLocationKey) appendObjectKey(key []byte) jsonLocationKey {
 	return append(append(root, beginObjectKey), key...)
 }
 
+// appendObjectKeyString encodes an in-memory object key.
 func (root jsonLocationKey) appendObjectKeyString(key string) jsonLocationKey {
+	for _, c := range key {
+		if c < ' ' || c == '\\' || c == '\u2028' || c == '\u2029' {
+			// A string always marshals successfully. Use the same escaping as
+			// indexed JSON values, including literal HTML characters.
+			quoted, _ := types.MarshallJsonValue(key)
+			return root.appendObjectKey(unescapeKey(quoted[1 : len(quoted)-1]))
+		}
+	}
 	return root.appendObjectKey([]byte(key))
 }
 
@@ -148,10 +158,6 @@ func compareJsonPathTypes(left, right jsonPathType) (int, error) {
 	return 0, nil
 }
 
-func (t jsonPathType) isInitialElement() bool {
-	return t == objectInitialElement || t == arrayInitialElement
-}
-
 var unknownLocationKeyError = fmt.Errorf("A JSON document was written with a future version of Dolt, and the index metadata cannot be read. This will impact performance for large documents.")
 var unsupportedPathError = fmt.Errorf("The supplied JSON path is not supported for optimized lookup, falling back on unoptimized implementation.")
 
@@ -225,7 +231,11 @@ func (p jsonLocation) toMysqlJsonPath() string {
 			result = fmt.Appendf(result, "[%d]", arrayIndex)
 		} else {
 			result = append(result, '.')
-			result = append(result, pathElement.key...)
+			if len(pathElement.key) == 0 || bytes.ContainsAny(pathElement.key, ".[]*\"\\") {
+				result = appendQuotedJsonKey(result, pathElement.key)
+			} else {
+				result = append(result, pathElement.key...)
+			}
 		}
 	}
 	return string(result)
@@ -285,8 +295,17 @@ const (
 	lexStateEscapedQuotedKey lexState = 5
 )
 
-func escapeKey(key []byte) []byte {
-	return bytes.Replace(key, []byte(`"`), []byte(`\"`), -1)
+// appendQuotedJsonKey restores the quotes and escaped double quotes omitted
+// from an indexed object key. Other escape sequences are already encoded.
+func appendQuotedJsonKey(dst, key []byte) []byte {
+	dst = append(dst, '"')
+	for _, c := range key {
+		if c == '"' {
+			dst = append(dst, '\\')
+		}
+		dst = append(dst, c)
+	}
+	return append(dst, '"')
 }
 
 func unescapeKey(key []byte) []byte {
@@ -295,19 +314,54 @@ func unescapeKey(key []byte) []byte {
 
 // IsJsonKeyPrefix computes whether one key encodes a json location that is a prefix of another.
 // Example: $.a is a prefix of $.a.b, but not $.aa
-func IsJsonKeyPrefix(path, prefix []byte) bool {
-	return bytes.HasPrefix(path, prefix) && (path[len(prefix)] == beginArrayKey || path[len(prefix)] == beginObjectKey)
+func IsJsonKeyPrefix(path, prefix []byte) (bool, error) {
+	if len(path) > len(prefix) && bytes.HasPrefix(path, prefix) {
+		return path[len(prefix)] == beginArrayKey || path[len(prefix)] == beginObjectKey, nil
+	}
+	if len(path) == 0 || len(prefix) == 0 ||
+		(bytes.IndexByte(path, '\\') < 0 && bytes.IndexByte(prefix, '\\') < 0) {
+		return false, nil
+	}
+	path, prefix = path[1:], prefix[1:]
+	var cmp int
+	var err error
+	// Finish checking depth before returning a comparison error: equal or shorter
+	// paths cannot be strict descendants.
+	for len(path) > 0 && len(prefix) > 0 {
+		var value, ancestor jsonPathElement
+		value, path = nextJsonPathElement(path)
+		ancestor, prefix = nextJsonPathElement(prefix)
+		if cmp == 0 && err == nil {
+			cmp, err = compareJsonPathElement(value, ancestor)
+		}
+	}
+	if len(path) == 0 || len(prefix) > 0 {
+		return false, nil
+	}
+	return cmp == 0, err
 }
 
-func JsonKeysModifySameArray(leftKey, rightKey []byte) bool {
-	i := 0
-	for i < len(leftKey) && i < len(rightKey) && leftKey[i] == rightKey[i] {
-		if leftKey[i] == beginArrayKey {
-			return true
-		}
-		i++
+// EqualJsonDiffKeys reports whether two diff keys name the same value.
+func EqualJsonDiffKeys(left, right []byte) (bool, error) {
+	if bytes.Equal(left, right) {
+		return true, nil
 	}
-	return false
+	if len(left) == 0 || len(right) == 0 ||
+		(bytes.IndexByte(left, '\\') < 0 && bytes.IndexByte(right, '\\') < 0) {
+		return false, nil
+	}
+	cmp, err := CompareJsonDiffKeys(left, right)
+	return cmp == 0, err
+}
+
+// JsonArrayPath returns the path of the outermost array containing the key, if any.
+func JsonArrayPath(key []byte) []byte {
+	// Object keys are UTF-8, so the first array separator marks an array index.
+	i := bytes.IndexByte(key, beginArrayKey)
+	if i < 0 {
+		return nil
+	}
+	return key[:i]
 }
 
 func jsonPathElementsFromMySQLJsonPath(pathBytes []byte) (jsonLocation, error) {
@@ -370,14 +424,11 @@ func jsonPathElementsFromMySQLJsonPath(pathBytes []byte) (jsonLocation, error) {
 			}
 		case lexStateQuotedKey:
 			if pathBytes[i] == '"' {
-				if tok+1 == i {
-					return jsonLocation{}, fmt.Errorf("Invalid JSON path expression. Expected field name after '.' at character %v of %s", i, string(pathBytes))
-				}
-				pathKey := unescapeKey(pathBytes[tok+1 : i])
-				if isUnsupportedJsonPathKey(pathKey) {
+				quoted := pathBytes[tok : i+1]
+				if !json.Valid(quoted) {
 					return jsonLocation{}, unsupportedPathError
 				}
-				location.appendObjectKey(pathKey)
+				location.appendObjectKey(unescapeKey(quoted[1 : len(quoted)-1]))
 				state = lexStatePath
 				i += 1
 			} else if pathBytes[i] == '\\' {
@@ -445,6 +496,21 @@ type jsonPathElement struct {
 	isArrayIndex bool
 }
 
+// nextJsonPathElement borrows the first encoded element and returns the remaining path.
+// Array indices can contain delimiter bytes, so their length comes from the varint header.
+func nextJsonPathElement(path []byte) (jsonPathElement, []byte) {
+	end := 1
+	isArrayIndex := path[0] == beginArrayKey
+	if isArrayIndex {
+		end += varIntLength(path[1])
+	} else {
+		for end < len(path) && path[end] != beginObjectKey && path[end] != beginArrayKey {
+			end++
+		}
+	}
+	return jsonPathElement{key: path[1:end], isArrayIndex: isArrayIndex}, path[end:]
+}
+
 func (e jsonPathElement) getArrayIndex() uint64 {
 	arrayIndex, _ := uvarint.Uvarint(e.key)
 	return arrayIndex
@@ -480,66 +546,117 @@ func (p *jsonLocation) Clone() jsonLocation {
 	}
 }
 
-// compareJsonLocations creates an ordering on locations by determining which one would come first in a normalized JSON
-// document where all keys are sorted lexographically.
+// compareJsonLocations orders locations as they appear in a normalized JSON document.
 func compareJsonLocations(left, right jsonLocation) (int, error) {
-	minLength := min(left.size(), right.size())
-	for i := 0; i < minLength; i++ {
-		leftPathElement := left.getPathElement(i)
-		rightPathElement := right.getPathElement(i)
-		c := bytes.Compare(leftPathElement.key, rightPathElement.key)
-		if c < 0 {
-			return -1, nil
-		}
-		if c > 0 {
-			return 1, nil
+	leftDepth, rightDepth := left.size(), right.size()
+	for i := 0; i < min(leftDepth, rightDepth); i++ {
+		if cmp, err := compareJsonPathElement(left.getPathElement(i), right.getPathElement(i)); cmp != 0 || err != nil {
+			return cmp, err
 		}
 	}
-	if left.size() < right.size() {
-		// left is a parent of right
-		// there's a special case here: the user may be trying to treat a scalar or object as an array, which causes
-		// it to get implicitly wrapped in an array. In order for the cursor to return the correct location for
-		// reading/modification, for any object b, b[N] must compare less than the initial element location of b.
-		if right.size() == left.size()+1 {
-			if left.getScannerState() == objectInitialElement {
-				rightIsArray := right.getLastPathElement().isArrayIndex
-				if rightIsArray {
-					return 1, nil
-				}
-			}
+	if leftDepth < rightDepth {
+		return compareJsonParentToChild(left.getScannerState(), right.getScannerState(), right.getPathElement(leftDepth), rightDepth == leftDepth+1), nil
+	}
+	if leftDepth > rightDepth {
+		return -compareJsonParentToChild(right.getScannerState(), left.getScannerState(), left.getPathElement(rightDepth), leftDepth == rightDepth+1), nil
+	}
+	return compareJsonPathTypes(left.getScannerState(), right.getScannerState())
+}
+
+// compareJsonLocationKeys compares encoded paths without copying keys or constructing offsets.
+func compareJsonLocationKeys(left, right []byte) (int, error) {
+	leftPath, rightPath := left[1:], right[1:]
+	for len(leftPath) > 0 && len(rightPath) > 0 {
+		var l, r jsonPathElement
+		l, leftPath = nextJsonPathElement(leftPath)
+		r, rightPath = nextJsonPathElement(rightPath)
+		if cmp, err := compareJsonPathElement(l, r); cmp != 0 || err != nil {
+			return cmp, err
 		}
-		if left.getScannerState() != endOfValue {
+	}
+	if len(rightPath) > 0 {
+		return compareJsonParentToEncodedChild(jsonPathType(left[0]), jsonPathType(right[0]), rightPath), nil
+	}
+	if len(leftPath) > 0 {
+		return -compareJsonParentToEncodedChild(jsonPathType(right[0]), jsonPathType(left[0]), leftPath), nil
+	}
+	return compareJsonPathTypes(jsonPathType(left[0]), jsonPathType(right[0]))
+}
+
+// compareJsonParentToEncodedChild reads child structure only when implicit array wrapping needs it.
+func compareJsonParentToEncodedChild(parent, childState jsonPathType, path []byte) int {
+	var child jsonPathElement
+	var immediate bool
+	if parent == objectInitialElement {
+		var remainder []byte
+		child, remainder = nextJsonPathElement(path)
+		immediate = len(remainder) == 0
+	}
+	return compareJsonParentToChild(parent, childState, child, immediate)
+}
+
+// compareJsonParentToChild places end markers after descendants and supports implicit array wrapping.
+func compareJsonParentToChild(parent, childState jsonPathType, child jsonPathElement, immediate bool) int {
+	switch parent {
+	case endOfValue:
+		return 1
+	case objectInitialElement:
+		// Initial-element markers describe the container, not the final encoded leg.
+		childIsArray := childState == arrayInitialElement || (childState != objectInitialElement && child.isArrayIndex)
+		if childIsArray && immediate {
+			return 1
+		}
+	}
+	return -1
+}
+
+// compareJsonPathElement compares decoded object names or order-preserving array indices.
+func compareJsonPathElement(left, right jsonPathElement) (int, error) {
+	if left.isArrayIndex != right.isArrayIndex {
+		if left.isArrayIndex {
 			return -1, nil
 		}
 		return 1, nil
 	}
-	if left.size() > right.size() {
-		// right is a parent of left
-		// there's a special case here: the user may be trying to treat a scalar or object as an array, which causes
-		// it to get implicitly wrapped in an array. In order for the cursor to return the correct location for
-		// reading/modification, for any object b, b[N] must compare less than the initial element location of b.
-		if left.size() == right.size()+1 {
-			if right.getScannerState() == objectInitialElement {
-				leftIsArray := left.getLastPathElement().isArrayIndex
-				if leftIsArray {
-					return -1, nil
-				}
-			}
-		}
-
-		if right.getScannerState() != endOfValue {
-			return 1, nil
-		}
-		return -1, nil
+	if bytes.Equal(left.key, right.key) {
+		return 0, nil
 	}
-	// left and right have the exact same key elements
-	return compareJsonPathTypes(left.getScannerState(), right.getScannerState())
-
+	leftKey, rightKey := left.key, right.key
+	if !left.isArrayIndex {
+		var err error
+		leftKey, err = decodeJsonObjectKey(leftKey)
+		if err != nil {
+			return 0, err
+		}
+		rightKey, err = decodeJsonObjectKey(rightKey)
+		if err != nil {
+			return 0, err
+		}
+	}
+	return bytes.Compare(leftKey, rightKey), nil
 }
 
-type jsonLocationOrdering struct {
-	err error // store errors created during comparisons
+// decodeJsonObjectKey restores the original object name for document ordering.
+func decodeJsonObjectKey(key []byte) ([]byte, error) {
+	if bytes.IndexByte(key, '\\') < 0 {
+		return key, nil
+	}
+	var decoded string
+	if err := json.Unmarshal(appendQuotedJsonKey(nil, key), &decoded); err != nil {
+		return nil, err
+	}
+	return []byte(decoded), nil
 }
+
+// CompareJsonDiffKeys orders encoded value paths in normalized JSON document order.
+func CompareJsonDiffKeys(left, right []byte) (int, error) {
+	if bytes.Equal(left, right) {
+		return 0, nil
+	}
+	return compareJsonLocationKeys(left, right)
+}
+
+type jsonLocationOrdering struct{}
 
 var _ Ordering[jsonLocationKey] = &jsonLocationOrdering{}
 
@@ -552,11 +669,5 @@ func (o *jsonLocationOrdering) Compare(ctx context.Context, left, right jsonLoca
 	} else if len(right) == 0 {
 		return 1, nil
 	}
-	leftPath := jsonPathFromKey(left)
-	rightPath := jsonPathFromKey(right)
-	cmp, err := compareJsonLocations(leftPath, rightPath)
-	if err != nil {
-		o.err = err
-	}
-	return cmp, nil
+	return compareJsonLocationKeys(left, right)
 }

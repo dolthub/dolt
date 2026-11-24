@@ -2927,7 +2927,6 @@ func MergeJSON(ctx context.Context, ns tree.NodeStore, baseJson, leftJson, right
 	threeWayDiffer := ThreeWayJsonDiffer{
 		leftDiffer:  leftDiffer,
 		rightDiffer: rightDiffer,
-		ns:          ns,
 	}
 
 	// Compute the merged object by applying diffs to the left object as needed.
@@ -2942,32 +2941,34 @@ func MergeJSON(ctx context.Context, ns tree.NodeStore, baseJson, leftJson, right
 		merged = tree.NewIndexedJsonDocument(root, ns)
 	}
 
+	editor := tree.NewJsonMergeEditor(merged)
 	for {
 		threeWayDiff, err := threeWayDiffer.Next(ctx)
 		if err == io.EOF {
-			return merged, false, nil
+			result, err := editor.Done(ctx)
+			return result, err != nil, err
 		}
 		if err != nil {
 			return types.JSONDocument{}, true, err
 		}
 
 		switch threeWayDiff.Op {
-		case tree.DiffOpRightAdd, tree.DiffOpConvergentAdd, tree.DiffOpRightModify, tree.DiffOpConvergentModify, tree.DiffOpDivergentModifyResolved:
-			merged, _, err = merged.SetWithKey(ctx, threeWayDiff.Key, threeWayDiff.Right)
-			if err != nil {
-				return types.JSONDocument{}, true, err
-			}
-		case tree.DiffOpRightDelete, tree.DiffOpConvergentDelete:
-			merged, _, err = merged.RemoveWithKey(ctx, threeWayDiff.Key)
-			if err != nil {
-				return types.JSONDocument{}, true, err
-			}
-		case tree.DiffOpLeftAdd, tree.DiffOpLeftModify, tree.DiffOpLeftDelete:
-			// these changes already exist on the left, so do nothing.
+		case tree.DiffOpRightAdd:
+			err = editor.Apply(ctx, tree.JsonDiff{Key: threeWayDiff.Key, Type: tree.AddedDiff, To: threeWayDiff.Right})
+		case tree.DiffOpRightModify:
+			err = editor.Apply(ctx, tree.JsonDiff{Key: threeWayDiff.Key, Type: tree.ModifiedDiff, To: threeWayDiff.Right})
+		case tree.DiffOpRightDelete:
+			err = editor.Apply(ctx, tree.JsonDiff{Key: threeWayDiff.Key, Type: tree.RemovedDiff})
+		case tree.DiffOpLeftAdd, tree.DiffOpLeftModify, tree.DiffOpLeftDelete,
+			tree.DiffOpConvergentAdd, tree.DiffOpConvergentModify, tree.DiffOpConvergentDelete:
+			// These changes already exist on the left.
 		case tree.DiffOpDivergentModifyConflict, tree.DiffOpDivergentDeleteConflict:
 			return types.JSONDocument{}, true, nil
 		default:
 			panic("unreachable")
+		}
+		if err != nil {
+			return types.JSONDocument{}, true, err
 		}
 	}
 }

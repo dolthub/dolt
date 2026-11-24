@@ -15,6 +15,7 @@
 package tree
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -27,25 +28,21 @@ type JsonCursor struct {
 	jsonScanner JsonScanner
 }
 
-// getPreviousKey computes the key of a cursor's predecessor node. This is important for scanning JSON because that
-// key represents the location within the document where the current node begins, and can be used to compute the location
-// of every value within the node.
+// getPreviousKey returns the boundary before a JSON leaf without reading its predecessor Blob.
+// A parentless leaf or the first leaf in the tree has no preceding boundary.
 func getPreviousKey(ctx context.Context, cur *cursor) ([]byte, error) {
-	cur2 := cur.clone()
-	err := cur2.retreat(ctx)
-	if err != nil {
-		return nil, err
-	}
-	// If we're at the start of the tree, return nil.
-	if !cur2.Valid() {
+	if cur.parent == nil {
 		return nil, nil
 	}
-	key := cur2.CurrentKey()
-	if len(key) == 0 {
-		key = cur2.parent.CurrentKey()
+	previous := cur.parent.clone()
+	if err := previous.retreat(ctx); err != nil {
+		return nil, err
 	}
-	err = errorIfNotSupportedLocation(key)
-	if err != nil {
+	if !previous.Valid() {
+		return nil, nil
+	}
+	key := previous.CurrentKey()
+	if err := errorIfNotSupportedLocation(key); err != nil {
 		return nil, err
 	}
 	return key, nil
@@ -70,23 +67,21 @@ func newJsonCursorAtStartOfChunk(ctx context.Context, ns NodeStore, root *Node, 
 	if err != nil {
 		return nil, err
 	}
-	if ordering.err != nil {
-		return nil, err
-	}
 	return newJsonCursorFromCursor(ctx, cur)
 }
 
+// newJsonCursorFromCursor descends to a Blob before initializing its boundary scanner.
 func newJsonCursorFromCursor(ctx context.Context, cur *cursor) (*JsonCursor, error) {
-	previousKey, err := getPreviousKey(ctx, cur)
-	if err != nil {
-		return nil, err
-	}
 	if !cur.isLeaf() {
 		nd, err := fetchChild(ctx, cur.nrw, cur.currentRef())
 		if err != nil {
 			return nil, err
 		}
 		return newJsonCursorFromCursor(ctx, &cursor{nd: nd, parent: cur, nrw: cur.nrw})
+	}
+	previousKey, err := getPreviousKey(ctx, cur)
+	if err != nil {
+		return nil, err
 	}
 	jsonBytes := cur.currentValue()
 	jsonDecoder := ScanJsonFromMiddleWithKey(jsonBytes, previousKey)
@@ -164,6 +159,12 @@ func (j *JsonCursor) isKeyInChunk(path jsonLocation) (bool, error) {
 // the cursor advances to the end of the previous value, prior to the object key. This allows the key to be removed along
 // with the value.
 func (j *JsonCursor) AdvanceToLocation(ctx context.Context, path jsonLocation, forRemoval bool) (found bool, err error) {
+	return j.advanceToLocation(ctx, path, forRemoval, false)
+}
+
+// advanceToLocation can treat the end of a leaf as the start of its next
+// array value when the first value shares the offset of the opening bracket.
+func (j *JsonCursor) advanceToLocation(ctx context.Context, path jsonLocation, forRemoval, allowEntryAtBoundary bool) (found bool, err error) {
 	isInChunk, err := j.isKeyInChunk(path)
 	if err != nil {
 		return false, err
@@ -173,9 +174,6 @@ func (j *JsonCursor) AdvanceToLocation(ctx context.Context, path jsonLocation, f
 		ordering := jsonLocationOrdering{}
 		err := Seek(ctx, j.cur.parent, path.key, &ordering)
 		if err != nil {
-			return false, err
-		}
-		if ordering.err != nil {
 			return false, err
 		}
 		j.cur.nd, err = fetchChild(ctx, j.cur.nrw, j.cur.parent.currentRef())
@@ -195,9 +193,24 @@ func (j *JsonCursor) AdvanceToLocation(ctx context.Context, path jsonLocation, f
 		return false, err
 	}
 	for cmp < 0 {
+		if allowEntryAtBoundary && j.jsonScanner.atEndOfChunk() &&
+			j.jsonScanner.currentPath.getScannerState() == arrayInitialElement && j.cur.parent != nil {
+			// The first array element can start at the same byte as the
+			// opening bracket's end. The index records that transition.
+			boundary := j.cur.parent.CurrentKey()
+			if len(boundary) > 0 && boundary[0] == path.key[0] {
+				found, err := EqualJsonDiffKeys(path.key, boundary)
+				if found || err != nil {
+					return found, err
+				}
+			}
+		}
 		previousScanner = j.jsonScanner.Clone()
 		err := j.jsonScanner.AdvanceToNextLocation()
 		if err == io.EOF {
+			if allowEntryAtBoundary {
+				return false, jsonParseError
+			}
 			// We reached the end of the document without finding the path. This shouldn't be possible, because
 			// there is no path greater than the end-of-document path, which is always the last key.
 			panic("Reached the end of the JSON document while advancing. This should not be possible. Is the document corrupt?")
@@ -222,16 +235,24 @@ func (j *JsonCursor) AdvanceToLocation(ctx context.Context, path jsonLocation, f
 	return true, nil
 }
 
+// advanceCursor resumes at the next leaf using the original input boundary, even
+// when its bytes were copied without scanning. It returns io.EOF at the tree's end.
 func (j *JsonCursor) advanceCursor(ctx context.Context) error {
-	err := j.cur.advance(ctx)
-	if err != nil {
-		return err
+	var boundary []byte
+	if j.cur.parent != nil {
+		boundary = j.cur.parent.CurrentKey()
+	}
+	if err := j.cur.advance(ctx); err != nil {
+		return fmt.Errorf("advance JSON cursor: %w", err)
 	}
 	if !j.cur.Valid() {
-		// We hit the end of the tree. This shouldn't happen.
 		return io.EOF
 	}
-	j.jsonScanner = ScanJsonFromMiddle(j.cur.currentValue(), j.jsonScanner.currentPath)
+	path := j.jsonScanner.currentPath
+	if !bytes.Equal(path.key, boundary) {
+		path = jsonPathFromKey(boundary)
+	}
+	j.jsonScanner = ScanJsonFromMiddle(j.cur.currentValue(), path)
 	return nil
 }
 
