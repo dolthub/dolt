@@ -48,8 +48,9 @@ var ErrDanglingRef = errors.New("dangling ref")
 
 const concurrentCompactions = 5
 
-// maxConcurrentTableOpens bounds the opens issued by rebase, so that opening a
-// cold remote does not burst one round of requests per table file at once.
+// maxConcurrentTableOpens bounds the opens issued at once by rebase and
+// openForAdd, so that opening many table files, such as on a cold remote, does
+// not burst one round of requests, or one process for git remotes, per file.
 const maxConcurrentTableOpens = 64
 
 func newTableSet(p tablePersister, q MemoryQuotaProvider) *tableSet {
@@ -464,6 +465,7 @@ func (ts *tableSet) openForAdd(ctx context.Context, files map[hash.Hash]uint32, 
 	// Concurrently open all files that are not already
 	// in |ret|.
 	eg, ctx := errgroup.WithContext(ctx)
+	eg.SetLimit(maxConcurrentTableOpens)
 	var mu sync.Mutex
 	for fileId, chunkCount := range files {
 		mu.Lock()

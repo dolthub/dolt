@@ -300,3 +300,34 @@ func TestTableSetRebaseBoundsConcurrentOpens(t *testing.T) {
 	require.NoError(t, rebased.close())
 	require.NoError(t, ts.close())
 }
+
+func TestTableSetOpenForAddBoundsConcurrentOpens(t *testing.T) {
+	q := NewUnlimitedMemQuotaProvider()
+	p := concurrencyTrackingPersister{
+		fakeTablePersister: newFakeTablePersister(q),
+		inFlight:           &atomic.Int32{},
+		maxInFlight:        &atomic.Int32{},
+	}
+
+	tableCount := maxConcurrentTableOpens * 4
+	for i := 0; i < tableCount; i++ {
+		persist(t, p, []byte(fmt.Sprintf("chunk-%d", i)))
+	}
+	files := make(map[hash.Hash]uint32)
+	for a := range p.sources {
+		files[a] = 1
+	}
+	require.Len(t, files, tableCount)
+
+	ts := newTableSet(p, q)
+	opened, err := ts.openForAdd(context.Background(), files, nil, openOpts{}, &Stats{})
+	require.NoError(t, err)
+	assert.Len(t, opened, tableCount)
+	assert.LessOrEqual(t, int(p.maxInFlight.Load()), maxConcurrentTableOpens)
+	assert.Greater(t, int(p.maxInFlight.Load()), 1)
+
+	for _, cs := range opened {
+		require.NoError(t, cs.close())
+	}
+	require.NoError(t, ts.close())
+}
