@@ -23,7 +23,7 @@ import (
 
 // Rekey returns |sch| with the primary key of |target|.
 //
-// It returns false when |sch| has a full text, vector or spatial index, or
+// It returns false when |sch| has a full-text, vector, or spatial index, or
 // when a key column of |target| is missing from |sch|, is virtual, or has an
 // incompatible type. Key columns match as [ColCollection.MatchColumn]
 // describes.
@@ -39,7 +39,7 @@ func Rekey(sch, target Schema) (Schema, bool, error) {
 	}
 	targetPK := target.GetPKCols()
 	keyPos := make(map[uint64]int, targetPK.Size())
-	for i, tc := range targetPK.GetColumns() {
+	for i, tc := range targetPK.cols {
 		col, ok := sch.GetAllCols().MatchColumn(target.GetAllCols(), tc)
 		if !ok || col.Virtual || !compatibleKeyType(col, tc) {
 			return nil, false, nil
@@ -47,7 +47,7 @@ func Rekey(sch, target Schema) (Schema, bool, error) {
 		keyPos[col.Tag] = i
 	}
 
-	cols := sch.GetAllCols().GetColumns()
+	cols := sch.GetAllCols().cols
 	newCols := make([]Column, len(cols))
 	pkOrdinals := make([]int, targetPK.Size())
 	for i, col := range cols {
@@ -63,10 +63,17 @@ func Rekey(sch, target Schema) (Schema, bool, error) {
 		col.IsPartOfPK = inPK
 		newCols[i] = col
 	}
-	newSch, err := NewSchema(NewColCollection(newCols...), pkOrdinals, sch.GetCollation(), nil, sch.Checks())
+
+	var checks CheckCollection
+	if sch.Checks() != nil {
+		checks = sch.Checks().Copy()
+	}
+	newSch, err := NewSchema(NewColCollection(newCols...), pkOrdinals, sch.GetCollation(), nil, checks)
 	if err != nil {
 		return nil, false, err
 	}
+	newSch.SetComment(sch.GetComment())
+	newSch.SetTargetRowSize(sch.GetTargetRowSize())
 	for _, index := range sch.Indexes().AllIndexes() {
 		newSch.Indexes().AddIndex(index)
 	}
@@ -76,17 +83,21 @@ func Rekey(sch, target Schema) (Schema, bool, error) {
 // compatibleKeyType reports whether the key column |from| can be copied as raw
 // bytes into the key column |to|.
 func compatibleKeyType(from, to Column) bool {
-	if from.TypeInfo.ToSqlType().Equals(to.TypeInfo.ToSqlType()) {
+	if from.TypeInfo.Encoding() != to.TypeInfo.Encoding() {
+		return false
+	}
+	fromType := from.TypeInfo.ToSqlType()
+	toType := to.TypeInfo.ToSqlType()
+	if fromType.Equals(toType) {
 		return true
 	}
 	// Widening a VARCHAR with the same encoding and collation preserves raw
 	// key bytes and keeps every existing value valid in the wider type.
-	fromStr, ok1 := from.TypeInfo.ToSqlType().(sql.StringType)
-	toStr, ok2 := to.TypeInfo.ToSqlType().(sql.StringType)
+	fromStr, ok1 := fromType.(sql.StringType)
+	toStr, ok2 := toType.(sql.StringType)
 	return ok1 && ok2 &&
 		fromStr.Type() == sqltypes.VarChar &&
 		toStr.Type() == sqltypes.VarChar &&
-		from.TypeInfo.Encoding() == to.TypeInfo.Encoding() &&
 		fromStr.Collation().Equals(toStr.Collation()) &&
 		fromStr.MaxCharacterLength() <= toStr.MaxCharacterLength()
 }

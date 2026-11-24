@@ -2243,9 +2243,9 @@ func evalColumnExpression(ctx *sql.Context, expr sql.Expression, col schema.Colu
 func convertValueToNewType(ctx *sql.Context, value interface{}, newTypeInfo typeinfo.TypeInfo, tm *TableMerger, from int, rightSide bool) (interface{}, error) {
 	var previousTypeInfo typeinfo.TypeInfo
 	if rightSide {
-		previousTypeInfo = tm.rightSch.GetNonPKCols().GetByIndex(from).TypeInfo
+		previousTypeInfo = tm.rightSch.GetNonPKCols().GetByStoredIndex(from).TypeInfo
 	} else {
-		previousTypeInfo = tm.leftSch.GetNonPKCols().GetByIndex(from).TypeInfo
+		previousTypeInfo = tm.leftSch.GetNonPKCols().GetByStoredIndex(from).TypeInfo
 	}
 
 	if newTypeInfo.Equals(previousTypeInfo) {

@@ -57,7 +57,7 @@ func TestRowRekeyer(t *testing.T) {
 		rk, ok := NewRowRekeyer(ns, sch, newSch)
 		require.True(t, ok)
 
-		// Row 1 has unique b=10. Rows 2 and 3 collide on b=20. Row 4 has NULL b.
+		// Row 1 is unique (b=10). Rows 2 and 3 collide (b=20). Row 4 has NULL b.
 		rows := newIntMap(t, ctx, ns, sch,
 			[][]any{{1}, {2}, {3}, {4}},
 			[][]any{{10, 100}, {20, 200}, {20, 300}, {nil, 400}},
@@ -172,11 +172,11 @@ func collectIntRows(t *testing.T, ctx context.Context, m prolly.Map, kd, vd *val
 	return out
 }
 
-// putInts writes each non-nil int element of |xs| into |b|.
-func putInts(b *val.TupleBuilder, xs []any) {
-	for i, x := range xs {
-		if x != nil {
-			b.PutInt64(i, int64(x.(int)))
+// putInts writes each non-nil int element of |vals| into |b|.
+func putInts(b *val.TupleBuilder, vals []any) {
+	for i, v := range vals {
+		if v != nil {
+			b.PutInt64(i, int64(v.(int)))
 		}
 	}
 }

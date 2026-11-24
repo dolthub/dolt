@@ -25,7 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// RekeyStatus reports the outcome of validating a new primary key or rekeying a map.
+// RekeyStatus reports the outcome of [RowRekeyer.RekeyMapStrict].
 type RekeyStatus uint8
 
 const (
@@ -33,29 +33,30 @@ const (
 	RekeyStatusOK RekeyStatus = iota
 	// RekeyStatusNullKey reports a NULL field in the new primary key.
 	RekeyStatusNullKey
-	// RekeyStatusDuplicateKey reports a new primary key already present in the map.
+	// RekeyStatusDuplicateKey reports a duplicate new primary key.
 	RekeyStatusDuplicateKey
 )
 
 // RowRekeyer rebuilds tuples of one schema under the primary key of another.
-// It copies raw field bytes without decoding, and is not safe for concurrent use.
+// It copies raw field bytes without decoding and is not safe for concurrent
+// use.
 type RowRekeyer struct {
-	ns     tree.NodeStore
-	keySrc []fieldSource
-	valSrc []fieldSource
-	kb     *val.TupleBuilder
-	vb     *val.TupleBuilder
-	oldKD  *val.TupleDesc
-	oldVD  *val.TupleDesc
-	newKD  *val.TupleDesc
-	newVD  *val.TupleDesc
+	ns      tree.NodeStore
+	keySrcs []fieldSource
+	valSrcs []fieldSource
+	kb      *val.TupleBuilder
+	vb      *val.TupleBuilder
+	oldKD   *val.TupleDesc
+	oldVD   *val.TupleDesc
+	newKD   *val.TupleDesc
+	newVD   *val.TupleDesc
 }
 
 // NewRowRekeyer returns a RowRekeyer that rebuilds tuples of |sch| under the
-// key of |newSch|, which [schema.Rekey] derives from |sch|.
+// primary key of |newSch|, which [schema.Rekey] derives from |sch|.
 //
 // It returns false when either schema is keyless, when |sch| lacks a column of
-// |newSch|, or when a column is stored with another encoding.
+// |newSch|, or when a column is stored with a different encoding.
 func NewRowRekeyer(ns tree.NodeStore, sch, newSch schema.Schema) (*RowRekeyer, bool) {
 	// Keyless value tuples start with a hidden cardinality field, so stored
 	// column ordinals do not align with tuple fields.
@@ -86,32 +87,33 @@ func NewRowRekeyer(ns tree.NodeStore, sch, newSch schema.Schema) (*RowRekeyer, b
 		return srcs, true
 	}
 
-	keySrc, ok := mapFields(newSch.GetPKCols(), newKD)
+	keySrcs, ok := mapFields(newSch.GetPKCols(), newKD)
 	if !ok {
 		return nil, false
 	}
-	valSrc, ok := mapFields(newSch.GetNonPKCols(), newVD)
+	valSrcs, ok := mapFields(newSch.GetNonPKCols(), newVD)
 	if !ok {
 		return nil, false
 	}
 	return &RowRekeyer{
-		ns:     ns,
-		keySrc: keySrc,
-		valSrc: valSrc,
-		kb:     val.NewTupleBuilder(newKD, ns),
-		vb:     val.NewTupleBuilder(newVD, ns),
-		oldKD:  oldKD,
-		oldVD:  oldVD,
-		newKD:  newKD,
-		newVD:  newVD,
+		ns:      ns,
+		keySrcs: keySrcs,
+		valSrcs: valSrcs,
+		kb:      val.NewTupleBuilder(newKD, ns),
+		vb:      val.NewTupleBuilder(newVD, ns),
+		oldKD:   oldKD,
+		oldVD:   oldVD,
+		newKD:   newKD,
+		newVD:   newVD,
 	}, true
 }
 
-// RekeyUniqueMap returns the rows of |rows| keyed by the new primary key.
+// RekeyMapStrict returns the rows of |rows| keyed by the new primary key.
 //
-// It stops at the first row with a NULL in the new key (RekeyStatusNullKey) or
-// the first duplicate new key (RekeyStatusDuplicateKey).
-func (r *RowRekeyer) RekeyUniqueMap(ctx context.Context, rows prolly.Map) (prolly.Map, RekeyStatus, error) {
+// It returns RekeyStatusOK on success. It stops at the first row with a NULL
+// in the new key (RekeyStatusNullKey) or the first duplicate new key
+// (RekeyStatusDuplicateKey), returning an empty map.
+func (r *RowRekeyer) RekeyMapStrict(ctx context.Context, rows prolly.Map) (prolly.Map, RekeyStatus, error) {
 	mut, err := r.newMutableMap(ctx, r.newKD, r.newVD)
 	if err != nil {
 		return prolly.Map{}, RekeyStatusOK, err
@@ -124,7 +126,8 @@ func (r *RowRekeyer) RekeyUniqueMap(ctx context.Context, rows prolly.Map) (proll
 		k, v, err := iter.Next(ctx)
 		if errors.Is(err, io.EOF) {
 			break
-		} else if err != nil {
+		}
+		if err != nil {
 			return prolly.Map{}, RekeyStatusOK, err
 		}
 		nk, status, err := r.validateKey(ctx, mut, k, v)
@@ -153,12 +156,12 @@ func (r *RowRekeyer) RekeyMap(ctx context.Context, rows prolly.Map) (rekeyed, re
 	if err != nil {
 		return prolly.Map{}, prolly.Map{}, err
 	}
-	dups, err := r.newMutableMap(ctx, r.newKD, val.NewTupleDescriptor())
+	dupMut, err := r.newMutableMap(ctx, r.newKD, val.NewTupleDescriptor())
 	if err != nil {
 		return prolly.Map{}, prolly.Map{}, err
 	}
 
-	var sawDup bool
+	var hasDups bool
 	err = IterRows(ctx, rows, func(k, v val.Tuple) error {
 		nk, status, err := r.validateKey(ctx, mut, k, v)
 		if err != nil {
@@ -168,11 +171,11 @@ func (r *RowRekeyer) RekeyMap(ctx context.Context, rows prolly.Map) (rekeyed, re
 		case RekeyStatusNullKey:
 			return rejectedMut.Put(ctx, k, v)
 		case RekeyStatusDuplicateKey:
-			sawDup = true
-			if exists, err := dups.Has(ctx, nk); err != nil || exists {
+			hasDups = true
+			if exists, err := dupMut.Has(ctx, nk); err != nil || exists {
 				return err
 			}
-			return dups.Put(ctx, nk, val.EmptyTuple)
+			return dupMut.Put(ctx, nk, val.EmptyTuple)
 		}
 		return r.putRow(ctx, mut, nk, k, v)
 	})
@@ -180,8 +183,8 @@ func (r *RowRekeyer) RekeyMap(ctx context.Context, rows prolly.Map) (rekeyed, re
 		return prolly.Map{}, prolly.Map{}, err
 	}
 
-	if sawDup {
-		dupKeys, err := dups.Map(ctx)
+	if hasDups {
+		dupKeys, err := dupMut.Map(ctx)
 		if err != nil {
 			return prolly.Map{}, prolly.Map{}, err
 		}
@@ -210,15 +213,30 @@ func (r *RowRekeyer) RekeyMap(ctx context.Context, rows prolly.Map) (rekeyed, re
 	return rekeyed, rejected, err
 }
 
+// Key builds the new primary key tuple for |k| and |v|.
+//
+// NULL fields in the new key are preserved. Such a key cannot be stored in a
+// map, but callers can still inspect it.
+func (r *RowRekeyer) Key(ctx context.Context, k, v val.Tuple) (val.Tuple, error) {
+	return r.buildTuple(ctx, r.kb, r.keySrcs, k, v, true)
+}
+
 // validateKey builds the new primary key for |k| and |v| and checks whether it
 // contains a NULL or already exists in |mut|.
 func (r *RowRekeyer) validateKey(ctx context.Context, mut *prolly.MutableMap, k, v val.Tuple) (val.Tuple, RekeyStatus, error) {
 	nk, err := r.Key(ctx, k, v)
-	if err != nil || r.newKD.HasNulls(nk) {
-		return nk, RekeyStatusNullKey, err
+	if err != nil {
+		return nil, RekeyStatusOK, err
 	}
-	if dup, err := mut.Has(ctx, nk); err != nil || dup {
-		return nk, RekeyStatusDuplicateKey, err
+	if r.newKD.HasNulls(nk) {
+		return nk, RekeyStatusNullKey, nil
+	}
+	dup, err := mut.Has(ctx, nk)
+	if err != nil {
+		return nil, RekeyStatusOK, err
+	}
+	if dup {
+		return nk, RekeyStatusDuplicateKey, nil
 	}
 	return nk, RekeyStatusOK, nil
 }
@@ -242,17 +260,9 @@ func (r *RowRekeyer) newMutableMap(ctx context.Context, kd, vd *val.TupleDesc) (
 	return m.Mutate(), nil
 }
 
-// Key returns the new primary key of |k| and |v|, without the new value.
-//
-// A NULL in the new key stays NULL. A map cannot key a row by such a NULL, but
-// the row can still be read.
-func (r *RowRekeyer) Key(ctx context.Context, k, v val.Tuple) (val.Tuple, error) {
-	return r.buildTuple(ctx, r.kb, r.keySrc, k, v, true)
-}
-
 // value returns the new value tuple of |k| and |v|.
 func (r *RowRekeyer) value(ctx context.Context, k, v val.Tuple) (val.Tuple, error) {
-	return r.buildTuple(ctx, r.vb, r.valSrc, k, v, false)
+	return r.buildTuple(ctx, r.vb, r.valSrcs, k, v, false)
 }
 
 // buildTuple populates |b| from |srcs| and builds a tuple, recycling |b| on
@@ -286,7 +296,8 @@ func IterRows(ctx context.Context, rows prolly.Map, cb func(k, v val.Tuple) erro
 		k, v, err := iter.Next(ctx)
 		if errors.Is(err, io.EOF) {
 			return nil
-		} else if err != nil {
+		}
+		if err != nil {
 			return err
 		}
 		if err = cb(k, v); err != nil {

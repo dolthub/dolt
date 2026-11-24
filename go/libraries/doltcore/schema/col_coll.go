@@ -137,19 +137,19 @@ func (cc *ColCollection) GetColumns() []Column {
 	return colsCopy
 }
 
-// MatchColumn returns the column of |cc| that holds the column |tc| of
-// |target|. Columns match by tag, or by name when neither tag appears on the
-// other side, as when a table is dropped and recreated.
-func (cc *ColCollection) MatchColumn(target *ColCollection, tc Column) (Column, bool) {
-	if col, ok := cc.GetByTag(tc.Tag); ok {
+// MatchColumn returns the column of |cc| corresponding to |targetCol| in
+// |target|. Columns match by tag, or case-insensitively by name when neither
+// tag appears on the other side, as when a table is dropped and recreated.
+func (cc *ColCollection) MatchColumn(target *ColCollection, targetCol Column) (Column, bool) {
+	if col, ok := cc.GetByTag(targetCol.Tag); ok {
 		return col, true
 	}
-	col, ok := cc.GetByNameCaseInsensitive(tc.Name)
+	col, ok := cc.GetByNameCaseInsensitive(targetCol.Name)
 	if !ok {
-		return Column{}, false
+		return InvalidCol, false
 	}
 	if _, ok := target.GetByTag(col.Tag); ok {
-		return Column{}, false
+		return InvalidCol, false
 	}
 	return col, true
 }
