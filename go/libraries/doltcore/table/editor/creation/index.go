@@ -254,19 +254,17 @@ func BuildUniqueProllyIndex(
 			return nil, err
 		}
 
-		if !idx.NullsNotDistinct() && prefixDesc.HasNulls(idxKey) {
-			continue
-		}
-
-		err = mut.GetPrefix(ctx, idxKey, prefixDesc, func(existingKey, _ val.Tuple) error {
-			// register a constraint violation if |idxKey| collides with |existingKey|
-			if existingKey != nil {
-				return cb(ctx, existingKey, idxKey)
+		// A distinct NULL cannot collide, but its row still belongs in the index.
+		if idx.NullsNotDistinct() || !prefixDesc.HasNulls(idxKey) {
+			err = mut.GetPrefix(ctx, idxKey, prefixDesc, func(existingKey, _ val.Tuple) error {
+				if existingKey != nil {
+					return cb(ctx, existingKey, idxKey)
+				}
+				return nil
+			})
+			if err != nil {
+				return nil, err
 			}
-			return nil
-		})
-		if err != nil {
-			return nil, err
 		}
 
 		if err = mut.Put(ctx, idxKey, val.EmptyTuple); err != nil {
