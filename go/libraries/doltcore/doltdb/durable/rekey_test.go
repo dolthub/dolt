@@ -63,7 +63,7 @@ func TestRowRekeyer(t *testing.T) {
 			[][]any{{10, 100}, {20, 200}, {20, 300}, {nil, 400}},
 		)
 
-		rekeyed, unpaired, err := rk.RekeyMap(ctx, rows)
+		rekeyed, rejected, err := rk.RekeyMap(ctx, rows)
 		require.NoError(t, err)
 		require.Equal(t, [][2][]any{
 			{{10}, {1, 100}},
@@ -74,7 +74,7 @@ func TestRowRekeyer(t *testing.T) {
 			{{2}, {20, 200}},
 			{{3}, {20, 300}},
 			{{4}, {nil, 400}},
-		}, collectIntRows(t, ctx, unpaired, oldKD, oldVD))
+		}, collectIntRows(t, ctx, rejected, oldKD, oldVD))
 	})
 
 	t.Run("recycle on error", func(t *testing.T) {

@@ -25,7 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// RekeyStatus reports the outcome of classifying a row or rekeying a map.
+// RekeyStatus reports the outcome of validating a new primary key or rekeying a map.
 type RekeyStatus uint8
 
 const (
@@ -127,7 +127,7 @@ func (r *RowRekeyer) RekeyUniqueMap(ctx context.Context, rows prolly.Map) (proll
 		} else if err != nil {
 			return prolly.Map{}, RekeyStatusOK, err
 		}
-		nk, status, err := r.classify(ctx, mut, k, v)
+		nk, status, err := r.validateKey(ctx, mut, k, v)
 		if err != nil || status != RekeyStatusOK {
 			return prolly.Map{}, status, err
 		}
@@ -140,16 +140,16 @@ func (r *RowRekeyer) RekeyUniqueMap(ctx context.Context, rows prolly.Map) (proll
 }
 
 // RekeyMap returns the rows of |rows| keyed by the new primary key, along with
-// any unpaired rows kept under the old primary key.
+// any rejected rows kept under the old primary key.
 //
-// Rows with a NULL in the new key or a duplicated new key are routed to
-// |unpaired|.
-func (r *RowRekeyer) RekeyMap(ctx context.Context, rows prolly.Map) (rekeyed, unpaired prolly.Map, err error) {
+// Rows whose new primary key contains a NULL or duplicates another row's new
+// primary key are routed to |rejected|.
+func (r *RowRekeyer) RekeyMap(ctx context.Context, rows prolly.Map) (rekeyed, rejected prolly.Map, err error) {
 	mut, err := r.newMutableMap(ctx, r.newKD, r.newVD)
 	if err != nil {
 		return prolly.Map{}, prolly.Map{}, err
 	}
-	unpairedMut, err := r.newMutableMap(ctx, r.oldKD, r.oldVD)
+	rejectedMut, err := r.newMutableMap(ctx, r.oldKD, r.oldVD)
 	if err != nil {
 		return prolly.Map{}, prolly.Map{}, err
 	}
@@ -160,13 +160,13 @@ func (r *RowRekeyer) RekeyMap(ctx context.Context, rows prolly.Map) (rekeyed, un
 
 	var sawDup bool
 	err = IterRows(ctx, rows, func(k, v val.Tuple) error {
-		nk, status, err := r.classify(ctx, mut, k, v)
+		nk, status, err := r.validateKey(ctx, mut, k, v)
 		if err != nil {
 			return err
 		}
 		switch status {
 		case RekeyStatusNullKey:
-			return unpairedMut.Put(ctx, k, v)
+			return rejectedMut.Put(ctx, k, v)
 		case RekeyStatusDuplicateKey:
 			sawDup = true
 			if exists, err := dups.Has(ctx, nk); err != nil || exists {
@@ -196,7 +196,7 @@ func (r *RowRekeyer) RekeyMap(ctx context.Context, rows prolly.Map) (rekeyed, un
 			if err = mut.Delete(ctx, nk); err != nil {
 				return err
 			}
-			return unpairedMut.Put(ctx, k, v)
+			return rejectedMut.Put(ctx, k, v)
 		})
 		if err != nil {
 			return prolly.Map{}, prolly.Map{}, err
@@ -206,13 +206,13 @@ func (r *RowRekeyer) RekeyMap(ctx context.Context, rows prolly.Map) (rekeyed, un
 	if rekeyed, err = mut.Map(ctx); err != nil {
 		return prolly.Map{}, prolly.Map{}, err
 	}
-	unpaired, err = unpairedMut.Map(ctx)
-	return rekeyed, unpaired, err
+	rejected, err = rejectedMut.Map(ctx)
+	return rekeyed, rejected, err
 }
 
-// classify builds the new primary key for |k| and |v| and reports whether it
+// validateKey builds the new primary key for |k| and |v| and checks whether it
 // contains a NULL or already exists in |mut|.
-func (r *RowRekeyer) classify(ctx context.Context, mut *prolly.MutableMap, k, v val.Tuple) (val.Tuple, RekeyStatus, error) {
+func (r *RowRekeyer) validateKey(ctx context.Context, mut *prolly.MutableMap, k, v val.Tuple) (val.Tuple, RekeyStatus, error) {
 	nk, err := r.Key(ctx, k, v)
 	if err != nil || r.newKD.HasNulls(nk) {
 		return nk, RekeyStatusNullKey, err

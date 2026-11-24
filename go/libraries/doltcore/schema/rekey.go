@@ -24,9 +24,9 @@ import (
 // Rekey returns |sch| with the primary key of |target|.
 //
 // It returns false when |sch| has a full text, vector or spatial index, or
-// when a key column of |target| is missing from |sch|, is virtual, or has a
-// type that cannot be rekeyed. Key columns match as
-// [ColCollection.MatchingColumn] describes.
+// when a key column of |target| is missing from |sch|, is virtual, or has an
+// incompatible type. Key columns match as [ColCollection.MatchColumn]
+// describes.
 //
 // A column that joins the primary key becomes NOT NULL, as ALTER TABLE ... ADD
 // PRIMARY KEY makes it. A key column takes the type of |target|, so that its
@@ -40,8 +40,8 @@ func Rekey(sch, target Schema) (Schema, bool, error) {
 	targetPK := target.GetPKCols()
 	keyPos := make(map[uint64]int, targetPK.Size())
 	for i, tc := range targetPK.GetColumns() {
-		col, ok := sch.GetAllCols().MatchingColumn(target.GetAllCols(), tc)
-		if !ok || col.Virtual || !rekeyableType(col, tc) {
+		col, ok := sch.GetAllCols().MatchColumn(target.GetAllCols(), tc)
+		if !ok || col.Virtual || !compatibleKeyType(col, tc) {
 			return nil, false, nil
 		}
 		keyPos[col.Tag] = i
@@ -73,9 +73,9 @@ func Rekey(sch, target Schema) (Schema, bool, error) {
 	return newSch, true, nil
 }
 
-// rekeyableType reports whether the key column |from| can be rekeyed to |to|
-// by copying its stored bytes.
-func rekeyableType(from, to Column) bool {
+// compatibleKeyType reports whether the key column |from| can be copied as raw
+// bytes into the key column |to|.
+func compatibleKeyType(from, to Column) bool {
 	if from.TypeInfo.ToSqlType().Equals(to.TypeInfo.ToSqlType()) {
 		return true
 	}

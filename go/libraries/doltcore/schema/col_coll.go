@@ -137,10 +137,10 @@ func (cc *ColCollection) GetColumns() []Column {
 	return colsCopy
 }
 
-// MatchingColumn returns the column of |cc| that holds the column |tc| of
+// MatchColumn returns the column of |cc| that holds the column |tc| of
 // |target|. Columns match by tag, or by name when neither tag appears on the
 // other side, as when a table is dropped and recreated.
-func (cc *ColCollection) MatchingColumn(target *ColCollection, tc Column) (Column, bool) {
+func (cc *ColCollection) MatchColumn(target *ColCollection, tc Column) (Column, bool) {
 	if col, ok := cc.GetByTag(tc.Tag); ok {
 		return col, true
 	}
