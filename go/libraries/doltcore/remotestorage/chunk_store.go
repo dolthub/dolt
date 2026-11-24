@@ -41,6 +41,7 @@ import (
 
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage/internal/reliable"
+	"github.com/dolthub/dolt/go/libraries/utils/netretry"
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -79,16 +80,8 @@ var _ chunks.LoggingChunkStore = (*DoltChunkStore)(nil)
 
 var tracer = otel.Tracer("github.com/dolthub/dolt/go/libraries/doltcore/remotestorage")
 
-func uploadBackOff(ctx context.Context, max int) backoff.BackOff {
-	ret := backoff.NewExponentialBackOff()
-	ret.MaxInterval = 5 * time.Second
-	return backoff.WithContext(backoff.WithMaxRetries(ret, uint64(max)), ctx)
-}
-
-func downloadBackOff(ctx context.Context, max int) backoff.BackOff {
-	ret := backoff.NewExponentialBackOff()
-	ret.MaxInterval = 5 * time.Second
-	return backoff.WithContext(backoff.WithMaxRetries(ret, uint64(max)), ctx)
+func networkBackOff(ctx context.Context, maxRetries int) backoff.BackOff {
+	return backoff.WithContext(backoff.WithMaxRetries(netretry.NewBackOff(), uint64(maxRetries)), ctx)
 }
 
 type HTTPFetcher interface {
@@ -109,8 +102,8 @@ type NetworkRequestParams struct {
 var defaultRequestParams = NetworkRequestParams{
 	StartingConcurrentDownloads:    64,
 	MaximumConcurrentDownloads:     64,
-	UploadRetryCount:               5,
-	DownloadRetryCount:             5,
+	UploadRetryCount:               netretry.Count,
+	DownloadRetryCount:             netretry.Count,
 	ThroughputMinimumCheckInterval: time.Second,
 	ThroughputMinimumBytesPerCheck: 1024,
 	ThroughputMinimumNumIntervals:  5,
@@ -462,7 +455,7 @@ func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, he
 			Health:  health,
 			Logf:    logf,
 			BackOffFact: func(ctx context.Context) backoff.BackOff {
-				return downloadBackOff(ctx, params.DownloadRetryCount)
+				return networkBackOff(ctx, params.DownloadRetryCount)
 			},
 			Throughput: reliable.MinimumThroughputCheck{
 				CheckInterval: params.ThroughputMinimumCheckInterval,
@@ -1044,7 +1037,7 @@ func (dcs *DoltChunkStore) uploadTableFileWithRetries(ctx context.Context, table
 		return nil
 	}
 
-	return backoff.Retry(op, uploadBackOff(ctx, dcs.params.UploadRetryCount))
+	return backoff.Retry(op, networkBackOff(ctx, dcs.params.UploadRetryCount))
 }
 
 type Sizer interface {

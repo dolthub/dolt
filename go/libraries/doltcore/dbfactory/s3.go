@@ -27,6 +27,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
+	"github.com/dolthub/dolt/go/libraries/utils/netretry"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
@@ -163,7 +164,7 @@ func newS3Client(ctx context.Context, routing s3Routing) (*s3.Client, error) {
 		return nil, err
 	}
 
-	return s3.NewFromConfig(cfg, func(o *s3.Options) {
+	return s3.NewFromConfig(cfg, netretry.WithS3Retryer, func(o *s3.Options) {
 		if routing.endpoint != "" {
 			o.BaseEndpoint = aws.String(routing.endpoint)
 		}
