@@ -650,7 +650,7 @@ var MergeSamePrimaryKeyChangeScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "same pk change on both sides: new key column widened varchar",
+		Name: "rekey ancestor: promoted varchar primary key widened with same collation",
 		SetUpScript: samePkChangeSetup(
 			"CREATE TABLE t (a INT NOT NULL, b VARCHAR(10) NOT NULL, v INT, PRIMARY KEY (a));",
 			[]string{"INSERT INTO t VALUES (1, 'one', 10), (2, 'two', 20);"},
@@ -669,7 +669,7 @@ var MergeSamePrimaryKeyChangeScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "same pk change on both sides: ancestor has a virtual column before a not-null column",
+		Name: "rekey ancestor: virtual column preceding not-null column preserves null validation",
 		SetUpScript: samePkChangeSetup(
 			"CREATE TABLE t (a INT NOT NULL, b INT NOT NULL, g INT AS (a + b) VIRTUAL, x INT NOT NULL, v INT, PRIMARY KEY (a));",
 			[]string{"INSERT INTO t (a, b, x, v) VALUES (1, 1, 100, 10), (2, 2, 200, 20);"},

@@ -66,46 +66,23 @@ func NewRowRekeyer(ns tree.NodeStore, sch, newSch schema.Schema) (*RowRekeyer, b
 	oldKD, oldVD := sch.GetMapDescriptors(ns)
 	newKD, newVD := newSch.GetMapDescriptors(ns)
 	oldPK, oldVals := sch.GetPKCols(), sch.GetNonPKCols()
-
-	mapFields := func(cols *schema.ColCollection, dest *val.TupleDesc) ([]fieldSource, bool) {
-		srcs := make([]fieldSource, dest.Count())
-		for i := range srcs {
-			col := cols.GetByStoredIndex(i)
-			var src fieldSource
-			if j, ok := oldPK.TagToIdx[col.Tag]; ok {
-				src = fieldSource{desc: oldKD, idx: j, fromKey: true}
-			} else if j, ok := oldVals.StoredIndexByTag(col.Tag); ok {
-				src = fieldSource{desc: oldVD, idx: j}
-			} else {
-				return nil, false
-			}
-			if src.desc.Types[src.idx].Enc != dest.Types[i].Enc {
-				return nil, false
-			}
-			srcs[i] = src
-		}
-		return srcs, true
+	r := &RowRekeyer{
+		ns:    ns,
+		kb:    val.NewTupleBuilder(newKD, ns),
+		vb:    val.NewTupleBuilder(newVD, ns),
+		oldKD: oldKD,
+		oldVD: oldVD,
+		newKD: newKD,
+		newVD: newVD,
 	}
-
-	keySrcs, ok := mapFields(newSch.GetPKCols(), newKD)
-	if !ok {
+	var ok bool
+	if r.keySrcs, ok = r.mapFields(oldPK, oldVals, newSch.GetPKCols(), newKD); !ok {
 		return nil, false
 	}
-	valSrcs, ok := mapFields(newSch.GetNonPKCols(), newVD)
-	if !ok {
+	if r.valSrcs, ok = r.mapFields(oldPK, oldVals, newSch.GetNonPKCols(), newVD); !ok {
 		return nil, false
 	}
-	return &RowRekeyer{
-		ns:      ns,
-		keySrcs: keySrcs,
-		valSrcs: valSrcs,
-		kb:      val.NewTupleBuilder(newKD, ns),
-		vb:      val.NewTupleBuilder(newVD, ns),
-		oldKD:   oldKD,
-		oldVD:   oldVD,
-		newKD:   newKD,
-		newVD:   newVD,
-	}, true
+	return r, true
 }
 
 // RekeyMapStrict returns the rows of |rows| keyed by the new primary key.
@@ -305,4 +282,26 @@ func (s fieldSource) field(k, v val.Tuple) []byte {
 		return s.desc.GetField(s.idx, k)
 	}
 	return s.desc.GetField(s.idx, v)
+}
+
+// mapFields locates each stored column of |target| in |oldPK| or |oldVals| and
+// verifies its encoding matches |dest|.
+func (r *RowRekeyer) mapFields(oldPK, oldVals, target *schema.ColCollection, dest *val.TupleDesc) ([]fieldSource, bool) {
+	srcs := make([]fieldSource, dest.Count())
+	for i := range srcs {
+		col := target.GetByStoredIndex(i)
+		var src fieldSource
+		if j, ok := oldPK.TagToIdx[col.Tag]; ok {
+			src = fieldSource{desc: r.oldKD, idx: j, fromKey: true}
+		} else if j, ok := oldVals.StoredIndexByTag(col.Tag); ok {
+			src = fieldSource{desc: r.oldVD, idx: j}
+		} else {
+			return nil, false
+		}
+		if src.desc.Types[src.idx].Enc != dest.Types[i].Enc {
+			return nil, false
+		}
+		srcs[i] = src
+	}
+	return srcs, true
 }
