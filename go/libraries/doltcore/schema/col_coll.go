@@ -137,16 +137,6 @@ func (cc *ColCollection) GetColumns() []Column {
 	return colsCopy
 }
 
-// StoredColumns returns the columns that tuples store, in stored order.
-// Virtual columns are computed on read, so no tuple holds them.
-func (cc *ColCollection) StoredColumns() []Column {
-	cols := make([]Column, len(cc.storedIndexes))
-	for i, idx := range cc.storedIndexes {
-		cols[i] = cc.cols[idx]
-	}
-	return cols
-}
-
 // MatchingColumn returns the column of |cc| that holds the column |tc| of
 // |target|. Columns match by tag, or by name when neither tag appears on the
 // other side, as when a table is dropped and recreated.

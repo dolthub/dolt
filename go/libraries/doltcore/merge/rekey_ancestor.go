@@ -292,6 +292,10 @@ func RekeyTable(ctx *sql.Context, name doltdb.TableName, tbl *doltdb.Table, sch,
 	}
 
 	vrw, ns := tbl.ValueReadWriter(), tbl.NodeStore()
+	rk, ok := durable.NewRowRekeyer(ns, sch, newSch)
+	if !ok {
+		return nil, false, nil
+	}
 	rd, err := tbl.GetRowData(ctx)
 	if err != nil {
 		return nil, false, err
@@ -299,10 +303,6 @@ func RekeyTable(ctx *sql.Context, name doltdb.TableName, tbl *doltdb.Table, sch,
 	oldRows, err := durable.ProllyMapFromIndex(rd)
 	if err != nil {
 		return nil, false, err
-	}
-	rk, ok := durable.NewRowRekeyer(ns, sch, newSch)
-	if !ok {
-		return nil, false, nil
 	}
 	newRows, status, err := rk.RekeyUniqueMap(ctx, oldRows)
 	if err != nil {

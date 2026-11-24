@@ -63,9 +63,8 @@ func TestRowRekeyer(t *testing.T) {
 			[][]any{{10, 100}, {20, 200}, {20, 300}, {nil, 400}},
 		)
 
-		rekeyed, unpaired, hasNullKey, err := rk.RekeyMap(ctx, rows)
+		rekeyed, unpaired, err := rk.RekeyMap(ctx, rows)
 		require.NoError(t, err)
-		require.True(t, hasNullKey)
 		require.Equal(t, [][2][]any{
 			{{10}, {1, 100}},
 		}, collectIntRows(t, ctx, rekeyed, newKD, newVD))
@@ -116,11 +115,11 @@ func TestRowRekeyer(t *testing.T) {
 		require.NoError(t, err)
 
 		ns.failWrite = true
-		_, _, err = rk.Rekey(ctx, k1, v1)
+		_, err = rk.value(ctx, k1, v1)
 		require.Error(t, err)
 
 		ns.failWrite = false
-		_, nv2, err := rk.Rekey(ctx, k2, v2)
+		nv2, err := rk.value(ctx, k2, v2)
 		require.NoError(t, err)
 		require.True(t, rk.newVD.IsNull(0, nv2))
 	})
@@ -140,25 +139,16 @@ func (f *failingWriteNodeStore) WriteBytes(ctx context.Context, bs []byte) (hash
 }
 
 // newIntMap constructs a [prolly.Map] from integer key and value slices.
-func newIntMap(t *testing.T, ctx context.Context, ns tree.NodeStore, sch schema.Schema, keys [][]any, vals [][]any) prolly.Map {
+func newIntMap(t *testing.T, ctx context.Context, ns tree.NodeStore, sch schema.Schema, keys, vals [][]any) prolly.Map {
 	t.Helper()
 	kd, vd := sch.GetMapDescriptors(ns)
 	m, err := prolly.NewMapFromTuples(ctx, ns, kd, vd)
 	require.NoError(t, err)
 	mut := m.Mutate()
-	kb := val.NewTupleBuilder(kd, ns)
-	vb := val.NewTupleBuilder(vd, ns)
+	kb, vb := val.NewTupleBuilder(kd, ns), val.NewTupleBuilder(vd, ns)
 	for i := range keys {
-		for j, v := range keys[i] {
-			if v != nil {
-				kb.PutInt64(j, int64(v.(int)))
-			}
-		}
-		for j, v := range vals[i] {
-			if v != nil {
-				vb.PutInt64(j, int64(v.(int)))
-			}
-		}
+		putInts(kb, keys[i])
+		putInts(vb, vals[i])
 		k, err := kb.Build(ctx, ns.Pool())
 		require.NoError(t, err)
 		v, err := vb.Build(ctx, ns.Pool())
@@ -175,21 +165,29 @@ func collectIntRows(t *testing.T, ctx context.Context, m prolly.Map, kd, vd *val
 	t.Helper()
 	var out [][2][]any
 	err := IterRows(ctx, m, func(k, v val.Tuple) error {
-		ks := make([]any, kd.Count())
-		for i := 0; i < kd.Count(); i++ {
-			if val64, ok := kd.GetInt64(i, k); ok {
-				ks[i] = int(val64)
-			}
-		}
-		vs := make([]any, vd.Count())
-		for i := 0; i < vd.Count(); i++ {
-			if val64, ok := vd.GetInt64(i, v); ok {
-				vs[i] = int(val64)
-			}
-		}
-		out = append(out, [2][]any{ks, vs})
+		out = append(out, [2][]any{readInts(kd, k), readInts(vd, v)})
 		return nil
 	})
 	require.NoError(t, err)
+	return out
+}
+
+// putInts writes each non-nil int element of |xs| into |b|.
+func putInts(b *val.TupleBuilder, xs []any) {
+	for i, x := range xs {
+		if x != nil {
+			b.PutInt64(i, int64(x.(int)))
+		}
+	}
+}
+
+// readInts decodes each int64 field of |tup| with |d|.
+func readInts(d *val.TupleDesc, tup val.Tuple) []any {
+	out := make([]any, d.Count())
+	for i := range out {
+		if v, ok := d.GetInt64(i, tup); ok {
+			out[i] = int(v)
+		}
+	}
 	return out
 }

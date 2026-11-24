@@ -15,6 +15,8 @@
 package schema
 
 import (
+	"slices"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/sqltypes"
 )
@@ -36,39 +38,32 @@ func Rekey(sch, target Schema) (Schema, bool, error) {
 		}
 	}
 	targetPK := target.GetPKCols()
-	// keyTags holds the tags in |sch| of the key columns, in key order, and
-	// targetCols the target column that each of those tags takes.
-	keyTags := make([]uint64, targetPK.Size())
-	targetCols := make(map[uint64]Column, targetPK.Size())
+	keyPos := make(map[uint64]int, targetPK.Size())
 	for i, tc := range targetPK.GetColumns() {
 		col, ok := sch.GetAllCols().MatchingColumn(target.GetAllCols(), tc)
 		if !ok || col.Virtual || !rekeyableType(col, tc) {
 			return nil, false, nil
 		}
-		keyTags[i] = col.Tag
-		targetCols[col.Tag] = tc
+		keyPos[col.Tag] = i
 	}
 
 	cols := sch.GetAllCols().GetColumns()
 	newCols := make([]Column, len(cols))
+	pkOrdinals := make([]int, targetPK.Size())
 	for i, col := range cols {
-		tc, inPK := targetCols[col.Tag]
-		wasNullable := col.IsNullable()
-		col.IsPartOfPK = inPK
+		pos, inPK := keyPos[col.Tag]
 		if inPK {
-			col.TypeInfo = tc.TypeInfo
+			// Check nullability before setting IsPartOfPK, which makes IsNullable false.
+			if col.IsNullable() {
+				col.Constraints = append(slices.Clone(col.Constraints), NotNullConstraint{})
+			}
+			col.TypeInfo = targetPK.GetByIndex(pos).TypeInfo
+			pkOrdinals[pos] = i
 		}
-		if inPK && wasNullable {
-			col.Constraints = append(append([]ColConstraint(nil), col.Constraints...), NotNullConstraint{})
-		}
+		col.IsPartOfPK = inPK
 		newCols[i] = col
 	}
-	allCols := NewColCollection(newCols...)
-	pkOrdinals := make([]int, len(keyTags))
-	for i, tag := range keyTags {
-		pkOrdinals[i] = allCols.TagToIdx[tag]
-	}
-	newSch, err := NewSchema(allCols, pkOrdinals, sch.GetCollation(), nil, sch.Checks())
+	newSch, err := NewSchema(NewColCollection(newCols...), pkOrdinals, sch.GetCollation(), nil, sch.Checks())
 	if err != nil {
 		return nil, false, err
 	}
@@ -88,11 +83,10 @@ func rekeyableType(from, to Column) bool {
 	// key bytes and keeps every existing value valid in the wider type.
 	fromStr, ok1 := from.TypeInfo.ToSqlType().(sql.StringType)
 	toStr, ok2 := to.TypeInfo.ToSqlType().(sql.StringType)
-	if !ok1 || !ok2 {
-		return false
-	}
-	isVarChar := fromStr.Type() == sqltypes.VarChar && toStr.Type() == sqltypes.VarChar
-	sameFormat := from.TypeInfo.Encoding() == to.TypeInfo.Encoding() &&
-		fromStr.Collation().Equals(toStr.Collation())
-	return isVarChar && sameFormat && fromStr.MaxCharacterLength() <= toStr.MaxCharacterLength()
+	return ok1 && ok2 &&
+		fromStr.Type() == sqltypes.VarChar &&
+		toStr.Type() == sqltypes.VarChar &&
+		from.TypeInfo.Encoding() == to.TypeInfo.Encoding() &&
+		fromStr.Collation().Equals(toStr.Collation()) &&
+		fromStr.MaxCharacterLength() <= toStr.MaxCharacterLength()
 }

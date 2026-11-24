@@ -278,9 +278,9 @@ const (
 	// PrimaryKeysSameTags means every key column has the same tag.
 	PrimaryKeysSameTags
 
-	// PrimaryKeysRetagged means every key column has the same SQL type and the
-	// same tag or name, and some tags differ, so rows pair by name.
-	PrimaryKeysRetagged
+	// primaryKeysRetagged means every key column has the same SQL type and the
+	// same tag or name, and some tags differ.
+	primaryKeysRetagged
 )
 
 // ComparePrimaryKeys reports how the primary keys of |fromSchema| and
@@ -291,7 +291,8 @@ const (
 //
 // Two keyless schemas return PrimaryKeysSameTags, since neither has key columns
 // that can differ. A keyed schema against a keyless one returns
-// PrimaryKeysDiffer.
+// PrimaryKeysDiffer, and [diff.Stat] rejects that pairing. Nil inputs are
+// handled by [diff.StatForTableDelta].
 func ComparePrimaryKeys(fromSchema, toSchema Schema) PrimaryKeyComparisonType {
 	if fromSchema == nil && toSchema == nil {
 		return PrimaryKeysDiffer
@@ -333,7 +334,7 @@ func ComparePrimaryKeys(fromSchema, toSchema Schema) PrimaryKeyComparisonType {
 			strings.ToLower(tagCol.Name) != strings.ToLower(fromCol.Name) {
 			return PrimaryKeysDiffer
 		}
-		comparison = PrimaryKeysRetagged
+		comparison = primaryKeysRetagged
 	}
 
 	return comparison

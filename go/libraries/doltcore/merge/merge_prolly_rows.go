@@ -1468,8 +1468,6 @@ func newNullValidator(
 	}, nil
 }
 
-// validateDiff checks |diff| for NOT NULL constraint violations and records any
-// violations as merge artifacts.
 func (nv nullValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) (count int, err error) {
 	switch diff.Op {
 	case tree.DiffOpRightAdd, tree.DiffOpRightModify:
