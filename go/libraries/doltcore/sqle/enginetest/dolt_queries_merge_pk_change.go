@@ -615,11 +615,11 @@ var MergeSamePrimaryKeyChangeScripts = []queries.ScriptTest{
 	{
 		Name: "same pk change on both sides: ancestor has a virtual column",
 		SetUpScript: samePkChangeSetup(
-			"CREATE TABLE t (a INT NOT NULL, b INT NOT NULL, g INT AS (a + b) VIRTUAL, x INT NOT NULL, v INT, PRIMARY KEY (a));",
-			[]string{"INSERT INTO t (a, b, x, v) VALUES (1, 1, 100, 10), (2, 2, 200, 20);"},
+			"CREATE TABLE t (a INT NOT NULL, b INT NOT NULL, v INT, g INT AS (a + b) VIRTUAL, PRIMARY KEY (a));",
+			[]string{"INSERT INTO t (a, b, v) VALUES (1, 1, 10), (2, 2, 20);"},
 			pkChangeAlter,
-			[]string{"UPDATE t SET x = 101 WHERE a = 1;"},
-			[]string{"UPDATE t SET v = NULL WHERE a = 1;"}),
+			nil,
+			[]string{"UPDATE t SET v = 11 WHERE a = 1;"}),
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// Tuples do not store g, so the ancestor rekeys by its stored columns.
@@ -628,7 +628,7 @@ var MergeSamePrimaryKeyChangeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * FROM t ORDER BY a;",
-				Expected: []sql.Row{{1, 1, 2, 101, nil}, {2, 2, 4, 200, 20}},
+				Expected: []sql.Row{{1, 1, 11, 2}, {2, 2, 20, 4}},
 			},
 		},
 	},
@@ -665,6 +665,25 @@ var MergeSamePrimaryKeyChangeScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT * FROM t ORDER BY a;",
 				Expected: []sql.Row{{1, "one", 11}, {2, "two", 20}},
+			},
+		},
+	},
+	{
+		Name: "same pk change on both sides: ancestor has a virtual column before a not-null column",
+		SetUpScript: samePkChangeSetup(
+			"CREATE TABLE t (a INT NOT NULL, b INT NOT NULL, g INT AS (a + b) VIRTUAL, x INT NOT NULL, v INT, PRIMARY KEY (a));",
+			[]string{"INSERT INTO t (a, b, x, v) VALUES (1, 1, 100, 10), (2, 2, 200, 20);"},
+			pkChangeAlter,
+			[]string{"UPDATE t SET x = 101 WHERE a = 1;"},
+			[]string{"UPDATE t SET v = NULL WHERE a = 1;"}),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t ORDER BY a;",
+				Expected: []sql.Row{{1, 1, 2, 101, nil}, {2, 2, 4, 200, 20}},
 			},
 		},
 	},
