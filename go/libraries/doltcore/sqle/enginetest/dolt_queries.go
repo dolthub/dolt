@@ -1071,6 +1071,34 @@ var DoltScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "left outer merge join with a single matching right row per key and non-merge filter (https://github.com/dolthub/doltgresql/issues/3939)",
+		SetUpScript: []string{
+			"create table r (id varchar(4) primary key, grp varchar(4) not null, key(grp))",
+			"create table l (id varchar(4) primary key, k varchar(4), m varchar(4) not null, st varchar(10) not null, key(k), key(m))",
+			"insert into r values ('0a','01'),('14','01'),('1e','02')",
+			"insert into l values ('a1','0a','02','active'),('a2','0a','01','active'),('b1','14','01','active'),('b2','1e','02','active'),('b3','1e','02','removed'),('b4',null,'02','active'),('b5','14','09','active'),('b6','1e','09','active')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select /*+ JOIN_ORDER(f, s) MERGE_JOIN(f, s) */ f.id, s.id from l f " +
+					"left join r s on s.id = f.k and s.grp = f.m where f.st = 'active' and f.k is not null order by 1",
+				Expected: []sql.Row{
+					{"a1", nil},
+					{"a2", "0a"},
+					{"b1", "14"},
+					{"b2", "1e"},
+					{"b5", nil},
+					{"b6", nil},
+				},
+			},
+			{
+				Query: "select /*+ JOIN_ORDER(f, s) MERGE_JOIN(f, s) */ f.id from l f " +
+					"left join r s on s.id = f.k and s.grp = f.m where f.st = 'active' and f.k is not null and s.id is null order by 1",
+				Expected: []sql.Row{{"a1"}, {"b5"}, {"b6"}},
+			},
+		},
+	},
+	{
 		Name: "Show create table with various keys and constraints",
 		SetUpScript: []string{
 			"create table t1(a int primary key, b varchar(10) not null default 'abc')",
