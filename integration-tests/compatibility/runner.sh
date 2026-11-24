@@ -151,6 +151,43 @@ function test_desc_index_compatibility() {
   DOLT_OLD_BIN="$(pwd)/$bin/dolt" REPO_DIR="$(pwd)/repos/desc_index-$ver" bats --print-output-on-failure ./test_files/bats/desc_index_breaking
 }
 
+function test_rebase_plan_compatibility() {
+  ver=$1
+  bin=`download_release "$ver"`
+  DOLT_NEW_BIN=`which dolt`
+
+  mkdir "repos/$ver-rebase-plan"
+  echo "Run rebase plan tests: verify the current dolt can use a rebase in progress from old Dolt version $ver"
+  DOLT_OLD_BIN="$(pwd)/$bin/dolt" DOLT_NEW_BIN="$DOLT_NEW_BIN" REPO_DIR="$(pwd)/repos/$ver-rebase-plan" bats --print-output-on-failure ./test_files/bats/rebase_plan
+}
+
+function test_rebase_plan_breaking_compatibility() {
+  ver=$1
+  bin=`download_release "$ver"`
+  DOLT_NEW_BIN=`which dolt`
+
+  mkdir "repos/$ver-rebase-plan-breaking"
+  echo "Run rebase plan breaking tests: verify old Dolt version $ver fails cleanly on a rebase in progress from the current dolt"
+  DOLT_OLD_BIN="$(pwd)/$bin/dolt" DOLT_NEW_BIN="$DOLT_NEW_BIN" REPO_DIR="$(pwd)/repos/$ver-rebase-plan-breaking" bats --print-output-on-failure ./test_files/bats/rebase_plan_breaking
+}
+
+function setup_repo_rekeyed_conflicts() {
+  dir=repos/"$1"
+  ./test_files/setup_repo_rekeyed_conflicts.sh "$dir"
+}
+
+function test_rekeyed_conflicts_compatibility() {
+  ver=$1
+  bin=`download_release "$ver"`
+  DOLT_NEW_BIN=`which dolt`
+
+  # create a repo with conflicts against a rekeyed merge base using the current dolt
+  setup_repo_rekeyed_conflicts "rekeyed_conflicts-$ver"
+
+  echo "Run rekeyed conflict tests: verify old Dolt version $ver fails only on conflicts with a rekeyed base"
+  DOLT_OLD_BIN="$(pwd)/$bin/dolt" DOLT_NEW_BIN="$DOLT_NEW_BIN" REPO_DIR="$(pwd)/repos/rekeyed_conflicts-$ver" bats --print-output-on-failure ./test_files/bats/rekeyed_conflicts_breaking
+}
+
 function list_forward_compatible_versions() {
   grep -v '^ *#' < test_files/forward_compatible_versions.txt
 }
@@ -237,6 +274,7 @@ _main() {
   # test backward compatibility
   list_backward_compatible_versions | while IFS= read -r ver; do
       test_backward_compatibility "$ver"
+      test_rebase_plan_compatibility "$ver"
   done
 
   # setup repo for current dolt version
@@ -257,6 +295,22 @@ _main() {
   if [ -s "test_files/2_0_forward_compatible_versions.txt" ]; then
     list_2_0_forward_compatible_versions | while IFS= read -r ver; do
       test_desc_index_compatibility "$ver"
+    done
+  fi
+
+  # a rebase plan from the current version is written with a new schema field, so older versions must fail reading
+  # the plan, and only the plan
+  if [ -s "test_files/2_0_forward_compatible_versions.txt" ]; then
+    list_2_0_forward_compatible_versions | while IFS= read -r ver; do
+      test_rebase_plan_breaking_compatibility "$ver"
+    done
+  fi
+
+  # the conflicts of a merge against a rekeyed merge base reference it in a new merge artifacts field, so otherwise
+  # forward compatible versions must fail on them and nothing else
+  if [ -s "test_files/2_0_forward_compatible_versions.txt" ]; then
+    list_2_0_forward_compatible_versions | while IFS= read -r ver; do
+      test_rekeyed_conflicts_compatibility "$ver"
     done
   fi
 

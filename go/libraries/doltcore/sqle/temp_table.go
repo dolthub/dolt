@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -43,22 +44,25 @@ type TempTable struct {
 	table *doltdb.Table
 	sch   schema.Schema
 
-	lookup sql.IndexLookup
-
-	ed   dsess.TableWriter
-	opts editor.Options
+	ddb *doltdb.DoltDB
+	// writeSession owns |ed|.
+	writeSession dsess.WriteSession
+	ed           dsess.TableWriter
+	opts         editor.Options
 }
 
 var _ sql.TemporaryTable = &TempTable{}
 var _ sql.Table = &TempTable{}
 var _ sql.PrimaryKeyTable = &TempTable{}
-var _ sql.IndexedTable = &TempTable{}
+var _ sql.IndexAddressableTable = &TempTable{}
+var _ sql.IndexedTable = &indexedTempTable{}
 var _ sql.IndexAlterableTable = &TempTable{}
 var _ sql.ForeignKeyTable = &TempTable{}
 var _ sql.CheckTable = &TempTable{}
 var _ sql.CheckAlterableTable = &TempTable{}
 var _ sql.StatisticsTable = &TempTable{}
 var _ sql.AutoIncrementTable = &TempTable{}
+var _ dsess.GCRootedTable = &TempTable{}
 
 func NewTempTable(
 	ctx *sql.Context,
@@ -79,7 +83,10 @@ func NewTempTable(
 		return nil, fmt.Errorf("database %s not found in session", db)
 	}
 
-	ws := dbState.WorkingSet()
+	ws, err := dbState.WorkingSet(ctx)
+	if err != nil {
+		return nil, err
+	}
 	if ws == nil {
 		return nil, doltdb.ErrOperationNotSupportedInDetachedHead
 	}
@@ -142,11 +149,12 @@ func NewTempTable(
 		pkSch:     pkSch,
 		table:     tbl,
 		sch:       sch,
+		ddb:       ddb,
 		opts:      opts,
 	}
 
-	writeSession := writer.NewWriteSession(db, newWs, ait, setTempTableRoot(tempTable), opts)
-	tempTable.ed, err = writeSession.GetTableWriter(ctx, doltdb.TableName{Name: name})
+	tempTable.writeSession = writer.NewDetachedWriteSession(db, newWs, ait, setTempTableRoot(tempTable), opts)
+	tempTable.ed, err = tempTable.writeSession.GetTableWriter(ctx, doltdb.TableName{Name: name})
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +182,10 @@ func setTempTableRoot(t *TempTable) func(ctx *sql.Context, dbName string, newRoo
 			return fmt.Errorf("database %s not found in session", t.dbName)
 		}
 
-		ws := dbState.WorkingSet()
+		ws, err := dbState.WorkingSet(ctx)
+		if err != nil {
+			return err
+		}
 		if ws == nil {
 			return doltdb.ErrOperationNotSupportedInDetachedHead
 		}
@@ -185,14 +196,32 @@ func setTempTableRoot(t *TempTable) func(ctx *sql.Context, dbName string, newRoo
 			return err
 		}
 
-		writeSession := writer.NewWriteSession(t.dbName, newWs, ait, setTempTableRoot(t), t.opts)
-		t.ed, err = writeSession.GetTableWriter(ctx, doltdb.TableName{Name: t.tableName})
+		writeSession := writer.NewDetachedWriteSession(t.dbName, newWs, ait, setTempTableRoot(t), t.opts)
+		ed, err := writeSession.GetTableWriter(ctx, doltdb.TableName{Name: t.tableName})
 		if err != nil {
 			return err
 		}
+		t.writeSession, t.ed = writeSession, ed
 
 		return nil
 	}
+}
+
+// GCRoots implements dsess.GCRootedTable. The write session's root is the base for the next write, and it lags
+// |t.table| after index and check DDL, so each has chunks the other does not reach.
+func (t *TempTable) GCRoots(ctx context.Context, ddb *doltdb.DoltDB) ([]hash.Hash, error) {
+	if ddb != t.ddb {
+		return nil, nil
+	}
+	rootHash, err := t.ddb.RootValueGCHash(ctx, t.writeSession.GetWorkingSet().WorkingRoot())
+	if err != nil {
+		return nil, err
+	}
+	tableHash, err := t.ddb.WriteGCTable(ctx, t.table)
+	if err != nil {
+		return nil, err
+	}
+	return []hash.Hash{rootHash, tableHash}, nil
 }
 
 func (t *TempTable) RowCount(ctx *sql.Context) (uint64, bool, error) {
@@ -265,21 +294,43 @@ func (t *TempTable) DataCacheKey(ctx *sql.Context) (doltdb.DataCacheKey, bool, e
 	return doltdb.DataCacheKey{}, false, nil
 }
 
-func (t *TempTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
-	t.lookup = lookup
-	return t.Partitions(ctx)
+func (t *TempTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
+	return t.PartitionValueRowWriter(ctx, partition, sql.ColSet{})
 }
 
-func (t *TempTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
-	if !t.lookup.IsEmpty() {
-		return index.RowIterForIndexLookup(ctx, t, t.lookup, t.pkSch, nil)
-	} else {
-		return partitionRows(ctx, t.table, nil, partition)
-	}
+func (t *TempTable) PartitionValueRowWriter(ctx *sql.Context, partition sql.Partition, columnIds sql.ColSet) (sql.ValueRowWriter, error) {
+	return partitionRows(ctx, t.table, nil, partition, columnIds)
 }
 
 func (t *TempTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
-	return t
+	return &indexedTempTable{TempTable: t, idx: lookup.Index.(index.DoltIndex)}
+}
+
+// indexedTempTable reads a TempTable through one of its indexes. It is a separate value from the TempTable so
+// that each indexed access to the table, including several in one query, reads with its own index.
+type indexedTempTable struct {
+	*TempTable
+	idx index.DoltIndex
+}
+
+func (t *indexedTempTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	return index.NewRangePartitionIter(ctx, t.TempTable, lookup)
+}
+
+func (t *indexedTempTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
+	return t.PartitionValueRowWriter(ctx, partition, sql.ColSet{})
+}
+
+func (t *indexedTempTable) PartitionValueRowWriter(ctx *sql.Context, partition sql.Partition, columnIds sql.ColSet) (sql.ValueRowWriter, error) {
+	key, _, err := t.DataCacheKey(ctx)
+	if err != nil {
+		return nil, err
+	}
+	builder, err := index.NewIndexReaderBuilder(ctx, t.TempTable, t.idx, key, nil, t.pkSch)
+	if err != nil {
+		return nil, err
+	}
+	return builder.NewPartitionRowIter(ctx, partition, columnIds)
 }
 
 func (t *TempTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) error {
@@ -292,21 +343,25 @@ func (t *TempTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) error {
 	}
 
 	ret, err := creation.CreateIndex(ctx, t.table, t.Name(), idx.Name, cols, allocatePrefixLengths(idx.Columns), schema.IndexProperties{
-		IsUnique:      idx.Constraint == sql.IndexConstraint_Unique,
-		IsSpatial:     idx.Constraint == sql.IndexConstraint_Spatial,
-		IsFullText:    false,
-		IsVector:      false,
-		IsUserDefined: true,
-		Comment:       idx.Comment,
-		ColumnOrders:  idx.ColumnOrders(),
-		OpClasses:     idx.OpClasses(),
+		IsUnique:         idx.Constraint == sql.IndexConstraint_Unique,
+		IsSpatial:        idx.Constraint == sql.IndexConstraint_Spatial,
+		IsFullText:       false,
+		IsVector:         false,
+		IsUserDefined:    true,
+		Comment:          idx.Comment,
+		ColumnOrders:     idx.ColumnOrders(),
+		OpClasses:        idx.OpClasses(),
+		NullsNotDistinct: idx.NullsNotDistinct,
 	}, t.opts, nil)
 	if err != nil {
 		return err
 	}
 
-	t.table = ret.NewTable
-	return nil
+	t.table, t.sch = ret.NewTable, ret.Sch
+	// Publish the indexed table to the write session so its editor uses the new
+	// schema and doesn't replace it with the pre-index schema on the next write.
+	_, err = t.writeSession.FlushTable(ctx, doltdb.TableName{Name: t.tableName}, t.table)
+	return err
 }
 
 func (t *TempTable) DropIndex(ctx *sql.Context, indexName string) error {
@@ -446,20 +501,15 @@ func (t *TempTable) StatementBegin(ctx *sql.Context) {
 }
 
 func (t *TempTable) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
-	t.lookup = sql.IndexLookup{}
 	return nil
 }
 
 func (t *TempTable) StatementComplete(ctx *sql.Context) error {
-	t.lookup = sql.IndexLookup{}
 	return nil
 }
 
 func (t *TempTable) Close(ctx *sql.Context) error {
-	err := t.ed.Close(ctx)
-
-	t.lookup = sql.IndexLookup{}
-	return err
+	return t.ed.Close(ctx)
 }
 
 func temporaryDoltSchema(ctx context.Context, pkSch sql.PrimaryKeySchema, tags []uint64, collation sql.CollationID) (sch schema.Schema, err error) {

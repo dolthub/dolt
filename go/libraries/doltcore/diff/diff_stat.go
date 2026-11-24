@@ -79,7 +79,7 @@ func StatForTableDelta(ctx context.Context, ch chan DiffStatProgress, td TableDe
 		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
 	}
 
-	if !schema.ArePrimaryKeySetsDiffable(fromSch, toSch) {
+	if schema.ComparePrimaryKeys(fromSch, toSch) == schema.PrimaryKeysDiffer {
 		return fmt.Errorf("failed to compute diff stat for table %s: %w", td.CurName(), ErrPrimaryKeySetChanged)
 	}
 

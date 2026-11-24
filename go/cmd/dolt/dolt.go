@@ -55,7 +55,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -117,10 +116,12 @@ var commandsWithoutCurrentDirWrites = []cli.Command{
 // commands that specifically skip the env.MultiEnvForDirectory loading step. These commands work in a context where
 // we expect the database to fail loading, but we need to get through to the Exec call anyway. The dEnv created with LoadWithoutDB
 // will be passed to these commands, so we can determine where the data root is, but commands will need to load the database
-// on terms that make sense for their purpose.
+// on terms that make sense for their purpose. sql-server builds its own env.MultiRepoEnv, and building one here as well
+// would open each of its databases twice.
 var commandsSkippingDBLoad = []cli.Command{
 	commands.FsckCmd{},
 	commands.InitCmd{},
+	sqlserver.SqlServerCmd{VersionStr: doltversion.Version},
 }
 
 // commands that use stdio directly and must not have it redirected.
@@ -226,6 +227,7 @@ func main() {
 	os.Exit(runMain())
 }
 
+// runMain executes the Dolt CLI process and returns the exit code.
 func runMain() int {
 	args := os.Args[1:]
 
@@ -470,15 +472,8 @@ func runMain() int {
 	events.SetGlobalCollector(events.NewCollector(doltversion.Version, metricsEmitter))
 
 	// try verifying contents of local config
-	localConfig, ok := dEnv.Config.GetConfig(env.LocalConfig)
-	if ok {
-		localConfig.Iter(func(name, val string) (stop bool) {
-			option := strings.ToLower(name)
-			if _, ok := config.ConfigOptions[option]; !ok && !strings.HasPrefix(option, env.SqlServerGlobalsPrefix) {
-				cli.PrintErrf("Warning: Unknown local config option '%s'. Use `dolt config --local --unset %s` to remove.", name, name)
-			}
-			return false
-		})
+	if localConfig, ok := dEnv.Config.GetConfig(env.LocalConfig); ok {
+		warnIfUnknownConfigOptions(localConfig, env.LocalConfig)
 	}
 
 	defer emitUsageEvents(metricsEmitter, cfg.subCommand)
@@ -493,9 +488,8 @@ func runMain() int {
 	}
 	defer tempfiles.MovableTempFileProvider.Clean()
 
-	// Find all database names and add global variables for them. This needs to
-	// occur before a call to dsess.InitPersistedSystemVars. Otherwise, database
-	// specific persisted system vars will fail to load.
+	// Engines that bind to these databases load persisted system variables
+	// with sqle.NewEngineVariablesForEnv.
 	//
 	// In general, there is a lot of work TODO in this area. System global
 	// variables are persisted to the Dolt local config if found and if not
@@ -515,16 +509,6 @@ func runMain() int {
 		if err != nil {
 			cli.PrintErrln("failed to load database names:", err.Error())
 			return 1
-		}
-		_ = mrEnv.Iter(func(dbName string, dEnv *env.DoltEnv) (stop bool, err error) {
-			dsess.DefineSystemVariablesForDB(dbName)
-			return false, nil
-		})
-
-		// TODO: we set persisted vars here, and this should be deferred until after we know what command line arguments might change them
-		err = dsess.InitPersistedSystemVars(dEnv)
-		if err != nil {
-			cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
 		}
 	}
 
@@ -568,24 +552,33 @@ or check the docs for questions about usage.`)
 		}
 	}
 
-	ctx, stop := context.WithCancel(ctx)
-	res := doltCommand.Exec(ctx, "dolt", cfg.remainingArgs, dEnv, cliCtx)
+	execCtx, stop := context.WithCancel(ctx)
+	res := doltCommand.Exec(execCtx, "dolt", cfg.remainingArgs, dEnv, cliCtx)
 	if cliCtx != nil {
 		cliCtx.Close()
 	}
 	stop()
 
-	if err = dbfactory.CloseAllLocalDatabases(); err != nil {
-		cli.PrintErrln(err)
-		if res == 0 {
-			res = 1
-		}
-	}
-
+	// The summary reads the store, so print it before closing.
 	if csMetrics && dEnv.DoltDB(ctx) != nil {
 		metricsSummary := dEnv.DoltDB(ctx).CSMetricsSummary()
 		cli.Println("Command took", time.Since(start).Seconds())
 		cli.PrintErrln(metricsSummary)
+	}
+
+	// mrEnv closes only the sub-envs it opened; dEnv is ours to close.
+	var closeErrs []error
+	if mrEnv != nil {
+		closeErrs = append(closeErrs, mrEnv.Close(ctx))
+	}
+	closeErrs = append(closeErrs, dEnv.Close())
+	// Backstop for stores opened outside an env until the singleton cache is removed.
+	closeErrs = append(closeErrs, dbfactory.CloseAllLocalDatabases())
+	if err = errors.Join(closeErrs...); err != nil {
+		cli.PrintErrln(err)
+		if res == 0 {
+			res = 1
+		}
 	}
 
 	return res
@@ -679,6 +672,13 @@ If you're interested in running this command against a remote host, hit us up on
 		}
 	}
 
+	// Commands which skip the DB load don't use a Queryist.
+	if mrEnv == nil {
+		return func(context.Context, ...cli.LateBindQueryistOption) (res cli.LateBindQueryistResult, err error) {
+			return res, fmt.Errorf("The %s command cannot run queries.", subcommandName)
+		}, nil
+	}
+
 	var dbName string
 
 	if hasUseDb {
@@ -709,7 +709,6 @@ If you're interested in running this command against a remote host, hit us up on
 	commandsNotRequiringRepo := map[string]bool{
 		"init":                         true,
 		"sql":                          true,
-		"sql-server":                   true,
 		"sql-client":                   true,
 		commands.DoltBackupCommandName: true,
 	}
@@ -814,7 +813,7 @@ If you're interested in running this command against a remote host, hit us up on
 	if verbose {
 		cli.Println("verbose: starting local mode")
 	}
-	return commands.BuildSqlEngineQueryist(ctx, cwdFS, mrEnv, creds, apr)
+	return commands.BuildSqlEngineQueryistForEnv(ctx, cwdFS, mrEnv, rootEnv, creds, apr)
 }
 
 // doc is currently used only when a `initCliContext` command is specified. This will include all commands in time,
@@ -982,13 +981,7 @@ func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapCo
 		panic("runtime error. tmpEnv.Config is nil by no tmpEnv.CfgLoadErr set")
 	}
 
-	globalConfig.Iter(func(name, val string) (stop bool) {
-		option := strings.ToLower(name)
-		if _, ok := config.ConfigOptions[option]; !ok && !strings.HasPrefix(option, env.SqlServerGlobalsPrefix) {
-			cli.PrintErrf("Warning: Unknown global config option '%s'. Use `dolt config --global --unset %s` to remove.\n", name, name)
-		}
-		return false
-	})
+	warnIfUnknownConfigOptions(globalConfig, env.GlobalConfig)
 
 	hasGlobalArgs := false
 	for _, option := range globalArgParser.Supported {
@@ -1065,6 +1058,22 @@ func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapCo
 	}
 
 	return cfg, false, 0
+}
+
+// warnIfUnknownConfigOptions prints a warning for any unrecognized config
+// options in |cfg|.
+func warnIfUnknownConfigOptions(cfg config.ReadableConfig, scope env.ConfigScope) {
+	scopeName := scope.String()
+	cfg.Iter(func(name, val string) (stop bool) {
+		option := strings.ToLower(name)
+		if _, ok := config.ConfigOptions[option]; ok ||
+			strings.HasPrefix(option, env.SqlServerGlobalsPrefix) ||
+			strings.HasPrefix(option, env.SqlServerClusterPrefix) {
+			return false
+		}
+		cli.PrintErrf("Warning: Unknown %s config option '%s'. Use `dolt config --%s --unset %s` to remove.\n", scopeName, name, scopeName, name)
+		return false
+	})
 }
 
 func applyDirectoryArgs(cwdFs filesys.Filesys, apr *argparser.ArgParseResults) (filesys.Filesys, error) {

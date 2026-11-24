@@ -204,14 +204,11 @@ type serverinterceptor struct {
 
 func (si *serverinterceptor) Stream() grpc.StreamServerInterceptor {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		fromClusterMember := false
-		if md, ok := metadata.FromIncomingContext(ss.Context()); ok {
-			fromClusterMember = si.handleRequestHeaders(md)
+		fromClusterMember, err := si.authenticateAndHandleRequestHeaders(ss.Context())
+		if err != nil {
+			return err
 		}
 		if fromClusterMember {
-			if err := si.authenticate(ss.Context()); err != nil {
-				return err
-			}
 			// After handleRequestHeaders, our role may have changed, so we fetch it again here.
 			role, epoch := si.getRole()
 			if err := grpc.SetHeader(ss.Context(), metadata.Pairs(clusterRoleHeader, string(role), clusterRoleEpochHeader, strconv.Itoa(epoch))); err != nil {
@@ -236,14 +233,11 @@ func (si *serverinterceptor) Stream() grpc.StreamServerInterceptor {
 
 func (si *serverinterceptor) Unary() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		fromClusterMember := false
-		if md, ok := metadata.FromIncomingContext(ctx); ok {
-			fromClusterMember = si.handleRequestHeaders(md)
+		fromClusterMember, err := si.authenticateAndHandleRequestHeaders(ctx)
+		if err != nil {
+			return nil, err
 		}
 		if fromClusterMember {
-			if err := si.authenticate(ctx); err != nil {
-				return nil, err
-			}
 			// After handleRequestHeaders, our role may have changed, so we fetch it again here.
 			role, epoch := si.getRole()
 			if err := grpc.SetHeader(ctx, metadata.Pairs(clusterRoleHeader, string(role), clusterRoleEpochHeader, strconv.Itoa(epoch))); err != nil {
@@ -264,6 +258,17 @@ func (si *serverinterceptor) Unary() grpc.UnaryServerInterceptor {
 			return nil, status.Error(codes.Unauthenticated, "unauthenticated")
 		}
 	}
+}
+
+func (si *serverinterceptor) authenticateAndHandleRequestHeaders(ctx context.Context) (bool, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok || len(md.Get(clusterRoleHeader)) == 0 || len(md.Get(clusterRoleEpochHeader)) == 0 {
+		return false, nil
+	}
+	if err := si.authenticate(ctx); err != nil {
+		return false, err
+	}
+	return si.handleRequestHeaders(md), nil
 }
 
 func (si *serverinterceptor) handleRequestHeaders(header metadata.MD) bool {

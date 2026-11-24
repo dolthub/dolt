@@ -23,8 +23,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
+	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -138,4 +140,63 @@ func TestMergeArtifactMaps(t *testing.T) {
 	t.Log(ms)
 
 	assert.Equal(t, es, ms)
+}
+
+// TestArtifactMapSpilledEditsAreMergeArtifacts asserts that edits which spill out of the
+// ArtifactsEditor's pending buffer before Flush are still written as MergeArtifacts nodes.
+func TestArtifactMapSpilledEditsAreMergeArtifacts(t *testing.T) {
+	ctx := context.Background()
+	ns := tree.NewTestNodeStore()
+	srcKd := val.NewTupleDescriptor(val.Type{Enc: val.Uint32Enc})
+	const numArtifacts = 20_000
+
+	build := func(t *testing.T, maxPending int, editAfterSpill bool) ArtifactMap {
+		empty, err := NewArtifactMapFromTuples(ctx, ns, srcKd)
+		require.NoError(t, err)
+		edt := empty.Editor()
+		edt.mut.maxPending = maxPending
+		kb := val.NewTupleBuilder(srcKd, ns)
+		add := func(i uint32) {
+			kb.PutUint32(0, i)
+			key, err := kb.Build(ctx, ns.Pool())
+			require.NoError(t, err)
+			require.NoError(t, edt.Add(ctx, key, hash.Of([]byte("theirs")), ArtifactTypeConflict, []byte("{}"), nil))
+		}
+		for i := uint32(0); i < numArtifacts; i++ {
+			add(i * 2)
+		}
+		if editAfterSpill {
+			add(1)
+		}
+		m, err := edt.Flush(ctx)
+		require.NoError(t, err)
+		return m
+	}
+
+	var assertAllMergeArtifacts func(t *testing.T, nd *tree.Node)
+	assertAllMergeArtifacts = func(t *testing.T, nd *tree.Node) {
+		msg := tree.ValueFromNode(nd).(types.SerialMessage)
+		require.Equal(t, serial.MergeArtifactsFileID, serial.GetFileID(msg), "level %d", nd.Level())
+		if nd.IsLeaf() {
+			return
+		}
+		for i := 0; i < nd.Count(); i++ {
+			child, err := ns.Read(ctx, hash.New(nd.GetValue(i)))
+			require.NoError(t, err)
+			assertAllMergeArtifacts(t, child)
+		}
+	}
+
+	unspilled := build(t, numArtifacts*2, true)
+	require.Greater(t, unspilled.Height(), 1)
+
+	t.Run("spill before last edit", func(t *testing.T) {
+		m := build(t, numArtifacts-1, true)
+		assertAllMergeArtifacts(t, m.Node())
+		assert.Equal(t, unspilled.HashOf(), m.HashOf())
+	})
+	t.Run("spill on last edit", func(t *testing.T) {
+		m := build(t, numArtifacts-1, false)
+		assertAllMergeArtifacts(t, m.Node())
+	})
 }

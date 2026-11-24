@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -29,17 +30,22 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 func TestCommitHooksNoErrors(t *testing.T) {
-	ctx := sql.NewEmptyContext()
+	vars := NewEngineVariables()
+	ctx := sql.NewContextWithVariables(context.Background(), vars)
 	dEnv, err := CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer dEnv.Close()
 
-	sql.SystemVariables.SetGlobal(ctx, dsess.SkipReplicationErrors, true)
-	sql.SystemVariables.SetGlobal(ctx, dsess.ReplicateToRemote, "unknown")
-	hooks, _, err := GetCommitHooks(context.Background(), "", dEnv, &buffer.Buffer{})
+	vars.System.SetGlobal(ctx, dsess.SkipReplicationErrors, true)
+	vars.System.SetGlobal(ctx, dsess.ReplicateToRemote, "unknown")
+	hooks, _, err := GetCommitHooksWithRegistry(ctx, "", dEnv, &buffer.Buffer{}, vars.System)
 	assert.NoError(t, err)
 	if len(hooks) < 1 {
 		t.Error("failed to produce noop hook")
@@ -53,7 +59,8 @@ func TestCommitHooksNoErrors(t *testing.T) {
 }
 
 func TestCommitHooksBackgroundThreadsUniqueNames(t *testing.T) {
-	ctx := sql.NewEmptyContext()
+	vars := NewEngineVariables()
+	ctx := sql.NewContextWithVariables(context.Background(), vars)
 	dEnv, err := CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer dEnv.Close()
@@ -68,14 +75,14 @@ func TestCommitHooksBackgroundThreadsUniqueNames(t *testing.T) {
 	}))
 	require.NoError(t, err)
 
-	sql.SystemVariables.SetGlobal(ctx, dsess.ReplicateToRemote, "origin")
-	sql.SystemVariables.SetGlobal(ctx, dsess.AsyncReplication, "true")
-	_, runThreads, err := GetCommitHooks(context.Background(), "[dbname]", dEnv, &buffer.Buffer{})
+	vars.System.SetGlobal(ctx, dsess.ReplicateToRemote, "origin")
+	vars.System.SetGlobal(ctx, dsess.AsyncReplication, "true")
+	_, runThreads, err := GetCommitHooksWithRegistry(ctx, "[dbname]", dEnv, &buffer.Buffer{}, vars.System)
 	require.NoError(t, err)
 	require.NotNil(t, runThreads)
 	bt := &testBackgroundThreads{make(map[string]func(context.Context))}
 	runThreads(bt, func(ctx context.Context) (*sql.Context, error) {
-		return sql.NewEmptyContext(), nil
+		return sql.NewContextWithVariables(ctx, vars), nil
 	})
 	assert.Len(t, bt.threads, 2)
 	for k := range bt.threads {
@@ -146,4 +153,97 @@ func TestReplicationBranches(t *testing.T) {
 		}
 		assert.Equal(t, tt.expToDelete, diffNames)
 	}
+}
+
+// TestDynamicPushOnWriteHookClosesDestinations checks that closing the DoltDB a push-on-write hook is registered on
+// closes every destination the hook opened, including one it replaced after a config change.
+func TestDynamicPushOnWriteHookClosesDestinations(t *testing.T) {
+	ctx := context.Background()
+	home := t.TempDir()
+	fs, err := filesys.LocalFS.WithWorkingDir(t.TempDir())
+	require.NoError(t, err)
+	dEnv := env.LoadWithoutDB(ctx, func() (string, error) { return home, nil }, fs, doltdb.LocalDirDoltDB, "test")
+	require.NoError(t, dEnv.InitRepo(ctx, types.Format_DOLT, "test", "test@example.com", env.DefaultInitBranch))
+	defer dEnv.Close()
+	for _, name := range []string{"first", "second"} {
+		require.NoError(t, dEnv.AddRemote(env.NewRemote(name, "file://"+t.TempDir(), nil)))
+	}
+
+	vars := NewEngineVariables().System
+	sqlCtx := sql.NewEmptyContext()
+	require.NoError(t, vars.SetGlobal(sqlCtx, dsess.ReplicateToRemote, "first"))
+	hook, _, err := NewDynamicPushOnWriteHookWithRegistry(ctx, "", dEnv, &buffer.Buffer{}, vars)
+	require.NoError(t, err)
+	ddb := dEnv.DoltDB(ctx)
+	ddb.PrependCommitHooks(ctx, hook)
+
+	require.NoError(t, vars.SetGlobal(sqlCtx, dsess.ReplicateToRemote, "second"))
+	ds, err := doltdb.ExposeDatabaseFromDoltDB(ddb).GetDataset(ctx, ref.NewBranchRef(env.DefaultInitBranch).String())
+	require.NoError(t, err)
+	_, err = hook.Execute(ctx, ds, ddb)
+	require.NoError(t, err)
+	require.Len(t, hook.opened, 2)
+	opened := slices.Clone(hook.opened)
+
+	require.NoError(t, dEnv.Close())
+	for _, dest := range opened {
+		_, err = dest.GetBranches(ctx)
+		require.ErrorIs(t, err, chunks.ErrStoreClosed)
+	}
+}
+
+// TestDynamicPushOnWriteHookConfigChangeOpensOnce checks that a config change opens one destination, not one per
+// commit, and that a failed open leaves the previous config in place.
+func TestDynamicPushOnWriteHookConfigChangeOpensOnce(t *testing.T) {
+	ctx := context.Background()
+	home := t.TempDir()
+	fs, err := filesys.LocalFS.WithWorkingDir(t.TempDir())
+	require.NoError(t, err)
+	dEnv := env.LoadWithoutDB(ctx, func() (string, error) { return home, nil }, fs, doltdb.LocalDirDoltDB, "test")
+	require.NoError(t, dEnv.InitRepo(ctx, types.Format_DOLT, "test", "test@example.com", env.DefaultInitBranch))
+	defer dEnv.Close()
+	require.NoError(t, dEnv.AddRemote(env.NewRemote("first", "file://"+t.TempDir(), nil)))
+
+	vars := NewEngineVariables().System
+	sqlCtx := sql.NewEmptyContext()
+	require.NoError(t, vars.SetGlobal(sqlCtx, dsess.ReplicateToRemote, "first"))
+	hook, _, err := NewDynamicPushOnWriteHookWithRegistry(ctx, "", dEnv, &buffer.Buffer{}, vars)
+	require.NoError(t, err)
+	ddb := dEnv.DoltDB(ctx)
+	ddb.PrependCommitHooks(ctx, hook)
+	ds, err := doltdb.ExposeDatabaseFromDoltDB(ddb).GetDataset(ctx, ref.NewBranchRef(env.DefaultInitBranch).String())
+	require.NoError(t, err)
+
+	require.NoError(t, vars.SetGlobal(sqlCtx, dsess.AsyncReplication, dsess.SysVarTrue))
+	for range 3 {
+		_, err = hook.Execute(ctx, ds, ddb)
+		require.NoError(t, err)
+	}
+	require.Len(t, hook.opened, 2)
+
+	require.NoError(t, vars.SetGlobal(sqlCtx, dsess.ReplicateToRemote, "missing"))
+	_, err = hook.Execute(ctx, ds, ddb)
+	require.ErrorIs(t, err, env.ErrRemoteNotFound)
+	require.Equal(t, "first", hook.remote)
+	require.Len(t, hook.opened, 2)
+}
+
+// TestReadReplicaDatabaseCloseClosesRemote checks that a read replica closes the remote it pulls from.
+func TestReadReplicaDatabaseCloseClosesRemote(t *testing.T) {
+	ctx := context.Background()
+	dEnv, err := CreateEnvWithSeedData()
+	require.NoError(t, err)
+	defer dEnv.Close()
+	require.NoError(t, dEnv.AddRemote(env.NewRemote("origin", "file://"+t.TempDir(), nil)))
+
+	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(ctx), editor.Options{})
+	require.NoError(t, err)
+	rrd, err := NewReadReplicaDatabase(ctx, db, "origin", dEnv)
+	require.NoError(t, err)
+	_, err = rrd.srcDB.GetBranches(ctx)
+	require.NoError(t, err)
+
+	rrd.Close()
+	_, err = rrd.srcDB.GetBranches(ctx)
+	require.ErrorIs(t, err, chunks.ErrStoreClosed)
 }

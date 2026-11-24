@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -108,7 +109,10 @@ func TestDoltHarness(t *testing.T) {
 		t.Run(fmt.Sprintf("dolt harness runner %d", i), func(t *testing.T) {
 			h := &DoltHarness{}
 			err := innerInit(h, dEnv)
-			assert.Equal(t, nil, err)
+			require.NoError(t, err)
+			require.Same(t, h.engine.Variables(), h.sess.EngineVariables())
+			_, _, registered := h.engine.Variables().System.GetGlobal("dolt_show_branch_databases")
+			require.True(t, registered)
 			defer h.Close()
 
 			// setup repo with statements

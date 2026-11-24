@@ -19,8 +19,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
@@ -156,7 +156,7 @@ var testCases = []testCase{
 }
 
 func TestRowMerge(t *testing.T) {
-	ctx := sql.NewEmptyContext()
+	ctx := newOwnedMergeContext()
 
 	tests := make([]rowMergeTest, len(testCases))
 	for i, t := range testCases {
@@ -165,7 +165,7 @@ func TestRowMerge(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			v := NewValueMerger(ctx, test.mergedSch, test.leftSch, test.rightSch, test.baseSch, syncPool, nil)
+			v := NewValueMerger(ctx, test.mergedSch, test.leftSch, test.rightSch, test.baseSch, syncPool, nil, "")
 
 			merged, ok, err := v.TryMerge(ctx, test.row, test.mergeRow, test.ancRow)
 			assert.NoError(t, err)
@@ -238,4 +238,125 @@ func buildTup(sch schema.Schema, r []*int) val.Tuple {
 		panic(err)
 	}
 	return tup
+}
+
+// intPtr returns a pointer to |v|, for building tuples with buildTup, which treats nil as NULL.
+func intPtr(v int) *int { return &v }
+
+// TestRowMergeConvergentAddColumn tests merging a column that both sides added with the same definition. In rows that
+// existed before the column was added, both sides backfill the column with its default, so a side whose value still
+// matches the default has not changed it.
+func TestRowMergeConvergentAddColumn(t *testing.T) {
+	ctx := newOwnedMergeContext()
+	baseSch := calcSchema(1)
+	baseCol := schema.NewColumn("c1", 1, types.IntKind, false)
+
+	tests := []struct {
+		name           string
+		defaultValue   string
+		anc            []*int
+		left, right    []*int
+		expected       []*int
+		expectConflict bool
+		noTableName    bool
+	}{
+		{
+			name:         "left has the default, right changed it",
+			defaultValue: "0",
+			anc:          []*int{intPtr(1)},
+			left:         []*int{intPtr(1), intPtr(0)},
+			right:        []*int{intPtr(1), intPtr(11)},
+			expected:     []*int{intPtr(1), intPtr(11)},
+		},
+		{
+			name:         "right has the default, left changed it",
+			defaultValue: "0",
+			anc:          []*int{intPtr(1)},
+			left:         []*int{intPtr(1), intPtr(7)},
+			right:        []*int{intPtr(1), intPtr(0)},
+			expected:     []*int{intPtr(1), intPtr(7)},
+		},
+		{
+			name:         "both changed it to the same value",
+			defaultValue: "0",
+			anc:          []*int{intPtr(1)},
+			left:         []*int{intPtr(1), intPtr(5)},
+			right:        []*int{intPtr(1), intPtr(5)},
+			expected:     []*int{intPtr(1), intPtr(5)},
+		},
+		{
+			name:           "both changed it to different values",
+			defaultValue:   "0",
+			anc:            []*int{intPtr(1)},
+			left:           []*int{intPtr(1), intPtr(7)},
+			right:          []*int{intPtr(1), intPtr(11)},
+			expectConflict: true,
+		},
+		{
+			name:           "row inserted on both sides has no base",
+			defaultValue:   "0",
+			left:           []*int{intPtr(1), intPtr(0)},
+			right:          []*int{intPtr(1), intPtr(11)},
+			expectConflict: true,
+		},
+		{
+			name:         "without a default, left has NULL, right changed it",
+			defaultValue: "",
+			anc:          []*int{intPtr(1)},
+			left:         []*int{intPtr(1), nil},
+			right:        []*int{intPtr(1), intPtr(11)},
+			expected:     []*int{intPtr(1), intPtr(11)},
+		},
+		{
+			name:           "non-deterministic default is not a base",
+			defaultValue:   "(FLOOR(RAND() * 0))",
+			anc:            []*int{intPtr(1)},
+			left:           []*int{intPtr(1), intPtr(0)},
+			right:          []*int{intPtr(1), intPtr(11)},
+			expectConflict: true,
+		},
+		{
+			name:           "default that reads another column is not a base",
+			defaultValue:   "(`c1` * 2)",
+			anc:            []*int{intPtr(1)},
+			left:           []*int{intPtr(1), intPtr(2)},
+			right:          []*int{intPtr(1), intPtr(11)},
+			expectConflict: true,
+		},
+		{
+			name:           "without a table name, the default is not resolved",
+			defaultValue:   "0",
+			anc:            []*int{intPtr(1)},
+			left:           []*int{intPtr(1), intPtr(0)},
+			right:          []*int{intPtr(1), intPtr(11)},
+			expectConflict: true,
+			noTableName:    true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			addedCol, err := schema.NewColumnWithTypeInfo("c2", 2, baseCol.TypeInfo, false, test.defaultValue, false, "")
+			require.NoError(t, err)
+			sch := schema.MustSchemaFromCols(schema.NewColCollection(
+				schema.NewColumn("primaryKey", 0, types.IntKind, true),
+				baseCol,
+				addedCol,
+			))
+
+			tableName := "t"
+			if test.noTableName {
+				tableName = ""
+			}
+			m := NewValueMerger(ctx, sch, sch, sch, baseSch, syncPool, nil, tableName)
+
+			merged, ok, err := m.TryMerge(ctx, buildTup(sch, test.left), buildTup(sch, test.right), buildTup(baseSch, test.anc))
+			require.NoError(t, err)
+			require.Equal(t, test.expectConflict, !ok)
+			if !test.expectConflict {
+				vD := sch.GetValueDescriptor(m.ns)
+				require.Equal(t, vD.Format(ctx, buildTup(sch, test.expected)), vD.Format(ctx, merged))
+			}
+		})
+	}
 }

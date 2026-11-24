@@ -301,17 +301,22 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 			} else {
 				field := value.GetField(j - pkSize)
 
-				if def.IsSpatial() {
+				// geometry columns are stored as cells in both spatial and non-spatial indexes
+				if def.IsSpatial() || idxDesc.Types[i].Enc == val.CellEnc {
 					geom, err := dereferenceGeometry(ctx, vd, j-pkSize, value, secondary.NodeStore())
 					if err != nil {
 						return err
 					}
-					geom, _, err = sqltypes.GeometryType{}.Convert(ctx, geom)
-					if err != nil {
-						return err
+
+					if geom != nil {
+						geom, _, err = sqltypes.GeometryType{}.Convert(ctx, geom)
+						if err != nil {
+							return err
+						}
+
+						cell := tree.ZCell(geom.(sqltypes.GeometryValue))
+						field = cell[:]
 					}
-					cell := tree.ZCell(geom.(sqltypes.GeometryValue))
-					field = cell[:]
 				} else if shouldDereferenceContent(j-pkSize, vd, i, idxDesc) {
 					field, err = dereferenceContent(ctx, vd, j-pkSize, value, secondary.NodeStore())
 					if err != nil {

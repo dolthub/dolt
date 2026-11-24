@@ -64,5 +64,5 @@ func NewTableIterator(ctx context.Context, sch schema.Schema, idx durable.Index)
 	if err != nil {
 		return nil, err
 	}
-	return NewRowIter(index.NewProllyRowIterForMap(sch, m, itr, nil)), nil
+	return NewRowIter(index.NewProllyRowIterForMap(sch, m, itr, nil, sql.ColSet{})), nil
 }

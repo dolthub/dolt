@@ -56,7 +56,16 @@ type Server struct {
 	grpcSrv *grpc.Server
 	httpSrv http.Server
 
-	grpcHttpReqsWG sync.WaitGroup
+	// In the multiplexed case, tracks in-flight gRPC requests being
+	// served through httpSrv so that shutdown can wait for them.
+	// httpSrv keeps accepting requests until it is shut down, so
+	// once grpcHttpReqsStopping is set we stop handing new requests
+	// to grpcSrv. That keeps grpcHttpReqsWG.Add from racing with
+	// grpcHttpReqsWG.Wait, and keeps a steady stream of new requests
+	// from holding up grpcSrv.Stop().
+	grpcHttpReqsMu       sync.Mutex
+	grpcHttpReqsStopping bool
+	grpcHttpReqsWG       sync.WaitGroup
 
 	tlsConfig *tls.Config
 }
@@ -192,7 +201,17 @@ func withH2ALPN(cfg *tls.Config) *tls.Config {
 func (s *Server) grpcMultiplexHandler(grpcSrv *grpc.Server, handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.ProtoMajor == 2 && strings.HasPrefix(r.Header.Get("Content-Type"), "application/grpc") {
-			s.grpcHttpReqsWG.Add(1)
+			s.grpcHttpReqsMu.Lock()
+			stopping := s.grpcHttpReqsStopping
+			if !stopping {
+				s.grpcHttpReqsWG.Add(1)
+			}
+			s.grpcHttpReqsMu.Unlock()
+			if stopping {
+				// gRPC clients see this as codes.Unavailable.
+				http.Error(w, "server is shutting down", http.StatusServiceUnavailable)
+				return
+			}
 			defer s.grpcHttpReqsWG.Done()
 			grpcSrv.ServeHTTP(w, r)
 		} else {
@@ -291,6 +310,9 @@ func (s *Server) Serve(listeners Listeners) {
 		// httpSrv and Shutdown will not return while they are still
 		// in flight.
 		if listeners.grpc == nil {
+			s.grpcHttpReqsMu.Lock()
+			s.grpcHttpReqsStopping = true
+			s.grpcHttpReqsMu.Unlock()
 			logrus.Traceln("Calling grpcSrv.Stop")
 			s.grpcSrv.Stop()
 			s.grpcHttpReqsWG.Wait()

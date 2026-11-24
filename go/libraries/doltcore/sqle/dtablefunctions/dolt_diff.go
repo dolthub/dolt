@@ -21,8 +21,10 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/transform"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/vitess/go/mysql"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -350,19 +352,38 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 	return dtables.NewDiffPartitionRowIter(dp, ddb), nil
 }
 
+// resolveDeltaTableName returns the name that the table name argument refers to. When using the search path, it resolves
+// through the search path in the to root, then the from root, before splitting a dotted name into its schema and table.
+func resolveDeltaTableName(ctx *sql.Context, fromRoot, toRoot doltdb.RootValue, tableName string) (doltdb.TableName, error) {
+	if !resolve.UseSearchPath {
+		return doltdb.TableName{Name: tableName}, nil
+	}
+	for _, root := range []doltdb.RootValue{toRoot, fromRoot} {
+		resolvedName, ok, err := resolve.TableName(ctx, root, tableName)
+		if err != nil || ok {
+			return resolvedName, err
+		}
+	}
+	if schemaName, name, ok := strings.Cut(tableName, "."); ok {
+		return doltdb.TableName{Name: name, Schema: schemaName}, nil
+	}
+	return doltdb.TableName{Name: tableName}, nil
+}
+
 // findMatchingDelta returns the best matching table delta for the table name
 // given, taking renames into account
-// TODO: schema name
-func findMatchingDelta(deltas []diff.TableDelta, tableName string) diff.TableDelta {
-	tableName = strings.ToLower(tableName)
+func findMatchingDelta(deltas []diff.TableDelta, tableName doltdb.TableName) diff.TableDelta {
+	matches := func(name doltdb.TableName) bool {
+		return strings.EqualFold(name.Name, tableName.Name) && (tableName.Schema == "" || strings.EqualFold(name.Schema, tableName.Schema))
+	}
 	for _, d := range deltas {
-		if strings.EqualFold(d.ToName.Name, tableName) {
+		if matches(d.ToName) {
 			return d
 		}
 	}
 
 	for _, d := range deltas {
-		if strings.EqualFold(d.FromName.Name, tableName) {
+		if matches(d.FromName) {
 			return d
 		}
 	}
@@ -404,6 +425,17 @@ func loadDetailsForRefs(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db
 	return fromDetails, toDetails, nil
 }
 
+// warnOnce adds a warning unless the statement already has it. A table function can resolve its arguments several
+// times while a statement is analyzed.
+func warnOnce(ctx *sql.Context, code int, message string) {
+	for _, w := range ctx.Session.Warnings() {
+		if w.Code == code && w.Message == message {
+			return
+		}
+	}
+	ctx.Warn(code, "%s", message)
+}
+
 func resolveCommitStrings(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db dsess.SqlDatabase) (string, string, error) {
 	if dotRef != nil {
 		dotStr, err := interfaceToString(dotRef)
@@ -431,12 +463,15 @@ func resolveCommitStrings(ctx *sql.Context, fromRef, toRef, dotRef interface{}, 
 				return "", "", err
 			}
 
-			mergeBase, err := merge.MergeBase(ctx, rightCm, leftCm)
+			mergeBases, err := merge.MergeBases(ctx, rightCm, leftCm)
 			if err != nil {
 				return "", "", err
 			}
+			if len(mergeBases) > 1 {
+				warnOnce(ctx, mysql.ERUnknownError, fmt.Sprintf("%s: multiple merge bases, using %s", dotStr, mergeBases[0]))
+			}
 
-			return mergeBase.String(), refs[1], nil
+			return mergeBases[0].String(), refs[1], nil
 		} else {
 			refs := strings.Split(dotStr, "..")
 			return refs[0], refs[1], nil
@@ -513,7 +548,7 @@ func (dtf *DiffTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.Privileg
 		return ExpressionIsDeferred(ctx, dtf.tableNameExpr)
 	}
 
-	baseDB, _ := doltdb.SplitRevisionDbName(dtf.database.Name())
+	baseDB := plan.CheckPrivilegeNameForDatabase(dtf.database)
 	subject := sql.PrivilegeCheckSubject{Database: baseDB, Table: tableName}
 	// TODO: Add tests for privilege checking
 	return opChecker.UserHasPrivileges(ctx,
@@ -772,7 +807,15 @@ func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, to
 		return fmt.Errorf("unexpected database type: %T", dtf.database)
 	}
 
-	delta, err := dtf.cacheTableDelta(ctx, fromCommitVal, toCommitVal, dotCommitVal, tableName, sqledb)
+	fromRefDetails, toRefDetails, err := loadDetailsForRefs(ctx, fromCommitVal, toCommitVal, dotCommitVal, sqledb)
+	if err != nil {
+		return err
+	}
+	resolvedName, err := resolveDeltaTableName(ctx, fromRefDetails.root, toRefDetails.root, tableName)
+	if err != nil {
+		return err
+	}
+	delta, err := dtf.cacheTableDelta(ctx, fromRefDetails, toRefDetails, resolvedName)
 	if err != nil {
 		return err
 	}
@@ -828,7 +871,7 @@ func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, to
 	}
 
 	if rootVal != nil {
-		overriddenTable, _, ok, err := doltdb.GetTableInsensitive(ctx, rootVal, doltdb.TableName{Name: tableName})
+		overriddenTable, _, ok, err := doltdb.GetTableInsensitive(ctx, rootVal, resolvedName)
 		if err != nil {
 			return fmt.Errorf("unable to find table '%s' at overridden schema root: %s", tableName, err.Error())
 		}
@@ -883,12 +926,7 @@ func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, to
 
 // cacheTableDelta caches and returns an appropriate table delta for the table name given, taking renames into
 // consideration. Returns a sql.ErrTableNotFound if the given table name cannot be found in either revision.
-func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, fromCommitVal, toCommitVal, dotCommitVal interface{}, tableName string, db dsess.SqlDatabase) (diff.TableDelta, error) {
-	fromRefDetails, toRefDetails, err := loadDetailsForRefs(ctx, fromCommitVal, toCommitVal, dotCommitVal, db)
-	if err != nil {
-		return diff.TableDelta{}, err
-	}
-
+func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, fromRefDetails, toRefDetails *refDetails, tableName doltdb.TableName) (diff.TableDelta, error) {
 	// TODO: it would be nice to limit this to just the table under consideration, not all tables with a diff
 	deltas, err := diff.GetTableDeltas(ctx, fromRefDetails.root, toRefDetails.root)
 	if err != nil {
@@ -901,24 +939,23 @@ func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, fromCommitVal, t
 	delta := findMatchingDelta(deltas, tableName)
 
 	// We only get a delta if there's a diff. When there isn't one, construct a delta here with table and schema info
-	// TODO: schema name
 	if delta.FromTable == nil && delta.ToTable == nil {
-		fromTableName, fromTable, fromTableExists, err := resolve.Table(ctx, fromRefDetails.root, tableName)
+		fromTable, fromTableName, fromTableExists, err := doltdb.GetTableInsensitive(ctx, fromRefDetails.root, tableName)
 		if err != nil {
 			return diff.TableDelta{}, err
 		}
 
-		toTableName, toTable, toTableExists, err := resolve.Table(ctx, toRefDetails.root, tableName)
+		toTable, toTableName, toTableExists, err := doltdb.GetTableInsensitive(ctx, toRefDetails.root, tableName)
 		if err != nil {
 			return diff.TableDelta{}, err
 		}
 
 		if !fromTableExists && !toTableExists {
-			return diff.TableDelta{}, sql.ErrTableNotFound.New(tableName)
+			return diff.TableDelta{}, sql.ErrTableNotFound.New(tableName.String())
 		}
 
-		delta.FromName = fromTableName
-		delta.ToName = toTableName
+		delta.FromName = doltdb.TableName{Name: fromTableName, Schema: tableName.Schema}
+		delta.ToName = doltdb.TableName{Name: toTableName, Schema: tableName.Schema}
 		delta.FromTable = fromTable
 		delta.ToTable = toTable
 

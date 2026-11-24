@@ -15,10 +15,20 @@
 package ref
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestRefNameLength(t *testing.T) {
+	longest := strings.Repeat("n", MaxRefNameLength)
+	tooLong := longest + "n"
+	assert.True(t, IsValidBranchName(longest))
+	assert.False(t, IsValidBranchName(tooLong))
+	assert.True(t, IsValidTagName(longest))
+	assert.False(t, IsValidTagName(tooLong))
+}
 
 func TestBranchName(t *testing.T) {
 	assert.True(t, IsValidBranchName("t"))

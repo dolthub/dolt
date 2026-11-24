@@ -341,7 +341,7 @@ func PushToRemoteBranch[C doltdb.Context](ctx C, rsr env.RepoStateReader[C], tem
 	case doltdb.ErrUpToDate, doltdb.ErrIsAhead, ErrCantFF, datas.ErrMergeNeeded, datas.ErrDirtyWorkspace, ErrShallowPushImpossible:
 		return nil, err
 	default:
-		return nil, fmt.Errorf("%w; %s", ErrUnknownPushErr, err.Error())
+		return nil, fmt.Errorf("%w; %w", ErrUnknownPushErr, err)
 	}
 }
 
@@ -895,7 +895,7 @@ const (
 func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir string, relationship SyncRootsDBRelationship, statsCh chan pull.Stats) error {
 	srcRoot, err := srcDb.NomsRoot(ctx)
 	if err != nil {
-		return nil
+		return fmt.Errorf("sync roots: failed to read source root: %w", err)
 	}
 
 	destRoot, err := destDb.NomsRoot(ctx)

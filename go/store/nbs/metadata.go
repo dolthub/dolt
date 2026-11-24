@@ -145,6 +145,7 @@ func GetStorageMetadata(ctx context.Context, path string, stats *Stats, mmapArch
 	if err != nil {
 		return StorageMetadata{}, err
 	}
+	defer manifestReader.Close()
 
 	manifest, err := ParseManifest(manifestReader)
 	if err != nil {
@@ -175,6 +176,7 @@ func GetStorageMetadata(ctx context.Context, path string, stats *Stats, mmapArch
 	if err != nil {
 		return StorageMetadata{}, err
 	}
+	defer manifestReader.Close()
 	manifest, err = ParseManifest(manifestReader)
 	if err != nil {
 		return StorageMetadata{}, err
@@ -230,6 +232,7 @@ func buildArtifact(ctx context.Context, info TableSpecInfo, genPath string, stat
 		if err != nil {
 			return StorageArtifact{}, err
 		}
+		defer fra.Close()
 
 		id := hash.Parse(tfName)
 

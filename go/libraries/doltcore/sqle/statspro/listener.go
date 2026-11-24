@@ -103,14 +103,14 @@ func (sc *StatsController) Stop() chan struct{} {
 // RefreshFromSysVars reads the environment variables and updates controller
 // parameters. If the queue is not started this will hang.
 func (sc *StatsController) RefreshFromSysVars(ctx *sql.Context) {
-	_, memOnly, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly)
+	_, memOnly, _ := ctx.SystemVariables().GetGlobal(dsess.DoltStatsMemoryOnly)
 	sc.SetMemOnly(memOnly.(int8) == 1)
 
-	_, gcEnabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsGCEnabled)
+	_, gcEnabled, _ := ctx.SystemVariables().GetGlobal(dsess.DoltStatsGCEnabled)
 	sc.SetEnableGc(gcEnabled.(int8) == 1)
 
-	typ, jobI, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsJobInterval)
-	_, gcI, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsGCInterval)
+	typ, jobI, _ := ctx.SystemVariables().GetGlobal(dsess.DoltStatsJobInterval)
+	_, gcI, _ := ctx.SystemVariables().GetGlobal(dsess.DoltStatsGCInterval)
 
 	jobInterval, _, _ := typ.GetType().Convert(ctx, jobI)
 	gcInterval, _, _ := typ.GetType().Convert(ctx, gcI)

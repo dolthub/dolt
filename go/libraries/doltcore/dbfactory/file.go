@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -171,10 +172,18 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 		// sketchy for any concurrent accessors, but this whole mechanism
 		// has already made callers reliquinish any notion that they are
 		// the sole owners of the Database they opened.
-		if err := datas.ChunkStoreFromDatabase(s.ddb).Rebase(ctx); err != nil {
+		err := datas.ChunkStoreFromDatabase(s.ddb).Rebase(ctx)
+		if err == nil {
+			if os.Getenv(dconfig.EnvTestPanicOnSingletonHit) != "" {
+				panic(fmt.Sprintf("singleton cache hit opening %s", urlObj.Path))
+			}
+			return s.ddb, s.vrw, s.ns, nil
+		}
+		if !errors.Is(err, chunks.ErrStoreClosed) {
 			return nil, nil, nil, err
 		}
-		return s.ddb, s.vrw, s.ns, nil
+		// A holder closed this store, so open a new one in its place.
+		delete(singletons, urlObj.Path)
 	}
 
 	ddb, vrw, ns, err := fact.CreateDbNoCache(ctx, nbf, urlObj, params, nbs.JournalParserLoggingWarningsCb)
@@ -245,23 +254,23 @@ func (fact FileFactory) CreateDbNoCache(ctx context.Context, nbf *types.NomsBinF
 	err = validateDir(oldgenPath)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			return nil, nil, nil, err
+			return nil, nil, nil, errors.Join(err, newGenSt.Close())
 		}
 
 		err = os.Mkdir(oldgenPath, os.ModePerm)
 		if err != nil && !errors.Is(err, os.ErrExist) {
-			return nil, nil, nil, err
+			return nil, nil, nil, errors.Join(err, newGenSt.Close())
 		}
 	}
 
 	oldGenSt, err := nbs.NewLocalStore(ctx, newGenSt.Version(), oldgenPath, memlimit.MemtableSize(), q, mmapArchiveIndexes)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, errors.Join(err, newGenSt.Close())
 	}
 
 	ghostGen, err := nbs.NewGhostBlockStore(path)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, errors.Join(err, oldGenSt.Close(), newGenSt.Close())
 	}
 
 	st := nbs.NewGenerationalCS(oldGenSt, newGenSt, ghostGen)

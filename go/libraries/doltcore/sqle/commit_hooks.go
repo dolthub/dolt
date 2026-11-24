@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -24,10 +25,12 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/sirupsen/logrus"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -323,24 +326,28 @@ func RunAsyncReplicationThreads(bThreads BackgroundThreads, nameSuffix string, c
 type DynamicPushOnWriteHook struct {
 	mu      sync.Mutex
 	dEnv    *env.DoltEnv
+	vars    sql.SystemVariableRegistry
 	tempDir string
 	logger  io.Writer
 
 	// Values below protected with mu Mutex
 	remote string
 	async  bool
+	// opened holds every destination this hook opened. One replaced by a config change stays open until Close,
+	// because pushes already queued for the async hook still use it.
+	opened []*doltdb.DoltDB
 	// Wrappers around the two hook types. We update the fields of these structs as needed based on the current config.
 	syncHook  PushOnWriteHook
 	asyncHook AsyncPushOnWriteHook
 }
 
-var _ doltdb.CommitHook = (*DynamicPushOnWriteHook)(nil)
+var _ doltdb.CloseableCommitHook = (*DynamicPushOnWriteHook)(nil)
 
-// NewDynamicPushOnWriteHook creates a DynamicPushOnWriteHook, parameterized by the environment and a logger. The configuration
-// options at this time can result in errors, for example if the provided remote does not exist. This is not the case
-// when the process is up and running. If bad configuration is detected at execution time, the error is logged and replication is skipped.
-func NewDynamicPushOnWriteHook(ctx context.Context, nameSuffix string, dEnv *env.DoltEnv, logger io.Writer) (*DynamicPushOnWriteHook, RunAsyncThreads, error) {
-	remote, async, err := getReplicationVals()
+// NewDynamicPushOnWriteHookWithRegistry creates a hook that retains its registry
+// for live configuration reads. Invalid configuration can fail construction;
+// configuration errors during execution are logged and replication is skipped.
+func NewDynamicPushOnWriteHookWithRegistry(ctx context.Context, nameSuffix string, dEnv *env.DoltEnv, logger io.Writer, vars sql.SystemVariableRegistry) (*DynamicPushOnWriteHook, RunAsyncThreads, error) {
+	remote, async, err := getReplicationValsFromRegistry(vars)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -353,6 +360,7 @@ func NewDynamicPushOnWriteHook(ctx context.Context, nameSuffix string, dEnv *env
 	a, newThreads := NewAsyncPushOnWriteHook(nameSuffix, tmpDir, logger)
 	p := NewPushOnWriteHook(tmpDir, logger)
 
+	var opened []*doltdb.DoltDB
 	if remote != "" {
 		destDb, err := getDestinationDb(ctx, dEnv, remote)
 		if err != nil {
@@ -360,23 +368,40 @@ func NewDynamicPushOnWriteHook(ctx context.Context, nameSuffix string, dEnv *env
 		}
 		p.destDb = destDb
 		a.destDb = destDb
+		opened = append(opened, destDb)
 	}
 
 	return &DynamicPushOnWriteHook{
 		dEnv:      dEnv,
+		vars:      vars,
 		tempDir:   tmpDir,
 		logger:    logger,
 		remote:    remote,
 		async:     async,
+		opened:    opened,
 		syncHook:  *p,
 		asyncHook: *a,
 	}, newThreads, nil
 }
 
+// Close implements doltdb.CloseableCommitHook. It closes every destination the hook opened.
+func (m *DynamicPushOnWriteHook) Close() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var errs []error
+	for _, ddb := range m.opened {
+		errs = append(errs, ddb.Close())
+	}
+	m.opened = nil
+	m.syncHook.destDb = nil
+	m.asyncHook.destDb = nil
+	return errors.Join(errs...)
+}
+
 // getReplicationVals gets the current values of the `dolt_replicate_to_remote` and `dolt_async_replication` system
 // variables.
-func getReplicationVals() (string, bool, error) {
-	_, val, ok := sql.SystemVariables.GetGlobal(dsess.ReplicateToRemote)
+func getReplicationValsFromRegistry(vars sql.SystemVariableRegistry) (string, bool, error) {
+	_, val, ok := vars.GetGlobal(dsess.ReplicateToRemote)
 	if !ok {
 		return "", false, sql.ErrUnknownSystemVariable.New(dsess.ReplicateToRemote)
 	}
@@ -386,7 +411,7 @@ func getReplicationVals() (string, bool, error) {
 	}
 
 	async := false
-	if _, val, ok = sql.SystemVariables.GetGlobal(dsess.AsyncReplication); ok && val == dsess.SysVarTrue {
+	if _, val, ok = vars.GetGlobal(dsess.AsyncReplication); ok && val == dsess.SysVarTrue {
 		async = true
 	}
 
@@ -405,15 +430,22 @@ func getDestinationDb(ctx context.Context, dEnv *env.DoltEnv, remoteName string)
 		return nil, fmt.Errorf("%w: '%s'", env.ErrRemoteNotFound, remoteName)
 	}
 
-	destDb, err := rem.GetRemoteDB(ctx, types.Format_DOLT, dEnv)
+	return openRemoteDB(ctx, rem, dEnv)
+}
+
+// openRemoteDB opens |r| without the singleton cache, so the caller owns the returned DB and must close it. Unlike
+// [env.Remote.GetRemoteDBWithoutCaching], it keeps the remote chunk cache, which a long-lived holder benefits from.
+func openRemoteDB(ctx context.Context, r env.Remote, dialer dbfactory.GRPCDialProvider) (*doltdb.DoltDB, error) {
+	params, err := r.DBFactoryParams(dialer)
 	if err != nil {
 		return nil, err
 	}
-	return destDb, nil
+	params[dbfactory.DisableSingletonCacheParam] = "true"
+	return doltdb.LoadDoltDBWithParams(ctx, types.Format_DOLT, r.Url, filesys.LocalFS, params)
 }
 
 func (m *DynamicPushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db *doltdb.DoltDB) (func(context.Context) error, error) {
-	remoteName, async, err := getReplicationVals()
+	remoteName, async, err := getReplicationValsFromRegistry(m.vars)
 
 	// We only need the lock if the remote configuration has changed.
 	hook, err := func() (doltdb.CommitHook, error) {
@@ -442,12 +474,14 @@ func (m *DynamicPushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, 
 			return nil, nil
 		}
 
-		m.remote = remoteName
-
-		destDb, err := getDestinationDb(ctx, m.dEnv, m.remote)
+		destDb, err := getDestinationDb(ctx, m.dEnv, remoteName)
 		if err != nil {
 			return nil, err
 		}
+		// Record the new config only once it took effect, so the next commit does not reopen the destination.
+		m.remote = remoteName
+		m.async = async
+		m.opened = append(m.opened, destDb)
 
 		m.syncHook.destDb = destDb
 		m.asyncHook.destDb = destDb

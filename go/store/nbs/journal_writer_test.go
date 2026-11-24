@@ -17,6 +17,7 @@ package nbs
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -402,6 +403,21 @@ func TestJournalIndexBootstrap(t *testing.T) {
 	}
 }
 
+// The index batch checksum covers only addresses, so reads must reject a corrupt range rather than panic.
+func TestJournalWriterReadCorruptRange(t *testing.T) {
+	j := newTestJournalWriter(t, newTestFilePath(t))
+	for _, cc := range randomCompressedChunks(1) {
+		require.NoError(t, j.writeCompressedChunk(context.Background(), dherrors.FatalBehaviorError, cc))
+		r, _ := j.ranges.get(cc.H)
+		_, err := j.getCompressedChunkAtRange(Range{Offset: r.Offset, Length: 2}, cc.H)
+		require.Error(t, err)
+		_, err = j.getCompressedChunkAtRange(Range{Offset: 1 << 40, Length: r.Length}, cc.H)
+		require.Error(t, err)
+		_, err = j.getCompressedChunkAtRange(Range{Offset: 1 << 63, Length: r.Length}, cc.H)
+		require.Error(t, err)
+	}
+}
+
 // TestJournalIndexCorruptionRecovery verifies that a corrupt journal index does
 // not prevent the database from opening. The journal index (journal.idx) is an
 // optimization that is written without the same atomicity guarantees as the
@@ -505,6 +521,21 @@ func TestJournalIndexCorruptionRecovery(t *testing.T) {
 		validateOpen(t, path, data, last)
 	})
 
+	t.Run("oversized lookup length", func(t *testing.T) {
+		path, data, last := writeIndexedJournal(t, 3)
+		// The batch checksum covers only lookup addresses, so it does not
+		// catch a corrupt length. The length ends the first lookup, which
+		// follows its one byte tag.
+		f, err := os.OpenFile(idxPath(path), os.O_RDWR, 0666)
+		require.NoError(t, err)
+		var length [lengthSize]byte
+		binary.BigEndian.PutUint32(length[:], journalWriterBuffSize+1)
+		_, err = f.WriteAt(length[:], 1+lookupSz-lengthSize)
+		require.NoError(t, err)
+		require.NoError(t, f.Close())
+		validateOpen(t, path, data, last)
+	})
+
 	// When opened read-only (canWrite == false, i.e. we do not hold the database
 	// lock), bootstrapping a corrupt index must never mutate on-disk state. The
 	// journal must still open and serve reads by rebuilding from the journal.
@@ -587,4 +618,79 @@ func TestRangeIndex(t *testing.T) {
 	idx = idx.flatten(context.Background())
 	assert.Equal(t, 0, idx.novelCount())
 	assert.Equal(t, len(data), int(idx.count()))
+}
+
+func TestJournalWriterZeroFillAhead(t *testing.T) {
+	if journalPadBufferSize == 0 {
+		t.Skip("journal padding is disabled on this platform")
+	}
+	ctx := context.Background()
+	path := newTestFilePath(t)
+	j := newTestJournalWriter(t, path)
+	data := randomCompressedChunks(256)
+	var last hash.Hash
+	for _, cc := range data {
+		require.NoError(t, j.writeCompressedChunk(ctx, dherrors.FatalBehaviorError, cc))
+		last = cc.Hash()
+	}
+	require.NoError(t, j.commitRootHash(ctx, dherrors.FatalBehaviorError, last))
+
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, info.Size(), j.off+journalPadBufferSize)
+
+	reopened, _, err := openJournalWriter(ctx, path)
+	require.NoError(t, err)
+	recovered, err := reopened.bootstrapJournal(ctx, true, nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, last, recovered)
+	assert.Equal(t, j.off, reopened.off)
+	validateAllLookups(t, reopened, data)
+	info, err = os.Stat(path)
+	require.NoError(t, err)
+	assert.Equal(t, reopened.off, info.Size())
+
+	more := randomCompressedChunks(16)
+	for _, cc := range more {
+		require.NoError(t, reopened.writeCompressedChunk(ctx, dherrors.FatalBehaviorError, cc))
+		last = cc.Hash()
+	}
+	require.NoError(t, reopened.commitRootHash(ctx, dherrors.FatalBehaviorError, last))
+	end := reopened.off
+	require.NoError(t, reopened.Close())
+	info, err = os.Stat(path)
+	require.NoError(t, err)
+	assert.Equal(t, end, info.Size())
+	require.NoError(t, j.journal.f.Close())
+}
+
+func TestJournalWriterCloseWithoutWritesLeavesTrailingBytes(t *testing.T) {
+	ctx := context.Background()
+	path := newTestFilePath(t)
+	j := newTestJournalWriter(t, path)
+	cc := randomCompressedChunks(1)
+	for _, c := range cc {
+		require.NoError(t, j.writeCompressedChunk(ctx, dherrors.FatalBehaviorError, c))
+		require.NoError(t, j.commitRootHash(ctx, dherrors.FatalBehaviorError, c.Hash()))
+	}
+	require.NoError(t, j.Close())
+
+	reopened, _, err := openJournalWriter(ctx, path)
+	require.NoError(t, err)
+	_, err = reopened.bootstrapJournal(ctx, true, nil, nil)
+	require.NoError(t, err)
+
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	require.NoError(t, err)
+	_, err = f.Write([]byte{0, 0x50, 0, 1, 'g', 'a', 'r', 'b', 'a', 'g', 'e'})
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+	grown := info.Size()
+
+	require.NoError(t, reopened.Close())
+	info, err = os.Stat(path)
+	require.NoError(t, err)
+	assert.Equal(t, grown, info.Size())
 }

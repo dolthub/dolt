@@ -47,6 +47,8 @@ The command's second form creates a new branch head named {{.LessThan}}branchnam
 
 Note that this will create the new branch, but it will not switch the working tree to it; use {{.EmphasisLeft}}dolt checkout <newbranch>{{.EmphasisRight}} to switch to the new branch.
 
+With {{.EmphasisLeft}}--orphan{{.EmphasisRight}}, the new branch starts an unrelated history: a single parentless commit with the contents of {{.LessThan}}start-point{{.GreaterThan}}.
+
 With a {{.EmphasisLeft}}-m{{.EmphasisRight}}, {{.LessThan}}oldbranch{{.GreaterThan}} will be renamed to {{.LessThan}}newbranch{{.GreaterThan}}. If {{.LessThan}}newbranch{{.GreaterThan}} exists, -f must be used to force the rename to happen.
 
 The {{.EmphasisLeft}}-c{{.EmphasisRight}} options have the exact same semantics as {{.EmphasisLeft}}-m{{.EmphasisRight}}, except instead of the branch being renamed it will be copied to a new name.
@@ -55,6 +57,7 @@ With a {{.EmphasisLeft}}-d{{.EmphasisRight}}, {{.LessThan}}branchname{{.GreaterT
 	Synopsis: []string{
 		`[--list] [-v] [-a] [-r]`,
 		`[-f] {{.LessThan}}branchname{{.GreaterThan}} [{{.LessThan}}start-point{{.GreaterThan}}]`,
+		`--orphan [-f] {{.LessThan}}branchname{{.GreaterThan}} [{{.LessThan}}start-point{{.GreaterThan}}]`,
 		`-m [-f] [{{.LessThan}}oldbranch{{.GreaterThan}}] {{.LessThan}}newbranch{{.GreaterThan}}`,
 		`-c [-f] [{{.LessThan}}oldbranch{{.GreaterThan}}] {{.LessThan}}newbranch{{.GreaterThan}}`,
 		`-d [-f] [-r] {{.LessThan}}branchname{{.GreaterThan}}...`,
@@ -122,6 +125,8 @@ func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string,
 	}
 
 	switch {
+	case apr.Contains(cli.OrphanFlag):
+		return createBranch(queryist.Context, queryist.Queryist, apr, args, usage)
 	case apr.Contains(cli.MoveFlag):
 		return moveBranch(queryist.Context, queryist.Queryist, apr, args, usage)
 	case apr.Contains(cli.CopyFlag):

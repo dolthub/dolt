@@ -84,6 +84,12 @@ type mergeJoinKvIter struct {
 	nextRightVal val.Tuple
 
 	matchPos int
+	// resumeMatch indicates that the previous call returned a
+	// null-extended left row in the middle of the match stage, and the
+	// next call must resume matching the current |l.leftKey| against the
+	// existing right-side match set rather than re-entering the compare
+	// stage (which would refill the lookahead buffer and skip rows).
+	resumeMatch bool
 
 	// LEFT_JOIN impl details
 	excludeNulls bool
@@ -116,7 +122,8 @@ func (l *mergeJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 		return l.exhaustLeftReturn(ctx)
 	}
 
-	if len(l.lookaheadBuf) > 0 || l.matchPos > 0 {
+	if l.resumeMatch || len(l.lookaheadBuf) > 0 || l.matchPos > 0 {
+		l.resumeMatch = false
 		goto match
 	}
 
@@ -276,6 +283,9 @@ match:
 					return nil, err
 				}
 				if ok {
+					// the new left key shares the current right-side
+					// match set, so the next call must resume matching
+					l.resumeMatch = cmp == 0
 					return ret, nil
 				}
 			}

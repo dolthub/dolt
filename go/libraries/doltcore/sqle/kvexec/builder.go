@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/aggregation"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/rowexec"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -33,11 +34,35 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-type Builder struct{}
+type Builder struct {
+	// fallback executes the plan nodes that kvexec has no KV-native
+	// implementation for. A lookup join whose left side is not a KV source
+	// builds that side with it. It is the exec builder this Builder is
+	// registered with, which delegates back here, so it is wired up after
+	// construction.
+	fallback sql.NodeExecBuilder
+}
 
 var _ sql.NodeExecBuilder = (*Builder)(nil)
 
-func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, error) {
+// SetFallbackBuilder supplies the builder used for plan nodes kvexec cannot
+// execute itself. Call it once, with the exec builder this Builder was
+// registered with.
+func (b *Builder) SetFallbackBuilder(fallback sql.NodeExecBuilder) {
+	b.fallback = fallback
+}
+
+// NewExecBuilder returns the exec builder a Dolt engine should run with: the
+// GMS row executor with kvexec's KV-native operators taking priority, wired so
+// that kvexec can hand the nodes it does not implement back to GMS.
+func NewExecBuilder(overrides sql.EngineOverrides) *rowexec.BaseBuilder {
+	kvb := &Builder{}
+	eb := rowexec.NewBuilder(kvb, overrides)
+	kvb.SetFallbackBuilder(eb)
+	return eb
+}
+
+func (b *Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, error) {
 
 	// TODO: join optimization limits should be relaxed:
 	//  - expression types supported
@@ -55,9 +80,8 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 		case n.Op.IsLookup():
 			// conditions to use this fast path for lookup joins:
 			// (1) lookup or left lookup join
-			// (2) left-side is something we read KVs from (table or indexscan, ex: no subqueries)
-			// (3) right-side is an index lookup, by definition
-			// (4) the key expressions for the lookup are literals or columns (ex: no arithmetic yet)
+			// (2) right-side is an index lookup, by definition
+			// (3) the key expressions for the lookup are literals or columns (ex: no arithmetic yet)
 
 			ita, ok := getIndexedTableAccess(n.Right())
 			if !ok || len(r) > 0 || !simpleLookupExpressions(ita.Expressions()) {
@@ -70,36 +94,15 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 			}
 
 			srcMap, srcIter, _, srcSchema, srcTags, srcFilter, err := getSourceKv(ctx, n.Left(), true)
-			if err != nil || srcSchema == nil {
+			if err != nil {
 				return nil, nil
 			}
 
-			keyLookupMapper, err := newLookupKeyMapping(
-				ctx,
-				srcSchema,
-				dstIter.InputKeyDesc(),
-				ita.Expressions(),
-				ita.Index().ColumnExpressionTypes(ctx),
-				srcMap.NodeStore(),
-			)
-			if err != nil || !keyLookupMapper.valid(ctx) {
-				return nil, nil
+			if srcSchema != nil {
+				return b.newTupleLookupKvIter(ctx, srcSchema, dstIter, ita, srcMap, srcTags, dstTags, srcIter, srcFilter, dstFilter, n)
+			} else {
+				return b.newRowLookupKvIter(ctx, n, r, ita, dstIter, dstTags, dstFilter)
 			}
-
-			split := len(srcTags)
-			projections := append(srcTags, dstTags...)
-			rowJoiner := newRowJoiner(ctx, []schema.Schema{srcSchema, dstIter.Schema()}, []int{split}, projections, dstIter.NodeStore())
-			return newLookupKvIter(
-				srcIter,
-				dstIter,
-				keyLookupMapper,
-				rowJoiner,
-				srcFilter,
-				dstFilter,
-				n.Filter,
-				n.Op.IsLeftOuter(),
-				n.Op.IsExcludeNulls(),
-			)
 		case n.Op.IsMerge():
 			if leftState, err := getMergeKv(ctx, n.Left()); err == nil {
 				if rightState, err := getMergeKv(ctx, n.Right()); err == nil {
@@ -112,7 +115,7 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 					if lrCmp, llCmp, ok := mergeComparer(ctx, filters[0], leftState, rightState, projections); ok {
 						split := len(leftState.tags)
 						var rowJoiner *prollyToSqlJoiner
-						rowJoiner = newRowJoiner(ctx, []schema.Schema{leftState.priSch, rightState.priSch}, []int{split}, projections, leftState.idxMap.NodeStore())
+						rowJoiner = newRowJoiner(ctx, []schema.Schema{leftState.priSch, rightState.priSch}, []int{split}, projections, []tree.NodeStore{leftState.idxMap.NodeStore(), rightState.idxMap.NodeStore()})
 						if iter, err := newMergeKvIter(leftState, rightState, rowJoiner, lrCmp, llCmp, filters, n.Op.IsLeftOuter(), n.Op.IsExcludeNulls()); err == nil {
 							iter.isReversed = n.IsReversed
 							return iter, nil
@@ -140,6 +143,51 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 	}
 
 	return nil, nil
+}
+
+// newTupleLookupKvIter returns a KV iter for a join whose left and right side are both prolly indexes
+func (b *Builder) newTupleLookupKvIter(
+	ctx *sql.Context,
+	srcSchema schema.Schema,
+	dstIter index.SecondaryLookupIterGen,
+	ita *plan.IndexedTableAccess,
+	srcMap prolly.MapReader,
+	srcTags []uint64,
+	dstTags []uint64,
+	srcIter prolly.MapIter,
+	srcFilter sql.Expression,
+	dstFilter sql.Expression,
+	n *plan.JoinNode,
+) (sql.RowIter, error) {
+
+	keyLookupMapper, err := newLookupKeyMapping(
+		ctx,
+		srcSchema,
+		dstIter.InputKeyDesc(),
+		ita.Expressions(),
+		ita.Index().ColumnExpressionTypes(ctx),
+		srcMap.NodeStore(),
+	)
+	if err != nil || !keyLookupMapper.valid(ctx) {
+		// A nil result (from an invalid mapper) signals to the builder that the lookup join cannot be executed with
+		// a KV-native operator, and should be built with the fallback builder.
+		return nil, err
+	}
+
+	split := len(srcTags)
+	projections := append(srcTags, dstTags...)
+	rowJoiner := newRowJoiner(ctx, []schema.Schema{srcSchema, dstIter.Schema()}, []int{split}, projections, []tree.NodeStore{srcMap.NodeStore(), dstIter.NodeStore()})
+	return newLookupKvIter(
+		srcIter,
+		dstIter,
+		keyLookupMapper,
+		rowJoiner,
+		srcFilter,
+		dstFilter,
+		n.Filter,
+		n.Op.IsLeftOuter(),
+		n.Op.IsExcludeNulls(),
+	)
 }
 
 func getIndexedTableAccess(n sql.Node) (*plan.IndexedTableAccess, bool) {
@@ -170,7 +218,6 @@ func simpleLookupExpressions(keyExprs []sql.Expression) bool {
 
 // prollyToSqlJoiner converts a list of KV pairs into a sql.Row
 type prollyToSqlJoiner struct {
-	ns tree.NodeStore
 	// kvSplits are offsets between consecutive kv pairs
 	kvSplits    []int
 	desc        []kvDesc
@@ -179,13 +226,14 @@ type prollyToSqlJoiner struct {
 }
 
 type kvDesc struct {
+	ns          tree.NodeStore
 	keyDesc     *val.TupleDesc
 	valDesc     *val.TupleDesc
 	keyMappings []int
 	valMappings []int
 }
 
-func newRowJoiner(ctx *sql.Context, schemas []schema.Schema, splits []int, projections []uint64, ns tree.NodeStore) *prollyToSqlJoiner {
+func newRowJoiner(ctx *sql.Context, schemas []schema.Schema, splits []int, projections []uint64, nodeStores []tree.NodeStore) *prollyToSqlJoiner {
 	numPhysicalColumns := getPhysicalColCount(schemas, splits, projections)
 
 	// last kv pair can safely look ahead for its end range
@@ -221,7 +269,9 @@ func newRowJoiner(ctx *sql.Context, schemas []schema.Schema, splits []int, proje
 			if splitIdx > 0 {
 				mappingStartIdx = splits[splitIdx-1] - virtualCnt
 			}
+			ns := nodeStores[splitIdx]
 			tupleDesc = append(tupleDesc, kvDesc{
+				ns:          ns,
 				keyDesc:     sch.GetKeyDescriptor(ns),
 				valDesc:     sch.GetValueDescriptor(ns),
 				keyMappings: allMap[mappingStartIdx:nextKeyIdx],               // prev kv partition -> last key of this partition
@@ -265,16 +315,23 @@ func newRowJoiner(ctx *sql.Context, schemas []schema.Schema, splits []int, proje
 		kvSplits:    kvSplits,
 		desc:        tupleDesc,
 		ordMappings: allMap[numPhysicalColumns:],
-		ns:          ns,
 		outCnt:      len(projections),
 	}
 }
 
 func (m *prollyToSqlJoiner) buildRow(ctx context.Context, tuples ...val.Tuple) (sql.Row, error) {
+	row := make(sql.Row, m.outCnt)
+	if err := m.buildRowInto(ctx, row, tuples...); err != nil {
+		return nil, err
+	}
+	return row, nil
+}
+
+// buildRowInto decodes |tuples| into |row| (which must have space for all the values)
+func (m *prollyToSqlJoiner) buildRowInto(ctx context.Context, row sql.Row, tuples ...val.Tuple) error {
 	if len(tuples) != 2*len(m.desc) {
 		panic("invalid KV count for prollyToSqlJoiner")
 	}
-	row := make(sql.Row, m.outCnt)
 	split := 0
 	var err error
 	var tup val.Tuple
@@ -290,21 +347,21 @@ func (m *prollyToSqlJoiner) buildRow(ctx context.Context, tuples ...val.Tuple) (
 		}
 		for j, idx := range desc.keyMappings {
 			outputIdx := m.ordMappings[split+j]
-			row[outputIdx], err = tree.GetField(ctx, desc.keyDesc, idx, tup, m.ns)
+			row[outputIdx], err = tree.GetField(ctx, desc.keyDesc, idx, tup, desc.ns)
 			if err != nil {
-				return nil, err
+				return err
 			}
 		}
 		tup = tuples[2*i+1]
 		for j, idx := range desc.valMappings {
 			outputIdx := m.ordMappings[split+len(desc.keyMappings)+j]
-			row[outputIdx], err = tree.GetField(ctx, desc.valDesc, idx, tup, m.ns)
+			row[outputIdx], err = tree.GetField(ctx, desc.valDesc, idx, tup, desc.ns)
 			if err != nil {
-				return nil, err
+				return err
 			}
 		}
 	}
-	return row, nil
+	return nil
 }
 
 func getPhysicalColCount(schemas []schema.Schema, splits []int, projections []uint64) int {
@@ -341,11 +398,10 @@ func getPhysicalColCount(schemas []schema.Schema, splits []int, projections []ui
 // TODO: This function call is very confusing because it returns so many different variables (many of which are often
 // ignored or nil). Split into two separate functions. The source and destination distinction is also not the most
 // intuitive -- consider using primary and secondary naming conventions.
-func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.MapIter, index.SecondaryLookupIterGen, schema.Schema, []uint64, sql.Expression, error) {
-	var table *doltdb.Table
+func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.MapReader, prolly.MapIter, index.SecondaryLookupIterGen, schema.Schema, []uint64, sql.Expression, error) {
 	var tags []uint64
 	var err error
-	var priMap prolly.Map
+	var priMap prolly.MapReader
 	var srcIter prolly.MapIter
 	var dstIter index.SecondaryLookupIterGen
 	var priSch schema.Schema
@@ -355,50 +411,40 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 	case *plan.Filter:
 		m, mIter, destIter, s, t, _, err := getSourceKv(ctx, n.Child, isSrc)
 		if err != nil {
-			return prolly.Map{}, nil, nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, nil, err
 		}
 		return m, mIter, destIter, s, t, n.Expression, nil
 	case *plan.IndexedTableAccess:
 		if _, ok := plan.FindVirtualColumnTable(n.Table); ok {
-			return prolly.Map{}, nil, nil, nil, nil, nil, fmt.Errorf("virtual tables unsupported in kvexec")
+			return nil, nil, nil, nil, nil, nil, fmt.Errorf("virtual tables unsupported in kvexec")
 		}
 
 		var lb index.IndexScanBuilder
 		switch dt := n.UnderlyingTable().(type) {
 		case *sqle.WritableIndexedDoltTable:
 			tags = dt.ProjectedTags()
-			table, err = dt.DoltTable.DoltTable(ctx)
+			priMap, _, err = dt.DoltTable.RowMap(ctx)
 			if err != nil {
-				return prolly.Map{}, nil, nil, nil, nil, nil, err
+				return nil, nil, nil, nil, nil, nil, err
 			}
 			lb, err = dt.LookupBuilder(ctx)
 			if err != nil {
-				return prolly.Map{}, nil, nil, nil, nil, nil, err
+				return nil, nil, nil, nil, nil, nil, err
 			}
 		case *sqle.IndexedDoltTable:
 			tags = dt.ProjectedTags()
-			table, err = dt.DoltTable.DoltTable(ctx)
+			priMap, _, err = dt.DoltTable.RowMap(ctx)
 			if err != nil {
-				return prolly.Map{}, nil, nil, nil, nil, nil, err
+				return nil, nil, nil, nil, nil, nil, err
 			}
 			lb, err = dt.LookupBuilder(ctx)
 			if err != nil {
-				return prolly.Map{}, nil, nil, nil, nil, nil, err
+				return nil, nil, nil, nil, nil, nil, err
 			}
 		// case *dtables.DiffTable:
 		// TODO: add interface to include system tables
 		default:
-			return prolly.Map{}, nil, nil, nil, nil, nil, nil
-		}
-
-		rowData, err := table.GetRowData(ctx)
-		if err != nil {
-			return prolly.Map{}, nil, nil, nil, nil, nil, err
-		}
-
-		priMap, err = durable.ProllyMapFromIndex(rowData)
-		if err != nil {
-			return prolly.Map{}, nil, nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, nil, nil
 		}
 
 		priSch = lb.OutputSchema()
@@ -406,17 +452,17 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 		if isSrc {
 			l, _, err := n.GetLookup(ctx, nil)
 			if err != nil {
-				return prolly.Map{}, nil, nil, nil, nil, nil, err
+				return nil, nil, nil, nil, nil, nil, err
 			}
 
 			prollyRanges, err := index.ProllyRangesForIndex(ctx, l.Index, l.Ranges)
 			if err != nil {
-				return prolly.Map{}, nil, nil, nil, nil, nil, err
+				return nil, nil, nil, nil, nil, nil, err
 			}
 
 			srcIter, err = index.NewSequenceRangeIter(ctx, lb, prollyRanges, l.IsReverse)
 			if err != nil {
-				return prolly.Map{}, nil, nil, nil, nil, nil, err
+				return nil, nil, nil, nil, nil, nil, err
 			}
 		} else {
 			dstIter, _ = lb.NewSecondaryIter(n.IsStrictLookup(ctx), len(n.Expressions()), n.NullMask())
@@ -426,37 +472,23 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 		switch dt := n.UnderlyingTable().(type) {
 		case *sqle.WritableDoltTable:
 			tags = dt.ProjectedTags()
-			table, err = dt.DoltTable.DoltTable(ctx)
+			priMap, priSch, err = dt.DoltTable.RowMap(ctx)
 		case *sqle.AlterableDoltTable:
 			tags = dt.ProjectedTags()
-			table, err = dt.DoltTable.DoltTable(ctx)
+			priMap, priSch, err = dt.DoltTable.RowMap(ctx)
 		case *sqle.DoltTable:
 			tags = dt.ProjectedTags()
-			table, err = dt.DoltTable(ctx)
+			priMap, priSch, err = dt.RowMap(ctx)
 		default:
-			return prolly.Map{}, nil, nil, nil, nil, nil, nil
+			return nil, nil, nil, nil, nil, nil, nil
 		}
 		if err != nil {
-			return prolly.Map{}, nil, nil, nil, nil, nil, err
-		}
-
-		priSch, err = table.GetSchema(ctx)
-		if err != nil {
-			return prolly.Map{}, nil, nil, nil, nil, nil, err
-		}
-
-		priIndex, err := table.GetRowData(ctx)
-		if err != nil {
-			return prolly.Map{}, nil, nil, nil, nil, nil, err
-		}
-		priMap, err = durable.ProllyMapFromIndex(priIndex)
-		if err != nil {
-			return prolly.Map{}, nil, nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, nil, err
 		}
 
 		srcIter, err = priMap.IterAll(ctx)
 		if err != nil {
-			return prolly.Map{}, nil, nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, nil, err
 		}
 
 		if schema.IsKeyless(priSch) {
@@ -464,17 +496,10 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 		}
 
 	default:
-		return prolly.Map{}, nil, nil, nil, nil, nil, nil
+		return nil, nil, nil, nil, nil, nil, nil
 	}
 	if err != nil {
-		return prolly.Map{}, nil, nil, nil, nil, nil, err
-	}
-
-	if priSch == nil && table != nil {
-		priSch, err = table.GetSchema(ctx)
-		if err != nil {
-			return prolly.Map{}, nil, nil, nil, nil, nil, err
-		}
+		return nil, nil, nil, nil, nil, nil, err
 	}
 
 	return priMap, srcIter, dstIter, priSch, tags, nil, nil
@@ -562,6 +587,11 @@ func getMergeKv(ctx *sql.Context, n sql.Node) (mergeState, error) {
 		// TODO: add interface to include system tables
 		default:
 			return ms, fmt.Errorf("non-standard indexed table not supported")
+		}
+
+		// TODO: read edits that have not been materialized, as lookup joins do
+		if pending, err := doltTable.HasPendingEdits(ctx); err != nil || pending {
+			return ms, fmt.Errorf("tables with pending edits not supported")
 		}
 
 		secIdx, err := index.GetDurableIndex(ctx, doltTable, idx)

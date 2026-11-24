@@ -27,6 +27,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
@@ -39,6 +40,10 @@ var fastPathSchema = sch("CREATE TABLE t (pk int PRIMARY KEY, a int, b int)")
 var differPathSchema = sch("CREATE TABLE t (pk int PRIMARY KEY, a int, b int, INDEX idx_a (a))")
 
 var policyTestSchema = fastPathSchema
+
+func newOwnedMergeContext(ctx context.Context) *sql.Context {
+	return sql.NewContextWithVariables(ctx, sqle.NewEngineVariables())
+}
 
 type policyInvocation struct {
 	table             string
@@ -81,7 +86,7 @@ func runPolicyMergeWithSchema(t *testing.T, schema namedSchema, data dataTest, p
 
 	var eo editor.Options
 	mo := merge.MergeOpts{RowMergePolicy: policy}
-	return merge.MergeRoots(sql.NewContext(ctx), doltdb.SimpleTableResolver{}, l, r, a, rootish{r}, rootish{a}, eo, mo)
+	return merge.MergeRoots(newOwnedMergeContext(ctx), doltdb.SimpleTableResolver{}, l, r, a, rootish{r}, rootish{a}, eo, mo)
 }
 
 // A policy installed through MergeOpts must reach the merge, be told which
@@ -271,7 +276,7 @@ func TestRowMergePolicy_DefersWhenSchemasDiffer(t *testing.T) {
 
 	var eo editor.Options
 	mo := merge.MergeOpts{RowMergePolicy: p.opt()}
-	result, err := merge.MergeRoots(sql.NewContext(ctx), doltdb.SimpleTableResolver{}, l, r, a, rootish{r}, rootish{a}, eo, mo)
+	result, err := merge.MergeRoots(newOwnedMergeContext(ctx), doltdb.SimpleTableResolver{}, l, r, a, rootish{r}, rootish{a}, eo, mo)
 	require.NoError(t, err)
 	require.Empty(t, p.calls, "a schema-changing merge must not consult the policy")
 	require.Zero(t, dataConflictCount(result), "the merge must use Dolt's own semantics")
@@ -394,9 +399,8 @@ func (l strictnessLevel) policy(calls *int) merge.RowMergePolicy {
 
 // ---------------------------------------------------------------------------
 // The case matrix. pk 1 or 2 carries the case; pk 99 is ballast that only the
-// left side edits, so the two roots always differ (an identical pair short
-// circuits before any row is compared) and so every run also asserts that a
-// one-sided edit is not offered to the policy.
+// left side edits, so the two roots always differ and so every run also
+// asserts that a one-sided edit is not offered to the policy.
 // ---------------------------------------------------------------------------
 
 type levelCase struct {
@@ -753,4 +757,26 @@ func requireSameTables(t *testing.T, expected doltdb.RootValue, actual doltdb.Ro
 	act, err := doltdb.MapTableHashes(ctx, actual)
 	require.NoError(t, err)
 	require.Equal(t, exp, act, "merged tables must match the expected composition")
+}
+
+// Both sides changing a table identically merges without comparing any rows
+// when no policy is installed, so a policy must still be consulted for each
+// row that both sides changed.
+func TestRowMergePolicy_SeesConvergentEditsInIdenticalTables(t *testing.T) {
+	data := dataTest{
+		name:     "both sides set a=1 on row 1 and nothing else",
+		ancestor: []sql.Row{sql.NewRow(1, 0, 0), sql.NewRow(2, 0, 0)},
+		left:     []sql.Row{sql.NewRow(1, 1, 0), sql.NewRow(2, 0, 0)},
+		right:    []sql.Row{sql.NewRow(1, 1, 0), sql.NewRow(2, 0, 0)},
+		merged:   []sql.Row{sql.NewRow(1, 1, 0), sql.NewRow(2, 0, 0)},
+	}
+
+	p := &recordingRowMergePolicy{answer: func() (val.Tuple, tree.RowMergeStatus) {
+		return nil, tree.RowMergeConflict
+	}}
+	result, err := runPolicyMerge(t, data, p.opt())
+	require.NoError(t, err)
+	require.Len(t, p.calls, 1, "the convergent row must reach the policy")
+	require.Equal(t, 1, dataConflictCount(result),
+		"RowMergeConflict on a convergent edit must record a data conflict")
 }

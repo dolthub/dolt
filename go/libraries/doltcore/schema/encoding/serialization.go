@@ -283,6 +283,9 @@ func serializeSchemaColumns(ctx context.Context, b *fb.Builder, sch schema.Schem
 			serial.ColumnAddUsesAdaptiveEncoding(b, true)
 			serial.ColumnAddAdaptiveEncodingBreakingChange(b, true)
 		}
+		if col.TypeInfo.Encoding() == val.CommitAddrEnc {
+			serial.ColumnAddUsesCommitAddrEncoding(b, true)
+		}
 
 		if col.Hidden {
 			serial.ColumnAddHidden(b, col.Hidden)
@@ -518,6 +521,9 @@ func serializeSecondaryIndexes(b *fb.Builder, sch schema.Schema, indexes []schem
 		if len(opClasses) > 0 {
 			serial.IndexAddOpClasses(b, opClassesOff)
 		}
+		if idx.NullsNotDistinct() {
+			serial.IndexAddNullsNotDistinct(b, true)
+		}
 		offs[i] = serial.IndexEnd(b)
 	}
 
@@ -575,6 +581,7 @@ func deserializeSecondaryIndexes(sch schema.Schema, s *serial.TableSchema) error
 			Predicate:          string(idx.Predicate()),
 			ColumnOrders:       columnOrders,
 			OpClasses:          opClasses,
+			NullsNotDistinct:   idx.NullsNotDistinct(),
 			FullTextProperties: fti,
 			VectorProperties:   vi,
 		}

@@ -41,6 +41,9 @@ import (
 // BinlogBranch specifies the branch used for generating binlog events.
 var BinlogBranch = "main"
 
+// A table ID occupies six bytes on the wire. The all-ones value is reserved.
+const maxBinlogTableID = 1<<48 - 2
+
 // binlogProducer implements the doltdb.DatabaseUpdateListener interface so that it can listen for updates to Dolt
 // databases and generate binlog events describing them. Those binlog events are sent to the binlogStreamerManager,
 // which is responsible for delivering them to each connected replica.
@@ -52,7 +55,10 @@ type binlogProducer struct {
 	mu              *sync.Mutex
 	gtidPosition    *mysql.Position
 	logManager      *logManager
+	tableIDs        map[string]map[string]uint64
+	tableIDMu       sync.Mutex // locks access to the tableIDs map
 	gtidSequence    int64
+	lastTableID     uint64
 	binlogEventMeta mysql.BinlogEventMetadata
 }
 
@@ -62,7 +68,7 @@ var _ doltdb.DatabaseUpdateListener = (*binlogProducer)(nil)
 // returned binlogProducer as a DatabaseUpdateListener before it will start receiving database updates and start
 // producing binlog events.
 func NewBinlogProducer(ctx *sql.Context, fs filesys.Filesys) (*binlogProducer, error) {
-	binlogFormat := createBinlogFormat()
+	binlogFormat := createBinlogFormat(ctx)
 	binlogEventMeta, err := createBinlogEventMetadata(ctx)
 	if err != nil {
 		return nil, err
@@ -72,9 +78,11 @@ func NewBinlogProducer(ctx *sql.Context, fs filesys.Filesys) (*binlogProducer, e
 		binlogEventMeta: *binlogEventMeta,
 		binlogFormat:    binlogFormat,
 		mu:              &sync.Mutex{},
+		tableIDs:        make(map[string]map[string]uint64),
+		lastTableID:     2,
 	}
 
-	if err = b.initializeGtidPosition(fs); err != nil {
+	if err = b.initializeGtidPosition(ctx, fs); err != nil {
 		return nil, err
 	}
 
@@ -114,6 +122,8 @@ func (b *binlogProducer) WorkingRootUpdated(ctx *sql.Context, databaseName strin
 		return err
 	}
 
+	hasSchemaChanges := len(binlogEvents) > 0
+
 	// Process data changes...
 	if hasDataChanges {
 		// GTID
@@ -144,7 +154,13 @@ func (b *binlogProducer) WorkingRootUpdated(ctx *sql.Context, databaseName strin
 		binlogEvents = append(binlogEvents, b.newXIDEvent())
 	}
 
-	return b.logManager.WriteEvents(ctx, binlogEvents...)
+	if err := b.logManager.WriteEvents(ctx, binlogEvents...); err != nil {
+		return err
+	}
+	if hasSchemaChanges {
+		b.forgetDroppedTableIDs(databaseName, tableDeltas)
+	}
+	return nil
 }
 
 // DatabaseCreated implements the doltdb.DatabaseUpdateListener interface.
@@ -182,14 +198,27 @@ func (b *binlogProducer) DatabaseDropped(ctx *sql.Context, databaseName string) 
 	dropDatabaseStatement := fmt.Sprintf("drop database `%s`;", databaseName)
 	binlogEvents = append(binlogEvents, b.newQueryEvent(databaseName, dropDatabaseStatement))
 
-	return b.logManager.WriteEvents(ctx, binlogEvents...)
+	if err := b.logManager.WriteEvents(ctx, binlogEvents...); err != nil {
+		return err
+	}
+
+	// A DROP statement can spell the database differently than its name in a table map.
+	b.tableIDMu.Lock()
+	defer b.tableIDMu.Unlock()
+	databaseKey := strings.ToLower(databaseName)
+	for name := range b.tableIDs {
+		if strings.ToLower(name) == databaseKey {
+			delete(b.tableIDs, name)
+		}
+	}
+	return nil
 }
 
 // initializeGtidPosition loads the persisted GTID position from disk and initializes it
 // in this binlogStreamerManager instance. If the gtidPosition has already been loaded
 // from disk and initialized, this method simply returns. If any problems were encountered
 // loading the GTID position from disk, or parsing its value, an error is returned.
-func (b *binlogProducer) initializeGtidPosition(fs filesys.Filesys) error {
+func (b *binlogProducer) initializeGtidPosition(ctx *sql.Context, fs filesys.Filesys) error {
 	if b.gtidPosition != nil {
 		return nil
 	}
@@ -241,7 +270,7 @@ func (b *binlogProducer) initializeGtidPosition(fs filesys.Filesys) error {
 	b.gtidSequence = int64(i + 1)
 
 	logrus.Tracef("setting @@gtid_executed to %s", b.gtidPosition.GTIDSet.String())
-	return sql.SystemVariables.AssignValues(map[string]any{
+	return ctx.SystemVariables().AssignValues(ctx, map[string]any{
 		"gtid_executed": b.gtidPosition.GTIDSet.String()})
 }
 
@@ -271,7 +300,7 @@ func (b *binlogProducer) createGtidEvent(ctx *sql.Context) (mysql.BinlogEvent, e
 		return nil, fmt.Errorf("unable to store GTID executed metadata to disk: %s", err.Error())
 	}
 
-	err = sql.SystemVariables.AssignValues(map[string]any{
+	err = ctx.SystemVariables().AssignValues(ctx, map[string]any{
 		"gtid_executed": b.gtidPosition.GTIDSet.String()})
 	if err != nil {
 		return nil, err
@@ -330,7 +359,6 @@ func (b *binlogProducer) createSchemaChangeQueryEvents(
 // table name to the table IDs used for that table in the generated TableMap events, so that callers can look up
 // the correct table ID to use in Row events.
 func (b *binlogProducer) createTableMapEvents(ctx *sql.Context, databaseName string, tableDeltas []diff.TableDelta) (events []mysql.BinlogEvent, tablesToId map[string]uint64, err error) {
-	tableId := uint64(02)
 	tablesToId = make(map[string]uint64)
 	for _, tableDelta := range tableDeltas {
 		dataChanged, err := tableDelta.HasDataChanged(ctx)
@@ -342,8 +370,6 @@ func (b *binlogProducer) createTableMapEvents(ctx *sql.Context, databaseName str
 			continue
 		}
 
-		// For every table with data changes, we need to send a TableMap event over the stream.
-		tableId++
 		tableName := tableDelta.ToName
 		if tableName.Name == "" {
 			tableName = tableDelta.FromName
@@ -354,13 +380,18 @@ func (b *binlogProducer) createTableMapEvents(ctx *sql.Context, databaseName str
 			return nil, nil, err
 		}
 
-		tablesToId[tableName.Name] = tableId
 		tableMap, err := createTableMapFromDoltTable(ctx, databaseName,
 			tableName.Name, tableDelta.ToTable, isFullRowMetadata)
 		if err != nil {
 			return nil, nil, err
 		}
 
+		// Emit a fresh table map for every transaction, including after a schema change or log rotation.
+		tableId, err := b.tableID(databaseName, tableName.Name)
+		if err != nil {
+			return nil, nil, err
+		}
+		tablesToId[tableName.Name] = tableId
 		tableMapEvent, err := b.newTableMapEvent(tableId, tableMap)
 		if err != nil {
 			return nil, nil, err
@@ -422,6 +453,15 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 			}
 		}
 
+		resolved, err := resolveBinlogSchema(ctx, tableName.Name, sch)
+		if err != nil {
+			return nil, err
+		}
+		toSerializer := newBinlogRowSerializer(sch, sch, resolved)
+		fromSerializer := toSerializer
+		if !schema.SchemasAreEqual(fromSch, sch) {
+			fromSerializer = newBinlogRowSerializer(fromSch, sch, resolved)
+		}
 		nonSystemHiddenCols := sch.GetAllCols().GetNonSystemHiddenCols()
 		tableId := tablesToId[tableName.Name]
 
@@ -442,8 +482,7 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 			case tree.AddedDiff:
 				// For inserted rows, there's no existing row to be identified, so
 				// we don't need to use the from schema.
-				data, nullBitmap, err := serializeRowToBinlogBytes(ctx,
-					sch, sch, diff.Key, diff.To, tableDelta.ToTable.NodeStore())
+				data, nullBitmap, err := toSerializer.serialize(ctx, diff.Key, diff.To, tableDelta.ToTable.NodeStore())
 				if err != nil {
 					return err
 				}
@@ -457,8 +496,7 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 			case tree.ModifiedDiff:
 				// For an updated row, we don't need to use the "from" schema for the
 				// new values being updated.
-				data, nullColumns, err := serializeRowToBinlogBytes(ctx,
-					sch, sch, diff.Key, diff.To, tableDelta.ToTable.NodeStore())
+				data, nullColumns, err := toSerializer.serialize(ctx, diff.Key, diff.To, tableDelta.ToTable.NodeStore())
 				if err != nil {
 					return err
 				}
@@ -468,8 +506,7 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 				// we need the "from" schema to properly extract the values from the tuple, in
 				// case there have been any schema/type changes, and we need the "to" schema so
 				// that we can assemble and serialize the row information to the current schema.
-				identify, nullIdentifyColumns, err := serializeRowToBinlogBytes(ctx,
-					fromSch, sch, diff.Key, diff.From, tableDelta.FromTable.NodeStore())
+				identify, nullIdentifyColumns, err := fromSerializer.serialize(ctx, diff.Key, diff.From, tableDelta.FromTable.NodeStore())
 				if err != nil {
 					return err
 				}
@@ -488,8 +525,7 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 				// occurred in the transaction we're recording, we must use the "from" schema to
 				// correctly extract the values from the "from" diff, but also use the "to" schema to
 				// assemble and encode the values to the current schema.
-				identifyData, nullBitmap, err := serializeRowToBinlogBytes(ctx,
-					fromSch, sch, diff.Key, diff.From, tableDelta.FromTable.NodeStore())
+				identifyData, nullBitmap, err := fromSerializer.serialize(ctx, diff.Key, diff.From, tableDelta.FromTable.NodeStore())
 				if err != nil {
 					return err
 				}
@@ -515,10 +551,8 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 				DataColumns: mysql.NewServerBitmap(len(nonSystemHiddenCols)),
 				Rows:        tableRowsToWrite,
 			}
-			for i, col := range nonSystemHiddenCols {
-				if !col.Virtual {
-					rows.DataColumns.Set(i, true)
-				}
+			for i := range nonSystemHiddenCols {
+				rows.DataColumns.Set(i, true)
 			}
 			events = append(events, b.newWriteRowsEvent(tableId, rows))
 		}
@@ -528,10 +562,8 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 				IdentifyColumns: mysql.NewServerBitmap(len(nonSystemHiddenCols)),
 				Rows:            tableRowsToDelete,
 			}
-			for i, col := range nonSystemHiddenCols {
-				if !col.Virtual {
-					rows.IdentifyColumns.Set(i, true)
-				}
+			for i := range nonSystemHiddenCols {
+				rows.IdentifyColumns.Set(i, true)
 			}
 			events = append(events, b.newDeleteRowsEvent(tableId, rows))
 		}
@@ -542,11 +574,9 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 				IdentifyColumns: mysql.NewServerBitmap(len(nonSystemHiddenCols)),
 				Rows:            tableRowsToUpdate,
 			}
-			for i, col := range nonSystemHiddenCols {
-				if !col.Virtual {
-					rows.DataColumns.Set(i, true)
-					rows.IdentifyColumns.Set(i, true)
-				}
+			for i := range nonSystemHiddenCols {
+				rows.DataColumns.Set(i, true)
+				rows.IdentifyColumns.Set(i, true)
 			}
 			events = append(events, b.newUpdateRowsEvent(tableId, rows))
 		}
@@ -607,6 +637,46 @@ func (b *binlogProducer) newDeleteRowsEvent(tableId uint64, rows mysql.Rows) mys
 // stream's log position.
 func (b *binlogProducer) newUpdateRowsEvent(tableId uint64, rows mysql.Rows) mysql.BinlogEvent {
 	return mysql.NewUpdateRowsEvent(*b.binlogFormat, b.binlogEventMeta, tableId, rows)
+}
+
+// tableID assigns a stable ID to the exact database and table names sent on the wire. The counter
+// never reassigns an ID, even when its table is dropped. A server restart starts a new
+// producer and rotates the log, which signals readers to clear cached table mappings.
+func (b *binlogProducer) tableID(databaseName, tableName string) (uint64, error) {
+	b.tableIDMu.Lock()
+	defer b.tableIDMu.Unlock()
+
+	databaseIDs := b.tableIDs[databaseName]
+	if id, ok := databaseIDs[tableName]; ok {
+		return id, nil
+	}
+	if b.lastTableID == maxBinlogTableID {
+		return 0, fmt.Errorf("binlog table ID space exhausted")
+	}
+	if databaseIDs == nil {
+		databaseIDs = make(map[string]uint64)
+		b.tableIDs[databaseName] = databaseIDs
+	}
+	b.lastTableID++
+	databaseIDs[tableName] = b.lastTableID
+	return b.lastTableID, nil
+}
+
+// forgetDroppedTableIDs releases mappings for table names removed by a DROP or RENAME.
+// A rename can change whether a consumer includes the table, so its new name has its own ID.
+func (b *binlogProducer) forgetDroppedTableIDs(databaseName string, tableDeltas []diff.TableDelta) {
+	b.tableIDMu.Lock()
+	defer b.tableIDMu.Unlock()
+
+	databaseIDs := b.tableIDs[databaseName]
+	for _, tableDelta := range tableDeltas {
+		if tableDelta.IsDrop() || tableDelta.IsRename() {
+			delete(databaseIDs, tableDelta.FromName.Name)
+		}
+	}
+	if len(databaseIDs) == 0 {
+		delete(b.tableIDs, databaseName)
+	}
 }
 
 // isDatabaseFilteredOut returns true if |dbName| is listed in the @@binlog_ignore_dbs
@@ -719,8 +789,7 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 		return nil, err
 	}
 
-	// Include all non-system-hidden columns. Virtual generated columns still pass metadata, but
-	// don't ever pass a value, since the value isn't stored in a row tuple.
+	// Include all non-system-hidden columns, matching the full row images.
 	nonSystemHiddenCols := sch.GetAllCols().GetNonSystemHiddenCols()
 	types := make([]byte, len(nonSystemHiddenCols))
 	metadata := make([]uint16, len(nonSystemHiddenCols))
@@ -790,10 +859,10 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 
 // createBinlogFormat returns a new BinlogFormat that describes the format of this binlog stream, which will always
 // be a MySQL 5.6+ compatible binlog format.
-func createBinlogFormat() *mysql.BinlogFormat {
+func createBinlogFormat(ctx *sql.Context) *mysql.BinlogFormat {
 	binlogFormat := mysql.NewMySQL56BinlogFormat()
 
-	_, value, ok := sql.SystemVariables.GetGlobal("binlog_checksum")
+	_, value, ok := ctx.SystemVariables().GetGlobal("binlog_checksum")
 	if !ok {
 		panic("unable to read binlog_checksum system variable")
 	}

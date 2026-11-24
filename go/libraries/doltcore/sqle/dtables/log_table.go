@@ -31,20 +31,22 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/gpg"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/prolly"
 )
 
 // LogTable is a sql.Table implementation that implements a system table which shows the dolt commit log
 type LogTable struct {
-	ddb               *doltdb.DoltDB
-	head              *doltdb.Commit
-	headCommitClosure *prolly.CommitClosure
-	dbName            string
-	tableName         string
-	headHash          hash.Hash
-	refs              *refsCache
-	projectedCols     []string
-	schema            sql.Schema
+	ddb           *doltdb.DoltDB
+	head          *doltdb.Commit
+	headAncestry  *doltdb.CommitAncestry
+	dbName        string
+	tableName     string
+	headHash      hash.Hash
+	refs          *refsCache
+	projectedCols []string
+	// projectedColumnOffsets holds the position in schema of each projected column, in projection order.
+	projectedColumnOffsets []int
+	projectedSchema        sql.Schema
+	schema                 sql.Schema
 }
 
 // refsCache holds the commit-hash-to-refs map shared by every iterator a LogTable spawns.
@@ -73,20 +75,56 @@ var _ sql.Table = (*LogTable)(nil)
 var _ sql.StatisticsTable = (*LogTable)(nil)
 var _ sql.IndexAddressable = (*LogTable)(nil)
 var _ sql.ProjectedTable = (*LogTable)(nil)
+var _ sql.PrimaryKeyTable = (*LogTable)(nil)
 
 // WithProjections records the columns the caller will read so the row builder can skip
 // populating columns the SELECT did not ask for. The signature column in particular is left
 // empty unless projected by name, keeping signature data opt-in.
 func (dt *LogTable) WithProjections(_ *sql.Context, colNames []string) (sql.Table, error) {
 	nt := *dt
+	if colNames == nil {
+		nt.projectedCols = nil
+		nt.projectedColumnOffsets = nil
+		nt.projectedSchema = nil
+		return &nt, nil
+	}
+
 	nt.projectedCols = colNames
+	nt.projectedColumnOffsets = make([]int, len(colNames))
+	nt.projectedSchema = make(sql.Schema, len(colNames))
+	for i, name := range colNames {
+		idx := dt.schema.IndexOfColName(name)
+		if idx < 0 {
+			return nil, fmt.Errorf("column %q not found in %s", name, dt.tableName)
+		}
+		nt.projectedColumnOffsets[i] = idx
+		nt.projectedSchema[i] = dt.schema[idx]
+	}
 	return &nt, nil
+}
+
+// projectRow returns a row containing only the values at |idx|, in that order. A nil |idx|
+// means no projection was applied.
+func projectRow(row sql.Row, idx []int) sql.Row {
+	if idx == nil {
+		return row
+	}
+	out := make(sql.Row, len(idx))
+	for i, j := range idx {
+		out[i] = row[j]
+	}
+	return out
 }
 
 // Projections returns the column names previously stored by WithProjections, or nil when the
 // table has not been projected (caller wants every column).
 func (dt *LogTable) Projections() []string {
 	return dt.projectedCols
+}
+
+// PrimaryKeySchema implements sql.PrimaryKeyTable.
+func (dt *LogTable) PrimaryKeySchema(_ *sql.Context) sql.PrimaryKeySchema {
+	return sql.NewPrimaryKeySchema(dt.schema)
 }
 
 // LogRowOptions selects which opt-in columns BuildLogTableRow populates. Each column stays
@@ -102,7 +140,7 @@ type LogRowOptions struct {
 func LogRowOptionsFromProjection(projected []string) LogRowOptions {
 	var opts LogRowOptions
 	for _, p := range projected {
-		switch p {
+		switch strings.ToLower(p) {
 		case "parents":
 			opts.ShowParents = true
 		case "signature":
@@ -254,6 +292,9 @@ func BuildLogTableRow(ctx *sql.Context, commit *doltdb.Commit, meta *datas.Commi
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
 func (dt *LogTable) Schema(_ *sql.Context) sql.Schema {
+	if dt.projectedSchema != nil {
+		return dt.projectedSchema
+	}
 	return dt.schema
 }
 
@@ -291,7 +332,7 @@ func (dt *LogTable) PartitionRows(ctx *sql.Context, p sql.Partition) (sql.RowIte
 		if err != nil {
 			return nil, err
 		}
-		return sql.RowsToRowIter(row), nil
+		return sql.RowsToRowIter(projectRow(row, dt.projectedColumnOffsets)), nil
 	default:
 		return dt.NewLogItr(ctx, dt.ddb, dt.head, refs, rowOpts)
 	}
@@ -368,29 +409,14 @@ func (dt *LogTable) commitHashPartitionIter(ctx *sql.Context, lookup sql.IndexLo
 // CommitIsInScope returns true if a given commit hash is head or is
 // visible from the current head's ancestry graph.
 func (dt *LogTable) CommitIsInScope(ctx context.Context, height uint64, h hash.Hash) (bool, error) {
-	headHash, err := dt.HeadHash()
-	if err != nil {
-		return false, err
-	}
-	if headHash == h {
-		return true, nil
-	}
-	cc, err := dt.HeadCommitClosure(ctx)
-	if err != nil {
-		return false, err
-	}
-	return cc.ContainsKey(ctx, h, height)
-}
-
-func (dt *LogTable) HeadCommitClosure(ctx context.Context) (*prolly.CommitClosure, error) {
-	if dt.headCommitClosure == nil {
-		cc, err := dt.head.GetCommitClosure(ctx)
-		dt.headCommitClosure = &cc
+	if dt.headAncestry == nil {
+		a, err := dt.head.GetAncestry(ctx)
 		if err != nil {
-			return nil, err
+			return false, err
 		}
+		dt.headAncestry = a
 	}
-	return dt.headCommitClosure, nil
+	return dt.headAncestry.Contains(ctx, h, height)
 }
 
 func (dt *LogTable) HeadHash() (hash.Hash, error) {
@@ -410,6 +436,8 @@ type LogItr struct {
 	cHashToRefs map[hash.Hash][]string
 	headHash    hash.Hash
 	rowOpts     LogRowOptions
+	// projectedIdx selects the columns of each built row to return; nil returns the full row.
+	projectedIdx []int
 }
 
 // NewLogItr creates a LogItr from the current environment. |rowOpts| selects which opt-in
@@ -432,7 +460,7 @@ func (dt *LogTable) NewLogItr(ctx *sql.Context, ddb *doltdb.DoltDB, head *doltdb
 		return nil, err
 	}
 
-	return &LogItr{child: child, cHashToRefs: cHashToRefs, headHash: h, rowOpts: rowOpts}, nil
+	return &LogItr{child: child, cHashToRefs: cHashToRefs, headHash: h, rowOpts: rowOpts, projectedIdx: dt.projectedColumnOffsets}, nil
 }
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
@@ -463,7 +491,11 @@ func (itr *LogItr) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 	}
 
-	return BuildLogTableRow(ctx, cm, meta, height, itr.cHashToRefs, itr.headHash, itr.rowOpts)
+	row, err := BuildLogTableRow(ctx, cm, meta, height, itr.cHashToRefs, itr.headHash, itr.rowOpts)
+	if err != nil {
+		return nil, err
+	}
+	return projectRow(row, itr.projectedIdx), nil
 }
 
 // Close closes the iterator.

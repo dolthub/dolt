@@ -17,8 +17,10 @@ package prolly
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"math/rand"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -56,6 +58,49 @@ func TestAddressMap(t *testing.T) {
 			act, err = am.Get(ctx, p.name())
 			assert.NoError(t, err)
 			assert.Equal(t, p.addr(), act)
+		}
+	})
+}
+
+func TestAddressMapKeyLength(t *testing.T) {
+	ctx := context.Background()
+	ns := tree.NewTestNodeStore()
+	addr, err := ns.Write(ctx, tree.NewEmptyTestNode())
+	require.NoError(t, err)
+
+	t.Run("keys over the limit are refused", func(t *testing.T) {
+		empty, err := NewEmptyAddressMap(ns)
+		require.NoError(t, err)
+		editor := empty.Editor()
+		for _, n := range []int{MaxAddressMapKeyLength + 1, 32 * 1024, 64*1024 + 10, 64*1024 + 11} {
+			name := strings.Repeat("n", n)
+			assert.ErrorIs(t, editor.Add(ctx, name, addr), ErrAddressMapKeyTooLong)
+			assert.ErrorIs(t, editor.Update(ctx, name, addr), ErrAddressMapKeyTooLong)
+		}
+		am, err := editor.Flush(ctx)
+		require.NoError(t, err)
+		cnt, err := am.Count()
+		require.NoError(t, err)
+		assert.Equal(t, 0, cnt)
+	})
+
+	t.Run("many keys at the limit round trip", func(t *testing.T) {
+		empty, err := NewEmptyAddressMap(ns)
+		require.NoError(t, err)
+		editor := empty.Editor()
+		names := make([]string, 64)
+		for i := range names {
+			prefix := fmt.Sprintf("%03d", i)
+			names[i] = prefix + strings.Repeat("n", MaxAddressMapKeyLength-len(prefix))
+			require.NoError(t, editor.Add(ctx, names[i], addr))
+		}
+		am, err := editor.Flush(ctx)
+		require.NoError(t, err)
+		assert.Greater(t, am.Height(), 1)
+		for _, name := range names {
+			act, err := am.Get(ctx, name)
+			require.NoError(t, err)
+			assert.Equal(t, addr, act)
 		}
 	})
 }

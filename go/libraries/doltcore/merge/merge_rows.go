@@ -61,6 +61,12 @@ type MergeOpts struct {
 	// inspection. Returning tree.RowMergeDefer keeps the standard behaviour for
 	// that row.
 	RowMergePolicy RowMergePolicy
+	// SkipFullTextRebuild leaves the Full-Text pseudo-index tables of merged tables as the merge left them, for a
+	// caller that brings them up to date itself.
+	SkipFullTextRebuild bool
+	// KeepTablesAddedTwice records a table that both sides added with different schemas as a schema conflict, rather
+	// than failing the merge. A virtual merge base sets it.
+	KeepTablesAddedTwice bool
 }
 
 // RowMergeInput describes one three-way row decision offered to a policy.
@@ -115,7 +121,7 @@ type TableMerger struct {
 }
 
 func (tm TableMerger) GetNewValueMerger(ctx context.Context, mergeSch schema.Schema, leftRows prolly.Map) *valueMerger {
-	return NewValueMerger(ctx, mergeSch, tm.leftSch, tm.rightSch, tm.ancSch, leftRows.Pool(), leftRows.NodeStore())
+	return NewValueMerger(ctx, mergeSch, tm.leftSch, tm.rightSch, tm.ancSch, leftRows.Pool(), leftRows.NodeStore(), tm.name.Name)
 }
 
 func rowsFromTable(ctx context.Context, tbl *doltdb.Table) (prolly.Map, error) {
@@ -193,13 +199,22 @@ type RootMerger struct {
 	ns  tree.NodeStore
 }
 
-// NewMerger creates a new merger utility object.
+// NewMerger creates a new merger utility object. Tables of |anc| whose primary key was changed the same way in |left|
+// and |right| are rekeyed to that primary key.
 func NewMerger(
+	ctx *sql.Context,
 	left, right, anc doltdb.RootValue,
 	rightSrc, ancestorSrc doltdb.Rootish,
 	vrw types.ValueReadWriter,
 	ns tree.NodeStore,
 ) (*RootMerger, error) {
+	tblNames, err := doltdb.UnionTableNames(ctx, left, right)
+	if err != nil {
+		return nil, err
+	}
+	if anc, ancestorSrc, err = rekeyAncestor(ctx, left, right, anc, ancestorSrc, tblNames); err != nil {
+		return nil, err
+	}
 	return &RootMerger{
 		left:     left,
 		right:    right,
@@ -209,6 +224,11 @@ func NewMerger(
 		vrw:      vrw,
 		ns:       ns,
 	}, nil
+}
+
+// Ancestor returns the Rootish that conflicts of this merge take their base from.
+func (rm *RootMerger) Ancestor() doltdb.Rootish {
+	return rm.ancSrc
 }
 
 // MergedResult returns either the merged table or merged root object. Both fields will never be set simultaneously.
@@ -421,8 +441,8 @@ func (rm *RootMerger) MaybeShortCircuit(ctx context.Context, tm *TableMerger, op
 	}
 
 	// Both made identical changes
-	// For keyless tables, this counts as a conflict
-	if leftExists && rightExists && leftHash == rightHash && !schema.IsKeyless(tm.leftSch) {
+	// For keyless tables, this counts as a conflict, and a row merge policy decides each row of a table
+	if leftExists && rightExists && leftHash == rightHash && !schema.IsKeyless(tm.leftSch) && (opts.RowMergePolicy == nil || areRootObjs) {
 		return tm.leftTbl, tm.leftRootObj, &MergeStats{Operation: TableUnmodified}, nil
 	}
 
@@ -457,7 +477,8 @@ func (rm *RootMerger) MaybeShortCircuit(ctx context.Context, tm *TableMerger, op
 			childTable = tm.leftTbl
 			childHash = leftHash
 		}
-		if childHash != baseHash {
+		// Conflicted cells of a virtual merge base count as changed on the surviving side even when it matches the base.
+		if childHash != baseHash || len(tm.virtualBaseConflicts()) > 0 {
 			if areRootObjs {
 				return nil, nil, nil, nil
 			} else {
@@ -474,6 +495,12 @@ func (rm *RootMerger) MaybeShortCircuit(ctx context.Context, tm *TableMerger, op
 		}
 		// fast-forward
 		return nil, nil, &MergeStats{Operation: TableRemoved}, nil
+	}
+
+	// A table with conflicted cells in a virtual merge base needs a row merge even when one side matches the base,
+	// because those cells count as changed on both sides.
+	if len(tm.virtualBaseConflicts()) > 0 {
+		return nil, nil, nil, nil
 	}
 
 	// Changes only in root, table unmodified

@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"time"
 
@@ -51,6 +52,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/overrides"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
@@ -78,11 +80,9 @@ type Database struct {
 	rsw           env.RepoStateWriter
 	gs            dsess.GlobalStateImpl
 	ddb           *doltdb.DoltDB
-	baseName      string
+	name          doltdb.QualifiedDbName
 	requestedName string
 	schemaName    string
-	revision      string
-	revName       string
 	editOpts      editor.Options
 	revType       dsess.RevisionType
 }
@@ -138,7 +138,7 @@ func (r ReadOnlyDatabase) IsReadOnly() bool {
 }
 
 func (r ReadOnlyDatabase) InitialDBState(ctx *sql.Context) (dsess.InitialDbState, error) {
-	return initialDBState(ctx, r, r.revision)
+	return initialDBState(ctx, r, r.name.Revision)
 }
 
 func (r ReadOnlyDatabase) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
@@ -157,8 +157,7 @@ func (db Database) GetTableResolver() doltdb.TableResolver {
 
 func (db Database) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
 	db.rsr, db.rsw = branchSpec.RepoState, branchSpec.RepoState
-	db.revision = branchSpec.Branch
-	db.revName = db.baseName + doltdb.DbRevisionDelimiter + branchSpec.Branch
+	db.name = db.name.WithRevision(branchSpec.Branch)
 	db.revType = dsess.RevisionTypeBranch
 	db.requestedName = requestedName
 
@@ -180,7 +179,7 @@ func (db Database) Close() {
 
 // Revision implements dsess.RevisionDatabase
 func (db Database) Revision() string {
-	return db.revision
+	return db.name.Revision
 }
 
 func (db Database) Versioned() bool {
@@ -215,8 +214,7 @@ func NewDatabase(ctx context.Context, name string, dbData env.DbData[context.Con
 	}
 
 	return Database{
-		baseName:      name,
-		revName:       name,
+		name:          doltdb.NewQualifiedDbName(name, ""),
 		requestedName: name,
 		ddb:           dbData.Ddb,
 		rsr:           forwardCtxDbData{dbData.Rsr},
@@ -249,7 +247,7 @@ func initialDBState(ctx *sql.Context, db dsess.SqlDatabase, branch string) (dses
 }
 
 func (db Database) InitialDBState(ctx *sql.Context) (dsess.InitialDbState, error) {
-	return initialDBState(ctx, db, db.revision)
+	return initialDBState(ctx, db, db.name.Revision)
 }
 
 // Name returns the name of this database, set at creation time.
@@ -265,13 +263,13 @@ func (db Database) Schema() string {
 // AliasedName is what allows databases named e.g. `mydb/b1` to work with the grant and info schema tables that expect
 // a base (no revision qualifier) db name
 func (db Database) AliasedName() string {
-	return db.baseName
+	return db.name.Base
 }
 
 // RevisionQualifiedName returns the name of this database including its revision qualifier, if any. This method should
 // be used whenever accessing internal state of a database and its tables.
 func (db Database) RevisionQualifiedName() string {
-	return db.revName
+	return db.name.String()
 }
 
 func (db Database) RequestedName() string {
@@ -315,7 +313,15 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 		return tbl, ok, nil
 	}
 
-	root, err := db.GetRoot(ctx)
+	// Generated system tables are computed from the rows of the whole working set, so they read it materialized. Other
+	// tables only resolve their table and schema from it, and read their rows through PendingRows.
+	var root doltdb.RootValue
+	var err error
+	if doltdb.IsReadOnlySystemTable(doltdb.TableName{Name: tblName, Schema: db.schemaName}) {
+		root, err = db.GetRoot(ctx)
+	} else {
+		root, err = schemaRoot(ctx, db)
+	}
 	if err != nil {
 		return nil, false, err
 	}
@@ -323,8 +329,40 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 	return db.getTableInsensitiveWithRoot(ctx, nil, ds, root, tblName, "")
 }
 
+// materializePending materializes the session's pending edits to |db| into its working set, for a read through
+// schemaRoot that needs some table's rows to be current.
+func materializePending(ctx *sql.Context, db dsess.SqlDatabase) error {
+	return dsess.DSessFromSess(ctx.Session).MaterializePending(ctx, db.RevisionQualifiedName())
+}
+
+// schemaRoot returns the session's working root for |db| without materializing pending edits, for resolving tables
+// and reading schemas. The rows of a table with pending edits aren't current in it: DoltTable reads those through
+// PendingRows. Everything else reads the root through GetRoot, which materializes them.
+func schemaRoot(ctx *sql.Context, db dsess.SqlDatabase) (doltdb.RootValue, error) {
+	dbState, ok, err := dsess.DSessFromSess(ctx.Session).LookupDbState(ctx, db.RevisionQualifiedName())
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("no root value found in session")
+	}
+	return dbState.UnmaterializedWorkingRoot(), nil
+}
+
+// materializePendingTable is materializePending, but only materializes when |tblName| has pending edits.
+func materializePendingTable(ctx *sql.Context, db dsess.SqlDatabase, tblName doltdb.TableName) error {
+	state, ok, err := dsess.DSessFromSess(ctx.Session).LookupDbState(ctx, db.RevisionQualifiedName())
+	if err != nil || !ok || state.WriteSession() == nil {
+		return err
+	}
+	if slices.Contains(state.WriteSession().PendingTables(), tblName) {
+		return materializePending(ctx, db)
+	}
+	return nil
+}
+
 func (db Database) getDoltDBTableInsensitive(ctx *sql.Context, tblName doltdb.TableName, readNonlocalTables readNonlocalTablesFlag) (doltdb.TableName, *doltdb.Table, bool, error) {
-	root, err := db.GetRoot(ctx)
+	root, err := schemaRoot(ctx, db)
 	if err != nil {
 		return doltdb.TableName{}, nil, false, err
 	}
@@ -1152,7 +1190,7 @@ func (db Database) getNonlocalTableEntry(ctx *sql.Context, root doltdb.RootValue
 			}
 
 			if nonlocalTableEntry.Ref == "" {
-				nonlocalTableEntry.Ref = db.revision
+				nonlocalTableEntry.Ref = db.name.Revision
 			}
 			return nonlocalTableEntry, true, nil
 		}
@@ -1227,7 +1265,7 @@ func (db Database) getNonlocalTableNames(ctx *sql.Context, root doltdb.RootValue
 
 		nonlocalTableEntry = doltdb.GetNonlocalTablesRef(ctx, valueDesc, valueTuple)
 		if nonlocalTableEntry.Ref == "" {
-			nonlocalTableEntry.Ref = db.revision
+			nonlocalTableEntry.Ref = db.name.Revision
 		}
 
 		referencedRoot, err := db.getRootForNonlocalRef(ctx, nonlocalTableEntry.Ref)
@@ -1745,7 +1783,7 @@ func (db Database) GetTableNames(ctx *sql.Context) ([]string, error) {
 	}
 
 	showSystemTables := showSystemTablesVar.(int8) == 1
-	root, err := db.GetRoot(ctx)
+	root, err := schemaRoot(ctx, db)
 	if err != nil {
 		return nil, err
 	}
@@ -1774,7 +1812,7 @@ func (db Database) GenerateIndexName(ctx *sql.Context, _ string, idxDef sql.Inde
 // GetAllTableNames returns all user-space tables, including system tables in user space
 // (e.g. dolt_docs, dolt_query_catalog).
 func (db Database) GetAllTableNames(ctx *sql.Context, showSystemTables bool) ([]string, error) {
-	root, err := db.GetRoot(ctx)
+	root, err := schemaRoot(ctx, db)
 	if err != nil {
 		return nil, err
 	}
@@ -1861,7 +1899,7 @@ func (db Database) GetRoot(ctx *sql.Context) (doltdb.RootValue, error) {
 		return nil, fmt.Errorf("no root value found in session")
 	}
 
-	return dbState.WorkingRoot(), nil
+	return dbState.WorkingRoot(ctx)
 }
 
 // GetWorkingSet gets the current working set for the database.
@@ -1879,10 +1917,14 @@ func (db Database) GetWorkingSet(ctx *sql.Context) (*doltdb.WorkingSet, error) {
 	if !ok {
 		return nil, fmt.Errorf("no root value found in session")
 	}
-	if dbState.WorkingSet() == nil {
+	ws, err := dbState.WorkingSet(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if ws == nil {
 		return nil, doltdb.ErrOperationNotSupportedInDetachedHead
 	}
-	return dbState.WorkingSet(), nil
+	return ws, nil
 }
 
 // SetRoot should typically be called on the Session, which is where this state lives. But it's available here as a
@@ -2089,7 +2131,7 @@ func (db Database) CreateIndexedTable(ctx *sql.Context, tableName string, sch sq
 // nonlocal rule that would resolve it to a table on another branch
 // or under another name.
 func (db Database) checkNonlocalTableName(ctx *sql.Context, tableName string) error {
-	root, err := db.GetRoot(ctx)
+	root, err := schemaRoot(ctx, db)
 	if err != nil {
 		return err
 	}
@@ -2100,9 +2142,14 @@ func (db Database) checkNonlocalTableName(ctx *sql.Context, tableName string) er
 	if !matched {
 		return nil
 	}
-	if entry.Ref == db.revision &&
+	if entry.Ref == db.name.Revision &&
 		strings.EqualFold(entry.NewTableName, tableName) {
 		return nil
+	}
+	if _, exists, err := db.getNonlocalTable(ctx, root, strings.ToLower(tableName)); err != nil {
+		return err
+	} else if exists {
+		return sql.ErrTableAlreadyExists.New(tableName)
 	}
 	return ErrNonlocalTableName.New(tableName)
 }
@@ -2135,6 +2182,12 @@ OuterLoop:
 
 // createSqlTable is the private version of CreateTable.
 func (db Database) createSqlTable(ctx *sql.Context, table string, schemaName string, sch sql.PrimaryKeySchema, collation sql.CollationID, comment string) error {
+	return db.createTransformedSqlTable(ctx, table, schemaName, sch, collation, comment, nil)
+}
+
+// createTransformedSqlTable is createSqlTable with |transform|, when it is not nil, applied to the Dolt schema of the
+// new table.
+func (db Database) createTransformedSqlTable(ctx *sql.Context, table string, schemaName string, sch sql.PrimaryKeySchema, collation sql.CollationID, comment string, transform func(schema.Schema) (schema.Schema, error)) error {
 	ws, err := db.GetWorkingSet(ctx)
 	if err != nil {
 		return err
@@ -2166,6 +2219,12 @@ func (db Database) createSqlTable(ctx *sql.Context, table string, schemaName str
 	doltSch, err := sqlutil.ToDoltSchema(ctx, root, tableName, sch, headRoot, collation)
 	if err != nil {
 		return err
+	}
+	if transform != nil {
+		doltSch, err = transform(doltSch)
+		if err != nil {
+			return err
+		}
 	}
 	doltSch.SetComment(comment)
 
@@ -2389,7 +2448,7 @@ func (db Database) GetSchema(ctx *sql.Context, schemaName string) (sql.DatabaseS
 		return newInformationSchemaDatabase(db.Name()), true, nil
 	}
 
-	root, err := db.GetRoot(ctx)
+	root, err := schemaRoot(ctx, db)
 	if err != nil {
 		return nil, false, err
 	}
@@ -2422,7 +2481,7 @@ func (db Database) AllSchemas(ctx *sql.Context) ([]sql.DatabaseSchema, error) {
 		return []sql.DatabaseSchema{db}, nil
 	}
 
-	root, err := db.GetRoot(ctx)
+	root, err := schemaRoot(ctx, db)
 	if err != nil {
 		return nil, err
 	}
@@ -2508,7 +2567,11 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 
 // GetViewDefinition implements sql.ViewDatabase
 func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.ViewDefinition, bool, error) {
-	root, err := db.GetRoot(ctx)
+	// views are cached by root, so the root must include any edits to dolt_schemas
+	if err := materializePendingTable(ctx, db, doltdb.TableName{Name: doltdb.SchemasTableName, Schema: db.schemaName}); err != nil {
+		return sql.ViewDefinition{}, false, err
+	}
+	root, err := schemaRoot(ctx, db)
 	if err != nil {
 		return sql.ViewDefinition{}, false, err
 	}
@@ -2528,7 +2591,7 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 		if err != nil {
 			return sql.ViewDefinition{}, false, err
 		}
-		return sql.ViewDefinition{Name: viewName, TextDefinition: blameViewTextDef, CreateViewStatement: fmt.Sprintf("CREATE VIEW `%s` AS %s", viewName, blameViewTextDef)}, true, nil
+		return sql.ViewDefinition{Name: viewName, TextDefinition: blameViewTextDef, CreateViewStatement: fmt.Sprintf("CREATE VIEW %s AS %s", sqlfmt.QuoteIdentifier(ctx, viewName), blameViewTextDef)}, true, nil
 	}
 
 	schTblHash, ok, err := root.GetTableHash(ctx, doltdb.TableName{Name: doltdb.SchemasTableName, Schema: db.schemaName})
@@ -2547,11 +2610,8 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 		return sql.ViewDefinition{}, false, err
 	}
 
-	if dbState.SessionCache().ViewsCached(key) {
-		view, ok := dbState.SessionCache().GetCachedViewDefinition(key, dsess.TableCacheKey{Name: viewName, Schema: db.schemaName})
-		if ok {
-			return view, ok, nil
-		}
+	if view, found, cached := dbState.SessionCache().GetCachedViewDefinition(key, db.schemaName, viewName); cached {
+		return view, found, nil
 	}
 
 	tbl, _, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
@@ -2574,7 +2634,6 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 		return sql.ViewDefinition{}, false, err
 	}
 
-	// TODO: only cache views from a single schema here
 	dbState.SessionCache().CacheViews(key, views, db.schemaName)
 
 	return viewDef, found, nil
@@ -2650,13 +2709,17 @@ func (db Database) CreateView(ctx *sql.Context, name string, selectStatement, cr
 // dolt database. Returns sql.ErrNonExistingView if the view did not
 // exist.
 func (db Database) DropView(ctx *sql.Context, name string) error {
-	err := sql.ErrViewDoesNotExist.New(db.baseName, name)
+	err := sql.ErrViewDoesNotExist.New(db.name.Base, name)
 	return db.dropFragFromSchemasTable(ctx, "view", name, err)
 }
 
 // GetTriggers implements sql.TriggerDatabase.
 func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error) {
-	root, err := db.GetRoot(ctx)
+	// triggers are cached by root, so the root must include any edits to dolt_schemas
+	if err := materializePendingTable(ctx, db, doltdb.TableName{Name: doltdb.SchemasTableName, Schema: db.schemaName}); err != nil {
+		return nil, err
+	}
+	root, err := schemaRoot(ctx, db)
 	if err != nil {
 		return nil, nil
 	}
@@ -2831,7 +2894,7 @@ func (db Database) NeedsToReloadEvents(ctx *sql.Context, token interface{}) (boo
 
 // doltSchemaTableHash returns the hash of the dolt_schemas table, or any error encountered along the way.
 func (db Database) doltSchemaTableHash(ctx *sql.Context) (hash.Hash, error) {
-	root, err := db.GetRoot(ctx)
+	root, err := schemaRoot(ctx, db)
 	if err != nil {
 		return hash.Hash{}, err
 	}
@@ -2842,9 +2905,16 @@ func (db Database) doltSchemaTableHash(ctx *sql.Context) (hash.Hash, error) {
 
 // createEventDefinitionFromFragment creates an EventDefinition instance from the schema fragment |frag|.
 func (db Database) createEventDefinitionFromFragment(ctx *sql.Context, frag schemaFragment) (*sql.EventDefinition, error) {
-	b := planbuilder.New(ctx, db.getCatalog(ctx), db.getEventScheduler(ctx))
+	vars := ctx.EngineVariables()
+	if vars == nil {
+		return nil, fmt.Errorf("event definition requires an engine variable owner")
+	}
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	engine := sqle.New(analyzer.NewDefault(doltSession.Provider()), &sqle.Config{EngineVariables: vars})
+	defer engine.Close()
+	b := planbuilder.New(ctx, engine.Analyzer.Catalog, engine.EventScheduler)
 	b.SetParserOptions(sql.NewSqlModeFromString(frag.sqlMode).ParserOptions())
-	parsed, _, _, _, err := b.Parse(updateEventStatusTemporarilyForNonDefaultBranch(db.revision, frag.fragment), nil, false)
+	parsed, _, _, _, err := b.Parse(updateEventStatusTemporarilyForNonDefaultBranch(db.name.Revision, frag.fragment), nil, false)
 	if err != nil {
 		return nil, err
 	}
@@ -2868,26 +2938,14 @@ func (db Database) createEventDefinitionFromFragment(ctx *sql.Context, frag sche
 	return &event, nil
 }
 
-// getCatalog creates and returns the analyzer.Catalog instance for this database.
-func (db Database) getCatalog(ctx *sql.Context) *analyzer.Catalog {
-	doltSession := dsess.DSessFromSess(ctx.Session)
-	return sqle.NewDefault(doltSession.Provider()).Analyzer.Catalog
-}
-
-// getEventScheduler retrieves the EventScheduler for this database
-func (db Database) getEventScheduler(ctx *sql.Context) sql.EventScheduler {
-	doltSession := dsess.DSessFromSess(ctx.Session)
-	return sqle.NewDefault(doltSession.Provider()).EventScheduler
-}
-
 // SaveEvent implements sql.EventDatabase.
 func (db Database) SaveEvent(ctx *sql.Context, event sql.EventDefinition) (bool, error) {
 	// If the database is NOT on the DefaultInitBranch, then we disable the event, since
 	// events only run from a single branch. We check this by looking at the database's
 	// revision and ensuring it either matches DefaultInitBranch or is empty.
 	// TODO: need better way to determine the default branch; currently it checks only 'main'
-	if (db.revision != env.DefaultInitBranch && db.revision != "") && event.Status == sql.EventStatus_Enable.String() {
-		ctx.GetLogger().Debugf("disabling event %s (db.revision == %s)", event.Name, db.revision)
+	if (db.name.Revision != env.DefaultInitBranch && db.name.Revision != "") && event.Status == sql.EventStatus_Enable.String() {
+		ctx.GetLogger().Debugf("disabling event %s (revision == %s)", event.Name, db.name.Revision)
 		event.Status = sql.EventStatus_Disable.String()
 		ctx.Session.Warn(&sql.Warning{
 			Level:   "Warning",
@@ -3112,7 +3170,7 @@ func (db Database) GetAllTemporaryTables(ctx *sql.Context) ([]sql.Table, error) 
 
 // GetCollation implements the interface sql.CollatedDatabase.
 func (db Database) GetCollation(ctx *sql.Context) sql.CollationID {
-	root, err := db.GetRoot(ctx)
+	root, err := schemaRoot(ctx, db)
 	if err != nil {
 		return sql.Collation_Default
 	}
@@ -3242,6 +3300,21 @@ func convertRebasePlanStepToRow(planMember rebase.RebasePlanStep) (sql.Row, erro
 	}, nil
 }
 
+// storeRebaseCommitsAsAddresses is applied to the schema of the dolt_rebase table when a plan is saved. It stores the
+// commit_hash column as commit addresses, so that garbage collection keeps every commit the plan names. Those commits
+// can be unreachable from any branch while the rebase is paused, because the plan can be edited and the branch being
+// rebased can be changed.
+func storeRebaseCommitsAsAddresses(sch schema.Schema) (schema.Schema, error) {
+	cols := sch.GetAllCols().GetColumns()
+	for i := range cols {
+		// Only a plain string column can be stored as commit addresses.
+		if cols[i].Name == dprocedures.RebaseCommitHashColumn && cols[i].TypeInfo.Encoding() == val.StringEnc {
+			cols[i].TypeInfo = cols[i].TypeInfo.WithEncoding(val.CommitAddrEnc)
+		}
+	}
+	return schema.NewSchema(schema.NewColCollection(cols...), sch.GetPkOrdinals(), sch.GetCollation(), sch.Indexes(), sch.Checks())
+}
+
 // SaveRebasePlan implements the rebase.RebasePlanDatabase interface
 func (db Database) SaveRebasePlan(ctx *sql.Context, plan *rebase.RebasePlan) error {
 	if resolve.UseSearchPath {
@@ -3250,7 +3323,7 @@ func (db Database) SaveRebasePlan(ctx *sql.Context, plan *rebase.RebasePlan) err
 
 	pkSchema := sql.NewPrimaryKeySchema(dprocedures.GetDoltRebaseSystemTableSchema())
 	// we use createSqlTable, instead of CreateTable to avoid the "dolt_" reserved prefix table name check
-	err := db.createSqlTable(ctx, doltdb.GetRebaseTableName(), db.schemaName, pkSchema, sql.Collation_Default, "")
+	err := db.createTransformedSqlTable(ctx, doltdb.GetRebaseTableName(), db.schemaName, pkSchema, sql.Collation_Default, "", storeRebaseCommitsAsAddresses)
 	if err != nil {
 		return err
 	}

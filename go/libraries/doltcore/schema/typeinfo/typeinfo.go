@@ -224,11 +224,13 @@ func fillInCollationWithDefault(typ sql.Type) (sql.Type, error) {
 	return typ, nil
 }
 
-// PreserveAdaptiveEncoding returns newTI with its storage encoding overridden to that
-// of oldTI whenever both TypeInfos belong to the same adaptive-encoding family. This
-// keeps columns that we don't rewrite during ALTER TABLE statements on the same encoding.
-// We could alternately rewrite the table in the presence of such ALTER TABLE statments.
-func PreserveAdaptiveEncoding(oldTI, newTI TypeInfo) TypeInfo {
+// PreserveOldEncoding returns newTI with its storage encoding overridden to that of oldTI whenever values stored with
+// oldTI's encoding remain valid for newTI. This applies to any type whose encoding can vary for the same type: TEXT,
+// BLOB, JSON and geometry types, which may use either an address or an adaptive encoding, and unchanged extended
+// types, which may use the extended encoding rather than their default encoding. This keeps columns that we don't
+// rewrite during ALTER TABLE statements on the same encoding. We could alternately rewrite the table in the presence
+// of such ALTER TABLE statements.
+func PreserveOldEncoding(oldTI, newTI TypeInfo) TypeInfo {
 	if oldTI == nil || newTI == nil {
 		return newTI
 	}
@@ -276,6 +278,17 @@ func PreserveAdaptiveEncoding(oldTI, newTI TypeInfo) TypeInfo {
 	case *geometryType:
 		if ot, ok := oldTI.(*geometryType); ok {
 			return nt.WithEncoding(ot.Encoding())
+		}
+	default:
+		// Extended types (e.g. those of doltgres) may store values of the same type with different encodings: older
+		// doltgres releases stored every column with the extended encoding. Any change to the type rewrites the
+		// column's values, so only keep the old encoding when the type is unchanged.
+		if oldTI.NomsKind() != types.ExtendedKind || newTI.NomsKind() != types.ExtendedKind {
+			break
+		}
+
+		if oldTI.Encoding() != newTI.Encoding() && oldTI.ToSqlType().Equals(newTI.ToSqlType()) {
+			return newTI.WithEncoding(oldTI.Encoding())
 		}
 	}
 	return newTI

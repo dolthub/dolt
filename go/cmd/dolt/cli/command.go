@@ -45,9 +45,9 @@ func IsHelp(str string) bool {
 		return false
 	}
 
-	str = strings.ToLower(strings.TrimLeft(str, "- "))
+	str = strings.TrimLeft(str, "- ")
 
-	return str == "h" || str == "help"
+	return str == "h" || strings.EqualFold(str, "help")
 }
 
 func hasHelpFlag(args []string) bool {

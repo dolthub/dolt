@@ -26,6 +26,7 @@ import (
 	"github.com/cockroachdb/apd/v3"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/sqllogictest/go/logictest"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 
@@ -54,7 +55,7 @@ type DoltHarness struct {
 }
 
 func (h *DoltHarness) Close() {
-	dbs := h.sess.Provider().AllDatabases(sql.NewEmptyContext())
+	dbs := h.sess.Provider().AllDatabases(sql.NewContextWithVariables(context.Background(), h.engine.Variables(), sql.WithSession(h.sess)))
 	for _, db := range dbs {
 		// Close the sql-layer database resources (global state, background threads, etc).
 		// Do NOT close the underlying DoltDB here; this harness reuses a shared *env.DoltEnv
@@ -149,7 +150,8 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 
 	var err error
 	var pro dsess.DoltDatabaseProvider
-	h.engine, pro, err = sqlNewEngine(ctx, dEnv)
+	vars := dsql.NewEngineVariables()
+	h.engine, pro, err = sqlNewEngine(ctx, dEnv, vars)
 
 	if err != nil {
 		return err
@@ -158,7 +160,7 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 	gcSafepointController := gcctx.NewGCSafepointController()
 
 	config, _ := dEnv.Config.GetConfig(env.GlobalConfig)
-	sqlCtx := dsql.NewTestSQLCtxWithProvider(ctx, pro, config, statspro.StatsNoop{}, gcSafepointController)
+	sqlCtx := dsql.NewTestSQLCtxWithProvider(ctx, pro, config, statspro.StatsNoop{}, gcSafepointController, vars)
 	h.sess = sqlCtx.Session.(*dsess.DoltSession)
 
 	dbs := h.engine.Analyzer.Catalog.AllDatabases(sqlCtx)
@@ -308,7 +310,7 @@ func schemaToSchemaString(sch sql.Schema) (string, error) {
 	return b.String(), nil
 }
 
-func sqlNewEngine(ctx context.Context, dEnv *env.DoltEnv) (*sqle.Engine, dsess.DoltDatabaseProvider, error) {
+func sqlNewEngine(ctx context.Context, dEnv *env.DoltEnv, vars *sql.EngineVariables) (*sqle.Engine, dsess.DoltDatabaseProvider, error) {
 	db, err := dsql.NewDatabase(context.Background(), "dolt", dEnv.DbData(ctx), editor.Options{})
 	if err != nil {
 		return nil, nil, err
@@ -327,7 +329,7 @@ func sqlNewEngine(ctx context.Context, dEnv *env.DoltEnv) (*sqle.Engine, dsess.D
 
 	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 
-	engine := sqle.NewDefault(pro)
+	engine := sqle.New(analyzer.NewDefault(pro), &sqle.Config{EngineVariables: vars})
 
 	return engine, pro, nil
 }

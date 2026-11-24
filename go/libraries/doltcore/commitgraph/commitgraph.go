@@ -87,10 +87,11 @@ func GetDotDotIterator(
 // --- priority queue --------------------------------------------------------
 
 type entry struct {
-	resolver  HashResolver
-	info      *CommitInfo
-	invisible bool
-	queued    bool
+	resolver       HashResolver
+	info           *CommitInfo
+	invisible      bool
+	queued         bool
+	mergeBaseFlags mergeBaseFlags
 }
 
 type pq struct {

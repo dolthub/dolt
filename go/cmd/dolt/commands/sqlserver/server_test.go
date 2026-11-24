@@ -19,10 +19,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
+	filelocks "github.com/dolthub/file-locks"
 	"github.com/dolthub/go-mysql-server/sql"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gocraft/dbr/v2"
@@ -31,6 +34,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testcommands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
@@ -39,6 +43,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/svcs"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 //TODO: server tests need to expose a higher granularity for server interactions:
@@ -210,10 +215,11 @@ func TestServerGoodParams(t *testing.T) {
 			sc := svcs.NewController()
 			go func(config servercfg.ServerConfig, sc *svcs.Controller) {
 				_, _ = Serve(context.Background(), &Config{
-					Version:      "0.0.0",
-					ServerConfig: config,
-					Controller:   sc,
-					DoltEnv:      env,
+					Version:         "0.0.0",
+					ServerConfig:    config,
+					Controller:      sc,
+					DoltEnv:         env,
+					EngineVariables: sqle.NewEngineVariables(),
 				})
 			}(test, sc)
 			err = sc.WaitForStart()
@@ -243,10 +249,11 @@ func TestServerSelect(t *testing.T) {
 	defer sc.Stop()
 	go func() {
 		_, _ = Serve(context.Background(), &Config{
-			Version:      "0.0.0",
-			ServerConfig: serverConfig,
-			Controller:   sc,
-			DoltEnv:      env,
+			Version:         "0.0.0",
+			ServerConfig:    serverConfig,
+			Controller:      sc,
+			DoltEnv:         env,
+			EngineVariables: sqle.NewEngineVariables(),
 		})
 	}()
 	err = sc.WaitForStart()
@@ -289,6 +296,36 @@ func TestServerSelect(t *testing.T) {
 			assert.ElementsMatch(t, peoples, test.expectedRes)
 		})
 	}
+}
+
+func TestIsolatedServerStartup(t *testing.T) {
+	dEnv, err := sqle.CreateEnvWithSeedData()
+	require.NoError(t, err)
+	defer dEnv.Close()
+	port, err := sql.GetEmptyPort()
+	require.NoError(t, err)
+	serverConfig := DefaultCommandLineServerConfig().withLogLevel(servercfg.LogLevel_Fatal).WithPort(port)
+	vars := sqle.NewEngineVariables()
+	controller := svcs.NewController()
+	go func() {
+		_, _ = Serve(context.Background(), &Config{
+			Version: "0.0.0", ServerConfig: serverConfig, Controller: controller,
+			DoltEnv: dEnv, EngineVariables: vars,
+		})
+	}()
+	require.NoError(t, controller.WaitForStart())
+	defer func() {
+		controller.Stop()
+		require.NoError(t, controller.WaitForStop())
+	}()
+
+	conn, err := dbr.Open("mysql", servercfg.ConnectionString(serverConfig, "dolt"), nil)
+	require.NoError(t, err)
+	defer conn.Close()
+	var count int
+	err = conn.NewSession(nil).Select("COUNT(*)").From("people").LoadOneContext(context.Background(), &count)
+	require.NoError(t, err)
+	require.Equal(t, 3, count)
 }
 
 // If a port is already in use, throw error "Port XXXX already in use."
@@ -360,7 +397,8 @@ func TestReadReplica(t *testing.T) {
 		dsess.ReplicateHeads:    "main",
 		dsess.DoltStatsEnabled:  "false",
 	})
-	dsess.InitPersistedSystemVars(multiSetup.GetEnv(readReplicaDbName))
+	vars := sqle.NewEngineVariables()
+	require.NoError(t, dsess.InitPersistedSystemVarsWithRegistry(vars.System, multiSetup.GetEnv(readReplicaDbName)))
 
 	// start server as read replica
 	sc := svcs.NewController()
@@ -372,10 +410,11 @@ func TestReadReplica(t *testing.T) {
 	os.Chdir(multiSetup.DbPaths[readReplicaDbName])
 	go func() {
 		err, _ = Serve(context.Background(), &Config{
-			Version:      "0.0.0",
-			ServerConfig: serverConfig,
-			Controller:   sc,
-			DoltEnv:      multiSetup.GetEnv(readReplicaDbName),
+			Version:         "0.0.0",
+			ServerConfig:    serverConfig,
+			Controller:      sc,
+			DoltEnv:         multiSetup.GetEnv(readReplicaDbName),
+			EngineVariables: vars,
 		})
 		require.NoError(t, err)
 	}()
@@ -400,7 +439,7 @@ func TestReadReplica(t *testing.T) {
 
 		// Configure the read replica to pull the new feature branch we just created
 		config.NewPrefixConfig(localCfg, env.SqlServerGlobalsPrefix).SetStrings(map[string]string{dsess.ReadReplicaRemote: "remote1", dsess.ReplicateHeads: "main,feature"})
-		dsess.InitPersistedSystemVars(multiSetup.GetEnv(readReplicaDbName))
+		require.NoError(t, dsess.InitPersistedSystemVarsWithRegistry(vars.System, multiSetup.GetEnv(readReplicaDbName)))
 
 		var res []int
 		q := sess.SelectBySql("call dolt_checkout('feature');")
@@ -426,10 +465,11 @@ func TestReadOnlySystemVariable(t *testing.T) {
 	defer sc.Stop()
 	go func() {
 		_, _ = Serve(context.Background(), &Config{
-			Version:      "0.0.0",
-			ServerConfig: serverConfig,
-			Controller:   sc,
-			DoltEnv:      dEnv,
+			Version:         "0.0.0",
+			ServerConfig:    serverConfig,
+			Controller:      sc,
+			DoltEnv:         dEnv,
+			EngineVariables: sqle.NewEngineVariables(),
 		})
 	}()
 	err = sc.WaitForStart()
@@ -525,10 +565,11 @@ func TestPortSystemVariable(t *testing.T) {
 	defer sc.Stop()
 	go func() {
 		_, _ = Serve(context.Background(), &Config{
-			Version:      "0.0.0",
-			ServerConfig: serverConfig,
-			Controller:   sc,
-			DoltEnv:      dEnv,
+			Version:         "0.0.0",
+			ServerConfig:    serverConfig,
+			Controller:      sc,
+			DoltEnv:         dEnv,
+			EngineVariables: sqle.NewEngineVariables(),
 		})
 	}()
 	err = sc.WaitForStart()
@@ -574,10 +615,11 @@ func TestReadOnlyEnforcement(t *testing.T) {
 	defer sc.Stop()
 	go func() {
 		_, _ = Serve(context.Background(), &Config{
-			Version:      "0.0.0",
-			ServerConfig: serverConfig,
-			Controller:   sc,
-			DoltEnv:      dEnv,
+			Version:         "0.0.0",
+			ServerConfig:    serverConfig,
+			Controller:      sc,
+			DoltEnv:         dEnv,
+			EngineVariables: sqle.NewEngineVariables(),
 		})
 	}()
 	err = sc.WaitForStart()
@@ -740,10 +782,11 @@ func TestServerSetDefaultBranch(t *testing.T) {
 	defer sc.Stop()
 	go func() {
 		_, _ = Serve(context.Background(), &Config{
-			Version:      "0.0.0",
-			ServerConfig: serverConfig,
-			Controller:   sc,
-			DoltEnv:      dEnv,
+			Version:         "0.0.0",
+			ServerConfig:    serverConfig,
+			Controller:      sc,
+			DoltEnv:         dEnv,
+			EngineVariables: sqle.NewEngineVariables(),
 		})
 	}()
 	err = sc.WaitForStart()
@@ -871,4 +914,59 @@ func runDefaultBranchTests(t *testing.T, tests []defaultBranchTest, conn *dbr.Co
 		})
 	}
 	require.NoError(t, conn.Close())
+}
+
+// TestServerStopReleasesDatabaseLocks asserts that stopping the server closes the databases it found in its data
+// directory, releasing their file locks.
+func TestServerStopReleasesDatabaseLocks(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows due to differing file locking semantics")
+	}
+	ctx := context.Background()
+	root := t.TempDir()
+	home := t.TempDir()
+	hdp := func() (string, error) { return home, nil }
+
+	dbPath := filepath.Join(root, "sub_db")
+	require.NoError(t, os.MkdirAll(dbPath, os.ModePerm))
+	dbFS, err := filesys.LocalFS.WithWorkingDir(dbPath)
+	require.NoError(t, err)
+	subEnv := env.LoadWithoutDB(ctx, hdp, dbFS, doltdb.LocalDirDoltDB, "test")
+	require.NoError(t, subEnv.InitRepo(ctx, types.Format_DOLT, "test", "test@example.com", env.DefaultInitBranch))
+	require.NoError(t, subEnv.Close())
+
+	fs, err := filesys.LocalFS.WithWorkingDir(root)
+	require.NoError(t, err)
+	dEnv := env.LoadWithoutDB(ctx, hdp, fs, doltdb.LocalDirDoltDB, "test")
+	dEnv.Config.WriteableConfig().SetStrings(map[string]string{
+		config.UserNameKey:  "test",
+		config.UserEmailKey: "test@example.com",
+	})
+	defer func() {
+		assert.NoError(t, dEnv.Close())
+	}()
+
+	controller := svcs.NewController()
+	startErr := make(chan error, 1)
+	go func() {
+		startErr <- StartServer(ctx, "0.0.0", "dolt sql-server", []string{
+			"-H", "localhost",
+			"-P", "15200",
+		}, dEnv, fs, controller)
+	}()
+	require.NoError(t, controller.WaitForStart())
+	conn, err := dbr.Open("mysql", "root@tcp(localhost:15200)/sub_db", nil)
+	require.NoError(t, err)
+	_, err = conn.Exec("SELECT COUNT(*) FROM dolt_log")
+	require.NoError(t, err)
+	require.NoError(t, conn.Close())
+	controller.Stop()
+	require.NoError(t, controller.WaitForStop())
+	require.NoError(t, <-startErr)
+
+	lck, err := filelocks.New(filepath.Join(dbPath, ".dolt", "noms", "LOCK"))
+	require.NoError(t, err)
+	require.NoError(t, lck.LockWithTimeout(25*time.Millisecond), "expected sub_db's lock to be free after server stop")
+	require.NoError(t, lck.Unlock())
+	require.NoError(t, lck.Close())
 }

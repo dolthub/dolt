@@ -35,6 +35,7 @@ import (
 	"github.com/google/uuid"
 
 	git "github.com/dolthub/dolt/go/store/blobstore/internal/git"
+	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 const gitblobstorePartNameWidth = 4 // "0001"
@@ -353,6 +354,9 @@ type GitBlobstore struct {
 	// for a visible info branch pushed after each successful data write. The branch
 	// contains a single DOLT_REMOTE.md file with remote metadata. Empty means disabled.
 	infoBranch string
+
+	// spoolDir holds local copies of this store's blobs.
+	spoolDir *tempfiles.LockedDir
 }
 
 var _ Blobstore = (*GitBlobstore)(nil)
@@ -416,6 +420,9 @@ type GitBlobstoreOptions struct {
 	// SyncForReadTTL overrides the read-side fetch dedup window. Zero means
 	// use defaultSyncForReadTTL.
 	SyncForReadTTL time.Duration
+	// SpoolDir holds local copies of this store's blobs. Opening a table file through a
+	// store with no SpoolDir fails.
+	SpoolDir *tempfiles.LockedDir
 }
 
 // NewGitBlobstoreWithOptions creates a GitBlobstore rooted at |gitDir| and |ref|.
@@ -480,6 +487,7 @@ func NewGitBlobstoreWithOptions(gitDir, ref string, opts GitBlobstoreOptions) (*
 		cacheChildren:     make(map[string][]git.TreeEntry),
 		syncForReadTTL:    syncForReadTTL,
 		infoBranch:        infoBranch,
+		spoolDir:          opts.SpoolDir,
 	}, nil
 }
 
@@ -788,9 +796,12 @@ func (gbs *GitBlobstore) Teardown(ctx context.Context) error {
 
 func (gbs *GitBlobstore) Close() error {
 	// Deliberately not paired with a resumeSyncs: a closed store never fetches
-	// again, and answers reads from what it has already cached. Nothing errors
-	// out on a read after Close today, and this keeps it that way.
+	// again, and answers reads from what it has already cached. The exception
+	// is a table with no spool yet, which can no longer make one.
 	gbs.quiesceSyncs(errGitStoreClosed)
+	if gbs.spoolDir != nil {
+		return gbs.spoolDir.Close()
+	}
 	return nil
 }
 
@@ -1299,6 +1310,13 @@ func (gbs *GitBlobstore) RangeReadsWholeBlob() bool {
 
 var _ interface{ RangeReadsWholeBlob() bool } = (*GitBlobstore)(nil)
 
+// SpoolDir returns the directory holding local copies of this store's blobs.
+func (gbs *GitBlobstore) SpoolDir() *tempfiles.LockedDir {
+	return gbs.spoolDir
+}
+
+var _ interface{ SpoolDir() *tempfiles.LockedDir } = (*GitBlobstore)(nil)
+
 func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {
 	key, err := normalizeGitTreePath(key)
 	if err != nil {
@@ -1321,6 +1339,39 @@ func (gbs *GitBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.
 		return nil, 0, "", err
 	}
 	return gbs.getFromCache(ctx, key, br)
+}
+
+// PinBlob returns a function which reads the whole of |key| as it is now. It keeps working
+// after a manifest update removes |key|, because it reads the git objects directly and they
+// outlive the key. Only a git gc which finds them unreachable can remove them.
+func (gbs *GitBlobstore) PinBlob(key string) (func(context.Context) (io.ReadCloser, error), error) {
+	key, err := normalizeGitTreePath(key)
+	if err != nil {
+		return nil, err
+	}
+	obj, ok := gbs.cacheGetObject(key)
+	if !ok {
+		return nil, NotFound{Key: key}
+	}
+	switch obj.typ {
+	case git.ObjectTypeBlob:
+		return func(ctx context.Context) (io.ReadCloser, error) {
+			return gbs.api.BlobReader(ctx, obj.oid)
+		}, nil
+
+	case git.ObjectTypeTree:
+		entries, ok := gbs.cacheListChildren(key)
+		if !ok {
+			return nil, NotFound{Key: key}
+		}
+		return func(ctx context.Context) (io.ReadCloser, error) {
+			rc, _, err := gbs.openChunkedEntriesRange(ctx, entries, AllRange)
+			return rc, err
+		}, nil
+
+	default:
+		return nil, fmt.Errorf("gitblobstore: unsupported object type %q for key %q", obj.typ, key)
+	}
 }
 
 // syncedAbsent reports that |key| does not exist, on the authority of the cache
@@ -1382,6 +1433,10 @@ func (gbs *GitBlobstore) openChunkedTreeRange(ctx context.Context, key string, b
 	if !ok {
 		return nil, 0, NotFound{Key: key}
 	}
+	return gbs.openChunkedEntriesRange(ctx, entries, br)
+}
+
+func (gbs *GitBlobstore) openChunkedEntriesRange(ctx context.Context, entries []git.TreeEntry, br BlobRange) (io.ReadCloser, uint64, error) {
 	parts, totalSize, err := gbs.validateAndSizeChunkedParts(ctx, entries)
 	if err != nil {
 		return nil, 0, err

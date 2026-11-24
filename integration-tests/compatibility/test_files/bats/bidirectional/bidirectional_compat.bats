@@ -986,3 +986,62 @@ SQL
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "7" ]] || false
 }
+
+# ---------------------------------------------------------------------------
+# Conflicts — each version reads and resolves the merge conflicts the other
+# wrote.
+# ---------------------------------------------------------------------------
+
+@test "bidirectional_compat: conflicts round-trip across versions" {
+    [ -n "$DOLT_OLD_BIN" ] || skip "requires DOLT_OLD_BIN"
+    [ -n "$DOLT_NEW_BIN" ] || skip "requires DOLT_NEW_BIN"
+
+    old_dolt init
+    old_dolt sql <<SQL
+CREATE TABLE t (pk INT PRIMARY KEY, v INT);
+INSERT INTO t VALUES (1, 10), (2, 20);
+CALL DOLT_COMMIT('-Am', 'old: base');
+CALL DOLT_BRANCH('old_right');
+CALL DOLT_BRANCH('new_right');
+CALL DOLT_CHECKOUT('old_right');
+UPDATE t SET v = 11 WHERE pk = 1;
+CALL DOLT_COMMIT('-am', 'old: old_right');
+CALL DOLT_CHECKOUT('new_right');
+UPDATE t SET v = 21 WHERE pk = 2;
+CALL DOLT_COMMIT('-am', 'old: new_right');
+SQL
+    old_dolt sql -q "UPDATE t SET v = 100 WHERE pk = 1; UPDATE t SET v = 200 WHERE pk = 2; CALL DOLT_COMMIT('-am', 'old: main');"
+
+    # Round 1: old dolt merges with conflicts, and HEAD reads and resolves them
+    old_dolt sql -q "SET @@dolt_allow_commit_conflicts = 1; CALL DOLT_MERGE('old_right');"
+
+    clear_branch_control
+
+    run new_dolt sql -r csv -q "SELECT base_pk, base_v, our_v, their_v FROM dolt_conflicts_t;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,10,100,11" ]] || false
+    run new_dolt sql -r csv -q "CALL DOLT_CONFLICTS_RESOLVE('--theirs', 't'); CALL DOLT_COMMIT('-am', 'head: resolve old_right'); SELECT * FROM t ORDER BY pk;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,11" ]] || false
+    [[ "$output" =~ "2,200" ]] || false
+
+    # Round 2: HEAD merges with conflicts, and old dolt reads and resolves them
+    new_dolt sql -q "SET @@dolt_allow_commit_conflicts = 1; CALL DOLT_MERGE('new_right');"
+
+    clear_branch_control
+
+    run old_dolt sql -r csv -q "SELECT base_pk, base_v, our_v, their_v FROM dolt_conflicts_t;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2,20,200,21" ]] || false
+    run old_dolt sql -r csv -q "CALL DOLT_CONFLICTS_RESOLVE('--ours', 't'); CALL DOLT_COMMIT('-am', 'old: resolve new_right'); SELECT * FROM t ORDER BY pk;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,11" ]] || false
+    [[ "$output" =~ "2,200" ]] || false
+
+    clear_branch_control
+
+    # Round 3: HEAD reads the resolution
+    run new_dolt sql -r csv -q "SELECT COUNT(*) AS conflicts FROM dolt_conflicts;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "conflicts"$'\n'"0" ]] || false
+}

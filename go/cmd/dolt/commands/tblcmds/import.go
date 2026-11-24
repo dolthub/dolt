@@ -495,10 +495,14 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	var verr errhand.VerboseError
 
-	dEnv, err := commands.MaybeMigrateEnv(ctx, dEnv)
+	migratedEnv, err := commands.MaybeMigrateEnv(ctx, dEnv)
 	if err != nil {
 		verr = errhand.BuildDError("could not load manifest for gc").AddCause(err).Build()
 		return commands.HandleVErrAndExitCode(verr, usage)
+	}
+	if migratedEnv != dEnv {
+		defer migratedEnv.Close()
+		dEnv = migratedEnv
 	}
 
 	verr = validateImportArgs(apr)
@@ -520,6 +524,7 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		verr = errhand.BuildDError("could not build sql engine for import").AddCause(err).Build()
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
+	defer eng.Close()
 	sqlCtx, err := eng.NewLocalContext(ctx)
 	if err != nil {
 		verr = errhand.BuildDError("could not build sql context for import").AddCause(err).Build()

@@ -251,7 +251,7 @@ func (a *binlogReplicaApplier) startReplicationEventStream(ctx *sql.Context, con
 		// If the positionStore doesn't have a record of executed GTIDs, check to see if the gtid_purged system
 		// variable is set. If it holds a GTIDSet, then we use that as our starting position. As part of loading
 		// a mysqldump onto a replica, gtid_purged will be set to indicate where to start replication.
-		_, value, ok := sql.SystemVariables.GetGlobal("gtid_purged")
+		_, value, ok := ctx.SystemVariables().GetGlobal("gtid_purged")
 		gtidPurged, isString := value.(string)
 		if ok && value != nil && isString && gtidPurged != "" {
 			// Starting in MySQL 8.0, when setting the GTID_PURGED sys variable, if the new value starts with '+', then
@@ -604,17 +604,6 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 			return err
 		}
 
-		// Record the last GTID processed after the commit
-		a.currentPosition.GTIDSet = a.currentPosition.GTIDSet.AddGTID(a.currentGtid)
-		err := sql.SystemVariables.AssignValues(map[string]interface{}{"gtid_executed": a.currentPosition.GTIDSet.String()})
-		if err != nil {
-			ctx.GetLogger().Errorf("unable to set @@GLOBAL.gtid_executed: %s", err.Error())
-		}
-		err = positionStore.Save(ctx, a.currentPosition)
-		if err != nil {
-			return fmt.Errorf("unable to store GTID executed metadata to disk: %s", err.Error())
-		}
-
 		// For now, create a Dolt commit from every data update. Eventually, we'll want to make this configurable.
 		// We commit to every database that we saw had a dirty session – these identify the databases where we have
 		// run DML commands through the engine. We also commit to every database that was modified through a RowEvent,
@@ -627,6 +616,18 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 				fmt.Sprintf("call dolt_commit('-Am', 'Dolt binlog replica commit: GTID %s');", a.currentGtid))
 		}
 		a.dbsWithUncommittedChanges = nil
+
+		// Record the GTID only after its Dolt commits exist, so a replica whose @@gtid_executed includes a
+		// transaction also has that transaction's Dolt commit.
+		a.currentPosition.GTIDSet = a.currentPosition.GTIDSet.AddGTID(a.currentGtid)
+		err := ctx.SystemVariables().AssignValues(ctx, map[string]interface{}{"gtid_executed": a.currentPosition.GTIDSet.String()})
+		if err != nil {
+			ctx.GetLogger().Errorf("unable to set @@GLOBAL.gtid_executed: %s", err.Error())
+		}
+		err = positionStore.Save(ctx, a.currentPosition)
+		if err != nil {
+			return fmt.Errorf("unable to store GTID executed metadata to disk: %s", err.Error())
+		}
 	}
 
 	return nil
@@ -841,7 +842,7 @@ func getTableWriter(ctx *sql.Context, engine *gms.Engine, tableName, databaseNam
 
 	ds := dsess.DSessFromSess(ctx.Session)
 	setter := ds.SetWorkingRoot
-	writeSession := writer.NewWriteSession(databaseName, ws, tracker, setter, sqlDatabase.EditOptions())
+	writeSession := writer.NewDetachedWriteSession(databaseName, ws, tracker, setter, sqlDatabase.EditOptions())
 
 	tableWriter, err := writeSession.GetTableWriter(ctx, doltdb.TableName{Name: tableName})
 	if err != nil {
@@ -1001,7 +1002,7 @@ func getAllUserDatabaseNames(ctx *sql.Context, engine *gms.Engine) []string {
 // loadReplicaServerId loads the @@GLOBAL.server_id system variable needed to register the replica with the source,
 // and returns an error specific to replication configuration if the variable is not set to a valid value.
 func loadReplicaServerId(ctx *sql.Context) (uint32, error) {
-	serverIdVar, value, ok := sql.SystemVariables.GetGlobal("server_id")
+	serverIdVar, value, ok := ctx.SystemVariables().GetGlobal("server_id")
 	if !ok {
 		return 0, fmt.Errorf("no server_id global system variable set")
 	}

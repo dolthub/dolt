@@ -41,9 +41,10 @@ const (
 
 var mergeArtifactFileID = []byte(serial.MergeArtifactsFileID)
 
-func NewMergeArtifactSerializer(keyDesc *val.TupleDesc, pool pool.BuffPool) MergeArtifactSerializer {
+func NewMergeArtifactSerializer(keyDesc, valDesc *val.TupleDesc, pool pool.BuffPool) MergeArtifactSerializer {
 	return MergeArtifactSerializer{
 		keyDesc: keyDesc,
+		valDesc: valDesc,
 		pool:    pool,
 	}
 }
@@ -51,6 +52,7 @@ func NewMergeArtifactSerializer(keyDesc *val.TupleDesc, pool pool.BuffPool) Merg
 type MergeArtifactSerializer struct {
 	pool    pool.BuffPool
 	keyDesc *val.TupleDesc
+	valDesc *val.TupleDesc
 }
 
 var _ Serializer = MergeArtifactSerializer{}
@@ -60,10 +62,11 @@ func (s MergeArtifactSerializer) Serialize(keys, values [][]byte, subtrees []uin
 		keyTups, keyOffs fb.UOffsetT
 		valTups, valOffs fb.UOffsetT
 		keyAddrOffs      fb.UOffsetT
+		valAddrOffs      fb.UOffsetT
 		refArr, cardArr  fb.UOffsetT
 	)
 
-	keySz, valSz, bufSz := estimateMergeArtifactSize(keys, values, subtrees, s.keyDesc.AddressFieldCount())
+	keySz, valSz, bufSz := estimateMergeArtifactSize(keys, values, subtrees, s.keyDesc.AddressFieldCount(), s.valDesc.AddressFieldCount())
 	b := getFlatbufferBuilder(s.pool, bufSz)
 
 	// serialize keys and offStart
@@ -84,6 +87,15 @@ func (s MergeArtifactSerializer) Serialize(keys, values [][]byte, subtrees []uin
 				keyAddrOffs = writeAddressOffsets(b, keys, keySz, s.keyDesc)
 			}
 		}
+		// Only nodes holding a value address write value_address_offsets, so that clients that predate the field
+		// can still read every other node.
+		if s.valDesc.AddressFieldCount() > 0 {
+			numAddressFields := countAddresses(values, s.valDesc)
+			if numAddressFields > 0 {
+				serial.MergeArtifactsStartValueAddressOffsetsVector(b, numAddressFields)
+				valAddrOffs = writeAddressOffsets(b, values, valSz, s.valDesc)
+			}
+		}
 	} else {
 		// serialize child refs and subtree counts for internal nodes
 		refArr = writeItemBytes(b, values, valSz)
@@ -99,6 +111,9 @@ func (s MergeArtifactSerializer) Serialize(keys, values [][]byte, subtrees []uin
 		serial.MergeArtifactsAddValueOffsets(b, valOffs)
 		serial.MergeArtifactsAddTreeCount(b, uint64(len(keys)))
 		serial.MergeArtifactsAddKeyAddressOffsets(b, keyAddrOffs)
+		if valAddrOffs != 0 {
+			serial.MergeArtifactsAddValueAddressOffsets(b, valAddrOffs)
+		}
 	} else {
 		serial.MergeArtifactsAddAddressArray(b, refArr)
 		serial.MergeArtifactsAddSubtreeCounts(b, cardArr)
@@ -163,6 +178,16 @@ func walkMergeArtifactAddresses(ctx context.Context, msg serial.Message, cb func
 		}
 	}
 
+	cnt = ma.ValueAddressOffsetsLength()
+	arr3 := ma.ValueItemsBytes()
+	for i := 0; i < cnt; i++ {
+		o := ma.ValueAddressOffsets(i)
+		addr := hash.New(arr3[o : o+addrSize])
+		if err := cb(ctx, addr); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -213,7 +238,7 @@ func getMergeArtifactSubtrees(msg serial.Message) ([]uint64, error) {
 
 // estimateMergeArtifact>Size returns the exact Size of the tuple vectors for keys and values,
 // and an estimate of the overall Size of the final flatbuffer.
-func estimateMergeArtifactSize(keys, values [][]byte, subtrees []uint64, keyAddrs int) (int, int, int) {
+func estimateMergeArtifactSize(keys, values [][]byte, subtrees []uint64, keyAddrs, valAddrs int) (int, int, int) {
 	var keySz, valSz, bufSz int
 	for i := range keys {
 		keySz += len(keys[i])
@@ -236,6 +261,7 @@ func estimateMergeArtifactSize(keys, values [][]byte, subtrees []uint64, keyAddr
 	bufSz += 72                          // vtable (approx)
 	bufSz += 100                         // padding?
 	bufSz += keyAddrs * len(keys) * 2
+	bufSz += valAddrs * len(values) * 2
 	bufSz += serial.MessagePrefixSz
 
 	return keySz, valSz, bufSz

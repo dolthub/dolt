@@ -52,6 +52,23 @@ type DoltTableable interface {
 	DataCacheKey(*sql.Context) (doltdb.DataCacheKey, bool, error)
 }
 
+// PendingRowsTable is implemented by tables whose rows can include edits that have not been materialized into a
+// doltdb.Table.
+type PendingRowsTable interface {
+	// PendingRows returns views of the table's rows that include its pending edits, or nil if it has none, or if
+	// they can't be read without materializing them. In that case, DoltTable materializes them.
+	PendingRows(*sql.Context) (*PendingRows, error)
+}
+
+// PendingRows holds read-only views of a table's indexes, including edits that have not been materialized into a
+// doltdb.Table.
+type PendingRows struct {
+	// Key identifies the edits included in the views, and changes whenever they do.
+	Key       doltdb.DataCacheKey
+	Primary   prolly.MapView
+	Secondary map[string]prolly.MapView
+}
+
 type DoltIndex interface {
 	sql.FilteredIndex
 	sql.OrderedIndex
@@ -293,6 +310,7 @@ func MakeDiffTableSecondaryIndex(ctx context.Context, tableName string, indexTyp
 		prefixLengths:                 idx.PrefixLengths(),
 		columnOrders:                  idx.ColumnOrders(),
 		opClasses:                     idx.OpClasses(),
+		nullsNotDistinct:              idx.NullsNotDistinct(),
 	}, nil
 }
 
@@ -487,6 +505,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		prefixLengths:                 idx.PrefixLengths(),
 		columnOrders:                  idx.ColumnOrders(),
 		opClasses:                     idx.OpClasses(),
+		nullsNotDistinct:              idx.NullsNotDistinct(),
 		fullTextProps:                 idx.FullTextProperties(),
 		vectorProps:                   idx.VectorProperties(),
 	}, nil
@@ -522,6 +541,7 @@ func ConvertFullTextToSql(ctx context.Context, db, tbl string, sch schema.Schema
 		prefixLengths:                 idx.PrefixLengths(),
 		columnOrders:                  idx.ColumnOrders(),
 		opClasses:                     idx.OpClasses(),
+		nullsNotDistinct:              idx.NullsNotDistinct(),
 		fullTextProps:                 idx.FullTextProperties(),
 		vectorProps:                   idx.VectorProperties(),
 	}, nil
@@ -535,6 +555,29 @@ type durableIndexState struct {
 	cachedProjections     atomic.Value
 	coversAllCols         uint32
 	key                   doltdb.DataCacheKey
+	// pending, when set, replaces |Primary| and |Secondary| with views that include edits that have not been
+	// materialized
+	pending *pendingIndexState
+}
+
+type pendingIndexState struct {
+	primary, secondary prolly.MapView
+}
+
+// primaryMap returns the rows of the index's table.
+func (s *durableIndexState) primaryMap() (prolly.MapReader, error) {
+	if s.pending != nil {
+		return s.pending.primary, nil
+	}
+	return durable.ProllyMapFromIndex(s.Primary)
+}
+
+// secondaryMap returns the rows of the index. It returns an error for proximity indexes.
+func (s *durableIndexState) secondaryMap() (prolly.MapReader, error) {
+	if s.pending != nil {
+		return s.pending.secondary, nil
+	}
+	return durable.ProllyMapFromIndex(s.Secondary)
 }
 
 func (s *durableIndexState) coversAllColumns(i *doltIndex) bool {
@@ -608,11 +651,12 @@ type doltIndex struct {
 	order                         sql.IndexOrder
 	constrainedToLookupExpression bool
 
-	vector   bool
-	isPk     bool
-	unique   bool
-	spatial  bool
-	fulltext bool
+	vector           bool
+	isPk             bool
+	unique           bool
+	nullsNotDistinct bool
+	spatial          bool
+	fulltext         bool
 }
 
 type LookupMeta struct {
@@ -660,14 +704,69 @@ func GetStrictLookups(ctx *sql.Context, schCols *schema.ColCollection, indexes [
 
 var _ DoltIndex = (*doltIndex)(nil)
 var _ sql.ExtendedIndex = (*doltIndex)(nil)
+var _ sql.NullsNotDistinctIndex = (*doltIndex)(nil)
 
 func (di *doltIndex) String() string {
 	return di.dbName + "." + di.tblName + "." + di.id
 }
 
 // CanSupport implements sql.Index
-func (di *doltIndex) CanSupport(*sql.Context, ...sql.Range) bool {
+func (di *doltIndex) CanSupport(ctx *sql.Context, ranges ...sql.Range) bool {
+	if !di.hasCellEncodedField() {
+		return true
+	}
+
+	// geometry columns in non-spatial indexes are stored as lossy spatial cells, which don't preserve the order of
+	// geometry values. Only equality and NULL lookups can be served from such columns.
+	for _, rng := range ranges {
+		mysqlRange, ok := rng.(sql.MySQLRange)
+		if !ok {
+			continue
+		}
+
+		for i, expr := range mysqlRange {
+			if !di.isCellEncodedField(i) {
+				continue
+			}
+
+			switch expr.Type() {
+			case sql.RangeType_All, sql.RangeType_EqualNull, sql.RangeType_Empty:
+				continue
+			case sql.RangeType_ClosedClosed:
+				lower, upper := sql.GetMySQLRangeCutKey(expr.LowerBound), sql.GetMySQLRangeCutKey(expr.UpperBound)
+				cmp, err := expr.Typ.Compare(ctx, lower, upper)
+				if err == nil && cmp == 0 {
+					continue
+				}
+			}
+
+			return false
+		}
+	}
+
 	return true
+}
+
+// hasCellEncodedField returns whether any column of this index is a geometry column stored as a spatial cell in a
+// non-spatial index. Such columns are lossy: they can't be read back from the index, and the index isn't ordered by
+// their values.
+func (di *doltIndex) hasCellEncodedField() bool {
+	for i := range di.columns {
+		if di.isCellEncodedField(i) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// isCellEncodedField returns whether the |i|th column of this non-spatial index is stored as a spatial cell.
+func (di *doltIndex) isCellEncodedField(i int) bool {
+	if di.spatial || di.keyBld == nil || i >= len(di.keyBld.Desc.Types) {
+		return false
+	}
+
+	return di.keyBld.Desc.Types[i].Enc == val.CellEnc
 }
 
 // CanSupportOrderBy implements the interface sql.Index.
@@ -725,6 +824,28 @@ func (di *doltIndex) getDurableState(ctx *sql.Context, ti DoltTableable) (*durab
 	}
 
 	ret = new(durableIndexState)
+	ret.key = newkey
+
+	if pt, ok := ti.(PendingRowsTable); ok {
+		var rows *PendingRows
+		if rows, err = pt.PendingRows(ctx); err != nil {
+			return nil, err
+		}
+		if rows != nil {
+			secondary, ok := rows.Primary, true
+			if di.ID() != "PRIMARY" {
+				// indexes without a view, such as full-text indexes, are read from the materialized table
+				secondary, ok = rows.Secondary[di.ID()]
+			}
+			if ok {
+				ret.pending = &pendingIndexState{primary: rows.Primary, secondary: secondary}
+				if cancache {
+					di.cache.store(ret)
+				}
+				return ret, nil
+			}
+		}
+	}
 
 	var t *doltdb.Table
 	t, err = ti.DoltTable(ctx)
@@ -747,7 +868,6 @@ func (di *doltIndex) getDurableState(ctx *sql.Context, ti DoltTableable) (*durab
 		}
 	}
 
-	ret.key = newkey
 	ret.Primary = primary
 	ret.Secondary = secondary
 
@@ -779,6 +899,10 @@ func (di *doltIndex) prollyRanges(ctx *sql.Context, ns tree.NodeStore, ranges ..
 
 // coversColumnsByTag determines if this index covers a list of columns
 func (di *doltIndex) coversColumnsByTag(s *durableIndexState, cols []uint64) bool {
+	if di.hasCellEncodedField() {
+		return false
+	}
+
 	if cols == nil {
 		return s.coversAllColumns(di)
 	}
@@ -838,8 +962,8 @@ func (di *doltIndex) HandledFilters(ctx *sql.Context, filters []sql.Expression) 
 		return nil
 	}
 
-	// filters on indexes with prefix lengths are not completely handled
-	if len(di.prefixLengths) > 0 {
+	// filters on indexes with prefix lengths or lossy geometry cells are not completely handled
+	if len(di.prefixLengths) > 0 || di.hasCellEncodedField() {
 		return nil
 	}
 
@@ -894,7 +1018,7 @@ func isHashEncoded(ti typeinfo.TypeInfo) bool {
 }
 
 func (di *doltIndex) Order(ctx *sql.Context) sql.IndexOrder {
-	if di.HasContentHashedField() || di.IsSpatial() {
+	if di.HasContentHashedField() || di.IsSpatial() || di.hasCellEncodedField() {
 		return sql.IndexOrderNone
 	}
 	// A descending column leaves the index without a single order, while placing NULLs last keeps the values
@@ -910,14 +1034,14 @@ func (di *doltIndex) Order(ctx *sql.Context) sql.IndexOrder {
 
 // ColumnOrders implements sql.ColumnOrderedIndex.
 func (di *doltIndex) ColumnOrders(ctx *sql.Context) []sql.IndexColumnOrder {
-	if di.HasContentHashedField() || di.IsSpatial() {
+	if di.HasContentHashedField() || di.IsSpatial() || di.hasCellEncodedField() {
 		return nil
 	}
 	return di.columnOrders
 }
 
 func (di *doltIndex) Reversible(ctx *sql.Context) bool {
-	if di.HasContentHashedField() {
+	if di.HasContentHashedField() || di.hasCellEncodedField() {
 		return false
 	}
 
@@ -1004,6 +1128,11 @@ func (di *doltIndex) PrefixLengths() []uint16 {
 // OpClasses implements sql.OpClassIndex.
 func (di *doltIndex) OpClasses() []string {
 	return di.opClasses
+}
+
+// NullsNotDistinct implements sql.NullsNotDistinctIndex.
+func (di *doltIndex) NullsNotDistinct() bool {
+	return di.nullsNotDistinct
 }
 
 // IndexType implements sql.Index
@@ -1098,28 +1227,30 @@ func pruneEmptyRanges(ctx context.Context, sqlRanges []sql.MySQLRange) (pruned [
 	return pruned, nil
 }
 
-// trimRangeCutValue will trim the key value retrieved, depending on its type and prefix length
+// trimRangeCutValue will trim the key value retrieved, depending on its type and prefix length. Returns the
+// (possibly) trimmed value and whether trimming shortened it.
 // TODO: this is just the trimKeyPart in the SecondaryIndexWriters, maybe find a different place
-func (di *doltIndex) trimRangeCutValue(to int, keyPart interface{}) interface{} {
+func (di *doltIndex) trimRangeCutValue(to int, keyPart interface{}) (interface{}, bool) {
 	var prefixLength uint16
 	if len(di.prefixLengths) > to {
 		prefixLength = di.prefixLengths[to]
 	}
-	if prefixLength != 0 {
-		switch kp := keyPart.(type) {
-		case string:
-			if prefixLength > uint16(len(kp)) {
-				prefixLength = uint16(len(kp))
-			}
-			keyPart = kp[:prefixLength]
-		case []uint8:
-			if prefixLength > uint16(len(kp)) {
-				prefixLength = uint16(len(kp))
-			}
-			keyPart = kp[:prefixLength]
+	if prefixLength == 0 {
+		return keyPart, false
+	}
+
+	switch kp := keyPart.(type) {
+	case string:
+		if int(prefixLength) < len(kp) {
+			return kp[:prefixLength], true
+		}
+	case []uint8:
+		if int(prefixLength) < len(kp) {
+			return kp[:prefixLength], true
 		}
 	}
-	return keyPart
+
+	return keyPart, false
 }
 
 func (di *doltIndex) valueReadWriter() types.ValueReadWriter {
@@ -1220,7 +1351,7 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 				if err != nil {
 					return nil, err
 				}
-				nv := di.trimRangeCutValue(j, v)
+				nv, _ := di.trimRangeCutValue(j, v)
 				if err = tree.PutField(ctx, ns, tb, j, nv); err != nil {
 					return nil, err
 				}
@@ -1250,20 +1381,15 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 				if err != nil {
 					return nil, err
 				}
-				nv := di.trimRangeCutValue(i, v)
+				// a trimmed upper bound must be inclusive, since the full value may sort after its prefix
+				nv, trimmed := di.trimRangeCutValue(i, v)
 				if err = tree.PutField(ctx, ns, tb, i, nv); err != nil {
 					return nil, err
-				}
-				if vv, ok := v.([]byte); ok {
-					v = string(vv)
-				}
-				if nvv, ok := nv.([]byte); ok {
-					nv = string(nvv)
 				}
 
 				fields[i].Hi = prolly.Bound{
 					Binding:   true,
-					Inclusive: bound == sql.Closed || nv != v,
+					Inclusive: bound == sql.Closed || trimmed,
 				}
 			} else {
 				fields[i].Hi = prolly.Bound{}

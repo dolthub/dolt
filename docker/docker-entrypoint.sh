@@ -90,14 +90,11 @@ exec_mysql() {
   start_time=$(date +%s)
 
   while true; do
+    status=0
     if [ -n "$query" ]; then
-      output=$(dolt sql -q "$query" 2>&1)
-      status=$?
+      output=$(dolt sql -q "$query" 2>&1) || status=$?
     else
-      set +e # tmp disabled to initdb.d/ file err
-      output=$(dolt sql < /dev/stdin 2>&1)
-      status=$?
-      set -e
+      output=$(dolt sql < /dev/stdin 2>&1) || status=$?
     fi
 
     if [ "$status" -eq 0 ]; then
@@ -105,7 +102,7 @@ exec_mysql() {
       return 0
     fi
 
-    if echo "$output" | grep -qiE "Error [0-9]+ \([A-Z0-9]+\)"; then
+    if echo "$output" | grep -qiE "Error [0-9]+ \([A-Z0-9]+\)|syntax error|Error parsing SQL"; then
       mysql_error "$error_message$(echo "$output" | grep -iE "Error|error")"
     fi
 
@@ -406,26 +403,22 @@ _main() {
 
   # `dolt sql` can hold locks that prevent the server from starting during system hangs without this func
   dolt_server_initializer "$@"
-  # Ran in a subshell to avoid exiting the main script, and so, we can use fallback below
-  local has_correct_host
-  has_correct_host=$(exec_mysql --show-result "Could not check root host: " \
-    "SELECT User, Host FROM mysql.user WHERE User='root' AND Host='${DOLT_ROOT_HOST}' LIMIT 1;" | \
-    grep -c "$DOLT_ROOT_HOST" || true)
-
-  # args or system hangs may conflict with sql-server root env vars support
-  if [ "$has_correct_host" -eq 0 ]; then
-    mysql_warn "Environment variables failed to initialize 'root@${DOLT_ROOT_HOST}'; docker-entrypoint-initdb.d scripts queries may have conflicted. Overriding root user..."
-    exec_mysql "Could not create root user: " "CREATE USER IF NOT EXISTS 'root'@'${DOLT_ROOT_HOST}' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}';" # override password
-    exec_mysql "Could not set root privileges: " "GRANT ALL PRIVILEGES ON *.* TO 'root'@'${DOLT_ROOT_HOST}' WITH GRANT OPTION;"
-  fi
-
-  create_database_from_env
-
-  create_user_from_env
-
-  exec_mysql --show-result "Could not list users: " "SELECT User, Host FROM mysql.user;"
 
   if [[ ! -f $INIT_COMPLETED ]]; then
+    if dolt sql -q "SHOW VARIABLES LIKE 'dolt_cluster_role';" -r csv 2>/dev/null | grep -q "dolt_cluster_role,standby"; then
+      mysql_note "Server is a cluster standby replica; skipping initial database and user provisioning."
+      touch "$INIT_COMPLETED"
+      mysql_note "Dolt init process done. Ready for connections."
+      wait "$SERVER_PID"
+      return 0
+    fi
+
+    create_database_from_env
+
+    create_user_from_env
+
+    exec_mysql --show-result "Could not list users: " "SELECT User, Host FROM mysql.user;"
+
     if ls /docker-entrypoint-initdb.d/* >/dev/null 2>&1; then
       docker_process_init_files /docker-entrypoint-initdb.d/*
     else

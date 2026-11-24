@@ -33,6 +33,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/gcctx"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -122,6 +123,34 @@ func TestAnalyze(t *testing.T) {
 	require.Equal(t, 1, len(sc.Stats.stats))
 	for _, tableStats := range sc.Stats.stats {
 		require.Equal(t, 3, len(tableStats))
+	}
+}
+
+// TestAnalyzeRevisionQualifiedTable verifies that ANALYZE TABLE on a revision-qualified table updates the statistics
+// of that revision rather than those of the session's current branch.
+func TestAnalyzeRevisionQualifiedTable(t *testing.T) {
+	for _, name := range []string{"mydb/feature", "mydb@feature", "mydb/feat/x", "mydb@feat/x"} {
+		t.Run(name, func(t *testing.T) {
+			threads := sql.NewBackgroundThreads()
+			defer threads.Shutdown()
+			ctx, sqlEng, sc := defaultSetup(t, threads, true, false)
+
+			_, branch := doltdb.SplitRevisionDbName(name)
+			require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_commit('-Am', 'setup')"))
+			require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_branch('"+branch+"')"))
+			require.NoError(t, executeQuery(ctx, sqlEng, "insert into `mydb/"+branch+"`.xy values (1000, 1000)"))
+			rows, err := executeQueryResults(ctx, sqlEng, "select count(*) from `mydb/"+branch+"`.xy")
+			require.NoError(t, err)
+			branchRowCnt := uint64(rows[0][0].(int64))
+
+			require.NoError(t, executeQuery(ctx, sqlEng, "analyze table `"+name+"`.xy"))
+
+			sc.mu.Lock()
+			branchStats := sc.Stats.stats[tableIndexesKey{"mydb", branch, "xy", ""}]
+			sc.mu.Unlock()
+			require.NotEmpty(t, branchStats)
+			require.Equal(t, branchRowCnt, branchStats[0].RowCnt)
+		})
 	}
 }
 
@@ -636,6 +665,23 @@ func TestRotateBackingDb(t *testing.T) {
 
 }
 
+func TestFailedRotateStorage(t *testing.T) {
+	threads := sql.NewBackgroundThreads()
+	defer threads.Shutdown()
+	ctx, _, sc := defaultSetup(t, threads, false, false)
+
+	prev, ok := sc.kv.(*prollyStats)
+	require.True(t, ok)
+
+	// Without a home directory provider, creating the new stats database fails.
+	sc.getUserHomeDir = nil
+	require.Error(t, sc.rotateStorage(ctx))
+
+	// The rotation closed |prev|, which must not be left in place to be used or closed again.
+	require.Same(t, prev.mem, sc.kv)
+	require.Equal(t, 4, sc.kv.Len())
+}
+
 func TestPanic(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
@@ -700,23 +746,24 @@ func emptySetupDetail(t *testing.T, threads *sql.BackgroundThreads, memOnly bool
 	})
 
 	setTimers(t, ctx, 1*time.Millisecond, 100*time.Millisecond)
+	vars := ctx.SystemVariables()
 	if memOnly {
-		sql.SystemVariables.AssignValues(map[string]interface{}{
+		require.NoError(t, vars.AssignValues(ctx, map[string]interface{}{
 			dsess.DoltStatsMemoryOnly: int8(1),
-		})
+		}))
 	} else {
-		sql.SystemVariables.AssignValues(map[string]interface{}{
+		require.NoError(t, vars.AssignValues(ctx, map[string]interface{}{
 			dsess.DoltStatsMemoryOnly: int8(0),
-		})
+		}))
 	}
 	if gcEnabled {
-		sql.SystemVariables.AssignValues(map[string]interface{}{
+		require.NoError(t, vars.AssignValues(ctx, map[string]interface{}{
 			dsess.DoltStatsGCEnabled: int8(1),
-		})
+		}))
 	} else {
-		sql.SystemVariables.AssignValues(map[string]interface{}{
+		require.NoError(t, vars.AssignValues(ctx, map[string]interface{}{
 			dsess.DoltStatsGCEnabled: int8(0),
-		})
+		}))
 	}
 
 	sc := sqlEng.Analyzer.Catalog.StatsProvider.(*StatsController)
@@ -856,6 +903,7 @@ func executeQueryResults(ctx *sql.Context, eng *gms.Engine, query string) ([]sql
 }
 
 func newTestEngine(ctx context.Context, t *testing.T, dEnv *env.DoltEnv, threads *sql.BackgroundThreads) (*gms.Engine, *sql.Context) {
+	vars := sqle.NewEngineVariables()
 	pro, err := sqle.NewDoltDatabaseProviderWithDatabases("main", dEnv.FS, nil, nil, sql.EngineOverrides{})
 	if err != nil {
 		panic(err)
@@ -873,7 +921,7 @@ func newTestEngine(ctx context.Context, t *testing.T, dEnv *env.DoltEnv, threads
 
 	gcSafepointController := gcctx.NewGCSafepointController()
 
-	doltSession, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, dEnv.Config.WriteableConfig(), branch_control.CreateDefaultController(ctx), sc, writer.NewWriteSession, gcSafepointController, nil)
+	doltSession, err := dsess.NewDoltSession(sql.NewBaseSessionWithVariables(vars), pro, dEnv.Config.WriteableConfig(), branch_control.CreateDefaultController(ctx), sc, writer.NewWriteSession, gcSafepointController, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -882,7 +930,7 @@ func newTestEngine(ctx context.Context, t *testing.T, dEnv *env.DoltEnv, threads
 	sqlCtx.SetCurrentDatabase(mrEnv.GetFirstDatabase())
 
 	ctxGen := func(ctx context.Context) (*sql.Context, error) {
-		doltSession, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, dEnv.Config.WriteableConfig(), branch_control.CreateDefaultController(ctx), sc, writer.NewWriteSession, gcSafepointController, nil)
+		doltSession, err := dsess.NewDoltSession(sql.NewBaseSessionWithVariables(vars), pro, dEnv.Config.WriteableConfig(), branch_control.CreateDefaultController(ctx), sc, writer.NewWriteSession, gcSafepointController, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -893,8 +941,9 @@ func newTestEngine(ctx context.Context, t *testing.T, dEnv *env.DoltEnv, threads
 	pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, NewDropDatabaseHook(sc))
 
 	sqlEng := gms.New(analyzer.NewBuilder(pro).Build(), &gms.Config{
-		IsReadOnly:     false,
-		IsServerLocked: false,
+		IsReadOnly:      false,
+		IsServerLocked:  false,
+		EngineVariables: vars,
 	})
 
 	if err := sc.Init(sqlCtx, pro, ctxGen, pro.AllDatabases(sqlCtx)); err != nil {
@@ -906,17 +955,17 @@ func newTestEngine(ctx context.Context, t *testing.T, dEnv *env.DoltEnv, threads
 
 func setTimers(t *testing.T, ctx *sql.Context, jobI, gcI time.Duration) {
 	if jobI > 0 {
-		_, origJob, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsJobInterval)
-		sql.SystemVariables.SetGlobal(ctx, dsess.DoltStatsJobInterval, strconv.Itoa(int(jobI/time.Millisecond)))
+		_, origJob, _ := ctx.SystemVariables().GetGlobal(dsess.DoltStatsJobInterval)
+		ctx.SystemVariables().SetGlobal(ctx, dsess.DoltStatsJobInterval, strconv.Itoa(int(jobI/time.Millisecond)))
 		t.Cleanup(func() {
-			sql.SystemVariables.SetGlobal(ctx, dsess.DoltStatsJobInterval, origJob)
+			ctx.SystemVariables().SetGlobal(ctx, dsess.DoltStatsJobInterval, origJob)
 		})
 	}
 	if gcI > 0 {
-		_, origGc, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsGCInterval)
-		sql.SystemVariables.SetGlobal(ctx, dsess.DoltStatsGCInterval, strconv.Itoa(int(gcI/time.Millisecond)))
+		_, origGc, _ := ctx.SystemVariables().GetGlobal(dsess.DoltStatsGCInterval)
+		ctx.SystemVariables().SetGlobal(ctx, dsess.DoltStatsGCInterval, strconv.Itoa(int(gcI/time.Millisecond)))
 		t.Cleanup(func() {
-			sql.SystemVariables.SetGlobal(ctx, dsess.DoltStatsGCInterval, origGc)
+			ctx.SystemVariables().SetGlobal(ctx, dsess.DoltStatsGCInterval, origGc)
 		})
 	}
 }

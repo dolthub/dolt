@@ -30,6 +30,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/memlimit"
 	"github.com/dolthub/dolt/go/libraries/utils/awsrefreshcreds"
+	"github.com/dolthub/dolt/go/libraries/utils/netretry"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
@@ -159,7 +160,7 @@ func (fact AWSFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinForm
 
 	q := nbs.NewUnlimitedMemQuotaProvider()
 	// DisableLogOutputChecksumValidationSkipped silences the per-GetObject WARN emitted when objects have no stored checksum.
-	s3c := s3.NewFromConfig(cfg, func(o *s3.Options) { o.DisableLogOutputChecksumValidationSkipped = true })
+	s3c := s3.NewFromConfig(cfg, netretry.WithS3Retryer, func(o *s3.Options) { o.DisableLogOutputChecksumValidationSkipped = true })
 	return nbs.NewAWSStore(ctx, nbf.VersionString(), parts[0], dbName, parts[1], s3c, dynamodb.NewFromConfig(cfg), memlimit.MemtableSize(), q)
 }
 

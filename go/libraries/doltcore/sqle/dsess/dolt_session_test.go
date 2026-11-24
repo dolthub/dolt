@@ -17,13 +17,13 @@ package dsess
 import (
 	"context"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
-	_ "github.com/dolthub/go-mysql-server/sql/variables"
+	"github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -31,11 +31,13 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/keymutex"
+	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 func TestDoltSessionInit(t *testing.T) {
-	dsess := DefaultSession(emptyDatabaseProvider(), nil)
+	dsess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
 	conf := config.NewMapConfig(make(map[string]string))
 	assert.Equal(t, conf, dsess.globalsConf)
 }
@@ -45,6 +47,7 @@ type countingDoltgresTransactionLifecycle struct {
 	pending         bool
 	cacheClears     int
 	events          []string
+	onCommit        func()
 }
 
 func (l *countingDoltgresTransactionLifecycle) DoltgresTransactionStarted() {
@@ -52,6 +55,9 @@ func (l *countingDoltgresTransactionLifecycle) DoltgresTransactionStarted() {
 }
 func (l *countingDoltgresTransactionLifecycle) DoltgresTransactionCommitted() {
 	l.events = append(l.events, "commit")
+	if l.onCommit != nil {
+		l.onCommit()
+	}
 }
 func (l *countingDoltgresTransactionLifecycle) DoltgresTransactionRolledBack() {
 	l.events = append(l.events, "rollback")
@@ -78,7 +84,7 @@ func (l *countingDoltgresTransactionLifecycle) DoltgresSessionCacheClear() {
 }
 
 func TestDoltgresTransactionLifecycle(t *testing.T) {
-	sess := DefaultSession(emptyDatabaseProvider(), nil)
+	sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
 	lifecycle := &countingDoltgresTransactionLifecycle{pending: true}
 	sess.DoltgresSessObj = lifecycle
 	tx := DisabledTransaction{}
@@ -97,14 +103,31 @@ func TestDoltgresTransactionLifecycle(t *testing.T) {
 	assert.Equal(t, 2, lifecycle.transactionEnds)
 }
 
+// newTransactionTestVariables returns a bundle defining the Dolt session
+// variables read by transaction start and commit.
+func newTransactionTestVariables() *sql.EngineVariables {
+	vars := variables.NewEngineVariables()
+	vars.System.AddSystemVariables([]sql.SystemVariable{
+		&sql.MysqlSystemVariable{
+			Name:    TransactionsDisabledSysVar,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
+			Dynamic: true,
+			Type:    sqltypes.NewSystemBoolType(TransactionsDisabledSysVar),
+			Default: int8(0),
+		},
+		&sql.MysqlSystemVariable{
+			Name:    DoltCommitOnTransactionCommit,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
+			Dynamic: true,
+			Type:    sqltypes.NewSystemBoolType(DoltCommitOnTransactionCommit),
+			Default: int8(0),
+		},
+	})
+	return vars
+}
+
 func TestDoltgresSemanticTransactionLifecycle(t *testing.T) {
-	if _, _, ok := sql.SystemVariables.GetGlobal(TransactionsDisabledSysVar); !ok {
-		sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{&sql.MysqlSystemVariable{
-			Name: TransactionsDisabledSysVar, Scope: sql.GetMysqlScope(sql.SystemVariableScope_Session),
-			Dynamic: true, Type: sqltypes.NewSystemBoolType(TransactionsDisabledSysVar), Default: int8(0),
-		}})
-	}
-	sess := DefaultSession(emptyDatabaseProvider(), nil)
+	sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, newTransactionTestVariables())
 	lifecycle := &countingDoltgresTransactionLifecycle{pending: true}
 	sess.DoltgresSessObj = lifecycle
 	ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
@@ -127,57 +150,162 @@ func TestDoltgresSemanticTransactionLifecycle(t *testing.T) {
 	}
 	for _, name := range []string{"one", "two"} {
 		state := newEmptyDatabaseSessionState()
-		state.NewEmptyBranchState("main", RevisionTypeBranch).dirty = true
-		sess.dbStates[name] = state
+		state.dbName = name
+		sess.dbStates[doltdb.NewDbKey(name)] = state
+		sess.currentBranches().add(state, "main", RevisionTypeBranch).dirty = true
 	}
-	assert.ErrorIs(t, sess.CommitTransaction(ctx, tx), ErrDirtyWorkingSets)
+	// An invalid transaction must not emit a successful commit notification.
+	assert.EqualError(t, sess.CommitTransaction(ctx, nil), "expected a DoltTransaction")
 	assert.Equal(t, "start", lifecycle.events[len(lifecycle.events)-1], "failed commit ended transaction")
 	assert.NoError(t, sess.Rollback(ctx, tx))
 	assert.Equal(t, 2, lifecycle.transactionEnds)
 	assert.Equal(t, "rollback", lifecycle.events[len(lifecycle.events)-1])
 }
 
+func TestCommitBranchStatesNotifiesDoltgres(t *testing.T) {
+	sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
+	ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
+	tx := &DoltTransaction{branches: newBranchStates()}
+	ctx.SetTransaction(tx)
+	lifecycle := &countingDoltgresTransactionLifecycle{
+		pending: true,
+		onCommit: func() {
+			assert.Nil(t, ctx.GetTransaction(), "clear the transaction before notifying Doltgres")
+		},
+	}
+	sess.DoltgresSessObj = lifecycle
+
+	// Validation failures leave the transaction active and emit no commit notification.
+	_, err := sess.commitBranchStates(ctx, nil, DisabledTransaction{}, nil)
+	assert.Error(t, err)
+	assert.Same(t, tx, ctx.GetTransaction())
+	assert.Empty(t, lifecycle.events)
+	assert.Zero(t, lifecycle.transactionEnds)
+
+	_, err = sess.commitBranchStates(ctx, nil, tx, []*doltdb.PendingCommit{nil})
+	assert.Error(t, err)
+	assert.Same(t, tx, ctx.GetTransaction())
+	assert.Empty(t, lifecycle.events)
+	assert.Zero(t, lifecycle.transactionEnds)
+
+	_, err = sess.commitBranchStates(ctx, nil, tx, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"commit"}, lifecycle.events)
+	assert.Equal(t, 1, lifecycle.transactionEnds)
+	assert.Nil(t, ctx.GetTransaction())
+
+	// The public caller must not send a second notification after the batch completes.
+	ctx.SetTransaction(tx)
+	lifecycle.pending = true
+	lifecycle.events = nil
+	_, err = sess.DoltCommitMulti(ctx, tx, nil, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"commit"}, lifecycle.events)
+	assert.Equal(t, 2, lifecycle.transactionEnds)
+	assert.Nil(t, ctx.GetTransaction())
+}
+
+func TestCommitTransactionWithoutBatchNotifiesDoltgres(t *testing.T) {
+	for _, disabled := range []bool{
+		false,
+		true,
+	} {
+		name := "no pending edits"
+		if disabled {
+			name = "transactions disabled"
+		}
+
+		t.Run(name, func(t *testing.T) {
+			sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, newTransactionTestVariables())
+			ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
+			assert.NoError(t, sess.SetSessionVariable(ctx, TransactionsDisabledSysVar, disabled))
+			if disabled {
+				state := newEmptyDatabaseSessionState()
+				state.dbName = "mydb"
+				sess.dbStates[doltdb.NewDbKey("mydb")] = state
+				sess.currentBranches().add(state, "main", RevisionTypeBranch).dirty = true
+			}
+
+			tx := DisabledTransaction{}
+			ctx.SetTransaction(tx)
+			lifecycle := &countingDoltgresTransactionLifecycle{
+				pending: true,
+				onCommit: func() {
+					assert.Equal(t, tx, ctx.GetTransaction(), "preserve notification order for commits without a batch")
+				},
+			}
+			sess.DoltgresSessObj = lifecycle
+
+			assert.NoError(t, sess.CommitTransaction(ctx, tx))
+			assert.Equal(t, []string{"commit"}, lifecycle.events)
+			assert.Equal(t, 1, lifecycle.transactionEnds)
+			assert.Nil(t, ctx.GetTransaction())
+		})
+	}
+}
+
 func TestDoltTransactionRepeatedSavepointNames(t *testing.T) {
 	tx := &DoltTransaction{postgresSavepoints: true}
-	first := map[string]doltdb.RootValue{"first": nil}
-	second := map[string]doltdb.RootValue{"second": nil}
-	tx.CreateSavepoint("same", first)
-	tx.CreateSavepoint("child", map[string]doltdb.RootValue{})
-	tx.CreateSavepoint("same", second)
-	assert.Equal(t, second, tx.RollbackToSavepoint("same"))
+	first := map[doltdb.QualifiedDbKey]doltdb.RootValue{doltdb.NewQualifiedDbKey("first/main"): nil}
+	second := map[doltdb.QualifiedDbKey]doltdb.RootValue{doltdb.NewQualifiedDbKey("second/main"): nil}
+	firstDirty := map[doltdb.QualifiedDbKey]bool{
+		doltdb.NewQualifiedDbKey("mydb/main"): true,
+	}
+	secondDirty := map[doltdb.QualifiedDbKey]bool{
+		doltdb.NewQualifiedDbKey("mydb/other"): true,
+	}
+	tx.CreateSavepoint("same", first, firstDirty)
+	tx.CreateSavepoint("child", map[doltdb.QualifiedDbKey]doltdb.RootValue{}, nil)
+	tx.CreateSavepoint("same", second, secondDirty)
+	assert.Equal(t, second, tx.RollbackToSavepoint("same").roots)
+	assert.Equal(t, secondDirty, tx.RollbackToSavepoint("same").dirtyBranches)
 	assert.True(t, tx.ClearSavepoint("same"))
-	assert.Equal(t, first, tx.RollbackToSavepoint("same"))
+	assert.Equal(t, first, tx.RollbackToSavepoint("same").roots)
+	assert.Equal(t, firstDirty, tx.RollbackToSavepoint("same").dirtyBranches)
 	assert.False(t, tx.ClearSavepoint("child"))
 }
 
 func TestDoltTransactionDefaultSavepointSemantics(t *testing.T) {
 	tx := &DoltTransaction{}
-	tx.CreateSavepoint("Same", map[string]doltdb.RootValue{"first": nil})
-	tx.CreateSavepoint("same", map[string]doltdb.RootValue{"second": nil})
-	assert.Equal(t, map[string]doltdb.RootValue{"second": nil}, tx.RollbackToSavepoint("SAME"))
+	tx.CreateSavepoint("Same", map[doltdb.QualifiedDbKey]doltdb.RootValue{
+		doltdb.NewQualifiedDbKey("first/main"): nil,
+	}, map[doltdb.QualifiedDbKey]bool{
+		doltdb.NewQualifiedDbKey("mydb/main"): true,
+	})
+	tx.CreateSavepoint("same", map[doltdb.QualifiedDbKey]doltdb.RootValue{
+		doltdb.NewQualifiedDbKey("second/main"): nil,
+	}, map[doltdb.QualifiedDbKey]bool{
+		doltdb.NewQualifiedDbKey("mydb/other"): true,
+	})
+	assert.Equal(t, map[doltdb.QualifiedDbKey]doltdb.RootValue{
+		doltdb.NewQualifiedDbKey("second/main"): nil,
+	}, tx.RollbackToSavepoint("SAME").roots)
+	assert.Equal(t, map[doltdb.QualifiedDbKey]bool{
+		doltdb.NewQualifiedDbKey("mydb/other"): true,
+	}, tx.RollbackToSavepoint("SAME").dirtyBranches)
 	assert.True(t, tx.ClearSavepoint("Same"))
 	assert.Nil(t, tx.RollbackToSavepoint("same"))
 }
 
 func TestDirtyBranches(t *testing.T) {
 	addBranchState := func(sess *DoltSession, dbName, head string, dirty bool) {
-		dbState, ok := sess.dbStates[strings.ToLower(dbName)]
+		dbState, ok := sess.dbStates[doltdb.NewDbKey(dbName)]
 		if !ok {
 			dbState = newEmptyDatabaseSessionState()
 			dbState.dbName = dbName
-			sess.dbStates[strings.ToLower(dbName)] = dbState
+			sess.dbStates[doltdb.NewDbKey(dbName)] = dbState
 		}
-		dbState.NewEmptyBranchState(head, RevisionTypeBranch).dirty = dirty
+		sess.currentBranches().add(dbState, head, RevisionTypeBranch).dirty = dirty
 	}
 
 	t.Run("no branch states", func(t *testing.T) {
-		sess := DefaultSession(emptyDatabaseProvider(), nil)
+		sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
 		assert.Empty(t, sess.DirtyBranches())
 		assert.False(t, sess.IsBranchDirty("db1", "main"))
 	})
 
 	t.Run("no dirty branch states", func(t *testing.T) {
-		sess := DefaultSession(emptyDatabaseProvider(), nil)
+		sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
 		addBranchState(sess, "db1", "main", false)
 		assert.Empty(t, sess.DirtyBranches())
 		assert.False(t, sess.IsBranchDirty("db1", "main"))
@@ -185,7 +313,7 @@ func TestDirtyBranches(t *testing.T) {
 
 	// Two dirty branches of one database: two pairs, one database name.
 	t.Run("multiple dirty branches in one database", func(t *testing.T) {
-		sess := DefaultSession(emptyDatabaseProvider(), nil)
+		sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
 		addBranchState(sess, "db1", "main", true)
 		addBranchState(sess, "db1", "feature", true)
 		addBranchState(sess, "db1", "clean", false)
@@ -202,7 +330,7 @@ func TestDirtyBranches(t *testing.T) {
 	})
 
 	t.Run("dirty branches across databases", func(t *testing.T) {
-		sess := DefaultSession(emptyDatabaseProvider(), nil)
+		sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
 		addBranchState(sess, "db1", "main", true)
 		addBranchState(sess, "db2", "main", false)
 		addBranchState(sess, "db3", "feature", true)
@@ -220,7 +348,7 @@ func TestDirtyBranches(t *testing.T) {
 
 	// Both maps are keyed lowercased, as lookupDbState assumes.
 	t.Run("lookup folds case", func(t *testing.T) {
-		sess := DefaultSession(emptyDatabaseProvider(), nil)
+		sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
 		addBranchState(sess, "db1", "Feature", true)
 
 		assert.True(t, sess.IsBranchDirty("DB1", "feature"))
@@ -229,7 +357,7 @@ func TestDirtyBranches(t *testing.T) {
 
 	// The joined form could not express this.
 	t.Run("database name containing a revision delimiter", func(t *testing.T) {
-		sess := DefaultSession(emptyDatabaseProvider(), nil)
+		sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
 		addBranchState(sess, "db/one", "main", true)
 
 		assert.Equal(t, []DirtyBranch{{DbName: "db/one", Branch: "main"}}, sess.DirtyBranches())
@@ -238,7 +366,7 @@ func TestDirtyBranches(t *testing.T) {
 }
 
 func TestNewPersistedSystemVariables(t *testing.T) {
-	dsess := DefaultSession(emptyDatabaseProvider(), nil)
+	dsess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
 	conf := config.NewMapConfig(map[string]string{"max_connections": "1000"})
 	dsess = dsess.WithGlobals(conf)
 
@@ -251,6 +379,7 @@ func TestNewPersistedSystemVariables(t *testing.T) {
 }
 
 func TestValidatePeristableSystemVar(t *testing.T) {
+	vars := variables.NewEngineVariables()
 	tests := []struct {
 		Err  *errors.Kind
 		Name string
@@ -271,7 +400,7 @@ func TestValidatePeristableSystemVar(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
-			if sysVar, _, err := validatePersistableSysVar(tt.Name); tt.Err != nil {
+			if sysVar, _, err := validatePersistableSysVarInRegistry(vars.System, tt.Name); tt.Err != nil {
 				assert.True(t, tt.Err.Is(err))
 			} else {
 				assert.Equal(t, tt.Name, sysVar.GetName())
@@ -374,6 +503,7 @@ func TestSetPersistedValue(t *testing.T) {
 }
 
 func TestGetPersistedValue(t *testing.T) {
+	vars := variables.NewEngineVariables()
 	tests := []struct {
 		ExpectedRes interface{}
 		Name        string
@@ -446,7 +576,7 @@ func TestGetPersistedValue(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
 			conf := config.NewMapConfig(map[string]string{tt.Name: tt.Value})
-			if val, err := getPersistedValue(conf, tt.Name); tt.Err {
+			if val, err := getPersistedValueInRegistry(vars.System, conf, tt.Name); tt.Err {
 				assert.Error(t, err)
 			} else {
 				assert.Equal(t, tt.ExpectedRes, val)
@@ -457,6 +587,88 @@ func TestGetPersistedValue(t *testing.T) {
 
 func emptyDatabaseProvider() DoltDatabaseProvider {
 	return emptyRevisionDatabaseProvider{}
+}
+
+// closedRootChunkStore fails to read its root, like a store which has been closed.
+type closedRootChunkStore struct {
+	chunks.ChunkStore
+}
+
+func (s closedRootChunkStore) Root(context.Context) (hash.Hash, error) {
+	return hash.Hash{}, chunks.ErrStoreClosed
+}
+
+type snapshotTestDatabase struct {
+	SqlDatabase
+	name string
+	ddb  *doltdb.DoltDB
+}
+
+func (db snapshotTestDatabase) Name() string {
+	return db.name
+}
+
+func (db snapshotTestDatabase) DbData() env.DbData[*sql.Context] {
+	return env.DbData[*sql.Context]{Ddb: db.ddb}
+}
+
+// snapshotDatabaseProvider returns each of |snapshots| in turn from DoltDatabases, and then the
+// last of them forever.
+type snapshotDatabaseProvider struct {
+	emptyRevisionDatabaseProvider
+	snapshots [][]SqlDatabase
+}
+
+func (p *snapshotDatabaseProvider) DoltDatabases() []SqlDatabase {
+	ret := p.snapshots[0]
+	if len(p.snapshots) > 1 {
+		p.snapshots = p.snapshots[1:]
+	}
+	return ret
+}
+
+func TestStartTransactionWithClosedDatabase(t *testing.T) {
+	newDb := func(t *testing.T, name string, cs chunks.ChunkStore) SqlDatabase {
+		ddb, err := doltdb.DoltDBFromCS(cs, name)
+		require.NoError(t, err)
+		return snapshotTestDatabase{name: name, ddb: ddb}
+	}
+	newCS := func() chunks.ChunkStore {
+		return (&chunks.MemoryStorage{}).NewView()
+	}
+	startTransaction := func(t *testing.T, snapshots ...[]SqlDatabase) (sql.Transaction, error) {
+		pro := &snapshotDatabaseProvider{snapshots: snapshots}
+		sess := DefaultSessionWithVariables(pro, nil, newTransactionTestVariables())
+		ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
+		return sess.StartTransaction(ctx, sql.ReadWrite)
+	}
+	requireStartPoints := func(t *testing.T, tx sql.Transaction, expected ...doltdb.DbKey) {
+		var actual []doltdb.DbKey
+		for key := range tx.(*DoltTransaction).dbStartPoints {
+			actual = append(actual, key)
+		}
+		require.ElementsMatch(t, expected, actual)
+	}
+
+	t.Run("DroppedSinceSnapshot", func(t *testing.T) {
+		live := newDb(t, "live", newCS())
+		dropped := newDb(t, "dropped", closedRootChunkStore{newCS()})
+		tx, err := startTransaction(t, []SqlDatabase{dropped, live}, []SqlDatabase{live})
+		require.NoError(t, err)
+		requireStartPoints(t, tx, "live")
+	})
+	t.Run("RecreatedSinceSnapshot", func(t *testing.T) {
+		dropped := newDb(t, "db", closedRootChunkStore{newCS()})
+		recreated := newDb(t, "db", newCS())
+		tx, err := startTransaction(t, []SqlDatabase{dropped}, []SqlDatabase{recreated})
+		require.NoError(t, err)
+		requireStartPoints(t, tx)
+	})
+	t.Run("ClosedButNotDropped", func(t *testing.T) {
+		closed := newDb(t, "closed", closedRootChunkStore{newCS()})
+		_, err := startTransaction(t, []SqlDatabase{closed})
+		require.ErrorIs(t, err, chunks.ErrStoreClosed)
+	})
 }
 
 type emptyRevisionDatabaseProvider struct {

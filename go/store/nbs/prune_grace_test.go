@@ -604,12 +604,14 @@ func TestNBSPruneUnreferencedWithGraceKeepsPending(t *testing.T) {
 	require.NoError(t, st.AddTableFilesToManifest(ctx, map[string]int{fileID: 1}, noopGetAddrs))
 }
 
-// TestCopyTableFileReplacesExistingFile guards an invariant grace pruning
-// depends on: landing a table file always writes it, even over an existing file
-// of the same name, so it carries a fresh mtime. Adding a "skip uploading what
-// the destination already has" optimization to the pull or clone path would
-// break that, and a prune could then delete a file as it goes live.
-func TestCopyTableFileReplacesExistingFile(t *testing.T) {
+// TestCopyTableFileTouchesExistingFile guards two invariants. Grace pruning
+// depends on landing a table file always refreshing its mtime, even when a file
+// of the same name already exists. Adding a "skip uploading what the
+// destination already has" optimization to the pull or clone path would break
+// that, and a prune could then delete a file as it goes live. And landing a
+// table file never replaces an existing file of the same name, which may be
+// live.
+func TestCopyTableFileTouchesExistingFile(t *testing.T) {
 	ctx := context.Background()
 	dir := makeTempDir(t)
 	defer file.RemoveAll(dir)
@@ -618,7 +620,7 @@ func TestCopyTableFileReplacesExistingFile(t *testing.T) {
 	data, addr, err := buildTable([][]byte{[]byte("a chunk")})
 	require.NoError(t, err)
 
-	// An orphan left by an interrupted sync: right name, stale content.
+	// An existing file under the same name, with different content.
 	p := writeAgedFile(t, dir, addr.String(), 7, 2*testGrace)
 	before, err := os.Stat(p)
 	require.NoError(t, err)
@@ -631,11 +633,13 @@ func TestCopyTableFileReplacesExistingFile(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, after.ModTime().After(before.ModTime()),
 		"landing a table file over an existing name must refresh its mtime")
+	assert.True(t, os.SameFile(before, after), "the existing file must be touched, not replaced")
 
-	f, err := os.Open(p)
+	got, err := os.ReadFile(p)
 	require.NoError(t, err)
-	defer f.Close()
-	got, err := io.ReadAll(f)
+	assert.Equal(t, bytes.Repeat([]byte("x"), 7), got, "the existing file's content must be unchanged")
+
+	entries, err := os.ReadDir(dir)
 	require.NoError(t, err)
-	assert.Equal(t, data, got, "the existing file must be replaced, not adopted")
+	require.Len(t, entries, 1, "the discarded temp file must be removed")
 }

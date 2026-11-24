@@ -153,6 +153,43 @@ parquet() {
   fi
 }
 
+wait_for_file() {
+  local file="$1"
+  local retries="${2:-40}"
+  local interval="${3:-0.1}"
+
+  for ((i=0; i<retries; i++)); do
+    if [ -f "$file" ]; then
+      return 0
+    fi
+    sleep "$interval"
+  done
+
+  echo "Timed out waiting for file: $file"
+  return 1
+}
+
+# get_memory_kb(<PID>) returns the resident memory or working set size in KB
+# for the specified process PID.
+#
+# Arguments:
+#   $1 - process PID
+# Outputs:
+#   STDOUT - process memory in KB
+get_memory_kb() {
+    pid="$1"
+
+    if [ "$IS_WINDOWS" == true ]; then
+        winpid="$pid"
+        if [ -f "/proc/$pid/winpid" ]; then
+            winpid=$(cat "/proc/$pid/winpid")
+        fi
+        tasklist //FI "PID eq $winpid" //FO CSV //NH | awk -F'","' '{print $5}' | tr -d '", K\r'
+    else
+        ps -o rss= -p "$pid" | tr -d ' '
+    fi
+}
+
 nativevar DOLT_ROOT_PATH $BATS_TMPDIR/config-$$ /p
 dolt config --global --add metrics.disabled true > /dev/null 2>&1
 set_dolt_user "Bats Tests" "bats@email.fake" 

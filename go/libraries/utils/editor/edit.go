@@ -28,11 +28,12 @@ import (
 func OpenTempEditor(ed string, initialContents string, fileSuffix string) (string, error) {
 	fileName := uuid.New().String() + fileSuffix
 	filename := filepath.Join(os.TempDir(), fileName)
-	err := os.WriteFile(filename, []byte(initialContents), os.ModePerm)
+	err := os.WriteFile(filename, []byte(initialContents), 0600)
 
 	if err != nil {
 		return "", err
 	}
+	defer os.Remove(filename)
 
 	cmdName, cmdArgs := getCmdNameAndArgsForEditor(ed)
 

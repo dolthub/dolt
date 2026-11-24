@@ -1,5 +1,6 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
+load $BATS_TEST_DIRNAME/helper/criss-cross.bash
 
 setup() {
     setup_common
@@ -2554,4 +2555,42 @@ EOF
     [ $status -eq 1 ]
     [[ "$output" =~ "Incompatible schema change, skipping data diff for table 't'" ]] || false
 
+}
+
+@test "diff: A...B with several merge bases uses the newest and warns" {
+    criss_cross
+
+    # Like git diff branchA...branchB, diff branchB against baseB, which has row 20.
+    run dolt diff branchA...branchB
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "warning: branchA...branchB: multiple merge bases, using $BASE_B" ]
+    [[ "$output" =~ "| + | 10 |" ]] || false
+    [[ ! "$output" =~ "| + | 20 |" ]] || false
+}
+
+@test "diff: ...B diffs B against the merge base of HEAD and B" {
+    criss_cross
+
+    # Like git diff ...branchB, the omitted side is HEAD, which is branchA.
+    run dolt diff ...branchB
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "warning: HEAD...branchB: multiple merge bases, using $BASE_B" ]
+    [[ "$output" =~ "| + | 10 |" ]] || false
+}
+
+@test "diff: A...B with one merge base does not warn" {
+    criss_cross
+
+    run dolt diff main...branchA
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "warning" ]] || false
+}
+
+@test "diff: --merge-base with several merge bases fails" {
+    criss_cross
+
+    # Like git diff --merge-base branchA branchB.
+    run dolt diff --merge-base branchA branchB
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "multiple merge bases found" ]] || false
 }

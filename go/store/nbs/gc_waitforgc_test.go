@@ -129,10 +129,11 @@ func TestWaitForGCNotTrappedAcrossCycles(t *testing.T) {
 	}
 }
 
-// TestWaitForGCWakesOnContextCancel covers the cancellation half of
-// waitForGC's contract. A sync.Cond wait cannot select on a context, so
-// without broadcastOnCancel a Put blocked behind a GC keeper sleeps
-// until the GC cycle ends, no matter what its context says.
+// TestWaitForGCWakesOnContextCancel tests context cancellation
+// behavior of waithForGC. sync.Cond does not natively support
+// context.Context, so waiting on one while respecting context
+// cancellation requires signaling the condition variable
+// asychronously when the context itself is Done().
 func TestWaitForGCWakesOnContextCancel(t *testing.T) {
 	ctx := context.Background()
 

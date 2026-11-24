@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/test"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -184,6 +186,142 @@ func TestEmptyInMemoryRepoCreation(t *testing.T) {
 	}
 }
 
+func TestCopyWorkingSetPreservesDestination(t *testing.T) {
+	ddb, ctx, commit := newMemDoltDBWithDefaultBranch(t, "main")
+	root, err := commit.GetRootValue(ctx)
+	require.NoError(t, err)
+	source := ref.NewWorkingSetRef("heads/main")
+	target := ref.NewWorkingSetRef("heads/copy")
+	ws := EmptyWorkingSet(source).WithWorkingRoot(root).WithStagedRoot(root)
+	require.ErrorContains(t, ddb.UpdateWorkingSet(ctx, target, ws, hash.Hash{}, TodoWorkingSetMeta(), nil), "does not match target")
+	_, err = ddb.ResolveWorkingSet(ctx, target)
+	require.ErrorIs(t, err, ErrWorkingSetNotFound)
+	require.NoError(t, ddb.UpdateWorkingSet(ctx, source, ws, hash.Hash{}, TodoWorkingSetMeta(), nil))
+	require.NoError(t, ddb.CopyWorkingSet(ctx, source, target, false))
+	copied, err := ddb.ResolveWorkingSet(ctx, target)
+	require.NoError(t, err)
+	require.Equal(t, target, copied.Ref())
+	require.Equal(t, source, ws.Ref())
+	require.Error(t, ddb.CopyWorkingSet(ctx, source, target, false))
+	require.NoError(t, ddb.CopyWorkingSet(ctx, source, target, true))
+}
+
+type workingRootListener struct {
+	updated func(string, RootValue, RootValue)
+}
+
+type batchCommitHook struct {
+	datasets        []string
+	skipWorkingSets bool
+}
+
+func (h *batchCommitHook) Execute(_ context.Context, ds datas.Dataset, _ *DoltDB) (func(context.Context) error, error) {
+	h.datasets = append(h.datasets, ds.ID())
+	return func(context.Context) error {
+		return nil
+	}, nil
+}
+func (h *batchCommitHook) ExecuteForWorkingSets() bool {
+	return !h.skipWorkingSets
+}
+func (*batchCommitHook) ExecuteForReplicaWrite() bool {
+	return false
+}
+
+func (l workingRootListener) WorkingRootUpdated(_ *sql.Context, _ string, branch string, previous, current RootValue) error {
+	l.updated(branch, previous, current)
+	return nil
+}
+func (workingRootListener) DatabaseCreated(*sql.Context, string) error {
+	return nil
+}
+func (workingRootListener) DatabaseDropped(*sql.Context, string) error {
+	return nil
+}
+
+type notificationSnapshotCountingDatabase struct {
+	datas.Database
+	snapshots int
+}
+
+func (db *notificationSnapshotCountingDatabase) GetDatasetByRootHash(ctx context.Context, id string, root hash.Hash) (datas.Dataset, error) {
+	db.snapshots++
+	return db.Database.GetDatasetByRootHash(ctx, id, root)
+}
+
+type notificationValueCountingStore struct {
+	types.ValueReadWriter
+	reads int
+}
+
+func (s *notificationValueCountingStore) MustReadValue(ctx context.Context, h hash.Hash) (types.Value, error) {
+	s.reads++
+	return s.ValueReadWriter.MustReadValue(ctx, h)
+}
+
+func TestCommitHeadUpdatesOnlyLoadsWorkingSetsForListeners(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		listener   bool
+		sqlContext bool
+	}{
+		{"no listeners", false, true},
+		{"listener", true, true},
+		{"non-SQL context", true, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ddb, ctx, commit := newMemDoltDBWithDefaultBranch(t, "main")
+			root, err := commit.GetRootValue(ctx)
+			require.NoError(t, err)
+			ws := EmptyWorkingSet(ref.NewWorkingSetRef("heads/main")).WithWorkingRoot(root).WithStagedRoot(root)
+			require.NoError(t, ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, hash.Hash{}, TodoWorkingSetMeta(), nil))
+			ws, err = ddb.ResolveWorkingSet(ctx, ws.Ref())
+			require.NoError(t, err)
+			previous, err := ws.HashOf()
+			require.NoError(t, err)
+
+			listeners := DatabaseUpdateListeners
+			t.Cleanup(func() {
+				DatabaseUpdateListeners = listeners
+			})
+			DatabaseUpdateListeners = nil
+			called := 0
+			if test.listener {
+				DatabaseUpdateListeners = []DatabaseUpdateListener{workingRootListener{func(_ string, _, _ RootValue) {
+					called++
+				}}}
+			}
+			if test.sqlContext {
+				ctx = sql.NewContext(ctx)
+			}
+			db := &notificationSnapshotCountingDatabase{
+				Database: ddb.db.Database,
+			}
+			ddb.db.Database = db
+			store := &notificationValueCountingStore{
+				ValueReadWriter: ddb.vrw,
+			}
+			ddb.vrw = store
+			heads, err := ddb.CommitHeadUpdates(ctx, []HeadUpdate{WorkingSetUpdate{
+				WorkingSet: ws,
+				PrevHash:   previous,
+				Meta:       TodoWorkingSetMeta(),
+			}}, nil)
+			require.NoError(t, err)
+			require.Len(t, heads, 1)
+			if test.listener && test.sqlContext {
+				require.Equal(t, 1, called)
+				require.Equal(t, 1, db.snapshots)
+				require.Positive(t, store.reads)
+			} else {
+				require.Zero(t, called)
+				require.Zero(t, db.snapshots)
+				require.Zero(t, store.reads, "neither before nor after working sets should be loaded")
+			}
+		})
+	}
+}
+
 func TestResolveTagWithNonTagHead(t *testing.T) {
 	ddb, ctx, commit := newMemDoltDBWithDefaultBranch(t, "main")
 	tagRef := ref.NewTagRef("invalid-tag")
@@ -225,6 +363,26 @@ func TestLoadBadLocalFSRepo(t *testing.T) {
 	assert.Error(t, err, "Should see an error here")
 }
 
+func TestResolveCommitRefFailsAfterClose(t *testing.T) {
+	ctx := context.Background()
+	fs, err := filesys.LocalFS.WithWorkingDir(t.TempDir())
+	require.NoError(t, err)
+	require.NoError(t, fs.MkDirs(dbfactory.DoltDataDir))
+	params := map[string]any{dbfactory.DisableSingletonCacheParam: struct{}{}}
+	ddb, err := LoadDoltDBWithParams(ctx, types.Format_DOLT, LocalDirDoltDB, fs, params)
+	require.NoError(t, err)
+	require.NoError(t, ddb.WriteEmptyRepo(ctx, "main", "Bill Billerson", "bigbillieb@fake.horse"))
+
+	// Populate the value caches, which would otherwise serve this after Close.
+	branch := ref.NewBranchRef("main")
+	_, err = ddb.ResolveCommitRef(ctx, branch)
+	require.NoError(t, err)
+
+	require.NoError(t, ddb.Close())
+	_, err = ddb.ResolveCommitRef(ctx, branch)
+	require.ErrorIs(t, err, chunks.ErrStoreClosed)
+}
+
 func TestLDNoms(t *testing.T) {
 	testDir, err := test.ChangeToTestDir("TestLoadRepo")
 
@@ -243,19 +401,23 @@ func TestLDNoms(t *testing.T) {
 			t.Fatal("Failed to create noms directory")
 		}
 
-		ddb, _ := LoadDoltDB(context.Background(), types.Format_DOLT, LocalDirDoltDB, filesys.LocalFS)
+		ddb, err := LoadDoltDB(context.Background(), types.Format_DOLT, LocalDirDoltDB, filesys.LocalFS)
+		require.NoError(t, err)
 		err = ddb.WriteEmptyRepo(context.Background(), "master", committerName, committerEmail)
 
 		if err != nil {
 			t.Fatal("Unexpected error creating empty repo", err)
 		}
+		require.NoError(t, ddb.Close())
 	}
 
 	// read the empty repo back and add a new table.  Write the value, but don't commit
 	var valHash hash.Hash
 	var tbl *Table
 	{
-		ddb, _ := LoadDoltDB(context.Background(), types.Format_DOLT, LocalDirDoltDB, filesys.LocalFS)
+		ddb, err := LoadDoltDB(context.Background(), types.Format_DOLT, LocalDirDoltDB, filesys.LocalFS)
+		require.NoError(t, err)
+		defer ddb.Close()
 		cs, _ := NewCommitSpec("master")
 		optCmt, err := ddb.Resolve(context.Background(), cs, nil)
 		if err != nil {

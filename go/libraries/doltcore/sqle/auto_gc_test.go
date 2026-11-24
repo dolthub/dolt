@@ -38,7 +38,8 @@ func TestAutoGCController(t *testing.T) {
 		return res
 	}
 	CtxFactory := func(ctx context.Context) (*sql.Context, error) {
-		return sql.NewContext(ctx, sql.WithSession(sql.NewBaseSession())), nil
+		vars := NewEngineVariables()
+		return sql.NewContextWithVariables(ctx, vars), nil
 	}
 	t.Run("Hook", func(t *testing.T) {
 		t.Run("NeverStarted", func(t *testing.T) {

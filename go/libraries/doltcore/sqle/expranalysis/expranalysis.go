@@ -181,8 +181,11 @@ func parseQuery(ctx *sql.Context, query string) (sql.Node, error) {
 		mockProvider := memory.NewDBProvider(mockDatabase)
 		catalog := analyzer.NewCatalog(mockProvider, engOverrides)
 		catalog.AuthHandler = sql.NoopAuthorizationHandler{}
-		// We need a new context for this operation
-		parseCtx := sql.NewEmptyContext()
+		// Expressions may name system variables, so parse with the caller's when it has them.
+		parseCtx := sql.NewContext(ctx)
+		if vars := ctx.EngineVariables(); vars != nil {
+			parseCtx = sql.NewContextWithVariables(ctx, vars)
+		}
 		parseCtx.SetCurrentDatabase("mydb")
 
 		b = planbuilder.New(parseCtx, catalog, nil)

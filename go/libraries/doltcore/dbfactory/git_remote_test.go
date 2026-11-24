@@ -27,7 +27,9 @@ import (
 	"testing"
 	"time"
 
+	filelocks "github.com/dolthub/file-locks"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -172,18 +174,12 @@ func TestGitRemoteFactory_GitFile_CachesUnderRepoDoltDirAndCanWrite(t *testing.T
 	require.True(t, ok, "expected ValueReadWriter to be *types.ValueStore, got %T", vrw)
 	cs := vs.ChunkStore()
 
-	// Minimal write: put one chunk and commit its hash as the root.
-	c := chunks.NewChunk([]byte("hello\n"))
-	err = cs.Put(ctx, c, func(chunks.Chunk) chunks.InsertAddrsCb {
-		return func(context.Context, hash.HashSet, chunks.PendingRefExists) error { return nil }
-	})
-	require.NoError(t, err)
+	commitOneChunk(t, ctx, cs)
 
-	last, err := cs.Root(ctx)
+	// The table just written is spooled under the cache root.
+	spools, err := filepath.Glob(filepath.Join(cacheBase, GitRemoteSpoolDirName, "*", "nbs-spool-*"))
 	require.NoError(t, err)
-	okCommit, err := cs.Commit(ctx, c.Hash(), last)
-	require.NoError(t, err)
-	require.True(t, okCommit)
+	require.Len(t, spools, 1)
 
 	require.NoError(t, db.Close())
 
@@ -191,6 +187,45 @@ func TestGitRemoteFactory_GitFile_CachesUnderRepoDoltDirAndCanWrite(t *testing.T
 	cmd := exec.CommandContext(ctx, "git", "--git-dir", remoteRepo.GitDir, "rev-parse", "--verify", "--quiet", "refs/dolt/data^{commit}")
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, "git rev-parse failed: %s", strings.TrimSpace(string(out)))
+}
+
+func TestGitRemoteFactory_GitFile_SHA256RemoteCanWrite(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/12060
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found on PATH")
+	}
+
+	ctx := context.Background()
+	remoteRepo := newSHA256Remote(t, ctx, filepath.Join(shortTempDir(t), "remote.git"))
+
+	remotePath := filepath.ToSlash(remoteRepo.GitDir)
+	urlStr := "git+file://" + remotePath
+	params := map[string]interface{}{
+		GitCacheRootParam: filepath.Join(shortTempDir(t), DoltDir, GitRemoteCacheDirName),
+	}
+
+	db, vrw, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, params)
+	require.NoError(t, err)
+	commitOneChunk(t, ctx, vrw.(*types.ValueStore).ChunkStore())
+	require.NoError(t, db.Close())
+
+	out, err := exec.CommandContext(ctx, "git", "--git-dir", remoteRepo.GitDir, "rev-parse", "--verify", "--quiet", "refs/dolt/data^{commit}").CombinedOutput()
+	require.NoError(t, err, "git rev-parse failed: %s", strings.TrimSpace(string(out)))
+}
+
+func TestGitRemoteFactory_RemoteInitFlagsIgnoresStderr(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/12060
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found on PATH")
+	}
+
+	ctx := context.Background()
+	dir := shortTempDir(t)
+	remoteURL := "file://" + filepath.ToSlash(newSHA256Remote(t, ctx, filepath.Join(dir, "remote.git")).GitDir)
+	t.Setenv("GIT_TRACE", "1")
+	flags, err := remoteInitFlags(ctx, filepath.Join(dir, "cache.git"), remoteURL)
+	require.NoError(t, err)
+	require.Equal(t, []string{"--object-format=sha256"}, flags)
 }
 
 func TestGitRemoteFactory_TwoClientsDistinctCacheDirsRoundtrip(t *testing.T) {
@@ -327,6 +362,98 @@ func TestEnsureGitRemoteURL_IdempotentRemoteAlreadyExists(t *testing.T) {
 	require.Equal(t, remoteURL, strings.TrimSpace(string(got)))
 }
 
+func TestGitRemoteStores_GiveUpSpoolDirOnClose(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found on PATH")
+	}
+
+	ctx := context.Background()
+	remoteRepo, err := gitrepo.InitBare(ctx, filepath.Join(shortTempDir(t), "remote.git"))
+	require.NoError(t, err)
+	_, err = remoteRepo.SetRefToTree(ctx, "refs/heads/main", map[string][]byte{"README": []byte("seed\n")}, "seed")
+	require.NoError(t, err)
+
+	root := shortTempDir(t)
+	cacheBase := filepath.Join(root, DoltDir, GitRemoteCacheDirName)
+	spoolDir := filepath.Join(cacheBase, GitRemoteSpoolDirName)
+	urlStr := "git+file://" + filepath.ToSlash(remoteRepo.GitDir)
+	params := map[string]interface{}{GitCacheRootParam: cacheBase}
+
+	// Callers racing to open the remote end up sharing a store, and the rest are closed.
+	var eg errgroup.Group
+	for i := 0; i < 4; i++ {
+		eg.Go(func() error {
+			_, _, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, params)
+			return err
+		})
+	}
+	require.NoError(t, eg.Wait())
+	lockFiles, err := filepath.Glob(filepath.Join(spoolDir, "*.lock"))
+	require.NoError(t, err)
+	require.Len(t, lockFiles, 1, "only the store in use holds a spool directory")
+
+	_, vrw, _, err := CreateDB(ctx, types.Format_DOLT, urlStr, params)
+	require.NoError(t, err)
+	commitOneChunk(t, ctx, vrw.(*types.ValueStore).ChunkStore())
+
+	lock, err := filelocks.New(lockFiles[0])
+	require.NoError(t, err)
+	require.ErrorIs(t, lock.TryLock(), filelocks.ErrLocked, "a store with spools holds its lock")
+	require.NoError(t, lock.Close())
+
+	// The blobstore closes before the store's tables do, so its spools are still open then.
+	require.NoError(t, CloseGitRemotesUnderRoot(root))
+	entries, err := os.ReadDir(spoolDir)
+	require.NoError(t, err)
+	require.Empty(t, entries, "closing the root's stores gives up the spool directory")
+}
+
+// sql-server does not load its databases in runMain, so opening a git remote is what must
+// clean up the spools of a server that was killed.
+func TestGitRemoteFactory_CleansDeadSpoolDirs(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found on PATH")
+	}
+
+	ctx := context.Background()
+	remoteRepo, err := gitrepo.InitBare(ctx, filepath.Join(shortTempDir(t), "remote.git"))
+	require.NoError(t, err)
+	_, err = remoteRepo.SetRefToTree(ctx, "refs/heads/main", map[string][]byte{"README": []byte("seed\n")}, "seed")
+	require.NoError(t, err)
+
+	root := shortTempDir(t)
+	cacheBase := filepath.Join(root, DoltDir, GitRemoteCacheDirName)
+	spoolDir := filepath.Join(cacheBase, GitRemoteSpoolDirName)
+	t.Cleanup(func() { _ = CloseGitRemotesUnderRoot(root) })
+
+	// A spool directory left by a killed process: nobody holds its lock.
+	deadDir := filepath.Join(spoolDir, "locked-dead")
+	require.NoError(t, os.MkdirAll(deadDir, 0o755))
+	require.NoError(t, os.WriteFile(deadDir+".lock", nil, 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(deadDir, "nbs-spool-dead"), []byte("dead"), 0o644))
+
+	// A spool directory of another live process. The lock stands in for that process.
+	liveDir := filepath.Join(spoolDir, "locked-live")
+	require.NoError(t, os.MkdirAll(liveDir, 0o755))
+	liveSpool := filepath.Join(liveDir, "nbs-spool-live")
+	require.NoError(t, os.WriteFile(liveSpool, []byte("live"), 0o644))
+	liveLock, err := filelocks.New(liveDir + ".lock")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = liveLock.Close() })
+	require.NoError(t, liveLock.TryLock())
+
+	urlStr := "git+file://" + filepath.ToSlash(remoteRepo.GitDir)
+	_, _, _, err = CreateDB(ctx, types.Format_DOLT, urlStr, map[string]interface{}{GitCacheRootParam: cacheBase})
+	require.NoError(t, err)
+
+	_, err = os.Stat(deadDir)
+	require.True(t, os.IsNotExist(err), "the dead process's spool directory must be removed")
+	_, err = os.Stat(deadDir + ".lock")
+	require.True(t, os.IsNotExist(err), "the dead process's lock file must be removed")
+	_, err = os.Stat(liveSpool)
+	require.NoError(t, err, "a live process's spools must be kept")
+}
+
 func TestCloseGitRemotesUnderRoot(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found on PATH")
@@ -458,4 +585,34 @@ func TestGitRemoteFactory_GitCacheRootParamUsedVerbatim(t *testing.T) {
 		}
 	}
 	require.True(t, found, "expected the cache repo directly under <git_cache_root>/<hash>/repo.git")
+}
+
+// commitOneChunk puts one chunk into |cs| and commits its hash as the root,
+// which pushes it to the git remote behind |cs|.
+func commitOneChunk(t *testing.T, ctx context.Context, cs chunks.ChunkStore) {
+	t.Helper()
+	c := chunks.NewChunk([]byte("hello\n"))
+	err := cs.Put(ctx, c, func(chunks.Chunk) chunks.InsertAddrsCb {
+		return func(context.Context, hash.HashSet, chunks.PendingRefExists) error { return nil }
+	})
+	require.NoError(t, err)
+	last, err := cs.Root(ctx)
+	require.NoError(t, err)
+	ok, err := cs.Commit(ctx, c.Hash(), last)
+	require.NoError(t, err)
+	require.True(t, ok)
+}
+
+// newSHA256Remote creates a bare SHA-256 repository at |dir| with one commit
+// on refs/heads/main. It skips the test when git cannot create one.
+func newSHA256Remote(t *testing.T, ctx context.Context, dir string) *gitrepo.Repo {
+	t.Helper()
+	out, err := exec.CommandContext(ctx, "git", "init", "--bare", "--object-format=sha256", dir).CombinedOutput()
+	if err != nil {
+		t.Skipf("git cannot create a SHA-256 repository: %s", strings.TrimSpace(string(out)))
+	}
+	repo := &gitrepo.Repo{GitDir: dir}
+	_, err = repo.SetRefToTree(ctx, "refs/heads/main", map[string][]byte{"README": []byte("seed\n")}, "seed")
+	require.NoError(t, err)
+	return repo
 }

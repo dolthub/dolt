@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM golang:1.26.2-alpine AS golang_cgo
+FROM golang:1.27.3-alpine AS golang_cgo
 ENV CGO_ENABLED=1
 ENV GO_LDFLAGS="-linkmode external -extldflags '-static'"
 RUN apk add --no-cache build-base

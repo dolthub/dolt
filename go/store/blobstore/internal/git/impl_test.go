@@ -34,8 +34,23 @@ import (
 // in place of git for the cmdReadCloser tests.
 func TestMain(m *testing.M) {
 	// See https://abhinavg.net/2022/05/15/hijack-testmain/
+	if os.Getenv(gitWithoutNoWriteFetchHeadEnv) != "" {
+		os.Exit(runGitWithoutNoWriteFetchHead(os.Args[1:]))
+	}
+	if os.Getenv(warnSizeEnv) != "" {
+		os.Args = []string{os.Args[0], "warnsize"}
+	}
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
+		case "warnsize":
+			// Stands in for a git that warns on stderr and still succeeds.
+			_, _ = os.Stderr.WriteString("error: packfile objects/pack/pack-abc.pack index unavailable\n")
+			_, _ = os.Stdout.WriteString("321\n")
+			os.Exit(0)
+		case "warnfail":
+			_, _ = os.Stdout.WriteString("out\n")
+			_, _ = os.Stderr.WriteString("fatal: boom\n")
+			os.Exit(3)
 		case "stdoutfail":
 			_, _ = os.Stdout.WriteString("abc")
 			os.Exit(3)
@@ -1209,5 +1224,168 @@ func TestCmdReadCloser_DrainedNonZeroExitSurfaces(t *testing.T) {
 	}
 	if ce.ExitCode != 3 {
 		t.Fatalf("exit code: got %d, want 3", ce.ExitCode)
+	}
+}
+
+func TestGitAPIImpl_FetchRef_SucceedsWithUnopenableFetchHead(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11904
+	t.Parallel()
+
+	ctx := context.Background()
+	localRepo, _, localAPI, remoteHead := newFetchableRepos(t, ctx)
+	if err := os.Mkdir(filepath.Join(localRepo.GitDir, "FETCH_HEAD"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := localAPI.FetchRef(ctx, "origin", "refs/dolt/data", "refs/dolt/remotes/origin/data"); err != nil {
+		t.Fatalf("FetchRef failed on an unopenable FETCH_HEAD it does not need: %v", err)
+	}
+	requireTrackingRef(t, ctx, localAPI, remoteHead)
+}
+
+func newFetchableRepos(t *testing.T, ctx context.Context) (localRepo *gitrepo.Repo, localRunner *Runner, localAPI GitAPI, remoteHead OID) {
+	t.Helper()
+
+	remoteRepo, _, _ := newTestRepo(t, ctx)
+	c1, err := remoteRepo.SetRefToTree(ctx, "refs/dolt/data", nil, "seed remote")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	localRepo, localRunner, localAPI = newTestRepo(t, ctx)
+	if _, err := localRunner.Run(ctx, RunOptions{}, "remote", "add", "origin", remoteRepo.GitDir); err != nil {
+		t.Fatal(err)
+	}
+	return localRepo, localRunner, localAPI, OID(c1)
+}
+
+func requireTrackingRef(t *testing.T, ctx context.Context, api GitAPI, want OID) {
+	t.Helper()
+
+	got, ok, err := api.TryResolveRefCommit(ctx, "refs/dolt/remotes/origin/data")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || got != want {
+		t.Fatalf("tracking ref: got %q (found %v), want %q", got, ok, want)
+	}
+}
+
+func TestGitAPIImpl_FetchRef_FallsBackOnGitWithoutNoWriteFetchHead(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/11904
+	t.Parallel()
+
+	ctx := context.Background()
+	localRepo, _, _, remoteHead := newFetchableRepos(t, ctx)
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := NewRunnerWithGitPath(localRepo.GitDir, exe)
+	r.extraEnv = []string{gitWithoutNoWriteFetchHeadEnv + "=1"}
+	api := NewGitAPIImpl(r)
+
+	for i := 0; i < 2; i++ {
+		if err := api.FetchRef(ctx, "origin", "refs/dolt/data", "refs/dolt/remotes/origin/data"); err != nil {
+			t.Fatalf("FetchRef %d with git lacking --no-write-fetch-head: %v", i+1, err)
+		}
+	}
+	requireTrackingRef(t, ctx, api, remoteHead)
+}
+
+// warnSizeEnv makes the test act as a git that warns on stderr, prints a size on
+// stdout and succeeds, whatever its arguments.
+const warnSizeEnv = "DOLT_TEST_GIT_WARN_SIZE"
+
+// gitWithoutNoWriteFetchHeadEnv makes the test act as git without the flag.
+const gitWithoutNoWriteFetchHeadEnv = "DOLT_TEST_GIT_WITHOUT_NO_WRITE_FETCH_HEAD"
+
+// runGitWithoutNoWriteFetchHead acts as git without the flag. It rejects
+// --no-write-fetch-head and runs real git for other arguments.
+func runGitWithoutNoWriteFetchHead(args []string) int {
+	for _, a := range args {
+		if a == "--no-write-fetch-head" {
+			if _, err := os.Stderr.WriteString("error: unknown option `no-write-fetch-head'\n"); err != nil {
+				return 1
+			}
+			return gitUsageExitCode
+		}
+	}
+	gitPath, err := exec.LookPath("git")
+	if err != nil {
+		return 1
+	}
+	cmd := exec.Command(gitPath, args...)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	if err := cmd.Run(); err != nil {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			return ee.ExitCode()
+		}
+		return 1
+	}
+	return 0
+}
+
+// BlobSize against a git that warns on stderr and then prints the size.
+func TestGitAPIImpl_BlobSize_IgnoresStderrWarning(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/12488
+	t.Parallel()
+
+	r := helperCommandRunner(t).WithExtraEnv(warnSizeEnv + "=1")
+	n, err := NewGitAPIImpl(r).BlobSize(context.Background(), OID(strings.Repeat("a", 40)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 321 {
+		t.Fatalf("got size %d, want 321", n)
+	}
+}
+
+// Fetch must not let git's automatic maintenance repack the repository: it detaches
+// and can delete packs while the fetched objects are being read.
+func TestGitAPIImpl_FetchRef_DoesNotAutoRepack(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/12488
+	t.Parallel()
+
+	ctx := context.Background()
+	localRepo, localRunner, _, remoteHead := newFetchableRepos(t, ctx)
+
+	// Leave the repository due for a repack once the fetch lands: one pack already
+	// present, the fetch kept as a second, and a limit of one. Maintenance runs in
+	// the foreground so that its trace is complete when the fetch returns.
+	if _, err := localRepo.SetRefToTree(ctx, "refs/heads/local", nil, "seed local"); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"repack"},
+		{"config", "gc.autoPackLimit", "1"},
+		{"config", "fetch.unpackLimit", "1"},
+		{"config", "gc.autoDetach", "false"},
+		{"config", "maintenance.autoDetach", "false"},
+	} {
+		if _, err := localRunner.Run(ctx, RunOptions{}, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	trace := filepath.Join(t.TempDir(), "trace")
+	api := NewGitAPIImpl(localRunner.WithExtraEnv("GIT_TRACE2_EVENT=" + trace))
+	if err := api.FetchRef(ctx, "origin", "refs/dolt/data", "refs/dolt/remotes/origin/data"); err != nil {
+		t.Fatal(err)
+	}
+	requireTrackingRef(t, ctx, api, remoteHead)
+
+	b, err := os.ReadFile(trace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `"fetch"`) {
+		t.Fatalf("trace does not record the fetch:\n%s", b)
+	}
+	// Older gits still launch "gc --auto" here, which gc.auto=0 makes a no-op, so
+	// look for the repack rather than for the launch.
+	if strings.Contains(string(b), `"repack"`) {
+		t.Fatalf("fetch repacked the repository:\n%s", b)
 	}
 }
