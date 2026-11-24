@@ -217,7 +217,7 @@ func TestOpenBSArchiveErrors(t *testing.T) {
 		_, err := bs.Put(ctx, bigKey, int64(len(big)), bytes.NewReader(big))
 		require.NoError(t, err)
 		q := NewUnlimitedMemQuotaProvider()
-		_, _, err = openBSArchiveIndex(ctx, bs, bigKey, bigName, 8, q, openOpts{}, &Stats{})
+		_, err = newBSArchiveChunkSource(ctx, bs, bigName, 8, q, openOpts{}, &Stats{})
 		require.ErrorContains(t, err, "read more than")
 		assert.Zero(t, q.Usage())
 	})
@@ -259,6 +259,7 @@ func TestSingleBlobPersistersPersistArchivesWhichOpenInOneRead(t *testing.T) {
 				exists, err = bs.Exists(ctx, persisted.hash().String())
 				require.NoError(t, err)
 				assert.False(t, exists)
+				assertReadsChunksFromBlobstore(t, persisted, spool)
 				for _, c := range data {
 					got, _, err := persisted.get(ctx, computeAddr(c), nil, &Stats{})
 					require.NoError(t, err)
@@ -270,6 +271,7 @@ func TestSingleBlobPersistersPersistArchivesWhichOpenInOneRead(t *testing.T) {
 				require.NoError(t, err)
 				defer opened.close()
 				assert.Equal(t, 1, bs.gets)
+				assertReadsChunksFromBlobstore(t, opened, spool)
 				for _, c := range data {
 					got, _, err := opened.get(ctx, computeAddr(c), nil, &Stats{})
 					require.NoError(t, err)
@@ -277,6 +279,19 @@ func TestSingleBlobPersistersPersistArchivesWhichOpenInOneRead(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// assertReadsChunksFromBlobstore checks that |cs| is an archive whose chunk
+// data reader is the blobstore, or its spool, rather than anything left over
+// from reading the index.
+func assertReadsChunksFromBlobstore(t *testing.T, cs chunkSource, spool bool) {
+	acs, ok := cs.(*archiveChunkSource)
+	require.True(t, ok, "%T is not an archive", cs)
+	if spool {
+		assert.IsType(t, &spoolingTableReaderAt{}, acs.aRdr.reader)
+	} else {
+		assert.IsType(t, &bsTableReaderAt{}, acs.aRdr.reader)
 	}
 }
 
@@ -358,14 +373,30 @@ func TestArchiveReadBuffersUseQuota(t *testing.T) {
 		assert.Zero(t, q.Usage())
 	})
 
-	t.Run("buffered index is not copied", func(t *testing.T) {
+	t.Run("index from the caller", func(t *testing.T) {
 		q := &peakQuotaProvider{}
 		indexSpan := footer.totalIndexSpan()
-		buffered := &archiveIndexReaderAt{buf: archive[indexSpan.offset : indexSpan.offset+indexSpan.length], off: int64(indexSpan.offset)}
-		idx, err := newInMemoryArchiveIndexReader(ctx, buffered, footer, q, &Stats{})
+		index := bytes.Clone(archive[indexSpan.offset : indexSpan.offset+indexSpan.length])
+		ar, err := newArchiveReaderFromIndex(ctx, reader, footer, index, q, openOpts{deepValidate: true})
 		require.NoError(t, err)
+		// Only the decoded index is acquired; the caller's bytes are not copied.
 		assert.Equal(t, q.Usage(), q.peak)
-		require.NoError(t, idx.Close())
+		// Nor are they retained: the caller may reuse them at once.
+		clear(index)
+		for _, h := range hashes {
+			assert.True(t, ar.has(h))
+		}
+		require.NoError(t, ar.close())
+		assert.Zero(t, q.Usage())
+	})
+
+	t.Run("index from the caller of the wrong length", func(t *testing.T) {
+		q := &peakQuotaProvider{}
+		indexSpan := footer.totalIndexSpan()
+		index := archive[indexSpan.offset : indexSpan.offset+indexSpan.length-1]
+		_, err := newArchiveReaderFromIndex(ctx, reader, footer, index, q, openOpts{})
+		require.Error(t, err)
+		assert.Zero(t, q.Usage())
 	})
 
 	t.Run("metadata", func(t *testing.T) {

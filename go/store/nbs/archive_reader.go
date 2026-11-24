@@ -248,12 +248,8 @@ func newArchiveReader(ctx context.Context, reader tableReaderAt, name hash.Hash,
 }
 
 func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiveFooter, q MemoryQuotaProvider, opts openOpts, stats *Stats) (archiveReader, error) {
-	dictCache, err := lru.New2Q[uint32, *DecompBundle](256)
-	if err != nil {
-		return archiveReader{}, err
-	}
-
 	var indexRdr archiveIndexReader
+	var err error
 
 	// Try to use memory mapping if the reader is a file
 	if fileReader, ok := reader.(*fileReaderAt); ok && fileReader.mmapIndexes {
@@ -262,13 +258,46 @@ func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiv
 			return archiveReader{}, err
 		}
 	} else {
-		if _, isSet := os.LookupEnv(dconfig.EnvAssertNoInMemoryArchiveIndex); isSet {
-			return archiveReader{}, fmt.Errorf("attempted to load archive index into memory but %s was set", dconfig.EnvAssertNoInMemoryArchiveIndex)
+		if err := assertInMemoryArchiveIndexAllowed(); err != nil {
+			return archiveReader{}, err
 		}
 		indexRdr, err = newInMemoryArchiveIndexReader(ctx, reader, footer, q, stats)
 		if err != nil {
 			return archiveReader{}, err
 		}
+	}
+
+	return assembleArchiveReader(reader, footer, indexRdr, opts)
+}
+
+// newArchiveReaderFromIndex builds an archiveReader which reads chunk data
+// from |reader|, decoding its index from |index|, the bytes of
+// footer.totalIndexSpan() already in the caller's hands. |index| is not
+// retained, so the caller may release it once this returns.
+func newArchiveReaderFromIndex(ctx context.Context, reader tableReaderAt, footer archiveFooter, index []byte, q MemoryQuotaProvider, opts openOpts) (archiveReader, error) {
+	if err := assertInMemoryArchiveIndexAllowed(); err != nil {
+		return archiveReader{}, err
+	}
+	indexRdr, err := decodeArchiveIndex(ctx, footer, index, q)
+	if err != nil {
+		return archiveReader{}, err
+	}
+	return assembleArchiveReader(reader, footer, indexRdr, opts)
+}
+
+func assertInMemoryArchiveIndexAllowed() error {
+	if _, isSet := os.LookupEnv(dconfig.EnvAssertNoInMemoryArchiveIndex); isSet {
+		return fmt.Errorf("attempted to load archive index into memory but %s was set", dconfig.EnvAssertNoInMemoryArchiveIndex)
+	}
+	return nil
+}
+
+// assembleArchiveReader takes ownership of |indexRdr|, closing it on error.
+func assembleArchiveReader(reader tableReaderAt, footer archiveFooter, indexRdr archiveIndexReader, opts openOpts) (archiveReader, error) {
+	dictCache, err := lru.New2Q[uint32, *DecompBundle](256)
+	if err != nil {
+		_ = indexRdr.Close()
+		return archiveReader{}, err
 	}
 
 	ar := archiveReader{
@@ -387,24 +416,24 @@ func (ar *archiveReader) checkSpan(id uint32) error {
 // sections are contiguous, so they are fetched with a single read; remote readers pay one round trip per read.
 func newInMemoryArchiveIndexReader(ctx context.Context, reader tableReaderAt, footer archiveFooter, q MemoryQuotaProvider, stats *Stats) (archiveIndexReader, error) {
 	indexSpan := footer.totalIndexSpan()
-	var indexBytes []byte
-	var err error
-	if buffered, ok := reader.(*archiveIndexReaderAt); ok {
-		// The caller owns, and has accounted for, the buffered index.
-		indexBytes, err = buffered.span(indexSpan)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		indexBytes, err = q.AcquireQuotaByteSlice(ctx, int(indexSpan.length))
-		if err != nil {
-			return nil, fmt.Errorf("Failed to allocate archive index buffer: %w", err)
-		}
-		defer q.ReleaseQuotaBytes(len(indexBytes))
-		_, err = io.ReadFull(newSectionReader(ctx, reader, int64(indexSpan.offset), int64(indexSpan.length), stats), indexBytes)
-		if err != nil {
-			return nil, fmt.Errorf("Failed to read archive index: %w", err)
-		}
+	indexBytes, err := q.AcquireQuotaByteSlice(ctx, int(indexSpan.length))
+	if err != nil {
+		return nil, fmt.Errorf("Failed to allocate archive index buffer: %w", err)
+	}
+	defer q.ReleaseQuotaBytes(len(indexBytes))
+	_, err = io.ReadFull(newSectionReader(ctx, reader, int64(indexSpan.offset), int64(indexSpan.length), stats), indexBytes)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to read archive index: %w", err)
+	}
+	return decodeArchiveIndex(ctx, footer, indexBytes, q)
+}
+
+// decodeArchiveIndex decodes |indexBytes|, the bytes of footer.totalIndexSpan(),
+// into quota-backed slices. |indexBytes| is not retained.
+func decodeArchiveIndex(ctx context.Context, footer archiveFooter, indexBytes []byte, q MemoryQuotaProvider) (archiveIndexReader, error) {
+	indexSpan := footer.totalIndexSpan()
+	if uint64(len(indexBytes)) != indexSpan.length {
+		return nil, fmt.Errorf("runtime error: archive index is %d bytes, but the footer gives %d", len(indexBytes), indexSpan.length)
 	}
 	// footer.validate() guarantees the sections exactly tile the index span.
 	sectionBytes := func(span byteSpan) []byte {

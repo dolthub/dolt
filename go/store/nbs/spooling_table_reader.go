@@ -221,41 +221,6 @@ func (s *spoolingTableReaderAt) Close() error {
 	return nil
 }
 
-// archiveIndexReaderAt serves the reads of opening an archive from its index, already in
-// memory, so that opening it makes no further reads of the blobstore.
-type archiveIndexReaderAt struct {
-	buf []byte
-	off int64
-}
-
-func (r *archiveIndexReaderAt) ReadAtWithStats(_ context.Context, p []byte, off int64, _ *Stats) (int, error) {
-	if off < r.off {
-		return 0, fmt.Errorf("read at %d is before the archive index at %d", off, r.off)
-	}
-	return bytes.NewReader(r.buf).ReadAt(p, off-r.off)
-}
-
-// span returns the bytes of |span|, which must lie within the buffered index.
-func (r *archiveIndexReaderAt) span(span byteSpan) ([]byte, error) {
-	start := int64(span.offset) - r.off
-	if start < 0 || start+int64(span.length) > int64(len(r.buf)) {
-		return nil, fmt.Errorf("runtime error: span at %d of %d bytes is outside the buffered archive index at %d of %d bytes", span.offset, span.length, r.off, len(r.buf))
-	}
-	return r.buf[start : start+int64(span.length)], nil
-}
-
-func (r *archiveIndexReaderAt) Reader(context.Context) (io.ReadCloser, error) {
-	return nil, errors.New("runtime error: archiveIndexReaderAt only serves index reads")
-}
-
-func (r *archiveIndexReaderAt) clone() (tableReaderAt, error) {
-	return nil, errors.New("runtime error: archiveIndexReaderAt only serves index reads")
-}
-
-func (r *archiveIndexReaderAt) Close() error {
-	return nil
-}
-
 // readBlobRangeInto fills |p| from the range |br| of the blob |key|.
 func readBlobRangeInto(ctx context.Context, bs blobstore.Blobstore, key string, br blobstore.BlobRange, p []byte) error {
 	rc, _, _, err := bs.Get(ctx, key, br)
@@ -270,13 +235,11 @@ func readBlobRangeInto(ctx context.Context, bs blobstore.Blobstore, key string, 
 // spools it when its chunks are first read.
 func newSpooledBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, opts openOpts, stats *Stats) (chunkSource, error) {
 	key := name.String() + ArchiveFileSuffix
-	aRdr, sz, err := openBSArchiveIndex(ctx, bs, key, name, chunkCount, q, opts, stats)
+	aRdr, err := openBSArchive(ctx, bs, key, name, chunkCount, q, opts, stats, func(sz uint64) (tableReaderAt, error) {
+		return newPinnedSpoolingTableReaderAt(bs, key, int64(sz))
+	})
 	if err != nil {
 		return nil, err
-	}
-	aRdr.reader, err = newPinnedSpoolingTableReaderAt(bs, key, int64(sz))
-	if err != nil {
-		return nil, errors.Join(err, aRdr.close())
 	}
 	return &archiveChunkSource{aRdr: aRdr, refs: noopRefCounter{}, blockSize: fileBlockSize}, nil
 }

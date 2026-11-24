@@ -389,18 +389,27 @@ func persistBSArchive(ctx context.Context, bs blobstore.Blobstore, q MemoryQuota
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	}
 
-	aRdr, err := newArchiveReader(ctx, &archiveIndexReaderAt{buf: data}, name, uint64(len(data)), q, openOpts{}, stats)
+	if uint64(len(data)) < archiveFooterSize {
+		return emptyChunkSource{}, gcBehavior_Continue, fmt.Errorf("runtime error: wrote a %d byte archive, too small to hold a footer", len(data))
+	}
+	footer, err := buildArchiveFooter(name, uint64(len(data)), data[uint64(len(data))-archiveFooterSize:])
 	if err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	}
+
+	var dataRdr tableReaderAt = &bsTableReaderAt{key: key, bs: bs}
 	blockSize := uint64(s3BlockSize)
-	aRdr.reader = &bsTableReaderAt{key: key, bs: bs}
 	if shouldSpool(bs) {
 		blockSize = fileBlockSize
-		aRdr.reader, err = newPersistedSpoolingTableReaderAt(bs, key, data)
+		dataRdr, err = newPersistedSpoolingTableReaderAt(bs, key, data)
 		if err != nil {
-			return emptyChunkSource{}, gcBehavior_Continue, errors.Join(err, aRdr.close())
+			return emptyChunkSource{}, gcBehavior_Continue, err
 		}
+	}
+	index := footer.totalIndexSpan()
+	aRdr, err := newArchiveReaderFromIndex(ctx, dataRdr, footer, data[index.offset:index.offset+index.length], q, openOpts{})
+	if err != nil {
+		return emptyChunkSource{}, gcBehavior_Continue, errors.Join(err, dataRdr.Close())
 	}
 	return &archiveChunkSource{aRdr: aRdr, refs: noopRefCounter{}, blockSize: blockSize}, gcBehavior_Continue, nil
 }
@@ -422,11 +431,12 @@ func newBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore, name h
 	}
 
 	key := name.String() + ArchiveFileSuffix
-	aRdr, _, err := openBSArchiveIndex(ctx, bs, key, name, chunkCount, q, opts, stats)
+	aRdr, err := openBSArchive(ctx, bs, key, name, chunkCount, q, opts, stats, func(uint64) (tableReaderAt, error) {
+		return &bsTableReaderAt{key: key, bs: bs}, nil
+	})
 	if err != nil {
 		return emptyChunkSource{}, err
 	}
-	aRdr.reader = &bsTableReaderAt{key: key, bs: bs}
 	return &archiveChunkSource{aRdr: aRdr, refs: noopRefCounter{}, blockSize: s3BlockSize}, nil
 }
 
@@ -470,36 +480,36 @@ func readArchiveTail(ctx context.Context, rc io.Reader, key string, want, sz uin
 	return tail, nil
 }
 
-// openBSArchiveIndex reads the footer and index of the archive |key| and builds
-// an archiveReader from them, returning it with the archive's size. The
-// archiveReader has no reader for chunk data; the caller must set one.
+// openBSArchive opens the archive |key|, reading its footer and index and
+// reading chunk data through the reader |newDataReader| returns for the
+// archive's size.
 //
 // The footer, metadata and index are read with a single ranged read sized by
 // archiveTailEstimate, falling back to a second read for the part of the index
 // it missed.
-func openBSArchiveIndex(ctx context.Context, bs blobstore.Blobstore, key string, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, opts openOpts, stats *Stats) (archiveReader, uint64, error) {
+func openBSArchive(ctx context.Context, bs blobstore.Blobstore, key string, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, opts openOpts, stats *Stats, newDataReader func(sz uint64) (tableReaderAt, error)) (archiveReader, error) {
 	want := archiveTailEstimate(chunkCount)
 	rc, sz, _, err := bs.Get(ctx, key, blobstore.NewBlobRange(-int64(want), 0))
 	if err != nil {
-		return archiveReader{}, 0, err
+		return archiveReader{}, err
 	}
 	tail, err := readArchiveTail(ctx, rc, key, want, sz, q)
 	closeErr := rc.Close()
 	if err != nil {
-		return archiveReader{}, 0, errors.Join(err, closeErr)
+		return archiveReader{}, errors.Join(err, closeErr)
 	}
 	defer q.ReleaseQuotaBytes(len(tail))
 	if closeErr != nil {
-		return archiveReader{}, 0, closeErr
+		return archiveReader{}, closeErr
 	}
 	tailLen := uint64(len(tail))
 	if tailLen < archiveFooterSize {
-		return archiveReader{}, 0, fmt.Errorf("%s: %d byte archive is too small to hold a footer: %w", key, sz, ErrCorruptArchiveIndex)
+		return archiveReader{}, fmt.Errorf("%s: %d byte archive is too small to hold a footer: %w", key, sz, ErrCorruptArchiveIndex)
 	}
 
 	footer, err := buildArchiveFooter(name, sz, tail[tailLen-archiveFooterSize:])
 	if err != nil {
-		return archiveReader{}, 0, err
+		return archiveReader{}, err
 	}
 
 	index := footer.totalIndexSpan()
@@ -511,24 +521,28 @@ func openBSArchiveIndex(ctx context.Context, bs blobstore.Blobstore, key string,
 	} else {
 		indexBytes, err = q.AcquireQuotaByteSlice(ctx, int(index.length))
 		if err != nil {
-			return archiveReader{}, 0, err
+			return archiveReader{}, err
 		}
 		defer q.ReleaseQuotaBytes(len(indexBytes))
 		missing := min(indexEnd, tailOffset) - index.offset
 		err = readBlobRangeInto(ctx, bs, key, blobstore.NewBlobRange(int64(index.offset), int64(missing)), indexBytes[:missing])
 		if err != nil {
-			return archiveReader{}, 0, err
+			return archiveReader{}, err
 		}
 		if indexEnd > tailOffset {
 			copy(indexBytes[missing:], tail[:indexEnd-tailOffset])
 		}
 	}
 
-	aRdr, err := buildArchiveReader(ctx, &archiveIndexReaderAt{buf: indexBytes, off: int64(index.offset)}, footer, q, opts, stats)
+	dataRdr, err := newDataReader(sz)
 	if err != nil {
-		return archiveReader{}, 0, err
+		return archiveReader{}, err
 	}
-	return aRdr, sz, nil
+	aRdr, err := newArchiveReaderFromIndex(ctx, dataRdr, footer, indexBytes, q, opts)
+	if err != nil {
+		return archiveReader{}, errors.Join(err, dataRdr.Close())
+	}
+	return aRdr, nil
 }
 
 func newBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, opts openOpts, stats *Stats) (cs chunkSource, err error) {
