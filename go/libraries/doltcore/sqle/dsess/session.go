@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -696,7 +697,7 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) er
 		return fmt.Errorf("Unexpected type for var %s: %T", DoltCommitOnTransactionCommit, performDoltCommitVar)
 	}
 
-	if peformDoltCommitInt == 1 {
+	if peformDoltCommitInt == 1 && !slices.ContainsFunc(dirties, func(b *branchState) bool { return b.resetHead != nil }) {
 		return d.doltCommit(ctx, tx, dirties)
 	}
 
@@ -822,6 +823,7 @@ func (d *DoltSession) commitBranchStates(
 			dbName:     state.RevisionDbName(),
 			workingSet: ws,
 			commit:     commit,
+			resetHead:  state.resetHead,
 		}
 	}
 
@@ -1637,6 +1639,22 @@ func (d *DoltSession) GetFileSystem() filesys.Filesys {
 }
 
 // SetWorkingSet sets the working set for this session.
+// ResetHead moves the branch head of |dbName| to |commit| when the transaction commits, atomically with its working
+// set. The commit fails with a retryable error if the head has moved since the transaction began. Callers set the
+// working set first, so that a failure there leaves no head move pending.
+func (d *DoltSession) ResetHead(ctx *sql.Context, dbName string, commit *doltdb.Commit) error {
+	branchState, ok, err := d.lookupDbState(ctx, dbName)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return sql.ErrDatabaseNotFound.New(dbName)
+	}
+	branchState.resetHead = commit
+	branchState.dirty = true
+	return nil
+}
+
 func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.WorkingSet) error {
 	if ws == nil {
 		panic("attempted to set a nil working set for the session")

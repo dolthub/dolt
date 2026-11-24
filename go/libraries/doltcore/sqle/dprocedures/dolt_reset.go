@@ -135,7 +135,7 @@ func resetMixedToRef(
 	dSess *dsess.DoltSession,
 	dbName string,
 ) error {
-	roots, err := actions.MoveHeadToRef(ctx, dbData, firstArg)
+	newHead, roots, err := actions.ResolveResetTarget(ctx, dbData, firstArg)
 	if err != nil {
 		return err
 	}
@@ -147,7 +147,7 @@ func resetMixedToRef(
 	if err != nil {
 		return err
 	}
-	return nil
+	return dSess.ResetHead(ctx, dbName, newHead)
 }
 
 // isTableInRoots returns true if the table given exists in any of the roots given
@@ -216,8 +216,8 @@ func resetSoft(
 
 	// If ref is "" that means HEAD, which makes reset --soft a no-op
 	if arg != "" {
-		// MoveHeadToRef returns Roots usable for --mixed. The --soft path ignores them per https://git-scm.com/docs/git-reset.
-		_, err := actions.MoveHeadToRef(ctx, dbData, arg)
+		// The returned Roots are usable for --mixed. The --soft path ignores them per https://git-scm.com/docs/git-reset.
+		newHead, _, err := actions.ResolveResetTarget(ctx, dbData, arg)
 		if err != nil {
 			return err
 		}
@@ -229,6 +229,7 @@ func resetSoft(
 		if err != nil {
 			return err
 		}
+		return dSess.ResetHead(ctx, dbName, newHead)
 	}
 
 	return nil
@@ -267,18 +268,6 @@ func resetHard(
 		return err
 	}
 
-	// TODO: this overrides the transaction setting, needs to happen at commit, not here
-	if newHead != nil {
-		headRef, err := dbData.Rsr.CWBHeadRef(ctx)
-		if err != nil {
-			return err
-		}
-		if err := dbData.Ddb.SetHeadToCommit(ctx, headRef, newHead); err != nil {
-			return err
-		}
-	}
-
-	// TODO - refactor and make transactional with the head update above.
 	ws, err := dSess.WorkingSet(ctx, dbName)
 	if err != nil {
 		return err
@@ -286,6 +275,9 @@ func resetHard(
 	err = dSess.SetWorkingSet(ctx, dbName, ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged).ClearMerge().ClearRebase())
 	if err != nil {
 		return err
+	}
+	if newHead != nil {
+		return dSess.ResetHead(ctx, dbName, newHead)
 	}
 
 	return nil

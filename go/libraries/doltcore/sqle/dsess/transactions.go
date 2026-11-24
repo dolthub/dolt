@@ -371,6 +371,8 @@ type workingSetAndHead struct {
 	workingSet *doltdb.WorkingSet
 	// commit is the dolt commit to create, or nil if only the working set is being committed
 	commit *doltdb.PendingCommit
+	// resetHead is the existing commit to move the branch head to, or nil. Not combined with commit.
+	resetHead *doltdb.Commit
 }
 
 // commitHeads atomically commits the head updates given
@@ -491,6 +493,28 @@ func (tx *DoltTransaction) commitHeads(
 				PrevHash:   existingHash,
 				Meta:       tx.WorkingSetMeta(name, email),
 			})
+			if change.resetHead != nil {
+				headRef, err := ws.Ref().ToHeadRef()
+				if err != nil {
+					return nil, nil, err
+				}
+				// The reset target was chosen against the head this transaction started with.
+				startHead, err := states[i].headCommit.HashOf()
+				if err != nil {
+					return nil, nil, err
+				}
+				newHead, err := change.resetHead.HashOf()
+				if err != nil {
+					return nil, nil, err
+				}
+				if newHead != startHead {
+					updates = append(updates, doltdb.BranchHeadReset{HeadRef: headRef, Commit: change.resetHead, ExpectedHead: startHead})
+				} else if cur, err := startPoint.db.GetHashForRefStr(ctx, headRef.String()); err != nil {
+					return nil, nil, err
+				} else if *cur != startHead {
+					return nil, nil, tx.rollbackAndErr(ctx, retryTransactionError(""))
+				}
+			}
 			if pending != nil {
 				headRef, err := ws.Ref().ToHeadRef()
 				if err != nil {
@@ -516,6 +540,9 @@ func (tx *DoltTransaction) commitHeads(
 			for _, change := range changes {
 				if change.commit != nil && !change.commit.CommitOptions.AmendedCommit.IsEmpty() {
 					return nil, nil, tx.rollbackAndErr(ctx, retryTransactionError(err.Error()))
+				}
+				if change.resetHead != nil {
+					return nil, nil, tx.rollbackAndErr(ctx, retryTransactionError(""))
 				}
 			}
 		}
