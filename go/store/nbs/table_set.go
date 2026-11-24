@@ -30,7 +30,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	lru "github.com/hashicorp/golang-lru/v2"
 	"golang.org/x/sync/errgroup"
 
 	dherrors "github.com/dolthub/dolt/go/libraries/utils/errors"
@@ -311,15 +310,15 @@ func (ts *tableSet) Size() int {
 
 // append adds a memTable to an existing tableSet, compacting |mt| and
 // returning a new tableSet with newly compacted table added.
-func (ts *tableSet) append(ctx context.Context, fatalBehavior dherrors.FatalBehavior, mt *memTable, checker refCheck, keeper keeperF, hasCache *lru.TwoQueueCache[hash.Hash, struct{}], stats *Stats) (*tableSet, gcBehavior, error) {
+func (ts *tableSet) append(ctx context.Context, fatalBehavior dherrors.FatalBehavior, mt *memTable, checker refCheck, keeper keeperF, hasCache hash.HashSet, stats *Stats) (*tableSet, gcBehavior, error) {
 	addrs := hash.NewHashSet()
 	for _, getAddrs := range mt.getChildAddrs {
-		getAddrs(ctx, addrs, func(h hash.Hash) bool { return hasCache.Contains(h) })
+		getAddrs(ctx, addrs, hasCache.Has)
 	}
 	mt.addChildRefs(addrs)
 
 	for i := range mt.pendingRefs {
-		if !mt.pendingRefs[i].has && hasCache.Contains(*mt.pendingRefs[i].a) {
+		if !mt.pendingRefs[i].has && hasCache.Has(*mt.pendingRefs[i].a) {
 			mt.pendingRefs[i].has = true
 		}
 	}
