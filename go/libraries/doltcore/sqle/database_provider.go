@@ -1843,7 +1843,9 @@ func (p *DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (d
 			// We can return a better error message here in some cases
 			// TODO: this better error message doesn't always get returned to clients because the code path is doesn't
 			//  return an error, only a boolean result (HasDB)
-			return nil, false, fmt.Errorf("cannot resolve default branch head for database '%s': '%s'", baseName, head)
+			return nil, false, dsess.HeadBranchNotFoundError{DbName: baseName, Branch: head, DefaultBranch: true}
+		} else if sql.ErrDatabaseNotFound.Is(err) && head != "" {
+			return nil, false, dsess.HeadBranchNotFoundError{DbName: baseName, Branch: head}
 		} else {
 			return nil, false, err
 		}
