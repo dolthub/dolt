@@ -401,7 +401,7 @@ func (m invariantCheckingMap) flushPending(ctx context.Context) error {
 	return m.MutableMap.flushPending(ctx)
 }
 
-func (m invariantCheckingMap) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+func (m invariantCheckingMap) VisitGCRoots(ctx context.Context, roots func(hash.Hash)) error {
 	defer m.check()
 	return m.MutableMap.VisitGCRoots(ctx, roots)
 }

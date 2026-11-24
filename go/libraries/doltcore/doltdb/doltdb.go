@@ -351,8 +351,10 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitMetaGeneratorAndDefaultBranch(
 	return err
 }
 
+// Close closes the database and the [CloseableCommitHook]s registered on it.
 func (ddb *DoltDB) Close() error {
-	return ddb.db.Close()
+	hooksErr := ddb.db.hooks.close()
+	return errors.Join(ddb.db.Close(), hooksErr)
 }
 
 func (ddb *DoltDB) Teardown(ctx context.Context) error {
@@ -1687,7 +1689,7 @@ func (ddb *DoltDB) NewBranchAtCommitAllowCaseConflict(ctx context.Context, branc
 
 func (ddb *DoltDB) newBranchAtCommit(ctx context.Context, branchRef ref.DoltRef, commit *Commit, replicationStatus *ReplicationStatusController, preconditions ...datas.Precondition) error {
 	if !IsValidBranchRef(branchRef) {
-		panic(fmt.Sprintf("invalid branch name %s, use IsValidUserBranchName check", branchRef.String()))
+		return ErrInvBranchName
 	}
 
 	ds, err := ddb.db.GetDataset(ctx, branchRef.String())
@@ -1830,7 +1832,7 @@ func (ddb *DoltDB) DeleteAllRefs(ctx context.Context) error {
 // NewTagAtCommit create a new tag at the commit given.
 func (ddb *DoltDB) NewTagAtCommit(ctx context.Context, tagRef ref.DoltRef, c *Commit, meta *datas.TagMeta) error {
 	if !IsValidTagRef(tagRef) {
-		panic(fmt.Sprintf("invalid tag name %s, use IsValidUserTagName check", tagRef.String()))
+		return ErrInvTagName
 	}
 
 	ds, err := ddb.db.GetDataset(ctx, tagRef.String())

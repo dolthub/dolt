@@ -31,6 +31,14 @@ type RootObject interface {
 	Name() TableName
 }
 
+// RootObjectWithKind is a RootObject that reports what kind of object it is, such as "function" or "sequence". The kind
+// is used in place of "table" in the status of a new root object ("new function").
+type RootObjectWithKind interface {
+	RootObject
+	// KindName returns the kind of the root object. An empty string means that the root object is described as a table.
+	KindName() string
+}
+
 // ConflictRootObject is a RootObject that contains conflict information.
 type ConflictRootObject interface {
 	RootObject

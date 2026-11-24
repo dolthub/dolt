@@ -493,6 +493,6 @@ type visitable struct {
 	state bool
 }
 
-func (*visitable) VisitGCRoots(ctx context.Context, db string, keep func(hash.Hash) bool) error {
+func (*visitable) VisitGCRoots(ctx context.Context, db string, keep func(hash.Hash)) error {
 	return nil
 }

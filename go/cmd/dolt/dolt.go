@@ -227,18 +227,6 @@ func main() {
 	os.Exit(runMain())
 }
 
-// cleanGitRemoteSpools removes the git remote spool files which dead processes left in
-// |mrEnv|'s databases. A failure does not concern the command being run, which may not use
-// a git remote at all, and the next process to start tries again.
-func cleanGitRemoteSpools(mrEnv *env.MultiRepoEnv) {
-	_ = mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (bool, error) {
-		if root, ok := dEnv.GitCacheRoot(); ok {
-			_ = tempfiles.CleanDir(dbfactory.GitRemoteSpoolDirForRepo(root))
-		}
-		return false, nil
-	})
-}
-
 // runMain executes the Dolt CLI process and returns the exit code.
 func runMain() int {
 	args := os.Args[1:]
@@ -522,7 +510,6 @@ func runMain() int {
 			cli.PrintErrln("failed to load database names:", err.Error())
 			return 1
 		}
-		cleanGitRemoteSpools(mrEnv)
 	}
 
 	var cliCtx cli.CliContext = nil
@@ -565,24 +552,33 @@ or check the docs for questions about usage.`)
 		}
 	}
 
-	ctx, stop := context.WithCancel(ctx)
-	res := doltCommand.Exec(ctx, "dolt", cfg.remainingArgs, dEnv, cliCtx)
+	execCtx, stop := context.WithCancel(ctx)
+	res := doltCommand.Exec(execCtx, "dolt", cfg.remainingArgs, dEnv, cliCtx)
 	if cliCtx != nil {
 		cliCtx.Close()
 	}
 	stop()
 
-	if err = dbfactory.CloseAllLocalDatabases(); err != nil {
-		cli.PrintErrln(err)
-		if res == 0 {
-			res = 1
-		}
-	}
-
+	// The summary reads the store, so print it before closing.
 	if csMetrics && dEnv.DoltDB(ctx) != nil {
 		metricsSummary := dEnv.DoltDB(ctx).CSMetricsSummary()
 		cli.Println("Command took", time.Since(start).Seconds())
 		cli.PrintErrln(metricsSummary)
+	}
+
+	// mrEnv closes only the sub-envs it opened; dEnv is ours to close.
+	var closeErrs []error
+	if mrEnv != nil {
+		closeErrs = append(closeErrs, mrEnv.Close(ctx))
+	}
+	closeErrs = append(closeErrs, dEnv.Close())
+	// Backstop for stores opened outside an env until the singleton cache is removed.
+	closeErrs = append(closeErrs, dbfactory.CloseAllLocalDatabases())
+	if err = errors.Join(closeErrs...); err != nil {
+		cli.PrintErrln(err)
+		if res == 0 {
+			res = 1
+		}
 	}
 
 	return res

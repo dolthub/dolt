@@ -21,11 +21,13 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
 	filelocks "github.com/dolthub/file-locks"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 )
 
 // The locks belong to the open file rather than the process, so another Lock in this process
@@ -264,45 +266,73 @@ func TestCleanDir(t *testing.T) {
 	})
 }
 
-// Several cleanups racing each other and a process making its directory must neither fail nor
-// take away a directory whose lock is held.
+// canRetryCleanup returns true if |err| should be retried. This is needed because a Windows cleaner
+// can get ERROR_ACCESS_DENIED opening a lock file another cleaner is removing. That is how Windows
+// reports opening a file which is delete-pending, not a permission problem. It is rare and usually
+// clears within the 100ms tryLockFileWhileDeletePending already retries, but CI has seen it outlast that.
+func canRetryCleanup(err error) bool {
+	if runtime.GOOS != "windows" {
+		return false
+	}
+
+	switch e := err.(type) {
+	case interface{ Unwrap() []error }:
+		for _, child := range e.Unwrap() {
+			if !canRetryCleanup(child) {
+				return false
+			}
+		}
+		return true
+	case *filelocks.Error:
+		const windowsAccessDenied = syscall.Errno(5) // ERROR_ACCESS_DENIED
+		return e.Op == "new" && e.Err == windowsAccessDenied
+	default:
+		return false
+	}
+}
+
+// Concurrent cleanup must preserve live directories and eventually reclaim abandoned ones.
 func TestNewLockedDir_RacingClean(t *testing.T) {
 	parent := filepath.Join(t.TempDir(), "spools")
 
-	const cleaners = 4
-	stop := make(chan struct{})
-	cleaned := make(chan error, cleaners)
-	for i := 0; i < cleaners; i++ {
-		go func() {
-			for {
-				select {
-				case <-stop:
-					cleaned <- nil
-					return
-				default:
-				}
+	ctx := t.Context()
+	var cleaners errgroup.Group
+	for range 4 { // parallel cleaners
+		cleaners.Go(func() error {
+			for ctx.Err() == nil {
 				if err := CleanDir(parent); err != nil {
-					cleaned <- err
-					return
+					if canRetryCleanup(err) {
+						t.Logf("retrying concurrent cleanup: %v", err)
+						continue
+					}
+					return err
 				}
 			}
-		}()
+			return nil
+		})
 	}
-	defer func() {
-		close(stop)
-		for i := 0; i < cleaners; i++ {
-			require.NoError(t, <-cleaned)
+	t.Cleanup(func() {
+		// The test context is canceled before cleanup, even if a creator assertion failed.
+		require.NoError(t, cleaners.Wait())
+		if t.Failed() {
+			return
 		}
-	}()
+		// With all owners and cleaners gone, a single pass must reclaim everything.
+		require.NoError(t, CleanDir(parent))
+		entries, err := os.ReadDir(parent)
+		require.NoError(t, err)
+		require.Empty(t, entries)
+	})
 
 	for i := 0; i < 2000; i++ {
 		d, err := NewLockedDir(parent)
 		require.NoError(t, err, "iteration %d", i)
-		_, err = os.Stat(d.dir)
-		require.NoError(t, err, "iteration %d: a directory whose lock is held must not be removed", i)
-		_, err = os.Stat(d.dir + lockedDirLockSuffix)
-		require.NoError(t, err, "iteration %d: a held lock file must not be removed", i)
+		_, dirErr := os.Stat(d.dir)
+		_, lockErr := os.Stat(d.dir + lockedDirLockSuffix)
+		// Simulate an owner exiting: release its lock and leave its directory for a cleaner.
 		require.NoError(t, d.lock.Close())
+		require.NoError(t, dirErr, "iteration %d: a directory whose lock is held must not be removed", i)
+		require.NoError(t, lockErr, "iteration %d: a held lock file must not be removed", i)
 	}
 }
 

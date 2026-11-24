@@ -604,17 +604,6 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 			return err
 		}
 
-		// Record the last GTID processed after the commit
-		a.currentPosition.GTIDSet = a.currentPosition.GTIDSet.AddGTID(a.currentGtid)
-		err := sqle.AssignSystemVariables(ctx, map[string]interface{}{"gtid_executed": a.currentPosition.GTIDSet.String()})
-		if err != nil {
-			ctx.GetLogger().Errorf("unable to set @@GLOBAL.gtid_executed: %s", err.Error())
-		}
-		err = positionStore.Save(ctx, a.currentPosition)
-		if err != nil {
-			return fmt.Errorf("unable to store GTID executed metadata to disk: %s", err.Error())
-		}
-
 		// For now, create a Dolt commit from every data update. Eventually, we'll want to make this configurable.
 		// We commit to every database that we saw had a dirty session – these identify the databases where we have
 		// run DML commands through the engine. We also commit to every database that was modified through a RowEvent,
@@ -627,6 +616,18 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 				fmt.Sprintf("call dolt_commit('-Am', 'Dolt binlog replica commit: GTID %s');", a.currentGtid))
 		}
 		a.dbsWithUncommittedChanges = nil
+
+		// Record the GTID only after its Dolt commits exist, so a replica whose @@gtid_executed includes a
+		// transaction also has that transaction's Dolt commit.
+		a.currentPosition.GTIDSet = a.currentPosition.GTIDSet.AddGTID(a.currentGtid)
+		err := ctx.SystemVariables().AssignValues(ctx, map[string]interface{}{"gtid_executed": a.currentPosition.GTIDSet.String()})
+		if err != nil {
+			ctx.GetLogger().Errorf("unable to set @@GLOBAL.gtid_executed: %s", err.Error())
+		}
+		err = positionStore.Save(ctx, a.currentPosition)
+		if err != nil {
+			return fmt.Errorf("unable to store GTID executed metadata to disk: %s", err.Error())
+		}
 	}
 
 	return nil

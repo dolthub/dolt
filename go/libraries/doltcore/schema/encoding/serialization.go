@@ -521,6 +521,9 @@ func serializeSecondaryIndexes(b *fb.Builder, sch schema.Schema, indexes []schem
 		if len(opClasses) > 0 {
 			serial.IndexAddOpClasses(b, opClassesOff)
 		}
+		if idx.NullsNotDistinct() {
+			serial.IndexAddNullsNotDistinct(b, true)
+		}
 		offs[i] = serial.IndexEnd(b)
 	}
 
@@ -578,6 +581,7 @@ func deserializeSecondaryIndexes(sch schema.Schema, s *serial.TableSchema) error
 			Predicate:          string(idx.Predicate()),
 			ColumnOrders:       columnOrders,
 			OpClasses:          opClasses,
+			NullsNotDistinct:   idx.NullsNotDistinct(),
 			FullTextProperties: fti,
 			VectorProperties:   vi,
 		}

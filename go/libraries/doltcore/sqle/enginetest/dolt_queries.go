@@ -1071,6 +1071,34 @@ var DoltScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "left outer merge join with a single matching right row per key and non-merge filter (https://github.com/dolthub/doltgresql/issues/3939)",
+		SetUpScript: []string{
+			"create table r (id varchar(4) primary key, grp varchar(4) not null, key(grp))",
+			"create table l (id varchar(4) primary key, k varchar(4), m varchar(4) not null, st varchar(10) not null, key(k), key(m))",
+			"insert into r values ('0a','01'),('14','01'),('1e','02')",
+			"insert into l values ('a1','0a','02','active'),('a2','0a','01','active'),('b1','14','01','active'),('b2','1e','02','active'),('b3','1e','02','removed'),('b4',null,'02','active'),('b5','14','09','active'),('b6','1e','09','active')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select /*+ JOIN_ORDER(f, s) MERGE_JOIN(f, s) */ f.id, s.id from l f " +
+					"left join r s on s.id = f.k and s.grp = f.m where f.st = 'active' and f.k is not null order by 1",
+				Expected: []sql.Row{
+					{"a1", nil},
+					{"a2", "0a"},
+					{"b1", "14"},
+					{"b2", "1e"},
+					{"b5", nil},
+					{"b6", nil},
+				},
+			},
+			{
+				Query: "select /*+ JOIN_ORDER(f, s) MERGE_JOIN(f, s) */ f.id from l f " +
+					"left join r s on s.id = f.k and s.grp = f.m where f.st = 'active' and f.k is not null and s.id is null order by 1",
+				Expected: []sql.Row{{"a1"}, {"b5"}, {"b6"}},
+			},
+		},
+	},
+	{
 		Name: "Show create table with various keys and constraints",
 		SetUpScript: []string{
 			"create table t1(a int primary key, b varchar(10) not null default 'abc')",
@@ -4399,6 +4427,39 @@ var DoltBranchScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt_branch refuses names longer than the ref name limit",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_branch(repeat('a', 1024));",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "call dolt_branch(repeat('b', 1025));",
+				ExpectedErrStr: "fatal: '" + strings.Repeat("b", 1025) + "' is an invalid branch name.",
+			},
+			{
+				Query:          "call dolt_branch(repeat('c', 32768));",
+				ExpectedErrStr: "fatal: '" + strings.Repeat("c", 32768) + "' is an invalid branch name.",
+			},
+			{
+				Query:          "call dolt_branch('--orphan', repeat('d', 1025));",
+				ExpectedErrStr: "fatal: '" + strings.Repeat("d", 1025) + "' is an invalid branch name.",
+			},
+			{
+				Query:          "call dolt_branch('-c', 'main', repeat('e', 1025));",
+				ExpectedErrStr: "fatal: '" + strings.Repeat("e", 1025) + "' is not a valid branch name.",
+			},
+			{
+				Query:          "call dolt_branch('-m', repeat('a', 1024), repeat('f', 1025));",
+				ExpectedErrStr: doltdb.ErrInvBranchName.Error(),
+			},
+			{
+				Query:    "select length(name) from dolt_branches order by 1;",
+				Expected: []sql.Row{{4}, {1024}},
+			},
+		},
+	},
 }
 
 var DoltResetTestScripts = []queries.ScriptTest{
@@ -6485,6 +6546,31 @@ var JsonAdaptiveEncodingScriptTests = []queries.ScriptTest{
 
 var DoltTagTestScripts = []queries.ScriptTest{
 	{
+		Name: "dolt-tag: refuses names longer than the ref name limit",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_TAG(repeat('a', 1024), 'HEAD')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "CALL DOLT_TAG(repeat('b', 1025), 'HEAD')",
+				ExpectedErrStr: doltdb.ErrInvTagName.Error(),
+			},
+			{
+				Query:          "CALL DOLT_TAG(repeat('c', 65536), 'HEAD')",
+				ExpectedErrStr: doltdb.ErrInvTagName.Error(),
+			},
+			{
+				Query:          "CALL DOLT_TAG(repeat('d', 65537), 'HEAD')",
+				ExpectedErrStr: doltdb.ErrInvTagName.Error(),
+			},
+			{
+				Query:    "SELECT length(tag_name) FROM dolt_tags",
+				Expected: []sql.Row{{1024}},
+			},
+		},
+	},
+	{
 		Name: "dolt-tag: SQL create tags",
 		SetUpScript: []string{
 			"CREATE TABLE test(pk int primary key);",
@@ -8427,6 +8513,81 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// Geometry columns in non-spatial indexes are stored as lossy spatial cells, much like prefix indexes
+		// https://github.com/dolthub/dolt/issues/12622
+		Name: "geometry columns in non-spatial indexes",
+		SetUpScript: []string{
+			"create table poly (id int primary key, g polygon not null, key (g))",
+			"insert into poly values (1, ST_GeomFromText('POLYGON((0 0,1 0,1 1,0 0))')), (2, ST_GeomFromText('POLYGON((0 0,2 0,2 2,0 0))')), (3, ST_GeomFromText('POLYGON((-1 -1,1 0,1 1,-1 -1))')), (4, ST_GeomFromText('POLYGON((0 0,1 1,0 1,0 0))'))",
+			"create table line (id int primary key, g linestring not null, key (g))",
+			"insert into line values (1, ST_GeomFromText('LINESTRING(0 0,1 1)')), (2, ST_GeomFromText('LINESTRING(0 0,2 2)')), (3, ST_GeomFromText('LINESTRING(-1 -1,1 1)'))",
+			"create table pt (id int primary key, g point, x int, key (g, x))",
+			"insert into pt values (1, point(0,0), 1), (2, point(1,1), 2), (3, point(-1,5), 3), (4, point(0,0), 4), (5, null, 5)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select count(*) from poly where g < ST_GeomFromText('POLYGON((0 0,1 0,1 1,0 0))')",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "select id from poly where g < ST_GeomFromText('POLYGON((0 0,1 0,1 1,0 0))') order by id",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "select id from poly where g <= ST_GeomFromText('POLYGON((0 0,1 0,1 1,0 0))') order by id",
+				Expected: []sql.Row{{1}, {2}},
+			},
+			{
+				Query:    "select id from poly where g > ST_GeomFromText('POLYGON((0 0,1 0,1 1,0 0))') order by id",
+				Expected: []sql.Row{{3}, {4}},
+			},
+			{
+				Query:    "select id from poly where g = ST_GeomFromText('POLYGON((0 0,1 0,1 1,0 0))')",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "select ST_AsText(g) from poly where g = ST_GeomFromText('POLYGON((0 0,1 1,0 1,0 0))')",
+				Expected: []sql.Row{{"POLYGON((0 0,1 1,0 1,0 0))"}},
+			},
+			{
+				Query:    "select id from poly where g in (ST_GeomFromText('POLYGON((0 0,1 0,1 1,0 0))'), ST_GeomFromText('POLYGON((0 0,2 0,2 2,0 0))')) order by id",
+				Expected: []sql.Row{{1}, {2}},
+			},
+			{
+				Query:    "select id from poly where g <> ST_GeomFromText('POLYGON((0 0,1 0,1 1,0 0))') order by id",
+				Expected: []sql.Row{{2}, {3}, {4}},
+			},
+			{
+				Query:    "select id from poly order by g",
+				Expected: []sql.Row{{2}, {1}, {4}, {3}},
+			},
+			{
+				Query:    "select count(*) from line where g < ST_GeomFromText('LINESTRING(0 0,1 1)')",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "select id from line where g >= ST_GeomFromText('LINESTRING(0 0,1 1)') order by id",
+				Expected: []sql.Row{{1}, {3}},
+			},
+			{
+				Query:    "select id from line where g = ST_GeomFromText('LINESTRING(0 0,1 1)')",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "select id from pt where g > point(0,0) order by id",
+				Expected: []sql.Row{{2}, {3}},
+			},
+			{
+				Query:    "select id from pt where g = point(0,0) and x > 1",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:    "select id from pt where g is null",
+				Expected: []sql.Row{{5}},
+			},
+		},
+	},
 }
 
 // DoltCallAsOf are tests of using CALL ... AS OF using commits
@@ -8814,297 +8975,6 @@ var DoltSystemVariables = []queries.ScriptTest{
 					{"dolt_status_ignored"},
 					{"dolt_workspace_test"},
 					{"test"},
-				},
-			},
-		},
-	},
-}
-
-// DoltTempTableScripts tests temporary tables.
-// Temporary tables are not supported in GMS, eventually should move those tests there.
-var DoltTempTableScripts = []queries.ScriptTest{
-	{
-		Name: "temporary and non-temporary table name collisions",
-		SetUpScript: []string{
-			"create table t1 (id varchar(100))",
-			"insert into t1 values ('this is a non-temporary table')",
-			"create temporary table t1 (id varchar(100))", // okay to create temporary table with the same name as a non-temporary table
-			"insert into t1 values ('this is a temporary table')",
-			"create temporary table t2 (id int)",
-			"create table t2 (id int)", // okay to create a non-temporary table with the same name as a temporary table
-			"create temporary table t3 (id int)",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				// should show temporary table t1
-				Query:    "select * from t1",
-				Expected: []sql.Row{{"this is a temporary table"}},
-			},
-			{
-				// cannot create a temporary table with the same name as another temporary table
-				Query:       "create temporary table t3 (id int)",
-				ExpectedErr: sql.ErrTableAlreadyExists,
-			},
-			{
-				// should show temporary table
-				Query:    "show create table t1",
-				Expected: []sql.Row{{"t1", "CREATE TEMPORARY TABLE `t1` (\n  `id` varchar(100)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
-			},
-			{
-				// should drop temporary table t1
-				Query:    "drop table t1",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
-			},
-			{
-				// should show non-temporary table that was created before
-				Query:    "show create table t1",
-				Expected: []sql.Row{{"t1", "CREATE TABLE `t1` (\n  `id` varchar(100)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
-			},
-		},
-	},
-	{
-		Name: "temporary table supports auto increment",
-		SetUpScript: []string{
-			"create temporary table t (i int primary key auto_increment)",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query: "show create table t;",
-				Expected: []sql.Row{
-					{"t", "CREATE TEMPORARY TABLE `t` (\n" +
-						"  `i` int NOT NULL AUTO_INCREMENT,\n" +
-						"  PRIMARY KEY (`i`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
-				},
-			},
-			{
-				Query: "insert into t values (), (), ()",
-				Expected: []sql.Row{
-					{types.OkResult{RowsAffected: 3, InsertID: 1}},
-				},
-			},
-			{
-				Query: "show create table t;",
-				Expected: []sql.Row{
-					{"t", "CREATE TEMPORARY TABLE `t` (\n" +
-						"  `i` int NOT NULL AUTO_INCREMENT,\n" +
-						"  PRIMARY KEY (`i`)\n" +
-						") ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
-				},
-			},
-			{
-				Query: "select * from t",
-				Expected: []sql.Row{
-					{1},
-					{2},
-					{3},
-				},
-			},
-			{
-				Query: "insert into t values (100), (1000)",
-				Expected: []sql.Row{
-					{types.OkResult{RowsAffected: 2, InsertID: 100}},
-				},
-			},
-			{
-				Query: "show create table t;",
-				Expected: []sql.Row{
-					{"t", "CREATE TEMPORARY TABLE `t` (\n" +
-						"  `i` int NOT NULL AUTO_INCREMENT,\n" +
-						"  PRIMARY KEY (`i`)\n" +
-						") ENGINE=InnoDB AUTO_INCREMENT=1001 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
-				},
-			},
-			{
-				Query: "insert into t values (), (), ()",
-				Expected: []sql.Row{
-					{types.OkResult{RowsAffected: 3, InsertID: 0x3e9}},
-				},
-			},
-			{
-				Query: "select * from t",
-				Expected: []sql.Row{
-					{1},
-					{2},
-					{3},
-					{100},
-					{1000},
-					{1001},
-					{1002},
-					{1003},
-				},
-			},
-		},
-	},
-	{
-		Name: "temporary table inline indexes",
-		// PostgreSQL does not support inline INDEX/UNIQUE KEY declarations, SHOW CREATE TABLE, or FORCE INDEX.
-		Dialect: "mysql",
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query: "CREATE TEMPORARY TABLE inline_indexes (id VARCHAR(512), n INT, INDEX idx (id(255)), UNIQUE KEY uniq (n))",
-			},
-			{
-				Query: "INSERT INTO inline_indexes VALUES ('abc', 1), ('def', 2)",
-			},
-			{
-				Query:    "SHOW CREATE TABLE inline_indexes",
-				Expected: []sql.Row{{"inline_indexes", "CREATE TEMPORARY TABLE `inline_indexes` (\n  `id` varchar(512),\n  `n` int,\n  KEY `idx` (`id`(255)),\n  UNIQUE KEY `uniq` (`n`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
-			},
-			{
-				Query:    "SELECT id, n FROM inline_indexes FORCE INDEX (idx) WHERE id = 'abc'",
-				Expected: []sql.Row{{"abc", 1}},
-			},
-			{
-				Query:       "INSERT INTO inline_indexes VALUES ('other', 1)",
-				ExpectedErr: sql.ErrUniqueKeyViolation,
-			},
-			{
-				Query:    "SELECT id, n FROM inline_indexes ORDER BY n",
-				Expected: []sql.Row{{"abc", 1}, {"def", 2}},
-			},
-		},
-	},
-	{
-		Name: "temporary table inline index with AS SELECT",
-		// PostgreSQL does not support inline INDEX declarations in CTAS, SHOW CREATE TABLE, or FORCE INDEX.
-		Dialect: "mysql",
-		SetUpScript: []string{
-			"CREATE TABLE source_entries (id VARCHAR(512))",
-			"INSERT INTO source_entries VALUES ('abc'), ('def')",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query: "CREATE TEMPORARY TABLE mat_entries (INDEX mat_entries_id (id(255))) AS SELECT id FROM source_entries",
-			},
-			{
-				Query:    "SHOW CREATE TABLE mat_entries",
-				Expected: []sql.Row{{"mat_entries", "CREATE TEMPORARY TABLE `mat_entries` (\n  `id` varchar(512),\n  KEY `mat_entries_id` (`id`(255))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
-			},
-			{
-				Query:    "SELECT id FROM mat_entries FORCE INDEX (mat_entries_id) WHERE id = 'abc'",
-				Expected: []sql.Row{{"abc"}},
-			},
-			{
-				Query: "CREATE INDEX by_id ON mat_entries (id)",
-			},
-			{
-				Query: "INSERT INTO mat_entries VALUES ('ghi')",
-			},
-			{
-				Query:    "SELECT id FROM mat_entries FORCE INDEX (mat_entries_id) WHERE id = 'ghi'",
-				Expected: []sql.Row{{"ghi"}},
-			},
-			{
-				Query:    "SELECT id FROM mat_entries FORCE INDEX (by_id) WHERE id = 'abc'",
-				Expected: []sql.Row{{"abc"}},
-			},
-			{
-				Query:    "SELECT id FROM mat_entries FORCE INDEX (by_id) WHERE id = 'ghi'",
-				Expected: []sql.Row{{"ghi"}},
-			},
-		},
-	},
-	{
-		Name: "temporary table tag collision",
-		SetUpScript: []string{
-			"CREATE TABLE note(a int, b int, userid int);",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query: "CREATE TEMPORARY TABLE tmp_tbl(a int, b int, c int, d int, e int, f int, g int);",
-				Expected: []sql.Row{
-					{types.NewOkResult(0)},
-				},
-			},
-		},
-	},
-	{
-		Name:    "drop temporary table behavior",
-		Dialect: "mysql",
-		SetUpScript: []string{
-			"create table t (i int);",
-			"create temporary table tmp (i int);",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query: "show create table tmp;",
-				Expected: []sql.Row{
-					{"tmp", "CREATE TEMPORARY TABLE `tmp` (\n" +
-						"  `i` int\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
-				},
-			},
-			{
-				Query: "drop temporary table tmp;",
-				Expected: []sql.Row{
-					{types.NewOkResult(0)},
-				},
-			},
-
-			{
-				Query: "create temporary table t (i int, j int);",
-				Expected: []sql.Row{
-					{types.NewOkResult(0)},
-				},
-			},
-			{
-				Query: "show create table t;",
-				Expected: []sql.Row{
-					{"t", "CREATE TEMPORARY TABLE `t` (\n" +
-						"  `i` int,\n" +
-						"  `j` int\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
-				},
-			},
-			{
-				Query: "drop temporary table t;",
-				Expected: []sql.Row{
-					{types.NewOkResult(0)},
-				},
-			},
-			{
-				Query: "show create table t;",
-				Expected: []sql.Row{
-					{"t", "CREATE TABLE `t` (\n" +
-						"  `i` int\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
-				},
-			},
-			{
-				Query:       "drop temporary table t;",
-				ExpectedErr: sql.ErrUnknownTable,
-			},
-		},
-	},
-	{
-		Name:    "temporary tables in stored procedures",
-		Dialect: "mysql",
-		SetUpScript: []string{
-			`
-create procedure proc()
-begin
-  create temporary table tmp (i int primary key);
-  insert into tmp values (1), (2), (3);
-  select * from tmp;
-end;
-`,
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query: "call proc();",
-				Expected: []sql.Row{
-					{1},
-					{2},
-					{3},
-				},
-			},
-			{
-				Query: "select * from tmp;",
-				Expected: []sql.Row{
-					{1},
-					{2},
-					{3},
 				},
 			},
 		},

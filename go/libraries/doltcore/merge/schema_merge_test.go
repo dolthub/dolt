@@ -386,18 +386,18 @@ var columnAddDropTests = []schemaMergeTest{
 				merged:   singleRow(1, 2, nil),
 			},
 			{
-				name:         "convergent adds with differing nullness",
-				ancestor:     singleRow(1, 2),
-				left:         singleRow(1, 2, nil),
-				right:        singleRow(1, 2, 3),
-				dataConflict: true,
+				name:     "convergent adds with differing nullness",
+				ancestor: singleRow(1, 2),
+				left:     singleRow(1, 2, nil),
+				right:    singleRow(1, 2, 3),
+				merged:   singleRow(1, 2, 3),
 			},
 			{
-				name:         "convergent adds with differing nullness, plus convergent data change",
-				ancestor:     singleRow(1, 2),
-				left:         singleRow(1, 3, nil),
-				right:        singleRow(1, 3, 4),
-				dataConflict: true,
+				name:     "convergent adds with differing nullness, plus convergent data change",
+				ancestor: singleRow(1, 2),
+				left:     singleRow(1, 3, nil),
+				right:    singleRow(1, 3, 4),
+				merged:   singleRow(1, 3, 4),
 			},
 		},
 	},
@@ -416,18 +416,18 @@ var columnAddDropTests = []schemaMergeTest{
 				merged:   singleRow(1, nil, 2),
 			},
 			{
-				name:         "convergent adds with differing nullness",
-				ancestor:     singleRow(1, 2),
-				left:         singleRow(1, nil, 2),
-				right:        singleRow(1, 3, 2),
-				dataConflict: true,
+				name:     "convergent adds with differing nullness",
+				ancestor: singleRow(1, 2),
+				left:     singleRow(1, nil, 2),
+				right:    singleRow(1, 3, 2),
+				merged:   singleRow(1, 3, 2),
 			},
 			{
-				name:         "convergent adds with differing nullness, plus convergent data change",
-				ancestor:     singleRow(1, 2),
-				left:         singleRow(1, nil, 3),
-				right:        singleRow(1, 4, 3),
-				dataConflict: true,
+				name:     "convergent adds with differing nullness, plus convergent data change",
+				ancestor: singleRow(1, 2),
+				left:     singleRow(1, nil, 3),
+				right:    singleRow(1, 4, 3),
+				merged:   singleRow(1, 4, 3),
 			},
 		},
 	},
@@ -1908,6 +1908,7 @@ func sch(definition string) namedSchema {
 	ns := denv.DoltDB(ctx).NodeStore()
 	root, _ := doltdb.EmptyRootValue(ctx, vrw, ns)
 	eng, dbName, _ := engine.NewSqlEngineForEnv(ctx, denv)
+	defer eng.Close()
 	sqlCtx, _ := eng.NewDefaultContext(ctx)
 	defer sql.SessionEnd(sqlCtx.Session)
 	sql.SessionCommandBegin(sqlCtx.Session)

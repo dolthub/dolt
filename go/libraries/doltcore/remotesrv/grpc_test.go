@@ -15,15 +15,19 @@
 package remotesrv
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
 
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -39,6 +43,23 @@ func TestGRPCSchemeSelection(t *testing.T) {
 	md.Append("x-forwarded-proto", "https")
 	scheme = rs.getScheme(md)
 	assert.Equal(t, scheme, "https")
+}
+
+type pathOnlyStore struct {
+	RemoteSrvStore
+	path string
+}
+
+func (s pathOnlyStore) Path(context.Context) (string, bool, error) { return s.path, true, nil }
+
+func TestRelativeStorePathUsesForwardSlashes(t *testing.T) {
+	root := t.TempDir()
+	fs, err := filesys.LocalFilesysWithWorkingDir(root)
+	require.NoError(t, err)
+	rs := &RemoteChunkStore{fs: fs}
+	prefix, err := rs.getRelativeStorePath(context.Background(), pathOnlyStore{path: filepath.Join(root, "db", ".dolt", "noms")})
+	require.NoError(t, err)
+	require.Equal(t, "db/.dolt/noms", prefix)
 }
 
 func TestGetUploadDownloadUrl(t *testing.T) {

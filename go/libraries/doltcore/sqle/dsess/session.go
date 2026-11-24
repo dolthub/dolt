@@ -41,6 +41,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/dynassert"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -68,7 +69,7 @@ type DoltSession struct {
 	mu                    *sync.Mutex
 	branchController      *branch_control.Controller
 	dbCache               *DatabaseCache
-	dbStates              map[string]*DatabaseSessionState
+	dbStates              map[doltdb.DbKey]*DatabaseSessionState
 	tempTables            map[string]map[string]sql.Table
 	gcSafepointController *gcctx.GCSafepointController
 
@@ -94,14 +95,6 @@ func (s *DoltSession) GetSessionVariable(ctx *sql.Context, name string) (interfa
 		}
 	}
 	return s.Session.GetSessionVariable(ctx, name)
-}
-
-// EngineVariables exposes the bundle retained by the underlying GMS session.
-func (d *DoltSession) EngineVariables() *sql.EngineVariables {
-	if owner, ok := d.Session.(sql.EngineVariablesProvider); ok {
-		return owner.EngineVariables()
-	}
-	return nil
 }
 
 // DoltgresSessionLifecycle is implemented by Doltgres session state that needs
@@ -183,7 +176,7 @@ func DefaultSessionWithVariables(pro DoltDatabaseProvider, sessFunc WriteSessFun
 		Session:          sql.NewBaseSessionWithVariables(vars),
 		username:         "",
 		email:            "",
-		dbStates:         make(map[string]*DatabaseSessionState),
+		dbStates:         make(map[doltdb.DbKey]*DatabaseSessionState),
 		noTxBranches:     newBranchStates(),
 		dbCache:          newDatabaseCache(),
 		provider:         pro,
@@ -260,7 +253,7 @@ func NewDoltSession(
 		Session:               sqlSess,
 		username:              username,
 		email:                 email,
-		dbStates:              make(map[string]*DatabaseSessionState),
+		dbStates:              make(map[doltdb.DbKey]*DatabaseSessionState),
 		noTxBranches:          newBranchStates(),
 		dbCache:               newDatabaseCache(),
 		provider:              pro,
@@ -318,17 +311,17 @@ func GetTableResolver(ctx *sql.Context, dbName string) (doltdb.TableResolver, er
 // lookupDbState is the private version of LookupDbState, returning a struct that has more information available than
 // the interface returned by the public method.
 func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchState, bool, error) {
-	baseName, rev := doltdb.SplitRevisionDbName(strings.ToLower(dbName))
+	name := doltdb.ParseQualifiedDbName(dbName)
 	d.mu.Lock()
-	dbState, dbStateFound := d.dbStates[baseName]
+	dbState, dbStateFound := d.dbStates[name.DbKey()]
 	var branchState *branchState
 	var ok bool
 	if dbStateFound {
 		// If we got an unqualified name, use the current working set head
-		if rev == "" {
-			rev = dbState.checkedOutRevSpec
+		if !name.IsQualified() {
+			name = name.WithRevision(dbState.checkedOutRevSpec)
 		}
-		branchState, ok = d.currentBranches().get(baseName, rev)
+		branchState, ok = d.currentBranches().get(name)
 	}
 	d.mu.Unlock()
 
@@ -339,7 +332,7 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 		return branchState, true, nil
 	}
 
-	database, ok, err := d.provider.SessionDatabase(ctx, doltdb.RevisionDbName(baseName, rev))
+	database, ok, err := d.provider.SessionDatabase(ctx, name.Key().String())
 	if err != nil {
 		return nil, false, err
 	}
@@ -353,8 +346,8 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 	}
 
 	d.mu.Lock()
-	_, dbStateFound = d.dbStates[baseName]
-	branchState, _ = d.currentBranches().get(baseName, database.Revision())
+	_, dbStateFound = d.dbStates[name.DbKey()]
+	branchState, _ = d.currentBranches().get(name.WithRevision(database.Revision()))
 	d.mu.Unlock()
 	if !dbStateFound {
 		// should be impossible
@@ -405,13 +398,28 @@ func (d *DoltSession) LookupDbState(ctx *sql.Context, dbName string) (SessionSta
 	return s, true, nil
 }
 
+// droppedSinceSnapshot returns true if |err| is from reading |ddb| after a concurrent DROP DATABASE closed it. The
+// provider stops listing a database before closing it, so a transaction's snapshot of the provider's databases can
+// contain one which is closed. That shouldn't fail statements which don't use it.
+func (d *DoltSession) droppedSinceSnapshot(ddb *doltdb.DoltDB, err error) bool {
+	if !errors.Is(err, chunks.ErrStoreClosed) {
+		return false
+	}
+	for _, db := range d.provider.DoltDatabases() {
+		if db.DbData().Ddb == ddb {
+			return false
+		}
+	}
+	return true
+}
+
 // RemoveDbState invalidates any cached db state in this session, for example, if a database is dropped.
 func (d *DoltSession) RemoveDbState(ctx *sql.Context, dbName string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	key := strings.ToLower(dbName)
-	delete(d.dbStates, key)
-	heads := d.currentBranches().removeDb(key)
+	name := doltdb.ParseQualifiedDbName(dbName)
+	delete(d.dbStates, name.DbKey())
+	heads := d.currentBranches().removeDb(name)
 	// also clear out any db-level caches for this db
 	d.dbCache.Clear()
 
@@ -440,7 +448,7 @@ func (d *DoltSession) RemoveBranchState(ctx *sql.Context, dbName string, branchN
 	}
 
 	d.mu.Lock()
-	bs, hadState := d.currentBranches().remove(baseName, branchName)
+	bs, hadState := d.currentBranches().remove(doltdb.NewQualifiedDbName(baseName, branchName))
 	d.mu.Unlock()
 	// The branch is gone either way, so its state is dropped even if this fails.
 	var writersErr error
@@ -479,7 +487,7 @@ func (d *DoltSession) RenameBranchState(ctx *sql.Context, dbName string, oldBran
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	branch, ok := d.currentBranches().remove(baseName, oldBranchName)
+	branch, ok := d.currentBranches().remove(doltdb.NewQualifiedDbName(baseName, oldBranchName))
 	if !ok {
 		// nothing to rename
 		return nil
@@ -552,6 +560,9 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 			rrd, ok := db.(RemoteReadReplicaDatabase)
 			if ok && rrd.ValidReplicaState(ctx) {
 				err := rrd.PullFromRemote(ctx)
+				if d.droppedSinceSnapshot(ddb, err) {
+					continue
+				}
 				if err != nil && !IgnoreReplicationErrorsWithRegistry(ctx.SystemVariables()) {
 					return nil, fmt.Errorf("replication error: %w", err)
 				} else if err != nil {
@@ -563,6 +574,9 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 			//  up on each transaction start
 			if _, v, ok := ctx.SystemVariables().GetGlobal(ReadReplicaRemote); ok && v != "" {
 				err := ddb.Rebase(ctx)
+				if d.droppedSinceSnapshot(ddb, err) {
+					continue
+				}
 				if err != nil && !IgnoreReplicationErrorsWithRegistry(ctx.SystemVariables()) {
 					return nil, err
 				} else if err != nil {
@@ -574,7 +588,7 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 		}
 	}
 
-	tx, err := NewDoltTransaction(ctx, txDbs, tCharacteristic)
+	tx, err := newDoltTransaction(ctx, txDbs, tCharacteristic, d.droppedSinceSnapshot)
 	if err != nil {
 		return nil, err
 	}
@@ -836,7 +850,7 @@ func (d *DoltSession) validateDoltCommit(currDb string, dirtyBranchState *branch
 	}
 
 	d.mu.Lock()
-	dbState, ok := d.dbStates[strings.ToLower(currDbBaseName)]
+	dbState, ok := d.dbStates[doltdb.NewDbKey(currDbBaseName)]
 	d.mu.Unlock()
 
 	if !ok {
@@ -882,7 +896,7 @@ func (d *DoltSession) DirtyDatabases() []string {
 	defer d.mu.Unlock()
 	var dbNames []string
 	for _, dbState := range d.dbStates {
-		for _, branchState := range d.currentBranches().forDb(dbState.dbName) {
+		for _, branchState := range d.currentBranches().forDb(doltdb.NewQualifiedDbName(dbState.dbName, "")) {
 			if branchState.isDirty() {
 				dbNames = append(dbNames, dbState.dbName)
 				break
@@ -917,7 +931,7 @@ func (d *DoltSession) DirtyBranches() []DirtyBranch {
 func (d *DoltSession) IsBranchDirty(dbName, branch string) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	branchState, ok := d.currentBranches().get(dbName, branch)
+	branchState, ok := d.currentBranches().get(doltdb.NewQualifiedDbName(dbName, branch))
 	return ok && branchState.isDirty()
 }
 
@@ -927,7 +941,7 @@ func (d *DoltSession) IsBranchDirty(dbName, branch string) bool {
 func (d *DoltSession) IsWritingDatabase(dbName string) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	for _, branchState := range d.currentBranches().forDb(dbName) {
+	for _, branchState := range d.currentBranches().forDb(doltdb.ParseQualifiedDbName(dbName)) {
 		if branchState.isDirty() || (branchState.writeSession != nil && branchState.writeSession.HasOpenTableWriters()) {
 			return true
 		}
@@ -1146,13 +1160,13 @@ func (d *DoltSession) Rollback(ctx *sql.Context, tx sql.Transaction) error {
 // 2) If there is an active transaction, the initial root for that transaction and any roots for any savepoints of that transaction.
 // 3) Working set roots in any writeSession.
 // 4) The roots of any temporary tables in the database.
-func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func(hash.Hash) bool) error {
-	dbName = strings.ToLower(dbName)
-	dbName, _ = doltdb.SplitRevisionDbName(dbName)
+func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func(hash.Hash)) error {
+	name := doltdb.ParseQualifiedDbName(dbName)
+	dbKey := name.DbKey()
 
 	d.mu.Lock()
-	dbState, dbStateFound := d.dbStates[dbName]
-	heads := d.currentBranches().forDb(dbName)
+	dbState, dbStateFound := d.dbStates[dbKey]
+	heads := d.currentBranches().forDb(name)
 	d.mu.Unlock()
 
 	if dbStateFound {
@@ -1162,26 +1176,20 @@ func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func
 				if err != nil {
 					return err
 				}
-				if keep(h) {
-					panic("gc safepoint establishment found inconsistent state; process could not guarantee it would be able to keep a chunk if we continue")
-				}
+				keep(h)
 			} else if head.headCommit != nil {
 				h, err := head.headCommit.HashOf()
 				if err != nil {
 					return err
 				}
-				if keep(h) {
-					panic("gc safepoint establishment found inconsistent state; process could not guarantee it would be able to keep a chunk if we continue")
-				}
+				keep(h)
 			} else if head.workingSet != nil {
 				hashes, err := head.dbData.Ddb.WorkingSetGCHashes(ctx, head.workingSet)
 				if err != nil {
 					return err
 				}
 				for _, h := range hashes {
-					if keep(h) {
-						panic("gc safepoint establishment found inconsistent state; process could not guarantee it would be able to keep a chunk if we continue")
-					}
+					keep(h)
 				}
 			}
 			// The working set can hold changes beyond the head commit.
@@ -1191,18 +1199,11 @@ func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func
 					return err
 				}
 				for _, h := range hashes {
-					if keep(h) {
-						panic("gc safepoint establishment found inconsistent state; process could not guarantee it would be able to keep a chunk if we continue")
-					}
+					keep(h)
 				}
 				// Edits pending materialization only exist in the write session's table writers.
 				if head.writeSession.HasPendingEdits() {
-					err = head.writeSession.VisitGCRoots(ctx, func(h hash.Hash) bool {
-						if keep(h) {
-							panic("gc safepoint establishment found inconsistent state; process could not guarantee it would be able to keep a chunk if we continue")
-						}
-						return false
-					})
+					err = head.writeSession.VisitGCRoots(ctx, keep)
 					if err != nil {
 						return err
 					}
@@ -1226,16 +1227,15 @@ func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func
 	}
 
 	h, has := dtx.GetInitialRoot(dbName)
-	if has && keep(h) {
-		panic("gc safepoint establishment found inconsistent state; process could not guarantee it could would be able to keep a chunk if we continue")
+	if has {
+		keep(h)
 	}
 	for _, savepoint := range dtx.savepoints {
-		for name, rv := range savepoint.roots {
-			baseName, _ := doltdb.SplitRevisionDbName(name)
-			if !strings.EqualFold(baseName, dbName) {
+		for key, rv := range savepoint.roots {
+			if key.Db != dbKey {
 				continue
 			}
-			start, ok := dtx.dbStartPoints[strings.ToLower(dbName)]
+			start, ok := dtx.dbStartPoints[dbKey]
 			if !ok {
 				return fmt.Errorf("database %s unknown to transaction", dbName)
 			}
@@ -1244,9 +1244,7 @@ func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func
 			if err != nil {
 				return err
 			}
-			if keep(h) {
-				panic("gc safepoint establishment found inconsistent state; process could not guarantee it could would be able to keep a chunk if we continue")
-			}
+			keep(h)
 		}
 	}
 
@@ -1255,7 +1253,7 @@ func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func
 
 // visitTempTableGCRoots keeps the roots of the temporary tables stored in |dbState|'s database. They outlive the
 // session's branch states, so it doesn't look for the database's DoltDB there.
-func (d *DoltSession) visitTempTableGCRoots(ctx context.Context, dbState *DatabaseSessionState, keep func(hash.Hash) bool) error {
+func (d *DoltSession) visitTempTableGCRoots(ctx context.Context, dbState *DatabaseSessionState, keep func(hash.Hash)) error {
 	ddb := dbState.ddb
 	for _, tables := range d.tempTables {
 		for _, tbl := range tables {
@@ -1268,9 +1266,7 @@ func (d *DoltSession) visitTempTableGCRoots(ctx context.Context, dbState *Databa
 				return err
 			}
 			for _, h := range hashes {
-				if keep(h) {
-					panic("gc safepoint establishment found inconsistent state; process could not guarantee it would be able to keep a chunk if we continue")
-				}
+				keep(h)
 			}
 		}
 	}
@@ -1293,7 +1289,7 @@ func (d *DoltSession) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, save
 		return err
 	}
 
-	roots := make(map[string]doltdb.RootValue)
+	roots := make(map[doltdb.QualifiedDbKey]doltdb.RootValue)
 	for _, db := range d.provider.DoltDatabases() {
 		// TODO: See TODO in CreateTransaction about needing to skip clusterDatabase and UserSpaceDatabases here :-/. (aaron@, 2025/03)
 		ddb := db.DbData().Ddb
@@ -1310,13 +1306,13 @@ func (d *DoltSession) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, save
 				return err
 			}
 			if ws != nil {
-				roots[strings.ToLower(branchState.RevisionDbName())] = ws.WorkingRoot()
+				roots[branchState.key()] = ws.WorkingRoot()
 			}
 		}
 	}
 
 	// A physical database can have several branch states in this session.
-	dirtyBranches := make(map[string]bool)
+	dirtyBranches := make(map[doltdb.QualifiedDbKey]bool)
 	d.mu.Lock()
 	branches := d.currentBranches().all()
 	d.mu.Unlock()
@@ -1326,8 +1322,8 @@ func (d *DoltSession) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, save
 			return err
 		}
 		if ws != nil {
-			roots[strings.ToLower(branch.RevisionDbName())] = ws.WorkingRoot()
-			dirtyBranches[strings.ToLower(branch.RevisionDbName())] = branch.dirty
+			roots[branch.key()] = ws.WorkingRoot()
+			dirtyBranches[branch.key()] = branch.dirty
 		}
 	}
 
@@ -1357,28 +1353,28 @@ func (d *DoltSession) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, 
 
 	// Branches first edited after the savepoint weren't in its map. Their
 	// saved value is the value at transaction start, not the latest persisted value.
-	restore := make(map[string]doltdb.RootValue, len(point.roots))
-	for name, root := range point.roots {
-		restore[name] = root
+	restore := make(map[doltdb.QualifiedDbKey]doltdb.RootValue, len(point.roots))
+	for key, root := range point.roots {
+		restore[key] = root
 	}
 	for _, branch := range d.dirtyWorkingSets() {
-		name := strings.ToLower(branch.RevisionDbName())
-		if _, ok := restore[name]; ok {
+		key := branch.key()
+		if _, ok := restore[key]; ok {
 			continue
 		}
-		baseName := strings.ToLower(branch.dbState.dbName)
-		start, ok := dtx.dbStartPoints[baseName]
+		start, ok := dtx.dbStartPoints[key.Db]
 		if !ok {
-			return fmt.Errorf("database %s unknown to transaction", baseName)
+			return fmt.Errorf("database %s unknown to transaction", key.Db)
 		}
 		wsRef, _ := branch.workingSetRef()
 		ws, err := start.db.ResolveWorkingSetAtRoot(ctx, wsRef, start.rootHash)
 		if err != nil {
 			return err
 		}
-		restore[name] = ws.WorkingRoot()
+		restore[key] = ws.WorkingRoot()
 	}
-	for dbName, root := range restore {
+	for key, root := range restore {
+		dbName := key.String()
 		err := d.SetWorkingRoot(ctx, dbName, root)
 		if err != nil {
 			return err
@@ -1387,7 +1383,7 @@ func (d *DoltSession) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, 
 		if err != nil {
 			return err
 		}
-		branch.dirty = point.dirtyBranches[dbName]
+		branch.dirty = point.dirtyBranches[key]
 	}
 	if lifecycle, ok := d.DoltgresSessObj.(DoltgresTransactionLifecycle); ok {
 		lifecycle.DoltgresSavepointRolledBack(savepointName)
@@ -1746,7 +1742,7 @@ func (d *DoltSession) SwitchWorkingSet(
 	d.mu.Lock()
 
 	baseName, _ := doltdb.SplitRevisionDbName(dbName)
-	dbState, ok := d.dbStates[strings.ToLower(baseName)]
+	dbState, ok := d.dbStates[doltdb.NewDbKey(baseName)]
 	if !ok {
 		d.mu.Unlock()
 		return sql.ErrDatabaseNotFound.New(dbName)
@@ -1846,8 +1842,9 @@ func (d *DoltSession) setForeignKeyChecksSessionVar(ctx *sql.Context, key string
 // addDB adds the database given to this session. This establishes a starting root value for this session, as well as
 // other state tracking metadata.
 func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
-	revisionQualifiedName := strings.ToLower(db.RevisionQualifiedName())
-	baseName, _ := doltdb.SplitRevisionDbName(revisionQualifiedName)
+	name := doltdb.NewQualifiedDbName(db.AliasedName(), db.Revision())
+	key := name.Key()
+	baseName := string(key.Db)
 
 	DefineSystemVariablesForDBInRegistry(d.EngineVariables().System, baseName)
 
@@ -1868,7 +1865,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	sessionState, sessionStateExists := d.dbStates[baseName]
+	sessionState, sessionStateExists := d.dbStates[key.Db]
 
 	// Before computing initial state for the DB, check to see if we have it in the cache
 	var dbState InitialDbState
@@ -1876,7 +1873,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	if usingDoltTransaction {
 		nomsRoot, ok := tx.GetInitialRoot(baseName)
 		if ok && sessionStateExists {
-			dbState, dbStateCached = d.dbCache.GetCachedInitialDbState(doltdb.DataCacheKey{Hash: nomsRoot}, revisionQualifiedName)
+			dbState, dbStateCached = d.dbCache.GetCachedInitialDbState(doltdb.DataCacheKey{Hash: nomsRoot}, name)
 		}
 	}
 
@@ -1890,7 +1887,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 
 	if !sessionStateExists {
 		sessionState = newEmptyDatabaseSessionState()
-		d.dbStates[baseName] = sessionState
+		d.dbStates[key.Db] = sessionState
 
 		var err error
 		sessionState.tmpFileDir, err = dbState.DbData.Rsw.TempTableFilesDir()
@@ -1920,7 +1917,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	if !dbStateCached && usingDoltTransaction {
 		nomsRoot, ok := tx.GetInitialRoot(baseName)
 		if ok {
-			d.dbCache.CacheInitialDbState(doltdb.DataCacheKey{Hash: nomsRoot}, revisionQualifiedName, dbState)
+			d.dbCache.CacheInitialDbState(doltdb.DataCacheKey{Hash: nomsRoot}, name, dbState)
 		}
 	}
 
@@ -1929,7 +1926,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	// TODO: this no longer gets called at session creation time, so the error handling below never occurs when a
 	//  database is deleted out from under a running server
 	adapter := NewSessionStateAdapter(d, db.Name(), dbState.Remotes, dbState.Branches, dbState.Backups)
-	if existing, ok := d.currentBranches().get(baseName, db.Revision()); ok {
+	if existing, ok := d.currentBranches().get(name); ok {
 		if err := existing.checkNoOpenWriters(); err != nil {
 			return err
 		}
@@ -1971,7 +1968,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 			if err != nil {
 				return err
 			}
-			branchState.writeSession = d.writeSessProv(revisionQualifiedName, branchWorkingSetOwner{d, branchState}, tracker, editOpts)
+			branchState.writeSession = d.writeSessProv(key.String(), branchWorkingSetOwner{d, branchState}, tracker, editOpts)
 			branchState.writeSession.SetDeferMaterialization(true)
 		}
 	}
@@ -2048,10 +2045,13 @@ func (d *DoltSession) CWBHeadRef(ctx *sql.Context, dbName string) (ref.DoltRef, 
 // CurrentHead returns the current head for the db named, which must be unqualified. Used for bootstrap resolving the
 // correct session head when a database name from the client is unqualified.
 func (d *DoltSession) CurrentHead(ctx *sql.Context, dbName string) (string, bool, error) {
-	baseName := strings.ToLower(dbName)
+	name := doltdb.ParseQualifiedDbName(dbName)
+	if name.IsQualified() {
+		return "", false, nil
+	}
 
 	d.mu.Lock()
-	dbState, ok := d.dbStates[baseName]
+	dbState, ok := d.dbStates[name.DbKey()]
 	d.mu.Unlock()
 
 	if ok {

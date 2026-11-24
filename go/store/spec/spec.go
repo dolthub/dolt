@@ -44,6 +44,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/awsrefreshcreds"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/netretry"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -378,7 +379,7 @@ func parseAWSSpec(ctx context.Context, awsURL string, options SpecOptions) chunk
 	d.PanicIfError(err)
 
 	// DisableLogOutputChecksumValidationSkipped silences the per-GetObject WARN emitted when objects have no stored checksum.
-	s3c := s3.NewFromConfig(cfg, func(o *s3.Options) { o.DisableLogOutputChecksumValidationSkipped = true })
+	s3c := s3.NewFromConfig(cfg, netretry.WithS3Retryer, func(o *s3.Options) { o.DisableLogOutputChecksumValidationSkipped = true })
 	cs, err := nbs.NewAWSStore(ctx, types.Format_DOLT.VersionString(), parts[0], u.Path, parts[1], s3c, dynamodb.NewFromConfig(cfg), 1<<28, nbs.NewUnlimitedMemQuotaProvider())
 	d.PanicIfError(err)
 

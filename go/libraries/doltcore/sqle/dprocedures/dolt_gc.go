@@ -179,7 +179,12 @@ type sessionAwareSafepointController struct {
 }
 
 func (sc *sessionAwareSafepointController) visit(ctx context.Context, sess gcctx.GCRootsProvider) error {
-	return sess.VisitGCRoots(ctx, sc.dbname, sc.keeper)
+	return sess.VisitGCRoots(ctx, sc.dbname, func(h hash.Hash) {
+		// Every visit completes before the GC finalizes, so the keeper must accept |h|.
+		if sc.keeper(h) {
+			panic("gc safepoint visit could not keep a chunk; the safepoint was not established before finalize")
+		}
+	})
 }
 
 func (sc *sessionAwareSafepointController) BeginGC(ctx context.Context, keeper func(hash.Hash) bool) error {

@@ -19,10 +19,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
+	filelocks "github.com/dolthub/file-locks"
 	"github.com/dolthub/go-mysql-server/sql"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gocraft/dbr/v2"
@@ -31,6 +34,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testcommands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
@@ -39,6 +43,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/svcs"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 //TODO: server tests need to expose a higher granularity for server interactions:
@@ -909,4 +914,59 @@ func runDefaultBranchTests(t *testing.T, tests []defaultBranchTest, conn *dbr.Co
 		})
 	}
 	require.NoError(t, conn.Close())
+}
+
+// TestServerStopReleasesDatabaseLocks asserts that stopping the server closes the databases it found in its data
+// directory, releasing their file locks.
+func TestServerStopReleasesDatabaseLocks(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows due to differing file locking semantics")
+	}
+	ctx := context.Background()
+	root := t.TempDir()
+	home := t.TempDir()
+	hdp := func() (string, error) { return home, nil }
+
+	dbPath := filepath.Join(root, "sub_db")
+	require.NoError(t, os.MkdirAll(dbPath, os.ModePerm))
+	dbFS, err := filesys.LocalFS.WithWorkingDir(dbPath)
+	require.NoError(t, err)
+	subEnv := env.LoadWithoutDB(ctx, hdp, dbFS, doltdb.LocalDirDoltDB, "test")
+	require.NoError(t, subEnv.InitRepo(ctx, types.Format_DOLT, "test", "test@example.com", env.DefaultInitBranch))
+	require.NoError(t, subEnv.Close())
+
+	fs, err := filesys.LocalFS.WithWorkingDir(root)
+	require.NoError(t, err)
+	dEnv := env.LoadWithoutDB(ctx, hdp, fs, doltdb.LocalDirDoltDB, "test")
+	dEnv.Config.WriteableConfig().SetStrings(map[string]string{
+		config.UserNameKey:  "test",
+		config.UserEmailKey: "test@example.com",
+	})
+	defer func() {
+		assert.NoError(t, dEnv.Close())
+	}()
+
+	controller := svcs.NewController()
+	startErr := make(chan error, 1)
+	go func() {
+		startErr <- StartServer(ctx, "0.0.0", "dolt sql-server", []string{
+			"-H", "localhost",
+			"-P", "15200",
+		}, dEnv, fs, controller)
+	}()
+	require.NoError(t, controller.WaitForStart())
+	conn, err := dbr.Open("mysql", "root@tcp(localhost:15200)/sub_db", nil)
+	require.NoError(t, err)
+	_, err = conn.Exec("SELECT COUNT(*) FROM dolt_log")
+	require.NoError(t, err)
+	require.NoError(t, conn.Close())
+	controller.Stop()
+	require.NoError(t, controller.WaitForStop())
+	require.NoError(t, <-startErr)
+
+	lck, err := filelocks.New(filepath.Join(dbPath, ".dolt", "noms", "LOCK"))
+	require.NoError(t, err)
+	require.NoError(t, lck.LockWithTimeout(25*time.Millisecond), "expected sub_db's lock to be free after server stop")
+	require.NoError(t, lck.Unlock())
+	require.NoError(t, lck.Close())
 }

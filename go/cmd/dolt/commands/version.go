@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -51,7 +52,7 @@ var versionDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Displays the version for the Dolt binary.",
 	LongDesc: `Displays the version for the Dolt binary.
 
-The out-of-date check can be disabled by running {{.EmphasisLeft}}dolt config --global --add versioncheck.disabled true{{.EmphasisRight}}.`,
+The out-of-date check can be disabled by running {{.EmphasisLeft}}dolt config --global --add versioncheck.disabled true{{.EmphasisRight}} or by setting {{.EmphasisLeft}}DOLT_DISABLE_VERSION_CHECKS{{.EmphasisRight}} to a truthy boolean value.`,
 	Synopsis: []string{
 		`[--verbose] [--feature]`,
 	},
@@ -100,6 +101,9 @@ func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string
 	return cmd.ExecWithArgParser(ctx, apr, usage, dEnv)
 }
 
+// ExecWithArgParser prints the binary version and optional repository details
+// using |ctx|, |apr|, |usage|, and |dEnv|, returning an exit code. It lets
+// other binaries embed VersionCmd with their own flag parsing and help text.
 func (cmd VersionCmd) ExecWithArgParser(ctx context.Context, apr *argparser.ArgParseResults, usage cli.UsagePrinter, dEnv *env.DoltEnv) int {
 	binName := "dolt"
 	if cmd.BinaryName != "" {
@@ -107,8 +111,7 @@ func (cmd VersionCmd) ExecWithArgParser(ctx context.Context, apr *argparser.ArgP
 	}
 	cli.Printf("%s version %s\n", binName, cmd.VersionStr)
 
-	versionCheckDisabled := dEnv.Config.GetStringOrDefault(config.VersionCheckDisabled, "false")
-	if versionCheckDisabled == "false" {
+	if !versionCheckDisabled(dEnv) {
 		verr := checkAndPrintVersionOutOfDateWarning(cmd.VersionStr, dEnv)
 		if verr != nil {
 			// print error but don't fail
@@ -148,6 +151,24 @@ func (cmd VersionCmd) ExecWithArgParser(ctx context.Context, apr *argparser.ArgP
 	}
 
 	return HandleVErrAndExitCode(nil, usage)
+}
+
+// versionCheckDisabled reports whether the out-of-date version check is
+// disabled via the environment or |dEnv|, so callers can skip querying the
+// latest release when checks are turned off.
+func versionCheckDisabled(dEnv *env.DoltEnv) bool {
+	if dEnv.Config.GetStringOrDefault(config.VersionCheckDisabled, "false") != "false" {
+		return true
+	}
+	val := strings.TrimSpace(os.Getenv(dconfig.EnvDisableVersionChecks))
+	if val == "" {
+		return false
+	}
+	disabled, err := strconv.ParseBool(val)
+	if err != nil {
+		return false
+	}
+	return disabled
 }
 
 // checkAndPrintVersionOutOfDateWarning checks if the current version of Dolt is out of date and prints a warning if it

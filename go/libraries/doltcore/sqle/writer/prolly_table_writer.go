@@ -116,18 +116,19 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, schSta
 
 		// mapping from secondary index key to primary key
 		writers[defName] = prollySecondaryIndexWriter{
-			name:          defName,
-			mut:           idxMap.MutateInterface(),
-			unique:        def.IsUnique,
-			prefixLengths: def.PrefixLengths,
-			idxCols:       def.Count,
-			keyMap:        def.KeyMapping,
-			keyBld:        val.NewTupleBuilder(keyDesc, idxMap.NodeStore()).WithMaxRowSize(targetRowSize),
-			pkMap:         def.PkMapping,
-			pkBld:         val.NewTupleBuilder(schState.PkKeyDesc, idxMap.NodeStore()).WithMaxRowSize(targetRowSize),
-			key:           make(sql.Row, keyDesc.Count()),
-			predicate:     def.Predicate,
-			virtualExprs:  def.KeyVirtualExprs,
+			name:             defName,
+			mut:              idxMap.MutateInterface(),
+			unique:           def.IsUnique,
+			nullsNotDistinct: def.NullsNotDistinct,
+			prefixLengths:    def.PrefixLengths,
+			idxCols:          def.Count,
+			keyMap:           def.KeyMapping,
+			keyBld:           val.NewTupleBuilder(keyDesc, idxMap.NodeStore()).WithMaxRowSize(targetRowSize),
+			pkMap:            def.PkMapping,
+			pkBld:            val.NewTupleBuilder(schState.PkKeyDesc, idxMap.NodeStore()).WithMaxRowSize(targetRowSize),
+			key:              make(sql.Row, keyDesc.Count()),
+			predicate:        def.Predicate,
+			virtualExprs:     def.KeyVirtualExprs,
 		}
 	}
 
@@ -160,18 +161,19 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, schS
 
 		targetRowSize := schState.DoltSchema.GetTargetRowSize()
 		writers[defName] = prollyKeylessSecondaryWriter{
-			name:          defName,
-			mut:           m.Mutate(),
-			primary:       primary,
-			unique:        def.IsUnique,
-			spatial:       def.IsSpatial,
-			predicate:     def.Predicate,
-			prefixLengths: def.PrefixLengths,
-			keyBld:        val.NewTupleBuilder(keyDesc, m.NodeStore()).WithMaxRowSize(targetRowSize),
-			prefixBld:     val.NewTupleBuilder(keyDesc.PrefixDesc(def.Count), m.NodeStore()).WithMaxRowSize(targetRowSize),
-			hashBld:       val.NewTupleBuilder(val.NewTupleDescriptor(val.Type{Enc: val.Hash128Enc}), m.NodeStore()),
-			keyMap:        def.KeyMapping,
-			virtualExprs:  def.KeyVirtualExprs,
+			name:             defName,
+			mut:              m.Mutate(),
+			primary:          primary,
+			unique:           def.IsUnique,
+			nullsNotDistinct: def.NullsNotDistinct,
+			spatial:          def.IsSpatial,
+			predicate:        def.Predicate,
+			prefixLengths:    def.PrefixLengths,
+			keyBld:           val.NewTupleBuilder(keyDesc, m.NodeStore()).WithMaxRowSize(targetRowSize),
+			prefixBld:        val.NewTupleBuilder(keyDesc.PrefixDesc(def.Count), m.NodeStore()).WithMaxRowSize(targetRowSize),
+			hashBld:          val.NewTupleBuilder(val.NewTupleDescriptor(val.Type{Enc: val.Hash128Enc}), m.NodeStore()),
+			keyMap:           def.KeyMapping,
+			virtualExprs:     def.KeyVirtualExprs,
 		}
 	}
 
@@ -451,7 +453,7 @@ func (w *prollyTableWriter) deferMaterialization() bool {
 	return w.writeSess.deferMaterialization
 }
 
-func (w *prollyTableWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+func (w *prollyTableWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash)) error {
 	err := w.primary.VisitGCRoots(ctx, roots)
 	if err != nil {
 		return err
@@ -463,9 +465,15 @@ func (w *prollyTableWriter) VisitGCRoots(ctx context.Context, roots func(hash.Ha
 		}
 	}
 	if w.view != nil {
-		w.view.Primary.VisitGCRoots(roots)
+		err = w.view.Primary.VisitGCRoots(ctx, roots)
+		if err != nil {
+			return err
+		}
 		for _, v := range w.view.Secondary {
-			v.VisitGCRoots(roots)
+			err = v.VisitGCRoots(ctx, roots)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -569,24 +577,12 @@ func (w *prollyTableWriter) table(ctx *sql.Context) (tbl *doltdb.Table, err erro
 
 // pendingTable returns a doltdb.Table containing all edits from completed statements, excluding the edits of any
 // statement in progress. It doesn't modify the writer, so it may run concurrently with other writers' flushes. Once
-// the returned table is in the working set, the caller must call materialized.
+// the returned table is in the working set, the caller must set it as the writer's table and clear pending.
 func (w *prollyTableWriter) pendingTable(ctx *sql.Context) (*doltdb.Table, error) {
 	if w.hasUncommittedEdits() {
 		return w.tableFromMaps(ctx, indexWriter.CheckpointMap)
 	}
 	return w.table(ctx)
-}
-
-// materialized records that |tbl|, returned by pendingTable, is in the working set. If no statement is in progress,
-// the writer is reset to |tbl|. Otherwise our index writers still hold every edit, so our views remain valid and the
-// next materialization rebuilds all of them on top of |tbl|.
-func (w *prollyTableWriter) materialized(ctx *sql.Context, tbl *doltdb.Table) error {
-	if w.hasUncommittedEdits() {
-		w.tbl = tbl
-		w.pending = false
-		return nil
-	}
-	return w.Reset(ctx, tbl)
 }
 
 // tableFromMaps builds a doltdb.Table from the maps that |getMap| returns for each index writer.

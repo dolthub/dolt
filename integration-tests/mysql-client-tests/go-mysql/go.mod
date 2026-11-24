@@ -1,6 +1,6 @@
 module github.com/dolthub/dolt/integration-tests/mysql-client-tests/go
 
-go 1.22
+go 1.24
 
 toolchain go1.24.1
 
@@ -10,7 +10,7 @@ require (
 	filippo.io/edwards25519 v1.1.1 // indirect
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect
-	github.com/klauspost/compress v1.17.8 // indirect
+	github.com/klauspost/compress v1.18.7 // indirect
 	github.com/pingcap/errors v0.11.5-0.20240311024730-e056997136bb // indirect
 	github.com/pingcap/log v1.1.1-0.20230317032135-a0d097d16e22 // indirect
 	github.com/pingcap/tidb/pkg/parser v0.0.0-20241118164214-4f047be191be // indirect

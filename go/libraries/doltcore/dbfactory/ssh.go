@@ -25,6 +25,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"strings"
 	"time"
 
@@ -160,7 +161,7 @@ func (SSHRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 
 	// Create chunk store backed by the remote gRPC service.
 	client := remotesapi.NewChunkStoreServiceClient(grpcConn)
-	cs, err := remotestorage.NewDoltChunkStoreFromPath(procCtx, nbf, urlObj.Path, path, false, client)
+	cs, err := remotestorage.NewDoltChunkStoreFromPath(procCtx, nbf, sshRepoPath(urlObj), path, false, client)
 	if err != nil {
 		conn.CloseWithErr(err)
 		return nil, nil, nil, sshRemoteError(stderrDone, &stderrBuf, path, "failed to create chunk store", err)
@@ -238,6 +239,13 @@ func parseSSHURL(urlObj *url.URL) (host, port, path, user string) {
 		host = host[atIdx+1:]
 	}
 	return
+}
+
+// sshRepoPath returns the repository path that names |urlObj|'s repository to the transfer server. The server
+// serves only the repository that --data-dir names, but refuses a path with "." or ".." components, so the path
+// is cleaned.
+func sshRepoPath(urlObj *url.URL) string {
+	return path.Clean("/" + urlObj.Path)
 }
 
 // buildTransferCommand constructs the exec.Cmd for the transfer subprocess.

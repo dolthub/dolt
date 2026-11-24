@@ -1075,7 +1075,7 @@ func TestDoltIndexBetween(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, ok)
 
-			indexIter, err := index.RowIterForIndexLookup(ctx, NoCacheTableable{dt}, indexLookup, pkSch, nil)
+			indexIter, err := index.RowIterForIndexLookup(ctx, NoCacheTableable{dt}, indexLookup, pkSch, nil, sql.ColSet{})
 			require.NoError(t, err)
 
 			var readRows []sql.Row
@@ -1326,7 +1326,7 @@ func testDoltIndex(t *testing.T, ctx *sql.Context, root doltdb.RootValue, keys [
 	pkSch, err := sqlutil.FromDoltSchema(ctx, "", "fake_table", idx.Schema())
 	require.NoError(t, err)
 
-	indexIter, err := index.RowIterForIndexLookup(ctx, NoCacheTableable{dt}, indexLookup, pkSch, nil)
+	indexIter, err := index.RowIterForIndexLookup(ctx, NoCacheTableable{dt}, indexLookup, pkSch, nil, sql.ColSet{})
 	require.NoError(t, err)
 
 	var readRows []sql.Row
@@ -1585,7 +1585,7 @@ INSERT INTO keyless VALUES (1), (1), (1), (1), (1), (1), (1), (1), (1), (1);
 		require.NoError(t, err)
 		pkSch, err := sqlutil.FromDoltSchema(sqlCtx, "", "keyless", idx.Schema())
 		require.NoError(t, err)
-		iter, err := index.RowIterForIndexLookup(sqlCtx, NoCacheTableable{tbl}, lookup, pkSch, nil)
+		iter, err := index.RowIterForIndexLookup(sqlCtx, NoCacheTableable{tbl}, lookup, pkSch, nil, sql.ColSet{})
 		require.NoError(t, err)
 		_, err = iter.Next(sqlCtx)
 		require.NoError(t, err)

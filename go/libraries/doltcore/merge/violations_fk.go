@@ -69,8 +69,25 @@ func RegisterForeignKeyViolations(
 	if err != nil {
 		return err
 	}
+	// Built on first use, so that a root without foreign keys to check doesn't compare any tables.
+	var changes *fkTableChanges
 	for _, foreignKey := range fkColl.AllKeys() {
 		if !foreignKey.IsResolved() || (tables.Size() != 0 && !tables.Contains(foreignKey.TableName)) {
+			continue
+		}
+
+		if changes == nil {
+			changes, err = newFkTableChanges(ctx, newRoot, baseRoot)
+			if err != nil {
+				return err
+			}
+		}
+
+		// Every violation found below comes from a row that differs between |baseRoot| and |newRoot|: a row added to
+		// or modified in the child table, or a row removed from or modified in the parent table. A foreign key whose
+		// child and parent tables are both the same in the two roots has no such row, so it cannot have a violation
+		// and is skipped before its tables are loaded.
+		if !changes.mayDiffer(foreignKey.TableName) && !changes.mayDiffer(foreignKey.ReferencedTableName) {
 			continue
 		}
 
@@ -147,6 +164,79 @@ func RegisterForeignKeyViolations(
 		}
 	}
 	return nil
+}
+
+// fkTableChanges records which tables differ between the two roots given to RegisterForeignKeyViolations, so that
+// foreign keys over unchanged tables can be skipped without loading any table.
+type fkTableChanges struct {
+	// newHashes and baseHashes hold the hash of every table in the two roots, keyed by case-folded table name.
+	newHashes  map[doltdb.TableName]hash.Hash
+	baseHashes map[doltdb.TableName]hash.Hash
+	// redirectsChanged is set when dolt_nonlocal_tables differs between the two roots.
+	redirectsChanged bool
+}
+
+// newFkTableChanges compares the tables of |newRoot| and |baseRoot| by hash. A table hash covers the schema, the row
+// data and every index of the table, so two tables with the same hash have the same rows in every index.
+func newFkTableChanges(ctx context.Context, newRoot, baseRoot doltdb.RootValue) (*fkTableChanges, error) {
+	newHashes, err := foldedTableHashes(ctx, newRoot)
+	if err != nil {
+		return nil, err
+	}
+	baseHashes, err := foldedTableHashes(ctx, baseRoot)
+	if err != nil {
+		return nil, err
+	}
+	changes := &fkTableChanges{newHashes: newHashes, baseHashes: baseHashes}
+
+	// The table resolver redirects a table name to another branch when dolt_nonlocal_tables has an entry for it, so a
+	// change to that table can change what any name resolves to. It is looked up directly, in both places it can live,
+	// because it is not in a schema that MapTableHashes is certain to list.
+	nonlocalTables := doltdb.GetNonlocalTablesTableName()
+	for _, name := range []doltdb.TableName{{Name: nonlocalTables}, {Name: nonlocalTables, Schema: doltdb.DoltNamespace}} {
+		newHash, _, err := newRoot.GetTableHash(ctx, name)
+		if err != nil {
+			return nil, err
+		}
+		baseHash, _, err := baseRoot.GetTableHash(ctx, name)
+		if err != nil {
+			return nil, err
+		}
+		if newHash != baseHash {
+			changes.redirectsChanged = true
+		}
+	}
+	return changes, nil
+}
+
+// mayDiffer returns false only if |name| is certain to resolve to the same table, with the same contents, in both
+// roots. Resolvers match names case-insensitively, so tables are compared by case-folded name. A name that is not a
+// table of the new root, or that matches more than one table, is reported as changed, which leaves it to the resolver.
+func (c *fkTableChanges) mayDiffer(name doltdb.TableName) bool {
+	if c.redirectsChanged {
+		return true
+	}
+	folded := name.FoldCase()
+	newHash, ok := c.newHashes[folded]
+	return !ok || newHash.IsEmpty() || newHash != c.baseHashes[folded]
+}
+
+// foldedTableHashes returns the hash of every table in |root|, keyed by case-folded table name. Names that fold to the
+// same key get the empty hash, since a case-insensitive resolver could match either table.
+func foldedTableHashes(ctx context.Context, root doltdb.RootValue) (map[doltdb.TableName]hash.Hash, error) {
+	hashes, err := doltdb.MapTableHashes(ctx, root)
+	if err != nil {
+		return nil, err
+	}
+	folded := make(map[doltdb.TableName]hash.Hash, len(hashes))
+	for name, h := range hashes {
+		key := name.FoldCase()
+		if _, ok := folded[key]; ok {
+			h = hash.Hash{}
+		}
+		folded[key] = h
+	}
+	return folded, nil
 }
 
 // AddForeignKeyViolations adds foreign key constraint violations to each table.

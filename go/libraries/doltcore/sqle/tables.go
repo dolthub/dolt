@@ -155,11 +155,20 @@ func (t *DoltTable) LookupForExpressions(ctx *sql.Context, exprs ...sql.Expressi
 
 	colset := sets.NewFastIntSet()
 	schCols := t.sch.GetAllCols()
-	for _, c := range lookupCols {
+	keys := make([]interface{}, len(lookupCols))
+	for i, c := range lookupCols {
 		col := schCols.LowerNameToCol[c.Col]
-		if !sql.IsConvertibleKeyType(col.TypeInfo.ToSqlType(), c.Lit.Type(ctx)) {
+		colType := col.TypeInfo.ToSqlType()
+		if !sql.IsConvertibleKeyType(colType, c.Lit.Type(ctx)) {
 			return sql.IndexLookup{}, nil, nil, false, nil
 		}
+
+		key, ok, err := strictLookupKey(ctx, colType, c.Lit)
+		if err != nil || !ok {
+			return sql.IndexLookup{}, nil, nil, false, nil
+		}
+
+		keys[i] = key
 		idx := schCols.TagToIdx[col.Tag]
 		colset.Add(idx + 1)
 	}
@@ -185,7 +194,7 @@ func (t *DoltTable) LookupForExpressions(ctx *sql.Context, exprs ...sql.Expressi
 		// (1) assign lookup columns to range expressions in the appropriate order for the given lookup.
 		// (2) aggregate the unused expressions into the return filter.
 		rb := sql.NewEqualityIndexBuilder(lookup.Idx)
-		for _, c2 := range lookupCols {
+		for keyIdx, c2 := range lookupCols {
 			matchIdx := -1
 			for i, ord := range lookup.Ordinals {
 				// the ordinals redirection accounts for index
@@ -198,7 +207,7 @@ func (t *DoltTable) LookupForExpressions(ctx *sql.Context, exprs ...sql.Expressi
 				}
 			}
 			if matchIdx != -1 {
-				if err = rb.AddEquality(ctx, matchIdx, c2.Lit.Value()); err != nil {
+				if err = rb.AddEquality(ctx, matchIdx, keys[keyIdx]); err != nil {
 					return sql.IndexLookup{}, nil, nil, false, nil
 				}
 				continue
@@ -220,6 +229,46 @@ func (t *DoltTable) LookupForExpressions(ctx *sql.Context, exprs ...sql.Expressi
 
 	return sql.IndexLookup{}, nil, nil, false, nil
 
+}
+
+// strictLookupKey returns the value of |lit| as a key of a column of type |colType|. Extended types can represent the
+// same value differently, so a literal of another extended type is converted to the column's type. Returns false when
+// the literal has no exact equivalent in the column's type, such as 1.5 for an integer column, in which case the strict
+// lookup must not be used.
+func strictLookupKey(ctx *sql.Context, colType sql.Type, lit *expression.Literal) (interface{}, bool, error) {
+	key := lit.Value()
+	colEt, ok := colType.(sql.ExtendedType)
+	if !ok || key == nil {
+		return key, true, nil
+	}
+
+	litType := lit.Type(ctx)
+	if colType.Equals(litType) {
+		return key, true, nil
+	}
+
+	litEt, ok := litType.(sql.ExtendedType)
+	if !ok {
+		return nil, false, nil
+	}
+
+	converted, inRange, err := colEt.ConvertToType(ctx, litEt, key, 'a')
+	if err != nil || inRange != sql.InRange {
+		return nil, false, err
+	}
+
+	// Assignment casts can round, so the key is only used when it converts back to the literal's value.
+	restored, inRange, err := litEt.ConvertToType(ctx, colEt, converted, 'a')
+	if err != nil || inRange != sql.InRange {
+		return nil, false, err
+	}
+
+	cmp, err := litEt.Compare(ctx, key, restored)
+	if err != nil || cmp != 0 {
+		return nil, false, err
+	}
+
+	return converted, true, nil
 }
 
 func NewDoltTable(ctx *sql.Context, name string, sch schema.Schema, tbl *doltdb.Table, db dsess.SqlDatabase, opts editor.Options) (*DoltTable, error) {
@@ -744,6 +793,10 @@ func (t *DoltTable) PrimaryKeySchema(ctx *sql.Context) sql.PrimaryKeySchema {
 
 // PartitionRows returns the table rows for the partition given
 func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
+	return t.PartitionValueRowWriter(ctx, partition, sql.ColSet{})
+}
+
+func (t *DoltTable) PartitionValueRowWriter(ctx *sql.Context, partition sql.Partition, columnIds sql.ColSet) (sql.ValueRowWriter, error) {
 	if p, ok := partition.(pendingTablePartition); ok {
 		iter, err := p.rows.IterAll(ctx)
 		if err != nil {
@@ -754,7 +807,7 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 			projCols = t.sch.GetAllCols().Tags
 		}
 		kd, vd := p.rows.Descriptors()
-		return index.NewProllyRowIterForSchema(t.sch, iter, kd, vd, projCols, p.rows.NodeStore()), nil
+		return index.NewProllyRowIterForSchema(t.sch, iter, kd, vd, projCols, p.rows.NodeStore(), columnIds), nil
 	}
 
 	table, err := t.DoltTable(ctx)
@@ -777,7 +830,7 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 		}
 	}
 
-	originalRowIter, err := partitionRows(ctx, table, projCols, partition)
+	originalRowIter, err := partitionRows(ctx, table, projCols, partition, columnIds)
 	if err != nil {
 		return originalRowIter, err
 	}
@@ -789,12 +842,12 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 	}
 }
 
-func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []uint64, partition sql.Partition) (sql.RowIter, error) {
+func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []uint64, partition sql.Partition, columnIds sql.ColSet) (sql.ValueRowWriter, error) {
 	switch typedPartition := partition.(type) {
 	case doltTablePartition:
-		return newRowIterator(ctx, t, projCols, typedPartition)
+		return newRowIterator(ctx, t, projCols, typedPartition, columnIds)
 	case index.SinglePartition:
-		return newRowIterator(ctx, t, projCols, doltTablePartition{rowData: typedPartition.RowData, end: NoUpperBound})
+		return newRowIterator(ctx, t, projCols, doltTablePartition{rowData: typedPartition.RowData, end: NoUpperBound}, columnIds)
 	}
 
 	return nil, errors.New("unsupported partition type")
@@ -842,7 +895,7 @@ type doltTableInterface interface {
 }
 
 func (t *WritableDoltTable) Database() string {
-	return t.db.baseName
+	return t.db.name.Base
 }
 
 func (t *WritableDoltTable) setRoot(ctx *sql.Context, newRoot doltdb.RootValue) error {
@@ -1772,6 +1825,12 @@ func (t *AlterableDoltTable) columnChangeRequiresRewrite(oldColumn *sql.Column, 
 		panic(err) // should be impossible, we check compatibility before this point
 	}
 
+	if extendedTypeChanged(existingCol.TypeInfo, newCol.TypeInfo) {
+		// Values of an extended type are encoded according to their type, so every value must be rewritten when the
+		// type changes.
+		return true
+	}
+
 	if !existingCol.TypeInfo.Equals(newCol.TypeInfo) {
 		if schema.IsColSpatialType(newCol) {
 			// TODO: we need to do this because some spatial type changes require a full table check, but not all.
@@ -1786,6 +1845,15 @@ func (t *AlterableDoltTable) columnChangeRequiresRewrite(oldColumn *sql.Column, 
 	}
 
 	return false
+}
+
+// extendedTypeChanged returns whether either of the given types is an extended type, and the types differ.
+func extendedTypeChanged(oldTI, newTI typeinfo.TypeInfo) bool {
+	if oldTI.NomsKind() != types.ExtendedKind && newTI.NomsKind() != types.ExtendedKind {
+		return false
+	}
+
+	return !oldTI.ToSqlType().Equals(newTI.ToSqlType())
 }
 
 func isColumnDrop(oldSchema sql.PrimaryKeySchema, newSchema sql.PrimaryKeySchema) bool {
@@ -1882,7 +1950,8 @@ func (t *AlterableDoltTable) RewriteInserter(
 		if err != nil {
 			return nil, err
 		}
-		fkcChanged, err := rebindForeignKeyIndexes(t.TableName(), newSch, fkc)
+		var fkcChanged bool
+		fkc, fkcChanged, err = rebindForeignKeyIndexes(t.TableName(), newSch, fkc)
 		if err != nil {
 			return nil, err
 		}
@@ -2218,6 +2287,7 @@ func modifyIndexesForTableRewrite(ctx *sql.Context, oldSch schema.Schema, oldCol
 				Comment:            index.Comment(),
 				ColumnOrders:       index.ColumnOrders(),
 				OpClasses:          index.OpClasses(),
+				NullsNotDistinct:   index.NullsNotDistinct(),
 				FullTextProperties: index.FullTextProperties(),
 				VectorProperties:   index.VectorProperties(),
 			})
@@ -2293,7 +2363,14 @@ func preserveSurvivingColumnEncodings(oldSch, newSch schema.Schema) schema.Schem
 		if oldCol.Kind != cols[i].Kind {
 			continue
 		}
-		preserved := typeinfo.PreserveAdaptiveEncoding(oldCol.TypeInfo, cols[i].TypeInfo)
+
+		// Every value is rewritten, so extended types use the default encoding of their type. Older encodings of
+		// extended types may not be able to represent every value of the type.
+		if cols[i].Kind == types.ExtendedKind {
+			continue
+		}
+
+		preserved := typeinfo.PreserveOldEncoding(oldCol.TypeInfo, cols[i].TypeInfo)
 		if preserved == cols[i].TypeInfo {
 			continue
 		}
@@ -2384,7 +2461,7 @@ func (t *AlterableDoltTable) adjustForeignKeysForDroppedPk(ctx *sql.Context, tbl
 		return nil, err
 	}
 
-	err = fkc.UpdateIndexes(ctx, t.sch, fkcUpdates)
+	fkc, err = fkc.UpdateIndexes(ctx, t.sch, fkcUpdates)
 	if err != nil {
 		return nil, err
 	}
@@ -2435,7 +2512,12 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 	}
 
 	if existingCol.Kind == col.Kind {
-		col.TypeInfo = typeinfo.PreserveAdaptiveEncoding(existingCol.TypeInfo, col.TypeInfo)
+		col.TypeInfo = typeinfo.PreserveOldEncoding(existingCol.TypeInfo, col.TypeInfo)
+	}
+
+	if extendedTypeChanged(existingCol.TypeInfo, col.TypeInfo) {
+		return fmt.Errorf("cannot change the type of column %s from %s to %s without rewriting the table",
+			columnName, existingCol.TypeInfo.ToSqlType().String(), col.TypeInfo.ToSqlType().String())
 	}
 
 	// TODO: move this logic into ShouldRewrite
@@ -2526,7 +2608,7 @@ func (t *AlterableDoltTable) getFirstAutoIncrementValue(
 
 	// Note that we aren't calling the public PartitionRows, because it always gets the table data from the session
 	// root, which hasn't been updated yet
-	rowIter, err := partitionRows(ctx, table, t.projectedCols, index.SinglePartition{RowData: rowData})
+	rowIter, err := partitionRows(ctx, table, t.projectedCols, index.SinglePartition{RowData: rowData}, sql.ColSet{})
 	if err != nil {
 		return 0, err
 	}
@@ -2723,15 +2805,16 @@ func (t *AlterableDoltTable) createIndex(ctx *sql.Context, idx sql.IndexDef, key
 	}
 
 	idxProperties := schema.IndexProperties{
-		IsUnique:      idx.Constraint == sql.IndexConstraint_Unique,
-		IsSpatial:     idx.Constraint == sql.IndexConstraint_Spatial,
-		IsFullText:    idx.Constraint == sql.IndexConstraint_Fulltext,
-		IsVector:      idx.Constraint == sql.IndexConstraint_Vector,
-		IsUserDefined: true,
-		Comment:       idx.Comment,
-		Predicate:     predicateStr,
-		ColumnOrders:  idx.ColumnOrders(),
-		OpClasses:     idx.OpClasses(),
+		IsUnique:         idx.Constraint == sql.IndexConstraint_Unique,
+		IsSpatial:        idx.Constraint == sql.IndexConstraint_Spatial,
+		IsFullText:       idx.Constraint == sql.IndexConstraint_Fulltext,
+		IsVector:         idx.Constraint == sql.IndexConstraint_Vector,
+		IsUserDefined:    true,
+		Comment:          idx.Comment,
+		Predicate:        predicateStr,
+		ColumnOrders:     idx.ColumnOrders(),
+		OpClasses:        idx.OpClasses(),
+		NullsNotDistinct: idx.NullsNotDistinct,
 		FullTextProperties: schema.FullTextProperties{
 			ConfigTable:      tableNames.Config,
 			PositionTable:    tableNames.Position,
@@ -2778,6 +2861,7 @@ func (t *AlterableDoltTable) updateForeignKeyIndexNames(ctx *sql.Context, root d
 	if err != nil {
 		return nil, err
 	}
+	renamed := fkc.Builder()
 	for _, fk := range fkc.AllKeys() {
 		usesTableIndex := t.TableName() == fk.TableName && strings.EqualFold(fk.TableIndex, oldIndexName)
 		usesReferencedTableIndex := t.TableName() == fk.ReferencedTableName && strings.EqualFold(fk.ReferencedTableIndex, oldIndexName)
@@ -2791,13 +2875,13 @@ func (t *AlterableDoltTable) updateForeignKeyIndexNames(ctx *sql.Context, root d
 		if usesReferencedTableIndex {
 			newFk.ReferencedTableIndex = newIndexName
 		}
-		fkc.RemoveKeys(fk)
-		err = fkc.AddKeys(newFk)
+		renamed.RemoveKeys(fk)
+		err = renamed.AddKeys(newFk)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return root.PutForeignKeyCollection(ctx, fkc)
+	return root.PutForeignKeyCollection(ctx, renamed.Build())
 }
 
 // createForeignKey creates a doltdb.ForeignKey from a sql.ForeignKeyConstraint
@@ -3024,7 +3108,7 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 		return err
 	}
 
-	err = fkc.AddKeys(doltFk)
+	fkc, err = fkc.AddKeys(doltFk)
 	if err != nil {
 		return err
 	}
@@ -3053,7 +3137,12 @@ func (t *AlterableDoltTable) DropForeignKey(ctx *sql.Context, fkName string, tab
 	if err != nil {
 		return err
 	}
-	if !fkc.RemoveKeyByName(fkName, doltdb.TableName{Name: tableName, Schema: schemaName}) {
+	// The engine doesn't always supply a schema name. A foreign key is declared in the schema of its table, so use that.
+	if schemaName == "" {
+		schemaName = t.db.Schema()
+	}
+	fkc, removed := fkc.RemoveKeyByName(fkName, doltdb.TableName{Name: tableName, Schema: schemaName})
+	if !removed {
 		return sql.ErrForeignKeyNotFound.New(fkName, t.tableName)
 	}
 	newRoot, err := root.PutForeignKeyCollection(ctx, fkc)
@@ -3102,7 +3191,7 @@ func (t *WritableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, sq
 	if !ok {
 		return sql.ErrForeignKeyNotFound.New(fkName, t.tableName)
 	}
-	fkc.RemoveKeyByName(doltFk.Name, currentTblName)
+	fkc, _ = fkc.RemoveKeyByName(doltFk.Name, currentTblName)
 	doltFk.Name = sqlFk.Name
 	doltFk.TableName = tblName
 	doltFk.ReferencedTableName = doltdb.TableName{Name: sqlFk.ParentTable, Schema: schemaName}
@@ -3125,7 +3214,7 @@ func (t *WritableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, sq
 	doltFk.IsNotValid = sqlFk.IsNotValid
 	doltFk.MatchType = doltdb.ForeignKeyMatchType(sqlFk.MatchType)
 
-	err = fkc.AddKeys(doltFk)
+	fkc, err = fkc.AddKeys(doltFk)
 	if err != nil {
 		return err
 	}
@@ -3220,6 +3309,7 @@ func (t *AlterableDoltTable) dropIndex(ctx *sql.Context, indexName string) (*dol
 	if err != nil {
 		return nil, nil, err
 	}
+	rebound := fkc.Builder()
 	for _, fk := range fkc.AllKeys() {
 		if fk.ReferencedTableIndex != oldIdx.Name() {
 			continue
@@ -3241,13 +3331,13 @@ func (t *AlterableDoltTable) dropIndex(ctx *sql.Context, indexName string) (*dol
 			// if a replacement index wasn't found; it matched on primary key, so use empty string
 			newFk.ReferencedTableIndex = ""
 		}
-		fkc.RemoveKeys(fk)
-		err = fkc.AddKeys(newFk)
+		rebound.RemoveKeys(fk)
+		err = rebound.AddKeys(newFk)
 		if err != nil {
 			return nil, nil, err
 		}
 	}
-	root, err = root.PutForeignKeyCollection(ctx, fkc)
+	root, err = root.PutForeignKeyCollection(ctx, rebound.Build())
 	if err != nil {
 		return nil, nil, err
 	}
