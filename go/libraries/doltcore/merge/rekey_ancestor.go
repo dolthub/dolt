@@ -16,7 +16,6 @@ package merge
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -305,13 +304,15 @@ func RekeyTable(ctx *sql.Context, name doltdb.TableName, tbl *doltdb.Table, sch,
 	if !ok {
 		return nil, false, nil
 	}
-	newRows, err := rk.RekeyUniqueMap(ctx, oldRows)
-	if errors.Is(err, durable.ErrRekeyNullKey) {
-		return nil, false, ErrRekeyedAncestorNullKey.New(name)
-	} else if errors.Is(err, durable.ErrRekeyDuplicateKey) {
-		return nil, false, ErrRekeyedAncestorCollision.New(name)
-	} else if err != nil {
+	newRows, status, err := rk.RekeyUniqueMap(ctx, oldRows)
+	if err != nil {
 		return nil, false, err
+	}
+	switch status {
+	case durable.RekeyStatusNullKey:
+		return nil, false, ErrRekeyedAncestorNullKey.New(name)
+	case durable.RekeyStatusDuplicateKey:
+		return nil, false, ErrRekeyedAncestorCollision.New(name)
 	}
 
 	indexes, err := durable.NewIndexSet(ctx, vrw, ns)

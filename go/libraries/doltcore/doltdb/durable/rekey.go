@@ -25,12 +25,21 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-var (
-	// ErrRekeyNullKey indicates a row has a NULL in its new primary key.
-	ErrRekeyNullKey = errors.New("rekeyed row has NULL in primary key")
-	// ErrRekeyDuplicateKey indicates two rows share a new primary key.
-	ErrRekeyDuplicateKey = errors.New("rekeyed rows share a primary key")
+// RekeyStatus reports the outcome of [RowRekeyer.RekeyUniqueMap].
+type RekeyStatus uint8
+
+const (
+	// RekeyStatusUnknown is the zero value.
+	RekeyStatusUnknown RekeyStatus = iota
+	// RekeyStatusOK reports that every row was rekeyed under a unique, non-NULL key.
+	RekeyStatusOK
+	// RekeyStatusNullKey reports that a row had a NULL in its new primary key.
+	RekeyStatusNullKey
+	// RekeyStatusDuplicateKey reports that two rows shared a new primary key.
+	RekeyStatusDuplicateKey
 )
+
+var errStopIter = errors.New("stop iteration")
 
 // RowRekeyer rebuilds tuples of one schema under the primary key of another.
 // It copies their fields, so merges and diffs can compare rows across a
@@ -56,6 +65,8 @@ type RowRekeyer struct {
 // It returns false when either schema is keyless, when |sch| lacks a column of
 // |newSch|, or when a column is stored with another encoding.
 func NewRowRekeyer(ns tree.NodeStore, sch, newSch schema.Schema) (*RowRekeyer, bool) {
+	// Keyless value tuples start with a hidden cardinality field, so stored
+	// column ordinals do not align with tuple fields.
 	if schema.IsKeyless(sch) || schema.IsKeyless(newSch) {
 		return nil, false
 	}
@@ -166,20 +177,22 @@ func (r *RowRekeyer) RekeyMap(ctx context.Context, rows prolly.Map) (rekeyed, un
 
 // RekeyUniqueMap returns the rows of |rows| keyed by the new primary key.
 //
-// It stops at the first row with a NULL in the new key (ErrRekeyNullKey) or
-// the first duplicate new key (ErrRekeyDuplicateKey).
-func (r *RowRekeyer) RekeyUniqueMap(ctx context.Context, rows prolly.Map) (prolly.Map, error) {
+// It stops at the first row with a NULL in the new key (RekeyStatusNullKey) or
+// the first duplicate new key (RekeyStatusDuplicateKey).
+func (r *RowRekeyer) RekeyUniqueMap(ctx context.Context, rows prolly.Map) (prolly.Map, RekeyStatus, error) {
 	mut, err := r.newTargetMutator(ctx)
 	if err != nil {
-		return prolly.Map{}, err
+		return prolly.Map{}, RekeyStatusUnknown, err
 	}
+	status := RekeyStatusOK
 	err = IterRows(ctx, rows, func(k, v val.Tuple) error {
 		nk, err := r.Key(ctx, k, v)
 		if err != nil {
 			return err
 		}
 		if r.newKD.HasNulls(nk) {
-			return ErrRekeyNullKey
+			status = RekeyStatusNullKey
+			return errStopIter
 		}
 		if !r.isUnique {
 			dup, err := mut.Has(ctx, nk)
@@ -187,15 +200,23 @@ func (r *RowRekeyer) RekeyUniqueMap(ctx context.Context, rows prolly.Map) (proll
 				return err
 			}
 			if dup {
-				return ErrRekeyDuplicateKey
+				status = RekeyStatusDuplicateKey
+				return errStopIter
 			}
 		}
 		return r.putRow(ctx, mut, nk, k, v)
 	})
-	if err != nil {
-		return prolly.Map{}, err
+	if errors.Is(err, errStopIter) {
+		return prolly.Map{}, status, nil
 	}
-	return mut.Map(ctx)
+	if err != nil {
+		return prolly.Map{}, RekeyStatusUnknown, err
+	}
+	rekeyed, err := mut.Map(ctx)
+	if err != nil {
+		return prolly.Map{}, RekeyStatusUnknown, err
+	}
+	return rekeyed, RekeyStatusOK, nil
 }
 
 // newTargetMutator returns an empty mutable map for the destination schema.
@@ -250,6 +271,8 @@ func (r *RowRekeyer) moveDuplicateKeys(ctx context.Context, rows prolly.Map, mut
 		if err != nil {
 			return err
 		}
+		// Skip NULL keys before probing dupKeys, which uses a non-nullable key
+		// descriptor.
 		if r.newKD.HasNulls(nk) {
 			return nil
 		}

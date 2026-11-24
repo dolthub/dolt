@@ -88,13 +88,11 @@ func rekeyableType(from, to Column) bool {
 	// key bytes and keeps every existing value valid in the wider type.
 	fromStr, ok1 := from.TypeInfo.ToSqlType().(sql.StringType)
 	toStr, ok2 := to.TypeInfo.ToSqlType().(sql.StringType)
-	if ok1 && ok2 &&
-		fromStr.Type() == sqltypes.VarChar &&
-		toStr.Type() == sqltypes.VarChar &&
-		from.TypeInfo.Encoding() == to.TypeInfo.Encoding() &&
-		fromStr.Collation().Equals(toStr.Collation()) &&
-		fromStr.MaxCharacterLength() <= toStr.MaxCharacterLength() {
-		return true
+	if !ok1 || !ok2 {
+		return false
 	}
-	return false
+	isVarChar := fromStr.Type() == sqltypes.VarChar && toStr.Type() == sqltypes.VarChar
+	sameFormat := from.TypeInfo.Encoding() == to.TypeInfo.Encoding() &&
+		fromStr.Collation().Equals(toStr.Collation())
+	return isVarChar && sameFormat && fromStr.MaxCharacterLength() <= toStr.MaxCharacterLength()
 }
