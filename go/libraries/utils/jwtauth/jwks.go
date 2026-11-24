@@ -122,48 +122,56 @@ func (f *fetchedJWKS) GetKey(kid string) ([]jose.JSONWebKey, error) {
 // refreshed and the results will be aggregated into the JWKS view. If a key no
 // longer appears at the URL, it may eventually be removed from the set of keys
 // available through GetKey(). Requesting a key which is not currently in the
-// key set will hint that the URLs should be refreshed. GetKey() then waits
-// until the key shows up or until every URL has been refetched. Each fetch
-// is bounded by a timeout, so an unresponsive URL delays only lookups of keys
-// which no other URL serves.
+// key set asks every URL to be refetched. GetKey() then waits until the key
+// shows up or until every URL has finished a fetch which started after the
+// request. Each fetch is bounded by a timeout, so an unresponsive URL delays
+// only lookups of keys which no other URL serves.
 //
 // GracefulStop() will shutdown any ongoing fetching work and will return when
 // everything is cleanly shutdown.
 type MultiJWKS struct {
-	client  *http.Client
-	wg      sync.WaitGroup
-	stop    chan struct{}
-	ctx     context.Context
-	cancel  context.CancelFunc
-	refresh []chan *sync.WaitGroup
-	urls    []string
-	sets    []jose.JSONWebKeySet
-	agg     jose.JSONWebKeySet
-	// Closed and replaced every time |agg| changes.
-	updated chan struct{}
-	mu      sync.RWMutex
-	lgr     *logrus.Entry
-	stopped bool
-
+	client       *http.Client
+	lgr          *logrus.Entry
+	urls         []string
 	fetchTimeout time.Duration
+
+	wg     sync.WaitGroup
+	ctx    context.Context
+	cancel context.CancelFunc
+	// pokes[i] asks the fetch loop of urls[i] to fetch now. A poke which
+	// arrives during a fetch causes another fetch right after it.
+	pokes []chan struct{}
+
+	mu   sync.RWMutex
+	sets []jose.JSONWebKeySet
+	agg  jose.JSONWebKeySet
+	// started[i] and done[i] count the fetches of urls[i] which have started
+	// and which have finished, successfully or not.
+	started []uint64
+	done    []uint64
+	// Closed and replaced whenever a fetch finishes and on stop.
+	changed chan struct{}
+	stopped bool
 }
 
 const defaultJWKSFetchTimeout = 5 * time.Second
 
 func NewMultiJWKS(lgr *logrus.Entry, urls []string, client *http.Client) *MultiJWKS {
-	res := new(MultiJWKS)
-	res.lgr = lgr
-	res.client = client
-	res.urls = urls
-	res.stop = make(chan struct{})
-	res.ctx, res.cancel = context.WithCancel(context.Background())
-	res.updated = make(chan struct{})
-	res.fetchTimeout = defaultJWKSFetchTimeout
-	res.refresh = make([]chan *sync.WaitGroup, len(urls))
-	for i := range res.refresh {
-		res.refresh[i] = make(chan *sync.WaitGroup, 3)
+	res := &MultiJWKS{
+		client:       client,
+		lgr:          lgr,
+		urls:         urls,
+		fetchTimeout: defaultJWKSFetchTimeout,
+		pokes:        make([]chan struct{}, len(urls)),
+		sets:         make([]jose.JSONWebKeySet, len(urls)),
+		started:      make([]uint64, len(urls)),
+		done:         make([]uint64, len(urls)),
+		changed:      make(chan struct{}),
 	}
-	res.sets = make([]jose.JSONWebKeySet, len(urls))
+	res.ctx, res.cancel = context.WithCancel(context.Background())
+	for i := range res.pokes {
+		res.pokes[i] = make(chan struct{}, 1)
+	}
 	return res
 }
 
@@ -178,146 +186,133 @@ func (t *MultiJWKS) Run() {
 func (t *MultiJWKS) GracefulStop() {
 	t.mu.Lock()
 	t.stopped = true
+	t.broadcast()
 	t.mu.Unlock()
-	close(t.stop)
 	t.cancel()
 	t.wg.Wait()
-	// TODO: Potentially clear t.refresh channels, ensure nothing else can call GetKey()...
 }
 
-func (t *MultiJWKS) needsRefresh() *sync.WaitGroup {
-	wg := new(sync.WaitGroup)
-	if t.stopped {
-		return wg
-	}
-	wg.Add(len(t.refresh))
-	for _, c := range t.refresh {
-		select {
-		case c <- wg:
-		default:
-			wg.Done()
-		}
-	}
-	return wg
-}
-
-func (t *MultiJWKS) store(i int, jwks jose.JSONWebKeySet) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.sets[i] = jwks
-	sum := 0
-	for _, s := range t.sets {
-		sum += len(s.Keys)
-	}
-	t.agg.Keys = make([]jose.JSONWebKey, 0, sum)
-	for _, s := range t.sets {
-		t.agg.Keys = append(t.agg.Keys, s.Keys...)
-	}
-	close(t.updated)
-	t.updated = make(chan struct{})
+// broadcast wakes every GetKey() waiting on |t.changed|. Callers hold |t.mu|.
+func (t *MultiJWKS) broadcast() {
+	close(t.changed)
+	t.changed = make(chan struct{})
 }
 
 func (t *MultiJWKS) GetKey(kid string) ([]jose.JSONWebKey, error) {
 	t.mu.RLock()
 	res := t.agg.Key(kid)
-	if len(res) > 0 {
+	if len(res) > 0 || t.stopped {
 		t.mu.RUnlock()
 		return res, nil
 	}
-	t.lgr.Infof("fetched key %s, found no key, signaling refresh", kid)
-	refresh := t.needsRefresh()
-	updated := t.updated
+	// Wait on fetches which start after now, since earlier ones may predate
+	// the key.
+	want := make([]uint64, len(t.started))
+	for i, n := range t.started {
+		want[i] = n + 1
+	}
 	t.mu.RUnlock()
 
-	refreshed := make(chan struct{})
-	go func() {
-		refresh.Wait()
-		close(refreshed)
-	}()
-	// Return as soon as any URL serves the key; don't wait on the others.
-	for {
+	t.lgr.Infof("fetched key %s, found no key, signaling refresh", kid)
+	for _, p := range t.pokes {
 		select {
-		case <-refreshed:
-			t.mu.RLock()
-			res = t.agg.Key(kid)
-			t.mu.RUnlock()
-			t.lgr.Infof("refresh for key %s done, found %d keys", kid, len(res))
-			return res, nil
-		case <-updated:
+		case p <- struct{}{}:
+		default:
 		}
+	}
+	for {
 		t.mu.RLock()
 		res = t.agg.Key(kid)
-		updated = t.updated
+		refreshed := t.stopped || t.fetchedSince(want)
+		changed := t.changed
 		t.mu.RUnlock()
-		if len(res) > 0 {
-			t.lgr.Infof("refresh for key %s found %d keys", kid, len(res))
+		// Return as soon as any URL serves the key; don't wait on the others.
+		if len(res) > 0 || refreshed {
+			t.lgr.Infof("refresh for key %s done, found %d keys", kid, len(res))
 			return res, nil
 		}
+		<-changed
 	}
 }
 
+// fetchedSince returns true when every URL has finished its |want|th fetch.
+// Callers hold |t.mu|.
+func (t *MultiJWKS) fetchedSince(want []uint64) bool {
+	for i, n := range want {
+		if t.done[i] < n {
+			return false
+		}
+	}
+	return true
+}
+
+// fetch fetches urls[i], stores its keys on success, and wakes any GetKey()
+// waiting on it either way.
 func (t *MultiJWKS) fetch(i int) error {
+	t.mu.Lock()
+	t.started[i]++
+	n := t.started[i]
+	t.mu.Unlock()
+
+	jwks, err := t.get(i)
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if err == nil {
+		t.sets[i] = jwks
+		sum := 0
+		for _, s := range t.sets {
+			sum += len(s.Keys)
+		}
+		t.agg.Keys = make([]jose.JSONWebKey, 0, sum)
+		for _, s := range t.sets {
+			t.agg.Keys = append(t.agg.Keys, s.Keys...)
+		}
+	}
+	t.done[i] = n
+	t.broadcast()
+	return err
+}
+
+func (t *MultiJWKS) get(i int) (jose.JSONWebKeySet, error) {
+	var jwks jose.JSONWebKeySet
 	ctx, cancel := context.WithTimeout(t.ctx, t.fetchTimeout)
 	defer cancel()
 	request, err := http.NewRequestWithContext(ctx, "GET", t.urls[i], nil)
 	if err != nil {
-		return err
+		return jwks, err
 	}
 	response, err := t.client.Do(request)
 	if err != nil {
-		return err
+		return jwks, err
 	}
 	defer response.Body.Close()
 	if response.StatusCode/100 != 2 {
-		return fmt.Errorf("http request failed: StatusCode: %d", response.StatusCode)
+		return jwks, fmt.Errorf("http request failed: StatusCode: %d", response.StatusCode)
 	}
 	contents, err := io.ReadAll(response.Body)
 	if err != nil {
-		return err
+		return jwks, err
 	}
-	var jwks jose.JSONWebKeySet
 	err = json.Unmarshal(contents, &jwks)
-	if err != nil {
-		return err
-	}
-	t.store(i, jwks)
-	return nil
+	return jwks, err
 }
 
 func (t *MultiJWKS) thread(i int) {
 	defer t.wg.Done()
-	timer := time.NewTimer(30 * time.Second)
-	var refresh *sync.WaitGroup
+	timer := time.NewTimer(0)
+	defer timer.Stop()
 	for {
 		nextRefresh := 30 * time.Second
-		err := t.fetch(i)
-		if err != nil {
-			// Something bad...
+		if err := t.fetch(i); err != nil {
 			t.lgr.Warnf("error fetching %s: %v", t.urls[i], err)
 			nextRefresh = 1 * time.Second
 		}
 		timer.Reset(nextRefresh)
-		if refresh != nil {
-			refresh.Done()
-		}
-		refresh = nil
 		select {
-		case <-t.stop:
-			if !timer.Stop() {
-				<-timer.C
-			}
-			for {
-				select {
-				case refresh = <-t.refresh[i]:
-					refresh.Done()
-				default:
-					return
-				}
-			}
-		case refresh = <-t.refresh[i]:
-			if !timer.Stop() {
-				<-timer.C
-			}
+		case <-t.ctx.Done():
+			return
+		case <-t.pokes[i]:
 		case <-timer.C:
 		}
 	}

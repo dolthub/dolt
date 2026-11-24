@@ -227,3 +227,13 @@ drain:
 		}
 	}
 }
+
+func TestMultiJWKSNoURLs(t *testing.T) {
+	jwks := runMultiJWKS(t, nil, 0)
+	select {
+	case res := <-getKeyAsync(jwks, "missing"):
+		require.Empty(t, res)
+	case <-time.After(5 * time.Second):
+		t.Fatal("GetKey with no URLs blocked")
+	}
+}
