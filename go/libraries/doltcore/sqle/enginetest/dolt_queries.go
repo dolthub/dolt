@@ -530,6 +530,44 @@ var DoltScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "dolt_status errors on irreconcilable dolt_ignore patterns",
+		SetUpScript: []string{
+			"INSERT INTO dolt_ignore VALUES ('*_ignore', true), ('commit_*', false);",
+			"CREATE TABLE commit_ignore (pk int primary key);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "SELECT * FROM dolt_status;",
+				ExpectedErrStr: "the table commit_ignore matches conflicting patterns in dolt_ignore:\nignored:     *_ignore\nnot ignored: commit_*",
+			},
+			{
+				// dolt_status_ignored reports a table matched by conflicting patterns as not ignored
+				Query:    "SELECT table_name, staged, status, ignored FROM dolt_status_ignored WHERE table_name = 'commit_ignore';",
+				Expected: []sql.Row{{"commit_ignore", byte(0), "new table", false}},
+			},
+		},
+	},
+	{
+		Name: "dolt_status shows tracked tables that match dolt_ignore patterns",
+		SetUpScript: []string{
+			"INSERT INTO dolt_ignore VALUES ('scratch_*', true);",
+			"CREATE TABLE scratch_one (pk int primary key);",
+			"CALL DOLT_ADD('--force', 'scratch_one');",
+			"CALL DOLT_COMMIT('-m', 'track scratch_one');",
+			"INSERT INTO scratch_one VALUES (1);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT table_name, staged, status FROM dolt_status WHERE table_name = 'scratch_one';",
+				Expected: []sql.Row{{"scratch_one", byte(0), "modified"}},
+			},
+			{
+				Query:    "SELECT table_name, staged, status, ignored FROM dolt_status_ignored WHERE table_name = 'scratch_one';",
+				Expected: []sql.Row{{"scratch_one", byte(0), "modified", false}},
+			},
+		},
+	},
+	{
 		Name: "dolt_status reports AUTO_INCREMENT value changes",
 		// See https://github.com/dolthub/dolt/issues/11145
 		SetUpScript: []string{
