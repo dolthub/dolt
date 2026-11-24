@@ -190,7 +190,7 @@ func (tx *DoltTransaction) GetInitialRoot(dbName string) (hash.Hash, bool) {
 
 // prepareDoltCommit merges a pending commit with the current HEAD without publishing it.
 // The returned hash identifies the exact HEAD used to prepare the commit.
-func prepareDoltCommit(ctx *sql.Context,
+func (tx *DoltTransaction) prepareDoltCommit(ctx *sql.Context,
 	dbName string,
 	doltDb *doltdb.DoltDB,
 	startState *doltdb.WorkingSet,
@@ -265,6 +265,9 @@ func prepareDoltCommit(ctx *sql.Context,
 				merge.MergeOpts{})
 			if err != nil {
 				return nil, nil, hash.Hash{}, err
+			}
+			if result.CountOfTablesWithDataConflicts() > 0 {
+				return nil, nil, hash.Hash{}, tx.rollbackAndErr(ctx, retryTransactionError(""))
 			}
 			pending.Roots.Staged = result.Root
 
@@ -461,7 +464,7 @@ func (tx *DoltTransaction) commitHeads(
 			pending := change.commit
 			var expectedHead hash.Hash
 			if pending != nil {
-				ws, pending, expectedHead, err = prepareDoltCommit(ctx, change.dbName, startPoint.db, workingSetsAtTxStart[i], pending, ws, states[i].EditOpts())
+				ws, pending, expectedHead, err = tx.prepareDoltCommit(ctx, change.dbName, startPoint.db, workingSetsAtTxStart[i], pending, ws, states[i].EditOpts())
 				if err != nil {
 					return nil, nil, err
 				}
@@ -571,6 +574,9 @@ func (tx *DoltTransaction) mergeRoots(
 		if err != nil {
 			return nil, err
 		}
+		if result.CountOfTablesWithDataConflicts() > 0 {
+			return nil, tx.rollbackAndErr(ctx, retryTransactionError(""))
+		}
 		workingSet = workingSet.WithStagedRoot(result.Root)
 	}
 
@@ -666,7 +672,9 @@ const (
 //
 // The justification for this behavior is that we want to protect the working
 // set from constraint violations with the above settings.
-// TODO: should this validate staged as well?
+//
+// The staged root is not validated here, because it can keep conflicts that were committed deliberately and have since
+// been resolved in the working root. Staged conflicts from a transaction merge are rejected when the merge happens.
 func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, workingSet *doltdb.WorkingSet, isFf ffMerge) error {
 	forceTransactionCommit, err := ctx.GetSessionVariable(ctx, ForceTransactionCommit)
 	if err != nil {

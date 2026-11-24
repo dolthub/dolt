@@ -2216,6 +2216,364 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 
 var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 	{
+		Name: "dolt_commit conflicting with a concurrent soft reset is rejected",
+		SetUpScript: []string{
+			"create table t (k int primary key, x int)",
+			"call dolt_commit('-Am', 'a')",
+			"insert into t values (1, 1)",
+			"call dolt_commit('-am', 'b')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "/* client a */ call dolt_reset('--soft', 'HEAD~1')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ update t set x = 5 where k = 1",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:          "/* client b */ call dolt_commit('-am', 'c')",
+				ExpectedErrStr: sql.ErrLockDeadlock.New(dsess.ErrRetryTransaction.Error()).Error(),
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ update t set x = 5 where k = 1",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:            "/* client b */ call dolt_commit('-am', 'c')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ select message from dolt_log limit 1",
+				Expected: []sql.Row{{"c"}},
+			},
+			{
+				Query:            "/* client a */ call dolt_checkout('-b', 'verify', 'main')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ select * from dolt_conflicts",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from t order by k",
+				Expected: []sql.Row{{1, 5}},
+			},
+		},
+	},
+	{
+		Name: "dolt_commit conflicting with a concurrent mixed reset is rejected",
+		SetUpScript: []string{
+			"create table t (k int primary key, x int)",
+			"call dolt_commit('-Am', 'a')",
+			"insert into t values (1, 1)",
+			"call dolt_commit('-am', 'b')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "/* client a */ call dolt_reset('HEAD~1')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ update t set x = 5 where k = 1",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:          "/* client b */ call dolt_commit('-am', 'c')",
+				ExpectedErrStr: sql.ErrLockDeadlock.New(dsess.ErrRetryTransaction.Error()).Error(),
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ update t set x = 5 where k = 1",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:            "/* client b */ call dolt_commit('-am', 'c')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ select message from dolt_log limit 1",
+				Expected: []sql.Row{{"c"}},
+			},
+			{
+				Query:            "/* client a */ call dolt_checkout('-b', 'verify', 'main')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ select * from dolt_conflicts",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from t order by k",
+				Expected: []sql.Row{{1, 5}},
+			},
+		},
+	},
+	{
+		Name: "dolt_commit conflicting with a concurrent dolt_commit of staged changes is rejected",
+		SetUpScript: []string{
+			"create table t (k int primary key, x int)",
+			"insert into t values (1, 0), (2, 0)",
+			"call dolt_commit('-Am', 'a')",
+			"update t set x = 1 where k = 1",
+			"call dolt_add('t')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client b */ set dolt_allow_commit_conflicts = 1",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "/* client a */ call dolt_commit('-m', 'b')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ update t set x = 5 where k = 1",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:          "/* client b */ call dolt_commit('-am', 'c')",
+				ExpectedErrStr: sql.ErrLockDeadlock.New(dsess.ErrRetryTransaction.Error()).Error(),
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ update t set x = 5 where k = 1",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:            "/* client b */ call dolt_commit('-am', 'c')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ select message from dolt_log limit 1",
+				Expected: []sql.Row{{"c"}},
+			},
+			{
+				Query:            "/* client a */ call dolt_checkout('-b', 'verify', 'main')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ select * from dolt_conflicts",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from t order by k",
+				Expected: []sql.Row{{1, 5}, {2, 0}},
+			},
+		},
+	},
+	{
+		Name: "dolt_commit conflicting with a concurrent dolt_commit and dolt_add is rejected",
+		SetUpScript: []string{
+			"create table t (k int primary key, x int)",
+			"insert into t values (1, 0), (2, 0)",
+			"call dolt_commit('-Am', 'a')",
+			"update t set x = 1 where k = 1",
+			"call dolt_add('t')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "/* client a */ call dolt_commit('-m', 'b')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ update t set x = 2 where k = 1",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:            "/* client a */ call dolt_add('t')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ update t set x = 7 where k = 2",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:          "/* client b */ call dolt_commit('-am', 'c')",
+				ExpectedErrStr: sql.ErrLockDeadlock.New(dsess.ErrRetryTransaction.Error()).Error(),
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ update t set x = 7 where k = 2",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:            "/* client b */ call dolt_commit('-am', 'c')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ select message from dolt_log limit 1",
+				Expected: []sql.Row{{"c"}},
+			},
+			{
+				Query:            "/* client a */ call dolt_checkout('-b', 'verify', 'main')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ select * from dolt_conflicts",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from t order by k",
+				Expected: []sql.Row{{1, 2}, {2, 7}},
+			},
+		},
+	},
+	{
+		Name: "dolt_commit conflicting with a concurrent unstage is rejected",
+		SetUpScript: []string{
+			"create table t (k int primary key, x int)",
+			"insert into t values (1, 0)",
+			"call dolt_commit('-Am', 'a')",
+			"update t set x = 1 where k = 1",
+			"call dolt_add('t')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "/* client a */ call dolt_reset('t')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ update t set x = 5 where k = 1",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:          "/* client b */ call dolt_commit('-am', 'c')",
+				ExpectedErrStr: sql.ErrLockDeadlock.New(dsess.ErrRetryTransaction.Error()).Error(),
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ update t set x = 5 where k = 1",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:            "/* client b */ call dolt_commit('-am', 'c')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ select message from dolt_log limit 1",
+				Expected: []sql.Row{{"c"}},
+			},
+			{
+				Query:            "/* client a */ call dolt_checkout('-b', 'verify', 'main')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ select * from dolt_conflicts",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from t order by k",
+				Expected: []sql.Row{{1, 5}},
+			},
+		},
+	},
+	{
+		Name: "staged conflicts resolved in the working set do not block other transactions",
+		SetUpScript: []string{
+			"create table t (k int primary key, x int)",
+			"insert into t values (1, 0)",
+			"call dolt_commit('-Am', 'a')",
+			"call dolt_checkout('-b', 'other')",
+			"update t set x = 1 where k = 1",
+			"call dolt_commit('-am', 'b')",
+			"call dolt_checkout('main')",
+			"update t set x = 2 where k = 1",
+			"call dolt_commit('-am', 'c')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ set dolt_allow_commit_conflicts = 1",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:            "/* client a */ call dolt_merge('other')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ call dolt_commit('-Am', 'conflicted', '--force')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ call dolt_conflicts_resolve('--ours', 't')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t values (2, 2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ insert into t values (3, 3)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "/* client b */ call dolt_commit('-am', 'resolved')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ select message from dolt_log limit 1",
+				Expected: []sql.Row{{"resolved"}},
+			},
+			{
+				Query:            "/* client a */ call dolt_checkout('-b', 'verify', 'main')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ select * from dolt_conflicts",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from t order by k",
+				Expected: []sql.Row{{1, 2}, {2, 2}, {3, 3}},
+			},
+		},
+	},
+	{
 		Name: "committed conflicts are seen by other sessions",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
