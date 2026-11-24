@@ -52,7 +52,6 @@ type MutableMapInterface interface {
 	Delete(ctx context.Context, key val.Tuple) error
 	Checkpoint(ctx context.Context) error
 	Revert(ctx context.Context)
-	HasEdits() bool
 	IterRange(ctx context.Context, rng Range) (MapIter, error)
 	MapInterface(ctx context.Context) (MapInterface, error)
 	HasUncheckpointedEdits() bool
