@@ -1115,14 +1115,14 @@ export NO_COLOR=1
     mkdir -p remotes/origin
     dolt remote add origin file://./remotes/origin
 
-    dolt checkout -b pushed
     dolt commit --allow-empty -m "only on remote"
+    dolt branch pushed
+    dolt reset --hard HEAD~1
     dolt push origin pushed
-    dolt checkout -b tagged main
+    dolt branch -D pushed
     dolt commit --allow-empty -m "only tagged"
     dolt tag v1
-    dolt checkout main
-    dolt branch -D pushed tagged
+    dolt reset --hard HEAD~1
 
     run dolt log --all
     [ "$status" -eq 0 ]
@@ -1138,13 +1138,12 @@ export NO_COLOR=1
 
 @test "log: --all with a revision range" {
     dolt commit --allow-empty -m "on main"
-    dolt checkout -b feature
     dolt commit --allow-empty -m "on feature"
-    dolt checkout -b tagged main
+    dolt branch feature
+    dolt reset --hard HEAD~1
     dolt commit --allow-empty -m "only tagged"
     dolt tag v1
-    dolt checkout main
-    dolt branch -D tagged
+    dolt reset --hard HEAD~1
 
     run dolt log --oneline --all feature..main
     [ "$status" -eq 0 ]
