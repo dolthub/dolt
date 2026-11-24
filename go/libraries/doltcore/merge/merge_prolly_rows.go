@@ -195,7 +195,16 @@ func computeProllyTreePatches(
 	if err != nil {
 		return nil, nil, err
 	}
-	artEditor := durable.ProllyMapFromArtifactIndex(ai).Editor()
+	artifacts := durable.ProllyMapFromArtifactIndex(ai)
+	if mergeInfo.InvalidateSecondaryIndexes {
+		// Rebuilding all unique indexes records the violations present in the merged rows.
+		// Discard inherited unique violations, including those resolved by this merge.
+		artifacts, err = artifacts.ClearArtifactsOfType(ctx, prolly.ArtifactTypeUniqueKeyViol)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	artEditor := artifacts.Editor()
 
 	keyless := schema.IsKeyless(tm.leftSch)
 
@@ -224,10 +233,13 @@ func computeProllyTreePatches(
 		return nil, nil, err
 	}
 
-	// validator shares an artifact editor with conflict merge
-	uniq, err := newUniqValidator(ctx, finalSch, tm, valueMerger, pri, artEditor)
-	if err != nil {
-		return nil, nil, err
+	var uniq uniqValidator
+	if !mergeInfo.InvalidateSecondaryIndexes {
+		// The incremental validator reads existing unique keys, which may use a different encoding when rebuilt.
+		uniq, err = newUniqValidator(ctx, finalSch, tm, valueMerger, pri, artEditor)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	nullChk, err := newNullValidator(ctx, finalSch, tm, valueMerger, artEditor, patchBuffer, sec.leftIdxes)
@@ -268,7 +280,9 @@ func computeProllyTreePatches(
 		!needsSecondaryIndexMerge &&
 		!needsSchemaMigration &&
 		!diffInfo.RightSchemaChange &&
-		!diffInfo.LeftSchemaChange
+		!diffInfo.LeftSchemaChange &&
+		// The three-way differ defers to the default row merge when the policy would see different schemas.
+		(rowPolicy == nil || !diffInfo.LeftAndRightSchemasDiffer)
 	if canFastMergeProllyTrees {
 		lDiff, err := tree.PatchGeneratorFromRoots(ctx, ns, ns, ancRows.Node(), leftRows.Node(), leftRows.Tuples().Order)
 		if err != nil {
@@ -380,13 +394,15 @@ func computeProllyTreePatches(
 				}
 			}
 
-			cnt, err := uniq.validateDiff(ctx, diff)
-			if err != nil {
-				return nil, nil, err
+			if !mergeInfo.InvalidateSecondaryIndexes {
+				cnt, err := uniq.validateDiff(ctx, diff)
+				if err != nil {
+					return nil, nil, err
+				}
+				s.ConstraintViolations += cnt
 			}
-			s.ConstraintViolations += cnt
 
-			cnt, err = nullChk.validateDiff(ctx, diff)
+			cnt, err := nullChk.validateDiff(ctx, diff)
 			if err != nil {
 				return nil, nil, err
 			}

@@ -2149,6 +2149,30 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 		},
 	},
 	{
+		Name: "VARCHAR to TEXT with a deletion and a unique prefix index",
+		AncSetUpScript: []string{
+			"CREATE TABLE t (pk INT PRIMARY KEY, n VARCHAR(256), UNIQUE INDEX idx_n (n(16)));",
+			"INSERT INTO t VALUES (1, REPEAT('0123', 50));",
+		},
+		RightSetUpScript: []string{
+			"DELETE FROM t WHERE pk = 1;",
+			"ALTER TABLE t MODIFY n TEXT;",
+		},
+		LeftSetUpScript: []string{
+			"INSERT INTO t VALUES (2, 'unique');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT pk, n FROM t;",
+				Expected: []sql.Row{{2, "unique"}},
+			},
+		},
+	},
+	{
 		Name: "VARCHAR index with prefix narrowing",
 		AncSetUpScript: []string{
 			"set autocommit = 0;",
@@ -2487,6 +2511,28 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 					{2, "12345"},
 					{3, "321"},
 				},
+			},
+		},
+	},
+	{
+		Name: "BINARY widening preserves NULL entries in a unique index",
+		AncSetUpScript: []string{
+			"CREATE TABLE t (pk INT PRIMARY KEY, n BINARY(4), UNIQUE INDEX idx_n (n));",
+		},
+		RightSetUpScript: []string{
+			"ALTER TABLE t MODIFY n BINARY(8);",
+		},
+		LeftSetUpScript: []string{
+			"INSERT INTO t VALUES (1, NULL), (2, NULL), (3, 'cat');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT pk FROM t FORCE INDEX (idx_n) WHERE n IS NULL ORDER BY pk;",
+				Expected: []sql.Row{{1}, {2}},
 			},
 		},
 	},

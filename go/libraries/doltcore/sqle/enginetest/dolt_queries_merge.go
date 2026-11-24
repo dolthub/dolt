@@ -5961,6 +5961,44 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name:    "a case-sensitive collation resolves existing unique index violations",
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"SET dolt_force_transaction_commit = on;",
+			"CREATE TABLE t (pk INT PRIMARY KEY, n VARCHAR(40) COLLATE utf8mb4_general_ci UNIQUE);",
+			"CALL DOLT_COMMIT('-Am', 'empty table');",
+			"CALL DOLT_CHECKOUT('-b', 'case-sensitive');",
+			"ALTER TABLE t MODIFY n VARCHAR(40) COLLATE utf8mb4_bin;",
+			"CALL DOLT_COMMIT('-am', 'make index case-sensitive');",
+			"CALL DOLT_CHECKOUT('-b', 'duplicate', 'main');",
+			"INSERT INTO t VALUES (2, 'HELLO');",
+			"CALL DOLT_COMMIT('-am', 'uppercase');",
+			"CALL DOLT_CHECKOUT('main');",
+			"INSERT INTO t VALUES (1, 'hello');",
+			"CALL DOLT_COMMIT('-am', 'lowercase');",
+			"CALL DOLT_MERGE('duplicate');",
+			"CALL DOLT_COMMIT('-afm', 'persist duplicate violations');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT pk FROM dolt_constraint_violations_t ORDER BY pk;",
+				Expected: []sql.Row{{1}, {2}},
+			},
+			{
+				Query:    "CALL DOLT_MERGE('case-sensitive');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT pk FROM dolt_constraint_violations_t;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT pk, n = 'hello' FROM t ORDER BY pk;",
+				Expected: []sql.Row{{1, true}, {2, false}},
+			},
+		},
+	},
+	{
 		Name: "right adds a unique key constraint and resolves existing violations.",
 		SetUpScript: []string{
 			"SET dolt_force_transaction_commit = on;",
