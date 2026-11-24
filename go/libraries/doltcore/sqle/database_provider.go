@@ -90,6 +90,11 @@ type DoltDatabaseProvider struct {
 	// clone's on-disk directory is simply invisible until it registers.
 	creatingDatabases map[doltdb.DbKey]struct{}
 
+	// createdDBs holds the DoltDBs this provider opened for CREATE DATABASE, dolt_clone and undrop, which Close
+	// closes. Databases the provider was constructed with belong to the caller. Guarded by mu, and made once in
+	// the constructor so that copies of the provider share it.
+	createdDBs map[*doltdb.DoltDB]struct{}
+
 	txLocks keymutex.Keymutex
 
 	defaultBranch     string
@@ -222,6 +227,7 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 		databases:              dbs,
 		deletingDatabases:      make(map[doltdb.DbKey]struct{}),
 		creatingDatabases:      make(map[doltdb.DbKey]struct{}),
+		createdDBs:             make(map[*doltdb.DoltDB]struct{}),
 		functions:              funcs,
 		tableFunctions:         tableFuncs,
 		externalProcedures:     externalProcedures,
@@ -331,10 +337,23 @@ func (p *DoltDatabaseProvider) Close() {
 		db.Close()
 	}
 
+	p.mu.Lock()
+	created := make([]*doltdb.DoltDB, 0, len(p.createdDBs))
+	for ddb := range p.createdDBs {
+		created = append(created, ddb)
+	}
+	clear(p.createdDBs)
+	p.mu.Unlock()
+
+	seen := make(map[*doltdb.DoltDB]struct{})
+	for _, ddb := range created {
+		seen[ddb] = struct{}{}
+		_ = ddb.Close()
+	}
+
 	// In embedded / nocache mode, the underlying DoltDBs are not tracked by the singleton cache, so
 	// the provider is responsible for closing them to release filesystem locks.
 	if closeDoltDBs {
-		seen := make(map[*doltdb.DoltDB]struct{})
 		for _, db := range dbs {
 			if db == nil {
 				continue
@@ -1185,7 +1204,6 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 	var dbLoc filesys.Filesys
 	var dbKey doltdb.DbKey
 	var dropDbLoc string
-	var closeDoltDBs bool
 	err := func() error {
 		p.mu.Lock()
 		defer p.mu.Unlock()
@@ -1211,10 +1229,8 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 		}
 		delete(p.databases, dbKey)
 		p.deletingDatabases[dbKey] = struct{}{}
-
-		closeDoltDBs = p.dbLoadParams != nil
-		if closeDoltDBs {
-			_, closeDoltDBs = p.dbLoadParams[dbfactory.DisableSingletonCacheParam]
+		for _, ddb := range db.DoltDatabases() {
+			delete(p.createdDBs, ddb)
 		}
 		return nil
 	}()
@@ -1247,15 +1263,11 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 		dropHook(ctx, name)
 	}
 
+	// Dropping closes the DoltDB whoever opened it, so that its files are released before they move.
 	db.Close()
-
-	// In embedded / nocache mode, the underlying DoltDBs are not tracked by the singleton cache, so
-	// the provider is responsible for closing them to release filesystem locks.
-	if closeDoltDBs {
-		for _, ddb := range db.DoltDatabases() {
-			if ddb != nil {
-				_ = ddb.Close()
-			}
+	for _, ddb := range db.DoltDatabases() {
+		if ddb != nil {
+			_ = ddb.Close()
 		}
 	}
 
@@ -1366,6 +1378,7 @@ func (p *DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string
 	}
 	p.databases[key] = sdb
 	p.dbLocations[key] = newEnv.FS
+	p.createdDBs[ddb] = struct{}{}
 	return nil
 }
 

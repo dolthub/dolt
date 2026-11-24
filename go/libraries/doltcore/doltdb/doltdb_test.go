@@ -401,19 +401,23 @@ func TestLDNoms(t *testing.T) {
 			t.Fatal("Failed to create noms directory")
 		}
 
-		ddb, _ := LoadDoltDB(context.Background(), types.Format_DOLT, LocalDirDoltDB, filesys.LocalFS)
+		ddb, err := LoadDoltDB(context.Background(), types.Format_DOLT, LocalDirDoltDB, filesys.LocalFS)
+		require.NoError(t, err)
 		err = ddb.WriteEmptyRepo(context.Background(), "master", committerName, committerEmail)
 
 		if err != nil {
 			t.Fatal("Unexpected error creating empty repo", err)
 		}
+		require.NoError(t, ddb.Close())
 	}
 
 	// read the empty repo back and add a new table.  Write the value, but don't commit
 	var valHash hash.Hash
 	var tbl *Table
 	{
-		ddb, _ := LoadDoltDB(context.Background(), types.Format_DOLT, LocalDirDoltDB, filesys.LocalFS)
+		ddb, err := LoadDoltDB(context.Background(), types.Format_DOLT, LocalDirDoltDB, filesys.LocalFS)
+		require.NoError(t, err)
+		defer ddb.Close()
 		cs, _ := NewCommitSpec("master")
 		optCmt, err := ddb.Resolve(context.Background(), cs, nil)
 		if err != nil {

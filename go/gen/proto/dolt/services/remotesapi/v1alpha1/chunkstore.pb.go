@@ -2912,20 +2912,20 @@ const file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDesc = "" +
 	"\x16ManifestAppendixOption\x12(\n" +
 	"$MANIFEST_APPENDIX_OPTION_UNSPECIFIED\x10\x00\x12 \n" +
 	"\x1cMANIFEST_APPENDIX_OPTION_SET\x10\x01\x12#\n" +
-	"\x1fMANIFEST_APPENDIX_OPTION_APPEND\x10\x022\xd0\f\n" +
-	"\x11ChunkStoreService\x12\x88\x01\n" +
-	"\x0fGetRepoMetadata\x129.dolt.services.remotesapi.v1alpha1.GetRepoMetadataRequest\x1a:.dolt.services.remotesapi.v1alpha1.GetRepoMetadataResponse\x12v\n" +
-	"\tHasChunks\x123.dolt.services.remotesapi.v1alpha1.HasChunksRequest\x1a4.dolt.services.remotesapi.v1alpha1.HasChunksResponse\x12\x8d\x01\n" +
-	"\x14GetDownloadLocations\x129.dolt.services.remotesapi.v1alpha1.GetDownloadLocsRequest\x1a:.dolt.services.remotesapi.v1alpha1.GetDownloadLocsResponse\x12\x94\x01\n" +
-	"\x17StreamDownloadLocations\x129.dolt.services.remotesapi.v1alpha1.GetDownloadLocsRequest\x1a:.dolt.services.remotesapi.v1alpha1.GetDownloadLocsResponse(\x010\x01\x12\x9b\x01\n" +
-	"\x14StreamChunkLocations\x12>.dolt.services.remotesapi.v1alpha1.StreamChunkLocationsRequest\x1a?.dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse(\x010\x01\x12\x87\x01\n" +
-	"\x12GetUploadLocations\x127.dolt.services.remotesapi.v1alpha1.GetUploadLocsRequest\x1a8.dolt.services.remotesapi.v1alpha1.GetUploadLocsResponse\x12m\n" +
-	"\x06Rebase\x120.dolt.services.remotesapi.v1alpha1.RebaseRequest\x1a1.dolt.services.remotesapi.v1alpha1.RebaseResponse\x12g\n" +
-	"\x04Root\x12..dolt.services.remotesapi.v1alpha1.RootRequest\x1a/.dolt.services.remotesapi.v1alpha1.RootResponse\x12m\n" +
-	"\x06Commit\x120.dolt.services.remotesapi.v1alpha1.CommitRequest\x1a1.dolt.services.remotesapi.v1alpha1.CommitResponse\x12\x85\x01\n" +
-	"\x0eListTableFiles\x128.dolt.services.remotesapi.v1alpha1.ListTableFilesRequest\x1a9.dolt.services.remotesapi.v1alpha1.ListTableFilesResponse\x12\x94\x01\n" +
-	"\x13RefreshTableFileUrl\x12=.dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequest\x1a>.dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlResponse\x12\x82\x01\n" +
-	"\rAddTableFiles\x127.dolt.services.remotesapi.v1alpha1.AddTableFilesRequest\x1a8.dolt.services.remotesapi.v1alpha1.AddTableFilesResponseBSZQgithub.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1;remotesapib\x06proto3"
+	"\x1fMANIFEST_APPENDIX_OPTION_APPEND\x10\x022\x8c\r\n" +
+	"\x11ChunkStoreService\x12\x8d\x01\n" +
+	"\x0fGetRepoMetadata\x129.dolt.services.remotesapi.v1alpha1.GetRepoMetadataRequest\x1a:.dolt.services.remotesapi.v1alpha1.GetRepoMetadataResponse\"\x03\x90\x02\x02\x12{\n" +
+	"\tHasChunks\x123.dolt.services.remotesapi.v1alpha1.HasChunksRequest\x1a4.dolt.services.remotesapi.v1alpha1.HasChunksResponse\"\x03\x90\x02\x02\x12\x92\x01\n" +
+	"\x14GetDownloadLocations\x129.dolt.services.remotesapi.v1alpha1.GetDownloadLocsRequest\x1a:.dolt.services.remotesapi.v1alpha1.GetDownloadLocsResponse\"\x03\x90\x02\x02\x12\x99\x01\n" +
+	"\x17StreamDownloadLocations\x129.dolt.services.remotesapi.v1alpha1.GetDownloadLocsRequest\x1a:.dolt.services.remotesapi.v1alpha1.GetDownloadLocsResponse\"\x03\x90\x02\x02(\x010\x01\x12\xa0\x01\n" +
+	"\x14StreamChunkLocations\x12>.dolt.services.remotesapi.v1alpha1.StreamChunkLocationsRequest\x1a?.dolt.services.remotesapi.v1alpha1.StreamChunkLocationsResponse\"\x03\x90\x02\x02(\x010\x01\x12\x8c\x01\n" +
+	"\x12GetUploadLocations\x127.dolt.services.remotesapi.v1alpha1.GetUploadLocsRequest\x1a8.dolt.services.remotesapi.v1alpha1.GetUploadLocsResponse\"\x03\x90\x02\x02\x12r\n" +
+	"\x06Rebase\x120.dolt.services.remotesapi.v1alpha1.RebaseRequest\x1a1.dolt.services.remotesapi.v1alpha1.RebaseResponse\"\x03\x90\x02\x02\x12l\n" +
+	"\x04Root\x12..dolt.services.remotesapi.v1alpha1.RootRequest\x1a/.dolt.services.remotesapi.v1alpha1.RootResponse\"\x03\x90\x02\x02\x12r\n" +
+	"\x06Commit\x120.dolt.services.remotesapi.v1alpha1.CommitRequest\x1a1.dolt.services.remotesapi.v1alpha1.CommitResponse\"\x03\x90\x02\x00\x12\x8a\x01\n" +
+	"\x0eListTableFiles\x128.dolt.services.remotesapi.v1alpha1.ListTableFilesRequest\x1a9.dolt.services.remotesapi.v1alpha1.ListTableFilesResponse\"\x03\x90\x02\x02\x12\x99\x01\n" +
+	"\x13RefreshTableFileUrl\x12=.dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequest\x1a>.dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlResponse\"\x03\x90\x02\x01\x12\x87\x01\n" +
+	"\rAddTableFiles\x127.dolt.services.remotesapi.v1alpha1.AddTableFilesRequest\x1a8.dolt.services.remotesapi.v1alpha1.AddTableFilesResponse\"\x03\x90\x02\x02BSZQgithub.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1;remotesapib\x06proto3"
 
 var (
 	file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDescOnce sync.Once
@@ -3099,6 +3099,8 @@ const _ = grpc.SupportPackageIsVersion6
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type ChunkStoreServiceClient interface {
+	// May create the repository if it does not exist, depending on server
+	// configuration.
 	GetRepoMetadata(ctx context.Context, in *GetRepoMetadataRequest, opts ...grpc.CallOption) (*GetRepoMetadataResponse, error)
 	HasChunks(ctx context.Context, in *HasChunksRequest, opts ...grpc.CallOption) (*HasChunksResponse, error)
 	// Get the download locations for a list of chunk hashes.
@@ -3122,6 +3124,10 @@ type ChunkStoreServiceClient interface {
 	GetUploadLocations(ctx context.Context, in *GetUploadLocsRequest, opts ...grpc.CallOption) (*GetUploadLocsResponse, error)
 	Rebase(ctx context.Context, in *RebaseRequest, opts ...grpc.CallOption) (*RebaseResponse, error)
 	Root(ctx context.Context, in *RootRequest, opts ...grpc.CallOption) (*RootResponse, error)
+	// A compare-and-swap of the root from last to current. Replaying a
+	// successful Commit which changed the root reports failure while the
+	// root is still current, and can reapply it if the root has since moved
+	// back to last. Replaying a Commit where last == current succeeds.
 	Commit(ctx context.Context, in *CommitRequest, opts ...grpc.CallOption) (*CommitResponse, error)
 	ListTableFiles(ctx context.Context, in *ListTableFilesRequest, opts ...grpc.CallOption) (*ListTableFilesResponse, error)
 	RefreshTableFileUrl(ctx context.Context, in *RefreshTableFileUrlRequest, opts ...grpc.CallOption) (*RefreshTableFileUrlResponse, error)
@@ -3290,6 +3296,8 @@ func (c *chunkStoreServiceClient) AddTableFiles(ctx context.Context, in *AddTabl
 
 // ChunkStoreServiceServer is the server API for ChunkStoreService service.
 type ChunkStoreServiceServer interface {
+	// May create the repository if it does not exist, depending on server
+	// configuration.
 	GetRepoMetadata(context.Context, *GetRepoMetadataRequest) (*GetRepoMetadataResponse, error)
 	HasChunks(context.Context, *HasChunksRequest) (*HasChunksResponse, error)
 	// Get the download locations for a list of chunk hashes.
@@ -3313,6 +3321,10 @@ type ChunkStoreServiceServer interface {
 	GetUploadLocations(context.Context, *GetUploadLocsRequest) (*GetUploadLocsResponse, error)
 	Rebase(context.Context, *RebaseRequest) (*RebaseResponse, error)
 	Root(context.Context, *RootRequest) (*RootResponse, error)
+	// A compare-and-swap of the root from last to current. Replaying a
+	// successful Commit which changed the root reports failure while the
+	// root is still current, and can reapply it if the root has since moved
+	// back to last. Replaying a Commit where last == current succeeds.
 	Commit(context.Context, *CommitRequest) (*CommitResponse, error)
 	ListTableFiles(context.Context, *ListTableFilesRequest) (*ListTableFilesResponse, error)
 	RefreshTableFileUrl(context.Context, *RefreshTableFileUrlRequest) (*RefreshTableFileUrlResponse, error)

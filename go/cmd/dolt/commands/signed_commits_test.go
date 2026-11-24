@@ -121,6 +121,7 @@ func execCommand(t *testing.T, cmd cli.Command, args []string, apr *argparser.Ar
 	}
 
 	dEnv := env.Load(context.Background(), func() (string, error) { return home, nil }, fs, doltdb.LocalDirDoltDB, "test")
+	defer dEnv.Close()
 	if global != nil {
 		cfg, ok := dEnv.Config.GetConfig(env.GlobalConfig)
 		require.True(t, ok)
@@ -144,6 +145,7 @@ func execCommand(t *testing.T, cmd cli.Command, args []string, apr *argparser.Ar
 		err = fmt.Errorf("error creating cli context: %w", err)
 		return
 	}
+	defer cliCtx.Close()
 
 	initialOut := os.Stdout
 	initialErr := os.Stderr

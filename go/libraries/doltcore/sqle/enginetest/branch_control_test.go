@@ -103,6 +103,13 @@ var BranchControlBlockTests = []BranchControlBlockTest{
 		ExpectedErr: branch_control.ErrIncorrectPermissions,
 	},
 	{
+		// A no-op UPDATE never calls RowUpdater.Update, so the permission error
+		// must still surface when the statement editor is closed.
+		Name:        "no-op UPDATE",
+		Query:       "UPDATE test SET v1 = v1 WHERE pk = 1;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
 		Name:        "DELETE",
 		Query:       "DELETE FROM test WHERE pk >= 0;",
 		ExpectedErr: branch_control.ErrIncorrectPermissions,
@@ -110,6 +117,13 @@ var BranchControlBlockTests = []BranchControlBlockTest{
 	{
 		Name:        "DELETE from branch table",
 		Query:       "DELETE FROM `mydb/other`.test WHERE pk >= 0;",
+		ExpectedErr: branch_control.ErrIncorrectPermissions,
+	},
+	{
+		// A DELETE that matches no rows never calls RowDeleter.Delete, so the
+		// permission error must still surface when the statement editor is closed.
+		Name:        "DELETE without matching rows",
+		Query:       "DELETE FROM test WHERE pk = 0;",
 		ExpectedErr: branch_control.ErrIncorrectPermissions,
 	},
 	{

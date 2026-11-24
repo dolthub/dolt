@@ -80,8 +80,7 @@ func (e *StaticErrorEditor) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 }
 
 func (e *StaticErrorEditor) Close(*sql.Context) error {
-	// Or e.err?
-	return nil
+	return e.err
 }
 
 func (e *StaticErrorEditor) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
