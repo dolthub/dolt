@@ -1352,6 +1352,11 @@ func (c *Controller) standbyRemotesJWKS() *jwtauth.MultiJWKS {
 		Transport: &http.Transport{
 			TLSClientConfig:   c.tlsCfg,
 			ForceAttemptHTTP2: true,
+			// Drop pooled connections to peers which have gone silent.
+			HTTP2: &http.HTTP2Config{
+				SendPingTimeout: 15 * time.Second,
+				PingTimeout:     5 * time.Second,
+			},
 		},
 	}
 	urls := make([]string, len(c.cfg.StandbyRemotes()))

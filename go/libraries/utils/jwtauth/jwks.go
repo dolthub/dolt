@@ -15,6 +15,7 @@
 package jwtauth
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -121,8 +122,10 @@ func (f *fetchedJWKS) GetKey(kid string) ([]jose.JSONWebKey, error) {
 // refreshed and the results will be aggregated into the JWKS view. If a key no
 // longer appears at the URL, it may eventually be removed from the set of keys
 // available through GetKey(). Requesting a key which is not currently in the
-// key set will generally hint that the URLs should be more aggressively
-// refreshed, but there is no blocking on refreshing the URLs.
+// key set will hint that the URLs should be refreshed. GetKey() then waits
+// until the key shows up or until every URL has been refetched. Each fetch
+// is bounded by a timeout, so an unresponsive URL delays only lookups of keys
+// which no other URL serves.
 //
 // GracefulStop() will shutdown any ongoing fetching work and will return when
 // everything is cleanly shutdown.
@@ -130,14 +133,22 @@ type MultiJWKS struct {
 	client  *http.Client
 	wg      sync.WaitGroup
 	stop    chan struct{}
+	ctx     context.Context
+	cancel  context.CancelFunc
 	refresh []chan *sync.WaitGroup
 	urls    []string
 	sets    []jose.JSONWebKeySet
 	agg     jose.JSONWebKeySet
+	// Closed and replaced every time |agg| changes.
+	updated chan struct{}
 	mu      sync.RWMutex
 	lgr     *logrus.Entry
 	stopped bool
+
+	fetchTimeout time.Duration
 }
+
+const defaultJWKSFetchTimeout = 5 * time.Second
 
 func NewMultiJWKS(lgr *logrus.Entry, urls []string, client *http.Client) *MultiJWKS {
 	res := new(MultiJWKS)
@@ -145,6 +156,9 @@ func NewMultiJWKS(lgr *logrus.Entry, urls []string, client *http.Client) *MultiJ
 	res.client = client
 	res.urls = urls
 	res.stop = make(chan struct{})
+	res.ctx, res.cancel = context.WithCancel(context.Background())
+	res.updated = make(chan struct{})
+	res.fetchTimeout = defaultJWKSFetchTimeout
 	res.refresh = make([]chan *sync.WaitGroup, len(urls))
 	for i := range res.refresh {
 		res.refresh[i] = make(chan *sync.WaitGroup, 3)
@@ -166,6 +180,7 @@ func (t *MultiJWKS) GracefulStop() {
 	t.stopped = true
 	t.mu.Unlock()
 	close(t.stop)
+	t.cancel()
 	t.wg.Wait()
 	// TODO: Potentially clear t.refresh channels, ensure nothing else can call GetKey()...
 }
@@ -198,26 +213,53 @@ func (t *MultiJWKS) store(i int, jwks jose.JSONWebKeySet) {
 	for _, s := range t.sets {
 		t.agg.Keys = append(t.agg.Keys, s.Keys...)
 	}
+	close(t.updated)
+	t.updated = make(chan struct{})
 }
 
 func (t *MultiJWKS) GetKey(kid string) ([]jose.JSONWebKey, error) {
 	t.mu.RLock()
-	defer t.mu.RUnlock()
 	res := t.agg.Key(kid)
-	if len(res) == 0 {
-		t.lgr.Infof("fetched key %s, found no key, signaling refresh", kid)
-		refresh := t.needsRefresh()
+	if len(res) > 0 {
 		t.mu.RUnlock()
+		return res, nil
+	}
+	t.lgr.Infof("fetched key %s, found no key, signaling refresh", kid)
+	refresh := t.needsRefresh()
+	updated := t.updated
+	t.mu.RUnlock()
+
+	refreshed := make(chan struct{})
+	go func() {
 		refresh.Wait()
+		close(refreshed)
+	}()
+	// Return as soon as any URL serves the key; don't wait on the others.
+	for {
+		select {
+		case <-refreshed:
+			t.mu.RLock()
+			res = t.agg.Key(kid)
+			t.mu.RUnlock()
+			t.lgr.Infof("refresh for key %s done, found %d keys", kid, len(res))
+			return res, nil
+		case <-updated:
+		}
 		t.mu.RLock()
 		res = t.agg.Key(kid)
-		t.lgr.Infof("refresh for key %s done, found %d keys", kid, len(res))
+		updated = t.updated
+		t.mu.RUnlock()
+		if len(res) > 0 {
+			t.lgr.Infof("refresh for key %s found %d keys", kid, len(res))
+			return res, nil
+		}
 	}
-	return res, nil
 }
 
 func (t *MultiJWKS) fetch(i int) error {
-	request, err := http.NewRequest("GET", t.urls[i], nil)
+	ctx, cancel := context.WithTimeout(t.ctx, t.fetchTimeout)
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, "GET", t.urls[i], nil)
 	if err != nil {
 		return err
 	}
