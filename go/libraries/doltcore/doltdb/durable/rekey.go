@@ -244,7 +244,7 @@ func (r *RowRekeyer) validateKey(ctx context.Context, mut *prolly.MutableMap, k,
 // putRow builds the destination value tuple for |k| and |v| and inserts it into
 // |mut| under |nk|.
 func (r *RowRekeyer) putRow(ctx context.Context, mut *prolly.MutableMap, nk, k, v val.Tuple) error {
-	nv, err := r.value(ctx, k, v)
+	nv, err := r.buildTuple(ctx, r.vb, r.valSrcs, k, v, false)
 	if err != nil {
 		return err
 	}
@@ -260,29 +260,15 @@ func (r *RowRekeyer) newMutableMap(ctx context.Context, kd, vd *val.TupleDesc) (
 	return m.Mutate(), nil
 }
 
-// value returns the new value tuple of |k| and |v|.
-func (r *RowRekeyer) value(ctx context.Context, k, v val.Tuple) (val.Tuple, error) {
-	return r.buildTuple(ctx, r.vb, r.valSrcs, k, v, false)
-}
-
-// buildTuple populates |b| from |srcs| and builds a tuple, recycling |b| on
-// error so subsequent rows do not observe stale fields.
+// buildTuple populates |b| from |srcs| and builds a tuple.
 func (r *RowRekeyer) buildTuple(ctx context.Context, b *val.TupleBuilder, srcs []fieldSource, k, v val.Tuple, permissive bool) (val.Tuple, error) {
 	for i, src := range srcs {
 		b.PutRaw(i, src.field(k, v))
 	}
-	var tup val.Tuple
-	var err error
 	if permissive {
-		tup, err = b.BuildPermissive(ctx, r.ns.Pool())
-	} else {
-		tup, err = b.Build(ctx, r.ns.Pool())
+		return b.BuildPermissive(ctx, r.ns.Pool())
 	}
-	if err != nil {
-		b.Recycle()
-		return nil, err
-	}
-	return tup, nil
+	return b.Build(ctx, r.ns.Pool())
 }
 
 // IterRows calls |cb| for each key and value of |rows|. It returns the first

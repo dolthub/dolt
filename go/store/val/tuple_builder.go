@@ -103,6 +103,7 @@ func (tb *TupleBuilder) Build(ctx context.Context, pool pool.BuffPool) (tup Tupl
 // BuildPermissive materializes a Tuple from the fields
 // written to the TupleBuilder without validating nullability.
 func (tb *TupleBuilder) BuildPermissive(ctx context.Context, pool pool.BuffPool) (tup Tuple, err error) {
+	defer tb.Recycle()
 	// Values may get passed into the tuple builder in either in-band or out-of-band form.
 	// In the best case, we don't need to convert any of them, so the TupleBuilder initially stores them in the form they're given.
 	// But we track the tuple size if they're all inlined vs the tuple size if they're all out-of-band,
@@ -172,7 +173,6 @@ func (tb *TupleBuilder) BuildPermissive(ctx context.Context, pool pool.BuffPool)
 	}
 	values := tb.fields[:tb.Desc.Count()]
 	tup = NewTuple(pool, values...)
-	tb.Recycle()
 	return tup, nil
 }
 

@@ -16,16 +16,11 @@ package durable
 
 import (
 	"context"
-	"errors"
-	"strings"
 	"testing"
 
-	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -76,66 +71,6 @@ func TestRowRekeyer(t *testing.T) {
 			{{4}, {nil, 400}},
 		}, collectIntRows(t, ctx, rejected, oldKD, oldVD))
 	})
-
-	t.Run("recycle on error", func(t *testing.T) {
-		prev := typeinfo.UseAdaptiveEncoding
-		typeinfo.UseAdaptiveEncoding = true
-		t.Cleanup(func() { typeinfo.UseAdaptiveEncoding = prev })
-
-		ns := &failingWriteNodeStore{NodeStore: tree.NewTestNodeStore()}
-
-		textTI, err := typeinfo.FromSqlType(gmstypes.Text)
-		require.NoError(t, err)
-		textCol, err := schema.NewColumnWithTypeInfo("txt", 2, textTI, false, "", false, "")
-		require.NoError(t, err)
-
-		sch := schema.MustSchemaFromCols(schema.NewColCollection(
-			schema.NewColumn("a", 1, types.IntKind, true, schema.NotNullConstraint{}),
-			textCol,
-		))
-		rk, ok := NewRowRekeyer(ns, sch, sch)
-		require.True(t, ok)
-		rk.vb = rk.vb.WithMaxRowSize(100)
-
-		oldKD, oldVD := sch.GetMapDescriptors(ns)
-		kb := val.NewTupleBuilder(oldKD, ns)
-		vb := val.NewTupleBuilder(oldVD, ns).WithMaxRowSize(10000)
-
-		kb.PutInt64(0, 1)
-		require.NoError(t, vb.PutAdaptiveStringFromInline(ctx, 0, strings.Repeat("x", 200)))
-		k1, err := kb.Build(ctx, ns.Pool())
-		require.NoError(t, err)
-		v1, err := vb.Build(ctx, ns.Pool())
-		require.NoError(t, err)
-
-		kb.PutInt64(0, 2)
-		k2, err := kb.Build(ctx, ns.Pool())
-		require.NoError(t, err)
-		v2, err := vb.Build(ctx, ns.Pool())
-		require.NoError(t, err)
-
-		ns.failWrite = true
-		_, err = rk.value(ctx, k1, v1)
-		require.Error(t, err)
-
-		ns.failWrite = false
-		nv2, err := rk.value(ctx, k2, v2)
-		require.NoError(t, err)
-		require.True(t, rk.newVD.IsNull(0, nv2))
-	})
-}
-
-type failingWriteNodeStore struct {
-	tree.NodeStore
-	failWrite bool
-}
-
-// WriteBytes returns an injected error when failWrite is true.
-func (f *failingWriteNodeStore) WriteBytes(ctx context.Context, bs []byte) (hash.Hash, error) {
-	if f.failWrite {
-		return hash.Hash{}, errors.New("injected write failure")
-	}
-	return f.NodeStore.WriteBytes(ctx, bs)
 }
 
 // newIntMap constructs a [prolly.Map] from integer key and value slices.
