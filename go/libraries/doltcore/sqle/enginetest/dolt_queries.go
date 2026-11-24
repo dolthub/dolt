@@ -5634,6 +5634,18 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{"on other"}, {"only tagged"}},
 			},
 			{
+				Query:    "select message from dolt_log('--all', 'main..feature') order by message;",
+				Expected: []sql.Row{{"on feature"}, {"on other"}, {"only tagged"}},
+			},
+			{
+				Query:    "select message from dolt_log('--all', 'feature..main') order by message;",
+				Expected: []sql.Row{{"on other"}, {"only tagged"}},
+			},
+			{
+				Query:    "select message from dolt_log('--all', 'feature...main') order by message;",
+				Expected: []sql.Row{{"on feature"}, {"on other"}, {"only tagged"}},
+			},
+			{
 				Query:    "select message from dolt_log('--all', '--tables', 'nonexistent');",
 				Expected: []sql.Row{},
 			},

@@ -1136,6 +1136,28 @@ export NO_COLOR=1
     [[ "$output" =~ "only tagged" ]] || false
 }
 
+@test "log: --all with a revision range" {
+    dolt commit --allow-empty -m "on main"
+    dolt checkout -b feature
+    dolt commit --allow-empty -m "on feature"
+    dolt checkout -b tagged main
+    dolt commit --allow-empty -m "only tagged"
+    dolt tag v1
+    dolt checkout main
+    dolt branch -D tagged
+
+    run dolt log --oneline --all feature..main
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+    [[ "$output" =~ "only tagged" ]] || false
+
+    run dolt log --oneline --all feature...main
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "on feature" ]] || false
+    [[ "$output" =~ "only tagged" ]] || false
+}
+
 @test "log: A...B with several merge bases leaves out every merge base" {
     criss_cross
 
