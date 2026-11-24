@@ -317,6 +317,9 @@ func tableName(td diff.TableDelta) string {
 
 func statusString(td diff.TableDelta) string {
 	if td.IsAdd() {
+		if kind := rootObjectKindName(td); kind != "" {
+			return "new " + kind
+		}
 		return newTableStatus
 	} else if td.IsDrop() {
 		return "deleted"
@@ -325,6 +328,17 @@ func statusString(td diff.TableDelta) string {
 	} else {
 		return "modified"
 	}
+}
+
+// rootObjectKindName returns the kind of the root object added by the given delta, as reported by
+// [doltdb.RootObjectWithKind], which replaces "table" in the status of a new root object (e.g. "new function"). Returns an
+// empty string if the delta does not add a root object, or if the root object does not report its kind, in which case it
+// is described as a table.
+func rootObjectKindName(td diff.TableDelta) string {
+	if ro, ok := td.ToRootObject.(doltdb.RootObjectWithKind); ok {
+		return ro.KindName()
+	}
+	return ""
 }
 
 const mergeConflictStatus = "conflict"
