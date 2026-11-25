@@ -59,6 +59,7 @@ func newDoltTypeCompatibilityChecker() TypeCompatibilityChecker {
 	return &doltTypeCompatibilityChecker{
 		checkers: []typeChangeHandler{
 			stringTypeChangeHandler{},
+			integerTypeChangeHandler{},
 			enumTypeChangeHandler{},
 			setTypeChangeHandler{},
 		},
@@ -119,6 +120,36 @@ type typeChangeHandler interface {
 	// |fromType| to |toType| is compatible and safe to perform automatically. The second boolean response parameter
 	// indicates if the type conversion requires a full table rewrite.
 	isCompatible(fromSqlType, toSqlType sql.Type) TypeChangeInfo
+}
+
+// integerTypeChangeHandler recognizes lossless integer conversions supported by the row rewrite.
+type integerTypeChangeHandler struct{}
+
+// integerBits gives the SQL range width, including the sign bit for signed types.
+var integerBits = map[query.Type]int{
+	sqltypes.Int8: 8, sqltypes.Uint8: 8,
+	sqltypes.Int16: 16, sqltypes.Uint16: 16,
+	sqltypes.Int24: 24, sqltypes.Uint24: 24,
+	sqltypes.Int32: 32, sqltypes.Uint32: 32,
+	sqltypes.Int64: 64, sqltypes.Uint64: 64,
+}
+
+// canHandle implements typeChangeHandler.
+func (integerTypeChangeHandler) canHandle(from, to sql.Type) bool {
+	return integerBits[from.Type()] != 0 && integerBits[to.Type()] != 0
+}
+
+// isCompatible implements typeChangeHandler.
+func (integerTypeChangeHandler) isCompatible(from, to sql.Type) TypeChangeInfo {
+	fromBits, toBits := integerBits[from.Type()], integerBits[to.Type()]
+	fromSigned, toSigned := sqltypes.IsSigned(from.Type()), sqltypes.IsSigned(to.Type())
+	if fromBits >= toBits || (fromSigned && !toSigned) {
+		return TypeChangeInfo{}
+	}
+
+	// Dolt stores MEDIUMINT in the same four-byte field as INT of the same signedness.
+	rewrite := !(fromBits == 24 && toBits == 32 && fromSigned == toSigned)
+	return TypeChangeInfo{Compatible: true, RewriteRows: rewrite, InvalidateSecondaryIndexes: rewrite}
 }
 
 // stringTypeChangeHandler handles type change compatibility between from string types, i.e. VARCHAR, VARBINARY,

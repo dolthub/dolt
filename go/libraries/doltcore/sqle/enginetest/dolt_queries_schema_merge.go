@@ -2019,6 +2019,81 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 		},
 	},
 	{
+		Name: "INT UNSIGNED to BIGINT with rows only on the destination",
+		AncSetUpScript: []string{
+			"CREATE TABLE t (pk INT PRIMARY KEY, n INT UNSIGNED);",
+		},
+		RightSetUpScript: []string{
+			"ALTER TABLE t MODIFY n BIGINT;",
+		},
+		LeftSetUpScript: []string{
+			"INSERT INTO t VALUES (1, NULL), (2, 0), (3, 4294967295);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT column_type FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 't' AND column_name = 'n';",
+				Expected: []sql.Row{{"bigint"}},
+			},
+			{
+				Query:    "SELECT pk, n FROM t ORDER BY pk;",
+				Expected: []sql.Row{{1, nil}, {2, 0}, {3, int64(4294967295)}},
+			},
+		},
+	},
+	{
+		Name: "MEDIUMINT to INT preserves duplicate rows on a keyless table",
+		AncSetUpScript: []string{
+			"CREATE TABLE t (n MEDIUMINT, u MEDIUMINT UNSIGNED);",
+		},
+		RightSetUpScript: []string{
+			"ALTER TABLE t MODIFY n INT, MODIFY u INT UNSIGNED;",
+		},
+		LeftSetUpScript: []string{
+			"INSERT INTO t VALUES (-8388608, 16777215), (-8388608, 16777215);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT column_type FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 't' ORDER BY ordinal_position;",
+				Expected: []sql.Row{{"int"}, {"int unsigned"}},
+			},
+			{
+				Query:    "SELECT n, u, COUNT(*) FROM t GROUP BY n, u;",
+				Expected: []sql.Row{{-8388608, uint32(16777215), 2}},
+			},
+		},
+	},
+	{
+		Name: "INT UNSIGNED to BIGINT conflicts on a keyless table",
+		AncSetUpScript: []string{
+			"SET autocommit = 0;",
+			"CREATE TABLE t (n INT UNSIGNED);",
+		},
+		RightSetUpScript: []string{
+			"ALTER TABLE t MODIFY n BIGINT;",
+		},
+		LeftSetUpScript: []string{
+			"INSERT INTO t VALUES (42);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('right');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT description FROM dolt_schema_conflicts;",
+				Expected: []sql.Row{{"incompatible column types for column 'n': Uint32 and Int64"}},
+			},
+		},
+	},
+	{
 		Name: "TEXT index without schema change",
 		AncSetUpScript: []string{
 			"set autocommit = 0;",
@@ -2707,7 +2782,7 @@ var SchemaChangeTestsSchemaConflicts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select * from dolt_preview_merge_conflicts_summary('main', 'right');",
-				Expected: []sql.Row{{"t", nil, uint64(4)}},
+				Expected: []sql.Row{{"t", nil, uint64(3)}},
 			},
 			{
 				Query:    "call dolt_merge('right');",

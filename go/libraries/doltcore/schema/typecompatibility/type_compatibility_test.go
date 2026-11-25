@@ -16,6 +16,7 @@ package typecompatibility
 
 import (
 	"context"
+	"math"
 	"reflect"
 	"testing"
 
@@ -85,11 +86,6 @@ func TestDoltIsTypeChangeCompatible(t *testing.T) {
 			from:       typeinfo.Int64Type,
 			to:         typeinfo.Int64Type,
 			compatible: true,
-		}, {
-			name:       "int family: small to large type changes are incompatible",
-			from:       typeinfo.Int8Type,
-			to:         typeinfo.Int16Type,
-			compatible: false,
 		}, {
 			name:       "int family: large to small type changes are incompatible",
 			from:       typeinfo.Int64Type,
@@ -267,6 +263,37 @@ func TestDoltIsTypeChangeCompatible(t *testing.T) {
 			compatible: false,
 		},
 	})
+}
+
+// TestDoltIntegerTypeChanges checks lossless conversions and their storage requirements.
+func TestDoltIntegerTypeChanges(t *testing.T) {
+	integerTypes := []struct {
+		typ typeinfo.TypeInfo
+		min int64
+		max uint64
+	}{
+		{typeinfo.Int8Type, math.MinInt8, math.MaxInt8},
+		{typeinfo.Uint8Type, 0, math.MaxUint8},
+		{typeinfo.Int16Type, math.MinInt16, math.MaxInt16},
+		{typeinfo.Uint16Type, 0, math.MaxUint16},
+		{typeinfo.Int24Type, -8_388_608, 8_388_607},
+		{typeinfo.Uint24Type, 0, 16_777_215},
+		{typeinfo.Int32Type, math.MinInt32, math.MaxInt32},
+		{typeinfo.Uint32Type, 0, math.MaxUint32},
+		{typeinfo.Int64Type, math.MinInt64, math.MaxInt64},
+		{typeinfo.Uint64Type, 0, math.MaxUint64},
+	}
+	checker := NewTypeCompatabilityChecker()
+	for _, from := range integerTypes {
+		for _, to := range integerTypes {
+			t.Run(from.typ.String()+" to "+to.typ.String(), func(t *testing.T) {
+				compatible := to.min <= from.min && to.max >= from.max
+				rewrite := compatible && from.typ.Encoding() != to.typ.Encoding()
+				want := TypeChangeInfo{Compatible: compatible, RewriteRows: rewrite, InvalidateSecondaryIndexes: rewrite}
+				assert.Equal(t, want, checker.IsTypeChangeCompatible(from.typ, to.typ))
+			})
+		}
+	}
 }
 
 func runTypeCompatibilityTests(t *testing.T, compatChecker TypeCompatibilityChecker, tests []typeChangeCompatibilityTest) {
