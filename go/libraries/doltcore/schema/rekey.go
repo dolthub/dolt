@@ -22,8 +22,15 @@ import (
 )
 
 // Rekey returns |sch| with the primary key of |target|, or false if |sch|
-// cannot be rekeyed to |target|. New primary-key columns get a NOT NULL
-// constraint and adopt |target|'s type.
+// cannot be rekeyed to |target|.
+//
+// Primary-key columns in SQL cannot be NULL, so any column promoted into the
+// primary key gains an explicit NOT NULL constraint (matching ALTER TABLE ...
+// ADD PRIMARY KEY).
+//
+// Each primary-key column adopts |target|'s type so that binary-coercible
+// widenings (such as VARCHAR(10) to VARCHAR(20)) produce a schema whose key
+// types match |target| during subsequent diffs and merges.
 func Rekey(sch, target Schema) (Schema, bool, error) {
 	for _, index := range sch.Indexes().AllIndexes() {
 		if index.IsFullText() || index.IsVector() || index.IsSpatial() {
@@ -34,16 +41,16 @@ func Rekey(sch, target Schema) (Schema, bool, error) {
 	keyPos := make(map[uint64]int, targetPK.Size())
 	for i, tc := range targetPK.cols {
 		col, ok := sch.GetAllCols().MatchColumn(target.GetAllCols(), tc)
-		if !ok || col.Virtual || !binaryCoercibleKeyType(col, tc) {
+		if !ok || col.Virtual || !isBinaryCoercible(col, tc) {
 			return nil, false, nil
 		}
 		keyPos[col.Tag] = i
 	}
 
-	cols := sch.GetAllCols().cols
-	newCols := make([]Column, len(cols))
+	newCols := sch.GetAllCols().GetColumns()
 	pkOrdinals := make([]int, targetPK.Size())
-	for i, col := range cols {
+	for i := range newCols {
+		col := &newCols[i]
 		pos, inPK := keyPos[col.Tag]
 		if inPK {
 			// Check nullability before setting IsPartOfPK, which makes
@@ -55,7 +62,6 @@ func Rekey(sch, target Schema) (Schema, bool, error) {
 			pkOrdinals[pos] = i
 		}
 		col.IsPartOfPK = inPK
-		newCols[i] = col
 	}
 
 	var checks CheckCollection
@@ -74,8 +80,8 @@ func Rekey(sch, target Schema) (Schema, bool, error) {
 	return newSch, true, nil
 }
 
-// binaryCoercibleKeyType reports whether |from| is binary-coercible to |to|.
-func binaryCoercibleKeyType(from, to Column) bool {
+// isBinaryCoercible reports whether |from| is binary-coercible to |to|.
+func isBinaryCoercible(from, to Column) bool {
 	if from.TypeInfo.Encoding() != to.TypeInfo.Encoding() {
 		return false
 	}
