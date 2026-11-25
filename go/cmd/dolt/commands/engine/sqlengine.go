@@ -64,7 +64,6 @@ type SqlEngine struct {
 	fs                    filesys.Filesys
 	clusterController     *cluster.Controller
 	branchActivityTracker *doltdb.BranchActivityTracker
-	rebasedDbs            map[string]dsess.SqlDatabase
 	ownedMrEnv            *env.MultiRepoEnv // built by NewSqlEngineForEnv; closed after the provider
 }
 
@@ -425,16 +424,6 @@ func NewSqlEngine(
 	return sqlEngine, nil
 }
 
-// NewRebasedSqlEngine returns a smalled rebased engine primarily used in filterbranch.
-// The engine owns |dbs| and closes them in Close.
-// TODO: migrate to provider
-func NewRebasedSqlEngine(engine *gms.Engine, dbs map[string]dsess.SqlDatabase) *SqlEngine {
-	return &SqlEngine{
-		engine:     engine,
-		rebasedDbs: dbs,
-	}
-}
-
 func applySystemVariables(ctx *sql.Context, cfg SystemVariables) error {
 	if cfg == nil {
 		return nil
@@ -581,9 +570,6 @@ func (se *SqlEngine) Close() error {
 	if se.provider != nil {
 		se.provider.Teardown(context.Background())
 		se.provider.Close()
-	}
-	for _, db := range se.rebasedDbs {
-		db.Close()
 	}
 	if se.ownedMrEnv != nil {
 		err = errors.Join(err, se.ownedMrEnv.Close(context.Background()))

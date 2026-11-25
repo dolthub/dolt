@@ -83,11 +83,22 @@ func (l *countingDoltgresTransactionLifecycle) DoltgresSessionCacheClear() {
 	l.cacheClears++
 }
 
+// nonDoltTransaction is a sql.Transaction that isn't a DoltTransaction.
+type nonDoltTransaction struct{}
+
+func (nonDoltTransaction) String() string {
+	return "non-Dolt transaction"
+}
+
+func (nonDoltTransaction) IsReadOnly() bool {
+	return false
+}
+
 func TestDoltgresTransactionLifecycle(t *testing.T) {
 	sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, variables.NewEngineVariables())
 	lifecycle := &countingDoltgresTransactionLifecycle{pending: true}
 	sess.DoltgresSessObj = lifecycle
-	tx := DisabledTransaction{}
+	tx := nonDoltTransaction{}
 	ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
 
 	assert.NoError(t, sess.Rollback(ctx, tx))
@@ -104,17 +115,10 @@ func TestDoltgresTransactionLifecycle(t *testing.T) {
 }
 
 // newTransactionTestVariables returns a bundle defining the Dolt session
-// variables read by transaction start and commit.
+// variable read by transaction commit.
 func newTransactionTestVariables() *sql.EngineVariables {
 	vars := variables.NewEngineVariables()
 	vars.System.AddSystemVariables([]sql.SystemVariable{
-		&sql.MysqlSystemVariable{
-			Name:    TransactionsDisabledSysVar,
-			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
-			Dynamic: true,
-			Type:    sqltypes.NewSystemBoolType(TransactionsDisabledSysVar),
-			Default: int8(0),
-		},
 		&sql.MysqlSystemVariable{
 			Name:    DoltCommitOnTransactionCommit,
 			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
@@ -176,7 +180,7 @@ func TestCommitBranchStatesNotifiesDoltgres(t *testing.T) {
 	sess.DoltgresSessObj = lifecycle
 
 	// Validation failures leave the transaction active and emit no commit notification.
-	_, err := sess.commitBranchStates(ctx, nil, DisabledTransaction{}, nil)
+	_, err := sess.commitBranchStates(ctx, nil, nonDoltTransaction{}, nil)
 	assert.Error(t, err)
 	assert.Same(t, tx, ctx.GetTransaction())
 	assert.Empty(t, lifecycle.events)
@@ -206,42 +210,22 @@ func TestCommitBranchStatesNotifiesDoltgres(t *testing.T) {
 }
 
 func TestCommitTransactionWithoutBatchNotifiesDoltgres(t *testing.T) {
-	for _, disabled := range []bool{
-		false,
-		true,
-	} {
-		name := "no pending edits"
-		if disabled {
-			name = "transactions disabled"
-		}
-
-		t.Run(name, func(t *testing.T) {
-			sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, newTransactionTestVariables())
-			ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
-			assert.NoError(t, sess.SetSessionVariable(ctx, TransactionsDisabledSysVar, disabled))
-			if disabled {
-				state := newEmptyDatabaseSessionState()
-				state.dbName = "mydb"
-				sess.dbStates[doltdb.NewDbKey("mydb")] = state
-				sess.currentBranches().add(state, "main", RevisionTypeBranch).dirty = true
-			}
-
-			tx := DisabledTransaction{}
-			ctx.SetTransaction(tx)
-			lifecycle := &countingDoltgresTransactionLifecycle{
-				pending: true,
-				onCommit: func() {
-					assert.Equal(t, tx, ctx.GetTransaction(), "preserve notification order for commits without a batch")
-				},
-			}
-			sess.DoltgresSessObj = lifecycle
-
-			assert.NoError(t, sess.CommitTransaction(ctx, tx))
-			assert.Equal(t, []string{"commit"}, lifecycle.events)
-			assert.Equal(t, 1, lifecycle.transactionEnds)
-			assert.Nil(t, ctx.GetTransaction())
-		})
+	sess := DefaultSessionWithVariables(emptyDatabaseProvider(), nil, newTransactionTestVariables())
+	ctx := sql.NewContext(context.Background(), sql.WithSession(sess))
+	tx := nonDoltTransaction{}
+	ctx.SetTransaction(tx)
+	lifecycle := &countingDoltgresTransactionLifecycle{
+		pending: true,
+		onCommit: func() {
+			assert.Equal(t, tx, ctx.GetTransaction(), "preserve notification order for commits without a batch")
+		},
 	}
+	sess.DoltgresSessObj = lifecycle
+
+	assert.NoError(t, sess.CommitTransaction(ctx, tx))
+	assert.Equal(t, []string{"commit"}, lifecycle.events)
+	assert.Equal(t, 1, lifecycle.transactionEnds)
+	assert.Nil(t, ctx.GetTransaction())
 }
 
 func TestDoltTransactionRepeatedSavepointNames(t *testing.T) {

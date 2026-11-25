@@ -8979,4 +8979,17 @@ var DoltSystemVariables = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "transactions cannot be disabled",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "SET @@dolt_transactions_disabled=1",
+				ExpectedErr: sql.ErrUnknownSystemVariable,
+			},
+			{
+				Query:       "SELECT @@dolt_transactions_disabled",
+				ExpectedErr: sql.ErrUnknownSystemVariable,
+			},
+		},
+	},
 }

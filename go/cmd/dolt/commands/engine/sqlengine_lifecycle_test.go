@@ -26,8 +26,6 @@ import (
 	"time"
 
 	filelocks "github.com/dolthub/file-locks"
-	gms "github.com/dolthub/go-mysql-server"
-	"github.com/dolthub/go-mysql-server/memory"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
 
@@ -312,21 +310,4 @@ func lifecycleQuery(t *testing.T, se *SqlEngine, ctx *sql.Context, query string)
 	rows, err := sql.RowIterToRows(ctx, iter)
 	require.NoError(t, err, query)
 	return rows
-}
-
-type closeCountingDatabase struct {
-	sqle.Database
-	closes *int
-}
-
-func (db closeCountingDatabase) Close() { *db.closes++ }
-
-// TestRebasedSqlEngineCloseClosesDatabases checks that a rebased engine closes the
-// databases it owns, which stops their sequence trackers' background store reads.
-func TestRebasedSqlEngineCloseClosesDatabases(t *testing.T) {
-	closes := 0
-	db := closeCountingDatabase{closes: &closes}
-	se := NewRebasedSqlEngine(gms.NewDefault(memory.NewDBProvider()), map[string]dsess.SqlDatabase{"filter": db})
-	require.NoError(t, se.Close())
-	require.Equal(t, 1, closes)
 }

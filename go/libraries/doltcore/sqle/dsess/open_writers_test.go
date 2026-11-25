@@ -59,7 +59,7 @@ func TestDropBranchStateWithOpenWriters(t *testing.T) {
 			return err
 		}},
 		{"Rollback", func(s *DoltSession, ctx *sql.Context) error {
-			return s.Rollback(ctx, DisabledTransaction{})
+			return s.Rollback(ctx, nonDoltTransaction{})
 		}},
 	} {
 		t.Run(d.name, func(t *testing.T) {
@@ -100,7 +100,7 @@ func TestDropBranchStateWithOpenWriters(t *testing.T) {
 
 	t.Run("no open writers", func(t *testing.T) {
 		sess, ctx, bs := newSession(false)
-		require.NoError(t, sess.Rollback(ctx, DisabledTransaction{}))
+		require.NoError(t, sess.Rollback(ctx, nonDoltTransaction{}))
 		assert.Empty(t, sess.currentBranches().all())
 		assert.False(t, sess.isCurrentBranchState(bs))
 	})
@@ -157,8 +157,8 @@ func TestBranchStatesBelongToTransaction(t *testing.T) {
 	assert.Empty(t, sess.currentBranches().all())
 
 	// Branch states loaded with transactions disabled last across statements.
-	ctx.SetTransaction(DisabledTransaction{})
+	ctx.SetTransaction(nonDoltTransaction{})
 	disabled := sess.currentBranches().add(dbState, "main", RevisionTypeBranch)
-	ctx.SetTransaction(DisabledTransaction{})
+	ctx.SetTransaction(nonDoltTransaction{})
 	assert.True(t, sess.isCurrentBranchState(disabled))
 }
