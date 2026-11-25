@@ -48,6 +48,23 @@ import (
 
 var ErrSessionNotPersistable = errors.New("session is not persistable")
 
+// HeadBranchNotFoundError is the error for resolving a database whose branch this session is on no longer exists:
+// the branch it checked out, or the database's default branch if it hasn't checked one out. The session stays on that
+// branch until it checks out another one, rather than silently moving elsewhere.
+type HeadBranchNotFoundError struct {
+	DbName        string
+	Branch        string
+	DefaultBranch bool
+}
+
+func (e HeadBranchNotFoundError) Error() string {
+	if e.DefaultBranch {
+		return fmt.Sprintf("cannot resolve default branch head for database '%s': '%s'", e.DbName, e.Branch)
+	}
+	return fmt.Sprintf("branch '%s' checked out in this session no longer exists in database '%s'; "+
+		"use dolt_checkout() to check out another branch", e.Branch, e.DbName)
+}
+
 // DoltSession is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
 type DoltSession struct {
 	provider DoltDatabaseProvider
@@ -318,10 +335,12 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 	dbState, dbStateFound := d.dbStates[name.DbKey()]
 	var branchState *branchState
 	var ok bool
+	var checkedOut, baseName string
 	if dbStateFound {
 		// If we got an unqualified name, use the current working set head
 		if !name.IsQualified() {
-			name = name.WithRevision(dbState.checkedOutRevSpec)
+			checkedOut, baseName = dbState.checkedOutRevSpec, dbState.dbName
+			name = name.WithRevision(checkedOut)
 		}
 		branchState, ok = d.currentBranches().get(name)
 	}
@@ -335,17 +354,18 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 	}
 
 	database, ok, err := d.provider.SessionDatabase(ctx, name.Key().String())
+	if err == nil && ok {
+		// Add the initial state to the session for future reuse
+		branchState, err = d.addDB(ctx, database)
+	}
+	if err != nil && checkedOut != "" && (sql.ErrDatabaseNotFound.Is(err) || errors.Is(err, doltdb.ErrBranchNotFound)) {
+		return nil, false, HeadBranchNotFoundError{DbName: baseName, Branch: checkedOut}
+	}
 	if err != nil {
 		return nil, false, err
 	}
 	if !ok {
 		return nil, false, nil
-	}
-
-	// Add the initial state to the session for future reuse
-	branchState, err = d.addDB(ctx, database)
-	if err != nil {
-		return nil, false, err
 	}
 	return branchState, true, nil
 }
