@@ -2113,6 +2113,26 @@ on a.to_pk = b.to_pk;`,
 			},
 		},
 	},
+	{
+		Name: "dolt_diff with subquery arguments",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int primary key, c1 varchar(100));",
+			"INSERT INTO t VALUES (1, 'a');",
+			"CALL DOLT_COMMIT('-Am', 'base');",
+			"UPDATE t SET c1 = 'b' WHERE pk = 1;",
+			"CALL DOLT_COMMIT('-am', 'change');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT to_pk, to_c1, from_c1 FROM dolt_diff((SELECT commit_hash FROM dolt_log ORDER BY date DESC LIMIT 1 OFFSET 1), (SELECT commit_hash FROM dolt_log ORDER BY date DESC LIMIT 1), 't');",
+				Expected: []sql.Row{{1, "b", "a"}},
+			},
+			{
+				Query:       "SELECT to_pk FROM dolt_diff((SELECT commit_hash FROM dolt_log), 'HEAD', 't');",
+				ExpectedErr: sql.ErrExpectedSingleRow,
+			},
+		},
+	},
 }
 
 var DiffStatTableFunctionScriptTests = []queries.ScriptTest{
