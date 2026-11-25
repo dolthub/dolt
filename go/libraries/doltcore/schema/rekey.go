@@ -40,7 +40,7 @@ func Rekey(sch, target Schema) (Schema, bool, error) {
 	targetPK := target.GetPKCols()
 	keyPos := make(map[uint64]int, targetPK.Size())
 	for i, tc := range targetPK.cols {
-		col, ok := sch.GetAllCols().MatchColumn(target.GetAllCols(), tc)
+		col, ok := sch.GetAllCols().Match(target.GetAllCols(), tc)
 		if !ok || col.Virtual || !isBinaryCoercible(col, tc) {
 			return nil, false, nil
 		}
