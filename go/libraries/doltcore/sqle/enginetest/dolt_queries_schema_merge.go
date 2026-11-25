@@ -2019,6 +2019,81 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 		},
 	},
 	{
+		Name: "INT UNSIGNED to BIGINT with rows only on the destination",
+		AncSetUpScript: []string{
+			"CREATE TABLE t (pk INT PRIMARY KEY, n INT UNSIGNED);",
+		},
+		RightSetUpScript: []string{
+			"ALTER TABLE t MODIFY n BIGINT;",
+		},
+		LeftSetUpScript: []string{
+			"INSERT INTO t VALUES (1, NULL), (2, 0), (3, 4294967295);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT column_type FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 't' AND column_name = 'n';",
+				Expected: []sql.Row{{"bigint"}},
+			},
+			{
+				Query:    "SELECT pk, n FROM t ORDER BY pk;",
+				Expected: []sql.Row{{1, nil}, {2, 0}, {3, int64(4294967295)}},
+			},
+		},
+	},
+	{
+		Name: "MEDIUMINT to INT preserves duplicate rows on a keyless table",
+		AncSetUpScript: []string{
+			"CREATE TABLE t (n MEDIUMINT, u MEDIUMINT UNSIGNED);",
+		},
+		RightSetUpScript: []string{
+			"ALTER TABLE t MODIFY n INT, MODIFY u INT UNSIGNED;",
+		},
+		LeftSetUpScript: []string{
+			"INSERT INTO t VALUES (-8388608, 16777215), (-8388608, 16777215);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT column_type FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 't' ORDER BY ordinal_position;",
+				Expected: []sql.Row{{"int"}, {"int unsigned"}},
+			},
+			{
+				Query:    "SELECT n, u, COUNT(*) FROM t GROUP BY n, u;",
+				Expected: []sql.Row{{-8388608, uint32(16777215), 2}},
+			},
+		},
+	},
+	{
+		Name: "INT UNSIGNED to BIGINT conflicts on a keyless table",
+		AncSetUpScript: []string{
+			"SET autocommit = 0;",
+			"CREATE TABLE t (n INT UNSIGNED);",
+		},
+		RightSetUpScript: []string{
+			"ALTER TABLE t MODIFY n BIGINT;",
+		},
+		LeftSetUpScript: []string{
+			"INSERT INTO t VALUES (42);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('right');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT description FROM dolt_schema_conflicts;",
+				Expected: []sql.Row{{"incompatible column types for column 'n': Uint32 and Int64"}},
+			},
+		},
+	},
+	{
 		Name: "TEXT index without schema change",
 		AncSetUpScript: []string{
 			"set autocommit = 0;",
@@ -2145,6 +2220,30 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 					{"43210000000"},
 					{"54321"},
 				},
+			},
+		},
+	},
+	{
+		Name: "VARCHAR to TEXT with a deletion and a unique prefix index",
+		AncSetUpScript: []string{
+			"CREATE TABLE t (pk INT PRIMARY KEY, n VARCHAR(256), UNIQUE INDEX idx_n (n(16)));",
+			"INSERT INTO t VALUES (1, REPEAT('0123', 50));",
+		},
+		RightSetUpScript: []string{
+			"DELETE FROM t WHERE pk = 1;",
+			"ALTER TABLE t MODIFY n TEXT;",
+		},
+		LeftSetUpScript: []string{
+			"INSERT INTO t VALUES (2, 'unique');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT pk, n FROM t;",
+				Expected: []sql.Row{{2, "unique"}},
 			},
 		},
 	},
@@ -2491,6 +2590,28 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 		},
 	},
 	{
+		Name: "BINARY widening preserves NULL entries in a unique index",
+		AncSetUpScript: []string{
+			"CREATE TABLE t (pk INT PRIMARY KEY, n BINARY(4), UNIQUE INDEX idx_n (n));",
+		},
+		RightSetUpScript: []string{
+			"ALTER TABLE t MODIFY n BINARY(8);",
+		},
+		LeftSetUpScript: []string{
+			"INSERT INTO t VALUES (1, NULL), (2, NULL), (3, 'cat');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT pk FROM t FORCE INDEX (idx_n) WHERE n IS NULL ORDER BY pk;",
+				Expected: []sql.Row{{1}, {2}},
+			},
+		},
+	},
+	{
 		Name: "BINARY to VARBINARY widening",
 		AncSetUpScript: []string{
 			"set autocommit = 0;",
@@ -2661,7 +2782,7 @@ var SchemaChangeTestsSchemaConflicts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select * from dolt_preview_merge_conflicts_summary('main', 'right');",
-				Expected: []sql.Row{{"t", nil, uint64(4)}},
+				Expected: []sql.Row{{"t", nil, uint64(3)}},
 			},
 			{
 				Query:    "call dolt_merge('right');",

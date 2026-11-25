@@ -289,17 +289,11 @@ func deleteBranches(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argp
 			return err
 		}
 
-		// If the session has this branch checked out, we need to change that to the default head
-		headRef, err := dSess.CWBHeadRef(ctx, currBase)
+		// Drop this session's state for the branch, so that it doesn't try to commit changes to it. If the session has
+		// the branch checked out, it switches to the default head.
+		err = dSess.RemoveBranchState(ctx, currBase, branchName)
 		if err != nil {
 			return err
-		}
-
-		if headRef == ref.NewBranchRef(branchName) {
-			err = dSess.RemoveBranchState(ctx, currBase, branchName)
-			if err != nil {
-				return err
-			}
 		}
 	}
 
@@ -333,7 +327,6 @@ func validateBranchNotActiveInAnySession(ctx *sql.Context, branchName string) er
 		return nil
 	}
 	sessionManager := runningServer.SessionManager()
-	branchRef := ref.NewBranchRef(branchName)
 
 	return sessionManager.Iter(func(session sql.Session) (bool, error) {
 		if session.ID() == ctx.Session.ID() {
@@ -345,20 +338,13 @@ func validateBranchNotActiveInAnySession(ctx *sql.Context, branchName string) er
 			return false, fmt.Errorf("unexpected session type: %T", session)
 		}
 
-		sessionDbName := sess.Session.GetCurrentDatabase()
-		baseName, _ := doltdb.SplitRevisionDbName(sessionDbName)
-		if len(baseName) == 0 || baseName != currentDbName {
+		activeHead, ok, err := sess.ActiveHead(ctx, currentDbName)
+		if err != nil || !ok {
+			// A session that's on another database, or whose head we can't resolve, isn't using this branch
 			return false, nil
 		}
 
-		activeBranchRef, err := sess.CWBHeadRef(ctx, sessionDbName)
-		if err != nil {
-			// The above will throw an error if the current DB doesn't have a head ref, in which case we don't need to
-			// consider it
-			return false, nil
-		}
-
-		if ref.Equals(branchRef, activeBranchRef) {
+		if strings.EqualFold(activeHead, branchName) {
 			return false, fmt.Errorf("unsafe to delete or rename branches in use in other sessions; " +
 				"use --force to force the change")
 		}

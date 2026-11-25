@@ -42,11 +42,17 @@ func (u WorkingSetUpdate) BuildDatasetUpdate(ctx context.Context, ddb *DoltDB) (
 	if err != nil {
 		return nil, err
 	}
-	return datas.WorkingSetUpdate{
+	update := datas.WorkingSetUpdate{
 		WorkingSetDS: u.WorkingSet.Ref().String(),
 		WorkingSet:   *spec,
 		PrevWsHash:   u.PrevHash,
-	}, nil
+	}
+	// A branch's working set can only be written while the branch exists, so that writing it can't resurrect the working
+	// set of a branch that was deleted.
+	if headRef, err := u.WorkingSet.Ref().ToHeadRef(); err == nil && headRef.GetType() == ref.BranchRefType {
+		update.HeadDS = headRef.String()
+	}
+	return update, nil
 }
 
 // BranchHeadUpdate creates a commit and updates its branch head.

@@ -199,7 +199,7 @@ func SchemaMerge(
 	}
 
 	var mergedCC *schema.ColCollection
-	mergedCC, sc.ColConflicts, mergeInfo, diffInfo, err = mergeColumns(ctx, tblName.Name, format, ourSch.GetAllCols(), theirSch.GetAllCols(), ancSch.GetAllCols())
+	mergedCC, sc.ColConflicts, mergeInfo, diffInfo, err = mergeColumns(ctx, tblName.Name, ourSch, theirSch, ancSch)
 	if err != nil {
 		return nil, SchemaConflict{}, mergeInfo, diffInfo, err
 	}
@@ -437,18 +437,12 @@ type MergeInfo struct {
 	InvalidateSecondaryIndexes bool
 }
 
-// mergeColumns merges the columns from |ourCC|, |theirCC| into a single column collection, using the ancestor column
-// definitions in |ancCC| to determine on which side a column has changed. If merging is not possible because of
-// conflicting changes to the columns in |ourCC| and |theirCC|, then a set of ColConflict instances are returned
-// describing the conflicts. |format| indicates what storage format is in use, and is needed to determine compatibility
-// between types, since different storage formats have different restrictions on how much types can change and remain
-// compatible with the current stored format. The merged columns, any column conflicts, and a boolean value stating if
-// a full table rewrite is needed to align the existing table rows with the new, merged schema. If any unexpected error
-// occurs, then that error is returned and the other response fields should be ignored.
-func mergeColumns(ctx *sql.Context, tblName string, format *storetypes.NomsBinFormat, ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColCollection, []ColConflict, MergeInfo, tree.ThreeWayDiffInfo, error) {
+// mergeColumns merges the branches' columns using the ancestor to identify one-sided changes.
+// It reports conflicting definitions and the rewrites required by the resulting schema.
+func mergeColumns(ctx *sql.Context, tblName string, ourSch, theirSch, ancSch schema.Schema) (*schema.ColCollection, []ColConflict, MergeInfo, tree.ThreeWayDiffInfo, error) {
 	mergeInfo := MergeInfo{}
 	diffInfo := tree.ThreeWayDiffInfo{}
-	columnMappings, err := mapColumns(ourCC, theirCC, ancCC)
+	columnMappings, err := mapColumns(ourSch.GetAllCols(), theirSch.GetAllCols(), ancSch.GetAllCols())
 	if err != nil {
 		return nil, nil, mergeInfo, diffInfo, err
 	}
@@ -464,6 +458,8 @@ func mergeColumns(ctx *sql.Context, tblName string, format *storetypes.NomsBinFo
 	}
 
 	compatChecker := typecompatibility.NewTypeCompatabilityChecker()
+	// Keyless row keys hash the stored values. Their merge path cannot rewrite those values and regenerate the keys.
+	canRewriteRows := !schema.IsKeyless(ourSch)
 
 	// After we've checked for schema conflicts, merge the columns together
 	// TODO: We don't currently preserve all column position changes; the returned merged columns are always based on
@@ -530,7 +526,7 @@ func mergeColumns(ctx *sql.Context, tblName string, format *storetypes.NomsBinFo
 						mergeInfo.LeftNeedsRewrite = true
 						diffInfo.RightSchemaChange = true
 					}
-					if compatibilityInfo.Compatible {
+					if compatibilityInfo.Compatible && (!compatibilityInfo.RewriteRows || canRewriteRows) {
 						mergedColumns = append(mergedColumns, *theirs)
 					} else {
 						conflicts = append(conflicts, ColConflict{
@@ -552,7 +548,7 @@ func mergeColumns(ctx *sql.Context, tblName string, format *storetypes.NomsBinFo
 						mergeInfo.RightNeedsRewrite = true
 						diffInfo.LeftSchemaChange = true
 					}
-					if compatibilityInfo.Compatible {
+					if compatibilityInfo.Compatible && (!compatibilityInfo.RewriteRows || canRewriteRows) {
 						mergedColumns = append(mergedColumns, *ours)
 					} else {
 						conflicts = append(conflicts, ColConflict{

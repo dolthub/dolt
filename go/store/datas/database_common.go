@@ -45,6 +45,7 @@ var (
 	ErrMergeNeeded          = errors.New("dataset head is not ancestor of commit")
 	ErrAlreadyCommitted     = errors.New("dataset head already pointing at given commit")
 	ErrDirtyWorkspace       = errors.New("target has uncommitted changes. --force required to overwrite")
+	ErrHeadNotFound         = errors.New("head of working set not found")
 )
 
 // rootTracker is a narrowing of the ChunkStore interface, to keep Database disciplined about working directly with Chunks

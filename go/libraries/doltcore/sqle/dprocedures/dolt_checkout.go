@@ -89,6 +89,9 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 	}
 
 	dSess := dsess.DSessFromSess(ctx.Session)
+	if deletedErr, ok := deletedHeadBranch(ctx, dSess, currentDbName); ok {
+		return checkoutFromDeletedBranch(ctx, dSess, deletedErr, newBranch, apr)
+	}
 	dbData, ok := dSess.GetDbData(ctx, currentDbName)
 	if !ok {
 		return 1, "", fmt.Errorf("Could not load database %s", currentDbName)
@@ -575,6 +578,58 @@ func checkoutExistingBranch(
 	}
 
 	return nil
+}
+
+// deletedHeadBranch returns the error for the database |dbName| if the branch this session is on in it was deleted.
+// Resolving the database fails then, but a transaction that already loaded the branch can still look it up.
+func deletedHeadBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName string) (dsess.HeadBranchNotFoundError, bool) {
+	var deletedErr dsess.HeadBranchNotFoundError
+	if _, _, err := dSess.Provider().SessionDatabase(ctx, dbName); errors.As(err, &deletedErr) {
+		return deletedErr, true
+	}
+	_, _, err := dSess.LookupDbState(ctx, dbName)
+	return deletedErr, errors.As(err, &deletedErr)
+}
+
+// checkoutFromDeletedBranch checks out an existing branch for a session whose branch, described by |deletedErr|, was
+// deleted. That branch has no working set to carry over or check against, so this only switches.
+func checkoutFromDeletedBranch(
+	ctx *sql.Context,
+	dSess *dsess.DoltSession,
+	deletedErr dsess.HeadBranchNotFoundError,
+	newBranch string,
+	apr *argparser.ArgParseResults,
+) (int, string, error) {
+	if newBranch != "" || apr.Contains(cli.TrackFlag) || apr.Contains(cli.MoveFlag) || apr.NArg() != 1 {
+		return 1, "", fmt.Errorf("%w; only an existing branch can be checked out until then", deletedErr)
+	}
+	db, ok := dSess.Provider().BaseDatabase(ctx, deletedErr.DbName)
+	if !ok {
+		return 1, "", sql.ErrDatabaseNotFound.New(deletedErr.DbName)
+	}
+	ddb := db.DbData().Ddb
+	branchName, ok, err := ddb.HasBranch(ctx, apr.Arg(0))
+	if err != nil {
+		return 1, "", err
+	}
+	if !ok {
+		return 1, "", fmt.Errorf("%w: %s", doltdb.ErrBranchNotFound, apr.Arg(0))
+	}
+	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(branchName))
+	if err != nil {
+		return 1, "", err
+	}
+	if _, err = ddb.ResolveWorkingSet(ctx, wsRef); err != nil {
+		return 1, "", err
+	}
+	// Load the database into the session through the branch, since a session still on the default branch hasn't yet
+	if _, _, err = dSess.LookupDbState(ctx, doltdb.RevisionDbName(deletedErr.DbName, branchName)); err != nil {
+		return 1, "", err
+	}
+	if err = dSess.SwitchWorkingSet(ctx, deletedErr.DbName, wsRef); err != nil {
+		return 1, "", err
+	}
+	return 0, generateSuccessMessage(branchName, ""), nil
 }
 
 // checkoutExistingBranchWithWorkingSetFallback checks out an existing branch, and if the working set does not exist,
