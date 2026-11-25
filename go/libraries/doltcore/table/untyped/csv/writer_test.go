@@ -15,6 +15,7 @@
 package csv
 
 import (
+	"errors"
 	"os"
 	"testing"
 
@@ -144,5 +145,40 @@ Andy Anderson|27|
 	}
 	if string(results) != expected {
 		t.Errorf(`%s != %s`, results, expected)
+	}
+}
+
+type failingWriteCloser struct {
+	writeErr error
+	closed   bool
+}
+
+func (f *failingWriteCloser) Write(p []byte) (int, error) { return 0, f.writeErr }
+func (f *failingWriteCloser) Close() error                { f.closed = true; return nil }
+
+// A failure while flushing buffered rows on Close must be reported, not dropped,
+// otherwise an export that lost data still looks successful.
+func TestWriterCloseReportsFlushError(t *testing.T) {
+	writeErr := errors.New("no space left on device")
+	wc := &failingWriteCloser{writeErr: writeErr}
+
+	csvWr, err := NewCSVWriter(wc, rowSch, NewCSVInfo())
+	if err != nil {
+		t.Fatal("Could not open CSVWriter", err)
+	}
+
+	ctx := sql.NewEmptyContext()
+	for _, r := range getSampleRows() {
+		if err := csvWr.WriteSqlRow(ctx, r); err != nil {
+			t.Fatal("Failed to write row", err)
+		}
+	}
+
+	err = csvWr.Close(ctx)
+	if !errors.Is(err, writeErr) {
+		t.Fatalf("Close() = %v, want error wrapping %v", err, writeErr)
+	}
+	if !wc.closed {
+		t.Error("underlying writer was not closed after a flush error")
 	}
 }
