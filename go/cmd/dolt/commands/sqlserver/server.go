@@ -904,6 +904,13 @@ func ConfigureServices(
 	}
 	controller.Register(RunClusterRemoteSrv)
 
+	StartClusterReplication := &svcs.AnonService{
+		InitF: func(context.Context) error {
+			return clusterController.RunCommitHooks(sqlEngine.GetUnderlyingEngine().BackgroundThreads)
+		},
+	}
+	controller.Register(StartClusterReplication)
+
 	// We still have some startup to do from this point, and we do not run
 	// the SQL server until we are fully booted. We also want to stop the
 	// SQL server as the first thing we stop. However, if startup fails

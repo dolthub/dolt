@@ -365,9 +365,7 @@ func NewSqlEngine(
 	sqlEngine.clusterController = config.ClusterController
 
 	pro.InstallReplicationInitDatabaseHook(bThreads, sqlEngine.NewDefaultContext)
-	if err = config.ClusterController.RunCommitHooks(bThreads, sqlEngine.NewDefaultContext); err != nil {
-		return nil, err
-	}
+	config.ClusterController.SetSqlContextFactory(sqlEngine.NewDefaultContext)
 	if runAsyncThreads != nil {
 		if err = runAsyncThreads(bThreads, sqlEngine.NewDefaultContext); err != nil {
 			return nil, err
