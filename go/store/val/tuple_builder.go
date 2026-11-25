@@ -145,6 +145,7 @@ func (tb *TupleBuilder) BuildPermissive(ctx context.Context, pool pool.BuffPool)
 			if !adaptiveValue.IsOutOfBand() {
 				outOfBandValue, err := adaptiveValue.convertToOutOfBand(ctx, tb.vs, nil)
 				if err != nil {
+					tb.Recycle()
 					return nil, err
 				}
 				tb.PutRaw(c.columnIndex, outOfBandValue)
@@ -163,6 +164,7 @@ func (tb *TupleBuilder) BuildPermissive(ctx context.Context, pool pool.BuffPool)
 				if adaptiveValue.IsOutOfBand() {
 					inline, err := adaptiveValue.convertToInline(ctx, tb.vs, nil)
 					if err != nil {
+						tb.Recycle()
 						return nil, err
 					}
 					tb.PutRaw(i, inline)

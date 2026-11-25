@@ -137,6 +137,23 @@ func (cc *ColCollection) GetColumns() []Column {
 	return colsCopy
 }
 
+// Match returns the column of |cc| corresponding to |targetCol| in |target|.
+// Columns match by tag, or case-insensitively by name when neither tag appears
+// on the other side, as when a table is dropped and recreated.
+func (cc *ColCollection) Match(target *ColCollection, targetCol Column) (Column, bool) {
+	if col, ok := cc.GetByTag(targetCol.Tag); ok {
+		return col, true
+	}
+	col, ok := cc.GetByNameCaseInsensitive(targetCol.Name)
+	if !ok {
+		return InvalidCol, false
+	}
+	if _, ok := target.GetByTag(col.Tag); ok {
+		return InvalidCol, false
+	}
+	return col, true
+}
+
 // GetColumnNames returns a list of names of the columns.
 func (cc *ColCollection) GetColumnNames() []string {
 	names := make([]string, len(cc.cols))

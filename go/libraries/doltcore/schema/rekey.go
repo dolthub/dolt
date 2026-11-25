@@ -14,48 +14,89 @@
 
 package schema
 
-// RekeyedSchema returns |sch| with the primary key of |target|, or false when |sch| lacks a column of that key or holds it with another type, or has columns or
-// indexes whose rows cannot be rekeyed by copying fields. Columns keep their definitions from |sch|, except
-// that a column joining the primary key becomes NOT NULL, as ALTER TABLE ... ADD PRIMARY KEY makes it.
-func RekeyedSchema(sch, target Schema) (Schema, bool, error) {
-	if sch.GetAllCols().StoredSize() != sch.GetAllCols().Size() {
-		// Virtual columns are not stored, and so cannot be rekeyed by copying fields.
-		return nil, false, nil
-	}
+import (
+	"slices"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/sqltypes"
+)
+
+// Rekey returns |sch| with the primary key of |target|, or false if |sch|
+// cannot be rekeyed to |target|.
+//
+// Primary-key columns in SQL cannot be NULL, so any column promoted into the
+// primary key gains an explicit NOT NULL constraint (matching ALTER TABLE ...
+// ADD PRIMARY KEY).
+//
+// Each primary-key column adopts |target|'s type (see [isBinaryCoercible]) so
+// the rekeyed schema's key types match |target| during diffs and merges.
+func Rekey(sch, target Schema) (Schema, bool, error) {
 	for _, index := range sch.Indexes().AllIndexes() {
 		if index.IsFullText() || index.IsVector() || index.IsSpatial() {
 			return nil, false, nil
 		}
 	}
 	targetPK := target.GetPKCols()
-	for _, tc := range targetPK.GetColumns() {
-		col, ok := sch.GetAllCols().GetByTag(tc.Tag)
-		if !ok || !col.TypeInfo.ToSqlType().Equals(tc.TypeInfo.ToSqlType()) {
+	keyPos := make(map[uint64]int, targetPK.Size())
+	for i, tc := range targetPK.cols {
+		col, ok := sch.GetAllCols().Match(target.GetAllCols(), tc)
+		if !ok || col.Virtual || !isBinaryCoercible(col, tc) {
 			return nil, false, nil
 		}
+		keyPos[col.Tag] = i
 	}
 
-	cols := sch.GetAllCols().GetColumns()
-	newCols := make([]Column, len(cols))
-	for i, col := range cols {
-		_, inPK := targetPK.GetByTag(col.Tag)
-		col.IsPartOfPK = inPK
-		if inPK && col.IsNullable() {
-			col.Constraints = append(append([]ColConstraint(nil), col.Constraints...), NotNullConstraint{})
-		}
-		newCols[i] = col
-	}
-	allCols := NewColCollection(newCols...)
+	newCols := sch.GetAllCols().GetColumns()
 	pkOrdinals := make([]int, targetPK.Size())
-	for i, tag := range targetPK.Tags {
-		pkOrdinals[i] = allCols.TagToIdx[tag]
+	for i := range newCols {
+		col := &newCols[i]
+		pos, inPK := keyPos[col.Tag]
+		if inPK {
+			// Check nullability before setting IsPartOfPK, which makes
+			// IsNullable return false.
+			if col.IsNullable() {
+				col.Constraints = append(slices.Clone(col.Constraints), NotNullConstraint{})
+			}
+			col.TypeInfo = targetPK.GetByIndex(pos).TypeInfo
+			pkOrdinals[pos] = i
+		}
+		col.IsPartOfPK = inPK
 	}
-	newSch, err := NewSchema(allCols, pkOrdinals, sch.GetCollation(), nil, sch.Checks())
+
+	var checks CheckCollection
+	if sch.Checks() != nil {
+		checks = sch.Checks().Copy()
+	}
+	newSch, err := NewSchema(NewColCollection(newCols...), pkOrdinals, sch.GetCollation(), nil, checks)
 	if err != nil {
 		return nil, false, err
 	}
+	newSch.SetComment(sch.GetComment())
+	newSch.SetTargetRowSize(sch.GetTargetRowSize())
 	for _, index := range sch.Indexes().AllIndexes() {
 		newSch.Indexes().AddIndex(index)
 	}
 	return newSch, true, nil
+}
+
+// isBinaryCoercible reports whether |from| is binary-coercible to |to|.
+func isBinaryCoercible(from, to Column) bool {
+	if from.TypeInfo.Encoding() != to.TypeInfo.Encoding() {
+		return false
+	}
+	fromType := from.TypeInfo.ToSqlType()
+	toType := to.TypeInfo.ToSqlType()
+	if fromType.Equals(toType) {
+		return true
+	}
+	// VARCHAR stores variable-length bytes with no max-length padding, and key
+	// order depends only on collation, so a wider VARCHAR reads the same bytes
+	// and sorts identically.
+	fromStr, ok1 := fromType.(sql.StringType)
+	toStr, ok2 := toType.(sql.StringType)
+	return ok1 && ok2 &&
+		fromStr.Type() == sqltypes.VarChar &&
+		toStr.Type() == sqltypes.VarChar &&
+		fromStr.Collation().Equals(toStr.Collation()) &&
+		fromStr.MaxCharacterLength() <= toStr.MaxCharacterLength()
 }

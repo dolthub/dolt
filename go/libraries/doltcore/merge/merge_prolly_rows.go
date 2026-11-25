@@ -1489,7 +1489,7 @@ func (nv nullValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) (
 	case tree.DiffOpRightAdd, tree.DiffOpRightModify:
 		var violations []string
 		for to, from := range nv.rightMap {
-			col := nv.final.GetNonPKCols().GetByIndex(to)
+			col := nv.final.GetNonPKCols().GetByStoredIndex(to)
 			if col.IsNullable() {
 				continue
 			}
@@ -1524,7 +1524,7 @@ func (nv nullValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) (
 	case tree.DiffOpLeftAdd, tree.DiffOpLeftModify:
 		var violations []string
 		for to, from := range nv.leftMap {
-			col := nv.final.GetNonPKCols().GetByIndex(to)
+			col := nv.final.GetNonPKCols().GetByStoredIndex(to)
 			if col.IsNullable() {
 				continue
 			}
@@ -1567,7 +1567,7 @@ func (nv nullValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) (
 	case tree.DiffOpDivergentModifyResolved:
 		var violations []string
 		for to, _ := range nv.leftMap {
-			col := nv.final.GetNonPKCols().GetByIndex(to)
+			col := nv.final.GetNonPKCols().GetByStoredIndex(to)
 			if !col.IsNullable() && diff.Merged.FieldIsNull(to) {
 				violations = append(violations, col.Name)
 			}
@@ -2259,9 +2259,9 @@ func evalColumnExpression(ctx *sql.Context, expr sql.Expression, col schema.Colu
 func convertValueToNewType(ctx *sql.Context, value interface{}, newTypeInfo typeinfo.TypeInfo, tm *TableMerger, from int, rightSide bool) (interface{}, error) {
 	var previousTypeInfo typeinfo.TypeInfo
 	if rightSide {
-		previousTypeInfo = tm.rightSch.GetNonPKCols().GetByIndex(from).TypeInfo
+		previousTypeInfo = tm.rightSch.GetNonPKCols().GetByStoredIndex(from).TypeInfo
 	} else {
-		previousTypeInfo = tm.leftSch.GetNonPKCols().GetByIndex(from).TypeInfo
+		previousTypeInfo = tm.leftSch.GetNonPKCols().GetByStoredIndex(from).TypeInfo
 	}
 
 	if newTypeInfo.Equals(previousTypeInfo) {
