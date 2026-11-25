@@ -28,9 +28,8 @@ import (
 // primary key gains an explicit NOT NULL constraint (matching ALTER TABLE ...
 // ADD PRIMARY KEY).
 //
-// Each primary-key column adopts |target|'s type so that binary-coercible
-// widenings (such as VARCHAR(10) to VARCHAR(20)) produce a schema whose key
-// types match |target| during subsequent diffs and merges.
+// Each primary-key column adopts |target|'s type (see [isBinaryCoercible]) so
+// the rekeyed schema's key types match |target| during diffs and merges.
 func Rekey(sch, target Schema) (Schema, bool, error) {
 	for _, index := range sch.Indexes().AllIndexes() {
 		if index.IsFullText() || index.IsVector() || index.IsSpatial() {
