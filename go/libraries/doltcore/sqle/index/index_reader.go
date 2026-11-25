@@ -37,7 +37,7 @@ func ProllyRangesForIndex(ctx *sql.Context, index sql.Index, ranges sql.RangeCol
 	return idx.prollyRanges(ctx, idx.ns, ranges.(sql.MySQLRangeCollection)...)
 }
 
-func RowIterForIndexLookup(ctx *sql.Context, t DoltTableable, lookup sql.IndexLookup, pkSch sql.PrimaryKeySchema, columns []uint64) (sql.RowIter, error) {
+func RowIterForIndexLookup(ctx *sql.Context, t DoltTableable, lookup sql.IndexLookup, pkSch sql.PrimaryKeySchema, columns []uint64, columnIds sql.ColSet) (sql.ValueRowWriter, error) {
 	mysqlRanges, ok := lookup.Ranges.(sql.MySQLRangeCollection)
 	if !ok {
 		return nil, fmt.Errorf("expected MySQL ranges while creating row iter")
@@ -55,25 +55,34 @@ func RowIterForIndexLookup(ctx *sql.Context, t DoltTableable, lookup sql.IndexLo
 	if err != nil {
 		return nil, err
 	}
-	return RowIterForProllyRange(ctx, idx, prollyRanges[0], pkSch, columns, durableState, lookup.IsReverse)
+	return RowIterForProllyRange(ctx, idx, prollyRanges[0], pkSch, columns, durableState, lookup.IsReverse, columnIds)
 }
 
-func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, r prolly.Range, pkSch sql.PrimaryKeySchema, projections []uint64, durableState *durableIndexState, reverse bool) (sql.RowIter, error) {
+func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, r prolly.Range, pkSch sql.PrimaryKeySchema, projections []uint64, durableState *durableIndexState, reverse bool, columnIds sql.ColSet) (sql.ValueRowWriter, error) {
 	if projections == nil {
 		projections = idx.Schema().GetAllCols().Tags
+	}
+
+	primary, err := durableState.primaryMap()
+	if err != nil {
+		return nil, err
+	}
+	secondary, err := durableState.secondaryMap()
+	if err != nil {
+		return nil, err
 	}
 
 	if sql.IsKeyless(pkSch.Schema) {
 		// in order to resolve row cardinality, keyless indexes must always perform
 		// an indirect lookup through the clustered index.
-		return newProllyKeylessIndexIter(ctx, idx, r, pkSch, projections, durableState.Primary, durableState.Secondary, reverse)
+		return newProllyKeylessIndexIter(ctx, idx, r, pkSch, projections, primary, secondary, reverse, columnIds)
 	}
 
 	covers := idx.coversColumnsByTag(durableState, projections)
 	if covers {
-		return newProllyCoveringIndexIter(ctx, idx, r, pkSch, projections, durableState.Secondary)
+		return newProllyCoveringIndexIter(ctx, idx, r, pkSch, projections, secondary, columnIds)
 	}
-	return newProllyIndexIter(ctx, idx, r, pkSch, projections, durableState.Primary, durableState.Secondary)
+	return newProllyIndexIter(ctx, idx, r, pkSch, projections, primary, secondary, columnIds)
 }
 
 func NewRangePartitionIter(ctx *sql.Context, t DoltTableable, lookup sql.IndexLookup) (sql.PartitionIter, error) {
@@ -196,6 +205,9 @@ func GetDurableIndex(ctx *sql.Context,
 	if err != nil {
 		return nil, err
 	}
+	if s.pending != nil {
+		return nil, fmt.Errorf("index %s has edits that have not been materialized", di.ID())
+	}
 	return s.Secondary, nil
 }
 
@@ -241,7 +253,7 @@ type IndexScanBuilder interface {
 	IndexRangeIterable
 
 	// NewPartitionRowIter returns a sql.RowIter for an index partition.
-	NewPartitionRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error)
+	NewPartitionRowIter(ctx *sql.Context, part sql.Partition, columnIds sql.ColSet) (sql.ValueRowWriter, error)
 
 	// NewSecondaryIter returns an object used to perform secondary lookups
 	// for index joins.
@@ -283,20 +295,26 @@ func NewIndexReaderBuilder(
 		projections: projections,
 	}
 
-	secondaryIndex := durable.MapFromIndex(s.Secondary)
-	base.ns = secondaryIndex.NodeStore()
-	base.secKd, base.secVd = secondaryIndex.Descriptors()
-	base.prefDesc = base.secKd.PrefixDesc(len(di.columns))
+	if s.pending != nil {
+		base.sec = s.pending.secondary
+		base.ns = base.sec.NodeStore()
+		base.secKd, base.secVd = base.sec.Descriptors()
+	} else {
+		secondaryIndex := durable.MapFromIndex(s.Secondary)
+		base.ns = secondaryIndex.NodeStore()
+		base.secKd, base.secVd = secondaryIndex.Descriptors()
 
-	switch si := secondaryIndex.(type) {
-	case prolly.Map:
-		base.sec = si
-	case prolly.ProximityMap:
-		base.proximitySecondary = si
-		base.isProximity = true
-	default:
-		return nil, fmt.Errorf("unknown index type %v", secondaryIndex)
+		switch si := secondaryIndex.(type) {
+		case prolly.Map:
+			base.sec = si
+		case prolly.ProximityMap:
+			base.proximitySecondary = si
+			base.isProximity = true
+		default:
+			return nil, fmt.Errorf("unknown index type %v", secondaryIndex)
+		}
 	}
+	base.prefDesc = base.secKd.PrefixDesc(len(di.columns))
 
 	switch {
 	case sql.IsKeyless(pkSch.Schema):
@@ -342,7 +360,7 @@ func newNonCoveringLookupBuilder(s *durableIndexState, b *baseIndexImplBuilder) 
 			"primary index passed, but only secondary indexes are supported")
 	}
 
-	primary, err := durable.ProllyMapFromIndex(s.Primary)
+	primary, err := s.primaryMap()
 	if err != nil {
 		return nil, err
 	}
@@ -374,7 +392,7 @@ type baseIndexImplBuilder struct {
 	secKd              *val.TupleDesc
 	secVd              *val.TupleDesc
 	prefDesc           *val.TupleDesc
-	sec                prolly.Map
+	sec                prolly.MapReader
 	sch                sql.PrimaryKeySchema
 	projections        []uint64
 	proximitySecondary prolly.ProximityMap
@@ -391,7 +409,7 @@ func (ib *baseIndexImplBuilder) OutputSchema() schema.Schema {
 }
 
 // NewPartitionRowIter implements IndexScanBuilder
-func (ib *baseIndexImplBuilder) NewPartitionRowIter(_ *sql.Context, _ sql.Partition) (sql.RowIter, error) {
+func (ib *baseIndexImplBuilder) NewPartitionRowIter(_ *sql.Context, _ sql.Partition, _ sql.ColSet) (sql.ValueRowWriter, error) {
 	panic("cannot call NewRowIter on baseIndexImplBuilder")
 }
 
@@ -531,10 +549,10 @@ func (i *sequenceRangeIter) Next(ctx context.Context) (val.Tuple, val.Tuple, err
 }
 
 type secIterGen struct {
-	m prolly.Map
+	m prolly.MapReader
 }
 
-func NewSecondaryIterGen(m prolly.Map) IndexRangeIterable {
+func NewSecondaryIterGen(m prolly.MapReader) IndexRangeIterable {
 	return secIterGen{m: m}
 }
 
@@ -564,7 +582,7 @@ func (ib *coveringIndexImplBuilder) NewRangeMapIter(ctx context.Context, r proll
 }
 
 // NewPartitionRowIter implements IndexScanBuilder
-func (ib *coveringIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+func (ib *coveringIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part sql.Partition, columnIds sql.ColSet) (sql.ValueRowWriter, error) {
 	var indexIter prolly.MapIter
 	var err error
 	if proximityPartition, ok := part.(vectorPartitionIter); ok {
@@ -575,6 +593,7 @@ func (ib *coveringIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part s
 	if err != nil {
 		return nil, err
 	}
+	columnIdMap := columnIdMapping(ib.idx.Schema(), ib.projections, columnIds)
 	return prollyCoveringIndexIter{
 		idx:         ib.idx,
 		indexIter:   indexIter,
@@ -586,6 +605,8 @@ func (ib *coveringIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part s
 		sqlSch:      ib.sch.Schema,
 		projections: ib.projections,
 		ns:          ib.ns,
+		columnIds:   columnIds,
+		columnIdMap: columnIdMap,
 	}, nil
 }
 
@@ -614,7 +635,7 @@ func (ib *coveringIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullS
 type nonCoveringIndexImplBuilder struct {
 	*baseIndexImplBuilder
 
-	pri   prolly.Map
+	pri   prolly.MapReader
 	pkBld *val.TupleBuilder
 
 	pkMap, keyMap, valMap, ordMap val.OrdinalMapping
@@ -623,7 +644,7 @@ type nonCoveringIndexImplBuilder struct {
 type nonCoveringMapIter struct {
 	indexIter prolly.MapIter
 	pkBld     *val.TupleBuilder
-	primary   prolly.Map
+	primary   prolly.MapReader
 	pkMap     val.OrdinalMapping
 }
 
@@ -688,7 +709,7 @@ func (ib *nonCoveringIndexImplBuilder) NewRangeMapIter(ctx context.Context, r pr
 }
 
 // NewPartitionRowIter implements IndexScanBuilder
-func (ib *nonCoveringIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+func (ib *nonCoveringIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part sql.Partition, columnIds sql.ColSet) (sql.ValueRowWriter, error) {
 	var indexIter prolly.MapIter
 	var err error
 	if proximityPartition, ok := part.(vectorPartitionIter); ok {
@@ -699,6 +720,7 @@ func (ib *nonCoveringIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, par
 	if err != nil {
 		return nil, err
 	}
+	columnIdMap := columnIdMapping(ib.idx.Schema(), ib.projections, columnIds)
 	return prollyIndexIter{
 		idx:         ib.idx,
 		indexIter:   indexIter,
@@ -710,6 +732,8 @@ func (ib *nonCoveringIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, par
 		ordMap:      ib.ordMap,
 		sqlSch:      ib.sch.Schema,
 		projections: ib.projections,
+		columnIds:   columnIds,
+		columnIdMap: columnIdMap,
 	}, nil
 }
 
@@ -742,9 +766,7 @@ func (ib *keylessIndexImplBuilder) OutputSchema() schema.Schema {
 
 // NewRangeMapIter implements IndexScanBuilder
 func (ib *keylessIndexImplBuilder) NewRangeMapIter(ctx context.Context, r prolly.Range, reverse bool) (prolly.MapIter, error) {
-	rows := ib.s.Primary
-	dsecondary := ib.s.Secondary
-	secondary, err := durable.ProllyMapFromIndex(dsecondary)
+	secondary, err := ib.s.secondaryMap()
 	if err != nil {
 		return nil, err
 	}
@@ -752,7 +774,7 @@ func (ib *keylessIndexImplBuilder) NewRangeMapIter(ctx context.Context, r prolly
 	if err != nil {
 		return nil, err
 	}
-	clustered, err := durable.ProllyMapFromIndex(rows)
+	clustered, err := ib.s.primaryMap()
 	if err != nil {
 		return nil, err
 	}
@@ -765,7 +787,7 @@ func (ib *keylessIndexImplBuilder) NewRangeMapIter(ctx context.Context, r prolly
 }
 
 // NewPartitionRowIter implements IndexScanBuilder
-func (ib *keylessIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+func (ib *keylessIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part sql.Partition, columnIds sql.ColSet) (sql.ValueRowWriter, error) {
 	var prollyRange prolly.Range
 	var reverse bool
 	switch p := part.(type) {
@@ -775,18 +797,26 @@ func (ib *keylessIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part sq
 	case pointPartition:
 		prollyRange = p.r
 	}
-	return newProllyKeylessIndexIter(ctx, ib.idx, prollyRange, ib.sch, ib.projections, ib.s.Primary, ib.s.Secondary, reverse)
+	primary, err := ib.s.primaryMap()
+	if err != nil {
+		return nil, err
+	}
+	secondary, err := ib.s.secondaryMap()
+	if err != nil {
+		return nil, err
+	}
+	return newProllyKeylessIndexIter(ctx, ib.idx, prollyRange, ib.sch, ib.projections, primary, secondary, reverse, columnIds)
 }
 
 func (ib *keylessIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSafe []bool) (SecondaryLookupIterGen, error) {
-	pri, err := durable.ProllyMapFromIndex(ib.s.Primary)
+	pri, err := ib.s.primaryMap()
 	if err != nil {
 		return nil, err
 	}
 	pkDesc, _ := pri.Descriptors()
 	pkBld := val.NewTupleBuilder(pkDesc, pri.NodeStore())
 
-	secondary, err := durable.ProllyMapFromIndex(ib.s.Secondary)
+	secondary, err := ib.s.secondaryMap()
 	if err != nil {
 		return nil, err
 	}

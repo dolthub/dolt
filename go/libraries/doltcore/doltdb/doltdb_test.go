@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/test"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -196,6 +197,9 @@ func TestCopyWorkingSetPreservesDestination(t *testing.T) {
 	_, err = ddb.ResolveWorkingSet(ctx, target)
 	require.ErrorIs(t, err, ErrWorkingSetNotFound)
 	require.NoError(t, ddb.UpdateWorkingSet(ctx, source, ws, hash.Hash{}, TodoWorkingSetMeta(), nil))
+	// A branch's working set can only be written while the branch exists
+	require.ErrorIs(t, ddb.CopyWorkingSet(ctx, source, target, false), datas.ErrHeadNotFound)
+	require.NoError(t, ddb.SetHeadToCommit(ctx, ref.NewBranchRef("copy"), commit))
 	require.NoError(t, ddb.CopyWorkingSet(ctx, source, target, false))
 	copied, err := ddb.ResolveWorkingSet(ctx, target)
 	require.NoError(t, err)
@@ -362,6 +366,26 @@ func TestLoadBadLocalFSRepo(t *testing.T) {
 	assert.Error(t, err, "Should see an error here")
 }
 
+func TestResolveCommitRefFailsAfterClose(t *testing.T) {
+	ctx := context.Background()
+	fs, err := filesys.LocalFS.WithWorkingDir(t.TempDir())
+	require.NoError(t, err)
+	require.NoError(t, fs.MkDirs(dbfactory.DoltDataDir))
+	params := map[string]any{dbfactory.DisableSingletonCacheParam: struct{}{}}
+	ddb, err := LoadDoltDBWithParams(ctx, types.Format_DOLT, LocalDirDoltDB, fs, params)
+	require.NoError(t, err)
+	require.NoError(t, ddb.WriteEmptyRepo(ctx, "main", "Bill Billerson", "bigbillieb@fake.horse"))
+
+	// Populate the value caches, which would otherwise serve this after Close.
+	branch := ref.NewBranchRef("main")
+	_, err = ddb.ResolveCommitRef(ctx, branch)
+	require.NoError(t, err)
+
+	require.NoError(t, ddb.Close())
+	_, err = ddb.ResolveCommitRef(ctx, branch)
+	require.ErrorIs(t, err, chunks.ErrStoreClosed)
+}
+
 func TestLDNoms(t *testing.T) {
 	testDir, err := test.ChangeToTestDir("TestLoadRepo")
 
@@ -380,19 +404,23 @@ func TestLDNoms(t *testing.T) {
 			t.Fatal("Failed to create noms directory")
 		}
 
-		ddb, _ := LoadDoltDB(context.Background(), types.Format_DOLT, LocalDirDoltDB, filesys.LocalFS)
+		ddb, err := LoadDoltDB(context.Background(), types.Format_DOLT, LocalDirDoltDB, filesys.LocalFS)
+		require.NoError(t, err)
 		err = ddb.WriteEmptyRepo(context.Background(), "master", committerName, committerEmail)
 
 		if err != nil {
 			t.Fatal("Unexpected error creating empty repo", err)
 		}
+		require.NoError(t, ddb.Close())
 	}
 
 	// read the empty repo back and add a new table.  Write the value, but don't commit
 	var valHash hash.Hash
 	var tbl *Table
 	{
-		ddb, _ := LoadDoltDB(context.Background(), types.Format_DOLT, LocalDirDoltDB, filesys.LocalFS)
+		ddb, err := LoadDoltDB(context.Background(), types.Format_DOLT, LocalDirDoltDB, filesys.LocalFS)
+		require.NoError(t, err)
+		defer ddb.Close()
 		cs, _ := NewCommitSpec("master")
 		optCmt, err := ddb.Resolve(context.Background(), cs, nil)
 		if err != nil {

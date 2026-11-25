@@ -80,6 +80,30 @@ func TestUnknownJournalRecordTag(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestTruncatedJournalRecordField(t *testing.T) {
+	tests := []struct {
+		name   string
+		fields []byte
+	}{
+		{name: "kind", fields: []byte{byte(kindJournalRecTag)}},
+		{name: "address", fields: append([]byte{byte(addrJournalRecTag)}, make([]byte, journalRecAddrSz-1)...)},
+		{name: "timestamp", fields: append([]byte{byte(timestampJournalRecTag)}, make([]byte, journalRecTimestampSz-1)...)},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// The checksum is valid, but the last field runs into it.
+			buf := make([]byte, journalRecLenSz+len(test.fields)+journalRecChecksumSz)
+			writeUint32(buf, uint32(len(buf)))
+			copy(buf[journalRecLenSz:], test.fields)
+			writeUint32(buf[len(buf)-journalRecChecksumSz:], crc(buf[:len(buf)-journalRecChecksumSz]))
+			require.NoError(t, validateJournalRecord(buf))
+
+			_, err := readJournalRecord(buf)
+			require.Error(t, err)
+		})
+	}
+}
+
 func TestProcessJournalRecords(t *testing.T) {
 	const cnt = 1024
 	ctx := context.Background()

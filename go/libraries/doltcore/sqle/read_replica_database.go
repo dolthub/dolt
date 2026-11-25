@@ -32,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 type ReadReplicaDatabase struct {
@@ -68,14 +67,14 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 		return EmptyReadReplica, fmt.Errorf("%w: '%s'", env.ErrRemoteNotFound, remoteName)
 	}
 
-	srcDB, err := remote.GetRemoteDB(ctx, types.Format_DOLT, dEnv)
+	srcDB, err := openRemoteDB(ctx, remote, dEnv)
 	if err != nil {
 		return EmptyReadReplica, err
 	}
 
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {
-		return EmptyReadReplica, err
+		return EmptyReadReplica, errors.Join(err, srcDB.Close())
 	}
 
 	return ReadReplicaDatabase{
@@ -89,8 +88,7 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 
 func (rrd ReadReplicaDatabase) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
 	rrd.rsr, rrd.rsw = branchSpec.RepoState, branchSpec.RepoState
-	rrd.revision = branchSpec.Branch
-	rrd.revName = rrd.baseName + doltdb.DbRevisionDelimiter + branchSpec.Branch
+	rrd.name = rrd.name.WithRevision(branchSpec.Branch)
 	rrd.revType = dsess.RevisionTypeBranch
 	rrd.requestedName = requestedName
 
@@ -106,7 +104,15 @@ func (rrd ReadReplicaDatabase) ValidReplicaState(ctx *sql.Context) bool {
 // This seems like a pointless override from the embedded Database implementation, but it's necessary to pass the
 // correct pointer type to the session initializer.
 func (rrd ReadReplicaDatabase) InitialDBState(ctx *sql.Context) (dsess.InitialDbState, error) {
-	return initialDBState(ctx, rrd, rrd.revision)
+	return initialDBState(ctx, rrd, rrd.name.Revision)
+}
+
+// Close closes the remote this replica pulls from, which it owns.
+func (rrd ReadReplicaDatabase) Close() {
+	rrd.Database.Close()
+	if rrd.srcDB != nil {
+		_ = rrd.srcDB.Close()
+	}
 }
 
 func (rrd ReadReplicaDatabase) DoltDatabases() []*doltdb.DoltDB {

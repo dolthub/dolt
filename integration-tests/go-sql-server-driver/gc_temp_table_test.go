@@ -128,6 +128,17 @@ func TestGCWithTemporaryTable(t *testing.T) {
 		s.requireTempRows(gcTempTableRows, gcTempTableRows-1)
 	})
 
+	// ROLLBACK drops the session's branch states, and they aren't loaded again until its next statement. The
+	// temporary table outlives them.
+	t.Run("AfterRollback", func(t *testing.T) {
+		t.Parallel()
+		s := newGCTempTableServer(t)
+		s.createTempTable()
+		s.exec("ROLLBACK")
+		s.gc()
+		s.requireTempRows(gcTempTableRows, gcTempTableRows)
+	})
+
 	t.Run("RevisionDatabase", func(t *testing.T) {
 		t.Parallel()
 		s := newGCTempTableServer(t)

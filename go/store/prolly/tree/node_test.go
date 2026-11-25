@@ -323,3 +323,82 @@ func (d *fakeChunkDiffer) Next(_ context.Context) ([]byte, []byte, error) {
 	}
 	return l, r, nil
 }
+
+// writeRecordingNodeStore records the hash of every Node written through it.
+type writeRecordingNodeStore struct {
+	NodeStore
+	written hash.HashSet
+}
+
+func (ns writeRecordingNodeStore) Write(ctx context.Context, nd *Node) (hash.Hash, error) {
+	h, err := ns.NodeStore.Write(ctx, nd)
+	if err == nil {
+		ns.written.Insert(h)
+	}
+	return h, err
+}
+
+// TestWalkNodesSkipsKeyAddresses checks that WalkNodes and WalkAddresses only
+// descend into the child refs of internal nodes, not into addresses embedded
+// in their keys.
+func TestWalkNodesSkipsKeyAddresses(t *testing.T) {
+	ctx := context.Background()
+	ns := writeRecordingNodeStore{NodeStore: NewTestNodeStore(), written: hash.NewHashSet()}
+
+	kd := val.NewTupleDescriptor(
+		val.Type{Enc: val.Int64Enc},
+		val.Type{Enc: val.CommitAddrEnc},
+	)
+	vd := val.NewTupleDescriptor(val.Type{Enc: val.Int64Enc, Nullable: true})
+	// |missing| is not present in the store.
+	missing := hash.Of([]byte("x"))
+
+	chkr, err := newEmptyChunker(ctx, ns, message.NewProllyMapSerializer(kd, vd, ns.Pool()))
+	require.NoError(t, err)
+	kb := val.NewTupleBuilder(kd, ns)
+	vb := val.NewTupleBuilder(vd, ns)
+	for i := 0; i < 20_000; i++ {
+		kb.PutInt64(0, int64(i))
+		kb.PutCommitAddr(1, missing)
+		k, err := kb.Build(ctx, sharedPool)
+		require.NoError(t, err)
+		vb.PutInt64(0, int64(i))
+		v, err := vb.Build(ctx, sharedPool)
+		require.NoError(t, err)
+		require.NoError(t, chkr.AddPair(ctx, Item(k), Item(v)))
+	}
+	root, err := chkr.Done(ctx)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, root.Level(), 2)
+
+	// The root's message yields its key-embedded addresses alongside its child refs.
+	msgAddrs := 0
+	require.NoError(t, walkAddresses(ctx, root, func(context.Context, hash.Hash) error {
+		msgAddrs++
+		return nil
+	}))
+	require.Greater(t, msgAddrs, root.Count())
+
+	visited := hash.NewHashSet()
+	require.NoError(t, WalkNodes(ctx, root, ns, func(_ context.Context, nd *Node) error {
+		require.False(t, visited.Has(nd.HashOf()))
+		visited.Insert(nd.HashOf())
+		return nil
+	}))
+	assert.Equal(t, ns.written.Size(), visited.Size())
+	for h := range ns.written {
+		assert.True(t, visited.Has(h))
+	}
+
+	addrs := hash.NewHashSet()
+	require.NoError(t, WalkAddresses(ctx, root, ns, func(_ context.Context, addr hash.Hash) error {
+		addrs.Insert(addr)
+		return nil
+	}))
+	assert.True(t, addrs.Has(missing))
+	for h := range visited {
+		if h != root.HashOf() {
+			assert.True(t, addrs.Has(h))
+		}
+	}
+}

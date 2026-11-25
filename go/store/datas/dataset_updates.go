@@ -63,6 +63,9 @@ type WorkingSetUpdate struct {
 	// PrevWsHash is the expected hash of the current working set for the WorkingSetDS.
 	// If the current working set does not match this hash, the update will fail with ErrOptimisticLockFailed.
 	PrevWsHash hash.Hash
+	// HeadDS, when non-empty, is the dataset of the head this working set belongs to. It must exist when the working set
+	// is written, or the update fails with ErrHeadNotFound.
+	HeadDS string
 }
 
 var _ DatasetUpdate = &WorkingSetUpdate{}
@@ -77,13 +80,24 @@ func (w WorkingSetUpdate) build(ctx context.Context, db valueBuilder) (writtenDa
 		return writtenDatasetUpdate{}, err
 	}
 
+	var preconditions []datasetCommitPrecondition
+	// A deleted head fails the update even after a retry, so it's checked before the working set's own lock.
+	if w.HeadDS != "" {
+		preconditions = append(preconditions, datasetCommitPrecondition{
+			DatasetID: w.HeadDS,
+			NotEqual:  true,
+			OnFailure: ErrHeadNotFound,
+		})
+	}
+	preconditions = append(preconditions, datasetCommitPrecondition{
+		DatasetID:    w.WorkingSetDS,
+		ExpectedHead: w.PrevWsHash,
+		OnFailure:    ErrOptimisticLockFailed,
+	})
+
 	return writtenDatasetUpdate{
-		NewHead: head,
-		Preconditions: []datasetCommitPrecondition{{
-			DatasetID:    w.WorkingSetDS,
-			ExpectedHead: w.PrevWsHash,
-			OnFailure:    ErrOptimisticLockFailed,
-		}},
+		NewHead:       head,
+		Preconditions: preconditions,
 	}, nil
 }
 

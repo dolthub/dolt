@@ -64,6 +64,7 @@ type SqlEngine struct {
 	fs                    filesys.Filesys
 	clusterController     *cluster.Controller
 	branchActivityTracker *doltdb.BranchActivityTracker
+	ownedMrEnv            *env.MultiRepoEnv // built by NewSqlEngineForEnv; closed after the provider
 }
 
 type sessionFactory func(mysqlSess *sql.BaseSession, pro sql.DatabaseProvider) (*dsess.DoltSession, error)
@@ -185,6 +186,17 @@ func NewSqlEngine(
 	}
 
 	bThreads := sql.NewBackgroundThreads()
+	sqlEngine := &SqlEngine{}
+	initialized := false
+	// On failure, Close releases whatever has been recorded on |sqlEngine| so far.
+	defer func() {
+		if !initialized {
+			if sqlEngine.engine == nil {
+				_ = bThreads.Shutdown()
+			}
+			_ = sqlEngine.Close()
+		}
+	}()
 	var runAsyncThreads sqle.RunAsyncThreads
 	dbs, runAsyncThreads, err = sqle.ApplyReplicationConfigWithRegistry(bootstrapCtx, mrEnv, cli.CliOut, vars, dbs...)
 	if err != nil {
@@ -237,6 +249,7 @@ func NewSqlEngine(
 	default:
 		return nil, fmt.Errorf("provider %T must be or wrap a *sqle.DoltDatabaseProvider", engineProvider)
 	}
+	sqlEngine.provider = pro
 
 	pro.SetRemoteDialer(mrEnv.RemoteDialProvider())
 	if len(config.DBLoadParams) > 0 {
@@ -250,21 +263,15 @@ func NewSqlEngine(
 		config.ClusterController.SetDropDatabase(pro.DropDatabase)
 	}
 
-	sqlEngine := &SqlEngine{}
 	// Create the engine
 	engine := gms.New(analyzer.NewBuilder(engineProvider).AddOverrides(config.EngineOverrides).Build(), &gms.Config{
 		IsReadOnly:      config.IsReadOnly,
 		IsServerLocked:  config.IsServerLocked,
 		EngineVariables: engineVars,
 	}).WithBackgroundThreads(bThreads)
+	sqlEngine.engine = engine
 
-	primaryController := configureBinlogPrimaryController(engine)
-	initialized := false
-	defer func() {
-		if !initialized {
-			primaryController.Close()
-		}
-	}()
+	configureBinlogPrimaryController(engine)
 
 	config.ClusterController.SetIsStandbyCallback(func(isStandby bool) {
 		pro.SetIsStandby(isStandby)
@@ -343,30 +350,21 @@ func NewSqlEngine(
 
 	branchActivityTracker := doltdb.NewBranchActivityTracker(ctx, config.BranchActivityTracking)
 	sqlEngine.branchActivityTracker = branchActivityTracker
-	defer func() {
-		if !initialized {
-			branchActivityTracker.Close()
-		}
-	}()
 
 	engine.Analyzer.ExecBuilder = kvexec.NewExecBuilder(engine.Analyzer.Overrides)
 	engine.Analyzer.ExecBuilder.Runner = engine.Analyzer.Runner
 	sessFactory := doltSessionFactory(pro, statsPro, mrEnv.Config(), bcController, gcSafepointController, config.Autocommit, branchActivityTracker)
-	sqlEngine.provider = pro
 	sqlEngine.dsessFactory = sessFactory
 	sqlEngine.ContextFactory = func(ctx context.Context, opts ...sql.ContextOption) *sql.Context {
 		opts = append([]sql.ContextOption{sql.WithEngineVariables(engineVars)}, opts...)
 		return sqlContextFactory(ctx, opts...)
 	}
-	sqlEngine.engine = engine
 	sqlEngine.variables = engineVars
 	sqlEngine.fs = pro.FileSystem()
 	sqlEngine.clusterController = config.ClusterController
 
 	pro.InstallReplicationInitDatabaseHook(bThreads, sqlEngine.NewDefaultContext)
-	if err = config.ClusterController.RunCommitHooks(bThreads, sqlEngine.NewDefaultContext); err != nil {
-		return nil, err
-	}
+	config.ClusterController.SetSqlContextFactory(sqlEngine.NewDefaultContext)
 	if runAsyncThreads != nil {
 		if err = runAsyncThreads(bThreads, sqlEngine.NewDefaultContext); err != nil {
 			return nil, err
@@ -430,7 +428,7 @@ func applySystemVariables(ctx *sql.Context, cfg SystemVariables) error {
 	if cfg == nil {
 		return nil
 	}
-	return sqle.AssignSystemVariables(ctx, cfg)
+	return ctx.SystemVariables().AssignValues(ctx, cfg)
 }
 
 // InitStats initializes stats threads. We separate construction
@@ -572,6 +570,9 @@ func (se *SqlEngine) Close() error {
 	if se.provider != nil {
 		se.provider.Teardown(context.Background())
 		se.provider.Close()
+	}
+	if se.ownedMrEnv != nil {
+		err = errors.Join(err, se.ownedMrEnv.Close(context.Background()))
 	}
 	return err
 }
@@ -805,11 +806,12 @@ func NewSqlEngineForEnv(ctx context.Context, dEnv *env.DoltEnv, options ...Confi
 		config,
 	)
 	if err != nil {
-		return nil, "", err
+		return nil, "", errors.Join(err, mrEnv.Close(ctx))
 	}
+	engine.ownedMrEnv = mrEnv
 
 	if err := engine.InitStats(ctx); err != nil {
-		return nil, "", err
+		return nil, "", errors.Join(err, engine.Close())
 	}
 
 	return engine, mrEnv.GetFirstDatabase(), err

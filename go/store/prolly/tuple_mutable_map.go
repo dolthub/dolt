@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
@@ -38,12 +39,13 @@ type GenericMutableMap[MapType MapInterface, TreeMap tree.MapInterface[val.Tuple
 	flusher MutableMapFlusher[MapType, TreeMap]
 	// tuples contains the primary Prolly Tree and skip.List for this map.
 	tuples tree.MutableMap[val.Tuple, val.Tuple, *val.TupleDesc, TreeMap]
-	// stash, if not nil, contains a previous checkpoint of this map.
-	// stashes are created when a MutableMap has been check-pointed, but
-	// the number of in-memory pending writes exceeds, maxPending.
-	// In this case we stash a copy MutableMap containing the checkpoint,
-	// flush the pending writes and continue accumulating
-	stash *tree.MutableMap[val.Tuple, val.Tuple, *val.TupleDesc, TreeMap]
+	// flushedCheckpoint is the state Revert restores once a flush has
+	// changed |tuples.Static| since the last Checkpoint. While it is nil,
+	// the checkpoint is |tuples.Static| plus |tuples.Edits| up to its
+	// checkpoint. While it is set, |tuples.Edits| holds only
+	// post-checkpoint writes. It is set only by flushPending, cleared by
+	// Checkpoint and Revert, and never aliases |tuples.Edits|.
+	flushedCheckpoint *tree.MutableMap[val.Tuple, val.Tuple, *val.TupleDesc, TreeMap]
 	// keyDesc and valDesc are tuples descriptors for the map.
 	keyDesc *val.TupleDesc
 	valDesc *val.TupleDesc
@@ -64,20 +66,58 @@ func (mut *GenericMutableMap[M, T]) Map(ctx context.Context) (M, error) {
 	return mut.flusher.Map(ctx, mut)
 }
 
-func (mut *GenericMutableMap[M, T]) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
-	// flushPending in order to ensure that our tuples.Static root
-	// is a chunk which includes all of the reachable chunks for
-	// our edits, including chunked internal values like text,
-	// json and geometry.
-	err := mut.flushPending(ctx, true)
+// VisitGCRoots passes every chunk address reachable from the pending state of
+// this map to |roots|: the addresses referenced by the roots of its static
+// trees and any out-of-band values referenced by its in-memory edits. It does
+// not write to the NodeStore.
+func (mut *GenericMutableMap[M, T]) VisitGCRoots(ctx context.Context, roots func(hash.Hash)) error {
+	if err := visitMutableTreeGCRoots(ctx, mut.tuples, mut.keyDesc, mut.valDesc, roots); err != nil {
+		return err
+	}
+	if mut.flushedCheckpoint != nil {
+		return visitMutableTreeGCRoots(ctx, *mut.flushedCheckpoint, mut.keyDesc, mut.valDesc, roots)
+	}
+	return nil
+}
+
+func visitMutableTreeGCRoots[T tree.MapInterface[val.Tuple, val.Tuple, *val.TupleDesc]](ctx context.Context, tuples tree.MutableMap[val.Tuple, val.Tuple, *val.TupleDesc, T], kd, vd *val.TupleDesc, roots func(hash.Hash)) error {
+	// Visit what the root references rather than the root: the root node is in memory, and needn't be a chunk in the
+	// store. A table's primary index root, for one, is stored inline in the table's chunk.
+	err := tree.WalkNodeAddresses(ctx, tuples.Static.GetRoot(), func(_ context.Context, addr hash.Hash) error {
+		roots(addr)
+		return nil
+	})
 	if err != nil {
 		return err
 	}
-	roots(mut.tuples.Static.GetRoot().HashOf())
-	if mut.stash != nil {
-		roots(mut.stash.Static.GetRoot().HashOf())
+	for it := tuples.Edits.IterAtStart(); ; it.Advance() {
+		k, v := it.Current()
+		if k == nil {
+			break
+		}
+		visitTupleAddresses(val.Tuple(k), kd, roots)
+		if v != nil {
+			visitTupleAddresses(val.Tuple(v), vd, roots)
+		}
 	}
 	return nil
+}
+
+// visitTupleAddresses passes the chunk addresses stored within |tup| to |cb|, matching the addresses that would be
+// recorded for |tup| when it is serialized into a tree node.
+func visitTupleAddresses(tup val.Tuple, td *val.TupleDesc, cb func(hash.Hash)) {
+	val.IterAddressFields(td, func(i int, _ val.Type) {
+		addr := tup.GetField(i)
+		if len(addr) > 0 && !hash.New(addr).IsEmpty() {
+			cb(hash.New(addr))
+		}
+	})
+	val.IterAdaptiveFields(td, func(i int, _ val.Type) {
+		av := val.AdaptiveValue(tup.GetField(i))
+		if av.IsOutOfBand() {
+			cb(hash.New(av[len(av)-hash.ByteLen:]))
+		}
+	})
 }
 
 // newMutableMap returns a new MutableMap.
@@ -124,15 +164,24 @@ func (mut *GenericMutableMap[M, T]) Put(ctx context.Context, key, value val.Tupl
 	if err := mut.tuples.Put(ctx, key, value); err != nil {
 		return err
 	}
-	if mut.tuples.Edits.Count() > mut.maxPending {
-		return mut.flushPending(ctx, false)
-	}
-	return nil
+	return mut.flushIfFull(ctx)
 }
 
 // Delete deletes the pair keyed by |key| from the MutableMap.
 func (mut *GenericMutableMap[M, T]) Delete(ctx context.Context, key val.Tuple) error {
-	return mut.tuples.Delete(ctx, key)
+	if err := mut.tuples.Delete(ctx, key); err != nil {
+		return err
+	}
+	return mut.flushIfFull(ctx)
+}
+
+// flushIfFull flushes our edits once they hold more than |maxPending| entries. Superseded entries stay in memory until a
+// flush, so they count too.
+func (mut *GenericMutableMap[M, T]) flushIfFull(ctx context.Context) error {
+	if mut.tuples.Edits.NodeCount() > mut.maxPending {
+		return mut.flushPending(ctx)
+	}
+	return nil
 }
 
 // Get fetches the Tuple pair keyed by |key|, if it exists, and passes it to |cb|.
@@ -141,8 +190,26 @@ func (mut *GenericMutableMap[M, T]) Get(ctx context.Context, key val.Tuple, cb t
 	return mut.tuples.Get(ctx, key, cb)
 }
 
+// GetPrefix fetches the first Tuple pair with a key matching |key| in the fields of |prefixDesc|, and passes it to
+// |cb|. If no key matches, a nil Tuple pair is passed to |cb|.
 func (mut *GenericMutableMap[M, T]) GetPrefix(ctx context.Context, key val.Tuple, prefixDesc *val.TupleDesc, cb tree.KeyValueFn[val.Tuple, val.Tuple]) (err error) {
-	return mut.tuples.GetPrefix(ctx, key, prefixDesc, cb)
+	// A pending delete of the first matching key in the edits can shadow a different matching key in the static
+	// tree, so we merge the two.
+	rng, err := PrefixRange(ctx, key, prefixDesc)
+	if err != nil {
+		return err
+	}
+	iter, err := mut.IterRange(ctx, rng)
+	if err != nil {
+		return err
+	}
+	k, v, err := iter.Next(ctx)
+	if err == io.EOF {
+		return cb(nil, nil)
+	} else if err != nil {
+		return err
+	}
+	return cb(k, v)
 }
 
 // Has returns true if |key| is present in the MutableMap.
@@ -152,86 +219,95 @@ func (mut *GenericMutableMap[M, T]) Has(ctx context.Context, key val.Tuple) (ok 
 
 // HasPrefix returns true if a key with a matching prefix to |key| is present in the MutableMap.
 func (mut *GenericMutableMap[M, T]) HasPrefix(ctx context.Context, key val.Tuple, prefixDesc *val.TupleDesc) (ok bool, err error) {
-	return mut.tuples.HasPrefix(ctx, key, prefixDesc)
+	err = mut.GetPrefix(ctx, key, prefixDesc, func(k, _ val.Tuple) error {
+		ok = k != nil
+		return nil
+	})
+	return
 }
 
 // Checkpoint records a checkpoint that can be reverted to.
 func (mut *GenericMutableMap[M, T]) Checkpoint(context.Context) error {
-	// discard previous stash, if one exists
-	mut.stash = nil
+	mut.flushedCheckpoint = nil
 	mut.tuples.Edits.Checkpoint()
 	return nil
 }
 
 // Revert discards writes made since the last checkpoint.
 func (mut *GenericMutableMap[M, T]) Revert(ctx context.Context) {
-	// if we've accumulated a large number of writes
-	// since we check-pointed, our last checkpoint
-	// may be stashed in a separate tree.MutableMap
-	if mut.stash != nil {
-		mut.tuples = *mut.stash
-		mut.stash = nil
+	if mut.flushedCheckpoint != nil {
+		mut.tuples = *mut.flushedCheckpoint
+		mut.flushedCheckpoint = nil
 		return
 	}
 	mut.tuples.Edits.Revert(ctx)
 }
 
-func (mut *GenericMutableMap[M, T]) flushPending(ctx context.Context, deep bool) error {
-	stash := mut.stash
-	// Applying our pending edits to |mut.tuples.Static| loses the state we
-	// would revert to, so we must first stash a copy of it, unless an
-	// earlier flush already did so.
-	if mut.tuples.Edits.HasCheckpoint() {
-		cp := mut.tuples.Copy()
-		if err := cp.Edits.Revert(ctx); err != nil {
-			return err
-		}
-		if deep {
-			// deep is used by online GC. In order to
-			// ensure that all internal chunk pointers in
-			// all reachable cached edits get visited by
-			// GC, we flush the checkpointed edits to
-			// storage as well.
-			//
-			// TODO: Because of the way apply mutations is
-			// currently coupled with GenericMutableMap,
-			// we construct this temporary generic mutable
-			// map to make the call we want to. This could
-			// be better if we could flush the map with a
-			// more straightforward call which passed
-			// along the dependencies.
-			tmpGMM := &GenericMutableMap[M, T]{
-				keyDesc:    mut.keyDesc,
-				valDesc:    mut.valDesc,
-				flusher:    mut.flusher,
-				tuples:     cp,
-				stash:      nil,
-				maxPending: mut.maxPending,
-			}
-			err := tmpGMM.flushPending(ctx, false)
-			if err != nil {
-				return err
-			}
-			stash = &tmpGMM.tuples
-		} else {
-			stash = &cp
-		}
-	} else if stash == nil {
-		// The checkpoint holds no edits, so it is just our static tree.
-		stash = &tree.MutableMap[val.Tuple, val.Tuple, *val.TupleDesc, T]{
-			Edits:  mut.tuples.Edits.EmptyCopy(),
-			Static: mut.tuples.Static,
+// HasUncheckpointedEdits returns true if writes have been made since the last checkpoint.
+func (mut *GenericMutableMap[M, T]) HasUncheckpointedEdits() bool {
+	return mut.flushedCheckpoint != nil || mut.tuples.Edits.EditedSinceCheckpoint()
+}
+
+// CheckpointMap materializes the map as of the last checkpoint, excluding any writes made since. Unlike Revert, it
+// leaves |mut| unchanged.
+func (mut *GenericMutableMap[M, T]) CheckpointMap(ctx context.Context) (M, error) {
+	if !mut.HasUncheckpointedEdits() {
+		return mut.Map(ctx)
+	}
+	var cp tree.MutableMap[val.Tuple, val.Tuple, *val.TupleDesc, T]
+	if mut.flushedCheckpoint != nil {
+		cp = *mut.flushedCheckpoint
+	} else {
+		var err error
+		if cp, err = mut.checkpointState(ctx); err != nil {
+			var m M
+			return m, err
 		}
 	}
-	serializer := mut.flusher.GetDefaultSerializer(ctx, mut)
-	sm, err := mut.flusher.ApplyMutationsWithSerializer(ctx, serializer, mut)
+	tmp := &GenericMutableMap[M, T]{
+		flusher:    mut.flusher,
+		tuples:     cp,
+		keyDesc:    mut.keyDesc,
+		valDesc:    mut.valDesc,
+		maxPending: mut.maxPending,
+	}
+	return tmp.Map(ctx)
+}
+
+// CheckpointMapInterface is CheckpointMap, returning a MapInterface.
+func (mut *GenericMutableMap[M, T]) CheckpointMapInterface(ctx context.Context) (MapInterface, error) {
+	return mut.CheckpointMap(ctx)
+}
+
+// flushPending applies |tuples.Edits| to |tuples.Static| and truncates them.
+func (mut *GenericMutableMap[M, T]) flushPending(ctx context.Context) error {
+	if mut.flushedCheckpoint == nil {
+		// This flush changes |tuples.Static|, the base of the checkpoint.
+		cp, err := mut.checkpointState(ctx)
+		if err != nil {
+			return err
+		}
+		mut.flushedCheckpoint = &cp
+	}
+	sm, err := mut.flusher.ApplyMutationsWithSerializer(ctx, mut.flusher.GetDefaultSerializer(ctx, mut), mut)
 	if err != nil {
 		return err
 	}
 	mut.tuples.Static = sm
 	mut.tuples.Edits.Truncate() // reuse skip list
-	mut.stash = stash
 	return nil
+}
+
+// checkpointState returns a copy of the state Revert would restore while |flushedCheckpoint| is nil.
+func (mut *GenericMutableMap[M, T]) checkpointState(ctx context.Context) (tree.MutableMap[val.Tuple, val.Tuple, *val.TupleDesc, T], error) {
+	if !mut.tuples.Edits.HasCheckpointedEdits() {
+		return tree.MutableMap[val.Tuple, val.Tuple, *val.TupleDesc, T]{
+			Edits:  mut.tuples.Edits.EmptyCopy(),
+			Static: mut.tuples.Static,
+		}, nil
+	}
+	cp := mut.tuples.Copy()
+	return cp, cp.Edits.Revert(ctx)
 }
 
 // IterAll returns a mutableMapIter that iterates over the entire MutableMap.
@@ -244,7 +320,19 @@ func (mut *GenericMutableMap[M, T]) IterAll(ctx context.Context) (MapIter, error
 // |stop|. If |start| and/or |stop| is nil, the range will be open
 // towards that end.
 func (mut *GenericMutableMap[M, T]) IterKeyRange(ctx context.Context, start, stop val.Tuple) (MapIter, error) {
-	return mut.tuples.Static.IterKeyRange(ctx, start, stop)
+	treeIter, err := mut.tuples.Static.IterKeyRange(ctx, start, stop)
+	if err != nil {
+		return nil, err
+	}
+	memIter, err := memIterFromKeyRange(ctx, mut.tuples.Edits, mut.keyDesc, start, stop)
+	if err != nil {
+		return nil, err
+	}
+	return &mutableMapIter[val.Tuple, val.Tuple, *val.TupleDesc]{
+		memory: memIter,
+		prolly: treeIter,
+		order:  mut.keyDesc,
+	}, nil
 }
 
 // IterRange returns a MapIter that iterates over a Range.
@@ -258,24 +346,55 @@ func (mut *GenericMutableMap[M, T]) IterRange(ctx context.Context, rng Range) (M
 		return nil, err
 	}
 
+	// |rng.Desc| may only describe a prefix of our keys, so we order the merge by the whole key
 	iter := &mutableMapIter[val.Tuple, val.Tuple, *val.TupleDesc]{
 		memory: memIter,
 		prolly: treeIter,
-		order:  rng.Desc,
+		order:  mut.keyDesc,
 	}
 
 	return filteredIter{iter: iter, rng: rng}, err
 }
 
-// HasEdits returns true when the MutableMap has performed at least one Put or Delete operation. This does not indicate
-// whether the materialized map contains different values to the contained unedited map.
-func (mut *GenericMutableMap[M, T]) HasEdits() bool {
-	return mut.tuples.Edits.Count() > 0
+// IterRangeReverse returns a MapIter that iterates over a Range backwards.
+func (mut *GenericMutableMap[M, T]) IterRangeReverse(ctx context.Context, rng Range) (MapIter, error) {
+	treeIter, err := treeIterFromRangeReverse(ctx, mut.tuples.Static.GetRoot(), mut.tuples.Static.GetNodeStore(), rng)
+	if err != nil {
+		return nil, err
+	}
+	memIter, err := memIterFromRangeReverse(ctx, mut.tuples.Edits, rng)
+	if err != nil {
+		return nil, err
+	}
+
+	iter := &mutableMapIter[val.Tuple, val.Tuple, *val.TupleDesc]{
+		memory:  memIter,
+		prolly:  treeIter,
+		order:   mut.keyDesc,
+		reverse: true,
+	}
+
+	return filteredIter{iter: iter, rng: rng}, nil
 }
 
 // Descriptors returns the key and value val.TupleDesc.
 func (mut *GenericMutableMap[M, T]) Descriptors() (*val.TupleDesc, *val.TupleDesc) {
 	return mut.keyDesc, mut.valDesc
+}
+
+// KeyDesc returns the key val.TupleDesc.
+func (mut *GenericMutableMap[M, T]) KeyDesc() *val.TupleDesc {
+	return mut.keyDesc
+}
+
+// ValDesc returns the value val.TupleDesc.
+func (mut *GenericMutableMap[M, T]) ValDesc() *val.TupleDesc {
+	return mut.valDesc
+}
+
+// Pool returns the pool.BuffPool of the map's NodeStore.
+func (mut *GenericMutableMap[M, T]) Pool() pool.BuffPool {
+	return mut.NodeStore().Pool()
 }
 
 type tupleIter struct {

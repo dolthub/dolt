@@ -361,6 +361,59 @@ var SchemaOverrideTests = []queries.ScriptTest{
 		},
 	},
 
+	{
+		// https://github.com/dolthub/dolt/issues/12309
+		Name: "Recursive CTE joins with schema override",
+		SetUpScript: []string{
+			"CREATE TABLE node (id VARCHAR(36) PRIMARY KEY)",
+			"CREATE TABLE edge (id VARCHAR(36) PRIMARY KEY, parent_id VARCHAR(36) NOT NULL, child_id VARCHAR(36) NOT NULL, INDEX idx_parent (parent_id), INDEX idx_child (child_id))",
+			"INSERT INTO node VALUES ('root'), ('child'), ('grandchild'), ('root2'), ('child2'), ('isolated1'), ('isolated2')",
+			"INSERT INTO edge VALUES ('e1', 'root', 'child'), ('e2', 'child', 'grandchild'), ('e3', 'root2', 'child2')",
+			"CALL DOLT_COMMIT('-Am', 'node and edge graph')",
+			"SET @@cte_max_recursion_depth = 20",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: `WITH RECURSIVE chain AS (
+                    SELECT n.id AS node_id FROM node n WHERE n.id = 'child'
+                    UNION ALL
+                    SELECT p.id FROM chain c
+                    JOIN edge e ON e.child_id = c.node_id
+                    JOIN node p ON p.id = e.parent_id
+                ) SELECT node_id FROM chain LIMIT 12`,
+				Expected: []sql.Row{{"child"}, {"root"}},
+			},
+			{
+				Query:    "SET @@dolt_override_schema = HASHOF('HEAD')",
+				Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
+			},
+			{
+				Query: `WITH RECURSIVE chain AS (
+                    SELECT n.id AS node_id FROM node n WHERE n.id = 'child'
+                    UNION ALL
+                    SELECT p.id FROM chain c
+                    JOIN edge e ON e.child_id = c.node_id
+                    JOIN node p ON p.id = e.parent_id
+                ) SELECT node_id FROM chain LIMIT 12`,
+				Expected: []sql.Row{{"child"}, {"root"}},
+			},
+			{
+				Query:    "SET @@dolt_override_schema = NULL",
+				Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
+			},
+			{
+				Query: `WITH RECURSIVE chain AS (
+                    SELECT n.id AS node_id FROM node n WHERE n.id = 'child'
+                    UNION ALL
+                    SELECT p.id FROM chain c
+                    JOIN edge e ON e.child_id = c.node_id
+                    JOIN node p ON p.id = e.parent_id
+                ) SELECT node_id FROM chain LIMIT 12`,
+				Expected: []sql.Row{{"child"}, {"root"}},
+			},
+		},
+	},
+
 	// ERROR CASES
 	{
 		Name: "Error Case: Invalid schema override commit",

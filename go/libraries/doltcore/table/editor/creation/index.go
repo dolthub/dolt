@@ -196,7 +196,9 @@ type DupEntryCb func(ctx context.Context, existingKey, newKey val.Tuple) error
 
 // BuildUniqueProllyIndex builds a unique index based on the given |primary| row
 // data. If any duplicate entries are found, they are passed to |cb|. If |cb|
-// returns a non-nil error then the process is stopped.
+// returns a non-nil error then the process is stopped. For a partial index,
+// |predicate| is its predicate resolved against |sch|, and rows that don't
+// satisfy it are left out of the index.
 func BuildUniqueProllyIndex(
 	ctx *sql.Context,
 	vrw types.ValueReadWriter,
@@ -205,6 +207,7 @@ func BuildUniqueProllyIndex(
 	tableName string,
 	idx schema.Index,
 	primary prolly.Map,
+	predicate sql.Expression,
 	cb DupEntryCb,
 ) (durable.Index, error) {
 	empty, err := durable.NewEmptyIndexFromTableSchema(ctx, vrw, ns, idx, sch)
@@ -238,24 +241,30 @@ func BuildUniqueProllyIndex(
 			return nil, err
 		}
 
+		matches, err := index.TupleMatchesPredicate(ctx, predicate, k, v, sch, ns)
+		if err != nil {
+			return nil, err
+		}
+		if !matches {
+			continue
+		}
+
 		idxKey, err := secondaryBld.SecondaryKeyFromRow(ctx, k, v)
 		if err != nil {
 			return nil, err
 		}
 
-		if prefixDesc.HasNulls(idxKey) {
-			continue
-		}
-
-		err = mut.GetPrefix(ctx, idxKey, prefixDesc, func(existingKey, _ val.Tuple) error {
-			// register a constraint violation if |idxKey| collides with |existingKey|
-			if existingKey != nil {
-				return cb(ctx, existingKey, idxKey)
+		// A distinct NULL cannot collide, but its row still belongs in the index.
+		if idx.NullsNotDistinct() || !prefixDesc.HasNulls(idxKey) {
+			err = mut.GetPrefix(ctx, idxKey, prefixDesc, func(existingKey, _ val.Tuple) error {
+				if existingKey != nil {
+					return cb(ctx, existingKey, idxKey)
+				}
+				return nil
+			})
+			if err != nil {
+				return nil, err
 			}
-			return nil
-		})
-		if err != nil {
-			return nil, err
 		}
 
 		if err = mut.Put(ctx, idxKey, val.EmptyTuple); err != nil {

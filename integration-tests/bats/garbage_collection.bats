@@ -1,19 +1,21 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
+load $BATS_TEST_DIRNAME/helper/remotesrv-common.bash
 
 remotesrv_pid=
 setup() {
     skiponwindows "tests are flaky on Windows"
+    setup_remotesrv_ports
     setup_common
     cd $BATS_TMPDIR
     mkdir remotes-$$
     mkdir remotes-$$/empty
     echo remotesrv log available here $BATS_TMPDIR/remotes-$$/remotesrv.log
-    remotesrv --http-port 1234 --dir ./remotes-$$ &> ./remotes-$$/remotesrv.log 3>&- &
+    remotesrv --http-port "$REMOTESRV_HTTP_PORT" --grpc-port "$REMOTESRV_GRPC_PORT" --dir ./remotes-$$ &> ./remotes-$$/remotesrv.log 3>&- &
     remotesrv_pid=$!
     cd dolt-repo-$$
     mkdir "dolt-repo-clones"
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
 }
 
 teardown() {
@@ -116,7 +118,7 @@ SQL
     dolt push test-remote main
 
     cd "dolt-repo-clones"
-    run dolt clone http://localhost:50051/test-org/test-repo
+    run dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
     [ "$status" -eq 0 ]
     cd ../
 

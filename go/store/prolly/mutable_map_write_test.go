@@ -503,6 +503,43 @@ func testInternalNodeSplits(t *testing.T) {
 	}
 }
 
+// TestMutableMapFlushesWhenFull checks that deletes, and puts that overwrite pending edits, flush the edits once they
+// hold more than maxPending entries.
+func TestMutableMapFlushesWhenFull(t *testing.T) {
+	ctx := context.Background()
+	const maxPending = 64
+
+	t.Run("deletes", func(t *testing.T) {
+		mut := ascendingIntMap(t, 1000).Mutate().WithMaxPending(maxPending)
+		for _, tup := range ascendingTuplesWithStepAndStart(1000, 1, 0) {
+			require.NoError(t, mut.Delete(ctx, tup[0]))
+			require.LessOrEqual(t, mut.tuples.Edits.NodeCount(), maxPending)
+		}
+		m, err := mut.Map(ctx)
+		require.NoError(t, err)
+		cnt, err := m.Count()
+		require.NoError(t, err)
+		assert.Equal(t, 0, cnt)
+	})
+
+	t.Run("overwrites", func(t *testing.T) {
+		const keys, writes = 10, 1000
+		mut := ascendingIntMap(t, keys).Mutate().WithMaxPending(maxPending)
+		for i := 0; i < writes; i++ {
+			k, v := makePut(int64(i%keys), int64(i))
+			require.NoError(t, mut.Put(ctx, k, v))
+			require.LessOrEqual(t, mut.tuples.Edits.NodeCount(), maxPending)
+		}
+		for i := writes - keys; i < writes; i++ {
+			k, expected := makePut(int64(i%keys), int64(i))
+			require.NoError(t, mut.Get(ctx, k, func(_, v val.Tuple) error {
+				assert.Equal(t, expected, v)
+				return nil
+			}))
+		}
+	})
+}
+
 // utilities
 
 func ascendingIntMap(t *testing.T, count int) Map {

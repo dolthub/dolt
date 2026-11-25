@@ -31,6 +31,41 @@ const insertManyRowsThenDuplicateKey = `insert into t (a, b)
 
 var DoltTransactionTests = []queries.TransactionTest{
 	{
+		Name: "a failed first write to dolt_ignore doesn't create it",
+		SetUpScript: []string{
+			"create table t (id int primary key)",
+			"call dolt_commit('-Am', 'init')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "/* client a */ start transaction",
+			},
+			{
+				Query:       "/* client a */ insert into dolt_ignore values ('a', true), ('a', false)",
+				ExpectedErr: sql.ErrPrimaryKeyViolation,
+			},
+			{
+				Query:    "/* client a */ insert into t values (1)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ select table_name from dolt_status order by 1",
+				Expected: []sql.Row{{"t"}},
+			},
+			{
+				Query:    "/* client a */ insert into dolt_ignore values ('a', true)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ select table_name from dolt_status order by 1",
+				Expected: []sql.Row{{"dolt_ignore"}, {"t"}},
+			},
+			{
+				Query: "/* client a */ commit",
+			},
+		},
+	},
+	{
 		Name: "duplicate inserts, autocommit on",
 		SetUpScript: []string{
 			"create table t (x int primary key, y int)",
@@ -984,6 +1019,778 @@ var DoltTransactionTests = []queries.TransactionTest{
 			{
 				Query:    "/* client b */ select count(*) from t where b = 'w'",
 				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		// Edits from completed statements are materialized into the working set lazily, when the session reads it.
+		Name: "edits from earlier statements are visible later in the transaction",
+		SetUpScript: []string{
+			"create table t (x int primary key, y int, key (y))",
+			"insert into t values (1, 1)",
+			"call dolt_commit('-Am', 'create t')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ set autocommit = 0",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ insert into t values (2, 2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ update t set y = 10 where x = 1",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:    "/* client a */ insert into t values (3, 3)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ select * from t where y = 10",
+				Expected: []sql.Row{{1, 10}},
+			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{1, 10}, {2, 2}, {3, 3}},
+			},
+			{
+				Query:    "/* client a */ insert into t values (4, 4)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ select table_name, staged, status from dolt_status",
+				Expected: []sql.Row{{"t", byte(0), "modified"}},
+			},
+			{
+				Query:    "/* client a */ select to_x, diff_type from dolt_diff_t where to_commit = 'WORKING' order by to_x",
+				Expected: []sql.Row{{1, "modified"}, {2, "added"}, {3, "added"}, {4, "added"}},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}},
+			},
+			{
+				Query:    "/* client a */ insert into t values (5, 5)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 10}, {2, 2}, {3, 3}, {4, 4}, {5, 5}},
+			},
+		},
+	},
+	{
+		Name: "a failed statement discards only its own edits",
+		SetUpScript: []string{
+			"create table t (x int primary key, y int, unique key (y))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ set autocommit = 0",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ insert into t values (1, 1)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:       "/* client a */ insert into t values (2, 2), (3, 1)",
+				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+			{
+				Query:    "/* client a */ insert into t values (4, 4)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:       "/* client a */ insert into t values (5, 5), (4, 6)",
+				ExpectedErr: sql.ErrPrimaryKeyViolation,
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}, {4, 4}},
+			},
+		},
+	},
+	{
+		Name: "a failed statement with many edits discards only its own edits",
+		SetUpScript: []string{
+			"create table digits (d int primary key)",
+			"insert into digits values (0), (1), (2), (3), (4), (5), (6), (7), (8), (9)",
+			"create table t (x int primary key)",
+			"insert into t values (-1)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ set autocommit = 0",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ insert into t values (-2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				// enough rows to flush pending edits within the statement before it fails
+				Query:       "/* client a */ insert into t select a.d + b.d*10 + c.d*100 + d.d*1000 + e.d*10000 from digits a, digits b, digits c, digits d, digits e union all select -1",
+				ExpectedErr: sql.ErrPrimaryKeyViolation,
+			},
+			{
+				Query:    "/* client a */ insert into t values (-3)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ select count(*) from t",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{-3}, {-2}, {-1}},
+			},
+		},
+	},
+	{
+		Name: "rollback and savepoints discard pending edits",
+		SetUpScript: []string{
+			"create table t (x int primary key auto_increment, y int)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ set autocommit = 0",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ insert into t (y) values (1)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, InsertID: 1}}},
+			},
+			{
+				Query:    "/* client a */ rollback",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from t",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t (y) values (2)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, InsertID: 2}}},
+			},
+			{
+				Query:    "/* client a */ savepoint s1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t (y) values (3)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, InsertID: 3}}},
+			},
+			{
+				Query:    "/* client a */ rollback to savepoint s1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t (y) values (4)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, InsertID: 4}}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{2, 2}, {4, 4}},
+			},
+		},
+	},
+	{
+		// Edits are only materialized into the working set when the transaction commits, or when a query reads the whole
+		// working set. Until then, reads of edited tables are served from the edits themselves.
+		Name: "reads of pending edits don't materialize them",
+		SetUpScript: []string{
+			"create table t (x int primary key, y int, z varchar(20), key (y), unique key (z))",
+			"create table k (a int, b int, key (b))",
+			"create table p (id int primary key)",
+			"create table c (id int primary key, pid int, foreign key (pid) references p(id) on delete cascade)",
+			"create table ai (id int primary key auto_increment, v int)",
+			"create table log (msg varchar(50))",
+			"create trigger trg after insert on ai for each row insert into log values (concat('ai ', new.v))",
+			"insert into t values (1, 1, 'one'), (5, 5, 'five')",
+			"insert into p values (1)",
+			"call dolt_commit('-Am', 'init')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ set autocommit = 0",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ set @working = @@mydb_working",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client a */ insert into t values (2, 2, 'two'), (3, 3, 'three')",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "/* client a */ insert into k values (2, 2), (2, 2), (3, 3)",
+				Expected: []sql.Row{{types.NewOkResult(3)}},
+			},
+			{
+				Query:    "/* client a */ insert into p values (2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ insert into c values (1, 2), (2, 1)",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "/* client a */ update t set y = 10 where x = 1",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:    "/* client a */ delete from t where y = 5",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ update t set z = 'uno' where z = 'one'",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				// joins
+				Query:    "/* client a */ select t.x, k.a from t join k on t.y = k.b order by t.x, k.a",
+				Expected: []sql.Row{{2, 2}, {2, 2}, {3, 3}},
+			},
+			{
+				Query:    "/* client a */ select /*+ LOOKUP_JOIN(c, p) */ c.id, p.id from c join p on c.pid = p.id order by c.id",
+				Expected: []sql.Row{{1, 2}, {2, 1}},
+			},
+			{
+				Query:    "/* client a */ select /*+ MERGE_JOIN(c, p) */ c.id, p.id from c join p on c.pid = p.id order by c.id",
+				Expected: []sql.Row{{1, 2}, {2, 1}},
+			},
+			{
+				// table scans, and primary and secondary index lookups
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{1, 10, "uno"}, {2, 2, "two"}, {3, 3, "three"}},
+			},
+			{
+				Query:    "/* client a */ select * from t where x = 2",
+				Expected: []sql.Row{{2, 2, "two"}},
+			},
+			{
+				Query:    "/* client a */ select * from t where x > 1 order by x desc",
+				Expected: []sql.Row{{3, 3, "three"}, {2, 2, "two"}},
+			},
+			{
+				Query:    "/* client a */ select y from t where y >= 3 order by y",
+				Expected: []sql.Row{{3}, {10}},
+			},
+			{
+				Query:    "/* client a */ select x, z from t where y = 10",
+				Expected: []sql.Row{{1, "uno"}},
+			},
+			{
+				Query:    "/* client a */ select x from t where z = 'uno'",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "/* client a */ select x from t where z = 'one'",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select x from t where y = 5",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select y from t order by y desc limit 1",
+				Expected: []sql.Row{{10}},
+			},
+			{
+				Query:    "/* client a */ select count(*) from t",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				// keyless tables
+				Query:    "/* client a */ select * from k order by a, b",
+				Expected: []sql.Row{{2, 2}, {2, 2}, {3, 3}},
+			},
+			{
+				Query:    "/* client a */ select a from k where b = 2",
+				Expected: []sql.Row{{2}, {2}},
+			},
+			{
+				Query:    "/* client a */ delete from k where b = 3",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ select count(*) from k",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				// constraints are checked against pending edits
+				Query:       "/* client a */ insert into t values (4, 4, 'two')",
+				ExpectedErr: sql.ErrUniqueKeyViolation,
+			},
+			{
+				Query:       "/* client a */ insert into t values (2, 4, 'four')",
+				ExpectedErr: sql.ErrPrimaryKeyViolation,
+			},
+			{
+				Query:       "/* client a */ insert into c values (3, 3)",
+				ExpectedErr: sql.ErrForeignKeyChildViolation,
+			},
+			{
+				Query:    "/* client a */ delete from p where id = 2",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ select * from c",
+				Expected: []sql.Row{{2, 1}},
+			},
+			{
+				// a statement reads the tables it writes as of its start
+				Query:    "/* client a */ insert into t select x + 10, y + 10, concat(z, '!') from t",
+				Expected: []sql.Row{{types.NewOkResult(3)}},
+			},
+			{
+				Query:    "/* client a */ select x from t order by x",
+				Expected: []sql.Row{{1}, {2}, {3}, {11}, {12}, {13}},
+			},
+			{
+				Query:    "/* client a */ update t set y = y + 1 where x > 10",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 3, Info: plan.UpdateInfo{Matched: 3, Updated: 3}}}},
+			},
+			{
+				Query:    "/* client a */ select sum(y) from t",
+				Expected: []sql.Row{{float64(10 + 2 + 3 + 21 + 13 + 14)}},
+			},
+			{
+				Query:    "/* client a */ select @@mydb_working = @working",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				// triggers and auto increment. Statements that fire triggers create a savepoint, which materializes
+				// pending edits.
+				Query:    "/* client a */ insert into ai (v) values (7), (8)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 1}}},
+			},
+			{
+				Query:    "/* client a */ insert into ai (v) values (9)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, InsertID: 3}}},
+			},
+			{
+				Query:    "/* client a */ select * from ai order by id",
+				Expected: []sql.Row{{1, 7}, {2, 8}, {3, 9}},
+			},
+			{
+				Query:    "/* client a */ select * from log order by msg",
+				Expected: []sql.Row{{"ai 7"}, {"ai 8"}, {"ai 9"}},
+			},
+			{
+				Query:    "/* client a */ set @working = @@mydb_working",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 1, "one"}, {5, 5, "five"}},
+			},
+			{
+				// system tables computed from the working set materialize it
+				Query:    "/* client a */ select table_name, status from dolt_status order by table_name",
+				Expected: []sql.Row{{"ai", "modified"}, {"c", "modified"}, {"k", "modified"}, {"log", "modified"}, {"t", "modified"}},
+			},
+			{
+				Query:    "/* client a */ select @@mydb_working = @working",
+				Expected: []sql.Row{{false}},
+			},
+			{
+				Query:    "/* client a */ set @working = @@mydb_working",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client a */ insert into t values (20, 20, 'twenty')",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ select count(*) from t where y = 20",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "/* client a */ select @@mydb_working = @working",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select x, y, z from t order by x",
+				Expected: []sql.Row{{1, 10, "uno"}, {2, 2, "two"}, {3, 3, "three"}, {11, 21, "uno!"}, {12, 13, "two!"}, {13, 14, "three!"}, {20, 20, "twenty"}},
+			},
+			{
+				Query:    "/* client b */ select count(*) from k",
+				Expected: []sql.Row{{2}},
+			},
+		},
+	},
+	{
+		Name: "savepoints and rollbacks with pending edits",
+		SetUpScript: []string{
+			"create table t (x int primary key, y int, key (y))",
+			"create table log (msg varchar(50) primary key)",
+			"create table k (a int, b int, key (b))",
+			"create table u (id int primary key)",
+			"create trigger trg after insert on t for each row insert into log values (concat('t ', new.y))",
+			"insert into t values (1, 1)",
+			"call dolt_commit('-Am', 'init')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ set autocommit = 0",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ insert into t values (2, 2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ insert into k values (1, 1), (1, 1)",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				// the trigger fails, so the statement is rolled back to the savepoint made for it
+				Query:       "/* client a */ insert into t values (3, 3), (4, 2)",
+				ExpectedErr: sql.ErrPrimaryKeyViolation,
+			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{
+				Query:    "/* client a */ select * from log order by msg",
+				Expected: []sql.Row{{"t 1"}, {"t 2"}},
+			},
+			{
+				Query:    "/* client a */ insert into t values (3, 3)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ select * from t where y = 3",
+				Expected: []sql.Row{{3, 3}},
+			},
+			{
+				Query:    "/* client a */ savepoint s1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t values (5, 5)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ delete from k where b = 1",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "/* client a */ insert into k values (9, 9)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ rollback to savepoint s1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+			},
+			{
+				Query:    "/* client a */ select * from k",
+				Expected: []sql.Row{{1, 1}, {1, 1}},
+			},
+			{
+				Query:    "/* client a */ select * from log order by msg",
+				Expected: []sql.Row{{"t 1"}, {"t 2"}, {"t 3"}},
+			},
+			{
+				// edits materialized by a system table read after a savepoint are rolled back too
+				Query:    "/* client a */ savepoint s2",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t values (6, 6)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ select count(*) from dolt_status",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "/* client a */ insert into t values (7, 7)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ rollback to savepoint s2",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select x from t order by x",
+				Expected: []sql.Row{{1}, {2}, {3}},
+			},
+			{
+				Query:    "/* client a */ select x from t where y > 2",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				// as are tables first edited after a savepoint
+				Query:    "/* client a */ savepoint s3",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into u values (1)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ insert into t values (8, 8)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ select count(*) from u",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "/* client a */ rollback to savepoint s3",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select count(*) from u",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+			},
+			{
+				Query:    "/* client a */ insert into t values (9, 9)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {9, 9}},
+			},
+			{
+				Query:    "/* client b */ select * from log order by msg",
+				Expected: []sql.Row{{"t 1"}, {"t 2"}, {"t 3"}, {"t 9"}},
+			},
+			{
+				Query:    "/* client b */ select * from k",
+				Expected: []sql.Row{{1, 1}, {1, 1}},
+			},
+			{
+				Query:    "/* client b */ select count(*) from u",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "commit changes to another branch after it's deleted",
+		SetUpScript: []string{
+			"create table t (pk int primary key)",
+			"insert into t values (1)",
+			"call dolt_commit('-Am', 'init')",
+			"call dolt_branch('feature')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t values (2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ insert into `mydb/feature`.t values (3)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ call dolt_branch('-d', 'feature')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "/* client a */ commit",
+				ExpectedErrStr: "branch not found: cannot commit changes to deleted branch 'feature'",
+			},
+			{
+				// The whole transaction rolled back, including its changes to main
+				Query:    "/* client a */ select * from t",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "/* client b */ select * from t",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "/* client b */ select name from dolt_branches",
+				Expected: []sql.Row{{"main"}},
+			},
+		},
+	},
+	{
+		Name: "commit changes to the checked out branch after it's deleted",
+		SetUpScript: []string{
+			"create table t (pk int primary key)",
+			"insert into t values (1)",
+			"call dolt_commit('-Am', 'init')",
+			"call dolt_branch('feature')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ call dolt_checkout('feature')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t values (2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ call dolt_branch('-D', 'feature')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "/* client a */ commit",
+				ExpectedErrStr: "branch not found: cannot commit changes to deleted branch 'feature'",
+			},
+			{
+				Query:    "/* client b */ select name from dolt_branches",
+				Expected: []sql.Row{{"main"}},
+			},
+		},
+	},
+	{
+		Name: "commit changes to a branch after it's renamed",
+		SetUpScript: []string{
+			"create table t (pk int primary key)",
+			"insert into t values (1)",
+			"call dolt_commit('-Am', 'init')",
+			"call dolt_branch('feature')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into `mydb/feature`.t values (2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ call dolt_branch('-m', 'feature', 'renamed')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "/* client a */ commit",
+				ExpectedErrStr: "branch not found: cannot commit changes to deleted branch 'feature'",
+			},
+			{
+				Query:    "/* client b */ select * from `mydb/renamed`.t",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		Name: "delete a branch with uncommitted changes in the same session",
+		SetUpScript: []string{
+			"create table t (pk int primary key)",
+			"insert into t values (1)",
+			"call dolt_commit('-Am', 'init')",
+			"call dolt_branch('feature')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t values (2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ insert into `mydb/feature`.t values (3)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ call dolt_branch('-D', 'feature')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				// The changes to the deleted branch are discarded with it
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select * from t order by pk",
+				Expected: []sql.Row{{1}, {2}},
+			},
+		},
+	},
+	{
+		Name: "dolt_commit changes to a branch after it's deleted",
+		SetUpScript: []string{
+			"create table t (pk int primary key)",
+			"insert into t values (1)",
+			"call dolt_commit('-Am', 'init')",
+			"call dolt_branch('feature')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into `mydb/feature`.t values (2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ call dolt_branch('-d', 'feature')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "/* client a */ call dolt_commit('--branch', 'feature', '-am', 'feature commit')",
+				ExpectedErrStr: "branch not found",
+			},
+			{
+				Query:          "/* client a */ commit",
+				ExpectedErrStr: "branch not found: cannot commit changes to deleted branch 'feature'",
+			},
+			{
+				Query:    "/* client b */ select name from dolt_branches",
+				Expected: []sql.Row{{"main"}},
 			},
 		},
 	},
@@ -2611,6 +3418,80 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 			},
 		},
 	},
+	{
+		Name: "an update that changes a unique key frees the old key for an insert in the same transaction",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY, col1 int UNIQUE);",
+			"INSERT INTO t VALUES (1, 5);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ START TRANSACTION;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ START TRANSACTION;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ INSERT INTO t VALUES (3, 9);",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ UPDATE t SET col1 = 6 WHERE pk = 1;",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:    "/* client b */ INSERT INTO t VALUES (2, 5);",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ COMMIT;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ COMMIT;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ SELECT * FROM t ORDER BY pk;",
+				Expected: []sql.Row{{1, 6}, {2, 5}, {3, 9}},
+			},
+		},
+	},
+	{
+		Name: "a row inserted on the old schema takes the default of a new column in a unique key",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY, col1 int);",
+			"INSERT INTO t VALUES (1, 5);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client b */ START TRANSACTION;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ INSERT INTO t VALUES (2, 5);",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				// DDL commits implicitly
+				Query:    "/* client a */ ALTER TABLE t ADD COLUMN col2 int DEFAULT 10, ADD UNIQUE KEY u (col1, col2);",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query: "/* client b */ COMMIT;",
+				ExpectedErrStr: dsess.ErrUnresolvedConstraintViolationsCommit.Error() + dsess.ConstraintViolationsListPrefix +
+					"\nType: Unique Key Constraint Violation,\n" +
+					"\tName: u,\n" +
+					"\tColumns: [col1 col2] (2 row(s))",
+			},
+			{
+				Query:    "/* client a */ SELECT * FROM t ORDER BY pk;",
+				Expected: []sql.Row{{1, 5, 10}},
+			},
+		},
+	},
 	//	{
 	//		Name:        "Run GC concurrently with other transactions",
 	//		SetUpScript: gcSetup(),
@@ -3141,6 +4022,45 @@ var BranchIsolationTests = []queries.TransactionTest{
 			},
 		},
 	},
+	{
+		// https://github.com/dolthub/dolt/issues/12553
+		Name: "dolt_tag changes are visible to dolt_tags in the same transaction",
+		SetUpScript: []string{
+			"call dolt_commit('--allow-empty','-m','original')",
+			"call dolt_tag('alpha')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select tag_name from dolt_tags order by tag_name",
+				Expected: []sql.Row{{"alpha"}},
+			},
+			{
+				Query:    "/* client a */ call dolt_tag('beta')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:           "/* client a */ select tag_name from dolt_tags where tag_name = 'beta'",
+				Expected:        []sql.Row{{"beta"}},
+				ExpectedIndexes: []string{"dolt_tags_name_idx"},
+			},
+			{
+				Query:    "/* client a */ call dolt_tag('-d','alpha')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client a */ select tag_name from dolt_tags order by tag_name",
+				Expected: []sql.Row{{"beta"}},
+			},
+			{
+				Query:    "/* client b */ select tag_name from dolt_tags order by tag_name",
+				Expected: []sql.Row{{"beta"}},
+			},
+		},
+	},
 
 	{
 		Name: "dolt_branches name index uses transaction snapshot",
@@ -3247,6 +4167,104 @@ var BranchIsolationTests = []queries.TransactionTest{
 				Query:           "/* client b */ select name from dolt_branches where name in ('alpha','beta','gamma','delta') order by name",
 				Expected:        []sql.Row{{"alpha"}, {"delta"}},
 				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+		},
+	},
+	{
+		Name: "checked out branch deleted by another session",
+		SetUpScript: []string{
+			"create table t (pk int primary key)",
+			"insert into t values (1)",
+			"call dolt_commit('-Am', 'init')",
+			"call dolt_branch('feature')",
+			"call dolt_branch('other')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ call dolt_checkout('feature')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ call dolt_branch('-D', 'feature')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "/* client a */ select * from t",
+				ExpectedErrStr: "branch 'feature' checked out in this session no longer exists in database 'mydb'; use dolt_checkout() to check out another branch",
+			},
+			{
+				Query:          "/* client a */ insert into t values (2)",
+				ExpectedErrStr: "branch 'feature' checked out in this session no longer exists in database 'mydb'; use dolt_checkout() to check out another branch",
+			},
+			{
+				Query:          "/* client a */ use mydb",
+				ExpectedErrStr: "branch 'feature' checked out in this session no longer exists in database 'mydb'; use dolt_checkout() to check out another branch",
+			},
+			{
+				Query:          "/* client a */ call dolt_checkout('-b', 'newbranch')",
+				ExpectedErrStr: "branch 'feature' checked out in this session no longer exists in database 'mydb'; use dolt_checkout() to check out another branch; only an existing branch can be checked out until then",
+			},
+			{
+				Query:          "/* client a */ call dolt_checkout('nonexistent')",
+				ExpectedErrStr: "branch not found: nonexistent",
+			},
+			{
+				Query:    "/* client a */ call dolt_checkout('other')",
+				Expected: []sql.Row{{0, "Switched to branch 'other'"}},
+			},
+			{
+				Query:    "/* client a */ select active_branch()",
+				Expected: []sql.Row{{"other"}},
+			},
+			{
+				Query:    "/* client a */ insert into t values (2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ select * from `mydb/other`.t order by pk",
+				Expected: []sql.Row{{1}, {2}},
+			},
+			{
+				Query:    "/* client a */ use mydb",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "checked out branch deleted and recreated by another session",
+		SetUpScript: []string{
+			"create table t (pk int primary key)",
+			"insert into t values (1)",
+			"call dolt_commit('-Am', 'init')",
+			"call dolt_branch('feature')",
+			"insert into t values (2)",
+			"call dolt_commit('-am', 'second')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ call dolt_checkout('feature')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ call dolt_branch('-D', 'feature')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "/* client a */ select * from t",
+				ExpectedErrStr: "branch 'feature' checked out in this session no longer exists in database 'mydb'; use dolt_checkout() to check out another branch",
+			},
+			{
+				Query:    "/* client b */ call dolt_branch('feature', 'main')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				// Like a dropped database that's created again, the session picks up the new branch
+				Query:    "/* client a */ select * from t order by pk",
+				Expected: []sql.Row{{1}, {2}},
+			},
+			{
+				Query:    "/* client a */ select active_branch()",
+				Expected: []sql.Row{{"feature"}},
 			},
 		},
 	},
@@ -4343,6 +5361,37 @@ var MultiDbSavepointTests = []queries.TransactionTest{
 }
 
 var AutoIncrementTransactionTests = []queries.TransactionTest{
+	{
+		Name: "a delete that matches no rows doesn't write the table",
+		SetUpScript: []string{
+			"create table t (id int primary key auto_increment)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "/* client a */ start transaction",
+			},
+			{
+				Query:    "/* client a */ insert into t values ()",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 0x1, InsertID: 0x1}}},
+			},
+			{
+				Query:    "/* client b */ insert into t values ()",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 0x1, InsertID: 0x2}}},
+			},
+			{
+				Query:    "/* client a */ set @h = dolt_hashof_table('t')",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client a */ delete from t where id = 100",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client a */ select dolt_hashof_table('t') = @h",
+				Expected: []sql.Row{{true}},
+			},
+		},
+	},
 	{
 		Name: "two auto increment values in two transactions",
 		SetUpScript: []string{

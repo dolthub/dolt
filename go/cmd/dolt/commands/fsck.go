@@ -135,6 +135,7 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		report.ScanErrs.AppendE(vErr)
 	})
 	if err == nil {
+		defer ddb.Close()
 		// Creating NomsBlockStore can lazily load the actual database resources. We force them here by performing
 		// an actual read against the database.
 		_, err = datas.ChunkStoreFromDatabase(ddb).Root(ctx)

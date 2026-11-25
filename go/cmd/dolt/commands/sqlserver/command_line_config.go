@@ -458,6 +458,14 @@ func (cfg *commandLineServerConfig) WithPort(port int) *commandLineServerConfig 
 	return cfg
 }
 
+// WithBranchActivityTracking updates whether branch activity is tracked and returns the called
+// `*commandLineServerConfig`, which is useful for chaining calls.
+func (cfg *commandLineServerConfig) WithBranchActivityTracking(enabled bool) *commandLineServerConfig {
+	cfg.branchActivityTracking = enabled
+	cfg.valuesSet[servercfg.BranchActivityTrackingKey] = struct{}{}
+	return cfg
+}
+
 // withUser updates the user and returns the called `*commandLineServerConfig`, which is useful for chaining calls.
 func (cfg *commandLineServerConfig) withUser(user string) *commandLineServerConfig {
 	cfg.user = user

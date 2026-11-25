@@ -155,7 +155,7 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 	defer srcDB.Close()
 
 	// Create a new Dolt env for the clone
-	clonedEnv, err := actions.EnvForClone(ctx, srcDB.ValueReadWriter().Format(), r, dir, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
+	clonedEnv, err := actions.EnvForCloneOf(ctx, srcDB, r, dir, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}

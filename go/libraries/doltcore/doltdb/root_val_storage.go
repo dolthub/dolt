@@ -35,6 +35,7 @@ type rootValueStorage interface {
 
 	GetTablesMap(ctx context.Context, vr types.ValueReadWriter, ns tree.NodeStore, databaseSchema string) (tableMap, error)
 	GetForeignKeys(ctx context.Context, vr types.ValueReader) (types.Value, bool, error)
+	GetForeignKeysAddr() hash.Hash
 	GetCollation(ctx context.Context) (schema.Collation, error)
 	GetSchemas(ctx context.Context) ([]schema.DatabaseSchema, error)
 
@@ -175,6 +176,10 @@ func (r fbRvStorage) GetForeignKeys(ctx context.Context, vr types.ValueReader) (
 	}
 
 	return v.(types.SerialMessage), true, nil
+}
+
+func (r fbRvStorage) GetForeignKeysAddr() hash.Hash {
+	return hash.New(r.srv.ForeignKeyAddrBytes())
 }
 
 func (r fbRvStorage) GetCollation(ctx context.Context) (schema.Collation, error) {

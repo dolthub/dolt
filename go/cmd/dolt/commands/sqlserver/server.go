@@ -220,6 +220,10 @@ func ConfigureServices(
 				return false, nil
 			})
 		},
+		// Registered before every service that uses |mrEnv|, so it stops after them.
+		StopF: func(_ svcs.RunState) error {
+			return mrEnv.Close(context.Background())
+		},
 	}
 	controller.Register(InitMultiEnv)
 
@@ -403,7 +407,11 @@ func ConfigureServices(
 			if config.IsReadOnly {
 				readOnlyValue = int8(1)
 			}
-			return vars.SetGlobal(sqlCtx, "read_only", readOnlyValue)
+			if err := vars.SetGlobal(sqlCtx, "read_only", readOnlyValue); err != nil {
+				// A failed InitF never gets its StopF, so close the engine here.
+				return errors.Join(err, sqlEngine.Close())
+			}
+			return nil
 		},
 		StopF: func(_ svcs.RunState) error {
 			sqlEngine.Close()
@@ -895,6 +903,13 @@ func ConfigureServices(
 		},
 	}
 	controller.Register(RunClusterRemoteSrv)
+
+	StartClusterReplication := &svcs.AnonService{
+		InitF: func(context.Context) error {
+			return clusterController.RunCommitHooks(sqlEngine.GetUnderlyingEngine().BackgroundThreads)
+		},
+	}
+	controller.Register(StartClusterReplication)
 
 	// We still have some startup to do from this point, and we do not run
 	// the SQL server until we are fully booted. We also want to stop the

@@ -242,14 +242,14 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "/* client a */ select name from dolt_branches;",
-				ExpectedErrStr: "Error 1049 (HY000): database not found: dolt/branch1",
+				ExpectedErrStr: "Error 1105 (HY000): branch 'branch1' checked out in this session no longer exists in database 'dolt'; use dolt_checkout() to check out another branch",
 			},
 			{
-				Query:          "/* client a */ CALL DOLT_CHECKOUT('main');",
-				ExpectedErrStr: "Error 1049 (HY000): database not found: dolt/branch1",
+				Query:    "/* client a */ CALL DOLT_CHECKOUT('main');",
+				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
 			},
 			{
-				Query:    "/* client a */ USE dolt/main;",
+				Query:    "/* client a */ USE dolt;",
 				Expected: []sql.Row{},
 			},
 			{
@@ -291,19 +291,35 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "/* client a */ select name from dolt_branches;",
-				ExpectedErrStr: "Error 1049 (HY000): database not found: dolt/branch1",
+				ExpectedErrStr: "Error 1105 (HY000): branch 'branch1' checked out in this session no longer exists in database 'dolt'; use dolt_checkout() to check out another branch",
 			},
 			{
-				// TODO: this could be handled better, not the best experience. Maybe kill the session?
-				Query:          "/* client a */ CALL DOLT_CHECKOUT('main');",
-				ExpectedErrStr: "Error 1049 (HY000): database not found: dolt/branch1",
+				Query:    "/* client a */ CALL DOLT_CHECKOUT('main');",
+				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
 			},
 			{
-				Query:    "/* client a */ USE dolt/main;",
+				Query:    "/* client a */ USE dolt;",
 				Expected: []sql.Row{},
 			},
 			{
 				Query:    "/* client a */ select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_branch_activity when another session's checked out branch was deleted",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ CALL DOLT_CHECKOUT('-b', 'branch1');",
+				Expected: []sql.Row{{0, "Switched to branch 'branch1'"}},
+			},
+			{
+				Query:    "/* client b */ CALL DOLT_BRANCH('-D', 'branch1');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client b */ select branch from dolt_branch_activity;",
 				Expected: []sql.Row{{"main"}},
 			},
 		},
@@ -578,7 +594,8 @@ func newConnection(t *testing.T, serverConfig servercfg.ServerConfig) (*dbr.Conn
 // startServer will start sql-server with given host, unix socket file path and whether to use specific port, which is defined randomly.
 func startServer(t *testing.T, withPort bool, host string, unixSocketPath string) (*env.DoltEnv, *svcs.Controller, servercfg.ServerConfig) {
 	dEnv := dtestutils.CreateTestEnv()
-	serverConfig := sqlserver.DefaultCommandLineServerConfig()
+	// Branch activity tracking lets tests query dolt_branch_activity
+	serverConfig := sqlserver.DefaultCommandLineServerConfig().WithBranchActivityTracking(true)
 	if withPort {
 		rand.Seed(time.Now().UnixNano())
 		port := 15403 + rand.Intn(25)

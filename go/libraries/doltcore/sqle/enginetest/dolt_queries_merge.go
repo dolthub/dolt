@@ -3338,6 +3338,30 @@ var MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	// https://github.com/dolthub/dolt/issues/7031
+	{
+		Name: "Test conflict deletion after column drops",
+		SetUpScript: []string{
+			"SET dolt_allow_commit_conflicts=1",
+			"CALL dolt_checkout('-b','old')",
+			"CREATE TABLE conflict_drop(a INT PRIMARY KEY,b INT,c INT)",
+			"CALL dolt_commit('-Am','table')",
+			"CALL dolt_checkout('-b','new')",
+			"ALTER TABLE conflict_drop DROP COLUMN c",
+			"INSERT INTO conflict_drop VALUES(1,5)",
+			"CALL dolt_commit('-am','new')",
+			"CALL dolt_checkout('old')",
+			"INSERT INTO conflict_drop VALUES(1,2,3)",
+			"CALL dolt_commit('-am','old')",
+			"CALL dolt_merge('new')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "SELECT COUNT(*) FROM dolt_conflicts_conflict_drop", Expected: []sql.Row{{int64(1)}}},
+			{Query: "DELETE FROM dolt_conflicts_conflict_drop", Expected: []sql.Row{{types.NewOkResult(1)}}},
+			{Query: "SELECT * FROM conflict_drop", Expected: []sql.Row{{int32(1), int32(2)}}},
+			{Query: "SELECT COUNT(*) FROM dolt_conflicts_conflict_drop", Expected: []sql.Row{{int64(0)}}},
+		},
+	},
 	{
 		Name: "resolving a modified/modified row still checks nullness constraint",
 		SetUpScript: []string{
@@ -4509,6 +4533,146 @@ var MergeScripts = []queries.ScriptTest{
 				// The vector index must be rebuilt after conflict resolution — verify it is.
 				Query:    "SELECT id FROM chunks ORDER BY VEC_DISTANCE('[0,0]', e) LIMIT 1",
 				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		// A keyless UPDATE is a delete plus an insert, so both branches delete 'seed' and neither side holds it.
+		Name: "dolt_conflicts_resolve --theirs on a keyless table with a fulltext index",
+		SetUpScript: []string{
+			"CREATE TABLE t (a VARCHAR(100), FULLTEXT INDEX fa (a))",
+			"INSERT INTO t VALUES ('seed')",
+			"CALL DOLT_COMMIT('-Am', 'c1')",
+			"CALL DOLT_BRANCH('x')",
+			"UPDATE t SET a = 'bravo'",
+			"CALL DOLT_COMMIT('-am', 'main')",
+			"CALL DOLT_CHECKOUT('x')",
+			"UPDATE t SET a = 'alpha'",
+			"CALL DOLT_COMMIT('-am', 'x')",
+			"CALL DOLT_CHECKOUT('main')",
+			"SET @@autocommit = 0",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('x')",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_a, base_cardinality, our_cardinality, their_cardinality FROM dolt_conflicts_t",
+				Expected: []sql.Row{{"seed", uint64(1), uint64(0), uint64(0)}},
+			},
+			{
+				Query:    "CALL DOLT_CONFLICTS_RESOLVE('--theirs', 't')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_conflicts_t",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM t",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "SELECT a FROM t WHERE MATCH(a) AGAINST('alpha')",
+				Expected: []sql.Row{{"alpha"}},
+			},
+			{
+				Query:    "SELECT a FROM t WHERE MATCH(a) AGAINST('bravo')",
+				Expected: []sql.Row{{"bravo"}},
+			},
+			{
+				Query:    "SELECT a FROM t WHERE MATCH(a) AGAINST('seed')",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "dolt_conflicts_resolve --theirs on a keyless table with a secondary index",
+		SetUpScript: []string{
+			"CREATE TABLE t (a VARCHAR(100), INDEX ia (a))",
+			"INSERT INTO t VALUES ('seed')",
+			"CALL DOLT_COMMIT('-Am', 'c1')",
+			"CALL DOLT_BRANCH('x')",
+			"UPDATE t SET a = 'bravo'",
+			"CALL DOLT_COMMIT('-am', 'main')",
+			"CALL DOLT_CHECKOUT('x')",
+			"UPDATE t SET a = 'alpha'",
+			"CALL DOLT_COMMIT('-am', 'x')",
+			"CALL DOLT_CHECKOUT('main')",
+			"SET @@autocommit = 0",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('x')",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT base_a, base_cardinality, our_cardinality, their_cardinality FROM dolt_conflicts_t",
+				Expected: []sql.Row{{"seed", uint64(1), uint64(0), uint64(0)}},
+			},
+			{
+				Query:    "CALL DOLT_CONFLICTS_RESOLVE('--theirs', 't')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_conflicts_t",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT a FROM t ORDER BY a",
+				Expected: []sql.Row{{"alpha"}, {"bravo"}},
+			},
+			{
+				Query:    "SELECT a FROM t WHERE a = 'alpha'",
+				Expected: []sql.Row{{"alpha"}},
+			},
+			{
+				Query:    "SELECT a FROM t WHERE a = 'seed'",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		// Our side is read from the working set at resolve time, so deleting the row there empties both sides.
+		Name: "dolt_conflicts_resolve --theirs after deleting a conflicted row in the working set",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk INT PRIMARY KEY, v INT, INDEX iv (v))",
+			"INSERT INTO t VALUES (1, 1), (2, 2)",
+			"CALL DOLT_COMMIT('-Am', 'c1')",
+			"CALL DOLT_BRANCH('x')",
+			"UPDATE t SET v = 10 WHERE pk = 1",
+			"CALL DOLT_COMMIT('-am', 'main')",
+			"CALL DOLT_CHECKOUT('x')",
+			"DELETE FROM t WHERE pk = 1",
+			"CALL DOLT_COMMIT('-am', 'x')",
+			"CALL DOLT_CHECKOUT('main')",
+			"SET @@autocommit = 0",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('x')",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "DELETE FROM t WHERE pk = 1",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "CALL DOLT_CONFLICTS_RESOLVE('--theirs', 't')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_conflicts_t",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT pk, v FROM t ORDER BY pk",
+				Expected: []sql.Row{{2, 2}},
+			},
+			{
+				Query:    "SELECT pk FROM t WHERE v = 10",
+				Expected: []sql.Row{},
 			},
 		},
 	},
@@ -5793,6 +5957,44 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 					{"unique index", 2, 1},
 					{"unique index", 3, 1},
 					{"unique index", 4, 1}},
+			},
+		},
+	},
+	{
+		Name:    "a case-sensitive collation resolves existing unique index violations",
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"SET dolt_force_transaction_commit = on;",
+			"CREATE TABLE t (pk INT PRIMARY KEY, n VARCHAR(40) COLLATE utf8mb4_general_ci UNIQUE);",
+			"CALL DOLT_COMMIT('-Am', 'empty table');",
+			"CALL DOLT_CHECKOUT('-b', 'case-sensitive');",
+			"ALTER TABLE t MODIFY n VARCHAR(40) COLLATE utf8mb4_bin;",
+			"CALL DOLT_COMMIT('-am', 'make index case-sensitive');",
+			"CALL DOLT_CHECKOUT('-b', 'duplicate', 'main');",
+			"INSERT INTO t VALUES (2, 'HELLO');",
+			"CALL DOLT_COMMIT('-am', 'uppercase');",
+			"CALL DOLT_CHECKOUT('main');",
+			"INSERT INTO t VALUES (1, 'hello');",
+			"CALL DOLT_COMMIT('-am', 'lowercase');",
+			"CALL DOLT_MERGE('duplicate');",
+			"CALL DOLT_COMMIT('-afm', 'persist duplicate violations');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT pk FROM dolt_constraint_violations_t ORDER BY pk;",
+				Expected: []sql.Row{{1}, {2}},
+			},
+			{
+				Query:    "CALL DOLT_MERGE('case-sensitive');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT pk FROM dolt_constraint_violations_t;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT pk, n = 'hello' FROM t ORDER BY pk;",
+				Expected: []sql.Row{{1, true}, {2, false}},
 			},
 		},
 	},

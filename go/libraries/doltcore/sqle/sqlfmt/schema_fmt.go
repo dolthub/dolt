@@ -223,6 +223,7 @@ func GenerateCreateTableIndentedColumnDefinition(ctx *sql.Context, formatter sql
 	}
 
 	return formatter.GenerateCreateTableColumnDefinition(
+		ctx,
 		&sql.Column{
 			Name:          col.Name,
 			Type:          col.TypeInfo.ToSqlType(),

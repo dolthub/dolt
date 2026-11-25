@@ -41,6 +41,10 @@ const (
 	maxTxCommitRetries = 5
 )
 
+// TransactionRowMergePolicy, when non-nil, decides each row that both a committing transaction and a concurrently
+// committed transaction changed in the working set. A nil policy keeps the default merge.
+var TransactionRowMergePolicy merge.RowMergePolicy
+
 var ErrRetryTransaction = errors.New("this transaction conflicts with a committed transaction from another client")
 
 var ErrUnresolvedConflictsCommit = errors.New("Merge conflict detected, transaction rolled back. Merge conflicts must be resolved using the dolt_conflicts and dolt_schema_conflicts tables before committing a transaction. To commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1")
@@ -56,7 +60,10 @@ var ErrUnresolvedConstraintViolationsCommit = errors.New("Committing this transa
 const ConstraintViolationsListPrefix = "\nConstraint violations: "
 
 type DoltTransaction struct {
-	dbStartPoints      map[string]dbRoot
+	// branches holds the branch states loaded in this transaction. They're dropped when it stops being its session's
+	// transaction (see DoltSession.SetTransaction). Guarded by the session's mutex.
+	branches           *branchStates
+	dbStartPoints      map[doltdb.DbKey]dbRoot
 	savepoints         []savepoint
 	postgresSavepoints bool
 	tCharacteristic    sql.TransactionCharacteristic
@@ -69,9 +76,9 @@ type dbRoot struct {
 }
 
 type savepoint struct {
-	roots         map[string]doltdb.RootValue
+	roots         map[doltdb.QualifiedDbKey]doltdb.RootValue
 	name          string
-	dirtyBranches map[string]bool
+	dirtyBranches map[doltdb.QualifiedDbKey]bool
 }
 
 func NewDoltTransaction(
@@ -79,23 +86,38 @@ func NewDoltTransaction(
 	dbs []SqlDatabase,
 	tCharacteristic sql.TransactionCharacteristic,
 ) (*DoltTransaction, error) {
+	return newDoltTransaction(ctx, dbs, tCharacteristic, func(*doltdb.DoltDB, error) bool { return false })
+}
 
-	startPoints := make(map[string]dbRoot)
+// newDoltTransaction leaves out of the transaction any database whose root can't be read and for which
+// |skipOnError| returns true.
+func newDoltTransaction(
+	ctx *sql.Context,
+	dbs []SqlDatabase,
+	tCharacteristic sql.TransactionCharacteristic,
+	skipOnError func(ddb *doltdb.DoltDB, err error) bool,
+) (*DoltTransaction, error) {
+
+	startPoints := make(map[doltdb.DbKey]dbRoot)
 	for _, db := range dbs {
 		nomsRoot, err := db.DbData().Ddb.NomsRoot(ctx)
 		if err != nil {
+			if skipOnError(db.DbData().Ddb, err) {
+				continue
+			}
 			return nil, err
 		}
 
-		baseName, _ := doltdb.SplitRevisionDbName(db.Name())
-		startPoints[strings.ToLower(baseName)] = dbRoot{
-			dbName:   baseName,
+		name := doltdb.ParseQualifiedDbName(db.Name())
+		startPoints[name.DbKey()] = dbRoot{
+			dbName:   name.Base,
 			rootHash: nomsRoot,
 			db:       db.DbData().Ddb,
 		}
 	}
 
 	return &DoltTransaction{
+		branches:        newBranchStates(),
 		dbStartPoints:   startPoints,
 		tCharacteristic: tCharacteristic,
 	}, nil
@@ -112,9 +134,9 @@ func (tx *DoltTransaction) AddDb(ctx *sql.Context, db SqlDatabase) error {
 		return err
 	}
 
-	baseName, _ := doltdb.SplitRevisionDbName(db.Name())
-	tx.dbStartPoints[strings.ToLower(baseName)] = dbRoot{
-		dbName:   baseName,
+	name := doltdb.ParseQualifiedDbName(db.Name())
+	tx.dbStartPoints[name.DbKey()] = dbRoot{
+		dbName:   name.Base,
 		rootHash: nomsRoot,
 		db:       db.DbData().Ddb,
 	}
@@ -134,8 +156,7 @@ func (tx *DoltTransaction) IsReadOnly() bool {
 // GetInitialRoot returns the noms root hash for the db named, established when the transaction began. The dbName here
 // is always the base name of the database, not the revision qualified one.
 func (tx *DoltTransaction) GetInitialRoot(dbName string) (hash.Hash, bool) {
-	dbName, _ = doltdb.SplitRevisionDbName(dbName)
-	startPoint, ok := tx.dbStartPoints[strings.ToLower(dbName)]
+	startPoint, ok := tx.dbStartPoints[doltdb.NewDbKey(dbName)]
 	return startPoint.rootHash, ok
 }
 
@@ -324,7 +345,7 @@ func (tx *DoltTransaction) commitHeads(
 	lockIDs := make([]string, len(changes))
 
 	var startPoint dbRoot
-	var baseDbName string
+	var baseDbKey doltdb.DbKey
 	for i, change := range changes {
 		state, ok, err := sess.lookupDbState(ctx, change.dbName)
 		if err != nil {
@@ -333,14 +354,14 @@ func (tx *DoltTransaction) commitHeads(
 		if !ok {
 			return nil, nil, sql.ErrDatabaseNotFound.New(change.dbName)
 		}
-		normalizedName := strings.ToLower(state.dbState.dbName)
+		dbKey := doltdb.NewDbKey(state.dbState.dbName)
 
-		if i > 0 && normalizedName != baseDbName {
+		if i > 0 && dbKey != baseDbKey {
 			return nil, nil, ErrMultipleDatabases
 		}
 
-		baseDbName = normalizedName
-		startPoint, ok = tx.dbStartPoints[baseDbName]
+		baseDbKey = dbKey
+		startPoint, ok = tx.dbStartPoints[baseDbKey]
 		if !ok {
 			return nil, nil, fmt.Errorf("database %s unknown to transaction", change.dbName)
 		}
@@ -350,7 +371,7 @@ func (tx *DoltTransaction) commitHeads(
 			return nil, nil, err
 		}
 
-		lockIDs[i] = baseDbName + "\u0000" + change.workingSet.Ref().String()
+		lockIDs[i] = string(baseDbKey) + "\u0000" + change.workingSet.Ref().String()
 	}
 
 	name, email, _, _, err := ResolveNameEmail(ctx, DoltCommitterName, DoltCommitterEmail)
@@ -374,7 +395,10 @@ func (tx *DoltTransaction) commitHeads(
 	for attempt := 0; attempt < maxTxCommitRetries; attempt++ {
 		updates := make([]doltdb.HeadUpdate, 0, 2*len(changes))
 		workingSets := make([]*doltdb.WorkingSet, len(changes))
+		// commitIdxs records the index in updates (and therefore in the returned heads) of each change's commit, or -1
+		commitIdxs := make([]int, len(changes))
 		for i, change := range changes {
+			commitIdxs[i] = -1
 			ws := change.workingSet
 			existing, err := startPoint.db.ResolveWorkingSet(ctx, ws.Ref())
 			newWorkingSet := errors.Is(err, doltdb.ErrWorkingSetNotFound)
@@ -429,6 +453,7 @@ func (tx *DoltTransaction) commitHeads(
 				if err != nil {
 					return nil, nil, err
 				}
+				commitIdxs[i] = len(updates)
 				updates = append(updates, doltdb.BranchHeadUpdate{
 					HeadRef:       headRef,
 					Root:          pending.Roots.Staged,
@@ -452,6 +477,10 @@ func (tx *DoltTransaction) commitHeads(
 			}
 		}
 
+		if errors.Is(err, datas.ErrHeadNotFound) {
+			return nil, nil, tx.rollbackAndErr(ctx, deletedBranchError(ctx, startPoint.db, changes))
+		}
+
 		// An optimistic lock failure will be retried with the new current value of the working set.
 		if errors.Is(err, datas.ErrOptimisticLockFailed) || errors.Is(err, datas.ErrMergeNeeded) {
 			continue
@@ -461,23 +490,22 @@ func (tx *DoltTransaction) commitHeads(
 			return nil, nil, err
 		}
 
-		// Fill in the commits to return
-		// The length of the list to return is the same as the number of changes, but may contain nil elements
-		// We always pass them to the doltdb layer above in the order [workingSet, (commit)], where commit is optional.
-		// So the result we get back may have a different number of elements than 2*changes, and we need to conditionally
-		// skip some indexes when building the set of commits to return.
+		// Fill in the commits to return. The length of the list to return is the same as the number of changes, but
+		// may contain nil elements for changes that didn't produce a commit.
 		commits := make([]*doltdb.Commit, len(changes))
-		for i, change := range changes {
-			if change.commit != nil {
-				commits[i], err = doltdb.HashToCommit(
-					ctx,
-					startPoint.db.ValueReadWriter(),
-					startPoint.db.NodeStore(),
-					heads[2*i+1],
-				)
-				if err != nil {
-					return nil, nil, err
-				}
+		for i, idx := range commitIdxs {
+			if idx < 0 {
+				continue
+			}
+
+			commits[i], err = doltdb.HashToCommit(
+				ctx,
+				startPoint.db.ValueReadWriter(),
+				startPoint.db.NodeStore(),
+				heads[idx],
+			)
+			if err != nil {
+				return nil, nil, err
 			}
 		}
 
@@ -506,8 +534,8 @@ func (tx *DoltTransaction) mergeRoots(
 		return nil, err
 	}
 
-	if !rootsEqual(existingWorkingSet.WorkingRoot(), workingSet.WorkingRoot()) {
-		result, err := merge.MergeRoots(ctx, tableResolver, existingWorkingSet.WorkingRoot(), workingSet.WorkingRoot(), startState.WorkingRoot(), workingSet, startState, mergeOpts, merge.MergeOpts{})
+	if TransactionRowMergePolicy != nil || !rootsEqual(existingWorkingSet.WorkingRoot(), workingSet.WorkingRoot()) {
+		result, err := merge.MergeRoots(ctx, tableResolver, existingWorkingSet.WorkingRoot(), workingSet.WorkingRoot(), startState.WorkingRoot(), workingSet, startState, mergeOpts, merge.MergeOpts{RowMergePolicy: TransactionRowMergePolicy})
 		if err != nil {
 			return nil, err
 		}
@@ -523,6 +551,20 @@ func (tx *DoltTransaction) mergeRoots(
 	}
 
 	return workingSet, nil
+}
+
+// deletedBranchError returns the error for a commit that failed because a branch it changes no longer exists.
+func deletedBranchError(ctx *sql.Context, db *doltdb.DoltDB, changes []workingSetAndHead) error {
+	for _, change := range changes {
+		headRef, err := change.workingSet.Ref().ToHeadRef()
+		if err != nil {
+			continue
+		}
+		if ok, err := db.HasRef(ctx, headRef); err == nil && !ok {
+			return fmt.Errorf("%w: cannot commit changes to deleted branch '%s'", doltdb.ErrBranchNotFound, headRef.GetPath())
+		}
+	}
+	return fmt.Errorf("%w: cannot commit changes to a deleted branch", doltdb.ErrBranchNotFound)
 }
 
 // rollback attempts a transaction rollback
@@ -803,7 +845,7 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 // CreateSavepoint creates a new savepoint with the name and roots given. In
 // PostgreSQL mode a repeated name shadows the older savepoint until release;
 // the default MySQL mode replaces it.
-func (tx *DoltTransaction) CreateSavepoint(name string, roots map[string]doltdb.RootValue, dirtyBranches map[string]bool) {
+func (tx *DoltTransaction) CreateSavepoint(name string, roots map[doltdb.QualifiedDbKey]doltdb.RootValue, dirtyBranches map[doltdb.QualifiedDbKey]bool) {
 	if !tx.postgresSavepoints {
 		if existing := tx.findSavepoint(name); existing >= 0 {
 			tx.savepoints = append(tx.savepoints[:existing], tx.savepoints[existing+1:]...)

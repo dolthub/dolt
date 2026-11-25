@@ -160,7 +160,7 @@ func (acs *archiveChunkSource) getMany(ctx context.Context, eg *errgroup.Group, 
 		if err != nil {
 			return err
 		}
-		chunk := chunks.NewChunk(raw)
+		chunk := chunks.NewChunkWithHash(rc.h, raw)
 		found(ctx, &chunk)
 		return nil
 	})
@@ -297,6 +297,9 @@ func (acs *archiveChunkSource) resolve(records []getRecord, keeper keeperF) ([]r
 			foundAll = false
 			continue
 		}
+		if err := acs.aRdr.checkChunkRef(rc); err != nil {
+			return nil, true, gcBehavior_Continue, err
+		}
 
 		if keeper != nil && keeper(h) {
 			return nil, true, gcBehavior_Block, nil
@@ -395,7 +398,7 @@ func (acs *archiveChunkSource) clone() (chunkSource, error) {
 	}, nil
 }
 
-func (acs *archiveChunkSource) getRecordRanges(_ context.Context, _ dherrors.FatalBehavior, records []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error) {
+func (acs *archiveChunkSource) getRecordRanges(ctx context.Context, _ dherrors.FatalBehavior, records []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error) {
 	resolved, _, gcb, err := acs.resolve(records, keeper)
 	if err != nil || gcb != gcBehavior_Continue {
 		return nil, gcb, err

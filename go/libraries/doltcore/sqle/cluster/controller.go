@@ -341,13 +341,22 @@ func (c *Controller) applyCommitHooks(ctx context.Context, name string, denv *en
 	return hooks, nil
 }
 
-func (c *Controller) RunCommitHooks(bt *sql.BackgroundThreads, ctxF SqlContextFactory) error {
+func (c *Controller) SetSqlContextFactory(ctxF SqlContextFactory) {
+	if c == nil {
+		return
+	}
+	c.sqlCtxFactory = ctxF
+}
+
+// RunCommitHooks starts replicating the databases which existed at startup.
+// Call it only once the cluster remotesapi server is listening: a standby
+// authenticates our replication requests by fetching our JWKS from it.
+func (c *Controller) RunCommitHooks(bt *sql.BackgroundThreads) error {
 	if c == nil {
 		return nil
 	}
-	c.sqlCtxFactory = ctxF
 	for _, hook := range c.commithooks {
-		err := hook.Run(bt, ctxF)
+		err := hook.Run(bt, c.sqlCtxFactory)
 		if err != nil {
 			return err
 		}
@@ -1147,11 +1156,18 @@ func (c *Controller) refreshAutoIncrementTrackersForSessionDatabases() error {
 		if err != nil {
 			return fmt.Errorf("cluster/controller: auto-inc refresh: %s: lookup db state: %w", name, err)
 		}
-		if !ok || state.WorkingSet() == nil {
+		if !ok {
 			// Not loaded in session; defer to lazy initialization on first use
 			continue
 		}
-		if err := gsp.GetGlobalState().MergeRoots(sqlCtx, state.WorkingSet()); err != nil {
+		ws, err := state.WorkingSet(sqlCtx)
+		if err != nil {
+			return fmt.Errorf("cluster/controller: auto-inc refresh: %s: working set: %w", name, err)
+		}
+		if ws == nil {
+			continue
+		}
+		if err := gsp.GetGlobalState().MergeRoots(sqlCtx, ws); err != nil {
 			return fmt.Errorf("cluster/controller: auto-inc refresh: %s: merge: %w", name, err)
 		}
 	}
@@ -1345,6 +1361,11 @@ func (c *Controller) standbyRemotesJWKS() *jwtauth.MultiJWKS {
 		Transport: &http.Transport{
 			TLSClientConfig:   c.tlsCfg,
 			ForceAttemptHTTP2: true,
+			// Drop pooled connections to peers which have gone silent.
+			HTTP2: &http.HTTP2Config{
+				SendPingTimeout: 15 * time.Second,
+				PingTimeout:     5 * time.Second,
+			},
 		},
 	}
 	urls := make([]string, len(c.cfg.StandbyRemotes()))

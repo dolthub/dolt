@@ -20,12 +20,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 func TestCommitHookStartsNotCaughtUp(t *testing.T) {
@@ -44,6 +50,34 @@ func TestCommitHookStartsNotCaughtUp(t *testing.T) {
 	}, srcEnv.DoltDB(ctx), t.TempDir())
 
 	require.False(t, hook.isCaughtUp())
+}
+
+func TestCommitHookReopensDestDBAfterFailedPush(t *testing.T) {
+	srcEnv := dtestutils.CreateTestEnv()
+	ctx := context.Background()
+	t.Cleanup(func() {
+		srcEnv.Close()
+	})
+
+	opens := 0
+	hook := newCommitHook(logrus.StandardLogger(), "origin", "https://localhost:50051/mydb", "mydb", RolePrimary, func(ctx context.Context) (*doltdb.DoltDB, error) {
+		opens++
+		return doltdb.LoadDoltDB(ctx, types.Format_DOLT, doltdb.InMemDoltDB, filesys.LocalFS)
+	}, srcEnv.DoltDB(ctx), t.TempDir())
+	hook.sqlCtxFactory = func(context.Context) (*sql.Context, error) {
+		return sql.NewEmptyContext(), nil
+	}
+
+	hook.mu.Lock()
+	defer hook.mu.Unlock()
+	// The source does not have this head, so pushing it fails.
+	hook.nextHead = hash.Of([]byte("missing"))
+	hook.attemptReplicate(ctx)
+	require.NotNil(t, hook.currentError)
+	require.Nil(t, hook.destDB)
+
+	hook.attemptReplicate(ctx)
+	require.Equal(t, 2, opens)
 }
 
 // fakeClock is a manually-advanced clock used to make the commithook's probe
@@ -188,4 +222,28 @@ func TestCommitHookCircuitBreakerClosesWhileBusy(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, waitF)
 	require.ErrorIs(t, failWait(clock, waitF, ackBudget), doltdb.ErrReplicationWaitFailed)
+}
+
+// TestCommitHookReplicateClosesDestDB checks that the replicate thread closes the destination it fetched when it
+// exits, as it does when the database is dropped.
+func TestCommitHookReplicateClosesDestDB(t *testing.T) {
+	ctx := context.Background()
+	srcEnv := dtestutils.CreateTestEnv()
+	t.Cleanup(func() { srcEnv.Close() })
+	destDB, err := doltdb.LoadDoltDBWithParams(ctx, types.Format_DOLT, "file://"+t.TempDir(), filesys.LocalFS, map[string]interface{}{
+		dbfactory.DisableSingletonCacheParam: "true",
+	})
+	require.NoError(t, err)
+
+	hook := newCommitHook(logrus.StandardLogger(), "origin", "https://localhost:50051/mydb", "mydb", RolePrimary, func(context.Context) (*doltdb.DoltDB, error) {
+		return destDB, nil
+	}, srcEnv.DoltDB(ctx), t.TempDir())
+	hook.destDB = destDB // as fetched by an earlier push
+	hook.databaseWasDropped()
+	hook.wg.Add(1)
+	hook.replicate(ctx)
+
+	require.Nil(t, hook.destDB)
+	_, err = destDB.GetBranches(ctx)
+	require.ErrorIs(t, err, chunks.ErrStoreClosed)
 }

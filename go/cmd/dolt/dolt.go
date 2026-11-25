@@ -116,10 +116,12 @@ var commandsWithoutCurrentDirWrites = []cli.Command{
 // commands that specifically skip the env.MultiEnvForDirectory loading step. These commands work in a context where
 // we expect the database to fail loading, but we need to get through to the Exec call anyway. The dEnv created with LoadWithoutDB
 // will be passed to these commands, so we can determine where the data root is, but commands will need to load the database
-// on terms that make sense for their purpose.
+// on terms that make sense for their purpose. sql-server builds its own env.MultiRepoEnv, and building one here as well
+// would open each of its databases twice.
 var commandsSkippingDBLoad = []cli.Command{
 	commands.FsckCmd{},
 	commands.InitCmd{},
+	sqlserver.SqlServerCmd{VersionStr: doltversion.Version},
 }
 
 // commands that use stdio directly and must not have it redirected.
@@ -550,24 +552,33 @@ or check the docs for questions about usage.`)
 		}
 	}
 
-	ctx, stop := context.WithCancel(ctx)
-	res := doltCommand.Exec(ctx, "dolt", cfg.remainingArgs, dEnv, cliCtx)
+	execCtx, stop := context.WithCancel(ctx)
+	res := doltCommand.Exec(execCtx, "dolt", cfg.remainingArgs, dEnv, cliCtx)
 	if cliCtx != nil {
 		cliCtx.Close()
 	}
 	stop()
 
-	if err = dbfactory.CloseAllLocalDatabases(); err != nil {
-		cli.PrintErrln(err)
-		if res == 0 {
-			res = 1
-		}
-	}
-
+	// The summary reads the store, so print it before closing.
 	if csMetrics && dEnv.DoltDB(ctx) != nil {
 		metricsSummary := dEnv.DoltDB(ctx).CSMetricsSummary()
 		cli.Println("Command took", time.Since(start).Seconds())
 		cli.PrintErrln(metricsSummary)
+	}
+
+	// mrEnv closes only the sub-envs it opened; dEnv is ours to close.
+	var closeErrs []error
+	if mrEnv != nil {
+		closeErrs = append(closeErrs, mrEnv.Close(ctx))
+	}
+	closeErrs = append(closeErrs, dEnv.Close())
+	// Backstop for stores opened outside an env until the singleton cache is removed.
+	closeErrs = append(closeErrs, dbfactory.CloseAllLocalDatabases())
+	if err = errors.Join(closeErrs...); err != nil {
+		cli.PrintErrln(err)
+		if res == 0 {
+			res = 1
+		}
 	}
 
 	return res
@@ -661,6 +672,13 @@ If you're interested in running this command against a remote host, hit us up on
 		}
 	}
 
+	// Commands which skip the DB load don't use a Queryist.
+	if mrEnv == nil {
+		return func(context.Context, ...cli.LateBindQueryistOption) (res cli.LateBindQueryistResult, err error) {
+			return res, fmt.Errorf("The %s command cannot run queries.", subcommandName)
+		}, nil
+	}
+
 	var dbName string
 
 	if hasUseDb {
@@ -691,7 +709,6 @@ If you're interested in running this command against a remote host, hit us up on
 	commandsNotRequiringRepo := map[string]bool{
 		"init":                         true,
 		"sql":                          true,
-		"sql-server":                   true,
 		"sql-client":                   true,
 		commands.DoltBackupCommandName: true,
 	}

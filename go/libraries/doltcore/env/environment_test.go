@@ -239,8 +239,10 @@ func TestMigrateWorkingSet(t *testing.T) {
 
 	// Now write the repo state file to disk and re-load the repo
 	require.NoError(t, rs.save(dEnv.FS))
+	require.NoError(t, dEnv.Close())
 
 	dEnv = Load(context.Background(), testHomeDirFunc, dEnv.FS, doltdb.LocalDirDoltDB, "test")
+	defer dEnv.Close()
 	assert.NoError(t, dEnv.RSLoadErr)
 	assert.NoError(t, dEnv.CfgLoadErr)
 

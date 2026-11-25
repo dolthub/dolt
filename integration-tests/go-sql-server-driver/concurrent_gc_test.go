@@ -298,6 +298,20 @@ func (gct gcTest) run(t *testing.T) {
 		srvSettings.Envs = append(srvSettings.Envs, "DOLT_GC_SAFEPOINT_CONTROLLER_CHOICE=session_aware")
 	} else {
 		srvSettings.Envs = append(srvSettings.Envs, "DOLT_GC_SAFEPOINT_CONTROLLER_CHOICE=kill_connections")
+		// Auto GC forces session-aware safepoints, and is on unless a config file turns it off.
+		err = driver.WithFile{
+			Name: "server.yaml",
+			Contents: `
+behavior:
+  auto_gc_behavior:
+    enable: false
+listener:
+  port: {{get_port "server_port"}}
+`,
+			Template: ports.ApplyTemplate,
+		}.WriteAtDir(repo.Dir)
+		require.NoError(t, err)
+		srvSettings.Args = []string{"--config", "server.yaml"}
 	}
 
 	server := MakeServer(t, repo, srvSettings, &ports)
@@ -306,6 +320,12 @@ func (gct gcTest) run(t *testing.T) {
 	db, err := server.DB(driver.Connection{User: "root"})
 	require.NoError(t, err)
 	defer db.Close()
+
+	if !gct.sessionAware {
+		var autoGCEnabled int
+		require.NoError(t, db.QueryRowContext(context.Background(), "SELECT @@GLOBAL.dolt_auto_gc_enabled").Scan(&autoGCEnabled))
+		require.Equal(t, 0, autoGCEnabled, "auto GC would override kill_connections safepoints")
+	}
 
 	gct.createDB(t, context.Background(), db)
 
