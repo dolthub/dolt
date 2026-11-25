@@ -279,10 +279,11 @@ func needsRekeyedAncestor(ourSch, theirSch, ancSch schema.Schema) bool {
 		schema.ComparePrimaryKeys(ourSch, ancSch) != schema.PrimaryKeysSameTags
 }
 
-// RekeyTable returns |tbl|, whose schema is |sch|, rewritten to the primary key of |target|: the same columns and
-// rows, keyed and indexed by the columns of |target|'s primary key. It returns false when the table cannot be rekeyed
-// (for example, when |sch| lacks a target key column, holds it with an incompatible type or encoding, is keyless, has a
-// Full-Text, Vector, or Spatial index, or has merge artifacts).
+// RekeyTable returns |tbl|, whose schema is |sch|, rewritten to the primary
+// key of |target|. It returns false when |tbl| cannot be rekeyed (for example,
+// when |sch| lacks a target key column, has an incompatible type or encoding,
+// is keyless, has a Full-Text, Vector, or Spatial index, or has merge
+// artifacts).
 func RekeyTable(ctx *sql.Context, name doltdb.TableName, tbl *doltdb.Table, sch, target schema.Schema) (*doltdb.Table, bool, error) {
 	newSch, ok, err := schema.Rekey(sch, target)
 	if err != nil || !ok {

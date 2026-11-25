@@ -622,7 +622,6 @@ var MergeSamePrimaryKeyChangeScripts = []queries.ScriptTest{
 			[]string{"UPDATE t SET v = 11 WHERE a = 1;"}),
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				// Tuples do not store g, so the ancestor rekeys by its stored columns.
 				Query:    "CALL DOLT_MERGE('feature');",
 				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
 			},

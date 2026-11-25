@@ -52,7 +52,7 @@ func TestRowRekeyer(t *testing.T) {
 		rk, ok := NewRowRekeyer(ns, sch, newSch)
 		require.True(t, ok)
 
-		// Row 1 is unique (b=10). Rows 2 and 3 collide (b=20). Row 4 has NULL b.
+		// Row 1 is unique (b=10). Rows 2-3 collide (b=20). Row 4 has NULL.
 		rows := newIntMap(t, ctx, ns, sch,
 			[][]any{{1}, {2}, {3}, {4}},
 			[][]any{{10, 100}, {20, 200}, {20, 300}, {nil, 400}},

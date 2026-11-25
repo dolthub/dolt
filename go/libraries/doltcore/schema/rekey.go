@@ -53,7 +53,8 @@ func Rekey(sch, target Schema) (Schema, bool, error) {
 	for i, col := range cols {
 		pos, inPK := keyPos[col.Tag]
 		if inPK {
-			// Check nullability before setting IsPartOfPK, which makes IsNullable false.
+			// Check nullability before setting IsPartOfPK, which makes
+			// IsNullable return false.
 			if col.IsNullable() {
 				col.Constraints = append(slices.Clone(col.Constraints), NotNullConstraint{})
 			}
