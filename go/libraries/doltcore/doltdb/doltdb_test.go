@@ -197,6 +197,9 @@ func TestCopyWorkingSetPreservesDestination(t *testing.T) {
 	_, err = ddb.ResolveWorkingSet(ctx, target)
 	require.ErrorIs(t, err, ErrWorkingSetNotFound)
 	require.NoError(t, ddb.UpdateWorkingSet(ctx, source, ws, hash.Hash{}, TodoWorkingSetMeta(), nil))
+	// A branch's working set can only be written while the branch exists
+	require.ErrorIs(t, ddb.CopyWorkingSet(ctx, source, target, false), datas.ErrHeadNotFound)
+	require.NoError(t, ddb.SetHeadToCommit(ctx, ref.NewBranchRef("copy"), commit))
 	require.NoError(t, ddb.CopyWorkingSet(ctx, source, target, false))
 	copied, err := ddb.ResolveWorkingSet(ctx, target)
 	require.NoError(t, err)

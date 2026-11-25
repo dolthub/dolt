@@ -1613,6 +1613,187 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 		},
 	},
+	{
+		Name: "commit changes to another branch after it's deleted",
+		SetUpScript: []string{
+			"create table t (pk int primary key)",
+			"insert into t values (1)",
+			"call dolt_commit('-Am', 'init')",
+			"call dolt_branch('feature')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t values (2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ insert into `mydb/feature`.t values (3)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ call dolt_branch('-d', 'feature')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "/* client a */ commit",
+				ExpectedErrStr: "branch not found: cannot commit changes to deleted branch 'feature'",
+			},
+			{
+				// The whole transaction rolled back, including its changes to main
+				Query:    "/* client a */ select * from t",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "/* client b */ select * from t",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "/* client b */ select name from dolt_branches",
+				Expected: []sql.Row{{"main"}},
+			},
+		},
+	},
+	{
+		Name: "commit changes to the checked out branch after it's deleted",
+		SetUpScript: []string{
+			"create table t (pk int primary key)",
+			"insert into t values (1)",
+			"call dolt_commit('-Am', 'init')",
+			"call dolt_branch('feature')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ call dolt_checkout('feature')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t values (2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ call dolt_branch('-D', 'feature')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "/* client a */ commit",
+				ExpectedErrStr: "branch not found: cannot commit changes to deleted branch 'feature'",
+			},
+			{
+				Query:    "/* client b */ select name from dolt_branches",
+				Expected: []sql.Row{{"main"}},
+			},
+		},
+	},
+	{
+		Name: "commit changes to a branch after it's renamed",
+		SetUpScript: []string{
+			"create table t (pk int primary key)",
+			"insert into t values (1)",
+			"call dolt_commit('-Am', 'init')",
+			"call dolt_branch('feature')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into `mydb/feature`.t values (2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ call dolt_branch('-m', 'feature', 'renamed')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "/* client a */ commit",
+				ExpectedErrStr: "branch not found: cannot commit changes to deleted branch 'feature'",
+			},
+			{
+				Query:    "/* client b */ select * from `mydb/renamed`.t",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		Name: "delete a branch with uncommitted changes in the same session",
+		SetUpScript: []string{
+			"create table t (pk int primary key)",
+			"insert into t values (1)",
+			"call dolt_commit('-Am', 'init')",
+			"call dolt_branch('feature')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t values (2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ insert into `mydb/feature`.t values (3)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ call dolt_branch('-D', 'feature')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				// The changes to the deleted branch are discarded with it
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select * from t order by pk",
+				Expected: []sql.Row{{1}, {2}},
+			},
+		},
+	},
+	{
+		Name: "dolt_commit changes to a branch after it's deleted",
+		SetUpScript: []string{
+			"create table t (pk int primary key)",
+			"insert into t values (1)",
+			"call dolt_commit('-Am', 'init')",
+			"call dolt_branch('feature')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into `mydb/feature`.t values (2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ call dolt_branch('-d', 'feature')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "/* client a */ call dolt_commit('--branch', 'feature', '-am', 'feature commit')",
+				ExpectedErrStr: "branch not found",
+			},
+			{
+				Query:          "/* client a */ commit",
+				ExpectedErrStr: "branch not found: cannot commit changes to deleted branch 'feature'",
+			},
+			{
+				Query:    "/* client b */ select name from dolt_branches",
+				Expected: []sql.Row{{"main"}},
+			},
+		},
+	},
 }
 
 var DoltConflictHandlingTests = []queries.TransactionTest{

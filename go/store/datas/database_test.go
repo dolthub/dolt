@@ -87,6 +87,36 @@ func (suite *RemoteDatabaseSuite) TestWriteRefToNonexistentValue() {
 	suite.Error(err)
 }
 
+func (suite *DatabaseSuite) TestWorkingSetUpdateRequiresHead() {
+	ctx := context.Background()
+	root, err := suite.db.WriteValue(ctx, types.String("working root"))
+	suite.Require().NoError(err)
+	update := WorkingSetUpdate{
+		WorkingSetDS: "workingSets/heads/main",
+		WorkingSet: WorkingSetSpec{
+			Meta:        &WorkingSetMeta{},
+			WorkingRoot: root,
+			StagedRoot:  root,
+		},
+		HeadDS: "refs/heads/main",
+	}
+
+	// The head doesn't exist, so neither does the working set afterward
+	_, err = suite.db.CommitDatasets(ctx, []DatasetUpdate{update})
+	suite.ErrorIs(err, ErrHeadNotFound)
+	ws, err := suite.db.GetDataset(ctx, update.WorkingSetDS)
+	suite.Require().NoError(err)
+	suite.False(ws.HasHead())
+
+	head, err := suite.db.GetDataset(ctx, update.HeadDS)
+	suite.Require().NoError(err)
+	_, err = CommitValue(ctx, suite.db, head, types.String("initial"))
+	suite.Require().NoError(err)
+	datasets, err := suite.db.CommitDatasets(ctx, []DatasetUpdate{update})
+	suite.Require().NoError(err)
+	suite.True(datasets[0].HasHead())
+}
+
 func (suite *DatabaseSuite) TestCommitDatasetsAtomic() {
 	ctx := context.Background()
 	root, err := suite.db.WriteValue(ctx, types.String("working root"))
