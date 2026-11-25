@@ -34,7 +34,7 @@ func Rekey(sch, target Schema) (Schema, bool, error) {
 	keyPos := make(map[uint64]int, targetPK.Size())
 	for i, tc := range targetPK.cols {
 		col, ok := sch.GetAllCols().MatchColumn(target.GetAllCols(), tc)
-		if !ok || col.Virtual || !compatibleKeyType(col, tc) {
+		if !ok || col.Virtual || !binaryCoercibleKeyType(col, tc) {
 			return nil, false, nil
 		}
 		keyPos[col.Tag] = i
@@ -74,9 +74,8 @@ func Rekey(sch, target Schema) (Schema, bool, error) {
 	return newSch, true, nil
 }
 
-// compatibleKeyType reports whether the key column |from| can be copied as raw
-// bytes into the key column |to|.
-func compatibleKeyType(from, to Column) bool {
+// binaryCoercibleKeyType reports whether |from| is binary-coercible to |to|.
+func binaryCoercibleKeyType(from, to Column) bool {
 	if from.TypeInfo.Encoding() != to.TypeInfo.Encoding() {
 		return false
 	}
