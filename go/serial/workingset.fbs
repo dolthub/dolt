@@ -56,6 +56,11 @@ table MergeState {
   // After resolving the conflict and calling --continue, these commits are applied
   // next, in order.
   pending_commit_hashes:[string];
+
+  // Schema names corresponding to unmergable_tables, in the same order.
+  // Omitted when all tables belong to the default (empty) schema, including
+  // working sets written before schema names were persisted.
+  unmergable_table_schemas:[string];
 }
 
 table RebaseState {
