@@ -770,26 +770,29 @@ func (i IndexedJsonDocument) Compare(ctx context.Context, other interface{}) (in
 		if err != nil {
 			return 0, err
 		}
-		firstDiff, err := jsonDiffer.Next(ctx)
-		if err == io.EOF {
-			// The two documents have no differences.
-			return 0, nil
-		}
-		if err != nil {
-			return 0, err
-		}
-		switch firstDiff.Type {
-		case AddedDiff:
-			// A key is present in other but not this.
-			return -1, nil
-		case RemovedDiff:
-			return 1, nil
-		case ModifiedDiff:
-			// Since both modified values have already been loaded into memory,
-			// We can just compare them.
-			return types.JSON.Compare(ctx, firstDiff.From, firstDiff.To)
-		default:
-			panic("Impossible diff type")
+		for {
+			diff, err := jsonDiffer.Next(ctx)
+			if err == io.EOF {
+				return 0, nil
+			}
+			if err != nil {
+				return 0, err
+			}
+			switch diff.Type {
+			case AddedDiff:
+				// A key is present in other but not this.
+				return -1, nil
+			case RemovedDiff:
+				return 1, nil
+			case ModifiedDiff:
+				cmp, err := types.JSON.Compare(ctx, diff.From, diff.To)
+				if err != nil || cmp != 0 {
+					return cmp, err
+				}
+				// Numerically equal representations do not determine the document ordering.
+			default:
+				panic("Impossible diff type")
+			}
 		}
 	default:
 		val, err := i.ToInterface(ctx)
