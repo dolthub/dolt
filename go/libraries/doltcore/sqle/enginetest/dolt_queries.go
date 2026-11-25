@@ -5623,6 +5623,71 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "dolt_log --all includes every ref",
+		SetUpScript: []string{
+			"call dolt_commit('--allow-empty', '-m', 'on main');",
+			"call dolt_checkout('-b', 'feature');",
+			"call dolt_commit('--allow-empty', '-m', 'on feature');",
+			"call dolt_checkout('-b', 'other', 'main');",
+			"call dolt_commit('--allow-empty', '-m', 'on other');",
+			"call dolt_checkout('-b', 'doomed', 'main');",
+			"call dolt_commit('--allow-empty', '-m', 'only tagged');",
+			"call dolt_tag('tagged');",
+			"call dolt_checkout('main');",
+			"call dolt_branch('-D', 'doomed');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select message from dolt_log() order by message;",
+				Expected: []sql.Row{{"Initialize data repository"}, {"on main"}},
+			},
+			{
+				Query:    "select message from dolt_log('--all') order by message;",
+				Expected: []sql.Row{{"Initialize data repository"}, {"on feature"}, {"on main"}, {"on other"}, {"only tagged"}},
+			},
+			{
+				Query:    "select refs from dolt_log('--all') where message = 'on main';",
+				Expected: []sql.Row{{"HEAD -> main"}},
+			},
+			{
+				Query:    "select message from dolt_log('--all', 'feature') order by message;",
+				Expected: []sql.Row{{"Initialize data repository"}, {"on feature"}, {"on main"}, {"on other"}, {"only tagged"}},
+			},
+			{
+				Query:    "select message from dolt_log('--all', '--not', 'main') order by message;",
+				Expected: []sql.Row{{"on feature"}, {"on other"}, {"only tagged"}},
+			},
+			{
+				Query:    "select message from dolt_log('--all', '^feature') order by message;",
+				Expected: []sql.Row{{"on other"}, {"only tagged"}},
+			},
+			{
+				Query:    "select message from dolt_log('--all', 'main..feature') order by message;",
+				Expected: []sql.Row{{"on feature"}, {"on other"}, {"only tagged"}},
+			},
+			{
+				Query:    "select message from dolt_log('--all', 'feature..main') order by message;",
+				Expected: []sql.Row{{"on other"}, {"only tagged"}},
+			},
+			{
+				Query:    "select message from dolt_log('--all', 'feature...main') order by message;",
+				Expected: []sql.Row{{"on feature"}, {"on other"}, {"only tagged"}},
+			},
+			{
+				Query:    "select message from dolt_log('--all', '--tables', 'nonexistent');",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "use `mydb/tagged`;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select message from dolt_log('--all') order by message;",
+				Expected: []sql.Row{{"Initialize data repository"}, {"on feature"}, {"on main"}, {"on other"}, {"only tagged"}},
+			},
+		},
+	},
+	{
 		Name: "dolt_log with non-literal arguments",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",

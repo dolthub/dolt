@@ -108,7 +108,12 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 		return handleErrAndExit(err)
 	}
 
-	query, err := constructInterpolatedDoltLogQuery(apr, queryist.Queryist, queryist.Context)
+	refs, err := getLogRefs(queryist.Queryist, queryist.Context)
+	if err != nil {
+		return handleErrAndExit(err)
+	}
+
+	query, err := constructInterpolatedDoltLogQuery(apr, queryist.Queryist, queryist.Context, refs)
 	if err != nil {
 		return handleErrAndExit(err)
 	}
@@ -118,81 +123,197 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 		return handleErrAndExit(err)
 	}
 
-	return handleErrAndExit(logCommits(apr, logRows, queryist.Queryist, queryist.Context))
+	return handleErrAndExit(logCommits(apr, logRows, queryist.Queryist, queryist.Context, refs))
 }
 
-func collectRevisions(apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context) ([]string, int, error) {
-	revisions := make(map[string]bool, apr.NArg())
-	tablesIndex := 0
+// logRefs is the HEAD hash and every branch, remote branch and tag, read with one query and used both to
+// classify arguments and to decorate the output.
+type logRefs struct {
+	headHash string
+	// Each map is keyed by commit hash.
+	localBranches  map[string][]string
+	remoteBranches map[string][]string
+	tags           map[string][]string
+	hashByName     map[string]string
+}
 
-	if apr.PositionalArgsSeparatorIndex >= 0 {
-		for i := 0; i < apr.PositionalArgsSeparatorIndex; i++ {
-			revisions[apr.Args[i]] = true
+func getLogRefs(queryist cli.Queryist, sqlCtx *sql.Context) (*logRefs, error) {
+	rows, err := cli.GetRowsForSql(queryist, sqlCtx, "select 'head', 'HEAD', dolt_hashof('HEAD') "+
+		"union all select 'branch', name, hash from dolt_branches "+
+		"union all select 'remote', name, hash from dolt_remote_branches "+
+		"union all select 'tag', tag_name, tag_hash from dolt_tags")
+	if err != nil {
+		return nil, fmt.Errorf("error getting refs: %v", err)
+	}
+
+	refs := &logRefs{
+		localBranches:  make(map[string][]string),
+		remoteBranches: make(map[string][]string),
+		tags:           make(map[string][]string),
+		hashByName:     make(map[string]string),
+	}
+	for _, row := range rows {
+		kind, name, hash := row[0].(string), row[1].(string), row[2].(string)
+		refs.hashByName[name] = hash
+		switch kind {
+		case "head":
+			refs.headHash = hash
+		case "branch":
+			refs.localBranches[hash] = append(refs.localBranches[hash], name)
+		case "remote":
+			refs.remoteBranches[hash] = append(refs.remoteBranches[hash], name)
+		case "tag":
+			refs.tags[hash] = append(refs.tags[hash], name)
 		}
-		tablesIndex = apr.PositionalArgsSeparatorIndex
-	} else {
-		for _, arg := range apr.Args {
-			if strings.Contains(arg, "..") || strings.HasPrefix(arg, "^") || strings.HasPrefix(arg, "refs/") || strings.HasPrefix(arg, "remotes/") {
-				tablesIndex++
-				revisions[arg] = true
-			} else {
-				_, err := cli.GetRowsForSql(queryist, sqlCtx, "select hashof('"+arg+"')")
+	}
+	return refs, nil
+}
 
-				// Once we get a non-revision argument, we treat the remaining args as tables
-				if _, ok := revisions[arg]; ok || err != nil {
-					break
-				} else {
-					tablesIndex++
-					revisions[arg] = true
-				}
+// branchHashes returns the commit hash of every local and remote tracking branch.
+func (refs *logRefs) branchHashes() []string {
+	var hashes []string
+	for _, byHash := range []map[string][]string{refs.localBranches, refs.remoteBranches} {
+		for hash := range byHash {
+			hashes = append(hashes, hash)
+		}
+	}
+	return hashes
+}
+
+// collectRevisions returns the leading positional arguments that are revisions, and the index of the first table
+// argument. Without a -- separator, the revisions end at the first argument that does not resolve to a commit.
+func collectRevisions(apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context, refs *logRefs) ([]string, int, error) {
+	if apr.PositionalArgsSeparatorIndex >= 0 {
+		return uniqueStrings(apr.Args[:apr.PositionalArgsSeparatorIndex]), apr.PositionalArgsSeparatorIndex, nil
+	}
+
+	var revisions []string
+	seen := make(map[string]struct{}, apr.NArg())
+	tablesIndex := 0
+	for _, arg := range apr.Args {
+		_, isRepeat := seen[arg]
+		if !isRevisionSyntax(arg) {
+			// A repeated name is read as a table, so that "dolt log t t" logs table t on revision t.
+			if isRepeat {
+				break
+			}
+			isRevision, err := isLogRevision(arg, queryist, sqlCtx, refs)
+			if err != nil {
+				return nil, 0, err
+			}
+			if !isRevision {
+				break
 			}
 		}
-	}
-
-	if apr.Contains(cli.AllFlag) {
-		branches, err := getBranches(sqlCtx, queryist, false, true)
-		if err != nil {
-			return nil, 0, err
-		}
-
-		for _, branch := range branches {
-			revisions[branch.name] = true
+		tablesIndex++
+		if !isRepeat {
+			seen[arg] = struct{}{}
+			revisions = append(revisions, arg)
 		}
 	}
-
-	var revisionNames []string
-	for arg, ok := range revisions {
-		if ok {
-			revisionNames = append(revisionNames, arg)
-		}
-	}
-
-	return revisionNames, tablesIndex, nil
+	return revisions, tablesIndex, nil
 }
 
-func collectTables(apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context, selectedBranches []string, startIndex int) ([]string, error) {
-	var existingTables map[string]bool
-	var tableNames []string
+// isRevisionSyntax reports whether |arg| is a range, an exclusion or a fully qualified ref, which are revisions
+// without needing to be resolved.
+func isRevisionSyntax(arg string) bool {
+	return strings.Contains(arg, "..") || strings.HasPrefix(arg, "^") || strings.HasPrefix(arg, "refs/") || strings.HasPrefix(arg, "remotes/")
+}
 
-	existingTables, err := getExistingTables(selectedBranches, queryist, sqlCtx)
+// isLogRevision reports whether |arg| resolves to a commit. Known refs are recognized without a query; anything
+// else is resolved with dolt_hashof.
+func isLogRevision(arg string, queryist cli.Queryist, sqlCtx *sql.Context, refs *logRefs) (bool, error) {
+	if _, ok := refs.hashByName[arg]; ok {
+		return true, nil
+	}
+	q, err := dbr.InterpolateForDialect("select dolt_hashof(?)", []interface{}{arg}, dialect.MySQL)
+	if err != nil {
+		return false, err
+	}
+	_, err = cli.GetRowsForSql(queryist, sqlCtx, q)
+	return err == nil, nil
+}
+
+func uniqueStrings(strs []string) []string {
+	var unique []string
+	seen := make(map[string]struct{}, len(strs))
+	for _, str := range strs {
+		if _, ok := seen[str]; !ok {
+			seen[str] = struct{}{}
+			unique = append(unique, str)
+		}
+	}
+	return unique
+}
+
+// collectTables returns the table arguments. Unless they follow a -- separator, each one must exist in one of
+// |revisions|, or in HEAD when there are none, or on any branch when --all is given.
+func collectTables(apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context, refs *logRefs, revisions []string, startIndex int) ([]string, error) {
+	tableNames := apr.Args[startIndex:]
+	if apr.PositionalArgsSeparatorIndex >= 0 {
+		return tableNames, nil
+	}
+
+	searchRevisions := revisions
+	if len(searchRevisions) == 0 || apr.Contains(cli.AllFlag) {
+		searchRevisions = append([]string{"HEAD"}, searchRevisions...)
+	}
+	if apr.Contains(cli.AllFlag) {
+		searchRevisions = append(searchRevisions, refs.branchHashes()...)
+	}
+
+	missing, err := findMissingTables(tableNames, searchRevisions, queryist, sqlCtx, refs)
 	if err != nil {
 		return nil, err
 	}
-
-	for i := startIndex; i < apr.NArg(); i++ {
-		if _, ok := existingTables[apr.Args[i]]; !ok && apr.PositionalArgsSeparatorIndex < 0 {
-			return nil, fmt.Errorf("error: table %s does not exist", apr.Args[i])
+	for _, tableName := range tableNames {
+		if _, ok := missing[tableName]; ok {
+			return nil, fmt.Errorf("error: table %s does not exist", tableName)
 		}
-		tableNames = append(tableNames, apr.Args[i])
+	}
+	return tableNames, nil
+}
+
+// findMissingTables returns the subset of |tableNames| that exists in none of |revisions|. It reads the tables of
+// one revision at a time, skips revisions that point at a commit already read, and stops once every table is found.
+func findMissingTables(tableNames []string, revisions []string, queryist cli.Queryist, sqlCtx *sql.Context, refs *logRefs) (map[string]struct{}, error) {
+	missing := make(map[string]struct{}, len(tableNames))
+	for _, tableName := range tableNames {
+		missing[tableName] = struct{}{}
 	}
 
-	return tableNames, nil
+	readCommits := make(map[string]struct{}, len(revisions))
+	for _, rev := range revisions {
+		if len(missing) == 0 {
+			break
+		}
+		commit := rev
+		if hash, ok := refs.hashByName[rev]; ok {
+			commit = hash
+		}
+		if _, ok := readCommits[commit]; ok {
+			continue
+		}
+		readCommits[commit] = struct{}{}
 
+		q, err := dbr.InterpolateForDialect("show tables as of ?", []interface{}{rev}, dialect.MySQL)
+		if err != nil {
+			return nil, err
+		}
+		rows, err := cli.GetRowsForSql(queryist, sqlCtx, q)
+		if err != nil {
+			return nil, err
+		}
+		for _, row := range rows {
+			delete(missing, row[0].(string))
+		}
+	}
+	return missing, nil
 }
 
 // constructInterpolatedDoltLogQuery generates the sql query necessary to call the DOLT_LOG() function.
 // Also interpolates this query to prevent sql injection.
-func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context) (string, error) {
+func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context, refs *logRefs) (string, error) {
 	var buffer bytes.Buffer
 	first := true
 	writeToBuffer := func(s string) {
@@ -206,7 +327,7 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 
 	// TODO: we can avoid some logic if we make `--table` parameter required like it is in `dolt_log()`
 	//  This way, we can easily see which arguments are refs and which are tables without `select hashof(...)`
-	params, tablesIndex, err := collectRevisions(apr, queryist, sqlCtx)
+	params, tablesIndex, err := collectRevisions(apr, queryist, sqlCtx, refs)
 	if err != nil {
 		return "", err
 	}
@@ -214,8 +335,12 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 		writeToBuffer("?")
 	}
 
+	if apr.Contains(cli.AllFlag) {
+		writeToBuffer("'--all'")
+	}
+
 	if tablesIndex < len(apr.Args) {
-		tableNames, err := collectTables(apr, queryist, sqlCtx, params, tablesIndex)
+		tableNames, err := collectTables(apr, queryist, sqlCtx, refs, params, tablesIndex)
 		if err != nil {
 			return "", err
 		}
@@ -280,88 +405,7 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 	return interpolatedQuery, nil
 }
 
-// getExistingTables returns a map of table names that exist in the commit history of the given revisions
-func getExistingTables(revisions []string, queryist cli.Queryist, sqlCtx *sql.Context) (map[string]bool, error) {
-	tableNames := make(map[string]bool)
-
-	if len(revisions) == 0 {
-		revisions = []string{"HEAD"}
-	}
-
-	for _, rev := range revisions {
-		rows, err := cli.GetRowsForSql(queryist, sqlCtx, "show tables as of '"+rev+"'")
-		if err != nil {
-			return nil, err
-		}
-		for _, r := range rows {
-			tableNames[r[0].(string)] = true
-		}
-	}
-
-	return tableNames, nil
-}
-
-func getBranchMaps(queryist cli.Queryist, sqlCtx *sql.Context, local bool) (map[string][]string, error) {
-	var query string
-	if local {
-		query = "select * from dolt_branches"
-	} else {
-		query = "select * from dolt_remote_branches"
-	}
-	rows, err := cli.GetRowsForSql(queryist, sqlCtx, query)
-	if err != nil {
-		return nil, err
-	}
-
-	branchMap := make(map[string][]string)
-	for _, row := range rows {
-		name := row[0].(string)
-		hash := row[1].(string)
-		if _, ok := branchMap[hash]; !ok {
-			branchMap[hash] = make([]string, 0)
-		}
-		branchMap[hash] = append(branchMap[hash], name)
-	}
-	return branchMap, nil
-}
-
-func getTagMap(queryist cli.Queryist, sqlCtx *sql.Context) (map[string][]string, error) {
-	rows, err := cli.GetRowsForSql(queryist, sqlCtx, "select tag_name, tag_hash from dolt_tags")
-	if err != nil {
-		return nil, err
-	}
-	tagMap := make(map[string][]string)
-	for _, row := range rows {
-		name := row[0].(string)
-		hash := row[1].(string)
-		if _, ok := tagMap[hash]; !ok {
-			tagMap[hash] = make([]string, 0)
-		}
-		tagMap[hash] = append(tagMap[hash], name)
-	}
-	return tagMap, nil
-}
-
-// logCommits takes a list of sql rows and logs them
-func logCommits(apr *argparser.ArgParseResults, rows []sql.Row, queryist cli.Queryist, sqlCtx *sql.Context) error {
-	// TODO: concurrency worth it?
-	hashOfHead, err := getHashOf(queryist, sqlCtx, "HEAD")
-	if err != nil {
-		return fmt.Errorf("error getting hash of HEAD: %v", err)
-	}
-	// retrieve full list of branches and tags
-	localBranchMap, err := getBranchMaps(queryist, sqlCtx, true)
-	if err != nil {
-		return err
-	}
-	remoteBranchMap, err := getBranchMaps(queryist, sqlCtx, false)
-	if err != nil {
-		return err
-	}
-	tagMap, err := getTagMap(queryist, sqlCtx)
-	if err != nil {
-		return err
-	}
+func logCommits(apr *argparser.ArgParseResults, rows []sql.Row, queryist cli.Queryist, sqlCtx *sql.Context, refs *logRefs) error {
 
 	commitInfos := make([]*CommitInfo, 0, len(rows))
 	for _, row := range rows {
@@ -438,15 +482,15 @@ func logCommits(apr *argparser.ArgParseResults, rows []sql.Row, queryist cli.Que
 			Signature:   signature,
 		}
 
-		localBranches := localBranchMap[commitHashStr]
-		remoteBranches := remoteBranchMap[commitHashStr]
-		tags := tagMap[commitHashStr]
+		localBranches := refs.localBranches[commitHashStr]
+		remoteBranches := refs.remoteBranches[commitHashStr]
+		tags := refs.tags[commitHashStr]
 
 		commitInfo := &CommitInfo{
 			commitMeta:        commitMeta,
 			commitHash:        commitHashStr,
 			height:            commitOrder,
-			isHead:            commitHashStr == hashOfHead,
+			isHead:            commitHashStr == refs.headHash,
 			parentHashes:      parentHashStrs,
 			localBranchNames:  localBranches,
 			remoteBranchNames: remoteBranches,

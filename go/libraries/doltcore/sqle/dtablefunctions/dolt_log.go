@@ -48,6 +48,7 @@ type LogTableFunctionArgs struct {
 	decoration      string
 	showParents     bool
 	showSignature   bool
+	allRefs         bool
 }
 
 // Name implements the sql.TableFunction interface
@@ -141,6 +142,7 @@ func (ltfa *LogTableFunctionArgs) addOptions(ctx *sql.Context, expressions []sql
 
 	ltfa.showParents = apr.Contains(cli.ParentsFlag)
 	ltfa.showSignature = apr.Contains(cli.ShowSignatureFlag)
+	ltfa.allRefs = apr.Contains(cli.AllFlag)
 
 	// Default to short so ad-hoc SQL callers see refs without an extra flag. auto has no
 	// defined meaning here because the server has no tty signal, so accept it for back
@@ -272,6 +274,10 @@ func (ltf *LogTableFunction) getOptionsString() string {
 
 	if ltf.showSignature {
 		options = append(options, fmt.Sprintf("--%s", cli.ShowSignatureFlag))
+	}
+
+	if ltf.allRefs {
+		options = append(options, fmt.Sprintf("--%s", cli.AllFlag))
 	}
 
 	if len(ltf.tableNames) > 0 {
@@ -477,14 +483,19 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		return nil, err
 	}
 
-	var commits []*doltdb.Commit
-	if len(revisionValStrs) == 0 {
-		// If no revisions given, use session head
-		commit, err = sess.GetHeadCommit(ctx, sqledb.RevisionQualifiedName())
+	// The session head is the default start point, and --all also walks it, like git log --all walks
+	// HEAD, so a detached head is included even when no ref points to it.
+	var sessionHead *doltdb.Commit
+	if len(revisionValStrs) == 0 || args.allRefs {
+		sessionHead, err = sess.GetHeadCommit(ctx, sqledb.RevisionQualifiedName())
 		if err != nil {
 			return nil, err
 		}
-		commits = append(commits, commit)
+	}
+
+	var commits []*doltdb.Commit
+	if len(revisionValStrs) == 0 {
+		commits = append(commits, sessionHead)
 	}
 
 	dbName := sess.Session.GetCurrentDatabase()
@@ -533,6 +544,22 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		notCommits = append(notCommits, notCommit)
 	}
 
+	rowOpts := dtables.LogRowOptions{ShowParents: args.showParents, ShowSignature: args.showSignature}
+	ddb := sqledb.DbData().Ddb
+
+	if args.allRefs {
+		refHeads, err := refHeadCommits(ctx, ddb)
+		if err != nil {
+			return nil, err
+		}
+		// Append after the explicit revisions: for A...B, the merge base lookup below reads A and B
+		// from commits[0] and commits[1].
+		commits, err = appendUniqueCommits(commits, append([]*doltdb.Commit{sessionHead}, refHeads...))
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	if threeDot {
 		// Like git log A...B, exclude every merge base, so that no commit reachable from both sides is listed.
 		mergeBases, err := doltdb.GetCommitAncestors(ctx, commits[0], commits[1])
@@ -547,14 +574,73 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 			notCommits = append(notCommits, mergeCommit)
 		}
 
-		return ltf.NewDotDotLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, commits, notCommits, matchFunc, cHashToRefs, ltf.tableNames, dtables.LogRowOptions{ShowParents: args.showParents, ShowSignature: args.showSignature})
+		return ltf.newAllRefsAwareDotDotRowIter(ctx, ddb, commits, notCommits, matchFunc, cHashToRefs, rowOpts, args.allRefs, sessionHead)
 	}
 
-	if len(revisionValStrs) <= 1 && len(notRevisionValStrs) == 0 {
-		return ltf.NewLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, commits[0], matchFunc, cHashToRefs, ltf.tableNames, dtables.LogRowOptions{ShowParents: args.showParents, ShowSignature: args.showSignature})
+	if len(commits) == 1 && len(notCommits) == 0 {
+		return ltf.NewLogTableFunctionRowIter(ctx, ddb, commits[0], matchFunc, cHashToRefs, ltf.tableNames, rowOpts)
 	}
 
-	return ltf.NewDotDotLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, commits, notCommits, matchFunc, cHashToRefs, ltf.tableNames, dtables.LogRowOptions{ShowParents: args.showParents, ShowSignature: args.showSignature})
+	return ltf.newAllRefsAwareDotDotRowIter(ctx, ddb, commits, notCommits, matchFunc, cHashToRefs, rowOpts, args.allRefs, sessionHead)
+}
+
+// newAllRefsAwareDotDotRowIter wraps NewDotDotLogTableFunctionRowIter so that, with --all, the
+// session head is still decorated as HEAD even though the walk starts from several commits.
+func (ltf *LogTableFunction) newAllRefsAwareDotDotRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commits []*doltdb.Commit, notCommits []*doltdb.Commit, matchFn func(*doltdb.OptionalCommit) (bool, error), cHashToRefs map[hash.Hash][]string, rowOpts dtables.LogRowOptions, allRefs bool, sessionHead *doltdb.Commit) (*logTableFunctionRowIter, error) {
+	itr, err := ltf.NewDotDotLogTableFunctionRowIter(ctx, ddb, commits, notCommits, matchFn, cHashToRefs, ltf.tableNames, rowOpts)
+	if err != nil {
+		return nil, err
+	}
+	if allRefs {
+		itr.headHash, err = sessionHead.HashOf()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return itr, nil
+}
+
+// refHeadCommits returns the commit each ref in |ddb| points to: local and remote tracking branches,
+// tags, workspaces and internal refs. Stashes are skipped because they do not point to commits.
+func refHeadCommits(ctx *sql.Context, ddb *doltdb.DoltDB) ([]*doltdb.Commit, error) {
+	refs, err := ddb.GetHeadRefs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	commits := make([]*doltdb.Commit, 0, len(refs))
+	for _, r := range refs {
+		commit, err := ddb.ResolveCommitRef(ctx, r)
+		if err != nil {
+			return nil, err
+		}
+		commits = append(commits, commit)
+	}
+	return commits, nil
+}
+
+// appendUniqueCommits appends each commit in |toAdd| to |commits| unless a commit with the same hash is
+// already present.
+func appendUniqueCommits(commits []*doltdb.Commit, toAdd []*doltdb.Commit) ([]*doltdb.Commit, error) {
+	seen := make(map[hash.Hash]struct{}, len(commits)+len(toAdd))
+	for _, commit := range commits {
+		h, err := commit.HashOf()
+		if err != nil {
+			return nil, err
+		}
+		seen[h] = struct{}{}
+	}
+	for _, commit := range toAdd {
+		h, err := commit.HashOf()
+		if err != nil {
+			return nil, err
+		}
+		if _, ok := seen[h]; ok {
+			continue
+		}
+		seen[h] = struct{}{}
+		commits = append(commits, commit)
+	}
+	return commits, nil
 }
 
 var _ sql.RowIter = (*logTableFunctionRowIter)(nil)
