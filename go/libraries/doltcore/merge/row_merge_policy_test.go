@@ -259,27 +259,41 @@ func TestRowMergePolicy_SeesConvergentEditsInsideIdenticalSubtrees(t *testing.T)
 // with Dolt's own semantics even though the policy would have conflicted every
 // row it was offered.
 func TestRowMergePolicy_DefersWhenSchemasDiffer(t *testing.T) {
-	test := schemaMergeTest{
-		name:     "right side adds a nullable column",
-		ancestor: *tbl(sch("CREATE TABLE t (pk int PRIMARY KEY, a int)"), sql.NewRow(1, 0), sql.NewRow(2, 0)),
-		left:     tbl(sch("CREATE TABLE t (pk int PRIMARY KEY, a int)"), sql.NewRow(1, 1), sql.NewRow(2, 0)),
-		right:    tbl(sch("CREATE TABLE t (pk int PRIMARY KEY, a int, c int)"), sql.NewRow(1, 1, nil), sql.NewRow(2, 0, nil)),
-		merged:   *tbl(sch("CREATE TABLE t (pk int PRIMARY KEY, a int, c int)"), sql.NewRow(1, 1, nil), sql.NewRow(2, 0, nil)),
+	ci := sch("CREATE TABLE t (pk int PRIMARY KEY, a varchar(20) COLLATE utf8mb4_general_ci, UNIQUE KEY (a))")
+	cs := sch("CREATE TABLE t (pk int PRIMARY KEY, a varchar(20) COLLATE utf8mb4_bin, UNIQUE KEY (a))")
+	tests := []schemaMergeTest{
+		{
+			name:     "right side adds a nullable column",
+			ancestor: *tbl(sch("CREATE TABLE t (pk int PRIMARY KEY, a int)"), sql.NewRow(1, 0), sql.NewRow(2, 0)),
+			left:     tbl(sch("CREATE TABLE t (pk int PRIMARY KEY, a int)"), sql.NewRow(1, 1), sql.NewRow(2, 0)),
+			right:    tbl(sch("CREATE TABLE t (pk int PRIMARY KEY, a int, c int)"), sql.NewRow(1, 1, nil), sql.NewRow(2, 0, nil)),
+			merged:   *tbl(sch("CREATE TABLE t (pk int PRIMARY KEY, a int, c int)"), sql.NewRow(1, 1, nil), sql.NewRow(2, 0, nil)),
+		},
+		{
+			name:     "right side changes an indexed column's collation",
+			ancestor: *tbl(ci, sql.NewRow(1, "base"), sql.NewRow(2, "other")),
+			left:     tbl(ci, sql.NewRow(1, "edited"), sql.NewRow(2, "left")),
+			right:    tbl(cs, sql.NewRow(1, "edited"), sql.NewRow(2, "other")),
+			merged:   *tbl(cs, sql.NewRow(1, "edited"), sql.NewRow(2, "left")),
+		},
 	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			a, l, r, _ := setupSchemaMergeTest(ctx, t, test)
 
-	ctx := context.Background()
-	a, l, r, _ := setupSchemaMergeTest(ctx, t, test)
+			p := &recordingRowMergePolicy{answer: func() (val.Tuple, tree.RowMergeStatus) {
+				return nil, tree.RowMergeConflict
+			}}
 
-	p := &recordingRowMergePolicy{answer: func() (val.Tuple, tree.RowMergeStatus) {
-		return nil, tree.RowMergeConflict
-	}}
-
-	var eo editor.Options
-	mo := merge.MergeOpts{RowMergePolicy: p.opt()}
-	result, err := merge.MergeRoots(newOwnedMergeContext(ctx), doltdb.SimpleTableResolver{}, l, r, a, rootish{r}, rootish{a}, eo, mo)
-	require.NoError(t, err)
-	require.Empty(t, p.calls, "a schema-changing merge must not consult the policy")
-	require.Zero(t, dataConflictCount(result), "the merge must use Dolt's own semantics")
+			var eo editor.Options
+			mo := merge.MergeOpts{RowMergePolicy: p.opt()}
+			result, err := merge.MergeRoots(newOwnedMergeContext(ctx), doltdb.SimpleTableResolver{}, l, r, a, rootish{r}, rootish{a}, eo, mo)
+			require.NoError(t, err)
+			require.Empty(t, p.calls, "a schema-changing merge must not consult the policy")
+			require.Zero(t, dataConflictCount(result), "the merge must use Dolt's own semantics")
+		})
+	}
 }
 
 // ---------------------------------------------------------------------------
