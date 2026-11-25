@@ -15,7 +15,6 @@
 package merge
 
 import (
-	"bytes"
 	"context"
 	"io"
 
@@ -63,7 +62,7 @@ func (differ *ThreeWayJsonDiffer) Next(ctx context.Context) (ThreeWayJsonDiff, e
 		leftKey := leftDiff.Key
 		rightKey := rightDiff.Key
 
-		cmp := bytes.Compare(leftKey, rightKey)
+		cmp := tree.CompareJsonDiffKeys(leftKey, rightKey)
 		// If both sides modify the same array to different values, we currently consider that to be a conflict.
 		// This may be relaxed in the future.
 		if cmp != 0 && tree.JsonKeysModifySameArray(leftKey, rightKey) {

@@ -16,6 +16,7 @@ package tree
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"fmt"
 	"slices"
@@ -297,6 +298,33 @@ func unescapeKey(key []byte) []byte {
 // Example: $.a is a prefix of $.a.b, but not $.aa
 func IsJsonKeyPrefix(path, prefix []byte) bool {
 	return bytes.HasPrefix(path, prefix) && (path[len(prefix)] == beginArrayKey || path[len(prefix)] == beginObjectKey)
+}
+
+// CompareJsonDiffKeys compares two keys produced by JsonDiffer (a sequence of path elements, with no leading type byte)
+// in the order that JsonDiffer emits them: element by element, rather than byte by byte. A plain byte comparison
+// disagrees with the emission order when one object key is a prefix of another, because the 0xFF separator that follows
+// the shorter key sorts after any UTF-8 byte: "$.a.q" is emitted before "$.ab", but bytes.Compare orders it after.
+func CompareJsonDiffKeys(left, right []byte) int {
+	for len(left) > 0 && len(right) > 0 {
+		l, r := jsonDiffKeyElementLen(left), jsonDiffKeyElementLen(right)
+		if c := bytes.Compare(left[:l], right[:r]); c != 0 {
+			return c
+		}
+		left, right = left[l:], right[r:]
+	}
+	return cmp.Compare(len(left), len(right))
+}
+
+// jsonDiffKeyElementLen returns the length of the path element at the start of |key|.
+func jsonDiffKeyElementLen(key []byte) int {
+	if key[0] == beginArrayKey {
+		return min(1+varIntLength(key[1]), len(key))
+	}
+	i := 1
+	for i < len(key) && key[i] != beginObjectKey && key[i] != beginArrayKey {
+		i++
+	}
+	return i
 }
 
 func JsonKeysModifySameArray(leftKey, rightKey []byte) bool {
