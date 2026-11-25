@@ -22,8 +22,8 @@ import (
 )
 
 // Rekey returns |sch| with the primary key of |target|, or false if |sch|
-// cannot be rekeyed to |target|. Columns joining the primary key become NOT
-// NULL and adopt |target|'s type.
+// cannot be rekeyed to |target|. New primary-key columns get a NOT NULL
+// constraint and adopt |target|'s type.
 func Rekey(sch, target Schema) (Schema, bool, error) {
 	for _, index := range sch.Indexes().AllIndexes() {
 		if index.IsFullText() || index.IsVector() || index.IsSpatial() {
@@ -84,8 +84,9 @@ func binaryCoercibleKeyType(from, to Column) bool {
 	if fromType.Equals(toType) {
 		return true
 	}
-	// Widening a VARCHAR with the same encoding and collation preserves raw
-	// key bytes and keeps every existing value valid in the wider type.
+	// VARCHAR stores variable-length bytes with no max-length padding, and key
+	// order depends only on collation, so a wider VARCHAR reads the same bytes
+	// and sorts identically.
 	fromStr, ok1 := fromType.(sql.StringType)
 	toStr, ok2 := toType.(sql.StringType)
 	return ok1 && ok2 &&
