@@ -385,7 +385,20 @@ func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root doltdb.Roo
 		if !ok {
 			return fmt.Errorf("unexpected type for doltdb.SchemasTablesFragmentCol, expected string, got %T", row[fragColIdx])
 		}
+
+		// A trigger body can be a BEGIN ... END block containing semicolons, so change the delimiter the same way
+		// procedures are dumped. Otherwise the statement is split at the first semicolon when the dump is loaded.
+		err = iohelp.WriteLine(writer, "delimiter END_TRIGGER")
+		if err != nil {
+			return err
+		}
+
 		err = iohelp.WriteLine(writer, fmt.Sprintf("%s;", fragCol))
+		if err != nil {
+			return err
+		}
+
+		err = iohelp.WriteLine(writer, "END_TRIGGER\ndelimiter ;")
 		if err != nil {
 			return err
 		}
