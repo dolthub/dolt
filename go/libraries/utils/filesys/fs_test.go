@@ -156,6 +156,41 @@ func TestFilesystems(t *testing.T) {
 	}
 }
 
+func TestOpenForWriteAppend(t *testing.T) {
+	for fsName, fs := range filesysetmsToTest {
+		t.Run(fsName, func(t *testing.T) {
+			dir := test.TestDir("append_test")
+			require.NoError(t, fs.MkDirs(dir))
+			defer fs.Delete(dir, true)
+			fp := filepath.Join(dir, testFilename)
+
+			appendData := func(data string) {
+				wr, err := fs.OpenForWriteAppend(fp, os.ModePerm)
+				require.NoError(t, err)
+				_, err = wr.Write([]byte(data))
+				require.NoError(t, err)
+				require.NoError(t, wr.Close())
+			}
+
+			// The file is created if it does not exist.
+			appendData("first;")
+			data, err := fs.ReadFile(fp)
+			require.NoError(t, err)
+			require.Equal(t, "first;", string(data))
+
+			// Writes are added to the end of an existing file.
+			appendData("second;")
+			data, err = fs.ReadFile(fp)
+			require.NoError(t, err)
+			require.Equal(t, "first;second;", string(data))
+
+			// Opening a directory fails.
+			_, err = fs.OpenForWriteAppend(dir, os.ModePerm)
+			require.Error(t, err)
+		})
+	}
+}
+
 func TestNewInMemFS(t *testing.T) {
 	fs := NewInMemFS([]string{"/r1/c1", "r2/c1/gc1"}, map[string][]byte{
 		"/r1/c1/file1.txt": []byte(testString),

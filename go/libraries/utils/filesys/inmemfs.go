@@ -344,7 +344,8 @@ func (fs *InMemFS) OpenForWriteAppend(fp string, perm os.FileMode) (io.WriteClos
 
 	fp = fs.getAbsPath(fp)
 
-	if exists, isDir := fs.exists(fp); exists && isDir {
+	exists, isDir := fs.exists(fp)
+	if exists && isDir {
 		return nil, ErrIsDir
 	}
 
@@ -355,7 +356,13 @@ func (fs *InMemFS) OpenForWriteAppend(fp string, perm os.FileMode) (io.WriteClos
 		return nil, err
 	}
 
-	return &inMemFSWriteCloser{fp, parentDir, fs, bytes.NewBuffer(make([]byte, 0, 512)), fs.rwLock}, nil
+	buf := bytes.NewBuffer(make([]byte, 0, 512))
+	if exists {
+		// Start from the current contents so that Close writes them back followed by the new data.
+		buf.Write(fs.objs[fp].(*memFile).data)
+	}
+
+	return &inMemFSWriteCloser{fp, parentDir, fs, buf, fs.rwLock}, nil
 }
 
 // WriteFile writes the entire data buffer to a given file.  The file will be created if it does not exist,
