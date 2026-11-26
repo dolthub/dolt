@@ -23,7 +23,10 @@ package nbs
 
 import (
 	"context"
+	"fmt"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/stretchr/testify/assert"
@@ -248,4 +251,83 @@ func TestTableSetClosesOpenedChunkSourcesOnErr(t *testing.T) {
 
 	assert.NoError(t, ts.close())
 	assert.Equal(t, 0, int(q.Usage()))
+}
+
+type concurrencyTrackingPersister struct {
+	fakeTablePersister
+	inFlight    *atomic.Int32
+	maxInFlight *atomic.Int32
+}
+
+func (p concurrencyTrackingPersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, opts openOpts, stats *Stats) (chunkSource, error) {
+	n := p.inFlight.Add(1)
+	defer p.inFlight.Add(-1)
+	for {
+		prev := p.maxInFlight.Load()
+		if n <= prev || p.maxInFlight.CompareAndSwap(prev, n) {
+			break
+		}
+	}
+	time.Sleep(time.Millisecond)
+	return p.fakeTablePersister.Open(ctx, name, chunkCount, opts, stats)
+}
+
+func TestTableSetRebaseBoundsConcurrentOpens(t *testing.T) {
+	q := NewUnlimitedMemQuotaProvider()
+	p := concurrencyTrackingPersister{
+		fakeTablePersister: newFakeTablePersister(q),
+		inFlight:           &atomic.Int32{},
+		maxInFlight:        &atomic.Int32{},
+	}
+
+	tableCount := maxConcurrentTableOpens * 4
+	for i := 0; i < tableCount; i++ {
+		persist(t, p, []byte(fmt.Sprintf("chunk-%d", i)))
+	}
+	var specs []tableSpec
+	for a := range p.sources {
+		specs = append(specs, tableSpec{a, 1})
+	}
+	require.Len(t, specs, tableCount)
+
+	ts := newTableSet(p, q)
+	rebased, err := ts.rebase(context.Background(), specs, nil, &Stats{})
+	require.NoError(t, err)
+	assert.Equal(t, tableCount, rebased.Size())
+	assert.LessOrEqual(t, int(p.maxInFlight.Load()), maxConcurrentTableOpens)
+	assert.Greater(t, int(p.maxInFlight.Load()), 1)
+
+	require.NoError(t, rebased.close())
+	require.NoError(t, ts.close())
+}
+
+func TestTableSetOpenForAddBoundsConcurrentOpens(t *testing.T) {
+	q := NewUnlimitedMemQuotaProvider()
+	p := concurrencyTrackingPersister{
+		fakeTablePersister: newFakeTablePersister(q),
+		inFlight:           &atomic.Int32{},
+		maxInFlight:        &atomic.Int32{},
+	}
+
+	tableCount := maxConcurrentTableOpens * 4
+	for i := 0; i < tableCount; i++ {
+		persist(t, p, []byte(fmt.Sprintf("chunk-%d", i)))
+	}
+	files := make(map[hash.Hash]uint32)
+	for a := range p.sources {
+		files[a] = 1
+	}
+	require.Len(t, files, tableCount)
+
+	ts := newTableSet(p, q)
+	opened, err := ts.openForAdd(context.Background(), files, nil, openOpts{}, &Stats{})
+	require.NoError(t, err)
+	assert.Len(t, opened, tableCount)
+	assert.LessOrEqual(t, int(p.maxInFlight.Load()), maxConcurrentTableOpens)
+	assert.Greater(t, int(p.maxInFlight.Load()), 1)
+
+	for _, cs := range opened {
+		require.NoError(t, cs.close())
+	}
+	require.NoError(t, ts.close())
 }

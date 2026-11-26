@@ -78,6 +78,12 @@ func TestGitBlobstore_Get_ChunkedTree_AllAndRanges(t *testing.T) {
 	require.Equal(t, treeOID.String(), ver)
 	require.Equal(t, []byte("fgh"), got)
 
+	// A suffix longer than the blob reads the whole blob
+	got, ver, err = GetBytes(ctx, bs, "chunked", NewBlobRange(-100, 0))
+	require.NoError(t, err)
+	require.Equal(t, treeOID.String(), ver)
+	require.Equal(t, wantAll, got)
+
 	// Validate size returned is logical size.
 	rc, sz, ver2, err := bs.Get(ctx, "chunked", NewBlobRange(0, 1))
 	require.NoError(t, err)

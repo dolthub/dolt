@@ -38,26 +38,7 @@ var _ tablePersister = &singleBlobBSPersister{}
 var _ tableFilePersister = &singleBlobBSPersister{}
 
 func (bsp *singleBlobBSPersister) Persist(ctx context.Context, behavior dherrors.FatalBehavior, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
-	address, data, _, chunkCount, gcb, err := mt.write(haver, keeper, stats)
-	if err != nil {
-		return emptyChunkSource{}, gcBehavior_Continue, err
-	} else if gcb != gcBehavior_Continue {
-		return emptyChunkSource{}, gcb, nil
-	} else if chunkCount == 0 {
-		return emptyChunkSource{}, gcBehavior_Continue, nil
-	}
-	name := address.String()
-
-	_, err = bsp.bs.Put(ctx, name, int64(len(data)), bytes.NewBuffer(data))
-	if err != nil {
-		return nil, gcBehavior_Continue, err
-	}
-
-	src, err := newPersistedBSTableChunkSource(ctx, bsp.bs, bsp.q, data, address, bsp.blockSize)
-	if err != nil {
-		return nil, gcBehavior_Continue, err
-	}
-	return src, gcBehavior_Continue, nil
+	return persistBSArchive(ctx, bsp.bs, bsp.q, mt, haver, keeper, stats)
 }
 
 func (bsp *singleBlobBSPersister) ConjoinAll(ctx context.Context, behavior dherrors.FatalBehavior, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
@@ -105,7 +86,7 @@ func (bsp *singleBlobBSPersister) ConjoinAll(ctx context.Context, behavior dherr
 
 	var cs chunkSource
 	if plan.suffix == ArchiveFileSuffix {
-		cs, err = newBSArchiveChunkSource(ctx, bsp.bs, plan.name, bsp.q, openOpts{deepValidate: true}, stats)
+		cs, err = newBSArchiveChunkSource(ctx, bsp.bs, plan.name, plan.chunkCount, bsp.q, openOpts{deepValidate: true}, stats)
 	} else {
 		cs, err = newBSTableChunkSource(ctx, bsp.bs, plan.name, plan.chunkCount, bsp.q, openOpts{deepValidate: true}, stats)
 	}
@@ -114,16 +95,7 @@ func (bsp *singleBlobBSPersister) ConjoinAll(ctx context.Context, behavior dherr
 }
 
 func (bsp *singleBlobBSPersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, opts openOpts, stats *Stats) (chunkSource, error) {
-	cs, err := newBSTableChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, opts, stats)
-	if err == nil {
-		return cs, nil
-	}
-
-	if blobstore.IsNotFoundError(err) {
-		return newBSArchiveChunkSource(ctx, bsp.bs, name, bsp.q, opts, stats)
-	}
-
-	return nil, err
+	return openBSArchiveFirst(ctx, bsp.bs, name, chunkCount, bsp.q, opts, stats)
 }
 
 func (bsp *singleBlobBSPersister) Exists(ctx context.Context, name string, _ uint32, _ *Stats) (bool, io.Closer, error) {
