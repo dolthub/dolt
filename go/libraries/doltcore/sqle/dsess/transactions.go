@@ -190,10 +190,11 @@ func (tx *DoltTransaction) GetInitialRoot(dbName string) (hash.Hash, bool) {
 
 // prepareDoltCommit merges a pending commit with the current HEAD without publishing it.
 // The returned hash identifies the exact HEAD used to prepare the commit.
-func prepareDoltCommit(ctx *sql.Context,
+func (tx *DoltTransaction) prepareDoltCommit(ctx *sql.Context,
 	dbName string,
 	doltDb *doltdb.DoltDB,
 	startState *doltdb.WorkingSet,
+	startHead *doltdb.Commit,
 	commit *doltdb.PendingCommit,
 	workingSet *doltdb.WorkingSet,
 	mergeOpts editor.Options,
@@ -244,10 +245,21 @@ func prepareDoltCommit(ctx *sql.Context,
 			// If the branch head changed since our transaction started, then we merge
 			// the existing branch head (curRootVal) into our staged root value. We
 			// treat the HEAD of the branch when our transaction started as the common
-			// ancestor (TODO: This will not be true in the case of destructive branch
-			// updates). The merged root value becomes our new Staged root value which
+			// ancestor. The merged root value becomes our new Staged root value which
 			// is the value which we are trying to commit.
 			start := time.Now()
+
+			// A destructive branch update, such as a reset, leaves that HEAD out of the
+			// branch's history, so it is not a common ancestor and there is nothing to merge with.
+			if startHead != nil {
+				isAncestor, err := startHead.CanFastForwardTo(ctx, curHead)
+				if err != nil && !errors.Is(err, doltdb.ErrUpToDate) && !errors.Is(err, doltdb.ErrIsAhead) {
+					return nil, nil, hash.Hash{}, err
+				}
+				if !isAncestor {
+					return nil, nil, hash.Hash{}, tx.rollbackAndErr(ctx, retryTransactionError(""))
+				}
+			}
 
 			tableResolver, err := GetTableResolver(ctx, dbName)
 			if err != nil {
@@ -265,6 +277,9 @@ func prepareDoltCommit(ctx *sql.Context,
 				merge.MergeOpts{})
 			if err != nil {
 				return nil, nil, hash.Hash{}, err
+			}
+			if result.CountOfTablesWithDataConflicts() > 0 {
+				return nil, nil, hash.Hash{}, tx.rollbackAndErr(ctx, retryTransactionError(""))
 			}
 			pending.Roots.Staged = result.Root
 
@@ -461,7 +476,7 @@ func (tx *DoltTransaction) commitHeads(
 			pending := change.commit
 			var expectedHead hash.Hash
 			if pending != nil {
-				ws, pending, expectedHead, err = prepareDoltCommit(ctx, change.dbName, startPoint.db, workingSetsAtTxStart[i], pending, ws, states[i].EditOpts())
+				ws, pending, expectedHead, err = tx.prepareDoltCommit(ctx, change.dbName, startPoint.db, workingSetsAtTxStart[i], states[i].headCommit, pending, ws, states[i].EditOpts())
 				if err != nil {
 					return nil, nil, err
 				}
@@ -575,6 +590,9 @@ func (tx *DoltTransaction) mergeRoots(
 		if err != nil {
 			return nil, err
 		}
+		if result.CountOfTablesWithDataConflicts() > 0 {
+			return nil, tx.rollbackAndErr(ctx, retryTransactionError(""))
+		}
 		workingSet = workingSet.WithStagedRoot(result.Root)
 	}
 
@@ -684,7 +702,9 @@ const (
 //
 // The justification for this behavior is that we want to protect the working
 // set from constraint violations with the above settings.
-// TODO: should this validate staged as well?
+//
+// The staged root is not validated here, because it can keep conflicts that were committed deliberately and have since
+// been resolved in the working root. Staged conflicts from a transaction merge are rejected when the merge happens.
 func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, workingSet *doltdb.WorkingSet, isFf ffMerge) error {
 	forceTransactionCommit, err := ctx.GetSessionVariable(ctx, ForceTransactionCommit)
 	if err != nil {
