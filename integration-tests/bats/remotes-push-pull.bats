@@ -344,6 +344,28 @@ SQL
     [[ "$output" =~ "v1" ]] || false
 }
 
+@test "remotes-push-pull: delete a tag on the remote" {
+    setup_remotesrv ""
+    dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
+    dolt commit --allow-empty -m "commit to tag"
+    dolt tag v1
+    dolt tag v2
+    dolt push test-remote main v1 v2
+
+    run dolt push test-remote :refs/tags/v1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "- [deleted]             v1" ]] || false
+
+    cd "dolt-repo-clones"
+    run dolt clone http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo
+    [ "$status" -eq 0 ]
+    cd test-repo
+    run dolt tag
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "v1" ]] || false
+    [[ "$output" =~ "v2" ]] || false
+}
+
 @test "remotes-push-pull: tags are fetched when pulling" {
     setup_remotesrv ""
     dolt remote add test-remote http://localhost:$REMOTESRV_GRPC_PORT/test-org/test-repo

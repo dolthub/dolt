@@ -65,11 +65,15 @@ func ParseRefSpecForRemote(remote, refSpecStr string) (RefSpec, error) {
 	if len(refSpecStr) == 0 {
 		return nil, ErrInvalidRefSpec
 	} else if refSpecStr[0] == ':' {
-		fromRef = EmptyBranchRef
 		toRef, err = Parse(refSpecStr[1:])
 
 		if err != nil {
 			return nil, ErrInvalidRefSpec
+		}
+
+		fromRef = EmptyBranchRef
+		if toRef.GetType() == TagRefType {
+			fromRef = EmptyTagRef
 		}
 	} else {
 		tokens := strings.Split(refSpecStr, ":")
@@ -89,7 +93,8 @@ func ParseRefSpecForRemote(remote, refSpecStr string) (RefSpec, error) {
 
 		fromRef, err = Parse(srcStr)
 
-		if err != nil {
+		// An empty tag source is reserved for deletes, which are written as ":refs/tags/<tag>".
+		if err != nil || fromRef == EmptyTagRef {
 			return nil, ErrInvalidRefSpec
 		}
 

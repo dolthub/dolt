@@ -401,6 +401,39 @@ assert_push_forced() {
     [[ "$output" =~ "- [deleted]             to_delete" ]] || false
 }
 
+@test "push: delete remote tag" {
+    cd repo1
+    setup_remote_server
+    dolt tag v1
+    dolt tag v2
+    dolt push origin v1 v2
+
+    run dolt push origin :refs/tags/v1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "- [deleted]             v1" ]] || false
+
+    run dolt push origin :refs/tags/v1
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "tag not found" ]] || false
+
+    run dolt push -u origin :refs/tags/v2
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "cannot set upstream for tag" ]] || false
+
+    # the local tag is kept
+    run dolt tag
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "v1" ]] || false
+
+    cd $TESTDIRS
+    dolt clone file://rem1 repo3
+    cd repo3
+    run dolt tag
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "v1" ]] || false
+    [[ "$output" =~ "v2" ]] || false
+}
+
 @test "push: push refspec with different destination name reports src to dest" {
     cd repo1
     setup_remote_server

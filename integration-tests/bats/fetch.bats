@@ -390,6 +390,20 @@ teardown() {
     [[ "$output" =~ "invalid fetch spec: ''" ]] || false
 }
 
+@test "fetch: fetch delete refspec fails" {
+    cd repo2
+
+    setup_remote_server
+
+    run dolt fetch origin :main
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "invalid fetch spec: ':main'" ]] || false
+
+    run dolt fetch origin :refs/tags/v1
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "invalid fetch spec: ':refs/tags/v1'" ]] || false
+}
+
 @test "fetch: fetching from empty remote" {
     cd repo2
     dolt remote add empty file://../empty

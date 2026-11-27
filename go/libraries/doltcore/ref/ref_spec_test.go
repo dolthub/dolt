@@ -27,7 +27,9 @@ func TestRefSpec(t *testing.T) {
 		refSpecStr string
 		isValid    bool
 		inToExpOut map[string]string
-		skip       bool
+		// deletes is the ref that a refspec with an empty source deletes
+		deletes string
+		skip    bool
 	}{
 		{
 			remote:     "origin",
@@ -69,6 +71,16 @@ func TestRefSpec(t *testing.T) {
 				"refs/heads/feature": "refs/nil/",
 			},
 		}, {
+			refSpecStr: ":main",
+			isValid:    true,
+			deletes:    "refs/heads/main",
+		}, {
+			refSpecStr: ":refs/tags/v1",
+			isValid:    true,
+			deletes:    "refs/tags/v1",
+		}, {
+			refSpecStr: "refs/tags/:refs/tags/v1",
+		}, {
 			remote:     "origin",
 			refSpecStr: "refs/heads/main:refs/remotes/not_borigin/mymain",
 		}, {
@@ -109,6 +121,15 @@ func TestRefSpec(t *testing.T) {
 				require.NoError(t, err)
 			} else {
 				require.Error(t, err)
+			}
+
+			if test.deletes != "" {
+				deleted, err := Parse(test.deletes)
+				require.NoError(t, err)
+				src := refSpec.SrcRef(nil)
+				assert.Equal(t, deleted.GetType(), src.GetType())
+				assert.Empty(t, src.GetPath())
+				assert.Equal(t, deleted, refSpec.DestRef(src))
 			}
 
 			for in, out := range test.inToExpOut {

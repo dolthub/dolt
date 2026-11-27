@@ -223,6 +223,22 @@ SQL
     [[ "$output" =~ "invalid ref spec: ''" ]] || false
 }
 
+@test "sql-push: delete remote tag on CALL" {
+    cd repo1
+    dolt tag v1
+    dolt sql -q "CALL dolt_push('origin', 'v1')"
+    run dolt sql -q "CALL dolt_push('origin', ':refs/tags/v1')"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "- [deleted]             v1" ]] || false
+
+    cd $TESTDIRS
+    dolt clone file://rem1 repo3
+    cd repo3
+    run dolt tag
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "v1" ]] || false
+}
+
 @test "sql-push: up to date push returns message" {
     cd repo1
     dolt sql -q "call dolt_push('origin', 'main')"

@@ -44,6 +44,9 @@ func IsValidTagName(tagName string) bool {
 	return len(tagName) <= MaxRefNameLength && !InvalidTagNameRegex.MatchString(tagName)
 }
 
+// EmptyTagRef is the source of a refspec that deletes a tag, e.g. ":refs/tags/v1".
+var EmptyTagRef = TagRef{""}
+
 type TagRef struct {
 	tag string
 }
