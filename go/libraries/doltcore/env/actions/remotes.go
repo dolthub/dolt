@@ -59,7 +59,7 @@ const (
 	// PushResultTypeForced indicates an existing remote branch was
 	// force-updated.
 	PushResultTypeForced
-	// PushResultTypeDeleted indicates a remote branch was deleted.
+	// PushResultTypeDeleted indicates a remote branch or tag was deleted.
 	PushResultTypeDeleted
 	// PushResultTypeNewTag indicates a new remote tag was created.
 	PushResultTypeNewTag
@@ -238,6 +238,12 @@ func push[C doltdb.Context](ctx C, rsr env.RepoStateReader[C], tmpDir string, sr
 		}
 		return PushToRemoteBranch(ctx, rsr, tmpDir, opts.Mode, opts.SrcRef, opts.DestRef, opts.RemoteRef, src, dest, *remote, statsCh)
 	case ref.TagRefType:
+		if opts.SrcRef == ref.EmptyTagRef {
+			if err := deleteRemoteTag(ctx, opts.DestRef, dest, *remote); err != nil {
+				return nil, err
+			}
+			return &PushRefResult{Type: PushResultTypeDeleted}, nil
+		}
 		if err := pushTagToRemote(ctx, tmpDir, opts.SrcRef, opts.DestRef, src, dest, statsCh); err != nil {
 			return nil, err
 		}
@@ -358,6 +364,13 @@ func pushTagToRemote(ctx context.Context, tempTableDir string, srcRef, destRef r
 	}
 
 	cli.Println()
+	return nil
+}
+
+func deleteRemoteTag(ctx context.Context, toDelete ref.DoltRef, remoteDB *doltdb.DoltDB, remote env.Remote) error {
+	if err := remoteDB.DeleteTag(ctx, toDelete); err != nil {
+		return fmt.Errorf("%w; '%s' from remote '%s'; %s", ErrFailedToDeleteRemote, toDelete.String(), remote.Name, err)
+	}
 	return nil
 }
 

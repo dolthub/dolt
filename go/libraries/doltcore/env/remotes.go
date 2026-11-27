@@ -404,6 +404,9 @@ func getPushTargetFromRefSpec(refSpec ref.RefSpec, currentBranch ref.DoltRef, re
 		}
 		remoteRef, err = GetTrackingRef(dest, *remote)
 	case ref.TagRefType:
+		if !ref.IsValidTagName(dest.GetPath()) {
+			return nil, fmt.Errorf("%w: '%s'", doltdb.ErrInvTagName, dest.GetPath())
+		}
 		if setUpstream {
 			err = ErrCannotSetUpstreamForTag
 		}
@@ -511,7 +514,8 @@ func ParseRSFromArgs(remName string, args []string) ([]ref.RemoteRefSpec, error)
 		rsStr := args[i]
 		rs, err := ref.ParseRefSpec(rsStr)
 
-		if err != nil {
+		// A tag delete refspec is only meaningful for push.
+		if tagSpec, ok := rs.(ref.TagToTagRefSpec); err != nil || ok && tagSpec.SrcRef(nil) == ref.EmptyTagRef {
 			return nil, fmt.Errorf("%w: '%s'", ErrInvalidFetchSpec, rsStr)
 		}
 
