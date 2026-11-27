@@ -71,6 +71,27 @@ type BranchHeadUpdate struct {
 
 var _ HeadUpdate = BranchHeadUpdate{}
 
+// BranchHeadReset moves a branch head to an existing commit, provided the head is still ExpectedHead.
+type BranchHeadReset struct {
+	HeadRef      ref.DoltRef
+	Commit       *Commit
+	ExpectedHead hash.Hash
+}
+
+var _ HeadUpdate = BranchHeadReset{}
+
+func (u BranchHeadReset) BuildDatasetUpdate(ctx context.Context, ddb *DoltDB) (datas.DatasetUpdate, error) {
+	ds, err := ddb.db.GetDataset(ctx, u.HeadRef.String())
+	if err != nil {
+		return nil, err
+	}
+	if cur, _ := ds.MaybeHeadAddr(); cur != u.ExpectedHead {
+		return nil, datas.ErrMergeNeeded
+	}
+	// The update is conditional on the head of |ds|, which was just compared with ExpectedHead.
+	return datas.PrebuiltCommitUpdate{CommitDS: ds, Commit: u.Commit.dCommit}, nil
+}
+
 func (u BranchHeadUpdate) BuildDatasetUpdate(ctx context.Context, ddb *DoltDB) (datas.DatasetUpdate, error) {
 	ds, err := ddb.db.GetDataset(ctx, u.HeadRef.String())
 	if err != nil {

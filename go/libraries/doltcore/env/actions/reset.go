@@ -214,39 +214,33 @@ func ResetSoftTables(ctx context.Context, tableNames []doltdb.TableName, roots d
 	return roots, nil
 }
 
-// MoveHeadToRef resolves |cSpecStr| to a commit and moves the current branch HEAD to it. The
-// returned Roots has Head and Staged set to the resolved commit's root, available for callers
-// composing further reset semantics on top of the HEAD move.
-func MoveHeadToRef[C doltdb.Context](ctx C, dbData env.DbData[C], cSpecStr string) (doltdb.Roots, error) {
+// ResolveResetTarget resolves |cSpecStr| to a commit for the current branch HEAD to move to. The
+// returned Roots has Head and Staged set to the resolved commit's root. The caller moves the HEAD.
+func ResolveResetTarget[C doltdb.Context](ctx C, dbData env.DbData[C], cSpecStr string) (*doltdb.Commit, doltdb.Roots, error) {
 	cs, err := doltdb.NewCommitSpec(cSpecStr)
 	if err != nil {
-		return doltdb.Roots{}, err
+		return nil, doltdb.Roots{}, err
 	}
 
 	headRef, err := dbData.Rsr.CWBHeadRef(ctx)
 	if err != nil {
-		return doltdb.Roots{}, err
+		return nil, doltdb.Roots{}, err
 	}
 	optCmt, err := dbData.Ddb.Resolve(ctx, cs, headRef)
 	if err != nil {
-		return doltdb.Roots{}, err
+		return nil, doltdb.Roots{}, err
 	}
 	newHead, ok := optCmt.ToCommit()
 	if !ok {
-		return doltdb.Roots{}, doltdb.ErrGhostCommitEncountered
+		return nil, doltdb.Roots{}, doltdb.ErrGhostCommitEncountered
 	}
 
 	foundRoot, err := newHead.GetRootValue(ctx)
 	if err != nil {
-		return doltdb.Roots{}, err
+		return nil, doltdb.Roots{}, err
 	}
 
-	// Update the head to this commit
-	if err = dbData.Ddb.SetHeadToCommit(ctx, headRef, newHead); err != nil {
-		return doltdb.Roots{}, err
-	}
-
-	return doltdb.Roots{
+	return newHead, doltdb.Roots{
 		Head:   foundRoot,
 		Staged: foundRoot,
 	}, err

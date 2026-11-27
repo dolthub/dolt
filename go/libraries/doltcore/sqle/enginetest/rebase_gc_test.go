@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
@@ -155,11 +156,16 @@ func TestRebaseConflictStateSurvivesGC(t *testing.T) {
 	preMergeHead, err := ws.MergeState().PreMergeHeadCommit().HashOf()
 	require.NoError(t, err)
 
-	// With conflicts disallowed, this reset moves the branch but fails to commit its working set, leaving the merge state.
-	run(rebasing, "SET @@dolt_allow_commit_conflicts = 0;")
-	_, err = queryRows(e, rebasing, "CALL DOLT_RESET('--soft', 'HEAD~1');")
-	require.ErrorContains(t, err, "Merge conflict detected")
-	head, err := ddb.ResolveCommitRef(rebasing, ref.NewBranchRef("dolt_rebase_feat"))
+	// Move the branch without touching its working set, leaving the merge state.
+	branchRef := ref.NewBranchRef("dolt_rebase_feat")
+	parentSpec, err := doltdb.NewCommitSpec("HEAD~1")
+	require.NoError(t, err)
+	optParent, err := ddb.Resolve(rebasing, parentSpec, branchRef)
+	require.NoError(t, err)
+	parent, ok := optParent.ToCommit()
+	require.True(t, ok)
+	require.NoError(t, ddb.SetHeadToCommit(rebasing, branchRef, parent))
+	head, err := ddb.ResolveCommitRef(rebasing, branchRef)
 	require.NoError(t, err)
 	moved, err := head.HashOf()
 	require.NoError(t, err)

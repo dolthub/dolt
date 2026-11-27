@@ -131,6 +131,8 @@ type branchState struct {
 	readOnly bool
 	// dirty is true if this branch state has uncommitted changes
 	dirty bool
+	// resetHead, when non-nil, is the commit this branch's head moves to when the transaction commits
+	resetHead *doltdb.Commit
 }
 
 // ErrOpenTableWriters is returned when a branch state would be dropped while its write session has open table writers.

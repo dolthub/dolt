@@ -2397,6 +2397,249 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 
 var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 	{
+		Name: "dolt_reset rejected for a staged conflict does not move HEAD",
+		SetUpScript: []string{
+			"create table t (k int primary key, x int)",
+			"call dolt_commit('-Am', 'c0')",
+			"insert into t values (1, 0)",
+			"call dolt_commit('-am', 'c1')",
+			"update t set x = 1",
+			"call dolt_commit('-am', 'c2')",
+			"update t set x = 2",
+			"call dolt_commit('-am', 'c3')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ update t set x = 5 where k = 1",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:            "/* client b */ call dolt_add('t')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:          "/* client a */ call dolt_reset('HEAD~1')",
+				ExpectedErrStr: sql.ErrLockDeadlock.New(dsess.ErrRetryTransaction.Error()).Error(),
+			},
+			{
+				Query:    "/* client b */ select message from dolt_log limit 1",
+				Expected: []sql.Row{{"c3"}},
+			},
+			{
+				Query:    "/* client a */ call dolt_reset('HEAD~1')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client b */ select message from dolt_log limit 1",
+				Expected: []sql.Row{{"c2"}},
+			},
+			{
+				Query:    "/* client b */ select * from dolt_status",
+				Expected: []sql.Row{{"t", byte(0), "modified"}},
+			},
+			{
+				Query:    "/* client b */ select * from t",
+				Expected: []sql.Row{{1, 5}},
+			},
+		},
+	},
+	{
+		Name: "dolt_reset --hard rejected for a working set conflict does not move HEAD",
+		SetUpScript: []string{
+			"create table t (k int primary key, x int)",
+			"call dolt_commit('-Am', 'c0')",
+			"insert into t values (1, 0)",
+			"call dolt_commit('-am', 'c1')",
+			"update t set x = 1",
+			"call dolt_commit('-am', 'c2')",
+			"update t set x = 2",
+			"call dolt_commit('-am', 'c3')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ update t set x = 5 where k = 1",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:          "/* client a */ call dolt_reset('--hard', 'HEAD~1')",
+				ExpectedErrStr: sql.ErrLockDeadlock.New(dsess.ErrRetryTransaction.Error()).Error(),
+			},
+			{
+				Query:    "/* client b */ select message from dolt_log limit 1",
+				Expected: []sql.Row{{"c3"}},
+			},
+			{
+				Query:    "/* client b */ select * from t",
+				Expected: []sql.Row{{1, 5}},
+			},
+			{
+				Query:    "/* client a */ call dolt_reset('--hard', 'HEAD~1')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client b */ select message from dolt_log limit 1",
+				Expected: []sql.Row{{"c2"}},
+			},
+			{
+				Query:    "/* client b */ select * from dolt_status",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select * from t",
+				Expected: []sql.Row{{1, 1}},
+			},
+		},
+	},
+	{
+		Name: "dolt_reset --soft is rejected after a concurrent dolt_commit",
+		SetUpScript: []string{
+			"create table t (k int primary key, x int)",
+			"call dolt_commit('-Am', 'c0')",
+			"insert into t values (1, 0)",
+			"call dolt_commit('-am', 'c1')",
+			"update t set x = 1",
+			"call dolt_commit('-am', 'c2')",
+			"update t set x = 2",
+			"call dolt_commit('-am', 'c3')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ update t set x = 3 where k = 1",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:            "/* client b */ call dolt_commit('-am', 'c4')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:          "/* client a */ call dolt_reset('--soft', 'HEAD~1')",
+				ExpectedErrStr: sql.ErrLockDeadlock.New(dsess.ErrRetryTransaction.Error()).Error(),
+			},
+			{
+				Query:    "/* client b */ select message from dolt_log limit 1",
+				Expected: []sql.Row{{"c4"}},
+			},
+			{
+				Query:    "/* client a */ call dolt_reset('--soft', 'HEAD~1')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client b */ select message from dolt_log limit 1",
+				Expected: []sql.Row{{"c3"}},
+			},
+			{
+				Query:    "/* client a */ select message from dolt_log limit 1",
+				Expected: []sql.Row{{"c3"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_reset is rejected after a concurrent dolt_commit",
+		SetUpScript: []string{
+			"create table t (k int primary key, x int)",
+			"call dolt_commit('-Am', 'c0')",
+			"insert into t values (1, 0)",
+			"call dolt_commit('-am', 'c1')",
+			"update t set x = 1",
+			"call dolt_commit('-am', 'c2')",
+			"update t set x = 2",
+			"call dolt_commit('-am', 'c3')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ update t set x = 3 where k = 1",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:            "/* client b */ call dolt_commit('-am', 'c4')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:          "/* client a */ call dolt_reset('HEAD~1')",
+				ExpectedErrStr: sql.ErrLockDeadlock.New(dsess.ErrRetryTransaction.Error()).Error(),
+			},
+			{
+				Query:    "/* client b */ select message from dolt_log limit 1",
+				Expected: []sql.Row{{"c4"}},
+			},
+			{
+				Query:    "/* client a */ call dolt_reset('HEAD~1')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client b */ select message from dolt_log limit 1",
+				Expected: []sql.Row{{"c3"}},
+			},
+			{
+				Query:    "/* client a */ select message from dolt_log limit 1",
+				Expected: []sql.Row{{"c3"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_reset --hard is rejected after a concurrent dolt_commit",
+		SetUpScript: []string{
+			"create table t (k int primary key, x int)",
+			"call dolt_commit('-Am', 'c0')",
+			"insert into t values (1, 0)",
+			"call dolt_commit('-am', 'c1')",
+			"update t set x = 1",
+			"call dolt_commit('-am', 'c2')",
+			"update t set x = 2",
+			"call dolt_commit('-am', 'c3')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ update t set x = 3 where k = 1",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				Query:            "/* client b */ call dolt_commit('-am', 'c4')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:          "/* client a */ call dolt_reset('--hard', 'HEAD~1')",
+				ExpectedErrStr: sql.ErrLockDeadlock.New(dsess.ErrRetryTransaction.Error()).Error(),
+			},
+			{
+				Query:    "/* client b */ select message from dolt_log limit 1",
+				Expected: []sql.Row{{"c4"}},
+			},
+			{
+				Query:    "/* client a */ call dolt_reset('--hard', 'HEAD~1')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client b */ select message from dolt_log limit 1",
+				Expected: []sql.Row{{"c3"}},
+			},
+			{
+				Query:    "/* client a */ select message from dolt_log limit 1",
+				Expected: []sql.Row{{"c3"}},
+			},
+		},
+	},
+	{
 		Name: "dolt_commit conflicting with a concurrent soft reset is rejected",
 		SetUpScript: []string{
 			"create table t (k int primary key, x int)",
